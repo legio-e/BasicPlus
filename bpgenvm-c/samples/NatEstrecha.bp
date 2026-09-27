@@ -1,0 +1,129 @@
+// NatEstrecha.bp — V7/H5 (27-sep): las conversiones ESTRECHAS dentro de una native: `byte(x)`, `int8(x)`, `word(x)`,
+// `int16(x)` y `short(x)` (que es `int16`). En el intérprete son un opcode (OP_I32_TO_U8…) que comprueba el rango:
+// dentro, el valor tal cual; fuera, un RuntimeError atrapable con su texto. Hasta hoy el AOT no las traducía
+// («función desconocida») y la native entera corría interpretada. Ahora las escribe en el C del módulo con el texto
+// del intérprete —la opción A de Eduardo: cambiarlas es cosa del compilador, sin tocar la ABI del .mdn—. El texto está
+// dos veces, en la VM y en el emisor: `make test-aotestrecha` corre este .mod con el AOT y sin él y exige la misma
+// salida (los dos bordes de cada una y uno fuera por cada lado). Y en el corpus de paridad: interpretada, miVM == VM-C.
+module NatEstrecha
+  import Core
+
+  native function aByte(x: integer): integer
+    return byte(x)
+  end aByte
+
+  native function aInt8(x: integer): integer
+    return int8(x)
+  end aInt8
+
+  native function aWord(x: integer): integer
+    return word(x)
+  end aWord
+
+  native function aInt16(x: integer): integer
+    return int16(x)
+  end aInt16
+
+  native function aShort(x: integer): integer
+    return short(x)
+  end aShort
+
+  // con un bucle va a un EJECUTOR (P2b.3): el RuntimeError sale desde ahí
+  native function sumaBytes(desde: integer, hasta: integer): integer
+    var t: integer := 0
+    var i: integer := desde
+    while i <= hasta do
+      t += byte(i)
+      i += 1
+    endwh
+    return t
+  end sumaBytes
+
+  // el valor convertido, en una local estrecha y en una cadena
+  native function texto(x: integer): string
+    var b: byte := byte(x)
+    return "b=" + b + " w=" + word(x * 2)
+  end texto
+
+  function pByte(x: integer)
+    try
+      print "ok byte(" + x + ") = " + aByte(x)
+    catch e: RuntimeError
+      print "ok byte(" + x + "): atrapada: " + e.msg
+    endtry
+  end pByte
+
+  function pInt8(x: integer)
+    try
+      print "ok int8(" + x + ") = " + aInt8(x)
+    catch e: RuntimeError
+      print "ok int8(" + x + "): atrapada: " + e.msg
+    endtry
+  end pInt8
+
+  function pWord(x: integer)
+    try
+      print "ok word(" + x + ") = " + aWord(x)
+    catch e: RuntimeError
+      print "ok word(" + x + "): atrapada: " + e.msg
+    endtry
+  end pWord
+
+  function pInt16(x: integer)
+    try
+      print "ok int16(" + x + ") = " + aInt16(x)
+    catch e: RuntimeError
+      print "ok int16(" + x + "): atrapada: " + e.msg
+    endtry
+  end pInt16
+
+  function pShort(x: integer)
+    try
+      print "ok short(" + x + ") = " + aShort(x)
+    catch e: RuntimeError
+      print "ok short(" + x + "): atrapada: " + e.msg
+    endtry
+  end pShort
+
+  function pSuma(a: integer, b: integer)
+    try
+      print "ok sumaBytes(" + a + ", " + b + ") = " + sumaBytes(a, b)
+    catch e: RuntimeError
+      print "ok sumaBytes(" + a + ", " + b + "): atrapada: " + e.msg
+    endtry
+  end pSuma
+
+  function pTexto(x: integer)
+    try
+      print "ok texto(" + x + ") = " + texto(x)
+    catch e: RuntimeError
+      print "ok texto(" + x + "): atrapada: " + e.msg
+    endtry
+  end pTexto
+
+  function Main()
+    pByte(0)
+    pByte(255)
+    pByte(-1)
+    pByte(256)
+    pInt8(-128)
+    pInt8(127)
+    pInt8(-129)
+    pInt8(128)
+    pWord(0)
+    pWord(65535)
+    pWord(-1)
+    pWord(65536)
+    pInt16(-32768)
+    pInt16(32767)
+    pInt16(-32769)
+    pInt16(32768)
+    pShort(-5)
+    pShort(40000)
+    pSuma(250, 255)
+    pSuma(250, 256)
+    pTexto(7)
+    pTexto(200)
+    pTexto(40000)
+  end Main
+end NatEstrecha

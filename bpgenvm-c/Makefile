@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -840,6 +840,32 @@ medir-llamada: $(LIBOBJ)
 	  -o build/test_aotllamada.exe $(LDFLAGS)
 	@./build/test_aotllamada.exe samples/NatLlamada.mod 2>/dev/null
 	@./build/test_aotllamada.exe samples/NatLlamada.mod --interp 2>/dev/null
+
+# V7/H5 (27-sep) — LAS CONVERSIONES ESTRECHAS dentro de una native (`byte(x)`, `int8`, `word`, `int16`, `short`):
+# el emisor las escribe en el C del módulo con el rango y el TEXTO de OP_I32_TO_U8 y compañía (la opción A de Eduardo:
+# sin tocar la ABI). El texto está en la VM y en el emisor, y esto es lo que lo vigila: los dos bordes de cada una y
+# uno fuera por cada lado, con el AOT y sin él, y la misma salida. Se cuentan las natives traducidas (una que se
+# cayera correría interpretada y daría igual) y se mira que la del bucle vaya a un EJECUTOR y las demás, directas.
+test-aotestrecha: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatEstrecha)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatEstrecha,build/aotestrecha)
+	@c=build/aotestrecha/aot_NatEstrecha.c; \
+	 n=$$(grep -c "bpvm_aot_register_by_name" $$c); \
+	 if [ "$$n" -ne 7 ]; then cat build/aotestrecha/aot.log; echo "  ROJO: el AOT tradujo $$n de las 7 natives de NatEstrecha"; exit 1; fi; \
+	 grep -q "bpvm_aot_register_by_name(vm, \"NatEstrecha\.sumaBytes\"" $$c || { echo "  ROJO: sumaBytes (con bucle) tenia que ir a un EJECUTOR"; exit 1; }; \
+	 grep -q "NatEstrecha\.aByte\", .*BPVM_AOT_DIRECTA" $$c || { echo "  ROJO: aByte tenia que salir DIRECTA"; exit 1; }
+	$(CC) $(CFLAGS) -Isrc test/test_aotestrecha.c build/aotestrecha/aot_NatEstrecha.c $(LIBOBJ) \
+	  -o build/test_aotestrecha.exe $(LDFLAGS)
+	@echo "--- conversiones estrechas en una native (esperado: AOT == interpretado, 23/23, sin FALLO) ---"
+	@./build/test_aotestrecha.exe samples/NatEstrecha.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotestrecha.aot; \
+	 ./build/test_aotestrecha.exe samples/NatEstrecha.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotestrecha.int; \
+	 n=$$(grep -c '^ok ' build/aotestrecha.aot); \
+	 if grep -q '^FALLO' build/aotestrecha.aot build/aotestrecha.int; then grep -h '^FALLO' build/aotestrecha.aot build/aotestrecha.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotestrecha.int build/aotestrecha.aot; then diff build/aotestrecha.int build/aotestrecha.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 23 ]; then cat build/aotestrecha.aot; echo "  ROJO: $$n de 23 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 23/23 con el AOT, igual que interpretado"
 
 # V7/H5 (#572, 27-sep) — LOS IDENTIFICADORES DE BP EN EL C DEL AOT: una native con parámetros, locales e iterador
 # llamados `vm`, `mem`, `cs`, `int`, `char`, `static`, `register`, `bool`, `INT32_MAX`… (en un módulo con globales), y el

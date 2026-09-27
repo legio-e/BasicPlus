@@ -434,8 +434,10 @@ public final class AotCEmitter {
     private boolean isIntExpr(Ast.IExpr e) {
         if (semInfo == null) return false;
         BpType t = semInfo.exprTypes.get(e);
-        return (t instanceof PrimitiveType)
-            && ((PrimitiveType) t).tag == PrimitiveType.Kind.INTEGER;
+        /* V7/H5 (27-sep) — y los estrechos (`byte`, `word`, `int8`, `int16`): viajan ensanchados a 32 bits y el
+         * intérprete los pasa a cadena con INT_TO_STRING, como un integer (MivmEmitter.coerceToString, L8 v2). Su
+         * único llamador es emitStringOperand: `"b=" + byte(x)` en una native. */
+        return (t instanceof PrimitiveType) && ((PrimitiveType) t).isIntegerLike();
     }
 
     /** #193 — ancho del elemento del array `arr` para elegir el helper AOT.
@@ -852,6 +854,23 @@ public final class AotCEmitter {
         w.println("    uint32_t f = vm->aot_helpers->find_function(vm, nombre);");
         w.println("    if (f == 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */");
         w.println("    return f;");
+        w.println("}");
+        /* V7/H5 (27-sep) — las conversiones ESTRECHAS (`byte(x)`…): el rango de OP_I32_TO_U8 y compañía, AQUÍ y no en
+         * un helper de la VM. La opción A de Eduardo: «nos permite más flexibilidad, si se quiere cambiar algo
+         * solamente hace falta modificar el compilador». Un helper nuevo habría subido la ABI del .mdn (regenerar los
+         * de los packs y regrabar todas las placas). El precio: el texto está en la VM y aquí; test-aotestrecha compara
+         * la native con la interpretada en los bordes de cada una. Fuera de rango arma el MISMO mensaje que el
+         * intérprete (snprintf "%s%d") con los helpers que ya hay, y lo lanza como un RuntimeError atrapable. */
+        w.println("/* V7/H5 — las conversiones estrechas (`byte(x)`…): el rango de OP_I32_TO_U8 y compañía, con su texto. */");
+        w.println("static inline int32_t aot_" + moduleName + "_estrecha(struct bpvm* vm, int32_t v, int32_t min, int32_t max,");
+        w.println("                                        const char* texto, int32_t largo) {");
+        w.println("    if (v < min || v > max) {");
+        w.println("        const struct aot_helpers_v2* H = vm->aot_helpers;");
+        w.println("        uint32_t a = H->string_from_cstr(vm, texto, largo);");
+        w.println("        uint32_t b = H->int_to_string(vm, v);");
+        w.println("        H->throw_str(vm, H->string_concat(vm, a, b));   /* longjmp: no vuelve */");
+        w.println("    }");
+        w.println("    return v;");
         w.println("}");
         if (Main.FORMATO == 9) {
             /* V7/H2 (#533) — el AOT en MOD9, fase 2: la ranura de vtable de un método de una
@@ -2340,6 +2359,23 @@ public final class AotCEmitter {
              * Va ANTES de los builtins a propósito: si alguien declarase una
              * función suya llamada `integer`, la conversión debe seguir siendo la
              * conversión — es sintaxis del lenguaje, no una llamada cualquiera. */
+            /* V7/H5 (27-sep) — las conversiones ESTRECHAS (L10): `byte(x)`, `int8(x)`, `word(x)` e `int16(x)` (y
+             * `short(x)`, que el parser deja en `int16`). En el intérprete no son una llamada sino un opcode
+             * (OP_I32_TO_U8…) que comprueba el rango: dentro, el valor tal cual; fuera, un RuntimeError atrapable
+             * con su texto. Aquí, lo mismo, por aot_<Mod>_estrecha (el prólogo). Hasta hoy caían en «función
+             * desconocida» y la native entera corría interpretada. Son palabras reservadas: una función de BP no
+             * puede llamarse así, así que el nombre basta. El argumento es un integer (el análisis no deja otra
+             * cosa, como en MivmEmitter), y el valor sigue siendo un int32_t de C. */
+            String[] estrecha = (c.args.size() == 1) ? conversionEstrecha(name) : null;
+            if (estrecha != null) {
+                byte[] texto = estrecha[2].getBytes(java.nio.charset.StandardCharsets.UTF_8);
+                w.print("aot_" + moduleName + "_estrecha(vm, (int32_t) (");
+                emitExpr(c.args.get(0));
+                w.print("), " + estrecha[0] + ", " + estrecha[1] + ", \"" + cEscapeBytes(texto) + "\", "
+                        + texto.length + ")");
+                return;
+            }
+
             if (c.args.size() == 1 && esCastNumerico(name)) {
                 /* [V7/H5 #559] ... salvo las que el micro no hace en hardware, que van
                  * por su helper (la misma expresión de C que el opcode, compilada en el
@@ -2377,11 +2413,14 @@ public final class AotCEmitter {
                  * manda (es lo que hace el resto del compilador). */
                 Symbol.ClassSymbol nuevaCls = claseConstruida(c);
                 if (nuevaCls != null) { emitNewObject(c, nuevaCls, c.line); return; }
+                /* V7/H5 (27-sep) — el texto decía «un builtin AOT-soportado (now, charAt, charCodeAt, substring,
+                 * intToString)» y «cross-module sigue pendiente (#169)»: desde P2b.2 vale cualquier intrínseca, y lo
+                 * de otro módulo se llama cualificado (#169, `Mod.f(…)`, por emitCrossModuleBridgeCall). */
                 throw new UnsupportedAotException(
-                    "AOT: call a función desconocida '" + name + "' (line " + c.line + "). "
-                    + "Debe ser native o BP del mismo módulo, o un builtin AOT-soportado "
-                    + "(now, charAt, charCodeAt, substring, intToString). "
-                    + "Cross-module sigue pendiente (#169).");
+                    "AOT: la native llama a '" + name + "' (line " + c.line + "), que no es una función de este "
+                    + "módulo (native o BP), ni una intrínseca (Math.sin, charAt…), ni una conversión, ni la "
+                    + "construcción de una clase. Una función de otro módulo se llama cualificada (Mod.f(…)); "
+                    + "si no, quita 'native' para que corra interpretada.");
             }
 
             /* C call directo a otra función native del mismo módulo.
@@ -3102,6 +3141,19 @@ public final class AotCEmitter {
      *  Los cuatro que el lenguaje admite; `double` entra en la lista para poder
      *  RECHAZARLO con su motivo (#426) en vez de dejarlo caer en el genérico
      *  «función desconocida», que no explicaría nada. */
+    /** V7/H5 (27-sep) — `byte(x)` y compañía: {mínimo, máximo, el texto del intérprete}, o null si el nombre no es una
+     *  de las cuatro. Los rangos y los textos son los de OP_I32_TO_U8/I8/U16/I16 (interp.c, y VirtualMachine en
+     *  miVM): si cambian allí, cambian aquí — lo vigila test-aotestrecha. */
+    private static String[] conversionEstrecha(String n) {
+        switch (n) {
+            case "byte":  return new String[] { "0",      "255",   "I32_TO_U8: valor fuera de rango " };
+            case "int8":  return new String[] { "-128",   "127",   "I32_TO_I8: valor fuera de rango " };
+            case "word":  return new String[] { "0",      "65535", "I32_TO_U16: valor fuera de rango " };
+            case "int16": return new String[] { "-32768", "32767", "I32_TO_I16: valor fuera de rango " };
+            default:      return null;
+        }
+    }
+
     private boolean esCastNumerico(String n) {
         return "integer".equals(n) || "long".equals(n)
             || "float".equals(n)   || "double".equals(n);

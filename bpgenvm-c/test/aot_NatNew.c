@@ -18,6 +18,17 @@ static inline uint32_t aot_NatNew_busca(struct bpvm* vm, const char* nombre, con
     if (f == 0) vm->aot_helpers->throw_runtime(vm, aviso);   /* longjmp: no vuelve */
     return f;
 }
+/* V7/H5 — las conversiones estrechas (`byte(x)`…): el rango de OP_I32_TO_U8 y compañía, con su texto. */
+static inline int32_t aot_NatNew_estrecha(struct bpvm* vm, int32_t v, int32_t min, int32_t max,
+                                        const char* texto, int32_t largo) {
+    if (v < min || v > max) {
+        const struct aot_helpers_v2* H = vm->aot_helpers;
+        uint32_t a = H->string_from_cstr(vm, texto, largo);
+        uint32_t b = H->int_to_string(vm, v);
+        H->throw_str(vm, H->string_concat(vm, a, b));   /* longjmp: no vuelve */
+    }
+    return v;
+}
 /* V7/H2 (#533) — la ranura de un método de clase externa/abierta, por clave y en ejecución; si no está, lo DICE. */
 static inline int32_t aot_NatNew_ranura(struct bpvm* vm, const char* clase, const char* clave, const char* aviso) {
     int32_t s = vm->aot_helpers->slot_por_clave(vm, clase, clave, "NatNew");
