@@ -75,8 +75,10 @@ public final class DeviceFrameResolver {
         return new Frame(fv.name, line, out);
     }
 
-    /** Render por tipo (= DebugServer.renderLocalDisplay, pero del lado host). */
-    private static String render(ModuleManager.LocalVarDescriptor v, long value, MemReader r) {
+    /** Render por tipo. #589 (V7, 27-sep): es EL render de un local, también el de la VM-Java
+     *  ({@code DebugServer.renderLocalDisplay} lo llama con un lector de su propia memoria). Había dos
+     *  copias y la de la VM-Java se separó: ponía las comillas dos veces y no hacía la indirección. */
+    static String render(ModuleManager.LocalVarDescriptor v, long value, MemReader r) {
         if (v.isArray) return "array[len=" + value + "]";  // array local inline: el slot guarda la longitud
         switch (v.type) {
             case "integer": return Integer.toString((int) value);
@@ -86,11 +88,28 @@ public final class DeviceFrameResolver {
             case "boolean": return (value != 0) ? "true" : "false";
             case "string": {
                 if (value == 0) return "null";
-                String s = r.readString((int) value);
-                return (s != null) ? ("\"" + s + "\"") : ("@" + value);
+                String s = r.readString((int) value);   // la palabra BAJA: el handle (idx|TAG) o la dirección cruda
+                return (s != null) ? cadenaParaVer(s) : ("@" + value);
             }
             case "ref":     return (value == 0) ? "null" : ("@" + value);
             default:        return Long.toString(value);   // "?" / desconocido → crudo
         }
+    }
+
+    /** #589 — una cadena como se enseña en el panel de variables: entre comillas y con las comillas, la barra
+     *  y los saltos escapados (una celda es una línea). Lo mismo para un local y para una property de módulo. */
+    public static String cadenaParaVer(String s) {
+        StringBuilder sb = new StringBuilder(s.length() + 2);
+        sb.append('"');
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '"') sb.append("\\\"");
+            else if (c == '\\') sb.append("\\\\");
+            else if (c == '\n') sb.append("\\n");
+            else if (c == '\r') sb.append("\\r");
+            else if (c == '\t') sb.append("\\t");
+            else sb.append(c);
+        }
+        return sb.append('"').toString();
     }
 }

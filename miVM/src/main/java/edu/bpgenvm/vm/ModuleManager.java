@@ -1399,7 +1399,11 @@ public class ModuleManager {
             if (m.properties == null) continue;
             for (PropertyDescriptor pd : m.properties) {
                 int absAddr = m.codeStart + pd.csOff;  // CS = codeStart; csOff es relativo a CS
-                int raw = vm.readMemoryInt(absAddr);
+                // #589 (V7, 27-sep) — una string o una ref ocupa 8 bytes, big-endian: en absAddr la palabra ALTA
+                // (la generación del handle) y en absAddr+4 la BAJA (idx|TAG, o la dirección de un literal). Se
+                // leía la alta: con la generación a 0, toda property string salía «null».
+                boolean esRef = "string".equals(pd.type) || "ref".equals(pd.type);
+                int raw = vm.readMemoryInt(esRef ? absAddr + 4 : absAddr);
                 String display = formatPropertyValue(pd.type, raw);
                 out.add(new PropertyView(m.name, pd.name, pd.type, raw, display));
             }
@@ -1412,7 +1416,11 @@ public class ModuleManager {
             case "integer": return Integer.toString(raw);
             case "boolean": return raw != 0 ? "true" : "false";
             case "float":   return Float.toString(Float.intBitsToFloat(raw));
-            case "string":  return raw == 0 ? "null" : vm.readStringIfPossible(raw);
+            case "string": {   // #589 — con la indirección del handle, y con el render de un local
+                if (raw == 0) return "null";
+                String s = vm.leeCadenaDeRef(raw);
+                return (s != null) ? edu.bpgenvm.vm.debug.DeviceFrameResolver.cadenaParaVer(s) : ("@" + Integer.toHexString(raw));
+            }
             case "ref":     return raw == 0 ? "null" : ("@" + Integer.toHexString(raw));
             default:        return "?";
         }

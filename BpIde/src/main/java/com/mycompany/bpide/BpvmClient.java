@@ -755,10 +755,10 @@ public final class BpvmClient implements AutoCloseable {
                 catch (IOException e) { return 0; }
             }
             @Override public String readString(int ref) {
-                try {
-                    String s = readStringIfPossible(ref, timeoutMs);
-                    return (s == null || s.isEmpty()) ? null : s;
-                } catch (IOException e) { return null; }
+                // #589 — una cadena VACÍA es "" (se enseñaba «@…» como si no se pudiera leer): lo que no se
+                // puede leer llega como ERROR (BAD_REF), y sendRequest lo lanza como WireError.
+                try { return readStringIfPossible(ref, timeoutMs); }
+                catch (IOException e) { return null; }
             }
         };
         return DeviceFrameResolver.resolve(dbg, relPc, ev.bp, reader);
@@ -808,7 +808,8 @@ public final class BpvmClient implements AutoCloseable {
         return (int) Json.getLong(resp, "value", 0);
     }
 
-    /** Lee un string BP por ref; "" si no es un string válido. */
+    /** Lee un string BP por su referencia (un handle o la de un literal): el texto tal cual, "" si la
+     *  referencia es 0; una que no resuelve llega como ERROR (BAD_REF) y sale como {@link WireError}. */
     public String readStringIfPossible(int ref, long timeoutMs) throws IOException {
         Map<String, Object> resp = sendRequest("READ_STRING", "\"ref\":" + ref, null, timeoutMs);
         return Json.getString(resp, "value", "");

@@ -7359,4 +7359,32 @@ public class VirtualMachine {
             return "@" + Integer.toHexString(ref);
         }
     }
+
+    /**
+     * #589 (V7, 27-sep) — el TEXTO de una cadena BP por su REFERENCIA, para el depurador: un handle del heap o la
+     * referencia cruda de un literal del bloque de datos (las dos formas de una cadena), que `refDeref` resuelve,
+     * como `bpref_deref` en el READ_STRING de la VM-C (`dbg_read_string`, `bpvm_dbg_wire.c`), su espejo. null si no
+     * resuelve a nada legible: la referencia nula, un handle muerto o fuera de la tabla, o una cabecera o un cuerpo
+     * que no caben en la memoria. Sin efectos. Antes el depurador pasaba el handle tal cual a
+     * {@link #readStringIfPossible} —que quiere una DIRECCIÓN— y una cadena del heap salía como «@40000004».
+     */
+    public String leeCadenaDeRef(long ref) {
+        int addr = (ref == 0) ? 0 : refDeref(ref);
+        if (addr <= 0 || addr + 4 > memory.length) return null;
+        int nbytes = readInt32(addr);
+        if (nbytes < 0 || (long) addr + 4 + nbytes > memory.length) return null;
+        return new String(memory, addr + 4, nbytes, java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    /** #589 — ¿puede la referencia ser una cadena, por su forma? Un handle, si su bloque del heap está vivo y es un
+     *  array de bytes (una cadena o un byte[]: la VM no los distingue); una referencia cruda —un literal del bloque
+     *  de datos, sin cabecera—, sí. Para el INSPECT del depurador, que no sabe el tipo de lo que le piden. */
+    public boolean puedeSerCadena(long ref) {
+        if (ref == 0) return false;
+        if ((ref & HANDLE_TAG) == 0) return true;
+        int header = refDeref(ref) - 4;
+        if (header < heapStart || header >= heapNext) return false;
+        int tag = readInt32(header);
+        return (tag & TAG_FREE_BIT) == 0 && ((tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) == TYPE_ARRAY_I8;
+    }
 }

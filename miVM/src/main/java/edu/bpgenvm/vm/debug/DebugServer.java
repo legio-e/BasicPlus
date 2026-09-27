@@ -740,22 +740,14 @@ public final class DebugServer implements AutoCloseable {
      * del slot, o el i64 big-endian combinado si el slot es de 8 bytes.
      */
     private String renderLocalDisplay(ModuleManager.LocalVarDescriptor v, long value) {
-        if (v.isArray) return "array[len=" + value + "]";   // array local inline: el slot guarda la longitud
-        switch (v.type) {
-            case "integer": return Integer.toString((int) value);
-            case "long":    return Long.toString(value);
-            case "float":   return Float.toString(Float.intBitsToFloat((int) value));
-            case "double":  return Double.toString(Double.longBitsToDouble(value));
-            case "boolean": return (value != 0) ? "true" : "false";
-            case "string": {
-                if (value == 0) return "null";
-                String s = null;
-                try { s = vm.readStringIfPossible((int) value); } catch (Throwable ignored) { }
-                return (s != null) ? ("\"" + s + "\"") : ("@" + value);
-            }
-            case "ref":     return (value == 0) ? "null" : ("@" + value);
-            default:        return Long.toString(value);   // "?" / desconocido → valor crudo
-        }
+        // #589 (V7, 27-sep) — el MISMO render que el host aplica a un device (DeviceFrameResolver), con un
+        // lector de la memoria de esta VM. Aquí había una copia que se separó: la cadena pasaba por
+        // readStringIfPossible, que quiere una DIRECCIÓN y devuelve el texto YA entre comillas —una cadena del
+        // heap salía «"@40000004"» y un literal, «""literal""»—.
+        return DeviceFrameResolver.render(v, value, new DeviceFrameResolver.MemReader() {
+            @Override public int readI32(int addr) { return vm.readMemoryInt(addr); }
+            @Override public String readString(int ref) { return vm.leeCadenaDeRef(ref); }
+        });
     }
 
     private void sendStackReply(long id) {
@@ -814,14 +806,20 @@ public final class DebugServer implements AutoCloseable {
 
     private void sendReadStringReply(long id, Map<String, Object> m) {
         long ref = Json.getLong(m, "ref", 0);
-        String s;
-        try {
-            s = vm.readStringIfPossible((int) ref);
-        } catch (Throwable t) {
-            sendError(id, "INTERNAL_ERROR", "READ_STRING(" + ref + "): " + t.getMessage());
+        // #589 (V7, 27-sep) — ESPEJO del READ_STRING de la VM-C (`dbg_read_string`): `ref` es una REFERENCIA
+        // —un handle o la de un literal—, no una dirección; 0 (o menos) es la cadena vacía; una que no resuelve,
+        // BAD_REF; y el valor, el texto TAL CUAL. Antes: sin la indirección («@40000004» para una cadena del heap)
+        // y con las comillas dentro del valor.
+        if (ref <= 0) {
+            sendReply(id, "READ_STRING_REPLY", "\"value\":\"\"");
             return;
         }
-        sendReply(id, "READ_STRING_REPLY", "\"value\":" + Json.quote(s == null ? "" : s));
+        String s = vm.leeCadenaDeRef(ref);
+        if (s == null) {
+            sendError(id, "BAD_REF", "ref " + ref + " no resuelve a una cadena (muerta, fuera de la tabla o de la memoria)");
+            return;
+        }
+        sendReply(id, "READ_STRING_REPLY", "\"value\":" + Json.quote(s));
     }
 
     // ---- File transfer (A2.2) — PR-2: bulk binario raw inline ----
@@ -1117,7 +1115,9 @@ public final class DebugServer implements AutoCloseable {
             return;
         }
         try {
-            String s = vm.readStringIfPossible((int) ref);
+            // #589 — con la indirección (antes, un handle salía «@40000004» como si fuera el texto) y sólo si por
+            // su forma puede ser una cadena: un objeto no se lee como texto.
+            String s = vm.puedeSerCadena(ref) ? vm.leeCadenaDeRef(ref) : null;
             if (s != null) {
                 sendReply(id, "INSPECT_REPLY",
                         "\"class\":\"string\""
