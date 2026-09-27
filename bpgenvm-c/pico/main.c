@@ -1974,77 +1974,24 @@ void __attribute__((noreturn)) bpvm_pico_panic(const char* fmt, ...) {
  * se ven EXACTAMENTE IGUAL desde fuera, asi que ni siquiera sabiamos en cual de
  * los dos mundos estabamos.
  *
- * Lo que se registra, y por que cada cosa:
- *   · CFSR — el desglose del fallo. Su bit UNALIGNED contesta de una vez la
- *     pregunta de Eduardo: en x86 un acceso desalineado pasa y en Cortex-M33
- *     revienta, y desde V4 todo lo que movemos (refs, long, double) son 8 bytes.
- *   · BFAR/MMFAR — la DIRECCION que se intento tocar (si el bit *VALID lo avala;
- *     si no, el registro trae basura de un fallo anterior y mentiria).
- *   · PC y LR del frame apilado — DONDE revento. Con el .dbg del modulo, eso es
- *     una linea de BP.
- *
- * `log_printf` no toca flash (escribe al anillo de RAM) y `log_flush` persiste:
- * por eso el orden es imprimir todo y volcar UNA vez al final.  */
-#include "bpvm_log.h"
-
-struct bpvm_fault_frame { uint32_t r0, r1, r2, r3, r12, lr, pc, psr; };
-
-void bpvm_pico_fault_report(struct bpvm_fault_frame* f, const char* cual) {
-    volatile uint32_t* SCB_CFSR  = (volatile uint32_t*) 0xE000ED28u;
-    volatile uint32_t* SCB_HFSR  = (volatile uint32_t*) 0xE000ED2Cu;
-    volatile uint32_t* SCB_MMFAR = (volatile uint32_t*) 0xE000ED34u;
-    volatile uint32_t* SCB_BFAR  = (volatile uint32_t*) 0xE000ED38u;
-    uint32_t cfsr = *SCB_CFSR;
-
-    log_printf("FALLO %s: CFSR=%08lX HFSR=%08lX", cual,
-               (unsigned long) cfsr, (unsigned long) *SCB_HFSR);
-    log_printf("FALLO  PC=%08lX LR=%08lX PSR=%08lX",
-               (unsigned long) f->pc, (unsigned long) f->lr, (unsigned long) f->psr);
-    /* El desglose en palabras, para no tener que decodificar el hex a mano. */
-    /* El CFSR son TRES registros apilados, y confundirlos hace que el telltale
-     * MIENTA — que es peor que no tenerlo. El reparto (ARMv8-M):
-     *   MMFSR = CFSR[7:0]    fallos de MEMORIA (MPU)
-     *   BFSR  = CFSR[15:8]   fallos de BUS
-     *   UFSR  = CFSR[31:16]  fallos de USO   <- UNALIGNED es su bit 8, o sea CFSR bit 24
-     * En la primera version puse UNALIGNED en el bit 8 (que es IBUSERR) y
-     * UNDEFINSTR en el 24 (que es UNALIGNED): justo cambiados. */
-    /* --- MMFSR: memoria (esto es lo que dispara el MPU) --- */
-    if (cfsr & (1u << 0))  log_printf("FALLO  causa: IACCVIOL (ejecutar donde no se puede)");
-    if (cfsr & (1u << 1))  log_printf("FALLO  causa: DACCVIOL  <-- ESCRITURA/LECTURA prohibida (MPU)");
-    if (cfsr & (1u << 3))  log_printf("FALLO  causa: MUNSTKERR");
-    if (cfsr & (1u << 4))  log_printf("FALLO  causa: MSTKERR");
-    if (cfsr & (1u << 7))  log_printf("FALLO  MMFAR=%08lX (la direccion prohibida)",
-                                      (unsigned long) *SCB_MMFAR);
-    else if (cfsr & 0x000000FFu) log_printf("FALLO  MMFAR NO valido");
-    /* --- BFSR: bus --- */
-    if (cfsr & (1u << 8))  log_printf("FALLO  causa: IBUSERR");
-    if (cfsr & (1u << 9))  log_printf("FALLO  causa: PRECISERR");
-    if (cfsr & (1u << 10)) log_printf("FALLO  causa: IMPRECISERR");
-    if (cfsr & (1u << 15)) log_printf("FALLO  BFAR=%08lX (direccion que se toco)",
-                                      (unsigned long) *SCB_BFAR);
-    else if (cfsr & 0x0000FF00u) log_printf("FALLO  BFAR NO valido");
-    /* --- UFSR: uso --- */
-    if (cfsr & (1u << 16)) log_printf("FALLO  causa: UNDEFINSTR (instruccion invalida)");
-    if (cfsr & (1u << 17)) log_printf("FALLO  causa: INVSTATE");
-    if (cfsr & (1u << 18)) log_printf("FALLO  causa: INVPC");
-    if (cfsr & (1u << 19)) log_printf("FALLO  causa: NOCP (coprocesador ausente)");
-    if (cfsr & (1u << 24)) log_printf("FALLO  causa: UNALIGNED  <-- acceso desalineado");
-    if (cfsr & (1u << 25)) log_printf("FALLO  causa: DIVBYZERO");
-    log_flush();
-    for (;;) { /* parados, pero habiendo dicho por que */ }
-}
+ * V7/H5 P2b.3 (27-sep) — el INFORME ya no vive aqui: esta en el comun
+ * (src/bpvm_fallo_cm33.c), que comparte con las STM32 —que seguian con el bucle
+ * mudo de CubeMX— y que ademas dice STKOF (el limite de pila de la tarea: el
+ * desborde de un ejecutor de natives), STKERR/UNSTKERR, la tarea en curso y su
+ * pila con su limite. Aqui queda lo que es de la Pico: el envoltorio. */
+#include "bpvm_fallo_cm33.h"
 
 /* El wrapper elige la pila donde el hardware apilo el frame (MSP o PSP, segun el
  * bit 2 del EXC_RETURN) y salta al reporte con ese puntero en r0 — que es
- * justo el primer argumento. Es `naked` porque cualquier prologo del compilador
- * pisaria los registros que hay que leer.
+ * justo el primer argumento — y el EXC_RETURN en r1, el segundo. Es `naked`
+ * porque cualquier prologo del compilador pisaria los registros que hay que leer.
  *
  * Un solo manejador basta: en Cortex-M33 los fallos configurables (memoria,
  * bus, uso) vienen DESHABILITADOS de fabrica y escalan a HardFault, asi que
  * todos pasan por aqui. El desglose de cual fue lo da el CFSR. */
-void bpvm_pico_fault_hard(struct bpvm_fault_frame* f);
-void bpvm_pico_fault_hard(struct bpvm_fault_frame* f) {
-    bpvm_pico_fault_report(f, "HardFault");
+void bpvm_pico_fault_hard(struct bpvm_fault_frame* f, uint32_t exc_return);
+void bpvm_pico_fault_hard(struct bpvm_fault_frame* f, uint32_t exc_return) {
+    bpvm_cm33_fallo_informe(f, exc_return, "HardFault");
 }
 
 void isr_hardfault(void) __attribute__((naked));
@@ -2054,6 +2001,7 @@ void isr_hardfault(void) {
         "ite   eq                      \n"
         "mrseq r0, msp                 \n"
         "mrsne r0, psp                 \n"
+        "mov   r1, lr                  \n"
         "b     bpvm_pico_fault_hard    \n"
     );
 }

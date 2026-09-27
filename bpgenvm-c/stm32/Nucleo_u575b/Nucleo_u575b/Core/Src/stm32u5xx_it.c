@@ -22,6 +22,7 @@
 #include "stm32u5xx_it.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "bpvm_fallo_cm33.h"   /* V7/H5 P2b.3: que el HardFault hable (comun con la Pico) */
 extern void stm32_wire_rx_drain();
 /* USER CODE END Includes */
 
@@ -86,7 +87,18 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* USER CODE BEGIN HardFault_IRQn 0 */
-
+  /* V7/H5 P2b.3 — QUE HABLE (bpvm_fallo_cm33.h): hasta hoy aqui habia el bucle mudo de CubeMX, y un desborde de la
+   * pila de una tarea —el limite PSPLIM, STKOF— o cualquier otro fallo dejaba la placa colgada sin nada en el log.
+   * El EXC_RETURN sigue en LR al entrar (el prologo de esta funcion lo apila, pero no lo cambia), y su bit 2 dice
+   * donde dejo el marco el hardware: en la pila de la TAREA (PSP), que el prologo no toca, o en la del manejador
+   * (MSP), que el prologo ya movio — entonces el marco no se da y el informe lo dice. No vuelve. */
+  {
+    uint32_t exc_return;
+    struct bpvm_fault_frame* marco = 0;
+    __asm volatile ("mov %0, lr" : "=r" (exc_return));
+    if (exc_return & 4u) __asm volatile ("mrs %0, psp" : "=r" (marco));
+    bpvm_cm33_fallo_informe(marco, exc_return, "HardFault");
+  }
   /* USER CODE END HardFault_IRQn 0 */
   while (1)
   {
