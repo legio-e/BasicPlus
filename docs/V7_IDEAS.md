@@ -2524,6 +2524,16 @@ módulo —lo que cuesta un `GET_GLOBAL_L`—. Frente a `fromBytes`, que reserva
 Se pueden combinar: B para que el código nuevo no tenga literales crudos, y la copia de C en los helpers para que un
 módulo viejo no rompa la concatenación.
 
+**Decidido: C** (Eduardo: *«OK, C entonces»*, tras preguntar cuántas entradas crearía B —ninguna con C; con B, sólo
+los literales del código que se ejecutan, una vez cada uno: los strings de la cabecera del módulo no son valores—).
+**Hecho en el PC** (`e5761dd1`): `__strCopy(src: string, dst: byte[], pos): integer`, el builtin 263, en las dos VMs
+(`memmove`/`arraycopy`), privado de `Core.bp`; acepta la cadena en sus dos formas y `null` como vacía, y devuelve dónde
+acabó, así que las copias se encadenan. `__strconcat` y `__strconcatN` lo usan; los literales, como eran (fuera la
+conversión con `fromBytes`). La stdlib regenerada (14 módulos), `Stdlib.pack` y la stdlib embebida de las tres
+familias; `CatCadena` en la paridad (106) y, con `CatCrono`, en la ronda de V7. Queda la placa: una imagen con el
+builtin 263 —lo que compile el compilador de hoy lo necesita: en una imagen vieja, «builtin no soportado» en la
+primera concatenación—.
+
 ### Hallazgos de paso (con ficha)
 
 - **`#588`** — el AOT calcula a mano la posición de las globales del módulo (-4, -8…, sólo para integer, float y

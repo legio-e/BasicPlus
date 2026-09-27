@@ -891,6 +891,31 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
+## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
+
+**Commits desde el traspaso de mediodía** (sin push): `7f2c60bd` (`#576`) · `617ab23d` (H5 cerrado) · `b377da40` ·
+`989c2fc2` (el análisis de `#554`) · `e5761dd1` (`#554`, el camino C) · y los docs.
+
+**`#554`**: la causa, medida —el `__strconcat` sintetizado copiaba byte a byte en bytecode—; la concatenación de N de
+una vez (idea de Eduardo); el análisis a fondo de su propuesta de los literales como entradas estáticas de la tabla de
+handles (`V7_IDEAS` §H7: con el GC de hoy sólo vale una entrada por literal que dura lo que el RUN, y pide opcode y
+formato nuevos); y el camino que eligió, **C**: el builtin `__strCopy` (263), que acepta la cadena en sus dos formas.
+Hecho y verde en el PC (`compat.sh check`: paridad 106/106 en MOD9 y MOD8, pruebas de C 23/23); compilan las ocho
+imágenes con la stdlib nueva dentro. **Falta la placa**: grabar la imagen y medir `CatCrono` (la Metro, la de la
+medida original: con la versión de `move` del mismo diseño, 2122 → 45 ms el bucle).
+
+**⚠️ El riesgo que acecha**: lo que compila el compilador de hoy (el IDE incluido, reconstruido) usa el builtin 263.
+En una placa con la imagen de antes, un programa nuevo falla en la primera concatenación de cadenas («builtin no
+soportado») hasta que se regraba. Ninguna de las nueve placas tiene aún esa imagen. Lo compilado ANTES sigue
+funcionando en cualquier imagen (su helper copiaba byte a byte, que vale para todo).
+
+**Las placas**, como en el traspaso de mediodía (la Nucleo con `packRam=256`, que se queda).
+
+**Para repasar a la vuelta** (Eduardo: *«a la vuelta repasamos lo que hay que hacer»*): grabar las placas con la
+imagen de `e5761dd1` (con OK) y cerrar `#554` en placa; lo demás de H7 (la lista de su fila en FICHAS); las fichas
+nuevas del análisis (`#587` el `StringBuilder` con el diseño de Eduardo, `#588` las globales del AOT —silencioso—,
+`#589` el depurador de miVM); y las sueltas `#577`–`#586`.
+
 ## ⏭️ Traspaso (27-sep, mediodía) — H5 CERRADO
 
 **Commits de hoy** (sin push): `b2a55303` (P2b.3 rediseñado: la native en un hilo de la plataforma) · `0b997502`
