@@ -2421,6 +2421,125 @@ otro módulo, cualificado. `samples/NatEstrecha.bp`: 23 comprobaciones, 23/23 co
 en cada alocación), una de ellas con bucle —lanza desde un EJECUTOR— y las demás directas; con el emisor de antes, el
 compilador ni lo compila (ROJO). En placa, sin imagen nueva (la ABI no cambia): `NatNombres` (4/4 thunks nativos) y `NatEstrecha` (7/7) IDÉNTICOS al PC en la DK2, la Metro, el P4 y la Nucleo (`compat/informes/tanda_estrecha_27sep.md`).
 
+## H7 — `#554`: concatenar en placa, y QUÉ ES un literal de cadena (27-sep, análisis)
+
+### La causa, medida
+
+`#554` decía que concatenar en placa era ~250 veces más lento que en el PC (10 ms por concatenación en la Metro y la
+C5). No era el GC ni la reserva: `a + b` llamaba a `__strconcat`, una función que el compilador SINTETIZA en bytecode y
+que copiaba **byte a byte** en un bucle interpretado —13 opcodes por byte: unas 26 000 instrucciones para alargar una
+cadena de 2 KB—. `CatCrono` (el bucle `s := s + trozo` de `#554`, y `a + b + c + d + i` 500 veces), antes y con lo que
+hay hecho en el árbol (sin commit):
+
+| | bucle (192) | cadena (500) |
+|---|---|---|
+| VM-C (PC) | 8 → 1 ms | 3 → 1 ms |
+| miVM | 166 → 3 ms | 51 → 0 ms |
+| **Metro** (sin regrabar: sólo el programa) | **2122 → 45 ms** | **474 → 83 ms** |
+
+### Lo hecho en el árbol (sin commit), con las decisiones de Eduardo
+
+- `__strconcat` copia con `move` (el builtin 55, en C en las dos VMs), y sólo si hay algo que copiar: una cadena `null`
+  (un campo sin inicializar) concatena como `""` (`#512`, `StrNulo`).
+- Una CADENA de `+` (`a + b + c + d`, la idea de Eduardo) se hace de una vez: `__strconcatN`, la longitud total, UNA
+  reserva y un `move` por operando (por grupos de 8). Se aplana sólo lo que es concatenación (`1 + 2 + "x"` suma
+  primero), también a través de paréntesis. La reserva cuenta BYTES (`ALEN`), no caracteres: `"año·€ñ"` bien.
+- **El tropiezo**: los literales viven en el bloque de datos del módulo y `LEA_GLOBAL` empuja una referencia CRUDA (sin
+  cabecera de heap); `move` sólo acepta arrays del heap → «move: src no es ref a heap». Eduardo: *«es una llamada
+  implícita a una función de conversión y punto»* —un literal es un array de bytes constante, y usarlo como string es
+  `toString(b'abc')`—: en el árbol, el literal usado como valor sale `LEA_GLOBAL + fromBytes` (el builtin 120, que lo
+  copia al heap); en `print`, `==`/`!=` y los `case` de un switch de cadenas se lee tal cual (sólo leen). La stdlib,
+  regenerada (15 módulos cambian) y `Stdlib.pack`. `CatCadena` —se comprueba ella misma: 23 casos— igual que antes.
+- **Lo que eso rompe, comprobado en la Metro**: un programa nuevo que concatena el `"B"` que devuelve el `Machine.mod`
+  VIEJO de su `/lib` da «move: src no es ref a heap». Cualquier módulo compilado antes (la stdlib de una imagen, los
+  packs —`SQLite.pack` pasa 16 literales crudos a `RuntimeError`—, una librería de un usuario) rompe la concatenación
+  de uno nuevo hasta que se recompila.
+
+### La propuesta de Eduardo: el literal como ENTRADA ESTÁTICA de la tabla de handles
+
+*«Si tuviésemos una entrada especial en la tabla […] donde no hace falta alojar espacio para el array de bytes,
+simplemente se guarda su dirección, nos ahorramos el copiar al heap. Pero el destructor del string debería en ese caso
+solamente eliminar la entrada de la tabla.»* Y: *«un string es por definición constante […] así que una entrada […] de
+tipo string a array de bytes no cambia casi nada, salvo en el momento de la destrucción. Pero analízalo a fondo.»*
+
+Analizado con tres barridos de lectura (la VM-C, miVM, y el compilador con el formato), cada hallazgo con su sitio.
+
+**Lo que ya encaja.** Todas las LECTURAS de una cadena van por la indirección (`bpref_deref`/`refDeref`): ALEN, ALOAD,
+PRINT_STRING, los builtins y las primitivas de cadena, los helpers del AOT, el mensaje de una excepción, el
+`READ_STRING` del depurador de la VM-C. `CHECKCAST string(o)` ya acepta lo que está por debajo del heap. El bloque de
+datos va SIEMPRE a RAM (también con XIP: sólo el código se queda en flash), no se descarga durante un RUN y vive más que
+cualquier handle (la tabla se reinicia en cada RUN; miVM, una VM por ejecución). El GC no compacta. Y «liberar sólo la
+entrada» ya existe (`bpvm_handle_kill`/`handleKillIdx`).
+
+**Los problemas**, de más a menos grave:
+
+1. **Un handle NUEVO en cada evaluación del literal no se puede liberar con el GC de hoy.** La marca de alcanzable va
+   EN la cabecera del bloque del heap, y una entrada estática no tiene cabecera: el marcado se la salta y el barrido de
+   la tabla también (`if (hh < heap_start …) continue; /* defensivo */`, en las dos VMs). Resultado: 8 B perdidos por
+   evaluación, la tabla comiéndose el heap desde arriba hasta el OOM (un literal en un bucle). Liberarlas —el
+   «destructor que quita la entrada»— pide una marca POR ENTRADA fuera de la cabecera, en el GC de las dos VMs; y
+   registrar fuera de `heap_alloc` se salta la puerta que pide un GC cuando la tabla aprieta (`#430`): `LEA_GLOBAL`
+   pasaría a poder fallar por memoria.
+2. **Lo que funciona con el GC de hoy es UN handle por LITERAL, que dura lo que el RUN.** Pero entonces lo comparten
+   todos los usos del literal, y su «destructor» no puede quitar la entrada (la mataría para los demás): no hace nada
+   —como ya hace hoy la liberación de algo fuera del heap (`bpvm_free_owned`: *«no-heap: NOP»*, antes del kill; y
+   `var owner s: string` compila)— y la entrada muere con la tabla, al acabar el RUN.
+3. **`LEA_GLOBAL` no sirve para saber que apunta a un literal.** Los `.mod` MOD7/MOD8 (y los MOD9 del 17 al 21-sep)
+   lo emiten también para los arrays fijos de módulo, que se ESCRIBEN (comprobado: `GcMisalign2.bp` compilado con el
+   compilador de V6, `var buf: byte[10]`, las dos VMs de hoy lo ejecutan); el propio `ArraysTest` de miVM escribe en un
+   `int[]` del bloque de datos. Ni el MAGIC ni ningún metadato lo distinguen, y el cargador no sabe dónde están los
+   literales. Hace falta un OPCODE nuevo para el literal (hay libres: 0x6D-0x6E, 0xBE-0xFF).
+4. **La caché de «el handle de este literal» no tiene sitio en el formato**: el relleno tras un literal es de 0 a 3
+   bytes y `LEA` sólo lleva un offset. Hace falta una tabla por módulo en RAM (como la ext-table: `ext[i]`, que vale
+   para XIP porque no se parchea el código), llena a la primera ejecución de cada literal —atómica con SMP— y NO en la
+   carga (miVM reinicia la tabla de handles tras cargar: `setHeapStart`). Formato nuevo: las dos VMs y sus cargadores,
+   `ModWriter`, `ModFormat`, `Disasm`, el MAGIC/cabecera; la cápsula V6 (MOD7) sigue igual.
+5. **`move`**: saca el tipo y el tamaño de elemento de la cabecera. Una entrada estática se reconoce sin campo nuevo
+   —su dirección cae por debajo de `heap_start`: sólo los literales tendrían handle ahí— y tiene que aceptarse como
+   origen de BYTES y rechazarse como DESTINO: escribir en un literal compartido lo cambiaría para todos sus usos. Hoy
+   la VM no distingue `string` de `byte[]` (los dos son I8): lo único que impide escribir un literal es el tipado del
+   compilador (ASTORE*, los `array_store_*` del AOT, `FREAD`, los builtins de bus).
+6. **Los módulos compilados antes siguen dando literales crudos**: con esta propuesta también hay que recompilarlos
+   (la stdlib, los packs, los blobs de las imágenes, el IDE) —lo mismo que con `fromBytes`—.
+7. **Las natives no pueden tener literales estáticos**: sus literales son de C, en el `.text` del `.mdn` (en flash con
+   XIP), fuera de `memory[]`. Siguen reservando (`string_from_cstr`), como hoy.
+8. **Paridad y detalles**: `==` entre `any`/`Object` compara los 8 bytes (con uno por literal, el mismo literal sigue
+   siendo idéntico a sí mismo, como hoy); `object@N` imprime números de handle y crear entradas los desplaza (fuera
+   del contrato de paridad, y las dos VMs las crearían en el mismo orden: el de la ejecución); los fallos de «32 bits
+   truncados» (`#302`) pasarían a poder tocar a los literales.
+9. **«Todas las referencias son handles» no se consigue sólo con los literales**: siguen crudas `LEA_LOCAL` y
+   `LEA_FIELD` (los arrays fijos de `#19`, que sólo se indexan y se miden).
+
+**Coste en ejecución** (uno por literal): la primera evaluación registra la entrada; las demás leen la tabla del
+módulo —lo que cuesta un `GET_GLOBAL_L`—. Frente a `fromBytes`, que reserva y copia en CADA evaluación.
+
+### Tres caminos, para decidir
+
+| | qué | lo bueno | lo que cuesta |
+|---|---|---|---|
+| **A** (lo del árbol) | el literal usado como valor = `fromBytes` (una copia al heap) | sólo el compilador; ya medido | una copia por evaluación (salvo `print`, `==`, `case`); los módulos viejos rompen la concatenación hasta recompilarlos |
+| **B** (la de Eduardo) | una entrada ESTÁTICA por literal, a la primera ejecución, en una tabla del módulo; `move` la acepta como origen | sin copias; todo string que nace en código nuevo es un handle | opcode y formato nuevos (las dos VMs, cargadores, herramientas); el «destructor» no hace nada (la entrada muere con el RUN); los módulos viejos igual que en A |
+| **C** | un builtin de copia PROPIO de las cadenas para los helpers de la concatenación, que acepte las dos formas (el que el AOT ya tiene: `h_string_concat` acepta refs crudas) | los literales siguen crudos (coste cero) y los módulos viejos NO rompen nada | un builtin nuevo en las dos VMs; la doble representación de una cadena se queda |
+
+Se pueden combinar: B para que el código nuevo no tenga literales crudos, y la copia de C en los helpers para que un
+módulo viejo no rompa la concatenación.
+
+### Hallazgos de paso (con ficha)
+
+- **`#588`** — el AOT calcula a mano la posición de las globales del módulo (-4, -8…, sólo para integer, float y
+  boolean) y se equivoca si antes hay una global `string`, ref, `long` o `double`: con `var s: string := "hola"` y
+  luego `var n: integer := 5`, la native lee `cs-4` y `n` está en `cs-20`. Silencioso. (Anterior a todo esto.)
+- **`#589`** — el depurador de miVM muestra una cadena del HEAP como `@4000…` (no hace la indirección: sólo los
+  literales crudos salían con su texto; con A o con B, TODAS las cadenas) y la vista de properties lee 4 de los 8
+  bytes de una referencia.
+- **`#587`** — `StringBuilder` (`Core.bp`): un `integer[]` (4 bytes por carácter) y `appendStr` carácter a carácter
+  con una llamada por carácter. Eduardo: *«debería ser un array de strings, así que la copia y el cálculo del espacio
+  necesario se simplifica»* —las piezas, y `toString()` como `__strconcatN`: la suma de las longitudes en BYTES, una
+  reserva y un `move` por pieza—; `appendInt` es una pieza como otra (ya convierte), `appendChar` una pieza de un
+  carácter (*«un poco tonto, pero nada grave»*).
+- Menores: la base de cada módulo (CS) no va alineada a 4 aunque `MOD_FORMAT` §7 lo dice; `OPCODES.md` cuenta 186
+  opcodes y hay 188.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
