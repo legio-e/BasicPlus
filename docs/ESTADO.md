@@ -891,6 +891,19 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
+## 🏷️ H5 (27-sep, mediodía) — `#572`: los nombres de BP con su prefijo en el C del AOT
+
+- `#572` cerrada (`a76375c6`): el emisor pone `bp_` delante de todo identificador de BP (parámetros, locales, el
+  iterador de un `for`, el `this` de un método) en UN sitio, `cVar()`. Una native con variables llamadas `vm`,
+  `mem`, `cs`, `int`, `static`, `bool`… ya se traduce; antes gcc no compilaba el módulo y corría interpretada.
+  De paso, un caso mudo en el puente a un pack (un parámetro `r` se pasaba sin valor). `make test-aotnombres`, en
+  `check-testc`, roja con el emisor de antes. El frontend y el IDE, reconstruidos.
+- Las conversiones estrechas en una native (`byte(x)`…): de las dos formas —A, la comprobación en el C del módulo
+  con los helpers que hay, sin tocar la ABI; B, un helper nuevo con la misma función que el opcode, que sube la ABI
+  a 10 y obliga a regrabar todo—, Eduardo elige A: *«nos permite más flexibilidad, si se quiere cambiar algo
+  solamente hace falta modificar el compilador. También es verdad que genera más código, pero siempre lo podemos
+  cambiar más adelante»*. En marcha.
+
 ## 🔌 H5 (27-sep, tarde) — P2b.3.d: la sesión de placas, primera parte (la DK2, la Metro, el P4 y la Nucleo)
 
 - `P2b.3.c` (`abb21836`, `9f7227f5`): el HardFault habla en las dos familias Cortex-M33 (con STKOF, la tarea y su
