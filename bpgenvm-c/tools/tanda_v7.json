@@ -16,6 +16,12 @@
       "artefactos": ["GuiShot.shot"], "timeout_s": 60, "criterio": "no-peta"},
     { "nombre": "NatNew", "fuente": "samples/NatNew.bp", "aot": true },
     { "nombre": "NatV7",  "fuente": "samples/NatV7.bp",  "aot": true, "ignorar": ["^  tiempo: "] },
-    { "nombre": "FloatNat", "fuente": "samples/FloatNat.bp", "aot": true }
+    { "nombre": "FloatNat", "fuente": "samples/FloatNat.bp", "aot": true },
+    { "nombre": "NatCede",     "fuente": "bpgenvm-c/samples/NatCede.bp",     "aot": true },
+    { "nombre": "NatExpropia", "fuente": "bpgenvm-c/samples/NatExpropia.bp", "aot": true },
+    { "nombre": "NatBuiltin",  "fuente": "bpgenvm-c/samples/NatBuiltin.bp",  "aot": true },
+    { "nombre": "NatAnida",    "fuente": "bpgenvm-c/samples/NatAnida.bp",    "aot": true },
+    { "nombre": "NatDirecta",  "fuente": "bpgenvm-c/samples/NatDirecta.bp",  "aot": true },
+    { "nombre": "NatCoste",    "fuente": "bpgenvm-c/samples/NatCoste.bp",    "aot": true, "ignorar": ["^  tiempo: "] }
   ]
 }

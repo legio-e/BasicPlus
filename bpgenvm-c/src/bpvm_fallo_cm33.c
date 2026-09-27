@@ -29,6 +29,9 @@ void bpvm_cm33_fallo_informe(const struct bpvm_fault_frame* f, uint32_t exc_retu
     uint32_t sp, lim;
     int en_psp = (exc_return & 4u) != 0u;
 
+    /* Un fallo FATAL se registra aunque el log esté apagado (#423): es el post-mortem para el que el log existe, y
+     * el contrato de #423 ya lo dice del arranque —«si la placa se muere… el rastro está»—. */
+    bpvm_log_set_enabled(1);
     log_printf("FALLO %s: CFSR=%08lX HFSR=%08lX", cual,
                (unsigned long) cfsr, (unsigned long) *SCB_HFSR);
     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)

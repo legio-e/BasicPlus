@@ -113,6 +113,7 @@ uint32_t bpvm_platform_random_u32(void) {
 #include "task.h"
 
 static void stm32_rtos_parar(const char* que, const char* det, unsigned num) {
+    bpvm_log_set_enabled(1);   /* V7/H5 P2b.3: fatal → se registra aunque el log esté apagado (#423) */
     log_printf("RTOS: %s (%s:%u) - parado", que, det ? det : "?", num);
     log_flush();
     __disable_irq();

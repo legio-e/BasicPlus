@@ -1586,6 +1586,7 @@ void vApplicationMallocFailedHook(void) {
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     (void) xTask;
+    bpvm_log_set_enabled(1);   /* V7/H5 P2b.3: fatal → se registra aunque el log esté apagado (#423) */
     log_printf("STACK OVERFLOW task=%s", pcTaskName ? pcTaskName : "?");
     log_flush();
     printf("[STACK OVERFLOW] task=%s\n", pcTaskName);
