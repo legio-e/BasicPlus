@@ -946,6 +946,17 @@ la C6, la P4 y la Nucleo.
   cuantos y 7 durmiendo) y verde el control (`bpvm_run`, 0). Con la guarda, 0 en las seis. `6f249614`.
 - `test-kill` no estaba en ninguna red: ahora en `check-testc` (25), con su línea «OK:».
 
+## 🧮 (27-sep, tarde) — `#590`: una global siempre vale lo que dice su declaración (el modelo de Eduardo)
+
+- Las decisiones de Eduardo del lote: `#590` como un `var` de módulo, `#494` UNA EXCEPCIÓN (falta el cómo), `#356`
+  cerrada por superada, `#531` a analizar antes de tocar nada. Y al ver el manual, el modelo: *«las variables
+  globales van en el espacio de constantes del módulo […] si se indica, el valor viene ya grabado en el módulo»*;
+  lo que no se puede grabar, en `__init`; un array literal, grabado y copiado al cargar.
+- El censo destapó más: un `var` estático tiraba su valor EN SILENCIO, y `samples/ModInit.bp` llevaba roto desde el
+  21-sep (sus arrays de módulo se ignoraban; fuera de toda red). `dd2e06e5`: un criterio para las cuatro clases de
+  global, el literal horneado y lo demás en `__globales` (al final del módulo, llamada por `__init` tras los imports
+  y antes de la inicializadora); la stdlib, igual byte a byte. `GlobalesIni` (26) y `ModInit`, a la paridad.
+
 ## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
 
 **Commits desde el traspaso de mediodía** (sin push): `7f2c60bd` (`#576`) · `617ab23d` (H5 cerrado) · `b377da40` ·
