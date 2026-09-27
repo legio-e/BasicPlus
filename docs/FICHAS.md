@@ -88,7 +88,7 @@ el PC sin placa, como en el host.
 >
 > 🔎 **LO ABIERTO DE VERDAD, al 24-sep por la noche** (la tabla de hitos, limpia ese día a petición de Eduardo: las
 > cerradas que seguían sin tachar, tachadas, y los restos de las cerradas, llamados «restos»): **H1 y H2, cerrados.**
-> Fichas con número abiertas: `#452` (H8), ~~`#468`~~ (cerrada el 25-sep, `7398d6e5`), `#495` (H8), `#531` (H7), `#538` (H8), ~~`#542`~~ (H5; cerrada el 26-sep, `99136adb`), ~~`#567`~~ (H6; cerrada el 26-sep, `b9315223`), ~~`#571`~~ (H5; abierta y cerrada el 26-sep, `99b02ddb`), ~~`#572`~~ (H5; cerrada el 27-sep, `a76375c6`), ~~`#573`~~ (H5; abierta y cerrada el 26-sep, `de04b689`), ~~`#574`~~ (H4; abierta y cerrada el 26-sep, `6a53f91f`), ~~`#575`~~ (H5; abierta y cerrada el 26-sep, `848ded39`), ~~`#576`~~ (H5; abierta y cerrada el 27-sep, `7f2c60bd`), **las SUELTAS de H5** (27-sep, al cerrarlo: lo que quedaba en su fila, una ficha cada cosa) `#577` `#578` `#579` `#580` `#581` `#582` `#583` `#584` `#585` `#586`, y las que salen del análisis de `#554` (27-sep): `#587` (H7: el `StringBuilder`), `#588` (SUELTA: las globales del AOT) y `#589` (H8: el depurador de miVM), ~~`#544`~~
+> Fichas con número abiertas: `#452` (H8), ~~`#468`~~ (cerrada el 25-sep, `7398d6e5`), `#495` (H8), `#531` (H7), `#538` (H8), ~~`#542`~~ (H5; cerrada el 26-sep, `99136adb`), ~~`#567`~~ (H6; cerrada el 26-sep, `b9315223`), ~~`#571`~~ (H5; abierta y cerrada el 26-sep, `99b02ddb`), ~~`#572`~~ (H5; cerrada el 27-sep, `a76375c6`), ~~`#573`~~ (H5; abierta y cerrada el 26-sep, `de04b689`), ~~`#574`~~ (H4; abierta y cerrada el 26-sep, `6a53f91f`), ~~`#575`~~ (H5; abierta y cerrada el 26-sep, `848ded39`), ~~`#576`~~ (H5; abierta y cerrada el 27-sep, `7f2c60bd`), **las SUELTAS de H5** (27-sep, al cerrarlo: lo que quedaba en su fila, una ficha cada cosa) `#577` `#578` `#579` `#580` `#581` `#582` `#583` `#584` `#585` `#586`, y las que salen del análisis de `#554` (27-sep): `#587` (H7: el `StringBuilder`), ~~`#588`~~ (SUELTA; cerrada el 27-sep, `455ca895`) y `#589` (H8: el depurador de miVM), ~~`#544`~~
 > (H4; cerrada el 25-sep: no se reproduce) y ~~`#554`~~ (H7; cerrada el 27-sep, `e5761dd1`) —y `#490`, en V8—. Decisiones de Eduardo pendientes: ~~`#542`~~ (decidida el 25-sep: un import sin interfaz es un error de carga), `#579` (¿cerrarla con la evidencia de las `test-aot*` y la tanda?), `#582`/`#583` (la línea y el debugger: «una decisión de fondo»), `#584` (¿podar es obligatorio?) y,
 > al publicar, `--formato=8` (la SD de la C6 quedó decidida el 24-sep: tras `H6.b`). Lo demás abierto no tiene número: está en la fila de su hito, abajo.
 >
@@ -779,13 +779,23 @@ heap. `make test-guilleno` (en `check-testc`, sólo VM-C): 511 etiquetas y el er
 `ModuleManager.formatPropertyValue` lee 4 bytes). En la VM-C, `READ_STRING` sí hace la indirección. Con `#554` —el
 literal usado como valor es una cadena del heap— lo verían TODAS las cadenas en el depurador del PC. `V7_IDEAS` §H7.
 
-#### 🟡 `#588` — el AOT calcula a mano la posición de las globales del módulo y se equivoca si antes hay una global `string`, ref, `long` o `double`: la native lee otra palabra, sin un error (abierta 27-sep, en el análisis de `#554`; preexistente; SUELTA)
+#### ✅ `#588` — el AOT calcula a mano la posición de las globales del módulo y se equivoca si antes hay una global `string`, ref, `long` o `double`: la native lee otra palabra, sin un error (abierta 27-sep, en el análisis de `#554`; preexistente; SUELTA · **CERRADA el 27-sep**, `455ca895`)
 
 `AotCEmitter` asigna -4, -8… sólo a las globales integer, float y boolean, por su cuenta y no por lo que escribió
 `ModWriter`. Comprobado en el análisis: con `var s: string := "hola"` y luego `var n: integer := 5`, el C generado
 lee `cs + (-4)` y en el `.mod` `n` está en `cs-20` (`s` en `cs-8`, `"hola"` en `cs-16`). Una native que lee o escribe
 una global entera de un módulo así usa otra memoria. El arreglo natural: que el emisor tome los offsets de lo que
 escribe el compilador (una sola fuente), con una prueba que mezcle globales de todos los tipos. `V7_IDEAS` §H7.
+
+✅ **HECHO el 27-sep** (`455ca895`): la posición la da el compilador. `ModWriter.offsetDeDato(nombre)` y
+`MivmEmitter.offsetsDeGlobales(módulo, info)`, que ejecuta el paso 2 de `emitTo` —las globales y las constantes,
+en su orden— sobre un emisor nuevo, sin escribir nada y devolviendo los estáticos que fija; `AotCEmitter` toma de
+ahí las posiciones de sus globales integer/float/boolean y de las constantes con hueco. Sin información semántica,
+ninguna global: una native que toque una lo dice en vez de adivinar. El AOT necesita ahora las clases de miVM:
+añadidas al `classpath` de `AotMain` en el Makefile y en `pico/build_mdn.sh` (el IDE y `PackAot` ya las llevaban).
+`make test-aotglobales` (en `check-testc`): `samples/NatGlobales.bp` —una string con valor inicial, un `long`, un
+array y otra string por delante de las globales que las natives leen y escriben—, 7/7 igual que interpretado; con
+el emisor de antes, ROJO: `suma` daba 705033164 en vez de 23 y la escritura se comía las cadenas.
 
 #### 🟡 `#587` — `StringBuilder` (en `Core.bp`) no es eficiente: guarda un `integer[]` —4 bytes por carácter— y `appendStr` copia carácter a carácter con una llamada a método por cada uno (abierta 27-sep, en el análisis de `#554`; H7)
 

@@ -891,6 +891,13 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
+## 🎯 AOT (27-sep, tarde) — `#588` cerrada: las globales del módulo, desde el compilador
+
+- La native calculaba la posición de cada global por su cuenta y, con una global string, long o array por
+  delante, leía y ESCRIBÍA otra palabra (`NatGlobales`: `suma` 705033164 en vez de 23; la escritura se comía las
+  cadenas). Ahora se la pregunta al compilador (`MivmEmitter.offsetsDeGlobales`, el mismo reparto del `.mod`).
+  `make test-aotglobales` 7/7 (roja antes). El AOT lleva las clases de miVM en su `classpath`.
+
 ## 🔗 H7 (27-sep, tarde) — `#554` cerrada: concatenar en placa, de 2122 a 44 ms
 
 - La causa (el `__strconcat` sintetizado copiaba byte a byte en bytecode), la concatenación de N de una vez (idea de

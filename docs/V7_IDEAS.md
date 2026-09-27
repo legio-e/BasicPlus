@@ -2544,6 +2544,7 @@ primera concatenación—.
 - **`#588`** — el AOT calcula a mano la posición de las globales del módulo (-4, -8…, sólo para integer, float y
   boolean) y se equivoca si antes hay una global `string`, ref, `long` o `double`: con `var s: string := "hola"` y
   luego `var n: integer := 5`, la native lee `cs-4` y `n` está en `cs-20`. Silencioso. (Anterior a todo esto.)
+  ✅ Cerrada el 27-sep (`455ca895`): la posición la da el compilador (`MivmEmitter.offsetsDeGlobales`).
 - **`#589`** — el depurador de miVM muestra una cadena del HEAP como `@4000…` (no hace la indirección: sólo los
   literales crudos salían con su texto; con A o con B, TODAS las cadenas) y la vista de properties lee 4 de los 8
   bytes de una referencia.
