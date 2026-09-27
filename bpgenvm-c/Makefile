@@ -813,6 +813,13 @@ test-aotdirecta: $(LIBOBJ)
 	 done; \
 	 if [ $$mal -ne 0 ]; then exit 1; fi; \
 	 echo "  ok  : hoja, llamaHoja, fibR y texto, DIRECTAS; conBucle, pequena, llamaPequena, conRaiz y llamaBp, al ejecutor"
+	$(call aotmain,NatDirectaPack,build/aotdirectapack)
+	@c=build/aotdirectapack/aot_NatDirectaPack.c; mal=0; \
+	 for f in suma nombre; do \
+	   grep -q "NatDirectaPack\.$$f\", .*BPVM_AOT_DIRECTA" $$c || { echo "  ROJO: $$f (del pack) tenia que salir DIRECTA"; mal=1; }; \
+	 done; \
+	 if [ $$mal -ne 0 ]; then exit 1; fi; \
+	 echo "  ok  : llamar a un pack no cede: suma y nombre (del pack), DIRECTAS"
 	@./build/test_aotdirecta.exe samples/NatDirecta.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotdirecta.aot; \
 	 ./build/test_aotdirecta.exe samples/NatDirecta.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotdirecta.int; \
 	 n=$$(grep -c '^ok ' build/aotdirecta.aot); \

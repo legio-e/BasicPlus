@@ -53,12 +53,24 @@ def abi_de(fichero, patron):
     return int(m.group(1)) if m else None
 
 
+_MDN_VERSION = []
+
+
+def mdn_version_max():
+    """Hasta qué versión de cabecera carga la VM (mdn_loader.c: de 1 a MDN_VERSION), leída de mdn_format.h como la
+    ABI. V7/H5 P2b.3: con un 1-2 fijo, la v3 (la marca DIRECTA) salía «ABI None» y la red daba rojo por la razón
+    equivocada."""
+    if not _MDN_VERSION:
+        _MDN_VERSION.append(abi_de(MDN_FORMAT, r'^#define\s+MDN_VERSION\s+(\d+)') or 2)
+    return _MDN_VERSION[0]
+
+
 def abi_mdn(b):
     """La ABI de un .mdn (cabecera little-endian: magic, versión, abi), o None si no lo es."""
     if len(b) < 8 or b[:4] != b'MDN\x00':
         return None
     ver, abi = struct.unpack('<HH', b[4:8])
-    return abi if ver in (1, 2) else None
+    return abi if 1 <= ver <= mdn_version_max() else None
 
 
 def entradas(b):

@@ -30,10 +30,13 @@
 /* La pila de un ejecutor. Dentro corren la native, sus helpers, el intérprete anidado del puente nativo→BP y los
  * builtins que llamen —el GC no: va al worker—. En el PC, holgada (256 KB, como la pila prestada de P2b.1); en las
  * placas, lo que diga la marca de agua (P2b.3.d; Eduardo: «en freertos el tamaño del stack de los Threads puede
- * ser más pequeño»): de entrada 6 KB, y cada familia puede fijar la suya con -D. */
+ * ser más pequeño»). Medido el 27-sep con 6 KB en la DK2, la Metro y el P4: las pruebas de natives, hasta 3,3 KB
+ * en ARM y 3,5 en RISC-V (el `call_builtin` y su marco de 2 KB; RISC-V apila más, también el contexto de las
+ * interrupciones); SQLite, 5,5 KB en el P4 —que desde entonces no va al ejecutor: llamar a un pack no cede—. 8 KB
+ * deja sitio a una native que llama a BP que escribe un fichero. Cada familia puede fijar la suya con -D. */
 #ifndef BPVM_NATIVA_PILA_BYTES
 #  if defined(__arm__) || defined(__riscv) || defined(__XTENSA__)
-#    define BPVM_NATIVA_PILA_BYTES (6u * 1024u)
+#    define BPVM_NATIVA_PILA_BYTES (8u * 1024u)
 #  else
 #    define BPVM_NATIVA_PILA_BYTES (256u * 1024u)
 #  endif

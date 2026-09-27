@@ -1,0 +1,17 @@
+// NatDirectaPack.bp — V7/H5 P2b.3: LLAMAR A UN PACK NO CEDE (Eduardo, 27-sep). Una native `from pack` no tiene
+// cuerpo en BP: su puente busca la función en el pack y salta a su código C, que sólo ve la BIOS —ninguna de sus
+// ranuras ejecuta BP—, así que no hay dónde suspenderse: es DIRECTA. (En un módulo con `import … from pack` todas
+// las `native` son externas; una native de OTRO módulo que las llame lo hace por el puente a BP y va al ejecutor,
+// como `llamaBp` en NatDirecta.) En el PC no hay pack "PRUE": `make test-aotdirecta` sólo mira la clasificación en
+// el C que emite el AOT (no lo ejecuta).
+module NatDirectaPack
+  import Core
+  import v1 from pack "PRUE"
+
+  public native function suma(a: integer, b: integer): integer
+  public native function nombre(n: integer): string
+
+  function Main()
+    print "sin el pack PRUE no se ejecuta: esta muestra es para la clasificacion del AOT"
+  end Main
+end NatDirectaPack

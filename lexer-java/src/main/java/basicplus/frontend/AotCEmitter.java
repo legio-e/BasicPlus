@@ -767,10 +767,17 @@ public final class AotCEmitter {
     }
 
     /** V7/H5 P2b.3 — los helpers por los que una native puede CEDER el hilo: la línea del bucle, un builtin por el
-     *  despachador (puede bloquear), el puente a BP (la función BP puede bloquear) y un pack (su código podría volver
-     *  a BP). Todo lo demás de la tabla —cadenas, arrays, reservas, `print`, lanzar— vuelve sin ceder. */
+     *  despachador (puede bloquear) y el puente a BP (la función BP puede bloquear). Todo lo demás de la tabla
+     *  —cadenas, arrays, reservas, `print`, lanzar— vuelve sin ceder.
+     *
+     *  Y LLAMAR A UN PACK TAMPOCO CEDE (Eduardo, 27-sep: «OK, adelante»): el puente de una native `from pack` usa
+     *  `pack_sym` sólo para BUSCAR la función, y luego salta a código C del pack, que sólo ve la BIOS (libc, ficheros,
+     *  la HAL, `log`, `env`, `sleep_ms`…): ninguna de sus ranuras ejecuta BP, así que dentro del pack no hay ningún
+     *  punto de suspensión. Estaba en la lista por prudencia y mandaba a SQLite a un ejecutor sin servirle de nada
+     *  (el testigo en cada llamada y su motor, 5,5 KB, en la pila pequeña del ejecutor). ⚠️ Si algún día la BIOS da a
+     *  un pack una forma de llamar a BP, "->pack_sym(" tiene que VOLVER a esta lista. */
     private static final String[] CEDEN = {
-        "->punto_control(", "->call_builtin(", "->call_bp_i32(", "->call_method_i32(", "->pack_sym("
+        "->punto_control(", "->call_builtin(", "->call_bp_i32(", "->call_method_i32("
     };
 
     /** V7/H5 P2b.3 — las natives DIRECTAS: las que no pueden ceder el hilo en ningún caso, porque ni su C ni el de
