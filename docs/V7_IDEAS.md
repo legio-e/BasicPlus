@@ -2602,6 +2602,12 @@ volátiles).
 **Propuesta**: hacerlo —el contador, sin el temporizador—, con `EvDos` en la paridad, y el camino rápido sólo si el
 +6 % molesta.
 
+**Hecho el 27-sep** (`8614d7af`, con el OK de Eduardo). Su pregunta al leerlo —*«si hay un cambio de contexto
+cada cierto tiempo, en ese momento ya se asegura un punto donde atender otros eventos dentro de una función nativa;
+si se quiere afinar más, ¿un 2º timer?»*—: la VM-C ya mide así a una native (por tiempo, 5 ms, mirado en su línea
+del bucle cada 1024 vueltas), y en miVM una native se interpreta y cuenta instrucciones como todo; el 2º
+temporizador, para que una native con vueltas pesadas ceda a tiempo, es `#592`.
+
 ## H7 — `#494`: el heap descarrilado, UNA EXCEPCIÓN (27-sep, decisión de Eduardo; el cómo, para mirarlo)
 
 **Lo que hay.** El guardián (`buildValidObjectsSet` en miVM, `build_gc_valid_map` en la VM-C) ve que el recorrido

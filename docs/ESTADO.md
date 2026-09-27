@@ -957,6 +957,16 @@ la C6, la P4 y la Nucleo.
   global, el literal horneado y lo demás en `__globales` (al final del módulo, llamada por `__init` tras los imports
   y antes de la inicializadora); la stdlib, igual byte a byte. `GlobalesIni` (26) y `ModInit`, a la paridad.
 
+## ⏱️ H7 (27-sep, tarde) — `#531` cerrada: miVM corta el cuanto por instrucciones, como la VM-C
+
+- El análisis que pidió Eduardo (`V7_IDEAS` §H7), con un prototipo desechable: `EvDos` idéntica a la VM-C, la red
+  verde, +4-6 % en miVM. Su pregunta —un cambio de contexto por tiempo ya asegura un punto para atender otros
+  eventos dentro de una native; ¿un 2º timer para afinar?—: la VM-C ya mide así a la native (5 ms, mirado cada 1024
+  vueltas); el 2º temporizador para afinarla es `#592`.
+- `8614d7af`: `quantumOps` en el lazo de `runOnContext` y fuera el temporizador; `EvDos` (eventos y dos hilos) a la
+  paridad. Una medida de 10 s con dos hilos, justo después de compilar, era la máquina ocupada: repetida tres veces,
+  3,1 s, lo que dio el prototipo.
+
 ## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
 
 **Commits desde el traspaso de mediodía** (sin push): `7f2c60bd` (`#576`) · `617ab23d` (H5 cerrado) · `b377da40` ·
