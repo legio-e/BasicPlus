@@ -20,7 +20,7 @@
 #include "bpvm_opcodes.h"
 #include "aot_registry.h"        /* H3 #160: hijack BP→AOT en OP_CALL/CALL_EXT */
 #include "bpvm_aot_helpers.h"    /* P-aot-call-bp: struct aot_helpers_v1 completa */
-#include "bpvm_nativa.h"         /* V7/H5 P2b.1: la pila prestada de una native */
+#include "bpvm_nativa.h"         /* V7/H5 P2b.3: el ejecutor de una native */
 #include "bpvm_prims.h"          /* V7/H5 P2b: las primitivas compartidas con el AOT */
 
 #include "bpvm_comm.h"
@@ -273,10 +273,10 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
     tc->pc = target_abs;
     tc->cs = target_cs;
 
-    /* V7/H5 P2b.1.c — si el hilo corre en su pila prestada, la función BP puede BLOQUEARSE y agotar su
+    /* V7/H5 P2b.1.c — si el hilo corre en su ejecutor (P2b.3), la función BP puede BLOQUEARSE y agotar su
      * quantum como cualquier otra: la native se suspende entera y el worker atiende a los demás hilos.
      * Antes, un bloqueo aquí era «cedió/falló (no soportado por el puente v1)» y el quantum no se acababa
-     * nunca (1 << 24 operaciones). Sin pila prestada, todo sigue como antes. */
+     * nunca (1 << 24 operaciones). Sin ejecutor, todo sigue como antes. */
     int puede_ceder = tc->nativa != NULL && tc->nativa->estado == BPVM_NATIVA_CORRIENDO;
     /* V7/H5 P2b.2 — el código BP anidado deshace sus propias excepciones: la marca de «builtin llamado desde
      * una native» (un builtin de la GUI que llama de vuelta a BP) no vale aquí dentro. */
@@ -667,18 +667,14 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
     int ops = 0;
 
     /* V7/H5 P2b.1.c — un hilo suspendido DENTRO de una native no se interpreta: se REANUDA su native (y con
-     * ella lo que haya en su pila prestada: el intérprete anidado del puente, otras natives). Si vuelve a
+     * ella lo que haya en su ejecutor: el intérprete anidado del puente, otras natives; P2b.3). Si vuelve a
      * suspenderse, se acaba el quantum sin tocar tc; si termina, el intérprete de fuera sigue tras su CALL. */
     if (bpvm_nativa_suspendida(tc)) {
-        int r = bpvm_nativa_reanudar(vm, tc);
+        int r = bpvm_nativa_reanudar(vm, tc, &pc, &cs, &sp, &bp);
         if (r == BPVM_NATIVA_SUSPENDIDA_R) {
             if (yielded) *yielded = 1;
             return BPVM_OK;
         }
-        pc = tc->nativa->pc_vuelta;
-        cs = tc->nativa->cs_vuelta;
-        sp = tc->nativa->sp;
-        bp = tc->nativa->bp;
         if (r != 0) {   /* lanzó: eh_unwind dejó tc en el handler (r == 1) o el hilo muerto (r == 2) */
             pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
             if (r == 2) {
@@ -1100,7 +1096,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 /* #186 — boundary de fault. Si el native lanza, el wrapper
                  * propaga al try/catch BP que envuelva la llamada. */
                 tc->cs = cs;
-                int r = bpvm_nativa_llamar(vm, tc, aot, &sp, &bp, pc, cs);   /* P2b.1: en su pila prestada */
+                int r = bpvm_nativa_llamar(vm, tc, aot, &sp, &bp, pc, cs);   /* P2b.3: en su ejecutor */
                 if (r == BPVM_NATIVA_SUSPENDIDA_R) {
                     /* P2b.1.c — el hilo se queda DENTRO de la native, suspendido: su estado (el del
                      * intérprete anidado, si lo hay) ya está en tc. No se pasa por `done`, que lo pisaría
@@ -2021,7 +2017,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 if (aot_ext) {
                     /* #186 — mismo boundary de fault que OP_CALL. */
                     tc->cs = cs;
-                    int r = bpvm_nativa_llamar(vm, tc, aot_ext, &sp, &bp, pc, cs);   /* P2b.1 */
+                    int r = bpvm_nativa_llamar(vm, tc, aot_ext, &sp, &bp, pc, cs);   /* P2b.3: en su ejecutor */
                     if (r == BPVM_NATIVA_SUSPENDIDA_R) {
                         /* P2b.1.c — el hilo se queda DENTRO de la native, suspendido: su estado (el del
                          * intérprete anidado, si lo hay) ya está en tc. No se pasa por `done`, que lo pisaría

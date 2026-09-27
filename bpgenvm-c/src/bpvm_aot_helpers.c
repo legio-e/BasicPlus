@@ -283,7 +283,7 @@ static int64_t h_call_builtin(bpvm_t* vm, int32_t id, const char* tipos, const i
         default:  h_throw_runtime(vm, "call_builtin: tipo de argumento desconocido"); return 0;
         }
     }
-    /* El respaldo: donde la native no puede suspenderse (sin pila prestada), un builtin que cede el hilo no se
+    /* El respaldo: donde la native no puede suspenderse (sin ejecutor, P2b.3), un builtin que cede el hilo no se
      * ejecuta — se dice con nombre y sin efectos a medias. */
     if (bpvm_builtin_cede(id)
         && !(tc->nativa != NULL && tc->nativa->estado == BPVM_NATIVA_CORRIENDO)) {

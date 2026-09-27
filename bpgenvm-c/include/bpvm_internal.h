@@ -689,6 +689,10 @@ struct bpvm {
      * y la apertura duplicada. Al final, como todo lo nuevo: el prefijo del .mdn
      * no se toca. 0 = ninguno. */
     uint32_t files_head;
+    /* V7/H5 P2b.3 — EL DEPÓSITO DE EJECUTORES de natives (src/bpvm_nativa.h): los hilos de la plataforma en los que
+     * corren las natives, creados al entrar en la primera y reutilizados; se terminan en bpvm_destroy. Al final,
+     * como todo lo nuevo: el prefijo del .mdn no se toca. */
+    struct bpvm_nativa* nativas;
 };
 
 /* V7/H3 (#491) — en builtins.c. */
@@ -1008,7 +1012,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
 
 /* V7/H5 P2b.2 — ¿este builtin cede o bloquea el hilo? (sleep, sleepSec, yield, Thread.join, Mutex.lock: los que
  * cambian tc->status). Sólo lo usa call_builtin como RESPALDO, donde la native no puede suspenderse: allí los
- * rechaza con nombre ANTES de ejecutarlos, sin efectos a medias. Con la pila prestada se ejecutan y la native
+ * rechaza con nombre ANTES de ejecutarlos, sin efectos a medias. Con un ejecutor (P2b.3) se ejecutan y la native
  * se suspende. */
 int bpvm_builtin_cede(int id);
 
@@ -1177,6 +1181,10 @@ typedef struct {
      * cero cambio de ABI: el thunk no sabe que esto existe — por eso los `.mdn`
      * ya grabados se vuelven seguros sin regenerarlos. */
     uintptr_t      cstack_hi;
+    /* V7/H5 P2b.3 — el EJECUTOR en el que corre este hilo (src/bpvm_nativa.h), o NULL en el worker. El GC lo mira:
+     * pedido dentro de un ejecutor, le pasa el testigo al worker y corre en su pila. Va aquí porque esto ya es lo
+     * que cada hilo ve como suyo (TLS en el PC; en las placas, la vista que se turnan el worker y la native). */
+    struct bpvm_nativa* ejecutor;
 } bpvm_aot_callctx_t;
 
 /* Contexto AOT del worker actual (TLS en host). */

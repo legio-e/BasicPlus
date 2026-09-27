@@ -37,7 +37,7 @@ SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/bu
           src/bpvm_log.c \
           src/scheduler_smp.c src/comm_common.c src/comm_host.c src/bpvm_io.c \
           src/fs_facade.c src/fs_host.c src/crc32.c src/bpvm_env.c src/bpvm_part.c src/bpvm_boot.c src/bpvm_sqlmem.c src/bpvm_mem.c src/bpvm_mods.c src/bpvm_handles.c src/bpvm_bios.c src/bpvm_bios_fs.c src/bpvm_bios_hal.c src/bpvm_bus.c src/bpvm_npack.c src/bpvm_bmgr.c src/bpvm_bmgr_wire.c src/bpvm_dbg_wire.c \
-          src/bpvm_pack.c src/bpvm_mdn_scan.c src/bpvm_ctx.c src/bpvm_nativa.c \
+          src/bpvm_pack.c src/bpvm_mdn_scan.c src/bpvm_nativa.c \
           src/net.c src/net_host.c \
           src/fs_lfs.c src/fs_lfs_host.c \
           third_party/littlefs/lfs.c third_party/littlefs/lfs_util.c \
@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-ctx test-aotswitch test-aotstr test-aotarr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotswitch test-aotstr test-aotarr test-aotanida test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -708,15 +708,6 @@ test-aotarr: $(LIBOBJ)
 	 if ! cmp -s build/aotarr.int build/aotarr.aot; then diff build/aotarr.int build/aotarr.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 21 ]; then cat build/aotarr.aot; echo "  ROJO: $$n de 21 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 21/21 con el AOT, igual que interpretado"
-
-# V7/H5 (P2b.1.a, 26-sep) — EL CAMBIO DE CONTEXTO (bpvm_ctx), la pieza en ensamblador de la suspensión de
-# natives: 100 000 saltos con estado vivo en los registros no volátiles, setjmp/longjmp y un marco grande
-# DENTRO de la pila prestada.
-test-ctx: $(LIBOBJ)
-	@mkdir -p build
-	$(CC) $(CFLAGS) -Isrc test/test_ctx.c $(LIBOBJ) -o build/test_ctx.exe $(LDFLAGS)
-	@echo "--- P2b.1.a el cambio de contexto (esperado: solo 'ok', [status=OK]) ---"
-	./build/test_ctx.exe
 
 # V7/H5 (P2b.3.a, 27-sep) — EL EJECUTOR de una native y EL TESTIGO, las dos piezas de la plataforma, solas:
 # idas y vueltas con estado vivo (y lo que cuesta un paso), terminar uno parado a mitad, un marco grande.

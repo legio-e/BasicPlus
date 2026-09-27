@@ -16,7 +16,7 @@
 #include "bpvm_spi.h"
 #include "bpvm_i2c.h"
 #include "bpvm_alloc.h"         /* #339: guardián de fin de RUN */
-#include "bpvm_nativa.h"        /* V7/H5 P2b.1: la pila prestada se va con la VM */
+#include "bpvm_nativa.h"        /* V7/H5 P2b.3: los ejecutores de natives se van con la VM */
 #include "bpvm_entry.h"         /* #344: el RUN, escrito UNA vez */
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"          /* #352: el modelo del GUI se va con la VM */
@@ -1624,6 +1624,9 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_out_set_vm(NULL);   /* #478 */
 
     if (!vm) return;
+    /* V7/H5 P2b.3 — los ejecutores de natives, lo PRIMERO: un ejecutor parado a mitad de una native tiene marcos
+     * que apuntan al programa; se le da la orden de terminar (salta a su fondo, abandonándolos) antes de tocar nada. */
+    bpvm_nativa_liberar_todas(vm);
     bpvm_files_fin_de_run(vm);      /* V7/H3 (#491): lo primero, con la memoria y la tabla de handles vivas */
     bpvm_gpio_estado_reset();       /* V7/H4 (#479): los pines vuelven a libres para el siguiente RUN */
     bpvm_bus_fin_de_run(cerrar_bus);   /* V7/H6.c G4.a1: y los buses que sólo usaba el programa, se cierran */
@@ -1662,7 +1665,6 @@ void bpvm_destroy(bpvm_t* vm) {
     /* Liberar EH stacks y mutex waiters. */
     for (int i = 0; i < vm->thread_count; i++) {
         bpvm_free(vm->threads[i].eh_stack);
-        bpvm_nativa_liberar(&vm->threads[i]);   /* V7/H5 P2b.1: su pila prestada, si tuvo */
     }
     for (int i = 0; i < vm->mutex_count; i++) {
         bpvm_free(vm->mutexes[i].waiters);

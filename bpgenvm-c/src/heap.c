@@ -19,7 +19,7 @@
  */
 
 #include "bpvm_internal.h"
-#include "bpvm_nativa.h"   /* V7/H5 P2b.1: la pila prestada, para decir cuál se escanea */
+#include "bpvm_nativa.h"   /* V7/H5 P2b.3: las natives paradas en su ejecutor, y el GC que piden */
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include <string.h>
 #include <stdlib.h>
@@ -374,16 +374,23 @@ static void gc_mark_phase(bpvm_t* vm) {
      *     programas sin AOT no pagan nada. Y en SMP el callctx es TLS por
      *     worker, y el STW garantiza que los demás workers están aparcados en
      *     frontera de quantum — nunca a mitad de un native. */
-    /* 2e. V7/H5 P2b.1.c — LAS NATIVES SUSPENDIDAS. Su estado de C —sus variables, y los registros que el
-     *     cambio de contexto guardó al suspenderlas— está en su pila prestada, desde el contexto guardado
-     *     hasta el tope. Nadie más lo ve: la native no corre, así que el escaneo de abajo (el del native
-     *     en curso) no la cubre. Palabra a palabra y conservador, como ese. */
+    /* 2e. V7/H5 P2b.1.c / P2b.3 — LAS NATIVES PARADAS EN SU EJECUTOR: suspendidas, o esperando a que el
+     *     worker corra este mismo GC por ellas. Su estado de C —sus variables, y los registros, que volcó un
+     *     setjmp antes de pasar el testigo— está en la pila del ejecutor, desde donde se paró hasta el techo
+     *     que apuntó su native más externa. Nadie más lo ve: la native no corre, así que el escaneo de abajo
+     *     (el del native en curso) no la cubre. Palabra a palabra y conservador, como ese. */
     for (int t = 0; t < vm->thread_count; t++) {
         const struct bpvm_nativa* nv = vm->threads[t].nativa;
-        if (nv == NULL || nv->estado != BPVM_NATIVA_SUSPENDIDA) continue;
+        if (nv == NULL || (nv->estado != BPVM_NATIVA_SUSPENDIDA && nv->estado != BPVM_NATIVA_PIDE_GC)) continue;
+        if (nv->cc_nativa.cstack_hi == 0) {
+            /* Sin marcos de native vivos: pide el GC tras salir de ella (construyendo la excepción con la que
+             * lanzó, ya fuera del longjmp). No hay pila que escanear. */
+            bpvm_diag("[gc] el ejecutor del hilo %d pide este GC sin native viva (lanzando su excepción)", t);
+            continue;
+        }
         {
-            uintptr_t lo = ((uintptr_t) nv->ctx_nativa + 3u) & ~(uintptr_t) 3u;
-            uintptr_t hi = (uintptr_t) nv->pila + nv->tam;
+            uintptr_t lo = (nv->sp_parado + 3u) & ~(uintptr_t) 3u;
+            uintptr_t hi = nv->cc_nativa.cstack_hi;
             uint32_t palabras = 0;
             for (uintptr_t a = lo; a + 4u <= hi; a += 4u) {
                 uint32_t v;
@@ -391,7 +398,8 @@ static void gc_mark_phase(bpvm_t* vm) {
                 palabras++;
                 mark_recursive(vm, v);
             }
-            bpvm_diag("[gc] pila C de la native SUSPENDIDA del hilo %d: [%p..%p) = %u palabras",
+            bpvm_diag("[gc] pila C de la native %s del hilo %d (en su ejecutor): [%p..%p) = %u palabras",
+                      nv->estado == BPVM_NATIVA_PIDE_GC ? "que pide este GC" : "SUSPENDIDA",
                       t, (void*) lo, (void*) hi, (unsigned) palabras);
         }
     }
@@ -416,14 +424,11 @@ static void gc_mark_phase(bpvm_t* vm) {
                 }
                 mark_recursive(vm, v);
             }
-            {   /* V7/H5 P2b.1 — ¿es la pila PRESTADA del hilo o la del worker? Que lo diga: es la
-                 * forma de saber, en el artefacto, por qué pila corre una native. */
-                const struct bpvm_nativa* nv = cc->tc->nativa;
-                int prestada = nv != NULL && lo >= (uintptr_t) nv->pila && hi <= (uintptr_t) nv->pila + nv->tam;
-                bpvm_diag("[gc] pila C del native (%s): [%p..%p) = %u palabras, %u refs",
-                          prestada ? "prestada" : "del worker",
-                          (void*) lo, (void*) hi, (unsigned) palabras, (unsigned) refs);
-            }
+            /* V7/H5 P2b.3 — aquí sólo llega una native que corre en la pila del WORKER (sin ejecutor, por
+             * falta de memoria): las de un ejecutor le piden el GC al worker y se escanean arriba (2e). Que lo
+             * diga: es la forma de saber, en el artefacto, por qué pila corre una native. */
+            bpvm_diag("[gc] pila C del native (en la del worker, sin ejecutor): [%p..%p) = %u palabras, %u refs",
+                      (void*) lo, (void*) hi, (unsigned) palabras, (unsigned) refs);
         }
     }
     /* 3. GC-2: data blocks de módulo. Consts + globales de módulo viven en
@@ -692,6 +697,19 @@ static void bpvm_gc(bpvm_t* vm) {
      * Sin esto, el gc() manual corría y su escaneo conservativo no reconoce los
      * handles tageados → no marca nada → libera TODO lo vivo (ownerreassign). */
     if (vm->gc_suspended) return;
+    /* V7/H5 P2b.3 — pedido DENTRO del ejecutor de una native: el marcado es recursivo (una lista larga es una
+     * recursión igual de honda) y la pila del ejecutor es pequeña a propósito. Se le pasa el testigo al worker
+     * con el encargo y corre en SU pila; la del ejecutor se escanea como la de una native parada (2e). */
+    if (bpvm_aot_callctx()->ejecutor != NULL) {
+        bpvm_nativa_gc_en_worker(vm);
+        return;
+    }
+    bpvm_gc_cuerpo(vm);
+}
+
+/* V7/H5 P2b.3 — el GC en sí. Lo llama bpvm_gc y, por encargo de un ejecutor, el worker (sin el cerrojo del SMP:
+ * el ejecutor que lo pide ya lo tiene tomado). */
+void bpvm_gc_cuerpo(bpvm_t* vm) {
     gc_mark_phase(vm);
     bpvm_files_gc(vm);         /* V7/H3 (#491): un File inalcanzable se cierra AQUÍ, con su bloque intacto y su handle vivo */
     bpvm_handles_gc_sweep(vm); /* paso 6: recicla slots de tabla de lo inalcanzable (bpvm_handles.c) */
