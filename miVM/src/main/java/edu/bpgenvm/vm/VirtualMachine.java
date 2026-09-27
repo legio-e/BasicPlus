@@ -133,7 +133,7 @@ public class VirtualMachine {
          * EL UNICO sitio que cambia el estado de un thread BP.
          *
          * `quien` es el worker que hace el cambio (-1 = fuera de un worker: el
-         * arranque, el DebugServer, el timer). Sirve para el aviso de abajo, no
+         * arranque, el DebugServer). Sirve para el aviso de abajo, no
          * para decidir: aqui todavia no se veta nada, se DENUNCIA.
          */
         void setStatus(ThreadStatus nuevo, int quien, String motivo) {
@@ -165,11 +165,11 @@ public class VirtualMachine {
             estado = nuevo;
         }
         /**
-         * Señal per-thread: un builtin (yield/sleep/join) O el timer preemptivo
-         * ha pedido que el worker que ejecuta ESTE tc abandone el bucle inner
-         * y vuelva al scheduler para hacer context switch. Se limpia al cargar
-         * el tc de nuevo en un worker.
-         * volatile: la fija el timer preemptivo (otro Java thread) y el bucle
+         * Señal per-thread: un builtin (yield/sleep/join), el fin del cuanto
+         * (#531: quantumOps instrucciones) o el GC/KILL han pedido que el worker
+         * que ejecuta ESTE tc abandone el bucle inner y vuelva al scheduler para
+         * hacer context switch. Se limpia al cargar el tc de nuevo en un worker.
+         * volatile: la puede fijar otro Java thread (otro worker) y el bucle
          * inner debe verla en la siguiente iteración sin que el JIT la cachée.
          */
         volatile boolean yieldRequested = false;
@@ -418,16 +418,20 @@ public class VirtualMachine {
     private final java.util.ArrayDeque<PendingEvent> eventQueue = new java.util.ArrayDeque<>();
 
     /**
-     * Quantum del scheduler preemptivo en milisegundos. Cada {@code quantumMs}
-     * el timer marca yieldRequested=true en todos los tcs RUNNING, forzando
-     * un context switch. 0 desactiva el timer (cooperativo puro).
+     * #531 (V7, 27-sep) — el QUANTUM del planificador, en INSTRUCCIONES: un hilo ejecuta exactamente
+     * {@code quantumOps} opcodes y cede el turno, como la VM-C (`bpvm_interp_run_quantum`: 1024, o el
+     * `quantum=N` del ENV de una placa, #462). Hasta hoy era un TEMPORIZADOR de 10 ms que marcaba
+     * yieldRequested en los hilos RUNNING: el corte caía en una instrucción distinta en cada ejecución, y
+     * con él el momento en que se entrega un evento (uno por cuanto) o le toca a otro hilo; miVM no
+     * coincidía con la VM-C ni consigo misma (`samples/EvDos.bp`). Contando, el corte cae en la misma
+     * instrucción en las dos VMs, y la garantía de atender a los demás sigue: 1024 opcodes pasan en
+     * decenas de microsegundos. Medido: +4-6 % en un bucle de cálculo (la frontera de cuanto de miVM es
+     * cara), sin temporizador (un hilo menos).
      */
-    private int quantumMs = 10;
-    public void setQuantumMs(int ms) { this.quantumMs = Math.max(0, ms); }
-    public int getQuantumMs() { return quantumMs; }
-
-    /** Timer preemptivo: ScheduledExecutorService daemon que dispara cada quantum. */
-    private java.util.concurrent.ScheduledExecutorService preemptTimer;
+    private int quantumOps = 1024;
+    /** Espejo de `bpvm_set_quantum_ops`: 0 o menos, el de por defecto (1024). */
+    public void setQuantumOps(int ops) { this.quantumOps = (ops > 0) ? ops : 1024; }
+    public int getQuantumOps() { return quantumOps; }
 
     /**
      * Estado interno de un Mutex BP. La clase BP {@code Mutex} guarda en su
@@ -439,7 +443,7 @@ public class VirtualMachine {
      * escriben SÓLO con {@code vmLock} tomado (o entre acquire/release explícitos del mismo
      * lock). Todos los sitios de hoy lo cumplen (los builtins de lock/unlock, el scheduler al
      * despertar a un waiter y el volcado del debugger); un acceso fuera del lock sería una
-     * carrera con el timer preemptivo, y no la delataría ninguna prueba del PC (la VM-C no
+     * carrera con otro worker (--workers), y no la delataría ninguna prueba del PC (la VM-C no
      * tiene este problema: su scheduler es cooperativo dentro de un solo hilo de SO).
      */
     private static final class JavaMutex {
@@ -2581,16 +2585,10 @@ public class VirtualMachine {
             workers[i].setDaemon(false);
             workers[i].start();
         }
-        // Timer preemptivo: cada quantumMs marca yieldRequested=true en
-        // los tcs RUNNING. Daemon thread (no impide la salida de la JVM).
-        startPreemptTimer();
-        try {
-            // Esperamos a que todos los workers terminen (vmShutdown=true).
-            for (Thread w : workers) {
-                try { w.join(); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
-            }
-        } finally {
-            stopPreemptTimer();
+        // #531 — sin temporizador: el cuanto lo cuenta cada worker en runOnContext (quantumOps).
+        // Esperamos a que todos los workers terminen (vmShutdown=true).
+        for (Thread w : workers) {
+            try { w.join(); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
         }
         // Vuelco final por compatibilidad con callers que lean this.X.
         this.PC = main.pc;
@@ -2768,8 +2766,9 @@ public class VirtualMachine {
                                 // Dos orígenes posibles:
                                 //   1) Builtin yield/sleep/join: ya cambió tc.getStatus()
                                 //      (RUNNABLE+addLast, BLOCKED_SLEEP, o BLOCKED_JOIN).
-                                //   2) Preempt timer: sólo activó yieldRequested,
-                                //      tc.getStatus() sigue RUNNING → re-encolamos aquí.
+                                //   2) Fin del cuanto (#531: quantumOps instrucciones): sólo
+                                //      activó yieldRequested, tc.getStatus() sigue RUNNING →
+                                //      re-encolamos aquí.
                                 //
                                 // 🔴 B1 — Y LA TERCERA, que era la carrera: mientras este
                                 // worker salia de runOnContext, el thread se volvio
@@ -2813,38 +2812,6 @@ public class VirtualMachine {
     }
 
     /**
-     * Arranca el timer preemptivo (si quantumMs > 0). Cada quantum, marca
-     * tc.yieldRequested=true en todos los ThreadContexts RUNNING para forzar
-     * un context switch en el próximo opcode. Los workers ven el flag en su
-     * while-condition y abandonan runOnContext con señal YIELD.
-     */
-    private void startPreemptTimer() {
-        if (quantumMs <= 0) return;
-        preemptTimer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "bpgenvm-preempt-timer");
-            t.setDaemon(true);
-            return t;
-        });
-        preemptTimer.scheduleAtFixedRate(() -> {
-            if (vmShutdown) return;
-            synchronized (vmLock) {
-                for (ThreadContext t : threads) {
-                    if (t.getStatus() == ThreadStatus.RUNNING) {
-                        t.yieldRequested = true;
-                    }
-                }
-            }
-        }, quantumMs, quantumMs, java.util.concurrent.TimeUnit.MILLISECONDS);
-    }
-
-    private void stopPreemptTimer() {
-        if (preemptTimer != null) {
-            preemptTimer.shutdownNow();
-            preemptTimer = null;
-        }
-    }
-
-    /**
      * Bucle del intérprete que opera sobre UN ThreadContext.
      *
      * Lee/escribe SÓLO en tc — nada de this.PC/SP/BP/CS. Imprescindible para
@@ -2880,9 +2847,18 @@ public class VirtualMachine {
         final Deque<int[]> handlerStack = tc.handlerStack;
         ExitSignal exitSignal = ExitSignal.YIELD;  // si salimos por yieldRequested
         boolean running = true;
+        // #531 — el cuanto, en instrucciones y con el criterio exacto de la VM-C (bpvm_interp_run_quantum):
+        // se mira ARRIBA del lazo y se cuenta después, así que un cuanto son exactamente `cuanto` opcodes.
+        final int cuanto = quantumOps;
+        int opsCuanto = 0;
         try {
         while (running && !tc.yieldRequested) {
             int currentPC = pc;
+            if (opsCuanto >= cuanto) {   // cuanto agotado: sigue RUNNABLE y el planificador elige (y drena un evento)
+                tc.yieldRequested = true;
+                break;
+            }
+            opsCuanto++;
 
             // ---- Safepoint stop-the-world para GC (B1) ----
             // stopTheWorld es volatile: lo levanta el worker que va a
@@ -4345,7 +4321,9 @@ public class VirtualMachine {
         // «compareTo() no implementado» probabilistico al final de un programa
         // cuya ultima accion era un sleep (el wait() del worker y el tick del timer
         // despiertan en el mismo tick de 15,6 ms de Windows). Medido: 3-5 de cada
-        // 20 ejecuciones. La marca se limpia siempre; la senal manda.
+        // 20 ejecuciones. La marca se limpia siempre; la senal manda. (#531: el
+        // temporizador ya no existe, pero la guarda se queda: la marca la ponen
+        // también los builtins, el fin del cuanto y el GC.)
         tc.yieldRequested = false;
         return exitSignal;
     }
