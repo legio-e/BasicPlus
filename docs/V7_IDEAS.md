@@ -2627,6 +2627,10 @@ VM-C decidió no abortar a propósito (`heap.c`); Eduardo, 27-sep: ni avisar y s
 5. La prueba: en C y en miVM, estropear a propósito la cabecera de un bloque (un largo falso), pedir un GC y esperar
    la excepción con su texto; y con el guardián saboteado, roja.
 
+**Hecho el 27-sep** (`7a1a9374`, con el OK de Eduardo), tal cual. La prueba enseñó además un punto ciego del
+guardián, que ya estaba: una cabecera con un largo DENTRO del heap hizo saltar el recorrido hasta el borde de otro
+bloque, que acabó en `heap_next` sin decir nada (`#593`); la prueba usa por eso un largo que se sale del heap.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más

@@ -967,6 +967,15 @@ la C6, la P4 y la Nucleo.
   paridad. Una medida de 10 s con dos hilos, justo después de compilar, era la máquina ocupada: repetida tres veces,
   3,1 s, lo que dio el prototipo.
 
+## 🧯 H7 (27-sep, tarde) — `#494`: el heap descarrilado es una excepción
+
+- El diseño, aprobado por Eduardo: el GC que descarrila no barre y la reserva que lo pidió lanza la prefabricada
+  «heap descarrilado (fallo interno de la VM)», atrapable e igual en las dos VMs. `7a1a9374`.
+- La prueba, un gancho de depuración que estropea la cabecera del primer bloque, en las dos VMs y con el mismo
+  programa (`HeapRoto`). La primera versión no descarrilaba: el largo falso caía dentro del heap y el recorrido se
+  resincronizó en el borde de otro bloque —un punto ciego del guardián que ya estaba: `#593`—. Saboteada, roja: el
+  GC barrió con el mapa roto y el programa atrapó «strCopy: fuera de rango».
+
 ## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
 
 **Commits desde el traspaso de mediodía** (sin push): `7f2c60bd` (`#576`) · `617ab23d` (H5 cerrado) · `b377da40` ·
