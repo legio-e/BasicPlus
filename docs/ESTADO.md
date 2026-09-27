@@ -922,6 +922,21 @@ la C6, la P4 y la Nucleo.
   check` verde (paridad 107/107 con `SbPiezas`). **Las imágenes nuevas están compiladas y NO grabadas**: las cuatro
   placas de hoy siguen con la de `e5761dd1`, cuyo `StringBuilder` viejo tiene la misma interfaz pública.
 
+## 🐞 H8 (27-sep, tarde) — `#589` cerrada: el depurador de miVM ya lee las cadenas del heap; y dos fichas nuevas
+
+- Reproducido antes de tocar nada, por el wire (un cliente que para en un breakpoint y pregunta como el IDE): una
+  cadena del heap salía `"@40000004"`, un literal `""literal""` (las comillas dos veces), las properties string
+  `null` (la vista leía la palabra ALTA de la referencia: la generación) y `READ_STRING` con comillas, al revés que
+  la VM-C. `b777f25f`: la indirección (`leeCadenaDeRef`, espejo del `READ_STRING` de la VM-C), UN render de
+  locales para la VM-Java y para una placa —había dos copias y la de Java se separó—, la palabra baja en las
+  properties; y en el IDE, la cadena vacía de una placa ya no sale `@…`.
+- La red: `DepuradorCadenasTest` (lexer-java) ejecuta el depurador de miVM de verdad, por el socket; saboteada
+  (el miVM de antes), ROJA. No había ninguna.
+- Por el camino, dos fallos anteriores, con ficha: **`#590`** —`public property saludo: string := "hola"` vale
+  `null` en las dos VMs; el compilador sólo avisa; decisión de Eduardo— y **`#591`** —un breakpoint en la última
+  línea de un módulo para dentro de `__strconcat`, que hereda esa línea en el `.dbg`—. La prueba lo esquiva con
+  una sentencia de más, y lo dice.
+
 ## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
 
 **Commits desde el traspaso de mediodía** (sin push): `7f2c60bd` (`#576`) · `617ab23d` (H5 cerrado) · `b377da40` ·

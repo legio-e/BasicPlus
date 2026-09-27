@@ -2548,6 +2548,10 @@ primera concatenación—.
 - **`#589`** — el depurador de miVM muestra una cadena del HEAP como `@4000…` (no hace la indirección: sólo los
   literales crudos salían con su texto; con A o con B, TODAS las cadenas) y la vista de properties lee 4 de los 8
   bytes de una referencia.
+  ✅ Cerrada el 27-sep (`b777f25f`): la indirección (`VirtualMachine.leeCadenaDeRef`, espejo del `READ_STRING` de
+  la VM-C), UN render de locales para la VM-Java y para una placa, la palabra baja en las properties, y una prueba
+  que ejecuta el depurador de miVM por el socket (`DepuradorCadenasTest`). Salieron `#590` (el valor inicial de una
+  property de módulo se descarta) y `#591` (los helpers sintetizados heredan la última línea del `.dbg`).
 - **`#587`** — `StringBuilder` (`Core.bp`): un `integer[]` (4 bytes por carácter) y `appendStr` carácter a carácter
   con una llamada por carácter. Eduardo: *«debería ser un array de strings, así que la copia y el cálculo del espacio
   necesario se simplifica»* —las piezas, y `toString()` como `__strconcatN`: la suma de las longitudes en BYTES, una
