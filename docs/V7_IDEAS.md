@@ -2553,6 +2553,10 @@ primera concatenación—.
   necesario se simplifica»* —las piezas, y `toString()` como `__strconcatN`: la suma de las longitudes en BYTES, una
   reserva y un `move` por pieza—; `appendInt` es una pieza como otra (ya convierte), `appendChar` una pieza de un
   carácter (*«un poco tonto, pero nada grave»*).
+  ✅ Cerrada el 27-sep (`ec5b15c7`), con `__strCopy` (el camino C) en vez de `move` y, para `appendChar`, una
+  caché de 64 caracteres que se vacía como una pieza más (Eduardo: *«un array de longitud fija […] hasta que llega
+  un appendInt o appendStr y entonces aprovechas y vacías la caché»*). En la Metro, 192 `appendStr` de 94 a 19 ms;
+  2000 `appendChar`, de 78 a 74-75.
 - Menores: la base de cada módulo (CS) no va alineada a 4 aunque `MOD_FORMAT` §7 lo dice; `OPCODES.md` cuenta 186
   opcodes y hay 188.
 

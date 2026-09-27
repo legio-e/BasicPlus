@@ -891,13 +891,6 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
-## 🎯 AOT (27-sep, tarde) — `#588` cerrada: las globales del módulo, desde el compilador
-
-- La native calculaba la posición de cada global por su cuenta y, con una global string, long o array por
-  delante, leía y ESCRIBÍA otra palabra (`NatGlobales`: `suma` 705033164 en vez de 23; la escritura se comía las
-  cadenas). Ahora se la pregunta al compilador (`MivmEmitter.offsetsDeGlobales`, el mismo reparto del `.mod`).
-  `make test-aotglobales` 7/7 (roja antes). El AOT lleva las clases de miVM en su `classpath`.
-
 ## 🔗 H7 (27-sep, tarde) — `#554` cerrada: concatenar en placa, de 2122 a 44 ms
 
 - La causa (el `__strconcat` sintetizado copiaba byte a byte en bytecode), la concatenación de N de una vez (idea de
@@ -906,6 +899,28 @@ la C6, la P4 y la Nucleo.
 - Con su OK, la Metro, la DK2, el P4 y la Nucleo grabadas con esa imagen; su INFO ya dice `"mdnAbi": 9` (`#576` en
   placa); la ronda de V7 verde en las cuatro, con `CatCadena` y `CatCrono`. En la Metro, el bucle de `#554`, de 2122
   a 44 ms. Del análisis salieron `#587` (el `StringBuilder`), `#588` (las globales del AOT) y `#589` (el depurador).
+
+## 🎯 AOT (27-sep, tarde) — `#588` cerrada: las globales del módulo, desde el compilador
+
+- La native calculaba la posición de cada global por su cuenta y, con una global string, long o array por
+  delante, leía y ESCRIBÍA otra palabra (`NatGlobales`: `suma` 705033164 en vez de 23; la escritura se comía las
+  cadenas). Ahora se la pregunta al compilador (`MivmEmitter.offsetsDeGlobales`, el mismo reparto del `.mod`).
+  `make test-aotglobales` 7/7 (roja antes). El AOT lleva las clases de miVM en su `classpath`.
+
+## 🧵 H7 (27-sep, tarde) — `#587` cerrada: el `StringBuilder`, piezas y una caché de caracteres
+
+- El diseño de Eduardo: las PIEZAS en un `string[]` y `toString()` de una vez (la suma de los bytes, una reserva y
+  un `__strCopy` por pieza, como la concatenación de `#554`). Para `appendChar` —`Json` y `Str` construyen carácter
+  a carácter— una caché de 64 que se vacía como una pieza más (Eduardo: *«un array de longitud fija […] hasta que
+  llega un appendInt o appendStr y entonces aprovechas y vacías la caché»*). `ec5b15c7`.
+- Medido en la Metro con el `Core` nuevo en `/app`: 192 `appendStr` de 94 a 19 ms. La primera versión llevaba la
+  cuenta de caracteres y el tope de la caché por `len`, y `appendChar` EMPEORABA (93 ms donde el viejo daba 78);
+  sin las dos cosas, 74-75. Lo cazó la medida en la placa.
+- Por el camino, la trampa conocida: el script que reescribía la clase cortó en el `end StringBuilder` del
+  CONSTRUCTOR (se casa por sangría: `'\n  end StringBuilder\n'`); con `git checkout` y rehecho.
+- La stdlib regenerada (los 29 módulos: cambia la interfaz de `Core`), `Stdlib.pack` y la stdlib embebida; `compat.sh
+  check` verde (paridad 107/107 con `SbPiezas`). **Las imágenes nuevas están compiladas y NO grabadas**: las cuatro
+  placas de hoy siguen con la de `e5761dd1`, cuyo `StringBuilder` viejo tiene la misma interfaz pública.
 
 ## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
 
