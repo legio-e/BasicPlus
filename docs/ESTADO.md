@@ -937,6 +937,15 @@ la C6, la P4 y la Nucleo.
   línea de un módulo para dentro de `__strconcat`, que hereda esa línea en el `.dbg`—. La prueba lo esquiva con
   una sentencia de más, y lo dice.
 
+## 🧵 H7 (27-sep, tarde) — la guarda del SMP: con `io`, el planificador SMP ya no toca el transporte
+
+- `scheduler_smp.c` llamaba al `poll_cb` viejo aunque el hilo `io` estuviera en marcha (la guarda `vm->io == NULL`
+  de `scheduler.c` no había viajado: la auditoría de capas, A3); latente, porque el SMP es opt-in y en el PC el
+  `poll_cb` es NULL. Primero la prueba: `test_kill.c` con tres fases más —`io` arrancado, el KILL por su
+  `ops.poll` como en una placa y el `poll_cb` viejo contando—; ROJA en las dos del SMP (177 921 llamadas entre
+  cuantos y 7 durmiendo) y verde el control (`bpvm_run`, 0). Con la guarda, 0 en las seis. `6f249614`.
+- `test-kill` no estaba en ninguna red: ahora en `check-testc` (25), con su línea «OK:».
+
 ## ⏭️ Traspaso (27-sep, tarde) — pausa: `#554` hecho en el PC; falta la placa
 
 **Commits desde el traspaso de mediodía** (sin push): `7f2c60bd` (`#576`) · `617ab23d` (H5 cerrado) · `b377da40` ·
