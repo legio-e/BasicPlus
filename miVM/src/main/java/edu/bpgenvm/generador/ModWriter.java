@@ -545,6 +545,12 @@ public class ModWriter {
         return csOffset;
     }
 
+    /** V7/H5 #588 — la posición CS-relativa de un símbolo del bloque de datos, o null si no existe. La que usa el
+     *  AOT para leer y escribir las globales del módulo desde una native (MivmEmitter.offsetsDeGlobales). */
+    public Integer offsetDeDato(String name) {
+        return dataSymbolOffset.get(name);
+    }
+
     private void requireUnique(String name) {
         if (dataSymbolOffset.containsKey(name)) {
             throw new RuntimeException("Símbolo de datos ya existe: " + name);

@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -178,7 +178,8 @@ endef
 # «sin interfaz» es rojo.
 define aotmain
 @rm -rf $(2) && mkdir -p $(2) && cp ../bpstdlib/*.mod $(2)/
-@java -cp "../lexer-java/target/classes;../pack/target/classes" basicplus.frontend.AotMain samples/$(1).bp $(2) >$(2)/aot.log 2>&1 || { cat $(2)/aot.log; exit 1; }
+@java -cp "../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes" basicplus.frontend.AotMain samples/$(1).bp $(2) >$(2)/aot.log 2>&1 || { cat $(2)/aot.log; exit 1; }
+@# #588 (27-sep): con las clases de miVM: el AOT pregunta al compilador dónde queda cada global (ModWriter).
 @# #542 (26-sep): un import sin interfaz ya no es un aviso que haya que buscar en el log: AotMain sale
 @# con 4 y «falta el modulo 'X'», y lo para el `||` de arriba.
 endef
@@ -311,7 +312,7 @@ LONGNAT_BIN = build/test_longnat.exe
 test-longnat: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,LongNat)
-	@if [ ! -f samples/LongNat.mod ]; then 	  echo "(skip test-longnat: falta samples/LongNat.mod)"; 	else 	  java -cp "../lexer-java/target/classes;../pack/target/classes" 	    basicplus.frontend.AotMain samples/LongNat.bp build/aotlong >/dev/null; 	  cp build/aotlong/aot_LongNat.c test/aot_LongNat.c; 	  $(CC) $(CFLAGS) -Isrc test/test_longnat.c test/aot_LongNat.c 	    $(LIBOBJ) -o $(LONGNAT_BIN) $(LDFLAGS); 	  echo "--- #381 long en native (la salida debe ser la de la VM-Java) ---"; 	  ./$(LONGNAT_BIN) samples/LongNat.mod; 	fi
+	@if [ ! -f samples/LongNat.mod ]; then 	  echo "(skip test-longnat: falta samples/LongNat.mod)"; 	else 	  java -cp "../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes" 	    basicplus.frontend.AotMain samples/LongNat.bp build/aotlong >/dev/null; 	  cp build/aotlong/aot_LongNat.c test/aot_LongNat.c; 	  $(CC) $(CFLAGS) -Isrc test/test_longnat.c test/aot_LongNat.c 	    $(LIBOBJ) -o $(LONGNAT_BIN) $(LDFLAGS); 	  echo "--- #381 long en native (la salida debe ser la de la VM-Java) ---"; 	  ./$(LONGNAT_BIN) samples/LongNat.mod; 	fi
 
 # #240 — Compress.decompress (LZSS) en variante NATIVE. Compila el thunk AOT
 # (byte[] + shl/shr/mod, helpers array_load_u8 / array_store_i8) y corre
@@ -841,6 +842,27 @@ medir-llamada: $(LIBOBJ)
 	@./build/test_aotllamada.exe samples/NatLlamada.mod 2>/dev/null
 	@./build/test_aotllamada.exe samples/NatLlamada.mod --interp 2>/dev/null
 
+# V7/H5 (#588, 27-sep) — LAS GLOBALES DEL MÓDULO desde una native, con globales de OTROS tipos por delante (una string
+# con valor inicial, un long, un array, otra string): el AOT contaba la posición de cada una por su cuenta (-4, -8…,
+# sólo las de 4 bytes) y leía otra palabra sin un error. Ahora la toma del compilador (MivmEmitter.offsetsDeGlobales).
+test-aotglobales: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatGlobales)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatGlobales,build/aotglobales)
+	@n=$$(grep -c "bpvm_aot_register_by_name" build/aotglobales/aot_NatGlobales.c); \
+	 if [ "$$n" -ne 4 ]; then cat build/aotglobales/aot.log; echo "  ROJO: el AOT tradujo $$n de las 4 natives de NatGlobales"; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_aotglobales.c build/aotglobales/aot_NatGlobales.c $(LIBOBJ) \
+	  -o build/test_aotglobales.exe $(LDFLAGS)
+	@echo "--- #588 globales del modulo desde una native (esperado: AOT == interpretado, 7/7, sin FALLO) ---"
+	@./build/test_aotglobales.exe samples/NatGlobales.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotglobales.aot; \
+	 ./build/test_aotglobales.exe samples/NatGlobales.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotglobales.int; \
+	 n=$$(grep -c '^ok ' build/aotglobales.aot); \
+	 if grep -q '^FALLO' build/aotglobales.aot build/aotglobales.int; then grep -h '^FALLO' build/aotglobales.aot build/aotglobales.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotglobales.int build/aotglobales.aot; then diff build/aotglobales.int build/aotglobales.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 7 ]; then cat build/aotglobales.aot; echo "  ROJO: $$n de 7 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 7/7 con el AOT, igual que interpretado"
+
 # V7/H5 (27-sep) — LAS CONVERSIONES ESTRECHAS dentro de una native (`byte(x)`, `int8`, `word`, `int16`, `short`):
 # el emisor las escribe en el C del módulo con el rango y el TEXTO de OP_I32_TO_U8 y compañía (la opción A de Eduardo:
 # sin tocar la ABI). El texto está en la VM y en el emisor, y esto es lo que lo vigila: los dos bordes de cada una y
@@ -924,7 +946,7 @@ test-aotfloat: $(LIBOBJ)
 	@rm -rf build/aotfloat && mkdir -p build/aotfloat && cp ../bpstdlib/*.mod build/aotfloat/
 	@java -jar ../lexer-java/target/basicplus-frontend.jar ../samples/FloatNat.bp --compile build/aotfloat --backend=mivm >build/aotfloat/compile.log 2>&1 || { cat build/aotfloat/compile.log; exit 1; }
 	@test -f build/aotfloat/FloatNat.mod || { cat build/aotfloat/compile.log; echo "  ROJO: FloatNat.bp no compila"; exit 1; }
-	@java -cp "../lexer-java/target/classes;../pack/target/classes" basicplus.frontend.AotMain ../samples/FloatNat.bp build/aotfloat >build/aotfloat/aot.log 2>&1 || { cat build/aotfloat/aot.log; exit 1; }
+	@java -cp "../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes" basicplus.frontend.AotMain ../samples/FloatNat.bp build/aotfloat >build/aotfloat/aot.log 2>&1 || { cat build/aotfloat/aot.log; exit 1; }
 	@if grep -q "sin interfaz" build/aotfloat/aot.log; then echo "  ROJO: el AOT de FloatNat no ve la interfaz de un import (#542):"; grep "sin interfaz" build/aotfloat/aot.log; exit 1; fi
 	$(CC) $(CFLAGS) -Isrc test/test_aotfloat.c build/aotfloat/aot_FloatNat.c $(LIBOBJ) \
 	  -o build/test_aotfloat.exe $(LDFLAGS)
@@ -1198,7 +1220,7 @@ SQLDEF   = -DSQLITE_OS_OTHER=1 -DSQLITE_THREADSAFE=0 -DSQLITE_ENABLE_MEMSYS5    
 test-sqldemo: $(LIBOBJ)
 	@mkdir -p build/sql
 	@[ -f build/sql/sqlite3.c ] || unzip -o -j $(SQLZIP) "*/sqlite3.c" "*/sqlite3.h" 	    -d build/sql >/dev/null
-	@if [ ! -f build/sql/aot_SQLite.c ]; then 	  echo "(falta build/sql/aot_SQLite.c — generalo con:"; 	  echo "   java -cp '../lexer-java/target/classes;../pack/target/classes' \\"; 	  echo "        basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql)"; 	  exit 1; 	fi
+	@if [ ! -f build/sql/aot_SQLite.c ]; then 	  echo "(falta build/sql/aot_SQLite.c — generalo con:"; 	  echo "   java -cp '../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes' \\"; 	  echo "        basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql)"; 	  exit 1; 	fi
 	@[ -f build/sql/sqlite3.o ] || $(CC) -O1 -w -c build/sql/sqlite3.c 	    -o build/sql/sqlite3.o -Ibuild/sql $(SQLDEF)
 	$(CC) $(CFLAGS) -Isrc -Ibuild/sql -I$(SQLSRC) 	    test/test_sqldemo.c build/sql/aot_SQLite.c 	    $(SQLSRC)/sqlite_shim.c $(SQLSRC)/vfs_bp.c $(SQLSRC)/packglue.c 	    build/sql/sqlite3.o $(LIBOBJ) -o build/sqldemo.exe $(LDFLAGS) $(SQLDEF)
 	@echo "--- V5/H4: un programa BP consultando una base de datos ---"
@@ -1317,7 +1339,7 @@ build/sql/sqlite3.o:
 
 build/sql/aot_SQLite.c:
 	@echo "falta build/sql/aot_SQLite.c — generalo con:"
-	@echo "   java -cp '../lexer-java/target/classes;../pack/target/classes' basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql"
+	@echo "   java -cp '../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes' basicplus.frontend.AotMain ../bpstdlib/sqlite/SQLite.bp build/sql"
 	@exit 1
 
 # Alias histórico (H9): el boardsim ES el sim, con otro nombre.

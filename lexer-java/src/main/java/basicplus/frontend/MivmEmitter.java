@@ -451,6 +451,44 @@ public final class MivmEmitter {
      *  Nunca se pone a true fuera de un test. */
     static boolean PRUEBA_ERROR_DE_EMISOR = false;
 
+    /** V7/H5 #588 (27-sep) — DÓNDE QUEDA CADA GLOBAL DEL MÓDULO en el bloque de datos, la MISMA posición que tendrá en
+     *  el `.mod`: el paso 2 de emitTo (las globales y las constantes, en su orden) sobre un emisor NUEVO, sin
+     *  escribir nada. El AOT la toma de aquí: la calculaba por su cuenta (-4, -8… contando sólo las de 4 bytes), y
+     *  con una global string, long o array por delante leía y escribía otra palabra, sin un error. Los pasos 0 y 1
+     *  no tocan el bloque de datos (las dependencias van a la ext-table; el 1 no hace nada). Los estáticos que fija
+     *  emitTo se guardan y se devuelven: esto puede correr en medio de la compilación de otro módulo. */
+    public static java.util.Map<String, Integer> offsetsDeGlobales(ModuleNode mod, SemanticInfo info) {
+        MivmEmitter m = new MivmEmitter(mod, info);
+        int formato0 = formatoActual;
+        String modulo0 = moduloLocalActual;
+        try {
+            m.w.setFormato(m.formato);
+            formatoActual = m.formato; moduloLocalActual = m.moduloLocal();
+            m.collectStringLiterals(mod);
+            for (ITopLevelDecl d : mod.defs) {
+                if (d instanceof VarDecl)        m.emitModuleVarDecl((VarDecl) d);
+                else if (d instanceof ConstDecl) m.emitModuleConstDecl((ConstDecl) d);
+            }
+            java.util.Map<String, Integer> r = new java.util.HashMap<>();
+            for (ITopLevelDecl d : mod.defs) {
+                if (d instanceof VarDecl) {
+                    for (DeclName dn : ((VarDecl) d).names) {
+                        Integer o = m.w.offsetDeDato(dn.name);
+                        if (o != null) r.put(dn.name, o);
+                    }
+                } else if (d instanceof ConstDecl) {
+                    String n = ((ConstDecl) d).name.name;
+                    Integer o = m.w.offsetDeDato(n);
+                    if (o != null) r.put(n, o);
+                }
+            }
+            return r;
+        } finally {
+            formatoActual = formato0;
+            moduloLocalActual = modulo0;
+        }
+    }
+
     public void emitTo(Path outputDir) throws IOException {
         if (PRUEBA_ERROR_DE_EMISOR) errors.add("[prueba] error del emisor forzado (EmisorConErroresTest)");
         w.setFormato(formato);   // V7/H2 (#523): 8 o 9

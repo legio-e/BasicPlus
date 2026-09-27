@@ -31,9 +31,9 @@ LEXER="$PM_ROOT/lexer-java"
 # pasarla a java, pero NO una lista separada por ';' — hay que traducirlas a
 # mano con cygpath o java no encuentra ni la clase principal.
 if command -v cygpath >/dev/null 2>&1; then
-    CP="$(cygpath -w "$LEXER/target/classes");$(cygpath -w "$PM_ROOT/pack/target/classes")"
+    CP="$(cygpath -w "$LEXER/target/classes");$(cygpath -w "$PM_ROOT/pack/target/classes");$(cygpath -w "$PM_ROOT/miVM/target/classes")"
 else
-    CP="$LEXER/target/classes:$PM_ROOT/pack/target/classes"
+    CP="$LEXER/target/classes:$PM_ROOT/pack/target/classes:$PM_ROOT/miVM/target/classes"
 fi
 SAMPLES="$PM_ROOT/samples"
 WORK_DIR="$SCRIPT_DIR/mdn_build"     # intermedios (.c, .o)

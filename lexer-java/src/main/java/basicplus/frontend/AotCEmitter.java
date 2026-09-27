@@ -709,10 +709,9 @@ public final class AotCEmitter {
             packVersion = module.packNativoVersion;
         }
 
-        // #172 — Pre-pass: asignar offsets CS-relativos a vars/consts
-        // nivel-módulo recorriendo en orden de declaración. MivmEmitter
-        // sigue la misma convención (cf. ModWriter.registerSymbol):
-        // primer decl encontrado → -4, segundo → -8, etc.
+        // #172 — Pre-pass: los offsets CS-relativos de las vars/consts de
+        // módulo que una native puede tocar. #588: los da el compilador
+        // (MivmEmitter.offsetsDeGlobales), no una convención propia.
         precomputeModuleVarOffsets(module);
 
         // Header del archivo.
@@ -3097,41 +3096,37 @@ public final class AotCEmitter {
     /*  #172 helpers — layout de variables nivel-módulo              */
     /* ============================================================ */
 
-    /** Recorre `module.defs` en orden y asigna offsets CS-relativos a
-     *  cada VarDecl / ConstDecl con tipo primitivo. Convención cuadrada
-     *  con MivmEmitter / ModWriter.registerSymbol: el primer decl
-     *  encontrado obtiene offset -4, el siguiente -8, etc.
+    /** #172 — las globales de módulo que una native puede leer y escribir (integer, float, boolean y los estrechos,
+     *  de 4 bytes; y las constantes integer/float, que ocupan su hueco), con su posición CS-relativa.
      *
-     *  v1: solo cuenta integer/float/bool (4 bytes); otros tipos (string,
-     *  array, ref) no entran en este path. Limitación documentada — si
-     *  un .bp más complejo tiene class descriptors o synthetics
-     *  intercalados, los offsets podrían descuadrarse y la AOT cascarse
-     *  con datos incoherentes. La convención está fijada en MivmEmitter:
-     *  user-vars/consts van primero, __initialized y class descriptors
-     *  después (verificado en GlobalsAot.mod). */
+     *  [V7/H5 #588, 27-sep] LA POSICIÓN LA DA EL COMPILADOR (MivmEmitter.offsetsDeGlobales: el mismo reparto que
+     *  escribe el `.mod`), no una convención propia. Aquí se contaba -4, -8… sólo con las de 4 bytes, y una global
+     *  string (8 bytes y su literal detrás), long, double o array por delante descuadraba todas las siguientes: la
+     *  native leía y ESCRIBÍA otra palabra, sin un error (`NatGlobales`: `suma` daba 705033164 en vez de 23, y la
+     *  escritura se comía las cadenas). Sin información semántica no hay reparto: ninguna global entra, y una native
+     *  que toque una lo dice (UnsupportedAotException) en vez de adivinar. */
     private void precomputeModuleVarOffsets(Ast.ModuleNode module) {
-        int nextOffset = -4;
+        if (semInfo == null) return;
+        java.util.Map<String, Integer> reales = MivmEmitter.offsetsDeGlobales(module, semInfo);
         for (Ast.ITopLevelDecl d : module.defs) {
             if (d instanceof Ast.VarDecl) {
                 Ast.VarDecl vd = (Ast.VarDecl) d;
                 if (!isPrimitiveTypeName(vd.type)) continue;
                 boolean esFloat = "float".equals(((Ast.SimpleTypeRef) vd.type).name);
                 for (Ast.DeclName dn : vd.names) {
-                    moduleVarOffsets.put(dn.name, nextOffset);
+                    Integer off = reales.get(dn.name);
+                    if (off == null) continue;
+                    moduleVarOffsets.put(dn.name, off);
                     if (esFloat) moduleVarFloat.add(dn.name);
-                    nextOffset -= 4;
                 }
             } else if (d instanceof Ast.ConstDecl) {
                 Ast.ConstDecl cd = (Ast.ConstDecl) d;
-                // L8 v2 — convención actualizada de MivmEmitter: SOLO las const
-                // int/float-literal materializan data symbol (compat); bool/
-                // string/long/double/negativas se inlinan en cada uso y ya NO
-                // ocupan slot. Contarlas aquí descuadraría todos los offsets.
-                if (cd.value instanceof Ast.IntLitExpr
-                        || cd.value instanceof Ast.FloatLitExpr) {
-                    moduleVarOffsets.put(cd.name.name, nextOffset);
+                /* L8 v2 — sólo las const integer/float literales tienen hueco; las demás se inlinan en cada uso. */
+                if (cd.value instanceof Ast.IntLitExpr || cd.value instanceof Ast.FloatLitExpr) {
+                    Integer off = reales.get(cd.name.name);
+                    if (off == null) continue;
+                    moduleVarOffsets.put(cd.name.name, off);
                     if (cd.value instanceof Ast.FloatLitExpr) moduleVarFloat.add(cd.name.name);
-                    nextOffset -= 4;
                 }
             }
         }
