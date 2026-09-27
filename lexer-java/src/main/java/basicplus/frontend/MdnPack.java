@@ -65,8 +65,9 @@ public final class MdnPack {
      * 6 = [V6/N1.5] 24-ago, slot `newarray_i64` nuevo y tres newarray_* que
      * dejaron de ser stubs; 5 = 11-ago, el .mdn depende también del OFFSET de `memory` y
      * `aot_helpers` dentro de `struct bpvm`, no sólo de la tabla. La autoridad del número
-     * es mdn_format.h; esto lo copia. */
-    static final int MDN_ABI_VERSION = 9;   // V7/H5 P2b.1.d (26-sep): `punto_control`, la línea del bucle
+     * es mdn_format.h; esto lo copia (y compat/packs_abi.py comprueba que casen). Pública desde el 27-sep: el IDE
+     * la compara con la que publica la placa en su INFO (`mdnAbi`). */
+    public static final int MDN_ABI_VERSION = 9;   // V7/H5 P2b.1.d (26-sep): `punto_control`, la línea del bucle
     private static final int MDN_NAME_MAX = 32;
 
     /** Sufijos que gcc le pega a un simbolo cuando lo clona o especializa. Son

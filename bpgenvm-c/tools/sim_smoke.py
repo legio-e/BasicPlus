@@ -133,6 +133,9 @@ def main():
         check("aotReceta" in r and "aotFlagsCrc" in r
               and r.get("aotReceta") == "" and r.get("aotFlagsCrc") == 0,
               "INFO → aotReceta/aotFlagsCrc presentes (vacíos en el PC: sin receta)")
+        # V7/H5 (27-sep): y la ABI de helpers, `mdnAbi`, con la misma regla: 0 donde no hay receta.
+        check("mdnAbi" in r and r.get("mdnAbi") == 0,
+              "INFO → mdnAbi presente (0 en el PC: sin receta, no ejecuta .mdn)")
 
         # 3. FS virgen
         r = w.call("FORMAT", confirm="YES")

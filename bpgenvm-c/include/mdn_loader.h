@@ -65,6 +65,12 @@ const char* bpvm_mdn_host_float_abi(void);
 const char* bpvm_mdn_host_receta_nombre(void);
 uint32_t    bpvm_mdn_host_receta_crc(void);
 
+/* [V7/H5, 27-sep] LA ABI DE HELPERS que habla este firmware (`MDN_ABI_VERSION`), 0 si la imagen no ejecuta `.mdn`
+ * (sin receta: el PC, Xtensa). El cargador rechaza un `.mdn` de otra ABI y el programa corre interpretado; lo
+ * publica el INFO (`mdnAbi`) para que el IDE lo DIGA en vez de subir uno que la placa rechazará en su log —así se
+ * tapó `#504` tres semanas. */
+int32_t     bpvm_mdn_host_abi(void);
+
 /* [V7/H5 #565] LA VISTA EJECUTABLE DE LA RAM. Un `.mdn` fundido en el `.mod`
  * —como lo suben el IDE y la tanda— vive en el heap de la VM, y el cargador
  * saltaba a él por la misma dirección por la que lo había leído (el que viene

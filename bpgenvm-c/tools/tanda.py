@@ -816,11 +816,23 @@ def fundir_aot(p, o, receta):
     return fa
 
 
-def juzgar_nativo(r, fa, exited):
+def abi_del_compilador():
+    """V7/H5 (27-sep): la ABI de helpers que genera el compilador (MDN_ABI_VERSION de mdn_format.h; que MdnPack diga
+    lo mismo lo vigila compat/packs_abi.py). None si no se puede leer."""
+    try:
+        txt = open(os.path.join(BPGENVM, "src", "mdn_format.h"), encoding="utf-8", errors="replace").read()
+    except OSError:
+        return None
+    m = re.search(r"^#define\s+MDN_ABI_VERSION\s+(\d+)", txt, re.M)
+    return int(m.group(1)) if m else None
+
+
+def juzgar_nativo(r, fa, exited, abi_placa=None):
     """V7/H5: la salida sale IGUAL interpretada (H13-40: el «fib(28) AOT» daba lo mismo que el
     interpretado), asi que una prueba "aot" sólo es verde si la placa dice en su EXITED que registró
     los thunks que compilo el compilador. No se mira el log: con log=0 (lo de fabrica) esa linea
-    no se escribe, y un aviso que no distingue «no paso» de «no se apunto» no sirve."""
+    no se escribe, y un aviso que no distingue «no paso» de «no se apunto» no sirve.
+    `abi_placa` (el `mdnAbi` de su INFO, 27-sep): si no es la del compilador, el SIN NATIVO dice por qué."""
     nat = (exited or {}).get("nativos")
     r["aot"] = {"receta": fa["receta"], "thunks": fa["thunks"], "nativos": nat,
                 "crc": fa["crc"], "size": fa["size"]}
@@ -834,6 +846,10 @@ def juzgar_nativo(r, fa, exited):
         r["veredicto"] = "SIN NATIVO"
         r["detalle"] += ("; el nativo NO se uso entero: la placa registro %s de %d thunks (%s) y lo demas corrio "
                          "interpretado, que da los mismos numeros" % (nat, fa["thunks"], fa["receta"]))
+        mia = abi_del_compilador()
+        if abi_placa and mia and abi_placa != mia:
+            r["detalle"] += ("; la placa habla la ABI de helpers %d y el compilador genera la %d: su cargador rechaza "
+                             "el nativo (regrabala con la imagen de esta version)" % (abi_placa, mia))
     else:
         r["detalle"] += "; nativo %s/%d thunks (%s)" % (nat, fa["thunks"], fa["receta"])
 
@@ -905,6 +921,7 @@ def sello_de(w, arranque=None):
         "fsTotalBytes": info.get("fsTotalBytes"),
         "vmHeapBytes": info.get("vmHeapBytes"),
         "aotReceta": info.get("aotReceta") or "",      # V7/H5: con ella se funde el nativo de las pruebas "aot"
+        "mdnAbi": info.get("mdnAbi"),                  # V7/H5 (27-sep): la ABI de helpers (None: la imagen no lo dice)
         "uptime_ultimo": info.get("uptimeMs") if isinstance(info.get("uptimeMs"), int) else None,
         "arranque": arranque,          # (corria, detalle) del KILL de conexion
         "transporte": w.t.nombre,
@@ -1261,7 +1278,7 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         r["ms_placa"] = res["exited"].get("elapsedMs")
     r["veredicto"], r["detalle"] = veredicto_de(p, o, res, sin_oraculo)
     if fa is not None and res["exited"] is not None:
-        juzgar_nativo(r, fa, res["exited"])
+        juzgar_nativo(r, fa, res["exited"], sello.get("mdnAbi"))
     if res["transporte_roto"]:
         r["abortar_placa"] = "transporte roto durante %s: %s" % (p["nombre"], res["error"])
         r["basura"] = w.basura_texto()

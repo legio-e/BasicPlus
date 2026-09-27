@@ -333,6 +333,11 @@ public final class PicoExplorer extends JPanel {
     private volatile String deviceReceta   = "";
     public long   deviceFlagsCrc() { return deviceFlagsCrc; }
     public String deviceReceta()   { return deviceReceta; }
+    /* [V7/H5, 27-sep] LA ABI DE HELPERS que habla la placa (`mdnAbi` del INFO). Con la receta se sabe compilar para
+     * ella, pero no si su cargador aceptará el resultado: uno de otra ABI lo rechaza en su log y el programa corre
+     * interpretado sin ruido (#504). 0 = la placa no lo dice (sin receta, o firmware anterior): no se compara. */
+    private volatile int deviceMdnAbi = 0;
+    public int deviceMdnAbi() { return deviceMdnAbi; }
 
     /** Prompt actual: ruta del device + "> ". */
     public String consolePrompt() { return consoleCwd + "> "; }
@@ -1443,9 +1448,39 @@ public final class PicoExplorer extends JPanel {
             return "es de otra ARQUITECTURA (" + archName(suyo) + ", y la placa es "
                  + archName(deviceArch) + ")";
         }
+        /* V7/H5 (27-sep) — la ABI de HELPERS: misma receta, otra tabla de helpers. */
+        int abi = mdnAbiOf(mdnFile);
+        if (abi != 0 && deviceMdnAbi != 0 && abi != deviceMdnAbi) {
+            return "es de otra ABI de helpers (" + abi + ", y la placa habla la " + deviceMdnAbi + ")";
+        }
         /* #441 (V7/H2) — la RECETA: misma arquitectura, otros flags. */
         return String.format("es de otra RECETA de compilación (huella %08x, y la placa exige %s %08x): regenéralo",
                              mdnFlagsCrcOf(mdnFile), deviceReceta, deviceFlagsCrc);
+    }
+
+    /** [V7/H5, 27-sep] El aviso cuando la placa habla OTRA ABI de helpers que este IDE (null si es la misma, o si la
+     *  placa no lo dice). El remedio depende de quién se ha quedado atrás: la imagen de la placa o el propio IDE. */
+    public static String avisoAbi(int abiPlaca) {
+        int mia = basicplus.frontend.MdnPack.MDN_ABI_VERSION;
+        if (abiPlaca == 0 || abiPlaca == mia) return null;
+        return "la placa habla la ABI de helpers " + abiPlaca + " y este IDE genera la " + mia
+             + ": su cargador rechazaría el código nativo y las funciones `native` correrían interpretadas — "
+             + (abiPlaca < mia ? "regraba la placa con la imagen de esta versión"
+                               : "este IDE es más viejo que la imagen de la placa: ponlo al día");
+    }
+
+    /** [V7/H5, 27-sep] La ABI de helpers de un `.mdn` (cabecera: magic, versión u16, ABI u16, little-endian), o 0 si
+     *  no se puede leer. */
+    public static int mdnAbiOf(File f) {
+        try (java.io.DataInputStream in = new java.io.DataInputStream(
+                new java.io.BufferedInputStream(new java.io.FileInputStream(f)))) {
+            byte[] hdr = new byte[8];
+            in.readFully(hdr);
+            if (hdr[0] != 'M' || hdr[1] != 'D' || hdr[2] != 'N') return 0;
+            return java.nio.ByteBuffer.wrap(hdr).order(java.nio.ByteOrder.LITTLE_ENDIAN).getShort(6) & 0xFFFF;
+        } catch (Exception e) {
+            return 0;                  /* ilegible → que decidan la fecha y lo demás, como antes */
+        }
     }
 
     private boolean mdnIsStale(File mdnFile, File modFile) {
@@ -1464,7 +1499,11 @@ public final class PicoExplorer extends JPanel {
          * CRC del literal de bpvm_aot_recetas.h y la placa publica el suyo. Un
          * `.mdn` v1 (sin huella) no se compara: la placa lo carga y avisa. */
         long crc = mdnFlagsCrcOf(mdnFile);
-        return crc != 0 && deviceFlagsCrc != 0 && crc != deviceFlagsCrc;
+        if (crc != 0 && deviceFlagsCrc != 0 && crc != deviceFlagsCrc) return true;
+        /* V7/H5 (27-sep) — y la ABI de HELPERS: con la misma receta, un `.mdn` generado por un compilador de otra ABI
+         * lo rechaza el cargador (en su log, sin que el programa se entere: #504). La placa la publica (`mdnAbi`). */
+        int abi = mdnAbiOf(mdnFile);
+        return abi != 0 && deviceMdnAbi != 0 && abi != deviceMdnAbi;
     }
 
     /** #441 — la huella de la receta de un `.mdn` v2 (`flags_crc`, offset 20,
@@ -1619,6 +1658,7 @@ public final class PicoExplorer extends JPanel {
             backend = null;
             deviceArch = 0;              // H11: la arch se va con la conexión
             deviceFlagsCrc = 0; deviceReceta = "";   // #441: y la receta
+            deviceMdnAbi = 0;                        // V7/H5: y la ABI de helpers
             setConnectedUI(false);
             rootNode.removeAllChildren();
             treeModel.reload();
@@ -2175,12 +2215,16 @@ public final class PicoExplorer extends JPanel {
             /* #441 — y la receta, si el firmware la publica (V7/H2). */
             deviceFlagsCrc = ilong(m, "aotFlagsCrc") & 0xFFFFFFFFL;
             deviceReceta   = istr(m, "aotReceta");
+            deviceMdnAbi   = (int) ilong(m, "mdnAbi");   /* V7/H5 (27-sep); 0 si el firmware no lo manda */
             if (a != 0 && outputSink != null) {
                 outputSink.accept("[Explorer] la placa ejecuta nativo "
                         + archName((int) a) + " (arch=" + a + ")"
                         + (deviceFlagsCrc != 0
                            ? String.format(", receta %s (huella %08x)", deviceReceta, deviceFlagsCrc)
-                           : ""));
+                           : "")
+                        + (deviceMdnAbi != 0 ? ", ABI de helpers " + deviceMdnAbi : ""));
+                String aviso = avisoAbi(deviceMdnAbi);
+                if (aviso != null) outputSink.accept("[Explorer] ⚠ " + aviso);
             }
         });
     }
@@ -2302,6 +2346,16 @@ public final class PicoExplorer extends JPanel {
             sb.append("Receta AOT  : ")
               .append(rc.isEmpty() ? "(sin receta: esta imagen no ejecuta .mdn)"
                                    : String.format("%s  (huella %08x; bpvm_aot_recetas.h)", rc, rh))
+              .append('\n');
+        }
+        // V7/H5 (27-sep) — la ABI de helpers de la imagen (`mdnAbi`), contra la que genera este IDE.
+        if (m.containsKey("mdnAbi")) {
+            long ab = ilong(m, "mdnAbi");
+            int mia = basicplus.frontend.MdnPack.MDN_ABI_VERSION;
+            sb.append("ABI nativo  : ")
+              .append(ab == 0 ? "(sin receta: esta imagen no ejecuta .mdn)"
+                              : ab + (ab == mia ? "  (la misma que genera este IDE)"
+                                                : "  ⚠ este IDE genera la " + mia + ": el nativo no cargará"))
               .append('\n');
         }
         // #354 — lo que FreeRTOS sabe y nunca le habíamos preguntado: cuánto de

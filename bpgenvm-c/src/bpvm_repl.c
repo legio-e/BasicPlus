@@ -564,6 +564,11 @@ static void repl_info(long id) {
      * Sin signo: un CRC con el bit alto en un `long` de 32 saldria negativo. */
     CAMPO_S ("aotReceta",   bpvm_mdn_host_receta_nombre());
     CAMPO_UL("aotFlagsCrc", bpvm_mdn_host_receta_crc());
+    /* [V7/H5, 27-sep] Y LA ABI DE HELPERS (`MDN_ABI_VERSION`; 0 sin receta). Con la
+     * receta, el IDE sabía compilar para la placa, pero no si la placa CARGARÍA el
+     * resultado: un `.mdn` de otra ABI se rechaza en el log y el programa corre
+     * interpretado sin ruido (`#504`, tres semanas). Con ella, el IDE lo dice. */
+    CAMPO_L ("mdnAbi",      bpvm_mdn_host_abi());
     CAMPO_L("cpuFreqHz",    in.cpu_hz);
     CAMPO_L("uptimeMs",     in.uptime_ms);
     CAMPO_S("resetReason",  in.reset_reason);

@@ -2634,6 +2634,14 @@ public class FrmMain extends javax.swing.JFrame
             }
             deviceTarget = d.targetAot;
         }
+        /* V7/H5 (27-sep) — y la ABI de HELPERS: con la receta se sabe compilar para la placa, pero no si su cargador
+         * aceptará el resultado; uno de otra ABI lo rechaza en su log y el programa corre interpretado sin que nada
+         * lo diga (#504, tres semanas). La placa la publica en el INFO (`mdnAbi`); 0 = no lo dice, no se compara. */
+        String avisoAbi = PicoExplorer.avisoAbi(picoExplorer != null ? picoExplorer.deviceMdnAbi() : 0);
+        if (avisoAbi != null) {
+            log.accept("== AOT: " + avisoAbi + " ==\n");
+            return;
+        }
         String target = !deviceTarget.isEmpty() ? deviceTarget
                       : haveProject ? currentProject.aotTarget : "";
         if (target == null || target.isEmpty()) {

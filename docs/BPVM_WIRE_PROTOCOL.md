@@ -207,6 +207,7 @@ Reply:
  "arch":40,
  "aotReceta":"ARMV8M_MAIN_SOFTFP",
  "aotFlagsCrc":100061591,
+ "mdnAbi":9,
  "cpuFreqHz":150000000,
  "uptimeMs":12345,
  "tempC":43.5,
@@ -216,7 +217,7 @@ Reply:
 
 Los campos **comunes** los pone `src/bpvm_repl.c` a partir de la struct que
 rellena cada familia (`bpvm_repl_info_t`); lo propio de una familia entra por
-`info_extra`. Tres de ellos describen **el código nativo que esta imagen puede
+`info_extra`. Cuatro de ellos describen **el código nativo que esta imagen puede
 ejecutar**, y el IDE los usa para compilar a la ISA correcta y no subir un `.mdn`
 que la placa rechazaría:
 
@@ -225,9 +226,10 @@ que la placa rechazaría:
 | `arch` | la familia (`bpvm_mdn_host_arch()`) | `e_machine` del ELF: 40 ARM · 243 RISC-V · 94 Xtensa · 0 = sin nativo |
 | `aotReceta` | el común, compile-time | **V7/H2 (`#441`)**: la receta de `bpvm_aot_recetas.h` que este firmware exige (`ARMV8M_MAIN_SOFTFP`, `RV32IMAFC_ILP32F`, `RV32IMC_ILP32`); `""` donde no hay (PC, Xtensa) |
 | `aotFlagsCrc` | el común, compile-time | CRC32 IEEE del literal de esa receta, **sin signo** (0 sin receta); es lo que la cabecera v2 del `.mdn` lleva en `flags_crc` |
+| `mdnAbi` | el común, compile-time | **V7/H5 (27-sep)**: la ABI de helpers que habla este firmware (`MDN_ABI_VERSION` de `mdn_format.h`; 0 sin receta). Un `.mdn` de otra la rechaza el cargador y el programa corre interpretado: con ella el IDE lo dice en vez de subirlo (así se tapó `#504` tres semanas), y la tanda explica un «SIN NATIVO» |
 
-Un firmware de antes de V7/H2 no manda `aotReceta`/`aotFlagsCrc`: el IDE lee por
-nombre y distingue «ausente» (firmware viejo: no compara) de «vacío» (sin receta).
+Un firmware de antes de V7/H2 no manda `aotReceta`/`aotFlagsCrc`, ni uno de antes del 27-sep `mdnAbi`: el IDE lee
+por nombre y distingue «ausente» (firmware viejo: no compara) de «vacío» o 0 (sin receta).
 
 #### `TIME` (request)
 

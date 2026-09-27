@@ -116,6 +116,10 @@ const char* bpvm_mdn_host_float_abi(void) {
  * los mismos que el IDE hashea al escribir la cabecera. */
 const char* bpvm_mdn_host_receta_nombre(void) { return BPVM_AOT_HOST_RECETA_NOMBRE; }
 
+/* [V7/H5, 27-sep] La ABI de helpers, sólo donde hay receta: sin ella esta imagen no ejecuta ningún `.mdn`, y un 9
+ * ahí diría lo contrario. */
+int32_t bpvm_mdn_host_abi(void) { return BPVM_AOT_HOST_RECETA_NOMBRE[0] ? (int32_t) MDN_ABI_VERSION : 0; }
+
 uint32_t bpvm_mdn_host_receta_crc(void) {
     static uint32_t s_crc = 0;
     static int      s_hecho = 0;
