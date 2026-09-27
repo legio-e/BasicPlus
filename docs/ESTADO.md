@@ -891,6 +891,19 @@ la C6, la P4 y la Nucleo.
   arregló como en la ESP32 (`bba97e0b`). Luego: la tanda 14/14, 48 ms por pantalla y 1 por etiqueta, el giro bien en
   el cristal, `C5Touch` 5 de 5 y `GuiRotDemo` en las cuatro orientaciones (Eduardo). **`G5` hecho.**
 
+## 🔌 H5 (27-sep, tarde) — P2b.3.d: la sesión de placas, primera parte (la DK2, la Metro y el P4)
+
+- `P2b.3.c` (`abb21836`, `9f7227f5`): el HardFault habla en las dos familias Cortex-M33 (con STKOF, la tarea y su
+  pila); los fallos fatales, al registro aunque el log esté apagado; la ronda de V7 gana las seis pruebas de natives.
+- En las placas, con el OK de Eduardo en cada grabación: la DK2, la Metro (por BOOTSEL desde el wire) y el P4, la ronda
+  de V7 entera (20/20, 18/18, 20/20), con las natives que ceden IDÉNTICAS al PC. Medido: el testigo, 17–36 µs por
+  llamada; la pila del ejecutor, 3,2–3,5 KB en las pruebas y hasta 5,5 KB con SQLite.
+- De ahí, decidido por Eduardo (`b9b3f0ac`): llamar a un pack no cede (SQLite y Gui2, directas: sin ejecutor) y la pila
+  del ejecutor a 8 KB; los `.mdn` de los packs regenerados en v3, los packs reconstruidos y regrabados (`PACK_FORMAT` en
+  el P4 y la DK2), y las tres placas otra vez: la ronda igual, y SQLite ya sin ejecutor.
+- De paso: el ADC de la DK2, el NeoPixel de la Metro, SQLite en la Metro y SQLite y la Gui en el P4. Y la pregunta de
+  Eduardo por los 32 MB del P4: la caché mapea 16 (el revert `2dc12d5b`); es de H7.
+
 ## 🧵 H5 (27-sep) — P2b.3: la native en un HILO de la plataforma (idea de Eduardo), y las natives directas
 
 - El análisis del cambio de contexto en ARM y RISC-V destapó lo que de verdad costaba: cambiar de pila DENTRO de una

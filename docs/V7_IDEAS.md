@@ -2339,6 +2339,50 @@ que correr A LA VEZ —dos hilos tocando el heap, el GC parando la native donde 
 costes van en ejes distintos: el testigo, por llamada; la línea, por vuelta (+15–33 % en los bucles más apretados,
 P2b.0). La línea da la rebanada, el `kill` y, mañana, el breakpoint, igual en todas las plataformas.
 
+#### P2b.3.c y la sesión de placas (27-sep): la DK2, la Metro y el P4
+
+**c** (`abb21836`, `9f7227f5`): el informe de un HardFault de `#447` sube al común (`src/bpvm_fallo_cm33.c`) y lo usan
+la Pico y, por fin, las STM32 —que tenían el bucle mudo de CubeMX—, con lo que no decía: **STKOF** (el desborde de la
+pila de una tarea por su límite PSPLIM: justo el de un ejecutor), STKERR/UNSTKERR, la tarea en curso y su pila. Y los
+fallos FATALES (el HardFault, el canario de FreeRTOS, la parada del RTOS) escriben en el registro aunque el log esté
+apagado: el contrato de `#423` ya lo decía del arranque.
+
+**En las placas** (con el OK de Eduardo en cada grabación; `log=1` sólo mientras se medía):
+
+| | DK2 (STM32U5, 160 MHz) | Metro (RP2350, 150 MHz) | P4 (RISC-V con FPU, 360 MHz) |
+|---|---|---|---|
+| ronda de V7 (20) | **20/20** | **18/18** (sin pantalla) | **20/20** |
+| llamada con ejecutor (`NatCoste`, 20 000) | 206 → 929 ms: **~36 µs** | 170 → 667 ms: **~25 µs** | 86 → 436 ms: **~17,5 µs** |
+| pila del ejecutor, pruebas | 3,3 KB | 3,2 KB | 3,5 KB |
+| pila del ejecutor, SQLite (antes de la regla del pack) | 4960 B de 6144 | 4960 B | **5516 B** (628 libres) |
+
+Las seis pruebas de natives de la ronda (`NatCede`, `NatExpropia`, `NatBuiltin`, `NatAnida`, `NatDirecta`,
+`NatCoste`), IDÉNTICAS al PC en las tres: por primera vez, natives que se suspenden y se reanudan EN PLACA (en el puente
+a BP, en la línea del bucle, en un `sleep` por el despachador). El cargador lee la marca v3 («9/9 thunks registrados
+(4 directas)»). Y lo que esperaba placa: el ADC de la DK2 (los 17 canales; los errores con nombre), el NeoPixel de la
+Metro con el `__npInit` nuevo («el pin 99 no existe en rp2350b»; el ciclo de colores), SQLite y la Gui regrabados en
+el P4 y SQLite en la Metro (sus `.mdn` eran de la ABI 8: el cargador los rechazaba con nombre).
+
+**Lo que la medida cambió** (Eduardo, «OK, adelante», `b9b3f0ac`): **llamar a un pack no cede** —su código sólo ve la
+BIOS, y ninguna ranura ejecuta BP—, así que las natives de SQLite y de Gui2 son DIRECTAS: SQLite corre en la pila del
+worker como antes de P2b.3 (en las tres placas, «16/16 thunks (16 directas)» y `SqlDemo` sin crear ejecutor); y la pila
+del ejecutor, a **8 KB**. Los packs, regenerados (`.mdn` v3) y regrabados; en el P4 y la DK2, con `PACK_FORMAT` (sus
+zonas no daban para los nuevos junto a los borrados) y en el orden de siempre (el reparto de RAM de G1: `mini`, SQLite,
+Gui en la DK2).
+
+**El testigo, caro en las placas** (17–36 µs por llamada, con semáforos binarios y `configASSERT`): lo pagan sólo las
+natives que pueden ceder. Si hiciera falta abaratarlo, las notificaciones directas entre tareas de FreeRTOS son la
+siguiente perilla; hoy no se toca.
+
+**El P4 y sus 32 MB** (pregunta de Eduardo): la flash física es de 32 MB (el INFO mide 33 554 432 B), pero la imagen usa
+16: su caché sólo mapea los primeros 16 MB, y los packs se ejecutan en sitio (el revert `2dc12d5b`, 18-ago). El
+arreglo —los packs abajo, el FS arriba— es «los 32 MB del P4» de H7. Tras regrabar, su zona de packs queda en 1,4 MB
+libres (tras un `PACK_FORMAT`).
+
+**Quedan** de P2b.3.d: la Nucleo (primer arranque con `softfp` y el adaptador de G5.b0), la S3 (sólo la imagen: no tiene
+AOT), la C3, la C5 y la C6 (RISC-V sin FPU), y lo que esperaba placa en ellas: la C6 con `#574`, `DriverSpi` en la C5 y
+la C6.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
