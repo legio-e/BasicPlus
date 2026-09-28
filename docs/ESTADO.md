@@ -1068,6 +1068,42 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## ⏭️ Traspaso (28-sep, pausa) — H7: el módulo `Heap` y `Heap.compact()`; el corpus con DOS workers en la red; un `print` sale entero
+
+**Commits de hoy** (sin push): `d3a60e5c` (`#591`, el `.dbg` del código sintetizado) · `ac0f3d71` (`#594`, el módulo
+`Heap`) · `6b265162` (`#595`, `Heap.compact()`) · `6e362e2e` (`#597` y `#598`, dos fallos de la VM-C que rompían el
+recorrido del heap) · `cdedb1d1` (`#596`, con `--smp` una excepción sin atrapar acaba en error) · `95de38bc` (`#586`,
+la documentación del AOT tras P2b) · `c539c27c` (`#599`, miVM colgada en el GC con dos workers, y `check-smp` en la
+red) · `cc073e52` (`#600`, un `print` sale entero) · y sus docs.
+
+**Lo que decidió Eduardo hoy**: `Heap.compact()` sólo desde `Main` y sin otros hilos vivos, y su patrón para un
+programa de días —parar los hilos, cerrar lo abierto, compactar, reposar— (`HeapReposo`); `--smp=2` por defecto en el
+PC, **de momento no**: se decide con las pruebas del final de V7, y como hay micros de uno y de dos núcleos, la red
+prueba los dos modos (`check-smp`); para la salida con varios hilos, lo más sencillo —un `StringBuilder` y un
+`print`— con su regla: *dentro de un `print` no se cuela nada; entre dos, sí puede*. La propuesta de transacciones
+(`IO.beginPrint`/`endPrint`, como el bus) quedó como análisis en `V7_IDEAS` §H7.
+
+**Las placas**: TODAS siguen con imágenes anteriores a lo de hoy, y hoy hay mucho que las toca: el módulo `Heap` y
+`Heap.compact()` (builtins nuevos), `#597`/`#598`, y sobre todo `#600`, que cambia el camino de TODO `print` (la línea
+del hilo y la cola que empuja varios trozos seguidos, en código común: `interp.c`, `comm_common.c`, `bpvm_io.c`,
+`comm_host.c`, `comm_pico.c`) y la stdlib (`Heap.mod`, y `Gui.mod`/`Log.mod` regenerados; `pico_mods.c`). **La Pico
+compila; la ESP32 y la STM32 no se han compilado hoy.** Grabar, sólo con el OK de Eduardo; y en esa ronda: rehacer las
+seis imágenes, la tanda de V7 (ya lleva `HeapCompact` y `HeapReposo`) y mirar la salida —sugerencia: meter
+`PrintEntero` en la tanda: tres hilos y Main imprimiendo a la vez, 578 líneas—. `bpvm_thread_t` crece unos 12 B por
+hilo en las placas (el puntero de la línea y sus dos contadores; unos 400 B en `bpvm_t`), fuera del prefijo congelado:
+el `.mdn` no cambia.
+
+**⚠️ A vigilar**: `check-smp` compara ORDENADAS las líneas de los samples con `// smp: orden libre` (`EvDos`,
+`PrintEntero`): un sample nuevo cuyo orden entre hilos no fije el programa necesita la marca, o dará rojo al azar
+—cuatro vueltas seguidas, verdes—. `test-listen` puede fallar con la máquina cargada (visto hoy con la Pico
+compilando a la vez; aislado, verde). Y `doc_frags.py` da 4 FALLO en el manual que vienen de antes (`IO.open`, un `…`
+dentro del código, un campo que ya no se ve): quedó una tarea aparte para arreglarlos.
+
+**Lo siguiente**, de `FICHAS`: la ronda de placas (con el OK); lo de análisis de H7 (Boot 1/2 y `U1.4`, `CALL_REL`,
+el muro heap/pilas, los 32 MB del P4, la Pico a `platform_freertos.c`, los restos de `U6`) y `#592`/`#593`; las
+decisiones pendientes de Eduardo —`#579`, `#582`/`#583`, `#584`—; las sueltas `#577`–`#585`; H8 (`#495`, `#538`…),
+H9, H10 (`Rtc`, `#544`) y cerrar H11; H12 la última.
+
 ## ⏭️ Traspaso (27-sep, noche) — H7: lo corto, hecho; sigue lo de análisis
 
 **Commits desde la pausa** (sin push): `ec5b15c7` (`#587`, el `StringBuilder`) · `b777f25f` (`#589`, el depurador
