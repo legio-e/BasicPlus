@@ -1024,6 +1024,19 @@ la C6, la P4 y la Nucleo.
 - Un tropiezo: dejé vivo el eco de `test_net serve` de la prueba de paridad, esperando una tercera conexión con su
   puerto fijo, y el `make test-net` siguiente se colgó. Tras un `serve`, pararlo.
 
+## 🔧 H7 (28-sep) — `#599` cerrada: el corpus con DOS workers, en la red; y `#600` abierta
+
+- Eduardo, «Si» al arreglo y a la pasada. miVM: quien se aparca en `heapAlloc` durante una colecta ajena AVISA,
+  como la VM-C (`HeapReposo`, 10/10 con dos workers y 5/5 con cuatro).
+- `compat.sh check-smp`, dentro de `check`: el corpus con dos workers en las dos VMs y el stdout de la pasada con
+  uno. Marcas en la cabecera de un sample: `// smp: orden libre` (se compara ordenado) y `// smp: fuera — por qué`
+  (un SKIP a la vista). Saboteado el arreglo, rojo en `HeapReposo`.
+- En esa vuelta, `#600`: con dos workers la línea de un hilo se parte con la de otro (`EvDos`, en las dos VMs; el
+  texto y el salto de un `print` van por separado). `EvDos` va `fuera` hasta que Eduardo decida; propuesta: cada
+  instrucción de `print` sale entera.
+- `test-iomt` y `test-smphandles`, a `check-testc`; la primera ya comprueba los tamaños que prometía.
+- Red: paridad 114, cápsula 59, pruebas de C 31/31, norma, sim, sombra, MOD8, dos workers (113, con `EvDos` fuera) y packs-abi verdes; `check-smp`, tres vueltas más, igual.
+
 ## 🔬 H7 (28-sep) — `--smp=2` por defecto: de momento no; el corpus con dos workers saca `#599`
 
 - Eduardo: `--smp=2` no va por defecto de momento —se decide con las pruebas del final de V7—, y *«tenemos micros
