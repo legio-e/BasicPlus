@@ -1,0 +1,55 @@
+// ============================================================
+// Heap.bp — V7/H7 (28-sep): el diagnóstico del heap DESDE un programa BP (pedido de Eduardo, 5-ago:
+// «¿hay algún handle de memoria degradado?, ¿la memoria está muy fragmentada?»; decidido el 28-sep).
+//
+// Cada función LEE contadores de la VM: no reserva nada ni recorre el heap (sólo su lista de libres,
+// que es corta), así que preguntar no cambia lo que se pregunta. Devuelven NÚMEROS, para que un
+// programa decida con ellos (un umbral, un aviso) o una prueba compruebe una relación.
+//
+// ⚠️ Son números de ESTA VM, no de paridad: la VM-C guarda la tabla de handles y una reserva de
+// emergencia dentro del bloque de memoria, su heap no mide lo mismo que el de miVM y las dos colectan
+// en momentos distintos. Compara relaciones (el mayor ≤ lo libre), no valores.
+//
+// Uso típico:
+//
+//   import Heap
+//   if Heap.getLargestFree() < 4096 then
+//     print "fragmentada:", Heap.getFree(), "B libres, el mayor", Heap.getLargestFree()
+//   endif
+//
+// (heapFrag() y heapMap(), de Core, siguen: texto y sólo en miVM, para mirar en el PC.)
+// ============================================================
+module Heap
+
+  // El tamaño del heap, en bytes: lo que un programa puede llegar a ocupar.
+  public function getSize(): integer
+    inline CALL_BUILTIN 264
+  end getSize
+
+  // Los bytes libres: lo que queda al final del heap más la lista de libres.
+  public function getFree(): integer
+    inline CALL_BUILTIN 265
+  end getFree
+
+  // El mayor bloque libre, en bytes (cabecera incluida): una reserva hasta ese tamaño cabe de una
+  // vez. Frente a getFree() dice si la memoria está fragmentada («200 KB libres y el mayor, 4»).
+  public function getLargestFree(): integer
+    inline CALL_BUILTIN 266
+  end getLargestFree
+
+  // Cuántos huecos tiene la lista de libres.
+  public function getFreeBlocks(): integer
+    inline CALL_BUILTIN 267
+  end getFreeBlocks
+
+  // Cuántos objetos hay en el heap: los vivos y los muertos que el GC aún no ha recogido.
+  public function getHandles(): integer
+    inline CALL_BUILTIN 268
+  end getHandles
+
+  // Cuántas colectas lleva el programa.
+  public function getCollections(): integer
+    inline CALL_BUILTIN 269
+  end getCollections
+
+end Heap

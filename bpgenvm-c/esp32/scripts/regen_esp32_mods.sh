@@ -6,4 +6,4 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 bash "$HERE/../../scripts/regen_mods.sh" esp32 "$HERE/../common" \
-    Core Math IO Gpio I2c Spi Uart Pulse Pwm Pico Machine Rtc Adc Wdt Timer Time Neopixel
+    Core Math IO Heap Gpio I2c Spi Uart Pulse Pwm Pico Machine Rtc Adc Wdt Timer Time Neopixel

@@ -494,6 +494,7 @@ struct bpvm {
      * devolver. */
     uint32_t alloc_since_gc;
     uint32_t gc_bump_threshold;/* bump máx. desde el último GC antes de colectar (0 = off) */
+    uint32_t gc_colectas;      /* V7 (28-sep) — colectas hechas en este RUN (Heap.getCollections) */
     /* #355 — reserva de emergencia: bytes del final del heap que el programa NO
      * puede tocar. Se sueltan cuando una reserva ya ha fallado, para que quede
      * sitio con el que CONSTRUIR el RuntimeError de OOM (mensaje + objeto).
@@ -1000,6 +1001,18 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm);
 
 /* heap.c (F2) */
 uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type);
+
+/* V7 (28-sep) — lo que un programa puede preguntar del heap (Heap.bp; V7_IDEAS §H7): sin reservar nada ni recorrer el
+ * heap (sólo la lista de libres). Números de ESTA VM. Espejo de VirtualMachine.cuentasDelHeap. */
+typedef struct {
+    uint32_t tamano;       /* lo que un programa puede llegar a ocupar: [heap_start, heap_top - heap_reserve) */
+    uint32_t libre;        /* el final sin usar más la lista de libres */
+    uint32_t mayor_libre;  /* el mayor bloque libre (el final o el mayor hueco) */
+    uint32_t huecos;       /* bloques en la lista de libres */
+    uint32_t handles;      /* objetos en el heap: vivos y muertos sin recoger (slots de la tabla en uso) */
+    uint32_t colectas;     /* colectas de este RUN */
+} bpvm_heap_cuentas_t;
+void bpvm_heap_cuentas(bpvm_t* vm, bpvm_heap_cuentas_t* out);
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
 void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);

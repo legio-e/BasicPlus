@@ -269,7 +269,13 @@ enum {
     BUILTIN_I2C_WRITE_READ               = 261,   /* __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer */
     BUILTIN_I2C_EXEC                     = 262,   /* __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer */
     BUILTIN_STR_COPY                     = 263,   /* __strCopy(src: string, dst: byte[], pos: integer): integer */
-    BUILTIN__CUANTOS = 264
+    BUILTIN_HEAP_SIZE                    = 264,   /* __heapSize(): integer */
+    BUILTIN_HEAP_FREE                    = 265,   /* __heapFree(): integer */
+    BUILTIN_HEAP_LARGEST_FREE            = 266,   /* __heapLargestFree(): integer */
+    BUILTIN_HEAP_FREE_BLOCKS             = 267,   /* __heapFreeBlocks(): integer */
+    BUILTIN_HEAP_HANDLES                 = 268,   /* __heapHandles(): integer */
+    BUILTIN_HEAP_COLLECTIONS             = 269,   /* __heapCollections(): integer */
+    BUILTIN__CUANTOS = 270
 };
 
 #endif

@@ -21,6 +21,7 @@ module Stdlib
   import App              // proyecto en ejecución (projectPath, mainModule)
   import Collections      // List, Map, SyncList, ...
   import Compress         // compresión/descompresión
+  import Heap             // V7 (28-sep) — el diagnóstico del heap desde un programa (números de cada VM)
   import IO               // ficheros, consola, prompt
   import Json             // parseo y escritura JSON
   import Log              // logger

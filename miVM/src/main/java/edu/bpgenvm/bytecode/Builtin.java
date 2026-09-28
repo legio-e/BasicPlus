@@ -273,7 +273,13 @@ public enum Builtin {
     SPI_DEV_EXEC("__spiDevExec"),   // [260] __spiDevExec(bus: integer, cs: integer, baudrate: integer, mode: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
     I2C_WRITE_READ("__i2cWriteRead"),   // [261] __i2cWriteRead(bus: integer, addr: integer, tx: integer[], ntx: integer, rx: integer[], nrx: integer): integer
     I2C_EXEC("__i2cExec"),   // [262] __i2cExec(bus: integer, addr: integer, ops: integer[], nops: integer, tx: integer[], rx: integer[]): integer
-    STR_COPY("__strCopy");   // [263] __strCopy(src: string, dst: byte[], pos: integer): integer
+    STR_COPY("__strCopy"),   // [263] __strCopy(src: string, dst: byte[], pos: integer): integer
+    HEAP_SIZE("__heapSize"),   // [264] __heapSize(): integer
+    HEAP_FREE("__heapFree"),   // [265] __heapFree(): integer
+    HEAP_LARGEST_FREE("__heapLargestFree"),   // [266] __heapLargestFree(): integer
+    HEAP_FREE_BLOCKS("__heapFreeBlocks"),   // [267] __heapFreeBlocks(): integer
+    HEAP_HANDLES("__heapHandles"),   // [268] __heapHandles(): integer
+    HEAP_COLLECTIONS("__heapCollections");   // [269] __heapCollections(): integer
 
     public final String bpName;
     public final int id;
@@ -285,6 +291,8 @@ public enum Builtin {
         for (Builtin b : values()) BY_NAME.put(b.bpName, b);
         BY_NAME.put("newObjArray", NEW_REF_ARRAY);   // alias en Core.bp
         BY_NAME.put("growObjArray", GROW_REF_ARRAY);   // alias en Core.bp
+        BY_NAME.put("__newStrArray", NEW_REF_ARRAY);   // alias en Core.bp
+        BY_NAME.put("__growStrArray", GROW_REF_ARRAY);   // alias en Core.bp
         BY_NAME.put("__refToString", LONG_TO_STRING);   // alias en Core.bp
         BY_NAME.put("len", STRLEN);   // alias en Core.bp
     }

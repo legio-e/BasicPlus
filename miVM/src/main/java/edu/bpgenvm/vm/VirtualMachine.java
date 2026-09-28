@@ -2214,6 +2214,32 @@ public class VirtualMachine {
         // es del PROGRAMA, byte a byte entre las dos VMs.
         System.err.printf("VM [GC]: heap=%d bytes (alive=%d, libres=%d, bump_remain=%d) | antes free_list=%d%n",
                 beforeBumpUsed, aliveBytes, afterFreeListBytes, STACK_BASE - heapNext, beforeFreeListBytes);
+        gcColectas++;   // V7 (28-sep): Heap.getCollections
+    }
+
+    /** V7 (28-sep) — colectas hechas en este run (Heap.getCollections); espejo de gc_colectas de la VM-C. */
+    private int gcColectas = 0;
+
+    /** V7 (28-sep) — lo que un programa puede preguntar del heap (Heap.bp; V7_IDEAS §H7): {tamaño, libre,
+     *  mayor libre, huecos, handles, colectas}. Lee contadores: no reserva nada ni recorre el heap, sólo la
+     *  lista de libres. Espejo de bpvm_heap_cuentas (heap.c); el techo aquí es STACK_BASE —la tabla de
+     *  handles vive en Java y no hay reserva de emergencia—, así que los números son de ESTA VM. */
+    private int[] cuentasDelHeap() {
+        synchronized (vmLock) {
+            int fin = Math.max(0, STACK_BASE - heapNext);
+            int libre = fin, mayor = fin, huecos = 0;
+            int p = freeListHead;
+            while (p != 0 && huecos < 100000) {
+                int sz = readInt32(p + 4);
+                huecos++;
+                libre += sz;
+                if (sz > mayor) mayor = sz;
+                p = readInt32(p + 8);
+            }
+            int repartidos = Math.max(0, handleNext - 1);   // el slot 0 es el null
+            int handles = Math.max(0, repartidos - handleFreeTop);
+            return new int[]{ Math.max(0, STACK_BASE - heapStart), libre, mayor, huecos, handles, gcColectas };
+        }
     }
 
     private void addToFreeList(int addr, int size) {
@@ -2620,6 +2646,7 @@ public class VirtualMachine {
         // mismo orden que la VM-C (bpvm_run): las dos VMs dejan el heap igual.
         heapExc = 0;
         gcDescarrilo = false;
+        gcColectas = 0;   // V7 (28-sep): Heap.getCollections cuenta las de ESTE run
         try {
             throwBpRuntimeError(main, MSG_HEAP_DESCARRILADO);
         } catch (BpExceptionPending pend) {
@@ -6539,6 +6566,14 @@ public class VirtualMachine {
                 pushTc(tc, mask);
                 break;
             }
+            // V7 (28-sep) — el diagnóstico del heap DESDE BP (Heap.bp): contadores de ESTA VM, sin reservar
+            // (cuentasDelHeap). Espejo de los BUILTIN_HEAP_* de la VM-C.
+            case HEAP_SIZE:         pushTc(tc, cuentasDelHeap()[0]); break;
+            case HEAP_FREE:         pushTc(tc, cuentasDelHeap()[1]); break;
+            case HEAP_LARGEST_FREE: pushTc(tc, cuentasDelHeap()[2]); break;
+            case HEAP_FREE_BLOCKS:  pushTc(tc, cuentasDelHeap()[3]); break;
+            case HEAP_HANDLES:      pushTc(tc, cuentasDelHeap()[4]); break;
+            case HEAP_COLLECTIONS:  pushTc(tc, cuentasDelHeap()[5]); break;
             case MACHINE_GPIO_COUNT: {
                 /* host: perfil RP2350A (30 GPIO). En el device el firmware
                  * lo resuelve desde board_desc (variante / board.json). */

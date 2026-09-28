@@ -28,6 +28,7 @@
     { "nombre": "CatCadena",   "fuente": "bpgenvm-c/samples/CatCadena.bp" },
     { "nombre": "CatCrono",    "fuente": "bpgenvm-c/samples/CatCrono.bp",    "ignorar": ["^  tiempo: "] },
     { "nombre": "SbPiezas",    "fuente": "bpgenvm-c/samples/SbPiezas.bp" },
-    { "nombre": "SbCrono",     "fuente": "bpgenvm-c/samples/SbCrono.bp",     "ignorar": ["^  tiempo: "] }
+    { "nombre": "SbCrono",     "fuente": "bpgenvm-c/samples/SbCrono.bp",     "ignorar": ["^  tiempo: "] },
+    { "nombre": "HeapInfo",    "fuente": "bpgenvm-c/samples/HeapInfo.bp" }
   ]
 }

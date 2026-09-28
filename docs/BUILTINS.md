@@ -354,6 +354,22 @@ bloque de datos (`LEA_GLOBAL`) —de cualquier módulo, compilado antes o despu�
 `dst no es ref a heap`, `dst apunta a bloque libre`, `dst no es un array de bytes (type=N)`, `fuera de rango (pos=…
 bytes=… dst=…)` — ninguno sale del helper, que reserva justo lo que copia.
 
+## 264–269 — el diagnóstico del heap: `__heapSize`, `__heapFree`, `__heapLargestFree`, `__heapFreeBlocks`, `__heapHandles`, `__heapCollections`() → integer  *(V7/H7, 28-sep)*
+
+Lo que un programa puede preguntar del heap, en las DOS VMs (el pedido de Eduardo del 5-ago; `V7_IDEAS` §H7). Se
+usan por el módulo `Heap` (`Heap.getSize`, `getFree`, `getLargestFree`, `getFreeBlocks`, `getHandles`,
+`getCollections`). LEEN contadores: no reservan nada ni recorren el heap, sólo su lista de libres (`heap.c`,
+`bpvm_heap_cuentas`; `VirtualMachine.cuentasDelHeap`). El tamaño es lo que un programa puede llegar a ocupar (en la
+VM-C, hasta `heap_top` menos la reserva de emergencia); lo libre, el final sin usar más la lista de libres; el mayor
+libre, el mayor de los dos; los huecos, los bloques de la lista; los handles, los slots de la tabla en uso (vivos y
+muertos sin recoger); las colectas, las de este RUN.
+
+**No son números de paridad**: cada VM tiene su heap (la VM-C guarda la tabla de handles y la reserva de emergencia
+dentro del bloque, y su tamaño depende de la memoria de cada placa), así que el tamaño y lo libre difieren entre VMs
+—en el PC, 254753 y 376424 al arrancar—; lo usado, los handles y las colectas coinciden (medido: 108 B, 4 y 0 al
+arrancar). Una prueba compara RELACIONES (`bpgenvm-c/samples/HeapInfo.bp`). `heapFrag` (121) y `heapMap` (122)
+siguen como estaban: texto y sólo miVM.
+
 ---
 
 ## Próximos builtins propuestos (no asignados todavía)

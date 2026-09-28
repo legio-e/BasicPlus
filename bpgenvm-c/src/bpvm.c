@@ -1433,6 +1433,7 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     vm->heap_exc.v = 0u;
     vm->gc_descarrilo = 0;
     vm->reserva_descarrilada = 0;
+    vm->gc_colectas = 0;           /* V7 (28-sep): Heap.getCollections cuenta las de ESTE RUN */
     {
         vm->prefabricando_oom = 1;
         bpref_t pre = bpvm_throw_runtime_error(vm, main_tc, BPVM_MSG_HEAP_DESCARRILADO);
@@ -1496,6 +1497,7 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     vm->heap_exc.v = 0u;
     vm->gc_descarrilo = 0;
     vm->reserva_descarrilada = 0;
+    vm->gc_colectas = 0;           /* V7 (28-sep): Heap.getCollections cuenta las de ESTE RUN */
     {
         bpvm_thread_t* tc0 = &vm->threads[0];
         vm->prefabricando_oom = 1;

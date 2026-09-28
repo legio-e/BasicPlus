@@ -5,4 +5,4 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 bash "$HERE/../../scripts/regen_mods.sh" stm32 "$HERE/../port" \
-    Core Math IO Gpio I2c Spi Uart Pulse Pwm Pico Machine Rtc Adc Wdt Timer Time
+    Core Math IO Heap Gpio I2c Spi Uart Pulse Pwm Pico Machine Rtc Adc Wdt Timer Time

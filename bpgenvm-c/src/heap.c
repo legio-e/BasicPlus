@@ -727,6 +727,32 @@ void bpvm_gc_cuerpo(bpvm_t* vm) {
     bpvm_files_gc(vm);         /* V7/H3 (#491): un File inalcanzable se cierra AQUÍ, con su bloque intacto y su handle vivo */
     bpvm_handles_gc_sweep(vm); /* paso 6: recicla slots de tabla de lo inalcanzable (bpvm_handles.c) */
     gc_sweep_phase(vm);
+    vm->gc_colectas++;         /* V7 (28-sep): Heap.getCollections */
+}
+
+/* V7 (28-sep) — lo que un programa puede preguntar del heap (Heap.bp; V7_IDEAS §H7). Lee contadores: no reserva nada
+ * ni recorre el heap, sólo la lista de libres (como la línea «[gc] libres» de gc_sweep_phase, con el mismo tope). El
+ * techo que ve un programa es heap_top menos la reserva de emergencia (#355), que no se le presta. */
+void bpvm_heap_cuentas(bpvm_t* vm, bpvm_heap_cuentas_t* out) {
+    memset(out, 0, sizeof *out);
+    bpvm_smp_lock(vm);
+    uint32_t techo = (vm->heap_top > vm->heap_reserve) ? vm->heap_top - vm->heap_reserve : vm->heap_top;
+    uint32_t final = (techo > vm->heap_next) ? techo - vm->heap_next : 0u;
+    out->tamano = (techo > vm->heap_start) ? techo - vm->heap_start : 0u;
+    out->libre = final;
+    out->mayor_libre = final;
+    uint32_t c = vm->free_list_head;
+    while (c != 0u && out->huecos < 100000u) {
+        uint32_t sz = bpvm_read_u32_be(vm->memory + c + 4);
+        out->huecos++;
+        out->libre += sz;
+        if (sz > out->mayor_libre) out->mayor_libre = sz;
+        c = bpvm_read_u32_be(vm->memory + c + 8);
+    }
+    uint32_t repartidos = (vm->handles.next > 0u) ? vm->handles.next - 1u : 0u;   /* el slot 0 es el null */
+    out->handles = (repartidos > vm->handles.free_top) ? repartidos - vm->handles.free_top : 0u;
+    out->colectas = vm->gc_colectas;
+    bpvm_smp_unlock(vm);
 }
 
 /* V6/U5 — la TABLA DE HANDLES vive en src/bpvm_handles.c: registro, baja,

@@ -3791,6 +3791,25 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, (int32_t) bpvm_machine_gpio_count());
         return BPVM_OK;
     }
+    /* V7 (28-sep) — el diagnóstico del heap DESDE BP (Heap.bp): contadores de ESTA VM, sin reservar (heap.c,
+     * bpvm_heap_cuentas). Espejo de los HEAP_* de miVM. */
+    case BUILTIN_HEAP_SIZE:
+    case BUILTIN_HEAP_FREE:
+    case BUILTIN_HEAP_LARGEST_FREE:
+    case BUILTIN_HEAP_FREE_BLOCKS:
+    case BUILTIN_HEAP_HANDLES:
+    case BUILTIN_HEAP_COLLECTIONS: {
+        bpvm_heap_cuentas_t c;
+        bpvm_heap_cuentas(vm, &c);
+        uint32_t v = (id == BUILTIN_HEAP_SIZE)         ? c.tamano
+                   : (id == BUILTIN_HEAP_FREE)         ? c.libre
+                   : (id == BUILTIN_HEAP_LARGEST_FREE) ? c.mayor_libre
+                   : (id == BUILTIN_HEAP_FREE_BLOCKS)  ? c.huecos
+                   : (id == BUILTIN_HEAP_HANDLES)      ? c.handles
+                   :                                     c.colectas;
+        push_i32(vm, tc, (int32_t) v);
+        return BPVM_OK;
+    }
     case BUILTIN_MACHINE_ADC_CHANNELS: {
         push_i32(vm, tc, (int32_t) bpvm_machine_adc_channels());
         return BPVM_OK;

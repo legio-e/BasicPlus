@@ -1549,6 +1549,26 @@ module Core
   public function __strCopy(src: string, dst: byte[], pos: integer): integer   // #554: la concatenación (los __strconcat* que sintetiza el compilador)
     inline CALL_BUILTIN 263
   end __strCopy
+  // V7/H7 (28-sep) — el diagnóstico del heap DESDE BP (Heap.bp; V7_IDEAS §H7): contadores de ESTA VM, sin reservar
+  // nada ni recorrer el heap (sólo su lista de libres). No son de paridad: el heap de cada VM mide lo suyo.
+  function __heapSize(): integer   // Heap.getSize
+    inline CALL_BUILTIN 264
+  end __heapSize
+  function __heapFree(): integer   // Heap.getFree
+    inline CALL_BUILTIN 265
+  end __heapFree
+  function __heapLargestFree(): integer   // Heap.getLargestFree
+    inline CALL_BUILTIN 266
+  end __heapLargestFree
+  function __heapFreeBlocks(): integer   // Heap.getFreeBlocks
+    inline CALL_BUILTIN 267
+  end __heapFreeBlocks
+  function __heapHandles(): integer   // Heap.getHandles
+    inline CALL_BUILTIN 268
+  end __heapHandles
+  function __heapCollections(): integer   // Heap.getCollections
+    inline CALL_BUILTIN 269
+  end __heapCollections
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray
