@@ -2561,7 +2561,7 @@ public class FrmMain extends javax.swing.JFrame
                         // a /app (lo decide uploadAndRun con este set).
                         java.util.List<java.io.File> deps = packRun
                                 ? java.util.Collections.<java.io.File>emptyList()
-                                : resolveDeviceDeps(bpFile, outDir);
+                                : resolveDeviceDeps(bpFile, outDir, modPath);
                         // #466 — «de la stdlib» = vive en stdlibDir. Ya no hay lista a
                         // mano de lo que el firmware embebe: eso lo contesta la PLACA
                         // (uploadAndRun le pregunta por cada dependencia). Esto sólo
@@ -2789,7 +2789,7 @@ public class FrmMain extends javax.swing.JFrame
                         appendConsola("[debug] aviso: no hay " + base + ".dbg; locales saldrán crudos\n");
                     }
                     // Deps (igual que Run on Pico): stdlib core → /lib, resto → /app.
-                    java.util.List<java.io.File> deps = resolveDeviceDeps(bpFile, outDir);
+                    java.util.List<java.io.File> deps = resolveDeviceDeps(bpFile, outDir, modPath);
                     java.util.Set<String> libDeps = stdlibDepNames(deps, outDir);   // #466: como en Run
                     final String remoteMain = deviceAppPrefix() + "/" + base + ".mod";   // F2 (H19)
                     appendConsola("[debug] subiendo + enganchando sesión de debug en la placa...\n");
@@ -2881,17 +2881,22 @@ public class FrmMain extends javax.swing.JFrame
     }
 
     /**
-     * Resuelve los drivers de dispositivo necesarios para ejecutar
-     * {@code bpFile}. Parsea las líneas `import X` del fuente, filtra
-     * los stdlib core, y busca el `.mod` correspondiente en:
+     * Los {@code .mod} de los que depende el programa, para subirlos a la placa: los que CARGA la VM, leídos del
+     * {@code .mod} compilado ({@code mainMod}) y de los suyos, transitivos
+     * ({@link basicplus.frontend.DependenciasDelMod}). Se buscan en:
      *   1) outDir (si el frontend lo emitió como dep)
      *   2) {bpdevices/} via devicesDir del BpVM.cfg
      *   3) {bpstdlib/} via stdlibDir (fallback)
      *   4) directorio del bpFile
-     * Devuelve lista de .mod existentes a subir, en orden de
-     * descubrimiento. (No recursivo en deps-de-deps para v1.)
+     * y uno de la stdlib, en stdlibDir PRIMERO. Devuelve los que existen, en orden de descubrimiento.
+     *
+     * V7/H8 #538 (28-sep): antes salían de una regex sobre las líneas `import X` de los {@code .bp}, y se le
+     * escapaban el {@code import Core} implícito (lo pone el parser), un módulo de biblioteca
+     * ({@code import com.acme.lib.X} cogía {@code com}) y la dependencia de la que sólo había {@code .mod}. Con el
+     * {@code Stdlib.pack} cargado {@code /lib} está vacío, y en el micro simulado un pack rancio mataba el programa
+     * al enlazar. Qué se sube de verdad lo sigue decidiendo la placa (uploadAndRun → {@code statModule}, #466).
      */
-    private java.util.List<java.io.File> resolveDeviceDeps(Path bpFile, Path outDir) {
+    private java.util.List<java.io.File> resolveDeviceDeps(Path bpFile, Path outDir, Path mainMod) {
         java.util.List<java.io.File> result = new java.util.ArrayList<>();
 
         java.util.List<Path> searchDirs = new java.util.ArrayList<>();
@@ -2908,80 +2913,22 @@ public class FrmMain extends javax.swing.JFrame
             }
         } catch (Throwable ignored) { }
         if (bpFile.getParent() != null) searchDirs.add(bpFile.getParent());
-        final Path stdlibFirst = stdlibPath;   // para resolución core-first
 
-        // Resolución TRANSITIVA (BFS sobre el grafo de imports). Un import puede
-        // tener sus propias deps — p.ej. Gui importa Json para el loader de Forms
-        // (H13.1) — y hay que subir TODAS, no solo las directas de la app. Por
-        // cada módulo: resolvemos su .mod y leemos los imports de SU .bp para
-        // encolar los suyos. (Antes solo se resolvían los imports directos del .bp
-        // de la app → faltaba Json → Gui no cargaba en el device → RuntimeError.)
-        // La decisión final de subir o no la toma uploadAndRun según lo que YA
-        // exista en el device (/lib embebida → no se pisa; ausente → se sube).
-        java.util.Set<String> visited = new java.util.LinkedHashSet<>();
-        java.util.ArrayDeque<String> queue = new java.util.ArrayDeque<>(parseImports(bpFile));
-        while (!queue.isEmpty()) {
-            String imp = queue.poll();
-            if (!visited.add(imp)) continue;   // ya procesado → evita ciclos
-            // BUGFIX (2026-06-13): la stdlib CORE se resuelve desde bpstdlib
-            // (stdlibDir) ANTES que outDir. Un X.mod rancio en outDir (de un
-            // compile viejo) tiene un layout de vtable de clase incompatible con
-            // la app recién compilada → en un método OO cross-module el
-            // INVOKE_VIRTUAL apunta a un slot inexistente → RuntimeError en el
-            // device (cazado con I2c.Bus.read). Drivers de usuario: outDir primero.
-            // AMPLIADO (2026-06-26): la protección stdlib-first cubría SOLO
-            // EMBEDDED_CORE_MODS → Json (dep de Gui para Forms, H13.1) quedaba
-            // fuera y el IDE subía un Json.mod RANCIO del out/ del proyecto
-            // (p.ej. samples/out/Json.mod de mayo: 12351 B, asObject en otro
-            // slot que el #15 actual) en vez del de bpstdlib → en el P4 el
-            // INVOKE_VIRTUAL cross-module no resolvía ("símbolo no resuelto
-            // 'Json.JsonValue#asObject#15'") → exit 10 mudo. Ahora CUALQUIER
-            // módulo que viva en stdlibDir (tiene su .bp/.mod allí) se resuelve
-            // de stdlibDir PRIMERO, no solo los EMBEDDED_CORE.
-            java.util.List<Path> order = searchDirs;
-            boolean isStdlibMod = stdlibFirst != null
-                    && (Files.isRegularFile(stdlibFirst.resolve(imp + ".bp"))
-                        || Files.isRegularFile(stdlibFirst.resolve(imp + ".mod")));
-            if (isStdlibMod) {
-                order = new java.util.ArrayList<>();
-                order.add(stdlibFirst);
-                order.addAll(searchDirs);   // el break corta en el 1º; dup inocuo
+        // Resolución TRANSITIVA, leída de los .mod (V7/H8 #538): Gui importa Json para el loader de Forms (H13.1),
+        // y hay que subir TODAS, no sólo las directas de la app. La stdlib, desde stdlibDir PRIMERO: un X.mod rancio
+        // en outDir (de un compile viejo) tiene otro layout de vtable y el INVOKE_VIRTUAL cross-module no resuelve
+        // en la placa (junio: I2c.Bus.read; y Json.JsonValue#asObject#15 en el P4, «exit 10 mudo»). Esa regla vive
+        // ahora en DependenciasDelMod, con su prueba (DependenciasDelModTest). La decisión final de subir o no la
+        // toma uploadAndRun según lo que YA exista en la placa.
+        try {
+            for (Path p : basicplus.frontend.DependenciasDelMod.paraSubir(mainMod, searchDirs, stdlibPath)) {
+                result.add(p.toFile());
             }
-            for (Path dir : order) {
-                Path candidate = dir.resolve(imp + ".mod");
-                if (Files.isRegularFile(candidate)) {
-                    result.add(candidate.toFile());
-                    break;
-                }
-            }
-            // Recursión: encola los imports del .bp de ESTE módulo (p.ej. Gui.bp →
-            // import Json). Buscamos el .bp en los mismos dirs (stdlib, outDir…).
-            for (Path dir : searchDirs) {
-                Path bpCand = dir.resolve(imp + ".bp");
-                if (Files.isRegularFile(bpCand)) {
-                    queue.addAll(parseImports(bpCand));
-                    break;
-                }
-            }
+        } catch (java.io.IOException e) {
+            appendConsola("[deps] no se pudieron leer las dependencias de " + mainMod.getFileName()
+                    + ": " + e.getMessage() + "\n");
         }
         return result;
-    }
-
-    /** Parser ligero de imports del .bp. Devuelve los nombres a la
-     *  derecha de `import` (sin alias, sin `from`). */
-    private static java.util.Set<String> parseImports(Path bpFile) {
-        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
-        try {
-            java.util.List<String> lines = Files.readAllLines(bpFile,
-                    java.nio.charset.StandardCharsets.UTF_8);
-            java.util.regex.Pattern pat = java.util.regex.Pattern.compile(
-                    "^\\s*import\\s+([A-Za-z_][A-Za-z0-9_]*)");
-            for (String line : lines) {
-                java.util.regex.Matcher m = pat.matcher(line);
-                if (m.find()) out.add(m.group(1));
-            }
-        } catch (Exception ignored) { }
-        return out;
     }
 
     /**
