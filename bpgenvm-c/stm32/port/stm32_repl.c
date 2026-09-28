@@ -617,6 +617,8 @@ static void run_module_path(const char* path, long id, const char* arg) {
             const char* rt_err = bpvm_runtime_error(vm);
             if (st != BPVM_OK && st != BPVM_KILLED && rt_err[0]) {
                 emit_exited_msg(session, "RUNTIME_ERROR", bpvm_exit_code(st), dt, rt_err);
+            } else if (st == BPVM_KILLED && s_reset_ack_id >= 0) {   /* E1: lo paró un RESET, no un KILL */
+                emit_exited_msg(session, "KILLED", bpvm_exit_code(st), dt, BPVM_REPL_MSG_RESET);
             } else {
                 emit_exited(session,
                             (st == BPVM_OK)     ? "OK"

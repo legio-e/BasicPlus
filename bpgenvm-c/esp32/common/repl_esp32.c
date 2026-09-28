@@ -841,7 +841,9 @@ static void run_module_path(const char* path, long id, const char* arg) {
     const char* rt_err = bpvm_runtime_error(vm);
     const char* err_msg = (rs == BPVM_OK) ? NULL
                         : (link_err[0] ? link_err
-                                       : (rt_err[0] ? rt_err : bpvm_status_str(rs)));
+                                       : (rt_err[0] ? rt_err
+                        : (rs == BPVM_KILLED && s_reset_ack_id >= 0) ? BPVM_REPL_MSG_RESET   /* E1 */
+                                       : bpvm_status_str(rs)));
     send_exited(session, status_str, exit_code, (long) dt, err_msg);
 
 #if BPVM_ESP_AOT_MDN

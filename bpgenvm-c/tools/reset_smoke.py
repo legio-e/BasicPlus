@@ -25,11 +25,24 @@ se declara INVALIDA en vez de dar verde. Y por eso el programa es
 samples/benchmarks/VivoLargo.bp, que late e insiste 30 s.
 """
 
-import socket, json, subprocess, sys, time, os, select
+import socket, json, subprocess, sys, time, os, select, tempfile
 
 REPO  = r"C:\lenguajes\pm"
 SIM   = os.path.join(REPO, "bpgenvm-c", "build", "bpvm-sim.exe")
-MOD   = os.path.join(REPO, "samples", "benchmarks", "VivoLargo.mod")
+SIM   = os.environ.get("BPVM_SIM") or SIM   # compat.sh check-sim: el sim que construye la red
+# V7/H8 (28-sep) — el programa se COMPILA al vuelo con el compilador de hoy (como sim_smoke): el .mod versionado era
+# un MOD7 del 13-sep que ninguna VM de hoy enlazaba, y la prueba salía INVALIDA sin que nadie lo viera.
+JAR   = os.path.join(REPO, "lexer-java", "target", "basicplus-frontend.jar")
+def _compila():
+    d = tempfile.mkdtemp(prefix="reset_smoke_mod_")
+    src = os.path.join(REPO, "samples", "benchmarks", "VivoLargo.bp")
+    rc = subprocess.run(["java", "-jar", JAR, src, "--compile", d, "--backend=mivm"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    m = os.path.join(d, "VivoLargo.mod")
+    if rc.returncode != 0 or not os.path.exists(m):
+        sys.exit("INVALIDA: VivoLargo.bp no compila con el compilador de hoy (%s)" % JAR)
+    return m
+MOD   = _compila()
 VERBO = (sys.argv[1] if len(sys.argv) > 1 else "RESET").upper()
 PORT  = 5117
 SERIE = None
@@ -61,7 +74,13 @@ if SERIE:
             # — pero por si solo no prueba nada: la prueba es que VUELVA (abajo).
             raise _CableCaido()
 else:
-    sim = subprocess.Popen([SIM, "--port=%d" % PORT], cwd=REPO,
+    # V7/H8 (28-sep) — como el IDE (SimRunner) y sim_smoke: la stdlib del micro simulado es packs/Stdlib.pack.
+    # Antes se subian a /lib seis modulos de una lista a mano, y el dia que VivoLargo empezo a importar Machine
+    # el programa ya no enlazaba y la prueba salia INVALIDA (el .mod, ademas, era MOD7).
+    _flash = os.path.join(tempfile.mkdtemp(prefix="reset_smoke_"), "sim.flash")
+    sim = subprocess.Popen([SIM, "--port=%d" % PORT, "--flash-file=" + _flash,
+                            "--mem=1M", "--psram=8M", "--flash=4M",
+                            "--pack=" + os.path.join(REPO, "packs", "Stdlib.pack")], cwd=REPO,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     time.sleep(1.2)
     s = socket.create_connection(("127.0.0.1", PORT), timeout=20)
@@ -105,13 +124,7 @@ def leer(t):
 
 send({"type": "HELLO", "id": sig()}); leer(2.0)
 send_bulk({"type": "PUT", "id": sig(), "path": "/app/P.mod"}, open(MOD, "rb").read()); leer(3.0)
-# Las dependencias solo hacen falta contra el SIMULADOR: una placa trae la
-# stdlib EMBEBIDA en su imagen, y subirsela seria escribir en su FS sin motivo.
-if not SERIE:
-    for d in ["Core", "Str", "Math", "Collections", "IO", "Pico"]:
-        o = os.path.join(REPO, "bpstdlib", d + ".mod")
-        if os.path.exists(o):
-            send_bulk({"type": "PUT", "id": sig(), "path": "/lib/" + d + ".mod"}, open(o, "rb").read()); leer(3.0)
+# La stdlib: en una placa, la de su imagen; en el simulador, la del Stdlib.pack con el que se arranca (arriba).
 
 send({"type": "RUN", "id": sig(), "path": "/app/P.mod"})
 ini = leer(1.5)
@@ -130,9 +143,32 @@ print("control: el programa esta VIVO (%d OUTPUT, ningun EXITED)" % salida)
 print("\n--- %s con el RUN vivo ---" % VERBO)
 t0 = time.time()
 send({"type": VERBO, "id": sig()})
-for tipo, l, ts in leer(15.0):
+tras = leer(15.0)
+for tipo, l, ts in tras:
     if tipo == "OUTPUT": continue
     print("   [+%6.1f ms] %s" % ((ts - t0) * 1000.0, l[:150]))
+
+# V7/H8 (28-sep) — contra el simulador, COMPROBADO y no sólo impreso (la prueba está en check-sim; fuera de la red
+# se pudrió: su .mod era MOD7 y le faltaba un módulo por subir). Con una placa se mira a mano, como siempre.
+fallos = 0
+if not SERIE:
+    def _j(tipo):
+        return [json.loads(l) for t_, l, ts in tras if t_ == tipo]
+    def _chk(ok, msg):
+        global fallos
+        print(("  ok  " if ok else "  FAIL ") + msg)
+        if not ok: fallos += 1
+    ex = _j("EXITED")
+    if VERBO in ("RESET", "KILL"):
+        _chk(len(_j(VERBO + "_REPLY")) == 1, "el %s tiene su %s_REPLY" % (VERBO, VERBO))
+        _chk(len(ex) == 1 and ex[0].get("status") == "KILLED", "el programa acaba KILLED: %s" % ex)
+        msg = ex[0].get("errorMessage") if ex else None
+        if VERBO == "RESET":
+            _chk(msg == "reiniciado por RESET", "y el EXITED dice que lo paro un RESET, no un KILL: %r" % msg)
+        else:
+            _chk(msg != "reiniciado por RESET", "un KILL no dice RESET: %r" % msg)
+    if fallos == 0:
+        print("[status=OK] %s con el RUN vivo, contra el simulador" % VERBO)
 try: s.close()
 except Exception: pass
 
@@ -163,3 +199,4 @@ if SERIE and VERBO == "RESET":
                 break
     if not volvio: print("   NO volvio en 25 s")
 parar_sim()
+sys.exit(1 if fallos else 0)

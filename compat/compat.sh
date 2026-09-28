@@ -677,7 +677,7 @@ SIM_RED=""   # lo fija check_sim al construirlo; check_sombra lo usa si esta
 check_sim() {
   echo "-- el micro simulado (#537): la libreria del pack y los smokes del wire (y la SD, V7/H3) --"
   local fails=0 sal rc t n sim="$ROOT/bpgenvm-c/build/bpvm-sim-red.exe"
-  local smokes="sim_smoke boardsim_smoke io_smoke list_trunc_smoke sd_smoke" total
+  local smokes="sim_smoke boardsim_smoke io_smoke list_trunc_smoke sd_smoke reset_smoke" total   # reset_smoke: V7/H8 (28-sep)
   total=$(( $(echo $smokes | wc -w) + 1 ))
   bash "$HERE/stdlib_pack.sh" || fails=$((fails+1))
   if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then

@@ -1065,7 +1065,8 @@ static void run_module_path(const char* path, long id, const char* arg) {
      * en un fallo espurio. */
     { extern void bpvm_pico_mpu_desarmar(void); bpvm_pico_mpu_desarmar(); }
 
-    log_printf("RUN/v1 %s finished: %s", path, bpvm_status_str(rs));
+    log_printf("RUN/v1 %s finished: %s", path,
+               (rs == BPVM_KILLED && s_reset_ack_id >= 0) ? BPVM_REPL_MSG_RESET : bpvm_status_str(rs));
 
     /* P-run-stop — ack diferido del KILL. Orden: KILL_REPLY → EXITED. */
     bpvm_set_poll(vm, NULL, NULL);
@@ -1098,6 +1099,7 @@ static void run_module_path(const char* path, long id, const char* arg) {
          * status genérico. Antes siempre iba el genérico "exit N". */
         const char* emsg = link_err[0] ? link_err
                          : (rt_err[0]   ? rt_err
+                         : (rs == BPVM_KILLED && s_reset_ack_id >= 0) ? BPVM_REPL_MSG_RESET   /* E1 */
                                         : bpvm_status_str(rs));
         /* #557 — recortado si no cabe: un error de enlace llega a 1.536 B y este
          * buffer tiene 1.024; antes el EXITED entero se quedaba sin salir. */

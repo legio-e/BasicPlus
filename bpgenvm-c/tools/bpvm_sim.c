@@ -981,7 +981,8 @@ static void handle_run(sock_t c, long id, json_obj_t* obj) {
                         (st == BPVM_OK)     ? "OK"
                       : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
                         bpvm_exit_code(st), dt,   /* #481 - la tabla comun */
-                        (st == BPVM_OK || st == BPVM_KILLED) ? "" : bpvm_runtime_error(vm));
+                        (st == BPVM_KILLED && g_reset_ack_id >= 0) ? BPVM_REPL_MSG_RESET   /* E1 */
+                      : (st == BPVM_OK || st == BPVM_KILLED) ? "" : bpvm_runtime_error(vm));
         }
     }
     bpvm_destroy(vm);

@@ -167,6 +167,12 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj);
  *  la STM32, SAVE. Un verbo de fichero nuevo se añade aquí, una vez. */
 int bpvm_repl_verbo_de_fs(const char* type);
 
+/** V7/H8 (restos de E1, 28-sep) — el `errorMessage` del EXITED de un programa parado por un RESET, el MISMO en las
+ *  cuatro (Pico, ESP32, STM32 y el micro simulado). El `poll` trata el RESET como un KILL —lo para, y reinicia
+ *  después, fuera de `bpvm_run`— y el EXITED decía «terminado por KILL» (Pico y ESP32) o nada (STM32 y simulado). El
+ *  `status` sigue siendo KILLED: es lo que esperan los clientes. */
+#define BPVM_REPL_MSG_RESET "reiniciado por RESET"
+
 #ifdef __cplusplus
 }
 #endif
