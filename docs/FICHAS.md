@@ -2649,6 +2649,13 @@ durante todo el RUN.
 3. Después, levantar el `BUSY` en los cinco `poll` **sólo para `LS`/`GET`**: `PUT` sobre `/app` con el
    programa leyendo ahí es otra conversación.
 
+🧭 **Eduardo (28-sep, al mapear H8)**: *«el get tiene que trocearse y los paquetes de los diferentes comandos se pueden
+mezclar, tiene que ser el destinatario el que vaya recogiendo los diferentes paquetes y los vaya agrupando. En un
+entorno multitarea no puede ser que una comunicación monopolice la comunicación.»* Y el mapa (`V7_IDEAS` §H8): la
+premisa 1 de abajo no se cumple —el cable lo atiende el hilo `io`, el mismo que saca la salida—; lo que monopoliza
+es el `GET` entero en un `poll` (ni salida ni `KILL` mientras dura) y el cerrojo del FS en todo el envío. El
+protocolo troceado, a diseñar antes de tocar código.
+
 ⏩ **Decisión de Eduardo (11-sep): a V7** — *«lo estudiamos en V7, no es para V6»*. Para `C1` no hace
 falta: la captura se escribe cuando el programa quiere y se baja al terminar (o tras `KILL`). El
 runner de `T1` lo sabe: `RUN → EXITED → GET`.

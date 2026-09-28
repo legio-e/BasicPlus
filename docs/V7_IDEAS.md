@@ -2786,6 +2786,22 @@ siguen hablando de un solo hilo.
 `Stdlib.pack` cargado y `/lib` vacío), `#601`, el `EXITED` del `RESET`, el `INFO` y el guardián del fat-jar—; después,
 con las decisiones de Eduardo, `#495`, `#452` y los packs en el árbol; el rojo del árbol y `M5` son diseño, a hablar.
 
+**Decidido por Eduardo (28-sep, tras el mapa):**
+
+- **`#495`**: *«el get tiene que trocearse y los paquetes de los diferentes comandos se pueden mezclar, tiene que ser
+  el destinatario el que vaya recogiendo los diferentes paquetes y los vaya agrupando. En un entorno multitarea no
+  puede ser que una comunicación monopolice la comunicación.»* → un protocolo TROCEADO y MEZCLABLE: cada respuesta
+  larga en paquetes con su id, intercalados con los `OUTPUT` y con las demás respuestas, y el IDE (o quien lea) los
+  junta por id. El diseño, antes de tocar código.
+- **`#452`**: *«desde el IDE ya hay un botón para formatear la zona de packs, ¿hacen falta más formats?»* → no: el FS
+  se formatea solo al arrancar si no monta (`fs_lfs.c`, «formatea si no monta»), y el `FORMAT` del wire (en caliente,
+  con `confirm:"YES"`) sólo lo usan las pruebas contra el micro simulado. Se quedan los cinco verbos como están,
+  probados en `check-sim`.
+- **Los packs en el árbol de ficheros**: *«solamente si están en el FS; si mezclamos los del FS y los de la zona de
+  packs vamos a liar a los usuarios»* → no hay rama `pack:`: un `.pack` en el FS sale como cualquier fichero (ya sale),
+  y la zona de packs se ve en su panel.
+
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
