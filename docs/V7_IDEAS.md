@@ -2759,6 +2759,33 @@ entera, sincronizada en cada sumidero (el de stdout, el del cable y los del IDE)
 bloques a la vez y un sample que comprueba que cada bloque sale seguido; `EvDos` vuelve a `check-smp` con
 `// smp: orden libre`. Y en placa, la salida por el cable de las tres familias (es el camino de todo `print`).
 
+## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
+
+Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.
+Lo que dice cada asunto contra lo que hay:
+
+| asunto | lo que hay hoy | tamaño | ¿decide Eduardo? |
+|---|---|---|---|
+| `#538` — el IDE y las dependencias | `resolveDeviceDeps` (`FrmMain`) recorre con una regex las líneas `import X` de los `.bp`: no ve el `Core` implícito, se equivoca con `import I:M` (coge `I`) y con `import acme.Lib` (coge `acme`), y corta la cadena si una dependencia sólo existe como `.mod`. El `.mod` MOD9 SÍ lleva sus dependencias (la subtabla `deps`, `Core` implícito incluido): es lo que lee la VM al cargar. `statModule` ya decide bien con un pack (`STAT` → `pack:`; mismo CRC, no sube; distinto, sube delante). Con el `Stdlib.pack` cargado, **`/lib` está vacío** (Eduardo): es el caso normal, y el que prueba el arreglo. | medio: sacar las dependencias del `.mod` (hay un lector, package-private: `PackStep.duenosDeImports`) | no: es un fallo |
+| `#495` — `GET`/`LS` durante un RUN | La premisa 1 de la ficha NO se cumple: durante el RUN el cable lo atiende el hilo `io` (`io_loop`: saca la salida y luego llama al `poll`, en el mismo hilo), así que un `print` no puede colarse entre la cabecera de un `GET_REPLY` y sus bytes. Lo que SÍ pasaría al levantar el `BUSY`: mientras dura un `GET` (60 KB, ~5 s en la DK2) `io` ni vacía la salida —el programa se para al imprimir— ni lee un `KILL`; y el cerrojo del FS abarca el envío entero (littlefs y FAT: el `readFile`/`writeFile` del programa espera). `LS` es corto. `LIST_DIR` usa la zona de rascar global, la misma que el `listDir` del programa: en paralelo, carrera. Son cuatro `BUSY` (Pico; ESP32 —S3, C3, C5, C6 y P4—; STM32; micro simulado), no cinco. | pequeño si sólo `LS`; grande si `GET` | sí: ¿`LS` ya y `GET` troceado (entre trozo y trozo vaciar la salida y mirar el `KILL`, con el cerrojo del FS por trozo), o `GET` sólo sin RUN? |
+| `#452` — los cinco verbos | `PING`, `DF`, `FORMAT`, `RENAME`, `RMDIR`: ni el IDE ni `tanda.py` los mandan, pero SÍ los ejercita `sim_smoke` contra el micro simulado, en la red (`check-sim`): ya no están sin probar. El IDE NO puede formatear el FS de una placa (su «Formatear zona…» es `PACK_FORMAT`, la zona de packs). `pico/scripts/bpvm-pico.py` manda `FORMAT` en el protocolo de texto retirado en `#305`: muerto. | pequeño | sí: ¿`FORMAT` en el IDE, con confirmación?, ¿`DF` fuera (el IDE lo saca de `INFO` + `LIST`)? |
+| `M5` — las properties heredadas en el depurador | NO es una comprobación: el depurador no despliega NINGÚN objeto (un local objeto sale como `@<valor>`; el `INSPECT` de miVM es mínimo; la VM-C no lo tiene; la tabla de variables es plana). Haría falta el layout de cada clase en el `.dbg` (padre, campos, properties, offsets; con el padre en otro módulo los offsets los recalcula el enlace tardío al cargar), desplegar desde el IDE leyendo la memoria (`READ_INT`, que la VM-C ya tiene) y la vista en árbol. | grande: una función nueva | sí: ¿en V7? |
+| `E1` — el rojo del árbol | No existe: `colorDeTipo` sólo mira la extensión y nunca da rojo. Los candidatos a «problema» están en un comentario (`.mdn` de otra arquitectura, `.mod` de ABI incompatible, `/lib` rancio, listado truncado), y el `LIST` manda `crc:-1`. | medio | sí: qué cuenta como problema |
+| `E1` — el `EXITED` de un `RESET` | Dice «terminado por KILL»: el `poll` trata `RESET` como `KILL` (devuelve 1 → `BPVM_KILLED`) y reinicia después. Cuatro sitios (Pico, ESP32, STM32, micro simulado); en la STM32 y el simulado sale sólo «(KILLED)». | pequeño | no |
+| `E1` — los packs en el árbol | El árbol sale sólo de `LIST`, que no lista la zona de packs (desde `#493` un módulo de pack es `pack:<Pack>/x`, no `/lib`). `PACK_LS`/`PACK_ENTRIES` existen y sólo los usa el panel de packs. | pequeño, en el IDE: una rama `pack:` | sí, poco: ¿rama `pack:` en el árbol? |
+| El `INFO` de ESP32 y STM32 | Siguen sin `floatAbi`, `packsXipBase`/`Bytes` ni `sqlite*` (sólo la Pico tiene `info_extra`); el IDE ya los pinta si llegan. `floatAbi` y los packs pueden ir al `INFO` común (sus funciones ya son comunes); `sqlite*`, por familia. | pequeño-medio | no |
+| El guardián del fat-jar (`#429`) | `Version.avisoDeDesfase` compara el fat-jar con el `.jar` del compilador; la miVM embebida, nada. Y su aviso, desde la miVM del IDE, se perdería: el stderr de ese proceso va a un `diag` sin sumidero. | pequeño | no |
+
+**Encontrado de paso**: la puerta de «sin FS → `NOT_READY`» es una lista COPIADA en cada familia y las tres difieren
+—la ESP32 no para `MKDIR`, `RMDIR`, `RENAME` ni `FORMAT`: sin partición montada, un `FORMAT` pasaría— → `#601`. Y, por
+mirar: en el micro simulado, con breakpoints, leen el socket dos (el `dbgw_next_cmd` de la tarea `vm` y el `poll` de
+`io`); `Disasm` rotula los MOD9 como «NO MATCH, esperado MOD8»; los comentarios de `repl_esp32.c` y `stm32_repl.c`
+siguen hablando de un solo hilo.
+
+**Propuesta de orden**: primero lo que no pide decisión y cierra algo —`#538` (con la prueba de `Run on Device` con el
+`Stdlib.pack` cargado y `/lib` vacío), `#601`, el `EXITED` del `RESET`, el `INFO` y el guardián del fat-jar—; después,
+con las decisiones de Eduardo, `#495`, `#452` y los packs en el árbol; el rojo del árbol y `M5` son diseño, a hablar.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
