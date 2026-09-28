@@ -2631,6 +2631,52 @@ VM-C decidió no abortar a propósito (`heap.c`); Eduardo, 27-sep: ni avisar y s
 guardián, que ya estaba: una cabecera con un largo DENTRO del heap hizo saltar el recorrido hasta el borde de otro
 bloque, que acabó en `heap_next` sin decir nada (`#593`); la prueba usa por eso un largo que se sale del heap.
 
+## H7 — el diagnóstico del heap DESDE BP (28-sep, propuesta para Eduardo)
+
+**Lo que hay, medido hoy.** `heapFrag()` y `heapMap(cols)`, primitivas públicas de `Core`, devuelven TEXTO y sólo
+existen en miVM: el mismo programa en la VM-C —la de las placas— muere con «builtin 121 no soportado en esta VM
+(subconjunto C)». La VM-C sabe los números (una línea de diagnóstico por colecta: vivos, liberados, huecos, el
+mayor, las reservas de la lista y del bump, las astillas, las fusiones), pero un programa no puede preguntarlos. Es
+lo que pidió Eduardo el 5-ago (`V5_IDEAS` §«Diagnóstico del heap DESDE BP»): *«¿hay algún handle de memoria
+degradado?, ¿la memoria está muy fragmentada?»*, llamable desde un programa.
+
+**La propuesta**: un módulo `Heap` en la stdlib, en las DOS VMs, que LEE contadores —no reserva nada ni recorre el
+heap; sólo su lista de libres, que es corta— y devuelve NÚMEROS (la lección de `MemInfo.bp`: un instrumento que
+reserva memoria para medir memoria miente):
+
+| función | qué da |
+|---|---|
+| `Heap.getSize()` | el tamaño del heap, en bytes |
+| `Heap.getFree()` | los bytes libres: lo que queda al final más la lista de libres |
+| `Heap.getLargestFree()` | el mayor bloque que se puede reservar de una vez |
+| `Heap.getFreeBlocks()` | cuántos huecos tiene la lista de libres |
+| `Heap.getHandles()` | cuántos objetos vivos hay (handles en uso) |
+| `Heap.getCollections()` | cuántas colectas lleva el programa |
+
+`getFree` y `getLargestFree` contestan «¿está fragmentada?»:
+
+```
+if Heap.getLargestFree() < 4096 then
+  print "fragmentada: " + Heap.getFree() + " B libres, el mayor " + Heap.getLargestFree()
+endif
+```
+
+Cada una, una primitiva nueva de `Core` (como todas desde P2) con su espejo en las dos VMs; `Heap.bp`, la capa fina
+de encima, como `Machine`.
+
+**Lo que NO son: números de paridad.** Son de cada VM y no miden lo mismo: la VM-C guarda la tabla de handles y la
+reserva de emergencia dentro del bloque de memoria, su heap tiene otro tamaño que el de miVM y colectan en momentos
+distintos (medido hoy: la VM-C del PC colecta cada 47910 B, con el tope en 387232). Un programa los usa para
+DECIDIR (un umbral), y una prueba mira RELACIONES —el mayor ≤ lo libre; tras soltar una lista grande, lo libre
+sube—, nunca el número en el stdout.
+
+**Para decidir**:
+1. El nombre del módulo y de las funciones (`Heap.get*`: verbo y minúsculas, la convención de la casa).
+2. ¿También los contadores del alocador —reservas de la lista y del bump, astillas, fusiones—? Sirven para
+   diagnosticar la VM más que a un programa; propuesta: no, por ahora (la stdlib, pequeña).
+3. `heapFrag`/`heapMap`: quedarse como están (texto, sólo miVM, para mirar en el PC) o retirarse. Propuesta:
+   quedarse, y que el manual diga que lo portable es `Heap`.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
