@@ -2683,6 +2683,13 @@ arrancar, en el PC), lo usado coincide (108 B). Y Eduardo añadió: *«Me gustar
 pudiese pedir compactar el heap. Siempre en condiciones controladas, como por ejemplo al terminar la aplicación»*:
 `#595`, con su análisis (el mecanismo, el censo de punteros crudos y las condiciones) en la ficha.
 
+**`#595`, decidido y hecho el mismo día** (`6b265162`): Eduardo, «Si» a las condiciones —sólo desde `Main`, sin
+otros hilos—, y una intrínseca, no una `native` (una native es BP compilado a C y no ve la tabla de handles). Sin
+memoria aparte: la tabla se enhebra en las cabeceras. El censo tenía un error: el estado de un fichero abierto
+vive en el heap en la VM-C y littlefs lo enlaza; se clava. Lo que Eduardo ve detrás: los overlays
+(`loadModule`/`unloadModule`, `V2_BACKLOG` §17) y los programas que corren días —con hilos, el programa aprovecha
+una calma para pararlos, cerrar lo abierto, compactar y reposar (`HeapReposo`)—.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más

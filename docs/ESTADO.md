@@ -994,6 +994,27 @@ la C6, la P4 y la Nucleo.
   arrays fijos de un objeto mientras se indexan, las natives, un builtin bloqueado; la GUI y SQLite, no) y la
   propuesta —sólo desde `Main`, sin otros hilos—, pendiente de su OK.
 
+## 🧹 H7 (28-sep) — `#595` cerrada: `Heap.compact()`, en las dos VMs; y `#596`–`#598` abiertas
+
+- Eduardo, «Si» a las condiciones; y el porqué: los overlays (`loadModule`/`unloadModule`) y los programas de días.
+  Preguntó si valía una `native` en vez de una intrínseca: no —una native es BP compilado a C, sin acceso a la
+  tabla de handles; la de un pack, sólo C—. Hecho (`6b265162`): el mismo algoritmo en las dos, la tabla enhebrada
+  en las cabeceras (sin memoria aparte); `HeapCompact` en la paridad y en la ronda; la native, error de compilación.
+- El censo de la ficha se equivocaba con los File: en la VM-C el estado vive en el bloque y littlefs lo enlaza. Se
+  clava (el diagnóstico lo muestra: «1 clavados, 1 huecos», en las dos).
+- ⚠️ Un tropiezo con el SABOTAJE de control: tras deshacerlo y recompilar, la prueba seguía fallando como saboteada
+  —con SMP y sin él, y en un programa mínimo—; con la VM-C recompilada DESDE CERO, todo verde en los tres modos.
+  No sé por qué el `make` de después no dejó el binario bueno. La lección: tras un sabotaje, recompilar y volver
+  a pasar el CONTROL antes de fiarse de lo que salga.
+- Eduardo, sobre los programas de días con hilos: aprovechar una calma para parar los hilos, cerrar lo abierto,
+  compactar y reposar. Es el patrón, no un límite: `HeapReposo` (tres jornadas) y la referencia §13.19.
+- La revisión adversarial (un agente, sobre el diff): el algoritmo bien; una carrera y una divergencia con el
+  scheduler SMP —«sin otros hilos» mirado fuera del mundo parado; `join` volvía antes del handler post-mortem
+  (#342)—: arreglado, con `test-compactsmp` (30 pasadas; con el orden viejo, 0/30). Y un barrido cortado ya marca
+  el heap descarrilado.
+- De paso, tres fallos anteriores, abiertos: `#596` (con `--smp`, una excepción sin atrapar acaba en OK), `#597`
+  (`Net.recv` deja un bloque que miente su tamaño) y `#598` (el GC sin memoria para su mapa lo barre todo).
+
 ## ⏭️ Traspaso (27-sep, noche) — H7: lo corto, hecho; sigue lo de análisis
 
 **Commits desde la pausa** (sin push): `ec5b15c7` (`#587`, el `StringBuilder`) · `b777f25f` (`#589`, el depurador
