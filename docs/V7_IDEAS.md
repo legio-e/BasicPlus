@@ -2801,6 +2801,62 @@ con las decisiones de Eduardo, `#495`, `#452` y los packs en el árbol; el rojo 
   packs vamos a liar a los usuarios»* → no hay rama `pack:`: un `.pack` en el FS sale como cualquier fichero (ya sale),
   y la zona de packs se ve en su panel.
 
+### `#495` — el cable TROCEADO y MEZCLABLE: el diseño (28-sep, para revisar antes de tocar código)
+
+*«El get tiene que trocearse y los paquetes de los diferentes comandos se pueden mezclar, tiene que ser el destinatario
+el que vaya recogiendo los diferentes paquetes y los vaya agrupando. En un entorno multitarea no puede ser que una
+comunicación monopolice la comunicación.»* (Eduardo)
+
+**Lo que hay hoy** (leído en el código):
+
+- Un mensaje es una línea JSON y, si lleva `"bulk":N`, N bytes crudos detrás. El protocolo ya admite varias peticiones
+  en vuelo y eventos entre respuestas (`BPVM_WIRE_PROTOCOL.md`). `GET_REPLY` es UN mensaje con el fichero entero de
+  bulk; `LIST_REPLY` es UNA línea que se escribe a trozos.
+- En la placa, el hilo `io` saca la salida y luego mira el cable, en el mismo lazo: un `GET` largo en un `poll` deja
+  sin salida y sin `KILL` mientras dura (por eso el `BUSY`). Y el `read_stream` del FS tiene el cerrojo cogido todo el
+  envío: el `readFile`/`writeFile` del programa espera.
+- En el IDE, un solo hilo lector; el bulk se lee ahí mismo. Una respuesta se empareja por id y **el PRIMER mensaje con
+  ese id la completa; los siguientes con el mismo id se tiran en silencio**. Un IDE viejo que recibiera trozos se
+  quedaría con el primero sin avisar: el troceado lo tiene que PEDIR el cliente.
+- Leen `GET`/`LIST`: el IDE, `tanda.py`, `wire_serie.py`, `sim_smoke`, `sd_smoke`, `list_trunc_smoke`,
+  `medir_margen.ps1`. Y la VM Java también los SIRVE (`DebugServer`).
+- Límites: una línea entrante, 2 KB; el USB-Serial-JTAG (la C3, la C5, la C6), un anillo de 2 KB que pierde la
+  respuesta si el host no lee en 2 s (`#545`); el bulk va SIN cerrojo en la ESP32, el P4 por TCP y la STM32, y el
+  cerrojo de la Pico no es recursivo; la pila de `io`, 4 KB; el parser JSON de las placas, 16 pares.
+
+**La propuesta:**
+
+1. **El mensaje, la unidad que no se parte**: línea + su bulk, de una vez bajo el cerrojo del cable (`send_msg` en cada
+   transporte: coge el cerrojo UNA vez y escribe las dos cosas). Entre dos mensajes puede ir cualquier cosa: un
+   `OUTPUT`, un `BP_HIT`, un trozo de otra respuesta.
+2. **`GET` troceado, si el cliente lo pide**: `{"type":"GET","id":7,"path":"/app/x","trozos":true}` → `GET_PART` (id,
+   `off`, `bulk` de hasta 1 KB)… y `GET_END` (id, `size`, `crc`). Un error a mitad sale como `ERROR` con ese id (hoy,
+   a mitad de un bulk, no hay forma de avisar). Sin `"trozos"`, el `GET` de siempre: `tanda.py`, los smokes y un IDE
+   viejo siguen igual; y un dispositivo viejo ignora el campo y contesta el `GET_REPLY` entero, que el IDE nuevo
+   también acepta. **`LIST` igual**: `LIST_PART` (unas cuantas entradas, una línea acotada) y `LIST_END` (con
+   `omitted`).
+3. **Los manda el hilo `io`, UN trozo por vuelta**: la petición deja una transferencia (el fichero abierto, por dónde
+   va, el id); en cada vuelta de `io_loop` —sacar salida, mirar el cable, mandar un trozo de cada transferencia viva—
+   ninguna monopoliza: entre trozo y trozo sale la salida del programa y llega un `KILL`. En reposo, lo mismo desde el
+   lazo del REPL. Un tope de transferencias a la vez (2, por ejemplo); pasado, `BUSY`.
+4. **El FS, por trozo**: con el cursor de `#491` —una apertura y el cerrojo por cada `fread`—, el programa no se para
+   mientras se baja un fichero. Si el fichero cambia a mitad, `GET_END` lo dice (tamaño o CRC distintos) y el IDE avisa.
+5. **Durante un RUN** se atienden los de LECTURA (`GET`, `LIST`, `LIST_DIR`, `STAT`); los que escriben (`PUT`, `DEL`,
+   `MKDIR`, `RMDIR`, `RENAME`, `FORMAT`, `SAVE`) siguen con `BUSY`: escribir donde el programa lee es otra conversación.
+   `LIST_DIR`, con un búfer suyo y no la zona de rascar global que usa el `listDir` del programa (hoy chocarían).
+6. **El destinatario junta**: el IDE guarda las transferencias por id, junta los `GET_PART` por `off` y completa la
+   petición con el `GET_END` (comprobando tamaño y CRC); lo demás sigue su camino entre medias.
+7. **La VM Java**, igual: también sirve `GET` y `LIST`.
+
+**Por partes, cada una cierra algo**: (a) `send_msg` atómico en los cuatro transportes y el simulado; (b) `GET`/`LIST`
+troceados en el REPL común, las transferencias en el lazo de `io` y el cursor; (c) el IDE: el colector por id y pedir
+`trozos`; (d) levantar el `BUSY` para los de lectura; (e) la VM Java. La prueba: un smoke contra el micro simulado que
+baja 60 KB mientras un programa imprime sin parar —la salida no se corta más de un trozo, el `KILL` llega, el fichero
+llega entero y con su CRC—; y en placa, la DK2 (11 KB/s: donde más dura un `GET`).
+
+**Para decidir**: el tamaño del trozo (512 B–1 KB: mandan la Pico y el anillo del USB-JTAG); cuántas transferencias a
+la vez; y si el `PUT` entra en el mismo esquema (hoy va troceado, pero con una sola sesión global y un acuse por trozo).
+
 
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
