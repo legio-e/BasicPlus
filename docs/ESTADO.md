@@ -985,6 +985,15 @@ la C6, la P4 y la Nucleo.
 - `DepuradorCadenasTest` vuelve a su breakpoint en la última línea (roja con el compilador de antes). Los `.dbg`
   de la stdlib, regenerados; los `.mod`, iguales.
 
+## 🧮 H7 (28-sep) — el diagnóstico del heap desde BP: el módulo `Heap` (`#594`); y compactar, `#595`
+
+- Analizado y propuesto (`V7_IDEAS` §H7), decidido por Eduardo y hecho (`ac0f3d71`): seis números que se leen sin
+  reservar, en las dos VMs; no de paridad (medido: tamaño y libre difieren, lo usado coincide); `HeapInfo` compara
+  relaciones, en la paridad y en la ronda.
+- Eduardo pidió además COMPACTAR en condiciones controladas: `#595`, con el censo de punteros crudos al heap (los
+  arrays fijos de un objeto mientras se indexan, las natives, un builtin bloqueado; la GUI y SQLite, no) y la
+  propuesta —sólo desde `Main`, sin otros hilos—, pendiente de su OK.
+
 ## ⏭️ Traspaso (27-sep, noche) — H7: lo corto, hecho; sigue lo de análisis
 
 **Commits desde la pausa** (sin push): `ec5b15c7` (`#587`, el `StringBuilder`) · `b777f25f` (`#589`, el depurador

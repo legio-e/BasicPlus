@@ -2677,6 +2677,12 @@ sube—, nunca el número en el stdout.
 3. `heapFrag`/`heapMap`: quedarse como están (texto, sólo miVM, para mirar en el PC) o retirarse. Propuesta:
    quedarse, y que el manual diga que lo portable es `Heap`.
 
+**Decidido (Eduardo, 28-sep) y hecho** (`ac0f3d71`, `#594`): el módulo `Heap` con esos nombres; sin los contadores
+del alocador; `heapFrag`/`heapMap` se quedan. Medido: el tamaño y lo libre difieren entre VMs (254753 y 376424 al
+arrancar, en el PC), lo usado coincide (108 B). Y Eduardo añadió: *«Me gustaría la posibilidad de que el usuario
+pudiese pedir compactar el heap. Siempre en condiciones controladas, como por ejemplo al terminar la aplicación»*:
+`#595`, con su análisis (el mecanismo, el censo de punteros crudos y las condiciones) en la ficha.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
