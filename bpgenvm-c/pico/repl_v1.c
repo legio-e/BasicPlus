@@ -423,22 +423,10 @@ static int pico_repl_info_extra(char* buf, unsigned long buf_max, int off) {
      *    ENV (`SQLite=<MB>`). 0 = no hay BD en esta placa.
      *  · floatAbi    — junto a `arch`, el SELLO. `arch` sola no distingue hard
      *    de softfp, y esa discrepancia da numeros mal sin avisar. */
-    {
-        long packs_xip = 0, packs_len = 0;
-        const bpvm_part_layout_t* lay = board_partitions();
-        if (lay) {
-            const bpvm_part_t* pp = bpvm_part_get(lay, BPVM_PART_PACKS);
-            if (pp && pp->size > 0) {
-                packs_xip = (long) (XIP_BASE + pp->offset);
-                packs_len = (long) pp->size;
-            }
-        }
-        X_L("packsXipBase", packs_xip);
-        X_L("packsBytes",   packs_len);
-    }
+    /* V7/H8 (28-sep) — `packsXipBase`/`packsBytes` y `floatAbi` salen ya del INFO COMÚN, para las cuatro familias
+     * (bpvm_repl.c: la zona montada, en su vista ejecutable). Aquí queda lo que sólo sabe la Pico. */
     X_L("sqliteBase",  (long) (uintptr_t) s_sqlite_base);
     X_L("sqliteBytes", (long) s_sqlite_size);
-    X_S("floatAbi",    bpvm_mdn_host_float_abi());
     /* El AVISO (decision de Eduardo: vive en el INFO). Van los TRES datos que
      * hacen falta para redactarlo sin mentir y sin que el IDE se invente nada:
      * el MOTIVO (0 bytes por "no se pidio" y por "se pidio poco" son cosas

@@ -136,6 +136,10 @@ def main():
         # V7/H5 (27-sep): y la ABI de helpers, `mdnAbi`, con la misma regla: 0 donde no hay receta.
         check("mdnAbi" in r and r.get("mdnAbi") == 0,
               "INFO → mdnAbi presente (0 en el PC: sin receta, no ejecuta .mdn)")
+        # V7/H8 (28-sep): floatAbi y la zona de packs, del INFO COMÚN (antes, sólo la Pico): el sim arranca con el
+        # Stdlib.pack grabado, así que su zona está montada y no puede salir 0.
+        check("floatAbi" in r and r.get("packsXipBase", 0) != 0 and r.get("packsBytes", 0) > 0,
+              "INFO → floatAbi y la zona de packs montada (packsXipBase/packsBytes)")
 
         # 3. FS virgen
         r = w.call("FORMAT", confirm="YES")

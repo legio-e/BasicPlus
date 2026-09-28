@@ -569,6 +569,17 @@ static void repl_info(long id) {
      * resultado: un `.mdn` de otra ABI se rechaza en el log y el programa corre
      * interpretado sin ruido (`#504`, tres semanas). Con ella, el IDE lo dice. */
     CAMPO_L ("mdnAbi",      bpvm_mdn_host_abi());
+    /* V7/H8 (28-sep) — el ABI de coma flotante y la zona de packs, en el COMÚN: eran de la Pico (su info_extra) y
+     * la ESP32 y la STM32 no los daban (el IDE ya los pinta si llegan). `floatAbi`, junto a `arch`, es el sello:
+     * `arch` sola no distingue hard de softfp. `packsXipBase` es la dirección que ve la CPU al EJECUTAR la zona —en
+     * la S3 y la C3 no es la de lectura—; 0 y 0 si no hay zona montada. */
+    CAMPO_S ("floatAbi",    bpvm_mdn_host_float_abi());
+    {
+        uint32_t zona_bytes = 0;
+        const uint8_t* zona = bpvm_pack_mounted(&zona_bytes);
+        CAMPO_UL("packsXipBase", zona ? (unsigned long) (uintptr_t) bpvm_pack_exec_ptr(zona) : 0ul);
+        CAMPO_L ("packsBytes",   zona ? (long) zona_bytes : 0);
+    }
     CAMPO_L("cpuFreqHz",    in.cpu_hz);
     CAMPO_L("uptimeMs",     in.uptime_ms);
     CAMPO_S("resetReason",  in.reset_reason);
