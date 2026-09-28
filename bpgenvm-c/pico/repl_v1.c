@@ -1336,13 +1336,7 @@ void repl_v1_handle_request(int first_char) {
      * "si no hay partición, nada con el sistema de ficheros". */
     {
         const bpvm_boot_status_t* bs = board_boot_status();
-        int is_fs_cmd = strcmp(type, "LIST") == 0 || strcmp(type, "STAT") == 0
-                     || strcmp(type, "GET") == 0  || strcmp(type, "PUT") == 0
-                     || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
-                     || strcmp(type, "DEL") == 0  || strcmp(type, "MKDIR") == 0
-                     || strcmp(type, "RMDIR") == 0 || strcmp(type, "RENAME") == 0
-                     || strcmp(type, "FORMAT") == 0 || strcmp(type, "SAVE") == 0
-                     || strcmp(type, "DF") == 0;
+        int is_fs_cmd = bpvm_repl_verbo_de_fs(type);   /* V7/H8 #601: la lista, UNA, en el común */
         if (is_fs_cmd && bs->state < BPVM_BOOT_FS) {
             /* El bulk que esta puerta rechaza hay que TRAGARSELO igual, o se
              * queda en el cable. Sólo el de los verbos PUT: el resto ya lo

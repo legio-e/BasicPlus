@@ -761,13 +761,9 @@ static void dispatch(int first_char) {
      * HELLO/INFO/STATE/PING/TIME/RESET van SIEMPRE (para conectar y configurar). */
     {
         int st = (int) board_boot_status()->state;
-        int is_fs = (strcmp(type, "LIST")  == 0 || strcmp(type, "STAT") == 0 || strcmp(type, "DF")  == 0
-                  || strcmp(type, "GET")   == 0 || strcmp(type, "PUT")  == 0 || strcmp(type, "DEL") == 0
-                  || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
-                  || strcmp(type, "MKDIR") == 0 || strcmp(type, "FORMAT") == 0
-                  || strcmp(type, "RENAME") == 0 || strcmp(type, "RMDIR") == 0);
-                  /* V6/U3 g2: RENAME/RMDIR entran por el común, pero el gate
-                   * de FS-no-montado es de esta familia y debe cubrirlos. */
+        /* V7/H8 #601 — la lista de verbos de fichero, UNA, en el común (antes, una copia por familia: esta
+         * cubrió RENAME/RMDIR en V6/U3 y la de la ESP32 se quedó atrás). */
+        int is_fs = bpvm_repl_verbo_de_fs(type);
         if (is_fs && st < BPVM_BOOT_FS) {
             /* El bulk que esta puerta rechaza hay que TRAGARSELO igual, o se
              * queda en el cable y el mensaje siguiente se lee desde la mitad.

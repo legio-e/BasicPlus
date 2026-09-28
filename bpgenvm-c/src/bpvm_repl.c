@@ -1013,6 +1013,19 @@ static void repl_list_dir(long id, json_obj_t* obj) {
     wire_v1_send_line("", 0);
 }
 
+/* V7/H8 #601 — la lista ÚNICA de los verbos que tocan el FS (ver bpvm_repl.h). */
+int bpvm_repl_verbo_de_fs(const char* type) {
+    static const char* const verbos[] = {
+        "LIST", "LIST_DIR", "STAT", "GET", "PUT", "DEL", "MKDIR", "RMDIR", "RENAME", "FORMAT", "SAVE", "DF"
+    };
+    size_t i;
+    if (!type) return 0;
+    if (strncmp(type, "PUT_", 4) == 0) return 1;   /* #294, el PUT en streaming: PUT_BEGIN/PUT_DATA/PUT_END */
+    for (i = 0; i < sizeof verbos / sizeof verbos[0]; i++)
+        if (strcmp(type, verbos[i]) == 0) return 1;
+    return 0;
+}
+
 int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);

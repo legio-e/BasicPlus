@@ -1172,12 +1172,9 @@ static void handle_request(const char* line, int len) {
      * con el sistema de ficheros" (Eduardo). */
     {
         const bpvm_boot_status_t* bs = board_boot_status();
-        int is_fs = strcmp(type, "LIST") == 0 || strcmp(type, "LIST_DIR") == 0
-                 || strcmp(type, "STAT") == 0
-                 || strcmp(type, "GET")  == 0 || strcmp(type, "PUT")  == 0
-                 || strncmp(type, "PUT_", 4) == 0   /* #294 streaming: PUT_BEGIN/DATA/END */
-                 || strcmp(type, "DEL")  == 0
-                 || strcmp(type, "SAVE") == 0 || strcmp(type, "DF") == 0;
+        /* V7/H8 #601 — la lista de verbos de fichero, UNA, en el común: esta copia no paraba MKDIR, RMDIR,
+         * RENAME ni FORMAT (sin partición montada, un FORMAT pasaba). */
+        int is_fs = bpvm_repl_verbo_de_fs(type);
         if (is_fs && bs->state < BPVM_BOOT_FS) {
             /* El bulk que esta puerta rechaza HAY QUE TRAGÁRSELO igual, o se
              * queda en el cable y el mensaje siguiente se lee a partir de la

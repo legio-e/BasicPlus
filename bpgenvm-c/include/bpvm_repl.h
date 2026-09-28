@@ -161,6 +161,12 @@ int bpvm_repl_drain_bulk(unsigned long n);
  *  con su cadena. `obj` es el mensaje ya parseado (para los parámetros). */
 int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj);
 
+/** V7/H8 #601 (28-sep) — ¿`type` es un verbo que necesita el sistema de ficheros MONTADO? La puerta de «sin FS →
+ *  NOT_READY» de cada familia pregunta AQUÍ. Era una lista copiada en cada una y las tres habían divergido: la ESP32
+ *  no paraba MKDIR, RMDIR, RENAME ni FORMAT (sin partición montada, un FORMAT pasaba); la Pico y la STM32, LIST_DIR;
+ *  la STM32, SAVE. Un verbo de fichero nuevo se añade aquí, una vez. */
+int bpvm_repl_verbo_de_fs(const char* type);
+
 #ifdef __cplusplus
 }
 #endif
