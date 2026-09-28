@@ -219,6 +219,7 @@
     <li class="sub"><a href="#conc-preempt">14.2 Preemption and yield</a></li>
     <li class="sub"><a href="#conc-encapsulacion">14.3 Encapsulation of case bodies</a></li>
     <li class="sub"><a href="#conc-gc">14.4 GC and concurrency</a></li>
+    <li class="sub"><a href="#conc-print">14.5 print with several threads</a></li>
 
 
 
@@ -1706,15 +1707,14 @@ Within one module, two classes may refer to each other with no problem.</p>
 
 <h3 id="conc-preempt">14.2 Preemption and <code>yield()</code></h3>
 <p>
-  A daemon timer (<code>ScheduledExecutorService</code>, default quantum
-  10&nbsp;ms) sets <code>yieldRequested=true</code> on every
-  <code>RUNNING</code> BP thread. The interpreter loop observes it between
-  opcodes (a <code>volatile</code> field) and abandons the inner loop with a
-  YIELD signal; the worker re-queues the thread and picks up the next RUNNABLE. On
-  the C VM (PC and boards) the quantum is counted in <strong>opcodes</strong>: 1024
+  The quantum is counted in <strong>opcodes</strong>, the same in both VMs: 1024
   by default, adjustable with <code>quantum=N</code> in the board's ENV
-  (<code>--quantum=N</code> on the PC); when it runs out the VM also yields to the
-  system, so an IDE <code>stop</code> gets through even if the program never sleeps.
+  (<code>--quantum=N</code> on the PC). When it runs out, the worker re-queues the
+  thread and picks up the next RUNNABLE; so the switch between threads falls on
+  the same instructions in the Java VM and in the C VM (the Java VM used to use a
+  10&nbsp;ms timer, and the order of the output changed from run to run). The C VM
+  also yields to the system, so an IDE <code>stop</code> gets through even if the
+  program never sleeps.
 </p>
 <p>
   In parallel with preemption, BP code can yield the CPU
@@ -1811,6 +1811,33 @@ shared object</code></pre>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
+<h3 id="conc-print">14.5 <code>print</code> with several threads</h3>
+<p>
+  A <code>print</code> comes out <strong>whole</strong>: its line, with all its
+  pieces and the line break, never mixes with another thread's. Between two
+  consecutive <code>print</code>s, another thread's line can land:
+</p>
+<pre><code><span class="kw">print</span> <span class="str">"Result="</span>, r      <span class="comment">// comes out together: nothing slips in between "Result=" and r</span>
+<span class="kw">print</span> a
+<span class="kw">print</span> b               <span class="comment">// another thread's line may come out between a and b</span></code></pre>
+<p>
+  For <strong>several lines</strong> to come out together, join them in a
+  <code>StringBuilder</code> and print them with a single <code>print</code>:
+</p>
+<pre><code><span class="kw">var</span> sb: StringBuilder := StringBuilder()
+sb.appendStr(<span class="str">"Temperature: "</span> + t + <span class="str">"\n"</span>)
+sb.appendStr(<span class="str">"Humidity: "</span> + h)
+<span class="kw">print</span> sb.toString()</code></pre>
+<p>
+  It holds on every board and with any number of workers: with one, the thread
+  switch could fall in the middle of a <code>print</code>; with two, two threads
+  really print at the same time. The limit: a line longer than 1&nbsp;KB (what
+  fits at once in the output queue of the smallest board) may come out in pieces.
+  And a trace the VM writes <em>while</em> a piece is being computed (on the PC,
+  those of the simulated peripherals: <code>[gpio] read pin=25 …</code>) comes out
+  before the line, not in the middle.
+</p>
+
 <h2 id="eventos">15. Events</h2>
 <p>An <strong>event</strong> lets an object <em>announce</em> that something has
 happened without knowing who is listening. The emitter declares <strong>the

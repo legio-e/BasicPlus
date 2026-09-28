@@ -82,8 +82,8 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | Code | Op | Operando | Stack effect | Semántica |
 |---|---|---|---|---|
 | 0x20 | `ALEN` | — | `( ref -- length )` | Push `mem[ref+0]`. Devuelve 0 si `ref == 0`. |
-| 0x21 | `PRINT_CHAR` | — | `( ch -- )` | Escribe codepoint al output sink (sin newline). |
-| 0x22 | `PRINT_STRING` | — | `( ref -- )` | Imprime string + newline. Lee length+chars del array i32. |
+| 0x21 | `PRINT_CHAR` | — | `( ch -- )` | Escribe codepoint al output sink (sin newline): una pieza de la línea del hilo (V7 #600, ver abajo). |
+| 0x22 | `PRINT_STRING` | — | `( ref -- )` | Imprime string + newline, de UNA vez (con lo que el hilo llevara guardado de la línea). Desde V7 (#600) es lo que emite el compilador para un `print` de un solo texto (una cadena, un booleano, un objeto). |
 | 0x23 | `LEA_LOCAL` | `i16` soff | `( -- addr )` | Push `bp + soff` (dirección absoluta del local). |
 | 0x24 | `JUMP8` | `i8` rel | `( -- )` | Variante compacta de JUMP. |
 | 0x25 | `JUMP16` | `i16` rel | `( -- )` | Variante mediana. |
@@ -153,7 +153,16 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | 0x56 | `PRINT_NONL` | — | `( v -- )` | Int al output sink sin newline. |
 | 0x57 | `FPRINT_NONL` | — | `( f -- )` | Float sin newline. |
 | 0x58 | `PRINT_STR_NONL` | — | `( ref -- )` | String sin newline. |
-| 0x59 | `PRINT_NL` | — | `( -- )` | Newline solo. |
+| 0x59 | `PRINT_NL` | — | `( -- )` | Newline: saca la línea del hilo ENTERA, con su salto, de una vez (V7 #600). |
+
+> **V7/H7 #600 (28-sep) — un `print` sale entero.** `print "Resultado=", r` son varias instrucciones: las
+> piezas (`PRINT_NONL`, `FPRINT_NONL`, `LPRINT_NONL`, `DPRINT_NONL`, `PRINT_STR_NONL`, `PRINT_CHAR`) y el salto
+> (`PRINT_NL`). Las dos VMs guardan las piezas en la LÍNEA DEL HILO (`bpvm_thread_t.linea` / `ThreadContext.linea`)
+> y el salto la saca entera, de un empujón a la salida, igual que los opcodes que llevan salto (`PRINT_STRING`,
+> `LPRINT`, `DPRINT`…): entre dos `print` cabe la línea de otro hilo; dentro de uno, no. Lo que sale es lo mismo;
+> cambia cuándo. Una línea de más de 1 KB (`BPVM_LINEA_MAX`) sale por partes, como antes. Un hilo que acaba a
+> mitad de una línea (una excepción al calcular una pieza) la deja salir tal cual, sin salto.
+
 | 0x5A | `CALL_BUILTIN` | `u16` id | `( args -- result )` | Despacha al builtin con id `id` (ver `BUILTINS.md`). Cada builtin define su stack effect específico. |
 | 0x5B | `TRY_BEGIN` | `i32` handlerRel, `i16` clsOff | `( -- )` | Push entry al `handlerStack`: `{ handlerPc = pc + handlerRel, savedSp, savedBp, savedCs, expectedClass = (clsOff==0 ? 0 : cs+clsOff) }`. Si `clsOff == 0`, catch atrapa cualquier ref/excepción. |
 | 0xAB | `TRY_BEGIN_EXT` | `i32` handlerRel, `i32` clsOff | `( -- )` | BUG-2 — igual que `TRY_BEGIN` pero `clsOff` es **i32**, alcanzando el descriptor de una clase de excepción de OTRO módulo (catch cross-module). El `clsOff` lo PARCHA el linker (`ehClassFixups`, MOD_FORMAT §4.4) por nombre cualificado. **Aditivo**: `TRY_BEGIN` (i16) no cambia → `.mod` existentes válidos. |

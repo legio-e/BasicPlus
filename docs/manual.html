@@ -222,6 +222,7 @@
     <li class="sub"><a href="#conc-preempt">14.2 Preempción y yield</a></li>
     <li class="sub"><a href="#conc-encapsulacion">14.3 Encapsulación de cuerpos de case</a></li>
     <li class="sub"><a href="#conc-gc">14.4 GC y concurrencia</a></li>
+    <li class="sub"><a href="#conc-print">14.5 print con varios threads</a></li>
 
 
 
@@ -1868,15 +1869,14 @@ otra sin problema.</p>
 
 <h3 id="conc-preempt">14.2 Preempción y <code>yield()</code></h3>
 <p>
-  Un timer daemon (<code>ScheduledExecutorService</code>, quantum por
-  defecto 10&nbsp;ms) marca <code>yieldRequested=true</code> sobre todos los
-  threads BP <code>RUNNING</code>. El bucle del intérprete lo observa entre
-  opcodes (campo <code>volatile</code>) y abandona el bucle inner con señal
-  YIELD; el worker re-encola el thread y coge el siguiente RUNNABLE. En la
-  VM-C (PC y placas) el quantum se cuenta en <strong>opcodes</strong>: 1024 por
-  defecto, ajustable con <code>quantum=N</code> en el ENV de la placa
-  (<code>--quantum=N</code> en el PC); al agotarlo la VM cede además el turno al
-  sistema, y así un <code>stop</code> del IDE llega aunque el programa no duerma.
+  El quantum se cuenta en <strong>opcodes</strong>, igual en las dos VMs: 1024
+  por defecto, ajustable con <code>quantum=N</code> en el ENV de la placa
+  (<code>--quantum=N</code> en el PC). Al agotarlo, el worker re-encola el thread
+  y coge el siguiente RUNNABLE; así el reparto entre threads cae en las mismas
+  instrucciones en la VM Java y en la VM-C (antes la Java usaba un temporizador
+  de 10&nbsp;ms, y el orden de la salida cambiaba de una ejecución a otra). La
+  VM-C cede además el turno al sistema, y así un <code>stop</code> del IDE llega
+  aunque el programa no duerma.
 </p>
 <p>
   En paralelo a la preempción, el código BP puede ceder CPU
@@ -1975,6 +1975,34 @@ objeto compartido</code></pre>
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <!-- =========================================================== -->
+<h3 id="conc-print">14.5 <code>print</code> con varios threads</h3>
+<p>
+  Un <code>print</code> sale <strong>entero</strong>: su línea, con todas sus
+  piezas y el salto, no se mezcla con la de otro thread. Entre dos
+  <code>print</code> seguidos sí puede caer la línea de otro:
+</p>
+<pre><code><span class="kw">print</span> <span class="str">"Resultado="</span>, r      <span class="comment">// sale junta: nada se cuela entre "Resultado=" y r</span>
+<span class="kw">print</span> a
+<span class="kw">print</span> b                   <span class="comment">// entre a y b puede salir la línea de otro thread</span></code></pre>
+<p>
+  Para que <strong>varias líneas</strong> salgan juntas, júntalas en un
+  <code>StringBuilder</code> e imprímelas con un solo <code>print</code>:
+</p>
+<pre><code><span class="kw">var</span> sb: StringBuilder := StringBuilder()
+sb.appendStr(<span class="str">"Temperatura: "</span> + t + <span class="str">"\n"</span>)
+sb.appendStr(<span class="str">"Humedad: "</span> + h)
+<span class="kw">print</span> sb.toString()</code></pre>
+<p>
+  Vale en todas las placas y con cualquier número de workers: con uno, el
+  cambio de turno podía caer en mitad de un <code>print</code>; con dos, dos
+  threads imprimen de verdad a la vez. El límite: una línea de más de
+  1&nbsp;KB (lo que cabe de una vez en la cola de salida de la placa más
+  pequeña) puede salir en trozos. Y una traza que la VM escribe
+  <em>mientras</em> se calcula una pieza (en el PC, las de los periféricos
+  simulados: <code>[gpio] read pin=25 …</code>) sale antes que la línea, no en
+  medio.
+</p>
+
 <h2 id="eventos">15. Eventos</h2>
 <p>Un <strong>evento</strong> permite que un objeto <em>avise</em> de que algo ha
 pasado sin saber quién le escucha. El que emite declara <strong>la firma</strong>

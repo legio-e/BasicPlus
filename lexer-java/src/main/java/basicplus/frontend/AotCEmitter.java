@@ -1501,6 +1501,16 @@ public final class AotCEmitter {
          * por COMA (no por punto y coma), y un salto de linea al final. */
         if (s instanceof Ast.PrintStmt) {
             Ast.PrintStmt ps = (Ast.PrintStmt) s;
+            /* V7/H7 #600 — como `emitPrint` (PRINT_STRING): un `print` de UNA sola cadena sale entero, el texto
+             * y su salto de una vez (`print_string` con `nl` = 1), y no pieza a pieza. */
+            if (ps.items.size() == 1 && ps.items.get(0).expr != null
+                    && "print_string".equals(printHelperDe(ps.items.get(0).expr))) {
+                indent();
+                w.print("vm->aot_helpers->print_string(vm, ");
+                emitExpr(ps.items.get(0).expr);
+                w.println(", 1);");
+                return;
+            }
             for (int i = 0; i < ps.items.size(); i++) {
                 Ast.PrintItem it = ps.items.get(i);
                 if (i > 0 && it.leadingSep == Ast.PrintSep.COMMA) {

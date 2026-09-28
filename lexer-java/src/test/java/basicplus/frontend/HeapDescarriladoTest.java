@@ -35,6 +35,7 @@ class HeapDescarriladoTest {
             @Override public void writeText(String s) { salida.append(s); }
             @Override public void writeChar(char c) { salida.append(c); }
             @Override public void newline() { salida.append('\n'); }
+            @Override public void writeLine(String s) { salida.append(s).append('\n'); }   // #600
             @Override public void flush() { }
         });
         boolean[] hecho = {false};

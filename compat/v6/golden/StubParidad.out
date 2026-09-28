@@ -1,8 +1,8 @@
 [gpio] init pin=25 mode=OUTPUT
 [gpio] write pin=25 value=HIGH
 [gpio] write pin=25 value=LOW
-gpio value: [gpio] read pin=25 (sim → siempre 0 en PC)
-0
+[gpio] read pin=25 (sim → siempre 0 en PC)
+gpio value: 0
 [gpio] pull pin=25 mode=UP
 [pwm] init pin=16 freqHz=1000 (sim → sliceId=0)
 [pwm] setFreq slice=0 freqHz=2000 (sim)
@@ -11,21 +11,21 @@ gpio value: [gpio] read pin=25 (sim → siempre 0 en PC)
 [pwm] stop slice=0 (sim)
 [pulse] init pin=14 edge=RISING (sim → counterId=0)
 [pulse] start id=0 (sim)
-pulse value: [pulse] value id=0 (sim → 0)
-0
+[pulse] value id=0 (sim → 0)
+pulse value: 0
 [pulse] stop id=0 (sim, value=0)
 [pulse] reset id=0 (sim)
 [uart] init bus=0 tx=0 rx=1 baud=115200 8N1
-uart available: [uart] available bus=0 (sim → 0)
-0
+[uart] available bus=0 (sim → 0)
+uart available: 0
 [uart] write bus=0 bytes=[41 42 43] ("ABC")
 uart escritos: 3
 [spi] init bus=0 sck=18 mosi=19 miso=16 baud=1000000 mode=0
-spi escritos: [spi] write bus=0 bytes=[01 02]
-2
-spi leidos: [spi] read bus=0 count=2 (sim → ceros)
-2
-spi transfer: [spi] transfer bus=0 tx=[01 02] (rx sim → ceros)
-2
+[spi] write bus=0 bytes=[01 02]
+spi escritos: 2
+[spi] read bus=0 count=2 (sim → ceros)
+spi leidos: 2
+[spi] transfer bus=0 tx=[01 02] (rx sim → ceros)
+spi transfer: 2
 [pico] setCpuFreqMHz(150) (host, simulado)
 fin

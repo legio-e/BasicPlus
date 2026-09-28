@@ -126,6 +126,9 @@ public class VirtualMachine {
         volatile Thread ownerThread = null;
         /** true mientras su worker esta DENTRO de runOnContext. */
         volatile boolean enEjecucion = false;
+        /** V7/H7 #600 — la línea de un `print` a medias: sus piezas (los *_NONL, PRINT_CHAR) se guardan aquí y la
+         *  línea sale ENTERA con su salto (lineaFin → writeLine). null hasta la primera pieza; se reutiliza. */
+        StringBuilder linea;
 
         ThreadStatus getStatus() { return estado; }
 
@@ -598,6 +601,7 @@ public class VirtualMachine {
     }
 
     private void terminateThread(ThreadContext t) {
+        lineaVaciar(t);   // V7/H7 #600: lo que dejara a mitad de un `print`, tal cual (como salía antes)
         if (reviveForPendingEvents(t)) return;   // #342 — aún debe eventos
         t.setStatus(ThreadStatus.TERMINATED, -1, "L567");
         if (t.id != 0) {
@@ -2816,6 +2820,10 @@ public class VirtualMachine {
         this.SP = main.sp;
         this.BP = main.bp;
         this.CS = main.cs;
+        // V7/H7 #600 — lo que algún hilo dejara a mitad de un `print` (el programa parado, o muerto por un
+        // error de la VM, en medio de una línea): tal cual, sin salto, como salía antes. El que acaba solo ya lo
+        // ha vaciado en terminateThread. Espejo de lineas_vaciar (bpvm.c).
+        synchronized (vmLock) { for (ThreadContext t : threads) lineaVaciar(t); }
         // Asegura que el último output del programa BP llegue al sink
         // antes de que la VM termine — crítico cuando el sink es un
         // socket cuyo lado lector cierra al ver el evento "exited".
@@ -3462,13 +3470,12 @@ public class VirtualMachine {
 
                 case 0x21: { // PRINT_CHAR
                     sp -= 4; int c = readI32(mem, sp);
-                    programOut.writeChar((char) c);
+                    lineaPieza(tc, String.valueOf((char) c));   // V7/H7 #600
                     break;
                 }
                 case 0x22: { // PRINT_STRING (legacy: con \n al final)
                     sp -= REF_SIZE; long ref = refLoad(mem, sp);
-                    programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
-                    programOut.newline();
+                    lineaFin(tc, readVmString(ref));  // H2: decodifica UTF-8. V7/H7 #600: la línea, entera
                     break;
                 }
 
@@ -3835,21 +3842,21 @@ public class VirtualMachine {
                 }
                 case 0x56: { // PRINT_NONL
                     sp -= 4; int v = readI32(mem, sp);
-                    programOut.writeText(Integer.toString(v));
+                    lineaPieza(tc, Integer.toString(v));   // V7/H7 #600
                     break;
                 }
                 case 0x57: { // FPRINT_NONL
                     sp -= 4; float v = Float.intBitsToFloat(readI32(mem, sp));
-                    programOut.writeText(formatBpDouble((double) v));   // GAP-4
+                    lineaPieza(tc, formatBpDouble((double) v));   // GAP-4. V7/H7 #600
                     break;
                 }
                 case 0x58: { // PRINT_STR_NONL
                     sp -= REF_SIZE; long ref = refLoad(mem, sp);
-                    programOut.writeText(readVmString(ref));  // H2: decodifica UTF-8
+                    lineaPieza(tc, readVmString(ref));  // H2: decodifica UTF-8. V7/H7 #600
                     break;
                 }
                 case 0x59: { // PRINT_NL
-                    programOut.newline();
+                    lineaFin(tc, "");   // V7/H7 #600: la línea del `print`, entera, con su salto
                     break;
                 }
 
@@ -3956,12 +3963,12 @@ public class VirtualMachine {
                 }
                 case 0x85: { // LPRINT
                     sp -= 8; long v = readI64(mem, sp);
-                    programOut.writeText(Long.toString(v)); programOut.newline();
+                    lineaFin(tc, Long.toString(v));   // V7/H7 #600
                     break;
                 }
                 case 0x86: { // LPRINT_NONL
                     sp -= 8; long v = readI64(mem, sp);
-                    programOut.writeText(Long.toString(v));
+                    lineaPieza(tc, Long.toString(v));   // V7/H7 #600
                     break;
                 }
                 case 0x87: { // I32_TO_I64 (sign-extend)
@@ -4128,11 +4135,11 @@ public class VirtualMachine {
                 }
                 case 0x9E: { // DPRINT
                     sp -= 8; double v = Double.longBitsToDouble(readI64(mem, sp));
-                    programOut.writeText(formatBpDouble(v)); programOut.newline(); break;   // GAP-4
+                    lineaFin(tc, formatBpDouble(v)); break;   // GAP-4. V7/H7 #600
                 }
                 case 0x9F: { // DPRINT_NONL
                     sp -= 8; double v = Double.longBitsToDouble(readI64(mem, sp));
-                    programOut.writeText(formatBpDouble(v)); break;   // GAP-4
+                    lineaPieza(tc, formatBpDouble(v)); break;   // GAP-4. V7/H7 #600
                 }
                 case 0xA0: { // I2D
                     sp -= 4; int v = readI32(mem, sp);
@@ -4554,6 +4561,48 @@ public class VirtualMachine {
     // ====================================================================
 
     /** Lee un string de la VM (length + chars) a partir de su user_ref y devuelve String Java. */
+    // ── V7/H7 #600 (28-sep) — UN `print` SALE ENTERO. Espejo de bpvm_linea_* de la VM-C (bpvm_out.h) ────────
+    // `print "Resultado=", r` son varias instrucciones: las piezas (*_NONL, PRINT_CHAR) y el salto (PRINT_NL). Salían
+    // pieza a pieza, y entre dos cabía la línea de otro hilo. Eduardo: «si haces print a; print b entre los dos se
+    // puede colgar un print de otro hilo, eso es correcto. Ahora si haces print "Resultado=", r que se cuele algo en
+    // medio no es correcto». Las piezas van a la línea del hilo, y la línea sale de UNA vez con su salto. Lo que sale
+    // es lo mismo que antes; cambia cuándo.
+
+    /** El tope de la línea guardada, el de la VM-C (BPVM_LINEA_MAX: lo que cabe en la cola de salida de la Pico).
+     *  Una línea más larga sale por partes, como antes. */
+    private static final int LINEA_MAX = 1024;
+
+    /** Una pieza de la línea del `print` en curso del hilo. */
+    private void lineaPieza(ThreadContext tc, String s) {
+        if (s.isEmpty()) return;
+        if (tc != null && (tc.linea == null ? s.length() : tc.linea.length() + s.length()) <= LINEA_MAX) {
+            if (tc.linea == null) tc.linea = new StringBuilder();
+            tc.linea.append(s);
+            return;
+        }
+        lineaVaciar(tc);            // la línea ya no cabe entera: lo guardado y esta pieza salen ya
+        programOut.writeText(s);
+    }
+
+    /** El final de la línea: lo guardado + `s` + el salto, de una vez. */
+    private void lineaFin(ThreadContext tc, String s) {
+        if (tc != null && tc.linea != null && tc.linea.length() > 0) {
+            String todo = tc.linea.append(s).toString();
+            tc.linea.setLength(0);
+            programOut.writeLine(todo);
+        } else {
+            programOut.writeLine(s);
+        }
+    }
+
+    /** Lo que quedó a medias, tal cual y sin salto: un hilo que acaba a mitad de un `print`, el fin del RUN. */
+    private void lineaVaciar(ThreadContext tc) {
+        if (tc != null && tc.linea != null && tc.linea.length() > 0) {
+            programOut.writeText(tc.linea.toString());
+            tc.linea.setLength(0);
+        }
+    }
+
     private String readVmString(long ref) {
         // H2 (V2): strings son byte[] UTF-8. length = nº de bytes; payload en ref+4.
         // V4: la resolución ref→bytes pasa por la abstracción (arrLen/arrElem).

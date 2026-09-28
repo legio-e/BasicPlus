@@ -1397,6 +1397,13 @@ static bpvm_after_link_fn g_after_link = NULL;
 
 void bpvm_set_after_link_hook(bpvm_after_link_fn fn) { g_after_link = fn; }
 
+/* V7/H7 #600 — al acabar el RUN, lo que algún hilo dejara a mitad de un `print` (el programa parado con un KILL,
+ * o muerto por un error de la VM, en medio de una línea): sale tal cual, sin salto, como salía antes. El hilo que
+ * acaba solo ya lo ha vaciado al terminar (interp.c, `done`). */
+static void lineas_vaciar(bpvm_t* vm) {
+    for (int i = 0; i < vm->thread_count; i++) bpvm_linea_vaciar(vm, &vm->threads[i]);
+}
+
 bpvm_status_t bpvm_run(bpvm_t* vm) {
     if (!vm) return BPVM_ERR_BAD_PC;
     vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
@@ -1456,6 +1463,7 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     }
 
     bpvm_status_t rs = bpvm_scheduler_run(vm);
+    lineas_vaciar(vm);   /* V7/H7 #600 */
     /* #310 (Eduardo) — al TERMINAR se vuelve al camino estándar: el del pack
      * desaparece. Si no, en un daemon (que es como lo usa el IDE) el Run
      * siguiente heredaría el pack del anterior y resolvería imports contra un
@@ -1522,6 +1530,7 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
 
     if (bpvm_smp_init(vm, n_workers) != 0) return BPVM_ERR_OOM;
     int rc = bpvm_scheduler_run_smp(vm);
+    lineas_vaciar(vm);   /* V7/H7 #600 — antes de deshacer el SMP: su cola aún está */
     bpvm_smp_destroy(vm);
     vm->run_pack_on = 0;   /* #310 — mismo cierre que bpvm_run: fuera el camino del pack */
     vm->run_pack_only[0] = '\0';
@@ -1708,6 +1717,7 @@ void bpvm_destroy(bpvm_t* vm) {
     /* Liberar EH stacks y mutex waiters. */
     for (int i = 0; i < vm->thread_count; i++) {
         bpvm_free(vm->threads[i].eh_stack);
+        bpvm_free(vm->threads[i].linea);   /* V7/H7 #600: la línea del `print` de ese hilo */
     }
     for (int i = 0; i < vm->mutex_count; i++) {
         bpvm_free(vm->mutexes[i].waiters);

@@ -68,6 +68,15 @@ public final class SocketSink implements OutputSink {
         }
     }
 
+    /** V7/H7 #600 — la línea entera, en un OUTPUT, bajo el mismo cerrojo. */
+    @Override public void writeLine(String s) {
+        synchronized (lock) {
+            if (s != null) buf.append(s);
+            buf.append('\n');
+            flushBuffer();
+        }
+    }
+
     @Override public void flush() {
         synchronized (lock) {
             flushBuffer();

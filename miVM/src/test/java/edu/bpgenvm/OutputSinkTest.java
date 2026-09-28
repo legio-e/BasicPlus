@@ -25,6 +25,7 @@ class OutputSinkTest {
         @Override public synchronized void writeText(String s) { buf.append(s); }
         @Override public synchronized void writeChar(char c)   { buf.append(c); }
         @Override public synchronized void newline()           { buf.append('\n'); }
+        @Override public synchronized void writeLine(String s) { buf.append(s).append('\n'); }   // #600
         @Override public synchronized void flush()             { flushes++; }
     }
 

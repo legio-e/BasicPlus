@@ -4311,6 +4311,25 @@ public final class MivmEmitter {
     }
 
     private void emitPrint(PrintStmt s) throws IOException {
+        // V7/H7 #600 (28-sep) — un `print` de UN SOLO texto (una cadena, o lo que se imprime como cadena: un
+        // booleano, un objeto por su toString) es UNA instrucción, PRINT_STRING: el texto y su salto van a la
+        // salida de un empujón. Las piezas de un `print` de varias (`print a, b`, o un número: varias
+        // instrucciones) las junta la VM en la línea del hilo y las saca enteras con el PRINT_NL; este camino ni
+        // pasa por ahí, así que el bloque de un StringBuilder sale entero hasta lo que quepa en la cola de salida,
+        // no sólo hasta el tope de la línea (1 KB).
+        if (s.items.size() == 1 && s.items.get(0).expr != null && imprimeComoTexto(s.items.get(0).expr)) {
+            IExpr e = s.items.get(0).expr;
+            emitExpr(e);
+            BpType t = info.exprTypes.get(e);
+            if (t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.BOOLEAN) {
+                w.emit(OpCode.CALL_BUILTIN);
+                w.emitShort((short) Builtin.BOOL_TO_STRING.id);
+            } else if (t instanceof ClassType) {
+                emitObjectToStringOnStack(((ClassType) t).cls);
+            }
+            w.emit(OpCode.PRINT_STRING);
+            return;
+        }
         for (int i = 0; i < s.items.size(); i++) {
             PrintItem it = s.items.get(i);
             if (i > 0 && it.leadingSep == PrintSep.COMMA) {
@@ -4360,6 +4379,18 @@ public final class MivmEmitter {
             }
         }
         w.emit(OpCode.PRINT_NL);
+    }
+
+    /** V7/H7 #600 — ¿este valor lo imprime el bucle de emitPrint con PRINT_STR_NONL? (una cadena, un booleano
+     *  —BOOL_TO_STRING—, un objeto —toString— o un tipo que no se sabe, como el `catch` genérico). Esos, solos
+     *  en un `print`, van por PRINT_STRING: una instrucción. Los números, no: su NONL es otro opcode. */
+    private boolean imprimeComoTexto(IExpr e) {
+        BpType t = info.exprTypes.get(e);
+        if (t instanceof PrimitiveType) {
+            PrimitiveType.Kind k = ((PrimitiveType) t).tag;
+            return k == PrimitiveType.Kind.STRING || k == PrimitiveType.Kind.BOOLEAN;
+        }
+        return t instanceof ClassType || t == null || t instanceof BpType.ErrorType;
     }
 
     /**

@@ -50,27 +50,56 @@ void bpvm_oq_destroy(bpvm_output_queue_t* q) {
     q->buf = NULL;
 }
 
+/* Copia `len` bytes al ring (con la vuelta), sabiendo que caben. Con el cerrojo tomado. */
+static void oq_copiar(bpvm_output_queue_t* q, const char* src, size_t len) {
+    size_t first = q->cap - q->head;
+    if (first > len) first = len;
+    memcpy(q->buf + q->head, src, first);
+    size_t rest = len - first;
+    if (rest) memcpy(q->buf, src + first, rest);
+    q->head = (q->head + len) % q->cap;
+    q->used += len;
+}
+
 /* Productor — push síncrono (bloquea si lleno). Soporta wrap-around. */
 void bpvm_oq_push(bpvm_output_queue_t* q, const char* src, size_t len) {
+    bpvm_trozo_t t;
+    t.p = src; t.n = len;
+    bpvm_oq_pushv(q, &t, 1);
+}
+
+/* V7/H7 #600 — los trozos, SEGUIDOS. Antes el push copiaba lo que cupiera, esperaba (soltando el cerrojo) y
+ * seguía: con la cola medio llena, otro productor entraba en medio. Ahora, si el total cabe en la cola, se espera
+ * a que haya sitio para todo y se copia de una vez; sólo lo que no cabe ni con la cola vacía va por partes. */
+void bpvm_oq_pushv(bpvm_output_queue_t* q, const bpvm_trozo_t* t, int n) {
+    size_t total = 0;
+    for (int i = 0; i < n; i++) total += t[i].n;
+    if (total == 0) return;
     bpvm_platform_mutex_lock(&q->mtx);
-    size_t pushed = 0;
-    while (pushed < len) {
-        while (q->used == q->cap && !q->closed) {
+    if (total <= q->cap) {
+        while (q->cap - q->used < total && !q->closed) {
             bpvm_platform_cond_wait(&q->not_full, &q->mtx);
         }
-        if (q->closed) break;                  /* consumer cerrado — discard */
-        size_t free_space = q->cap - q->used;
-        size_t to_write = len - pushed;
-        if (to_write > free_space) to_write = free_space;
-        size_t first = q->cap - q->head;
-        if (first > to_write) first = to_write;
-        memcpy(q->buf + q->head, src + pushed, first);
-        size_t rest = to_write - first;
-        if (rest) memcpy(q->buf, src + pushed + first, rest);
-        q->head = (q->head + to_write) % q->cap;
-        q->used += to_write;
-        pushed += to_write;
-        bpvm_platform_cond_signal(&q->not_empty);
+        if (!q->closed) {                      /* cerrada: se descarta, como siempre */
+            for (int i = 0; i < n; i++) if (t[i].n) oq_copiar(q, t[i].p, t[i].n);
+            bpvm_platform_cond_signal(&q->not_empty);
+        }
+    } else {
+        for (int i = 0; i < n && !q->closed; i++) {
+            size_t pushed = 0;
+            while (pushed < t[i].n) {
+                while (q->used == q->cap && !q->closed) {
+                    bpvm_platform_cond_wait(&q->not_full, &q->mtx);
+                }
+                if (q->closed) break;          /* consumer cerrado — discard */
+                size_t free_space = q->cap - q->used;
+                size_t to_write = t[i].n - pushed;
+                if (to_write > free_space) to_write = free_space;
+                oq_copiar(q, t[i].p + pushed, to_write);
+                pushed += to_write;
+                bpvm_platform_cond_signal(&q->not_empty);
+            }
+        }
     }
     bpvm_platform_mutex_unlock(&q->mtx);
 }

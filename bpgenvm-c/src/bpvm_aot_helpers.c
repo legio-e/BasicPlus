@@ -428,10 +428,17 @@ static int32_t h_new_object(bpvm_t* vm, uint32_t class_addr) {
  * Escribían por el callback directo, y en placa, con el hilo `io` en marcha, el `print` de una `native` ADELANTABA
  * a lo que el programa había impreso antes y aún esperaba en la cola: `NatV7` sacaba su «7» arriba del todo en la
  * C5 y dos líneas antes en la Metro. Lo cazó la tanda con el AOT. */
+/* V7/H7 #600 — y POR LA LÍNEA DEL HILO, como el intérprete: las piezas de un `print` de la native se guardan en
+ * la línea del hilo que la llamó, y la línea sale entera con su salto (bpvm_linea_*, bpvm_out.h). */
+static void h_pieza_o_fin(bpvm_t* vm, const char* s, size_t n, int nl) {
+    bpvm_thread_t* tc = bpvm_aot_callctx()->tc;
+    if (nl) bpvm_linea_fin(vm, tc, s, n);
+    else    bpvm_linea_pieza(vm, tc, s, n);
+}
 static void h_print_i32(bpvm_t* vm, int32_t v, int nl) {
     char buf[24];
-    int n = snprintf(buf, sizeof(buf), nl ? "%d\n" : "%d", (int) v);
-    if (n > 0) bpvm_emit(vm, buf, (size_t) n);
+    int n = snprintf(buf, sizeof(buf), "%d", (int) v);
+    if (n > 0) h_pieza_o_fin(vm, buf, (size_t) n, nl);
 }
 /* V7/H5 (#561, 25-sep) — el float, con EL FORMATEADOR del intérprete (`bpvm_format_double`,
  * el canónico de GAP-4 que comparten las dos VMs), igual que `emit_float` en interp.c. Era
@@ -441,26 +448,26 @@ static BPVM_AOT_FP_ABI void h_print_f32(bpvm_t* vm, float v, int nl) {
     char buf[52];
     int n = bpvm_format_double(buf, (double) v);
     if (n <= 0) return;
-    if (nl && n + 1 < (int) sizeof(buf)) { buf[n++] = '\n'; buf[n] = '\0'; }
-    bpvm_emit(vm, buf, (size_t) n);
+    h_pieza_o_fin(vm, buf, (size_t) n, nl);
 }
 static void h_print_string(bpvm_t* vm, uint32_t ref, int nl) {
     /* H2 (V2): string = byte[] UTF-8 → emite los bytes directamente, sin
      * truncar (paridad con OP_PRINT_STRING del intérprete). v2: deref el handle. */
     uint32_t addr = ref ? A(vm, ref) : 0;
+    const char* p = NULL;
+    uint32_t nbytes = 0;
     if (addr != 0) {
-        uint32_t nbytes = bpvm_read_u32_be(vm->memory + addr);
-        const char* p = (const char*)(vm->memory + addr + 4);
-        if (nbytes > 0) bpvm_emit(vm, p, (size_t) nbytes);
+        nbytes = bpvm_read_u32_be(vm->memory + addr);
+        p = (const char*)(vm->memory + addr + 4);
     }
-    if (nl) bpvm_emit(vm, "\n", 1);
+    h_pieza_o_fin(vm, p, (size_t) nbytes, nl);
 }
 static void h_print_char(bpvm_t* vm, int32_t ch) {
     char c = (char) ch;
-    bpvm_emit(vm, &c, 1);
+    h_pieza_o_fin(vm, &c, 1, 0);
 }
 static void h_print_nl(bpvm_t* vm) {
-    bpvm_emit(vm, "\n", 1);
+    h_pieza_o_fin(vm, NULL, 0, 1);
 }
 
 /* ---------- I/O float (H3 #166) ----------

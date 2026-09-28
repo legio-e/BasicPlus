@@ -52,6 +52,7 @@
 #define BPVM_IO_H
 
 #include <stddef.h>
+#include "bpvm_out.h"   /* V7/H7 #600: bpvm_trozo_t */
 
 #ifdef __cplusplus
 extern "C" {
@@ -132,6 +133,10 @@ void bpvm_io_stop(struct bpvm* vm);
  * es cuando el programa produce más deprisa de lo que el transporte traga
  * (contrapresión: ahí no hay hilo que lo arregle). */
 void bpvm_io_write(struct bpvm* vm, const char* s, size_t len);
+
+/* V7/H7 #600 — varios trozos de UNA vez (la línea de un `print` con su salto): entran en la cola seguidos, sin
+ * que otro hilo se cuele entre ellos (ver bpvm_oq_pushv). */
+void bpvm_io_writev(struct bpvm* vm, const bpvm_trozo_t* t, int n);
 
 /* ¿Hay un `io` en marcha? Lo usa `emit_text` (y el scheduler, para no llamar al
  * `poll_cb` viejo cuando quien atiende el wire ya es `io`). */

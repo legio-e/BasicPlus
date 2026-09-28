@@ -25,6 +25,7 @@
 
 #include "bpvm_comm.h"
 #include "bpvm_io.h"   /* V6/A1 — la salida va al hilo io */
+#include "bpvm_alloc.h"   /* V7/H7 #600: el búfer de la línea de un hilo */
 
 #include <stdio.h>
 #include <inttypes.h>
@@ -42,24 +43,84 @@
  *      llamada (toma el mutex de la queue), así que cada emit_text sale
  *      contiguo. NOTA: la atomicidad de LÍNEA completa (bufferizar
  *      per-tc hasta '\n') se intentó en #185 pero infló bpvm_t ~4 KB
- *      (×32 threads) y reventó la RAM de la Pico → revertido. Si se
- *      quiere, hacerlo per-worker en bpvm_smp_t (2×128 B), no per-thread.
+ *      (×32 threads) y reventó la RAM de la Pico → revertido. Desde
+ *      V7/H7 #600 la línea de un `print` se guarda en el hilo con un
+ *      PUNTERO (bpvm_thread_t.linea: el búfer, sólo en quien imprime
+ *      varias piezas) y sale entera: ver bpvm_linea_* más abajo.
  *   2. Modo legacy single-worker — si hay callback, va ahí; si no,
  *      fwrite directo. Sin overhead extra para el camino existente.
  */
-static void emit_text(bpvm_t* vm, const char* s, size_t len) {
+static void emit_textv(bpvm_t* vm, const bpvm_trozo_t* t, int n) {
     /* V6/A1 — con el hilo `io` en marcha, un `print` es UN EMPUJÓN A LA COLA y
      * vuelve. Ni marco JSON ni escritura al transporte: eso lo hace `io`, una
-     * vez por línea. Medido en la C6 (4-sep): 0,84 ms por línea antes. */
+     * vez por línea. Medido en la C6 (4-sep): 0,84 ms por línea antes.
+     * V7/H7 #600 — y los trozos de una línea, seguidos (bpvm_oq_pushv). */
     if (vm->io) {
-        bpvm_io_write(vm, s, len);
+        bpvm_io_writev(vm, t, n);
     } else if (vm->smp) {
-        bpvm_comm_output_enqueue(vm, s, len);
+        bpvm_comm_output_enqueuev(vm, t, n);
     } else if (vm->output_cb) {
-        vm->output_cb(s, len, vm->output_user);
+        for (int i = 0; i < n; i++) if (t[i].n) vm->output_cb(t[i].p, t[i].n, vm->output_user);
     } else {
-        fwrite(s, 1, len, stdout);
+        for (int i = 0; i < n; i++) if (t[i].n) fwrite(t[i].p, 1, t[i].n, stdout);
     }
+}
+
+static void emit_text(bpvm_t* vm, const char* s, size_t len) {
+    bpvm_trozo_t t;
+    t.p = s; t.n = len;
+    emit_textv(vm, &t, 1);
+}
+
+/* ─── V7/H7 #600 — LA LÍNEA DE UN `print`, ENTERA (el porqué, en bpvm_out.h) ───────────────────────────
+ * Las piezas (*_NONL, PRINT_CHAR) van a la línea del hilo; el salto (PRINT_NL, o las que llevan salto:
+ * PRINT_STRING, LPRINT…) la saca de UN empujón con lo suyo. Lo que sale es lo mismo que antes, byte a byte. */
+
+/* Que quepan `mas` bytes más en la línea de `tc`: crece doblando, hasta BPVM_LINEA_MAX. 0 = no caben (la línea
+ * pasa del tope, o no hay memoria): entonces ya no puede salir entera. */
+static int linea_hueco(bpvm_thread_t* tc, size_t mas) {
+    size_t need = (size_t) tc->linea_len + mas;
+    if (need > BPVM_LINEA_MAX) return 0;
+    if (need <= tc->linea_cap) return 1;
+    size_t cap = tc->linea_cap ? tc->linea_cap : 64u;
+    while (cap < need) cap *= 2;
+    if (cap > BPVM_LINEA_MAX) cap = BPVM_LINEA_MAX;
+    char* p = (char*) bpvm_malloc(cap);
+    if (!p) return 0;
+    if (tc->linea_len) memcpy(p, tc->linea, tc->linea_len);
+    bpvm_free(tc->linea);
+    tc->linea = p;
+    tc->linea_cap = (uint32_t) cap;
+    return 1;
+}
+
+void bpvm_linea_pieza(bpvm_t* vm, bpvm_thread_t* tc, const char* s, size_t len) {
+    if (!vm || !s || len == 0) return;
+    if (tc && linea_hueco(tc, len)) {
+        memcpy(tc->linea + tc->linea_len, s, len);
+        tc->linea_len += (uint32_t) len;
+        return;
+    }
+    /* Sin hilo al que guardársela, o la línea ya no cabe: lo guardado y esta pieza salen ya, como antes. */
+    bpvm_linea_vaciar(vm, tc);
+    emit_text(vm, s, len);
+}
+
+void bpvm_linea_fin(bpvm_t* vm, bpvm_thread_t* tc, const char* s, size_t len) {
+    bpvm_trozo_t t[3];
+    int n = 0;
+    if (!vm) return;
+    if (tc && tc->linea_len) { t[n].p = tc->linea; t[n].n = tc->linea_len; n++; }
+    if (s && len)            { t[n].p = s;         t[n].n = len;           n++; }
+    t[n].p = "\n"; t[n].n = 1; n++;
+    emit_textv(vm, t, n);
+    if (tc) tc->linea_len = 0;
+}
+
+void bpvm_linea_vaciar(bpvm_t* vm, bpvm_thread_t* tc) {
+    if (!vm || !tc || tc->linea_len == 0) return;
+    emit_text(vm, tc->linea, tc->linea_len);
+    tc->linea_len = 0;
 }
 
 /* V7/H5 (#558) — el mismo camino, para quien escribe en nombre del programa desde C (los helpers del AOT). */
@@ -89,23 +150,25 @@ void bpvm_out(const char* fmt, ...) {
     else          fwrite(buf, 1, len, stdout);   /* fachada suelta en una herramienta */
 }
 
-static void emit_int(bpvm_t* vm, int32_t v, int newline) {
+/* V7/H7 #600 — los números: con salto, la línea se cierra con ellos (bpvm_linea_fin); sin él, son una pieza. */
+static void emit_pieza_o_fin(bpvm_t* vm, bpvm_thread_t* tc, const char* buf, int n, int newline) {
+    if (n <= 0) return;
+    if (newline) bpvm_linea_fin(vm, tc, buf, (size_t) n);
+    else         bpvm_linea_pieza(vm, tc, buf, (size_t) n);
+}
+
+static void emit_int(bpvm_t* vm, bpvm_thread_t* tc, int32_t v, int newline) {
     char buf[32];
-    int n = snprintf(buf, sizeof(buf), newline ? "%" PRId32 "\n" : "%" PRId32, v);
-    if (n > 0) emit_text(vm, buf, (size_t) n);
+    int n = snprintf(buf, sizeof(buf), "%" PRId32, v);
+    emit_pieza_o_fin(vm, tc, buf, n, newline);
 }
 
 /* H1.2 (V2): print de un long (i64). Vía bpvm_format_i64 (u64_dec) — NO %lld de
  * snprintf, que el newlib-nano del STM32 no soporta (salía "ld"). Byte-idéntico. */
-static void emit_long(bpvm_t* vm, int64_t v, int newline) {
+static void emit_long(bpvm_t* vm, bpvm_thread_t* tc, int64_t v, int newline) {
     char buf[24];
     int n = bpvm_format_i64(buf, v);
-    if (newline) buf[n++] = '\n';
-    emit_text(vm, buf, (size_t) n);
-}
-
-static void emit_newline(bpvm_t* vm) {
-    emit_text(vm, "\n", 1);
+    emit_pieza_o_fin(vm, tc, buf, n, newline);
 }
 
 /* #186 — invoca un thunk AOT con un boundary de fault armado.
@@ -564,12 +627,10 @@ int bpvm_format_i64(char* out, int64_t v) {
     return n;
 }
 
-static void emit_float(bpvm_t* vm, float v, int newline) {
+static void emit_float(bpvm_t* vm, bpvm_thread_t* tc, float v, int newline) {
     char buf[52];
     int n = bpvm_format_double(buf, (double) v);
-    if (n <= 0) return;
-    if (newline && n + 1 < (int) sizeof(buf)) { buf[n++] = '\n'; buf[n] = '\0'; }
-    emit_text(vm, buf, (size_t) n);
+    emit_pieza_o_fin(vm, tc, buf, n, newline);   /* V7/H7 #600 */
 }
 
 /* Helpers de reinterpretación int↔float (tipo punning seguro en C99 vía
@@ -589,12 +650,10 @@ static inline int64_t double_to_bits(double d) {
 }
 /* GAP-4: print de un double via bpvm_format_double (punto fijo + sci,
  * byte-idéntico a la VM Java). */
-static void emit_double(bpvm_t* vm, double v, int newline) {
+static void emit_double(bpvm_t* vm, bpvm_thread_t* tc, double v, int newline) {
     char buf[52];
     int n = bpvm_format_double(buf, v);
-    if (n <= 0) return;
-    if (newline && n + 1 < (int) sizeof(buf)) { buf[n++] = '\n'; buf[n] = '\0'; }
-    emit_text(vm, buf, (size_t) n);
+    emit_pieza_o_fin(vm, tc, buf, n, newline);   /* V7/H7 #600 */
 }
 
 /* V4 / H-006: liberación determinista y RECURSIVA de un ref owned — espejo de
@@ -1169,21 +1228,21 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         /* ---- Output ---- */
         case OP_PRINT: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            emit_int(vm, v, /*newline=*/1);
+            emit_int(vm, tc, v, /*newline=*/1);
             break;
         }
         case OP_PRINT_NONL: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
-            emit_int(vm, v, /*newline=*/0);
+            emit_int(vm, tc, v, /*newline=*/0);
             break;
         }
         case OP_PRINT_NL:
-            emit_newline(vm);
+            bpvm_linea_fin(vm, tc, NULL, 0);   /* V7/H7 #600: la línea del `print`, entera, con su salto */
             break;
         case OP_PRINT_CHAR: {
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
             char c = (char)(v & 0xFF);
-            emit_text(vm, &c, 1);
+            bpvm_linea_pieza(vm, tc, &c, 1);   /* V7/H7 #600 */
             break;
         }
 
@@ -1266,12 +1325,12 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_FPRINT: {
             sp -= 4; float v = bits_to_float(bpvm_read_i32_be(mem + sp));
-            emit_float(vm, v, /*newline=*/1);
+            emit_float(vm, tc, v, /*newline=*/1);
             break;
         }
         case OP_FPRINT_NONL: {
             sp -= 4; float v = bits_to_float(bpvm_read_i32_be(mem + sp));
-            emit_float(vm, v, /*newline=*/0);
+            emit_float(vm, tc, v, /*newline=*/0);
             break;
         }
         case OP_I2F: {
@@ -1393,9 +1452,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                        sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
                        bpvm_write_i32_be(mem+sp, a >= b ? 1 : 0); sp += 4; break; }
         case OP_LPRINT: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp);
-                          emit_long(vm, v, 1); break; }
+                          emit_long(vm, tc, v, 1); break; }
         case OP_LPRINT_NONL: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp);
-                               emit_long(vm, v, 0); break; }
+                               emit_long(vm, tc, v, 0); break; }
         case OP_I32_TO_I64: { sp -= 4; int32_t v = bpvm_read_i32_be(mem+sp);
                               bpvm_write_i64_be(mem+sp, (int64_t) v); sp += 8; break; }
         case OP_I64_TO_I32: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp);
@@ -1523,8 +1582,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_DGE:  { sp -= 8; double b = bits_to_double(bpvm_read_i64_be(mem+sp));
                         sp -= 8; double a = bits_to_double(bpvm_read_i64_be(mem+sp));
                         bpvm_write_i32_be(mem+sp, a >= b ? 1 : 0); sp += 4; break; }
-        case OP_DPRINT:      { sp -= 8; double v = bits_to_double(bpvm_read_i64_be(mem+sp)); emit_double(vm, v, 1); break; }
-        case OP_DPRINT_NONL: { sp -= 8; double v = bits_to_double(bpvm_read_i64_be(mem+sp)); emit_double(vm, v, 0); break; }
+        case OP_DPRINT:      { sp -= 8; double v = bits_to_double(bpvm_read_i64_be(mem+sp)); emit_double(vm, tc, v, 1); break; }
+        case OP_DPRINT_NONL: { sp -= 8; double v = bits_to_double(bpvm_read_i64_be(mem+sp)); emit_double(vm, tc, v, 0); break; }
         case OP_I2D: { sp -= 4; int32_t v = bpvm_read_i32_be(mem+sp); bpvm_write_i64_be(mem+sp, double_to_bits((double) v)); sp += 8; break; }
         case OP_D2I: { sp -= 8; double d = bits_to_double(bpvm_read_i64_be(mem+sp)); bpvm_write_i32_be(mem+sp, (int32_t) d); sp += 4; break; }
         case OP_L2D: { sp -= 8; int64_t v = bpvm_read_i64_be(mem+sp); bpvm_write_i64_be(mem+sp, double_to_bits((double) v)); sp += 8; break; }
@@ -1681,13 +1740,18 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_PRINT_STRING:
         case OP_PRINT_STR_NONL: {
             sp -= BPVM_REF_SIZE; bpref_t s = bpref_load(vm, sp);
+            const char* txt = NULL;
+            uint32_t nbytes = 0;
             if (!bpref_is_null(s)) {
                 /* H2 (V2): strings son byte[] UTF-8 → emitimos los bytes
                  * directamente, sin truncar (Unicode completo). */
-                uint32_t nbytes = bpref_arr_len(vm, s);
-                emit_text(vm, (const char*) bpref_arr_elem(vm, s, 0, 1), nbytes);
+                nbytes = bpref_arr_len(vm, s);
+                txt = (const char*) bpref_arr_elem(vm, s, 0, 1);
             }
-            if (op == OP_PRINT_STRING) emit_newline(vm);
+            /* V7/H7 #600 — con salto (PRINT_STRING, lo que emite el compilador para un `print` de UNA
+             * cadena) la línea sale entera con ella; sin él, es una pieza de la línea del hilo. */
+            if (op == OP_PRINT_STRING) bpvm_linea_fin(vm, tc, txt, nbytes);
+            else                       bpvm_linea_pieza(vm, tc, txt, nbytes);
             break;
         }
 
@@ -2173,5 +2237,8 @@ done:
         tc->status = BPVM_THREAD_TERMINATED;
         if (yielded) *yielded = 1;
     }
+    /* V7/H7 #600 — un hilo que acaba a mitad de un `print` (una excepción al calcular una pieza): lo que
+     * llevaba sale tal cual, sin salto, como salía antes. */
+    if (tc->status == BPVM_THREAD_TERMINATED) bpvm_linea_vaciar(vm, tc);
     return exit_status;
 }

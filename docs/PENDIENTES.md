@@ -187,6 +187,11 @@
   (los módulos no la tienen). Reabrible si surge caso de uso.
 - **L9 — `Mutex` no reentrante.** Por diseño (documentado en el manual). Para
   re-entrada, usar otro patrón (flag + condvar).
+- **Con varios hilos, un `print` sale entero; entre dos `print`, no** (decidido el 28-sep,
+  `#600`). `print "Resultado=", r` nunca se mezcla con la línea de otro hilo; entre `print a`
+  y `print b` sí puede caer. Para que varias líneas salgan juntas: un `StringBuilder` y un
+  solo `print` (manual §14.5). El límite: una línea de más de 1 KB —lo que cabe de una vez
+  en la cola de salida de la Pico— puede salir en trozos.
 
 
 ### `input()` sólo funciona en el PC, no en el micro (decidido el 26-ago; `listDir` YA está en las dos desde V7/H3)

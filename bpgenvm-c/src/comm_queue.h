@@ -15,6 +15,7 @@
 #define BPVM_COMM_QUEUE_INTERNAL_H
 
 #include "bpvm_smp.h"
+#include "bpvm_out.h"   /* V7/H7 #600: bpvm_trozo_t */
 
 #include <stddef.h>
 
@@ -29,6 +30,12 @@ void   bpvm_oq_destroy(bpvm_output_queue_t* q);
  * (back-pressure). Si closed=true en mitad de un push largo, descarta
  * lo que queda silenciosamente (la sesión está terminando). */
 void   bpvm_oq_push(bpvm_output_queue_t* q, const char* src, size_t len);
+
+/* V7/H7 #600 — push de VARIOS trozos, seguidos: si el total cabe en la cola (≤ su capacidad), se espera a que
+ * haya sitio para TODOS y se copian sin soltar el cerrojo —ningún otro productor se cuela entre ellos—. Lo que no
+ * cabe ni con la cola vacía se empuja por partes, como el push de siempre (entero no puede salir). push(src, len)
+ * es este con un trozo: también un trozo solo entra entero si cabe. */
+void   bpvm_oq_pushv(bpvm_output_queue_t* q, const bpvm_trozo_t* t, int n);
 
 /* Consumer — pop hasta max bytes a dst. Bloquea en cond_wait si vacío.
  * Devuelve nº bytes leídos. 0 ⇒ closed + drenado (señal de salida). */

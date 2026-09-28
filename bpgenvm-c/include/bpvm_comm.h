@@ -47,6 +47,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "bpvm_out.h"   /* V7/H7 #600: bpvm_trozo_t */
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,6 +69,9 @@ void bpvm_comm_stop(struct bpvm* vm);
  * si la queue está llena. Re-entrante (varios workers pueden encolar
  * simultáneamente — la queue lo serializa). */
 void bpvm_comm_output_enqueue(struct bpvm* vm, const char* buf, size_t len);
+
+/* V7/H7 #600 — varios trozos de UNA vez (la línea de un `print` con su salto), seguidos en la cola. */
+void bpvm_comm_output_enqueuev(struct bpvm* vm, const bpvm_trozo_t* t, int n);
 
 #ifdef __cplusplus
 }

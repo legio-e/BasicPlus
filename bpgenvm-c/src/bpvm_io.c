@@ -175,6 +175,11 @@ void bpvm_io_write(struct bpvm* vm, const char* s, size_t len) {
     bpvm_oq_push(&vm->io->oq, s, len);
 }
 
+void bpvm_io_writev(struct bpvm* vm, const bpvm_trozo_t* t, int n) {   /* V7/H7 #600 */
+    if (!vm || !vm->io || !t || n <= 0) return;
+    bpvm_oq_pushv(&vm->io->oq, t, n);
+}
+
 int bpvm_io_running(const struct bpvm* vm) {
     return (vm && vm->io) ? 1 : 0;
 }

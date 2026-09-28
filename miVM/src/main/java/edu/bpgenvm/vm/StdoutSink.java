@@ -22,6 +22,10 @@ public final class StdoutSink implements OutputSink {
     @Override public void newline() {
         synchronized (lock) { System.out.println(); }
     }
+    /** V7/H7 #600 — la línea entera, bajo el mismo cerrojo. */
+    @Override public void writeLine(String s) {
+        synchronized (lock) { System.out.print(s); System.out.println(); }
+    }
 
     @Override public void flush() {
         synchronized (lock) { System.out.flush(); }

@@ -377,6 +377,13 @@ struct bpvm_thread {
      * límite de fallos de #186. El puente nativo→BP la apaga mientras corre código BP anidado. */
     int      builtin_de_nativa;
     uint32_t excepcion_pendiente;   /* handle empaquetado (idx|TAG) de esa excepción, o 0 */
+    /* V7/H7 #600 — LA LÍNEA DE UN `print` A MEDIAS (bpvm_out.h): las piezas de `print "Resultado=", r` se
+     * guardan aquí y la línea sale entera con su salto. NULL hasta la primera pieza de un `print` de varias; se
+     * reutiliza (hasta BPVM_LINEA_MAX) y se libera en bpvm_destroy. Un puntero y no el búfer dentro del hilo:
+     * #185 lo metió dentro (4 KB ×32 hilos en bpvm_t) y no cupo en la Pico. */
+    char*    linea;
+    uint32_t linea_len;
+    uint32_t linea_cap;
 };
 
 /* F5 — entry del handlerStack. */

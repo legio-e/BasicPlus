@@ -126,3 +126,8 @@ void bpvm_comm_output_enqueue(bpvm_t* vm, const char* buf, size_t len) {
     if (!vm || !vm->smp || !buf || len == 0) return;
     bpvm_oq_push(&vm->smp->output_queue, buf, len);
 }
+
+void bpvm_comm_output_enqueuev(bpvm_t* vm, const bpvm_trozo_t* t, int n) {   /* V7/H7 #600 */
+    if (!vm || !vm->smp || !t || n <= 0) return;
+    bpvm_oq_pushv(&vm->smp->output_queue, t, n);
+}

@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -497,6 +497,15 @@ test-smpfallo: $(LIBOBJ)
 	  echo "--- una excepcion sin atrapar con SMP (esperado: OK / RuntimeError / RuntimeError y la linea OK) ---"; \
 	  (cd samples && ../$(SMPFALLO_BIN) SmpFallo.mod); \
 	fi
+
+# V7/H7 #600 (28-sep) — lo que se empuja DE UNA VEZ a la cola de salida sale SEGUIDO (bpvm_oq_pushv): la línea de
+# un `print` y un bloque de varias líneas impreso con un solo `print`. Cuatro productores, una cola de 256 B casi
+# siempre llena, y cada registro de tres trozos tiene que salir entero y en orden. Ver test/test_oqentero.c.
+OQENTERO_BIN = build/test_oqentero.exe
+test-oqentero: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_oqentero.c $(LIBOBJ) -o $(OQENTERO_BIN) $(LDFLAGS)
+	./$(OQENTERO_BIN)
 
 # #339 — el GUARDIÁN DE FIN DE RUN, probado contra una fuga DE VERDAD. Que la
 # VM no fugue lo dice el guardián en cada ejecución; lo que hay que demostrar
