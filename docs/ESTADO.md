@@ -1015,6 +1015,15 @@ la C6, la P4 y la Nucleo.
 - De paso, tres fallos anteriores, abiertos: `#596` (con `--smp`, una excepción sin atrapar acaba en OK), `#597`
   (`Net.recv` deja un bloque que miente su tamaño) y `#598` (el GC sin memoria para su mapa lo barre todo).
 
+## 🔧 H7 (28-sep) — `#597` y `#598` cerradas: los dos fallos anteriores que la revisión de `#595` encontró
+
+- `#598`: sin memoria para su mapa, el GC de la VM-C ya no lo barre todo: es la excepción del heap descarrilado
+  (#494). Para probarlo, una inyección de fallos en el reservador del núcleo (`bpvm_alloc_prueba_fallar`), que
+  sirve para cualquier camino de «sin memoria» del núcleo que en el PC no se da solo.
+- `#597`: `Net.recv` reserva justo lo recibido. `test-net` estaba fuera de las redes; ahora en `check-testc`.
+- Un tropiezo: dejé vivo el eco de `test_net serve` de la prueba de paridad, esperando una tercera conexión con su
+  puerto fijo, y el `make test-net` siguiente se colgó. Tras un `serve`, pararlo.
+
 ## ⏭️ Traspaso (27-sep, noche) — H7: lo corto, hecho; sigue lo de análisis
 
 **Commits desde la pausa** (sin push): `ec5b15c7` (`#587`, el `StringBuilder`) · `b777f25f` (`#589`, el depurador
