@@ -229,6 +229,7 @@ static void worker_loop(void* raw) {
             /* Fallo terminal del intérprete → shutdown VM. */
             bpvm_diag_urgente("[bpvm-c smp w%d] interp error: status=%d",
                     arg ? 0 : 0, (int) s);
+            if (smp->fallo == 0) smp->fallo = (int) s;   /* #596: el RUN acaba con ÉSTE */
             smp->shutdown = true;
         }
         /* Notify: algún tc puede haber pasado de RUNNING → terminated,
@@ -250,6 +251,7 @@ int bpvm_smp_init(bpvm_t* vm, int n_workers) {
     if (!smp) return -1;
     smp->n_workers = n_workers;
     smp->shutdown = false;
+    smp->fallo = 0;   /* #596 (el calloc ya lo deja a 0; se dice) */
     smp->stop_the_world = false;
     smp->gc_in_progress = false;
     smp->running_workers = 0;
@@ -342,5 +344,7 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
                         "(destinatario muerto o encolados por un handler tardío)",
                 vm->ev_count);
     }
-    return 0;
+    /* #596 — el estado del primer fallo (0 si ninguno), como scheduler.c devuelve el suyo: una excepción sin
+     * atrapar acaba el RUN en error también con --smp. */
+    return smp->fallo;
 }

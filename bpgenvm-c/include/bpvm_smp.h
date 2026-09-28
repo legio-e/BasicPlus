@@ -86,6 +86,12 @@ typedef struct bpvm_smp {
 
     /* Output queue (workers print → comm drena). */
     bpvm_output_queue_t output_queue;
+
+    /* V7/H7 #596 — el estado (bpvm_status_t) del PRIMER fallo que vio un worker: una excepción sin atrapar, un error
+     * de la VM. 0 = ninguno. Es lo que devuelve bpvm_scheduler_run_smp, como el scheduler simple devuelve el suyo;
+     * antes se devolvía 0 siempre y un programa muerto acababa en «status=OK». Guardado bajo vm_lock. Al final: un
+     * campo nuevo va detrás. */
+    int fallo;
 } bpvm_smp_t;
 
 /* Inicializa el sub-estado SMP en vm. Aloca y arranca workers + comm.

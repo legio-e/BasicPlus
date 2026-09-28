@@ -1527,7 +1527,8 @@ bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     vm->run_pack_only[0] = '\0';
     bpvm_fs_set_overlay(NULL, NULL, NULL);
     if (vm->kill_requested) return BPVM_KILLED;   /* P-run-stop */
-    return rc == 0 ? BPVM_OK : BPVM_ERR_RUNTIME;
+    /* #596 — rc es el estado del primer fallo de un worker (0 = ninguno), o -1 si no arrancaron los workers. */
+    return (rc < 0) ? BPVM_ERR_RUNTIME : (bpvm_status_t) rc;
 }
 
 void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user) {
