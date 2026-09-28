@@ -103,6 +103,52 @@ public final class Version {
         System.out.println(linea());
         String aviso = avisoDeDesfase();
         if (aviso != null) System.out.println(aviso);
+        String avisoVm = avisoDeDesfaseDeLaVm();
+        if (avisoVm != null) System.out.println(avisoVm);
+    }
+
+    /**
+     * V7/H8 (28-sep) — lo mismo que {@link #avisoDeDesfase} (#429), para la miVM EMBEBIDA: el jar en el que va este
+     * compilador —el fat-jar del IDE, o el propio {@code basicplus-frontend.jar}, que la sombrea— lleva también su
+     * copia de la miVM ({@code edu/bpgenvm/**}: el {@code ModWriter} y los opcodes con los que se compila, y en el IDE
+     * la VM que ejecuta el programa en el PC). Si al lado hay una miVM construida MÁS TARDE, esa copia puede estar
+     * rancia —la trampa del jar-plugin que reutilizaba el shaded viejo—, y el guardián de #429 no lo veía: sólo
+     * mira el compilador. Misma regla: se comparan FECHAS de ficheros que existen o no; sin miVM al lado, callado.
+     */
+    public static String avisoDeDesfaseDeLaVm() {
+        try {
+            return compararVm(procedencia(), buscar(new String[] {
+                "miVM/target/bpgenvm-1.0.jar",
+                "../miVM/target/bpgenvm-1.0.jar",
+            }));
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /** El aviso, o null: {@code mio} es el artefacto de este compilador y {@code vm}, la miVM construida al lado. Sólo
+     *  un JAR lleva la miVM dentro (con clases sueltas se usa la del árbol, y no hay copia de la que desfasarse). */
+    static String compararVm(File mio, File vm) {
+        if (mio == null || vm == null || !mio.isFile() || !mio.getName().endsWith(".jar")) return null;
+        long tMio = mio.lastModified(), tVm = vm.lastModified();
+        if (tMio <= 0 || tVm <= 0 || tVm <= tMio) return null;
+        SimpleDateFormat f = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+        return "  AVISO: la miVM que va EMBEBIDA aqui es MAS VIEJA que la del arbol."
+             + System.lineSeparator()
+             + "         embebida: " + mio.getName() + "  " + f.format(new Date(tMio))
+             + System.lineSeparator()
+             + "         al lado : " + vm.getName() + "  " + f.format(new Date(tVm))
+             + System.lineSeparator()
+             + "         Reconstruye lo que la embebe (el frontend con clean install, y el IDE) o"
+             + " compilaras y ejecutaras con la VM vieja.";
+    }
+
+    private static File buscar(String[] candidatos) {
+        for (String c : candidatos) {
+            File f = new File(c);
+            if (f.isFile()) return f;
+        }
+        return null;
     }
 
     /**
