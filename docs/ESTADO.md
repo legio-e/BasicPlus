@@ -1024,6 +1024,17 @@ la C6, la P4 y la Nucleo.
 - Un tropiezo: dejé vivo el eco de `test_net serve` de la prueba de paridad, esperando una tercera conexión con su
   puerto fijo, y el `make test-net` siguiente se colgó. Tras un `serve`, pararlo.
 
+## 🔬 H7 (28-sep) — `--smp=2` por defecto: de momento no; el corpus con dos workers saca `#599`
+
+- Eduardo: `--smp=2` no va por defecto de momento —se decide con las pruebas del final de V7—, y *«tenemos micros
+  con 1 núcleo y con 2 núcleos así que ejecutar solamente con una opción no sé si es lo conveniente»*.
+- Mirado: hoy todas las placas corren UN worker, también las de dos núcleos (la Pico se compila con uno), y la red
+  también; el SMP sólo lo ven tres pruebas de C.
+- Medido el corpus con dos workers (copia del arnés): 113/114 contra miVM con uno (`EvDos`, el reparto entre dos
+  hilos, esperado) y 113/114 con las dos en SMP: **`HeapReposo` cuelga miVM** (8 de 8). Un interbloqueo del GC de
+  miVM que la VM-C no tiene: `#599`, con el arreglo de una línea probado en una copia (10/10). Pendiente de Eduardo:
+  el arreglo y una pasada del corpus con dos workers en la red.
+
 ## 🔧 H7 (28-sep) — `#596` y `#586` cerradas
 
 - `#596`: con `--smp`, una excepción sin atrapar ya acaba el RUN en error (el primer fallo de un worker es lo que
