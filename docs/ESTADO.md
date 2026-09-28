@@ -1068,6 +1068,18 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🗺️ H8 (28-sep, tarde) — el mapa verificado; `#538` y `#601` cerradas
+
+- Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código y lo decisivo a mano: el mapa, en `V7_IDEAS`
+  §H8. `#495` no era lo que decía (el cable y la salida los atiende el mismo hilo `io`); `M5` no es una prueba (el
+  depurador no despliega objetos); `#538`, más ancho.
+- Sus decisiones: `#495`, un protocolo troceado y mezclable que junta el destinatario —*«en un entorno multitarea
+  no puede ser que una comunicación monopolice la comunicación»*—; `#452`, no hacen falta más `FORMAT`; los packs
+  en el árbol, sólo si están en el FS. Y me corrigió: con el `Stdlib.pack` cargado, `/lib` está vacío.
+- `#538` (`b7d28991`): las dependencias que sube el IDE salen de los `.mod` (`DependenciasDelMod`, con su
+  prueba); falta mirarlo en el IDE con una placa. `#601` (`1a75a498`): una sola lista de verbos de fichero
+  en el REPL común; compiladas por fin la S3, la C6 y la Nucleo con lo de hoy.
+
 ## ⏭️ Traspaso (28-sep, pausa) — H7: el módulo `Heap` y `Heap.compact()`; el corpus con DOS workers en la red; un `print` sale entero
 
 **Commits de hoy** (sin push): `d3a60e5c` (`#591`, el `.dbg` del código sintetizado) · `ac0f3d71` (`#594`, el módulo
