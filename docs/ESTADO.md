@@ -1024,6 +1024,18 @@ la C6, la P4 y la Nucleo.
 - Un tropiezo: dejé vivo el eco de `test_net serve` de la prueba de paridad, esperando una tercera conexión con su
   puerto fijo, y el `make test-net` siguiente se colgó. Tras un `serve`, pararlo.
 
+## 🔧 H7 (28-sep) — `#600` cerrada: un `print` sale entero
+
+- Eduardo: lo más sencillo —un `StringBuilder` y un `print` para varias líneas— y la regla: dentro de un
+  `print` no se cuela nada; entre dos, sí puede.
+- Las dos VMs guardan las piezas de un `print` en la línea del hilo y la sacan entera con el salto; la cola
+  empuja varios trozos seguidos (`bpvm_oq_pushv`); el compilador emite `PRINT_STRING` para un `print` de un solo
+  texto. Sin cerrojo entre instrucciones; tope 1 KB por línea.
+- La salida del corpus, igual byte a byte en 111 de 114; en 3, una traza del PC que partía la línea sale ahora
+  antes (y dos `.out` de la cápsula de V6 al día). `PrintEntero` y `test-oqentero` en la red, los dos saboteados.
+- De paso: el manual §14.2 aún contaba el temporizador de 10 ms de miVM (es por instrucciones desde `#531`).
+- Red: paridad 115, cápsula 59, pruebas de C 32/32, norma, sim, sombra, MOD8, dos workers (115, dos comparados ordenados; tres vueltas más, igual) y packs-abi verdes; la Pico compila.
+
 ## 🔧 H7 (28-sep) — `#599` cerrada: el corpus con DOS workers, en la red; y `#600` abierta
 
 - Eduardo, «Si» al arreglo y a la pasada. miVM: quien se aparca en `heapAlloc` durante una colecta ajena AVISA,

@@ -2692,6 +2692,14 @@ una calma para pararlos, cerrar lo abierto, compactar y reposar (`HeapReposo`)�
 
 ## H7 — `#600`: la salida por TRANSACCIONES (28-sep, idea de Eduardo; propuesta para decidir)
 
+> **Decidido el mismo día (Eduardo), y hecho (`cc073e52`, ver `FICHAS` `#600`)**: *«la otra opción es
+> utilizar stringbuilder y acumular las salidas y al final hacer un print stringbuilder.toString(). No sé, lo que
+> sea más sencillo»*, con la regla *«si haces print a; print b entre los dos se puede colgar un print de otro
+> hilo, eso es correcto. Ahora si haces print "Resultado=", r que se cuele algo en medio no es correcto»*. Así
+> que no hay `beginPrint`/`endPrint`: **un `print` sale entero** —sus piezas se guardan en la línea del hilo y
+> salen con el salto, de un empujón— y varias líneas juntas son un `StringBuilder` y un `print`. Lo de abajo se
+> queda como el análisis que llevó ahí.
+
 Eduardo, al ver `#600` (con dos workers, la línea de un hilo se parte con la de otro): *«Este problema ya lo hemos
 tenido con I2C y SPI y al final optamos por trabajar con transacciones. Sería algo así como Ini Trans, print a,
 print b Fin Trans.»*
