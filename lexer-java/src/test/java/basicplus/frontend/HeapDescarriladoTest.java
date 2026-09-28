@@ -80,6 +80,9 @@ class HeapDescarriladoTest {
         assertTrue(roto.contains("cazada: " + VirtualMachine.MSG_HEAP_DESCARRILADO),
                 "el GC descarrilado tenía que lanzar la prefabricada, y el programa atraparla: " + roto);
         assertTrue(roto.contains("fin"), "tras atraparla, el programa sigue: " + roto);
+        // #598 (28-sep): y lo vivo de antes, intacto —un GC descarrilado no marca ni barre—.
+        assertTrue(roto.contains("lo de antes: guardado 42"), "lo vivo tenía que sobrevivir al GC descarrilado: " + roto);
+        assertTrue(control.contains("lo de antes: guardado 42"), control);
         assertEquals("heap descarrilado (fallo interno de la VM)", VirtualMachine.MSG_HEAP_DESCARRILADO,
                 "el MISMO texto que la VM-C (BPVM_MSG_HEAP_DESCARRILADO)");
     }

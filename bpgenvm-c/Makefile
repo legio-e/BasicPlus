@@ -424,7 +424,7 @@ NET_BIN = build/test_net.exe
 test-net: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,TcpEchoTest)
-	$(call stdlibdep,Net Core)
+	$(call stdlibdep,Net Core Heap)
 	@if [ ! -f samples/TcpEchoTest.mod ]; then \
 	  echo "(skip test-net: falta samples/TcpEchoTest.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
@@ -432,7 +432,7 @@ test-net: $(LIBOBJ)
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_net.c \
 	    $(LIBOBJ) -o $(NET_BIN) $(LDFLAGS); \
-	  echo "--- TCP echo H11 (esperado: conectado / 2 ecos / timeout-len: 0 / fin, PASS) ---"; \
+	  echo "--- TCP echo H11 (esperado: conectado / 2 ecos / timeout-len: 0 / heap: recorrido entero / fin, PASS) ---"; \
 	  ./$(NET_BIN) samples/TcpEchoTest.mod samples/Net.mod samples/Core.mod; \
 	fi
 
@@ -462,7 +462,7 @@ test-heapdescarrilado: $(LIBOBJ)
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_heapdescarrilado.c \
 	    $(LIBOBJ) -o $(HEAPD_BIN) $(LDFLAGS); \
-	  echo "--- el heap descarrilado (esperado: control PASS, estropeado PASS y la linea OK) ---"; \
+	  echo "--- el heap descarrilado (esperado: control PASS, estropeado PASS, sin mapa PASS y la linea OK) ---"; \
 	  (cd samples && ../$(HEAPD_BIN) HeapRoto.mod); \
 	fi
 

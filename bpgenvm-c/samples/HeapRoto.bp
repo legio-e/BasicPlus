@@ -2,9 +2,13 @@
 // —test/test_heapdescarrilado.c en la VM-C, HeapDescarriladoTest (lexer-java) en miVM— le estropean la cabecera del primer bloque del
 // heap en la primera línea; aquí se reservan cadenas hasta que un GC recorre el heap, descarrila, no barre, y la reserva
 // que lo pidió lanza la excepción prefabricada: se atrapa y se dice. Sin la prueba (el heap sano), «sin excepcion».
+// #598 (28-sep): la misma excepción cuando al GC de la VM-C le falta memoria para su mapa (la prueba de C lo provoca);
+// sin el arreglo, ese GC barría el heap ENTERO. Por eso `guardado`, de antes de la primera colecta: tiene que llegar
+// intacto al final —un GC descarrilado no barre nada—.
 module HeapRoto
 
   function Main()
+    var guardado: string := "guardado " + 42
     try
       var s: string := ""
       var i: integer := 0
@@ -16,6 +20,7 @@ module HeapRoto
     catch e: RuntimeError
       print "cazada:", e.msg
     endtry
+    print "lo de antes:", guardado
     print "fin"
   end Main
 end HeapRoto

@@ -151,7 +151,19 @@ static void build_gc_valid_map(bpvm_t* vm) {
     } else {
         memset(vm->gc_valid_map, 0, vm->gc_valid_map_size);
     }
-    if (vm->gc_valid_map == NULL) return;   /* sin memoria → is_heap_ref rechaza todo (conservador) */
+    /* V7/H7 #598 — SIN MEMORIA PARA EL MAPA. Aquí ponía «is_heap_ref rechaza todo (conservador)», y era lo
+     * contrario: sin mapa no se reconoce ninguna raíz, no se marca nada, y lo que venía después —cerrar los File
+     * inalcanzables, matar los handles de lo no marcado, barrer— se llevaba el heap ENTERO, vivo incluido. En el PC
+     * el malloc no falla; en una placa es el margen pequeño de la plataforma (la revisión de #595). Ahora es lo
+     * mismo que un recorrido roto (#494): este GC no marca ni barre, y la reserva que lo pidió lanza la
+     * prefabricada. El siguiente GC lo vuelve a intentar: si ya hay memoria, colecta como siempre. */
+    if (vm->gc_valid_map == NULL) {
+        vm->gc_descarrilo = 1;
+        bpvm_diag_urgente("[gc] !! SIN MEMORIA para el mapa de cabeceras del GC (%u B): este GC no marca ni barre "
+                          "(sin mapa lo barreria TODO) y la reserva que lo pidio lanza la excepcion del heap.",
+                          (unsigned) bytes);
+        return;
+    }
     uint32_t cur = vm->heap_start;
     uint32_t prev = 0;
     while (cur < vm->heap_next) {

@@ -134,8 +134,20 @@ static void blk_unlink(bpvm_blk_t* b) {
     blk_unlock(lk);
 }
 
+/* V7/H7 #598 — la inyección de fallos de las pruebas (bpvm_alloc.h). */
+static const char* volatile g_fallar_en = NULL;
+void bpvm_alloc_prueba_fallar(const char* fichero) { g_fallar_en = fichero; }
+static int termina_en(const char* s, const char* fin) {
+    size_t a = strlen(s), b = strlen(fin);
+    return a >= b && strcmp(s + a - b, fin) == 0;
+}
+
 void* bpvm_alloc_raw(size_t n, int zero, bpvm_alloc_kind_t k,
                      const char* file, int line) {
+    if (g_fallar_en != NULL && file != NULL && termina_en(file, g_fallar_en)) {
+        g_fallar_en = NULL;   /* una vez */
+        return NULL;
+    }
     uint8_t* raw = (uint8_t*) malloc(BPVM_BLK_HDR + n);
     if (!raw) return NULL;
     bpvm_blk_t* b = (bpvm_blk_t*) raw;

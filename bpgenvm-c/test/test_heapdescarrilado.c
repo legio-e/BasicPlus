@@ -11,12 +11,19 @@
  *
  * El mismo caso en miVM: HeapDescarriladoTest (lexer-java), con VirtualMachine.estropeaHeapParaPrueba.
  *
+ * V7/H7 #598 (28-sep) — una TERCERA pasada, sin estropear nada: la reserva del mapa de cabeceras del primer GC falla
+ * (bpvm_alloc_prueba_fallar, la inyección de fallos del núcleo), como en una placa sin margen de malloc. Tiene que ser
+ * la MISMA excepción y nada barrido: HeapRoto guarda una cadena de antes de la primera colecta y la imprime al final.
+ * Sin el arreglo, ese GC no marcaba nada y lo barría TODO: el bucle seguía («sin excepcion») y leer la cadena guardada
+ * era un «objeto eliminado». Sólo VM-C: en miVM el conjunto de cabeceras es un HashSet de Java.
+ *
  * Salida: una línea por pasada y, si las dos van, «OK: ...» (la señal de check-testc). exit 0 si pasan.
  */
 #include "bpvm.h"
 #include "bpvm_internal.h"
 #include "bpvm_io.h"
 #include "bpvm_fs.h"
+#include "bpvm_alloc.h"   /* #598: bpvm_alloc_prueba_fallar */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,8 +53,8 @@ static void recoge(const char* s, size_t len, void* user) {
     s_salida[s_n] = 0;
 }
 
-/* Una pasada; devuelve 0 si PASS. */
-static int corre(const char* mod, int estropear, const char* esperado) {
+/* Una pasada; devuelve 0 si PASS. `sin_mapa` (#598): sin estropear, falla la reserva del mapa del primer GC. */
+static int corre(const char* mod, int estropear, int sin_mapa, const char* esperado) {
     size_t mem_size = 512 * 1024;
     uint8_t* mem = (uint8_t*) calloc(1, mem_size);
     if (!mem) { fprintf(stderr, "OOM\n"); return 1; }
@@ -70,13 +77,18 @@ static int corre(const char* mod, int estropear, const char* esperado) {
         fprintf(stderr, "no arranca el hilo io\n");
         bpvm_destroy(vm); free(mem); return 1;
     }
+    if (sin_mapa) bpvm_alloc_prueba_fallar("heap.c");   /* la ÚNICA reserva de heap.c: el mapa del GC */
     s = bpvm_run(vm);
+    bpvm_alloc_prueba_fallar(NULL);
     bpvm_io_stop(vm);
     int descarrilo = vm->gc_descarrilo;
-    int pass = (s == BPVM_OK) && (s_estropeado == estropear) && (descarrilo == estropear)
-               && strstr(s_salida, esperado) != NULL;
+    /* Sin mapa, el GC siguiente ya lo tiene: el último no descarrila, así que ahí no se mira. */
+    int pass = (s == BPVM_OK) && (s_estropeado == estropear) && (sin_mapa || descarrilo == estropear)
+               && strstr(s_salida, esperado) != NULL
+               && strstr(s_salida, "lo de antes: guardado 42") != NULL;   /* lo vivo, intacto */
     printf("[heap] %s: status=%s, cabecera estropeada=%d, el ultimo GC descarrilo=%d, el programa dijo: %s",
-           estropear ? "estropeado" : "control   ", bpvm_status_str(s), s_estropeado, descarrilo, s_salida);
+           sin_mapa ? "sin mapa  " : estropear ? "estropeado" : "control   ", bpvm_status_str(s), s_estropeado,
+           descarrilo, s_salida);
     printf("[heap] %s\n", pass ? "PASS" : "FAIL");
     bpvm_destroy(vm); free(mem);
     return pass ? 0 : 1;
@@ -87,9 +99,11 @@ int main(int argc, char** argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     const char* mod = (argc > 1) ? argv[1] : "HeapRoto.mod";
     int rc = 0;
-    rc |= corre(mod, 0, "sin excepcion");
-    rc |= corre(mod, 1, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);
+    rc |= corre(mod, 0, 0, "sin excepcion");
+    rc |= corre(mod, 1, 0, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);
+    rc |= corre(mod, 0, 1, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);   /* #598 */
     if (rc == 0)
-        printf("OK: el heap descarrilado es una excepcion atrapable (y sin estropear, ninguna)\n");
+        printf("OK: el heap descarrilado es una excepcion atrapable (y sin estropear, ninguna); sin memoria para el "
+               "mapa del GC, la misma, y nada barrido\n");
     return rc;
 }

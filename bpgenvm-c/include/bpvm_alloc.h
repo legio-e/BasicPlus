@@ -65,6 +65,10 @@ void* bpvm_alloc_raw  (size_t n, int zero, bpvm_alloc_kind_t k, const char* file
 void* bpvm_realloc_at (void* p, size_t n, const char* file, int line);
 char* bpvm_strdup_at  (const char* s, const char* file, int line);
 void  bpvm_free       (void* p);   /* vale para las dos familias */
+/* V7/H7 #598 — PARA LAS PRUEBAS: la siguiente reserva pedida desde `fichero` (el final del __FILE__ de quien la pide:
+ * "heap.c") falla como si no hubiera memoria; una vez. NULL, ninguna. En el PC el malloc no falla, y los caminos de
+ * «sin memoria» del núcleo —los que una placa sí recorre— se quedaban sin probar. */
+void  bpvm_alloc_prueba_fallar(const char* fichero);
 
 #define bpvm_malloc(n)      bpvm_alloc_raw((n), 0, BPVM_ALLOC_VM, __FILE__, __LINE__)
 #define bpvm_calloc(n, sz)  bpvm_alloc_raw((size_t)(n) * (size_t)(sz), 1, BPVM_ALLOC_VM, __FILE__, __LINE__)

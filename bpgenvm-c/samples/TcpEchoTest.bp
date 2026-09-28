@@ -8,12 +8,19 @@
 //   eco: hola eco
 //   eco: BasicPlus en red
 //   timeout-len: 0
+//   heap: recorrido entero
 //   tras-close: false
 //   fin
+//
+// #597 (28-sep): lo recibido tiene que dejar el heap RECORRIBLE. La VM-C
+// reservaba el máximo pedido y apuntaba como longitud lo recibido: el
+// bloque medía distinto de lo que dice su cabecera y el siguiente GC
+// descarrilaba. Heap.compact() colecta y recorre el heap entero.
 // ============================================================
 module TcpEchoTest
 
   import Net
+  import Heap
 
   function main()
     var c: Net.Tcp := Net.Tcp()
@@ -34,6 +41,13 @@ module TcpEchoTest
     // agota su timeout y devuelve un byte[] vacío.
     var t: byte[] := c.recv(16, 120)
     print "timeout-len:", len(t)
+
+    try
+      Heap.compact()
+      print "heap: recorrido entero"
+    catch e: RuntimeError
+      print "heap:", e.msg
+    endtry
 
     c.close()
     print "tras-close:", c.isOpen()

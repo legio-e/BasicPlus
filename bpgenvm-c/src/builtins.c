@@ -1136,19 +1136,30 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         if (max < 0) max = 0;
         if (max > 65536) max = 65536;            /* tope sano por llamada */
-        uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) max, BPVM_TYPE_ARRAY_I8);
-        if (ref == 0) return builtin_throw(vm, tc, "Net.recv: sin memoria");
+        /* V7/H7 #597 — se recibe en un búfer de C y se reserva JUSTO lo recibido, como miVM. Antes se reservaban
+         * `max` bytes en el heap y se apuntaba como longitud lo recibido («mismo patrón que READ_FILE», decía; no:
+         * readFile escribe lo que reserva): el bloque medía distinto de lo que dice su cabecera —el tamaño no se
+         * guarda, se RECALCULA de la longitud (#352)— y el recorrido del siguiente GC descarrilaba (#494), o se
+         * resincronizaba en silencio (#593). */
+        uint8_t* buf = NULL;
+        if (max > 0) {
+            buf = (uint8_t*) bpvm_malloc((size_t) max);
+            if (buf == NULL) return builtin_throw(vm, tc, "Net.recv: sin memoria");
+        }
         int n = (max == 0) ? 0
-              : bpvm_net_recv((int) h, vm->memory + ref + 4, (int) max,
-                               (int) timeout_ms);
+              : bpvm_net_recv((int) h, buf, (int) max, (int) timeout_ms);
         if (n == BPVM_NET_CLOSED) {
+            bpvm_free(buf);
             return builtin_throw(vm, tc, "Net.recv: conexión cerrada por el peer");
         }
-        if (n < 0) return builtin_throw(vm, tc, "Net.recv: error de red");
-        /* n==0 (timeout) → byte[] vacío. La longitud del array puede ser
-         * menor que el payload alocado (mismo patrón que READ_FILE). */
+        if (n < 0) { bpvm_free(buf); return builtin_throw(vm, tc, "Net.recv: error de red"); }
+        /* n==0 (timeout) → byte[] vacío. */
+        uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) n, BPVM_TYPE_ARRAY_I8);
+        if (ref == 0) { bpvm_free(buf); return builtin_throw(vm, tc, "Net.recv: sin memoria"); }
         bpvm_write_u32_be(vm->memory + ref, (uint32_t) n);
-                bpref_push(vm, tc, bpvm_handle_register(vm, ref));
+        if (n > 0) memcpy(vm->memory + ref + 4, buf, (size_t) n);
+        bpvm_free(buf);
+        bpref_push(vm, tc, bpvm_handle_register(vm, ref));
         return BPVM_OK;
     }
     case BUILTIN_TCP_CLOSE: {

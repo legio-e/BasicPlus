@@ -150,9 +150,12 @@ int main(int argc, char** argv) {
             && strstr(s_out, "eco: hola eco")      != NULL
             && strstr(s_out, "eco: BasicPlus en red") != NULL
             && strstr(s_out, "timeout-len: 0")     != NULL
+            && strstr(s_out, "heap: recorrido entero") != NULL   /* #597: lo recibido deja el heap recorrible */
             && strstr(s_out, "fin")                != NULL;
     fprintf(stderr, "[net] status=%s %s\n", bpvm_status_str(s),
             pass ? "PASS" : "FAIL");
+    /* V7/H7 #597 (28-sep) — la señal de check-testc: desde hoy esta prueba está en la red. */
+    if (pass) printf("OK: TCP contra un eco local, y lo recibido deja el heap recorrible (#597)\n");
 
     bpvm_destroy(vm); free(mem);
     return pass ? 0 : 1;
