@@ -44,6 +44,24 @@
 #                           con mensaje; nunca peta. Es la prueba de «hacia
 #                           delante» (cuando el compilador emita MOD8, aqui se
 #                           exige el rechazo). Entra en check.
+#
+# V7/H7 (#599, 28-sep-2026) — DOS WORKERS. Eduardo: «tenemos micros con 1 nucleo y
+# con 2 nucleos asi que ejecutar solamente con una opcion no se si es lo
+# conveniente». La paridad principal corre con UN worker (lo que hacen hoy todas
+# las placas); esta pasada corre el mismo corpus con DOS en las dos VMs:
+#
+#   ./compat.sh check-smp   VM-C --smp=2 == miVM --workers=2, y el stdout IGUAL al
+#                           de la pasada con un worker: el mismo programa dice lo
+#                           mismo en un micro de un nucleo y en uno de dos. Un
+#                           sample cuyo orden entre hilos no fija el programa (dos
+#                           hilos que imprimen a la vez) lo declara en su cabecera
+#                           con `// smp: orden libre`, y se compara ORDENADO; con
+#                           `// smp: fuera — por que`, se queda fuera de esta pasada
+#                           (un SKIP a la vista, con su razon). Entra en check. La
+#                           primera vez saco #599: miVM colgada en el GC con
+#                           HeapReposo, que la pasada con uno no ve; y la segunda,
+#                           #600: con dos workers, la linea de un hilo se parte con
+#                           la de otro (EvDos).
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -59,6 +77,9 @@ GOLD="$HERE/v2/golden"
 PAR_FORMATO=""   # vacio = el del compilador (9); "8" -> --formato=8 en las dos compilaciones
 PAR_SAVE=""      # dir donde guardar <s>.out (la salida de la VM-Java) como referencia
 PAR_REF=""       # dir con <s>.out de referencia: un stdout distinto es FAIL (MOD8 != MOD9)
+PAR_C_ARGS=""    # opciones de la VM-C en la pasada ("--smp=2" en check-smp)
+PAR_J_ARGS=""    # opciones de miVM en la pasada ("--workers=2" en check-smp)
+PAR_REF_QUE="la pasada MOD9"   # de donde sale $PAR_REF, para el mensaje de un FAIL
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -124,14 +145,14 @@ filt() {
 # Si un caso se come el timeout, la salida sale cortada y el diff lo canta.
 VM_TIMEOUT="${VM_TIMEOUT:-25}"
 
-run_vm() {  # $1=bin(.jar|.exe) $2=mod
+run_vm() {  # $1=bin(.jar|.exe) $2=mod [$3...=opciones de la VM, p. ej. --smp=2]
   # Se ejecuta DESDE el dir del .mod para que ambas VMs resuelvan las deps
   # (p.ej. Core.mod, dep implicita de try/catch en V3 desde #248) junto al
   # modulo raiz. La VM-C ya resuelve relativo al .mod; el CLI de la VM-Java
   # resuelve relativo al CWD, asi que sin este cd la Java no encontraria Core.
   # Subshell () para no alterar el CWD del propio arnes. Los binarios ($1) son
   # rutas absolutas, siguen resolviendo desde cualquier dir.
-  local dir base; dir="$(dirname "$2")"; base="$(basename "$2")"
+  local bin="$1" dir base; dir="$(dirname "$2")"; base="$(basename "$2")"; shift 2
   # V6/C1 (12-sep) — miVM SIN VENTANA (-Djava.awt.headless): el arnes compara
   # stdout, y un sample con Gui.start() abriria un JFrame en el PC de quien lo
   # corre; ademas asi miVM y la VM-C sin LVGL dicen lo mismo ante Gui.shot
@@ -142,9 +163,9 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod
   # (57 PASS con el GC de la VM de referencia roto). Un aviso de heap se vuelca
   # como linea de salida: rompe la paridad y se VE en el diff.
   local err="$WORK/.stderr.$$"
-  case "$1" in
-    *.jar) ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$1" "$base" 2>"$err" | filt ) ;;
-    *)     ( cd "$dir" && timeout "$VM_TIMEOUT" "$1" "$base" 2>"$err" | filt ) ;;
+  case "$bin" in
+    *.jar) ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$bin" "$@" "$base" 2>"$err" | filt ) ;;
+    *)     ( cd "$dir" && timeout "$VM_TIMEOUT" "$bin" "$@" "$base" 2>"$err" | filt ) ;;
   esac
   grep -E "HEAP INCONSISTENTE" "$err" 2>/dev/null | head -2 | sed 's/^/!! stderr: /'
   rm -f "$err"
@@ -259,7 +280,7 @@ check_parity() {
     echo "  ⚠ el host esta compilado CON LVGL: el arnes necesita 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"
     return 1
   fi
-  local pass=0 fail=0 skip=0 s bp mod oj oc fmt=""
+  local pass=0 fail=0 skip=0 s bp mod oj oc fmt="" libres=0 smp_marca="" ordena="" ref_txt=""
   [ -n "$PAR_FORMATO" ] && fmt="--formato=$PAR_FORMATO"
   for s in $CORPUS; do
     bp="$(bp_path "$s")"
@@ -339,7 +360,30 @@ check_parity() {
       echo "  FAIL $s — el .mod es $(head -c 4 "$mod") y no MOD${PAR_FORMATO:-9}: el arnes no compilo lo que dice"
       fail=$((fail+1)); continue
     fi
-    oj="$(run_vm "$V3_JAVA" "$mod")"; oc="$(run_vm "$V3_C" "$mod")"
+    # V7/H7 (#599, 28-sep) — con dos workers, un sample cuyo orden entre hilos no
+    # fija el programa (dos hilos que imprimen a la vez) lo DECLARA en su cabecera,
+    # `// smp: orden libre`, y sus lineas se comparan ORDENADAS: las mismas, en
+    # cualquier orden, contra la otra VM y contra la referencia. `// smp: fuera`
+    # (con su por que) lo deja fuera de ESTA pasada, a la vista: un SKIP que dice la
+    # razon. El arnes no adivina cuales son; y una marca que no conoce es ROJO: una
+    # errata dejaria el sample comparado de otra manera que la que dice su cabecera.
+    smp_marca=""; ordena=""
+    if [ -n "$PAR_C_ARGS$PAR_J_ARGS" ]; then
+      smp_marca="$(sed -nE 's|^//[[:space:]]*smp:[[:space:]]*(.*)$|\1|p' "$bp" | head -1 | tr -d '\r')"
+      case "$smp_marca" in
+        "") ;;
+        "orden libre"|"orden libre"[[:space:]]*) ordena=1; libres=$((libres+1)) ;;
+        "fuera"|"fuera"[[:space:]]*)
+          echo "  SKIP $s — // smp: $(printf '%s' "$smp_marca" | cut -c1-110)"; skip=$((skip+1)); continue ;;
+        *)
+          echo "  FAIL $s — la marca '// smp: $smp_marca' no la conoce el arnes (son 'orden libre' y 'fuera')"
+          fail=$((fail+1)); continue ;;
+      esac
+    fi
+    oj="$(run_vm "$V3_JAVA" "$mod" $PAR_J_ARGS)"; oc="$(run_vm "$V3_C" "$mod" $PAR_C_ARGS)"
+    if [ -n "$ordena" ]; then
+      oj="$(printf '%s\n' "$oj" | LC_ALL=C sort)"; oc="$(printf '%s\n' "$oc" | LC_ALL=C sort)"
+    fi
     # Una salida VACIA en las dos VMs no es paridad: es un caso que no ejecuto
     # nada y coincide por casualidad. Importa desde que hay GUI en el corpus,
     # porque esos samples se cortan por VM_TIMEOUT: si el corte llegase antes
@@ -364,10 +408,13 @@ check_parity() {
       # acuerdo seria un falso-PAR de otro piso: el enlace tardio cambiando la
       # semantica sin que nadie lo oiga.
       local outname="${s//\//_}.out"
-      if [ -n "$PAR_REF" ] && [ -f "$PAR_REF/$outname" ] && [ "$oj" != "$(cat "$PAR_REF/$outname")" ]; then
-        echo "  FAIL $s — paridad OK pero el stdout NO es el de la referencia (la pasada MOD9)"; fail=$((fail+1))
-        diff "$PAR_REF/$outname" <(printf '%s\n' "$oj") 2>/dev/null | head -6 | sed 's/^/       /'
-        continue
+      if [ -n "$PAR_REF" ] && [ -f "$PAR_REF/$outname" ]; then
+        if [ -n "$ordena" ]; then ref_txt="$(LC_ALL=C sort "$PAR_REF/$outname")"; else ref_txt="$(cat "$PAR_REF/$outname")"; fi
+        if [ "$oj" != "$ref_txt" ]; then
+          echo "  FAIL $s — paridad OK pero el stdout NO es el de la referencia ($PAR_REF_QUE)"; fail=$((fail+1))
+          diff <(printf '%s\n' "$ref_txt") <(printf '%s\n' "$oj") 2>/dev/null | head -6 | sed 's/^/       /'
+          continue
+        fi
       fi
       [ -n "$PAR_SAVE" ] && printf '%s\n' "$oj" > "$PAR_SAVE/$outname"
       pass=$((pass+1))
@@ -377,6 +424,7 @@ check_parity() {
     fi
   done
   echo "  paridad: $pass PASS, $fail FAIL, $skip SKIP"
+  [ "$libres" -gt 0 ] && echo "  ($libres con '// smp: orden libre': sus lineas, comparadas ordenadas)"
   # CERO ejecutados no es verde. Se vio el 25-ago: un fallo del arnes convirtio
   # los 38 en SKIP y el resumen decia VERDE sin haber ejecutado ni un sample.
   # (Ya estaba apuntado de antes: «un SKIP no es un PASS».)
@@ -420,6 +468,30 @@ check_mod8() {   # $1 = "sin-referencia" cuando check ya hizo la pasada MOD9 gua
   check_parity; rc=$?
   STDLIB="$std_old"; PAR_FORMATO=""; PAR_REF=""
   echo "  mod8: $([ "$rc" -eq 0 ] && echo 'el corpus corre en MOD8 como en MOD9' || echo 'MOD8 en ROJO')"
+  return "$rc"
+}
+
+# ------------------------------------------------------------- dos workers (V7/H7 #599)
+# El corpus con DOS workers en las dos VMs (VM-C --smp=2, miVM --workers=2): paridad
+# Java == C y el stdout de la pasada con UNO, sample a sample. Hoy todas las placas
+# corren un worker —tambien las de dos nucleos—, pero el mismo programa tiene que
+# decir lo mismo en las dos maneras (Eduardo, 28-sep). Los samples con
+# `// smp: orden libre` se comparan ordenados (ver check_parity).
+check_smp() {   # $1 = "sin-referencia" cuando check ya hizo la pasada principal guardando en $REF_PAR
+  echo "-- el corpus con DOS workers (VM-C --smp=2 == miVM --workers=2, y el stdout de la pasada con uno) --"
+  local ref="$REF_PAR" rc; mkdir -p "$ref"
+  if [ "${1:-}" != "sin-referencia" ]; then
+    echo "  [un worker: la referencia]"
+    PAR_SAVE="$ref"; check_parity; rc=$?; PAR_SAVE=""
+    [ "$rc" -eq 0 ] || return 1
+  elif [ -z "$(ls "$ref"/*.out 2>/dev/null)" ]; then
+    echo "  no hay referencia en $ref: la pasada principal no guardo nada"; return 1
+  fi
+  echo "  [dos workers]"
+  PAR_C_ARGS="--smp=2"; PAR_J_ARGS="--workers=2"; PAR_REF="$ref"; PAR_REF_QUE="la pasada con un worker"
+  check_parity; rc=$?
+  PAR_C_ARGS=""; PAR_J_ARGS=""; PAR_REF=""; PAR_REF_QUE="la pasada MOD9"
+  echo "  smp: $([ "$rc" -eq 0 ] && echo 'el corpus dice lo mismo con dos workers que con uno' || echo 'dos workers en ROJO')"
   return "$rc"
 }
 
@@ -649,7 +721,7 @@ check_testc() {
     return 1
   fi
   local fails=0 t sal rc ok n
-  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-mods test-guilleno test-sd-turnos test-debug test-debug-mt test-listen test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-net"
+  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-mods test-guilleno test-sd-turnos test-debug test-debug-mt test-listen test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-net test-iomt test-smphandles"
   n=$(echo $lista | wc -w)
   for t in $lista; do
     sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?
@@ -998,8 +1070,10 @@ EOF
   check_testc || fails=$((fails+1))
   check_sombra || fails=$((fails+1))
   check_mod8 sin-referencia || fails=$((fails+1))
+  # V7/H7 (#599) — el mismo corpus con dos workers, contra la misma referencia.
+  check_smp sin-referencia || fails=$((fails+1))
   check_packs_abi || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + packs-abi VERDE' || echo "$fails frente(s) en ROJO") =="
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + packs-abi VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
 
@@ -1014,6 +1088,7 @@ case "${1:-}" in
   check-sim)  check_sim ;;
   check-testc) check_testc ;;
   check-mod8) check_mod8 ;;
+  check-smp)  check_smp ;;
   check-packs-abi) check_packs_abi ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-packs-abi}"; exit 2 ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-packs-abi}"; exit 2 ;;
 esac

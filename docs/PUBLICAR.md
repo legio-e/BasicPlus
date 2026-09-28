@@ -107,6 +107,9 @@ trampa que ya nos mordió al menos una vez**.
 - [ ] **Paridad dual-VM** en host: `bash compat/compat.sh check`. Debe decir cuántos
       PASS y **ninguna línea `!! stderr:`**: desde el 11-sep el arnés ya no tira el
       stderr (#494: el GC de miVM descarrilaba dos meses con 57 PASS en verde).
+      Desde el 28-sep corre el corpus también con **dos workers** en las dos VMs
+      (`check-smp`, #599): si sólo esa pasada sale roja, el fallo es del modo de
+      dos núcleos, y lo que no vería nadie con un worker.
 - [ ] **Barrido de TODOS los samples**: `python bpgenvm-c/tools/samples_sweep.py`
       → código de salida **0** y `N OK, 0 FALLO`. Compila cada `samples/**/*.bp`
       con el frontend actual, `bpstdlib/*.mod` y `packs/*.pack` al lado (la misma

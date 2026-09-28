@@ -369,7 +369,8 @@ public class VirtualMachine {
      * sigue siendo RUNNING (no han salido de runOnContext), su Java
      * thread no está ejecutando bytecode — está parqueado. anyOtherThreadRunning
      * los excluye para no entrar en deadlock cuando dos workers piden GC
-     * a la vez.
+     * a la vez. Quien se apunta AVISA (notifyAll): el colector sólo vuelve a
+     * mirar si lo despiertan (#599).
      */
     private final java.util.HashSet<Integer> parkedInHeapAlloc = new java.util.HashSet<>();
 
@@ -1735,15 +1736,26 @@ public class VirtualMachine {
             // Si otro worker está ejecutando GC stop-the-world, esperamos a
             // que termine antes de hacer NADA. Nos registramos como parked
             // para que su check de "anyOtherThreadRunning" nos excluya.
-            while (gcInProgress) {
+            //
+            // V7/H7 #599 (28-sep) — Y SE LO DECIMOS. El colector duerme en su
+            // `while (anyOtherThreadRunning)` y sólo vuelve a mirar si alguien le
+            // avisa: apuntarse sin notifyAll lo dejaba esperándonos para siempre
+            // mientras nosotros lo esperábamos a él (HeapReposo con dos workers,
+            // 8 de 8 colgados). Como stw_esperar_al_otro de la VM-C: apuntarse Y
+            // avisar, una vez, antes de esperar; y borrarse al salir, no en cada
+            // despertar (con tres workers o más, dos aparcados se despertarían el
+            // uno al otro sin fin).
+            if (gcInProgress) {
                 if (myTid >= 0) parkedInHeapAlloc.add(myTid);
-                try { vmLock.wait(); }
-                catch (InterruptedException ie) {
+                vmLock.notifyAll();
+                try {
+                    while (gcInProgress) vmLock.wait();
+                } catch (InterruptedException ie) {
                     Thread.currentThread().interrupt();
-                    if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
                     throw new RuntimeException("heapAlloc interrumpido esperando otro GC");
+                } finally {
+                    if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
                 }
-                if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
             }
 
             // H3: GC PROACTIVO por umbral de crecimiento de bump. Evita el

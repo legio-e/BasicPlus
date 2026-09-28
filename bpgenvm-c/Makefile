@@ -622,6 +622,9 @@ THROW_BIN = build/test_throwmsg.exe
 # martillean handle_register/handle_kill sobre un vm compartido. CONTROL 1 thread
 # = 0 corrupciones (test sano); >1 thread = corrupciones por la carrera de la
 # free-list (ROJO hasta 7a: hacer la tabla SMP-safe).
+# V7/H7 (#599, 28-sep) — la tabla ES SMP-safe desde 7a (0 corrupciones con 4 y 8),
+# así que las pasadas concurrentes ya no pueden fallar sin que se note: sin el `-`,
+# con su línea OK, y en la red (check-testc), que no la corría.
 SMPH_BIN = build/test_smp_handles.exe
 test-smphandles: $(LIBOBJ)
 	@mkdir -p build
@@ -629,8 +632,9 @@ test-smphandles: $(LIBOBJ)
 	@echo "--- CONTROL 1 thread (esperado: corrupciones=0) ---"
 	./$(SMPH_BIN) 1 200000
 	@echo "--- concurrente 4 y 8 threads (0 = tabla SMP-safe) ---"
-	-./$(SMPH_BIN) 4 200000
-	-./$(SMPH_BIN) 8 200000
+	./$(SMPH_BIN) 4 200000
+	./$(SMPH_BIN) 8 200000
+	@echo "OK: la tabla de handles aguanta 4 y 8 hilos a la vez sin una corrupcion"
 
 # H1 (V4) — OOM ATRAPABLE. Al agotarse el heap, la VM lanza un RuntimeError
 # "No space in heap" que el BP puede cazar con try/catch; NUNCA se cuelga mudo
@@ -1557,6 +1561,8 @@ test-fslfsmt: $(LIBOBJ)
 # H2 fase A · B1.4b — el requisito de multitarea A NIVEL BP: 3 Threads BP
 # escribiendo 4 ficheros a la vez sobre el ORÁCULO littlefs con 4 workers
 # REALES (--smp=4). Verde = tamaños exactos + 0 líneas rotas.
+# V7/H7 (#599, 28-sep) — en la red (check-testc), y el verde que dice el comentario:
+# hasta hoy sólo se miraban las líneas rotas; ahora también cada tamaño y cada marca.
 test-iomt: $(BIN)
 	$(call fixture,IoMt)
 	@if [ ! -f samples/IoMt.mod ]; then \
@@ -1568,7 +1574,10 @@ test-iomt: $(BIN)
 	  rm -f build/iomt.img; \
 	  out=$$(cd samples && ../$(BIN) --fs=lfs:../build/iomt.img --smp=4 IoMt.mod 2>&1); \
 	  echo "$$out" | grep -vE 'INICIANDO|FIN DE'; \
-	  if echo "$$out" | grep -q "lineas rotas = 0"; then echo "PASS test-iomt"; \
+	  if echo "$$out" | grep -qx "own1 = 200" && echo "$$out" | grep -qx "own2 = 200" && \
+	     echo "$$out" | grep -qx "own3 = 200" && echo "$$out" | grep -qx "shared = 600" && \
+	     echo "$$out" | grep -qx "marcas a/b/c = 100 100 100" && echo "$$out" | grep -qx "lineas rotas = 0"; then \
+	    echo "OK: 3 hilos BP escriben 4 ficheros a la vez sobre littlefs con 4 workers: tamanos exactos, 0 lineas rotas"; \
 	  else echo "FAIL test-iomt"; exit 1; fi; \
 	  rm -f build/iomt.img; \
 	fi

@@ -4,6 +4,8 @@
 //    el turno con un temporizador de 10 ms y «onB» salía en un sitio distinto en cada ejecución (tras `fin` o tras la
 //    vuelta 250); la VM-C, siempre tras la 50.
 // 2) Dos hilos que calculan sin esperar e imprimen su avance: el reparto entre ellos cae en las mismas instrucciones.
+// smp: fuera — #600: con dos workers los hilos de la parte 2 imprimen A LA VEZ, y la línea de uno se parte con
+//      la del otro («  A 1000  B 1000»). Arreglado eso, `orden libre`: el orden de sus líneas no es fijo.
 module EvDos
 
   class Fuente
