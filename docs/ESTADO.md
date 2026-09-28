@@ -1024,6 +1024,14 @@ la C6, la P4 y la Nucleo.
 - Un tropiezo: dejé vivo el eco de `test_net serve` de la prueba de paridad, esperando una tercera conexión con su
   puerto fijo, y el `make test-net` siguiente se colgó. Tras un `serve`, pararlo.
 
+## 🔧 H7 (28-sep) — `#596` y `#586` cerradas
+
+- `#596`: con `--smp`, una excepción sin atrapar ya acaba el RUN en error (el primer fallo de un worker es lo que
+  devuelve el scheduler SMP); `test-smpfallo` en la red.
+- `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
+  que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
+  las dos referencias sin la 13.19.
+
 ## ⏭️ Traspaso (27-sep, noche) — H7: lo corto, hecho; sigue lo de análisis
 
 **Commits desde la pausa** (sin push): `ec5b15c7` (`#587`, el `StringBuilder`) · `b777f25f` (`#589`, el depurador
