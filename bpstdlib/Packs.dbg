@@ -2,12 +2,16 @@ dbg 3
 module Packs
 source C:\lenguajes\pm\bpstdlib\Packs.bp
 lines
+0 0
+29 0
+40 0
 43 51
 49 52
 55 53
 65 54
 79 55
 88 57
+104 0
 107 63
 113 64
 119 65
@@ -20,10 +24,12 @@ lines
 208 73
 224 76
 233 78
+249 0
 252 85
 265 86
 278 88
 291 89
+325 0
 vars
 func list 40
 l 8 8 0 ?

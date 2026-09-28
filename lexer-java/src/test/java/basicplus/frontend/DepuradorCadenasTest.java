@@ -47,9 +47,10 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class DepuradorCadenasTest {
 
-    /** La línea 13 es el `print`: ahí están asignadas todas. Y NO es la última: los helpers de la
-     *  concatenación que el compilador sintetiza detrás de `Main` no tienen línea propia y heredan la última
-     *  del mapa, así que un breakpoint en ella para también DENTRO de `__strconcat` (#591, aparte). */
+    /** La línea 13 es el `print`: ahí están asignadas todas. Y es la ÚLTIMA sentencia a propósito (#591): los
+     *  helpers de la concatenación que el compilador sintetiza detrás de `Main` no tenían línea propia en el
+     *  .dbg y heredaban la última del mapa, así que un breakpoint en ella paraba también DENTRO de
+     *  `__strconcat`, con sus locales (a, b, la…) en vez de los de `Main`. */
     private static final String FUENTE =
           "module DbgCad\n"                                   // 1
         + "  public property nombre: string\n"                // 2
@@ -64,7 +65,6 @@ class DepuradorCadenasTest {
         + "    var heap: string := \"ho\" + \"la\\n\" + nombre\n"   // 11 del heap, con un salto
         + "    var nada: string := \"\"\n"                    // 12 un literal vacío
         + "    print heap\n"                                  // 13
-        + "    print lit\n"                                   // 14
         + "  end Main\n"
         + "end DbgCad\n";
     private static final int LINEA = 13;

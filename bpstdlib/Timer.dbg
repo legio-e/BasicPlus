@@ -2,6 +2,13 @@ dbg 3
 module Timer
 source C:\lenguajes\pm\bpstdlib\Timer.bp
 lines
+0 0
+24 0
+35 0
+50 0
+64 0
+79 0
+93 0
 96 75
 101 76
 116 77
@@ -9,14 +16,24 @@ lines
 145 79
 176 82
 189 84
+201 0
 204 93
 217 94
 226 95
 238 97
+261 0
 264 104
+287 0
 290 110
+320 0
 323 64
 334 65
+352 0
+384 0
+400 0
+414 0
+428 0
+445 0
 vars
 func Alarm.getPeriodMs_ 35
 this -20 8 0 ?

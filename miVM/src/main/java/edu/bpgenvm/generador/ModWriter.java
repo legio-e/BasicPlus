@@ -435,6 +435,12 @@ public class ModWriter {
     /** H6.a.1 — relPc de inicio (OP_ENTER) de la función, o null si no existe. */
     public Integer getFunctionStartRel(String name) { return functionAddresses.get(name); }
 
+    /** V7 #591 — el relPc de inicio de TODAS las funciones del módulo (las sintetizadas también): el .dbg
+     *  les pone la línea 0 si no empiezan por una sentencia con línea. Solo lectura. */
+    public java.util.Collection<Integer> getFunctionStarts() {
+        return java.util.Collections.unmodifiableCollection(functionAddresses.values());
+    }
+
     public void addFunction(String name, boolean isPublic) {
         if (lastFunctionName != null) {
             functionLocalsBytesMap.put(lastFunctionName, currentLocalsBytes);

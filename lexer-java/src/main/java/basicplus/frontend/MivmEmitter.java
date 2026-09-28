@@ -725,7 +725,7 @@ public final class MivmEmitter {
             sb.append("source ").append(sourcePath).append('\n');
         }
         sb.append("lines\n");
-        for (int[] pair : debugLineMap) {
+        for (int[] pair : lineasDelDbg()) {
             sb.append(pair[0]).append(' ').append(pair[1]).append('\n');
         }
         // Sección properties: una línea por public property a nivel módulo.
@@ -771,6 +771,25 @@ public final class MivmEmitter {
             }
         }
         Files.write(dbgOut, sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+
+    /**
+     * #591 (V7, 28-sep) — el mapa de líneas del .dbg, con una entrada `<inicio> 0` al principio de cada función
+     * que no empiece ya por una sentencia con línea. El código que el compilador sintetiza detrás de una
+     * sentencia —`__strconcat`, los accesores de las properties, los constructores sintéticos…— no tiene línea
+     * propia y HEREDABA la anterior del mapa: un breakpoint en la última línea de un módulo paraba dentro de
+     * `__strconcat`, con sus locales. La línea 0 es «sin línea»: el gancho de miVM la descarta (dbgLine > 0) y
+     * el IDE no la resalta. Un solo sitio, con los inicios que el ModWriter conoce de todas las funciones, en vez
+     * de acordarse de cada una de las que se sintetizan.
+     */
+    private List<int[]> lineasDelDbg() {
+        Set<Integer> conLinea = new HashSet<>();
+        for (int[] p : debugLineMap) conLinea.add(p[0]);
+        List<int[]> out = new ArrayList<>(debugLineMap);
+        for (Integer inicio : w.getFunctionStarts())
+            if (!conLinea.contains(inicio)) out.add(new int[]{inicio, 0});
+        out.sort(java.util.Comparator.comparingInt(p -> p[0]));
+        return out;
     }
 
     /**

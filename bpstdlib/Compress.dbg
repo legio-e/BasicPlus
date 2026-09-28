@@ -2,6 +2,9 @@ dbg 3
 module Compress
 source C:\lenguajes\pm\bpstdlib\Compress.bp
 lines
+0 0
+24 0
+35 0
 38 20
 47 21
 61 23
@@ -45,6 +48,7 @@ lines
 473 74
 481 77
 493 80
+506 0
 509 89
 518 90
 532 93

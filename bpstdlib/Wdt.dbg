@@ -2,18 +2,33 @@ dbg 3
 module Wdt
 source C:\lenguajes\pm\bpstdlib\Wdt.bp
 lines
+0 0
+24 0
+35 0
+50 0
+64 0
+79 0
+93 0
 96 83
 108 84
+121 0
 124 111
 134 112
+142 0
 145 117
 155 118
+170 0
 173 70
 177 71
 190 72
 202 74
 213 75
 223 76
+233 0
+265 0
+281 0
+295 0
+309 0
 vars
 func Timer.getTimeoutMs_ 35
 this -20 8 0 ?
