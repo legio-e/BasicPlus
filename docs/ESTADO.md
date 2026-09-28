@@ -976,6 +976,15 @@ la C6, la P4 y la Nucleo.
   resincronizó en el borde de otro bloque —un punto ciego del guardián que ya estaba: `#593`—. Saboteada, roja: el
   GC barrió con el mapa roto y el programa atrapó «strCopy: fuera de rango».
 
+## 🐞 H8 (28-sep) — `#591` cerrada: el código sintetizado ya no hereda la última línea del `.dbg`
+
+- No eran sólo los helpers de la concatenación: todo lo que el compilador emite sin sentencias (los accesores de
+  las properties, los constructores sintéticos, las primitivas `inline` de `Core`) heredaba la línea anterior, y
+  un breakpoint en ella paraba ahí dentro. Un solo arreglo, en el `.dbg`: `<inicio> 0` al principio de cada
+  función sin sentencia propia (`d3a60e5c`); la línea 0 ya la descartaban el gancho de miVM y el IDE.
+- `DepuradorCadenasTest` vuelve a su breakpoint en la última línea (roja con el compilador de antes). Los `.dbg`
+  de la stdlib, regenerados; los `.mod`, iguales.
+
 ## ⏭️ Traspaso (27-sep, noche) — H7: lo corto, hecho; sigue lo de análisis
 
 **Commits desde la pausa** (sin push): `ec5b15c7` (`#587`, el `StringBuilder`) · `b777f25f` (`#589`, el depurador

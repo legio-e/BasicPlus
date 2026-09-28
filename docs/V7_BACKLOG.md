@@ -211,7 +211,7 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 | **Muro de contención entre el heap y las pilas** (idea de V4; desde `#451` la tabla de handles vive entre los dos) | `FICHAS` L11883 |
 | **Diagnóstico del heap DESDE BP**: `heapFrag`/`heapMap` y los contadores del GC como **números**, en las dos VMs (hoy sólo miVM y como cadena); intrínsecas nuevas → van con el módulo raíz | `FICHAS` L11880; `V5_IDEAS` (5-ago) |
 | ~~`#356`~~ ✅ 27-sep, cerrada por superada (Eduardo: el único descarte no pierde bytes y se cuenta desde `#355`) — el descarte mudo del alocador (resto rebajado de `#357`): el cuerpo de la ficha no está en el repo; reconstruir qué se descarta o cerrar por no reproducible | `FICHAS` L11890 |
-| `#494` resto — el guardián del heap del GC (`HEAP INCONSISTENTE` / `DESCARRILADO`): ¿fatal o aviso? | `FICHAS` L4000 |
+| ~~`#494` resto — el guardián del heap del GC (`HEAP INCONSISTENTE` / `DESCARRILADO`): ¿fatal o aviso?~~ ✅ 27-sep (`7a1a9374`): ni lo uno ni lo otro, una excepción (Eduardo); su punto ciego, `#593` | `FICHAS` L4000 |
 | ~~`scheduler_smp.c` llama al `poll_cb` sin la guarda `vm->io == NULL` (latente: SMP es opt-in)~~ ✅ 27-sep (`6f249614`: la guarda y `test-kill` en la red); **decidir si `--smp=2` va por defecto** en el host (×1,7–1,9 medido, 0/40 cuelgues tras `#474`); y el **modelo final del SMP**: VMs ociosas «a piñón» o parqueadas (medir la latencia de despertar antes) y los workers como cola de hilos de SO en vez de N fijos — rumbo de Eduardo del 9-sep | `ESTADO` 5-sep; `FICHAS` L6850; `V6_IDEAS.md` §SMP |
 
 ## H8 · IDE y protocolo wire
