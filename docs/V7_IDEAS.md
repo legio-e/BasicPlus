@@ -2690,6 +2690,67 @@ vive en el heap en la VM-C y littlefs lo enlaza; se clava. Lo que Eduardo ve det
 (`loadModule`/`unloadModule`, `V2_BACKLOG` §17) y los programas que corren días —con hilos, el programa aprovecha
 una calma para pararlos, cerrar lo abierto, compactar y reposar (`HeapReposo`)—.
 
+## H7 — `#600`: la salida por TRANSACCIONES (28-sep, idea de Eduardo; propuesta para decidir)
+
+Eduardo, al ver `#600` (con dos workers, la línea de un hilo se parte con la de otro): *«Este problema ya lo hemos
+tenido con I2C y SPI y al final optamos por trabajar con transacciones. Sería algo así como Ini Trans, print a,
+print b Fin Trans.»*
+
+**El problema, entero.** Un `print` no es una instrucción. `print a, b` son cuatro —la cadena, el separador, el
+número y el salto: `PRINT_STR_NONL`, `PRINT_CHAR`, `PRINT_NONL`, `PRINT_NL`, visto con `--trace`—, y hasta el
+`print` de una cadena sola empuja dos trozos (la VM-C, la cadena y luego el salto; miVM, `writeText` y `newline`).
+Entre dos trozos cabe el de otro hilo:
+
+- con **dos workers**, en cualquier momento (`#600`: «  A 1000  B 1000»);
+- con **uno** —todas las placas hoy—, en el cambio de turno, cada 1024 instrucciones: determinista e igual en las
+  dos VMs, así que la paridad no lo ve, pero la línea sale mezclada igual. Y entre dos `print` seguidos de un hilo
+  puede caer la línea de otro, que para una tabla o un informe de varias líneas es lo mismo.
+
+**Lo que enseñó el bus (G4.a3), y vale aquí**: la transacción se PREPARA y se ejecuta de UNA vez; nunca un cerrojo
+abierto entre instrucciones BP —con hilos verdes, el hilo que espera un cerrojo de C bloquea el hilo del sistema, y
+con él al que lo tiene: cuelgue—; y lo que cabe en una lo marca el micro más pequeño.
+
+**La propuesta, en dos piezas:**
+
+1. **Cada instrucción de `print` sale entera** (la base, sin API): lo que empuja una instrucción —el texto y su
+   salto— va a la cola de salida de una vez, esperando a que quepa entero (hoy, si la cola está medio llena, la
+   parte en dos y otro hilo puede entrar en medio). Es la transacción de una instrucción; arregla el `print x` de
+   siempre con dos workers, que es el caso de `#600`.
+
+2. **La transacción, para varias** —la forma de Eduardo—:
+
+   ```basic
+   IO.beginPrint()              // Ini Trans: lo que imprima ESTE hilo, se guarda
+   print "Temperatura: ", t
+   print "Humedad: ", h
+   IO.endPrint()                // Fin Trans: sale todo junto, de un empujón
+   ```
+
+   Entre el principio y el fin, los `print` de ese hilo no van a la cola: se acumulan en un búfer suyo, y el fin lo
+   empuja de una vez. **Nadie espera a nadie** mientras tanto: no hay cerrojo entre instrucciones; los demás hilos
+   imprimen como siempre y sus líneas salen antes o después del bloque, nunca en medio. Es el «se prepara y se
+   ejecuta de una vez» del bus, con los `print` de siempre dentro (se puede llamar a una función que imprime).
+   Coste: por hilo, una referencia al búfer, que sólo existe mientras dura la transacción —nada de los 4 KB fijos
+   por hilo que tumbaron la línea por hilo de `#185` en la Pico—; en cada `print`, mirar si su hilo está en una.
+
+**Lo que hay que decidir** (la columna de la propuesta es mía):
+
+| | propuesta | por qué |
+|---|---|---|
+| el nombre | `IO.beginPrint()` / `IO.endPrint()` | en un módulo que ya existe; sin palabras reservadas |
+| el límite | lo que cabe en la cola de salida del más pequeño: la Pico, 1 KB (ESP32 y STM32, 2 KB; el PC, 4 KB) | como el bus: lo marca el piso, igual en todas |
+| pasar del límite | sale lo acumulado y la transacción sigue, en trozos de 1 KB, cada uno entero, con un aviso | la salida es también el canal de depuración: un `print` que lanza una excepción escondería justo lo que se quería ver. La otra, la del bus: un error con nombre |
+| anidar | cuenta: sólo el fin de fuera empuja | una función con su transacción se puede llamar dentro de otra |
+| el hilo acaba —o muere— con la transacción abierta | sale lo acumulado, antes que el mensaje de la excepción | no se pierde texto |
+| leer de la consola dentro | sale lo acumulado antes de leer | si no, la pregunta no se vería |
+
+**Cómo, en las dos VMs** (para cuando se decida): en la VM-C, `emit_text` mira el hilo en curso —cada worker sabe
+el suyo— y, si está en una transacción, añade a su búfer; `bpvm_oq_push` gana una forma que espera a que quepa
+ENTERO (la de hoy parte lo que no cabe); en miVM, el `ThreadContext` lleva el búfer y `OutputSink` una escritura
+entera, sincronizada en cada sumidero (el de stdout, el del cable y los del IDE). La prueba: dos hilos que imprimen
+bloques a la vez y un sample que comprueba que cada bloque sale seguido; `EvDos` vuelve a `check-smp` con
+`// smp: orden libre`. Y en placa, la salida por el cable de las tres familias (es el camino de todo `print`).
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
