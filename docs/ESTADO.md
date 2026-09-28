@@ -1068,6 +1068,15 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🔧 H8 (28-sep, tarde) — el `EXITED` de un `RESET`, el `INFO` en común y el guardián de la miVM
+
+- El `EXITED` de un programa parado por un `RESET` dice «reiniciado por RESET» en las cuatro (`10910242`). Y
+  `reset_smoke`, que salía INVALIDA fuera de la red (su `.mod` era MOD7 y le faltaba `Machine`), compila al vuelo,
+  arranca el simulado con el `Stdlib.pack`, comprueba y está en `check-sim` (7/7).
+- `floatAbi` y la zona de packs, del `INFO` común (`801e840e`); el bloque de RAM de los motores, a unificar: `#602`.
+- El guardián de `#429` vigila también la miVM embebida (`3c9d197c`), con su prueba y visto a mano.
+- Compiladas en cada paso la Pico, la S3, la C6 y la Nucleo.
+
 ## 🗺️ H8 (28-sep, tarde) — el mapa verificado; `#538` y `#601` cerradas
 
 - Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código y lo decisivo a mano: el mapa, en `V7_IDEAS`
