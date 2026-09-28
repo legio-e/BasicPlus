@@ -70,11 +70,17 @@ familias. Que ahora *se pueda* no lo vuelve rápido.
 
 ### 2. `try` / `catch` DENTRO de una función `native`
 
-El `.mdn` no puede usar `setjmp` (#213). Lanzar (`throw`) sí se puede.
+Lo rechaza el compilador. Lanzar (`throw`) sí se puede.
 
 **Qué hacer**: envolver la llamada a la función `native` en un `try` desde
 código BP normal. Las excepciones que lance la nativa se propagan y se atrapan
 ahí.
+
+> ⚠️ Aquí ponía que «el `.mdn` no puede usar `setjmp` (#213)». **Era falso**: `__builtin_setjmp` y
+> `__builtin_longjmp` se compilan en línea (medido el 24-ago: 52 B en ARM, 60 en RISC-V), sin símbolos
+> externos. Lo que falta de verdad es DÓNDE aterriza un `throw`: el `eh_stack` del intérprete no sabe de
+> un manejador nativo. Es `#578` (V7), con el planteamiento de Eduardo: darle a la native las primitivas de
+> manejadores del intérprete y aterrizar con `__builtin_longjmp`.
 
 ### 3. Llamadas de `native` a funciones BP: sólo firmas de 4 bytes
 
@@ -82,7 +88,9 @@ El puente `native→BP` marshalla `integer`/`boolean`/`string`/arrays/refs, que
 ocupan 4 bytes. `float`, `long`, `double` y `void` quedan fuera.
 
 Ojo: llamar a BP desde `native` **pierde la velocidad AOT** (esa función corre
-interpretada). El compilador lo avisa como `-- aviso AOT: ...` sin abortar.
+interpretada). El compilador lo avisa como `-- aviso AOT: ...` sin abortar. Y desde
+V7 (P2b), si esa función BP se bloquea o agota su turno, la native **se suspende**
+con ella y los demás hilos siguen (§7).
 
 > ⚠️ **El 24-ago-2026 escribí aquí que este puente «nunca había llegado a una
 > placa» porque su `find_function(vm, "Mod.func")` mete el nombre en `.rodata`.
@@ -94,12 +102,22 @@ interpretada). El compilador lo avisa como `-- aviso AOT: ...` sin abortar.
 > Lo caro del error no fue el código que sobraba: fue **medir una etapa que el
 > producto no tiene** y sacar de ahí una conclusión sobre la placa.
 
-### 4. Builtins: sólo un subconjunto
+### 4. ~~Builtins: sólo un subconjunto~~ — desde V7, CUALQUIER intrínseca (P2b.2)
 
-Hoy: `now` · `charAt`, `charCodeAt`, `substring`, `intToString` · `len` (sobre
-array o string; sobre una clase es una llamada a su `length()`/`size()` y va por
-otro camino) · `newIntArray`, `newByteArray`, `newLongArray`, `newDoubleArray`
-*(V6/N1.5)*. El resto se rechaza con el nombre del builtin en el mensaje.
+Desde el 26-sep (`P2b.2`, ABI 9 del `.mdn`), una native llama a **cualquier función intrínseca** —las que
+tienen el cuerpo `inline CALL_BUILTIN n`: `Math.sin`, `sqrt`, `startsWith`, `sleep`…— por el **mismo
+despachador de builtins que el intérprete** (el helper `call_builtin`): ejecuta su código y no una copia, así
+que la paridad sale por construcción. La excepción de un builtin sale por el límite de fallos (se atrapa en el
+`try` BP de fuera), y un builtin que bloquea suspende la native (§7). La lista de antes —`now` · `charAt`,
+`charCodeAt`, `substring`, `intToString` · `len` · `newIntArray`, `newByteArray`, `newLongArray`,
+`newDoubleArray`— sigue por sus helpers tipados, más rápidos (5 millones de `charCodeAt`: 44 ms tipado, 96 por
+el despachador, 257 interpretado), pero cada uno llama a LA MISMA primitiva que su builtin (`bpvm_prims.h`).
+
+Y las **conversiones estrechas** (`byte(x)`, `int8`, `word`, `int16`) van en el C del módulo con el rango y el
+mensaje del intérprete, sin tocar la ABI (27-sep).
+
+La única intrínseca que se rechaza: **`Heap.compact()`** (`#595`, 28-sep): mueve los objetos del heap, y una
+native guarda sus direcciones en variables de C.
 
 ### 5. Arrays: todos los elementos *(V6/N1.5)*
 
@@ -155,6 +173,32 @@ Lo que SÍ cabe desde el 14-sep-2026: construir una clase con **constructor
 sobrecargado** — la factoría lleva el sufijo de la sobrecarga elegida
 (`__cls_new_<Cls>$s`); antes llamaba siempre a la cabeza con los argumentos de
 la otra, sin aviso.
+
+Y los identificadores de BP que chocan con los de C (`int`, `char`…) ya compilan: van
+al C con su prefijo (`#572`, 27-sep).
+
+### 7. Parar, ceder y suspenderse: una native es un hilo más *(V7/H5, P2b)*
+
+Hasta V6 una native corría de un tirón: el Stop esperaba a que volviera y ningún otro hilo avanzaba. Desde V7
+(idea de Eduardo: *«pensar en la ejecución de código nativo como un Thread BP, con su propio stack»*):
+
+- **Se suspende** si llama a algo que bloquea —`sleep`, una función BP que espera un `Mutex`, un builtin que
+  bloquea—, y los demás hilos siguen.
+- **Cede el turno** en un cálculo largo: la *línea del bucle* —`punto_control` cada 1024 vueltas— la expropia a
+  los 5 ms. Medido en la Pico 2 (P2b.0): +33 % en el bucle más apretado, +15 % en uno menos; el nativo sigue 134 y
+  96 veces más rápido que interpretado.
+- **Se para**: un Stop (`KILL`) la detiene en esa misma línea (`make test-aotkill`: una en bucle infinito, en 99 ms).
+
+Cómo: la native corre en un **ejecutor** —un hilo de la plataforma con su pila: una tarea de FreeRTOS, un pthread
+en el PC— y ella y el intérprete se pasan el testigo; sólo corre uno de los dos. Una native **directa** —sin puntos
+de cesión, transitivamente— corre sin ejecutor (de 5,2 a 0,05 µs por llamada). Llamar a un pack no cede: SQLite y
+Gui2 son directas. Las pruebas: `test-aotcede`, `test-aotexpropia`, `test-aotkill` y `test-aotdirecta` en
+`check-testc`, y `NatCede`/`NatExpropia`/`NatBuiltin` en la ronda de placas.
+
+**Lo que falta** (`#580`): una native recursiva **sin bucles** no pasa por la línea del bucle —y no se la puede
+parar hasta que vuelva—; y ninguna prueba ha parado una native EN PLACA (la tanda no sabe mandar un `KILL`).
+Los demás cabos del AOT, cada uno en su ficha: leer un campo de una tupla (`#577`), `try`/`catch` dentro (`#578`),
+la línea de un error dentro de una native (`#582`), el depurador (`#583`) y medir `double` (`#585`).
 
 ## Dónde se hace cumplir
 

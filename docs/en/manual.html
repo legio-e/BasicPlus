@@ -898,7 +898,7 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
           <td>AOT-accelerated (target <code>riscv32-esp-p4</code>, since V4).</td></tr>
       <tr><td>ESP32-C5 / ESP32-C3 / ESP32-C6 (RISC-V without FPU)</td>
           <td>AOT-accelerated (target <code>riscv-imc</code>, <code>ilp32</code> ABI, since
-              V7; verified on the C5; the C3 and the C6, built but not yet tried on the board). Without an FPU, every
+              V7; tested on the board on the C5, the C3 and the C6). Without an FPU, every
               <code>float</code> operation is done by the firmware —the same routine the
               interpreter uses—: the result is exactly the same, but it speeds up less
               than integer code.</td></tr>
@@ -914,27 +914,51 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       <code>double</code>, <code>boolean</code>, narrow types), <code>string</code>,
       arrays of any element type (create them with
       <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>/<code>newDoubleArray</code>
-      and index them), objects, module variables and a subset of the builtins
-      (<code>print</code>, <code>now</code>, <code>len</code>,
-      <code>intToString</code>, <code>substring</code>, …). A runtime failure
+      and index them), objects, module variables, the narrowing conversions
+      (<code>byte(x)</code>, <code>int16(x)</code>…, with the interpreter's range and
+      message) and <strong>any intrinsic function</strong> of the stdlib
+      —<code>Math.sin</code>, <code>sqrt</code>, <code>startsWith</code>,
+      <code>sleep</code>…, those whose body is <code>inline CALL_BUILTIN</code>
+      (§8.3b)—: the native calls the SAME builtin code as the interpreter, so the
+      result is the same. A runtime failure
       (index out of range, null reference) or a
       <code>throw RuntimeError("…")</code> inside the native propagates to the
-      BP <code>try/catch</code> that wraps the call. What still does NOT fit —
+      BP <code>try/catch</code> that wraps the call, with the interpreter's message
+      (the exact line inside the native, not yet). What still does NOT fit —
       <code>try/catch</code> inside the native, tuples, <code>instanceof</code>,
       events, <code>parallel</code>, <code>for … in</code>,
       <strong>reading or writing fields</strong>
       (own or inherited: use a getter), <strong>calling static methods or
-      properties</strong> and <code>super</code> — is rejected by the compiler with its
-      message and the line. Local fixed arrays
+      properties</strong>, <code>super</code> and <code>Heap.compact()</code> — is
+      rejected by the compiler with its message and the line. Local fixed arrays
       <code>type[N]</code> are not supported either (compile error):
       use <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.
       The same goes for a <code>native</code> <em>class method</em>: it is the same
       error, naming the method and the line (<code>#519</code>, V7).
       The live detail is in <code>docs/AOT_LIMITES.md</code>.</li>
+  <li><strong>A native behaves like one more thread</strong> (V7): if it calls
+      something that blocks —<code>sleep</code>, <code>lock()</code> on a busy
+      <code>Mutex</code>, a BP function that waits— it <strong>is suspended</strong>
+      and the other threads carry on; in a long computation it <strong>yields its
+      turn</strong> every 5 ms (it checks in its loops, every 1024 iterations), and
+      the IDE's <strong>Stop</strong> halts it even inside an infinite loop. Inside,
+      it runs on a thread of its own on the platform and passes the baton back and
+      forth with the interpreter; a native that cannot yield (no loops and no calls
+      that block) runs directly, without that step. What is missing: a recursive
+      native <em>without loops</em> never reaches that check, and cannot be stopped
+      until it returns.</li>
+  <li><strong>Speed and <code>double</code></strong>: none of the boards has a
+      double-precision FPU, so a <code>double</code> in a native is emulated by the
+      firmware and speeds up much less than integer code. If you want speed on the
+      micro, use <code>float</code>.</li>
+  <li><strong>Debugging</strong>: on the PC a native runs interpreted and is
+      debugged like any other function; on the board, the debugger does not stop
+      inside it.</li>
   <li><strong>Calling normal BP functions from a native</strong> is possible
       (the bridge exists), but it crosses back into the interpreter: the speed
       gained is lost on every crossing. The compiler detects this and emits a
-      <strong>performance warning</strong>.</li>
+      <strong>performance warning</strong>. If that function blocks, the native
+      is suspended along with it.</li>
   <li><strong>How the native code is generated</strong>: the IDE does it
       <strong>automatically</strong> on <em>Run on Device</em>, according to the
       connected board: for RP2350/STM32 it detects the <strong>ARM bare-metal
@@ -1759,6 +1783,14 @@ shared object</code></pre>
   between <code>heapAlloc</code>'s <code>return</code> and the caller's
   subsequent push, the GC scanner sees the anchor as an extra root and does not
   free the object in transit.
+</p>
+<p>
+  The GC <strong>does not move</strong> anything: the free memory can end up split into
+  holes. <code>Heap.compact()</code> does move —it slides what is alive to the start of the
+  heap, with the world stopped—, but only when the program asks and under controlled
+  conditions: from <code>Main</code>, with no other thread alive and never from a
+  <code>native</code> (reference §13.19). It is possible because a reference is a
+  <em>handle</em>: moving an object is changing its entry in the table.
 </p>
 <p>
   <strong>Wraps of allocation opcodes</strong>:

@@ -286,16 +286,20 @@ su ficha (`docs/FICHAS.md`); aquí, lo que cambia al escribir un programa.
   tapa a `/lib` (`#493`)— se carga sin aviso. Mientras llega la norma: no dejes módulos
   de stdlib en `/app` ni packs con stdlib dentro en la placa; el log del RUN dice de
   dónde carga cada dependencia (`dep 'Str' -> /app/Str.mod`).
-- **Una `native` larga no se puede parar**: la VM atiende el Stop (`KILL`) entre dos
-  instrucciones del intérprete, y mientras corre código nativo no hay dónde mirarlo. Una
-  `native` que tarde segundos deja el Stop esperando hasta que vuelva (`#379`: medido en el
-  P4 con tarjeta, 8 de 8 Stop limpios con código interpretado). Si necesitas parar un cálculo
-  largo, hazlo interpretado o pártelo en llamadas cortas.
+- **Una `native` recursiva SIN bucles no se puede parar hasta que vuelve.** Desde V7 una
+  native se porta como un hilo más: se suspende si llama a algo que bloquea, cede el turno
+  cada 5 ms y el Stop la para aunque esté en un bucle infinito —lo mira en sus bucles, cada
+  1024 vueltas—. Una recursiva sin ningún bucle no pasa por ese punto (`#580`). Si necesitas
+  parar un cálculo así, dale un bucle o pártelo en llamadas cortas.
+- **Dentro de una `native`**: no hay `try`/`catch` (envuelve la llamada en uno desde BP:
+  `#578`), no se lee el campo de una tupla (`#577`), un error no dice en qué línea de la
+  native pasó (`#582`) y en la placa el depurador no para dentro de ella (`#583`). El detalle,
+  en `AOT_LIMITES.md`.
 - **En el ESP32-S3 todo se ejecuta interpretado** (`#488`, fuera del plan). El AOT
   genera ARM Thumb-2 y RISC-V; **no genera Xtensa**, y de momento no se va a hacer. Las
   `native function` compilan y corren, pero a la velocidad del intérprete.
   Aceleran hoy: RP2350, STM32, ESP32-P4 y, desde V7, **la C5, la C3 y la C6** (RISC-V
-  sin FPU, destino `ilp32`; verificado en la C5 el 25-sep, la C3 y la C6 compiladas).
+  sin FPU, destino `ilp32`; probado en placa en la C5, la C3 y la C6 el 25-sep).
   En ellas los `float` van por las rutinas del firmware (`#559`): dan lo mismo que
   interpretados, pero aceleran menos que el código entero. En el PC —VM Java y micro
   simulado— todo es interpretado, y así se comparan los tiempos.

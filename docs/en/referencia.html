@@ -179,6 +179,7 @@
     <li class="sub"><a href="#stdlib-compress">13.16 Compress</a></li>
     <li class="sub"><a href="#stdlib-json">13.17 Json</a></li>
     <li class="sub"><a href="#stdlib-app">13.18 App</a></li>
+    <li class="sub"><a href="#stdlib-heap">13.19 Heap</a></li>
     <li class="group"><a href="#dispositivos">14. Device libraries</a></li>
     <li class="sub"><a href="#stdlib-hw-policy">14.1 HW policy = OO class</a></li>
     <li class="sub"><a href="#stdlib-gpio">14.2 Gpio</a></li>
@@ -1043,6 +1044,80 @@ root.<span class="fn">put</span>(<span class="str">"age"</span>,   Json.<span cl
   <tr><td><code>App.mainModulePath(): string</code></td><td>Path of the executed <code>.mod</code>.</td></tr>
   <tr><td><code>App.projectPath(): string</code></td><td>Project root (the base of the relative paths of <code>readFile</code>, images, <code>.win</code>…).</td></tr>
 </table>
+
+<h3 id="stdlib-heap">13.19 <code>Heap</code> (heap diagnostics, and compacting it)</h3>
+<p>
+  What a program can ask about its memory (<code>import Heap</code>), on the PC and on
+  any board. Each function <em>reads</em> counters of the VM —it allocates nothing and does
+  not walk the heap—, so asking does not change what is asked; and it returns a
+  <strong>number</strong>, to decide with it (a threshold, a warning). They are numbers of
+  <strong>each VM</strong>: the heap size depends on the board's memory, and the PC VM and
+  the board VMs do not split it the same way; like <code>now()</code> or the FS, they are not
+  part of the byte-identical parity. Compare relations, not values.
+</p>
+<table>
+  <tr><th>Function</th><th>Description</th></tr>
+  <tr><td><code>Heap.getSize(): integer</code></td><td>The heap size, in bytes: what a program can come to occupy.</td></tr>
+  <tr><td><code>Heap.getFree(): integer</code></td><td>The free bytes: what is left at the end plus the holes.</td></tr>
+  <tr><td><code>Heap.getLargestFree(): integer</code></td><td>The largest free block (header included): an allocation up to that size fits in one go. Against <code>getFree()</code>, it tells whether memory is fragmented.</td></tr>
+  <tr><td><code>Heap.getFreeBlocks(): integer</code></td><td>How many holes there are.</td></tr>
+  <tr><td><code>Heap.getHandles(): integer</code></td><td>How many objects there are in the heap: the live ones and the dead ones the GC has not collected yet.</td></tr>
+  <tr><td><code>Heap.getCollections(): integer</code></td><td>How many collections the program has done.</td></tr>
+  <tr><td><code>Heap.compact()</code></td><td>Compacts the heap (below).</td></tr>
+</table>
+<pre><code><span class="kw">import</span> Heap
+<span class="kw">if</span> Heap.getLargestFree() &lt; <span class="num">4096</span> <span class="kw">then</span>
+  <span class="kw">print</span> <span class="str">"fragmented:"</span>, Heap.getFree(), <span class="str">"B free, the largest"</span>, Heap.getLargestFree()
+<span class="kw">endif</span></code></pre>
+<p>
+  <code>heapFrag()</code> and <code>heapMap()</code> remain: they return text and only exist in
+  the PC VM (on a board, «builtin not supported»), to look at memory while developing.
+</p>
+<h4 id="stdlib-heap-compact"><code>Heap.compact()</code>: compacting the heap</h4>
+<p>
+  The GC collects what is no longer used, but it does not move what remains: after many
+  allocations and releases the free memory ends up split into holes, and a large allocation
+  can fail with memory to spare. <code>Heap.compact()</code> does a full collection and
+  <strong>slides what is alive to the start</strong> of the heap, so all the free memory ends
+  up in one block: <code>getLargestFree()</code> becomes <code>getFree()</code>. It is for a
+  program that runs for days, or that ends a phase and starts another:
+</p>
+<pre><code>loadData()
+Heap.compact()
+workLoop()</code></pre>
+<p>
+  Moving an object is safe because a reference is a <em>handle</em>, not an address: it is
+  enough to change its entry in the table. But there are raw addresses that cannot be
+  followed (those of an expression half-way, those of a <code>native</code> function), so it
+  compacts under <strong>controlled conditions</strong>:
+</p>
+<ul>
+  <li><strong>Only from <code>Main</code></strong>, in its own code: from another function, or
+    from an event handler, <code>RuntimeError</code> «Heap.compact: sólo se puede llamar desde
+    Main».</li>
+  <li><strong>With no other thread alive</strong>: otherwise, <code>RuntimeError</code>
+    «Heap.compact: no se puede compactar con otros hilos vivos».</li>
+  <li><strong>Never from a <code>native</code></strong>: it is a compile error.</li>
+</ul>
+<p>
+  What cannot be moved stays where it is: the state of an open file (<code>IO.File</code>),
+  which the board's file system keeps linked. If one is open, a hole may remain in front of
+  it. Compacting includes its collection (<code>getCollections()</code> goes up by one) and
+  costs a walk of the heap: it is for chosen moments, not for every turn of a loop.
+</p>
+<p>
+  A program with threads that runs for days <strong>prepares</strong> that moment in a quiet
+  spell: <code>Main</code> tells its threads to stop (a flag each one checks in its loop;
+  killing a thread from outside could leave a <code>Mutex</code> held) and waits for them with
+  <code>join()</code>, closes whatever is open, compacts, rests and starts new threads for the
+  next shift (<code>bpgenvm-c/samples/HeapReposo.bp</code>):
+</p>
+<pre><code>shift.stop()          <span class="comment">// the order to stop</span>
+a.join()
+b.join()
+f.close()
+Heap.compact()
+sleep(<span class="num">60000</span>)          <span class="comment">// and the next shift, with new threads</span></code></pre>
 
 
 <!-- =========================================================== -->

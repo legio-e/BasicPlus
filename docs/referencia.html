@@ -179,6 +179,7 @@
     <li class="sub"><a href="#stdlib-compress">13.16 Compress</a></li>
     <li class="sub"><a href="#stdlib-json">13.17 Json</a></li>
     <li class="sub"><a href="#stdlib-app">13.18 App</a></li>
+    <li class="sub"><a href="#stdlib-heap">13.19 Heap</a></li>
     <li class="group"><a href="#dispositivos">14. Librerías de dispositivos</a></li>
     <li class="sub"><a href="#stdlib-hw-policy">14.1 Política HW = clase OO</a></li>
     <li class="sub"><a href="#stdlib-gpio">14.2 Gpio</a></li>
@@ -1063,6 +1064,7 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   <tr><td><code>Heap.getFreeBlocks(): integer</code></td><td>Cuántos huecos hay.</td></tr>
   <tr><td><code>Heap.getHandles(): integer</code></td><td>Cuántos objetos hay en el heap: los vivos y los muertos que el GC aún no ha recogido.</td></tr>
   <tr><td><code>Heap.getCollections(): integer</code></td><td>Cuántas colectas lleva el programa.</td></tr>
+  <tr><td><code>Heap.compact()</code></td><td>Compacta el heap (abajo).</td></tr>
 </table>
 <pre><code><span class="kw">import</span> Heap
 <span class="kw">if</span> Heap.getLargestFree() &lt; <span class="num">4096</span> <span class="kw">then</span>
