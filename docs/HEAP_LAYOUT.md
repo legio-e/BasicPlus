@@ -99,6 +99,9 @@ bit 29..24  TAG_TYPE      0x3F000000   tipo (6 bits, 0..63)
 bit 23..0   reservados                 (0 hoy; futuro: hash/size cache)
 ```
 
+Mientras dura `Heap.compact()` (§2.5), y sólo entonces, el bit 31 de una cabecera significa ENHEBRADO (la
+cabecera guarda un índice de la tabla de handles, no la etiqueta) y el bit 23, CLAVADO. Fuera de ahí valen 0.
+
 ### 2.2 Códigos de tipo (`TAG_TYPE`)
 
 | Valor | Constante | Significado |
@@ -132,6 +135,23 @@ header_libre:
 
 `tryAllocateInner` busca en la free-list un bloque con `totalSize`
 suficiente antes de bumpear `heapNext`.
+
+### 2.5 Compactación (`Heap.compact()`, V7/H7 #595)
+
+El GC no mueve nada; `Heap.compact()` sí, a petición del programa y en condiciones controladas (sólo desde `Main`,
+sin otros hilos vivos, nunca desde una `native`: `BUILTINS.md` §270). Tras una colecta completa, con el mundo aún
+parado y sin memoria aparte:
+
+1. **Clavar** (bit 23) lo que no se puede mover aunque tenga handle: el bloque de estado de un fichero abierto (en
+   la VM-C el motor del FS guarda ahí su estado, y littlefs lo enlaza en su lista de abiertos).
+2. **Enhebrar** la tabla de handles en las cabeceras: por cada handle vivo, la cabecera de su bloque pasa a
+   guardar `ENHEBRADO | idx` y la entrada `idx`, lo que había antes en la cabecera (la etiqueta, o el índice
+   anterior si dos handles apuntan al mismo bloque). Al final de la cadena está siempre la etiqueta.
+3. **Deslizar** en orden de dirección: un bloque enhebrado baja al primer sitio libre (el destino nunca pasa del
+   origen) y cada índice de su cadena pasa a apuntar ahí; uno sin enhebrar —clavado, o vivo sin handle— se queda,
+   y el hueco que le quede delante vuelve a la lista de libres. `heapNext` acaba tras el último bloque.
+
+Las dos VMs hacen lo mismo (`heap.c` `compactar`; `VirtualMachine.compactarLocked`).
 
 ---
 

@@ -279,7 +279,8 @@ public enum Builtin {
     HEAP_LARGEST_FREE("__heapLargestFree"),   // [266] __heapLargestFree(): integer
     HEAP_FREE_BLOCKS("__heapFreeBlocks"),   // [267] __heapFreeBlocks(): integer
     HEAP_HANDLES("__heapHandles"),   // [268] __heapHandles(): integer
-    HEAP_COLLECTIONS("__heapCollections");   // [269] __heapCollections(): integer
+    HEAP_COLLECTIONS("__heapCollections"),   // [269] __heapCollections(): integer
+    HEAP_COMPACT("__heapCompact");   // [270] __heapCompact()
 
     public final String bpName;
     public final int id;

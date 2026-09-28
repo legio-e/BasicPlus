@@ -91,7 +91,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-heapdescarrilado test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-heapdescarrilado test-compactsmp test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -464,6 +464,22 @@ test-heapdescarrilado: $(LIBOBJ)
 	    $(LIBOBJ) -o $(HEAPD_BIN) $(LDFLAGS); \
 	  echo "--- el heap descarrilado (esperado: control PASS, estropeado PASS y la linea OK) ---"; \
 	  (cd samples && ../$(HEAPD_BIN) HeapRoto.mod); \
+	fi
+
+# V7/H7 #595 (28-sep) — Heap.compact() con el scheduler SMP: el caso de la revision (un hilo que muere
+# debiendo un evento; join; compactar), 30 veces con dos workers y una sin SMP, y siempre lo que dice
+# miVM. Ver test/test_compactsmp.c.
+COMPSMP_BIN = build/test_compactsmp.exe
+test-compactsmp: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,HeapCompactEv)
+	@if [ ! -f samples/HeapCompactEv.mod ]; then \
+	  echo "(skip test-compactsmp: no hay samples/HeapCompactEv.mod y no se ha podido generar)"; \
+	else \
+	  $(CC) $(CFLAGS) -Isrc test/test_compactsmp.c \
+	    $(LIBOBJ) -o $(COMPSMP_BIN) $(LDFLAGS); \
+	  echo "--- Heap.compact() y el scheduler SMP (esperado: sin SMP PASS, 30/30 con 2 workers y la linea OK) ---"; \
+	  (cd samples && ../$(COMPSMP_BIN) HeapCompactEv.mod); \
 	fi
 
 # #339 — el GUARDIÁN DE FIN DE RUN, probado contra una fuga DE VERDAD. Que la

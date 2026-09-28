@@ -1847,7 +1847,10 @@ public class VirtualMachine {
      * adquirido. Lo usan tanto el disparo PROACTIVO por umbral como la ruta
      * de OOM (bump+free-list agotados).
      */
-    private void gcSafepoint(int myTid) {
+    private void gcSafepoint(int myTid) { gcSafepoint(myTid, false); }
+
+    /** V7/H7 #595 — con `compactar`, tras la colecta y con el mundo aún parado, compactarLocked (Heap.compact). */
+    private void gcSafepoint(int myTid, boolean compactar) {
         gcInProgress = true;
         stopTheWorld = true;
         if (myTid >= 0) parkedInHeapAlloc.add(myTid);
@@ -1864,6 +1867,7 @@ public class VirtualMachine {
             // estamos ejecutando GC (no esperando).
             if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
             gcLocked();
+            if (compactar && !gcDescarrilo) compactarLocked();   // V7/H7 #595
         } finally {
             if (myTid >= 0) parkedInHeapAlloc.remove(myTid);
             stopTheWorld = false;
@@ -2171,7 +2175,9 @@ public class VirtualMachine {
 
         while (addr < heapNext) {
             int size = objectTotalSize(addr);
-            if (size <= 0) break;
+            // V7/H7 #595 — un barrido cortado es un heap descarrilado (#494): los bloques de detrás se quedan con la
+            // marca puesta, y la compactación la tomaría por un bloque enhebrado. Espejo de gc_sweep_phase.
+            if (size <= 0) { gcDescarrilo = true; break; }
             int tag = readInt32(addr);
             boolean isFree = (tag & TAG_FREE_BIT) != 0;
             boolean isUnmarked = !isFree && ((tag & TAG_MARK_BIT) == 0);
@@ -2247,6 +2253,123 @@ public class VirtualMachine {
         writeInt32(addr + 4, size);
         writeInt32(addr + 8, freeListHead);
         freeListHead = addr;
+    }
+
+    // ====================================================================
+    // V7/H7 #595 (28-sep) — Heap.compact(): COMPACTAR el heap a petición del programa. Eduardo: «me gustaría
+    // la posibilidad de que el usuario pudiese pedir compactar el heap. Siempre en condiciones controladas, como
+    // por ejemplo al terminar la aplicación». Mover un objeto es posible porque una referencia es un HANDLE (V4):
+    // basta con cambiar su entrada de la tabla. Espejo de bpvm_heap_compactar (heap.c): el MISMO algoritmo y
+    // las mismas reglas (qué se mueve y qué no); los heaps de las dos VMs no son iguales ni antes ni después.
+    // ====================================================================
+
+    /** Los textos de Heap.compact() cuando no se cumplen sus condiciones; los MISMOS en la VM-C. */
+    public static final String MSG_COMPACT_MAIN  = "Heap.compact: sólo se puede llamar desde Main";
+    public static final String MSG_COMPACT_HILOS = "Heap.compact: no se puede compactar con otros hilos vivos";
+
+    /** Dos marcas que sólo existen MIENTRAS se compacta (compactarLocked). ENHEBRADO, el bit de la marca del GC
+     *  —a 0 en todo bloque tras el barrido—: la cabecera de un bloque con handle guarda el ÚLTIMO índice que lo
+     *  apunta, y la entrada de ese índice, lo que había antes en la cabecera (la etiqueta, o el índice anterior si
+     *  lo apuntan dos). CLAVADO, un bit de los reservados (HEAP_LAYOUT §2.1): un bloque que no se mueve aunque
+     *  tenga handle. */
+    private static final int TAG_ENHEBRADO = 0x80000000;
+    private static final int TAG_CLAVADO   = 0x00800000;
+    /** [0, 0x100): la zona de los centinelas (HEAP_LAYOUT §1). Un pc de vuelta ahí no es un CALL: es un marco
+     *  inyectado (el de un handler de evento, el de un despacho de la GUI). */
+    private static final int ZONA_CENTINELAS = 0x100;
+
+    /** Heap.compact(): las condiciones —en el MISMO orden y con los MISMOS textos que la VM-C— y, si se cumplen,
+     *  colecta y compacta con el mundo parado (el protocolo del GC: gcSafepoint). */
+    private void heapCompact(ThreadContext tc) {
+        // 1) DESDE Main: el marco actual es el que abrió el CALL de __startup —su bp de vuelta es el fondo de la
+        //    pila del hilo principal y su pc de vuelta es código, no un centinela—. Por debajo no queda entonces
+        //    ninguna expresión a medias con una dirección cruda al heap: la de un array fijo de un objeto
+        //    (LEA_FIELD) sólo sale en los métodos de su clase, y Main no es un método.
+        boolean desdeMain = tc.id == 0
+                && tc.bp > tc.stackBase
+                && readInt32(tc.bp - 8) == tc.stackBase
+                && Integer.compareUnsigned(readInt32(tc.bp - 12), ZONA_CENTINELAS) >= 0;
+        if (!desdeMain) throwBpRuntimeError(tc, MSG_COMPACT_MAIN);
+        // 2) SIN OTROS HILOS VIVOS —ninguno parado con una dirección cruda (un builtin bloqueado con su array)— y
+        // 3) colecta y compacta, bajo el mismo cerrojo: que nadie arranque un hilo entre mirar y compactar. (Un hilo
+        //    con eventos pendientes no llega aquí a TERMINATED: reviveForPendingEvents, #342. En la VM-C sí, y allí
+        //    cuenta como vivo.) Con el GC apagado, nada: apagado es apagado (#355).
+        boolean otros = false;
+        synchronized (vmLock) {
+            for (ThreadContext t : threads)
+                if (t != tc && t.getStatus() != ThreadStatus.TERMINATED) { otros = true; break; }
+            if (!otros && !gcSuspended) {
+                gcSafepoint(tc.id, true);
+                if (gcDescarrilo) lanzaHeapDescarrilado(tc);   // #494: sin recorrido fiable no se compacta
+            }
+        }
+        if (otros) throwBpRuntimeError(tc, MSG_COMPACT_HILOS);
+    }
+
+    /**
+     * Desliza lo vivo al principio del heap. Precondición: vmLock, el mundo parado y una colecta RECIÉN hecha
+     * (ningún bloque con la marca del GC; los libres, con TAG_FREE_BIT). Sin memoria aparte: lo que hace falta
+     * saber vive, mientras dura, en la propia tabla de handles y en las cabeceras.
+     *  1. CLAVAR lo que no se puede mover aunque tenga handle: el bloque de estado de un fichero abierto. En la
+     *     VM-C el motor del FS guarda ahí su estado y littlefs lo enlaza en su lista de abiertos; aquí el estado
+     *     vive en Java, pero se clava igual: la regla es la misma en las dos VMs.
+     *  2. ENHEBRAR la tabla en las cabeceras: cada bloque apuntado queda con la cadena de los índices que lo
+     *     apuntan (casi siempre uno). Un bloque vivo SIN handle no se enhebra —nadie sabe quién lo apunta—: se
+     *     queda en su sitio, como uno clavado.
+     *  3. DESLIZAR en orden de dirección: un bloque enhebrado baja al primer sitio libre (el destino nunca pasa del
+     *     origen) y cada índice de su cadena pasa a apuntar ahí; uno clavado se queda, y el hueco que le quede
+     *     delante vuelve a la lista de libres. Lo que queda detrás del último bloque es el bump.
+     */
+    private void compactarLocked() {
+        int antes = heapNext;
+        // 1) Clavar el estado de los ficheros abiertos (los de un File inalcanzable ya los cerró la colecta).
+        for (Long sref : ficherosAbiertos.keySet()) {
+            int a = refDeref(sref);
+            int h = a - 4;
+            if (a != 0 && h >= heapStart && h < heapNext) writeInt32(h, readInt32(h) | TAG_CLAVADO);
+        }
+        // 2) Enhebrar.
+        for (int idx = 1; idx < handleNext; idx++) {
+            int a = handleAddr[idx];
+            if (a == 0) continue;                               // slot libre
+            int h = a - 4;
+            if (h < heapStart || h >= heapNext) continue;       // defensivo
+            int w = readInt32(h);
+            if ((w & TAG_ENHEBRADO) == 0 && (w & (TAG_FREE_BIT | TAG_CLAVADO)) != 0) continue;   // clavado (o libre)
+            handleAddr[idx] = w;
+            writeInt32(h, TAG_ENHEBRADO | idx);
+        }
+        // 3) Deslizar.
+        freeListHead = 0;   // la rehacen los huecos que queden delante de un clavado
+        int dst = heapStart, addr = heapStart;
+        int movidos = 0, clavados = 0, huecos = 0;
+        while (addr < heapNext) {
+            int w = readInt32(addr);
+            int tag = w;
+            while ((tag & TAG_ENHEBRADO) != 0) tag = handleAddr[tag & ~TAG_ENHEBRADO];   // al final, la etiqueta
+            writeInt32(addr, tag & ~TAG_CLAVADO);               // la cabecera vuelve a ser la de siempre
+            int size = objectTotalSize(addr);
+            if ((tag & TAG_FREE_BIT) != 0) { addr += size; continue; }
+            if ((w & TAG_ENHEBRADO) != 0) {
+                for (int c = w; (c & TAG_ENHEBRADO) != 0; ) {  // cada índice de la cadena, al sitio nuevo
+                    int idx = c & ~TAG_ENHEBRADO;
+                    c = handleAddr[idx];
+                    handleAddr[idx] = dst + 4;
+                }
+                if (dst != addr) { System.arraycopy(memory, addr, memory, dst, size); movidos++; }
+                dst += size;
+            } else {
+                if (dst < addr) { addToFreeList(dst, addr - dst); huecos++; }
+                clavados++;
+                dst = addr + size;
+            }
+            addr += size;
+        }
+        heapNext = dst;
+        lastGcHeapNext = heapNext;
+        for (ThreadContext t : threads) t.allocAnchor = 0;   // un ancla es una dirección cruda, y transitoria
+        System.err.printf("VM [GC]: compactado: heapNext %d -> %d (%d bloques movidos, %d clavados, %d huecos)%n",
+                antes, heapNext, movidos, clavados, huecos);
     }
 
     // ====================================================================
@@ -6574,6 +6697,10 @@ public class VirtualMachine {
             case HEAP_FREE_BLOCKS:  pushTc(tc, cuentasDelHeap()[3]); break;
             case HEAP_HANDLES:      pushTc(tc, cuentasDelHeap()[4]); break;
             case HEAP_COLLECTIONS:  pushTc(tc, cuentasDelHeap()[5]); break;
+            case HEAP_COMPACT:   // V7/H7 #595 (28-sep): Heap.compact()
+                heapCompact(tc);
+                pushTc(tc, 0);   // void → dummy
+                break;
             case MACHINE_GPIO_COUNT: {
                 /* host: perfil RP2350A (30 GPIO). En el device el firmware
                  * lo resuelve desde board_desc (variante / board.json). */

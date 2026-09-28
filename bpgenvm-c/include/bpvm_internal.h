@@ -62,6 +62,12 @@ typedef struct { uint64_t v; } bpref_t;
 #define BPVM_TAG_FREE_BIT   0x40000000u
 #define BPVM_TAG_TYPE_MASK  0x3F000000u
 #define BPVM_TAG_TYPE_SHIFT 24
+/* V7/H7 #595 — dos marcas que sólo existen MIENTRAS se compacta (heap.c, compactar). ENHEBRADO, el bit de la
+ * marca del GC —a 0 en todo bloque tras el barrido—: la cabecera de un bloque con handle guarda el ÚLTIMO índice
+ * que lo apunta, y la entrada de ese índice, lo que había antes en la cabecera. CLAVADO, un bit de los
+ * reservados: un bloque que no se mueve aunque tenga handle (el estado de un fichero abierto). Espejo de miVM. */
+#define BPVM_TAG_ENHEBRADO  0x80000000u
+#define BPVM_TAG_CLAVADO    0x00800000u
 
 /* Códigos de tipo de heap. */
 #define BPVM_TYPE_ARRAY_I8  0
@@ -403,6 +409,9 @@ struct aot_helpers_v2;
 
 /* V7 #494 — el mensaje de la excepción del heap descarrilado; el MISMO en miVM (VirtualMachine). */
 #define BPVM_MSG_HEAP_DESCARRILADO "heap descarrilado (fallo interno de la VM)"
+/* V7/H7 #595 — los textos de Heap.compact() cuando no se cumplen sus condiciones; los MISMOS en miVM. */
+#define BPVM_MSG_COMPACT_MAIN  "Heap.compact: sólo se puede llamar desde Main"
+#define BPVM_MSG_COMPACT_HILOS "Heap.compact: no se puede compactar con otros hilos vivos"
 
 struct bpvm {
     /* ══ PREFIJO CONGELADO ══════════════════════════════════════════════════
@@ -711,6 +720,7 @@ struct bpvm {
 
 /* V7/H3 (#491) — en builtins.c. */
 void bpvm_files_gc(bpvm_t* vm);          /* entre la marca y el barrido: cierra lo inalcanzable */
+void bpvm_files_clavar(bpvm_t* vm);      /* V7/H7 #595: antes de compactar, el estado de lo abierto no se mueve */
 void bpvm_files_fin_de_run(bpvm_t* vm);  /* al destruir la VM: cierra lo que quede y lo dice */
 
 
@@ -831,6 +841,7 @@ int  bpvm_event_drain_one(bpvm_t* vm, bpvm_thread_t* tc);
  * los DOS schedulers desde su punto de wake-up: una sola regla, no una copia
  * por scheduler. Devuelve cuántos resucitó. */
 int  bpvm_events_revive_terminated(bpvm_t* vm);
+int  bpvm_events_con_deuda(const bpvm_t* vm, const bpvm_thread_t* tc);   /* V7/H7 #595 */
 
 /* Paso 3 / contrato B — ¿es `r` un handle a un objeto LIBERADO? Solo los handles
  * (con TAG) pueden morir; null/constantes nunca. Lo consulta el deref de PROGRAMA
@@ -1013,6 +1024,11 @@ typedef struct {
     uint32_t colectas;     /* colectas de este RUN */
 } bpvm_heap_cuentas_t;
 void bpvm_heap_cuentas(bpvm_t* vm, bpvm_heap_cuentas_t* out);
+/* V7/H7 #595 (28-sep) — Heap.compact(): con el mundo parado, mira que `tc` sea el único hilo vivo y colecta y
+ * compacta. «Desde Main» lo mira el builtin. 0 = hecho (o el GC apagado: no hace nada); 1 = el recorrido del heap se
+ * descarriló (#494): no se compacta, y queda armada la prefabricada, que lanza bpvm_throw_runtime_error; 2 = hay
+ * otro hilo vivo: ni colecta ni compacta. */
+int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc);
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
 void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);

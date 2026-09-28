@@ -52,4 +52,25 @@ module Heap
     inline CALL_BUILTIN 269
   end getCollections
 
+  // COMPACTA el heap (#595, pedido de Eduardo el 28-sep): una colecta completa y, después, todo lo
+  // vivo se desliza hacia el principio, así que lo libre queda en UN bloque —getLargestFree() pasa a
+  // ser getFree()—. Para un programa que corre días, o que acaba una fase y empieza otra:
+  //
+  //   cargaDatos()
+  //   Heap.compact()
+  //   bucleDeTrabajo()
+  //
+  // Mover un objeto es seguro porque una referencia es un handle, no una dirección. Pero hay
+  // direcciones crudas que no se pueden seguir (las de una expresión a medias, las de una native),
+  // así que se compacta en condiciones controladas: SÓLO DESDE Main y SIN OTROS HILOS VIVOS; si no,
+  // RuntimeError. Y no se llama desde una native (error de compilación). Lo que no se puede mover
+  // (el estado de un fichero abierto) se queda en su sitio: puede quedar un hueco delante.
+  //
+  // Un programa con hilos que corre días PREPARA ese momento en una calma (Eduardo): Main da la orden
+  // de parar a sus hilos y los espera (join), cierra lo abierto, compacta, reposa, y arranca hilos
+  // nuevos. El ejemplo: bpgenvm-c/samples/HeapReposo.bp.
+  public function compact()
+    inline CALL_BUILTIN 270
+  end compact
+
 end Heap

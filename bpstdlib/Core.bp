@@ -1569,6 +1569,11 @@ module Core
   function __heapCollections(): integer   // Heap.getCollections
     inline CALL_BUILTIN 269
   end __heapCollections
+  // V7/H7 #595 (28-sep) — COMPACTAR el heap, a petición del programa (Heap.compact): colecta y desliza lo vivo al
+  // principio, así que todo lo libre queda en un bloque. Sólo desde Main y sin otros hilos vivos.
+  function __heapCompact()   // Heap.compact
+    inline CALL_BUILTIN 270
+  end __heapCompact
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

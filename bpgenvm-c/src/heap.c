@@ -374,7 +374,8 @@ static void gc_mark_phase(bpvm_t* vm) {
      *     palabra a palabra dándoselo a `mark_recursive`, que ya valida — es
      *     EXACTAMENTE lo que el paso 1 hace con la pila BP, que también es
      *     conservadora. Un falso positivo retiene de más una colecta;
-     *     este GC no compacta, así que retener nunca corrompe.
+     *     este GC no compacta, así que retener nunca corrompe. (Heap.compact
+     *     sí mueve, #595, pero nunca con una native a medias: la rechaza.)
      *
      *     El `setjmp` no es un salto: es el truco clásico (Boehm) para VOLCAR
      *     los registros preservados a la pila. Un handle puede vivir SOLO en
@@ -615,13 +616,17 @@ static void gc_sweep_phase(bpvm_t* vm) {
     uint32_t prev_blk = 0;                    /* #355: el vecino de la izquierda del culpable */
     while (cur < vm->heap_next) {
         uint32_t total = block_total_size(vm, cur);
-        if (total == 0) break;
+        /* V7/H7 #595 — un barrido cortado deja los bloques de detrás con la marca del GC puesta, y sin recorrer:
+         * es un heap descarrilado (#494) aunque el mapa no lo viera. Se dice, y nadie lo compacta después (la
+         * compactación toma el bit 31 por un bloque enhebrado; la revisión de #595). */
+        if (total == 0) { vm->gc_descarrilo = 1; break; }
         /* #355 — el mismo cazador que en el mapa. Si salta AQUÍ y no allí, la
          * corrupción nace ENTRE los dos recorridos, y en medio sólo pasa una
          * cosa: el marcado escribiendo MARK_BIT en las cabeceras. Si salta en
          * los dos, ya venía de antes. Esa diferencia es la respuesta. */
         if (total > vm->heap_top - vm->heap_start) {
             bpvm_diag_bloque_mentiroso(vm, "barrido", cur, prev_blk, total);
+            vm->gc_descarrilo = 1;   /* V7/H7 #595: ídem */
             break;   /* no seguir: el recorrido ya no significa nada */
         }
         uint32_t tag = bpvm_read_u32_be(mem + cur);
@@ -760,6 +765,32 @@ void bpvm_heap_cuentas(bpvm_t* vm, bpvm_heap_cuentas_t* out) {
  * sólo quedan sus dos llamadas: bpvm_handles_gc_sweep (en bpvm_gc) y
  * bpvm_handles_grow (en la puerta de heap_alloc). */
 
+/* El mundo parado (SMP): se pide y se espera a que el único worker en marcha sea el que llama. Asume vm_lock
+ * tomado. Lo comparten gc_stw y la compactación (V7/H7 #595). */
+static void stw_parar(bpvm_t* vm) {
+    if (!vm->smp) return;
+    vm->smp->stop_the_world = true;
+    bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+    while (vm->smp->running_workers > 1) {
+        bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
+    }
+}
+static void stw_seguir(bpvm_t* vm) {
+    if (!vm->smp) return;
+    vm->smp->stop_the_world = false;
+    bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+}
+/* Si OTRO worker ya ha parado el mundo (está colectando), el que llega no puede esperarlo como un worker en marcha:
+ * se descuenta de `running_workers` mientras espera a que acabe (ver gc_stw). Asume vm_lock tomado. */
+static void stw_esperar_al_otro(bpvm_t* vm) {
+    vm->smp->running_workers--;
+    bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+    while (vm->smp->stop_the_world) {
+        bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
+    }
+    vm->smp->running_workers++;
+}
+
 /* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo
  * por umbral y la ruta de OOM. En legacy/single-worker no hay baile. */
 static void gc_stw(bpvm_t* vm) {
@@ -781,25 +812,107 @@ static void gc_stw(bpvm_t* vm) {
          * Al volver, el heap ya esta colectado por el otro: el llamante reintenta
          * su asignacion, que es lo que hace igualmente tras un GC propio. */
         if (vm->smp->stop_the_world) {
-            vm->smp->running_workers--;
-            bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
-            while (vm->smp->stop_the_world) {
-                bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
-            }
-            vm->smp->running_workers++;
+            stw_esperar_al_otro(vm);
             return;
         }
-        vm->smp->stop_the_world = true;
-        bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
-        while (vm->smp->running_workers > 1) {
-            bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
-        }
     }
+    stw_parar(vm);
     bpvm_gc(vm);
-    if (vm->smp) {
-        vm->smp->stop_the_world = false;
-        bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+    stw_seguir(vm);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * V7/H7 #595 (28-sep) — Heap.compact(): COMPACTAR el heap a petición del programa. Eduardo: «me gustaría la
+ * posibilidad de que el usuario pudiese pedir compactar el heap. Siempre en condiciones controladas, como por
+ * ejemplo al terminar la aplicación». Mover un objeto es posible porque una referencia es un HANDLE (V4): basta
+ * con cambiar su entrada de la tabla. Espejo de compactarLocked (miVM): el MISMO algoritmo y las mismas reglas
+ * (qué se mueve y qué no); los heaps de las dos VMs no son iguales ni antes ni después.
+ *
+ * Precondición: el mundo parado y una colecta RECIÉN hecha (ningún bloque con la marca del GC; los libres, con
+ * FREE_BIT). Sin memoria aparte —en una placa no la hay—: lo que hace falta saber vive, mientras dura, en la
+ * propia tabla de handles y en las cabeceras.
+ *  1. CLAVAR lo que no se puede mover aunque tenga handle: el bloque de estado de un fichero abierto
+ *     (bpvm_files_clavar: el motor guarda ahí su estado, y littlefs lo enlaza en su lista de abiertos).
+ *  2. ENHEBRAR la tabla en las cabeceras: cada bloque apuntado queda con la cadena de los índices que lo apuntan
+ *     (casi siempre uno). Un bloque vivo SIN handle no se enhebra —nadie sabe quién lo apunta—: se queda en su
+ *     sitio, como uno clavado.
+ *  3. DESLIZAR en orden de dirección: un bloque enhebrado baja al primer sitio libre (el destino nunca pasa del
+ *     origen: memmove) y cada índice de su cadena pasa a apuntar ahí; uno clavado se queda, y el hueco que le
+ *     quede delante vuelve a la lista de libres. Lo que queda detrás del último bloque es el bump.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static void compactar(bpvm_t* vm) {
+    uint8_t* mem = vm->memory;
+    uint32_t antes = vm->heap_next;
+    /* 1. Clavar el estado de los ficheros abiertos (los de un File inalcanzable ya los cerró la colecta). */
+    bpvm_files_clavar(vm);
+    /* 2. Enhebrar. */
+    for (uint32_t idx = 1u; idx < vm->handles.next; idx++) {
+        uint32_t a = vm->handles.addr[idx];
+        if (a == 0u) continue;                                        /* slot libre */
+        uint32_t h = a - 4u;
+        if (h < vm->heap_start || h >= vm->heap_next) continue;       /* defensivo */
+        uint32_t w = bpvm_read_u32_be(mem + h);
+        if (!(w & BPVM_TAG_ENHEBRADO) && (w & (BPVM_TAG_FREE_BIT | BPVM_TAG_CLAVADO))) continue;   /* clavado (o libre) */
+        vm->handles.addr[idx] = w;
+        bpvm_write_u32_be(mem + h, BPVM_TAG_ENHEBRADO | idx);
     }
+    /* 3. Deslizar. */
+    vm->free_list_head = 0u;   /* la rehacen los huecos que queden delante de un clavado */
+    uint32_t dst = vm->heap_start, cur = vm->heap_start;
+    uint32_t movidos = 0, clavados = 0, huecos = 0;
+    while (cur < vm->heap_next) {
+        uint32_t w = bpvm_read_u32_be(mem + cur);
+        uint32_t tag = w;
+        while (tag & BPVM_TAG_ENHEBRADO) tag = vm->handles.addr[tag & ~BPVM_TAG_ENHEBRADO];   /* al final, la etiqueta */
+        bpvm_write_u32_be(mem + cur, tag & ~BPVM_TAG_CLAVADO);   /* la cabecera vuelve a ser la de siempre */
+        uint32_t total = block_total_size(vm, cur);
+        if (tag & BPVM_TAG_FREE_BIT) { cur += total; continue; }
+        if (w & BPVM_TAG_ENHEBRADO) {
+            for (uint32_t c = w; c & BPVM_TAG_ENHEBRADO; ) {         /* cada índice de la cadena, al sitio nuevo */
+                uint32_t idx = c & ~BPVM_TAG_ENHEBRADO;
+                c = vm->handles.addr[idx];
+                vm->handles.addr[idx] = dst + 4u;
+            }
+            if (dst != cur) { memmove(mem + dst, mem + cur, total); movidos++; }
+            dst += total;
+        } else {
+            if (dst < cur) { add_to_free_list(vm, dst, cur - dst); huecos++; }
+            clavados++;
+            dst = cur + total;
+        }
+        cur += total;
+    }
+    vm->heap_next = dst;
+    vm->last_gc_heap_next = dst;
+    vm->alloc_since_gc = 0u;
+    for (int t = 0; t < vm->thread_count; t++) vm->threads[t].alloc_anchor = 0;   /* un ancla es transitoria */
+    bpvm_diag("[gc] compactado: bump %u -> %u (%u bloques movidos, %u clavados, %u huecos)",
+              (unsigned) antes, (unsigned) vm->heap_next,
+              (unsigned) movidos, (unsigned) clavados, (unsigned) huecos);
+}
+
+int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc) {
+    int r = 0;
+    bpvm_smp_lock(vm);
+    /* Si otro worker está colectando, se le deja acabar; luego, el mundo parado es de la compactación. */
+    if (vm->smp && vm->smp->stop_the_world) stw_esperar_al_otro(vm);
+    stw_parar(vm);
+    /* SIN OTROS HILOS VIVOS, mirado AQUÍ, con el mundo ya parado: fuera, entre mirar y parar, un worker podía
+     * resucitar a un hilo con eventos pendientes (#342) y dejarlo a medias de un builtin o de una expresión con
+     * una dirección cruda (la revisión de #595). Parado, los workers esperan antes de despertar a nadie. Un hilo
+     * TERMINATED que aún debe eventos cuenta como vivo, como en miVM. */
+    for (int t = 0; t < vm->thread_count && r == 0; t++) {
+        const bpvm_thread_t* o = &vm->threads[t];
+        if (o != tc && (o->status != BPVM_THREAD_TERMINATED || bpvm_events_con_deuda(vm, o))) r = 2;
+    }
+    if (r == 0 && !vm->gc_suspended) {   /* con el GC apagado, nada: apagado es apagado (#355) */
+        bpvm_gc_cuerpo(vm);
+        if (vm->gc_descarrilo) { vm->reserva_descarrilada = 1; r = 1; }   /* #494: sin recorrido fiable, no */
+        else compactar(vm);
+    }
+    stw_seguir(vm);
+    bpvm_smp_unlock(vm);
+    return r;
 }
 
 /* H3: intenta asignar `total` bytes. Devuelve la dirección de la cabecera, o

@@ -1826,6 +1826,14 @@ public final class AotCEmitter {
 
     private boolean emitLlamadaABuiltin(Symbol.FunctionSymbol fs, Ast.CallExpr c) {
         Integer id = idDeBuiltin(fs);
+        /* V7/H7 #595 — Heap.compact() MUEVE los objetos del heap, y una native guarda sus direcciones en variables
+         * de C que nadie sabría poner al día. En miVM la native es bytecode y la VM la rechazaría por no ser Main;
+         * en la VM-C la rechazaría por estar dentro de una native: el error, al compilar, igual para las dos. */
+        if (id != null && id == edu.bpgenvm.bytecode.Builtin.HEAP_COMPACT.id) {
+            throw new UnsupportedAotException("AOT: Heap.compact() (line " + c.line + ") no se puede llamar desde"
+                + " una native: mueve los objetos del heap, y una native guarda sus direcciones en variables de C."
+                + " Se llama desde Main.");
+        }
         if (id == null || fs.params == null || fs.params.size() != c.args.size()) return false;
         StringBuilder tipos = new StringBuilder();
         for (Symbol.ParamSymbol p : fs.params) {

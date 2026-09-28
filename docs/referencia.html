@@ -1046,7 +1046,7 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   <tr><td><code>App.projectPath(): string</code></td><td>Raíz del proyecto (la base de las rutas relativas de <code>readFile</code>, imágenes, <code>.win</code>…).</td></tr>
 </table>
 
-<h3 id="stdlib-heap">13.19 <code>Heap</code> (el diagnóstico del heap)</h3>
+<h3 id="stdlib-heap">13.19 <code>Heap</code> (el diagnóstico del heap, y compactarlo)</h3>
 <p>
   Lo que un programa puede preguntar de su memoria (<code>import Heap</code>), en el PC y en
   cualquier placa. Cada función <em>lee</em> contadores de la VM —no reserva nada ni recorre el heap—,
@@ -1072,6 +1072,48 @@ root.<span class="fn">put</span>(<span class="str">"edad"</span>,   Json.<span c
   <code>heapFrag()</code> y <code>heapMap()</code> siguen: devuelven texto y sólo existen en la VM del PC
   (en una placa, «builtin no soportado»), para mirar la memoria mientras se desarrolla.
 </p>
+<h4 id="stdlib-heap-compact"><code>Heap.compact()</code>: compactar el heap</h4>
+<p>
+  El GC recoge lo que ya no se usa, pero no mueve lo que queda: tras muchas reservas y liberaciones la
+  memoria libre acaba repartida en huecos, y una reserva grande puede fallar con memoria de sobra.
+  <code>Heap.compact()</code> hace una colecta completa y <strong>desliza lo vivo hacia el principio</strong>
+  del heap, así que todo lo libre queda en un bloque: <code>getLargestFree()</code> pasa a ser
+  <code>getFree()</code>. Es para un programa que corre días, o que acaba una fase y empieza otra:
+</p>
+<pre><code>cargaDatos()
+Heap.compact()
+bucleDeTrabajo()</code></pre>
+<p>
+  Mover un objeto es seguro porque una referencia es un <em>handle</em>, no una dirección: basta con cambiar
+  su entrada en la tabla. Pero hay direcciones crudas que no se pueden seguir (las de una expresión a medias,
+  las de una función <code>native</code>), así que se compacta en <strong>condiciones controladas</strong>:
+</p>
+<ul>
+  <li><strong>Sólo desde <code>Main</code></strong>, en su propio código: desde otra función, o desde un
+    handler de evento, <code>RuntimeError</code> «Heap.compact: sólo se puede llamar desde Main».</li>
+  <li><strong>Sin otros hilos vivos</strong>: si no, <code>RuntimeError</code> «Heap.compact: no se puede
+    compactar con otros hilos vivos».</li>
+  <li><strong>Nunca desde una <code>native</code></strong>: es un error de compilación.</li>
+</ul>
+<p>
+  Lo que no se puede mover se queda en su sitio: el estado de un fichero abierto (<code>IO.File</code>), que
+  el sistema de ficheros de la placa tiene enlazado. Si hay uno abierto, delante de él puede quedar un hueco.
+  Compactar lleva su colecta (<code>getCollections()</code> sube uno) y cuesta un recorrido del heap: es
+  para momentos elegidos, no para cada vuelta de un bucle.
+</p>
+<p>
+  Un programa con hilos que corre días <strong>prepara</strong> ese momento aprovechando una calma:
+  <code>Main</code> da a sus hilos la orden de parar (un indicador que cada uno mira en su bucle; matar un hilo
+  desde fuera podría dejar un <code>Mutex</code> cogido) y los espera con <code>join()</code>, cierra lo que
+  esté abierto, compacta, reposa y arranca hilos nuevos para la jornada siguiente
+  (<code>bpgenvm-c/samples/HeapReposo.bp</code>):
+</p>
+<pre><code>turno.pide()          <span class="comment">// la orden de parar</span>
+a.join()
+b.join()
+f.close()
+Heap.compact()
+sleep(<span class="num">60000</span>)          <span class="comment">// y la jornada siguiente, con hilos nuevos</span></code></pre>
 
 
 <!-- =========================================================== -->

@@ -88,6 +88,13 @@ static int pending_for(const bpvm_t* vm, int tid) {
  * El presupuesto (ev_post_mortem) se fija la PRIMERA vez que se le ve muerto
  * con deuda, y sólo baja. Así un handler post-mortem que vuelva a levantar un
  * evento no resucita al thread para siempre. */
+/* V7/H7 #595 — ¿un hilo TERMINATED que aún debe eventos suyos? El scheduler lo resucitará para saldarlos (arriba),
+ * así que no ha acabado: para Heap.compact() cuenta como vivo. En miVM ni existe ese estado —un hilo con eventos
+ * pendientes no llega a TERMINATED (reviveForPendingEvents, al terminar)—, y así las dos VMs cuentan igual. */
+int bpvm_events_con_deuda(const bpvm_t* vm, const bpvm_thread_t* tc) {
+    return tc->status == BPVM_THREAD_TERMINATED && tc->ev_post_mortem != 0 && pending_for(vm, tc->id) > 0;
+}
+
 int bpvm_events_revive_terminated(bpvm_t* vm) {
     int revived = 0;
     for (int i = 0; i < vm->thread_count; i++) {

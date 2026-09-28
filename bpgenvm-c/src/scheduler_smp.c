@@ -69,6 +69,17 @@ static int64_t earliest_wake_locked(const bpvm_t* vm) {
 static int do_wakeups_locked(bpvm_t* vm) {
     int woken = 0;
     int64_t now = bpvm_platform_now_ms();
+    /* #342 — un thread que terminó dejando eventos SUYOS encolados es otra
+     * razón para volver a ser elegible, igual que un sleep vencido o un join
+     * completado. La regla vive en events.c y la llaman los DOS schedulers:
+     * una sola verdad, no una copia por scheduler.
+     *
+     * V7/H7 #595 (28-sep) — y ANTES de los joins, como en scheduler.c: si no, el
+     * que espera a ese thread lo ve TERMINATED, se despierta y sigue antes de que
+     * el handler post-mortem corra (la revisión de #595: «join vuelto» salía antes
+     * que el handler, sólo con --smp; en miVM y sin SMP, después). Resucitado,
+     * vuelve a estar RUNNABLE y el join espera a que salde su deuda. */
+    woken += bpvm_events_revive_terminated(vm);
     for (int i = 0; i < vm->thread_count; i++) {
         bpvm_thread_t* tc = &vm->threads[i];
         if (tc->status == BPVM_THREAD_BLOCKED_SLEEP && tc->wake_at_ms <= now) {
@@ -77,17 +88,15 @@ static int do_wakeups_locked(bpvm_t* vm) {
         } else if (tc->status == BPVM_THREAD_BLOCKED_JOIN
                 && tc->blocked_on_join >= 0
                 && tc->blocked_on_join < vm->thread_count
-                && vm->threads[tc->blocked_on_join].status == BPVM_THREAD_TERMINATED) {
+                && vm->threads[tc->blocked_on_join].status == BPVM_THREAD_TERMINATED
+                /* ...y sin deuda: el TERMINATED se escribe sin cerrojo (interp.c), así que pudo llegar entre la
+                 * resurrección de arriba y esta línea; con deuda, la siguiente pasada lo resucita. */
+                && !bpvm_events_con_deuda(vm, &vm->threads[tc->blocked_on_join])) {
             tc->blocked_on_join = -1;
             tc->status = BPVM_THREAD_RUNNABLE;
             woken++;
         }
     }
-    /* #342 — un thread que terminó dejando eventos SUYOS encolados es otra
-     * razón para volver a ser elegible, igual que un sleep vencido o un join
-     * completado. La regla vive en events.c y la llaman los DOS schedulers:
-     * una sola verdad, no una copia por scheduler. */
-    woken += bpvm_events_revive_terminated(vm);
     return woken;
 }
 

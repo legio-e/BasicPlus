@@ -275,7 +275,8 @@ enum {
     BUILTIN_HEAP_FREE_BLOCKS             = 267,   /* __heapFreeBlocks(): integer */
     BUILTIN_HEAP_HANDLES                 = 268,   /* __heapHandles(): integer */
     BUILTIN_HEAP_COLLECTIONS             = 269,   /* __heapCollections(): integer */
-    BUILTIN__CUANTOS = 270
+    BUILTIN_HEAP_COMPACT                 = 270,   /* __heapCompact() */
+    BUILTIN__CUANTOS = 271
 };
 
 #endif

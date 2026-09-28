@@ -370,6 +370,34 @@ dentro del bloque, y su tamaño depende de la memoria de cada placa), así que e
 arrancar). Una prueba compara RELACIONES (`bpgenvm-c/samples/HeapInfo.bp`). `heapFrag` (121) y `heapMap` (122)
 siguen como estaban: texto y sólo miVM.
 
+## 270 — `__heapCompact`() → void — COMPACTAR el heap  *(V7/H7 #595, 28-sep)*
+
+Lo usa `Heap.compact()` (pedido de Eduardo el 28-sep: *«que el usuario pudiese pedir compactar el heap. Siempre en
+condiciones controladas»*). Una colecta completa y, con el mundo aún parado, deslizar lo vivo al principio del heap:
+todo lo libre queda en UN bloque. Posible porque una referencia es un handle (V4): mover un objeto es cambiar su
+entrada de la tabla. El MISMO algoritmo en las dos VMs (`heap.c`, `compactar`/`bpvm_heap_compactar`;
+`VirtualMachine.compactarLocked`), sin memoria aparte: la tabla se ENHEBRA en las cabeceras —la cabecera guarda el
+último índice que apunta al bloque (el bit 31, el de la marca del GC) y la entrada, lo que había en la cabecera—; se
+recorre el heap en orden de dirección y cada bloque enhebrado baja al primer sitio libre, con sus índices puestos
+al día. No se mueven, y dejan delante un hueco en la lista de libres: un bloque vivo sin handle y uno CLAVADO (el
+bit 23, de los reservados: el estado de un fichero abierto —en la VM-C, el motor del FS lo guarda ahí y littlefs lo
+enlaza en su lista—). Los dos bits sólo existen mientras dura la compactación.
+
+Las condiciones, las mira el builtin en este orden y con estos textos, los MISMOS en las dos VMs:
+
+- **desde `Main`**: el marco actual es el que abrió el `CALL` de `__startup` —su bp de vuelta es el fondo de la
+  pila del hilo principal, y su pc de vuelta es código y no un centinela de `[0, 0x100)` (un handler de evento,
+  un despacho de la GUI, el puente de una native)—; en la VM-C, además, sin una native a medias en el hilo (no
+  abren marco BP). Si no: `RuntimeError` «Heap.compact: sólo se puede llamar desde Main».
+- **sin otros hilos vivos**, mirado con el mundo ya parado (fuera, con el scheduler SMP, un worker podía resucitar
+  entre mirar y parar a un hilo que murió debiendo un evento, #342); y un hilo TERMINATED que aún debe eventos
+  cuenta como vivo, como en miVM, donde ni llega a TERMINATED. Si no: `RuntimeError` «Heap.compact: no se puede
+  compactar con otros hilos vivos».
+
+Y desde una `native` es un error de COMPILACIÓN (`AotCEmitter`): guarda direcciones del heap en variables de C. Con
+el GC apagado (`--nogc`) no hace nada; si el recorrido del GC se descarrila (#494), lanza la prefabricada del heap
+descarrilado. La prueba: `bpgenvm-c/samples/HeapCompact.bp` (paridad y ronda de placas).
+
 ---
 
 ## Próximos builtins propuestos (no asignados todavía)

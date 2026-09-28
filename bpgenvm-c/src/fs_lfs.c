@@ -394,7 +394,8 @@ static int be_list(const char* path,
  * Arduino-LittleFS, y respeta la regla B2 de arriba —cero malloc aquí— sin el
  * tope de dos ficheros que imponían los buffers estáticos. El bloque tiene que
  * quedarse quieto y vivo mientras el fichero esté abierto: littlefs lo enhebra
- * en su `mlist`. La VM lo garantiza (heap sin compactar + cierre desde el GC). */
+ * en su `mlist`. La VM lo garantiza: Heap.compact() no lo mueve (lo clava,
+ * V7/H7 #595: bpvm_files_clavar) y el cierre de uno inalcanzable, desde el GC. */
 typedef struct {
     lfs_file_t              f;
     struct lfs_file_config  cfg;

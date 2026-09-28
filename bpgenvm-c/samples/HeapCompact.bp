@@ -1,0 +1,197 @@
+// HeapCompact.bp — V7/H7 #595 (28-sep): Heap.compact(), pedido de Eduardo («que el usuario pudiese pedir compactar
+// el heap, siempre en condiciones controladas»). Se fragmenta el heap a propósito, se compacta desde Main y se
+// comprueba que todo lo libre queda en UN bloque y que lo vivo sigue intacto —objetos que se apuntan entre sí,
+// cadenas, arrays de enteros y de long—; que reservar y colectar después sigue bien; que un fichero ABIERTO
+// sobrevive (su estado no se mueve: en la VM-C, littlefs lo enlaza); y los dos rechazos: desde otra función y con
+// otro hilo vivo. Los números del heap son de cada VM: se comprueban RELACIONES, y en el stdout, «ok» o «FALLO».
+module HeapCompact
+  import IO
+  import Heap
+
+  var F: string := "compact_test.bin"
+
+  class Nodo
+    var sig: Nodo
+    var nombre: string
+    var datos: integer[]
+    var largos: long[]
+    public function Nodo(sig: Nodo, n: integer)
+      this.sig := sig
+      this.nombre := "nodo" + n
+      this.datos := newIntArray(n mod 7 + 1)
+      for i := 0 to len(this.datos) - 1 do
+        this.datos[i] := n * 10 + i
+      next i
+      this.largos := newLongArray(2)
+      this.largos[0] := 4000000000L + n
+      this.largos[1] := -n
+    end Nodo
+    public function siguiente(): Nodo
+      return this.sig
+    end siguiente
+    // ¿Sigue siendo el nodo n? (su nombre, sus enteros y sus long)
+    public function sano(n: integer): boolean
+      if this.nombre != "nodo" + n then
+        return false
+      endif
+      if len(this.datos) != n mod 7 + 1 then
+        return false
+      endif
+      for i := 0 to len(this.datos) - 1 do
+        if this.datos[i] != n * 10 + i then
+          return false
+        endif
+      next i
+      return this.largos[0] == 4000000000L + n and this.largos[1] == -n
+    end sano
+  end Nodo
+
+  class Espera extends Thread
+    var m: Mutex
+    public function Espera(mx: Mutex)
+      super(4096)
+      this.m := mx
+    end Espera
+    public function run()
+      this.m.lock()      // se queda esperando a que Main suelte el cerrojo
+      this.m.unlock()
+    end run
+  end Espera
+
+  function mira(nombre: string, cierto: boolean)
+    if cierto then
+      print "ok " + nombre
+    else
+      print "FALLO " + nombre
+    endif
+  end mira
+
+  // La lista de los nodos pares de [desde, hasta), del último al primero; ¿están todos, y sanos?
+  function listaSana(cab: Nodo, desde: integer, hasta: integer): boolean
+    var n: integer := hasta - 1
+    if n mod 2 == 1 then
+      n := n - 1
+    endif
+    var p: Nodo := cab
+    while n >= desde do
+      if p == null then
+        return false
+      endif
+      if not p.sano(n) then
+        return false
+      endif
+      p := p.siguiente()
+      n := n - 2
+    endwh
+    return p == null
+  end listaSana
+
+  // Reserva [desde, hasta) alternando: los pares, a la lista que se devuelve; los impares, a una que se suelta.
+  // Así el heap queda hecho un peine: huecos entre lo vivo.
+  function peine(cab: Nodo, desde: integer, hasta: integer): Nodo
+    var basura: Nodo := null
+    for i := desde to hasta - 1 do
+      if i mod 2 == 0 then
+        cab := Nodo(cab, i)
+      else
+        basura := Nodo(basura, i)
+      endif
+    next i
+    return cab
+  end peine
+
+  // Llamar a compact desde una función que no es Main: se rechaza.
+  function compactaDesdeFuera()
+    Heap.compact()
+  end compactaDesdeFuera
+
+  function Main()
+    // 1) El peine y una colecta: el heap queda fragmentado.
+    // Los contadores se leen justo antes y justo después de compactar: leerlos no reserva nada, y cualquier
+    // otra cosa (un print, un mira) sí.
+    var vivos: Nodo := peine(null, 0, 300)
+    gc()
+    var huecos0: integer := Heap.getFreeBlocks()
+    var mayor0: integer := Heap.getLargestFree()
+    var libre0: integer := Heap.getFree()
+    var handles0: integer := Heap.getHandles()
+    var colectas0: integer := Heap.getCollections()
+
+    // 2) Compactar desde Main.
+    Heap.compact()
+    var huecos1: integer := Heap.getFreeBlocks()
+    var mayor1: integer := Heap.getLargestFree()
+    var libre1: integer := Heap.getFree()
+    var handles1: integer := Heap.getHandles()
+    var colectas1: integer := Heap.getCollections()
+    mira("fragmentado: hay huecos", huecos0 > 0)
+    mira("fragmentado: el mayor libre es menor que lo libre", mayor0 < libre0)
+    mira("compactado: ni un hueco", huecos1 == 0)
+    mira("compactado: todo lo libre en un bloque", mayor1 == libre1)
+    mira("compactado: no se pierde memoria", libre1 >= libre0)
+    mira("compactado: con su colecta", colectas1 == colectas0 + 1)
+    mira("compactado: los objetos no aumentan", handles1 <= handles0)
+    mira("lo vivo sigue intacto", listaSana(vivos, 0, 300))
+
+    // 3) Reservar y colectar después: el heap compactado es un heap normal.
+    vivos := peine(vivos, 300, 500)
+    mira("tras compactar se reserva", listaSana(vivos, 0, 500))
+    gc()
+    mira("y se colecta", listaSana(vivos, 0, 500))
+    Heap.compact()
+    mira("y se vuelve a compactar", Heap.getLargestFree() == Heap.getFree() and listaSana(vivos, 0, 500))
+
+    // 4) Un fichero ABIERTO mientras se compacta: su estado no se mueve, y sigue funcionando.
+    var f: IO.File := IO.File(F, "w")
+    var a: byte[] := newByteArray(64)
+    for i := 0 to 63 do
+      a[i] := byte(i)
+    next i
+    f.write(a)
+    var otros: Nodo := peine(null, 1000, 1200)
+    otros := null
+    gc()
+    Heap.compact()
+    for i := 0 to 63 do
+      a[i] := byte(200 - i)
+    next i
+    f.write(a)
+    f.seek(0)
+    var b: byte[] := f.readBytes(200)
+    var bien: boolean := len(b) == 128
+    if bien then
+      for i := 0 to 63 do
+        if b[i] != i or b[64 + i] != 200 - i then
+          bien := false
+        endif
+      next i
+    endif
+    f.close()
+    IO.removeFile(F)
+    mira("un fichero abierto sobrevive a la compactacion", bien)
+    mira("y lo vivo tambien", listaSana(vivos, 0, 500))
+
+    // 5) Los rechazos: desde otra función, y con otro hilo vivo.
+    try
+      compactaDesdeFuera()
+      print "FALLO compactar desde otra funcion no se rechaza"
+    catch e: RuntimeError
+      print "rechazo: " + e.msg
+    endtry
+    var mtx: Mutex := Mutex()
+    mtx.lock()
+    var t: Espera := Espera(mtx)
+    t.start()
+    try
+      Heap.compact()
+      print "FALLO compactar con otro hilo vivo no se rechaza"
+    catch e: RuntimeError
+      print "rechazo: " + e.msg
+    endtry
+    mtx.unlock()
+    t.join()
+    Heap.compact()
+    mira("con el hilo acabado, se compacta", Heap.getFreeBlocks() == 0 and listaSana(vivos, 0, 500))
+    print "fin"
+  end Main
+end HeapCompact

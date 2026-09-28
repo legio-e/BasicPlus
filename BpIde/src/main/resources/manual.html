@@ -1924,6 +1924,14 @@ objeto compartido</code></pre>
   extra y no libera el objeto en tránsito.
 </p>
 <p>
+  El GC <strong>no mueve</strong> nada: lo libre puede acabar repartido en huecos.
+  <code>Heap.compact()</code> sí mueve —desliza lo vivo al principio del heap, con el
+  mundo parado—, pero sólo a petición del programa y en condiciones controladas:
+  desde <code>Main</code>, sin otros hilos vivos y nunca desde una <code>native</code>
+  (referencia §13.19). Es posible porque una referencia es un <em>handle</em>: mover
+  un objeto es cambiar su entrada de la tabla.
+</p>
+<p>
   <strong>Wraps de opcodes de alocación</strong>:
   <code>NEW_OBJECT</code> y las variantes de <code>NEWARRAY</code> mantienen
   <code>vmLock</code> desde la alocación hasta la publicación al stack BP

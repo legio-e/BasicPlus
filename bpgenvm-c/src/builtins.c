@@ -108,6 +108,19 @@ void bpvm_files_gc(bpvm_t* vm) {
         }
     }
 }
+/* V7/H7 #595 — antes de compactar (heap.c, con el mundo parado): el bloque de un fichero abierto NO se mueve. El
+ * motor guarda dentro su estado, y littlefs, además, lo enlaza en su `mlist` (fs_lfs.c): moverlo dejaría esa
+ * lista apuntando al sitio viejo. Se clava con la etiqueta, y la compactación lo deja donde está. */
+void bpvm_files_clavar(bpvm_t* vm) {
+    for (uint32_t r = vm->files_head; r != 0; ) {
+        uint32_t a = bpref_deref(vm, bpref_from_addr(r));
+        if (a == 0) break;
+        uint32_t h = a - 4u;
+        if (h >= vm->heap_start && h < vm->heap_next)
+            bpvm_write_u32_be(vm->memory + h, bpvm_read_u32_be(vm->memory + h) | BPVM_TAG_CLAVADO);
+        r = ((bpvm_fs_file_t*) (vm->memory + a + 4))->next;
+    }
+}
 /* El fin de RUN cierra lo que quede y LO DICE (errores sí, silenciosos no). */
 void bpvm_files_fin_de_run(bpvm_t* vm) {
     int n = 0;
@@ -3808,6 +3821,29 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                    : (id == BUILTIN_HEAP_HANDLES)      ? c.handles
                    :                                     c.colectas;
         push_i32(vm, tc, (int32_t) v);
+        return BPVM_OK;
+    }
+    /* V7/H7 #595 (28-sep) — Heap.compact(): las condiciones, en el MISMO orden y con los MISMOS textos que miVM
+     * (heapCompact), y la compactación con el mundo parado (heap.c, bpvm_heap_compactar). */
+    case BUILTIN_HEAP_COMPACT: {
+        /* 1. DESDE Main: el marco actual lo abrió el CALL de __startup —su bp de vuelta es el fondo de la pila del
+         *    hilo principal y su pc de vuelta es código, no un centinela de [0, 0x100) (el de un handler de evento
+         *    o el del puente de una native)—. Y ninguna native a medias en este hilo: una native no abre marco BP
+         *    (sus variables son de C), así que el marco no lo diría; en miVM la native es bytecode y sí lo dice. */
+        uint32_t tbp = tc->bp;
+        int desde_main = (tc == &vm->threads[0])
+            && tbp > tc->stack_base
+            && bpvm_read_u32_be(vm->memory + tbp - 8u) == tc->stack_base
+            && bpvm_read_u32_be(vm->memory + tbp - 12u) >= BPVM_INITIAL_FREE_ADDR
+            && tc->nativa == NULL && !tc->builtin_de_nativa && bpvm_aot_callctx()->tc == NULL;
+        if (!desde_main) return builtin_throw(vm, tc, BPVM_MSG_COMPACT_MAIN);
+        /* 2. SIN OTROS HILOS VIVOS —ninguno parado con una dirección cruda (un builtin bloqueado con su array)—, y
+         * 3. colecta y compacta: las dos con el mundo parado (heap.c). Si el recorrido se descarrila (#494), la
+         *    prefabricada: queda armada y bpvm_throw_runtime_error la entrega, sea cual sea el texto que se le pase. */
+        int r = bpvm_heap_compactar(vm, tc);
+        if (r == 2) return builtin_throw(vm, tc, BPVM_MSG_COMPACT_HILOS);
+        if (r == 1) return builtin_throw(vm, tc, BPVM_MSG_HEAP_DESCARRILADO);
+        push_i32(vm, tc, 0);   /* void → push dummy */
         return BPVM_OK;
     }
     case BUILTIN_MACHINE_ADC_CHANNELS: {
