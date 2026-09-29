@@ -1068,6 +1068,31 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🔧 H7 (29-sep, noche) — `#593` y `#608` cerradas (`41c27547`); la prueba de estrés del heap abre `#610`–`#612`
+
+- Eduardo: *«al final la reserva la ha de hacer un método único, no n métodos»* y *«si se detecta en un bloque vivo
+  y un programa funcionando se debería producir una excepción»*. `bpvm_heap_nuevo` / `heapNuevo` (`41c27547`):
+  el bloque nace completo y con su handle; 38 sitios de las dos VMs, convertidos.
+- Cada GC cuenta los bloques y mira los handles; el caso que pasaba mudo —un bloque que se traga justo el
+  siguiente— ya es la excepción de `#494`, en las dos VMs y con su sabotaje.
+- De paso: `test-packhelp` (roto desde `#571`), `test-freelist` y `test-mem`, a la red.
+- `#608`, «la A» de Eduardo (el mismo commit): una excepción sin atrapar en un hilo acaba ese hilo, los demás siguen
+  y el programa sale con error; igual en las dos VMs. `HiloExc` al corpus.
+- **Antes de tocar la reserva, la prueba de estrés** (Eduardo: *«lo testearía en el PC, con 1 hilo y con varios …
+  hay que estar muy seguro antes de tocar nada»*; `V7_IDEAS` §H7 `#593`): `HeapEstres` y `TablaCrece`, cientos de
+  veces con 1, 2 y 4 workers, contra el árbol de antes y el de ahora. Tres fallos, los tres anteriores a `#593`:
+  `#611` (el `split` de miVM pierde los trozos si la reserva colecta: falla SIEMPRE con el heap justo), `#612` (y
+  entonces miVM acaba sin decir nada) y `#610` (la tabla de handles de la VM-C crece MOVIÉNDOSE con otros workers
+  leyéndola: antes de `#593`, del 3 al 7 % de las ejecuciones con 2+ workers; con el método único ya no, salvo con el
+  GC apagado). Cada causa, probada cambiando UNA cosa sobre una copia; el arreglo de `#610`, prototipado (0/300).
+  Eduardo avisó de que el GC apagado no para las liberaciones de `owner`: descartado con el desensamblado (cero
+  `FREE_REF` y `SET_FIELD_OWNER`). Y la lección que decide el diseño: esperar dentro de la ventana entre la reserva y
+  el alta del handle corrompe (26-35 %, medido), así que el handle nace con el bloque.
+- La red completa, verde (11 min); placas compiladas sin grabar: Pico, S3, C6 y Nucleo. Sigue, por orden de Eduardo:
+  `#610`, `#611`, `#612`, cada una con su prueba en la red.
+- Incidente raro, anotado: una vez, con `2>&1`, la línea «[bpvm] pila:» del final del RUN de la VM-C salió partida
+  a trozos entre las líneas del programa (hasta un carácter UTF-8 partido). Sólo afecta al mezclar stdout y stderr.
+
 ## 🧵 H7 (29-sep) — el mapa de lo que quedaba, y las pilas y los hilos: `#603`–`#606` cerradas; `#607`, `#608` y `#609` abiertas
 
 - `#603` (`a907435d`): con `--smp`, soltar un objeto con dueño rompía el heap de la VM-C 10 de 10 veces —la lista de
