@@ -1068,6 +1068,19 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🗺️ H7 (29-sep) — el mapa verificado de lo que queda: tres fallos medidos ejecutándolos (`#603`, `#604`, `#605`) y dos latentes (`#606`)
+
+- Eduardo: *«continuar H7»*. Cinco lecturas del código (la memoria por placa, el heap y las pilas, el arranque y
+  los packs, la flash, `CALL_REL` y la Pico sobre FreeRTOS) y lo decisivo comprobado a mano: el mapa, en
+  `V7_IDEAS` §H7.
+- Lo que pesa más que la lista de la ficha, ejecutado en las dos VMs: con `--smp=2`, soltar objetos con dueño desde
+  dos hilos rompe el heap de la VM-C 8 de 8 veces (`#603`); la VM-C sólo deja crear 32 hilos en la vida del
+  programa (`#604`); y nadie vigila el desbordamiento de pila: a 100 niveles, un hilo pisa al vecino en silencio,
+  distinto en cada VM (`#605`, el «muro»). Leyendo: dos latentes del XIP (`#606`).
+- Lo que no estaba anotado: la C3 ya no llega a su objetivo de 128 KB (120 desde el 25-sep); `test-mem` no está en
+  la red; la línea que explicaba el techo de 16 MB del P4 se borró el 8-sep; y el 32 % de la Pico se midió en un
+  camino de `print` que `#600` ya cambió.
+
 ## 🔧 H8 (28-sep, tarde) — el `EXITED` de un `RESET`, el `INFO` en común y el guardián de la miVM
 
 - El `EXITED` de un programa parado por un `RESET` dice «reiniciado por RESET» en las cuatro (`10910242`). Y
