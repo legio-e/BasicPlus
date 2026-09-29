@@ -68,6 +68,8 @@ void    bpvm_handles_destroy(struct bpvm* vm);  /* la free-list; addr/gen se van
  * cada sitio que perdería la generación. Ref nula = sin slot ni sitio para crecer
  * (OOM atrapable, con la excepción prefabricada de #430). */
 bpref_t bpvm_handle_register(struct bpvm* vm, uint32_t addr);
+/* V7/H7 #593 — lo mismo con el vm_lock YA tomado: para bpvm_heap_nuevo, el método único de la reserva. */
+bpref_t bpvm_handle_register_bajo_cerrojo(struct bpvm* vm, uint32_t addr);
 /* Paso 3 — marca MUERTO el índice de un handle (owner-free): bump de gen + el slot a
  * la free-list. No-op para null y constantes. Idempotente. */
 void    bpvm_handle_kill(struct bpvm* vm, bpref_t r);

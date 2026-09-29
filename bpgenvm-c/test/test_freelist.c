@@ -65,10 +65,9 @@ static int ordenada(const bpvm_t* vm) {
  * Se pide con el GC apagado para que nadie mueva nada a mitad del experimento:
  * lo que se prueba aquí es la lista, no el recolector. */
 static uint32_t reserva(bpvm_t* vm, uint32_t payload) {
-    uint32_t user = bpvm_heap_alloc(vm, payload, BPVM_TYPE_ARRAY_I8);
-    if (user == 0) { printf("FALLO: no hay heap para reservar %u B\n", (unsigned) payload); exit(1); }
-    bpvm_write_u32_be(vm->memory + user, payload);   /* length, como hace el caller real */
-    return user - 4u;
+    bpref_t h = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, payload, payload);   /* V7/H7 #593: el método único */
+    if (h.v == 0u) { printf("FALLO: no hay heap para reservar %u B\n", (unsigned) payload); exit(1); }
+    return bpref_deref(vm, h) - 4u;
 }
 
 int main(void) {

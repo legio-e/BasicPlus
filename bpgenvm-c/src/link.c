@@ -752,6 +752,7 @@ static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm) {
         uint32_t nf = (x.arena + 63u) & ~63u;
         vm->next_free_address = nf; vm->heap_start = nf; vm->heap_next = nf;
         vm->last_gc_heap_next = nf; vm->free_list_head = 0;
+        vm->heap_bloques = 0;   /* V7/H7 #593: el heap, vacío */
     }
     if (x.construidas > 0 || x.refs > 0)
         bpvm_diag("[bpvm] enlace tardio: %d clases construidas, %d refs, %u bytes de arena",

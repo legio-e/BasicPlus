@@ -24,8 +24,10 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class HeapDescarriladoTest {
 
-    /** Corre HeapRoto (compilado en `out`) y devuelve lo que imprime. */
-    private static String corre(Path out, boolean estropear) throws Exception {
+    /** Corre HeapRoto (compilado en `out`) y devuelve lo que imprime. `modo`: 0, sano; 1, un largo que se sale del
+     *  heap (#494); 2, un largo que se traga justo el bloque siguiente (#593: antes, mudo). */
+    private static String corre(Path out, int modo) throws Exception {
+        boolean estropear = modo != 0;
         VirtualMachine vm = new VirtualMachine();
         ModuleManager mm = new ModuleManager(vm);
         mm.setStdlibDir("../bpstdlib");          // el CWD de la prueba es lexer-java/
@@ -42,7 +44,8 @@ class HeapDescarriladoTest {
         vm.setDebugHook(ctx -> {
             if (estropear && !hecho[0]) {
                 hecho[0] = true;
-                vm.estropeaHeapParaPrueba();
+                if (modo == 1) vm.estropeaHeapParaPrueba();
+                else vm.estropeaHeapTragandoElSiguienteParaPrueba();
             }
         });
         mm.executeRootModule(out.resolve("HeapRoto.mod").toString(), "HeapRoto");
@@ -73,11 +76,11 @@ class HeapDescarriladoTest {
             Main.STDLIB_DIR = antes;
         }
 
-        String control = corre(out, false);
+        String control = corre(out, 0);
         assertTrue(control.contains("sin excepcion"), "el control, con el heap sano, no lanza: " + control);
         assertTrue(control.contains("fin"), control);
 
-        String roto = corre(out, true);
+        String roto = corre(out, 1);
         assertTrue(roto.contains("cazada: " + VirtualMachine.MSG_HEAP_DESCARRILADO),
                 "el GC descarrilado tenía que lanzar la prefabricada, y el programa atraparla: " + roto);
         assertTrue(roto.contains("fin"), "tras atraparla, el programa sigue: " + roto);
@@ -86,5 +89,12 @@ class HeapDescarriladoTest {
         assertTrue(control.contains("lo de antes: guardado 42"), control);
         assertEquals("heap descarrilado (fallo interno de la VM)", VirtualMachine.MSG_HEAP_DESCARRILADO,
                 "el MISMO texto que la VM-C (BPVM_MSG_HEAP_DESCARRILADO)");
+
+        // V7/H7 #593 (29-sep): un bloque que se traga JUSTO el siguiente —el recorrido se recompone y acaba en
+        // heapNext—; antes pasaba mudo y el GC seguía con lo saltado fuera del set. Ahora, la misma excepción.
+        String traga = corre(out, 2);
+        assertTrue(traga.contains("cazada: " + VirtualMachine.MSG_HEAP_DESCARRILADO),
+                "un bloque que se traga el siguiente tenía que dar la prefabricada: " + traga);
+        assertTrue(traga.contains("lo de antes: guardado 42"), "y lo vivo, intacto: " + traga);
     }
 }

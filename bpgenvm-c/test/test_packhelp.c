@@ -162,10 +162,7 @@ int main(void)
      * plausible y equivocado, que es la peor forma de fallar. */
     printf("\n  -- long[] y double[] (elementos de 8 bytes) --\n");
     {
-        uint32_t cru = bpvm_heap_alloc(vm, 2 * 8, BPVM_TYPE_ARRAY_I64);
-        uint32_t arr;
-        bpvm_write_u32_be(vm->memory + cru, 2);
-        arr = (uint32_t) bpvm_handle_register(vm, cru).v;
+        uint32_t arr = (uint32_t) bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I64, 2, 2 * 8).v;   /* V7/H7 #593 */
 
         H->array_store_i64(vm, arr, 0, 1754300000789LL);
         ok("un timestamp en ms va y vuelve entero (NO cabe en 32 bits)",
@@ -183,8 +180,10 @@ int main(void)
     printf("\n  -- pack_fallo: el mensaje --\n");
     {
         bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
+        jmp_buf limite;   /* #571: el slot guarda un PUNTERO al jmp_buf del limite, como aot_call_guarded */
+        f->buf = &limite;
         f->armed = 1; f->msg[0] = 0;
-        if (setjmp(f->buf) == 0) {
+        if (setjmp(limite) == 0) {
             H->pack_fallo(vm, MARCA_FALSA, 7u, "prb_suma", 1);
             ok("pack_fallo NO retorna", 0);
         } else {
@@ -196,7 +195,7 @@ int main(void)
             ok("y la VERSION que se pedia",   strstr(f->msg, "7") != 0);
         }
         f->armed = 1; f->msg[0] = 0;
-        if (setjmp(f->buf) == 0) {
+        if (setjmp(limite) == 0) {
             H->pack_fallo(vm, MARCA_FALSA, 1u, "prb_suma", 2);
         } else {
             printf("      \"%s\"\n", f->msg);
@@ -207,6 +206,6 @@ int main(void)
     }
 
     printf("\n==========================================\n");
-    printf(fallos == 0 ? "  [status=OK]\n" : "  [status=FAIL] %d\n", fallos);
+    printf(fallos == 0 ? "[status=OK]\n" : "[status=FAIL] %d\n", fallos);   /* en la columna 0: la señal de check-testc */
     return fallos == 0 ? 0 : 1;
 }

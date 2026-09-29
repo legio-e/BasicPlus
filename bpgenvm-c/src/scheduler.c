@@ -158,6 +158,14 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
         int yielded = 0;
         int quantum = vm->quantum_ops > 0 ? vm->quantum_ops : 1024;
         bpvm_status_t s = bpvm_interp_run_quantum(vm, tc, quantum, &yielded);
+        /* V7/H7 #608 (29-sep, Eduardo: la A) — una excepción sin atrapar en un hilo que NO es el main acaba ESE hilo;
+         * los demás siguen, como en Java y como decía su propio aviso («el thread TERMINA aquí»). Antes cualquier
+         * fallo de un cuanto acababa el RUN. Al final, el RUN dice que hubo un error (abajo), con el mensaje de la
+         * excepción en runtime_error. La del main sí acaba el programa. */
+        if (s == BPVM_ERR_RUNTIME && tc->status == BPVM_THREAD_TERMINATED && tc->id != 0) {
+            vm->hilo_sin_atrapar = 1;
+            continue;
+        }
         if (s != BPVM_OK) return s;
         /* Si el tc terminó o cedió, el bucle continúa. */
     }
@@ -189,5 +197,6 @@ bpvm_status_t bpvm_scheduler_run(bpvm_t* vm) {
      *
      * La bandera es la verdad: si se pidió parar, se paró. */
     if (vm->kill_requested) return BPVM_KILLED;
+    if (vm->hilo_sin_atrapar) return BPVM_ERR_RUNTIME;   /* V7/H7 #608: un hilo murió sin atrapar */
     return BPVM_OK;
 }

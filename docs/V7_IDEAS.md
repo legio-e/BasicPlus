@@ -2842,6 +2842,74 @@ de una pila que no es la que el programa pidió (el hilo de la GUI pide 8 KB y e
 atrapada y el vecino intacto) al corpus, en la paridad y con dos workers; y los sabotajes: sin la reutilización, rojo
 en el 32; sin el muro, el vecino roto.
 
+### `#593` — la reserva en UN método, y el GC que comprueba (29-sep, decidido por Eduardo)
+
+Eduardo, a la propuesta de cruzar la tabla de handles y la lista de huecos para corregir un heap que miente: *«la
+cuestión real es ¿ese error se está produciendo de verdad o es hipotético? Y si se produce, ¿por qué?»*; *«lo que hay
+que garantizar es que la operación sea atómica, no interrumpible»*; *«al final la reserva la ha de hacer un método
+único, no n métodos»*; y *«si se detecta en un bloque vivo y un programa funcionando se debería producir una
+excepción»*. Lo real, medido: las cabeceras que mintieron fueron fallos de la VM (`#597`, `#598` y `#603`, una
+liberación sin cerrojo); ninguna vino de un programa.
+
+**Lo que hay** (29-sep): la reserva la reparten el asignador —pone el tipo y un 0 en la palabra de la longitud o la
+clase— y los llamadores —23 en la VM-C, 15 en miVM—, que escriben esa palabra a mano y dan de alta el handle aparte,
+a veces después de llenar el contenido. Hoy todos lo hacen bien (sin otra reserva por medio), pero por disciplina.
+
+**El método único** (`bpvm_heap_nuevo` en la VM-C; `heapNuevo` en miVM): bajo el cerrojo y de una vez, el hueco, la
+cabecera ENTERA (el tipo, y la longitud o la clase), el contenido a cero y el handle, y cuenta el bloque. Devuelve el
+handle; quien llama llena el contenido por él. El asignador de antes queda por dentro, sin llamadores fuera. La ABI
+de los `.mdn` no cambia: los helpers del AOT siguen igual por fuera y reservan por dentro con el método único.
+
+**Las dos comprobaciones de cada GC**, las dos con la excepción de `#494` y sin corregir nada:
+
+- **La cuenta**: la reserva suma un bloque, la liberación de un owner resta uno y el barrido deja la de los que
+  quedan; el recorrido cuenta los bloques no libres que ve. Si no cuadran, el recorrido se ha saltado bloques (`#593`)
+  o se ha inventado alguno (el sobrante de `#597`). Contar BYTES no valdría: el bloque que miente se traga justo los
+  bytes de los que se salta.
+- **Los handles**: todo handle vivo que apunta dentro del heap tiene que caer en una cabecera que el recorrido vio.
+
+**Las pruebas**: el gancho de `test-heapdescarrilado` (VM-C) y de `HeapDescarriladoTest` (miVM) gana el caso de
+`#593` —una cabecera que dice lo justo para tragarse el bloque SIGUIENTE, calculado en cada VM porque los heaps no son
+iguales—, que hoy pasa mudo; con el arreglo, la excepción. Y la red entera: ningún programa sano puede dar un falso
+positivo.
+
+**La prueba de estrés, antes de tocar nada** (29-sep, noche). Eduardo: *«Antes de hacerlo yo lo testearía en el PC,
+con 1 hilo y con varios, a ver que pasa. Los temas de memoria ya los hemos padecido otras veces y hay que estar muy
+seguro antes de tocar nada.»* Dos programas, cientos de veces, con 1, 2 y 4 workers, contra el árbol de antes de
+`#593` y el de ahora: `HeapEstres` —4 hilos crean cadenas, arrays y objetos con los builtins que reservan, se los
+pasan por un buzón con `Mutex` y comprueban lo que reciben; con poca memoria, ~1.000 colectas por ejecución— y
+`TablaCrece` —4 hilos guardan cadenas VIVAS, así que la tabla de handles crece mientras los otros la leen—. Tres
+fallos, los tres anteriores a `#593`, cada uno probado cambiando UNA cosa:
+
+- **miVM, `split` y `listDir`** (`#611`): reservan los trozos ANTES que el array y los guardan en un `long[]` de Java
+  que el GC no ve (el ancla sólo guarda el último); si una reserva dispara el GC, los trozos ya hechos se liberan. Con
+  un heap pequeño falla SIEMPRE, también con UN worker: use-after-free, o un `OutOfMemoryError` de Java al leer una
+  longitud basura. Con el array primero y apilado, como la VM-C: de 60/60 fallos a 0/60. Y al reventar así, miVM
+  acababa con salida 0 y sin imprimir nada (`#612`).
+- **VM-C antes de `#593`, con 2 o más workers** (del 3 al 7 % de las ejecuciones): use-after-free falsos, «strCopy:
+  dst no es ref a heap», un `ALOAD` con longitud 0 y resultados mal SIN ningún error. La causa: la tabla de handles
+  **crece moviéndose** —`bpvm_handles_grow`, un `memmove` dentro del heap: el `addr[]` nuevo cae encima del `gen[]`
+  viejo, y el final del `addr[]` viejo se pone a cero— mientras los otros workers la leen sin cerrojo (`bpref_deref`).
+  Quien lee con los punteros viejos encuentra una DIRECCIÓN donde espera una generación («gen del slot=19972», con el
+  heap en 12864..30720) o un cero donde espera una dirección. Pasaba por el crecimiento de «último recurso» del alta
+  del handle, que iba en su propia toma del cerrojo, separada de la reserva: varios workers pasaban la puerta con la
+  tabla casi llena y el último alta la desbordaba. La prueba: el mismo código con la tabla nueva puesta sin pisar la
+  vieja, de 19/400 fallos a 0/400.
+- **VM-C de ahora** (`#610`): `#593` cierra ese camino —la puerta y el alta van juntas, y la tabla sólo crece en la
+  puerta, justo tras una colecta propia, con los demás esperando el cerrojo: 0/240 con el GC en marcha—, pero la causa
+  sigue. Con el GC apagado (`--nogc`, el `gc=0` del ENV) y 2 o 4 workers, la tabla crece sin parar a nadie:
+  `TablaCrece` corrompe 58 y 93 de 150. Eduardo avisó: *«aunque GC esté parado todavía el final de una función con
+  variables owner podría intentar liberar objetos»*. Descartado aquí —cero `FREE_REF` y `SET_FIELD_OWNER` en los
+  programas y en Core, y es el único camino que libera fuera del GC—, así que sin GC ningún slot se recicla y una
+  generación distinta de 0 es otra cosa leída en su sitio. El arreglo: crecer con el mundo parado, en la puerta de la
+  reserva (quien reserva aún no tiene nada a medias), como se colecta. El prototipo, sobre una copia: 0/300, y nada
+  roto con el GC en marcha ni en las pruebas de C del heap y del SMP.
+
+**Lo que decide el diseño de la reserva**: una ESPERA dentro de la ventana entre la reserva y el alta del handle
+corrompe. Medido: parar el mundo en el alta (para crecer allí) subió los fallos al 26-35 %, porque el GC de otro worker
+liberaba el bloque a medio nacer. Así que el método único se queda como está, con el handle al nacer: separar otra vez
+el alta (llenar fuera y publicar al final) volvería a abrir esa ventana.
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.

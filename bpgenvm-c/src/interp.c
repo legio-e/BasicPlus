@@ -1809,14 +1809,11 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             uint16_t num_fields = bpvm_read_u16_be(mem + class_ptr
                                                     + BPVM_CLS_OFF_NUM_FIELDS);
             tc->sp = sp;   /* SAFEPOINT GC */
-            uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4,
-                                            BPVM_TYPE_OBJECT);
-            if (ref == 0) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
-            bpvm_write_u32_be(mem + ref, class_ptr);   /* slot[0] = class_ptr (alloc fresca) */
-            /* fields ya zeroed por heap_alloc. */
-                        { bpref_t h430 = bpvm_handle_register(vm, ref);
-                          if (h430.v == 0u) BPVM_RT_THROW("No space in heap");   /* #430: tabla de handles agotada, mismo OOM */
-                          bpref_store(vm, sp, h430); } sp += BPVM_REF_SIZE;
+            /* V7/H7 #593 — el método único: la clase en la cabecera, los campos a cero y el handle, al nacer. Nulo = sin
+             * sitio en el heap o en la tabla (#430): el mismo OOM, atrapable. */
+            { bpref_t h = bpvm_heap_nuevo(vm, BPVM_TYPE_OBJECT, class_ptr, (uint32_t) num_fields * 4);
+              if (h.v == 0u) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
+              bpref_store(vm, sp, h); } sp += BPVM_REF_SIZE;
             mem = vm->memory;
             break;
         }

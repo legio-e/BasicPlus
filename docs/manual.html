@@ -1863,6 +1863,10 @@ otra sin problema.</p>
       <code>RuntimeError</code> «desbordamiento de pila (el hilo tiene N B)»,
       que se atrapa con <code>try</code> como cualquier otro, igual en las dos
       VMs. Los demás threads no se enteran.</li>
+  <li>Una excepción que nadie atrapa acaba <em>su</em> thread: los demás
+      siguen, y al final el programa sale con error (código 1), para que el
+      IDE o un script no lo den por bueno. Si es el main, se acaba el
+      programa.</li>
   <li>Caben hasta <strong>32 threads vivos a la vez</strong>, el main incluido.
       Un thread terminado deja su sitio a otro, así que a lo largo de su vida un
       programa puede crear todos los que quiera. <code>start()</code> lanza

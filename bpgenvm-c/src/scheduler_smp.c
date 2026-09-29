@@ -225,6 +225,12 @@ static void worker_loop(void* raw) {
             tc->status = BPVM_THREAD_RUNNABLE;
         }
         tc->sched_owner = -1;                /* H2: libera el tc */
+        /* V7/H7 #608 (29-sep, Eduardo: la A) — como en scheduler.c: la excepción sin atrapar de un hilo que no es el
+         * main acaba ese hilo, no el RUN; al final, el RUN dice que hubo un error (bpvm_scheduler_run_smp). */
+        if (s == BPVM_ERR_RUNTIME && tc->status == BPVM_THREAD_TERMINATED && tc->id != 0) {
+            vm->hilo_sin_atrapar = 1;
+            s = BPVM_OK;
+        }
         if (s != BPVM_OK) {
             /* Fallo terminal del intérprete → shutdown VM. */
             bpvm_diag_urgente("[bpvm-c smp w%d] interp error: status=%d",
@@ -345,6 +351,8 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
                 vm->ev_count);
     }
     /* #596 — el estado del primer fallo (0 si ninguno), como scheduler.c devuelve el suyo: una excepción sin
-     * atrapar acaba el RUN en error también con --smp. */
+     * atrapar acaba el RUN en error también con --smp. V7/H7 #608: y la de un hilo que no es el main, que no acaba el
+     * RUN pero sí lo deja en error al final. */
+    if (smp->fallo == 0 && vm->hilo_sin_atrapar) return BPVM_ERR_RUNTIME;
     return smp->fallo;
 }

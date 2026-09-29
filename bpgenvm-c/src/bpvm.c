@@ -375,6 +375,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->next_free_address = BPVM_INITIAL_FREE_ADDR;
     vm->heap_start = (uint32_t) stack_base;   /* sin módulos cargados aún */
     vm->heap_next  = vm->heap_start;
+    vm->heap_bloques = 0;                     /* V7/H7 #593: el heap, vacío */
     /* H3 (V2): el loader fijará el umbral real con el heap_start tras cargar. */
     vm->free_list_head    = 0;
     vm->last_gc_heap_next = vm->heap_next;
@@ -1344,6 +1345,7 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
      * umbral del GC, que se recalcula porque la arena disponible ha encogido. */
     vm->heap_start        = vm->next_free_address;
     vm->heap_next         = vm->heap_start;
+    vm->heap_bloques      = 0;   /* V7/H7 #593: el heap, vacío */
     vm->free_list_head    = 0;
     vm->last_gc_heap_next = vm->heap_next;
     vm->alloc_since_gc    = 0u;   /* #357 */
@@ -1431,6 +1433,7 @@ static bpvm_status_t preparar_run(bpvm_t* vm) {
     main_tc->sp = main_tc->stack_base;
     main_tc->bp = main_tc->stack_base;
     main_tc->pila_max = main_tc->stack_base;   /* V7/H7 #605: la marca, de cero en cada RUN */
+    vm->hilo_sin_atrapar = 0;                  /* V7/H7 #608: ningún hilo ha muerto sin atrapar */
     main_tc->status = BPVM_THREAD_RUNNABLE;
 
     /* Default quantum si no se ajustó; el ENV (`quantum=N`) manda si trae valor (#462, también con SMP). */

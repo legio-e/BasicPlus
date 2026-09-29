@@ -729,6 +729,11 @@ public class VirtualMachine {
     private int heapStart;   // = STACK_BASE, en el constructor
     private int heapNext;    // = STACK_BASE, en el constructor
     private int freeListHead = 0;          // 0 = lista vacía (no hay objetos en addr 0)
+    /** V7/H7 #593 (29-sep) — cuántos bloques NO libres hay en el heap, según la reserva: +1 al nacer (heapAlloc, sólo
+     *  desde heapNuevo), -1 al soltar un owner, y el barrido deja los que quedan. El recorrido de cada GC cuenta los
+     *  suyos; si no cuadran, se ha saltado bloques o se ha inventado alguno: heap descarrilado (#494). Espejo de
+     *  heap_bloques en la VM-C. */
+    private int heapBloques = 0;
     // H3: GC proactivo + retorno de memoria.
     //   lastGcHeapNext  = heapNext en el último GC (mide el crecimiento de bump).
     //   gcBumpThreshold = bump máx. desde el último GC antes de colectar
@@ -1047,15 +1052,11 @@ public class VirtualMachine {
         synchronized (vmLock) {
             msgRef = allocVmString(message == null ? "" : message);   // handle 64b
             int numFields = readInt16(classPtr + CLS_OFF_NUM_FIELDS) & 0xFFFF;
-            int objAddr = heapAlloc(numFields * 4, TYPE_OBJECT);   // dirección física para el init
-            writeInt32(objAddr, classPtr);
-            for (int i = 0; i < numFields; i++) {
-                writeInt32(objAddr + 4 + i * 4, 0);
-            }
+            objH = heapNuevo(TYPE_OBJECT, classPtr, numFields * 4);   // V7/H7 #593: nace con su clase, a cero y con su handle
+            int objAddr = refDeref(objH);
             // Field `msg` en slot 0 (la clase sintetizada lo declara primero). Es una
             // ref (string) → 8 bytes; guardamos el HANDLE completo (gen preservada).
             writeI64(memory, objAddr + 4 + 0 * 4, msgRef);
-            objH = handleRegister(objAddr);   // addr → handle 64b (tras escribir todos los campos)
             // Empujamos el ref al stack del thread; el dispatcher hará el pop en el
             // unwind. 8 BYTES = handle 64b completo (gen preservada): el objeto-excepción
             // puede caer en un slot RECICLADO (gen>0); si se empujara a 4B la gen se perdería
@@ -1658,6 +1659,7 @@ public class VirtualMachine {
         this.heapStart = addr;
         this.heapNext  = addr;
         this.freeListHead = 0;
+        this.heapBloques = 0;   // V7/H7 #593: el heap, vacío
         // H3: base del umbral de GC proactivo, fijada con el heapStart real
         // (tras cargar el data block). Umbral ~1/8 del heap, con suelo de 4 KB.
         this.lastGcHeapNext = addr;
@@ -1743,8 +1745,26 @@ public class VirtualMachine {
     }
 
     /**
-     * Reserva un objeto en el heap. payloadBytes = bytes del payload (sin cabecera).
+     * V7/H7 #593 (29-sep) — LA reserva, en UN método (Eduardo: «al final la reserva la ha de hacer un método único, no
+     * n métodos»). Bajo el cerrojo de la VM y de una vez: el hueco, la cabecera ENTERA —el tipo y {@code cabecera}, la
+     * longitud de un array o la clase de un objeto—, el contenido a cero y el handle. El bloque nace completo y con su
+     * handle: ningún GC lo ve a medias, y la tabla de handles conoce todo bloque vivo (con eso las dos comprobaciones
+     * de cada GC son exactas). Antes lo remataban a mano quince sitios. Devuelve el handle; la dirección, para llenar el
+     * contenido, con {@link #refDeref}. Sin sitio, la excepción de siempre (la lanza heapAlloc). Espejo de
+     * bpvm_heap_nuevo (VM-C).
+     */
+    long heapNuevo(int type, int cabecera, int payloadBytes) {
+        synchronized (vmLock) {
+            int userRef = heapAlloc(payloadBytes, type);
+            writeInt32(userRef, cabecera);
+            return handleRegister(userRef);
+        }
+    }
+
+    /**
+     * Reserva un bloque en el heap. payloadBytes = bytes del payload (sin cabecera).
      * Devuelve user_ref = headerAddr + 4 (apunta al length, igual que data/local arrays).
+     * V7/H7 #593: sólo la llama {@link #heapNuevo}, que completa la cabecera y da de alta el handle.
      */
     private int heapAlloc(int payloadBytes, int type) {
         int totalSize = Math.max(MIN_FREE_BLOCK, alignTo4(OBJ_HEADER_SIZE + payloadBytes));
@@ -1825,6 +1845,7 @@ public class VirtualMachine {
                 // y marca el objeto como vivo.
                 if (me != null) me.allocAnchor = userRef;
                 throwingOom = false;   // H1: alocación con éxito → limpia la guarda
+                heapBloques++;         // V7/H7 #593
                 return userRef;
             }
 
@@ -1869,6 +1890,7 @@ public class VirtualMachine {
             java.util.Arrays.fill(memory, userRef2, userRef2 + 4 + payloadBytes, (byte) 0);
             if (me != null) me.allocAnchor = userRef2;
             throwingOom = false;   // H1: alocación con éxito → limpia la guarda
+            heapBloques++;         // V7/H7 #593
             return userRef2;
         }
     }
@@ -1928,6 +1950,21 @@ public class VirtualMachine {
         synchronized (vmLock) {
             writeInt32(heapStart, TYPE_ARRAY_I8 << TAG_TYPE_SHIFT);
             writeInt32(heapStart + 4, (STACK_BASE - heapStart) + 4096);
+        }
+    }
+
+    /**
+     * V7/H7 #593 (29-sep) — el caso que el guardián de #494 no veía, sólo para HeapDescarriladoTest: la cabecera del
+     * primer bloque dice lo justo para tragarse el SIGUIENTE (medido en ESTA VM: los heaps de las dos no son iguales).
+     * El recorrido salta al tercero, se recompone y acaba en heapNext; sin las comprobaciones de #593 el GC seguía como
+     * si nada, con lo saltado fuera del set. Espejo del modo 2 de test_heapdescarrilado.c.
+     */
+    public void estropeaHeapTragandoElSiguienteParaPrueba() {
+        synchronized (vmLock) {
+            int t1 = objectTotalSize(heapStart);
+            int t2 = objectTotalSize(heapStart + t1);
+            writeInt32(heapStart, TYPE_ARRAY_I8 << TAG_TYPE_SHIFT);
+            writeInt32(heapStart + 4, t1 + t2 - OBJ_HEADER_SIZE);
         }
     }
 
@@ -2036,6 +2073,34 @@ public class VirtualMachine {
                     + addr + ", no en heapNext=" + heapNext + ". Hay un bloque cuyo tamaño real no "
                     + "coincide con objectTotalSize() → el set del GC sale incompleto y se barrerán "
                     + "objetos vivos.");
+        }
+        // V7/H7 #593 (29-sep) — LO QUE EL RECORRIDO NO VE SOLO. Acabar en heapNext no basta: si un bloque miente y el
+        // salto cae justo en el borde de otro, el recorrido se recompone y acaba donde debe, con lo saltado fuera del
+        // set. Dos comprobaciones más, con lo que ya existe: (1) la CUENTA —los bloques no libres que ve contra los que
+        // lleva la reserva: heapNuevo suma, soltar un owner resta y el barrido deja los que quedan—; contar bytes no
+        // valdría (el que miente se traga justo los bytes de los que se salta); y (2) los HANDLES: todo handle vivo que
+        // apunta dentro del heap cae en una cabecera vista (desde #593 todo bloque nace con el suyo). Si no, heap
+        // descarrilado (#494): la excepción, sin corregir nada —Eduardo: «si se detecta en un bloque vivo y un
+        // programa funcionando se debería producir una excepción»—. Espejo de build_gc_valid_map (VM-C).
+        if (!gcDescarrilo) {
+            if (valid.size() != heapBloques) {
+                gcDescarrilo = true;
+                System.err.println("[gc] !! HEAP DESCARRILADO: el recorrido ve " + valid.size() + " bloques y la "
+                        + "reserva lleva " + heapBloques + " (#593): se ha saltado bloques o se ha inventado alguno.");
+            } else {
+                for (int hidx = 1; hidx < handleNext; hidx++) {
+                    int a = handleAddr[hidx];
+                    if (a == 0) continue;                              // slot libre
+                    int hh = a - 4;
+                    if (hh < heapStart || hh >= heapNext) continue;   // fuera del heap: una constante
+                    if (!valid.contains(hh)) {
+                        gcDescarrilo = true;
+                        System.err.println("[gc] !! HEAP DESCARRILADO: el handle " + hidx + " apunta a " + hh
+                                + ", donde el recorrido no vio ningún bloque (#593).");
+                        break;
+                    }
+                }
+            }
         }
         return valid;
     }
@@ -2203,6 +2268,7 @@ public class VirtualMachine {
 
         int pendingFreeStart = -1; // dirección donde empieza un run de blocks libres consecutivos
         int pendingFreeSize = 0;
+        int quedan = 0;            // V7/H7 #593: los bloques que siguen vivos, la cuenta nueva
 
         while (addr < heapNext) {
             int size = objectTotalSize(addr);
@@ -2228,9 +2294,11 @@ public class VirtualMachine {
                 }
                 writeInt32(addr, tag & ~TAG_MARK_BIT);
                 aliveBytes += size;
+                quedan++;
             }
             addr += size;
         }
+        if (!gcDescarrilo) heapBloques = quedan;   // V7/H7 #593: lo que el barrido deja
         if (pendingFreeStart != -1) {
             // H3: el run libre FINAL toca heapNext → retroceder heapNext
             // (devolverlo al bump) en vez de meterlo en la free list. Recupera
@@ -2946,10 +3014,10 @@ public class VirtualMachine {
                         System.err.println("[bpgenvm worker " + workerId + ", tid="
                                 + tc.id + "] " + tf.getMessage());
                         dumpFault(workerId, tc, "BpThreadFault", tf);
-                        /* #481 — solo cuenta si tumba el programa: un fallo de un
-                         * thread SECUNDARIO no lo mata (abajo se termina ese thread
-                         * y los demas siguen), asi que no debe cambiar el codigo de
-                         * salida. Se apunta abajo, en la rama del main. */
+                        /* #481 — el codigo de salida. V7/H7 #608 (29-sep, Eduardo: la A): un fallo de un
+                         * thread SECUNDARIO no mata el programa (abajo se termina ese thread y los demas
+                         * siguen), pero SI cuenta: al final el programa sale con error (1), para que el IDE o
+                         * un script no lo den por bueno. Antes no cambiaba el codigo de salida. */
                         // A1.7: notificar al IDE remoto si hay listener cableado.
                         emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(
                                 tc.id, tf.getMessage(), ""));
@@ -2965,6 +3033,8 @@ public class VirtualMachine {
                             // worker thread: termina sólo este. Liberamos
                             // mutexes que pudiera tener tomados para no
                             // dejar a otros threads bloqueados eternamente.
+                            if (runtimeError.isEmpty())
+                                runtimeError = String.valueOf(tf.getMessage());   // #608: al final, salida 1
                             releaseMutexesOwnedBy(tc.id);
                             terminateThread(tc);
                             vmLock.notifyAll();
@@ -3430,9 +3500,7 @@ public class VirtualMachine {
                     if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
-                        int ref = heapAlloc(size * 4, TYPE_ARRAY_I32);
-                        writeI32(mem, ref, size);
-                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;
+                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I32, size, size * 4)); sp += REF_SIZE;   // V7/H7 #593
                         tc.sp = sp;
                     }
                     break;
@@ -3442,9 +3510,7 @@ public class VirtualMachine {
                     if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY_I8: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
-                        int ref = heapAlloc(size, TYPE_ARRAY_I8);
-                        writeI32(mem, ref, size);
-                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;
+                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I8, size, size)); sp += REF_SIZE;   // V7/H7 #593
                         tc.sp = sp;
                     }
                     break;
@@ -3454,9 +3520,7 @@ public class VirtualMachine {
                     if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY_I16: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
-                        int ref = heapAlloc(size * 2, TYPE_ARRAY_I16);
-                        writeI32(mem, ref, size);
-                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;
+                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I16, size, size * 2)); sp += REF_SIZE;   // V7/H7 #593
                         tc.sp = sp;
                     }
                     break;
@@ -3801,12 +3865,7 @@ public class VirtualMachine {
                     // y sincronizar tc.sp, para cerrar la ventana en que
                     // otro worker pudiera disparar GC con el ref en tránsito.
                     synchronized (vmLock) {
-                        int ref = heapAlloc(numFields * 4, TYPE_OBJECT);
-                        writeI32(mem, ref, classPtr);
-                        for (int i = 0; i < numFields; i++) {
-                            writeI32(mem, ref + 4 + i * 4, 0);
-                        }
-                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;   // V4: push del ref nuevo
+                        refStore(mem, sp, heapNuevo(TYPE_OBJECT, classPtr, numFields * 4)); sp += REF_SIZE;   // V4: push del ref nuevo; V7/H7 #593: nace entero
                         tc.sp = sp;
                     }
                     break;
@@ -4031,9 +4090,7 @@ public class VirtualMachine {
                     if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY_I64: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
-                        int ref = heapAlloc(size * 8, TYPE_ARRAY_I64);
-                        writeI32(mem, ref, size);
-                                                refStore(mem, sp, handleRegister(ref)); sp += REF_SIZE;
+                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I64, size, size * 8)); sp += REF_SIZE;   // V7/H7 #593
                         tc.sp = sp;
                     }
                     break;
@@ -4279,7 +4336,11 @@ public class VirtualMachine {
                     }
                     if (!handled) {
                         tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
-                        throw new RuntimeException(buildUnhandledExceptionMessage(
+                        // V7/H7 #608 (29-sep, Eduardo: la A) — un fallo BP de ESTE hilo (BpThreadFault), como los errores
+                        // que lanza la VM: el planificador acaba sólo este hilo si no es el main. Era una RuntimeException
+                        // a secas —la de los fallos internos de Java— y un `throw` sin atrapar en un hilo tumbaba la VM
+                        // entera, mientras una división por cero en el mismo hilo acababa sólo ese hilo.
+                        throw new BpThreadFault(buildUnhandledExceptionMessage(
                                 currentPC, v, thrownClass, bp, tc.stackBase));
                     }
                     break;
@@ -4642,10 +4703,8 @@ public class VirtualMachine {
     private long allocVmString(String s) {
         byte[] utf8 = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         int len = utf8.length;
-        int addr = heapAlloc(len, TYPE_ARRAY_I8);
-        writeInt32(addr, len);
-        System.arraycopy(utf8, 0, memory, addr + 4, len);
-        long h = handleRegister(addr);   // V4: addr físico → handle 64b
+        long h = heapNuevo(TYPE_ARRAY_I8, len, len);   // V7/H7 #593: el handle 64b, con la cabecera entera
+        System.arraycopy(utf8, 0, memory, refDeref(h) + 4, len);
         // B1 residual — el caller llama a allocVmString desde dispatchBuiltin
         // SIN vmLock, así que entre `return h` y el `pushTc(tc, h)` un GC
         // de otro worker podría liberar `h` (no hay raíz aún). Anclamos
@@ -4658,10 +4717,7 @@ public class VirtualMachine {
 
     /** Aloca un array de refs (TYPE_ARRAY_REF) con n elementos, devolviendo el handle. Los slots quedan a 0. */
     private long allocVmRefArray(int n) {
-        int addr = heapAlloc(n * 8, TYPE_ARRAY_REF);   // H1.2a (V4): ref plana = 8 bytes/elem
-        writeInt32(addr, n);
-        for (int i = 0; i < n; i++) writeI64(memory, addr + 4 + i * 8, 0L);
-        long h = handleRegister(addr);   // V4: addr físico → handle 64b
+        long h = heapNuevo(TYPE_ARRAY_REF, n, n * 8);   // H1.2a (V4): ref plana = 8 bytes/elem; V7/H7 #593 (a cero ya)
         // B1 residual — ver allocVmString. Mismo motivo: ancla GC para el
         // intervalo entre alocación y publicación al stack del programa.
         ThreadContext me = currentTcLocal.get();
@@ -4852,10 +4908,8 @@ public class VirtualMachine {
                     throwBpRuntimeError(tc, "Net.recv: error de red");
                     break;
                 }
-                int ref = heapAlloc(n, TYPE_ARRAY_I8);
-                writeInt32(ref, n);
-                if (n > 0) System.arraycopy(buf, 0, memory, ref + 4, n);
-                long outRef = handleRegister(ref);   // V4: addr → handle 64b
+                long outRef = heapNuevo(TYPE_ARRAY_I8, n, n);   // V7/H7 #593
+                if (n > 0) System.arraycopy(buf, 0, memory, refDeref(outRef) + 4, n);
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG)
                 pushTcRef(tc, outRef);   // 8B (byte[] es referencia — antes truncaba a 4B)
@@ -5440,10 +5494,8 @@ public class VirtualMachine {
                 byte[] linea = bo.toByteArray();
                 int len = linea.length;
                 if (len > 0 && linea[len - 1] == '\r') len--;
-                int addr = heapAlloc(len, TYPE_ARRAY_I8);
-                writeInt32(addr, len);
-                System.arraycopy(linea, 0, memory, addr + 4, len);
-                long h = handleRegister(addr);
+                long h = heapNuevo(TYPE_ARRAY_I8, len, len);   // V7/H7 #593
+                System.arraycopy(linea, 0, memory, refDeref(h) + 4, len);
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) h;
                 pushTcRef(tc, h);
@@ -5473,10 +5525,8 @@ public class VirtualMachine {
                     byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
                     if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
                     if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
-                    int ref = heapAlloc(data.length, TYPE_ARRAY_I8);
-                    writeInt32(ref, data.length);
-                    System.arraycopy(data, 0, memory, ref + 4, data.length);
-                    long outRef = handleRegister(ref);   // V4: addr → handle 64b
+                    long outRef = heapNuevo(TYPE_ARRAY_I8, data.length, data.length);   // V7/H7 #593
+                    System.arraycopy(data, 0, memory, refDeref(outRef) + 4, data.length);
                     ThreadContext me = currentTcLocal.get();
                     if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG)
                     pushTcRef(tc, outRef);   // 8B (byte[] es referencia — antes truncaba a 4B)
@@ -5566,16 +5616,13 @@ public class VirtualMachine {
                 if (newCap < 0) throwBpRuntimeError(tc, "__growIntArray: capacidad negativa: " + newCap);
                 int od = (oldRef != 0) ? refDeref(oldRef) : 0;   // V4: dirección física fuente
                 int oldLen = (od != 0) ? readInt32(od) : 0;
-                int newRef = heapAlloc(newCap * 4, TYPE_ARRAY_I32);   // addr físico
-                writeInt32(newRef, newCap);
+                long newH = heapNuevo(TYPE_ARRAY_I32, newCap, newCap * 4);   // V7/H7 #593 (el resto, a cero ya)
+                int newRef = refDeref(newH);   // addr físico
                 int copyLen = Math.min(oldLen, newCap);
                 for (int i = 0; i < copyLen; i++) {
                     writeInt32(newRef + 4 + i * 4, readInt32(od + 4 + i * 4));
                 }
-                for (int i = copyLen; i < newCap; i++) {
-                    writeInt32(newRef + 4 + i * 4, 0);
-                }
-                                pushTcRef(tc, handleRegister(newRef));
+                                pushTcRef(tc, newH);
                 break;
             }
             case CHARS_TO_STRING: {
@@ -5606,10 +5653,8 @@ public class VirtualMachine {
                 long ref = popTcRef(tc);   // #6 (censo V4): string/byte[] ref = 8B
                 int rd = (ref == 0) ? 0 : refDeref(ref);   // V4: dirección física fuente
                 int n = (rd == 0) ? 0 : readInt32(rd);
-                int out = heapAlloc(n, TYPE_ARRAY_I8);   // addr físico
-                writeInt32(out, n);
-                if (n > 0) System.arraycopy(memory, rd + 4, memory, out + 4, n);
-                long outRef = handleRegister(out);   // V4: addr → handle 64b COMPLETO (no truncar)
+                long outRef = heapNuevo(TYPE_ARRAY_I8, n, n);   // V4: handle 64b COMPLETO (no truncar); V7/H7 #593
+                if (n > 0) System.arraycopy(memory, rd + 4, memory, refDeref(outRef) + 4, n);
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG) que refDeref usa
                 pushTcRef(tc, outRef);
@@ -6332,12 +6377,7 @@ public class VirtualMachine {
                     throwBpRuntimeError(tc, "newIntArray: tamaño negativo: " + size);
                     break;
                 }
-                int ref = heapAlloc(size * 4, TYPE_ARRAY_I32);
-                writeInt32(ref, size);
-                for (int i = 0; i < size; i++) {
-                    writeInt32(ref + 4 + i * 4, 0);
-                }
-                                pushTcRef(tc, handleRegister(ref));   // H1.2a: ref 8 bytes
+                pushTcRef(tc, heapNuevo(TYPE_ARRAY_I32, size, size * 4));   // H1.2a: ref 8 bytes; V7/H7 #593 (a cero ya)
                 break;
             }
 
@@ -6746,10 +6786,9 @@ public class VirtualMachine {
                     case 7: out = new int[0]; break;
                     default: throwBpRuntimeError(tc, "Machine: clase de capacidad desconocida"); out = new int[0];
                 }
-                int addr = heapAlloc(out.length * 4, TYPE_ARRAY_I32);
-                writeInt32(addr, out.length);
+                long h = heapNuevo(TYPE_ARRAY_I32, out.length, out.length * 4);   // V7/H7 #593
+                int addr = refDeref(h);
                 for (int i = 0; i < out.length; i++) writeInt32(addr + 4 + 4 * i, out[i]);
-                long h = handleRegister(addr);
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) h;
                 pushTcRef(tc, h);
@@ -7169,6 +7208,7 @@ public class VirtualMachine {
 
         int totalSize = objectTotalSize(headerAddr);
         addToFreeList(headerAddr, totalSize);
+        heapBloques--;   // V7/H7 #593: un bloque menos
     }
 
     /**

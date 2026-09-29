@@ -730,6 +730,15 @@ struct bpvm {
      * corren las natives, creados al entrar en la primera y reutilizados; se terminan en bpvm_destroy. Al final,
      * como todo lo nuevo: el prefijo del .mdn no se toca. */
     struct bpvm_nativa* nativas;
+    /* V7/H7 #593 (29-sep) — cuántos bloques NO libres hay en el heap, según la reserva: +1 al nacer (bpvm_heap_nuevo,
+     * el método único), -1 al soltar un owner (bpvm_heap_free_block), y el barrido deja los que quedan. El recorrido
+     * de cada GC cuenta los suyos; si no cuadran, se ha saltado bloques o se ha inventado alguno: heap descarrilado
+     * (#494). Espejo de heapBloques en miVM. Al final: el prefijo del .mdn no se toca. */
+    uint32_t heap_bloques;
+    /* V7/H7 #608 (29-sep, Eduardo: la A) — un hilo que NO es el main murió con una excepción que nadie atrapó: ese hilo
+     * se acabó y los demás siguieron, y al final el RUN dice que hubo un error (BPVM_ERR_RUNTIME, con el mensaje en
+     * runtime_error), para que el IDE o un script no lo den por bueno. Lo pone a 0 cada RUN (preparar_run). */
+    int      hilo_sin_atrapar;
 };
 
 /* V7/H3 (#491) — en builtins.c. */
@@ -1024,8 +1033,13 @@ static inline void bpvm_smp_unlock(bpvm_t* vm) {
 /* interp.c */
 bpvm_status_t bpvm_interp_run(bpvm_t* vm);
 
-/* heap.c (F2) */
-uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type);
+/* heap.c (F2) — V7/H7 #593 (29-sep): LA reserva, en UN método. Bajo el cerrojo y de una vez: el hueco, la cabecera
+ * ENTERA —el tipo y `cabecera`, la longitud de un array o la clase de un objeto—, el contenido a cero, la cuenta del
+ * bloque y el handle. Devuelve el handle (bpref_deref da la dirección, para llenar el contenido) o nulo si no cabe,
+ * en el heap o en la tabla: quien llama lanza «No space in heap». No hay otra forma de poner un bloque en el heap. */
+bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes);
+/* El tamaño total de un bloque según su cabecera (el que usan el recorrido y el barrido): para las pruebas (#593). */
+uint32_t bpvm_heap_bloque_tam(const bpvm_t* vm, uint32_t header_addr);
 
 /* V7 (28-sep) — lo que un programa puede preguntar del heap (Heap.bp; V7_IDEAS §H7): sin reservar nada ni recorrer el
  * heap (sólo la lista de libres). Números de ESTA VM. Espejo de VirtualMachine.cuentasDelHeap. */

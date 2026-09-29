@@ -233,12 +233,19 @@ int bpvm_handles_grow(bpvm_t* vm) {
  * devolvía la dirección cruda y las refs MENTIAN). */
 bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
     /* Paso 7 — la tabla (free-list/handle_next) es estado COMPARTIDO: bajo SMP dos
-     * workers registran a la vez (handle_register corre FUERA del vm_lock, heap_alloc
-     * ya lo soltó) → carrera en free_top → roban el mismo idx. Serializamos con el
-     * vm_lock (no-op en single-worker → coste cero en el default de envío). El GC usa
+     * workers registran a la vez → carrera en free_top → roban el mismo idx. Serializamos
+     * con el vm_lock (no-op en single-worker → coste cero en el default de envío). El GC usa
      * handle_kill_idx (sin lock) porque corre bajo STW (todos parados). */
-    bpref_t r;
     bpvm_smp_lock(vm);
+    bpref_t r = bpvm_handle_register_bajo_cerrojo(vm, addr);
+    bpvm_smp_unlock(vm);
+    return r;
+}
+
+/* V7/H7 #593 (29-sep) — lo mismo con el vm_lock YA tomado: la parte del alta que hace el método único de la reserva
+ * (bpvm_heap_nuevo) sin soltar el cerrojo entre el hueco, la cabecera y el handle. */
+bpref_t bpvm_handle_register_bajo_cerrojo(bpvm_t* vm, uint32_t addr) {
+    bpref_t r;
     uint32_t idx;
     if (vm->handles.free_top > 0u) {
         idx = vm->handles.free_list[--vm->handles.free_top];   /* REUSO: slot reciclado, gen ya bumpeada */
@@ -253,7 +260,7 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
                 bpvm_diag_urgente("[bpvm] tabla de handles AGOTADA (%u slots, tope %u): "
                           "ref nula -> OOM atrapable",
                           (unsigned) vm->handles.cap, (unsigned) vm->handles.cap_max);
-                r.v = 0u; bpvm_smp_unlock(vm); return r;
+                r.v = 0u; return r;
             }
         }
         idx = vm->handles.next++;
@@ -272,7 +279,6 @@ bpref_t bpvm_handle_register(bpvm_t* vm, uint32_t addr) {
      * lock en 7b.2.) Inerte en x86; barrera en ARM/RISC-V. */
     __atomic_store_n(&vm->handles.addr[idx], addr, __ATOMIC_RELEASE);
     r.v = ((uint64_t) vm->handles.gen[idx] << 32) | (uint64_t)(idx | BPVM_HANDLE_TAG);
-    bpvm_smp_unlock(vm);
     return r;
 }
 

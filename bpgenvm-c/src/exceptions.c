@@ -306,8 +306,8 @@ have_class:
 
     /* Alocar el objeto RuntimeError. */
     uint16_t num_fields = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
-    uint32_t obj_addr = bpvm_heap_alloc(vm, (uint32_t) num_fields * 4, BPVM_TYPE_OBJECT);
-    if (obj_addr == 0) {
+    bpref_t obj_h = bpvm_heap_nuevo(vm, BPVM_TYPE_OBJECT, class_ptr, (uint32_t) num_fields * 4);   /* V7/H7 #593: con su clase y su handle, al nacer */
+    if (obj_h.v == 0u) {
         bpref_t d = exc_heap_descarrilado(vm);   /* V7 #494: idem */
         if (d.v != 0u) { vm->building_error = 0; return d; }
         if (vm->oom_exc.v != 0) {   /* #430: idem — la prefabricada */
@@ -321,20 +321,15 @@ have_class:
         vm->building_error = 0;
         return bpref_null();
     }
-    bpvm_write_u32_be(vm->memory + obj_addr, class_ptr);
+    /* La clase ya está en la cabecera y el handle dado de alta (el método único, #593); nulo arriba era también
+     * «sin SLOT en la tabla» (#430), con su prefabricada. */
+    uint32_t obj_addr = bpref_deref(vm, obj_h);
     /* slot 0 = msg (convención del frontend). Guardamos el HANDLE COMPLETO de 64b:
      * bpref_regen re-adjunta la gen VIVA del slot del msg (heap_alloc_string truncó
      * a uint32 → gen=0). Sin esto, si el slot del msg fue reciclado (gen ≠ 0), leer
      * e.msg daría "referencia a objeto eliminado" sobre un mensaje vivo. */
     if (num_fields > 0) {
         bpref_store(vm, obj_addr + 4 + 0 * 4, bpref_regen(vm, msg_ref));
-    }
-    bpref_t obj_h = bpvm_handle_register(vm, obj_addr);   /* V4: handle 64b (gen preservada — clave si el slot fue reciclado) */
-    if (obj_h.v == 0u && vm->oom_exc.v != 0) {
-        /* #430 — objeto construido pero sin SLOT para registrarlo: prefabricada. */
-        bpvm_diag("[bpvm] throw: sin slot para la excepcion -> PREFABRICADA (#430)");
-        vm->building_error = 0;
-        return vm->oom_exc;
     }
 
     /* Anclar para GC; el caller decide si pasarlo a eh_unwind o usarlo

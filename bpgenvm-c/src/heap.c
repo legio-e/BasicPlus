@@ -69,6 +69,9 @@ static uint32_t block_total_size(const bpvm_t* vm, uint32_t header_addr) {
     return total;
 }
 
+/* V7/H7 #593 — lo mismo, para las pruebas que estropean una cabecera a la medida de ESTA VM (test_heapdescarrilado). */
+uint32_t bpvm_heap_bloque_tam(const bpvm_t* vm, uint32_t header_addr) { return block_total_size(vm, header_addr); }
+
 /* #355 — RETRATO DEL BLOQUE QUE MIENTE.
  *
  * Todo el recorrido del heap se apoya en que cada bloque diga la verdad sobre su
@@ -132,6 +135,8 @@ static void bpvm_diag_bloque_mentiroso(const bpvm_t* vm, const char* quien,
  * reconstruido al empezar cada mark. Subsume GC-1: la cabecera de un
  * long[]/double[] real ENTRA en el bitmap (block_total_size la recorre) → se
  * reconoce; un entero a mitad de objeto NO entra → se rechaza. */
+static int is_valid_header(const bpvm_t* vm, uint32_t header_addr);   /* abajo; la usa la comprobación de #593 */
+
 static void build_gc_valid_map(bpvm_t* vm) {
     /* Dimensiona el bitmap por el heap USADO [heap_start, heap_next), NO por la
      * capacidad total (stack_base - heap_start): is_valid_header solo consulta
@@ -166,6 +171,7 @@ static void build_gc_valid_map(bpvm_t* vm) {
     }
     uint32_t cur = vm->heap_start;
     uint32_t prev = 0;
+    uint32_t vistos = 0;   /* V7/H7 #593: los bloques no libres que ve el recorrido */
     while (cur < vm->heap_next) {
         uint32_t total = block_total_size(vm, cur);
         if (total == 0) break;
@@ -182,6 +188,7 @@ static void build_gc_valid_map(bpvm_t* vm) {
         }
         uint32_t word = (cur - vm->heap_start) / 4u;
         vm->gc_valid_map[word / 8u] |= (uint8_t)(1u << (word % 8u));
+        if ((bpvm_read_u32_be(vm->memory + cur) & BPVM_TAG_FREE_BIT) == 0u) vistos++;
         prev = cur;
         cur += total;
     }
@@ -227,6 +234,37 @@ static void build_gc_valid_map(bpvm_t* vm) {
                   (unsigned) tag, (unsigned) len,
                   (unsigned)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT),
                   (unsigned)((tag & BPVM_TAG_FREE_BIT) ? 1u : 0u));
+    }
+    /* V7/H7 #593 (29-sep) — LO QUE EL RECORRIDO NO VE SOLO. Acabar en heap_next no basta: si un bloque miente y el
+     * salto cae justo en el borde de otro, el recorrido se recompone y acaba donde debe, con lo saltado fuera del mapa
+     * (medido al hacer #494; por ahí se coló #597 una vez de cada tres). Dos comprobaciones más, con lo que ya existe:
+     * (1) la CUENTA —los bloques no libres que ve, contra los que lleva la reserva: bpvm_heap_nuevo suma, soltar un
+     * owner resta y el barrido deja los que quedan—; contar bytes no valdría (el que miente se traga justo los bytes
+     * de los que se salta); y (2) los HANDLES: todo handle vivo que apunta dentro del heap cae en una cabecera vista y
+     * no libre (desde #593 todo bloque nace con el suyo). Si no, heap descarrilado (#494): la excepción, sin corregir
+     * nada —Eduardo: «si se detecta en un bloque vivo y un programa funcionando se debería producir una excepción»—.
+     * Espejo de buildValidObjectsSet (miVM). */
+    if (!vm->gc_descarrilo) {
+        if (vistos != vm->heap_bloques) {
+            vm->gc_descarrilo = 1;
+            bpvm_diag_urgente("[gc] !! HEAP DESCARRILADO: el recorrido ve %u bloques y la reserva lleva %u (#593): "
+                              "se ha saltado bloques o se ha inventado alguno.",
+                              (unsigned) vistos, (unsigned) vm->heap_bloques);
+        } else if (vm->handles.addr != NULL) {
+            for (uint32_t idx = 1u; idx < vm->handles.next; idx++) {
+                uint32_t a = vm->handles.addr[idx];
+                if (a == 0u) continue;                                    /* slot libre */
+                uint32_t hh = a - 4u;
+                if (hh < vm->heap_start || hh >= vm->heap_next) continue;   /* fuera del heap: una constante */
+                if (!is_valid_header(vm, hh)
+                        || (bpvm_read_u32_be(vm->memory + hh) & BPVM_TAG_FREE_BIT) != 0u) {
+                    vm->gc_descarrilo = 1;
+                    bpvm_diag_urgente("[gc] !! HEAP DESCARRILADO: el handle %u apunta a %u, donde el recorrido no "
+                                      "vio ningún bloque vivo (#593).", (unsigned) idx, (unsigned) hh);
+                    break;
+                }
+            }
+        }
     }
 }
 
@@ -601,7 +639,10 @@ void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
      * cerrojo ya tomado; ésta es la única entrada desde el bytecode. Con un worker, el cerrojo no hace nada. */
     bpvm_smp_lock(vm);
     uint32_t size = block_total_size(vm, header_addr);
-    if (size != 0) add_to_free_list(vm, header_addr, size);   /* defensivo: 0 = no sabemos el tamaño, no tocar */
+    if (size != 0) {   /* defensivo: 0 = no sabemos el tamaño, no tocar */
+        add_to_free_list(vm, header_addr, size);
+        vm->heap_bloques--;   /* V7/H7 #593: un bloque menos */
+    }
     bpvm_smp_unlock(vm);
 }
 
@@ -630,6 +671,7 @@ static void gc_sweep_phase(bpvm_t* vm) {
     vm->free_list_head = 0;
     uint32_t cur = vm->heap_start;
     uint32_t freed = 0, kept = 0;
+    uint32_t quedan = 0;                      /* V7/H7 #593: los bloques que siguen vivos, la cuenta nueva */
     uint32_t pend_start = 0, pend_size = 0;   /* 0 = sin run pendiente (heap_start>0) */
     uint32_t prev_blk = 0;                    /* #355: el vecino de la izquierda del culpable */
     while (cur < vm->heap_next) {
@@ -660,10 +702,12 @@ static void gc_sweep_phase(bpvm_t* vm) {
             tag &= ~BPVM_TAG_MARK_BIT;
             bpvm_write_u32_be(mem + cur, tag);
             kept += total;
+            quedan++;
         }
         prev_blk = cur;
         cur += total;
     }
+    if (!vm->gc_descarrilo) vm->heap_bloques = quedan;   /* V7/H7 #593: lo que el barrido deja */
     if (pend_start != 0) {
         /* El run libre FINAL toca heap_next → retroceder (devolver al bump). */
         vm->heap_next = pend_start;
@@ -1049,19 +1093,37 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
 
 /* --- API pública del heap ---
  *
- * Devuelve user_ref (= header_addr + 4) o 0 si OOM tras GC.
- * Tras heapAlloc el caller normalmente escribe `length` (o `class_ptr`)
- * en mem[user_ref] y luego zero-inicializa el payload.
- */
-uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
+ * V7/H7 #593 (29-sep) — LA reserva, en UN método (Eduardo: «al final la reserva la ha de hacer un método único, no
+ * n métodos»). Hasta hoy la repartían el asignador —el tipo y un 0 donde va la longitud o la clase— y 23 sitios que
+ * escribían esa palabra a mano y daban de alta el handle aparte, a veces después de llenar el contenido: correcto
+ * porque todos lo hacían bien, no porque no pudiera salir mal. Ahora, bajo el cerrojo y de una vez: el hueco (abajo,
+ * heap_reservar), la cabecera ENTERA, el contenido a cero, la cuenta del bloque y el handle. El bloque nace completo
+ * y con su handle: ningún GC lo ve a medias, y la tabla de handles conoce todo bloque vivo (con eso, las dos
+ * comprobaciones de build_gc_valid_map son exactas). Devuelve el handle —bpref_deref da la dirección, para llenar
+ * el contenido— o nulo si no cabe, en el heap o en la tabla; quien llama lanza «No space in heap» y
+ * bpvm_throw_runtime_error escoge la prefabricada que toque (#430, #494). Espejo de heapNuevo (miVM). */
+static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera);
+
+bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes) {
+    bpref_t h = bpref_null();
+    bpvm_smp_lock(vm);
+    uint32_t o = heap_reservar(vm, payload_bytes, type, cabecera);
+    if (o != 0u) h = bpvm_handle_register_bajo_cerrojo(vm, o);
+    bpvm_smp_unlock(vm);
+    return h;
+}
+
+/* El hueco: el GC proactivo, la presión de la tabla, la lista de libres, el bump y el OOM. Con el vm_lock tomado
+ * (bpvm_heap_nuevo); sólo la llama él. Devuelve user_ref (= header_addr + 4), con la cabecera entera y el
+ * contenido a cero, o 0 si no cabe. */
+static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera) {
     uint32_t total = align4(BPVM_OBJ_HEADER_SIZE + payload_bytes);
     if (total < BPVM_MIN_FREE_BLOCK) total = BPVM_MIN_FREE_BLOCK;
 
     /* H2 — Heap allocation y GC son críticos en SMP: bump pointer y
      * mark/sweep escriben estado compartido. Tomar el vm_lock global
      * serializa los workers contra heap. En legacy mode (vm->smp NULL)
-     * el lock es no-op. */
-    bpvm_smp_lock(vm);
+     * el lock es no-op. V7/H7 #593: lo toma bpvm_heap_nuevo, para la reserva y el alta del handle juntas. */
 
     /* H3 (V2): GC PROACTIVO por umbral de crecimiento de bump. Evita el
      * over-commit (que el heap suba a su pico antes de colectar): si el bump
@@ -1112,7 +1174,6 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                       (unsigned) vm->heap_start, (unsigned) vm->heap_top);
             if (vm->gc_descarrilo) {   /* V7 #494: esta reserva lanza la del heap descarrilado */
                 vm->reserva_descarrilada = 1;
-                bpvm_smp_unlock(vm);
                 return 0;
             }
         }
@@ -1158,7 +1219,6 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                           (unsigned)((vm->handles.cap * 8u) / 1024u),
                           (unsigned) vm->heap_next, (unsigned) vm->heap_top);
             }
-            bpvm_smp_unlock(vm);
             return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
         }
     }
@@ -1169,7 +1229,6 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
         gc_stw(vm);
         if (vm->gc_descarrilo) {   /* V7 #494: no hay reintento; la del heap descarrilado */
             vm->reserva_descarrilada = 1;
-            bpvm_smp_unlock(vm);
             return 0;
         }
         addr = try_allocate_inner(vm, total);
@@ -1209,7 +1268,6 @@ uint32_t bpvm_heap_alloc(bpvm_t* vm, uint32_t payload_bytes, int type) {
                           (unsigned) vm->heap_top,
                           (unsigned)((vm->heap_top - vm->heap_next) / 1024u));
             }
-            bpvm_smp_unlock(vm);
             return 0;   /* OOM real: ni con la reserva de emergencia cabe */
         }
     }
@@ -1217,15 +1275,16 @@ con_reserva: ;
 
     uint32_t tag = ((uint32_t)(type & 0x3F)) << BPVM_TAG_TYPE_SHIFT;
     bpvm_write_u32_be(vm->memory + addr, tag);
-    /* length lo escribe el caller; zero-inicializamos el slot por si lo olvida. */
-    bpvm_write_u32_be(vm->memory + addr + 4, 0);
+    /* V7/H7 #593 — la cabecera ENTERA, aquí y no en quien llama: la longitud de un array o la clase de un
+     * objeto. Antes se dejaba un 0 y la escribían a mano 23 sitios. */
+    bpvm_write_u32_be(vm->memory + addr + 4, cabecera);
 
     uint32_t user_ref = addr + 4;
     /* Zero-inicializar el resto del payload (importante al reusar free-list). */
     if (payload_bytes > 0) {
         memset(vm->memory + user_ref + 4, 0, payload_bytes);
     }
-    bpvm_smp_unlock(vm);
+    vm->heap_bloques++;   /* V7/H7 #593: un bloque más */
     return user_ref;
 }
 
@@ -1233,13 +1292,13 @@ con_reserva: ;
  * strings son TYPE_ARRAY_I8 con los bytes UTF-8 tal cual (1 byte/elem).
  * `len` = nº de bytes de `s`. */
 uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len) {
-    uint32_t ref = bpvm_heap_alloc(vm, (uint32_t) len, BPVM_TYPE_ARRAY_I8);
-    if (ref == 0) return 0;
-    bpvm_write_u32_be(vm->memory + ref, (uint32_t) len);   /* length = bytes */
+    bpref_t h = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) len, (uint32_t) len);   /* V7/H7 #593 */
+    if (h.v == 0u) return 0;
+    uint32_t ref = bpref_deref(vm, h);
     for (size_t i = 0; i < len; i++) {
         vm->memory[ref + 4 + i] = (uint8_t) s[i];
     }
-    return (uint32_t) bpvm_handle_register(vm, ref).v;   /* string: idx|TAG (gen=0); reuso de strings = paso 6 */
+    return (uint32_t) h.v;   /* string: idx|TAG (gen=0); reuso de strings = paso 6 */
 }
 
 /* Trigger manual de GC. Devuelve bytes liberados (aproximado: el delta

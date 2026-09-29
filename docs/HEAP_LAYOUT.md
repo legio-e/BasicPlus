@@ -159,6 +159,33 @@ parado y sin memoria aparte:
 
 Las dos VMs hacen lo mismo (`heap.c` `compactar`; `VirtualMachine.compactarLocked`).
 
+### 2.6 La reserva: UN método (V7/H7 #593)
+
+Un bloque sólo entra en el heap por `bpvm_heap_nuevo(vm, tipo, cabecera, payload)` (VM-C) y
+`heapNuevo(tipo, cabecera, payload)` (miVM). Bajo el cerrojo de la VM y de una vez: el hueco (lista de libres o
+bump), la cabecera ENTERA —el tipo y `cabecera`, la longitud de un array o el `class_ptr` de un objeto—, el
+contenido a cero, la cuenta del bloque y el handle. El bloque nace completo y con su handle: ningún GC lo ve a
+medias, y la tabla de handles conoce todo bloque vivo. Quien llama sólo llena el contenido (por el handle). Antes
+el asignador dejaba un 0 donde va la longitud o la clase y lo escribían a mano 23 sitios de la VM-C y 15 de miVM,
+que además daban de alta el handle aparte (Eduardo: *«al final la reserva la ha de hacer un método único, no n
+métodos»*).
+
+**La cuenta** (`heap_bloques` / `heapBloques`): los bloques no libres que hay según la reserva. `+1` al nacer,
+`-1` al soltar un owner (`FREE_REF`), y el barrido deja los que quedan; vuelve a 0 donde el heap se vacía (el
+arranque, la arena, el enlace, `setHeapStart`).
+
+**Las comprobaciones de cada GC**, en el recorrido de cabeceras (§2.3), además de que acabe en `heapNext`:
+
+1. los bloques no libres que ve el recorrido, contra la cuenta; y
+2. todo handle vivo que apunta dentro del heap cae en una cabecera vista y no libre.
+
+Si algo no cuadra, el heap se ha descarrilado (§ del GC, `#494`): ese GC no marca ni barre y la reserva que lo
+pidió lanza la excepción prefabricada «heap descarrilado (fallo interno de la VM)». Sin corregir nada: detectarlo
+en un programa en marcha es una excepción (Eduardo). Lo que cazan y el guardián de `#494` no: un bloque que dice
+lo justo para tragarse el SIGUIENTE, con lo que el recorrido se recompone y acaba en su sitio (el punto ciego de
+`#593`, por donde se coló `#597` una vez de cada tres); o uno que dice MENOS de lo que mide, que deja al recorrido
+inventarse bloques en su contenido. Contar bytes no valdría: el que miente se traga justo los bytes que se salta.
+
 ---
 
 ## 3. Layout del Class Descriptor

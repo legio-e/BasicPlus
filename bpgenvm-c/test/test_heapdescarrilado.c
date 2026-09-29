@@ -38,11 +38,21 @@ static void gancho(bpvm_t* vm, bpvm_thread_t* tc, uint32_t pc, int line, const c
     if (!s_estropear || s_estropeado) return;
     if (vm->heap_next <= vm->heap_start) return;   /* todavía no hay ningún bloque */
     s_estropeado = 1;
-    /* Un largo que se sale del heap ENTERO (no sólo del usado): con uno menor, el salto puede caer en el borde de
-     * otro bloque —las cadenas del programa miden todas lo mismo— y el recorrido se resincroniza en silencio (el
-     * agujero del guardián que ya contaba heap.c, #355). Así el recorrido no puede acabar en heap_next. */
     bpvm_write_u32_be(vm->memory + vm->heap_start, (uint32_t) BPVM_TYPE_ARRAY_I8 << BPVM_TAG_TYPE_SHIFT);
-    bpvm_write_u32_be(vm->memory + vm->heap_start + 4, (vm->heap_top - vm->heap_start) + 4096u);
+    if (s_estropear == 1) {
+        /* Un largo que se sale del heap ENTERO (no sólo del usado): con uno menor, el salto puede caer en el borde de
+         * otro bloque —las cadenas del programa miden todas lo mismo— y el recorrido se resincroniza en silencio (el
+         * agujero del guardián que ya contaba heap.c, #355). Así el recorrido no puede acabar en heap_next. */
+        bpvm_write_u32_be(vm->memory + vm->heap_start + 4, (vm->heap_top - vm->heap_start) + 4096u);
+    } else {
+        /* V7/H7 #593 (29-sep) — ESE agujero, a propósito: un largo que se traga JUSTO el bloque siguiente (medido en
+         * esta VM: el primero es el mensaje de la excepción prefabricada del OOM y el segundo, su objeto, VIVO). El
+         * recorrido salta al tercero, se recompone y acaba en heap_next: el guardián de #494 no lo ve, y sin #593 el
+         * GC mataba el handle de la prefabricada sin decir nada y el programa seguía («sin excepcion»). */
+        uint32_t t1 = bpvm_heap_bloque_tam(vm, vm->heap_start);
+        uint32_t t2 = bpvm_heap_bloque_tam(vm, vm->heap_start + t1);
+        bpvm_write_u32_be(vm->memory + vm->heap_start + 4, t1 + t2 - BPVM_OBJ_HEADER_SIZE);
+    }
 }
 
 static void recoge(const char* s, size_t len, void* user) {
@@ -83,12 +93,12 @@ static int corre(const char* mod, int estropear, int sin_mapa, const char* esper
     bpvm_io_stop(vm);
     int descarrilo = vm->gc_descarrilo;
     /* Sin mapa, el GC siguiente ya lo tiene: el último no descarrila, así que ahí no se mira. */
-    int pass = (s == BPVM_OK) && (s_estropeado == estropear) && (sin_mapa || descarrilo == estropear)
+    int pass = (s == BPVM_OK) && (s_estropeado == (estropear != 0)) && (sin_mapa || descarrilo == (estropear != 0))
                && strstr(s_salida, esperado) != NULL
                && strstr(s_salida, "lo de antes: guardado 42") != NULL;   /* lo vivo, intacto */
     printf("[heap] %s: status=%s, cabecera estropeada=%d, el ultimo GC descarrilo=%d, el programa dijo: %s",
-           sin_mapa ? "sin mapa  " : estropear ? "estropeado" : "control   ", bpvm_status_str(s), s_estropeado,
-           descarrilo, s_salida);
+           sin_mapa ? "sin mapa        " : estropear == 2 ? "traga el siguiente" : estropear ? "estropeado      "
+           : "control         ", bpvm_status_str(s), s_estropeado, descarrilo, s_salida);
     printf("[heap] %s\n", pass ? "PASS" : "FAIL");
     bpvm_destroy(vm); free(mem);
     return pass ? 0 : 1;
@@ -102,8 +112,9 @@ int main(int argc, char** argv) {
     rc |= corre(mod, 0, 0, "sin excepcion");
     rc |= corre(mod, 1, 0, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);
     rc |= corre(mod, 0, 1, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);   /* #598 */
+    rc |= corre(mod, 2, 0, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);   /* #593: el que se recomponía en silencio */
     if (rc == 0)
         printf("OK: el heap descarrilado es una excepcion atrapable (y sin estropear, ninguna); sin memoria para el "
-               "mapa del GC, la misma, y nada barrido\n");
+               "mapa del GC, la misma, y nada barrido; y un bloque que se traga justo el siguiente, tambien (#593)\n");
     return rc;
 }
