@@ -1221,7 +1221,15 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_ENTER: {
             uint16_t bytes = bpvm_read_u16_be(mem + pc); pc += 2;
+            /* V7/H7 #605 (29-sep) — EL MURO DE LA PILA (Eduardo: «excepción stack overflow, sí»). Toda función empieza
+             * por aquí (el prólogo de ModWriter, también con cero locales), así que una comparación por llamada basta: si
+             * con sus locales y la zona roja no cabe en el tope de SU hilo, RuntimeError atrapable. Antes nadie lo
+             * miraba: un hilo que recursaba pisaba en silencio la pila del vecino, y el main se comía la región entera.
+             * La misma cuenta que miVM: la excepción sale en la misma instrucción en las dos. */
+            if (sp + bytes + BPVM_PILA_ZONA_ROJA > tc->stack_top)
+                BPVM_RT_THROW("desbordamiento de pila (el hilo tiene %u B)", (unsigned) (tc->stack_top - tc->stack_base));
             sp += bytes;
+            if (sp > tc->pila_max) tc->pila_max = sp;   /* la marca: cuánta pila llegó a usar (sin los operandos) */
             break;
         }
 

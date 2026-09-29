@@ -2987,6 +2987,19 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int new_tid = bpvm_thread_spawn(vm, thread_ref);
         if (new_tid == -2)   /* #530: el mismo texto que miVM (no pasa con un Thread: Core.Thread tiene run()) */
             return builtin_throw(vm, tc, "Thread.start: run() no resoluble en la cadena de herencia");
+        /* V7/H7 #604 — los dos límites, atrapables y con el texto de miVM (antes, el programa moría con un error que no
+         * se atrapa): más de BPVM_MAX_THREADS vivos a la vez, o sin sitio para la pila que pide el hilo. */
+        if (new_tid == -1 || new_tid == -3) {
+            char m[80];
+            if (new_tid == -1) {
+                snprintf(m, sizeof m, "Thread.start: demasiados hilos vivos a la vez (%d)", BPVM_MAX_THREADS);
+            } else {
+                int32_t pedido = bpvm_read_i32_be(vm->memory + bpref_deref(vm, thread_ref) + 4 + 1 * 4);
+                snprintf(m, sizeof m, "Thread.start: no hay memoria para la pila del hilo (%ld B)",
+                         (long) (pedido > 0 ? pedido : (int32_t) BPVM_THREAD_STACK_BYTES));
+            }
+            return builtin_throw(vm, tc, m);
+        }
         if (new_tid < 0) {
             bpvm_diag_urgente("[bpvm-c] Thread.start falló");
             push_i32(vm, tc, 0);

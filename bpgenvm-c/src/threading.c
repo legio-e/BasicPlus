@@ -180,11 +180,47 @@ int bpvm_mutex_pop_waiter(bpvm_t* vm, int mid) {
  * — depende de la subclass del usuario — tenemos que hacerlo via
  * INVOKE_VIRTUAL: empujamos `this` y llamamos `run` (slot 0).
  *
- * Devuelve el tid del thread nuevo; -1 si error (null, sin hueco en la tabla de
- * hilos o sin pila), y -2 si run() no se resuelve en la cadena de herencia.
+ * Devuelve el tid del thread nuevo; -1 si ya hay BPVM_MAX_THREADS vivos, -2 si run() no
+ * se resuelve en la cadena de herencia, -3 si no cabe su pila (V7/H7 #604: el builtin lanza
+ * cada uno con su texto, el de miVM) y -4 si no hay objeto.
  */
+
+/* V7/H7 #604 (29-sep) — ¿se puede dar el hueco `i` a un hilo nuevo? Sólo si su hilo acabó DEL TODO: terminado, sin
+ * eventos que saldar (#342: a un hilo muerto con eventos pendientes se le resucita para atenderlos), sin nadie en su
+ * `join` (el planificador despierta a los que esperan cuando lo VE terminado: no se le puede cambiar el hilo antes),
+ * sin un worker encima (SMP) y sin un ejecutor de natives atado. Bajo vm_lock. */
+static int hueco_reutilizable(const bpvm_t* vm, int i) {
+    const bpvm_thread_t* t = &vm->threads[i];
+    if (t->status != BPVM_THREAD_TERMINATED || t->sched_owner != -1 || t->nativa != NULL) return 0;
+    if (bpvm_events_con_deuda(vm, t)) return 0;
+    for (int k = 0; k < vm->thread_count; k++)
+        if (vm->threads[k].status == BPVM_THREAD_BLOCKED_JOIN && vm->threads[k].blocked_on_join == i) return 0;
+    return 1;
+}
+
+/* V7/H7 #604 — deja el hueco como nuevo. El Thread del hilo anterior, si su objeto sigue vivo, deja de apuntar aquí
+ * —su `__tid` vuelve a 0—: su `join` vuelve enseguida, como el de un hilo terminado en miVM, en vez de esperar al hilo
+ * nuevo. Y lo que el anterior dejara no pasa al nuevo: la pila de manejadores de excepción, el ancla del GC, el paso a
+ * paso, la excepción de una native, la línea de `print`, la caché de cb y la marca de pila. Los búferes (eh_stack,
+ * linea) se quedan y se reutilizan. */
+static void hueco_a_estrenar(bpvm_t* vm, bpvm_thread_t* tc, int tid) {
+    if (!bpref_is_null(tc->thread_ref_heap) && !bpvm_ref_dead(vm, tc->thread_ref_heap)) {
+        uint32_t viejo = bpref_deref(vm, tc->thread_ref_heap) + 4 + 0 * 4;
+        if (bpvm_read_i32_be(vm->memory + viejo) == tid) bpvm_write_i32_be(vm->memory + viejo, 0);
+    }
+    tc->eh_stack_size = 0;
+    tc->alloc_anchor = 0;
+    tc->dbg_step = 0;
+    tc->builtin_de_nativa = 0;
+    tc->excepcion_pendiente = 0;
+    tc->linea_len = 0;
+    tc->cb_cache_cs = 0;
+    tc->cb_cache_cb = 0;
+    tc->pila_max = 0;
+}
+
 int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
-    if (bpref_is_null(thread_ref)) return -1;
+    if (bpref_is_null(thread_ref)) return -4;
 
     /* run() es la ranura 0 de la vtable (Core.Thread la declara la primera) y se resuelve como
      * cualquier llamada virtual, SUBIENDO por la cadena. #530 (V7): una clase que hereda run() de
@@ -205,19 +241,39 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
      * pickear. */
     bpvm_smp_lock(vm);
 
-    if (vm->thread_count >= BPVM_MAX_THREADS) {
-        bpvm_smp_unlock(vm);
-        return -1;
-    }
+    /* V7/H7 #604 — la pila que PIDE el hilo: el campo 1 del Thread (Thread(stackSize)); 0 = la de siempre, como en
+     * miVM. Su tope es lo pedido aunque su región mida más: el muro de #605 salta en el mismo sitio en las dos VMs. */
+    int32_t  pedido = bpvm_read_i32_be(vm->memory + bpref_deref(vm, thread_ref) + 4 + 1 * 4);
+    uint32_t tam    = (pedido > 0) ? (uint32_t) pedido : BPVM_THREAD_STACK_BYTES;
 
-    /* Reservar región de stack. */
-    uint32_t stack_base = vm->next_thread_stack;
-    uint32_t stack_top  = stack_base + BPVM_THREAD_STACK_BYTES;
-    if (stack_top > vm->memory_size) {
-        bpvm_smp_unlock(vm);
-        return -1;
+    /* V7/H7 #604 — el HUECO y su región. Antes los dos sólo crecían: 32 hilos en TODA la vida del programa, y el 33
+     * mataba el programa. Primero, un hueco que ya acabó del todo y cuya región le quepa; si no, una región nueva, en un
+     * hueco nuevo o en uno acabado (su región vieja se queda sin usar). */
+    int tid = -1;
+    uint32_t stack_base = 0, cap = 0;
+    for (int i = 1; i < vm->thread_count && tid < 0; i++) {
+        if (hueco_reutilizable(vm, i) && vm->threads[i].stack_cap >= tam) {
+            tid = i; stack_base = vm->threads[i].stack_base; cap = vm->threads[i].stack_cap;
+        }
     }
-    vm->next_thread_stack = stack_top;
+    if (tid < 0) {
+        int hueco = -1;
+        if (vm->thread_count < BPVM_MAX_THREADS) hueco = vm->thread_count;
+        for (int i = 1; i < vm->thread_count && hueco < 0; i++)
+            if (hueco_reutilizable(vm, i)) hueco = i;
+        if (hueco < 0) { bpvm_smp_unlock(vm); return -1; }        /* BPVM_MAX_THREADS vivos */
+        uint32_t region = (tam + 7u) & ~7u;                        /* la siguiente base, alineada */
+        if (region < tam || vm->next_thread_stack > vm->memory_size
+                || region > vm->memory_size - vm->next_thread_stack) {
+            bpvm_smp_unlock(vm);
+            return -3;                                             /* no cabe su pila */
+        }
+        stack_base = vm->next_thread_stack;
+        cap = region;
+        vm->next_thread_stack += region;
+        tid = hueco;
+        if (hueco == vm->thread_count) vm->thread_count++;
+    }
 
     /* Layout inicial del frame: simulamos un CALL desde un caller
      * imaginario que ya pusheó `this` (thread_ref) en su stack.
@@ -234,11 +290,12 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
      * (Thread.run). Eso ya hace push de pc/bp/cs reales y entra al
      * cuerpo de run. Pero antes hay que tener `this` en el stack.
      */
-    int tid = vm->thread_count++;
     bpvm_thread_t* tc = &vm->threads[tid];
+    hueco_a_estrenar(vm, tc, tid);
     tc->id = tid;
     tc->stack_base = stack_base;
-    tc->stack_top  = stack_top;
+    tc->stack_top  = stack_base + tam;
+    tc->stack_cap  = cap;
     tc->blocked_on_mutex = -1;
     tc->blocked_on_join = -1;
     tc->wake_at_ms = 0;

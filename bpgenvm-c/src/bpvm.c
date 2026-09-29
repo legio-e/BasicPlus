@@ -404,6 +404,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     main_tc->id = 0;
     main_tc->stack_base = (uint32_t) stack_base;
     main_tc->stack_top  = (uint32_t) stack_base + BPVM_MAIN_STACK_BYTES;
+    main_tc->stack_cap  = BPVM_MAIN_STACK_BYTES;
     main_tc->sp = main_tc->stack_base;
     main_tc->bp = main_tc->stack_base;
     main_tc->status = BPVM_THREAD_RUNNABLE;
@@ -1429,6 +1430,7 @@ static bpvm_status_t preparar_run(bpvm_t* vm) {
     if (main_tc->cs == 0) return BPVM_ERR_BAD_PC;
     main_tc->sp = main_tc->stack_base;
     main_tc->bp = main_tc->stack_base;
+    main_tc->pila_max = main_tc->stack_base;   /* V7/H7 #605: la marca, de cero en cada RUN */
     main_tc->status = BPVM_THREAD_RUNNABLE;
 
     /* Default quantum si no se ajustó; el ENV (`quantum=N`) manda si trae valor (#462, también con SMP). */
@@ -1477,6 +1479,24 @@ static void cerrar_run(bpvm_t* vm) {
     vm->run_pack_on = 0;
     vm->run_pack_only[0] = '\0';
     bpvm_fs_set_overlay(NULL, NULL, NULL);   /* y los recursos, al camino normal */
+    /* V7/H7 #605 — CUÁNTA PILA USÓ (la marca de ENTER: con los locales, sin los operandos): el main, y el hilo que más
+     * cerca estuvo de su tope. El instrumento para saber si bastan los 16 KB del main y lo que pide cada hilo; habla
+     * siempre, como el guardián de la memoria. */
+    const bpvm_thread_t* m = &vm->threads[0];
+    unsigned mu = (m->pila_max > m->stack_base) ? (unsigned) (m->pila_max - m->stack_base) : 0u;
+    unsigned pu = 0u, pt = 0u;
+    int peor = -1;
+    for (int i = 1; i < vm->thread_count; i++) {
+        const bpvm_thread_t* t = &vm->threads[i];
+        if (t->pila_max <= t->stack_base) continue;
+        unsigned u = (unsigned) (t->pila_max - t->stack_base), tot = (unsigned) (t->stack_top - t->stack_base);
+        if (peor < 0 || (uint64_t) u * pt > (uint64_t) pu * tot) { peor = i; pu = u; pt = tot; }
+    }
+    if (peor >= 0)
+        bpvm_diag("[bpvm] pila: el main llegó a %u de %u B; el hilo más lleno, a %u de %u B", mu,
+                  (unsigned) (m->stack_top - m->stack_base), pu, pt);
+    else
+        bpvm_diag("[bpvm] pila: el main llegó a %u de %u B", mu, (unsigned) (m->stack_top - m->stack_base));
 }
 
 bpvm_status_t bpvm_run(bpvm_t* vm) {

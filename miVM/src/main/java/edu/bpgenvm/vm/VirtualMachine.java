@@ -250,6 +250,20 @@ public class VirtualMachine {
     public static final int MAIN_STACK_BYTES = 16 * 1024;
 
     /**
+     * V7/H7 #604 (29-sep) — hilos VIVOS a la vez, el main incluido: el tope de la VM-C (BPVM_MAX_THREADS), también
+     * aquí, para que las dos digan lo mismo. Pasarlo es una RuntimeError atrapable con el mismo texto en las dos.
+     */
+    public static final int MAX_HILOS_VIVOS = 32;
+
+    /**
+     * V7/H7 #605 (29-sep) — la ZONA ROJA de la pila: lo que una función puede apilar después de su ENTER sin volver
+     * a mirar el tope (los operandos de una expresión, los argumentos de una llamada y los 12 B que empuja el CALL)
+     * hasta el ENTER siguiente. La misma en la VM-C (BPVM_PILA_ZONA_ROJA): el desbordamiento salta en la misma
+     * instrucción en las dos.
+     */
+    public static final int PILA_ZONA_ROJA = 256;
+
+    /**
      * Alocador de regiones de stack: punto bajo de la próxima región libre
      * dentro del rango [STACK_BASE..memory.length]. Crece hacia arriba.
      * Cuando un Thread termina, su región se devuelve a `freedStackRegions`.
@@ -270,8 +284,7 @@ public class VirtualMachine {
         int base = nextStackBase;
         int top  = base + size;
         if (top > memory.length) {
-            throw new RuntimeException("Sin espacio para stack de " + size + " bytes (nextBase="
-                    + base + ", memory.length=" + memory.length + ")");
+            return null;   // V7/H7 #604: quien llama lo dice con una RuntimeError atrapable (era una de Java: tumbaba la VM)
         }
         nextStackBase = top;
         return new int[]{base, top};
@@ -520,11 +533,13 @@ public class VirtualMachine {
     /**
      * Crea un nuevo ThreadContext con el stackSize indicado (0 = default).
      * El thread arranca en estado RUNNABLE y queda añadido a la runQueue.
+     * -1 si no cabe su pila (V7/H7 #604: quien llama lanza la RuntimeError).
      * Debe llamarse bajo vmLock (o desde setup mono-thread).
      */
     int spawnThread(int stackSize) {
         if (stackSize <= 0) stackSize = DEFAULT_THREAD_STACK_BYTES;
         int[] region = allocStackRegion(stackSize);
+        if (region == null) return -1;   // #604: no cabe la pila
         int newId = threads.size();
         ThreadContext nt = new ThreadContext(newId, region[0], region[1]);
         nt.setStatus(ThreadStatus.RUNNABLE, -1, "L492");
@@ -3309,6 +3324,16 @@ public class VirtualMachine {
 
                 case 0x0F: { // ENTER
                     int localsBytes = readI16(mem, pc); pc += 2;
+                    // V7/H7 #605 (29-sep) — EL MURO DE LA PILA (Eduardo: «excepción stack overflow, sí»). Toda función
+                    // empieza por aquí, así que una comparación por llamada basta: si con sus locales y la zona roja
+                    // no cabe en el tope de SU hilo, RuntimeError atrapable. Antes nadie lo miraba y un hilo que
+                    // recursaba pisaba en silencio la pila del vecino. La misma cuenta que la VM-C: la excepción sale
+                    // en la misma instrucción en las dos.
+                    if (sp + localsBytes + PILA_ZONA_ROJA > tc.stackTop) {
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "desbordamiento de pila (el hilo tiene "
+                                + (tc.stackTop - tc.stackBase) + " B)");
+                    }
                     sp += localsBytes;
                     break;
                 }
@@ -5623,40 +5648,56 @@ public class VirtualMachine {
                 long runResuelto = resolverVirtual(memory, classPtr, 0);
                 if (runResuelto == -1L)
                     throwBpRuntimeError(tc, "Thread.start: run() no resoluble en la cadena de herencia");
+                // V7/H7 #604 — los dos límites, como la VM-C y con su mismo texto: más hilos VIVOS de la cuenta, o sin
+                // sitio para su pila. Se deciden bajo el cerrojo y se lanzan FUERA (lanzar construye la excepción en el
+                // heap, y eso puede pedir un GC).
+                String errorHilo = null;
                 synchronized (vmLock) {
+                    int vivos = 0;
+                    for (ThreadContext t : threads) if (t.getStatus() != ThreadStatus.TERMINATED) vivos++;
+                    if (vivos >= MAX_HILOS_VIVOS) {
+                        errorHilo = "Thread.start: demasiados hilos vivos a la vez (" + MAX_HILOS_VIVOS + ")";
+                    }
                     // 1) Crear el nuevo ThreadContext con su región de stack.
-                    int newTid = spawnThread(stackSize);
-                    writeInt32(ta + 4 + 0 * 4, newTid);          // guardar tid en field 0
-                    ThreadContext nt = threads.get(newTid);
-                    // 2) La dirección absoluta del run() resuelto arriba.
-                    int targetCS   = (int) (runResuelto >>> 32);
-                    int runPc      = targetCS + (int) runResuelto;
-                    // 3) Preparar el frame inicial en el stack del nuevo thread.
-                    //    Tiene que ser IGUAL al que monta INVOKE_VIRTUAL, porque
-                    //    run() es un método corriente y su código lo da por hecho:
-                    //    el emisor le pone GET_LOCAL_L -20, una carga de 8 BYTES.
-                    //    [sb+0..7]  thisRef  (REF_SIZE — refStore, NO writeInt32)
-                    //    [sb+8]     saved PC = 0  (sentinela: memory[0] = THREAD_EXIT)
-                    //    [sb+12]    saved BP = sb
-                    //    [sb+16]    saved CS = 0
-                    //    bp = sb + 20; sp = sb + 20
-                    //
-                    //    Esto valía 16 y la ref se escribía en 4 bytes: el layout de
-                    //    ANTES del ensanchado de ref 4→8B, que aquí no se migró. Con
-                    //    bp = sb+16 run() leía sus 8 bytes en sb-4 y la mitad ALTA
-                    //    —la generación— salía de debajo de su propia pila.
-                    int sb = nt.stackBase;
-                    refStore(memory, sb, threadRef);
-                    writeInt32(sb + 8,  0);
-                    writeInt32(sb + 12, sb);
-                    writeInt32(sb + 16, 0);
-                    nt.sp = sb + 20;
-                    nt.bp = sb + 20;
-                    nt.pc = runPc;
-                    nt.cs = targetCS;
-                    // 4) Notificamos a workers durmiendo en pickNextRunnableTc.
-                    vmLock.notifyAll();
+                    int newTid = (errorHilo == null) ? spawnThread(stackSize) : -1;
+                    if (errorHilo == null && newTid < 0) {
+                        errorHilo = "Thread.start: no hay memoria para la pila del hilo ("
+                                + (stackSize > 0 ? stackSize : DEFAULT_THREAD_STACK_BYTES) + " B)";
+                    }
+                    if (errorHilo == null) {
+                        writeInt32(ta + 4 + 0 * 4, newTid);          // guardar tid en field 0
+                        ThreadContext nt = threads.get(newTid);
+                        // 2) La dirección absoluta del run() resuelto arriba.
+                        int targetCS   = (int) (runResuelto >>> 32);
+                        int runPc      = targetCS + (int) runResuelto;
+                        // 3) Preparar el frame inicial en el stack del nuevo thread.
+                        //    Tiene que ser IGUAL al que monta INVOKE_VIRTUAL, porque
+                        //    run() es un método corriente y su código lo da por hecho:
+                        //    el emisor le pone GET_LOCAL_L -20, una carga de 8 BYTES.
+                        //    [sb+0..7]  thisRef  (REF_SIZE — refStore, NO writeInt32)
+                        //    [sb+8]     saved PC = 0  (sentinela: memory[0] = THREAD_EXIT)
+                        //    [sb+12]    saved BP = sb
+                        //    [sb+16]    saved CS = 0
+                        //    bp = sb + 20; sp = sb + 20
+                        //
+                        //    Esto valía 16 y la ref se escribía en 4 bytes: el layout de
+                        //    ANTES del ensanchado de ref 4→8B, que aquí no se migró. Con
+                        //    bp = sb+16 run() leía sus 8 bytes en sb-4 y la mitad ALTA
+                        //    —la generación— salía de debajo de su propia pila.
+                        int sb = nt.stackBase;
+                        refStore(memory, sb, threadRef);
+                        writeInt32(sb + 8,  0);
+                        writeInt32(sb + 12, sb);
+                        writeInt32(sb + 16, 0);
+                        nt.sp = sb + 20;
+                        nt.bp = sb + 20;
+                        nt.pc = runPc;
+                        nt.cs = targetCS;
+                        // 4) Notificamos a workers durmiendo en pickNextRunnableTc.
+                        vmLock.notifyAll();
+                    }
                 }
+                if (errorHilo != null) throwBpRuntimeError(tc, errorHilo);
                 pushTc(tc, 0);   // dummy ret
                 break;
             }

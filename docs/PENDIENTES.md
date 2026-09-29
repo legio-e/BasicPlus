@@ -192,6 +192,12 @@
   y `print b` sí puede caer. Para que varias líneas salgan juntas: un `StringBuilder` y un
   solo `print` (manual §14.5). El límite: una línea de más de 1 KB —lo que cabe de una vez
   en la cola de salida de la Pico— puede salir en trozos.
+- **Hasta 32 hilos VIVOS a la vez, el main incluido, y cada uno con la pila que pide** (29-sep,
+  `#604`/`#605`). Un hilo terminado deja su sitio, así que en su vida un programa crea los que
+  quiera; pasar de 32 a la vez, o pedir una pila que no cabe, es un `RuntimeError` en `start()`.
+  Una función que no cabe en la pila de su hilo lanza «desbordamiento de pila» (manual §14.1).
+  El límite: una recursión DENTRO de una `native` corre, en la VM-C, en la pila de C de su
+  ejecutor, y allí sólo la vigila miVM (que ejecuta la native como bytecode).
 
 
 ### `input()` sólo funciona en el PC, no en el micro (decidido el 26-ago; `listDir` YA está en las dos desde V7/H3)

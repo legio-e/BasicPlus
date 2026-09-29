@@ -1852,10 +1852,22 @@ otra sin problema.</p>
       grande (16&nbsp;KB). Sólo <em>él</em> puede ejecutar la instrucción
       <code>HALT</code> que apaga la VM.</li>
   <li>Cualquier subclase de <code>Thread</code> añade un thread BP nuevo al
-      hacer <code>start()</code>. La VM le asigna stack (default 2&nbsp;KB)
+      hacer <code>start()</code>. La VM le asigna la pila que pide su
+      constructor —<code>Thread(stackSize)</code>, en bytes; con 0, 2&nbsp;KB—
       y lo encola <code>RUNNABLE</code>. Un worker Java libre lo coge y
       ejecuta su <code>run()</code> hasta retorno (THREAD_EXIT) o
       <code>yield()</code>/<code>sleep()</code>/<code>join()</code>/lock.</li>
+  <li><strong>La pila tiene un tope, y se vigila.</strong> Cada función, al
+      entrar, comprueba que lo suyo cabe en la pila de su thread; si no —una
+      recursión sin fin, o una pila pequeña para lo que hace—, lanza un
+      <code>RuntimeError</code> «desbordamiento de pila (el hilo tiene N B)»,
+      que se atrapa con <code>try</code> como cualquier otro, igual en las dos
+      VMs. Los demás threads no se enteran.</li>
+  <li>Caben hasta <strong>32 threads vivos a la vez</strong>, el main incluido.
+      Un thread terminado deja su sitio a otro, así que a lo largo de su vida un
+      programa puede crear todos los que quiera. <code>start()</code> lanza
+      <code>RuntimeError</code> si ya hay 32 vivos, o si no queda memoria para la
+      pila que pide.</li>
   <li>Cada thread BP tiene su propio contexto (<code>ThreadContext</code>):
       PC, SP, BP, CS, región de stack, pila de handlers de excepción. El
       heap (incluyendo objetos owned por threads) es <strong>compartido</strong>.</li>

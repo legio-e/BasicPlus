@@ -52,7 +52,12 @@ typedef struct { uint64_t v; } bpref_t;
 
 /* Stack del thread main; ver HEAP_LAYOUT.md §8 */
 #define BPVM_MAIN_STACK_BYTES   (16 * 1024)
-#define BPVM_THREAD_STACK_BYTES (2 * 1024)
+#define BPVM_THREAD_STACK_BYTES (2 * 1024)   /* el de un Thread que no pide otro (Thread(0)); como miVM */
+
+/* V7/H7 #605 (29-sep) — la ZONA ROJA de la pila: lo que una función puede apilar después de su ENTER sin volver a
+ * mirar el tope (los operandos de una expresión, los argumentos de una llamada y los 12 B que empuja el CALL) hasta
+ * el ENTER siguiente. La misma en miVM (PILA_ZONA_ROJA): el desbordamiento salta en la misma instrucción en las dos. */
+#define BPVM_PILA_ZONA_ROJA 256u
 
 /* Dirección inicial reservada (sentinela THREAD_EXIT en memory[0]). */
 #define BPVM_INITIAL_FREE_ADDR  0x0100
@@ -308,7 +313,9 @@ struct bpvm_thread {
     uint32_t cb_cache_cs;
     uint32_t cb_cache_cb;
     uint32_t stack_base;       /* dirección baja de su región de pila */
-    uint32_t stack_top;        /* dirección alta (excluida) */
+    uint32_t stack_top;        /* dirección alta (excluida): la base + lo que el hilo PIDIÓ (#604) */
+    uint32_t stack_cap;        /* V7/H7 #604 — lo que mide su REGIÓN, que puede ser más (una reutilizada) */
+    uint32_t pila_max;         /* V7/H7 #605 — el sp más alto visto en un ENTER, con los locales: cuánta pila usó */
     bpvm_thread_status_t status;
 
     /* F4 — bloqueo y join. */
@@ -1144,7 +1151,7 @@ void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid);
 int  bpvm_mutex_pop_waiter(bpvm_t* vm, int mid);
 
 /* Thread BP helpers (F4). */
-int  bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref);   /* tid; -1 error; -2 run() no resoluble (#530) */
+int  bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref);   /* tid; -1 ya hay BPVM_MAX_THREADS vivos; -2 run() no resoluble (#530); -3 no cabe su pila (#604) */
 
 /* F5 — Exception handling helpers. */
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,

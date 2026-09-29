@@ -64,6 +64,12 @@ memorySize└──────────────────────�
 - **`STACK_BASE`**: configurable por `BpVM.cfg.stackBase` (default
   `memorySize / 2`). Divide heap de stacks.
 
+- **En la VM-C** el reparto es otro (desde `#451`, 11-sep): entre el techo del heap y las pilas vive
+  la **tabla de handles** (`gen[]` y `addr[]`; baja desde las pilas y sólo sobre heap libre), y la
+  región de pilas la decide `bpvm_stack_region_bytes` (un 25 % del bloque de la VM, de 64 a 512 KB, o
+  `stack=N` del ENV), no `BpVM.cfg`. En miVM la tabla son arrays de Java, fuera de `memory[]`. Lo que
+  ve el programa es lo mismo en las dos (§4: el tope de cada pila).
+
 ---
 
 ## 2. Header de objeto en heap
@@ -201,9 +207,9 @@ del heap; `MOD_FORMAT.md` §13.4) y ningún rango los contiene.
 
 ## 4. Stacks de los threads BP
 
-Cada thread BP tiene una **región fija** dentro del área `[STACK_BASE,
-memorySize)`. La región se asigna al crear el thread y se libera al
-terminar (`freedStackRegions` para reuso).
+Cada thread BP tiene una **región** dentro del área de pilas. La región se asigna al crear el
+thread y, cuando el thread acaba del todo, **se reutiliza** para otro (en las dos VMs; la VM-C, desde
+`#604`, 29-sep: antes no reutilizaba nada y un programa sólo podía crear 32 hilos en su vida).
 
 ```
 stackBase ━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ↓ dirección baja
@@ -224,8 +230,18 @@ stackTop  ━━━━━━━━━━━━━━━━━━━━━━━�
 
 Tamaños:
 - **Thread main**: `MAIN_STACK_BYTES = 16 KiB`.
-- **Threads creados con `THREAD_NEW`**: `DEFAULT_THREAD_STACK_BYTES = 2 KiB`
-  (sobreescribible al crear con un valor explícito).
+- **Los demás**: lo que pide su constructor, `Thread(stackSize)` (campo 1 de `Core.Thread`); con 0,
+  `DEFAULT_THREAD_STACK_BYTES = 2 KiB`. El `stackTop` de un thread es SU tamaño pedido, aunque la
+  región que le toque (una reutilizada) mida más: así el tope es el mismo en las dos VMs.
+- **Hasta 32 threads vivos a la vez**, el main incluido (`BPVM_MAX_THREADS`; `MAX_HILOS_VIVOS` en
+  miVM). Uno más, o una pila que no cabe: `RuntimeError` en `start()`.
+
+**El muro (`#605`, 29-sep).** Cada función empieza por `ENTER`, y ahí se mira el tope: si
+`sp + locales + ZONA_ROJA > stackTop`, `RuntimeError` «desbordamiento de pila (el hilo tiene N B)»,
+atrapable. La **zona roja** (`BPVM_PILA_ZONA_ROJA` / `PILA_ZONA_ROJA` = 256 B) es lo que una función
+puede apilar después de su `ENTER` sin volver a mirar —los operandos, los argumentos de una llamada y
+los 12 B del `CALL`— hasta el `ENTER` siguiente. La misma cuenta en las dos VMs: la excepción sale en
+la misma instrucción. Antes nadie miraba, y un thread que recursaba pisaba la pila del de al lado.
 
 ### 4.1 Layout de un frame de función
 

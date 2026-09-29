@@ -1,0 +1,94 @@
+// HilosMuchos.bp — V7/H7 #604 (29-sep): cuántos hilos puede crear un programa en su vida, y cuántos a la vez.
+//
+// La VM-C no reutilizaba el hueco ni la pila de un hilo terminado: un programa sólo podía crear 32 hilos EN TODA SU
+// VIDA, y el 32 moría con «Thread.start falló», un error que no se atrapa (miVM creaba los que hicieran falta). Un
+// programa de días que lance un hilo por tarea moría así. Ahora las dos VMs reutilizan los huecos, y el límite es el
+// de hilos VIVOS a la vez (32, el main incluido): pasarlo es una RuntimeError atrapable, con el mismo texto en las dos.
+//
+//   1. 40 hilos de uno en uno (start y join): los 40.
+//   2. hilos que esperan en un Mutex del main, hasta que start() dice que no caben: 31 arrancados (el main es el 32)
+//      y la excepción atrapada; luego el main suelta el Mutex, acaban todos y se unen.
+//   3. otros 40 de uno en uno, sobre los huecos que dejaron los de antes.
+module HilosMuchos
+
+  class Tarea extends Thread
+    var n: integer
+
+    public function Tarea(n: integer)
+      super(0)
+      this.n := n
+    end Tarea
+
+    public function run()
+      var s: integer := 0
+      var i: integer := 0
+      while i < 10 do
+        s := s + i
+        i := i + 1
+      endwh
+      if this.n mod 20 == 0 then
+        print "  hilo ", this.n, " suma ", s
+      endif
+    end run
+  end Tarea
+
+  class Espera extends Thread
+    var m: Mutex
+    public property sig: Espera     // la lista de los que esperan, para unirlos después
+
+    public function Espera(m: Mutex, sig: Espera)
+      super(0)
+      this.m := m
+      this.sig := sig
+    end Espera
+
+    public function run()
+      this.m.lock()
+      this.m.unlock()
+    end run
+  end Espera
+
+  function unoTrasOtro(desde: integer, cuantos: integer): integer
+    var k: integer := 0
+    while k < cuantos do
+      var t: Thread := Tarea(desde + k)
+      t.start()
+      t.join()
+      k := k + 1
+    endwh
+    return k
+  end unoTrasOtro
+
+  function main(arg: string)
+    print "1. de uno en uno: ", unoTrasOtro(1, 40)
+
+    var m: Mutex := Mutex()
+    m.lock()
+    var primero: Espera := null
+    var n: integer := 0
+    var lleno: boolean := false
+    while n < 40 and not lleno do
+      var e: Espera := Espera(m, primero)
+      try
+        e.start()
+        primero := e
+        n := n + 1
+      catch x: RuntimeError
+        print "2. arrancados ", n, "; el siguiente: ", x.msg
+        lleno := true
+      endtry
+    endwh
+    m.unlock()
+    var j: integer := 0
+    var cur: Espera := primero
+    while cur != null do
+      cur.join()
+      j := j + 1
+      cur := cur.sig
+    endwh
+    print "   unidos: ", j
+
+    print "3. otra vez de uno en uno: ", unoTrasOtro(41, 40)
+  end main
+
+end HilosMuchos

@@ -1690,10 +1690,22 @@ Within one module, two classes may refer to each other with no problem.</p>
       (16&nbsp;KB). Only <em>it</em> can execute the <code>HALT</code>
       instruction that shuts the VM down.</li>
   <li>Any subclass of <code>Thread</code> adds a new BP thread when you call
-      <code>start()</code>. The VM assigns it a stack (default 2&nbsp;KB) and
+      <code>start()</code>. The VM assigns it the stack its constructor asks
+      for —<code>Thread(stackSize)</code>, in bytes; with 0, 2&nbsp;KB— and
       queues it <code>RUNNABLE</code>. A free Java worker picks it up and runs
       its <code>run()</code> until return (THREAD_EXIT) or
       <code>yield()</code>/<code>sleep()</code>/<code>join()</code>/a lock.</li>
+  <li><strong>The stack has a limit, and it is watched.</strong> On entry,
+      every function checks that its frame fits in its thread's stack; if it
+      does not —an endless recursion, or a stack too small for the job— it
+      throws a <code>RuntimeError</code> «desbordamiento de pila (el hilo tiene
+      N B)» (stack overflow), which <code>try</code> catches like any other, the
+      same in both VMs. The other threads are not affected.</li>
+  <li>Up to <strong>32 threads can be alive at once</strong>, main included.
+      A finished thread frees its place for another, so over its lifetime a
+      program can create as many as it wants. <code>start()</code> throws a
+      <code>RuntimeError</code> if 32 are already alive, or if there is no
+      memory left for the stack it asks for.</li>
   <li>Each BP thread has its own context (<code>ThreadContext</code>): PC, SP,
       BP, CS, stack region, exception-handler stack. The heap (including objects
       owned by threads) is <strong>shared</strong>.</li>
