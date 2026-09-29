@@ -594,9 +594,15 @@ uint32_t bpvm_heap_release_reserve(bpvm_t* vm) {
 }
 
 void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
+    /* V7/H7 #603 (29-sep) — BAJO EL CERROJO: la lista de libres es de todos los workers. Aquí llega el FREE_REF de
+     * un `var owner` (bpvm_free_owned, interp.c), que corre SIN cerrojo, mientras el alocador de otro worker recorre
+     * la misma lista bajo él (bpvm_heap_alloc): con --smp=2, dos hilos soltando owners rompían el heap 10 de cada 10
+     * veces (samples/OwnerSmp.bp). El barrido y la compactación también la tocan, pero con el mundo parado y el
+     * cerrojo ya tomado; ésta es la única entrada desde el bytecode. Con un worker, el cerrojo no hace nada. */
+    bpvm_smp_lock(vm);
     uint32_t size = block_total_size(vm, header_addr);
-    if (size == 0) return;   /* defensivo: no tocar si no sabemos el tamaño */
-    add_to_free_list(vm, header_addr, size);
+    if (size != 0) add_to_free_list(vm, header_addr, size);   /* defensivo: 0 = no sabemos el tamaño, no tocar */
+    bpvm_smp_unlock(vm);
 }
 
 /* H3 (V2): sweep que RECONSTRUYE la free-list coalesciendo runs de bloques

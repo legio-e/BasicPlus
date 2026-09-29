@@ -1404,8 +1404,12 @@ static void lineas_vaciar(bpvm_t* vm) {
     for (int i = 0; i < vm->thread_count; i++) bpvm_linea_vaciar(vm, &vm->threads[i]);
 }
 
-bpvm_status_t bpvm_run(bpvm_t* vm) {
-    if (!vm) return BPVM_ERR_BAD_PC;
+/* V7/H7 #606 (29-sep) — LA PUESTA A PUNTO de un RUN, UNA para los dos planificadores. bpvm_run y bpvm_run_smp la
+ * llevaban copiada y la copia se quedó atrás: el cs del `main` se buscaba en bpvm_run_smp por el rango viejo
+ * [code_start, end_addr), que en un módulo XIP (de un pack) está vacío —end_addr == code_start—, y un `main` de la
+ * zona de packs con --smp acababa en «PC fuera de rango»; bpvm_run se había arreglado en su día (H3.c) y su gemelo
+ * no. Enlazar, el hilo `main` desde el punto de entrada, el cuanto y las dos excepciones prefabricadas. */
+static bpvm_status_t preparar_run(bpvm_t* vm) {
     vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
     /* F3 — resolver imports y aplicar class fixups antes de ejecutar. */
     bpvm_status_t ls = bpvm_link_all(vm);
@@ -1427,7 +1431,7 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     main_tc->bp = main_tc->stack_base;
     main_tc->status = BPVM_THREAD_RUNNABLE;
 
-    /* Default quantum si no se ajustó; el ENV (`quantum=N`) manda si trae valor. */
+    /* Default quantum si no se ajustó; el ENV (`quantum=N`) manda si trae valor (#462, también con SMP). */
     if (vm->quantum_ops == 0)
         vm->quantum_ops = (g_quantum_ops > 0) ? (int) g_quantum_ops : 1024;
 
@@ -1461,17 +1465,27 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
         vm->runtime_error[0] = 0;
         main_tc->alloc_anchor = 0;
     }
+    return BPVM_OK;
+}
 
-    bpvm_status_t rs = bpvm_scheduler_run(vm);
-    lineas_vaciar(vm);   /* V7/H7 #600 */
-    /* #310 (Eduardo) — al TERMINAR se vuelve al camino estándar: el del pack
-     * desaparece. Si no, en un daemon (que es como lo usa el IDE) el Run
-     * siguiente heredaría el pack del anterior y resolvería imports contra un
-     * pack que ya no se está ejecutando: la peor clase de fallo, porque
-     * funciona hasta que alguien encadena dos ejecuciones. */
+/* #310 (Eduardo) — al TERMINAR se vuelve al camino estándar: el del pack
+ * desaparece. Si no, en un daemon (que es como lo usa el IDE) el Run
+ * siguiente heredaría el pack del anterior y resolvería imports contra un
+ * pack que ya no se está ejecutando: la peor clase de fallo, porque
+ * funciona hasta que alguien encadena dos ejecuciones. */
+static void cerrar_run(bpvm_t* vm) {
     vm->run_pack_on = 0;
     vm->run_pack_only[0] = '\0';
     bpvm_fs_set_overlay(NULL, NULL, NULL);   /* y los recursos, al camino normal */
+}
+
+bpvm_status_t bpvm_run(bpvm_t* vm) {
+    if (!vm) return BPVM_ERR_BAD_PC;
+    bpvm_status_t ps = preparar_run(vm);
+    if (ps != BPVM_OK) return ps;
+    bpvm_status_t rs = bpvm_scheduler_run(vm);
+    lineas_vaciar(vm);   /* V7/H7 #600 */
+    cerrar_run(vm);
     return rs;
 }
 
@@ -1480,61 +1494,14 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
 bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     if (!vm) return BPVM_ERR_BAD_PC;
     if (n_workers < 1) n_workers = 1;
-    vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
-    bpvm_status_t ls = bpvm_link_all(vm);
-    if (ls != BPVM_OK) return ls;
-    if (g_after_link) g_after_link(vm);   /* el código ya no debe cambiar */
-    if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
-    bpvm_thread_t* main_tc = &vm->threads[0];
-    main_tc->pc = vm->main_absolute_address;
-    for (int i = 0; i < vm->module_count; i++) {
-        bpvm_module_t* m = &vm->modules[i];
-        if (m->code_start <= vm->main_absolute_address
-                && vm->main_absolute_address < m->end_addr) {
-            main_tc->cs = m->code_start;
-            break;
-        }
-    }
-    if (main_tc->cs == 0) return BPVM_ERR_BAD_PC;
-    main_tc->sp = main_tc->stack_base;
-    main_tc->bp = main_tc->stack_base;
-    main_tc->status = BPVM_THREAD_RUNNABLE;
-    if (vm->quantum_ops == 0)   /* #462 — el ENV (`quantum=N`) manda también aquí */
-        vm->quantum_ops = (g_quantum_ops > 0) ? (int) g_quantum_ops : 1024;
-
-    /* #430 — misma prefabricada que en bpvm_run (ver alli). */
-    vm->oom_exc.v = 0u;
-    {
-        bpvm_thread_t* tc0 = &vm->threads[0];
-        vm->prefabricando_oom = 1;   /* V6/P1.C3.3: idem */
-        bpref_t pre = bpvm_throw_runtime_error(vm, tc0, "No space in heap");
-        vm->prefabricando_oom = 0;
-        vm->oom_exc = pre;
-        vm->runtime_error[0] = 0;
-        tc0->alloc_anchor = 0;
-    }
-    /* V7 #494 — y la del heap descarrilado (ver bpvm_run). */
-    vm->heap_exc.v = 0u;
-    vm->gc_descarrilo = 0;
-    vm->reserva_descarrilada = 0;
-    vm->gc_colectas = 0;           /* V7 (28-sep): Heap.getCollections cuenta las de ESTE RUN */
-    {
-        bpvm_thread_t* tc0 = &vm->threads[0];
-        vm->prefabricando_oom = 1;
-        bpref_t pre = bpvm_throw_runtime_error(vm, tc0, BPVM_MSG_HEAP_DESCARRILADO);
-        vm->prefabricando_oom = 0;
-        vm->heap_exc = pre;
-        vm->runtime_error[0] = 0;
-        tc0->alloc_anchor = 0;
-    }
+    bpvm_status_t ps = preparar_run(vm);   /* #606: la misma que bpvm_run */
+    if (ps != BPVM_OK) return ps;
 
     if (bpvm_smp_init(vm, n_workers) != 0) return BPVM_ERR_OOM;
     int rc = bpvm_scheduler_run_smp(vm);
     lineas_vaciar(vm);   /* V7/H7 #600 — antes de deshacer el SMP: su cola aún está */
     bpvm_smp_destroy(vm);
-    vm->run_pack_on = 0;   /* #310 — mismo cierre que bpvm_run: fuera el camino del pack */
-    vm->run_pack_only[0] = '\0';
-    bpvm_fs_set_overlay(NULL, NULL, NULL);
+    cerrar_run(vm);
     if (vm->kill_requested) return BPVM_KILLED;   /* P-run-stop */
     /* #596 — rc es el estado del primer fallo de un worker (0 = ninguno), o -1 si no arrancaron los workers. */
     return (rc < 0) ? BPVM_ERR_RUNTIME : (bpvm_status_t) rc;

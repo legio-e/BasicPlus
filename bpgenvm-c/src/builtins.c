@@ -1511,20 +1511,14 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t desc = (uint32_t) bpvm_read_i32_be(mem + wa);
         int32_t  method_off = -1;
         uint32_t target_cs  = 0;
-        for (;;) {
-            uint16_t bw    = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_BITMAP_WORDS);
-            uint16_t nmeth = bpvm_read_u16_be(mem + desc + BPVM_CLS_OFF_NUM_METHODS);
-            uint32_t vt_base = desc + BPVM_CLS_OFF_FIELD_BITMAP + 2u * (uint32_t) bw * 4u;
-            if ((uint32_t) slot < nmeth) {
-                int32_t off = bpvm_read_i32_be(mem + vt_base + (uint32_t) slot * 4);
-                if (off != -1) { method_off = off; target_cs = bpvm_get_cs_for_data_addr(vm, desc); break; }
-            }
-            int32_t parent_off = bpvm_read_i32_be(mem + desc + BPVM_CLS_OFF_PARENT_OFF);
-            if (parent_off == 0) { push_i32(vm, tc, 0); return BPVM_OK; }  /* no resoluble → ignora */
-            uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, desc);
-            desc = (uint32_t) ((int32_t) cur_cs + parent_off);
+        /* La regla del despacho virtual, la de OP_INVOKE_VIRTUAL (era una copia a mano del mismo paseo). */
+        if (bpvm_vt_resolver(vm, desc, (uint32_t) slot, &method_off, &target_cs) != 0) {
+            push_i32(vm, tc, 0); return BPVM_OK;   /* no resoluble → ignora */
         }
-        uint32_t target_abs = target_cs + (uint32_t) method_off;
+        /* V7/H7 #606 — method_off es CS-relativo; la dirección real va por la base de CÓDIGO del módulo dueño (cb;
+         * en RAM, cb == cs), como en OP_INVOKE_VIRTUAL. Sin ella, una ventana cuya clase vive en un pack (XIP)
+         * saltaba a basura en el primer evento. */
+        uint32_t target_abs = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) method_off;
         int32_t a2[2]; a2[0] = (int32_t) win; a2[1] = (int32_t) sender;
         bpvm_call_bp_from_builtin(vm, tc, target_abs, a2, 2, 3u); /* #302: win+sender son refs */
         push_i32(vm, tc, 0);

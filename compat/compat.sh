@@ -104,7 +104,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero OwnerSmp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -832,6 +832,38 @@ EOF
     o="$( cd "$S/vacio" && "$V3_C" --libdir=../lib2 --pack=../AppPk.pack Sombra.mod 2>"$S/zona.err" | filt )"
     if printf '%s' "$o" | grep -q "VARIANTE:ff" && grep -q "cargado XIP desde el pack 'AppPk'" "$S/zona.err" && grep -q "dep 'Str' -> pack EN EJECUCION" "$S/zona.err"; then echo "  ok  zona (VM-C): el principal que solo vive en la zona corre XIP, su pack primero"
     else echo "  ✗ zona: el principal de la zona:"; printf '%s\n' "$o" | head -3 | sed 's/^/       /'; grep -E "dep |XIP|load" "$S/zona.err" | sed 's/^/       /'; fails=$((fails+1)); fi
+    # V7/H7 #606 — ...y con DOS workers: bpvm_run_smp buscaba el modulo del `main` con el rango viejo, vacio en XIP
+    # («PC fuera de rango»); desde #606 la puesta a punto del RUN es una para los dos planificadores.
+    o="$( cd "$S/vacio" && "$V3_C" --smp=2 --libdir=../lib2 --pack=../AppPk.pack Sombra.mod 2>"$S/zona2.err" | filt )"
+    if printf '%s' "$o" | grep -q "VARIANTE:ff"; then echo "  ok  zona (VM-C): el principal de la zona corre XIP tambien con dos workers (#606)"
+    else echo "  ✗ zona: el principal de la zona con --smp=2 (#606):"; printf '%s\n' "$o" | head -3 | sed 's/^/       /'; tail -2 "$S/zona2.err" | sed 's/^/       /'; fails=$((fails+1)); fi
+    # V7/H7 #606 — ...y el manejador por RANURA (Forms: GUI_INVOKE_BY_SLOT) de una clase de la zona salta a SU
+    # codigo: la direccion se calculaba sin la base `cb` del XIP y saltaba a basura.
+    cat > "$S/src/SlotZona.bp" <<'EOF'
+module SlotZona
+  import Gui
+  class Mando
+    var nombre: string
+    public function Mando(nombre: string)
+      this.nombre := nombre
+    end Mando
+    public function pulsado(sender: Object)
+      print "manejador de " + this.nombre + " llamado"
+    end pulsado
+  end Mando
+  public function main()
+    var m: Mando := Mando("la zona")
+    Gui.__guiInvokeBySlot(m, Gui.__guiSlotOf(m, "pulsado"), null)
+    print "fin"
+  end main
+end SlotZona
+EOF
+    if ( cd "$ROOT" && java -jar "$V3_FE" "$S/src/SlotZona.bp" --compile "$S/app" --backend=mivm ) >"$S/slot.log" 2>&1 \
+       && ( cd "$S/app" && java -cp "$PACKJAR" basicplus.pack.PackCli build --out "$S/SlotPk.pack" --name SlotPk --version 1 --date 0 SlotZona.mod ) >>"$S/slot.log" 2>&1; then
+      o="$( cd "$S/vacio" && "$V3_C" --libdir=../lib --pack=../SlotPk.pack SlotZona.mod 2>"$S/slot.err" | filt )"
+      if printf '%s' "$o" | grep -q "manejador de la zona llamado" && printf '%s' "$o" | grep -qx "fin"; then echo "  ok  zona (VM-C): el manejador por ranura de una clase de la zona salta a su codigo (#606)"
+      else echo "  ✗ zona: el manejador por ranura de una clase de la zona (#606):"; printf '%s\n' "$o" | head -3 | sed 's/^/       /'; tail -2 "$S/slot.err" | sed 's/^/       /'; fails=$((fails+1)); fi
+    else echo "  ✗ SlotZona no compila o no se empaqueta: $S/slot.log"; fails=$((fails+1)); fi
   else
     echo "  (sin $PACKJAR: los casos de la zona no se prueban)"
   fi

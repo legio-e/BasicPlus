@@ -1087,8 +1087,8 @@ int           bpvm_link_nombre_de_clase(const bpvm_t* vm, uint32_t class_ptr, ch
  * entrada que no sea -1 (-1 = «heredada»). 0, con el método (cs-relativo) en *off y el cs de su
  * módulo en *tcs; -1 si ninguna clase de la cadena la tiene. Espejo de `resolverVirtual` de miVM.
  * #530 (V7): el arranque de un hilo leía la ranura 0 (run()) SIN subir, y una clase cuyo run()
- * venía de un padre de otro módulo no arrancaba. La usan OP_INVOKE_VIRTUAL, bpvm_thread_spawn y
- * el puente AOT (call_method): una regla, un sitio. */
+ * venía de un padre de otro módulo no arrancaba. La usan OP_INVOKE_VIRTUAL, bpvm_thread_spawn,
+ * el puente AOT (call_method) y, desde #606, el manejador por ranura de Forms: una regla, un sitio. */
 static inline int bpvm_vt_resolver(const bpvm_t* vm, uint32_t desc, uint32_t slot,
                                    int32_t* off, uint32_t* tcs) {
     const uint8_t* mem = vm->memory;
