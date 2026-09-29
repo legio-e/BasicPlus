@@ -1088,8 +1088,25 @@ la C6, la P4 y la Nucleo.
   Eduardo avisó de que el GC apagado no para las liberaciones de `owner`: descartado con el desensamblado (cero
   `FREE_REF` y `SET_FIELD_OWNER`). Y la lección que decide el diseño: esperar dentro de la ventana entre la reserva y
   el alta del handle corrompe (26-35 %, medido), así que el handle nace con el bloque.
-- La red completa, verde (11 min); placas compiladas sin grabar: Pico, S3, C6 y Nucleo. Sigue, por orden de Eduardo:
-  `#610`, `#611`, `#612`, cada una con su prueba en la red.
+- La red completa, verde (11 min); placas compiladas sin grabar: Pico, S3, C6 y Nucleo. Después, por orden de
+  Eduardo (*«si, en ese orden»*), las tres, cada una con su control rojo, su verde y la red entera:
+  - ~~`#610`~~ (`b4bb28fb`): la tabla de handles de la VM-C crece con el mundo parado —`tabla_crecer`, en la puerta de
+    la reserva, que se mira antes de reservar y otra vez tras la colecta del reintento—. La red gana el frente
+    `check_estres` (el estrés del heap): `TablaHandles` con `--nogc --smp=4`, ocho pasadas; sin el arreglo, 7 de 8
+    en rojo. Placas compiladas.
+  - ~~`#611`~~ (`c0015787`): el `split` y el `listDir` de miVM, con el array primero y apilado. `HeapEstres` con el
+    heap justo y 1, 2 y 4 workers en las dos VMs, al mismo frente; sin el arreglo, miVM en rojo con los tres.
+  - ~~`#612`~~ (`cf476205`): un `Error` de Java en un worker de miVM para la VM, lo dice y sale con 3 (fallo interno).
+    `FalloInternoTest`, con su sabotaje. Tropiezo del día: restaurar la fuente del sabotaje con `cp -p` le devolvió
+    la hora vieja y Maven se quedó la clase saboteada (la memoria de los jars rancios lo cuenta).
+
+**Traspaso (29-sep, noche).** La reserva y el GC quedan como los dejó la prueba: el método único, la tabla que crece
+parada, `split` con raíz, y `check_estres` vigilando lo que la paridad no ve. Riesgos a la vista: (1) si alguna vez
+sale «el alta de un handle iba a crecer la tabla con otros workers en marcha (#610)», la puerta de la reserva tiene
+un camino que no conozco; (2) en miVM los campos de la tabla no son `volatile` y los lectores no sincronizan: un
+lector atrasado vería datos viejos —teórico, no se ha visto en 60 pasadas de `TablaCrece`—. Lo abierto de H7 sigue
+siendo lo del mapa: los restos de `U6`, Boot 1/2 y el montaje de packs, `U1.4`, los 32 MB del P4, `CALL_REL` (medir
+antes), la Pico sobre `platform_freertos` (grabar, con el OK de Eduardo), `#607` y `#609`.
 - Incidente raro, anotado: una vez, con `2>&1`, la línea «[bpvm] pila:» del final del RUN de la VM-C salió partida
   a trozos entre las líneas del programa (hasta un carácter UTF-8 partido). Sólo afecta al mezclar stdout y stderr.
 
