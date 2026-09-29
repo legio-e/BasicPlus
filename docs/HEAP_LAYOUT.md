@@ -70,6 +70,13 @@ memorySize└──────────────────────�
   `stack=N` del ENV), no `BpVM.cfg`. En miVM la tabla son arrays de Java, fuera de `memory[]`. Lo que
   ve el programa es lo mismo en las dos (§4: el tope de cada pila).
 
+- **La tabla de la VM-C crece MOVIÉNDOSE** (`bpvm_handles_grow`: un `memmove` dentro del bloque; el `addr[]` nuevo
+  cae encima del `gen[]` viejo) y los workers la leen SIN cerrojo (`bpref_deref`, `bpvm_ref_dead`). Por eso sólo
+  crece **con el mundo parado**, como se colecta (V7/H7 `#610`): en la puerta de la reserva (`tabla_con_sitio` →
+  `tabla_crecer`, `heap.c`), antes de reservar el bloque y otra vez tras la colecta del reintento, que suelta el
+  cerrojo mientras espera. El alta del handle no crece la tabla con otros workers en marcha. En miVM crecer hace
+  arrays nuevos y deja intactos los viejos.
+
 ---
 
 ## 2. Header de objeto en heap

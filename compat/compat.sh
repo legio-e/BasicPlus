@@ -104,7 +104,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero OwnerSmp HilosMuchos PilaMuro HiloExc"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -497,6 +497,32 @@ check_smp() {   # $1 = "sin-referencia" cuando check ya hizo la pasada principal
   PAR_C_ARGS=""; PAR_J_ARGS=""; PAR_REF=""; PAR_REF_QUE="la pasada MOD9"
   echo "  smp: $([ "$rc" -eq 0 ] && echo 'el corpus dice lo mismo con dos workers que con uno' || echo 'dos workers en ROJO')"
   return "$rc"
+}
+
+# ------------------------------------------------------------- el estres del heap
+# V7/H7 #610 (29-sep) — lo que la paridad no ve porque casi siempre sale BIEN: la prueba de estres de #593
+# (V7_IDEAS §H7). TablaHandles en la VM-C con el GC APAGADO y cuatro workers, varias veces: cuatro hilos guardan
+# cadenas vivas, asi que la tabla de handles crece mientras los otros la leen. Crecia MOVIENDOSE con ellos corriendo
+# (un memmove dentro del heap): con el codigo de antes de #610, un use-after-free falso casi una vez de cada dos.
+# Ahora crece con el mundo parado. Sin GC a proposito: con el GC en marcha la tabla crece justo tras una colecta,
+# con los demas parados, y no se veria. ESTRES_VECES=n cambia las pasadas.
+ESTRES_VECES="${ESTRES_VECES:-8}"
+check_estres() {
+  echo "-- el estres del heap (#610): la tabla de handles crece con cuatro workers leyendola (VM-C sin GC, x$ESTRES_VECES) --"
+  local E="$WORK/estres" fails=0 i rc sal
+  rm -rf "$E"; mkdir -p "$E"; cp "$STDLIB"/*.mod "$E/"
+  ( cd "$ROOT" && java -jar "$V3_FE" "$SAMPLES/TablaHandles.bp" --compile "$E" --backend=mivm ) >"$E/compila.log" 2>&1 \
+    || { echo "  ✗ TablaHandles no compila: $E/compila.log"; return 1; }
+  for i in $(seq 1 "$ESTRES_VECES"); do
+    ( cd "$E" && timeout "$VM_TIMEOUT" "$V3_C" --nogc --smp=4 TablaHandles.mod >"$E/out.$i" 2>"$E/err.$i" ); rc=$?
+    sal="$(filt < "$E/out.$i" | grep -v 'GC DESACTIVADO' | paste -sd'|')"   # el aviso de --nogc no es del programa
+    if [ "$rc" -ne 0 ] || [ "$sal" != "errores:  0" ]; then
+      fails=$((fails+1))
+      echo "  ✗ pasada $i: salida $rc, «$sal» — $(grep -m1 -E 'UAF|mensaje que traia|SIN MEMORIA' "$E/err.$i")"
+    fi
+  done
+  echo "  estres: $([ "$fails" -eq 0 ] && echo "la tabla crece sin corromper nada ($ESTRES_VECES de $ESTRES_VECES)" || echo "$fails de $ESTRES_VECES pasadas en ROJO")"
+  [ "$fails" -eq 0 ]
 }
 
 # ------------------------------------------------------------- capsula V6
@@ -1108,8 +1134,10 @@ EOF
   check_mod8 sin-referencia || fails=$((fails+1))
   # V7/H7 (#599) — el mismo corpus con dos workers, contra la misma referencia.
   check_smp sin-referencia || fails=$((fails+1))
+  # V7/H7 #610 — el estres del heap: lo que casi siempre sale bien (la tabla de handles que crece, sin GC).
+  check_estres || fails=$((fails+1))
   check_packs_abi || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + packs-abi VERDE' || echo "$fails frente(s) en ROJO") =="
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + estres del heap + packs-abi VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
 
@@ -1125,6 +1153,7 @@ case "${1:-}" in
   check-testc) check_testc ;;
   check-mod8) check_mod8 ;;
   check-smp)  check_smp ;;
+  check-estres) check_estres ;;
   check-packs-abi) check_packs_abi ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-packs-abi}"; exit 2 ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-estres|check-packs-abi}"; exit 2 ;;
 esac

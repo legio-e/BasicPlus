@@ -853,6 +853,27 @@ static void stw_esperar_al_otro(bpvm_t* vm) {
     vm->smp->running_workers++;
 }
 
+/* V7/H7 #610 (29-sep) — LA TABLA CRECE CON EL MUNDO PARADO. bpvm_handles_grow la MUEVE —un memmove dentro del heap:
+ * el addr[] nuevo cae encima del gen[] viejo, y el final del addr[] viejo se pone a cero— y los demás workers la leen
+ * sin cerrojo (bpref_deref, bpvm_ref_dead). Quien leyera a mitad encontraría una dirección donde espera una generación
+ * (un use-after-free falso) o un cero donde espera una dirección: medido en la prueba de estrés de #593 (TablaCrece
+ * con --nogc: 58 y 93 de 150 con 2 y 4 workers). Así que se crece como se colecta, con los demás parados, también con
+ * el GC apagado. Si otro worker ya ha parado el mundo, se le deja acabar y se vuelve a mirar si hay sitio. Asume
+ * vm_lock tomado. Sólo la llama la puerta de la reserva (tabla_con_sitio), donde quien reserva aún no tiene nada a
+ * medias: esperar dentro de la ventana entre la reserva y el alta del handle corrompe (medido: V7_IDEAS §H7 #593). */
+static int tabla_crecer(bpvm_t* vm) {
+    if (vm->smp) {
+        if (vm->smp->stop_the_world) {
+            stw_esperar_al_otro(vm);
+            if (vm->handles.free_top > 0u || vm->handles.next < vm->handles.cap) return 1;
+        }
+        stw_parar(vm);
+    }
+    int r = bpvm_handles_grow(vm);
+    stw_seguir(vm);
+    return r;
+}
+
 /* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo
  * por umbral y la ruta de OOM. En legacy/single-worker no hay baile. */
 static void gc_stw(bpvm_t* vm) {
@@ -1113,6 +1134,57 @@ bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payloa
     return h;
 }
 
+/* V7/H7 #610 — la puerta de la TABLA de handles, en su función porque se mira DOS veces en heap_reservar: antes de
+ * reservar y tras la colecta del reintento (gc_stw suelta el cerrojo mientras espera, y otros workers pueden gastarse
+ * los slots que había). El alta del handle va detrás de la reserva sin soltarlo, así que lo último que se mira es
+ * esto: 1 = hay sitio para ella; 0 = no cabe, el OOM de siempre. Asume vm_lock tomado. */
+static int tabla_con_sitio(bpvm_t* vm) {
+    /* #430 — resolver la presion de tabla, si la habia. Dos salidas buenas:
+     * la colecta rellena la free-list (recicla) o, si todo sigue VIVO, se
+     * crece AQUI — donde fallar tiene camino digno: el mismo contrato
+     * "return 0 = OOM atrapable" del heap lleno. El flag se desarma en las
+     * dos; volvera a armarse solo al cruzar la marca siguiente. (El segundo
+     * termino: mismo lleno-duro que arriba — la colecta de la puerta pudo no
+     * reciclar nada y el flag estar en 0.) */
+    if (vm->handles.pressure != 0 ||
+        (vm->handles.cap != 0u && vm->handles.free_top == 0u &&
+         vm->handles.next >= vm->handles.cap)) {
+        if (vm->handles.free_top > 0u) {
+            vm->handles.pressure = 0;          /* reciclado: presion resuelta */
+        } else if (tabla_crecer(vm)) {   /* #610: con el mundo parado */
+            vm->handles.pressure = 0;          /* todo vivo: tabla mas grande */
+        } else {
+            /* ⚠️ EL AVISO ESTABA MUDO (29-ago). Era un `static` de fichero, o sea
+             * UNA VEZ POR ARRANQUE — no por ejecucion, que es lo que decia su
+             * propio texto. En la Pico, con la placa encendida y varias pruebas
+             * corridas, ya estaba gastado: `SyncListDiag` murio por la tabla y
+             * el unico mensaje que lo decia no salio. Se buscó el fallo en el
+             * heap durante media hora. Ahora vive en el `vm`, que nace a cero en
+             * cada RUN (calloc).
+             *
+             * Y dice el heap LIBRE a proposito: el OOM que el programa recibe se
+             * llama "No space in heap" —no se puede cambiar sin romper la
+             * paridad con la VM-Java— asi que sin este numero al lado, el
+             * mensaje manda a mirar precisamente donde no esta el problema. */
+            if (!vm->handles.oom_avisado) {
+                vm->handles.oom_avisado = 1;
+                /* #451 — desde que la tabla vive DENTRO del bloque, quedarse sin
+                 * handles ya significa quedarse sin memoria de verdad: la tabla
+                 * bajo hasta tocar el heap. Ya no hay que aclarar "no es el
+                 * heap", porque ahora si lo es — es la misma bolsa. */
+                bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles: %u slots ocupan "
+                          "%u KB y la tabla ya toca el heap (vivo hasta %u, techo %u). "
+                          "OOM atrapable.",
+                          (unsigned) vm->handles.cap,
+                          (unsigned)((vm->handles.cap * 8u) / 1024u),
+                          (unsigned) vm->heap_next, (unsigned) vm->heap_top);
+            }
+            return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
+        }
+    }
+    return 1;
+}
+
 /* El hueco: el GC proactivo, la presión de la tabla, la lista de libres, el bump y el OOM. Con el vm_lock tomado
  * (bpvm_heap_nuevo); sólo la llama él. Devuelve user_ref (= header_addr + 4), con la cabecera entera y el
  * contenido a cero, o 0 si no cabe. */
@@ -1179,49 +1251,7 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
         }
     }
 
-    /* #430 — resolver la presion de tabla, si la habia. Dos salidas buenas:
-     * la colecta rellena la free-list (recicla) o, si todo sigue VIVO, se
-     * crece AQUI — donde fallar tiene camino digno: el mismo contrato
-     * "return 0 = OOM atrapable" del heap lleno. El flag se desarma en las
-     * dos; volvera a armarse solo al cruzar la marca siguiente. (El segundo
-     * termino: mismo lleno-duro que arriba — la colecta de la puerta pudo no
-     * reciclar nada y el flag estar en 0.) */
-    if (vm->handles.pressure != 0 ||
-        (vm->handles.cap != 0u && vm->handles.free_top == 0u &&
-         vm->handles.next >= vm->handles.cap)) {
-        if (vm->handles.free_top > 0u) {
-            vm->handles.pressure = 0;          /* reciclado: presion resuelta */
-        } else if (bpvm_handles_grow(vm)) {
-            vm->handles.pressure = 0;          /* todo vivo: tabla mas grande */
-        } else {
-            /* ⚠️ EL AVISO ESTABA MUDO (29-ago). Era un `static` de fichero, o sea
-             * UNA VEZ POR ARRANQUE — no por ejecucion, que es lo que decia su
-             * propio texto. En la Pico, con la placa encendida y varias pruebas
-             * corridas, ya estaba gastado: `SyncListDiag` murio por la tabla y
-             * el unico mensaje que lo decia no salio. Se buscó el fallo en el
-             * heap durante media hora. Ahora vive en el `vm`, que nace a cero en
-             * cada RUN (calloc).
-             *
-             * Y dice el heap LIBRE a proposito: el OOM que el programa recibe se
-             * llama "No space in heap" —no se puede cambiar sin romper la
-             * paridad con la VM-Java— asi que sin este numero al lado, el
-             * mensaje manda a mirar precisamente donde no esta el problema. */
-            if (!vm->handles.oom_avisado) {
-                vm->handles.oom_avisado = 1;
-                /* #451 — desde que la tabla vive DENTRO del bloque, quedarse sin
-                 * handles ya significa quedarse sin memoria de verdad: la tabla
-                 * bajo hasta tocar el heap. Ya no hay que aclarar "no es el
-                 * heap", porque ahora si lo es — es la misma bolsa. */
-                bpvm_diag_urgente("[bpvm] SIN SITIO para mas handles: %u slots ocupan "
-                          "%u KB y la tabla ya toca el heap (vivo hasta %u, techo %u). "
-                          "OOM atrapable.",
-                          (unsigned) vm->handles.cap,
-                          (unsigned)((vm->handles.cap * 8u) / 1024u),
-                          (unsigned) vm->heap_next, (unsigned) vm->heap_top);
-            }
-            return 0;   /* mismo cauce que el heap lleno: el caller lanza OOM */
-        }
-    }
+    if (!tabla_con_sitio(vm)) return 0;   /* #430: la presión de la tabla, resuelta ANTES de reservar (#610) */
 
     uint32_t addr = try_allocate_inner(vm, total);
     if (addr == 0) {
@@ -1231,6 +1261,9 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
             vm->reserva_descarrilada = 1;
             return 0;
         }
+        /* V7/H7 #610 — la tabla, otra vez: gc_stw soltó el cerrojo mientras esperaba, y otros workers pueden haberse
+         * gastado los slots que había. Aún no hay nada reservado: si hay que crecer, se puede esperar. */
+        if (!tabla_con_sitio(vm)) return 0;
         addr = try_allocate_inner(vm, total);
         if (addr == 0) {
             /* #355 — EL OOM ERA MUDO: se devolvia 0 y el que llama decidia si

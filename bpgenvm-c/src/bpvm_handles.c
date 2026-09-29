@@ -255,7 +255,17 @@ bpref_t bpvm_handle_register_bajo_cerrojo(bpvm_t* vm, uint32_t addr) {
              * crecimiento es el ULTIMO RECURSO (registros en vuelo mas alla del
              * margen). Si no se puede, el "paso siguiente" que prometia #355:
              * ref NULA → el llamador la trata como el OOM que ya sabe tratar.
-             * Nada de direcciones crudas — las refs no mienten. */
+             * Nada de direcciones crudas — las refs no mienten.
+             *
+             * V7/H7 #610 — crecer MUEVE la tabla y los demás workers la leen sin cerrojo: se crece con el mundo parado,
+             * y eso lo hace la puerta de la reserva (tabla_crecer, heap.c), que deja sitio para el alta que va
+             * detrás. Aquí sólo se crea (cap 0) o crece la de un solo hilo (las pruebas de la tabla). Con otros
+             * workers en marcha no debería llegarse; si se llega, el mismo OOM que el heap lleno, y dicho. */
+            if (vm->handles.cap != 0u && vm->smp != NULL && vm->smp->running_workers > 1) {
+                bpvm_diag_urgente("[bpvm] el alta de un handle iba a crecer la tabla con otros workers en marcha "
+                                  "(#610): no deberia pasar, la puerta de la reserva deja sitio. OOM atrapable");
+                r.v = 0u; return r;
+            }
             if (!bpvm_handles_grow(vm)) {
                 bpvm_diag_urgente("[bpvm] tabla de handles AGOTADA (%u slots, tope %u): "
                           "ref nula -> OOM atrapable",
