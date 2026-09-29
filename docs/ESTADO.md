@@ -1068,6 +1068,22 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🧵 H7 (29-sep) — el mapa de lo que quedaba, y las pilas y los hilos: `#603`–`#606` cerradas; `#607`, `#608` y `#609` abiertas
+
+- `#603` (`a907435d`): con `--smp`, soltar un objeto con dueño rompía el heap de la VM-C 10 de 10 veces —la lista de
+  libres sin cerrojo—. `#606` (ídem): el manejador por ranura de Forms y el `main` de un pack con `--smp` saltaban a
+  basura en XIP; la puesta a punto del RUN es ya una para los dos planificadores.
+- `#604` y `#605` (`98c640e9`): la VM-C reutiliza los huecos de los hilos (antes, 32 en la vida del programa) y
+  respeta `Thread(stackSize)`; y el MURO de la pila en las dos VMs —Eduardo: *«excepción stack overflow, sí»*—, con
+  la medida del corpus (el main, 944 B de 16 KB como mucho) y `PILA_LOG=` en `compat.sh`.
+- `#593`, decidido por Eduardo: *«la reserva la ha de hacer un método único, no n métodos»* —atómica, completa y
+  con su handle—, y lo que se detecte en marcha, excepción. Es lo siguiente.
+- Abiertas: `#607` (un manejador de la GUI que hace `sleep` se corta en silencio, en las dos VMs), `#608` (una
+  excepción sin atrapar en un hilo: miVM acaba el hilo o el programa según quién la lanzó; la VM-C, siempre el
+  programa — a decidir) y `#609` (`test-listen`, el `TimeoutError` intermitente, tercera vez).
+- Las cuatro familias compilan con todo; el compilador y el IDE, rehechos (el guardián de ayer avisó de la miVM
+  embebida vieja, como debía). Sin grabar placas.
+
 ## 🗺️ H7 (29-sep) — el mapa verificado de lo que queda: tres fallos medidos ejecutándolos (`#603`, `#604`, `#605`) y dos latentes (`#606`)
 
 - Eduardo: *«continuar H7»*. Cinco lecturas del código (la memoria por placa, el heap y las pilas, el arranque y
