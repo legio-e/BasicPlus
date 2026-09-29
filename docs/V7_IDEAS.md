@@ -2804,6 +2804,44 @@ documentos rancios—; después, con las decisiones de Eduardo, el muro de las p
 todo en el PC; y lo que pide placa (el arranque y los packs, `U1.4`, la Pico, los márgenes de `U6`, los 32 MB), a la
 ronda de placas, cuando toque.
 
+### `#604` y `#605` — las pilas de los hilos: el diseño (29-sep)
+
+Eduardo, sobre `#605`: *«excepción stack overflow, sí»*. Los dos van juntos porque tocan lo mismo —dónde vive la pila
+de cada hilo y hasta dónde puede crecer— y el orden es `#604` primero: sin él, el tope que vigilaría `#605` sería el
+de una pila que no es la que el programa pidió (el hilo de la GUI pide 8 KB y en la VM-C tiene 2).
+
+**`#605` — el muro:**
+
+- **Dónde**: en `ENTER`. Toda función empieza por él (el prólogo que pone `ModWriter`, también con cero locales), así
+  que es una comparación por llamada: `sp + locales + zona roja > tope del hilo` → `RuntimeError` «desbordamiento de
+  pila», atrapable, con el mismo texto en las dos VMs. Las dos VMs llevan el mismo marco (el mismo bytecode, las mismas
+  cuentas de `sp`), así que la excepción sale en la MISMA instrucción: la paridad incluye el desbordamiento.
+- **La zona roja** (256 B): lo que una función puede apilar después de su `ENTER` sin volver a mirar —los operandos
+  de una expresión, los argumentos de una llamada y los 12 B que empuja el `CALL`— hasta el `ENTER` siguiente. La
+  inyección de un evento ya mira su propio sitio (`events.c`).
+- **El `main`, 16 KB de verdad** (lo que ya dicen las dos VMs; hoy usaba en silencio toda la región). Antes de fijarlo
+  se mide cuánta pila usa el corpus: una marca del máximo por hilo, que queda como diagnóstico al acabar el RUN.
+- **Las natives**: en la VM-C corren en la pila de C de su ejecutor y en miVM son bytecode, así que una recursión
+  DENTRO de una native sólo la ve miVM. Diferencia conocida; se documenta.
+
+**`#604` — los hilos de la VM-C, como miVM:**
+
+- **Reutilizar el hueco** de un hilo terminado cuando ya no le queda nada: terminado, sin eventos pendientes (`#342`),
+  sin nadie en su `join` y sin ejecutor de natives atado. Al reutilizarlo, el campo `__tid` del `Thread` viejo pasa a 0
+  —su `join` vuelve enseguida, como el de un hilo terminado en miVM— y se limpia lo que arrastraría del anterior (la
+  pila de manejadores de excepción, el ancla del GC, el paso a paso, la línea de `print`, la caché de `cb`).
+- **Reutilizar su región de pila** si le cabe lo que pide el nuevo (la primera que quepa); si no, una nueva de la
+  región libre.
+- **Respetar `Thread(stackSize)`**: 0 = 2 KB, como miVM; el tope del hilo es el tamaño PEDIDO, no el de la región
+  que le tocó, para que `#605` salte en el mismo sitio en las dos VMs.
+- **Los límites, con excepciones atrapables y el mismo texto en las dos VMs**: más de 32 hilos VIVOS a la vez (hoy la
+  VM-C muere con un error que no se atrapa, y miVM no tiene tope: se le pone el mismo) y sin memoria para la pila del
+  hilo (el punto en que pasa depende del tamaño de la región de pilas de cada VM, como el heap lleno).
+
+**Las pruebas**: `HilosMuchos` (40 hilos de uno en uno) y `PilaHonda` (un hilo que recursa; con `try`, la excepción
+atrapada y el vecino intacto) al corpus, en la paridad y con dos workers; y los sabotajes: sin la reutilización, rojo
+en el 32; sin el muro, el vecino roto.
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.
