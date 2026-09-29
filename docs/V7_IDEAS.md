@@ -2910,6 +2910,17 @@ corrompe. Medido: parar el mundo en el alta (para crecer allí) subió los fallo
 liberaba el bloque a medio nacer. Así que el método único se queda como está, con el handle al nacer: separar otra vez
 el alta (llenar fuera y publicar al final) volvería a abrir esa ventana.
 
+**Para H12** (multinúcleo de verdad, con memoria de orden débil: el P4, la RP2350). El alta publica el slot con
+RELEASE y `bpref_deref` lo lee con ACQUIRE (el «paso 7c» de V4); con el handle al nacer, lo que se escribe DESPUÉS
+—el contenido que llena quien reserva— ya no va detrás de esa barrera. Un programa que pasa un objeto a otro hilo con
+un `Mutex`, un `join` o un `start` no lo nota: esas operaciones ya ordenan la memoria. Uno que lo comparta SIN
+sincronizar (una carrera del programa) podría, en otro núcleo, ver el handle antes que el contenido. Tampoco antes era
+estanco (el handle guardado en un campo compartido podía verse antes que la barrera del alta). Cuando H12 llegue:
+decidir si se garantiza también la publicación sin sincronizar (una barrera RELEASE al guardar una referencia en un
+campo, un array o una global) o se documenta que compartir sin sincronizar no está definido. Y en miVM, la tabla de
+handles la leen los workers sin sincronizar y sus campos no son `volatile`: un lector podría ver un array viejo tras
+crecer (teórico; no se ha visto).
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.
