@@ -5302,14 +5302,16 @@ public class VirtualMachine {
                 String s   = readVmString(popTcRef(tc));
                 // String.split con regex literal: pasamos java.util.regex.Pattern.quote.
                 String[] parts = s.split(java.util.regex.Pattern.quote(sep), -1);
-                // Aloca primero los strings individuales, luego el array (en ese orden el
-                // GC tendrá los slots zero-init mientras se llenan).
-                long[] refs = new long[parts.length];
-                for (int i = 0; i < parts.length; i++) refs[i] = allocVmString(parts[i]);   // #6 (censo V4): handle 64b completo (era (int)→gen=0)
+                // V7/H7 #611 (29-sep) — el array PRIMERO, y apilado: es la raíz de los trozos mientras nacen (como la
+                // VM-C). Antes se reservaban los trozos primero y se guardaban en un long[] de Java que el GC no ve —el
+                // ancla del hilo sólo guarda el último—: si una reserva colectaba, los ya hechos se liberaban. Con el
+                // heap justo fallaba SIEMPRE, también con un solo worker (la prueba de estrés de #593, HeapEstres).
                 long arrRef = allocVmRefArray(parts.length);
-                int adir = refDeref(arrRef);   // V4: dirección física (antes usaba el handle crudo como addr, sin refDeref)
-                for (int i = 0; i < parts.length; i++) writeI64(memory, adir + 4 + i * 8, refs[i]);   // ref 8B completa
                 pushTcRef(tc, arrRef);
+                for (int i = 0; i < parts.length; i++) {
+                    long p = allocVmString(parts[i]);                          // #6 (censo V4): handle 64b completo
+                    writeI64(memory, refDeref(arrRef) + 4 + i * 8, p);        // ref 8B completa; la dirección, tras la reserva
+                }
                 break;
             }
 
@@ -5579,12 +5581,13 @@ public class VirtualMachine {
                     for (int i = 0; i < m; i++) { int d = (bx[i] & 0xFF) - (by[i] & 0xFF); if (d != 0) return d; }
                     return bx.length - by.length;
                 });
-                long[] refs = new long[names.length];
-                for (int i = 0; i < names.length; i++) refs[i] = allocVmString(names[i]);   // #6 (censo V4): handle 64b completo (era (int)→gen=0)
+                // V7/H7 #611 — como SPLIT: el array primero y apilado, la raíz de los nombres mientras nacen.
                 long arrRef = allocVmRefArray(names.length);   // ya es handle
-                int adir = refDeref(arrRef);   // V4: dirección física
-                for (int i = 0; i < names.length; i++) writeI64(memory, adir + 4 + i * 8, refs[i]);   // ref 8B completa
                 pushTcRef(tc, arrRef);
+                for (int i = 0; i < names.length; i++) {
+                    long p = allocVmString(names[i]);                          // #6 (censo V4): handle 64b completo
+                    writeI64(memory, refDeref(arrRef) + 4 + i * 8, p);        // ref 8B completa; la dirección, tras la reserva
+                }
                 break;
             }
 

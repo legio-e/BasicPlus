@@ -506,13 +506,37 @@ check_smp() {   # $1 = "sin-referencia" cuando check ya hizo la pasada principal
 # (un memmove dentro del heap): con el codigo de antes de #610, un use-after-free falso casi una vez de cada dos.
 # Ahora crece con el mundo parado. Sin GC a proposito: con el GC en marcha la tabla crece justo tras una colecta,
 # con los demas parados, y no se veria. ESTRES_VECES=n cambia las pasadas.
+# V7/H7 #611 — y HeapEstres con el heap JUSTO (~1.000 colectas por ejecucion) y 1, 2 y 4 workers, en las DOS VMs:
+# cuatro hilos se pasan cadenas por un buzon y comprueban lo que reciben. El split de miVM reservaba los trozos antes
+# que el array, donde el GC no los ve: con el heap justo fallaba SIEMPRE, tambien con un solo worker.
 ESTRES_VECES="${ESTRES_VECES:-8}"
 check_estres() {
-  echo "-- el estres del heap (#610): la tabla de handles crece con cuatro workers leyendola (VM-C sin GC, x$ESTRES_VECES) --"
-  local E="$WORK/estres" fails=0 i rc sal
+  echo "-- el estres del heap (#610, #611): la tabla de handles que crece (VM-C sin GC, x$ESTRES_VECES); el heap justo con 1, 2 y 4 workers (las dos VMs) --"
+  local E="$WORK/estres" fails=0 i rc sal w op
   rm -rf "$E"; mkdir -p "$E"; cp "$STDLIB"/*.mod "$E/"
-  ( cd "$ROOT" && java -jar "$V3_FE" "$SAMPLES/TablaHandles.bp" --compile "$E" --backend=mivm ) >"$E/compila.log" 2>&1 \
-    || { echo "  ✗ TablaHandles no compila: $E/compila.log"; return 1; }
+  ( cd "$ROOT" && java -jar "$V3_FE" "$SAMPLES/TablaHandles.bp" --compile "$E" --backend=mivm \
+      && java -jar "$V3_FE" "$SAMPLES/HeapEstres.bp" --compile "$E" --backend=mivm ) >"$E/compila.log" 2>&1 \
+    || { echo "  ✗ TablaHandles o HeapEstres no compilan: $E/compila.log"; return 1; }
+  # El heap justo: en miVM, 48 KB de heap (el resto, pilas); en la VM-C, 96 KB en total. Los dos, ~1.000 colectas.
+  printf '{\n  "memorySize": 114688,\n  "stackBase": 49152\n}\n' > "$E/justo.cfg"
+  local justo="creados:  1600|errores:  0|leidos de otros:  true|muchas colectas:  true"
+  for w in 1 2 4; do
+    ( cd "$E" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$V3_JAVA" --config=justo.cfg --workers=$w HeapEstres.mod >"$E/j.$w" 2>"$E/je.$w" ); rc=$?
+    sal="$(filt < "$E/j.$w" | paste -sd'|')"
+    if [ "$rc" -ne 0 ] || [ "$sal" != "$justo" ]; then
+      fails=$((fails+1))
+      echo "  ✗ HeapEstres miVM --workers=$w: salida $rc, «$sal» — $(grep -m1 -vE '^\[(gc|miVM)\]|^VM \[GC\]' "$E/je.$w")"
+    fi
+  done
+  for w in 0 1 2 4; do
+    op=""; [ "$w" -gt 0 ] && op="--smp=$w"
+    ( cd "$E" && timeout "$VM_TIMEOUT" "$V3_C" --mem=98304 $op HeapEstres.mod >"$E/c.$w" 2>"$E/ce.$w" ); rc=$?
+    sal="$(filt < "$E/c.$w" | paste -sd'|')"
+    if [ "$rc" -ne 0 ] || [ "$sal" != "$justo" ]; then
+      fails=$((fails+1))
+      echo "  ✗ HeapEstres VM-C ${op:-sin --smp}: salida $rc, «$sal» — $(grep -m1 -E 'UAF|mensaje que traia|DESCARRIL' "$E/ce.$w")"
+    fi
+  done
   for i in $(seq 1 "$ESTRES_VECES"); do
     ( cd "$E" && timeout "$VM_TIMEOUT" "$V3_C" --nogc --smp=4 TablaHandles.mod >"$E/out.$i" 2>"$E/err.$i" ); rc=$?
     sal="$(filt < "$E/out.$i" | grep -v 'GC DESACTIVADO' | paste -sd'|')"   # el aviso de --nogc no es del programa
@@ -521,7 +545,7 @@ check_estres() {
       echo "  ✗ pasada $i: salida $rc, «$sal» — $(grep -m1 -E 'UAF|mensaje que traia|SIN MEMORIA' "$E/err.$i")"
     fi
   done
-  echo "  estres: $([ "$fails" -eq 0 ] && echo "la tabla crece sin corromper nada ($ESTRES_VECES de $ESTRES_VECES)" || echo "$fails de $ESTRES_VECES pasadas en ROJO")"
+  echo "  estres: $([ "$fails" -eq 0 ] && echo "la tabla crece sin corromper nada ($ESTRES_VECES de $ESTRES_VECES) y el heap justo aguanta en las dos VMs" || echo "$fails pasadas en ROJO")"
   [ "$fails" -eq 0 ]
 }
 
@@ -1134,7 +1158,8 @@ EOF
   check_mod8 sin-referencia || fails=$((fails+1))
   # V7/H7 (#599) — el mismo corpus con dos workers, contra la misma referencia.
   check_smp sin-referencia || fails=$((fails+1))
-  # V7/H7 #610 — el estres del heap: lo que casi siempre sale bien (la tabla de handles que crece, sin GC).
+  # V7/H7 #610, #611 — el estres del heap: lo que casi siempre sale bien (la tabla de handles que crece, sin GC;
+  # el heap justo con varios workers, en las dos VMs).
   check_estres || fails=$((fails+1))
   check_packs_abi || fails=$((fails+1))
   echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + estres del heap + packs-abi VERDE' || echo "$fails frente(s) en ROJO") =="
