@@ -385,6 +385,9 @@ public class Main {
             if (vm.isKillRequested()) {        // P-run-stop (#257)
                 exitCode = 130;                // convención 128+SIGINT
                 exitReason = "killed";
+            } else if (vm.isFalloInterno()) {  // V7/H7 #612: un Error de Java en un worker — de la VM, no del programa
+                exitCode = 3;
+                exitReason = "interno: " + vm.getRuntimeError();
             } else if (!vm.getRuntimeError().isEmpty()) {
                 /* #481 — EL PROGRAMA MURIO LANZANDO. Hasta hoy esto salía con 0:
                  * un programa muerto decía que había ido bien, y un script que

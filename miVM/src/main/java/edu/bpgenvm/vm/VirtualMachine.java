@@ -1126,6 +1126,10 @@ public class VirtualMachine {
 
     private volatile String runtimeError = "";
     public String getRuntimeError() { return runtimeError; }
+    /** V7/H7 #612 — el RUN acabó por un fallo de la VM (un Error de Java en un worker), no del programa: la salida
+     *  3 de la tabla común (#481), como la VM-C con un opcode o un PC imposibles. */
+    private volatile boolean falloInterno = false;
+    public boolean isFalloInterno() { return falloInterno; }
 
     // ── V7/H3 (#491) — EL CURSOR: un fichero abierto por objeto IO.File ────────────────────
     // El bloque de estado es el byte[] del objeto (aquí de 0 bytes: el estado vive en Java),
@@ -3050,6 +3054,23 @@ public class VirtualMachine {
                         synchronized (vmLock) {
                             if (runtimeError.isEmpty())
                                 runtimeError = String.valueOf(ex.getMessage());   // #481
+                            vmShutdown = true;
+                            vmLock.notifyAll();
+                        }
+                        return;
+                    } catch (Error err) {
+                        // V7/H7 #612 (29-sep) — un ERROR de Java (un OutOfMemoryError, un StackOverflowError) no es del
+                        // programa: es un fallo de la VM. Antes no se atrapaba: el worker moría con la traza de Java y
+                        // el RUN acababa como si hubiera terminado —sin imprimir nada y con salida 0— y, con varios
+                        // workers, su hilo se quedaba RUNNING para siempre (lo vio la prueba de estrés de #593, con el
+                        // split de #611). Ahora se para la VM, se dice, y la salida es la del fallo interno (3).
+                        String msg = "fallo interno de la VM: " + err;
+                        System.err.println("[bpgenvm worker " + workerId + ", tid=" + tc.id + "] " + msg);
+                        dumpFault(workerId, tc, "Error", err);
+                        emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(tc.id, msg, ""));
+                        synchronized (vmLock) {
+                            if (runtimeError.isEmpty()) runtimeError = msg;
+                            falloInterno = true;
                             vmShutdown = true;
                             vmLock.notifyAll();
                         }
