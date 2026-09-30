@@ -3038,6 +3038,23 @@ región de arriba al FS—; (2) qué hace `part.fs.size` en esa placa; y (3) en 
 de hoy, con su `/app`, se queda en `bpdata` sin montar) y rehacer la zona de packs, que pasa a empezar en
 `bpdata+0` (`PACK_FORMAT` y volver a grabar sus packs) —las dos cosas, con el OK de Eduardo—.
 
+✅ **HECHO el 30-sep** (`d5b828b1`, `a91b8dad`; Eduardo: *«si la C5 tiene 32M hacemos lo mismo que con la P4»*):
+- **La regla** (común a las cinco ESP32): si el chip tiene flash por encima del final de `bpdata` (al menos 1 MB),
+  el arranque sube el `size` del driver al físico, registra ese trozo como la partición «bpfsalto» y el FS se
+  monta ahí, entero; `bpdata` queda para los packs. En el kit, la S3, la C3 y la C6 no cambia nada. El reparto es
+  `bpvm_part_layout_fs_arriba` (común, con su prueba) y el gestor lo cuenta: `PART_LS` con `fsArriba`, y
+  `PART_APPLY`/`PART_DEFAULTS` contestan «no se reparte»; el IDE lo enseña. `part.fs.size` no se aplica allí.
+- **En las dos placas**, paso a paso con su OK: copia del FS al PC (61 ficheros en la Waveshare, 33 en la C5;
+  menos `/lib`, que repone el SO, y la SD); la imagen (el FS nuevo nace vacío y formateado, y la zona de packs,
+  en `bpdata+0` sobre el FS viejo, dice «cadena ROTA» sin caerse); `PACK_FORMAT`; los packs sellados otra vez
+  (la Waveshare, SQLite y Gui, `riscv`: le quedan 8,5 MB libres, antes 1,4; la C5, Gui y DriverSpi,
+  `riscv-imc`); la copia subida, igual fichero a fichero; y los programas: `Bench` con AOT, `SqlDemo` y
+  `GuiShot` en la Waveshare; `GuiFlushBench`, `GuiShot` y `C5SdGui` en la C5.
+- **Lo que salió en la C5**: con la zona de 15 MB, la segunda vista (DATOS) no cabe en el espacio virtual
+  (`ESP_ERR_NOT_FOUND`: `esp_mmu_map` busca un hueco del tamaño entero antes de ver que ese trozo ya está
+  mapeado) y se lee por la de INST, que en estos micros es la misma dirección: funciona, y el log ya lo explica.
+- **Más adelante**, lo que dijo Eduardo: un FS de más de 16 MB, y entonces una zona de packs más pequeña.
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.

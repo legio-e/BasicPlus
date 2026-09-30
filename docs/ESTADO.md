@@ -1093,15 +1093,24 @@ la C6, la P4 y la Nucleo.
   el tamaño, `INVALID_ARG`; subido a 32 MB, arriba todo `ff` y abajo el bootloader, la tabla, la app y el ENV: sin eco.
   Y **la escritura** (con su OK, otra imagen de prueba): borrar, escribir y releer un sector en 16 MB + 0x300000, bien,
   y su eco de abajo intacto. Eduardo decidió: *«para ahora con 16M de FS la P4 va sobrada. Y el resto para el SO y
-  los packs»* —el FS arriba, `bpdata` para los packs; un FS de más de 16 MB, más adelante—.
+  los packs»* —el FS arriba, `bpdata` para los packs; un FS de más de 16 MB, más adelante—; y *«si la C5 tiene 32M
+  hacemos lo mismo que con la P4»*.
+- **Los 32 MB, HECHOS** (`d5b828b1`, `a91b8dad`): la regla en el común de la ESP32 (la flash de encima de la tabla,
+  registrada como «bpfsalto», es del FS; `bpdata`, de los packs), `PART_LS` con `fsArriba` y `PART_APPLY` que no
+  reparte, el IDE que lo enseña. Y las dos placas migradas con su OK: copia del FS, imagen, `PACK_FORMAT`, packs
+  sellados otra vez, copia subida (igual fichero a fichero) y programas en marcha. De paso: `test-bmgr` no
+  enlazaba desde `#468` —la segunda vez fuera de la red— y entra en ella con `test-part` y `test-pack`; y en la C5
+  la segunda vista de la zona (15 MB) no cabe en el espacio virtual y se lee por la primera (el log lo explica).
+- Encontrado: la Waveshare lleva `DaoDemo.mod` y `ModeloDao.mod` en MOD6, que ya no enlazan con la SQLite de hoy
+  (piden `__cls_new_Db`, que no existe desde el enlace tardío): no es de la migración —la copia los devolvió byte a
+  byte— y MOD6 queda por debajo de lo que se garantiza (MOD7). Se recompilan cuando haga falta.
 - Tropiezos: (1) `pack … riscv` a secas poda para el P4; la C5 (como la C3 y la C6) es `riscv-imc` —no llegó a grabar:
   no cabía—. (2) Le dije a Eduardo que no había que borrar nada: miré el sitio en la zona, no la RAM de los motores.
   (3) Un `cut -c30-` se comió la primera cifra del tamaño de `Gui.pack` (2 326 528 → «326528») y me hizo dudar del
   pack.
 
 **Traspaso (30-sep, mediodía).** De H7 queda lo del mapa: los restos de `U6`, `U1.4`, Boot 1/2 y el montaje de packs,
-la Pico sobre `platform_freertos` y, de los 32 MB, HACERLO: el FS en los 16 MB de arriba de la Waveshare (la regla en
-el común, qué hace `part.fs.size` allí, y en la placa formatear el FS nuevo y rehacer la zona de packs, con su OK).
+y la Pico sobre `platform_freertos`. Los 32 MB, hechos en la Waveshare y la C5 (un FS de más de 16 MB, más adelante).
 La P4, la C5 y la Pico llevan la imagen de hoy (con `#607`: el `Gui.mod` nuevo ya puede ir a ellas); la DK2 y las que
 no estaban, no.
 
