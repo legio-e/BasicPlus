@@ -1119,6 +1119,20 @@ la C6, la P4 y la Nucleo.
   tres marcaban sólo al saltar a alguno (el primer pack grabado se carga en el siguiente RUN, sin reiniciar); se queda
   así. En las placas: la DK2 (Mini, SQLite y Gui) y la C5 (Gui y DriverSpi) cargan UNA vez con dos INFO y dos RUN; la
   P4, SQLite y la GUI (sin `log=1` no deja el rastro); la Pico sin packs, igual. `test-npack` entra en la red.
+- **La fase 3, hecha** (`72c3ab6f`): la regla del bloque de RAM de los motores, común (`bpvm_packram_region`:
+  `packRam=` y, si no, `SQLite=`, dejando a la VM 128 KB —la STM32 dejaba 64—) y `packRam=` en la Pico: con PSRAM, al
+  principio de la ventana como SQLite; sin ella, la cola de la SRAM crece hacia abajo. En las placas, los bloques de
+  siempre; en la Pico, `packRam=64` → 64 KB en `0x20070000` y la VM de 346 a 290 KB, y quitado. `test-sqlmem` a la red.
+
+**Traspaso (30-sep, noche).** De H7 queda **la fase 4 de Boot 2**: el orden del arranque común, con ganchos por
+familia —arregla los dos fallos de paso (la P4 por TCP no aplica `stack=`/`quantum=`/`log=`; el autorun de la STM32 no
+mira si la placa llegó sana)— y declarar las capas del SO (`V7_IDEAS` §H7, «Boot 2 y el montaje de packs»). Y sin
+decisión, con placa: remedir el S3 (su margen es ahora el de su PSRAM; no estaba). Fuera de H7: `#614` —queda la parte
+de la C5, 5,8 ms por etiqueta—, `#609`, y la línea de la C5 que mezcla la PSRAM con la DRAM. Aparcado: la Pico sobre
+el backend común.
+
+Las placas: la Pico, la DK2 (con `log=1`), la C5 y la P4, con la imagen de `72c3ab6f` y su ENV como estaba (la zona de
+la Pico, vacía); las demás, con imágenes anteriores —firmware y stdlib, juntos—.
 - Las placas: la Pico, la DK2 (con `log=1`), la C5 y la P4, con la imagen de `da19145e` y su ENV como estaba; la zona
   de la Pico, vacía (formateada). Las demás, como estaban.
 

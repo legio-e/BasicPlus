@@ -3190,7 +3190,11 @@ micro simulado:
    DENTRO —cierra el hueco del ancla— y el `log_flush` antes de saltar en las tres; lo dispara el primer RUN o INFO
    en todas; un motor que no carga, al `casi`. Ganchos: la zona, la BIOS, el bloque de RAM y (sólo la ESP32) releer
    la cabecera para el diagnóstico.
-3. **La regla del bloque de RAM, común** (pequeño): `packRam=` y, si no, `SQLite=`, en una función; la familia sólo
+3. ✅ **HECHA el 30-sep, `72c3ab6f`** —`bpvm_packram_region`; en el host (`test_sqlmem`, y `test-sqlmem` a la red) y
+   en las placas: los mismos bloques de antes (la Pico 8 KB en la cola de la SRAM, la DK2 768 KB, la C5 1024, la P4
+   4 MB por `SQLite=4`) y, en la Pico sin PSRAM, `packRam=64` hace la cola de 64 KB en `0x20070000` y la VM baja lo
+   mismo (346 → 290 KB)—. En la Pico sin PSRAM, `packRam=` cambia la COLA de la SRAM, que crece hacia abajo desde el
+   techo: un motor sellado contra la de 8 KB sigue dentro. **La regla del bloque de RAM, común** (pequeño): `packRam=` y, si no, `SQLite=`, en una función; la familia sólo
    COLOCA (el plan en la Pico y la STM32, la reserva aparte en la ESP32). `packRam=` llega a la Pico.
 4. **El Boot 2 común** (medio): el orden, una vez, con ganchos por familia; arregla los dos fallos de paso (la P4 por
    TCP y el autorun de la STM32) y declara las capas del SO (`H9_KERNEL_CAPAS.md`).
