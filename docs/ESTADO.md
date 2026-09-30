@@ -1108,6 +1108,11 @@ no mudo—; las placas de GUI se graban con el firmware y la stdlib de hoy, junt
 (`__guiInvokeBySlot`) sigue anidando: ya no lo llama nadie de la stdlib; sólo lo verían un `Gui.mod` de antes o un
 programa que lo llame a mano.
 
+Eduardo, al hacer la pausa (30-sep, 9:20): *«El orden en sí me da igual, la cuestión es ir resolviendo problemas
+e ir cerrando las entradas correspondientes.»* A la vuelta, sesión REMOTA: algunas placas conectadas, no todas, así
+que no hay ronda de placas completa. Lo primero, ver cuáles hay —sin abrir los puertos— y escoger de H7 lo que se
+pueda CERRAR con el PC y esas placas; grabar, como siempre, con su OK.
+
 ## 🔧 H7 (29-sep, noche) — `#593` y `#608` cerradas (`41c27547`); la prueba de estrés del heap abre `#610`–`#612`
 
 - Eduardo: *«al final la reserva la ha de hacer un método único, no n métodos»* y *«si se detecta en un bloque vivo
