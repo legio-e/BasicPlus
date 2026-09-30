@@ -1113,6 +1113,12 @@ la C6, la P4 y la Nucleo.
   zona de la Pico, formateada antes (quitada la lápida de la prueba de `U1.4`). De paso, en la DK2: la etiqueta de
   `GuiFlushBench` vuelve a 10 ms con FreeRTOS a 32 KB (`#614`, su parte de la DK2); y `#609` saltó una vez en la red
   con tres builds a la vez (sola, 4 de 4).
+- **La fase 2, hecha** (`ef55fc9d`): el cargador de motores común (`src/bpvm_npack_carga.c`; las tres familias,
+  envoltorios de tres datos), con la guarda «una vez» dentro —cierra el hueco del ancla de la BIOS— y el «casi» de un
+  motor que no carga. Mi propuesta de marcar el primer INTENTO no iba: el comentario de la Pico explicaba por qué las
+  tres marcaban sólo al saltar a alguno (el primer pack grabado se carga en el siguiente RUN, sin reiniciar); se queda
+  así. En las placas: la DK2 (Mini, SQLite y Gui) y la C5 (Gui y DriverSpi) cargan UNA vez con dos INFO y dos RUN; la
+  P4, SQLite y la GUI (sin `log=1` no deja el rastro); la Pico sin packs, igual. `test-npack` entra en la red.
 - Las placas: la Pico, la DK2 (con `log=1`), la C5 y la P4, con la imagen de `da19145e` y su ENV como estaba; la zona
   de la Pico, vacía (formateada). Las demás, como estaban.
 

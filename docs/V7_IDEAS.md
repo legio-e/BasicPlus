@@ -3181,7 +3181,12 @@ micro simulado:
    comunes** (pequeño-medio): `bpvm_packs_montar` —exige el FS, monta con el
    gancho de la familia (XIP fijo en la Pico y la STM32; el mapeo de la MMU en la ESP32 y la P4), mira la cadena y lo
    dice en el log del arranque—; el `casi` en `STATE` y en el IDE. Arregla las dos incoherencias de arriba.
-2. **El cargador común** (medio): la cola de `cargar`, `saltar` y `explicar` en `src/`, con la guarda «una vez»
+2. ✅ **HECHA el 30-sep, `ef55fc9d`** —`src/bpvm_npack_carga.c`; en el host (`test_npack`, todo menos el salto:
+   sin zona, sin RAM, zona vacía, un motor de otra arquitectura, y el `STATE`), y en las placas: la DK2 carga sus tres
+   motores y la C5 sus dos UNA vez con dos INFO y dos RUN, la P4 con SQLite y la GUI, la Pico sin packs igual—. Un
+   cambio sobre lo propuesto: la guarda marca, como marcaban las tres, sólo cuando se saltó a alguno (si no, el
+   siguiente RUN lo reintenta: lo que se quiere tras grabar el primer pack, sin reiniciar). **El cargador común**
+   (medio): la cola de `cargar`, `saltar` y `explicar` en `src/`, con la guarda «una vez»
    DENTRO —cierra el hueco del ancla— y el `log_flush` antes de saltar en las tres; lo dispara el primer RUN o INFO
    en todas; un motor que no carga, al `casi`. Ganchos: la zona, la BIOS, el bloque de RAM y (sólo la ESP32) releer
    la cabecera para el diagnóstico.
