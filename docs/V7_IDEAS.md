@@ -3106,11 +3106,16 @@ Lo que se comprobó para fiarse de las cifras:
    - `malloc` tiene 333 KB para un pico de 142: lo sube la GUI (la tabla de símbolos de `Gui` y la fragmentación), y
      crece con el tamaño de la app.
 
-**Lo que decide Eduardo** (la propuesta):
+**Lo que decide Eduardo** (la propuesta) — ✅ **decidido el 30-sep: las dos; hecho con `2a597152`**:
 - **el MSP de la DK2, de 16 a 4 KB**, como la Nucleo: 15 veces lo medido;
 - **el heap de FreeRTOS de la STM32, de 24 a 32 KB** —el de la Pico—: en la DK2, con lo que suelta el MSP; en la
   Nucleo, de lo que deja el enlazador;
 - **lo que sobra de `malloc` en la DK2, dejarlo**: es el único consumidor que crece con la app, y la VM ya tiene 1 MB.
+
+**Medido después, en la DK2** (grabada con `2a597152`, la tanda de V7 entera otra vez, programa a programa tras un
+RESET, las 29 bien): el heap de FreeRTOS, **10 368 B** libres en el peor momento (antes 2 176); el MSP, 272 B de 4 096;
+y `malloc`, 141 560 B de 345 224 (tenía 341 128: suelta 12 KB el MSP y se lleva 8 FreeRTOS). La Nucleo compila con
+los dos cambios (le quedan ~129 KB para `malloc`); no se ha grabado: no estaba conectada.
 
 De paso (`64487df4`): el aviso del arranque de la ESP32 «el asignador solo dio 6653 KB de los 6653 planificados» (en la
 C5) era falso —comparaba el bloque pedido, en KB enteros, con el plan sin redondear—.

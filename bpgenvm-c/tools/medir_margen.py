@@ -19,9 +19,10 @@ CDC de la Pico).
 EL PROTOCOLO, el mismo en todas las placas (dos medidas del mismo instrumento no se
 pueden comparar si no se sabe qué se ejecutó):
   1. LOG_CLEAR y LUEGO RESET  (log sólo de esta pasada, CON las líneas del arranque)
-  2. PUT de un fichero        (el búfer del wire; el .ps1 subía BenchMem.mod, que desde
-                               el muro de la pila ya no compila —128 KB de locales—: ahora
-                               bpstdlib/Time.mod, 6,5 KB, que sólo se guarda)
+  2. PUT de un fichero        (el búfer del wire; el .ps1 subía BenchMem.mod, que hubo
+                               que compilar aparte —y un tiempo ni compilaba, `a629c7ec`—:
+                               ahora bpstdlib/Time.mod, 6,5 KB, que siempre está y sólo se
+                               guarda)
   3. RUN ×2                   (el MISMO programa en todas las placas: Bench, fib(28))
   4. LIST                     (recorre el FS entero)
   5. LOG_DUMP                 (las líneas `vm:` del arranque y `mem:` de cada RUN)

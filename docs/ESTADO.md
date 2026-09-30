@@ -1083,10 +1083,16 @@ la C6, la P4 y la Nucleo.
   cada nativo sale de ahí) y le quedan 10 368 B de FreeRTOS; la DK2, 141 560 B de 333 KB (la GUI), **2 176 B de
   FreeRTOS** y **≤ 272 B de sus 16 KB de MSP**. Los números y la propuesta (el MSP de la DK2 a 4 KB; el heap de
   FreeRTOS de la STM32 a 32 KB), en `V7_IDEAS` §H7, «Los márgenes de la Pico y de la STM32, MEDIDOS».
+- Eduardo, a la propuesta: *las dos*. Hecho (`2a597152`): el heap de FreeRTOS de la STM32 a 32 KB y el MSP de la DK2
+  a 4 KB; la DK2 grabada y la tanda entera otra vez, las 29 bien: FreeRTOS con 10 368 B libres en el peor momento
+  (antes 2 176) y el MSP, 272 B de 4 096. La Nucleo compila; sin grabar (no estaba).
 - De paso (`64487df4`): el aviso del arranque de la C5 «el asignador solo dio 6653 KB de los 6653 planificados» era
-  falso (el bloque en KB enteros contra el plan sin redondear). Compilado; sin grabar.
-- Las placas: la Pico y la DK2, con la imagen de `a2bdff6e` (la DK2, con `log=1`); la C5, la P4 y las demás, como
-  estaban.
+  falso (el bloque en KB enteros contra el plan sin redondear). Grabada la C5 con HEAD (el OK de Eduardo): el aviso ya
+  no sale, y sí la línea de `a91b8dad`; los packs, cargados.
+- Y al probar la C5, `#614`: en `GuiFlushBench`, cambiar una etiqueta cuesta 5,8 ms (1 el 25-sep), y en la DK2 1,8
+  (1,0 el 26-sep), con la pantalla entera igual. Ya pasaba esta mañana: no es de lo grabado hoy. Anotada, sin tocar.
+- Las placas: la Pico, con la imagen de `a2bdff6e`; la DK2, con la de `2a597152` y `log=1`; la C5, con HEAD; la P4 y
+  las demás, como estaban.
 
 ## 🔧 H7 (30-sep, mediodía, sesión remota) — `#613` abierta y cerrada (B1 por `sleep(0)` en miVM); el paso 0 de los 32 MB y el `HELLO`, vistos en placa; la lectura por encima de 16 MB, medida en la Waveshare
 
