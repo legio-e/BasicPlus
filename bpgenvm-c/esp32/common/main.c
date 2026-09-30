@@ -179,8 +179,11 @@ static void vm_buffer_init(void) {
         printf("[boot] %s\n", linea);
         printf("[boot] vm: DRAM interna libre %u->%u B (bloque mayor %u->%u B)\n",
                (unsigned) hi.total_free_bytes, after, (unsigned) hi.largest_free_block, after_blk);
-        if (s_vm_buffer_size < (unsigned) plan.bytes) {
-            /* La escalera bajo: el asignador no dio lo que sus contadores decian. */
+        if (s_vm_buffer_size < ((unsigned) plan.bytes & ~1023u)) {
+            /* La escalera bajo: el asignador no dio lo que sus contadores decian.
+             * Contra lo PEDIDO (el plan en KB enteros, como `bloque`): contra
+             * plan.bytes avisaba siempre que el plan no fuera múltiplo de 1 KB
+             * —la C5, 30-sep: «solo dio 6653 KB de los 6653 planificados»—. */
             log_printf("vm: AVISO el asignador solo dio %u KB de los %u planificados",
                        (unsigned)(s_vm_buffer_size / 1024u), (unsigned)(plan.bytes / 1024u));
         }
