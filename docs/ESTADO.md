@@ -1068,6 +1068,39 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🔧 H7 (30-sep, mediodía, sesión remota) — `#613` abierta y cerrada (B1 por `sleep(0)` en miVM); el paso 0 de los 32 MB y el `HELLO`, vistos en placa; la lectura por encima de 16 MB, medida en la Waveshare
+
+- Conectadas: la Pico 2 (COM22), la P4 Waveshare (COM15), la C5 (COM6) y la DK2 (COM12, su ST-Link); sabido sin
+  abrir los puertos —el VID/PID, la MAC del USB-JTAG, las tandas de `compat/informes` y `STM32_Programmer_CLI -l`—.
+  Eduardo: *«El orden en sí me da igual, la cuestión es ir resolviendo problemas e ir cerrando las entradas»*.
+- **`#613`** (`d6d72384`): al ir a quitar el `[B1-trigger]` de miVM (el «encontrado de paso» lo daba por ruido), lo
+  que lo disparaba era B1 por otro camino: `sleep(0)` re-encolaba el hilo desde el builtin y otro worker lo cogía
+  antes de que el suyo saliera. `CedeCero`: 5 de 30 con dos workers, 9 de 30 con cuatro; la VM-C, 0. Arreglado como
+  la VM-C (no se reclama un hilo con dueño); al corpus y al frente del estrés, con su control rojo. Red verde.
+- **El paso 0 de los 32 MB y el `HELLO`** (`cc503a54`). Eduardo corrigió el planteamiento dos veces: *«el límite de la
+  flash de 16M en la P4 era para código ejecutable. Para FS no debería haber límite»*, y *«cuando es el kit tiene 16M
+  y cuando es la de Waveshare son 32M y lo sabemos porque nos lo han dicho ellas»*. Leído en el IDF: el mapeo tiene su
+  techo de 24 bits; leer y escribir, el tamaño de la cabecera, que se puede subir al arrancar (`V7_IDEAS` §H7 «Los 32
+  MB del P4»). Lo que trajo de la red sobre esptool (el stub, `--flash-size`) no era la grabación.
+- **Grabadas, con su OK**: la P4 y la Pico con la imagen de hoy —el arranque de la P4 ya no aconseja reflashear, la
+  zona dice su dirección física, el `HELLO` de las dos dice lo que tienen; `Bench` y `Hello`, `EXITED OK`—. Y **la
+  C5**: la imagen creció una página de 64 KB (el rodata acaba en `0x4209124c`), el bloque de RAM de packs pasó de
+  `0x42091000` a `0x420a1000` y la placa lo dijo sola, «realojado para OTRA direccion»; se borraron los packs viejos
+  (`packdel`, con su OK: no cabían por RAM —383 KB contra 320—, no por flash) y se volvieron a sellar `Gui` y
+  `DriverSpi` con `riscv-imc`. Pinta: `GuiFlushBench` 67 ms por pantalla y 5 por etiqueta (el 24-sep, 144 y 1; son
+  los packs del 26 y 27-sep), `GuiShot` `EXITED OK`. La DK2, sin tocar.
+- **La lectura por encima de 16 MB, medida en la Waveshare** (imagen de prueba, sólo lectura, ya retirada): sin subir
+  el tamaño, `INVALID_ARG`; subido a 32 MB, arriba todo `ff` y abajo el bootloader, la tabla, la app y el ENV: sin eco.
+- Tropiezos: (1) `pack … riscv` a secas poda para el P4; la C5 (como la C3 y la C6) es `riscv-imc` —no llegó a grabar:
+  no cabía—. (2) Le dije a Eduardo que no había que borrar nada: miré el sitio en la zona, no la RAM de los motores.
+  (3) Un `cut -c30-` se comió la primera cifra del tamaño de `Gui.pack` (2 326 528 → «326528») y me hizo dudar del
+  pack.
+
+**Traspaso (30-sep, mediodía).** De H7 queda lo del mapa: los restos de `U6`, `U1.4`, Boot 1/2 y el montaje de packs,
+la Pico sobre `platform_freertos` y, de los 32 MB, la ESCRITURA arriba (con OK) y decidir cómo se le da al FS (a o b).
+La P4, la C5 y la Pico llevan la imagen de hoy (con `#607`: el `Gui.mod` nuevo ya puede ir a ellas); la DK2 y las que
+no estaban, no.
+
 ## 🔧 H7 (30-sep) — `CALL_REL` cerrada con la medida; `#607` cerrada (`85de188f`): el setter de Forms, con el opcode `INVOKE_SLOT`, y el hilo que muere lo dice
 
 - Por la mañana, lo que el mapa llamaba «documentos rancios» (`abf62a59`): lo que decía lo contrario del código

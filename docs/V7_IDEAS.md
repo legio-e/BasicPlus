@@ -3015,6 +3015,15 @@ la Waveshare una vez; el kit y las demás placas no cambian. La C5 lo tendría m
 24 bits, leería lo de abajo: se sabe sin escribir nada—; y sólo si no hay eco, escribir un sector de arriba y
 releerlo.
 
+**Medido el 30-sep** (con el OK de Eduardo; una imagen de prueba que no se commitea, que sólo LEE): sin subir el
+tamaño, leer en 16 MB + 8 KB da `rc=258` (`ESP_ERR_INVALID_ARG`): el límite es el `size` de la cabecera. Subido a
+32 MB, las diez lecturas de arriba dan `rc=0` y `ff ff…` (borrado), y las de abajo, lo suyo: el bootloader
+(`e9 03…` en 0x2000), la tabla (`aa 50…` en 0x8000), la app, el ENV (`42 50 45 56`, «BPEV») y el FS. **Sin eco**:
+con la imagen de 16 MB, la Waveshare LEE sus 16 MB de arriba en cuanto el driver sabe el tamaño real (las dos
+«iguales» eran zonas borradas por los dos lados, la cola vacía de la partición de la app). Lo que falta si se
+sigue: la ESCRITURA —un sector arriba, con el OK de Eduardo; en 16 MB + 0x300000, cuyo eco, si lo hubiera, caería en
+esa cola vacía— y decidir (a) o (b).
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.
