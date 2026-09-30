@@ -1091,8 +1091,22 @@ la C6, la P4 y la Nucleo.
   no sale, y sí la línea de `a91b8dad`; los packs, cargados.
 - Y al probar la C5, `#614`: en `GuiFlushBench`, cambiar una etiqueta cuesta 5,8 ms (1 el 25-sep), y en la DK2 1,8
   (1,0 el 26-sep), con la pantalla entera igual. Ya pasaba esta mañana: no es de lo grabado hoy. Anotada, sin tocar.
-- Las placas: la Pico, con la imagen de `a2bdff6e`; la DK2, con la de `2a597152` y `log=1`; la C5, con HEAD; la P4 y
-  las demás, como estaban.
+- Las decisiones de Eduardo sobre lo que quedaba de `U6` y `U1.4` (`0057c4a5`): la C3 —coserla, su objetivo y el
+  +10 %— a V8 (*«que funcione lo mínimo»*); `vmheap=N`, el bloque entero; el nativo sobre PSRAM y `U6.F1`, a
+  estudiar sin versión; `U1.4`, la pequeña. Hechas las dos que tocaban código:
+  - **`vmheap=N`** (`ee89f444`): el objetivo del plan común desde el ENV en las cuatro familias, y la línea del
+    plan dice cuándo lo que no llega al suelo es lo pedido. Probado con la clave puesta y quitada en la Pico (200 KB:
+    `malloc` pasa a 216 112 B), la DK2 (512), la C5 (2048, en PSRAM) y la P4 (8192, con `SqlDemo`).
+  - **`U1.4`** (`47fe6fef`): `pico/pico_flash.c`, la cintura de flash de la Pico, con el candado y la zona
+    permitida dentro (antes, sólo el ENV miraba no escribir sobre la imagen). Probada por los cuatro caminos: 40 KB
+    aleatorios por el FS, idénticos tras un reset; el ENV (`vmheap`); `Stdlib.pack` grabado —relee y verifica— y
+    borrado con `packdel` (la lápida ocupa sus 192 KB hasta un `PACK_FORMAT`); y el log, cargado de la flash tras
+    desenchufarla (Eduardo).
+  - De paso: `BenchMem.bp` ya no compilaba —su array de 128 KB era un array fijo en la pila— (`a629c7ec`: al heap);
+    y en la C5 la línea «vm: DRAM interna libre 7337580->248675» mezcla la PSRAM de antes con la DRAM de después
+    (esp32/common/main.c, con PSRAM): sin tocar.
+- Las placas: la Pico, la DK2 (con `log=1`), la C5 y la P4, con la imagen de `47fe6fef` y su ENV como estaba; en la
+  zona de la Pico, la lápida de `Stdlib.pack`. Las demás, como estaban.
 
 ## 🔧 H7 (30-sep, mediodía, sesión remota) — `#613` abierta y cerrada (B1 por `sleep(0)` en miVM); el paso 0 de los 32 MB y el `HELLO`, vistos en placa; la lectura por encima de 16 MB, medida en la Waveshare
 
