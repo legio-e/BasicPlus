@@ -11,7 +11,8 @@
 #include "bpvm_part.h"
 #include "bpvm_pack.h"   /* #327: cintura de flash de la zona de packs */
 #include "wire_v1.h"
-#include "flash_lock.h"
+#include "pico_flash.h"  /* V7/H7 U1.4: la cintura de flash (el candado va dentro) */
+#include "log.h"
 #include "board_desc.h"
 #include "flash_layout.h"
 #include "pack_pico.h"   /* V5/H8: s_pack_ram_base — la RAM del motor nativo */
@@ -48,10 +49,7 @@ static uint32_t s_packs_off = 0;      /* offset absoluto de la región en flash 
 
 static int packs_fl_erase(void* user, uint32_t off, uint32_t len) {
     (void) user;
-    uint32_t tok = bpvm_flash_lock_begin();
-    flash_range_erase(s_packs_off + off, len);
-    bpvm_flash_lock_end(tok);
-    return 0;
+    return pico_flash_erase(s_packs_off + off, len);   /* V7/H7 U1.4: la cintura, con el candado */
 }
 
 /*
@@ -94,9 +92,7 @@ static int packs_fl_program(void* user, uint32_t off, const uint8_t* d, uint32_t
         if (run > len - done) run = len - done;
         memset(page, 0xFF, sizeof page);
         memcpy(page + sesgo, d + done, run);
-        uint32_t tok = bpvm_flash_lock_begin();
-        flash_range_program(base, page, FLASH_PAGE_SIZE);
-        bpvm_flash_lock_end(tok);
+        if (pico_flash_write(base, page, FLASH_PAGE_SIZE) != 0) return -1;   /* U1.4: la cintura */
         done += run;
     }
     return 0;
@@ -109,10 +105,12 @@ static const bpvm_pack_flash_t s_packs_fl =
  * ventana XIP-safe). El otro sector queda intacto (A/B). `src` = el buffer RAM. */
 static void env_write(int slot, const uint8_t* src) {
     uint32_t off = (slot == 0) ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET;
-    uint32_t tok = bpvm_flash_lock_begin();
-    flash_range_erase(off, BP_ENV_SECTOR);
-    flash_range_program(off, src, BP_ENV_SECTOR);   /* 4096 = múltiplo de FLASH_PAGE_SIZE */
-    bpvm_flash_lock_end(tok);
+    /* V7/H7 U1.4 — por la cintura: dos ventanas del candado en vez de una (borrar y
+     * programar), y da igual: el A/B deja la otra copia buena si algo corta en medio. */
+    if (pico_flash_erase(off, BP_ENV_SECTOR) != 0
+        || pico_flash_write(off, src, BP_ENV_SECTOR) != 0)   /* 4096 = múltiplo de FLASH_PAGE_SIZE */
+        log_printf("env: la cintura de flash RECHAZÓ el sector %d (0x%05lX): no se ha escrito",
+                   slot, (unsigned long) off);
 }
 
 /* #338 — la zona compartida tiene que dar para las DOS copias del env de ESTA

@@ -186,6 +186,7 @@ add_executable(bpvm_pico
     wire_v1.c       # H1 fase A: framing line-delimited + bulk inline
     log.c           # FP2 step 4: log persistente
     flash_lock.c    # H2 #153: ventana XIP-safe (single + dual-core)
+    pico_flash.c    # V7/H7 U1.4: LA cintura de flash (FS, ENV, packs y log; el candado va dentro)
     aot_funcs.c              # hook de trazas del cargador .mdn (H13 h12: ya no precarga nada)
     ${BPVM_C_ROOT}/src/mdn_loader.c   # H3 #158 / H9.5: loader .mdn COMPARTIDO (Pico+STM32); trazas via bpvm_mdn_log (impl fuerte en aot_funcs.c)
     ${BPVM_C_SRC}

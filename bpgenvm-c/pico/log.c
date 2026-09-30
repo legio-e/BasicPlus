@@ -2,7 +2,8 @@
  * log.c (Pico/RP2350) — CINTURA del núcleo portable bpvm_log (src/bpvm_log.c).
  *
  * Aquí sólo vive lo que NO es portable del RP2350: el reloj (FreeRTOS), leer la
- * región del log por XIP, y escribirla con erase+program bajo `flash_lock`. La
+ * región del log por XIP, y escribirla con erase+program por la cintura de flash
+ * de la familia (pico_flash.c, V7/H7 U1.4, con el candado dentro). La
  * lógica —buffer, anillo, formato, snapshot, volcado, el interruptor `log=`— la
  * pone el núcleo, así que las cuatro imágenes se comportan igual.
  *
@@ -33,7 +34,7 @@
 #include "log.h"
 
 #include "bpvm_log.h"       /* el núcleo portable + la struct de cintura */
-#include "flash_lock.h"     /* #153 — ventana XIP-safe (dual-core safe) */
+#include "pico_flash.h"     /* V7/H7 U1.4: la cintura de flash (con el candado de #153 dentro) */
 #include "flash_layout.h"   /* H9: el log vive en la ZONA 2 (kernel) */
 
 #include "FreeRTOS.h"
@@ -79,15 +80,12 @@ static int flash_read(uint8_t* dst, uint32_t len) {
     return 0;
 }
 
-/* Erase + program de la región ENTERA. El candado apaga IRQs y para al otro
- * núcleo: durante la operación nadie puede acceder a XIP, y ejecutar desde
- * flash mientras se borra cuelga la placa. */
+/* Erase + program de la región ENTERA, por la cintura (V7/H7 U1.4): el candado
+ * —IRQs fuera y el otro núcleo parado, porque ejecutar desde flash mientras se
+ * borra cuelga la placa— va dentro, en dos ventanas (borrar, programar). */
 static int flash_write(const uint8_t* src, uint32_t len) {
-    uint32_t saved = bpvm_flash_lock_begin();
-    flash_range_erase(LOG_FLASH_OFFSET, len);
-    flash_range_program(LOG_FLASH_OFFSET, src, len);
-    bpvm_flash_lock_end(saved);
-    return 0;
+    if (pico_flash_erase(LOG_FLASH_OFFSET, len) != 0) return -1;
+    return pico_flash_write(LOG_FLASH_OFFSET, src, len);
 }
 
 void log_init(void) {

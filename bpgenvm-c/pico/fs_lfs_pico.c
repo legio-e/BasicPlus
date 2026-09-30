@@ -3,9 +3,9 @@
  * MISMO .uf2). DOS piezas:
  *
  * 1) CINTURA block-device de littlefs (§2.3 del plan): read por XIP
- *    (memcpy desde XIP_BASE), prog/erase por flash_range_* BAJO
- *    bpvm_flash_lock (el guard XIP de #153: IRQs off en single-core;
- *    parquea el otro core en dual-core). El quirk se absorbe AQUÍ.
+ *    (memcpy desde XIP_BASE), prog/erase por la cintura de flash de la
+ *    familia (pico_flash.c, V7/H7 U1.4), que lleva dentro el candado XIP de
+ *    #153 (IRQs off en single-core; parquea el otro core en dual-core).
  *
  * 2) SHIM del API legado fs.h SOBRE la fachada bpvm_fs (retirarlo = #305).
  *    - fs_get: read a un scratch estático (contrato documentado del API:
@@ -30,7 +30,7 @@
 #include "bpvm_fs.h"
 #include "bpvm.h"          /* #338: la zona de rascar compartida */
 #include "bpvm_fs_lfs.h"
-#include "flash_lock.h"
+#include "pico_flash.h"     /* V7/H7 U1.4: la cintura de flash (el candado va dentro) */
 #include "log.h"            /* log_printf: al log PERSISTENTE (printf = solo consola USB) */
 
 #include "pico/stdlib.h"
@@ -60,20 +60,16 @@ static int pico_bd_read(const struct lfs_config* c, lfs_block_t block,
 static int pico_bd_prog(const struct lfs_config* c, lfs_block_t block,
                         lfs_off_t off, const void* buffer, lfs_size_t size) {
     (void) c;
-    uint32_t tok = bpvm_flash_lock_begin();
-    flash_range_program(s_fs_offset + block * FLASH_SECTOR_SIZE + off,
-                        buffer, size);
-    bpvm_flash_lock_end(tok);
-    return 0;
+    /* V7/H7 U1.4 — por la cintura (el candado va dentro). Un rechazo es un error de
+     * E/S para littlefs, no un «hecho» que deja el bloque a medias. */
+    return pico_flash_write(s_fs_offset + block * FLASH_SECTOR_SIZE + off,
+                            (const uint8_t*) buffer, size) == 0 ? 0 : LFS_ERR_IO;
 }
 
 static int pico_bd_erase(const struct lfs_config* c, lfs_block_t block) {
     (void) c;
-    uint32_t tok = bpvm_flash_lock_begin();
-    flash_range_erase(s_fs_offset + block * FLASH_SECTOR_SIZE,
-                      FLASH_SECTOR_SIZE);
-    bpvm_flash_lock_end(tok);
-    return 0;
+    return pico_flash_erase(s_fs_offset + block * FLASH_SECTOR_SIZE,
+                            FLASH_SECTOR_SIZE) == 0 ? 0 : LFS_ERR_IO;
 }
 
 static int pico_bd_sync(const struct lfs_config* c) { (void) c; return 0; }
