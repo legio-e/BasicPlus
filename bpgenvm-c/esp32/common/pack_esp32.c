@@ -52,84 +52,32 @@ uint8_t* s_pack_ram_base = 0;
 uint32_t s_pack_ram_size = 0;
 int      s_pack_ram_res  = 0;   /* bpvm_sqlite_res_t */
 
-/* Los mapeos se hacen UNA vez y se quedan: soltarlos invalidaría el código que
- * el pack deja publicado (SQLite publica su tabla de funciones y la VM la usa
- * durante toda la sesión). */
-
 /*
- * Mapea la zona de packs de las dos formas y deja dicho qué salió.
- * Devuelve 1 si se puede seguir (un mapeo utilizable), 0 si no.
- */
-/* El mapeo se fue a `esp32/common/board_mgr_esp32.c` el 8-sep. No porque sobrara
- * aqui, sino porque nunca fue del P4: lo unico que cambia entre micros es si la
- * MMU da una direccion o dos, y eso no es una familia, es una capacidad. Mientras
- * vivio en este fichero, el C6 —que comparte D/I vaddr igual que el P4— se quedo
- * sin packs por vivir en el directorio de al lado. Correccion de Eduardo.
+ * ─── V7/H7 (Boot 2, fase 2): EL CARGADOR ES COMÚN ───
  *
- * Se conserva el nombre local para no tocar a sus tres llamantes de aqui. */
-static int mapear_zona(void)
-{
-    return board_mgr_esp32_mapear_packs();
-}
-
-static int hay_algun_pack(const uint8_t* base, uint32_t bytes) {
-    if (base == 0 || bytes == 0) return 0;
-    uint32_t fin = 0;
-    int n = bpvm_pack_scan(base, bytes, 0, 0, 0, &fin);
-    return n > 0;
-}
-
-/*
- * ─── POR QUÉ UN MOTOR NO SE CARGA, CON LOS NÚMEROS ───
+ * El plan, la arena, la `.data` y la `.bss`, la miga de pan, el salto por la vista de
+ * ejecución y la guarda «una vez» son `src/bpvm_npack_carga.c`: la misma copia estaba en las
+ * tres familias. La zona la montó el arranque (fase 1: con el FS). Aquí quedan los tres datos
+ * de esta placa y lo único que de verdad es suyo: el control de abajo.
  *
- * El peldaño dice QUÉ comparación falló pero no CON QUÉ. "Otra arquitectura"
- * lo dan dos causas muy distintas: que la cabecera esté bien y de verdad no
- * cuadre, o que la cabecera se esté LEYENDO MAL. Así que, para los peldaños que
- * un mapeo roto produciría, se lee la MISMA cabecera por los DOS caminos:
+ * ─── POR QUÉ UN MOTOR NO SE CARGA, CON LOS NÚMEROS (el control de la ESP32) ───
+ *
+ * El peldaño dice QUÉ comparación falló pero no CON QUÉ. "Otra arquitectura" lo dan dos
+ * causas muy distintas: que la cabecera esté bien y de verdad no cuadre, o que la cabecera se
+ * esté LEYENDO MAL. Así que, para los peldaños que un mapeo roto produciría, se lee la MISMA
+ * cabecera por los DOS caminos:
  *   · por el mapeo           — como la lee la escalera
  *   · por esp_partition_read — que no pasa por la MMU y no puede mentir
- * Si los dos dicen lo mismo, el mapeo es fiable y el problema son los datos. Si
- * difieren, el problema es el mapeo (accesos de 4 bytes) y la escalera está
- * juzgando basura. Un control, como manda la casa.
+ * Si los dos dicen lo mismo, el mapeo es fiable y el problema son los datos. Si difieren, el
+ * problema es el mapeo (accesos de 4 bytes) y la escalera está juzgando basura. Un control,
+ * como manda la casa. (El arch y la ABI de la placa ya los dice el común.)
  */
-static void explicar(const bpvm_npack_carga_t* c, int i, const bpvm_npack_carga_t* todos,
-                     const uint8_t* zbase)
+static void cabecera_por_dos_caminos(const bpvm_npack_carga_t* c, int i, const uint8_t* zbase)
 {
-    if (c->eclipsado_por >= 0) {
-        log_printf("pack: [%d] '%s' (motor '%s') NO se carga: hay otro motor '%s' mas adelante "
-                   "(el pack '%s', grabado despues) y gana el ultimo, como los .mod — borra el viejo",
-                   i, c->pack, c->npk, c->npk, todos[c->eclipsado_por].pack);
-        return;
-    }
-    if (c->pisa_a >= 0) {
-        const bpvm_npack_carga_t* o = &todos[c->pisa_a];
-        log_printf("pack: [%d] '%s' NO se carga: su RAM [0x%08x, +%u) pisa la de '%s' [0x%08x, +%u) "
-                   "— se grabo con una imagen de antes de G1 (daba la base a todos): regrabalo",
-                   i, c->pack, (unsigned) c->ram, (unsigned) c->ram_bytes,
-                   o->pack, (unsigned) o->ram, (unsigned) o->ram_bytes);
-        return;
-    }
-    log_printf("pack: [%d] '%s' (motor '%s') NO se carga — %s",
-               i, c->pack, c->npk, bpvm_npack_res_str(c->motivo));
-    if (c->hdr == 0) return;
-    const bpvm_npack_hdr_t* m = c->hdr;
-
-    if (c->motivo == BPVM_NPACK_E_SELLO) {
-        log_printf("pack: [%d] su sello dice flash 0x%08x ram 0x%08x | aqui esta en flash 0x%08x "
-                   "y el bloque de RAM es [0x%08x, +%u)",
-                   i, (unsigned) m->linked_flash, (unsigned) m->linked_ram, (unsigned) c->codigo,
-                   (unsigned) (uintptr_t) s_pack_ram_base, (unsigned) s_pack_ram_size);
-        return;
-    }
-    if (c->motivo == BPVM_NPACK_E_TAMANO) {
-        log_printf("pack: [%d] pide .data %u + .bss %u B desde 0x%08x; el bloque acaba en 0x%08x",
-                   i, (unsigned) m->data_bytes, (unsigned) m->bss_bytes, (unsigned) m->linked_ram,
-                   (unsigned) ((uintptr_t) s_pack_ram_base + s_pack_ram_size));
-        return;
-    }
+    if (c->hdr == 0 || c->eclipsado_por >= 0 || c->pisa_a >= 0) return;
     if (c->motivo != BPVM_NPACK_E_MAGIC && c->motivo != BPVM_NPACK_E_FORMAT &&
         c->motivo != BPVM_NPACK_E_ARCH  && c->motivo != BPVM_NPACK_E_ABI) return;
-
+    const bpvm_npack_hdr_t* m = c->hdr;
     uint32_t off = (uint32_t) ((const uint8_t*) m - zbase);
     bpvm_npack_hdr_t d;
     const esp_partition_t* bpdata = (const esp_partition_t*) board_mgr_esp32_bpdata();
@@ -147,139 +95,21 @@ static void explicar(const bpvm_npack_carga_t* c, int i, const bpvm_npack_carga_
                    (unsigned) d.data_bytes, (unsigned) d.bss_bytes,
                    (m->arch == d.arch && m->format == d.format)
                        ? "  <- IGUAL que el mapeo" : "  <<< DIFIERE DEL MAPEO");
-    log_printf("pack: esta placa ES arch %u, abi '%s'",
-               (unsigned) bpvm_mdn_host_arch(), bpvm_mdn_host_float_abi());
 }
 
-/*
- * ─── SALTAR A UN MOTOR ───
- *
- * Su RAM: copiar su `.data` y poner su `.bss` a cero, EN SU TROZO (el de su
- * sello). Sin esto sus variables arrancan CON BASURA. Y no es teórico: se me
- * olvidó al escribir este cargador, y el pack de SQLite lo cazó con su propia
- * comprobación —`sqlite3_libversion()` no empezaba por "3."— devolviendo rc=6
- * en vez de reventar. `mini` NO lo destapó porque tiene `data 0` y `bss 8`, y
- * su entrada se asigna `g_bios` ella misma: un control descarta lo que
- * ejercita, no más.
- *
- * El reparto viene de la cabecera y está fijado en `bpvm_npack.h`:
- *
- *     codigo                   imagen de flash   (flash_bytes)
- *     codigo + flash_bytes     imagen de .data   (data_bytes)
- *     ram + data_bytes         la .bss, a cero   (bss_bytes)
- *
- * La escalera ya comprobó que `data+bss` cabe desde `ram` hasta el final del
- * bloque, y el plan que no pisa a otro motor: aquí no hay que volver a mirarlo.
- */
-static int32_t saltar(const bpvm_npack_carga_t* c, int i)
-{
-    const bpvm_npack_hdr_t* hdr = c->hdr;
-    uint8_t* ram = (uint8_t*) (uintptr_t) c->ram;
-    const uint8_t* data_img = (const uint8_t*) (uintptr_t) (c->codigo + hdr->flash_bytes);
-    if (hdr->data_bytes) memcpy(ram, data_img, hdr->data_bytes);
-    if (hdr->bss_bytes)  memset(ram + hdr->data_bytes, 0, hdr->bss_bytes);
-
-    uint32_t entry = bpvm_npack_entry_addr(hdr, c->codigo);
-    /* V7/H6: la vista MONTADA es la de lectura; se salta por la de ejecución.
-     * Medido (9-sep): en S3, C3, C6 y P4 son la misma dirección, así que hoy
-     * esto es la identidad — y el día que un micro las separe, ya está. */
-    entry = (uint32_t) (uintptr_t) bpvm_pack_exec_ptr((const uint8_t*) (uintptr_t) entry);
-
-    /* MIGA DE PAN. Se escribe ANTES de saltar y se vuelca: si el motor se
-     * cuelga, el siguiente arranque enseña este paso SIN su pareja de despues, y
-     * eso dice exactamente donde se quedo. Es lo unico que hay: ahi dentro no
-     * hay depurador. */
-    log_printf("pack: [%d] '%s' (motor '%s') valido @0x%08x | .data %u B a %p, .bss %u B a cero"
-               " | saltando a 0x%08x",
-               i, c->pack, c->npk, (unsigned) (c->codigo - BPVM_NPACK_HDR_BYTES),
-               (unsigned) hdr->data_bytes, (void*) ram, (unsigned) hdr->bss_bytes,
-               (unsigned) entry);
-    log_flush();
-
-    /* La arena, con dueño: sólo se la puede llevar desde su entrada. */
-    bpvm_bios_arena_entra(c->pack);
-    int32_t (*init)(const bpvm_bios_t*) =
-        (int32_t (*)(const bpvm_bios_t*)) (uintptr_t) entry;
-    int32_t rc = init(bios_esp32_get());
-    bpvm_bios_arena_sale();
-
-    const char* no = bpvm_bios_arena_negada();
-    log_printf("pack: [%d] '%s' volvio, rc=%d%s%s", i, c->pack, (int) rc,
-               no ? " | pidio la arena y se le nego: " : "", no ? no : "");
-    return rc;
-}
+static void log_linea(const char* l) { log_printf("%s", l); }
 
 int32_t pack_esp32_cargar(void)
 {
-    /* La zona sale de la vista MONTADA, que la pone el mapeo comun. Aqui es un
-     * puntero de LECTURA: la escalera y el plan leen por él, y el salto se
-     * traduce a la vista ejecutable. */
-    uint32_t       zbytes = 0;
-    const uint8_t* zbase  = bpvm_pack_mounted(&zbytes);
-    if (!zbase || zbytes == 0) { if (!mapear_zona()) return -1;
-                                 zbase = bpvm_pack_mounted(&zbytes); }
-    if (!mapear_zona()) return -1;
-
-    if (s_pack_ram_base == 0) {
-        log_printf("pack: no hay bloque de RAM para sus estaticos "
-                   "(ni packRam ni SQLite en el ENV, o no cupo) — no se carga");
-        return -(int32_t) BPVM_NPACK_E_TAMANO;
-    }
-
-    /* La BIOS, comprobada ANTES de prestarla: un hueco se manifestaria DENTRO
-     * del pack, o sea un cuelgue donde no hay depurador. */
-    const char* falta = 0;
-    if (bios_esp32_get() == 0) falta = "la BIOS de esta placa tiene huecos";
-
-    /* Si no hay ni un pack grabado, no hay cadena que recorrer. */
-    if (!hay_algun_pack(zbase, zbytes)) {
-        log_printf("pack: la zona no tiene ningun pack grabado - no se recorre");
-        return -(int32_t) BPVM_NPACK_E_MAGIC;
-    }
-
-    /* EL PLAN: la cadena, en orden, con el veredicto de cada motor. La MISMA
-     * regla en las familias, y la misma que usa `PACK_BURN_BEGIN` para decirle
-     * al IDE dónde sellar el siguiente. */
-    uint32_t ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
-    bpvm_npack_carga_t c[BPVM_NPACK_MAX];
-    bpvm_npack_plan_t  p;
-    int vistos = bpvm_npack_planear(zbase, zbytes, ram_base, s_pack_ram_size, falta,
-                                    c, BPVM_NPACK_MAX, &p);
-    int n = (vistos < BPVM_NPACK_MAX) ? vistos : BPVM_NPACK_MAX;
-    if (vistos == 0) {
-        log_printf("pack: hay packs grabados pero ninguno trae motor nativo (npk)");
-        return -(int32_t) BPVM_NPACK_E_MAGIC;
-    }
-    uint32_t usada = p.ram_tope - ram_base;
-    log_printf("pack: %d motor(es) en la zona, %d cargable(s) | bloque %u KB @%p: "
-               "estaticos %u B, arena %u KB",
-               vistos, p.cargables, (unsigned) (s_pack_ram_size / 1024u),
-               (void*) s_pack_ram_base, (unsigned) usada,
-               (unsigned) ((s_pack_ram_size - usada) / 1024u));
-    if (vistos > n)
-        log_printf("pack: hay %d motores y solo se miran los %d primeros (BPVM_NPACK_MAX)",
-                   vistos, n);
-
-    /* La arena: lo que queda por encima del último motor. Se fija ANTES de
-     * saltar a ninguno — y con ella se olvida cualquier dueña anterior. */
-    bpvm_bios_arena_fija(s_pack_ram_base + usada, s_pack_ram_size - usada);
-
-    int saltados = 0;
-    bpvm_npack_res_t ultimo = BPVM_NPACK_E_MAGIC;
-    for (int i = 0; i < n; i++) {
-        if (!bpvm_npack_cargable(&c[i])) {
-            explicar(&c[i], i, c, zbase);
-            if (c[i].eclipsado_por < 0)
-                ultimo = (c[i].pisa_a >= 0) ? BPVM_NPACK_E_SELLO : c[i].motivo;
-            continue;
-        }
-        (void) saltar(&c[i], i);
-        saltados++;
-    }
-    /* A cuántos se saltó (lo que devolvió cada uno ya está en el log), o el
-     * peldaño del último rechazado: el que llama sólo necesita saber si se
-     * saltó a ALGUNO — volver a saltar republicaría sus marcas. */
-    return saltados > 0 ? saltados : -(int32_t) ultimo;
+    bpvm_npack_familia_t f;
+    memset(&f, 0, sizeof f);
+    f.bios         = bios_esp32_get();
+    f.ram          = s_pack_ram_base;   /* la reserva de pack_esp32_ram_init, antes del heap */
+    f.ram_bytes    = s_pack_ram_size;
+    f.log          = log_linea;
+    f.flush        = log_flush;
+    f.explicar_mas = cabecera_por_dos_caminos;
+    return bpvm_npack_cargar_zona(&f);
 }
 
 /*

@@ -241,6 +241,11 @@ int bpvm_pack_zona_aviso(bpvm_zona_estado_t e, int packs, char* buf, size_t cap)
 bpvm_zona_estado_t bpvm_pack_montar_arranque(int fs_montado, int (*mapear)(void),
                                              void (*log)(const char* linea));
 
+/* V7/H7 (Boot 2, fase 2) — el otro «casi»: un MOTOR que no carga (lo pone el cargador
+ * común, bpvm_npack_carga.c; NULL lo borra). STATE lo dice si la zona no tiene el suyo. */
+void bpvm_pack_aviso_motor(const char* texto);
+int  bpvm_pack_aviso_motor_de(char* buf, size_t cap);   /* 1 y el aviso; 0 si no hay */
+
 /* Entradas del pack que empieza en pack_off (previamente localizado con scan).
  * Devuelve el nº de entradas (puede ser > max) o -1 si la cabecera no valida. */
 int bpvm_pack_entries(const uint8_t* base, uint32_t region_size, uint32_t pack_off,

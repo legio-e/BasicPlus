@@ -358,7 +358,13 @@ typedef struct {
  * zona de packs con su direccion XIP, el bloque de SQLite y las marcas de agua
  * de FreeRTOS. Meter esto ultimo en el struct comun obligaria a las otras
  * familias a declarar campos que no saben rellenar. */
+static void packs_cargar_una_vez(void);   /* abajo; V7/H7: también desde el INFO */
+
 static void pico_repl_info(bpvm_repl_info_t* out) {
+    /* V7/H7 (Boot 2, fase 2) — el INFO también dispara la carga de los motores, como en la
+     * ESP32 y la STM32: la tanda y el IDE preguntan por el INFO ANTES del primer Run (lo que
+     * publica un motor —la pantalla de un pack— tiene que estar). La guarda, en el común. */
+    packs_cargar_una_vez();
     /* Estaticos porque el struct guarda punteros y el comun los lee DESPUES. */
     static char unique[20], board[16];
     bpvm_machine_unique_id(unique, sizeof unique);
@@ -727,22 +733,8 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
  * llevar ninguno. Quien los necesite se enterará por su nombre cuando el puente
  * no encuentre la marca. */
 static void packs_cargar_una_vez(void) {
-    static int s_ok = 0;
-    if (s_ok) return;
-
-    int32_t r = pack_pico_cargar();
-    if (r >= 0) {
-        /* V7/H6.c G1: `r` = a cuántos motores se saltó; lo que devolvió cada
-         * uno ya está en el log, con su nombre. */
-        s_ok = 1;
-        log_printf("packs: %ld motor(es) cargado(s)", (long) r);
-    } else {
-        /* r<0 = no se saltó; el detalle (cuántos candidatos, por qué peldaño)
-         * ya lo dejó `pack_pico_cargar` en el log. Aquí sólo se dice que se
-         * sigue sin pack, que es lo que el usuario tiene que saber. */
-        log_printf("packs: sin pack utilizable (peldano %ld) — se sigue sin el",
-                   (long) -r);
-    }
+    /* V7/H7 (Boot 2, fase 2): la guarda y el log, en el cargador común. */
+    (void) pack_pico_cargar();
 }
 
 /* ── V5/H4: la CINTURA del escaneo de .mdn en esta familia ─────────────────

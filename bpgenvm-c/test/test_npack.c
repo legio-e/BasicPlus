@@ -15,6 +15,7 @@
 #include "bpvm_npack.h"
 #include "bpvm_pack.h"
 #include "mdn_loader.h"
+#include "bpvm_bmgr_wire.h"   /* V7/H7 (Boot 2, fase 2): el STATE con el «casi» de un motor */
 #include <stdio.h>
 #include <string.h>
 
@@ -150,6 +151,13 @@ static bpvm_npack_hdr_t motor(uint32_t ram, uint32_t data, uint32_t bss) {
 #define GUI_DATA   1024u               /* el de la GUI: pool + modelo + búferes */
 #define GUI_BSS    (392u * 1024u)
 #define GUI_RAM    ((GUI_DATA + GUI_BSS + 15u) & ~15u)
+
+/* V7/H7 (Boot 2, fase 2) — el log del cargador común, a un búfer. */
+static char g_log[4096];
+static void captura(const char* l) {
+    size_t n = strlen(g_log);
+    snprintf(g_log + n, sizeof g_log - n, "%s\n", l);
+}
 
 static int plan(bpvm_npack_carga_t* c, bpvm_npack_plan_t* p) {
     return bpvm_npack_planear(g_zona.b, sizeof g_zona.b, RAM_BASE, RAM_TAM, 0,
@@ -506,6 +514,71 @@ int main(void) {
           "dos de 392 KB en 512 KB -> el segundo NO CABE (TAMANO, no escribe fuera)");
     CHECK(p.ram_tope == RAM_BASE + GUI_RAM,
           "y el que no cabe no cuenta para el tope (no es un trozo del bloque)");
+
+    /* ── V7/H7 (Boot 2, fase 2) — EL CARGADOR COMÚN, en todo menos el salto: en el PC no hay
+     * a dónde saltar, así que sólo motores que la escalera rechaza. La zona, MONTADA. ── */
+    {
+        static int bios_de_prueba;   /* no se presta: ningún motor llega a saltar */
+        bpvm_npack_familia_t f;
+        memset(&f, 0, sizeof f);
+        f.bios      = (const struct bpvm_bios*) (const void*) &bios_de_prueba;
+        f.ram       = (uint8_t*) (uintptr_t) RAM_BASE;
+        f.ram_bytes = RAM_TAM;
+        f.log       = captura;
+        char av[200];
+
+        bpvm_npack_carga_reinicia(); g_log[0] = '\0';
+        bpvm_pack_mount(NULL, NULL, 0);
+        CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_MAGIC
+              && strstr(g_log, "no hay zona de packs montada"),
+              "cargador comun: sin zona montada, no carga y lo dice");
+
+        zona_vacia();
+        bpvm_pack_mount(g_zona.b, g_zona.b, sizeof g_zona.b);
+        f.ram = NULL; g_log[0] = '\0';
+        CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_TAMANO
+              && strstr(g_log, "no hay bloque de RAM"),
+              "cargador comun: sin bloque de RAM, no carga y lo dice");
+        f.ram = (uint8_t*) (uintptr_t) RAM_BASE; g_log[0] = '\0';
+        CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_MAGIC
+              && strstr(g_log, "ningun pack grabado"),
+              "cargador comun: zona vacia, no se recorre");
+
+        { bpvm_npack_hdr_t h = motor(RAM_BASE, 0, 8);
+          h.arch = (uint16_t) (h.arch ^ 0x5Au);
+          arma("Otro", 1, "otro", &h, 190); }
+        g_log[0] = '\0';
+        CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_ARCH
+              && strstr(g_log, "'Otro' (motor 'otro') NO se carga")
+              && strstr(g_log, "esta placa ES arch")
+              && strstr(g_log, "sin motor utilizable"),
+              "cargador comun: un motor de otra arquitectura no se salta, y se dice con los dos arch");
+        CHECK(bpvm_pack_aviso_motor_de(av, sizeof av) && strstr(av, "'Otro' no carga su motor"),
+              "cargador comun: y deja el casi, con el nombre del pack");
+        g_log[0] = '\0';
+        CHECK(bpvm_npack_cargar_zona(&f) == -(int32_t) BPVM_NPACK_E_ARCH && strstr(g_log, "NO se carga"),
+              "cargador comun: sin saltar a ninguno NO marca: el siguiente RUN lo reintenta");
+
+        /* El STATE: la zona está lista, así que el casi que dice es el del motor. */
+        static uint8_t eA[4096], eB[4096], eS[4096];
+        memset(eA, 0xFF, sizeof eA); memset(eB, 0xFF, sizeof eB);
+        bpvm_bmgr_t bm;
+        memset(&bm, 0, sizeof bm);
+        bm.a = eA; bm.b = eB; bm.scratch = eS; bm.sector = 4096u;
+        bm.packs_base = g_zona.b; bm.packs_size = sizeof g_zona.b;
+        bpvm_bmgr_req_t rq;
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "STATE"); rq.id = 3;
+        char rep[1024];
+        int slot = -9;
+        int nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "\"casi\":true") && strstr(rep, "no carga su motor"),
+              "STATE: con la zona lista, el casi de un motor que no carga");
+        bpvm_npack_carga_reinicia();
+        nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "\"casi\":false"), "STATE: sin intento, sin casi");
+        bpvm_pack_mount(NULL, NULL, 0);
+    }
 
     printf("\n[status=%s]\n", g_fail == 0 ? "OK" : "FAIL");
     return g_fail != 0;

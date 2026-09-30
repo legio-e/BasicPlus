@@ -440,15 +440,8 @@ static int stm32_fs_resolve(const char* name, char* out, size_t out_cap, uint32_
  * bien: volver a saltar publicaría la misma marca dos veces; si no había motor, el
  * siguiente Run lo reintenta — justo lo que se quiere tras grabarlo. */
 static void packs_cargar_una_vez(void) {
-    static int s_ok = 0;
-    if (s_ok) return;
-    int32_t r = pack_stm32_cargar();
-    if (r >= 0) {
-        s_ok = 1;
-        log_printf("packs: %ld motor(es) cargado(s)", (long) r);
-    } else {
-        log_printf("packs: sin motor utilizable (peldano %ld) — se sigue sin el", (long) -r);
-    }
+    /* V7/H7 (Boot 2, fase 2): la guarda y el log, en el cargador común. */
+    (void) pack_stm32_cargar();
 }
 
 static void run_module_path(const char* path, long id, const char* arg) {

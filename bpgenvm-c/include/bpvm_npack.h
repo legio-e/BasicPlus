@@ -237,6 +237,42 @@ uint32_t bpvm_npack_ram_tope(const uint8_t* zona, uint32_t zbytes,
  * tipo de detalle que se copia mal al segundo sitio donde se escriba. */
 uint32_t bpvm_npack_entry_addr(const bpvm_npack_hdr_t* h, uint32_t aqui_flash);
 
+/* ── V7/H7 (Boot 2, fase 2; 30-sep) — EL CARGADOR, común a las tres familias ─────────
+ *
+ * Era la misma copia en pack_pico.c, pack_esp32.c y pack_stm32.c: el plan, la arena, la
+ * `.data` y la `.bss` de cada motor, la miga de pan y el salto —unas 160 líneas iguales—.
+ * Lo propio de cada familia son tres datos —la BIOS que presta, el bloque de RAM de los
+ * estáticos y cómo volcar el log antes de saltar— y, en la ESP32, releer la cabecera
+ * cuando un motor no carga. La zona es la MONTADA (fase 1: el arranque la montó con el FS).
+ *
+ * La guarda «una vez» va AQUÍ DENTRO. Vivía en el REPL de cada familia, y el ancla de la
+ * BIOS apuntaba al cargador SIN ella: una segunda carga copiaría otra vez la `.data` y la
+ * `.bss` encima de un motor vivo. Marca cuando se saltó a ALGUNO, como hacían las tres: si
+ * no se saltó a ninguno, el siguiente RUN lo reintenta —lo que se quiere tras grabar el
+ * primer pack, sin reiniciar—. Un motor que no carga deja el «casi» de Eduardo
+ * (30-sep), con su nombre y el porqué (bpvm_pack_aviso_motor). Vive en
+ * bpvm_npack_carga.c y no aquí: este fichero sólo decide, no salta. */
+struct bpvm_bios;
+typedef struct {
+    const struct bpvm_bios* bios;   /* NULL: la BIOS de la placa tiene huecos (ya lo dijo quien la dio) */
+    uint8_t*                ram;    /* el bloque de RAM de los motores: estáticos y arena */
+    uint32_t                ram_bytes;
+    void (*log)(const char* linea);
+    void (*flush)(void);            /* el log a la flash ANTES de saltar: la miga de pan */
+    /* opcional: lo que la familia añade cuando un motor no carga (la ESP32 relee la
+     * cabecera por esp_partition_read y la compara con el mapeo) */
+    void (*explicar_mas)(const bpvm_npack_carga_t* c, int i, const uint8_t* zona);
+} bpvm_npack_familia_t;
+
+/* Carga TODOS los motores de la zona montada. Tras saltar a alguno, las siguientes llamadas
+ * devuelven lo mismo sin tocar nada. >= 1: a cuántos saltó; < 0: -peldaño del último
+ * rechazado, o MAGIC si no había ninguno. El detalle, al log. */
+int32_t bpvm_npack_cargar_zona(const bpvm_npack_familia_t* f);
+
+/* Olvida la guarda y el aviso: SÓLO para las pruebas de host. En placa, cargar otra vez es
+ * reiniciar la placa (lo que ya hay en RAM no se descarga). */
+void bpvm_npack_carga_reinicia(void);
+
 #ifdef __cplusplus
 }
 #endif

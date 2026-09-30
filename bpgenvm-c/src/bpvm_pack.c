@@ -521,6 +521,19 @@ bpvm_zona_estado_t bpvm_pack_montar_arranque(int fs_montado, int (*mapear)(void)
     return e;
 }
 
+static char s_aviso_motor[120];
+
+void bpvm_pack_aviso_motor(const char* texto) {
+    if (!texto) { s_aviso_motor[0] = '\0'; return; }
+    snprintf(s_aviso_motor, sizeof s_aviso_motor, "%s", texto);
+}
+
+int bpvm_pack_aviso_motor_de(char* buf, size_t cap) {
+    if (!buf || cap == 0 || s_aviso_motor[0] == '\0') return 0;
+    snprintf(buf, cap, "%s", s_aviso_motor);
+    return 1;
+}
+
 int bpvm_pack_entries_src(const bpvm_pack_src_t* src, uint32_t pack_off,
                           bpvm_pack_entry_t* out, int max) {
     bpvm_pack_info_t info;

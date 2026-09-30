@@ -211,22 +211,8 @@ void repl_set_packs_loader(int32_t (*fn)(void)) { s_packs_loader = fn; }
  * pack grabado no se marca como hecho: el siguiente Run lo reintenta, que es
  * justo lo que se quiere despues de grabar uno, sin reiniciar la placa. */
 static void packs_cargar_una_vez(void) {
-    static int s_hecho = 0;
-    if (s_hecho || s_packs_loader == 0) return;
-    int32_t r = s_packs_loader();
-    if (r >= 0) {
-        /* V7/H6.c G1: `r` = a cuántos motores se saltó; lo que devolvió cada
-         * uno ya está en el log, con su nombre. */
-        s_hecho = 1;
-        log_printf("packs: %ld motor(es) cargado(s)", (long) r);
-    } else {
-        /* El detalle -cuantos candidatos, que peldano fallo- ya lo dejo el
-         * cargador en el log. Aqui solo se dice que se sigue sin pack, que no
-         * es un error: un programa que no use packs no tiene por que llevar
-         * ninguno. */
-        log_printf("packs: sin pack utilizable (peldano %ld) - se sigue sin el",
-                   (long) -r);
-    }
+    /* V7/H7 (Boot 2, fase 2): la guarda y el log, en el cargador común. */
+    if (s_packs_loader) (void) s_packs_loader();
 }
 
 /* ---- fs_status_t → (code, message) v1 ---- */

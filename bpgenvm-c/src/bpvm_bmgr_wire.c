@@ -168,7 +168,9 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             int packs_n = 0;
             bpvm_zona_estado_t ze = bpvm_pack_zona_estado(bm->packs_base, bm->packs_size,
                                                           &packs_n, NULL, NULL);
-            if (bpvm_pack_zona_aviso(ze, packs_n, aviso, sizeof aviso)) {
+            /* el de la zona, y si no, el de un motor que no cargó (fase 2) */
+            if (bpvm_pack_zona_aviso(ze, packs_n, aviso, sizeof aviso)
+                || (bm->packs_base && bpvm_pack_aviso_motor_de(aviso, sizeof aviso))) {
                 sb_raw(&s, "\",\"casi\":true,\"aviso\":\"");
                 sb_esc(&s, aviso);
                 sb_raw(&s, "\"}");
