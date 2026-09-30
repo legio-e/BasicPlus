@@ -6,6 +6,8 @@
  */
 #include "bpvm_mem.h"
 #include <stdio.h>
+#include <stdint.h>   /* SIZE_MAX, para vmheap= */
+#include <limits.h>   /* LONG_MAX */
 
 static const char* K_REGION   = "la región";
 static const char* K_CONTIGUO = "el bloque contiguo";
@@ -86,6 +88,17 @@ bpvm_mem_res_t bpvm_mem_plan(const bpvm_mem_region_t* r, int n,
     return out->res;
 }
 
+size_t bpvm_mem_objetivo_env(long kb, size_t por_defecto)
+{
+    if (kb <= 0) return por_defecto;
+#if SIZE_MAX / 1024u < LONG_MAX
+    /* Sólo donde N KB pueden no caber en un size_t (los micros, de 32 bits): satura,
+     * pide «todo» en vez de dar la vuelta y pedir un bloque de basura. */
+    if (kb > (long) (SIZE_MAX / 1024u)) return SIZE_MAX;
+#endif
+    return (size_t) kb * 1024u;
+}
+
 int bpvm_mem_plan_str(const bpvm_mem_plan_t* p, const bpvm_mem_region_t* r,
                       const bpvm_mem_cfg_t* cfg, char* buf, size_t cap)
 {
@@ -111,8 +124,13 @@ int bpvm_mem_plan_str(const bpvm_mem_plan_t* p, const bpvm_mem_region_t* r,
                           cfg->reserva_nombre, (unsigned)(p->reserva_bytes / 1024u));
         break;
     case BPVM_MEM_NO_CABE:
-        n = snprintf(buf, cap, "vm: NO CABE en %s — techo %u KB por %s, suelo %u KB: sin VM",
-                     nombre, techo, p->limita, (unsigned)((cfg ? cfg->vm_min : 0) / 1024u));
+        if (obj && cfg->objetivo < p->techo)
+            /* Cabía: lo que no llega al suelo es lo PEDIDO (`vmheap=`), no la región. */
+            n = snprintf(buf, cap, "vm: el objetivo (%u KB) no llega al suelo (%u KB) — sin VM (en %s cabían %u KB)",
+                         obj, (unsigned)(cfg->vm_min / 1024u), nombre, techo);
+        else
+            n = snprintf(buf, cap, "vm: NO CABE en %s — techo %u KB por %s, suelo %u KB: sin VM",
+                         nombre, techo, p->limita, (unsigned)((cfg ? cfg->vm_min : 0) / 1024u));
         break;
     default:
         n = snprintf(buf, cap, "vm: SIN REGIONES: la placa no ofreció memoria — sin VM");

@@ -86,6 +86,13 @@ typedef struct {
 bpvm_mem_res_t bpvm_mem_plan(const bpvm_mem_region_t* r, int n,
                              const bpvm_mem_cfg_t* cfg, bpvm_mem_plan_t* out);
 
+/* V7/H7 (30-sep) — `vmheap=N` del ENV, en KB: el tamaño del BLOQUE de la VM —heap y
+ * pilas; `stack=` lo sigue repartiendo por dentro— (decidido por Eduardo: N es el bloque
+ * entero). Da el objetivo del plan: `por_defecto` (el de la imagen) si la clave no está
+ * o no es positiva; si no, N KB, saturado si no cabe en un size_t. Por encima del techo
+ * manda el techo, y por debajo del suelo no hay VM: el plan lo dice con los números. */
+size_t bpvm_mem_objetivo_env(long vmheap_kb, size_t por_defecto);
+
 /* La línea del log, la MISMA en todas las placas. Devuelve chars escritos. */
 int bpvm_mem_plan_str(const bpvm_mem_plan_t* p, const bpvm_mem_region_t* r,
                       const bpvm_mem_cfg_t* cfg, char* buf, size_t cap);

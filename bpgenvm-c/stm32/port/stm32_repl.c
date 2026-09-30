@@ -921,7 +921,12 @@ static void stm32_mem_planificar(void) {
     }
 
     bpvm_mem_cfg_t cfg;
-    cfg.objetivo       = 0;                  /* todo lo que el plan deje: el array entero */
+    /* Todo lo que el plan deje —el array entero—, salvo `vmheap=N` (KB, el bloque
+     * entero; V7/H7). Aquí lo que la VM no coge no es de nadie: el array es estático.
+     * Sirve para probar cómo iría una placa más pequeña, no para dar RAM a malloc. */
+    long vmheap_kb     = board_mgr_stm32_env_long("vmheap", 0);
+    cfg.objetivo       = bpvm_mem_objetivo_env(vmheap_kb, 0);
+    if (vmheap_kb > 0) log_printf("vm: vmheap=%ld KB (ENV): el objetivo del bloque", vmheap_kb);
     cfg.vm_min         = VM_MEM_MIN;
     cfg.reserva_bytes  = pide;
     cfg.reserva_nombre = nombre;

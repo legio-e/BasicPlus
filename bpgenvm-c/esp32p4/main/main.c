@@ -464,7 +464,10 @@ static void vm_buffer_init_psram(void)
                (unsigned) hi.free_blocks, (unsigned) hi.allocated_blocks);
 
     bpvm_mem_cfg_t cfg;
-    cfg.objetivo = 0;                 /* la VM toma todo lo que el plan deje */
+    /* La VM toma todo lo que el plan deje, salvo `vmheap=N` (KB, el bloque entero; V7/H7). */
+    long vmheap_kb = bpvm_env_get_long(board_mgr_env(), "vmheap", 0);
+    cfg.objetivo = bpvm_mem_objetivo_env(vmheap_kb, 0);
+    if (vmheap_kb > 0) log_printf("vm: vmheap=%ld KB (ENV): el objetivo del bloque", vmheap_kb);
     cfg.vm_min   = VM_MEM_MIN;        /* piso si algo va mal */
     cfg.reserva_bytes = 0; cfg.reserva_nombre = NULL;   /* SQLite va aparte, y ya esta tomada */
 

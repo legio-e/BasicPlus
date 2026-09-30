@@ -49,10 +49,10 @@
 /* Cuánto pide la VM y cómo se llama el chip: lo pone el proyecto (`chip_cfg.h`).
  * Era por fuerza —`vm_buffer_init()` corría antes que el ENV—, pero desde V7/H6
  * el ENV ya está leído a esa hora: `pack_esp32_ram_init()`, que va justo antes,
- * lo carga (`board_mgr_esp32_env_temprano`). O sea que una clave del ENV podría
- * decidir el tamaño: es la `vmheap=N` de U6, pendiente (¿N es el bloque o el
- * heap?). El porqué de cada número está en el `chip_cfg.h` que lo fija — y en el
- * del C3 está escrito que AÚN NO ESTÁ MEDIDO. */
+ * lo carga (`board_mgr_esp32_env_temprano`). O sea que una clave del ENV puede
+ * decidir el tamaño: `vmheap=N` (KB, el bloque entero —Eduardo, 30-sep—), en
+ * vm_buffer_init. El porqué de cada número está en el `chip_cfg.h` que lo fija — y
+ * en el del C3 está escrito que AÚN NO ESTÁ MEDIDO. */
 #include "chip_cfg.h"
 #include "bpvm_mem.h"          /* V6/U6: el planificador comun de memoria */
 #include "bpvm_sd_placa.h"    /* V7/H3 SD.3: la SD de la placa, en el comun */
@@ -142,10 +142,16 @@ static void vm_buffer_init(void) {
      * «PSRAM» y todo. Con region exclusiva se hace como el P4: objetivo 0 = la VM
      * toma lo que el plan deje. Sin PSRAM, el techo medido del chip sigue mandando. */
 #if defined(CONFIG_SPIRAM)
-    cfg.objetivo       = 0;                      /* exclusiva: todo lo que el plan deje */
+    size_t objetivo_imagen = 0;                  /* exclusiva: todo lo que el plan deje */
 #else
-    cfg.objetivo       = CHIP_VM_OBJETIVO;       /* politica: cuanto quiere la VM (no se sube aunque quepa) */
+    size_t objetivo_imagen = CHIP_VM_OBJETIVO;   /* politica: cuanto quiere la VM (no se sube aunque quepa) */
 #endif
+    /* V7/H7 — `vmheap=N` (KB, el bloque entero) manda sobre el de la imagen. Por
+     * encima del techo manda el techo (el margen del sistema sigue protegido), y por
+     * debajo del suelo no hay VM: la línea del plan lo dice. */
+    long vmheap_kb     = bpvm_env_get_long(board_mgr_env(), "vmheap", 0);
+    cfg.objetivo       = bpvm_mem_objetivo_env(vmheap_kb, objetivo_imagen);
+    if (vmheap_kb > 0) log_printf("vm: vmheap=%ld KB (ENV): el objetivo del bloque", vmheap_kb);
     cfg.vm_min         = CHIP_VM_MIN;
     cfg.reserva_bytes  = 0;                      /* la reserva con nombre es de la memoria exclusiva */
     cfg.reserva_nombre = NULL;

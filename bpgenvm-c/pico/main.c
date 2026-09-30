@@ -1367,7 +1367,12 @@ static void vm_task(void* arg) {
         if (sqlres != BPVM_SQLITE_OK) sqlbytes = 0;
 
         bpvm_mem_cfg_t cfg;
-        cfg.objetivo       = 0;                       /* la Pico toma todo lo que el plan deje */
+        /* La Pico toma todo lo que el plan deje, salvo `vmheap=N` (KB, el bloque entero;
+         * V7/H7): lo que no coja se queda para malloc —el techo de `_sbrk` es la base
+         * del bloque—, que es donde van, por ejemplo, las pilas de los nativos. */
+        long vmheap_kb     = bpvm_env_get_long(&s_env, "vmheap", 0);
+        cfg.objetivo       = bpvm_mem_objetivo_env(vmheap_kb, 0);
+        if (vmheap_kb > 0) log_printf("vm: vmheap=%ld KB (ENV): el objetivo del bloque", vmheap_kb);
         cfg.vm_min         = VM_SRAM_MIN;
         cfg.reserva_bytes  = sqlbytes;
         cfg.reserva_nombre = "SQLite";

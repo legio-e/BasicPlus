@@ -154,22 +154,61 @@ static void caso_stm32(void) {
 }
 
 static void caso_discovery(void) {
-    /* U6.12 — la Discovery (3008 KB de RAM) deja de heredar el techo de la Nucleo:
-     * BOARD_VM_BYTES = 1536 KB, medido sobre el .elf (estatico sin la VM ~1025 KB,
-     * quedan ~460 KB para malloc y pila). Misma forma que la Nucleo: exclusiva, sin
-     * margen (el enlazador lo pone), objetivo 0 = el array entero. */
-    bpvm_mem_region_t r[1] = {{ (unsigned char*) 0x20000000, 1536u * 1024u, 1536u * 1024u, 1, 0, "SRAM estática" }};
-    bpvm_mem_cfg_t cfg = { 0, 64u * 1024u, 0, NULL };
+    /* U6.12 — la Discovery (3008 KB de RAM) deja de heredar el techo de la Nucleo.
+     * Hoy (G5.b, 26-sep) el array son 1792 KB y `packRam=768` aparta delante el bloque
+     * de los motores nativos: la VM se queda 1024. Es la línea de su arranque del 30-sep:
+     * «vm: 1024 KB en SRAM estática (todo lo que deja la región) | packs 768 KB delante».
+     * Misma forma que la Nucleo: exclusiva, sin margen (el enlazador lo pone). */
+    bpvm_mem_region_t r[1] = {{ (unsigned char*) 0x20000000, 1792u * 1024u, 1792u * 1024u, 1, 0, "SRAM estática" }};
+    bpvm_mem_cfg_t cfg = { 0, 64u * 1024u, 768u * 1024u, "packs" };
     bpvm_mem_plan_t p; char s[160];
     bpvm_mem_plan(r, 1, &cfg, &p);
     bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
-    CHECK(p.res == BPVM_MEM_OK && p.bytes == 1536u * 1024u, "Discovery: los 1536 KB del array, enteros (%u KB)", (unsigned)(p.bytes / 1024u));
-    CHECK(strstr(s, "1536 KB en SRAM est") != NULL,         "Discovery: la linea: %s", s);
+    CHECK(p.res == BPVM_MEM_OK && p.bytes == 1024u * 1024u && p.reserva_bytes == 768u * 1024u,
+          "Discovery: 1024 KB para la VM y 768 delante (%u + %u KB)", (unsigned)(p.bytes / 1024u),
+          (unsigned)(p.reserva_bytes / 1024u));
+    CHECK(strstr(s, "vm: 1024 KB en SRAM est") != NULL && strstr(s, "| packs 768 KB delante") != NULL,
+          "Discovery: la linea: %s", s);
+}
+
+static void caso_vmheap(void) {
+    /* V7/H7 (30-sep) — `vmheap=N` (KB): el BLOQUE entero, decidido por Eduardo. Sobre la
+     * Pico de caso_pico_sram (357 KB de techo, 64 de suelo). */
+    CHECK(bpvm_mem_objetivo_env(0, 12345) == 12345 && bpvm_mem_objetivo_env(-7, 12345) == 12345,
+          "vmheap: sin la clave (o no positiva), el objetivo de la imagen");
+    CHECK(bpvm_mem_objetivo_env(200, 0) == 200u * 1024u, "vmheap=200: 200 KB");
+    {   /* En 32 bits, 0x7FFFFFFF KB no caben en un size_t: satura. En 64, cabe entero. Lo
+         * que no puede salir es la vuelta (0xFFFFFC00 en 32 bits: un bloque de basura). */
+        size_t e = bpvm_mem_objetivo_env(0x7FFFFFFFL, 0);
+        CHECK(e == (size_t) -1 || e / 1024u == (size_t) 0x7FFFFFFFu, "vmheap enorme: satura o cabe, no da la vuelta");
+    }
+
+    bpvm_mem_region_t r[1] = {{ (unsigned char*) 0x20014BF8, 431432, 431432, 0, 65536, "SRAM interna" }};
+    bpvm_mem_plan_t p; char s[200];
+
+    bpvm_mem_cfg_t c1 = { bpvm_mem_objetivo_env(200, 0), 64u * 1024u, 0, NULL };
+    bpvm_mem_plan(r, 1, &c1, &p);
+    bpvm_mem_plan_str(&p, r, &c1, s, sizeof s);
+    CHECK(p.res == BPVM_MEM_OK && p.bytes == 200u * 1024u, "vmheap=200 en la Pico: 200 KB (%u)", (unsigned) p.bytes);
+    CHECK(strstr(s, "vm: 200 KB en SRAM interna (objetivo 200, techo 357") != NULL, "vmheap=200: la linea: %s", s);
+
+    bpvm_mem_cfg_t c2 = { bpvm_mem_objetivo_env(1000, 0), 64u * 1024u, 0, NULL };
+    bpvm_mem_plan(r, 1, &c2, &p);
+    bpvm_mem_plan_str(&p, r, &c2, s, sizeof s);
+    CHECK(p.res == BPVM_MEM_OK && p.bytes == 365896, "vmheap=1000 en la Pico: manda el techo (%u)", (unsigned) p.bytes);
+    CHECK(strstr(s, "POR DEBAJO del objetivo (1000)") != NULL, "vmheap=1000: la linea: %s", s);
+
+    bpvm_mem_cfg_t c3 = { bpvm_mem_objetivo_env(32, 0), 64u * 1024u, 0, NULL };
+    bpvm_mem_plan(r, 1, &c3, &p);
+    bpvm_mem_plan_str(&p, r, &c3, s, sizeof s);
+    CHECK(p.res == BPVM_MEM_NO_CABE && p.bytes == 0, "vmheap=32 en la Pico: por debajo del suelo, sin VM");
+    CHECK(strstr(s, "el objetivo (32 KB) no llega al suelo (64 KB)") != NULL && strstr(s, "cabían 357 KB") != NULL,
+          "vmheap=32: la linea dice que es lo PEDIDO, no la region: %s", s);
 }
 
 int main(void) {
     printf("=== test_mem: el planificador contra las placas medidas ===\n");
-    caso_c3(); caso_c6(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32(); caso_discovery();
+    caso_c3(); caso_c6(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32(); caso_discovery(); caso_vmheap();
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;
 }
