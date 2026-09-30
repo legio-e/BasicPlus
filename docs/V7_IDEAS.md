@@ -2971,6 +2971,7 @@ la GUI sigue, como el hilo de eventos de Swing—.
 En el peor caso posible (un programa que no hace más que llamar), un 1,7 % como mucho; en uno normal, menos. En
 contra, subir el formato con toda su cascada (la stdlib, los packs, las imágenes y las nueve placas) y el `CALL` de
 siempre para siempre. **Propuesta: cerrarla.** Si se quiere la certeza del micro, la misma medida en la Pico (grabar).
+**CERRADA** (Eduardo, 30-sep: *«1 la cerramos»*). La base `cb` se queda como está.
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
