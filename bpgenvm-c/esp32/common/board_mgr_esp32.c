@@ -33,6 +33,14 @@
 
 #define BP_ENV_SECTOR   4096u   /* sector de borrado de la flash SPI */
 
+/* El techo del mapeo de la flash: `spi_flash_mmap` (IDF) no pasa de 24 bits salvo
+ * con la opcion experimental de 32. Ver `board_mgr_esp32_mapear_packs`. */
+#if CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_QUAD_FLASH || CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_OCTAL_FLASH
+#define PACKS_MMAP_24BIT 0
+#else
+#define PACKS_MMAP_24BIT 1
+#endif
+
 static const char* TAG = "board_mgr";
 
 /* Particiones vendor (localizadas una vez en board_mgr_esp32_boot). */
@@ -182,13 +190,26 @@ int board_mgr_esp32_mapear_packs(void) {
     esp_err_t ed = esp_partition_mmap(bpdata, packs->offset, packs->size,
                                       ESP_PARTITION_MMAP_DATA, &s_map_data, &s_h_data);
 
-    log_printf("pack: zona %u KB en bpdata+0x%x | INST %s @%p | DATA %s @%p",
+    /* Los 32 MB del P4, paso 0 (30-sep) — la direccion FISICA, que es la que
+     * decide. El offset relativo a bpdata no dice nada por si solo: el mapeo del
+     * IDF (`spi_flash_mmap`) rechaza con ESP_ERR_INVALID_ARG todo lo que pase de
+     * 24 bits (16 MB) —salvo con CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_*, que es
+     * experimental y no usamos—, y lo dice por la consola del IDF, no por este
+     * log. `pack_p4.c` lo decia y se perdio al pasar el mapeo al comun
+     * (630a221e): desde entonces un fallo salia como «err=258» y nada mas. */
+    uint32_t fis_ini = (uint32_t) bpdata->address + packs->offset;
+    uint32_t fis_fin = fis_ini + packs->size;
+    log_printf("pack: zona %u KB en bpdata+0x%x (fisica %u..%u KB) | INST %s @%p | DATA %s @%p%s",
                (unsigned) (packs->size / 1024u), (unsigned) packs->offset,
+               (unsigned) (fis_ini / 1024u), (unsigned) (fis_fin / 1024u),
                (ei == ESP_OK) ? "ok" : "FALLO", s_map_inst,
-               (ed == ESP_OK) ? "ok" : "FALLO", s_map_data);
+               (ed == ESP_OK) ? "ok" : "FALLO", s_map_data,
+               (PACKS_MMAP_24BIT && fis_fin > 0x1000000u)
+                   ? "  <<< PASA DE 16 MB: el mapeo del IDF solo llega a 24 bits" : "");
 
     if (ei != ESP_OK) {
-        log_printf("pack: sin mapeo EJECUTABLE no hay nada que hacer (err=%d)", (int) ei);
+        log_printf("pack: sin mapeo EJECUTABLE no hay nada que hacer (err=%d, %s)",
+                   (int) ei, esp_err_to_name(ei));
         s_map_inst = 0;
         return 0;
     }
@@ -382,12 +403,21 @@ void board_mgr_esp32_boot(void) {
              * que littlefs reporta como CORRUPT. Y explica el patrón exacto que
              * vimos: los superbloques (al principio) bien y el resto mal.
              * Un reflasheo SOLO de la app no actualiza el bootloader ⇒ la placa
-             * arrastra el límite viejo y nada te lo dice. Aquí sí. */
-            log_printf("flash: configurada %u KB | chip fisico %u KB | bpdata acaba en %u KB%s%s",
+             * arrastra el límite viejo y nada te lo dice. Aquí sí.
+             *
+             * Y sólo cuando la TABLA pasa de lo configurado (30-sep, los 32 MB del
+             * P4, paso 0): que el chip tenga más flash de la que usa la imagen no
+             * es un fallo. La P4 Waveshare tiene 32 MB y su imagen declara 16 a
+             * propósito —la misma imagen arranca en el kit de 16, y el mapeo del
+             * IDF no pasa de 16 MB—, y este aviso le aconsejaba reflashear el
+             * bootloader, que no arregla nada. */
+            const char* aviso =
+                (need > phys)  ? "  <<< LA TABLA SE SALE DEL CHIP" :
+                (need > cfgsz) ? "  <<< LA TABLA SE SALE DE LA FLASH CONFIGURADA: el bootloader usa menos de la que hay (reflashear el bootloader)" :
+                                 "";
+            log_printf("flash: configurada %u KB | chip fisico %u KB | bpdata acaba en %u KB%s",
                        (unsigned) (cfgsz / 1024u), (unsigned) (phys / 1024u),
-                       (unsigned) (need / 1024u),
-                       (cfgsz < phys) ? "  <<< EL BOOTLOADER USA MENOS FLASH DE LA QUE HAY (reflashear bootloader)" : "",
-                       (need > cfgsz) ? "  <<< LA TABLA SE SALE DE LA FLASH CONFIGURADA" : "");
+                       (unsigned) (need / 1024u), aviso);
         } else {
             log_printf("flash: no se pudo leer el tamano (cfg=%d fis=%d)", (int) e1, (int) e2);
         }

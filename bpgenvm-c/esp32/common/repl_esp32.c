@@ -1052,7 +1052,9 @@ static bpvm_repl_ops_t s_repl_ops = {
     .info           = esp32_repl_info,
     .server_name    = "bpvm-esp32",   /* se pisa en repl_esp32_run con el real */
     .server_build   = ESP32_BUILD_DATE,
-    .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\"]",
+    /* 30-sep (del mapa de H7, «encontrado de paso»): el depurador (`bpvm_dbg_wire`, como la Pico) y los packs (los
+     * PACK_* del común, `bpvm_bmgr_wire.c`) los tenía y no los decía. */
+    .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\",\"DEBUG\",\"PACKS\"]",
     .fs_total_bytes = esp32_repl_fs_total,
     .fs_used_bytes  = esp32_repl_fs_used,
     .fs_file_count  = esp32_repl_fs_count,

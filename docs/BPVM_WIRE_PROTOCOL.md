@@ -179,7 +179,18 @@ Lista de strings que el servidor declara soportar. Permite a clientes
 adaptar la UI (esconder pestaña Debug si no hay capability `DEBUG`,
 por ejemplo).
 
-Categorías actuales: `FILES`, `TERMINAL`, `DEBUG`, `META`.
+Categorías actuales: `FILES`, `TERMINAL`, `DEBUG`, `META`; y `PACKS` (la zona de packs: los `PACK_*`,
+comunes en `bpvm_bmgr_wire.c`) y `BOOTSEL` (§6.1, sólo la Pico).
+
+Quién declara qué (30-sep; hasta entonces la Pico y la ESP32 callaban `PACKS`, y la ESP32 `DEBUG`, aunque los
+tenían):
+
+| servidor | `META` `FILES` `TERMINAL` | `DEBUG` | `PACKS` | `BOOTSEL` |
+|---|---|---|---|---|
+| miVM (`DebugServer`) | sí | sí | — (el PC no tiene zona de packs) | — |
+| Pico (RP2350) | sí | sí | sí | sí |
+| ESP32 (todas) | sí | sí | sí | — |
+| STM32 | sí | — (su wire no tiene el depurador) | sí | — |
 
 Futuras: `BLE`, `PIO`, `AOT`, ...
 

@@ -1236,8 +1236,9 @@ static const bpvm_repl_ops_t s_repl_ops = {
     .server_name    = "bpvm-pico",
     .server_build   = BPVM_PICO_BUILD_DATE,
     /* BOOTSEL va como capacidad aparte: es de esta familia y el IDE decide con
-     * ella si enseñar el botón. */
-    .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\",\"DEBUG\",\"BOOTSEL\"]",
+     * ella si enseñar el botón. Y PACKS (30-sep): los PACK_* del común los tenía
+     * y no los decía. */
+    .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\",\"DEBUG\",\"PACKS\",\"BOOTSEL\"]",
     .put_buf        = s_put_buf,
     .put_buf_size   = sizeof s_put_buf,
     /* Sin after_put a propósito: littlefs committea en cada close, así que aquí

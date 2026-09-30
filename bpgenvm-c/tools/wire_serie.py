@@ -531,7 +531,12 @@ if __name__ == "__main__":
     if len(sys.argv) < 3 or sys.argv[2] not in COMANDOS:
         sys.exit(__doc__ + "\ncomandos: " + " ".join(COMANDOS))
     w = Wire(sys.argv[1])
-    if w.hola() is None:
+    h = w.hola()
+    if h is None:
         print("(sin HELLO_REPLY — la placa no contesta o no es el puerto del wire)")
+    elif sys.argv[2] == "info":
+        # 30-sep: el HELLO dice qué firmware es (serverBuild) y qué declara saber hacer (capabilities).
+        print("HELLO: %s %s capabilities=%s" % (h.get("serverName"), h.get("serverBuild"),
+                                                json.dumps(h.get("capabilities"))))
     COMANDOS[sys.argv[2]](w, sys.argv[3:])
     w.close()
