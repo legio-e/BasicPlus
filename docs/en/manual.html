@@ -1704,7 +1704,9 @@ Within one module, two classes may refer to each other with no problem.</p>
   <li>An exception that nobody catches ends <em>its</em> thread: the others
       carry on, and at the end the program exits with an error (code 1), so
       that the IDE or a script does not take it as a success. If it is main,
-      the program ends.</li>
+      the program ends. And it says so right then, on the program output (the
+      PC console, the IDE's with a board):
+      <code>=== excepcion no atrapada en un hilo (el hilo termina): &lt;message&gt; ===</code>.</li>
   <li>Up to <strong>32 threads can be alive at once</strong>, main included.
       A finished thread frees its place for another, so over its lifetime a
       program can create as many as it wants. <code>start()</code> throws a
@@ -1923,6 +1925,12 @@ fin</code></pre>
   <li><strong>Do not count on the handler having already run</strong> on the line
       after the <code>raise</code>. If you need the result, pass it through the event
       itself or wait until the handler has written it down.</li>
+  <li><strong>The handler is one more function of its thread</strong>: it can
+      yield (<code>sleep</code>, a busy <code>Mutex</code>, a <code>join</code>) and
+      throw. An exception it does not catch ends that thread, like any other, and
+      the output says so (§14.1). In the GUI, handlers run on the GUI thread: if
+      one throws without catching, the screen stops responding, and the output
+      says why.</li>
 </ul>
 
 <h3 id="ev-async">15.4 Asynchronous calls</h3>

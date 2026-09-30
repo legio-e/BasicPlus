@@ -320,7 +320,11 @@ public enum OpCode {
     // dentro del objeto, como ref SIN TAG (identidad), para que ALOAD/ASTORE/ALEN trabajen sobre
     // el `[len][elems]` que vive en el objeto. Gemelo de LEA_LOCAL para el marco.
     LEA_FIELD            (0xBC, OperandKind.IMM_U8),               // ( obj -- addr ) slot u8 (clase cerrada)
-    LEA_FIELD_REF        (0xBD, OperandKind.IDX_U16);              // ( obj -- addr ) slot = ext[idx] (clase abierta, MOD9)
+    LEA_FIELD_REF        (0xBD, OperandKind.IDX_U16),              // ( obj -- addr ) slot = ext[idx] (clase abierta, MOD9)
+    // V7/H7 #607 (30-sep) — el despacho virtual con la RANURA en la pila (arriba), no en el código: el setter que
+    // Forms resuelve por nombre al cargar (Gui.bindMember). Antes lo llamaba ANIDADO un builtin (__guiInvokeBySlot,
+    // el puente) y no podía ceder; así es una llamada normal en el hilo. numArgs, como en INVOKE_VIRTUAL.
+    INVOKE_SLOT          (0xBE, OperandKind.IMM_U8);               // ( this ...args slot -- ) numArgs u8
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;

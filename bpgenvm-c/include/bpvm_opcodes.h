@@ -286,5 +286,9 @@
  * ALOAD/ASTORE/ALEN trabajen sobre el [len][elems] que vive en el objeto. Gemelo de LEA_LOCAL. */
 #define OP_LEA_FIELD           0xBC   /* slot u8           : ( obj -- addr ) (clase cerrada) */
 #define OP_LEA_FIELD_REF       0xBD   /* idx u16           : ( obj -- addr ), slot = ext[idx] (clase abierta) */
+/* 0xBE — V7/H7 #607 (30-sep): el despacho virtual con la RANURA en la pila (arriba), no en el codigo: el setter
+ * que Forms resuelve por nombre al cargar (Gui.bindMember). Antes lo llamaba ANIDADO un builtin
+ * (__guiInvokeBySlot, el puente) y no podia ceder; asi es una llamada normal en el hilo. */
+#define OP_INVOKE_SLOT         0xBE   /* numArgs u8        : ( this ...args slot -- ) */
 
 #endif /* BPVM_OPCODES_H */

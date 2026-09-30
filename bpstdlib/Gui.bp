@@ -669,6 +669,14 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   public function __guiInvokeBySlot(win: Object, slot: integer, sender: Object)
     inline CALL_BUILTIN 207
   end __guiInvokeBySlot
+  // V7/H7 #607 (30-sep) — lo mismo SIN anidar: una llamada virtual normal con la ranura en la pila (el opcode
+  // INVOKE_SLOT), en el hilo que carga. El builtin de arriba corría el método DENTRO de sí mismo: un setter que
+  // cedía (un sleep, un Mutex ocupado) se cortaba en silencio, y uno que lanzaba no llegaba bien al catch de
+  // quien cargó (las dos VMs divergían). Lo usa bindMember; __guiInvokeBySlot se queda como estaba para no
+  // cambiar la interfaz del módulo (#500). ( win sender slot -- ): `sender`, una ref, son 2 palabras.
+  function __invocaRanura(win: Object, sender: Object, slot: integer)
+    inline INVOKE_SLOT 2
+  end __invocaRanura
   // #324 tanda 2b — REFLEXIÓN MÍNIMA (idea de Eduardo): nombre de método →
   // slot de vtable, en ejecución. -1 si esa clase no lo tiene. No hace falta
   // dato nuevo: el .mod ya exporta `Clase#metodo#slot` por cada entrada de la
@@ -1545,7 +1553,7 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     endwh
     if (cs[0] >= 97) and (cs[0] <= 122) then cs[0] := cs[0] - 32
     var slot: integer := __guiSlotOf(win, "set" + __charsToString(cs, n))
-    if slot >= 0 then __guiInvokeBySlot(win, slot, w)
+    if slot >= 0 then __invocaRanura(win, w, slot)   // #607: una llamada normal, sin anidar (puede ceder y lanzar)
   end bindMember
 
   // bindHandler — ata los eventos del widget a métodos de la ventana, SIEMPRE

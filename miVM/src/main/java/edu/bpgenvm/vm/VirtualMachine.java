@@ -4361,6 +4361,7 @@ public class VirtualMachine {
                         // que lanza la VM: el planificador acaba sólo este hilo si no es el main. Era una RuntimeException
                         // a secas —la de los fallos internos de Java— y un `throw` sin atrapar en un hilo tumbaba la VM
                         // entera, mientras una división por cero en el mismo hilo acababa sólo ese hilo.
+                        informaHiloMuerto(tc, vFull, thrownClass);   // #607: que no sea mudo
                         throw new BpThreadFault(buildUnhandledExceptionMessage(
                                 currentPC, v, thrownClass, bp, tc.stackBase));
                     }
@@ -4594,6 +4595,45 @@ public class VirtualMachine {
                     break;
                 }
 
+                case 0xBE: { // INVOKE_SLOT — V7/H7 #607 (30-sep): INVOKE_VIRTUAL con la RANURA en la pila (arriba)
+                    // ( this ...args slot -- ): el setter que Forms resuelve por nombre al cargar (Gui.bindMember).
+                    // Antes lo llamaba ANIDADO un builtin (__guiInvokeBySlot, invokeHandlerBySlot): un setter que
+                    // cedía se cortaba en silencio y uno que lanzaba no llegaba al catch de quien cargó. Así es una
+                    // llamada normal en el hilo. Los textos, los de INVOKE_VIRTUAL; la ranura que no existe, atrapable
+                    // (viene de datos del programa). Espejo de OP_INVOKE_SLOT (interp.c).
+                    int numArgs = mem[pc] & 0xFF; pc++;
+                    sp -= 4;
+                    int vtSlot  = readI32(mem, sp);
+                    long thisRef = refLoad(mem, sp - REF_SIZE - numArgs * 4);
+                    if (thisRef == 0) {
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "referencia nula: llamada a un método de un objeto null");
+                        break;
+                    }
+                    requireAlive(tc, sp, thisRef);
+                    int classPtr = classPtrOfRefOr0(thisRef);
+                    if (classPtr == 0) {
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
+                        break;
+                    }
+                    tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
+                    long resuelto = (vtSlot < 0) ? -1L : resolverVirtual(mem, classPtr, vtSlot);
+                    if (resuelto == -1L) {
+                        throwBpRuntimeError(tc, "INVOKE_SLOT: la ranura " + vtSlot + " no existe en la clase del receptor");
+                        break;
+                    }
+                    int targetCS = (int) (resuelto >>> 32);
+                    int targetPC = targetCS + (int) resuelto;
+                    writeI32(mem, sp, pc); sp += 4;
+                    writeI32(mem, sp, bp); sp += 4;
+                    writeI32(mem, sp, cs); sp += 4;
+                    bp = sp;
+                    pc = targetPC;
+                    cs = targetCS;
+                    break;
+                }
+
                 default:
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     throw new RuntimeException(String.format(
@@ -4631,6 +4671,7 @@ public class VirtualMachine {
                 if (!handled) {
                     String msg = readRuntimeErrorMsg(v);
                     tc.pc = pc; tc.sp = sp; tc.bp = bp; tc.cs = cs;
+                    informaHiloMuerto(tc, v, thrownClass);   // #607: que no sea mudo
                     throw new BpThreadFault(msg != null ? msg : pending.getMessage());
                 }
             }
@@ -4700,6 +4741,30 @@ public class VirtualMachine {
         } else {
             programOut.writeLine(s);
         }
+    }
+
+    /** V7/H7 #607 (30-sep, Eduardo: «lo que sea pero que no sea mudo») — un hilo que NO es el main muere por una
+     *  excepción que nadie atrapa: se DICE en la salida del programa —la consola del PC y la del IDE con la placa—,
+     *  no sólo por el stderr. Pasa sobre todo mientras se desarrolla (el manejador de un botón que falla deja la
+     *  pantalla quieta), y sin esta línea no hay ninguna pista. Sólo el MENSAJE: la clase la VM-C sólo la sabe en
+     *  MOD9 y el número del hilo lo reutiliza #604 (no darían lo mismo); el detalle sigue en el stderr. La del main
+     *  acaba el programa y ya la dice el fin del RUN. Espejo de informa_hilo_muerto (exceptions.c). */
+    private void informaHiloMuerto(ThreadContext tc, long exc, int thrownClass) {
+        if (tc == null || tc.id == 0) return;
+        Integer excCls = (moduleManager != null) ? moduleManager.resolveGlobal("Core.Exception") : null;
+        boolean esExcepcion = excCls == null || (thrownClass != 0 && isDescendantOf(thrownClass, excCls));
+        String texto;
+        if (!esExcepcion) {
+            texto = "throw de un objeto que no es una excepcion";
+        } else {
+            String msg = null;   // en crudo, como buildUnhandledExceptionMessage (readRuntimeErrorMsg lo entrecomilla)
+            if (thrownClass != 0) {
+                try { long msgRef = refLoad(memory, refDeref(exc) + 4); if (msgRef != 0) msg = readVmString(msgRef); }
+                catch (RuntimeException e) { msg = null; }
+            }
+            texto = (msg != null && !msg.isEmpty()) ? msg : "(sin mensaje)";
+        }
+        lineaFin(tc, "=== excepcion no atrapada en un hilo (el hilo termina): " + texto + " ===");
     }
 
     /** Lo que quedó a medias, tal cual y sin salto: un hilo que acaba a mitad de un `print`, el fin del RUN. */

@@ -1,10 +1,11 @@
 # Catálogo de opcodes de la VM BasicPlus
 
-Documento canónico de los opcodes del bytecode `.mod`: los **188** que
+Documento canónico de los opcodes del bytecode `.mod`: los **189** que
 define `bpgenvm-c/include/bpvm_opcodes.h` (V7). Los de `0x00..0x70` son los
 de V1; los de `0x6F` y `0x71..0xB0` se añadieron después (long, double,
 potencia, `CHECKCAST`), los `0xB1..0xBB` son los `_REF` del enlace tardío
-(MOD9, V7/H2) y `0xBC..0xBD`, `LEA_FIELD` y `LEA_FIELD_REF` (V7/H1); están
+(MOD9, V7/H2), `0xBC..0xBD`, `LEA_FIELD` y `LEA_FIELD_REF` (V7/H1), y `0xBE`,
+`INVOKE_SLOT` (V7/H7); están
 en sus propias secciones al final de las tablas.
 Cada entrada incluye:
 - Byte (`code`), mnemonic.
@@ -435,6 +436,7 @@ Sólo los emite `--formato=9`; una VM de V6 no los conoce (y rechaza el `MOD9` a
 | 0xBA | `TRY_BEGIN_REF` | `i32` handlerRel, `u16` idx | `( -- )` | `TRY_BEGIN` con `expectedClass = ext[idx]` (el `catch` de una excepción de otro módulo). |
 | 0xBB | `PUSH_REF` | `u16` idx | `( -- i32 )` | Empuja `ext[idx]` tal cual (la ranura del `$dest` de un handler: ref `EV_DEST`). |
 | 0xBD | `LEA_FIELD_REF` | `u16` idx | `( obj -- addr )` | Como `LEA_FIELD` con `slot = ext[idx]` (clase abierta, MOD9: la ranura la pone el cargador por clave, como `GET_FIELD_REF`). |
+| 0xBE | `INVOKE_SLOT` | `u8` numArgs | `( this ...args slot -- )` | V7/H7 `#607`: `INVOKE_VIRTUAL` con la RANURA en la pila (la cima), no en el código —la de un método que el programa resuelve en ejecución (`Gui.__guiSlotOf`: el setter que Forms llama al cargar)—. Saca la ranura y despacha como `INVOKE_VIRTUAL` (`this = peek(sp - 8 - numArgs*4)`, la misma regla de herencia), con sus mismos textos de error; la ranura que no existe es un `RuntimeError` atrapable, «INVOKE_SLOT: la ranura N no existe en la clase del receptor» (viene de datos del programa, no del compilador). Es una llamada normal en el hilo: el método puede ceder y lanzar. |
 | 0xBC | `LEA_FIELD` | `u8` slot | `( obj -- addr )` | V7/H1 `#19`: la dirección del campo `slot` dentro del objeto, como ref SIN TAG (identidad). Para un array fijo `private var b: tipo[N]`, que vive en el objeto como `[len][N elems]`: `ALOAD/ASTORE/ALEN` trabajan sobre esa dirección. Gemelo de `LEA_LOCAL` (0x23) para el marco. null → RuntimeError. |
 
 `super.m()` a un padre por ref **no** tiene opcode nuevo: es `CALL_EXT idx` con una ref
@@ -448,8 +450,8 @@ Sólo los emite `--formato=9`; una VM de V6 no los conoce (y rechaza el `MOD9` a
 (`0x6F` es `EVENT_RETURN`). `0x71 .. 0xB0` asignados en bloque (long, double,
 campos de 8 bytes, `NATIVE_RETURN`, `TRY_BEGIN_EXT`, potencia, `CHECKCAST`).
 `0xB1 .. 0xBB` los `_REF` del enlace tardío (MOD9); `0xBC .. 0xBD`,
-`LEA_FIELD` y `LEA_FIELD_REF` (V7/H1). **`0xBE .. 0xFF` libres** (con
-`0x6D .. 0x6E`, 68 en total). Total asignado: 188 (miVM, 187: `0xAA`,
+`LEA_FIELD` y `LEA_FIELD_REF` (V7/H1); `0xBE`, `INVOKE_SLOT` (V7/H7 `#607`). **`0xBF .. 0xFF` libres**
+(con `0x6D .. 0x6E`, 67 en total). Total asignado: 189 (miVM, 188: `0xAA`,
 `NATIVE_RETURN`, es sólo de la VM-C).
 
 Si una implementación encuentra un opcode no listado, debe fallar con

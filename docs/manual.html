@@ -1866,7 +1866,9 @@ otra sin problema.</p>
   <li>Una excepción que nadie atrapa acaba <em>su</em> thread: los demás
       siguen, y al final el programa sale con error (código 1), para que el
       IDE o un script no lo den por bueno. Si es el main, se acaba el
-      programa.</li>
+      programa. Y lo dice en ese momento, en la salida del programa (la
+      consola del PC, la del IDE con la placa):
+      <code>=== excepcion no atrapada en un hilo (el hilo termina): &lt;mensaje&gt; ===</code>.</li>
   <li>Caben hasta <strong>32 threads vivos a la vez</strong>, el main incluido.
       Un thread terminado deja su sitio a otro, así que a lo largo de su vida un
       programa puede crear todos los que quiera. <code>start()</code> lanza
@@ -2088,6 +2090,12 @@ fin</code></pre>
   <li><strong>No cuentes con que el manejador ya haya corrido</strong> en la línea
       siguiente al <code>raise</code>. Si necesitas el resultado, pásalo por el
       propio evento o espera a que el manejador lo deje escrito.</li>
+  <li><strong>El manejador es una función más de su hilo</strong>: puede ceder
+      (<code>sleep</code>, un <code>Mutex</code> ocupado, un <code>join</code>) y
+      lanzar. Una excepción que no atrape acaba ese hilo, como cualquier otra, y
+      la salida lo dice (§14.1). En la GUI los manejadores corren en el hilo de la
+      GUI: si uno lanza sin atraparla, la pantalla deja de responder, y la salida
+      dice por qué.</li>
 </ul>
 
 <h3 id="ev-async">15.4 Llamadas asíncronas</h3>

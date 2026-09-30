@@ -19,6 +19,7 @@
 #include <inttypes.h>
 #include <string.h>
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
+#include "bpvm_out.h"     /* V7/H7 #607: la línea del hilo (bpvm_linea_*), para decir que un hilo muere */
 
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,
                   int32_t saved_bp, int32_t saved_cs, int32_t expected_class) {
@@ -59,6 +60,21 @@ static int is_descendant_of(const bpvm_t* vm, uint32_t obj_class, uint32_t targe
         cur = (uint32_t)((int32_t) cur_cs + parent_off);
     }
     return 0;
+}
+
+/* V7/H7 #607 (30-sep, Eduardo: «lo que sea pero que no sea mudo») — un hilo que NO es el main muere por una
+ * excepción que nadie atrapa: se DICE en la salida del programa —la consola del PC y la del IDE con la placa—, no
+ * sólo por el diagnóstico, que en la placa va al log. Pasa sobre todo mientras se desarrolla (el manejador de un
+ * botón que falla deja la pantalla quieta), y sin esta línea no hay ninguna pista. Sólo el MENSAJE: la clase sólo se
+ * sabe en MOD9, y el número del hilo lo reutiliza #604 (las dos VMs no darían lo mismo); el detalle sigue en el
+ * diagnóstico. Por piezas a la línea del hilo (#600), sin otro búfer en la pila. La del main acaba el programa y ya
+ * la dice el fin del RUN. Espejo de informaHiloMuerto (miVM). */
+static void informa_hilo_muerto(bpvm_t* vm, bpvm_thread_t* tc, const char* texto, size_t n) {
+    static const char pre[] = "=== excepcion no atrapada en un hilo (el hilo termina): ";
+    if (tc->id == 0) return;
+    bpvm_linea_pieza(vm, tc, pre, sizeof pre - 1);
+    bpvm_linea_pieza(vm, tc, texto, n);
+    bpvm_linea_fin(vm, tc, " ===", 4);
 }
 
 int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
@@ -113,6 +129,8 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
         bpvm_diag("[bpvm]   lo lanzado no es una excepcion (clase %s)", clase[0] ? clase : "desconocida");
         if (clase[0]) snprintf(vm->runtime_error, sizeof(vm->runtime_error), "throw de un objeto que no es una excepcion: %.140s", clase);
         else          snprintf(vm->runtime_error, sizeof(vm->runtime_error), "throw de un objeto que no es una excepcion");
+        informa_hilo_muerto(vm, tc, "throw de un objeto que no es una excepcion",
+                            strlen("throw de un objeto que no es una excepcion"));   /* #607 */
     } else
     if (!bpref_is_null(ref)) {
         /* Intenta leer field 0 = msg (asumiendo layout RuntimeError). */
@@ -164,11 +182,14 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
                 snprintf(vm->runtime_error, sizeof(vm->runtime_error),
                          "excepcion no atrapada (sin mensaje)");
             }
+            if (n > 0) informa_hilo_muerto(vm, tc, buf, n);                                  /* #607 */
+            else       informa_hilo_muerto(vm, tc, "(sin mensaje)", strlen("(sin mensaje)"));
         } else {
             /* Ni siquiera hay objeto de mensaje. Que se sepa QUE paso: «exit 11»
              * a secas no distingue esto de un fallo de la propia VM. */
             if (clase[0]) snprintf(vm->runtime_error, sizeof(vm->runtime_error), "excepcion no atrapada: %.150s (sin mensaje)", clase);
             else          snprintf(vm->runtime_error, sizeof(vm->runtime_error), "excepcion no atrapada (sin mensaje)");
+            informa_hilo_muerto(vm, tc, "(sin mensaje)", strlen("(sin mensaje)"));        /* #607 */
         }
     }
     tc->status = BPVM_THREAD_TERMINATED;

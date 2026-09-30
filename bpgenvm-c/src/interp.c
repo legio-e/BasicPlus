@@ -1905,6 +1905,35 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
+        /* V7/H7 #607 (30-sep) — INVOKE_SLOT: INVOKE_VIRTUAL con la RANURA en la pila (arriba), no en el código.
+         * ( this ...args slot -- ): el setter que Forms resuelve por nombre al cargar (Gui.bindMember). Antes lo
+         * llamaba ANIDADO un builtin (__guiInvokeBySlot, el puente bpvm_call_bp_from_builtin): un setter que cedía
+         * se cortaba en silencio, y uno que lanzaba dejaba divergir a las dos VMs. Así es una llamada normal en el
+         * hilo. Los textos, los de INVOKE_VIRTUAL; la ranura que no existe, atrapable (viene de datos del programa,
+         * no del compilador). Espejo del 0xBE de miVM. */
+        case OP_INVOKE_SLOT: {
+            uint8_t num_args = mem[pc++];
+            sp -= 4;
+            int32_t vt_slot = bpvm_read_i32_be(mem + sp);
+            bpref_t this_obj = bpref_load(vm, sp - BPVM_REF_SIZE - (uint32_t) num_args * 4);
+            if (bpref_is_null(this_obj)) BPVM_RT_THROW("referencia nula: llamada a un método de un objeto null");
+            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");
+            uint32_t class_ptr = class_ptr_of_ref_or0(vm, this_obj);
+            if (class_ptr == 0) BPVM_RT_THROW("el receptor no es un objeto (una cadena o un array no despachan metodos)");
+            int32_t method_off = -1;
+            uint32_t target_cs = 0;
+            if (vt_slot < 0 || bpvm_vt_resolver(vm, class_ptr, (uint32_t) vt_slot, &method_off, &target_cs) != 0)
+                BPVM_RT_THROW("INVOKE_SLOT: la ranura %d no existe en la clase del receptor", (int) vt_slot);
+            uint32_t target_pc = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) method_off;
+            bpvm_write_i32_be(mem + sp, (int32_t) pc); sp += 4;
+            bpvm_write_i32_be(mem + sp, (int32_t) bp); sp += 4;
+            bpvm_write_i32_be(mem + sp, (int32_t) cs); sp += 4;
+            bp = sp;
+            pc = target_pc;
+            cs = target_cs;
+            break;
+        }
+
         case OP_INSTANCEOF: case OP_INSTANCEOF_REF: {
             uint32_t expected;
             if (op == OP_INSTANCEOF) { int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2; expected = (uint32_t)((int32_t) cs + cs_off); }
