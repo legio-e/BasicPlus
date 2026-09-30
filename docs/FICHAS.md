@@ -894,6 +894,16 @@ ceden (`P2b`, H5), y la cura natural va por el mismo lado: no anidar —que el b
 normal, como `INVOKE_VIRTUAL`, y el intérprete la corra en el hilo, que puede ceder y lanzar como cualquier
 función—. Falta: el diseño (con la vuelta al lazo del GUI) y la prueba en las dos VMs.
 
+**Medido el 30-sep** (`V7_IDEAS` §H7 `#607`; un clic sintético con `Gui.__guiClick`, las dos VMs con el mismo
+stdout): la premisa, en lo principal, ya no es cierta. El `onClick`/`onChange` del usuario corre como EVENTO en el hilo
+de la GUI desde `#324` (el anidado es sólo un trampolín que encola): un `sleep` dentro funciona, y una excepción sin
+atrapar acaba ese hilo y el programa sale con 1 (`#608`). Lo que sí corre anidado es el setter de la ventana que
+llama Forms al cargar (`bindMember` → `__guiInvokeBySlot`): con un `sleep` se corta en silencio, y si lanza con un
+`try` alrededor, la VM-C la atrapa (por un camino raro: el `catch` corre dentro del intérprete anidado) y miVM no —las
+VMs divergen—. Más `__guiInvokeByName` y `__guiRun`, sin llamadores. Los caminos, en `V7_IDEAS`; **decide Eduardo**:
+un opcode `INVOKE_SLOT` (propuesta), que el builtin monte el marco, o un error honesto; y si una excepción en un
+manejador acaba el hilo de la GUI (hoy) o se dice y la GUI sigue.
+
 #### ✅ `#606` — dos fallos LATENTES del XIP en la VM-C: el manejador por ranura de una ventana (`GUI_INVOKE_BY_SLOT`) calcula la dirección sin `cb`, y `bpvm_run_smp` busca el módulo del `main` con el rango viejo (abierta 29-sep, en el mapa de H7; preexistentes; H7 · **CERRADA el 29-sep**, `a907435d`)
 
 Los dos convierten un offset de función en una dirección, y en un módulo que se ejecuta desde la zona de packs (XIP)

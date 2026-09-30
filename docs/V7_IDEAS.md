@@ -2921,6 +2921,57 @@ campo, un array o una global) o se documenta que compartir sin sincronizar no es
 handles la leen los workers sin sincronizar y sus campos no son `volatile`: un lector podría ver un array viejo tras
 crecer (teórico; no se ha visto).
 
+### `#607` — los manejadores de la GUI: lo que corre ANIDADO de verdad (30-sep, el mapa y lo medido)
+
+**La premisa de la ficha ya no es cierta en lo principal.** Desde `#324` (tanda 2c) el `onClick`/`onChange` que escribe
+el usuario —suscrito con `btn.onClick := obj::m`, o por Forms con `bindHandler` y `__methodRef`— NO corre anidado: lo
+único anidado del lazo es un trampolín, `Gui.__guiDispatch(self)` → `self.__fireClick()` → `raise onClick(this)`, y
+`raise` sólo encola. El manejador lo inyecta el mecanismo de eventos de H5.c en el hilo de la GUI (`HiloGui`), entre
+cuantos, como una llamada normal: puede ceder y lanzar como cualquier función.
+
+**Medido** (`GuiCede`, un clic sintético con `Gui.__guiClick`; las dos VMs, el mismo stdout):
+
+| el caso | lo que pasa |
+|---|---|
+| un `onClick` con `sleep(20)` en medio | funciona: lo de después del `sleep` se ejecuta; salida 0 |
+| un `onClick` que lanza sin atrapar | muere el hilo de la GUI, el `main` sigue, y al final salida 1 (la regla de `#608`) |
+| el setter de una ventana llamado POR RANURA (lo que hace Forms al cargar: `bindMember` → `__guiInvokeBySlot`) con un `sleep` | se CORTA en el `sleep`, en silencio (la VM-C lo dice sólo en el stderr: «la función BP cedió/falló»); salida 0 |
+| ese setter lanzando, con un `try` alrededor en el `main` | la VM-C la atrapa —el `catch` y el resto del `main` corren DENTRO del intérprete anidado— y sale con 0; miVM no la atrapa, mata el `main` y sale con 1: **las dos VMs divergen** |
+
+**Lo que corre anidado hoy** (el mapa, comprobado en el código): `__guiInvokeBySlot` —Forms: el setter de la ventana al
+cargar, en el hilo que llama a `load`—; `__guiInvokeByName` y `__guiRun`, sin llamadores en la stdlib; y el trampolín
+dentro de `__guiRunOnce`, que sólo levanta el evento (cedería sólo si una subclase sobrescribiera `__fireClick` o
+`__fireChange`, que son públicos). Las natives del AOT que llaman a BP tienen su propia frontera (P2b).
+
+**Para el setter, tres caminos:**
+- (A) **Un opcode, `INVOKE_SLOT`** (`0xBE`, el primero libre; MOD9 aún no está publicado): un `INVOKE_VIRTUAL` que toma
+  la ranura de la pila. `__guiInvokeBySlot` pasa a ser `inline INVOKE_SLOT` en `Gui.bp`, y el setter, una llamada
+  normal en el mismo hilo: cede, y su excepción llega al `catch` de quien llamó, igual en las dos VMs.
+- (B) El builtin monta el marco y vuelve al intérprete (la VM-C ya relee pc/sp/bp/cs tras un `CALL_BUILTIN`; miVM sólo
+  sp): el mismo efecto, menos claro.
+- (C) Dejar el anidado y hacer honesto el puente: una `RuntimeError` atrapable, «un setter de Forms no puede ceder»,
+  igual en las dos VMs. La restricción se queda.
+
+**El resto**: `__guiInvokeByName` y `__guiRun`, sin llamadores, se pueden quitar de la API (sus números se quedan
+reservados: van dentro de los `.mod`); el trampolín, o declarar internos los `__fire*`, o que la VM encole el evento
+directamente (con la misma tabla que `__guiSlotOf`).
+
+**Decide Eduardo**: el camino del setter; y qué hace una excepción sin atrapar en un manejador de la GUI —hoy, como en
+cualquier hilo (`#608`): se acaba el hilo de la GUI, la pantalla se queda quieta y el programa sale con 1; o se dice y
+la GUI sigue, como el hilo de eventos de Swing—.
+
+### `CALL_REL` — medido (30-sep)
+
+`fib(32)` interpretado (unos 7 millones de `CALL`) en el PC, las dos VMs alternadas, 15 y 15, dos tandas:
+
+- quitar del `CALL` la base `cb` del todo —lo más que daría `CALL_REL`—: del **−1,0 al −1,7 %**;
+- el acierto de la caché de `cb` en línea, sin tocar el formato: del **0,0 al +0,3 %**, nada. Lo que cuesta no es
+  llamar a `bpvm_cb_for_cs`, es la comprobación misma.
+
+En el peor caso posible (un programa que no hace más que llamar), un 1,7 % como mucho; en uno normal, menos. En
+contra, subir el formato con toda su cascada (la stdlib, los packs, las imágenes y las nueve placas) y el `CALL` de
+siempre para siempre. **Propuesta: cerrarla.** Si se quiere la certeza del micro, la misma medida en la Pico (grabar).
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.
