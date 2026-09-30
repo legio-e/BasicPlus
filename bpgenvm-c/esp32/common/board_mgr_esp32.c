@@ -235,7 +235,11 @@ int board_mgr_esp32_mapear_packs(void) {
     } else {
         /* Sin mapeo de DATOS se valida por el de INST, que en algunos micros solo
          * admite accesos de 4 bytes -> si la cabecera sale rara, es esto. */
-        log_printf("pack: no hubo mapeo de DATOS (err=%d); se lee por el de INST", (int) ed);
+        /* V7/H7 (30-sep): con la zona grande (15 MB en la C5, con el FS arriba) la segunda vista no cabe en el espacio
+         * virtual: `esp_mmu_map` busca un hueco del tamano entero ANTES de ver que ese trozo ya esta mapeado (y
+         * devolveria la misma direccion). NOT_FOUND es eso; la de INST es la misma direccion en estos micros. */
+        log_printf("pack: no hubo mapeo de DATOS (err=%d, %s)%s; se lee por el de INST", (int) ed, esp_err_to_name(ed),
+                   (ed == ESP_ERR_NOT_FOUND) ? ": no queda espacio virtual para una segunda vista" : "");
         board_mgr_esp32_set_packs_view(s_map_inst, s_map_inst, packs->size);
     }
     return 1;
