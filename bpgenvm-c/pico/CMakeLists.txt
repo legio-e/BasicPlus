@@ -68,6 +68,15 @@ include(${FREERTOS_KERNEL_PATH}/portable/ThirdParty/Community-Supported-Ports/GC
 
 # === VM-C sources (re-usamos los del host) ==============================
 set(BPVM_C_ROOT ${CMAKE_CURRENT_LIST_DIR}/..)
+# V7/H7 (30-sep) - el paso 0 de fundir los backends de FreeRTOS (docs/FUSION_BACKENDS_FREERTOS.md): la Pico con
+# el contrato COMUN (src/platform_freertos.c) y solo lo suyo aparte (platform_pico_hw.c), para MEDIRLA contra su
+# fichero de siempre. Por defecto, el de siempre.
+option(BPVM_PICO_PLATFORM_COMUN "Pico: el backend FreeRTOS comun (medida del paso 0)" OFF)
+if (BPVM_PICO_PLATFORM_COMUN)
+    set(BPVM_PICO_PLATFORM ${BPVM_C_ROOT}/src/platform_freertos.c ${CMAKE_CURRENT_LIST_DIR}/platform_pico_hw.c)
+else()
+    set(BPVM_PICO_PLATFORM ${CMAKE_CURRENT_LIST_DIR}/platform_freertos.c)
+endif()
 set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm.c
     ${BPVM_C_ROOT}/src/loader.c
@@ -150,8 +159,8 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/scheduler_smp.c
     ${BPVM_C_ROOT}/src/comm_common.c
     ${CMAKE_CURRENT_LIST_DIR}/comm_pico.c
-    # Plataforma: usamos el backend FreeRTOS en vez del pthread del host.
-    ${CMAKE_CURRENT_LIST_DIR}/platform_freertos.c
+    # Plataforma: usamos el backend FreeRTOS en vez del pthread del host (arriba: el propio o el comun).
+    ${BPVM_PICO_PLATFORM}
 )
 
 # === Firmware executable ================================================
