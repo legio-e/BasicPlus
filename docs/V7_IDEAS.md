@@ -3154,7 +3154,7 @@ P4, de una reserva aparte, antes del heap.
 `stack=`, `quantum=` ni `log=` (el camino UART sí); y el autorun de la STM32 no mira si la placa llegó a la app sin
 degradar (las otras tres, sí).
 
-### La propuesta
+### La propuesta — ✅ **decidida por Eduardo el 30-sep**: el «casi» así, y las fases en este orden (empezando ya por la 1)
 
 **El «casi» de Eduardo, sin renumerar.** El arranque sigue subiendo 0 → 1 → 2 (FS) → 3 (app) —los números los leen
 el IDE, las pruebas y los documentos—, y al llegar al FS se monta la zona (la regla de Eduardo) y se mira su ESTADO,
