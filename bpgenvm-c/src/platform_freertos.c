@@ -28,6 +28,12 @@
  * siendo lo correcto —evitar la copia privada que no crece con el común— pero
  * pide antes encontrar ese 32 %.
  *
+ * Remedido el 30-sep (V7/H7, el paso 0 de docs/FUSION_BACKENDS_FREERTOS.md):
+ * +10,8 % —4633 frente a 5132 ms—, con Bench, AllocBench, el KILL y la fuga de
+ * hilos iguales. Descartados midiendo: el broadcast, el final de hilo, la
+ * colocación y la prioridad de los hilos genéricos; lo que corre por línea es
+ * idéntico. La Pico se prueba con esto usando -DBPVM_PICO_PLATFORM_COMUN=ON.
+ *
  * ─── LO QUE CADA FAMILIA TIENE QUE PONER APARTE ──────────────────────────────
  *
  *   bpvm_platform_now_ms()        — su reloj

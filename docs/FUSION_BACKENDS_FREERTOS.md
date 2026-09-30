@@ -80,6 +80,31 @@ La cabecera del común (`src/platform_freertos.c:18-29`) dice que con este fiche
 
 *Comprobación*: sustituir `pico/CMakeLists.txt:149` por el común + un `pico/platform_pico_hw.c` mínimo, construir, y correr PrintBench cuatro veces contra las cuatro del fichero privado. Si el 32 % ha desaparecido, la fusión de la Pico deja de estar bloqueada; si sigue, ver §4.1.
 
+**Medido el 30-sep** (`d8db24b7`; con el OK de Eduardo, la Pico 2 grabada por turnos; el criterio, suyo: *±3 %*).
+Las dos imágenes del mismo commit —A con su fichero, B con el común y `pico/platform_pico_hw.c` (opción
+`BPVM_PICO_PLATFORM_COMUN`, apagada por defecto)—, y cada ronda: `PrintBench` ×4, `Bench` y `AllocBench` ×2, cinco
+KILL y la marca de agua del heap del RTOS en ocho RUN:
+
+| variante | qué cambia | `PrintBench` | frente a A |
+|---|---|---|---|
+| A (su fichero) | — | 4633 ms (16) | — |
+| A con el código de detrás donde B | colocación | 4628 / 4637 | −0,1 / +0,1 % |
+| B (el común) | — | 5132 ms (8) | **+10,8 %** |
+| B con el `broadcast` de la Pico | la hipótesis de §4.1 | 5129 | +10,7 % |
+| y además su final de hilo | R16 | 5084 | +9,7 % |
+| B desplazada | colocación | 5093 | +9,9 % |
+| B con los hilos genéricos a +1 | prioridad | 5135 | +10,8 % |
+
+`Bench` (−0,2 %), `AllocBench` (+0,4 %), el KILL y la fuga de hilos, iguales. **El 32 % de hoy es un 11 %, fuera del
+±3 %: la Pico se queda con su fichero.** Y el porqué, sin encontrar: lo que corre en el bucle (mutex, condiciones,
+reloj, y el stdio/USB del SDK) son las MISMAS instrucciones en las dos imágenes (desensamblado); el firmware entero
+sólo difiere en lo que corre al nacer o morir un hilo; no hay natives, ni SMP, ni latido en `PrintBench`; y la
+colocación no lo explica (A movida sigue rápida, B movida sigue lenta). Los 250 µs por línea no son trabajo de CPU
+sino ESPERA —el cuello es el USB—: algo del arranque del RUN cambia cómo se turnan `io` y la VM alrededor del USB.
+**Lo que queda** (Eduardo, 30-sep): *«fusionar la mitad del código: si tarda más, el problema está en esa mitad; si
+no, en la otra. Y así acaba apareciendo»* —la opción de CMake y `platform_pico_hw.c` son la herramienta—. Puede
+esperar.
+
 ### Paso 1 — Los arreglos que hay que hacer IGUAL, se funda o no (baratos, y quitan ruido del experimento)
 
 1. `ft->lockout_victim = 0;` en `pico/platform_freertos.c:257-262`. Hoy es inocuo porque `bpvm_flash_lock_init_victim()` tiene el cuerpo entero bajo `#if configNUMBER_OF_CORES > 1` (`pico/flash_lock.c:15-23`) y el default es 1 core (`pico/CMakeLists.txt:219-220`), pero es una lectura de valor indeterminado en cada RUN.
@@ -131,7 +156,8 @@ Borrar las copias privadas, cerrar el contrato en el header (gancho + obligació
 
 ## 3. Riesgos, el más importante primero
 
-**R1 — El 32 % de PrintBench en la Pico, sin explicar.** Es el único riesgo que bloquea de verdad, y no por su tamaño sino por la regla de la casa: *no se publica lo que no se entiende*. Está medido, repetible a ±10 ms y aislado por bisección (`src/platform_freertos.c:19-24`).
+**R1 — El 32 % de PrintBench en la Pico, sin explicar** (remedido el 30-sep: **+10,8 %**, y el `broadcast` de §4.1
+descartado; ver el Paso 0). Es el único riesgo que bloquea de verdad, y no por su tamaño sino por la regla de la casa: *no se publica lo que no se entiende*. Está medido, repetible a ±10 ms y aislado por bisección (`src/platform_freertos.c:19-24`).
 
 **R2 — La pila de `io` en el ESP: 4096 bytes pasarían a 1024.** No es "la cuarta parte": el sink que corre en `io` declara `char buf[1024]` en pila (`esp32/common/repl_esp32.c:436`, es el `io_ops.line` de `:774`) y el lazo añade `char tmp[256]` (`src/bpvm_io.c:107`). Es desbordamiento en la primera línea impresa. Con el canario encendido en los cuatro sdkconfig será un abort, no un silencio — pero el build sale verde. El común ya delega la unidad por escrito (`src:52-54`) y **ninguna familia pone el `-D`**.
 

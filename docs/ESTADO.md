@@ -1101,6 +1101,13 @@ la C6, la P4 y la Nucleo.
   sellados otra vez, copia subida (igual fichero a fichero) y programas en marcha. De paso: `test-bmgr` no
   enlazaba desde `#468` —la segunda vez fuera de la red— y entra en ella con `test-part` y `test-pack`; y en la C5
   la segunda vista de la zona (15 MB) no cabe en el espacio virtual y se lee por la primera (el log lo explica).
+- **La Pico sobre el backend común, el paso 0 MEDIDO** (`d8db24b7`, con el OK de Eduardo para grabarla por turnos y su
+  criterio de ±3 %): `PrintBench` +10,8 % (4633 frente a 5132 ms) y lo demás igual; la Pico se queda con su fichero.
+  Siete hipótesis descartadas midiendo, de una en una —la del plan (el `broadcast`), el final de hilo, la colocación
+  (A movida sigue rápida, B movida sigue lenta), la prioridad de los hilos genéricos, el hilo de comunicaciones—, y lo
+  que corre en el bucle, idéntico instrucción a instrucción. Eduardo: *«en este punto es mejor analizar que hacer
+  pruebas»*; el análisis dice que es ESPERA alrededor del USB, no trabajo; y *«hay otro método: fusionar la mitad del
+  código…; puede esperar»*. La opción `BPVM_PICO_PLATFORM_COMUN` y `pico/platform_pico_hw.c` se quedan (apagadas).
 - Encontrado: la Waveshare lleva `DaoDemo.mod` y `ModeloDao.mod` en MOD6, que ya no enlazan con la SQLite de hoy
   (piden `__cls_new_Db`, que no existe desde el enlace tardío): no es de la migración —la copia los devolvió byte a
   byte— y MOD6 queda por debajo de lo que se garantiza (MOD7). Se recompilan cuando haga falta.
