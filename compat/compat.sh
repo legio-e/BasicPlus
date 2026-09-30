@@ -104,7 +104,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles FormsSetter"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles FormsSetter CedeCero"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -509,14 +509,19 @@ check_smp() {   # $1 = "sin-referencia" cuando check ya hizo la pasada principal
 # V7/H7 #611 — y HeapEstres con el heap JUSTO (~1.000 colectas por ejecucion) y 1, 2 y 4 workers, en las DOS VMs:
 # cuatro hilos se pasan cadenas por un buzon y comprueban lo que reciben. El split de miVM reservaba los trozos antes
 # que el array, donde el GC no los ve: con el heap justo fallaba SIEMPRE, tambien con un solo worker.
+# V7/H7 #613 (30-sep) — y CedeCero con CUATRO workers, varias veces, en las dos VMs: cuatro hilos que ceden con
+# sleep(0) en cada vuelta. miVM reclamaba un hilo que su worker aun no habia soltado (el sleep(0) lo re-encola
+# desde dentro del builtin): dos workers sobre el mismo contexto, 9 de cada 30 con cuatro. La VM-C, nunca
+# (sched_owner); desde #613 miVM tampoco.
 ESTRES_VECES="${ESTRES_VECES:-8}"
 check_estres() {
-  echo "-- el estres del heap (#610, #611): la tabla de handles que crece (VM-C sin GC, x$ESTRES_VECES); el heap justo con 1, 2 y 4 workers (las dos VMs) --"
+  echo "-- el estres del heap (#610, #611): la tabla de handles que crece (VM-C sin GC, x$ESTRES_VECES); el heap justo con 1, 2 y 4 workers (las dos VMs); y un hilo que cede, con 4 workers (#613, x$ESTRES_VECES, las dos VMs) --"
   local E="$WORK/estres" fails=0 i rc sal w op
   rm -rf "$E"; mkdir -p "$E"; cp "$STDLIB"/*.mod "$E/"
   ( cd "$ROOT" && java -jar "$V3_FE" "$SAMPLES/TablaHandles.bp" --compile "$E" --backend=mivm \
-      && java -jar "$V3_FE" "$SAMPLES/HeapEstres.bp" --compile "$E" --backend=mivm ) >"$E/compila.log" 2>&1 \
-    || { echo "  ✗ TablaHandles o HeapEstres no compilan: $E/compila.log"; return 1; }
+      && java -jar "$V3_FE" "$SAMPLES/HeapEstres.bp" --compile "$E" --backend=mivm \
+      && java -jar "$V3_FE" "$SAMPLES/CedeCero.bp" --compile "$E" --backend=mivm ) >"$E/compila.log" 2>&1 \
+    || { echo "  ✗ TablaHandles, HeapEstres o CedeCero no compilan: $E/compila.log"; return 1; }
   # El heap justo: en miVM, 48 KB de heap (el resto, pilas); en la VM-C, 96 KB en total. Los dos, ~1.000 colectas.
   printf '{\n  "memorySize": 114688,\n  "stackBase": 49152\n}\n' > "$E/justo.cfg"
   local justo="creados:  1600|errores:  0|leidos de otros:  true|muchas colectas:  true"
@@ -545,7 +550,21 @@ check_estres() {
       echo "  ✗ pasada $i: salida $rc, «$sal» — $(grep -m1 -E 'UAF|mensaje que traia|SIN MEMORIA' "$E/err.$i")"
     fi
   done
-  echo "  estres: $([ "$fails" -eq 0 ] && echo "la tabla crece sin corromper nada ($ESTRES_VECES de $ESTRES_VECES) y el heap justo aguanta en las dos VMs" || echo "$fails pasadas en ROJO")"
+  for i in $(seq 1 "$ESTRES_VECES"); do
+    ( cd "$E" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$V3_JAVA" --workers=4 CedeCero.mod >"$E/cj.$i" 2>"$E/cje.$i" ); rc=$?
+    sal="$(filt < "$E/cj.$i" | paste -sd'|')"
+    if [ "$rc" -ne 0 ] || [ "$sal" != "errores:  0" ]; then
+      fails=$((fails+1))
+      echo "  ✗ CedeCero miVM --workers=4, pasada $i: salida $rc, «$sal» — $(grep -m1 -E '^\[B1\]|HALT|excep' "$E/cje.$i")"
+    fi
+    ( cd "$E" && timeout "$VM_TIMEOUT" "$V3_C" --smp=4 CedeCero.mod >"$E/cc.$i" 2>"$E/cce.$i" ); rc=$?
+    sal="$(filt < "$E/cc.$i" | paste -sd'|')"
+    if [ "$rc" -ne 0 ] || [ "$sal" != "errores:  0" ]; then
+      fails=$((fails+1))
+      echo "  ✗ CedeCero VM-C --smp=4, pasada $i: salida $rc, «$sal»"
+    fi
+  done
+  echo "  estres: $([ "$fails" -eq 0 ] && echo "la tabla crece sin corromper nada ($ESTRES_VECES de $ESTRES_VECES), el heap justo aguanta y un hilo que cede no se ejecuta dos veces, en las dos VMs" || echo "$fails pasadas en ROJO")"
   [ "$fails" -eq 0 ]
 }
 
@@ -1159,7 +1178,7 @@ EOF
   # V7/H7 (#599) — el mismo corpus con dos workers, contra la misma referencia.
   check_smp sin-referencia || fails=$((fails+1))
   # V7/H7 #610, #611 — el estres del heap: lo que casi siempre sale bien (la tabla de handles que crece, sin GC;
-  # el heap justo con varios workers, en las dos VMs).
+  # el heap justo con varios workers, en las dos VMs); y #613, un hilo que cede con cuatro workers.
   check_estres || fails=$((fails+1))
   check_packs_abi || fails=$((fails+1))
   echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + estres del heap + packs-abi VERDE' || echo "$fails frente(s) en ROJO") =="

@@ -1,0 +1,63 @@
+// CedeCero.bp — V7/H7 #613 (30-sep): un hilo que cede con `sleep(0)` no puede acabar en DOS workers a la vez.
+//
+// Cuatro hilos hacen una cuenta que se comprueba a sí misma y ceden en cada vuelta. `sleep(0)` re-encola al hilo
+// desde dentro del builtin, cuando su worker aún no ha salido del intérprete (le quedan por empujar la vuelta y por
+// guardar los registros). En miVM, otro worker podía reclamarlo en ese hueco: dos núcleos sobre el mismo contexto
+// —B1, la carrera de #474 por otro camino—, con cuentas mal, «HALT en thread no-main» o un use-after-free. Con 1
+// worker no pasa nunca; la red lo corre también con 4 y varias veces (el frente del estrés). La VM-C no lo tuvo: su
+// planificador no reclama un hilo que aún tiene dueño (`sched_owner`), y desde #613 miVM hace lo mismo.
+module CedeCero
+
+  class Cuenta extends Thread
+    var t: integer
+    var n: integer
+    public property errores: integer
+
+    public function Cuenta(t: integer, n: integer)
+      super(8192)
+      this.t := t
+      this.n := n
+      this.errores := 0
+    end Cuenta
+
+    function paso(a: integer, b: integer): integer
+      return a * 3 + b
+    end paso
+
+    public function run()
+      var i: integer := 0
+      var s: integer := 0
+      var esperado: integer := 0
+      while i < this.n do
+        s := this.paso(s mod 1000, i)
+        sleep(0)
+        esperado := (esperado mod 1000) * 3 + i
+        if s != esperado then
+          this.errores := this.errores + 1
+          esperado := s
+        endif
+        i := i + 1
+      endwh
+    end run
+  end Cuenta
+
+  function main(arg: string)
+    var c0: Cuenta := Cuenta(0, 3000)
+    var c1: Cuenta := Cuenta(1, 3000)
+    var c2: Cuenta := Cuenta(2, 3000)
+    var c3: Cuenta := Cuenta(3, 3000)
+    c0.start()
+    c1.start()
+    c2.start()
+    c3.start()
+    c0.join()
+    c1.join()
+    c2.join()
+    c3.join()
+    var e: integer := c0.errores + c1.errores + c2.errores + c3.errores
+    if e != 0 then
+      print "FALLO: un hilo que cede con sleep(0) se ejecuto en dos workers a la vez (B1, #613)"
+    endif
+    print "errores: ", e
+  end main
+end CedeCero

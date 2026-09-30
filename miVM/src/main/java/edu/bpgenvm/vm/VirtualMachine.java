@@ -122,10 +122,12 @@ public class VirtualMachine {
          *  Se guarda el `Thread` y no un id de worker a proposito: asi el setter
          *  puede comparar contra `Thread.currentThread()` sin que haya que pasar el
          *  id del worker por los veinte sitios que cambian estado, la mayoria
-         *  builtins donde ese id ni esta a mano. */
+         *  builtins donde ese id ni esta a mano.
+         *
+         *  Y desde #613 (30-sep) es el cerrojo del reparto, el `sched_owner` de la
+         *  VM-C: se pone al reclamarlo, se quita (bajo vmLock) cuando su worker
+         *  vuelve al planificador, y mientras tanto nadie más lo reclama. */
         volatile Thread ownerThread = null;
-        /** true mientras su worker esta DENTRO de runOnContext. */
-        volatile boolean enEjecucion = false;
         /** V7/H7 #600 — la línea de un `print` a medias: sus piezas (los *_NONL, PRINT_CHAR) se guardan aquí y la
          *  línea sale ENTERA con su salto (lineaFin → writeLine). null hasta la primera pieza; se reutiliza. */
         StringBuilder linea;
@@ -149,15 +151,9 @@ public class VirtualMachine {
              * De momento AVISA y no corta, para poder medir cuantas veces pasa y
              * desde donde sin cambiar el comportamiento que se esta midiendo. */
             Thread duenyo = ownerThread;
-            /* Y el DISPARADOR: un thread que se pone a si mismo RUNNABLE mientras
-             * su worker sigue dentro de runOnContext. Ahi es donde se abre la
-             * ventana por la que otro nucleo lo toma. Se cuenta aparte porque no
-             * es un error en si — es la condicion previa. */
-            if (estado == ThreadStatus.RUNNING && nuevo == ThreadStatus.RUNNABLE
-                    && duenyo == Thread.currentThread() && enEjecucion) {
-                System.err.println("[B1-trigger] tid=" + id + " se auto-encola RUNNABLE"
-                        + " desde " + motivo + " mientras su worker lo ejecuta");
-            }
+            /* El DISPARADOR —un thread que se pone a sí mismo RUNNABLE mientras su worker sigue dentro de
+             * runOnContext (un `sleep(0)`)— se avisaba aquí por stderr, una línea por cada vez. Desde #613 (30-sep)
+             * ya no abre ninguna ventana: nadie reclama un thread con dueño (pickNextRunnableTc). */
             if (estado == ThreadStatus.RUNNING && duenyo != null
                     && duenyo != Thread.currentThread()) {
                 System.err.println("[B1] tid=" + id + " lo esta EJECUTANDO "
@@ -561,10 +557,18 @@ public class VirtualMachine {
                 runQueue.addLast(t.id);
             }
         }
-        while (!runQueue.isEmpty()) {
-            int tid = runQueue.pollFirst();
-            ThreadContext t = threads.get(tid);
-            if (t.getStatus() == ThreadStatus.RUNNABLE) return t;
+        /* V7/H7 #613 (30-sep) — sólo se reclama un thread SIN DUEÑO, como `sched_owner == -1` en la VM-C. Un thread
+         * puede volverse RUNNABLE mientras su worker sigue dentro de runOnContext —un `sleep(0)` se re-encola desde el
+         * builtin, y después aún empuja su vuelta y guarda los registros al salir—; si otro worker lo cogía en ese
+         * hueco, dos núcleos corrían el mismo contexto: B1 otra vez (con `CedeCero`, 5 de 30 con dos workers y 9 de 30
+         * con cuatro; la VM-C, 0). El que tiene dueño se queda en la cola: su worker lo suelta al volver al planificador
+         * (WorkerLoop) y avisa. */
+        for (java.util.Iterator<Integer> it = runQueue.iterator(); it.hasNext(); ) {
+            ThreadContext t = threads.get(it.next());
+            if (t.getStatus() != ThreadStatus.RUNNABLE) { it.remove(); continue; }
+            if (t.ownerThread != null) continue;
+            it.remove();
+            return t;
         }
         return null;
     }
@@ -3005,9 +3009,7 @@ public class VirtualMachine {
                     ExitSignal sig;
                     currentTcLocal.set(tc);
                     try {
-                        tc.enEjecucion = true;
-                        try { sig = runOnContext(tc); }
-                        finally { tc.enEjecucion = false; }
+                        sig = runOnContext(tc);
                     } catch (BpThreadFault tf) {
                         // Fallo BP localizado a este thread (e.g. violación de
                         // Mutex). Imprimimos el mensaje, terminamos SOLO este
@@ -3041,6 +3043,7 @@ public class VirtualMachine {
                                 runtimeError = String.valueOf(tf.getMessage());   // #608: al final, salida 1
                             releaseMutexesOwnedBy(tc.id);
                             terminateThread(tc);
+                            tc.ownerThread = null;   // #613: vuelve al planificador
                             vmLock.notifyAll();
                         }
                         continue;
@@ -3128,6 +3131,10 @@ public class VirtualMachine {
                                 vmLock.notifyAll();
                                 break;
                         }
+                        /* #613 — y deja de ser suyo SIEMPRE, no sólo en el cuanto agotado: hasta aquí nadie más
+                         * podía reclamarlo (pickNextRunnableTc salta a los que tienen dueño). Es el
+                         * `sched_owner = -1` de la VM-C. */
+                        if (tc.ownerThread == Thread.currentThread()) tc.ownerThread = null;
                     }
                 }
             } catch (Throwable t) {
