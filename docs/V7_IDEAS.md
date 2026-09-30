@@ -2772,7 +2772,7 @@ muro, `#593`), el arranque y los packs, la flash (`U1.4`, los 32 MB) y `CALL_REL
 | **Los hilos de la VM-C: 32 en toda la vida del programa** → `#604` | `bpvm_thread_spawn` no reutiliza nunca el hueco ni la pila de un hilo terminado (`thread_count` y `next_thread_stack` sólo crecen). Medido (`HilosMuchos`: 40 hilos de uno en uno, `start` y `join`): miVM, los 40; la VM-C muere en el 32 con «Thread.start falló», un error que no se atrapa. miVM reutiliza las regiones de los muertos y no tiene tope. Un programa de días que lance un hilo por tarea muere en la VM-C. | medio (reutilizar el hueco y la región respetando `stackSize`; va de la mano del muro) | no: es un fallo, y rompe la paridad |
 | **`FREE_REF` sin el cerrojo con `--smp`** → `#603` | Soltar un `var owner` (o sustituir un campo owner) mete el bloque en la lista de libres SIN `vm_lock` (`bpvm_free_owned` → `add_to_free_list`), mientras el alocador de otro worker la recorre. Medido (`OwnerSmp`: dos hilos que crean y sueltan objetos con dueño): con `--smp=2`, 8 de 8 ejecuciones rotas —«heap descarrilado», «use-after-free», «strCopy: dst no es ref a heap»—; con un worker, bien; miVM con dos, bien (libera bajo `vmLock`). `check-smp` no lo ve: ningún sample suelta owners desde dos hilos a la vez. | pequeño (el cerrojo, y el sample al corpus) | no |
 | `#593` — el punto ciego del guardián del heap | El guardián mira DÓNDE acaba el recorrido (y, sólo en la VM-C, un tamaño mayor que el heap entero). Contar BYTES no lo arregla: si el bloque que miente se traga bloques ocupados, la suma sale igual. Hay que contar BLOQUES: una cuenta que llevan la reserva, la liberación y el barrido, comparada con la del recorrido en cada GC (4 B y una suma por reserva). Por este agujero se coló `#597` una vez de cada tres. | pequeño, en las dos VMs (y el gancho de la prueba, relativo —«tragarse justo el bloque siguiente»—, porque los heaps de las dos no son iguales) | sí: ¿merece la pena? (propuesta: sí, la cuenta de bloques, con la excepción de `#494`) |
-| Los restos de `U6` | Nada ha entrado desde el 3-sep (en el código no hay `coser` ni `vmheap`), pero el terreno se movió: el S3 y la C5 tienen la VM en PSRAM (con un margen de 512 KB «prudente y no medido»), las cinco familias leen el ENV antes de repartir la memoria (el obstáculo de `vmheap=N` ya no existe) y hay consumidores nuevos de `malloc` (8 KB de pila por native). **Lo que no está anotado: la C3 ya no llega a su objetivo** —`vmHeapBytes` 65536 el 12-sep, 61440 el 24 y 57344 el 25 (las tandas): el bloque, de 128 a 120 KB, a saltos de 4 KB, que es el paso con el que el arranque reintenta—. Y `test-mem` pasa, pero no está en la red y describe placas de antes (la DK2 con 1536 KB; hoy, 1792). | coser la C3: grande (además de las cuatro comprobaciones de la ficha, el cargador, la compactación y `Heap.*`); los márgenes de la Pico y la STM32 como MEDIDA: pequeño, pero hoy no hay instrumento (la línea `mem:` sólo existe en la ESP32); el del S3 es ahora el de su PSRAM; `vmheap=N`: pequeño; el +10 % del `AllocBench` de la C3: la premisa no se sostiene (antes y después ya llevaban el planificador) y el camino que medía ya no existe (`#554`); un nativo sobre PSRAM: pequeño-medio, en la Metro; `U6.F1`: medio | sí, cada uno: coser choca con su regla de no encoger el heap del RTOS; ¿qué es N en `vmheap` (el bloque o el heap)?; ¿cerrar el +10 % y abrir «la C3 por debajo de su objetivo»?; ¿qué decisión depende del nativo sobre PSRAM?; ¿`U6.F1` sale del aparcamiento? |
+| Los restos de `U6` | Nada ha entrado desde el 3-sep (en el código no hay `coser` ni `vmheap`), pero el terreno se movió: el S3 y la C5 tienen la VM en PSRAM (con un margen de 512 KB «prudente y no medido»), las cinco familias leen el ENV antes de repartir la memoria (el obstáculo de `vmheap=N` ya no existe) y hay consumidores nuevos de `malloc` (8 KB de pila por native). **Lo que no está anotado: la C3 ya no llega a su objetivo** —`vmHeapBytes` 65536 el 12-sep, 61440 el 24 y 57344 el 25 (las tandas): el bloque, de 128 a 120 KB, a saltos de 4 KB, que es el paso con el que el arranque reintenta—. Y `test-mem` pasa, pero no está en la red y describe placas de antes (la DK2 con 1536 KB; hoy, 1792). | coser la C3: grande (además de las cuatro comprobaciones de la ficha, el cargador, la compactación y `Heap.*`); ~~los márgenes de la Pico y la STM32 como MEDIDA~~ (✅ **medidos el 30-sep**, `a2bdff6e`: la línea `mem:` en las dos y `tools/medir_margen.py`; los números y la propuesta, en «Los márgenes de la Pico y de la STM32, MEDIDOS», más abajo); el del S3 es ahora el de su PSRAM; `vmheap=N`: pequeño; el +10 % del `AllocBench` de la C3: la premisa no se sostiene (antes y después ya llevaban el planificador) y el camino que medía ya no existe (`#554`); un nativo sobre PSRAM: pequeño-medio, en la Metro; `U6.F1`: medio | sí, cada uno: coser choca con su regla de no encoger el heap del RTOS; ¿qué es N en `vmheap` (el bloque o el heap)?; ¿cerrar el +10 % y abrir «la C3 por debajo de su objetivo»?; ¿qué decisión depende del nativo sobre PSRAM?; ¿`U6.F1` sale del aparcamiento? |
 | Boot 1 / Boot 2, las capas del SO y el montaje de packs | `bpvm_boot.h` no se toca desde el 18-jul: cuatro estados y ningún peldaño de packs. El «Boot 2» está escrito a mano en cinco sitios (Pico, ESP32, el P4 dos veces —TCP y UART— y STM32), con el mismo esqueleto y órdenes distintos. Montar la zona son tres funciones (y el simulado, a mano) y tres criterios: la Pico y el P4 exigen FS; las otras ESP32 y la STM32, sólo particiones; el simulado, siempre. El cargador de motores son tres casi-copias (~570 líneas); «cargar una vez», tres; el bloque de RAM, tres reglas (la Pico no entiende `packRam=`, sólo `SQLite=`). `pack_s3.c` ya no hace falta: el S3 monta por el común desde el 8-sep. Las capas del SO no están declaradas en ningún sitio. | medio (un Boot 2 común, con `mapear()` por familia); medio (el cargador común); pequeño (declarar las capas). Pide la ronda de placas | sí: ¿los packs, un estado con número (renumerar y tocar el IDE) o una capa al lado que no corta la subida?; ¿montar exige FS o bastan las particiones?; ¿sólo el montaje, o también el cargador y el bloque de RAM (con `packRam=` en la Pico)? |
 | `U1.4` — una cintura de flash por familia | La STM32 ya la tiene (`stm32_flash.c`: los cuatro consumidores por el mismo par de funciones; por eso el borrado por bancos de `ec0a48b2` les llegó a todos a la vez); la ESP32 usa `esp_partition_*` en los cuatro (el IDF hace de cintura); sólo la Pico llama al SDK desde cuatro sitios, con el candado en seis. No hay cabecera común. | pequeño (un `pico_flash.c`, como la STM32) o medio (un contrato común) | sí: ¿la pequeña, la grande, o cerrarla como «no se hace»? |
 | Los 32 MB del P4 | El techo de 16 MB lo pone el IDF (el mapeo rechaza lo que pase de 16 MB salvo con una opción experimental), no el chip. La C5 tiene el mismo techo y lo esquiva: declara 32 MB y su `bpdata` acaba en 16. Los 32 MB son de la P4 Waveshare; el kit tiene 16, y una imagen declarada de 32 no arranca en él (el IDF para en un `assert`). La línea del log que explicaba el techo (la dirección física contra el límite de 24 bits) se borró el 8-sep (`630a221e`) al pasar el mapeo al común: hoy un fallo sale como «err=258» y nada más; y a la Waveshare el arranque le aconseja «reflashear bootloader», que no toca (los 16 MB son a propósito). | ~~pequeño el paso 0 (devolver la línea y corregir el aviso)~~ ✅ 30-sep, `cc503a54`, visto en la Waveshare; medio una partición por encima de 16 MB (con una segunda imagen del P4); grande invertir el orden común (reformatear diez placas) | sí: ¿dos imágenes del P4 (V4 lo rechazó), o repartir dentro de los 16 MB y cerrarla?; ¿la C5, por el mismo camino? |
@@ -3054,6 +3054,66 @@ de hoy, con su `/app`, se queda en `bpdata` sin montar) y rehacer la zona de pac
   (`ESP_ERR_NOT_FOUND`: `esp_mmu_map` busca un hueco del tamaño entero antes de ver que ese trozo ya está
   mapeado) y se lee por la de INST, que en estos micros es la misma dirección: funciona, y el log ya lo explica.
 - **Más adelante**, lo que dijo Eduardo: un FS de más de 16 MB, y entonces una zona de packs más pequeña.
+
+## H7 — los márgenes de la Pico y de la STM32, MEDIDOS (30-sep)
+
+Del mapa (fila «Los restos de `U6`»): *«los márgenes de la Pico y la STM32 como MEDIDA: pequeño, pero hoy no hay
+instrumento»*. El de la Pico eran los 64 KB de `VM_SRAM_MALLOC_MARGIN`, puestos a mano en julio (y desbordados una
+vez: `#440`/`#449`); el de la STM32, lo que deja el enlazador. Ninguno se había medido.
+
+**El instrumento** (`a2bdff6e`): la línea `mem:` tras cada RUN, antes de soltar la VM, como la de la ESP32 (`#336`):
+- en la Pico, `malloc` —lo más alto que ha llegado `sbrk`, sobre lo que tiene— y el heap de FreeRTOS con su mínimo
+  histórico;
+- en la STM32, lo mismo (newlib-nano no devuelve memoria a `sbrk`: su `arena` es la marca de agua) y la pila del MSP,
+  pintada en `main()` antes de arrancar el planificador;
+- y el protocolo de `U6.4` para las cinco familias: `tools/medir_margen.py` (el `.ps1` sólo hablaba con las ESP32).
+  Se niega si el ENV no tiene `log=1`: la primera pasada en la DK2 salió MUDA —sólo las líneas del arranque— porque
+  el rastro de ejecución está apagado por defecto (`#423`).
+
+**Lo medido** (con el OK de Eduardo, las dos grabadas con esa imagen y `log=1` en el ENV de la DK2): el protocolo de
+`U6.4` (`Bench` ×2) y la tanda de V7 ENTERA, programa a programa tras un RESET —la Pico, 27 idénticas y 2 saltadas
+por pantalla; la DK2, las 29—:
+
+| | Pico 2 (RP2350A) | DK2 (STM32U5G9) |
+|---|---|---|
+| **`malloc`: lo que tiene** | 64 KB (`VM_SRAM_MALLOC_MARGIN`) | 333 KB (lo que deja el enlazador) |
+| — con `Bench` ×2 | 35 888 B | 29 420 B |
+| — con la tanda de V7 | **48 176 B** (`NatV7`) | **141 560 B** (`GuiShot` detrás de `GuiWinJson`; sola, 117 096) |
+| — lo que sobra | 17 360 B (26 %) | 199 568 B (58 %) |
+| **heap de FreeRTOS** | 32 KB | 24 KB |
+| — mínimo libre | 10 368 B (32 %) | **2 176 B (9 %)** |
+| **pila del MSP** | — (la Pico la tiene aparte, en `SCRATCH_Y`) | 16 KB, de los que usa **≤ 272 B** |
+
+Lo que se comprobó para fiarse de las cifras:
+- el pico es del programa, no de lo que corrió antes: `NatV7` solo tras un reset da los mismos 48 176 B, y repetido no
+  crece; en la DK2, las dos de GUI alternadas tres veces se quedan en 141 556. Lo que sí pesa es el orden: `GuiShot`
+  sola, 117 096; detrás de `GuiWinJson`, 24 KB más —la fragmentación de newlib-nano—;
+- lo que queda en uso al final de un RUN vuelve a su valor con el mismo programa, sin fuga (con `Bench`, 23 440 B en la
+  Pico y 23 476 en la DK2);
+- el heap de FreeRTOS pierde 280 B mientras vive un nativo (su `fr_thread_t` y su semáforo) y los recupera al soltar
+  la VM.
+
+**Lo que dice:**
+1. **La Pico, bien.** El peor programa de la tanda usa el 74 % del margen, y lo que lo empuja se sabe: la pila de 8 KB
+   del ejecutor de cada nativo sale de `malloc` (desde P2b.3), además de las tablas del cargador.
+2. **La DK2, tres cosas:**
+   - la pila del MSP es una reliquia: 16 KB desde V3/H5.0, cuando el intérprete corría sobre ella (lo dice su `.ld`);
+     desde A1.5 corre en la tarea `vm` y el MSP sólo lo usan las interrupciones —≤ 272 B con la GUI, el táctil y el
+     wire en marcha—. La Nucleo tiene 4 KB;
+   - el heap de FreeRTOS es el más justo del parque: 2 176 B en el peor momento (la tarea `vm`, 16 KB; `io`, 4 KB; la
+     ociosa y los objetos del kernel). Una tarea o una cola más y no cabe. Es el `FreeRTOSConfig.h` de la familia, así
+     que la Nucleo va igual (no se midió: no estaba conectada);
+   - `malloc` tiene 333 KB para un pico de 142: lo sube la GUI (la tabla de símbolos de `Gui` y la fragmentación), y
+     crece con el tamaño de la app.
+
+**Lo que decide Eduardo** (la propuesta):
+- **el MSP de la DK2, de 16 a 4 KB**, como la Nucleo: 15 veces lo medido;
+- **el heap de FreeRTOS de la STM32, de 24 a 32 KB** —el de la Pico—: en la DK2, con lo que suelta el MSP; en la
+  Nucleo, de lo que deja el enlazador;
+- **lo que sobra de `malloc` en la DK2, dejarlo**: es el único consumidor que crece con la app, y la VM ya tiene 1 MB.
+
+De paso (`64487df4`): el aviso del arranque de la ESP32 «el asignador solo dio 6653 KB de los 6653 planificados» (en la
+C5) era falso —comparaba el bloque pedido, en KB enteros, con el plan sin redondear—.
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

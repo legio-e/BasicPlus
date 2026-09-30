@@ -1068,6 +1068,26 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 📏 H7 (30-sep, tarde, con las placas) — los márgenes de la Pico y de la STM32, MEDIDOS (`a2bdff6e`)
+
+- Lo primero del traspaso que no pedía decisiones. Faltaba el instrumento: la línea `mem:` tras cada RUN, que sólo
+  tenía la ESP32. Hecha en la Pico (el `_sbrk` propio apunta el máximo; `mallinfo` y el heap de FreeRTOS) y en la
+  STM32 (newlib-nano no devuelve memoria: su `arena` es la marca de agua; y la pila del MSP, pintada antes de arrancar
+  el planificador). Y `tools/medir_margen.py`: el protocolo de `U6.4` para las cinco familias; probado primero en la
+  C5, que ya tenía la línea (13 156 B de consumo del sistema con el protocolo).
+- Con el OK de Eduardo, la Pico y la DK2 grabadas con esa imagen. La primera pasada en la DK2 salió MUDA: el rastro
+  de ejecución lo manda `log=1` en el ENV (`#423`) y ella no lo tenía. Eduardo: `log=1`, *«déjalo puesto»*. La
+  herramienta ya se niega sin él, con el porqué.
+- Medido con el protocolo y con la tanda de V7 entera, programa a programa tras un RESET (la Pico, 27 idénticas y 2
+  saltadas por pantalla; la DK2, las 29): la Pico usa 48 176 B de sus 64 KB de `malloc` (el pico, `NatV7`: la pila de
+  cada nativo sale de ahí) y le quedan 10 368 B de FreeRTOS; la DK2, 141 560 B de 333 KB (la GUI), **2 176 B de
+  FreeRTOS** y **≤ 272 B de sus 16 KB de MSP**. Los números y la propuesta (el MSP de la DK2 a 4 KB; el heap de
+  FreeRTOS de la STM32 a 32 KB), en `V7_IDEAS` §H7, «Los márgenes de la Pico y de la STM32, MEDIDOS».
+- De paso (`64487df4`): el aviso del arranque de la C5 «el asignador solo dio 6653 KB de los 6653 planificados» era
+  falso (el bloque en KB enteros contra el plan sin redondear). Compilado; sin grabar.
+- Las placas: la Pico y la DK2, con la imagen de `a2bdff6e` (la DK2, con `log=1`); la C5, la P4 y las demás, como
+  estaban.
+
 ## 🔧 H7 (30-sep, mediodía, sesión remota) — `#613` abierta y cerrada (B1 por `sleep(0)` en miVM); el paso 0 de los 32 MB y el `HELLO`, vistos en placa; la lectura por encima de 16 MB, medida en la Waveshare
 
 - Conectadas: la Pico 2 (COM22), la P4 Waveshare (COM15), la C5 (COM6) y la DK2 (COM12, su ST-Link); sabido sin
