@@ -36,7 +36,10 @@ module BenchMem
   const SALTO: integer := 4099
 
   function Main()
-    var a: integer[32768]
+    // En el HEAP, que es lo que se mide. (30-sep: estaba como `integer[32768]`, que
+    // hoy es un array FIJO en el marco de la función —en la pila— y, con 128 KB, ya
+    // ni compilaba: los locales tienen un tope de 64 KB.)
+    var a: integer[] := newIntArray(N)
 
     // Contenido: da igual el valor, pero que no sea todo cero — así la suma
     // final depende de haber leído de verdad y el optimizador (o yo leyendo el
