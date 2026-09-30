@@ -1116,10 +1116,20 @@ la C6, la P4 y la Nucleo.
   (3) Un `cut -c30-` se comió la primera cifra del tamaño de `Gui.pack` (2 326 528 → «326528») y me hizo dudar del
   pack.
 
-**Traspaso (30-sep, mediodía).** De H7 queda lo del mapa: los restos de `U6`, `U1.4`, Boot 1/2 y el montaje de packs,
-y la Pico sobre `platform_freertos`. Los 32 MB, hechos en la Waveshare y la C5 (un FS de más de 16 MB, más adelante).
-La P4, la C5 y la Pico llevan la imagen de hoy (con `#607`: el `Gui.mod` nuevo ya puede ir a ellas); la DK2 y las que
-no estaban, no.
+**Traspaso (30-sep, tarde — pausa).** Eduardo: *«a la vuelta terminamos lo que falta y ya sí con las placas
+delante»*. Lo que queda de H7, y qué pide cada cosa:
+- **Sin decisiones, con placa**: los márgenes de memoria de la Pico y de la STM32 como MEDIDA —falta el instrumento:
+  la línea `mem:` del arranque, que sólo tiene la ESP32—; coser las dos regiones del C3 y remedir el S3 (sus placas no
+  estaban hoy).
+- **Con una decisión de Eduardo** (las preguntas, en el mapa de `V7_IDEAS` §H7): `U1.4` (¿un `pico_flash.c`, un contrato
+  común, o cerrarla?); Boot 1/2 y el montaje de packs (tres preguntas); `vmheap=N` (¿el bloque o el heap?); el +10 %
+  del `AllocBench` de la C3 (¿cerrarlo y abrir «la C3 por debajo de su objetivo»?); un nativo sobre PSRAM; `U6.F1`.
+- **Aparcado, puede esperar**: la Pico sobre el backend común —medida: +10,8 %, se queda con su fichero—; lo que
+  queda es fusionar por mitades (Eduardo), con la opción `BPVM_PICO_PLATFORM_COMUN`.
+
+Las placas: la P4 Waveshare y la C5 con el FS arriba (migradas; la línea más clara del log de la C5, `a91b8dad`,
+compilada y sin grabar); la Pico, con la imagen de HEAD; la DK2, sin tocar; las demás, con imágenes anteriores. Una
+imagen de antes de `#607` no entiende el `Gui.mod` nuevo (`0xBE`): firmware y stdlib, juntos.
 
 ## 🔧 H7 (30-sep) — `CALL_REL` cerrada con la medida; `#607` cerrada (`85de188f`): el setter de Forms, con el opcode `INVOKE_SLOT`, y el hilo que muere lo dice
 
