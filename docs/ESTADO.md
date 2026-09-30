@@ -1068,6 +1068,46 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🔧 H7 (30-sep) — `CALL_REL` cerrada con la medida; `#607` cerrada (`85de188f`): el setter de Forms, con el opcode `INVOKE_SLOT`, y el hilo que muere lo dice
+
+- Por la mañana, lo que el mapa llamaba «documentos rancios» (`abf62a59`): lo que decía lo contrario del código
+  —`OPCODES` (188, libres desde `0xBE`), el dibujo de la VM-C en `HEAP_LAYOUT` (la tabla de handles, entre el heap y
+  las pilas), los punteros de `V7_BACKLOG` §H7 y tres comentarios de placa (la zona de packs va ANTES de `/lib` desde
+  `#468`, el S3 sí registra el cargador de packs y el ENV ya está leído cuando se reserva la VM)—. Y, de anoche, la
+  nota para H12 (`8f55f699`): con el handle al nacer, lo que se escribe después en el objeto ya no va detrás de la
+  barrera del alta.
+- Eduardo: *«Los opcodes de LVGL se liberan o se siguen utilizando?»*. No son opcodes, son builtins (`CALL_BUILTIN
+  n`, el ordinal de `Core.bp`): los 83 de la GUI, todos en uso —LVGL en la imagen o, por la tabla del pack,
+  `gui_pack.c`—; y su número no se puede dar a otro sin romper los `.mod` ya compilados.
+- **`CALL_REL`, medida y CERRADA** (`b2029c03`, `4e2f2c72`; Eduardo: *«1 la cerramos»*): quitar la base `cb` del
+  `CALL` da del 1,0 al 1,7 % en el peor caso (`fib(32)`) y la caché en línea, nada; no compensa subir el formato con
+  toda su cascada.
+- **`#607`, medida antes de tocarla** (`b2029c03`): la premisa de la ficha era verdad a medias. El `onClick` del
+  usuario ya corre como EVENTO en el hilo de la GUI desde `#324` —cede y lanza—. Lo anidado de verdad era el setter
+  de Forms (`bindMember` → `__guiInvokeBySlot`, un builtin que corría el método dentro de sí): con un `sleep` se
+  cortaba en silencio en las dos VMs, y al lanzar divergían. Tres caminos a Eduardo: *«2 A»* y *«3 … lo que sea pero
+  que no sea mudo»*.
+- **`#607`, hecha** (`85de188f`): el opcode `INVOKE_SLOT` (`0xBE`, `INVOKE_VIRTUAL` con la ranura en la pila) en las
+  dos VMs, y `bindMember` llama al setter con él. `__guiInvokeBySlot` se queda (la interfaz de `Gui`, `#500`: gen 7,
+  `bda9b10d`); de la stdlib sólo cambia `Gui.mod`, y `packs/Stdlib.pack`, regenerado. El hilo que muere sin atrapar
+  lo DICE en la salida, igual en las dos VMs. `FormsSetter` al corpus (un `.win` de verdad; con el `Gui.mod` de
+  antes, sus dos `FALLO` en las dos VMs). El marco del intérprete en la Pico, 256 B como antes. La red completa,
+  verde (paridad 121); las 267 del compilador; placas compiladas sin grabar: Pico, S3, C6 y Nucleo.
+- Tropiezos: (1) medí la salida con `$?` DETRÁS de un `|` —el estado del `grep`— y las dos VMs parecían acabar con 0
+  tras la excepción de la GUI; medida bien, 1 en las dos, como manda `#608`. (2) Las barras invertidas de un
+  heredoc, otra vez (un texto de C y unas regex): script con Write. (3) El `end Prueba` de un constructor casó con el
+  de su clase; la memoria lo avisaba, y se ancló en `end setBoton`.
+
+**Traspaso (30-sep).** Lo que queda de H7 es lo del mapa, y todo pide una decisión de Eduardo o la ronda de placas:
+los restos de `U6` (coser el C3, `vmheap=N`, el +10 % del `AllocBench`, un nativo sobre PSRAM, los márgenes como
+medida, `U6.F1`), Boot 1/2 y el montaje de packs (tres decisiones), `U1.4`, los 32 MB del P4 (paso 0: devolver la
+línea del log) y la Pico sobre `platform_freertos` (grabar A/B, con su OK). Fuera de H7, `#609` (H8/H9) y el modelo
+final del SMP (H12). Riesgos a la vista: (1) el `Gui.mod` nuevo usa `0xBE`: un firmware de antes de hoy con él se
+para con «opcode desconocido o no soportado» al cargar un formulario cuyo control con nombre tiene setter —ruidoso,
+no mudo—; las placas de GUI se graban con el firmware y la stdlib de hoy, juntos. (2) El builtin 207
+(`__guiInvokeBySlot`) sigue anidando: ya no lo llama nadie de la stdlib; sólo lo verían un `Gui.mod` de antes o un
+programa que lo llame a mano.
+
 ## 🔧 H7 (29-sep, noche) — `#593` y `#608` cerradas (`41c27547`); la prueba de estrés del heap abre `#610`–`#612`
 
 - Eduardo: *«al final la reserva la ha de hacer un método único, no n métodos»* y *«si se detecta en un bloque vivo

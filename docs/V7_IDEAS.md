@@ -2960,6 +2960,11 @@ directamente (con la misma tabla que `__guiSlotOf`).
 cualquier hilo (`#608`): se acaba el hilo de la GUI, la pantalla se queda quieta y el programa sale con 1; o se dice y
 la GUI sigue, como el hilo de eventos de Swing—.
 
+**Decidido y hecho** (30-sep, `85de188f`): el camino (A), el opcode `INVOKE_SLOT`; y la excepción de un manejador
+—la de cualquier hilo que no es el main—, «que no sea mudo»: acaba su hilo (`#608`) y lo dice en la salida del
+programa en ese momento, igual en las dos VMs. `__guiInvokeBySlot` se queda (interfaz de `Gui`, `#500`). El
+detalle, en `FICHAS` `#607`.
+
 ### `CALL_REL` — medido (30-sep)
 
 `fib(32)` interpretado (unos 7 millones de `CALL`) en el PC, las dos VMs alternadas, 15 y 15, dos tandas:
