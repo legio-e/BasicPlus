@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <malloc.h>   /* V7/H7: mallinfo, para la línea `mem:` */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -1776,25 +1777,55 @@ int main(void) {
  * ⚠️ Si el heap de la VM se fue a la PSRAM (Metro), `s_vm_buffer` apunta fuera
  * de la SRAM y no sirve de techo: ahi se usa `__StackLimit`, como siempre. Y
  * antes de que el arranque fije el bloque, tambien. */
-void* _sbrk(int incr);
-void* _sbrk(int incr) {
+static char* sbrk_techo(void) {
     extern char end;
     extern char __StackLimit;
-    static char* heap_end = 0;
-    if (heap_end == 0) heap_end = &end;
-
     /* El techo: la base del bloque de la VM si esta en SRAM; si no, el de
      * siempre. La comparacion con __StackLimit es la que descarta la PSRAM. */
     char* techo = &__StackLimit;
     if (s_vm_buffer != NULL && (char*) s_vm_buffer < techo
                             && (char*) s_vm_buffer > &end)
         techo = (char*) s_vm_buffer;
+    return techo;
+}
+
+static char* s_sbrk_max = 0;   /* V7/H7: lo más alto que ha llegado malloc (bpvm_pico_mem_log) */
+
+void* _sbrk(int incr);
+void* _sbrk(int incr) {
+    extern char end;
+    static char* heap_end = 0;
+    if (heap_end == 0) heap_end = &end;
 
     char* prev = heap_end;
     char* next = heap_end + incr;
-    if (next > techo) return (void*) -1;   /* -> malloc devuelve NULL */
+    if (next > sbrk_techo()) return (void*) -1;   /* -> malloc devuelve NULL */
     heap_end = next;
+    if (next > s_sbrk_max) s_sbrk_max = next;
     return (void*) prev;
+}
+
+/* V7/H7 (30-sep) — EL MARGEN, MEDIDO. Los 64 KB de `VM_SRAM_MALLOC_MARGIN` y los
+ * 32 KB del heap de FreeRTOS son números puestos a mano; hasta hoy la Pico no
+ * decía cuánto de ellos se llega a usar (la línea `mem:` sólo existía en la
+ * ESP32; la lee `tools/medir_margen.py`). Se emite tras cada RUN, antes de soltar
+ * la VM —el momento de más memoria—, con las dos marcas de agua:
+ *  · malloc: lo más alto que ha llegado `sbrk` desde `end` (el newlib no devuelve
+ *    memoria por debajo de 128 KB, así que lo que se ha pedido una vez se queda
+ *    pedido: ESE es el consumo que tiene que caber en el margen), y lo que hay
+ *    en uso ahora (si crece de un RUN a otro, es una fuga);
+ *  · el heap de FreeRTOS (`ucHeap`): libre ahora y su mínimo histórico. Ahí van
+ *    las PILAS de las tareas de la plataforma —la de la VM, la de `io` y, con
+ *    SMP, las de los workers; los hilos BP no son tareas—. La del ejecutor de un
+ *    nativo NO: sale de malloc (platform_freertos.c), y cuenta en el margen. */
+void bpvm_pico_mem_log(void) {
+    extern char end;
+    struct mallinfo mi = mallinfo();
+    unsigned maximo = s_sbrk_max ? (unsigned) (s_sbrk_max - &end) : 0u;
+    log_printf("mem: malloc en uso %u B | MAXIMO %u B de %u | heap RTOS libre %u B de %u, MINIMO HISTORICO %u B",
+               (unsigned) mi.uordblks, maximo, (unsigned) (sbrk_techo() - &end),
+               (unsigned) xPortGetFreeHeapSize(), (unsigned) configTOTAL_HEAP_SIZE,
+               (unsigned) xPortGetMinimumEverFreeHeapSize());
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

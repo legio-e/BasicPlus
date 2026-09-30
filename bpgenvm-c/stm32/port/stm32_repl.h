@@ -15,6 +15,10 @@ extern "C" {
 /* Bucle infinito del REPL: nunca retorna. Llamar tras BSP_COM_Init(). */
 void stm32_repl_run(void);
 
+/* V7/H7 — pinta la pila del MSP que no se está usando, para que la línea `mem:`
+ * diga cuánto llega a usar. Llamar en main() justo antes de arrancar FreeRTOS. */
+void stm32_msp_pintar(void);
+
 #ifdef __cplusplus
 }
 #endif

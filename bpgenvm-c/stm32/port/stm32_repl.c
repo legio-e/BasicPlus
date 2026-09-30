@@ -48,8 +48,12 @@
 
 #include <string.h>
 #include <stdio.h>
+#include <malloc.h>     /* V7/H7: mallinfo, para la línea `mem:` */
+#include "FreeRTOS.h"   /* V7/H7: el heap del RTOS, ídem */
 
 #define SERVER_NAME "bpvm-stm32"
+
+static void stm32_mem_log(void);   /* V7/H7: la línea `mem:` (junto a stm32_mem_regiones) */
 /* BOARD_NAME, BOARD_SRAM_BYTES y los BOARD_LED_* los provee board.h (por placa). */
 
 /* Buffers estáticos (NO en stack: el stack C del micro es pequeño). */
@@ -627,6 +631,9 @@ static void run_module_path(const char* path, long id, const char* arg) {
             }
         }
     }
+    /* V7/H7 — la línea `mem:`, como la ESP32 y la Pico: tras cada RUN y antes de
+     * soltar la VM, que es cuando la memoria hace pico. */
+    stm32_mem_log();
     bpvm_destroy(vm);
 
     /* V6/E1 (#452) — el RESET pedido durante el RUN, servido AHORA: el EXITED ya
@@ -819,6 +826,47 @@ static void stm32_mods_log(const char* l) { log_printf("%s", l); }
 static void stm32_mods_install(void) {
     bpvm_mods_set_resync(stm32_mods_install);
     (void) bpvm_mods_instalar_tabla(stm32_mods, stm32_mods_n, stm32_mods_put, stm32_mods_log);
+}
+
+/* V7/H7 (30-sep) — EL MARGEN, MEDIDO. Lo que esta familia deja fuera de la VM
+ * lo reserva el enlazador (`._user_heap_stack`) y hasta hoy nadie decía cuánto de
+ * eso se usa: la línea `mem:` sólo existía en la ESP32. Son tres cosas:
+ *  · malloc, de `_end` al principio de la pila del MSP: newlib-nano NUNCA devuelve
+ *    memoria a sbrk, así que lo que ha tomado (`arena`) es su marca de agua; y lo
+ *    que hay en uso ahora (si crece de un RUN a otro, es una fuga). Ahí va también
+ *    la pila del ejecutor de cada nativo (8 KB, src/platform_freertos.c);
+ *  · el heap de FreeRTOS (`ucHeap`): las pilas de las tareas —la de `vm`, 16 KB,
+ *    y la de `io`, 4 KB; los hilos BP no son tareas— y los objetos del kernel;
+ *  · la pila del MSP (`_Min_Stack_Size`): desde que el intérprete corre en la tarea
+ *    `vm` (A1.5) sólo la usan las interrupciones —FreeRTOS la devuelve a `_estack`
+ *    al arrancar—. Se pinta en main() antes de arrancar el planificador y se
+ *    cuenta lo que sigue pintado. Lo que main() tenía por encima al pintar cuenta
+ *    como usado: el número es un techo, no un suelo. */
+#define MSP_PINTURA 0xA5A5A5A5u
+
+void stm32_msp_pintar(void) {
+    extern uint32_t _sstack;
+    uint32_t* p  = &_sstack;
+    uint32_t* sp = (uint32_t*) __get_MSP();
+    while (p + 4 < sp) *p++ = MSP_PINTURA;   /* lo de debajo del SP de ahora no es de nadie */
+}
+
+static void stm32_mem_log(void) {
+    extern uint8_t  _end, _estack;
+    extern uint32_t _sstack, _Min_Stack_Size;
+    uint32_t msp_total = (uint32_t) &_Min_Stack_Size;
+    const uint32_t* p  = &_sstack;
+    const uint32_t* fin = (const uint32_t*) &_estack;
+    while (p < fin && *p == MSP_PINTURA) p++;
+    uint32_t msp_libre = (uint32_t) ((const uint8_t*) p - (const uint8_t*) &_sstack);
+    struct mallinfo mi = mallinfo();
+    log_printf("mem: malloc en uso %u B | MAXIMO %u B de %u | heap RTOS libre %u B de %u, MINIMO HISTORICO %u B"
+               " | pila MSP usada %u B de %u",
+               (unsigned) mi.uordblks, (unsigned) mi.arena,
+               (unsigned) ((const uint8_t*) &_sstack - &_end),
+               (unsigned) xPortGetFreeHeapSize(), (unsigned) configTOTAL_HEAP_SIZE,
+               (unsigned) xPortGetMinimumEverFreeHeapSize(),
+               (unsigned) (msp_total - msp_libre), (unsigned) msp_total);
 }
 
 static int stm32_mem_regiones(bpvm_mem_region_t* out, int max) {

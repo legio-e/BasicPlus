@@ -173,6 +173,7 @@ int main(void)
   if (xTaskCreate(vm_task, "vm", 4096, NULL, tskIDLE_PRIORITY + 2, NULL) != pdPASS) {
     Error_Handler();
   }
+  stm32_msp_pintar();   /* V7/H7: para medir cuánto MSP usan las interrupciones (la línea `mem:`) */
   vTaskStartScheduler();
   Error_Handler();   /* solo se llega aqui si el planificador no arranco */
   while (1) { }

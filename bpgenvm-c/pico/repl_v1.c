@@ -1098,6 +1098,10 @@ static void run_module_path(const char* path, long id, const char* arg) {
                                           (size_t) off);
     if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
 
+    /* V7/H7 — la línea `mem:` (main.c), como la ESP32: tras cada RUN y antes de
+     * soltar la VM, que es cuando la memoria hace pico. Sin log_flush: LOG_DUMP
+     * lee la RAM, y la flash ya se graba una vez por RUN (el CHECKPOINT). */
+    { extern void bpvm_pico_mem_log(void); bpvm_pico_mem_log(); }
     bpvm_destroy(vm);
     s_active_session = 0;
     /* H6.b.3 — limpiar estado de debug de esta sesión. */

@@ -1,5 +1,9 @@
 # medir_margen.ps1 — protocolo de medida del MARGEN DEL SISTEMA (V6/U6).
 #
+# ⏩ 30-sep (V7/H7): lo sustituye `medir_margen.py`, que hace el mismo protocolo
+# con las cinco familias (este sólo habla con las ESP32, y el BenchMem.mod que
+# sube ya no compila). Se queda por la historia de U6.4.
+#
 # QUE MIDE: lo que consume EL SISTEMA (no el programa BP) mientras la placa
 # trabaja — tareas que se crean, buffers que se piden, FS, trafico del wire. Es
 # el numero del que sale el MARGEN: cuanta DRAM hay que dejarle a lo que NO es
