@@ -68,6 +68,11 @@ typedef struct {
      */
     uint32_t pack_ram_base;
     uint32_t pack_ram_size;
+    /* V7/H7 (30-sep, los 32 MB del P4 y la C5; decisión de Eduardo) — > 0 si el FS es la flash que el CHIP tiene
+     * por encima de la zona de datos (esos bytes): el reparto es entonces bpvm_part_layout_fs_arriba —el FS, ese
+     * trozo; los packs, toda la zona— y no depende del env. PART_LS lo cuenta así («fsArriba») y PART_APPLY y
+     * PART_DEFAULTS no reparten: lo dicen. 0 = el reparto de siempre, por el env. */
+    uint32_t fs_arriba;
 } bpvm_bmgr_t;
 
 /* --- Lectura: entorno --- */

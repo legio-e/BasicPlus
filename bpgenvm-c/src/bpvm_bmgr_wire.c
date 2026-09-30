@@ -72,6 +72,16 @@ static int reply_error(char* out, size_t cap, long id, const char* code, const c
  * su magic nunca se escribió). static: fuera del stack de la comm task. */
 static bpvm_pack_burn_t s_burn;
 
+/* V7/H7 (30-sep) — con el FS ARRIBA (los 32 MB del P4 y la C5) no hay reparto que pedir ni que aplicar: el FS es la
+ * flash de encima de la zona y los packs, la zona entera. Se dice, en vez de aceptar un tamaño que no se aplicaría. */
+static int reply_fs_arriba(char* out, size_t cap, long id, const bpvm_bmgr_t* bm) {
+    char m[200];
+    snprintf(m, sizeof m, "en esta placa el FS es la flash que el chip tiene por encima de la zona de datos "
+             "(%lu KB) y los packs, toda la zona (%lu KB): no se reparte",
+             (unsigned long) (bm->fs_arriba / 1024u), (unsigned long) (bm->usable_flash / 1024u));
+    return reply_error(out, cap, id, "UNSUPPORTED", m);
+}
+
 /* Mapea un error del núcleo de packs a (code, message) del wire. */
 static int reply_pack_err(char* out, size_t cap, long id, int32_t e) {
     switch (e) {
@@ -185,6 +195,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         sb_raw(&s, "{\"type\":\"PART_LS_REPLY\",\"id\":"); sb_long(&s, id);
         sb_raw(&s, ",\"base\":"); sb_long(&s, (long) bm->part_base);
         sb_raw(&s, ",\"usableFlash\":"); sb_long(&s, (long) bm->usable_flash);
+        if (bm->fs_arriba) { sb_raw(&s, ",\"fsArriba\":"); sb_long(&s, (long) bm->fs_arriba); }   /* V7/H7 */
         if (e == BPVM_PART_ERR_MISSING) {
             sb_raw(&s, ",\"missing\":true,\"parts\":[]}");
         } else {
@@ -409,6 +420,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "PART_DEFAULTS")) {
+        if (bm->fs_arriba) return reply_fs_arriba(out, cap, id, bm);
         uint32_t sizes[BPVM_PART_COUNT];
         bpvm_bmgr_part_defaults(bm, bm->sector, sizes);
         sb_raw(&s, "{\"type\":\"PART_DEFAULTS_REPLY\",\"id\":"); sb_long(&s, id);
@@ -422,6 +434,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "PART_APPLY")) {
+        if (bm->fs_arriba) return reply_fs_arriba(out, cap, id, bm);
         /* Solo las KNOBS son obligatorias (hoy FS); la última (packs) es EL RESTO,
          * derivada → su valor es opcional y se ignora (el cliente puede mandarlo o no). */
         uint32_t sizes[BPVM_PART_COUNT];

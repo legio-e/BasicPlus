@@ -46,6 +46,11 @@ int bpvm_bmgr_env_set(bpvm_bmgr_t* bm, const char* key, const char* value, int* 
 bpvm_part_err_t bpvm_bmgr_part_layout(const bpvm_bmgr_t* bm, uint32_t sector,
                                       bpvm_part_layout_t* out, int* bad_idx) {
     if (!bm) return BPVM_PART_ERR_ZERO;
+    if (bm->fs_arriba) {     /* V7/H7: el FS arriba —no hay mando que leer del env— (bpvm_bmgr.h) */
+        if (bad_idx) *bad_idx = -1;
+        bpvm_part_layout_fs_arriba(bm->part_base, bm->usable_flash, bm->fs_arriba, sector, out);
+        return BPVM_PART_OK;
+    }
     bpvm_env_t e;
     bpvm_bmgr_env(bm, &e);   /* si virgen, e.valid=0 → part_layout devuelve MISSING */
     return bpvm_part_layout(&e, bm->part_base, bm->usable_flash, sector, out, bad_idx);

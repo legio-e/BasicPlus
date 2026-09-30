@@ -86,6 +86,13 @@ bpvm_part_err_t bpvm_part_layout_from_sizes(const uint32_t sizes[BPVM_PART_COUNT
                                             uint32_t sector, bpvm_part_layout_t* out,
                                             int* bad_idx);
 
+/* V7/H7 (30-sep, los 32 MB del P4; decisión de Eduardo) — el reparto cuando el CHIP tiene flash por encima de la zona
+ * de datos: `fs_arriba` bytes, contiguos a ella. El FS es ese trozo, entero, y los packs, TODA la zona [base,
+ * usable_flash) —su techo es el del mapeo (16 MB) y la zona acaba ahí—. No hay mando: `part.fs.size` no se aplica.
+ * Los offsets siguen siendo relativos: el del FS es `usable_flash`, justo donde acaba la zona. `complete` = 1. */
+void bpvm_part_layout_fs_arriba(uint32_t base, uint32_t usable_flash, uint32_t fs_arriba,
+                                uint32_t sector, bpvm_part_layout_t* out);
+
 /* Fachada kind→región (offset+size derivados). NULL si el kind está fuera de rango. */
 const bpvm_part_t* bpvm_part_get(const bpvm_part_layout_t* lay, bpvm_part_kind_t k);
 

@@ -115,6 +115,21 @@ bpvm_part_err_t bpvm_part_layout(const bpvm_env_t* env, uint32_t base,
     return bpvm_part_layout_from_sizes(sizes, base, usable_flash, sector, out, bad_idx);
 }
 
+void bpvm_part_layout_fs_arriba(uint32_t base, uint32_t usable_flash, uint32_t fs_arriba,
+                                uint32_t sector, bpvm_part_layout_t* out) {
+    if (!out) return;
+    uint32_t avail = (usable_flash > base) ? (usable_flash - base) : 0;
+    out->base = base;
+    out->usable_flash = usable_flash;
+    out->complete = 1;
+    out->parts[BPVM_PART_PACKS].kind   = BPVM_PART_PACKS;
+    out->parts[BPVM_PART_PACKS].offset = base;
+    out->parts[BPVM_PART_PACKS].size   = align_down(avail, sector);
+    out->parts[BPVM_PART_FS].kind      = BPVM_PART_FS;
+    out->parts[BPVM_PART_FS].offset    = usable_flash;          /* justo donde acaba la zona */
+    out->parts[BPVM_PART_FS].size      = align_down(fs_arriba, sector);
+}
+
 const bpvm_part_t* bpvm_part_get(const bpvm_part_layout_t* lay, bpvm_part_kind_t k) {
     if (!lay || (int) k < 0 || (int) k >= (int) BPVM_PART_COUNT) return NULL;
     return &lay->parts[k];

@@ -139,6 +139,23 @@ int main(void) {
               "round-trip: FS conserva, PACKS = el resto");
     }
 
+    /* --- 9. V7/H7 (30-sep): el FS ARRIBA —la P4 Waveshare y la C5, 32 MB con una tabla que acaba en 16—: el FS es
+     *        el trozo de encima de la zona, entero, y los packs TODA la zona; el env no reparte --- */
+    {
+        const uint32_t ZONA = 0x9E8000u, ALTO = 0x1000000u;   /* bpdata del P4 (9,9 MB) y los 16 MB de arriba */
+        memset(&lay, 0xAA, sizeof lay);
+        bpvm_part_layout_fs_arriba(0u, ZONA, ALTO, S4K, &lay);
+        const bpvm_part_t* fs = bpvm_part_get(&lay, BPVM_PART_FS);
+        const bpvm_part_t* pk = bpvm_part_get(&lay, BPVM_PART_PACKS);
+        CHECK(lay.complete == 1 && lay.base == 0u && lay.usable_flash == ZONA, "FS arriba: completo, sin env");
+        CHECK(pk->kind == BPVM_PART_PACKS && pk->offset == 0u && pk->size == ZONA, "FS arriba: los packs, TODA la zona");
+        CHECK(fs->kind == BPVM_PART_FS && fs->offset == ZONA && fs->size == ALTO,
+              "FS arriba: el FS empieza donde acaba la zona y es el trozo entero");
+        bpvm_part_layout_fs_arriba(0u, ZONA + 100u, ALTO + 100u, S4K, &lay);
+        CHECK(bpvm_part_get(&lay, BPVM_PART_PACKS)->size == ZONA && bpvm_part_get(&lay, BPVM_PART_FS)->size == ALTO,
+              "FS arriba: los dos tamaños, alineados al sector");
+    }
+
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;
 }

@@ -1215,8 +1215,15 @@ public final class BpvmClient implements AutoCloseable {
         public final boolean missing;
         public final long base, usableFlash;
         public final List<Partition> parts;
+        /** V7/H7 (30-sep): > 0 si el FS es la flash que el chip tiene por encima de la zona de datos (la P4
+         *  Waveshare y la C5): entonces esa placa no reparte (PART_APPLY contesta UNSUPPORTED). */
+        public final long fsArriba;
         public PartTable(boolean missing, long base, long usableFlash, List<Partition> parts) {
+            this(missing, base, usableFlash, parts, 0L);
+        }
+        public PartTable(boolean missing, long base, long usableFlash, List<Partition> parts, long fsArriba) {
             this.missing = missing; this.base = base; this.usableFlash = usableFlash; this.parts = parts;
+            this.fsArriba = fsArriba;
         }
     }
 
@@ -1318,7 +1325,8 @@ public final class BpvmClient implements AutoCloseable {
             }
         }
         return new PartTable(Json.getBool(r, "missing", false),
-                Json.getLong(r, "base", 0), Json.getLong(r, "usableFlash", 0), parts);
+                Json.getLong(r, "base", 0), Json.getLong(r, "usableFlash", 0), parts,
+                Json.getLong(r, "fsArriba", 0));
     }
 
     /** PART_LS — layout actual (offsets DERIVADOS + tamaños), o missing si virgen. */

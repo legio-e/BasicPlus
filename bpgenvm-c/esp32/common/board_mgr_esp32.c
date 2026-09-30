@@ -25,6 +25,7 @@
 
 #include "esp_partition.h"
 #include "esp_flash.h"    /* #328 — el tamaño REAL del chip, no el que dice la tabla */
+#include "esp_flash_chips/esp_flash_types.h"   /* V7/H7: el `size` del chip, para subirlo al físico (FS arriba) */
 #include "esp_log.h"
 
 #include <stdint.h>
@@ -41,11 +42,19 @@
 #define PACKS_MMAP_24BIT 1
 #endif
 
+/* V7/H7 (30-sep) — lo mínimo que tiene que haber por encima de la tabla para que el FS vaya allí. Con nuestras tablas
+ * (bpdata llega a la flash que declara la imagen) es 0 o una potencia de dos (16 MB en la Waveshare y en la C5); esto
+ * sólo evita que una cola suelta dejara el FS en nada. */
+#define FS_ARRIBA_MIN   (1024u * 1024u)
+
 static const char* TAG = "board_mgr";
 
 /* Particiones vendor (localizadas una vez en board_mgr_esp32_boot). */
 static const esp_partition_t* s_bpenv  = NULL;   /* env A/B (sectores 0 y 1) */
 static const esp_partition_t* s_bpdata = NULL;   /* zona de datos (FS + Packs) */
+/* V7/H7 (30-sep) — la flash que el CHIP tiene por encima de la tabla, registrada como partición «bpfsalto» cuando
+ * la hay (board_mgr_esp32_boot): entonces el FS es ella, entera, y bpdata es sólo de packs. NULL = lo de siempre. */
+static const esp_partition_t* s_bpfs_alto = NULL;
 
 /* Estado del arranque escalonado + el env/layout del climb (estáticos: el layout
  * debe sobrevivir para que layer_fs lo use; el boot lo lee board_boot_status). */
@@ -349,6 +358,11 @@ static bpvm_boot_step_t layer_partitions(void* u) {
     if (!s_bpdata) { snprintf(r.reason, sizeof r.reason, "sin particion bpdata"); return r; }
     env_read_slots(s_env_a, s_env_b);
     bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &s_env);
+    if (s_bpfs_alto) {   /* V7/H7: el FS arriba; los packs, bpdata entera. El reparto no sale del env */
+        bpvm_part_layout_fs_arriba(0u, data_usable(), (uint32_t) s_bpfs_alto->size, BP_ENV_SECTOR, &s_layout);
+        r.ok = 1;
+        return r;
+    }
     int bad = -1;
     bpvm_part_err_t e = bpvm_part_layout(&s_env, 0u, data_usable(), BP_ENV_SECTOR, &s_layout, &bad);
     if (e == BPVM_PART_OK) { r.ok = 1; return r; }
@@ -362,8 +376,9 @@ static bpvm_boot_step_t layer_fs(void* u) {
     const bpvm_part_t* fsp = bpvm_part_get(&s_layout, BPVM_PART_FS);
     if (!fsp) { snprintf(r.reason, sizeof r.reason, "sin region FS"); return r; }
     /* fsp->offset es RELATIVO a bpdata (base=0) → el 1er byte de la partición de
-     * datos. fs_init_at monta littlefs en ese sub-rango. */
-    if (fs_init_at(fsp->offset, fsp->size) != FS_OK) {
+     * datos. fs_init_at monta littlefs en ese sub-rango. V7/H7: con el FS ARRIBA,
+     * fs_init_at monta en «bpfsalto» (la busca él) desde su principio. */
+    if (fs_init_at(s_bpfs_alto ? 0u : fsp->offset, fsp->size) != FS_OK) {
         snprintf(r.reason, sizeof r.reason, "littlefs no monta ni formatea");
         return r;
     }
@@ -418,6 +433,29 @@ void board_mgr_esp32_boot(void) {
             log_printf("flash: configurada %u KB | chip fisico %u KB | bpdata acaba en %u KB%s",
                        (unsigned) (cfgsz / 1024u), (unsigned) (phys / 1024u),
                        (unsigned) (need / 1024u), aviso);
+            /* V7/H7 (30-sep, los 32 MB del P4 y la C5). Eduardo: «para ahora con 16M de FS la P4 va sobrada. Y el
+             * resto para el SO y los packs». La flash que el CHIP tiene por encima del final de la tabla es del FS,
+             * entera, y bpdata queda para los packs, que por el mapeo no pueden pasar de 16 MB (24 bits). La tabla es
+             * la misma en todas las placas de una imagen —el kit del P4 tiene 16 MB y la Waveshare 32—: lo que decide
+             * es lo que dice el chip, en ejecución. Medido en la Waveshare antes de hacerlo (V7_IDEAS §H7 «Los 32 MB
+             * del P4»): con el tamaño del driver subido al físico, leer, escribir y borrar arriba van bien y sin eco;
+             * sin subirlo, INVALID_ARG, porque el driver acota por la cabecera de la imagen (`size`). */
+            if (s_bpdata && phys > need && phys - need >= FS_ARRIBA_MIN) {
+                if (esp_flash_default_chip->size < phys) esp_flash_default_chip->size = phys;
+                esp_err_t er = esp_partition_register_external(esp_flash_default_chip, need, phys - need,
+                                                               "bpfsalto", ESP_PARTITION_TYPE_DATA,
+                                                               (esp_partition_subtype_t) 0x42, &s_bpfs_alto);
+                if (er == ESP_OK) {
+                    log_printf("flash: el FS va ARRIBA, %u..%u KB (%u KB); bpdata, entera para los packs (%u KB); "
+                               "part.fs.size no se aplica en esta placa",
+                               (unsigned) (need / 1024u), (unsigned) (phys / 1024u),
+                               (unsigned) ((phys - need) / 1024u), (unsigned) (s_bpdata->size / 1024u));
+                } else {
+                    s_bpfs_alto = NULL;
+                    log_printf("flash: la flash de encima de la tabla (%u KB) no se pudo registrar (%s): el FS "
+                               "sigue en bpdata", (unsigned) ((phys - need) / 1024u), esp_err_to_name(er));
+                }
+            }
         } else {
             log_printf("flash: no se pudo leer el tamano (cfg=%d fis=%d)", (int) e1, (int) e2);
         }
@@ -500,6 +538,7 @@ void board_mgr_esp32_handle(long id, const json_obj_t* obj, const char* type,
     bm.sector = BP_ENV_SECTOR;
     bm.part_base = 0u;                 /* offsets relativos a bpdata */
     bm.usable_flash = data_usable();   /* la tabla vendor ES el límite; sin clamp #292 */
+    bm.fs_arriba = s_bpfs_alto ? (uint32_t) s_bpfs_alto->size : 0u;   /* V7/H7: el FS arriba (PART_LS lo cuenta) */
     bm.live = &s_boot;                 /* STATE cuenta el estado REAL del boot */
 
     /* V5/H7 — la zona de packs. Sólo si la familia registró su vista Y el layout

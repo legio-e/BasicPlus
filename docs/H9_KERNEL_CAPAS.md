@@ -258,6 +258,13 @@ en `bpvm_bmgr` (host-testable, `test-bmgr` 30/30).
 - `ENV_SET`/`PART_APPLY` re-serializan a la copia A/B **rancia** con `seq+1`; el device
   solo tiene que volcar el sector `wrote_slot` a flash (la cintura por-micro). Corte de
   corriente a mitad = seguro (la copia actual sigue válida hasta que la nueva pasa CRC).
+- **V7/H7 (30-sep): el FS ARRIBA.** En una placa cuyo CHIP tiene flash por encima de la
+  zona de datos —la P4 Waveshare y la C5: 32 MB con una tabla que acaba en 16—, el FS es
+  ese trozo, entero, y los packs, toda la zona (su techo es el del mapeo, 16 MB). No hay
+  mando: `PART_LS` lo cuenta así, con `fsArriba` (bytes) y sin mirar el env, y
+  `PART_DEFAULTS` y `PART_APPLY` contestan `UNSUPPORTED` («no se reparte»). La decide el
+  arranque de la familia por lo que dice el chip (`bpvm_bmgr_t.fs_arriba`; en la ESP32,
+  `board_mgr_esp32_boot`), y el reparto es `bpvm_part_layout_fs_arriba`.
 
 ## Flujo de bring-up (IDE ↔ FrmBoard) — placa virgen (charla 18-jul)
 

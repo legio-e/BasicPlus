@@ -88,8 +88,14 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     /* H9: la zona de datos es la particion vendor "bpdata"; la REGION FS es su
      * sub-rango [fs_offset, fs_offset+fs_size). El tamaño lo define el env
      * (bpvm_part, un mando); aqui solo se monta. Antes montaba "bpfs" entera. */
+    /* V7/H7 (30-sep, los 32 MB del P4 y la C5): si el arranque registró la flash de encima de la tabla
+     * («bpfsalto», board_mgr_esp32_boot), el FS es ésa y el offset es desde su principio; si no, el sub-rango
+     * de "bpdata" de siempre. */
     s_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
-                                      ESP_PARTITION_SUBTYPE_ANY, "bpdata");
+                                      ESP_PARTITION_SUBTYPE_ANY, "bpfsalto");
+    if (!s_part)
+        s_part = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
+                                          ESP_PARTITION_SUBTYPE_ANY, "bpdata");
     if (!s_part) {
         log_printf("fs: NO hay particion 'bpdata' (tabla vieja sin reflashear?)");
         return FS_ERR_BAD_FLASH;            /* sin particion de datos → sin FS */
@@ -97,11 +103,11 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     /* #329 — el tamaño de bpdata al log: si la placa arrastra una tabla vieja
      * (el S3 tenía una de 2 MB con 16 MB de flash), aquí se ve de un vistazo en
      * vez de deducirlo de un "FS lleno". */
-    log_printf("fs: bpdata @0x%X size=%u KB | region FS +0x%X size=%u KB",
+    log_printf("fs: %s @0x%X size=%u KB | region FS +0x%X size=%u KB", s_part->label,
                (unsigned) s_part->address, (unsigned) (s_part->size / 1024u),
                (unsigned) fs_offset, (unsigned) (fs_size / 1024u));
     if (fs_size == 0 || (uint64_t) fs_offset + fs_size > (uint64_t) s_part->size) {
-        log_printf("fs: la region FS NO CABE en bpdata → sin FS");
+        log_printf("fs: la region FS NO CABE en %s → sin FS", s_part->label);
         return FS_ERR_BAD_FLASH;            /* region fuera de bpdata */
     }
     s_fs_offset = fs_offset;

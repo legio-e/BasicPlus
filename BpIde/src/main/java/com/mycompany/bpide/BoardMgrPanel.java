@@ -195,7 +195,10 @@ public final class BoardMgrPanel extends JPanel {
                         p.offset < 0 ? "—" : hex(p.offset) });
             }
             flashLabel.setText("Flash usable: " + (lay.usableFlash / 1024L) + " KB · base "
-                    + hex(lay.base) + (lay.missing ? "  ·  SIN PARTICIONES → propón defaults" : ""));
+                    + hex(lay.base) + (lay.missing ? "  ·  SIN PARTICIONES → propón defaults" : "")
+                    // V7/H7 (30-sep): el FS es la flash de encima de la tabla y los packs, toda la zona
+                    + (lay.fsArriba > 0 ? "  ·  FS ARRIBA: " + (lay.fsArriba / 1024L)
+                            + " KB, por encima de la tabla (esta placa no reparte)" : ""));
 
             // editor de tamaños (abajo): conjunto fijo, pre-relleno del layout o de defaults
             List<BpvmClient.Partition> set = lay.missing && defs != null ? defs.parts : lay.parts;

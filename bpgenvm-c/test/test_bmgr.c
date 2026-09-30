@@ -30,6 +30,9 @@ void bpvm_fs_set_fallback(bpvm_fs_ov_stat_fn st, bpvm_fs_ov_read_fn rd,
 { (void) st; (void) rd; (void) locate; (void) user; }
 uint16_t    bpvm_mdn_host_arch(void)      { return 0; }
 const char* bpvm_mdn_host_float_abi(void) { return ""; }
+/* V7/H7 (30-sep): y otra vez lo mismo —el wire de packs llama a bpvm_mods_resync desde #468 (25-sep) y la prueba
+ * volvio a no enlazar—. Desde hoy esta en la red (check-testc), que es lo que faltaba. */
+void        bpvm_mods_resync(void)        { }
 
 static int g_fail = 0;
 #define CHECK(cond, msg) do { \
@@ -321,6 +324,40 @@ int main(void) {
         nn = bpvm_bmgr_wire_dispatch(&bmp, &rq, rep, sizeof rep, &wr3);
         CHECK(nn > 0 && strstr(rep, "\"ramBase\":0") != NULL && strstr(rep, "\"ramSize\":0") != NULL,
               "G1: sin bloque de RAM -> ramBase 0 (el IDE avisa, no graba un motor muerto)");
+    }
+
+    /* V7/H7 (30-sep) — el FS ARRIBA (la P4 Waveshare y la C5: 32 MB con una tabla que acaba en 16): PART_LS cuenta
+     * el reparto de verdad (el FS, el trozo de arriba; los packs, toda la zona) SIN mirar el env, y PART_APPLY y
+     * PART_DEFAULTS no reparten: lo dicen. Con fs_arriba a 0, lo de siempre (lo prueban los casos de arriba). */
+    {
+        static uint8_t fa[SECT], fb[SECT], fsc[SECT];   /* un env VIRGEN: con el FS arriba no hace falta */
+        memset(fa, 0xFF, SECT); memset(fb, 0xFF, SECT);
+        bpvm_bmgr_t bmf;
+        memset(&bmf, 0, sizeof bmf);
+        bmf.a = fa; bmf.b = fb; bmf.scratch = fsc;
+        bmf.sector = SECT; bmf.part_base = 0u; bmf.usable_flash = 0x9E8000u; bmf.fs_arriba = 0x1000000u;
+        bpvm_bmgr_req_t rq;
+        char rep[512];
+        int wr = -1;
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PART_LS"); rq.id = 21;
+        int nn = bpvm_bmgr_wire_dispatch(&bmf, &rq, rep, sizeof rep, &wr);
+        CHECK(nn > 0 && strstr(rep, "\"fsArriba\":16777216") != NULL && strstr(rep, "\"missing\":false") != NULL,
+              "FS arriba: PART_LS lo dice (fsArriba) y no pide el env");
+        CHECK(strstr(rep, "{\"name\":\"fs\",\"offset\":10387456,\"size\":16777216}") != NULL
+              && strstr(rep, "{\"name\":\"packs\",\"offset\":0,\"size\":10387456}") != NULL,
+              "FS arriba: el FS, el trozo de arriba entero; los packs, toda la zona");
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PART_APPLY"); rq.id = 22;
+        rq.part_sizes[0] = 1048576; rq.part_sizes[1] = -1;
+        nn = bpvm_bmgr_wire_dispatch(&bmf, &rq, rep, sizeof rep, &wr);
+        CHECK(nn > 0 && strstr(rep, "\"code\":\"UNSUPPORTED\"") != NULL && strstr(rep, "no se reparte") != NULL
+              && wr == -1, "FS arriba: PART_APPLY no reparte, lo dice, y no escribe el env");
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PART_DEFAULTS"); rq.id = 23;
+        nn = bpvm_bmgr_wire_dispatch(&bmf, &rq, rep, sizeof rep, &wr);
+        CHECK(nn > 0 && strstr(rep, "\"code\":\"UNSUPPORTED\"") != NULL,
+              "FS arriba: PART_DEFAULTS tampoco propone un reparto");
     }
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
