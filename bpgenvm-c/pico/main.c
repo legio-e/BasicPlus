@@ -1487,6 +1487,13 @@ static void vm_task(void* arg) {
                s_boot.degraded ? " DEGRADADO: " : "",
                s_boot.degraded ? s_boot.reason : "");
 
+    /* V7/H2 (#493) — la zona de packs en el arranque: el STAT por nombre del IDE la
+     * necesita antes del primer RUN. V7/H6 (#468) — y ANTES que la stdlib: el
+     * instalador pregunta a la zona qué sirve ya con los mismos bytes que la imagen.
+     * V7/H7 (Boot 2, fase 1) — la regla (con el FS) y el estado de la zona, comunes; va
+     * FUERA del bloque del FS para que, sin él, se diga por qué no se monta. */
+    (void) bpvm_pack_montar_arranque(s_boot.state >= BPVM_BOOT_FS, pack_pico_montar, pico_mods_log);
+
     if (s_boot.state >= BPVM_BOOT_FS) {
     /* H7.3: overrides de /sys/board.json (name/led/neopixel) — ya con FS. La
      * variante, la flash y la PSRAM vienen del suelo/env, no de aquí. */
@@ -1512,11 +1519,7 @@ static void vm_task(void* arg) {
      * repone; más nuevo → deja; /app → sólo si falta) viven en src/bpvm_mods.c.
      * Aquí ya no hay tabla a mano: la de antes guardaba la longitud por dirección
      * porque los `_len` eran `extern` de 16 ficheros; ahora es `sizeof` en uno. */
-    /* V7/H2 (#493) — la zona de packs en el arranque: el STAT por nombre del IDE la
-     * necesita antes del primer RUN. V7/H6 (#468) — y ANTES que la stdlib: el
-     * instalador pregunta a la zona qué sirve ya con los mismos bytes que la imagen. */
-    pack_pico_montar();
-    pico_mods_install();
+    pico_mods_install();   /* la zona ya está montada (arriba, antes del bloque del FS) */
 
     log_printf("fs: %d ficheros, %u/%u bytes usados",
                fs_file_count(), (unsigned) fs_used_bytes(),

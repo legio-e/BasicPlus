@@ -28,7 +28,7 @@ void board_mgr_stm32_boot(void);
  * (V7/H6, #468), como en las otras familias: el instalador pregunta a la zona
  * qué sirve ya con los mismos bytes que la imagen. (En #493 iba detrás: el `stat`
  * del sync de entonces veía la zona y reponía /lib en cada arranque.) */
-void board_mgr_stm32_montar_packs(void);
+int  board_mgr_stm32_montar_packs(void);   /* el gancho de bpvm_pack_montar_arranque (V7/H7) */
 
 /* Estado REAL del boot (para STATE del wire y el gating de FS/RUN en el repl). */
 const bpvm_boot_status_t* board_boot_status(void);

@@ -59,6 +59,15 @@ int bpvm_bmgr_wire_state(const bpvm_bmgr_t* bm) {
 }
 
 /* Construye un ERROR reply en `out`. Devuelve su longitud (siempre un reply válido). */
+/* V7/H7 (Boot 2, fase 1) — POR QUÉ no hay zona. Sin el FS no se monta (la regla de
+ * Eduardo), y eso no es lo mismo que una placa sin partición de packs: decir «sin zona» a
+ * secas mandaba a buscar donde no era (la P4 sin FS ya lo decía así). */
+static const char* sin_zona(const bpvm_bmgr_t* bm, int escribible) {
+    if (bm->live && bm->live->state < BPVM_BOOT_FS)
+        return "la zona de packs no se monta sin el FS: arregla antes el FS";
+    return escribible ? "sin zona de packs escribible" : "sin zona de packs";
+}
+
 static int reply_error(char* out, size_t cap, long id, const char* code, const char* msg) {
     sb_t s; sb_init(&s, out, cap);
     sb_raw(&s, "{\"type\":\"ERROR\",\"id\":"); sb_long(&s, id);
@@ -151,7 +160,22 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         sb_raw(&s, degraded ? "\",\"degraded\":true,\"reason\":\""
                             : "\",\"degraded\":false,\"reason\":\"");
         sb_esc(&s, reason);
-        sb_raw(&s, "\"}");
+        /* V7/H7 (Boot 2, fase 1) — el «casi» de Eduardo: la placa llega a la app, pero la
+         * zona de packs no deja grabar (sin formatear, o la cadena rota). Es de la ZONA, no
+         * de la subida: se lee de la montada, como el PACK_LS. */
+        {
+            char aviso[160];
+            int packs_n = 0;
+            bpvm_zona_estado_t ze = bpvm_pack_zona_estado(bm->packs_base, bm->packs_size,
+                                                          &packs_n, NULL, NULL);
+            if (bpvm_pack_zona_aviso(ze, packs_n, aviso, sizeof aviso)) {
+                sb_raw(&s, "\",\"casi\":true,\"aviso\":\"");
+                sb_esc(&s, aviso);
+                sb_raw(&s, "\"}");
+            } else {
+                sb_raw(&s, "\",\"casi\":false}");
+            }
+        }
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "ENV_LS")) {
@@ -214,7 +238,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         /* H3 — LIST de la zona de packs. Lectura pura (scan de la cadena con
          * verificación de CRCs); las escrituras (BURN/DEL) llegan en su fase. */
         if (!bm->packs_base || bm->packs_size == 0)
-            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs");
+            return reply_error(out, cap, id, "UNSUPPORTED", sin_zona(bm, 0));
         /* #338 — ~1,2 KB que no queremos ni en el stack de la comm task ni
          * permanentes en .bss: salen de la zona compartida y vuelven al acabar
          * de escribir la respuesta (los datos se leen DENTRO de este bloque).
@@ -266,7 +290,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         /* H3 — ficheros DENTRO del pack en `offset` (lo da el PACK_LS previo).
          * Lectura pura; el panel del IDE lo pide al seleccionar un pack. */
         if (!bm->packs_base || bm->packs_size == 0)
-            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs");
+            return reply_error(out, cap, id, "UNSUPPORTED", sin_zona(bm, 0));
         if (!req->has_off || req->off < 0)
             return reply_error(out, cap, id, "INVALID_PARAM", "falta offset");
         /* #338 — de la zona compartida, como el PACK_LS. OJO: esta rama tiene
@@ -302,7 +326,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
          * BEGIN valida+borra y abre sesión; DATA graba según llega; END verifica
          * en flash y ACTIVA (magic al final). */
         if (!bm->packs_base || bm->packs_size == 0 || !bm->packs_flash)
-            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+            return reply_error(out, cap, id, "UNSUPPORTED", sin_zona(bm, 1));
         if (!req->has_size || req->size <= 0)
             return reply_error(out, cap, id, "INVALID_PARAM", "falta size");
         int32_t r = bpvm_pack_burn_begin(bm->packs_base, bm->packs_size, bm->packs_flash,
@@ -350,7 +374,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
     }
     if (!strcmp(type, "PACK_BURN_DATA")) {
         if (!bm->packs_flash)
-            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+            return reply_error(out, cap, id, "UNSUPPORTED", sin_zona(bm, 1));
         if (!req->bulk || req->bulk_len <= 0 || req->bulk_len > BPVM_PACK_BURN_CHUNK)
             return reply_error(out, cap, id, "INVALID_PARAM", "falta bulk (o chunk demasiado grande)");
         int r = bpvm_pack_burn_data(&s_burn, bm->packs_flash,
@@ -362,7 +386,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
     }
     if (!strcmp(type, "PACK_BURN_END")) {
         if (!bm->packs_flash)
-            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+            return reply_error(out, cap, id, "UNSUPPORTED", sin_zona(bm, 1));
         int32_t r = bpvm_pack_burn_end(bm->packs_base, bm->packs_size, &s_burn, bm->packs_flash);
         if (r < 0) return reply_pack_err(out, cap, id, r);
         bpvm_mods_resync();   /* V7/H6 (#468): lo que el pack nuevo sirve igual, fuera de /lib */
@@ -376,7 +400,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
          * PC). En flash real va por RMW de la 1ª página (gotcha ECC del U5:
          * los flags comparten quadword con el magic). */
         if (!bm->packs_base || bm->packs_size == 0 || !bm->packs_flash)
-            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+            return reply_error(out, cap, id, "UNSUPPORTED", sin_zona(bm, 1));
         if (!req->has_off)
             return reply_error(out, cap, id, "INVALID_PARAM", "falta offset");
         /* #338 — la página de RMW sale de la zona compartida: 8 KB que sólo
@@ -408,7 +432,7 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
          * corrupta — correctamente. Borrado EXPLÍCITO con confirmación (como el
          * FORMAT del FS); borra TODOS los packs. Nunca automático. */
         if (!bm->packs_flash || !bm->packs_base || bm->packs_size == 0)
-            return reply_error(out, cap, id, "UNSUPPORTED", "sin zona de packs escribible");
+            return reply_error(out, cap, id, "UNSUPPORTED", sin_zona(bm, 1));
         if (!req->confirm_yes)
             return reply_error(out, cap, id, "INVALID_PARAM", "falta confirm=YES");
         s_burn.active = 0;                       /* una sesión de burn a medias muere aquí */

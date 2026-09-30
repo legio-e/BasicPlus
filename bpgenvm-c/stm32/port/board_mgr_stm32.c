@@ -21,6 +21,7 @@
 #include "stm32_flash.h"         /* stm32_flash_write / erase (compartidas con el FS) */
 #include "flash_layout_stm32.h"  /* BP_ENV_A/B_OFFSET, BP_PART_BASE, BP_USABLE_FLASH, símbolos .ld */
 #include "pack_stm32.h"          /* V7/H6 G5.b0: el bloque de RAM de los motores (PACK_BURN_BEGIN) */
+#include "log.h"                 /* V7/H7: el gancho del montaje dice por qué no hay zona */
 
 #include "main.h"                /* FLASH_BASE */
 #include <stdint.h>
@@ -186,17 +187,21 @@ const bpvm_part_t* board_mgr_stm32_packs(void) {
     return (pp && pp->size > 0) ? pp : NULL;
 }
 
-void board_mgr_stm32_montar_packs(void) {
-    if (s_layout_ok) {
-        const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
-        if (pp && pp->size > 0) {
-            /* La flash del STM32 esta mapeada: la misma direccion sirve para leer
-             * y para ejecutar, asi que va dos veces. */
-            bpvm_pack_mount((const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset),
-                            (const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset),
-                            pp->size);
-        }
+/* V7/H7 (Boot 2, fase 1) — el GANCHO de la familia para bpvm_pack_montar_arranque: dónde
+ * ve la CPU la zona. 1 = montada; 0 = no hay zona (y lo dice). La regla —con el FS— y el
+ * estado de la zona los pone el común. */
+int board_mgr_stm32_montar_packs(void) {
+    const bpvm_part_t* pp = s_layout_ok ? bpvm_part_get(&s_layout, BPVM_PART_PACKS) : NULL;
+    if (!pp || pp->size == 0) {
+        log_printf("packs: sin zona de packs (no hay particion de packs en el reparto)");
+        return 0;
     }
+    /* La flash del STM32 esta mapeada: la misma direccion sirve para leer
+     * y para ejecutar, asi que va dos veces. */
+    bpvm_pack_mount((const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset),
+                    (const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset),
+                    pp->size);
+    return 1;
 }
 
 /* ── ramo del wire (STATE/ENV_x/PART_x): el repl encamina aquí ── */
@@ -261,14 +266,16 @@ void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
     bm.part_base = BP_PART_BASE;
     bm.usable_flash = BP_USABLE_FLASH;   /* tamaño de flash fijo por placa; sin clamp */
     bm.live = &s_boot;                   /* STATE cuenta el estado REAL del boot */
-    /* H3 — zona de packs: XIP directo sobre la partición PACKS del layout del boot
-     * (offset relativo a FLASH_BASE, como el FS). Sin layout válido → sin packs. */
-    if (s_layout_ok) {
-        const bpvm_part_t* pp = bpvm_part_get(&s_layout, BPVM_PART_PACKS);
-        if (pp && pp->size > 0) {
-            bm.packs_base = (const uint8_t*) (uintptr_t) (FLASH_BASE + pp->offset);
-            bm.packs_size = pp->size;
-            s_packs_off   = pp->offset;      /* la cintura de burn escribe aquí */
+    /* H3 — zona de packs: XIP directo sobre la partición PACKS. V7/H7 (Boot 2, fase 1):
+     * la que ve el gestor es la MONTADA —con el FS, la regla del arranque—, no la del
+     * layout: sin FS no hay zona, y PACK_LS dice por qué. */
+    {
+        uint32_t tam = 0;
+        const uint8_t* base = bpvm_pack_mounted(&tam);
+        if (base && tam > 0) {
+            bm.packs_base = base;
+            bm.packs_size = tam;
+            s_packs_off   = (uint32_t) ((uintptr_t) base - FLASH_BASE);   /* la cintura de burn escribe aquí */
             bm.packs_flash = &s_packs_fl;
         }
     }

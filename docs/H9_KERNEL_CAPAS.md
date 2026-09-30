@@ -55,6 +55,18 @@ El arranque normal SUBE 0→1→2→3; un fallo BAJA al último estado bueno y *
   comms + FS vivos y reportas. Aquí vive el *"la app petó pero el aparato sigue
   alcanzable"*.
 
+**La zona de packs, una capa AL LADO** (V7/H7, 30-sep, decidido por Eduardo). No es un
+peldaño: la placa sube a la app haya lo que haya en la zona. Se monta al llegar al FS
+(*«el FS es necesario para el funcionamiento normal del SO, así que si no está bien hay que
+solucionarlo»*), con la misma regla en las cinco familias (`bpvm_pack_montar_arranque`), y
+tiene su propio estado: sin zona, **lista** (vacía o con packs; una zona BORRADA ya es una
+cadena vacía y vale), **sin formatear** (restos de antes: no se puede grabar) o **rota** (la
+cadena se corta tras N packs: ésos sirven, grabar más no). Las dos últimas son el **«casi»**
+de Eduardo —*«no es un error, es correcto; sin embargo tampoco se pueden subir packs, así que
+lo podemos señalar como un estado más, ni totalmente correcto pero casi»*—: `STATE` lleva
+`"casi":true` y el `aviso`, el arranque lo dice en su log y el IDE lo propone al conectar
+(el remedio, «Formatear zona…»).
+
 ## Corolario: el descriptor de PLACA es un artefacto del kernel, no un fichero del FS (Eduardo, 18-jul)
 
 Hoy `board.json` (qué micro, tamaño de flash, si hay PSRAM y cuánta/en qué pin,
@@ -240,7 +252,7 @@ en `bpvm_bmgr` (host-testable, `test-bmgr` 30/30).
 
 | Verbo | Argumentos | Reply | `bpvm_bmgr_*` |
 |---|---|---|---|
-| `STATE` | — | `{state,name,degraded,reason}` | (bpvm_boot_state_report) |
+| `STATE` | — | `{state,name,degraded,reason,casi[,aviso]}` —`casi`, V7/H7: la zona de packs, abajo— | (bpvm_boot_state_report) |
 | `ENV_LS` | — | lista `{key,value}` | `env_count` + `env_pair_at` |
 | `ENV_GET` | `key` | `{value}` o ERROR NOT_FOUND | `env_get` |
 | `ENV_SET` | `key,value` | OK (+ vuelca slot) | `env_set` |

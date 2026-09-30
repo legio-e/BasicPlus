@@ -25,12 +25,14 @@
  * Uso:  bpvm-sim [puerto] [fichero-flash] [flashSizeBytes]        (posicional)
  *       bpvm-sim [--port=N] [--flash-file=F] [--flash=N] [--mem=N] [--psram=N]
  *                [--fs=IMG] [--fs-size=N] [--board=NOMBRE] [--screen=WxH]
- *                [--no-screen] [--pack=F]...
+ *                [--no-screen] [--pack=F]... [--zona-sucia]
  *   defaults: 127.0.0.1:5099, "boardsim.flash", 4 MB de flash, 512 KiB de RAM,
  *             imagen de FS "<fichero-flash>.fs".
  *   --pack=<f.pack> (repetible): "graba" la imagen en la zona de packs simulada
  *   (región RAM, 0xFF = NOR virgen) para que PACK_LS la liste y los imports
  *   resuelvan XIP, igual que el --pack= de la VM-C host.
+ *   --zona-sucia: la zona empieza con RESTOS (como una partición recién creada sobre
+ *   flash usada): está sin formatear, y el micro llega a la app en «casi» (V7/H7).
  *
  * Ver docs/BPVM_WIRE_PROTOCOL.md (catálogo de mensajes) y
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
@@ -145,6 +147,10 @@ static const char* g_flash_path = "boardsim.flash";
  * Se precarga con los --pack= y PACK_LS la sirve por el dispatch compartido. */
 #define PACKS_REGION_SIZE (1024u * 1024u)
 static uint8_t* g_packs = NULL;   /* tallada dentro del buffer de la VM (ver main) */
+/* V7/H7 (Boot 2, fase 1) — el gancho del montaje (como el XIP fijo de la Pico y la STM32)
+ * y la línea del log: la regla y el estado de la zona los pone el común. */
+static int  sim_montar_packs(void);
+static void sim_log_linea(const char* l) { fprintf(stderr, "sim: %s\n", l); }
 
 /* ── H10: el "silicio" configurable ─────────────────────────────────────────
  * Son los mimbres que el IDE deja tocar: la RAM que gestiona la VM, la PSRAM
@@ -1109,11 +1115,13 @@ int main(int argc, char** argv) {
     const char* fs_img_arg = NULL;
     size_t fs_size_arg = 0;
     const char* packs[8]; int n_packs = 0;
+    int zona_sucia = 0;
     int port = 5099;
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
         if (!strncmp(a, "--pack=", 7))            { if (n_packs < 8) packs[n_packs++] = a + 7; }
+        else if (!strcmp(a, "--zona-sucia"))      zona_sucia = 1;   /* V7/H7: el «casi» */
         else if (!strncmp(a, "--port=", 7))       port = atoi(a + 7);
         else if (!strncmp(a, "--flash-file=", 13)) g_flash_path = a + 13;
         else if (!strncmp(a, "--flash=", 8))      g_flash_size = (uint32_t) parse_size(a + 8);
@@ -1174,16 +1182,15 @@ int main(int argc, char** argv) {
     if (fuera > 0)
         fprintf(stderr, "sim: %d pack(s) fuera y %d cargado(s) — el simulador"
                         " arranca igual con los que si caben\n", fuera, cargados);
-    bpvm_pack_mount(g_packs, g_packs, PACKS_REGION_SIZE);
+    if (zona_sucia) memset(g_packs, 0x5A, 64);   /* restos: el byte 0 no es BPAK ni 0xFF */
+    /* (V7/H7: la zona se monta DESPUÉS del FS, con la regla común; ver abajo.) */
 
     /* --- "flash" del env (A/B) + gestor de placa --- */
     flash_load();
     g_bm.a = g_a; g_bm.b = g_b; g_bm.scratch = g_scratch; g_bm.sector = SECTOR;
     g_bm.part_base = PART_BASE;
     g_bm.usable_flash = bpvm_part_usable_flash(g_flash_size, 0);
-    g_bm.packs_base = g_packs;
-    g_bm.packs_size = PACKS_REGION_SIZE;
-    g_bm.packs_flash = &g_packs_fl;
+    g_bm.packs_flash = &g_packs_fl;   /* la zona que ve el gestor: la montada (tras el FS) */
 
     /* --- FS: littlefs sobre una imagen en fichero (MISMO motor que el micro).
      * El tamaño sale de la partición FS si la placa ya está provisionada; si no
@@ -1198,6 +1205,10 @@ int main(int argc, char** argv) {
         fprintf(stderr, "sim: no se pudo montar el FS sobre %s\n", g_fs_img);
         return 1;
     }
+    /* V7/H7 (Boot 2, fase 1) — la zona, con el FS y por la regla común (como las placas),
+     * y el gestor la ve MONTADA. Antes se montaba antes del FS y sin regla. */
+    (void) bpvm_pack_montar_arranque(1, sim_montar_packs, sim_log_linea);
+    g_bm.packs_base = bpvm_pack_mounted(&g_bm.packs_size);
     bpvm_repl_set_ops(&SIM_REPL_OPS);   /* U3.24: la cintura, antes del primer mensaje */
     /* V7/H3 — la SD, como una placa con ranura: registrar y montar en el arranque, ENCIMA del FS. */
     if (g_sd_path) {
@@ -1290,4 +1301,9 @@ int main(int argc, char** argv) {
         g_cli = BAD_SOCK;
         printf("%s: cliente desconectado\n", SERVER_NAME); fflush(stdout);
     }
+}
+
+static int sim_montar_packs(void) {
+    bpvm_pack_mount(g_packs, g_packs, PACKS_REGION_SIZE);
+    return 1;
 }

@@ -27,6 +27,7 @@
 #include "esp_eth.h"
 #include "esp_event.h"
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
+#include "bpvm_pack.h"          /* V7/H7 (Boot 2, fase 1): el montaje de la zona y su estado, comunes */
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
 #include "bpvm.h"              /* #353: bpvm_diag_set_sink — el rastro de la VM al log */
 #include "bpvm_sqlmem.h"       /* V5/H7: la REGLA del bloque de la BD (un solo sitio) */
@@ -301,6 +302,8 @@ static void p4_sd_arranque(int con_fs)
     else        log_printf("sd: el FS de la placa no esta montado - /sd no se monta (SD_INFO si contesta)");
 }
 
+static void diag_al_log(const char* linea);   /* V7/H7: la línea del montaje de packs (definida abajo) */
+
 #ifdef BPVM_P4_WIRE_TCP
 /* ---- Servidor del wire v1: la VM corre AQUÍ (stack holgado). ----
  * Prepara FS + stdlib (independiente del canal de log), abre el socket de
@@ -316,7 +319,9 @@ static void wire_task(void *arg)
     const bpvm_boot_status_t* bs = board_boot_status();
     /* V7/H6 (#468) — la zona ANTES que la stdlib: el instalador pregunta qué sirve ya
      * con los mismos bytes que la imagen (ver el mapeo, más abajo). */
-    if (bs->state >= BPVM_BOOT_FS) (void) pack_esp32_mapear();
+    /* V7/H7 (Boot 2, fase 1) — el montaje y el estado de la zona, comunes: con el FS
+     * (la regla de Eduardo), y la línea que dice lista o el «casi». */
+    (void) bpvm_pack_montar_arranque(bs->state >= BPVM_BOOT_FS, board_mgr_esp32_mapear_packs, diag_al_log);
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
     p4_sd_arranque(bs->state >= BPVM_BOOT_FS);   /* V5/H6 → V7/H3: registra siempre; monta con el FS */
     /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
@@ -371,7 +376,9 @@ static void wire_task_uart(void *arg)
     const bpvm_boot_status_t* bs = board_boot_status();
     /* V7/H6 (#468) — la zona ANTES que la stdlib: el instalador pregunta qué sirve ya
      * con los mismos bytes que la imagen (ver el mapeo, más abajo). */
-    if (bs->state >= BPVM_BOOT_FS) (void) pack_esp32_mapear();
+    /* V7/H7 (Boot 2, fase 1) — el montaje y el estado de la zona, comunes: con el FS
+     * (la regla de Eduardo), y la línea que dice lista o el «casi». */
+    (void) bpvm_pack_montar_arranque(bs->state >= BPVM_BOOT_FS, board_mgr_esp32_mapear_packs, diag_al_log);
     if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
     p4_sd_arranque(bs->state >= BPVM_BOOT_FS);   /* V5/H6 → V7/H3: registra siempre; monta con el FS */
     /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace

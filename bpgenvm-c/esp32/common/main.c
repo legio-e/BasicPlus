@@ -28,6 +28,7 @@
 #include "pack_esp32.h"        /* V7/H6: el pack nativo, común a la familia */
 #include "bpvm_bios.h"         /* bpvm_bios_slot_count */
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
+#include "bpvm_pack.h"          /* V7/H7 (Boot 2, fase 1): el montaje de la zona y su estado, comunes */
 #include "bpvm_bus.h"          /* V7/H6.c G4.a1: los buses del ENV */
 #include "bpvm_env.h"
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
@@ -281,8 +282,13 @@ void app_main(void)
      * @0x4208c000 | DATA ok @0x4208c000`) devuelve la MISMA. Lo que sí tiene dos
      * direcciones en el C3 es la SRAM, y eso es `#565` (arriba).
      *
-     * Si no hay zona, dice por que y se sigue: una placa sin packs arranca igual. */
-    (void) board_mgr_esp32_mapear_packs();
+     * Si no hay zona, dice por que y se sigue: una placa sin packs arranca igual.
+     *
+     * V7/H7 (Boot 2, fase 1) — la regla y el estado, comunes (bpvm_pack_montar_arranque):
+     * se monta CON EL FS (Eduardo, 30-sep; antes aquí bastaban las particiones), y se dice
+     * el estado de la zona —lista, o el «casi»: sin formatear o con la cadena rota—. */
+    (void) bpvm_pack_montar_arranque(board_boot_status()->state >= BPVM_BOOT_FS,
+                                     board_mgr_esp32_mapear_packs, diag_al_log);
     if (board_boot_status()->state >= BPVM_BOOT_FS) {
         fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
         esp32_mods_install();  /* stdlib core embebida -> /lib, salvo lo que ya sirva la zona (#468) */

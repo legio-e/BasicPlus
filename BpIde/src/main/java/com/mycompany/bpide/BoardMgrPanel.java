@@ -186,7 +186,9 @@ public final class BoardMgrPanel extends JPanel {
         updatingUi = true;
         try {
             stateLabel.setText("estado " + st.state + " — " + st.name
-                    + (st.degraded ? "  ⚠ DEGRADADO: " + st.reason : ""));
+                    + (st.degraded ? "  ⚠ DEGRADADO: " + st.reason : "")
+                    // V7/H7 (Boot 2, fase 1): el «casi»; el remedio está en la pestaña de packs
+                    + (st.casi ? "  · casi: " + st.aviso + " → «Formatear zona…» en Packs" : ""));
 
             // tabla de particiones (solo lectura): el layout actual
             partModel.setRowCount(0);

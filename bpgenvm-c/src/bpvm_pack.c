@@ -461,6 +461,66 @@ int bpvm_pack_listar(const uint8_t* base, uint32_t region_size,
     return n;
 }
 
+/* ── V7/H7 (Boot 2, fase 1) — el estado de la zona y el montaje (ver bpvm_pack.h) ── */
+
+bpvm_zona_estado_t bpvm_pack_zona_estado(const uint8_t* base, uint32_t size,
+                                         int* packs, int* vivos, uint32_t* libres) {
+    if (packs)  *packs  = 0;
+    if (vivos)  *vivos  = 0;
+    if (libres) *libres = 0;
+    if (!base || size == 0) return BPVM_ZONA_SIN;
+    uint32_t end = 0;
+    bpvm_pack_listado_t lst;
+    (void) bpvm_pack_listar(base, size, NULL, 0, /*verify_content=*/0, &end, &lst);
+    if (packs) *packs = lst.total;
+    if (vivos) *vivos = lst.vivos;
+    if (end == BPVM_PACK_NO_SPACE)   /* no hay punto de append: o restos desde el byte 0, o una cadena que se corta */
+        return lst.total == 0 ? BPVM_ZONA_SIN_FORMATEAR : BPVM_ZONA_ROTA;
+    if (libres) *libres = size - end;
+    return BPVM_ZONA_LISTA;
+}
+
+int bpvm_pack_zona_aviso(bpvm_zona_estado_t e, int packs, char* buf, size_t cap) {
+    if (!buf || cap == 0) return 0;
+    buf[0] = '\0';
+    if (e == BPVM_ZONA_SIN_FORMATEAR)
+        snprintf(buf, cap, "la zona de packs está sin formatear (restos de antes): no se pueden subir packs");
+    else if (e == BPVM_ZONA_ROTA)
+        snprintf(buf, cap, "la cadena de packs se corta tras %d pack(s): ésos sirven, pero no se pueden "
+                           "subir más", packs);
+    else
+        return 0;
+    return 1;
+}
+
+bpvm_zona_estado_t bpvm_pack_montar_arranque(int fs_montado, int (*mapear)(void),
+                                             void (*log)(const char* linea)) {
+    char l[256];   /* lo que cabe en una línea del log */
+    if (!fs_montado) {
+        if (log) log("packs: la zona no se monta sin el FS (lo primero es arreglar el FS)");
+        return BPVM_ZONA_SIN;
+    }
+    if (!mapear || !mapear()) return BPVM_ZONA_SIN;         /* no hay zona: la familia ya dijo por qué */
+    uint32_t size = 0;
+    const uint8_t* base = bpvm_pack_mounted(&size);
+    int packs = 0, vivos = 0;
+    uint32_t libres = 0;
+    bpvm_zona_estado_t e = bpvm_pack_zona_estado(base, size, &packs, &vivos, &libres);
+    if (e == BPVM_ZONA_LISTA) {
+        snprintf(l, sizeof l, "packs: zona lista, %d pack(s) (%d vivo(s)), %lu KB libres de %lu", packs, vivos,
+                 (unsigned long) (libres / 1024u), (unsigned long) (size / 1024u));
+    } else if (e == BPVM_ZONA_SIN) {
+        snprintf(l, sizeof l, "packs: la familia dijo que había zona, pero no quedó montada");
+    } else {
+        char aviso[120];   /* el más largo, ~92 B */
+        (void) bpvm_pack_zona_aviso(e, packs, aviso, sizeof aviso);
+        snprintf(l, sizeof l, "packs: CASI — %s. Se arregla formateándola («Formatear zona…» en el IDE)%s",
+                 aviso, (e == BPVM_ZONA_ROTA) ? ", que borra también los que sirven" : "");
+    }
+    if (log) log(l);
+    return e;
+}
+
 int bpvm_pack_entries_src(const bpvm_pack_src_t* src, uint32_t pack_off,
                           bpvm_pack_entry_t* out, int max) {
     bpvm_pack_info_t info;

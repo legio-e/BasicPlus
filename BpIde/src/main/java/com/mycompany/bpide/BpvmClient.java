@@ -1188,8 +1188,15 @@ public final class BpvmClient implements AutoCloseable {
         public final String name;
         public final boolean degraded;
         public final String reason;
-        public BoardState(int state, String name, boolean degraded, String reason) {
+        /** V7/H7 (Boot 2, fase 1) — el «casi» de Eduardo: la placa llega a la app pero la
+         *  zona de packs no deja grabar (sin formatear, o la cadena rota). Una imagen
+         *  anterior no lo manda: false. */
+        public final boolean casi;
+        public final String aviso;
+        public BoardState(int state, String name, boolean degraded, String reason,
+                          boolean casi, String aviso) {
             this.state = state; this.name = name; this.degraded = degraded; this.reason = reason;
+            this.casi = casi; this.aviso = aviso;
         }
     }
 
@@ -1278,7 +1285,9 @@ public final class BpvmClient implements AutoCloseable {
         return new BoardState((int) Json.getLong(r, "state", -1),
                 Json.getString(r, "name", "?"),
                 Json.getBool(r, "degraded", false),
-                Json.getString(r, "reason", ""));
+                Json.getString(r, "reason", ""),
+                Json.getBool(r, "casi", false),
+                Json.getString(r, "aviso", ""));
     }
 
     /** ENV_LS — todas las variables de entorno (la tabla nombre|valor). */

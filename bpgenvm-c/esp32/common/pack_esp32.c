@@ -79,11 +79,6 @@ static int hay_algun_pack(const uint8_t* base, uint32_t bytes) {
     return n > 0;
 }
 
-int32_t pack_esp32_mapear(void)
-{
-    return mapear_zona() ? 0 : -1;
-}
-
 /*
  * ─── POR QUÉ UN MOTOR NO SE CARGA, CON LOS NÚMEROS ───
  *

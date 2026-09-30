@@ -82,13 +82,6 @@ extern int      s_pack_ram_res;     /* bpvm_sqlite_res_t: por qué hay o no hay 
 void    pack_esp32_ram_init(void);
 
 /*
- * Mapea la zona de packs y la PUBLICA (para el IDE y para que se vean los .mod
- * y .mdn que lleve dentro). Lo llama el arranque; es barato y no salta a nada.
- * 0 si la zona quedó mapeada, -1 si no hay zona o falló el mapeo.
- */
-int32_t pack_esp32_mapear(void);
-
-/*
  * Carga y ejecuta los packs nativos de la zona (V7/H6.c G1: TODOS los motores
  * cargables, en orden de cadena). Se dispara en el primer `Run` (ver
  * repl_esp32.c): es el único paso que puede colgar, y un cuelgue en el

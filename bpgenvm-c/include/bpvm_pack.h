@@ -22,6 +22,7 @@
 #define BPVM_PACK_H
 
 #include <stdint.h>
+#include <stddef.h>   /* size_t: el aviso del estado de la zona (V7/H7) */
 
 #ifdef __cplusplus
 extern "C" {
@@ -206,6 +207,39 @@ int bpvm_pack_listar(const uint8_t* base, uint32_t region_size,
                      bpvm_pack_info_t* out, int max,
                      int verify_content, uint32_t* end_off,
                      bpvm_pack_listado_t* r);
+
+/* ── V7/H7 (Boot 2, fase 1; 30-sep) — EL ESTADO DE LA ZONA, y el montaje, comunes ─────
+ *
+ * La placa sube a la app haya lo que haya en la zona: los packs son una capa AL LADO de
+ * la subida, no un peldaño. Eduardo (30-sep): la zona sin formatear *«no es un error, es
+ * correcto; sin embargo tampoco se pueden subir packs, así que lo podemos señalar como un
+ * estado más, ni totalmente correcto pero casi»*. El estado es de la ZONA y sale de la
+ * cadena: formatear no deja cabecera, así que una zona BORRADA (0xFF) ya es una cadena
+ * vacía y válida; la que no se puede usar es la que tiene RESTOS de antes. */
+typedef enum {
+    BPVM_ZONA_SIN = 0,        /* no hay zona montada: sin partición de packs, o sin FS */
+    BPVM_ZONA_SIN_FORMATEAR,  /* no es una cadena de packs (restos de antes): no se graba */
+    BPVM_ZONA_ROTA,           /* la cadena se corta tras N packs buenos: ésos sirven; grabar más, no */
+    BPVM_ZONA_LISTA           /* vacía o con packs, y la cadena entera */
+} bpvm_zona_estado_t;
+
+/* El estado de una región (la montada: bpvm_pack_mounted). `packs`, `vivos` y `libres`,
+ * opcionales. Sólo lee cabeceras: lo que cuesta un LIST normal. */
+bpvm_zona_estado_t bpvm_pack_zona_estado(const uint8_t* base, uint32_t size,
+                                         int* packs, int* vivos, uint32_t* libres);
+
+/* El «casi»: 1 y el aviso para quien lo lea (el log del arranque, STATE, el IDE) si la
+ * zona no deja grabar packs; 0 si no hay nada que decir (sin zona es una placa sin packs,
+ * y lista es lista). */
+int bpvm_pack_zona_aviso(bpvm_zona_estado_t e, int packs, char* buf, size_t cap);
+
+/* MONTAR la zona en el arranque, la misma regla en las cinco familias: con el FS
+ * (Eduardo, 30-sep: *«el FS es necesario para el funcionamiento normal del SO, así que si
+ * no está bien hay que solucionarlo»*). `mapear` es de la familia —dónde ve la CPU la
+ * zona: XIP fijo, o el mapeo de la MMU— y llama a bpvm_pack_mount; devuelve 0 si no hay
+ * zona, y ya ha dicho por qué. Aquí se decide si se monta y se dice el estado, una línea. */
+bpvm_zona_estado_t bpvm_pack_montar_arranque(int fs_montado, int (*mapear)(void),
+                                             void (*log)(const char* linea));
 
 /* Entradas del pack que empieza en pack_off (previamente localizado con scan).
  * Devuelve el nº de entradas (puede ser > max) o -1 si la cabecera no valida. */

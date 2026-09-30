@@ -147,6 +147,15 @@ static int fl_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) {
     return 0;
 }
 
+/* V7/H7 (Boot 2, fase 1) — el gancho de montaje de la familia, en host: monta la región
+ * de prueba y cuenta cuántas veces se le llama; y el log, que se queda con la última línea. */
+static uint8_t* g_montar_z = NULL;
+static int      g_mapeos   = 0;
+static char     g_linea[256];
+static int  montar_z(void)        { g_mapeos++; bpvm_pack_mount(g_montar_z, g_montar_z, REGION); return 1; }
+static int  sin_zona_gancho(void) { return 0; }
+static void guarda_linea(const char* l) { snprintf(g_linea, sizeof g_linea, "%s", l); }
+
 int main(void) {
     printf("=== test_pack (H3 zona de packs) ===\n");
 
@@ -771,6 +780,105 @@ int main(void) {
                   "#539 el peor caso (16 filas de nombre 32 y version 16) cabe en 4 KB con margen");
             printf("        (peor caso: %d B de 4096)\n", nr);
         }
+    }
+
+    /* --- 15. V7/H7 (Boot 2, fase 1; 30-sep) — EL ESTADO DE LA ZONA y el «casi» de Eduardo:
+     * la zona sin formatear «no es un error, es correcto; sin embargo tampoco se pueden subir
+     * packs». Formatear no deja cabecera: una zona BORRADA es una cadena vacía y vale; la que
+     * no vale es la de RESTOS. Y la regla del montaje: con el FS. --- */
+    {
+        static uint8_t z[REGION];
+        int np = -1, nv = -1;
+        uint32_t lib = 0;
+        char av[200];
+
+        CHECK(bpvm_pack_zona_estado(NULL, REGION, &np, &nv, &lib) == BPVM_ZONA_SIN && np == 0,
+              "15.a sin zona montada: SIN");
+
+        memset(z, 0xFF, sizeof z);
+        CHECK(bpvm_pack_zona_estado(z, REGION, &np, &nv, &lib) == BPVM_ZONA_LISTA && np == 0 && lib == REGION,
+              "15.b zona borrada (0xFF): LISTA, 0 packs y toda libre —ya es una cadena vacia—");
+        CHECK(!bpvm_pack_zona_aviso(BPVM_ZONA_LISTA, 0, av, sizeof av) && av[0] == '\0',
+              "15.b lista: sin aviso");
+
+        memset(z, 0x5A, 64);   /* restos de antes (un FS viejo, otra imagen): el byte 0 no es BPAK ni 0xFF */
+        CHECK(bpvm_pack_zona_estado(z, REGION, &np, &nv, &lib) == BPVM_ZONA_SIN_FORMATEAR && np == 0 && lib == 0,
+              "15.c restos desde el byte 0: SIN_FORMATEAR, y nada libre (no hay donde grabar)");
+        CHECK(bpvm_pack_zona_aviso(BPVM_ZONA_SIN_FORMATEAR, 0, av, sizeof av)
+              && strstr(av, "sin formatear") && strstr(av, "no se pueden subir packs"),
+              "15.c el aviso del casi: sin formatear, no se pueden subir packs");
+
+        CHECK(monta_cadena(z, REGION, fixA, "VB") == 2, "15.d dos packs grabados (uno vivo, uno borrado)");
+        CHECK(bpvm_pack_zona_estado(z, REGION, &np, &nv, &lib) == BPVM_ZONA_LISTA && np == 2 && nv == 1
+              && lib == REGION - 2u * FIX_SIZE,
+              "15.d cadena entera: LISTA, 2 packs, 1 vivo, y lo libre detras");
+        memset(z + 2u * FIX_SIZE, 0x5A, 64);   /* y detras, restos */
+        CHECK(bpvm_pack_zona_estado(z, REGION, &np, &nv, &lib) == BPVM_ZONA_ROTA && np == 2,
+              "15.e restos detras de dos packs: ROTA (esos sirven, grabar mas no)");
+        CHECK(bpvm_pack_zona_aviso(BPVM_ZONA_ROTA, np, av, sizeof av) && strstr(av, "se corta tras 2 pack(s)"),
+              "15.e el aviso dice cuantos sirven");
+
+        /* El STATE lleva el casi, leido de la zona que el gestor ve (la montada). */
+        static uint8_t eA[4096], eB[4096], eS[4096];
+        memset(eA, 0xFF, sizeof eA); memset(eB, 0xFF, sizeof eB);
+        bpvm_bmgr_t bm;
+        memset(&bm, 0, sizeof bm);
+        bm.a = eA; bm.b = eB; bm.scratch = eS; bm.sector = 4096u;
+        bpvm_bmgr_req_t rq;
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "STATE"); rq.id = 7;
+        char rep[1024];
+        int slot = -9;
+        memset(z, 0xFF, sizeof z); memset(z, 0x5A, 64);
+        bm.packs_base = z; bm.packs_size = REGION;
+        int nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "\"casi\":true") && strstr(rep, "sin formatear"),
+              "15.f STATE con la zona sin formatear: casi, con el aviso");
+        memset(z, 0xFF, sizeof z);
+        nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "\"casi\":false") && !strstr(rep, "aviso"),
+              "15.f STATE con la zona lista: casi false, sin aviso");
+        bm.packs_base = NULL; bm.packs_size = 0;
+        nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "\"casi\":false"), "15.f STATE sin zona: una placa sin packs no es un casi");
+
+        /* Sin zona, el PACK_LS dice POR QUE: sin el FS no se monta (no es «no hay partición»). */
+        bpvm_boot_status_t vivo;
+        memset(&vivo, 0, sizeof vivo);
+        vivo.state = BPVM_BOOT_PARTITIONS; vivo.degraded = 1;
+        bm.live = &vivo;
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_LS"); rq.id = 8;
+        nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "no se monta sin el FS"), "15.g sin FS, PACK_LS dice que falta el FS");
+        vivo.state = BPVM_BOOT_APP; vivo.degraded = 0;
+        nr = bpvm_bmgr_wire_dispatch(&bm, &rq, rep, sizeof rep, &slot);
+        CHECK(nr > 0 && strstr(rep, "sin zona de packs") && !strstr(rep, "FS"),
+              "15.g con FS y sin zona: sin zona de packs, a secas");
+    }
+
+    /* --- 16. La regla del montaje en el arranque, comun: con el FS; el gancho es de la familia. --- */
+    {
+        static uint8_t z[REGION];
+        g_montar_z = z;
+        g_linea[0] = '\0'; g_mapeos = 0;
+        CHECK(bpvm_pack_montar_arranque(0, montar_z, guarda_linea) == BPVM_ZONA_SIN && g_mapeos == 0
+              && strstr(g_linea, "no se monta sin el FS"),
+              "16.a sin FS: no se llama al gancho de la familia, y se dice por que");
+        memset(z, 0xFF, sizeof z); memset(z, 0x5A, 64);
+        g_linea[0] = '\0';
+        CHECK(bpvm_pack_montar_arranque(1, montar_z, guarda_linea) == BPVM_ZONA_SIN_FORMATEAR && g_mapeos == 1
+              && strstr(g_linea, "CASI") && strstr(g_linea, "Formatear zona"),
+              "16.b con FS y restos: se monta, y la linea dice el casi y el remedio");
+        memset(z, 0xFF, sizeof z);
+        g_linea[0] = '\0';
+        CHECK(bpvm_pack_montar_arranque(1, montar_z, guarda_linea) == BPVM_ZONA_LISTA
+              && strstr(g_linea, "zona lista, 0 pack(s)"),
+              "16.c con FS y la zona borrada: lista");
+        g_linea[0] = '\0';
+        CHECK(bpvm_pack_montar_arranque(1, sin_zona_gancho, guarda_linea) == BPVM_ZONA_SIN && g_linea[0] == '\0',
+              "16.d el gancho dice que no hay zona: SIN, y la linea es suya (el comun no repite)");
+        bpvm_pack_mount(NULL, NULL, 0);   /* no dejar montada una zona de pila para lo que venga */
     }
 
 done:

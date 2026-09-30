@@ -190,16 +190,17 @@ void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
     /* STATE cuenta el estado REAL alcanzado por el boot (no el plan del env). */
     bm.live = board_boot_status();
 
-    /* #327 — zona de packs: XIP directo sobre la partición PACKS del layout del
-     * BOOT (el mismo que conduce el FS: una sola verdad). Sin layout válido o
-     * con la partición a 0 → sin packs, y el LS lo dice en vez de callarse. */
-    const bpvm_part_layout_t* lay = board_partitions();
-    if (lay) {
-        const bpvm_part_t* pp = bpvm_part_get(lay, BPVM_PART_PACKS);
-        if (pp && pp->size > 0) {
-            bm.packs_base  = (const uint8_t*) (uintptr_t) (XIP_BASE + pp->offset);
-            bm.packs_size  = pp->size;
-            s_packs_off    = pp->offset;      /* la cintura de burn escribe aquí */
+    /* #327 — zona de packs: XIP directo sobre la partición PACKS. V7/H7 (Boot 2, fase 1):
+     * la que ve el gestor es la MONTADA —con el FS, la regla del arranque—, no la del
+     * layout. Antes era la del layout, y con el FS caído PACK_LS enseñaba una zona que no
+     * estaba montada (e INFO decía packsBytes=0). Sin zona, el LS dice por qué. */
+    {
+        uint32_t tam = 0;
+        const uint8_t* base = bpvm_pack_mounted(&tam);
+        if (base && tam > 0) {
+            bm.packs_base  = base;
+            bm.packs_size  = tam;
+            s_packs_off    = (uint32_t) ((uintptr_t) base - XIP_BASE);   /* la cintura de burn escribe aquí */
             bm.packs_flash = &s_packs_fl;
         }
     }

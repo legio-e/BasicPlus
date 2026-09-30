@@ -804,12 +804,15 @@ public class FrmMain extends javax.swing.JFrame
             } catch (java.io.IOException e) {
                 return;   // el device no soporta STATE → no es una placa H9, silencio
             }
-            if (st.state >= 3 && !st.degraded) return;   // ya configurada y sana
+            if (st.state >= 3 && !st.degraded && !st.casi) return;   // ya configurada y sana
             SwingUtilities.invokeLater(() -> {
                 String msg = (st.state == 0)
                         ? "Esta placa está sin configurar (estado 0 — kernel).\n¿Abrir la ventana de gestión de placa?"
                         : "La placa está en estado " + st.state + " (" + st.name + ")"
-                          + (st.degraded ? " y DEGRADADA" : "") + ".\n¿Abrir la ventana de gestión de placa?";
+                          + (st.degraded ? " y DEGRADADA" : "")
+                          // V7/H7 (Boot 2, fase 1): el «casi» —la app va, pero la zona de packs no deja grabar—
+                          + (!st.degraded && st.casi ? ", CASI:\n" + st.aviso : "")
+                          + ".\n¿Abrir la ventana de gestión de placa?";
                 int r = JOptionPane.showConfirmDialog(this, msg, "Gestión de placa",
                         JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
                 if (r == JOptionPane.YES_OPTION) openBoardManager();

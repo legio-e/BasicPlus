@@ -87,7 +87,9 @@ int32_t pack_pico_cargar(void);
  * hoy la zona solo se montaba en el primer RUN (pack_pico_cargar): desde que no
  * se disfraza de /app, el IDE pregunta STAT name= ANTES del primer Run y sin
  * zona montada veia NOT_FOUND, subia la stdlib a /lib y el pack quedaba
- * eclipsado en todos los arranques. */
-void pack_pico_montar(void);
+ * eclipsado en todos los arranques.
+ * V7/H7 (Boot 2, fase 1) — es el GANCHO de bpvm_pack_montar_arranque: 1 = montada; 0 = no
+ * hay zona (y lo dice). La regla —con el FS— y el estado de la zona los pone el común. */
+int  pack_pico_montar(void);
 
 #endif /* PACK_PICO_H */

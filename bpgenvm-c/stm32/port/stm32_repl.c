@@ -1005,10 +1005,12 @@ void stm32_repl_run(void) {
     const bpvm_boot_status_t* bs = board_boot_status();
     log_printf("boot: estado %d (%s)%s%s", (int) bs->state, bpvm_boot_state_name(bs->state),
                bs->degraded ? " DEGRADED: " : "", bs->degraded ? bs->reason : "");
-    /* V7/H2 (#493) — la zona de packs, fuera del gate del FS: sólo necesita las
-     * particiones. V7/H6 (#468) — y ANTES que la stdlib: el instalador pregunta a la
-     * zona qué sirve ya con los mismos bytes que la imagen. */
-    board_mgr_stm32_montar_packs();
+    /* V7/H6 (#468) — la zona ANTES que la stdlib: el instalador pregunta a la zona qué
+     * sirve ya con los mismos bytes que la imagen. V7/H7 (Boot 2, fase 1) — y con el FS
+     * (Eduardo, 30-sep; antes aquí bastaban las particiones): la regla y el estado de la
+     * zona, comunes. */
+    (void) bpvm_pack_montar_arranque(bs->state >= BPVM_BOOT_FS, board_mgr_stm32_montar_packs,
+                                     stm32_mods_log);
     /* stdlib core embebida en /lib SOLO con el FS montado (si el climb no llegó al
      * FS, no hay dónde instalarla; el host configura particiones primero). */
     if (bs->state >= BPVM_BOOT_FS) {
