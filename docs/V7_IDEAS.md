@@ -3120,6 +3120,73 @@ los dos cambios (le quedan ~129 KB para `malloc`); no se ha grabado: no estaba c
 De paso (`64487df4`): el aviso del arranque de la ESP32 «el asignador solo dio 6653 KB de los 6653 planificados» (en la
 C5) era falso —comparaba el bloque pedido, en KB enteros, con el plan sin redondear—.
 
+## H7 — Boot 2 y el montaje de packs: lo que hay y la propuesta (30-sep, noche)
+
+Eduardo respondió a las tres preguntas del mapa (arriba, en su fila): la zona sin formatear *«no es un error, es
+correcto; sin embargo tampoco se pueden subir packs, así que lo podemos señalar como un estado más, ni totalmente
+correcto pero casi»*; montar exige el FS; y se unifican el montaje, el cargador y el bloque de RAM. Lo que hay hoy,
+leído en el código de las cinco familias (Pico, ESP32, P4 —con sus dos transportes—, STM32 y el micro simulado):
+
+**El montaje.** El único común es `bpvm_pack_mount` (guarda la base y el tamaño; no lee la zona). Cada familia
+lo envuelve a su manera y con su condición: la ESP32 y la STM32 montan con sólo las particiones; la Pico y la P4,
+con el FS (lo que decidió Eduardo). De ahí dos incoherencias: en la Pico sin FS, `PACK_LS` enseña la zona que no
+está montada (e INFO dice `packsBytes=0`); en la P4 sin FS, `PACK_LS` y `PACK_FORMAT` dicen «sin zona».
+
+**Qué es «sin formatear».** La zona no tiene cabecera: la cadena de packs empieza en el byte 0. Una zona BORRADA
+(`0xFF`) ya es una cadena vacía y válida —se puede grabar—; lo que Eduardo llama sin formatear es la que tiene
+RESTOS de antes: la cadena no es válida y grabar da `NO_SPACE`. Hoy el arranque no lo dice; `PACK_LS` sí
+(`chainOk:false`), y en el primer RUN el log dice «la zona no tiene ningún pack grabado», el mismo texto que con
+una zona vacía. Y un pack cuyo motor no carga sólo se ve con `LOG_DUMP`.
+
+**El cargador.** La validación ya es común (`bpvm_npack.c`: la escalera, el tope y el reparto de G1; y
+`bpvm_bios.c`: `publica`/`busca` y la arena). Lo triplicado es el orquestador de cada familia —unas 160 líneas
+iguales por copia: la cola de `cargar`, el núcleo de `saltar`, lo común de `explicar`—; lo propio de verdad son 8
+líneas en la Pico, 14 en la STM32 y 30 en la ESP32. La guarda «cargar una vez» vive en el REPL de cada una, y la
+dispara el primer RUN (la Pico) o el primer RUN o INFO (la ESP32 y la STM32). Y un hueco latente: el ancla de la
+BIOS apunta al cargador SIN la guarda —hoy no lo llama nadie; si alguien lo hiciera, volvería a copiar `.data` y
+`.bss` encima de un motor vivo—.
+
+**El bloque de RAM.** Tres reglas: la ESP32 y la STM32 leen `packRam=` (KB, redondeado a 4 KB) y si no `SQLite=`
+(MB); la Pico, sólo `SQLite=`. Y dos sitios: en la Pico y la STM32 sale del plan de memoria común; en la ESP32 y la
+P4, de una reserva aparte, antes del heap.
+
+**El Boot 2.** Cinco copias del mismo esqueleto con órdenes distintos. Dos fallos de paso: la P4 por TCP no aplica
+`stack=`, `quantum=` ni `log=` (el camino UART sí); y el autorun de la STM32 no mira si la placa llegó a la app sin
+degradar (las otras tres, sí).
+
+### La propuesta
+
+**El «casi» de Eduardo, sin renumerar.** El arranque sigue subiendo 0 → 1 → 2 (FS) → 3 (app) —los números los leen
+el IDE, las pruebas y los documentos—, y al llegar al FS se monta la zona (la regla de Eduardo) y se mira su ESTADO,
+que es de la zona y no de la subida:
+
+| la zona | ¿sube a la app? | lo que se dice |
+|---|---|---|
+| sin partición de packs | sí | nada: es una placa sin packs |
+| **sin formatear** (restos: la cadena no es válida) | sí | **casi**: «la zona de packs está sin formatear: no se pueden subir packs» |
+| lista (vacía o con packs) | sí | nada |
+| un pack cuyo motor no carga | sí | **casi**, con el motivo y el nombre del pack |
+| el FS no monta | no (se queda en 1, como hoy) | degradada; la zona ni se monta |
+
+`STATE` añade el campo (`"casi":true,"aviso":"…"`); el IDE lo enseña en la gestión de placa y, al conectar, la
+propone igual que con una degradada (allí está «Formatear la zona»). La otra forma —un estado con número, 3 = packs
+y 4 = app— obliga a renumerar y, sobre todo, cortaría la subida con la zona sin formatear, que Eduardo quiere
+correcta.
+
+**Por fases**, cada una probada en las cuatro placas de código distinto (la Pico, la DK2, la C5 y la P4) y en el
+micro simulado:
+1. **El estado de la zona y el montaje, comunes** (pequeño-medio): `bpvm_packs_montar` —exige el FS, monta con el
+   gancho de la familia (XIP fijo en la Pico y la STM32; el mapeo de la MMU en la ESP32 y la P4), mira la cadena y lo
+   dice en el log del arranque—; el `casi` en `STATE` y en el IDE. Arregla las dos incoherencias de arriba.
+2. **El cargador común** (medio): la cola de `cargar`, `saltar` y `explicar` en `src/`, con la guarda «una vez»
+   DENTRO —cierra el hueco del ancla— y el `log_flush` antes de saltar en las tres; lo dispara el primer RUN o INFO
+   en todas; un motor que no carga, al `casi`. Ganchos: la zona, la BIOS, el bloque de RAM y (sólo la ESP32) releer
+   la cabecera para el diagnóstico.
+3. **La regla del bloque de RAM, común** (pequeño): `packRam=` y, si no, `SQLite=`, en una función; la familia sólo
+   COLOCA (el plan en la Pico y la STM32, la reserva aparte en la ESP32). `packRam=` llega a la Pico.
+4. **El Boot 2 común** (medio): el orden, una vez, con ganchos por familia; arregla los dos fallos de paso (la P4 por
+   TCP y el autorun de la STM32) y declara las capas del SO (`H9_KERNEL_CAPAS.md`).
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.
