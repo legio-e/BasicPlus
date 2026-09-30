@@ -1091,13 +1091,17 @@ la C6, la P4 y la Nucleo.
   los packs del 26 y 27-sep), `GuiShot` `EXITED OK`. La DK2, sin tocar.
 - **La lectura por encima de 16 MB, medida en la Waveshare** (imagen de prueba, sólo lectura, ya retirada): sin subir
   el tamaño, `INVALID_ARG`; subido a 32 MB, arriba todo `ff` y abajo el bootloader, la tabla, la app y el ENV: sin eco.
+  Y **la escritura** (con su OK, otra imagen de prueba): borrar, escribir y releer un sector en 16 MB + 0x300000, bien,
+  y su eco de abajo intacto. Eduardo decidió: *«para ahora con 16M de FS la P4 va sobrada. Y el resto para el SO y
+  los packs»* —el FS arriba, `bpdata` para los packs; un FS de más de 16 MB, más adelante—.
 - Tropiezos: (1) `pack … riscv` a secas poda para el P4; la C5 (como la C3 y la C6) es `riscv-imc` —no llegó a grabar:
   no cabía—. (2) Le dije a Eduardo que no había que borrar nada: miré el sitio en la zona, no la RAM de los motores.
   (3) Un `cut -c30-` se comió la primera cifra del tamaño de `Gui.pack` (2 326 528 → «326528») y me hizo dudar del
   pack.
 
 **Traspaso (30-sep, mediodía).** De H7 queda lo del mapa: los restos de `U6`, `U1.4`, Boot 1/2 y el montaje de packs,
-la Pico sobre `platform_freertos` y, de los 32 MB, la ESCRITURA arriba (con OK) y decidir cómo se le da al FS (a o b).
+la Pico sobre `platform_freertos` y, de los 32 MB, HACERLO: el FS en los 16 MB de arriba de la Waveshare (la regla en
+el común, qué hace `part.fs.size` allí, y en la placa formatear el FS nuevo y rehacer la zona de packs, con su OK).
 La P4, la C5 y la Pico llevan la imagen de hoy (con `#607`: el `Gui.mod` nuevo ya puede ir a ellas); la DK2 y las que
 no estaban, no.
 

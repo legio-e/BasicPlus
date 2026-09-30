@@ -3024,6 +3024,20 @@ con la imagen de 16 MB, la Waveshare LEE sus 16 MB de arriba en cuanto el driver
 sigue: la ESCRITURA —un sector arriba, con el OK de Eduardo; en 16 MB + 0x300000, cuyo eco, si lo hubiera, caería en
 esa cola vacía— y decidir (a) o (b).
 
+**La escritura, medida el 30-sep** (con el OK; otra imagen de prueba, ya retirada): con el tamaño subido, borrar y
+escribir el sector de 16 MB + 0x300000 dan `rc=0`, se relee el patrón exacto («BP32»…), su eco de abajo (0x300000)
+sigue borrado, y el sector se deja borrado. **La Waveshare lee, escribe y borra sus 16 MB de arriba con la imagen de
+16.**
+
+**Decidido por Eduardo (30-sep):** *«para ahora con 16M de FS la P4 va sobrada. Y el resto para el SO y los packs.
+Más adelante podemos estudiar hacer FS más grandes de 16M. En cuanto a los packs, los 16M físicos hacen de límite.
+Cuando el P4 soporte FS >16M entonces podemos hacer packs también más pequeños.»* O sea, la (a): en la Waveshare,
+el FS entero en los 16 MB de arriba y `bpdata` entero para los packs; el kit, como está. Lo que pide al hacerlo:
+(1) la regla, en el común de la ESP32 —si el chip dice más que la cabecera, subir el `size` del driver y dar la
+región de arriba al FS—; (2) qué hace `part.fs.size` en esa placa; y (3) en la Waveshare, formatear el FS nuevo (el
+de hoy, con su `/app`, se queda en `bpdata` sin montar) y rehacer la zona de packs, que pasa a empezar en
+`bpdata+0` (`PACK_FORMAT` y volver a grabar sus packs) —las dos cosas, con el OK de Eduardo—.
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.
