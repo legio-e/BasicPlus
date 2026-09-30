@@ -3175,7 +3175,10 @@ correcta.
 
 **Por fases**, cada una probada en las cuatro placas de código distinto (la Pico, la DK2, la C5 y la P4) y en el
 micro simulado:
-1. **El estado de la zona y el montaje, comunes** (pequeño-medio): `bpvm_packs_montar` —exige el FS, monta con el
+1. ✅ **HECHA el 30-sep, `da19145e`** —en el host (`test_pack` 15-16), en el micro simulado con `--zona-sucia` (el
+   «casi» de punta a punta: `STATE`, `PACK_LS`, formatear) y en la Pico, la DK2, la C5 y la P4 (el camino normal:
+   monta con el FS, «zona lista», sin «casi», los packs y un programa)—. **El estado de la zona y el montaje,
+   comunes** (pequeño-medio): `bpvm_packs_montar` —exige el FS, monta con el
    gancho de la familia (XIP fijo en la Pico y la STM32; el mapeo de la MMU en la ESP32 y la P4), mira la cadena y lo
    dice en el log del arranque—; el `casi` en `STATE` y en el IDE. Arregla las dos incoherencias de arriba.
 2. **El cargador común** (medio): la cola de `cargar`, `saltar` y `explicar` en `src/`, con la guarda «una vez»

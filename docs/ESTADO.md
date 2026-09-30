@@ -1105,8 +1105,16 @@ la C6, la P4 y la Nucleo.
   - De paso: `BenchMem.bp` ya no compilaba —su array de 128 KB era un array fijo en la pila— (`a629c7ec`: al heap);
     y en la C5 la línea «vm: DRAM interna libre 7337580->248675» mezcla la PSRAM de antes con la DRAM de después
     (esp32/common/main.c, con PSRAM): sin tocar.
-- Las placas: la Pico, la DK2 (con `log=1`), la C5 y la P4, con la imagen de `47fe6fef` y su ENV como estaba; en la
-  zona de la Pico, la lápida de `Stdlib.pack`. Las demás, como estaban.
+- **Boot 2 y el montaje de packs** (`V7_IDEAS` §H7): las respuestas de Eduardo a las tres preguntas (`da597e59`), el
+  mapa de lo que hay en las cinco familias —dos lecturas en paralelo del código— y la propuesta (`40e5b898`): el
+  «casi» sin renumerar y cuatro fases; Eduardo: *así, y en ese orden*. **La fase 1, hecha** (`da19145e`): el estado
+  de la zona (sin zona / sin formatear / rota / lista) y el montaje —con el FS— comunes; el `casi` en `STATE` y en el
+  IDE; en el micro simulado, `--zona-sucia` para verlo de punta a punta; en las cuatro placas, el camino normal. La
+  zona de la Pico, formateada antes (quitada la lápida de la prueba de `U1.4`). De paso, en la DK2: la etiqueta de
+  `GuiFlushBench` vuelve a 10 ms con FreeRTOS a 32 KB (`#614`, su parte de la DK2); y `#609` saltó una vez en la red
+  con tres builds a la vez (sola, 4 de 4).
+- Las placas: la Pico, la DK2 (con `log=1`), la C5 y la P4, con la imagen de `da19145e` y su ENV como estaba; la zona
+  de la Pico, vacía (formateada). Las demás, como estaban.
 
 ## 🔧 H7 (30-sep, mediodía, sesión remota) — `#613` abierta y cerrada (B1 por `sleep(0)` en miVM); el paso 0 de los 32 MB y el `HELLO`, vistos en placa; la lectura por encima de 16 MB, medida en la Waveshare
 
