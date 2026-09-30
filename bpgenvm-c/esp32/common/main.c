@@ -46,10 +46,13 @@
  * PSRAM: mismos bytes en marcha, pero el enlazador deja de tener que encajar un
  * bloque contiguo enorme y, si no hay sitio, el boot lo DICE (se queda por
  * debajo del estado 3 con su motivo) en vez de fallar al enlazar. */
-/* Cuánto pide la VM y cómo se llama el chip: lo pone el proyecto, porque son
- * las dos cosas que NO se pueden preguntar en marcha (`vm_buffer_init()` corre
- * antes que el ENV). El porqué de cada número está en el `chip_cfg.h` que lo
- * fija — y en el del C3 está escrito que AÚN NO ESTÁ MEDIDO. */
+/* Cuánto pide la VM y cómo se llama el chip: lo pone el proyecto (`chip_cfg.h`).
+ * Era por fuerza —`vm_buffer_init()` corría antes que el ENV—, pero desde V7/H6
+ * el ENV ya está leído a esa hora: `pack_esp32_ram_init()`, que va justo antes,
+ * lo carga (`board_mgr_esp32_env_temprano`). O sea que una clave del ENV podría
+ * decidir el tamaño: es la `vmheap=N` de U6, pendiente (¿N es el bloque o el
+ * heap?). El porqué de cada número está en el `chip_cfg.h` que lo fija — y en el
+ * del C3 está escrito que AÚN NO ESTÁ MEDIDO. */
 #include "chip_cfg.h"
 #include "bpvm_mem.h"          /* V6/U6: el planificador comun de memoria */
 #include "bpvm_sd_placa.h"    /* V7/H3 SD.3: la SD de la placa, en el comun */

@@ -60,8 +60,9 @@ void repl_set_board_id(const repl_board_id_t *id);
 
 /* V5/H7 - quien carga el pack nativo, y se hace en el PRIMER `Run` (no al
  * arrancar: el salto es el unico paso que puede colgar, y un cuelgue en el
- * arranque obliga a regrabar). La familia que tenga pack nativo registra aqui
- * su cargador; el S3 no registra ninguno y no pasa nada.
+ * arranque obliga a regrabar). Lo registra el main.c comun para todas las ESP32
+ * -el S3 incluido- en cuanto el arranque llega al FS; sin cargador, o sin pack,
+ * no pasa nada.
  * Devuelve >=0 si salto (lo que devolvio el pack), <0 si no. */
 void repl_set_packs_loader(int32_t (*fn)(void));
 

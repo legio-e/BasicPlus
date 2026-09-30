@@ -16,10 +16,12 @@
  * `#include "chip_cfg.h"` no puede resolver al del vecino por accidente —
  * siempre cae en el del proyecto que se está compilando.
  *
- * ⚠️ Lo que entra aquí es lo que NO se puede preguntar en marcha. El tamaño del
- * heap de la VM es el caso: `vm_buffer_init()` corre ANTES de
- * `board_mgr_esp32_boot()` (layer_app comprueba `s_vm_buffer`), o sea antes de
- * que exista el ENV. Todo lo demás que dependa de la placa va al ENV, no aquí.
+ * Lo que entra aquí es lo de ESTE silicio que no dice el ENV. El tamaño del heap
+ * de la VM se fijó aquí porque `vm_buffer_init()` —que corre ANTES de
+ * `board_mgr_esp32_boot()`: layer_app comprueba `s_vm_buffer`— corría también
+ * antes que el ENV. Desde V7/H6 no: `pack_esp32_ram_init()`, justo antes, lo lee
+ * (`board_mgr_esp32_env_temprano`), así que el tamaño podría ir al ENV: es la
+ * `vmheap=N` de U6, pendiente. Todo lo demás que dependa de la placa va al ENV.
  */
 #ifndef BPVM_CHIP_CFG_H
 #define BPVM_CHIP_CFG_H

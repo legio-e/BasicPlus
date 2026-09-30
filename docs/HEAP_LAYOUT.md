@@ -68,7 +68,18 @@ memorySize└──────────────────────�
   la **tabla de handles** (`gen[]` y `addr[]`; baja desde las pilas y sólo sobre heap libre), y la
   región de pilas la decide `bpvm_stack_region_bytes` (un 25 % del bloque de la VM, de 64 a 512 KB, o
   `stack=N` del ENV), no `BpVM.cfg`. En miVM la tabla son arrays de Java, fuera de `memory[]`. Lo que
-  ve el programa es lo mismo en las dos (§4: el tope de cada pila).
+  ve el programa es lo mismo en las dos (§4: el tope de cada pila). El dibujo de arriba es el de miVM; el
+  tramo de la VM-C, del heap para abajo:
+
+  ```
+  heap_start ━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ← tras el último módulo
+          │  HEAP (bump: heap_next ↑)     │
+  heap_top   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ← baja cuando la tabla crece, nunca sobre heap vivo
+          │  TABLA DE HANDLES             │
+          │   gen[cap]  │  addr[cap]      │  ← crece HACIA ABAJO, con el mundo parado (#610)
+  stack_base ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+          │  PILAS (main e hilos)         │  ← bpvm_stack_region_bytes / stack=N; cada una crece hacia arriba
+  ```
 
 - **La tabla de la VM-C crece MOVIÉNDOSE** (`bpvm_handles_grow`: un `memmove` dentro del bloque; el `addr[]` nuevo
   cae encima del `gen[]` viejo) y los workers la leen SIN cerrojo (`bpref_deref`, `bpvm_ref_dead`). Por eso sólo

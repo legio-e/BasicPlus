@@ -1,10 +1,11 @@
 # Catálogo de opcodes de la VM BasicPlus
 
-Documento canónico de los opcodes del bytecode `.mod`: los **186** que
+Documento canónico de los opcodes del bytecode `.mod`: los **188** que
 define `bpgenvm-c/include/bpvm_opcodes.h` (V7). Los de `0x00..0x70` son los
 de V1; los de `0x6F` y `0x71..0xB0` se añadieron después (long, double,
-potencia, `CHECKCAST`) y los `0xB1..0xBB` son los `_REF` del enlace tardío
-(MOD9, V7/H2); están en sus propias secciones al final de las tablas.
+potencia, `CHECKCAST`), los `0xB1..0xBB` son los `_REF` del enlace tardío
+(MOD9, V7/H2) y `0xBC..0xBD`, `LEA_FIELD` y `LEA_FIELD_REF` (V7/H1); están
+en sus propias secciones al final de las tablas.
 Cada entrada incluye:
 - Byte (`code`), mnemonic.
 - Operando inmediato (si lo hay): tipo + tamaño en bytes.
@@ -446,8 +447,10 @@ Sólo los emite `--formato=9`; una VM de V6 no los conoce (y rechaza el `MOD9` a
 `0x4F .. 0x50` asignados (I32_TO_I16, I32_TO_U16). `0x6D .. 0x6E` libres
 (`0x6F` es `EVENT_RETURN`). `0x71 .. 0xB0` asignados en bloque (long, double,
 campos de 8 bytes, `NATIVE_RETURN`, `TRY_BEGIN_EXT`, potencia, `CHECKCAST`).
-`0xB1 .. 0xBB` los `_REF` del enlace tardío (MOD9). **`0xBC .. 0xFF` libres.**
-Total asignado: 186.
+`0xB1 .. 0xBB` los `_REF` del enlace tardío (MOD9); `0xBC .. 0xBD`,
+`LEA_FIELD` y `LEA_FIELD_REF` (V7/H1). **`0xBE .. 0xFF` libres** (con
+`0x6D .. 0x6E`, 68 en total). Total asignado: 188 (miVM, 187: `0xAA`,
+`NATIVE_RETURN`, es sólo de la VM-C).
 
 Si una implementación encuentra un opcode no listado, debe fallar con
 "Opcode no implementado: 0x%02X en PC %d" — coherente con la VM Java.

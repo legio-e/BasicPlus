@@ -173,7 +173,12 @@ void board_mgr_stm32_boot(void) {
  * cualquier ruta: el sync veía «/lib/Core.mod» en la zona, no podía leerle el
  * CRC y lo REPONÍA cada arranque con «no se pudo leer»; con un pack de MAGIC
  * mayor, /lib no se instalaba nunca. Las otras tres familias sincronizan antes
- * de montar; ahora ésta también. */
+ * de montar; ahora ésta también.
+ *
+ * V7/H6 (#468): al revés otra vez, y en todas las familias: la zona se monta ANTES
+ * de la stdlib (stm32_repl.c), porque el instalador —`bpvm_mods_sincronizar`— le
+ * pregunta qué sirve ya con los mismos bytes que la imagen y no copia a /lib lo que
+ * el pack sirve (esa copia idéntica lo tapaba). */
 /* V7/H6 G5.b0 — la partición de packs del layout del boot, para el cargador. */
 const bpvm_part_t* board_mgr_stm32_packs(void) {
     if (!s_layout_ok) return NULL;

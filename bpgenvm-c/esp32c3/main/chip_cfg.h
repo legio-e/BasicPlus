@@ -2,9 +2,9 @@
  * chip_cfg.h — LO PARTICULAR DE ESTE SILICIO (ESP32-C3).
  *
  * El `main.c` es el de `esp32/common/`, compartido con el S3. Aquí solo está lo
- * que de verdad cambia: el nombre y los dos tamaños del heap de la VM — que son
- * lo único que no se puede preguntar en marcha, porque `vm_buffer_init()` corre
- * antes de que exista el ENV. El porqué completo, en el `chip_cfg.h` del S3.
+ * que de verdad cambia: el nombre y los dos tamaños del heap de la VM (fijos aquí;
+ * desde V7/H6 el ENV ya está leído cuando se reservan, y podrían ir a él: la
+ * `vmheap=N` de U6, pendiente). El porqué completo, en el `chip_cfg.h` del S3.
  */
 #ifndef BPVM_CHIP_CFG_H
 #define BPVM_CHIP_CFG_H
