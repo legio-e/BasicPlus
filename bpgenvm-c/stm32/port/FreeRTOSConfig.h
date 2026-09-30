@@ -77,11 +77,15 @@ extern uint32_t SystemCoreClock;
  * proyecto ya costó dos días de diagnóstico cuando la tabla de handles y el
  * heap eran bolsas distintas y nadie lo decía (#430).
  *
- * 24 KB: pila de `vm` (16 KB, lo que hoy reserva el enlazador como MSP porque
- * el intérprete corre sobre ella) + `io` (4 KB) + idle (0,5 KB) + los objetos.
- * En la Nucleo quedan ~174 KB libres para newlib y en la Discovery ~447 KB,
- * así que esto no aprieta en ninguna de las dos. */
-#define configTOTAL_HEAP_SIZE                   ((size_t) (24 * 1024))
+ * Lo que vive aquí: la pila de `vm` (16 KB: el intérprete corre sobre ella desde
+ * A1.5) + `io` (4 KB) + idle (0,5 KB) + los objetos del kernel.
+ *
+ * V7/H7 (30-sep) — MEDIDO con la línea `mem:`: con 24 KB quedaban 2 176 B libres en
+ * el peor momento de la tanda de V7 en la DK2 (un nativo vivo: su `fr_thread_t` y su
+ * semáforo salen de aquí), el más justo del parque: una tarea o una cola más y no
+ * cabía. 32 KB, como la Pico (decidido por Eduardo). En la DK2 lo paga el MSP, que
+ * baja de 16 a 4 KB (su .ld); en la Nucleo, lo que deja el enlazador (~137 KB). */
+#define configTOTAL_HEAP_SIZE                   ((size_t) (32 * 1024))
 /* V7/H5 P2b.3 (27-sep) - A 1: el EJECUTOR de una native es una tarea estatica
  * con su pila de malloc (src/platform_freertos.c), porque en el heap del kernel
  * -dimensionado justo para `vm` e `io`- no cabe. Antes estaba a 0 porque ponerlo

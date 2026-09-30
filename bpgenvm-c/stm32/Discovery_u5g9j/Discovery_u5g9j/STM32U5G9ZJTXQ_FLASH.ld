@@ -40,7 +40,9 @@ _estack = ORIGIN(RAM) + LENGTH(RAM); /* end of "RAM" Ram type memory */
 _sstack = _estack - _Min_Stack_Size;
 
 _Min_Heap_Size = 0x200; /* required amount of heap */
-_Min_Stack_Size = 0x4000; /* 16 KB: el interprete BP corre sobre este stack (V3/H5.0) */
+_Min_Stack_Size = 0x1000; /* 4 KB, como la Nucleo. Eran 16 KB desde V3/H5.0, cuando el interprete BP corria sobre
+                             este stack; desde A1.5 corre en la tarea `vm` y el MSP solo lo usan las interrupciones:
+                             medidos <= 272 B con la GUI, el tactil y el wire (V7/H7, 30-sep, la linea `mem:`). */
 
 /* Memories definition */
 MEMORY
