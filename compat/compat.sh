@@ -796,7 +796,7 @@ check_testc() {
   local fails=0 t sal rc ok n
   # V7/H7 (30-sep): y test-part, test-bmgr y test-pack, que no estaban en ninguna red: test-bmgr llevaba roto (no
   # enlazaba) desde #468 sin que nadie lo viera, por segunda vez (la primera, del 13-ago al 23-sep).
-  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-mods test-guilleno test-sd-turnos test-debug test-debug-mt test-listen test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack"
+  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-mods test-guilleno test-sd-turnos test-debug test-debug-mt test-listen test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem"
   n=$(echo $lista | wc -w)
   for t in $lista; do
     sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?

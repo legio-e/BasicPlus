@@ -35,6 +35,23 @@ bpvm_sqlite_res_t bpvm_sqlite_region(long env_mb, size_t total_bytes,
     return BPVM_SQLITE_OK;
 }
 
+bpvm_sqlite_res_t bpvm_packram_region(long pack_kb, long sql_mb, size_t total_bytes,
+                                      size_t* out_bytes)
+{
+    if (out_bytes) *out_bytes = 0;
+    if (pack_kb <= 0) return bpvm_sqlite_region(sql_mb, total_bytes, out_bytes);
+
+    /* Cordura antes de multiplicar, como arriba: un KB que no cabe en el total no se
+     * multiplica (en 32 bits, dar la vuelta pediría un bloque de basura). */
+    if ((unsigned long) pack_kb > (unsigned long) (total_bytes / 1024u)) return BPVM_SQLITE_NO_CABE;
+    size_t want = ((size_t) pack_kb * 1024u + 4095u) & ~(size_t) 4095u;   /* en páginas de 4 KB */
+
+    if (want > total_bytes) return BPVM_SQLITE_NO_CABE;
+    if (total_bytes - want < BPVM_VM_MIN_BYTES) return BPVM_SQLITE_NO_CABE;
+    if (out_bytes) *out_bytes = want;
+    return BPVM_SQLITE_OK;
+}
+
 const char* bpvm_sqlite_res_str(bpvm_sqlite_res_t r)
 {
     switch (r) {

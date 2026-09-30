@@ -888,20 +888,14 @@ static void stm32_mem_planificar(void) {
 
     long pack_kb = board_mgr_stm32_env_long("packRam", 0);
     long sql_mb  = board_mgr_stm32_env_long("SQLite", 0);
-    bpvm_sqlite_res_t sqlres = BPVM_SQLITE_OFF;
+    /* V7/H7 (Boot 2, fase 3) — CUÁNTO, la regla común de las cinco (bpvm_packram_region):
+     * `packRam=` en páginas de 4 KB y, si no está, `SQLite=` con la suya; las dos dejan a la
+     * VM su suelo (128 KB: aquí era el del plan, 64). Aquí sólo se decide DÓNDE: la reserva
+     * del plan, delante de la VM, en 0x20000000. */
     size_t pide = 0;
     const char* nombre = NULL;
-    if (pack_kb > 0) {
-        /* En páginas de 4 KB. Un número que no cabe en la región no se multiplica —desbordaría el
-         * size_t de 32 bits y pediría un bloque de tamaño basura—: se pide la región entera y el plan
-         * dice que no cabe. */
-        pide   = (pack_kb >= (long) (reg[0].bytes / 1024u)) ? reg[0].bytes
-               : (((size_t) pack_kb * 1024u + 4095u) & ~(size_t) 4095u);
-        nombre = "packs";
-    } else {
-        sqlres = bpvm_sqlite_region(sql_mb, reg[0].bytes, &pide);
-        if (sqlres == BPVM_SQLITE_OK) nombre = "SQLite"; else pide = 0;
-    }
+    bpvm_sqlite_res_t sqlres = bpvm_packram_region(pack_kb, sql_mb, reg[0].bytes, &pide);
+    if (sqlres == BPVM_SQLITE_OK) nombre = (pack_kb > 0) ? "packs" : "SQLite"; else pide = 0;
     const int en_su_sitio = ((uintptr_t) s_vm_mem == (uintptr_t) __bp_vm_start)
                          && ((uintptr_t) __bp_vm_start == (uintptr_t) __bp_ram_start);
     if (pide && !en_su_sitio) {
@@ -945,7 +939,8 @@ static void stm32_mem_planificar(void) {
                    pack_kb > 0 ? "KB" : "MB", (unsigned) (VM_MEM_MIN / 1024u),
                    (unsigned) (reg[0].bytes / 1024u));
     else if (sqlres != BPVM_SQLITE_OFF)
-        log_printf("packs: SIN bloque de RAM — %s (SQLite=%ld)", bpvm_sqlite_res_str(sqlres), sql_mb);
+        log_printf("packs: SIN bloque de RAM — %s (%s=%ld)", bpvm_sqlite_res_str(sqlres),
+                   pack_kb > 0 ? "packRam" : "SQLite", pack_kb > 0 ? pack_kb : sql_mb);
     else if (en_su_sitio)
         log_printf("packs: sin bloque de RAM (ni packRam= ni SQLite= en el ENV): un pack nativo no podria cargar");
 }

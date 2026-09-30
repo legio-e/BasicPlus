@@ -88,6 +88,27 @@ int main(void) {
           bpvm_sqlite_res_str(BPVM_SQLITE_NO_CABE)[0]  != '\0',
           "los cuatro motivos tienen texto para el log");
 
+    /* V7/H7 (Boot 2, fase 3) — la regla del bloque de los motores, común a las cinco. */
+    {
+        size_t b = 1;
+        CHECK(bpvm_packram_region(768, 0, 1792u * 1024u, &b) == BPVM_SQLITE_OK && b == 768u * 1024u,
+              "packRam=768 en 1792 KB (la DK2): 768 KB");
+        CHECK(bpvm_packram_region(1001, 0, 8u * 1024u * 1024u, &b) == BPVM_SQLITE_OK && b == 1028096u,
+              "packRam=1001: en paginas de 4 KB por arriba (1028096)");
+        CHECK(bpvm_packram_region(1024, 4, 8u * 1024u * 1024u, &b) == BPVM_SQLITE_OK && b == 1024u * 1024u,
+              "packRam manda sobre SQLite");
+        CHECK(bpvm_packram_region(0, 4, 8u * 1024u * 1024u, &b) == BPVM_SQLITE_OK && b == 4u * 1024u * 1024u,
+              "sin packRam, la regla de SQLite (4 MB)");
+        CHECK(bpvm_packram_region(0, 0, 8u * 1024u * 1024u, &b) == BPVM_SQLITE_OFF && b == 0,
+              "ni una ni otra: OFF, sin bloque");
+        CHECK(bpvm_packram_region(300, 0, 400u * 1024u, &b) == BPVM_SQLITE_NO_CABE && b == 0,
+              "packRam que no deja a la VM sus 128 KB: NO_CABE");
+        CHECK(bpvm_packram_region(272, 0, 400u * 1024u, &b) == BPVM_SQLITE_OK && b == 272u * 1024u,
+              "y el justo: deja 128 KB exactos");
+        CHECK(bpvm_packram_region(0x7FFFFFFFL, 0, 400u * 1024u, &b) == BPVM_SQLITE_NO_CABE && b == 0,
+              "un packRam enorme no da la vuelta: NO_CABE");
+    }
+
     printf("\n[status=%s]\n", g_fail == 0 ? "OK" : "FAIL");
     return g_fail != 0;
 }

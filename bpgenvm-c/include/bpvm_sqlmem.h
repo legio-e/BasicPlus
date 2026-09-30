@@ -73,6 +73,22 @@ typedef enum {
 bpvm_sqlite_res_t bpvm_sqlite_region(long env_mb, size_t total_bytes,
                                      size_t* out_bytes);
 
+/*
+ * V7/H7 (Boot 2, fase 3; 30-sep) — EL BLOQUE DE LOS MOTORES NATIVOS, la MISMA regla en las
+ * cinco familias (Eduardo: se unifican el montaje, el cargador y el bloque de RAM). Antes eran
+ * tres: la ESP32 y la STM32 leían `packRam=` con suelos distintos (128 KB y 64) y la Pico sólo
+ * entendía `SQLite=`.
+ *
+ *   pack_kb  — `packRam=<KB>`, la clave genérica: lo pedido, en páginas de 4 KB por arriba.
+ *   sql_mb   — `SQLite=<MB>`, sólo si no hay `packRam=`: la regla de arriba (su mínimo medido).
+ *
+ * En los dos casos el bloque deja a la VM su suelo (BPVM_VM_MIN_BYTES). DÓNDE va es de la
+ * familia (la reserva del plan delante de la VM, o una reserva aparte). Mismos motivos que
+ * bpvm_sqlite_region, que el IDE ya sabe leer.
+ */
+bpvm_sqlite_res_t bpvm_packram_region(long pack_kb, long sql_mb, size_t total_bytes,
+                                      size_t* out_bytes);
+
 /* Texto fijo del motivo, EN PROSA, para el log de arranque. Nunca NULL. */
 const char* bpvm_sqlite_res_str(bpvm_sqlite_res_t r);
 

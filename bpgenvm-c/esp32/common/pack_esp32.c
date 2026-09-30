@@ -149,29 +149,20 @@ void pack_esp32_ram_init(void)
     size_t   libre    = libre_ps ? libre_ps : heap_caps_get_free_size(caps);
     const char* fuente = libre_ps ? "PSRAM" : "SRAM";
 
+    /* V7/H7 (Boot 2, fase 3) — CUÁNTO, la regla común de las cinco (bpvm_packram_region):
+     * `packRam=` en páginas de 4 KB y, si no está, `SQLite=` con la suya; las dos dejan a la
+     * VM su suelo. Aquí sólo se decide DÓNDE: una reserva aparte, antes del heap. */
     size_t bytes = 0;
-    if (pack_kb > 0) {
-        /* La clave genérica: lo que se pide, redondeado a página, dejando a la
-         * VM su mínimo. Sin la regla de la BD (2 MB, ~40 %): ésa es de SQLite. */
-        bytes = ((size_t) pack_kb * 1024u + 4095u) & ~(size_t) 4095u;
-        if (bytes + BPVM_VM_MIN_BYTES > libre) {
-            s_pack_ram_res = (int) BPVM_SQLITE_NO_CABE;
-            log_printf("packs: SIN bloque de RAM — packRam=%ld KB no cabe dejando la VM viable (%s libre %u KB)",
-                       pack_kb, fuente, (unsigned) (libre / 1024u));
-            return;
-        }
-        s_pack_ram_res = (int) BPVM_SQLITE_OK;
-    } else {
-        bpvm_sqlite_res_t r = bpvm_sqlite_region(sql_mb, libre, &bytes);
-        s_pack_ram_res = (int) r;
-        if (r != BPVM_SQLITE_OK) {
-            if (r == BPVM_SQLITE_OFF)
-                log_printf("packs: sin bloque de RAM (ni packRam= ni SQLite= en el ENV): un pack nativo no podría cargar");
-            else
-                log_printf("packs: SIN bloque de RAM — %s (SQLite=%ld en el ENV, %s libre %u KB)",
-                           bpvm_sqlite_res_str(r), sql_mb, fuente, (unsigned) (libre / 1024u));
-            return;
-        }
+    bpvm_sqlite_res_t r = bpvm_packram_region(pack_kb, sql_mb, libre, &bytes);
+    s_pack_ram_res = (int) r;
+    if (r != BPVM_SQLITE_OK) {
+        if (r == BPVM_SQLITE_OFF)
+            log_printf("packs: sin bloque de RAM (ni packRam= ni SQLite= en el ENV): un pack nativo no podría cargar");
+        else
+            log_printf("packs: SIN bloque de RAM — %s (%s=%ld en el ENV, %s libre %u KB)",
+                       bpvm_sqlite_res_str(r), pack_kb > 0 ? "packRam" : "SQLite",
+                       pack_kb > 0 ? pack_kb : sql_mb, fuente, (unsigned) (libre / 1024u));
+        return;
     }
 
     s_pack_ram_base = (uint8_t*) heap_caps_aligned_alloc(4096, bytes, caps);

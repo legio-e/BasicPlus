@@ -137,10 +137,20 @@ static void pico_mods_install(void) {
     (void) bpvm_mods_instalar_tabla(pico_mods, pico_mods_n, pico_mods_put, pico_mods_log);
 }
 
+/* V7/H7 (Boot 2, fase 3) — LA COLA de la SRAM para los motores nativos, cuando no hay PSRAM:
+ * los 8 KB de siempre (PACK_RAM_BYTES) si el ENV no pide otra cosa, y `packRam=` la cambia
+ * (Eduardo, 30-sep: la Pico también entiende `packRam=`). Crece HACIA ABAJO desde el techo,
+ * que no se mueve: un motor sellado contra la de 8 KB sigue dentro de una mayor. La decide el
+ * arranque ANTES de enumerar, porque la región de la VM se para en su base. */
+static uint32_t s_cola_bytes = PACK_RAM_BYTES;
+static uintptr_t cola_base(void) {
+    return ((uintptr_t) PACK_SRAM_TECHO - s_cola_bytes) & ~(uintptr_t) 7u;
+}
+
 static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
     int n = 0;
     if (n < max) {
-        uintptr_t top  = (uintptr_t) PACK_RAM_SRAM_BASE;
+        uintptr_t top  = cola_base();
         uintptr_t base = ((uintptr_t) &end + 7u) & ~(uintptr_t) 7u;
         out[n].base = (unsigned char*) base;
         out[n].bytes = (top > base) ? (size_t)(top - base) : 0u;
@@ -1347,6 +1357,22 @@ static void vm_task(void* arg) {
      * direcciones que el resto del arranque necesita. Los números son los de
      * siempre (test_mem los fija); lo que cambia es que ya no hay dos ramas. */
     {
+        /* V7/H7 (Boot 2, fase 3) — el bloque de los motores por la regla COMÚN
+         * (bpvm_packram_region): `packRam=` y, si no, `SQLite=`. Sin PSRAM, `packRam=`
+         * cambia la cola de la SRAM, y eso va ANTES de enumerar. */
+        long pack_kb = bpvm_env_get_long(&s_env, "packRam", 0);
+        int con_psram = board_desc()->psram_present && board_desc()->psram_bytes >= (1u << 20);
+        if (!con_psram && pack_kb > 0) {
+            uintptr_t ini = ((uintptr_t) &end + 7u) & ~(uintptr_t) 7u;   /* lo que queda sobre el margen de malloc */
+            size_t sram = ((uintptr_t) PACK_SRAM_TECHO > ini + VM_SRAM_MALLOC_MARGIN)
+                        ? (size_t) ((uintptr_t) PACK_SRAM_TECHO - ini - VM_SRAM_MALLOC_MARGIN) : 0u;
+            size_t b = 0;
+            bpvm_sqlite_res_t rc = bpvm_packram_region(pack_kb, 0, sram, &b);
+            if (rc == BPVM_SQLITE_OK) s_cola_bytes = (uint32_t) b;
+            else log_printf("packs: packRam=%ld KB %s: la cola de la SRAM se queda en %u KB",
+                            pack_kb, bpvm_sqlite_res_str(rc), (unsigned) (s_cola_bytes / 1024u));
+        }
+
         bpvm_mem_region_t reg[2];
         int nreg = pico_mem_regiones(reg, 2);
 
@@ -1360,7 +1386,7 @@ static void vm_task(void* arg) {
         bpvm_sqlite_res_t sqlres = BPVM_SQLITE_OFF;
         for (int k = 0; k < nreg; k++) {
             if (!reg[k].exclusiva) continue;
-            sqlres = bpvm_sqlite_region(s_sqlite_asked_mb, reg[k].bytes, &sqlbytes);
+            sqlres = bpvm_packram_region(pack_kb, s_sqlite_asked_mb, reg[k].bytes, &sqlbytes);
             break;
         }
         s_sqlite_res = (int) sqlres;
@@ -1375,7 +1401,7 @@ static void vm_task(void* arg) {
         if (vmheap_kb > 0) log_printf("vm: vmheap=%ld KB (ENV): el objetivo del bloque", vmheap_kb);
         cfg.vm_min         = VM_SRAM_MIN;
         cfg.reserva_bytes  = sqlbytes;
-        cfg.reserva_nombre = "SQLite";
+        cfg.reserva_nombre = (pack_kb > 0) ? "packs" : "SQLite";
 
         bpvm_mem_plan_t plan;
         bpvm_mem_plan(reg, nreg, &cfg, &plan);
@@ -1386,8 +1412,8 @@ static void vm_task(void* arg) {
 
         if (plan.res != BPVM_MEM_OK) {
             s_vm_buffer = NULL; s_vm_buffer_size = 0;
-            s_pack_ram_base = (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
-            s_pack_ram_size = PACK_RAM_BYTES;
+            s_pack_ram_base = (uint8_t*) cola_base();
+            s_pack_ram_size = s_cola_bytes;
             log_flush();
         } else if (reg[plan.idx].exclusiva) {
             /* TOMAR de la PSRAM: la reserva delante, la VM detrás. */
@@ -1399,20 +1425,20 @@ static void vm_task(void* arg) {
              * `[estáticos | arena]`, como se decidió al cerrar la RAM de la BD.
              * Criterio de Eduardo (7-ago): "la reserva solamente hace falta si
              * SQLite=0" — donde hay arena no se le quita nada a la SRAM. */
-            s_pack_ram_base = plan.reserva_bytes ? s_sqlite_base
-                                                 : (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
+            s_pack_ram_base = plan.reserva_bytes ? s_sqlite_base : (uint8_t*) cola_base();
             /* V7/H6.c G1: el tamaño del bloque que EMPIEZA en esa base — el de
              * la BD o la cola de 8 KB de la SRAM. Antes el wire contaba sólo
              * `s_sqlite_size`, y sin BD decía 0 KB de un bloque que existía. */
-            s_pack_ram_size = plan.reserva_bytes ? s_sqlite_size : PACK_RAM_BYTES;
+            s_pack_ram_size = plan.reserva_bytes ? s_sqlite_size : s_cola_bytes;
             log_printf("vm: heap en PSRAM %u MB @ 0x%08x (SRAM interna sin reservar)",
                        (unsigned)(s_vm_buffer_size / (1024u * 1024u)),
                        (unsigned)(uintptr_t) s_vm_buffer);
             /* El motivo de un NO se dice siempre: "se pidió mal" no puede
              * parecerse a "no se pidió" (patrón del clamp de #292). */
             if (sqlres != BPVM_SQLITE_OFF) {
-                log_printf("bd: %s (SQLite=%ld) -> %u KB @ 0x%08x",
-                           bpvm_sqlite_res_str(sqlres), s_sqlite_asked_mb,
+                log_printf("packs: bloque de RAM %s (%s=%ld) -> %u KB @ 0x%08x en PSRAM",
+                           bpvm_sqlite_res_str(sqlres), pack_kb > 0 ? "packRam" : "SQLite",
+                           pack_kb > 0 ? pack_kb : s_sqlite_asked_mb,
                            (unsigned)(s_sqlite_size / 1024u),
                            (unsigned)(uintptr_t) s_sqlite_base);
             }
@@ -1421,8 +1447,11 @@ static void vm_task(void* arg) {
              * abajo, pegado a `end`, que es desde donde crece sbrk/malloc. Sin
              * PSRAM no hay arena de donde sacar la RAM del pack: va a la SRAM, y
              * la región ya se para justo debajo. */
-            s_pack_ram_base  = (uint8_t*) (uintptr_t) PACK_RAM_SRAM_BASE;
-            s_pack_ram_size  = PACK_RAM_BYTES;
+            s_pack_ram_base  = (uint8_t*) cola_base();
+            s_pack_ram_size  = s_cola_bytes;
+            log_printf("packs: bloque de RAM %u KB @ 0x%08x, la cola de la SRAM%s",
+                       (unsigned) (s_cola_bytes / 1024u), (unsigned) cola_base(),
+                       (pack_kb > 0) ? " (packRam= del ENV)" : "");
             s_vm_buffer      = reg[plan.idx].base + (reg[plan.idx].bytes - plan.bytes);
             s_vm_buffer_size = (uint32_t) plan.bytes;
             size_t stk = vm_stack_region_bytes();   /* la regla, no una copia */
