@@ -2791,7 +2791,9 @@ muro, `#593`), el arranque y los packs, la flash (`U1.4`, los 32 MB) y `CALL_REL
 - El `HELLO` dice capacidades distintas: `PACKS`, sólo la STM32 y el simulado (la Pico y la ESP32 también tienen
   packs); `DEBUG` y `BOOTSEL`, sólo la Pico. Nadie las lee hoy.
 - miVM saca por stderr `[B1-trigger] … se auto-encola RUNNABLE` en ejecuciones normales: una medida de `#474`
-  (`2e94620b`) que se quedó; no es un error (su comentario: «es la condición previa»).
+  (`2e94620b`) que se quedó; no es un error (su comentario: «es la condición previa»). → **No era sólo ruido:
+  `#613`** (30-sep, `d6d72384`): con varios workers, esa condición previa abría la ventana de B1 por `sleep(0)`
+  (9 de 30 con cuatro); arreglado como en la VM-C —no se reclama un hilo con dueño— y el aviso, fuera.
 - Documentos rancios: `HEAP_LAYOUT.md` no dibuja la tabla de handles entre el heap y las pilas (es de `#451`), y el
   documento dice de sí mismo que manda sobre el código; `OPCODES.md` dice 186 y «`0xBC .. 0xFF` libres», pero `0xBC`
   y `0xBD` son `LEA_FIELD` y `LEA_FIELD_REF`; los punteros de `V7_BACKLOG` §H7 a `FICHAS`, todos rancios; y
@@ -2977,6 +2979,39 @@ En el peor caso posible (un programa que no hace más que llamar), un 1,7 % como
 contra, subir el formato con toda su cascada (la stdlib, los packs, las imágenes y las nueve placas) y el `CALL` de
 siempre para siempre. **Propuesta: cerrarla.** Si se quiere la certeza del micro, la misma medida en la Pico (grabar).
 **CERRADA** (Eduardo, 30-sep: *«1 la cerramos»*). La base `cb` se queda como está.
+
+### Los 32 MB del P4 — dónde está de verdad cada techo (30-sep)
+
+Eduardo, al ver el paso 0: *«el límite de la flash de 16M en la P4 era para código ejecutable. Para FS no debería
+haber límite»*; y *«cuando es el kit tiene 16M y cuando es la de Waveshare son 32M y lo sabemos porque nos lo han
+dicho ellas»*. Leído en el IDF (v6.0.1), son dos techos distintos:
+
+- **Ejecutar desde la flash** (la zona de packs, que se mapea): `spi_flash_mmap` rechaza con `ESP_ERR_INVALID_ARG`
+  todo lo que pase de 24 bits (16 MB), en todas las ESP32, salvo con `CONFIG_BOOTLOADER_CACHE_32BIT_ADDR_*`
+  (experimental; no la usamos). Es el `err=258` del revert `2dc12d5b`. No depende del chip ni de cómo se grabe.
+- **Leer, escribir y borrar** (el FS): `esp_flash_read/write/erase` sólo miran `chip->size`, y ése es el tamaño de la
+  CABECERA de la imagen (`esp_flash_types.h`: *«this stands for the size in the binary image header»*; al arrancar,
+  *«Detected size larger than the size in the binary image header. Using the size in the binary image header»*).
+  Grabamos con `--flash-size 16MB` para que la misma imagen arranque en el kit (con 32, el kit para al arrancar:
+  *«Detected size smaller than the size in the binary image header. Probe failed»*). Por encima de 16 MB, el driver
+  genérico ya manda comandos de 4 bytes en cada operación (`IS_ADDR_32BIT`), sin opciones.
+- **El tamaño real** lo dice cada placa: `esp_flash_get_physical_size` —la línea `flash:` del arranque, y el INFO,
+  33 554 432 B en la Waveshare—.
+- Grabar no es el problema (lo que Eduardo trajo de la red sobre esptool: el stub, `--flash-size`, QIO/DIO): el stub
+  ya se usa, la imagen entera vive por debajo de 16 MB y grabamos en DIO. `--flash-size detect` escribiría en la
+  cabecera, al grabar, lo que mida cada placa; pero depende de cómo se grabe (el IDE, `idf.py`), y leerlo al
+  arrancar, no.
+
+**El camino que sale** (una imagen; el tamaño, el que diga la placa al arrancar, como la variante y el panel): si el
+chip físico es mayor que la cabecera, subir `esp_flash_default_chip->size` al físico; la zona de packs sigue en
+`bpdata`, por debajo de 16 MB —lo único que pide el mapeo—, y el FS gana los 16 MB de arriba. Dos formas de
+dárselos, a decidir: (a) el FS entero arriba, contiguo, y los packs con todo `bpdata`; (b) el FS en dos trozos —el
+suyo de `bpdata` y el de arriba— unidos en el dispositivo de bloques de littlefs. Las dos piden reformatear el FS de
+la Waveshare una vez; el kit y las demás placas no cambian. La C5 lo tendría más fácil: su imagen ya declara 32 MB
+(su `chip->size` ya es 32) y su `bpdata` acaba en 16. **Lo primero, medir** en la Waveshare con una imagen de prueba
+(con el OK de Eduardo): subir el tamaño y LEER por encima de 16 MB comparando con lo de abajo —si el driver cortara a
+24 bits, leería lo de abajo: se sabe sin escribir nada—; y sólo si no hay eco, escribir un sector de arriba y
+releerlo.
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
