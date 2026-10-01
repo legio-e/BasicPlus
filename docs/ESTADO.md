@@ -1093,6 +1093,17 @@ la C6, la P4 y la Nucleo.
   lista de H12 de antes de activar el segundo núcleo; y lo que ya estaba en ella: `kill_requested` atómico, el
   `printf` de la Pico y el inventario de `A4`.
 
+**Traspaso (1-oct, pausa).** Boot 2, hecho (las cuatro fases); H7, abierto sólo por remedir el S3 y añadir su caso a
+`test_mem` (Eduardo: hasta que la S3 esté en la mesa). H12 tiene escrito el modelo de Eduardo —`io` es el hilo
+principal y escucha siempre; el arranque crea un run por núcleo (dos en la Pico, la Metro, las dos P4 y la S3), haya
+programa o no; una VM que comparten— y lo que falta antes de encender el segundo núcleo, con la variable de condición
+de FreeRTOS a la cabeza (`V7_IDEAS` §H12). `#616`, cerrada. Fuera de H7: `#614` (la C5, 5 ms por etiqueta), `#615`
+(aparcada), `#609` y la línea de la C5 que mezcla la PSRAM con la DRAM.
+
+Las placas: la Pico, la DK2, la C5 y la P4, con la imagen de `e9ca7c30` y su ENV como estaba (`log=1` en la Pico, la
+DK2 y la C5; la zona de la Pico, vacía; sin autorun). El arreglo de `#616` no va en ellas: toca el planificador de
+varios runs, que en las placas está apagado.
+
 ## 🥾 H7 (1-oct) — Boot 2, la fase 4: el arranque común (`e9ca7c30`), y tres fallos de paso que se van con él
 
 - **Lo que había**, leído en las cinco copias (la Pico, la ESP32, la P4 por UART y por TCP, la STM32): el mismo
