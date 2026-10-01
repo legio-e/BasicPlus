@@ -1046,6 +1046,9 @@ static bpvm_repl_ops_t s_repl_ops = {
     .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\",\"DEBUG\",\"PACKS\"]",
     .fich_buf       = s_fich_buf,     /* V7/H8 #495: un sector de la flash */
     .fich_bytes     = sizeof s_fich_buf,
+    .put_trozo      = 512,            /* V7/H8 #495: 4 trozos de 512 B = 2 KB: caben en el anillo de la UART
+                                       * (8 KB) y en el del USB-Serial-JTAG (4 KB) (Eduardo, 1-oct) */
+    .put_ventana    = 4,
     .fs_total_bytes = esp32_repl_fs_total,
     .fs_used_bytes  = esp32_repl_fs_used,
     .fs_file_count  = esp32_repl_fs_count,

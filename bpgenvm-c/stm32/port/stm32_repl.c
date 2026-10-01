@@ -239,6 +239,9 @@ static const bpvm_repl_ops_t s_repl_ops = {
     .after_put     = stm32_after_put,
     .fich_buf      = s_fich_buf,      /* V7/H8 #495: una página de la flash */
     .fich_bytes    = sizeof s_fich_buf,
+    .put_trozo     = 512,             /* V7/H8 #495: 4 trozos de 512 B = 2 KB, con sus cabeceras dentro del
+                                       * anillo de 4 KB que llena el DMA (Eduardo, 1-oct) */
+    .put_ventana   = 4,
 };
 
 /* ---- FILES ---- */

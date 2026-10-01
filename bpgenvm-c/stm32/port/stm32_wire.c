@@ -249,7 +249,7 @@ int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
     while (got < n) {
         int c = stm32_wire_getchar();
         if (c < 0) {
-            if (HAL_GetTick() - last >= 3000U) return -1;   /* bulk estancado */
+            if (HAL_GetTick() - last >= WIRE_V1_BULK_ESTANCADO_MS) return -2;   /* bulk estancado (bpvm_wire_v1.h) */
             continue;
         }
         last = HAL_GetTick();

@@ -145,6 +145,14 @@ typedef struct {
      * ESP32, 8 KB la STM32U5. NULL = sin búfer: cada trozo va al fichero abierto según llega. */
     unsigned char* fich_buf;
     unsigned long  fich_bytes;
+
+    /* V7/H8 #495 (1-oct) — EL TROZO Y LA VENTANA que la placa ANUNCIA en el HELLO (`putChunk`, `putWindow`):
+     * el cliente sube en trozos de `put_trozo` bytes con hasta `put_ventana` sin acuse. Los decide el búfer de
+     * comunicaciones de la familia (Eduardo: «512 bytes o 1K [...] si el buffer en las placas es pequeño
+     * entonces 512»; «una ventana de 4 paquetes de 512 bytes son 2K»). 0 = no se anuncia, y el cliente sube como
+     * siempre (un trozo, un acuse). */
+    unsigned long  put_trozo;
+    unsigned long  put_ventana;
 } bpvm_repl_ops_t;
 
 /** La familia registra su cintura UNA vez, antes de atender el primer mensaje.

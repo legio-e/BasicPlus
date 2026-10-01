@@ -1245,6 +1245,8 @@ static const bpvm_repl_ops_t s_repl_ops = {
     .after_put      = NULL,
     .fich_buf       = s_fich_buf,     /* V7/H8 #495: un sector de la flash */
     .fich_bytes     = sizeof s_fich_buf,
+    .put_trozo      = 512,            /* V7/H8 #495: 4 trozos de 512 B = 2 KB, la FIFO del CDC (Eduardo, 1-oct) */
+    .put_ventana    = 4,
     .fs_total_bytes = pico_repl_fs_total,
     .fs_used_bytes  = pico_repl_fs_used,
     .fs_file_count  = pico_repl_fs_count,

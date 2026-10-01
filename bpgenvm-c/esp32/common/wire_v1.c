@@ -141,10 +141,12 @@ int wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max) {
 int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
     if (n > buf_max) return -1;
     size_t got = 0;
+    int64_t ultimo = bpvm_platform_now_ms();   /* #495: plazo de bulk estancado (bpvm_wire_v1.h) */
     while (got < n) {
         /* uart_read_bytes bloquea (cede CPU) hasta tener datos o timeout. */
         int r = uart_read_bytes(WIRE_UART, buf + got, n - got, pdMS_TO_TICKS(200));
-        if (r > 0) got += (size_t) r;
+        if (r > 0) { got += (size_t) r; ultimo = bpvm_platform_now_ms(); continue; }
+        if (bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_BULK_ESTANCADO_MS) return -2;
     }
     return (int) n;
 }

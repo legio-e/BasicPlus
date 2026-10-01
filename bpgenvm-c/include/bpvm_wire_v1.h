@@ -63,6 +63,14 @@ extern "C" {
  * contrato no exige». Lo exige: es del protocolo, no del cable. */
 #define WIRE_V1_ESTANCADA_MS 300u
 
+/* V7/H8 #495 (1-oct) — CUÁNTO SE ESPERA A UN BULK QUE SE HA QUEDADO A MEDIAS. Lo mismo que la línea, con
+ * más margen (un bulk es más largo y llega a ráfagas). Sin plazo, a un bulk al que le faltan bytes —un
+ * cliente que se cae a mitad de envío, o bytes perdidos— la placa los espera PARA SIEMPRE, y lo siguiente
+ * que llegue —el HELLO del cliente que vuelve, el PUT_BEGIN de su segundo intento (Eduardo: el segundo
+ * intento lo hace el IDE)— se lee como DATOS. Con plazo, el bulk se da por perdido, el llamante contesta su
+ * error y la línea siguiente vuelve a estar en sincronía. Lo tenía sólo la STM32 (3 s). */
+#define WIRE_V1_BULK_ESTANCADO_MS 3000u
+
 /** Lee una línea JSON hasta el '\n'. NO hace eco (el IDE no lo espera y
  *  rompería el framing). `first_char_already_read` permite pasar un carácter ya
  *  consumido por el dispatcher; -1 = leer la línea entera.
@@ -75,7 +83,9 @@ extern "C" {
 int  wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max);
 
 /** Lee exactamente `n` bytes crudos (tras un mensaje con campo `"bulk":N`).
- *  @return n si OK, -1 si `n` excede `buf_max`. */
+ *  @return n si OK; -1 si `n` excede `buf_max` (o se corta el cable);
+ *          **-2** si el bulk se estanca `WIRE_V1_BULK_ESTANCADO_MS` sin recibir un byte (lo recibido se
+ *          pierde: el llamante contesta su error y el cable sigue en sincronía en la línea siguiente). */
 int  wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max);
 
 /** Escribe `len` bytes seguidos de '\n' y hace flush. UNA vez por mensaje JSON.

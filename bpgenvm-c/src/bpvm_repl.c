@@ -746,6 +746,13 @@ static void repl_hello(long id) {
     off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "serverBuild",
                                s_ops->server_build ? s_ops->server_build : "");
     if (off < 0) goto err;
+    /* #495 — el trozo y la ventana de la subida, si la familia los declara (un cliente viejo no los mira). */
+    if (s_ops->put_trozo > 0 && s_ops->put_ventana > 0) {
+        off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "putChunk", (long) s_ops->put_trozo);
+        if (off < 0) goto err;
+        off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "putWindow", (long) s_ops->put_ventana);
+        if (off < 0) goto err;
+    }
     /* El array, tal cual lo da la familia. */
     {
         const char* caps = s_ops->capabilities ? s_ops->capabilities
@@ -815,6 +822,16 @@ static void crear_dirs_padre(const char* path) {
 
 /* PUT — subida de un tirón (para ficheros que caben en el scratch; los grandes
  * van por PUT_BEGIN/DATA/END). */
+/* #495 — EL PUT DE UNA PIEZA QUE SE ROMPE, también se borra: la misma regla que la subida por trozos (Eduardo,
+ * 1-oct: «si queda la versión anterior el usuario se va a pensar que tiene el nuevo»). Sin esto, un .mod de 5 KB —
+ * casi todos suben de una pieza— que no llega dejaba en la placa el de antes. Si no estaba, no hay nada que borrar. */
+static void put_unica_borrar(const char* path, unsigned long bytes, const char* por_que) {
+    if (!bpvm_fs_exists(path)) return;
+    int borrado = (bpvm_fs_remove(path) == 0);
+    log_printf("put: %s no termino (%lu B de una pieza, %s): %s", path, bytes, por_que,
+               borrado ? "borrado" : "NO SE PUDO BORRAR");
+}
+
 static void repl_put(long id, json_obj_t* obj) {
     const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
     if (path == NULL) {
@@ -831,12 +848,14 @@ static void repl_put(long id, json_obj_t* obj) {
         return;
     }
     if (wire_v1_recv_bulk(s_ops->put_buf, (size_t) bulk, (size_t) s_ops->put_buf_size) < 0) {
+        put_unica_borrar(path, (unsigned long) bulk, "el bulk no llego entero");   /* #495 */
         wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
     }
     crear_dirs_padre(path);                             /* #455 */
     if (bpvm_fs_write(path, s_ops->put_buf, (uint32_t) bulk, 0) != 0) {
         const char *code, *msg;
-        fs_fallo("put", path, (unsigned long) bulk, &code, &msg);
+        fs_fallo("put", path, (unsigned long) bulk, &code, &msg);   /* antes de borrar: mira el espacio */
+        put_unica_borrar(path, (unsigned long) bulk, "no se pudo escribir");   /* #495 */
         wire_v1_send_error(id, code, msg);
         return;
     }

@@ -163,6 +163,19 @@ public final class BpvmClient implements AutoCloseable {
     private final CountDownLatch helloLatch = new CountDownLatch(1);
     /** Build/version reportado por el server en HELLO_REPLY. */
     private volatile String serverBuild;
+    /** V7/H8 #495 — el trozo y la ventana que la placa ANUNCIA en el HELLO_REPLY (`putChunk`, `putWindow`): se
+     *  sube en trozos de ese tamaño con hasta esa cantidad sin acuse. 0 = no los anuncia (un firmware anterior, la
+     *  VM-Java): se sube como siempre, en trozos de PUT_STREAM_CHUNK y con un acuse por trozo. */
+    private volatile int putTrozo = 0;
+    private volatile int putVentana = 0;
+    /** #495 — la hora del último byte que SALE (la pone writeFrame): antes del segundo intento se espera a que el
+     *  cable lleve callado, en los dos sentidos, más que el plazo de bulk estancado de la placa. */
+    private volatile long lastTxMillis = 0;
+    /** #495 — cuántas subidas han necesitado el segundo intento (lo mira SubidaSmoke). */
+    private volatile int segundosIntentos = 0;
+    /** #495 — SÓLO para SubidaSmoke: en la PRÓXIMA subida por trozos, el trozo con este índice sale con 16 bytes
+     *  menos de los que anuncia —un cable que pierde bytes—, para forzar el segundo intento. -1 = nada. */
+    static volatile int pruebaRecortarTrozo = -1;
     /** PR-3 — sessionId activa (0 = ninguna). La aprendemos de RUN_REPLY o
      *  del campo `session` de cualquier evento entrante. La usamos para
      *  componer KILL { session: N }. */
@@ -409,16 +422,25 @@ public final class BpvmClient implements AutoCloseable {
      *  Bloquea hasta recibir el HELLO_REPLY o un timeout corto. */
     private void doHandshake() {
         try {
-            Map<String, Object> resp = sendRequest("HELLO",
-                    "\"protoVersion\":1,\"clientName\":\"BpIde\",\"clientBuild\":\"1.0\"",
-                    null, 5000);
-            serverBuild = Json.getString(resp, "serverBuild", "?");
+            Map<String, Object> resp = sendRequest("HELLO", HELLO_CAMPOS, null, 5000);
+            aprenderHello(resp);
             diag("[BpvmClient] handshake con VM: " + Json.getString(resp, "serverName", "?")
                     + " " + serverBuild
-                    + " protoVersion=" + Json.getLong(resp, "protoVersion", 0));
+                    + " protoVersion=" + Json.getLong(resp, "protoVersion", 0)
+                    + (putTrozo > 0 ? " | subida: trozos de " + putTrozo + " B, ventana " + putVentana : ""));
         } catch (IOException e) {
             diag("[BpvmClient] handshake falló: " + e.getMessage());
         }
+    }
+
+    private static final String HELLO_CAMPOS =
+            "\"protoVersion\":1,\"clientName\":\"BpIde\",\"clientBuild\":\"1.0\"";
+
+    /** Lo que el HELLO_REPLY dice del server: su build y, desde #495, el trozo y la ventana de la subida. */
+    private void aprenderHello(Map<String, Object> resp) {
+        serverBuild = Json.getString(resp, "serverBuild", "?");
+        putTrozo    = (int) Json.getLong(resp, "putChunk", 0);
+        putVentana  = (int) Json.getLong(resp, "putWindow", 0);
     }
 
     /** Cierra el puerto serie bajando antes RTS y DESPUÉS DTR (23-sep).
@@ -485,6 +507,7 @@ public final class BpvmClient implements AutoCloseable {
                 WireFraming.sendBulk(w, bulkOrNull);
             }
             w.flush();
+            lastTxMillis = System.currentTimeMillis();   /* #495 */
         }
     }
 
@@ -631,6 +654,24 @@ public final class BpvmClient implements AutoCloseable {
 
     private Map<String, Object> sendRequest(String type, String extraJson, byte[] bulkOrNull, long timeoutMs)
             throws IOException {
+        return esperarPeticion(enviarPeticion(type, extraJson, bulkOrNull, 0), timeoutMs);
+    }
+
+    /** #495 — una petición en vuelo: su id, su tipo (para el mensaje) y su future. */
+    private static final class Pendiente {
+        final long id;
+        final String type;
+        final CompletableFuture<Map<String, Object>> future;
+        Pendiente(long id, String type, CompletableFuture<Map<String, Object>> future) {
+            this.id = id; this.type = type; this.future = future;
+        }
+    }
+
+    /** #495 — la mitad de sendRequest que MANDA: registra la future y escribe la trama sin esperar (la ventana de la
+     *  subida manda varias antes de esperar la primera). `recorte` > 0, sólo para SubidaSmoke: el bulk sale con esos
+     *  bytes de menos de los que anuncia. */
+    private Pendiente enviarPeticion(String type, String extraJson, byte[] bulkOrNull, int recorte)
+            throws IOException {
         long id = nextRequestId.getAndIncrement();
         CompletableFuture<Map<String, Object>> future = new CompletableFuture<>();
         synchronized (pendingLock) { pendingRequests.put(id, future); }
@@ -643,7 +684,21 @@ public final class BpvmClient implements AutoCloseable {
             sb.append(",\"bulk\":").append(bulkOrNull.length);
         }
         sb.append('}');
-        writeFrame(sb.toString(), bulkOrNull);
+        try {
+            writeFrame(sb.toString(), recorte > 0 && bulkOrNull != null
+                    ? java.util.Arrays.copyOf(bulkOrNull, Math.max(0, bulkOrNull.length - recorte)) : bulkOrNull);
+        } catch (IOException e) {
+            synchronized (pendingLock) { pendingRequests.remove(id); }
+            throw e;
+        }
+        return new Pendiente(id, type, future);
+    }
+
+    /** La mitad de sendRequest que ESPERA la respuesta de una petición ya mandada. */
+    private Map<String, Object> esperarPeticion(Pendiente p, long timeoutMs) throws IOException {
+        final long id = p.id;
+        final String type = p.type;
+        final CompletableFuture<Map<String, Object>> future = p.future;
         try {
             /* #454 — se espera POR INACTIVIDAD, no por tiempo total. Mientras
              * la placa siga mandando bytes, esto no se rinde; si deja de
@@ -849,8 +904,33 @@ public final class BpvmClient implements AutoCloseable {
     private static final int PUT_STREAM_CHUNK     = 8 * 1024;
 
     /** Sube `bytes` al workdir de la VM en `remotePath`. Whole-buffer si cabe;
-     *  streaming por trozos si es grande. Bulk raw inline. */
+     *  streaming por trozos si es grande. Bulk raw inline.
+     *
+     *  V7/H8 #495 — EL SEGUNDO INTENTO lo hace el IDE (Eduardo, 1-oct: «que lo haga el IDE»): UNO, desde el
+     *  principio, y SÓLO si falla el cable (sin respuesta, una respuesta rota, la placa que pierde el hilo); si la
+     *  placa dice que no con nombre (sin espacio, la ruta, no preparada), repetir no arregla nada y se dice a la
+     *  primera. Una subida que no termina, la placa la BORRA (Eduardo: «si queda la versión anterior el usuario se va
+     *  a pensar que tiene el nuevo»): si el segundo también falla, el fichero no está en la placa. */
     public int uploadFile(String remotePath, byte[] bytes, long timeoutMs) throws IOException {
+        try {
+            return subirUnaVez(remotePath, bytes, timeoutMs);
+        } catch (IOException e) {
+            if (closed || !esDelCable(e)) throw e;
+            segundosIntentos++;
+            diag("[BpvmClient] subida de " + remotePath + ": " + motivo(e) + " — segundo intento");
+            resincronizar(timeoutMs);
+            try {
+                return subirUnaVez(remotePath, bytes, timeoutMs);
+            } catch (IOException e2) {
+                if (closed || !esDelCable(e2)) throw e2;
+                try { resincronizar(timeoutMs); } catch (IOException ignorada) { /* el HELLO es lo que la borra */ }
+                throw new IOException("no se pudo subir " + remotePath + " (dos intentos): " + motivo(e2)
+                        + "; el fichero no está en la placa", e2);
+            }
+        }
+    }
+
+    private int subirUnaVez(String remotePath, byte[] bytes, long timeoutMs) throws IOException {
         if (bytes.length <= PUT_SINGLE_SHOT_MAX) {
             String extra = "\"path\":" + jsonStr(remotePath);
             Map<String, Object> resp = sendRequest("PUT", extra, bytes, timeoutMs);
@@ -860,20 +940,80 @@ public final class BpvmClient implements AutoCloseable {
     }
 
     /** #294 — subida por trozos (PUT_BEGIN + N×PUT_DATA + PUT_END). Sin techo de
-     *  tamaño: el firmware apende cada chunk al FS sin buferizar el fichero entero. */
+     *  tamaño: el firmware apende cada chunk al FS sin buferizar el fichero entero.
+     *
+     *  #495 — con el trozo y la VENTANA que anuncia la placa (512 B y 4): hasta 4 trozos sin acuse, y se espera
+     *  el más antiguo antes de mandar el siguiente. Sin anuncio, como siempre: 8 KB y un acuse por trozo. */
     private int uploadFileStreaming(String remotePath, byte[] bytes, long timeoutMs)
             throws IOException {
         String p = "\"path\":" + jsonStr(remotePath);
         sendRequest("PUT_BEGIN", p + ",\"size\":" + bytes.length, null, timeoutMs);
-        int off = 0;
-        while (off < bytes.length) {
-            int n = Math.min(PUT_STREAM_CHUNK, bytes.length - off);
-            sendRequest("PUT_DATA", "", java.util.Arrays.copyOfRange(bytes, off, off + n), timeoutMs);
-            off += n;
+        int trozo   = putTrozo   > 0 ? putTrozo   : PUT_STREAM_CHUNK;
+        int ventana = putVentana > 0 ? putVentana : 1;
+        int recortar = pruebaRecortarTrozo;
+        pruebaRecortarTrozo = -1;
+        java.util.ArrayDeque<Pendiente> enVuelo = new java.util.ArrayDeque<>();
+        int off = 0, indice = 0;
+        try {
+            while (off < bytes.length || !enVuelo.isEmpty()) {
+                while (off < bytes.length && enVuelo.size() < ventana) {
+                    int n = Math.min(trozo, bytes.length - off);
+                    enVuelo.add(enviarPeticion("PUT_DATA", "", java.util.Arrays.copyOfRange(bytes, off, off + n),
+                                               indice == recortar ? 16 : 0));
+                    off += n;
+                    indice++;
+                }
+                esperarPeticion(enVuelo.poll(), timeoutMs);
+            }
+        } finally {
+            /* tras un fallo, lo que quedaba en vuelo: si sus respuestas llegan, nadie las espera (se tiran) */
+            synchronized (pendingLock) { for (Pendiente q : enVuelo) pendingRequests.remove(q.id); }
         }
         Map<String, Object> resp = sendRequest("PUT_END", "\"size\":" + bytes.length, null, timeoutMs);
         return (int) Json.getLong(resp, "size", 0);
     }
+
+    /** #495 — ¿falló el CABLE (sin respuesta a tiempo, un FATAL, la placa que perdió el hilo de la subida) o la
+     *  PLACA dijo que no con nombre? Sólo lo primero se arregla repitiendo. */
+    static boolean esDelCable(IOException e) {
+        if (e instanceof WireError) {
+            String c = ((WireError) e).code;
+            return "SIZE_MISMATCH".equals(c) || "NO_SESSION".equals(c) || "PROTOCOL_ERROR".equals(c);
+        }
+        return true;
+    }
+
+    private static String motivo(IOException e) {
+        Throwable c = e.getCause();
+        return (c != null && c.getMessage() != null && "fallo en future".equals(e.getMessage()))
+                ? c.getMessage() : e.getMessage();
+    }
+
+    /** #495 — antes del segundo intento: que la placa suelte lo que tenía a medias y se entere de que el de antes ya
+     *  no está. Un bulk incompleto lo da por perdido a los 3 s (WIRE_V1_BULK_ESTANCADO_MS), así que se espera a que
+     *  el cable lleve callado más que eso EN LOS DOS SENTIDOS; luego un HELLO, que en la placa acaba la subida a
+     *  medias y la borra. */
+    private void resincronizar(long timeoutMs) throws IOException {
+        final long CALLADO_MS = 3500L;
+        long tope = System.currentTimeMillis() + Math.max(timeoutMs, 10_000L);
+        for (;;) {
+            long ahora = System.currentTimeMillis();
+            if (ahora - lastRxMillis >= CALLADO_MS && ahora - lastTxMillis >= CALLADO_MS) break;
+            if (ahora > tope) break;                       /* el cable no calla: se intenta igual */
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new IOException("interrupted", ie);
+            }
+        }
+        aprenderHello(sendRequest("HELLO", HELLO_CAMPOS, null, 5000));
+    }
+
+    /** #495 — para SubidaSmoke: lo que anunció la placa (0 = nada) y cuántas subidas necesitaron el segundo. */
+    int putTrozoAnunciado()   { return putTrozo; }
+    int putVentanaAnunciada() { return putVentana; }
+    int segundosIntentos()    { return segundosIntentos; }
 
     /** Sube un fichero local al workdir de la VM. */
     public int uploadFile(java.nio.file.Path localFile, String remotePath, long timeoutMs)

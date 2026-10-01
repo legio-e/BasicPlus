@@ -63,6 +63,8 @@ class Wire:
         self.otros = []
         self.basura = []
         self.pend = []
+        self.trozo = 0       # #495: el trozo y la ventana que anuncia la placa en el HELLO (0 = no los anuncia)
+        self.ventana = 0
         time.sleep(0.3)
         self.s.reset_input_buffer()
 
@@ -91,25 +93,51 @@ class Wire:
                     self.basura.append(ln[:200])
         return out
 
+    def _bocado(self):
+        """Lo que haya en el puerto EN CUANTO haya algo (o a los 0,2 s del plazo si no llega nada), en mensajes."""
+        c = self.s.read(self.s.in_waiting or 1)
+        if c:
+            self.buf += c
+        out = []
+        while b"\n" in self.buf:
+            ln, self.buf = self.buf.split(b"\n", 1)
+            ln = ln.strip()
+            if ln.startswith(b"{"):
+                try:
+                    out.append(json.loads(ln.decode("utf-8", "replace")))
+                except Exception:
+                    self.basura.append(ln[:200])
+            else:
+                self.basura.append(ln[:200])
+        return out
+
     def esperar(self, typ, secs):
         """Espera un tipo. GUARDA lo demas en self.otros: tirar la respuesta que
         no encaja es como se pierden los diagnosticos (me paso escribiendo esto:
-        la placa contestaba ERROR/NOT_FOUND y yo veia 'sin respuesta')."""
+        la placa contestaba ERROR/NOT_FOUND y yo veia 'sin respuesta').
+        #495 (1-oct): vuelve EN CUANTO llega la respuesta. Antes leía el puerto a vueltas de lines(0.2), y un
+        read(4096) con plazo de 0,2 s no vuelve hasta tener 4096 bytes o agotarlo: cada respuesta costaba 0,2 s
+        aunque llegara en un milisegundo, y una medida hecha con esto medía su propia espera."""
         self.otros = []
         t0 = time.time()
-        while time.time() - t0 < secs:
-            lote = self.lines(0.2)
+        lote, self.pend = self.pend, []
+        while True:
             for n, m in enumerate(lote):
                 if m.get("type") == typ:
                     # la COLA del lote es respuesta tambien: tirarla fue el bug
                     self.pend = lote[n+1:]
                     return m
                 self.otros.append(m)
-        return None
+            if time.time() - t0 >= secs:
+                return None
+            lote = self._bocado()
 
     def hola(self):
         self.send("HELLO", client="wire_serie", version=1)
-        return self.esperar("HELLO_REPLY", 3)
+        r = self.esperar("HELLO_REPLY", 3)
+        if r:   # #495: el trozo y la ventana de la subida, si la placa los anuncia
+            self.trozo, self.ventana = int(r.get("putChunk", 0) or 0), int(r.get("putWindow", 0) or 0)
+        return r
 
     def close(self):
         try:
@@ -155,24 +183,36 @@ def cmd_put(w, args):
 def cmd_puts(w, args):
     """#294 - PUT por TROZOS, para ficheros que no caben en el scratch de la placa
     (Gui.mod son 44 KB y el PUT de un tiron los rechaza con «demasiado grande»).
-    `puts <local> [/ruta/remota] [trozo]`."""
+    `puts <local> [/ruta/remota] [trozo]`.
+    #495: sin `trozo`, el trozo y la VENTANA que anuncia la placa en el HELLO (hasta `ventana` trozos sin acuse);
+    con `trozo`, o si la placa no anuncia nada, un acuse por trozo (4096 B por defecto)."""
     import os
     local = args[0]
     remoto = args[1] if len(args) > 1 else ("/app/" + os.path.basename(local))
-    trozo = int(args[2]) if len(args) > 2 else 4096
+    if len(args) > 2:
+        trozo, ventana = int(args[2]), 1
+    else:
+        if not w.trozo:
+            w.hola()
+        trozo, ventana = (w.trozo, w.ventana) if w.trozo and w.ventana else (4096, 1)
     data = open(local, "rb").read()
     w.send("PUT_BEGIN", path=remoto, size=len(data))
     if w.esperar("PUT_BEGIN_REPLY", 15) is None:
         print("PUT_BEGIN fallo:", [(m.get("code"), m.get("message")) for m in w.otros][:2]); return
-    enviados = 0
-    while enviados < len(data):
-        cacho = data[enviados:enviados + trozo]
-        w.id += 1
-        cab = json.dumps({"type": "PUT_DATA", "id": w.id, "bulk": len(cacho)})
-        w.s.write((cab + chr(10)).encode() + cacho)
+    enviados, en_vuelo, acusados = 0, 0, 0
+    while enviados < len(data) or en_vuelo:
+        while enviados < len(data) and en_vuelo < ventana:
+            cacho = data[enviados:enviados + trozo]
+            w.id += 1
+            cab = json.dumps({"type": "PUT_DATA", "id": w.id, "bulk": len(cacho)})
+            w.s.write((cab + chr(10)).encode() + cacho)
+            enviados += len(cacho)
+            en_vuelo += 1
         if w.esperar("PUT_DATA_REPLY", 15) is None:
-            print("PUT_DATA fallo en %d B" % enviados); return
-        enviados += len(cacho)
+            print("PUT_DATA fallo tras %d B acusados: %s" % (acusados, [(m.get("code"), m.get("message"))
+                                                                     for m in w.otros][:2])); return
+        en_vuelo -= 1
+        acusados = min(len(data), acusados + trozo)
     w.send("PUT_END")
     r = w.esperar("PUT_END_REPLY", 20)
     print("puts %s -> %s : %s" % (local, remoto,

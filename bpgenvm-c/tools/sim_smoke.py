@@ -224,6 +224,47 @@ def main():
         r = w.call("RUN", path="/app/NoExiste.mod")
         check(r.get("code") == "NOT_FOUND" and no_esta("/app/rota.bin"), "#495: un RUN acaba la subida")
 
+        # 5d. #495 paso 3 — EL TROZO Y LA VENTANA, anunciados en el HELLO (512 B y 4), una subida que los usa (hasta 4
+        # trozos sin acuse, como hará el IDE) y el BULK ESTANCADO: al que le faltan bytes se le da por perdido a los
+        # WIRE_V1_BULK_ESTANCADO_MS (3 s) y el cable vuelve a estar en sincronía —sin eso, el segundo intento del IDE se
+        # leería como datos—.
+        r = w.call("HELLO", protoVersion=1, clientName="smoke-495-3")
+        check(r.get("putChunk") == 512 and r.get("putWindow") == 4,
+              "#495: el HELLO anuncia el trozo y la ventana (putChunk=%s, putWindow=%s)"
+              % (r.get("putChunk"), r.get("putWindow")))
+        datos = bytes((i * 13 + 7) & 0xFF for i in range(20000))
+        r = w.call("PUT_BEGIN", path="/app/ventana.bin", size=len(datos))
+        enviados, en_vuelo, bien = 0, 0, True
+        while enviados < len(datos) or en_vuelo:
+            while enviados < len(datos) and en_vuelo < 4:
+                cacho = datos[enviados:enviados + 512]
+                w.id += 1
+                w.s.sendall((json.dumps({"type": "PUT_DATA", "id": w.id, "bulk": len(cacho)}) + "\n").encode() + cacho)
+                enviados += len(cacho); en_vuelo += 1
+            m = w._line()
+            if m.get("type") != "PUT_DATA_REPLY": bien = False
+            en_vuelo -= 1
+        r = w.call("PUT_END", size=len(datos))
+        r2, got = w.get("/app/ventana.bin")
+        check(bien and r.get("type") == "PUT_END_REPLY" and got == datos,
+              "#495: subida de 20000 B en trozos de 512 con 4 en vuelo: llega entera")
+        w.call("DEL", path="/app/ventana.bin")
+        w.id += 1
+        t0 = time.time()
+        w.s.sendall((json.dumps({"type": "PUT_DATA", "id": w.id, "bulk": 100}) + "\n").encode() + b"x" * 40)
+        m = w._line()
+        dt = time.time() - t0
+        check(m.get("type") == "FATAL" and "bulk" in m.get("message", "") and 2.5 <= dt <= 6.0,
+              "#495: un bulk al que le faltan bytes se da por perdido a los 3 s (%s «%s», %.1f s)"
+              % (m.get("type"), m.get("message"), dt))
+        r = w.call("PING")
+        check(r.get("type") == "PONG", "#495: ... y el cable vuelve a estar en sincronía (PING → PONG)")
+        w.s.sendall(b'{"type":"PI')                          # una línea que se queda a medias
+        time.sleep(0.6)                                      # > WIRE_V1_ESTANCADA_MS (300 ms)
+        r = w.call("PING")
+        check(r.get("type") == "PONG",
+              "#495: una línea a medias que se estanca se tira, y la siguiente llega entera (como en las placas)")
+
         # 5b. U3.24 — EL RESTO DEL REPL COMUN.
         #
         # Desde que el sim usa `src/bpvm_repl.c`, cada linea de aqui vale para las

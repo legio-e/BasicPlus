@@ -389,15 +389,47 @@ void wire_v1_send_bulk(const uint8_t* data, size_t n) {
     (void) send_all(g_cli, (const char*) data, n);
 }
 
+/* V7/H8 #495 — el contrato del bulk (bpvm_wire_v1.h): -2 si se estanca WIRE_V1_BULK_ESTANCADO_MS sin
+ * recibir un byte. Por TCP no se pierden bytes, pero un cliente puede quedarse a medias sin cerrar; y así el
+ * segundo intento del IDE se prueba aquí igual que en una placa. */
 int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
+    size_t got = 0;
     if (n > buf_max) return -1;
-    return recv_exact(g_cli, buf, n) == 0 ? (int) n : -1;
+    while (got < n) {
+        fd_set rd;
+        struct timeval tv;
+        FD_ZERO(&rd);
+        FD_SET(g_cli, &rd);
+        tv.tv_sec  = (long) (WIRE_V1_BULK_ESTANCADO_MS / 1000u);
+        tv.tv_usec = (long) ((WIRE_V1_BULK_ESTANCADO_MS % 1000u) * 1000u);
+        int s = select((int) g_cli + 1, &rd, NULL, NULL, &tv);
+        if (s == 0) return -2;                          /* estancado */
+        if (s < 0) return -1;
+        int r = recv(g_cli, (char*) buf + got, (int) (n - got), 0);
+        if (r <= 0) return -1;
+        got += (size_t) r;
+    }
+    return (int) n;
 }
 
-/* Lee una línea (hasta '\n', descarta '\r'). Devuelve len o -1 si el peer cierra. */
+/* Lee una línea (hasta '\n', descarta '\r'). Devuelve len o -1 si el peer cierra.
+ * V7/H8 #495 — y una línea a medias que se ESTANCA WIRE_V1_ESTANCADA_MS se tira en silencio y se sigue
+ * esperando, como en las placas (bpvm_wire_v1.h): sin eso, la basura de una subida rota se queda a medias y
+ * el mensaje siguiente —el HELLO del segundo intento del IDE— se le pega detrás y se pierde. */
 static int recv_line(sock_t c, char* buf, size_t cap) {
     size_t n = 0;
     for (;;) {
+        if (n > 0) {
+            fd_set rd;
+            struct timeval tv;
+            FD_ZERO(&rd);
+            FD_SET(c, &rd);
+            tv.tv_sec  = (long) (WIRE_V1_ESTANCADA_MS / 1000u);
+            tv.tv_usec = (long) ((WIRE_V1_ESTANCADA_MS % 1000u) * 1000u);
+            int s = select((int) c + 1, &rd, NULL, NULL, &tv);
+            if (s == 0) { n = 0; continue; }            /* estancada: se tira */
+            if (s < 0) return -1;
+        }
         char ch; int r = recv(c, &ch, 1, 0);
         if (r <= 0) return -1;
         if (ch == '\n') { buf[n < cap ? n : cap - 1] = '\0'; return (int) n; }
@@ -642,6 +674,8 @@ static const bpvm_repl_ops_t SIM_REPL_OPS = {
     NULL,                       /* fs_save: idem — el común contesta OK, que es la verdad */
     g_sim_fich_buf,             /* V7/H8 #495: el búfer de ficheros, un bloque (SECTOR) */
     sizeof g_sim_fich_buf,
+    512,                        /* V7/H8 #495: el trozo y la ventana del HELLO, los de las placas */
+    4,
 };
 
 /* ── META ─────────────────────────────────────────────────────────────────── */

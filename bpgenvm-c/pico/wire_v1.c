@@ -58,6 +58,7 @@ int wire_v1_recv_line(int first_char_already_read,
 int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
     if (n > buf_max) return -1;
     size_t got = 0;
+    int64_t ultimo = bpvm_platform_now_ms();   /* #495: plazo de bulk estancado (bpvm_wire_v1.h) */
     while (got < n) {
         /* #495 — POR BLOQUES: lo que haya en la FIFO del CDC, de una vez (stdio_get_until
          * acaba en tud_cdc_read), y no byte a byte; y nunca más de lo que falta del bulk,
@@ -68,9 +69,11 @@ int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
         int r = stdio_get_until((char*) buf + got, falta > 65536u ? 65536 : (int) falta,
                                 make_timeout_time_us(0));
         if (r <= 0) {
+            if (bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_BULK_ESTANCADO_MS) return -2;
             vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
+        ultimo = bpvm_platform_now_ms();
         got += (size_t) r;
     }
     return (int) n;

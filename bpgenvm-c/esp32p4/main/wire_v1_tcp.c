@@ -161,14 +161,21 @@ int wire_v1_recv_bulk(uint8_t *buf, size_t n, size_t buf_max)
     if (n > buf_max) return -1;
     if (s_client_fd < 0) return -1;
     size_t got = 0;
+    int64_t ultimo = bpvm_platform_now_ms();   /* #495: plazo de bulk estancado (bpvm_wire_v1.h) */
     while (got < n) {
         int r = recv(s_client_fd, buf + got, n - got, 0);   /* <= SO_RCVTIMEO */
-        if (r > 0) { got += (size_t) r; continue; }
+        if (r > 0) { got += (size_t) r; ultimo = bpvm_platform_now_ms(); continue; }
         if (r == 0) {
             net_logf("[p4] wire: desconexión en bulk (%u/%u)", (unsigned) got, (unsigned) n);
             wire_close_client(); return -1;
         }
-        if (errno == EWOULDBLOCK || errno == EAGAIN) continue;   /* timeout: sigue esperando el resto */
+        if (errno == EWOULDBLOCK || errno == EAGAIN) {   /* timeout: sigue esperando el resto, con plazo */
+            if (bpvm_platform_now_ms() - ultimo >= (int64_t) WIRE_V1_BULK_ESTANCADO_MS) {
+                net_logf("[p4] wire: bulk estancado (%u/%u)", (unsigned) got, (unsigned) n);
+                return -2;
+            }
+            continue;
+        }
         net_logf("[p4] wire: bulk recv err %d", errno); wire_close_client(); return -1;
     }
     return (int) n;

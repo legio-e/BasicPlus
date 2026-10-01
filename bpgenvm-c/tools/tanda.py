@@ -214,6 +214,10 @@ class TransSerie:
     def read(self, n):
         return self.s.read(n)
 
+    def read_disponible(self):
+        """#495: lo que haya en cuanto haya algo (o a los 0,2 s si no llega nada); read(4096) esperaba el plazo entero."""
+        return self.s.read(self.s.in_waiting or 1)
+
     def write(self, b):
         self.s.write(b)
 
@@ -236,6 +240,9 @@ class TransTcp:
         if not c:
             raise EOFError("el otro lado cerro la conexion")
         return c
+
+    def read_disponible(self):
+        return self.read(4096)   # recv ya vuelve en cuanto llega algo
 
     def write(self, b):
         self.s.sendall(b)
@@ -301,11 +308,14 @@ class Wire:
         respuesta que no encaja es como se pierden los diagnosticos).
         Si llega un ERROR con el id de la ULTIMA peticion, la respuesta buena ya
         no va a venir (BUSY, NOT_FOUND...): se corta en seco en vez de agotar
-        el plazo — con BUSY eran 20 s por PUT (hallazgo 4)."""
+        el plazo — con BUSY eran 20 s por PUT (hallazgo 4).
+        #495 (1-oct): vuelve EN CUANTO llega la respuesta. Antes leía el puerto a vueltas de lines(0.2), y un
+        read(4096) con plazo de 0,2 s no vuelve hasta tener 4096 bytes o agotarlo: cada respuesta costaba 0,2 s
+        aunque llegara en un milisegundo, y una medida hecha con esto medía su propia espera."""
         self.otros = []
         t0 = time.time()
-        while time.time() - t0 < secs:
-            lote = self.lines(0.2)
+        lote, self.pend = self.pend, []
+        while True:
             for n, m in enumerate(lote):
                 if m.get("type") == typ:
                     self.pend = lote[n + 1:]
@@ -314,7 +324,34 @@ class Wire:
                 if m.get("type") == "ERROR" and m.get("id") == self.id:
                     self.pend = lote[n + 1:]
                     return None
-        return None
+            if time.time() - t0 >= secs:
+                return None
+            lote = self._bocado()
+
+    def _bocado(self):
+        """Lo que haya en el transporte EN CUANTO haya algo, en mensajes (#495). Si el transporte se cae, lo ya
+        recibido se entrega y la vuelta siguiente lanza la excepcion (como lines(), hallazgo 5)."""
+        if self.roto is not None:
+            raise self.roto
+        try:
+            c = self.t.read_disponible()
+        except (EOFError, OSError) as e:
+            self.roto = e
+            c = b""
+        if c:
+            self.buf += c
+        out = []
+        while b"\n" in self.buf:
+            ln, self.buf = self.buf.split(b"\n", 1)
+            ln = ln.strip()
+            if ln.startswith(b"{"):
+                try:
+                    out.append(json.loads(ln.decode("utf-8", "replace")))
+                except Exception:
+                    self.basura.append(ln[:200])
+            else:
+                self.basura.append(ln[:200])
+        return out
 
     def codigo_error(self):
         """El code del ERROR que contesto a la ultima peticion, o None."""
