@@ -309,10 +309,49 @@ public final class BpvmClient implements AutoCloseable {
             throw new IOException("drain inicial falló: " + ioe.getMessage(), ioe);
         }
 
-        this.inRaw  = conLatido(new SerialBlockingInputStream(rawIn));
+        this.inRaw  = conLatido(new SerialLoQueHay(new SerialBlockingInputStream(rawIn)));
         this.outRaw = rawOut;   // raw — purejavacomm a veces se atraganta con buffered
         startReaderThread();
         doHandshake();
+    }
+
+    /** #618 — LEER DEL PUERTO LO QUE HAYA, de una vez. `WireFraming.recvLine` lee byte a byte, y con purejavacomm
+     *  leer de un byte en un puerto que recibe deprisa PIERDE bytes: en la C5 (USB-Serial-JTAG, ~0,6 MB/s) la bajada
+     *  troceada de #495 —128 cabeceras leídas así, con los trozos llegando detrás— se descolocaba a la primera,
+     *  siempre, y con Python (que lee lo que hay) llegaba entera. Pedir un bloque grande tampoco vale: purejavacomm
+     *  espera a que llegue más antes de devolver, y por una UART cada respuesta tardaba ~70 ms más (la subida de 64 KB
+     *  a la P4, de 6,4 a 14,7 s). Así que se pide justo lo que hay disponible (y 1 si no hay nada: entonces no hay
+     *  prisa ni nada que perder), y se sirve desde aquí. */
+    private static final class SerialLoQueHay extends InputStream {
+        private final InputStream delegate;
+        private final byte[] buf = new byte[8192];
+        private int pos, lim;
+        SerialLoQueHay(InputStream d) { this.delegate = d; }
+        private boolean llenar() throws IOException {
+            int hay;
+            try { hay = delegate.available(); }
+            catch (RuntimeException re) { hay = 0; }   // el espurio de jtermios (handleSerialFail): leer de uno, que lo aguanta
+            int pide = Math.max(1, Math.min(buf.length, hay));
+            int n = delegate.read(buf, 0, pide);
+            if (n <= 0) return false;
+            pos = 0;
+            lim = n;
+            return true;
+        }
+        @Override public int read() throws IOException {
+            if (pos >= lim && !llenar()) return -1;
+            return buf[pos++] & 0xFF;
+        }
+        @Override public int read(byte[] b, int off, int len) throws IOException {
+            if (len == 0) return 0;
+            if (pos >= lim && !llenar()) return -1;
+            int k = Math.min(len, lim - pos);
+            System.arraycopy(buf, pos, b, off, k);
+            pos += k;
+            return k;
+        }
+        @Override public int available() throws IOException { return (lim - pos) + delegate.available(); }
+        @Override public void close() throws IOException { delegate.close(); }
     }
 
     /** Wrapper que convierte el -1-de-timeout de purejavacomm en "espera
