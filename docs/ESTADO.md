@@ -1068,6 +1068,46 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🥾 H7 (1-oct) — Boot 2, la fase 4: el arranque común (`e9ca7c30`), y tres fallos de paso que se van con él
+
+- **Lo que había**, leído en las cinco copias (la Pico, la ESP32, la P4 por UART y por TCP, la STM32): el mismo
+  esqueleto con órdenes distintos —la tabla, en `V7_IDEAS` §H7 «La fase 4»—, los dos fallos de paso sabidos y uno
+  nuevo: en la Pico y las ESP32 la cintura del REPL se registraba al entrar al REPL, o sea DESPUÉS del autorun, y un
+  IDE que se conectaba con un autorun corriendo saludaba y recibía «HELLO: este firmware no ha registrado su cintura
+  de REPL». (Durante un autorun la placa sólo atiende `HELLO`, `KILL` y `RESET`; en el diseño puse que el `INFO`
+  también fallaba, y no: es `BUSY` por diseño. Corregido antes del commit.)
+- **Lo hecho** (`e9ca7c30`): `src/bpvm_boot2.c`, en dos tiempos —repartir: `stack=`, `quantum=`, la memoria y la
+  BIOS; subir: las capas, la zona, `/lib`, el hardware, los buses, la SD, la identidad, la cintura del REPL, el cable,
+  `log=`, el autorun sólo con la placa sana y el REPL—; cada familia, sus ganchos. La P4 parte los dos tiempos entre
+  `app_main` (antes de la red, que también pide memoria) y una sola tarea del cable para los dos transportes. El micro
+  simulado sigue con su arranque (es un servidor, y virgen trabaja desde el minuto cero) y toma las claves del reparto:
+  gana `quantum=`. Las capas, declaradas en `H9_KERNEL_CAPAS.md` («Boot 1 y Boot 2»).
+- **La prueba**: `test_boot2` (sana, sin FS, sin VM, virgen, ganchos NULL), saboteada dos veces —sin la puerta del
+  autorun, y la cintura detrás del autorun—: caza las dos; a la red, verde (41 de 41 de C, 122 de paridad). Compilan
+  las nueve imágenes y el `main.c` de la P4 por TCP (con su control: sin `NETLOG`, su `#error`); la C5 y la P4 no
+  mueven la zona (`nm`). En las cuatro placas, el arranque en el orden del diseño, sano y con sus packs: la Pico
+  (`Hello`; a `vm_task` le sobran los mismos 8320 B), la DK2 y la C5 (`GuiFlushBench`: 1 y 5 ms por etiqueta, lo de
+  siempre) y la P4 (`SqlDemo`). Y en la Pico, el fallo nuevo de punta a punta: con un autorun de 90 s corriendo, la
+  imagen de antes contestó al `HELLO` «no ha registrado su cintura» y la nueva, `HELLO_REPLY serverName=bpvm-pico`;
+  el autorun, borrado después (el OK de Eduardo para las dos cosas).
+- **En el log**: la línea «boot: estado» la dice el común (la STM32 decía «DEGRADED»); la STM32 dice que no tiene SD;
+  el log del arranque se vuelca a la flash antes del autorun. En la P4 no sale «REPL entry»: su ENV no lleva `log=1`
+  (las demás, sí), y lo de después del arranque lo manda esa clave (`#423`) —con la imagen de antes, igual—.
+- **De paso**: al grabar la Pico, su cargador salió como `D:` (la Nucleo no estaba conectada); `flash_pico.py` elige
+  la unidad por la etiqueta y por ser la que aparece tras el `BOOTSEL`, así que copió en la Pico: tras el arranque
+  sólo queda `C:`. En `FICHAS`, dos entradas de la fila de H7 seguían abiertas con su ficha cerrada (`#607` y el muro
+  heap/pilas, que es `#605`): tachadas. Y la línea de las placas que se quedó colgando bajo el traspaso del 30-sep,
+  quitada.
+
+**Traspaso (1-oct).** Boot 2 está hecho: las cuatro fases. De H7 quedan dos: la Pico sobre el backend común
+(aparcada; lo que queda es fusionar por mitades, «puede esperar», Eduardo) y el modelo final del SMP de host, que va
+con H12. Para cerrar H7 hay que hacer o cancelar la primera, y el pequeño cierre del hito (la ronda corta en las placas
+tocadas). Sin decisión, con placa: remedir el S3. Fuera de H7: `#614` (la C5, 5 ms por etiqueta), `#609`, y la línea
+de la C5 que mezcla la PSRAM con la DRAM.
+
+Las placas: la Pico, la DK2, la C5 y la P4, con la imagen de `e9ca7c30` y su ENV como estaba (`log=1` en la Pico,
+la DK2 y la C5; la zona de la Pico, vacía; sin autorun); las demás, con imágenes anteriores —firmware y stdlib, juntos—.
+
 ## 📏 H7 (30-sep, tarde, con las placas) — los márgenes de la Pico y de la STM32, MEDIDOS (`a2bdff6e`)
 
 - Lo primero del traspaso que no pedía decisiones. Faltaba el instrumento: la línea `mem:` tras cada RUN, que sólo
@@ -1133,8 +1173,6 @@ el backend común.
 
 Las placas: la Pico, la DK2 (con `log=1`), la C5 y la P4, con la imagen de `72c3ab6f` y su ENV como estaba (la zona de
 la Pico, vacía); las demás, con imágenes anteriores —firmware y stdlib, juntos—.
-- Las placas: la Pico, la DK2 (con `log=1`), la C5 y la P4, con la imagen de `da19145e` y su ENV como estaba; la zona
-  de la Pico, vacía (formateada). Las demás, como estaban.
 
 ## 🔧 H7 (30-sep, mediodía, sesión remota) — `#613` abierta y cerrada (B1 por `sleep(0)` en miVM); el paso 0 de los 32 MB y el `HELLO`, vistos en placa; la lectura por encima de 16 MB, medida en la Waveshare
 

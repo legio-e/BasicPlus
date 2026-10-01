@@ -3196,8 +3196,68 @@ micro simulado:
    mismo (346 → 290 KB)—. En la Pico sin PSRAM, `packRam=` cambia la COLA de la SRAM, que crece hacia abajo desde el
    techo: un motor sellado contra la de 8 KB sigue dentro. **La regla del bloque de RAM, común** (pequeño): `packRam=` y, si no, `SQLite=`, en una función; la familia sólo
    COLOCA (el plan en la Pico y la STM32, la reserva aparte en la ESP32). `packRam=` llega a la Pico.
-4. **El Boot 2 común** (medio): el orden, una vez, con ganchos por familia; arregla los dos fallos de paso (la P4 por
-   TCP y el autorun de la STM32) y declara las capas del SO (`H9_KERNEL_CAPAS.md`).
+4. ✅ **HECHA el 1-oct, `e9ca7c30`** —en el host (`test_boot2`, saboteada dos veces, y a la red) y en las cuatro
+   placas: el arranque en el orden del diseño, sano y con sus packs, y un programa (la Pico `Hello`, la DK2 y la C5
+   `GuiFlushBench`, la P4 `SqlDemo`); y en la Pico, el fallo nuevo de punta a punta: con un autorun corriendo, la
+   imagen de antes contesta al `HELLO` «no ha registrado su cintura» y la nueva, el `HELLO_REPLY`. La P4 por TCP,
+   compilada (no hay placa con Ethernet); la puerta del autorun de la STM32, sólo en el host (en la placa no se da:
+   su capa `app` siempre sube, y sin FS no hay `auto.txt`)—. **El Boot 2 común** (medio): el orden, una vez, con
+   ganchos por familia; arregla los dos fallos de paso (la P4 por TCP y el autorun de la STM32) y declara las capas
+   del SO (`H9_KERNEL_CAPAS.md`). El diseño, abajo («La fase 4»).
+
+### La fase 4 — el Boot 2 común: lo que hay y el diseño (1-oct)
+
+**Lo que hay**, leído en las cinco copias (la Pico, la ESP32, la P4 por UART y por TCP, la STM32). El esqueleto es el
+mismo —el ENV, la memoria, subir, la zona, `/lib`, el hardware, los buses, la SD, el cable, el autorun, el REPL— y lo
+que cambia de una a otra es esto:
+
+| paso | Pico | ESP32 | P4 (UART · TCP) | STM32 |
+|---|---|---|---|---|
+| `stack=` y `quantum=` | antes de la memoria | al final | al final · **nunca** | al final |
+| `log=` | al final | al final | al final · **nunca** | al final |
+| el autorun | sólo con la placa sana | sólo sana | sólo sana | **siempre** |
+| la cintura del REPL | **tras el autorun** | **tras el autorun** | **tras el autorun** | antes de subir |
+| los buses y la SD | antes de la memoria | tras el hardware | la SD, antes del hardware | sin SD (ni su línea) |
+| la BIOS | antes de subir | tras la zona | en `app_main` | antes de subir |
+| volcar el log a la flash | al entrar al REPL, tras el autorun | tras subir | tras subir | antes del cable |
+| la línea «boot: estado» | `main.c` | `board_mgr_esp32.c` | ídem | `stm32_repl.c`, con «DEGRADED» |
+
+**Tres fallos de paso**: los dos sabidos —la P4 por TCP no aplica `stack=`, `quantum=` ni `log=`; el autorun de la
+STM32 no mira si la placa llegó sana— y uno nuevo: en la Pico y en las ESP32 (la P4 también) la cintura del REPL se
+registra al entrar al REPL, o sea DESPUÉS del autorun. Un IDE que se conecta durante un autorun —en su ventana de
+10 s o con el programa corriendo— saluda (`HELLO`, lo único que se atiende entonces con `KILL` y `RESET`) y recibe
+`HELLO: este firmware no ha registrado su cintura de REPL`: el IDE se lo traga («handshake falló») y se queda sin la
+identidad de la placa. La STM32 y el micro simulado la registran antes de nada.
+
+**El diseño:**
+- **Boot 1, de la familia**: lo que no existe hasta que arranca el silicio —el reloj, el RTOS, el log y sus primeras
+  líneas, el cable donde ya esté (el USB de la Pico) y el ENV a la vista—.
+- **Boot 2, común** (`src/bpvm_boot2.c`), en **dos tiempos**, porque la memoria se reparte ANTES de que nadie más la
+  pida —la dirección del bloque de los motores va sellada en ellos— y en la P4 la red pide memoria entre medias: allí
+  el primero va en `app_main` y el segundo en la tarea del cable.
+  - **2a, repartir** (`bpvm_boot2_repartir`): las claves del reparto (`stack=`, `quantum=`), la memoria (gancho:
+    DÓNDE; la regla ya es común) y la BIOS (gancho: la tabla y el ancla).
+  - **2b, subir** (`bpvm_boot2_subir`; no vuelve): subir (gancho: las capas de la familia) y la línea «boot: estado»,
+    una para todas; la zona (común, con el gancho de `mapear`); con el FS, `/lib` (gancho) y lo de la familia que pide
+    el FS (gancho: `board.json`, la fachada de ficheros); el hardware (gancho); los buses del ENV (común); la SD (el
+    gancho la registra, el común la monta con el FS); la identidad (gancho); **la cintura del REPL** (gancho, antes del
+    cable); el cable (gancho); y al final, común: el porqué si no hay autorun, volcar el log (una vez), `log=`, el
+    autorun **sólo con la app sana** y el REPL (gancho).
+- La capa que pide cada paso, escrita UNA vez: en el código (un `if` por capa, en un sitio) y en
+  `H9_KERNEL_CAPAS.md` (la tabla).
+- Un gancho NULL es que la familia no lo tiene o lo hizo en el Boot 1 (la Pico: el hardware y el cable, en `main()`).
+- **El micro simulado se queda con su arranque**: es un servidor, sin escalera ni autorun, y virgen trabaja desde el
+  minuto cero —el IDE y los smokes de `check-sim` cuentan con eso—. Del común toma las claves del reparto
+  (`bpvm_boot2_claves`), y gana `quantum=`, que no aplicaba.
+- **Lo que se mueve, y por qué no rompe nada**: en la Pico, los buses y el registro de la SD pasan detrás de subir (la
+  SD sólo copia sus pines; el bus se usa al montar, que ya iba después); en la ESP32 y la STM32, `stack=` y `quantum=`
+  pasan delante de la memoria (se leen en el primer RUN); en la P4, la SD detrás del hardware y los buses (el SDIO no
+  pasa por el árbitro); la línea de la BIOS de la ESP32, delante de subir; y el volcado del log, el del arranque, ANTES
+  del autorun (en la Pico iba al entrar al REPL, o sea después).
+- **La prueba**: `test_boot2` en el host —una familia que apunta lo que se le llama: sana, sin particiones, sin FS,
+  sin VM, ganchos NULL— y a la red; las cuatro placas; y en la Pico, el control del fallo nuevo: un `auto.txt` con un
+  programa largo y un `HELLO` mientras corre —con la imagen de antes, «no ha registrado su cintura»; con la nueva, el
+  `HELLO_REPLY` con el nombre de la placa—.
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

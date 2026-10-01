@@ -67,6 +67,45 @@ lo podemos señalar como un estado más, ni totalmente correcto pero casi»*—:
 `"casi":true` y el `aviso`, el arranque lo dice en su log y el IDE lo propone al conectar
 (el remedio, «Formatear zona…»).
 
+## Boot 1 y Boot 2: el orden del arranque, declarado (V7/H7, 1-oct)
+
+Eduardo, 22-ago: *«tenemos 1 boot, y dependerá del hardware. Si lo dividimos en 2, podemos tener un boot que
+dependa del hardware pero el 2º, que se ejecuta a continuación, podría ya ser independiente.»* Hecho el 1-oct
+(`src/bpvm_boot2.c`; el porqué y lo que había, en `V7_IDEAS` §H7, «La fase 4»):
+
+- **Boot 1, de la familia**: lo que no existe hasta que arranca el silicio —el reloj, el RTOS, el log y sus
+  primeras líneas, el cable donde ya esté (el USB de la Pico) y el ENV a la vista—.
+- **Boot 2, común**: los pasos de abajo, en este orden y una sola vez, con un gancho para lo que es de cada familia
+  (`bpvm_boot2_familia_t`; un gancho NULL es que la familia no lo tiene o lo hizo en su Boot 1). En dos tiempos,
+  porque la memoria se reparte antes de que nadie más la pida —la dirección del bloque de los motores va sellada en
+  ellos—: la P4 llama a **repartir** en `app_main`, antes de la red, y a **subir** en la tarea del cable; las demás,
+  seguidos.
+
+| | la capa que pide | el paso | común o gancho |
+|---|---|---|---|
+| repartir | kernel | las claves del reparto: `stack=`, `quantum=` | común (`bpvm_boot2_claves`) |
+| | kernel | la memoria: el bloque de los motores y el de la VM | gancho: DÓNDE (la regla, común: `bpvm_mem_plan`, `bpvm_packram_region`) |
+| | kernel | la BIOS de los motores (y el ancla), verificada | gancho |
+| subir | 0 → 3 | particiones → FS → app, y la línea «boot: estado» | gancho: las capas (`bpvm_boot_climb`); la línea, común |
+| | FS | la zona de packs, al lado, y su estado (lista o el «casi») | común (`bpvm_pack_montar_arranque`), con el gancho `mapear` |
+| | FS | `/lib`: la stdlib embebida | gancho (`bpvm_mods`) |
+| | FS | lo de la familia que pide el FS | gancho: `board.json` (la Pico), el cargador de motores (la ESP32) |
+| | kernel | el hardware: los backends de la HAL BP | gancho (la Pico, en `main()`) |
+| | kernel | los buses que declara el ENV | común (`bpvm_bus_desde_env`) |
+| | kernel | registrar la SD, o decir por qué no hay | gancho |
+| | FS | montar la SD (`/sd` se cuelga del FS) | común (`bpvm_sd_placa_montar_arranque`) |
+| | kernel | la identidad que dicen INFO y HELLO | gancho |
+| | kernel | la cintura del REPL | gancho — antes del cable y del autorun: un IDE que se conecta con el autorun corriendo saluda |
+| | kernel | el cable | gancho (la Pico, en `main()`) |
+| | kernel | el porqué si no hay autorun; volcar el log a la flash; `log=` | común |
+| | **app sana** | el autorun | la puerta, común; el autorun, gancho |
+| | — | el REPL (no vuelve) | gancho |
+
+La regla para colocar un paso (22-ago): *la capa de algo es la de aquello que CONSUME*. `/lib` consume el FS; el
+autorun, la app sana; el hardware, los buses y el cable, sólo el kernel. La zona consume particiones, pero se monta
+con el FS (decisión de Eduardo, 30-sep: arriba). El micro simulado no sube por aquí —es un servidor, sin escalera
+ni autorun, y virgen trabaja desde el minuto cero—: de lo común toma las claves del reparto.
+
 ## Corolario: el descriptor de PLACA es un artefacto del kernel, no un fichero del FS (Eduardo, 18-jul)
 
 Hoy `board.json` (qué micro, tamaño de flash, si hay PSRAM y cuánta/en qué pin,
