@@ -3302,6 +3302,61 @@ Sin programa, una VM mira la cola, la ve vacía y cede el núcleo.
   su ociosa para el núcleo (`waiti`/`wfi`) hasta la siguiente interrupción; la STM32 **no cede**: lee el anillo de la
   UART sin parar y su ociosa no llega a ejecutarse nunca. En el modelo, esa VM sin programa cedería.
 
+**El arranque y los runs** (Eduardo, 1-oct, después: *«Empecemos por el principio, el boot»*):
+
+> *«El SO arranca, va haciendo su trabajo: activa el sistema, lee las variables de entorno, las particiones, monta el
+> FS, etc. En un momento dado activa la comunicación con el PC (o al menos se pone a la escucha). Y cuando termina todo
+> eso, si no tiene nada más, se queda ahí. Pero para que le podamos decir que haga algo tiene que estar a la escucha.
+> Para mí ese hilo de ejecución es el hilo principal del SO al que llamamos IO (para mí, no digo que ahora sea así).
+> Como parte del sistema de arranque debería crear 1 o 2 hilos de ejecución de la VM, independientemente de si hay o
+> no algún programa que ejecutar. Un tema importante: VM hay 1, pero runs puede haber hasta 2. Los runs comparten la
+> memoria, el heap, etc. Lo que tienen independiente son sus registros BP, su stack BP y alguna cosa más que puedan
+> necesitar.»*
+
+| | hoy | el modelo |
+|---|---|---|
+| quién arranca y se queda escuchando | un solo hilo: hace el arranque y luego es el REPL | `io`: hace el arranque y escucha siempre |
+| cuando llega un RUN | ese mismo hilo ejecuta el programa —es el run— y crea un `io` provisional para el cable, que muere al acabar | `io` sigue escuchando; el programa lo ejecuta un run que ya existía |
+| los runs | nacen con cada RUN —en las placas, uno; en el PC con `--smp=N`, N— y desaparecen al acabar | nacen con el arranque (uno o dos) y viven siempre; sin programa, esperan |
+
+**Lo que ya existe, en el PC**: una VM con varios runs es el planificador de varios workers de la VM-C
+(`scheduler_smp.c`, `--smp=N`, de H2) y el de miVM (`--workers=N`), en la red con dos workers. Es lo que describe el
+modelo: una VM —el heap, la tabla de handles, los módulos, las globales— que comparten los runs; cada run coge un hilo
+BP listo que no tenga ya otro run, lo ejecuta un cuanto y lo suelta; lo independiente es DE CADA HILO BP —sus registros
+(pc, sp, bp) y su pila—, que el run toma prestados mientras lo ejecuta, y lo del run es poco: qué hilo lleva. Un run
+sin nada que hacer espera dormido (una condición), y el GC para a todos (stop-the-world). Al mirarlo salió `#616`:
+el de la VM-C no repartía en rueda —buscaba siempre desde el primer hilo—; arreglado el mismo día (`c671d3a2`). En las
+placas, ese planificador está compilado (la Pico y la P4) y apagado.
+
+**La cola de hilos BP con dos núcleos** (Eduardo, 1-oct: *«Entiendo que la cola de tareas del SO la gestiona
+FreeRTOS sin problemas y ahí no hay que hacer nada. Ahora la cola de Threads BP la gestionamos nosotros. Aquí es
+fundamental que pueda funcionar en un entorno multitarea real ya que tendremos 2 núcleos corriendo. Todas las
+operaciones de añadir/borrar Thread BP en la cola como reservar y liberar deben soportar multihilo a nivel de 2
+núcleos trabajando»*). Cómo está hoy en el planificador de varios runs (leído el 1-oct):
+
+| operación | cómo va | con dos núcleos |
+|---|---|---|
+| **añadir** un hilo (`start`) | entero bajo el cerrojo de la VM: el hueco, su pila, el marco y, lo último, «listo» (`bpvm_thread_spawn`) | sí |
+| **reservar** (un run coge el siguiente) | bajo el cerrojo: uno listo y sin dueño, y el run lo marca como suyo (`sched_owner`) | sí; y en rueda desde `#616` |
+| **liberar** (acaba su cuanto) | bajo el cerrojo: suelta el dueño y avisa a los que esperan | sí |
+| bloquear y despertar por un **mutex BP** | bajo el cerrojo, y apuntarse y bloquearse JUNTOS (la carrera de B1, 9-sep) | sí |
+| **dormir, `join`, terminar, ceder** | el hilo cambia SU estado sin cerrojo —nadie más lo toca mientras tiene dueño, y el cerrojo lo publica al soltarlo—; despertarlo es del planificador, bajo el cerrojo | sí |
+| **borrar** (dar el hueco de un hilo acabado a uno nuevo) | bajo el cerrojo, y sólo si acabó del todo y no tiene dueño (`#604`) | sí |
+| el **GC** | para a todos los runs (stop-the-world), bajo el cerrojo | sí |
+
+Probado en la red con dos y cuatro workers (el corpus, `CedeCero`, `HeapEstres`, `TablaHandles`, `Rueda`), pero en un
+PC: un x86 ordena la memoria entre núcleos mejor de lo que están obligados el ARM y el RISC-V, y en el PC las esperas
+son las de pthreads, no las de FreeRTOS. **Lo que falta para dos núcleos de verdad:**
+1. **La variable de condición de FreeRTOS**, en las tres plataformas: un semáforo BINARIO, y un aviso a todos da un
+   `Give` por cada uno; el binario no pasa de 1, así que con dos esperando se pierde un aviso y uno se queda dormido —y
+   los runs esperan sin plazo—. Visto el 10-sep (`FUSION_BACKENDS_FREERTOS.md`, R8 y su paso 3, que no depende de
+   fundir nada), sin síntoma hoy porque en las placas sólo hay un run. Con dos, es lo primero que se notaría.
+2. `kill_requested`, un `volatile int` que escribe `io` y leen los runs: atómico y con orden explícito.
+3. En la Pico, el `printf` de la consola comparte el USB con el wire sin su cerrojo.
+4. Lo que el inventario de `A4` marcó como compartido sin dueño.
+
+(Del 2 al 4 ya estaban en la lista de H12 de «antes de activar el segundo núcleo»; el 1 se añade.)
+
 **Lo que el modelo decide de lo que H7 dejaba abierto** (el índice: «VMs ociosas a piñón o parqueadas» y «los
 workers como cola de hilos de SO en vez de N fijos»):
 - **Cuántas VM**: tantas como núcleos —una o dos, fijas por placa—, más `io`; la cola de hilos de SO es la del RTOS, de

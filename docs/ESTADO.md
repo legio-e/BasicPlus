@@ -1068,6 +1068,31 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🧵 H12 (1-oct, tarde) — el modelo de Eduardo, desde el arranque: `io` y los runs; y `#616` (`c671d3a2`)
+
+- **«¿Hay algún hilo del SO ejecutándose?»** (Eduardo, con la placa encendida y sin programa): sí, siempre la tarea de
+  la VM haciendo de REPL, más la ociosa de FreeRTOS, y `io` no existe —nace con cada RUN y muere al acabar—. Cada
+  familia espera distinto (el censo de `#490`, 10-sep, comprobado hoy en el código): la Pico duerme 10 ms entre
+  vueltas y su ociosa gira sin parar el núcleo; las ESP32 y la P4 esperan en el driver y su ociosa para el núcleo; la
+  STM32 no cede nunca. En `V7_IDEAS` §H12 (`3f1cb7fb`).
+- **El arranque y los runs** (Eduardo): `io` es el hilo principal —hace el arranque y escucha siempre—; el arranque
+  crea uno o dos runs, haya programa o no; una VM que comparten los runs, y lo independiente son sus registros y su
+  pila BP. Comparado con hoy y escrito en `V7_IDEAS` §H12: hoy el hilo que arranca es el REPL y, con un RUN, pasa a
+  ejecutar el programa (con un `io` provisional para el cable); los runs nacen con cada RUN. Una VM con varios runs ya
+  existe en el PC —el planificador de varios workers de H2, en la red con dos—, compilado y apagado en las placas.
+- **`#616`, abierta y cerrada** (`c671d3a2`): al mirar ese planificador para contestar, no repartía en rueda —buscaba
+  siempre desde el primer hilo de la lista—: con `--smp=1`, tres hilos que calculan sin ceder corrían de uno en uno;
+  con `--smp=2`, el tercero no empezaba hasta que acababa el primero. El planificador de un run (el de las placas) y
+  miVM sí iban en rueda. Arreglado eligiendo como el de un run; la prueba, `Rueda` en `check_estres` (saboteada: en
+  rojo); la red entera, verde.
+- **La cola de hilos BP con dos núcleos** (Eduardo: *«todas las operaciones de añadir/borrar Thread BP en la cola como
+  reservar y liberar deben soportar multihilo a nivel de 2 núcleos trabajando»*): en el planificador de varios runs ya
+  van todas bajo el cerrojo de la VM, o, las del propio hilo, las publica él al soltarlo; probado con 2 y 4 workers,
+  pero en un PC. Lo que falta para dos núcleos de verdad, en `V7_IDEAS` §H12: la variable de condición de FreeRTOS
+  (un semáforo binario: un aviso a todos con dos esperando despierta a uno; R8 del estudio del 10-sep), añadida a la
+  lista de H12 de antes de activar el segundo núcleo; y lo que ya estaba en ella: `kill_requested` atómico, el
+  `printf` de la Pico y el inventario de `A4`.
+
 ## 🥾 H7 (1-oct) — Boot 2, la fase 4: el arranque común (`e9ca7c30`), y tres fallos de paso que se van con él
 
 - **Lo que había**, leído en las cinco copias (la Pico, la ESP32, la P4 por UART y por TCP, la STM32): el mismo
