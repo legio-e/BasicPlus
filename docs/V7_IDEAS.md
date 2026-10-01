@@ -3479,23 +3479,39 @@ la vez; y si el `PUT` entra en el mismo esquema (hoy va troceado, pero con una s
   comunicaciones y por otro el buffer de archivos. Un buffer de comunicaciones con una ventana de 4 paquetes de 512 bytes
   son 2K. El buffer de archivos puede estar condicionado por el tamaño del bloque de flash. Yo los separaría.»*
 
-**Lo medido antes de tocar nada** (1-oct; 64 KB aleatorios subidos con `PUT_BEGIN`/`PUT_DATA`/`PUT_END`, bajados con
-`GET` y comparados —iguales en todos los casos que terminaron—):
+**Lo medido, antes y después del paso 1** (1-oct; 64 KB aleatorios subidos con `PUT_BEGIN`/`PUT_DATA`/`PUT_END`,
+bajados con `GET` y comparados byte a byte: iguales en todos los casos):
 
-| placa | 8 KB, parada y espera (el IDE de hoy) | 1 KB, parada y espera | 1 KB, ventana de 4 |
-|---|---|---|---|
-| P4 (UART por el CH343) | 8,6 s | 24,7 s | **falla**: «JSON inválido» |
-| C5 (USB-Serial-JTAG) | 2,2 s | 18,1 s | 16,3 s |
-| Pico 2 (USB CDC) | 7,6 s | 20,5 s | 21,6 s |
+> ⚠️ **La primera medida de este apartado estaba mal** (de 2 a 9 s con trozos de 8 KB, de 16 a 25 con los de 1 KB, y de
+> ahí «el cuello no es el cable, es la placa: ~0,27 s por trozo»). La tomé con el `esperar()` de `wire_serie.py`, que
+> lee el puerto 0,2 s enteros por vuelta aunque la respuesta llegue en un milisegundo: con un acuse por trozo, medía
+> sobre todo su propia espera. Rehecha con un instrumento que vuelve en cuanto llega el acuse; y el «antes», grabando
+> otra vez en la C5 y la Pico la imagen de `6db432e0` (con el OK de Eduardo) y luego la nueva.
 
-Dos cosas que no eran las esperadas:
-1. **El cuello no es el cable, es la placa**: cada `PUT_DATA` abre el fichero, añade y lo cierra (`bpvm_fs_write` en modo
-   añadir), y en la C5 eso son ~0,27 s por trozo, mida 1 u 8 KB. Por eso trozos pequeños hacen la subida de 3 a 8
-   veces más lenta y la ventana apenas gana. Es exactamente la mezcla de los dos búferes.
-2. **La ventana pierde bytes en la P4**: mientras la ESP32 escribe en la flash se apaga la caché y las interrupciones que
-   no están en RAM esperan; la de la UART no lo está (`CONFIG_UART_ISR_IN_IRAM` apagado en la P4 y la S3), así que la
-   FIFO de 128 B se desborda con lo que el PC manda entretanto. Con parada y espera no pasa porque el PC calla mientras
-   la placa escribe.
+| placa | 8 KB, parada y espera (el IDE de hoy) | 512 B, parada y espera | 512 B, ventana de 4 | `GET` de 64 KB |
+|---|---|---|---|---|
+| C5 (USB-Serial-JTAG) | 0,72 → **0,34–0,52 s** | 5,04 → **0,41–0,81 s** | 5,12 → **0,44–0,59 s** | 0,10 s |
+| Pico 2 (USB CDC) | 6,40 → **6,07–6,13 s** | 14,31 → **7,25–7,27 s** | 13,24 → **6,12–6,19 s** | 0,14 s |
+| P4 (UART por el CH343) | → 6,19 s | → 7,38 s | (paso 2) | 5,70 s |
+| DK2 (UART por el ST-Link) | → 6,32 s | → 7,37 s | (paso 2) | 5,71 s |
+
+(Antes → después del paso 1, `1c19eabb`; el después, en dos tandas. En la P4 y la DK2, sólo el después: ahí manda el
+cable —115 200 baudios son 11,2 KB/s, y 64 KB no bajan de 5,7 s—.)
+
+Lo que dice:
+1. **El paso 1 hace lo que tenía que hacer**: abrir, añadir y cerrar en cada trozo costaba ~35 ms por trozo en la C5 y
+   ~55 ms en la Pico; con el fichero abierto toda la sesión y la flash escrita por bloques, un `PUT` de 512 B cuesta ya
+   lo mismo que el de 8 KB de hoy. El trozo pequeño —el que hace falta para mezclar— ya no se paga.
+2. **La Pico recibe a 12 KB/s, y eso es lo que la frena, no su flash**: un `PUT_DATA` sin sesión (la placa lee el bulk
+   y contesta `NO_SESSION` sin tocar el FS) tarda 5,2 s por 64 KB en la Pico y 0,11 s en la C5; escribir los 64 KB en
+   la flash de la Pico añade ~0,9 s. Su cable (`pico/wire_v1.c`) lee byte a byte y, en cuanto la FIFO de recepción del
+   CDC se vacía, duerme 5 ms; y esa FIFO es la del SDK, **64 B** a velocidad completa (`CFG_TUD_CDC_RX_BUFSIZE`, en
+   `pico_stdio_usb/include/tusb_config.h`): un paquete USB por siesta, 64 B / 5 ms = 12,8 KB/s. El búfer de
+   comunicaciones de la Pico, de hecho, es de 64 B.
+3. **La ventana pierde bytes en la P4** (esto la medida mala ya lo vio, y sigue en pie: es la placa la que contesta
+   «JSON inválido»): mientras la ESP32 escribe en la flash se apaga la caché y las interrupciones que no están en RAM
+   esperan; la de la UART no lo está (`CONFIG_UART_ISR_IN_IRAM` apagado en la P4 y la S3), así que la FIFO de 128 B se
+   desborda con lo que el PC manda entretanto. Con parada y espera no pasa porque el PC calla mientras la placa escribe.
 
 **El diseño, con los dos búferes separados:**
 
@@ -3508,18 +3524,27 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
 
 | placa | recepción | hoy |
 |---|---|---|
-| Pico 2 / Metro | USB CDC | sí: el USB no pierde, espera (control de flujo del propio USB) |
+| Pico 2 / Metro | USB CDC: la FIFO de recepción, 64 B (la del SDK) | no pierde —el USB espera: control de flujo del propio USB—, pero **recibe a 12 KB/s**: un paquete de 64 B por cada siesta de 5 ms del cable. La FIFO, a 2 KB, y leerla por bloques |
 | C3, C5, C6 | USB-Serial-JTAG, 4 KB (envío: 2 KB, la ventana justa) | sí, por lo mismo |
 | S3, P4 | UART, 8 KB de anillo | **no**: la interrupción de la UART a RAM (`CONFIG_UART_ISR_IN_IRAM` y `ESP_INTR_FLAG_IRAM`) |
 | STM32 (DK2, Nucleo) | UART, anillo de 256 B | **no**: el anillo, a 4 KB (los paquetes con su cabecera) |
 | el micro simulado | TCP | sí |
 
 **El orden** (cada paso, medido con lo de arriba como referencia):
-1. **El búfer de ficheros**, común: la sesión del `PUT` con el fichero abierto y la escritura por bloques. Ya con eso,
-   un `PUT` de trozos pequeños no debería costar más que el de hoy.
-2. **El búfer de comunicaciones en las placas que lo pierden**: la UART de la S3 y la P4 desde RAM; el anillo de la STM32.
+1. ✅ **El búfer de ficheros**, común (1-oct, `1c19eabb`): la sesión del `PUT` con el fichero abierto y la escritura
+   por bloques. Medido arriba: un `PUT` de trozos de 512 B ya no cuesta más que el de 8 KB de hoy.
+2. **El búfer de comunicaciones en las placas que lo pierden o lo tienen pequeño**: la Pico (la FIFO del CDC, de 64 B a
+   2 KB, y leerla por bloques en vez de byte a byte); la UART de la S3 y la P4 desde RAM; el anillo de la STM32 (de
+   256 B a 4 KB). 🧭 Eduardo (1-oct): *«En la Pico hay que activar el DMA, si no vas a tener muchos problemas o de
+   rendimiento o de desbordamiento de la FIFO.»* A hablar con lo que hay: el cable de la Pico no es una UART, es el USB
+   nativo, que no se desborda —con la FIFO llena la Pico contesta NAK y el PC reintenta: la ventana de 4 × 512 B sobre
+   la FIFO de 64 B llegó entera—; y el RP2350 no tiene canal de DMA para el USB (no hay DREQ del USB): el controlador
+   deja lo recibido en su propia RAM (4 KB) y la interrupción de TinyUSB lo copia a la FIFO, 64 B por paquete. Lo que
+   frena es el tamaño de la FIFO. Donde el cable sí es una UART —la STM32, la S3, la P4— el DMA es una de las dos
+   salidas (la otra, la interrupción en RAM).
 3. **El trozo y la ventana, anunciados por la placa** en el `HELLO` (512 B y 4), y el IDE (y `tanda.py`) usándolos para
-   el `PUT`; con un firmware que no los anuncia, el IDE sigue como hoy.
+   el `PUT`; con un firmware que no los anuncia, el IDE sigue como hoy. Y `wire_serie.py` deja de esperar 0,2 s por
+   respuesta (su `esperar()`: el instrumento de la medida mala).
 4. **El `GET` y el `LIST` troceados y mezclables** (arriba, la propuesta), con la misma ventana en el otro sentido.
 
 

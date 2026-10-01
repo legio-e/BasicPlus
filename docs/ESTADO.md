@@ -1068,6 +1068,33 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 📡 H8 (1-oct, noche) — `#495`: el búfer de ficheros (`1c19eabb`), medido antes y después; y la Pico recibe a 12 KB/s
+
+- **Las decisiones de Eduardo** (en `V7_IDEAS` §H8, `02bb439e`): trozos de 512 B o 1 KB según el búfer de la placa; una
+  ventana pequeña; un fichero cada vez, pero un `LIST` o un `print` pueden ir entre medias; el `PUT` también entra; y
+  dos búferes separados, el de comunicaciones (una ventana de 4 × 512 B = 2 KB) y el de ficheros (un bloque de la
+  flash). Y una prueba de rendimiento antes y después.
+- **El paso 1** (`1c19eabb`): la sesión del `PUT` abre el fichero en `PUT_BEGIN` con el cursor de `#491`, junta lo
+  recibido en el búfer de ficheros de la familia —4 KB la Pico, la ESP32 y el micro simulado; 8 KB la STM32— y lo
+  escribe cuando se llena; `PUT_END` escribe el resto y cierra. `sim_smoke` lo prueba (saboteado: en rojo); la red,
+  verde; y en las cuatro placas, 64 KB subidos y bajados iguales.
+- **Una medida mala, corregida**: la primera (la de `02bb439e`: «el cuello es la placa, ~0,27 s por trozo») la tomé con
+  el `esperar()` de `wire_serie.py`, que lee el puerto 0,2 s enteros por vuelta aunque la respuesta llegue antes: con
+  un acuse por trozo, medía su propia espera. Rehecha con un instrumento que vuelve en cuanto llega el acuse, y el
+  «antes» grabando otra vez en la C5 y la Pico la imagen de `6db432e0`: el `PUT` de 64 KB en trozos de 512 B, de 5,04
+  a 0,41–0,81 s en la C5 y de 14,3 a 7,3 s en la Pico (6,2 con la ventana de 4); con los 8 KB del IDE de hoy, de 0,72 a
+  0,34–0,52 s y de 6,4 a 6,1. La P4 y la DK2 van al ritmo del cable (115 200 baudios: ~6,2 s). La tabla, en `V7_IDEAS`.
+- **La Pico recibe a 12 KB/s**: un `PUT_DATA` sin sesión (la placa lee el bulk y contesta `NO_SESSION` sin tocar el
+  FS) tarda 5,2 s por 64 KB en la Pico y 0,11 s en la C5. El cable de la Pico lee byte a byte y, con la FIFO del CDC
+  vacía, duerme 5 ms; y la FIFO es la del SDK, 64 B a velocidad completa: un paquete USB por siesta. Va al paso 2.
+- **Eduardo**: *«En la Pico hay que activar el DMA, si no vas a tener muchos problemas o de rendimiento o de
+  desbordamiento de la FIFO.»* Pendiente de hablar: el cable de la Pico es el USB nativo, que no se desborda (la Pico
+  contesta NAK y el PC reintenta: la ventana de 2 KB sobre la FIFO de 64 B llegó entera), y el RP2350 no tiene DMA
+  para el USB; lo que frena es el tamaño de la FIFO. En las UART (STM32, S3, P4), el DMA sí es una salida.
+
+Las placas: la Pico, la DK2, la C5 y la P4, con la imagen de `1c19eabb` (la C5 y la Pico, otra vez la nueva tras medir
+la vieja) y su ENV como estaba.
+
 ## ✅ H11 (1-oct, tras la pausa) — cerrado; y dos entradas de `FICHAS` que no cuadraban
 
 - Eduardo pidió ver los hitos que faltan, sin H7 ni H12: **H8** (IDE y wire), **H9** (pruebas y medida), **H10** (placas
