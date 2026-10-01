@@ -3602,6 +3602,46 @@ del cable** (sin acuse a tiempo, una respuesta rota, `SIZE_MISMATCH`); si la pla
 con el fichero: no está en la placa. A decidir.
 
 
+### `E1` — el rojo del árbol: el diseño (1-oct, antes de tocar código)
+
+*«En rojo mostrar módulos/packs dañados o con un formato no válido.»* (Eduardo, 1-oct)
+
+**Quién lo sabe: la VM que tiene el fichero** —la placa, o la VM-Java en el PC—, porque es la que tendría que
+cargarlo, y con SUS reglas (qué versiones de `.mod` carga, de qué arquitectura es su código nativo). El IDE no tiene los
+bytes de lo que hay en la placa.
+
+**Cuándo: en el `LIST`**, que ya recorre el FS, y sólo en los ficheros cuyo formato conoce la VM —`.mod`, `.mdn`,
+`.pack`—, leyendo SÓLO la cabecera (`bpvm_fs_read_at`, hasta 128 B): una lectura corta por fichero.
+
+**Qué cuenta** —lo que dicen la cabecera y el tamaño, sin leer el contenido—:
+
+| | formato no válido | dañado |
+|---|---|---|
+| `.mod` | un MAGIC que esta VM no carga (`MOD5`, o desconocido) | la cabecera y el tamaño no cuadran: el fichero acaba justo donde acaba `code` (`MOD_FORMAT` §1), así que más corto es truncado y más largo, roto |
+| `.mdn` | MAGIC o versión de cabecera desconocidos; de otra arquitectura o de otra ABI de helpers (esta placa no lo cargaría) | más corto que lo que su cabecera dice |
+| `.pack` | MAGIC (`BPAK`) o versión de formato desconocidos | el CRC de la cabecera no cuadra; el tamaño que declara no es el del fichero |
+
+Lo que NO se mira, y por qué: el CONTENIDO. Un `.mod` no lleva checksum (un bit cambiado en medio no se ve sin
+cargarlo); un `.pack` sí lleva el CRC de su contenido, pero comprobarlo es leer el pack entero —un `SQLite.pack` es
+1 MB— en cada `LIST`: lo comprueba la grabación (`PACK_BURN`), que valida la imagen entera.
+
+**Cómo llega**: la entrada del `LIST` lleva `"mal":"<motivo>"` SÓLO si hay problema —las buenas, como hoy: el listado
+no crece—. El IDE la pinta en rojo, con el motivo en la ayuda emergente. Las dos VMs, con las mismas reglas y los
+mismos textos (la VM-Java también sirve el `LIST`). Y el panel de la zona de packs ya dice «MAL» por pack
+(`PACK_LS`, `crcOk`): esa fila, en rojo también.
+
+**La trampa del cerrojo**: el `LIST` emite cada entrada desde el callback del recorrido del FS, y el recorrido tiene el
+cerrojo del FS cogido (`be_list`); leer una cabecera desde ahí lo pediría otra vez —el de la Pico no es recursivo: se
+colgaría—. Así que, por cada directorio, el recorrido APUNTA los módulos y packs (nombre y tamaño, en un búfer fijo) y
+los examina y emite al acabar ese directorio, con el cerrojo suelto; lo demás sale como hoy. Si el búfer se llena, lo
+que no cabe sale sin examinar (y el log lo dice).
+
+**Las piezas**: (a) en la VM-C, las tres funciones que examinan una cabecera —la del `.mod` sacada del cargador, para
+que la regla sea UNA (`load_buffer_impl` lee la cabecera con la misma función)—, y el `LIST`; (b) la VM-Java, igual;
+(c) el IDE: el campo, el rojo y la ayuda, en el árbol y en el panel de packs; (d) las pruebas: el micro simulado con un
+`.mod` cortado, uno `MOD5`, uno con bytes de más, un `.mdn` de otra arquitectura y un `.pack` con la cabecera tocada →
+el `LIST` los marca y a los buenos no; y la VM-Java, lo mismo.
+
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
 El encargo de Eduardo: *«Vamos a analizar qué necesitamos para meter LVGL en un pack. De momento nada más
