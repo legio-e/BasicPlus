@@ -140,6 +140,11 @@ static void reply_empty(const char* type, long id) {
 
 static void packs_cargar_una_vez(void);   /* V7/H6 G5.b0: más abajo, junto al RUN */
 
+/* V7/H8 #602 — para el INFO común: el motivo de la regla, la clave del ENV que pidió el bloque y lo que pedía. */
+static int         s_pack_ram_res    = 0;
+static const char* s_pack_ram_clave  = NULL;
+static long        s_pack_ram_pedido = 0;
+
 static void stm32_repl_info(bpvm_repl_info_t* o) {
     /* V7/H6 G5.b (26-sep) — como la ESP32 (pregunta 6 de V7_IDEAS §H6): el INFO publica screenW/H sólo si hay
      * render, y con la GUI por el pack eso exige el pack CARGADO; la tanda y el IDE preguntan el tamaño de
@@ -148,6 +153,12 @@ static void stm32_repl_info(bpvm_repl_info_t* o) {
      * y un cuelgue aquí no se repite en cada reset. Sin esto, la DK2 sin LVGL en la imagen decía «sin
      * pantalla» y la tanda SALTABA las pruebas de GUI. */
     packs_cargar_una_vez();
+    /* V7/H8 #602 — el bloque de RAM de los motores (stm32_mem_planificar), al INFO común. */
+    o->pack_ram_base   = (unsigned long) (uintptr_t) s_pack_ram_base;
+    o->pack_ram_bytes  = (unsigned long) s_pack_ram_size;
+    o->pack_ram_res    = s_pack_ram_res;
+    o->pack_ram_clave  = s_pack_ram_clave;
+    o->pack_ram_pedido = s_pack_ram_pedido;
     /* N-stm32-info — DE DONDE SALE CADA VALOR de esta placa. El mensaje ya no
      * se arma aquí (lo hace src/bpvm_repl.c con los 18 campos comunes); esto
      * sólo los RELLENA, que es lo que de verdad es propio del STM32.
@@ -905,6 +916,9 @@ static void stm32_mem_planificar(void) {
     size_t pide = 0;
     const char* nombre = NULL;
     bpvm_sqlite_res_t sqlres = bpvm_packram_region(pack_kb, sql_mb, reg[0].bytes, &pide);
+    s_pack_ram_res    = (int) sqlres;                                                   /* #602 */
+    s_pack_ram_clave  = (pack_kb > 0) ? "packRam" : (sql_mb > 0) ? "SQLite" : NULL;
+    s_pack_ram_pedido = (pack_kb > 0) ? pack_kb : sql_mb;
     if (sqlres == BPVM_SQLITE_OK) nombre = (pack_kb > 0) ? "packs" : "SQLite"; else pide = 0;
     const int en_su_sitio = ((uintptr_t) s_vm_mem == (uintptr_t) __bp_vm_start)
                          && ((uintptr_t) __bp_vm_start == (uintptr_t) __bp_ram_start);

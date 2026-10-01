@@ -87,6 +87,14 @@ typedef struct {
     unsigned long flash_bytes, sram_bytes, psram_bytes;
     unsigned long vm_heap_bytes, vm_stack_bytes;
     unsigned long fs_total_bytes, fs_used_bytes;
+    /* V7/H8 #602 (1-oct) — EL BLOQUE DE RAM DE LOS MOTORES NATIVOS (V7/H6.c G1: el reparto de la RAM es el sello),
+     * igual en las cuatro familias: dónde y cuánto (0 y 0 = no hay), el motivo de la regla común
+     * (`bpvm_packram_region`: off/ok/low/nofit) y la clave del ENV que lo pidió, con lo que pedía en SU unidad (KB
+     * `packRam=`, MB `SQLite=`). Era de la Pico, con los nombres de V5 (`sqlite*`); la ESP32 y la STM32 no lo decían. */
+    unsigned long pack_ram_base, pack_ram_bytes;
+    int           pack_ram_res;        /* bpvm_sqlite_res_t */
+    const char*   pack_ram_clave;      /* "packRam", "SQLite" o NULL (ninguna) */
+    long          pack_ram_pedido;
 } bpvm_repl_info_t;
 
 typedef struct {

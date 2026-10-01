@@ -71,6 +71,11 @@ extern uint8_t* s_pack_ram_base;
  * BD (`s_sqlite_size`) o la cola de la SRAM (`PACK_RAM_BYTES`). Es lo que se
  * reparte entre los motores y lo que sale al wire como `ramSize`. */
 extern uint32_t s_pack_ram_size;
+/* V7/H8 #602 — para el INFO común: el motivo de la regla (bpvm_sqlite_res_t), la clave del ENV que lo pidió
+ * ("packRam", "SQLite" o NULL) y lo que pedía, en su unidad. */
+extern int         s_pack_ram_res;
+extern const char* s_pack_ram_clave;
+extern long        s_pack_ram_pedido;
 /* V5/H8 — tamaño del bloque de la BD, del que `s_pack_ram_base` es el
  * principio. Sale al wire (`PACK_BURN_BEGIN`) como el sitio de RAM que
  * tiene el motor: el sello del `.npk` se comprueba contra él. */

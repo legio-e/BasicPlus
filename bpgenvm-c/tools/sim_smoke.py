@@ -140,6 +140,12 @@ def main():
         # Stdlib.pack grabado, así que su zona está montada y no puede salir 0.
         check("floatAbi" in r and r.get("packsXipBase", 0) != 0 and r.get("packsBytes", 0) > 0,
               "INFO → floatAbi y la zona de packs montada (packsXipBase/packsBytes)")
+        # V7/H8 #602 (1-oct): el bloque de RAM de los motores nativos, del INFO COMÚN con los mismos nombres en las
+        # cuatro familias (era la Pico, como sqlite*). El sim no tiene un bloque como el de las placas: 0, 0 y off.
+        check(r.get("packRamBase") == 0 and r.get("packRamBytes") == 0 and r.get("packRamStatus") == "off"
+              and r.get("packRamKey") == "" and "packRamAsked" in r and r.get("packRamMinMb") == 2
+              and "sqliteBytes" not in r,
+              "INFO → el bloque de RAM de los motores, con los nombres comunes (packRam*; en el sim, off)")
 
         # 3. FS virgen
         r = w.call("FORMAT", confirm="YES")

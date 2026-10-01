@@ -79,6 +79,8 @@ void bios_esp32_verificar(void);
 extern uint8_t* s_pack_ram_base;
 extern uint32_t s_pack_ram_size;    /* bytes del bloque entero (estáticos + arena) */
 extern int      s_pack_ram_res;     /* bpvm_sqlite_res_t: por qué hay o no hay bloque */
+extern const char* s_pack_ram_clave;  /* V7/H8 #602: "packRam", "SQLite" o NULL */
+extern long        s_pack_ram_pedido; /* lo que pedía esa clave, en su unidad */
 
 /* Reserva el bloque (o dice por qué no). ANTES del heap de la VM. */
 void    pack_esp32_ram_init(void);

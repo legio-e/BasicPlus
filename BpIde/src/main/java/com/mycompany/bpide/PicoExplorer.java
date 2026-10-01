@@ -2296,37 +2296,43 @@ public final class PicoExplorer extends JPanel {
         if (vh > 0 && vs > 0)
             sb.append("VM          : heap ").append(human(vh))
               .append(" + stack ").append(human(vs)).append('\n');
-        // V5/H — el bloque de la BD y lo que el IDE necesita para PRE-ENLAZAR un
-        // pack de código nativo. Tolerante con firmwares viejos (si no vienen, no
-        // se pintan) — pero OJO: mientras no se pinten, este panel NO distingue un
-        // firmware nuevo de uno viejo. Por eso la línea de la BD sale SIEMPRE que
-        // el firmware mande el campo, aunque valga 0: "(no activada)" es una
-        // respuesta, "nada" es un instrumento mudo.
-        if (m.containsKey("sqliteBytes")) {
-            long   sqb = ilong(m, "sqliteBytes"), sqa = ilong(m, "sqliteBase");
-            long   ask = ilong(m, "sqliteAskedMb"), min = ilong(m, "sqliteMinMb");
-            String st  = istr(m, "sqliteStatus");
-            sb.append("BD (SQLite) : ");
-            // El AVISO va con el MOTIVO, no con los bytes: 0 bytes significa
-            // "no se pidió" Y "se pidió mal", y son cosas distintas. Y el
-            // remedio (el mínimo) lo dice la PLACA — si algún día cambia,
-            // cambia en un sitio y este panel se entera solo.
-            switch (st) {
-                case "ok":
-                    sb.append(human(sqb)).append(" @ ").append(hex(sqa));
-                    break;
-                case "low":
-                    sb.append("SQLite=").append(ask).append(" es MENOS del mínimo (")
-                      .append(min).append(" MB) → no se activa. Pon SQLite=").append(min)
-                      .append(" o más y reinicia");
-                    break;
-                case "nofit":
-                    sb.append("SQLite=").append(ask)
-                      .append(" no cabe: la VM se quedaría sin memoria. Baja el valor");
-                    break;
-                default:   // "off" y firmwares que no manden el motivo
-                    sb.append("no activada — añade SQLite=").append(min > 0 ? min : 2)
-                      .append(" al entorno de la placa y reinicia");
+        // V7/H8 #602 — EL BLOQUE DE RAM DE LOS MOTORES NATIVOS, con los nombres del INFO común (`packRam*`), el
+        // mismo en las cuatro familias. Una Pico con firmware anterior lo manda como `sqlite*` (sólo la reserva en
+        // PSRAM, la de SQLite): se lee igual. La línea sale SIEMPRE que llegue el campo, aunque valga 0: "no hay"
+        // es una respuesta, "nada" es un instrumento mudo. Y el AVISO va con el MOTIVO y lo pedido, y el remedio
+        // (el mínimo) lo dice la PLACA (decisión de V5: el aviso vive en el INFO).
+        boolean nuevo = m.containsKey("packRamBytes");
+        if (nuevo || m.containsKey("sqliteBytes")) {
+            long   bytes = ilong(m, nuevo ? "packRamBytes"  : "sqliteBytes");
+            long   base  = ilong(m, nuevo ? "packRamBase"   : "sqliteBase");
+            String st    = istr(m,  nuevo ? "packRamStatus" : "sqliteStatus");
+            long   ask   = ilong(m, nuevo ? "packRamAsked"  : "sqliteAskedMb");
+            long   min   = ilong(m, nuevo ? "packRamMinMb"  : "sqliteMinMb");
+            String clave = nuevo ? istr(m, "packRamKey") : (ask > 0 ? "SQLite" : "");
+            String pedido = clave.isEmpty() ? "" : clave + "=" + ask;
+            sb.append("RAM packs   : ");
+            if (bytes > 0) {
+                sb.append(human(bytes)).append(" @ ").append(hex(base));
+                if ("low".equals(st))
+                    sb.append("  (por defecto: ").append(pedido).append(" es MENOS del mínimo, ")
+                      .append(min).append(" MB)");
+                else if ("nofit".equals(st))
+                    sb.append("  (por defecto: ").append(pedido).append(" no cabe)");
+                else
+                    sb.append(pedido.isEmpty() ? "  (por defecto)" : "  (" + pedido + ")");
+            } else {
+                switch (st) {
+                    case "low":
+                        sb.append(pedido).append(" es MENOS del mínimo (").append(min)
+                          .append(" MB) → no se activa. Pon SQLite=").append(min).append(" o más y reinicia");
+                        break;
+                    case "nofit":
+                        sb.append(pedido).append(" no cabe: la VM se quedaría sin memoria. Baja el valor");
+                        break;
+                    default:   // "off" y firmwares que no manden el motivo
+                        sb.append("no hay: un pack nativo no podría cargar. Añade packRam=<KB> (o SQLite=")
+                          .append(min > 0 ? min : 2).append(" para la BD) al entorno de la placa y reinicia");
+                }
             }
             sb.append('\n');
         }

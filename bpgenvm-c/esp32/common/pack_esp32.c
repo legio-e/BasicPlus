@@ -51,6 +51,8 @@
 uint8_t* s_pack_ram_base = 0;
 uint32_t s_pack_ram_size = 0;
 int      s_pack_ram_res  = 0;   /* bpvm_sqlite_res_t */
+const char* s_pack_ram_clave  = NULL;   /* V7/H8 #602: la clave del ENV que lo pidió, para el INFO */
+long        s_pack_ram_pedido = 0;      /* y lo que pedía, en su unidad */
 
 /*
  * ─── V7/H7 (Boot 2, fase 2): EL CARGADOR ES COMÚN ───
@@ -142,6 +144,8 @@ void pack_esp32_ram_init(void)
     board_mgr_esp32_env_temprano();
     long pack_kb  = bpvm_env_get_long(board_mgr_env(), "packRam", 0);
     long sql_mb   = bpvm_env_get_long(board_mgr_env(), "SQLite", 0);
+    s_pack_ram_clave  = (pack_kb > 0) ? "packRam" : (sql_mb > 0) ? "SQLite" : NULL;   /* #602 */
+    s_pack_ram_pedido = (pack_kb > 0) ? pack_kb : sql_mb;
 
     /* De dónde: la PSRAM si la hay (S3, C5, P4); si no, la SRAM interna. */
     size_t   libre_ps = heap_caps_get_free_size(MALLOC_CAP_SPIRAM);

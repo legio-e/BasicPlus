@@ -191,6 +191,11 @@ uint32_t s_sqlite_size     = 0;
  * bytes son 0 igual que si la clave no estuviera, y son cosas distintas. */
 int      s_sqlite_res      = 0;      /* bpvm_sqlite_res_t                     */
 long     s_sqlite_asked_mb = 0;      /* lo que pedia el ENV (para citarlo)    */
+/* V7/H8 #602 — el bloque de los MOTORES (no sólo el de la BD) para el INFO común: el motivo de la regla común,
+ * la clave que lo pidió y lo que pedía (en su unidad). Sin clave, la cola de 8 KB de siempre. */
+int         s_pack_ram_res    = 0;   /* bpvm_sqlite_res_t                     */
+const char* s_pack_ram_clave  = NULL;
+long        s_pack_ram_pedido = 0;
 
 /* --- LED on-board (GP25 en Pico 2 igual que Pico 1) -------------- */
 #ifndef PICO_DEFAULT_LED_PIN
@@ -1237,6 +1242,7 @@ static void pico_memoria(void) {
                         ? (size_t) ((uintptr_t) PACK_SRAM_TECHO - ini - VM_SRAM_MALLOC_MARGIN) : 0u;
             size_t b = 0;
             bpvm_sqlite_res_t rc = bpvm_packram_region(pack_kb, 0, sram, &b);
+            s_pack_ram_res = (int) rc;   /* #602: sin PSRAM, el motivo es el de la cola */
             if (rc == BPVM_SQLITE_OK) s_cola_bytes = (uint32_t) b;
             else log_printf("packs: packRam=%ld KB %s: la cola de la SRAM se queda en %u KB",
                             pack_kb, bpvm_sqlite_res_str(rc), (unsigned) (s_cola_bytes / 1024u));
@@ -1252,6 +1258,9 @@ static void pico_memoria(void) {
          * dice OFF y aquí no hay reserva. */
         size_t sqlbytes = 0;
         s_sqlite_asked_mb = bpvm_env_get_long(&s_env, "SQLite", 0);
+        /* #602 — para el INFO: qué clave pidió el bloque y cuánto, en su unidad (packRam= manda). */
+        s_pack_ram_clave  = (pack_kb > 0) ? "packRam" : (s_sqlite_asked_mb > 0) ? "SQLite" : NULL;
+        s_pack_ram_pedido = (pack_kb > 0) ? pack_kb : s_sqlite_asked_mb;
         bpvm_sqlite_res_t sqlres = BPVM_SQLITE_OFF;
         for (int k = 0; k < nreg; k++) {
             if (!reg[k].exclusiva) continue;
@@ -1259,6 +1268,7 @@ static void pico_memoria(void) {
             break;
         }
         s_sqlite_res = (int) sqlres;
+        if (con_psram) s_pack_ram_res = (int) sqlres;   /* #602 (sin PSRAM lo puso la cola, arriba) */
         if (sqlres != BPVM_SQLITE_OK) sqlbytes = 0;
 
         bpvm_mem_cfg_t cfg;

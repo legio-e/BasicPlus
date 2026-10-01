@@ -398,6 +398,12 @@ static void pico_repl_info(bpvm_repl_info_t* out) {
      * conserva el nombre historico "pwmSlices". */
     out->pwm_slices   = bd->pwm_slices * 2;
     out->adc_channels = bd->adc_channels;
+    /* V7/H8 #602 — el bloque de RAM de los motores, al INFO común (era `sqlite*`, en el info_extra). */
+    out->pack_ram_base   = (unsigned long) (uintptr_t) s_pack_ram_base;
+    out->pack_ram_bytes  = (unsigned long) s_pack_ram_size;
+    out->pack_ram_res    = s_pack_ram_res;
+    out->pack_ram_clave  = s_pack_ram_clave;
+    out->pack_ram_pedido = s_pack_ram_pedido;
     out->flash_bytes  = (unsigned long) bd->flash_bytes;
     out->sram_bytes   = 520UL * 1024UL;
     out->psram_bytes  = (unsigned long) bd->psram_bytes;
@@ -428,22 +434,15 @@ static int pico_repl_info_extra(char* buf, unsigned long buf_max, int off) {
      *    mapeo, y equivocarse ahi desplaza TODO el codigo por una constante, en
      *    silencio: es el error mas caro posible en este camino.
      *  · packsBytes  — para negarse ANTES de compilar 400 KB que no caben.
-     *  · sqliteBase/Bytes — el bloque de RAM que el arranque reservo desde el
-     *    ENV (`SQLite=<MB>`). 0 = no hay BD en esta placa.
+     *  · (el bloque de RAM de los motores —era sqliteBase/Bytes— sale desde
+     *    V7/H8 #602 del INFO COMÚN, como packRam*, en las cuatro familias.)
      *  · floatAbi    — junto a `arch`, el SELLO. `arch` sola no distingue hard
      *    de softfp, y esa discrepancia da numeros mal sin avisar. */
     /* V7/H8 (28-sep) — `packsXipBase`/`packsBytes` y `floatAbi` salen ya del INFO COMÚN, para las cuatro familias
      * (bpvm_repl.c: la zona montada, en su vista ejecutable). Aquí queda lo que sólo sabe la Pico. */
-    X_L("sqliteBase",  (long) (uintptr_t) s_sqlite_base);
-    X_L("sqliteBytes", (long) s_sqlite_size);
-    /* El AVISO (decision de Eduardo: vive en el INFO). Van los TRES datos que
-     * hacen falta para redactarlo sin mentir y sin que el IDE se invente nada:
-     * el MOTIVO (0 bytes por "no se pidio" y por "se pidio poco" son cosas
-     * distintas), lo que se PIDIO (para citarlo) y el MINIMO (para que el
-     * remedio salga de la placa y no de un numero copiado en Java). */
-    X_S("sqliteStatus",  bpvm_sqlite_res_code((bpvm_sqlite_res_t) s_sqlite_res));
-    X_L("sqliteAskedMb", s_sqlite_asked_mb);
-    X_L("sqliteMinMb",   (long) BPVM_SQLITE_MIN_MB);
+    /* V7/H8 #602 — el bloque de RAM de los motores y su AVISO (el motivo, lo pedido y el mínimo: decisión de
+     * Eduardo, el aviso vive en el INFO) salen ya del INFO COMÚN, como packRam*, en las cuatro familias. Eran
+     * `sqliteBase`/`Bytes`/`Status`/`AskedMb`/`MinMb`, y sólo contaban la reserva en PSRAM. */
 
     /* #354 — LO QUE NUNCA LE HEMOS PREGUNTADO A FreeRTOS: cuanto de lo que se le
      * reservo llego a usar. SOLO DIAGNOSTICO. Dos cifras que contestan a dos

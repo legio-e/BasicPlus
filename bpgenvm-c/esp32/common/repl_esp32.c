@@ -100,6 +100,7 @@
 #include "esp_cache.h"       /* H4 AOT: sync de cachés tras copiar .mdn a RAM exec */
 #include "esp_log.h"         /* H4 AOT: trazas del cargador .mdn (consola) */
 #endif
+#include "pack_esp32.h"      /* V7/H8 #602: el bloque de RAM de los motores, para el INFO */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -980,6 +981,12 @@ static void esp32_repl_info(bpvm_repl_info_t* o) {
      * nada). La política de no cargar en el ARRANQUE no cambia: esto ya es el
      * host hablando, y un cuelgue aquí no se repite en cada reset. */
     packs_cargar_una_vez();
+    /* V7/H8 #602 — el bloque de RAM de los motores (pack_esp32_ram_init), al INFO común. */
+    o->pack_ram_base   = (unsigned long) (uintptr_t) s_pack_ram_base;
+    o->pack_ram_bytes  = (unsigned long) s_pack_ram_size;
+    o->pack_ram_res    = s_pack_ram_res;
+    o->pack_ram_clave  = s_pack_ram_clave;
+    o->pack_ram_pedido = s_pack_ram_pedido;
     static char uid[16];
     uint8_t mac[6] = {0};
     esp_efuse_mac_get_default(mac);

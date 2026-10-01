@@ -22,6 +22,7 @@
 #include "mdn_loader.h"     /* V7/H2 (#441): aotReceta/aotFlagsCrc en INFO */
 #include "bpvm_pack.h"      /* V7/H2 (#493): BPVM_PACK_URI */
 #include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
+#include "bpvm_sqlmem.h"    /* V7/H8 #602: el motivo y el mínimo del bloque de RAM de los motores */
 
 #include <stdio.h>
 #include <string.h>
@@ -580,6 +581,16 @@ static void repl_info(long id) {
         CAMPO_UL("packsXipBase", zona ? (unsigned long) (uintptr_t) bpvm_pack_exec_ptr(zona) : 0ul);
         CAMPO_L ("packsBytes",   zona ? (long) zona_bytes : 0);
     }
+    /* V7/H8 #602 — EL BLOQUE DE RAM DE LOS MOTORES, con los mismos nombres en las cuatro familias: dónde y cuánto
+     * (0 y 0 = no hay), el motivo de la regla común (off/ok/low/nofit), la clave del ENV que lo pidió y lo que pedía
+     * (en su unidad), y el mínimo de `SQLite=`, para que el remedio de un `low` lo diga la placa y no un número
+     * copiado en el IDE (la decisión de V5: el AVISO vive en el INFO). Era de la Pico, como `sqlite*`. */
+    CAMPO_UL("packRamBase",   in.pack_ram_base);
+    CAMPO_L ("packRamBytes",  in.pack_ram_bytes);
+    CAMPO_S ("packRamStatus", bpvm_sqlite_res_code((bpvm_sqlite_res_t) in.pack_ram_res));
+    CAMPO_S ("packRamKey",    in.pack_ram_clave ? in.pack_ram_clave : "");
+    CAMPO_L ("packRamAsked",  in.pack_ram_pedido);
+    CAMPO_L ("packRamMinMb",  BPVM_SQLITE_MIN_MB);
     CAMPO_L("cpuFreqHz",    in.cpu_hz);
     CAMPO_L("uptimeMs",     in.uptime_ms);
     CAMPO_S("resetReason",  in.reset_reason);
