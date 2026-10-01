@@ -30,17 +30,25 @@
 /*  Helpers (bajo vm_lock)                                       */
 /* ============================================================ */
 
+/* V7 #616 (1-oct) — EN RUEDA, como scheduler.c y como miVM (su cola): se busca desde el
+ * siguiente al último que se eligió (`current_thread_idx`, que se escribe bajo vm_lock
+ * al elegir), no desde el primero. Buscando siempre desde el 0, con más hilos listos que
+ * workers los primeros acaparaban: con un worker, tres hilos que calculan sin ceder
+ * corrían A entero, luego B, luego C; con dos, C no empezaba hasta que acababa A. */
 static int pick_next_runnable_locked(bpvm_t* vm) {
     int n = vm->thread_count;
+    if (n <= 0) return -1;
+    int desde = vm->current_thread_idx;
     for (int i = 0; i < n; i++) {
+        int idx = (desde + 1 + i) % n;
         /* H2 — Sólo seleccionable si está RUNNABLE Y nadie lo tiene
          * asignado actualmente (sched_owner == -1). El status se puede
          * escribir desde el interp sin lock, por eso no basta — el
          * worker que "tiene" el tc lo marca con su wid bajo vm_lock y
          * lo libera bajo vm_lock al volver al scheduler. */
-        if (vm->threads[i].status == BPVM_THREAD_RUNNABLE
-                && vm->threads[i].sched_owner == -1) {
-            return i;
+        if (vm->threads[idx].status == BPVM_THREAD_RUNNABLE
+                && vm->threads[idx].sched_owner == -1) {
+            return idx;
         }
     }
     return -1;

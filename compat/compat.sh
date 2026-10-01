@@ -513,6 +513,10 @@ check_smp() {   # $1 = "sin-referencia" cuando check ya hizo la pasada principal
 # sleep(0) en cada vuelta. miVM reclamaba un hilo que su worker aun no habia soltado (el sleep(0) lo re-encola
 # desde dentro del builtin): dos workers sobre el mismo contexto, 9 de cada 30 con cuatro. La VM-C, nunca
 # (sched_owner); desde #613 miVM tampoco.
+# V7 #616 (1-oct) — y LA RUEDA: tres hilos que calculan sin ceder (Rueda). Con un worker, la VM-C con su planificador
+# de varios (--smp=1) tiene que decir lo MISMO que con el de uno y que miVM: los tres empiezan antes de que acabe
+# ninguno. El de varios buscaba siempre desde el primer hilo de la lista: A entero, luego B, luego C. Y con dos y
+# cuatro workers, en las dos VMs, los tres tienen que empezar antes de que acabe el primero.
 ESTRES_VECES="${ESTRES_VECES:-8}"
 check_estres() {
   echo "-- el estres del heap (#610, #611): la tabla de handles que crece (VM-C sin GC, x$ESTRES_VECES); el heap justo con 1, 2 y 4 workers (las dos VMs); y un hilo que cede, con 4 workers (#613, x$ESTRES_VECES, las dos VMs) --"
@@ -520,8 +524,9 @@ check_estres() {
   rm -rf "$E"; mkdir -p "$E"; cp "$STDLIB"/*.mod "$E/"
   ( cd "$ROOT" && java -jar "$V3_FE" "$SAMPLES/TablaHandles.bp" --compile "$E" --backend=mivm \
       && java -jar "$V3_FE" "$SAMPLES/HeapEstres.bp" --compile "$E" --backend=mivm \
-      && java -jar "$V3_FE" "$SAMPLES/CedeCero.bp" --compile "$E" --backend=mivm ) >"$E/compila.log" 2>&1 \
-    || { echo "  ✗ TablaHandles, HeapEstres o CedeCero no compilan: $E/compila.log"; return 1; }
+      && java -jar "$V3_FE" "$SAMPLES/CedeCero.bp" --compile "$E" --backend=mivm \
+      && java -jar "$V3_FE" "$SAMPLES/Rueda.bp" --compile "$E" --backend=mivm ) >"$E/compila.log" 2>&1 \
+    || { echo "  ✗ TablaHandles, HeapEstres, CedeCero o Rueda no compilan: $E/compila.log"; return 1; }
   # El heap justo: en miVM, 48 KB de heap (el resto, pilas); en la VM-C, 96 KB en total. Los dos, ~1.000 colectas.
   printf '{\n  "memorySize": 114688,\n  "stackBase": 49152\n}\n' > "$E/justo.cfg"
   local justo="creados:  1600|errores:  0|leidos de otros:  true|muchas colectas:  true"
@@ -564,7 +569,27 @@ check_estres() {
       echo "  ✗ CedeCero VM-C --smp=4, pasada $i: salida $rc, «$sal»"
     fi
   done
-  echo "  estres: $([ "$fails" -eq 0 ] && echo "la tabla crece sin corromper nada ($ESTRES_VECES de $ESTRES_VECES), el heap justo aguanta y un hilo que cede no se ejecuta dos veces, en las dos VMs" || echo "$fails pasadas en ROJO")"
+  local rueda="empieza A|empieza B|empieza C|acaba A|acaba B|acaba C|fin" quien
+  for quien in "c:" "c:--smp=1" "j:--workers=1"; do
+    op="${quien#*:}"
+    if [ "${quien%%:*}" = c ]; then ( cd "$E" && timeout "$VM_TIMEOUT" "$V3_C" $op Rueda.mod >"$E/r.out" 2>"$E/r.err" ); rc=$?
+    else ( cd "$E" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$V3_JAVA" $op Rueda.mod >"$E/r.out" 2>"$E/r.err" ); rc=$?; fi
+    sal="$(filt < "$E/r.out" | paste -sd'|')"
+    if [ "$rc" -ne 0 ] || [ "$sal" != "$rueda" ]; then
+      fails=$((fails+1)); echo "  ✗ Rueda (#616) ${quien%%:*} ${op:-sin opciones}: salida $rc, «$sal»"
+    fi
+  done
+  for quien in "c:--smp=2" "c:--smp=4" "j:--workers=2" "j:--workers=4"; do
+    op="${quien#*:}"
+    if [ "${quien%%:*}" = c ]; then ( cd "$E" && timeout "$VM_TIMEOUT" "$V3_C" $op Rueda.mod >"$E/r.out" 2>"$E/r.err" ); rc=$?
+    else ( cd "$E" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$V3_JAVA" $op Rueda.mod >"$E/r.out" 2>"$E/r.err" ); rc=$?; fi
+    sal="$(filt < "$E/r.out" | paste -sd'|')"
+    # las tres «empieza» antes de la primera «acaba»; el orden entre ellas, libre
+    if [ "$rc" -ne 0 ] || [ "$(filt < "$E/r.out" | head -3 | grep -c '^empieza')" != 3 ]; then
+      fails=$((fails+1)); echo "  ✗ Rueda (#616) ${quien%%:*} $op: un hilo no empieza hasta que acaba otro — salida $rc, «$sal»"
+    fi
+  done
+  echo "  estres: $([ "$fails" -eq 0 ] && echo "la tabla crece sin corromper nada ($ESTRES_VECES de $ESTRES_VECES), el heap justo aguanta, un hilo que cede no se ejecuta dos veces y los hilos se turnan en rueda (#616), en las dos VMs" || echo "$fails pasadas en ROJO")"
   [ "$fails" -eq 0 ]
 }
 
