@@ -1068,6 +1068,23 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 📡 H8 (1-oct, tarde) — `#495` paso 3 (`e97b4c38`): el trozo y la ventana en el `HELLO`, y el segundo intento del IDE
+
+- **Eduardo**: el segundo intento, *«que lo haga el IDE»*. Hecho así: uno, desde el principio, y sólo si falla el cable
+  (sin respuesta, un `FATAL`, `SIZE_MISMATCH`, `NO_SESSION`); antes de repetir, el IDE espera a que el cable calle 3,5 s
+  y manda un `HELLO`, que en la placa borra la subida a medias.
+- **Lo que pedía debajo**: un bulk a medias se da por perdido a los 3 s en todas las placas —la Pico, la ESP32 y la P4
+  por TCP lo esperaban para siempre, y el reintento se habría leído como datos—, y el micro simulado, además, tira una
+  línea estancada como las placas. Lo destapó probar el segundo intento contra el simulado: el `HELLO` se perdía.
+- La placa anuncia `putChunk`/`putWindow` (512 B y 4); el IDE sube con ellos. Y la subida de una pieza (casi todos los
+  `.mod`) que se rompe también se borra.
+- `SubidaSmoke` (nuevo, el cliente real del IDE): en el simulado y en las cuatro placas, con un trozo recortado que
+  fuerza el segundo intento. La red, verde; la tanda de V7 contra el simulado, idéntica (menos `GuiShot`, sin LVGL en
+  ese simulado, y las de AOT, sin receta). Las placas —la Pico, la P4, la DK2 y la S3— llevan `e97b4c38` (con el OK de
+  Eduardo); la P4, con sus packs vivos en la misma zona.
+- Visto de paso: el lazo de la ESP32 tira sin `FATAL` una línea que no empieza por `{` (la Pico y la STM32 contestan
+  `FATAL`): el segundo intento tarda 10 s más en arrancar; funciona igual.
+
 ## ✅ H7 (1-oct, tarde) — CERRADO: la S3 en la mesa, remedida, y su caso con PSRAM en `test_mem` (`b0bc3164`)
 
 - Eduardo conectó la S3 (en lugar de la C5) y dio el OK para grabarla: llevaba una imagen del 26-sep; con la de

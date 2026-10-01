@@ -3559,9 +3559,30 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
    11,2 KB/s: 64 KB no bajan de 5,7 s), y la ventana recupera lo que costaban las idas y vueltas de los trozos de 512 B.
    En la S3, con trozos de 8 KB, 0,3–0,4 s peor que con la imagen del 26-sep: una sola medida del antes y cinco días de
    cambios en medio; sin partir. Sin probar en placa: la Nucleo (el mismo USART1 y el mismo DMA que la DK2).
-3. **El trozo y la ventana, anunciados por la placa** en el `HELLO` (512 B y 4), y el IDE (y `tanda.py`) usándolos para
-   el `PUT`; con un firmware que no los anuncia, el IDE sigue como hoy. Y `wire_serie.py` deja de esperar 0,2 s por
-   respuesta (su `esperar()`: el instrumento de la medida mala).
+3. ✅ **El trozo y la ventana, anunciados por la placa, y el segundo intento del IDE** (1-oct, `e97b4c38`):
+   - la placa los declara en su cintura (`put_trozo`, `put_ventana`: 512 B y 4 en las cuatro familias y el micro
+     simulado) y los anuncia en el `HELLO` (`putChunk`, `putWindow`); un cliente viejo no los mira;
+   - el IDE (`BpvmClient`) sube por trozos con esa ventana —hasta 4 sin acuse—; sin anuncio (un firmware anterior, la
+     VM-Java), como antes: 8 KB y un acuse por trozo. Lo que cabe en 8 KB sigue subiendo de una pieza;
+   - **el segundo intento, del IDE** (Eduardo, 1-oct: *«Sí, que lo haga el IDE»*): uno, desde el principio, y sólo si
+     falla el cable —sin respuesta a tiempo, un `FATAL`, `SIZE_MISMATCH`, `NO_SESSION`—; si la placa dice que no con
+     nombre, a la primera. Antes de repetir, el IDE espera a que el cable lleve callado 3,5 s en los dos sentidos y manda
+     un `HELLO`, que en la placa acaba la subida a medias y la borra;
+   - para eso, **un bulk a medias se da por perdido a los 3 s** (`WIRE_V1_BULK_ESTANCADO_MS`, en el contrato): sin
+     plazo, la Pico, la ESP32 y la P4 por TCP esperaban para siempre los bytes que faltaban, y el reintento se habría
+     leído como datos (la STM32 ya tenía 3 s). El micro simulado, igual, y con el plazo de la línea estancada de las
+     placas (300 ms), que no tenía;
+   - y **la subida de una pieza que se rompe también se borra**: la regla de la subida rota sólo cubría la de trozos,
+     y casi todos los `.mod` suben de una pieza;
+   - `wire_serie.py` y `tanda.py` dejan de esperar 0,2 s por respuesta (el instrumento de la medida mala); `puts` de
+     `wire_serie.py` sube con la ventana.
+
+   Probado en el micro simulado (`sim_smoke`: el `HELLO`, una subida con 4 en vuelo, el bulk y la línea estancados;
+   saboteado el plazo, en rojo) y con el cliente del IDE (`SubidaSmoke`: tres tamaños subidos y bajados, y un trozo
+   recortado 16 bytes —un cable que pierde bytes— que llega entero por el segundo intento) en el simulado y en la Pico,
+   la P4, la DK2 y la S3: 64 KB en 1,18 s en la Pico y en 6,15–6,25 s en las de UART. El segundo intento tarda de 4,9 s
+   (la Pico y la DK2 contestan `FATAL` en cuanto les llega la basura) a 16,7 s (la P4 y la S3: el lazo de la ESP32 tira
+   sin `FATAL` una línea que no empieza por `{`, y el IDE espera sus 10 s de silencio).
 4. **El `GET` y el `LIST` troceados y mezclables** (arriba, la propuesta), con la misma ventana en el otro sentido.
 
 **La subida que no termina** (1-oct, `ae3ca338`). Medir el paso 1 lo destapó: una subida abandonada (el PC deja de
