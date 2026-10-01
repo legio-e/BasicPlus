@@ -1068,6 +1068,19 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## ✅ H7 (1-oct, tarde) — CERRADO: la S3 en la mesa, remedida, y su caso con PSRAM en `test_mem` (`b0bc3164`)
+
+- Eduardo conectó la S3 (en lugar de la C5) y dio el OK para grabarla: llevaba una imagen del 26-sep; con la de
+  `ae3ca338` arranca con su FS entero (45 ficheros) y la zona de packs vacía.
+- **Lo que H7 esperaba de ella**, el resto de `U6`: remedirla con la imagen de hoy (`tools/medir_margen.py`: reset, PUT,
+  dos RUN de Bench, LIST) y añadir el caso. Es una N16R8: la VM va a la PSRAM, región exclusiva con 512 KB de margen
+  —«vm: 7677 KB en PSRAM (todo lo que deja el margen de la región)»—, y la DRAM interna, sin la VM, tiene un mínimo
+  histórico de 297 535 B libres. `caso_s3_psram` en `test_mem` (la línea del plan, idéntica a la de la placa); el
+  caso sin PSRAM, del 30-ago, se queda; saboteado el planificador, en rojo.
+- De paso, visto otra vez: la línea «vm: DRAM interna libre A->B» mezcla la PSRAM (antes de tomar) con la DRAM (después)
+  en las ESP32 con PSRAM; es la misma que se anotó en la C5.
+- **H7, cerrado**: era lo único abierto (Eduardo lo había dejado así hasta que la S3 estuviera en la mesa).
+
 ## 📡 H8 (1-oct, tarde) — `#495`: el búfer de ficheros (`1c19eabb`) y el de comunicaciones (`ae3ca338`), medidos antes y después; y la subida que no termina se borra
 
 - **Las decisiones de Eduardo** (en `V7_IDEAS` §H8, `02bb439e`): trozos de 512 B o 1 KB según el búfer de la placa; una
