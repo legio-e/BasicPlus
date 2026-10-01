@@ -170,6 +170,13 @@ void bpvm_platform_cond_broadcast(bpvm_platform_cond_handle_t* c) {
 
 #define BPVM_ESP32_THREAD_STACK_BYTES 4096
 
+/* V7/H8 #495 (paso 4) — LA PILA DE `io`, 6 KB y no la de un hilo cualquiera. Desde el paso 4, `io` corre durante un
+ * RUN el GET y el LIST troceados —el recorrido del FS, el examen de E1, la lectura por el cursor— además de la salida
+ * del programa. Medido en placa (1-oct, `ioStackFree` del INFO, con un GET de 40 KB, un STAT con CRC y un LIST
+ * troceados durante un RUN): con 4 KB le sobraban 332 B en la S3 (los marcos de Xtensa) y 700 en la P4; en la Pico y
+ * la DK2, con el mismo código en ARM, 1208. Aquí la RAM no aprieta; los 2 KB, sólo mientras dura el RUN. */
+#define BPVM_ESP32_IO_STACK_BYTES 6144
+
 typedef struct {
     TaskHandle_t        task;
     SemaphoreHandle_t   exited;
@@ -252,8 +259,8 @@ int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
      * repl lo hacen desde el camino del RUN), asi que uxTaskPriorityGet(NULL)
      * ES la prioridad de la VM. Con esto el contrato pasa de vigilado a
      * CONSTRUIDO: no hay dos numeros que puedan divergir. */
-    return es_thread_spawn_prio(t, entry, arg, tskNO_AFFINITY,
-                                (int) uxTaskPriorityGet(NULL));
+    return es_thread_spawn_pila(t, entry, arg, tskNO_AFFINITY, (int) uxTaskPriorityGet(NULL),
+                                "bpvm-io", BPVM_ESP32_IO_STACK_BYTES);   /* #495 (paso 4): su pila, medida */
 }
 
 int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
