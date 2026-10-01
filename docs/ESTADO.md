@@ -1068,6 +1068,21 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🔌 (1-oct, noche) — la C5 grabada con el paso 4 (con el OK de Eduardo), y `#618` (`34167432`)
+
+- La C5 (COM6) con la imagen de `be628ee3` (la pila de `io` a 6 KB): antes de grabar, `nm` —el rodata acaba en
+  `0x4209223c`, en la página del 30-sep— decía que la zona y el bloque de RAM de los packs no se movían; y así fue:
+  `Gui` (LVGL 9.2.2) y `DriverSpi` cargan sin regrabarlos (bloque en `0x420A1000`). `paso4_placa.py`, entera:
+  40 KB en 0,06 s enteros y 0,07 troceados; durante un RUN, 0,22 s con 1606 líneas del programa entre trozos;
+  `ioStackFree` 2828 B de 6 KB.
+- `SubidaSmoke` falló al bajar 64 KB troceados → `#618`, acotada cambiando una cosa cada vez (Python 5 de 5, el `GET`
+  entero del cliente 5 de 5, el troceado 3 de 3 fallos): el cliente del IDE leía las líneas de un byte en uno, y con
+  purejavacomm eso pierde bytes cuando llegan deprisa. Un `BufferedInputStream` lo arreglaba pero frenaba la P4 (~70 ms
+  por respuesta); lo que se quedó, leer lo que haya. Probado en la C5 y en la P4 (con sus tiempos de siempre); la Pico,
+  la DK2 y la S3 estaban desconectadas: sin repetir con el cliente nuevo.
+
+Las placas: la C5 y la P4 conectadas, con `be628ee3`; la Pico, la DK2 y la S3, desconectadas, también con `be628ee3`.
+
 ## ✅ H8 (1-oct, noche) — CERRADO (Eduardo): `#617` (`b33794df`), la VM-Java sube por trozos y vuelve a escuchar; y `#538`, visto en el IDE con una placa
 
 - Salió al probar el paso 4 con el cliente del IDE contra `bpgenvm --listen` (el destino «VM Java» del explorador):

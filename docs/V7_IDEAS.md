@@ -3639,6 +3639,7 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
    | DK2 (UART) | 3,49 / 3,86 s | 14,17 s, con 1613 | 1208 B de 4 KB |
    | P4 (UART) | 3,49 / 3,84 s | 14,09 s, con 1613 | 700 B de 4 KB → **2748 B de 6 KB** |
    | S3 (UART) | 3,48 / 3,84 s | 14,09 s, con 1613 | 332 B de 4 KB → **2316 B de 6 KB** |
+   | C5 (USB-Serial-JTAG; grabada después, ya con 6 KB) | 0,06 / 0,07 s | 0,22 s, con 1606 | 2828 B de 6 KB (su FS, el mayor: 147 entradas) |
 
    Las 1613 líneas entre trozos son las mismas en todas: `io` saca hasta 256 B de salida por vuelta y un trozo, así
    que el reparto lo da la vuelta, no el reloj. Con el programa hablando, la descarga se lleva más o menos un tercio del
@@ -3646,7 +3647,8 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
    son ~12,5 s, de los 14 medidos). La pila de `io` —con 4 KB, 332 B libres en la S3— pasó a 6 KB en
    la familia ESP32 (`be628ee3`); la Pico y la STM32 se quedan en 4 KB, con un 30 % de margen y el gancho de
    desbordamiento de FreeRTOS. Salió de paso `#617`: la VM-Java no tenía la subida por trozos (`PUT_BEGIN`) y atendía a un cliente por proceso
-   (cerrada el mismo día, `b33794df`).
+   (cerrada el mismo día, `b33794df`). Y al grabar la C5, `#618`: el cliente del IDE leía las líneas de un byte en uno, y
+   por el USB-Serial-JTAG la bajada troceada perdía bytes (cerrada el mismo día, `34167432`: lee lo que haya).
 
 **La subida que no termina** (1-oct, `ae3ca338`). Medir el paso 1 lo destapó: una subida abandonada (el PC deja de
 mandar, se suelta el cable) dejaba el fichero abierto —uno de los dos huecos del FS— hasta el siguiente `PUT_BEGIN`, y
