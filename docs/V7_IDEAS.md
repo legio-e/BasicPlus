@@ -3259,6 +3259,56 @@ identidad de la placa. La STM32 y el micro simulado la registran antes de nada.
   programa largo y un `HELLO` mientras corre —con la imagen de antes, «no ha registrado su cintura»; con la nueva, el
   `HELLO_REPLY` con el nombre de la placa—.
 
+## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
+
+Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):
+
+> *«Mi idea, en las placas con 1 núcleo → 2 hilos (IO y run1 de la VM). Los 2 hilos del SO se van ejecutando 1 detrás
+> de otro. El hilo de ejecución de la VM, si no hay ningún programa BP cargado, no hace nada, mira la cola, no hay
+> nada, así que pasa el control al siguiente hilo del SO. Si hay varios hilos BP en la cola (el hilo principal del
+> programa y el resto de hilos creados con Thread), ejecuta un thread BP y cuando le toca pasa al siguiente, y así
+> hasta el final de la cola, y luego continúa desde el principio, y así indefinidamente o hasta que el programa BP se
+> termine. Ahora, dispositivos con 2 núcleos (la Pico, la Metro y las dos placas P4). Con 2 núcleos creamos 3 hilos de
+> ejecución a nivel del SO: el IO, el run1 de la VM y el run2 de la VM. El funcionamiento es casi igual que en los
+> dispositivos de 1 núcleo: tenemos 3 hilos a nivel de SO que los ejecutan los 2 núcleos. Así que los hilos están en
+> una cola con 3 elementos y los cores van mirando cuál es el siguiente hilo en espera y lo ejecutan. A nivel de
+> programas BP, funciona casi igual que antes; lo que ocurre es que los 2 runs de la VM van mirando la cola de hilos
+> BP y van ejecutando lo que haya en ella.»*
+
+| | hilos del SO | quién los reparte | los hilos BP |
+|---|---|---|---|
+| **un núcleo** (la C3, la C5, la C6, las STM32) | `io` y `run1` | el RTOS, uno tras otro | `run1` los recorre en rueda, un cuanto cada uno |
+| **dos núcleos** (la Pico, la Metro, las dos P4) | `io`, `run1` y `run2` | los dos núcleos toman el siguiente listo, sin anclar | `run1` y `run2` sacan de la MISMA cola |
+
+Sin programa, una VM mira la cola, la ve vacía y cede el núcleo.
+
+**Lo que hay hoy** (leído el 1-oct):
+- **Todas las placas corren con UN núcleo**: la Pico compila con `BPVM_PICO_NUM_CORES=1` (el valor por defecto), y la
+  S3 y la P4 con `CONFIG_FREERTOS_UNICORE=y` (`c080e1f0`, de `A4`). O sea que el modelo de un núcleo es el de hoy:
+  `io` y la tarea de la VM, la arquitectura de `A1` (Eduardo, 4-sep: *«de momento 1 VM, 1 core y 2 hilos a nivel de
+  OS; en un futuro tendremos dos VM y una cola de threads BP»*).
+- **Las dos VM sobre una cola ya existen en el PC**: `scheduler_smp.c` (`--smp=N` en la VM-C, `--workers=N` en miVM),
+  con el corpus con dos workers en la red (`check-smp`) desde `#599`; en la Pico, la opción de compilación de H2
+  (`BPVM_PICO_SMP_WORKERS`, mayo), que no usa nadie.
+- **Lo que difiere del modelo**: `io` vive sólo durante un RUN —las cuatro familias lo arrancan y lo paran en el camino
+  del RUN— y, fuera de él, el cable lo atiende la propia tarea de la VM: es el REPL. En el modelo, la VM sin programa
+  no hace nada (*«mira la cola, no hay nada, pasa el control»*), así que `io` vive siempre y el REPL es suyo, que es lo
+  que `A1` decidió el 4-sep (*«`io` = wire, OUTPUT por línea, log, REPL, LVGL»*) y se quedó a medias. Es el primer paso
+  de H12, y vale igual con un núcleo.
+
+**Lo que el modelo decide de lo que H7 dejaba abierto** (el índice: «VMs ociosas a piñón o parqueadas» y «los
+workers como cola de hilos de SO en vez de N fijos»):
+- **Cuántas VM**: tantas como núcleos —una o dos, fijas por placa—, más `io`; la cola de hilos de SO es la del RTOS, de
+  la que tiran los núcleos. Sin anclar: el índice de H12 decía «`io` en un núcleo y `vm` en el otro», y el modelo deja
+  que cada núcleo coja el siguiente que esté listo.
+- **Una VM ociosa cede.** Queda por medir CÓMO, porque «pasar el control» tiene dos lecturas en un RTOS: ceder el turno
+  (`taskYIELD`) —si los demás hilos están bloqueados vuelve enseguida, y la VM da vueltas con el núcleo al 100 %— o
+  esperar en la cola —dormida hasta que llegue un hilo BP, sin gastar, a cambio de la latencia de despertar—. Es la
+  medida que el índice ya pedía antes de decidir (y el bajo consumo de V8 preferirá la segunda).
+
+**Para decidir en H12**: la S3 también tiene dos núcleos (dos LX7) y el índice de H12 la contaba entre las placas de
+la prueba; el modelo nombra la Pico, la Metro y las dos P4. ¿Entra?
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.

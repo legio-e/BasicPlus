@@ -1099,11 +1099,25 @@ la C6, la P4 y la Nucleo.
   heap/pilas, que es `#605`): tachadas. Y la línea de las placas que se quedó colgando bajo el traspaso del 30-sep,
   quitada.
 
-**Traspaso (1-oct).** Boot 2 está hecho: las cuatro fases. De H7 quedan dos: la Pico sobre el backend común
-(aparcada; lo que queda es fusionar por mitades, «puede esperar», Eduardo) y el modelo final del SMP de host, que va
-con H12. Para cerrar H7 hay que hacer o cancelar la primera, y el pequeño cierre del hito (la ronda corta en las placas
-tocadas). Sin decisión, con placa: remedir el S3. Fuera de H7: `#614` (la C5, 5 ms por etiqueta), `#609`, y la línea
-de la C5 que mezcla la PSRAM con la DRAM.
+- **H7, vaciado** (Eduardo, a la pregunta de cómo cerrarlo): la Pico sobre el backend común, a **`#615`**, SUELTA
+  —*«aparcado indefinidamente (sin ninguna fecha ni previsión) […] ya veremos si lo resolvemos en V7 o la pasamos a
+  V8»*—; y el modelo final del SMP, a H12, con **su modelo**: con un núcleo, `io` y la VM; con dos —la Pico, la Metro y
+  las dos P4—, `io` y dos VM que tiran de la misma cola de hilos BP, sin anclar; una VM sin nada en la cola cede.
+  Escrito y comparado con lo que hay en `V7_IDEAS` §H12: hoy todas las placas van con un núcleo, que es su modelo de
+  un núcleo; lo que falta es que `io` viva siempre y el REPL sea suyo (`A1`, del 4-sep, a medias: hoy `io` sólo vive
+  durante un RUN); y queda por medir cómo cede una VM ociosa. Por decidir en H12: la S3, que también tiene dos
+  núcleos. En el índice, la fila de los restos de `U6`, ordenada: tres cosas resueltas seguían sin tachar.
+- **El pequeño cierre de H7**: la tanda de V7 (29 pruebas) en las cuatro placas con la imagen de `e9ca7c30`: **114 de
+  116 verdes** (107 idénticas al PC y 7 «no peta», las que no tienen oráculo) y 2 saltadas con su motivo (las de la
+  GUI, en la Pico, que no tiene pantalla). Las capturas de `GuiShot`, miradas: la DK2 y la P4, bien; en la C5 el
+  deslizador tapa la casilla, como el 25-sep (en 240 de ancho, el del ejemplo es fijo). Informe:
+  `compat/informes/tanda_v7.md` (y su `.json`).
+
+**Traspaso (1-oct, tarde).** Boot 2, hecho (las cuatro fases), y H7 vaciado y con su pequeño cierre: la tanda de V7,
+verde en las cuatro placas. Lo único abierto de H7 es **remedir el S3 y añadir su caso a `test_mem`** (pide la S3, que
+no estaba conectada). Cerrar H7 lo decide Eduardo: con eso hecho, o pasándolo a suelta. H12 tiene ya el modelo de
+Eduardo (`V7_IDEAS` §H12) y una pregunta: ¿la S3? Fuera de H7: `#614` (la C5, 5 ms por etiqueta), `#615` (aparcada),
+`#609`, y la línea de la C5 que mezcla la PSRAM con la DRAM.
 
 Las placas: la Pico, la DK2, la C5 y la P4, con la imagen de `e9ca7c30` y su ENV como estaba (`log=1` en la Pico,
 la DK2 y la C5; la zona de la Pico, vacía; sin autorun); las demás, con imágenes anteriores —firmware y stdlib, juntos—.
