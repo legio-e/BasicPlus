@@ -81,3 +81,12 @@ CONFIG_COMPILER_OPTIMIZATION_SIZE=y
 # El día que se activen los dos, se quita esta línea y se fijan las tareas a mano
 # (`io` en un núcleo, `vm` en el otro), que es como lo tiene previsto la Pico.
 CONFIG_FREERTOS_UNICORE=y
+
+# #495 (V7/H8) — LA INTERRUPCION DE LA UART, EN RAM. El wire va por UART0, y mientras la
+# ESP32 escribe en la flash se apaga la cache: las interrupciones que no estan en RAM
+# esperan, y la FIFO de la UART (128 B) se desborda con lo que el PC manda entretanto
+# (medido el 1-oct en la P4: con una ventana de 4 trozos, la placa contestaba «JSON
+# invalido»). En RAM, la interrupcion sigue llenando el anillo del driver (8 KB, que con
+# esto va a RAM interna) durante la escritura. Es la via del IDF —la ayuda de su Kconfig
+# lo dice tal cual— y la decision de Eduardo (1-oct): la interrupcion en RAM, no el DMA.
+CONFIG_UART_ISR_IN_IRAM=y

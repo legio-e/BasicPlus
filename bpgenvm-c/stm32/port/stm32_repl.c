@@ -727,6 +727,7 @@ static void dispatch(int first_char) {
     if (json_get_str(&obj, "type", type, sizeof(type)) < 0) {
         wire_v1_send_error(id, "PROTOCOL_ERROR", "missing type"); return;
     }
+    bpvm_repl_antes_de_despachar(type);   /* #495: un verbo que no convive con una subida a medias, la acaba */
 
     /* H9 — gestión de placa (STATE/ENV_x/PART_x + H3 PACK_x): el host configura el
      * env/particiones cuando el arranque no llegó al FS, y consulta/graba la zona
@@ -1024,13 +1025,14 @@ static void stm32_cable(void) {
     HAL_UARTEx_EnableFifoMode(BOARD_WIRE_UART);
 
 #if defined(BOARD_WIRE_IRQn)
-    /* RX por IRQ → ring (V3/H5.2 DK2; H10 también Nucleo). La FIFO de 8B (≈700µs)
+    /* RX a un anillo (V3/H5.2 DK2; H10 también Nucleo). La FIFO de 8B (≈700µs)
      * no basta cuando el lazo deja el UART sin sondear ms (bombeo de LVGL en
-     * Gui.run()) y se perdían los primeros bytes del KILL. Con la IRQ drenando a un
-     * ring de 256B, getchar() no pierde nada y el GUI puede dormir entre frames
-     * (__WFI). Tras EnableFifoMode para que RXFNE refleje la FIFO ya activa.
+     * Gui.run()) y se perdían los primeros bytes del KILL. Con el anillo, getchar()
+     * no pierde nada y el GUI puede dormir entre frames (__WFI). Desde #495 lo llena
+     * el DMA (4 KB: la ventana del wire mientras se escribe la flash). Tras
+     * EnableFifoMode para que RXFNE refleje la FIFO ya activa.
      * La placa opta definiendo BOARD_WIRE_IRQn en board.h. */
-    stm32_wire_rx_irq_enable();
+    stm32_wire_rx_arrancar();
 #endif
 
     wire_v1_send_cstr("=== bpvm-stm32 REPL (wire v1) listo ===");

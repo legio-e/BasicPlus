@@ -1090,6 +1090,7 @@ static void handle_request(const char* line, int len) {
         if (b > 0) (void) bpvm_repl_drain_bulk((unsigned long) b);
         wire_v1_send_error(id, "PROTOCOL_ERROR", "falta 'type'"); return;
     }
+    bpvm_repl_antes_de_despachar(type);   /* #495: un verbo que no convive con una subida a medias, la acaba */
 
     /* V6/U3 g12 — los verbos PUT ya viven en el común y el bulk se lee ALLÍ.
      * Pre-leerlo aquí además sería leerlo DOS VECES: la segunda se comería el

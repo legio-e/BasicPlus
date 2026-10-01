@@ -906,10 +906,46 @@ static int put_juntar(const unsigned char* d, unsigned long n) {
 }
 
 /* La sesión, cerrada: también la que se dejó a medias (otro PUT_BEGIN, un error). El fichero se cierra tal cual. */
-static void put_cerrar(void) {
-    bpvm_fs_fclose(s_put_sess.abierto);   /* idempotente */
+/* #495 — LA SUBIDA QUE NO TERMINA SE BORRA. La sesión tiene el fichero abierto —uno de los dos huecos del FS— y a
+ * medias; si no acaba en su PUT_END (otra subida, un cliente nuevo, un RUN, un error...), se cierra y se BORRA lo
+ * subido. Decisión de Eduardo (1-oct): por el espacio —«en algunas placas no vamos sobrados»— y porque «si intentamos
+ * subir un archivo y queda la versión anterior, el usuario se va a pensar que tiene el nuevo». Y el log lo dice: una
+ * subida rota no es silenciosa. (Un corte de corriente a mitad no pasa por aquí: el fichero queda como estaba al
+ * abrirlo, porque littlefs no da nada por bueno hasta cerrar.) */
+static void put_borrar(const char* por_que) {
+    int borrado = (bpvm_fs_remove(s_put_sess.path) == 0);
+    log_printf("put: %s no termino (%lu de %lu B, %s): %s", s_put_sess.path, s_put_sess.received,
+               s_put_sess.expected, por_que, borrado ? "borrado" : "NO SE PUDO BORRAR");
+}
+
+static void put_abortar(const char* por_que) {
+    if (!s_put_sess.active) return;
+    (void) bpvm_fs_fclose(s_put_sess.abierto);
     s_put_sess.active = 0;
     s_put_sess.lleno  = 0;
+    put_borrar(por_que);
+}
+
+/* #495 — ¿Acaba este verbo con una subida a medias? Los que no pueden convivir con ella: un cliente nuevo (HELLO: el
+ * que subía ya no está), un programa (RUN: no arranca con un fichero a medias ni con su hueco cogido), un RESET, otra
+ * subida (una a la vez, Eduardo 1-oct) y los que escriben en el FS. Los que sólo leen (LIST, LIST_DIR, STAT, GET, DF)
+ * y los demás (PING, INFO, LOG...) sí pueden ir entre medias: «si al mismo tiempo que se envía un archivo se hace un
+ * list o un print, no hay problema» (Eduardo, 1-oct). */
+static int acaba_la_subida(const char* type) {
+    static const char* const verbos[] = {
+        "HELLO", "RUN", "RESET", "PUT", "PUT_BEGIN", "DEL", "MKDIR", "RMDIR", "RENAME", "FORMAT", "SAVE"
+    };
+    size_t i;
+    for (i = 0; i < sizeof verbos / sizeof verbos[0]; i++)
+        if (strcmp(type, verbos[i]) == 0) return 1;
+    return 0;
+}
+
+void bpvm_repl_antes_de_despachar(const char* type) {
+    char por_que[48];
+    if (!s_put_sess.active || type == NULL || !acaba_la_subida(type)) return;
+    snprintf(por_que, sizeof por_que, "llego %s", type);
+    put_abortar(por_que);
 }
 
 static void reply_put_field(const char* type, long id, unsigned long val,
@@ -937,7 +973,7 @@ static void repl_put_begin(long id, json_obj_t* obj) {
     if (strlen(path) >= sizeof s_put_sess.path) {
         wire_v1_send_error(id, "INVALID_PATH", "path demasiado largo"); return;
     }
-    put_cerrar();                                    /* #495: una sesión a medias, cerrada */
+    put_abortar("llego otra subida");                /* #495: una sesión a medias, borrada */
     crear_dirs_padre(path);                          /* #455 */
     if (bpvm_fs_file_block_size(path) > sizeof s_put_sess.abierto) {
         wire_v1_send_error(id, "INVALID_PATH", "path demasiado largo para abrir el fichero"); return;
@@ -964,7 +1000,7 @@ static void repl_put_data(long id, json_obj_t* obj) {
         if (tragar_bulk((unsigned long) bulk) < 0) {
             wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
         }
-        put_cerrar();
+        put_abortar("trozo mayor que el bufer");
         wire_v1_send_error(id, "NO_SPACE", "chunk mayor que el buffer"); return;
     }
     if (wire_v1_recv_bulk(s_ops->put_buf, (size_t) bulk, (size_t) s_ops->put_buf_size) < 0) {
@@ -978,8 +1014,8 @@ static void repl_put_data(long id, json_obj_t* obj) {
     }
     if (bulk > 0 && put_juntar(s_ops->put_buf, (unsigned long) bulk) != 0) {   /* #495 */
         const char *code, *msg;
-        fs_fallo("append", s_put_sess.path, (unsigned long) bulk, &code, &msg);
-        put_cerrar();
+        fs_fallo("append", s_put_sess.path, (unsigned long) bulk, &code, &msg);   /* antes de borrar: mira el espacio */
+        put_abortar("no se pudo escribir");
         wire_v1_send_error(id, code, msg); return;
     }
     s_put_sess.received += (unsigned long) bulk;
@@ -1000,10 +1036,12 @@ static void repl_put_end(long id, json_obj_t* obj) {
     s_put_sess.lleno  = 0;
     if (falla) {
         const char *code, *msg;
-        fs_fallo("put", s_put_sess.path, recv, &code, &msg);
+        fs_fallo("put", s_put_sess.path, recv, &code, &msg);   /* antes de borrar: mira el espacio */
+        put_borrar("no se pudo escribir el final");
         wire_v1_send_error(id, code, msg); return;
     }
     if (exp != 0 && recv != exp) {
+        put_borrar("el tamano no cuadra");                     /* #495: lo que no está entero, no se queda */
         wire_v1_send_error(id, "SIZE_MISMATCH", "bytes recibidos != size anunciado");
         return;
     }

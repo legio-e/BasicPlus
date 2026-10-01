@@ -27,14 +27,16 @@ extern "C" {
 /* Compat: el nombre viejo del límite de línea, sobre el del contrato. */
 #define WIRE_LINE_MAX WIRE_V1_LINE_MAX
 
-/* Lee 1 byte del wire (poll, no bloqueante). -1 si no hay. En la DK2 sale del
- * ring que llena la IRQ de RX; en el resto, lectura directa del registro. */
+/* Lee 1 byte del wire (poll, no bloqueante). -1 si no hay. En la DK2 y la Nucleo
+ * sale del anillo de 4 KB que llena el DMA (#495); en el resto, lectura directa del
+ * registro. */
 int  stm32_wire_getchar(void);
 
-/* DK2 (V3/H5.2) — RX por IRQ + ring de 256B: el wire no pierde bytes aunque el
- * lazo no sondee durante ms (p.ej. el bombeo de LVGL en Gui.run()). */
-void stm32_wire_rx_drain(void);       /* drena la FIFO RX al ring (lo llama USART1_IRQHandler) */
-void stm32_wire_rx_irq_enable(void);  /* NVIC + RXFNE IE; llamar tras EnableFifoMode */
+/* DK2 y Nucleo (V3/H5.2, H10, #495) — RX a un anillo de 4 KB que llena el DMA (o,
+ * si el DMA no arranca, la IRQ de RX): el wire no pierde bytes aunque el lazo no
+ * sondee durante ms (el bombeo de LVGL, una escritura de la flash con la ventana). */
+void stm32_wire_rx_drain(void);       /* sin DMA, drena la FIFO RX al anillo (lo llama USART1_IRQHandler) */
+void stm32_wire_rx_arrancar(void);    /* el DMA circular (o NVIC + RXFNE IE); llamar tras EnableFifoMode */
 
 /* Escribe `len` bytes crudos al USART. */
 void stm32_wire_write(const char* buf, size_t len);

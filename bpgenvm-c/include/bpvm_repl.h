@@ -175,6 +175,12 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj);
  *  la STM32, SAVE. Un verbo de fichero nuevo se añade aquí, una vez. */
 int bpvm_repl_verbo_de_fs(const char* type);
 
+/** V7/H8 #495 — lo que la familia llama con CADA mensaje del lazo, en cuanto sabe su `type` y antes de despachar
+ *  nada (también los que atiende ella: RUN, RESET...). Hoy, una cosa: si el verbo no puede convivir con una subida a
+ *  medias —un HELLO, un RUN, un RESET, otra subida o un verbo que escribe en el FS—, la acaba: cierra el fichero y
+ *  BORRA lo subido (decisión de Eduardo, 1-oct). Los que sólo leen sí pueden ir entre medias. */
+void bpvm_repl_antes_de_despachar(const char* type);
+
 /** V7/H8 (restos de E1, 28-sep) — el `errorMessage` del EXITED de un programa parado por un RESET, el MISMO en las
  *  cuatro (Pico, ESP32, STM32 y el micro simulado). El `poll` trata el RESET como un KILL —lo para, y reinicia
  *  después, fuera de `bpvm_run`— y el EXITED decía «terminado por KILL» (Pico y ESP32) o nada (STM32 y simulado). El

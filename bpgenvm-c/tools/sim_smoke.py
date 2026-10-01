@@ -187,6 +187,43 @@ def main():
         r, got = w.get("/app/big.bin")
         check(got == big, "GET del fichero subido por streaming → bytes idénticos")
 
+        # 5c. #495 (V7/H8) — LA SUBIDA QUE NO TERMINA SE BORRA (decisión de Eduardo, 1-oct). La sesión tiene el
+        # fichero abierto y a medias; la acaban un HELLO, otro PUT_BEGIN, un PUT_END que no cuadra, un verbo que
+        # escribe y un RUN, y lo subido se borra. Un LIST entre medias, no.
+        trozo = bytes(range(256)) * 2                      # 512 B de los 4096 anunciados
+        def a_medias(path):
+            r1 = w.call("PUT_BEGIN", path=path, size=4096)
+            r2 = w.call_bulk("PUT_DATA", trozo)
+            return r1.get("type") == "PUT_BEGIN_REPLY" and r2.get("received") == len(trozo)
+        def no_esta(path):
+            return w.call("STAT", path=path).get("code") == "NOT_FOUND"
+        check(a_medias("/app/rota.bin"), "#495: una subida a medias (512 de 4096 B)")
+        r = w.call("LIST")
+        r = w.call_bulk("PUT_DATA", trozo)
+        check(r.get("received") == 2 * len(trozo), "#495: un LIST entre medias NO acaba la subida")
+        r = w.call("HELLO", protoVersion=1, clientName="smoke-495")
+        check(r.get("type") == "HELLO_REPLY" and no_esta("/app/rota.bin"),
+              "#495: un HELLO (cliente nuevo) acaba la subida y borra lo subido")
+        r = w.call_bulk("PUT_DATA", trozo)
+        check(r.get("code") == "NO_SESSION", "#495: tras el HELLO no queda sesión: PUT_DATA → NO_SESSION")
+        check(a_medias("/app/rota.bin"), "#495: otra subida a medias")
+        r = w.call("PUT_BEGIN", path="/app/otra.bin", size=len(trozo))
+        check(no_esta("/app/rota.bin"), "#495: otro PUT_BEGIN acaba la primera y la borra")
+        w.call_bulk("PUT_DATA", trozo)
+        r = w.call("PUT_END", size=len(trozo))
+        check(r.get("type") == "PUT_END_REPLY", "#495: ... y la segunda sube entera")
+        check(a_medias("/app/rota.bin"), "#495: una subida a medias, y un PUT_END con menos de lo anunciado")
+        r = w.call("PUT_END", size=4096)
+        check(r.get("code") == "SIZE_MISMATCH" and no_esta("/app/rota.bin"),
+              "#495: SIZE_MISMATCH, y el fichero que no está entero, borrado")
+        check(a_medias("/app/rota.bin"), "#495: una subida a medias, y un DEL de otro fichero")
+        r = w.call("DEL", path="/app/otra.bin")
+        check(r.get("type") == "DEL_REPLY" and no_esta("/app/rota.bin"),
+              "#495: un verbo que escribe en el FS acaba la subida (y hace lo suyo)")
+        check(a_medias("/app/rota.bin"), "#495: una subida a medias, y un RUN")
+        r = w.call("RUN", path="/app/NoExiste.mod")
+        check(r.get("code") == "NOT_FOUND" and no_esta("/app/rota.bin"), "#495: un RUN acaba la subida")
+
         # 5b. U3.24 — EL RESTO DEL REPL COMUN.
         #
         # Desde que el sim usa `src/bpvm_repl.c`, cada linea de aqui vale para las

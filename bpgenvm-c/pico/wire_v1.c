@@ -59,12 +59,19 @@ int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
     if (n > buf_max) return -1;
     size_t got = 0;
     while (got < n) {
-        int c = try_get_char_v1();
-        if (c < 0) {
+        /* #495 — POR BLOQUES: lo que haya en la FIFO del CDC, de una vez (stdio_get_until
+         * acaba en tud_cdc_read), y no byte a byte; y nunca más de lo que falta del bulk,
+         * para no comerse la línea que viene detrás. Con la FIFO vacía se duerme: la
+         * interrupción de TinyUSB la llena de fondo —hasta 2 KB, CFG_TUD_CDC_RX_BUFSIZE en
+         * el CMakeLists— y, si se llena, el PC espera (NAK). */
+        size_t falta = n - got;
+        int r = stdio_get_until((char*) buf + got, falta > 65536u ? 65536 : (int) falta,
+                                make_timeout_time_us(0));
+        if (r <= 0) {
             vTaskDelay(pdMS_TO_TICKS(5));
             continue;
         }
-        buf[got++] = (uint8_t) c;
+        got += (size_t) r;
     }
     return (int) n;
 }

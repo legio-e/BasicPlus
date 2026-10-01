@@ -277,6 +277,17 @@ target_compile_definitions(bpvm_pico PRIVATE
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=0
 )
 
+# #495 (V7/H8) — EL BÚFER DE COMUNICACIONES de la Pico: la FIFO de recepción del CDC.
+# La del SDK es de 64 B a velocidad completa (pico_stdio_usb/include/tusb_config.h), y con
+# ella la Pico recibía a 12 KB/s: un paquete USB por cada siesta de 5 ms del cable (medido el
+# 1-oct: 64 KB sin escribir nada, 5,2 s; la C5, 0,11 s). A 2 KB cabe la ventana del wire
+# —4 trozos de 512 B— y la interrupción de TinyUSB la llena de fondo mientras el cable
+# duerme: el RP2350 no tiene DMA para el USB (no hay DREQ del USB), y esa interrupción hace
+# su papel. El USB no se desborda: con la FIFO llena, la Pico contesta NAK y el PC reintenta.
+target_compile_definitions(bpvm_pico PRIVATE
+    CFG_TUD_CDC_RX_BUFSIZE=2048
+)
+
 # #430 — TOPE de la tabla de handles. Las dos tablas salen del malloc de
 # PLATAFORMA, que aquí es SRAM (520 KB en todo el RP2350), no del heap de la VM
 # (que puede estar en PSRAM). Doblar a 65536 slots pide 512 KB *y* el realloc

@@ -1020,6 +1020,7 @@ static void handle(sock_t c, json_obj_t* obj) {
     char type[32];
     if (json_get_str(obj, "type", type, sizeof type) < 0) return;
     long id = json_get_long(obj, "id", -1);
+    bpvm_repl_antes_de_despachar(type);   /* #495: un verbo que no convive con una subida a medias, la acaba */
 
     /* #326 — ramo de depuración (pre-RUN): SET_BP / CLR_BP / PAUSE. El núcleo
      * acumula y contesta; si no es de su ramo devuelve 0 y seguimos. */

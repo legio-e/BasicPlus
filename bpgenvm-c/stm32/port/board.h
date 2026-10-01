@@ -23,6 +23,12 @@
 extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10) */
 #define BOARD_WIRE_UART         (&huart1)
 #define BOARD_WIRE_IRQn         USART1_IRQn  /* IRQ de RX → ring (V3/H5.2) */
+/* #495 (V7/H8) — la RX del cable, por DMA circular (stm32_wire.c): la petición del
+ * USART1 y un canal del GPDMA1 que no usa nadie más. El 11, el último de los
+ * lineales: el 0 lo nombra el disparo del modo autónomo del SPI de CubeMX (apagado),
+ * y así no coinciden ni en el nombre. */
+#define BOARD_WIRE_DMA_REQ      GPDMA1_REQUEST_USART1_RX
+#define BOARD_WIRE_DMA_CH       GPDMA1_Channel11
 #define BOARD_NAME              "u5g9j-dk2"
 #define BOARD_SRAM_BYTES        (3008UL * 1024UL)   /* SRAM interna contigua (linker) */
 /* V6/U6.12 — el bloque de la VM, POR PLACA (antes 512 KB para las dos, «manda la
@@ -72,11 +78,15 @@ extern UART_HandleTypeDef huart1;          /* VCP del ST-LINK = USART1 (PA9/PA10
 /* H10 — RX por IRQ+ring también aquí (antes DK2-only). COM1 = USART1 (ver
  * stm32u5xx_nucleo.h: COM1_UART==USART1). OJO: en la Nucleo USART1 lo gestiona el
  * BSP (BSP_COM_Init), NO está en el .ioc → no hay handler ni prioridad de CubeMX.
- * Por eso definimos BOARD_WIRE_IRQ_PRIO: stm32_wire_rx_irq_enable() fija la
- * prioridad NVIC y habilita la IRQ él mismo. El USART1_IRQHandler (que llama a
- * stm32_wire_rx_drain) se añade a mano en Core/Src/stm32u5xx_it.c. */
+ * Por eso definimos BOARD_WIRE_IRQ_PRIO: stm32_wire_rx_arrancar() fija la
+ * prioridad NVIC y habilita la IRQ él mismo (si el DMA no arranca). El
+ * USART1_IRQHandler (que llama a stm32_wire_rx_drain) se añade a mano en
+ * Core/Src/stm32u5xx_it.c. */
 #define BOARD_WIRE_IRQn         USART1_IRQn
 #define BOARD_WIRE_IRQ_PRIO     5            /* 0=máx … 15=mín; > SysTick, sin FreeRTOS */
+/* #495 (V7/H8) — la RX por DMA circular, como en la DK2 (el mismo USART1). */
+#define BOARD_WIRE_DMA_REQ      GPDMA1_REQUEST_USART1_RX
+#define BOARD_WIRE_DMA_CH       GPDMA1_Channel11
 #define BOARD_NAME              "nucleo-u575zi"
 #define BOARD_SRAM_BYTES        (768UL * 1024UL)
 /* V6/U6.12 — 512 KB de 768: estático sin la VM ~98 KB, quedan ~158 KB para

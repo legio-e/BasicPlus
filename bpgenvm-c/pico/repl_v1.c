@@ -1282,6 +1282,7 @@ void repl_v1_handle_request(int first_char) {
         wire_v1_send_error(id, "PROTOCOL_ERROR", "falta 'type'");
         return;
     }
+    bpvm_repl_antes_de_despachar(type);   /* #495: un verbo que no convive con una subida a medias, la acaba */
 
     /* 5. El bulk — pero SÓLO para quien no se lo lee él mismo.
      *
