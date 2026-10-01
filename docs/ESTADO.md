@@ -1068,6 +1068,26 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🔴 H8 (1-oct, tarde) — `E1`, el rojo del árbol (`d7251bd5`), y el contrato del cable al día
+
+- Eduardo decidió el rojo: *«En rojo mostrar módulos/packs dañados o con un formato no válido»*. El diseño, en
+  `V7_IDEAS` §H8 (`9596add2`): lo examina la VM que tiene el fichero, en el `LIST`, sólo la cabecera de `.mod`, `.mdn` y
+  `.pack`, con la regla de su cargador (la lectura de la cabecera del `.mod` y la validación del `.mdn` salen de sus
+  cargadores a funciones que usan la carga y el examen). La trampa: el recorrido del FS emite con el cerrojo cogido;
+  los módulos se apuntan y se examinan al acabar cada directorio.
+- La VM-Java marca los `.mod` (lo único que carga), con los mismos textos. El IDE pinta en rojo con el motivo en la
+  ayuda, y el panel de packs, los MAL.
+- Probado: 19 casos en el micro simulado (saboteado: en rojo), la red entera dos veces, el cliente del IDE contra el
+  simulado, la VM-Java y las cuatro placas (con el OK de Eduardo). En los FS de verdad de las placas, ningún módulo
+  bueno en rojo; en la P4, `/app/Bench.mdn` con la ABI de helpers 4 (la VM habla la 9): uno viejo de verdad.
+- Lo que cuesta: el `LIST` lee una cabecera por módulo —la Pico, 71 entradas en 180 ms; la S3, 46 en 353; la DK2, 59
+  en 529—; el antes, sin medir en esta sesión.
+- El contrato del cable (`BPVM_WIRE_PROTOCOL.md`), al día: `putChunk`/`putWindow` en el `HELLO`, el bloque de RAM de
+  los motores en el `INFO`, `mal` en el `LIST` y la subida por trozos, que no estaba (la ventana, la subida que no
+  termina, el bulk estancado y el segundo intento).
+
+Las placas: la Pico, la P4, la DK2 y la S3, con `d7251bd5`.
+
 ## 📡 H8 (1-oct, tarde) — `#495` paso 3 (`e97b4c38`): el trozo y la ventana en el `HELLO`, y el segundo intento del IDE
 
 - **Eduardo**: el segundo intento, *«que lo haga el IDE»*. Hecho así: uno, desde el principio, y sólo si falla el cable

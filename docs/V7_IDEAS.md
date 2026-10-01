@@ -3602,7 +3602,7 @@ del cable** (sin acuse a tiempo, una respuesta rota, `SIZE_MISMATCH`); si la pla
 con el fichero: no está en la placa. A decidir.
 
 
-### `E1` — el rojo del árbol: el diseño (1-oct, antes de tocar código)
+### ✅ `E1` — el rojo del árbol: el diseño (1-oct, antes de tocar código; hecho el mismo día, `d7251bd5`)
 
 *«En rojo mostrar módulos/packs dañados o con un formato no válido.»* (Eduardo, 1-oct)
 

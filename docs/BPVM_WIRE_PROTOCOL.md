@@ -165,6 +165,11 @@ responde con `HELLO_REPLY` antes de aceptar ningún otro mensaje.
  "capabilities":["FILES","TERMINAL","DEBUG","META"]}
 ```
 
+`putChunk` y `putWindow` (V7/H8 `#495`, 1-oct; opcionales): el trozo, en bytes, y la ventana —cuántos `PUT_DATA` sin
+acuse— con que la placa quiere recibir la subida por trozos (§6.2). Los decide su búfer de comunicaciones: 512 B y 4 en
+las cuatro familias. Sin ellos (un firmware anterior, la VM-Java), el cliente sube como siempre: trozos de 8 KB y un
+acuse por trozo.
+
 ### 5.2 Negociación de versiones
 
 - Si `protoVersion` del cliente > del servidor: servidor responde con
@@ -242,6 +247,19 @@ que la placa rechazaría:
 Un firmware de antes de V7/H2 no manda `aotReceta`/`aotFlagsCrc`, ni uno de antes del 27-sep `mdnAbi`: el IDE lee
 por nombre y distingue «ausente» (firmware viejo: no compara) de «vacío» o 0 (sin receta).
 
+**El bloque de RAM de los motores nativos** (V7/H8 `#602`, 1-oct), el mismo en las cuatro familias —era de la Pico, como
+`sqlite*`—:
+
+| campo | qué es |
+|---|---|
+| `packRamBase`, `packRamBytes` | dónde y cuánto (0 y 0 = no hay) |
+| `packRamStatus` | el motivo de la regla común (`bpvm_packram_region`): `off` (no se pidió), `ok`, `low` (por debajo del mínimo de `SQLite=`), `nofit` (no cabe dejando a la VM su suelo) |
+| `packRamKey`, `packRamAsked` | la clave del ENV que lo pidió (`packRam`, `SQLite` o `""`) y lo que pedía, en su unidad (KB, MB) |
+| `packRamMinMb` | el mínimo de `SQLite=`, para que el remedio de un `low` lo diga la placa y no un número copiado en el IDE |
+
+Una Pico con firmware anterior manda `sqliteBase`/`sqliteBytes`/`sqliteStatus`/`sqliteAskedMb`/`sqliteMinMb` (sólo
+contaban la reserva en PSRAM): el IDE lee los dos.
+
 #### `TIME` (request)
 
 Sincroniza el RTC del dispositivo con el wall clock del IDE.
@@ -295,6 +313,12 @@ Reply:
 ```
 
 `mtime` puede ser 0 si el FS no lo soporta (Pico actual no).
+
+`mal` (V7/H8 `E1`, 1-oct; sólo si hay problema): por qué la VM NO cargaría el fichero —un `.mod`, `.mdn` o `.pack`
+dañado o de un formato que no carga—, en prosa: lo que el IDE enseña, en rojo. Lo examina la VM con la regla de su
+cargador, leyendo sólo la cabecera (`bpvm_examen.h`); el contenido no. La VM-Java sólo marca `.mod`, que es lo único
+que carga. Por ejemplo: `"dañado: la cabecera dice 144 B y el fichero tiene 94"`, `"formato no válido: MOD5, …"`,
+`"formato no válido para esta placa: código de otra arquitectura (65535; esta VM ejecuta la 40)"`.
 
 #### `STAT` (request)
 
@@ -356,6 +380,35 @@ Request:
 ```
 
 Reply: `{"type":"PUT_REPLY","id":N}`
+
+#### `PUT_BEGIN` / `PUT_DATA` / `PUT_END` (la subida por trozos, `#294`)
+
+Para lo que no cabe de una pieza (el IDE: más de 8 KB).
+
+```
+C→S {"type":"PUT_BEGIN","id":1,"path":"/app/Big.mod","size":40000}
+S→C {"type":"PUT_BEGIN_REPLY","id":1,"received":0}
+C→S {"type":"PUT_DATA","id":2,"bulk":512}\n<512 bytes>        (hasta putWindow sin acuse, §5.1)
+S→C {"type":"PUT_DATA_REPLY","id":2,"received":512}
+…
+C→S {"type":"PUT_END","id":N,"size":40000}
+S→C {"type":"PUT_END_REPLY","id":N,"size":40000}
+```
+
+- **La ventana** (V7/H8 `#495`): el cliente puede mandar hasta `putWindow` trozos de `putChunk` bytes sin esperar su
+  acuse; los acuses llegan en orden.
+- **El fichero, abierto toda la subida** (`#495`, paso 1): lo recibido se junta en un bloque de la flash y se escribe por
+  bloques.
+- **Una subida que no termina se BORRA** (Eduardo, 1-oct: *«si queda la versión anterior el usuario se va a pensar que
+  tiene el nuevo»*). La acaban un `HELLO` (un cliente nuevo), un `RUN`, un `RESET`, otra subida (`PUT`, `PUT_BEGIN`), un
+  verbo que escribe en el FS (`DEL`, `MKDIR`, `RMDIR`, `RENAME`, `FORMAT`, `SAVE`), un error o un `PUT_END` que no cuadra
+  (`SIZE_MISMATCH`); los que sólo leen pueden ir entre medias. Lo mismo un `PUT` de una pieza cuyo bulk no llega
+  entero o no se puede escribir.
+- **Un bulk a medias** se da por perdido a los `WIRE_V1_BULK_ESTANCADO_MS` (3 s, en `bpvm_wire_v1.h`) —`FATAL`
+  `bulk underrun`— y el cable vuelve a estar en sincronía en la línea siguiente.
+- **El segundo intento es del cliente** (Eduardo, 1-oct: *«que lo haga el IDE»*): uno, desde `PUT_BEGIN`, y sólo si
+  falla el cable (sin respuesta, un `FATAL`, `SIZE_MISMATCH`, `NO_SESSION`); antes, el cable callado 3,5 s en los dos
+  sentidos y un `HELLO`. Si la placa dice que no con nombre (`NO_SPACE`, la ruta…), a la primera.
 
 #### `DEL` (request)
 
