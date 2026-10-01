@@ -1085,7 +1085,7 @@ la C6, la P4 y la Nucleo.
 - Visto de paso: el lazo de la ESP32 tira sin `FATAL` una línea que no empieza por `{` (la Pico y la STM32 contestan
   `FATAL`): el segundo intento tarda 10 s más en arrancar; funciona igual.
 - **Lo que queda de H8**, repasado con Eduardo: el paso 4 de `#495`, `#602`, mirar `#538` en el IDE con una placa y el
-  rojo del árbol (decisión suya). **`M5` → V8** (Eduardo: *«M5, no entra en V7, lo pasamos a V8. Es una mejora, no es urgente»*).
+  rojo del árbol —decidido por Eduardo: *«En rojo mostrar módulos/packs dañados o con un formato no válido»*—. **`M5` → V8** (Eduardo: *«M5, no entra en V7, lo pasamos a V8. Es una mejora, no es urgente»*).
 
 ## ✅ H7 (1-oct, tarde) — CERRADO: la S3 en la mesa, remedida, y su caso con PSRAM en `test_mem` (`b0bc3164`)
 
