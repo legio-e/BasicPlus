@@ -1068,6 +1068,23 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## ✅ H8 (1-oct, noche) — CERRADO (Eduardo): `#617` (`b33794df`), la VM-Java sube por trozos y vuelve a escuchar; y `#538`, visto en el IDE con una placa
+
+- Salió al probar el paso 4 con el cliente del IDE contra `bpgenvm --listen` (el destino «VM Java» del explorador):
+  subir más de 8 KB fallaba con `unknown type: PUT_BEGIN`, y tras el primer cliente el siguiente no recibía ni el
+  `HELLO_REPLY` (la cabecera del `DebugServer` lo tenía apuntado como diferido). Ahora sube por trozos con la regla de
+  las placas (lo que no termina se borra; lo acaban los mismos verbos y el cliente que se va) y vuelve a escuchar.
+- Por el camino, dos cosas que no eran fallos: en Windows, el `java.exe` de `java8path` es un lanzador que arranca la
+  JVM de verdad (dos procesos para un servidor, no dos servidores); y la VM-Java sólo acepta rutas RELATIVAS a su
+  carpeta de trabajo (`/app/...` se sale de la caja de arena), que es lo que ya le manda el IDE.
+- Probado: `DebugServerTest` (tres pruebas nuevas; saboteada la vuelta a escuchar, en rojo), el cliente del IDE contra
+  una VM-Java dos veces seguidas sobre el mismo proceso, y la red entera.
+
+Y `#538`, visto en el IDE con una placa (Eduardo, 1-oct, con la captura): `JsonDemo` con `Run on Device` en la P4, sin
+`/lib` en el FS: `Json` y `Core` salen del `.mod`, se le preguntan a la placa, están idénticos en el `Stdlib.pack` y no se
+suben; exit 0 en 50 ms. Con eso, en la fila de H8 no quedaba nada abierto (`M5`, en V8), y Eduardo lo cerró:
+*«Si. cierra H8»*. La tabla de H8 de `V7_BACKLOG`, que estaba atrasada, al día.
+
 ## 📦 H8 (1-oct, noche) — `#495` paso 4 (`847873f5`, `be628ee3`): el `GET` y el `LIST` troceados y mezclables; `#495` CERRADA
 
 - El diseño, afinado con el código delante (`c1a711f9`): el mensaje que no se parte (`wire_v1_send_msg` en los cinco

@@ -3645,7 +3645,8 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
    cable (calculado, no medido: 40 KB de trozos y unos 100 KB de `OUTPUT` —1613 líneas de ~65 B con su JSON— a 11,2 KB/s
    son ~12,5 s, de los 14 medidos). La pila de `io` —con 4 KB, 332 B libres en la S3— pasó a 6 KB en
    la familia ESP32 (`be628ee3`); la Pico y la STM32 se quedan en 4 KB, con un 30 % de margen y el gancho de
-   desbordamiento de FreeRTOS. Salió de paso `#617`: la VM-Java no tiene la subida por trozos (`PUT_BEGIN`).
+   desbordamiento de FreeRTOS. Salió de paso `#617`: la VM-Java no tenía la subida por trozos (`PUT_BEGIN`) y atendía a un cliente por proceso
+   (cerrada el mismo día, `b33794df`).
 
 **La subida que no termina** (1-oct, `ae3ca338`). Medir el paso 1 lo destapó: una subida abandonada (el PC deja de
 mandar, se suelta el cable) dejaba el fichero abierto —uno de los dos huecos del FS— hasta el siguiente `PUT_BEGIN`, y

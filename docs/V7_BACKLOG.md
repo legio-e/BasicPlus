@@ -221,14 +221,18 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 
 ## H8 · IDE y protocolo wire
 
+> ✅ **H8 CERRADO el 1-oct** (Eduardo: *«Si. cierra H8»*) —lo último, ese día: el paso 4 de `#495` (`847873f5`, `be628ee3`; visto en las cuatro placas), `#617` (`b33794df`) y `#538`, visto por Eduardo en el IDE con una placa; `M5`, a V8—. El detalle, en `FICHAS` (la fila de H8) y `V7_IDEAS` §H8. Esta tabla estaba atrasada (daba por
+> abiertos `#495`, los restos de `E1`, el `INFO` y el guardián del fat-jar): puesta al día al cerrar.
+
 | asunto | dónde |
 |---|---|
-| **`#495` — `GET`/`LS` durante un RUN**: `GET_REPLY` entero bajo `tx_mtx`, decidir el cerrojo del `read_stream`, levantar el `BUSY` en los cinco `poll` sólo para `LS`/`GET` | `FICHAS` `#495` (L176) |
+| ✅ 1-oct, cerrada (`1c19eabb`, `ae3ca338`, `e97b4c38`, `847873f5`, `be628ee3`) — ~~**`#495` — `GET`/`LS` durante un RUN**~~ → el cable troceado: la subida con ventana y el segundo intento del IDE (pasos 1–3) y el `GET` y el `LIST` troceados y mezclables (paso 4); durante un RUN, `STAT` y los dos troceados | `FICHAS` `#495`; `V7_IDEAS` §H8 |
 | ✅ 1-oct, cerrada (Eduardo, 28-sep: los cinco se quedan como están, probados en `check-sim` desde `#537`) — ~~**`#452` — repasar los 29 verbos del wire**~~ con «¿a cuál de los tres consumidores sirve?»: **`FORMAT` falta hoy desde el IDE**, `RENAME`, `RMDIR`, `PING`, `DF` duplicado. La condición («cuando exista el script») se cumplió con `T1` | `FICHAS` `#452` (L1102) |
-| **`E1` restos**: el **rojo** del árbol por color (ficheros con problema — decidir qué cuenta); el `EXITED` de un `RESET` dice «terminado por KILL» (una línea); la **vista de packs en el árbol** (`LIST` sin fallback al pack: `/lib` no aparece aunque el RUN lo resuelva) | `FICHAS` L7427, L11760, L10266 |
-| **El `INFO` de las ESP32 y STM32** sin `packsXipBase`/`sqlite*`/`floatAbi` (`info_extra` sólo en la Pico); el IDE ya los pinta si llegan | `ESTADO` 12-sep |
-| El guardián del fat-jar (`#429`) no vigila la **miVM embebida**, sólo el compilador | `ESTADO` 5-sep |
-| Confirmar desde el IDE 6.0 que `Run on Device` sube `Gui`+`Json` solo (C6 con `/lib` vacío) — una comprobación | `FICHAS` L8238 |
+| ✅ 28-sep y 1-oct — ~~**`E1` restos**~~: el `EXITED` de un `RESET` (28-sep, `10910242`); la vista de packs en el árbol (Eduardo: no, el árbol es el FS); el **rojo** del árbol (1-oct, `d7251bd5`: el `LIST` examina la cabecera de cada `.mod`, `.mdn` y `.pack`) | `FICHAS` (la fila de H8); `V7_IDEAS` §H8 `E1` |
+| ✅ 28-sep (`801e840e`) y 1-oct (`#602`, `a6f7ff7f`) — ~~**El `INFO` de las ESP32 y STM32**~~: `floatAbi` y la zona de packs, del común; y el bloque de RAM de los motores (`packRam*`), el mismo en las cuatro familias | `FICHAS` `#602` |
+| ✅ 28-sep (`3c9d197c`) — ~~El guardián del fat-jar (`#429`) no vigila la **miVM embebida**~~: ya la vigila | `FICHAS` (la fila de H8) |
+| ✅ 1-oct, visto por Eduardo (`#538`) — ~~Confirmar desde el IDE que `Run on Device` sube sólo lo que falta (con `/lib` vacío)~~: `JsonDemo` en la P4 sin `/lib`: `Json` y `Core`, del `Stdlib.pack`, idénticos, no se suben; exit 0 | `FICHAS` `#538` |
+| ✅ 1-oct (`b33794df`) — `#617`, salida del paso 4: la VM-Java sube por trozos (con la regla de las placas) y vuelve a escuchar cuando el cliente se va | `FICHAS` `#617` |
 
 ## H9 · Pruebas y medida
 
