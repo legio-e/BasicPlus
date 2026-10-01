@@ -3469,6 +3469,59 @@ llega entero y con su CRC—; y en placa, la DK2 (11 KB/s: donde más dura un `G
 **Para decidir**: el tamaño del trozo (512 B–1 KB: mandan la Pico y el anillo del USB-JTAG); cuántas transferencias a
 la vez; y si el `PUT` entra en el mismo esquema (hoy va troceado, pero con una sola sesión global y un acuse por trozo).
 
+**Decidido por Eduardo (1-oct):**
+- **El trozo**: *«512 bytes o 1K está bien. Si el buffer en las placas es pequeño entonces 512, si no 1K»*; y *«en mi
+  experiencia trabajar con una pequeña ventana de paquetes mejora el rendimiento»*.
+- **Las transferencias**: *«enviar varios ficheros a la vez, en principio no, 1 a 1. Pero si al mismo tiempo que se
+  envía un archivo se hace un list o un print, no hay problema»*.
+- **El `PUT`**: *«¿también entra? Si se puede, sí»*.
+- **Y dos búferes, no uno** (a la vista de la medida de abajo): *«estamos mezclando dos cosas: por un lado un buffer de
+  comunicaciones y por otro el buffer de archivos. Un buffer de comunicaciones con una ventana de 4 paquetes de 512 bytes
+  son 2K. El buffer de archivos puede estar condicionado por el tamaño del bloque de flash. Yo los separaría.»*
+
+**Lo medido antes de tocar nada** (1-oct; 64 KB aleatorios subidos con `PUT_BEGIN`/`PUT_DATA`/`PUT_END`, bajados con
+`GET` y comparados —iguales en todos los casos que terminaron—):
+
+| placa | 8 KB, parada y espera (el IDE de hoy) | 1 KB, parada y espera | 1 KB, ventana de 4 |
+|---|---|---|---|
+| P4 (UART por el CH343) | 8,6 s | 24,7 s | **falla**: «JSON inválido» |
+| C5 (USB-Serial-JTAG) | 2,2 s | 18,1 s | 16,3 s |
+| Pico 2 (USB CDC) | 7,6 s | 20,5 s | 21,6 s |
+
+Dos cosas que no eran las esperadas:
+1. **El cuello no es el cable, es la placa**: cada `PUT_DATA` abre el fichero, añade y lo cierra (`bpvm_fs_write` en modo
+   añadir), y en la C5 eso son ~0,27 s por trozo, mida 1 u 8 KB. Por eso trozos pequeños hacen la subida de 3 a 8
+   veces más lenta y la ventana apenas gana. Es exactamente la mezcla de los dos búferes.
+2. **La ventana pierde bytes en la P4**: mientras la ESP32 escribe en la flash se apaga la caché y las interrupciones que
+   no están en RAM esperan; la de la UART no lo está (`CONFIG_UART_ISR_IN_IRAM` apagado en la P4 y la S3), así que la
+   FIFO de 128 B se desborda con lo que el PC manda entretanto. Con parada y espera no pasa porque el PC calla mientras
+   la placa escribe.
+
+**El diseño, con los dos búferes separados:**
+
+| | qué es | tamaño |
+|---|---|---|
+| **búfer de comunicaciones** | los paquetes en vuelo por el cable, en los dos sentidos: hasta 4 de 512 B sin acuse | 2 KB |
+| **búfer de ficheros** | lo que llega se junta aquí y va a la flash por bloques; el fichero, abierto toda la sesión (el cursor de `#491`: `bpvm_fs_fopen`/`fwrite`/`fclose`) | un bloque de borrado: 4 KB (RP2350, ESP32), 8 KB (STM32U5) |
+
+Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe un bloque en la flash—:
+
+| placa | recepción | hoy |
+|---|---|---|
+| Pico 2 / Metro | USB CDC | sí: el USB no pierde, espera (control de flujo del propio USB) |
+| C3, C5, C6 | USB-Serial-JTAG, 4 KB (envío: 2 KB, la ventana justa) | sí, por lo mismo |
+| S3, P4 | UART, 8 KB de anillo | **no**: la interrupción de la UART a RAM (`CONFIG_UART_ISR_IN_IRAM` y `ESP_INTR_FLAG_IRAM`) |
+| STM32 (DK2, Nucleo) | UART, anillo de 256 B | **no**: el anillo, a 4 KB (los paquetes con su cabecera) |
+| el micro simulado | TCP | sí |
+
+**El orden** (cada paso, medido con lo de arriba como referencia):
+1. **El búfer de ficheros**, común: la sesión del `PUT` con el fichero abierto y la escritura por bloques. Ya con eso,
+   un `PUT` de trozos pequeños no debería costar más que el de hoy.
+2. **El búfer de comunicaciones en las placas que lo pierden**: la UART de la S3 y la P4 desde RAM; el anillo de la STM32.
+3. **El trozo y la ventana, anunciados por la placa** en el `HELLO` (512 B y 4), y el IDE (y `tanda.py`) usándolos para
+   el `PUT`; con un firmware que no los anuncia, el IDE sigue como hoy.
+4. **El `GET` y el `LIST` troceados y mezclables** (arriba, la propuesta), con la misma ventana en el otro sentido.
+
 
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
 
