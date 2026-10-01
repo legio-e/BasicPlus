@@ -14,6 +14,7 @@
 #include "bpvm_internal.h"
 #include "mdn_loader.h"   /* V6/N1.4: cargar el bloque nativo embebido */
 #include "mdn_format.h"
+#include "bpvm_examen.h"   /* V7/H8 E1: el examen del .mod, con la misma lectura de cabecera */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -97,6 +98,73 @@ static void derive_module_name(const char* path, char* dst, size_t dst_size) {
     dst[n] = '\0';
 }
 
+/* V7/H8 E1 — LA CABECERA DEL .mod, leída por UNA función para cargar y para examinar (el LIST): qué MAGIC carga
+ * esta VM y cuánto ocupa la cabecera de cada versión se decide aquí y en ningún otro sitio. */
+typedef struct {
+    uint32_t magic, data_size, imports_size, exports_size, code_size, library_size;
+    uint32_t interface_size, native_size, gen, iface_crc;
+    int32_t  main_offset;
+    int      fmt;          /* 6..9 */
+    uint32_t cab_bytes;    /* lo que ocupa en el fichero: 32 (v6), 36 (v7) o 44 (v8, v9) */
+} mod_cab_t;
+
+static bpvm_status_t mod_cab_lee(buf_cursor_t* c, mod_cab_t* h) {
+    memset(h, 0, sizeof *h);
+    if (bc_read_be32(c, &h->magic) != 0)                 return BPVM_ERR_IO;
+    /* #284 — GATE DE ABI. La versión del formato ES la declaración de ABI:
+     * v6 garantiza refs de 8 bytes (nació DESPUÉS del ensanchado 4->8B), v5 es
+     * AMBIGUO (puede ser de la era 4B y corromper memoria en silencio). Lo que
+     * no se pueda garantizar se RECHAZA aquí, en la carga, con un error claro
+     * -- nunca se ejecuta a ciegas. */
+    if (h->magic == BPVM_MAGIC)                          return BPVM_ERR_ABI_MOD_V5;
+    if (h->magic != BPVM_MAGIC_V6 && h->magic != BPVM_MAGIC_V7 && h->magic != BPVM_MAGIC_V8
+        && h->magic != BPVM_MAGIC_V9)                    return BPVM_ERR_BAD_MAGIC;
+    int is_v6 = 1;                       /* v6, v7 y v8 llevan interfaceSize */
+    int is_v9 = (h->magic == BPVM_MAGIC_V9);   /* V7/H2 (#523): enlace tardio (refs 3.3 + CLASES 4.5) */
+    int is_v8 = (h->magic == BPVM_MAGIC_V8) || is_v9;   /* V7/H2: gen + ifaceCrc + subtabla deps */
+    int is_v7 = (h->magic == BPVM_MAGIC_V7) || is_v8;
+    if (bc_read_be32(c, &h->data_size) != 0)             return BPVM_ERR_IO;
+    {
+        uint32_t mo;
+        if (bc_read_be32(c, &mo) != 0)                   return BPVM_ERR_IO;
+        h->main_offset = (int32_t) mo;
+    }
+    if (bc_read_be32(c, &h->imports_size) != 0)          return BPVM_ERR_IO;
+    if (bc_read_be32(c, &h->exports_size) != 0)          return BPVM_ERR_IO;
+    if (bc_read_be32(c, &h->code_size) != 0)             return BPVM_ERR_IO;
+    if (bc_read_be32(c, &h->library_size) != 0)          return BPVM_ERR_IO;
+    if (is_v6 && bc_read_be32(c, &h->interface_size) != 0) return BPVM_ERR_IO;
+    if (is_v7 && bc_read_be32(c, &h->native_size) != 0)    return BPVM_ERR_IO;
+    if (is_v8 && (bc_read_be32(c, &h->gen) != 0 || bc_read_be32(c, &h->iface_crc) != 0))
+                                                         return BPVM_ERR_IO;
+    h->fmt       = is_v9 ? 9 : (is_v8 ? 8 : (is_v7 ? 7 : 6));
+    h->cab_bytes = 28u + 4u + (is_v7 ? 4u : 0u) + (is_v8 ? 8u : 0u);
+    return BPVM_OK;
+}
+
+/* V7/H8 E1 — ¿CARGARÍA ESTA VM ESTE .mod? Con la cabecera (la misma lectura que la carga) y el tamaño del fichero,
+ * que acaba justo donde acaba `code` (MOD_FORMAT §1: sin trailer ni checksum): más corto es truncado, más largo,
+ * roto. El contenido no se mira: el formato no lleva checksum. */
+int bpvm_mod_examina(const uint8_t* cab, size_t n, uint32_t tam, char* motivo, size_t cap) {
+    buf_cursor_t c = { cab, NULL, NULL, n < (size_t) tam ? n : (size_t) tam, 0, 0 };
+    mod_cab_t h;
+    bpvm_status_t st = mod_cab_lee(&c, &h);
+    if (st == BPVM_ERR_ABI_MOD_V5) {
+        snprintf(motivo, cap, "formato no válido: MOD5, de antes del ensanchado de las referencias (hay que recompilarlo)");
+        return 1;
+    }
+    if (st == BPVM_ERR_BAD_MAGIC) { snprintf(motivo, cap, "formato no válido: no es un .mod"); return 1; }
+    if (st != BPVM_OK)            { snprintf(motivo, cap, "dañado: más corto que su cabecera"); return 1; }
+    uint64_t dice = (uint64_t) h.cab_bytes + h.library_size + h.imports_size + h.exports_size
+                  + h.interface_size + h.native_size + h.data_size + h.code_size;
+    if (dice != (uint64_t) tam) {
+        snprintf(motivo, cap, "dañado: la cabecera dice %lu B y el fichero tiene %lu",
+                 dice > 0xFFFFFFFFull ? 0xFFFFFFFFul : (unsigned long) dice, (unsigned long) tam);
+        return 1;
+    }
+    return 0;
+}
+
 /* Cuerpo común de la carga. `xip` (H3.c): el código NO se copia a RAM — queda
  * direccionado en sitio (los bytes de `data` deben ser persistentes: la región
  * de packs montada). CS queda anclado en RAM como siempre; solo cb difiere. */
@@ -110,39 +178,18 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
 
     buf_cursor_t c = { data, rd, rd_user, size, 0, 0 };
 
-    /* --- Header (v5=28 bytes / v6=32 bytes) --- */
-    uint32_t magic, data_size, imports_size, exports_size, code_size, library_size;
-    uint32_t interface_size = 0;   /* H6.a: sección interface (sólo v6) */
-    uint32_t native_size    = 0;   /* V6/N1.4: sección native (sólo v7) */
-    int32_t  main_offset;
-    if (bc_read_be32(&c, &magic) != 0)                 return BPVM_ERR_IO;
-    /* #284 — GATE DE ABI. La versión del formato ES la declaración de ABI:
-     * v6 garantiza refs de 8 bytes (nació DESPUÉS del ensanchado 4->8B), v5 es
-     * AMBIGUO (puede ser de la era 4B y corromper memoria en silencio). Lo que
-     * no se pueda garantizar se RECHAZA aquí, en la carga, con un error claro
-     * -- nunca se ejecuta a ciegas. */
-    if (magic == BPVM_MAGIC)                           return BPVM_ERR_ABI_MOD_V5;
-    if (magic != BPVM_MAGIC_V6 && magic != BPVM_MAGIC_V7 && magic != BPVM_MAGIC_V8
-        && magic != BPVM_MAGIC_V9)                     return BPVM_ERR_BAD_MAGIC;
-    int is_v6 = 1;                       /* v6, v7 y v8 llevan interfaceSize */
-    int is_v9 = (magic == BPVM_MAGIC_V9);   /* V7/H2 (#523): enlace tardio (refs 3.3 + CLASES 4.5) */
-    int is_v8 = (magic == BPVM_MAGIC_V8) || is_v9;   /* V7/H2: gen + ifaceCrc + subtabla deps */
-    int is_v7 = (magic == BPVM_MAGIC_V7) || is_v8;
-    uint32_t gen = 0, iface_crc = 0;
-    if (bc_read_be32(&c, &data_size) != 0)             return BPVM_ERR_IO;
+    /* --- Header: por mod_cab_lee, la MISMA lectura que el examen del LIST (V7/H8 E1) --- */
+    mod_cab_t hc;
     {
-        uint32_t mo;
-        if (bc_read_be32(&c, &mo) != 0)                return BPVM_ERR_IO;
-        main_offset = (int32_t) mo;
+        bpvm_status_t st = mod_cab_lee(&c, &hc);
+        if (st != BPVM_OK) return st;
     }
-    if (bc_read_be32(&c, &imports_size) != 0)          return BPVM_ERR_IO;
-    if (bc_read_be32(&c, &exports_size) != 0)          return BPVM_ERR_IO;
-    if (bc_read_be32(&c, &code_size) != 0)             return BPVM_ERR_IO;
-    if (bc_read_be32(&c, &library_size) != 0)          return BPVM_ERR_IO;
-    if (is_v6 && bc_read_be32(&c, &interface_size) != 0) return BPVM_ERR_IO;
-    if (is_v7 && bc_read_be32(&c, &native_size) != 0)    return BPVM_ERR_IO;
-    if (is_v8 && (bc_read_be32(&c, &gen) != 0 || bc_read_be32(&c, &iface_crc) != 0))
-                                                       return BPVM_ERR_IO;
+    uint32_t data_size = hc.data_size, imports_size = hc.imports_size, exports_size = hc.exports_size;
+    uint32_t code_size = hc.code_size, library_size = hc.library_size;
+    uint32_t interface_size = hc.interface_size, native_size = hc.native_size;
+    uint32_t gen = hc.gen, iface_crc = hc.iface_crc;
+    int32_t  main_offset = hc.main_offset;
+    int is_v9 = (hc.fmt == 9), is_v8 = (hc.fmt >= 8), is_v7 = (hc.fmt >= 7);
 
     bpvm_module_t* mod = &vm->modules[vm->module_count];
     memset(mod, 0, sizeof(*mod));

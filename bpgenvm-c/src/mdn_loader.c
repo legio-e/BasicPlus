@@ -27,10 +27,12 @@
 #include "crc32.h"              /* bpvm_crc32: la huella de la receta */
 #include "bpvm_pack.h"   /* bpvm_pack_exec_ptr: la vista ejecutable de la zona */
 #include "aot_registry.h"
+#include "bpvm_examen.h"   /* V7/H8 E1: el examen del .mdn, con la misma regla */
 
 #include "bpvm.h"
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 /* H4 — arquitectura del firmware (gate del .mdn) + bit de modo del puntero a
@@ -161,27 +163,10 @@ size_t bpvm_mdn_used_bytes(void)   { return 0; }
 static bpvm_mdn_vista_ejec_t s_vista_ram = NULL;
 void bpvm_mdn_set_vista_ejecutable(bpvm_mdn_vista_ejec_t fn) { s_vista_ram = fn; }
 
-int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
-    /* La cabecera mínima es la v1 (20 B); la v2 (24 B) se comprueba en cuanto
-     * se sabe la versión. `sizeof(mdn_header_t)` es la actual y NO vale aquí:
-     * rechazaría por «truncado» un v1 de 20 bytes justos. */
-    if (!data || size < MDN_HEADER_SIZE_V1) return MDN_ERR_TRUNCATED;
-
-    /* Validar alineación. Thumb-2 requiere PC bit 1 = 0, lo que exige
-     * que el code_base (= data + hdr_total) sea al menos 2-aligned.
-     * Como hdr_total siempre es múltiplo de 4 (header=20/24, sym=36 cada
-     * uno), basta con que data sea 4-aligned. El FS v4 lo garantiza
-     * para ficheros del FS; los .mdn embebidos en .data del firmware
-     * también vienen alineados por el compilador. Si llega misaligned,
-     * es bug del caller. */
-    if (((uintptr_t) data) & 0x3u) {
-        log_printf("MDN: ABORT — data %p no alineado a 4 (FS v4 debería garantizar)",
-                   (const void*) data);
-        return MDN_ERR_TRUNCATED;
-    }
-
-    const mdn_header_t* h = (const mdn_header_t*) data;
-
+/* V7/H8 E1 — LA CABECERA DE UN .mdn: lo que la carga exige antes de tocar nada, en UNA función para cargar y para
+ * examinar (el LIST): magic, versión, la ABI de helpers y —en una placa— la arquitectura y la receta, y que el
+ * fichero tenga lo que la cabecera dice. `dice` = 1 en la carga (los mensajes de siempre al log); el examen, 0. */
+static int bpvm_mdn_cabecera_valida(const mdn_header_t* h, size_t size, int dice) {
     /* Magic + version + ABI. */
     static const uint8_t expected[4] = MDN_MAGIC;
     if (memcmp(h->magic, expected, 4) != 0) return MDN_ERR_MAGIC;
@@ -198,7 +183,7 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * #302 esperan HANDLES de 64 bits ⇒ corrupción y reset mudo. Preferimos
      * quedarnos sin overlay (interpretado, correcto) que ejecutar a ciegas. */
     if (h->abi_version != MDN_ABI_VERSION) {
-        log_printf("MDN: RECHAZADO — ABI %u, esta VM habla %u. El .mdn es de "
+        if (dice) log_printf("MDN: RECHAZADO — ABI %u, esta VM habla %u. El .mdn es de "
                      "otra era de los helpers AOT: hay que REGENERARLO.",
                      (unsigned) h->abi_version, (unsigned) MDN_ABI_VERSION);
         return MDN_ERR_ABI;
@@ -213,7 +198,7 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
         int ok = (a == MDN_HOST_ARCH)
               || (a == MDN_ARCH_NONE && MDN_HOST_ARCH == MDN_ARCH_ARM);
         if (!ok) {
-            log_printf("MDN: arch mismatch .mdn=%u firmware=%u — RECHAZADO",
+            if (dice) log_printf("MDN: arch mismatch .mdn=%u firmware=%u — RECHAZADO",
                        (unsigned) a, (unsigned) MDN_HOST_ARCH);
             return MDN_ERR_ARCH;
         }
@@ -235,7 +220,7 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
      * el dia que el IDE tenga el destino ilp32 su .mdn entra sin tocar nada. */
 #if defined(__riscv) && !defined(__riscv_float_abi_single) && !defined(__riscv_float_abi_double)
     if (h->arch == MDN_ARCH_RISCV && h->version < 2) {
-        log_printf("MDN: RECHAZADO — este firmware es RISC-V ilp32 (sin FPU) y un "
+        if (dice) log_printf("MDN: RECHAZADO — este firmware es RISC-V ilp32 (sin FPU) y un "
                    ".mdn v1 no dice su receta (hasta V7 solo los habia del P4, ilp32f): "
                    "se ignora y la funcion corre interpretada (#502)");
         return MDN_ERR_ARCH;
@@ -251,10 +236,10 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     {
         uint32_t mia = bpvm_mdn_host_receta_crc();
         if (h->version < 2) {
-            log_printf("MDN: sin huella de receta (formato v1) — se carga a ciegas; "
+            if (dice) log_printf("MDN: sin huella de receta (formato v1) — se carga a ciegas; "
                        "regenera el .mdn para que la lleve (#441)");
         } else if (mia != 0 && h->flags_crc != mia) {
-            log_printf("MDN: RECHAZADO — receta %08x, este firmware es %s (%08x): "
+            if (dice) log_printf("MDN: RECHAZADO — receta %08x, este firmware es %s (%08x): "
                        "el .mdn se compilo con OTROS FLAGS, hay que REGENERARLO (#441)",
                        (unsigned) h->flags_crc, bpvm_mdn_host_receta_nombre(), (unsigned) mia);
             return MDN_ERR_RECETA;
@@ -265,6 +250,70 @@ int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
     size_t hdr_total = (size_t) hsz
                      + (size_t) h->sym_count * sizeof(mdn_symbol_t);
     if (size < hdr_total + h->code_size) return MDN_ERR_TRUNCATED;
+    return 0;
+}
+
+/* V7/H8 E1 — ¿CARGARÍA ESTA VM ESTE .mdn? La misma regla que la carga (bpvm_mdn_cabecera_valida), sin el log. */
+int bpvm_mdn_examina(const uint8_t* cab, size_t n, uint32_t tam, char* motivo, size_t cap) {
+    mdn_header_t h;
+    memset(&h, 0, sizeof h);
+    memcpy(&h, cab, n < sizeof h ? n : sizeof h);
+    if (n < 8 || tam < 8) { snprintf(motivo, cap, "dañado: más corto que su cabecera"); return 1; }
+    switch (bpvm_mdn_cabecera_valida(&h, (size_t) tam, 0)) {
+        case 0: return 0;
+        case MDN_ERR_MAGIC:
+            snprintf(motivo, cap, "formato no válido: no es un .mdn"); break;
+        case MDN_ERR_VERSION:
+            snprintf(motivo, cap, "formato no válido: cabecera .mdn v%u (esta VM lee de la v1 a la v%u)",
+                     (unsigned) h.version, (unsigned) MDN_VERSION); break;
+        case MDN_ERR_ABI:
+            snprintf(motivo, cap, "formato no válido: ABI de helpers %u (esta VM habla la %u: hay que regenerarlo)",
+                     (unsigned) h.abi_version, (unsigned) MDN_ABI_VERSION); break;
+        case MDN_ERR_ARCH:
+            if (h.arch != (uint32_t) MDN_HOST_ARCH && !(h.arch == MDN_ARCH_NONE && MDN_HOST_ARCH == MDN_ARCH_ARM))
+                snprintf(motivo, cap, "formato no válido para esta placa: código de otra arquitectura (%u; esta VM "
+                         "ejecuta la %u)", (unsigned) h.arch, (unsigned) MDN_HOST_ARCH);
+            else
+                snprintf(motivo, cap, "formato no válido para esta placa: un .mdn v1 no dice su receta, y en un "
+                         "RISC-V sin FPU no se carga");
+            break;
+        case MDN_ERR_RECETA:
+            snprintf(motivo, cap, "formato no válido para esta placa: compilado con otra receta (la suya es %s)",
+                     bpvm_mdn_host_receta_nombre()); break;
+        default:
+            snprintf(motivo, cap, "dañado: más corto que lo que su cabecera dice"); break;
+    }
+    return 1;
+}
+
+int bpvm_load_mdn(struct bpvm* vm, const uint8_t* data, size_t size) {
+    /* La cabecera mínima es la v1 (20 B); la v2 (24 B) se comprueba en cuanto
+     * se sabe la versión. `sizeof(mdn_header_t)` es la actual y NO vale aquí:
+     * rechazaría por «truncado» un v1 de 20 bytes justos. */
+    if (!data || size < MDN_HEADER_SIZE_V1) return MDN_ERR_TRUNCATED;
+
+    /* Validar alineación. Thumb-2 requiere PC bit 1 = 0, lo que exige
+     * que el code_base (= data + hdr_total) sea al menos 2-aligned.
+     * Como hdr_total siempre es múltiplo de 4 (header=20/24, sym=36 cada
+     * uno), basta con que data sea 4-aligned. El FS v4 lo garantiza
+     * para ficheros del FS; los .mdn embebidos en .data del firmware
+     * también vienen alineados por el compilador. Si llega misaligned,
+     * es bug del caller. */
+    if (((uintptr_t) data) & 0x3u) {
+        log_printf("MDN: ABORT — data %p no alineado a 4 (FS v4 debería garantizar)",
+                   (const void*) data);
+        return MDN_ERR_TRUNCATED;
+    }
+
+    const mdn_header_t* h = (const mdn_header_t*) data;
+
+    /* V7/H8 E1 — la cabecera, por la MISMA función que el examen del LIST. */
+    {
+        int r = bpvm_mdn_cabecera_valida(h, size, 1);
+        if (r != 0) return r;
+    }
+    const uint32_t hsz = mdn_header_size(h->version);
+    size_t hdr_total = (size_t) hsz + (size_t) h->sym_count * sizeof(mdn_symbol_t);
 
     /* Registro zero-copy: el código nativo ya está en RAM (ejecutable) en data[],
      * solo apuntamos el thunk ahí. MDN_FUNCPTR_BIT añade el bit de modo que pida

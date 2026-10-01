@@ -36,14 +36,20 @@ public interface Backend extends AutoCloseable {
         public final long size;
         public final long crc;          // paso 4 cierre: CRC32 del device (-1 = no reportado)
         public final boolean isDir;
+        /** V7/H8 E1 — por qué la VM no cargaría este fichero (dañado o de un formato que no carga), o null. */
+        public final String mal;
         public Entry(String name, long size, boolean isDir) {
             this(name, size, -1L, isDir);
         }
         public Entry(String name, long size, long crc, boolean isDir) {
+            this(name, size, crc, isDir, null);
+        }
+        public Entry(String name, long size, long crc, boolean isDir, String mal) {
             this.name = name;
             this.size = size;
             this.crc = crc;
             this.isDir = isDir;
+            this.mal = mal;
         }
         @Override public String toString() {
             return (isDir ? "[D] " : "") + name + " (" + size + " bytes)";

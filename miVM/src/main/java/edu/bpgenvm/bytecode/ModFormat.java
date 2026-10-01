@@ -171,6 +171,34 @@ public final class ModFormat {
             || magic == MAGIC_NUMBER_V9;   // V7/H2 (#523): el enlace tardío no toca el ABI de refs
     }
 
+    /**
+     * V7/H8 E1 — ¿CARGARÍA ESTA VM ESTE .mod? Lo que examina el LIST para el rojo del árbol del IDE (Eduardo: «en rojo,
+     * módulos/packs dañados o con un formato no válido»): el MAGIC que esta VM carga ({@link #isAbiSupported}) y que la
+     * cabecera y el tamaño cuadren —el fichero acaba justo donde acaba {@code code} (MOD_FORMAT §1)—. La MISMA regla y
+     * los MISMOS textos que la VM-C ({@code bpvm_mod_examina}, loader.c): el árbol pinta igual las dos. El contenido
+     * no se mira: el formato no lleva checksum. Devuelve null si está bien, o el motivo.
+     */
+    public static String examina(byte[] f) {
+        if (f.length < 4) return "dañado: más corto que su cabecera";
+        int magic = be32(f, 0);
+        if (magic == MAGIC_NUMBER)
+            return "formato no válido: MOD5, de antes del ensanchado de las referencias (hay que recompilarlo)";
+        if (!isAbiSupported(magic)) return "formato no válido: no es un .mod";
+        int cab = headerSizeDe(magic);
+        if (f.length < cab) return "dañado: más corto que su cabecera";
+        long dice = (long) cab + u32(f, 24) + u32(f, 12) + u32(f, 16) + u32(f, 28)     // library, imports, exports, iface
+                  + (cab >= HEADER_SIZE_V7 ? u32(f, 32) : 0) + u32(f, 4) + u32(f, 20);  // native, data, code
+        if (dice != f.length)
+            return String.format("dañado: la cabecera dice %d B y el fichero tiene %d", Math.min(dice, 0xFFFFFFFFL), f.length);
+        return null;
+    }
+
+    private static int be32(byte[] b, int o) {
+        return ((b[o] & 0xFF) << 24) | ((b[o + 1] & 0xFF) << 16) | ((b[o + 2] & 0xFF) << 8) | (b[o + 3] & 0xFF);
+    }
+
+    private static long u32(byte[] b, int o) { return be32(b, o) & 0xFFFFFFFFL; }
+
     /** V7/H2 — ¿lleva este magic los campos de versión (gen, ifaceCrc, subtabla deps)? */
     public static boolean tieneVersion(int magic) { return magic == MAGIC_NUMBER_V8 || magic == MAGIC_NUMBER_V9; }
 

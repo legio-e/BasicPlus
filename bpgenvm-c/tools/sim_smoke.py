@@ -81,6 +81,42 @@ class Wire:
             elif m.get("type") == "EXITED": return "".join(out), m
         return "".join(out), None
 
+# V7/H8 E1 — ficheros de prueba para el rojo del árbol, construidos aquí (sin depender de nada de fuera).
+def mod_cab(magic=b"MOD9", data=0, imports=0, exports=0, code=0, library=0, iface=0, native=0):
+    """La cabecera de un .mod (big-endian): v6 32 B, v7 36, v8/v9 44 (MOD_FORMAT §1)."""
+    import struct
+    ver = magic[3] - ord("0")
+    campos = [data, 0xFFFFFFFF, imports, exports, code, library]
+    if ver >= 6: campos.append(iface)
+    if ver >= 7: campos.append(native)
+    if ver >= 8: campos += [0, 0]
+    return magic + struct.pack(">%dI" % len(campos), *campos)
+
+def crc16_ccitt(data, crc=0xFFFF):
+    for b in data:
+        crc ^= b << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) & 0xFFFF if crc & 0x8000 else (crc << 1) & 0xFFFF
+    return crc
+
+def pack_cab(nombre, size_total=128, verfmt=1):
+    """Un pack que es sólo su cabecera (128 B; bpvm_pack.c: big-endian, crc_cab sobre [0,6)+[8,126))."""
+    import struct
+    h = bytearray(128)
+    h[0:4] = b"BPAK"
+    h[4:6] = struct.pack(">H", verfmt)
+    h[6:8] = struct.pack(">H", 0x0001)                       # flags: vivo
+    h[8:12] = struct.pack(">I", size_total)
+    h[12:12 + len(nombre)] = nombre.encode()
+    crc = crc16_ccitt(bytes(h[0:6]) + bytes(h[8:126]))
+    h[126:128] = struct.pack(">H", crc)
+    return bytes(h) + b"\0" * (size_total - 128)
+
+def mdn_cab(abi, version=2, code=0, syms=0, arch=0):
+    """La cabecera de un .mdn (nativa, little-endian): v2 = 24 B."""
+    import struct
+    return b"MDN\0" + struct.pack("<HHIIII", version, abi, code, syms, arch, 0)
+
 def build_hello(dest):
     """Compila samples/Hello.bp con el frontend. None si no se puede (sin java/jar)."""
     src = os.path.join(ROOT, "samples", "Hello.bp")
@@ -270,6 +306,69 @@ def main():
         r = w.call("PING")
         check(r.get("type") == "PONG",
               "#495: una línea a medias que se estanca se tira, y la siguiente llega entera (como en las placas)")
+
+        # 5e. V7/H8 E1 — EL ROJO DEL ÁRBOL (Eduardo: «en rojo, módulos/packs dañados o con un formato no válido»): el LIST
+        # examina la cabecera de cada .mod, .mdn y .pack con la regla de su cargador y marca con "mal" los que no
+        # cargaría; los buenos, sin marca. El .mdn bueno se hace con la ABI que la propia VM dice (del motivo del malo).
+        casos = {
+            "/app/e1/bien.mod":     mod_cab(),
+            "/app/e1/corto.mod":    mod_cab(code=100) + b"x" * 50,
+            "/app/e1/largo.mod":    mod_cab() + b"x" * 10,
+            "/app/e1/viejo.mod":    mod_cab(magic=b"MOD5"),
+            "/app/e1/basura.mod":   b"esto no es un modulo de ninguna clase, de verdad",
+            "/app/e1/mini.mod":     b"MOD9\0\0\0\0",
+            "/app/e1/bien.pack":    pack_cab("Uno"),
+            "/app/e1/dos.pack":     pack_cab("Uno") + pack_cab("Dos", 256),
+            "/app/e1/tocado.pack":  bytearray(pack_cab("Uno")),
+            "/app/e1/cortado.pack": pack_cab("Uno", 512)[:300],
+            "/app/e1/nuevo.pack":   pack_cab("Uno", verfmt=2),
+            "/app/e1/basura.pack":  b"Z" * 200,
+            "/app/e1/otraabi.mdn":  mdn_cab(abi=1),
+            "/app/e1/corto.mdn":    mdn_cab(abi=1, code=100),
+        }
+        casos["/app/e1/tocado.pack"][20] ^= 0xFF                  # un byte del nombre: el CRC deja de cuadrar
+        casos["/app/e1/tocado.pack"] = bytes(casos["/app/e1/tocado.pack"])
+        for ruta, datos in casos.items():
+            w.call_bulk("PUT", datos, path=ruta)
+        def marcas():
+            r = w.call("LIST")
+            return {e["name"]: e.get("mal") for e in r.get("entries", []) if e["name"].startswith("/app/e1/")}
+        m = marcas()
+        abi = None
+        motivo = m.get("/app/e1/otraabi.mdn") or ""
+        if "habla la " in motivo:
+            abi = int(motivo.split("habla la ")[1].split(":")[0])
+        arch = None
+        if abi is not None:                                    # la arquitectura que ejecuta, del motivo de una imposible
+            w.call_bulk("PUT", mdn_cab(abi=abi, arch=0xFFFF), path="/app/e1/arch.mdn")
+            motivo = marcas().get("/app/e1/arch.mdn") or ""
+            if "ejecuta la " in motivo:
+                arch = int(motivo.split("ejecuta la ")[1].split(")")[0])
+        if arch is not None:
+            w.call_bulk("PUT", mdn_cab(abi=abi, arch=arch), path="/app/e1/bien.mdn")
+            w.call_bulk("PUT", mdn_cab(abi=abi, code=100, arch=arch), path="/app/e1/corto.mdn")
+        m = marcas()
+        esperado = {
+            "/app/e1/bien.mod": None, "/app/e1/bien.pack": None, "/app/e1/dos.pack": None, "/app/e1/bien.mdn": None,
+            "/app/e1/corto.mod": "dañado: la cabecera dice 144 B y el fichero tiene 94",
+            "/app/e1/largo.mod": "dañado: la cabecera dice 44 B y el fichero tiene 54",
+            "/app/e1/viejo.mod": "formato no válido: MOD5",
+            "/app/e1/basura.mod": "formato no válido: no es un .mod",
+            "/app/e1/mini.mod": "dañado: más corto que su cabecera",
+            "/app/e1/tocado.pack": "dañado: la cabecera del pack 1 no cuadra (CRC)",
+            "/app/e1/cortado.pack": "dañado: el pack 1 dice 512 B y en el fichero quedan 300",
+            "/app/e1/nuevo.pack": "formato no válido: versión de formato 2",
+            "/app/e1/basura.pack": "formato no válido: no es un .pack",
+            "/app/e1/otraabi.mdn": "formato no válido: ABI de helpers 1",
+            "/app/e1/arch.mdn": "formato no válido para esta placa: código de otra arquitectura (65535; esta VM ejecuta",
+            "/app/e1/corto.mdn": "dañado: más corto que lo que su cabecera dice",
+        }
+        for ruta, quiere in esperado.items():
+            tiene = m.get(ruta, "(no está en el LIST)")
+            bien = (tiene is None) if quiere is None else (tiene is not None and tiene.startswith(quiere))
+            check(bien, "E1: %s → %s" % (ruta.split("/")[-1], "sin marca" if quiere is None else "«%s»" % tiene))
+        for ruta in list(casos) + ["/app/e1/bien.mdn", "/app/e1/arch.mdn"]:
+            w.call("DEL", path=ruta)
 
         # 5b. U3.24 — EL RESTO DEL REPL COMUN.
         #

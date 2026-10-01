@@ -904,6 +904,12 @@ public final class DebugServer implements AutoCloseable {
                     sb.append("{\"name\":").append(Json.quote(p.getFileName().toString()));
                     sb.append(",\"size\":").append(size);
                     sb.append(",\"isDir\":").append(isDir ? "true" : "false");
+                    /* V7/H8 E1 — un .mod que esta VM no cargaría lleva el motivo (el rojo del árbol del IDE), con la
+                     * regla y los textos de la VM-C. Sólo el .mod: es lo único que carga la VM-Java (ni .mdn ni packs). */
+                    if (!isDir && p.getFileName().toString().endsWith(".mod")) {
+                        String mal = edu.bpgenvm.bytecode.ModFormat.examina(java.nio.file.Files.readAllBytes(p));
+                        if (mal != null) sb.append(",\"mal\":").append(Json.quote(mal));
+                    }
                     sb.append('}');
                 }
             }

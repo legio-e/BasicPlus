@@ -1040,8 +1040,15 @@ public final class BpvmClient implements AutoCloseable {
         public final long size;
         public final long crc;          // paso 4 cierre: CRC32 del device (-1 si el firmware no lo reporta)
         public final boolean isDirectory;
+        /** V7/H8 E1 — por qué la VM NO cargaría este fichero (un módulo o un pack dañado o de un formato que no
+         *  carga: lo examina el LIST), o null si está bien o no es de los que se examinan. */
+        public final String mal;
         public RemoteFile(String n, long s, long c, boolean d) {
+            this(n, s, c, d, null);
+        }
+        public RemoteFile(String n, long s, long c, boolean d, String mal) {
             this.name = n; this.size = s; this.crc = c; this.isDirectory = d;
+            this.mal = (mal == null || mal.isEmpty()) ? null : mal;
         }
         @Override public String toString() {
             return (isDirectory ? "[D] " : "[F] ") + name
@@ -1074,7 +1081,8 @@ public final class BpvmClient implements AutoCloseable {
                     Json.getString(m, "name", ""),
                     Json.getLong(m, "size", 0),
                     crcSinSigno(Json.getLong(m, "crc", -1)),   // paso 4 cierre: -1 = firmware sin crc → fallback
-                    Json.getBool(m, "isDir", false)));
+                    Json.getBool(m, "isDir", false),
+                    Json.getString(m, "mal", null)));          // V7/H8 E1: la VM no lo cargaría (y por qué)
         }
         /* Firmware anterior a #425: sin campo → 0 = "no me consta que falte
          * nada". No es lo mismo que "está completo", pero es lo único honesto

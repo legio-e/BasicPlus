@@ -44,6 +44,7 @@ import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 
 public final class PacksPanel extends JPanel {
@@ -97,6 +98,18 @@ public final class PacksPanel extends JPanel {
     }
 
     private void buildUi() {
+        /* V7/H8 E1 — el pack con la cabecera o el contenido mal (PACK_LS: crcOk = false, la columna CRC dice MAL), en
+         * rojo: lo mismo que el árbol de ficheros (Eduardo: «en rojo, módulos/packs dañados o con un formato no
+         * válido»). */
+        packTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override public java.awt.Component getTableCellRendererComponent(JTable t, Object v, boolean sel,
+                                                                           boolean foco, int fila, int col) {
+                java.awt.Component c = super.getTableCellRendererComponent(t, v, sel, foco, fila, col);
+                Object crc = t.getModel().getValueAt(t.convertRowIndexToModel(fila), t.getModel().getColumnCount() - 1);
+                if (!sel) c.setForeground("MAL".equals(crc) ? PicoExplorer.COLOR_MAL : t.getForeground());
+                return c;
+            }
+        });
         JPanel north = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 2));
         north.add(new JLabel("Packs de la placa:"));
         JButton refresh = new JButton("Refrescar");

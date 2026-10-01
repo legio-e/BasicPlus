@@ -15,6 +15,7 @@
  */
 #include "bpvm_pack.h"
 #include "bpvm_fs.h"   /* #362: la zona se engancha como respaldo de LECTURA */
+#include "bpvm_examen.h"   /* V7/H8 E1: el examen de un .pack del FS */
 #include <string.h>
 #include <stdio.h>     /* V7/H2 (#493): snprintf de la ruta pack:<Pack>/x */
 
@@ -316,8 +317,10 @@ static int next_entry(const bpvm_pack_src_t* src, uint32_t pack_off, uint32_t si
 
 /* Parsea + valida la cabecera del pack en `off`. 0 = cabecera FIABLE (crc_cab
  * OK, verfmt conocido, size_total dentro de la región → se puede encadenar);
- * -1 = cabecera NO fiable (corta la cadena). En ambos casos rellena `info`
- * con lo que haya (diagnóstico). El contenido se valida aparte. */
+ * <0 = cabecera NO fiable (corta la cadena): -1 no se puede leer, -2 el CRC no
+ * cuadra, -3 versión de formato desconocida, -4 el tamaño se sale (V7/H8 E1: el
+ * examen del LIST dice cuál; los demás sólo miran «!= 0»). En todos los casos
+ * rellena `info` con lo que haya (diagnóstico). El contenido se valida aparte. */
 static int parse_header(const bpvm_pack_src_t* src, uint32_t off,
                         bpvm_pack_info_t* info) {
     uint32_t region_size = src->size;
@@ -339,10 +342,60 @@ static int parse_header(const bpvm_pack_src_t* src, uint32_t off,
      * (para que el tombstone no la invalide) y el propio CRC. */
     uint16_t crc = bpvm_pack_crc16(BPVM_PACK_CRC16_INIT, h, OFF_FLAGS);
     crc = bpvm_pack_crc16(crc, h + OFF_SIZE_TOTAL, OFF_CRC_CAB - OFF_SIZE_TOTAL);
-    if (crc != get_u16(h + OFF_CRC_CAB)) return -1;
-    if (info->verfmt != BPVM_PACK_VERFMT) return -1;
+    if (crc != get_u16(h + OFF_CRC_CAB)) return -2;
+    if (info->verfmt != BPVM_PACK_VERFMT) return -3;
     if (info->size_total < BPVM_PACK_HEADER_SIZE ||
-        info->size_total > region_size - off) return -1;
+        info->size_total > region_size - off) return -4;
+    return 0;
+}
+
+/* V7/H8 E1 — ¿ES ESTE FICHERO UNA CADENA DE PACKS SANA? La cabecera de cada pack —magic, versión de formato, CRC y
+ * tamaño, con parse_header, la regla de la zona— y que la cadena acabe donde acaba el fichero (o en el 0xFF de una
+ * flash sin escribir). El CONTENIDO no: su CRC pide leer el pack entero —un SQLite.pack es 1 MB— y lo comprueba la
+ * grabación (PACK_BURN), que valida la imagen entera. */
+int bpvm_pack_examina(const bpvm_pack_src_t* src, char* motivo, size_t cap) {
+    uint32_t off = 0;
+    int n = 0;
+    while (off < src->size) {
+        uint8_t m[4];
+        if (src->size - off < 4 || !src_read(src, off, m, 4)) {
+            snprintf(motivo, cap, "dañado: tras %d pack(s), %lu B que no son un pack", n,
+                     (unsigned long) (src->size - off));
+            return 1;
+        }
+        uint32_t magic = get_u32(m);
+        if (magic == 0xFFFFFFFFu && n > 0) return 0;          /* fin de cadena: flash sin escribir */
+        if (magic != BPVM_PACK_MAGIC) {
+            if (n == 0) snprintf(motivo, cap, "formato no válido: no es un .pack");
+            else        snprintf(motivo, cap, "dañado: tras %d pack(s), %lu B que no son un pack", n,
+                                 (unsigned long) (src->size - off));
+            return 1;
+        }
+        if (src->size - off < BPVM_PACK_HEADER_SIZE) {
+            snprintf(motivo, cap, "dañado: el pack %d no tiene ni su cabecera entera", n + 1);
+            return 1;
+        }
+        bpvm_pack_info_t info;
+        switch (parse_header(src, off, &info)) {
+            case 0: break;
+            case -3:
+                snprintf(motivo, cap, "formato no válido: versión de formato %u (esta VM lee la %u)",
+                         (unsigned) info.verfmt, (unsigned) BPVM_PACK_VERFMT);
+                return 1;
+            case -4:
+                snprintf(motivo, cap, "dañado: el pack %d dice %lu B y en el fichero quedan %lu", n + 1,
+                         (unsigned long) info.size_total, (unsigned long) (src->size - off));
+                return 1;
+            case -2:
+                snprintf(motivo, cap, "dañado: la cabecera del pack %d no cuadra (CRC)", n + 1);
+                return 1;
+            default:
+                snprintf(motivo, cap, "dañado: la cabecera del pack %d no se puede leer", n + 1);
+                return 1;
+        }
+        off += info.size_total;
+        n++;
+    }
     return 0;
 }
 

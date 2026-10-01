@@ -100,7 +100,7 @@ public abstract class AbstractBpvmBackend implements Backend {
         lastOmitted = lst.omitidas;   // #425
         List<Entry> out = new ArrayList<>(lst.files.size());
         for (BpvmClient.RemoteFile f : lst.files) {
-            out.add(new Entry(f.name, f.size, f.crc, f.isDirectory));   // paso 4 cierre: propaga el CRC del device
+            out.add(new Entry(f.name, f.size, f.crc, f.isDirectory, f.mal));   // paso 4 cierre: el CRC; E1: el motivo
         }
         return out;
     }

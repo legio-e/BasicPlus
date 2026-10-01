@@ -197,6 +197,7 @@ public final class PicoExplorer extends JPanel {
          * era la diferencia entre incómodo e inviable. */
         fileTree.getSelectionModel().setSelectionMode(
                 TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION);
+        javax.swing.ToolTipManager.sharedInstance().registerComponent(fileTree);   /* V7/H8 E1: el motivo del rojo */
         fileTree.setCellRenderer(new DefaultTreeCellRenderer() {
             @Override
             public Component getTreeCellRendererComponent(JTree tree,
@@ -226,9 +227,11 @@ public final class PicoExplorer extends JPanel {
                          * rama no asigna, hereda el color de la fila anterior.
                          * Eso no lo ves probando con un solo tipo. */
                         if (!sel) {
-                            Color c = colorDeTipo(f.name);
+                            Color c = (f.mal != null) ? COLOR_MAL : colorDeTipo(f.name);
                             setForeground(c != null ? c : getTextNonSelectionColor());
                         }
+                        /* V7/H8 E1 — el motivo, en la ayuda (y null en las demás filas: el renderer se reutiliza). */
+                        setToolTipText(f.mal != null ? "La placa no lo cargaría: " + f.mal : null);
                     } else {
                         // Carpeta (o raíz). Usa los iconos nativos.
                         Icon icon = expanded
@@ -1367,6 +1370,9 @@ public final class PicoExplorer extends JPanel {
     private static final Color COLOR_MOD    = new Color(0x2F, 0x5C, 0x9C);  /* azul: el bytecode, el artefacto principal */
     private static final Color COLOR_MDN    = new Color(0x6B, 0x4A, 0x8F);  /* ciruela: su nativo, hermano del .mod */
     private static final Color COLOR_PACK   = new Color(0x7A, 0x62, 0x24);  /* ocre: contenedor grabable */
+    /* V7/H8 E1 — rojo: un módulo o un pack que la VM no cargaría (Eduardo: «en rojo, módulos/packs dañados o con un
+     * formato no válido»). Manda sobre el color del tipo; el motivo, en la ayuda emergente. */
+    static final Color COLOR_MAL = new Color(0xC0, 0x1C, 0x1C);
     private static final Color COLOR_RECURSO= new Color(0x2E, 0x7D, 0x4F);  /* verde: los recursos del proyecto */
     private static final Color COLOR_TEXTO  = new Color(0x5A, 0x5A, 0x5A);  /* gris: texto y configuración */
 

@@ -23,6 +23,7 @@
 #include "bpvm_pack.h"      /* V7/H2 (#493): BPVM_PACK_URI */
 #include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
 #include "bpvm_sqlmem.h"    /* V7/H8 #602: el motivo y el mínimo del bloque de RAM de los motores */
+#include "bpvm_examen.h"    /* V7/H8 E1: el LIST examina los módulos y los packs */
 
 #include <stdio.h>
 #include <string.h>
@@ -392,6 +393,109 @@ static void repl_list_apunta(repl_list_ctx_t* c, const char* dir, int n, long ms
     c->nraices++;
 }
 
+/* Escape minimo para el JSON del LIST: en un path (o un motivo) solo asoman `"` y el separador. */
+static void repl_list_escapa(const char* s, char* esc, size_t cap) {
+    size_t o = 0;
+    for (const char* q = s; *q && o + 2 < cap; q++) {
+        if (*q == '"' || *q == '\\') esc[o++] = '\\';
+        esc[o++] = *q;
+    }
+    esc[o] = '\0';
+}
+
+/* Una entrada del LIST. `mal` (V7/H8 E1): el motivo por el que esta VM no cargaría el fichero, o NULL. Sale a
+ * TROZOS, como todo el LIST (una línea que se escribe por partes): así el motivo no pide un búfer más en la pila
+ * del callback del recorrido. */
+static void repl_list_emite(repl_list_ctx_t* c, const char* full, uint32_t size, const char* mal) {
+    char ent[192];
+    char esc[REPL_LIST_NAME_MAX * 2];
+    repl_list_escapa(full, esc, sizeof esc);
+    int w = snprintf(ent, sizeof ent,
+        "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":-1,\"isDir\":false,\"mtime\":0",
+        c->first ? "" : ",", esc, (unsigned long) size);
+    if (w <= 0 || (size_t) w >= sizeof ent) return;
+    wire_v1_send_bulk((const uint8_t*) ent, (size_t) w);
+    if (mal) {
+        static const char k[] = ",\"mal\":\"";
+        wire_v1_send_bulk((const uint8_t*) k, sizeof k - 1);
+        repl_list_escapa(mal, ent, sizeof ent);
+        wire_v1_send_bulk((const uint8_t*) ent, strlen(ent));
+        wire_v1_send_bulk((const uint8_t*) "\"", 1);
+    }
+    wire_v1_send_bulk((const uint8_t*) "}", 1);
+    c->first = 0;
+    c->emitidas++;
+}
+
+/* ── V7/H8 E1 — EL EXAMEN DE LOS MÓDULOS Y PACKS DEL LIST ─────────────────────────────────────────────────────
+ *
+ * Eduardo (1-oct): «En rojo mostrar módulos/packs dañados o con un formato no válido.» Cada `.mod`, `.mdn` y
+ * `.pack` se examina con la regla de SU cargador (bpvm_examen.h) leyendo sólo su cabecera, y su entrada lleva el
+ * motivo. La TRAMPA: el recorrido del FS emite las entradas desde su callback con el cerrojo del FS cogido, y leer
+ * una cabecera ahí lo pediría otra vez —el de la Pico no es recursivo: se colgaría—. Así que el recorrido los
+ * APUNTA (nombre y tamaño, en un búfer fijo) y se examinan y emiten al acabar cada directorio, con el cerrojo
+ * suelto. Si el búfer se llena, lo que no cabe sale sin examinar, y el log lo dice. */
+#define REPL_EXAMEN_MAX     48
+#define REPL_EXAMEN_NOMBRES 1536
+static char     s_ex_nombres[REPL_EXAMEN_NOMBRES];
+static uint16_t s_ex_ini[REPL_EXAMEN_MAX];
+static uint32_t s_ex_tam[REPL_EXAMEN_MAX];
+static int      s_ex_n, s_ex_usado, s_ex_sin_sitio;
+
+static const char* repl_list_ext(const char* nombre) {
+    const char* p = strrchr(nombre, '.');
+    return p ? p : "";
+}
+
+static int repl_list_examinable(const char* nombre) {
+    const char* e = repl_list_ext(nombre);
+    return strcmp(e, ".mod") == 0 || strcmp(e, ".mdn") == 0 || strcmp(e, ".pack") == 0;
+}
+
+static int repl_list_apunta_examen(const char* full, uint32_t size) {
+    size_t l = strlen(full) + 1;
+    if (s_ex_n >= REPL_EXAMEN_MAX || s_ex_usado + l > sizeof s_ex_nombres) { s_ex_sin_sitio++; return 0; }
+    memcpy(s_ex_nombres + s_ex_usado, full, l);
+    s_ex_ini[s_ex_n] = (uint16_t) s_ex_usado;
+    s_ex_tam[s_ex_n] = size;
+    s_ex_usado += (int) l;
+    s_ex_n++;
+    return 1;
+}
+
+static long repl_list_fs_read_at(void* user, uint32_t off, uint8_t* dst, uint32_t n) {
+    return bpvm_fs_read_at((const char*) user, off, dst, n);
+}
+
+/* El examen de UN fichero, con el cerrojo del FS suelto. 0 = bien; 1 = mal, con el motivo. */
+static int repl_list_examina_uno(const char* full, uint32_t size, char* motivo, size_t cap) {
+    uint32_t cab32[BPVM_EXAMEN_CABECERA / 4];      /* alineado: la cabecera del .mdn se lee por campos */
+    uint8_t* cab = (uint8_t*) cab32;
+    memset(cab32, 0, sizeof cab32);
+    const char* e = repl_list_ext(full);
+    if (strcmp(e, ".pack") == 0) {
+        bpvm_pack_src_t s;
+        bpvm_pack_src_stream(&s, repl_list_fs_read_at, (void*) full, size);
+        return bpvm_pack_examina(&s, motivo, cap);
+    }
+    long n = bpvm_fs_read_at(full, 0, cab, size < sizeof cab32 ? size : (uint32_t) sizeof cab32);
+    if (n < 0) { snprintf(motivo, cap, "dañado: no se puede leer"); return 1; }
+    if (strcmp(e, ".mod") == 0) return bpvm_mod_examina(cab, (size_t) n, size, motivo, cap);
+    return bpvm_mdn_examina(cab, (size_t) n, size, motivo, cap);
+}
+
+/* Al acabar un directorio: lo apuntado, examinado y emitido. */
+static void repl_list_examina(repl_list_ctx_t* c) {
+    char motivo[160];
+    for (int i = 0; i < s_ex_n; i++) {
+        const char* full = s_ex_nombres + s_ex_ini[i];
+        int mal = repl_list_examina_uno(full, s_ex_tam[i], motivo, sizeof motivo);
+        repl_list_emite(c, full, s_ex_tam[i], mal ? motivo : NULL);
+    }
+    s_ex_n = 0;
+    s_ex_usado = 0;
+}
+
 static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user) {
     repl_list_ctx_t* c = (repl_list_ctx_t*) user;
     int is_root = (c->dir[1] == '\0');
@@ -415,7 +519,6 @@ static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user
         }
         return;              /* los dirs no se emiten (legado plano) */
     }
-    char ent[192];
     char full[REPL_LIST_NAME_MAX];
     int need = is_root ? snprintf(full, sizeof full, "%s", name)
                        : snprintf(full, sizeof full, "%s/%s", c->dir, name);
@@ -430,17 +533,10 @@ static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user
                    name, REPL_LIST_NAME_MAX);
         return;
     }
-    /* Escape minimo del nombre: en un path solo asoman `"` y el separador. */
-    char esc[REPL_LIST_NAME_MAX * 2]; size_t o = 0;
-    for (const char* q = full; *q && o + 2 < sizeof esc; q++) {
-        if (*q == '"' || *q == '\\') esc[o++] = '\\';
-        esc[o++] = *q;
-    }
-    esc[o] = '\0';
-    int w = snprintf(ent, sizeof ent,
-        "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":-1,\"isDir\":false,\"mtime\":0}",
-        c->first ? "" : ",", esc, (unsigned long) size);
-    if (w > 0) { wire_v1_send_bulk((const uint8_t*) ent, (size_t) w); c->first = 0; c->emitidas++; }
+    /* V7/H8 E1 — un módulo o un pack se apunta y se examina al acabar el directorio (repl_list_examina): aquí el
+     * recorrido tiene el cerrojo del FS cogido, y leer su cabecera lo pediría otra vez. Si no cabe, sale sin examinar. */
+    if (repl_list_examinable(full) && repl_list_apunta_examen(full, size)) return;
+    repl_list_emite(c, full, size, NULL);
 }
 
 static void repl_list(long id) {
@@ -464,6 +560,7 @@ static void repl_list(long id) {
     memset(&c, 0, sizeof c);
     c.id = id; c.first = 1;
     c.pending = pending;
+    s_ex_n = 0; s_ex_usado = 0; s_ex_sin_sitio = 0;    /* V7/H8 E1 */
     snprintf(pending[c.tail++], REPL_LIST_NAME_MAX, "/");
     int head_i = 0;
     while (head_i < c.tail) {
@@ -473,6 +570,7 @@ static void repl_list(long id) {
         int   antes = c.emitidas;
         long  t0    = (long) bpvm_platform_now_ms();
         (void) bpvm_fs_list(dir, repl_list_cb, &c);   /* un volumen caido no borra el resto */
+        repl_list_examina(&c);                         /* V7/H8 E1: con el cerrojo del FS ya suelto */
         repl_list_apunta(&c, dir, c.emitidas - antes,
                          (long) bpvm_platform_now_ms() - t0);
     }
@@ -493,6 +591,9 @@ static void repl_list(long id) {
     det[o] = '\0';
     log_printf("ls: %d ent en %ld ms |%s (%d dirs omitidos)",
                c.emitidas, (long) bpvm_platform_now_ms() - t_ini, det, c.omitidas);
+    if (s_ex_sin_sitio > 0)
+        log_printf("ls: %d modulos/packs SIN EXAMINAR (no cabian en el bufer del examen: %d por directorio)",
+                   s_ex_sin_sitio, REPL_EXAMEN_MAX);
 }
 
 
