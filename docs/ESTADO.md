@@ -1068,7 +1068,7 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
-## 📡 H8 (1-oct, noche) — `#495`: el búfer de ficheros (`1c19eabb`), medido antes y después; y la Pico recibe a 12 KB/s
+## 📡 H8 (1-oct, tarde) — `#495`: el búfer de ficheros (`1c19eabb`) y el de comunicaciones (`ae3ca338`), medidos antes y después; y la subida que no termina se borra
 
 - **Las decisiones de Eduardo** (en `V7_IDEAS` §H8, `02bb439e`): trozos de 512 B o 1 KB según el búfer de la placa; una
   ventana pequeña; un fichero cada vez, pero un `LIST` o un `print` pueden ir entre medias; el `PUT` también entra; y
@@ -1088,12 +1088,29 @@ la C6, la P4 y la Nucleo.
   FS) tarda 5,2 s por 64 KB en la Pico y 0,11 s en la C5. El cable de la Pico lee byte a byte y, con la FIFO del CDC
   vacía, duerme 5 ms; y la FIFO es la del SDK, 64 B a velocidad completa: un paquete USB por siesta. Va al paso 2.
 - **Eduardo**: *«En la Pico hay que activar el DMA, si no vas a tener muchos problemas o de rendimiento o de
-  desbordamiento de la FIFO.»* Pendiente de hablar: el cable de la Pico es el USB nativo, que no se desborda (la Pico
-  contesta NAK y el PC reintenta: la ventana de 2 KB sobre la FIFO de 64 B llegó entera), y el RP2350 no tiene DMA
-  para el USB; lo que frena es el tamaño de la FIFO. En las UART (STM32, S3, P4), el DMA sí es una salida.
+  desbordamiento de la FIFO.»* Hablado: el cable de la Pico es el USB nativo, que no se desborda (la Pico contesta NAK
+  y el PC reintenta: la ventana de 2 KB sobre la FIFO de 64 B llegó entera), y el RP2350 no tiene DMA para el USB; lo
+  que frena es el tamaño de la FIFO. En las UART, el DMA sí es una salida: la STM32 va por DMA (abajo).
 
-Las placas: la Pico, la DK2, la C5 y la P4, con la imagen de `1c19eabb` (la C5 y la Pico, otra vez la nueva tras medir
-la vieja) y su ENV como estaba.
+- **El paso 2** (`ae3ca338`), una vía por cable decidida por Eduardo a la vista de lo anterior: la Pico, la FIFO del
+  CDC a 2 KB y el bulk por bloques (el RP2350 no tiene DMA para el USB; la interrupción de TinyUSB hace su papel); la
+  STM32, la RX por DMA circular de 4 KB (GPDMA1, canal 11); la S3 y la P4, la interrupción de la UART en RAM. Medido
+  antes y después en las cuatro placas: la Pico sube 64 KB en 1,10 s (antes 6,1); en la P4, la DK2 y la S3 la ventana de
+  4 trozos, que perdía bytes, sube al ritmo del cable (6,2–6,3 s). En la S3, con trozos de 8 KB, 0,3–0,4 s peor que con
+  su imagen del 26-sep: una sola medida del antes; sin partir.
+- **La subida que no termina se borra** (con el paso 2): medir destapó que una subida abandonada dejaba el fichero
+  abierto —uno de los dos huecos del FS— y, al cerrarse, el trozo subido como bueno. Eduardo eligió borrarla (*«por tema
+  de espacio [...] y si queda la versión anterior el usuario se va a pensar que tiene el nuevo»*) y preguntó si debería
+  haber un segundo intento: la propuesta, en `V7_IDEAS` §H8 (del cliente, uno, sólo si falla el cable), para el paso 3.
+  Probado en el micro simulado (13 comprobaciones en `sim_smoke`, saboteado dos veces) y en las cuatro placas.
+- **De paso**: `fw_todas.sh` (el script del scratchpad que compila las ocho imágenes) da las cinco ESP32 por falladas
+  sin compilar nada —el `export.ps1` no prepara el entorno en un PowerShell lanzado desde Git Bash—; compiladas con la
+  herramienta de PowerShell, las cinco sin avisos.
+
+Las placas: la Pico, la P4, la DK2 y la S3 (conectada por Eduardo esta tarde, en lugar de la C5), con la imagen de
+`ae3ca338` y su ENV como estaba; la S3 venía del 26-sep y su FS sigue entero (45 ficheros). La C5, desconectada, se
+quedó con `1c19eabb`, que tiene la subida abandonada abierta: grabarla cuando vuelva. La Nucleo, desconectada: su DMA,
+sin probar en placa.
 
 ## ✅ H11 (1-oct, tras la pausa) — cerrado; y dos entradas de `FICHAS` que no cuadraban
 

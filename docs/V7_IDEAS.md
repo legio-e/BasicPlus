@@ -3533,19 +3533,52 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
 **El orden** (cada paso, medido con lo de arriba como referencia):
 1. ✅ **El búfer de ficheros**, común (1-oct, `1c19eabb`): la sesión del `PUT` con el fichero abierto y la escritura
    por bloques. Medido arriba: un `PUT` de trozos de 512 B ya no cuesta más que el de 8 KB de hoy.
-2. **El búfer de comunicaciones en las placas que lo pierden o lo tienen pequeño**: la Pico (la FIFO del CDC, de 64 B a
-   2 KB, y leerla por bloques en vez de byte a byte); la UART de la S3 y la P4 desde RAM; el anillo de la STM32 (de
-   256 B a 4 KB). 🧭 Eduardo (1-oct): *«En la Pico hay que activar el DMA, si no vas a tener muchos problemas o de
-   rendimiento o de desbordamiento de la FIFO.»* A hablar con lo que hay: el cable de la Pico no es una UART, es el USB
-   nativo, que no se desborda —con la FIFO llena la Pico contesta NAK y el PC reintenta: la ventana de 4 × 512 B sobre
-   la FIFO de 64 B llegó entera—; y el RP2350 no tiene canal de DMA para el USB (no hay DREQ del USB): el controlador
-   deja lo recibido en su propia RAM (4 KB) y la interrupción de TinyUSB lo copia a la FIFO, 64 B por paquete. Lo que
-   frena es el tamaño de la FIFO. Donde el cable sí es una UART —la STM32, la S3, la P4— el DMA es una de las dos
-   salidas (la otra, la interrupción en RAM).
+2. ✅ **El búfer de comunicaciones en cada placa** (1-oct, `ae3ca338`). 🧭 Eduardo (1-oct): *«En la Pico hay que
+   activar el DMA, si no vas a tener muchos problemas o de rendimiento o de desbordamiento de la FIFO.»* Hablado con lo
+   que hay —el cable de la Pico no es una UART sino el USB nativo, que no se desborda (con la FIFO llena la Pico contesta
+   NAK y el PC reintenta: la ventana de 4 × 512 B sobre la FIFO de 64 B llegó entera), y el RP2350 no tiene canal de DMA
+   para el USB (no hay DREQ del USB)—, decidió una vía por cable:
+   - **la Pico**: la FIFO del CDC, de 64 B a 2 KB (`CFG_TUD_CDC_RX_BUFSIZE`), y el bulk leído por bloques. La
+     interrupción de TinyUSB la llena de fondo y hace el papel del DMA;
+   - **la STM32** (DK2, Nucleo): la RX por **DMA circular** de 4 KB (GPDMA1, canal 11: una lista enlazada de un nodo que
+     se recarga a sí mismo; hasta dónde ha escrito lo dice lo que le falta del bloque, BNDT). Si no arrancara, la IRQ de
+     siempre sobre el mismo anillo, y el log lo dice;
+   - **la S3 y la P4**: la interrupción de la UART en RAM (`CONFIG_UART_ISR_IN_IRAM`), no el DMA (UHCI).
+
+   Medido (64 KB, subidos, bajados y comparados: iguales; el antes, la imagen del paso 1 —en la S3, la del 26-sep,
+   anterior a `#495`—):
+
+   | placa | 8 KB, parada y espera | 512 B, parada y espera | 512 B, ventana de 4 | recibir sin escribir (8 KB) |
+   |---|---|---|---|---|
+   | Pico | 6,07–6,13 → **1,10 s** | 7,25–7,27 → **2,16 s** | 6,12–6,19 → **1,12 s** | 5,20 → **0,23 s** |
+   | P4 | 6,20 → 6,20 s | 7,37 → 7,30 s | **fallaba** (sin acuse tras 4608 B) → **6,18 s** | 5,74 → 5,73 s |
+   | DK2 | 6,32 → 6,33 s | 7,37 → 7,34 s | **fallaba** (sin acuse tras 64 000 B) → **6,29 s** | 5,78 → 5,78 s |
+   | S3 | 5,96 → 6,23–6,38 s | 10,65 → 7,16–7,39 s | (no se probaba) → **6,17–6,19 s** | 5,74 → 5,74 s |
+
+   La Pico pasa a ir al ritmo de su flash (~0,9 s de los 1,1); la P4, la DK2 y la S3, al del cable (115 200 baudios son
+   11,2 KB/s: 64 KB no bajan de 5,7 s), y la ventana recupera lo que costaban las idas y vueltas de los trozos de 512 B.
+   En la S3, con trozos de 8 KB, 0,3–0,4 s peor que con la imagen del 26-sep: una sola medida del antes y cinco días de
+   cambios en medio; sin partir. Sin probar en placa: la Nucleo (el mismo USART1 y el mismo DMA que la DK2).
 3. **El trozo y la ventana, anunciados por la placa** en el `HELLO` (512 B y 4), y el IDE (y `tanda.py`) usándolos para
    el `PUT`; con un firmware que no los anuncia, el IDE sigue como hoy. Y `wire_serie.py` deja de esperar 0,2 s por
    respuesta (su `esperar()`: el instrumento de la medida mala).
 4. **El `GET` y el `LIST` troceados y mezclables** (arriba, la propuesta), con la misma ventana en el otro sentido.
+
+**La subida que no termina** (1-oct, `ae3ca338`). Medir el paso 1 lo destapó: una subida abandonada (el PC deja de
+mandar, se suelta el cable) dejaba el fichero abierto —uno de los dos huecos del FS— hasta el siguiente `PUT_BEGIN`, y
+al cerrarlo daba por bueno el trozo subido. Eduardo eligió que se **borre**: *«por tema de espacio, en algunas placas no
+vamos sobrados de espacio. Y por otro lado si intentamos subir un archivo y queda la versión anterior el usuario se va a
+pensar que tiene el nuevo»*. La acaban un `HELLO` (un cliente nuevo), un `RUN`, un `RESET`, otra subida, un verbo que
+escribe en el FS, un error o un `PUT_END` que no cuadra; lo que sólo lee puede ir entre medias. La regla está en el común
+(`bpvm_repl_antes_de_despachar`) y cada familia la llama con cada mensaje; el log lo dice («put: X no termino (...):
+borrado»). Un corte de corriente a mitad no pasa por ahí: littlefs no da nada por bueno hasta cerrar, así que el fichero
+queda como estaba al abrirlo.
+
+🧭 Y Eduardo: *«Aquí la cuestión es si debería haber un 2º intento.»* La propuesta, para el paso 3 (el que toca al
+IDE): el segundo intento es del **cliente** —la placa sólo recibe—, **uno**, desde `PUT_BEGIN`, y **sólo si el fallo es
+del cable** (sin acuse a tiempo, una respuesta rota, `SIZE_MISMATCH`); si la placa lo rechaza con nombre (`NO_SPACE`,
+`INVALID_PATH`, `NOT_READY`), repetir no arregla nada y se dice a la primera. Si el segundo también falla, el IDE lo dice
+con el fichero: no está en la placa. A decidir.
 
 
 ## H6 — LVGL en un pack: lo que hace falta (22-sep, día de análisis)
