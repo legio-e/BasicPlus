@@ -3583,7 +3583,7 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
    la P4, la DK2 y la S3: 64 KB en 1,18 s en la Pico y en 6,15–6,25 s en las de UART. El segundo intento tarda de 4,9 s
    (la Pico y la DK2 contestan `FATAL` en cuanto les llega la basura) a 16,7 s (la P4 y la S3: el lazo de la ESP32 tira
    sin `FATAL` una línea que no empieza por `{`, y el IDE espera sus 10 s de silencio).
-4. **El `GET` y el `LIST` troceados y mezclables** — la propuesta del 28-sep (arriba), afinada el 1-oct con el código
+4. ✅ **El `GET` y el `LIST` troceados y mezclables** (1-oct, `847873f5` y `be628ee3`) — la propuesta del 28-sep (arriba), afinada el 1-oct con el código
    delante y con lo que Eduardo decidió después (un fichero cada vez; un `LIST` o un `print`, entre medias):
    - **El mensaje no se parte**: `wire_v1_send_msg(línea, bulk)` en cada transporte —la Pico, la ESP32 por UART y por
      USB-Serial-JTAG, la P4 por TCP, la STM32 y el micro simulado— coge el cerrojo del cable UNA vez y escribe la línea
@@ -3628,6 +3628,24 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
    no se corta más de un trozo, el `KILL` llega, el fichero llega entero y con su CRC—; y en placa, la DK2 (11 KB/s:
    donde más dura un `GET`). Lo que hay que medir: la pila del hilo `io` (4 KB en la Pico y la STM32), que pasa a
    correr el `LIST` con su examen y la lectura del FS.
+
+   **Hecho y medido** (1-oct): en el micro simulado, 23 comprobaciones nuevas en `sim_smoke` (y saboteado el troceado
+   —la descarga de un paso—, tres en rojo); el cliente del IDE contra el simulado y la VM-Java; y en las cuatro placas
+   (con el OK de Eduardo), `paso4_placa.py` y `SubidaSmoke`:
+
+   | placa | 40 KB en reposo: `GET` entero / troceado | troceado DURANTE un RUN que imprime sin parar | a `io` le sobra de pila |
+   |---|---|---|---|
+   | Pico (USB) | 0,09 / 0,15 s | 1,45 s, con 1616 líneas del programa entre el primer trozo y el último | 1208 B de 4 KB |
+   | DK2 (UART) | 3,49 / 3,86 s | 14,17 s, con 1613 | 1208 B de 4 KB |
+   | P4 (UART) | 3,49 / 3,84 s | 14,09 s, con 1613 | 700 B de 4 KB → **2748 B de 6 KB** |
+   | S3 (UART) | 3,48 / 3,84 s | 14,09 s, con 1613 | 332 B de 4 KB → **2316 B de 6 KB** |
+
+   Las 1613 líneas entre trozos son las mismas en todas: `io` saca hasta 256 B de salida por vuelta y un trozo, así
+   que el reparto lo da la vuelta, no el reloj. Con el programa hablando, la descarga se lleva más o menos un tercio del
+   cable (calculado, no medido: 40 KB de trozos y unos 100 KB de `OUTPUT` —1613 líneas de ~65 B con su JSON— a 11,2 KB/s
+   son ~12,5 s, de los 14 medidos). La pila de `io` —con 4 KB, 332 B libres en la S3— pasó a 6 KB en
+   la familia ESP32 (`be628ee3`); la Pico y la STM32 se quedan en 4 KB, con un 30 % de margen y el gancho de
+   desbordamiento de FreeRTOS. Salió de paso `#617`: la VM-Java no tiene la subida por trozos (`PUT_BEGIN`).
 
 **La subida que no termina** (1-oct, `ae3ca338`). Medir el paso 1 lo destapó: una subida abandonada (el PC deja de
 mandar, se suelta el cable) dejaba el fichero abierto —uno de los dos huecos del FS— hasta el siguiente `PUT_BEGIN`, y

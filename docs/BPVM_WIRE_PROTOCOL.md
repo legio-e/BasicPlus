@@ -262,7 +262,8 @@ contaban la reserva en PSRAM): el IDE lee los dos.
 
 `ioStackFree` (V7/H8 `#495`, paso 4): lo que le sobró de pila al hilo `io` en el último RUN, en bytes (la marca de
 agua); -1 si no ha habido RUN o la plataforma no lo sabe (el PC). Desde el paso 4, `io` corre también el `GET` y el
-`LIST` troceados durante un RUN, con 4 KB de pila en las placas: se publica para mirarlo, no suponerlo.
+`LIST` troceados durante un RUN: se publica para mirarlo, no suponerlo. Con 4 KB sobraban 332 B en la S3 y 700 en la
+P4, y en la familia ESP32 pasó a 6 KB (2316 y 2748 libres); en la Pico y la STM32, 4 KB con 1208 libres (1-oct).
 
 #### `TIME` (request)
 

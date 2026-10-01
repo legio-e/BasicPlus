@@ -1068,6 +1068,33 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 📦 H8 (1-oct, noche) — `#495` paso 4 (`847873f5`, `be628ee3`): el `GET` y el `LIST` troceados y mezclables; `#495` CERRADA
+
+- El diseño, afinado con el código delante (`c1a711f9`): el mensaje que no se parte (`wire_v1_send_msg` en los cinco
+  transportes; el micro simulado no tenía cerrojo de cable), el `GET` y el `LIST` troceados si el cliente los pide
+  (`"chunked":true`), sin acuse en ese sentido (recibe el PC), un trozo por vuelta —desde el REPL en reposo y desde el
+  poll de `io` durante un RUN— y, durante un RUN, `STAT` y los dos troceados. Dos cosas cambiaron al hacerlo, y están
+  anotadas: `LIST_DIR` sigue con `BUSY` durante un RUN (comparte la zona de rascar con el `listDir` del programa, sin
+  cerrojo), y el plazo del IDE ya era de silencio desde `#454` (el diseño decía 10 s en total).
+- El IDE pide troceados el `GET` y el `LIST` y los junta por id, con su tamaño y su CRC: el árbol y abrir un fichero van
+  ya durante un RUN. La VM-Java sirve las dos formas.
+- `ioStackFree` en el `INFO`: lo que le sobró de pila a `io` en el último RUN. Medido en placa: la S3 con 332 B de sus
+  4 KB y la P4 con 700 → la familia ESP32 a 6 KB (`be628ee3`, con Eduardo): 2316 y 2748; la Pico y la DK2, 1208 de 4 KB,
+  se quedan.
+- Probado: `sim_smoke` 117 (23 nuevas; saboteado el troceado, tres en rojo), la red entera dos veces, `SubidaSmoke` y una
+  bajada troceada contra el simulado y la VM-Java, y en las cuatro placas (grabadas con el OK de Eduardo, la S3 y la P4
+  dos veces): 40 KB en reposo —entero y troceado: la Pico 0,09/0,15 s, las de UART ~3,5/3,85— y durante un RUN que
+  imprime sin parar —la Pico 1,45 s, las de UART ~14 s, con 1613 líneas del programa entre el primer trozo y el último—,
+  y un `KILL` con una descarga en curso que no espera a que acabe.
+- De paso, `#617`: la VM-Java no conoce `PUT_BEGIN` —el IDE no le sube nada de más de 8 KB— y atiende a un cliente por
+  proceso. Y un caso límite anotado, sin tocar: si el IDE se cierra a media descarga y entra una herramienta
+  (`tanda.py`, `wire_serie.py`), le pueden llegar restos de trozos con bulk antes de que su `HELLO` corte la descarga;
+  esas herramientas sólo leen bulk tras un `GET_REPLY`, y toleran ruido.
+
+Las placas: la Pico, la P4, la DK2 y la S3, con `be628ee3`. La C5 sigue desconectada con `1c19eabb` (con la fuga de la
+subida a medias): grabarla cuando vuelva. De H8 queda mirar `#538` en el IDE con una placa (`Run on Device` con el
+`Stdlib.pack` y `/lib` vacío) y `#617`.
+
 ## 🔴 H8 (1-oct, tarde) — `E1`, el rojo del árbol (`d7251bd5`), y el contrato del cable al día
 
 - Eduardo decidió el rojo: *«En rojo mostrar módulos/packs dañados o con un formato no válido»*. El diseño, en
