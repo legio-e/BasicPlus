@@ -3295,6 +3295,12 @@ Sin programa, una VM mira la cola, la ve vacía y cede el núcleo.
   no hace nada (*«mira la cola, no hay nada, pasa el control»*), así que `io` vive siempre y el REPL es suyo, que es lo
   que `A1` decidió el 4-sep (*«`io` = wire, OUTPUT por línea, log, REPL, LVGL»*) y se quedó a medias. Es el primer paso
   de H12, y vale igual con un núcleo.
+- **En reposo** (encendida, sin programa; Eduardo, 1-oct: *«¿hay algún hilo del SO ejecutándose?»*): sí, siempre
+  la tarea de la VM haciendo de REPL, más la ociosa de FreeRTOS —`io` no existe—, y cada familia espera distinto
+  (el censo de `#490`, 10-sep, comprobado hoy en el código): la Pico mira el USB y la SD y duerme 10 ms (~100
+  vueltas/s), y su ociosa gira sin parar el núcleo; las ESP32 y la P4 esperan en el driver hasta 100 ms (~10/s), y
+  su ociosa para el núcleo (`waiti`/`wfi`) hasta la siguiente interrupción; la STM32 **no cede**: lee el anillo de la
+  UART sin parar y su ociosa no llega a ejecutarse nunca. En el modelo, esa VM sin programa cedería.
 
 **Lo que el modelo decide de lo que H7 dejaba abierto** (el índice: «VMs ociosas a piñón o parqueadas» y «los
 workers como cola de hilos de SO en vez de N fijos»):
