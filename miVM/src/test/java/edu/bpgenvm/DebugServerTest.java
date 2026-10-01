@@ -440,6 +440,133 @@ class DebugServerTest {
         }
     }
 
+    // ---- V7/H8 #617: la subida por trozos, la regla de las placas, y volver a escuchar ----
+
+    /** Un mensaje del wire —la línea y, si anuncia bulk, sus bytes— leído del flujo crudo (como el lector del IDE). */
+    private static Map<String, Object> mensaje(java.io.InputStream in) throws IOException {
+        Map<String, Object> m = Json.parseFlatObject(edu.bpgenvm.util.WireFraming.recvLine(in));
+        long n = Json.getLong(m, "bulk", 0);
+        if (n > 0) m.put("__bulk", edu.bpgenvm.util.WireFraming.recvBulk(in, (int) n));
+        return m;
+    }
+
+    private static void manda(java.io.OutputStream out, String linea, byte[] bulk) throws IOException {
+        edu.bpgenvm.util.WireFraming.sendLine(out, linea);
+        if (bulk != null) edu.bpgenvm.util.WireFraming.sendBulk(out, bulk);
+        out.flush();
+    }
+
+    private static VirtualMachine vmConWorkdir(java.nio.file.Path dir) {
+        VirtualMachine vm = new VirtualMachine();
+        edu.bpgenvm.vm.ModuleManager mm = new edu.bpgenvm.vm.ModuleManager(vm);   // como Main con --workdir
+        mm.setWorkdir(dir);
+        vm.setModuleManager(mm);
+        return vm;
+    }
+
+    @Test
+    @Timeout(15)
+    void subidaPorTrozosYBajadaTroceada(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        int port = freePort();
+        byte[] datos = new byte[20000];
+        new java.util.Random(617).nextBytes(datos);
+        try (DebugServer server = new DebugServer(vmConWorkdir(dir), new DebugController())) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                java.io.InputStream in = new java.io.BufferedInputStream(s.getInputStream());
+                java.io.OutputStream out = s.getOutputStream();
+                manda(out, "{\"type\":\"PUT_BEGIN\",\"id\":1,\"path\":\"app/a.bin\",\"size\":20000}", null);
+                assertEquals("PUT_BEGIN_REPLY", Json.getString(mensaje(in), "type", ""));
+                long recibido = 0;
+                for (int k = 0, id = 2; k < datos.length; k += 8192, id++) {
+                    byte[] t = java.util.Arrays.copyOfRange(datos, k, Math.min(k + 8192, datos.length));
+                    manda(out, "{\"type\":\"PUT_DATA\",\"id\":" + id + ",\"bulk\":" + t.length + "}", t);
+                    recibido = Json.getLong(mensaje(in), "received", -1);
+                }
+                assertEquals(20000L, recibido);
+                manda(out, "{\"type\":\"PUT_END\",\"id\":9,\"size\":20000}", null);
+                Map<String, Object> fin = mensaje(in);
+                assertEquals("PUT_END_REPLY", Json.getString(fin, "type", ""));
+                assertArrayEquals(datos, java.nio.file.Files.readAllBytes(dir.resolve("app/a.bin")));
+
+                // y bajada troceada (#495 paso 4): GET_PART seguidos por off y GET_END con el CRC-32
+                manda(out, "{\"type\":\"GET\",\"id\":10,\"path\":\"app/a.bin\",\"chunked\":true}", null);
+                java.io.ByteArrayOutputStream junto = new java.io.ByteArrayOutputStream();
+                Map<String, Object> m;
+                while ("GET_PART".equals(Json.getString(m = mensaje(in), "type", ""))) {
+                    assertEquals((long) junto.size(), Json.getLong(m, "off", -1));
+                    junto.write((byte[]) m.get("__bulk"));
+                }
+                assertEquals("GET_END", Json.getString(m, "type", ""));
+                java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+                crc.update(datos);
+                assertEquals(crc.getValue(), Json.getLong(m, "crc", -1));
+                assertArrayEquals(datos, junto.toByteArray());
+            }
+        }
+    }
+
+    @Test
+    @Timeout(15)
+    void laSubidaQueNoTerminaSeBorra(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        int port = freePort();
+        try (DebugServer server = new DebugServer(vmConWorkdir(dir), new DebugController())) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                java.io.InputStream in = new java.io.BufferedInputStream(s.getInputStream());
+                java.io.OutputStream out = s.getOutputStream();
+                // a medias y llega un HELLO: lo subido, borrado, y no queda sesión
+                manda(out, "{\"type\":\"PUT_BEGIN\",\"id\":1,\"path\":\"app/r.bin\",\"size\":4096}", null);
+                mensaje(in);
+                manda(out, "{\"type\":\"PUT_DATA\",\"id\":2,\"bulk\":512}", new byte[512]);
+                assertEquals(512L, Json.getLong(mensaje(in), "received", -1));
+                assertTrue(java.nio.file.Files.exists(dir.resolve("app/r.bin")));
+                manda(out, "{\"type\":\"HELLO\",\"id\":3,\"protoVersion\":1}", null);
+                assertEquals("HELLO_REPLY", Json.getString(mensaje(in), "type", ""));
+                assertFalse(java.nio.file.Files.exists(dir.resolve("app/r.bin")), "la subida a medias se borra");
+                manda(out, "{\"type\":\"PUT_DATA\",\"id\":4,\"bulk\":8}", new byte[8]);
+                assertEquals("NO_SESSION", Json.getString(mensaje(in), "code", ""));
+                // un PUT_END que no cuadra: SIZE_MISMATCH, y lo subido no se queda
+                manda(out, "{\"type\":\"PUT_BEGIN\",\"id\":5,\"path\":\"app/c.bin\",\"size\":100}", null);
+                mensaje(in);
+                manda(out, "{\"type\":\"PUT_DATA\",\"id\":6,\"bulk\":50}", new byte[50]);
+                mensaje(in);
+                manda(out, "{\"type\":\"PUT_END\",\"id\":7,\"size\":100}", null);
+                assertEquals("SIZE_MISMATCH", Json.getString(mensaje(in), "code", ""));
+                assertFalse(java.nio.file.Files.exists(dir.resolve("app/c.bin")), "lo que no está entero no se queda");
+                // y otra a medias cuando el cliente se va (abajo, al cerrar el socket)
+                manda(out, "{\"type\":\"PUT_BEGIN\",\"id\":8,\"path\":\"app/v.bin\",\"size\":100}", null);
+                mensaje(in);
+                assertTrue(java.nio.file.Files.exists(dir.resolve("app/v.bin")));
+            }
+            long t0 = System.currentTimeMillis();
+            while (java.nio.file.Files.exists(dir.resolve("app/v.bin")) && System.currentTimeMillis() - t0 < 3000)
+                Thread.sleep(20);
+            assertFalse(java.nio.file.Files.exists(dir.resolve("app/v.bin")), "el cliente se fue: la subida a medias, borrada");
+        }
+    }
+
+    @Test
+    @Timeout(15)
+    void elServidorVuelveAEscucharCuandoSeVaElCliente() throws Exception {
+        int port = freePort();
+        try (DebugServer server = new DebugServer(new VirtualMachine(), new DebugController())) {
+            server.start(port);
+            for (int vez = 1; vez <= 3; vez++) {
+                try (Socket s = new Socket("localhost", port)) {
+                    s.setSoTimeout(5000);
+                    java.io.InputStream in = new java.io.BufferedInputStream(s.getInputStream());
+                    manda(s.getOutputStream(), "{\"type\":\"HELLO\",\"id\":" + vez + ",\"protoVersion\":1}", null);
+                    Map<String, Object> r = mensaje(in);
+                    assertEquals("HELLO_REPLY", Json.getString(r, "type", ""), "el cliente " + vez + " tiene que tener respuesta");
+                    assertEquals((long) vez, Json.getLong(r, "id", -1));
+                }
+            }
+        }
+    }
+
     @Test
     @Timeout(10)
     void stepEmiteStepDoneNoBpHit() throws Exception {

@@ -20,8 +20,12 @@
 //   2) Al primer cliente, conecta sus streams al controller + sink y
 //      arranca el thread de lectura de comandos.
 //   3) Si el cliente se desconecta, el VM sigue corriendo (modo
-//      headless). NO reaceptamos otro cliente todavía — esto se
-//      añadirá si se necesita reattach en caliente.
+//      headless) y el servidor VUELVE A ESCUCHAR: el siguiente cliente
+//      se engancha con su HELLO, como en una placa (V7/H8 #617, 1-oct:
+//      hasta entonces no reaceptaba, «se añadirá si se necesita
+//      reattach en caliente», y hacía falta: el explorador del IDE se
+//      conecta a una VM lanzada a mano, y tras un FATAL el protocolo
+//      pide reconectar).
 //
 // La VM puede empezar a ejecutar ANTES de que llegue el cliente
 // (modo "fire and forget") o BLOQUEAR esperándolo (modo "debugger
@@ -150,36 +154,47 @@ public final class DebugServer implements AutoCloseable {
     // ---- Accept ----
 
     private void acceptLoop() {
-        try {
-            Socket s = serverSocket.accept();   // bloquea hasta el primer cliente
-            if (closed) { try { s.close(); } catch (IOException ignored) {} return; }
-            this.client = s;
-            this.clientOutRaw = new BufferedOutputStream(s.getOutputStream());
-            this.clientInRaw  = new BufferedInputStream(s.getInputStream());
-            System.err.println("[DebugServer] cliente conectado desde " + s.getRemoteSocketAddress());
+        boolean primero = true;
+        while (!closed) {   // #617 — cuando el cliente se va, se vuelve a escuchar
+            try {
+                Socket s = serverSocket.accept();   // bloquea hasta el siguiente cliente
+                if (closed) { try { s.close(); } catch (IOException ignored) {} return; }
+                this.client = s;
+                this.clientOutRaw = new BufferedOutputStream(s.getOutputStream());
+                this.clientInRaw  = new BufferedInputStream(s.getInputStream());
+                System.err.println("[DebugServer] cliente conectado desde " + s.getRemoteSocketAddress());
 
-            // Conectar sink + listener + promptSender. El SocketSink emite
-            // OUTPUT events a través de nuestro send(jsonLine), garantizando
-            // sincronización con el resto de tráfico. La sessionId se lee
-            // perezosamente en cada flush — refleja la sesión activa en ese
-            // momento (0 = sin sesión).
-            SocketSink sink = new SocketSink(this::send, () -> activeSession);
-            vm.setProgramOut(sink);
-            controller.addListener(this::onEvent);
-            vm.setPromptSender(this.promptSender);
+                // Conectar sink + listener (UNA vez: escriben en el cliente que haya en cada momento,
+                // por send() y hasClient()). El SocketSink emite OUTPUT events a través de nuestro
+                // send(jsonLine), garantizando sincronización con el resto de tráfico. La sessionId se
+                // lee perezosamente en cada flush — refleja la sesión activa en ese momento (0 = sin
+                // sesión).
+                if (primero) {
+                    SocketSink sink = new SocketSink(this::send, () -> activeSession);
+                    vm.setProgramOut(sink);
+                    controller.addListener(this::onEvent);
+                    primero = false;
+                }
+                vm.setPromptSender(this.promptSender);   // el readLoop lo quita al irse el cliente
 
-            // v1: NO mandamos banner. El cliente debe enviar HELLO y
-            // recibir HELLO_REPLY como primer mensaje (§5.1 del wire spec).
+                // v1: NO mandamos banner. El cliente debe enviar HELLO y
+                // recibir HELLO_REPLY como primer mensaje (§5.1 del wire spec).
 
-            // Arrancar el thread de lectura de comandos.
-            readerThread = new Thread(this::readLoop, "bp-debug-reader");
-            readerThread.setDaemon(true);
-            readerThread.start();
+                // Arrancar el thread de lectura de comandos, y esperar a que el cliente se vaya.
+                readerThread = new Thread(this::readLoop, "bp-debug-reader");
+                readerThread.setDaemon(true);
+                readerThread.start();
 
-            clientConnected.countDown();
-        } catch (IOException e) {
-            if (!closed)
-                System.err.println("[DebugServer] accept falló: " + e.getMessage());
+                clientConnected.countDown();
+                readerThread.join();
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (IOException e) {
+                if (!closed)
+                    System.err.println("[DebugServer] accept falló: " + e.getMessage());
+                return;
+            }
         }
     }
 
@@ -393,6 +408,7 @@ public final class DebugServer implements AutoCloseable {
                 System.err.println("[DebugServer] readLoop terminó: " + e.getMessage());
         } finally {
             System.err.println("[DebugServer] cliente desconectado");
+            putAbortar("el cliente se fue");   // #617: lo que no termina, se borra (como en las placas)
             // No mata la VM: sigue ejecutando headless.
             vm.setPromptSender(null);   // futuros prompt() lanzarán RuntimeError BP
             this.client = null;
@@ -412,6 +428,8 @@ public final class DebugServer implements AutoCloseable {
     private void handleMessage(Map<String, Object> m, byte[] bulk) {
         String type = Json.getString(m, "type", "");
         long id = Json.getLong(m, "id", -1);
+        if (putSalida != null && ACABAN_LA_SUBIDA.contains(type))
+            putAbortar("llego " + type);       // #617: la regla de las placas (bpvm_repl_antes_de_despachar)
         try {
             switch (type) {
                 // ---- META ----
@@ -587,6 +605,9 @@ public final class DebugServer implements AutoCloseable {
                 case "STAT":   sendStatReply(id, m); break;
                 case "GET":    sendGetReply(id, m); break;
                 case "PUT":    sendPutReply(id, m, bulk); break;
+                case "PUT_BEGIN": sendPutBeginReply(id, m); break;   // #617: la subida por trozos (#294)
+                case "PUT_DATA":  sendPutDataReply(id, m, bulk); break;
+                case "PUT_END":   sendPutEndReply(id); break;
                 case "DEL":    sendDelReply(id, m); break;
                 case "MKDIR":  sendMkdirReply(id, m); break;
                 case "RMDIR":  sendRmdirReply(id, m); break;
@@ -842,6 +863,87 @@ public final class DebugServer implements AutoCloseable {
         if (t instanceof java.nio.file.DirectoryNotEmptyException) return "INVALID_PARAM";
         if (t instanceof IllegalStateException) return "INVALID_PATH";   // sandbox escape
         return "INTERNAL_ERROR";
+    }
+
+    /* V7/H8 #617 — LA SUBIDA POR TROZOS (PUT_BEGIN / PUT_DATA / PUT_END, #294), con la regla de las placas
+     * (bpvm_repl.c): el fichero, abierto toda la sesión; lo que no termina se BORRA (Eduardo, 1-oct: «si queda la
+     * versión anterior el usuario se va a pensar que tiene el nuevo»), y la acaban los mismos verbos y el cliente que
+     * se va. El IDE sube así todo lo que pasa de 8 KB, y esta VM sólo conocía el PUT de una pieza. La usa sólo el
+     * hilo lector (handleMessage), y su final, el mismo hilo. */
+    private static final java.util.Set<String> ACABAN_LA_SUBIDA = new java.util.HashSet<>(java.util.Arrays.asList(
+            "HELLO", "RUN", "RESET", "PUT", "PUT_BEGIN", "DEL", "MKDIR", "RMDIR", "RENAME", "FORMAT", "SAVE"));
+    private java.io.OutputStream putSalida;      // el fichero abierto; null = no hay subida
+    private java.nio.file.Path    putRuta;
+    private long                  putEsperado, putRecibido;
+
+    private void putBorrar(String porQue) {
+        boolean borrado;
+        try { borrado = java.nio.file.Files.deleteIfExists(putRuta); } catch (Throwable t) { borrado = false; }
+        System.err.println("[DebugServer] put: " + putRuta + " no termino (" + putRecibido + " de " + putEsperado
+                + " B, " + porQue + "): " + (borrado ? "borrado" : "NO SE PUDO BORRAR"));
+    }
+
+    private void putAbortar(String porQue) {
+        if (putSalida == null) return;
+        try { putSalida.close(); } catch (Throwable ignored) { }
+        putSalida = null;
+        putBorrar(porQue);
+    }
+
+    private void sendPutBeginReply(long id, Map<String, Object> m) {
+        String path = Json.getString(m, "path", "");
+        if (path.isEmpty()) {
+            sendError(id, "INVALID_PARAM", "PUT_BEGIN: falta 'path'"); return;
+        }
+        putAbortar("llego otra subida");
+        try {
+            java.nio.file.Path dst = workdirPath(path);
+            java.nio.file.Path parent = dst.getParent();
+            if (parent != null) java.nio.file.Files.createDirectories(parent);
+            putSalida   = new BufferedOutputStream(java.nio.file.Files.newOutputStream(dst));   // crea o trunca
+            putRuta     = dst;
+            putEsperado = Json.getLong(m, "size", 0);
+            putRecibido = 0;
+            sendReply(id, "PUT_BEGIN_REPLY", "\"received\":0");
+        } catch (Throwable e) {
+            sendError(id, codeFor(e), "PUT_BEGIN: " + e.getMessage());
+        }
+    }
+
+    private void sendPutDataReply(long id, Map<String, Object> m, byte[] bulk) {
+        if (!m.containsKey("bulk")) {
+            sendError(id, "INVALID_PARAM", "PUT_DATA: falta bulk"); return;
+        }
+        if (putSalida == null) {   // el bulk ya está leído (readLoop): el cable sigue en sincronía
+            sendError(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return;
+        }
+        byte[] datos = (bulk != null) ? bulk : new byte[0];
+        try {
+            putSalida.write(datos);
+            putRecibido += datos.length;
+            sendReply(id, "PUT_DATA_REPLY", "\"received\":" + putRecibido);
+        } catch (Throwable e) {
+            putAbortar("no se pudo escribir");
+            sendError(id, codeFor(e), "PUT_DATA: " + e.getMessage());
+        }
+    }
+
+    private void sendPutEndReply(long id) {
+        if (putSalida == null) {
+            sendError(id, "NO_SESSION", "PUT_END sin PUT_BEGIN"); return;
+        }
+        boolean falla = false;
+        try { putSalida.close(); } catch (Throwable e) { falla = true; }
+        putSalida = null;
+        if (falla) {
+            putBorrar("no se pudo escribir el final");
+            sendError(id, "INTERNAL_ERROR", "PUT_END: no se pudo cerrar el fichero"); return;
+        }
+        if (putEsperado != 0 && putRecibido != putEsperado) {
+            putBorrar("el tamano no cuadra");   // lo que no está entero, no se queda
+            sendError(id, "SIZE_MISMATCH", "bytes recibidos != size anunciado"); return;
+        }
+        sendReply(id, "PUT_END_REPLY", "\"size\":" + putRecibido);
     }
 
     private void sendPutReply(long id, Map<String, Object> m, byte[] bulk) {
