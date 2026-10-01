@@ -1084,6 +1084,9 @@ la C6, la P4 y la Nucleo.
   Eduardo); la P4, con sus packs vivos en la misma zona.
 - Visto de paso: el lazo de la ESP32 tira sin `FATAL` una línea que no empieza por `{` (la Pico y la STM32 contestan
   `FATAL`): el segundo intento tarda 10 s más en arrancar; funciona igual.
+- **`#602`, cerrada** (`a6f7ff7f`): el bloque de RAM de los motores, en el `INFO` común con los mismos nombres en las
+  cuatro familias (`packRam*`; era la Pico, como `sqlite*`), y el panel del IDE lo pinta como «RAM packs». Visto en
+  las cuatro placas con el cliente del IDE (grabadas con el OK de Eduardo).
 - **Lo que queda de H8**, repasado con Eduardo: el paso 4 de `#495`, `#602`, mirar `#538` en el IDE con una placa y el
   rojo del árbol —decidido por Eduardo: *«En rojo mostrar módulos/packs dañados o con un formato no válido»*—. **`M5` → V8** (Eduardo: *«M5, no entra en V7, lo pasamos a V8. Es una mejora, no es urgente»*).
 
