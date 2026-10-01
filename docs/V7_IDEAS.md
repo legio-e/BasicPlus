@@ -3583,7 +3583,48 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
    la P4, la DK2 y la S3: 64 KB en 1,18 s en la Pico y en 6,15–6,25 s en las de UART. El segundo intento tarda de 4,9 s
    (la Pico y la DK2 contestan `FATAL` en cuanto les llega la basura) a 16,7 s (la P4 y la S3: el lazo de la ESP32 tira
    sin `FATAL` una línea que no empieza por `{`, y el IDE espera sus 10 s de silencio).
-4. **El `GET` y el `LIST` troceados y mezclables** (arriba, la propuesta), con la misma ventana en el otro sentido.
+4. **El `GET` y el `LIST` troceados y mezclables** — la propuesta del 28-sep (arriba), afinada el 1-oct con el código
+   delante y con lo que Eduardo decidió después (un fichero cada vez; un `LIST` o un `print`, entre medias):
+   - **El mensaje no se parte**: `wire_v1_send_msg(línea, bulk)` en cada transporte —la Pico, la ESP32 por UART y por
+     USB-Serial-JTAG, la P4 por TCP, la STM32 y el micro simulado— coge el cerrojo del cable UNA vez y escribe la línea
+     y sus bytes. Hoy el bulk sale sin cerrojo (la Pico lo coge, pero aparte de su línea), y con la VM contestando al
+     depurador desde su hilo, una línea suya podría caer entre la cabecera y los bytes. El micro simulado no tiene
+     cerrojo de cable.
+   - **Lo pide el cliente**: `{"type":"GET","id":7,"path":"/app/x","chunked":true}` → `GET_PART` (`id`, `off`, y un bulk
+     de hasta `putChunk`, 512 B)… y `GET_END` (`id`, `size`, `crc`: el CRC-32 de lo mandado, el mismo de `STAT`). Un
+     error a mitad sale como `ERROR` con ese id —hoy, con el bulk anunciado, no hay forma de decirlo—. Sin `chunked`, el
+     `GET_REPLY` entero de siempre (las herramientas, un IDE viejo); un firmware viejo no mira el campo y contesta
+     entero, y el IDE nuevo acepta las dos formas. **El `LIST`, igual**: `LIST_PART` (las entradas de un directorio; uno
+     grande, en varias) y `LIST_END` (`omitted`). Los nombres, en inglés como el resto del contrato.
+   - **Sin acuse en este sentido** (el plan decía «con la misma ventana en el otro sentido»; mirado, no hace falta): la
+     ventana de la subida protege a quien RECIBE, que allí es la placa —2 KB que no pueden desbordarse mientras escribe
+     en la flash—. En el `GET` recibe el PC: lo lee siempre un hilo del IDE, con sitio de sobra, y cada cable trae su
+     control de flujo (el USB contesta NAK, TCP tiene su ventana, la UART espera al escribir). Un acuse por trozo sólo
+     añadiría idas y vueltas.
+   - **Un trozo por vuelta**: la petición deja una TRANSFERENCIA en el común —el fichero abierto con el cursor de `#491`
+     (el cerrojo del FS, por lectura y no todo el envío), por dónde va y el CRC—, y `bpvm_repl_paso()` manda UN trozo.
+     Lo llaman el lazo del REPL de cada familia (en reposo; mientras quede, sin dormir) y el `poll` del hilo `io`
+     (durante un RUN: entre trozo y trozo sale la salida del programa y llega un `KILL`). Una descarga a la vez
+     (Eduardo: «1 a 1»; una segunda, o una con una subida a medias: `BUSY`), y un listado, que sí puede ir con ella. El
+     `LIST` avanza un directorio por vuelta.
+   - **Durante un RUN** se atienden el `GET` y el `LIST` troceados, `LIST_DIR` y `STAT`. Los enteros siguen con `BUSY`
+     (un `GET` entero dejaría a `io` sin salida ni `KILL` mientras dura), y los que escriben también: escribir donde el
+     programa lee es otra conversación.
+   - **Lo que corta una descarga**: lo mismo que acaba una subida —un `HELLO`, un `RESET`, otra subida, un verbo que
+     escribe en el FS—, con un `ERROR` con su id (`ABORTED`); el `RUN` no, la descarga sigue en `io`. Y si el fichero
+     cambia de tamaño mientras se baja (el programa escribe en él), `GET_END` lo dice (`changed`) y el IDE avisa: lo
+     bajado puede no cuadrar. Lo que cambie sin cambiar de tamaño no se ve: habría que releerlo entero.
+   - **El IDE junta**: guarda lo que llega por id, junta los `GET_PART` por `off` y completa la petición con el
+     `GET_END`, comprobando el tamaño y el CRC. El plazo pasa a ser de SILENCIO (tantos segundos sin un trozo), no del
+     total: hoy un `GET` tiene 10 s, y por una UART a 11 KB/s no baja un fichero de más de ~110 KB.
+   - **La VM-Java**, igual: también sirve `GET` y `LIST`.
+
+   Por partes, cada una cierra algo: (a) `send_msg` en los cinco transportes y el simulado; (b) las transferencias y
+   los verbos troceados en el común, y el paso en el lazo de cada familia; (c) los de lectura durante un RUN; (d) el
+   IDE; (e) la VM-Java. La prueba: en el micro simulado, 60 KB bajados mientras un programa imprime sin parar —la salida
+   no se corta más de un trozo, el `KILL` llega, el fichero llega entero y con su CRC—; y en placa, la DK2 (11 KB/s:
+   donde más dura un `GET`). Lo que hay que medir: la pila del hilo `io` (4 KB en la Pico y la STM32), que pasa a
+   correr el `LIST` con su examen y la lectura del FS.
 
 **La subida que no termina** (1-oct, `ae3ca338`). Medir el paso 1 lo destapó: una subida abandonada (el PC deja de
 mandar, se suelta el cable) dejaba el fichero abierto —uno de los dos huecos del FS— hasta el siguiente `PUT_BEGIN`, y
