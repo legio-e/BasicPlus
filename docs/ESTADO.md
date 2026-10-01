@@ -27,6 +27,9 @@
 
 ## Última sesión
 
+> **1-oct** — el traspaso, más abajo: «🌙 TRASPASO (1-oct, al acabar)». H7, H11 y H8 cerrados ese día; quedan H9, H10 y
+> H12.
+
 ## 🧱 H1 (19-sep) — las seis de V10 en el compilador, cerradas: `#522` `#527` `#528` `#529` `#532` y `#517` de rebote
 
 Sesión corta de créditos (sin agentes): todo a mano, sample por sample, verificando el artefacto en las dos VMs.
@@ -1067,6 +1070,34 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🌙 TRASPASO (1-oct, al acabar) — tres hitos cerrados hoy (H7, H11 y H8); quedan H9, H10 y H12
+
+Eduardo: *«Quedan H9, H10 y H12 (el 25 %). Hoy hemos cerrado 3 hitos así que muy bien»*.
+
+**Cerrado hoy** (el detalle, en `FICHAS` y en las entradas de abajo):
+- **H7** (`b0bc3164`, con la S3 en la mesa) y **H11** (Eduardo).
+- **H8** (Eduardo): `#495` con sus cuatro pasos —el búfer de ficheros, el de comunicaciones por placa, el trozo y la
+  ventana en el `HELLO` con el segundo intento del IDE, y el `GET` y el `LIST` troceados y mezclables con los de lectura
+  durante un RUN—; `#602` (el bloque de RAM de los motores en el `INFO` común); `E1` (el rojo del árbol); `#617` (la
+  VM-Java sube por trozos y vuelve a escuchar); `#538`, visto por Eduardo en el IDE con una placa; y `#618` después (el
+  cliente del IDE lee del puerto lo que haya). `M5`, a V8.
+
+**Queda** (las filas de `FICHAS`): **H9** (pruebas y medida), **H10** (placas y drivers) y **H12** (los dos núcleos: al
+final de V7, y reversible).
+
+**Las placas**: la C5 (COM6) y la P4 (COM15), conectadas; la Pico (COM22), la DK2 (COM12) y la S3 (COM9),
+desconectadas. Todas con la imagen de `be628ee3`. La Nucleo, desconectada desde el paso 2 de `#495`.
+
+**Lo que acecha**:
+- El cliente serie del IDE de `#618` (lee lo que haya) se probó en la C5 y la P4; en la Pico, la DK2 y la S3, no (estaban
+  desconectadas). La Pico es USB rápido como la C5: es la que más gana y la primera a mirar.
+- La RX por DMA de la STM32 (`#495` paso 2) sólo se ha visto en la DK2; en la Nucleo (el mismo USART1 y el mismo DMA),
+  nunca.
+- Si el IDE se cierra a media descarga troceada y entra una herramienta (`tanda.py`, `wire_serie.py`), le pueden llegar
+  restos de trozos con bulk antes de que su `HELLO` corte la descarga: sólo leen bulk tras un `GET_REPLY`. Toleran
+  ruido; no visto, anotado.
+- Un IDE abierto con el jar de antes de `34167432` puede fallar bajando de la C5, la C3 o la C6: reiniciarlo.
 
 ## 🔌 (1-oct, noche) — la C5 grabada con el paso 4 (con el OK de Eduardo), y `#618` (`34167432`)
 
