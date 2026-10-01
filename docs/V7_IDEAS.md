@@ -3278,7 +3278,7 @@ Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo
 | | hilos del SO | quién los reparte | los hilos BP |
 |---|---|---|---|
 | **un núcleo** (la C3, la C5, la C6, las STM32) | `io` y `run1` | el RTOS, uno tras otro | `run1` los recorre en rueda, un cuanto cada uno |
-| **dos núcleos** (la Pico, la Metro, las dos P4) | `io`, `run1` y `run2` | los dos núcleos toman el siguiente listo, sin anclar | `run1` y `run2` sacan de la MISMA cola |
+| **dos núcleos** (la Pico, la Metro, las dos P4 y la S3) | `io`, `run1` y `run2` | los dos núcleos toman el siguiente listo, sin anclar | `run1` y `run2` sacan de la MISMA cola |
 
 Sin programa, una VM mira la cola, la ve vacía y cede el núcleo.
 
@@ -3306,8 +3306,9 @@ workers como cola de hilos de SO en vez de N fijos»):
   esperar en la cola —dormida hasta que llegue un hilo BP, sin gastar, a cambio de la latencia de despertar—. Es la
   medida que el índice ya pedía antes de decidir (y el bajo consumo de V8 preferirá la segunda).
 
-**Para decidir en H12**: la S3 también tiene dos núcleos (dos LX7) y el índice de H12 la contaba entre las placas de
-la prueba; el modelo nombra la Pico, la Metro y las dos P4. ¿Entra?
+**La S3**: también tiene dos núcleos (dos LX7) y el índice de H12 la contaba entre las placas de la prueba; el modelo
+nombraba la Pico, la Metro y las dos P4. **Decidido por Eduardo** (1-oct, a la pregunta): *sí, con tres hilos*, como
+las demás de dos núcleos.
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
