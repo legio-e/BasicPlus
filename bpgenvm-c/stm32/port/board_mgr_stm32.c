@@ -114,6 +114,15 @@ void board_mgr_stm32_env_temprano(void) {
     env_read_slots(s_env_a, s_env_b);
 }
 
+/* V7/H7 (Boot 2, fase 4) — el ENV ENTERO, de sólo lectura, para el arranque común (las claves
+ * del reparto, los buses, `log=`). Se elige en cada llamada, como los de arriba: las copias A/B
+ * de la RAM son las que leyó el arranque. */
+static bpvm_env_t s_env;
+const bpvm_env_t* board_mgr_stm32_env(void) {
+    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &s_env);
+    return &s_env;
+}
+
 static bpvm_boot_step_t layer_partitions(void* u) {
     (void) u;
     bpvm_boot_step_t r; r.ok = 0; r.reason[0] = '\0';

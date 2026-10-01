@@ -106,6 +106,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/bpvm_bus.c            # V7/H6.c G4.a1: los buses SPI/I2C, compartidos (la HAL BP)
     ${BPVM_C_ROOT}/src/bpvm_npack.c          # V5/I: escalera de validacion del pack nativo
     ${BPVM_C_ROOT}/src/bpvm_npack_carga.c    # V7/H7 (Boot 2, fase 2): el cargador comun de los motores
+    ${BPVM_C_ROOT}/src/bpvm_boot2.c          # V7/H7 (Boot 2, fase 4): el arranque comun
     ${BPVM_C_ROOT}/src/bpvm_mdn_scan.c       # V5/H4: buscar el .mdn (FS + pack) en UN sitio
     ${BPVM_C_ROOT}/src/bpvm_nativa.c         # V7/H5 P2b.3: el ejecutor de una native (un hilo, y el testigo)
     ${BPVM_C_ROOT}/src/bpvm_fallo_cm33.c     # V7/H5 P2b.3: el informe de un HardFault, comun con las STM32

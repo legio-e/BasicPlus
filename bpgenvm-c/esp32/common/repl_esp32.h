@@ -40,6 +40,12 @@ void repl_esp32_run(void);
  * Llamar UNA vez, tras wire_v1_transport_init() y antes de repl_esp32_run. */
 void repl_esp32_autorun(void);
 
+/* V7/H7 (Boot 2, fase 4) — registra la cintura del REPL común (bpvm_repl_set_ops), con
+ * el nombre de la placa que diga su identidad. La llama el arranque común antes del
+ * cable y del autorun: un IDE que se conecta con el autorun corriendo saluda, y el
+ * saludo lo contesta el común con esta cintura. */
+void repl_esp32_cintura(void);
+
 /* Identidad de la placa para INFO/HELLO (solo informativo del wire). Por
  * defecto = ESP32-S3; una placa instala la suya con repl_set_board_id() ANTES
  * de arrancar el REPL (p.ej. el ESP32-P4 en p4_board_id.c). No tocar el default

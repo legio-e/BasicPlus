@@ -1,0 +1,202 @@
+/*
+ * test_boot2.c — V7/H7 (Boot 2, fase 4): el ARRANQUE COMÚN (bpvm_boot2), en el PC.
+ *
+ * Una familia de mentira que APUNTA lo que se le llama, en orden, y una escalera que
+ * se queda donde diga cada caso: sana, sin FS, sin VM, virgen, ganchos NULL. Se mira el
+ * ORDEN (la cintura del REPL antes del cable y del autorun; la zona antes de /lib), las
+ * PUERTAS de cada capa (con el FS, la zona, /lib y montar la SD; con la app sana, el
+ * autorun) y las claves del ENV (`stack=`, `log=`), que la P4 por TCP no aplicaba.
+ *
+ * La SD de la placa (bpvm_sd_placa.c) es capa de placa y no va en la lib del host: sus
+ * dos funciones, de mentira, apuntan también.
+ *
+ *   make test-boot2
+ */
+#include "bpvm_boot2.h"
+#include "bpvm.h"
+#include "bpvm_log.h"
+#include "bpvm_sd_placa.h"
+
+#include <stdio.h>
+#include <string.h>
+
+static int g_fail = 0;
+#define CHECK(cond, msg) do { \
+    if (cond) { printf("  ok  : %s\n", msg); } \
+    else      { printf("  FAIL: %s\n", msg); g_fail++; } \
+} while (0)
+
+/* ── lo que se llama, en orden ── */
+static char g_traza[512];
+static void apunta(const char* paso) {
+    if (g_traza[0]) strncat(g_traza, " ", sizeof g_traza - strlen(g_traza) - 1);
+    strncat(g_traza, paso, sizeof g_traza - strlen(g_traza) - 1);
+}
+
+/* ── la SD de la placa, de mentira ── */
+static int g_sd_registrada = 0;
+int  bpvm_sd_placa_hay(void)             { return g_sd_registrada; }
+void bpvm_sd_placa_montar_arranque(void) { apunta("sd_montar"); }
+
+/* ── el log, en RAM; los volcados a la flash se cuentan ── */
+static uint8_t g_region[8192];
+static int     g_volcados = 0;
+static int  log_leer(uint8_t* dst, uint32_t len)        { (void) dst; (void) len; return -1; }
+static int  log_escribir(const uint8_t* s, uint32_t n)  { (void) s; (void) n; g_volcados++; return 0; }
+static char g_log[8192];
+static void log_a_buffer(const char* d, size_t n, void* u) {
+    (void) u;
+    size_t ya = strlen(g_log);
+    if (ya + n >= sizeof g_log) n = sizeof g_log - 1 - ya;
+    memcpy(g_log + ya, d, n);
+    g_log[ya + n] = '\0';
+}
+static int en_log(const char* s) {
+    g_log[0] = '\0';
+    log_dump(log_a_buffer, NULL);
+    return strstr(g_log, s) != NULL;
+}
+
+/* ── el ENV y la escalera de cada caso ── */
+static const char* ENV_TEXTO = "stack=128\nquantum=500\nlog=1\n";
+static bpvm_env_t        g_env;
+static const bpvm_env_t* g_env_ptr = NULL;
+static bpvm_boot_status_t g_st;
+
+static const bpvm_env_t* f_env(void) { apunta("env"); return g_env_ptr; }
+static void f_memoria(void)   { apunta("memoria"); }
+static void f_bios(void)      { apunta("bios"); }
+static const bpvm_boot_status_t* f_subir(void) { apunta("subir"); return &g_st; }
+static int  f_mapear(void)    { apunta("mapear"); return 0; }   /* sin zona: la familia lo diría */
+static void f_stdlib(void)    { apunta("stdlib"); }
+static void f_con_fs(void)    { apunta("con_fs"); }
+static void f_hw(void)        { apunta("hw"); }
+static void f_sd(void)        { apunta("sd"); g_sd_registrada = 1; }
+static void f_identidad(void) { apunta("identidad"); }
+static void f_cintura(void)   { apunta("cintura"); }
+static void f_cable(void)     { apunta("cable"); }
+static void f_autorun(void)   { apunta("autorun"); }
+static void f_repl(void)      { apunta("repl"); }
+
+static const bpvm_boot2_familia_t FAMILIA = {
+    f_env, f_memoria, f_bios, f_subir, f_mapear, f_stdlib, f_con_fs, f_hw, f_sd,
+    f_identidad, f_cintura, f_cable, f_autorun, f_repl
+};
+
+/* La traza sin los `env` (se pide cuando hace falta: no es un paso del orden). */
+static const char* pasos(void) {
+    static char sin[512];
+    const char* p = g_traza;
+    sin[0] = '\0';
+    while (*p) {
+        const char* fin = strchr(p, ' ');
+        size_t n = fin ? (size_t) (fin - p) : strlen(p);
+        if (!(n == 3 && strncmp(p, "env", 3) == 0)) {
+            if (sin[0]) strcat(sin, " ");
+            strncat(sin, p, n);
+        }
+        p += n;
+        while (*p == ' ') p++;
+    }
+    return sin;
+}
+
+static void caso(bpvm_boot_state_t estado, int degradada, const char* motivo, int con_env) {
+    g_traza[0] = '\0';
+    g_sd_registrada = 0;
+    g_volcados = 0;
+    log_clear_ram();
+    bpvm_log_set_enabled(1);
+    bpvm_set_stack_kb(0);
+    g_st.state = estado;
+    g_st.degraded = degradada;
+    snprintf(g_st.reason, sizeof g_st.reason, "%s", motivo);
+    g_env_ptr = con_env ? &g_env : NULL;
+}
+
+int main(void) {
+    printf("=== test_boot2 (V7/H7 fase 4: el arranque comun) ===\n");
+    bpvm_log_cintura_t c = { NULL, log_leer, log_escribir, g_region, sizeof g_region };
+    bpvm_log_init(&c);
+    g_env.payload = (const uint8_t*) ENV_TEXTO;
+    g_env.payload_len = (uint16_t) strlen(ENV_TEXTO);
+    g_env.seq = 1;
+    g_env.valid = 1;
+    const size_t MB = 1024u * 1024u;
+
+    printf("--- 1. la placa sana: todo, en su orden ---\n");
+    caso(BPVM_BOOT_APP, 0, "", 1);
+    bpvm_boot2_repartir(&FAMILIA);
+    CHECK(strcmp(pasos(), "memoria bios") == 0, "2a: la memoria y la BIOS");
+    CHECK(bpvm_stack_region_bytes(MB) == 128u * 1024u, "2a: stack=128 del ENV, aplicado ANTES de la memoria");
+    g_traza[0] = '\0';
+    bpvm_boot2_subir(&FAMILIA);
+    printf("       %s\n", pasos());
+    CHECK(strcmp(pasos(), "subir mapear stdlib con_fs hw sd sd_montar identidad cintura cable autorun repl") == 0,
+          "2b: subir, la zona, /lib, lo del FS, hw, la SD, la identidad, la CINTURA, el cable, el autorun, el REPL");
+    CHECK(en_log("boot: estado 3 (app)") && !en_log("DEGRADADO"), "la linea del arranque, una para todas");
+    CHECK(!en_log("autorun: no se mira"), "sana: el autorun no se excusa");
+    CHECK(g_volcados == 1, "el log del arranque, a la flash UNA vez");
+    CHECK(bpvm_log_enabled() == 1, "log=1 del ENV, aplicado al final (la P4 por TCP no lo hacia)");
+
+    printf("--- 2. sin FS: ni zona, ni /lib, ni montar la SD, ni autorun ---\n");
+    caso(BPVM_BOOT_PARTITIONS, 1, "littlefs no monta ni formatea", 1);
+    bpvm_boot2_subir(&FAMILIA);
+    printf("       %s\n", pasos());
+    CHECK(strcmp(pasos(), "subir hw sd identidad cintura cable repl") == 0,
+          "sin FS: lo del kernel sigue; la zona, /lib, montar la SD y el autorun, no");
+    CHECK(en_log("boot: estado 1 (particiones) DEGRADADO: littlefs no monta"), "el estado y el motivo");
+    CHECK(en_log("packs: la zona no se monta sin el FS"), "la zona dice por que no");
+    CHECK(en_log("sd: el FS de la placa no esta montado"), "la SD registrada dice por que no se monta");
+    CHECK(en_log("autorun: no se mira") && en_log("(estado 1, degradada)"), "y el autorun, por que no se mira");
+
+    printf("--- 3. sin VM (el FS si): la zona y /lib si, el autorun no (la STM32 lo corria) ---\n");
+    caso(BPVM_BOOT_FS, 1, "heap de la VM no disponible", 1);
+    bpvm_boot2_subir(&FAMILIA);
+    printf("       %s\n", pasos());
+    CHECK(strcmp(pasos(), "subir mapear stdlib con_fs hw sd sd_montar identidad cintura cable repl") == 0,
+          "sin VM: todo menos el autorun");
+    CHECK(en_log("(estado 2, degradada)"), "el autorun dice por que no");
+
+    printf("--- 4. virgen (sin ENV): el suelo, y las claves por defecto ---\n");
+    caso(BPVM_BOOT_KERNEL, 1, "sin particiones en el env", 0);
+    bpvm_boot2_repartir(&FAMILIA);
+    bpvm_boot2_subir(&FAMILIA);
+    CHECK(strcmp(pasos(), "memoria bios subir hw sd identidad cintura cable repl") == 0, "virgen: el kernel y el REPL");
+    CHECK(bpvm_stack_region_bytes(MB) == 256u * 1024u, "sin ENV, el reparto de siempre (25 %)");
+    CHECK(bpvm_log_enabled() == 0, "sin ENV, el log de ejecucion apagado (#423)");
+
+    printf("--- 5. ganchos NULL: lo que la familia no tiene, o hizo en su Boot 1 ---\n");
+    {
+        bpvm_boot2_familia_t poca;
+        memset(&poca, 0, sizeof poca);
+        poca.env = f_env; poca.subir = f_subir; poca.repl = f_repl;
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        bpvm_boot2_repartir(&poca);
+        bpvm_boot2_subir(&poca);
+        printf("       %s\n", pasos());
+        CHECK(strcmp(pasos(), "subir sd_montar repl") == 0,
+              "sin ganchos: subir, montar la SD (es del comun) y el REPL, sin caerse");
+        CHECK(en_log("stdlib: esta imagen no trae la stdlib embebida"), "/lib que falta, dicho");
+        CHECK(bpvm_stack_region_bytes(MB) == 128u * 1024u, "las claves, igual");
+    }
+    {
+        bpvm_boot2_familia_t nada;
+        memset(&nada, 0, sizeof nada);
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        bpvm_boot2_subir(&nada);
+        CHECK(en_log("boot: estado 0 (kernel) DEGRADADO: la familia no da sus capas"),
+              "sin capas: el suelo, y lo dice");
+    }
+
+    printf("--- 6. bpvm_boot2_claves sola (la usa el micro simulado) ---\n");
+    bpvm_set_stack_kb(0);
+    bpvm_boot2_claves(&g_env);
+    CHECK(bpvm_stack_region_bytes(MB) == 128u * 1024u, "stack= del ENV");
+    bpvm_set_stack_kb(0);
+    bpvm_boot2_claves(NULL);
+    CHECK(bpvm_stack_region_bytes(MB) == 256u * 1024u, "sin ENV no toca nada");
+
+    printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
+    return g_fail == 0 ? 0 : 1;
+}

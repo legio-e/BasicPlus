@@ -26,6 +26,8 @@ struct bpvm_ancla;
 const struct bpvm_bios*  bios_esp32_get(void);
 /* El ancla, para que el arranque compare lo que ENCUENTRA con lo que SABE. */
 const struct bpvm_ancla* bios_esp32_ancla(void);
+/* V7/H7 (Boot 2, fase 4): el gancho `bios` del arranque común — la verifica y lo dice. */
+void bios_esp32_verificar(void);
 
 /*
  * ─── LO QUE OCUPA UN MOTOR, Y DE DÓNDE SALÍAN LOS 16 KB ───

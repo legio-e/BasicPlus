@@ -29,7 +29,7 @@
 #include "bpvm_bios.h"         /* bpvm_bios_slot_count */
 #include "board_mgr_esp32.h"   /* H9: arranque escalonado + estado del boot */
 #include "bpvm_pack.h"          /* V7/H7 (Boot 2, fase 1): el montaje de la zona y su estado, comunes */
-#include "bpvm_bus.h"          /* V7/H6.c G4.a1: los buses del ENV */
+#include "bpvm_boot2.h"        /* V7/H7 (Boot 2, fase 4): el arranque común, con los ganchos de aquí */
 #include "bpvm_env.h"
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
 #include "esp_heap_caps.h"     /* H11: el heap de la VM se pide en runtime, no es .bss */
@@ -221,10 +221,72 @@ static const uint8_t* vista_ejecutable_ram(const uint8_t* p) {
     return p;
 }
 
-/* V7/H6.c G4.a1 — el ENV de la placa con la regla de siempre (entero o nada). */
-static int env_de_la_placa(const char* clave, char* buf, size_t cap) {
-    return bpvm_env_get_exacto(board_mgr_env(), clave, buf, cap);
+/* ===== V7/H7 (Boot 2, fase 4) — LOS GANCHOS DE LA FAMILIA ESP32 ==================
+ * El orden, la capa que pide cada paso y las reglas (con el FS, la zona y /lib; con la app
+ * sana, el autorun) son del arranque común (src/bpvm_boot2.c). Aquí, sólo lo que es de
+ * estos silicios (S3, C3, C5 y C6; la P4, en su main). */
+
+/* 2a — la memoria. El bloque de RAM del código nativo, ANTES que el heap de la VM: la
+ * dirección tiene que ser la misma en cada arranque (es el sello del pack). Luego el heap
+ * de la VM (layer_app lo comprueba al subir). Y #565: el código nativo fundido en el
+ * `.mod` se ejecuta desde ese heap, y en la C3 la SRAM tiene dos direcciones: se salta
+ * por la del bus de instrucciones (en la C5 y la C6 son la misma: la identidad; el `.mdn`
+ * suelto del FS no pasa por aquí: repl_esp32.c lo copia con MALLOC_CAP_EXEC). */
+static void esp32_memoria(void) {
+    pack_esp32_ram_init();
+    vm_buffer_init();
+    bpvm_mdn_set_vista_ejecutable(vista_ejecutable_ram);
 }
+
+/* 2b — subir: la flash que dice el chip, las particiones del env, el FS y la VM. */
+static const bpvm_boot_status_t* esp32_subir(void) {
+    board_mgr_esp32_boot();
+    return board_boot_status();
+}
+
+/* 2b — lo de la familia que pide el FS: la fachada de ficheros de BP (#247) y el cargador
+ * de los motores nativos (V7/H6), que BUSCA el ancla y SALTA en el primer `Run`, no aquí. */
+static void esp32_con_fs(void) {
+    fs_register_bpvm();
+    repl_set_packs_loader(pack_esp32_cargar);
+}
+
+/* 2b — la SD: la registra el chip (`chip_cfg.h`: la C5, su TF por SPI; el S3, el C3 y la
+ * C6, el porqué no). La monta el común con el FS, después de los buses. */
+static void esp32_sd(void) {
+    CHIP_SD_REGISTRAR();
+}
+
+/* 2b — la identidad de placa, si este silicio trae la suya (V6/P1.C3.3). Por defecto el
+ * REPL reporta la del S3, y eso es lo que hay que pisar: sin esto el C3 saludaba como
+ * `bpvm-esp32` y anunciaba los GPIOs y la SRAM de otro chip. Va por el `chip_cfg.h` y no por
+ * un símbolo weak: en ESP-IDF el `.o` de un componente no entra si nadie lo referencia. */
+static void esp32_identidad(void) {
+    CHIP_INSTALAR_BOARD_ID();
+}
+
+/* 2b — el cable: UART0 (el puente USB-UART) o el USB-Serial-JTAG, según el chip. */
+static void esp32_cable(void) {
+    wire_v1_transport_init();
+    printf("[boot] REPL wire v1 escuchando en %s.\n", wire_v1_transport_name());
+}
+
+static const bpvm_boot2_familia_t s_boot2 = {
+    .env          = board_mgr_env,
+    .memoria      = esp32_memoria,
+    .bios         = bios_esp32_verificar,
+    .subir        = esp32_subir,
+    .mapear_packs = board_mgr_esp32_mapear_packs,
+    .stdlib       = esp32_mods_install,
+    .con_fs       = esp32_con_fs,
+    .hw           = esp32_hw_register,
+    .sd           = esp32_sd,
+    .identidad    = esp32_identidad,
+    .cintura      = repl_esp32_cintura,
+    .cable        = esp32_cable,
+    .autorun      = repl_esp32_autorun,
+    .repl         = repl_esp32_run,
+};
 
 void app_main(void)
 {
@@ -248,114 +310,13 @@ void app_main(void)
                ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
                : "log: arranque en frio (cargado de flash)");
 
-
-    /* V7/H6 — el bloque de RAM del código nativo, ANTES que el heap de la VM
-     * (la dirección tiene que ser la misma en cada arranque: el sello del pack). */
-    pack_esp32_ram_init();
-    /* El heap de la VM, ANTES del climb: layer_app comprueba s_vm_buffer. */
-    vm_buffer_init();
-    /* #565 — el código nativo fundido en el `.mod` se ejecuta desde ese heap, y en
-     * la C3 la SRAM tiene dos direcciones: se salta por la del bus de
-     * instrucciones. En la C5 y la C6 son la misma y esto es la identidad. (El
-     * `.mdn` suelto del FS no pasa por aquí: repl_esp32.c lo copia con
-     * MALLOC_CAP_EXEC, que ya da esa vista.) */
-    bpvm_mdn_set_vista_ejecutable(vista_ejecutable_ram);
-
-    /* H9 — arranque escalonado: identidad → particiones del env → FS → VM. Sin
-     * particiones/FS el climb se queda abajo y el host conduce (nada se
-     * auto-inicializa); stdlib solo con el FS montado. */
-    board_mgr_esp32_boot();
-
-    /* V6 (8-sep) — MAPEAR LA ZONA DE PACKS. Va aqui, despues de que el arranque
-     * sepa sus particiones, y sirve a S3, C3 y C6 (el P4 lo hace desde su propio
-     * main, que tiene mas cosas que ordenar).
-     *
-     * V7/H6 (#468) — y ANTES que la stdlib: el instalador pregunta a la zona qué
-     * sirve ya con los mismos bytes que la imagen, para no poner en /lib una copia
-     * que la taparía. Montarla sólo pide las particiones, no el FS.
-     *
-     * Hasta hoy esto no existia fuera del P4, y el C6 se quedaba sin packs sin
-     * ninguna razon de silicio: comparte `SOC_MMU_DI_VADDR_SHARED` con el P4 y el
-     * codigo del mapeo vivia en el directorio de al lado. El S3 y el C3 no lo
-     * comparten, y el montaje admite dos vistas por si el mapeo devolviera dos
-     * direcciones — pero medido (9-sep en los dos, 25-sep en el C3: `INST ok
-     * @0x4208c000 | DATA ok @0x4208c000`) devuelve la MISMA. Lo que sí tiene dos
-     * direcciones en el C3 es la SRAM, y eso es `#565` (arriba).
-     *
-     * Si no hay zona, dice por que y se sigue: una placa sin packs arranca igual.
-     *
-     * V7/H7 (Boot 2, fase 1) — la regla y el estado, comunes (bpvm_pack_montar_arranque):
-     * se monta CON EL FS (Eduardo, 30-sep; antes aquí bastaban las particiones), y se dice
-     * el estado de la zona —lista, o el «casi»: sin formatear o con la cadena rota—. */
-    (void) bpvm_pack_montar_arranque(board_boot_status()->state >= BPVM_BOOT_FS,
-                                     board_mgr_esp32_mapear_packs, diag_al_log);
-    if (board_boot_status()->state >= BPVM_BOOT_FS) {
-        fs_register_bpvm();    /* #247 — file I/O desde BP sobre este FS */
-        esp32_mods_install();  /* stdlib core embebida -> /lib, salvo lo que ya sirva la zona (#468) */
-    }
-    /* V7/H6 — el pack NATIVO, para los cinco micros: BUSCAR el ancla y SALTAR se
-     * hace en el primer `Run` (repl_esp32.c), no aquí; y la tabla BIOS se
-     * verifica SIEMPRE, haya pack o no, y DICE QUE SÍ: callar al ir bien no
-     * distingue «completa» de «esta línea no se ejecutó». */
-    if (board_boot_status()->state >= BPVM_BOOT_FS) repl_set_packs_loader(pack_esp32_cargar);
-    log_printf("bios: tabla %s (%d ranuras)",
-               bios_esp32_get() ? "COMPLETA" : "INCOMPLETA", bpvm_bios_slot_count());
-    esp32_hw_register();   /* backends de HW (GPIO, pico/info) — siempre */
-    /* V7/H6.c G4.a1 — los buses que la placa DECLARA en su ENV (`spi2=sck:6,mosi:7,miso:8`,
-     * `i2c0=sda:0,scl:1,khz:400`): sus pines quedan reservados desde el arranque, y los que
-     * vengan detrás (un programa, un pack, la TF) se enganchan a esa configuración o reciben
-     * un error con nombre (V7_IDEAS §H6.11). Después de registrar el hardware: la tabla de
-     * capacidades dice qué buses existen. */
-    bpvm_bus_desde_env(env_de_la_placa);
-    /* V7/H3 SD.3 — la SD de la placa: la registra el chip (`chip_cfg.h`: la C5, su TF por SPI; el S3, el C3 y la
-     * C6, el porqué no) y el común la monta con las reglas de todas las placas. DESPUÉS de los buses, porque la
-     * línea corta (`sd=bus:2,cs:23`) se engancha a uno de ellos; y con el FS de la placa, que es donde se cuelga
-     * `/sd`. Un fallo no degrada el arranque. */
-    CHIP_SD_REGISTRAR();
-    if (board_boot_status()->state >= BPVM_BOOT_FS) bpvm_sd_placa_montar_arranque();
-    /* V6/P1.C3.3 — la identidad de placa, si este silicio trae la suya.
-     *
-     * Por defecto el REPL reporta la del S3 (`s_default_board` en
-     * `repl_esp32.c`), y eso es lo que hay que pisar: sin esto el C3 saludaba
-     * como `bpvm-esp32` y anunciaba los GPIOs y la SRAM de otro chip. Mismo bug
-     * que `U3.19` cazó en el P4. Va por el `chip_cfg.h` —el mecanismo que ya
-     * tenemos para lo que cambia por silicio— y no por un símbolo weak, porque
-     * en ESP-IDF el `.o` de un componente no entra si nadie lo referencia. */
-    CHIP_INSTALAR_BOARD_ID();
-    wire_v1_transport_init();
-
-    printf("[boot] REPL wire v1 escuchando en %s.\n", wire_v1_transport_name());
-
-    /* P-autorun (#256) — si /sys/auto.txt existe, arranca la app antes
-     * del REPL. El wire ya está vivo y el poll del run atiende
-     * HELLO/KILL: el IDE puede conectar y parar la app en cualquier
-     * momento. */
-    /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
-     *
-     * El arranque entero queda registrado SIEMPRE: son unas quince lineas y no
-     * llenan nada, y son justo las que hacen falta cuando una placa no arranca.
-     * Lo que se apaga es el rastro de EJECUCION — el que llena la region de
-     * 8 KB en ~26 colectas del GC y hacia que un cuelgue no dejara su ultimo
-     * momento escrito (#423).
-     *
-     * Por defecto APAGADO: se enciende con `log=1` en el entorno cuando se va a
-     * depurar, que es lo que pidio Eduardo. Para moverlo mas arriba, basta con
-     * subir esta llamada: todo lo que quede por encima se registra siempre. */
-    /* `stack=N` (KB) — el usuario reparte el bloque entre pilas y heap;
-     * ausente o 0 = el reparto de siempre. Mismo sitio y misma clave que
-     * en las otras familias: la regla vive en bpvm_stack_region_bytes(). */
-    bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(board_mgr_env(), "stack", 0));
-    bpvm_set_quantum_ops(bpvm_env_get_long(board_mgr_env(), "quantum", 0));   /* #462 */
-    bpvm_log_set_enabled(bpvm_env_get_bool(board_mgr_env(), "log", 0));
-
-    /* #464 — EL `if` ESTABA SIN LLAVES y se comía la línea equivocada.
-     *
-     * Estaba escrito como en el P4 pero repartido en varias líneas, con catorce
-     * de comentario en medio: el `if` gobernaba `bpvm_set_stack_kb` —que debe
-     * aplicarse SIEMPRE— y dejaba `repl_esp32_autorun()` incondicional, que es
-     * justo lo contrario de lo que dice su propio comentario. Los dos efectos,
-     * cambiados. El P4 lo tiene bien y en una sola línea; se copia esa forma. */
-    if (board_boot_status()->state == BPVM_BOOT_APP && !board_boot_status()->degraded)
-        repl_esp32_autorun();   /* H9: autorun solo con la placa sana en estado 3 */
-    repl_esp32_run();   /* no retorna */
+    /* V7/H7 (Boot 2, fase 4) — AQUÍ ACABA EL BOOT 1 DE LA FAMILIA: el log, y el ENV a la
+     * vista (las claves del reparto y la memoria lo leen; `pack_esp32_ram_init` lo cargaba
+     * por su cuenta, y lo sigue haciendo: es idempotente). Lo demás es el arranque común,
+     * con los ganchos de arriba: 2a reparte (`stack=`, `quantum=`, la memoria y la BIOS) y
+     * 2b sube (las capas, la zona, /lib, el hardware, los buses, la SD, la identidad, la
+     * cintura del REPL, el cable, `log=`, el autorun con la placa sana y el REPL). */
+    board_mgr_esp32_env_temprano();
+    bpvm_boot2_repartir(&s_boot2);
+    bpvm_boot2_subir(&s_boot2);   /* no vuelve: acaba en el REPL */
 }

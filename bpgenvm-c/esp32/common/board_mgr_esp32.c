@@ -477,14 +477,8 @@ void board_mgr_esp32_boot(void) {
              bpvm_boot_state_name(s_boot.state),
              s_boot.degraded ? " DEGRADADO: " : "",
              s_boot.degraded ? s_boot.reason : "");
-    /* Al log PERSISTENTE también: la consola se pierde al desconectar y en el P4
-     * puede ni existir. Si el climb se queda corto, el porqué sobrevive al reset
-     * y se lee luego con LOG_DUMP desde el IDE — que es para lo que está. */
-    log_printf("boot: estado %d (%s)%s%s", (int) s_boot.state,
-               bpvm_boot_state_name(s_boot.state),
-               s_boot.degraded ? " DEGRADADO: " : "",
-               s_boot.degraded ? s_boot.reason : "");
-    log_flush();
+    /* Al log PERSISTENTE lo dice el arranque común (V7/H7, Boot 2 fase 4: una línea para
+     * todas las familias), y lo vuelca a la flash antes del autorun. */
 }
 
 /* ── ramo del wire (STATE/ENV_x/PART_x): repl_esp32 encamina aquí ── */

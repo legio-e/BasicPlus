@@ -1223,14 +1223,21 @@ static void handle_request(const char* line, int len) {
     }
 }
 
+/* V7/H7 (Boot 2, fase 4) — la cintura, la registra el arranque común ANTES del cable y
+ * del autorun. Se registraba al entrar al REPL —o sea DESPUÉS del autorun—, y un IDE que
+ * se conectaba con el autorun corriendo recibía «HELLO: este firmware no ha registrado su
+ * cintura de REPL» al saludar. La identidad ya está puesta (va antes). */
+void repl_esp32_cintura(void) {
+    s_repl_ops.server_name = s_board_id->server_name;   /* S3 o P4: lo dice la placa */
+    bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3: la cintura, antes del primer mensaje */
+}
+
 void repl_esp32_run(void) {
     /* #329 — igual que el Pico ("REPL entry (wire v1)"): marca la frontera entre
      * el arranque y el diálogo con el IDE. Si el log se corta antes de esta
      * línea, el problema es de boot; si aparece, la placa estaba escuchando y lo
      * que venga después es del comando. También deja a la vista el tamaño del
      * buffer de bulk, que es distinto por placa (S3 48K / P4 64K). */
-    s_repl_ops.server_name = s_board_id->server_name;   /* S3 o P4: lo dice la placa */
-    bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3: la cintura, antes del primer mensaje */
     log_printf("REPL entry (wire v1) — buffer de bulk %u B", (unsigned) sizeof(s_put_buf));
     log_flush();
     for (;;) {

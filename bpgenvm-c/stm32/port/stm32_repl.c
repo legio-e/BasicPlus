@@ -18,7 +18,8 @@
 #include "stm32_wire.h"
 #include "stm32_fs.h"
 #include "board_mgr_stm32.h"  /* H9 — arranque escalonado + STATE/ENV/PART */
-#include "bpvm_bus.h"         /* V7/H6.c G4.a1: los buses del ENV */
+#include "bpvm_boot2.h"       /* V7/H7 (Boot 2, fase 4): el arranque común, con los ganchos de aquí */
+#include "bpvm_sd_placa.h"    /* V7/H7 (Boot 2, fase 4): el porqué de no tener SD, al registro común */
 #include "flash_layout_stm32.h" /* BP_ENV_SECTOR: s_put_buf hace de scratch del env */
 #include "bpvm_pack.h"        /* H3 — BPVM_PACK_BURN_CHUNK (bulk del PACK_BURN_DATA) */
 #include "log.h"              /* log persistente de diagnóstico (espejo del Pico) */
@@ -945,25 +946,16 @@ static void stm32_mem_planificar(void) {
         log_printf("packs: sin bloque de RAM (ni packRam= ni SQLite= en el ENV): un pack nativo no podria cargar");
 }
 
-void stm32_repl_run(void) {
-    /* H9 — arranque ESCALONADO: identidad → particiones del env → FS → VM, parando
-     * en la 1ª capa que falla. Sin particiones/FS el climb se queda abajo y el host
-     * conduce (Gestión de placa: proponer defaults → aplicar → reset). Sustituye al
-     * fs_load() de región fija. */
-    log_init();                     /* recupera el log de la sesión anterior (post-mortem) */
-    /* #439 — y DE DONDE sale lo recuperado: sin esto, un volcado con dos
-     * arranques no distingue «la RAM sobrevivio al reset» de «se cargo de
-     * flash lo que el arranque anterior volco». */
-    log_printf(bpvm_log_origen_ram()
-               ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
-               : "log: arranque en frio (cargado de flash)");
-    board_mgr_stm32_env_temprano(); /* V7/H6 G5.b0 — el ENV antes que el plan: packRam= / SQLite= */
-    stm32_mem_planificar();         /* V6/U6.11 — la línea `vm:` de las cinco placas, al abrir el boot */
-    /* V7/H6 G5.b0 — la BIOS de los packs nativos, VERIFICADA en cada arranque aunque
-     * no haya ninguno grabado (un hueco que sólo se descubre el día que alguien graba
-     * un motor cuesta el doble), y su ANCLA: la búsqueda tiene que dar EXACTAMENTE la
-     * que este firmware conoce; si da otra, la marca está dos veces y un motor leería
-     * punteros de basura. Como la Pico (pico/main.c). */
+/* ===== V7/H7 (Boot 2, fase 4) — LOS GANCHOS DE LA STM32 ==================================
+ * El orden, la capa que pide cada paso y las reglas (con el FS, la zona y /lib; con la app
+ * sana, el autorun —aquí corría SIEMPRE: no miraba si la placa había llegado sana—) son del
+ * arranque común (src/bpvm_boot2.c). Aquí, sólo lo que es de la STM32. */
+
+/* 2a — la BIOS de los packs nativos, VERIFICADA en cada arranque aunque no haya ninguno
+ * grabado (un hueco que sólo se descubre el día que alguien graba un motor cuesta el doble),
+ * y su ANCLA: la búsqueda tiene que dar EXACTAMENTE la que este firmware conoce; si da otra,
+ * la marca está dos veces y un motor leería punteros de basura. Como la Pico (pico/main.c). */
+static void stm32_bios(void) {
     {
         const bpvm_bios_t* bios = bios_stm32_get();   /* él ya loguea qué falta */
         if (bios) log_printf("bios: lista (%d ranuras, v%u)",
@@ -983,39 +975,42 @@ void stm32_repl_run(void) {
                        "-> un pack leeria punteros de basura",
                        (unsigned long) (uintptr_t) hallada, (unsigned long) (uintptr_t) real);
     }
-    /* #353 — lo que dice la VM (deps que faltan, packs, veredicto del guardián
-     * de #339) al log. Aquí el problema era el opuesto al de la Pico: sin un
-     * `_write` retargeteado, el stderr del núcleo se PERDÍA. Esto devuelve al
-     * log los avisos de pack que este port tenía a mano antes de #344. */
-    bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3 g4: la cintura, antes del primer mensaje */
-    bpvm_diag_set_sink(diag_al_log);
-    board_mgr_stm32_boot();
-    const bpvm_boot_status_t* bs = board_boot_status();
-    log_printf("boot: estado %d (%s)%s%s", (int) bs->state, bpvm_boot_state_name(bs->state),
-               bs->degraded ? " DEGRADED: " : "", bs->degraded ? bs->reason : "");
-    /* V7/H6 (#468) — la zona ANTES que la stdlib: el instalador pregunta a la zona qué
-     * sirve ya con los mismos bytes que la imagen. V7/H7 (Boot 2, fase 1) — y con el FS
-     * (Eduardo, 30-sep; antes aquí bastaban las particiones): la regla y el estado de la
-     * zona, comunes. */
-    (void) bpvm_pack_montar_arranque(bs->state >= BPVM_BOOT_FS, board_mgr_stm32_montar_packs,
-                                     stm32_mods_log);
-    /* stdlib core embebida en /lib SOLO con el FS montado (si el climb no llegó al
-     * FS, no hay dónde instalarla; el host configura particiones primero). */
-    if (bs->state >= BPVM_BOOT_FS) {
-        /* V6/U4 — la stdlib embebida a /lib: tabla GENERADA (stm32_mods.c, sólo
-         * datos); bucle y regla (#466) en src/bpvm_mods.c; aquí sólo el put. */
-        stm32_mods_install();
-        stm32_fs_register_bpvm();   /* #247 — readFile/writeFile/... sobre el FS */
-        log_printf("fs: %u/%u bytes usados", (unsigned) fs_used_bytes(),
-                   (unsigned) fs_total_bytes());
-    }
-    stm32_hw_register();            /* backends de HW (GPIO, info de MCU) — siempre */
-#if defined(BPVM_GUI_PACK)
-    stm32_pant_publicar();          /* V7/H6 G5.b: la pantalla, como 'PANT', para el LVGL del pack (como el P4) */
-#endif
-    bpvm_bus_desde_env(board_mgr_stm32_env_get);   /* V7/H6.c G4.a1: los buses del ENV (ver el main del S3) */
-    log_flush();                    /* persiste la historia del boot (post-mortem tras corte) */
+}
 
+/* 2b — subir: particiones del env → FS (sub-rango de la zona de datos) → VM. */
+static const bpvm_boot_status_t* stm32_subir(void) {
+    board_mgr_stm32_boot();
+    return board_boot_status();
+}
+
+/* 2b — lo de la STM32 que pide el FS: la fachada de ficheros de BP (#247) y su línea. */
+static void stm32_con_fs(void) {
+    stm32_fs_register_bpvm();
+    log_printf("fs: %u/%u bytes usados", (unsigned) fs_used_bytes(), (unsigned) fs_total_bytes());
+}
+
+/* 2b — el hardware: los backends (GPIO, la info del MCU) y, con la GUI en un pack, la
+ * pantalla de la DK2 como 'PANT' para su LVGL (V7/H6 G5.b, como el P4). */
+static void stm32_hw(void) {
+    stm32_hw_register();
+#if defined(BPVM_GUI_PACK)
+    stm32_pant_publicar();
+#endif
+}
+
+/* 2b — la SD: el firmware de la STM32 no tiene lector. Se dice, en vez del texto genérico
+ * del registro común (que habla de una línea `sd` del ENV que aquí nadie lee). */
+static void stm32_sd(void) {
+    bpvm_sd_placa_sin_sd("el firmware de la STM32 no tiene lector de SD");
+}
+
+/* 2b — la cintura del REPL común (V6/U3 g4), antes del cable y del autorun. */
+static void stm32_cintura(void) {
+    bpvm_repl_set_ops(&s_repl_ops);
+}
+
+/* 2b — el cable: la UART del wire con su FIFO y, en las placas que lo piden, la RX por IRQ. */
+static void stm32_cable(void) {
     /* FIFO RX/TX (8 bytes): absorbe el hueco de procesado entre la línea JSON
      * y los bytes bulk que la siguen → PUT fiable aunque la CPU vaya lenta.
      * (El fix definitivo del timing es subir el reloj a 160 MHz.) */
@@ -1039,25 +1034,10 @@ void stm32_repl_run(void) {
         snprintf(rc, sizeof(rc), "reset cause: %s", stm32_reset_cause());
         wire_v1_send_cstr(rc);
     }
+}
 
-    /* P-autorun (#256) — el wire ya está vivo: si la app de auto.txt se
-     * queda en bucle, el IDE puede conectar (HELLO) y matarla (KILL). */
-    /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
-     * Mismo punto que en las otras familias: el arranque entero se registra
-     * siempre (son ~15 lineas y hacen falta cuando una placa no arranca) y lo
-     * que se apaga es el rastro de EJECUCION, que es el que llena la region.
-     * Por defecto APAGADO: `log=1` cuando se va a depurar. */
-    /* `stack=N` (KB) — el usuario reparte el bloque entre pilas y heap; ausente
-     * o 0 = el reparto de siempre. Mismo sitio y misma clave que en las otras
-     * familias: la regla vive en bpvm_stack_region_bytes(). Va aquí, ANTES del
-     * primer RUN, que es quien llama a bpvm_init. */
-    bpvm_set_stack_kb((unsigned long) board_mgr_stm32_env_long("stack", 0));
-    bpvm_set_quantum_ops(board_mgr_stm32_env_long("quantum", 0));   /* #462 */
-
-    bpvm_log_set_enabled(board_mgr_stm32_env_bool("log", 0));
-
-    autorun_boot();
-
+/* 2b — el REPL: el lazo del wire, con el latido del LED. No vuelve. */
+static void stm32_lazo(void) {
     uint32_t last_blink = HAL_GetTick();
     for (;;) {
         int c = stm32_wire_getchar();
@@ -1069,4 +1049,47 @@ void stm32_repl_run(void) {
             BOARD_LED_BEAT_TOGGLE();
         }
     }
+}
+
+static const bpvm_boot2_familia_t s_boot2 = {
+    .env          = board_mgr_stm32_env,
+    .memoria      = stm32_mem_planificar,   /* V6/U6.11 — la línea `vm:` de las cinco placas */
+    .bios         = stm32_bios,
+    .subir        = stm32_subir,
+    .mapear_packs = board_mgr_stm32_montar_packs,
+    .stdlib       = stm32_mods_install,
+    .con_fs       = stm32_con_fs,
+    .hw           = stm32_hw,
+    .sd           = stm32_sd,
+    .identidad    = NULL,                   /* la de la placa la dice su cintura (board.h) */
+    .cintura      = stm32_cintura,
+    .cable        = stm32_cable,
+    .autorun      = autorun_boot,
+    .repl         = stm32_lazo,
+};
+
+void stm32_repl_run(void) {
+    /* H9 — arranque ESCALONADO: identidad → particiones del env → FS → VM, parando
+     * en la 1ª capa que falla. Sin particiones/FS el climb se queda abajo y el host
+     * conduce (Gestión de placa: proponer defaults → aplicar → reset). */
+    log_init();                     /* recupera el log de la sesión anterior (post-mortem) */
+    /* #439 — y DE DONDE sale lo recuperado: sin esto, un volcado con dos
+     * arranques no distingue «la RAM sobrevivio al reset» de «se cargo de
+     * flash lo que el arranque anterior volco». */
+    log_printf(bpvm_log_origen_ram()
+               ? "log: RAM SUPERVIVIENTE (lineas de ANTES del reset)"
+               : "log: arranque en frio (cargado de flash)");
+    /* #353 — lo que dice la VM (deps que faltan, packs, veredicto del guardián
+     * de #339) al log. Aquí el problema era el opuesto al de la Pico: sin un
+     * `_write` retargeteado, el stderr del núcleo se PERDÍA. */
+    bpvm_diag_set_sink(diag_al_log);
+    board_mgr_stm32_env_temprano(); /* V7/H6 G5.b0 — el ENV antes que el plan: packRam= / SQLite= */
+
+    /* V7/H7 (Boot 2, fase 4) — AQUÍ ACABA EL BOOT 1 DE LA STM32 (el HAL, los relojes y el RTOS
+     * los puso main(); el log y el ENV, aquí). Lo demás es el arranque común, con los ganchos
+     * de arriba: 2a reparte (`stack=`, `quantum=`, la memoria y la BIOS) y 2b sube (las capas,
+     * la zona, /lib, el hardware, los buses, la cintura del REPL, el cable, `log=`, el autorun
+     * SÓLO con la placa sana y el REPL, que no vuelve). */
+    bpvm_boot2_repartir(&s_boot2);
+    bpvm_boot2_subir(&s_boot2);
 }

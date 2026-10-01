@@ -131,3 +131,11 @@ const bpvm_bios_t* bios_esp32_get(void) {
     }
     return &s_bios;
 }
+
+/* V7/H7 (Boot 2, fase 4) — el gancho `bios` del arranque común, el mismo en las cinco ESP32
+ * (era una línea copiada en el main común y en el de la P4). Y DICE QUE SÍ, no sólo que no:
+ * callar al ir bien no distingue «completa» de «esta línea no se ejecutó». */
+void bios_esp32_verificar(void) {
+    log_printf("bios: tabla %s (%d ranuras)",
+               bios_esp32_get() ? "COMPLETA" : "INCOMPLETA", bpvm_bios_slot_count());
+}

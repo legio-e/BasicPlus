@@ -38,6 +38,7 @@
 #include "bpvm_bus.h"         /* V7/H6.c G4.a1: los buses del ENV */
 #include "bpvm_part.h"        /* H9: particiones derivadas del env */
 #include "bpvm_boot.h"        /* H9: máquina de estados del arranque */
+#include "bpvm_boot2.h"       /* V7/H7 (Boot 2, fase 4): el arranque común, con los ganchos de aquí */
 #include "bpvm_sqlmem.h"
 #include "bpvm_mem.h"
 #include "bpvm_mods.h"      /* #466: la regla del /lib de la imagen, común */        /* V6/U6: el planificador comun de memoria */      /* V5/H: regla del bloque de memoria de la BD */
@@ -1205,145 +1206,13 @@ static bpvm_boot_step_t layer_app(void* u) {
  * desde el INFO (lo responde la task de comms, no esta). Ver bpvm_stack_probe. */
 TaskHandle_t g_vm_task = NULL;
 
-/* V7/H6.c G4.a1 — el ENV de la placa con la regla de siempre (entero o nada). */
-static int env_de_la_placa(const char* clave, char* buf, size_t cap) {
-    return bpvm_env_get_exacto(&s_env, clave, buf, cap);
-}
+/* ===== V7/H7 (Boot 2, fase 4) — LOS GANCHOS DE LA PICO =====================
+ * El orden, la capa que pide cada paso y las reglas (con el FS, la zona y /lib; con la app
+ * sana, el autorun) son del arranque común (src/bpvm_boot2.c). Aquí, sólo lo que es de la
+ * Pico. El hardware y el cable no son ganchos: los pone main(), antes del planificador. */
 
-static void vm_task(void* arg) {
-    (void) arg;
-
-    log_printf("vm_task: started");
-    setvbuf(stdout, NULL, _IONBF, 0);
-    log_printf("vm_task: setvbuf OK");
-
-#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 9
-    /* #292 — nivel 9: LA PELÍCULA EN DIRECTO, un solo flasheo (idea de Eduardo:
-     * "la comunicación es nuestro chivato").
-     *
-     * El truco: ESPERAR a que el USB esté enumerado ANTES de tocar nada. Así el
-     * puerto ya existe cuando llega el fallo, y no se pierde el desenlace. Y de
-     * regalo: panic() del SDK IMPRIME ("*** PANIC ***" + el mensaje, panic.c:65)
-     * — o sea que un hard_assert nos cuenta él mismo qué aserto reventó.
-     *
-     * Cada paso se ANUNCIA antes de darlo: la última línea que veas es el paso
-     * que mató la placa. */
-    /* PAUSA LARGA con cuenta atrás (Eduardo: "necesito que el arranque sea más
-     * lento, que me dé tiempo a abrir el puerto"). No sirve esperar a
-     * stdio_usb_connected(): con PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1 eso es
-     * tud_ready(), que es true en cuanto enumera — no espera a que ABRAS. Así que
-     * esperamos por reloj: 30 s cantando cada segundo. Si ves la cuenta atrás,
-     * la placa está viva y te da tiempo de sobra a abrir el terminal. */
-    for (int s = 30; s > 0; s--) {
-        printf("bringup-9: esperando %2d s antes de tocar nada (abre el puerto)\n", s);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-
-    printf("\n===== bringup-9: arranque paso a paso =====\n");
-    printf("[1] USB listo. A partir de aquí, la ULTIMA linea que veas es la que mata.\n");
-
-    printf("[2] probe JEDEC (flash_do_cmd 0x9F)...\n");
-    unsigned fb = board_desc_probe_flash_bytes();
-    printf("[2] OK -> flash = %u bytes (%u MB)\n", fb, fb / (1024u * 1024u));
-
-    printf("[3] LO QUE VIENE: fs_init() escribe en flash. El board header declara\n");
-    printf("    PICO_FLASH_SIZE_BYTES = %u (%u MB), y el SDK hace hard_assert de que\n",
-           (unsigned) PICO_FLASH_SIZE_BYTES, (unsigned) PICO_FLASH_SIZE_BYTES / (1024u*1024u));
-    printf("    todo flash_range_erase/program caiga DENTRO de ese limite.\n");
-    printf("    Si el FS de esta placa empieza en 0x400000 y el limite son 4MB -> panic.\n");
-    printf("[3] H9: el mount del FS lo conduce el env (particiones derivadas);\n");
-    printf("    este nivel de bringup ya no monta nada por si mismo.\n");
-
-    printf("[4] llamando a board_desc_init() (board.json + sondeo QMI de PSRAM)...\n");
-    board_desc_init();
-    printf("[4] OK -> variante %c, psram %u MB\n", board_desc()->variant,
-           (unsigned)(board_desc()->psram_bytes / (1024u * 1024u)));
-
-    printf("===== TODO EL ARRANQUE SOBREVIVIO =====\n");
-    for (unsigned i = 0; ; i++) {
-        printf("bringup-9 vivo %u (arranque completo OK)\n", i);
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-#endif
-
-#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 26
-    /* #292 — nivel 2.6: parte fs_init() por dentro. Hace SÓLO el primer paso,
-     * el probe JEDEC (board_desc_probe_flash_bytes → flash_do_cmd 0x9F, que
-     * suspende el XIP), y CANTA EL NÚMERO. No escribe el descriptor ni monta
-     * ni formatea nada.
-     *   · Si habla: el JEDEC es inocente y el asesino es escribir/formatear.
-     *     Y de propina sabemos qué tamaño de flash ve la Metro — que es el
-     *     único dato del que cuelga TODO el layout del FS (>4MB → 12 MB de
-     *     volumen; si sale 0 o un valor raro, el descriptor sale mal).
-     *   · Si calla: es el probe JEDEC, y estamos en el #256 otra vez. */
-    for (unsigned i = 0; ; i++) {
-        unsigned fb = board_desc_probe_flash_bytes();
-        printf("bringup-2.6 vivo %u — JEDEC dice flash = %u bytes (%u MB)%s\n",
-               i, fb, fb / (1024u * 1024u),
-               fb == 0 ? "  <-- CERO: JEDEC no reconocido!" : "");
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-#endif
-
-#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 25
-    /* #292 — nivel 2.5: parte el hueco entre el 2 y el 3, que metía DOS cosas
-     * de golpe (scheduler+core1 Y fs_init). Aquí el scheduler YA corre y la
-     * tarea vive, pero NO se ha tocado el FS. Si el 2 habla y el 2.5 calla,
-     * el asesino es el scheduler/core 1, no el FS. Si el 2.5 habla y el 3
-     * calla, es el FS. Una variable cada vez. */
-    for (unsigned i = 0; ; i++) {
-        printf("bringup-2.5 vivo %u (scheduler + vm_task OK, SIN tocar el FS)\n", i);
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-#endif
-
-    /* ===== H9: subida escalonada (unificación 19-jul) =====
-     * 0) Identidad en el SUELO: variante (PACKAGE_SEL) + flash real (JEDEC).
-     *    Hardware puro — sin FS, sin env. */
-    board_desc_early_init();
-
-    /* Env de la ZONA 2, por XIP (sin copia y sin FS): la verdad de la placa. */
-    bpvm_env_pick((const uint8_t*)(XIP_BASE + BP_ENV_A_OFFSET), FLASH_SECTOR_SIZE,
-                  (const uint8_t*)(XIP_BASE + BP_ENV_B_OFFSET), FLASH_SECTOR_SIZE,
-                  &s_env);
-
-    /* PSRAM conducida por el env (`psram=1` ∧ RP2350B → CS=GPIO47), ANTES de
-     * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */
-    board_desc_psram_from_env(bpvm_env_get_bool(&s_env, "psram", 0));
-
-    /* `stack=N` (KB) — el usuario reparte el bloque entre pilas y heap. Ausente
-     * o 0 = el 25% de siempre. Va aquí, con el resto del reparto de memoria, y
-     * ANTES de que nadie pregunte por bpvm_stack_region_bytes(). */
-    bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(&s_env, "stack", 0));
-    bpvm_set_quantum_ops(bpvm_env_get_long(&s_env, "quantum", 0));   /* #462 */
-
-    /* V5/H1 → V7/H3 SD.3 — los pines del lector de SD, en UNA entrada con etiquetas (decisión de Eduardo:
-     * una sola línea es más simple para el usuario que cinco):
-     *
-     *     sd=sck:34,mosi:35,miso:36,cs:39,cd:40      (los de la Metro)
-     *
-     * van al REGISTRO COMÚN de la SD (`bpvm_sd_placa`), que atiende SD_INFO/SD_MOUNT en todas las placas y
-     * monta en el arranque. Aquí SOLO se leen y se registran —o se anota el porqué no, que es la diferencia
-     * entre «esta placa no tiene lector» y «la línea está mal escrita»—: no se toca la tarjeta. */
-    (void) bpvm_sd_blk_registrar_desde_env(&s_env);
-    /* V7/H6.c G4.a1 — los buses que la placa DECLARA en su ENV (`spi2=sck:6,mosi:7,miso:8`,
-     * `i2c0=sda:0,scl:1,khz:400`): sus pines quedan reservados desde el arranque, y los que
-     * vengan detrás (un programa, un pack, la TF) se enganchan a esa configuración o reciben
-     * un error con nombre (V7_IDEAS §H6.11). Después de registrar el hardware: la tabla de
-     * capacidades dice qué buses existen. */
-    bpvm_bus_desde_env(env_de_la_placa);
-
-#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 3
-    /* nivel 3 (H9): identidad + env + psram hechos, SIN tocar el FS aún. */
-    for (unsigned i = 0; ; i++) {
-        printf("bringup-3 vivo %u (identidad: variante %c, flash %u MB, psram %u MB)\n",
-               i, board_desc()->variant,
-               (unsigned)(board_desc()->flash_bytes / (1024u * 1024u)),
-               (unsigned)(board_desc()->psram_bytes / (1024u * 1024u)));
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-#endif
-
+/* 2a — la memoria: DÓNDE va el bloque de los motores y el de la VM (la regla, común). */
+static void pico_memoria(void) {
     /* H7.2.b — si hay PSRAM USABLE (detectada + QPI + RW test OK), el heap de la
      * VM va a la ventana PSRAM (MBs). El resto del firmware no cambia: sólo de
      * dónde sale s_vm_buffer.
@@ -1461,7 +1330,10 @@ static void vm_task(void* arg) {
                        (unsigned)(((uintptr_t) s_vm_buffer - (uintptr_t) &end) / 1024u));
         }
     }
+}
 
+/* 2a — la BIOS de los motores y su ancla, verificadas en cada arranque. */
+static void pico_bios(void) {
     /* V5/I — la tabla BIOS del pack nativo, VERIFICADA aquí aunque no haya
      * ningún pack grabado. El motivo de comprobarla siempre: un hueco que sólo
      * se descubre el día que alguien graba un pack aparece cuando YA estás
@@ -1498,7 +1370,10 @@ static void vm_task(void* arg) {
                        (unsigned long) (uintptr_t) real);
         }
     }
+}
 
+/* 2b — subir: las capas de la Pico (particiones del env → FS → VM). */
+static const bpvm_boot_status_t* pico_subir(void) {
     /* 1)→3): particiones del env → FS → VM. bpvm_boot_climb para en la
      * PRIMERA capa que falla: último estado bueno + motivo (nada se
      * auto-inicializa; sin particiones NO hay FS — norma de Eduardo). */
@@ -1511,19 +1386,11 @@ static void vm_task(void* arg) {
         layers.max_state     = BPVM_BOOT_APP;
         bpvm_boot_climb(&layers, &s_boot);
     }
-    log_printf("boot: estado %d (%s)%s%s", (int) s_boot.state,
-               bpvm_boot_state_name(s_boot.state),
-               s_boot.degraded ? " DEGRADADO: " : "",
-               s_boot.degraded ? s_boot.reason : "");
+    return &s_boot;
+}
 
-    /* V7/H2 (#493) — la zona de packs en el arranque: el STAT por nombre del IDE la
-     * necesita antes del primer RUN. V7/H6 (#468) — y ANTES que la stdlib: el
-     * instalador pregunta a la zona qué sirve ya con los mismos bytes que la imagen.
-     * V7/H7 (Boot 2, fase 1) — la regla (con el FS) y el estado de la zona, comunes; va
-     * FUERA del bloque del FS para que, sin él, se diga por qué no se monta. */
-    (void) bpvm_pack_montar_arranque(s_boot.state >= BPVM_BOOT_FS, pack_pico_montar, pico_mods_log);
-
-    if (s_boot.state >= BPVM_BOOT_FS) {
+/* 2b — lo de la Pico que pide el FS: board.json (el nombre, el LED, el NeoPixel). */
+static void pico_con_fs(void) {
     /* H7.3: overrides de /sys/board.json (name/led/neopixel) — ya con FS. La
      * variante, la flash y la PSRAM vienen del suelo/env, no de aquí. */
     board_desc_init();
@@ -1542,27 +1409,170 @@ static void vm_task(void* arg) {
         }
     }
 
-    /* V6/U4 — la tabla la genera scripts/regen_mods.sh (pico_mods.c: SÓLO datos,
-     * 15 módulos a /lib + el Hello.mod de muestra a /app); el bucle y la regla
-     * (#466: falta → instala; versión anterior o mismo MAGIC con CRC distinto →
-     * repone; más nuevo → deja; /app → sólo si falta) viven en src/bpvm_mods.c.
-     * Aquí ya no hay tabla a mano: la de antes guardaba la longitud por dirección
-     * porque los `_len` eran `extern` de 16 ficheros; ahora es `sizeof` en uno. */
-    pico_mods_install();   /* la zona ya está montada (arriba, antes del bloque del FS) */
-
     log_printf("fs: %d ficheros, %u/%u bytes usados",
                fs_file_count(), (unsigned) fs_used_bytes(),
                (unsigned) fs_total_bytes());
+}
 
-    /* V5/H2 — la tarjeta SD, si la hay. AQUÍ y no antes: /sd se monta ENCIMA de
-     * la fachada, y sin el FS de la placa no hay dónde colgarlo. Y antes del
-     * autoarranque, para que una app encuentre la tarjeta ya montada.
+/* 2b — la SD: la línea `sd` del ENV (SPI), al registro común (V5/H1 → V7/H3 SD.3). Una
+ * sola línea con etiquetas —decisión de Eduardo: más simple para el usuario que cinco—:
+ *
+ *     sd=sck:34,mosi:35,miso:36,cs:39,cd:40      (los de la Metro)
+ *
+ * Aquí SOLO se registran —o se anota el porqué no, que es la diferencia entre «esta placa
+ * no tiene lector» y «la línea está mal escrita»—: no se toca la tarjeta. La monta el común
+ * con el FS, y después de los buses: la línea corta (`sd=bus:2,cs:23`) se engancha a uno. */
+static void pico_sd(void) {
+    (void) bpvm_sd_blk_registrar_desde_env(&s_env);
+}
+
+/* 2b — el cable: el USB está abierto desde main(); aquí sólo el LED de la puesta en marcha. */
+static void pico_cable(void) {
+#ifdef BPVM_PICO_BOOT_LED
+    /* #153 bring-up: llegamos al REPL → boot OK. Apaga el LED que main() encendió antes
+     * del scheduler. Si tras flashear el LED queda ENCENDIDO fijo → el boot se colgó ANTES
+     * de aquí (arranque del scheduler / core 1 / vm_task). Si queda APAGADO → boot llegó al
+     * REPL y un "no conecta" es problema de USB/conexión, no de boot. */
+    led_set(0);
+#endif
+}
+
+static const bpvm_boot2_familia_t s_boot2 = {
+    .env          = board_env,
+    .memoria      = pico_memoria,
+    .bios         = pico_bios,
+    .subir        = pico_subir,
+    .mapear_packs = pack_pico_montar,
+    .stdlib       = pico_mods_install,
+    .con_fs       = pico_con_fs,
+    .hw           = NULL,              /* main(), antes del planificador */
+    .sd           = pico_sd,
+    .identidad    = NULL,              /* la de la Pico la dice su cintura */
+    .cintura      = repl_v1_cintura,
+    .cable        = pico_cable,
+    .autorun      = repl_v1_autorun,
+    .repl         = repl_v1_run,
+};
+
+static void vm_task(void* arg) {
+    (void) arg;
+
+    log_printf("vm_task: started");
+    setvbuf(stdout, NULL, _IONBF, 0);
+    log_printf("vm_task: setvbuf OK");
+
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 9
+    /* #292 — nivel 9: LA PELÍCULA EN DIRECTO, un solo flasheo (idea de Eduardo:
+     * "la comunicación es nuestro chivato").
      *
-     * Las reglas —el pin de detección manda (sin tarjeta no se toca ni el bus)
-     * y un fallo NO degrada el arranque— viven desde V7/H3 en el común
-     * (`bpvm_sd_placa_montar_arranque`), las mismas para todas las placas. */
-    bpvm_sd_placa_montar_arranque();     /* V7/H3 SD.3: las mismas reglas, ahora en el común */
-    }  /* fin estado >= FS (H9): sin particiones/FS no hay board.json/stdlib */
+     * El truco: ESPERAR a que el USB esté enumerado ANTES de tocar nada. Así el
+     * puerto ya existe cuando llega el fallo, y no se pierde el desenlace. Y de
+     * regalo: panic() del SDK IMPRIME ("*** PANIC ***" + el mensaje, panic.c:65)
+     * — o sea que un hard_assert nos cuenta él mismo qué aserto reventó.
+     *
+     * Cada paso se ANUNCIA antes de darlo: la última línea que veas es el paso
+     * que mató la placa. */
+    /* PAUSA LARGA con cuenta atrás (Eduardo: "necesito que el arranque sea más
+     * lento, que me dé tiempo a abrir el puerto"). No sirve esperar a
+     * stdio_usb_connected(): con PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1 eso es
+     * tud_ready(), que es true en cuanto enumera — no espera a que ABRAS. Así que
+     * esperamos por reloj: 30 s cantando cada segundo. Si ves la cuenta atrás,
+     * la placa está viva y te da tiempo de sobra a abrir el terminal. */
+    for (int s = 30; s > 0; s--) {
+        printf("bringup-9: esperando %2d s antes de tocar nada (abre el puerto)\n", s);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    printf("\n===== bringup-9: arranque paso a paso =====\n");
+    printf("[1] USB listo. A partir de aquí, la ULTIMA linea que veas es la que mata.\n");
+
+    printf("[2] probe JEDEC (flash_do_cmd 0x9F)...\n");
+    unsigned fb = board_desc_probe_flash_bytes();
+    printf("[2] OK -> flash = %u bytes (%u MB)\n", fb, fb / (1024u * 1024u));
+
+    printf("[3] LO QUE VIENE: fs_init() escribe en flash. El board header declara\n");
+    printf("    PICO_FLASH_SIZE_BYTES = %u (%u MB), y el SDK hace hard_assert de que\n",
+           (unsigned) PICO_FLASH_SIZE_BYTES, (unsigned) PICO_FLASH_SIZE_BYTES / (1024u*1024u));
+    printf("    todo flash_range_erase/program caiga DENTRO de ese limite.\n");
+    printf("    Si el FS de esta placa empieza en 0x400000 y el limite son 4MB -> panic.\n");
+    printf("[3] H9: el mount del FS lo conduce el env (particiones derivadas);\n");
+    printf("    este nivel de bringup ya no monta nada por si mismo.\n");
+
+    printf("[4] llamando a board_desc_init() (board.json + sondeo QMI de PSRAM)...\n");
+    board_desc_init();
+    printf("[4] OK -> variante %c, psram %u MB\n", board_desc()->variant,
+           (unsigned)(board_desc()->psram_bytes / (1024u * 1024u)));
+
+    printf("===== TODO EL ARRANQUE SOBREVIVIO =====\n");
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-9 vivo %u (arranque completo OK)\n", i);
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#endif
+
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 26
+    /* #292 — nivel 2.6: parte fs_init() por dentro. Hace SÓLO el primer paso,
+     * el probe JEDEC (board_desc_probe_flash_bytes → flash_do_cmd 0x9F, que
+     * suspende el XIP), y CANTA EL NÚMERO. No escribe el descriptor ni monta
+     * ni formatea nada.
+     *   · Si habla: el JEDEC es inocente y el asesino es escribir/formatear.
+     *     Y de propina sabemos qué tamaño de flash ve la Metro — que es el
+     *     único dato del que cuelga TODO el layout del FS (>4MB → 12 MB de
+     *     volumen; si sale 0 o un valor raro, el descriptor sale mal).
+     *   · Si calla: es el probe JEDEC, y estamos en el #256 otra vez. */
+    for (unsigned i = 0; ; i++) {
+        unsigned fb = board_desc_probe_flash_bytes();
+        printf("bringup-2.6 vivo %u — JEDEC dice flash = %u bytes (%u MB)%s\n",
+               i, fb, fb / (1024u * 1024u),
+               fb == 0 ? "  <-- CERO: JEDEC no reconocido!" : "");
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+#endif
+
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 25
+    /* #292 — nivel 2.5: parte el hueco entre el 2 y el 3, que metía DOS cosas
+     * de golpe (scheduler+core1 Y fs_init). Aquí el scheduler YA corre y la
+     * tarea vive, pero NO se ha tocado el FS. Si el 2 habla y el 2.5 calla,
+     * el asesino es el scheduler/core 1, no el FS. Si el 2.5 habla y el 3
+     * calla, es el FS. Una variable cada vez. */
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-2.5 vivo %u (scheduler + vm_task OK, SIN tocar el FS)\n", i);
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+#endif
+
+    /* ===== H9: subida escalonada (unificación 19-jul) =====
+     * 0) Identidad en el SUELO: variante (PACKAGE_SEL) + flash real (JEDEC).
+     *    Hardware puro — sin FS, sin env. */
+    board_desc_early_init();
+
+    /* Env de la ZONA 2, por XIP (sin copia y sin FS): la verdad de la placa. */
+    bpvm_env_pick((const uint8_t*)(XIP_BASE + BP_ENV_A_OFFSET), FLASH_SECTOR_SIZE,
+                  (const uint8_t*)(XIP_BASE + BP_ENV_B_OFFSET), FLASH_SECTOR_SIZE,
+                  &s_env);
+
+    /* PSRAM conducida por el env (`psram=1` ∧ RP2350B → CS=GPIO47), ANTES de
+     * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */
+    board_desc_psram_from_env(bpvm_env_get_bool(&s_env, "psram", 0));
+
+#if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 3
+    /* nivel 3 (H9): identidad + env + psram hechos, SIN tocar el FS aún. */
+    for (unsigned i = 0; ; i++) {
+        printf("bringup-3 vivo %u (identidad: variante %c, flash %u MB, psram %u MB)\n",
+               i, board_desc()->variant,
+               (unsigned)(board_desc()->flash_bytes / (1024u * 1024u)),
+               (unsigned)(board_desc()->psram_bytes / (1024u * 1024u)));
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+#endif
+
+    /* V7/H7 (Boot 2, fase 4) — AQUÍ ACABA EL BOOT 1 DE LA PICO (la identidad, el ENV y la
+     * PSRAM que pide el ENV). Lo demás es el arranque común, con los ganchos de arriba: 2a
+     * reparte (las claves `stack=` y `quantum=`, la memoria y la BIOS) y 2b sube (las capas,
+     * la zona, /lib, los buses, la SD, la cintura del REPL, `log=`, el autorun con la placa
+     * sana y el REPL, que no vuelve). */
+    bpvm_boot2_repartir(&s_boot2);
+    bpvm_boot2_subir(&s_boot2);   /* no vuelve: acaba en el REPL */
 
     /* H13 hallazgo 12 — AQUÍ CORRÍA UN fib(28) EN C EN CADA ARRANQUE. Era el
      * micro-bench de #159, el que tenía que decidir si el AOT valía la pena
@@ -1571,31 +1581,6 @@ static void vm_task(void* arg) {
      * seguía haciendo era gastar ~105 ms de CADA boot de CADA usuario para
      * escribir un número que ya nadie compara. Retirado con bench.c/.h. */
 
-#ifdef BPVM_PICO_BOOT_LED
-    /* #153 bring-up: llegamos al REPL → boot OK. Apaga el LED que
-     * main() encendió antes del scheduler. Si tras flashear el LED
-     * queda ENCENDIDO fijo → el boot se colgó ANTES de aquí (arranque
-     * del scheduler / core 1 / vm_task). Si queda APAGADO → boot llegó
-     * al REPL y un "no conecta" es problema de USB/conexión, no de boot. */
-    led_set(0);
-#endif
-    /* P-autorun (#256) — si /sys/auto.txt existe, arranca la app ANTES
-     * de entrar al REPL. El orden que pide el diseño (comm siempre
-     * antes) se cumple solo: el wire ya está vivo y el poll del run
-     * atiende HELLO/KILL, así que el IDE puede conectar y parar la app
-     * aunque sea un bucle infinito. */
-    /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
-     *
-     * El arranque entero queda registrado SIEMPRE: son unas quince lineas y no
-     * llenan nada, y son justo las que hacen falta cuando una placa no arranca.
-     * Lo que se apaga es el rastro de EJECUCION — el que llena la region en
-     * ~26 colectas del GC y hacia que un cuelgue no dejara su ultimo momento
-     * escrito. Por defecto APAGADO: `log=1` cuando se va a depurar. */
-    bpvm_log_set_enabled(bpvm_env_get_bool(&s_env, "log", 0));
-
-    if (s_boot.state == BPVM_BOOT_APP && !s_boot.degraded)
-        repl_v1_autorun();   /* H9: autorun solo con la placa SANA en estado 3 */
-    repl_v1_run();
     (void) run_vm_once;  /* silenciar unused warning */
 }
 

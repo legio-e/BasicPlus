@@ -41,6 +41,11 @@ void repl_v1_handle_request(int first_char);
  * log y retorno inmediato. Llamar UNA vez al boot, antes de repl_run. */
 void repl_v1_autorun(void);
 
+/* V7/H7 (Boot 2, fase 4) — registra la cintura del REPL común (bpvm_repl_set_ops). La
+ * llama el arranque común antes del cable y del autorun: un IDE que se conecta con el
+ * autorun corriendo saluda, y el saludo lo contesta el común con esta cintura. */
+void repl_v1_cintura(void);
+
 /* Bucle de transporte: lee de stdin y despacha cada request del wire. No
  * retorna. Pensado para correr como task de FreeRTOS. */
 void repl_v1_run(void);

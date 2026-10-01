@@ -45,6 +45,7 @@
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
 #include "bpvm_boot.h"
+#include "bpvm_boot2.h"   /* V7/H7 (Boot 2, fase 4): las claves del reparto, las del arranque comun */
 #include "bpvm_fs.h"
 #include "bpvm_net.h"
 #include "bpvm_pack.h"
@@ -1227,7 +1228,7 @@ int main(int argc, char** argv) {
     {
         bpvm_env_t env;
         if (bpvm_bmgr_env(&g_bm, &env))   /* devuelve 1 si HAY env, no 0 */
-            bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(&env, "stack", 0));
+            bpvm_boot2_claves(&env);   /* V7/H7 (Boot 2, fase 4): stack= y quantum=, como las placas */
     }
     bpvm_bus_desde_env(sim_env_get);   /* V7/H6.c G4.a1: los buses del ENV, en el boot como en la placa */
 

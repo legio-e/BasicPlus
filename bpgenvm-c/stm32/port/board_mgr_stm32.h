@@ -44,6 +44,9 @@ int  board_mgr_stm32_env_get(const char* key, char* buf, size_t cap);   /* V7/H6
  * temprano). Idempotente: el climb lo vuelve a leer. */
 void board_mgr_stm32_env_temprano(void);
 
+/* V7/H7 (Boot 2, fase 4) — el ENV entero, de sólo lectura, para el arranque común. */
+const bpvm_env_t* board_mgr_stm32_env(void);
+
 /* V7/H6 G5.b0 — la partición de packs del layout del BOOT (offset relativo a
  * FLASH_BASE), o NULL si el layout no validó o no hay zona. La recorre el cargador
  * de los motores nativos (pack_stm32.c): una sola verdad con el FS y el wire. */

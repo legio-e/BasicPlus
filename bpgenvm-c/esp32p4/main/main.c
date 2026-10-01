@@ -32,12 +32,7 @@
 #include "bpvm.h"              /* #353: bpvm_diag_set_sink — el rastro de la VM al log */
 #include "bpvm_sqlmem.h"       /* V5/H7: la REGLA del bloque de la BD (un solo sitio) */
 #include "bpvm_env.h"          /* V5/H7: SQLite=<MB> del entorno */
-#include "bpvm_bus.h"          /* V7/H6.c G4.a1: los buses del ENV */
-
-/* V7/H6.c G4.a1 — el ENV de la placa con la regla de siempre (entero o nada). */
-static int env_de_la_placa(const char* clave, char* buf, size_t cap) {
-    return bpvm_env_get_exacto(board_mgr_env(), clave, buf, cap);
-}
+#include "bpvm_boot2.h"        /* V7/H7 (Boot 2, fase 4): el arranque común, con los ganchos de aquí */
 #include "bpvm_bios.h"         /* V5/H7: la tabla que se le presta al pack */
 #include "pack_esp32.h"        /* V5/H7 → V7/H6: el pack nativo, común a la familia */
 #include "esp_log.h"
@@ -229,8 +224,9 @@ static void tcp_log_task(void *arg)
  * SD_INFO sigue diciendo que pasa con la tarjeta, como en la Metro y en la familia
  * del main comun—; lo que espera al FS es el montaje (`con_fs`).
  *
- * Lo llaman los DOS caminos de arranque (TCP y UART) desde una sola funcion, que
- * es lo que evita el clasico "lo arregle en uno y me olvide del otro".
+ * V7/H7 (Boot 2, fase 4): es el gancho `sd` del arranque común, que la MONTA con el FS
+ * —antes la montaba esta función, con un `con_fs` que le pasaban los DOS caminos de
+ * arranque (TCP y UART)—.
  *
  * (!) A diferencia de la Metro, el zocalo del P4 NO tiene deteccion de tarjeta
  * (~CD solo lleva su pull-up, leido del esquema), asi que NO se llama al vigia
@@ -250,15 +246,14 @@ static void tcp_log_task(void *arg)
  * enseña el IDE- es el de `log_printf`, y es donde estan las demas lineas del
  * arranque. Un chivato en el canal equivocado es un chivato mudo.
  * ------------------------------------------------------------------------- */
-static void p4_sd_arranque(int con_fs)
+static void p4_sd_registrar(void)
 {
     char linea[160];
     int n = bpvm_env_get(board_mgr_env(), "sd", linea, sizeof linea);
     if (n <= 0) {
         /* V7/H3 SD.3 — el porqué, al registro común: es lo que contestan SD_INFO y SD_MOUNT. */
         bpvm_sd_placa_sin_sd("esta placa no declara lector de SD (no hay entrada 'sd' en el env)");
-        if (con_fs) bpvm_sd_placa_montar_arranque();   /* lo anota en el log con el texto de las demás placas */
-        return;
+        return;   /* el común lo anota al montar, con el texto de las demás placas */
     }
 
     bpvm_sdio_pines_t pines;
@@ -298,137 +293,94 @@ static void p4_sd_arranque(int con_fs)
      * `bpvm_sd_placa_vigilar` daría un intento de más y nada más (ver arriba); aquí se monta al arrancar o
      * con SD_MOUNT. */
     bpvm_sd_placa_registrar(bpvm_blk_sdmmc(&pines), &bpvm_fs_fat_ops, "SDMMC");
-    if (con_fs) bpvm_sd_placa_montar_arranque();
-    else        log_printf("sd: el FS de la placa no esta montado - /sd no se monta (SD_INFO si contesta)");
 }
 
-static void diag_al_log(const char* linea);   /* V7/H7: la línea del montaje de packs (definida abajo) */
+/* ===== V7/H7 (Boot 2, fase 4) — LOS GANCHOS DE LA P4 ==================================
+ * El orden, la capa que pide cada paso y las reglas son del arranque común
+ * (src/bpvm_boot2.c). Antes eran DOS copias —la tarea del wire por TCP y la de UART— y la
+ * de TCP no aplicaba `stack=`, `quantum=` ni `log=`: ahora no hay copia que olvidar. */
 
-#ifdef BPVM_P4_WIRE_TCP
-/* ---- Servidor del wire v1: la VM corre AQUÍ (stack holgado). ----
- * Prepara FS + stdlib (independiente del canal de log), abre el socket de
- * escucha y entra al bucle del REPL reutilizado. No retorna. */
-static void wire_task(void *arg)
-{
-    (void) arg;
-    xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
+static void vm_buffer_init_psram(void);   /* el heap de la VM en PSRAM (abajo) */
 
-    /* H9 — arranque escalonado (particiones del env → FS → VM). Sin FS el climb
-     * se queda abajo y el host conduce; stdlib solo con el FS montado. */
+/* 2a — la memoria: el bloque de la BD/los motores muerde ANTES que el heap de la VM —su
+ * dirección va SELLADA en el pack y tiene que ser la misma cada arranque (ver
+ * pack_esp32_ram_init)—, y los dos, en app_main ANTES de la red: el Ethernet también pide. */
+static void p4_memoria(void) {
+    pack_esp32_ram_init();
+    vm_buffer_init_psram();
+}
+
+/* 2b — subir (particiones del env → FS → VM), y el estado también por el canal de red. */
+static const bpvm_boot_status_t* p4_subir(void) {
     board_mgr_esp32_boot();
     const bpvm_boot_status_t* bs = board_boot_status();
-    /* V7/H6 (#468) — la zona ANTES que la stdlib: el instalador pregunta qué sirve ya
-     * con los mismos bytes que la imagen (ver el mapeo, más abajo). */
-    /* V7/H7 (Boot 2, fase 1) — el montaje y el estado de la zona, comunes: con el FS
-     * (la regla de Eduardo), y la línea que dice lista o el «casi». */
-    (void) bpvm_pack_montar_arranque(bs->state >= BPVM_BOOT_FS, board_mgr_esp32_mapear_packs, diag_al_log);
-    if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
-    p4_sd_arranque(bs->state >= BPVM_BOOT_FS);   /* V5/H6 → V7/H3: registra siempre; monta con el FS */
-    /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
-     * aunque no haya pack grabado: con `0 candidatos` el log ya deja el
-     * dato que el IDE necesita para SELLAR uno (la direccion la asigna la
-     * MMU en runtime, o sea que no se puede saber desde el PC). */
-    /* V5/H7 (16-ago) - el arranque MAPEA la zona (barato, y el IDE la necesita
-     * ya); BUSCAR el ancla y SALTAR se hace en el primer `Run`, como en la
-     * Pico. Antes aquí se hacía todo: 338 ms de cada arranque, y el único paso
-     * que puede colgar puesto justo donde un cuelgue obliga a regrabar. */
-    if (bs->state >= BPVM_BOOT_FS) {
-        /* el mapeo va arriba, antes de la stdlib (#468) */
-        repl_set_packs_loader(pack_esp32_cargar);
-    }
-    net_logf("[p4] boot estado %d (%s)%s, %d ficheros",
-             (int) bs->state, bpvm_boot_state_name(bs->state),
-             bs->degraded ? " DEGRADADO" : "", fs_file_count());
+    net_logf("[p4] boot estado %d (%s)%s", (int) bs->state, bpvm_boot_state_name(bs->state),
+             bs->degraded ? " DEGRADADO" : "");
+    return bs;
+}
 
-    esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3, ESP-IDF) */
+/* 2b — lo de la P4 que pide el FS: la fachada de ficheros de BP (#247) y el cargador de los
+ * motores (V5/H7, 16-ago): el arranque MAPEA la zona —barato, y el IDE la necesita ya—;
+ * BUSCAR el ancla y SALTAR se hace en el primer `Run`, como en la Pico. Antes aquí se
+ * hacía todo: 338 ms de cada arranque, y el único paso que puede colgar puesto justo donde
+ * un cuelgue obliga a regrabar. */
+static void p4_con_fs(void) {
+    fs_register_bpvm();
+    repl_set_packs_loader(pack_esp32_cargar);
+}
+
+/* 2b — el hardware: GPIO/UART/SPI/I2C (el reúso del S3, H14) y la pantalla, como 'PANT',
+ * para el LVGL del pack (V7/H6 G5.a). */
+static void p4_hw(void) {
+    esp32_hw_register();
 #if defined(BPVM_GUI_PACK)
-    p4_pant_publicar();          /* V7/H6 G5.a: la pantalla, como 'PANT', para el LVGL del pack */
+    p4_pant_publicar();
 #endif
-    bpvm_bus_desde_env(env_de_la_placa);   /* V7/H6.c G4.a1: los buses del ENV (ver main.c del S3) */
-    p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* backend del P4 (pisa el del S3) */
+}
+
+/* 2b — el cable: el servidor TCP (:3333) o UART0 (el puente USB-UART). */
+static void p4_cable(void) {
+#ifdef BPVM_P4_WIRE_TCP
     wire_v1_tcp_server_init(WIRE_PORT);
     net_logf("[p4] VM.3: esperando al IDE en *:%d (backend 'VM (TCP v1)' -> 192.168.2.2:%d)",
              WIRE_PORT, WIRE_PORT);
-
-    /* bucle del REPL (accept/reconnect en wire_v1_recv_line). H9: autorun solo
-     * con la placa sana en estado 3. */
-    if (bs->state == BPVM_BOOT_APP && !bs->degraded) repl_esp32_autorun();
-    repl_esp32_run();            /* no retorna */
-}
-
-#else   /* !BPVM_P4_WIRE_TCP — transporte por defecto */
-
-/* ===== Transporte UART0 (#138): el IDE conecta al puerto del bridge USB-UART, SIN
- * red → sirve también a placas sin Ethernet (la nueva con pantalla). Gemelo de
- * wire_task: mismo FS+stdlib+HW y el mismo repl_esp32_run reutilizado, pero NO
- * espera Link Up y arranca wire_v1_transport_init en vez del servidor TCP. ===== */
-static void wire_task_uart(void *arg)
-{
-    (void) arg;
-    /* Espera Link Up (con timeout) para que net_logf (red de seguridad) llegue al
-     * PC antes de arrancar. Si la placa no tiene Ethernet, tras el timeout arranca
-     * igual (sin logs por red). */
-#if BPVM_P4_NETLOG
-    xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(5000));
-#endif
-
-    board_mgr_esp32_boot();
-    const bpvm_boot_status_t* bs = board_boot_status();
-    /* V7/H6 (#468) — la zona ANTES que la stdlib: el instalador pregunta qué sirve ya
-     * con los mismos bytes que la imagen (ver el mapeo, más abajo). */
-    /* V7/H7 (Boot 2, fase 1) — el montaje y el estado de la zona, comunes: con el FS
-     * (la regla de Eduardo), y la línea que dice lista o el «casi». */
-    (void) bpvm_pack_montar_arranque(bs->state >= BPVM_BOOT_FS, board_mgr_esp32_mapear_packs, diag_al_log);
-    if (bs->state >= BPVM_BOOT_FS) { fs_register_bpvm(); esp32_mods_install(); }
-    p4_sd_arranque(bs->state >= BPVM_BOOT_FS);   /* V5/H6 → V7/H3: registra siempre; monta con el FS */
-    /* V5/H7 — mapear la zona de packs y DECIR sus direcciones. Se hace
-     * aunque no haya pack grabado: con `0 candidatos` el log ya deja el
-     * dato que el IDE necesita para SELLAR uno (la direccion la asigna la
-     * MMU en runtime, o sea que no se puede saber desde el PC). */
-    /* V5/H7 (16-ago) - el arranque MAPEA la zona (barato, y el IDE la necesita
-     * ya); BUSCAR el ancla y SALTAR se hace en el primer `Run`, como en la
-     * Pico. Antes aquí se hacía todo: 338 ms de cada arranque, y el único paso
-     * que puede colgar puesto justo donde un cuelgue obliga a regrabar. */
-    if (bs->state >= BPVM_BOOT_FS) {
-        /* el mapeo va arriba, antes de la stdlib (#468) */
-        repl_set_packs_loader(pack_esp32_cargar);
-    }
-    net_logf("[p4] boot estado %d (%s)%s (UART), %d ficheros",
-             (int) bs->state, bpvm_boot_state_name(bs->state),
-             bs->degraded ? " DEGRADADO" : "", fs_file_count());
-
-    esp32_hw_register();         /* H14: backends GPIO/UART/SPI/I2C (reúso del S3) */
-#if defined(BPVM_GUI_PACK)
-    p4_pant_publicar();          /* V7/H6 G5.a: la pantalla, como 'PANT', para el LVGL del pack */
-#endif
-    bpvm_bus_desde_env(env_de_la_placa);   /* V7/H6.c G4.a1: los buses del ENV */
-    p4_install_board_id();       /* INFO/HELLO esp32p4 + Pico.* del P4 */
+#else
     wire_v1_transport_init();
     net_logf("[p4] VM.3 (UART0): wire v1 por el bridge USB-UART; conecta el IDE");
-
-    /* #423 — A PARTIR DE AQUI, EL LOG LO MANDA EL ENTORNO (`log=0|1`).
-     *
-     * El arranque entero queda registrado SIEMPRE: son unas quince lineas y no
-     * llenan nada, y son justo las que hacen falta cuando una placa no arranca.
-     * Lo que se apaga es el rastro de EJECUCION — el que llena la region de
-     * 8 KB en ~26 colectas del GC y hacia que un cuelgue no dejara su ultimo
-     * momento escrito (#423).
-     *
-     * Por defecto APAGADO: se enciende con `log=1` en el entorno cuando se va a
-     * depurar, que es lo que pidio Eduardo. Para moverlo mas arriba, basta con
-     * subir esta llamada: todo lo que quede por encima se registra siempre. */
-    /* `stack=N` (KB) — el usuario reparte el bloque entre pilas y heap;
-     * ausente o 0 = el reparto de siempre. Mismo sitio y misma clave que
-     * en las otras familias: la regla vive en bpvm_stack_region_bytes(). */
-    bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(board_mgr_env(), "stack", 0));
-    bpvm_set_quantum_ops(bpvm_env_get_long(board_mgr_env(), "quantum", 0));   /* #462 */
-    bpvm_log_set_enabled(bpvm_env_get_bool(board_mgr_env(), "log", 0));
-
-    if (bs->state == BPVM_BOOT_APP && !bs->degraded) repl_esp32_autorun();  /* H9 */
-    repl_esp32_run();            /* no retorna */
+#endif
 }
 
-#endif  /* BPVM_P4_WIRE_TCP */
+static const bpvm_boot2_familia_t s_boot2 = {
+    .env          = board_mgr_env,
+    .memoria      = p4_memoria,
+    .bios         = bios_esp32_verificar,
+    .subir        = p4_subir,
+    .mapear_packs = board_mgr_esp32_mapear_packs,
+    .stdlib       = esp32_mods_install,
+    .con_fs       = p4_con_fs,
+    .hw           = p4_hw,
+    .sd           = p4_sd_registrar,
+    .identidad    = p4_install_board_id,   /* INFO/HELLO esp32p4 + Pico.* del P4 (pisa el del S3) */
+    .cintura      = repl_esp32_cintura,
+    .cable        = p4_cable,
+    .autorun      = repl_esp32_autorun,
+    .repl         = repl_esp32_run,
+};
+
+/* ---- La tarea del cable: la VM corre AQUÍ (stack holgado). Una para los dos transportes.
+ * En TCP el wire va por la red: sin enlace no hay cable, y se espera. En UART, si se
+ * compiló el log por red, se le da hasta 5 s para que llegue al PC antes de arrancar (una
+ * placa sin Ethernet arranca igual tras el tiempo). Luego, 2b; no retorna. */
+static void wire_task(void *arg)
+{
+    (void) arg;
+#if defined(BPVM_P4_WIRE_TCP)
+    xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
+#elif BPVM_P4_NETLOG
+    xEventGroupWaitBits(s_events, LINK_UP_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(5000));
+#endif
+    bpvm_boot2_subir(&s_boot2);   /* no vuelve: acaba en el REPL */
+}
 
 /* Reserva el heap de la VM en PSRAM. El P4 SIEMPRE lleva PSRAM (in-package, la
  * comparte con el framebuffer del display); si la reserva falla el firmware no es
@@ -546,24 +498,12 @@ void app_main(void)
                : "log: arranque en frio (cargado de flash)");
 
 
-    /* V5/H7 — el bloque de la BD muerde ANTES que el heap de la VM: su dirección
-     * va SELLADA dentro del pack nativo y tiene que ser la misma cada arranque.
-     * Ver el porqué en pack_esp32_ram_init() (esp32/common/pack_esp32.c). */
-    pack_esp32_ram_init();
-
-    /* Heap de la VM en PSRAM (común a todos los transportes), con lo que quede. */
-    vm_buffer_init_psram();
-
-    /* La tabla BIOS se verifica SIEMPRE, haya pack o no: así un hueco se
-     * descubre hoy y no el día que alguien grabe uno. El que la usa es el pack,
-     * por el ancla; esto sólo comprueba.
-     *
-     * Y DICE QUE SÍ, no sólo que no. `bios_esp32_get()` ya escribe cuál ranura
-     * falta cuando falla, pero callar al ir bien deja un silencio ambiguo: no
-     * distingue "completa" de "esta línea no se ejecutó". En un arranque nuevo
-     * eso es justo lo que hay que poder distinguir. */
-    log_printf("bios: tabla %s (%d ranuras)",
-               bios_esp32_get() ? "COMPLETA" : "INCOMPLETA", bpvm_bios_slot_count());
+    /* V7/H7 (Boot 2, fase 4) — el ENV a la vista y 2a, repartir: las claves del reparto, el
+     * bloque de los motores y el heap de la VM en PSRAM —ANTES de la red, que también pide
+     * memoria: la dirección del bloque va sellada en los motores— y la BIOS. 2b, subir, va en
+     * la tarea del cable. */
+    board_mgr_esp32_env_temprano();
+    bpvm_boot2_repartir(&s_boot2);
 
     s_events = xEventGroupCreate();
 
@@ -616,7 +556,7 @@ void app_main(void)
              SERVER_IP, SERVER_PORT, WIRE_PORT);
 #else
     /* Wire por UART0 (COM14) + Ethernet SOLO para logs (:5555) = red de seguridad. */
-    xTaskCreate(wire_task_uart, "wire_uart", 32768, NULL, 5, NULL);
+    xTaskCreate(wire_task, "wire_uart", 32768, NULL, 5, NULL);
     ESP_LOGI(TAG, "P4 VM.3 (UART0 + Ethernet-logs): wire por COM14, logs por :5555");
 #endif
 

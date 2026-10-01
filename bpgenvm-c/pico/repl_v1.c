@@ -1429,8 +1429,15 @@ void repl_v1_handle_request(int first_char) {
  *
  * Nada se pierde por funcionalidad: el wire v1 cubre TIME, RESET y BOOTSEL, que
  * era lo único del modo texto sin equivalente obvio. */
-void repl_v1_run(void) {
+/* V7/H7 (Boot 2, fase 4) — la cintura, la registra el arranque común ANTES del cable y
+ * del autorun. Se registraba aquí, al entrar al REPL —o sea DESPUÉS del autorun—, y un IDE
+ * que se conectaba con el autorun corriendo recibía «HELLO: este firmware no ha registrado
+ * su cintura de REPL» al saludar (durante el autorun sólo se atienden HELLO, KILL y RESET). */
+void repl_v1_cintura(void) {
     bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3 g9: la cintura, antes del primer mensaje */
+}
+
+void repl_v1_run(void) {
     log_printf("REPL entry (wire v1)");
     /* #326 CONTROL: se marca en TODO arranque, haya depurador o no. Es la
      * prueba de que el portador funciona — el equivalente a ejecutar T antes
