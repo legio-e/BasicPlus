@@ -269,6 +269,15 @@ void wire_v1_send_bulk(const uint8_t* data, size_t n) {
     }
 }
 
+/* #495 (paso 4) — la línea y sus bytes con el cerrojo cogido UNA vez: lo que tiene que ir junto (bpvm_wire_v1.h). */
+void wire_v1_send_msg(const char* line, size_t len, const uint8_t* bulk, size_t n) {
+    tx_lock();
+    stm32_wire_write(line, len);
+    stm32_wire_write("\n", 1);
+    if (n) wire_v1_send_bulk(bulk, n);   /* el bulk no coge cerrojo: va por tramos (el uint16 de la HAL) */
+    tx_unlock();
+}
+
 int stm32_wire_json_escape(const char* src, size_t srclen, char* dst, size_t dstmax) {
     size_t o = 0;
     for (size_t i = 0; i < srclen; i++) {

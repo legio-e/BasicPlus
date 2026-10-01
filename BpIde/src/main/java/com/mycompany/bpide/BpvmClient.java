@@ -657,6 +657,79 @@ public final class BpvmClient implements AutoCloseable {
         return esperarPeticion(enviarPeticion(type, extraJson, bulkOrNull, 0), timeoutMs);
     }
 
+    /* #495 (paso 4) — LAS RESPUESTAS TROCEADAS. El GET y el LIST se piden con "chunked":true y la placa los manda en
+     * trozos con el id de la petición —GET_PART (off y un bulk) … GET_END (size y crc), LIST_PART … LIST_END—, mezclados
+     * con lo demás (la salida del programa, otras respuestas). Aquí se juntan por id, y la petición se completa con el
+     * último como si hubiera llegado de una pieza: GET_REPLY con los bytes, LIST_REPLY con las entradas. Un firmware
+     * anterior no mira "chunked" y contesta entero, que sigue el camino de siempre. */
+    private static final java.util.Set<String> TROCEADOS = new java.util.HashSet<>(
+            java.util.Arrays.asList("GET_PART", "GET_END", "LIST_PART", "LIST_END"));
+
+    private static final class Troceado {
+        final java.io.ByteArrayOutputStream datos = new java.io.ByteArrayOutputStream();
+        final java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        final List<Object> entradas = new ArrayList<>();
+        String roto;          // por qué no vale lo llegado (un trozo fuera de sitio), o null
+    }
+    private final Map<Long, Troceado> troceados = new HashMap<>();   // bajo pendingLock
+
+    /** Junta un trozo. null = la petición sigue esperando; si no, la respuesta entera (o un ERROR con el porqué). */
+    private Map<String, Object> juntaTrozo(long id, String type, Map<String, Object> m) {
+        Troceado t;
+        synchronized (pendingLock) {
+            t = troceados.get(id);
+            if (t == null) { t = new Troceado(); troceados.put(id, t); }
+            if (type.endsWith("_END")) troceados.remove(id);
+        }
+        Map<String, Object> r = new HashMap<>();
+        r.put("id", id);
+        switch (type) {
+            case "GET_PART": {
+                Object b = m.get(BULK_KEY);
+                byte[] d = (b instanceof byte[]) ? (byte[]) b : new byte[0];
+                long off = Json.getLong(m, "off", -1);
+                if (t.roto == null && off != t.datos.size())
+                    t.roto = "un trozo fuera de sitio (en " + off + ", y llevaba " + t.datos.size() + " B)";
+                t.datos.write(d, 0, d.length);
+                t.crc.update(d, 0, d.length);
+                return null;
+            }
+            case "LIST_PART": {
+                List<Object> e = Json.getList(m, "entries");
+                if (e != null) t.entradas.addAll(e);
+                return null;
+            }
+            case "GET_END": {
+                long size = Json.getLong(m, "size", -1);
+                long crc = Json.getLong(m, "crc", -1);
+                if (t.roto == null && size != t.datos.size())
+                    t.roto = "llegaron " + t.datos.size() + " B y la placa dice " + size;
+                if (t.roto == null && crc != t.crc.getValue())
+                    t.roto = "el CRC no cuadra (la placa dice " + crc + "; lo llegado, " + t.crc.getValue() + ")";
+                if (t.roto != null) {
+                    r.put("type", "ERROR");
+                    r.put("code", "BAD_TRANSFER");
+                    r.put("message", "la descarga llegó dañada: " + t.roto);
+                    return r;
+                }
+                boolean cambiado = Json.getBool(m, "changed", false);
+                if (cambiado)
+                    diag("[BpvmClient] GET (id=" + id + "): el fichero cambió en la placa mientras se bajaba"
+                            + " (lo escribía el programa); lo bajado puede no cuadrar");
+                r.put("type", "GET_REPLY");
+                r.put(BULK_KEY, t.datos.toByteArray());
+                r.put("changed", cambiado);
+                return r;
+            }
+            default: {   // LIST_END
+                r.put("type", "LIST_REPLY");
+                r.put("entries", t.entradas);
+                r.put("omitted", Json.getLong(m, "omitted", 0));
+                return r;
+            }
+        }
+    }
+
     /** #495 — una petición en vuelo: su id, su tipo (para el mensaje) y su future. */
     private static final class Pendiente {
         final long id;
@@ -713,7 +786,7 @@ public final class BpvmClient implements AutoCloseable {
             }
             return resp;
         } catch (TimeoutException te) {
-            synchronized (pendingLock) { pendingRequests.remove(id); }
+            synchronized (pendingLock) { pendingRequests.remove(id); troceados.remove(id); }
             throw new IOException("timeout esperando respuesta a '" + type + "' (id=" + id + ")");
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
@@ -1022,10 +1095,12 @@ public final class BpvmClient implements AutoCloseable {
         return uploadFile(remotePath, data, timeoutMs);
     }
 
-    /** Descarga `remotePath` del workdir de la VM. Bulk raw inline. */
+    /** Descarga `remotePath` del workdir de la VM. Troceada (#495, paso 4): la placa la manda a trozos, entre la
+     *  salida del programa y lo demás, y aquí se junta y se comprueba con su tamaño y su CRC; un firmware anterior la
+     *  manda entera. El plazo es de silencio (#454): mientras lleguen trozos, se espera. */
     public byte[] downloadFile(String remotePath, long timeoutMs) throws IOException {
         Map<String, Object> resp = sendRequest("GET",
-                "\"path\":" + jsonStr(remotePath), null, timeoutMs);
+                "\"path\":" + jsonStr(remotePath) + ",\"chunked\":true", null, timeoutMs);
         Object b = resp.get(BULK_KEY);
         if (b instanceof byte[]) return (byte[]) b;
         // Fallback defensivo: si por algún motivo el server no envió bulk,
@@ -1068,7 +1143,8 @@ public final class BpvmClient implements AutoCloseable {
      * mismo par (files, omitidas) que ya usaba {@link #listDir}, que es de donde
      * sale la forma. */
     public DirListing listFiles(String remotePath, long timeoutMs) throws IOException {
-        String extra = "\"path\":" + jsonStr(remotePath == null ? "" : remotePath);
+        /* #495 (paso 4): troceado, un directorio por vuelta de la placa (y así también durante un RUN). */
+        String extra = "\"path\":" + jsonStr(remotePath == null ? "" : remotePath) + ",\"chunked\":true";
         Map<String, Object> resp = sendRequest("LIST", extra, null, timeoutMs);
         List<Object> arr = Json.getList(resp, "entries");
         List<RemoteFile> out = new ArrayList<>();
@@ -1816,6 +1892,7 @@ public final class BpvmClient implements AutoCloseable {
             synchronized (pendingLock) {
                 toFail = new ArrayList<>(pendingRequests.values());
                 pendingRequests.clear();
+                troceados.clear();
             }
             if (!toFail.isEmpty()) {
                 IOException ex = new IOException(
@@ -1838,10 +1915,17 @@ public final class BpvmClient implements AutoCloseable {
         Object rawId = m.get("id");
         if (rawId instanceof Long) {
             long reqId = (Long) rawId;
+            Map<String, Object> resp = m;
+            if (TROCEADOS.contains(type)) {                 // #495 (paso 4): un trozo de una respuesta troceada
+                resp = juntaTrozo(reqId, type, m);
+                if (resp == null) return;                   // ...y la petición sigue esperando el siguiente
+            } else if ("ERROR".equals(type)) {
+                synchronized (pendingLock) { troceados.remove(reqId); }   // una troceada cortada a medias
+            }
             CompletableFuture<Map<String, Object>> fut;
             synchronized (pendingLock) { fut = pendingRequests.remove(reqId); }
             if (fut != null) {
-                fut.complete(m);
+                fut.complete(resp);
             } else {
                 // Reply sin request pendiente: probablemente respuesta a un
                 // sendOneShot (fire-and-forget). Silencioso por diseño.

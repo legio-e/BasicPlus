@@ -197,6 +197,34 @@ int bpvm_repl_verbo_de_fs(const char* type);
  *  BORRA lo subido (decisión de Eduardo, 1-oct). Los que sólo leen sí pueden ir entre medias. */
 void bpvm_repl_antes_de_despachar(const char* type);
 
+/* ── V7/H8 #495 (paso 4) — LAS TRANSFERENCIAS ─────────────────────────────────────────────────────────────────────
+ * Un GET o un LIST que el cliente pide troceados ("chunked":true) no se mandan de una vez: dejan una TRANSFERENCIA en
+ * el común, y cada paso manda un trozo —un GET_PART (o el GET_END), un directorio del LIST—. Entre trozo y trozo, el
+ * cable es de los demás: la salida del programa, un KILL, otra respuesta (Eduardo: «en un entorno multitarea no puede
+ * ser que una comunicación monopolice la comunicación»). Una descarga a la vez (Eduardo: «1 a 1») y un listado, que
+ * sí puede ir con ella. V7_IDEAS §H8, el paso 4. */
+
+/** Manda UN trozo de cada transferencia viva. Lo llaman el lazo del REPL de cada familia cuando no hay nada que leer
+ *  (mientras devuelva 1, sin dormir) y el poll del hilo `io` durante un RUN, en cada vuelta. 1 si queda algo. */
+int bpvm_repl_paso(void);
+
+/** ¿Hay una transferencia a medias? Para el lazo que espera el cable sin plazo (la ESP32): con una, mira el cable sin
+ *  esperar y, si no hay nada, da el paso. */
+int bpvm_repl_hay_transferencia(void);
+
+/** ¿Se atiende `type` DURANTE UN RUN? Los de lectura que no monopolizan el cable: el GET y el LIST troceados y STAT.
+ *  El poll de cada familia lo pregunta antes de su BUSY y, si es que sí, llama a bpvm_repl_dispatch. Los enteros
+ *  siguen con BUSY (un GET entero dejaría a `io` sin salida ni KILL mientras dura), LIST_DIR también (su foto sale de
+ *  la zona de rascar, la del `listDir` del programa) y los que escriben, también. */
+int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj);
+
+/** El BUSY de lo demás durante un RUN, el mismo texto en las cuatro familias y el simulado. */
+#define BPVM_REPL_OCUPADO_EN_RUN "ejecución en curso: sólo HELLO, KILL, RESET, STAT y GET/LIST troceados"
+
+/** El cliente se ha ido (la familia lo sabe cuando su cable lo dice: el socket del simulado): lo que se le mandaba,
+ *  cortado, y su RAM y su fichero abierto, libres. Lo mismo que hace un HELLO, que es como se entera una placa. */
+void bpvm_repl_cliente_ido(void);
+
 /** V7/H8 (restos de E1, 28-sep) — el `errorMessage` del EXITED de un programa parado por un RESET, el MISMO en las
  *  cuatro (Pico, ESP32, STM32 y el micro simulado). El `poll` trata el RESET como un KILL —lo para, y reinicia
  *  después, fuera de `bpvm_run`— y el EXITED decía «terminado por KILL» (Pico y ESP32) o nada (STM32 y simulado). El

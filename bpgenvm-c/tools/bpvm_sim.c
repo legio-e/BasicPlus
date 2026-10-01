@@ -61,6 +61,7 @@
 #include "bpvm_env.h"       /* U6.1: `stack=N` del ENV, como las placas */
 #include "bpvm_bus.h"       /* V7/H6.c G4.a1 */
 #include "bpvm_wire_v1.h"
+#include "bpvm_platform.h"   /* V7/H8 #495 (paso 4): el cerrojo del cable */
 #ifdef BPVM_GUI
 #include "bpvm_entry.h"   /* #344 — el RUN, escrito una vez */
 #include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen */
@@ -346,8 +347,20 @@ static int send_all(sock_t c, const char* data, size_t n) {
     }
     return 0;
 }
+
+/* V7/H8 #495 (paso 4) — EL CERROJO DEL CABLE, que el simulado no tenía. Escriben en el socket el hilo del REPL (y,
+ * durante un RUN, la VM contestando al depurador) y el hilo `io` (la salida del programa y lo que contesta su poll):
+ * las placas lo tienen desde #473, y con las respuestas troceadas que manda `io` la línea de un hilo podría caer
+ * dentro del mensaje del otro. No es recursivo: dentro, `send_all`, nunca `send_line`. Se crea en `main`, antes del
+ * primer cliente. */
+static bpvm_platform_mutex_handle_t s_tx_mtx;
+static void tx_lock(void)   { bpvm_platform_mutex_lock(&s_tx_mtx); }
+static void tx_unlock(void) { bpvm_platform_mutex_unlock(&s_tx_mtx); }
+
 static void send_line(sock_t c, const char* line) {
+    tx_lock();
     if (send_all(c, line, strlen(line)) == 0) send_all(c, "\n", 1);
+    tx_unlock();
 }
 static void send_err(sock_t c, long id, const char* code, const char* msg) {
     char buf[512]; sb_t s; sb_init(&s, buf, sizeof buf);
@@ -380,13 +393,25 @@ static int recv_exact(sock_t c, uint8_t* buf, size_t n);   /* U3.24: se usa abaj
  * "transporte" es el socket del cliente en curso, que ya era global (`g_cli`). */
 void wire_v1_send_line(const char* data, size_t len) {
     if (g_cli == BAD_SOCK) return;
-    if (len > 0 && send_all(g_cli, data, len) != 0) return;
-    (void) send_all(g_cli, "\n", 1);
+    tx_lock();
+    if (len == 0 || send_all(g_cli, data, len) == 0) (void) send_all(g_cli, "\n", 1);
+    tx_unlock();
 }
 
 void wire_v1_send_bulk(const uint8_t* data, size_t n) {
     if (g_cli == BAD_SOCK || n == 0) return;
+    tx_lock();
     (void) send_all(g_cli, (const char*) data, n);
+    tx_unlock();
+}
+
+/* #495 (paso 4) — la línea y sus bytes con el cerrojo cogido UNA vez: lo que tiene que ir junto (bpvm_wire_v1.h). */
+void wire_v1_send_msg(const char* line, size_t len, const uint8_t* bulk, size_t n) {
+    if (g_cli == BAD_SOCK) return;
+    tx_lock();
+    if ((len == 0 || send_all(g_cli, line, len) == 0) && send_all(g_cli, "\n", 1) == 0 && n > 0)
+        (void) send_all(g_cli, (const char*) bulk, n);
+    tx_unlock();
 }
 
 /* V7/H8 #495 — el contrato del bulk (bpvm_wire_v1.h): -2 si se estanca WIRE_V1_BULK_ESTANCADO_MS sin
@@ -742,6 +767,7 @@ static int sim_io_poll(void* user) { return sim_run_poll_cb((bpvm_t*) user, NULL
 
 static int sim_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
+    (void) bpvm_repl_paso();                  /* #495 (paso 4): un trozo de lo que se esté mandando (GET, LIST) */
     if (g_cli == BAD_SOCK || !sock_has_data(g_cli)) return 0;
     char line[WIRE_LINE_MAX];
     if (recv_line(g_cli, line, sizeof line) < 0) return 1;   /* peer cerró → parar */
@@ -755,8 +781,15 @@ static int sim_run_poll_cb(bpvm_t* vm, void* user) {
     /* U3.24 — el saludo lo construye el REPL comun (misma forma que en placa):
      * el IDE puede conectar con algo corriendo y necesita el HELLO para
      * ofrecer Stop. Lo demas se rechaza con BUSY. */
-    if (!strcmp(type, "HELLO")) { (void) bpvm_repl_dispatch("HELLO", rid, &obj); return 0; }
-    send_err(g_cli, rid, "BUSY", "ejecución en curso: solo HELLO/KILL/RESET");
+    if (!strcmp(type, "HELLO")) {
+        bpvm_repl_antes_de_despachar(type);   /* #495 (paso 4): lo que se mandaba al cliente de antes, cortado */
+        (void) bpvm_repl_dispatch("HELLO", rid, &obj);
+        return 0;
+    }
+    /* #495 (paso 4) — los de lectura que no monopolizan el cable: el GET y el LIST troceados (un trozo por vuelta
+     * de `io`, entre la salida del programa) y STAT. */
+    if (bpvm_repl_atiende_en_run(type, &obj)) { (void) bpvm_repl_dispatch(type, rid, &obj); return 0; }
+    send_err(g_cli, rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
     return 0;
 }
 
@@ -1146,6 +1179,7 @@ static size_t parse_size(const char* s) {
 }
 
 int main(int argc, char** argv) {
+    if (bpvm_platform_mutex_init(&s_tx_mtx) != 0) { fprintf(stderr, "sim: no se pudo crear el cerrojo del cable\n"); return 1; }
 #ifdef BPVM_SQLITE
     /* UNA VEZ, y lo PRIMERO: sqlite3_config solo vale antes de initialize, y
      * el vfs tiene que estar registrado antes que nada (leccion del 8-ago). */
@@ -1332,13 +1366,18 @@ int main(int argc, char** argv) {
         g_cli = cli;
         printf("%s: cliente conectado\n", SERVER_NAME); fflush(stdout);
         char line[WIRE_LINE_MAX];
-        while (g_cli != BAD_SOCK && recv_line(g_cli, line, sizeof line) >= 0) {
+        while (g_cli != BAD_SOCK) {
+            /* #495 (paso 4) — una transferencia a medias: el cable se mira sin esperar y, si no hay nada, el trozo
+             * siguiente. Sin ella, la espera de siempre. */
+            if (bpvm_repl_hay_transferencia() && !sock_has_data(g_cli)) { (void) bpvm_repl_paso(); continue; }
+            if (recv_line(g_cli, line, sizeof line) < 0) break;
             json_obj_t obj;
             if (json_parse(line, strlen(line), &obj) == 0) handle(g_cli, &obj);
             /* líneas no-JSON se ignoran (tolerante) */
         }
         if (g_cli != BAD_SOCK) close_sock(g_cli);
         g_cli = BAD_SOCK;
+        bpvm_repl_cliente_ido();   /* #495 (paso 4): lo que se le mandaba (y una subida a medias), cortado */
         printf("%s: cliente desconectado\n", SERVER_NAME); fflush(stdout);
     }
 }

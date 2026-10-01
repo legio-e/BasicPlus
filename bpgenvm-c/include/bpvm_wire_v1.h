@@ -95,6 +95,13 @@ void wire_v1_send_line(const char* data, size_t len);
 /** Escribe `n` bytes crudos, sin '\n' (la carga de un bulk). */
 void wire_v1_send_bulk(const uint8_t* data, size_t n);
 
+/** V7/H8 #495 (paso 4) — UN MENSAJE ENTERO: la línea (`len` bytes, sin el '\n', que lo pone el cable) y detrás sus
+ *  `n` bytes de bulk (0: sólo la línea), con el cerrojo del cable cogido UNA vez. Es la unidad que no se parte: entre
+ *  dos mensajes puede ir cualquier cosa —un OUTPUT, un BP_HIT, un trozo de otra respuesta—; dentro de uno, nada.
+ *  `send_line` + `send_bulk` no lo son: el bulk sale con su propio cerrojo o sin ninguno, y la línea de otro hilo (la
+ *  VM contestando al depurador) puede caer entre la cabecera y sus bytes. */
+void wire_v1_send_msg(const char* line, size_t len, const uint8_t* bulk, size_t n);
+
 /* ══════════════ PROTOCOLO — común, en src/wire_v1_proto.c ══════════════
  *
  * Construyen JSON dentro de un buffer del llamante y devuelven el offset nuevo,

@@ -871,6 +871,21 @@ public final class DebugServer implements AutoCloseable {
         try {
             java.nio.file.Path src = workdirPath(path);
             byte[] data = java.nio.file.Files.readAllBytes(src);
+            if (Json.getBool(m, "chunked", false)) {
+                /* V7/H8 #495 (paso 4) — el GET TROCEADO, con la forma de la VM-C: GET_PART (off y un bulk de 512 B como
+                 * mucho) … GET_END (size y el CRC-32 de lo mandado). Cada trozo, un mensaje entero bajo writeLock: la
+                 * salida del programa puede ir entre medias. */
+                final int trozo = 512;
+                for (int off = 0; off < data.length; off += trozo) {
+                    int n = Math.min(trozo, data.length - off);
+                    sendFrame("{\"type\":\"GET_PART\",\"id\":" + id + ",\"off\":" + off + ",\"bulk\":" + n + "}",
+                              java.util.Arrays.copyOfRange(data, off, off + n));
+                }
+                java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+                crc.update(data, 0, data.length);
+                sendReply(id, "GET_END", "\"size\":" + data.length + ",\"crc\":" + crc.getValue());
+                return;
+            }
             // v1: reply lleva `bulk:N`, los N bytes raw vienen inmediatamente
             // tras el `\n`. Atómico bajo writeLock.
             String header = "{\"type\":\"GET_REPLY\",\"id\":" + id
@@ -914,6 +929,12 @@ public final class DebugServer implements AutoCloseable {
                 }
             }
             sb.append("]");
+            if (Json.getBool(m, "chunked", false)) {
+                /* V7/H8 #495 (paso 4) — el LIST TROCEADO, con la forma de la VM-C: aquí, un directorio, una parte. */
+                sendReply(id, "LIST_PART", sb.toString());
+                sendReply(id, "LIST_END", "\"omitted\":0");
+                return;
+            }
             sendReply(id, "LIST_REPLY", sb.toString());
         } catch (Throwable e) {
             sendError(id, codeFor(e), "LIST: " + e.getMessage());

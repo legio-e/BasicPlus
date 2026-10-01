@@ -123,3 +123,13 @@ void wire_v1_send_bulk(const uint8_t* data, size_t n) {
     fflush(stdout);
     wire_v1_tx_unlock();
 }
+
+/* #495 (paso 4) — la línea y sus bytes con el cerrojo cogido UNA vez: lo que tiene que ir junto (bpvm_wire_v1.h). */
+void wire_v1_send_msg(const char* line, size_t len, const uint8_t* bulk, size_t n) {
+    wire_v1_tx_lock();
+    fwrite(line, 1, len, stdout);
+    fputc('\n', stdout);
+    if (n) fwrite(bulk, 1, n, stdout);
+    fflush(stdout);
+    wire_v1_tx_unlock();
+}

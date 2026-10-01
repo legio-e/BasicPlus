@@ -24,6 +24,8 @@
 #include "bpvm_platform.h"  /* V6/U3 g9: now_ms para el durationMs del SAVE */
 #include "bpvm_sqlmem.h"    /* V7/H8 #602: el motivo y el mínimo del bloque de RAM de los motores */
 #include "bpvm_examen.h"    /* V7/H8 E1: el LIST examina los módulos y los packs */
+#include "crc32.h"          /* V7/H8 #495 (paso 4): el CRC de lo mandado, en el GET_END */
+#include "bpvm_io.h"        /* V7/H8 #495 (paso 4): la pila que le sobró a `io` (ioStackFree) */
 
 #include <stdio.h>
 #include <string.h>
@@ -355,6 +357,7 @@ static void repl_get(long id, json_obj_t* obj) {
 
 typedef struct {
     long id;
+    int  trozos;          /* #495 (paso 4): 1 = el LIST troceado (las entradas, en líneas LIST_PART) */
     int  first;
     int  omitidas;
     int  emitidas;
@@ -403,26 +406,92 @@ static void repl_list_escapa(const char* s, char* esc, size_t cap) {
     esc[o] = '\0';
 }
 
-/* Una entrada del LIST. `mal` (V7/H8 E1): el motivo por el que esta VM no cargaría el fichero, o NULL. Sale a
- * TROZOS, como todo el LIST (una línea que se escribe por partes): así el motivo no pide un búfer más en la pila
- * del callback del recorrido. */
-static void repl_list_emite(repl_list_ctx_t* c, const char* full, uint32_t size, const char* mal) {
-    char ent[192];
-    char esc[REPL_LIST_NAME_MAX * 2];
-    repl_list_escapa(full, esc, sizeof esc);
-    int w = snprintf(ent, sizeof ent,
-        "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":-1,\"isDir\":false,\"mtime\":0",
-        c->first ? "" : ",", esc, (unsigned long) size);
-    if (w <= 0 || (size_t) w >= sizeof ent) return;
-    wire_v1_send_bulk((const uint8_t*) ent, (size_t) w);
+/* Lo que ocupa `s` escapado como lo escapa repl_list_escapa. */
+static size_t repl_list_escapado(const char* s) {
+    size_t n = 0;
+    for (; *s; s++) n += (*s == '"' || *s == '\\') ? 2u : 1u;
+    return n;
+}
+
+/* #495 (paso 4) — LA PARTE DEL LIST TROCEADO: las entradas se juntan en una línea LIST_PART acotada, que sale ENTERA
+ * (wire_v1_send_msg: una línea, de una vez) cuando la entrada siguiente no cabe o se acaba el directorio. 1 KB: la
+ * entrada más larga —un nombre de 63 y un motivo de E1, escapados— son ~540 B. */
+#define REPL_LIST_PARTE 1024
+static char   s_lp[REPL_LIST_PARTE];
+static size_t s_lp_n;          /* lo escrito en la parte abierta; 0 = no hay ninguna */
+
+static void repl_list_parte_sale(void) {
+    if (s_lp_n == 0) return;
+    s_lp[s_lp_n++] = ']';
+    s_lp[s_lp_n++] = '}';
+    wire_v1_send_msg(s_lp, s_lp_n, NULL, 0);
+    s_lp_n = 0;
+}
+
+/* La entrada, ENTERA en la parte abierta (si no cabe, la parte sale y se abre otra): una parte es JSON válido. */
+static void repl_list_emite_parte(repl_list_ctx_t* c, const char* full, const char* esc, uint32_t size,
+                                  const char* mal) {
+    const size_t cap = sizeof s_lp - 3;   /* sitio para el "]}" del cierre y el NUL de snprintf */
+    size_t falta = strlen(esc) + 96u + (mal ? repl_list_escapado(mal) + 10u : 0u);
+    size_t ini, o;
+    int w;
+    if (s_lp_n > 0 && s_lp_n + falta > cap) repl_list_parte_sale();
+    if (s_lp_n == 0) {
+        w = snprintf(s_lp, cap, "{\"type\":\"LIST_PART\",\"id\":%ld,\"entries\":[", c->id);
+        if (w <= 0 || (size_t) w >= cap) return;
+        s_lp_n = (size_t) w;
+        c->first = 1;
+    }
+    ini = s_lp_n;
+    w = snprintf(s_lp + ini, cap - ini, "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":-1,\"isDir\":false,\"mtime\":0",
+                 c->first ? "" : ",", esc, (unsigned long) size);
+    if (w <= 0 || ini + (size_t) w >= cap) goto no_cabe;
+    o = ini + (size_t) w;
     if (mal) {
         static const char k[] = ",\"mal\":\"";
-        wire_v1_send_bulk((const uint8_t*) k, sizeof k - 1);
-        repl_list_escapa(mal, ent, sizeof ent);
-        wire_v1_send_bulk((const uint8_t*) ent, strlen(ent));
-        wire_v1_send_bulk((const uint8_t*) "\"", 1);
+        if (o + sizeof k >= cap) goto no_cabe;
+        memcpy(s_lp + o, k, sizeof k - 1);
+        o += sizeof k - 1;
+        repl_list_escapa(mal, s_lp + o, cap - o);
+        o += strlen(s_lp + o);
+        if (o + 1 >= cap) goto no_cabe;
+        s_lp[o++] = '"';
     }
-    wire_v1_send_bulk((const uint8_t*) "}", 1);
+    if (o + 1 >= cap) goto no_cabe;
+    s_lp[o++] = '}';
+    s_lp_n = o;
+    c->first = 0;
+    c->emitidas++;
+    return;
+no_cabe:   /* no pasa (en una parte vacía cabe la entrada más larga); si pasara, se DICE (#425) */
+    s_lp_n = ini;
+    c->omitidas++;
+    log_printf("fs: LISTADO INCOMPLETO - '%s' no cabe en una parte del LIST", full);
+}
+
+/* Una entrada del LIST. `mal` (V7/H8 E1): el motivo por el que esta VM no cargaría el fichero, o NULL. En el LIST
+ * entero sale a TROZOS, como todo él (una línea que se escribe por partes): así el motivo no pide un búfer más en la
+ * pila del callback del recorrido. En el troceado (#495, paso 4), entera en su parte. */
+static void repl_list_emite(repl_list_ctx_t* c, const char* full, uint32_t size, const char* mal) {
+    char esc[REPL_LIST_NAME_MAX * 2];
+    repl_list_escapa(full, esc, sizeof esc);
+    if (c->trozos) { repl_list_emite_parte(c, full, esc, size, mal); return; }
+    {
+        char ent[192];
+        int w = snprintf(ent, sizeof ent,
+            "%s{\"name\":\"%s\",\"size\":%lu,\"crc\":-1,\"isDir\":false,\"mtime\":0",
+            c->first ? "" : ",", esc, (unsigned long) size);
+        if (w <= 0 || (size_t) w >= sizeof ent) return;
+        wire_v1_send_bulk((const uint8_t*) ent, (size_t) w);
+        if (mal) {
+            static const char k[] = ",\"mal\":\"";
+            wire_v1_send_bulk((const uint8_t*) k, sizeof k - 1);
+            repl_list_escapa(mal, ent, sizeof ent);
+            wire_v1_send_bulk((const uint8_t*) ent, strlen(ent));
+            wire_v1_send_bulk((const uint8_t*) "\"", 1);
+        }
+        wire_v1_send_bulk((const uint8_t*) "}", 1);
+    }
     c->first = 0;
     c->emitidas++;
 }
@@ -539,8 +608,65 @@ static void repl_list_cb(const char* name, int is_dir, uint32_t size, void* user
     repl_list_emite(c, full, size, NULL);
 }
 
+/* La cola de directorios del recorrido (BFS). Una: la comparten el LIST entero y el troceado, que no van a la vez. */
+static char s_list_pend[REPL_LIST_MAX_DIRS][REPL_LIST_NAME_MAX];
+
+/* El contexto, listo para recorrer desde la raíz.
+ *
+ * U3.23 — `memset` y NO campo a campo, que es como estaba y me mordió: al
+ * añadir los casilleros del desglose (`nraices`, `raiz*`) la inicialización
+ * parcial los dejó con BASURA de pila, y `repl_list_apunta` usaba `nraices`
+ * como tope de bucle → recorría memoria ajena y el LIST no contestaba.
+ *
+ * El código del ESP32 que sustituí ya hacía `memset` y llevaba el porqué
+ * escrito («con la struct ya no de un solo campo, la inicialización parcial
+ * saca -Wmissing-field-initializers»). Estaba dicho y no lo traje. */
+static void repl_list_empieza(repl_list_ctx_t* c, long id, int trozos) {
+    memset(c, 0, sizeof *c);
+    c->id = id; c->first = 1; c->trozos = trozos;
+    c->pending = s_list_pend;
+    s_ex_n = 0; s_ex_usado = 0; s_ex_sin_sitio = 0;    /* V7/H8 E1 */
+    s_lp_n = 0;                                         /* #495 (paso 4) */
+    snprintf(s_list_pend[c->tail++], REPL_LIST_NAME_MAX, "/");
+}
+
+/* El directorio `i` de la cola: listarlo (el callback emite las entradas y apunta los subdirectorios y los módulos),
+ * examinar lo apuntado con el cerrojo del FS suelto y anotar lo que costó. El LIST entero los hace todos seguidos; el
+ * troceado, uno por paso. */
+static void repl_list_un_dir(repl_list_ctx_t* c, int i) {
+    char dir[REPL_LIST_NAME_MAX];
+    snprintf(dir, sizeof dir, "%.63s", c->pending[i]);   /* copia: sin aliasing */
+    c->dir = dir;
+    int   antes = c->emitidas;
+    long  t0    = (long) bpvm_platform_now_ms();
+    (void) bpvm_fs_list(dir, repl_list_cb, c);   /* un volumen caido no borra el resto */
+    repl_list_examina(c);                        /* V7/H8 E1: con el cerrojo del FS ya suelto */
+    repl_list_apunta(c, dir, c->emitidas - antes,
+                     (long) bpvm_platform_now_ms() - t0);
+    c->dir = NULL;                               /* era de esta pila */
+}
+
+/* #398/#408 — el desglose, en UNA línea (el log es un bien escaso, #423).
+ * `total` es lo que tarda el device; lo que el usuario ve incluye además el
+ * viaje por el wire y el pintado del árbol, y eso lo mide el IDE. Que los dos
+ * números existan es lo que dirá si el tiempo se va aquí o allí. (En el troceado,
+ * el total va del primer paso al último: incluye lo que esperó entre medias.) */
+static void repl_list_cuenta(const repl_list_ctx_t* c, long t_ini) {
+    char det[160];
+    int o = 0;
+    for (int i = 0; i < c->nraices && o < (int) sizeof(det) - 24; i++) {
+        o += snprintf(det + o, sizeof(det) - (size_t) o, " %s:%d/%ldms",
+                      c->raiz[i], c->raiz_n[i], c->raiz_ms[i]);
+    }
+    det[o] = '\0';
+    log_printf("ls: %d ent en %ld ms |%s (%d dirs omitidos)",
+               c->emitidas, (long) bpvm_platform_now_ms() - t_ini, det, c->omitidas);
+    if (s_ex_sin_sitio > 0)
+        log_printf("ls: %d modulos/packs SIN EXAMINAR (no cabian en el bufer del examen: %d por directorio)",
+                   s_ex_sin_sitio, REPL_EXAMEN_MAX);
+}
+
 static void repl_list(long id) {
-    static char pending[REPL_LIST_MAX_DIRS][REPL_LIST_NAME_MAX];
     const long  t_ini = (long) bpvm_platform_now_ms();   /* U3.23: total del listado */
     char head[64];
     int hn = snprintf(head, sizeof head,
@@ -548,52 +674,63 @@ static void repl_list(long id) {
     if (hn <= 0) return;
     wire_v1_send_bulk((const uint8_t*) head, (size_t) hn);
 
-    /* U3.23 — `memset` y NO campo a campo, que es como estaba y me mordió: al
-     * añadir los casilleros del desglose (`nraices`, `raiz*`) la inicialización
-     * parcial los dejó con BASURA de pila, y `repl_list_apunta` usaba `nraices`
-     * como tope de bucle → recorría memoria ajena y el LIST no contestaba.
-     *
-     * El código del ESP32 que sustituí ya hacía `memset` y llevaba el porqué
-     * escrito («con la struct ya no de un solo campo, la inicialización parcial
-     * saca -Wmissing-field-initializers»). Estaba dicho y no lo traje. */
     repl_list_ctx_t c;
-    memset(&c, 0, sizeof c);
-    c.id = id; c.first = 1;
-    c.pending = pending;
-    s_ex_n = 0; s_ex_usado = 0; s_ex_sin_sitio = 0;    /* V7/H8 E1 */
-    snprintf(pending[c.tail++], REPL_LIST_NAME_MAX, "/");
-    int head_i = 0;
-    while (head_i < c.tail) {
-        char dir[REPL_LIST_NAME_MAX];
-        snprintf(dir, sizeof dir, "%.63s", pending[head_i++]);   /* copia: sin aliasing */
-        c.dir = dir;
-        int   antes = c.emitidas;
-        long  t0    = (long) bpvm_platform_now_ms();
-        (void) bpvm_fs_list(dir, repl_list_cb, &c);   /* un volumen caido no borra el resto */
-        repl_list_examina(&c);                         /* V7/H8 E1: con el cerrojo del FS ya suelto */
-        repl_list_apunta(&c, dir, c.emitidas - antes,
-                         (long) bpvm_platform_now_ms() - t0);
-    }
+    repl_list_empieza(&c, id, 0);
+    for (int i = 0; i < c.tail; i++) repl_list_un_dir(&c, i);   /* la cola crece según se recorre */
     char cola[40];
     int cn = snprintf(cola, sizeof cola, "],\"omitted\":%d}", c.omitidas);
     if (cn > 0) wire_v1_send_line(cola, (size_t) cn);
+    repl_list_cuenta(&c, t_ini);
+}
 
-    /* #398/#408 — el desglose, en UNA línea (el log es un bien escaso, #423).
-     * `total` es lo que tarda el device; lo que el usuario ve incluye además el
-     * viaje por el wire y el pintado del árbol, y eso lo mide el IDE. Que los dos
-     * números existan es lo que dirá si el tiempo se va aquí o allí. */
-    char det[160];
-    int o = 0;
-    for (int i = 0; i < c.nraices && o < (int) sizeof(det) - 24; i++) {
-        o += snprintf(det + o, sizeof(det) - (size_t) o, " %s:%d/%ldms",
-                      c.raiz[i], c.raiz_n[i], c.raiz_ms[i]);
+/* ── #495 (paso 4): EL LIST TROCEADO ─────────────────────────────────────────────────────────────────────────────
+ * Con "chunked":true el recorrido no se hace de una vez: un directorio por paso (bpvm_repl_paso), sus entradas en
+ * líneas LIST_PART, y al final LIST_END con `omitted`. Entre directorio y directorio, el cable es de los demás: la
+ * salida del programa, un KILL, los trozos de una descarga. Uno a la vez: comparte con el LIST entero la cola de
+ * directorios y la del examen. */
+static struct {
+    int  activo;
+    int  head_i;
+    long t_ini;
+    repl_list_ctx_t c;
+} s_ls;
+
+static void ls_abortar(const char* por_que) {
+    if (!s_ls.activo) return;
+    s_ls.activo = 0;
+    s_lp_n = 0;                      /* la parte a medias no sale */
+    s_ex_n = 0; s_ex_usado = 0;
+    log_printf("ls: listado cortado (%s)", por_que);
+    wire_v1_send_error(s_ls.c.id, "ABORTED", por_que);
+}
+
+static void repl_list_troceado(long id) {
+    if (s_ls.activo) { wire_v1_send_error(id, "BUSY", "ya hay un listado en curso"); return; }
+    repl_list_empieza(&s_ls.c, id, 1);
+    s_ls.head_i = 0;
+    s_ls.t_ini  = (long) bpvm_platform_now_ms();
+    s_ls.activo = 1;                 /* el primer directorio, en el próximo paso */
+}
+
+/* Un paso del listado: un directorio (sus LIST_PART), o el LIST_END. 1 si queda más. */
+static int ls_paso(void) {
+    repl_list_ctx_t* c = &s_ls.c;
+    char lin[64];
+    int off;
+    if (!s_ls.activo) return 0;
+    if (s_ls.head_i < c->tail) {
+        repl_list_un_dir(c, s_ls.head_i++);
+        repl_list_parte_sale();      /* lo de este directorio, fuera */
+        if (s_ls.head_i < c->tail) return 1;
     }
-    det[o] = '\0';
-    log_printf("ls: %d ent en %ld ms |%s (%d dirs omitidos)",
-               c.emitidas, (long) bpvm_platform_now_ms() - t_ini, det, c.omitidas);
-    if (s_ex_sin_sitio > 0)
-        log_printf("ls: %d modulos/packs SIN EXAMINAR (no cabian en el bufer del examen: %d por directorio)",
-                   s_ex_sin_sitio, REPL_EXAMEN_MAX);
+    s_ls.activo = 0;
+    off = wire_v1_msg_begin(lin, sizeof lin, 0, "LIST_END", c->id);
+    if (off >= 0) off = wire_v1_field_long(lin, sizeof lin, (size_t) off, "omitted", (long) c->omitidas);
+    if (off >= 0) off = wire_v1_msg_end(lin, sizeof lin, (size_t) off);
+    if (off < 0) wire_v1_send_error(c->id, "INTERNAL_ERROR", "LIST_END no cabe");
+    else         wire_v1_send_line(lin, (size_t) off);
+    repl_list_cuenta(c, s_ls.t_ini);
+    return 0;
 }
 
 
@@ -728,6 +865,9 @@ static void repl_info(long id) {
     CAMPO_L("psramBytes",   in.psram_bytes);
     CAMPO_L("vmHeapBytes",  in.vm_heap_bytes);
     CAMPO_L("vmStackBytes", in.vm_stack_bytes);
+    /* #495 (paso 4) — lo que le sobró de pila al hilo `io` en el último RUN (-1: sin RUN, o el PC no lo sabe). Corre el
+     * GET y el LIST troceados durante un RUN, con 4 KB de pila en la Pico y la STM32: se mira, no se supone. */
+    CAMPO_L("ioStackFree",  bpvm_io_pila_libre_ultima());
     CAMPO_L("fsTotalBytes", in.fs_total_bytes);
     CAMPO_L("fsUsedBytes",  in.fs_used_bytes);
     /* V6/T1 (11-sep) — la PANTALLA, si la placa la tiene: el runner de las
@@ -1072,11 +1212,161 @@ static int acaba_la_subida(const char* type) {
     return 0;
 }
 
+/* ══════════════ #495 (paso 4) — LA DESCARGA TROCEADA ══════════════
+ *
+ * Un GET con "chunked":true no se manda de una vez: deja aquí la descarga —el fichero abierto con el cursor de #491
+ * (el cerrojo del FS, por lectura y no todo el envío), por dónde va y el CRC de lo mandado— y cada paso manda UN
+ * trozo: un GET_PART con su `off` y GET_TROZO bytes de bulk (la línea y sus bytes de una vez, wire_v1_send_msg) y, al
+ * acabar, el GET_END con el tamaño y el CRC-32 de lo mandado (el de STAT). Sin acuse: aquí recibe el PC, que lee
+ * siempre; la ventana de la subida protege a la placa cuando es ella la que recibe.
+ *
+ * Una a la vez (Eduardo: «1 a 1») y no con una subida a medias. El trozo es el de la subida de las cuatro familias
+ * (put_trozo, 512 B); el cliente junta por `off`, así que no hace falta anunciarlo. */
+#define GET_TROZO 512u
+static struct {
+    int      activo;
+    long     id;
+    char     path[BPVM_FS_PATH_MAX];
+    uint32_t size;       /* al empezar */
+    uint32_t off;        /* lo mandado */
+    uint32_t crc;        /* el estado del CRC-32 de lo mandado (crc32.h: le falta el xor final) */
+    uint64_t abierto[PUT_ABIERTO_BYTES / 8];   /* el fichero abierto (#491), como el de la subida */
+} s_get;
+static uint8_t s_get_trozo[GET_TROZO];
+
+/* La descarga, cortada: un ERROR con su id, para que el cliente no la espere (y el log lo dice). */
+static void get_abortar(const char* code, const char* por_que) {
+    if (!s_get.activo) return;
+    (void) bpvm_fs_fclose(s_get.abierto);
+    s_get.activo = 0;
+    log_printf("get: %s cortado a %lu de %lu B (%s)", s_get.path, (unsigned long) s_get.off,
+               (unsigned long) s_get.size, por_que);
+    wire_v1_send_error(s_get.id, code, por_que);
+}
+
+static void repl_get_troceado(long id, json_obj_t* obj) {
+    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope (se copia al empezar) */
+    uint32_t size = 0;
+    if (path == NULL)                      { wire_v1_send_error(id, "INVALID_PARAM", "falta path"); return; }
+    if (s_get.activo)                      { wire_v1_send_error(id, "BUSY", "ya hay una descarga en curso: una cada vez"); return; }
+    if (s_put_sess.active)                 { wire_v1_send_error(id, "BUSY", "hay una subida a medias: un fichero cada vez"); return; }
+    if (strlen(path) >= sizeof s_get.path) { wire_v1_send_error(id, "INVALID_PATH", "ruta demasiado larga"); return; }
+    if (bpvm_fs_stat(path, &size) != 0)    { wire_v1_send_error(id, "NOT_FOUND", "no existe"); return; }
+    if (bpvm_fs_file_block_size(path) > sizeof s_get.abierto
+            || bpvm_fs_fopen(s_get.abierto, (uint32_t) sizeof s_get.abierto, path, BPVM_FS_O_READ) != 0) {
+        wire_v1_send_error(id, "INTERNAL_ERROR", "no se pudo abrir");
+        return;
+    }
+    snprintf(s_get.path, sizeof s_get.path, "%s", path);
+    s_get.id   = id;
+    s_get.size = size;
+    s_get.off  = 0;
+    s_get.crc  = BPVM_CRC32_INIT;
+    s_get.activo = 1;                /* el primer trozo, en el próximo paso */
+}
+
+/* Un paso de la descarga: el GET_PART siguiente, o el GET_END. 1 si queda más. */
+static int get_paso(void) {
+    char lin[112];
+    int off;
+    if (!s_get.activo) return 0;
+    if (s_get.off < s_get.size) {
+        uint32_t k = s_get.size - s_get.off;
+        long r;
+        if (k > GET_TROZO) k = GET_TROZO;
+        r = bpvm_fs_fread(s_get.abierto, s_get_trozo, k);
+        if (r < 0) { get_abortar("INTERNAL_ERROR", "no se pudo leer"); return 0; }
+        if (r > 0) {
+            off = wire_v1_msg_begin(lin, sizeof lin, 0, "GET_PART", s_get.id);
+            if (off >= 0) off = wire_v1_field_ulong(lin, sizeof lin, (size_t) off, "off", (unsigned long) s_get.off);
+            if (off >= 0) off = wire_v1_field_bulk(lin, sizeof lin, (size_t) off, (size_t) r);
+            if (off >= 0) off = wire_v1_msg_end(lin, sizeof lin, (size_t) off);
+            if (off < 0) { get_abortar("INTERNAL_ERROR", "GET_PART no cabe"); return 0; }
+            wire_v1_send_msg(lin, (size_t) off, s_get_trozo, (size_t) r);
+            s_get.crc = bpvm_crc32_update(s_get.crc, s_get_trozo, (size_t) r);
+            s_get.off += (uint32_t) r;
+            if (s_get.off < s_get.size) return 1;
+        }
+        /* r == 0 antes de llegar al tamaño: el fichero ha encogido mientras se bajaba. Se acaba con lo mandado. */
+    }
+    {
+        /* El GET_END: el tamaño y el CRC-32 de lo MANDADO; y `changed` si el fichero cambió de tamaño mientras se
+         * bajaba (el programa escribe en él) o se acabó antes: lo bajado puede no cuadrar, y el IDE lo dice. Lo que
+         * cambie sin cambiar de tamaño no se ve: habría que releerlo entero. */
+        uint32_t ahora = 0;
+        int changed = (s_get.off != s_get.size || bpvm_fs_stat(s_get.path, &ahora) != 0 || ahora != s_get.size);
+        (void) bpvm_fs_fclose(s_get.abierto);
+        s_get.activo = 0;
+        if (changed)
+            log_printf("get: %s cambio mientras se bajaba (%lu B al empezar, %lu mandados, %lu ahora)", s_get.path,
+                       (unsigned long) s_get.size, (unsigned long) s_get.off, (unsigned long) ahora);
+        off = wire_v1_msg_begin(lin, sizeof lin, 0, "GET_END", s_get.id);
+        if (off >= 0) off = wire_v1_field_ulong(lin, sizeof lin, (size_t) off, "size", (unsigned long) s_get.off);
+        if (off >= 0) off = wire_v1_field_ulong(lin, sizeof lin, (size_t) off, "crc",
+                                                 (unsigned long) bpvm_crc32_final(s_get.crc));
+        if (off >= 0 && changed) off = wire_v1_field_bool(lin, sizeof lin, (size_t) off, "changed", 1);
+        if (off >= 0) off = wire_v1_msg_end(lin, sizeof lin, (size_t) off);
+        if (off < 0) wire_v1_send_error(s_get.id, "INTERNAL_ERROR", "GET_END no cabe");
+        else         wire_v1_send_line(lin, (size_t) off);
+    }
+    return 0;
+}
+
+/* El GET y el LIST: troceados si el cliente lo pide; si no, enteros como siempre —y no con una transferencia de lo
+ * mismo en curso: comparten con ella el fichero (uno cada vez) o la cola del recorrido—. */
+static void repl_get_elige(long id, json_obj_t* obj) {
+    if (json_get_bool(obj, "chunked", 0)) { repl_get_troceado(id, obj); return; }
+    if (s_get.activo) { wire_v1_send_error(id, "BUSY", "hay una descarga en curso: un fichero cada vez"); return; }
+    repl_get(id, obj);
+}
+
+static void repl_list_elige(long id, json_obj_t* obj) {
+    if (json_get_bool(obj, "chunked", 0)) { repl_list_troceado(id); return; }
+    if (s_ls.activo) { wire_v1_send_error(id, "BUSY", "hay un listado en curso"); return; }
+    repl_list(id);
+}
+
+/* #495 (paso 4) — ¿Corta este verbo una descarga en curso? Los mismos que acaban una subida (un cliente nuevo, un
+ * RESET, otra subida, los que escriben en el FS), menos el RUN: la descarga sigue durante el programa, en `io`. */
+static int corta_la_descarga(const char* type) {
+    return strcmp(type, "RUN") != 0 && acaba_la_subida(type);
+}
+
+/* Un cliente nuevo (o ido): lo que se le mandaba al de antes, cortado. */
+static void corta_las_transferencias(const char* por_que) {
+    get_abortar("ABORTED", por_que);
+    ls_abortar(por_que);
+}
+
 void bpvm_repl_antes_de_despachar(const char* type) {
     char por_que[48];
-    if (!s_put_sess.active || type == NULL || !acaba_la_subida(type)) return;
+    if (type == NULL) return;
     snprintf(por_que, sizeof por_que, "llego %s", type);
-    put_abortar(por_que);
+    if (s_put_sess.active && acaba_la_subida(type)) put_abortar(por_que);
+    if (strcmp(type, "HELLO") == 0 || strcmp(type, "RESET") == 0) corta_las_transferencias(por_que);
+    else if (s_get.activo && corta_la_descarga(type)) get_abortar("ABORTED", por_que);
+}
+
+void bpvm_repl_cliente_ido(void) {
+    if (s_put_sess.active) put_abortar("el cliente se fue");
+    corta_las_transferencias("el cliente se fue");
+}
+
+int bpvm_repl_paso(void) {
+    int queda = get_paso();
+    queda |= ls_paso();
+    return queda;
+}
+
+int bpvm_repl_hay_transferencia(void) {
+    return s_get.activo || s_ls.activo;
+}
+
+int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj) {
+    if (type == NULL) return 0;
+    if (strcmp(type, "STAT") == 0) return 1;
+    if (strcmp(type, "GET") == 0 || strcmp(type, "LIST") == 0) return json_get_bool(obj, "chunked", 0);
+    return 0;
 }
 
 static void reply_put_field(const char* type, long id, unsigned long val,
@@ -1293,7 +1583,7 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
      * respuesta dice que esta placa no tiene SD, no «type no implementado». */
     if (strcmp(type, "SD_INFO")  == 0) { bpvm_sd_placa_sd_info(id);  return 1; }
     if (strcmp(type, "SD_MOUNT") == 0) { bpvm_sd_placa_sd_mount(id); return 1; }
-    if (strcmp(type, "LIST") == 0) { repl_list(id); return 1; }
+    if (strcmp(type, "LIST") == 0) { repl_list_elige(id, obj); return 1; }   /* #495 (paso 4): entero o troceado */
     /* ── grupo 4: los de la cintura ── */
     if (strcmp(type, "HELLO")  == 0) { if (!sin_ops(id, "HELLO"))  repl_hello(id);       return 1; }
     if (strncmp(type, "PUT", 3) == 0
@@ -1320,7 +1610,7 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
     if (strcmp(type, "DEL")    == 0) { repl_del(id, obj);    return 1; }
     if (strcmp(type, "STAT")   == 0) { repl_stat(id, obj);   return 1; }
     if (strcmp(type, "RENAME") == 0) { repl_rename(id, obj); return 1; }
-    if (strcmp(type, "GET")    == 0) { repl_get(id, obj);    return 1; }
+    if (strcmp(type, "GET")    == 0) { repl_get_elige(id, obj); return 1; }   /* #495 (paso 4): entero o troceado */
     if (strcmp(type, "MKDIR")  == 0) {
         /* U3.25 — CREA EL DIRECTORIO DE VERDAD.
          *

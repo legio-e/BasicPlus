@@ -191,4 +191,13 @@ void wire_v1_send_bulk(const uint8_t* data, size_t n) {
     if (n) uart_write_bytes(WIRE_UART, (const char*) data, n);
 }
 
+/* #495 (paso 4) — la línea y sus bytes con el cerrojo cogido UNA vez: lo que tiene que ir junto (bpvm_wire_v1.h). */
+void wire_v1_send_msg(const char* line, size_t len, const uint8_t* bulk, size_t n) {
+    tx_lock();
+    if (len) uart_write_bytes(WIRE_UART, line, len);
+    uart_write_bytes(WIRE_UART, "\n", 1);
+    if (n) uart_write_bytes(WIRE_UART, (const char*) bulk, n);
+    tx_unlock();
+}
+
 

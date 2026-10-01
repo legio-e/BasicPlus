@@ -8,7 +8,9 @@
 //   3. EL SEGUNDO INTENTO (Eduardo, 1-oct: «que lo haga el IDE»): la subida grande
 //      otra vez con un trozo recortado 16 bytes —un cable que pierde bytes—; tiene
 //      que llegar igual, y por el segundo intento;
-//   4. borra lo subido.
+//   4. (paso 4) la bajada y el listado troceados: el fichero grande, bajado y medido,
+//      y en el listado con su tamaño;
+//   5. borra lo subido.
 //
 // Uso:
 //   java -cp BpIde/target/BpIde-6.0.jar com.mycompany.bpide.SubidaSmoke <COMx | host:puerto> [KB]
@@ -70,6 +72,16 @@ public final class SubidaSmoke {
                  "un trozo recortado 16 bytes (un cable que pierde bytes): hizo falta el segundo intento");
             mira(dijo == d.length && Arrays.equals(d, vuelta),
                  String.format("... y el fichero llegó entero (%.2f s con la espera del cable)", s));
+            // #495 (paso 4) — la bajada y el listado TROCEADOS, que el IDE pide con "chunked" (una placa anterior
+            // contesta entero, y también vale): el fichero grande, bajado y medido, y en el listado con su tamaño.
+            long t1 = System.nanoTime();
+            byte[] bajado = c.downloadFile(ruta, 30_000);
+            double sb = (System.nanoTime() - t1) / 1e9;
+            mira(Arrays.equals(d, bajado), String.format("%d B bajados en %.2f s, iguales", bajado.length, sb));
+            boolean esta = false;
+            for (BpvmClient.RemoteFile f : c.listFiles("", 30_000).files)
+                if (f.name.equals(ruta) && f.size == d.length) esta = true;
+            mira(esta, "el listado lo trae, con su tamaño");
             c.deleteFile(ruta, 10_000);
         }
         System.out.println(fallos == 0 ? "[status=OK]" : "[status=FAIL]");

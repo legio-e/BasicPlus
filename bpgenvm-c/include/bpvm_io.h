@@ -142,6 +142,12 @@ void bpvm_io_writev(struct bpvm* vm, const bpvm_trozo_t* t, int n);
  * `poll_cb` viejo cuando quien atiende el wire ya es `io`). */
 int  bpvm_io_running(const struct bpvm* vm);
 
+/* V7/H8 #495 (paso 4) — LO QUE LE SOBRÓ DE PILA A `io` en el último RUN (la marca de agua, en bytes); -1 si no ha
+ * habido RUN o la plataforma no lo sabe (el PC). Desde el paso 4, `io` corre también el GET y el LIST troceados —el
+ * recorrido del FS, el examen de E1—, y su pila es de 4 KB en la Pico y la STM32: el INFO lo publica (`ioStackFree`)
+ * para que se vea, y no se suponga, cuánto queda. */
+long bpvm_io_pila_libre_ultima(void);
+
 #ifdef __cplusplus
 }
 #endif

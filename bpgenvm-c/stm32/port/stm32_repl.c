@@ -369,6 +369,7 @@ static int stm32_io_poll(void* user) {
 
 static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
+    (void) bpvm_repl_paso();                  /* #495 (paso 4): un trozo de lo que se esté mandando (GET, LIST) */
     int c = stm32_wire_getchar();
     if (c < 0) return 0;
     int n = wire_v1_recv_line(c, s_line, sizeof(s_line));
@@ -384,8 +385,15 @@ static int stm32_run_poll_cb(bpvm_t* vm, void* user) {
      * tener rama. En dos tiempos: marcar el id y devolver 1 para que el RUN muera
      * por el camino de siempre, y reiniciar DESPUÉS, ya fuera de `bpvm_run`. */
     if (strcmp(type, "RESET") == 0) { s_reset_ack_id = rid; return 1; }
-    if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 0; }
-    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL/RESET");
+    if (strcmp(type, "HELLO") == 0) {
+        bpvm_repl_antes_de_despachar(type);   /* #495 (paso 4): lo que se mandaba al cliente de antes, cortado */
+        bpvm_repl_dispatch(type, rid, &obj);
+        return 0;
+    }
+    /* #495 (paso 4) — los de lectura que no monopolizan el cable: el GET y el LIST troceados (un trozo por vuelta
+     * de `io`, entre la salida del programa) y STAT. */
+    if (bpvm_repl_atiende_en_run(type, &obj)) { bpvm_repl_dispatch(type, rid, &obj); return 0; }
+    wire_v1_send_error(rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
     return 0;
 }
 
@@ -1066,6 +1074,7 @@ static void stm32_lazo(void) {
     for (;;) {
         int c = stm32_wire_getchar();
         if (c == '{') dispatch(c);
+        else if (c < 0) (void) bpvm_repl_paso();   /* #495 (paso 4): sin nada que leer, el trozo siguiente de lo que se esté mandando */
 
         uint32_t now = HAL_GetTick();
         if (now - last_blink >= 500U) {     /* heartbeat */

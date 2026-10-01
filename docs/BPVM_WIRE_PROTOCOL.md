@@ -260,6 +260,10 @@ por nombre y distingue «ausente» (firmware viejo: no compara) de «vacío» o 
 Una Pico con firmware anterior manda `sqliteBase`/`sqliteBytes`/`sqliteStatus`/`sqliteAskedMb`/`sqliteMinMb` (sólo
 contaban la reserva en PSRAM): el IDE lee los dos.
 
+`ioStackFree` (V7/H8 `#495`, paso 4): lo que le sobró de pila al hilo `io` en el último RUN, en bytes (la marca de
+agua); -1 si no ha habido RUN o la plataforma no lo sabe (el PC). Desde el paso 4, `io` corre también el `GET` y el
+`LIST` troceados durante un RUN, con 4 KB de pila en las placas: se publica para mirarlo, no suponerlo.
+
 #### `TIME` (request)
 
 Sincroniza el RTC del dispositivo con el wall clock del IDE.
@@ -320,6 +324,19 @@ cargador, leyendo sólo la cabecera (`bpvm_examen.h`); el contenido no. La VM-Ja
 que carga. Por ejemplo: `"dañado: la cabecera dice 144 B y el fichero tiene 94"`, `"formato no válido: MOD5, …"`,
 `"formato no válido para esta placa: código de otra arquitectura (65535; esta VM ejecuta la 40)"`.
 
+**Troceado** (V7/H8 `#495`, paso 4; si el cliente lo pide con `"chunked":true`): las entradas llegan en líneas
+`LIST_PART` acotadas —las de un directorio; uno grande, en varias— y al final `LIST_END` con `omitted`. La placa
+recorre un directorio por vuelta de su lazo, así que entre parte y parte pueden ir otros mensajes (la salida de un
+programa, los trozos de un `GET`). Un servidor que no lo conoce contesta el `LIST_REPLY` entero, y el cliente acepta
+las dos formas. Uno a la vez: otro troceado con uno en curso, `BUSY`.
+
+```
+C→S {"type":"LIST","id":9,"path":"","chunked":true}
+S→C {"type":"LIST_PART","id":9,"entries":[{"name":"/app/Hello.mod","size":3519,"crc":-1,"isDir":false,"mtime":0}]}
+S→C {"type":"LIST_PART","id":9,"entries":[{"name":"/lib/Core.mod","size":20711,"crc":-1,"isDir":false,"mtime":0},…]}
+S→C {"type":"LIST_END","id":9,"omitted":0}
+```
+
 #### `STAT` (request)
 
 Metadata de un fichero individual — por **ruta**, o (`#466`) por **nombre de módulo**.
@@ -367,6 +384,35 @@ Reply:
 {"type":"GET_REPLY","id":N,"bulk":3519}\n
 <3519 bytes raw>
 ```
+
+**Troceado** (V7/H8 `#495`, paso 4; si el cliente lo pide con `"chunked":true`). Eduardo (28-sep): *«el get tiene que
+trocearse y los paquetes de los diferentes comandos se pueden mezclar, tiene que ser el destinatario el que vaya
+recogiendo los diferentes paquetes y los vaya agrupando»*.
+
+```
+C→S {"type":"GET","id":7,"path":"/app/datos.bin","chunked":true}
+S→C {"type":"GET_PART","id":7,"off":0,"bulk":512}\n<512 bytes>
+S→C {"type":"OUTPUT",…}                                  (lo que sea: entre trozo y trozo, el cable es de todos)
+S→C {"type":"GET_PART","id":7,"off":512,"bulk":512}\n<512 bytes>
+…
+S→C {"type":"GET_END","id":7,"size":40000,"crc":3141592653}
+```
+
+- **Un trozo por vuelta** del lazo de la placa (o de su hilo `io`, durante un RUN), de hasta 512 B. Cada `GET_PART` es
+  un mensaje entero —la línea y sus bytes, con el cerrojo del cable cogido una vez—; entre dos, cualquier otro.
+- **Sin acuse**: recibe el cliente, que lee siempre; el control de flujo es el del cable (el NAK del USB, la ventana de
+  TCP, la UART que espera). El cliente junta por `off`.
+- **`GET_END`**: `size` es lo mandado y `crc` el CRC-32 de lo mandado (el de `STAT`); el cliente lo comprueba.
+  `changed:true` si el fichero cambió de tamaño mientras se bajaba (lo escribe el programa) o se acabó antes: lo bajado
+  puede no cuadrar. Lo que cambie sin cambiar de tamaño no se ve.
+- **Un error a mitad**, `ERROR` con el id del `GET` (hoy, con el bulk anunciado, no había forma de decirlo).
+- **Una descarga a la vez** (Eduardo: *«1 a 1»*): otra con una en curso, o con una subida a medias, `BUSY`; un `GET`
+  entero con una troceada en curso, también. Un `LIST` sí puede ir con ella.
+- **La cortan** —`ERROR` con su id, `ABORTED`— lo mismo que acaba una subida: un `HELLO`, un `RESET`, otra subida y los
+  que escriben en el FS (`DEL`, `MKDIR`, `RMDIR`, `RENAME`, `FORMAT`, `SAVE`). Un `RUN`, no: sigue durante el programa.
+  Un `HELLO` corta también un `LIST` troceado.
+- Sin `chunked`, el `GET_REPLY` entero de siempre; un servidor que no lo conoce contesta así, y el cliente acepta las
+  dos formas.
 
 #### `PUT` (request con bulk)
 
@@ -509,6 +555,15 @@ Mata un programa en ejecución.
 Request: `{"type":"KILL","id":N,"session":3}`
 
 Reply: `{"type":"KILL_REPLY","id":N}`
+
+#### Durante un RUN
+
+Mientras corre un programa, la placa atiende `HELLO` (un IDE que se conecta con algo en marcha), `KILL` y `RESET`, el
+ramo de depuración y —desde V7/H8 `#495`, paso 4— los de lectura que no monopolizan el cable: **`STAT` y el `GET` y el
+`LIST` troceados**, cuyos trozos van entre la salida del programa. Lo demás contesta `BUSY` con el mismo texto en las
+cuatro familias (*«ejecución en curso: sólo HELLO, KILL, RESET, STAT y GET/LIST troceados»*): los enteros (un `GET`
+entero dejaría el cable sin salida ni `KILL` mientras dura), `LIST_DIR` (su foto del directorio sale de la zona de
+rascar, la misma del `listDir` del programa) y los que escriben (escribir donde el programa lee es otra conversación).
 
 #### `STDIN` (request, futuro)
 
@@ -818,6 +873,7 @@ Los `code` de `ERROR` replies son strings estables:
 | `UNSUPPORTED` | Operación no soportada por este servidor (ver capabilities). |
 | `PROTOCOL_ERROR` | Mensaje mal formado o secuencia inválida. |
 | `INTERNAL_ERROR` | Bug del servidor. Incluye `message` para diagnóstico. |
+| `ABORTED` | Una transferencia troceada (`GET`, `LIST`) cortada a medias: llegó un verbo que no convive con ella (§6.2). |
 
 ### 8.2 Mensajes desconocidos
 
@@ -916,6 +972,8 @@ Anotadas aquí para no perderlas:
 | `LIST` | C→S | `LIST_REPLY` | FILES | – |
 | `STAT` | C→S | `STAT_REPLY` | FILES | – |
 | `GET` | C→S | `GET_REPLY` | FILES | reply lleva bulk |
+| `GET_PART` / `GET_END` | S→C | trozos de un `GET` troceado | FILES | `GET_PART` lleva bulk (`#495`) |
+| `LIST_PART` / `LIST_END` | S→C | trozos de un `LIST` troceado | FILES | `#495` |
 | `PUT` | C→S | `PUT_REPLY` | FILES | request lleva bulk |
 | `DEL` | C→S | `DEL_REPLY` | FILES | – |
 | `MKDIR` | C→S | `MKDIR_REPLY` | FILES | – |

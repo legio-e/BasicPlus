@@ -2452,8 +2452,10 @@ public final class PicoExplorer extends JPanel {
                     String msg = cause.getMessage() == null ? "" : cause.getMessage();
                     // #256 — un BUSY aquí no es un fallo: la placa está
                     // ejecutando un programa (p.ej. un autorun) y durante un
-                    // run solo atiende HELLO/KILL. Mensaje accionable en vez
-                    // del error crudo del wire.
+                    // run sólo atiende HELLO/KILL/RESET y, para leer, STAT y el
+                    // GET y el LIST troceados (#495, paso 4: el árbol y abrir un
+                    // fichero sí van; subir o borrar, no). Mensaje accionable en
+                    // vez del error crudo del wire.
                     if (msg.contains("BUSY")) {
                         status.setText("placa ocupada (programa en ejecución)");
                         if (outputSink != null) {

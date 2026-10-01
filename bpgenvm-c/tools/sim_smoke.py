@@ -72,6 +72,30 @@ class Wire:
         r = self.call("GET", path=path)
         if r.get("type") != "GET_REPLY": return r, b""
         return r, self._bulk(r["bulk"])
+    def msg(self):
+        """#495 paso 4 — un mensaje CUALQUIERA: la línea y, si anuncia "bulk", sus bytes (en "_bulk")."""
+        m = self._line()
+        if m.get("bulk"): m["_bulk"] = self._bulk(m["bulk"])
+        return m
+    def send(self, typ, **fields):
+        """Manda sin esperar respuesta; devuelve su id."""
+        return self.send_many((typ, fields))[0]
+    def send_many(self, *peticiones):
+        """Varias peticiones en UN envío (llegan juntas al cable): (type, campos)... → sus ids."""
+        ids, out = [], b""
+        for typ, fields in peticiones:
+            self.id += 1
+            f = dict(fields); f.update(type=typ, id=self.id)
+            out += (json.dumps(f) + "\n").encode()
+            ids.append(self.id)
+        self.s.sendall(out)
+        return ids
+    def pide(self, typ, **fields):
+        """Manda y espera SU respuesta, saltando lo demás (los OUTPUT de un programa en marcha)."""
+        i = self.send(typ, **fields)
+        while True:
+            m = self.msg()
+            if m.get("id") == i: return m
     def drain_run(self, timeout=30.0):
         """Consume los eventos OUTPUT hasta el EXITED. Devuelve (texto, exited)."""
         out, t0 = [], time.time()
@@ -126,6 +150,58 @@ def build_hello(dest):
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     mod = os.path.join(dest, "Hello.mod")
     return mod if rc.returncode == 0 and os.path.exists(mod) else None
+
+# #495 paso 4 — un programa que imprime SIN PARAR (hasta que lo paren): el GET y el LIST troceados tienen que
+# abrirse paso entre su salida, y su salida entre ellos.
+CHARLA_BP = """module Charla
+  function Main()
+    var i: integer := 0
+    while true do
+      print "charla ", i
+      i := i + 1
+    endwh
+  end Main
+end Charla
+"""
+
+def build_bp(dest, nombre, fuente):
+    """Compila un .bp escrito aquí con el frontend. None si no se puede (sin java/jar)."""
+    if not os.path.exists(JAR) or shutil.which("java") is None: return None
+    src = os.path.join(dest, nombre + ".bp")
+    with open(src, "w", encoding="utf-8") as f: f.write(fuente)
+    rc = subprocess.run(["java", "-jar", JAR, src, "--compile", dest, "--backend=mivm"],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    mod = os.path.join(dest, nombre + ".mod")
+    return mod if rc.returncode == 0 and os.path.exists(mod) else None
+
+def junta_get(msgs):
+    """Los GET_PART de una descarga, juntos por `off`: (bytes, seguidos sin hueco, el trozo más grande)."""
+    data, seguidos, mayor = bytearray(), True, 0
+    for m in msgs:
+        if m.get("type") != "GET_PART": continue
+        if m.get("off") != len(data): seguidos = False
+        b = m.get("_bulk", b"")
+        mayor = max(mayor, len(b))
+        data += b
+    return bytes(data), seguidos, mayor
+
+def hasta_fin(w, fines, eventos=(), limite=30.0):
+    """Lee mensajes hasta que cada id de `fines` (id → los tipos que lo acaban) acabe —o con un ERROR— y hayan
+    llegado los `eventos` pedidos (p. ej. el EXITED). Devuelve (los de cada id, la secuencia entera)."""
+    por_id, todos, quedan, faltan = {}, [], dict(fines), set(eventos)
+    t0 = time.time()
+    while (quedan or faltan) and time.time() - t0 < limite:
+        m = w.msg()
+        todos.append(m)
+        faltan.discard(m.get("type"))
+        i = m.get("id")
+        if i in fines:
+            por_id.setdefault(i, []).append(m)
+            if m.get("type") in fines[i] or m.get("type") == "ERROR": quedan.pop(i, None)
+    return por_id, todos
+
+def ultimo(por_id, i):
+    return (por_id.get(i) or [{}])[-1]
 
 def main():
     if not os.path.exists(STDLIB_PACK):
@@ -182,6 +258,8 @@ def main():
               and r.get("packRamKey") == "" and "packRamAsked" in r and r.get("packRamMinMb") == 2
               and "sqliteBytes" not in r,
               "INFO → el bloque de RAM de los motores, con los nombres comunes (packRam*; en el sim, off)")
+        # #495 paso 4: la pila que le sobró a `io` en el último RUN (corre el GET y el LIST troceados); el PC no la sabe.
+        check(r.get("ioStackFree") == -1, "INFO → ioStackFree presente (-1: sin RUN, y el PC no lleva marca de agua)")
 
         # 3. FS virgen
         r = w.call("FORMAT", confirm="YES")
@@ -370,6 +448,64 @@ def main():
         for ruta in list(casos) + ["/app/e1/bien.mdn", "/app/e1/arch.mdn"]:
             w.call("DEL", path=ruta)
 
+        # 5f. #495 paso 4 — EL GET Y EL LIST TROCEADOS Y MEZCLABLES (Eduardo: «el get tiene que trocearse y los paquetes
+        # de los diferentes comandos se pueden mezclar [...] no puede ser que una comunicación monopolice la
+        # comunicación»). Con "chunked":true, GET_PART (off y un bulk de 512 B como mucho) … GET_END (size, crc), y
+        # LIST_PART … LIST_END: un trozo por vuelta, con lo demás entre medias. Sin acuse: aquí recibe el PC.
+        gid = w.send("GET", path="/app/big.bin", chunked=True)
+        por, _ = hasta_fin(w, {gid: ("GET_END",)})
+        datos, seguidos, mayor = junta_get(por.get(gid, []))
+        fin = ultimo(por, gid)
+        check(fin.get("type") == "GET_END" and datos == big and seguidos and 0 < mayor <= 512
+              and fin.get("size") == len(big) and fin.get("crc") == zlib.crc32(big) and "changed" not in fin,
+              "#495 paso 4: GET troceado → GET_PART de 512 B como mucho, seguidos por off, y GET_END con tamaño y CRC-32")
+        r = w.call("GET", path="/app/no_esta.bin", chunked=True)
+        check(r.get("code") == "NOT_FOUND", "#495 paso 4: GET troceado de lo que no está → NOT_FOUND")
+        w.call_bulk("PUT", b"", path="/app/vacio.bin")
+        gid = w.send("GET", path="/app/vacio.bin", chunked=True)
+        por, _ = hasta_fin(w, {gid: ("GET_END",)})
+        check([m.get("type") for m in por.get(gid, [])] == ["GET_END"] and ultimo(por, gid).get("size") == 0
+              and ultimo(por, gid).get("crc") == 0,
+              "#495 paso 4: GET troceado de un fichero vacío → sólo el GET_END (0 B, CRC 0)")
+        w.call("DEL", path="/app/vacio.bin")
+        # Tres de una vez: dos descargas (la segunda, BUSY: «1 a 1») y un LIST, que sí va con la primera, mezclado.
+        a, b, l = w.send_many(("GET", dict(path="/app/big.bin", chunked=True)),
+                              ("GET", dict(path="/app/demo/data.bin", chunked=True)),
+                              ("LIST", dict(chunked=True)))
+        por, todos = hasta_fin(w, {a: ("GET_END",), b: ("GET_END",), l: ("LIST_END",)})
+        datos, seguidos, _ = junta_get(por.get(a, []))
+        check(datos == big and seguidos and ultimo(por, a).get("type") == "GET_END",
+              "#495 paso 4: con otras peticiones detrás, la descarga llega entera")
+        check(ultimo(por, b).get("code") == "BUSY", "#495 paso 4: una segunda descarga a la vez → BUSY (Eduardo: «1 a 1»)")
+        nombres = sorted(e["name"] for m in por.get(l, []) if m.get("type") == "LIST_PART" for e in m.get("entries", []))
+        entero = sorted(e["name"] for e in w.call("LIST").get("entries", []))
+        check(ultimo(por, l).get("type") == "LIST_END" and nombres == entero and len(entero) > 0,
+              "#495 paso 4: LIST troceado → las mismas entradas que el entero (%d), y LIST_END" % len(entero))
+        orden = [(m.get("id"), m.get("type")) for m in todos]
+        trozos_a = [k for k, (i, t) in enumerate(orden) if i == a and t == "GET_PART"]
+        partes_l = [k for k, (i, t) in enumerate(orden) if i == l and t == "LIST_PART"]
+        check(bool(trozos_a) and bool(partes_l) and trozos_a[0] < partes_l[0] < trozos_a[-1],
+              "#495 paso 4: el LIST sale ENTRE los trozos de la descarga (mezclados, nadie monopoliza)")
+        # Mientras se baja uno, el GET entero de otro: BUSY (un fichero cada vez).
+        a, b = w.send_many(("GET", dict(path="/app/big.bin", chunked=True)), ("GET", dict(path="/app/demo/data.bin")))
+        por, _ = hasta_fin(w, {a: ("GET_END",), b: ("GET_REPLY",)})
+        check(ultimo(por, a).get("type") == "GET_END" and ultimo(por, b).get("code") == "BUSY",
+              "#495 paso 4: un GET entero con una descarga en curso → BUSY")
+        # Lo que la corta: un verbo que escribe (puede tocar lo que se baja) y un cliente nuevo; el cable, en sincronía.
+        w.call_bulk("PUT", b"x" * 10, path="/app/tmp_p4.bin")
+        a, d = w.send_many(("GET", dict(path="/app/big.bin", chunked=True)), ("DEL", dict(path="/app/tmp_p4.bin")))
+        por, _ = hasta_fin(w, {a: ("GET_END",), d: ("DEL_REPLY",)})
+        check(ultimo(por, a).get("code") == "ABORTED" and ultimo(por, d).get("type") == "DEL_REPLY",
+              "#495 paso 4: un DEL en mitad de una descarga → la corta (ABORTED) y se hace")
+        a, l, h = w.send_many(("GET", dict(path="/app/big.bin", chunked=True)), ("LIST", dict(chunked=True)),
+                              ("HELLO", dict(protoVersion=1, clientName="smoke")))
+        por, _ = hasta_fin(w, {a: ("GET_END",), l: ("LIST_END",), h: ("HELLO_REPLY",)})
+        check(ultimo(por, a).get("code") == "ABORTED" and ultimo(por, l).get("code") == "ABORTED"
+              and ultimo(por, h).get("type") == "HELLO_REPLY",
+              "#495 paso 4: un HELLO (un cliente nuevo) corta la descarga y el listado del de antes")
+        r = w.call("PING")
+        check(r.get("type") == "PONG", "#495 paso 4: …y el cable sigue en sincronía")
+
         # 5b. U3.24 — EL RESTO DEL REPL COMUN.
         #
         # Desde que el sim usa `src/bpvm_repl.c`, cada linea de aqui vale para las
@@ -516,6 +652,62 @@ def main():
             check(exited2 is not None and exited2.get("status") == "OK"
                   and text2 == text,
                   "2º RUN → misma salida (sin estado arrastrado)")
+
+        # 8b. #495 paso 4 — DURANTE UN RUN, los de lectura troceados: un programa que imprime sin parar y, mientras,
+        # una descarga de 40 KB y un LIST. Entre trozo y trozo sale la salida del programa —nadie monopoliza el cable—,
+        # y un KILL no espera a que acabe la descarga. Los enteros, LIST_DIR y los que escriben, BUSY.
+        p4 = bytes((i * 13 + 7) & 0xFF for i in range(40000))
+        r = w.call("PUT_BEGIN", path="/app/p4.bin", size=len(p4))
+        for k in range(0, len(p4), 8192):
+            w.call_bulk("PUT_DATA", p4[k:k + 8192])
+        r = w.call("PUT_END", size=len(p4))
+        charla = build_bp(tmp, "Charla", CHARLA_BP)
+        if r.get("type") != "PUT_END_REPLY" or charla is None:
+            check(False, "#495 paso 4 en RUN: no se pudo preparar (PUT_END %s; Charla %s)" % (r.get("type"), charla))
+        else:
+            with open(charla, "rb") as f: w.call_bulk("PUT", f.read(), path="/app/Charla.mod")
+            r = w.call("RUN", path="/app/Charla.mod")
+            check(r.get("type") == "RUN_REPLY", "#495 paso 4: RUN de un programa que imprime sin parar")
+            m = w.msg()
+            while m.get("type") != "OUTPUT": m = w.msg()          # ya está hablando
+            gid = w.send("GET", path="/app/p4.bin", chunked=True)
+            por, todos = hasta_fin(w, {gid: ("GET_END",)})
+            datos, seguidos, _ = junta_get(por.get(gid, []))
+            fin = ultimo(por, gid)
+            check(fin.get("type") == "GET_END" and datos == p4 and seguidos and fin.get("crc") == zlib.crc32(p4),
+                  "#495 paso 4: GET troceado DURANTE el RUN → llega entero y con su CRC (%s)" % fin.get("type"))
+            k = [n for n, m in enumerate(todos) if m.get("type") == "GET_PART"]
+            entre = sum(1 for m in todos[k[0]:k[-1]] if m.get("type") == "OUTPUT") if k else 0
+            check(entre > 0, "#495 paso 4: …y entre su primer trozo y el último salió la salida del programa (%d OUTPUT)"
+                  % entre)
+            r = w.pide("STAT", path="/app/p4.bin")
+            check(r.get("type") == "STAT_REPLY" and r.get("size") == len(p4), "#495 paso 4: STAT durante el RUN → contesta")
+            r = w.pide("GET", path="/app/p4.bin")
+            check(r.get("code") == "BUSY", "#495 paso 4: GET ENTERO durante el RUN → BUSY (dejaría a io sin salida ni KILL)")
+            r = w.pide("DEL", path="/app/p4.bin")
+            check(r.get("code") == "BUSY", "#495 paso 4: DEL durante el RUN → BUSY (los que escriben, no)")
+            r = w.pide("LIST_DIR", path="/app")
+            check(r.get("code") == "BUSY", "#495 paso 4: LIST_DIR durante el RUN → BUSY (su foto, en la zona del listDir)")
+            lid = w.send("LIST", chunked=True)
+            por, _ = hasta_fin(w, {lid: ("LIST_END",)})
+            nombres = [e["name"] for m in por.get(lid, []) if m.get("type") == "LIST_PART" for e in m.get("entries", [])]
+            check(ultimo(por, lid).get("type") == "LIST_END" and "/app/p4.bin" in nombres,
+                  "#495 paso 4: LIST troceado durante el RUN → LIST_PART … LIST_END")
+            # Una descarga y el KILL detrás, de una vez: el KILL no espera a que acabe, y la descarga sigue tras el RUN.
+            gid, kid = w.send_many(("GET", dict(path="/app/p4.bin", chunked=True)), ("KILL", dict()))
+            por, todos = hasta_fin(w, {gid: ("GET_END",), kid: ("KILL_REPLY",)}, eventos=("EXITED",))
+            orden = [m.get("type") for m in todos]
+            datos, seguidos, _ = junta_get(por.get(gid, []))
+            check("EXITED" in orden and ultimo(por, kid).get("type") == "KILL_REPLY"
+                  and orden.index("KILL_REPLY") < orden.index("GET_END") if "GET_END" in orden and "KILL_REPLY" in orden
+                  else False,
+                  "#495 paso 4: un KILL con una descarga en curso → KILL_REPLY y EXITED sin esperar a que acabe")
+            check(datos == p4 and seguidos and ultimo(por, gid).get("type") == "GET_END",
+                  "#495 paso 4: …y la descarga acaba entera después del RUN")
+            r = w.call("PING")
+            check(r.get("type") == "PONG", "#495 paso 4: …y el cable sigue en sincronía")
+            w.call("DEL", path="/app/Charla.mod")
+        w.call("DEL", path="/app/p4.bin")
 
         # 9. errores limpios
         r = w.call("RUN", path="/app/NoExiste.mod")

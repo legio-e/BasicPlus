@@ -102,6 +102,9 @@ static void trocear(struct bpvm_io* io, const char* s, size_t n) {
     }
 }
 
+/* #495 (paso 4) — la marca de agua de la pila de `io` en el último RUN (bpvm_io.h). */
+static long s_io_pila_libre = -1;
+
 static void io_loop(void* arg) {
     struct bpvm_io* io = (struct bpvm_io*) arg;
     char tmp[IO_CHUNK];
@@ -116,6 +119,11 @@ static void io_loop(void* arg) {
         if (eof) break;                 /* cerrada y seca: no queda nada que dar */
     }
     purgar_linea(io);                   /* un `print` sin '\n' final también sale */
+    s_io_pila_libre = (long) bpvm_platform_pila_libre_actual();   /* #495 (paso 4): lo que le sobró */
+}
+
+long bpvm_io_pila_libre_ultima(void) {
+    return s_io_pila_libre;
 }
 
 /* ─── API ───────────────────────────────────────────────────────────────── */

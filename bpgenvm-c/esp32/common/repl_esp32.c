@@ -576,6 +576,7 @@ static void esp32_mdn_decir(void* user, const char* msg) {
 
 static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     (void) vm; (void) user;
+    (void) bpvm_repl_paso();                  /* #495 (paso 4): un trozo de lo que se esté mandando (GET, LIST) */
     int c = wire_v1_try_getchar();
     if (c < 0) return 0;
     int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
@@ -593,7 +594,14 @@ static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
      * DESPUÉS, ya fuera de `bpvm_run` y desde la tarea del REPL. Ni se reinicia
      * desde dentro del intérprete, ni aparece un segundo lector del cable. */
     if (strcmp(type, "RESET") == 0) { s_reset_ack_id = rid; return 1; }
-    if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 0; }   /* attach en caliente */
+    if (strcmp(type, "HELLO") == 0) {                     /* attach en caliente */
+        bpvm_repl_antes_de_despachar(type);   /* #495 (paso 4): lo que se mandaba al cliente de antes, cortado */
+        bpvm_repl_dispatch(type, rid, &obj);
+        return 0;
+    }
+    /* #495 (paso 4) — los de lectura que no monopolizan el cable: el GET y el LIST troceados (un trozo por vuelta
+     * de `io`, entre la salida del programa) y STAT. */
+    if (bpvm_repl_atiende_en_run(type, &obj)) { bpvm_repl_dispatch(type, rid, &obj); return 0; }
     /* V6/A1.7 - si es del ramo de depuracion y `io` corre, se DEPOSITA para que
      * la saque el `next_cmd` (tarea `vm`). Un solo lector del cable: este. */
     /* OJO: el `vm` que llega aqui es NULL - el adaptador `esp32_io_poll` no lo
@@ -603,7 +611,7 @@ static int esp32_run_poll_cb(bpvm_t* vm, void* user) {
     if (bpvm_dbg_wire_kind(type) != BPVM_DBGC_OTHER && bpvm_io_running(s_dbg_vm)) {
         if (bpvm_io_ctrl_push(s_dbg_vm, s_line_buf, (size_t) n) == 0) return 0;
     }
-    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL/RESET");
+    wire_v1_send_error(rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
     return 0;
 }
 
@@ -1257,7 +1265,16 @@ void repl_esp32_run(void) {
     log_printf("REPL entry (wire v1) — buffer de bulk %u B", (unsigned) sizeof(s_put_buf));
     log_flush();
     for (;;) {
-        int n = wire_v1_recv_line(-1, s_line_buf, sizeof(s_line_buf));
+        int n;
+        if (bpvm_repl_hay_transferencia()) {
+            /* #495 (paso 4) — una transferencia a medias: el cable se mira SIN esperar y, si no hay nada, el trozo
+             * siguiente. Sin ella, la espera de siempre (cede la CPU hasta que llega algo). */
+            int c = wire_v1_try_getchar();
+            if (c < 0) { (void) bpvm_repl_paso(); continue; }
+            n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
+        } else {
+            n = wire_v1_recv_line(-1, s_line_buf, sizeof(s_line_buf));
+        }
         /* V6/#473 — -2 no es -1: la linea se estanco (truncado/ruido). Descartar en
          * SILENCIO y seguir; el IDE reintenta. */
         if (n == -2) continue;

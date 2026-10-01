@@ -664,6 +664,7 @@ static int pico_io_poll(void* user) {
 static int pico_run_poll_cb(bpvm_t* vm, void* user) {
     (void) user;
     if (s_latido_on) latido(vm);
+    (void) bpvm_repl_paso();                  /* #495 (paso 4): un trozo de lo que se esté mandando (GET, LIST) */
     int c = getchar_timeout_us(0);
     if (c < 0) return 0;                      /* nada pendiente */
     int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
@@ -688,7 +689,14 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
         return 1;                              /* → BPVM_KILLED, y luego reboot */
     }
     if (strcmp(type, "HELLO") == 0) {
+        bpvm_repl_antes_de_despachar(type);    /* #495 (paso 4): lo que se mandaba al cliente de antes, cortado */
         bpvm_repl_dispatch(type, rid, &obj);   /* attach en caliente */
+        return 0;
+    }
+    /* #495 (paso 4) — los de lectura que no monopolizan el cable: el GET y el LIST troceados (un trozo por vuelta
+     * de `io`, entre la salida del programa) y STAT. */
+    if (bpvm_repl_atiende_en_run(type, &obj)) {
+        bpvm_repl_dispatch(type, rid, &obj);
         return 0;
     }
     /* V6/A1.7 — si la línea es del ramo de depuración y `io` está en marcha,
@@ -699,7 +707,7 @@ static int pico_run_poll_cb(bpvm_t* vm, void* user) {
         if (bpvm_io_ctrl_push(vm, s_line_buf, (size_t) n) == 0) return 0;
         /* No cupo: se contesta como siempre, que es mejor que el silencio. */
     }
-    wire_v1_send_error(rid, "BUSY", "ejecución en curso: solo HELLO/KILL/RESET");
+    wire_v1_send_error(rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
     return 0;
 }
 
@@ -1466,6 +1474,7 @@ void repl_v1_run(void) {
     for (;;) {
         int first = getchar_timeout_us(0);
         if (first < 0) {                      /* nada que leer: ceder la CPU */
+            if (bpvm_repl_paso()) continue;   /* #495 (paso 4): una transferencia a medias: el trozo siguiente, sin dormir */
             bpvm_sd_placa_vigilar();          /* V5/H2 → V7/H3: ¿ha entrado o salido la SD? (el común) */
             vTaskDelay(pdMS_TO_TICKS(10));
             continue;

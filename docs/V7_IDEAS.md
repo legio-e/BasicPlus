@@ -3607,16 +3607,19 @@ Lo que pide el de comunicaciones a cada placa —aguantar 2 KB mientras escribe 
      (durante un RUN: entre trozo y trozo sale la salida del programa y llega un `KILL`). Una descarga a la vez
      (Eduardo: «1 a 1»; una segunda, o una con una subida a medias: `BUSY`), y un listado, que sí puede ir con ella. El
      `LIST` avanza un directorio por vuelta.
-   - **Durante un RUN** se atienden el `GET` y el `LIST` troceados, `LIST_DIR` y `STAT`. Los enteros siguen con `BUSY`
-     (un `GET` entero dejaría a `io` sin salida ni `KILL` mientras dura), y los que escriben también: escribir donde el
-     programa lee es otra conversación.
+   - **Durante un RUN** se atienden el `GET` y el `LIST` troceados y `STAT`. Los enteros siguen con `BUSY` (un `GET`
+     entero dejaría a `io` sin salida ni `KILL` mientras dura), y los que escriben también: escribir donde el programa
+     lee es otra conversación. ⚠️ **`LIST_DIR`, también `BUSY`** (corregido al hacerlo): su foto del directorio sale de
+     la zona de rascar, la misma que el `listDir` del programa, y cogerla no tiene cerrojo; un búfer suyo serían ~6,6 KB
+     de RAM en cada placa, y que el `listDir` de un programa falle porque el IDE mira un directorio no puede ser. El
+     `LIST` troceado ya da el árbol durante un RUN.
    - **Lo que corta una descarga**: lo mismo que acaba una subida —un `HELLO`, un `RESET`, otra subida, un verbo que
      escribe en el FS—, con un `ERROR` con su id (`ABORTED`); el `RUN` no, la descarga sigue en `io`. Y si el fichero
      cambia de tamaño mientras se baja (el programa escribe en él), `GET_END` lo dice (`changed`) y el IDE avisa: lo
      bajado puede no cuadrar. Lo que cambie sin cambiar de tamaño no se ve: habría que releerlo entero.
    - **El IDE junta**: guarda lo que llega por id, junta los `GET_PART` por `off` y completa la petición con el
-     `GET_END`, comprobando el tamaño y el CRC. El plazo pasa a ser de SILENCIO (tantos segundos sin un trozo), no del
-     total: hoy un `GET` tiene 10 s, y por una UART a 11 KB/s no baja un fichero de más de ~110 KB.
+     `GET_END`, comprobando el tamaño y el CRC. El plazo, de SILENCIO (tantos segundos sin un byte) y no del total: lo
+     es desde `#454` (corregido al hacerlo: aquí ponía que un `GET` tenía 10 s en total).
    - **La VM-Java**, igual: también sirve `GET` y `LIST`.
 
    Por partes, cada una cierra algo: (a) `send_msg` en los cinco transportes y el simulado; (b) las transferencias y

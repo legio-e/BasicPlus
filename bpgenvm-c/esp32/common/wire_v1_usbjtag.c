@@ -210,3 +210,12 @@ void wire_v1_send_line(const char* data, size_t len) {
 void wire_v1_send_bulk(const uint8_t* data, size_t n) {
     if (n) wire_write((const char*) data, n);
 }
+
+/* #495 (paso 4) — la línea y sus bytes con el cerrojo cogido UNA vez: lo que tiene que ir junto (bpvm_wire_v1.h). */
+void wire_v1_send_msg(const char* line, size_t len, const uint8_t* bulk, size_t n) {
+    tx_lock();
+    if (len) wire_write(line, len);
+    wire_write("\n", 1);
+    if (n) wire_write((const char*) bulk, n);
+    tx_unlock();
+}
