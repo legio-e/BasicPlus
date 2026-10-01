@@ -67,6 +67,28 @@ static void caso_s3(void) {
           "S3: techo 264 KB por el bloque contiguo — cabria mas y NO se coge (Eduardo)");
 }
 
+static void caso_s3_psram(void) {
+    /* MEDIDO el 1-oct (V7/H7, el resto de U6): la S3 N16R8 con la imagen de ae3ca338 y el protocolo de
+     * tools/medir_margen.py (reset, PUT, dos RUN de Bench, LIST). Con CONFIG_SPIRAM la región es la PSRAM,
+     * EXCLUSIVA, con 512 KB de margen (esp32/common/main.c: prudente, no medido —en la S3 nadie más pide PSRAM—):
+     *   vm: 7677 KB en PSRAM (todo lo que deja el margen de la región)
+     *   vm: DRAM interna libre 8386308->316407 B (bloque mayor 8257536->221184 B) | margen 26564
+     *       (los de ANTES de tomar son de la PSRAM, los de después de la DRAM interna: la línea los mezcla)
+     *   mem: DRAM interna libre 305311 B | MINIMO HISTORICO 297535 B (bloque mayor 221184 B)
+     * 8386308 - 524288 = 7862020 B, y la placa toma en KB enteros: 7677 KB. La SRAM, sin la VM, sobrada.
+     * El caso de la S3 sin PSRAM (caso_s3, 30-ago) se queda: es la otra rama de la misma imagen. */
+    bpvm_mem_region_t r[1] = {{ NULL, 8257536, 8386308, 1, 512u * 1024u, "PSRAM" }};
+    bpvm_mem_cfg_t cfg = { 0, 64u * 1024u, 0, NULL };
+    bpvm_mem_plan_t p; char s[160];
+    bpvm_mem_plan(r, 1, &cfg, &p);
+    bpvm_mem_plan_str(&p, r, &cfg, s, sizeof s);
+    CHECK(p.res == BPVM_MEM_OK && p.bytes == 7862020u,        "S3 con PSRAM: 8386308 - 512 KB = 7862020 B (%u)", (unsigned) p.bytes);
+    CHECK((p.bytes & ~1023u) / 1024u == 7677u,                 "S3 con PSRAM: en KB enteros, los 7677 KB del log");
+    CHECK(!strcmp(p.limita, "el margen de la región"),         "S3 con PSRAM: manda el margen de la region, no el contiguo: %s", s);
+    CHECK(strstr(s, "en PSRAM") != NULL && strstr(s, "todo lo que deja el margen de la regi") != NULL,
+          "S3 con PSRAM: la linea: %s", s);
+}
+
 static void caso_metro_psram(void) {
     /* psram: 8 MB usable | bd: reservada (SQLite=2) -> 2048 KB | vm: heap en PSRAM 6 MB
      * Y la SRAM se ofrece TAMBIEN: el planificador debe preferir la exclusiva. */
@@ -208,7 +230,7 @@ static void caso_vmheap(void) {
 
 int main(void) {
     printf("=== test_mem: el planificador contra las placas medidas ===\n");
-    caso_c3(); caso_c6(); caso_s3(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32(); caso_discovery(); caso_vmheap();
+    caso_c3(); caso_c6(); caso_s3(); caso_s3_psram(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32(); caso_discovery(); caso_vmheap();
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;
 }
