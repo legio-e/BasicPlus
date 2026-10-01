@@ -1068,6 +1068,19 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## ✅ H11 (1-oct, tras la pausa) — cerrado; y dos entradas de `FICHAS` que no cuadraban
+
+- Eduardo pidió ver los hitos que faltan, sin H7 ni H12: **H8** (IDE y wire), **H9** (pruebas y medida), **H10** (placas
+  y drivers) y **H11** (la C5).
+- **H11, cerrado** (Eduardo, a la pregunta de si estaba terminado): las dos etapas, hechas —la imagen sin LVGL (21-sep)
+  y LVGL en un pack (`H6.a`, 22-sep)—; el AOT sin FPU (H5), la TF (H3), los 32 MB con el FS arriba (30-sep) y la tanda
+  de V7 entera hoy, 29 de 29. Lo que su fila daba por pendiente, medir el bloque de la VM sin PSRAM, no aplica: su
+  `sdkconfig` lleva `CONFIG_SPIRAM=y` y la rama de los números del C3 (`chip_cfg.h`) ni se compila. Su RTC y el bajo
+  consumo van a V8 con `#490`; la memoria apretada, a H9.
+- **Dos entradas que no cuadraban**, corregidas: `#452` seguía «aplazada» y Eduardo la decidió el 28-sep —los cinco
+  verbos se quedan, probados en `check-sim`—: cerrada; y `#544` (el BOOT de la C6), abierta en la fila de H10 y cerrada
+  el 25-sep: tachada.
+
 ## 🧵 H12 (1-oct, tarde) — el modelo de Eduardo, desde el arranque: `io` y los runs; y `#616` (`c671d3a2`)
 
 - **«¿Hay algún hilo del SO ejecutándose?»** (Eduardo, con la placa encendida y sin programa): sí, siempre la tarea de
@@ -1093,7 +1106,8 @@ la C6, la P4 y la Nucleo.
   lista de H12 de antes de activar el segundo núcleo; y lo que ya estaba en ella: `kill_requested` atómico, el
   `printf` de la Pico y el inventario de `A4`.
 
-**Traspaso (1-oct, pausa).** Boot 2, hecho (las cuatro fases); H7, abierto sólo por remedir el S3 y añadir su caso a
+**Traspaso (1-oct, pausa).** Boot 2, hecho (las cuatro fases), y H11, cerrado (Eduardo, tras la pausa): los
+abiertos son H7, H8, H9, H10 y H12. H7, abierto sólo por remedir el S3 y añadir su caso a
 `test_mem` (Eduardo: hasta que la S3 esté en la mesa). H12 tiene escrito el modelo de Eduardo —`io` es el hilo
 principal y escucha siempre; el arranque crea un run por núcleo (dos en la Pico, la Metro, las dos P4 y la S3), haya
 programa o no; una VM que comparten— y lo que falta antes de encender el segundo núcleo, con la variable de condición

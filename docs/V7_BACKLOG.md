@@ -222,7 +222,7 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 | asunto | dónde |
 |---|---|
 | **`#495` — `GET`/`LS` durante un RUN**: `GET_REPLY` entero bajo `tx_mtx`, decidir el cerrojo del `read_stream`, levantar el `BUSY` en los cinco `poll` sólo para `LS`/`GET` | `FICHAS` `#495` (L176) |
-| **`#452` — repasar los 29 verbos del wire** con «¿a cuál de los tres consumidores sirve?»: **`FORMAT` falta hoy desde el IDE**, `RENAME`, `RMDIR`, `PING`, `DF` duplicado. La condición («cuando exista el script») se cumplió con `T1` | `FICHAS` `#452` (L1102) |
+| ✅ 1-oct, cerrada (Eduardo, 28-sep: los cinco se quedan como están, probados en `check-sim` desde `#537`) — ~~**`#452` — repasar los 29 verbos del wire**~~ con «¿a cuál de los tres consumidores sirve?»: **`FORMAT` falta hoy desde el IDE**, `RENAME`, `RMDIR`, `PING`, `DF` duplicado. La condición («cuando exista el script») se cumplió con `T1` | `FICHAS` `#452` (L1102) |
 | **`E1` restos**: el **rojo** del árbol por color (ficheros con problema — decidir qué cuenta); el `EXITED` de un `RESET` dice «terminado por KILL» (una línea); la **vista de packs en el árbol** (`LIST` sin fallback al pack: `/lib` no aparece aunque el RUN lo resuelva) | `FICHAS` L7427, L11760, L10266 |
 | **El `INFO` de las ESP32 y STM32** sin `packsXipBase`/`sqlite*`/`floatAbi` (`info_extra` sólo en la Pico); el IDE ya los pinta si llegan | `ESTADO` 12-sep |
 | El guardián del fat-jar (`#429`) no vigila la **miVM embebida**, sólo el compilador | `ESTADO` 5-sep |
@@ -263,6 +263,8 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 
 ## H11 · La ESP32-C5 — Waveshare ESP32-C5-Touch-LCD-2.8 (comprada el 5-sep; la placa nueva de V7)
 
+> ✅ **H11 CERRADO el 1-oct** (Eduardo) —las dos etapas, hechas: la imagen sin LVGL (21-sep) y LVGL en un pack (`H6.a`, 22-sep; H6 cerrado el 26-sep); el AOT sin FPU (H5, 25-sep); la TF (H3); los 32 MB, con el FS arriba (30-sep, `a91b8dad`); y la tanda de V7 entera, 29 de 29 (1-oct). Lo que la fila daba por pendiente, medir el bloque de la VM sin PSRAM, no aplica: su imagen lleva siempre PSRAM (`CONFIG_SPIRAM`) y esa rama ni se compila; su RTC y el bajo consumo van a V8 con `#490`, y la memoria apretada, a H9—.
+>
 > Sustituye al P4X en el plan. Entra por el camino que V6 dejó hecho para el C3 y el C6 (`P1`/`P2`): la
 > familia ESP32 se **activa**, no se construye — y lo que costó en V6 fue la placa, no la familia.
 >
