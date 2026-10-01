@@ -77,6 +77,9 @@ static char    s_line[WIRE_LINE_MAX];
  * marcando el suelo: si alguien lo baja de más, no compila. */
 #define V1_PUT_BUF_SIZE  (BP_ENV_SECTOR + 4096u)
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
+/* V7/H8 #495 — el búfer de FICHEROS del PUT troceado, aparte del de comunicaciones: una página de la flash
+ * (FLASH_PAGE_SIZE, 8 KB en el U5), el bloque de littlefs en esta familia (FS_BLOCK_SIZE, fs_lfs_stm32.c). */
+static uint8_t s_fich_buf[FLASH_PAGE_SIZE];
 typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
                              V1_PUT_BUF_SIZE >= BP_ENV_SECTOR + 512u) ? 1 : -1];
 /* H13 hallazgo 31 (5-ago) — 128 KB era un DESCUIDO, no una decisión: se fijó al
@@ -234,6 +237,8 @@ static const bpvm_repl_ops_t s_repl_ops = {
     .put_buf       = s_put_buf,
     .put_buf_size  = sizeof s_put_buf,
     .after_put     = stm32_after_put,
+    .fich_buf      = s_fich_buf,      /* V7/H8 #495: una página de la flash */
+    .fich_bytes    = sizeof s_fich_buf,
 };
 
 /* ---- FILES ---- */

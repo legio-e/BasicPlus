@@ -623,6 +623,8 @@ static int sim_fs_format(void) {
  * (por encima trocea con PUT_BEGIN/DATA/END). Un buffer más apretado que el
  * umbral del IDE convertiría el sim en más estricto que cualquier placa. */
 static unsigned char g_sim_put_buf[64 * 1024];
+/* V7/H8 #495 — el búfer de FICHEROS del PUT troceado, aparte del de comunicaciones: un bloque del FS (SECTOR). */
+static unsigned char g_sim_fich_buf[SECTOR];
 
 static const bpvm_repl_ops_t SIM_REPL_OPS = {
     sim_repl_info,
@@ -638,6 +640,8 @@ static const bpvm_repl_ops_t SIM_REPL_OPS = {
     sim_fs_count,
     sim_fs_format,
     NULL,                       /* fs_save: idem — el común contesta OK, que es la verdad */
+    g_sim_fich_buf,             /* V7/H8 #495: el búfer de ficheros, un bloque (SECTOR) */
+    sizeof g_sim_fich_buf,
 };
 
 /* ── META ─────────────────────────────────────────────────────────────────── */

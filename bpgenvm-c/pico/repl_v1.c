@@ -114,6 +114,9 @@ static char s_reply_buf[1024];
  * compila, en vez de romperse en placa. */
 #define V1_PUT_BUF_SIZE  (8 * 1024)
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
+/* V7/H8 #495 — el búfer de FICHEROS del PUT troceado, aparte del de comunicaciones: un sector de la flash
+ * (FLASH_SECTOR_SIZE, 4 KB), el bloque de littlefs en esta familia (fs_lfs_pico.c). */
+static uint8_t s_fich_buf[4096];
 /* C99 no tiene _Static_assert: el truco del array de tamaño negativo. */
 typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
                              V1_PUT_BUF_SIZE >= 4096u + 512u) ? 1 : -1];
@@ -1240,6 +1243,8 @@ static const bpvm_repl_ops_t s_repl_ops = {
     /* Sin after_put a propósito: littlefs committea en cada close, así que aquí
      * NO hay nada que persistir tras una subida (a diferencia del STM32). */
     .after_put      = NULL,
+    .fich_buf       = s_fich_buf,     /* V7/H8 #495: un sector de la flash */
+    .fich_bytes     = sizeof s_fich_buf,
     .fs_total_bytes = pico_repl_fs_total,
     .fs_used_bytes  = pico_repl_fs_used,
     .fs_file_count  = pico_repl_fs_count,

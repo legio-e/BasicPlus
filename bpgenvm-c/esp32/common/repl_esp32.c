@@ -156,6 +156,9 @@ static char    s_reply_buf[2048];
 #define V1_PUT_BUF_SIZE  (8 * 1024)
 #endif
 static uint8_t s_put_buf[V1_PUT_BUF_SIZE];
+/* V7/H8 #495 — el búfer de FICHEROS del PUT troceado, aparte del de comunicaciones: un sector de la flash SPI
+ * (4 KB), el bloque de littlefs en esta familia (ESP_FS_BLOCK_SIZE, fs_lfs_esp32.c). */
+static uint8_t s_fich_buf[4096];
 typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
                              V1_PUT_BUF_SIZE >= 4096u + 512u) ? 1 : -1];
 
@@ -1041,6 +1044,8 @@ static bpvm_repl_ops_t s_repl_ops = {
     /* 30-sep (del mapa de H7, «encontrado de paso»): el depurador (`bpvm_dbg_wire`, como la Pico) y los packs (los
      * PACK_* del común, `bpvm_bmgr_wire.c`) los tenía y no los decía. */
     .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\",\"DEBUG\",\"PACKS\"]",
+    .fich_buf       = s_fich_buf,     /* V7/H8 #495: un sector de la flash */
+    .fich_bytes     = sizeof s_fich_buf,
     .fs_total_bytes = esp32_repl_fs_total,
     .fs_used_bytes  = esp32_repl_fs_used,
     .fs_file_count  = esp32_repl_fs_count,

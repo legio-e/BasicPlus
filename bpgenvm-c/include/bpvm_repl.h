@@ -137,6 +137,14 @@ typedef struct {
     /** Persistir el FS. NULL = no hace falta (littlefs persiste al cerrar):
      *  el común contesta OK, que es la verdad, no un no-op disfrazado. */
     int (*fs_save)(void);
+
+    /* V7/H8 #495 (1-oct) — EL BÚFER DE FICHEROS del PUT troceado, SEPARADO del de comunicaciones (Eduardo:
+     * «estamos mezclando dos cosas: un buffer de comunicaciones y el buffer de archivos [...] yo los
+     * separaría»). Lo que llega por el cable aterriza en `put_buf` y se junta aquí; cuando se llena, va al
+     * fichero, que se queda ABIERTO toda la sesión. Un bloque de borrado de SU flash: 4 KB la RP2350 y la
+     * ESP32, 8 KB la STM32U5. NULL = sin búfer: cada trozo va al fichero abierto según llega. */
+    unsigned char* fich_buf;
+    unsigned long  fich_bytes;
 } bpvm_repl_ops_t;
 
 /** La familia registra su cintura UNA vez, antes de atender el primer mensaje.

@@ -860,7 +860,16 @@ err:
  * BEGIN crea/trunca, cada DATA apende su propio bulk, END verifica el tamaño y
  * persiste UNA sola vez (un after_put por chunk sería un erase+program por
  * trozo). Una sesión a la vez: el wire es un solo cable y el IDE sube de uno
- * en uno. */
+ * en uno.
+ *
+ * V7/H8 #495 (1-oct) — DOS BÚFERES, no uno (Eduardo: «estamos mezclando dos cosas: un buffer de comunicaciones y el
+ * buffer de archivos [...] yo los separaría»). Lo que llega por el cable aterriza en `put_buf` y se JUNTA en el de
+ * ficheros (`fich_buf`, un bloque de borrado de la flash de la familia), que va al fichero cuando se llena; y el
+ * fichero se queda ABIERTO toda la sesión (el cursor de #491), así que no se abre, añade y cierra por trozo. Así era
+ * antes, y era el cuello: ~0,27 s por trozo en la C5, midiera 1 u 8 KB; 64 KB en trozos de 512 B, de 30 a 42 s en
+ * las cuatro placas (con trozos de 8 KB, de 2 a 9). Y una subida a medias ya no deja el fichero a medias: littlefs no
+ * da por buena una escritura hasta cerrar el fichero, y si se va la luz queda el de antes. */
+#define PUT_ABIERTO_BYTES 1024u   /* el bloque del cursor: cabecera, estado del motor y ruta (FAT con 256 B: ~860) */
 static struct {
     int           active;
     /* #456 - este SI se guarda: sobrevive de BEGIN a END, o sea que no puede
@@ -868,7 +877,40 @@ static struct {
     char          path[BPVM_FS_PATH_MAX];
     unsigned long received;
     unsigned long expected;
+    unsigned long lleno;                          /* lo juntado en el búfer de ficheros, sin escribir aún */
+    uint64_t      abierto[PUT_ABIERTO_BYTES / 8]; /* el fichero abierto (#491); uint64_t: alineado a 8 */
 } s_put_sess;
+
+/* El búfer de ficheros, al fichero (un bloque entero, o lo que quede al cerrar). 0 / -1 (el porqué, en el FS). */
+static int put_vaciar(void) {
+    if (s_put_sess.lleno == 0) return 0;
+    if (bpvm_fs_fwrite(s_put_sess.abierto, s_ops->fich_buf, (uint32_t) s_put_sess.lleno) != (long) s_put_sess.lleno)
+        return -1;
+    s_put_sess.lleno = 0;
+    return 0;
+}
+
+/* Lo recibido, al búfer de ficheros; cada vez que se llena, al fichero. Sin búfer de ficheros (la familia no lo pone),
+ * al fichero según llega —que sigue abierto: tampoco se abre ni se cierra por trozo—. */
+static int put_juntar(const unsigned char* d, unsigned long n) {
+    if (!s_ops->fich_buf || s_ops->fich_bytes == 0)
+        return (bpvm_fs_fwrite(s_put_sess.abierto, d, (uint32_t) n) == (long) n) ? 0 : -1;
+    while (n > 0) {
+        unsigned long cabe = s_ops->fich_bytes - s_put_sess.lleno;
+        unsigned long k = (n < cabe) ? n : cabe;
+        memcpy(s_ops->fich_buf + s_put_sess.lleno, d, k);
+        s_put_sess.lleno += k; d += k; n -= k;
+        if (s_put_sess.lleno == s_ops->fich_bytes && put_vaciar() != 0) return -1;
+    }
+    return 0;
+}
+
+/* La sesión, cerrada: también la que se dejó a medias (otro PUT_BEGIN, un error). El fichero se cierra tal cual. */
+static void put_cerrar(void) {
+    bpvm_fs_fclose(s_put_sess.abierto);   /* idempotente */
+    s_put_sess.active = 0;
+    s_put_sess.lleno  = 0;
+}
 
 static void reply_put_field(const char* type, long id, unsigned long val,
                             const char* field) {
@@ -895,14 +937,19 @@ static void repl_put_begin(long id, json_obj_t* obj) {
     if (strlen(path) >= sizeof s_put_sess.path) {
         wire_v1_send_error(id, "INVALID_PATH", "path demasiado largo"); return;
     }
+    put_cerrar();                                    /* #495: una sesión a medias, cerrada */
     crear_dirs_padre(path);                          /* #455 */
-    if (bpvm_fs_write(path, NULL, 0, 0) != 0) {      /* crea/trunca */
-        const char *code, *msg;
+    if (bpvm_fs_file_block_size(path) > sizeof s_put_sess.abierto) {
+        wire_v1_send_error(id, "INVALID_PATH", "path demasiado largo para abrir el fichero"); return;
+    }
+    if (bpvm_fs_fopen(s_put_sess.abierto, (uint32_t) sizeof s_put_sess.abierto, path, BPVM_FS_O_WRITE) != 0) {
+        const char *code, *msg;                      /* #495: abierto toda la sesión; "w" = crea o trunca */
         fs_fallo("put", path, 0, &code, &msg);
         wire_v1_send_error(id, code, msg); return;
     }
     s_put_sess.active   = 1;
     s_put_sess.received = 0;
+    s_put_sess.lleno    = 0;
     s_put_sess.expected = (unsigned long) json_get_long(obj, "size", 0);
     strncpy(s_put_sess.path, path, sizeof s_put_sess.path - 1);
     s_put_sess.path[sizeof s_put_sess.path - 1] = '\0';
@@ -917,7 +964,7 @@ static void repl_put_data(long id, json_obj_t* obj) {
         if (tragar_bulk((unsigned long) bulk) < 0) {
             wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
         }
-        s_put_sess.active = 0;
+        put_cerrar();
         wire_v1_send_error(id, "NO_SPACE", "chunk mayor que el buffer"); return;
     }
     if (wire_v1_recv_bulk(s_ops->put_buf, (size_t) bulk, (size_t) s_ops->put_buf_size) < 0) {
@@ -929,11 +976,10 @@ static void repl_put_data(long id, json_obj_t* obj) {
     if (!s_put_sess.active) {
         wire_v1_send_error(id, "NO_SESSION", "PUT_DATA sin PUT_BEGIN"); return;
     }
-    if (bulk > 0 && bpvm_fs_write(s_put_sess.path, s_ops->put_buf,
-                                  (uint32_t) bulk, 1) != 0) {
+    if (bulk > 0 && put_juntar(s_ops->put_buf, (unsigned long) bulk) != 0) {   /* #495 */
         const char *code, *msg;
-        s_put_sess.active = 0;
         fs_fallo("append", s_put_sess.path, (unsigned long) bulk, &code, &msg);
+        put_cerrar();
         wire_v1_send_error(id, code, msg); return;
     }
     s_put_sess.received += (unsigned long) bulk;
@@ -947,7 +993,16 @@ static void repl_put_end(long id, json_obj_t* obj) {
     }
     unsigned long recv = s_put_sess.received;
     unsigned long exp  = s_put_sess.expected;
+    /* #495: lo que quede en el búfer de ficheros, al fichero, y cerrarlo: es al cerrar cuando littlefs lo da por bueno. */
+    int falla = (put_vaciar() != 0);
+    if (bpvm_fs_fclose(s_put_sess.abierto) != 0) falla = 1;
     s_put_sess.active = 0;
+    s_put_sess.lleno  = 0;
+    if (falla) {
+        const char *code, *msg;
+        fs_fallo("put", s_put_sess.path, recv, &code, &msg);
+        wire_v1_send_error(id, code, msg); return;
+    }
     if (exp != 0 && recv != exp) {
         wire_v1_send_error(id, "SIZE_MISMATCH", "bytes recibidos != size anunciado");
         return;
