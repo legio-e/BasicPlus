@@ -3919,3 +3919,626 @@ SALTADA: GuiWinJson en rp2350a@COM22: necesita pantalla y la placa no la tiene (
 SALTADA: GuiShot en rp2350a@COM22: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
 NECESITA OJOS: GuiShot en stm32u5g9@COM12: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5g9_203538505532\GuiShot.png  
 
+
+## Tanda 2026-10-02 12:37:40
+
+- manifiesto: `bpgenvm-c\tools\tanda_v7.json` (33 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-10-02 11:45:49) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-10-02 12:02:45) - sabor `gui1-lvgl0`
+- placas conectadas: 4 (esp32c6@COM3, esp32p4@COM15, rp2350a@COM22, stm32u5g9@COM12)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | ba378a10 | 1611 | ok | 0 | 10 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | 2766e6a8 | 295 | ok | 1 | 8 | 1 |
+| ThreadTrasMain | ThreadTrasMain | 283bde27 | 532 | ok | 0 | 318 | 3 |
+| MachineId | MachineId | 6670f12a | 484 | ok | 0 | 8 | 3 |
+| Destructor | Destructor | 1fd37c26 | 4667 | ok | 0 | 9 | 33 |
+| TimeDemo | TimeDemo | 7b5397fe | 1504 | ok | 0 | 14 | 13 |
+| ArrayFijo | ArrayFijo | cd20e12c | 2359 | ok | 0 | 9 | 11 |
+| MoveRango | MoveRango | d9f3513b | 3670 | ok | 0 | 9 | 26 |
+| HiloUsa | HiloUsa | 0c1797a2 | 2189 | ok | 0 | 18 | 8 |
+| GuiWinJson | GuiWinJson | f74e3271 | 2070 | ok | 0 | 60 | 17 |
+| GuiShot | GuiShot | 48635085 | 1344 | ok | 0 | 364 | 8 |
+| NatNew | NatNew | ff6ac50b | 2087 | ok | 0 | 8 | 10 |
+| NatV7 | NatV7 | 0f03da1a | 1557 | ok | 0 | 10 | 11 |
+| FloatNat | FloatNat | 8cff9966 | 4877 | ok | 0 | 8 | 40 |
+| NatCede | NatCede | eeb16b3b | 1499 | ok | 0 | 92 | 7 |
+| NatExpropia | NatExpropia | 560d1f57 | 905 | ok | 0 | 9 | 4 |
+| NatBuiltin | NatBuiltin | c83c0cb5 | 1592 | ok | 0 | 55 | 8 |
+| NatAnida | NatAnida | f2ccf6d0 | 734 | ok | 0 | 9 | 3 |
+| NatDirecta | NatDirecta | 47af3b73 | 1018 | ok | 0 | 14 | 9 |
+| NatCoste | NatCoste | 881d927c | 772 | ok | 0 | 12 | 2 |
+| NatNombres | NatNombres | 15055910 | 1444 | ok | 0 | 9 | 6 |
+| NatEstrecha | NatEstrecha | 49b2633d | 1767 | ok | 0 | 8 | 23 |
+| CatCadena | CatCadena | 30413235 | 3879 | ok | 0 | 8 | 24 |
+| CatCrono | CatCrono | 6ae56af1 | 886 | ok | 0 | 10 | 2 |
+| SbPiezas | SbPiezas | 635b7c22 | 1979 | ok | 0 | 8 | 12 |
+| SbCrono | SbCrono | 0e798ff0 | 819 | ok | 0 | 9 | 2 |
+| HeapInfo | HeapInfo | 34f97321 | 1225 | ok | 0 | 10 | 10 |
+| HeapCompact | HeapCompact | c45827d4 | 3577 | ok | 0 | 19 | 17 |
+| HeapReposo | HeapReposo | 4a87e0d1 | 2803 | ok | 0 | 63 | 8 |
+| DescarteAncho | DescarteAncho | 4c807172 | 1730 | ok | 0 | 28 | 5 |
+| TempRetiene | TempRetiene | e04b9177 | 3177 | ok | 0 | 14 | 13 |
+| FinallyAnidado | FinallyAnidado | 8fe62074 | 1951 | ok | 0 | 8 | 5 |
+| RtcEnHora | RtcEnHora | 3991790b | 1301 | ok | 0 | 9 | 7 |
+
+### Placa esp32c6 - 58E6C5FFFEF9
+
+- sello: boardName=`esp32c6` uniqueId=`58E6C5FFFEF9` serverName=`bpvm-esp32c6` serverBuild=`Oct  2 2026 11:59:24` capacidades=["META", "FILES", "TERMINAL", "DEBUG", "PACKS"]
+- imagen: arch=243 variant=None cpuFreqHz=160000000 resetReason=software uptimeMs=80472 fs=102400/1261568 B vmHeapBytes=65536
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM3
+- pantalla: si (INFO screenW x screenH = 240x240)
+- inventario /lib+/app: 5 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 0 | 10 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 0 | 8 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 320 | 318 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 0 | 8 | EXITED OK exit=0 |
+| Destructor | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0 |
+| TimeDemo | **IDENTICO** | 20 | 14 | EXITED OK exit=0; host rc=0 |
+| ArrayFijo | **IDENTICO** | 0 | 9 | EXITED OK exit=0; host rc=0 |
+| MoveRango | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0 |
+| HiloUsa | **IDENTICO** | 20 | 18 | EXITED OK exit=0; host rc=0 |
+| GuiWinJson | **IDENTICO** | 770 | 48 | EXITED OK exit=0; host rc=0 |
+| GuiShot | **NO-PETA** | 540 | 366 | EXITED OK exit=0 |
+| NatNew | **IDENTICO** | 0 | 8 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMC_ILP32) |
+| NatV7 | **IDENTICO** | 0 | 10 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMC_ILP32) |
+| FloatNat | **IDENTICO** | 10 | 8 | EXITED OK exit=0; host rc=0; nativo 23/23 thunks (RV32IMC_ILP32) |
+| NatCede | **IDENTICO** | 60 | 92 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32) |
+| NatExpropia | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0; nativo 1/1 thunks (RV32IMC_ILP32) |
+| NatBuiltin | **IDENTICO** | 50 | 55 | EXITED OK exit=0; host rc=0; nativo 6/6 thunks (RV32IMC_ILP32) |
+| NatAnida | **IDENTICO** | 0 | 9 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32) |
+| NatDirecta | **IDENTICO** | 10 | 14 | EXITED OK exit=0; host rc=0; nativo 9/9 thunks (RV32IMC_ILP32) |
+| NatCoste | **IDENTICO** | 1060 | 12 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32) |
+| NatNombres | **IDENTICO** | 0 | 9 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMC_ILP32) |
+| NatEstrecha | **IDENTICO** | 10 | 8 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMC_ILP32) |
+| CatCadena | **IDENTICO** | 20 | 8 | EXITED OK exit=0; host rc=0 |
+| CatCrono | **IDENTICO** | 90 | 10 | EXITED OK exit=0; host rc=0 |
+| SbPiezas | **IDENTICO** | 20 | 8 | EXITED OK exit=0; host rc=0 |
+| SbCrono | **IDENTICO** | 110 | 9 | EXITED OK exit=0; host rc=0 |
+| HeapInfo | **IDENTICO** | 20 | 10 | EXITED OK exit=0; host rc=0 |
+| HeapCompact | **IDENTICO** | 370 | 19 | EXITED OK exit=0; host rc=0 |
+| HeapReposo | **IDENTICO** | 320 | 63 | EXITED OK exit=0; host rc=0 |
+| DescarteAncho | **IDENTICO** | 1700 | 28 | EXITED OK exit=0; host rc=0 |
+| TempRetiene | **IDENTICO** | 490 | 14 | EXITED OK exit=0; host rc=0 |
+| FinallyAnidado | **IDENTICO** | 0 | 8 | EXITED OK exit=0; host rc=0 |
+| RtcEnHora | **IDENTICO** | 0 | 9 | EXITED OK exit=0; host rc=0 |
+
+- tras MathRango: uptimeMs=81295 fsUsed=106496 vmHeapBytes=65536
+- tras ThrowSinAtrapar: uptimeMs=81779 fsUsed=110592 vmHeapBytes=65536
+- tras ThreadTrasMain: uptimeMs=82728 fsUsed=114688 vmHeapBytes=65536
+- tras MachineId: uptimeMs=83230 fsUsed=118784 vmHeapBytes=65536
+- tras Destructor: uptimeMs=83762 fsUsed=126976 vmHeapBytes=65536
+- tras TimeDemo: uptimeMs=85532 fsUsed=131072 vmHeapBytes=65536
+- tras ArrayFijo: uptimeMs=86033 fsUsed=135168 vmHeapBytes=65536
+- tras MoveRango: uptimeMs=86534 fsUsed=139264 vmHeapBytes=65536
+- tras HiloUsa: uptimeMs=87517 fsUsed=147456 vmHeapBytes=65536
+- tras GuiWinJson: uptimeMs=90038 fsUsed=155648 vmHeapBytes=65536
+- tras GuiShot: uptimeMs=92054 fsUsed=159744 vmHeapBytes=65536
+- artefacto GuiShot.shot de GuiShot: bajado a `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32c6_58E6C5FFFEF9\GuiShot.shot` (3038 B, crc 7459129a) -> PNG `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32c6_58E6C5FFFEF9\GuiShot.png`; antes del RUN: existia: /GuiShot.shot (borrado)
+- tras NatNew: uptimeMs=93057 fsUsed=167936 vmHeapBytes=65536
+- tras NatV7: uptimeMs=93939 fsUsed=172032 vmHeapBytes=65536
+- tras FloatNat: uptimeMs=94973 fsUsed=184320 vmHeapBytes=65536
+- tras NatCede: uptimeMs=95861 fsUsed=188416 vmHeapBytes=65536
+- tras NatExpropia: uptimeMs=96708 fsUsed=192512 vmHeapBytes=65536
+- tras NatBuiltin: uptimeMs=97725 fsUsed=196608 vmHeapBytes=65536
+- tras NatAnida: uptimeMs=98591 fsUsed=200704 vmHeapBytes=65536
+- tras NatDirecta: uptimeMs=99462 fsUsed=204800 vmHeapBytes=65536
+- tras NatCoste: uptimeMs=101184 fsUsed=208896 vmHeapBytes=65536
+- tras NatNombres: uptimeMs=102094 fsUsed=212992 vmHeapBytes=65536
+- tras NatEstrecha: uptimeMs=103014 fsUsed=217088 vmHeapBytes=65536
+- tras CatCadena: uptimeMs=103531 fsUsed=221184 vmHeapBytes=65536
+- tras CatCrono: uptimeMs=104182 fsUsed=225280 vmHeapBytes=65536
+- tras SbPiezas: uptimeMs=104682 fsUsed=229376 vmHeapBytes=65536
+- tras SbCrono: uptimeMs=105164 fsUsed=233472 vmHeapBytes=65536
+- tras HeapInfo: uptimeMs=105666 fsUsed=237568 vmHeapBytes=65536
+- tras HeapCompact: uptimeMs=106635 fsUsed=241664 vmHeapBytes=65536
+- tras HeapReposo: uptimeMs=107644 fsUsed=245760 vmHeapBytes=65536
+- tras DescarteAncho: uptimeMs=109870 fsUsed=249856 vmHeapBytes=65536
+- tras TempRetiene: uptimeMs=111072 fsUsed=253952 vmHeapBytes=65536
+- tras FinallyAnidado: uptimeMs=111572 fsUsed=258048 vmHeapBytes=65536
+- tras RtcEnHora: uptimeMs=112492 fsUsed=262144 vmHeapBytes=65536
+- ejecutadas (con EXITED) 33 de 33 listadas; no terminaron 0; saltadas 0; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 1611 | ba378a10 | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 295 | 2766e6a8 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 532 | 283bde27 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 484 | 6670f12a | ok |
+| /app/Destructor.mod | bpgenvm-c\build\tanda\Destructor\Destructor.mod | 4667 | 1fd37c26 | ok (por trozos) |
+| /app/TimeDemo.mod | bpgenvm-c\build\tanda\TimeDemo\TimeDemo.mod | 1504 | 7b5397fe | ok |
+| /app/ArrayFijo.mod | bpgenvm-c\build\tanda\ArrayFijo\ArrayFijo.mod | 2359 | cd20e12c | ok |
+| /app/MoveRango.mod | bpgenvm-c\build\tanda\MoveRango\MoveRango.mod | 3670 | d9f3513b | ok |
+| /app/HiloLib.mod | bpgenvm-c\build\tanda\HiloUsa\HiloLib.mod | 1074 | 4a7229f8 | ok |
+| /app/HiloUsa.mod | bpgenvm-c\build\tanda\HiloUsa\HiloUsa.mod | 2189 | 0c1797a2 | ok |
+| /app/main.win | samples\formdemo\resources\main.win | 390 | 548edd67 | ok |
+| /app/GuiWinJson.mod | bpgenvm-c\build\tanda\GuiWinJson\GuiWinJson.mod | 2070 | f74e3271 | ok |
+| /app/GuiShot.mod | bpgenvm-c\build\tanda\GuiShot\GuiShot.mod | 1344 | 48635085 | ok |
+| /app/NatNew.mod | bpgenvm-c\build\tanda\NatNew\aot-RV32IMC_ILP32\NatNew.mod | 4483 | a4d0e489 | ok (por trozos) |
+| /app/NatV7.mod | bpgenvm-c\build\tanda\NatV7\aot-RV32IMC_ILP32\NatV7.mod | 2447 | 7def5e1d | ok |
+| /app/FloatNat.mod | bpgenvm-c\build\tanda\FloatNat\aot-RV32IMC_ILP32\FloatNat.mod | 9740 | 7ad95292 | ok (por trozos) |
+| /app/NatCede.mod | bpgenvm-c\build\tanda\NatCede\aot-RV32IMC_ILP32\NatCede.mod | 2325 | 898b5cda | ok |
+| /app/NatExpropia.mod | bpgenvm-c\build\tanda\NatExpropia\aot-RV32IMC_ILP32\NatExpropia.mod | 1166 | 8b6c96ec | ok |
+| /app/NatBuiltin.mod | bpgenvm-c\build\tanda\NatBuiltin\aot-RV32IMC_ILP32\NatBuiltin.mod | 2794 | f745c5e9 | ok |
+| /app/NatAnida.mod | bpgenvm-c\build\tanda\NatAnida\aot-RV32IMC_ILP32\NatAnida.mod | 1232 | 359b3eec | ok |
+| /app/NatDirecta.mod | bpgenvm-c\build\tanda\NatDirecta\aot-RV32IMC_ILP32\NatDirecta.mod | 2527 | b0130698 | ok |
+| /app/NatCoste.mod | bpgenvm-c\build\tanda\NatCoste\aot-RV32IMC_ILP32\NatCoste.mod | 1000 | 27be448c | ok |
+| /app/NatNombres.mod | bpgenvm-c\build\tanda\NatNombres\aot-RV32IMC_ILP32\NatNombres.mod | 2722 | 975650c8 | ok |
+| /app/NatEstrecha.mod | bpgenvm-c\build\tanda\NatEstrecha\aot-RV32IMC_ILP32\NatEstrecha.mod | 3131 | 01c97fbf | ok |
+| /app/CatCadena.mod | bpgenvm-c\build\tanda\CatCadena\CatCadena.mod | 3879 | 30413235 | ok |
+| /app/CatCrono.mod | bpgenvm-c\build\tanda\CatCrono\CatCrono.mod | 886 | 6ae56af1 | ok |
+| /app/SbPiezas.mod | bpgenvm-c\build\tanda\SbPiezas\SbPiezas.mod | 1979 | 635b7c22 | ok |
+| /app/SbCrono.mod | bpgenvm-c\build\tanda\SbCrono\SbCrono.mod | 819 | 0e798ff0 | ok |
+| /app/HeapInfo.mod | bpgenvm-c\build\tanda\HeapInfo\HeapInfo.mod | 1225 | 34f97321 | ok |
+| /app/HeapCompact.mod | bpgenvm-c\build\tanda\HeapCompact\HeapCompact.mod | 3577 | c45827d4 | ok |
+| /app/HeapReposo.mod | bpgenvm-c\build\tanda\HeapReposo\HeapReposo.mod | 2803 | 4a87e0d1 | ok |
+| /app/DescarteAncho.mod | bpgenvm-c\build\tanda\DescarteAncho\DescarteAncho.mod | 1730 | 4c807172 | ok |
+| /app/TempRetiene.mod | bpgenvm-c\build\tanda\TempRetiene\TempRetiene.mod | 3177 | e04b9177 | ok |
+| /app/FinallyAnidado.mod | bpgenvm-c\build\tanda\FinallyAnidado\FinallyAnidado.mod | 1951 | 8fe62074 | ok |
+| /app/RtcEnHora.mod | bpgenvm-c\build\tanda\RtcEnHora\RtcEnHora.mod | 1301 | 3991790b | ok |
+
+notas de dependencias:
+
+- dependencia Core: en la zona de packs (pack:GuiMini/Core.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia Math: en la zona de packs (pack:Stdlib/Math.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Time: ya en /lib/Time.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Rtc: ya en /lib/Rtc.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia HiloLib: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Gui: en la zona de packs (pack:GuiMini/Gui.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia Json: en la zona de packs (pack:GuiMini/Json.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia Collections: en la zona de packs (pack:GuiMini/Collections.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia Str: en la zona de packs (pack:GuiMini/Str.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia Heap: en la zona de packs (pack:Stdlib/Heap.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia IO: en la zona de packs (pack:Stdlib/IO.mod, crc igual): se ejecuta XIP, no se sube
+
+### Placa esp32p4 - E8F60AE0B380
+
+- sello: boardName=`esp32p4` uniqueId=`E8F60AE0B380` serverName=`bpvm-esp32p4` serverBuild=`Oct  2 2026 11:59:56` capacidades=["META", "FILES", "TERMINAL", "DEBUG", "PACKS"]
+- imagen: arch=243 variant=None cpuFreqHz=360000000 resetReason=software uptimeMs=111733 fs=266240/16777216 B vmHeapBytes=24637440
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM15
+- pantalla: si (INFO screenW x screenH = 480x800)
+- inventario /lib+/app: 12 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 10 | 10 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 10 | 8 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 310 | 318 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 0 | 8 | EXITED OK exit=0 |
+| Destructor | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0 |
+| TimeDemo | **IDENTICO** | 10 | 14 | EXITED OK exit=0; host rc=0 |
+| ArrayFijo | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0 |
+| MoveRango | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0 |
+| HiloUsa | **IDENTICO** | 20 | 18 | EXITED OK exit=0; host rc=0 |
+| GuiWinJson | **IDENTICO** | 580 | 52 | EXITED OK exit=0; host rc=0 |
+| GuiShot | **NO-PETA** | 580 | 369 | EXITED OK exit=0 |
+| NatNew | **IDENTICO** | 10 | 8 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMAFC_ILP32F) |
+| NatV7 | **IDENTICO** | 10 | 10 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMAFC_ILP32F) |
+| FloatNat | **IDENTICO** | 10 | 8 | EXITED OK exit=0; host rc=0; nativo 23/23 thunks (RV32IMAFC_ILP32F) |
+| NatCede | **IDENTICO** | 60 | 92 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMAFC_ILP32F) |
+| NatExpropia | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0; nativo 1/1 thunks (RV32IMAFC_ILP32F) |
+| NatBuiltin | **IDENTICO** | 50 | 55 | EXITED OK exit=0; host rc=0; nativo 6/6 thunks (RV32IMAFC_ILP32F) |
+| NatAnida | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMAFC_ILP32F) |
+| NatDirecta | **IDENTICO** | 10 | 14 | EXITED OK exit=0; host rc=0; nativo 9/9 thunks (RV32IMAFC_ILP32F) |
+| NatCoste | **IDENTICO** | 560 | 12 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMAFC_ILP32F) |
+| NatNombres | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMAFC_ILP32F) |
+| NatEstrecha | **IDENTICO** | 10 | 8 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMAFC_ILP32F) |
+| CatCadena | **IDENTICO** | 10 | 8 | EXITED OK exit=0; host rc=0 |
+| CatCrono | **IDENTICO** | 40 | 10 | EXITED OK exit=0; host rc=0 |
+| SbPiezas | **IDENTICO** | 10 | 8 | EXITED OK exit=0; host rc=0 |
+| SbCrono | **IDENTICO** | 60 | 9 | EXITED OK exit=0; host rc=0 |
+| HeapInfo | **IDENTICO** | 10 | 10 | EXITED OK exit=0; host rc=0 |
+| HeapCompact | **IDENTICO** | 150 | 19 | EXITED OK exit=0; host rc=0 |
+| HeapReposo | **IDENTICO** | 180 | 63 | EXITED OK exit=0; host rc=0 |
+| DescarteAncho | **IDENTICO** | 630 | 28 | EXITED OK exit=0; host rc=0 |
+| TempRetiene | **IDENTICO** | 180 | 14 | EXITED OK exit=0; host rc=0 |
+| FinallyAnidado | **IDENTICO** | 10 | 8 | EXITED OK exit=0; host rc=0 |
+| RtcEnHora | **IDENTICO** | 10 | 9 | EXITED OK exit=0; host rc=0 |
+
+- tras MathRango: uptimeMs=112961 fsUsed=270336 vmHeapBytes=24637440
+- tras ThrowSinAtrapar: uptimeMs=113646 fsUsed=274432 vmHeapBytes=24637440
+- tras ThreadTrasMain: uptimeMs=114800 fsUsed=278528 vmHeapBytes=24637440
+- tras MachineId: uptimeMs=115582 fsUsed=282624 vmHeapBytes=24637440
+- tras Destructor: uptimeMs=117081 fsUsed=290816 vmHeapBytes=24637440
+- tras TimeDemo: uptimeMs=119100 fsUsed=294912 vmHeapBytes=24637440
+- tras ArrayFijo: uptimeMs=120135 fsUsed=299008 vmHeapBytes=24637440
+- tras MoveRango: uptimeMs=121352 fsUsed=303104 vmHeapBytes=24637440
+- tras HiloUsa: uptimeMs=122804 fsUsed=311296 vmHeapBytes=24637440
+- tras GuiWinJson: uptimeMs=131215 fsUsed=319488 vmHeapBytes=24637440
+- tras GuiShot: uptimeMs=139684 fsUsed=323584 vmHeapBytes=24637440
+- artefacto GuiShot.shot de GuiShot: bajado a `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_E8F60AE0B380\GuiShot.shot` (8243 B, crc cde419d3) -> PNG `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_E8F60AE0B380\GuiShot.png`; antes del RUN: existia: /GuiShot.shot (borrado)
+- tras NatNew: uptimeMs=142021 fsUsed=331776 vmHeapBytes=24637440
+- tras NatV7: uptimeMs=143305 fsUsed=335872 vmHeapBytes=24637440
+- tras FloatNat: uptimeMs=145440 fsUsed=348160 vmHeapBytes=24637440
+- tras NatCede: uptimeMs=146640 fsUsed=352256 vmHeapBytes=24637440
+- tras NatExpropia: uptimeMs=147758 fsUsed=356352 vmHeapBytes=24637440
+- tras NatBuiltin: uptimeMs=148942 fsUsed=360448 vmHeapBytes=24637440
+- tras NatAnida: uptimeMs=149927 fsUsed=364544 vmHeapBytes=24637440
+- tras NatDirecta: uptimeMs=151095 fsUsed=368640 vmHeapBytes=24637440
+- tras NatCoste: uptimeMs=152646 fsUsed=372736 vmHeapBytes=24637440
+- tras NatNombres: uptimeMs=153861 fsUsed=376832 vmHeapBytes=24637440
+- tras NatEstrecha: uptimeMs=155264 fsUsed=380928 vmHeapBytes=24637440
+- tras CatCadena: uptimeMs=156433 fsUsed=385024 vmHeapBytes=24637440
+- tras CatCrono: uptimeMs=157051 fsUsed=389120 vmHeapBytes=24637440
+- tras SbPiezas: uptimeMs=157834 fsUsed=393216 vmHeapBytes=24637440
+- tras SbCrono: uptimeMs=158535 fsUsed=397312 vmHeapBytes=24637440
+- tras HeapInfo: uptimeMs=159268 fsUsed=401408 vmHeapBytes=24637440
+- tras HeapCompact: uptimeMs=160536 fsUsed=405504 vmHeapBytes=24637440
+- tras HeapReposo: uptimeMs=161871 fsUsed=409600 vmHeapBytes=24637440
+- tras DescarteAncho: uptimeMs=163674 fsUsed=413696 vmHeapBytes=24637440
+- tras TempRetiene: uptimeMs=164824 fsUsed=417792 vmHeapBytes=24637440
+- tras FinallyAnidado: uptimeMs=165639 fsUsed=421888 vmHeapBytes=24637440
+- tras RtcEnHora: uptimeMs=166724 fsUsed=425984 vmHeapBytes=24637440
+- ejecutadas (con EXITED) 33 de 33 listadas; no terminaron 0; saltadas 0; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 1611 | ba378a10 | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 295 | 2766e6a8 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 532 | 283bde27 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 484 | 6670f12a | ok |
+| /app/Destructor.mod | bpgenvm-c\build\tanda\Destructor\Destructor.mod | 4667 | 1fd37c26 | ok (por trozos) |
+| /app/TimeDemo.mod | bpgenvm-c\build\tanda\TimeDemo\TimeDemo.mod | 1504 | 7b5397fe | ok |
+| /app/ArrayFijo.mod | bpgenvm-c\build\tanda\ArrayFijo\ArrayFijo.mod | 2359 | cd20e12c | ok |
+| /app/MoveRango.mod | bpgenvm-c\build\tanda\MoveRango\MoveRango.mod | 3670 | d9f3513b | ok |
+| /app/HiloLib.mod | bpgenvm-c\build\tanda\HiloUsa\HiloLib.mod | 1074 | 4a7229f8 | ok |
+| /app/HiloUsa.mod | bpgenvm-c\build\tanda\HiloUsa\HiloUsa.mod | 2189 | 0c1797a2 | ok |
+| /app/main.win | samples\formdemo\resources\main.win | 390 | 548edd67 | ok |
+| /app/GuiWinJson.mod | bpgenvm-c\build\tanda\GuiWinJson\GuiWinJson.mod | 2070 | f74e3271 | ok |
+| /app/GuiShot.mod | bpgenvm-c\build\tanda\GuiShot\GuiShot.mod | 1344 | 48635085 | ok |
+| /app/NatNew.mod | bpgenvm-c\build\tanda\NatNew\aot-RV32IMAFC_ILP32F\NatNew.mod | 4467 | 183a7978 | ok (por trozos) |
+| /app/NatV7.mod | bpgenvm-c\build\tanda\NatV7\aot-RV32IMAFC_ILP32F\NatV7.mod | 2447 | c909fac7 | ok |
+| /app/FloatNat.mod | bpgenvm-c\build\tanda\FloatNat\aot-RV32IMAFC_ILP32F\FloatNat.mod | 9332 | 2365095d | ok (por trozos) |
+| /app/NatCede.mod | bpgenvm-c\build\tanda\NatCede\aot-RV32IMAFC_ILP32F\NatCede.mod | 2325 | 6f33192a | ok |
+| /app/NatExpropia.mod | bpgenvm-c\build\tanda\NatExpropia\aot-RV32IMAFC_ILP32F\NatExpropia.mod | 1166 | 0f42a895 | ok |
+| /app/NatBuiltin.mod | bpgenvm-c\build\tanda\NatBuiltin\aot-RV32IMAFC_ILP32F\NatBuiltin.mod | 2790 | 7d97dff4 | ok |
+| /app/NatAnida.mod | bpgenvm-c\build\tanda\NatAnida\aot-RV32IMAFC_ILP32F\NatAnida.mod | 1232 | 3b121406 | ok |
+| /app/NatDirecta.mod | bpgenvm-c\build\tanda\NatDirecta\aot-RV32IMAFC_ILP32F\NatDirecta.mod | 2531 | 670e020b | ok |
+| /app/NatCoste.mod | bpgenvm-c\build\tanda\NatCoste\aot-RV32IMAFC_ILP32F\NatCoste.mod | 1000 | 75ab9b09 | ok |
+| /app/NatNombres.mod | bpgenvm-c\build\tanda\NatNombres\aot-RV32IMAFC_ILP32F\NatNombres.mod | 2706 | e84239c1 | ok |
+| /app/NatEstrecha.mod | bpgenvm-c\build\tanda\NatEstrecha\aot-RV32IMAFC_ILP32F\NatEstrecha.mod | 3131 | 3dac6451 | ok |
+| /app/CatCadena.mod | bpgenvm-c\build\tanda\CatCadena\CatCadena.mod | 3879 | 30413235 | ok |
+| /app/CatCrono.mod | bpgenvm-c\build\tanda\CatCrono\CatCrono.mod | 886 | 6ae56af1 | ok |
+| /app/SbPiezas.mod | bpgenvm-c\build\tanda\SbPiezas\SbPiezas.mod | 1979 | 635b7c22 | ok |
+| /app/SbCrono.mod | bpgenvm-c\build\tanda\SbCrono\SbCrono.mod | 819 | 0e798ff0 | ok |
+| /app/HeapInfo.mod | bpgenvm-c\build\tanda\HeapInfo\HeapInfo.mod | 1225 | 34f97321 | ok |
+| /app/HeapCompact.mod | bpgenvm-c\build\tanda\HeapCompact\HeapCompact.mod | 3577 | c45827d4 | ok |
+| /app/HeapReposo.mod | bpgenvm-c\build\tanda\HeapReposo\HeapReposo.mod | 2803 | 4a87e0d1 | ok |
+| /app/DescarteAncho.mod | bpgenvm-c\build\tanda\DescarteAncho\DescarteAncho.mod | 1730 | 4c807172 | ok |
+| /app/TempRetiene.mod | bpgenvm-c\build\tanda\TempRetiene\TempRetiene.mod | 3177 | e04b9177 | ok |
+| /app/FinallyAnidado.mod | bpgenvm-c\build\tanda\FinallyAnidado\FinallyAnidado.mod | 1951 | 8fe62074 | ok |
+| /app/RtcEnHora.mod | bpgenvm-c\build\tanda\RtcEnHora\RtcEnHora.mod | 1301 | 3991790b | ok |
+
+notas de dependencias:
+
+- dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Math: en la zona de packs (pack:Stdlib/Math.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Time: ya en /lib/Time.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Rtc: ya en /lib/Rtc.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia HiloLib: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Gui: ya en /lib/Gui.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Json: ya en /lib/Json.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Collections: ya en /lib/Collections.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Str: ya en /lib/Str.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Heap: en la zona de packs (pack:Stdlib/Heap.mod, crc igual): se ejecuta XIP, no se sube
+- dependencia IO: en la zona de packs (pack:Stdlib/IO.mod, crc igual): se ejecuta XIP, no se sube
+
+### Placa rp2350a - 46CED5A69C399BD2
+
+- sello: boardName=`rp2350a` uniqueId=`46CED5A69C399BD2` serverName=`bpvm-pico` serverBuild=`Oct  2 2026 11:57:27` capacidades=["META", "FILES", "TERMINAL", "DEBUG", "PACKS", "BOOTSEL"]
+- imagen: arch=40 variant=A cpuFreqHz=150000000 resetReason=reinicio pedido uptimeMs=169692 fs=176128/1048576 B vmHeapBytes=251024
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM22
+- pantalla: no (INFO sin screenW/screenH: la imagen no lleva LVGL)
+- inventario /lib+/app: 19 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 39 | 10 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 9 | 8 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 306 | 318 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 8 | 8 | EXITED OK exit=0 |
+| Destructor | **IDENTICO** | 60 | 9 | EXITED OK exit=0; host rc=0 |
+| TimeDemo | **IDENTICO** | 48 | 14 | EXITED OK exit=0; host rc=0 |
+| ArrayFijo | **IDENTICO** | 23 | 9 | EXITED OK exit=0; host rc=0 |
+| MoveRango | **IDENTICO** | 73 | 9 | EXITED OK exit=0; host rc=0 |
+| HiloUsa | **IDENTICO** | 35 | 18 | EXITED OK exit=0; host rc=0 |
+| GuiWinJson | **SALTADA** | - | 60 | necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL) |
+| GuiShot | **SALTADA** | - | 364 | necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL) |
+| NatNew | **IDENTICO** | 28 | 8 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatV7 | **IDENTICO** | 28 | 10 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (ARMV8M_MAIN_SOFTFP) |
+| FloatNat | **IDENTICO** | 66 | 8 | EXITED OK exit=0; host rc=0; nativo 23/23 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatCede | **IDENTICO** | 62 | 92 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatExpropia | **IDENTICO** | 13 | 9 | EXITED OK exit=0; host rc=0; nativo 1/1 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatBuiltin | **IDENTICO** | 45 | 55 | EXITED OK exit=0; host rc=0; nativo 6/6 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatAnida | **IDENTICO** | 11 | 9 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatDirecta | **IDENTICO** | 18 | 14 | EXITED OK exit=0; host rc=0; nativo 9/9 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatCoste | **IDENTICO** | 789 | 12 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatNombres | **IDENTICO** | 12 | 9 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatEstrecha | **IDENTICO** | 74 | 8 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (ARMV8M_MAIN_SOFTFP) |
+| CatCadena | **IDENTICO** | 62 | 8 | EXITED OK exit=0; host rc=0 |
+| CatCrono | **IDENTICO** | 79 | 10 | EXITED OK exit=0; host rc=0 |
+| SbPiezas | **IDENTICO** | 50 | 8 | EXITED OK exit=0; host rc=0 |
+| SbCrono | **IDENTICO** | 101 | 9 | EXITED OK exit=0; host rc=0 |
+| HeapInfo | **IDENTICO** | 41 | 10 | EXITED OK exit=0; host rc=0 |
+| HeapCompact | **IDENTICO** | 382 | 19 | EXITED OK exit=0; host rc=0 |
+| HeapReposo | **IDENTICO** | 365 | 63 | EXITED OK exit=0; host rc=0 |
+| DescarteAncho | **IDENTICO** | 1425 | 28 | EXITED OK exit=0; host rc=0 |
+| TempRetiene | **IDENTICO** | 392 | 14 | EXITED OK exit=0; host rc=0 |
+| FinallyAnidado | **IDENTICO** | 8 | 8 | EXITED OK exit=0; host rc=0 |
+| RtcEnHora | **IDENTICO** | 29 | 9 | EXITED OK exit=0; host rc=0 |
+
+- tras MathRango: uptimeMs=170308 fsUsed=180224 vmHeapBytes=251024
+- tras ThrowSinAtrapar: uptimeMs=170824 fsUsed=184320 vmHeapBytes=251024
+- tras ThreadTrasMain: uptimeMs=171718 fsUsed=188416 vmHeapBytes=251024
+- tras MachineId: uptimeMs=172211 fsUsed=192512 vmHeapBytes=251024
+- tras Destructor: uptimeMs=172789 fsUsed=200704 vmHeapBytes=251024
+- tras TimeDemo: uptimeMs=173743 fsUsed=204800 vmHeapBytes=251024
+- tras ArrayFijo: uptimeMs=174340 fsUsed=208896 vmHeapBytes=251024
+- tras MoveRango: uptimeMs=174841 fsUsed=212992 vmHeapBytes=251024
+- tras HiloUsa: uptimeMs=175395 fsUsed=221184 vmHeapBytes=251024
+- tras NatNew: uptimeMs=176412 fsUsed=229376 vmHeapBytes=251024
+- tras NatV7: uptimeMs=177265 fsUsed=233472 vmHeapBytes=251024
+- tras FloatNat: uptimeMs=178358 fsUsed=245760 vmHeapBytes=251024
+- tras NatCede: uptimeMs=179199 fsUsed=249856 vmHeapBytes=251024
+- tras NatExpropia: uptimeMs=180142 fsUsed=253952 vmHeapBytes=251024
+- tras NatBuiltin: uptimeMs=181044 fsUsed=258048 vmHeapBytes=251024
+- tras NatAnida: uptimeMs=181886 fsUsed=262144 vmHeapBytes=251024
+- tras NatDirecta: uptimeMs=182766 fsUsed=266240 vmHeapBytes=251024
+- tras NatCoste: uptimeMs=184431 fsUsed=270336 vmHeapBytes=251024
+- tras NatNombres: uptimeMs=185287 fsUsed=274432 vmHeapBytes=251024
+- tras NatEstrecha: uptimeMs=186235 fsUsed=278528 vmHeapBytes=251024
+- tras CatCadena: uptimeMs=186754 fsUsed=282624 vmHeapBytes=251024
+- tras CatCrono: uptimeMs=187339 fsUsed=286720 vmHeapBytes=251024
+- tras SbPiezas: uptimeMs=187842 fsUsed=290816 vmHeapBytes=251024
+- tras SbCrono: uptimeMs=188341 fsUsed=294912 vmHeapBytes=251024
+- tras HeapInfo: uptimeMs=188857 fsUsed=299008 vmHeapBytes=251024
+- tras HeapCompact: uptimeMs=189821 fsUsed=303104 vmHeapBytes=251024
+- tras HeapReposo: uptimeMs=190743 fsUsed=307200 vmHeapBytes=251024
+- tras DescarteAncho: uptimeMs=192507 fsUsed=311296 vmHeapBytes=251024
+- tras TempRetiene: uptimeMs=193506 fsUsed=315392 vmHeapBytes=251024
+- tras FinallyAnidado: uptimeMs=194011 fsUsed=319488 vmHeapBytes=251024
+- tras RtcEnHora: uptimeMs=194507 fsUsed=323584 vmHeapBytes=251024
+- ejecutadas (con EXITED) 31 de 33 listadas; no terminaron 0; saltadas 2; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 1611 | ba378a10 | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 295 | 2766e6a8 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 532 | 283bde27 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 484 | 6670f12a | ok |
+| /app/Destructor.mod | bpgenvm-c\build\tanda\Destructor\Destructor.mod | 4667 | 1fd37c26 | ok (por trozos) |
+| /app/TimeDemo.mod | bpgenvm-c\build\tanda\TimeDemo\TimeDemo.mod | 1504 | 7b5397fe | ok |
+| /app/ArrayFijo.mod | bpgenvm-c\build\tanda\ArrayFijo\ArrayFijo.mod | 2359 | cd20e12c | ok |
+| /app/MoveRango.mod | bpgenvm-c\build\tanda\MoveRango\MoveRango.mod | 3670 | d9f3513b | ok |
+| /app/HiloLib.mod | bpgenvm-c\build\tanda\HiloUsa\HiloLib.mod | 1074 | 4a7229f8 | ok |
+| /app/HiloUsa.mod | bpgenvm-c\build\tanda\HiloUsa\HiloUsa.mod | 2189 | 0c1797a2 | ok |
+| /app/NatNew.mod | bpgenvm-c\build\tanda\NatNew\aot-ARMV8M_MAIN_SOFTFP\NatNew.mod | 4151 | 0b2e4308 | ok (por trozos) |
+| /app/NatV7.mod | bpgenvm-c\build\tanda\NatV7\aot-ARMV8M_MAIN_SOFTFP\NatV7.mod | 2295 | 6d5eecb8 | ok |
+| /app/FloatNat.mod | bpgenvm-c\build\tanda\FloatNat\aot-ARMV8M_MAIN_SOFTFP\FloatNat.mod | 8456 | 3612384a | ok (por trozos) |
+| /app/NatCede.mod | bpgenvm-c\build\tanda\NatCede\aot-ARMV8M_MAIN_SOFTFP\NatCede.mod | 2221 | 63be81f6 | ok |
+| /app/NatExpropia.mod | bpgenvm-c\build\tanda\NatExpropia\aot-ARMV8M_MAIN_SOFTFP\NatExpropia.mod | 1126 | dfa8ab63 | ok |
+| /app/NatBuiltin.mod | bpgenvm-c\build\tanda\NatBuiltin\aot-ARMV8M_MAIN_SOFTFP\NatBuiltin.mod | 2586 | 7c4d5b08 | ok |
+| /app/NatAnida.mod | bpgenvm-c\build\tanda\NatAnida\aot-ARMV8M_MAIN_SOFTFP\NatAnida.mod | 1164 | e0fc87f8 | ok |
+| /app/NatDirecta.mod | bpgenvm-c\build\tanda\NatDirecta\aot-ARMV8M_MAIN_SOFTFP\NatDirecta.mod | 2159 | 042932ad | ok |
+| /app/NatCoste.mod | bpgenvm-c\build\tanda\NatCoste\aot-ARMV8M_MAIN_SOFTFP\NatCoste.mod | 932 | 6205214f | ok |
+| /app/NatNombres.mod | bpgenvm-c\build\tanda\NatNombres\aot-ARMV8M_MAIN_SOFTFP\NatNombres.mod | 2462 | d9a3367a | ok |
+| /app/NatEstrecha.mod | bpgenvm-c\build\tanda\NatEstrecha\aot-ARMV8M_MAIN_SOFTFP\NatEstrecha.mod | 2895 | 1ae05cb1 | ok |
+| /app/CatCadena.mod | bpgenvm-c\build\tanda\CatCadena\CatCadena.mod | 3879 | 30413235 | ok |
+| /app/CatCrono.mod | bpgenvm-c\build\tanda\CatCrono\CatCrono.mod | 886 | 6ae56af1 | ok |
+| /app/SbPiezas.mod | bpgenvm-c\build\tanda\SbPiezas\SbPiezas.mod | 1979 | 635b7c22 | ok |
+| /app/SbCrono.mod | bpgenvm-c\build\tanda\SbCrono\SbCrono.mod | 819 | 0e798ff0 | ok |
+| /app/HeapInfo.mod | bpgenvm-c\build\tanda\HeapInfo\HeapInfo.mod | 1225 | 34f97321 | ok |
+| /app/HeapCompact.mod | bpgenvm-c\build\tanda\HeapCompact\HeapCompact.mod | 3577 | c45827d4 | ok |
+| /app/HeapReposo.mod | bpgenvm-c\build\tanda\HeapReposo\HeapReposo.mod | 2803 | 4a87e0d1 | ok |
+| /app/DescarteAncho.mod | bpgenvm-c\build\tanda\DescarteAncho\DescarteAncho.mod | 1730 | 4c807172 | ok |
+| /app/TempRetiene.mod | bpgenvm-c\build\tanda\TempRetiene\TempRetiene.mod | 3177 | e04b9177 | ok |
+| /app/FinallyAnidado.mod | bpgenvm-c\build\tanda\FinallyAnidado\FinallyAnidado.mod | 1951 | 8fe62074 | ok |
+| /app/RtcEnHora.mod | bpgenvm-c\build\tanda\RtcEnHora\RtcEnHora.mod | 1301 | 3991790b | ok |
+
+notas de dependencias:
+
+- dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Time: ya en /lib/Time.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Rtc: ya en /lib/Rtc.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia HiloLib: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Heap: ya en /lib/Heap.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia IO: ya en /lib/IO.mod (crc igual; resuelto por nombre, como el RUN)
+
+### Placa stm32u5g9 - 20353850553250040015002D
+
+- sello: boardName=`stm32u5g9` uniqueId=`20353850553250040015002D` serverName=`bpvm-stm32` serverBuild=`Oct  2 2026 12:00:39` capacidades=["META", "FILES", "TERMINAL", "PACKS"]
+- imagen: arch=40 variant=None cpuFreqHz=160000000 resetReason=software uptimeMs=192752 fs=253952/1032192 B vmHeapBytes=786432
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM12
+- pantalla: si (INFO screenW x screenH = 800x480)
+- inventario /lib+/app: 17 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 287 | 10 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 92 | 8 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 416 | 318 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 172 | 8 | EXITED OK exit=0 |
+| Destructor | **IDENTICO** | 438 | 9 | EXITED OK exit=0; host rc=0 |
+| TimeDemo | **IDENTICO** | 674 | 14 | EXITED OK exit=0; host rc=0 |
+| ArrayFijo | **IDENTICO** | 251 | 9 | EXITED OK exit=0; host rc=0 |
+| MoveRango | **IDENTICO** | 306 | 9 | EXITED OK exit=0; host rc=0 |
+| HiloUsa | **IDENTICO** | 278 | 18 | EXITED OK exit=0; host rc=0 |
+| GuiWinJson | **IDENTICO** | 784 | 61 | EXITED OK exit=0; host rc=0 |
+| GuiShot | **NO-PETA** | 880 | 364 | EXITED OK exit=0 |
+| NatNew | **IDENTICO** | 225 | 8 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatV7 | **IDENTICO** | 289 | 10 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (ARMV8M_MAIN_SOFTFP) |
+| FloatNat | **IDENTICO** | 382 | 8 | EXITED OK exit=0; host rc=0; nativo 23/23 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatCede | **IDENTICO** | 205 | 92 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatExpropia | **IDENTICO** | 156 | 9 | EXITED OK exit=0; host rc=0; nativo 1/1 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatBuiltin | **IDENTICO** | 217 | 55 | EXITED OK exit=0; host rc=0; nativo 6/6 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatAnida | **IDENTICO** | 143 | 9 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatDirecta | **IDENTICO** | 165 | 14 | EXITED OK exit=0; host rc=0; nativo 9/9 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatCoste | **IDENTICO** | 1332 | 12 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatNombres | **IDENTICO** | 191 | 9 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (ARMV8M_MAIN_SOFTFP) |
+| NatEstrecha | **IDENTICO** | 305 | 8 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (ARMV8M_MAIN_SOFTFP) |
+| CatCadena | **IDENTICO** | 292 | 8 | EXITED OK exit=0; host rc=0 |
+| CatCrono | **IDENTICO** | 249 | 10 | EXITED OK exit=0; host rc=0 |
+| SbPiezas | **IDENTICO** | 233 | 8 | EXITED OK exit=0; host rc=0 |
+| SbCrono | **IDENTICO** | 308 | 9 | EXITED OK exit=0; host rc=0 |
+| HeapInfo | **IDENTICO** | 208 | 10 | EXITED OK exit=0; host rc=0 |
+| HeapCompact | **IDENTICO** | 818 | 19 | EXITED OK exit=0; host rc=0 |
+| HeapReposo | **IDENTICO** | 849 | 63 | EXITED OK exit=0; host rc=0 |
+| DescarteAncho | **IDENTICO** | 1583 | 28 | EXITED OK exit=0; host rc=0 |
+| TempRetiene | **IDENTICO** | 711 | 14 | EXITED OK exit=0; host rc=0 |
+| FinallyAnidado | **IDENTICO** | 196 | 8 | EXITED OK exit=0; host rc=0 |
+| RtcEnHora | **IDENTICO** | 454 | 9 | EXITED OK exit=0; host rc=0 |
+
+- tras MathRango: uptimeMs=193653 fsUsed=262144 vmHeapBytes=786432
+- tras ThrowSinAtrapar: uptimeMs=194203 fsUsed=270336 vmHeapBytes=786432
+- tras ThreadTrasMain: uptimeMs=194802 fsUsed=278528 vmHeapBytes=786432
+- tras MachineId: uptimeMs=195403 fsUsed=286720 vmHeapBytes=786432
+- tras Destructor: uptimeMs=196804 fsUsed=294912 vmHeapBytes=786432
+- tras TimeDemo: uptimeMs=197938 fsUsed=303104 vmHeapBytes=786432
+- tras ArrayFijo: uptimeMs=198688 fsUsed=311296 vmHeapBytes=786432
+- tras MoveRango: uptimeMs=199588 fsUsed=319488 vmHeapBytes=786432
+- tras HiloUsa: uptimeMs=200454 fsUsed=335872 vmHeapBytes=786432
+- tras GuiWinJson: uptimeMs=202440 fsUsed=352256 vmHeapBytes=786432
+- tras GuiShot: uptimeMs=204589 fsUsed=360448 vmHeapBytes=786432
+- artefacto GuiShot.shot de GuiShot: bajado a `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5g9_203538505532\GuiShot.shot` (8718 B, crc d9978987) -> PNG `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5g9_203538505532\GuiShot.png`; antes del RUN: existia: /GuiShot.shot (borrado)
+- tras NatNew: uptimeMs=206438 fsUsed=368640 vmHeapBytes=786432
+- tras NatV7: uptimeMs=207186 fsUsed=376832 vmHeapBytes=786432
+- tras FloatNat: uptimeMs=208553 fsUsed=393216 vmHeapBytes=786432
+- tras NatCede: uptimeMs=209302 fsUsed=401408 vmHeapBytes=786432
+- tras NatExpropia: uptimeMs=209951 fsUsed=409600 vmHeapBytes=786432
+- tras NatBuiltin: uptimeMs=210735 fsUsed=417792 vmHeapBytes=786432
+- tras NatAnida: uptimeMs=211402 fsUsed=425984 vmHeapBytes=786432
+- tras NatDirecta: uptimeMs=212152 fsUsed=434176 vmHeapBytes=786432
+- tras NatCoste: uptimeMs=214003 fsUsed=442368 vmHeapBytes=786432
+- tras NatNombres: uptimeMs=214785 fsUsed=450560 vmHeapBytes=786432
+- tras NatEstrecha: uptimeMs=215655 fsUsed=458752 vmHeapBytes=786432
+- tras CatCadena: uptimeMs=216552 fsUsed=466944 vmHeapBytes=786432
+- tras CatCrono: uptimeMs=217170 fsUsed=475136 vmHeapBytes=786432
+- tras SbPiezas: uptimeMs=217886 fsUsed=483328 vmHeapBytes=786432
+- tras SbCrono: uptimeMs=218503 fsUsed=491520 vmHeapBytes=786432
+- tras HeapInfo: uptimeMs=219186 fsUsed=499712 vmHeapBytes=786432
+- tras HeapCompact: uptimeMs=220520 fsUsed=507904 vmHeapBytes=786432
+- tras HeapReposo: uptimeMs=222155 fsUsed=516096 vmHeapBytes=786432
+- tras DescarteAncho: uptimeMs=224105 fsUsed=524288 vmHeapBytes=786432
+- tras TempRetiene: uptimeMs=225374 fsUsed=532480 vmHeapBytes=786432
+- tras FinallyAnidado: uptimeMs=226121 fsUsed=540672 vmHeapBytes=786432
+- tras RtcEnHora: uptimeMs=227239 fsUsed=548864 vmHeapBytes=786432
+- ejecutadas (con EXITED) 33 de 33 listadas; no terminaron 0; saltadas 0; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 1611 | ba378a10 | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 295 | 2766e6a8 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 532 | 283bde27 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 484 | 6670f12a | ok |
+| /app/Destructor.mod | bpgenvm-c\build\tanda\Destructor\Destructor.mod | 4667 | 1fd37c26 | ok (por trozos) |
+| /app/TimeDemo.mod | bpgenvm-c\build\tanda\TimeDemo\TimeDemo.mod | 1504 | 7b5397fe | ok |
+| /app/ArrayFijo.mod | bpgenvm-c\build\tanda\ArrayFijo\ArrayFijo.mod | 2359 | cd20e12c | ok |
+| /app/MoveRango.mod | bpgenvm-c\build\tanda\MoveRango\MoveRango.mod | 3670 | d9f3513b | ok |
+| /app/HiloLib.mod | bpgenvm-c\build\tanda\HiloUsa\HiloLib.mod | 1074 | 4a7229f8 | ok |
+| /app/HiloUsa.mod | bpgenvm-c\build\tanda\HiloUsa\HiloUsa.mod | 2189 | 0c1797a2 | ok |
+| /app/main.win | samples\formdemo\resources\main.win | 390 | 548edd67 | ok |
+| /app/GuiWinJson.mod | bpgenvm-c\build\tanda\GuiWinJson\GuiWinJson.mod | 2070 | f74e3271 | ok |
+| /app/GuiShot.mod | bpgenvm-c\build\tanda\GuiShot\GuiShot.mod | 1344 | 48635085 | ok |
+| /app/NatNew.mod | bpgenvm-c\build\tanda\NatNew\aot-ARMV8M_MAIN_SOFTFP\NatNew.mod | 4151 | 0b2e4308 | ok (por trozos) |
+| /app/NatV7.mod | bpgenvm-c\build\tanda\NatV7\aot-ARMV8M_MAIN_SOFTFP\NatV7.mod | 2295 | 6d5eecb8 | ok |
+| /app/FloatNat.mod | bpgenvm-c\build\tanda\FloatNat\aot-ARMV8M_MAIN_SOFTFP\FloatNat.mod | 8456 | 3612384a | ok (por trozos) |
+| /app/NatCede.mod | bpgenvm-c\build\tanda\NatCede\aot-ARMV8M_MAIN_SOFTFP\NatCede.mod | 2221 | 63be81f6 | ok |
+| /app/NatExpropia.mod | bpgenvm-c\build\tanda\NatExpropia\aot-ARMV8M_MAIN_SOFTFP\NatExpropia.mod | 1126 | dfa8ab63 | ok |
+| /app/NatBuiltin.mod | bpgenvm-c\build\tanda\NatBuiltin\aot-ARMV8M_MAIN_SOFTFP\NatBuiltin.mod | 2586 | 7c4d5b08 | ok |
+| /app/NatAnida.mod | bpgenvm-c\build\tanda\NatAnida\aot-ARMV8M_MAIN_SOFTFP\NatAnida.mod | 1164 | e0fc87f8 | ok |
+| /app/NatDirecta.mod | bpgenvm-c\build\tanda\NatDirecta\aot-ARMV8M_MAIN_SOFTFP\NatDirecta.mod | 2159 | 042932ad | ok |
+| /app/NatCoste.mod | bpgenvm-c\build\tanda\NatCoste\aot-ARMV8M_MAIN_SOFTFP\NatCoste.mod | 932 | 6205214f | ok |
+| /app/NatNombres.mod | bpgenvm-c\build\tanda\NatNombres\aot-ARMV8M_MAIN_SOFTFP\NatNombres.mod | 2462 | d9a3367a | ok |
+| /app/NatEstrecha.mod | bpgenvm-c\build\tanda\NatEstrecha\aot-ARMV8M_MAIN_SOFTFP\NatEstrecha.mod | 2895 | 1ae05cb1 | ok |
+| /app/CatCadena.mod | bpgenvm-c\build\tanda\CatCadena\CatCadena.mod | 3879 | 30413235 | ok |
+| /app/CatCrono.mod | bpgenvm-c\build\tanda\CatCrono\CatCrono.mod | 886 | 6ae56af1 | ok |
+| /app/SbPiezas.mod | bpgenvm-c\build\tanda\SbPiezas\SbPiezas.mod | 1979 | 635b7c22 | ok |
+| /app/SbCrono.mod | bpgenvm-c\build\tanda\SbCrono\SbCrono.mod | 819 | 0e798ff0 | ok |
+| /app/HeapInfo.mod | bpgenvm-c\build\tanda\HeapInfo\HeapInfo.mod | 1225 | 34f97321 | ok |
+| /app/HeapCompact.mod | bpgenvm-c\build\tanda\HeapCompact\HeapCompact.mod | 3577 | c45827d4 | ok |
+| /app/HeapReposo.mod | bpgenvm-c\build\tanda\HeapReposo\HeapReposo.mod | 2803 | 4a87e0d1 | ok |
+| /app/DescarteAncho.mod | bpgenvm-c\build\tanda\DescarteAncho\DescarteAncho.mod | 1730 | 4c807172 | ok |
+| /app/TempRetiene.mod | bpgenvm-c\build\tanda\TempRetiene\TempRetiene.mod | 3177 | e04b9177 | ok |
+| /app/FinallyAnidado.mod | bpgenvm-c\build\tanda\FinallyAnidado\FinallyAnidado.mod | 1951 | 8fe62074 | ok |
+| /app/RtcEnHora.mod | bpgenvm-c\build\tanda\RtcEnHora\RtcEnHora.mod | 1301 | 3991790b | ok |
+
+notas de dependencias:
+
+- dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Time: ya en /lib/Time.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Rtc: ya en /lib/Rtc.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia HiloLib: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Gui: DESFASE de compilación —la placa tiene en pack:Gui/Gui.mod la versión 7 (>= la mínima 7), crc ae0d2a7e != el de hoy f99660c9: vale y NO se sube, pero la prueba corre con la suya; para probar la de hoy, regraba el pack—
+- dependencia Json: DESFASE de compilación —la placa tiene en pack:Gui/Json.mod la versión 7 (>= la mínima 7), crc 578601f2 != el de hoy 620b3c39: vale y NO se sube, pero la prueba corre con la suya; para probar la de hoy, regraba el pack—
+- dependencia Collections: DESFASE de compilación —la placa tiene en pack:Gui/Collections.mod la versión 7 (>= la mínima 7), crc feacb85e != el de hoy 263868cb: vale y NO se sube, pero la prueba corre con la suya; para probar la de hoy, regraba el pack—
+- dependencia Str: DESFASE de compilación —la placa tiene en pack:Gui/Str.mod la versión 7 (>= la mínima 7), crc 8e56f753 != el de hoy 9765bb28: vale y NO se sube, pero la prueba corre con la suya; para probar la de hoy, regraba el pack—
+- dependencia Heap: ya en /lib/Heap.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia IO: ya en /lib/IO.mod (crc igual; resuelto por nombre, como el RUN)
+
+### Matriz pruebas x placas
+
+| prueba | esp32c6@COM3 | esp32p4@COM15 | rp2350a@COM22 | stm32u5g9@COM12 |
+|---|---|---|---|---|
+| MathRango | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| ThrowSinAtrapar | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| ThreadTrasMain | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| MachineId | NO-PETA | NO-PETA | NO-PETA | NO-PETA |
+| Destructor | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| TimeDemo | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| ArrayFijo | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| MoveRango | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| HiloUsa | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| GuiWinJson | IDENTICO | IDENTICO | SALTADA | IDENTICO |
+| GuiShot | NO-PETA | NO-PETA | SALTADA | NO-PETA |
+| NatNew | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatV7 | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| FloatNat | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatCede | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatExpropia | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatBuiltin | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatAnida | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatDirecta | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatCoste | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatNombres | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| NatEstrecha | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| CatCadena | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| CatCrono | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| SbPiezas | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| SbCrono | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| HeapInfo | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| HeapCompact | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| HeapReposo | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| DescarteAncho | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| TempRetiene | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| FinallyAnidado | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+| RtcEnHora | IDENTICO | IDENTICO | IDENTICO | IDENTICO |
+
+NECESITA OJOS: GuiShot en esp32c6@COM3: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32c6_58E6C5FFFEF9\GuiShot.png  
+NECESITA OJOS: GuiShot en esp32p4@COM15: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_E8F60AE0B380\GuiShot.png  
+SALTADA: GuiWinJson en rp2350a@COM22: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
+SALTADA: GuiShot en rp2350a@COM22: necesita pantalla y la placa no la tiene (INFO sin screenW/screenH: la imagen no lleva LVGL)  
+NECESITA OJOS: GuiShot en stm32u5g9@COM12: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\stm32u5g9_203538505532\GuiShot.png  
+

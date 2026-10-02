@@ -27,8 +27,9 @@
 
 ## Última sesión
 
-> **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Más abajo:
-> «🧪 H9 (2-oct)», con su traspaso al final. Quedan H9, H10 y H12.
+> **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
+> tarde, `#624` (subir una librería por su versión) y, de H10, el `Rtc` en hora (`#626`, la idea de Eduardo), visto en
+> las cuatro. Más abajo: «🧪 H9 (2-oct)», con su traspaso al final. Quedan H9, H10 y H12.
 
 ## 🧱 H1 (19-sep) — las seis de V10 en el compilador, cerradas: `#522` `#527` `#528` `#529` `#532` y `#517` de rebote
 
@@ -1128,21 +1129,41 @@ pantalla). Red: **125 de 125** en MOD9, MOD8 y con dos workers; frontend 267, mi
 - **Decisiones de Eduardo**: el `break` fuera de bucle sigue siendo un error; `#623` lo piensa (packs LIBRERÍA sin copias
   de la stdlib, packs PROGRAMA como contenedor); `#624`, «OK».
 
+### ⏰ H10, el `Rtc` en hora (2-oct, tarde) — `#626`
+
+- **La idea de Eduardo, hecha** (`49b3818a`): la fecha de la imagen en el ENV (`imagen.fecha`), que el arranque común
+  anota UNA vez —si falta, y sólo entonces: *«si lo grabamos cada vez que arranque podríamos llegar a estropear la
+  flash»*—, y `Rtc.Clock.isSet()` escrito en BP sobre una primitiva GENERAL, `Machine.getEnv(clave)` (la 271): sin la
+  clave (el PC) en hora; con ella, si el reloj no marca menos que la fecha (un día de margen). El diseño y lo decidido,
+  en `V7_IDEAS` §H10 «el `Rtc`».
+- **En placa** (las cuatro de la mesa, con su OK): las cuatro anotan la fecha en el primer arranque y, reiniciadas, no
+  la vuelven a escribir; la Pico sin el IDE dice «fuera de hora». La tanda (33, con `RtcEnHora`): C6, P4 y DK2, 33 de
+  33; la Pico, 31 de 31.
+- **De paso**: la vista del ENV de la Pico se torcía tras dos `ENV_SET` sin reiniciar (leía el payload nuevo con la
+  longitud del arranque): arreglado y visto en placa. `test-env` entra en la red; `env_smoke`, nuevo, en `check-sim`.
+- **`#627`**: `test-packhelp` revienta más o menos una vez de cada cincuenta —también en el commit de antes—: abierta,
+  y una tarea aparte para buscar dónde cae.
+
 ### 🌙 Traspaso (2-oct)
 
 - **Decisiones**: un `break` fuera de un bucle sigue siendo un error de compilación (Eduardo, 2-oct: *«si el compilador
   da un mensaje de error por mí está bien»*). `#623`, Eduardo lo está pensando: packs LIBRERÍA sin copias de la
-  stdlib y packs PROGRAMA como contenedor (`V7_IDEAS` §«H9 — `#623`», con los hechos medidos).
+  stdlib y packs PROGRAMA como contenedor (`V7_IDEAS` §«H9 — `#623`», con los hechos medidos). La batería de
+  rendimiento se mide en H12, con dos núcleos; la prueba de resistencia de días, a V8. El `Rtc`: la primitiva general
+  y la fecha de la imagen, una vez (`#626`, cerrada).
 - **Lo que queda de H9**: en el runner, `memoria: APRETADA` y el criterio «no determinista», y recuperar una placa
-  colgada (ya se sabe cómo en cada familia: RTS en las ESP32, la sonda en la STM32, desenchufar en la Pico); el sello
-  de la imagen (`imageCrc` en el `HELLO`); `#609`; y decidir si la batería de rendimiento y la prueba de resistencia de
-  días caben en V7. Limpieza con OK: los `.mod` de prueba de las placas (la C6, una cuarentena en `/app`; la Pico, un
-  `Gui.mod` MOD6 de V5 en `/lib`).
-- **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) también llevan copias rancias —la tanda lo
-  tapa subiendo a `/lib`, y allí cabe—; el `SQLite.pack` sigue con un Core de antes; las placas tienen muchos `.mod` de
-  prueba en `/app` (la C6, una cuarentena; borrarlos con OK, placa a placa). Y el GC conservador con ENTER sin poner a
-  cero: retiene de pasada lo que apunten ranuras viejas; no rompe nada, pero confunde cualquier prueba que cuente
-  objetos (hoy, dos) —si se quiere quitar de raíz, es poner a cero los locales al entrar (coste por llamada): decisión—.
+  colgada (ya se sabe cómo en cada familia: RTS en las ESP32, la sonda en la STM32, desenchufar en la Pico); que la
+  tanda borre lo que sube; el sello de la imagen (`imageCrc` en el `HELLO`); `#609`; `#627`. La limpieza de las otras
+  cinco placas (S3, C3, C5, Metro, Nucleo) cuando se conecten.
+- **Lo que queda de H10**: que el arranque de la STM32 diga de dónde sale su tabla de particiones (una línea); la GUI
+  (`#477` resto, `G2` resto) y lo que espera una decisión de Eduardo: el nombre `Debug` de la STM32, `invokeLater` /
+  `Command`, el triaje de `#473` y el DMA de `Uart`.
+- **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) llevan copias rancias de la stdlib —la
+  tanda lo dice como DESFASE y no sube nada—; y los `Stdlib.pack` de las zonas de las cuatro llevan el `Machine`, el
+  `Rtc` y el `Time` de antes de `#626`: el arranque repone los de la imagen en `/lib`, que ganan (en RAM); regrabar el
+  pack cuando toque. El `SQLite.pack` sigue con un Core de antes. Y el GC conservador con ENTER sin poner a cero:
+  retiene de pasada lo que apunten ranuras viejas; no rompe nada, pero confunde cualquier prueba que cuente objetos
+  (hoy, dos) —si se quiere quitar de raíz, es poner a cero los locales al entrar (coste por llamada): decisión—.
 
 ## 🌙 TRASPASO (1-oct, al acabar) — tres hitos cerrados hoy (H7, H11 y H8); quedan H9, H10 y H12
 
