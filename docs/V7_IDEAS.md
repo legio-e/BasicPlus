@@ -3431,6 +3431,26 @@ instrucciones, con prueba de paridad), y la máquina hace lo que el I2C y el SPI
 argumentos y dice por la salida lo que haría (`[pio] …`, las mismas líneas en las dos VMs), y `get` da 0. Lo que la PIO
 hace de verdad se ve en la placa.
 
+**Para qué, y cómo se prueba** (Eduardo, 2-oct): *«La prueba se puede hacer fácil en la Metro con el código
+equivalente al del Neopixel. En realidad lo necesito para recibir una comunicación serie TTL a 9600 N 8 1»*.
+- **La prueba**: en la Metro, un `ws2812` en BP que encienda su NeoPixel como el driver de C —se ve, y se compara con
+  el de C—.
+- **El uso**: un RECEPTOR serie, el `uart_rx` de los ejemplos de la SDK: `wait 0 pin 0` (el bit de arranque),
+  `set x, 7 [10]` (hasta la mitad del primer bit), `in pins, 1` y `jmp x-- bitloop [6]` (ocho bits, ocho ciclos cada
+  uno), `jmp pin` (el bit de parada), y `push` —o `irq` si la trama viene mal—. La máquina, a 8 × 9600 = 76800 Hz (el
+  divisor, 1953,125 a 150 MHz); el byte entra por la derecha y queda en los bits 31..24 (`get() >> 24`). Pide
+  `addWait`, `addIn`, `addJump` con `X_DEC` y `PIN`, `addPush` y `addIrq`, y `setInBase` y `setJmpPin`.
+- **Lo que implica recibir**: la FIFO de la máquina tiene 4 palabras (8 si se une la de recepción); a 9600 baudios llega
+  un byte cada ~1 ms, así que una pausa del GC de más de 8 ms perdería bytes. Lo mismo que resolvió el `Uart` de la
+  Pico (`#473`: un anillo de 512 B que llena una interrupción): la capa de C vacía la FIFO en un anillo, por la
+  interrupción de la PIO, y `get()` lee del anillo. Y se dice cuándo el anillo se llenó (errores sí, silenciosos no).
+- **Su prueba en placa**: un puente entre el TX de un UART de hardware (`Uart`) y el pin RX de la máquina; se mandan
+  bytes a 9600 8N1 y se comparan los recibidos (también con el GC trabajando entre medias).
+- **Antes de la PIO, el `Uart`**: la Pico tiene dos UART de hardware, libres (el cable del IDE va por USB), que ya
+  reciben por interrupción en su anillo. Si el RX puede ir a un pin de UART (en la Pico 2: GP1, GP13, GP17 y GP29 del
+  UART0; GP5, GP9, GP21 y GP25 del UART1), funciona hoy. La PIO hace falta para un pin cualquiera o para un tercer
+  puerto.
+
 **Y lo último** (Eduardo, 2-oct): `null` se llama **`RP2350.NONE`** (*«NONE está bien»*); y **cuándo**: *«Más adelante,
 si tenemos tiempo de V7, si no en V8»* —anotado en el bloque de V8 de `FICHAS`—.
 
