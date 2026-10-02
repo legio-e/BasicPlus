@@ -591,7 +591,8 @@ firmware:
 |---|---|---|
 | host + `bpvm-sim` | ✅ total | es un proceso: se mata y se relanza |
 | ESP32-S3 / P4 | ✅ | el chip USB-serie lleva el circuito DTR/RTS que resetea el micro |
-| STM32 | ❓ **por comprobar** | el ST-LINK sí puede resetear el target, pero por su propia vía, no por el puerto serie |
+| ESP32-C3 / C5 / C6 | ✅ (2-oct, la C6) | el USB-Serial-JTAG: `wire_serie.py resetcable` (RTS 200 ms) la reinicia con un programa colgado |
+| STM32 | ✅ **por la sonda** (2-oct, la DK2) | el RTS del puerto del ST-LINK NO la resetea (sigue colgada); `STM32_Programmer_CLI -c port=SWD sn=… -hardRst` sí, y la placa dice «pin (NRST)» |
 | RP2350 | ❌ | USB **nativo**: no hay chip serie que lleve ese circuito. Sólo se recupera desenchufando ([[pico-sin-reset-instrumentar]]) |
 
 ⚠️ **Matiz importante**: el verbo `RESET` del wire existe en todas, pero **sólo sirve si el

@@ -106,7 +106,7 @@ el PC sin placa, como en el host.
 > |---|---|---|
 > | **fichas de V7 con número** | **45** | las catorce abiertas EN V7 (14-sep, de la matriz, el oráculo, el mapa y la revisión de `#492`): ~~`#506`~~ ~~`#507`~~ ~~`#508`~~ ~~`#509`~~ ~~`#510`~~ ~~`#511`~~ ~~`#512`~~ ~~`#513`~~ ~~`#514`~~ ~~`#515`~~ ~~`#516`~~ ~~`#517`~~ ~~`#518`~~ ~~`#519`~~ · las once que vienen de V6: `#452` `#468` ~~`#470`~~ ~~`#479`~~ ~~`#487`~~ `#490` (→ V8, 24-sep) ~~`#491`~~ ~~`#492`~~ ~~`#493`~~ ~~`#495`~~ ~~`#500`~~ · la abierta el 15-sep por la revisión de `#493`: ~~`#520`~~ · las dos del mapa de `#514`/`#516` (15-sep, tarde): ~~`#521`~~ ~~`#522`~~ · la decisión de Eduardo del 15-sep (noche): ~~`#523`~~ · del 16-sep: ~~`#524`~~ · de la revisión V10 (16-sep, tarde): ~~`#525`~~ ~~`#526`~~ ~~`#527`~~ ~~`#528`~~ ~~`#529`~~ ~~`#530`~~ ~~`#531`~~ ~~`#532`~~ · y las siete de la cola heredada de V5 que V6 no abrió: ~~`#19`~~ ~~`#356`~~ ~~`#378`~~ ~~`#396`~~ `#426` ~~`#441`~~ y `H6` (`SD_INFO`/`SD_MOUNT`) (tachadas el 24-sep las que ya estaban cerradas; ~~`#540`~~, abierta y cerrada el 24-sep, con H1; ~~`#541`~~ y ~~`#542`~~, del mismo día, en H9 y H5) |
 > | **hitos** | **12** | `H1`–`H12`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`) |
-> | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` `#485` `#494` `#502` · `A1.5` `E1` `G2` `N1` `P1.C3` `T1` `U1.2` `U3.25` `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
+> | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` ~~`#485`~~ `#494` `#502` · `A1.5` `E1` `G2` `N1` ~~`P1.C3`~~ `T1` ~~`U1.2`~~ ~~`U3.25`~~ `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
 > | **fuera del plan de versiones** (decidido) | **6** | `#488` (AOT Xtensa), la red en placa (V8; desde el 24-sep, V8 = WiFi y Bluetooth, y el bajo consumo), Linux/Raspberry Pi, el brillo de la GUI, «faltan módulos» sin reproducción, y el P4X (sin fecha). `A4` sale de aquí: es `H12` |
 >
@@ -7574,6 +7574,12 @@ el sim), todos desde el camino del RUN. Con esto **no hay dos números que pueda
 `INCLUDE_uxTaskPriorityGet` ya estaba a 1 en las tres `FreeRTOSConfig`. Compiladas Pico, P4, S3 y
 Nucleo; paridad 50 PASS.
 
+📏 **Medido en placa el 2-oct** (el resto que quedaba en H9; el «17 ms» de antes era del micro simulado, imprimiendo):
+un programa que CALCULA sin fin y un KILL desde el PC, cinco veces por placa, con las imágenes de hoy —del KILL al
+`EXITED`, medianas—: **P4 23,4 ms** (el ida y vuelta de un `STAT` con el programa calculando, 20,0 ms), DK2 15,8, C6
+4,6 (otra pasada, 31,3: el USB-Serial-JTAG baila), Pico 2 6,2. En el P4 el KILL cuesta lo que cualquier ida y vuelta
+del cable: `io` no espera a que la VM le deje la CPU, que es lo que este arreglo cambió.
+
 ⚠️ **Lo que NO se puede verificar aquí**: el efecto es del RTOS y sólo se ve en placa. La prueba, si
 se quiere cerrar del todo, es **en el P4**: un KILL mientras un programa CALCULA. Con `io` por
 debajo debería tardar; a la misma prioridad, decenas de ms — que es lo medido en la Pico y la C6 el
@@ -11116,6 +11122,9 @@ las **seis** imágenes reconstruidas (Pico, S3, P4, C3, Nucleo, Discovery).
 
 ⏭️ Queda de `P1.C3`: `trytest.bp` + `JsonDemo` en placa, y el AOT (el C3 es RISC-V, así que el
 `.mdn` del P4 debería servir de plantilla).
+✅ **Hecho en placa** (anotado el 2-oct): `trytest` y `JsonDemo`, IDÉNTICOS en la C3 el 24-sep (`compat/informes/
+tanda_v7.md`); y el AOT —`NatNew`, `NatV7`, `FloatNat`, con sus thunks `RV32IMC_ILP32`— IDÉNTICO el 25-sep, tras `#565`
+(`tanda_v7_25sep.md`).
 
 
 #### ✅ P1.C3.3 — lo que se pedia (hecho arriba)
@@ -11610,6 +11619,8 @@ las copias ya son idénticas.
   ✅ **Verificado en el PC**: el firmware **compila y enlaza** —y eso ya prueba que no
   quedó ninguna función duplicada del núcleo, que el enlazador lo habría cantado— y
   `make test-logsw` sigue en verde (4 de 4).
+  ✅ **Visto en placa el 24-sep** (la Pico 2, la tarde de placas de H9 —`ESTADO`—: tras un `RESET` por el wire, el log
+  de antes sobrevive), anotado aquí el 2-oct. Lo que decía:
   ⏳ **Falta la placa**: que el post-mortem siga sobreviviendo al reinicio en la Pico. Es
   la función que no puede romperse y **no se puede comprobar en host**.
   ⚠️ **Un cambio de comportamiento, a propósito**: `log_clear_flash` borraba SÓLO la flash
@@ -13496,6 +13507,10 @@ Pico, S3, P4, C3, STM32 Nucleo y STM32 Discovery.
 ⏭️ Falta **probarlo en placa**: en el host el backend es `fs_lfs` sobre imagen, y en el micro
 es el mismo fichero sobre flash real, pero eso hay que verlo. Gesto: `MKDIR /app/x`, `LIST_DIR
 /app`, `RMDIR /app/x`.
+
+✅ **Visto en placa el 2-oct** (la C6, littlefs sobre su flash, H9): `MKDIR /app/u325` crea, y el `LIST_DIR /app` lo
+da con `isDir: true`; `RMDIR` lo quita y, repetido, `NOT_FOUND`; un `RMDIR` de un directorio con un fichero dentro,
+`NOT_EMPTY`. La placa, limpia después.
 
 ---
 
