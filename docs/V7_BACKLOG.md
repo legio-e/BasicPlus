@@ -258,7 +258,7 @@ cuatro aceptadas tal cual y la primera rebajada a su tamaño — está anotado e
 | **`Rtc` por software en Pico y ESP**: con autorun nadie calibra y `epochSec()` devuelve segundos-desde-boot como si fuera la hora, sin forma de distinguirlo desde BP | `FICHAS` L671 |
 | ✅ (24-sep, en la Pico 2: «reinicio pedido» tras un `RESET` por el wire) ~~`#466` resto~~ — la Pico dice `causa del reset = WATCHDOG` tras un `RESET` pedido por el wire (una línea en `main.c:1596`; `resetCause` ya distingue) | `FICHAS` L3194 |
 | **STM32**: la única configuración se llama `Debug` aunque compile a `-Os` y sea la de publicar (renombrar o no; tocar `PUBLICAR.md` y el script) · **el TOTAL del FS baila** entre arranques (516096 ↔ 614400, 26-ago) y el boot no dice de dónde sale la tabla de particiones | `FICHAS` L8410, L10270 |
-| El `sdkconfig` generado del C3 está **trackeado** (S3, C6 y P4 lo ignoran): `.gitignore` + `git rm --cached` | `FICHAS` L7969 |
+| ✅ (2-oct: los defaults lo reproducen, 0 diferencias; fuera del índice y con su `.gitignore`) ~~El `sdkconfig` generado del C3 está **trackeado**~~ (S3, C6 y P4 lo ignoran): `.gitignore` + `git rm --cached` | `FICHAS` L7969 |
 | Cosmético: el log del bootloader sale por el USB nativo **antes del `HELLO`** (C6/C3); el IDE lo salta | `FICHAS` L8241 |
 | El ENV de la Pico 2 **cambió solo** al flashear (28-ago; FS 1512→1024 KB): sin causa ni reproducción — si vuelve, capturar el log del arranque | `ESTADO` 28-ago |
 | **ESP32-S31** (RISC-V, sucesora de la S3) cuando haya placa, por el camino de `P1.C3` | `FICHAS` L7641 |

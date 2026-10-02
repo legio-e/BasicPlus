@@ -11300,7 +11300,9 @@ nativo (COM3), Wi-Fi 6 / BLE / 802.15.4. El gemelo del C3 en lo que importa al f
 comunes; `c6_board_id.c` en vez de `c3_`), `partitions.csv` (la de 4 MB, mismos offsets),
 `sdkconfig.defaults` (wire por USB, consola a UART0 —GPIO16/17 aquí—, sin secundaria), `chip_cfg.h`
 y `c6_board_id.[ch]` (31 GPIO, 6 LEDC, 7 ADC, 512 KB SRAM). Y su `.gitignore` como el del S3: el
-`sdkconfig` generado no entra (el del C3 sí está trackeado: inconsistencia anotada).
+`sdkconfig` generado no entra (el del C3 sí está trackeado: inconsistencia anotada). ✅ **Resuelta el 2-oct** (H10):
+su `sdkconfig.defaults` lo reproduce línea a línea —1457 líneas `CONFIG_`, 0 diferencias, generado aparte con
+`idf.py -B … -D SDKCONFIG=… reconfigure`—, así que sale del índice y la C3 gana el `.gitignore` de las otras.
 
 🐛 **Lo único que no compiló, y es de la familia**: `gpio_esp32.c` guardaba `UART_NUM_2` con
 `#if SOC_UART_NUM > 2` (`#465`, que ya había salido del C3). El C6 cuenta **tres** UART —dos HP y
