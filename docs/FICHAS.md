@@ -830,7 +830,7 @@ reserva y los demás hilos paran en el safepoint de arriba del lazo o dentro de 
 siguiente, lo reservado ya está publicado); la VM-C, en `bpvm_eh_unwind`, cuando la excepción ya está en la pila de su
 manejador. `TempRetiene`, once `ok` en las dos VMs; las pruebas de miVM (56) en verde.
 
-#### ✅ `#621` — las variables OCULTAS que el compilador pone en el marco retienen lo que guardaron hasta que la función acaba: `cab := null; gc()` no suelta una lista construida en `Main` (abierta 2-oct, en la tanda de H9 en la C6 con `HeapInfo`; preexistente; H9 · **CERRADA el 2-oct**, `7021b975`)
+#### ✅ `#621` — las variables OCULTAS que el compilador pone en el marco retienen lo que guardaron hasta que la función acaba: `cab := null; gc()` no suelta una lista construida en `Main` (abierta 2-oct, en la tanda de H9 en la C6 con `HeapInfo`; preexistente; H9 · **CERRADA el 2-oct**, `7021b975` y `77b8d13b`)
 
 **Visto el 2-oct**: `HeapInfo` daba `FALLO` en la C6 («doscientos nodos son al menos cuatrocientos objetos más»: h0 7,
 al final 405). La prueba contaba la basura de antes (las cadenas de `mira`), que una colecta del bucle se llevaba: con
@@ -875,6 +875,16 @@ cada hilo: `#622`. **El censo por el bytecode** (la stdlib y los 549 samples que
 y el de después): 226 de 625 `.mod` crecen, 3190 B en total; la stdlib, 190 B de 188 KB (Collections, Core, Gui, I2c,
 Json, Spi, Str, Time), con la misma interfaz. Regenerados `bpstdlib/*.mod`, `packs/Stdlib.pack` y los blobs de las
 tres familias (`regen_all_mods.sh`).
+
+⚠️ **Y una REGRESIÓN de `7021b975`, cazada releyendo el diff antes de grabar ninguna placa** (`77b8d13b`):
+`__pending_exc`, donde un finally guarda la excepción mientras corre, era UNO por función y su vida cruza sentencias
+(del manejador al relanzamiento). Con un try/finally dentro de un finally, la limpieza del de dentro lo ponía a null y
+el de fuera relanzaba null («throw de un objeto que no es una excepción», en las dos VMs); dentro del cuerpo de otro,
+lo mismo con la limpieza del manejador de fuera. Ahora uno por try (`__pending_exc_N`). Y lo que ya pasaba ANTES de
+hoy: una excepción que atraviesa un finally de dentro del finally y se caza allí PISABA la pendiente, y el de fuera
+relanzaba la otra. Era el único nombre oculto de 8 B compartido con vida entre sentencias (`__result`,
+`__pending_owner_exc` y `__sync_exc` se usan fuera de toda sentencia). `bpgenvm-c/samples/FinallyAnidado.bp`, en la
+red y en la tanda.
 
 #### ✅ `#620` — descartar un valor de 8 bytes (una llamada como sentencia a una función que devuelve `string`, `long`, un objeto…, o un `catch` sin nombre) saca 4 bytes de la pila y deja 4: en un bucle, desbordamiento de pila; mezclado con un `catch` sin nombre, la pila baja hasta pisar los locales (abierta 2-oct, al mirar `#621`; preexistente: igual con la V6 publicada; H9 · **CERRADA el 2-oct**, `7021b975`)
 
