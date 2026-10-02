@@ -3457,6 +3457,30 @@ equivalente al del Neopixel. En realidad lo necesito para recibir una comunicaci
   comparten: caben de sobra en las 12 (menos la del `Neopixel`, si se usa). Transmitir por PIO (el `uart_tx`) sería
   la misma forma.
 
+**Recibir y enviar, y los buses por software** (Eduardo, 2-oct): *«En este caso solamente necesito recibir, lo normal
+sería poder recibir y enviar. En MicroPython tienen un I2C y un SPI por software lo cual es muy útil para cuando se te
+acaban los puertos físicos. Tener una Uart por software estaría muy bien pero el código se complica un poco ya que
+sería necesario que funcionase a diferentes baudios»*.
+- **El puerto serie por PIO, los dos sentidos**: el receptor (`uart_rx`, 5 instrucciones) y el emisor (`uart_tx`, 4),
+  cada uno en su máquina, con la interfaz de `Uart.Port`.
+- **Los baudios no lo complican, con la PIO**: el programa es el MISMO a cualquier velocidad; sólo cambia el reloj de
+  la máquina (8 ciclos por bit: 8 × baudios). El divisor del RP2350 (16 bits enteros y 8 de fracción) va de ~290
+  baudios a varios millones: a 9600, 1953,125 exacto; a 115200, 162,76 (con la fracción, el error queda por debajo
+  del 0,01 %).
+- **Por qué MicroPython tiene I2C y SPI por software y no UART**: en el I2C y el SPI el RELOJ lo pone el maestro, así
+  que unos bits a golpe de CPU con el ritmo irregular (el RTOS, la VM, el GC) siguen valiendo: el otro lado espera a
+  los flancos. En una UART no hay reloj: los dos lados llevan el tiempo, y recibir por software es muestrear cada bit
+  en su instante —a 9600, ~104 µs por bit—; una interrupción de unas decenas de µs estropea el byte. Con un RTOS y la
+  VM, no es fiable. Por eso en el RP2 se hace con la PIO, que es la UART por software bien hecha.
+- **El I2C y el SPI por software** (como `SoftI2C`/`SoftSPI` de MicroPython): viables en las cinco familias por lo de
+  arriba, y útiles cuando se acaban los buses. Irían en C, en la capa común sobre la fachada de GPIO, explícitos (una
+  clase propia, no un bus que se elige solo: nada de cosas inteligentes) y con la transacción de una vez de G4.a3.
+  Idea anotada, sin decidir.
+- **Cuántas UART da hoy cada familia** (la tabla de capacidades): el RP2350, 2; las ESP32, la UART0 es el cable del
+  IDE —a los programas les quedan 2 en la S3 y la P4, y 1 en la C3, la C5 y la C6—, y la P4 tiene 5 en el silicio
+  pero el backend sólo da la 1 y la 2; la STM32, 3 o 4. Sin PIO, la salida para más puertos en las ESP32 sería su
+  periférico RMT, no la CPU.
+
 **Y lo último** (Eduardo, 2-oct): `null` se llama **`RP2350.NONE`** (*«NONE está bien»*); y **cuándo**: *«Más adelante,
 si tenemos tiempo de V7, si no en V8»* —anotado en el bloque de V8 de `FICHAS`—.
 
