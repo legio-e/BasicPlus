@@ -1109,8 +1109,9 @@ pantalla). Red: **125 de 125** en MOD9, MOD8 y con dos workers; frontend 267, mi
 
 ### 🌙 Traspaso (2-oct)
 
-- **Decisiones que esperan a Eduardo**: la guarda de `#623`; y si un `break` fuera de un bucle debe salir de la función
-  (hoy no compila: «break fuera de bucle»).
+- **Decisiones**: un `break` fuera de un bucle sigue siendo un error de compilación (Eduardo, 2-oct: *«si el compilador
+  da un mensaje de error por mí está bien»*). `#623`, Eduardo lo está pensando: packs LIBRERÍA sin copias de la
+  stdlib y packs PROGRAMA como contenedor (`V7_IDEAS` §«H9 — `#623`», con los hechos medidos).
 - **Lo que queda de H9** (el mapa del día, leído de FICHAS/ESTADO; cada fila hay que verificarla antes de cerrarla):
   `#485` (cronometrar el KILL en el P4 con la imagen de hoy), `U3.25` (MKDIR/RMDIR de verdad en una placa), `U1.2` y
   `P1.C3` hechos en placa pero sin anotar en FICHAS, `memoria: APRETADA` y el criterio «no determinista» en el runner,

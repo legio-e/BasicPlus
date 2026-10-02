@@ -3259,6 +3259,47 @@ identidad de la placa. La STM32 y el micro simulado la registran antes de nada.
   programa largo y un `HELLO` mientras corre —con la imagen de antes, «no ha registrado su cintura»; con la nueva, el
   `HELLO_REPLY` con el nombre de la placa—.
 
+## H9 — `#623`: packs LIBRERÍA y packs PROGRAMA, y las copias de la stdlib (2-oct, idea de Eduardo; la está pensando)
+
+**Lo que pasó** (`FICHAS` `#623`): `GuiMini.pack` llevaba copias viejas de Gui, Json, Collections, Str y Core; entre
+packs gana el último grabado, así que tapaban las del `Stdlib.pack` de hoy, y la tanda subía las frescas a `/lib`, que
+van a RAM: en la C6 no cabía `GuiWinJson`.
+
+**La idea de Eduardo** (2-oct): *«hay que distinguir de los packs librerías de los packs programas. Los packs programas
+la idea es que funcionen como un contenedor y pase lo que pase fuera del pack, la ejecución del programa esté
+asegurada. Los packs librería no deberían necesitar librerías estándar. Lo que ocurre es que tenemos algunas
+librerías estándar que no se incluyen en las imágenes de las placas ni en el pack estándar. No sé, quizás necesitamos
+un segundo pack que incluya estas librerías y así no gastemos tanta RAM.»*
+
+**Los hechos** (medidos el 2-oct, para pensarla):
+
+- **La imagen** lleva 18 módulos (ESP32 y Pico; la STM32, 17: sin Neopixel): Core Math IO Heap Gpio I2c Spi Uart Pulse
+  Pwm Pico Machine Rtc Adc Wdt Timer Time Neopixel —83857 B—. El SO los repone en `/lib` y, cargados desde ahí, van a
+  RAM; si un pack sirve los mismos bytes, el instalador quita la copia de `/lib` y corren XIP desde el pack (`#468`).
+- **El `Stdlib.pack` lleva los 30**: los 18 y los 11 que NO van en la imagen —App Collections Compress Freq Gui Json Log
+  Net Packs Stats Str, más la raíz `Stdlib`: 104488 B, Gui sola 45112—. O sea que **ese «segundo pack» ya existe: es el
+  `Stdlib.pack`**, y además saca de RAM los 18 de la imagen. Lo que lo estropeó fue otra cosa: que packs LIBRERÍA
+  llevaran sus propias copias.
+- **Quién lleva copias de la stdlib** (el censo del 2-oct): `GuiMini` y `Gui` (Collections Core Gui Json Str), `SQLite`
+  (Core Str), y los drivers `DriverSpi`, `DriverC5` y `Mini` (Core). No las llevan `DriverNulo` ni `DemoLib`. Todos son
+  librerías; el único pack PROGRAMA del repo es `samples/sampleproject/out/App.pack`.
+- **El constructor ya distingue los dos**: dice «pack: LIBRERIA (el modulo raiz no tiene `main`)». Y el cargador
+  también: si el principal está en un pack, ese pack va PRIMERO (`#493`: pack del principal → `/app` → `/lib` →
+  packs), así que las copias de un pack PROGRAMA ya ganan dentro de su programa, que es lo de «contenedor».
+
+**Lo que cambiaría la idea**: un pack librería sin copias de la stdlib —sus módulos sacan Gui, Json… del `Stdlib.pack`
+(XIP) o de `/lib`—, y una sola fuente de la stdlib en la zona, la que la red ya comprueba byte a byte
+(`compat/stdlib_pack.sh`): se acaban las copias rancias de raíz, y con ellas lo que pedía la guarda de `#623`.
+
+**Lo que habría que mirar antes de decidir**:
+
+1. Un pack librería pasa a DEPENDER de la stdlib de la placa. Si la de la placa no es la interfaz con la que se
+   compiló, la norma de `#500` ya lo dice al enlazar, con nombre («actualiza /lib o recompila») —ruidoso, no mudo—.
+2. Sin `Stdlib.pack` en la placa, Gui y compañía vendrían de `/lib`, a RAM: en la C6 no cabe la GUI. ¿El manifiesto de
+   un pack librería dice «necesito el `Stdlib.pack`» y el que graba (`wire_serie.py`, el panel del IDE) avisa si falta?
+3. ¿Un pack PROGRAMA lleva las 30 o sólo el cierre de su programa? Hoy, el cierre.
+4. Lo ya grabado: los packs de la GUI de la P4, la DK2 y la C5 llevan copias viejas; con la regla nueva, al regrabarlos.
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):

@@ -814,6 +814,9 @@ silencio (`#563`, el `SQLite.pack` —todavía con un Core de antes—, y ésta)
 sus packs de la GUI llevan copias viejas, y la tanda lo tapa subiendo a `/lib`. Se propone una guarda donde se graba
 (`wire_serie.py pack` y el panel de packs del IDE): si un pack lleva un módulo de la stdlib que no es el de
 `bpstdlib/`, NO se graba y se dice cuál —«reconstruye el pack»—, en vez de descubrirlo por la memoria en la placa.
+**Eduardo (2-oct) lo está pensando por otro lado**: distinguir packs LIBRERÍA (sin copias de la stdlib) de packs
+PROGRAMA (un contenedor con todo). Los hechos para pensarlo, en `V7_IDEAS` §«H9 — `#623`» (el `Stdlib.pack` ya lleva
+las 11 librerías que no van en la imagen).
 
 #### ✅ `#622` — el ANCLA de la reserva no se soltaba al publicar el objeto: en la VM-Java, lo último que reservó cada hilo seguía siendo raíz hasta su siguiente reserva; en la VM-C, la última excepción que construyó la VM (abierta y cerrada el 2-oct, al medir `#621` con `TempRetiene`; preexistente; H9 · **CERRADA el 2-oct**, `9f41fd7a`)
 
