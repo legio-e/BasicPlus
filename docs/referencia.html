@@ -272,7 +272,8 @@
       <td><code>gc()</code> · <code>input()</code> <em>&mdash; <code>input()</code> sólo en la VM Java (la del IDE); en la VM-C —host y placas— lanza <code>RuntimeError</code> atrapable «builtin 37 no soportado en esta VM (subconjunto C)»</em></td></tr>
   <tr><td>Fichero</td>
       <td><code>readFile(path)</code> <code>writeFile(path, content)</code>
-          <code>appendFile(path, content)</code> <code>fileExists(path)</code>
+          <code>appendFile(path, content)</code> <code>fileExists(path)</code> <em>&mdash; sólo ficheros: una carpeta da
+          <code>false</code> (para una carpeta, <code>IO.dirExists</code>)</em>
           <code>listDir(path)</code> <em>&mdash; nombres ordenados por bytes; <code>RuntimeError</code> si no se puede abrir (ver <a href="#listar">&sect;14.17.6</a>)</em></td></tr>
   <tr><td>Internos (stdlib)</td>
       <td><code>__newRefArray(cap)</code> <code>__growRefArray(arr, cap)</code>
@@ -768,6 +769,9 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
       <td>Tamaño en bytes. Falla si <code>&gt; 2 GB</code>.</td></tr>
   <tr><td><code>isDirectory(p): boolean</code></td>
       <td><code>true</code> si <code>p</code> es un directorio existente.</td></tr>
+  <tr><td><code>dirExists(p): boolean</code></td>
+      <td>Lo mismo que <code>isDirectory</code>, con el nombre que acompaña a <code>fileExists</code>: <code>true</code>
+          si <code>p</code> es una carpeta que existe, vacía o no. <code>fileExists</code> es sólo para ficheros.</td></tr>
   <tr><td><code>lastModified(p): integer</code></td>
       <td>Último <code>mtime</code> en ms epoch (truncado a i32).
           <strong>No en placa</strong>: littlefs no guarda fechas.</td></tr>
@@ -2347,7 +2351,7 @@ ficheros funciona bajo <code>/sd</code>.</p>
   <tr><td><code>readFile(ruta)</code></td><td>el contenido entero, como cadena</td></tr>
   <tr><td><code>writeFile(ruta, texto)</code></td><td>lo escribe; si existía, <strong>trunca</strong></td></tr>
   <tr><td><code>appendFile(ruta, texto)</code></td><td>añade al final</td></tr>
-  <tr><td><code>fileExists(ruta)</code></td><td><code>true</code> / <code>false</code></td></tr>
+  <tr><td><code>fileExists(ruta)</code></td><td><code>true</code> / <code>false</code> &mdash; sólo ficheros (una carpeta: <code>IO.dirExists</code>)</td></tr>
   <tr><td><code>listDir(ruta)</code></td><td>lo que hay en un directorio, ordenado — ver <a href="#listar">§14.17.6</a></td></tr>
   <tr><td><code>readFileBytes(ruta)</code></td><td>el contenido como bytes</td></tr>
   <tr><td><code>writeFileBytes(ruta, datos)</code></td><td>escribe bytes</td></tr>

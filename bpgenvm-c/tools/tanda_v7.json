@@ -36,6 +36,7 @@
     { "nombre": "TempRetiene",   "fuente": "bpgenvm-c/samples/TempRetiene.bp" },
     { "nombre": "FinallyAnidado", "fuente": "bpgenvm-c/samples/FinallyAnidado.bp" },
     { "nombre": "RtcEnHora",     "fuente": "bpgenvm-c/samples/RtcEnHora.bp" },
+    { "nombre": "FicheroOCarpeta", "fuente": "bpgenvm-c/samples/FicheroOCarpeta.bp" },
     { "nombre": "synclisttest",  "fuente": "samples/synclisttest.bp", "criterio": "aserciones", "memoria": "apretada", "heap_min_kb": 80, "timeout_s": 90 }
   ]
 }

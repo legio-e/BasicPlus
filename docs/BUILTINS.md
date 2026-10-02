@@ -126,7 +126,7 @@ Convención general:
 | 38 | `readFile` | `(path: string)` | `string` | Lee fichero entero como UTF-8. RTErr si no existe / sandbox. |
 | 39 | `writeFile` | `(path, content: string)` | `void` | Sobreescribe. Crea el fichero si no existe. RTErr sandbox. |
 | 40 | `appendFile` | `(path, content: string)` | `void` | Append. RTErr sandbox. |
-| 41 | `fileExists` | `(path: string)` | `bool` | RTErr sandbox. |
+| 41 | `fileExists` | `(path: string)` | `bool` | Sólo FICHEROS: una carpeta da `false` (V7/H10 #630, 2-oct, Eduardo; la VM-Java decía `true`, la VM-C `false`). Para una carpeta, `IO.dirExists`. RTErr sandbox. |
 | 42 | `listDir` | `(path: string)` | `string[]` | **Sólo VM-Java**: nombres de los entries (no recursivo). RTErr si no es dir. En la VM-C lanza RTErr `builtin 42 no soportado en esta VM (subconjunto C)`: no está implementado en placa (V7). |
 | 126 | `readFileBytes` | `(path: string)` | `byte[]` | Lee fichero entero como `byte[]` crudo (binario sin pérdidas: NUL/>127/UTF-8 inválido). #247. |
 | 127 | `writeFileBytes` | `(path, data: byte[])` | `void` | Escribe los bytes crudos del `byte[]` (sobreescribe). #247. |
@@ -197,7 +197,7 @@ Convención general:
 | 72 | `__rename` | `(src, dst: string)` | `void` | Sobreescribe destino. |
 | 73 | `__copyFile` | `(src, dst: string)` | `void` | Sobreescribe destino. |
 | 74 | `__fileSize` | `(p: string)` | `int` | RTErr si >2GB (no representable en i32). |
-| 75 | `__isDirectory` | `(p: string)` | `bool` | |
+| 75 | `__isDirectory` | `(p: string)` | `bool` | También `IO.dirExists` (#630): el mismo builtin, con el nombre que acompaña a `fileExists`. |
 | 76 | `__lastModified` | `(p: string)` | `int` | Epoch ms truncado a i32. |
 
 ## 77 — UI (N20)

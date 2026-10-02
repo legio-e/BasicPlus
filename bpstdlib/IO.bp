@@ -99,6 +99,12 @@ module IO
     inline CALL_BUILTIN 75
   end isDirectory
 
+  // V7/H10 #630 (2-oct): true si p es una CARPETA que existe, vacía o no. Es isDirectory con el nombre que acompaña
+  // a fileExists, que desde ese día es sólo para ficheros (Eduardo).
+  public function dirExists(p: string): boolean
+    inline CALL_BUILTIN 75
+  end dirExists
+
   // Última fecha de modificación, en milisegundos epoch (truncado a i32).
   public function lastModified(p: string): integer
     inline CALL_BUILTIN 76

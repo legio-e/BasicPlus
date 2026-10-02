@@ -1649,7 +1649,11 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
             return 1;
         }
         if (bpvm_fs_mkdir(path) != 0) {
-            wire_v1_send_error(id, "INTERNAL_ERROR", "no se pudo crear el directorio");
+            /* #631 (2-oct): dice POR QUÉ, como DEL y PUT —un fichero con ese nombre es EXISTS, una unidad llena
+             * NO_SPACE—; contestaba siempre INTERNAL_ERROR. Desde #628 el motivo es el de ESTE fallo. */
+            const char *code, *msg;
+            fs_fallo("mkdir", path, 0, &code, &msg);
+            wire_v1_send_error(id, code, msg);
             return 1;
         }
         wire_v1_send_reply_empty("MKDIR_REPLY", id);

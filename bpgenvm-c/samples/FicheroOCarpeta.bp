@@ -1,0 +1,21 @@
+// FicheroOCarpeta.bp — V7/H10 #630 (2-oct): `fileExists` es SOLO para ficheros (Eduardo); para una carpeta,
+// `IO.dirExists`, que es `IO.isDirectory` con el nombre que acompana a fileExists. Antes, `fileExists` de una
+// carpeta daba true en la VM-Java y false en la VM-C (y en placa, false en littlefs y true en FAT). Deja el
+// directorio como estaba.
+module FicheroOCarpeta
+  import IO
+
+  function main()
+    IO.mkdir("foc_carpeta")
+    writeFile("foc_fichero.txt", "x")
+    print "fileExists(carpeta) = " + boolToString(fileExists("foc_carpeta"))
+    print "fileExists(fichero) = " + boolToString(fileExists("foc_fichero.txt"))
+    print "fileExists(no esta) = " + boolToString(fileExists("foc_no_esta"))
+    print "dirExists(carpeta)  = " + boolToString(IO.dirExists("foc_carpeta"))
+    print "dirExists(fichero)  = " + boolToString(IO.dirExists("foc_fichero.txt"))
+    print "dirExists(no esta)  = " + boolToString(IO.dirExists("foc_no_esta"))
+    IO.removeFile("foc_fichero.txt")
+    IO.rmdir("foc_carpeta")
+    print "tras borrar: " + boolToString(fileExists("foc_fichero.txt")) + " " + boolToString(IO.dirExists("foc_carpeta"))
+  end main
+end FicheroOCarpeta

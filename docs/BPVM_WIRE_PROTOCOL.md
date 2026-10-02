@@ -481,9 +481,11 @@ Reply: `{"type":"DEL_REPLY","id":N}`
 
 #### `MKDIR` / `RMDIR` (request)
 
-Crea / borra una "carpeta". En FS plano con `/`, MKDIR es
-conceptualmente no-op (las carpetas existen al haber ficheros con
-ese prefijo). RMDIR falla si hay ficheros con ese prefijo.
+Crea / borra una carpeta. Las carpetas existen DE VERDAD en las tres unidades (littlefs, FAT y el PC): esto decía
+que MKDIR era «conceptualmente no-op, las carpetas existen al haber ficheros con ese prefijo», y dejó de ser cierto
+con `U3.25`. MKDIR crea las intermedias que falten y, si la carpeta ya está, contesta OK; si con ese nombre hay un
+FICHERO, `EXISTS` (desde `#631`, 2-oct: dice el motivo como `DEL` y `PUT`; antes, siempre `INTERNAL_ERROR`). RMDIR
+sólo borra una carpeta vacía: `NOT_FOUND` si no está o no es una carpeta, `NOT_EMPTY` si tiene algo.
 
 Request: `{"type":"MKDIR","id":N,"path":"/data/"}`
 

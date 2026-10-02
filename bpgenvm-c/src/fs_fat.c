@@ -279,6 +279,12 @@ static int fat_stat(const char* path, uint32_t* size) {
     FRESULT r = (p[0] == '\0') ? FR_INVALID_NAME : f_stat(p, &fi);
     destrabar();
     if (r != FR_OK) return fat_fallo(r);
+    /* #630 (2-oct): una carpeta NO es un fichero —el contrato de la fachada, como littlefs y el PC—. Contestaba 0, y
+     * `fileExists("/sd/carpeta")` daba true en la tarjeta y false en la flash. */
+    if (fi.fattrib & AM_DIR) {
+        bpvm_fs_anota_fallo("fat", 0, BPVM_FS_FAIL_OTHER, "es una carpeta");
+        return -1;
+    }
     if (size) *size = (uint32_t) fi.fsize;
     return 0;
 }
@@ -455,13 +461,34 @@ static int fat_rename(const char* from, const char* to) {
     return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 
+/* #631 (2-oct) — el contrato de la fachada, el de littlefs y el PC: RECURSIVO (crea las carpetas intermedias) y
+ * «ya existe» es éxito SÓLO si lo que existe es una carpeta. FAT creaba un nivel —un `PUT` a /sd/a/b/x.txt con `a`
+ * nueva fallaba en la placa e iba en el PC: el `crear_dirs_padre` de #455 cuenta con que sea recursivo— y contestaba
+ * éxito encima de un FICHERO. */
 static int fat_mkdir(const char* path) {
     const char* p = entra(path);
     if (!p) return -1;
     if (p[0] == '\0') return fat_fallo(FR_INVALID_NAME);
-    trabar(); FRESULT r = f_mkdir(p); destrabar();
-    /* "ya existe" es éxito: lo dice el contrato de la fachada. */
-    return (r == FR_OK || r == FR_EXIST) ? 0 : fat_fallo(r);
+    char buf[256];
+    size_t n = strlen(p);
+    if (n >= sizeof buf) { bpvm_fs_anota_fallo("fat", 0, BPVM_FS_FAIL_NAME_TOO_LONG, "ruta demasiado larga"); return -1; }
+    memcpy(buf, p, n + 1);
+    FILINFO fi;
+    trabar();
+    for (size_t i = 1; i < n; i++) {
+        if (buf[i] == '/') {
+            buf[i] = '\0';
+            (void) f_mkdir(buf);          /* las intermedias: puede que ya estén */
+            buf[i] = '/';
+        }
+    }
+    FRESULT r = f_mkdir(buf);
+    if (r == FR_EXIST) {                  /* ¿una carpeta, o un fichero con ese nombre? */
+        FRESULT s = f_stat(buf, &fi);
+        r = (s != FR_OK) ? s : (fi.fattrib & AM_DIR) ? FR_OK : FR_EXIST;
+    }
+    destrabar();
+    return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 
 static int fat_rmdir(const char* path) {

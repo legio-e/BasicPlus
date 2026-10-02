@@ -136,18 +136,42 @@ def main():
 
         # #628 (2-oct) — el MOTIVO de un fallo en /sd es el SUYO. FAT no lo anotaba: un PUT que fallaba en la tarjeta
         # contestaba con el motivo de la última operación de littlefs. Primero un fallo de littlefs de OTRA clase
-        # (escribir encima de una carpeta: ISDIR, «argumento inválido») y después uno de FAT (una carpeta que no
-        # está: NO_PATH). Antes, el segundo decía INVALID_PARAM —el del primero—. (El sim arranca como una placa
-        # virgen, sin /lib: la carpeta se crea antes.)
+        # (escribir encima de una carpeta: ISDIR, «argumento inválido») y después uno de FAT (una carpeta del camino
+        # que es un FICHERO: NO_PATH). Antes, el segundo decía INVALID_PARAM —el del primero—. (El sim arranca como
+        # una placa virgen, sin /lib: la carpeta se crea antes.)
         r = w.call("MKDIR", path="/carpeta")
         check(r.get("type") == "MKDIR_REPLY", "MKDIR /carpeta (littlefs) → OK (dice %r)" % r.get("type"))
         r = w.call_bulk("PUT", b"x", path="/carpeta")
         check(r.get("type") == "ERROR" and r.get("code") == "INVALID_PARAM",
               "PUT encima de esa carpeta → INVALID_PARAM (dice %r %r)" % (r.get("code"), r.get("message")))
-        r = w.call_bulk("PUT", b"x", path="/sd/no/esta/x.txt")
+        r = w.call_bulk("PUT", b"x", path="/sd/HOLA.TXT/x.txt")
         check(r.get("type") == "ERROR" and r.get("code") == "NOT_FOUND",
-              "PUT en una carpeta de /sd que no está → NOT_FOUND, el de FAT y no el de littlefs de antes (dice %r %r)"
-              % (r.get("code"), r.get("message")))
+              "PUT a /sd/HOLA.TXT/x.txt (HOLA.TXT es un fichero) → NOT_FOUND, el de FAT y no el de littlefs de antes "
+              "(dice %r %r)" % (r.get("code"), r.get("message")))
+
+        # #631 (2-oct) — FAT cumple el contrato de la fachada, como la flash y el PC: el mkdir es RECURSIVO (el PUT crea
+        # las carpetas que falten: en la placa, con `uno` nueva, fallaba) y «ya existe» sólo vale si es una carpeta.
+        r = w.call_bulk("PUT", b"hondo", path="/sd/uno/dos/tres.txt")
+        check(r.get("type") == "PUT_REPLY",
+              "PUT a /sd/uno/dos/tres.txt con uno/ nueva → OK: el mkdir de FAT es recursivo (dice %r %r)"
+              % (r.get("type"), r.get("message")))
+        r, datos = w.get("/sd/uno/dos/tres.txt")
+        check(datos == b"hondo", "…y está en la tarjeta")
+        r = w.call("MKDIR", path="/sd/uno")
+        check(r.get("type") == "MKDIR_REPLY", "MKDIR de una carpeta que ya está → OK")
+        r = w.call("MKDIR", path="/sd/HOLA.TXT")
+        check(r.get("type") == "ERROR" and r.get("code") == "EXISTS",
+              "MKDIR encima del FICHERO /sd/HOLA.TXT → EXISTS, no éxito (dice %r %r)" % (r.get("code"), r.get("message")))
+
+        # #630 (2-oct) — una carpeta NO es un fichero en ninguna unidad: STAT (lo que pregunta fileExists) de una
+        # carpeta dice que no, en littlefs y ahora también en FAT, que contestaba «0 bytes».
+        r = w.call("STAT", path="/carpeta")
+        check(r.get("type") == "ERROR" and r.get("code") == "NOT_FOUND",
+              "STAT de una carpeta de littlefs → NOT_FOUND (dice %r)" % r.get("type"))
+        r = w.call("STAT", path="/sd/uno")
+        check(r.get("type") == "ERROR" and r.get("code") == "NOT_FOUND",
+              "STAT de una carpeta de /sd → NOT_FOUND, como en la flash; contestaba 0 bytes (dice %r, size %r)"
+              % (r.get("type"), r.get("size")))
     finally:
         para(proc)
 

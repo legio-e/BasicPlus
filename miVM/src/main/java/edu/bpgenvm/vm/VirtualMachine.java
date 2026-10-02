@@ -5610,9 +5610,12 @@ public class VirtualMachine {
                 break;
             }
             case FILE_EXISTS: {
+                // V7/H10 #630 (2-oct): SÓLO ficheros (Eduardo: «fileExists solo para ficheros»; para una carpeta,
+                // IO.dirExists). Era Files.exists, que dice que sí a una carpeta, y la VM-C —littlefs y el PC— decía que
+                // no: el invariante, roto. Y es la regla de #493: «if fileExists(x) then readFile(x)» ve lo que readFile.
                 String path = readVmString(popTcRef(tc));
                 boolean hay = (packResource(path) != null)   // #310 — el pack en ejecución va primero
-                        || (!esPackAjeno(path) && java.nio.file.Files.exists(sandboxPath(tc, path)));   // #520 (a)
+                        || (!esPackAjeno(path) && java.nio.file.Files.isRegularFile(sandboxPath(tc, path)));   // #520 (a)
                 pushTc(tc, hay ? 1 : 0);
                 break;
             }
