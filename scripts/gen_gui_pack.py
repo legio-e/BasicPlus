@@ -77,6 +77,50 @@ def leer():
             fns.append((ret, nom, ps, args))
     return fns
 
+# V7/H9 #619 — la resolución de la tabla 'LVGL': se guarda SÓLO el éxito (ver el comentario dentro).
+RESOLVER_C = """static bpvm_gui_tabla_t s_t;
+static int  s_estado = 0;          /* 0 = sin resolver · 1 = resuelta · -1 = no hay / no vale (se vuelve a mirar) */
+static char s_motivo[128];
+static const void* s_api_mala = 0; /* #619: la tabla de 'LVGL' que se miró y no valía (no se reverifica cada vez) */
+static int  s_dicho = 0;           /* #619: el motivo de ahora ya salió al diag (una vez por causa, no en cada llamada) */
+
+static void decir(void) { if (!s_dicho) { bpvm_diag("GUI: %s", s_motivo); s_dicho = 1; } }
+
+/* V7/H9 #619 — LO QUE NO HAY NO SE GUARDA; sólo el éxito, que no cambia sin reiniciar (un motor no se descarga). Lo
+ * que no hay se vuelve a mirar en cada llamada —una búsqueda en la tabla de la BIOS—: un pack grabado en caliente lo
+ * carga el siguiente RUN (o INFO), y la GUI tiene que verlo sin reiniciar. Se guardaba, y la primera pregunta —el
+ * INFO que pide el tamaño de pantalla, antes de que hubiera motores— dejaba la GUI muerta toda la sesión: en la C6,
+ * «no tiene el pack 'LVGL' grabado» con la API recién publicada por el motor. Una tabla que está pero no vale se
+ * recuerda (es la misma hasta reiniciar: el cargador no salta dos veces), y el motivo sale una vez por causa. */
+static int resolver(void) {
+    if (s_estado > 0) return 1;
+    const bpvm_pack_api_t* api = (const bpvm_pack_api_t*) bpvm_bios_busca(BPVM_GUI_MARCA);
+    if (api == 0) {
+        if (s_estado == 0 || s_api_mala != 0) { s_dicho = 0; s_api_mala = 0; }   /* una causa nueva: se dice */
+        snprintf(s_motivo, sizeof s_motivo, "esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)");
+        s_estado = -1; decir(); return 0;
+    }
+    if (api == s_api_mala) return 0;       /* la misma tabla que no valía: su motivo ya está dicho */
+    s_dicho = 0;
+    const char* mal = bpvm_pack_api_verify(api, BPVM_GUI_MARCA, BPVM_GUI_API_VER);
+    if (mal) {
+        snprintf(s_motivo, sizeof s_motivo, "el pack 'LVGL' no vale: %s (API v%u, se esperaba v%u)", mal, (unsigned) api->version, (unsigned) BPVM_GUI_API_VER);
+        s_estado = -1; s_api_mala = api; decir(); return 0;
+    }
+    bpvm_pack_fn_t* ranuras = (bpvm_pack_fn_t*) (void*) &s_t;   /* la struct son punteros a función, en orden */
+    for (int i = 0; i < BPVM_GUI_N_FUNCS; i++) {
+        bpvm_pack_fn_t f = bpvm_pack_api_find(api, BPVM_GUI_NOMBRES[i]);
+        if (f == 0) {
+            snprintf(s_motivo, sizeof s_motivo, "al pack 'LVGL' le falta '%s'", BPVM_GUI_NOMBRES[i]);
+            s_estado = -1; s_api_mala = api; decir(); return 0;
+        }
+        ranuras[i] = f;
+    }
+    s_estado = 1; s_api_mala = 0;
+    bpvm_diag("GUI: pack 'LVGL' resuelto (%d funciones, API v%u)", (int) BPVM_GUI_N_FUNCS, (unsigned) api->version);
+    return 1;
+}"""
+
 def generar(fns):
     cross = [f for f in fns if f[1] not in FUERA]
     # ── la tabla y los nombres ──
@@ -144,35 +188,7 @@ def generar(fns):
     t.append('#include <string.h>')
     t.append('#include <stdio.h>')
     t.append('')
-    t.append('static bpvm_gui_tabla_t s_t;')
-    t.append('static int  s_estado = 0;          /* 0 = sin resolver · 1 = resuelta · -1 = no hay / no vale */')
-    t.append('static char s_motivo[128];')
-    t.append('')
-    t.append('static int resolver(void) {')
-    t.append('    if (s_estado != 0) return s_estado > 0;')
-    t.append('    const bpvm_pack_api_t* api = (const bpvm_pack_api_t*) bpvm_bios_busca(BPVM_GUI_MARCA);')
-    t.append('    if (api == 0) {')
-    t.append('        snprintf(s_motivo, sizeof s_motivo, "esta placa no tiene el pack \'LVGL\' grabado (la GUI llega por el pack)");')
-    t.append('        s_estado = -1; bpvm_diag("GUI: %s", s_motivo); return 0;')
-    t.append('    }')
-    t.append('    const char* mal = bpvm_pack_api_verify(api, BPVM_GUI_MARCA, BPVM_GUI_API_VER);')
-    t.append('    if (mal) {')
-    t.append('        snprintf(s_motivo, sizeof s_motivo, "el pack \'LVGL\' no vale: %s (API v%u, se esperaba v%u)", mal, (unsigned) api->version, (unsigned) BPVM_GUI_API_VER);')
-    t.append('        s_estado = -1; bpvm_diag("GUI: %s", s_motivo); return 0;')
-    t.append('    }')
-    t.append('    bpvm_pack_fn_t* ranuras = (bpvm_pack_fn_t*) (void*) &s_t;   /* la struct son punteros a función, en orden */')
-    t.append('    for (int i = 0; i < BPVM_GUI_N_FUNCS; i++) {')
-    t.append('        bpvm_pack_fn_t f = bpvm_pack_api_find(api, BPVM_GUI_NOMBRES[i]);')
-    t.append('        if (f == 0) {')
-    t.append('            snprintf(s_motivo, sizeof s_motivo, "al pack \'LVGL\' le falta \'%s\'", BPVM_GUI_NOMBRES[i]);')
-    t.append('            s_estado = -1; bpvm_diag("GUI: %s", s_motivo); return 0;')
-    t.append('        }')
-    t.append('        ranuras[i] = f;')
-    t.append('    }')
-    t.append('    s_estado = 1;')
-    t.append('    bpvm_diag("GUI: pack \'LVGL\' resuelto (%d funciones, API v%u)", (int) BPVM_GUI_N_FUNCS, (unsigned) api->version);')
-    t.append('    return 1;')
-    t.append('}')
+    t.extend(RESOLVER_C.split('\n'))
     t.append('')
     t.append('int bpvm_gui_disponible(const char** motivo) {')
     t.append('    int ok = resolver();')
@@ -217,7 +233,7 @@ def generar(fns):
     t.append('}')
     t.append('')
     t.append('/* Para las pruebas de host y el simulador: olvidar la tabla (otro pack, otra vez). */')
-    t.append('void bpvm_gui_pack_reset(void) { s_estado = 0; memset(&s_t, 0, sizeof s_t); }')
+    t.append('void bpvm_gui_pack_reset(void) { s_estado = 0; s_api_mala = 0; s_dicho = 0; memset(&s_t, 0, sizeof s_t); }')
     t.append('')
     for ret, nom, ps, args in cross:
         firma = '%s bpvm_gui_%s(%s)' % (ret, nom, ', '.join(ps) if ps else 'void')

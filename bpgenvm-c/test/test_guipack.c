@@ -38,7 +38,8 @@ void* bpvm_alloc_raw(size_t n, int zero, bpvm_alloc_kind_t k, const char* file, 
 }
 void  bpvm_free(void* p)    { if (p) g_vm_frees++; free(p); }
 static char g_diag[256];
-void bpvm_diag(const char* fmt, ...) { va_list ap; va_start(ap, fmt); vsnprintf(g_diag, sizeof g_diag, fmt, ap); va_end(ap); }
+static int  g_diags = 0;   /* #619: cuántas veces se dijo algo (el «no hay pack», una vez y no en cada llamada) */
+void bpvm_diag(const char* fmt, ...) { va_list ap; va_start(ap, fmt); vsnprintf(g_diag, sizeof g_diag, fmt, ap); va_end(ap); g_diags++; }
 
 extern const bpvm_pack_api_t bpvm_gui_api_stubs;
 extern const bpvm_pack_sym_t bpvm_gui_stub_syms[];
@@ -104,6 +105,26 @@ int main(void) {
               "y el motivo lo dice: ningun driver de pantalla ('PANT')");
         CHECK(bpvm_bios_publica(BPVM_PANT_MARCA, &PANT_DOBLE) == 0, "se graba el driver: 'PANT' publicado");
         CHECK(bpvm_gui_disponible(&m) == 1, "y con el driver, disponible() = 1 (sin reiniciar nada)");
+    }
+
+    /* ── 1d. V7/H9 #619: el pack de LVGL publicado DESPUÉS de la primera pregunta ──
+     * Un pack grabado en caliente lo carga el siguiente RUN (o INFO), y la GUI tiene que verlo sin reiniciar. Se
+     * guardaba el «no hay»: en la C6, el INFO preguntó antes de que hubiera motores y la GUI se quedó muerta toda la
+     * sesión, con la API recién publicada. Y el «no hay» se dice UNA vez, no en cada llamada. */
+    {
+        bpvm_bios_packs_reset(); bpvm_gui_pack_reset();
+        const char* m = 0;
+        int antes = g_diags;
+        CHECK(bpvm_gui_disponible(&m) == 0, "#619: sin pack todavia -> disponible() = 0");
+        CHECK(g_diags == antes + 1, "#619: ... y el motivo sale al diag (una vez)");
+        int llamadas = g_stub_llamadas;
+        CHECK(bpvm_gui_create_label(1) == 0 && bpvm_gui_disponible(&m) == 0, "#619: otra pregunta sin pack -> 0");
+        CHECK(g_diags == antes + 1, "#619: ... y NO se repite el motivo en cada llamada");
+        CHECK(bpvm_bios_publica(BPVM_GUI_MARCA, &bpvm_gui_api_stubs) == 0 &&
+              bpvm_bios_publica(BPVM_PANT_MARCA, &PANT_DOBLE) == 0,
+              "#619: el motor publica 'LVGL' (y el driver 'PANT') DESPUES, sin reiniciar");
+        CHECK(bpvm_gui_disponible(&m) == 1, "#619: ... y la GUI lo ve: disponible() = 1, sin reiniciar nada");
+        CHECK(bpvm_gui_create_label(1) != 0 && g_stub_llamadas > llamadas, "#619: ... y el trampolin llega al pack");
     }
 
     /* ── 1c. V7/H6.c G3: un driver que se CONFIGURA dice si su config vale ──
