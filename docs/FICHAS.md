@@ -791,7 +791,7 @@ el mensaje sin el número. También la pestaña de un `TabView`. miVM no tiene t
 heap. `make test-guilleno` (en `check-testc`, sólo VM-C): 511 etiquetas y el error con 512; saboteado el builtin,
 «SIN ERROR tras 600 etiquetas». **En placa**: la C5 con `GuiMini`, «tras 255 etiquetas: … sitio para 256».
 
-#### 🔴 `#627` — `test-packhelp` revienta (SEGFAULT) más o menos una vez de cada cincuenta, y pone la red en rojo al azar (abierta 2-oct, en la red de `#626`; preexistente; H9 · sin empezar: una tarea aparte)
+#### ✅ `#627` — `test-packhelp` revienta (SEGFAULT) más o menos una vez de cada cincuenta, y pone la red en rojo al azar (abierta y cerrada el 2-oct, en la red de `#626`; preexistente; H9 · **CERRADA el 2-oct**, `95d09eac`)
 
 **Visto el 2-oct**: en la red completa de `#626`, `check-testc` en rojo por `test-packhelp` (`Error -1073741819`, una
 violación de acceso); sola, verde. **Medido**: 4 de 200 ejecuciones de `build/test_packhelp.exe` construido en `9f37130a`
@@ -800,6 +800,22 @@ violación de acceso); sola, verde. **Medido**: 4 de 200 ejecuciones de `build/t
 disposición de direcciones). Con la salida a un fichero sólo queda la línea de diagnóstico: stdout se pierde en el
 búfer, así que no se sabe en qué caso cae. Una pista para empezar: en el bloque «pack_fallo» el slot guarda un PUNTERO a
 un `jmp_buf` local y se queda apuntando a un marco muerto. Lo primero, saber DÓNDE cae.
+
+**Dónde y por qué** (2-oct, con una copia de diagnóstico: la salida sin búfer y las direcciones en juego): cae en el
+`longjmp` de `pack_fallo` de vuelta al límite que arma la prueba, y SÓLO cuando el marco de `main` queda a 432 bytes
+o menos de la base de la pila del hilo (el `StackBase` del TEB): 22 de 22 vueltas en esa zona revientan y ninguna de
+las 578 de fuera —de 448 en adelante—. La pista falsa del `jmp_buf` muerto no era. En x86_64, el `setjmp` de MinGW es
+`_setjmp(buf, __builtin_frame_address(0))`, y con ese marco el `longjmp` de la CRT deshace la pila con el mecanismo de
+excepciones de Windows (SEH) en vez de restaurar los registros; cuando el marco está arriba del todo de la pila —la
+aleatorización de Windows lo deja ahí de vez en cuando—, revienta. **El test de desplazamiento**: la misma copia con
+`__USE_MINGW_SETJMP_NON_SEH` (el `setjmp` guarda un marco nulo y el `longjmp` sólo restaura los registros, como en
+Linux y en las placas), 0 de 600, con 16 vueltas en la zona que antes caía entera.
+
+**Hecho** (`95d09eac`): la bandera en el `Makefile`, para todo el código del PC —no sólo la prueba: el límite de las native
+(`interp.c`) y el fondo del hilo que ejecuta una native (`bpvm_nativa.c`) usan el mismo `setjmp`, y el marco del
+fondo está, como el de `main`, arriba del todo de su pila—; y `BUILD_FLAGS_VER`, una versión de las banderas comunes
+delante del sabor del build, que al subir tira los `.o` de antes. `test_packhelp`, 600 de 600 (antes, ~2 %); la red,
+en verde.
 
 #### ✅ `#626` — el programa no podía saber si el reloj está en hora: en la Pico y las ESP32 empieza en 0 a cada arranque y, con autorun, nadie lo pone en hora (abierta y cerrada el 2-oct, la idea de Eduardo; H10 · **CERRADA el 2-oct**, `49b3818a`)
 
