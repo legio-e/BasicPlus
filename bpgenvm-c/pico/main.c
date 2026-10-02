@@ -1209,7 +1209,12 @@ static bpvm_boot_step_t layer_partitions(void* u) {
     int bad = -1;
     bpvm_part_err_t e = bpvm_part_layout(&s_env, BP_PART_BASE, usable,
                                          FLASH_SECTOR_SIZE, &s_layout, &bad);
-    if (e == BPVM_PART_OK) { r.ok = 1; return r; }
+    if (e == BPVM_PART_OK) {
+        char l[160];   /* V7/H10: de dónde sale el reparto, y cómo queda */
+        if (bpvm_part_describe(&s_layout, "del ENV (part.fs.size)", l, sizeof l) > 0) log_printf("%s", l);
+        r.ok = 1;
+        return r;
+    }
     snprintf(r.reason, sizeof r.reason, "%s", bpvm_part_err_str(e));
     return r;
 }

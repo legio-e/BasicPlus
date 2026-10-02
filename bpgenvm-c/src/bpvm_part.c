@@ -16,6 +16,18 @@ static const char* const PART_NAMES[BPVM_PART_COUNT] = {
     "packs"   /* BPVM_PART_PACKS */
 };
 
+int bpvm_part_describe(const bpvm_part_layout_t* lay, const char* origen, char* buf, size_t cap) {
+    if (!lay || !buf || cap == 0) return -1;
+    int n = snprintf(buf, cap, "particiones: %s", origen ? origen : "?");
+    for (int i = 0; i < BPVM_PART_COUNT; i++) {
+        if (n < 0 || (size_t) n >= cap) return -1;
+        const bpvm_part_t* p = &lay->parts[i];
+        n += snprintf(buf + n, cap - (size_t) n, "%s %s %lu KB @0x%lx", i ? "," : " —", bpvm_part_name(p->kind),
+                      (unsigned long) (p->size / 1024u), (unsigned long) p->offset);
+    }
+    return (n >= 0 && (size_t) n < cap) ? n : -1;
+}
+
 const char* bpvm_part_name(bpvm_part_kind_t k) {
     if ((int) k < 0 || (int) k >= (int) BPVM_PART_COUNT) return "?";
     return PART_NAMES[k];

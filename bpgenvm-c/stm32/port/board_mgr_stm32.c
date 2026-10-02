@@ -156,7 +156,13 @@ static bpvm_boot_step_t layer_partitions(void* u) {
      * — el U5 conoce su tamaño de flash en compilación, no hay sorpresa JEDEC). */
     bpvm_part_err_t e = bpvm_part_layout(&env, BP_PART_BASE, BP_USABLE_FLASH,
                                          BP_ENV_SECTOR, &s_layout, &bad);
-    if (e == BPVM_PART_OK) { s_layout_ok = 1; r.ok = 1; return r; }
+    if (e == BPVM_PART_OK) {
+        char l[160];   /* V7/H10: de dónde sale el reparto, y cómo queda (el TOTAL del FS bailaba el 26-ago) */
+        if (bpvm_part_describe(&s_layout, "del ENV (part.fs.size)", l, sizeof l) > 0) log_printf("%s", l);
+        s_layout_ok = 1;
+        r.ok = 1;
+        return r;
+    }
     snprintf(r.reason, sizeof r.reason, "%s", bpvm_part_err_str(e));
     return r;
 }

@@ -156,6 +156,21 @@ int main(void) {
               "FS arriba: los dos tamaños, alineados al sector");
     }
 
+    printf("--- V7/H10: bpvm_part_describe, la linea del arranque ---\n");
+    {
+        uint32_t tam[BPVM_PART_COUNT] = { 1032192u, 1572864u };
+        bpvm_part_layout_t lay;
+        int bad = -1;
+        CHECK(bpvm_part_layout_from_sizes(tam, 0x184000u, 0x400000u, 8192u, &lay, &bad) == BPVM_PART_OK, "un reparto valido");
+        char l[160];
+        int n = bpvm_part_describe(&lay, "del ENV (part.fs.size)", l, sizeof l);
+        printf("       %s\n", l);
+        CHECK(n > 0 && strstr(l, "particiones: del ENV (part.fs.size)") && strstr(l, "fs 1008 KB @0x184000")
+              && strstr(l, "packs 1536 KB @0x280000"), "dice de donde sale y como queda (tamanos y sitios)");
+        CHECK(bpvm_part_describe(&lay, "x", l, 20) == -1, "si no cabe: -1");
+        CHECK(bpvm_part_describe(NULL, "x", l, sizeof l) == -1, "sin reparto: -1");
+    }
+
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;
 }

@@ -99,6 +99,12 @@ const bpvm_part_t* bpvm_part_get(const bpvm_part_layout_t* lay, bpvm_part_kind_t
 /* Mensaje legible de un error (para el asistente / logs). */
 const char* bpvm_part_err_str(bpvm_part_err_t e);
 
+/* V7/H10 (2-oct) — la línea del arranque que dice DE DÓNDE sale el reparto y cómo queda: «particiones: del ENV
+ * (part.fs.size) — fs 1008 KB @0x184000, packs 2560 KB @0x280000». El TOTAL del FS de la STM32 bailaba entre arranques
+ * (26-ago) y no había forma de saber qué reparto se había aplicado. `origen` lo pone la familia. Escribe en `buf`
+ * (cap) y devuelve la longitud, o -1 si no cabe o los argumentos no valen. Pura: la prueba es test_part. */
+int bpvm_part_describe(const bpvm_part_layout_t* lay, const char* origen, char* buf, size_t cap);
+
 /* Serializa SOLO los tamaños a un fragmento de payload de env
  * ("part.fs.size=...\npart.packs.size=...\n") en `buf` (cap). Lo usa el asistente
  * al confirmar. Devuelve los bytes escritos, o -1 si no cabe. */

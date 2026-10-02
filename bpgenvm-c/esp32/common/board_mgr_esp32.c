@@ -387,12 +387,20 @@ static bpvm_boot_step_t layer_partitions(void* u) {
     bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &s_env);
     if (s_bpfs_alto) {   /* V7/H7: el FS arriba; los packs, bpdata entera. El reparto no sale del env */
         bpvm_part_layout_fs_arriba(0u, data_usable(), (uint32_t) s_bpfs_alto->size, BP_ENV_SECTOR, &s_layout);
+        char l[160];   /* V7/H10: de dónde sale el reparto, y cómo queda */
+        if (bpvm_part_describe(&s_layout, "el FS arriba de bpdata (la flash del chip; el ENV no reparte)",
+                               l, sizeof l) > 0) log_printf("%s", l);
         r.ok = 1;
         return r;
     }
     int bad = -1;
     bpvm_part_err_t e = bpvm_part_layout(&s_env, 0u, data_usable(), BP_ENV_SECTOR, &s_layout, &bad);
-    if (e == BPVM_PART_OK) { r.ok = 1; return r; }
+    if (e == BPVM_PART_OK) {
+        char l[160];   /* V7/H10: de dónde sale el reparto, y cómo queda */
+        if (bpvm_part_describe(&s_layout, "del ENV (part.fs.size)", l, sizeof l) > 0) log_printf("%s", l);
+        r.ok = 1;
+        return r;
+    }
     snprintf(r.reason, sizeof r.reason, "%s", bpvm_part_err_str(e));
     return r;
 }
