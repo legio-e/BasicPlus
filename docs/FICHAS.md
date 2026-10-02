@@ -4608,6 +4608,9 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   más bajos, que funcione lo mínimo»*): coser sus dos regiones (136 → ~250 KB, `V6_IDEAS`) y devolverle su objetivo
 >   —la VM bajó de 128 a 120 KB porque el asignador ya no da 128 seguidos—. El +10 % de su `AllocBench` se cierra: la
 >   premisa no se sostenía y el camino que medía ya no existe (`#554`).
+> - **la prueba de resistencia de días** (Eduardo, 2-oct: *«la prueba de resistencia de días lo dejamos para V8, cuando
+>   lo trabajemos un poco más»*): días de carga variada con una marca periódica en el log-anillo (un RUN largo Y muchos
+>   RUN); venía de H9. (La batería de rendimiento, en cambio, se queda en V7: se mide en H12, con dos núcleos.)
 > - **`M5`, el depurador que despliega objetos** (Eduardo, 1-oct: *«M5, no entra en V7, lo pasamos a V8. Es una mejora, no es urgente»*): hoy el
 >   depurador no despliega NINGÚN objeto —un local objeto sale como `@<valor>`—, y por eso tampoco las properties
 >   heredadas (de H1, 21-sep, y de ahí a H8). Hacerlo es una función nueva: el layout de cada clase en el `.dbg`
