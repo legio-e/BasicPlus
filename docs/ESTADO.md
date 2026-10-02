@@ -1179,9 +1179,9 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
   stdlib y packs PROGRAMA como contenedor (`V7_IDEAS` §«H9 — `#623`», con los hechos medidos). La batería de
   rendimiento se mide en H12, con dos núcleos; la prueba de resistencia de días, a V8. El `Rtc`: la primitiva general
   y la fecha de la imagen, una vez (`#626`, cerrada).
-- **Lo que queda de H9**: ver en placa el sello de la imagen (con el próximo lote); la limpieza de las otras cinco
-  placas (S3, C3, C5, Metro, Nucleo) cuando se conecten; y lo que la fila de H9 llama «el simulador con disfraces» y
-  «la inyección de eventos» (de antes, sin decidir si caben en V7).
+- **Lo que queda de H9**: ver en placa el sello de la imagen (con el próximo lote) y la limpieza de las otras cinco
+  placas (S3, C3, C5, Metro, Nucleo) cuando se conecten. El simulador con disfraces y la inyección de eventos, a V8
+  (Eduardo, 2-oct); `samples/out`, sin los 20 `.mod` MOD6/MOD7 (con su OK).
 - **El próximo lote de grabación** (se graba por lotes; Eduardo, 2-oct): el sello de la imagen (`5324946b`) en las
   cuatro placas de la mesa —comprobar que cada una dice el `imageCrc` de lo compilado, y pasar la tanda—.
 - **Lo que queda de H10**: que el arranque de la STM32 diga de dónde sale su tabla de particiones (una línea); la GUI
