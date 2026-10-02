@@ -27,8 +27,8 @@
 
 ## Última sesión
 
-> **1-oct** — el traspaso, más abajo: «🌙 TRASPASO (1-oct, al acabar)». H7, H11 y H8 cerrados ese día; quedan H9, H10 y
-> H12.
+> **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Más abajo:
+> «🧪 H9 (2-oct)», con su traspaso al final. Quedan H9, H10 y H12.
 
 ## 🧱 H1 (19-sep) — las seis de V10 en el compilador, cerradas: `#522` `#527` `#528` `#529` `#532` y `#517` de rebote
 
@@ -1070,6 +1070,57 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧪 H9 (2-oct) — LA TANDA EN LA C6 destapa cinco fichas (`#619`–`#623`), cuatro de ellas fallos viejos que las dos VMs hacían IGUAL; y las cuatro placas de la mesa, grabadas y en verde
+
+Eduardo conectó la Pico 2 (COM22), la C6 (COM3), el P4 (COM15) y la DK2 (COM12). La C6 se regrabó ayer y su tanda dio
+25 de 29; de ahí salió todo lo del día.
+
+- **`#619`** (`3f85cdce`): la GUI no veía un pack de LVGL grabado en caliente —`resolver()` guardaba el «no hay pack» de
+  la primera pregunta (el `INFO` que pide la pantalla) toda la sesión—. Ahora sólo se guarda el éxito. **Visto en la
+  C6** con el OK de Eduardo: `PACK_FORMAT`, reinicio, `INFO` sin motores, los tres packs en caliente y `GuiWinJson` sin
+  reiniciar, `EXITED OK`. `test-guipack` entra en la red.
+- **`HeapInfo`** destapó dos del compilador, PREEXISTENTES (la V6 publicada igual). **`#620`**: una llamada como
+  sentencia que devuelve 8 bytes (string, long, objeto) se descartaba con 4 → en un bucle, desbordamiento de pila; con
+  un `catch` sin nombre, la pila bajaba hasta los locales (`Gui.buildForm` era el único sitio de la stdlib).
+  **`#621`**: las variables OCULTAS del emisor (`__newref_N` y compañía: sin DUP/POP en la ISA) retenían lo que
+  guardaban hasta que la función acababa —`cab := null; gc()` no soltaba una lista en `Main`—; ahora viven una
+  sentencia, también si salen por una excepción, `break` o `continue` (`7021b975`). **Regresión mía, cazada antes de
+  grabar ninguna placa**: `__pending_exc`, compartido por la función, se ponía a null en un finally anidado y el de
+  fuera relanzaba null; ahora uno por try, y de paso lo que ya pasaba antes (un finally de dentro pisaba la excepción
+  pendiente) (`77b8d13b`). Samples nuevos en la red y en la tanda: `DescarteAncho`, `TempRetiene` (once casos, con la
+  pila FREGADA antes de medir: el GC es conservador y ENTER no pone a cero los locales), `FinallyAnidado`. La stdlib
+  crece 190 B (8 módulos, misma interfaz); `bpstdlib/*.mod`, `Stdlib.pack` y los blobs de las tres familias, rehechos.
+- **`#622`** (`9f41fd7a`): el ancla de la reserva no se soltaba —en la VM-Java, lo último que reservaba cada hilo seguía
+  siendo raíz; en la VM-C, la última excepción que construía la VM—. `TempRetiene` daba once `ok` en C y once `FALLO`
+  en Java por eso.
+- **Pruebas a la medida de la placa que más aprieta**: `HeapCompact` (`093118ab`, 300+200 nodos no caben en los 52 KB
+  de la C6) y `HeapInfo` (`2e4ff99c`, friega la pila: en la placa las ranuras sin escribir traen handles de antes).
+  El PC reproduce la C6 al byte con `--mem=131072`.
+- **`#623`** (🟡): `GuiWinJson` sin memoria en la C6 —no era el compilador: `GuiMini.pack` (25-sep) y `DriverSpi.pack`
+  llevan copias viejas de Gui/Json/Core…, y entre packs gana el último grabado; la tanda sube entonces las frescas a
+  `/lib`, que van a RAM—. Packs reconstruidos con la receta, la C6 formateada y regrabada (OK de Eduardo), las cuatro
+  copias de `/lib` borradas. **Falta la guarda** (decisión): que grabar un pack con una copia de la stdlib distinta de
+  `bpstdlib/` se niegue y diga cuál.
+
+**Las placas**: las ocho imágenes compiladas (5 ESP32, Pico, 2 STM32) y las cuatro de la mesa grabadas con el OK de
+Eduardo. Tanda (32 pruebas): **C6, P4 y DK2, 32 de 32**; Pico 2, 30 de 30 (las dos de GUI, saltadas: no tiene
+pantalla). Red: **125 de 125** en MOD9, MOD8 y con dos workers; frontend 267, miVM 56.
+
+### 🌙 Traspaso (2-oct)
+
+- **Decisiones que esperan a Eduardo**: la guarda de `#623`; y si un `break` fuera de un bucle debe salir de la función
+  (hoy no compila: «break fuera de bucle»).
+- **Lo que queda de H9** (el mapa del día, leído de FICHAS/ESTADO; cada fila hay que verificarla antes de cerrarla):
+  `#485` (cronometrar el KILL en el P4 con la imagen de hoy), `U3.25` (MKDIR/RMDIR de verdad en una placa), `U1.2` y
+  `P1.C3` hechos en placa pero sin anotar en FICHAS, `memoria: APRETADA` y el criterio «no determinista» en el runner,
+  recuperar una placa colgada (RESET + log post-mortem), el código de salida en la paridad (resto de `#481`), y
+  `#609` (`test-listen` intermitente).
+- **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) también llevan copias rancias —la tanda lo
+  tapa subiendo a `/lib`, y allí cabe—; el `SQLite.pack` sigue con un Core de antes; las placas tienen muchos `.mod` de
+  prueba en `/app` (la C6, una cuarentena; borrarlos con OK, placa a placa). Y el GC conservador con ENTER sin poner a
+  cero: retiene de pasada lo que apunten ranuras viejas; no rompe nada, pero confunde cualquier prueba que cuente
+  objetos (hoy, dos) —si se quiere quitar de raíz, es poner a cero los locales al entrar (coste por llamada): decisión—.
 
 ## 🌙 TRASPASO (1-oct, al acabar) — tres hitos cerrados hoy (H7, H11 y H8); quedan H9, H10 y H12
 

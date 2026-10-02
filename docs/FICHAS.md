@@ -791,6 +791,134 @@ el mensaje sin el número. También la pestaña de un `TabView`. miVM no tiene t
 heap. `make test-guilleno` (en `check-testc`, sólo VM-C): 511 etiquetas y el error con 512; saboteado el builtin,
 «SIN ERROR tras 600 etiquetas». **En placa**: la C5 con `GuiMini`, «tras 255 etiquetas: … sitio para 256».
 
+#### 🟡 `#623` — los packs de la GUI llevan COPIAS de la stdlib que se quedan rancias cuando ésta cambia: como entre packs gana el último grabado, tapan las del `Stdlib.pack`; la tanda sube entonces las frescas a `/lib`, que se cargan en RAM, y en la C6 no caben (abierta 2-oct, en la tanda de H9 en la C6; preexistente; H9 · lo inmediato hecho, falta la guarda)
+
+**Visto el 2-oct**: en la tanda, `GuiWinJson` acabó en la C6 con «No space in heap» —el mismo programa había ido bien
+minutos antes, recién grabados los packs—. **Acotado cambiando una cosa**: el `.mod` del compilador de antes y el de
+hoy fallan igual (no es el compilador); en el log, «heap=[58368..63488)»: de los 64 KB del bloque de la VM, 57 se los
+comían los módulos —Gui, Json, Core, Collections y Str, «del FS eclipsa al del pack», o sea desde `/lib` y en RAM—,
+cuando en el RUN que fue bien venían XIP del pack. **Causa**: `GuiMini.pack` (25-sep) lleva sus propias copias de esos
+cinco y `DriverSpi.pack` la de Core, de cuando se construyeron; entre packs gana el ÚLTIMO de la cadena
+(`find_src_en`), y GuiMini se graba el último, así que sus copias viejas tapan las del `Stdlib.pack` de hoy. La tanda
+lo ve («el RUN la resuelve a pack:GuiMini/Gui.mod, crc …: se sube a /lib») y sube las de `bpstdlib` a `/lib`, como
+debe para probar la stdlib de hoy —en las placas grandes cabe—; en la C6, que sólo puede con la GUI si esos módulos
+corren XIP, no. Y el instalador, al grabar el `Stdlib.pack`, sólo quita de `/lib` los módulos que lleva la IMAGEN
+(Core sí; Gui, Json, Collections y Str no van en ella), así que esas copias se quedaban.
+
+**Hecho** (artefactos, sin código): `GuiMini.pack` y `DriverSpi.pack` reconstruidos con su receta y los `.mod`
+canónicos de hoy; en la C6 (con el OK de Eduardo), `PACK_FORMAT`, los tres packs, las cuatro copias de `/lib` borradas
+(`DEL`) y la tanda repetida: 32 de 32 —GuiWinJson IDÉNTICO, y sin subir nada a /lib: la GUI corre XIP—.
+
+**Lo que falta, y es decisión**: es la tercera vez que una copia de la stdlib dentro de un pack se queda rancia en
+silencio (`#563`, el `SQLite.pack` —todavía con un Core de antes—, y ésta). Lo de las placas grandes también está así:
+sus packs de la GUI llevan copias viejas, y la tanda lo tapa subiendo a `/lib`. Se propone una guarda donde se graba
+(`wire_serie.py pack` y el panel de packs del IDE): si un pack lleva un módulo de la stdlib que no es el de
+`bpstdlib/`, NO se graba y se dice cuál —«reconstruye el pack»—, en vez de descubrirlo por la memoria en la placa.
+
+#### ✅ `#622` — el ANCLA de la reserva no se soltaba al publicar el objeto: en la VM-Java, lo último que reservó cada hilo seguía siendo raíz hasta su siguiente reserva; en la VM-C, la última excepción que construyó la VM (abierta y cerrada el 2-oct, al medir `#621` con `TempRetiene`; preexistente; H9 · **CERRADA el 2-oct**, `9f41fd7a`)
+
+**Visto el 2-oct**: con `#621` hecho, `TempRetiene` daba once `ok` en la VM-C y once `FALLO` en la VM-Java. La VM-Java
+(`heapAlloc`) pone en `tc.allocAnchor` todo objeto que reserva —lo protege mientras la instrucción que lo pidió aún
+no lo ha empujado ni guardado— y no lo soltaba nunca: el último objeto reservado por cada hilo era raíz hasta la
+siguiente reserva (en la prueba, justo la carga de 4 KB). La VM-C no tiene esa raíz; la suya sólo ancla la excepción
+que construye la propia VM (`bpvm_throw_runtime_error`), y tampoco la soltaba (la última, con su mensaje, seguía
+viva). No se ve en el stdout de un programa normal —los destructores corren al morir un `var owner`, no desde el GC—,
+pero sí en los números de `Heap` y en lo que cabe.
+
+✅ **Hecho** (`9f41fd7a`): la VM-Java suelta el ancla al empezar cada instrucción (el GC corre dentro de la instrucción que
+reserva y los demás hilos paran en el safepoint de arriba del lazo o dentro de su propia reserva: al empezar la
+siguiente, lo reservado ya está publicado); la VM-C, en `bpvm_eh_unwind`, cuando la excepción ya está en la pila de su
+manejador. `TempRetiene`, once `ok` en las dos VMs; las pruebas de miVM (56) en verde.
+
+#### ✅ `#621` — las variables OCULTAS que el compilador pone en el marco retienen lo que guardaron hasta que la función acaba: `cab := null; gc()` no suelta una lista construida en `Main` (abierta 2-oct, en la tanda de H9 en la C6 con `HeapInfo`; preexistente; H9 · **CERRADA el 2-oct**, `7021b975`)
+
+**Visto el 2-oct**: `HeapInfo` daba `FALLO` en la C6 («doscientos nodos son al menos cuatrocientos objetos más»: h0 7,
+al final 405). La prueba contaba la basura de antes (las cadenas de `mira`), que una colecta del bucle se llevaba: con
+un `gc()` antes de contar, esa línea pasa, pero entonces cae otra, «y los objetos bajan», **en las dos VMs y en
+cualquier heap** (en el PC, `--mem=131072` reproduce la C6 al byte: heap 52160, h0 7 → 405, tres colectas): tras
+`cab := null` y `gc()` siguen vivos los 400 objetos. **Causa**, en el desensamblado: `cab := Nodo(cab)` es
+`NEW_OBJECT_REF; SET_LOCAL_L __newref_N; GET_LOCAL_L __newref_N; …; CALL ctor; SET_LOCAL __discard_N; GET_LOCAL_L
+__newref_N` — la variable oculta `__newref_N` (`MivmEmitter.emitConstruction`, una por sitio de construcción) sigue
+apuntando al último nodo construido, la cabeza de la lista, y la lista entera vive mientras viva el marco: en `Main`,
+todo el programa. Las dos VMs miran todas las ranuras del marco, así que coinciden (paridad verde) y la red no lo ve.
+La prueba vieja pasaba por casualidad: la basura de h0 compensaba la cuenta.
+
+**No es sólo el constructor** —censo por la primitiva, las variables de 8 bytes que el emisor declara—: `__newref_N`
+(`X(...)` de una clase local), `__thrref_N` y `__par_newref_N` (hilos), `__arr_…` (literal `[a, b]`), `__tup_N`
+(literal `(a, b)`), `__dst_N` y `__de_N` (`{a, b} := f()`), `__switch_…` (el sujeto), `__o2s_N` (`print obj`),
+`__pending_exc` (el `finally`) y el `__discard` de un `catch` sin nombre (ver `#620`). La ISA no tiene `DUP`/`POP`/
+`SWAP`: por eso existen, y no se pueden quitar sin subir la ABI.
+
+**Lo que se propone** (compilador, sin tocar la ABI): una variable oculta de 8 bytes vive UNA sentencia —al acabar la
+sentencia que la escribió, el emisor la pone a null (`PUSH_0; I32_TO_I64; SET_LOCAL_L`, 5 bytes)—. Un mecanismo en un
+sitio (`emitStmt`), no un parche por construcción: lo que se añada mañana queda cubierto. No se limpia tras `return`
+ni `throw` (el marco se va). Las variables del programa no se tocan: las ve y puede ponerlas a null.
+
+✅ **Hecho** (`7021b975`, con `#620`): un gancho en el `emitSetLocal` del escritor (una subclase anónima de `ModWriter` en
+el emisor, y `ModWriter.localSizeBytes`) anota cada variable `__…` de 8 bytes que escribe la sentencia en curso, y al
+acabarla `emitStmt` las pone a null. `__` es del sistema desde M4 (el semántico no deja usarlo fuera de Core, y en Core
+sólo son campos). Y las salidas BRUSCAS, que se saltaban esa limpieza: una excepción que corta una sentencia y se caza
+en el mismo marco —cada `try` acumula lo que escribió su cuerpo, a cualquier profundidad, y sus manejadores lo limpian
+al entrar; lo del cuerpo pasa al `try` de fuera—, `break` y `continue` —limpian lo de las sentencias de las que salen,
+con la profundidad guardada en `LoopLabels`; en un `switch`, `continue` es del bucle de fuera— y el `__pending_exc`
+del `finally`, que se pone a null antes de relanzar. **La prueba**: `bpgenvm-c/samples/TempRetiene.bp`, en la red —un
+caso por variable oculta (el constructor, el literal de array, el desempaquetado, el sujeto del `switch`, el `print`
+de un objeto, la excepción de un `finally`, el `catch` sin nombre, el valor descartado) y uno por salida brusca
+(excepción, `break`, `continue`)—: cada uno reserva ~4 KB, los suelta, colecta y mira que lo libre vuelve. Con el
+compilador de antes, los once en `FALLO`, en las dos VMs y con el heap de la C6; con el de ahora, los once `ok`. Y
+`HeapInfo` (con un `gc()` antes de contar, que era la otra mitad de su fallo) en verde. **Lo que costó medirlo**: el
+GC recorre la pila palabra a palabra (conservador) y `ENTER` no pone a cero los locales, así que los marcos de las
+llamadas que ya volvieron dejan copias de handles en ranuras que las siguientes aún no han escrito —pasajero: la
+siguiente llamada lo pisa—; sin fregar la pila antes de medir, el resultado cambiaba con la disposición del marco
+(con el compilador nuevo salían más `FALLO` que con el viejo). Y la VM-Java retenía además lo último que reservaba
+cada hilo: `#622`. **El censo por el bytecode** (la stdlib y los 549 samples que compilan, con el compilador de antes
+y el de después): 226 de 625 `.mod` crecen, 3190 B en total; la stdlib, 190 B de 188 KB (Collections, Core, Gui, I2c,
+Json, Spi, Str, Time), con la misma interfaz. Regenerados `bpstdlib/*.mod`, `packs/Stdlib.pack` y los blobs de las
+tres familias (`regen_all_mods.sh`).
+
+#### ✅ `#620` — descartar un valor de 8 bytes (una llamada como sentencia a una función que devuelve `string`, `long`, un objeto…, o un `catch` sin nombre) saca 4 bytes de la pila y deja 4: en un bucle, desbordamiento de pila; mezclado con un `catch` sin nombre, la pila baja hasta pisar los locales (abierta 2-oct, al mirar `#621`; preexistente: igual con la V6 publicada; H9 · **CERRADA el 2-oct**, `7021b975`)
+
+**Visto el 2-oct**: el emisor descarta el valor de una llamada que se usa como sentencia guardándolo en el local
+`__discard` (`emitExprStmt`), y el primer uso de ese nombre en la función fija su ancho. `cadena()` o `largo()` como
+sentencia (8 bytes) se descartan con `SET_LOCAL_S8` (4): en un bucle de 100000 vueltas, **las dos VMs acaban en
+«desbordamiento de pila»** (la VM-C con `RuntimeError`; la VM-Java con código 1). Y el `catch` sin nombre guarda la
+excepción (8 B) en el mismo `__discard`: si la función ya lo había declarado de 4, deja 4 bytes en la pila; si lo
+declara él primero (de 8), cada descarte de 4 posterior saca 8 —la pila baja 4 bytes por llamada y se mete en los
+locales—: con seis `nada()` tras el `catch`, la VM-C acaba en `status=PC fuera de rango`. Con el compilador y la VM-Java
+de la V6 publicada (`dist/`), lo mismo (la VM-Java de entonces, sin la guarda de `#605`, acaba con un `524288`).
+
+**Lo que se propone**: el descarte por el ANCHO del valor —`__discard` (4) y `__discard8` (8), elegido por el tipo de la
+expresión—, y el `catch` sin nombre a `__discard8`. Y el censo por el bytecode: recompilar la stdlib y los samples con
+el compilador de antes y el de después; cada `.mod` que cambie es un sitio que estaba mal.
+
+✅ **Hecho** (`7021b975`, con `#621`): `MivmEmitter.descarta(ocho)` — `__discard` o `__discard8` por el tipo de la
+expresión (`occupies8Bytes`), y el `catch` sin nombre a `__discard8`. **El censo** (la stdlib y los 549 samples que
+compilan, antes y después): cambian 3 `.mod` además de la prueba —**`Gui.buildForm`**, que se llama a sí misma como
+sentencia por cada hijo del formulario y descartaba el `Component` con 4 bytes (4 B de pila por hijo hasta que la
+función vuelve: no rompía con formularios normales), y los samples `FileCursor` y `PathLargo`—. **La prueba**:
+`bpgenvm-c/samples/DescarteAncho.bp`, en la red —descartes de 4 y de 8 mezclados en un bucle, el primero de 8 y los
+del bucle de 4, un `catch` sin nombre y luego seis descartes de 4, y un descarte de 4 y luego el `catch` sin nombre en
+un bucle—: con el compilador de antes, `FALLO … desbordamiento de pila` y el programa muere sin llegar a `fin` en las
+dos VMs; con el de ahora, cuatro `ok`.
+
+#### ✅ `#619` — la GUI no veía un pack de LVGL grabado en caliente: `resolver()` guardaba el «no hay pack» de la primera pregunta toda la sesión (abierta y cerrada el 2-oct, al regrabar la C6 para la tanda de H9; preexistente; H9 · **CERRADA el 2-oct**, `3f85cdce`)
+
+**Visto el 2-oct** en la C6 (`log=1`): tras `PACK_FORMAT` y grabar en caliente Stdlib, DriverSpi y GuiMini, el cargador
+cargó los dos motores y el de LVGL publicó 'LVGL' (37322 ms), pero el RUN de `GuiWinJson` lanzó «esta placa no tiene el
+pack 'LVGL' grabado» (38050 ms): el primer `INFO` —que pide el tamaño de la pantalla, a los 6587 ms, sin motores aún—
+dejó `s_estado = -1` en `gui_pack.c` y `resolver()` ya no volvía a mirar. Tras reiniciar iba bien. Por eso la tanda
+del día anterior SALTABA las pruebas de GUI en la C6 (su `INFO`, sin `screenW`/`screenH`).
+
+**Hecho** (`3f85cdce`): lo que no hay no se guarda —sólo el éxito, que no cambia sin reiniciar (un motor no se
+descarga)—; lo que no hay se vuelve a mirar en cada llamada (una búsqueda en la tabla de la BIOS). Una tabla que está
+pero no vale se recuerda (es la misma hasta reiniciar), y el motivo sale al diag una vez por causa. En el generador
+(`scripts/gen_gui_pack.py`); `test_guipack.c`, caso 1d (sin pack → 0 y el motivo una vez; el motor publica DESPUÉS → la
+GUI lo ve sin reiniciar); saboteado el arreglo, 2 FAIL. `test-guipack` entra en `check-testc` (no estaba en ninguna
+red). Compila en las 5 ESP32 y las 2 STM32. ✅ **Visto en la C6** (2-oct, con el OK de Eduardo): grabada la imagen,
+`PACK_FORMAT`, reinicio con la zona vacía, un `INFO` sin motores (sin `screenW`, el disparador), los tres packs grabados
+en caliente y, SIN reiniciar, `GuiWinJson`: `EXITED OK`, el árbol cargado («J2 == J1: true»); en el log, 'PANT' y 'LVGL'
+publicados a los 39,3 s y «GUI: pack 'LVGL' resuelto» a los 40,0 s.
+
 #### ✅ `#618` — el cliente del IDE leía las líneas del puerto serie de UN BYTE en uno, y con purejavacomm eso PIERDE bytes cuando llegan deprisa: en la C5 la bajada troceada de `#495` se descolocaba a la primera (abierta y cerrada el 1-oct, al grabar la C5 con el paso 4; preexistente; H8 · **CERRADA el 1-oct**, `34167432`)
 
 **Visto el 1-oct**, al grabar la C5 (con el OK de Eduardo) y pasarle `SubidaSmoke`: la bajada troceada de 64 KB fallaba
