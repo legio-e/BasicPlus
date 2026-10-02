@@ -4552,10 +4552,21 @@ public final class MivmEmitter {
 
     /** V7/H9 #621 — relanza la excepción guardada mientras corría el finally, y antes pone a null su variable:
      *  la excepción va en la pila, y si la caza un try de fuera en este marco, la variable la retenía. */
-    private void relanzaPendiente() throws IOException {
-        w.emitGetLocal("__pending_exc");
-        limpiaNombres(java.util.Collections.singleton("__pending_exc"));
+    private void relanzaPendiente(String pend) throws IOException {
+        w.emitGetLocal(pend);
+        limpiaNombres(java.util.Collections.singleton(pend));
         w.emitThrow();
+    }
+
+    /** V7/H9 #621 — la variable de la excepción pendiente de UN try/finally: una por try. Era una por función
+     *  (`__pending_exc`), y un try/finally anidado —dentro del finally de otro, o dentro de su cuerpo— la
+     *  compartía: la excepción que pasaba por un finally de dentro pisaba la de fuera, que relanzaba la otra (lo
+     *  había antes); y con la limpieza de fin de sentencia, la de dentro la ponía a null antes de que la de fuera
+     *  la relanzara —«throw de un objeto que no es una excepción»— (samples/FinallyAnidado.bp). */
+    private String pendienteNueva() {
+        String pend = "__pending_exc_" + (tempCounter++);
+        declareLocalLong(pend);   // ref de 8 B
+        return pend;
     }
 
     private void emitTryStmt(TryStmt s) throws IOException {
@@ -4584,11 +4595,11 @@ public final class MivmEmitter {
             for (IStmt st : finallyBody) emitStmt(st);
             w.emitJump(fin);
             w.declareLabel(rethrow);
-            declareLocalLong("__pending_exc");   // ref de 8 B
-            w.emitSetLocal("__pending_exc");
+            String pend = pendienteNueva();      // V7/H9 #621: una por try (era `__pending_exc`, una por función)
+            w.emitSetLocal(pend);
             limpiaNombres(delCuerpo);            // V7/H9 #621: lo que dejó a medias la sentencia que lanzó
             for (IStmt st : finallyBody) emitStmt(st);
-            relanzaPendiente();
+            relanzaPendiente(pend);
             w.declareLabel(fin);
             return;
         }
@@ -4682,11 +4693,12 @@ public final class MivmEmitter {
         // === Rethrow handler compartido (sólo si hay finally) ===
         if (finallyBody != null) {
             w.declareLabel(rethrowLabel);
-            declareLocalLong("__pending_exc");   // #527 (de paso): era declareLocal (4 B) para una ref de 8 (hallazgo 34)
-            w.emitSetLocal("__pending_exc");
+            // #527 (de paso): era declareLocal (4 B) para una ref de 8 (hallazgo 34). V7/H9 #621: una por try.
+            String pend = pendienteNueva();
+            w.emitSetLocal(pend);
             limpiaNombres(delCuerpo);            // V7/H9 #621 (la excepción puede venir del cuerpo o de un catch)
             for (IStmt st : finallyBody) emitStmt(st);
-            relanzaPendiente();
+            relanzaPendiente(pend);
         }
 
         w.declareLabel(endLabel);
