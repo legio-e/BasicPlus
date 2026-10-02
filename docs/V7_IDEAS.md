@@ -3302,8 +3302,11 @@ tanda del 2-oct, después: «pack:GuiMini/Gui.mod, crc igual: se ejecuta XIP, no
 
 **Lo que habría que mirar antes de decidir**:
 
-1. Un pack librería pasa a DEPENDER de la stdlib de la placa. Si la de la placa no es la interfaz con la que se
-   compiló, la norma de `#500` ya lo dice al enlazar, con nombre («actualiza /lib o recompila») —ruidoso, no mudo—.
+1. Un pack librería pasa a DEPENDER de la stdlib de la placa. Con MOD9 manda la versión mínima: si la de la placa es
+   más antigua que la que pide, el cargador lo rechaza con nombre («actualiza /lib o recompila»); si es igual o más
+   nueva, enlaza símbolo a símbolo (`#523`), y lo que falte sale con su nombre —ruidoso, no mudo—. *(Corregido el
+   2-oct: decía que una interfaz distinta también la rechaza; eso es la regla 2 de `#500`, que sólo vale para MOD8 —
+   `comprobar_norma`, en las dos VMs—.)*
 2. Sin `Stdlib.pack` en la placa, Gui y compañía vendrían de `/lib`, a RAM: en la C6 no cabe la GUI. ¿El manifiesto de
    un pack librería dice «necesito el `Stdlib.pack`» y el que graba (`wire_serie.py`, el panel del IDE) avisa si falta?
 3. ¿Un pack PROGRAMA lleva las 30 o sólo el cierre de su programa? Hoy, el cierre.
