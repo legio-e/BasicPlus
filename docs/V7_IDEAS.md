@@ -3313,6 +3313,35 @@ tanda del 2-oct, después: «pack:GuiMini/Gui.mod, crc igual: se ejecuta XIP, no
 3. ¿Un pack PROGRAMA lleva las 30 o sólo el cierre de su programa? Hoy, el cierre.
 4. Lo ya grabado: los packs de la GUI de la P4, la DK2 y la C5 llevan copias viejas; con la regla nueva, al regrabarlos.
 
+## H10 — el `Rtc`: saber si el equipo está en hora (2-oct, idea de Eduardo; la forma, para decidir)
+
+**El problema** (`V7_BACKLOG` H10): en la Pico y las ESP32 el reloj de pared es por software y empieza en 0 a cada
+arranque; lo calibra el IDE al conectar (`TIME`). Con autorun nadie lo calibra, `Rtc.Clock.epochSec()` devuelve los
+segundos desde el arranque como si fueran la hora, y un programa no tiene forma de saberlo.
+
+**La idea de Eduardo** (2-oct): *«se puede utilizar una variable de entorno que guarde la fecha en la que se grabó la
+imagen y si la fecha actual es menor es que está fuera de hora»*.
+
+**De paso salió `#625`** (`8b67a0b1`): en el PC la VM-C contaba desde el arranque del PC y la VM-Java daba la hora; ahora
+las dos dan la hora del PC, que es lo que la regla necesita para decir «en hora» igual en las dos.
+
+**La forma que propongo**:
+
+1. **La clave del ENV**: `imagen.fecha` —segundos desde 1970, UTC—.
+2. **Quién la escribe**: el arranque común (Boot 2, las cinco familias). La imagen sabe cuándo se compiló (`__DATE__`);
+   si la clave falta o es anterior, se escribe. Con UN DÍA de margen (la fecha de compilación a las 00:00, menos un
+   día): `__DATE__` no lleva zona horaria, y sin margen una placa recién grabada y calibrada por el IDE en UTC podría
+   salir «fuera de hora» unas horas. Si la clave ya es posterior (la puso el usuario, o se grabó una imagen más vieja
+   después de una nueva), se respeta: manda la más reciente. Se escribe una vez por imagen nueva: el desgaste de la
+   flash no cuenta.
+3. **La API**: `Rtc.Clock.isSet(): boolean` —«¿está en hora?»: `epochSec() >= imagen.fecha`— (la convención de Java:
+   verbo, y para un booleano `is`). En el PC, siempre en hora (el reloj es el del PC).
+4. **La primitiva**: la 271 de Core, `__rtcIsSet` —específica: el ENV se queda dentro de la VM—. La alternativa es una
+   general, `getEnv(clave)`, con la que un programa podría leer cualquier clave del ENV (y `isSet` se escribiría en BP);
+   más útil, pero es abrir el ENV entero a los programas: otra decisión.
+5. **Lo que arrastra**: una primitiva nueva en Core cambia su interfaz → la stdlib, el `Stdlib.pack`, los blobs y las
+   imágenes, como con `#554`. Con MOD9 y el enlace tardío (`#523`), lo compilado contra el Core de antes sigue enlazando.
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):
