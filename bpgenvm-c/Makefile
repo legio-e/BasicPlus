@@ -16,6 +16,15 @@ CFLAGS  += -Iinclude
 # a los N workers del host compartiendo un jmp_buf: corrupcion SILENCIOSA
 # bajo carga, que ni el compilador ni el diff de paridad ven.
 CFLAGS  += -DBPVM_TIENE_TLS
+# #627 (2-oct) — setjmp/longjmp SIN el desenrollado SEH de Windows. En x86_64, el `setjmp` de MinGW guarda el marco
+# del que llama (`__builtin_frame_address(0)`), y con ese marco el `longjmp` de la CRT deshace la pila con el
+# mecanismo de excepciones del sistema. Cuando el marco del `setjmp` caía a 432 B o menos de la base de la pila del
+# hilo —la aleatorización de Windows lo deja ahí de vez en cuando—, el `longjmp` reventaba: `test-packhelp`, ~2 % de
+# las veces (medido: 22 de 22 vueltas en esa zona, y ninguna fuera). Con esto `setjmp` guarda un marco nulo y
+# `longjmp` sólo restaura los registros, como en Linux y en las placas, que es lo que la VM necesita (C, sin nada que
+# deshacer). Lo usan el límite de las native (interp.c) y el fondo del hilo de una native (bpvm_nativa.c), cuyo marco
+# está, como el de `main`, arriba del todo de su pila. Fuera de MinGW no hace nada.
+CFLAGS  += -D__USE_MINGW_SETJMP_NON_SEH
 CFLAGS  += $(CFLAGS_EXTRA)
 # H3: genera ficheros .d con las dependencias de cabecera de cada .o, para que
 # editar un header (p.ej. bpvm_internal.h, la struct) recompile los .c que lo
@@ -220,7 +229,10 @@ endif
 # perdido buscándolo en el sitio equivocado.
 # Solución: un sello por combinación de flags. Si cambia, se tiran los .o del
 # sabor anterior y se recompila entero (~30 s, y correcto).
-BUILD_FLAVOR := gui$(GUI)-lvgl$(LVGL)
+# Y la VERSIÓN de las banderas comunes: se sube cuando cambia una que vale para todos los sabores (#627: el setjmp
+# sin SEH), y así los .o de antes se tiran solos. Va delante: la red busca `.flavor-*lvgl1`.
+BUILD_FLAGS_VER := 2
+BUILD_FLAVOR := v$(BUILD_FLAGS_VER)-gui$(GUI)-lvgl$(LVGL)
 FLAVOR_STAMP := build/.flavor-$(BUILD_FLAVOR)
 
 $(FLAVOR_STAMP):
