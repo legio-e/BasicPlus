@@ -3816,6 +3816,42 @@ workers como cola de hilos de SO en vez de N fijos»):
 nombraba la Pico, la Metro y las dos P4. **Decidido por Eduardo** (1-oct, a la pregunta): *sí, con tres hilos*, como
 las demás de dos núcleos.
 
+### El plan por ETAPAS (2-oct, PROPUESTA; el criterio, de Eduardo)
+
+> Eduardo, 2-oct: *«Hay que ir pensando como abordar H12. Lo primero es preveer que podamos fracasar parcialmente o
+> totalmente. Entonces lo abordamos por etapas y si una etapa no funciona, no seguimos. O se soluciona o se cambia el
+> enfoque. Aquí el criterio ha de ser la seguridad, si no es seguro 100 x 100 no se implementa. El orden concreto como
+> lo veas. Quizás habría que aclarar lo del hilo IO y que en todas las imágenes esté igual.»*
+
+**Las reglas de todas las etapas**:
+- **una puerta al final de cada una**, escrita ANTES de empezarla: qué tiene que pasar, dónde y cuánto tiempo. Si no
+  pasa, no se sigue: se arregla o se cambia el enfoque. Un fallo que no se explica no es un fallo raro: es una puerta
+  cerrada;
+- **cada etapa se puede deshacer**: un interruptor (en el ENV cuando es de la placa, en el build cuando es de la
+  imagen) que deja la placa como estaba la etapa anterior; y lo que quede a medias, fuera de la imagen que se publica;
+- **«seguro al 100 %» se demuestra, no se supone**: un concurrente no se prueba sólo con que la red salga verde (el x86
+  ordena la memoria mejor que ARM y RISC-V, y una carrera puede no salir en mil vueltas). Por eso, en cada etapa:
+  (1) el INVENTARIO de todo lo compartido —quién lo escribe, quién lo lee y qué lo protege—, revisado por otro par de
+  ojos que intenta romperlo (revisión adversarial); (2) pruebas que PROVOCAN la carrera que el inventario dice
+  imposible —con la ventana ensanchada, como `#609`—; (3) el SABOTAJE de control: quitar un cerrojo y ver que la prueba
+  lo caza; (4) horas de resistencia en placa, no minutos;
+- **un núcleo antes que dos, y una placa antes que todas**: lo que se puede probar con un núcleo se prueba con uno.
+
+**Las etapas**, en el orden que propongo:
+
+| etapa | qué | la puerta (resumen) | volver atrás |
+|---|---|---|---|
+| **0** | **el hilo `io`, IGUAL en todas las imágenes** — con UN núcleo y UN run, sin cambiar nada para los programas. Primero lo que ya está decidido en H10: el `RUN` común (su poll y su sink son el trabajo de `io`). Después, `io` permanente: hace el arranque y atiende el cable siempre; la tarea de la VM, sin programa, espera (y deja de girar: la STM32 hoy no cede nunca) | la tanda entera en las nueve placas; el reposo medido (la ociosa del RTOS corre en todas); `KILL`, `RESET` y el depurador; el rendimiento, igual (`PrintBench`) | familia a familia, con el `RUN` viejo detrás de su puntero (`ops->run` a `NULL`) |
+| **1** | **lo que dos runs necesitan y es seguro con uno**: la variable de condición con semáforo CONTADOR en las tres plataformas, `kill_requested` atómico y con orden, el `printf` de la Pico con el cerrojo del cable, el inventario de `A4` repasado | pruebas de C en el PC que provocan el aviso perdido (dos esperando, avisar a todos) y su sabotaje; en placa, con un run, la tanda sin cambios | cada pieza, su commit |
+| **2** | **DOS runs en UN núcleo**: las dos tareas de la VM repartidas por el RTOS, con expropiación —la lógica del planificador, con el RTOS de verdad y sin el orden de memoria de dos núcleos— | el corpus y las de estrés (`HeapEstres`, `CedeCero`, `TablaHandles`, `Rueda`, `synclisttest`) en todas las placas, y horas de resistencia sin un cuelgue | `vm.runs=1` en el ENV |
+| **3** | **el SEGUNDO NÚCLEO en UNA placa: la Pico 2** (la de referencia; dos núcleos iguales; sin pantalla). En dos pasos: (3a) el RTOS en modo de dos núcleos con UN run —todo lo demás igual—; (3b) los dos runs | lo de la 2, más el inventario revisado de lo que el RTOS de dos núcleos cambia (interrupciones, la flash, el USB) | la imagen de un núcleo; `vm.runs=1` |
+| **4** | **las demás de dos núcleos**: la Metro, la S3 y las P4 —con la GUI, y aquí se verifica `invokeLater` (decidido el 2-oct)— | la de la 3, placa por placa | por placa |
+| **5** | **medir y decidir**: la batería de rendimiento HW+SW (de H9) con uno y con dos núcleos | Eduardo decide quedarse o revertir —revertir es un resultado válido— | la imagen de un núcleo |
+
+La etapa 0 vale por sí misma aunque H12 se pare en ella: un solo `RUN`, un solo `io` y una VM que en reposo cede (lo
+que pedía también el bajo consumo de V8).
+
+
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
 Eduardo: *«Vamos a continuar por H8.»* Cuatro lecturas del código de hoy, y lo que decide el plan comprobado a mano.
