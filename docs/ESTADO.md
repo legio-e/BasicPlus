@@ -1144,6 +1144,17 @@ pantalla). Red: **125 de 125** en MOD9, MOD8 y con dos workers; frontend 267, mi
 - **`#627`**: `test-packhelp` revienta más o menos una vez de cada cincuenta —también en el commit de antes—: abierta,
   y una tarea aparte para buscar dónde cae.
 
+### 🔌 La PIO del RP2350 (2-oct, mediodía) — el planteamiento, decidido; para más adelante
+
+Eduardo necesita más de dos puertos serie en la Pico (recibir TTL a 9600 8N1), y el RP2350 tiene dos UART. Decidido
+entero, en una conversación (`V7_IDEAS` §H10 «la PIO del RP2350»): un módulo `RP2350`, que sólo cargan los programas
+que lo usan, con la clase `StateMachine`, que guarda su programa y lo escribe con métodos (`sm.addJump`,
+`sm.addLabel`…), sin ensamblador; `null` se llama `RP2350.NONE`; en el PC, como el I2C y el SPI. Un prototipo
+desechable dio los códigos de `pioasm` del `ws2812` en las dos VMs. La prueba, en la Metro (un `ws2812` en BP, como el
+`Neopixel`) y un puente desde un `Uart`; el uso, un receptor (y emisor) con la forma de `Uart.Port`. **Cuándo**: V7 si
+da tiempo, si no V8. Y de las ESP32 (no tienen PIO): las UART que su silicio ya tiene (la P4 y la de bajo consumo), a
+V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el bloque de V8 de `FICHAS`.
+
 ### 🌙 Traspaso (2-oct)
 
 - **Decisiones**: un `break` fuera de un bucle sigue siendo un error de compilación (Eduardo, 2-oct: *«si el compilador
