@@ -3449,7 +3449,13 @@ equivalente al del Neopixel. En realidad lo necesito para recibir una comunicaci
 - **Antes de la PIO, el `Uart`**: la Pico tiene dos UART de hardware, libres (el cable del IDE va por USB), que ya
   reciben por interrupción en su anillo. Si el RX puede ir a un pin de UART (en la Pico 2: GP1, GP13, GP17 y GP29 del
   UART0; GP5, GP9, GP21 y GP25 del UART1), funciona hoy. La PIO hace falta para un pin cualquiera o para un tercer
-  puerto.
+  puerto. **Y es el caso** (Eduardo, 2-oct): *«necesito más de 2 puertos serie»*.
+- **Un receptor hecho, con la forma de `Uart.Port`** (propuesta): en el módulo `RP2350`, además de `StateMachine`, una
+  clase escrita en BP sobre una máquina —el programa `uart_rx`, a 8 × baudios, con su anillo— con la interfaz del
+  `Uart` (`read(data, count, timeoutMs)`, `available()`), para que el tercer puerto y los siguientes se usen igual que
+  los dos de hardware. Cada uno gasta UNA máquina; el programa (5 instrucciones) se carga una vez por PIO y lo
+  comparten: caben de sobra en las 12 (menos la del `Neopixel`, si se usa). Transmitir por PIO (el `uart_tx`) sería
+  la misma forma.
 
 **Y lo último** (Eduardo, 2-oct): `null` se llama **`RP2350.NONE`** (*«NONE está bien»*); y **cuándo**: *«Más adelante,
 si tenemos tiempo de V7, si no en V8»* —anotado en el bloque de V8 de `FICHAS`—.
