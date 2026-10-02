@@ -18,6 +18,12 @@ USO
     --sin-oraculo    no ejecuta el host (compila igual, porque el .mod que se
                      sube sale de ahi); el criterio 'identico' queda sin juez y
                      se dice.
+    --ensayo-colgada NOMBRE[,NOMBRE]
+                     para PROBAR la recuperacion de una placa colgada sin
+                     colgarla de verdad (el KILL llega hasta a una native en un
+                     bucle sin fin): esas pruebas se tratan como COLGADA sin
+                     EXITED al acabar, y la placa SE REINICIA y sigue. Su
+                     veredicto sale COLGADA (y la tanda, roja) a proposito.
 
 QUE HACE, EN ORDEN
     1. Lee el manifiesto (lista de pruebas: fuente .bp, criterio, requisitos,
@@ -39,7 +45,10 @@ QUE HACE, EN ORDEN
        lineas NO-JSON del wire (panics, avisos) y la cola del stderr del host.
 
 VEREDICTOS
-    IDENTICO / NO-PETA (verdes) - DIFIERE / PETA - FALLO (la salida de la placa
+    IDENTICO / NO-PETA / ASERCIONES (verdes; ASERCIONES = criterio "aserciones":
+    el programa se juzga por SUS comprobaciones —ninguna linea que empiece por
+    ERROR o FALLO, y salida 0—, no por la salida del PC, que depende del
+    planificador; V7_IDEAS §4, «no determinista»; V7/H9, 2-oct) - DIFIERE / PETA - FALLO (la salida de la placa
     tiene una linea que empieza por FALLO: el sample dice que algo sale mal,
     aunque salga igual en el PC; V7/H9, 2-oct) - COLGADA (sin EXITED en el
     timeout) - ERROR (no se pudo medir: subida, transporte, dependencia
@@ -62,6 +71,34 @@ EL AOT (V7/H5, 25-sep; V7_IDEAS §H5)
     Dos fallos solo son IDENTICO si fallan IGUAL: mismo exitCode que el rc
     del host (misma tabla, bpvm_exit_code). Un LINK_ERROR o un «load:» /
     «falta el modulo» de la placa es fallo del ARNES, nunca paridad.
+
+MEMORIA APRETADA (V7_IDEAS §4; V7/H9, 2-oct)
+    Una prueba con "memoria": "apretada" no es verde hasta haberlo sido en las
+    placas que APRIETAN: sin PSRAM y con 1 MB de SRAM o menos, segun su INFO
+    (la Pico 2, la C6, la C3). En TODAS las de la tanda —el verde de una no
+    exonera a otra que aprieta mas: la C6 da 64 KB de heap a la VM y la Pico,
+    251—. El orden de ejecucion lo decide la mesa; el veredicto, las placas que
+    aprietan. Si en la tanda no hay ninguna, o alguna no salio verde, la tanda
+    NO es verde y el informe lo dice.
+    Y una prueba puede decir cuanta memoria NECESITA: "heap_min_kb" (medido;
+    Eduardo, 2-oct). En una placa cuya VM da menos (vmHeapBytes del INFO) sale
+    SALTADA con los dos numeros, y esa placa no hace de juez de la memoria
+    apretada: no puede correrla por diseno. synclisttest pide 80 (con 64 KB de
+    heap, «No space in heap»: la C6).
+
+UNA PLACA COLGADA (V7_IDEAS §4; V7/H9, 2-oct)
+    Si una prueba no acaba en su plazo y el KILL tampoco da EXITED, la placa
+    se RECUPERA en vez de abandonarla: RESET por el wire (se atiende aunque
+    corra un programa, #452), volver a abrir el puerto (el USB de la Pico y de
+    la C6 se va y vuelve), HELLO, y el log post-mortem (LOG_DUMP) al informe
+    como evidencia; y se sigue con las demas pruebas. Si el wire no contesta
+    al RESET, en las ESP32 el reinicio por el cable (RTS, como esptool); en la
+    Pico y la STM32 no lo hay sin manos: se aborta la placa y se dice que hacer.
+
+LIMPIEZA (Eduardo, 2-oct: «la tanda que no borra lo que sube»)
+    Al acabar con una placa se borra lo que la tanda dejo en /app —los
+    programas, sus modulos y los artefactos que bajo—. Lo de /lib se queda: es
+    la libreria de la placa, puesta al dia, y el informe dice que se subio.
 
 POR QUE EL BUCLE ES POR PLACA (decision de Eduardo, 11-sep)
     Todas las pruebas sobre una placa, luego la siguiente. Eduardo va
@@ -502,6 +539,65 @@ class Wire:
     def info(self, secs=6):
         return self.llamar("INFO", "INFO_REPLY", secs)
 
+    def reabrir(self, segs=25):
+        """Tras un reinicio, el transporte otra vez: el puerto USB de la Pico y de la C6 desaparece y vuelve; el de la
+        P4 y la DK2 se queda. True si abre y la placa saluda."""
+        viejo = self.t
+        try:
+            viejo.close()
+        except Exception:
+            pass
+        fin = time.time() + segs
+        while time.time() < fin:
+            time.sleep(1.0)
+            try:
+                if viejo.nombre == "serie":
+                    self.t = TransSerie(viejo.puerto)
+                else:
+                    host, _, port = viejo.puerto.rpartition(":")
+                    self.t = TransTcp(host, int(port))
+            except Exception:
+                continue
+            self.buf, self.pend, self.otros, self.roto, self.session = b"", [], [], None, None
+            if self.hola() is not None:
+                return True
+            try:
+                self.t.close()
+            except Exception:
+                pass
+        return False
+
+    def recuperar(self, sello):
+        """V7/H9 (V7_IDEAS §4) — una placa COLGADA (el KILL no dio EXITED): RESET por el wire (se atiende aunque corra
+        un programa, #452), reabrir, HELLO y el log post-mortem. Si el wire no contesta al RESET, en las ESP32 el
+        reinicio POR EL CABLE (RTS 200 ms con DTR apagado, como esptool); en la Pico y la STM32 no lo hay sin manos.
+        Devuelve (ok, texto, cola_del_log)."""
+        via = "RESET por el wire"
+        self.send("RESET")
+        if self.esperar("RESET_REPLY", 3) is None:
+            placa = sello.get("boardName") or "?"
+            if self.t.nombre != "serie" or not placa.startswith("esp32"):
+                return False, ("no contesta al RESET por el wire, y %s no se reinicia sin manos: %s" % (
+                    placa, "desenchufa y enchufa la placa" if placa.startswith("rp2350")
+                    else "reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton")), ""
+            via = "reinicio por el cable (RTS; el wire no contesto al RESET)"
+            s = self.t.s
+            s.dtr = False
+            s.rts = True
+            s.dtr = s.dtr        # usbser.sys no manda el RTS nuevo sin tocar DTR (esptool)
+            time.sleep(0.2)
+            s.rts = False
+            s.dtr = s.dtr
+            time.sleep(0.2)
+        if not self.reabrir():
+            return False, "%s: la placa no vuelve a contestar en 25 s" % via, ""
+        info = self.info(6) or {}
+        self.send("LOG_DUMP")
+        lg = self.esperar("LOG_DUMP_REPLY", 10) or {}
+        cola = "\n".join((lg.get("text") or "").splitlines()[-40:])
+        return True, "%s: vuelve (resetReason=%s, uptimeMs=%s)" % (
+            via, info.get("resetReason"), info.get("uptimeMs")), cola
+
     def limpiar_arranque(self, secs=10):
         """KILL al conectar y ESPERAR a que la placa este en reposo (hallazgo 3):
         hasta el EXITED, o hasta que INFO conteste sin BUSY, o `secs`.
@@ -622,9 +718,13 @@ def leer_manifiesto(ruta):
             "artefactos": list(e.get("artefactos", [])),
             "aot": bool(e.get("aot", False)),                # V7/H5: subir con su nativo DENTRO
             "ignorar": list(e.get("ignorar", [])),           # V7/H5: lineas fuera de la comparacion
+            "memoria": e.get("memoria", ""),                  # V7/H9: "apretada" — verde solo con la placa que aprieta
+            "heap_min_kb": int(e.get("heap_min_kb", 0)),      # V7/H9: lo que la prueba necesita de heap de la VM
         }
-        if p["criterio"] not in ("identico", "no-peta"):
+        if p["criterio"] not in ("identico", "no-peta", "aserciones"):
             sys.exit("manifiesto: criterio desconocido '%s' en %s" % (p["criterio"], p["nombre"]))
+        if p["memoria"] not in ("", "apretada"):
+            sys.exit("manifiesto: memoria desconocida '%s' en %s (vale \"apretada\")" % (p["memoria"], p["nombre"]))
         bp = os.path.join(RAIZ, p["fuente"])
         if not os.path.exists(bp):
             sys.exit("manifiesto: no existe %s (prueba %s)" % (bp, p["nombre"]))
@@ -1194,6 +1294,66 @@ def borrar_artefactos(w, artefactos):
     return previos
 
 
+def aprieta(sello):
+    """¿La placa APRIETA de memoria? (V7_IDEAS §4): sin PSRAM y con 1 MB de SRAM o menos, segun su INFO —la Pico 2, la
+    C6, la C3—. (bool, motivo)."""
+    info = sello.get("info") or {}
+    sram, psram = info.get("sramBytes"), info.get("psramBytes")
+    if not isinstance(sram, int) or not isinstance(psram, int):
+        return False, "INFO sin sramBytes/psramBytes"
+    si = (psram == 0 and 0 < sram <= 1024 * 1024)
+    return si, "SRAM %d KB, PSRAM %d KB" % (sram // 1024, psram // 1024)
+
+
+def memoria_apretada(tanda):
+    """Las pruebas con "memoria": "apretada" y si alguna placa que APRIETA las dio por verdes. [(prueba, ok, texto)]."""
+    out = []
+    for p in tanda["pruebas"]:
+        if p.get("memoria") != "apretada":
+            continue
+        # los jueces: las placas que aprietan y la CORRIERON (una SALTADA —por heap_min_kb, por pantalla— no puede)
+        en = [(pl, rs) for pl, rs in ((pl, [r for r in pl["resultados"] if r["prueba"] == p["nombre"]])
+                                      for pl in tanda["placas"] if (pl.get("aprieta") or (False,))[0])
+              if not (rs and rs[0]["veredicto"] == "SALTADA")]
+        def nom(pl):
+            return "%s@%s" % (pl["sello"]["boardName"], pl["sello"]["puerto"])
+        verdes = [nom(pl) for pl, rs in en if rs and rs[0]["veredicto"] in VERDES]
+        no = ["%s: %s" % (nom(pl), rs[0]["veredicto"] if rs else "-") for pl, rs in en
+              if not (rs and rs[0]["veredicto"] in VERDES)]
+        if not en:
+            out.append((p["nombre"], False, "NO ES VERDE: ninguna placa de la tanda que aprieta la ha corrido (sin PSRAM "
+                                            "y <= 1 MB de SRAM: la Pico 2, la C6, la C3)"))
+        elif no:
+            out.append((p["nombre"], False, "NO ES VERDE: no salio verde en todas las que aprietan (%s%s)" % (
+                ", ".join(no), ("; verde en " + ", ".join(verdes)) if verdes else "")))
+        else:
+            out.append((p["nombre"], True, "verde en las que aprietan: %s" % ", ".join(verdes)))
+    return out
+
+
+def limpiar_lo_subido(w, subidos, artefactos):
+    """Al acabar con una placa (Eduardo, 2-oct: «la tanda que no borra lo que sube»): borra lo que la tanda dejo en
+    /app —los programas, sus modulos y los artefactos que bajo—. Lo de /lib se queda: es la libreria de la placa.
+    Devuelve las lineas para las notas del informe."""
+    notas = []
+    rutas = sorted({x["remoto"] for x in subidos if x.get("ok") and x["remoto"].startswith("/app/")})
+    borrados, fallos = 0, []
+    for r in rutas:
+        if w.llamar("DEL", "DEL_REPLY", 10, path=r) is not None:
+            borrados += 1
+        elif w.codigo_error() != "NOT_FOUND":
+            fallos.append("%s (%s)" % (r, w.errores()))
+    previos = borrar_artefactos(w, sorted(set(artefactos)))
+    malos_art = ["%s: %s" % (a, v["dudoso"]) for a, v in previos.items() if v["dudoso"]]
+    lib = sorted({x["remoto"] for x in subidos if x.get("ok") and x["remoto"].startswith("/lib/")})
+    notas.append("limpieza: %d fichero(s) de /app borrados%s%s" % (
+        borrados, (" y los artefactos (%s)" % ", ".join(sorted(set(artefactos)))) if artefactos else "",
+        ("; quedan en /lib, subidos por la tanda: %s" % ", ".join(lib)) if lib else ""))
+    if fallos or malos_art:
+        notas.append("limpieza INCOMPLETA: %s" % "; ".join(fallos + malos_art))
+    return notas
+
+
 def diff_corto(a, b, n=10):
     d = list(difflib.unified_diff(a.split("\n"), b.split("\n"), "oraculo (host)", "placa", lineterm=""))
     return "\n".join(d[:n]) + ("\n..." if len(d) > n else "")
@@ -1226,6 +1386,17 @@ def veredicto_de(p, o, res, sin_oraculo):
     # se comprueba a sí mismo imprime `FALLO …` cuando algo sale mal; si sale IGUAL en el PC y en la placa, la paridad
     # es verde y el programa está mal. La misma regla que la red (`compat.sh`: «paridad OK, pero el sample dice que
     # algo sale mal»): una línea que empieza por FALLO no es verde nunca.
+    if p["criterio"] == "aserciones":
+        # V7/H9 (V7_IDEAS §4, «no determinista»): la salida depende del planificador —el reparto entre hilos—, así que
+        # el PC no hace de juez. Se juzga por las comprobaciones del propio programa: ninguna línea ERROR/FALLO, salida 0.
+        lineas = (res["salida"] or "").splitlines()
+        mala = next((l for l in lineas if l.startswith("ERROR") or l.startswith("FALLO")), None)
+        if mala is not None:
+            return "FALLO", "la salida dice que algo sale mal: %s (%s)" % (mala[:160], estado)
+        if st == "OK" and code == 0:
+            return "ASERCIONES", "%d comprobaciones OK y ninguna mala (%s)" % (
+                sum(1 for l in lineas if l.startswith("OK")), estado)
+        return "PETA", estado
     fallo = next((l for l in (res["salida"] or "").splitlines() if l.startswith("FALLO")), None)
     if fallo is not None and (p["criterio"] == "no-peta" or sin_oraculo or o.get("ejecutado")):
         return "FALLO", "la salida dice que algo sale mal: %s (%s)" % (fallo[:160], estado)
@@ -1255,7 +1426,11 @@ def veredicto_de(p, o, res, sin_oraculo):
     return "DIFIERE", "; ".join(partes)
 
 
-VERDES = ("IDENTICO", "NO-PETA")
+VERDES = ("IDENTICO", "NO-PETA", "ASERCIONES")
+
+
+# --ensayo-colgada: las pruebas que se TRATAN como colgadas sin EXITED (ver la cabecera).
+ENSAYO_COLGADA = set()
 
 
 def resultado_vacio(nombre, ms_host=None):
@@ -1271,6 +1446,13 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
     no sirve para las siguientes (transporte roto, colgada tras KILL), lo dice
     en r["abortar_placa"] y main corta la placa."""
     r = resultado_vacio(p["nombre"], o.get("ms"))
+    if p.get("heap_min_kb"):
+        heap = (sello.get("info") or {}).get("vmHeapBytes")
+        if isinstance(heap, int) and heap < p["heap_min_kb"] * 1024:
+            r["veredicto"] = "SALTADA"
+            r["detalle"] = "necesita %d KB de heap y la VM de esta placa da %d KB (vmHeapBytes del INFO)" % (
+                p["heap_min_kb"], heap // 1024)
+            return r
     for req in p["necesita"]:
         if req == "pantalla":
             if not pantalla[0]:
@@ -1339,6 +1521,9 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
     log("    RUN /app/%s.mod (timeout %d s)" % (p["modulo"], p["timeout_s"]))
     w.ultima_prueba = p["nombre"]
     res = w.correr("/app/" + p["modulo"] + ".mod", p["timeout_s"])
+    if p["nombre"] in ENSAYO_COLGADA and not res["error"]:
+        log("    ENSAYO: se trata como COLGADA sin EXITED (--ensayo-colgada)")
+        res["colgada"], res["exited"] = True, None
     r["exited"] = res["exited"]
     r["salida_placa"] = res["salida"]          # hallazgo 5: tambien si hubo error
     r["tipos_extra"] = res["tipos"]
@@ -1358,6 +1543,24 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         r["abortar_placa"] = "transporte roto durante %s: %s" % (p["nombre"], res["error"])
         r["basura"] = w.basura_texto()
         return r
+    if res["colgada"] and res["exited"] is None:
+        # V7/H9 (V7_IDEAS §4): ni EXITED en el plazo ni tras el KILL. Antes la placa se arrastraba a la siguiente
+        # prueba (BUSY) y se abortaba; ahora se reinicia, se baja su log post-mortem y se sigue.
+        log("    COLGADA sin EXITED tras el KILL: se recupera la placa")
+        try:
+            ok, texto, cola = w.recuperar(sello)
+        except (EOFError, OSError) as e:
+            ok, texto, cola = False, "el transporte se cayo al recuperarla: %s" % e, ""
+        r["detalle"] += "; recuperacion: " + texto
+        r["postmortem"] = cola
+        notas.append("%s: COLGADA; %s" % (p["nombre"], texto))
+        log("    recuperacion: %s" % texto)
+        if not ok:
+            r["abortar_placa"] = "colgada en %s y no se recupera: %s" % (p["nombre"], texto)
+            r["basura"] = w.basura_texto()
+            return r
+        verificadas.clear()                 # tras un arranque, lo verificado ya no vale (la DK2 vacia /lib)
+        sello["uptime_ultimo"] = None       # el reinicio lo hemos pedido: no es un REINICIO de la prueba
     if r["veredicto"] == "DIFIERE" and p["criterio"] == "identico" and o.get("salida") is not None:
         r["diff"] = diff_corto(o["salida"], normalizar(res["salida"], p.get("ignorar_re", ())))
     if r["veredicto"] in ("DIFIERE", "ERROR", "PETA") and o.get("stderr_cola"):
@@ -1521,6 +1724,14 @@ def escribir_informe(ruta, tanda):
                 it = r["info_tras"]
                 L.append("- tras %s: uptimeMs=%s fsUsed=%s vmHeapBytes=%s" % (
                     r["prueba"], it.get("uptimeMs"), it.get("fsUsedBytes"), it.get("vmHeapBytes")))
+            if r.get("postmortem"):
+                L.append("<details><summary>%s: log post-mortem de la placa, tras recuperarla</summary>" % r["prueba"])
+                L.append("")
+                L.append("```")
+                L.append(r["postmortem"])
+                L.append("```")
+                L.append("</details>")
+                L.append("")
             if r["veredicto"] not in VERDES + ("SALTADA",):
                 # hallazgo 5: la salida que SI llego, aunque no hubiera EXITED
                 if r.get("salida_placa") and not r.get("diff"):
@@ -1614,6 +1825,8 @@ def escribir_informe(ruta, tanda):
             fila.append(v[0] if v else "-")
         L.append("| " + " | ".join(fila) + " |")
     L.append("")
+    for nombre, ok, texto in memoria_apretada(tanda):
+        L.append("MEMORIA APRETADA: %s: %s  " % (nombre, texto))
     for pl in tanda["placas"]:
         pn = "%s@%s" % (pl["sello"]["boardName"], pl["sello"]["puerto"])
         for r in pl["resultados"]:
@@ -1657,7 +1870,11 @@ def main():
     ap.add_argument("--prueba", default=None, help="solo estas (coma)")
     ap.add_argument("--informe", default=os.path.join(BUILD_TANDA, "tanda.md"))
     ap.add_argument("--sin-oraculo", action="store_true")
+    ap.add_argument("--ensayo-colgada", default=None,
+                    help="estas pruebas (coma) se tratan como COLGADA sin EXITED: prueba la recuperacion (REINICIA la placa)")
     a = ap.parse_args()
+    if a.ensayo_colgada:
+        ENSAYO_COLGADA.update(x.strip() for x in a.ensayo_colgada.split(",") if x.strip())
 
     if not os.path.exists(JAR):
         sys.exit("no existe el frontend: " + JAR)
@@ -1686,7 +1903,7 @@ def main():
                          "exe": os.path.relpath(EXE, RAIZ), "exe_hora": hora_de(EXE),
                          "sabor": sabor_host()},
         "pruebas": [{k: p[k] for k in ("nombre", "fuente", "criterio", "timeout_s", "necesita",
-                                       "recursos", "artefactos", "modulo")} for p in pruebas],
+                                       "recursos", "artefactos", "modulo", "memoria", "heap_min_kb")} for p in pruebas],
         "oraculos": {}, "placas": [],
     }
 
@@ -1727,6 +1944,7 @@ def main():
             sello = sello_de(w, arranque)
             pl["sello"] = sello
             pl["pantalla"] = tiene_pantalla(sello)
+            pl["aprieta"] = aprieta(sello)
             log("placa %s id=%s build=%s (%s %s) pantalla=%s [%s]" % (
                 sello["boardName"], sello["uniqueId"], sello["serverBuild"],
                 sello["transporte"], sello["puerto"],
@@ -1759,6 +1977,8 @@ def main():
                 if r.get("abortar_placa"):
                     # la placa ya no sirve para las siguientes: se dice y se corta
                     raise RuntimeError(r["abortar_placa"])
+            pl["notas"].extend(limpiar_lo_subido(w, pl["subidos"], [a for p in pruebas for a in p["artefactos"]]))
+            log("  " + pl["notas"][-1])
         except (RuntimeError, EOFError, OSError) as e:
             pl["error"] = str(e)
             log("  ERROR de placa: %s" % e)
@@ -1787,8 +2007,12 @@ def main():
             log("  %-10s %-16s %s" % (pl["sello"]["boardName"], r["prueba"], r["veredicto"]))
     log("informe: %s (+ %s)" % (a.informe, rj))
     malos = sum(1 for pl in tanda["placas"] for r in pl["resultados"]
-                if r["veredicto"] in ("DIFIERE", "PETA", "COLGADA", "ERROR", "SIN ARTEFACTO", "DUDOSO", "REINICIO",
-                                      "SIN NATIVO", "SIN COMPROBAR"))
+                if r["veredicto"] in ("DIFIERE", "PETA", "FALLO", "COLGADA", "ERROR", "SIN ARTEFACTO", "DUDOSO",
+                                      "REINICIO", "SIN NATIVO", "SIN COMPROBAR"))
+    for nombre, ok, texto in memoria_apretada(tanda):
+        log("  memoria APRETADA: %s: %s" % (nombre, texto))
+        if not ok:
+            malos += 1
     return 1 if malos else 0
 
 

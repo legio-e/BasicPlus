@@ -35,6 +35,7 @@
     { "nombre": "DescarteAncho", "fuente": "bpgenvm-c/samples/DescarteAncho.bp" },
     { "nombre": "TempRetiene",   "fuente": "bpgenvm-c/samples/TempRetiene.bp" },
     { "nombre": "FinallyAnidado", "fuente": "bpgenvm-c/samples/FinallyAnidado.bp" },
-    { "nombre": "RtcEnHora",     "fuente": "bpgenvm-c/samples/RtcEnHora.bp" }
+    { "nombre": "RtcEnHora",     "fuente": "bpgenvm-c/samples/RtcEnHora.bp" },
+    { "nombre": "synclisttest",  "fuente": "samples/synclisttest.bp", "criterio": "aserciones", "memoria": "apretada", "heap_min_kb": 80, "timeout_s": 90 }
   ]
 }
