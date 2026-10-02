@@ -1113,7 +1113,12 @@ pantalla). Red: **125 de 125** en MOD9, MOD8 y con dos workers; frontend 267, mi
   compatible y versión igual o superior a la mínima (la de compilación)—, no por el CRC. La placa (el `STAT` común) y la
   VM-Java dicen ya `gen` e `ifaceCrc`; `ReglaDeSubida` (`lexer-java`, 8 casos) la usan el IDE y, a su modo, la tanda (que
   anota el DESFASE en vez de subir). Corrigió de paso lo que yo dije del cargador: con MOD9 sólo exige la versión mínima
-  (`#523`), y el GuiMini viejo VALÍA —el RUN manual de la mañana lo probó—. **Falta verlo en placa** (imagen nueva).
+  (`#523`), y el GuiMini viejo VALÍA —el RUN manual de la mañana lo probó—. **Visto en placa** (`467de656`): las cuatro
+  grabadas otra vez, su `STAT` con la versión, y en la DK2 el Gui del 25-sep de su pack vale (DESFASE anotado, nada a
+  `/lib`, la GUI IDÉNTICA); la tanda, las cuatro en verde.
+- **El runner y la red**: la tanda da FALLO si la placa imprime una línea `FALLO` aunque coincida con el PC (`086f080e`);
+  la paridad del corpus exige el mismo código de salida en las dos VMs (`03e84bda`, censo previo 0 de 125; saboteado,
+  rojo) y `compat.sh check-paridad` corre sólo la paridad.
 - **H9 en placa**: `U3.25` (MKDIR/RMDIR en la C6), el reset sin manos (la C6 por el cable; la DK2 por la sonda —su
   puerto no la resetea—) y `#485` medido en las cuatro (P4: el KILL, 23,4 ms, lo que un ida y vuelta). `U1.2`, `P1.C3` y
   el «reinicio pedido» de la Pico ya se habían visto el 24/25-sep: anotados.
@@ -1128,11 +1133,11 @@ pantalla). Red: **125 de 125** en MOD9, MOD8 y con dos workers; frontend 267, mi
 - **Decisiones**: un `break` fuera de un bucle sigue siendo un error de compilación (Eduardo, 2-oct: *«si el compilador
   da un mensaje de error por mí está bien»*). `#623`, Eduardo lo está pensando: packs LIBRERÍA sin copias de la
   stdlib y packs PROGRAMA como contenedor (`V7_IDEAS` §«H9 — `#623`», con los hechos medidos).
-- **Lo que queda de H9** (lo de placa, hecho por la tarde): en el runner, juzgar las líneas `FALLO` aunque salgan
-  iguales en el PC, `memoria: APRETADA` y el criterio «no determinista», y recuperar una placa colgada (ya se sabe cómo
-  en cada familia: RTS en las ESP32, la sonda en la STM32, desenchufar en la Pico); el código de salida en la paridad
-  (resto de `#481`); el sello de la imagen (`imageCrc` en el `HELLO`); `#609`; y decidir si la batería de rendimiento y
-  la prueba de resistencia de días caben en V7. Y ver `#624` en placa (imagen nueva).
+- **Lo que queda de H9**: en el runner, `memoria: APRETADA` y el criterio «no determinista», y recuperar una placa
+  colgada (ya se sabe cómo en cada familia: RTS en las ESP32, la sonda en la STM32, desenchufar en la Pico); el sello
+  de la imagen (`imageCrc` en el `HELLO`); `#609`; y decidir si la batería de rendimiento y la prueba de resistencia de
+  días caben en V7. Limpieza con OK: los `.mod` de prueba de las placas (la C6, una cuarentena en `/app`; la Pico, un
+  `Gui.mod` MOD6 de V5 en `/lib`).
 - **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) también llevan copias rancias —la tanda lo
   tapa subiendo a `/lib`, y allí cabe—; el `SQLite.pack` sigue con un Core de antes; las placas tienen muchos `.mod` de
   prueba en `/app` (la C6, una cuarentena; borrarlos con OK, placa a placa). Y el GC conservador con ENTER sin poner a
