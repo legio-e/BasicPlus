@@ -3366,7 +3366,7 @@ elige otra vez. Las ESP32 y la STM32 no lo tenían: copian el ENV a RAM al arran
 la misma salida en el PC y en placa) y `env_smoke` (el micro simulado, tres arranques sobre la misma flash: sin la clave,
 con ella, y con una que no es una fecha).
 
-## H10 — la PIO del RP2350: programarla desde BP (2-oct, el planteamiento de Eduardo; por decidir, el nombre de `null` y cuándo)
+## H10 — la PIO del RP2350: programarla desde BP (2-oct, el planteamiento de Eduardo, decidido; para más adelante: V7 si da tiempo, si no V8)
 
 **El porqué** (Eduardo, 2-oct): *«Para la Pico igual necesito programar la PIO»*. Lo que hay: el `Neopixel` de la Pico
 va por PIO (H7.4, `pico/neopixel.c`), con un programa FIJO —el `ws2812.pio` de la SDK, ensamblado por `pioasm` al
@@ -3431,9 +3431,8 @@ instrucciones, con prueba de paridad), y la máquina hace lo que el I2C y el SPI
 argumentos y dice por la salida lo que haría (`[pio] …`, las mismas líneas en las dos VMs), y `get` da 0. Lo que la PIO
 hace de verdad se ve en la placa.
 
-**Por decidir**:
-1. **El nombre de `null`**: propongo `RP2350.NONE`.
-2. **Cuándo**: H10 de V7, o más adelante.
+**Y lo último** (Eduardo, 2-oct): `null` se llama **`RP2350.NONE`** (*«NONE está bien»*); y **cuándo**: *«Más adelante,
+si tenemos tiempo de V7, si no en V8»* —anotado en el bloque de V8 de `FICHAS`—.
 
 **Por fases**: 1) el writer, con su prueba de paridad (el oráculo, `pioasm` sobre los programas de los ejemplos de la
 SDK); 2) la máquina, en el PC como el I2C y el SPI, y de verdad en la Pico —el blink y un `ws2812` en BP que dé lo mismo

@@ -4664,6 +4664,10 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > - **la prueba de resistencia de días** (Eduardo, 2-oct: *«la prueba de resistencia de días lo dejamos para V8, cuando
 >   lo trabajemos un poco más»*): días de carga variada con una marca periódica en el log-anillo (un RUN largo Y muchos
 >   RUN); venía de H9. (La batería de rendimiento, en cambio, se queda en V7: se mide en H12, con dos núcleos.)
+> - **la PIO del RP2350, programable desde BP** (Eduardo, 2-oct: *«Más adelante, si tenemos tiempo de V7, si no en
+>   V8»*: si sobra tiempo en V7, entra antes): un módulo `RP2350` con la clase `StateMachine`, que guarda su programa y lo
+>   escribe con métodos (`sm.addJump`, `sm.addLabel`…), sin ensamblador; en el PC, como el I2C y el SPI. El planteamiento,
+>   decidido entero, en `V7_IDEAS` §H10 «la PIO del RP2350»; un prototipo dio los códigos de `pioasm` en las dos VMs.
 > - **`M5`, el depurador que despliega objetos** (Eduardo, 1-oct: *«M5, no entra en V7, lo pasamos a V8. Es una mejora, no es urgente»*): hoy el
 >   depurador no despliega NINGÚN objeto —un local objeto sale como `@<valor>`—, y por eso tampoco las properties
 >   heredadas (de H1, 21-sep, y de ahí a H8). Hacerlo es una función nueva: el layout de cada clase en el `.dbg`
