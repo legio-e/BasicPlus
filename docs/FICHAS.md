@@ -6992,6 +6992,9 @@ rojo»*. Ahora hay uno: **`samples/ThrowSinAtrapar.bp`**. Corpus **52 → 53**, 
 ⚠️ **Lo que el arnés NO vigila**: el código de salida. `run_vm` compara `stdout` y no mira el
 `exit`. Los dos 1 están medidos a mano. Si algún día alguien devuelve el ordinal otra vez, la
 paridad seguiría verde.
+✅ **Vigilado desde el 2-oct** (H9): `run_vm` guarda el código de salida de cada VM (se perdía en la tubería de `filt`) y
+la paridad del corpus exige que case; antes de exigirlo, el censo: 0 de 125 distintos. Saboteado (el de la VM-C a 99),
+los 125 en rojo con «el codigo de salida no casa». Y `compat.sh check-paridad` corre sólo la paridad.
 
 📌 Nadie dependía de los códigos viejos — comprobado antes de tocarlos: en todo el repo sólo se
 mira `== 0`.

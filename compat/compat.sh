@@ -164,9 +164,16 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod [$3...=opciones de la VM, p. ej. --smp=2]
   # (57 PASS con el GC de la VM de referencia roto). Un aviso de heap se vuelca
   # como linea de salida: rompe la paridad y se VE en el diff.
   local err="$WORK/.stderr.$$"
+  # V7/H9 (2-oct, resto de #481) — el CÓDIGO DE SALIDA de cada VM, a un fichero por VM (.rc.java / .rc.c): el
+  # stdout va por `filt` y el código se perdía en la tubería. La paridad del corpus lo compara.
+  # (cada llamada borra SÓLO el suyo: la paridad llama dos veces seguidas, Java y C, y lee los dos después)
   case "$bin" in
-    *.jar) ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$bin" "$@" "$base" 2>"$err" | filt ) ;;
-    *)     ( cd "$dir" && timeout "$VM_TIMEOUT" "$bin" "$@" "$base" 2>"$err" | filt ) ;;
+    *.jar) rm -f "$WORK/.rc.java"
+           ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$bin" "$@" "$base" 2>"$err" | filt
+             echo "${PIPESTATUS[0]}" > "$WORK/.rc.java" ) ;;
+    *)     rm -f "$WORK/.rc.c"
+           ( cd "$dir" && timeout "$VM_TIMEOUT" "$bin" "$@" "$base" 2>"$err" | filt
+             echo "${PIPESTATUS[0]}" > "$WORK/.rc.c" ) ;;
   esac
   grep -E "HEAP INCONSISTENTE" "$err" 2>/dev/null | head -2 | sed 's/^/!! stderr: /'
   # V7/H7 #605 (29-sep) — la MEDIDA de la pila, si se pide: con PILA_LOG=<fichero>, cuanta uso cada programa en la
@@ -385,6 +392,14 @@ check_parity() {
       esac
     fi
     oj="$(run_vm "$V3_JAVA" "$mod" $PAR_J_ARGS)"; oc="$(run_vm "$V3_C" "$mod" $PAR_C_ARGS)"
+    # V7/H9 (2-oct, resto de #481) — el CÓDIGO DE SALIDA también es paridad: un programa que acaba bien en una VM y
+    # con error en la otra (o con otro error) no es el mismo programa aunque imprima lo mismo. Hasta hoy se perdía en
+    # la tubería de `filt` (los `1` de ThrowSinAtrapar, medidos a mano). Antes de exigirlo, el censo: 0 de 125.
+    local rcj rcc
+    rcj="$(cat "$WORK/.rc.java" 2>/dev/null)"; rcc="$(cat "$WORK/.rc.c" 2>/dev/null)"
+    if [ "$rcj" != "$rcc" ]; then
+      echo "  FAIL $s — el codigo de salida no casa: VM-Java ${rcj:-?}, VM-C ${rcc:-?}"; fail=$((fail+1)); continue
+    fi
     if [ -n "$ordena" ]; then
       oj="$(printf '%s\n' "$oj" | LC_ALL=C sort)"; oc="$(printf '%s\n' "$oc" | LC_ALL=C sort)"
     fi
@@ -1228,5 +1243,6 @@ case "${1:-}" in
   check-smp)  check_smp ;;
   check-estres) check_estres ;;
   check-packs-abi) check_packs_abi ;;
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-estres|check-packs-abi}"; exit 2 ;;
+  check-paridad) check_parity ;;   # V7/H9 (2-oct): sólo la paridad del corpus
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-estres|check-packs-abi|check-paridad}"; exit 2 ;;
 esac
