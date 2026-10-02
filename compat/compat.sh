@@ -827,6 +827,24 @@ check_sim() {
 # veia Core fuera del checkout principal. Cada una compila ya su .mod (y su .c) en
 # cada ejecucion. Verde = salida 0 Y su linea de OK: un «skip», o una salida 0 sin
 # la señal buena, es ROJO.
+# #629 — la señal de verde de cada prueba de C: casi todas acaban en [status=OK]; las de antes de esa costumbre, no.
+# Junto con la salida 0 (las que se repiten, como test-fslfsmt, salen con 1 si una vuelta falla).
+senal_testc() {
+  case "$1" in
+    test-oom|test-excmsggc|test-gchole|test-rand|test-runguard) echo "^PASS $1\$" ;;
+    test-lfs)        echo '^littlefs smoke OK' ;;
+    test-lfsfile)    echo '^filebd read OK' ;;
+    test-lfsfault)   echo '^littlefs fault-injection OK' ;;
+    test-fslfs)      echo '^fachada bpvm_fs sobre littlefs OK' ;;
+    test-fscursor)   echo '^[0-9]+/[0-9]+, 0 fallos$' ;;
+    test-fsvfs)      echo '^VFS B1\.3 OK' ;;
+    test-fslfsmt)    echo '^fs-mt: threads=8 .*corrupciones=0 \(VERDE\)' ;;
+    test-fspos)      echo '^--- [0-9]+/[0-9]+ OK, 0 FALLO\(S\) ---$' ;;
+    test-sd-turnos-control) echo 'el control falla, como debe \[status=OK\]$' ;;
+    check-builtins)  echo '^  [0-9]+ builtins en Core\.bp .* generados hasta hoy' ;;
+    *)               echo '^\[status=OK\]|^OK: ' ;;
+  esac
+}
 check_testc() {
   echo "-- pruebas de C (#541): el AOT ejecutado, el switch en una native (#546), el float en una native por la FPU y por los helpers (#559), el EXITED que sale siempre (#557), la stdlib que cede a la zona de packs (#466, #468), la TF soltando el bus (H3 SD.2) y el nucleo del depurador --"
   if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
@@ -840,11 +858,15 @@ check_testc() {
   # «no hay pack» guardado para toda la sesión (la C6) se le escapó por no tener el caso, no por estar fuera.
   # V7/H10 #626 (2-oct): y test-env —el bloque A/B del ENV, y bpvm_env_anadir, la escritura del arranque—, que
   # tampoco estaba en ninguna red.
-  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env"
+  # V7/H10 #629 (2-oct): y TODAS las del Makefile que ninguna red corría —el censo de ese día: 32 sin nombrar; de
+  # las 31 ejecutadas, 30 en verde y test-crc, que no enlazaba desde el 31-ago (#628)—, y test-fsfallo (#628). Fuera, con su porqué: test-compressbench
+  # (una medida: su prueba es test-compressnat), gui-smoke (abre una ventana SDL) y boardsim-smoke (check-sim ya corre
+  # su boardsim_smoke.py). No todas acaban en [status=OK]: cada una dice su señal de verde en senal_testc.
+  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-bytenat test-xmodnat test-compressnat test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-fspos test-blk test-sdio test-listdir test-boot test-crc test-fsfallo test-gchole test-rand test-runguard test-sd-turnos-control check-builtins"
   n=$(echo $lista | wc -w)
   for t in $lista; do
     sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?
-    ok="$(printf '%s\n' "$sal" | grep -E '^\[status=OK\]|^OK: ' | head -1)"
+    ok="$(printf '%s\n' "$sal" | grep -E "$(senal_testc "$t")" | head -1)"
     if [ "$rc" -eq 0 ] && [ -n "$ok" ]; then
       echo "  ok  $t: $(printf '%s' "$ok" | cut -c1-90)"
     else
