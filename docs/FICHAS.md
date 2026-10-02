@@ -791,6 +791,15 @@ el mensaje sin el número. También la pestaña de un `TabView`. miVM no tiene t
 heap. `make test-guilleno` (en `check-testc`, sólo VM-C): 511 etiquetas y el error con 512; saboteado el builtin,
 «SIN ERROR tras 600 etiquetas». **En placa**: la C5 con `GuiMini`, «tras 255 etiquetas: … sitio para 256».
 
+#### ✅ `#625` — VM-C de host: `Rtc.epochSec()` sin calibrar contaba desde el arranque del PC, y la VM-Java da la hora: 17737 frente a 1790931534, y ningún sample lo veía (abierta y cerrada el 2-oct, al mirar el `Rtc` para la idea de Eduardo; preexistente; H10 · **CERRADA el 2-oct**, `8b67a0b1`)
+
+**Visto el 2-oct**: la VM-Java da `System.currentTimeMillis()` (más el desplazamiento de `setEpochSec`); la VM-C de host
+suma el desplazamiento a `bpvm_platform_now_ms()`, que en el PC es `CLOCK_MONOTONIC` —desde el arranque del PC—, y nadie
+lo calibraba. Ningún sample imprime la hora absoluta (cambia en cada ejecución), así que la paridad estaba verde.
+**Hecho** (`8b67a0b1`): el `main` de host la calibra con `time()` al arrancar, como haría el IDE con una placa (`TIME`); el
+micro simulado hace de placa y no se toca. `samples/RtcPc.bp` en la red (una relación: después del 1-oct-2025 → «ok»;
+con la VM-C de antes, FALLO), sólo en el PC.
+
 #### ✅ `#624` — el IDE y la tanda decidían si subir una librería a la placa por el CRC, no por la VERSIÓN: la placa sólo decía el formato (`MOD9`) y el CRC, así que cada recompilación de la misma versión se subía —y a `/lib`, que se carga en RAM— (abierta y cerrada el 2-oct, de `#623`; preexistente desde MOD8; H9 · **CERRADA el 2-oct**, `1d7837ae`)
 
 **Visto el 2-oct**, tirando de `#623` (a pregunta de Eduardo: *«el criterio de CRC diferentes no es el único criterio
