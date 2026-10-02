@@ -29,7 +29,11 @@
 
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
 > tarde, `#624` (subir una librería por su versión) y, de H10, el `Rtc` en hora (`#626`, la idea de Eduardo), visto en
-> las cuatro. Más abajo: «🧪 H9 (2-oct)», con su traspaso al final. Quedan H9, H10 y H12.
+> las cuatro. Por la noche, H10: `#628`–`#633` (el motivo de un fallo del FS, 32 pruebas fuera de la red, `fileExists`
+> y la paridad, FAT, el volcado de la GUI, el destructor al reasignar), tres mapas verificados (los diez de `#473`, sus
+> lotes D y E, la GUI), el análisis del `RUN` común y las decisiones de Eduardo; y el plan de H12 por etapas. Más abajo:
+> «🧪 H9 (2-oct)» y «🔧 H10, la tarde-noche», con el traspaso al final. **H9**: sólo le queda lo de placa. **H10**: entero
+> (Eduardo, 2-oct: *«hacemos todo lo que falte de H10»*). Quedan H9 (placa), H10 y H12.
 
 ## 🧱 H1 (19-sep) — las seis de V10 en el compilador, cerradas: `#522` `#527` `#528` `#529` `#532` y `#517` de rebote
 
@@ -1228,6 +1232,11 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
   el `RUN` común con sus reglas (`V7_IDEAS` §H10 «`RUN` en un solo sitio»); la fachada de la flash, con el `board_mgr`
   común, en V7; `G2`, (a) y (b), y `owner`: uno, el contenedor —«si aparece en otro sitio debe ser una referencia
   normal»—; `#477` resto, sólo lo barato.
+- **H10 se hace ENTERO** (Eduardo, 2-oct, a la propuesta de pasar el `RUN` común y el `board_mgr` a H12: *«No, hacemos
+  todo lo que falte de H10. Pero como llevamos una sesión muy larga, cuando termine la tarea cerramos por hoy y lo
+  retomamos mañana»*). **El orden para mañana** (el mío; Eduardo no fija el orden): (1) los arreglos pequeños, todos en
+  el PC —una sesión—; (2) el `RUN` común, sus pasos 0 a 2 (el sim primero: todo en el PC); (3) el análisis del
+  `board_mgr` común con la fachada de la flash; (4) lo de placa, en un lote.
 - **Lo que queda de H10**, ya sin decisiones pendientes (cada cosa con su análisis en `V7_IDEAS` §H10):
   · **los fallos con consecuencia del lote D/E**: la pantalla que no arranca y calla (180), `copyFile` en `/sd` (236:
     un `fat_copy`), el `FORMAT` que contesta OK (466), `ensure_parent_dirs` ×4 (268) y el `DF` que mezcla volúmenes
