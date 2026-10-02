@@ -791,6 +791,44 @@ el mensaje sin el número. También la pestaña de un `TabView`. miVM no tiene t
 heap. `make test-guilleno` (en `check-testc`, sólo VM-C): 511 etiquetas y el error con 512; saboteado el builtin,
 «SIN ERROR tras 600 etiquetas». **En placa**: la C5 con `GuiMini`, «tras 255 etiquetas: … sitio para 256».
 
+#### ✅ `#624` — el IDE y la tanda decidían si subir una librería a la placa por el CRC, no por la VERSIÓN: la placa sólo decía el formato (`MOD9`) y el CRC, así que cada recompilación de la misma versión se subía —y a `/lib`, que se carga en RAM— (abierta y cerrada el 2-oct, de `#623`; preexistente desde MOD8; H9 · **CERRADA el 2-oct**, `1d7837ae`)
+
+**Visto el 2-oct**, tirando de `#623` (a pregunta de Eduardo: *«el criterio de CRC diferentes no es el único criterio
+para tener que cargar un módulo… esto no fue lo que se acordó»*). El IDE pregunta a la placa por cada dependencia
+(`STAT` por nombre, `#466`) y la placa contesta dónde la tiene, su tamaño, su CRC y su «versión»; pero esa versión era
+el FORMATO del fichero (el MAGIC) —la única que había el 3-sep—. Desde MOD8 (`#500`, 15-sep) cada módulo lleva su
+versión de verdad (`gen`) y su interfaz, y ni la respuesta ni la decisión se actualizaron: con todo en MOD9, al IDE sólo
+le quedaba el CRC («misma versión, CRC distinto → se sube»; y en un pack, «distinto → se sube delante del pack»). En la
+C6 eso subió a `/lib` cuatro librerías que el pack ya tenía en una versión válida, y la GUI se quedó sin memoria. El
+cargador, en cambio, ya hacía lo de Java desde el enlace tardío (`#523`): para una dependencia MOD9 sólo exige la versión
+mínima (`comprobar_norma`, en las dos VMs); una interfaz distinta enlaza símbolo a símbolo, y lo que falte sale con su
+nombre. Lo prueba la mañana: el RUN manual de `GuiWinJson` con el `GuiMini` del 25-sep y el Core de hoy, `EXITED OK`.
+
+**La regla de Eduardo** (2-oct): *«podemos exigir una versión concreta pero generalmente se pide una versión mínima. Si
+es igual o superior a la mínima es válido. Por supuesto si el formato del fichero es diferente es incompatible […] 1º
+nombre correcto, 2º formato compatible»*, y la mínima que pide un módulo, *«en principio la versión con la que se
+compiló»*. Y su problema de fondo, que este modelo ya resuelve: *«si necesito la interfaz 10 y tú me das la 11 que
+hereda de la 10 no habría problema»* —con el enlace tardío, una interfaz que sólo CRECE no rompe a nadie; modificar o
+quitar sí, y lo dice el enlace—.
+
+**Hecho** (`1d7837ae`):
+- **La placa** (`src/bpvm_repl.c`, el `STAT` común: las cinco familias y el micro simulado) y **la VM-Java**
+  (`DebugServer`, que además gana `magic` y `crc`): `gen` e `ifaceCrc` de la cabecera, desde MOD8.
+- **La regla**, una función pura con su prueba (`lexer-java`: `ReglaDeSubida`, 8 casos): no la tiene → se sube;
+  idéntica → no; otro formato → incompatible, se sube; versión de la placa anterior a la mínima (la del `.mod` contra el
+  que se compiló) → se sube; igual o posterior → **vale** aunque el CRC sea otro (otra compilación), no se sube; un
+  firmware que no da la versión → la regla de antes.
+- **El IDE** (`PicoExplorer.uploadAndRun`) la aplica a las LIBRERÍAS; un módulo DEL PROGRAMA se sigue subiendo si cambia
+  (el que se acaba de recompilar tiene la misma versión y otro CRC).
+- **La tanda** (`tanda.py`, `asegurar_deps`), igual para `/lib` y los packs: si la de la placa vale pero es otra
+  compilación, NO se sube y se anota el DESFASE («la prueba corre con la suya; para probar la de hoy, regraba el pack»).
+  `/app` sigue como estaba: una copia distinta en `/app` tapa a `/lib` y el programa lo dice por `OUTPUT`.
+- La red: `sim_smoke` (un MOD9 con su `gen` e `ifaceCrc`; un MOD7, sin ellos) y `DebugServerTest`
+  (`statDeUnModuloDaSuVersion`). Protocolo: `BPVM_WIRE_PROTOCOL.md` §`STAT`.
+
+**Falta verlo en placa**: hace falta regrabar (el `STAT` nuevo va en la imagen). Con el firmware de hoy la placa no da
+la versión y el IDE y la tanda siguen con la regla de antes, así que nada se rompe entre medias.
+
 #### 🟡 `#623` — los packs de la GUI llevan COPIAS de la stdlib que se quedan rancias cuando ésta cambia: como entre packs gana el último grabado, tapan las del `Stdlib.pack`; la tanda sube entonces las frescas a `/lib`, que se cargan en RAM, y en la C6 no caben (abierta 2-oct, en la tanda de H9 en la C6; preexistente; H9 · lo inmediato hecho, falta la guarda)
 
 **Visto el 2-oct**: en la tanda, `GuiWinJson` acabó en la C6 con «No space in heap» —el mismo programa había ido bien
