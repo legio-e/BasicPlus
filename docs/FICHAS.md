@@ -1236,7 +1236,7 @@ tabla con otros workers en marcha: si se llegara, el OOM de siempre, dicho. **La
 rojo; con él, 8/8. En el árbol, `TablaCrece --nogc` de 151/300 corruptas a 0/200, y `HeapEstres` con el heap justo,
 400/400. `HEAP_LAYOUT` §1.
 
-#### 🟡 `#609` — `test-listen` (el depurador del PC por el cable) se corta a veces con un `TimeoutError`: el servidor arranca el RUN con la pausa pedida y el `BP_HIT` no llega en 5 s (abierta 29-sep; visto el 27, el 28 y el 29-sep; H8/H9)
+#### ✅ `#609` — `test-listen` (el depurador del PC por el cable) se corta a veces con un `TimeoutError`: el servidor arranca el RUN con la pausa pedida y el `BP_HIT` no llega en 5 s (abierta 29-sep; visto el 27, el 28 y el 29-sep; H8/H9 · **CERRADA el 2-oct**, `1dab3a66`)
 
 Tres veces en tres días dentro de `check-testc`, y aislado pasa siempre (6 de 6 el 29-sep). Lo que se ve: el cliente
 (`test/dbg_client.py`) manda `HELLO`, `PING`, `PAUSE` y `RUN`; el stderr del servidor llega a «tabla de handles …
@@ -1245,6 +1245,16 @@ cliente se cansa a los 5 s. El 28-sep se vio con la Pico compilando a la vez; el
 falla de vez en cuando y se da por buena enseña a no mirarla. Falta averiguar si es el tope de 5 s con la máquina
 cargada o una carrera en el servidor del depurador (la pausa pedida antes del RUN y el hilo que escribe el
 `BP_HIT`): repetirla en bucle, con carga y sin ella, con el registro del servidor.
+
+**La causa** (2-oct): una carrera en el SERVIDOR DE LA PRUEBA (`test/debug_listen.c`), no en la VM. Cazada con una
+copia del cliente que, al cortarse, engancha `gdb` al servidor vivo (1 de cada 100–134 vueltas): el worker estaba
+DENTRO de `pause_cb`, esperando una orden —la VM sí había pausado y el `BP_HIT` ya había salido—, y el lector, en su
+`recv`. El `pause_cb` mandaba el `BP_HIT` y DESPUÉS vaciaba el buzón (`cmd = -1`): un cliente rápido contesta con su
+`STEP` entre las dos cosas, el lector lo deja en el buzón y el vaciado lo borra; el worker espera para siempre y el
+cliente, su `BP_HIT`. **El test de desplazamiento**: con 20 ms entre el envío y el vaciado, 20 de 20 colgadas; con el
+arreglo y la misma espera, 0 de 20. El servidor de verdad (`bpvm_dbg_wire.c`, el de las placas y el micro simulado)
+no lo tiene: su `pause_cb` lee las órdenes él mismo, sin buzón; `test-debug-mt` tampoco (vacía y avisa bajo el mismo
+cerrojo). **Hecho** (`1dab3a66`): el buzón se vacía antes de mandar el `BP_HIT`; `test-listen`, 300 de 300.
 
 #### ✅ `#608` — una excepción que nadie atrapa en un hilo que no es el main: ¿acaba ESE hilo o el PROGRAMA? Hoy depende de la VM y de quién la lanzó (abierta 29-sep, al probar `#605`; preexistente; H7 · decidido por Eduardo, «la A» · **CERRADA el 29-sep**, `41c27547`)
 
