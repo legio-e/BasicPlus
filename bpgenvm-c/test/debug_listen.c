@@ -134,6 +134,11 @@ static bpvm_dbg_action_t pause_cb(bpvm_t* vm, bpvm_thread_t* tc,
     s->pf_pc = pc; s->pf_sp = bpvm_thread_sp(tc); s->pf_bp = bpvm_thread_bp(tc);
     s->pf_cs = bpvm_thread_cs(tc); s->pf_sbase = tc->stack_base;
     s->paused = 1;
+    /* #609 (2-oct) — el buzón se vacía ANTES de mandar el BP_HIT. Se vaciaba después, y un cliente rápido contestaba
+     * (su STEP) entre el envío y el vaciado: el lector lo dejaba en el buzón y el `cmd = -1` lo borraba; el worker
+     * esperaba para siempre y el cliente, su BP_HIT (~1 de cada 100 vueltas; con 20 ms entre el envío y el vaciado,
+     * 20 de 20). El servidor de verdad (bpvm_dbg_wire.c) no lo tiene: lee las órdenes él mismo, sin buzón. */
+    s->cmd = -1;
     pthread_mutex_unlock(&s->cmtx);
 
     char buf[256];
@@ -145,7 +150,6 @@ static bpvm_dbg_action_t pause_cb(bpvm_t* vm, bpvm_thread_t* tc,
     send_line(s, buf, n);
 
     pthread_mutex_lock(&s->cmtx);
-    s->cmd = -1;
     while (s->cmd < 0)
         pthread_cond_wait(&s->ccmd, &s->cmtx);
     int act = s->cmd;
