@@ -30,12 +30,14 @@
 #include "bpvm_net.h"   /* H11 — registro del backend TCP del host */
 #include "bpvm_pack.h"  /* H3 — zona de packs simulada (--pack=) */
 #include "bpvm_entry.h" /* #344 — el RUN, escrito una vez */
+#include "bpvm_rtc.h"   /* V7/H10 #625 — el reloj de pared, el del PC */
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen (micro simulado) */
 #endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static size_t parse_size(const char* s) {
     char* end = NULL;
@@ -297,6 +299,12 @@ int main(int argc, char** argv) {
         return 1;
     }
     bpvm_set_tracing(vm, trace);
+    /* V7/H10 #625 (2-oct) — el reloj de pared, el del PC. La VM-Java da System.currentTimeMillis() desde el
+     * principio, y la VM-C de host contaba desde el arranque del PC (CLOCK_MONOTONIC sin calibrar):
+     * Rtc.epochSec() salía 17737 en una y 1790931534 en la otra. En una placa el reloj empieza en 0 hasta que el
+     * IDE lo calibra (TIME); en el PC está en hora desde el principio, y aquí se calibra como lo haría el IDE. (El
+     * micro simulado hace de placa: él no.) */
+    bpvm_rtc_set_now_ms((int64_t) time(NULL) * 1000);   /* time(): C estándar; el Rtc se lee en segundos */
     /* H2·B1.2 — selección de backend de FS: libc (default, dev-loop de siempre)
      * o littlefs sobre imagen (--fs=lfs:<img> → el ORÁCULO: mismo motor que el
      * micro; formatea la imagen solo si no monta = primer arranque). */
