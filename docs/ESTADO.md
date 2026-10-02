@@ -1155,6 +1155,23 @@ desechable dio los códigos de `pioasm` del `ws2812` en las dos VMs. La prueba, 
 da tiempo, si no V8. Y de las ESP32 (no tienen PIO): las UART que su silicio ya tiene (la P4 y la de bajo consumo), a
 V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el bloque de V8 de `FICHAS`.
 
+### 🧪 H9, la tarde (2-oct) — las dos pruebas que fallaban al azar, el runner de la tanda y el sello de la imagen
+
+- **`#627`** (`95d09eac`): `test-packhelp` reventaba ~2 % de las veces. Medido con una copia de diagnóstico: sólo cuando
+  el marco de `main` queda a ≤432 B de la base de la pila del hilo (22 de 22 ahí; 0 de 578 fuera). En x86_64 el `setjmp`
+  de MinGW guarda ese marco y el `longjmp` deshace la pila con SEH. Arreglo para todo el código del PC:
+  `-D__USE_MINGW_SETJMP_NON_SEH` (y `BUILD_FLAGS_VER`, que tira los `.o` viejos). 600 de 600.
+- **`#609`** (`1dab3a66`): `test-listen` se colgaba ~1 de cada 100. Cazado con `gdb` enganchado al servidor colgado: una
+  carrera en el servidor DE LA PRUEBA (el buzón se vaciaba después de mandar el `BP_HIT` y se comía el `STEP` de un
+  cliente rápido); con la ventana ensanchada, 20 de 20 colgadas antes y 0 de 20 después. 300 de 300.
+- **El runner de la tanda** (`77def149`): borra lo que sube a `/app`; el criterio `aserciones` (lo no determinista,
+  `synclisttest`); `memoria: apretada` (verde sólo en TODAS las placas que aprietan) y `heap_min_kb` (Eduardo: «la
+  prueba dice su memoria»; `synclisttest` pide 80 KB y la C6 da 64: SALTADA allí); la placa colgada se recupera (RESET
+  por el wire, su log post-mortem, y se sigue; `--ensayo-colgada`). Tanda entera en verde en las cuatro.
+- **El sello de la imagen** (`5324946b`): `imageCrc` en el `HELLO` y la tanda lo compara con lo compilado. Compilado y
+  probado en el PC; **no grabado**: Eduardo, *«¿Realmente es necesario grabar las placas tantas veces?»* —hoy, la C6 4
+  veces y las otras 3—. **Desde hoy se graba por lotes**: lo verificado en el PC se apunta abajo y se graba una vez.
+
 ### 🌙 Traspaso (2-oct)
 
 - **Decisiones**: un `break` fuera de un bucle sigue siendo un error de compilación (Eduardo, 2-oct: *«si el compilador
@@ -1162,10 +1179,11 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
   stdlib y packs PROGRAMA como contenedor (`V7_IDEAS` §«H9 — `#623`», con los hechos medidos). La batería de
   rendimiento se mide en H12, con dos núcleos; la prueba de resistencia de días, a V8. El `Rtc`: la primitiva general
   y la fecha de la imagen, una vez (`#626`, cerrada).
-- **Lo que queda de H9**: en el runner, `memoria: APRETADA` y el criterio «no determinista», y recuperar una placa
-  colgada (ya se sabe cómo en cada familia: RTS en las ESP32, la sonda en la STM32, desenchufar en la Pico); que la
-  tanda borre lo que sube; el sello de la imagen (`imageCrc` en el `HELLO`); `#609`; `#627`. La limpieza de las otras
-  cinco placas (S3, C3, C5, Metro, Nucleo) cuando se conecten.
+- **Lo que queda de H9**: ver en placa el sello de la imagen (con el próximo lote); la limpieza de las otras cinco
+  placas (S3, C3, C5, Metro, Nucleo) cuando se conecten; y lo que la fila de H9 llama «el simulador con disfraces» y
+  «la inyección de eventos» (de antes, sin decidir si caben en V7).
+- **El próximo lote de grabación** (se graba por lotes; Eduardo, 2-oct): el sello de la imagen (`5324946b`) en las
+  cuatro placas de la mesa —comprobar que cada una dice el `imageCrc` de lo compilado, y pasar la tanda—.
 - **Lo que queda de H10**: que el arranque de la STM32 diga de dónde sale su tabla de particiones (una línea); la GUI
   (`#477` resto, `G2` resto) y lo que espera una decisión de Eduardo: el nombre `Debug` de la STM32, `invokeLater` /
   `Command`, el triaje de `#473` y el DMA de `Uart`.
