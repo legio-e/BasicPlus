@@ -826,8 +826,13 @@ quitar sí, y lo dice el enlace—.
 - La red: `sim_smoke` (un MOD9 con su `gen` e `ifaceCrc`; un MOD7, sin ellos) y `DebugServerTest`
   (`statDeUnModuloDaSuVersion`). Protocolo: `BPVM_WIRE_PROTOCOL.md` §`STAT`.
 
-**Falta verlo en placa**: hace falta regrabar (el `STAT` nuevo va en la imagen). Con el firmware de hoy la placa no da
-la versión y el IDE y la tanda siguen con la regla de antes, así que nada se rompe entre medias.
+✅ **Visto en placa el 2-oct** (con el OK de Eduardo): las ocho imágenes compiladas y las cuatro de la mesa grabadas
+(Pico 2, C6, P4, DK2); su `STAT` da ya `gen` e `ifaceCrc` (`Gui.mod`: gen 7, `ifaceCrc` `bda9b10d`). En la tanda (32
+pruebas, las cuatro en verde: C6, P4 y DK2 32 de 32; la Pico 30 + 2 sin pantalla), la DK2 tiene Gui, Json, Collections y
+Str en su pack `Gui`, compilados el 25-sep: «DESFASE de compilación —la versión 7 (>= la mínima 7), crc ae0d2a7e != el de
+hoy f99660c9: vale y NO se sube—», y `GuiWinJson` y `GuiShot` corren con ellos, IDÉNTICOS. A `/lib` no se subió nada en
+ninguna. De paso: la Pico tiene en `/lib` un `Gui.mod` MOD6 (de V5); con la regla, formato incompatible → si un programa
+lo pide, se sube el de hoy.
 
 #### 🟡 `#623` — los packs de la GUI llevan COPIAS de la stdlib que se quedan rancias cuando ésta cambia: como entre packs gana el último grabado, tapan las del `Stdlib.pack`; la tanda sube entonces las frescas a `/lib`, que se cargan en RAM, y en la C6 no caben (abierta 2-oct, en la tanda de H9 en la C6; preexistente; H9 · lo inmediato hecho, falta la guarda)
 
