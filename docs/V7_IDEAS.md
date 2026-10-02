@@ -3366,7 +3366,7 @@ elige otra vez. Las ESP32 y la STM32 no lo tenían: copian el ENV a RAM al arran
 la misma salida en el PC y en placa) y `env_smoke` (el micro simulado, tres arranques sobre la misma flash: sin la clave,
 con ella, y con una que no es una fecha).
 
-## H10 — la PIO del RP2350: programarla desde BP (2-oct, el planteamiento de Eduardo; falta decidir cuándo)
+## H10 — la PIO del RP2350: programarla desde BP (2-oct, el planteamiento de Eduardo; por decidir, el nombre de `null` y cuándo)
 
 **El porqué** (Eduardo, 2-oct): *«Para la Pico igual necesito programar la PIO»*. Lo que hay: el `Neopixel` de la Pico
 va por PIO (H7.4, `pico/neopixel.c`), con un programa FIJO —el `ws2812.pio` de la SDK, ensamblado por `pioasm` al
@@ -3425,17 +3425,19 @@ palabras de BP no distinguen mayúsculas—: la fuente de ceros y el destino que
 - Las primitivas, nuevas en Core; el backend, sólo en la Pico; el número de PIO, en la tabla de capacidades (el
   `pioCount` del `INFO` ya existe).
 
+**El PC** (Eduardo, 2-oct): *«En el PC solamente se escribe el programa, no funciona igual que el I2C o el SPI»*. Sin
+emulador: el programa se construye y se comprueba igual que en la placa (es BP: las etiquetas, los rangos, las 32
+instrucciones, con prueba de paridad), y la máquina hace lo que el I2C y el SPI hacen en el PC: comprueba los
+argumentos y dice por la salida lo que haría (`[pio] …`, las mismas líneas en las dos VMs), y `get` da 0. Lo que la PIO
+hace de verdad se ve en la placa.
+
 **Por decidir**:
 1. **El nombre de `null`**: propongo `RP2350.NONE`.
-2. **El PC**. La cascada pide validar en la VM-Java y en la VM-C antes que en la placa, y la tabla de capacidades del
-   PC lleva los números del RP2350A: lo coherente es un EMULADOR de la PIO en las dos VMs (las nueve instrucciones, las
-   FIFO y unos pines de mentira), y es la pieza grande. Lo barato: en el PC el programa se construye igual (es BP, con
-   prueba de paridad) y la máquina, al arrancar, da un error claro; ejecutarla sólo en la placa.
-3. **Cuándo**: H10 de V7, o más adelante.
+2. **Cuándo**: H10 de V7, o más adelante.
 
 **Por fases**: 1) el writer, con su prueba de paridad (el oráculo, `pioasm` sobre los programas de los ejemplos de la
-SDK); 2) la máquina en la Pico —el blink y un `ws2812` en BP que dé lo mismo que el driver de C—, en la tanda; 3) más
-tarde, las interrupciones de la PIO como eventos de BP, el DMA y, si se decide, el emulador.
+SDK); 2) la máquina, en el PC como el I2C y el SPI, y de verdad en la Pico —el blink y un `ws2812` en BP que dé lo mismo
+que el driver de C—, en la tanda; 3) más tarde, las interrupciones de la PIO como eventos de BP y el DMA.
 
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
