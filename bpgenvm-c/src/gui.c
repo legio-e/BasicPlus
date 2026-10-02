@@ -1603,9 +1603,20 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
     }
     if (n->readonly) buf_append(buf, len, cap, " ro", 3);
     buf_append(buf, len, cap, "]\n", 2);
-    for (int i = 0; i < g_node_count; i++)
-        if (g_nodes[i].used && g_nodes[i].parent == handle)
-            dump_node(buf, len, cap, g_nodes[i].handle, depth + 1);
+    /* V7/H10 #632 (2-oct): los hijos, por ORDEN DE ALTA —handle creciente: los handles son monótonos—, no por ranura.
+     * Desde G2 las ranuras se reutilizan, y un hijo nuevo en la ranura de uno borrado salía ANTES que sus hermanos
+     * mayores; la VM-Java los recorre por alta: «crear A y B, borrar A, crear C» volcaba C, B aquí y B, C allí. */
+    int ultimo = 0;
+    for (;;) {
+        int sig = 0;
+        for (int i = 0; i < g_node_count; i++)
+            if (g_nodes[i].used && g_nodes[i].parent == handle && g_nodes[i].handle > ultimo
+                && (sig == 0 || g_nodes[i].handle < sig))
+                sig = g_nodes[i].handle;
+        if (sig == 0) break;
+        dump_node(buf, len, cap, sig, depth + 1);
+        ultimo = sig;
+    }
 }
 size_t bpvm_gui_dump_tree(char** out) {
     char* buf = NULL; size_t len = 0, cap = 0;

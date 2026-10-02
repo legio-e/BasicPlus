@@ -1,0 +1,20 @@
+// GuiOrdenHijos.bp — V7/H10 #632 (2-oct): el volcado de la GUI recorre los hijos por ORDEN DE ALTA en las dos VMs.
+// Desde G2 la VM-C reutiliza la ranura de un widget borrado, y recorria los hijos por ranura: aqui «C» salia antes
+// que «B» en la VM-C y despues en la VM-Java. Ningun sample borraba un hermano y creaba otro despues.
+module GuiOrdenHijos
+  import Gui
+  import Core
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var panel: Gui.Panel := Gui.Panel(scr)
+    var a: Gui.Label := Gui.Label(panel, "A")
+    var b: Gui.Label := Gui.Label(panel, "B")
+    a.delete()
+    var c: Gui.Label := Gui.Label(panel, "C")
+    var d: Gui.Label := Gui.Label(panel, "D")
+    b.delete()
+    var e: Gui.Label := Gui.Label(panel, "E")
+    print Gui.__guiDumpTree()
+  end Main
+end GuiOrdenHijos

@@ -3236,6 +3236,10 @@ public final class MivmEmitter {
                     if (targetIsOwnerLocal) {
                         // Detectar auto-asignación 'p := p' para no destruir el objeto.
                         if (!isSameOwnerVar(a.value, sym)) {
+                            // V7/H10 #633 (2-oct): el valor viejo MUERE, así que su destructor corre, como al salir del
+                            // ámbito. Se liberaba sin él: `var owner f := IO.File(…)` y luego `f := IO.File(…)` dejaba
+                            // el primero abierto hasta el GC, contra lo que promete `~File()`.
+                            emitDestruirLocal(targetName);
                             w.emitGetLocal(targetName);
                             w.emitFreeRef();
                         } else {

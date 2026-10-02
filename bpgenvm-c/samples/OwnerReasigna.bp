@@ -1,0 +1,45 @@
+// OwnerReasigna.bp — V7/H10 #633 (2-oct): reasignar un `var owner` local DESTRUYE el valor viejo, con su destructor,
+// como al salir del ambito. Se liberaba sin llamarlo: un IO.File reasignado se quedaba abierto hasta el GC. La
+// auto-asignacion (r := r) no destruye nada, y reasignar desde null no llama a ningun destructor. Se comprueba solo:
+// las dos VMs ejecutan el mismo bytecode, y un compilador que lo olvidara fallaria IGUAL en las dos (una linea
+// «FALLO» pone el sample en rojo).
+module OwnerReasigna
+  public property cerrados: integer := 0
+
+  public class Recurso
+    public property nombre: string
+    public function Recurso(n: string)
+      this.nombre := n
+      print "abre " + n
+    end Recurso
+    public function ~Recurso()
+      cerrados := cerrados + 1
+      print "cierra " + this.nombre
+    end ~Recurso
+  end Recurso
+
+  function comprueba(esperados: integer, que: string)
+    if cerrados != esperados then
+      print "FALLO: " + que + ": " + cerrados + " cerrados, y tenian que ser " + esperados
+    endif
+  end comprueba
+
+  function prueba()
+    var owner r: Recurso := Recurso("uno")
+    r := Recurso("dos")
+    comprueba(1, "reasignar destruye el viejo")
+    r := r
+    comprueba(1, "la auto-asignacion no destruye")
+    r := null
+    comprueba(2, "a null tambien destruye el viejo")
+    r := Recurso("tres")
+    comprueba(2, "reasignar desde null no llama a ningun destructor")
+    print "  fin de prueba"
+  end prueba
+
+  function main()
+    prueba()
+    comprueba(3, "al salir del ambito")
+    print "fin"
+  end main
+end OwnerReasigna
