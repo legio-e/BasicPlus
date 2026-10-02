@@ -6843,6 +6843,11 @@ public class VirtualMachine {
                 pushTcRef(tc, allocVmString("unknown"));
                 break;
             }
+            case MACHINE_GET_ENV: {       // V7/H10 #626 — el ENV de la placa: el PC no tiene, y la VM-C de host tampoco
+                popTcRef(tc);             // la clave
+                pushTcRef(tc, allocVmString(""));
+                break;
+            }
             case MACHINE_SET_MARK: {      // H10 — breadcrumb (host: sin RAM retenida)
                 popTc(tc);             // descarta el code
                 pushTc(tc, 0);

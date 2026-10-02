@@ -398,6 +398,19 @@ Y desde una `native` es un error de COMPILACIÓN (`AotCEmitter`): guarda direcci
 el GC apagado (`--nogc`) no hace nada; si el recorrido del GC se descarrila (#494), lanza la prefabricada del heap
 descarrilado. La prueba: `bpgenvm-c/samples/HeapCompact.bp` (paridad y ronda de placas).
 
+## 271 — `__machineGetEnv(key: string)` → string — una clave del ENV de la placa  *(V7/H10 #626, 2-oct)*
+
+Lo usa `Machine.getEnv(key)`: el valor de la clave en el ENV —las variables `clave=valor` de la placa, las de
+«Variables del entorno» del IDE—, o `""` si no está. Decisión de Eduardo (2-oct): una primitiva GENERAL, con la que
+`Rtc.Clock.isSet()` se escribe en BP (lee `imagen.fecha`, la fecha de la imagen que el arranque anota una vez). La
+regla es la del ENV: claves sin distinguir mayúsculas, y el valor ENTERO o nada (`bpvm_env_get_exacto`, la de la
+ranura `env_get` de la BIOS). Es el ENV que leyó el arranque, como el hardware que configura.
+
+En la VM-C, el ENV lo registra el arranque común (`bpvm_machine_set_env`, en Boot 2), que es quien sabe dónde está
+el de cada familia; el micro simulado registra el suyo. Sin registrar —la VM-C de host— no hay ENV: `""`, como en
+miVM, donde el PC tampoco tiene. Una clave de más de 63 bytes no puede estar (`""`); un valor de más de 255 lanza
+`RuntimeError` («Machine.getEnv: el valor de la clave no cabe»), y no puede pasar: el wire los corta a 191.
+
 ---
 
 ## Próximos builtins propuestos (no asignados todavía)

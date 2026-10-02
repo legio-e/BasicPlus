@@ -1141,10 +1141,18 @@ static bpvm_status_t run_vm_once(int iteration) {
  * estado REAL vía board_boot_status(), y repl_v1 gatea los comandos FS/RUN. */
 
 static bpvm_env_t         s_env;      /* env de la zona 2 (payload apunta a XIP) */
+static int                s_env_slot = -1;   /* #626: la copia elegida (0=A, 1=B; -1 ninguna) */
 static bpvm_part_layout_t s_layout;   /* particiones derivadas del env */
 static bpvm_boot_status_t s_boot;     /* estado REAL alcanzado por el boot */
 
 const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
+
+/* Elige la copia buena de las dos, por XIP (sin copia y sin FS). */
+static void env_elige(void) {
+    s_env_slot = bpvm_env_pick((const uint8_t*)(XIP_BASE + BP_ENV_A_OFFSET), FLASH_SECTOR_SIZE,
+                               (const uint8_t*)(XIP_BASE + BP_ENV_B_OFFSET), FLASH_SECTOR_SIZE,
+                               &s_env);
+}
 
 /* #355 — una clave booleana del ENV, para quien la necesite fuera de main.c.
  * El env ya vive aquí (s_env, payload en XIP); esto sólo abre la ventanilla en
@@ -1152,13 +1160,36 @@ const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
  * GC (`gc=0`): sirve para PARTIR el experimento en dos —misma memoria, mismo
  * programa, con y sin recolector— sin regrabar la placa entre prueba y prueba. */
 int board_env_bool(const char* key, int def) {
-    return bpvm_env_get_bool(&s_env, key, def);
+    return bpvm_env_get_bool(board_env(), key, def);
 }
 
 /* V7/H6.c G1 — el ENV ENTERO, de sólo lectura, para la ranura `env_get` de la
  * BIOS (bios_pico.c): un driver en un pack lee ahí sus pines y su panel. La
- * misma ventanilla que la de arriba, sin repartir copias del bloque. */
-const bpvm_env_t* board_env(void) { return &s_env; }
+ * misma ventanilla que la de arriba, sin repartir copias del bloque.
+ *
+ * #626 — la vista apunta a la FLASH, y la flash cambia: un ENV_SET escribe la copia
+ * rancia, y el SEGUNDO de una sesión, la que eligió el arranque. Con la longitud de
+ * entonces, la vista leía el payload nuevo cortado (o con el relleno detrás). Si la
+ * copia elegida ya no es la que era —otra secuencia, o ya no vale—, se elige otra vez:
+ * la de la flash. Hasta entonces es la del arranque, como en las otras familias (que
+ * la tienen copiada en RAM: aquí se ahorran esos 8 KB). */
+const bpvm_env_t* board_env(void) {
+    if (s_env_slot >= 0) {
+        bpvm_env_t e;
+        const uint8_t* blk = (const uint8_t*)(XIP_BASE + (s_env_slot == 0 ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET));
+        if (!bpvm_env_parse(blk, FLASH_SECTOR_SIZE, &e) || e.seq != s_env.seq) env_elige();
+    }
+    return &s_env;
+}
+
+/* V7/H10 (#626) — el arranque común anota una clave que falta (la fecha de la imagen):
+ * la escribe el gestor de placa y la vista se elige otra vez, para que el programa la
+ * vea sin reiniciar. */
+static int pico_env_anadir(const char* clave, const char* valor) {
+    int r = board_mgr_pico_env_anadir(clave, valor);
+    if (r == 0) env_elige();
+    return r;
+}
 
 /* #327 — el layout REAL del arranque, para quien necesite una partición que no
  * sea el FS (hoy: la zona de packs del gestor de placa). NULL mientras el boot
@@ -1449,6 +1480,7 @@ static void pico_cable(void) {
 
 static const bpvm_boot2_familia_t s_boot2 = {
     .env          = board_env,
+    .env_anadir   = pico_env_anadir,
     .memoria      = pico_memoria,
     .bios         = pico_bios,
     .subir        = pico_subir,
@@ -1557,9 +1589,7 @@ static void vm_task(void* arg) {
     board_desc_early_init();
 
     /* Env de la ZONA 2, por XIP (sin copia y sin FS): la verdad de la placa. */
-    bpvm_env_pick((const uint8_t*)(XIP_BASE + BP_ENV_A_OFFSET), FLASH_SECTOR_SIZE,
-                  (const uint8_t*)(XIP_BASE + BP_ENV_B_OFFSET), FLASH_SECTOR_SIZE,
-                  &s_env);
+    env_elige();
 
     /* PSRAM conducida por el env (`psram=1` ∧ RP2350B → CS=GPIO47), ANTES de
      * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */

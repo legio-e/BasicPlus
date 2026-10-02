@@ -352,6 +352,7 @@ static void p4_cable(void) {
 
 static const bpvm_boot2_familia_t s_boot2 = {
     .env          = board_mgr_env,
+    .env_anadir   = board_mgr_esp32_env_anadir,
     .memoria      = p4_memoria,
     .bios         = bios_esp32_verificar,
     .subir        = p4_subir,

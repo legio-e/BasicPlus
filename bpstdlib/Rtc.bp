@@ -31,6 +31,7 @@
 //   print "1s después:", clk.epochSec()   // 1716544801
 // ============================================================
 module Rtc
+  import Machine   // V7/H10 #626: getEnv, para Clock.isSet()
 
   // ---- Intrínsecos de bajo nivel ----
   public function nowSec(): integer
@@ -72,6 +73,34 @@ module Rtc
     public function setEpochSec(sec: integer)
       setNowSec(sec)
     end setEpochSec
+
+    // ¿Está en hora? (V7/H10, #626; la idea de Eduardo, 2-oct). La placa anota en
+    // su ENV la fecha de su imagen (`imagen.fecha`, segundos desde 1970) la primera
+    // vez que arranca sin ella, y ninguna hora correcta puede ser anterior: si el
+    // reloj marca menos, no se ha puesto en hora (en la Pico y las ESP32 empieza en
+    // 0 a cada arranque, y lo pone el IDE al conectar). Con un día de margen: la
+    // fecha de compilación no lleva zona horaria. Sin la clave —el PC, que no tiene
+    // ENV y da la hora del PC— no hay fecha que contradiga al reloj: en hora.
+    //
+    //   if not clk.isSet() then
+    //     print "el reloj no está en hora: conecta el IDE o llama a setEpochSec"
+    //   endif
+    public function isSet(): boolean
+      var f: string := Machine.getEnv("imagen.fecha")
+      if f == "" then
+        return true
+      endif
+      var i: integer := 0
+      var c: integer := 0
+      while i < strlen(f) do
+        c := charCodeAt(f, i)
+        if c < 48 or c > 57 or i >= 10 then
+          throw RuntimeError("Rtc.Clock.isSet: el ENV dice imagen.fecha=" + f + ", que no son segundos desde 1970")
+        endif
+        i := i + 1
+      endwh
+      return nowSec() >= parseInt(f) - 86400
+    end isSet
 
   end Clock
 

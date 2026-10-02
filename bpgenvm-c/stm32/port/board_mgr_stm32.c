@@ -47,10 +47,14 @@ static void env_read_slots(uint8_t* a, uint8_t* b) {
     memcpy(b, (const void*) (uintptr_t) (FLASH_BASE + BP_ENV_B_OFFSET), BP_ENV_SECTOR);
 }
 
-static void env_write_slot(int slot, const uint8_t* src) {
+static int env_write_slot(int slot, const uint8_t* src) {
     uint32_t addr = FLASH_BASE + ((slot == 0) ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET);
-    if (stm32_flash_erase(addr, 1u) == 0)          /* 1 página de 8 KB */
-        stm32_flash_write(addr, src, BP_ENV_SECTOR);
+    if (stm32_flash_erase(addr, 1u) != 0                 /* 1 página de 8 KB */
+        || stm32_flash_write(addr, src, BP_ENV_SECTOR) != 0) {
+        log_printf("env: la flash no escribe el sector %d del env: no se ha escrito", slot);
+        return -1;
+    }
+    return 0;
 }
 
 /* ── H3: cintura de BURN de la zona de packs (offsets RELATIVOS a la región;
@@ -121,6 +125,24 @@ static bpvm_env_t s_env;
 const bpvm_env_t* board_mgr_stm32_env(void) {
     bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &s_env);
     return &s_env;
+}
+
+/* V7/H10 (#626) — el arranque común AÑADE una clave que falta (la fecha de la imagen, una
+ * vez). Sobre las copias del arranque: el bloque nuevo se construye en la copia RANCIA
+ * misma (bpvm_env_anadir con `out` NULL), sin pedir otro búfer, y se vuelca a la flash;
+ * las vistas se eligen en cada llamada, así que el programa la ve sin reiniciar. Si la
+ * flash no escribe, la copia rancia de la RAM se invalida: la vista no enseña lo que la
+ * flash no tiene. */
+int board_mgr_stm32_env_anadir(const char* clave, const char* valor) {
+    int slot = -1;
+    int r = bpvm_env_anadir(s_env_a, s_env_b, BP_ENV_SECTOR, clave, valor, NULL, &slot);
+    if (r != 0) return r;
+    uint8_t* nueva = (slot == 0) ? s_env_a : s_env_b;
+    if (env_write_slot(slot, nueva) != 0) {
+        memset(nueva, 0xFF, BPVM_ENV_HEADER_SIZE);
+        return -1;
+    }
+    return 0;
 }
 
 static bpvm_boot_step_t layer_partitions(void* u) {

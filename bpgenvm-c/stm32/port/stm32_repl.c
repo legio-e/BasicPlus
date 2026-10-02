@@ -1086,6 +1086,7 @@ static void stm32_lazo(void) {
 
 static const bpvm_boot2_familia_t s_boot2 = {
     .env          = board_mgr_stm32_env,
+    .env_anadir   = board_mgr_stm32_env_anadir,
     .memoria      = stm32_mem_planificar,   /* V6/U6.11 — la línea `vm:` de las cinco placas */
     .bios         = stm32_bios,
     .subir        = stm32_subir,

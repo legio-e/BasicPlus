@@ -174,6 +174,54 @@ int main(void) {
         CHECK(bpvm_env_payload_set(base, strlen(base), "x", "y", out, 4) == -1, "cap insuficiente → -1");
     }
 
+    /* --- 8. V7/H10 #626: AÑADIR una clave que falta, sin tercer búfer (la fecha de la imagen) --- */
+    printf("--- 8. bpvm_env_anadir (#626) ---\n");
+    {
+        enum { S8 = 512 };
+        static uint8_t a[S8], b[S8], out[S8], ca[S8], cb[S8];
+        char v[32];
+        bpvm_env_t e;
+        int slot = -9;
+
+        /* (a) virgen: el bloque nuevo, en `out` (A, seq 1, sólo la clave); las copias ni se tocan */
+        memset(a, 0xFF, S8); memset(b, 0xFF, S8);
+        CHECK(bpvm_env_anadir(a, b, S8, "imagen.fecha", "1790899200", out, &slot) == 0 && slot == 0,
+              "virgen: 0, y toca escribir A");
+        CHECK(bpvm_env_parse(out, S8, &e) == 1 && e.seq == 1
+              && bpvm_env_get(&e, "imagen.fecha", v, sizeof v) == 10 && strcmp(v, "1790899200") == 0,
+              "el bloque nuevo vale: seq 1, con la clave");
+        CHECK(a[0] == 0xFF && b[0] == 0xFF, "con `out`, las copias sólo se leen (pueden ser la flash)");
+
+        /* (b) A actual (seq 5): `out` NULL construye en la rancia (B, seq 6) y A no se toca */
+        bpvm_env_serialize(PAYLOAD, strlen(PAYLOAD), 5u, a, S8);
+        memcpy(ca, a, S8);
+        CHECK(bpvm_env_anadir(a, b, S8, "imagen.fecha", "1790899200", NULL, &slot) == 0 && slot == 1,
+              "out NULL: se construye en la rancia (B)");
+        CHECK(memcmp(a, ca, S8) == 0, "la copia actual (A) no se toca");
+        CHECK(bpvm_env_pick(a, S8, b, S8, &e) == 1 && e.seq == 6, "gana B, con seq 6");
+        CHECK(bpvm_env_get(&e, "imagen.fecha", v, sizeof v) == 10
+              && bpvm_env_get(&e, "board", v, sizeof v) > 0 && strcmp(v, "MetroRP2350B") == 0,
+              "la clave nueva, y las de antes siguen");
+
+        /* (c) ya está (sin distinguir mayúsculas): 1, y no se escribe NADA */
+        memcpy(ca, a, S8); memcpy(cb, b, S8);
+        CHECK(bpvm_env_anadir(a, b, S8, "IMAGEN.FECHA", "1", NULL, &slot) == 1, "ya estaba: 1");
+        CHECK(memcmp(a, ca, S8) == 0 && memcmp(b, cb, S8) == 0, "ni se toca la copia: la flash no se gasta");
+
+        /* (d) no cabe: -1, y la actual sigue siendo la buena */
+        char largo[600];
+        memset(largo, 'x', sizeof largo - 1); largo[sizeof largo - 1] = '\0';
+        CHECK(bpvm_env_anadir(a, b, S8, "otra", largo, NULL, &slot) == -1, "no cabe: -1");
+        CHECK(bpvm_env_pick(a, S8, b, S8, &e) == 1 && e.seq == 6, "y gana la de antes (B, seq 6)");
+
+        /* (e) lo que rompería el formato `clave=valor\n` */
+        CHECK(bpvm_env_anadir(a, b, S8, "a=b", "1", out, &slot) == -1
+              && bpvm_env_anadir(a, b, S8, "a\nb", "1", out, &slot) == -1
+              && bpvm_env_anadir(a, b, S8, "a", "1\n2", out, &slot) == -1
+              && bpvm_env_anadir(a, b, S8, "", "1", out, &slot) == -1,
+              "una clave con '=' o salto, vacía, o un valor con salto: -1");
+    }
+
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;
 }

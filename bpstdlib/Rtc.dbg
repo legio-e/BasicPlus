@@ -3,28 +3,61 @@ module Rtc
 source C:\lenguajes\pm\bpstdlib\Rtc.bp
 lines
 0 0
-24 0
-35 0
-38 67
-52 0
-55 73
-65 0
-71 0
-101 0
-115 0
-132 0
+29 0
+40 0
+43 68
+57 0
+60 74
+70 0
+73 89
+81 90
+96 91
+109 93
+112 94
+115 95
+129 96
+139 97
+192 98
+213 100
+221 102
+248 0
+254 0
+284 0
+298 0
+315 0
+332 0
+348 0
+412 0
 vars
-func Clock.epochSec 35
+func Clock.epochSec 40
 this -20 8 0 ?
-func Clock.setEpochSec 52
+func Clock.setEpochSec 57
 this -24 8 0 ?
 sec -16 4 0 integer
-func Clock.__init 65
+func Clock.isSet 70
 this -20 8 0 ?
-func __cls_init_Clock() 101
+f 4 8 0 string
+i 12 4 0 integer
+c 16 4 0 integer
+func Clock.__init 248
 this -20 8 0 ?
-func __cls_m_Clock#epochSec()i 115
+func __cls_init_Clock() 284
 this -20 8 0 ?
-func __cls_m_Clock#setEpochSec(i)V 132
+func __cls_m_Clock#isSet()z 298
+this -20 8 0 ?
+func __cls_m_Clock#epochSec()i 315
+this -20 8 0 ?
+func __cls_m_Clock#setEpochSec(i)V 332
 this -24 8 0 ?
 sec -16 4 0 integer
+func __strconcat3 348
+s0 -36 8 0 ?
+s1 -28 8 0 ?
+s2 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?
+func __strequals 412
+a -28 8 0 ?
+b -20 8 0 ?
+la 0 4 0 ?
+i 4 4 0 ?

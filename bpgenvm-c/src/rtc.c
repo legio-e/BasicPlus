@@ -17,8 +17,10 @@
  * línea INT está cableada a un pin capaz de despertar.
  *
  * Consecuencia para quien lea la hora: en la Pico y el ESP, `Rtc` es un offset por
- * software sobre el reloj monotónico. Muere en cada reset y el programa no tiene
- * forma de saber si la hora es real o inventada. Detalle en docs/BAJO_CONSUMO_CENSO.md.
+ * software sobre el reloj monotónico. Muere en cada reset. Detalle en
+ * docs/BAJO_CONSUMO_CENSO.md. Desde V7/H10 (#626) el programa SÍ puede saber si la hora
+ * es inventada: `Rtc.Clock.isSet()` la compara con la fecha de la imagen, que el
+ * arranque común anota una vez en el ENV (`imagen.fecha`, bpvm_boot2.c).
  */
 
 #include "bpvm_rtc.h"

@@ -3704,6 +3704,19 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
+    case BUILTIN_MACHINE_GET_ENV: {   /* V7/H10 #626 — una clave del ENV de la placa; "" si no está (el PC no tiene ENV) */
+        uint32_t kref = pop_ref(vm, tc);
+        char clave[64], valor[256];   /* las del wire: una clave cabe en 63, un valor en 191 (bpvm_bmgr_req_t) */
+        int n = -1;
+        if (read_bp_path(vm, kref, clave, sizeof clave) == 0)   /* una clave más larga no puede estar */
+            n = bpvm_machine_env_get(clave, valor, sizeof valor);
+        if (n == -2) return builtin_throw(vm, tc, "Machine.getEnv: el valor de la clave no cabe (mas de 255 bytes)");
+        if (n < 0) n = 0;
+        uint32_t ref = bpvm_heap_alloc_string(vm, valor, (size_t) n);
+        if (ref == 0) return builtin_throw(vm, tc, "No space in heap");
+        push_ref(vm, tc, ref);
+        return BPVM_OK;
+    }
     case BUILTIN_MACHINE_SET_MARK: {      /* H10 — breadcrumb: deja una miga */
         int32_t code = pop_i32(vm, tc);
         bpvm_machine_set_mark((int) code);

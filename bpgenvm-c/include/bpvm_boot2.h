@@ -31,6 +31,10 @@ extern "C" {
 typedef struct {
     /* El ENV de la placa, ya leído en el Boot 1 (NULL o inválido: una placa sin ENV). */
     const bpvm_env_t* (*env)(void);
+    /* V7/H10 (#626) — AÑADIR al ENV una clave que falta (bpvm_env_anadir), por la cintura de flash de la familia, y
+     * dejar la vista de `env` al día: lo que se anota en el arranque, el programa lo ve sin reiniciar. 0 escrita;
+     * 1 ya estaba; -1 no se pudo. NULL: esta familia no escribe su ENV (y el arranque lo dice). */
+    int (*env_anadir)(const char* clave, const char* valor);
 
     /* ── 2a, repartir ── */
     void (*memoria)(void);   /* el bloque de los motores y el de la VM: la regla es común
@@ -60,10 +64,18 @@ void bpvm_boot2_claves(const bpvm_env_t* env);
 /* 2a: las claves del reparto, la memoria y la BIOS. Antes de que nadie más pida memoria. */
 void bpvm_boot2_repartir(const bpvm_boot2_familia_t* f);
 
-/* 2b: subir, la zona, /lib, el hardware, los buses del ENV, la SD, la identidad, la
- * cintura del REPL, el cable, `log=`, el autorun —sólo con la app SANA— y el REPL. No
- * vuelve en placa (el REPL no vuelve). */
+/* 2b: subir, la fecha de la imagen (una vez), la zona, /lib, el hardware, los buses del
+ * ENV, la SD, la identidad, la cintura del REPL, el cable, `log=`, el autorun —sólo con la
+ * app SANA— y el REPL. No vuelve en placa (el REPL no vuelve). */
 void bpvm_boot2_subir(const bpvm_boot2_familia_t* f);
+
+/* V7/H10 (#626) — la clave del ENV con la fecha de la imagen (la lee Rtc.Clock.isSet()). */
+#define BPVM_BOOT2_CLAVE_FECHA "imagen.fecha"
+
+/* V7/H10 (#626) — «Oct  2 2026» (el formato de __DATE__) → los segundos desde 1970 de ese día
+ * a las 00:00 (como UTC: la fecha no lleva zona horaria, y el margen lo pone quien compara);
+ * -1 si no se entiende. Años 1970..2037: el reloj de BP es de 32 bits. Suelta, para su prueba. */
+long bpvm_boot2_fecha_de(const char* fecha);
 
 #ifdef __cplusplus
 }

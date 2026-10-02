@@ -299,13 +299,36 @@ static int env_read_slots(uint8_t* a, uint8_t* b) {
     return ok;
 }
 
-static void env_write_slot(int slot, const uint8_t* buf) {
-    if (!s_bpenv) return;
+static int env_write_slot(int slot, const uint8_t* buf) {
+    if (!s_bpenv) return -1;
     uint32_t off = (slot == 0) ? 0u : BP_ENV_SECTOR;
     /* esp_partition_{erase_range,write} son seguros para multitarea (esp-idf) y no
      * suspenden el XIP como el RP2350 → sin gimnasia de IRQs aquí. */
-    esp_partition_erase_range(s_bpenv, off, BP_ENV_SECTOR);
-    esp_partition_write(s_bpenv, off, buf, BP_ENV_SECTOR);
+    if (esp_partition_erase_range(s_bpenv, off, BP_ENV_SECTOR) != ESP_OK
+        || esp_partition_write(s_bpenv, off, buf, BP_ENV_SECTOR) != ESP_OK) {
+        log_printf("env: la flash no escribe el sector %d de bpenv: no se ha escrito", slot);
+        return -1;
+    }
+    return 0;
+}
+
+/* V7/H10 (#626) — el arranque común AÑADE una clave que falta (la fecha de la imagen, una
+ * vez). Sobre las copias del arranque: el bloque nuevo se construye en la copia RANCIA
+ * misma (bpvm_env_anadir con `out` NULL), sin pedir otro búfer, se vuelca a la flash y la
+ * vista se elige otra vez —el programa la ve sin reiniciar—. Si la flash no escribe, la
+ * copia rancia de la RAM se invalida: la vista no enseña lo que la flash no tiene. */
+int board_mgr_esp32_env_anadir(const char* clave, const char* valor) {
+    if (!s_bpenv) return -1;
+    int slot = -1;
+    int r = bpvm_env_anadir(s_env_a, s_env_b, BP_ENV_SECTOR, clave, valor, NULL, &slot);
+    if (r != 0) return r;
+    uint8_t* nueva = (slot == 0) ? s_env_a : s_env_b;
+    if (env_write_slot(slot, nueva) != 0) {
+        memset(nueva, 0xFF, BPVM_ENV_HEADER_SIZE);
+        r = -1;
+    }
+    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &s_env);
+    return r;
 }
 
 static uint32_t data_usable(void) { return s_bpdata ? (uint32_t) s_bpdata->size : 0u; }

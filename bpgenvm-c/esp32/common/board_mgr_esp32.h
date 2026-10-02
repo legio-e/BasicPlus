@@ -86,6 +86,11 @@ int board_mgr_esp32_mapear_packs(void);
  * llamante no necesita comprobar nada. Válido desde el estado 2 (particiones). */
 const bpvm_env_t* board_mgr_env(void);
 
+/* V7/H10 (#626) — añadir al ENV una clave que falta (bpvm_env_anadir), volcarla a la
+ * flash y dejar board_mgr_env() al día: lo que el arranque común anota una vez (la fecha
+ * de la imagen). 0 escrita; 1 ya estaba; -1 no se pudo. */
+int board_mgr_esp32_env_anadir(const char* clave, const char* valor);
+
 /* Atiende un comando de gestión ya parseado (STATE/ENV_x/PART_x). `scratch` (>= 4
  * sectores = 16 KB) lo presta el llamador (s_put_buf de repl_esp32, libre durante
  * un comando de gestión) → sin BSS propio grande. Idéntico shape que board_mgr_pico. */

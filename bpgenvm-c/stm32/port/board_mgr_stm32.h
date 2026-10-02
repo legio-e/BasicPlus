@@ -47,6 +47,11 @@ void board_mgr_stm32_env_temprano(void);
 /* V7/H7 (Boot 2, fase 4) — el ENV entero, de sólo lectura, para el arranque común. */
 const bpvm_env_t* board_mgr_stm32_env(void);
 
+/* V7/H10 (#626) — añadir al ENV una clave que falta (bpvm_env_anadir) y volcarla a la
+ * flash: lo que el arranque común anota una vez (la fecha de la imagen). 0 escrita; 1 ya
+ * estaba; -1 no se pudo. */
+int board_mgr_stm32_env_anadir(const char* clave, const char* valor);
+
 /* V7/H6 G5.b0 — la partición de packs del layout del BOOT (offset relativo a
  * FLASH_BASE), o NULL si el layout no validó o no hay zona. La recorre el cargador
  * de los motores nativos (pack_stm32.c): una sola verdad con el FS y el wire. */

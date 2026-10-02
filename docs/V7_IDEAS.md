@@ -3313,7 +3313,7 @@ tanda del 2-oct, después: «pack:GuiMini/Gui.mod, crc igual: se ejecuta XIP, no
 3. ¿Un pack PROGRAMA lleva las 30 o sólo el cierre de su programa? Hoy, el cierre.
 4. Lo ya grabado: los packs de la GUI de la P4, la DK2 y la C5 llevan copias viejas; con la regla nueva, al regrabarlos.
 
-## H10 — el `Rtc`: saber si el equipo está en hora (2-oct, idea de Eduardo; la forma, para decidir)
+## H10 — el `Rtc`: saber si el equipo está en hora (2-oct, idea de Eduardo; decidido y hecho: `#626`)
 
 **El problema** (`V7_BACKLOG` H10): en la Pico y las ESP32 el reloj de pared es por software y empieza en 0 a cada
 arranque; lo calibra el IDE al conectar (`TIME`). Con autorun nadie lo calibra, `Rtc.Clock.epochSec()` devuelve los
@@ -3325,22 +3325,46 @@ imagen y si la fecha actual es menor es que está fuera de hora»*.
 **De paso salió `#625`** (`8b67a0b1`): en el PC la VM-C contaba desde el arranque del PC y la VM-Java daba la hora; ahora
 las dos dan la hora del PC, que es lo que la regla necesita para decir «en hora» igual en las dos.
 
-**La forma que propongo**:
+**Lo que propuse** (`9f37130a`): la clave `imagen.fecha`, escrita por el arranque común con la fecha de compilación menos
+un día «si falta o es anterior», y una primitiva específica (`__rtcIsSet`) o una general (`getEnv`).
 
-1. **La clave del ENV**: `imagen.fecha` —segundos desde 1970, UTC—.
-2. **Quién la escribe**: el arranque común (Boot 2, las cinco familias). La imagen sabe cuándo se compiló (`__DATE__`);
-   si la clave falta o es anterior, se escribe. Con UN DÍA de margen (la fecha de compilación a las 00:00, menos un
-   día): `__DATE__` no lleva zona horaria, y sin margen una placa recién grabada y calibrada por el IDE en UTC podría
-   salir «fuera de hora» unas horas. Si la clave ya es posterior (la puso el usuario, o se grabó una imagen más vieja
-   después de una nueva), se respeta: manda la más reciente. Se escribe una vez por imagen nueva: el desgaste de la
-   flash no cuenta.
-3. **La API**: `Rtc.Clock.isSet(): boolean` —«¿está en hora?»: `epochSec() >= imagen.fecha`— (la convención de Java:
-   verbo, y para un booleano `is`). En el PC, siempre en hora (el reloj es el del PC).
-4. **La primitiva**: la 271 de Core, `__rtcIsSet` —específica: el ENV se queda dentro de la VM—. La alternativa es una
-   general, `getEnv(clave)`, con la que un programa podría leer cualquier clave del ENV (y `isSet` se escribiría en BP);
-   más útil, pero es abrir el ENV entero a los programas: otra decisión.
-5. **Lo que arrastra**: una primitiva nueva en Core cambia su interfaz → la stdlib, el `Stdlib.pack`, los blobs y las
-   imágenes, como con `#554`. Con MOD9 y el enlace tardío (`#523`), lo compilado contra el Core de antes sigue enlazando.
+**Lo que decidió Eduardo** (2-oct):
+- **La primitiva, general**: *«General: getEnv(clave)»* —un programa lee cualquier clave del ENV, e `isSet()` se escribe en
+  BP—.
+- **La fecha, UNA vez**: *«La fecha de la imagen. Se escribe una vez nada más. Cuando arranca el equipo, si está conectado
+  lee la hora del PC. Si no tiene la variable del environment con la fecha entonces la añade. Solamente se hace esa vez
+  hasta que se borre. Si lo grabamos cada vez que arranque podríamos llegar a estropear la flash.»* Corrige mi «si falta
+  o es anterior»: una imagen nueva NO la mueve; para ponerla al día, se borra la clave y la anota el siguiente arranque.
+
+**Hecho** (`#626`):
+- **`Machine.getEnv(key): string`** (la primitiva 271, `__machineGetEnv` en Core): el valor de la clave, o `""`. En
+  `Machine` y no suelta en Core: el ENV es la configuración de la placa, junto a `getMicro`/`getBoard`, y no gasta un
+  nombre global. La regla, la del ENV: claves sin distinguir mayúsculas, valor entero o nada. Es el ENV **que leyó el
+  arranque**, como el hardware que configura: un cambio desde el IDE se ve al reiniciar. En el PC no hay ENV: `""` en las
+  dos VMs.
+- **La VM-C** lo lee por un lector que registra el **arranque común** (`bpvm_machine_set_env`, en Boot 2): dónde está el
+  ENV de cada familia ya lo sabe su gancho `env`, así que no hay código de la primitiva por familia.
+- **La fecha**: el arranque común (Boot 2), después de la línea `boot: estado`, mira la clave en el ENV; si falta, la
+  anota con la fecha de la imagen (`__DATE__` a las 00:00, en segundos desde 1970) por un gancho nuevo de la familia,
+  `env_anadir` —la misma cintura de flash que `ENV_SET`, y la vista del ENV al día para que el programa la vea sin
+  reiniciar—. Si está, la flash ni se mira. Con un ENV virgen, se crea con ella. Una función común,
+  `bpvm_env_anadir`, construye el bloque nuevo sin tercer búfer: en un sector de la zona de rascar (la Pico, que lee las
+  copias por XIP) o en la copia rancia misma (las ESP32 y la STM32, que las tienen en RAM).
+- **`Rtc.Clock.isSet(): boolean`**, en BP: sin la clave, en hora (el PC: su reloj es el del PC); con ella, en hora si
+  `epochSec() >= imagen.fecha - 86400` —el día de margen, porque la fecha de compilación no lleva zona horaria; la clave
+  guarda la fecha tal cual—. Una clave que no son cifras (escrita a mano) LANZA con el valor en el mensaje.
+- **La fecha es la de compilación de `bpvm_boot2.c`**: en un build incremental, la de la última vez que se compiló —
+  anterior o igual a la de la imagen—. Como cota vale igual: ninguna hora correcta es anterior.
+
+**Visto de paso, y arreglado**: la vista del ENV de la **Pico** apunta a la flash (XIP) con la longitud del arranque, y el
+SEGUNDO `ENV_SET` de una sesión escribe justo esa copia (el A/B alterna): leía el payload nuevo cortado, o con el
+relleno detrás —un pin a medias para un pack, un `gc=` perdido—. Ahora, si la copia elegida ya no es la que era, se
+elige otra vez. Las ESP32 y la STM32 no lo tenían: copian el ENV a RAM al arrancar.
+
+**Las pruebas**: `test_env` (8: añadir sin tercer búfer, virgen, ya está, no cabe, formato), `test_boot2` (7: la fecha de
+`__DATE__`, una vez, no se pide si está, se dice si no se puede; el lector de `getEnv`), `RtcEnHora` (paridad y tanda:
+la misma salida en el PC y en placa) y `env_smoke` (el micro simulado, tres arranques sobre la misma flash: sin la clave,
+con ella, y con una que no es una fecha).
 
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 

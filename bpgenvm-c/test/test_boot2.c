@@ -15,6 +15,7 @@
 #include "bpvm_boot2.h"
 #include "bpvm.h"
 #include "bpvm_log.h"
+#include "bpvm_machine.h"   /* #626: el ENV de Machine.getEnv, que registra el arranque */
 #include "bpvm_sd_placa.h"
 
 #include <stdio.h>
@@ -64,6 +65,14 @@ static const bpvm_env_t* g_env_ptr = NULL;
 static bpvm_boot_status_t g_st;
 
 static const bpvm_env_t* f_env(void) { apunta("env"); return g_env_ptr; }
+/* #626: la escritura del ENV, de mentira: apunta, guarda lo que se le pide y contesta lo que diga el caso */
+static int  g_anadir_r = 0;
+static char g_anadido[64];
+static int  f_env_anadir(const char* clave, const char* valor) {
+    apunta("anadir");
+    snprintf(g_anadido, sizeof g_anadido, "%s=%s", clave, valor);
+    return g_anadir_r;
+}
 static void f_memoria(void)   { apunta("memoria"); }
 static void f_bios(void)      { apunta("bios"); }
 static const bpvm_boot_status_t* f_subir(void) { apunta("subir"); return &g_st; }
@@ -79,7 +88,7 @@ static void f_autorun(void)   { apunta("autorun"); }
 static void f_repl(void)      { apunta("repl"); }
 
 static const bpvm_boot2_familia_t FAMILIA = {
-    f_env, f_memoria, f_bios, f_subir, f_mapear, f_stdlib, f_con_fs, f_hw, f_sd,
+    f_env, f_env_anadir, f_memoria, f_bios, f_subir, f_mapear, f_stdlib, f_con_fs, f_hw, f_sd,
     f_identidad, f_cintura, f_cable, f_autorun, f_repl
 };
 
@@ -105,6 +114,8 @@ static void caso(bpvm_boot_state_t estado, int degradada, const char* motivo, in
     g_traza[0] = '\0';
     g_sd_registrada = 0;
     g_volcados = 0;
+    g_anadir_r = 0;
+    g_anadido[0] = '\0';
     log_clear_ram();
     bpvm_log_set_enabled(1);
     bpvm_set_stack_kb(0);
@@ -132,8 +143,8 @@ int main(void) {
     g_traza[0] = '\0';
     bpvm_boot2_subir(&FAMILIA);
     printf("       %s\n", pasos());
-    CHECK(strcmp(pasos(), "subir mapear stdlib con_fs hw sd sd_montar identidad cintura cable autorun repl") == 0,
-          "2b: subir, la zona, /lib, lo del FS, hw, la SD, la identidad, la CINTURA, el cable, el autorun, el REPL");
+    CHECK(strcmp(pasos(), "subir anadir mapear stdlib con_fs hw sd sd_montar identidad cintura cable autorun repl") == 0,
+          "2b: subir, la fecha (#626), la zona, /lib, lo del FS, hw, la SD, la identidad, la CINTURA, el cable, el autorun, el REPL");
     CHECK(en_log("boot: estado 3 (app)") && !en_log("DEGRADADO"), "la linea del arranque, una para todas");
     CHECK(!en_log("autorun: no se mira"), "sana: el autorun no se excusa");
     CHECK(g_volcados == 1, "el log del arranque, a la flash UNA vez");
@@ -143,8 +154,8 @@ int main(void) {
     caso(BPVM_BOOT_PARTITIONS, 1, "littlefs no monta ni formatea", 1);
     bpvm_boot2_subir(&FAMILIA);
     printf("       %s\n", pasos());
-    CHECK(strcmp(pasos(), "subir hw sd identidad cintura cable repl") == 0,
-          "sin FS: lo del kernel sigue; la zona, /lib, montar la SD y el autorun, no");
+    CHECK(strcmp(pasos(), "subir anadir hw sd identidad cintura cable repl") == 0,
+          "sin FS: lo del kernel sigue (la fecha, del ENV, tambien); la zona, /lib, montar la SD y el autorun, no");
     CHECK(en_log("boot: estado 1 (particiones) DEGRADADO: littlefs no monta"), "el estado y el motivo");
     CHECK(en_log("packs: la zona no se monta sin el FS"), "la zona dice por que no");
     CHECK(en_log("sd: el FS de la placa no esta montado"), "la SD registrada dice por que no se monta");
@@ -154,7 +165,7 @@ int main(void) {
     caso(BPVM_BOOT_FS, 1, "heap de la VM no disponible", 1);
     bpvm_boot2_subir(&FAMILIA);
     printf("       %s\n", pasos());
-    CHECK(strcmp(pasos(), "subir mapear stdlib con_fs hw sd sd_montar identidad cintura cable repl") == 0,
+    CHECK(strcmp(pasos(), "subir anadir mapear stdlib con_fs hw sd sd_montar identidad cintura cable repl") == 0,
           "sin VM: todo menos el autorun");
     CHECK(en_log("(estado 2, degradada)"), "el autorun dice por que no");
 
@@ -162,7 +173,8 @@ int main(void) {
     caso(BPVM_BOOT_KERNEL, 1, "sin particiones en el env", 0);
     bpvm_boot2_repartir(&FAMILIA);
     bpvm_boot2_subir(&FAMILIA);
-    CHECK(strcmp(pasos(), "memoria bios subir hw sd identidad cintura cable repl") == 0, "virgen: el kernel y el REPL");
+    CHECK(strcmp(pasos(), "memoria bios subir anadir hw sd identidad cintura cable repl") == 0,
+          "virgen: el kernel y el REPL (y la fecha: el ENV se crea con ella)");
     CHECK(bpvm_stack_region_bytes(MB) == 256u * 1024u, "sin ENV, el reparto de siempre (25 %)");
     CHECK(bpvm_log_enabled() == 0, "sin ENV, el log de ejecucion apagado (#423)");
 
@@ -178,6 +190,8 @@ int main(void) {
         CHECK(strcmp(pasos(), "subir sd_montar repl") == 0,
               "sin ganchos: subir, montar la SD (es del comun) y el REPL, sin caerse");
         CHECK(en_log("stdlib: esta imagen no trae la stdlib embebida"), "/lib que falta, dicho");
+        CHECK(en_log("env: esta familia no escribe su ENV en el arranque: imagen.fecha no se anota"),
+              "#626: sin el gancho, la fecha no se anota, y se dice");
         CHECK(bpvm_stack_region_bytes(MB) == 128u * 1024u, "las claves, igual");
     }
     {
@@ -196,6 +210,53 @@ int main(void) {
     bpvm_set_stack_kb(0);
     bpvm_boot2_claves(NULL);
     CHECK(bpvm_stack_region_bytes(MB) == 256u * 1024u, "sin ENV no toca nada");
+
+    printf("--- 7. #626: la fecha de la imagen, UNA vez; y el ENV de Machine.getEnv ---\n");
+    {
+        CHECK(bpvm_boot2_fecha_de("Oct  2 2026") == 1790899200L, "\"Oct  2 2026\" = 1790899200 (el 2-oct a las 00:00)");
+        CHECK(bpvm_boot2_fecha_de("Jan  1 1970") == 0L && bpvm_boot2_fecha_de("Mar  1 2000") == 951868800L
+              && bpvm_boot2_fecha_de("Feb 29 2028") == 1835395200L && bpvm_boot2_fecha_de("Dec 31 2037") == 2145830400L,
+              "1970, el 1-mar-2000, el 29-feb-2028 y el ultimo dia que cabe en 32 bits");
+        CHECK(bpvm_boot2_fecha_de("Oct 2 2026") == -1 && bpvm_boot2_fecha_de("Xyz  2 2026") == -1
+              && bpvm_boot2_fecha_de("Oct  2 1969") == -1 && bpvm_boot2_fecha_de("Oct  2 2038") == -1
+              && bpvm_boot2_fecha_de("Oct 32 2026") == -1 && bpvm_boot2_fecha_de(NULL) == -1,
+              "lo que no es una fecha de __DATE__, o no cabe: -1");
+
+        char esperado[64];
+        snprintf(esperado, sizeof esperado, "imagen.fecha=%ld", bpvm_boot2_fecha_de(__DATE__));
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        bpvm_boot2_subir(&FAMILIA);
+        CHECK(strcmp(g_anadido, esperado) == 0, "sin la clave: se pide anotar la fecha de la imagen (la de __DATE__)");
+        CHECK(en_log("env: imagen.fecha=") && en_log("anotada, una vez"), "y se dice");
+
+        static const char* CON_FECHA = "stack=128\nimagen.fecha=1700000000\n";
+        bpvm_env_t ef = g_env;
+        ef.payload = (const uint8_t*) CON_FECHA;
+        ef.payload_len = (uint16_t) strlen(CON_FECHA);
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_env_ptr = &ef;
+        bpvm_boot2_subir(&FAMILIA);
+        CHECK(strstr(g_traza, "anadir") == NULL && g_anadido[0] == '\0' && !en_log("env: imagen.fecha"),
+              "con la clave: ni se pide ni se dice (la flash no se toca en cada arranque)");
+
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_anadir_r = -1;
+        bpvm_boot2_subir(&FAMILIA);
+        CHECK(en_log("env: no se pudo anotar imagen.fecha"), "si la familia no puede escribir, se dice");
+
+        char val[32];
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        bpvm_boot2_repartir(&FAMILIA);
+        CHECK(bpvm_machine_env_get("STACK", val, sizeof val) == 3 && strcmp(val, "128") == 0,
+              "Machine.getEnv lee el ENV de la familia (la clave sin distinguir mayusculas)");
+        CHECK(bpvm_machine_env_get("nada", val, sizeof val) == -1 && val[0] == '\0', "una clave que no esta: -1 y \"\"");
+        CHECK(bpvm_machine_env_get("stack", val, 3) == -2, "un valor que no cabe: -2 (entero o nada)");
+        g_env_ptr = NULL;
+        CHECK(bpvm_machine_env_get("stack", val, sizeof val) == -1, "sin ENV: -1");
+        bpvm_machine_set_env(NULL);
+        g_env_ptr = &g_env;
+        CHECK(bpvm_machine_env_get("stack", val, sizeof val) == -1, "sin registrar (la VM de host): -1");
+    }
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;

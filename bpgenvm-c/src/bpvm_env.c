@@ -142,9 +142,9 @@ long bpvm_env_get_long(const bpvm_env_t* env, const char* key, long def) {
     return r;
 }
 
-int bpvm_env_serialize(const char* payload, size_t payload_len, uint32_t seq,
-                       uint8_t* out, size_t out_cap) {
-    if (!out) return -1;
+/* El MARCO alrededor de un payload que ya está en su sitio (`out + 16`): la cabecera, el CRC y el relleno. Lo
+ * comparten serialize, que copia el payload antes, y bpvm_env_anadir, que lo construye ahí mismo. */
+static int enmarca(uint8_t* out, size_t payload_len, uint32_t seq, size_t out_cap) {
     if (payload_len > BPVM_ENV_MAX_PAYLOAD) return -1;
     size_t used = (size_t) BPVM_ENV_HEADER_SIZE + payload_len;
     if (used > out_cap) return -1;
@@ -152,11 +152,19 @@ int bpvm_env_serialize(const char* payload, size_t payload_len, uint32_t seq,
     wr16(out + 4, (uint16_t) BPVM_ENV_VERSION);
     wr16(out + 6, (uint16_t) payload_len);
     wr32(out + 12, seq);
-    if (payload_len && payload) memcpy(out + BPVM_ENV_HEADER_SIZE, payload, payload_len);
     /* crc sobre [seq + payload] = out[12 .. 16+payload_len) */
     wr32(out + 8, bpvm_crc32(out + 12, (size_t) 4 + payload_len));
     if (used < out_cap) memset(out + used, 0xFF, out_cap - used);   /* pad flash-borrada */
     return (int) used;
+}
+
+int bpvm_env_serialize(const char* payload, size_t payload_len, uint32_t seq,
+                       uint8_t* out, size_t out_cap) {
+    if (!out) return -1;
+    if (payload_len > BPVM_ENV_MAX_PAYLOAD) return -1;
+    if ((size_t) BPVM_ENV_HEADER_SIZE + payload_len > out_cap) return -1;
+    if (payload_len && payload) memcpy(out + BPVM_ENV_HEADER_SIZE, payload, payload_len);
+    return enmarca(out, payload_len, seq, out_cap);
 }
 
 int bpvm_env_payload_set(const char* payload_in, size_t in_len, const char* key,
@@ -269,6 +277,30 @@ int bpvm_env_apply(uint8_t* a, uint8_t* b, size_t sector,
     int u = bpvm_env_serialize((const char*) scratch, (size_t) n, ns, dst, sector);
     if (u < 0) return -1;
     if (wrote_slot) *wrote_slot = stale;
+    return 0;
+}
+
+int bpvm_env_anadir(uint8_t* a, uint8_t* b, size_t sector, const char* key, const char* value,
+                    uint8_t* out, int* slot) {
+    if (!a || !b || !key || !key[0] || !value || sector <= BPVM_ENV_HEADER_SIZE) return -1;
+    if (strpbrk(key, "=\n") || strchr(value, '\n')) return -1;   /* romperían el formato `clave=valor\n` */
+    bpvm_env_t cur;
+    int who = bpvm_env_pick(a, sector, b, sector, &cur);   /* 0=A, 1=B, -1=ninguna */
+    int hay = (who >= 0 && cur.valid);
+    if (hay) {
+        char v[2];
+        if (bpvm_env_get(&cur, key, v, sizeof v) >= 0) return 1;   /* ya está: la flash no se toca */
+    }
+    uint32_t ns = bpvm_env_next_seq(a, sector, b, sector);
+    int rancia = (who == 0) ? 1 : 0;                       /* la que NO es la actual; virgen → A */
+    uint8_t* dst = out ? out : (rancia == 0 ? a : b);
+    /* El payload nuevo, ya en su sitio: se lee de la copia actual, que nunca es `dst`. Si no cabe, `dst` queda a
+     * medias, pero su CRC ya no casa y nadie la elige: la copia actual sigue intacta. */
+    int n = bpvm_env_payload_set(hay ? (const char*) cur.payload : NULL, hay ? (size_t) cur.payload_len : 0u,
+                                 key, value, (char*) (dst + BPVM_ENV_HEADER_SIZE),
+                                 sector - BPVM_ENV_HEADER_SIZE);
+    if (n < 0 || enmarca(dst, (size_t) n, ns, sector) < 0) return -1;
+    if (slot) *slot = rancia;
     return 0;
 }
 

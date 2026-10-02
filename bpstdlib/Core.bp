@@ -1574,6 +1574,10 @@ module Core
   function __heapCompact()   // Heap.compact
     inline CALL_BUILTIN 270
   end __heapCompact
+  // V7/H10 #626 (2-oct) — una clave del ENV de la placa, o "" si no está (Machine.bp). El PC no tiene ENV: "".
+  function __machineGetEnv(key: string): string   // Machine.getEnv
+    inline CALL_BUILTIN 271
+  end __machineGetEnv
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

@@ -29,6 +29,8 @@
  *   SQLite=<MB>    cuánta memoria se reserva para la base de datos
  *   fs=…, packs=…  tamaños de las particiones
  *   log=0|1        SI SE REGISTRA EL RASTRO DE EJECUCIÓN (#423, por defecto 0)
+ *   imagen.fecha=<s>  la fecha de la imagen, en segundos desde 1970: la ANOTA el arranque común
+ *                  la primera vez que falta —y sólo esa vez— y la lee Rtc.Clock.isSet() (#626)
  *
  * Sobre `log`, que es la única que cambia lo que la placa CUENTA de sí misma:
  * el arranque se registra SIEMPRE —hasta que se lee este bloque nadie puede
@@ -135,6 +137,17 @@ int bpvm_env_pair_at(const bpvm_env_t* env, int idx,
 int bpvm_env_apply(uint8_t* a, uint8_t* b, size_t sector,
                    uint8_t* scratch, size_t scratch_cap,
                    const char* key, const char* value, int* wrote_slot);
+
+/* V7/H10 (#626) — AÑADIR una clave que FALTA, sin un tercer búfer. Es la escritura del arranque común: la fecha de
+ * la imagen, que se anota UNA vez (Eduardo, 2-oct: «solamente se hace esa vez hasta que se borre»). El bloque nuevo
+ * —la copia actual con `key=value` al final, seq+1— se construye directamente en `out` (un sector de RAM), leyendo la
+ * copia actual de donde esté, también de la flash mapeada (entonces `a` y `b` sólo se leen). Con `out` NULL se
+ * construye en la copia RANCIA misma, y `a` y `b` tienen que ser RAM (las copias que la familia leyó al arrancar):
+ * la actual no se toca nunca. En `*slot`, la que toca volcar a la flash (0=A, 1=B; virgen → A). Devuelve 0 si hay
+ * que escribir; 1 si la clave YA estaba (nada que escribir: la flash no se gasta); -1 si no cabe o los argumentos no
+ * valen (una clave con `=` o un salto de línea, un valor con un salto de línea). */
+int bpvm_env_anadir(uint8_t* a, uint8_t* b, size_t sector, const char* key, const char* value,
+                    uint8_t* out, int* slot);
 
 #ifdef __cplusplus
 }

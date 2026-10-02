@@ -51,6 +51,18 @@ module Machine
     inline CALL_BUILTIN 105
   end boardName
 
+  // ---- La configuracion de la placa: su ENV (V7/H10, #626) ----
+  // El valor de una clave del ENV —las variables `clave=valor` que el IDE ensena y
+  // edita en «Variables del entorno»—, o "" si la clave no esta. Las claves no
+  // distinguen mayusculas: `PSRAM` y `psram` son la misma. Es el ENV con el que
+  // arranco la placa, como el hardware que configura: un cambio desde el IDE se
+  // ve al reiniciar. En el PC no hay ENV: siempre "".
+  //
+  //   var f: string := Machine.getEnv("imagen.fecha")   // la que mira Rtc.Clock.isSet()
+  public function getEnv(key: string): string
+    inline CALL_BUILTIN 271
+  end getEnv
+
   // ---- Sensores internos ----
   // Temperatura del die en °C. Lee el sensor interno del ADC
   // (canal 4 en RP2350). Precisión típica ±2 °C sin calibración.

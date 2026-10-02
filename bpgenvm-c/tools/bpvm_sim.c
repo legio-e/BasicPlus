@@ -59,6 +59,7 @@
 #include "bpvm_repl.h"      /* U3.24: el REPL comun */
 #include "bpvm_sd_placa.h"  /* V7/H3: la SD de la placa (aqui, un fichero: --sd=IMAGEN) */
 #include "bpvm_env.h"       /* U6.1: `stack=N` del ENV, como las placas */
+#include "bpvm_machine.h"   /* V7/H10 #626: el ENV de Machine.getEnv */
 #include "bpvm_bus.h"       /* V7/H6.c G4.a1 */
 #include "bpvm_wire_v1.h"
 #include "bpvm_platform.h"   /* V7/H8 #495 (paso 4): el cerrojo del cable */
@@ -143,6 +144,12 @@ static uint8_t g_a[SECTOR], g_b[SECTOR], g_scratch[SECTOR];
 static bpvm_bmgr_t g_bm;
 /* V7/H6.c G4.a1 — el ENV simulado, con la regla de siempre (entero o nada). */
 static int sim_env_get(const char* clave, char* buf, size_t cap) { return bpvm_bmgr_env_get(&g_bm, clave, buf, cap); }
+/* V7/H10 #626 — el ENV que ve el PROGRAMA (Machine.getEnv): el del ARRANQUE, como en la placa —una copia de las dos
+ * del gestor, hecha al arrancar—. Un ENV_SET se ve al volver a lanzar el simulador sobre la misma flash, como en la
+ * placa al reiniciar (el RESET del sim no rearranca: no hay silicio). */
+static uint8_t    g_env_a0[SECTOR], g_env_b0[SECTOR];
+static bpvm_env_t g_env0;
+static int sim_env_arranque(const char* clave, char* buf, size_t cap) { return bpvm_env_get_exacto(&g_env0, clave, buf, cap); }
 static const char* g_flash_path = "boardsim.flash";
 
 /* H3 — zona de packs simulada (región RAM que hace de flash; 0xFF = borrada).
@@ -1304,6 +1311,12 @@ int main(int argc, char** argv) {
             bpvm_boot2_claves(&env);   /* V7/H7 (Boot 2, fase 4): stack= y quantum=, como las placas */
     }
     bpvm_bus_desde_env(sim_env_get);   /* V7/H6.c G4.a1: los buses del ENV, en el boot como en la placa */
+    /* V7/H10 #626 — Machine.getEnv: la foto del ENV del arranque. El sim no anota la fecha de su imagen (no sube por
+     * el arranque común): la pone quien la quiera probar (tools/env_smoke.py). */
+    memcpy(g_env_a0, g_a, SECTOR);
+    memcpy(g_env_b0, g_b, SECTOR);
+    bpvm_env_pick(g_env_a0, SECTOR, g_env_b0, SECTOR, &g_env0);
+    bpvm_machine_set_env(sim_env_arranque);
 
     bpvm_net_register_host();   /* sockets TCP del SO, como en la VM-C host */
 

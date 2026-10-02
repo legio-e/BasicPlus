@@ -87,6 +87,7 @@ dependa del hardware pero el 2º, que se ejecuta a continuación, podría ya ser
 | | kernel | la memoria: el bloque de los motores y el de la VM | gancho: DÓNDE (la regla, común: `bpvm_mem_plan`, `bpvm_packram_region`) |
 | | kernel | la BIOS de los motores (y el ancla), verificada | gancho |
 | subir | 0 → 3 | particiones → FS → app, y la línea «boot: estado» | gancho: las capas (`bpvm_boot_climb`); la línea, común |
+| | kernel | la fecha de la imagen al ENV (`imagen.fecha`), si falta: UNA vez, y la lee `Rtc.Clock.isSet()` (`#626`) | común (`bpvm_env_anadir`), con el gancho `env_anadir`: la cintura de flash del ENV |
 | | FS | la zona de packs, al lado, y su estado (lista o el «casi») | común (`bpvm_pack_montar_arranque`), con el gancho `mapear` |
 | | FS | `/lib`: la stdlib embebida | gancho (`bpvm_mods`) |
 | | FS | lo de la familia que pide el FS | gancho: `board.json` (la Pico), el cargador de motores (la ESP32) |

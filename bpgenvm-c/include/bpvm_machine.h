@@ -177,6 +177,14 @@ int  bpvm_machine_mark_count(void);           /* H10 — nº migas del trail pre
 int  bpvm_machine_mark_at(int i);             /* H10 — i-ésima miga (0 = origen) */
 int  bpvm_machine_boot_count(void);           /* H10 — arranques desde power-on */
 
+/* V7/H10 (#626) — EL ENV DE LA PLACA, para `Machine.getEnv(clave)`. El contrato es el de bpvm_env_get_exacto: la
+ * longitud del valor; -1 si la clave no está (o no hay ENV); -2 si no cabe en `cap`. Lo registra el arranque común
+ * (Boot 2), que es quien sabe dónde está el ENV de cada familia, y el micro simulado el suyo. Sin registrar —la VM
+ * de host— no hay ENV: -1, como en la VM-Java. */
+typedef int (*bpvm_machine_env_fn)(const char* clave, char* buf, size_t cap);
+void bpvm_machine_set_env(bpvm_machine_env_fn fn);
+int  bpvm_machine_env_get(const char* clave, char* buf, size_t cap);
+
 #ifdef __cplusplus
 }
 #endif

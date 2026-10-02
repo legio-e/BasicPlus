@@ -276,7 +276,8 @@ enum {
     BUILTIN_HEAP_HANDLES                 = 268,   /* __heapHandles(): integer */
     BUILTIN_HEAP_COLLECTIONS             = 269,   /* __heapCollections(): integer */
     BUILTIN_HEAP_COMPACT                 = 270,   /* __heapCompact() */
-    BUILTIN__CUANTOS = 271
+    BUILTIN_MACHINE_GET_ENV              = 271,   /* __machineGetEnv(key: string): string */
+    BUILTIN__CUANTOS = 272
 };
 
 #endif

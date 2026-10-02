@@ -212,6 +212,18 @@ const char* bpvm_machine_reset_cause(void) {
     return "unknown";
 }
 
+/* V7/H10 (#626) — el ENV de la placa, para Machine.getEnv (ver bpvm_machine.h). Un puntero y no un campo del
+ * backend: dónde está el ENV de cada familia ya lo sabe el arranque común (su gancho `env`), y lo registra él. */
+static bpvm_machine_env_fn s_env_fn = NULL;
+
+void bpvm_machine_set_env(bpvm_machine_env_fn fn) { s_env_fn = fn; }
+
+int bpvm_machine_env_get(const char* clave, char* buf, size_t cap) {
+    if (buf && cap) buf[0] = '\0';
+    if (!s_env_fn || !clave || !buf || cap == 0) return -1;   /* el PC: no hay ENV */
+    return s_env_fn(clave, buf, cap);
+}
+
 /* ══════════ V7/H4 (#487) — el breadcrumb, en el común (ver bpvm_machine.h) ══════════
  * El algoritmo que vivía en gpio_stm32.c (H10), sin cambiar su contrato: en el
  * arranque se toma un SNAPSHOT del rastro de la vida anterior en orden

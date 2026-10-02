@@ -102,15 +102,50 @@ static const bpvm_pack_flash_t s_packs_fl =
     { packs_fl_erase, packs_fl_program, NULL, FLASH_SECTOR_SIZE /* 4K */ };
 
 /* Vuelca a flash un sector A/B (borra + programa el sector entero de 4K, bajo la
- * ventana XIP-safe). El otro sector queda intacto (A/B). `src` = el buffer RAM. */
-static void env_write(int slot, const uint8_t* src) {
+ * ventana XIP-safe). El otro sector queda intacto (A/B). `src` = el buffer RAM.
+ * 0 escrito, -1 no (y lo dice). */
+static int env_write(int slot, const uint8_t* src) {
     uint32_t off = (slot == 0) ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET;
     /* V7/H7 U1.4 — por la cintura: dos ventanas del candado en vez de una (borrar y
      * programar), y da igual: el A/B deja la otra copia buena si algo corta en medio. */
     if (pico_flash_erase(off, BP_ENV_SECTOR) != 0
-        || pico_flash_write(off, src, BP_ENV_SECTOR) != 0)   /* 4096 = múltiplo de FLASH_PAGE_SIZE */
+        || pico_flash_write(off, src, BP_ENV_SECTOR) != 0) {   /* 4096 = múltiplo de FLASH_PAGE_SIZE */
         log_printf("env: la cintura de flash RECHAZÓ el sector %d (0x%05lX): no se ha escrito",
                    slot, (unsigned long) off);
+        return -1;
+    }
+    return 0;
+}
+
+/* Red anti-divergencia bp_memmap.ld ↔ flash_layout.h: los offsets del env deben caer
+ * DENTRO del hueco real (zona 2, entre FLASH_BOOT y FLASH_MAIN). Si alguien mueve las
+ * regiones del linker sin tocar el header (o al revés), tocar flash borraría CÓDIGO →
+ * rechazar a gritos, nunca escribir. 1 = el env cae fuera (no se escribe). */
+static int env_fuera_de_su_zona(void) {
+    return (uintptr_t)(XIP_BASE + BP_ENV_A_OFFSET) < (uintptr_t) __bp_zone1_end
+        || (uintptr_t)(XIP_BASE + BP_ENV_B_OFFSET + BP_ENV_SECTOR) > (uintptr_t) __bp_zone3_start;
+}
+
+/* V7/H10 (#626) — el arranque común AÑADE una clave que falta (la fecha de la imagen, una
+ * vez). Las dos copias se leen de la flash por XIP, sin copiarlas; el bloque nuevo se
+ * construye en UN sector de la zona de rascar (libre en el arranque: sus usuarios son los
+ * comandos del wire, que aún no llegan). La vista del ENV la vuelve a elegir main.c. */
+int board_mgr_pico_env_anadir(const char* clave, const char* valor) {
+    if (env_fuera_de_su_zona()) {
+        log_printf("env: layout de flash inconsistente (env fuera de la zona 2): no se escribe");
+        return -1;
+    }
+    uint8_t* out = (uint8_t*) bpvm_scratch_take((size_t) BP_ENV_SECTOR, "env-anadir");
+    if (out == NULL) {
+        log_printf("env: la zona de rascar no esta libre: no se anota %s", clave);
+        return -1;
+    }
+    int slot = -1;
+    int r = bpvm_env_anadir((uint8_t*)(XIP_BASE + BP_ENV_A_OFFSET), (uint8_t*)(XIP_BASE + BP_ENV_B_OFFSET),
+                            BP_ENV_SECTOR, clave, valor, out, &slot);
+    if (r == 0 && env_write(slot, out) != 0) r = -1;
+    bpvm_scratch_give("env-anadir");
+    return r;
 }
 
 /* #338 — la zona compartida tiene que dar para las DOS copias del env de ESTA
@@ -122,12 +157,8 @@ typedef char bp_chk_scratch_env[(BPVM_SCRATCH_BYTES >= 2u * BP_ENV_SECTOR) ? 1 :
 void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
                            unsigned char* scratch, unsigned long scratch_len,
                            const unsigned char* bulk, unsigned long bulk_len) {
-    /* Red anti-divergencia bp_memmap.ld ↔ flash_layout.h: los offsets del env
-     * deben caer DENTRO del hueco real (zona 2, entre FLASH_BOOT y FLASH_MAIN).
-     * Si alguien mueve las regiones del linker sin tocar el header (o al revés),
-     * tocar flash borraría CÓDIGO → rechazar a gritos, nunca escribir. */
-    if ((uintptr_t)(XIP_BASE + BP_ENV_A_OFFSET) < (uintptr_t) __bp_zone1_end
-        || (uintptr_t)(XIP_BASE + BP_ENV_B_OFFSET + BP_ENV_SECTOR) > (uintptr_t) __bp_zone3_start) {
+    /* Red anti-divergencia bp_memmap.ld ↔ flash_layout.h (env_fuera_de_su_zona). */
+    if (env_fuera_de_su_zona()) {
         wire_v1_send_error(id, "INTERNAL_ERROR",
                            "layout de flash inconsistente (env fuera de la zona 2)");
         return;

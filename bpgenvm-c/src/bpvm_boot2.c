@@ -13,6 +13,7 @@
  *   ─────     ──────────────────────────────────────────────────────────────────────
  *   kernel    las claves del reparto · la memoria · la BIOS                   (2a)
  *   0 → 3     subir: particiones → FS → app, y la línea «boot: estado»
+ *   kernel    la fecha de la imagen al ENV, si falta (una vez: #626)
  *   FS        la zona de packs, al lado · /lib · lo de la familia con el FS
  *   kernel    el hardware · los buses del ENV · registrar la SD
  *   FS        montar la SD
@@ -24,8 +25,12 @@
 #include "bpvm.h"            /* bpvm_set_stack_kb, bpvm_set_quantum_ops */
 #include "bpvm_bus.h"        /* los buses que la placa declara en su ENV */
 #include "bpvm_log.h"
+#include "bpvm_machine.h"    /* #626: el lector del ENV de Machine.getEnv */
 #include "bpvm_pack.h"       /* el montaje de la zona y su estado (fase 1) */
 #include "bpvm_sd_placa.h"   /* la SD de la placa: el registro común */
+
+#include <stdio.h>
+#include <string.h>
 
 /* La familia de este arranque: los buses leen el ENV por una función sin contexto. */
 static const bpvm_boot2_familia_t* s_f = 0;
@@ -44,6 +49,62 @@ static int env_exacto(const char* clave, char* buf, size_t cap) {
 
 static void linea_al_log(const char* l) { log_printf("%s", l); }
 
+/* La familia de este arranque, y con ella el ENV de Machine.getEnv (#626): el programa lee el mismo ENV que el
+ * arranque, por la misma regla (entero o nada). */
+static void fija(const bpvm_boot2_familia_t* f) {
+    s_f = f;
+    bpvm_machine_set_env(env_exacto);
+}
+
+long bpvm_boot2_fecha_de(const char* d) {
+    static const char MESES[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    if (!d || strlen(d) != 11 || d[3] != ' ' || d[6] != ' ') return -1;
+    int m = 0;
+    for (int i = 0; i < 12 && !m; i++)
+        if (memcmp(d, MESES + 3 * i, 3) == 0) m = i + 1;
+    if (!m || (d[4] != ' ' && (d[4] < '0' || d[4] > '9')) || d[5] < '0' || d[5] > '9') return -1;
+    for (int i = 7; i < 11; i++)
+        if (d[i] < '0' || d[i] > '9') return -1;
+    int dia  = (d[4] == ' ' ? 0 : (d[4] - '0') * 10) + (d[5] - '0');
+    int anyo = (d[7] - '0') * 1000 + (d[8] - '0') * 100 + (d[9] - '0') * 10 + (d[10] - '0');
+    if (dia < 1 || dia > 31 || anyo < 1970 || anyo > 2037) return -1;
+    /* Los días desde 1970-01-01: el «days from civil» de H. Hinnant (el año empieza en marzo). */
+    long y   = anyo - (m <= 2);
+    long era = y / 400;
+    long yoe = y - era * 400;
+    long doy = (153L * (m > 2 ? m - 3 : m + 9) + 2) / 5 + dia - 1;
+    long doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    return (era * 146097L + doe - 719468L) * 86400L;
+}
+
+/* V7/H10 (#626) — LA FECHA DE LA IMAGEN, en el ENV: la que mira Rtc.Clock.isSet(). La idea es de Eduardo (2-oct):
+ * «una variable de entorno que guarde la fecha en la que se grabó la imagen, y si la fecha actual es menor es que
+ * está fuera de hora». Se anota UNA vez, si falta, y se queda hasta que se borre: «si lo grabamos cada vez que
+ * arranque podríamos llegar a estropear la flash». En un arranque normal la clave ya está y la flash ni se mira.
+ *
+ * Es la fecha en que se compiló ESTE fichero: en un build incremental, la de la última vez —anterior o igual a la
+ * de la imagen—, y como cota vale igual: ninguna hora correcta es anterior. */
+static void anota_fecha_de_la_imagen(const bpvm_boot2_familia_t* f) {
+    char v[24];
+    if (env_exacto(BPVM_BOOT2_CLAVE_FECHA, v, sizeof v) != -1) return;   /* ya está (o no cabe en v: está) */
+    long fecha = bpvm_boot2_fecha_de(__DATE__);
+    if (fecha < 0) {
+        log_printf("env: la fecha de esta imagen (\"%s\") no se entiende: %s no se anota", __DATE__, BPVM_BOOT2_CLAVE_FECHA);
+        return;
+    }
+    if (!f->env_anadir) {
+        log_printf("env: esta familia no escribe su ENV en el arranque: %s no se anota", BPVM_BOOT2_CLAVE_FECHA);
+        return;
+    }
+    snprintf(v, sizeof v, "%ld", fecha);
+    int r = f->env_anadir(BPVM_BOOT2_CLAVE_FECHA, v);
+    if (r == 0)
+        log_printf("env: %s=%s (%s, la fecha de esta imagen): anotada, una vez", BPVM_BOOT2_CLAVE_FECHA, v, __DATE__);
+    else if (r < 0)
+        log_printf("env: no se pudo anotar %s (no cabe en el ENV o la flash no escribe): Rtc.Clock.isSet() no tiene fecha",
+                   BPVM_BOOT2_CLAVE_FECHA);
+}
+
 void bpvm_boot2_claves(const bpvm_env_t* env) {
     if (!env || !env->valid) return;   /* sin ENV, lo de siempre: el 25 % a pilas, 1024 opcodes */
     /* `stack=N` (KB): el usuario reparte el bloque de la VM entre pilas y heap; la regla vive
@@ -54,7 +115,7 @@ void bpvm_boot2_claves(const bpvm_env_t* env) {
 
 void bpvm_boot2_repartir(const bpvm_boot2_familia_t* f) {
     if (!f) return;
-    s_f = f;
+    fija(f);
     bpvm_boot2_claves(env_de(f));
     if (f->memoria) f->memoria();
     /* La BIOS de los motores, verificada aunque no haya ninguno grabado: un hueco que sólo
@@ -67,7 +128,7 @@ static const bpvm_boot_status_t s_sin_capas = { BPVM_BOOT_KERNEL, 1, "la familia
 
 void bpvm_boot2_subir(const bpvm_boot2_familia_t* f) {
     if (!f) return;
-    s_f = f;
+    fija(f);
 
     /* 0 → 3: sube mientras cada capa arranca y para en la primera que falla (H9). */
     const bpvm_boot_status_t* st = f->subir ? f->subir() : 0;
@@ -76,6 +137,10 @@ void bpvm_boot2_subir(const bpvm_boot2_familia_t* f) {
                st->degraded ? " DEGRADADO: " : "", st->degraded ? st->reason : "");
     const int con_fs = (st->state >= BPVM_BOOT_FS);
     const int sana   = (st->state == BPVM_BOOT_APP && !st->degraded);
+
+    /* La fecha de la imagen, si falta (#626). Es del kernel —el ENV no pide el FS— y va antes del autorun: el
+     * programa que arranca solo ya la ve. */
+    anota_fecha_de_la_imagen(f);
 
     /* La zona de packs, AL LADO del FS: se monta con él —sin el FS no, y se dice— y se dice
      * su estado (fase 1). ANTES que /lib (#468): el instalador le pregunta qué sirve ya con

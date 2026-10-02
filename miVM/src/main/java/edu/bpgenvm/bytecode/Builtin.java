@@ -280,7 +280,8 @@ public enum Builtin {
     HEAP_FREE_BLOCKS("__heapFreeBlocks"),   // [267] __heapFreeBlocks(): integer
     HEAP_HANDLES("__heapHandles"),   // [268] __heapHandles(): integer
     HEAP_COLLECTIONS("__heapCollections"),   // [269] __heapCollections(): integer
-    HEAP_COMPACT("__heapCompact");   // [270] __heapCompact()
+    HEAP_COMPACT("__heapCompact"),   // [270] __heapCompact()
+    MACHINE_GET_ENV("__machineGetEnv");   // [271] __machineGetEnv(key: string): string
 
     public final String bpName;
     public final int id;
