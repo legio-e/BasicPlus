@@ -3576,6 +3576,8 @@ pack (23-26 sep); en el FS sólo lo que tuvo hito propio (la SD, el cursor, los 
 | 248 | `DF` mezcla volúmenes (el total de la raíz, la cuenta con `/sd`); en el sim con `--sd`, también `INFO` | vivo, sin consumidor real | ~8 líneas |
 | 244 | `hay_medio()` dice 1 sin detector: la vigilancia en caliente fuera de la Pico sería inservible | latente | un bit «sé detectar» en la cintura de bloque (~15 líneas) |
 
+**Decidido** (Eduardo, 2-oct): la fachada de la flash (256) entra en V7, con el `board_mgr` común.
+
 **Duplicación, orden o documentación** (sin consecuencia hoy): 256 —no hay fachada de flash: cuatro formas, y el
 ENV en estáticos de cada familia; **es el único que sigue fabricando copias** (`#626` trajo tres `env_anadir`); grande,
 ~250 líneas, escribe flash—; 264 —el shim viejo del FS ×3: borrar lo muerto (`fs_put_append` ×3, `fs_delete`/`fs_del`,
@@ -3589,6 +3591,118 @@ DSI) y notas rancias.
 
 **Resueltos**: 240 (el streaming de FAT, `b0e15592`), 260 (la SD al común, H3), 450 (el escaneo de `.mdn`, 4 de 4),
 184, 192, 196, 204 y 368 (todo por LVGL en un pack, `G1`–`G5`).
+
+## H10 — la GUI: `#477` resto, `G2` resto e `invokeLater`/`Command` — el MAPA VERIFICADO (2-oct, decidido por Eduardo)
+
+Un agente leyó el código de hoy; lo concreto, comprobado: **el orden de los hijos del volcado rompía la paridad**
+(medido: «crear A y B, borrar A, crear C» volcaba C, B en la VM-C y B, C en la VM-Java —la VM-C reutiliza ranuras
+desde `G2` y las recorría por ranura—; cerrado hoy, `#632`), **Bar, Led, Chart y Table no llaman a `attach()`** (leído:
+`Gui.bp:880`, `935`, `1169`, `1209`; Label y Button sí) y **reasignar un `owner` local no llamaba al destructor**
+(cerrado hoy, `#633`, con un sample que se comprueba solo y su sabotaje).
+
+**1. `#477` resto — los huecos del oráculo `__guiDumpTree`.** El Chart sigue sin volcar sus datos (el modelo los
+guarda en las dos VMs; el volcado no tiene rama). Lo de la rotación de la DK2 lo cerró `G5.b` (`568e976a`); quedan
+arreglos baratos —`rot=N` en la línea de `screen` sólo si no es 0 (no cambia ningún golden), la cabecera de `Gui.shot`
+con la rotación del modelo (en placa sale 0 desde `G5`), y borrar la rama muerta de `BPVM_LVGL`— y uno caro: que el
+modelo sólo gire si el panel giró (cambia la firma del contrato con el pack). El táctil de los dos drivers SPI (C5,
+C6) sigue sin girar, desde H6.a. Color y fuente cargada sólo viven en el render: es el diseño de V3. Y fuera de la
+lista: `min`/`max` no salen en el volcado; los botones de un Msgbox y el textarea de un Keyboard no están en el modelo.
+**Coste**: poco código, pero cada cambio del volcado obliga a rehacer el pack de LVGL en tres ABI y a regenerar a
+sabiendas los goldens de la cápsula V6 que lo congelan (`GuiParidad2.out`, `GuiShot.out`). **Decide Eduardo**: ¿el
+formato del volcado es un contrato congelado o se amplía?; ¿color y fuente al modelo?; ¿la rotación, cerrada con
+`G5.b` y los arreglos baratos?; ¿el táctil de la C5 y la C6?
+
+**Decidido** (Eduardo, 2-oct): *sólo lo barato*. El volcado sigue siendo el contrato que congela la cápsula; color y fuente se quedan en el render (el diseño de V3).
+
+**2. `G2` resto.** El destructor existe desde H1 (21-sep), pero sólo corre al morir un `var owner` local o al salir de
+un `try var`; las VMs no lo conocen (la cascada de `FREE_REF` y el GC liberan sin él) y `Gui.bp` no tiene ninguno. Hoy
+el nodo de un widget que el programa abandona sigue en la tabla y en pantalla hasta un `delete()` de un antepasado o
+el fin del RUN; y si su wrapper muere por `FREE_REF` (un `owner`), el nodo se queda con un puntero colgando —un
+evento posterior puede llegar a OTRO objeto si el hueco se recicla—: hoy nadie lo dispara (ningún programa usa
+`owner` con la GUI). `toJson()`: no emite `min`/`max`, ni `options`/`items` (que `__guiGetText` ya devuelve), ni los
+botones de un Msgbox, ni los colores; y Bar, Led, Chart y Table no están en el árbol: no cuentan, se pierden en la ida
+y vuelta del `.win` y sus `"clic"` nunca llegan. ImageView, Tabview y Keyboard no los sabe construir `makeWidget`.
+**Coste**: casi todo en `Gui.bp` (decenas de líneas, sin VMs, compilador ni imágenes). **Decidido** (Eduardo, 2-oct): (a) y (b) —el árbol y `toJson()` en `Gui.bp`, y un `~Component` que borre el nodo, con `Screen` exento—; y sobre `owner`: *«Owner solamente puede haber uno activo. El owner debe estar en su contenedor si lo pones en la lista de componentes del contenedor se queda ahí. Si aparece en otro sitio debe ser una referencia normal.»* O sea: «`owner` en las properties de la ventana», no.
+
+**Lo que se le preguntó**: ¿`~Component`
+hace `delete()` (con `Screen` exento)?; ¿se abandona «`owner` en las properties de la ventana» —el agente no lo
+recomienda: el widget ya tiene dueño, la `OwnerList` de su contenedor—?; ¿la red nativa para el wrapper que muere por
+cascada (~30 líneas por VM y el contrato del pack)?; ¿`toJson()` con campos BP (sin cascada) o con getters (`Core` y
+todas las imágenes)?; ¿qué widgets entran en el `.win`?
+
+**3. `invokeLater`/`Command`.** No existe nada. Las dos colas que hay no sirven: la de entrada de la GUI va del backend
+al hilo que bombea, y la de eventos (H5.c) entrega al hilo que levanta el evento. Hoy tocar widgets desde cualquier
+hilo es seguro (con `G1` todos los hilos BP corren en una tarea del sistema y cada primitiva es atómica; el manual lo
+promete y tres samples lo usan). **Lo que cambia es H12**: con dos runs en el P4 —la placa de pantalla grande— eso deja
+de ser cierto (LVGL va sin SO, y ni `g_nodes` ni el `HashMap` de la VM-Java tienen cerrojo). Dos caminos: un `Command`
+y un `Gui.invokeLater` mínimos en `Gui.bp` (40-60 líneas, sin VMs ni imágenes; la cola en `HiloGui`), o un CERROJO de la
+GUI en los trampolines (30-50 líneas en la imagen; mantiene lo que promete el manual). **Decide Eduardo**, antes de
+encender el segundo run en el P4: ¿regla + `invokeLater` (incompatible con lo de hoy) o cerrojo (compatible)?;
+¿alcance, forma y nombres (la API de `Gui` está en inglés)?
+
+**Decidido** (Eduardo, 2-oct): *«El GUI hace tiempo que corre en su propio hilo BP. Si desde otro hilo se pide algo entiendo que puede haber conflictos de hilos, así que invokeLater puede ser una buena opción. Habrá que verificar específicamente en H12»*. Va a H12, donde se verifica con el segundo run del P4.
+
+**La lectura del agente**: lo de más valor para quien programa una placa con pantalla es la parte BP de `G2` (Bar, Led,
+Chart y Table en el árbol; la ida y vuelta del `.win`); a medio plazo, la decisión de H12; y `#477` es lo más caro para
+lo que aporta.
+
+## H10 — `RUN` en un solo sitio (`#473`, punto 8; entra en V7, Eduardo, 2-oct): el análisis
+
+`RUN` está escrito cuatro veces —la Pico (`pico/repl_v1.c`), la ESP32 (`esp32/common/repl_esp32.c`, para las cinco), la
+STM32 (`stm32/port/stm32_repl.c`) y el micro simulado (`tools/bpvm_sim.c`)— y desde el 10-sep sólo subieron al común
+piezas sueltas. Un agente de diseño leyó las cuatro (sin ejecutar); lo concreto, comprobado a mano después (el mensaje
+del `KILL` y el prefijo `load:`).
+
+**Las divergencias** (además de las cuatro que se sabían: el `exitCode` de un fallo de carga, el registro AOT que el sim
+vacía después de cargar, el sink que la STM32 tira si no cabe y el sim corta en el primer NUL):
+- el fallo de carga con detalle sale **sin `load:`** en la ESP32 y el sim, y `tanda.py` no lo reconoce como fallo del
+  arnés (comprobado); y la Pico manda el ORDINAL del enum: «falta un módulo» = 1, que la tabla común lee como
+  «excepción no atrapada»;
+- **el `KILL` o el `RESET` pueden llevar el texto de una excepción VIEJA**: la Pico y la ESP32 anteponen `rt_err`, que
+  se escribe en cada `throw`, también en los atrapados (comprobado); la STM32 y el sim lo hacen bien;
+- **un carácter UTF-8 partido**: el hilo `io` corta las líneas a 512 B sin mirar caracteres, y el IDE decodifica cada
+  trama por separado: un carácter en el byte 512 sale como dos «�» (en las cuatro); la ESP32 además parte sus tramas;
+- rutas de 80 caracteres o más dan `NOT_FOUND` en la STM32 (búferes de 80 y 64; el núcleo admite 255);
+- un `KILL` en el hueco entre arrancar `io` y `bpvm_run` puede perderse (`preparar_run` lo borra; por lectura);
+- en el sim, el depurador y el poll leen el socket a la vez; y `sim_dbg_smoke.py` ni está en la red ni carga (su `.mod`
+  es MOD5);
+- líneas que no son del programa dentro de `OUTPUT` (el sim: «[sim] ejecutando el pack…» y los avisos del escáner de
+  `.mdn`; la STM32, los del escáner) —el PC los sacó a stderr por la paridad—;
+- `elapsedMs` mide cuatro cosas distintas; el `EXITED` de un `bpvm_init` fallido sale de cuatro formas (la Pico, por
+  `fputs`, fuera del contrato); un `KILL` en reposo es `NO_SESSION` en las placas y `KILL_REPLY` en el sim; el `RESET`
+  de la ESP32 no lo apunta el log; y el quinto sink, el de `test/debug_listen.c`, corta a 1 KB y no escapa controles.
+
+**El diseño**: `bpvm_repl_run(id, path, arg)` en `src/bpvm_repl.c` (ya lo compilan los siete builds: sin altas nuevas)
+con una cintura de ganchos `bpvm_repl_run_ops_t` que pone cada familia —obligatorios: de dónde sale la memoria de la
+VM, leer una línea sin esperar, el búfer de línea y el de mensajes, reiniciar; opcionales: los motores nativos, el
+escaneo de `.mdn`, lo de después de cargar (`esp_aot_register` debe seguir en `repl_esp32.c`, por el enlazador), lo de
+antes y después de correr (el MPU de la Pico, la línea `mem:`), cómo correr (el SMP de la Pico), el LED de la STM32, el
+depurador común (el de la Pico y la ESP32 es idéntico y sube al común) y el consejo del sim para un módulo que falta—.
+Un campo nuevo al final de `bpvm_repl_ops_t`: con `NULL`, la familia sigue con su `RUN`, y así se migra una a una y se
+revierte limpio. Una sola regla para el mensaje del `EXITED` (OK: nada; KILLED: el del `RESET` o el del `KILL`, nunca
+`rt_err`; LINK_ERROR: el de enlace; el resto: `rt_err` o el estado). El poll, común, «pegajoso» con un `KILL` pedido
+(cierra la carrera de `preparar_run`). **El sink de `OUTPUT`, común** (`src/wire_v1_proto.c`): escapa por longitud (un
+NUL sale `\u0000`), trocea en tramas de 1 KB sin partir nunca un escape ni un carácter UTF-8 —el que llegue a medias se
+guarda para la llamada siguiente, lo que arregla también el corte a 512 de `io`— y no tira nada. Saldo: unas −800
+líneas (las familias pierden ≈1700 y el común gana ≈600).
+
+**Los pasos**, cada uno su commit y reversible: (0) sin cambio de conducta: el sim con inicializadores designados,
+`sim_dbg_smoke.py` compilando su `.mod`, y un `run_smoke.py` con los casos que la red no cubre (el `EXITED` de un fallo
+de carga, un NUL, una línea de controles, un carácter en el byte 512, el `KILL` en reposo) corrido contra el `RUN` viejo
+para fijar qué cambia; (1) el sink y su prueba de C, sin llamadores; (2) el `RUN` común, estrenado por el SIM —todo en
+el PC: `check-sim`, `check-sombra`, `tanda.py --sim` y el IDE—; (3) la STM32 (la de menos ganchos; arregla la línea
+perdida); (4) la Pico; (5) la ESP32; (6) cerrar (el `KILL` en reposo, la escucha del autorun ×3, la cabecera, el
+protocolo). Del 3 al 5, a placa: por lotes.
+
+**Las decisiones** (el agente propone; mi lectura entre paréntesis): D1 el fallo de carga sale con exitCode 2 —el de la
+tabla común y el del CLI— (sí: es aplicar un contrato que ya existe); D2 los mensajes `falta el modulo 'X'`,
+`load: <fallo>` y `load: <estado>` —los prefijos que leen `tanda.py` y `sim_sombra.py`— (sí); D3 con `KILL`, «terminado
+por KILL» o nada (el texto: un error que no dice nada es mudo); D4 `elapsedMs` = de `bpvm_run` a parar `io`; D5 los
+avisos del escáner y del pack, sólo al log (sí: `OUTPUT` es del programa); D6 `gc=0` y `latido=1`, hoy sólo en la Pico,
+en las cuatro por el ENV; D7 los textos de la Pico para «falta path» y `NOT_FOUND`; D8 el `KILL` en reposo, `NO_SESSION`
+en todas; D9 el búfer del `EXITED`, uno por familia o un tamaño (detalle mío).
+
+**Decidido** (Eduardo, 2-oct): *«De acuerdo»* con las reglas —el fallo de carga con exitCode 2 y sus mensajes con `load:` y `falta el modulo`; el `KILL` o el `RESET` con su texto y nunca el de una excepción vieja; `OUTPUT` sólo con lo del programa; `gc=0` y `latido=1` en las cuatro familias por el ENV; el `KILL` sin programa, `NO_SESSION` en todas—.
 
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 

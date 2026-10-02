@@ -1194,6 +1194,12 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
 - **`#631`** (`34678c51`): FAT cumple el contrato de la fachada —el `mkdir`, recursivo; encima de un fichero, `EXISTS`; el `stat`
   de una carpeta, −1— y el `MKDIR` del wire dice por qué (contestaba siempre `INTERNAL_ERROR`). Probado en `sd_smoke`,
   con sabotaje.
+- **Los mapas verificados** (Eduardo: «Mapa verificado») de los lotes D y E de `#473` y de la GUI de H10, en `V7_IDEAS`
+  §H10. De D y E: 15 vivos, 2 a medias, 8 resueltos; con consecuencia, la pantalla que no arranca y calla (180),
+  `copyFile` en `/sd` (236) y el `FORMAT` que contesta OK (466). De la GUI salieron dos fichas, cerradas: **`#632`**
+  (`9d0bd4fd`: el volcado ordenaba los hijos por ranura en la VM-C —medido: «crear A y B, borrar A, crear C», C, B frente a
+  B, C—) y **`#633`** (`9d0bd4fd`: reasignar un `owner` local no llamaba al destructor; sample que se comprueba solo, con
+  sabotaje). Y lo que decide Eduardo: el volcado como contrato, `~Component`, `toJson()`, y la GUI con dos runs (H12).
 
 ### 🌙 Traspaso (2-oct)
 
@@ -1211,15 +1217,27 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
   línea `particiones:`; en la P4 y la C6, que tienen tarjeta, un `PUT` a `/sd/HOLA.TXT/x.txt` (o a cualquier carpeta
   que sea un fichero) contesta `NOT_FOUND`, un `PUT` a `/sd/a/b/x.txt` con `a` nueva va, y `MKDIR` encima de un
   fichero contesta `EXISTS` (`#628`, `#631`); `FicheroOCarpeta` va en la tanda (`#630`); y pasar la tanda—. Con la
-  stdlib nueva (`IO.dirExists`): el `Stdlib.pack` de la zona, a regrabar con el lote.
+  stdlib nueva (`IO.dirExists`): el `Stdlib.pack` de la zona, a regrabar con el lote. Y los packs de la GUI (las placas
+  con pantalla): rehacer `lvgl.npk` en sus tres ABI con el `gui.c` de `#632` —y con ellos, sus copias de la stdlib, que
+  ya iban rancias (`#623`)—.
 - **H10, por la tarde**: el arranque dice de dónde sale su reparto de particiones y cómo queda (`50750567`, común:
   `bpvm_part_describe`, en las tres familias; en placa, con el próximo lote); el ENV de la Pico que cambió solo,
   cerrado (no se reproduce). Y cuatro decisiones de Eduardo: `Debug` se queda (la nota, en `PUBLICAR.md`), el DMA de
   `Uart` a V8, la S31 fuera del plan hasta que haya placa, y el log del bootloader de la C3/C6 se queda.
-- **Lo que queda de H10**: la GUI (`#477` resto, `G2` resto, `invokeLater` / `Command`); de `#473`, los seis
-  «rompe-el-modelo» vivos (`V7_IDEAS` §H10 «`#473`»), la puerta a medias y los lotes D (FS, 15) y E (GUI, 10), sin
-  mirar (un mapa verificado en marcha, decidido por Eduardo), y la GUI, igual; y de los tres grandes, `RUN` y
-  `board_mgr` entran en V7 (Eduardo, 2-oct) y FreeRTOS no.
+- **Las decisiones de la noche** (Eduardo, 2-oct): `invokeLater` para la GUI desde otro hilo, a H12, donde se verifica;
+  el `RUN` común con sus reglas (`V7_IDEAS` §H10 «`RUN` en un solo sitio»); la fachada de la flash, con el `board_mgr`
+  común, en V7; `G2`, (a) y (b), y `owner`: uno, el contenedor —«si aparece en otro sitio debe ser una referencia
+  normal»—; `#477` resto, sólo lo barato.
+- **Lo que queda de H10**, ya sin decisiones pendientes (cada cosa con su análisis en `V7_IDEAS` §H10):
+  · **los fallos con consecuencia del lote D/E**: la pantalla que no arranca y calla (180), `copyFile` en `/sd` (236:
+    un `fat_copy`), el `FORMAT` que contesta OK (466), `ensure_parent_dirs` ×4 (268) y el `DF` que mezcla volúmenes
+    (248);
+  · **`G2`** (a) y (b) en `Gui.bp`; **`#477`**, lo barato;
+  · **el `RUN` común**, en sus seis pasos (el sim primero, todo en el PC; luego STM32, Pico y ESP32, a placa por lotes);
+  · **el `board_mgr` común con la fachada de la flash** (256): falta su análisis;
+  · lo pequeño de `#473`: `lv_conf.h` (2), la puerta de arranque (10), el lazo de la STM32 que no cede y el camino de
+    error de `scheduler_smp` (7); y del lote D, borrar el código muerto del shim (264), el censo que miente (280) y la
+    pila de SD que compila la STM32 (276).
 - **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) llevan copias rancias de la stdlib —la
   tanda lo dice como DESFASE y no sube nada—; y los `Stdlib.pack` de las zonas de las cuatro llevan el `Machine`, el
   `Rtc` y el `Time` de antes de `#626`: el arranque repone los de la imagen en `/lib`, que ganan (en RAM); regrabar el
