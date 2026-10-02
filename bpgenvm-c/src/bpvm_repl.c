@@ -202,17 +202,30 @@ static void repl_stat(long id, json_obj_t* obj) {
     }
     off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "size", (long) size);
     if (off < 0) goto err;
-    /* #466 — la VERSIÓN de un módulo es su MAGIC ("MOD6", "MOD7"): 4 bytes,
-     * sin cargar nada. Sólo si lo parece; lo que no empieza por "MOD" no lo
-     * lleva. Es lo que el IDE compara para decidir si sube una dependencia:
-     * la del micro se queda si es igual o más nueva. */
+    /* #466 — el FORMATO de un módulo es su MAGIC ("MOD8", "MOD9"): 4 bytes, sin
+     * cargar nada. Sólo si lo parece; lo que no empieza por "MOD" no lo lleva.
+     * V7/H9 #624 — y desde MOD8, su VERSIÓN de verdad, de la cabecera: `gen` (la
+     * «version» del proyecto, +36) y `ifaceCrc` (+40). Con eso decide el IDE si
+     * sube una dependencia, con la regla de Eduardo (2-oct, la de Java): formato
+     * compatible y versión igual o superior a la mínima —la de compilación—; el
+     * CRC sólo distingue «idéntico» de «otra compilación que vale». Hasta hoy
+     * contaba como versión el MAGIC, y con todo en MOD9 sólo quedaba el CRC. */
     {
-        uint8_t m[4];
-        if (bpvm_fs_read_at(path, 0, m, 4) == 4 && m[0] == 'M' && m[1] == 'O' && m[2] == 'D') {
+        uint8_t h[44];
+        long n = bpvm_fs_read_at(path, 0, h, (uint32_t) sizeof h);
+        if (n >= 4 && h[0] == 'M' && h[1] == 'O' && h[2] == 'D') {
             char magic[5];
-            memcpy(magic, m, 4); magic[4] = 0;
+            memcpy(magic, h, 4); magic[4] = 0;
             off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "magic", magic);
             if (off < 0) goto err;
+            if (n >= 44 && (h[3] == '8' || h[3] == '9')) {
+                uint32_t gen = ((uint32_t) h[36] << 24) | ((uint32_t) h[37] << 16) | ((uint32_t) h[38] << 8) | h[39];
+                uint32_t ifc = ((uint32_t) h[40] << 24) | ((uint32_t) h[41] << 16) | ((uint32_t) h[42] << 8) | h[43];
+                off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "gen", (long) gen);
+                if (off < 0) goto err;
+                off = wire_v1_field_ulong(buf, sizeof buf, (size_t) off, "ifaceCrc", (unsigned long) ifc);
+                if (off < 0) goto err;
+            }
         }
     }
     /* #398 — el CRC solo si se pide: es lo que antes calculaba el LIST para

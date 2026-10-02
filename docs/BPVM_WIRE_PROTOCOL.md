@@ -344,7 +344,7 @@ Metadata de un fichero individual — por **ruta**, o (`#466`) por **nombre de m
 
 Request: `{"type":"STAT","id":N,"path":"/app/Hello.mod"}`
 
-Reply: `{"type":"STAT_REPLY","id":N,"size":3519,"magic":"MOD7","isDir":false,"mtime":0}`
+Reply: `{"type":"STAT_REPLY","id":N,"size":3519,"magic":"MOD9","gen":7,"ifaceCrc":3166772865,"isDir":false,"mtime":0}`
 
 Error si no existe: `{"type":"ERROR","id":N,"code":"NOT_FOUND",...}`
 
@@ -352,16 +352,19 @@ Error si no existe: `{"type":"ERROR","id":N,"code":"NOT_FOUND",...}`
   99 % del refresco del árbol. Es un entero **sin signo** (0…4294967295; `#466`: antes salía
   negativo con el bit 31 puesto, porque `long` es de 32 bits en las placas, y el IDE lo daba por
   distinto). -1 = no se pudo calcular.
-- `magic` (`#466`): los 4 primeros bytes cuando parecen un módulo (`"MOD6"`, `"MOD7"`). Es la
-  **versión** del módulo — la única que hay: los ficheros no tienen fecha, tienen versión y CRC.
-  Un fichero que no empieza por `MOD` no lo lleva.
+- `magic` (`#466`): los 4 primeros bytes cuando parecen un módulo (`"MOD8"`, `"MOD9"`): su
+  **formato**. Un fichero que no empieza por `MOD` no lo lleva.
+- `gen` e `ifaceCrc` (V7/H9 `#624`, desde MOD8): la **versión** del módulo —la «version» de su
+  proyecto, de la cabecera (+36)— y el CRC-32 de su interfaz (+40, sin signo). Hasta `#624` contaba
+  como versión el `magic`, y con todo en MOD9 sólo quedaba el CRC para decidir. Un MOD7 o anterior
+  no los lleva.
 
 **Por nombre** (`#466`) — *«¿tienes `Math.mod`, donde sea?»*, la pregunta que el IDE hace por cada
 dependencia antes de subirla:
 
 Request: `{"type":"STAT","id":N,"name":"Math.mod","base":"/app/proj","crc":true}`
 
-Reply: `{"type":"STAT_REPLY","id":N,"path":"/lib/Math.mod","size":1708,"magic":"MOD7","crc":123456,"isDir":false,"mtime":0}`
+Reply: `{"type":"STAT_REPLY","id":N,"path":"/lib/Math.mod","size":1708,"magic":"MOD9","gen":7,"ifaceCrc":2768498097,"crc":123456,"isDir":false,"mtime":0}`
 
 El device lo resuelve con **su propio resolvedor**, el del RUN (`base` → literal → `/app` → `/lib`
 → la zona de packs; V7/H2 `#493`: sin `/sys`), para que el IDE no lleve una copia del orden de
@@ -369,10 +372,14 @@ búsqueda. `base` es opcional: la carpeta del proyecto que se va a ejecutar. `pa
 tiene — si hay que reemplazarlo, se reemplaza ahí. Si sólo lo tiene un **pack grabado**, `path` es
 la ruta cualificada `pack:<Pack>/Math.mod` (la placa lo ejecuta XIP desde ahí; `magic` y `crc`
 salen igual): la zona ya no contesta al `stat` de `/app/X.mod` por el nombre, así que un `path`
-de `/app` o `/lib` es un fichero de verdad. La regla del IDE con esta respuesta: se sube si no
-está (`NOT_FOUND`), si su `magic` es anterior, o si es el mismo y el `crc` es distinto; si el del
-device es más nuevo, no se sube; y si está en un pack, idéntico no se sube y distinto se sube a
-donde le toca (`/lib` o la app), que va delante del pack — un pack no se borra por un `DEL`.
+de `/app` o `/lib` es un fichero de verdad. **La regla con esta respuesta, para una LIBRERÍA**
+(V7/H9 `#624`, Eduardo, la de Java; `ReglaDeSubida` en `lexer-java`, y la tanda igual): se sube si no
+está (`NOT_FOUND`), si su `magic` es otro (formato incompatible), o si su `gen` es anterior a la
+mínima —la del `.mod` contra el que se compiló el programa—; con el mismo formato y una versión igual
+o superior, la del device **vale** aunque el `crc` sea otro (otra compilación), y no se sube. Sin
+`gen` (un firmware anterior a `#624`), la regla de antes: idéntico no se sube y distinto sí. Si hay
+que subir, se sube donde está o, si está en un pack, a donde le toca (`/lib`), que va delante del
+pack — un pack no se borra por un `DEL`. Un módulo del PROGRAMA se sube si cambia.
 
 #### `GET` (request, reply con bulk)
 

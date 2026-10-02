@@ -464,6 +464,43 @@ class DebugServerTest {
         return vm;
     }
 
+    /** V7/H9 #624 — el STAT de un módulo dice su formato (MAGIC) y, desde MOD8, su versión (`gen`, +36) y su interfaz
+     *  (`ifaceCrc`, +40), como la placa: con eso decide quien sube (formato compatible y versión >= la mínima). */
+    @Test
+    @Timeout(15)
+    void statDeUnModuloDaSuVersion(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+        int port = freePort();
+        java.nio.ByteBuffer cab = java.nio.ByteBuffer.allocate(52);   // big-endian, como el .mod
+        cab.put(new byte[] {'M', 'O', 'D', '9'}).position(36);
+        cab.putInt(7).putInt(0xDEADBEEF);
+        byte[] mod9 = cab.array();
+        java.nio.file.Files.createDirectories(dir.resolve("app"));
+        java.nio.file.Files.write(dir.resolve("app/Ver.mod"), mod9);
+        java.nio.file.Files.write(dir.resolve("app/raw.bin"), new byte[] {1, 2, 3});
+        java.util.zip.CRC32 crc = new java.util.zip.CRC32();
+        crc.update(mod9);
+        try (DebugServer server = new DebugServer(vmConWorkdir(dir), new DebugController())) {
+            server.start(port);
+            try (Socket s = new Socket("localhost", port)) {
+                server.awaitClient(2, TimeUnit.SECONDS);
+                java.io.InputStream in = new java.io.BufferedInputStream(s.getInputStream());
+                java.io.OutputStream out = s.getOutputStream();
+                manda(out, "{\"type\":\"STAT\",\"id\":1,\"path\":\"app/Ver.mod\",\"crc\":true}", null);
+                Map<String, Object> r = mensaje(in);
+                assertEquals("STAT_REPLY", Json.getString(r, "type", ""));
+                assertEquals("MOD9", Json.getString(r, "magic", null));
+                assertEquals(7L, Json.getLong(r, "gen", -1));
+                assertEquals(0xDEADBEEFL, Json.getLong(r, "ifaceCrc", -1));
+                assertEquals(crc.getValue(), Json.getLong(r, "crc", -1));
+                manda(out, "{\"type\":\"STAT\",\"id\":2,\"path\":\"app/raw.bin\"}", null);
+                Map<String, Object> r2 = mensaje(in);
+                assertEquals(3L, Json.getLong(r2, "size", -1));
+                assertNull(Json.getString(r2, "magic", null), "lo que no es módulo, sin magic");
+                assertEquals(-1L, Json.getLong(r2, "gen", -1));
+            }
+        }
+    }
+
     @Test
     @Timeout(15)
     void subidaPorTrozosYBajadaTroceada(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {

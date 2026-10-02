@@ -1130,6 +1130,20 @@ public final class PicoExplorer extends JPanel {
                     // No lo tiene (o firmware sin STAT por nombre): a donde le toca.
                     depRemote = isLib ? ("/lib/" + dep.getName()) : appPath(prefix, dep.getName());
                     motivo = "la placa no lo tiene"; subir = true;
+                } else if (isLib) {
+                    /* V7/H9 #624 — una LIBRERÍA: la regla de Eduardo (2-oct, la de Java), en ReglaDeSubida: el formato
+                     * (MAGIC) compatible y la versión de la placa igual o superior a la mínima —la del .mod contra el
+                     * que se compiló el programa—. El CRC sólo dice «idéntico»: otra compilación de la misma versión
+                     * VALE y no se sube (antes sí, y a /lib delante del pack, que va a RAM: la C6 sin memoria, #623).
+                     * Si hay que subir: donde está, o delante del pack (/lib), que va antes en la resolución. */
+                    final basicplus.frontend.ReglaDeSubida.Decision dd = basicplus.frontend.ReglaDeSubida.decidir(
+                            st.magic, st.gen, st.crc,
+                            basicplus.frontend.ReglaDeSubida.formatoDe(depBytes),
+                            basicplus.frontend.ReglaDeSubida.versionDe(depBytes), crc32(depBytes));
+                    subir = dd.subir;
+                    final boolean enPack = st.path.startsWith("pack:");
+                    depRemote = (subir && enPack) ? donde_le_tocaria : st.path;
+                    motivo = (subir && enPack) ? dd.motivo + ": se sube delante del pack" : dd.motivo;
                 } else if (st.path.startsWith("pack:")) {
                     /* [V7/H2, #493] Lo tiene UN PACK GRABADO (la placa lo ejecuta XIP
                      * desde ahí). Idéntico → no se sube nada. Distinto → se sube a

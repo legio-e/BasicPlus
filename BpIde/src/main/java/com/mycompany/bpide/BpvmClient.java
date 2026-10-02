@@ -1276,8 +1276,13 @@ public final class BpvmClient implements AutoCloseable {
         public final long   size;
         public final long   crc;    /* -1 = no lo dio */
         public final String magic;  /* "MOD7"; null si no parece un módulo */
-        ModStat(String path, long size, long crc, String magic) {
+        /** V7/H9 #624 — la VERSIÓN de verdad (desde MOD8, de la cabecera): `gen`, la «version» del proyecto; y la
+         *  interfaz (`ifaceCrc`). -1 = la placa no la dio (firmware anterior, o un formato sin versión). */
+        public final long   gen;
+        public final long   ifaceCrc;
+        ModStat(String path, long size, long crc, String magic, long gen, long ifaceCrc) {
             this.path = path; this.size = size; this.crc = crc; this.magic = magic;
+            this.gen = gen; this.ifaceCrc = ifaceCrc;
         }
         /** La VERSIÓN del módulo: "MOD7" → 7; 0 si no parece un módulo. Es la única
          *  que hay —los ficheros del device no tienen fecha: tienen versión y CRC. */
@@ -1306,7 +1311,8 @@ public final class BpvmClient implements AutoCloseable {
             String path = Json.getString(r, "path", null);
             if (path == null) return null;
             return new ModStat(path, Json.getLong(r, "size", -1), crcSinSigno(Json.getLong(r, "crc", -1)),
-                               Json.getString(r, "magic", null));
+                               Json.getString(r, "magic", null),
+                               Json.getLong(r, "gen", -1), crcSinSigno(Json.getLong(r, "ifaceCrc", -1)));   // V7/H9 #624
         } catch (IOException e) {
             return null;
         }

@@ -1043,14 +1043,28 @@ def stat_por_nombre(w, fich):
     """STAT name= : la placa resuelve con bpvm_entry_resolve (basedir -> tal cual
     -> /app -> /lib; desde V7/H2 #493 sin /sys y sin que la zona de packs conteste
     por basename), y dice path y crc. El RUN busca sus dependencias en ese
-    mismo orden salvo el «tal cual». Devuelve (path, crc) o (None, None)."""
+    mismo orden salvo el «tal cual». Devuelve (path, crc, magic, gen) o (None, None, None, None).
+    V7/H9 #624: y el formato (MAGIC) y la versión (`gen`, de la cabecera desde MOD8; -1 si no la dice)."""
     st = w.llamar("STAT", "STAT_REPLY", 10, name=fich, crc=True)
     if st is None:
-        return None, None
+        return None, None, None, None
     crc = st.get("crc")
     if isinstance(crc, int) and crc != -1:
         crc &= 0xFFFFFFFF
-    return st.get("path"), crc
+    gen = st.get("gen")
+    return st.get("path"), crc, st.get("magic"), (gen if isinstance(gen, int) else -1)
+
+
+def cabecera_local(ruta):
+    """V7/H9 #624 — el formato (MAGIC) y la versión (`gen`, +36, big-endian) de un .mod local; -1 si no la lleva."""
+    with open(ruta, "rb") as f:
+        h = f.read(44)
+    if len(h) < 4 or h[:3] != b"MOD":
+        return None, -1
+    magic = h[:4].decode("ascii", "replace")
+    if len(h) >= 44 and magic[3] in "89":
+        return magic, int.from_bytes(h[36:40], "big")
+    return magic, -1
 
 
 def anotar(notas, n):
@@ -1080,7 +1094,7 @@ def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
             anotar(notas, "dependencia %s: no es de bpstdlib: modulo de la app, va a /app con el programa" % d)
             continue
         crc_local = crc_de(local)
-        path, crc_placa = stat_por_nombre(w, fich)
+        path, crc_placa, magic_placa, gen_placa = stat_por_nombre(w, fich)
         if path in ("/lib/" + fich, "/app/" + fich) and crc_placa == crc_local:
             anotar(notas, "dependencia %s: ya en %s (crc igual; resuelto por nombre, como el RUN)" % (d, path))
             verificadas.add(d)
@@ -1092,6 +1106,21 @@ def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
             verificadas.add(d)
             continue
         crc_txt = ("%08x" % crc_placa) if isinstance(crc_placa, int) and crc_placa >= 0 else str(crc_placa)
+        # V7/H9 #624 — la regla de Eduardo (la de Java): en /lib o en un pack, con el MISMO formato y una versión
+        # igual o superior a la mínima (la de bpstdlib, contra la que se compila la prueba), la de la placa VALE: no se
+        # sube —antes se subía a /lib por el CRC, y /lib se carga en RAM: la C6 sin memoria, #623—. Pero entonces la
+        # placa no prueba la stdlib de HOY: se anota, para regrabar el pack o la imagen. (/app no entra: una copia en
+        # /app distinta de la de /lib la TAPA y el programa lo dice por OUTPUT, que rompería el oráculo.)
+        magic_local, gen_local = cabecera_local(local)
+        if (isinstance(path, str) and (path.startswith("/lib/") or path.startswith("pack:"))
+                and magic_placa is not None and magic_placa == magic_local
+                and gen_placa >= 0 and gen_local >= 0 and gen_placa >= gen_local):
+            anotar(notas, "dependencia %s: DESFASE de compilación —la placa tiene en %s la versión %d (>= la mínima %d), "
+                          "crc %s != el de hoy %08x: vale y NO se sube, pero la prueba corre con la suya; para probar "
+                          "la de hoy, regraba %s—" % (d, path, gen_placa, gen_local, crc_txt, crc_local,
+                                                     "el pack" if path.startswith("pack:") else "la imagen"))
+            verificadas.add(d)
+            continue
         if path is None:
             anotar(notas, "dependencia %s: el RUN no la resuelve (%s): se sube a /lib" % (d, w.errores()))
         elif path not in ("/lib/" + fich, "/app/" + fich):
@@ -1117,7 +1146,7 @@ def asegurar_deps(w, deps, inv, subidos, notas, verificadas):
         if not ok:
             raise RuntimeError("no se pudo subir %s: %s" % (fich, det))
         inv["/lib/" + fich] = len(data)
-        path2, crc2 = stat_por_nombre(w, fich)
+        path2, crc2, _, _ = stat_por_nombre(w, fich)
         if path2 != "/lib/" + fich or crc2 != crc_local:
             n = "dependencia %s: SOMBREADA por %s (crc %s) aunque se acaba de subir /lib/%s con crc %08x" % (
                 d, path2, ("%08x" % crc2) if isinstance(crc2, int) and crc2 >= 0 else crc2, fich, crc_local)

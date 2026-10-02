@@ -577,7 +577,17 @@ def main():
         check(r.get("code") == "NOT_FOUND", "STAT por nombre de lo que no hay → NOT_FOUND")
         r = w.call("STAT", path="/app/proj/raw.bin")
         check(r.get("size") == 3 and "magic" not in r, "STAT de lo que no es módulo → sin magic")
-        for p in ("/lib/Fake.mod", "/app/proj/Fake.mod", "/app/proj/raw.bin"):
+        # V7/H9 #624 — desde MOD8, la VERSIÓN de verdad: gen (+36) e ifaceCrc (+40) de la cabecera,
+        # con lo que el IDE decide si sube (formato compatible y versión >= la mínima, Eduardo).
+        cab9 = b"MOD9" + bytes(32) + (7).to_bytes(4, "big") + (0xDEADBEEF).to_bytes(4, "big") + bytes(8)
+        w.call_bulk("PUT", cab9, path="/app/proj/Ver.mod")
+        r = w.call("STAT", path="/app/proj/Ver.mod")
+        check(r.get("magic") == "MOD9" and r.get("gen") == 7 and r.get("ifaceCrc") == 0xDEADBEEF,
+              "STAT de un MOD9 → su versión (gen) y su interfaz (ifaceCrc), de la cabecera (#624)")
+        r = w.call("STAT", path="/lib/Fake.mod")
+        check(r.get("magic") == "MOD7" and "gen" not in r and "ifaceCrc" not in r,
+              "STAT de un MOD7 → sin gen ni ifaceCrc (ese formato no los lleva)")
+        for p in ("/lib/Fake.mod", "/app/proj/Fake.mod", "/app/proj/raw.bin", "/app/proj/Ver.mod"):
             w.call("DEL", path=p)
         w.call("RMDIR", path="/app/proj")
 

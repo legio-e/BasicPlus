@@ -1084,10 +1084,36 @@ public final class DebugServer implements AutoCloseable {
             boolean isDir = java.nio.file.Files.isDirectory(p);
             long size = isDir ? 0 : java.nio.file.Files.size(p);
             long mtime = java.nio.file.Files.getLastModifiedTime(p).toMillis() / 1000L;
+            // V7/H9 #624 — como la placa: de un módulo, su formato (el MAGIC) y, desde MOD8, su versión (`gen`, +36)
+            // y su interfaz (`ifaceCrc`, +40), de la cabecera; y el CRC si se pide. Con eso decide quien sube.
+            StringBuilder modulo = new StringBuilder();
+            if (!isDir) {
+                byte[] h = new byte[44];
+                int n = 0;
+                try (java.io.InputStream in = java.nio.file.Files.newInputStream(p)) {
+                    int r;
+                    while (n < h.length && (r = in.read(h, n, h.length - n)) > 0) n += r;
+                }
+                if (n >= 4 && h[0] == 'M' && h[1] == 'O' && h[2] == 'D') {
+                    modulo.append(",\"magic\":\"").append((char) h[0]).append((char) h[1]).append((char) h[2])
+                          .append((char) h[3]).append('"');
+                    if (n >= 44 && (h[3] == '8' || h[3] == '9')) {
+                        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(h);   // big-endian, como el .mod
+                        modulo.append(",\"gen\":").append(bb.getInt(36) & 0xFFFFFFFFL)
+                              .append(",\"ifaceCrc\":").append(bb.getInt(40) & 0xFFFFFFFFL);
+                    }
+                }
+                if (Json.getBool(m, "crc", false)) {
+                    java.util.zip.CRC32 c = new java.util.zip.CRC32();
+                    c.update(java.nio.file.Files.readAllBytes(p));
+                    modulo.append(",\"crc\":").append(c.getValue());
+                }
+            }
             sendReply(id, "STAT_REPLY",
                     "\"size\":" + size
                     + ",\"isDir\":" + (isDir ? "true" : "false")
-                    + ",\"mtime\":" + mtime);
+                    + ",\"mtime\":" + mtime
+                    + modulo);
         } catch (Throwable e) {
             sendError(id, codeFor(e), "STAT: " + e.getMessage());
         }
