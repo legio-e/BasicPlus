@@ -43,8 +43,8 @@ static int s_last_err = 0;
 
 int bpvm_fs_lfs_last_err(void) { return s_last_err; }
 
-bpvm_fs_fail_t bpvm_fs_last_fail(void) {
-    switch (s_last_err) {
+static bpvm_fs_fail_t clase_lfs(int e) {
+    switch (e) {
         case LFS_ERR_NOSPC:       return BPVM_FS_FAIL_NO_SPACE;
         case LFS_ERR_FBIG:        return BPVM_FS_FAIL_TOO_BIG;
         case LFS_ERR_NAMETOOLONG: return BPVM_FS_FAIL_NAME_TOO_LONG;
@@ -56,11 +56,15 @@ bpvm_fs_fail_t bpvm_fs_last_fail(void) {
     }
 }
 
-void bpvm_fs_log_fail(const char* op, const char* path, unsigned long size,
-                      unsigned long libre, unsigned long total) {
-    log_printf("fs: %s '%s' (%lu B) FALLO lfs=%d %s  [libre %lu/%lu B]",
-               op, path, size, s_last_err, bpvm_fs_lfs_err_str(s_last_err),
-               libre, total);
+/* #628 — un fallo de littlefs se ANOTA: su código crudo aquí (bpvm_fs_lfs_last_err,
+ * para los logs de las familias) y, en la fachada, su clase y su texto (para el
+ * wire y la línea del log, que sale igual que antes: «FALLO lfs=-28 NOSPC…»).
+ * Antes sólo lo hacían `write` y el cursor: un DEL que fallaba contestaba con el
+ * motivo de la operación anterior. -1, para el `return` del que falla. */
+static int lfs_fallo(int e) {
+    s_last_err = e;
+    bpvm_fs_anota_fallo("lfs", e, clase_lfs(e), bpvm_fs_lfs_err_str(e));
+    return -1;
 }
 
 const char* bpvm_fs_lfs_err_str(int e) {
@@ -117,21 +121,25 @@ static void fs_unlock(void) { if (s_fs_lock_ready) bpvm_platform_mutex_unlock(&s
 /* ¿el path existe y de qué tipo? 0=no existe, 1=fichero, 2=dir (size out) */
 static int kind_of(const char* path, uint32_t* size) {
     struct lfs_info info;
-    if (lfs_stat(&s_lfs, path, &info) < 0) return 0;
+    int e = lfs_stat(&s_lfs, path, &info);
+    if (e < 0) { (void) lfs_fallo(e); return 0; }   /* #628: el NOENT, anotado */
     if (size) *size = (uint32_t) info.size;
     return (info.type == LFS_TYPE_DIR) ? 2 : 1;
 }
 
 static int be_stat_impl(const char* path, uint32_t* size) {
-    return (kind_of(path, size) == 1) ? 0 : -1;   /* dirs → -1, como host */
+    int k = kind_of(path, size);
+    if (k == 1) return 0;
+    return (k == 2) ? lfs_fallo(LFS_ERR_ISDIR) : -1;   /* dirs → -1, como host (el NOENT ya lo anotó kind_of) */
 }
 
 static long be_read_impl(const char* path, uint8_t* dst, uint32_t cap) {
     lfs_file_t f;
-    if (lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
+    int e = lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a);
+    if (e < 0) return lfs_fallo(e);
     lfs_ssize_t n = lfs_file_read(&s_lfs, &f, dst, cap);
     lfs_file_close(&s_lfs, &f);
-    return (n < 0) ? -1 : (long) n;
+    return (n < 0) ? lfs_fallo((int) n) : (long) n;
 }
 
 /* #305 — lectura desde un offset. littlefs ya sabe posicionarse (lfs_file_seek),
@@ -139,11 +147,15 @@ static long be_read_impl(const char* path, uint8_t* dst, uint32_t cap) {
  * Lo hereda TODO el que use este backend: los 3 firmwares y el simulador. */
 static long be_read_at_impl(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
     lfs_file_t f;
-    if (lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
+    int e = lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a);
+    if (e < 0) return lfs_fallo(e);
     long r = -1;
-    if (lfs_file_seek(&s_lfs, &f, (lfs_soff_t) off, LFS_SEEK_SET) >= 0) {
+    lfs_soff_t s = lfs_file_seek(&s_lfs, &f, (lfs_soff_t) off, LFS_SEEK_SET);
+    if (s >= 0) {
         lfs_ssize_t n = lfs_file_read(&s_lfs, &f, dst, cap);
-        r = (n < 0) ? -1 : (long) n;
+        r = (n < 0) ? lfs_fallo((int) n) : (long) n;
+    } else {
+        (void) lfs_fallo((int) s);
     }
     lfs_file_close(&s_lfs, &f);
     return r;
@@ -161,18 +173,19 @@ static long be_read_at_impl(const char* path, uint32_t off, uint8_t* dst, uint32
  * más apretado. */
 static int be_crc32_impl(const char* path, uint32_t* crc_out) {
     lfs_file_t f;
-    if (lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
+    int e = lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a);
+    if (e < 0) return lfs_fallo(e);
     uint8_t  buf[512];
     uint32_t st = BPVM_CRC32_INIT;
     int      err = 0;
     for (;;) {
         lfs_ssize_t n = lfs_file_read(&s_lfs, &f, buf, sizeof buf);
-        if (n < 0) { err = 1; break; }
+        if (n < 0) { err = (int) n; break; }
         if (n == 0) break;
         st = bpvm_crc32_update(st, buf, (size_t) n);
     }
     lfs_file_close(&s_lfs, &f);
-    if (err) return -1;
+    if (err) return lfs_fallo(err);
     if (crc_out) *crc_out = bpvm_crc32_final(st);
     return 0;
 }
@@ -183,56 +196,60 @@ static int be_crc32_impl(const char* path, uint32_t* crc_out) {
  * firmware mas apretado. */
 static long be_read_stream_impl(const char* path, bpvm_fs_chunk_cb cb, void* user) {
     lfs_file_t f;
-    if (lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
+    int e = lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDONLY, &s_fcfg_a);
+    if (e < 0) return lfs_fallo(e);
     uint8_t buf[512];
     long    total = 0;
     int     err = 0;
     for (;;) {
         lfs_ssize_t n = lfs_file_read(&s_lfs, &f, buf, sizeof buf);
-        if (n < 0) { err = 1; break; }
+        if (n < 0) { err = (int) n; break; }
         if (n == 0) break;
         total += (long) n;
         if (cb(buf, (uint32_t) n, user) != 0) break;   /* el llamador aborta */
     }
     lfs_file_close(&s_lfs, &f);
-    return err ? -1 : total;
+    return err ? lfs_fallo(err) : total;
 }
 
 static int be_write_impl(const char* path, const uint8_t* data, uint32_t len, int append) {
     lfs_file_t f;
     int flags = LFS_O_WRONLY | LFS_O_CREAT | (append ? LFS_O_APPEND : LFS_O_TRUNC);
     int e = lfs_file_opencfg(&s_lfs, &f, path, flags, &s_fcfg_a);
-    if (e < 0) { s_last_err = e; return -1; }
+    if (e < 0) return lfs_fallo(e);
     int rc = 0;
     if (len > 0 && data) {
         lfs_ssize_t n = lfs_file_write(&s_lfs, &f, data, len);
         /* n >= 0 pero corto = disco lleno a media escritura; littlefs no lo marca
          * como error, así que lo nombramos nosotros en vez de dejar el 0 de "todo
          * fue bien" (#329: el que reporta el fallo tiene que poder decir cuál). */
-        if (n < 0)                    { s_last_err = (int) n;      rc = -1; }
-        else if ((uint32_t) n != len) { s_last_err = LFS_ERR_NOSPC; rc = -1; }
+        if (n < 0)                    rc = lfs_fallo((int) n);
+        else if ((uint32_t) n != len) rc = lfs_fallo(LFS_ERR_NOSPC);
     }
     /* el close COMMITTEA (durabilidad-por-llamada; ver cabecera) */
     e = lfs_file_close(&s_lfs, &f);
-    if (e < 0) { s_last_err = e; rc = -1; }
+    if (e < 0) rc = lfs_fallo(e);
     return rc;
 }
 
 static int be_remove_impl(const char* path) {
-    if (kind_of(path, NULL) != 1) return -1;      /* solo ficheros, como host */
-    return (lfs_remove(&s_lfs, path) < 0) ? -1 : 0;
+    int k = kind_of(path, NULL);
+    if (k != 1) return (k == 2) ? lfs_fallo(LFS_ERR_ISDIR) : -1;   /* solo ficheros, como host (el NOENT, kind_of) */
+    int e = lfs_remove(&s_lfs, path);
+    return (e < 0) ? lfs_fallo(e) : 0;
 }
 
 static int be_rename_impl(const char* from, const char* to) {
     /* lfs_rename ya sobreescribe un fichero destino (REPLACE_EXISTING). */
-    return (lfs_rename(&s_lfs, from, to) < 0) ? -1 : 0;
+    int e = lfs_rename(&s_lfs, from, to);
+    return (e < 0) ? lfs_fallo(e) : 0;
 }
 
 /* mkdir recursivo (crea intermedios; ok si ya existe) — espejo de host_mkdir. */
 static int be_mkdir_impl(const char* path) {
     char buf[512];
     size_t n = strlen(path);
-    if (n == 0 || n >= sizeof(buf)) return -1;
+    if (n == 0 || n >= sizeof(buf)) return lfs_fallo(n ? LFS_ERR_NAMETOOLONG : LFS_ERR_INVAL);
     memcpy(buf, path, n + 1);
     for (size_t i = 1; i < n; i++) {
         if (buf[i] == '/') {
@@ -243,33 +260,40 @@ static int be_mkdir_impl(const char* path) {
     }
     int e = lfs_mkdir(&s_lfs, buf);
     if (e == 0 || e == LFS_ERR_EXIST) {
-        return (kind_of(buf, NULL) == 2) ? 0 : -1;   /* EXIST como fichero → -1 */
+        int k = kind_of(buf, NULL);
+        return (k == 2) ? 0 : (k == 1) ? lfs_fallo(LFS_ERR_EXIST) : -1;   /* EXIST como fichero → -1 */
     }
-    return -1;
+    return lfs_fallo(e);
 }
 
 static int be_rmdir_impl(const char* path) {
-    if (kind_of(path, NULL) != 2) return -1;      /* solo dirs, como host */
-    return (lfs_remove(&s_lfs, path) < 0) ? -1 : 0;   /* NOTEMPTY → -1 */
+    int k = kind_of(path, NULL);
+    if (k != 2) return (k == 1) ? lfs_fallo(LFS_ERR_NOTDIR) : -1;   /* solo dirs, como host */
+    int e = lfs_remove(&s_lfs, path);
+    return (e < 0) ? lfs_fallo(e) : 0;   /* NOTEMPTY → -1 */
 }
 
 static int be_copy_impl(const char* from, const char* to) {
     lfs_file_t fi, fo;
-    if (lfs_file_opencfg(&s_lfs, &fi, from, LFS_O_RDONLY, &s_fcfg_a) < 0) return -1;
-    if (lfs_file_opencfg(&s_lfs, &fo, to, LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC, &s_fcfg_b) < 0) {
+    int e = lfs_file_opencfg(&s_lfs, &fi, from, LFS_O_RDONLY, &s_fcfg_a);
+    if (e < 0) return lfs_fallo(e);
+    e = lfs_file_opencfg(&s_lfs, &fo, to, LFS_O_WRONLY | LFS_O_CREAT | LFS_O_TRUNC, &s_fcfg_b);
+    if (e < 0) {
         lfs_file_close(&s_lfs, &fi);
-        return -1;
+        return lfs_fallo(e);
     }
     uint8_t buf[256];
     int rc = 0;
     for (;;) {
         lfs_ssize_t n = lfs_file_read(&s_lfs, &fi, buf, sizeof(buf));
-        if (n < 0) { rc = -1; break; }
+        if (n < 0) { rc = lfs_fallo((int) n); break; }
         if (n == 0) break;
-        if (lfs_file_write(&s_lfs, &fo, buf, (lfs_size_t) n) != n) { rc = -1; break; }
+        lfs_ssize_t w = lfs_file_write(&s_lfs, &fo, buf, (lfs_size_t) n);
+        if (w != n) { rc = lfs_fallo(w < 0 ? (int) w : LFS_ERR_NOSPC); break; }
     }
     lfs_file_close(&s_lfs, &fi);
-    if (lfs_file_close(&s_lfs, &fo) < 0) rc = -1;
+    e = lfs_file_close(&s_lfs, &fo);
+    if (e < 0) rc = lfs_fallo(e);
     return rc;
 }
 
@@ -285,7 +309,8 @@ static int be_list_impl(const char* path,
                         void* user) {
     lfs_dir_t d;
     struct lfs_info info;
-    if (lfs_dir_open(&s_lfs, &d, path) < 0) return -1;
+    int e = lfs_dir_open(&s_lfs, &d, path);
+    if (e < 0) return lfs_fallo(e);
     while (lfs_dir_read(&s_lfs, &d, &info) > 0) {
         if (strcmp(info.name, ".") == 0 || strcmp(info.name, "..") == 0) continue;
         cb(info.name, (info.type == LFS_TYPE_DIR) ? 1 : 0, (uint32_t) info.size, user);
@@ -330,19 +355,23 @@ static long be_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
 static long be_write_at_impl(const char* path, uint32_t off,
                              const uint8_t* data, uint32_t len) {
     lfs_file_t f;
-    if (lfs_file_opencfg(&s_lfs, &f, path,
-                         LFS_O_RDWR | LFS_O_CREAT, &s_fcfg_a) < 0) return -1;
+    int e = lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDWR | LFS_O_CREAT, &s_fcfg_a);
+    if (e < 0) return lfs_fallo(e);
     long r = -1;
     /* Más allá del final, littlefs rellena de CEROS al escribir. FatFs deja lo
      * que hubiera. Por eso el contrato de la fachada promete sólo lo común: el
      * hueco es INDEFINIDO. Prometer ceros aquí sería prometerlos en las dos. */
-    if (lfs_file_seek(&s_lfs, &f, (lfs_soff_t) off, LFS_SEEK_SET) >= 0) {
+    lfs_soff_t s = lfs_file_seek(&s_lfs, &f, (lfs_soff_t) off, LFS_SEEK_SET);
+    if (s >= 0) {
         lfs_ssize_t n = lfs_file_write(&s_lfs, &f, data, len);
-        r = (n < 0) ? -1 : (long) n;
+        r = (n < 0) ? lfs_fallo((int) n) : (long) n;
+    } else {
+        (void) lfs_fallo((int) s);
     }
     /* El close es quien VUELCA: si falla, lo escrito no está y decir que sí
      * estaría mintiendo. */
-    if (lfs_file_close(&s_lfs, &f) < 0) r = -1;
+    e = lfs_file_close(&s_lfs, &f);
+    if (e < 0) r = lfs_fallo(e);
     return r;
 }
 static long be_write_at(const char* path, uint32_t off,
@@ -352,10 +381,12 @@ static long be_write_at(const char* path, uint32_t off,
 
 static int be_truncate_impl(const char* path, uint32_t size) {
     lfs_file_t f;
-    if (lfs_file_opencfg(&s_lfs, &f, path,
-                         LFS_O_RDWR | LFS_O_CREAT, &s_fcfg_a) < 0) return -1;
-    int r = (lfs_file_truncate(&s_lfs, &f, (lfs_off_t) size) < 0) ? -1 : 0;
-    if (lfs_file_close(&s_lfs, &f) < 0) r = -1;
+    int e = lfs_file_opencfg(&s_lfs, &f, path, LFS_O_RDWR | LFS_O_CREAT, &s_fcfg_a);
+    if (e < 0) return lfs_fallo(e);
+    e = lfs_file_truncate(&s_lfs, &f, (lfs_off_t) size);
+    int r = (e < 0) ? lfs_fallo(e) : 0;
+    e = lfs_file_close(&s_lfs, &f);
+    if (e < 0) r = lfs_fallo(e);
     return r;
 }
 static int be_truncate(const char* path, uint32_t size) {
@@ -403,7 +434,7 @@ typedef struct {
 } lfs_abierto_t;
 
 static int be_fopen(void* st, const char* path, int mode) {
-    if (!s_mounted) return -1;
+    if (!s_mounted) { bpvm_fs_anota_fallo("lfs", 0, BPVM_FS_FAIL_IO, "littlefs sin montar"); return -1; }
     lfs_abierto_t* o = (lfs_abierto_t*) st;
     memset(o, 0, sizeof *o);
     o->cfg.buffer = o->cache;
@@ -413,32 +444,32 @@ static int be_fopen(void* st, const char* path, int mode) {
               :                              LFS_O_RDWR;
     fs_lock();
     int r = lfs_file_opencfg(&s_lfs, &o->f, path, flags, &o->cfg);
-    if (r < 0) s_last_err = r;
+    if (r < 0) (void) lfs_fallo(r);
     fs_unlock();
     return (r < 0) ? -1 : 0;
 }
 static int be_fclose(void* st) {
-    fs_lock(); int r = lfs_file_close(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) s_last_err = r; fs_unlock();
+    fs_lock(); int r = lfs_file_close(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) (void) lfs_fallo(r); fs_unlock();
     return (r < 0) ? -1 : 0;
 }
 static long be_fread(void* st, uint8_t* dst, uint32_t n) {
-    fs_lock(); lfs_ssize_t r = lfs_file_read(&s_lfs, &((lfs_abierto_t*) st)->f, dst, n); if (r < 0) s_last_err = (int) r; fs_unlock();
+    fs_lock(); lfs_ssize_t r = lfs_file_read(&s_lfs, &((lfs_abierto_t*) st)->f, dst, n); if (r < 0) (void) lfs_fallo((int) r); fs_unlock();
     return (r < 0) ? -1 : (long) r;
 }
 static long be_fwrite(void* st, const uint8_t* src, uint32_t n) {
-    fs_lock(); lfs_ssize_t r = lfs_file_write(&s_lfs, &((lfs_abierto_t*) st)->f, src, n); if (r < 0) s_last_err = (int) r; fs_unlock();
+    fs_lock(); lfs_ssize_t r = lfs_file_write(&s_lfs, &((lfs_abierto_t*) st)->f, src, n); if (r < 0) (void) lfs_fallo((int) r); fs_unlock();
     return (r < 0) ? -1 : (long) r;
 }
 static int be_fseek(void* st, uint32_t pos) {
-    fs_lock(); lfs_soff_t r = lfs_file_seek(&s_lfs, &((lfs_abierto_t*) st)->f, (lfs_soff_t) pos, LFS_SEEK_SET); if (r < 0) s_last_err = (int) r; fs_unlock();
+    fs_lock(); lfs_soff_t r = lfs_file_seek(&s_lfs, &((lfs_abierto_t*) st)->f, (lfs_soff_t) pos, LFS_SEEK_SET); if (r < 0) (void) lfs_fallo((int) r); fs_unlock();
     return (r < 0 || (uint32_t) r != pos) ? -1 : 0;
 }
 static long be_fsize(void* st) {
-    fs_lock(); lfs_soff_t r = lfs_file_size(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) s_last_err = (int) r; fs_unlock();
+    fs_lock(); lfs_soff_t r = lfs_file_size(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) (void) lfs_fallo((int) r); fs_unlock();
     return (r < 0) ? -1 : (long) r;
 }
 static int be_fsync(void* st) {
-    fs_lock(); int r = lfs_file_sync(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) s_last_err = r; fs_unlock();
+    fs_lock(); int r = lfs_file_sync(&s_lfs, &((lfs_abierto_t*) st)->f); if (r < 0) (void) lfs_fallo(r); fs_unlock();
     return (r < 0) ? -1 : 0;
 }
 
@@ -484,7 +515,7 @@ int bpvm_fs_lfs_attach(const struct lfs_config* cfg, int format_if_needed) {
     }
     if (e == 0) s_mounted = 1;
     fs_unlock();
-    if (e < 0) return -1;
+    if (e < 0) return lfs_fallo(e);   /* #628: el «lfs=%d» del log de la familia, el de ESTE fallo */
     s_cfg_ptr = cfg;
     bpvm_fs_set_backend(&s_lfs_backend);
     return 0;
@@ -523,6 +554,6 @@ int bpvm_fs_lfs_format(void) {
     if (e == 0) e = lfs_mount(&s_lfs, s_cfg_ptr);
     if (e < 0) s_mounted = 0;   /* irrecuperable: ops fallaran limpio */
     fs_unlock();
-    if (e < 0) { bpvm_fs_set_backend(NULL); return -1; }
+    if (e < 0) { bpvm_fs_set_backend(NULL); return lfs_fallo(e); }
     return 0;
 }

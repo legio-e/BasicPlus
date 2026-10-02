@@ -11,21 +11,61 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>      /* V5/H2: malloc del truncate por copia */
+#include <errno.h>       /* #628 — el motivo de un fallo del PC */
+
+/* #628 — el MOTIVO de un fallo sale de errno. Los textos, nuestros y literales:
+ * la fachada los guarda por puntero, y strerror puede devolver un búfer que la
+ * llamada siguiente pisa. -1, para el `return` del que falla. */
+static int host_fallo_de(int e) {
+    bpvm_fs_fail_t c = BPVM_FS_FAIL_OTHER;
+    const char*    t = "errno";
+    switch (e) {
+        case ENOENT: c = BPVM_FS_FAIL_NOT_FOUND; t = "ENOENT (no existe)"; break;
+        case EEXIST: c = BPVM_FS_FAIL_EXISTS;    t = "EEXIST (ya existe)"; break;
+        case ENOSPC: c = BPVM_FS_FAIL_NO_SPACE;  t = "ENOSPC (sin espacio)"; break;
+        case EIO:    c = BPVM_FS_FAIL_IO;        t = "EIO (fallo de E/S)"; break;
+#ifdef EFBIG
+        case EFBIG:  c = BPVM_FS_FAIL_TOO_BIG;   t = "EFBIG (fichero demasiado grande)"; break;
+#endif
+#ifdef ENAMETOOLONG
+        case ENAMETOOLONG: c = BPVM_FS_FAIL_NAME_TOO_LONG; t = "ENAMETOOLONG (nombre demasiado largo)"; break;
+#endif
+        case EACCES: t = "EACCES (sin permiso)"; break;
+        case EINVAL: t = "EINVAL (argumento invalido)"; break;
+        case ENOMEM: t = "ENOMEM (sin memoria)"; break;
+#ifdef EISDIR
+        case EISDIR: t = "EISDIR (es una carpeta)"; break;
+#endif
+#ifdef ENOTDIR
+        case ENOTDIR: t = "ENOTDIR (no es una carpeta)"; break;
+#endif
+#ifdef ENOTEMPTY
+        case ENOTEMPTY: t = "ENOTEMPTY (carpeta no vacia)"; break;
+#endif
+        default: break;
+    }
+    bpvm_fs_anota_fallo("host", e, c, t);
+    return -1;
+}
+static int host_fallo(void) { return host_fallo_de(errno); }
+/* Una escritura CORTA: errno, si la libc lo puso (se pone a 0 antes); si no, lleno. */
+static int host_corto(void) { return host_fallo_de(errno ? errno : ENOSPC); }
 
 static int host_stat(const char* path, uint32_t* size) {
     FILE* f = fopen(path, "rb");
-    if (!f) return -1;
-    if (fseek(f, 0, SEEK_END) != 0) { fclose(f); return -1; }
+    if (!f) return host_fallo();
+    if (fseek(f, 0, SEEK_END) != 0) { int e = errno; fclose(f); return host_fallo_de(e); }
     long sz = ftell(f);
+    int e = errno;
     fclose(f);
-    if (sz < 0) return -1;
+    if (sz < 0) return host_fallo_de(e);
     if (size) *size = (uint32_t) sz;
     return 0;
 }
 
 static long host_read(const char* path, uint8_t* dst, uint32_t cap) {
     FILE* f = fopen(path, "rb");
-    if (!f) return -1;
+    if (!f) return host_fallo();
     size_t n = fread(dst, 1, (size_t) cap, f);
     fclose(f);
     return (long) n;
@@ -39,15 +79,16 @@ static long host_read(const char* path, uint8_t* dst, uint32_t cap) {
  * y la placa otro, un CRC distinto entre los dos no lo cazaría nadie. */
 static int host_crc32(const char* path, uint32_t* crc_out) {
     FILE* f = fopen(path, "rb");
-    if (!f) return -1;
+    if (!f) return host_fallo();
     uint8_t  buf[512];
     uint32_t st = BPVM_CRC32_INIT;
     size_t   n;
+    errno = 0;
     while ((n = fread(buf, 1, sizeof buf, f)) > 0)
         st = bpvm_crc32_update(st, buf, n);
-    int err = ferror(f);
+    int err = ferror(f), e = errno;
     fclose(f);
-    if (err) return -1;
+    if (err) return host_fallo_de(e ? e : EIO);
     if (crc_out) *crc_out = bpvm_crc32_final(st);
     return 0;
 }
@@ -64,14 +105,16 @@ static long host_write_at(const char* path, uint32_t off,
                           const uint8_t* data, uint32_t len) {
     FILE* f = fopen(path, "r+b");
     if (!f) f = fopen(path, "w+b");
-    if (!f) return -1;
+    if (!f) return host_fallo();
     /* Más allá del final, fseek+fwrite extiende. El hueco lo rellena de ceros
      * la libc de POSIX, pero el contrato promete INDEFINIDO porque FatFs no lo
      * hace — no se puede prometer aquí lo que allí no se cumple. */
-    if (fseek(f, (long) off, SEEK_SET) != 0) { fclose(f); return -1; }
+    if (fseek(f, (long) off, SEEK_SET) != 0) { int e = errno; fclose(f); return host_fallo_de(e); }
+    errno = 0;
     size_t n = fwrite(data, 1, (size_t) len, f);
-    int mal = (n != (size_t) len) || (fclose(f) != 0);
-    return mal ? -1 : (long) n;
+    if (n != (size_t) len) { int r = host_corto(); fclose(f); return r; }
+    if (fclose(f) != 0) return host_corto();
+    return (long) n;
 }
 
 static int host_truncate(const char* path, uint32_t size) {
@@ -85,14 +128,15 @@ static int host_truncate(const char* path, uint32_t size) {
     if (f) {
         if (size > 0) {
             buf = (uint8_t*) malloc(size);
-            if (!buf) { fclose(f); return -1; }
+            if (!buf) { fclose(f); return host_fallo_de(ENOMEM); }
             leidos = fread(buf, 1, (size_t) size, f);
         }
         fclose(f);
     }
     FILE* o = fopen(path, "wb");
-    if (!o) { free(buf); return -1; }
+    if (!o) { int e = errno; free(buf); return host_fallo_de(e); }
     int mal = 0;
+    errno = 0;
     if (leidos && fwrite(buf, 1, leidos, o) != leidos) mal = 1;
     /* Agrandar: ceros hasta el tamaño pedido (mismo hueco "indefinido" del
      * contrato — aquí sale barato dejarlo definido y no cuesta prometer menos). */
@@ -100,13 +144,13 @@ static int host_truncate(const char* path, uint32_t size) {
         if (fputc(0, o) == EOF) mal = 1;
     if (fclose(o) != 0) mal = 1;
     free(buf);
-    return mal ? -1 : 0;
+    return mal ? host_corto() : 0;
 }
 
 static long host_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
     FILE* f = fopen(path, "rb");
-    if (!f) return -1;
-    if (fseek(f, (long) off, SEEK_SET) != 0) { fclose(f); return -1; }
+    if (!f) return host_fallo();
+    if (fseek(f, (long) off, SEEK_SET) != 0) { int e = errno; fclose(f); return host_fallo_de(e); }
     size_t n = fread(dst, 1, (size_t) cap, f);
     fclose(f);
     return (long) n;
@@ -114,17 +158,20 @@ static long host_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t 
 
 static int host_write(const char* path, const uint8_t* data, uint32_t len, int append) {
     FILE* f = fopen(path, append ? "ab" : "wb");
-    if (!f) return -1;
+    if (!f) return host_fallo();
+    errno = 0;
     if (len > 0 && data) {
-        if (fwrite(data, 1, (size_t) len, f) != (size_t) len) { fclose(f); return -1; }
+        if (fwrite(data, 1, (size_t) len, f) != (size_t) len) { int r = host_corto(); fclose(f); return r; }
     }
-    fclose(f);
+    /* #628: el close VUELCA, y se miraba sin mirar: un disco lleno al volcar
+     * contestaba «escrito». */
+    if (fclose(f) != 0) return host_corto();
     return 0;
 }
 
 /* #240 — borrado y rename para el logger (rotación y limpieza). */
 static int host_remove(const char* path) {
-    return (remove(path) == 0) ? 0 : -1;
+    return (remove(path) == 0) ? 0 : host_fallo();
 }
 
 static int host_rename(const char* from, const char* to) {
@@ -133,7 +180,7 @@ static int host_rename(const char* from, const char* to) {
      * sobreescribe y el remove previo es inocuo). */
     FILE* f = fopen(to, "rb");
     if (f) { fclose(f); remove(to); }
-    return (rename(from, to) == 0) ? 0 : -1;
+    return (rename(from, to) == 0) ? 0 : host_fallo();
 }
 
 /* #240 (2ª pasada) — resto de IO.bp en host. fs_host.c es HOST-ONLY, así que
@@ -161,7 +208,11 @@ typedef struct stat host_stat_t;
 static int host_mkdir(const char* path) {
     char buf[512];
     size_t n = strlen(path);
-    if (n == 0 || n >= sizeof(buf)) return -1;
+    if (n == 0 || n >= sizeof(buf)) {
+        bpvm_fs_anota_fallo("host", 0, n ? BPVM_FS_FAIL_NAME_TOO_LONG : BPVM_FS_FAIL_OTHER,
+                            n ? "ruta demasiado larga" : "ruta vacia");
+        return -1;
+    }
     memcpy(buf, path, n + 1);
     for (size_t i = 1; i < n; i++) {
         if (buf[i] == '/' || buf[i] == '\\') {
@@ -172,30 +223,32 @@ static int host_mkdir(const char* path) {
         }
     }
     if (HOST_MKDIR(buf) == 0) return 0;
+    int e = errno;   /* antes del stat, que lo puede pisar */
     /* ya existía como directorio → ok */
     host_stat_t st;
     if (HOST_STATFN(buf, &st) == 0 && HOST_ISDIR(st.st_mode)) return 0;
-    return -1;
+    return host_fallo_de(e);
 }
 
 static int host_rmdir(const char* path) {
-    return (HOST_RMDIR(path) == 0) ? 0 : -1;   /* falla si no vacío — como Java */
+    return (HOST_RMDIR(path) == 0) ? 0 : host_fallo();   /* falla si no vacío — como Java */
 }
 
 static int host_copy(const char* from, const char* to) {
     FILE* fi = fopen(from, "rb");
-    if (!fi) return -1;
+    if (!fi) return host_fallo();
     FILE* fo = fopen(to, "wb");   /* sobreescribe (REPLACE_EXISTING) */
-    if (!fo) { fclose(fi); return -1; }
+    if (!fo) { int e = errno; fclose(fi); return host_fallo_de(e); }
     char buf[4096];
     size_t n;
     int rc = 0;
+    errno = 0;
     while ((n = fread(buf, 1, sizeof(buf), fi)) > 0) {
-        if (fwrite(buf, 1, n, fo) != n) { rc = -1; break; }
+        if (fwrite(buf, 1, n, fo) != n) { rc = host_corto(); break; }
     }
-    if (ferror(fi)) rc = -1;
+    if (rc == 0 && ferror(fi)) rc = host_fallo_de(errno ? errno : EIO);
     fclose(fi);
-    fclose(fo);
+    if (fclose(fo) != 0 && rc == 0) rc = host_corto();
     return rc;
 }
 
@@ -216,7 +269,7 @@ static int host_list(const char* path,
                      void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
                      void* user) {
     DIR* d = opendir((path && path[0]) ? path : ".");
-    if (!d) return -1;
+    if (!d) return host_fallo();
     struct dirent* e;
     char full[600];
     while ((e = readdir(d)) != NULL) {
@@ -247,32 +300,34 @@ static int host_fopen(void* st, const char* path, int mode) {
         case BPVM_FS_O_WRITE:  f = fopen(path, "w+b"); break;
         case BPVM_FS_O_APPEND: f = fopen(path, "r+b"); if (!f) f = fopen(path, "w+b"); break;
         case BPVM_FS_O_RW:     f = fopen(path, "r+b"); break;
-        default: break;
+        default: errno = EINVAL; break;
     }
-    if (!f) return -1;
+    if (!f) return host_fallo();
     memcpy(st, &f, sizeof f);
     return 0;
 }
-static int host_fclose(void* st) { return (fclose(host_fh(st)) == 0) ? 0 : -1; }
+static int host_fclose(void* st) { return (fclose(host_fh(st)) == 0) ? 0 : host_corto(); }
 static long host_fread(void* st, uint8_t* dst, uint32_t n) {
     FILE* f = host_fh(st);
+    errno = 0;
     size_t r = fread(dst, 1, (size_t) n, f);
-    return (r == 0 && ferror(f)) ? -1 : (long) r;
+    return (r == 0 && ferror(f)) ? host_fallo_de(errno ? errno : EIO) : (long) r;
 }
 static long host_fwrite(void* st, const uint8_t* src, uint32_t n) {
+    errno = 0;
     size_t r = fwrite(src, 1, (size_t) n, host_fh(st));
-    return (r == (size_t) n) ? (long) r : -1;
+    return (r == (size_t) n) ? (long) r : host_corto();
 }
-static int host_fseek(void* st, uint32_t pos) { return (fseek(host_fh(st), (long) pos, SEEK_SET) == 0) ? 0 : -1; }
+static int host_fseek(void* st, uint32_t pos) { return (fseek(host_fh(st), (long) pos, SEEK_SET) == 0) ? 0 : host_fallo(); }
 static long host_fsize(void* st) {
     FILE* f = host_fh(st);
     long cur = ftell(f);
-    if (cur < 0 || fseek(f, 0, SEEK_END) != 0) return -1;
+    if (cur < 0 || fseek(f, 0, SEEK_END) != 0) return host_fallo();
     long sz = ftell(f);
-    if (fseek(f, cur, SEEK_SET) != 0) return -1;
+    if (fseek(f, cur, SEEK_SET) != 0) return host_fallo();
     return sz;
 }
-static int host_fsync(void* st) { return (fflush(host_fh(st)) == 0) ? 0 : -1; }
+static int host_fsync(void* st) { errno = 0; return (fflush(host_fh(st)) == 0) ? 0 : host_corto(); }
 
 static const bpvm_fs_backend_t s_host_fs = {
     .stat     = host_stat,
@@ -311,8 +366,8 @@ static char   s_dir_root[512];
 static char   s_dir_prefix[32];
 static size_t s_dir_prefix_len;
 
-/* `/lib/X` → `<root>/X`; 0 si la ruta no cuelga del prefijo o no cabe. */
-static int dir_map(const char* path, char* out, size_t cap) {
+/* `/lib/X` → `<root>/X`; 0 si la ruta no cuelga del prefijo o no cabe (con el motivo anotado, #628). */
+static int dir_map_(const char* path, char* out, size_t cap) {
     if (!path || !s_dir_root[0]) return 0;
     if (strncmp(path, s_dir_prefix, s_dir_prefix_len) != 0) return 0;
     const char* resto = path + s_dir_prefix_len;
@@ -320,6 +375,11 @@ static int dir_map(const char* path, char* out, size_t cap) {
     else if (*resto != '\0') return 0;
     int n = snprintf(out, cap, "%s/%s", s_dir_root, resto);
     return n > 0 && (size_t) n < cap;
+}
+static int dir_map(const char* path, char* out, size_t cap) {
+    if (dir_map_(path, out, cap)) return 1;
+    bpvm_fs_anota_fallo("host", 0, BPVM_FS_FAIL_NOT_FOUND, "la ruta no es de esa carpeta o no cabe");
+    return 0;
 }
 
 static int dir_stat(const char* path, uint32_t* size) {

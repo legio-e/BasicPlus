@@ -213,31 +213,85 @@ static const char* sin_prefijo(const char* path) {
     return r;                                    /* relativo: FatFs lo admite */
 }
 
+/* ── #628 — el MOTIVO de un fallo de FatFs, en la fachada (bpvm_fs_last_fail).
+ * Antes FAT no anotaba nada: un PUT que fallaba en /sd contestaba con el motivo
+ * RANCIO de la última operación de littlefs. Lo que viene de FatFs se clasifica
+ * por su FRESULT; los textos, literales. -1, para el `return` del que falla. */
+static bpvm_fs_fail_t clase_fat(FRESULT r) {
+    switch (r) {
+        case FR_NO_FILE: case FR_NO_PATH:                     return BPVM_FS_FAIL_NOT_FOUND;
+        case FR_EXIST:                                        return BPVM_FS_FAIL_EXISTS;
+        case FR_DISK_ERR: case FR_INT_ERR: case FR_NOT_READY:
+        case FR_NOT_ENABLED: case FR_NO_FILESYSTEM:           return BPVM_FS_FAIL_IO;
+        default:                                              return BPVM_FS_FAIL_OTHER;
+    }
+}
+static const char* texto_fat(FRESULT r) {
+    switch (r) {
+        case FR_DISK_ERR:            return "DISK_ERR (fallo del medio)";
+        case FR_INT_ERR:             return "INT_ERR (fallo interno)";
+        case FR_NOT_READY:           return "NOT_READY (el medio no responde)";
+        case FR_NO_FILE:             return "NO_FILE (no existe)";
+        case FR_NO_PATH:             return "NO_PATH (no existe la carpeta)";
+        case FR_INVALID_NAME:        return "INVALID_NAME (nombre no valido)";
+        case FR_DENIED:              return "DENIED (acceso denegado o carpeta llena)";
+        case FR_EXIST:               return "EXIST (ya existe)";
+        case FR_INVALID_OBJECT:      return "INVALID_OBJECT";
+        case FR_WRITE_PROTECTED:     return "WRITE_PROTECTED (protegida contra escritura)";
+        case FR_INVALID_DRIVE:       return "INVALID_DRIVE";
+        case FR_NOT_ENABLED:         return "NOT_ENABLED (sin volumen)";
+        case FR_NO_FILESYSTEM:       return "NO_FILESYSTEM (no hay FAT)";
+        case FR_TIMEOUT:             return "TIMEOUT";
+        case FR_LOCKED:              return "LOCKED";
+        case FR_NOT_ENOUGH_CORE:     return "NOT_ENOUGH_CORE (sin RAM)";
+        case FR_TOO_MANY_OPEN_FILES: return "TOO_MANY_OPEN_FILES";
+        default:                     return "?";
+    }
+}
+static int fat_fallo(FRESULT r) {
+    bpvm_fs_anota_fallo("fat", (int) r, clase_fat(r), texto_fat(r));
+    return -1;
+}
+/* FatFs escribe MENOS de lo pedido, y dice FR_OK, cuando el volumen se llena (y un
+ * lseek que extiende no llega): aquí es el único sitio donde se sabe. Antes se
+ * disfrazaba de FR_DISK_ERR. */
+static int fat_lleno(void) {
+    bpvm_fs_anota_fallo("fat", 0, BPVM_FS_FAIL_NO_SPACE, "el volumen se ha llenado (escritura corta)");
+    return -1;
+}
+/* La entrada de cada operación: la ruta dentro del volumen, o NULL con el motivo anotado. */
+static const char* entra(const char* path) {
+    const char* p = sin_prefijo(path);
+    if (!p) { bpvm_fs_anota_fallo("fat", 0, BPVM_FS_FAIL_OTHER, "la ruta no es de este volumen"); return NULL; }
+    if (!s_montado) { bpvm_fs_anota_fallo("fat", 0, BPVM_FS_FAIL_IO, "la tarjeta no esta montada"); return NULL; }
+    return p;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
  * Las operaciones de la fachada. TODAS entran y salen por el lock.
  * ───────────────────────────────────────────────────────────────────────── */
 
 static int fat_stat(const char* path, uint32_t* size) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado) return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
     FILINFO fi;
     trabar();
     FRESULT r = (p[0] == '\0') ? FR_INVALID_NAME : f_stat(p, &fi);
     destrabar();
-    if (r != FR_OK) return -1;
+    if (r != FR_OK) return fat_fallo(r);
     if (size) *size = (uint32_t) fi.fsize;
     return 0;
 }
 
 static long fat_read(const char* path, uint8_t* dst, uint32_t cap) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado) return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
     FIL f; UINT leidos = 0;
     trabar();
     FRESULT r = f_open(&f, p, FA_READ);
     if (r == FR_OK) { r = f_read(&f, dst, cap, &leidos); f_close(&f); }
     destrabar();
-    return (r == FR_OK) ? (long) leidos : -1;
+    return (r == FR_OK) ? (long) leidos : fat_fallo(r);
 }
 
 /* #398 — el CRC del fichero ENTERO, con UNA apertura. AQUÍ ESTABA EL AGUJERO.
@@ -254,8 +308,8 @@ static long fat_read(const char* path, uint8_t* dst, uint32_t cap) {
  * puntero y no hay seek. El buffer de 512 B es medio sector: leer de sector en
  * sector evita que FatFs parta cada lectura en dos. */
 static int fat_crc32(const char* path, uint32_t* crc_out) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado) return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
     FIL f;
     uint8_t  buf[512];
     uint32_t st = BPVM_CRC32_INIT;
@@ -271,14 +325,14 @@ static int fat_crc32(const char* path, uint32_t* crc_out) {
         f_close(&f);
     }
     destrabar();
-    if (r != FR_OK) return -1;
+    if (r != FR_OK) return fat_fallo(r);
     if (crc_out) *crc_out = bpvm_crc32_final(st);
     return 0;
 }
 
 static long fat_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado) return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
     FIL f; UINT leidos = 0;
     trabar();
     FRESULT r = f_open(&f, p, FA_READ);
@@ -291,7 +345,7 @@ static long fat_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t c
         f_close(&f);
     }
     destrabar();
-    return (r == FR_OK) ? (long) leidos : -1;
+    return (r == FR_OK) ? (long) leidos : fat_fallo(r);
 }
 
 /* V5/H2 — escritura POSICIONAL. `FA_OPEN_ALWAYS` (abre o crea, sin truncar) es
@@ -299,9 +353,11 @@ static long fat_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t c
  * primera vez y a partir de ahí sólo pisa la página que le toca. */
 static long fat_write_at(const char* path, uint32_t off,
                          const uint8_t* data, uint32_t len) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado || p[0] == '\0') return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
+    if (p[0] == '\0') return fat_fallo(FR_INVALID_NAME);
     FIL f; UINT esc = 0;
+    int lleno = 0;
     trabar();
     FRESULT r = f_open(&f, p, FA_WRITE | FA_OPEN_ALWAYS);
     if (r == FR_OK) {
@@ -309,54 +365,60 @@ static long fat_write_at(const char* path, uint32_t off,
          * de contenido indefinido que anuncia el contrato: FatFs deja lo que
          * hubiera en los clústeres. */
         r = f_lseek(&f, off);
-        if (r == FR_OK && f_tell(&f) != off) r = FR_DISK_ERR;   /* no llegó */
-        if (r == FR_OK) {
+        if (r == FR_OK && f_tell(&f) != off) lleno = 1;         /* no llegó: el volumen está lleno */
+        if (r == FR_OK && !lleno) {
             r = f_write(&f, data, len, &esc);
-            if (r == FR_OK && esc != len) r = FR_DISK_ERR;      /* disco lleno */
+            if (r == FR_OK && esc != len) lleno = 1;            /* disco lleno */
         }
         FRESULT rc = f_close(&f);        /* el close es donde se vuelca */
         if (r == FR_OK) r = rc;
     }
     destrabar();
-    return (r == FR_OK) ? (long) esc : -1;
+    if (r != FR_OK) return fat_fallo(r);
+    return lleno ? fat_lleno() : (long) esc;
 }
 
 /* Fija el tamaño EXACTO. `f_truncate` de FatFs corta por donde esté el puntero,
  * así que el lseek no es preparación: es quien decide dónde. Y como el lseek
  * también extiende, la misma pareja sirve para encoger y para agrandar. */
 static int fat_truncate(const char* path, uint32_t size) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado || p[0] == '\0') return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
+    if (p[0] == '\0') return fat_fallo(FR_INVALID_NAME);
     FIL f;
+    int lleno = 0;
     trabar();
     FRESULT r = f_open(&f, p, FA_WRITE | FA_OPEN_ALWAYS);
     if (r == FR_OK) {
         r = f_lseek(&f, size);
-        if (r == FR_OK && f_tell(&f) != size) r = FR_DISK_ERR;
-        if (r == FR_OK) r = f_truncate(&f);
+        if (r == FR_OK && f_tell(&f) != size) lleno = 1;        /* no llegó a agrandarlo: lleno */
+        if (r == FR_OK && !lleno) r = f_truncate(&f);
         FRESULT rc = f_close(&f);
         if (r == FR_OK) r = rc;
     }
     destrabar();
-    return (r == FR_OK) ? 0 : -1;
+    if (r != FR_OK) return fat_fallo(r);
+    return lleno ? fat_lleno() : 0;
 }
 
 static int fat_write(const char* path, const uint8_t* data, uint32_t len, int append) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado) return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
     FIL f; UINT esc = 0;
+    int lleno = 0;
     trabar();
     FRESULT r = f_open(&f, p, append ? (FA_WRITE | FA_OPEN_APPEND)
                                      : (FA_WRITE | FA_CREATE_ALWAYS));
     if (r == FR_OK) {
         r = f_write(&f, data, len, &esc);
-        if (r == FR_OK && esc != len) r = FR_DISK_ERR;   /* disco lleno */
+        if (r == FR_OK && esc != len) lleno = 1;         /* disco lleno */
         FRESULT rc = f_close(&f);                        /* el close SÍ importa:
                                                           * es donde se vuelca */
         if (r == FR_OK) r = rc;
     }
     destrabar();
-    return (r == FR_OK) ? 0 : -1;
+    if (r != FR_OK) return fat_fallo(r);
+    return lleno ? fat_lleno() : 0;
 }
 
 /* `exists` no está en el backend a propósito: la fachada lo resuelve con
@@ -364,41 +426,50 @@ static int fat_write(const char* path, const uint8_t* data, uint32_t len, int ap
  * pregunta es justo el sitio donde las dos acaban discrepando. */
 
 static int fat_remove(const char* path) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado || p[0] == '\0') return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
+    if (p[0] == '\0') return fat_fallo(FR_INVALID_NAME);
     trabar(); FRESULT r = f_unlink(p); destrabar();
-    return (r == FR_OK) ? 0 : -1;
+    return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 
 static int fat_rename(const char* from, const char* to) {
-    const char* a = sin_prefijo(from);
-    if (!a || !s_montado) return -1;
+    const char* a = entra(from);
+    if (!a) return -1;
     /* `to` puede venir sin prefijo si el llamante ya lo quitó; se admiten los
      * dos, pero un `to` de OTRO montaje se rechaza: mover entre volúmenes no es
      * renombrar, y hacerlo a medias sería peor que negarse. */
     const char* b = sin_prefijo(to);
-    if (!b) { if (to && to[0] == '/') return -1; b = to; }
-    if (!b || !a[0] || !b[0]) return -1;
+    if (!b) {
+        if (to && to[0] == '/') {
+            bpvm_fs_anota_fallo("fat", 0, BPVM_FS_FAIL_OTHER, "el destino es de otro volumen");
+            return -1;
+        }
+        b = to;
+    }
+    if (!b || !a[0] || !b[0]) return fat_fallo(FR_INVALID_NAME);
     trabar();
     f_unlink(b);                       /* semántica REPLACE_EXISTING de la VM */
     FRESULT r = f_rename(a, b);
     destrabar();
-    return (r == FR_OK) ? 0 : -1;
+    return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 
 static int fat_mkdir(const char* path) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado || p[0] == '\0') return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
+    if (p[0] == '\0') return fat_fallo(FR_INVALID_NAME);
     trabar(); FRESULT r = f_mkdir(p); destrabar();
     /* "ya existe" es éxito: lo dice el contrato de la fachada. */
-    return (r == FR_OK || r == FR_EXIST) ? 0 : -1;
+    return (r == FR_OK || r == FR_EXIST) ? 0 : fat_fallo(r);
 }
 
 static int fat_rmdir(const char* path) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado || p[0] == '\0') return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
+    if (p[0] == '\0') return fat_fallo(FR_INVALID_NAME);
     trabar(); FRESULT r = f_unlink(p); destrabar();   /* f_unlink borra dir vacío */
-    return (r == FR_OK) ? 0 : -1;
+    return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 
 static int fat_isdir(const char* path) {
@@ -411,11 +482,12 @@ static int fat_isdir(const char* path) {
 }
 
 static long long fat_mtime_ms(const char* path) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado || p[0] == '\0') return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
+    if (p[0] == '\0') return fat_fallo(FR_INVALID_NAME);
     FILINFO fi;
     trabar(); FRESULT r = f_stat(p, &fi); destrabar();
-    if (r != FR_OK) return -1;
+    if (r != FR_OK) return fat_fallo(r);
     /* De vuelta: FAT guarda año-1980, y la VM quiere epoch en ms. */
     int y = 1980 + ((fi.fdate >> 9) & 0x7F);
     int m = (fi.fdate >> 5) & 0x0F, d = fi.fdate & 0x1F;
@@ -436,8 +508,9 @@ static long long fat_mtime_ms(const char* path) {
 static int fat_list(const char* path,
                     void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
                     void* user) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado || !cb) return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
+    if (!cb) { bpvm_fs_anota_fallo("fat", 0, BPVM_FS_FAIL_OTHER, "argumentos no validos"); return -1; }
     DIR dir; FILINFO fi;
     trabar();
     FRESULT r = f_opendir(&dir, p[0] ? p : "");
@@ -451,7 +524,7 @@ static int fat_list(const char* path,
         f_closedir(&dir);
     }
     destrabar();
-    return (r == FR_OK) ? 0 : -1;
+    return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 
 /* #473 (punto 4) — el streaming que FAT no tenía: la MISMA forma que `fat_crc32`
@@ -459,8 +532,8 @@ static int fat_list(const char* path,
  * `read_at` en trozos de 256 B: `f_open`+`f_lseek`+`f_read`+`f_close` por trozo,
  * medido 6,4× más lento que littlefs en la Metro (10-sep). */
 static long fat_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado) return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
     FIL f;
     uint8_t buf[512];
     long total = 0;
@@ -477,7 +550,7 @@ static long fat_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
         f_close(&f);
     }
     destrabar();
-    return (r == FR_OK) ? total : -1;
+    return (r == FR_OK) ? total : fat_fallo(r);
 }
 
 /* V7/H3 (#491) — EL CURSOR sobre FatFs: el `FIL` (552 B con su sector dentro)
@@ -485,41 +558,43 @@ static long fat_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
  * FA_OPEN_APPEND: el cursor al final lo pone la fachada al abrir, y después la
  * posición manda (mismo contrato en los tres motores). */
 static int fat_fopen(void* st, const char* path, int mode) {
-    const char* p = sin_prefijo(path);
-    if (!p || !s_montado) return -1;
+    const char* p = entra(path);
+    if (!p) return -1;
     BYTE fl = (mode == BPVM_FS_O_READ)   ? FA_READ
             : (mode == BPVM_FS_O_WRITE)  ? (FA_READ | FA_WRITE | FA_CREATE_ALWAYS)
             : (mode == BPVM_FS_O_APPEND) ? (FA_READ | FA_WRITE | FA_OPEN_ALWAYS)
             :                              (FA_READ | FA_WRITE | FA_OPEN_EXISTING);
     trabar(); FRESULT r = f_open((FIL*) st, p, fl); destrabar();
-    return (r == FR_OK) ? 0 : -1;
+    return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 static int fat_fclose(void* st) {
     trabar(); FRESULT r = f_close((FIL*) st); destrabar();
-    return (r == FR_OK) ? 0 : -1;
+    return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 static long fat_fread(void* st, uint8_t* dst, uint32_t n) {
     UINT leidos = 0;
     trabar(); FRESULT r = f_read((FIL*) st, dst, n, &leidos); destrabar();
-    return (r == FR_OK) ? (long) leidos : -1;
+    return (r == FR_OK) ? (long) leidos : fat_fallo(r);
 }
 static long fat_fwrite(void* st, const uint8_t* src, uint32_t n) {
     UINT escritos = 0;
     trabar(); FRESULT r = f_write((FIL*) st, src, n, &escritos); destrabar();
-    return (r == FR_OK) ? (long) escritos : -1;
+    if (r != FR_OK) return fat_fallo(r);
+    return (escritos == n) ? (long) escritos : fat_lleno();   /* corta: el volumen se ha llenado */
 }
 static int fat_fseek(void* st, uint32_t pos) {
     trabar(); FRESULT r = f_lseek((FIL*) st, pos); int ok = (r == FR_OK && f_tell((FIL*) st) == pos); destrabar();
-    return ok ? 0 : -1;
+    if (ok) return 0;
+    return (r != FR_OK) ? fat_fallo(r) : fat_lleno();   /* no llegó a extenderlo: lleno */
 }
 static long fat_fsize(void* st) {
-    if (!s_montado) return -1;
+    if (!s_montado) { bpvm_fs_anota_fallo("fat", 0, BPVM_FS_FAIL_IO, "la tarjeta no esta montada"); return -1; }
     trabar(); long sz = (long) f_size((FIL*) st); destrabar();
     return sz;
 }
 static int fat_fsync(void* st) {
     trabar(); FRESULT r = f_sync((FIL*) st); destrabar();
-    return (r == FR_OK) ? 0 : -1;
+    return (r == FR_OK) ? 0 : fat_fallo(r);
 }
 
 static const bpvm_fs_backend_t s_backend = {

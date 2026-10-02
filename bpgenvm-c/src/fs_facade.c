@@ -7,6 +7,7 @@
  */
 #include "bpvm_fs.h"
 #include "crc32.h"        /* #305 — bpvm_fs_crc32 por trozos */
+#include "bpvm_log.h"     /* #628 — la línea del fallo la escribe quien guarda el motivo */
 #include <string.h>
 #include <stdio.h>
 
@@ -207,33 +208,81 @@ static int fallback_claims(const char* path, uint32_t* size) {
     return g_fb_stat && g_fb_stat(g_fb_user, path, size) == 0;
 }
 
+/* ── #628 — EL MOTIVO DEL ÚLTIMO FALLO (el contrato, en bpvm_fs.h) ──────────
+ * Lo anota el que falla: el motor, con `bpvm_fs_anota_fallo`, o la fachada. Los
+ * textos son fijos (literales): se guardan por puntero y el log los lee después. */
+static bpvm_fs_fail_t s_fallo       = BPVM_FS_FAIL_OTHER;
+static int            s_fallo_crudo = 0;
+static const char*    s_fallo_motor = "fs";
+static const char*    s_fallo_texto = "sin fallos";
+static uint32_t       s_fallo_n     = 0;   /* cuántos van anotados: si no se mueve, nadie dijo nada */
+
+void bpvm_fs_anota_fallo(const char* motor, int crudo, bpvm_fs_fail_t clase, const char* texto) {
+    s_fallo_motor = motor ? motor : "fs";
+    s_fallo_crudo = crudo;
+    s_fallo       = clase;
+    s_fallo_texto = texto ? texto : "";
+    s_fallo_n++;
+}
+
+bpvm_fs_fail_t bpvm_fs_last_fail(void) { return s_fallo; }
+
+void bpvm_fs_log_fail(const char* op, const char* path, unsigned long size,
+                      unsigned long libre, unsigned long total) {
+    log_printf("fs: %s '%s' (%lu B) FALLO %s=%d %s  [libre %lu/%lu B]",
+               op, path, size, s_fallo_motor, s_fallo_crudo, s_fallo_texto, libre, total);
+}
+
+/* Un fallo de la propia fachada. -1, para el `return`. */
+static int fs_falla(bpvm_fs_fail_t clase, const char* texto) {
+    bpvm_fs_anota_fallo("fs", 0, clase, texto);
+    return -1;
+}
+
+/* LA GARANTÍA: cada fallo lleva SU motivo. `n0` es la cuenta al empezar; si la
+ * operación falla y nadie anotó nada entretanto, anota la fachada. Así un fallo
+ * nunca hereda el motivo de otro, y un camino que se olvide de anotar sale «sin
+ * detalle», no con un motivo falso. Un éxito no escribe nada. */
+#define SIN_DETALLE "el motor no dice por que"
+static long con_motivo(long r, uint32_t n0, bpvm_fs_fail_t clase, const char* texto) {
+    if (r < 0 && s_fallo_n == n0) bpvm_fs_anota_fallo("fs", 0, clase, texto);
+    return r;
+}
+static long sin_motivo(long r, uint32_t n0) { return con_motivo(r, n0, BPVM_FS_FAIL_OTHER, SIN_DETALLE); }
+
+/* Sin motor que atienda la ruta (p. ej. /sd sin tarjeta), o con motor y sin esa operación. */
+static const char* falta(const bpvm_fs_backend_t* be) {
+    return be ? "esa unidad no lo hace" : "ninguna unidad atiende esa ruta";
+}
+
 int bpvm_fs_stat(const char* path, uint32_t* size) {
-    uint32_t osz = 0;
+    uint32_t osz = 0, n0 = s_fallo_n;
     if (overlay_claims(path, &osz)) { if (size) *size = osz; return 0; }
     const bpvm_fs_backend_t* be = route(path);
     if (be && be->stat && be->stat(path, size) == 0) return 0;
     if (fallback_claims(path, &osz)) { if (size) *size = osz; return 0; }
-    return -1;
+    return (int) con_motivo(-1, n0, BPVM_FS_FAIL_OTHER, (be && be->stat) ? SIN_DETALLE : falta(be));
 }
 
 long bpvm_fs_read(const char* path, uint8_t* dst, uint32_t cap) {
-    uint32_t osz = 0;
+    uint32_t osz = 0, n0 = s_fallo_n;
     if (overlay_claims(path, &osz) && g_ov_read)
-        return g_ov_read(g_ov_user, path, 0, dst, cap);
+        return sin_motivo(g_ov_read(g_ov_user, path, 0, dst, cap), n0);
     const bpvm_fs_backend_t* be = route(path);
     if (be && be->read) {
         long n = be->read(path, dst, cap);
         if (n >= 0) return n;
     }
     if (fallback_claims(path, &osz) && g_fb_read)
-        return g_fb_read(g_fb_user, path, 0, dst, cap);
-    return -1;
+        return sin_motivo(g_fb_read(g_fb_user, path, 0, dst, cap), n0);
+    return con_motivo(-1, n0, BPVM_FS_FAIL_OTHER, (be && be->read) ? SIN_DETALLE : falta(be));
 }
 
 int bpvm_fs_write(const char* path, const uint8_t* data, uint32_t len, int append) {
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->write) return be->write(path, data, len, append);
-    return -1;
+    uint32_t n0 = s_fallo_n;
+    if (be && be->write) return (int) sin_motivo(be->write(path, data, len, append), n0);
+    return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
 int bpvm_fs_exists(const char* path) {
@@ -244,38 +293,43 @@ int bpvm_fs_exists(const char* path) {
 /* #240 — ops opcionales del backend (logger: rotación y limpieza). */
 int bpvm_fs_remove(const char* path) {
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->remove) return be->remove(path);
-    return -1;
+    uint32_t n0 = s_fallo_n;
+    if (be && be->remove) return (int) sin_motivo(be->remove(path), n0);
+    return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
 int bpvm_fs_rename(const char* from, const char* to) {
     /* B1.3: entre montajes distintos → -1 (mover cross-motor = fase B). */
     const bpvm_fs_backend_t* be = route(from);
-    if (be != route(to)) return -1;
-    if (be && be->rename) return be->rename(from, to);
-    return -1;
+    if (be != route(to)) return fs_falla(BPVM_FS_FAIL_OTHER, "entre unidades distintas no se mueve ni se copia");
+    uint32_t n0 = s_fallo_n;
+    if (be && be->rename) return (int) sin_motivo(be->rename(from, to), n0);
+    return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
 /* #240 (2ª pasada) — resto de IO.bp. */
 int bpvm_fs_mkdir(const char* path) {
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->mkdir) return be->mkdir(path);
-    return -1;
+    uint32_t n0 = s_fallo_n;
+    if (be && be->mkdir) return (int) sin_motivo(be->mkdir(path), n0);
+    return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
 int bpvm_fs_rmdir(const char* path) {
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->rmdir) return be->rmdir(path);
-    return -1;
+    uint32_t n0 = s_fallo_n;
+    if (be && be->rmdir) return (int) sin_motivo(be->rmdir(path), n0);
+    return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
 int bpvm_fs_copy(const char* from, const char* to) {
     /* B1.3: entre montajes distintos → -1 (copiar cross-motor = fase B,
      * trivial vía read+write cuando haga falta). */
     const bpvm_fs_backend_t* be = route(from);
-    if (be != route(to)) return -1;
-    if (be && be->copy) return be->copy(from, to);
-    return -1;
+    if (be != route(to)) return fs_falla(BPVM_FS_FAIL_OTHER, "entre unidades distintas no se mueve ni se copia");
+    uint32_t n0 = s_fallo_n;
+    if (be && be->copy) return (int) sin_motivo(be->copy(from, to), n0);
+    return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
 int bpvm_fs_isdir(const char* path) {
@@ -416,8 +470,11 @@ int bpvm_fs_count_files(void) {
         c.dir = dir;
         (void) bpvm_fs_list(dir, bpvm_cnt_cb, &c);   /* un volumen caido no borra el resto */
     }
+    /* Deja rastro de que falta algo. Era `bpvm_fs_log_fail`, que escribe el motivo del ÚLTIMO fallo del FS —nada que
+     * ver con esto— y ataba la fachada a littlefs: test-crc, sin enlazar desde el 31-ago (#628). */
     if (c.omitidos > 0)
-        bpvm_fs_log_fail("count", "/", 0, 0, 0);   /* deja rastro de que falta algo */
+        log_printf("fs: count '/': %d carpeta(s) sin recorrer (la cola de %d se lleno): el total es un minimo",
+                   c.omitidos, CNT_MAX_DIRS);
     return c.ficheros;
 }
 
@@ -425,7 +482,9 @@ int bpvm_fs_list(const char* path,
                  void (*cb)(const char* name, int is_dir, uint32_t size, void* user),
                  void* user) {
     const bpvm_fs_backend_t* be = route(path);
-    int r = (be && be->list) ? be->list(path, cb, user) : -1;
+    uint32_t n0 = s_fallo_n;
+    int r = (be && be->list) ? (int) sin_motivo(be->list(path, cb, user), n0)
+                             : fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
     /* Aunque el backend haya fallado: que no se pueda leer un volumen no borra
      * los que cuelgan de él. */
     if (cb && path) emite_montajes_hijos(path, cb, user);
@@ -440,20 +499,22 @@ int bpvm_fs_list(const char* path,
 long bpvm_fs_write_at(const char* path, uint32_t off,
                       const uint8_t* data, uint32_t len) {
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->write_at) return be->write_at(path, off, data, len);
-    return -1;
+    uint32_t n0 = s_fallo_n;
+    if (be && be->write_at) return sin_motivo(be->write_at(path, off, data, len), n0);
+    return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
 int bpvm_fs_truncate(const char* path, uint32_t size) {
     const bpvm_fs_backend_t* be = route(path);
-    if (be && be->truncate) return be->truncate(path, size);
-    return -1;
+    uint32_t n0 = s_fallo_n;
+    if (be && be->truncate) return (int) sin_motivo(be->truncate(path, size), n0);
+    return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
 long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
-    uint32_t osz = 0;
+    uint32_t osz = 0, n0 = s_fallo_n;
     if (overlay_claims(path, &osz) && g_ov_read)
-        return g_ov_read(g_ov_user, path, off, dst, cap);
+        return sin_motivo(g_ov_read(g_ov_user, path, off, dst, cap), n0);
     const bpvm_fs_backend_t* be = route(path);
     if (be && be->read_at) {
         long n = be->read_at(path, off, dst, cap);
@@ -476,8 +537,8 @@ long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap)
      * no era la incoherencia; `read_at` llegó en #305 y el fallback en H4, y
      * nunca se juntaron. */
     if (fallback_claims(path, &osz) && g_fb_read)
-        return g_fb_read(g_fb_user, path, off, dst, cap);
-    return -1;
+        return sin_motivo(g_fb_read(g_fb_user, path, off, dst, cap), n0);
+    return con_motivo(-1, n0, BPVM_FS_FAIL_OTHER, (be && be->read_at) ? SIN_DETALLE : falta(be));
 }
 
 /* #305 — CRC-32 de un fichero POR TROZOS. El buffer es de pila y pequeño a
@@ -495,7 +556,7 @@ long bpvm_fs_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap)
  * Si el backend sabe leer en secuencia, que lo haga el (UNA apertura). Si no,
  * el bucle de siempre: mas lento, pero correcto -- y es lo que ya habia. */
 long bpvm_fs_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
-    if (!cb) return -1;
+    if (!cb) return fs_falla(BPVM_FS_FAIL_OTHER, "argumentos no validos");
     /* [V7/H2, #493] OVERLAY Y RESPALDO TAMBIÉN AQUÍ. Esta op y `crc32` iban
      * directas al backend si éste las traía, y en littlefs (placa y sim) las
      * trae: un fichero de la zona de packs tenía `stat` pero el `GET` del wire
@@ -510,7 +571,10 @@ long bpvm_fs_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
          * los primeros trozos dos veces (la revisión lo señaló). Al bucle sólo
          * se cae cuando el backend no lo tiene (entonces es del respaldo). */
         uint32_t bsz = 0;
-        if (be_rs->stat && be_rs->stat(path, &bsz) == 0) return be_rs->read_stream(path, cb, user);
+        if (be_rs->stat && be_rs->stat(path, &bsz) == 0) {
+            uint32_t n0 = s_fallo_n;
+            return sin_motivo(be_rs->read_stream(path, cb, user), n0);
+        }
     }
 
     uint32_t size = 0;
@@ -518,8 +582,10 @@ long bpvm_fs_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user) {
     uint8_t  buf[256];
     uint32_t off = 0;
     while (off < size) {
+        uint32_t n0 = s_fallo_n;
         long n = bpvm_fs_read_at(path, off, buf, sizeof buf);
-        if (n <= 0) return -1;               /* incluye "backend sin read_at" */
+        if (n <= 0)                          /* incluye "backend sin read_at" (ya anotado) */
+            return con_motivo(-1, n0, BPVM_FS_FAIL_IO, "el fichero se acabo antes de tiempo");
         if (cb(buf, (uint32_t) n, user) != 0) break;   /* el llamador aborta */
         off += (uint32_t) n;
     }
@@ -546,8 +612,10 @@ int bpvm_fs_crc32(const char* path, uint32_t* crc_out) {
     uint8_t  buf[256];
     uint32_t off = 0;
     while (off < size) {
+        uint32_t n0 = s_fallo_n;
         long n = bpvm_fs_read_at(path, off, buf, sizeof buf);
-        if (n <= 0) return -1;               /* incluye "backend sin read_at" */
+        if (n <= 0)                          /* incluye "backend sin read_at" (ya anotado) */
+            return (int) con_motivo(-1, n0, BPVM_FS_FAIL_IO, "el fichero se acabo antes de tiempo");
         st = bpvm_crc32_update(st, buf, (size_t) n);
         off += (uint32_t) n;
     }
@@ -589,10 +657,12 @@ uint32_t bpvm_fs_file_block_size(const char* path) {
 }
 
 int bpvm_fs_fopen(void* blk, uint32_t cap, const char* path, int mode) {
-    if (!blk || !path || mode < BPVM_FS_O_READ || mode > BPVM_FS_O_RW) return -1;
-    if (fh_de(blk)) return -1;                       /* ya tiene un fichero: ciérralo antes */
+    if (!blk || !path || mode < BPVM_FS_O_READ || mode > BPVM_FS_O_RW)
+        return fs_falla(BPVM_FS_FAIL_OTHER, "argumentos no validos");
+    if (fh_de(blk))                                  /* ya tiene un fichero: ciérralo antes */
+        return fs_falla(BPVM_FS_FAIL_OTHER, "el bloque ya tiene un fichero abierto");
     uint32_t need = bpvm_fs_file_block_size(path);
-    if (cap < need || need > 0xFFFFu) return -1;
+    if (cap < need || need > 0xFFFFu) return fs_falla(BPVM_FS_FAIL_TOO_BIG, "el bloque del fichero no cabe");
     bpvm_fs_file_t* h = (bpvm_fs_file_t*) blk;
     memset(h, 0, sizeof *h);
     h->st_off   = (uint16_t) fh_st_off(blk);
@@ -607,20 +677,21 @@ int bpvm_fs_fopen(void* blk, uint32_t cap, const char* path, int mode) {
     }
     /* 2. El motor, con su cursor de verdad. */
     const bpvm_fs_backend_t* be = route(path);
+    uint32_t n0 = s_fallo_n;
     if (be && be->fopen && be->file_state_size) {
         if (be->fopen(fh_st(h), path, mode) == 0) {
             long sz = be->fsize ? be->fsize(fh_st(h)) : -1;
-            if (sz < 0) { be->fclose(fh_st(h)); return -1; }
+            if (sz < 0) { be->fclose(fh_st(h)); return (int) sin_motivo(-1, n0); }
             h->be = be; h->kind = 1; h->size = (uint32_t) sz;
             if (mode == BPVM_FS_O_APPEND) {
-                if (be->fseek(fh_st(h), h->size) != 0) { be->fclose(fh_st(h)); return -1; }
+                if (be->fseek(fh_st(h), h->size) != 0) { be->fclose(fh_st(h)); return (int) sin_motivo(-1, n0); }
                 h->pos = h->size;
             }
             h->magic = BPVM_FS_FILE_MAGIC; return 0;
         }
-        if (mode != BPVM_FS_O_READ) return -1;       /* escribir: sólo el motor sabe */
+        if (mode != BPVM_FS_O_READ) return (int) sin_motivo(-1, n0);   /* escribir: sólo el motor sabe */
     } else if (mode != BPVM_FS_O_READ) {
-        return -1;                                   /* sin motor con cursor no se escribe */
+        return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));                /* sin motor con cursor no se escribe */
     }
     /* 3. Lectura sin cursor del motor: `read_at` a la posición de la cabecera. */
     if (be && be->read_at && be->stat && be->stat(path, &osz) == 0) {
@@ -630,14 +701,17 @@ int bpvm_fs_fopen(void* blk, uint32_t cap, const char* path, int mode) {
     if (fallback_claims(path, &osz) && g_fb_read) {
         h->kind = 3; h->size = osz; h->magic = BPVM_FS_FILE_MAGIC; return 0;
     }
-    return -1;
+    return (int) con_motivo(-1, n0, BPVM_FS_FAIL_NOT_FOUND, "no esta ni en la unidad ni en los packs");
 }
 
 int bpvm_fs_fclose(void* blk) {
     bpvm_fs_file_t* h = fh_de(blk);
     if (!h) return 0;                                /* idempotente: cerrar lo cerrado no es error */
     int r = 0;
-    if (h->kind == 1 && h->be && h->be->fclose) r = h->be->fclose(fh_st(h));
+    if (h->kind == 1 && h->be && h->be->fclose) {
+        uint32_t n0 = s_fallo_n;
+        r = (int) sin_motivo(h->be->fclose(fh_st(h)), n0);
+    }
     h->magic = 0; h->kind = 0; h->be = NULL;
     return r;
 }
@@ -656,19 +730,25 @@ static long fh_read_at(bpvm_fs_file_t* h, uint8_t* dst, uint32_t n) {
 
 long bpvm_fs_fread(void* blk, uint8_t* dst, uint32_t n) {
     bpvm_fs_file_t* h = fh_de(blk);
-    if (!h || (!dst && n)) return -1;
+    if (!h) return fs_falla(BPVM_FS_FAIL_OTHER, "el fichero no esta abierto");
+    if (!dst && n) return fs_falla(BPVM_FS_FAIL_OTHER, "argumentos no validos");
     if (n == 0) return 0;
-    long r = (h->kind == 1) ? h->be->fread(fh_st(h), dst, n) : fh_read_at(h, dst, n);
+    uint32_t n0 = s_fallo_n;
+    long r = sin_motivo((h->kind == 1) ? h->be->fread(fh_st(h), dst, n) : fh_read_at(h, dst, n), n0);
     if (r > 0) h->pos += (uint32_t) r;
     return r;
 }
 
 long bpvm_fs_fwrite(void* blk, const uint8_t* src, uint32_t n) {
     bpvm_fs_file_t* h = fh_de(blk);
-    if (!h || h->kind != 1 || h->mode == BPVM_FS_O_READ || (!src && n)) return -1;
+    if (!h) return fs_falla(BPVM_FS_FAIL_OTHER, "el fichero no esta abierto");
+    if (h->kind != 1 || h->mode == BPVM_FS_O_READ) return fs_falla(BPVM_FS_FAIL_OTHER, "el fichero es de solo lectura");
+    if (!src && n) return fs_falla(BPVM_FS_FAIL_OTHER, "argumentos no validos");
     if (n == 0) return 0;
+    uint32_t n0 = s_fallo_n;
     long r = h->be->fwrite(fh_st(h), src, n);
-    if (r < 0 || (uint32_t) r != n) return -1;
+    if (r < 0) return sin_motivo(-1, n0);
+    if ((uint32_t) r != n) return con_motivo(-1, n0, BPVM_FS_FAIL_NO_SPACE, "escritura corta: el medio se ha llenado");
     h->pos += n;
     if (h->pos > h->size) h->size = h->pos;
     return r;
@@ -676,8 +756,10 @@ long bpvm_fs_fwrite(void* blk, const uint8_t* src, uint32_t n) {
 
 int bpvm_fs_fseek(void* blk, uint32_t pos) {
     bpvm_fs_file_t* h = fh_de(blk);
-    if (!h || pos > h->size) return -1;              /* fuera de [0, size] es error: no hay huecos */
-    if (h->kind == 1 && h->be->fseek(fh_st(h), pos) != 0) return -1;
+    if (!h) return fs_falla(BPVM_FS_FAIL_OTHER, "el fichero no esta abierto");
+    if (pos > h->size) return fs_falla(BPVM_FS_FAIL_OTHER, "fuera del fichero");   /* fuera de [0, size]: no hay huecos */
+    uint32_t n0 = s_fallo_n;
+    if (h->kind == 1 && h->be->fseek(fh_st(h), pos) != 0) return (int) sin_motivo(-1, n0);
     h->pos = pos;
     return 0;
 }
@@ -689,7 +771,8 @@ const char* bpvm_fs_fpath(void* blk) { bpvm_fs_file_t* h = fh_de(blk); return h 
 
 int bpvm_fs_fflush(void* blk) {
     bpvm_fs_file_t* h = fh_de(blk);
-    if (!h) return -1;
+    if (!h) return fs_falla(BPVM_FS_FAIL_OTHER, "el fichero no esta abierto");
     if (h->kind != 1 || h->mode == BPVM_FS_O_READ || !h->be->fsync) return 0;
-    return h->be->fsync(fh_st(h));
+    uint32_t n0 = s_fallo_n;
+    return (int) sin_motivo(h->be->fsync(fh_st(h)), n0);
 }

@@ -355,9 +355,21 @@ typedef enum {
 
 bpvm_fs_fail_t bpvm_fs_last_fail(void);
 
-/* Deja en el log la línea de un fallo de FS (op, fichero, tamaño, motivo crudo
- * y espacio libre). Vivía DUPLICADA en la Pico y en el STM32, idéntica carácter
- * por carácter; ahora la escribe quien sabe el motivo. */
+/* #628 (2-oct) — QUIÉN ANOTA EL MOTIVO, y dónde vive. Vivía en fs_lfs.c como un
+ * `int` de littlefs: la fachada dependía de littlefs por un símbolo (test-crc no
+ * enlazaba desde el 31-ago), FAT y el motor del PC no anotaban nada —un PUT que
+ * fallaba en /sd contestaba con el motivo RANCIO de la última operación de
+ * littlefs— y en littlefs sólo `write` y el cursor (un DEL que fallaba, igual).
+ * Ahora vive en la fachada y lo anota el que falla: el motor (su nombre corto,
+ * su código crudo, la clase y un texto fijo) o la fachada. Y cada fallo lleva el
+ * SUYO: si una operación falla sin que nadie anote nada, anota la fachada «el
+ * motor no dice por qué». Como errno: sólo vale leerlo justo después de un -1. */
+void bpvm_fs_anota_fallo(const char* motor, int crudo, bpvm_fs_fail_t clase, const char* texto);
+
+/* Deja en el log la línea de un fallo de FS (op, fichero, tamaño, el motivo
+ * anotado —motor, código crudo y texto— y espacio libre). Vivía DUPLICADA en la
+ * Pico y en el STM32, idéntica carácter por carácter; desde #628, en la fachada,
+ * que es quien guarda el motivo. */
 void bpvm_fs_log_fail(const char* op, const char* path, unsigned long size,
                       unsigned long libre, unsigned long total);
 int  bpvm_fs_register_lfs_filebd(const char* img_path,

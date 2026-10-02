@@ -3508,6 +3508,55 @@ si tenemos tiempo de V7, si no en V8»* —anotado en el bloque de V8 de `FICHAS
 SDK); 2) la máquina, en el PC como el I2C y el SPI, y de verdad en la Pico —el blink y un `ws2812` en BP que dé lo mismo
 que el driver de C—, en la tanda; 3) más tarde, las interrupciones de la PIO como eventos de BP y el DMA.
 
+## H10 — `#473`: los diez «rompe-el-modelo», mirados contra el código (2-oct); y el motivo de un fallo del FS (`#628`)
+
+**El triaje** (un agente leyó el código de hoy, sin tocarlo; lo concreto, comprobado a mano después). De los diez que el
+triaje del 10-sep mandó a V7 con ficha nueva:
+
+| # | qué | hoy | lo que queda |
+|---|---|---|---|
+| 1 | los tres backends de FreeRTOS | vivo | la fusión, bloqueada por el +10,8 % de `PrintBench` en la Pico sin explicar (`#615`, aparcada) |
+| 2 | `lv_conf.h` con dos condiciones iguales (:33 y :1020) | vivo | desde `G5` ninguna imagen compila LVGL: decide `BPVM_EN_PACK`; una macro, y el pack byte-idéntico. Minutos |
+| 3 | `setRotation` en la DK2 | **resuelto** (`G5.b`, `568e976a`) | restos sin efecto bajo `BPVM_LVGL`, que la DK2 ya no compila |
+| 4 | la fachada del FS dependía de littlefs | vivo | → `#628`, abajo |
+| 5 | la clasificación del fallo, sólo en littlefs | vivo | → `#628`. Y la otra lectura: el `exitCode` de un fallo de CARGA diverge (la Pico, el ordinal del enum; la ESP32, `bpvm_exit_code`; la STM32 y el sim, −2) |
+| 6 | los tres `board_mgr_*` | vivo | el adaptador que envuelve al despachador común (47 de ~65 líneas iguales): un `bpvm_bmgr_handle()` común con una cintura de cuatro piezas |
+| 7 | el lazo del wire de la STM32 | vivo | no cede nunca (`stm32_repl.c:1087`): con la placa ociosa, la tarea ociosa de FreeRTOS no corre. Y `scheduler_smp.c:334` sale de un fallo sin unir los hilos ya creados |
+| 8 | `RUN` cuatro veces | vivo | el más caro: un `bpvm_repl_run` común con 5-6 ganchos, y la tanda en las placas |
+| 9 | el sink de `OUTPUT` cinco veces | vivo | **la STM32 tira EN SILENCIO la línea cuyo escape no cabe en 2048 B** (`stm32_repl.c:300`; una línea del hilo `io` llega a 512 B, y 512 de control escapan a 3072). Un `send_output` común que trocee |
+| 10 | la puerta de arranque | a medias (`#601`) | la lista ya es una; la puerta sigue triplicada (el `if`, tragar el bulk, el `NOT_READY` del RUN), con tres mensajes |
+
+Y los lotes D (FS, 15) y E (GUI, 10) de `473_TRIAJE_COLA.md` §3 siguen sin mirar.
+
+**`#628` — el motivo de un fallo del FS.** `bpvm_fs_last_fail()` es de la fachada (`bpvm_fs.h`), pero vivía en
+`fs_lfs.c` como un `int` de littlefs. Tres consecuencias, las tres medidas: la fachada dependía de littlefs por un
+símbolo —`test-crc`, que la enlaza con el motor del PC, no enlaza desde el 31-ago, y el 15-sep otras tres se
+«arreglaron» enlazando la librería entera—; FAT y el motor del PC no anotan nada, así que un `PUT` que falla en `/sd`
+contesta con el motivo RANCIO de la última operación de littlefs; y dentro de littlefs sólo lo anotaban `write` y el
+cursor: un `DEL` que falla (`lfs_remove`) también contesta con el de antes.
+
+El mecanismo, como `errno`:
+- **el motivo vive en la fachada**: la clase (lo que va al wire), el motor que falló, su código crudo y un texto (lo que
+  va al log). La línea del log no cambia para littlefs: `FALLO lfs=-28 NOSPC (sin espacio)`; FAT dice `fat=4 NO_FILE…`
+  y el PC `host=2 ENOENT…`;
+- **lo anota el que falla**: cada camino de fallo de los tres motores llama a `bpvm_fs_anota_fallo(motor, crudo, clase,
+  texto)`; y la fachada, los suyos (mover entre unidades, el bloque del fichero que no cabe, «ninguna unidad atiende
+  esa ruta»);
+- **cada fallo lleva SU motivo**: la fachada cuenta los que se anotan; si una operación falla y la cuenta no se ha movido
+  —el motor no dijo nada—, anota ella «el motor no dice por qué». Así un fallo nunca hereda el de otro, y un camino que
+  mañana se olvide de anotar sale como «sin detalle», no con un motivo falso. No se borra nada al empezar una
+  operación: un éxito no escribe, y lo que tiene sentido es leerlo justo después de un −1 (lo que ya hace el REPL).
+
+Ejemplo, el caso que lo destapó: un `PUT` encima de la carpeta `/lib` (littlefs: `ISDIR`, «argumento inválido») y
+luego un `PUT` a `/sd/no/esta/x.txt`. Antes, el segundo contestaba «argumento inválido» —el motivo del primero—; ahora,
+`NOT_FOUND` —el suyo, `FR_NO_PATH` de FAT—. Lo prueban `sd_smoke` (por el cable, en el micro simulado) y una prueba de C
+nueva, `test-fsfallo` (cada clase en el motor del PC y en littlefs, y el motor que falla sin decir por qué).
+
+**Visto de paso, sin tocar** (lote D, FS): FAT no cumple tres cosas del contrato de la fachada que cumplen littlefs y
+el PC: su `mkdir` no es recursivo (un `PUT` a `/sd/a/b/x.txt` con `a` nueva falla en placa y va en el PC: el
+`crear_dirs_padre` de `#455` dice «recursivo en los 3 backends»); su `stat` de una carpeta contesta 0 (los otros, −1); y
+su `mkdir` encima de un FICHERO contesta éxito.
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):

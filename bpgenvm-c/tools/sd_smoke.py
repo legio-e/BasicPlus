@@ -133,6 +133,21 @@ def main():
         check(datos == blob, "…y tras volver a montar, GET lo devuelve igual: está en la tarjeta")
         r = w.call("SD_MOUNT")
         check(r.get("entradasRaiz") == 2, "SD_MOUNT → la raíz tiene ya 2 entradas")
+
+        # #628 (2-oct) — el MOTIVO de un fallo en /sd es el SUYO. FAT no lo anotaba: un PUT que fallaba en la tarjeta
+        # contestaba con el motivo de la última operación de littlefs. Primero un fallo de littlefs de OTRA clase
+        # (escribir encima de una carpeta: ISDIR, «argumento inválido») y después uno de FAT (una carpeta que no
+        # está: NO_PATH). Antes, el segundo decía INVALID_PARAM —el del primero—. (El sim arranca como una placa
+        # virgen, sin /lib: la carpeta se crea antes.)
+        r = w.call("MKDIR", path="/carpeta")
+        check(r.get("type") == "MKDIR_REPLY", "MKDIR /carpeta (littlefs) → OK (dice %r)" % r.get("type"))
+        r = w.call_bulk("PUT", b"x", path="/carpeta")
+        check(r.get("type") == "ERROR" and r.get("code") == "INVALID_PARAM",
+              "PUT encima de esa carpeta → INVALID_PARAM (dice %r %r)" % (r.get("code"), r.get("message")))
+        r = w.call_bulk("PUT", b"x", path="/sd/no/esta/x.txt")
+        check(r.get("type") == "ERROR" and r.get("code") == "NOT_FOUND",
+              "PUT en una carpeta de /sd que no está → NOT_FOUND, el de FAT y no el de littlefs de antes (dice %r %r)"
+              % (r.get("code"), r.get("message")))
     finally:
         para(proc)
 

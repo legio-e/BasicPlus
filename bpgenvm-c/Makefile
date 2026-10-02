@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1366,9 +1366,12 @@ test-modhdr: $(LIBOBJ)
 	@echo "--- V7/H2 cabecera y secciones del .mod vs cargador (esperado: solo 'ok', [status=OK]) ---"
 	@cd build/modhdr && ../test_modhdr.exe NatV7.mod NatNew.mod Bench_riscv.mod acme.LibHdr.mod Core.mod Ocho.mod NatNew8.mod
 
+# V7/H10 #628 (2-oct): la fachada con el motor del PC y el log, y SIN littlefs. No enlazaba desde el 31-ago (#461:
+# la fachada llamaba a bpvm_fs_log_fail, que vivía en fs_lfs.c) y ninguna red la corría; ahora el motivo de un fallo
+# vive en la fachada, y que esto enlace con esta lista es la prueba de que no depende de littlefs.
 test-crc:
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_crc.c src/crc32.c src/fs_facade.c src/fs_host.c -o build/test_crc.exe
+	$(CC) $(CFLAGS) test/test_crc.c src/crc32.c src/fs_facade.c src/fs_host.c src/bpvm_log.c -o build/test_crc.exe
 	@echo "--- #305 CRC por trozos (esperado: solo 'ok', [status=OK]) ---"
 	@cd build && ./test_crc.exe
 
@@ -1624,6 +1627,14 @@ test-fscursor: $(LIBOBJ)
 	$(CC) $(CFLAGS) -Isrc test/test_fs_cursor.c $(LIBOBJ) -o $(FSCURSOR_BIN) $(LDFLAGS)
 	@echo "--- V7/H3 (#491) el cursor de la fachada: mismo guion en host y littlefs (esperado: 0 fallos) ---"
 	./$(FSCURSOR_BIN)
+
+# V7/H10 #628 (2-oct) — EL MOTIVO DE UN FALLO DEL FS: cada clase forzada en el motor del PC y en littlefs, y que un
+# fallo NO herede el motivo de otro (un motor de mentira que falla sin decir nada). FAT, por el cable: sd_smoke.
+test-fsfallo: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_fsfallo.c $(LIBOBJ) -o build/test_fsfallo.exe $(LDFLAGS)
+	@echo "--- #628 el motivo de un fallo del FS, en los motores y en la fachada (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_fsfallo.exe
 
 test-fslfs: $(LIBOBJ)
 	@mkdir -p build
