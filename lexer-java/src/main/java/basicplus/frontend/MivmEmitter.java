@@ -51,7 +51,62 @@ public final class MivmEmitter {
 
     private final ModuleNode moduleAst;
     private final SemanticInfo info;
-    private final ModWriter w = new ModWriter();
+    /** V7/H9 #621 — el escritor, con un gancho en `emitSetLocal`: cada vez que se escribe una variable oculta
+     *  (`__…`), se anota en la sentencia que se está emitiendo (ver {@link #emitStmt}). */
+    private final ModWriter w = new ModWriter() {
+        @Override public void emitSetLocal(String localName) throws IOException {
+            super.emitSetLocal(localName);
+            anotaOculta(localName);
+        }
+    };
+
+    /** V7/H9 #621 — UNA VARIABLE OCULTA VIVE UNA SENTENCIA. La ISA no tiene DUP/POP/SWAP, así que el emisor
+     *  guarda en locales suyos (`__…`) lo que necesita volver a leer: el objeto recién construido
+     *  (`__newref_N`), el literal de array o de tupla, la tupla que se desempaqueta, el sujeto de un switch,
+     *  el `print obj`, la excepción de un finally, el valor que se descarta… Una de 8 bytes guarda una
+     *  REFERENCIA, y la seguía guardando hasta que la función acababa: las dos VMs miran todas las ranuras del
+     *  marco, así que lo que apuntaba no se colectaba. `cab := Nodo(cab)` en un bucle de `Main` dejaba
+     *  `__newref` apuntando a la cabeza, y `cab := null; gc()` no soltaba la lista: en `Main`, nunca (lo cazó
+     *  `HeapInfo` en la tanda de H9). Ahora, al acabar la sentencia que las escribió, se ponen a null
+     *  (`PUSH_0; I32_TO_I64; SET_LOCAL_L`, 5 bytes cada una). Un mecanismo en UN sitio, no un parche por
+     *  construcción: una variable oculta que se añada mañana queda cubierta sola. Las variables del programa
+     *  no se tocan (`__` es del sistema desde M4: el semántico no deja usarlo fuera de Core). Pila de
+     *  conjuntos: una sentencia anidada (el cuerpo de un if, un finally) limpia las suyas al acabar ella. */
+    private final Deque<java.util.LinkedHashSet<String>> ocultasDeSentencia = new ArrayDeque<>();
+    private boolean limpiandoOcultas = false;
+
+    private void anotaOculta(String n) {
+        if (limpiandoOcultas || ocultasDeSentencia.isEmpty() || !n.startsWith("__")) return;
+        if (w.localSizeBytes(n) == 8) ocultasDeSentencia.peek().add(n);
+    }
+
+    /** V7/H9 #621 — las variables ocultas escritas DENTRO del cuerpo de cada try abierto, a cualquier
+     *  profundidad: si una excepción corta una sentencia, su limpieza de fin de sentencia no corre, y el
+     *  manejador que la caza en este marco las limpia al entrar. Lo del cuerpo pasa también al try de fuera
+     *  (la excepción puede no casar con ningún catch de éste y cazarla aquél). */
+    private final Deque<java.util.LinkedHashSet<String>> ocultasDeTry = new ArrayDeque<>();
+
+    /** V7/H9 #621 — pone a null las variables ocultas de 8 bytes que escribió la sentencia que acaba. Tras un
+     *  `return` o un `throw` no (el marco se va, y el código no se alcanzaría); `break` y `continue` limpian
+     *  ellos antes de saltar. */
+    private void limpiaOcultas(IStmt s, java.util.Set<String> escritas) throws IOException {
+        if (s instanceof ReturnStmt || s instanceof ThrowStmt) return;
+        limpiaNombres(escritas);
+    }
+
+    private void limpiaNombres(java.util.Set<String> nombres) throws IOException {
+        if (nombres.isEmpty()) return;
+        limpiandoOcultas = true;
+        try {
+            for (String n : nombres) {
+                w.emit(OpCode.PUSH_0);
+                w.emit(OpCode.I32_TO_I64);
+                w.emitSetLocal(n);
+            }
+        } finally {
+            limpiandoOcultas = false;
+        }
+    }
 
     /** H6.a — bytes de la interfaz (texto del .bpi) a embeber en el .mod. Lo
      *  fija el driver de compilación (Main) antes de emitTo. Null ⇒ .mod v5. */
@@ -451,10 +506,19 @@ public final class MivmEmitter {
         }
     }
 
-    private static final class LoopLabels {
+    private final class LoopLabels {
         final int continueLabel;
         final int breakLabel;
-        LoopLabels(int cont, int brk) { this.continueLabel = cont; this.breakLabel = brk; }
+        /** V7/H9 #621 — cuántas sentencias había abiertas (`ocultasDeSentencia`) al entrar en el bucle, la suya
+         *  incluida: un `break`/`continue` sale de las que estén por ENCIMA y limpia lo que escribieron. En un
+         *  switch, `continue` es del bucle de fuera: su profundidad, la de aquél. */
+        final int profBreak;
+        final int profContinue;
+        LoopLabels(int cont, int brk) { this(cont, brk, ocultasDeSentencia.size()); }
+        LoopLabels(int cont, int brk, int profContinue) {
+            this.continueLabel = cont; this.breakLabel = brk;
+            this.profBreak = ocultasDeSentencia.size(); this.profContinue = profContinue;
+        }
     }
 
     public MivmEmitter(ModuleNode moduleAst, SemanticInfo info) {
@@ -2629,6 +2693,18 @@ public final class MivmEmitter {
                 }
             }
         }
+        ocultasDeSentencia.push(new java.util.LinkedHashSet<>());   // V7/H9 #621
+        java.util.Set<String> escritas;
+        try {
+            emitSentencia(s);
+        } finally {
+            escritas = ocultasDeSentencia.pop();
+        }
+        if (!ocultasDeTry.isEmpty()) ocultasDeTry.peek().addAll(escritas);
+        limpiaOcultas(s, escritas);
+    }
+
+    private void emitSentencia(IStmt s) throws IOException {
         if (s instanceof Ast.RaiseStmt) { emitRaise((Ast.RaiseStmt) s); return; }
         if (s instanceof AssignStmt)  emitAssign((AssignStmt) s);
         else if (s instanceof Ast.DestructAssignStmt) emitDestructAssign((Ast.DestructAssignStmt) s);
@@ -3682,7 +3758,8 @@ public final class MivmEmitter {
         // del bucle de fuera. Antes el switch no se apilaba: el `break` salía del bucle que lo
         // contuviera y, sin bucle, el emisor fallaba sin línea.
         LoopLabels fuera = loopStack.peek();
-        loopStack.push(new LoopLabels(fuera != null ? fuera.continueLabel : end, end));
+        loopStack.push(new LoopLabels(fuera != null ? fuera.continueLabel : end, end,
+                                      fuera != null ? fuera.profContinue : ocultasDeSentencia.size()));
         try {
             for (CaseClause cc : s.cases) {
                 int bodyLabel = w.newLabel();
@@ -4441,9 +4518,44 @@ public final class MivmEmitter {
         emitExpr(s.expr);
         // Si la expresión devuelve algo, lo descartamos. Para llamadas, RET siempre
         // empuja un return value (aunque sea dummy). Lo descartamos con un SET_LOCAL.
-        String discard = "__discard";
-        declareLocal(discard);
-        w.emitSetLocal(discard);
+        // V7/H9 #620 — POR SU ANCHO: un valor de 8 bytes (string, long, double, objeto, tupla,
+        // any) va a `__discard8`; lo demás, y el dummy de una función sin valor, a `__discard`.
+        // Era siempre `__discard`, con el ancho de su PRIMER uso en la función: `cadena()` como
+        // sentencia dejaba 4 bytes en la pila (en un bucle, desbordamiento de pila), y tras un
+        // `catch` sin nombre —que lo declaraba de 8— cada descarte de 4 sacaba 8 y la pila bajaba
+        // hasta pisar los locales (la VM-C acababa en «PC fuera de rango»).
+        descarta(occupies8Bytes(info.exprTypes.get(s.expr)));
+    }
+
+    /** V7/H9 #620 — saca de la pila el valor de encima, de 4 u 8 bytes, a un local que no se lee:
+     *  uno por ancho, `__discard` y `__discard8`, para que el ancho no lo decida el primer uso del
+     *  nombre en la función. */
+    private void descarta(boolean ocho) throws IOException {
+        String d = ocho ? "__discard8" : "__discard";
+        if (ocho) declareLocalLong(d); else declareLocal(d);
+        w.emitSetLocal(d);
+    }
+
+    /** V7/H9 #621 — emite el cuerpo de un try y devuelve las variables ocultas que escribieron sus sentencias
+     *  (a cualquier profundidad), para que los manejadores las limpien; y se las pasa al try de fuera. */
+    private java.util.Set<String> cuerpoDeTry(List<IStmt> cuerpo) throws IOException {
+        ocultasDeTry.push(new java.util.LinkedHashSet<>());
+        java.util.Set<String> del;
+        try {
+            for (IStmt st : cuerpo) emitStmt(st);
+        } finally {
+            del = ocultasDeTry.pop();
+        }
+        if (!ocultasDeTry.isEmpty()) ocultasDeTry.peek().addAll(del);
+        return del;
+    }
+
+    /** V7/H9 #621 — relanza la excepción guardada mientras corría el finally, y antes pone a null su variable:
+     *  la excepción va en la pila, y si la caza un try de fuera en este marco, la variable la retenía. */
+    private void relanzaPendiente() throws IOException {
+        w.emitGetLocal("__pending_exc");
+        limpiaNombres(java.util.Collections.singleton("__pending_exc"));
+        w.emitThrow();
     }
 
     private void emitTryStmt(TryStmt s) throws IOException {
@@ -4462,8 +4574,9 @@ public final class MivmEmitter {
             int rethrow = w.newLabel(), fin = w.newLabel();
             w.emitTryBegin(rethrow, null);
             tryStack.push(new TryFrame(finallyBody, 1));
+            java.util.Set<String> delCuerpo;
             try {
-                for (IStmt st : s.body) emitStmt(st);
+                delCuerpo = cuerpoDeTry(s.body);   // V7/H9 #621
             } finally {
                 tryStack.pop();
             }
@@ -4473,9 +4586,9 @@ public final class MivmEmitter {
             w.declareLabel(rethrow);
             declareLocalLong("__pending_exc");   // ref de 8 B
             w.emitSetLocal("__pending_exc");
+            limpiaNombres(delCuerpo);            // V7/H9 #621: lo que dejó a medias la sentencia que lanzó
             for (IStmt st : finallyBody) emitStmt(st);
-            w.emitGetLocal("__pending_exc");
-            w.emitThrow();
+            relanzaPendiente();
             w.declareLabel(fin);
             return;
         }
@@ -4510,8 +4623,9 @@ public final class MivmEmitter {
 
         TryFrame bodyFrame = new TryFrame(finallyBody, N);
         tryStack.push(bodyFrame);
+        java.util.Set<String> delCuerpo;
         try {
-            for (IStmt st : s.body) emitStmt(st);
+            delCuerpo = cuerpoDeTry(s.body);   // V7/H9 #621
         } finally {
             tryStack.pop();
         }
@@ -4530,9 +4644,11 @@ public final class MivmEmitter {
                 declareLocalLong(cc.varName);   // H1.2a: el objeto de excepción cazado = ref 8 bytes
                 w.emitSetLocal(cc.varName);
             } else {
-                declareLocalLong("__discard");   // H1.2a: hay que sacar los 8 bytes del ref de excepción
-                w.emitSetLocal("__discard");
+                // H1.2a: hay que sacar los 8 bytes del ref de excepción. V7/H9 #620: a `__discard8`;
+                // con `__discard`, si la función ya lo había declarado de 4, sacaba 4 y dejaba 4.
+                descarta(true);
             }
+            limpiaNombres(delCuerpo);   // V7/H9 #621: lo que dejó a medias la sentencia que lanzó
             // V10 (16-sep, EC-2) — al entrar al handler, las DOS VMs han sacado de la pila los
             // handlers de ENCIMA del que casa y ese mismo; los HERMANOS DE DEBAJO (los catch
             // posteriores de este try, empujados antes) seguían vivos. Un throw posterior, fuera
@@ -4568,9 +4684,9 @@ public final class MivmEmitter {
             w.declareLabel(rethrowLabel);
             declareLocalLong("__pending_exc");   // #527 (de paso): era declareLocal (4 B) para una ref de 8 (hallazgo 34)
             w.emitSetLocal("__pending_exc");
+            limpiaNombres(delCuerpo);            // V7/H9 #621 (la excepción puede venir del cuerpo o de un catch)
             for (IStmt st : finallyBody) emitStmt(st);
-            w.emitGetLocal("__pending_exc");
-            w.emitThrow();
+            relanzaPendiente();
         }
 
         w.declareLabel(endLabel);
@@ -4605,12 +4721,26 @@ public final class MivmEmitter {
 
     private void emitBreak() throws IOException {
         if (loopStack.isEmpty()) { errors.add("break fuera de bucle"); return; }
+        limpiaHasta(loopStack.peek().profBreak);   // V7/H9 #621
         w.emitJump(loopStack.peek().breakLabel);
     }
 
     private void emitContinue() throws IOException {
         if (loopStack.isEmpty()) { errors.add("continue fuera de bucle"); return; }
+        limpiaHasta(loopStack.peek().profContinue);   // V7/H9 #621
         w.emitJump(loopStack.peek().continueLabel);
+    }
+
+    /** V7/H9 #621 — un salto que sale de las sentencias abiertas por encima de la profundidad {@code prof}: lo
+     *  que ya escribieron no se limpiaría al acabar (no acaban), así que se limpia antes de saltar. */
+    private void limpiaHasta(int prof) throws IOException {
+        java.util.LinkedHashSet<String> fuera = new java.util.LinkedHashSet<>();
+        int i = ocultasDeSentencia.size();
+        for (java.util.Set<String> sent : ocultasDeSentencia) {   // de la más interna a la más externa
+            if (i-- <= prof) break;
+            fuera.addAll(sent);
+        }
+        limpiaNombres(fuera);
     }
 
     // ============================================================

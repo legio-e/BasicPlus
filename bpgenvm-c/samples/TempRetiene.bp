@@ -1,0 +1,217 @@
+// TempRetiene.bp — V7/H9 #621 (2-oct): lo que el programa suelta se colecta, aunque el compilador lo haya guardado
+// en una variable OCULTA del marco. La ISA no tiene DUP/POP, así que el emisor guarda en locales suyos (`__…`) el
+// objeto recién construido, el literal de array, la tupla que desempaqueta, el sujeto de un switch, el
+// objeto de un `print`, la excepción de un finally o de un catch sin nombre, el valor que descarta… y los guardaba
+// hasta que la función acababa: las dos VMs miran todas las ranuras del marco, así que no se colectaban. Ahora cada
+// una vive UNA sentencia. Cada caso, en su función (su marco sigue vivo al medir): reserva unos 4 KB por la
+// construcción que prueba, suelta lo que el programa ve, colecta y mira que lo libre ha vuelto. «ok» o «FALLO».
+// Antes de cada caso y antes de medir se FRIEGA la pila: el GC la recorre palabra a palabra y toma por viva toda
+// palabra que parezca un handle, y los marcos de las llamadas que ya volvieron (grandeArr, el constructor…) dejan
+// copias en ranuras que las siguientes aún no han escrito —eso es pasajero (la siguiente llamada lo pisa) y no es
+// lo que se prueba aquí: sin fregar, la medida salía distinta con cada disposición del marco—.
+module TempRetiene
+  import Heap
+
+  class Caja
+    var d: integer[]
+    public function Caja(d: integer[])
+      this.d := d
+    end Caja
+    public function toString(): string
+      return "caja"
+    end toString
+  end Caja
+
+  // ~4 KB en el heap, hechos en ejecución (no un literal)
+  function grandeArr(): integer[]
+    return newIntArray(1000)
+  end grandeArr
+
+  function grandeStr(): string
+    var sb: StringBuilder := StringBuilder()
+    for i := 1 to 400 do
+      sb.appendStr("0123456789")
+    next i
+    return sb.toString()
+  end grandeStr
+
+  function lanza(): string
+    throw RuntimeError("cortada")
+  end lanza
+
+  function cuenta(a: string[]): integer
+    return len(a)
+  end cuenta
+
+  function parGrande(): (integer, string)
+    return (1, grandeStr())
+  end parGrande
+
+  // Llena de enteros (que no son handles) los marcos que vienen encima del que llama.
+  function friega(n: integer): integer
+    var a: integer := 0
+    var b: integer := 0
+    var c: integer := 0
+    var d: integer := 0
+    if n > 0 then
+      return friega(n - 1) + a + b + c + d
+    endif
+    return 0
+  end friega
+
+  function libre(): integer
+    gc()
+    return Heap.getFree()
+  end libre
+
+  function mira(nombre: string, f0: integer)
+    friega(64)
+    if libre() > f0 - 2000 then
+      print "ok " + nombre
+    else
+      print "FALLO " + nombre + ": sigue retenido tras soltarlo"
+    endif
+  end mira
+
+  function construido()
+    var f0: integer := libre()
+    var c: Caja := Caja(grandeArr())
+    c := null
+    mira("un objeto construido, X(...)", f0)
+  end construido
+
+  function literalArray()
+    var f0: integer := libre()
+    var a: string[] := [grandeStr()]
+    a := null
+    mira("un literal de array, [a]", f0)
+  end literalArray
+
+  function desempaqueta()
+    var n: integer := 0
+    var s: string := ""
+    var f0: integer := libre()
+    { n, s } := parGrande()
+    s := ""
+    mira("un desempaquetado, {a, b} := f()", f0)
+  end desempaqueta
+
+  function sujetoSwitch()
+    var r: integer := 0
+    var f0: integer := libre()
+    switch grandeStr()
+      case "a"
+        r := 1
+      default
+        r := 2
+    endsw
+    mira("el sujeto de un switch", f0)
+  end sujetoSwitch
+
+  function imprimeObjeto()
+    var f0: integer := libre()
+    var c: Caja := Caja(grandeArr())
+    print c
+    c := null
+    mira("el objeto de un print", f0)
+  end imprimeObjeto
+
+  function excepcionFinally()
+    var r: integer := 0
+    var f0: integer := libre()
+    try
+      try
+        throw RuntimeError(grandeStr())
+      finally
+        r := 1
+      endtry
+    catch e: RuntimeError
+      r := 2
+      e := null
+    endtry
+    mira("la excepcion que pasa por un finally", f0)
+  end excepcionFinally
+
+  function catchSinNombre()
+    var r: integer := 0
+    var f0: integer := libre()
+    try
+      throw RuntimeError(grandeStr())
+    catch
+      r := 1
+    endtry
+    mira("la excepcion de un catch sin nombre", f0)
+  end catchSinNombre
+
+  function descartado()
+    var f0: integer := libre()
+    grandeStr()
+    mira("el valor descartado de una llamada", f0)
+  end descartado
+
+  // Una excepción corta la sentencia a medias (el literal ya lleva su primer elemento) y se caza aquí mismo: la
+  // limpieza del final de la sentencia no corre; la hace el manejador.
+  function cortadaPorExcepcion()
+    var r: integer := 0
+    var f0: integer := libre()
+    try
+      var a: string[] := [grandeStr(), lanza()]
+      r := len(a)
+    catch e: RuntimeError
+      r := 2
+      e := null
+    endtry
+    mira("una sentencia cortada por una excepcion que se caza en la misma funcion", f0)
+  end cortadaPorExcepcion
+
+  // `break` sale del if sin acabarlo (el literal es de su condición): limpia antes de saltar.
+  function saleConBreak()
+    var f0: integer := libre()
+    while true do
+      if cuenta([grandeStr()]) > 0 then
+        break
+      endif
+    endwh
+    mira("un break que sale de un if", f0)
+  end saleConBreak
+
+  // Y `continue`.
+  function saleConContinue()
+    var i: integer := 0
+    var f0: integer := libre()
+    while i < 1 do
+      i := i + 1
+      if cuenta([grandeStr()]) > 0 then
+        continue
+      endif
+      i := 5
+    endwh
+    mira("un continue que sale de un if", f0)
+  end saleConContinue
+
+  function Main()
+    friega(64)
+    construido()
+    friega(64)
+    literalArray()
+    friega(64)
+    desempaqueta()
+    friega(64)
+    sujetoSwitch()
+    friega(64)
+    imprimeObjeto()
+    friega(64)
+    excepcionFinally()
+    friega(64)
+    catchSinNombre()
+    friega(64)
+    descartado()
+    friega(64)
+    cortadaPorExcepcion()
+    friega(64)
+    saleConBreak()
+    friega(64)
+    saleConContinue()
+    print "fin"
+  end Main
+end TempRetiene

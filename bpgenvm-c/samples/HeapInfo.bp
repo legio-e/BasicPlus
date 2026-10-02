@@ -29,6 +29,10 @@ module HeapInfo
     mira("lo libre cabe en el heap", libre > 0 and libre <= tam)
     mira("el mayor bloque cabe en lo libre", mayor > 0 and mayor <= libre)
     mira("los huecos se cuentan", Heap.getFreeBlocks() >= 0)
+    // V7/H9 (2-oct): se colecta ANTES de contar, para que h0 sean sólo objetos vivos. Si no, h0 cuenta también la
+    // basura de las líneas de arriba (las cadenas de «mira»), y una colecta en medio del bucle —en un heap pequeño
+    // las hay: en la C6, tres— se la lleva y los nodos parecen menos (h0 7, al final 405: 398 «más», no 400).
+    gc()
     var h0: integer := Heap.getHandles()
     // doscientos nodos vivos: cada uno, el objeto y su array
     var cab: Nodo := null

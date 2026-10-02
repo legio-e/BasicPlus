@@ -805,6 +805,14 @@ public class ModWriter {
         return null;
     }
 
+    /** V7/H9 #621 — el ancho en bytes del local {@code name} de la función abierta (4 u 8), o -1 si no es un
+     *  local escalar (un parámetro, un array fijo, o no existe). El emisor lo usa para saber qué temporales
+     *  suyos (`__…`) guardan 8 bytes —una referencia— y ponerlos a null al acabar la sentencia. */
+    public int localSizeBytes(String name) {
+        LocalSlot s = findLocalSlot(name);
+        return (s == null || s.isArray) ? -1 : s.sizeBytes;
+    }
+
     // --- Clases ---
 
     /**

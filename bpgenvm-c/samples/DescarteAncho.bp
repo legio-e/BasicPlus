@@ -1,0 +1,124 @@
+// DescarteAncho.bp — V7/H9 #620 (2-oct): el valor de una llamada que se usa como sentencia se descarta POR SU
+// ANCHO. Iba siempre al local oculto `__discard`, con el ancho de su primer uso en la función: una función que
+// devuelve 8 bytes (string, long, double, un objeto) llamada como sentencia dejaba 4 bytes en la pila —en un bucle,
+// desbordamiento de pila—, y tras un `catch` sin nombre (que lo declaraba de 8) cada descarte de 4 sacaba 8 y la
+// pila bajaba hasta pisar los locales. Cada línea, «ok» o «FALLO».
+module DescarteAncho
+
+  class Caja
+    var n: integer
+    public function Caja(n: integer)
+      this.n := n
+    end Caja
+  end Caja
+
+  function nada()
+  end nada
+
+  function cadena(): string
+    return "hola"
+  end cadena
+
+  function largo(): long
+    return 5000000000L
+  end largo
+
+  function real(): double
+    return 1.5
+  end real
+
+  function caja(): Caja
+    return Caja(3)
+  end caja
+
+  function mira(nombre: string, cierto: boolean)
+    if cierto then
+      print "ok " + nombre
+    else
+      print "FALLO " + nombre
+    endif
+  end mira
+
+  // Descartes de 4 y de 8 mezclados en un bucle: si uno saca de menos o de más, la pila deriva.
+  function mezcla(n: integer): integer
+    var x: integer := 0
+    var i: integer := 0
+    while i < n do
+      nada()
+      cadena()
+      largo()
+      real()
+      caja()
+      x := x + 1
+      i := i + 1
+    endwh
+    return x
+  end mezcla
+
+  // El primer descarte de la función es de 8; los del bucle, de 4.
+  function primeroOcho(n: integer): integer
+    var x: integer := 0
+    cadena()
+    var i: integer := 0
+    while i < n do
+      nada()
+      x := x + 1
+      i := i + 1
+    endwh
+    return x
+  end primeroOcho
+
+  // Un catch SIN nombre (la excepción, 8 bytes) y después descartes de 4: no pueden pisar los locales.
+  function catchLuegoCuatro(): integer
+    var x: integer := 7
+    var y: integer := 100
+    try
+      throw RuntimeError("b")
+    catch
+      x := x + 1
+    endtry
+    nada()
+    nada()
+    nada()
+    nada()
+    nada()
+    nada()
+    return x * 1000 + y
+  end catchLuegoCuatro
+
+  // Un descarte de 4 y después el catch sin nombre, en un bucle: no puede dejar nada en la pila.
+  function cuatroLuegoCatch(n: integer): integer
+    var x: integer := 0
+    nada()
+    var i: integer := 0
+    while i < n do
+      try
+        throw RuntimeError("a")
+      catch
+        x := x + 1
+      endtry
+      i := i + 1
+    endwh
+    return x
+  end cuatroLuegoCatch
+
+  function Main()
+    try
+      mira("descartes de 4 y de 8 en un bucle", mezcla(10000) == 10000)
+    catch e: RuntimeError
+      print "FALLO descartes de 4 y de 8 en un bucle: " + e.msg
+    endtry
+    try
+      mira("el primer descarte de 8, los del bucle de 4", primeroOcho(10000) == 10000)
+    catch e: RuntimeError
+      print "FALLO el primer descarte de 8: " + e.msg
+    endtry
+    mira("un catch sin nombre y luego descartes de 4", catchLuegoCuatro() == 8100)
+    try
+      mira("un descarte de 4 y luego un catch sin nombre, en un bucle", cuatroLuegoCatch(10000) == 10000)
+    catch e: RuntimeError
+      print "FALLO un catch sin nombre en un bucle: " + e.msg
+    endtry
+    print "fin"
+  end Main
+end DescarteAncho
