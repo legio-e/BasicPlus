@@ -3366,6 +3366,77 @@ elige otra vez. Las ESP32 y la STM32 no lo tenían: copian el ENV a RAM al arran
 la misma salida en el PC y en placa) y `env_smoke` (el micro simulado, tres arranques sobre la misma flash: sin la clave,
 con ella, y con una que no es una fecha).
 
+## H10 — la PIO del RP2350: programarla desde BP (2-oct, el planteamiento de Eduardo; falta decidir cuándo)
+
+**El porqué** (Eduardo, 2-oct): *«Para la Pico igual necesito programar la PIO»*. Lo que hay: el `Neopixel` de la Pico
+va por PIO (H7.4, `pico/neopixel.c`), con un programa FIJO —el `ws2812.pio` de la SDK, ensamblado por `pioasm` al
+compilar el firmware— en `pio0`, y no suelta nada de lo que coge. Un programa BP no puede escribir el suyo.
+
+**Lo que decidió Eduardo** (2-oct), mirando cómo lo hace MicroPython (`rp2.asm_pio` y `rp2.StateMachine`):
+1. **Sin ensamblador**: *«en vez de escribir un ensamblador […] con un writer y con llamadas a métodos vayan añadiendo
+   las líneas. Nos ahorramos el parseador»*. Cada método añade una instrucción, ya codificada en sus 16 bits.
+2. **Sin clase de programa**: *«piosm.addInst() (addInst puede ser AddJump, AddLabel, etc). Sin necesidad de crear una
+   clase para el programa, lo guarda dentro de una lista la StateMachine»*.
+3. **Un módulo `RP2350`, con la clase dentro**: *«y así solamente lo cargan los que vayan a utilizar el micro»* (no una
+   clase de `Machine`, que cargan todos los que importan `Gpio` o `Rtc`: el prototipo ya pesaba 1880 B de código, más
+   que los 785 de `Machine` entero). Su `.mod` va sólo en la imagen de la Pico: en otra familia, el programa que lo
+   importe se para al cargar («falta el módulo»); y aunque llegara por un pack, la primitiva mira la tabla de
+   capacidades y lo dice con nombre.
+
+**La forma** (los nombres, de la convención: un verbo y en minúsculas):
+```
+import RP2350
+
+var sm: RP2350.StateMachine := RP2350.StateMachine(0)    // la máquina 0 (de pio0)
+sm.setSideset(1)
+sm.addWrapTarget()
+sm.addLabel("bitloop")
+sm.addOut(RP2350.X, 1).side(0).delay(3)
+sm.addJump(RP2350.NOT_X, "do_zero").side(1).delay(2)
+sm.addJump("bitloop").side(1).delay(2)
+sm.addLabel("do_zero")
+sm.addNop().side(0).delay(2)
+sm.addWrap()
+sm.setFreq(8000000)
+sm.setSidesetBase(16)
+sm.active(true)          // aquí se resuelven las etiquetas, se carga en la PIO y arranca
+sm.put(color, 8)
+```
+Las instrucciones: `addJump`, `addWait`, `addIn`, `addOut`, `addPush`, `addPull`, `addMov`, `addIrq`, `addSet`, `addNop`, y
+`addWord` (una instrucción ya codificada); las marcas, `addLabel`, `addWrapTarget` y `addWrap`; `.side(v)` y
+`.delay(n)` modifican la última. La máquina, calcada de MicroPython: `active`, `restart`, `exec`, `put`, `get`, y
+cuántas palabras hay en cada FIFO. Reutilizar un programa es una función que se lo añade a una máquina (`ws2812(sm)`).
+
+**Lo que se probó** (2-oct, un prototipo desechable, fuera del repo): el `ws2812` de la SDK escrito así da los códigos
+de `pioasm` —`0x6321 0x1223 0x1200 0xa242`, `wrap_target` 0, `wrap` 3— en las dos VMs, y el blink de MicroPython
+también. De paso: con una CLASE de programa (la subclase de MicroPython), BP pedía `this.` delante de cada instrucción
+y `set`, `in` y `word` chocaban con palabras reservadas; la forma de Eduardo no tiene ninguno de los dos problemas.
+`put` y `get` valen como nombres de método (`get` sólo es reservada dentro de una propiedad). `null` sí choca —las
+palabras de BP no distinguen mayúsculas—: la fuente de ceros y el destino que descarta necesita otro nombre.
+
+**Por debajo, en C**:
+- Un solo reparto de la PIO, que comparte el `Neopixel`: la memoria de instrucciones de cada PIO es COMPARTIDA —si
+  varias máquinas llevan el mismo programa, se carga una vez— y cada máquina es EXCLUSIVA de quien la coge.
+- Con la máquina en marcha, su programa queda fijo (un `addX` entonces es un error con nombre).
+- Al acabar el RUN —también con KILL— se suelta lo que cogió el programa: la máquina, su programa y los pines.
+- `get()` y `put()`, mientras esperan, ceden a los otros hilos de BP, y un KILL los corta.
+- El RP2350: 3 PIO × 4 máquinas = 12, numeradas 0–11 como en MicroPython; 32 instrucciones por PIO; en el RP2350B
+  (la Metro, 48 pines) cada PIO ve 32 pines, desde la base 0 o la 16 (el `gpio_base` de MicroPython).
+- Las primitivas, nuevas en Core; el backend, sólo en la Pico; el número de PIO, en la tabla de capacidades (el
+  `pioCount` del `INFO` ya existe).
+
+**Por decidir**:
+1. **El nombre de `null`**: propongo `RP2350.NONE`.
+2. **El PC**. La cascada pide validar en la VM-Java y en la VM-C antes que en la placa, y la tabla de capacidades del
+   PC lleva los números del RP2350A: lo coherente es un EMULADOR de la PIO en las dos VMs (las nueve instrucciones, las
+   FIFO y unos pines de mentira), y es la pieza grande. Lo barato: en el PC el programa se construye igual (es BP, con
+   prueba de paridad) y la máquina, al arrancar, da un error claro; ejecutarla sólo en la placa.
+3. **Cuándo**: H10 de V7, o más adelante.
+
+**Por fases**: 1) el writer, con su prueba de paridad (el oráculo, `pioasm` sobre los programas de los ejemplos de la
+SDK); 2) la máquina en la Pico —el blink y un `ws2812` en BP que dé lo mismo que el driver de C—, en la tanda; 3) más
+tarde, las interrupciones de la PIO como eventos de BP, el DMA y, si se decide, el emulador.
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):
