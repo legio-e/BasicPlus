@@ -21,7 +21,23 @@ module HeapInfo
     endif
   end mira
 
-  function Main()
+  // V7/H9 (2-oct): llena de enteros (que no son handles) los marcos de encima. El GC recorre la pila palabra a
+  // palabra (conservador) y ENTER no pone a cero los locales: en la placa —no en el PC, cuya pila nueva está a
+  // cero— las ranuras que aún no se han escrito guardan handles de antes (de otra llamada, de otro RUN), que al
+  // contar h0 retienen basura que una colecta del bucle se lleva en cuanto se escriben. En la C6: «FALLO
+  // doscientos nodos…» con el arreglo de #621 ya puesto. Por eso la prueba va en su función, con la pila fregada.
+  function friega(n: integer): integer
+    var a: integer := 0
+    var b: integer := 0
+    var c: integer := 0
+    var d: integer := 0
+    if n > 0 then
+      return friega(n - 1) + a + b + c + d
+    endif
+    return 0
+  end friega
+
+  function prueba()
     var tam: integer := Heap.getSize()
     var libre: integer := Heap.getFree()
     var mayor: integer := Heap.getLargestFree()
@@ -52,5 +68,10 @@ module HeapInfo
     mira("tras soltar y colectar, lo libre sube", Heap.getFree() > libreLleno)
     mira("y los objetos bajan", Heap.getHandles() < h0 + 400)
     print "fin"
+  end prueba
+
+  function Main()
+    friega(64)
+    prueba()
   end Main
 end HeapInfo
