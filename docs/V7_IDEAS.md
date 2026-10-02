@@ -3481,6 +3481,22 @@ sería necesario que funcionase a diferentes baudios»*.
   pero el backend sólo da la 1 y la 2; la STM32, 3 o 4. Sin PIO, la salida para más puertos en las ESP32 sería su
   periférico RMT, no la CPU.
 
+**¿Y las ESP32?** (Eduardo, 2-oct: *«sin PIO no es tan sencillo hacer una UART. No sé si las ESP32 tenían algo de
+PIO»*). No tienen PIO. Lo que dicen los `soc_caps.h` del IDF v6.0.1, de lo más barato a lo más caro:
+1. **Las UART que ya están**: la P4 tiene 5 de alta velocidad y el backend sólo da la 1 y la 2 (`gpio_esp32.c`: `b <= 2`);
+   darle las otras es poco trabajo. Y la C5, la C6 y la P4 tienen además una **UART de bajo consumo** (`SOC_UART_LP_NUM`
+   1), con sus pines fijos: en la C5 y la C6, que hoy dejan 1 sola a los programas, sería la segunda.
+2. **El RMT** (en las cinco: S3, C3, C5, C6 y P4; 48 palabras por canal, y DMA en la S3 y la P4): lo más parecido a la
+   PIO, sin ser programable —manda y recibe trenes de pulsos (nivel y duración) con el tiempo puesto por el
+   hardware—. Para una UART: enviar es fácil (un byte, como mucho 10 pulsos con su duración exacta); recibir, el RMT
+   captura la línea como pulsos con precisión de hardware y la CPU, después, en C, cuenta cuántos bits caben en cada
+   pulso a los baudios dados: el tiempo lo garantiza el hardware, y una pausa del RTOS o del GC no estropea nada. De
+   regalo, el RMT es lo que usan las ESP32 para los WS2812: le daría a la familia el `Neopixel`, que hoy no hace nada.
+3. **Un segundo procesador pequeño**: el núcleo LP de la C5, la C6 y la P4 (`SOC_LP_CORE_SUPPORTED`) o el coprocesador
+   ULP RISC-V de la S3, que harían una UART por software sin las interrupciones del RTOS. Posible, y mucho más trabajo:
+   un firmware propio para ese núcleo.
+(También tienen PARLIO y ETM la C5, la C6 y la P4; para esto, el RMT es más directo.)
+
 **Y lo último** (Eduardo, 2-oct): `null` se llama **`RP2350.NONE`** (*«NONE está bien»*); y **cuándo**: *«Más adelante,
 si tenemos tiempo de V7, si no en V8»* —anotado en el bloque de V8 de `FICHAS`—.
 
