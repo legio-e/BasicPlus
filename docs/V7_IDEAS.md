@@ -3490,12 +3490,16 @@ PIO»*). No tienen PIO. Lo que dicen los `soc_caps.h` del IDF v6.0.1, de lo más
    PIO, sin ser programable —manda y recibe trenes de pulsos (nivel y duración) con el tiempo puesto por el
    hardware—. Para una UART: enviar es fácil (un byte, como mucho 10 pulsos con su duración exacta); recibir, el RMT
    captura la línea como pulsos con precisión de hardware y la CPU, después, en C, cuenta cuántos bits caben en cada
-   pulso a los baudios dados: el tiempo lo garantiza el hardware, y una pausa del RTOS o del GC no estropea nada. De
-   regalo, el RMT es lo que usan las ESP32 para los WS2812: le daría a la familia el `Neopixel`, que hoy no hace nada.
+   pulso a los baudios dados: el tiempo lo garantiza el hardware, y una pausa del RTOS o del GC no estropea nada. Y el
+   RMT ya está en el firmware: el `Neopixel` de la familia va por él desde el 26-sep (`6a53f91f`, probado en la S3).
 3. **Un segundo procesador pequeño**: el núcleo LP de la C5, la C6 y la P4 (`SOC_LP_CORE_SUPPORTED`) o el coprocesador
    ULP RISC-V de la S3, que harían una UART por software sin las interrupciones del RTOS. Posible, y mucho más trabajo:
    un firmware propio para ese núcleo.
 (También tienen PARLIO y ETM la C5, la C6 y la P4; para esto, el RMT es más directo.)
+
+**Lo que decidió Eduardo** (2-oct): *«la opción 1 para V8. El RMT para enviar se puede estudiar, el Neopixel o
+equivalente salen casi directo»* —las UART que ya están, a V8; enviar por el RMT, a estudiar—. Los dos, en el bloque de
+V8 de `FICHAS`.
 
 **Y lo último** (Eduardo, 2-oct): `null` se llama **`RP2350.NONE`** (*«NONE está bien»*); y **cuándo**: *«Más adelante,
 si tenemos tiempo de V7, si no en V8»* —anotado en el bloque de V8 de `FICHAS`—.

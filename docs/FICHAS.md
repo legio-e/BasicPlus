@@ -4668,6 +4668,11 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   V8»*: si sobra tiempo en V7, entra antes): un módulo `RP2350` con la clase `StateMachine`, que guarda su programa y lo
 >   escribe con métodos (`sm.addJump`, `sm.addLabel`…), sin ensamblador; en el PC, como el I2C y el SPI. El planteamiento,
 >   decidido entero, en `V7_IDEAS` §H10 «la PIO del RP2350»; un prototipo dio los códigos de `pioasm` en las dos VMs.
+> - **más puertos serie en las ESP32** (Eduardo, 2-oct: *«la opción 1 para V8. El RMT para enviar se puede estudiar, el
+>   Neopixel o equivalente salen casi directo»*): las UART que el silicio ya tiene —las tres de la P4 que el backend no
+>   da (`gpio_esp32.c`: `b <= 2`) y la UART de bajo consumo de la C5, la C6 y la P4—; y ENVIAR por el RMT, a estudiar
+>   (el `Neopixel` de la familia ya va por él desde el 26-sep, `6a53f91f`). El detalle, en `V7_IDEAS` §H10 «la PIO del
+>   RP2350» («¿Y las ESP32?»).
 > - **`M5`, el depurador que despliega objetos** (Eduardo, 1-oct: *«M5, no entra en V7, lo pasamos a V8. Es una mejora, no es urgente»*): hoy el
 >   depurador no despliega NINGÚN objeto —un local objeto sale como `@<valor>`—, y por eso tampoco las properties
 >   heredadas (de H1, 21-sep, y de ahí a H8). Hacerlo es una función nueva: el layout de cada clase en el `.dbg`
