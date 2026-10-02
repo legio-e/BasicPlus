@@ -3196,6 +3196,11 @@ public class VirtualMachine {
         try {
         while (running && !tc.yieldRequested) {
             int currentPC = pc;
+            // V7/H9 #622 — el ancla de heapAlloc protege lo reservado DENTRO de la instrucción que lo reserva (hasta
+            // que lo empuja o lo guarda); al empezar la siguiente ya está publicado. No se soltaba nunca: el último
+            // objeto que reservó cada hilo era raíz hasta su siguiente reserva —la VM-C no tiene esa raíz—, y lo que
+            // el programa soltaba no se colectaba si era lo último reservado (TempRetiene, en todos los casos).
+            tc.allocAnchor = 0;
             if (opsCuanto >= cuanto) {   // cuanto agotado: sigue RUNNABLE y el planificador elige (y drena un evento)
                 tc.yieldRequested = true;
                 break;

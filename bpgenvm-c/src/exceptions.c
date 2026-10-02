@@ -98,6 +98,11 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
              * reciclado (gen>0) daría gen-mismatch al leer e.msg y re-lanzaría. */
             bpvm_write_i64_be(vm->memory + tc->sp, (int64_t) ref.v);
             tc->sp += 8;
+            /* V7/H9 #622 — ya está en la pila del manejador: el ancla que la protegía desde que se construyó
+             * (bpvm_throw_runtime_error) sobra, y no se soltaba nunca —la última excepción que la VM construyó
+             * en el hilo seguía siendo raíz, con su mensaje—. La VM-Java suelta la suya al empezar cada
+             * instrucción. */
+            tc->alloc_anchor = 0;
             return 1;
         }
         /* No matchee: seguimos popeando entries (los handlers más
