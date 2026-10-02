@@ -3837,19 +3837,22 @@ las demás de dos núcleos.
   lo caza; (4) horas de resistencia en placa, no minutos;
 - **un núcleo antes que dos, y una placa antes que todas**: lo que se puede probar con un núcleo se prueba con uno.
 
-**Las etapas**, en el orden que propongo:
+**Las etapas**, en el orden que decidió Eduardo (2-oct: *«Podemos, después de hacer IO, hacer el Run1 de VM. Esto
+debería ser válido para todos los micros y debería de funcionar y si no hay nada raro se puede dejar permanente,
+funcione o no el resto. Después el 2º run de la VM pero solo para micros de 2 núcleos (hacemos IO y 2 runs pero todavía
+con 1 núcleo) y por último activar el 2º núcleo. Las 2 últimas etapas se pueden hacer en el PC y si funcionan en la
+Pico o Metro. Y si todo funciona se extiende al resto de placas de 2 núcleos.»*):
 
-| etapa | qué | la puerta (resumen) | volver atrás |
-|---|---|---|---|
-| **0** | **el hilo `io`, IGUAL en todas las imágenes** — con UN núcleo y UN run, sin cambiar nada para los programas. Primero lo que ya está decidido en H10: el `RUN` común (su poll y su sink son el trabajo de `io`). Después, `io` permanente: hace el arranque y atiende el cable siempre; la tarea de la VM, sin programa, espera (y deja de girar: la STM32 hoy no cede nunca) | la tanda entera en las nueve placas; el reposo medido (la ociosa del RTOS corre en todas); `KILL`, `RESET` y el depurador; el rendimiento, igual (`PrintBench`) | familia a familia, con el `RUN` viejo detrás de su puntero (`ops->run` a `NULL`) |
-| **1** | **lo que dos runs necesitan y es seguro con uno**: la variable de condición con semáforo CONTADOR en las tres plataformas, `kill_requested` atómico y con orden, el `printf` de la Pico con el cerrojo del cable, el inventario de `A4` repasado | pruebas de C en el PC que provocan el aviso perdido (dos esperando, avisar a todos) y su sabotaje; en placa, con un run, la tanda sin cambios | cada pieza, su commit |
-| **2** | **DOS runs en UN núcleo**: las dos tareas de la VM repartidas por el RTOS, con expropiación —la lógica del planificador, con el RTOS de verdad y sin el orden de memoria de dos núcleos— | el corpus y las de estrés (`HeapEstres`, `CedeCero`, `TablaHandles`, `Rueda`, `synclisttest`) en todas las placas, y horas de resistencia sin un cuelgue | `vm.runs=1` en el ENV |
-| **3** | **el SEGUNDO NÚCLEO en UNA placa: la Pico 2** (la de referencia; dos núcleos iguales; sin pantalla). En dos pasos: (3a) el RTOS en modo de dos núcleos con UN run —todo lo demás igual—; (3b) los dos runs | lo de la 2, más el inventario revisado de lo que el RTOS de dos núcleos cambia (interrupciones, la flash, el USB) | la imagen de un núcleo; `vm.runs=1` |
-| **4** | **las demás de dos núcleos**: la Metro, la S3 y las P4 —con la GUI, y aquí se verifica `invokeLater` (decidido el 2-oct)— | la de la 3, placa por placa | por placa |
-| **5** | **medir y decidir**: la batería de rendimiento HW+SW (de H9) con uno y con dos núcleos | Eduardo decide quedarse o revertir —revertir es un resultado válido— | la imagen de un núcleo |
+| etapa | qué | dónde | la puerta (resumen) | volver atrás |
+|---|---|---|---|---|
+| **0 · `io`** | **el hilo `io`, IGUAL en todas las imágenes**: primero el `RUN` común (decidido en H10: su poll y su sink son el trabajo de `io`); después, `io` permanente —hace el arranque y atiende el cable siempre— | todas las placas, con UN núcleo | la tanda entera en las nueve; `KILL`, `RESET` y el depurador; el rendimiento, igual (`PrintBench`) | familia a familia: el `RUN` viejo detrás de su puntero |
+| **1 · `run1`** | **la VM como un run permanente**: nace con el arranque, haya programa o no; sin programa, ESPERA en la cola (y cede el núcleo: hoy la STM32 no cede nunca); con programa, recorre los hilos BP en rueda. Es el modelo de un núcleo entero —`io` y `run1`— y **se queda aunque el resto no llegue** | todas las placas | la tanda; el reposo medido (la ociosa del RTOS corre en todas, y cuánto tarda en arrancar un `RUN`); horas sin un cuelgue | el run que nace con cada `RUN`, como hoy |
+| **2 · el 2º run, con UN núcleo** | **dos runs que sacan de la misma cola, repartidos por el RTOS con expropiación**. Antes, lo que dos runs necesitan aunque haya un núcleo: la variable de condición con semáforo CONTADOR (con el binario, un aviso a todos con dos esperando despierta a uno), `kill_requested` atómico y con orden, el `printf` de la Pico con el cerrojo del cable, el inventario de `A4` repasado | sólo las placas de dos núcleos: **primero el PC** (la VM-C con `--smp=2` atada a una CPU), **después la Pico o la Metro** | el corpus y las de estrés (`HeapEstres`, `CedeCero`, `TablaHandles`, `Rueda`, `synclisttest`); pruebas que provocan el aviso perdido, con su sabotaje; horas de resistencia | `vm.runs=1` en el ENV |
+| **3 · el 2º núcleo** | **los dos runs en dos núcleos de verdad**; en placa, en dos pasos: el RTOS en modo de dos núcleos con UN run (todo lo demás igual), y luego los dos runs | **el PC** (ya hoy: `check-smp`), **la Pico o la Metro**, y si todo va, **el resto de las de dos núcleos** (la otra RP2350, la S3 y las P4 —con la GUI: aquí se verifica `invokeLater`—) | lo de la 2, más el inventario de lo que cambia un RTOS de dos núcleos (interrupciones, la flash, el USB), placa por placa | la imagen de un núcleo; `vm.runs=1` |
+| **4 · medir y decidir** | la batería de rendimiento HW+SW (de H9), con uno y con dos núcleos | las de dos núcleos | Eduardo decide quedarse o revertir —revertir es un resultado válido— | la imagen de un núcleo |
 
-La etapa 0 vale por sí misma aunque H12 se pare en ella: un solo `RUN`, un solo `io` y una VM que en reposo cede (lo
-que pedía también el bajo consumo de V8).
+Las etapas 0 y 1 valen por sí mismas aunque H12 se pare ahí: un solo `RUN`, un solo `io`, y una VM que en reposo
+espera sin gastar (lo que pedirá también el bajo consumo de V8).
 
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
