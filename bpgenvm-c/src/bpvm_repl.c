@@ -1000,7 +1000,7 @@ err:
  * lista de constantes, no datos, y montarlas campo a campo aquí sería inventar
  * un mecanismo para lo que ya es un literal. */
 static void repl_hello(long id) {
-    char buf[320];
+    char buf[384];
     int off = wire_v1_msg_begin(buf, sizeof buf, 0, "HELLO_REPLY", id);
     if (off < 0) goto err;
     off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "protoVersion", 1);
@@ -1011,6 +1011,13 @@ static void repl_hello(long id) {
     off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "serverBuild",
                                s_ops->server_build ? s_ops->server_build : "");
     if (off < 0) goto err;
+    /* V7/H9 (2-oct) — el sello de la IMAGEN, si la familia lo da (ver bpvm_repl.h): ocho cifras hexadecimales. */
+    if (s_ops->image_crc) {
+        char hx[12];
+        snprintf(hx, sizeof hx, "%08lx", (unsigned long) s_ops->image_crc());
+        off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "imageCrc", hx);
+        if (off < 0) goto err;
+    }
     /* #495 — el trozo y la ventana de la subida, si la familia los declara (un cliente viejo no los mira). */
     if (s_ops->put_trozo > 0 && s_ops->put_ventana > 0) {
         off = wire_v1_field_long(buf, sizeof buf, (size_t) off, "putChunk", (long) s_ops->put_trozo);

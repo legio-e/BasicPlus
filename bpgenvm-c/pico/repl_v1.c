@@ -40,6 +40,8 @@
 #include "bpvm_rtc.h"        /* TIME: set epoch */
 #include "aot_registry.h"    /* H3 #160: bpvm_aot_clear */
 #include "pack_pico.h"       /* V5/H4: cargar los packs nativos en el primer Run */
+#include "crc32.h"           /* V7/H9: el sello de la imagen */
+#include "flash_layout.h"    /* V7/H9: __bp_zone3_start */
 
 #include "pico/bootrom.h"    /* reset_usb_boot (BOOTSEL) */
 #include "pico/stdlib.h"     /* getchar_timeout_us (poll de KILL, #257) */
@@ -1236,8 +1238,24 @@ static unsigned long pico_repl_fs_total(void) { return (unsigned long) fs_total_
 static unsigned long pico_repl_fs_used(void)  { return (unsigned long) fs_used_bytes(); }
 static int  pico_repl_fs_count(void)  { return (int) fs_file_count(); }
 
+/* V7/H9 (2-oct) — el sello de la imagen: el CRC32 de la ZONA 3 de la flash (FLASH_MAIN: el código, las constantes y los
+ * valores iniciales de los datos), de __bp_zone3_start a __flash_binary_end. La zona 1 (el arranque) cambia con ella, y
+ * la 2 es el ENV, que cambia sola y no es la imagen. Una vez, la primera que se pide. */
+extern char __flash_binary_end[];
+static uint32_t pico_image_crc(void) {
+    static uint32_t s_crc = 0;
+    static int s_hecho = 0;
+    if (!s_hecho) {
+        const uint8_t* a = (const uint8_t*) __bp_zone3_start;
+        s_crc = bpvm_crc32(a, (size_t) ((const uint8_t*) __flash_binary_end - a));
+        s_hecho = 1;
+    }
+    return s_crc;
+}
+
 static const bpvm_repl_ops_t s_repl_ops = {
     .info           = pico_repl_info,
+    .image_crc      = pico_image_crc,
     .info_extra     = pico_repl_info_extra,
     .server_name    = "bpvm-pico",
     .server_build   = BPVM_PICO_BUILD_DATE,

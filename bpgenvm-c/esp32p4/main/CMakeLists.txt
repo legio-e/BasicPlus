@@ -119,6 +119,7 @@ idf_component_register(
         esp_timer
         lwip
         esp_partition
+        app_update bootloader_support   # V7/H9: el sello de la imagen (imageCrc): la app que corre y su longitud
         spi_flash        # INFO (repl_esp32): esp_flash_get_size (flash real montada)
         esp_hw_support   # INFO (repl_esp32): esp_mac.h (uniqueId desde efuse)
         esp_mm           # H4 AOT RISC-V: esp_cache_msync (sync I/D-cache del .mdn en RAM exec)

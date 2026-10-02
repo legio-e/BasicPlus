@@ -170,6 +170,13 @@ acuse— con que la placa quiere recibir la subida por trozos (§6.2). Los decid
 las cuatro familias. Sin ellos (un firmware anterior, la VM-Java), el cliente sube como siempre: trozos de 8 KB y un
 acuse por trozo.
 
+`imageCrc` (V7/H9, 2-oct; opcional): el sello de la IMAGEN que corre, ocho cifras hexadecimales —el CRC32 de zlib de
+sus bytes en la flash—. `serverBuild` es la hora en que se compiló UN fichero y miente en un build incremental; esto
+identifica la imagen exacta, y el PC calcula el mismo número sobre lo que compiló: en las ESP32, el `.bin` de la app
+entero; en la Pico, la zona 3 de la flash (de `0x10014000` a `__flash_binary_end`, sin el ENV); en la STM32, de
+`FLASH_BASE` al final de los valores iniciales de `.data`. La placa lo calcula la primera vez que se pide. Sin él (un
+firmware anterior, el micro simulado, la VM-Java), no hay sello de imagen.
+
 ### 5.2 Negociación de versiones
 
 - Si `protoVersion` del cliente > del servidor: servidor responde con

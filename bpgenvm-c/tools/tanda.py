@@ -180,6 +180,7 @@ import os
 import re
 import shutil
 import socket
+import tempfile
 import subprocess
 import sys
 import time
@@ -1049,6 +1050,7 @@ def sello_de(w, arranque=None):
         "uniqueId": info.get("uniqueId", "?"),
         "serverName": h.get("serverName", "?"),
         "serverBuild": h.get("serverBuild", "?"),
+        "imageCrc": h.get("imageCrc"),       # V7/H9: el sello de la IMAGEN (None: una imagen de antes)
         "capabilities": h.get("capabilities", []),
         # hallazgo 8: lo que identifica la IMAGEN y el estado de la placa
         "arch": info.get("arch"),
@@ -1292,6 +1294,50 @@ def borrar_artefactos(w, artefactos):
                     remoto, w.errores(), (" [%s]" % del_fallo) if del_fallo else ""))
         previos[art] = {"existia": existia, "dudoso": "; ".join(problemas) or None}
     return previos
+
+
+# V7/H9 (2-oct) — la imagen COMPILADA en el PC para cada placa, para comparar su CRC con el `imageCrc` del HELLO (las
+# mismas reglas que el firmware: bpvm_repl.h, `image_crc`). boardName -> (carpeta, fichero, como se mide).
+IMAGENES = {
+    "rp2350a": ("pico/build", "bpvm_pico.elf", "zona3"), "rp2350b": ("pico/build", "bpvm_pico.elf", "zona3"),
+    "esp32s3": ("esp32/build", "bpvm_esp32.bin", "bin"), "esp32c3": ("esp32c3/build", "bpvm_esp32c3.bin", "bin"),
+    "esp32c5": ("esp32c5/build", "bpvm_esp32c5.bin", "bin"), "esp32c6": ("esp32c6/build", "bpvm_esp32c6.bin", "bin"),
+    "esp32p4": ("esp32p4/build", "bpvm_esp32p4.bin", "bin"),
+    "stm32u5g9": ("stm32/Discovery_u5g9j/Discovery_u5g9j/Debug", "Discovery_u5g9j.elf", "stm32"),
+    "stm32u575": ("stm32/Nucleo_u575b/Nucleo_u575b/Debug", "Nucleo_u575b.elf", "stm32"),
+}
+ARM_BIN = r"C:\Program Files (x86)\Arm\GNU Toolchain mingw-w64-i686-arm-none-eabi\bin"
+
+
+def crc_imagen_local(board):
+    """(crc, texto) de la imagen compilada en el PC para esta placa, o (None, por que no)."""
+    e = IMAGENES.get(board)
+    if not e:
+        return None, "no se que imagen compila el PC para %s" % board
+    f = os.path.join(RAIZ, "bpgenvm-c", e[0], e[1])
+    if not os.path.exists(f):
+        return None, "no esta %s" % os.path.relpath(f, RAIZ)
+    hora = time.strftime("%d-%m %H:%M", time.localtime(os.path.getmtime(f)))
+    try:
+        if e[2] == "bin":
+            data = open(f, "rb").read()
+        else:
+            def nm(sim):
+                out = subprocess.run([os.path.join(ARM_BIN, "arm-none-eabi-nm.exe"), f],
+                                     capture_output=True, text=True).stdout
+                return next(int(l.split()[0], 16) for l in out.splitlines()
+                            if len(l.split()) == 3 and l.split()[2] == sim)
+            d = tempfile.mkdtemp(prefix="tanda_img_")
+            b = os.path.join(d, "img.bin")
+            subprocess.run([os.path.join(ARM_BIN, "arm-none-eabi-objcopy.exe"), "-O", "binary", f, b], check=True)
+            img = open(b, "rb").read()
+            if e[2] == "zona3":
+                data = img[0x14000: nm("__flash_binary_end") - 0x10000000]
+            else:
+                data = img[:(nm("_sidata") - 0x08000000) + (nm("_edata") - nm("_sdata"))]
+    except Exception as ex:
+        return None, "no se pudo medir %s: %s" % (os.path.relpath(f, RAIZ), ex)
+    return "%08x" % (zlib.crc32(data) & 0xFFFFFFFF), "%s (%s)" % (os.path.relpath(f, RAIZ).replace("\\", "/"), hora)
 
 
 def aprieta(sello):
@@ -1693,8 +1739,11 @@ def escribir_informe(ruta, tanda):
         s = pl["sello"]
         L.append("### Placa %s - %s" % (s["boardName"], s["uniqueId"]))
         L.append("")
-        L.append("- sello: boardName=`%s` uniqueId=`%s` serverName=`%s` serverBuild=`%s` capacidades=%s" % (
-            s["boardName"], s["uniqueId"], s["serverName"], s["serverBuild"], json.dumps(s["capabilities"])))
+        L.append("- sello: boardName=`%s` uniqueId=`%s` serverName=`%s` serverBuild=`%s` imageCrc=`%s` capacidades=%s" % (
+            s["boardName"], s["uniqueId"], s["serverName"], s["serverBuild"],
+            s.get("imageCrc") or "sin (imagen de antes de V7/H9)", json.dumps(s["capabilities"])))
+        if s.get("imagen_local"):
+            L.append("- imagen: %s" % s["imagen_local"])
         L.append("- imagen: arch=%s variant=%s cpuFreqHz=%s resetReason=%s uptimeMs=%s fs=%s/%s B vmHeapBytes=%s" % (
             s.get("arch"), s.get("variant"), s.get("cpuFreqHz"), s.get("resetReason"), s.get("uptimeMs"),
             s.get("fsUsedBytes"), s.get("fsTotalBytes"), s.get("vmHeapBytes")))
@@ -1945,8 +1994,20 @@ def main():
             pl["sello"] = sello
             pl["pantalla"] = tiene_pantalla(sello)
             pl["aprieta"] = aprieta(sello)
-            log("placa %s id=%s build=%s (%s %s) pantalla=%s [%s]" % (
-                sello["boardName"], sello["uniqueId"], sello["serverBuild"],
+            # V7/H9: ¿lleva la imagen que hay compilada en el PC?
+            if sello.get("imageCrc"):
+                local, de = crc_imagen_local(sello["boardName"])
+                if local is None:
+                    sello["imagen_local"] = "sin comparar: %s" % de
+                elif local == sello["imageCrc"]:
+                    sello["imagen_local"] = "la COMPILADA en el PC: %s" % de
+                else:
+                    sello["imagen_local"] = "OTRA: la compilada en el PC (%s) da %s" % (de, local)
+                    pl["notas"].append("la placa NO lleva la imagen compilada en el PC: imageCrc %s, %s da %s" % (
+                        sello["imageCrc"], de, local))
+                log("  imagen: %s" % sello["imagen_local"])
+            log("placa %s id=%s build=%s imagen=%s (%s %s) pantalla=%s [%s]" % (
+                sello["boardName"], sello["uniqueId"], sello["serverBuild"], sello.get("imageCrc") or "?",
                 sello["transporte"], sello["puerto"],
                 "si" if pl["pantalla"][0] else "no", pl["pantalla"][1]))
             inv, det = inventario(w)

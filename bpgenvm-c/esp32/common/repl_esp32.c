@@ -101,6 +101,9 @@
 #include "esp_log.h"         /* H4 AOT: trazas del cargador .mdn (consola) */
 #endif
 #include "pack_esp32.h"      /* V7/H8 #602: el bloque de RAM de los motores, para el INFO */
+#include "esp_ota_ops.h"     /* V7/H9: la partición de la app que corre (el sello de la imagen) */
+#include "esp_image_format.h"/* V7/H9: su longitud real */
+#include "crc32.h"           /* V7/H9: el sello de la imagen */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1052,8 +1055,34 @@ static int  esp32_repl_fs_count(void)  { return (int) fs_file_count(); }
  * (`p4_board_id.c`). No habia mordido porque HELLO seguia siendo de la familia
  * —que si lee `s_board_id`—, y habria mordido justo al migrarlo. Lo caza
  * comparar antes de borrar, no leer el codigo por encima. */
+/* V7/H9 (2-oct) — el sello de la imagen: el CRC32 de la imagen de la app en su partición, de 0 a su longitud real
+ * (la cabecera, los segmentos y el hash del final: el mismo .bin que deja `idf.py build`, así que el PC puede calcular el
+ * mismo número). Por trozos, con un búfer estático: se llama una vez, la primera que se pide. */
+static uint32_t esp32_image_crc(void) {
+    static uint32_t s_crc = 0;
+    static int s_hecho = 0;
+    static uint8_t trozo[512];
+    if (s_hecho) return s_crc;
+    s_hecho = 1;
+    const esp_partition_t* p = esp_ota_get_running_partition();
+    if (!p) return 0;
+    esp_image_metadata_t md;
+    const esp_partition_pos_t pos = { .offset = p->address, .size = p->size };
+    if (esp_image_get_metadata(&pos, &md) != ESP_OK) return 0;
+    uint32_t st = BPVM_CRC32_INIT;
+    for (uint32_t off = 0; off < md.image_len; off += (uint32_t) sizeof trozo) {
+        uint32_t n = md.image_len - off;
+        if (n > (uint32_t) sizeof trozo) n = (uint32_t) sizeof trozo;
+        if (esp_partition_read(p, off, trozo, n) != ESP_OK) return 0;
+        st = bpvm_crc32_update(st, trozo, n);
+    }
+    s_crc = bpvm_crc32_final(st);
+    return s_crc;
+}
+
 static bpvm_repl_ops_t s_repl_ops = {
     .info           = esp32_repl_info,
+    .image_crc      = esp32_image_crc,
     .server_name    = "bpvm-esp32",   /* se pisa en repl_esp32_run con el real */
     .server_build   = ESP32_BUILD_DATE,
     /* 30-sep (del mapa de H7, «encontrado de paso»): el depurador (`bpvm_dbg_wire`, como la Pico) y los packs (los

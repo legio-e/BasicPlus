@@ -96,6 +96,7 @@ idf_component_register(
         esp_timer
         esp_driver_uart
         esp_partition
+        app_update bootloader_support   # V7/H9: el sello de la imagen (imageCrc): la app que corre y su longitud
         esp_driver_gpio
         esp_driver_spi   # H16: backend SPI (spi_master)
         esp_driver_i2c   # H16: backend I2C (i2c_master, IDF v6)

@@ -234,8 +234,23 @@ static void stm32_after_put(const char* path) {
     if (strncmp(path, "/lib/", 5) != 0) fs_save();
 }
 
+/* V7/H9 (2-oct) — el sello de la imagen: el CRC32 de la flash de FLASH_BASE al final de los valores iniciales de .data
+ * (_sidata + su tamaño): la imagen que graba la sonda, la misma que da `objcopy -O binary` del .elf. Una vez. */
+extern uint8_t _sidata[], _sdata[], _edata[];
+static uint32_t stm32_image_crc(void) {
+    static uint32_t s_crc = 0;
+    static int s_hecho = 0;
+    if (!s_hecho) {
+        const uint8_t* a = (const uint8_t*) FLASH_BASE;
+        s_crc = bpvm_crc32(a, (size_t) (_sidata - a) + (size_t) (_edata - _sdata));
+        s_hecho = 1;
+    }
+    return s_crc;
+}
+
 static const bpvm_repl_ops_t s_repl_ops = {
     .info          = stm32_repl_info,
+    .image_crc     = stm32_image_crc,
     .info_extra    = NULL,     /* sin campos propios: los 18 comunes bastan */
     .server_name   = SERVER_NAME,
     .server_build  = s_build,

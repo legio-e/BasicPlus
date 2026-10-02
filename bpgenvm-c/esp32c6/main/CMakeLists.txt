@@ -121,6 +121,7 @@ idf_component_register(
         esp_driver_uart
         esp_driver_usb_serial_jtag   # V6/P1.C3.3: el cable del wire va por el USB nativo
         esp_partition
+        app_update bootloader_support   # V7/H9: el sello de la imagen (imageCrc): la app que corre y su longitud
         esp_driver_gpio
         esp_driver_spi   # H16: backend SPI (spi_master)
         esp_driver_i2c   # H16: backend I2C (i2c_master, IDF v6)

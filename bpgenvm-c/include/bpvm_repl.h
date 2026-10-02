@@ -161,6 +161,13 @@ typedef struct {
      * siempre (un trozo, un acuse). */
     unsigned long  put_trozo;
     unsigned long  put_ventana;
+
+    /* V7/H9 (2-oct) — EL SELLO DE LA IMAGEN, en el HELLO (`imageCrc`): el CRC32 —el de zlib— de los bytes de la imagen
+     * que corre, tal como están en su flash. `server_build` es la hora en que se compiló UN fichero y miente en un
+     * build incremental; esto identifica la imagen exacta, y el PC puede calcular el mismo número sobre lo que acaba de
+     * compilar. La familia lo calcula la primera vez que se pide y lo guarda (recorrer la imagen cuesta unas decenas de
+     * ms). NULL = no lo da, y el HELLO va sin el campo. */
+    uint32_t (*image_crc)(void);
 } bpvm_repl_ops_t;
 
 /** La familia registra su cintura UNA vez, antes de atender el primer mensaje.
