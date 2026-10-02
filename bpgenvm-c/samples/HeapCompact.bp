@@ -4,6 +4,9 @@
 // cadenas, arrays de enteros y de long—; que reservar y colectar después sigue bien; que un fichero ABIERTO
 // sobrevive (su estado no se mueve: en la VM-C, littlefs lo enlaza); y los dos rechazos: desde otra función y con
 // otro hilo vivo. Los números del heap son de cada VM: se comprueban RELACIONES, y en el stdout, «ok» o «FALLO».
+// V7/H9 (2-oct): las cantidades, a la medida de la placa que más aprieta (V7_IDEAS §4, «memoria apretada»): la C6
+// con el pack de la GUI tiene 52 KB de heap útil, y con 300 + 200 nodos (en el pico, 350 de cuatro objetos cada
+// uno, unos 60 KB) se quedaba sin memoria —en el PC, con --mem=131072, igual—. Con 120 + 80 el peine es el mismo.
 module HeapCompact
   import IO
   import Heap
@@ -109,7 +112,7 @@ module HeapCompact
     // 1) El peine y una colecta: el heap queda fragmentado.
     // Los contadores se leen justo antes y justo después de compactar: leerlos no reserva nada, y cualquier
     // otra cosa (un print, un mira) sí.
-    var vivos: Nodo := peine(null, 0, 300)
+    var vivos: Nodo := peine(null, 0, 120)
     gc()
     var huecos0: integer := Heap.getFreeBlocks()
     var mayor0: integer := Heap.getLargestFree()
@@ -131,15 +134,15 @@ module HeapCompact
     mira("compactado: no se pierde memoria", libre1 >= libre0)
     mira("compactado: con su colecta", colectas1 == colectas0 + 1)
     mira("compactado: los objetos no aumentan", handles1 <= handles0)
-    mira("lo vivo sigue intacto", listaSana(vivos, 0, 300))
+    mira("lo vivo sigue intacto", listaSana(vivos, 0, 120))
 
     // 3) Reservar y colectar después: el heap compactado es un heap normal.
-    vivos := peine(vivos, 300, 500)
-    mira("tras compactar se reserva", listaSana(vivos, 0, 500))
+    vivos := peine(vivos, 120, 200)
+    mira("tras compactar se reserva", listaSana(vivos, 0, 200))
     gc()
-    mira("y se colecta", listaSana(vivos, 0, 500))
+    mira("y se colecta", listaSana(vivos, 0, 200))
     Heap.compact()
-    mira("y se vuelve a compactar", Heap.getLargestFree() == Heap.getFree() and listaSana(vivos, 0, 500))
+    mira("y se vuelve a compactar", Heap.getLargestFree() == Heap.getFree() and listaSana(vivos, 0, 200))
 
     // 4) Un fichero ABIERTO mientras se compacta: su estado no se mueve, y sigue funcionando.
     var f: IO.File := IO.File(F, "w")
@@ -148,7 +151,7 @@ module HeapCompact
       a[i] := byte(i)
     next i
     f.write(a)
-    var otros: Nodo := peine(null, 1000, 1200)
+    var otros: Nodo := peine(null, 1000, 1080)
     otros := null
     gc()
     Heap.compact()
@@ -169,7 +172,7 @@ module HeapCompact
     f.close()
     IO.removeFile(F)
     mira("un fichero abierto sobrevive a la compactacion", bien)
-    mira("y lo vivo tambien", listaSana(vivos, 0, 500))
+    mira("y lo vivo tambien", listaSana(vivos, 0, 200))
 
     // 5) Los rechazos: desde otra función, y con otro hilo vivo.
     try
@@ -191,7 +194,7 @@ module HeapCompact
     mtx.unlock()
     t.join()
     Heap.compact()
-    mira("con el hilo acabado, se compacta", Heap.getFreeBlocks() == 0 and listaSana(vivos, 0, 500))
+    mira("con el hilo acabado, se compacta", Heap.getFreeBlocks() == 0 and listaSana(vivos, 0, 200))
     print "fin"
   end Main
 end HeapCompact
