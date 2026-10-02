@@ -3287,6 +3287,15 @@ un segundo pack que incluya estas librerías y así no gastemos tanta RAM.»*
   también: si el principal está en un pack, ese pack va PRIMERO (`#493`: pack del principal → `/app` → `/lib` →
   packs), así que las copias de un pack PROGRAMA ya ganan dentro de su programa, que es lo de «contenedor».
 
+**Y no es sólo la tanda** (2-oct, a pregunta de Eduardo: *«¿pero Gui.mod no está en el pack gráfico?»*): sí está —en
+`GuiMini` y en el `Stdlib.pack`—, y no se cargó dos veces: se cargó desde `/lib` EN VEZ de desde el pack. El IDE hace lo
+mismo que la tanda al ejecutar en una placa (`BpIde` `PicoExplorer.uploadAndRun`, el caso `pack:`): si la copia que la
+placa resolvería —la del pack— no es la del PC, *«un pack lo tiene distinto: se sube delante del pack»*, a `/lib`,
+porque un pack no se puede retocar y `/lib` va antes en la resolución. Así el programa corre con la stdlib contra la
+que se compiló; pero `/lib` se carga en RAM y el pack corre XIP. En la C6, un usuario con un `GuiMini` rancio se habría
+quedado sin memoria igual en cuanto cambiara la stdlib. Con las copias iguales, nada se sube y Gui corre XIP (la
+tanda del 2-oct, después: «pack:GuiMini/Gui.mod, crc igual: se ejecuta XIP, no se sube»).
+
 **Lo que cambiaría la idea**: un pack librería sin copias de la stdlib —sus módulos sacan Gui, Json… del `Stdlib.pack`
 (XIP) o de `/lib`—, y una sola fuente de la stdlib en la zona, la que la red ya comprueba byte a byte
 (`compat/stdlib_pack.sh`): se acaban las copias rancias de raíz, y con ellas lo que pedía la guarda de `#623`.

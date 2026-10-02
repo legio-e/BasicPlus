@@ -818,6 +818,15 @@ sus packs de la GUI llevan copias viejas, y la tanda lo tapa subiendo a `/lib`. 
 PROGRAMA (un contenedor con todo). Los hechos para pensarlo, en `V7_IDEAS` §«H9 — `#623`» (el `Stdlib.pack` ya lleva
 las 11 librerías que no van en la imagen).
 
+**Y no es sólo la tanda** (2-oct, a pregunta de Eduardo: *«¿pero Gui.mod no está en el pack gráfico?»*): sí está —en
+`GuiMini` y en el `Stdlib.pack`—, y no se cargó dos veces: se cargó desde `/lib` EN VEZ de desde el pack. El IDE hace lo
+mismo que la tanda al ejecutar en una placa (`BpIde` `PicoExplorer.uploadAndRun`, el caso `pack:`): si la copia que la
+placa resolvería —la del pack— no es la del PC, *«un pack lo tiene distinto: se sube delante del pack»*, a `/lib`,
+porque un pack no se puede retocar y `/lib` va antes en la resolución. Así el programa corre con la stdlib contra la
+que se compiló; pero `/lib` se carga en RAM y el pack corre XIP. En la C6, un usuario con un `GuiMini` rancio se habría
+quedado sin memoria igual en cuanto cambiara la stdlib. Con las copias iguales, nada se sube y Gui corre XIP (la
+tanda del 2-oct, después: «pack:GuiMini/Gui.mod, crc igual: se ejecuta XIP, no se sube»).
+
 #### ✅ `#622` — el ANCLA de la reserva no se soltaba al publicar el objeto: en la VM-Java, lo último que reservó cada hilo seguía siendo raíz hasta su siguiente reserva; en la VM-C, la última excepción que construyó la VM (abierta y cerrada el 2-oct, al medir `#621` con `TempRetiene`; preexistente; H9 · **CERRADA el 2-oct**, `9f41fd7a`)
 
 **Visto el 2-oct**: con `#621` hecho, `TempRetiene` daba once `ok` en la VM-C y once `FALLO` en la VM-Java. La VM-Java
