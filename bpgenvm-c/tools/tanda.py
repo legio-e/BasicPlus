@@ -39,7 +39,9 @@ QUE HACE, EN ORDEN
        lineas NO-JSON del wire (panics, avisos) y la cola del stderr del host.
 
 VEREDICTOS
-    IDENTICO / NO-PETA (verdes) - DIFIERE / PETA - COLGADA (sin EXITED en el
+    IDENTICO / NO-PETA (verdes) - DIFIERE / PETA - FALLO (la salida de la placa
+    tiene una linea que empieza por FALLO: el sample dice que algo sale mal,
+    aunque salga igual en el PC; V7/H9, 2-oct) - COLGADA (sin EXITED en el
     timeout) - ERROR (no se pudo medir: subida, transporte, dependencia
     sombreada, fallo de CARGA/ENLACE en la placa) - SIN ORACULO - SALTADA -
     SIN ARTEFACTO (verde pero sin la evidencia) - DUDOSO (verde pero el
@@ -1220,6 +1222,13 @@ def veredicto_de(p, o, res, sin_oraculo):
         return "ERROR", "fallo del arnes en la placa, no del programa: %s%s" % (
             estado, " [ojo: en fallo de carga la Pico manda el ORDINAL del enum como exitCode, no la tabla comun]"
             if emsg.startswith("load:") or emsg.startswith("falta el modulo") else "")
+    # V7/H9 (2-oct; el aviso del 7-sep: «el runner compara host contra placa, no contra lo esperado») — un sample que
+    # se comprueba a sí mismo imprime `FALLO …` cuando algo sale mal; si sale IGUAL en el PC y en la placa, la paridad
+    # es verde y el programa está mal. La misma regla que la red (`compat.sh`: «paridad OK, pero el sample dice que
+    # algo sale mal»): una línea que empieza por FALLO no es verde nunca.
+    fallo = next((l for l in (res["salida"] or "").splitlines() if l.startswith("FALLO")), None)
+    if fallo is not None and (p["criterio"] == "no-peta" or sin_oraculo or o.get("ejecutado")):
+        return "FALLO", "la salida dice que algo sale mal: %s (%s)" % (fallo[:160], estado)
     if p["criterio"] == "no-peta":
         if st == "OK" and code == 0:
             return "NO-PETA", estado
