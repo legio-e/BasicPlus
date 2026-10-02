@@ -1107,16 +1107,32 @@ Eduardo conectó la Pico 2 (COM22), la C6 (COM3), el P4 (COM15) y la DK2 (COM12)
 Eduardo. Tanda (32 pruebas): **C6, P4 y DK2, 32 de 32**; Pico 2, 30 de 30 (las dos de GUI, saltadas: no tiene
 pantalla). Red: **125 de 125** en MOD9, MOD8 y con dos workers; frontend 267, miVM 56.
 
+### 🔧 La tarde (2-oct)
+
+- **`#624`** (`1d7837ae`): una librería se sube a la placa por su VERSIÓN —la regla de Eduardo, la de Java: formato
+  compatible y versión igual o superior a la mínima (la de compilación)—, no por el CRC. La placa (el `STAT` común) y la
+  VM-Java dicen ya `gen` e `ifaceCrc`; `ReglaDeSubida` (`lexer-java`, 8 casos) la usan el IDE y, a su modo, la tanda (que
+  anota el DESFASE en vez de subir). Corrigió de paso lo que yo dije del cargador: con MOD9 sólo exige la versión mínima
+  (`#523`), y el GuiMini viejo VALÍA —el RUN manual de la mañana lo probó—. **Falta verlo en placa** (imagen nueva).
+- **H9 en placa**: `U3.25` (MKDIR/RMDIR en la C6), el reset sin manos (la C6 por el cable; la DK2 por la sonda —su
+  puerto no la resetea—) y `#485` medido en las cuatro (P4: el KILL, 23,4 ms, lo que un ida y vuelta). `U1.2`, `P1.C3` y
+  el «reinicio pedido» de la Pico ya se habían visto el 24/25-sep: anotados.
+- **H10**: el `sdkconfig` de la C3 fuera del índice (`74069036`: sus defaults lo reproducen, 0 diferencias); el TOTAL del
+  FS de la STM32 no baila en la DK2 (cinco arranques, 1032192); que el arranque diga de dónde sale la tabla de
+  particiones sigue pendiente (una línea; para verla, grabar la DK2).
+- **Decisiones de Eduardo**: el `break` fuera de bucle sigue siendo un error; `#623` lo piensa (packs LIBRERÍA sin copias
+  de la stdlib, packs PROGRAMA como contenedor); `#624`, «OK».
+
 ### 🌙 Traspaso (2-oct)
 
 - **Decisiones**: un `break` fuera de un bucle sigue siendo un error de compilación (Eduardo, 2-oct: *«si el compilador
   da un mensaje de error por mí está bien»*). `#623`, Eduardo lo está pensando: packs LIBRERÍA sin copias de la
   stdlib y packs PROGRAMA como contenedor (`V7_IDEAS` §«H9 — `#623`», con los hechos medidos).
-- **Lo que queda de H9** (el mapa del día, leído de FICHAS/ESTADO; cada fila hay que verificarla antes de cerrarla):
-  `#485` (cronometrar el KILL en el P4 con la imagen de hoy), `U3.25` (MKDIR/RMDIR de verdad en una placa), `U1.2` y
-  `P1.C3` hechos en placa pero sin anotar en FICHAS, `memoria: APRETADA` y el criterio «no determinista» en el runner,
-  recuperar una placa colgada (RESET + log post-mortem), el código de salida en la paridad (resto de `#481`), y
-  `#609` (`test-listen` intermitente).
+- **Lo que queda de H9** (lo de placa, hecho por la tarde): en el runner, juzgar las líneas `FALLO` aunque salgan
+  iguales en el PC, `memoria: APRETADA` y el criterio «no determinista», y recuperar una placa colgada (ya se sabe cómo
+  en cada familia: RTS en las ESP32, la sonda en la STM32, desenchufar en la Pico); el código de salida en la paridad
+  (resto de `#481`); el sello de la imagen (`imageCrc` en el `HELLO`); `#609`; y decidir si la batería de rendimiento y
+  la prueba de resistencia de días caben en V7. Y ver `#624` en placa (imagen nueva).
 - **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) también llevan copias rancias —la tanda lo
   tapa subiendo a `/lib`, y allí cabe—; el `SQLite.pack` sigue con un Core de antes; las placas tienen muchos `.mod` de
   prueba en `/app` (la C6, una cuarentena; borrarlos con OK, placa a placa). Y el GC conservador con ENTER sin poner a
