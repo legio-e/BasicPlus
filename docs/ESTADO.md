@@ -1185,8 +1185,15 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
 - **`#629`** (`8adf86ff`): `test-crc` no enlazaba desde el 31-ago (por lo mismo) y ninguna red la corría; el censo de todas
   las pruebas del `Makefile` fuera de la red dio 32 (de 31 ejecutadas, 30 verdes). `check-testc` corre ya 73, cada una
   con su señal: 73 de 73.
-- **Visto de paso** (lote D, sin tocar): el `mkdir` de FAT no es recursivo —un `PUT` a `/sd/a/b/x.txt` con `a` nueva
-  falla en placa y va en el PC—, su `stat` de una carpeta contesta 0 y su `mkdir` encima de un fichero, éxito.
+- **`#630`** (`34678c51`): `fileExists` de una carpeta daba `true` en la VM-Java y `false` en la VM-C —el invariante, roto; lo
+  destapó el `stat` de FAT, que contestaba 0 a una carpeta—. Eduardo: *«fileExist solo para ficheros»*, y para carpetas
+  `dirExists`. Su idea era un listado, sobre la premisa de que «no existen directorios»; existen de verdad en las tres
+  unidades (lo contrario lo decía el protocolo, falso desde `U3.25`), y con un listado una carpeta vacía «no
+  existiría»: `IO.dirExists` = `IO.isDirectory`. La VM-Java pregunta ya a `isRegularFile`; sample nuevo
+  `FicheroOCarpeta` en el corpus y en la tanda; la stdlib, el pack y los blobs, regenerados.
+- **`#631`** (`34678c51`): FAT cumple el contrato de la fachada —el `mkdir`, recursivo; encima de un fichero, `EXISTS`; el `stat`
+  de una carpeta, −1— y el `MKDIR` del wire dice por qué (contestaba siempre `INTERNAL_ERROR`). Probado en `sd_smoke`,
+  con sabotaje.
 
 ### 🌙 Traspaso (2-oct)
 
@@ -1201,15 +1208,18 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
 - **El próximo lote de grabación** (se graba por lotes; Eduardo, 2-oct): el sello de la imagen (`5324946b`), la
   línea del arranque que dice el reparto de particiones (`50750567`) y el motivo de un fallo del FS (`#628`) en las
   cuatro placas de la mesa —comprobar que cada una dice el `imageCrc` de lo compilado (recalcularlo al grabar) y su
-  línea `particiones:`; en la P4 y la C6, que tienen tarjeta, un `PUT` a `/sd/no/esta/x.txt` contesta `NOT_FOUND`; y
-  pasar la tanda—.
+  línea `particiones:`; en la P4 y la C6, que tienen tarjeta, un `PUT` a `/sd/HOLA.TXT/x.txt` (o a cualquier carpeta
+  que sea un fichero) contesta `NOT_FOUND`, un `PUT` a `/sd/a/b/x.txt` con `a` nueva va, y `MKDIR` encima de un
+  fichero contesta `EXISTS` (`#628`, `#631`); `FicheroOCarpeta` va en la tanda (`#630`); y pasar la tanda—. Con la
+  stdlib nueva (`IO.dirExists`): el `Stdlib.pack` de la zona, a regrabar con el lote.
 - **H10, por la tarde**: el arranque dice de dónde sale su reparto de particiones y cómo queda (`50750567`, común:
   `bpvm_part_describe`, en las tres familias; en placa, con el próximo lote); el ENV de la Pico que cambió solo,
   cerrado (no se reproduce). Y cuatro decisiones de Eduardo: `Debug` se queda (la nota, en `PUBLICAR.md`), el DMA de
   `Uart` a V8, la S31 fuera del plan hasta que haya placa, y el log del bootloader de la C3/C6 se queda.
 - **Lo que queda de H10**: la GUI (`#477` resto, `G2` resto, `invokeLater` / `Command`); de `#473`, los seis
   «rompe-el-modelo» vivos (`V7_IDEAS` §H10 «`#473`»), la puerta a medias y los lotes D (FS, 15) y E (GUI, 10), sin
-  mirar; y lo de FAT que salió con `#628`.
+  mirar (un mapa verificado en marcha, decidido por Eduardo), y la GUI, igual; y de los tres grandes, `RUN` y
+  `board_mgr` entran en V7 (Eduardo, 2-oct) y FreeRTOS no.
 - **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) llevan copias rancias de la stdlib —la
   tanda lo dice como DESFASE y no sube nada—; y los `Stdlib.pack` de las zonas de las cuatro llevan el `Machine`, el
   `Rtc` y el `Time` de antes de `#626`: el arranque repone los de la imagen en `/lib`, que ganan (en RAM); regrabar el
