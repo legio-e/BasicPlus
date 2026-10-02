@@ -1172,6 +1172,22 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
   probado en el PC; **no grabado**: Eduardo, *«¿Realmente es necesario grabar las placas tantas veces?»* —hoy, la C6 4
   veces y las otras 3—. **Desde hoy se graba por lotes**: lo verificado en el PC se apunta abajo y se graba una vez.
 
+### 🔧 H10, la tarde-noche (2-oct) — los diez de `#473` contra el código, y el motivo de un fallo del FS (`#628`, `#629`)
+
+- **El triaje de los diez «rompe-el-modelo» de `#473`** (un agente leyó el código de hoy; lo concreto, comprobado a mano):
+  uno resuelto (`setRotation`, por `G5`), uno a medias (la puerta de arranque, por `#601`), dos cerrados hoy (`#628`) y
+  seis vivos. La tabla, en `V7_IDEAS` §H10 «`#473`». Lo que más pesa de lo vivo: la STM32 tira EN SILENCIO la línea de
+  `OUTPUT` cuyo escape no cabe en 2048 B, y el `exitCode` de un fallo de carga es distinto en cada familia.
+- **`#628`** (`6076cc27`): el motivo de un fallo del FS vivía en littlefs; un `PUT` que fallaba en `/sd` contestaba con el
+  de la última operación de littlefs, y un `DEL` que fallaba en littlefs, también. Ahora vive en la fachada, lo anota el
+  que falla (los tres motores, en todos sus caminos) y cada fallo lleva el suyo. Probado con `test-fsfallo` (nueva) y
+  `sd_smoke`, y con tres sabotajes. Las ocho imágenes compilan; en placa, con el próximo lote.
+- **`#629`** (`8adf86ff`): `test-crc` no enlazaba desde el 31-ago (por lo mismo) y ninguna red la corría; el censo de todas
+  las pruebas del `Makefile` fuera de la red dio 32 (de 31 ejecutadas, 30 verdes). `check-testc` corre ya 73, cada una
+  con su señal: 73 de 73.
+- **Visto de paso** (lote D, sin tocar): el `mkdir` de FAT no es recursivo —un `PUT` a `/sd/a/b/x.txt` con `a` nueva
+  falla en placa y va en el PC—, su `stat` de una carpeta contesta 0 y su `mkdir` encima de un fichero, éxito.
+
 ### 🌙 Traspaso (2-oct)
 
 - **Decisiones**: un `break` fuera de un bucle sigue siendo un error de compilación (Eduardo, 2-oct: *«si el compilador
@@ -1182,15 +1198,18 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
 - **Lo que queda de H9**: ver en placa el sello de la imagen (con el próximo lote) y la limpieza de las otras cinco
   placas (S3, C3, C5, Metro, Nucleo) cuando se conecten. El simulador con disfraces y la inyección de eventos, a V8
   (Eduardo, 2-oct); `samples/out`, sin los 20 `.mod` MOD6/MOD7 (con su OK).
-- **El próximo lote de grabación** (se graba por lotes; Eduardo, 2-oct): el sello de la imagen (`5324946b`) y la
-  línea del arranque que dice el reparto de particiones (`50750567`) en las cuatro placas de la mesa —comprobar que
-  cada una dice el `imageCrc` de lo compilado (recalcularlo al grabar) y su línea `particiones:`, y pasar la tanda—.
+- **El próximo lote de grabación** (se graba por lotes; Eduardo, 2-oct): el sello de la imagen (`5324946b`), la
+  línea del arranque que dice el reparto de particiones (`50750567`) y el motivo de un fallo del FS (`#628`) en las
+  cuatro placas de la mesa —comprobar que cada una dice el `imageCrc` de lo compilado (recalcularlo al grabar) y su
+  línea `particiones:`; en la P4 y la C6, que tienen tarjeta, un `PUT` a `/sd/no/esta/x.txt` contesta `NOT_FOUND`; y
+  pasar la tanda—.
 - **H10, por la tarde**: el arranque dice de dónde sale su reparto de particiones y cómo queda (`50750567`, común:
   `bpvm_part_describe`, en las tres familias; en placa, con el próximo lote); el ENV de la Pico que cambió solo,
   cerrado (no se reproduce). Y cuatro decisiones de Eduardo: `Debug` se queda (la nota, en `PUBLICAR.md`), el DMA de
   `Uart` a V8, la S31 fuera del plan hasta que haya placa, y el log del bootloader de la C3/C6 se queda.
-- **Lo que queda de H10**: la GUI (`#477` resto, `G2` resto, `invokeLater` / `Command`) y los «rompe-el-modelo» vivos
-  de `#473` (un agente los ha mirado hoy contra el código: uno resuelto, uno a medias, ocho vivos).
+- **Lo que queda de H10**: la GUI (`#477` resto, `G2` resto, `invokeLater` / `Command`); de `#473`, los seis
+  «rompe-el-modelo» vivos (`V7_IDEAS` §H10 «`#473`»), la puerta a medias y los lotes D (FS, 15) y E (GUI, 10), sin
+  mirar; y lo de FAT que salió con `#628`.
 - **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) llevan copias rancias de la stdlib —la
   tanda lo dice como DESFASE y no sube nada—; y los `Stdlib.pack` de las zonas de las cuatro llevan el `Machine`, el
   `Rtc` y el `Time` de antes de `#626`: el arranque repone los de la imagen en `/lib`, que ganan (en RAM); regrabar el
