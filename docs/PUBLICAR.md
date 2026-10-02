@@ -150,6 +150,10 @@ trampa que ya nos mordió al menos una vez**.
     `stm32cubeidec --launcher.suppressErrors -nosplash -consoleLog -application
     org.eclipse.cdt.managedbuilder.core.headlessbuild -data <ws-temp>
     -importAll <dir-del-.project> -cleanBuild "<Proyecto>/Debug"`
+    ⚠️ La configuración se llama `Debug` pero **es la de publicar**: es la única de
+    los dos proyectos y compila a `-Os`. Se queda con ese nombre (Eduardo, 2-oct,
+    H10): lo usan esta receta, `tanda.py` y `censo_reparto.py`, y renombrarla
+    movería sus rutas sin cambiar la imagen.
 - [ ] **Regenerar `dist/firmware/` a partir de esos builds** — ⚠️ **la trampa más
       cara del 6-ago (hallazgo 39)**: `dist/firmware` es lo que copia el
       empaquetador, y llevaba imágenes de **tres días antes** sin que nada lo
