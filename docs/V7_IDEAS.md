@@ -3557,6 +3557,39 @@ el PC: su `mkdir` no es recursivo (un `PUT` a `/sd/a/b/x.txt` con `a` nueva fall
 `crear_dirs_padre` de `#455` dice «recursivo en los 3 backends»); su `stat` de una carpeta contesta 0 (los otros, −1); y
 su `mkdir` encima de un FICHERO contesta éxito.
 
+## H10 — `#473`, los lotes D (FS) y E (GUI): el MAPA VERIFICADO (2-oct, decidido por Eduardo: «Mapa verificado»)
+
+Un agente leyó el código de hoy (sin compilar ni ejecutar) para los 25 hallazgos de `473_TRIAJE_COLA.md` §3 D y E;
+lo concreto con consecuencia, comprobado a mano después (180, 236, 466 y el código muerto de 264). **De 25: 15 vivos,
+2 a medias, 8 resueltos, ninguno «no se sostiene».** Lo de pantalla se arregló casi todo de rebote al sacar LVGL a un
+pack (23-26 sep); en el FS sólo lo que tuvo hito propio (la SD, el cursor, los packs). Y hoy, de paso, `#631`: el
+`mkdir` de FAT recursivo, su `stat` de carpetas y su `mkdir` encima de un fichero.
+
+**Con consecuencia para quien programa** (de más a menos daño):
+
+| # | qué | hoy | arreglo |
+|---|---|---|---|
+| 180 | si el driver de pantalla no arranca (la C5/C6: el bus SPI tomado; el P4: sin panel), sólo lo dice el log —`pant_lvgl.c:152`— y el programa sigue con una pantalla muerta | vivo, **mudo** | tras crear el screen, si el display no está abierto, excepción (~6 líneas, imágenes); con el motivo exacto, tocar la API del pack |
+| 236 | `copyFile` en `/sd` lanza «error al copiar»: FAT no tiene `copy` y la fachada no hace el «read+write» que promete su comentario; en la flash y en el PC, copia | vivo | un `fat_copy` como `fat_crc32` (~25 líneas, común) |
+| 466 | un `FORMAT` que falla contesta OK en las tres familias (sus `fs_format` devuelven 0 fijo); el sim sí lo propaga | vivo | que la cintura devuelva lo que pasó (~12 líneas, firmware) |
+| 268 | `ensure_parent_dirs` ×4 (tres de familia, para `/lib`, y la común del `PUT`) | vivo (la parte de FAT, cerrada con `#631`) | `bpvm_fs_mkdir_padres` en la fachada y fuera las cuatro (−40) |
+| 248 | `DF` mezcla volúmenes (el total de la raíz, la cuenta con `/sd`); en el sim con `--sd`, también `INFO` | vivo, sin consumidor real | ~8 líneas |
+| 244 | `hay_medio()` dice 1 sin detector: la vigilancia en caliente fuera de la Pico sería inservible | latente | un bit «sé detectar» en la cintura de bloque (~15 líneas) |
+
+**Duplicación, orden o documentación** (sin consecuencia hoy): 256 —no hay fachada de flash: cuatro formas, y el
+ENV en estáticos de cada familia; **es el único que sigue fabricando copias** (`#626` trajo tres `env_anadir`); grande,
+~250 líneas, escribe flash—; 264 —el shim viejo del FS ×3: borrar lo muerto (`fs_put_append` ×3, `fs_delete`/`fs_del`,
+`fs_exists`, `fs_status_str`, `fs_list_omitidas`: cero llamadores, comprobado) son ~95 líneas sin riesgo; entero,
+unas −450—; 324/328 —las operaciones de espacio, por familia: una en cada motor y fuera 3 punteros y 11 funciones—;
+276 —el STM32 compila la pila de SD sin usarla (0 bytes: el enlazador la descarta)—; **280 —`CENSO_FAMILIAS.md`
+miente en más filas que el 10-sep: una trampa para quien planifique con él—**; 360 (`ldo` del P4 en `include\`,
+aceptarlo); E: 176, 188 (el GT911 con dos drivers), 200 (3 de 8 verbos sólo del host), 340 (`lv_conf.h`, a medias:
+la consecuencia ya no puede darse). Y los restos de los resueltos: ~400 líneas muertas bajo `BPVM_LVGL` (el LTDC y el
+DSI) y notas rancias.
+
+**Resueltos**: 240 (el streaming de FAT, `b0e15592`), 260 (la SD al común, H3), 450 (el escaneo de `.mdn`, 4 de 4),
+184, 192, 196, 204 y 368 (todo por LVGL en un pack, `G1`–`G5`).
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):
