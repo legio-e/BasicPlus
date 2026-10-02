@@ -3854,6 +3854,39 @@ Pico o Metro. Y si todo funciona se extiende al resto de placas de 2 núcleos.»
 Las etapas 0 y 1 valen por sí mismas aunque H12 se pare ahí: un solo `RUN`, un solo `io`, y una VM que en reposo
 espera sin gastar (lo que pedirá también el bajo consumo de V8).
 
+### Etapa 0 — el hilo `io` hoy, imagen por imagen (mapa verificado, 2-oct)
+
+Un agente leyó el código de las diez imágenes (y el IDF y el kernel de FreeRTOS); lo que toca la seguridad, comprobado
+a mano (`#634`, `#635`). **Lo que es igual**: el lazo, el troceo, las colas y la parada de `io` (`src/bpvm_io.c`); que
+nace con cada `RUN` desde la tarea de la VM y muere con él; y la regla de prioridad (hereda la de quien lo crea).
+**Lo que difiere**:
+
+| | tarea VM/REPL (prio · pila) | cómo espera el cable en reposo | ociosa | `io` (pila · prio · cola) | fin del hilo | depurador |
+|---|---|---|---|---|---|---|
+| Pico/Metro | `vm_task` 2 · 16 KB | sondeo de USB y SD, 10 ms | gira (sin WFI) | 4 KB · 2 · 1 KB | se borra sola | por la cola de control |
+| S3, C3, C5, C6 | `main` 1 · 16 KB | bloqueada en el driver, ≤100 ms | `wfi` | 6 KB · 1 · 2 KB | se borra sola | por la cola |
+| P4 | `wire_uart` **5** · 32 KB | driver (o TCP), ≤100 ms | `wfi`; **watchdog de tareas** 5 s | 6 KB · **5** · 2 KB | se borra sola | por la cola |
+| Nucleo, DK2 | `vm` 2 · 16 KB | **sondeo del anillo sin ceder nunca** | **no corre** | 4 KB · 2 · 2 KB | suspender + `join` | no hay |
+| sim | hilo principal | `accept`/`recv` | — | hilo · — · 4 KB | `pthread_join` | **dos lectores del socket** |
+
+Y además: `io` NO lleva el log ni LVGL, aunque `bpvm_io.h` lo diga (LVGL lo bombea la tarea de la VM; el log lo escribe
+cada hilo, sin cerrojo); la espera de `io` es de 5 ms, salvo en las ESP32, donde el tick de 100 Hz la sube a 10; el
+arranque lo hace `boot2` en las placas, partido en la P4 y propio en el sim; y la P4 es la única con el watchdog de
+tareas y con la VM a prioridad 5 —sin un porqué en el código—.
+
+**Lo que hay que tocar para que `io` sea el mismo y permanente** (el riesgo, del mapa): separar `io` de la VM (hoy
+nace y muere con ella, y el orden «la última línea y el `KILL_REPLY` antes del `EXITED`» descansa en cerrar su cola y
+hacer `join`) —alto—; las ramas que dependen de `vm->io == NULL` —medio—; el contrato de prioridad («hereda de quien lo
+crea» se invierte si `io` crea los runs; la «misma prioridad» está medida) —alto—; el `RUN` y el poll ×4 (el `RUN` común
+de H10) —alto—; los cuatro lazos de reposo pasan a `io` (en la STM32 tendría que bloquearse de verdad: la interrupción
+del cable de la DK2 está por encima del umbral de FreeRTOS) —medio-alto—; el arranque a `io` —medio—; pilas y heap (el
+arranque y los verbos del REPL corren hoy en los 16 KB de la VM, y `io` tiene 4 o 6; el heap de FreeRTOS de la Pico y la
+STM32, 32 KB, ya va justo) —alto—; el fin de los hilos, uno solo (`#635`) —medio—; el `KILL` (la ventana con
+`preparar_run`, y en pausa: `#634`) —medio—; el log sin cerrojo —bajo-medio—; cómo espera `io` en reposo (cola y cable a
+la vez) —consumo y latencia—. Y para la etapa 2, confirmado leyendo el kernel: la variable de condición con un semáforo
+BINARIO pierde un aviso con dos esperando (y una espera con plazo que vence descuenta el contador aunque un aviso ya la
+hubiera contado); hoy ninguna tiene dos esperando a la vez.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

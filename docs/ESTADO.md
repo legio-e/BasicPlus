@@ -1246,7 +1246,10 @@ V8; enviar por el RMT —que ya usa su `Neopixel`—, a estudiar. Los dos, en el
   · **el `board_mgr` común con la fachada de la flash** (256): falta su análisis;
   · lo pequeño de `#473`: `lv_conf.h` (2), la puerta de arranque (10), el lazo de la STM32 que no cede y el camino de
     error de `scheduler_smp` (7); y del lote D, borrar el código muerto del shim (264), el censo que miente (280) y la
-    pila de SD que compila la STM32 (276).
+    pila de SD que compila la STM32 (276);
+  · y las dos del mapa del hilo `io` (abiertas a última hora): **`#634`** (el Stop del IDE con el programa parado en
+    un breakpoint, en placa, no para: el lazo de pausa no mira el `KILL`) y **`#635`** (el fin de un hilo en la Pico lee
+    su estructura después de avisar al `join`). El mapa, en `V7_IDEAS` §H12 «Etapa 0».
 - **Lo que acecha**: los packs de la GUI de las placas grandes (P4, DK2, C5) llevan copias rancias de la stdlib —la
   tanda lo dice como DESFASE y no sube nada—; y los `Stdlib.pack` de las zonas de las cuatro llevan el `Machine`, el
   `Rtc` y el `Time` de antes de `#626`: el arranque repone los de la imagen en `/lib`, que ganan (en RAM); regrabar el
