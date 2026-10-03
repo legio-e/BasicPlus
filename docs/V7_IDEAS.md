@@ -4020,6 +4020,47 @@ pasa si se borra firmware, y no es permanente en ninguna familia).
 - **D6**: para más adelante (*«esto hay que pensarlo»*);
 - **D7**: el IDE manda el `RESET` tras el `PART_APPLY` y se reconecta.
 
+**El plan, con las decisiones** (3-oct, noche; leído el código de las cuatro y del sim). Es lo único que le queda a
+H10 (Eduardo: *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*).
+
+- **La cintura de una familia**, `bpvm_bmgr_familia_t` (en `bpvm_bmgr_wire.h`): el sector del ENV (4 u 8 KB); dónde
+  se LEEN las dos copias —un puntero a la flash mapeada (la Pico y la STM32: `copia(slot)`) o copiándolas (la ESP32,
+  que no puede mapear `bpenv`: `leer(slot, dst)`, con un espejo de 2 sectores que pone ella)—; `escribir(slot, src)`
+  (borrar y programar; 0 o −1); `rellenar(bm)` (lo de cada placa: base y tamaño de las particiones, el FS arriba, el
+  estado real del arranque, la zona de packs y su cintura de grabar, el bloque de los motores); y `no_vale()` (el
+  motivo para no tocar nada, o NULL). Es la «cara común delgada» de D3/D5: sólo lo del ENV y de los packs; el log y
+  el FS, como están.
+- **La vista del ENV, común** (D1, `#638`): `bpvm_bmgr_vista()` elige la copia buena DE LA FLASH; cada escritura que
+  pasa por el común sube una generación, y la vista vuelve a elegir (y la ESP32 vuelve a leer su espejo) en cuanto
+  cambia. Los únicos que escriben el ENV son el gestor y el arranque, los dos por aquí: la vista es siempre lo que
+  tiene la flash, sin leerla en cada consulta. Las vistas de cada familia (`board_env()`, `board_mgr_stm32_env*()`,
+  `board_mgr_env()`) y `Machine.getEnv` del sim pasan a ser ésta. La STM32 deja de copiar el ENV a la RAM (−16 KB de
+  `.bss`): su flash está mapeada.
+- **El `anadir` común** (`#626`): el bloque nuevo, en un sector de la zona de rascar (como la Pico), y por `escribir`;
+  fuera las tres `env_anadir` y los dos «temprano».
+- **El `handle` común**, `bpvm_bmgr_handle()` (en `bpvm_repl.c`, junto al RUN): lo que hacen hoy los tres —el reparto
+  del búfer, las copias en la zona de rascar, rellenar el gestor, la petición desde el JSON, despachar y volcar— más
+  D2: si `escribir` falla, `ERROR FLASH_ERROR` «no se pudo escribir la flash: sigue el valor de antes» en vez del OK
+  (`#636`). El bulk de `PACK_BURN_DATA` lo sigue leyendo la familia (ya lo hace antes de llamar).
+- **`#637`**: la guarda de zona DENTRO de `stm32_flash.c` —sólo de `BP_LOG` al final de las particiones, y nada si el
+  `.ld` y la cabecera no casan—, con la regla en una función común que se prueba en el PC (`test-flash`, con las tablas
+  de la Pico y de la STM32), como la de `pico_flash.c`. Y **D4**: en la STM32, un mutex de FreeRTOS en
+  `stm32_flash.c` (el FS desde la VM, el gestor desde el REPL y el log pueden escribir a la vez), con el volcado del
+  log de un fallo sin esperar.
+- **D7**: el IDE manda `RESET` tras un `PART_APPLY` bueno y reconecta. El protocolo: `FLASH_ERROR` y la vista.
+
+**Los pasos** (cada uno su commit; las placas en UN lote al final, con copia del ENV antes de grabar):
+0. sin cambio de conducta: `bpvm_flash_lock_*` → `pico_flash_lock_*` (es de la Pico);
+1. el común (la cintura, la vista, el `anadir` y el `handle`), estrenado por el sim, con sus pruebas: el sim con
+   `--flash-falla` (`FLASH_ERROR`, y el valor de antes al relanzarlo), dos `ENV_SET` seguidos que un programa ve los
+   dos (D1) y la persistencia RELANZANDO el sim; y en C, la vista y el `anadir` con una flash de RAM que puede fallar;
+2. la STM32 (la cintura, la vista sin copias en RAM, `#637`, el mutex y `test-flash`);
+3. la Pico (la cintura y la vista: `#638`);
+4. las ESP32 (la cintura y el espejo);
+5. el IDE (D7), el protocolo y el contrato;
+6. el lote: las placas con la imagen nueva —lleva también `#640` y, a la Pico, el P4 y la Discovery, `#639` (3)—, y en
+   cada una: `ENV_SET` ×2 con un programa que lee `Machine.getEnv` (D1), `run_placa` y la tanda.
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):
