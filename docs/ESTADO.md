@@ -37,7 +37,8 @@
 > C6 y la C3 grabadas: **H13 CERRADO** (Eduardo). G2, IDÉNTICO en el P4, la Discovery y la C6. Por la noche, «a ver
 > qué podemos cerrar»: `#579` cerrada y `#584` decidida (Eduardo); la tanda sabe PARAR un programa; **`#580` CERRADA**
 > —una recursión es un bucle, decidido por Eduardo tras medirlo en la C3—, `#640` (un KILL a una native sin ejecutor
-> salía RUNTIME_ERROR) y `#585` (`double` en una native, medido en la C3: ×5,2). Más abajo, «🔧 SUELTAS (3-oct, noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y
+> salía RUNTIME_ERROR) y `#585` (`double` en una native, medido en la C3: ×5,2); `#577` decidida (getters, sin ABI) y,
+> con Eduardo: *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*, **H9 CERRADO**. Más abajo, «🔧 SUELTAS (3-oct, noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y
 > «(mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
@@ -1088,6 +1089,27 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧪 H9 (3-oct, noche) — CERRADO (Eduardo): el sello, visto; las nueve placas, limpias; `L15`, medido en la Metro
+
+- **El orden** (Eduardo, tras decidir `#577`): *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*.
+- **El sello de la imagen** (`imageCrc` en el HELLO, `5324946b`): visto en las tandas de hoy en las tres familias —la
+  Pico 2, la Discovery, el P4, la C6 y la C3—.
+- **La limpieza**, con el OK de Eduardo: la C3 (seis módulos de otras sesiones) y, conectadas por él, la Metro, la
+  Nucleo, la S3 y la C5: `/app` entero (33, 25, 28 y 49 ficheros; en la S3, dos `.md` y copias de `Str`,
+  `Collections` y `Adc` que tapaban a `/lib`) y los artefactos de la raíz (`medidas.db`, `GuiShot.shot`). `/lib` es
+  la stdlib de cada imagen; a la Metro y la Nucleo les falta `Heap` (imagen anterior). La SD de la C5 —grabaciones de
+  una cámara y otras cosas que no son nuestras—, sin tocar. De paso: el LIST nombra los ficheros de la raíz sin barra
+  («legado plano»; el STAT acepta las dos).
+- **`#641`, abierta**: en la C5, `/lib` tenía `Collections`, `Gui`, `Json` y `Str`, que tapaban a los del pack `Gui`;
+  borrados (OK de Eduardo), la tanda de GUI los volvió a subir —compila con la stdlib de hoy y deja `/lib` como está—.
+  Decide Eduardo. Y `GuiArbolG2` salió FALLO en la C5: su línea `rot=90` es de hoy (`c382a66c`, de la imagen) y la C5
+  lleva la del 1-oct; pasará al grabarla.
+- **`L15`**: con `log=1` en el ENV de la Metro (OK de Eduardo), un RUN de marca y Eduardo pulsando su botón de reset:
+  `arranque en frío (cargado de flash)`, causa `power-on/run`; de antes sólo queda lo volcado hasta el arranque del
+  programa, y sus líneas se pierden. `PENDIENTES` decía que el botón (el pin de RUN) lo conservaba, sin medirlo:
+  corregido. Después, `log=` quitado y la marca borrada: la Metro, como estaba.
+- **H10**: leído el mapa del `board_mgr` común (las tres familias y el sim) para empezar.
 
 ## 🔧 SUELTAS (3-oct, noche) — «a ver qué podemos cerrar»: `#579` y `#584`, decididas; `#580` y `#585` CERRADAS; `#640`
 

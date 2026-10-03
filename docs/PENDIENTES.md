@@ -76,12 +76,16 @@
   | | conserva el log | lo pierde |
   |---|---|---|
   | **ESP32-S3 / P4** | reset por software (el `reset` del IDE), panic/excepción, watchdog | **el botón RST de la placa** y desenchufar |
-  | **RP2350 (Pico 2 / Metro)** | el pin de RUN — o sea el botón de reset de la Metro | desenchufar |
+  | **RP2350 (Pico 2 / Metro)** | reset por software (el `reset` del IDE) | **el botón de reset de la Metro** (el pin de RUN: medido el 3-oct, arranque en frío) y desenchufar |
   | **STM32** | el botón NRST (medido en la Nucleo el 24-sep: «pin (NRST)» y las líneas de antes) | desenchufar |
 
-  Lo que sorprende es el ESP32: su botón RST tira del pin EN y corta el dominio
-  digital entero, así que cuenta como arranque en frío. **Si persigues un cuelgue en
-  un P4 o un S3, reinicia desde el IDE, no con el botón.** El arranque dice siempre
+  Lo que sorprende es el ESP32 —su botón RST tira del pin EN y corta el dominio
+  digital entero, así que cuenta como arranque en frío— y la Metro: aquí ponía que su
+  botón (el pin de RUN) conservaba el log, sin haberlo medido, y no lo conserva. Medido
+  el 3-oct: tras el botón, el arranque dice `arranque en frío (cargado de flash)` y la
+  causa `power-on/run`; de antes sólo queda lo que ya estaba en la flash, hasta el
+  arranque del último programa, y las líneas de ese programa se pierden. **Si persigues
+  un cuelgue en un P4, un S3 o una Metro, reinicia desde el IDE, no con el botón.** El arranque dice siempre
   de cuándo es lo que ha cargado (`RAM SUPERVIVIENTE` frente a `arranque en frío`),
   así que no hay que adivinarlo; y el `Reset` del diálogo de Info dice qué tipo de
   reinicio hubo. El volcado a flash sigue existiendo como red para los cortes de
