@@ -1575,11 +1575,18 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
     try:
         deps = dependencias(p["bp"])
         asegurar_deps(w, deps, inv, subidos, notas, verificadas)
+        # 3-oct (la Nucleo: 504 KB de FS en bloques de 8 KB, y cada .mod ocupa uno): lo que sube ESTA prueba a /app se
+        # borra al acabarla (main), no al final de la placa —con 40 pruebas, la Nucleo se llenaba en la 29.ª—. Cada
+        # prueba vuelve a subir lo suyo; las dependencias de la stdlib (asegurar_deps) se quedan: van verificadas.
+        r["propios"] = []
         for rec in p["recursos"]:
-            subir_fichero(w, os.path.join(RAIZ, rec), "/app/" + os.path.basename(rec), subidos)
+            r["propios"].append("/app/" + os.path.basename(rec))
+            subir_fichero(w, os.path.join(RAIZ, rec), r["propios"][-1], subidos)
         for d in modulos_de_app(deps, o["work"]):   # V7 (#530): HiloLib de HiloUsa
-            subir_fichero(w, os.path.join(o["work"], d + ".mod"), "/app/" + d + ".mod", subidos)
-        subir_fichero(w, mod_a_subir, "/app/" + p["modulo"] + ".mod", subidos)   # V7/H5: el fundido, si es "aot"
+            r["propios"].append("/app/" + d + ".mod")
+            subir_fichero(w, os.path.join(o["work"], d + ".mod"), r["propios"][-1], subidos)
+        r["propios"].append("/app/" + p["modulo"] + ".mod")
+        subir_fichero(w, mod_a_subir, r["propios"][-1], subidos)   # V7/H5: el fundido, si es "aot"
         r["artefactos_previos"] = borrar_artefactos(w, p["artefactos"])
     except PlacaColgada as e:
         r["veredicto"] = "ERROR"
@@ -2081,6 +2088,9 @@ def main():
                 if r.get("abortar_placa"):
                     # la placa ya no sirve para las siguientes: se dice y se corta
                     raise RuntimeError(r["abortar_placa"])
+                for ruta in r.get("propios", []):   # 3-oct: lo suyo, al acabar (ejecutar_en_placa)
+                    if w.llamar("DEL", "DEL_REPLY", 10, path=ruta) is None and w.codigo_error() != "NOT_FOUND":
+                        pl["notas"].append("%s: no se pudo borrar %s al acabar (%s)" % (r["prueba"], ruta, w.errores()))
             pl["notas"].extend(limpiar_lo_subido(w, pl["subidos"], [a for p in pruebas for a in p["artefactos"]]))
             log("  " + pl["notas"][-1])
         except (RuntimeError, EOFError, OSError) as e:
