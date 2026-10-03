@@ -27,6 +27,11 @@
 
 ## Última sesión
 
+> **3-oct** — H10, el paso 1 del traspaso entero: los arreglos pequeños, todos en el PC y cada uno con su prueba
+> (`89da2e63`, `26ecfef6`, `c382a66c`): el lote D del FS de `#473` (236, 248, 264, 268, 276, 280, 466), la pantalla
+> que no arranca (180), tres de los diez (2, 7, 10), `#634` y `#635`, `G2` (a) y (b) y lo barato de `#477`. La red,
+> verde; las ocho imágenes compilan. Más abajo, «🔧 H10 (3-oct, mañana)».
+>
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
 > tarde, `#624` (subir una librería por su versión) y, de H10, el `Rtc` en hora (`#626`, la idea de Eduardo), visto en
 > las cuatro. Por la noche, H10: `#628`–`#633` (el motivo de un fallo del FS, 32 pruebas fuera de la red, `fileExists`
@@ -1075,6 +1080,45 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🔧 H10 (3-oct, mañana) — LOS ARREGLOS PEQUEÑOS, todos en el PC: el lote D y E de `#473`, `G2`, lo barato de `#477`, tres de los diez y `#634`/`#635`
+
+El paso 1 del traspaso de anoche, entero. Cada uno con su prueba en el PC y, donde la prueba es nueva, con su sabotaje
+de control (la prueba tiene que fallar sin el arreglo).
+
+- **El FS** (`89da2e63`):
+  · **236** `copyFile` en `/sd`: FAT no tenía `copy` y la fachada no lo suplía; un `fat_copy` con la forma de
+    `fat_crc32`. `sd_smoke` corre ahora un PROGRAMA en el micro simulado con tarjeta (5000 B byte a byte, encima de
+    uno más largo, uno que no existe); contra el sim de ayer, el error exacto de la ficha.
+  · **248** el `DF` y el `INFO`, del volumen propio: la cuenta (y en el sim lo usado) sumaba la tarjeta. Control: 1→2
+    ficheros y 36→5036 B con el sim de ayer.
+  · **268** `bpvm_fs_mkdir_padres` en la fachada, y fuera las cuatro copias (búfer de 128 en las familias); seis casos
+    en `test-fsfallo`.
+  · **264** el código muerto de los tres shims (`fs_exists`, `fs_put_append`, `fs_delete`/`fs_del`, `fs_free_bytes`,
+    `fs_status_str`, `fs_list_omitidas` y los comentarios de lo que ya no existía), contado por llamadores; y la
+    excepción de `-Wformat-truncation` de los cinco CMake de las ESP32, que era por un `snprintf` ido con `#461`.
+  · **466** el `FORMAT` de las tres familias contestaba OK pasara lo que pasara: ahora devuelve lo que pasó (y las tres
+    carpetas), y el común deja el motivo en el log.
+- **`#634`** (`26ecfef6`): el lazo de pausa del depurador mira el `KILL` en cada vuelta, y un `KILL` en pausa acaba en
+  `KILLED`; el `KILL` aparte del `STOP` en el depurador (el sim lo lee desde la pausa). `test-dbgkill`, nuevo y en la
+  red: tres casos, y con el arreglo saboteado el lazo esperaba hasta el tope de 20. **`#635`**: el trampolín de la Pico
+  lee `t->tcb` antes del aviso (las ESP32 y la STM32 no leían nada después).
+- **180** (`c382a66c`): una pantalla cuyo driver falla al arrancar ya no es muda: `Gui.screen()` lanza, sólo si HAY
+  driver (`disp_native_size`); el modo mudo y `--no-screen` siguen igual. Sin prueba en el PC (no hay driver que falle):
+  compilado con LVGL dentro y con el pack.
+- **`G2`** (a) y (b) en `Gui.bp` y **lo barato de `#477`** (`c382a66c`): Bar, Led, Chart y Table al árbol; `toJson()`
+  con colores, rango, opciones, ítems, botones, la forma del Chart y la rejilla del Table (el cargador construye
+  Chart y Table); `~Component` borra su nodo (la pantalla no). `rot=N` en la línea del `screen` (las dos VMs) y la
+  cabecera de `Gui.shot` con el giro del modelo. `GuiArbolG2`, al corpus: se comprueba solo, paridad exacta, y con el
+  destructor vacío dos `FALLO`. Y fuera las mitades `BPVM_LVGL` de los drivers de pantalla del P4 y la DK2 (−442
+  líneas que ninguna imagen compila desde G5).
+- **Tres de los diez de `#473`** (`89da2e63`): `lv_conf.h` con una macro (2; las 670 macros del pack y las 676 del PC,
+  idénticas antes y después); la puerta del arranque en el común (10; sin prueba en el PC: el sim no la usa); el lazo
+  de la STM32 cede un tick si no hay nada que hacer (7, sólo donde hay anillo) y el SMP une a los workers si uno no nace.
+- **276** la STM32 deja de compilar la pila de SD (su `.cproject`) y **280** `CENSO_FAMILIAS.md`: lo de agosto,
+  rotulado como historia, y el reparto de hoy GENERADO por `tools/censo_fuentes.py` (lee lo que compiló el último
+  build de cada imagen).
+- La red: verde (paridad 131, cápsula 59, sim 8/8, pruebas de C 74/74, sombra, MOD8, dos workers, estrés y packs-abi). Las imágenes: las ocho compilan; los únicos avisos, los de siempre (cuatro funciones de la GUI sin usar en las placas sin pantalla, y una API del táctil obsoleta en la P4).
 
 ## 🧪 H9 (2-oct) — LA TANDA EN LA C6 destapa cinco fichas (`#619`–`#623`), cuatro de ellas fallos viejos que las dos VMs hacían IGUAL; y las cuatro placas de la mesa, grabadas y en verde
 

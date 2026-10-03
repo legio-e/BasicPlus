@@ -3528,6 +3528,14 @@ triaje del 10-sep mandó a V7 con ficha nueva:
 
 Y los lotes D (FS, 15) y E (GUI, 10) de `473_TRIAJE_COLA.md` §3 siguen sin mirar.
 
+**Hecho el 3-oct** (`89da2e63`): el **2** —`lv_conf.h` decide con UNA macro (`BPVM_EN_PACK`); comparadas todas las
+macros del fichero antes y después, con las banderas del pack (670) y con las del PC (676): idénticas—; el **7** —el lazo
+de la STM32 cede un tick cuando no hay nada que leer ni que mandar (sólo donde la RX tiene anillo: la FIFO de 8 B no
+aguantaría el milisegundo), y `bpvm_scheduler_run_smp` para y une a los workers ya nacidos si uno no nace—; y el
+**10** —la puerta del arranque, `bpvm_repl_puerta_arranque` en el común, con el mensaje de la Pico (dice el estado);
+sin prueba en el PC: el micro simulado no la usa (sirve ficheros sin particiones)—. Siguen vivos el 1 (FreeRTOS, fuera
+de V7), el 6 (el `board_mgr`, con la fachada de la flash), el 8 y el 9 (el `RUN` y su sink, en un solo sitio).
+
 **`#628` — el motivo de un fallo del FS.** `bpvm_fs_last_fail()` es de la fachada (`bpvm_fs.h`), pero vivía en
 `fs_lfs.c` como un `int` de littlefs. Tres consecuencias, las tres medidas: la fachada dependía de littlefs por un
 símbolo —`test-crc`, que la enlaza con el motor del PC, no enlaza desde el 31-ago, y el 15-sep otras tres se
@@ -3592,6 +3600,30 @@ DSI) y notas rancias.
 **Resueltos**: 240 (el streaming de FAT, `b0e15592`), 260 (la SD al común, H3), 450 (el escaneo de `.mdn`, 4 de 4),
 184, 192, 196, 204 y 368 (todo por LVGL en un pack, `G1`–`G5`).
 
+**Hecho el 3-oct** (`89da2e63`; la 180, en `c382a66c`), cada uno con su prueba en el PC:
+- **236** `fat_copy` (la forma de `fat_crc32`); `sd_smoke` corre un programa que copia en la tarjeta del micro
+  simulado (5000 B byte a byte, encima de uno más largo, uno que no existe) —contra el sim de antes, el «error al
+  copiar» exacto—;
+- **248** el `DF` y el `INFO` cuentan sólo el volumen propio (`bpvm_fs_count_files` y el recorrido del sim saltan lo
+  que atiende otra unidad montada, por la tabla de montajes); `sd_smoke` —el control: 1→2 ficheros y 36→5036 B—;
+- **268** `bpvm_fs_mkdir_padres` en la fachada, y fuera las cuatro copias; seis casos en `test-fsfallo`;
+- **264** lo muerto de los tres shims (contado por llamadores: `fs_exists`, `fs_put_append` ×3, `fs_delete`/`fs_del`,
+  `fs_free_bytes` de la Pico, `fs_status_str`, `fs_list_omitidas`, y los comentarios de lo que ya no existía), y la
+  excepción de `-Wformat-truncation` de los cinco CMake de las ESP32 (el `snprintf` se fue con `#461`). El resto del
+  shim (las cuentas, `fs_put` del instalador, el formateo) espera a la fachada de la flash (256);
+- **466** el `FORMAT` de las tres familias devuelve lo que pasó (formatear y las tres carpetas), y el común deja el
+  motivo en el log;
+- **180** la pantalla cuyo driver falla al arrancar: `Gui.screen()` lanza, sólo si HAY driver (`disp_native_size`);
+  sin prueba en el PC (no hay driver que falle: compilado con LVGL dentro y con el pack);
+- **276** la STM32 deja de compilar la pila de SD (`bpvm_sd.c`, `bpvm_sd_blk.c`, `bpvm_sd_spi_env.c`,
+  `bpvm_blk_sdmmc_cfg.c`, `bpvm_blk.c`: sus `.cproject`); `bpvm_sd_placa.c` se queda (dice «no tiene SD»);
+- **280** `CENSO_FAMILIAS.md`: lo de agosto, rotulado como historia, y el reparto de hoy GENERADO por
+  `tools/censo_fuentes.py`, que lo lee de lo que compiló el último build de cada imagen;
+- y los restos de los resueltos: fuera las mitades `BPVM_LVGL` de `gui_display_dsi.c` (P4) y `gui_display_ltdc.c`
+  (DK2), −442 líneas que ninguna imagen compila desde `G5`.
+Quedan, sin consecuencia hoy: 244 (`hay_medio()`), 256 (la fachada de la flash, con el `board_mgr`), 324/328 (las
+operaciones de espacio, con ella), 360 y los de E (176, 188, 200, 340).
+
 ## H10 — la GUI: `#477` resto, `G2` resto e `invokeLater`/`Command` — el MAPA VERIFICADO (2-oct, decidido por Eduardo)
 
 Un agente leyó el código de hoy; lo concreto, comprobado: **el orden de los hijos del volcado rompía la paridad**
@@ -3645,6 +3677,16 @@ encender el segundo run en el P4: ¿regla + `invokeLater` (incompatible con lo d
 **La lectura del agente**: lo de más valor para quien programa una placa con pantalla es la parte BP de `G2` (Bar, Led,
 Chart y Table en el árbol; la ida y vuelta del `.win`); a medio plazo, la decisión de H12; y `#477` es lo más caro para
 lo que aporta.
+
+**Hecho el 3-oct** (`c382a66c`): **`G2` (a)** —Bar, Led, Chart y Table se dan de alta en su contenedor; `toJson()`
+escribe el rango, las opciones y los ítems, los botones de un Msgbox, los colores (`"0xRRGGBB"`, campos BP: el render
+no los devuelve), la forma de un Chart (`points`, `chartType`, su rango: las series son datos del programa) y la
+rejilla de un Table (`rows`, `cols`, `cells`), y el cargador construye Chart y Table— y **(b)** —`~Component` borra el
+nodo y se da de baja en el padre cuando el wrapper muere por su dueño (un `var owner` local, un `try var`); la
+pantalla no—. **`#477`, lo barato**: `rot=N` en la línea del `screen` (en las dos VMs, sólo si gira: ningún golden
+cambia), la cabecera de `Gui.shot` con el giro del modelo, y fuera las mitades `BPVM_LVGL` muertas. Lo prueba
+`GuiArbolG2` (en el corpus; se comprueba solo, paridad exacta; con el destructor vacío, dos `FALLO`). Sin hacer, y
+fuera de (a): ImageView, Tabview y Keyboard en el `.win` (el título de una pestaña, la imagen, el campo del teclado).
 
 ## H10 — `RUN` en un solo sitio (`#473`, punto 8; entra en V7, Eduardo, 2-oct): el análisis
 
