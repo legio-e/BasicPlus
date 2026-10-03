@@ -4061,6 +4061,25 @@ H10 (Eduardo: *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*).
 6. el lote: las placas con la imagen nueva —lleva también `#640` y, a la Pico, el P4 y la Discovery, `#639` (3)—, y en
    cada una: `ENV_SET` ×2 con un programa que lee `Machine.getEnv` (D1), `run_placa` y la tanda.
 
+**Hecho** (3-oct, noche): los pasos 0 a 5 (`6a5b079d`, `a88520e4`, `7ffeebfc`, `60b6b223`, `e5e3676d`, `4eb1cf00`) y el
+lote en las NUEVE placas, con el OK de Eduardo y una copia del ENV de cada una antes de grabar (por SWD las dos STM32,
+por el cable la Pico 2 y la Metro, sólo la app las cinco ESP32): en todas, la imagen igual a la del PC, el ENV igual
+que antes, D1 verde (dos `ENV_SET` y un `ENV_DEL` que un programa ve sin reiniciar: `#638`, en la Pico donde estaba),
+`run_placa` 34 de 34 y la tanda verde; la línea del arranque de las particiones, vista en las tres familias. Lo que
+salió por el camino:
+- **los packs sellados AGUANTARON** donde el `nm` decía que no (`_heap_start` +32 B en la C6, la C5 y el P4): el bloque
+  de los motores está en la PSRAM (la C5, el P4) o alineado a 4 KB (la C6), y no se movió; la verdad, el `packRamBase`
+  del INFO antes y después. Pero el `Gui` de la C5, que cargaba, era anterior a `rot=` (allí `gui.c` va en el pack):
+  `GuiArbolG2` FALLO hasta regrabarlo (OK de Eduardo: `PACK_FORMAT`, `Gui` y `DriverSpi`);
+- **la tanda llenaba el FS de la Nucleo** (504 KB en bloques de 8 KB, y 40 pruebas): ahora cada prueba borra lo suyo de
+  `/app` al acabar (`e57c5e64`);
+- **D7, probado por Eduardo en el IDE** con la Nucleo: aplicar, reinicio, reconexión sola y «ha vuelto». El primer aviso
+  era modal y estaba delante del reinicio, que esperaba a que se aceptara: ahora va sin modal y se cierra solo
+  (`15d1366a`);
+- D2 (`FLASH_ERROR`) no se puede provocar en placa: se prueba en el sim (`--flash-falla`) y en C (`test-bmgr`).
+
+Queda D6 (el sim tan estricto como la placa), para más adelante (Eduardo: *«esto hay que pensarlo»*).
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):

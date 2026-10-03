@@ -38,8 +38,11 @@
 > qué podemos cerrar»: `#579` cerrada y `#584` decidida (Eduardo); la tanda sabe PARAR un programa; **`#580` CERRADA**
 > —una recursión es un bucle, decidido por Eduardo tras medirlo en la C3—, `#640` (un KILL a una native sin ejecutor
 > salía RUNTIME_ERROR) y `#585` (`double` en una native, medido en la C3: ×5,2); `#577` decidida (getters, sin ABI) y,
-> con Eduardo: *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*, **H9 CERRADO**. Más abajo, «🔧 SUELTAS (3-oct, noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y
-> «(mañana)».
+> con Eduardo: *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*, **H9 CERRADO**. Y para acabar, el
+> `board_mgr` común (pasos 0 a 5) y su lote en las NUEVE placas, todas verdes: `#636`–`#638` cerradas, D7 probado por
+> Eduardo en el IDE (y su aviso, sin modal), la tanda que llenaba la Nucleo y el `Gui` viejo de la C5, resueltos. A H10
+> sólo le queda D6, «más adelante». Más abajo, «🔧 H10 (3-oct, noche)», «🧪 H9 (3-oct, noche)», «🔧 SUELTAS (3-oct,
+> noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y «(mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
 > tarde, `#624` (subir una librería por su versión) y, de H10, el `Rtc` en hora (`#626`, la idea de Eduardo), visto en
@@ -1090,6 +1093,38 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🔧 H10 (3-oct, noche) — EL `board_mgr` COMÚN (pasos 0 a 5) y su lote en las NUEVE placas: `#636`–`#638` CERRADAS; D7, probado por Eduardo en el IDE
+
+- **Los pasos** (uno por commit; el plan, en `V7_IDEAS` §H10 «el `board_mgr` común»): 0, `pico_flash_lock_*`
+  (`6a5b079d`); 1, el común —la cintura de una familia (`bpvm_bmgr_familia_t`), la VISTA del ENV de la flash con su
+  generación (D1, `#638`), el `anadir` y el `handle` comunes, `FLASH_ERROR` (D2, `#636`)—, estrenado por el sim
+  (`--flash-falla`, `env_smoke.py`, `make test-bmgr`) (`a88520e4`); 2, la STM32: la vista sobre su flash mapeada (−16 KB
+  de `.bss`), la guarda de zona dentro de `stm32_flash.c` (`#637`, la regla en `bpvm_flash_zona.h` y `make test-flash`)
+  y el mutex (D4) (`7ffeebfc`); 3, la Pico (`60b6b223`); 4, las ESP32, con un espejo de `bpenv` (`e5e3676d`); 5, el IDE
+  reinicia y reconecta tras un `PART_APPLY` bueno (D7), con el contrato en `H9_KERNEL_CAPAS` y el manual (`4eb1cf00`).
+- **El lote** (OK de Eduardo; una copia del ENV de cada placa antes de grabar —`lote_bmgr.py`, en el scratchpad—): las
+  nueve, en tres rondas de cambio de placas. En todas: el `imageCrc`, el del PC; el ENV, el de antes (salvo
+  `imagen.fecha`); D1 verde —un programa con `Machine.getEnv` tras dos `ENV_SET` seguidos y un `ENV_DEL`, sin reiniciar;
+  en la Pico 2 y la Metro, donde estaba `#638`—; `run_placa` 34 de 34, y la tanda verde (se saltan la GUI sin pantalla,
+  lo nativo en la S3 y `synclisttest` por heap en la C6 y la C3; verde en la Pico 2 y la Nucleo, las que aprietan). La
+  línea de las particiones del arranque, vista en las tres familias (en la Pico 2, tras un reset: la tanda había llenado
+  su log). La Metro y la Nucleo llevaban imágenes del 27-sep.
+- **Los packs**: el `nm` decía «no aguantan» en la C6, la C5 y el P4 (`_heap_start` +32 B, el `.bss` del común), y
+  aguantaron: el bloque de los motores, en la PSRAM o alineado a 4 KB, no se movió (la memoria, corregida: la verdad es
+  el `packRamBase` del INFO). Pero el `Gui` de la C5, que cargaba, era anterior a `rot=` —allí la GUI va entera en el
+  pack— y `GuiArbolG2` daba FALLO; con el OK de Eduardo, `PACK_FORMAT` y `Gui` + `DriverSpi`: IDÉNTICO.
+- **La tanda llenaba el FS de la Nucleo**: 504 KB en bloques de 8 KB, y 11 ERROR «FS lleno» desde la 29.ª de las 40
+  pruebas. Ahora cada prueba borra lo suyo de `/app` al acabar (`e57c5e64`): la Nucleo, verde, con 312 KB de pico.
+- **D7, en el IDE** (Eduardo, con la Nucleo): «Aplicar tamaños» → reinicio → reconexión sola → «La placa ha vuelto con el
+  reparto nuevo.». El primer aviso era modal y estaba delante del reinicio, que esperaba a su «Aceptar»: ahora va sin
+  modal y se cierra solo (`15d1366a`; el jar, rehecho). En la primera prueba Eduardo formateó también la zona de packs
+  de la Nucleo: Mini y SQLite, regrabados (OK).
+- **De paso**: `idf.py app-flash` vuelve a enlazar si cambió HEAD (la versión de la app sale de `git describe`): el
+  `.elf` que se graba es el de ese momento. Y la primera HELLO tras arrancar una ESP32 por su USB puede perderse (el log
+  del bootloader va antes): se repite.
+- **H10, lo que queda**: D6, el sim tan estricto como la placa (Eduardo: *«esto hay que pensarlo»*, «más adelante»). Lo
+  demás de la fila, hecho o fuera (a SUELTAS, a `#615`, a V8). Cerrarlo, Eduardo.
+
 ## 🧪 H9 (3-oct, noche) — CERRADO (Eduardo): el sello, visto; las nueve placas, limpias; `L15`, medido en la Metro
 
 - **El orden** (Eduardo, tras decidir `#577`): *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*.
@@ -1104,7 +1139,8 @@ la C6, la P4 y la Nucleo.
 - **`#641`, abierta**: en la C5, `/lib` tenía `Collections`, `Gui`, `Json` y `Str`, que tapaban a los del pack `Gui`;
   borrados (OK de Eduardo), la tanda de GUI los volvió a subir —compila con la stdlib de hoy y deja `/lib` como está—.
   Decide Eduardo. Y `GuiArbolG2` salió FALLO en la C5: su línea `rot=90` es de hoy (`c382a66c`, de la imagen) y la C5
-  lleva la del 1-oct; pasará al grabarla.
+  lleva la del 1-oct; pasará al grabarla. (**No**: en la C5 `gui.c` va en el pack `Gui`, no en la imagen; con la imagen
+  nueva siguió en FALLO, y pasó al regrabar el pack —«🔧 H10 (3-oct, noche)», arriba—.)
 - **`L15`**: con `log=1` en el ENV de la Metro (OK de Eduardo), un RUN de marca y Eduardo pulsando su botón de reset:
   `arranque en frío (cargado de flash)`, causa `power-on/run`; de antes sólo queda lo volcado hasta el arranque del
   programa, y sus líneas se pierden. `PENDIENTES` decía que el botón (el pin de RUN) lo conservaba, sin medirlo:
