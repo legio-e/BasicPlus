@@ -14,6 +14,7 @@
       "recursos": ["samples/formdemo/resources/main.win"], "timeout_s": 60 },
     { "nombre": "GuiShot",         "fuente": "samples/GuiShot.bp", "necesita": ["pantalla"],
       "artefactos": ["GuiShot.shot"], "timeout_s": 60, "criterio": "no-peta"},
+    { "nombre": "GuiArbolG2",      "fuente": "bpgenvm-c/samples/GuiArbolG2.bp", "necesita": ["pantalla"], "timeout_s": 60 },
     { "nombre": "NatNew", "fuente": "samples/NatNew.bp", "aot": true },
     { "nombre": "NatV7",  "fuente": "samples/NatV7.bp",  "aot": true, "ignorar": ["^  tiempo: "] },
     { "nombre": "FloatNat", "fuente": "samples/FloatNat.bp", "aot": true },
