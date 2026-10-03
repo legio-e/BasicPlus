@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -472,6 +472,16 @@ test-dbgkill: $(LIBOBJ)
 	$(CC) $(CFLAGS) -Isrc test/test_dbgkill.c $(LIBOBJ) -o build/test_dbgkill.exe $(LDFLAGS)
 	@echo "--- #634: un KILL con el programa en pausa (esperado: solo 'ok', [status=OK]) ---"
 	cd samples && ../build/test_dbgkill.exe KillLoop.mod
+
+# #639 (3-oct) — la TABLA DE SIMBOLOS con poca memoria: si el doble no cabe, crece menos (x1,5, x1,25, lo justo) y, si
+# ni lo justo cabe, la carga lo DICE (antes el fallo se tiraba y el enlace acusaba a una version vieja: la C6 con la
+# GUI). Json.mod con un malloc que a link.c no le da mas de N bytes de un bloque.
+test-tablasim: $(LIBOBJ)
+	@mkdir -p build
+	$(call stdlibdep,Json Collections Str Core)
+	$(CC) $(CFLAGS) -Isrc test/test_tablasim.c $(LIBOBJ) -o build/test_tablasim.exe $(LDFLAGS)
+	@echo "--- #639: la tabla de simbolos con poca memoria (esperado: solo 'ok', [status=OK]) ---"
+	cd samples && ../build/test_tablasim.exe Json.mod
 
 # V7 #494 (27-sep) — el HEAP DESCARRILADO es UNA excepcion (decision de Eduardo): un gancho de depuracion
 # estropea la cabecera del primer bloque y el GC siguiente no barre; la reserva que lo pidio lanza la

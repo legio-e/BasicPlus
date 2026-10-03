@@ -427,14 +427,17 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             uint32_t abs = mod_cb + (uint32_t) rel;   /* función → base de CÓDIGO (XIP: flash) */
             char qual[320];
             snprintf(qual, sizeof(qual), "%s%s", export_prefix, name);
-            bpvm_link_register_symbol(vm, qual, abs);
-            if (mod->library[0]) {
+            /* #639 — sin memoria para la tabla, la carga falla y lo dice (load_error): seguir sin el simbolo acababa en
+             * un enlace que acusaba a una version vieja. */
+            bpvm_status_t rsim = bpvm_link_register_symbol(vm, qual, abs);
+            if (rsim == BPVM_OK && mod->library[0]) {
                 char short_q[320];
                 snprintf(short_q, sizeof(short_q), "%s.%s", mod->name, name);
                 if (bpvm_link_lookup(vm, short_q) == 0) {
-                    bpvm_link_register_symbol(vm, short_q, abs);
+                    rsim = bpvm_link_register_symbol(vm, short_q, abs);
                 }
             }
+            if (rsim != BPVM_OK) return rsim;
         }
 
         /* 4.2 data exports opcional. */
@@ -452,14 +455,15 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                 uint32_t abs = (uint32_t)((int32_t) code_start + cs_off);
                 char qual[320];
                 snprintf(qual, sizeof(qual), "%s%s", export_prefix, name);
-                bpvm_link_register_symbol(vm, qual, abs);
-                if (mod->library[0]) {
+                bpvm_status_t rsim = bpvm_link_register_symbol(vm, qual, abs);   /* #639: con su error */
+                if (rsim == BPVM_OK && mod->library[0]) {
                     char short_q[320];
                     snprintf(short_q, sizeof(short_q), "%s.%s", mod->name, name);
                     if (bpvm_link_lookup(vm, short_q) == 0) {
-                        bpvm_link_register_symbol(vm, short_q, abs);
+                        rsim = bpvm_link_register_symbol(vm, short_q, abs);
                     }
                 }
+                if (rsim != BPVM_OK) return rsim;
             }
 
             /* V7/H2 (#523, MOD9) — detras de 4.2 viene la subtabla CLASES (4.5), y no hay

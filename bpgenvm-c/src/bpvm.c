@@ -142,12 +142,21 @@ static int termina_en(const char* s, const char* fin) {
     return a >= b && strcmp(s + a - b, fin) == 0;
 }
 
+/* #639 (3-oct) — el TOPE de las pruebas (bpvm_alloc.h): de `fichero`, nada de mas de `tope` bytes de un bloque. */
+static const char* volatile g_tope_en = NULL;
+static size_t g_tope = 0;
+void bpvm_alloc_prueba_tope(const char* fichero, size_t tope) { g_tope = tope; g_tope_en = fichero; }
+static int pasa_del_tope(size_t n, const char* file) {
+    return g_tope_en != NULL && file != NULL && n > g_tope && termina_en(file, g_tope_en);
+}
+
 void* bpvm_alloc_raw(size_t n, int zero, bpvm_alloc_kind_t k,
                      const char* file, int line) {
     if (g_fallar_en != NULL && file != NULL && termina_en(file, g_fallar_en)) {
         g_fallar_en = NULL;   /* una vez */
         return NULL;
     }
+    if (pasa_del_tope(n, file)) return NULL;
     uint8_t* raw = (uint8_t*) malloc(BPVM_BLK_HDR + n);
     if (!raw) return NULL;
     bpvm_blk_t* b = (bpvm_blk_t*) raw;
@@ -179,6 +188,7 @@ void* bpvm_realloc_at(void* p, size_t n, const char* file, int line) {
         bpvm_diag("[bpvm] bpvm_realloc: puntero que no reservó el núcleo (%p)", p);
         return NULL;
     }
+    if (pasa_del_tope(n, file)) return NULL;   /* #639: como un realloc que no cabe: el bloque de antes, intacto */
     bpvm_alloc_kind_t k = BLK_IS_VM(old) ? BPVM_ALLOC_VM : BPVM_ALLOC_OS;
     /* Se desencadena ANTES de realloc: puede mover el bloque, y los vecinos
      * apuntarían a memoria liberada. Al volver se re-encadena (secuencia NUEVA
@@ -1083,6 +1093,9 @@ static bpvm_status_t load_entry_file_det(bpvm_t* vm, const char* resolved_path) 
         load_err(vm, "'%s' mide 0 bytes (subida a medias?)", resolved_path);
         return BPVM_ERR_IO;
     }
+    /* #639 — lo que diga el cargador de ESTE modulo (la tabla de simbolos sin memoria, la subtabla CLASES rota) es el
+     * motivo; antes se pisaba con el generico del estado («memoria del buffer insuficiente»). */
+    vm->load_error[0] = '\0';
     bpvm_status_t s = bpvm_load_mod_stream(vm, entry_fs_read_at, (void*) resolved_path,
                                            (size_t) size, resolved_path);
     if (s != BPVM_OK) {
@@ -1096,9 +1109,11 @@ static bpvm_status_t load_entry_file_det(bpvm_t* vm, const char* resolved_path) 
         if (s == BPVM_ERR_IO)
             load_err(vm, "'%s' (%u B) se lee pero no cuadra con su cabecera: "
                          "truncado o de otra version", resolved_path, (unsigned) size);
-        else
-            load_err(vm, "'%s' (%u B): %s", resolved_path,
-                     (unsigned) size, bpvm_status_str(s));
+        else {
+            char det[sizeof vm->load_error];
+            snprintf(det, sizeof det, "%s", vm->load_error[0] ? vm->load_error : bpvm_status_str(s));
+            load_err(vm, "'%s' (%u B): %s", resolved_path, (unsigned) size, det);
+        }
     }
     return s;
 }

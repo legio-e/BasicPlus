@@ -118,29 +118,62 @@ const char* bpvm_symbol_name(const bpvm_t* vm, int i) {
     return vm->sym_pool + vm->symbols[i].name_off;
 }
 
+/* #639 (3-oct) — CRECER SIN PEDIR DE MAS. Las dos piezas de la tabla crecian siempre al DOBLE, y el doble de un bloque
+ * grande es un bloque grande: en la C6 con la GUI habia 16 KB de nombres y el simbolo siguiente pedia 32 KB de un trozo a
+ * un `malloc` con 12 KB libres (el mayor, de 7,9). Eduardo (3-oct): «que crezca menos cuando no hay memoria; en vez de
+ * pasar de 8K a 16K, que pase a 10 o 12K». Asi que el doble si cabe; si no, x1,5; si no, x1,25; y si tampoco, lo justo.
+ * Cada intento es un `realloc`, que si falla deja el bloque de antes como estaba. Se cuenta en elementos de `tam` bytes
+ * (1 para el pool, un registro para el array). Devuelve la capacidad nueva, o 0 si ni lo justo cabe. */
+static uint32_t tabla_crecer(void** p, uint32_t cap, uint32_t doble, uint32_t justo, size_t tam) {
+    const uint32_t intentos[4] = { doble, cap + cap / 2u, cap + cap / 4u, justo };
+    uint32_t anterior = 0;
+    for (int i = 0; i < 4; i++) {
+        uint32_t u = intentos[i] < justo ? justo : intentos[i];
+        if (anterior != 0 && u >= anterior) continue;      /* solo hacia abajo: ese tamaño ya no cupo */
+        anterior = u;
+        void* q = bpvm_realloc(*p, (size_t) u * tam);
+        if (q) { *p = q; return u; }
+    }
+    return 0;
+}
+
+/* #639 — y si ni lo justo cabe, se DICE: que simbolo no entro y lo que ocupaba la tabla. Antes el fallo se tiraba —los
+ * seis sitios que registran no miraban lo que devolvia esto— y el enlace acababa diciendo «presente pero no exporta...
+ * version vieja?»: un mensaje que mandaba a buscar donde no estaba el problema. Lo recoge la carga (load_error). */
+static bpvm_status_t tabla_sin_memoria(bpvm_t* vm, const char* qualified, size_t pedia) {
+    snprintf(vm->load_error, sizeof vm->load_error,
+             "sin memoria para la tabla de simbolos: no cabe '%.80s' (%d simbolos y %u B de nombres; ni %u B de un bloque)",
+             qualified, vm->symbol_count, (unsigned) vm->sym_pool_len, (unsigned) pedia);
+    bpvm_diag_urgente("[bpvm] %s", vm->load_error);
+    return BPVM_ERR_OOM;
+}
+
 bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
                                          uint32_t abs_addr) {
     size_t n = strlen(qualified);
 
     /* 1) sitio en el pool para el nombre + su terminador. */
     if (vm->sym_pool_len + n + 1u > vm->sym_pool_cap) {
-        uint32_t new_cap = vm->sym_pool_cap ? vm->sym_pool_cap * 2u : 1024u;
-        while (new_cap < vm->sym_pool_len + n + 1u) new_cap *= 2u;
-        char* new_pool = (char*) bpvm_realloc(vm->sym_pool, new_cap);
-        if (!new_pool) return BPVM_ERR_OOM;
-        vm->sym_pool = new_pool;
-        vm->sym_pool_cap = new_cap;
+        uint32_t justo = vm->sym_pool_len + (uint32_t) n + 1u;
+        uint32_t doble = vm->sym_pool_cap ? vm->sym_pool_cap * 2u : 1024u;
+        while (doble < justo) doble *= 2u;
+        void* p = vm->sym_pool;
+        uint32_t cap = tabla_crecer(&p, vm->sym_pool_cap, doble, justo, 1u);
+        if (cap == 0) return tabla_sin_memoria(vm, qualified, justo);
+        vm->sym_pool = (char*) p;
+        vm->sym_pool_cap = cap;
     }
 
     /* 2) sitio en la tabla. Se hace DESPUES del pool para que un fallo aqui no
      * deje una cadena huerfana ocupando sitio. */
     if (vm->symbol_count >= vm->symbol_capacity) {
-        int new_cap = vm->symbol_capacity == 0 ? 32 : vm->symbol_capacity * 2;
-        bpvm_symbol_t* new_arr = (bpvm_symbol_t*) bpvm_realloc(vm->symbols,
-                                  (size_t) new_cap * sizeof(bpvm_symbol_t));
-        if (!new_arr) return BPVM_ERR_OOM;
-        vm->symbols = new_arr;
-        vm->symbol_capacity = new_cap;
+        uint32_t justo = (uint32_t) vm->symbol_count + 1u;
+        uint32_t doble = vm->symbol_capacity == 0 ? 32u : (uint32_t) vm->symbol_capacity * 2u;
+        void* p = vm->symbols;
+        uint32_t cap = tabla_crecer(&p, (uint32_t) vm->symbol_capacity, doble, justo, sizeof(bpvm_symbol_t));
+        if (cap == 0) return tabla_sin_memoria(vm, qualified, (size_t) justo * sizeof(bpvm_symbol_t));
+        vm->symbols = (bpvm_symbol_t*) p;
+        vm->symbol_capacity = (int) cap;
     }
 
     bpvm_symbol_t* s = &vm->symbols[vm->symbol_count++];
@@ -605,8 +638,9 @@ static bpvm_status_t lt_asegurar(lt_ctx_t* x, int ci) {
         char canon[160], nm2[128], qual[320];
         lt_canon(m, canon, sizeof canon); lt_utf_copy(c->name, nm2, sizeof nm2);
         snprintf(qual, sizeof qual, "%s.%s", canon, nm2);
-        bpvm_link_register_symbol(vm, qual, desc);
-        if (m->library[0]) { char sq[320]; snprintf(sq, sizeof sq, "%s.%s", m->name, nm2); if (bpvm_link_lookup(vm, sq) == 0) bpvm_link_register_symbol(vm, sq, desc); }
+        bpvm_status_t rsim = bpvm_link_register_symbol(vm, qual, desc);
+        if (rsim == BPVM_OK && m->library[0]) { char sq[320]; snprintf(sq, sizeof sq, "%s.%s", m->name, nm2); if (bpvm_link_lookup(vm, sq) == 0) rsim = bpvm_link_register_symbol(vm, sq, desc); }
+        if (rsim != BPVM_OK) { lt_error(x, "%s", vm->load_error); return rsim; }   /* #639: sin memoria para la tabla */
     }
     c->estado = 2;
     return BPVM_OK;
