@@ -832,12 +832,18 @@ la tabla pedía 32 KB de un bloque a un `malloc` con 12 768 B libres y el mayor 
 devolvía `BPVM_ERR_OOM` y los seis sitios que registran lo ignoraban. G2 sólo añadió 5 símbolos y 162 B (medido en el
 PC): la C6 estaba en el umbral. **Arreglado en el PC**: si el doble no cabe, ×1,5, ×1,25 y lo justo —Eduardo (3-oct):
 *«La tabla de símbolos que crezca menos cuando no hay memoria, en vez de pasar de 8K a 16K que pase a 10 o 12K»*—; y si
-ni lo justo cabe, la carga falla y lo DICE («sin memoria para la tabla de simbolos: no cabe 'X' (N simbolos y M B de
-nombres; ni K B de un bloque)»), con el fichero delante: la carga de un módulo pisaba el motivo del cargador con el
-genérico del estado (también los dos de la subtabla CLASES). `make test-tablasim` (en `check-testc`): `Json.mod` con un
-`malloc` que a `link.c` no le da más de N bytes de un bloque (`bpvm_alloc_prueba_tope`, nuevo); dos sabotajes —sólo el
-doble, e ignorar el error otra vez—, cada uno caza el suyo. Lo de fondo, la DRAM de la C6 y la C3, es `H13`. **Falta**:
-la C6 en el próximo lote (que `GuiWinJson` enlace, o que diga por qué no).
+ni lo justo cabe, la carga falla y lo DICE (`fd03af31`; y la carga de un módulo ya no pisa el motivo del cargador con
+el genérico del estado —también los dos de la subtabla CLASES—). **La C6 lo desmintió** (3-oct, el lote del paso 6):
+`GuiShot`, que corría, dejó de cargar —«no cabe 'Str.padRight(si)s' (505 simbolos y 16 377 B…)»—: ya antes se le
+perdían en silencio los últimos símbolos de `Str`, y corría porque no los usa. Que la carga falle es peor que lo de
+antes. **El arreglo (2)**: lo que no cabe se APUNTA —cuántos y el primero, en la VM, y una línea en el log— y la carga
+SIGUE; si el enlace busca uno que no está, su mensaje da la causa («no se encuentra 'X' de la lib 'L' (la usa 'M') — la
+tabla de simbolos se quedo sin memoria: N sin registrar; el primero, no cupo 'Y' (…)»), y nunca «version vieja?».
+`make test-tablasim` (en `check-testc`): `Json.mod` con un `malloc` que a `link.c` no le da más de N bytes de un bloque
+(`bpvm_alloc_prueba_tope`, nuevo): la línea base; un tope entre los nombres y el doble (carga igual, con la tabla más
+pequeña); la MITAD (el enlace los necesita: falla y dice la causa); y un poco menos (se pierde la cola de `Core` y corre,
+como `GuiShot`). Sabotajes: sólo el doble (rojo el 2), sin la causa (rojo el 3) y hacer fallar la carga (rojo el 3 y el
+4). Lo de fondo, la DRAM de la C6 y la C3, es `H13`. **Falta**: la C6 con el (2) y H13.
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 

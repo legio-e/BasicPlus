@@ -137,15 +137,31 @@ static uint32_t tabla_crecer(void** p, uint32_t cap, uint32_t doble, uint32_t ju
     return 0;
 }
 
-/* #639 — y si ni lo justo cabe, se DICE: que simbolo no entro y lo que ocupaba la tabla. Antes el fallo se tiraba —los
- * seis sitios que registran no miraban lo que devolvia esto— y el enlace acababa diciendo «presente pero no exporta...
- * version vieja?»: un mensaje que mandaba a buscar donde no estaba el problema. Lo recoge la carga (load_error). */
+/* #639 — y si ni lo justo cabe, se APUNTA: cuántos no entraron y el primero, con lo que ocupaba la tabla, y se dice en
+ * el log (una vez). La carga SIGUE: un programa que no use esos símbolos corre —así corría GuiShot en la C6, con los
+ * últimos de Str perdidos sin saberlo—; y si el enlace busca uno que no está, su mensaje da esta causa
+ * (bpvm_link_set_error, lt_error). Antes se tiraba en silencio —los seis sitios que registran no miraban esto— y el
+ * enlace decía «presente pero no exporta... version vieja?», que mandaba a buscar donde no estaba el problema. Y que
+ * la carga fallara (fd03af31) era peor que lo de antes: GuiShot dejó de correr en la C6. */
 static bpvm_status_t tabla_sin_memoria(bpvm_t* vm, const char* qualified, size_t pedia) {
-    snprintf(vm->load_error, sizeof vm->load_error,
-             "sin memoria para la tabla de simbolos: no cabe '%.80s' (%d simbolos y %u B de nombres; ni %u B de un bloque)",
-             qualified, vm->symbol_count, (unsigned) vm->sym_pool_len, (unsigned) pedia);
-    bpvm_diag_urgente("[bpvm] %s", vm->load_error);
-    return BPVM_ERR_OOM;
+    if (vm->sym_perdidos++ == 0) {
+        snprintf(vm->sym_perdido, sizeof vm->sym_perdido,
+                 "no cupo '%.80s' (%d simbolos y %u B de nombres; ni %u B de un bloque)",
+                 qualified, vm->symbol_count, (unsigned) vm->sym_pool_len, (unsigned) pedia);
+        bpvm_diag_urgente("[bpvm] la tabla de simbolos se quedo sin memoria: %s; la carga sigue (el enlace lo dira si "
+                          "algun simbolo de los que no entraron hace falta)", vm->sym_perdido);
+    }
+    return BPVM_OK;   /* apuntado: la carga sigue */
+}
+
+/* #639 — si hubo símbolos que no cupieron, LA CAUSA de un enlace que no encuentra algo: se dice, con los números. */
+static void con_la_causa(bpvm_t* vm) {
+    if (vm->sym_perdidos <= 0) return;
+    size_t n = strlen(vm->link_error);
+    if (n + 1 >= sizeof vm->link_error) return;
+    snprintf(vm->link_error + n, sizeof vm->link_error - n,
+             " — la tabla de simbolos se quedo sin memoria: %d sin registrar; el primero, %s",
+             vm->sym_perdidos, vm->sym_perdido);
 }
 
 bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
@@ -220,6 +236,10 @@ static void bpvm_link_set_error(bpvm_t* vm, const char* needed, const char* who)
     if (lib[0] && !loaded) {
         snprintf(vm->link_error, sizeof(vm->link_error),
                  "falta la lib '%s' (la usa '%s'; simbolo '%s')", lib, who, needed);
+    } else if (lib[0] && vm->sym_perdidos > 0) {
+        /* #639 — no se sabe si ESTE es de los que no cupieron, pero «version vieja?» seguro que no es la pista */
+        snprintf(vm->link_error, sizeof(vm->link_error),
+                 "no se encuentra '%s' de la lib '%s' (la usa '%s')", needed, lib, who);
     } else if (lib[0]) {
         snprintf(vm->link_error, sizeof(vm->link_error),
                  "lib '%s' presente pero no exporta '%s' (la usa '%s'; version vieja?)",
@@ -236,6 +256,7 @@ static void bpvm_link_set_error(bpvm_t* vm, const char* needed, const char* who)
         snprintf(vm->link_error + l, sizeof(vm->link_error) - l,
                  " [el padre cambio de forma: recompila la clase hija]");
     }
+    con_la_causa(vm);   /* #639: si la tabla se quedó sin memoria, se dice */
 }
 
 /* Paso 4 (V3) — accessor público del detalle de fallo de link (ver bpvm.h). */
@@ -317,6 +338,7 @@ static void lt_error(lt_ctx_t* x, const char* fmt, ...) {
     va_list ap; va_start(ap, fmt);
     vsnprintf(x->vm->link_error, sizeof(x->vm->link_error), fmt, ap);
     va_end(ap);
+    con_la_causa(x->vm);
     x->fallo = 1;
 }
 

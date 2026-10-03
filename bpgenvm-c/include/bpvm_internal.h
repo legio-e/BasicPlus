@@ -739,6 +739,11 @@ struct bpvm {
      * se acabó y los demás siguieron, y al final el RUN dice que hubo un error (BPVM_ERR_RUNTIME, con el mensaje en
      * runtime_error), para que el IDE o un script no lo den por bueno. Lo pone a 0 cada RUN (preparar_run). */
     int      hilo_sin_atrapar;
+    /* #639 (3-oct) — LOS SÍMBOLOS QUE NO CUPIERON en la tabla (sin memoria ni para lo justo): cuántos, y el primero con
+     * lo que ocupaba la tabla. La carga sigue —un programa que no los use corre, como antes—; si el enlace busca uno
+     * que no está, su mensaje da esta causa (link.c). Al final: el prefijo del .mdn no se toca. */
+    int      sym_perdidos;
+    char     sym_perdido[200];
 };
 
 /* V7/H3 (#491) — en builtins.c. */
@@ -1086,7 +1091,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
  * se suspende. */
 int bpvm_builtin_cede(int id);
 
-/* link.c (F3) */
+/* link.c (F3). #639: si no cabe ni lo justo, el símbolo se APUNTA como perdido (vm->sym_perdidos) y devuelve OK: la
+ * carga sigue, y el enlace lo dice si alguien lo busca. */
 bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
                                          uint32_t abs_addr);
 uint32_t      bpvm_link_lookup(const bpvm_t* vm, const char* qualified);

@@ -11,10 +11,13 @@
  * bytes de un bloque (bpvm_alloc_prueba_tope):
  *   1. sin tope: la línea base —cuántos símbolos, cuántos bytes de nombres y la capacidad, una potencia de dos—;
  *   2. un tope entre los nombres y esa capacidad: el doble no cabe, y carga y enlaza IGUAL, con la tabla más pequeña;
- *   3. un tope por debajo de los nombres: la carga falla con BPVM_ERR_OOM y dice «sin memoria para la tabla de
- *      simbolos», no «presente pero no exporta».
+ *   3. un tope de la MITAD de los nombres: los que no caben se APUNTAN y la carga SIGUE; el enlace, que necesita
+ *      muchos de ellos, falla y dice la causa —«la tabla de simbolos se quedo sin memoria: N sin registrar»—, no
+ *      «presente pero no exporta... version vieja?»;
+ *   4. un tope un poco por debajo de los nombres: sólo se pierde la cola (los últimos de Core). La carga sigue, y el
+ *      programa corre si no los usa —así corría GuiShot en la C6— o, si los usa, el enlace dice la causa.
  * Los topes salen de la línea base, no de un número escrito aquí: la stdlib crece. Sin el arreglo, la 2 falla (el doble
- * no cabe) y la 3 carga sin los símbolos.
+ * no cabe) y la 3 enlaza sin decir la causa. (Que la carga FALLARA, como hizo fd03af31, era peor: lo vio la C6.)
  *
  *   make test-tablasim
  */
@@ -31,7 +34,7 @@ static int g_fail = 0;
 
 typedef struct {
     bpvm_status_t carga, corre;
-    int           simbolos;
+    int           simbolos, perdidos;
     unsigned      nombres, cap;
     char          error[600];
 } resultado_t;
@@ -49,6 +52,7 @@ static resultado_t prueba(const char* mod, size_t tope) {
     if (r.carga == BPVM_OK) r.corre = bpvm_run(vm);       /* el enlace (y el tardío) también, con el tope puesto */
     bpvm_alloc_prueba_tope(NULL, 0);
     r.simbolos = vm->symbol_count;
+    r.perdidos = vm->sym_perdidos;
     r.nombres  = vm->sym_pool_len;
     r.cap      = vm->sym_pool_cap;
     snprintf(r.error, sizeof r.error, "%s%s%s", bpvm_load_error(vm),
@@ -80,12 +84,23 @@ int main(int argc, char** argv) {
     CHECK(r.carga == BPVM_OK && r.corre == BPVM_OK && r.simbolos == b.simbolos && r.nombres == b.nombres
           && r.cap >= r.nombres && r.cap <= tope, m);
 
-    tope = b.nombres - 200;                      /* ni lo justo cabe */
+    tope = b.nombres / 2;                        /* se pierde la mitad: el enlace los necesita */
     r = prueba(mod, tope);
-    snprintf(m, sizeof m, "3, tope %u B (menos que los nombres): la carga falla (%s) y lo dice: «%s»",
-             (unsigned) tope, bpvm_status_str(r.carga), r.error);
-    CHECK(r.carga == BPVM_ERR_OOM && strstr(r.error, "sin memoria para la tabla de simbolos") != NULL
-          && strstr(r.error, "presente pero no exporta") == NULL, m);
+    snprintf(m, sizeof m, "3, tope %u B (la mitad de los nombres): la carga sigue (%s, %d sin registrar), el enlace "
+             "falla (%s) y dice la causa: «%s»", (unsigned) tope, bpvm_status_str(r.carga), r.perdidos,
+             bpvm_status_str(r.corre), r.error);
+    CHECK(r.carga == BPVM_OK && r.perdidos > 0 && r.corre != BPVM_OK
+          && strstr(r.error, "la tabla de simbolos se quedo sin memoria") != NULL
+          && strstr(r.error, "version vieja") == NULL, m);
+
+    tope = b.nombres - 200;                      /* se pierde sólo la cola */
+    r = prueba(mod, tope);
+    snprintf(m, sizeof m, "4, tope %u B (un poco menos que los nombres): la carga sigue (%s, %d sin registrar) y el "
+             "programa %s%s%s", (unsigned) tope, bpvm_status_str(r.carga), r.perdidos,
+             r.corre == BPVM_OK ? "corre (no los usa: como GuiShot en la C6)" : "no enlaza, y dice la causa: «",
+             r.corre == BPVM_OK ? "" : r.error, r.corre == BPVM_OK ? "" : "»");
+    CHECK(r.carga == BPVM_OK && r.perdidos > 0
+          && (r.corre == BPVM_OK || strstr(r.error, "la tabla de simbolos se quedo sin memoria") != NULL), m);
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;

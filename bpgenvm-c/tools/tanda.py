@@ -1425,9 +1425,9 @@ def veredicto_de(p, o, res, sin_oraculo):
     # paridad que medir: nunca IDENTICO, ni NO-PETA/PETA como si fuera el programa.
     fallo_arnes = (st == "LINK_ERROR" or emsg.startswith("load:") or emsg.startswith("falta el modulo"))
     if fallo_arnes:
-        return "ERROR", "fallo del arnes en la placa, no del programa: %s%s" % (
-            estado, " [ojo: en fallo de carga la Pico manda el ORDINAL del enum como exitCode, no la tabla comun]"
-            if emsg.startswith("load:") or emsg.startswith("falta el modulo") else "")
+        # (La nota de que la Pico mandaba el ORDINAL del enum como exitCode se fue con el RUN común, V7/H10: las cuatro
+        # mandan el 2 de la tabla común.)
+        return "ERROR", "fallo del arnes en la placa, no del programa: %s" % estado
     # V7/H9 (2-oct; el aviso del 7-sep: «el runner compara host contra placa, no contra lo esperado») — un sample que
     # se comprueba a sí mismo imprime `FALLO …` cuando algo sale mal; si sale IGUAL en el PC y en la placa, la paridad
     # es verde y el programa está mal. La misma regla que la red (`compat.sh`: «paridad OK, pero el sample dice que
