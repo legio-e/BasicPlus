@@ -34,8 +34,8 @@
 > ESP32), y el `board_mgr` común analizado y decidido por Eduardo (`#636`–`#638` abiertas). Por la tarde, el lote de
 > placas: el `RUN` común en las cuatro y el paso 6 (`5c2d6bb0`: fuera los `RUN` viejos); `#639` (la tabla de símbolos,
 > en tres vueltas: ahora en trozos de 2 KB), y el hito H13 (la memoria de la C3 y la C6) con sus opciones del IDF, la
-> C6 grabada. G2, IDÉNTICO en el P4, la Discovery y la C6. Más abajo, «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y
-> «(mañana)».
+> C6 y la C3 grabadas: **H13 CERRADO** (Eduardo). G2, IDÉNTICO en el P4, la Discovery y la C6. Más abajo, «🔧 H10
+> (3-oct, tarde)», «(mediodía y tarde)» y «(mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
 > tarde, `#624` (subir una librería por su versión) y, de H10, el `Rtc` en hora (`#626`, la idea de Eduardo), visto en

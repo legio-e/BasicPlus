@@ -318,6 +318,10 @@ con conector MX1.25 (sin batería); *«flexible clock and multiple power modes t
 
 ## H13 · La memoria de la ESP32-C3 y la ESP32-C6 (Eduardo, 3-oct)
 
+> ✅ **H13 CERRADO el 3-oct** (Eduardo), el mismo día: las opciones del IDF (`db0c0150`) —la C3, −16 KB de SRAM estática;
+> la C6, −9,5 KB; ~2,5 KB más de heap en las dos—, probadas en la C6 (con `#639`, corre las tres de GUI) y en la C3
+> (la tanda IDÉNTICA). Lo que quedó fuera, a propósito: los asserts del HAL y el RMT del NeoPixel en IRAM.
+
 > Eduardo, 3-oct: *«Añade un hito (H13?) para optimizar el uso de la memoria en ESP32-C3 y ESP32-C6»*, con la guía de
 > Espressif: https://docs.espressif.com/projects/esp-idf/en/v5.2/esp32c6/api-guides/performance/ram-usage.html
 > (es la de la v5.2; el proyecto va con el IDF v6.0.1: cada opción, a comprobar que existe y qué hace allí).
