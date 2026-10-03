@@ -2175,7 +2175,7 @@ las diez de natives (los thunks, en el EXITED: `NatNew` 7/7, `FloatNat` 23/23, `
 `NatNombres` y `NatEstrecha` incluidas), `mdnAbi` 9 en el INFO de la C3 y `DriverSpi` regrabado en la C6. **Faltan**: la
 S3 y la C5 (cuando estén en la mesa) y `PinesSistema` (`#574`) en la C6.
 
-#### 🟡 `#580` — parar una native: una recursiva SIN bucles no pasa nunca por la línea del bucle; y ninguna prueba ha parado una native EN PLACA (abierta 27-sep, al cerrar H5; SUELTA: el resto de `#379`)
+#### 🟡 `#580` — parar una native: una recursiva SIN bucles no pasa nunca por la línea del bucle; y ~~ninguna prueba ha parado una native EN PLACA~~ (hecho el 3-oct, `09c82d15`) (abierta 27-sep, al cerrar H5; SUELTA: el resto de `#379`)
 
 `#379` (el wire tras el Stop) se cerró el 12-sep con un resto: una native larga no se podía parar. P2b lo resolvió
 —la línea del bucle, `punto_control` cada 1024 vueltas, que expropia a los 5 ms y atiende un `kill` (`make
@@ -2186,6 +2186,11 @@ la entrada hace falta otro (por hilo o en la VM: un acceso a memoria por llamada
 ninguna prueba ha parado una native EN PLACA: la ronda tiene `NatCede`, `NatExpropia`, `NatBuiltin`… y ninguna
 manda un `KILL` (la tanda no sabe hacerlo). Eduardo, 9-sep, sobre el resto de `#379`: *«la podemos dejar pendiente
 para las pruebas finales»*.
+**(2) hecha el 3-oct** (`09c82d15`): la tanda sabe PARAR un programa —`kill_tras_ms` manda un KILL a los N ms y
+`kill_max_ms` (2 s si no se dice) es lo más que puede tardar el EXITED; veredictos PARADA / NO PARA— y `KillLoop` y
+`NatKill` están en la ronda de V7. En la C3, PARADA en 5 y 3 ms, la segunda con la native en uso (1/1 thunks). La
+primera medida daba ~200 ms y era la del instrumento: el EXITED se fechaba al volver un read de 0,2 s (la trampa del
+cronómetro de `#495`); desde el commit, se fecha al llegar. **Queda la (1).**
 
 #### ✅ `#579` — la paridad dual-VM no recorre el camino AOT: corre las natives INTERPRETADAS en las dos VMs (abierta 27-sep, al cerrar H5; SUELTA: un resto de `N1` · **CERRADA el 3-oct** por Eduardo, con la evidencia)
 
