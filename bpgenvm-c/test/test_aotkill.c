@@ -11,6 +11,11 @@
  * moría con esa excepción y el programa salía RUNTIME_ERROR en vez de KILLED (el `--smp` ya daba KILLED). Aquí, el
  * tope de las pruebas deja sin memoria el `bpvm_malloc` del ejecutor, y el kill lo levanta el hilo `io` (como en la
  * placa): sin ejecutor la native no cede y el planificador no vuelve a llamar al poll de las otras pasadas.
+ *
+ * #580 (1) (3-oct, Eduardo: «como un bucle») — y una native RECURSIVA SIN BUCLES (`NatRecurKill`: fib(45)): no pasa
+ * por la línea del bucle, así que hasta hoy ni cedía ni veía el kill —el poll no volvía hasta que acabara: segundos
+ * en el PC, minutos en una placa—. Ahora lleva la marca a la ENTRADA (AotCEmitter, `recursivas`) y va a un ejecutor:
+ * cede cada rebanada y el kill llega. El control, la misma interpretada.
  */
 #include "bpvm.h"
 #include "bpvm_internal.h"
@@ -24,6 +29,7 @@
 #include <time.h>
 
 extern void aot_NatKill_register(struct bpvm* vm);
+extern void aot_NatRecurKill_register(struct bpvm* vm);   /* #580 (1) */
 
 static int s_polls = 0;
 static int kill_tras_20(bpvm_t* vm, void* user) {
@@ -44,7 +50,8 @@ static long long ahora_ms(void) {
     return (long long) clock() * 1000LL / CLOCKS_PER_SEC;
 }
 
-static int pasada(const char* nombre, const char* mod_path, int con_aot, int sin_ejecutor) {
+/* `registrar`: el AOT del módulo (NULL = interpretado). */
+static int pasada(const char* nombre, const char* mod_path, void (*registrar)(struct bpvm*), int sin_ejecutor) {
     size_t mem_size = 512 * 1024;
     uint8_t* mem = (uint8_t*) calloc(1, mem_size);
     bpvm_t* vm;
@@ -59,7 +66,7 @@ static int pasada(const char* nombre, const char* mod_path, int con_aot, int sin
         printf("load_mod %s: %s\n", mod_path, bpvm_status_str(s));
         bpvm_destroy(vm); free(mem); return 1;
     }
-    if (con_aot) aot_NatKill_register(vm);
+    if (registrar) registrar(vm);
     s_polls = 0;
     if (sin_ejecutor) {
         bpvm_io_ops_t ops;
@@ -90,12 +97,17 @@ static int pasada(const char* nombre, const char* mod_path, int con_aot, int sin
 
 int main(int argc, char** argv) {
     const char* mod_path = (argc > 1) ? argv[1] : "NatKill.mod";
+    const char* recur_path = (argc > 2) ? argv[2] : "NatRecurKill.mod";   /* #580 (1) */
     int rc = 0;
     bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
-    rc |= pasada("interpretado (el control)", mod_path, 0, 0);
-    rc |= pasada("con el AOT: una native en un bucle sin fin", mod_path, 1, 0);
-    rc |= pasada("con el AOT y SIN EJECUTOR (no cabe): el kill lanza, y sale KILLED (#640)", mod_path, 1, 1);
+    rc |= pasada("interpretado (el control)", mod_path, NULL, 0);
+    rc |= pasada("con el AOT: una native en un bucle sin fin", mod_path, aot_NatKill_register, 0);
+    rc |= pasada("con el AOT y SIN EJECUTOR (no cabe): el kill lanza, y sale KILLED (#640)", mod_path,
+                 aot_NatKill_register, 1);
+    rc |= pasada("recursiva sin bucles, interpretada (el control)", recur_path, NULL, 0);
+    rc |= pasada("recursiva sin bucles, con el AOT: la marca a la entrada (#580)", recur_path,
+                 aot_NatRecurKill_register, 0);
     printf("[status=%s]\n", rc ? "FAIL" : "OK");
     return rc;
 }

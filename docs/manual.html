@@ -980,11 +980,12 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       hilos siguen; en un cálculo
       largo <strong>cede el turno</strong> cada 5 ms (lo mira en sus bucles, cada
       1024 vueltas), y el <strong>Stop</strong> del IDE la para aunque esté en un
-      bucle infinito. Por dentro corre en un hilo propio de la plataforma y se pasa
-      el testigo con el intérprete; una native que no puede ceder (sin bucles ni
-      llamadas que bloqueen) corre directa, sin ese paso. Lo que falta: una native
-      recursiva <em>sin bucles</em> no pasa por ese punto, y no se la puede parar
-      hasta que vuelva.</li>
+      bucle infinito. Una <strong>recursión cuenta como un bucle</strong>: una native
+      que se llama a sí misma —o a otra que la vuelve a llamar— lo mira al entrar,
+      cada 1024 llamadas, así que también cede y se para aunque no tenga bucles.
+      Por dentro corre en un hilo propio de la plataforma y se pasa
+      el testigo con el intérprete; una native que no puede ceder (sin bucles, sin
+      recursión y sin llamadas que bloqueen) corre directa, sin ese paso.</li>
   <li><strong>Velocidad y <code>double</code></strong>: ninguna de las placas tiene
       FPU de doble precisión, así que un <code>double</code> en una native lo emula el
       firmware y acelera mucho menos que el código entero. Si buscas velocidad en el

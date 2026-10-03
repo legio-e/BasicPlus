@@ -107,6 +107,22 @@ public final class AotCEmitter {
     /** #546 — ídem para el sujeto de un switch sobre string ({@code __swN}). */
     private int switchCounter = 0;
 
+    /** #580 (1), decidido por Eduardo el 3-oct («como un bucle») — UNA RECURSIÓN ES UN BUCLE. Una native que puede
+     *  volver a entrar en sí misma por llamadas de C entre natives del módulo (`fib` → `fib`; `a` → `b` → `a`) no pasa
+     *  nunca por la línea del bucle si no tiene bucles —ni cede ni ve un `kill`: `fib(40)` en la C3, 32 s sin poder
+     *  pararla—, y con bucles cortos tampoco (el contador de la línea es local a cada llamada). Éstas llevan la marca a
+     *  la ENTRADA: un contador que no puede ser local, así que viaja por un parámetro oculto (`CUENTA_R`) desde el thunk
+     *  —o desde la native que entra en el ciclo— y cada `CUENTA_VUELTAS` entradas llama a `punto_control`. Con eso
+     *  dejan de ser directas (`nativesDirectas` ve el helper) y van a un ejecutor, como una native con bucle. Lo que
+     *  cruza por BP ya cede en el puente y no es una llamada de C: no cuenta. Medido en la C3 (V7_IDEAS §H5, `#580`):
+     *  `fib(30)` de 262 a 398 ms (el peor caso: toda ella es llamar); el KILL de `fib(40)`, de 31,6 s a 26 ms.
+     *  Las calcula una emisión EN SECO del módulo (`soloGrafo`), que apunta cada llamada de C a otra native donde la
+     *  escribe (`llamadasDirectas`): el grafo es el del C que sale, como `nativesDirectas`. */
+    private Set<String> recursivas = new HashSet<>();
+    private boolean soloGrafo = false;
+    private final Map<String, Set<String>> llamadasDirectas = new HashMap<>();
+    private static final String CUENTA_R = "__bpvm_cr";
+
     /** #172 — nombres definidos en el ámbito de la función actual
      *  (parámetros + VarDecl + induction de for). Cualquier
      *  IdentifierExpr cuyo name NO esté aquí se asume variable
@@ -709,6 +725,16 @@ public final class AotCEmitter {
             packVersion = module.packNativoVersion;
         }
 
+        /* #580 (1) — las natives en un ciclo, por una emisión en seco del mismo módulo (ver `recursivas`). Si la
+         * de verdad no se puede traducir, ésta tampoco: lanza lo mismo, desde aquí. */
+        if (!soloGrafo) {
+            AotCEmitter seco = new AotCEmitter(moduleName);
+            seco.semInfo = semInfo;
+            seco.soloGrafo = true;
+            seco.emitModule(module);
+            recursivas = enCiclo(seco.llamadasDirectas);
+        }
+
         // #172 — Pre-pass: los offsets CS-relativos de las vars/consts de
         // módulo que una native puede tocar. #588: los da el compilador
         // (MivmEmitter.offsetsDeGlobales), no una convención propia.
@@ -827,6 +853,23 @@ public final class AotCEmitter {
         return dir;
     }
 
+    /** #580 (1) — las natives de un CICLO del grafo de llamadas de C entre natives del módulo: las que pueden volver
+     *  a entrar en sí mismas (también directamente: `fib` → `fib`). */
+    private static Set<String> enCiclo(Map<String, Set<String>> grafo) {
+        Set<String> r = new HashSet<>();
+        for (Map.Entry<String, Set<String>> e : grafo.entrySet()) {
+            java.util.ArrayDeque<String> pila = new java.util.ArrayDeque<>(e.getValue());
+            Set<String> visto = new HashSet<>();
+            while (!pila.isEmpty()) {
+                String g = pila.pop();
+                if (g.equals(e.getKey())) { r.add(g); break; }
+                Set<String> sig = grafo.get(g);
+                if (visto.add(g) && sig != null) pila.addAll(sig);
+            }
+        }
+        return r;
+    }
+
     // ==================== Header ====================
 
     private void emitHeader() {
@@ -898,6 +941,7 @@ public final class AotCEmitter {
                 for (Ast.Param p : f.params) {
                     w.print(", " + cType(p.type) + " " + cVar(p.name));
                 }
+                if (recursivas.contains(f.name.name)) w.print(", int32_t* " + CUENTA_R);   /* #580 (1) */
                 w.println(");");
             } catch (UnsupportedAotException ex) {
                 throw new UnsupportedAotException(
@@ -955,6 +999,8 @@ public final class AotCEmitter {
         for (Ast.Param p : f.params) {
             w.print(", " + cType(p.type) + " " + cVar(p.name));
         }
+        boolean recursiva = recursivas.contains(f.name.name);   /* #580 (1) */
+        if (recursiva) w.print(", int32_t* " + CUENTA_R);
         w.println(") {");
         w.println("    (void) vm;   /* puede no usarse si la función no toca");
         w.println("                  *  globals/arrays/builtins. */");
@@ -981,6 +1027,11 @@ public final class AotCEmitter {
         for (Ast.Param p : f.params) {
             w.println("    (void) " + cVar(p.name) + ";");
         }
+
+        /* #580 (1) — LA ENTRADA de una native en un ciclo cuenta como una vuelta de un bucle (ver `recursivas`). */
+        if (recursiva)
+            w.println("    if (__builtin_expect(--*" + CUENTA_R + " == 0, 0)) { *" + CUENTA_R + " = " + CUENTA_VUELTAS
+                      + "; vm->aot_helpers->punto_control(vm); }   /* #580: la entrada de una recursión */");
 
         /* #172 — Inicializar ámbito local: params + reset entre funcs. */
         localNames.clear();
@@ -1266,6 +1317,8 @@ public final class AotCEmitter {
         if (!isVoid) call.append(cRet).append(" r = ");
         call.append(fname).append("(vm");
         for (int i = 0; i < n; i++) call.append(", a").append(i);
+        if (recursivas.contains(f.name.name))   /* #580 (1): el contador de las entradas nace en el thunk */
+            call.append(", &(int32_t){ ").append(CUENTA_VUELTAS).append(" }");
         call.append(");");
         w.println(call);
         if (!isVoid && returnIsRef(f)) {
@@ -2443,6 +2496,7 @@ public final class AotCEmitter {
             /* C call directo a otra función native del mismo módulo.
              * BL PC-relative dentro del mismo blob — gcc lo resuelve
              * sin relocations porque ambas son static en el mismo .o. */
+            llamadasDirectas.computeIfAbsent(currentFuncName, k -> new java.util.LinkedHashSet<>()).add(name);   /* #580 */
             w.print("aot_" + moduleName + "_" + name + "(vm");
             Ast.FuncDef llamada = allFuncDefs.get(name);
             for (int k = 0; k < c.args.size(); k++) {
@@ -2452,6 +2506,11 @@ public final class AotCEmitter {
                         ? tipoDeclarado(llamada.params.get(k).type) : null;
                 emitComo(c.args.get(k), tp);
             }
+            /* #580 (1) — a una native de un ciclo, el contador de las entradas: el mismo si se llama desde dentro de
+             * otra (sigue contando), uno nuevo si se entra en el ciclo desde fuera. */
+            if (recursivas.contains(name))
+                w.print(recursivas.contains(currentFuncName)
+                        ? ", " + CUENTA_R : ", &(int32_t){ " + CUENTA_VUELTAS + " }");
             w.print(")");
             return;
         }

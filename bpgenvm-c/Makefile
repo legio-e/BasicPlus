@@ -851,13 +851,14 @@ test-aotexpropia: $(LIBOBJ)
 # V7/H5 (P2b.1.d, 26-sep) — el KILL de una native en un bucle sin fin (con tope de tiempo).
 test-aotkill: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,NatKill)
+	$(call fixture,NatKill NatRecurKill)
 	$(call stdlibdep,Core)
 	$(call aotmain,NatKill,build/aotkill)
-	$(CC) $(CFLAGS) -Isrc test/test_aotkill.c build/aotkill/aot_NatKill.c $(LIBOBJ) \
+	$(call aotmain,NatRecurKill,build/aotkill2)
+	$(CC) $(CFLAGS) -Isrc test/test_aotkill.c build/aotkill/aot_NatKill.c build/aotkill2/aot_NatRecurKill.c $(LIBOBJ) \
 	  -o build/test_aotkill.exe $(LDFLAGS)
-	@echo "--- P2b.1.d el kill de una native en un bucle sin fin (esperado: las tres KILLED —la 3ª sin ejecutor, #640—, [status=OK]) ---"
-	@timeout 60 ./build/test_aotkill.exe samples/NatKill.mod 2>/dev/null || { echo "  ROJO: alguna pasada no salió KILLED (o el kill no llegó y la cortó el tope)"; exit 1; }
+	@echo "--- P2b.1.d el kill de una native en un bucle sin fin, y #580 de una recursiva sin bucles (esperado: las cinco KILLED —la 3ª sin ejecutor, #640—, [status=OK]) ---"
+	@timeout 60 ./build/test_aotkill.exe samples/NatKill.mod samples/NatRecurKill.mod 2>/dev/null || { echo "  ROJO: alguna pasada no salió KILLED (o el kill no llegó y la cortó el tope)"; exit 1; }
 
 # V7/H5 (P2b.2, 26-sep) — CUALQUIER INTRÍNSECA desde una native, por el despachador de la VM (call_builtin):
 # de Core y de otro módulo, una que lanza y un sleep que suspende la native mientras otro hilo avanza.
@@ -898,16 +899,16 @@ test-aotdirecta: $(LIBOBJ)
 	$(call aotmain,NatDirecta,build/aotdirecta)
 	$(CC) $(CFLAGS) -Isrc test/test_aotdirecta.c build/aotdirecta/aot_NatDirecta.c $(LIBOBJ) \
 	  -o build/test_aotdirecta.exe $(LDFLAGS)
-	@echo "--- P2b.3 las natives directas (esperado: 4 directas, 5 al ejecutor; AOT == interpretado, 9/9) ---"
+	@echo "--- P2b.3 las natives directas (esperado: 3 directas, 6 al ejecutor —fibR, recursiva, desde #580—; AOT == interpretado, 9/9) ---"
 	@c=build/aotdirecta/aot_NatDirecta.c; mal=0; \
-	 for f in hoja llamaHoja fibR texto; do \
+	 for f in hoja llamaHoja texto; do \
 	   grep -q "NatDirecta\.$$f\", .*BPVM_AOT_DIRECTA" $$c || { echo "  ROJO: $$f tenia que salir DIRECTA"; mal=1; }; \
 	 done; \
-	 for f in conBucle pequena llamaPequena conRaiz llamaBp; do \
+	 for f in conBucle pequena llamaPequena conRaiz llamaBp fibR; do \
 	   grep -q "bpvm_aot_register_by_name(vm, \"NatDirecta\.$$f\"" $$c || { echo "  ROJO: $$f tenia que ir a un EJECUTOR"; mal=1; }; \
 	 done; \
 	 if [ $$mal -ne 0 ]; then exit 1; fi; \
-	 echo "  ok  : hoja, llamaHoja, fibR y texto, DIRECTAS; conBucle, pequena, llamaPequena, conRaiz y llamaBp, al ejecutor"
+	 echo "  ok  : hoja, llamaHoja y texto, DIRECTAS; conBucle, pequena, llamaPequena, conRaiz, llamaBp y fibR (#580), al ejecutor"
 	$(call aotmain,NatDirectaPack,build/aotdirectapack)
 	@c=build/aotdirectapack/aot_NatDirectaPack.c; mal=0; \
 	 for f in suma nombre; do \

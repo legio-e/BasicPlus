@@ -187,7 +187,14 @@ Hasta V6 una native corría de un tirón: el Stop esperaba a que volviera y ning
 - **Cede el turno** en un cálculo largo: la *línea del bucle* —`punto_control` cada 1024 vueltas— la expropia a
   los 5 ms. Medido en la Pico 2 (P2b.0): +33 % en el bucle más apretado, +15 % en uno menos; el nativo sigue 134 y
   96 veces más rápido que interpretado.
-- **Se para**: un Stop (`KILL`) la detiene en esa misma línea (`make test-aotkill`: una en bucle infinito, en 99 ms).
+- **Una recursión cuenta como un bucle** (`#580`, 3-oct; Eduardo: *«como un bucle»*): una native que puede volver a
+  entrar en sí misma por llamadas entre natives del módulo —`fib` → `fib`, `a` → `b` → `a`— lleva la marca a la
+  ENTRADA: cada 1024 entradas, `punto_control`. Sin ella, una recursiva sin bucles ni cedía ni se podía parar (en la
+  C3, `fib(40)` eran 32 s con el Stop sin efecto). El contador viaja con la llamada; la ABI no cambia. Cuesta
+  +52 % en `fib(30)` en la C3, que es el peor caso (toda ella es llamar), y va a un ejecutor como una con bucle.
+- **Se para**: un Stop (`KILL`) la detiene en esa misma línea (`make test-aotkill`: una en bucle infinito, en 99 ms,
+  y una recursiva sin bucles). Y en placa, la tanda la para (`kill_tras_ms`): en la C3, `NatKill` y `NatRecurKill`
+  (una recursiva sin bucles), PARADA a los 2 y 8 ms del KILL con el nativo en uso.
 
 Cómo: la native corre en un **ejecutor** —un hilo de la plataforma con su pila: una tarea de FreeRTOS, un pthread
 en el PC— y ella y el intérprete se pasan el testigo; sólo corre uno de los dos. Una native **directa** —sin puntos
@@ -195,9 +202,7 @@ de cesión, transitivamente— corre sin ejecutor (de 5,2 a 0,05 µs por llamada
 Gui2 son directas. Las pruebas: `test-aotcede`, `test-aotexpropia`, `test-aotkill` y `test-aotdirecta` en
 `check-testc`, y `NatCede`/`NatExpropia`/`NatBuiltin` en la ronda de placas.
 
-**Lo que falta** (`#580`): una native recursiva **sin bucles** no pasa por la línea del bucle —y no se la puede
-parar hasta que vuelva—; y ninguna prueba ha parado una native EN PLACA (la tanda no sabe mandar un `KILL`).
-Los demás cabos del AOT, cada uno en su ficha: leer un campo de una tupla (`#577`), `try`/`catch` dentro (`#578`),
+Los cabos del AOT que quedan, cada uno en su ficha: leer un campo de una tupla (`#577`), `try`/`catch` dentro (`#578`),
 la línea de un error dentro de una native (`#582`), el depurador (`#583`) y medir `double` (`#585`).
 
 ## Dónde se hace cumplir

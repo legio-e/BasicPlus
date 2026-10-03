@@ -16,14 +16,6 @@ module NatDirecta
     return hoja(x) + hoja(x + 1)
   end llamaHoja
 
-  // recursiva sin bucles: no tiene dónde ceder (y un kill no la corta hasta que vuelve, con ejecutor o sin él)
-  native function fibR(n: integer): integer
-    if n < 2 then
-      return n
-    endif
-    return fibR(n - 1) + fibR(n - 2)
-  end fibR
-
   // cadenas por los helpers tipados: no ceden
   native function texto(n: integer): string
     return "n=" + intToString(n)
@@ -50,6 +42,15 @@ module NatDirecta
   native function llamaPequena(n: integer): integer
     return pequena(n) * 2
   end llamaPequena
+
+  // recursiva sin bucles: hasta el 3-oct, DIRECTA —no tenía dónde ceder, y un kill no la cortaba hasta que volviera—.
+  // Desde #580 (Eduardo: «como un bucle»), la marca a la ENTRADA —cada 1024 entradas, punto_control—: cede y se para.
+  native function fibR(n: integer): integer
+    if n < 2 then
+      return n
+    endif
+    return fibR(n - 1) + fibR(n - 2)
+  end fibR
 
   // un builtin por el despachador (puede bloquear)
   native function conRaiz(x: float): float

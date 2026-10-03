@@ -297,11 +297,6 @@ su ficha (`docs/FICHAS.md`); aquí, lo que cambia al escribir un programa.
   tapa a `/lib` (`#493`)— se carga sin aviso. Mientras llega la norma: no dejes módulos
   de stdlib en `/app` ni packs con stdlib dentro en la placa; el log del RUN dice de
   dónde carga cada dependencia (`dep 'Str' -> /app/Str.mod`).
-- **Una `native` recursiva SIN bucles no se puede parar hasta que vuelve.** Desde V7 una
-  native se porta como un hilo más: se suspende si llama a algo que bloquea, cede el turno
-  cada 5 ms y el Stop la para aunque esté en un bucle infinito —lo mira en sus bucles, cada
-  1024 vueltas—. Una recursiva sin ningún bucle no pasa por ese punto (`#580`). Si necesitas
-  parar un cálculo así, dale un bucle o pártelo en llamadas cortas.
 - **Dentro de una `native`**: no hay `try`/`catch` (envuelve la llamada en uno desde BP:
   `#578`), no se lee el campo de una tupla (`#577`), un error no dice en qué línea de la
   native pasó (`#582`) y en la placa el depurador no para dentro de ella (`#583`). El detalle,
