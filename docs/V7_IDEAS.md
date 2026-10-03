@@ -3746,6 +3746,26 @@ en todas; D9 el búfer del `EXITED`, uno por familia o un tamaño (detalle mío)
 
 **Decidido** (Eduardo, 2-oct): *«De acuerdo»* con las reglas —el fallo de carga con exitCode 2 y sus mensajes con `load:` y `falta el modulo`; el `KILL` o el `RESET` con su texto y nunca el de una excepción vieja; `OUTPUT` sólo con lo del programa; `gc=0` y `latido=1` en las cuatro familias por el ENV; el `KILL` sin programa, `NO_SESSION` en todas—.
 
+**Hecho el 3-oct** (los pasos 0 a 5; el 6, tras probarlo en placa):
+- **paso 0** (`1bfbb08e`, sin cambio de conducta): la cintura del sim con nombres; `sim_dbg_smoke` a la red (llevaba meses
+  con un `.mod` MOD5 que nadie cargaba; ahora compila su programa y prueba también un KILL en pausa, `#634`); y
+  `run_smoke`, que FIJÓ lo que hacía el RUN del sim en los cinco casos que nada más miraba;
+- **paso 1** (`90ae0501`): el sink común, `wire_v1_salida` (en `wire_v1_proto.c`): escapa por longitud, trocea en tramas de
+  1 KB sin partir un escape ni un carácter —el que llega a medias se guarda para la llamada siguiente— y no tira nada
+  (un byte que no es UTF-8, U+FFFD). `test-salida`, con dos sabotajes;
+- **paso 2** (`8448a9d7`): `bpvm_repl_run` y su cintura (`bpvm_repl_run_ops_t`) en el común, estrenados por el sim (−300
+  líneas allí). Lo llama la FAMILIA que pone `.run`, no el despachador común: así el enlazador no mete el RUN común en
+  las que aún no lo usan. `run_smoke` cambió sus cuatro expectativas en el mismo commit (el diff dice qué cambió: el
+  KILL sin programa, `NO_SESSION`; un módulo que falta, exitCode 2; un NUL, `\u0000` y el resto; una ñ en el byte
+  512, entera). La red, verde; la tanda de V7 en el sim, como antes;
+- **paso 3** (`9c3cb27d`): la STM32 —deja de tirar líneas, las rutas largas ya valen y GANA EL DEPURADOR—;
+- **pasos 4 y 5** (`d56dbaab`): la Pico y las cinco ESP32. La ruta del RUN, COPIADA al empezar: en las placas apunta al
+  búfer de línea del REPL, que es el que lee `io` durante el RUN.
+En las tres familias, su RUN de siempre se queda DETRÁS DEL PUNTERO: con `.run = NULL` vuelve a él. Compilan las
+ocho imágenes. **Falta** (paso 6): probarlo en placa (en el lote: la tanda en las nueve, KILL, RESET, el depurador en un
+breakpoint, un fallo de carga y `run_smoke`-a-mano en una placa), y entonces borrar los cuatro RUN viejos y sus sinks,
+el KILL en reposo y la escucha del autorun, la cabecera y el protocolo.
+
 ## H10 — el `board_mgr` común y la fachada de la flash (256): el análisis (3-oct; entra en V7, Eduardo, 2-oct)
 
 Un agente leyó el código (sin compilar ni ejecutar); lo de más consecuencia, comprobado a mano después (`#636`, `#637`).

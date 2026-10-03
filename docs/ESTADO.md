@@ -30,7 +30,9 @@
 > **3-oct** — H10, el paso 1 del traspaso entero: los arreglos pequeños, todos en el PC y cada uno con su prueba
 > (`89da2e63`, `26ecfef6`, `c382a66c`): el lote D del FS de `#473` (236, 248, 264, 268, 276, 280, 466), la pantalla
 > que no arranca (180), tres de los diez (2, 7, 10), `#634` y `#635`, `G2` (a) y (b) y lo barato de `#477`. La red,
-> verde; las ocho imágenes compilan. Más abajo, «🔧 H10 (3-oct, mañana)».
+> verde; las ocho imágenes compilan. Por la tarde, el `RUN` común, pasos 0 a 5 (el sim, la STM32, la Pico y las
+> ESP32; falta la placa), y el `board_mgr` común analizado y decidido por Eduardo (`#636`–`#638` abiertas). Más
+> abajo, «🔧 H10 (3-oct, mediodía y tarde)» y «🔧 H10 (3-oct, mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
 > tarde, `#624` (subir una librería por su versión) y, de H10, el `Rtc` en hora (`#626`, la idea de Eduardo), visto en
@@ -1080,6 +1082,25 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🔧 H10 (3-oct, mediodía y tarde) — EL `RUN` EN UN SOLO SITIO (pasos 0 a 5) y el `board_mgr` común, analizado y decidido
+
+- **El `RUN` común**, por pasos, cada uno su commit (`V7_IDEAS` §H10 «RUN en un solo sitio», «Hecho el 3-oct»):
+  paso 0 (`1bfbb08e`: la cintura del sim con nombres, `sim_dbg_smoke` a la red —llevaba meses con un `.mod` MOD5— y
+  `run_smoke`, que fijó lo que hacía el RUN en cinco casos que nada miraba); paso 1 (`90ae0501`: el sink común,
+  `wire_v1_salida`, y `test-salida` con dos sabotajes); paso 2 (`8448a9d7`: `bpvm_repl_run` y su cintura, estrenados
+  por el sim —`run_smoke` cambió sus cuatro expectativas en el mismo commit—; la red verde y la tanda de V7 en el sim
+  como antes); pasos 3 a 5 (`9c3cb27d`, `d56dbaab`: la STM32 —gana el depurador y deja de tirar líneas—, la Pico y las
+  cinco ESP32, con su RUN viejo detrás del puntero). Las ocho imágenes compilan. **Falta el paso 6**: la placa.
+- **El `board_mgr` común con la fachada de la flash**: el análisis de un agente (`90a541ce`), comprobado a mano en lo
+  que tiene consecuencia, y tres fichas abiertas: `#636` (el ENV que contesta OK aunque la flash no escriba, en las
+  cuatro), `#637` (la STM32 escribe la flash sin red de zona) y `#638` (la vista del ENV de la Pico, a mitad de
+  sesión). Las decisiones de Eduardo (`4fd9f625`): el ENV se lee de la flash, siempre —cuándo entra en efecto lo decide
+  quien lo lee, y lo EN VIGOR es otra cosa (a la memoria)—; `FLASH_ERROR`; la flash, lo mínimo (lo unificado el 30-sep
+  era DENTRO de cada familia; Eduardo lo recordaba como «ya se unificó» y preguntó por qué volvía); el IDE reinicia tras
+  `PART_APPLY`; el sim estricto, más adelante.
+- Visto de paso: `GuiShot` da «sin artefacto» en el sim de la red (no lleva LVGL y anuncia pantalla); igual con el sim
+  de antes del paso 2 —compilado en un worktree para comprobarlo—: no es del RUN.
 
 ## 🔧 H10 (3-oct, mañana) — LOS ARREGLOS PEQUEÑOS, todos en el PC: el lote D y E de `#473`, `G2`, lo barato de `#477`, tres de los diez y `#634`/`#635`
 
