@@ -66,3 +66,26 @@ CONFIG_ESPTOOLPY_FLASHSIZE="4MB"
 # código de confianza, de nuestro toolchain y con su receta sellada (#441). En la C6, compilado; SIN probar en placa.
 # OJO: sdkconfig es GENERADO — hay que borrarlo o reconfigurar para que recoja esto (mismo gotcha que el P4).
 CONFIG_ESP_SYSTEM_MEMPROT=n
+
+# V7/H13 (3-oct; Eduardo: «todo lo que sea ahorrar 10K o más, bienvenido»; la guía de RAM de Espressif) — LA SRAM DEL
+# SISTEMA. En la C3 y la C6 la IRAM y la DRAM salen de la MISMA SRAM: cada función que sale de la IRAM es DRAM para la
+# VM. Medido con `idf.py size` en builds aparte (3-oct): la C3, −16 016 B de estático; la C6, −9 548 B; y en las dos,
+# sin la tarea de temporizadores de FreeRTOS, ~2,5 KB más de heap al arrancar (su pila sale de ahí). Ninguna cambia lo
+# que usamos:
+# - los ISR del SPI maestro y del I2C, a la flash: si coinciden con una escritura de la flash, esperan a que acabe (como
+#   los nuestros: ninguno va a IRAM). Con el SPI fuera de la IRAM, el heap puede ir también a la flash;
+# - los ISR de lo que no usamos (SPI esclavo, GPTimer, MCPWM, PARLIO);
+# - la tarea de temporizadores de FreeRTOS (`Tmr Svc`, 2 KB de pila): ni nosotros ni los drivers que usamos crean uno.
+# Lo que se queda, a propósito: los asserts del HAL (2,4 KB: la red de seguridad de los drivers) y el RMT en IRAM (el
+# NeoPixel se cortaría a mitad si su ISR esperase a una escritura de la flash). Las del sueño no se tocan: sin
+# PM_ENABLE (el bajo consumo es V8) no se dejan cambiar.
+# OJO: sdkconfig es GENERADO — hay que borrarlo o reconfigurar para que recoja esto.
+CONFIG_SPI_MASTER_ISR_IN_IRAM=n
+CONFIG_SPI_SLAVE_ISR_IN_IRAM=n
+CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH=y
+CONFIG_I2C_MASTER_ISR_HANDLER_IN_IRAM=n
+CONFIG_GPTIMER_ISR_HANDLER_IN_IRAM=n
+CONFIG_MCPWM_ISR_HANDLER_IN_IRAM=n
+CONFIG_PARLIO_TX_ISR_HANDLER_IN_IRAM=n
+CONFIG_PARLIO_RX_ISR_HANDLER_IN_IRAM=n
+CONFIG_FREERTOS_USE_TIMERS=n
