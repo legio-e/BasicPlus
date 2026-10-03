@@ -3746,6 +3746,91 @@ en todas; D9 el búfer del `EXITED`, uno por familia o un tamaño (detalle mío)
 
 **Decidido** (Eduardo, 2-oct): *«De acuerdo»* con las reglas —el fallo de carga con exitCode 2 y sus mensajes con `load:` y `falta el modulo`; el `KILL` o el `RESET` con su texto y nunca el de una excepción vieja; `OUTPUT` sólo con lo del programa; `gc=0` y `latido=1` en las cuatro familias por el ENV; el `KILL` sin programa, `NO_SESSION` en todas—.
 
+## H10 — el `board_mgr` común y la fachada de la flash (256): el análisis (3-oct; entra en V7, Eduardo, 2-oct)
+
+Un agente leyó el código (sin compilar ni ejecutar); lo de más consecuencia, comprobado a mano después (`#636`, `#637`).
+
+**Hoy.** El protocolo ya es común: `bpvm_bmgr_wire_dispatch` atiende los 15 verbos (STATE, ENV_*, PART_*, PACK_*) y
+dice qué sector del ENV hay que volcar; los PACK_* escriben solos por su cintura. Lo que queda en cada familia es el
+adaptador de alrededor: los tres `handle` tienen 81, 77 y 79 líneas de código y **50 son idénticas**; difieren en cinco
+cosas (la guarda, leer las dos copias del ENV, la geometría, de dónde sale la zona de packs y escribir el sector). Y
+fuera del `handle`, por familia: el enrutado con el bulk de `PACK_BURN_DATA` (×4, con un `s_burn_chunk` de 4 KB en la
+STM32), la cintura de packs (×4), la vista del ENV (×4), el ENV «temprano» (×3), la capa de particiones del arranque
+(×3, casi igual) y las tres `env_anadir` de `#626`. **La flash, cuatro formas**: la Pico (sector de 4 KB, página de 256
+B, sólo zona 2 o desde `BP_PART_BASE`, el candado dentro), la STM32 (página de 8 KB por banco, quadword de 16 B que se
+programa UNA vez, **cualquier página que exista**, sin candado), las ESP32 (`esp_partition_*`, el IDF guarda) y el
+sim (un fichero, sin semántica NOR).
+
+**Con consecuencia** (de más a menos):
+1. **`#636` — un `ENV_SET`, `ENV_DEL` o `PART_APPLY` cuya escritura en flash falla contesta OK, en las cuatro**: la
+   respuesta se construye antes de escribir y nadie mira lo que devuelve la escritura (comprobado). En placa, el IDE
+   refresca y enseña el valor viejo sin decir por qué; en el sim, la RAM ya tiene el nuevo y se pierde al reiniciar.
+2. **`#638` — en la Pico la vista del ENV cambia a mitad de sesión**: apunta a la flash y sólo vuelve a elegir copia si
+   cambia la del arranque; el primer `ENV_SET` no se ve y el segundo sí (con lo del primero). Las otras tres mantienen
+   el ENV del arranque hasta reiniciar —y `env_smoke` lo exige—. Choca con la regla del `RUN` común (`gc=` y
+   `latido=` por el ENV en las cuatro).
+3. **`#637` — la STM32 escribe la flash sin red de zona**: su primitiva acepta cualquier página que exista (comprobado),
+   y la comprobación `.ld`↔cabecera sólo está en el `handle` y en el log, no en su `env_anadir`, que escribe durante el
+   ARRANQUE cuando falta `imagen.fecha`. Si el `.ld` y `flash_layout_stm32.h` dejan de casar, ese arranque borra la
+   página que caiga (firmware incluido; se recupera por SWD).
+4. El sim es más amable que la placa: su STATE sale del plan del ENV y no del arranque real; su flash no es NOR ni
+   respeta el quadword único del U5 (la RMW de `PACK_DEL` existe por esa regla y en el PC no se prueba);
+   `boardsim_smoke` «reconecta» al mismo proceso y la persistencia nunca se prueba.
+5. El IDE dice «el device se reiniciará» tras aplicar las particiones, y nadie reinicia.
+6. Menores: el bulk que no cabe recibe tres códigos distintos; la ESP32 rechaza los PACK_* si falta `bpenv`; la flash
+   usable de la Pico se calcula en dos sitios.
+**Sin verificar** (por lectura): en la ESP32, un error al leer `bpenv` se trata en silencio como placa virgen; en la
+STM32 nada impide dos escritores de la flash a la vez (hoy ningún camino lo provoca); y en la STM32 un doble error de
+ECC al leer la flash dispara una NMI cuyo manejador es el bucle mudo de CubeMX —si se va la luz a mitad de programar
+un quadword, la placa podría colgarse en cada arranque— (propuesta: ficha aparte, y la fachada es el sitio).
+
+**El diseño propuesto**:
+- **la fachada, `include/bpvm_flash.h`**: REGIONES con nombre (`ENV`, `LOG` fijas; `FS`, `PACKS` las fija el arranque),
+  offsets relativos a la región, cuatro verbos (`leer`, `borrar`, `programar`, `ver` —un puntero legible o NULL—), la
+  geometría (borrado de 4 u 8 KB; programa en unidades de 16 B, la del U5, la más estricta); el común comprueba una vez
+  para todas que la operación cabe en su región, la alineación, que cada unidad se programa una vez entre borrados y
+  salta las unidades todo 0xFF; la comprobación `.ld`↔cabecera, al registrar la tabla (si no casan, ninguna
+  escritura, y lo dice). La cintura de cada familia: `pico_flash.c`, `stm32_flash.c` más un mutex, `esp_partition_*`
+  por región, el sim imitando la NOR (y con un perfil U5);
+- **el ENV, común** (en `src/bpvm_bmgr.c`): leer las dos copias, escribir un sector, `anadir` y la vista del arranque;
+  fuera las tres `env_anadir`, las tres escrituras, los dos «temprano», los lectores por familia y el ENV a mano del
+  sim;
+- **`bpvm_bmgr_handle()` común** (en `src/bpvm_repl.c`, como el RUN): lo del `handle` de hoy más contestar
+  `FLASH_ERROR` si el volcado falla y leer él mismo el bulk de `PACK_BURN_DATA`; la cintura que le queda a la familia,
+  dos datos que ya se llaman igual en las tres (`board_boot_status()` y la RAM de los motores). Un campo nuevo al final
+  de `bpvm_repl_ops_t`; con NULL, la familia sigue con su `handle`.
+Saldo: unas −400 líneas (`board_mgr_pico.c` desaparece; a la ESP32 le quedan ~400 de 656 y a la STM32 ~140 de 360).
+Pruebas nuevas, cada una con su sabotaje: `test-flash` (fuera de región, programar sin borrar, el quadword dos veces
+con el perfil U5, un arranque con `imagen.fecha` que escribe 0 veces); `boardsim_smoke` con la persistencia
+comprobada REINICIANDO el sim, `--flash-falla` → `FLASH_ERROR`, y el perfil U5; `env_smoke` con dos `ENV_SET` en el
+mismo arranque.
+
+**Los pasos** (cada uno su commit, reversible; después de los pasos 0–2 del `RUN` común, que tocan lo mismo): 0, sin
+cambio de conducta (renombrar `bpvm_flash_lock_*` a `pico_flash_lock_*`; los casos nuevos de los smokes, fijados contra
+lo de hoy); 1, la fachada en el PC (el sim, y `test-flash` a la red); 2, el ENV y el `handle` comunes, estrenados por el
+sim; 3, la STM32 (su tabla de regiones comprobada EN COMPILACIÓN contra sus constantes, y el mutex); 4, la Pico; 5, las
+ESP32 (al migrar cada familia, `PACK_` entra en su `lo_lee_el_comun` en el mismo commit); 6, si D5 lo incluye, el log y
+el FS por la fachada; 7, cerrar (el contrato, el protocolo, el censo, el IDE). Del 3 al 6, a placa en UN lote, con
+copia del ENV antes de grabar. Los riesgos y sus defensas, en el informe del agente (el que una placa no arranque sólo
+pasa si se borra firmware, y no es permanente en ninguna familia).
+
+**Las decisiones** (el agente recomienda; pendientes de Eduardo):
+- **D1** la vista del ENV, la del ARRANQUE, en RAM y en las cuatro (un `ENV_SET` se ve al reiniciar; la fecha que añade
+  el arranque, sin reiniciar). Coste: la Pico +4 KB (hoy no tiene copia, a propósito); la ESP32 −4 KB y la STM32 −8 KB.
+  La alternativa —leer siempre de la flash— enseñaría `stack=256` a un programa que corre con el reparto viejo;
+- **D2** si el volcado del ENV falla, `ERROR FLASH_ERROR` («sigue el de antes») en vez de OK (el IDE ya convierte un
+  ERROR en un diálogo);
+- **D3** regiones con nombre y offsets relativos, y la LECTURA dentro del contrato (la ESP32 no puede leer el ENV por
+  puntero: mapear `bpenv` gasta espacio virtual, y en la C5 no queda);
+- **D4** el candado, en cada familia (en la Pico no hay elección: va dentro de cada operación; la STM32, un mutex nuevo,
+  con un camino sin espera para el volcado del log de un fallo);
+- **D5** qué entra: los cuatro consumidores (ENV y packs en los pasos 1–5; log, FS y la capa de particiones en el 6,
+  donde está el riesgo de datos) o sólo los del gestor (y entonces la fachada sería una quinta forma más);
+- **D6** el sim tan estricto como la placa: (a) su flash como NOR, con perfil U5 (quadword único); (b) su STATE, el real
+  del arranque (`boardsim_smoke` tendría que reiniciar el sim tras `PART_APPLY`, como ya hace `env_smoke`);
+- **D7** tras `PART_APPLY`, ¿quién reinicia?: (a) la placa, después de contestar; (b) el IDE manda `RESET` y reconecta;
+  (c) sólo cambiar el texto. El agente recomienda (b): la respuesta nunca se pierde en una carrera con el reinicio.
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):
