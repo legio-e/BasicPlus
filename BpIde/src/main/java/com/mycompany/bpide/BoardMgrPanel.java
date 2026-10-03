@@ -32,6 +32,7 @@ import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
+import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
@@ -265,11 +266,19 @@ public final class BoardMgrPanel extends JPanel {
                 refresh();
                 return;
             }
-            info("Tamaños aplicados: la placa se reinicia para subir con el reparto nuevo…");
+            /* El aviso, SIN modal: con `info()` (modal) delante, el reinicio esperaba a que se aceptara aunque el texto
+             * dijera «se reinicia» (Eduardo, 3-oct, en la Nucleo). Ahora se reinicia ya, y el aviso se cierra solo
+             * cuando llega el resultado —que sale en su sitio, no debajo de un aviso viejo—. */
+            final JDialog aviso = new JOptionPane("Tamaños aplicados: la placa se está reiniciando para subir con el "
+                    + "reparto nuevo…", JOptionPane.INFORMATION_MESSAGE).createDialog(this, "Gestión de placa");
+            aviso.setModal(false);
+            final boolean[] acabado = { false };
             reiniciador.reiniciar(
-                    nuevo -> info("La placa ha vuelto con el reparto nuevo."),
-                    motivo -> info("Tamaños aplicados, pero la placa no ha vuelto (" + motivo
-                            + "): reiníciala y reconecta a mano."));
+                    nuevo -> { acabado[0] = true; aviso.dispose(); info("La placa ha vuelto con el reparto nuevo."); },
+                    motivo -> { acabado[0] = true; aviso.dispose();
+                                info("Tamaños aplicados, pero la placa no ha vuelto (" + motivo
+                                     + "): reiníciala y reconecta a mano."); });
+            if (!acabado[0]) aviso.setVisible(true);   // si falló ya (sin conexión), no se enseña
         });
     }
 
