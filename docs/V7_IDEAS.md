@@ -2515,6 +2515,51 @@ daba KILLED. Arreglado en `bpvm_run`: «la bandera es la verdad» (`#462`), tamb
 excepción. `test-aotkill` lleva una pasada sin ejecutor (el kill desde `io`, como en la placa): roja antes del
 arreglo, verde después.
 
+#### `#577` — las tuplas DENTRO de una native: lo que hay y tres caminos (3-oct, para decidir)
+
+**Lo que hay**, probado el 3-oct con el compilador del día. Desde `#519`, una native que no se puede traducir es un
+error de compilación, y con tuplas se rechazan las dos direcciones:
+
+```
+native function sumaPartes(a: integer, b: integer): integer
+  var c: integer
+  var r: integer
+  { c, r } := divide(a, b)        // «AOT: statement no soportado: DestructAssignStmt»
+  return c + r
+end sumaPartes
+
+native function divideN(a: integer, b: integer): (integer, integer)    // «TypeRef no soportado: TupleTypeRef»
+  return (a / b, a mod b)
+end divideN
+```
+
+Una tupla es un objeto de una clase que el compilador sintetiza por forma, con campos pelados `_0`, `_1`… y sin
+getters. Leer o escribir esos campos desde una native pide algo que hoy no existe:
+
+| | qué | lo bueno | lo que cuesta |
+|---|---|---|---|
+| **A** | la clase sintética gana getters (y un constructor con los campos); la native los llama por el puente de métodos que ya hay (`call_method_i32`) | sólo el compilador, sin tocar la ABI; la regla «público ⇒ property» | cada campo, una llamada al intérprete (microsegundos), y la native va a un ejecutor; ranuras de vtable en todo módulo que use tuplas |
+| B | helpers de campo (`get_field_*`, `set_field_*`), como los de los arrays | una lectura de memoria: rápido | sube la ABI (9 → 10): regenerar los `.mdn` de los packs y regrabar todas las placas y sus packs |
+| C | no se hace; el manual lo dice: se desestructura en BP y la native recibe los campos como parámetros | nada | una native no habla tuplas |
+
+**Decidido: A** (Eduardo, 3-oct: *«Getters, sin ABI»*). Se hace después de cerrar H9 y H10 (Eduardo: *«podemos cerrar
+H9 y H10 antes de pasar a otras cosas»*).
+
+**Una variante, vista al leer el código, para confirmarla al retomarlo.** Las natives ya crean objetos por una
+FACTORÍA: `__cls_new_<Clase>`, una función del módulo que llaman por el puente a BP (`call_bp_i32`, buscándola por
+nombre). Los getters y el constructor de la tupla pueden ser lo mismo: funciones ocultas del módulo que tiene la
+native (`__tup_get_<forma>_<i>` y `__tup_new_<forma>`), en vez de métodos de la clase sintética. Funciona porque la
+clase de una tupla tiene el mismo layout por forma en cualquier módulo; es lo que ya hace el intérprete al
+desestructurar. Lo que se gana:
+- no se añaden ranuras a la tabla de métodos de ninguna clase, sólo funciones en los módulos que tienen natives;
+- no depende del módulo que CREÓ la tupla. Con métodos, una tupla que viniera de un `Str.mod` compilado antes (el de una
+  placa) daría «slot no resoluble» (`call_method_i32` lo comprueba).
+
+El coste es el mismo: una llamada al intérprete por campo, y la native va a un ejecutor. Un límite que se hereda del
+puente: sólo lleva valores de 4 bytes, así que una tupla con `float`, `long` o `double` seguiría siendo un error al
+compilar dentro de una native. La stdlib devuelve tuplas en `Str.parseInt` (`boolean`, `integer`), `parseLong`,
+`parseDouble`, `parseHex` y `Time.civilDesdeDias`.
+
 ## H7 — `#554`: concatenar en placa, y QUÉ ES un literal de cadena (27-sep, análisis)
 
 ### La causa, medida

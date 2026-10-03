@@ -2252,6 +2252,9 @@ elegir a la vista»): helpers de campo (`get_field_i32/_i64/_ref`: suben la ABI 
 sintética de la tupla, por `call_method_i32`, que ya existe —sin tocar la ABI, que es el criterio de Eduardo del
 27-sep con las conversiones estrechas—. El censo de `AOT_LIMITES.md` sigue en 28/30: faltan `TupleExpr` y
 `TryStmt` (`#578`). PC para hacerlo; la tanda con el AOT, para verlo en placa.
+**Decidido el 3-oct** (Eduardo): *«Getters, sin ABI»* (`V7_IDEAS` §H5, `#577`: lo que hay —hoy se rechazan al compilar
+desestructurar dentro de una native y una native que devuelva una tupla— y la variante de hacer getters y constructor
+como funciones ocultas del módulo de la native, para confirmarla al retomarlo). Se hace tras cerrar H9 y H10.
 
 #### ✅ `#576` — el `INFO` no publicaba la ABI de helpers (`MDN_ABI_VERSION`): un `.mdn` de otra ABI lo rechaza el cargador en su log y el programa corre interpretado sin que el IDE ni la tanda lo digan —así se tapó `#504` tres semanas— (abierta y cerrada el 27-sep, al cerrar H5; su origen, el 23-ago: «el IDE no sabe qué ABI habla la placa… merece ficha aparte»; H5 · **CERRADA el 27-sep**, `7f2c60bd`)
 
