@@ -448,6 +448,12 @@
   padre como <code>parent: Container</code>: un <code>Label</code> dentro de un <code>Checkbox</code> no
   compila. El árbol es tuyo y se puede recorrer y volcar (<code>toJson()</code>, §24.2).
 </p>
+<p>
+  <strong>El dueño de un widget es su contenedor</strong>: al crearlo se da de alta en él, y ahí se queda hasta un
+  <code>delete()</code> (suyo o de un antepasado). Si además lo sujetas con un <code>var owner</code> local, al salir
+  de ámbito su destructor lo borra del árbol y de la pantalla y lo da de baja en su contenedor (V7, 3-oct); la
+  pantalla (<code>Screen</code>) no se borra nunca así. Para todo lo demás, una referencia normal.
+</p>
 <div class="note">
   <p><strong>Política OO.</strong> Igual que el resto de la librería, los widgets son clases: no hay campos
   públicos, sino propiedades. Esto mantiene la API estable entre versiones y placas.</p>
@@ -1017,7 +1023,7 @@ Gui.<span class="fn">join</span>()</code></pre>
   <tr><td><code>refresh()</code></td><td>función</td><td>Fuerza repintado del widget.</td></tr>
   <tr><td><code>getParent(): Container</code></td><td>función</td><td>El contenedor que lo tiene; <code>null</code> en la raíz (<code>Screen</code>, <code>Window</code>).</td></tr>
   <tr><td><code>typeName(): string</code></td><td>función</td><td>El nombre de la clase (<code>"Label"</code>, <code>"Button"</code>…), el mismo <code>type</code> del <code>.win</code>.</td></tr>
-  <tr><td><code>toJson(): Json.JsonObject</code> / <code>toJsonText(): string</code></td><td>función</td><td>El subárbol en formato <code>.win</code>: <code>type</code>, <code>name</code>, lo propio del widget (<code>text</code>, <code>checked</code>, <code>value</code>…), <code>align</code> por nombre con <code>x</code>/<code>y</code> como desplazamientos, <code>width</code>/<code>height</code> sólo si no son automáticos, <code>fontSize</code>, y los <code>clic</code>/<code>change</code> explícitos. Lo que cargó <code>Window.load</code> vuelve a salir igual (ida y vuelta). <code>toJsonText</code> da el texto sin tener que importar <code>Json</code>.</td></tr>
+  <tr><td><code>toJson(): Json.JsonObject</code> / <code>toJsonText(): string</code></td><td>función</td><td>El subárbol en formato <code>.win</code>: <code>type</code>, <code>name</code>, lo propio del widget (<code>text</code>, <code>checked</code>, <code>value</code>…), <code>align</code> por nombre con <code>x</code>/<code>y</code> como desplazamientos, <code>width</code>/<code>height</code> sólo si no son automáticos, <code>fontSize</code>, los colores, y los <code>clic</code>/<code>change</code> explícitos. Lo que cargó <code>Window.load</code> vuelve a salir igual (ida y vuelta). <code>toJsonText</code> da el texto sin tener que importar <code>Json</code>.</td></tr>
   <tr><td><code>clean()</code></td><td>función</td><td>Elimina los HIJOS del widget (él queda).</td></tr>
   <tr><td><code>delete()</code></td><td>función</td><td>Elimina el widget y sus hijos (hijos antes que padre) y lo da de baja en su padre. <strong>Idempotente</strong>: borrar dos veces no falla.</td></tr>
   <tr><td><code>onClick</code> / <code>onChange</code></td><td><strong>evento</strong></td><td>Se suscriben con <code>::</code>: <code>boton.onClick := ventana::boton_onClick</code>. Ver <a href="#ev-codigo">§22.5</a>. <em>(En V3 eran métodos virtuales que se sobrescribían subclaseando; ya no.)</em></td></tr>
@@ -1082,10 +1088,14 @@ Gui.<span class="fn">join</span>()</code></pre>
 
 <h3>Lo que <code>toJson()</code> no guarda todavía</h3>
 <p>
-  Rangos (<code>min</code>/<code>max</code>), opciones e ítems, los botones del <code>Msgbox</code>, colores y
-  títulos de pestaña. Y <code>Bar</code>, <code>Led</code>, <code>Chart</code> y <code>Table</code> no se dan de
-  alta en su padre: no cuentan en <code>childCount()</code> ni salen en <code>toJson()</code>, aunque se pinten y
-  el volcado <code>__guiDumpTree()</code> sí los liste.
+  Desde V7 (3-oct) guarda los rangos (<code>min</code>/<code>max</code>), las opciones y los ítems, los botones del
+  <code>Msgbox</code>, los colores (<code>bgColor</code>/<code>textColor</code>, como <code>"0xRRGGBB"</code>), la
+  forma de un <code>Chart</code> (<code>points</code>, <code>chartType</code>, su rango) y la rejilla de un
+  <code>Table</code> (<code>rows</code>, <code>cols</code> y <code>cells</code>); y <code>Bar</code>, <code>Led</code>,
+  <code>Chart</code> y <code>Table</code> están en el árbol como los demás (cuentan en <code>childCount()</code> y
+  reciben sus clics). Lo que todavía no: los títulos de las pestañas, la imagen de un <code>ImageView</code> y el
+  campo de un <code>Keyboard</code> (y el cargador no construye esos tres desde un <code>.win</code>); y las series y
+  muestras de un <code>Chart</code>, que son datos del programa, no forma.
 </p>
 
 <h3>Vista previa Swing: aproximación</h3>

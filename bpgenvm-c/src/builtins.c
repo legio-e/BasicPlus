@@ -1209,7 +1209,21 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             char m[192]; snprintf(m, sizeof m, "GUI: %s", motivo ? motivo : "no disponible");
             return builtin_throw(vm, tc, m);
         }
-        push_i32(vm, tc, bpvm_gui_screen_active()); return BPVM_OK;
+        int pantalla = bpvm_gui_screen_active();
+#ifdef BPVM_GUI_RENDER   /* V7/H6: LVGL dentro, o por el pack */
+        {
+            /* #473 (lote E, 180; 3-oct) — UNA PANTALLA QUE NO ARRANCA YA NO ES MUDA. Si el driver falla al iniciarse
+             * (la C5 o la C6 con el bus SPI tomado, el P4 sin panel), sólo lo decía el log y el programa seguía con
+             * una pantalla muerta: `Gui.run()` volvía a la primera. Sólo cuando HAY driver —`disp_native_size` dice
+             * su tamaño—: sin driver es el modo mudo del pack (el modelo va, no se pinta) y sin ventana a propósito
+             * (`--no-screen`, la ventana del PC) tampoco hay tamaño. El motivo exacto (el código del driver) está en
+             * el log; traerlo aquí es ampliar la API del pack. */
+            int sw = 0, sh = 0;
+            if (bpvm_gui_disp_native_size(&sw, &sh) && sw > 0 && sh > 0 && !bpvm_gui_lvgl_window_open())
+                return builtin_throw(vm, tc, "GUI: la pantalla no arranco: su driver fallo al iniciarse (el motivo, en el log)");
+        }
+#endif
+        push_i32(vm, tc, pantalla); return BPVM_OK;
     }
     case BUILTIN_GUI_CREATE_OBJ: return gui_make_child(vm, tc, bpvm_gui_create_obj);
     case BUILTIN_GUI_CREATE_LABEL: return gui_make_child(vm, tc, bpvm_gui_create_label);

@@ -942,6 +942,8 @@ public final class GuiBackend {
         }
         if (n.fontSize != 0) sb.append(" font=").append(n.fontSize);
         if (n.readOnly) sb.append(" ro");
+        // #477 (lo barato; 3-oct): el giro, en la línea de la pantalla y sólo si lo hay (igual que la VM-C).
+        if (handle == screenHandle && rotation != 0) sb.append(" rot=").append(rotation);
         sb.append("]\n");
         for (int c : n.children) dump(sb, c, depth + 1);
     }

@@ -1,36 +1,28 @@
 /*
- * gui_display_ltdc.c — la pantalla de la DK2 (STM32 LTDC): V3/H5.1, y desde V7/H6 G5.b en DOS MODOS.
+ * gui_display_ltdc.c — la pantalla de la DK2 (STM32 LTDC): V3/H5.1; desde V7/H6 G5.b, su driver para el LVGL del pack.
  *
  * Pensado para la STM32U5G9J-DK2: panel 800x480 RGB, capa LTDC 0, RGB565 (16bpp, ~750 KB de framebuffer en
  * SRAM interna), retroiluminación por PWM (TIM3_CH4) y táctil GT911 por el I2C 2.
  *
- *   BPVM_LVGL      LVGL va DENTRO de la imagen y este fichero le da su display y su táctil: el contrato
- *                  bpvm_gui_disp_* (bpvm_gui.h) que gui.c llama tras lv_init(). Lo de siempre.
- *   BPVM_GUI_PACK  (V7/H6 G5.b, 26-sep) LVGL viene de un PACK (lvgl.npk.ARMV8), como en el P4, la C5 y la C6, y
- *                  busca su driver de pantalla por la marca 'PANT'. El LTDC es un periférico de la familia y no se
- *                  presta por la BIOS, así que su driver se queda aquí y PUBLICA lo mismo que DriverSpi
- *                  (bpvm_pant.h): init, size, flush, rotate y touch.
+ * Con BPVM_GUI_PACK (V7/H6 G5.b, 26-sep) LVGL viene de un PACK (lvgl.npk.ARMV8), como en el P4, la C5 y la C6, y
+ * busca su driver de pantalla por la marca 'PANT'. El LTDC es un periférico de la familia y no se presta por la
+ * BIOS, así que su driver se queda aquí y PUBLICA lo mismo que DriverSpi (bpvm_pant.h): init, size, flush, rotate y
+ * touch. El framebuffer lo escanea el LTDC, así que es de la imagen. Sin el flag, la unidad de compilación queda
+ * vacía (la Nucleo).
  *
- * Lo común a los dos: el framebuffer (lo escanea el LTDC, así que es de la imagen en los dos modos), la luz y la
- * capa, y la lectura del GT911. Sin ninguno de los dos flags, la unidad de compilación queda vacía (la Nucleo).
+ * #473/#477 (3-oct): fuera la otra mitad, la de BPVM_LVGL (LVGL dentro de la imagen), muerta desde G5: ninguna
+ * imagen lo define. Su setRotation avisaba y no hacía nada; el giro de la DK2 es el de abajo.
  */
-#if defined(BPVM_LVGL) || defined(BPVM_GUI_PACK)
+#if defined(BPVM_GUI_PACK)
 
 #include "main.h"        /* HAL + handles hltdc / htim3 / hi2c2 (generados por CubeMX) */
 #include "gui_display_ltdc.h"
 #include <string.h>
 #include <stdint.h>
 
-#if defined(BPVM_LVGL)
-#include "lvgl.h"
-#include "bpvm_gui.h"
-#include <stdio.h>        /* printf — aviso "setRotation no soportado en LTDC" */
-#endif
-#if defined(BPVM_GUI_PACK)
 #include "bpvm_pant.h"    /* V7/H6 G5.b: el contrato del driver de pantalla ('PANT') */
 #include "bpvm_bios.h"    /* V7/H6 G5.b: bpvm_bios_publica, el mismo registro que usan los packs */
 #include "log.h"
-#endif
 
 /* Panel físico de la DK2. OJO: el tamaño "lógico" del modelo Gui (para el dumpTree / paridad miVM↔VM-C) es OTRO
  * — 480x320 en gui.c. Aquí manda el panel físico; como la paridad es por el árbol y NO por píxeles, decouplear el
@@ -100,86 +92,6 @@ static void ltdc_encender(void) {
     HAL_LTDC_ConfigLayer(&hltdc, &lc, 0);
 }
 
-#if defined(BPVM_LVGL)
-/* ════════ LVGL DENTRO DE LA IMAGEN (lo de siempre) ════════ */
-
-/* Buffer de dibujo PARCIAL de LVGL: renderiza las zonas sucias aquí y flush_cb las copia al framebuffer.
- * 48 líneas ≈ 77 KB (RGB565). */
-#define DRAW_LINES 48
-static uint8_t s_drawbuf[LTDC_PANEL_W * DRAW_LINES * 2] __attribute__((aligned(4)));
-
-static void gt911_read_cb(lv_indev_t* indev, lv_indev_data_t* data) {
-    (void) indev;
-    int pulsado = gt911_leer();
-    data->point.x = s_tx;
-    data->point.y = s_ty;
-    data->state = pulsado ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
-}
-
-/* Copia la zona renderizada (RGB565) al framebuffer, fila a fila. */
-static void ltdc_flush_cb(lv_display_t* disp, const lv_area_t* area, uint8_t* px_map) {
-    int32_t w = area->x2 - area->x1 + 1;
-    for (int32_t y = area->y1; y <= area->y2; y++) {
-        memcpy(&s_framebuffer[(uint32_t) y * LTDC_PANEL_W + (uint32_t) area->x1],
-               px_map, (size_t) w * 2u);          /* RGB565 = 2 bytes/px */
-        px_map += w * 2;
-    }
-    lv_display_flush_ready(disp);
-}
-
-void bpvm_gui_disp_init(int w, int h) {
-    (void) w; (void) h;   /* el tamaño físico lo fija el panel, no el modelo */
-    ltdc_encender();
-
-    /* Tick de LVGL = SysTick de la HAL (ms). */
-    lv_tick_set_cb(HAL_GetTick);
-
-    /* Display LVGL: tamaño del panel + flush_cb + buffer parcial. */
-    lv_display_t* disp = lv_display_create(LTDC_PANEL_W, LTDC_PANEL_H);
-    lv_display_set_flush_cb(disp, ltdc_flush_cb);
-    lv_display_set_buffers(disp, s_drawbuf, NULL, sizeof(s_drawbuf),
-                           LV_DISPLAY_RENDER_MODE_PARTIAL);
-
-    /* Táctil GT911 → indev de puntero. LVGL enruta el toque al widget bajo el dedo → su evento de clic →
-     * lvgl_click_cb → bpvm_gui_inject_click → upcall onClick. Es EXACTAMENTE el mismo camino que el clic
-     * sintético del host, ahora disparado por un dedo real sobre el panel. */
-    lv_indev_t* touch = lv_indev_create();
-    lv_indev_set_type(touch, LV_INDEV_TYPE_POINTER);
-    lv_indev_set_read_cb(touch, gt911_read_cb);
-}
-
-uint32_t bpvm_gui_disp_pump(void) {
-    /* Procesa timers/render de LVGL y DEVUELVE el ocio que pide.
-     *
-     * #462 — aqui habia un __WFI(), que duerme el NUCLEO hasta la siguiente IRQ. No giraba al 100 % de CPU, que
-     * era su motivo, pero paraba la tarea `vm` y con ella TODOS los hilos BP: el lazo del GUI se llevaba el turno
-     * y nadie mas corria. Ahora el ocio lo duerme el lazo BP (`sleep` de BP), que cede el turno al siguiente hilo
-     * BP; y cuando no queda ninguno ejecutable es el planificador quien duerme, por el mismo camino de siempre.
-     *
-     * lv_timer_handler se auto-regula por lv_tick (no re-renderiza de mas). */
-    uint32_t idle_ms = lv_timer_handler();
-    if (idle_ms > BPVM_GUI_OCIO_MAX_MS) idle_ms = BPVM_GUI_OCIO_MAX_MS;
-    return idle_ms;
-}
-
-/* H5.1: sin "ventana que cerrar"; Gui.run() corre hasta reset. */
-int bpvm_gui_disp_is_open(void) { return 1; }
-
-/* V6/P2.3 — el screen del modelo mide lo que mide el panel (decisión de Eduardo, 4-sep-2026). La DK2 es LTDC a
- * 800×480 fijos: se contesta sin tocar el hardware (gui.c pregunta ANTES de disp_init). */
-int bpvm_gui_disp_native_size(int* w, int* h) { *w = LTDC_PANEL_W; *h = LTDC_PANEL_H; return 1; }
-
-/* Rotación en runtime (Gui.setRotation): el LTDC escanea un framebuffer fijo y este flush NO gira (con el LVGL del
- * pack sí: ver BPVM_GUI_PACK, abajo). Aviso una vez y no-op. */
-void bpvm_gui_disp_set_rotation(int deg)
-{
-    (void) deg;
-    static int warned = 0;
-    if (!warned) { warned = 1; printf("[gui] setRotation: no soportado en este display (LTDC) todavia\n"); }
-}
-#endif /* BPVM_LVGL */
-
-#if defined(BPVM_GUI_PACK)
 /* ═════════ V7/H6 G5.b (26-sep) — LA PANTALLA DE LA DK2, PUBLICADA COMO 'PANT' DESDE LA IMAGEN ═════════
  * LVGL ya no va en la imagen: viene del pack (lvgl.npk.ARMV8) y busca su driver por la marca 'PANT', en su primer
  * uso. El formato no se publica: RGB565 tal cual, lo que escanea el LTDC.
@@ -284,5 +196,3 @@ void stm32_pant_publicar(void)
         log_printf("pantalla: la DK2 publica 'PANT' desde la imagen (LTDC 800x480, tactil GT911, gira)");
 }
 #endif /* BPVM_GUI_PACK */
-
-#endif /* BPVM_LVGL || BPVM_GUI_PACK */

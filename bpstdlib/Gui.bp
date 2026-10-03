@@ -388,12 +388,16 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
 
     public function setBgColor(c: Color)
       __guiSetBgColor(this.lvglId, c.rgb)
+      this.fondo := c.rgb            // V7/H10 G2 (a): para toJson(), el render no lo devuelve
+      this.conFondo := true
     end setBgColor
 
     // Color del texto. Vale para cualquier widget con texto (label, botón…):
     // en LVGL el text_color se hereda, así que en un botón colorea su label hijo.
     public function setTextColor(c: Color)
       __guiSetTextColor(this.lvglId, c.rgb)
+      this.tinta := c.rgb
+      this.conTinta := true
     end setTextColor
 
     // refresh — invalidar para repintar (Swing repaint / LVGL lv_obj_invalidate).
@@ -411,6 +415,12 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     //    Container anade "children". --
     var handlerClic: string        // nombres EXPLICITOS del .win ("clic"/"change"):
     var handlerChange: string      // los derivados de `name` no se guardan, se derivan
+    // V7/H10 G2 (a) (3-oct) — los colores: el color y la fuente cargada viven sólo en el render (el diseño de V3), así
+    // que el árbol los recuerda aquí, en BP, para escribirlos en el .win (decidido: campos BP, sin tocar las VMs).
+    var fondo: integer
+    var conFondo: boolean
+    var tinta: integer
+    var conTinta: boolean
 
     // Los anota el cargador (bindHandler es funcion de modulo y los campos son
     // protegidos). "" = no hay nombre explicito.
@@ -452,6 +462,8 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       if h >= 0 then o.put("height", Json.JsonInt(h))
       var fs: integer := __guiGetFontSize(this.lvglId)
       if fs != 0 then o.put("fontSize", Json.JsonInt(fs))
+      if this.conFondo then o.put("bgColor", Json.JsonString(colorToHex(this.fondo)))
+      if this.conTinta then o.put("textColor", Json.JsonString(colorToHex(this.tinta)))
       if strlen(this.handlerClic) > 0 then o.put("clic", Json.JsonString(this.handlerClic))
       if strlen(this.handlerChange) > 0 then o.put("change", Json.JsonString(this.handlerChange))
       return o
@@ -509,6 +521,16 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
         this.parent := null
       endif
     end delete
+
+    // -- V7/H10 G2 (b) (3-oct; decidido por Eduardo el 2-oct) — EL DESTRUCTOR. Cuando el wrapper muere por su DUEÑO
+    //    —un `var owner` local que sale de ámbito, un `try var`—, el widget se borra en los dos planos y se da de baja
+    //    del padre: sin esto el nodo seguía en la tabla y en pantalla, con un puntero al objeto ya liberado (un clic
+    //    posterior podía llegar a OTRO objeto si el hueco se reciclaba). La PANTALLA no: es del backend y vive todo el
+    //    RUN. El dueño normal de un widget es su contenedor (Eduardo: «owner solamente puede haber uno activo; el owner
+    //    debe estar en su contenedor»); la cascada de una OwnerList y el GC liberan sin destructor (#491). --
+    public function ~Component()
+      if this.typeName() != "Screen" then this.delete()
+    end ~Component
 
     // -- Eventos (#324). Al pulsar → onClick; al cambiar de valor → onChange.
     //
@@ -847,6 +869,10 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       return "Slider"
     end typeName
     public function jsonProps(o: Json.JsonObject)
+      if this.conRango and ((this.rMin != 0) or (this.rMax != 100)) then
+        o.put("min", Json.JsonInt(this.rMin))
+        o.put("max", Json.JsonInt(this.rMax))
+      endif
       if this.value != 0 then o.put("value", Json.JsonInt(this.value))
     end jsonProps
     public function Slider(parent: Container)
@@ -854,8 +880,15 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       this.attach(parent)
     end Slider
 
+    // V7/H10 G2 (a): el rango, para toJson() (las VMs no lo devuelven); por defecto, 0..100.
+    var rMin: integer
+    var rMax: integer
+    var conRango: boolean
     public function setRange(mn: integer, mx: integer)
       __guiSetRange(this.lvglId, mn, mx)
+      this.rMin := mn
+      this.rMax := mx
+      this.conRango := true
     end setRange
 
     public property value: integer
@@ -875,14 +908,26 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       return "Bar"
     end typeName
     public function jsonProps(o: Json.JsonObject)
+      if this.conRango and ((this.rMin != 0) or (this.rMax != 100)) then
+        o.put("min", Json.JsonInt(this.rMin))
+        o.put("max", Json.JsonInt(this.rMax))
+      endif
       if this.value != 0 then o.put("value", Json.JsonInt(this.value))
     end jsonProps
     public function Bar(parent: Container)
       this.lvglId := __guiCreateBar(parent.lvglId)
+      this.attach(parent)              // V7/H10 G2 (a): en el árbol, como los demás
     end Bar
 
+    // V7/H10 G2 (a): el rango, para toJson() (las VMs no lo devuelven); por defecto, 0..100.
+    var rMin: integer
+    var rMax: integer
+    var conRango: boolean
     public function setRange(mn: integer, mx: integer)
       __guiSetRange(this.lvglId, mn, mx)
+      this.rMin := mn
+      this.rMax := mx
+      this.conRango := true
     end setRange
 
     public property value: integer
@@ -902,6 +947,10 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       return "Spinbox"
     end typeName
     public function jsonProps(o: Json.JsonObject)
+      if this.conRango and ((this.rMin != 0) or (this.rMax != 100)) then
+        o.put("min", Json.JsonInt(this.rMin))
+        o.put("max", Json.JsonInt(this.rMax))
+      endif
       if this.value != 0 then o.put("value", Json.JsonInt(this.value))
     end jsonProps
     public function Spinbox(parent: Container)
@@ -909,8 +958,15 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       this.attach(parent)
     end Spinbox
 
+    // V7/H10 G2 (a): el rango, para toJson() (las VMs no lo devuelven); por defecto, 0..100.
+    var rMin: integer
+    var rMax: integer
+    var conRango: boolean
     public function setRange(mn: integer, mx: integer)
       __guiSetRange(this.lvglId, mn, mx)
+      this.rMin := mn
+      this.rMax := mx
+      this.conRango := true
     end setRange
 
     public property value: integer
@@ -934,6 +990,7 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     end jsonProps
     public function Led(parent: Container)
       this.lvglId := __guiCreateLed(parent.lvglId)
+      this.attach(parent)              // V7/H10 G2 (a): en el árbol, como los demás
     end Led
 
     public function on()
@@ -960,6 +1017,8 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       return "Dropdown"
     end typeName
     public function jsonProps(o: Json.JsonObject)
+      var op: string := __guiGetText(this.lvglId)   // V7/H10 G2 (a): las opciones (el modelo las guarda como texto)
+      if strlen(op) > 0 then o.put("options", Json.JsonString(op))
       if this.selected != 0 then o.put("selected", Json.JsonInt(this.selected))
     end jsonProps
     public function Dropdown(parent: Container)
@@ -1030,6 +1089,8 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       return "ListBox"
     end typeName
     public function jsonProps(o: Json.JsonObject)
+      var it: string := __guiGetText(this.lvglId)   // V7/H10 G2 (a): los ítems (el modelo los guarda como texto)
+      if strlen(it) > 0 then o.put("items", Json.JsonString(it))
       if this.selected != 0 then o.put("selected", Json.JsonInt(this.selected))
     end jsonProps
     public function ListBox(parent: Container)
@@ -1082,6 +1143,7 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     public function jsonProps(o: Json.JsonObject)
       var t: string := __guiGetText(this.lvglId)
       if strlen(t) > 0 then o.put("text", Json.JsonString(t))
+      if strlen(this.botones) > 0 then o.put("buttons", Json.JsonString(this.botones))
     end jsonProps
     public function Msgbox(parent: Container, message: string)
       this.lvglId := __guiCreateMsgbox(parent.lvglId)
@@ -1089,8 +1151,11 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       this.attach(parent)
     end Msgbox
 
+    var botones: string               // V7/H10 G2 (a): para toJson(), las VMs no los devuelven
+
     public function setButtons(labels: string)
       __guiSetButtons(this.lvglId, labels)
+      this.botones := labels
     end setButtons
 
     // Índice del botón pulsado (válido tras dispararse onChange).
@@ -1160,6 +1225,22 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     public function typeName(): string
       return "Chart"
     end typeName
+    // V7/H10 G2 (a) (3-oct): en el .win va la FORMA de la gráfica —sus puntos, su tipo y su rango—; las series y sus
+    // muestras son datos que pone el programa (como el texto de un Textarea que se rellena al vuelo).
+    public function jsonProps(o: Json.JsonObject)
+      if this.puntos > 0 then o.put("points", Json.JsonInt(this.puntos))
+      if this.tipo == 1 then o.put("chartType", Json.JsonString("BARS"))
+      if this.conRango and ((this.rMin != 0) or (this.rMax != 100)) then
+        o.put("min", Json.JsonInt(this.rMin))
+        o.put("max", Json.JsonInt(this.rMax))
+      endif
+    end jsonProps
+    var puntos: integer
+    var tipo: integer
+    // V7/H10 G2 (a): el rango, para toJson() (las VMs no lo devuelven); por defecto, 0..100.
+    var rMin: integer
+    var rMax: integer
+    var conRango: boolean
     // Tipos de gráfica para setType().
     public const Chart.LINE := 0
     public const Chart.BARS := 1
@@ -1168,17 +1249,22 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
 
     public function Chart(parent: Container)
       this.lvglId := __guiCreateChart(parent.lvglId)
+      this.attach(parent)              // V7/H10 G2 (a): en el árbol, como los demás
     end Chart
 
     // Rango del eje Y. Usa el intrínseco genérico de rango (el mismo de
     // slider/bar/spinbox), que en un chart aplica al eje Y primario.
     public function setRange(mn: integer, mx: integer)
       __guiSetRange(this.lvglId, mn, mx)
+      this.rMin := mn
+      this.rMax := mx
+      this.conRango := true
     end setRange
 
     // Nº de muestras visibles (la ventana). Conserva los datos que sigan cabiendo.
     public function setPointCount(n: integer)
       __guiChartSetPoints(this.lvglId, n)
+      this.puntos := n
     end setPointCount
 
     // Añade una serie del color dado; devuelve su índice (o -1 si se pasó del tope).
@@ -1199,6 +1285,7 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     // LINE o BARS.
     public function setType(t: integer)
       __guiChartSetType(this.lvglId, t)
+      this.tipo := t
     end setType
   end Chart
 
@@ -1206,12 +1293,40 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     public function typeName(): string
       return "Table"
     end typeName
+    // V7/H10 G2 (a) (3-oct): la rejilla y, si alguna celda dice algo, todas, fila a fila (las celdas sí se leen de
+    // vuelta: getCell).
+    public function jsonProps(o: Json.JsonObject)
+      if (this.filas <= 0) or (this.columnas <= 0) then return
+      o.put("rows", Json.JsonInt(this.filas))
+      o.put("cols", Json.JsonInt(this.columnas))
+      var algo: boolean := false
+      var filasJ: Json.JsonArray := Json.JsonArray()
+      var f: integer := 0
+      while f < this.filas do
+        var fila: Json.JsonArray := Json.JsonArray()
+        var c: integer := 0
+        while c < this.columnas do
+          var celda: string := this.getCell(f, c)
+          if strlen(celda) > 0 then algo := true
+          fila.add(Json.JsonString(celda))
+          c := c + 1
+        endwh
+        filasJ.add(fila)
+        f := f + 1
+      endwh
+      if algo then o.put("cells", filasJ)
+    end jsonProps
+    var filas: integer
+    var columnas: integer
     public function Table(parent: Container)
       this.lvglId := __guiCreateTable(parent.lvglId)
+      this.attach(parent)              // V7/H10 G2 (a): en el árbol, como los demás
     end Table
 
     public function setGrid(rows: integer, cols: integer)
       __guiTableSetGrid(this.lvglId, rows, cols)
+      this.filas := rows
+      this.columnas := cols
     end setGrid
 
     public function setCell(row: integer, col: integer, text: string)
@@ -1672,6 +1787,36 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       if node.has("buttons") then mb.setButtons(node.getStringOr("buttons", "OK"))
       return mb
     endif
+    // V7/H10 G2 (a) (3-oct) — los dos que toJson() ya escribe y el cargador no sabía construir.
+    if t == "Chart" then
+      var ch: Chart := Chart(parent)
+      if node.has("points") then ch.setPointCount(node.getIntOr("points", 0))
+      if node.getStringOr("chartType", "LINE") == "BARS" then ch.setType(1)
+      if node.has("min") or node.has("max") then ch.setRange(node.getIntOr("min", 0), node.getIntOr("max", 100))
+      return ch
+    endif
+    if t == "Table" then
+      var tb: Table := Table(parent)
+      var nf: integer := node.getIntOr("rows", 0)
+      var nc: integer := node.getIntOr("cols", 0)
+      if (nf > 0) and (nc > 0) then
+        tb.setGrid(nf, nc)
+        if node.has("cells") then
+          var filasJ: Json.JsonArray := node.getArray("cells")
+          var f: integer := 0
+          while (f < filasJ.length()) and (f < nf) do
+            var fila: Json.JsonArray := filasJ.at(f).asArray()
+            var c: integer := 0
+            while (c < fila.length()) and (c < nc) do
+              tb.setCell(f, c, fila.at(c).asString())
+              c := c + 1
+            endwh
+            f := f + 1
+          endwh
+        endif
+      endif
+      return tb
+    endif
     print "[Gui] aviso: widget desconocido '" + t + "' en el form (uso Panel)"
     return Panel(parent)
   end makeWidget
@@ -1731,6 +1876,27 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     endwh
     return acc
   end colorFromHex
+
+  // colorToHex — entero 0xRRGGBB → "0xRRGGBB" (inverso de colorFromHex): el color del .win va como cadena. Pública,
+  // como alignName: la usa toJson(), que está en una clase declarada antes.
+  public function colorToHex(rgb: integer): string
+    var cs: integer[] := newIntArray(8)
+    cs[0] := 48                      // '0'
+    cs[1] := 120                     // 'x'
+    var v: integer := rgb
+    var i: integer := 7
+    while i >= 2 do
+      var d: integer := v mod 16
+      if d < 10 then
+        cs[i] := 48 + d
+      else
+        cs[i] := 55 + d              // 'A' = 65 = 55 + 10
+      endif
+      v := v / 16
+      i := i - 1
+    endwh
+    return __charsToString(cs, 8)
+  end colorToHex
 
   // alignName — constante de Align → string del .win (inverso de alignFromName).
   public function alignName(a: integer): string

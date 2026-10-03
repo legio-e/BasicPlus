@@ -1256,7 +1256,9 @@ int bpvm_gui_shot(const char* path) {
     /* cabecera (nblocks se rellena al final) */
     memcpy(g_shot.out, "BPSH", 4);
     g_shot.out[4] = 1; g_shot.out[5] = 1; g_shot.out[6] = 1;
-    g_shot.out[7] = (uint8_t) lv_display_get_rotation(d);
+    /* #477 (lo barato; 3-oct): el giro del MODELO, como la VM-Java. Era el del display de LVGL, y desde G5 en placa gira
+     * el driver de pantalla y LVGL no: la cabecera decía 0 con la pantalla girada. */
+    g_shot.out[7] = (uint8_t) (g_rotation / 90);
     put_u16(g_shot.out + 8, (uint32_t) w); put_u16(g_shot.out + 10, (uint32_t) h);
     put_u32(g_shot.out + 12, 0);
     g_shot.len = 16;
@@ -1602,6 +1604,12 @@ static void dump_node(char** buf, size_t* len, size_t* cap, int handle, int dept
         if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
     }
     if (n->readonly) buf_append(buf, len, cap, " ro", 3);
+    /* #477 (lo barato; 3-oct): el giro, en la línea de la pantalla y sólo si lo hay (así no cambia ningún volcado sin
+     * giro). Era el hueco del oráculo: un programa que gira veía el ancho y el alto cambiados y nada más. */
+    if (handle == g_screen && g_rotation != 0) {
+        k = snprintf(tmp, sizeof(tmp), " rot=%d", g_rotation);
+        if (k > 0) buf_append(buf, len, cap, tmp, (size_t) k);
+    }
     buf_append(buf, len, cap, "]\n", 2);
     /* V7/H10 #632 (2-oct): los hijos, por ORDEN DE ALTA —handle creciente: los handles son monótonos—, no por ranura.
      * Desde G2 las ranuras se reutilizan, y un hijo nuevo en la ranura de uno borrado salía ANTES que sus hermanos
