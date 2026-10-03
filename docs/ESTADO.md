@@ -1109,7 +1109,17 @@ la C6, la P4 y la Nucleo.
   `arranque en frío (cargado de flash)`, causa `power-on/run`; de antes sólo queda lo volcado hasta el arranque del
   programa, y sus líneas se pierden. `PENDIENTES` decía que el botón (el pin de RUN) lo conservaba, sin medirlo:
   corregido. Después, `log=` quitado y la marca borrada: la Metro, como estaba.
-- **H10**: leído el mapa del `board_mgr` común (las tres familias y el sim) para empezar.
+- **Lo que se escapó al cerrar H9**, y lo que decidió Eduardo: `#623` (las copias de la stdlib en los packs de la GUI;
+  falta la guarda y su decisión de packs LIBRERÍA/PROGRAMA) seguía abierta con «H9» en su cabecera → a SUELTAS, y H9
+  sigue cerrado; `#641` era `#623` → cerrada como duplicada, con lo de la C5 allí. Lección a la memoria: al cerrar un
+  hito, la fila, el backlog Y las fichas abiertas que lo nombran.
+- **H10, lo que queda**: sólo el `board_mgr` común (`#636`–`#638`). Los restos «sin consecuencia» de los lotes D y E,
+  fuera de H10 como SUELTAS (Eduardo: *«sácalos de H10 y los resolvemos como pendientes sueltos»*): `#642`–`#646`
+  (244, 360, 176, 188 y 200); el 340, resuelto con `89da2e63`; el 324/328, fuera por D5; del `#473`, el 8 y el 9,
+  hechos con el `RUN` común, y el 1, aparcado (`#615`). La GUI del backlog, marcada (`c382a66c`). Leído el mapa del
+  `board_mgr` común (las tres familias y el sim) para empezar.
+- **Las SUELTAS abiertas, 15**: `#577` y `#584` (decididas: por hacer), `#578`, `#581` (la S3, la C5 y `PinesSistema`
+  en la C6), `#582`, `#583`, `#592`, `#614`, `#615` (aparcada), `#623` y `#642`–`#646`.
 
 ## 🔧 SUELTAS (3-oct, noche) — «a ver qué podemos cerrar»: `#579` y `#584`, decididas; `#580` y `#585` CERRADAS; `#640`
 
