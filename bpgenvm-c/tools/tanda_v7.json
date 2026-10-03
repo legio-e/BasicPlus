@@ -26,6 +26,8 @@
     { "nombre": "NatCoste",    "fuente": "bpgenvm-c/samples/NatCoste.bp",    "aot": true, "ignorar": ["^  tiempo: "] },
     { "nombre": "NatNombres",  "fuente": "bpgenvm-c/samples/NatNombres.bp",  "aot": true },
     { "nombre": "NatEstrecha", "fuente": "bpgenvm-c/samples/NatEstrecha.bp", "aot": true },
+    { "nombre": "KillLoop",    "fuente": "bpgenvm-c/samples/KillLoop.bp",    "kill_tras_ms": 500, "timeout_s": 10 },
+    { "nombre": "NatKill",     "fuente": "bpgenvm-c/samples/NatKill.bp",     "aot": true, "kill_tras_ms": 500, "timeout_s": 10 },
     { "nombre": "CatCadena",   "fuente": "bpgenvm-c/samples/CatCadena.bp" },
     { "nombre": "CatCrono",    "fuente": "bpgenvm-c/samples/CatCrono.bp",    "ignorar": ["^  tiempo: "] },
     { "nombre": "SbPiezas",    "fuente": "bpgenvm-c/samples/SbPiezas.bp" },

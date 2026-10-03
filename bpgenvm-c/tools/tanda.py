@@ -58,7 +58,13 @@ VEREDICTOS
     durante la prueba: uptimeMs decrecio) - SIN NATIVO (una prueba "aot" que
     corrio interpretada: los numeros salen IGUALES, asi que la salida no basta;
     lo dice el campo `nativos` del EXITED) - SIN COMPROBAR (una prueba "aot" en
-    una imagen de antes de V7/H5, sin `nativos` en el EXITED).
+    una imagen de antes de V7/H5, sin `nativos` en el EXITED) - PARADA (verde) /
+    NO PARA: una prueba con "kill_tras_ms": N no tiene que ACABAR sino PARARSE —a los
+    N ms se le manda un KILL y tiene que salir KILLED en "kill_max_ms" (2 s si no se
+    dice); el detalle dice cuánto tardó el EXITED, fechado al llegar—. NO PARA si acaba
+    sola antes, con otro estado o tarde (lo que acaba a los 8 s del KILL no ha parado);
+    sin EXITED tras el KILL, COLGADA. El PC sólo la compila (no acabaría). Es lo que
+    ninguna prueba había hecho en placa con una native (#580, 3-oct).
 
 EL AOT (V7/H5, 25-sep; V7_IDEAS §H5)
     Una prueba con "aot": true se sube con su codigo nativo DENTRO: por cada
@@ -633,15 +639,17 @@ class Wire:
                     return None, "tras KILL, INFO no contesta: " + self.errores()
         return None, "tras KILL, ni EXITED ni INFO sin BUSY en %d s" % secs
 
-    def correr(self, path, timeout_s):
+    def correr(self, path, timeout_s, kill_tras_ms=0):
         """RUN -> RUN_REPLY -> OUTPUT... -> EXITED. Devuelve un dict con
         salida, exited, colgada, error, tipos (lo demas que llego), session,
         rezagados (mensajes de OTRA sesion, descartados), arranco.
+        #580: con `kill_tras_ms`, a los N ms del RUN_REPLY (como pronto: una vuelta lee hasta 0,2 s) manda un
+        KILL y apunta cuánto tarda el EXITED (`ms_kill`), fechado AL LLEGAR; si el EXITED llega antes, `acabo_antes`.
         Si el transporte se cae a mitad (hallazgo 5) NO se pierde lo recibido:
         vuelve con error + salida parcial + transporte_roto=True."""
         res = {"salida": "", "exited": None, "colgada": False, "error": None,
                "tipos": [], "ms_wire": None, "session": None, "rezagados": [],
-               "arranco": False, "transporte_roto": False}
+               "arranco": False, "transporte_roto": False, "ms_kill": None, "acabo_antes": False}
         out = []
         try:
             self.send("RUN", path=path)
@@ -665,9 +673,20 @@ class Wire:
             res["session"] = session
             self.session = session
             t0 = time.time()
+            t_kill = None
             otros = set()
             while time.time() - t0 < timeout_s:
-                for m in self.lines(0.3):
+                if kill_tras_ms and t_kill is None and (time.time() - t0) * 1000 >= kill_tras_ms:
+                    self.send("KILL")                # #580: la prueba es PARARLA
+                    t_kill = time.time()
+                if kill_tras_ms:
+                    # #580: lo que llegue, EN CUANTO llegue (`_bocado`, como `esperar`, #495). Con lines(), el EXITED se
+                    # fechaba al volver un read de 0,2 s: el «ms despues» del KILL salía de ~200 en el sim y en la C3,
+                    # y era la espera del cronómetro, no la de la placa.
+                    lote, self.pend = self.pend + self._bocado(), []
+                else:
+                    lote = self.lines(0.3)
+                for m in lote:
                     typ = m.get("type")
                     if typ in ("OUTPUT", "EXITED") and self._de_otra_sesion(m, session, res["rezagados"]):
                         continue
@@ -678,6 +697,11 @@ class Wire:
                         res["exited"] = m
                         res["ms_wire"] = int((time.time() - t0) * 1000)
                         res["tipos"] = sorted(otros)
+                        if kill_tras_ms:
+                            if t_kill is None:
+                                res["acabo_antes"] = True
+                            else:
+                                res["ms_kill"] = int((time.time() - t_kill) * 1000)
                         return res
                     else:
                         otros.add(typ or "?")
@@ -721,9 +745,13 @@ def leer_manifiesto(ruta):
             "ignorar": list(e.get("ignorar", [])),           # V7/H5: lineas fuera de la comparacion
             "memoria": e.get("memoria", ""),                  # V7/H9: "apretada" — verde solo con la placa que aprieta
             "heap_min_kb": int(e.get("heap_min_kb", 0)),      # V7/H9: lo que la prueba necesita de heap de la VM
+            "kill_tras_ms": int(e.get("kill_tras_ms", 0)),    # #580: PARARLA con un KILL a los N ms (0 = no)
+            "kill_max_ms": int(e.get("kill_max_ms", 2000)),   # #580: y el EXITED, como mucho a estos ms del KILL
         }
         if p["criterio"] not in ("identico", "no-peta", "aserciones"):
             sys.exit("manifiesto: criterio desconocido '%s' en %s" % (p["criterio"], p["nombre"]))
+        if p["kill_tras_ms"] < 0 or p["kill_max_ms"] <= 0:
+            sys.exit("manifiesto: kill_tras_ms negativo o kill_max_ms no positivo en %s" % p["nombre"])
         if p["memoria"] not in ("", "apretada"):
             sys.exit("manifiesto: memoria desconocida '%s' en %s (vale \"apretada\")" % (p["memoria"], p["nombre"]))
         bp = os.path.join(RAIZ, p["fuente"])
@@ -878,7 +906,7 @@ def oraculo(p, sin_oraculo, extra_args=()):
     o["mod"] = os.path.join(work, p["modulo"] + ".mod")
     o["crc"] = crc_de(o["mod"])
     o["size"] = os.path.getsize(o["mod"])
-    if sin_oraculo:
+    if sin_oraculo or p.get("kill_tras_ms"):   # #580: una prueba que se PARA no acabaría en el PC: sólo se compila
         return o
     t0 = time.time()
     try:
@@ -1415,6 +1443,20 @@ def veredicto_de(p, o, res, sin_oraculo):
     if res["colgada"]:
         return "COLGADA", "sin EXITED en %d s; tras KILL: %s" % (
             p["timeout_s"], ("EXITED %s" % ex.get("status")) if ex else "tampoco EXITED en 5 s")
+    if p.get("kill_tras_ms") and ex is not None:
+        # #580: la prueba es PARARLA. Verde sólo si sale KILLED después del KILL.
+        est = "EXITED %s exit=%s%s" % (ex.get("status"), ex.get("exitCode"),
+                                        (" (%s)" % ex.get("errorMessage")) if ex.get("errorMessage") else "")
+        if res.get("acabo_antes"):
+            return "NO PARA", "acabo sola antes del KILL de los %d ms: %s" % (p["kill_tras_ms"], est)
+        if ex.get("status") == "KILLED":
+            ms = res.get("ms_kill")
+            if ms is not None and ms > p.get("kill_max_ms", 2000):
+                return "NO PARA", "el KILL de los %d ms llego, pero el EXITED tardo %d ms (el maximo, %d): %s" % (
+                    p["kill_tras_ms"], ms, p.get("kill_max_ms", 2000), est)
+            return "PARADA", "KILL a los %d ms; el EXITED, %s ms despues: %s" % (
+                p["kill_tras_ms"], ms, est)
+        return "NO PARA", "tras el KILL de los %d ms: %s" % (p["kill_tras_ms"], est)
     if ex is None:
         return "ERROR", "sin EXITED"
     st, code = ex.get("status"), ex.get("exitCode")
@@ -1472,7 +1514,7 @@ def veredicto_de(p, o, res, sin_oraculo):
     return "DIFIERE", "; ".join(partes)
 
 
-VERDES = ("IDENTICO", "NO-PETA", "ASERCIONES")
+VERDES = ("IDENTICO", "NO-PETA", "ASERCIONES", "PARADA")
 
 
 # --ensayo-colgada: las pruebas que se TRATAN como colgadas sin EXITED (ver la cabecera).
@@ -1564,9 +1606,10 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
     for art, pv in r["artefactos_previos"].items():
         if pv["dudoso"]:
             notas.append("%s: artefacto %s DUDOSO antes del RUN: %s" % (p["nombre"], art, pv["dudoso"]))
-    log("    RUN /app/%s.mod (timeout %d s)" % (p["modulo"], p["timeout_s"]))
+    log("    RUN /app/%s.mod (timeout %d s%s)" % (p["modulo"], p["timeout_s"],
+        (", KILL a los %d ms" % p["kill_tras_ms"]) if p["kill_tras_ms"] else ""))
     w.ultima_prueba = p["nombre"]
-    res = w.correr("/app/" + p["modulo"] + ".mod", p["timeout_s"])
+    res = w.correr("/app/" + p["modulo"] + ".mod", p["timeout_s"], p["kill_tras_ms"])
     if p["nombre"] in ENSAYO_COLGADA and not res["error"]:
         log("    ENSAYO: se trata como COLGADA sin EXITED (--ensayo-colgada)")
         res["colgada"], res["exited"] = True, None
