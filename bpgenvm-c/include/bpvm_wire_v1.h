@@ -146,6 +146,31 @@ void wire_v1_send_error(long id, const char* code, const char* message);
 /** FATAL (evento, sin id). Mismo criterio de degradación que `send_error`. */
 void wire_v1_send_fatal(const char* code, const char* message);
 
+/* ── V7/H10 — LA SALIDA DEL PROGRAMA (OUTPUT), COMÚN: el RUN común, paso 1 (3-oct) ────────────────────────────────
+ * Había cuatro sinks de OUTPUT y fallaban distinto con lo mismo: la STM32 TIRABA la línea cuyo escape no cabía en 2 KB,
+ * el micro simulado cortaba en el primer NUL, la ESP32 partía un carácter entre tramas, y el hilo `io` trocea a 512 B
+ * sin mirar caracteres (el IDE decodifica cada trama aparte: un carácter en el byte 512 salía como dos «�»). Las
+ * reglas, de Eduardo (2-oct): se escapa por LONGITUD (un NUL sale \u0000), se trocea en tramas de
+ * WIRE_V1_SALIDA_TRAMA bytes de datos sin partir NUNCA un escape ni un carácter —el que llega a medias se guarda para
+ * la llamada siguiente— y no se tira nada: un byte que no es UTF-8 sale como U+FFFD (en una cadena JSON no cabe otra
+ * cosa), y un carácter que se queda a medias al acabar, también. Cada trama sale ENTERA por `wire_v1_send_line`: el
+ * cerrojo del cable, si lo hay, lo pone quien llama. NO es reentrante (la trama es estática: 1 KB que no va en la pila
+ * de `io`, que en la Pico y la STM32 es de 4); lo llama un solo hilo a la vez. */
+#define WIRE_V1_SALIDA_TRAMA 1024u
+
+typedef struct {
+    long          session;
+    unsigned char resto[4];   /* el principio de un carácter que llegó partido */
+    unsigned      nresto;
+} wire_v1_salida_t;
+
+/** Para cada RUN: la sesión que va en cada OUTPUT, y nada a medias. */
+void wire_v1_salida_inicia(wire_v1_salida_t* s, long session);
+/** Lo que imprime el programa, en tramas OUTPUT (ver arriba). */
+void wire_v1_salida(wire_v1_salida_t* s, const char* data, size_t len);
+/** Al acabar el programa: si quedó medio carácter, sale como U+FFFD. */
+void wire_v1_salida_cierra(wire_v1_salida_t* s);
+
 #ifdef __cplusplus
 }
 #endif

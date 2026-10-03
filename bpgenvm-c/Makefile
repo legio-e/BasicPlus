@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1056,6 +1056,15 @@ test-wirerecorte:
 	$(CC) $(CFLAGS) -Isrc test/test_wirerecorte.c src/wire_v1_proto.c -o build/test_wirerecorte.exe $(LDFLAGS)
 	@echo "--- #557 el errorMessage del EXITED, recortado si no cabe (esperado: solo 'ok', [status=OK]) ---"
 	@./build/test_wirerecorte.exe
+
+# V7/H10, el RUN común, paso 1 (3-oct) — LA SALIDA DEL PROGRAMA, COMÚN (wire_v1_salida): un NUL, 512 controles, un
+# carácter partido entre dos llamadas, un carácter y un escape que no caben al final de una trama, un byte que no es
+# UTF-8 y 10 KB en trozos raros; cada trama, JSON entero y UTF-8 válido, y se reconstruye lo impreso.
+test-salida:
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_salida.c src/wire_v1_proto.c -o build/test_salida.exe $(LDFLAGS)
+	@echo "--- el RUN comun, paso 1: la salida del programa, comun (esperado: solo 'ok', [status=OK]) ---"
+	@./build/test_salida.exe
 
 test-loaderr: $(LIBOBJ)
 	@mkdir -p build
