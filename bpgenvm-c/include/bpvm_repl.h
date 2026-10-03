@@ -277,6 +277,16 @@ int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj);
 /** El BUSY de lo demás durante un RUN, el mismo texto en las cuatro familias y el simulado. */
 #define BPVM_REPL_OCUPADO_EN_RUN "ejecución en curso: sólo HELLO, KILL, RESET, STAT y GET/LIST troceados"
 
+/** V7/H10, el board_mgr común (3-oct; V7_IDEAS §H10) — STATE, ENV_*, PART_* y PACK_*, para la familia registrada con
+ *  `bpvm_bmgr_familia` (bpvm_bmgr_wire.h). Era el `handle` de cada placa, el mismo código salvo la cintura. `scratch`
+ *  es el búfer prestado del que salen el sector de trabajo y la respuesta; `bulk`, el de PACK_BURN_DATA, que la
+ *  familia ya ha leído del cable. Si la escritura del ENV falla contesta `FLASH_ERROR` (D2: «sigue el valor de antes»)
+ *  en vez del OK que salía siempre (#636). */
+#define BPVM_REPL_FLASH_ERROR "no se pudo escribir la flash: sigue el valor de antes"
+void bpvm_bmgr_handle(long id, const json_obj_t* obj, const char* type,
+                      unsigned char* scratch, unsigned long scratch_len,
+                      const unsigned char* bulk, unsigned long bulk_len);
+
 /** El cliente se ha ido (la familia lo sabe cuando su cable lo dice: el socket del simulado): lo que se le mandaba,
  *  cortado, y su RAM y su fichero abierto, libres. Lo mismo que hace un HELLO, que es como se entera una placa. */
 void bpvm_repl_cliente_ido(void);

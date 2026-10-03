@@ -70,6 +70,47 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
  * virgen (sin env) → 0 (kernel); env pero sin particiones → 1; completo → 3. */
 int bpvm_bmgr_wire_state(const bpvm_bmgr_t* bm);
 
+/* ── V7/H10, EL BOARD_MGR COMÚN (3-oct; V7_IDEAS §H10 «el board_mgr común», las decisiones de Eduardo) ──────────
+ *
+ * LA CINTURA DE UNA FAMILIA: lo poco que el común no puede hacer por ella. Los tres `handle` de las placas eran el
+ * mismo código salvo esto. Es también la «cara común delgada» de la flash (D3/D5): sólo lo que necesita el gestor —el
+ * ENV y la zona de packs, que ya tiene su cintura en `bm->packs_flash`—; el log y el FS, como están. */
+typedef struct bpvm_bmgr_familia {
+    size_t sector;                                      /* el sector del ENV: 4 KB (RP2350, ESP32, el sim) u 8 KB (U5) */
+    /* Dónde se LEEN las dos copias del ENV (0 = A, 1 = B). O un puntero a la copia, en su sitio —la flash mapeada: la
+     * Pico y la STM32—, o, si no se puede (la ESP32 no mapea `bpenv`: gasta espacio virtual, y en la C5 no queda),
+     * `copia` NULL y `leer` la copia a un sector de `espejo` (2 sectores que pone la familia). */
+    const uint8_t* (*copia)(int slot);
+    int  (*leer)(int slot, uint8_t* dst);               /* 0 leída; si no, la vista la da por borrada (0xFF) */
+    uint8_t* espejo;
+    int  (*escribir)(int slot, const uint8_t* src);     /* borrar y programar un sector entero; 0 escrito, -1 no */
+    /* Lo de cada placa en el gestor: todo menos `a`, `b`, `scratch` y `sector`, que pone el común (la base y el tamaño
+     * de las particiones, el FS arriba, el estado REAL del arranque, la zona de packs montada y su cintura, el bloque de
+     * los motores). */
+    void (*rellenar)(bpvm_bmgr_t* bm);
+    const char* (*no_vale)(void);                       /* NULL = adelante; si no, por qué no se toca nada */
+} bpvm_bmgr_familia_t;
+
+/* La familia la registra al arrancar, antes de leer el ENV. */
+void bpvm_bmgr_familia(const bpvm_bmgr_familia_t* f);
+const bpvm_bmgr_familia_t* bpvm_bmgr_familia_actual(void);
+
+/* D1 (Eduardo, 3-oct: *«En realidad deberían de leerse siempre de la flash»*) — LA VISTA DEL ENV: la copia buena de las
+ * que hay en la flash. Toda escritura del ENV pasa por `bpvm_bmgr_escribir` y sube una generación; la vista vuelve a
+ * elegir (y la ESP32 vuelve a leer su espejo) en cuanto cambia: es siempre lo que tiene la flash, sin leerla en cada
+ * consulta. CUÁNDO entra en efecto un valor lo decide quien lo lee (al arrancar, en cada RUN…); lo EN VIGOR es otra
+ * cosa. Sin familia registrada, un ENV vacío (`valid` = 0). El puntero vale hasta la próxima escritura. */
+const bpvm_env_t* bpvm_bmgr_vista(void);
+
+/* Escribe un sector del ENV por la cintura de la familia y renueva la vista. 0 escrito; -1 no (y la vista sigue a lo
+ * que haya quedado en la flash: la otra copia, si ésta quedó a medias). */
+int bpvm_bmgr_escribir(int slot, const uint8_t* src);
+
+/* #626 — el arranque común AÑADE una clave que falta (la fecha de la imagen, una vez): el bloque nuevo, en un sector
+ * de la zona de rascar, desde las copias de la flash, y por `bpvm_bmgr_escribir`. 0 escrita; 1 ya estaba (nada que
+ * escribir); -1 no (no cabe, la zona no está libre, la flash no escribe o la familia dice que no). */
+int bpvm_bmgr_anadir(const char* clave, const char* valor);
+
 #ifdef __cplusplus
 }
 #endif

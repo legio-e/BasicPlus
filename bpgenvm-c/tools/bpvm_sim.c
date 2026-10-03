@@ -33,6 +33,8 @@
  *   resuelvan XIP, igual que el --pack= de la VM-C host.
  *   --zona-sucia: la zona empieza con RESTOS (como una partición recién creada sobre
  *   flash usada): está sin formatear, y el micro llega a la app en «casi» (V7/H7).
+ *   --flash-falla: la «flash» del ENV no escribe: un ENV_SET contesta FLASH_ERROR y sigue
+ *   el valor de antes (V7/H10, el board_mgr común, D2: #636).
  *
  * Ver docs/BPVM_WIRE_PROTOCOL.md (catálogo de mensajes) y
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
@@ -141,16 +143,19 @@ static void sim_sqlite_arranca(void) {
 #define DEF_FLASH   0x400000u   /* 4 MB por defecto (tipo Pico) */
 
 static uint8_t g_a[SECTOR], g_b[SECTOR], g_scratch[SECTOR];
+/* El modelo del gestor del sim: g_a y g_b SON su flash (en RAM, respaldada por un fichero), así que las consultas de
+ * sólo lectura (el reparto del FS, el estado) lo usan tal cual. Los comandos del wire van por el común
+ * (bpvm_bmgr_handle), con sus copias, y escriben por la cintura de abajo. */
 static bpvm_bmgr_t g_bm;
-/* V7/H6.c G4.a1 — el ENV simulado, con la regla de siempre (entero o nada). */
-static int sim_env_get(const char* clave, char* buf, size_t cap) { return bpvm_bmgr_env_get(&g_bm, clave, buf, cap); }
-/* V7/H10 #626 — el ENV que ve el PROGRAMA (Machine.getEnv): el del ARRANQUE, como en la placa —una copia de las dos
- * del gestor, hecha al arrancar—. Un ENV_SET se ve al volver a lanzar el simulador sobre la misma flash, como en la
- * placa al reiniciar (el RESET del sim no rearranca: no hay silicio). */
-static uint8_t    g_env_a0[SECTOR], g_env_b0[SECTOR];
-static bpvm_env_t g_env0;
-static int sim_env_arranque(const char* clave, char* buf, size_t cap) { return bpvm_env_get_exacto(&g_env0, clave, buf, cap); }
+/* V7/H10 (3-oct, el board_mgr común, D1) — EL ENV, EL DE LA FLASH: el que ve el programa (Machine.getEnv), los buses
+ * y lo demás, con la regla de siempre (entero o nada). Hasta hoy el programa veía una foto del ARRANQUE, y un ENV_SET
+ * no se veía hasta relanzar el sim; Eduardo: «deberían de leerse siempre de la flash». CUÁNDO entra en efecto lo
+ * decide quien lo lee: `stack=` y `quantum=`, al arrancar. */
+static int sim_env_get(const char* clave, char* buf, size_t cap) { return bpvm_env_get_exacto(bpvm_bmgr_vista(), clave, buf, cap); }
 static const char* g_flash_path = "boardsim.flash";
+/* V7/H10 (D2, #636) — `--flash-falla`: la «flash» no escribe. Un ENV_SET tiene que contestar FLASH_ERROR, y el valor de
+ * antes, seguir (también al relanzar el sim). */
+static int g_flash_falla = 0;
 
 /* H3 — zona de packs simulada (región RAM que hace de flash; 0xFF = borrada).
  * Se precarga con los --pack= y PACK_LS la sirve por el dispatch compartido. */
@@ -294,13 +299,42 @@ static void flash_load(void) {
     fclose(f);
 }
 
-static void flash_store(void) {   /* la "cintura de flash" del sim */
+static int flash_store(void) {   /* la "cintura de flash" del sim: 0 escrita, -1 no */
     FILE* f = fopen(g_flash_path, "wb");
-    if (!f) { perror("sim: no puedo escribir la flash"); return; }
-    fwrite(g_a, 1, SECTOR, f);
-    fwrite(g_b, 1, SECTOR, f);
-    fclose(f);
+    if (!f) { perror("sim: no puedo escribir la flash"); return -1; }
+    int ok = fwrite(g_a, 1, SECTOR, f) == SECTOR && fwrite(g_b, 1, SECTOR, f) == SECTOR;
+    if (fclose(f) != 0) ok = 0;
+    return ok ? 0 : -1;
 }
+
+/* ── V7/H10, el board_mgr común: LA CINTURA DEL SIM (bpvm_bmgr_familia_t) ── */
+static const uint8_t* sim_env_copia(int slot) { return slot == 0 ? g_a : g_b; }
+static int sim_env_escribir(int slot, const uint8_t* src) {
+    if (g_flash_falla) return -1;   /* --flash-falla: ni la RAM cambia, como una flash que no programa */
+    uint8_t* dst = (slot == 0) ? g_a : g_b;
+    uint8_t antes[SECTOR];
+    memcpy(antes, dst, SECTOR);
+    memcpy(dst, src, SECTOR);
+    if (flash_store() != 0) {       /* el fichero no se escribió: la RAM vuelve a lo que tiene el fichero */
+        memcpy(dst, antes, SECTOR);
+        return -1;
+    }
+    return 0;
+}
+static void sim_env_rellenar(bpvm_bmgr_t* bm) {   /* lo del sim: su configuración (la pone main) */
+    bm->part_base     = g_bm.part_base;
+    bm->usable_flash  = g_bm.usable_flash;
+    bm->fs_arriba     = g_bm.fs_arriba;
+    bm->live          = g_bm.live;               /* NULL: STATE se deriva del ENV (el sim no tiene arranque real) */
+    bm->packs_base    = g_bm.packs_base;
+    bm->packs_size    = g_bm.packs_size;
+    bm->packs_flash   = g_bm.packs_flash;
+    bm->pack_ram_base = g_bm.pack_ram_base;
+    bm->pack_ram_size = g_bm.pack_ram_size;
+}
+static const bpvm_bmgr_familia_t SIM_FAMILIA = {
+    SECTOR, sim_env_copia, NULL, NULL, sim_env_escribir, sim_env_rellenar, NULL
+};
 
 /* --- string builder minúsculo para construir replies JSON --- */
 typedef struct { char* buf; size_t cap, off; int ok; } sb_t;
@@ -631,7 +665,7 @@ static void     fs_walk(sb_t* sb);
 
 static void sim_repl_info(bpvm_repl_info_t* out) {
     char idv[64];
-    int has = bpvm_bmgr_env_get(&g_bm, "board", idv, sizeof idv) >= 0;
+    int has = bpvm_env_get(bpvm_bmgr_vista(), "board", idv, sizeof idv) >= 0;   /* V7/H10: el ENV de la flash */
     static char s_board[64];
     snprintf(s_board, sizeof s_board, "%s", has ? idv : (g_board ? g_board : "sim"));
     fs_walk(NULL);
@@ -887,23 +921,6 @@ static void handle(sock_t c, json_obj_t* obj) {
      *     byte-idénticas a las del device. --- */
     if (!strcmp(type, "STATE") || !strncmp(type, "ENV_", 4) || !strncmp(type, "PART_", 5)
         || !strncmp(type, "PACK_", 5)) {
-        bpvm_bmgr_req_t req;
-        memset(&req, 0, sizeof req);
-        snprintf(req.type, sizeof req.type, "%s", type);
-        req.id = id;
-        req.has_key   = json_get_str(obj, "key",   req.key,   sizeof req.key)   >= 0;
-        req.has_value = json_get_str(obj, "value", req.value, sizeof req.value) >= 0;
-        for (int i = 0; i < BPVM_PART_COUNT; i++)
-            req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
-        req.off = json_get_long(obj, "offset", -1);     /* H3: PACK_ENTRIES/DEL/READ */
-        req.has_off = req.off >= 0;
-        req.size = json_get_long(obj, "size", -1);      /* H3: PACK_BURN_BEGIN */
-        req.has_size = req.size >= 0;
-        {                                               /* H3: PACK_FORMAT (confirm=YES) */
-            char confirm[8];
-            req.confirm_yes = json_get_str(obj, "confirm", confirm, sizeof confirm) >= 0
-                              && strcmp(confirm, "YES") == 0;
-        }
         /* H3 — bulk crudo tras la línea (PACK_BURN_DATA): leerlo SIEMPRE que se
          * anuncie, aunque sobre, para no desincronizar el wire. */
         static uint8_t s_bulk[BPVM_PACK_BURN_CHUNK];
@@ -915,15 +932,12 @@ static void handle(sock_t c, json_obj_t* obj) {
                 return;
             }
             if (recv_exact(c, s_bulk, (size_t) bulk) != 0) return;
-            req.bulk = s_bulk;
-            req.bulk_len = bulk;
         }
-        char rbuf[4096];
-        int wrote = -1;
-        int n = bpvm_bmgr_wire_dispatch(&g_bm, &req, rbuf, sizeof rbuf, &wrote);
-        if (n < 0) { send_err(c, id, "INTERNAL_ERROR", "reply no cabe"); return; }
-        if (wrote >= 0) flash_store();     /* la "flash" del sim = el fichero A/B */
-        send_line(c, rbuf);
+        /* V7/H10 — el board_mgr COMÚN (bpvm_bmgr_handle), el mismo de las placas, con la cintura del sim. El búfer: el
+         * sector de trabajo y la respuesta, como el del PUT de una placa. */
+        static unsigned char s_bmgr_buf[SECTOR + 4096];
+        bpvm_bmgr_handle(id, obj, type, s_bmgr_buf, sizeof s_bmgr_buf,
+                         bulk > 0 ? s_bulk : NULL, bulk > 0 ? (unsigned long) bulk : 0ul);
         return;
     }
     send_err(c, id, "UNSUPPORTED", "comando no soportado por el sim");
@@ -967,6 +981,7 @@ int main(int argc, char** argv) {
         else if (!strncmp(a, "--fs=", 5))         fs_img_arg = a + 5;
         else if (!strncmp(a, "--fs-size=", 10))   fs_size_arg = parse_size(a + 10);
         else if (!strncmp(a, "--board=", 8))      g_board = a + 8;
+        else if (!strcmp(a, "--flash-falla"))     g_flash_falla = 1;   /* V7/H10 (D2): la flash del ENV no escribe */
         else if (!strncmp(a, "--sd=", 5))         g_sd_path = a + 5;   /* V7/H3: la tarjeta */
         /* H10 — pantalla. Con GUI=0 en el build se aceptan y se ignoran: el IDE
          * las pasa siempre sin tener que saber cómo se compiló el sim. */
@@ -1028,6 +1043,7 @@ int main(int argc, char** argv) {
 
     /* --- "flash" del env (A/B) + gestor de placa --- */
     flash_load();
+    bpvm_bmgr_familia(&SIM_FAMILIA);   /* V7/H10: el board_mgr común, con la cintura del sim; y la vista del ENV */
     g_bm.a = g_a; g_bm.b = g_b; g_bm.scratch = g_scratch; g_bm.sector = SECTOR;
     g_bm.part_base = PART_BASE;
     g_bm.usable_flash = bpvm_part_usable_flash(g_flash_size, 0);
@@ -1065,18 +1081,11 @@ int main(int argc, char** argv) {
      * no en cada `Run`: en la placa el valor se recoge en el boot y hace falta un
      * reset para que entre. Aplicarlo por `Run` seria mas comodo y por eso mismo
      * infiel — el simulador tiene que doler donde duele la placa. */
-    {
-        bpvm_env_t env;
-        if (bpvm_bmgr_env(&g_bm, &env))   /* devuelve 1 si HAY env, no 0 */
-            bpvm_boot2_claves(&env);   /* V7/H7 (Boot 2, fase 4): stack= y quantum=, como las placas */
-    }
+    bpvm_boot2_claves(bpvm_bmgr_vista());   /* V7/H7 (Boot 2, fase 4): stack= y quantum=, como las placas (sin ENV, nada) */
     bpvm_bus_desde_env(sim_env_get);   /* V7/H6.c G4.a1: los buses del ENV, en el boot como en la placa */
-    /* V7/H10 #626 — Machine.getEnv: la foto del ENV del arranque. El sim no anota la fecha de su imagen (no sube por
-     * el arranque común): la pone quien la quiera probar (tools/env_smoke.py). */
-    memcpy(g_env_a0, g_a, SECTOR);
-    memcpy(g_env_b0, g_b, SECTOR);
-    bpvm_env_pick(g_env_a0, SECTOR, g_env_b0, SECTOR, &g_env0);
-    bpvm_machine_set_env(sim_env_arranque);
+    /* V7/H10 — Machine.getEnv: el ENV de la flash (D1). El sim no anota la fecha de su imagen (no sube por el arranque
+     * común): la pone quien la quiera probar (tools/env_smoke.py). */
+    bpvm_machine_set_env(sim_env_get);
 
     bpvm_net_register_host();   /* sockets TCP del SO, como en la VM-C host */
 

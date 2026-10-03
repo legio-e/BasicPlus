@@ -48,6 +48,36 @@ static int g_fail = 0;
  * programar son memset/memcpy, y un pack con un motor se arma a mano con el
  * formato de pack/PackFormat.java (si no cuadrara, el tope no lo vería y el
  * caso saldría en rojo). */
+/* ── V7/H10, el board_mgr común: una FAMILIA de prueba con su flash del ENV en RAM (dos sectores), que puede negarse
+ * a escribir. Las dos formas de leer: en su sitio (la Pico, la STM32, el sim) y con espejo (la ESP32). ── */
+static uint8_t g_fl[2][SECT];          /* la «flash» del ENV: A y B */
+static uint8_t g_espejo[2 * SECT];     /* el espejo de la familia que no lee en su sitio */
+static int     g_fl_falla = 0;         /* 1: la flash no escribe */
+static int     g_fl_escrituras = 0;    /* cuántas escrituras llegaron a la flash */
+static const uint8_t* fam_copia(int slot) { return g_fl[slot]; }
+static int fam_leer(int slot, uint8_t* dst) { memcpy(dst, g_fl[slot], SECT); return 0; }
+static int fam_escribir(int slot, const uint8_t* src) {
+    if (g_fl_falla) return -1;
+    memcpy(g_fl[slot], src, SECT);
+    g_fl_escrituras++;
+    return 0;
+}
+static const bpvm_bmgr_familia_t FAM_EN_SU_SITIO = { SECT, fam_copia, NULL, NULL, fam_escribir, NULL, NULL };
+static const bpvm_bmgr_familia_t FAM_CON_ESPEJO  = { SECT, NULL, fam_leer, g_espejo, fam_escribir, NULL, NULL };
+
+/* Un ENV_SET como lo hace el común: las copias de la flash a la RAM, el gestor edita la rancia y se escribe. */
+static int fam_env_set(const char* key, const char* value) {
+    static uint8_t a[SECT], b[SECT], sc[SECT];
+    bpvm_bmgr_t bm;
+    memset(&bm, 0, sizeof bm);
+    memcpy(a, g_fl[0], SECT);
+    memcpy(b, g_fl[1], SECT);
+    bm.a = a; bm.b = b; bm.scratch = sc; bm.sector = SECT;
+    int slot = -1;
+    if (bpvm_bmgr_env_set(&bm, key, value, &slot) != 0) return -2;
+    return bpvm_bmgr_escribir(slot, slot == 0 ? a : b);
+}
+
 static int zf_erase(void* u, uint32_t off, uint32_t len) { memset((uint8_t*) u + off, 0xFF, len); return 0; }
 static int zf_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) { memcpy((uint8_t*) u + off, d, len); return 0; }
 static void be32w(uint8_t* p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t) v; }
@@ -359,6 +389,41 @@ int main(void) {
         CHECK(nn > 0 && strstr(rep, "\"code\":\"UNSUPPORTED\"") != NULL,
               "FS arriba: PART_DEFAULTS tampoco propone un reparto");
     }
+
+    /* ── V7/H10, el board_mgr común (3-oct): la VISTA del ENV es la de la flash (D1) y el `anadir` común (#626), con
+     * las dos formas de leer las copias. Una escritura que no llega deja el valor de antes (D2). ── */
+    for (int forma = 0; forma < 2; forma++) {
+        const char* f = forma == 0 ? "en su sitio" : "con espejo";
+        char val[64];
+        memset(g_fl, 0xFF, sizeof g_fl);
+        g_fl_falla = 0;
+        g_fl_escrituras = 0;
+        bpvm_bmgr_familia(forma == 0 ? &FAM_EN_SU_SITIO : &FAM_CON_ESPEJO);
+        CHECK(!bpvm_bmgr_vista()->valid, "board_mgr común: la flash borrada, la vista sin ENV");
+
+        CHECK(bpvm_bmgr_anadir("imagen.fecha", "123") == 0 && g_fl_escrituras == 1,
+              "board_mgr común: anadir una clave que falta, escribe una vez");
+        CHECK(bpvm_env_get_exacto(bpvm_bmgr_vista(), "imagen.fecha", val, sizeof val) == 3 && !strcmp(val, "123"),
+              "board_mgr común: y la vista la ve sin reiniciar (D1)");
+        CHECK(bpvm_bmgr_anadir("imagen.fecha", "999") == 1 && g_fl_escrituras == 1,
+              "board_mgr común: anadir la que ya está no escribe (y no la cambia)");
+
+        CHECK(fam_env_set("gc", "0") == 0 && fam_env_set("gc", "1") == 0,
+              "board_mgr común: dos ENV_SET seguidos");
+        CHECK(bpvm_env_get_exacto(bpvm_bmgr_vista(), "gc", val, sizeof val) == 1 && !strcmp(val, "1")
+              && bpvm_env_get_exacto(bpvm_bmgr_vista(), "imagen.fecha", val, sizeof val) == 3,
+              "board_mgr común: la vista ve el segundo, y lo anterior sigue (#638)");
+
+        g_fl_falla = 1;
+        CHECK(fam_env_set("gc", "7") == -1, "board_mgr común: con la flash que no escribe, la escritura falla");
+        CHECK(bpvm_env_get_exacto(bpvm_bmgr_vista(), "gc", val, sizeof val) == 1 && !strcmp(val, "1"),
+              "board_mgr común: y la vista sigue con el valor de antes (D2)");
+        CHECK(bpvm_bmgr_anadir("otra", "x") == -1, "board_mgr común: anadir con la flash que no escribe: -1");
+        g_fl_falla = 0;
+        (void) f;
+    }
+    bpvm_bmgr_familia(NULL);
+    CHECK(!bpvm_bmgr_vista()->valid, "board_mgr común: sin familia, la vista sin ENV");
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;

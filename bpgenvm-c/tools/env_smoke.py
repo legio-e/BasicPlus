@@ -1,14 +1,17 @@
 # -*- coding: utf-8 -*-
 """env_smoke.py — V7/H10 #626: Machine.getEnv y Rtc.Clock.isSet() contra el micro simulado, con su ENV.
 
-El programa ve el ENV del ARRANQUE, como en la placa: un ENV_SET se ve después de reiniciar. Aquí reiniciar es parar
-el simulador y lanzarlo otra vez sobre la MISMA flash (el fichero A/B del ENV y el FS). Tres arranques:
+El programa ve el ENV de la FLASH —V7/H10, el board_mgr común, D1 (Eduardo, 3-oct: «deberían de leerse siempre de la
+flash»)—: un ENV_SET se ve en el mismo arranque, también el SEGUNDO seguido (en la Pico, el primero no se veía: #638).
+Reiniciar es parar el simulador y lanzarlo otra vez sobre la MISMA flash (el fichero A/B del ENV y el FS):
 
-  1. sin la clave: getEnv da "" e isSet() dice «en hora» aunque el reloj marque 1970 (sin fecha no hay regla). Se
-     anota imagen.fecha=1790899200 (el 2-oct-2026) con ENV_SET, y en ESTE arranque el programa aún no la ve.
-  2. con la fecha: a 1970, fuera de hora; medio día antes, dentro del margen, en hora; un día después, en hora. Y se
-     escribe una que no es una fecha: imagen.fecha=abc.
+  1. sin la clave: getEnv da "" e isSet() dice «en hora» aunque el reloj marque 1970 (sin fecha no hay regla). Dos
+     ENV_SET seguidos —imagen.fecha=1 y luego 1790899200 (el 2-oct-2026)— y el programa ve cada uno sin reiniciar.
+  2. tras reiniciar, la fecha sigue: a 1970, fuera de hora; medio día antes, dentro del margen, en hora; un día
+     después, en hora. Y se escribe una que no es una fecha: imagen.fecha=abc.
   3. con «abc», isSet() LANZA, con el valor en el mensaje (errores sí, silenciosos no).
+  4. con la flash que no escribe (`--flash-falla`, D2): el ENV_SET contesta FLASH_ERROR y el valor de antes sigue —en
+     el ENV_GET y en el programa—; y 5, relanzado sin la opción, también: no se escribió nada (#636).
 
 El simulador no anota la fecha de su imagen al arrancar —no sube por el arranque común (Boot 2)—: la pone esta
 prueba. La regla de «una vez» la prueba test_boot2 (make test-boot2), y en placa, la tanda (RtcEnHora).
@@ -72,9 +75,9 @@ def compila(dest):
     return mod if rc.returncode == 0 and os.path.exists(mod) else None
 
 
-def arranca(flash):
+def arranca(flash, extra=()):
     proc = subprocess.Popen([SIM, "--port=%d" % PORT, "--flash-file=" + flash,
-                             "--mem=1M", "--flash=4M", "--pack=" + STDLIB_PACK],
+                             "--mem=1M", "--flash=4M", "--pack=" + STDLIB_PACK] + list(extra),
                             stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
     sock = None
     for _ in range(50):
@@ -137,10 +140,14 @@ def main():
             check("fecha=[] nada=[]" in text, "1: sin la clave, getEnv da \"\" (y una que no esta, tambien)")
             check("1970: en hora" in text and "un dia despues: en hora" in text,
                   "1: sin fecha no hay regla: en hora aunque marque 1970")
-            r = w.call("ENV_SET", key="imagen.fecha", value="1790899200")
-            check(r.get("type") == "ENV_SET_REPLY", "1: ENV_SET imagen.fecha=1790899200")
+            r = w.call("ENV_SET", key="imagen.fecha", value="1")
+            check(r.get("type") == "ENV_SET_REPLY", "1: ENV_SET imagen.fecha=1")
             text, ex = corre(w)
-            check("fecha=[]" in text, "1: en el mismo arranque el programa aun no la ve (el ENV del arranque)")
+            check("fecha=[1]" in text, "1: en el mismo arranque el programa YA la ve (D1: el ENV de la flash)")
+            r = w.call("ENV_SET", key="imagen.fecha", value="1790899200")
+            check(r.get("type") == "ENV_SET_REPLY", "1: el segundo ENV_SET, imagen.fecha=1790899200")
+            text, ex = corre(w)
+            check("fecha=[1790899200]" in text, "1: y tambien el segundo, sin reiniciar (#638)")
         finally:
             para(proc, sock)
 
@@ -166,6 +173,27 @@ def main():
             check(ex.get("status") not in (None, "OK"), "3: el RUN no acaba bien (%s)" % ex.get("status"))
             check("imagen.fecha=abc" in todo and "que no son segundos desde 1970" in todo,
                   "3: isSet() lanza, y el mensaje dice el valor")
+        finally:
+            para(proc, sock)
+
+        # 4. la flash no escribe (D2, #636): FLASH_ERROR, y el valor de antes
+        proc, sock, w = arranca(flash, ["--flash-falla"])
+        try:
+            r = w.call("ENV_SET", key="imagen.fecha", value="1790899200")
+            check(r.get("type") == "ERROR" and r.get("code") == "FLASH_ERROR",
+                  "4: ENV_SET con la flash que no escribe: ERROR FLASH_ERROR (%s)" % r)
+            r = w.call("ENV_GET", key="imagen.fecha")
+            check(r.get("value") == "abc", "4: el ENV_GET sigue con el valor de antes (%s)" % r.get("value"))
+            text, ex = corre(w)
+            check("fecha=[abc]" in text, "4: y el programa tambien")
+        finally:
+            para(proc, sock)
+
+        # 5. relanzado sin la opción: no se escribió nada
+        proc, sock, w = arranca(flash)
+        try:
+            r = w.call("ENV_GET", key="imagen.fecha")
+            check(r.get("value") == "abc", "5: relanzado, el ENV sigue con el valor de antes (%s)" % r.get("value"))
         finally:
             para(proc, sock)
     except Exception as e:

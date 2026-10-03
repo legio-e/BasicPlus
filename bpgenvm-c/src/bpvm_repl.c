@@ -31,6 +31,7 @@
 #include "bpvm_dbg_wire.h"  /* V7/H10, el RUN común: el depurador, común */
 #include "bpvm_mdn_scan.h"  /* V7/H10, el RUN común: el escáner de .mdn */
 #include "aot_registry.h"   /* V7/H10, el RUN común: vaciar y contar el registro AOT */
+#include "bpvm_bmgr_wire.h" /* V7/H10, el board_mgr común: la familia, la vista del ENV y el despachador */
 
 #include <stdio.h>
 #include <string.h>
@@ -1390,6 +1391,106 @@ int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj) {
     if (strcmp(type, "STAT") == 0) return 1;
     if (strcmp(type, "GET") == 0 || strcmp(type, "LIST") == 0) return json_get_bool(obj, "chunked", 0);
     return 0;
+}
+
+/* ── V7/H10, EL BOARD_MGR COMÚN (3-oct; V7_IDEAS §H10 «el board_mgr común») ──────────────────────────────────────
+ * Era el `handle` de cada placa —la Pico, la STM32 y la ESP32, el mismo código salvo la cintura— y el del sim. La
+ * cintura la pone la familia registrada (bpvm_bmgr_familia_t); lo demás es esto.
+ *
+ * #338 — DOS prestamistas: del búfer prestado (el del PUT, libre durante un comando de gestión) salen el sector de
+ * TRABAJO y la respuesta; las dos copias del ENV las presta la ZONA DE RASCAR, libre durante un comando del entorno
+ * porque sus otros usuarios son los PACK_* y ésos no lo tocan (bpvm_bmgr_needs_env, la frontera). Los PACK_* no usan
+ * sector de trabajo y llegan con el búfer ya mordido por su bulk: el resto va entero a la respuesta. */
+void bpvm_bmgr_handle(long id, const json_obj_t* obj, const char* type,
+                      unsigned char* scratch, unsigned long scratch_len,
+                      const unsigned char* bulk, unsigned long bulk_len) {
+    const bpvm_bmgr_familia_t* f = bpvm_bmgr_familia_actual();
+    if (f == NULL) {
+        wire_v1_send_error(id, "UNSUPPORTED", "esta placa no tiene gestor de placa");
+        return;
+    }
+    {
+        const char* motivo = f->no_vale ? f->no_vale() : NULL;   /* p. ej. el layout de flash inconsistente */
+        if (motivo) {
+            wire_v1_send_error(id, "INTERNAL_ERROR", motivo);
+            return;
+        }
+    }
+    const size_t sec = f->sector;
+    const int con_env = bpvm_bmgr_needs_env(type);
+    const unsigned long minimo = con_env ? (unsigned long) sec + 512u : 512u;
+    if (scratch == NULL || scratch_len < minimo) {
+        wire_v1_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
+        return;
+    }
+    uint8_t* sc        = con_env ? scratch : NULL;
+    char*    reply     = (char*)  (con_env ? scratch + sec : scratch);
+    size_t   reply_cap = (size_t) (con_env ? scratch_len - sec : scratch_len);
+
+    uint8_t* a = NULL;
+    uint8_t* b = NULL;
+    if (con_env) {
+        /* Contiguas y en ese orden: `b` cuelga de `a`. Una petición, un dueño que soltar. */
+        a = (uint8_t*) bpvm_scratch_take(2u * sec, "bmgr-env");
+        if (a == NULL) {
+            wire_v1_send_error(id, "INTERNAL_ERROR", "zona de scratch no disponible para el entorno");
+            return;
+        }
+        b = a + sec;
+        /* Las dos copias, frescas de la flash: el gestor edita la rancia aquí, y sólo la flash la ve si se escribe. */
+        for (int i = 0; i < 2; i++) {
+            uint8_t* dst = (i == 0) ? a : b;
+            if (f->copia) memcpy(dst, f->copia(i), sec);
+            else if (!f->leer || f->leer(i, dst) != 0) memset(dst, 0xFF, sec);
+        }
+    }
+
+    bpvm_bmgr_t bm;
+    memset(&bm, 0, sizeof bm);   /* campos nuevos futuros nunca con basura de pila */
+    if (f->rellenar) f->rellenar(&bm);
+    bm.a = a; bm.b = b; bm.scratch = sc;
+    bm.sector = sec;
+
+    bpvm_bmgr_req_t req;
+    memset(&req, 0, sizeof req);
+    snprintf(req.type, sizeof req.type, "%s", type);
+    req.id = id;
+    req.has_key   = json_get_str(obj, "key",   req.key,   sizeof req.key)   >= 0;
+    req.has_value = json_get_str(obj, "value", req.value, sizeof req.value) >= 0;
+    for (int i = 0; i < BPVM_PART_COUNT; i++)
+        req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
+    req.off      = json_get_long(obj, "offset", -1);   /* PACK_ENTRIES/DEL/READ */
+    req.has_off  = req.off >= 0;
+    req.size     = json_get_long(obj, "size", -1);     /* PACK_BURN_BEGIN */
+    req.has_size = req.size >= 0;
+    req.bulk     = bulk;                               /* PACK_BURN_DATA (ya recibido por la familia) */
+    req.bulk_len = (long) bulk_len;
+    {
+        /* PACK_FORMAT: una CADENA "YES", no un booleano —el formateo borra la zona entera y el contrato pide
+         * escribirlo, no marcar una casilla—. */
+        char confirm[8];
+        req.confirm_yes = json_get_str(obj, "confirm", confirm, sizeof confirm) >= 0
+                          && strcmp(confirm, "YES") == 0;
+    }
+
+    int wrote = -1;
+    int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);
+    /* La zona se suelta en TODAS las salidas —quedársela dejaría mudos los PACK_* y los comandos del entorno
+     * siguientes— y DESPUÉS del volcado, porque el sector que va a la flash vive en ella. */
+    if (n < 0) {
+        if (con_env) bpvm_scratch_give("bmgr-env");
+        wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe");
+        return;
+    }
+    /* #636 / D2 — la respuesta se construye ANTES de escribir; si la flash no escribe, no se manda el OK: FLASH_ERROR, y
+     * sigue el valor de antes (A/B: la copia buena no se ha tocado). */
+    if (wrote >= 0 && bpvm_bmgr_escribir(wrote, wrote == 0 ? a : b) != 0) {
+        if (con_env) bpvm_scratch_give("bmgr-env");
+        wire_v1_send_error(id, "FLASH_ERROR", BPVM_REPL_FLASH_ERROR);
+        return;
+    }
+    if (con_env) bpvm_scratch_give("bmgr-env");
+    wire_v1_send_line(reply, (size_t) n);
 }
 
 static void reply_put_field(const char* type, long id, unsigned long val,

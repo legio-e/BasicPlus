@@ -504,3 +504,61 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
 
     return reply_error(out, cap, id, "UNSUPPORTED", "comando de gestion no soportado");
 }
+
+/* ── V7/H10, EL BOARD_MGR COMÚN: la familia, la vista del ENV y el `anadir` (ver bpvm_bmgr_wire.h) ───────────────── */
+
+static const bpvm_bmgr_familia_t* s_fam = NULL;
+static unsigned   s_gen = 1;          /* sube con cada escritura del ENV que pasa por aquí */
+static unsigned   s_vista_gen = 0;    /* la generación de la vista elegida (0: ninguna todavía) */
+static bpvm_env_t s_vista;
+
+void bpvm_bmgr_familia(const bpvm_bmgr_familia_t* f) {
+    s_fam = f;
+    s_vista_gen = 0;
+}
+
+const bpvm_bmgr_familia_t* bpvm_bmgr_familia_actual(void) { return s_fam; }
+
+/* La copia `slot` donde se lee: en su sitio, o en el espejo de la familia. */
+static const uint8_t* copia_de(int slot) {
+    if (s_fam->copia) return s_fam->copia(slot);
+    return s_fam->espejo + (size_t) slot * s_fam->sector;
+}
+
+const bpvm_env_t* bpvm_bmgr_vista(void) {
+    if (!s_fam) {
+        memset(&s_vista, 0, sizeof s_vista);
+        return &s_vista;
+    }
+    if (s_vista_gen != s_gen) {
+        if (!s_fam->copia) {   /* la ESP32: vuelve a leer las dos copias de la flash a su espejo */
+            for (int i = 0; i < 2; i++) {
+                uint8_t* dst = s_fam->espejo + (size_t) i * s_fam->sector;
+                if (!s_fam->leer || s_fam->leer(i, dst) != 0) memset(dst, 0xFF, s_fam->sector);
+            }
+        }
+        bpvm_env_pick(copia_de(0), s_fam->sector, copia_de(1), s_fam->sector, &s_vista);
+        s_vista_gen = s_gen;
+    }
+    return &s_vista;
+}
+
+int bpvm_bmgr_escribir(int slot, const uint8_t* src) {
+    if (!s_fam || !s_fam->escribir || (slot != 0 && slot != 1) || !src) return -1;
+    int r = s_fam->escribir(slot, src);
+    s_gen++;   /* haya ido bien o no: un borrado sin programa también cambia la flash, y la vista lo tiene que ver */
+    return r;
+}
+
+int bpvm_bmgr_anadir(const char* clave, const char* valor) {
+    if (!s_fam) return -1;
+    if (s_fam->no_vale && s_fam->no_vale()) return -1;
+    (void) bpvm_bmgr_vista();   /* la ESP32: el espejo, al día con la flash */
+    uint8_t* out = (uint8_t*) bpvm_scratch_take(s_fam->sector, "env-anadir");
+    if (out == NULL) return -1;
+    int slot = -1;
+    int r = bpvm_env_anadir((uint8_t*) copia_de(0), (uint8_t*) copia_de(1), s_fam->sector, clave, valor, out, &slot);
+    if (r == 0 && bpvm_bmgr_escribir(slot, out) != 0) r = -1;
+    bpvm_scratch_give("env-anadir");
+    return r;
+}
