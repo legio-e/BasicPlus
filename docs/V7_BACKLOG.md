@@ -18,7 +18,7 @@ de abajo. Los punteros `FICHAS:Lnnnn` son líneas del `FICHAS.md` del 13-sep (ho
 palabra clave o con `git show` de aquel día). Donde un hito se ha vuelto a mapear —H7, el 29-sep—, sus punteros
 van a la fila del mapa en `V7_IDEAS` o al número de ficha, que no caducan.
 
-**Recuento:** **12 hitos** (`H1`–`H12`); dentro, **18 fichas con número**, **28 restos** de fichas cerradas de V6, **~40 sueltos** sin ficha; y **6 fuera del plan** — 100 entradas en este índice.
+**Recuento:** **13 hitos** (`H1`–`H13`; el 13, la memoria de la C3 y la C6, lo añade Eduardo el 3-oct); dentro, **18 fichas con número**, **28 restos** de fichas cerradas de V6, **~40 sueltos** sin ficha; y **6 fuera del plan** — 101 entradas en este índice.
 
 ---
 
@@ -315,6 +315,20 @@ con conector MX1.25 (sin batería); *«flexible clock and multiple power modes t
 | **Dónde se prueba**: las placas con dos núcleos son la Pico 2 (dos Cortex-M33 / Hazard3), el S3 y el P4 (dual RISC-V); el C3, C6, C5 y los STM32 son de un núcleo y se quedan como están. El banco es `tanda.py` con la misma tanda de `F1` en las dos configuraciones, y `Bench`/`PrintBench`/`AllocBench` con cronómetro: **si no es medible, no es mejora** | H9; memoria `impresion-no-es-medida-cronometro` |
 | **La GUI desde otro hilo: `invokeLater`** (de H10; Eduardo, 2-oct: *«El GUI hace tiempo que corre en su propio hilo BP. Si desde otro hilo se pide algo entiendo que puede haber conflictos de hilos, así que invokeLater puede ser una buena opción. Habrá que verificar específicamente en H12»*). Hoy cada primitiva es atómica (todos los hilos BP en una tarea del sistema: `G1`) y lo que se puede cruzar es una SECUENCIA; con dos runs chocan hasta las primitivas sueltas —LVGL va sin SO y ni `g_nodes` ni el modelo de la VM-Java tienen cerrojo—. La forma mínima: un `Command` y un `Gui.invokeLater` en `Gui.bp`, con la cola en `HiloGui` (sin VMs ni imágenes); lo que hay que verificar aquí, con el segundo run del P4 | `V7_IDEAS` §H10 «la GUI» (el mapa, 2-oct) |
 | **El criterio de salida**, literal: *«si funciona se mantiene, pero si da problemas y no somos capaces de solucionarlos, lo echamos para atrás»*. Lo que se conserva en cualquier caso: los atómicos y los candados que la prueba obligue a poner, que son correctos también con un núcleo | — |
+
+## H13 · La memoria de la ESP32-C3 y la ESP32-C6 (Eduardo, 3-oct)
+
+> Eduardo, 3-oct: *«Añade un hito (H13?) para optimizar el uso de la memoria en ESP32-C3 y ESP32-C6»*, con la guía de
+> Espressif: https://docs.espressif.com/projects/esp-idf/en/v5.2/esp32c6/api-guides/performance/ram-usage.html
+> (es la de la v5.2; el proyecto va con el IDF v6.0.1: cada opción, a comprobar que existe y qué hace allí).
+
+| asunto | dónde |
+|---|---|
+| **Por qué** (3-oct, el lote de placas de H10): la C6 con la GUI (GuiMini y DriverSpi cargados) se queda con **12 768 B de DRAM libres tras un RUN y el bloque mayor de 7 936 B** (la línea `mem:`); la tabla de símbolos de `GuiWinJson` pedía un bloque de 32 KB y no cabía (`#639`: ahora crece menos y, si no cabe, lo dice; el fondo es este); la VM tiene 62 KB de heap y `synclisttest` (80 KB) se salta allí. Son las dos ESP32 sin PSRAM: la C6 con 512 KB de SRAM y la C3 con 400 | `FICHAS` `#639`, `#623`; `ESTADO` 3-oct |
+| **Medir primero** (lo primero de la guía): `idf.py size` y `idf.py size-components` de las dos imágenes —IRAM, DRAM estática, por componente—; el heap libre, el mínimo y el bloque mayor (ya los da la línea `mem:`); y la marca de agua de cada tarea (`uxTaskGetStackHighWaterMark`) tras una tanda. El reparto de la SRAM, escrito, antes de tocar nada | la guía; memoria `impresion-no-es-medida-cronometro` |
+| **Lo que la guía da y nos aplica** (sin WiFi ni Bluetooth en la imagen hasta V8): **la IRAM a la flash** —en la C3 y la C6 la IRAM y la DRAM salen de la misma SRAM: cada byte de IRAM es uno menos de DRAM— (`CONFIG_FREERTOS_PLACE_FUNCTIONS_INTO_FLASH`, `CONFIG_RINGBUF_PLACE_FUNCTIONS_INTO_FLASH`, `CONFIG_HEAP_PLACE_FUNCTION_INTO_FLASH` —con `CONFIG_SPI_MASTER_ISR_IN_IRAM` apagado—, `CONFIG_HAL_DEFAULT_ASSERTION_LEVEL`, los drivers de los chips de flash que no hay, `CONFIG_SPI_FLASH_ROM_IMPL`); **las pilas de las tareas del sistema** (`CONFIG_ESP_MAIN_TASK_STACK_SIZE` —la de `main`, 16 KB desde `#543`—, `CONFIG_ESP_TIMER_TASK_STACK_SIZE`, `CONFIG_FREERTOS_TIMER_TASK_STACK_DEPTH`, `CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE`, `CONFIG_FREERTOS_IDLE_TASK_STACKSIZE`), medidas antes de bajarlas; y **lo nuestro que sea `const` y no lo diga** (tablas y búferes que acaban en la DRAM) | la guía |
+| **Cómo**, como siempre: una opción cada vez, medida antes y después (la línea `mem:` y `idf.py size`), con la tanda de V7 en la C3 y la C6 —y en la C6, la GUI: `GuiWinJson` y `GuiArbolG2` en verde— como puerta; lo que cueste velocidad (una función que sale de la IRAM) se mide con `Bench`. Y las imágenes que crezcan una página de 64 KB obligan a regrabar los packs sellados (3-oct): mirarlo con `nm` antes de grabar | memorias `debug-acotar-antes-de-tocar`, `regrabar-packs-sellados-se-mira-con-nm` |
+| **Lo que NO es esto**: lo de la C3 que se fue a V8 el 30-sep (coserla, su objetivo, el +10 % del `AllocBench`) es la memoria de la VM; esto es la del SISTEMA —lo que la imagen se come antes de que la VM pida nada— | `FICHAS` H7 (30-sep) |
 
 ## Fuera del plan de versiones (decidido; se lista para no perderlo)
 
