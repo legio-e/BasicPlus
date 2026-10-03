@@ -36,8 +36,8 @@
 > en tres vueltas: ahora en trozos de 2 KB), y el hito H13 (la memoria de la C3 y la C6) con sus opciones del IDF, la
 > C6 y la C3 grabadas: **H13 CERRADO** (Eduardo). G2, IDÉNTICO en el P4, la Discovery y la C6. Por la noche, «a ver
 > qué podemos cerrar»: `#579` cerrada y `#584` decidida (Eduardo); la tanda sabe PARAR un programa; **`#580` CERRADA**
-> —una recursión es un bucle, decidido por Eduardo tras medirlo en la C3— y `#640` (un KILL a una native sin ejecutor
-> salía RUNTIME_ERROR). Más abajo, «🔧 SUELTAS (3-oct, noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y
+> —una recursión es un bucle, decidido por Eduardo tras medirlo en la C3—, `#640` (un KILL a una native sin ejecutor
+> salía RUNTIME_ERROR) y `#585` (`double` en una native, medido en la C3: ×5,2). Más abajo, «🔧 SUELTAS (3-oct, noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y
 > «(mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
@@ -1089,7 +1089,7 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
-## 🔧 SUELTAS (3-oct, noche) — «a ver qué podemos cerrar»: `#579` y `#584`, decididas; `#580` CERRADA; `#640`
+## 🔧 SUELTAS (3-oct, noche) — «a ver qué podemos cerrar»: `#579` y `#584`, decididas; `#580` y `#585` CERRADAS; `#640`
 
 - **Las decisiones de la vuelta** (Eduardo, tras la pausa; `d5c2f774`): `#579` cerrada con la evidencia —la paridad
   compara dos intérpretes; el nativo se compara con el intérprete en las `test-aot*` y en la tanda, que ese día salió
@@ -1113,14 +1113,18 @@ la C6, la P4 y la Nucleo.
   devolvía el error del `main` aunque hubiera un KILL; `bpvm_run_smp`, no. Arreglado igual que en el SMP;
   `test-aotkill` lleva una pasada sin ejecutor, con el kill desde `io`. Es de la imagen: llega a las placas con el
   próximo lote.
+- **`#585`** (`ff1135cc`): `samples/DblNat.bp` —el mismo bucle con `double`, `float` y enteros, nativo contra
+  interpretado, el resultado igual al bit— en la ronda de V7. En la C3: `double` ×5,2 (307 ms frente a 1609), `float`
+  ×5,7 (200 frente a 1141: sin FPU también se emula) y enteros ×105. El número, al manual y a `AOT_LIMITES`; las placas
+  con FPU simple darán el suyo en su próxima ronda.
 - **El traspaso.** El próximo lote de placas lleva `#640` (a todas) y el `#639` (3) a la Pico, el P4 y la Discovery;
   `#580` no pide grabar nada (es del compilador). En H10 sigue abierto el `board_mgr` común (`#636`–`#638`). Las
   SUELTAS que quedan: `#577` (tuplas), `#578` (`try`), `#581` (la S3, la C5 y `PinesSistema` en la C6), `#582` y `#583`
-  (la línea y el debugger: antes, el análisis y la medida), lo que queda de `#584`, `#585` (`double`), `#592`, `#614` y
-  `#615`. Sobre `#592` (el 2º temporizador) quedó medido, de paso, que mirar una bandera a la entrada cuesta más que
+  (la línea y el debugger: antes, el análisis y la medida), lo que queda de `#584`, `#592`, `#614` y `#615`. Sobre `#592` (el 2º temporizador) quedó medido, de paso, que mirar una bandera a la entrada cuesta más que
   el contador (+11 ciclos frente a +7,6 en la C3), y que una bandera que la native pueda leer sube la ABI.
 - **Commits** (sin push): `d5c2f774` (FICHAS: `#579`, `#584`, `#581`) · `09c82d15` (la tanda para) · `e5c35a61`
-  (FICHAS, `#580` (2)) · `6702e483` (`#640`) · `d66e19d0` (`#580` (1)) · y el de los docs.
+  (FICHAS, `#580` (2)) · `6702e483` (`#640`) · `d66e19d0` (`#580` (1)) · `648c8f92` (los docs) · `ff1135cc` (`#585`) ·
+  y el de los docs de `#585`.
 
 ## 🔧 H10 (3-oct, tarde) — EL LOTE DEL `RUN` COMÚN Y EL PASO 6; `#639` (la tabla de símbolos); H13 en la C6
 
