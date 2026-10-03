@@ -209,12 +209,17 @@ static void fr_thread_trampoline(void* pv) {
         bpvm_flash_lock_init_victim();
     }
     t->entry(t->arg);
+    /* #635 (3-oct) — lo que se mira DESPUÉS del aviso se lee ANTES. En cuanto `exited` se da, join puede correr (con
+     * el reparto por tiempo basta un tick en esta ventana) y hacer vPortFree(t): leer `t->tcb` después era leer
+     * memoria liberada —y si el bloque se reutilizaba con algo no nulo ahí, la tarea se suspendía en vez de borrarse
+     * y su pila no volvía—. Las ESP32 y la STM32 no leen nada tras el aviso. */
+    int es_nativa = (t->tcb != NULL);
     /* Marcar como terminado para join. */
     if (t->exited) xSemaphoreGive(t->exited);
     /* P2b.3 — el ejecutor de una native tiene la memoria de su tarea en nuestras manos: no puede borrarse a sí
      * mismo (su TCB seguiría en la lista de terminadas hasta que corriera la ociosa, y join lo liberaría antes).
      * Se SUSPENDE y join lo borra: borrar OTRA tarea la saca de las listas del núcleo en el acto. */
-    if (t->tcb) {
+    if (es_nativa) {
         vTaskSuspend(NULL);
         for (;;) { vTaskDelay(portMAX_DELAY); }   /* por si alguien la reanudara */
     }

@@ -37,7 +37,7 @@ typedef enum {
     BPVM_DBGC_OTHER = 0,
     BPVM_DBGC_CONTINUE,
     BPVM_DBGC_STEP,
-    BPVM_DBGC_STOP,          /* STOP y KILL */
+    BPVM_DBGC_STOP,          /* STOP (el del depurador) */
     BPVM_DBGC_PING,
     BPVM_DBGC_PAUSE,
     BPVM_DBGC_SET_BP,
@@ -45,7 +45,11 @@ typedef enum {
     BPVM_DBGC_READ_INT,
     BPVM_DBGC_READ_STRING,
     BPVM_DBGC_LOCALS,
-    BPVM_DBGC_STACK
+    BPVM_DBGC_STACK,
+    /* #634 (3-oct): el KILL, aparte del STOP. Los dos paran, pero un KILL acaba en KILLED (la bandera de la VM es la
+     * verdad, #462) y un STOP en «detenido por el depurador». En placa no llega al depurador —lo recoge `io`—; en
+     * el micro simulado, que lee el socket desde la pausa, sí. */
+    BPVM_DBGC_KILL
 } bpvm_dbg_cmd_kind_t;
 
 /* Comando ya parseado por el firmware. Los campos que no apliquen al kind se

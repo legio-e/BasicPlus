@@ -39,7 +39,7 @@ bpvm_dbg_cmd_kind_t bpvm_dbg_wire_kind(const char* type) {
     if (strcmp(type, "CONTINUE")    == 0) return BPVM_DBGC_CONTINUE;
     if (strcmp(type, "STEP")        == 0) return BPVM_DBGC_STEP;
     if (strcmp(type, "STOP")        == 0) return BPVM_DBGC_STOP;
-    if (strcmp(type, "KILL")        == 0) return BPVM_DBGC_STOP;
+    if (strcmp(type, "KILL")        == 0) return BPVM_DBGC_KILL;   /* #634: aparte del STOP */
     if (strcmp(type, "PING")        == 0) return BPVM_DBGC_PING;
     if (strcmp(type, "PAUSE")       == 0) return BPVM_DBGC_PAUSE;
     if (strcmp(type, "SET_BP")      == 0) return BPVM_DBGC_SET_BP;
@@ -222,7 +222,6 @@ static void dbg_stack(bpvm_dbg_wire_t* w, long id) {
  * CONTINUE/STEP/STOP. Corre en la task del REPL, con la VM detenida dentro. */
 static bpvm_dbg_action_t pause_cb(bpvm_t* vm, bpvm_thread_t* tc,
                                   uint32_t pc, void* user) {
-    (void) vm;
     bpvm_dbg_wire_t* w = (bpvm_dbg_wire_t*) user;
 
     s_pf_pc    = pc;
@@ -239,15 +238,22 @@ static bpvm_dbg_action_t pause_cb(bpvm_t* vm, bpvm_thread_t* tc,
         (unsigned long) s_pf_bp, (unsigned long) s_pf_cs));
 
     for (;;) {
+        /* #634 (3-oct) — UN KILL CON EL PROGRAMA EN PAUSA. En placa el KILL no llega a este lazo: lo recoge `io`, el
+         * único lector del cable, y pone la bandera de la VM (a la cola de control sólo van los comandos del
+         * depurador). `next_cmd` espera a lo sumo 200 ms y vuelve sin nada, y este lazo volvía a esperar sin mirar la
+         * bandera: el Stop del IDE —que manda KILL— no paraba un programa detenido en un breakpoint. Ahora se mira en
+         * cada vuelta; el intérprete lo cuenta como KILLED. */
+        if (bpvm_kill_requested(vm)) return BPVM_DBG_STOP;
         bpvm_dbg_cmd_t c;
         memset(&c, 0, sizeof c);
         c.pc = c.bpId = c.addr = -1;
-        if (w->next_cmd(&c, w->user) != 0) continue;   /* línea ilegible: ignora */
+        if (w->next_cmd(&c, w->user) != 0) continue;   /* nada en el plazo, o una línea ilegible: otra vuelta */
 
         switch (c.kind) {
             case BPVM_DBGC_CONTINUE: return BPVM_DBG_CONTINUE;
             case BPVM_DBGC_STEP:     return BPVM_DBG_STEP;
             case BPVM_DBGC_STOP:     return BPVM_DBG_STOP;
+            case BPVM_DBGC_KILL:     bpvm_request_kill(vm); return BPVM_DBG_STOP;   /* #634: el sim lo lee aquí */
             case BPVM_DBGC_PING:
                 emit(w, snprintf(w->reply, w->reply_cap,
                      "{\"type\":\"PONG\",\"id\":%ld}", c.id));

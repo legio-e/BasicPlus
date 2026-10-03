@@ -817,7 +817,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 tc->dbg_step = 0;
                 tc->pc = pc; tc->sp = sp; tc->bp = bp; tc->cs = cs;   /* sync para inspección */
                 bpvm_dbg_action_t act = vm->pause_cb(vm, tc, pc, vm->pause_user);
-                if (act == BPVM_DBG_STOP) { exit_status = BPVM_DBG_STOPPED; break; }
+                /* #634 (3-oct): con un KILL pedido, KILLED —si se pidió parar, se paró (#462)—; si no, el STOP del
+                 * depurador. */
+                if (act == BPVM_DBG_STOP) { exit_status = vm->kill_requested ? BPVM_KILLED : BPVM_DBG_STOPPED; break; }
                 if (act == BPVM_DBG_STEP) tc->dbg_step = 1;
             }
         }

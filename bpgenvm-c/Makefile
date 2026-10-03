@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -461,6 +461,17 @@ test-kill: $(LIBOBJ)
 	  echo "--- KILL cooperativo (esperado: 6x 'terminado por KILL ... PASS' y la linea OK) ---"; \
 	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod); \
 	fi
+
+# V7/H10 #634 (3-oct) — UN KILL CON EL PROGRAMA EN PAUSA: el lazo de pausa del depurador no miraba la bandera que pone
+# `io` al recibir el KILL, y el Stop del IDE no paraba un programa detenido en un breakpoint (en placa). KillLoop parado
+# en su primer opcode y un `next_cmd` de mentira; sin el fixture, ROJO (no un «saltado» que pasa por verde).
+test-dbgkill: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,KillLoop)
+	@if [ ! -f samples/KillLoop.mod ]; then echo "  FAIL: no hay samples/KillLoop.mod [status=FAIL]"; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_dbgkill.c $(LIBOBJ) -o build/test_dbgkill.exe $(LDFLAGS)
+	@echo "--- #634: un KILL con el programa en pausa (esperado: solo 'ok', [status=OK]) ---"
+	cd samples && ../build/test_dbgkill.exe KillLoop.mod
 
 # V7 #494 (27-sep) — el HEAP DESCARRILADO es UNA excepcion (decision de Eduardo): un gancho de depuracion
 # estropea la cabecera del primer bloque y el GC siguiente no barre; la reserva que lo pidio lanza la
