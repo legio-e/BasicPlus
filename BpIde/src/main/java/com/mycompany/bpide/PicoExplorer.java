@@ -53,6 +53,9 @@ public final class PicoExplorer extends JPanel {
     /** Backend activo. Se construye en connect() según el radio
      *  Pico/VM-Java; null mientras no haya conexión. */
     private Backend backend;
+    /* V7/H10 (D7) — el destino de la última conexión y cómo se abre otra igual: para reconectar tras un reset. */
+    private String ultimoEndpoint;
+    private java.util.function.Supplier<Backend> ultimaFabrica;
 
     /** N-skip-put-by-hash: CRC32 de los bytes que subimos a cada ruta remota
      *  en ESTA conexión. El skip-if-same-size (#110) servía .mod rancios
@@ -1703,14 +1706,18 @@ public final class PicoExplorer extends JPanel {
         }
         // El nombre que se enseña sale de a QUÉ nos conectamos, no de la clase:
         // el mismo backend TCP sirve a la VM Java y al micro simulado.
-        final Backend b = serial ? new SerialBackend()
-                : new BpvmBackend(simulado ? rbSim.getText() : rbVm.getText());
+        final String nombreTcp = simulado ? rbSim.getText() : rbVm.getText();
+        final java.util.function.Supplier<Backend> fabrica =
+                () -> serial ? new SerialBackend() : new BpvmBackend(nombreTcp);
+        final Backend b = fabrica.get();
         status.setText("Connecting to " + endpoint + " (" + b.displayName() + ")...");
         runAsync(() -> {
             String hello = b.connect(endpoint);
             return hello;
         }, hello -> {
             this.backend = b;
+            this.ultimoEndpoint = endpoint;   // V7/H10 (D7): para reconectar tras un reset
+            this.ultimaFabrica = fabrica;
             sentCrc.clear();   // nueva conexión → cache de subidas limpia
             setConnectedUI(true);
             status.setText(endpoint + " — " + hello);
@@ -2199,6 +2206,69 @@ public final class PicoExplorer extends JPanel {
         final Backend b = this.backend;
         runAsync(() -> { b.clearLog(); return null; },
                 v -> status.setText("Log borrado en " + b.displayName()));
+    }
+
+    /**
+     * V7/H10, el board_mgr común (D7, Eduardo 3-oct: «el IDE manda el RESET tras el PART_APPLY y se reconecta») —
+     * reinicia la placa y vuelve a conectar al MISMO destino: el reparto nuevo de las particiones se aplica al arrancar.
+     * Espera hasta 30 s a que vuelva (el USB de una ESP32 o de la Pico desaparece y vuelve con el mismo puerto; el
+     * simulador sigue escuchando). `alVolver` recibe el cliente nuevo y `alFallar` el motivo, los dos en el hilo de
+     * Swing. Sin diálogo de confirmación: lo pide quien acaba de aplicar las particiones.
+     */
+    public void resetYReconectar(Consumer<BpvmClient> alVolver, Consumer<String> alFallar) {
+        if (!isConnected() || ultimoEndpoint == null || ultimaFabrica == null) {
+            alFallar.accept("no hay conexión");
+            return;
+        }
+        final Backend viejo = this.backend;
+        final String endpoint = this.ultimoEndpoint;
+        final java.util.function.Supplier<Backend> fabrica = this.ultimaFabrica;
+        this.backend = null;
+        setConnectedUI(false);
+        rootNode.removeAllChildren();
+        treeModel.reload();
+        status.setText("Reiniciando la placa (" + endpoint + ")…");
+        new SwingWorker<Object[], Void>() {
+            @Override protected Object[] doInBackground() throws Exception {
+                try { viejo.reset(); } catch (IOException e) { /* un no explícito (BUSY…) se dice abajo */
+                    if (e.getMessage() != null && e.getMessage().contains("BUSY")) throw e;
+                }
+                try { viejo.close(); } catch (Exception ignore) { }
+                Thread.sleep(1500);   // que caiga antes de llamar a la puerta
+                long hasta = System.currentTimeMillis() + 30000L;
+                Exception ultimo = null;
+                while (System.currentTimeMillis() < hasta) {
+                    Backend b = fabrica.get();
+                    try {
+                        return new Object[]{ b, b.connect(endpoint) };
+                    } catch (Exception e) {
+                        ultimo = e;
+                        try { b.close(); } catch (Exception ignore) { }
+                        Thread.sleep(1000);
+                    }
+                }
+                throw new IOException("no ha vuelto en 30 s"
+                        + (ultimo != null && ultimo.getMessage() != null ? " (" + ultimo.getMessage() + ")" : ""));
+            }
+            @Override protected void done() {
+                try {
+                    Object[] r = get();
+                    backend = (Backend) r[0];
+                    sentCrc.clear();
+                    setConnectedUI(true);
+                    status.setText(endpoint + " — " + r[1] + " (reiniciada)");
+                    onRefresh();
+                    fetchDeviceArch();
+                    if (connectedSink != null) connectedSink.accept(debugClient());
+                    alVolver.accept(debugClient());
+                } catch (Exception e) {
+                    Throwable c = e.getCause() != null ? e.getCause() : e;
+                    String msg = c.getMessage() == null ? c.toString() : c.getMessage();
+                    status.setText("Reinicio: " + msg + " — reconecta a mano");
+                    alFallar.accept(msg);
+                }
+            }
+        }.execute();
     }
 
     private void onReset() {

@@ -3388,6 +3388,11 @@ public class FrmMain extends javax.swing.JFrame
          * cambiado de placa, y grabar el motor de otra familia no da error: da un
          * salto a un sitio que no es. */
         fb.setArchPlaca(() -> picoExplorer != null ? picoExplorer.deviceArch() : 0);
+        /* V7/H10 (D7) — tras un PART_APPLY bueno, el explorador reinicia la placa y reconecta. */
+        fb.setReiniciador((alVolver, alFallar) -> {
+            if (picoExplorer == null) { alFallar.accept("sin explorador de dispositivo"); return; }
+            picoExplorer.resetYReconectar(alVolver, alFallar);
+        });
         fb.setSize(760, 520);
         fb.setLocationRelativeTo(this);
         fb.setVisible(true);

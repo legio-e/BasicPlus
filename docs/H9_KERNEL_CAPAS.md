@@ -295,11 +295,11 @@ en `bpvm_bmgr` (host-testable, `test-bmgr` 30/30).
 | `STATE` | — | `{state,name,degraded,reason,casi[,aviso]}` —`casi`, V7/H7: la zona de packs, abajo— | (bpvm_boot_state_report) |
 | `ENV_LS` | — | lista `{key,value}` | `env_count` + `env_pair_at` |
 | `ENV_GET` | `key` | `{value}` o ERROR NOT_FOUND | `env_get` |
-| `ENV_SET` | `key,value` | OK (+ vuelca slot) | `env_set` |
-| `ENV_DEL` | `key` | OK (+ vuelca slot) | `env_set(value=NULL)` |
+| `ENV_SET` | `key,value` | OK (+ vuelca slot), o ERROR `FLASH_ERROR` | `env_set` |
+| `ENV_DEL` | `key` | OK (+ vuelca slot), o ERROR `FLASH_ERROR` | `env_set(value=NULL)` |
 | `PART_LS` | — | tamaños+offsets derivados, o `MISSING` (virgen) | `part_layout` |
 | `PART_DEFAULTS` | — | tamaños sugeridos (1ª vez) | `part_defaults` |
-| `PART_APPLY` | `sizes[]` | OK (+ vuelca slot) o error de validación | `part_apply` |
+| `PART_APPLY` | `sizes[]` | OK (+ vuelca slot), error de validación, o ERROR `FLASH_ERROR` | `part_apply` |
 
 **Notas de contrato** (cerradas por el modelo de particiones y el bloque A/B):
 - **No hay `PART_ADD`/`PART_DEL`.** Las particiones son un conjunto fijo; "crear" =
@@ -310,6 +310,17 @@ en `bpvm_bmgr` (host-testable, `test-bmgr` 30/30).
 - `ENV_SET`/`PART_APPLY` re-serializan a la copia A/B **rancia** con `seq+1`; el device
   solo tiene que volcar el sector `wrote_slot` a flash (la cintura por-micro). Corte de
   corriente a mitad = seguro (la copia actual sigue válida hasta que la nueva pasa CRC).
+- **V7/H10 (3-oct), el board_mgr común** (`V7_IDEAS` §H10 «el board_mgr común», las decisiones de Eduardo):
+  - **Un `handle` para las cuatro y el sim** (`bpvm_bmgr_handle`, `bpvm_repl.c`). Lo propio de cada familia es su
+    cintura (`bpvm_bmgr_familia_t`): dónde se leen las copias, cómo se escribe un sector y lo de la placa.
+  - **`FLASH_ERROR`** (D2, `#636`): si la flash no escribe, `ENV_SET`, `ENV_DEL` y `PART_APPLY` contestan
+    `{"type":"ERROR","code":"FLASH_ERROR","message":"no se pudo escribir la flash: sigue el valor de antes"}`. Antes
+    la respuesta se armaba antes de escribir y salía OK aunque la flash no escribiera.
+  - **El ENV se lee de la flash** (D1, `#638`): lo que ve un programa (`Machine.getEnv`), la BIOS de un pack y el
+    arranque es lo último que se escribió, también en la misma sesión (el `ENV_SET` se ve sin reiniciar). CUÁNDO entra
+    en efecto una clave lo decide quien la lee: `gc=` y `latido=`, en el RUN siguiente; el reparto de memoria y las
+    particiones, al arrancar. Lo EN VIGOR (lo que aplicó el arranque) es otra cosa, y lo dice `INFO`.
+  - **Tras un `PART_APPLY` bueno, el IDE manda `RESET` y reconecta** (D7): el reparto nuevo se aplica al arrancar.
 - **V7/H7 (30-sep): el FS ARRIBA.** En una placa cuyo CHIP tiene flash por encima de la
   zona de datos —la P4 Waveshare y la C5: 32 MB con una tabla que acaba en 16—, el FS es
   ese trozo, entero, y los packs, toda la zona (su techo es el del mapeo, 16 MB). No hay

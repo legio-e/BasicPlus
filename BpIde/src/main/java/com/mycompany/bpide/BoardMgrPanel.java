@@ -258,10 +258,31 @@ public final class BoardMgrPanel extends JPanel {
         }
         bg(() -> { client.partApply(sizes, T); return null; }, r -> {
             log.accept("[FrmBoard] PART_APPLY " + sizes);
-            info("Tamaños aplicados. El device se reiniciará y subirá con el layout nuevo.");
-            refresh();
+            /* V7/H10 (D7, Eduardo 3-oct) — el reparto nuevo se aplica al ARRANCAR: el IDE reinicia la placa y reconecta.
+             * Antes este texto decía «el device se reiniciará» y nadie la reiniciaba. */
+            if (reiniciador == null) {
+                info("Tamaños aplicados. Reinicia la placa para que suba con el reparto nuevo.");
+                refresh();
+                return;
+            }
+            info("Tamaños aplicados: la placa se reinicia para subir con el reparto nuevo…");
+            reiniciador.reiniciar(
+                    nuevo -> info("La placa ha vuelto con el reparto nuevo."),
+                    motivo -> info("Tamaños aplicados, pero la placa no ha vuelto (" + motivo
+                            + "): reiníciala y reconecta a mano."));
         });
     }
+
+    /** V7/H10 (D7) — reiniciar la placa y reconectar, tras un PART_APPLY bueno. Lo pone la ventana que abre el panel
+     *  (con el explorador de dispositivo); quien lo pone se encarga de enganchar el cliente nuevo. */
+    public interface Reiniciador {
+        void reiniciar(java.util.function.Consumer<BpvmClient> alVolver,
+                       java.util.function.Consumer<String> alFallar);
+    }
+
+    private Reiniciador reiniciador;
+
+    public void setReiniciador(Reiniciador r) { this.reiniciador = r; }
 
     // ---- #435: el panel de carpetas ----
 

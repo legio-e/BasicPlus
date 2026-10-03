@@ -43,6 +43,17 @@ public class FrmBoard extends javax.swing.JFrame {
         if (packsPanel != null) packsPanel.setArchPlaca(s);
     }
 
+    /** V7/H10 (D7) — reiniciar la placa y reconectar tras un PART_APPLY (lo hace el explorador de la ventana
+     *  principal). Al volver, la ventana se engancha al cliente NUEVO —el viejo se cerró con el reset— y refresca. */
+    public void setReiniciador(BoardMgrPanel.Reiniciador r) {
+        if (boardPanel == null) return;
+        if (r == null) { boardPanel.setReiniciador(null); return; }
+        boardPanel.setReiniciador((alVolver, alFallar) -> r.reiniciar(nuevo -> {
+            attach(nuevo);
+            alVolver.accept(nuevo);
+        }, alFallar));
+    }
+
     public void attach(BpvmClient client) {
         this.clienteActual = client;   // #435: el diálogo del entorno lo necesita
         if (boardPanel != null) boardPanel.attach(client);
