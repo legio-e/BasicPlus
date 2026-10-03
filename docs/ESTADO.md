@@ -34,8 +34,11 @@
 > ESP32), y el `board_mgr` común analizado y decidido por Eduardo (`#636`–`#638` abiertas). Por la tarde, el lote de
 > placas: el `RUN` común en las cuatro y el paso 6 (`5c2d6bb0`: fuera los `RUN` viejos); `#639` (la tabla de símbolos,
 > en tres vueltas: ahora en trozos de 2 KB), y el hito H13 (la memoria de la C3 y la C6) con sus opciones del IDF, la
-> C6 y la C3 grabadas: **H13 CERRADO** (Eduardo). G2, IDÉNTICO en el P4, la Discovery y la C6. Más abajo, «🔧 H10
-> (3-oct, tarde)», «(mediodía y tarde)» y «(mañana)».
+> C6 y la C3 grabadas: **H13 CERRADO** (Eduardo). G2, IDÉNTICO en el P4, la Discovery y la C6. Por la noche, «a ver
+> qué podemos cerrar»: `#579` cerrada y `#584` decidida (Eduardo); la tanda sabe PARAR un programa; **`#580` CERRADA**
+> —una recursión es un bucle, decidido por Eduardo tras medirlo en la C3— y `#640` (un KILL a una native sin ejecutor
+> salía RUNTIME_ERROR). Más abajo, «🔧 SUELTAS (3-oct, noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y
+> «(mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
 > tarde, `#624` (subir una librería por su versión) y, de H10, el `Rtc` en hora (`#626`, la idea de Eduardo), visto en
@@ -1085,6 +1088,39 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🔧 SUELTAS (3-oct, noche) — «a ver qué podemos cerrar»: `#579` y `#584`, decididas; `#580` CERRADA; `#640`
+
+- **Las decisiones de la vuelta** (Eduardo, tras la pausa; `d5c2f774`): `#579` cerrada con la evidencia —la paridad
+  compara dos intérpretes; el nativo se compara con el intérprete en las `test-aot*` y en la tanda, que ese día salió
+  IDÉNTICA con el nativo en uso también en la C3 y la C6—; `#584`, *podar sólo ahorra flash*; y `#581`, la C3 y la C6
+  hechas.
+- **La tanda sabe PARAR** (`09c82d15`): `kill_tras_ms` (un KILL a los N ms) y `kill_max_ms` (el EXITED, como mucho a
+  2 s); veredictos PARADA / NO PARA; `KillLoop` y `NatKill` en la ronda de V7. La primera medida en la C3 daba ~200 ms
+  del KILL al EXITED y era del instrumento: `lines()` vuelve tras un read de 0,2 s (la trampa del cronómetro de
+  `#495`). Con el EXITED fechado al llegar, 5 y 3 ms. Los veredictos, con un control de resultados fabricados (7 ramas).
+- **`#580` (1), medida y decidida.** El C del AOT retocado a mano (el método de P2b.0), compilado con la receta de la
+  C3 y fundido en el `.mod`; con el C sin tocar, el arnés da el `.mod` del AOT byte a byte. `fib(30)`: 262 ms hoy, 390
+  con la marca a la entrada (directa), 398 con la marca y el ejecutor, 448 con una bandera en memoria. El KILL de
+  `fib(40)`: 31,6 s hoy (no paraba), 26 ms con la marca. Eduardo: *«Como un bucle»*. Hecho en el emisor (`d66e19d0`):
+  el grafo, de una emisión en seco; el contador, por un parámetro oculto; la marca, a la entrada. El C de 51 de los 56
+  módulos con natives, idéntico byte a byte; `test-aotkill` y `test-aotdirecta`, rojas con el emisor saboteado; la red,
+  verde. En la C3, sin grabar (la ABI no cambia): las once de natives de la ronda IDÉNTICAS y `KillLoop`, `NatKill` y
+  `NatRecurKill` PARADA a los 12, 2 y 8 ms. El manual, `AOT_LIMITES` y `PENDIENTES`, al día. El IDE se rehízo (BpIde,
+  18:35): Eduardo sólo tiene que reabrirlo.
+- **`#640`** (`6702e483`): al medir, la variante «directa con la marca» paró, pero salió RUNTIME_ERROR. Es la rama de
+  `punto_control` SIN ejecutor (lanza), a la que hoy se llega cuando no cabe el ejecutor (8 KB de pila). `bpvm_run`
+  devolvía el error del `main` aunque hubiera un KILL; `bpvm_run_smp`, no. Arreglado igual que en el SMP;
+  `test-aotkill` lleva una pasada sin ejecutor, con el kill desde `io`. Es de la imagen: llega a las placas con el
+  próximo lote.
+- **El traspaso.** El próximo lote de placas lleva `#640` (a todas) y el `#639` (3) a la Pico, el P4 y la Discovery;
+  `#580` no pide grabar nada (es del compilador). En H10 sigue abierto el `board_mgr` común (`#636`–`#638`). Las
+  SUELTAS que quedan: `#577` (tuplas), `#578` (`try`), `#581` (la S3, la C5 y `PinesSistema` en la C6), `#582` y `#583`
+  (la línea y el debugger: antes, el análisis y la medida), lo que queda de `#584`, `#585` (`double`), `#592`, `#614` y
+  `#615`. Sobre `#592` (el 2º temporizador) quedó medido, de paso, que mirar una bandera a la entrada cuesta más que
+  el contador (+11 ciclos frente a +7,6 en la C3), y que una bandera que la native pueda leer sube la ABI.
+- **Commits** (sin push): `d5c2f774` (FICHAS: `#579`, `#584`, `#581`) · `09c82d15` (la tanda para) · `e5c35a61`
+  (FICHAS, `#580` (2)) · `6702e483` (`#640`) · `d66e19d0` (`#580` (1)) · y el de los docs.
 
 ## 🔧 H10 (3-oct, tarde) — EL LOTE DEL `RUN` COMÚN Y EL PASO 6; `#639` (la tabla de símbolos); H13 en la C6
 

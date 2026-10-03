@@ -2422,6 +2422,99 @@ otro módulo, cualificado. `samples/NatEstrecha.bp`: 23 comprobaciones, 23/23 co
 en cada alocación), una de ellas con bucle —lanza desde un EJECUTOR— y las demás directas; con el emisor de antes, el
 compilador ni lo compila (ROJO). En placa, sin imagen nueva (la ABI no cambia): `NatNombres` (4/4 thunks nativos) y `NatEstrecha` (7/7) IDÉNTICOS al PC en la DK2, la Metro, el P4 y la Nucleo (`compat/informes/tanda_estrecha_27sep.md`).
 
+#### `#580` (1) — la recursión SIN bucles: medido en la C3 (3-oct, para decidir)
+
+**El problema, con un ejemplo:**
+
+```
+native function fib(n: integer): integer
+  if n < 2 then
+    return n
+  endif
+  return fib(n - 1) + fib(n - 2)
+end fib
+```
+
+No tiene bucles, así que nunca pasa por la línea del bucle: ni cede ni ve un `kill`. Y el AOT la marca DIRECTA (sin
+puntos de cesión: corre sin ejecutor). En la C3, `fib(40)` nativo son 32 s, y un KILL a los 500 ms no hace nada: la
+native acaba, el programa sigue con lo que hay detrás de la llamada y el EXITED llega a los 31,6 s del KILL. Mientras
+tanto, los demás hilos, los eventos y la GUI esperan. Le pasa también a una recursiva CON bucles cortos (un
+quicksort): el contador de la línea es LOCAL a cada llamada y empieza en 1024 en cada una, así que en lo hondo de la
+recursión no llega a cero.
+
+**El mecanismo que propongo: una recursión es un bucle.** La marca va a la ENTRADA de cada native que está en un ciclo
+de llamadas entre natives del módulo (`fib` → `fib`; `a` → `b` → `a`); las demás no cambian. El contador no puede ser
+local (cada llamada tendría el suyo), así que viaja por un parámetro oculto: un puntero a un contador que vive en el
+thunk (donde BP entró en la native) o en la primera native que entra en el ciclo. Cada 1024 entradas llama a
+`punto_control`, el mismo de la línea del bucle: cede si lleva 5 ms y para si hay un kill. Es **sólo el compilador**:
+no hay campo nuevo en `bpvm_t` ni helper nuevo, así que **la ABI no cambia** (ni packs que regenerar ni placas que
+regrabar). Con un punto de cesión la native deja de ser directa y va a un ejecutor, como hoy una con bucle. Lo que cruza
+por BP (native → función BP → native) ya cede al llamar a BP y no cuenta para el ciclo.
+
+**Medido** el 3-oct en la C3 (RV32IMC a 160 MHz). El método, el de P2b.0: el C del AOT retocado a mano, compilado con
+la receta de la placa y fundido en el `.mod`. Con el C sin tocar, el arnés da el `.mod` del AOT byte a byte. Tres
+pasadas por variante, iguales al milisegundo:
+
+| `fib(30)` (2,69 M llamadas) | ms | ciclos por llamada | KILL a los 500 ms de `fib(40)` |
+|---|---|---|---|
+| hoy (directa, sin marca) | 262 | 15,6 | no para: el EXITED, a los 31,6 s |
+| la marca a la entrada, directa | 390 (+49 %) | 23,2 | para a los 45 ms, pero salía RUNTIME_ERROR (→ `#640`) |
+| **la marca, con ejecutor** (lo que sería) | **398 (+52 %)** | 23,7 | **KILLED a los 26 ms** |
+| una bandera en memoria a la entrada (lo de `#592`) | 448 (+71 %) | 26,6 | — |
+
+- `fib` es el peor caso: toda ella es llamar. Una recursión que trabaje algo en cada llamada paga proporcionalmente
+  menos.
+- Ceder cada 5 ms cuesta ~2 % (398 frente a 390).
+- Ir a un ejecutor cuesta **+30 µs por llamada DESDE BP** (`NatCoste` en la C3: 11 µs directa, 41 con ejecutor). No
+  se nota en una recursión larga; sí en una native recursiva diminuta llamada miles de veces desde BP.
+- La bandera cuesta MÁS que el contador también a la entrada.
+
+**Tres caminos:**
+
+| | qué | lo bueno | lo que cuesta |
+|---|---|---|---|
+| **A** (propuesta) | la marca a la entrada de las natives en un ciclo, y van a un ejecutor | para Y cede, como un bucle; sólo el compilador | +49 % en `fib`; +30 µs por llamada desde BP para esas natives |
+| B | la marca, pero siguen directas | para (KILLED, con `#640`); sin el coste del ejecutor | no cede: mientras corre, los demás hilos y la GUI esperan, como hoy |
+| C | nada; lo dice el manual | nada | una recursiva larga no se puede parar ni deja correr a nadie |
+
+**Y `#592`** (el 2º temporizador) se decide aparte. Aquí sólo se midió lo que costaría mirar la bandera a la entrada
+(+11 ciclos, frente a +7,6 del contador). Una bandera que la native pueda leer necesita un campo en el prefijo
+congelado de `bpvm_t` o un helper, así que sube la ABI (9 → 10).
+
+**Decidido: A** (Eduardo, 3-oct: *«Como un bucle»*).
+
+**Hecho** (el emisor, `AotCEmitter`):
+- **El grafo, del C que sale.** Antes de emitir, una emisión EN SECO del mismo módulo (otra instancia del emisor, con
+  `soloGrafo`) apunta cada llamada de C a otra native en el sitio donde la escribe (`llamadasDirectas`): el grafo es
+  el del C que sale, con el mismo criterio que `nativesDirectas`. Las natives de un ciclo (`enCiclo`; también `f` →
+  `f`) son las `recursivas`.
+- **El contador viaja con la llamada.** Esas funciones llevan un parámetro oculto, `int32_t* __bpvm_cr`, en la firma
+  y en la declaración adelantada. Una llamada desde dentro del ciclo pasa el mismo puntero. Una que entra desde fuera
+  (el thunk, u otra native) pasa uno nuevo, un literal compuesto `&(int32_t){ 1024 }` que vive en el marco de quien
+  llama.
+- **La marca**, la de la línea del bucle, a la entrada: `if (--*__bpvm_cr == 0) { *__bpvm_cr = 1024;
+  punto_control(vm); }`. `nativesDirectas` ve el helper y la native va a un ejecutor.
+- **El control**: el C de los 56 módulos con natives del árbol, antes y después. 51 salen idénticos byte a byte; sólo
+  cambian los cinco que tienen recursión: `NatDirecta` (`fibR`), `Fibo`, `Bench`, `fibobench` e `intbench`.
+- **Las pruebas**:
+  - `test-aotkill` gana dos pasadas con `samples/NatRecurKill.bp` (`fib(45)`, recursiva sin bucles), la interpretada
+    (el control) y con el AOT: KILLED en 96 ms.
+  - `test-aotdirecta`: `fibR` va al ejecutor (3 directas y 6 al ejecutor), y sigue 9/9 igual que interpretada.
+  - **Saboteado** el emisor (sin `recursivas`), las dos se ponen rojas: la recursiva acaba sola (`status=OK` a los
+    1,1 s) y `fibR` sale directa.
+- **La ABI no cambia**: el `.mdn` sigue en la 9, ni packs que regenerar ni placas que regrabar.
+- **En la C3** (`d66e19d0`; sin grabar nada, porque la ABI no cambia): las once de natives de la ronda salen IDÉNTICAS
+  al PC con el nativo en uso (`NatDirecta`, 9/9, con `fibR` ya en un ejecutor), y `KillLoop`, `NatKill` y
+  `NatRecurKill` salen PARADA a los 12, 2 y 8 ms del KILL.
+
+**Lo que destapó la medida: `#640`.** La variante «directa» paró a los 45 ms, pero el programa salió RUNTIME_ERROR
+(«excepcion no atrapada: … se ha detenido (kill) dentro de una native»). Es la rama de `punto_control` para una native
+SIN ejecutor, que lanza; y hoy se llega a ella cuando no cabe el ejecutor (8 KB de pila; la C6 con la GUI va al
+límite). El `main` moría con esa excepción y `bpvm_run` devolvía el error aunque hubiera un KILL. `bpvm_run_smp` ya
+daba KILLED. Arreglado en `bpvm_run`: «la bandera es la verdad» (`#462`), también cuando el `main` muere de una
+excepción. `test-aotkill` lleva una pasada sin ejecutor (el kill desde `io`, como en la placa): roja antes del
+arreglo, verde después.
+
 ## H7 — `#554`: concatenar en placa, y QUÉ ES un literal de cadena (27-sep, análisis)
 
 ### La causa, medida
