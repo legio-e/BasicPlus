@@ -8,12 +8,13 @@
  *    #153 (IRQs off en single-core; parquea el otro core en dual-core).
  *
  * 2) SHIM del API legado fs.h SOBRE la fachada bpvm_fs (retirarlo = #305).
- *    - fs_get: read a un scratch estático (contrato documentado del API:
- *      "puntero válido hasta el siguiente fs_put/fs_delete").
- *    - fs_put: crea los dirs padre (el FS viejo era plano; littlefs no).
- *    - fs_list: paseo BFS que emite paths PLANOS como el FS viejo.
+ *    - fs_put: escribe creando las carpetas que falten (el instalador de /lib).
  *    - fs_save_to_flash: no-op (littlefs committea en cada close).
  *    - fs_format_ram: reformateo EN CALIENTE + recrear /sys /lib /app.
+ *    - las cuentas (bytes, ficheros) para el INFO, el DF y el log.
+ * #473 (lote D, 3-oct): fuera lo que no tenía llamadores (264) y las carpetas
+ * padre las crea la fachada (268, `bpvm_fs_mkdir_padres`); y el FORMAT dice si
+ * pudo (466: contestaba OK pasara lo que pasara).
  *
  * H9 (unificación, 19-jul — norma de Eduardo: "si no hay partición, nada
  * con el sistema de ficheros"): el DESCRIPTOR binario propio (bp_ptable_t
@@ -127,40 +128,19 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     return FS_OK;
 }
 
-void fs_format_ram(void) {
-    /* legado: "vaciar". Con littlefs = reformateo EN CALIENTE del volumen. */
-    if (bpvm_fs_lfs_format() == 0) {
-        bpvm_fs_mkdir("/sys");
-        bpvm_fs_mkdir("/lib");
-        bpvm_fs_mkdir("/app");
-    }
+int fs_format_ram(void) {
+    /* legado: "vaciar". Con littlefs = reformateo EN CALIENTE del volumen.
+     * #473 (466): 0 sólo si formateó Y están las tres carpetas; el motivo de un
+     * fallo queda anotado en la fachada. */
+    if (bpvm_fs_lfs_format() != 0) return -1;
+    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0) return -1;
+    return 0;
 }
 
 fs_status_t fs_save_to_flash(void) {
     /* littlefs committea en cada close (durabilidad-por-llamada, B1) —
      * el SAVE del wire queda como no-op de compatibilidad. */
     return FS_OK;
-}
-
-/* #305 — existencia sin leer nada. El fs_get de abajo ya empieza por este mismo
- * stat; la diferencia es que aquí no seguimos leyendo el fichero al scratch. */
-int fs_exists(const char* name) {
-    uint32_t sz = 0;
-    return bpvm_fs_stat(name, &sz) == 0 ? 1 : 0;
-}
-
-
-/* fs_put crea los dirs padre: el FS viejo era PLANO ("/lib/x" era un nombre
- * con barras); en littlefs /lib debe existir antes de escribir /lib/x. */
-static void ensure_parent_dirs(const char* name) {
-    const char* last = strrchr(name, '/');
-    if (!last || last == name) return;          /* raíz o sin dir */
-    char dir[128];
-    size_t n = (size_t)(last - name);
-    if (n >= sizeof(dir)) return;
-    memcpy(dir, name, n);
-    dir[n] = '\0';
-    bpvm_fs_mkdir(dir);                          /* recursivo, ok-si-existe */
 }
 
 /* #329 — que el fallo de escritura NO MIENTA (la 3ª y última familia; ESP32 y
@@ -190,42 +170,10 @@ static fs_status_t map_lfs_err(const char* op, const char* name, uint32_t size) 
 
 fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
     if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
-    ensure_parent_dirs(name);
+    (void) bpvm_fs_mkdir_padres(name);     /* #473 (268): si no puede, que lo diga el write */
     if (bpvm_fs_write(name, data, size, 0) != 0) return map_lfs_err("put", name, size);
     return FS_OK;
 }
-
-/* #294 streaming PUT — apende un trozo (el PUT_BEGIN del wire crea/trunca con
- * fs_put(name,NULL,0)). Sube ficheros > buffer del wire sin buferizarlos enteros. */
-fs_status_t fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
-    if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
-    if (size == 0) return FS_OK;
-    if (bpvm_fs_write(name, data, size, 1) != 0) return map_lfs_err("append", name, size);
-    return FS_OK;
-}
-
-fs_status_t fs_delete(const char* name) {
-    if (!bpvm_fs_exists(name)) return FS_ERR_NOT_FOUND;
-    return (bpvm_fs_remove(name) == 0) ? FS_OK : FS_ERR_INVALID;
-}
-
-/* ── fs_list: BFS emitiendo paths PLANOS como el FS viejo ──────────────
- * El cb de la fachada corre BAJO el lock → SOLO acumula; el descenso a
- * subdirs y la emisión al cliente pasan FUERA del callback. */
-/* EFECTO VENTANA (Eduardo, 28-jul) — el Pico ya EMITE el listado según lo
- * recorre, pero el snapshot POR DIRECTORIO se cortaba a 32 EN SILENCIO. Con la
- * stdlib completa (~47 módulos en /lib) muerde: el IDE mostraría 32 y el resto
- * simplemente "no estaría". Mismo arreglo que en ESP32 y STM32: sube a 96 y
- * DEJA DE SER MUDO. El snapshot NO se puede quitar (el cb corre bajo el lock). */
-
-/* #425 — las que NO cupieron en el ÚLTIMO recorrido, para que el wire lo diga
- * (ver fs_list_omitidas en fs.h). Se pone a cero al empezar fs_list. */
-
-/* #338 — los dos buffers del listado, JUNTOS y en un solo préstamo. Iban
- * `static` (6.632 + 1.024 = 7.656 B permanentes en .bss) para no reventar el
- * stack de la comm task; ahora salen de la zona compartida y viven lo que dura
- * el LIST. Cabe de sobra en los 8 KB, y en UNA estructura se deja al compilador
- * el relleno y la alineación en vez de repartir el bloque a mano. */
 
 /* stats para INFO del IDE / logs de boot */
 uint32_t fs_total_bytes(void) {
@@ -240,12 +188,6 @@ uint32_t fs_used_bytes(void) {
     return u;
 }
 
-uint32_t fs_free_bytes(void) {
-    uint32_t t = 0, u = 0;
-    bpvm_fs_lfs_stats(&t, &u);
-    return (t > u) ? (t - u) : 0;
-}
-
 /* #461 — EL RECORRIDO PLANO DE ESTA FAMILIA SE FUE AL COMUN.
  *
  * `fs_list` + `dir_snapshot_t` existian para el verbo LIST; desde que LIST vive
@@ -254,21 +196,6 @@ uint32_t fs_free_bytes(void) {
  * `bpvm_fs_count_files()` en la fachada, sin guardar nombres y con la cola de
  * directorios en un pool. Tres copias -> una. */
 int fs_file_count(void) { return bpvm_fs_count_files(); }   /* #461 */
-
-const char* fs_status_str(fs_status_t s) {
-    switch (s) {
-        case FS_OK:                return "OK";
-        case FS_ERR_NOT_FOUND:     return "no encontrado";
-        case FS_ERR_EXISTS:        return "ya existe";
-        case FS_ERR_NO_SPACE:      return "sin espacio";
-        case FS_ERR_NAME_TOO_LONG: return "nombre demasiado largo";
-        case FS_ERR_TOO_BIG:       return "fichero demasiado grande";
-        case FS_ERR_TABLE_FULL:    return "tabla llena";
-        case FS_ERR_BAD_FLASH:     return "flash corrupta";
-        case FS_ERR_INVALID:       return "operacion invalida";
-        default:                   return "error desconocido";
-    }
-}
 
 void fs_register_bpvm(void) {
     /* no-op: bpvm_fs_lfs_attach (en fs_init) ya registró el backend en la

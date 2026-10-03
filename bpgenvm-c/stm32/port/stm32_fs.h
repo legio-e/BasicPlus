@@ -1,9 +1,7 @@
 /*
- * stm32_fs.h — filesystem en RAM (mini) para el STM32 (H9.2.b).
- *
- * Namespace plano: los ficheros se guardan por path completo (p.ej.
- * "/app/Hello.mod"). Sin flash todavía → se pierde al resetear (suficiente
- * para el dev-loop "subir + ejecutar"; la persistencia en flash es H9.3).
+ * stm32_fs.h — lo que queda del API legado del FS del STM32, sobre la fachada
+ * bpvm_fs y littlefs en la flash interna (fs_lfs_stm32.c). Era un FS en RAM
+ * (H9.2.b) hasta #297; el wire va por la fachada desde U3.
  */
 #ifndef STM32_FS_H
 #define STM32_FS_H
@@ -15,12 +13,9 @@
 extern "C" {
 #endif
 
-/* Guarda (o sobreescribe) un fichero. 0 OK, -1 sin espacio / demasiados. */
+/* Escribe (o sobrescribe) el fichero entero, creando las carpetas que falten
+ * (el instalador de /lib). 0 OK, -1 con el motivo anotado en la fachada. */
 int  fs_put(const char* name, const uint8_t* data, uint32_t size);
-
-/* #294 streaming PUT — apende un trozo (el PUT_BEGIN del wire crea/trunca con
- * fs_put(name,NULL,0)). Sube ficheros > buffer del wire por trozos. */
-int  fs_put_append(const char* name, const uint8_t* data, uint32_t size);
 
 /* Devuelve puntero (dentro del arena) + tamaño. 0 OK, -1 no existe.
  * El puntero es válido hasta el siguiente fs_put/fs_del/fs_format. */
@@ -28,29 +23,19 @@ int  fs_put_append(const char* name, const uint8_t* data, uint32_t size);
  * a un espejo estático del tamaño de la arena (496 KB / 96 KB). Usar la fachada
  * por trozos: bpvm_fs_stat / bpvm_fs_read_at / bpvm_fs_read / bpvm_fs_crc32. */
 
-/* Borra (compacta el arena). 0 OK, -1 no existe. */
-int  fs_del(const char* name);
-
 /* Cuantos ficheros hay. #461: lo cuenta el comun, sin indice persistente. */
 int  fs_count(void);
 
-/* #425 — cuantas entradas dejo FUERA el ultimo recorrido. 0 = listado COMPLETO.
- * Valido inmediatamente despues de fs_count(). Mismo contrato y mismo nombre que
- * en el Pico y el ESP32 (fs.h de cada uno): las tres familias recorren distinto,
- * asi que lo uniforme es lo que se REPORTA, no la firma del recorrido.
- * Por que existe: al pasarse de los topes el listado se recortaba EN SILENCIO y
- * el IDE lo pintaba como si fuera todo. El wire lo manda en LIST_REPLY. */
-int  fs_list_omitidas(void);
-
 uint32_t fs_total_bytes(void);
 uint32_t fs_used_bytes(void);
-void     fs_format(void);
+/* Reformatea y recrea /sys, /lib y /app (el FORMAT del wire). 0 / -1 (#473,
+ * 466: era `void`, y el FORMAT contestaba OK aunque no hubiera podido). #473
+ * (264, 3-oct): fs_put_append, fs_del y fs_list_omitidas, fuera: sin llamadores. */
+int      fs_format(void);
 
 /* --- Persistencia en flash interna (H9.3) --- */
 
-/* Vuelca el FS (arena + tabla) a la región reservada de flash. Best-effort:
- * si falla, el próximo arranque lo detecta (magic) y arranca con FS vacío.
- * Llamar tras cada mutación que deba sobrevivir al reset (PUT/DEL/FORMAT). */
+/* No-op: littlefs persiste en cada close (el SAVE del wire). */
 void fs_save(void);
 
 /* H9 — monta el FS (littlefs) en un SUB-RANGO de la flash: `fs_offset` DESDE

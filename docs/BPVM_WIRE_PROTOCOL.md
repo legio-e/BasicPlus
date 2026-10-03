@@ -508,11 +508,14 @@ Request: `{"type":"FORMAT","id":N,"confirm":"YES"}`
 
 Reply: `{"type":"FORMAT_REPLY","id":N}`
 
-Si `confirm != "YES"`, error `MISSING_CONFIRM`.
+Si `confirm != "YES"`, error `MISSING_CONFIRM`. Si no se pudo formatear (o recrear `/sys`, `/lib` y `/app`), error
+`INTERNAL_ERROR` («FORMAT: el FS no se pudo formatear»), con el motivo en el log de la placa (V7/H10, `#473` 466, 3-oct:
+las tres familias contestaban OK pasara lo que pasara).
 
-#### `SAVE` (request, solo Pico)
+#### `SAVE` (request)
 
-Commit del FS RAM a flash. No aplica a VM Java (siempre persiste).
+Persistir el FS. Con littlefs cada `close` ya persiste: contesta OK, que es la verdad, y `durationMs` (V6/U3: común a
+las familias). No aplica a VM Java (siempre persiste).
 
 Request: `{"type":"SAVE","id":N}`
 
@@ -520,13 +523,15 @@ Reply: `{"type":"SAVE_REPLY","id":N,"durationMs":47}`
 
 #### `DF` (request)
 
-Espacio en el FS.
+Espacio en el FS **propio del micro** (la flash): `totalBytes`, `usedBytes` y `fileCount` son del mismo volumen; lo de
+una unidad montada encima (`/sd`) no cuenta (V7/H10, `#473` 248, 3-oct: la cuenta sumaba la tarjeta). El de la tarjeta
+lo da `SD_MOUNT`.
 
 Request: `{"type":"DF","id":N}`
 
 Reply: `{"type":"DF_REPLY","id":N,"totalBytes":131072,"usedBytes":18432,"freeBytes":112640,"fileCount":12}`
 
-#### `LOG_DUMP` (request, solo Pico)
+#### `LOG_DUMP` (request)
 
 Volcado del log persistente del firmware (`log.c`).
 

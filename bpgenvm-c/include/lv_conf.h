@@ -26,11 +26,20 @@
    COLOR SETTINGS
  *====================*/
 
+/* #473 (punto 2; 3-oct) — ¿LVGL pinta en un MICRO (RGB565, sin SDL) o en el PC (XRGB8888, ventana SDL)? Era una
+ * condición escrita DOS veces (aquí y en DEVICES, abajo) con las cinco banderas de cuando cada imagen compilaba LVGL
+ * (USE_HAL_DRIVER, que CubeMX pone en todo proyecto STM32, y BPVM_BOARD_DK2/P4/C6). Desde G5 ninguna imagen compila
+ * LVGL: o lo compila el PACK (BPVM_EN_PACK, para todas las placas) o es el PC. Una macro, en un sitio; el pack sale
+ * igual (comparadas todas las macros de este fichero, antes y después, con las banderas del pack y con las del PC). */
+#if defined(BPVM_EN_PACK)
+#define BPVM_LV_EN_MICRO 1
+#else
+#define BPVM_LV_EN_MICRO 0
+#endif
+
 /*Color depth: 1 (I1), 8 (L8), 16 (RGB565), 24 (RGB888), 32 (XRGB8888)*/
-/* Board-aware (V3): los micros con panel RGB565 (STM32 DK2 via LTDC; ESP32-P4 via
- * MIPI-DSI) usan 16 bpp; el host (SDL) usa XRGB8888. USE_HAL_DRIVER lo define CubeMX
- * en todo proyecto STM32; BPVM_BOARD_P4 lo define el build del P4; el host ninguno. */
-#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4) || defined(BPVM_BOARD_C6) || defined(BPVM_EN_PACK)
+/* Board-aware (V3): en un micro, 16 bpp (los paneles son RGB565); el host (SDL) usa XRGB8888. */
+#if BPVM_LV_EN_MICRO
 #define LV_COLOR_DEPTH 16
 #else
 #define LV_COLOR_DEPTH 32
@@ -1015,9 +1024,8 @@ void bpvm_pack_lv_assert(const char* fichero, int linea);
  *==================*/
 
 /*Use SDL to open window on PC and handle mouse and keyboard*/
-/* Board-aware: los micros (STM32 via LTDC, ESP32-P4 via MIPI-DSI, ESP32-C6 via SPI)
- * pintan sin SDL. V6/P2: el C6 entra aquí igual que en LV_COLOR_DEPTH, arriba. */
-#if defined(USE_HAL_DRIVER) || defined(BPVM_BOARD_DK2) || defined(BPVM_BOARD_P4) || defined(BPVM_BOARD_C6) || defined(BPVM_EN_PACK)
+/* Board-aware: en un micro se pinta sin SDL (BPVM_LV_EN_MICRO, arriba). */
+#if BPVM_LV_EN_MICRO
 #define LV_USE_SDL              0
 #else
 #define LV_USE_SDL              1

@@ -6,10 +6,14 @@
 #     SD_INFO la identifica y lee el MBR; el arranque ya la montó; SD_MOUNT da la etiqueta y el fichero; y el
 #     FS de la fachada lee, escribe y lista en /sd, y lo escrito SIGUE ahí tras volver a montar;
 #   · SIN tarjeta: los dos verbos dicen que no hay SD, con el motivo —no «type no implementado»—;
-#   · con una imagen ROTA (sin FS): SD_MOUNT falla con el motivo y el LBA, y el wire sigue vivo.
+#   · con una imagen ROTA (sin FS): SD_MOUNT falla con el motivo y el LBA, y el wire sigue vivo;
+#   · y un PROGRAMA que copia dentro de la tarjeta (#473, 236): con la stdlib del pack del IDE y el compilador.
 #
 #   python tools/sd_smoke.py
-import json, os, socket, subprocess, sys, tempfile, time
+import json, os, shutil, socket, subprocess, sys, tempfile, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sim_smoke import Wire, STDLIB_PACK, STDLIB_DIR, JAR   # noqa: E402 — el mismo cable (con drain_run) y el mismo compilador
 
 try: sys.stdout.reconfigure(encoding="utf-8")
 except Exception: pass
@@ -27,37 +31,25 @@ def check(cond, msg):
     print(("  ok  : " if cond else "  FAIL: ") + msg)
     if not cond: fails += 1
 
-class Wire:
-    def __init__(self, sock):
-        self.s = sock; self.buf = b""; self.id = 0
-    def _line(self):
-        while b"\n" not in self.buf:
-            chunk = self.s.recv(65536)
-            if not chunk: raise EOFError("el sim cerró la conexión")
-            self.buf += chunk
-        line, self.buf = self.buf.split(b"\n", 1)
-        return json.loads(line.decode())
-    def _bulk(self, n):
-        while len(self.buf) < n:
-            chunk = self.s.recv(65536)
-            if not chunk: raise EOFError("el sim cerró la conexión durante el bulk")
-            self.buf += chunk
-        data, self.buf = self.buf[:n], self.buf[n:]
-        return data
-    def call(self, typ, **fields):
-        self.id += 1
-        fields.update(type=typ, id=self.id)
-        self.s.sendall((json.dumps(fields) + "\n").encode())
-        return self._line()
-    def call_bulk(self, typ, data, **fields):
-        self.id += 1
-        fields.update(type=typ, id=self.id, bulk=len(data))
-        self.s.sendall((json.dumps(fields) + "\n").encode() + data)
-        return self._line()
-    def get(self, path):
-        r = self.call("GET", path=path)
-        if r.get("type") != "GET_REPLY": return r, b""
-        return r, self._bulk(r["bulk"])
+# #473 (lote D, 236) — el programa de la sección 4: copia dentro de la tarjeta (ningún import más que IO; Core va solo).
+COPIA_SD = """module CopiaSd
+  import IO
+
+  function Main()
+    IO.copyFile("/sd/HOLA.TXT", "/sd/COPIA.TXT")
+    print "copia=[" + readFile("/sd/COPIA.TXT") + "]"
+    IO.copyFile("/sd/grande.bin", "/sd/grande2.bin")
+    print "grande2=" + IO.fileSize("/sd/grande2.bin")
+    IO.copyFile("/sd/HOLA.TXT", "/sd/encima.bin")
+    try
+      IO.copyFile("/sd/no_esta.txt", "/sd/x.txt")
+      print "MAL: copio un fichero que no existe"
+    catch e: RuntimeError
+      print "no_esta: lanzo"
+    endtry
+  end Main
+end CopiaSd
+"""
 
 def arranca(tmp, nombre, extra):
     """Un sim en una placa virgen, con `extra` en la línea de órdenes. Devuelve (proceso, wire)."""
@@ -125,9 +117,23 @@ def main():
         check((r.get("kbTotal") or 0) > 6000 and 0 < (r.get("kbLibres") or 0) <= r.get("kbTotal"),
               "SD_MOUNT → el tamaño: %r KB, %r libres" % (r.get("kbTotal"), r.get("kbLibres")))
 
+        # #473 (lote D, 248; 3-oct) — el DF y el INFO son del volumen PROPIO del micro: el total y lo usado son los de
+        # littlefs, y la cuenta sumaba los ficheros de la tarjeta (y aquí, en el sim, también lo usado).
+        df0, in0 = w.call("DF"), w.call("INFO")
         blob = bytes((i * 7) & 0xFF for i in range(5000))
         r = w.call_bulk("PUT", blob, path="/sd/datos.bin")
         check(r.get("type") == "PUT_REPLY", "PUT /sd/datos.bin (5000 B, 5 clusters) → OK")
+        df1, in1 = w.call("DF"), w.call("INFO")
+        check(df1.get("fileCount") == df0.get("fileCount") and df1.get("usedBytes") == df0.get("usedBytes"),
+              "#473 (248): DF tras escribir 5000 B en /sd → la misma cuenta y lo mismo usado: es la flash "
+              "(dice %r → %r ficheros, %r → %r B)" % (df0.get("fileCount"), df1.get("fileCount"),
+                                                     df0.get("usedBytes"), df1.get("usedBytes")))
+        check(in1.get("fsUsedBytes") == in0.get("fsUsedBytes"),
+              "#473 (248): INFO → fsUsedBytes no cambia (dice %r → %r)" % (in0.get("fsUsedBytes"), in1.get("fsUsedBytes")))
+        r = w.call_bulk("PUT", b"cuenta", path="/app/cuenta.bin")
+        df2 = w.call("DF")
+        check(r.get("type") == "PUT_REPLY" and df2.get("fileCount") == (df1.get("fileCount") or 0) + 1,
+              "…y un fichero en la flash, sí: la cuenta sube uno (dice %r → %r)" % (df1.get("fileCount"), df2.get("fileCount")))
         r = w.call("SD_MOUNT")   # volver a montar: lo escrito tiene que estar EN LA TARJETA, no en una caché
         r, datos = w.get("/sd/datos.bin")
         check(datos == blob, "…y tras volver a montar, GET lo devuelve igual: está en la tarjeta")
@@ -205,6 +211,53 @@ def main():
         check(r.get("type") == "PONG", "…y el wire sigue vivo")
     finally:
         para(proc)
+
+    # ── 4. un PROGRAMA que copia dentro de la tarjeta (#473, lote D, 236; 3-oct) ─────────────────────────────────────
+    # FAT no tenía `copy` y la fachada no lo suplía: `copyFile` en /sd lanzaba «error al copiar», y en la flash y en el PC
+    # copiaba. Un fichero de varios sectores (5000 B, que no es múltiplo del trozo), uno pequeño, uno ENCIMA de otro más
+    # largo (tiene que quedar sólo el nuevo) y uno que no existe (tiene que lanzar).
+    if not os.path.exists(JAR) or shutil.which("java") is None or not os.path.exists(STDLIB_PACK):
+        check(False, "#473 (236): sin el compilador o sin %s: no se puede probar copyFile" % STDLIB_PACK)
+    else:
+        img2 = os.path.join(tmp, "tarjeta2.img")
+        subprocess.run([sys.executable, os.path.join(HERE, "fat_imagen.py"), img2], check=True,
+                       stdout=subprocess.DEVNULL)
+        src = os.path.join(tmp, "CopiaSd.bp")
+        with open(src, "w", encoding="utf-8") as f:
+            f.write(COPIA_SD)
+        rc = subprocess.run(["java", "-jar", JAR, src, "--compile", tmp, "--backend=mivm", "--stdlibDir=" + STDLIB_DIR],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        mod = os.path.join(tmp, "CopiaSd.mod")
+        check(rc.returncode == 0 and os.path.exists(mod), "#473 (236): CopiaSd compila")
+        if os.path.exists(mod):
+            proc, w = arranca(tmp, "copia", ["--sd=" + img2, "--pack=" + STDLIB_PACK])
+            try:
+                w.s.settimeout(60.0)
+                with open(mod, "rb") as f:
+                    check(w.call_bulk("PUT", f.read(), path="/app/CopiaSd.mod").get("type") == "PUT_REPLY",
+                          "#473 (236): PUT del programa")
+                grande = bytes((i * 13 + 5) & 0xFF for i in range(5000))
+                check(w.call_bulk("PUT", grande, path="/sd/grande.bin").get("type") == "PUT_REPLY",
+                      "#473 (236): PUT /sd/grande.bin (5000 B)")
+                check(w.call_bulk("PUT", b"z" * 3000, path="/sd/encima.bin").get("type") == "PUT_REPLY",
+                      "#473 (236): PUT /sd/encima.bin (3000 B, para copiar encima)")
+                r = w.call("RUN", path="/app/CopiaSd.mod")
+                texto, ex = w.drain_run() if r.get("type") == "RUN_REPLY" else ("", None)
+                ex = ex or {}
+                check(ex.get("status") == "OK",
+                      "#473 (236): el programa acaba bien (dice %r %r; salida %r)"
+                      % (ex.get("status"), ex.get("errorMessage"), texto[-300:]))
+                check("copia=[hola desde la SD del micro simulado\n]" in texto,
+                      "#473 (236): copyFile de /sd/HOLA.TXT, y readFile lee la copia (dice %r)" % texto[:200])
+                check("no_esta: lanzo" in texto and "MAL" not in texto,
+                      "#473 (236): copyFile de un fichero que no existe → lanza")
+                r, datos = w.get("/sd/grande2.bin")
+                check(datos == grande, "#473 (236): /sd/grande2.bin es la copia de los 5000 B, byte a byte (%d B)" % len(datos))
+                r, datos = w.get("/sd/encima.bin")
+                check(datos == b"hola desde la SD del micro simulado\n",
+                      "#473 (236): copiar ENCIMA de uno más largo deja sólo el nuevo (%d B)" % len(datos))
+            finally:
+                para(proc)
 
     print("[status=OK]" if fails == 0 else f"[status=FAIL: {fails}]")
     return 0 if fails == 0 else 1

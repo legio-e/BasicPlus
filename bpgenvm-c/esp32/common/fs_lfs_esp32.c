@@ -13,9 +13,11 @@
  *    a flash de forma segura. La multitarea la cubre el LOCK GRUESO de la
  *    fachada (B1.4) — los DOS clientes (builtins BP + comm task) pasan por él.
  *
- * El SHIM del API legado fs.h (fs_get/put/delete/list/stats) es IDÉNTICO al del
- * RP2350: todo son llamadas `bpvm_fs_*` a la fachada (backend-agnóstico). La
- * migración de los llamadores a la fachada directa + retirar el scratch = B2 v2.
+ * El SHIM del API legado fs.h (fs_put, el formateo y las cuentas) es IDÉNTICO
+ * al del RP2350: todo son llamadas `bpvm_fs_*` a la fachada (backend-agnóstico).
+ * #473 (lote D, 3-oct): fuera lo que no tenía llamadores (264) y las carpetas
+ * padre las crea la fachada (268, `bpvm_fs_mkdir_padres`); y el FORMAT dice si
+ * pudo (466: contestaba OK pasara lo que pasara).
  */
 #include "fs.h"
 #include "bpvm_fs.h"
@@ -146,13 +148,12 @@ fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size) {
     return FS_OK;
 }
 
-void fs_format_ram(void) {
-    /* legado "vaciar" → reformateo EN CALIENTE del volumen littlefs */
-    if (bpvm_fs_lfs_format() == 0) {
-        bpvm_fs_mkdir("/sys");
-        bpvm_fs_mkdir("/lib");
-        bpvm_fs_mkdir("/app");
-    }
+int fs_format_ram(void) {
+    /* legado "vaciar" → reformateo EN CALIENTE del volumen littlefs.
+     * #473 (466): 0 sólo si formateó Y están las tres carpetas. */
+    if (bpvm_fs_lfs_format() != 0) return -1;
+    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0) return -1;
+    return 0;
 }
 
 fs_status_t fs_save_to_flash(void) {
@@ -165,19 +166,6 @@ fs_status_t fs_save_to_flash(void) {
 void fs_autosave_suspend(void) { }
 void fs_autosave_resume(int save_now) { (void) save_now; }
 
-
-/* fs_put crea los dirs padre (el FS viejo era PLANO; littlefs necesita /lib
- * antes de escribir /lib/x). */
-static void ensure_parent_dirs(const char* name) {
-    const char* last = strrchr(name, '/');
-    if (!last || last == name) return;
-    char dir[128];
-    size_t n = (size_t)(last - name);
-    if (n >= sizeof(dir)) return;
-    memcpy(dir, name, n);
-    dir[n] = '\0';
-    bpvm_fs_mkdir(dir);
-}
 
 /* #329 — el fallo de escritura DEJA DE MENTIR. Antes cualquier retorno != 0 de
  * la fachada se traducía a FS_ERR_NO_SPACE y el IDE decía "FS lleno" con el FS
@@ -204,40 +192,10 @@ static fs_status_t map_lfs_err(const char* op, const char* name, uint32_t size) 
 
 fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size) {
     if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
-    ensure_parent_dirs(name);
+    (void) bpvm_fs_mkdir_padres(name);     /* #473 (268): si no puede, que lo diga el write */
     if (bpvm_fs_write(name, data, size, 0) != 0) return map_lfs_err("put", name, size);
     return FS_OK;
 }
-
-/* #294 streaming PUT — apende un trozo al fichero. El PUT_BEGIN del wire lo
- * crea/trunca (+dirs) con fs_put(name,NULL,0); cada PUT_DATA llama aquí. Permite
- * subir ficheros mayores que el buffer del wire sin buferizarlos enteros. */
-fs_status_t fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
-    if (strlen(name) >= 128) return FS_ERR_NAME_TOO_LONG;
-    if (size == 0) return FS_OK;
-    if (bpvm_fs_write(name, data, size, 1) != 0) return map_lfs_err("append", name, size);
-    return FS_OK;
-}
-
-fs_status_t fs_delete(const char* name) {
-    if (!bpvm_fs_exists(name)) return FS_ERR_NOT_FOUND;
-    return (bpvm_fs_remove(name) == 0) ? FS_OK : FS_ERR_INVALID;
-}
-
-/* ── fs_list: BFS emitiendo paths PLANOS como el FS viejo. El cb de la fachada
- * corre BAJO el lock → SOLO acumula; el descenso y la emisión van FUERA. ── */
-/* EFECTO VENTANA (Eduardo, 28-jul) — el ESP32 SÍ emite el listado según lo
- * recorre (a diferencia del STM32, que lo armaba entero en 1 KB), pero el
- * snapshot POR DIRECTORIO se cortaba a 32 EN SILENCIO. Con la stdlib completa
- * (~47 módulos en /lib) eso muerde seguro: el IDE mostraría 32 y los demás
- * simplemente "no estarían". Sube a 96 y, sobre todo, DEJA DE SER MUDO:
- * cualquier tope se queda corto alguna vez; lo que no puede hacer es mentir.
- * El snapshot NO se puede quitar: el cb de la fachada corre BAJO el lock del FS
- * y emitir al wire desde ahí fue un autobloqueo mudo en su día (H10). */
-
-/* #425 — las que NO cupieron en el ÚLTIMO recorrido, para que el wire lo diga
- * (ver fs_list_omitidas en fs.h). Se pone a cero al empezar fs_list. */
-
 
 uint32_t fs_total_bytes(void) {
     uint32_t t = 0; bpvm_fs_lfs_stats(&t, NULL); return t;

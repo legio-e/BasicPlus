@@ -315,6 +315,20 @@ int bpvm_fs_mkdir(const char* path) {
     return fs_falla(BPVM_FS_FAIL_OTHER, falta(be));
 }
 
+/* #473 (lote D, 268; 3-oct) — estaba CUATRO veces: el `crear_dirs_padre` del PUT común (#455) y un
+ * `ensure_parent_dirs` en cada familia, para la stdlib de /lib, con un búfer de 128 (el núcleo admite 255). El
+ * `mkdir` de las tres unidades es recursivo y vale si la carpeta ya está (FAT, desde #631). */
+int bpvm_fs_mkdir_padres(const char* path) {
+    const char* ult = path ? strrchr(path, '/') : NULL;
+    if (!ult || ult == path) return 0;            /* en la raíz o sin carpeta: no falta nada */
+    char dir[BPVM_FS_PATH_MAX];
+    size_t n = (size_t) (ult - path);
+    if (n >= sizeof dir) return fs_falla(BPVM_FS_FAIL_NAME_TOO_LONG, "la carpeta del fichero no cabe en una ruta");
+    memcpy(dir, path, n);
+    dir[n] = '\0';
+    return bpvm_fs_mkdir(dir);
+}
+
 int bpvm_fs_rmdir(const char* path) {
     const bpvm_fs_backend_t* be = route(path);
     uint32_t n0 = s_fallo_n;
@@ -467,6 +481,10 @@ int bpvm_fs_count_files(void) {
     for (int i = 0; i < c.n; i++) {
         char dir[CNT_POOL];
         snprintf(dir, sizeof dir, "%s", pool + c.off[i]);  /* copia: sin aliasing */
+        /* #473 (lote D, 248; 3-oct): sólo el volumen PROPIO del micro. El total y lo usado del DF y del INFO son los
+         * de littlefs, y la cuenta sumaba los ficheros de la tarjeta: una carpeta que atiende otra unidad montada
+         * (/sd) no se recorre. Lo decide la tabla de montajes, no el nombre. */
+        if (i > 0 && !bpvm_fs_en_raiz(dir)) continue;
         c.dir = dir;
         (void) bpvm_fs_list(dir, bpvm_cnt_cb, &c);   /* un volumen caido no borra el resto */
     }

@@ -1,5 +1,59 @@
 # Censo de las familias — qué tiene cada una, qué le falta, qué divergió
 
+> ⚠️ **#473 (lote D, 280; 3-oct): TODO lo que sigue a la sección 0 es la FOTO DEL 17-AGO**, y la unificación de V6
+> cambió casi todas sus filas —los verbos del wire son comunes desde U3 (LIST_DIR, SAVE, FORMAT, RENAME, RMDIR,
+> SD_INFO/SD_MOUNT), el escaneo de `.mdn` y el log también, y el micro simulado compila FAT desde H3 (su SD)—. Quien planificara con ella
+> repartía mal. Se queda como historia. **El reparto de ficheros de HOY no se escribe a mano: se genera** con
+> `python tools/censo_fuentes.py` (desde `bpgenvm-c`), que lo lee de lo que compiló el último build de cada imagen y
+> dice de dónde sale cada columna y de qué fecha es. Su salida del día, en la sección 0; para planificar, vuelve a
+> correrlo.
+
+## 0 · El reparto de `src/*.c` por imagen, HOY (generado por `tools/censo_fuentes.py`, 03-10-2026 10:14)
+
+De dónde sale cada columna:
+
+- **host**: Makefile (03-10 09:34)
+- **sim**: Makefile (03-10 09:34) + la receta de sim
+- **pico**: pico/build/build.ninja (01-10 13:01, la última vez que se configuró)
+- **s3**: esp32/build/compile_commands.json (03-10 10:11)
+- **c3**: esp32c3/build/compile_commands.json (03-10 10:12)
+- **c5**: esp32c5/build/compile_commands.json (03-10 10:12)
+- **c6**: esp32c6/build/compile_commands.json (03-10 10:13)
+- **p4**: esp32p4/build/compile_commands.json (03-10 10:14)
+- **nucleo**: stm32/Nucleo_u575b/Nucleo_u575b/Debug/src/subdir.mk (03-10 10:11)
+- **dk2**: stm32/Discovery_u5g9j/Discovery_u5g9j/Debug/src/subdir.mk (03-10 10:11)
+
+**52** de 75 ficheros comunes están en las 10 imágenes con build. Los demás:
+
+| fichero | host | sim | pico | s3 | c3 | c5 | c6 | p4 | nucleo | dk2 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| `bpvm_blk.c` | – | x | x | – | – | x | x | x | – | – |
+| `bpvm_blk_sdmmc_cfg.c` | – | – | – | – | – | – | – | x | – | – |
+| `bpvm_boot2.c` | – | x | x | x | x | x | x | x | x | x |
+| `bpvm_fallo_cm33.c` | – | – | x | – | – | – | – | – | x | x |
+| `bpvm_listdir.c` | – | x | x | x | x | x | x | x | x | x |
+| `bpvm_repl.c` | – | x | x | x | x | x | x | x | x | x |
+| `bpvm_sd.c` | – | – | x | – | – | x | x | – | – | – |
+| `bpvm_sd_blk.c` | – | – | x | – | – | x | x | – | – | – |
+| `bpvm_sd_placa.c` | – | x | x | x | x | x | x | x | x | x |
+| `bpvm_sd_spi_env.c` | – | – | x | – | – | x | x | – | – | – |
+| `comm_host.c` | x | x | – | x | x | x | x | x | x | x |
+| `fs_fat.c` | – | x | x | – | – | x | x | x | – | – |
+| `fs_host.c` | x | x | – | – | – | – | – | – | – | – |
+| `fs_lfs_host.c` | x | x | – | – | – | – | – | – | – | – |
+| `gui.c` | x | x | – | – | – | – | – | – | x | x |
+| `gui_display_sdl.c` | – | – | – | – | – | – | – | – | x | – |
+| `gui_pack.c` | – | – | – | – | – | x | x | x | x | x |
+| `gui_pack_publics.c` | – | – | – | – | – | – | – | – | x | x |
+| `json_min.c` | – | x | x | x | x | x | x | x | x | x |
+| `net_host.c` | x | x | – | – | – | – | – | – | x | x |
+| `platform_freertos.c` | – | – | – | – | – | – | – | – | x | x |
+| `platform_pthread.c` | x | x | – | – | – | – | – | – | – | – |
+| `wire_v1_proto.c` | – | x | x | x | x | x | x | x | x | x |
+
+Lectura del 3-oct: la Nucleo compila `gui_display_sdl.c` y las dos STM32 `net_host.c` (vacíos por sus guardas: la
+STM32 compila TODO `src/` salvo lo que su `.cproject` excluye; desde hoy, también la pila de SD, 276).
+
 > **`#427`, 17-ago-2026.** Decisión de Eduardo: *«revisar todas las familias e
 > imágenes; eso nos daría un censo real de cómo está el código. La unificación
 > y racionalización es tarea de V6, pero lo que vayamos adelantando bienvenido
@@ -18,7 +72,7 @@
 > abriendo el `.cproject` — de hecho el propio censo encontró rarezas ahí
 > (compila `fs_host.c`/`net_host.c`, que son de host).
 
-## La foto
+## La foto (17-ago, HISTÓRICA)
 
 | imagen | build | nivel de opt. | fuente del dato |
 |---|---|---|---|
@@ -36,7 +90,7 @@ se hicieron con optimización de depuración: **una imagen release será más
 rápida gratis**. Cambiarlo es una línea del `sdkconfig` — y REPETIR las medidas
 de referencia, que ésa es la parte que no es gratis.
 
-## 1 · El común (`src/*.c`, 57 ficheros): quién compila qué
+## 1 · El común (`src/*.c`, 57 ficheros): quién compila qué (17-ago, HISTÓRICO: el de hoy, en la sección 0)
 
 40 de 57 están en las cinco imágenes. Los 17 con huecos, con veredicto:
 
@@ -53,7 +107,7 @@ de referencia, que ésa es la parte que no es gratis.
 | `bpvm_mdn_scan.c` | x | x | x | x | 🔴 **–** | 🔴 **el STM32 escanea los `.mdn` con SU PROPIO bucle** (`stm32_repl.c:526`) en vez del común — copia divergida |
 | `bpvm_bios_fs.c`, `bpvm_npack.c` | x | x | x/– | x | – | el STM32 **no puede alojar un pack nativo** (como la S3, pero lo de la S3 estaba escrito y lo del STM32 NO) |
 
-## 2 · Los verbos del wire (el protocolo dice ser UNO)
+## 2 · Los verbos del wire (el protocolo dice ser UNO) (17-ago, HISTÓRICO: desde V6/U3 son comunes)
 
 18 de 29 verbos están en los cuatro despachadores. Los dispares:
 

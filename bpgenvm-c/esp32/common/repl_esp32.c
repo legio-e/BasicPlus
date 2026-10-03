@@ -1043,7 +1043,7 @@ static void esp32_repl_info(bpvm_repl_info_t* o) {
     o->fs_used_bytes = (unsigned long) fs_used_bytes();
 }
 
-static int  esp32_repl_fs_format(void) { fs_format_ram(); return 0; }
+static int  esp32_repl_fs_format(void) { return fs_format_ram(); }   /* #473 (466): lo que pasó */
 static int  esp32_repl_fs_save(void)   { return fs_save_to_flash() == FS_OK ? 0 : -1; }
 static unsigned long esp32_repl_fs_total(void) { return (unsigned long) fs_total_bytes(); }
 static unsigned long esp32_repl_fs_used(void)  { return (unsigned long) fs_used_bytes(); }
@@ -1213,28 +1213,9 @@ static void handle_request(const char* line, int len) {
     /* H9 — gating por estado REAL del boot: sin FS (estado<2) los comandos de
      * fichero → NOT_READY; RUN necesita la VM (estado 3). "Sin partición, nada
      * con el sistema de ficheros" (Eduardo). */
-    {
-        const bpvm_boot_status_t* bs = board_boot_status();
-        /* V7/H8 #601 — la lista de verbos de fichero, UNA, en el común: esta copia no paraba MKDIR, RMDIR,
-         * RENAME ni FORMAT (sin partición montada, un FORMAT pasaba). */
-        int is_fs = bpvm_repl_verbo_de_fs(type);
-        if (is_fs && bs->state < BPVM_BOOT_FS) {
-            /* El bulk que esta puerta rechaza HAY QUE TRAGÁRSELO igual, o se
-             * queda en el cable y el mensaje siguiente se lee a partir de la
-             * mitad de los datos. Sólo el de los verbos PUT: el del resto ya lo
-             * pre-leyó el paso de arriba. */
-            if (lo_lee_el_comun) {
-                long b_pend = json_get_long(&obj, "bulk", 0);
-                if (b_pend > 0) (void) bpvm_repl_drain_bulk((unsigned long) b_pend);
-            }
-            wire_v1_send_error(id, "NOT_READY", "FS no disponible: configurar particiones");
-            return;
-        }
-        if (strcmp(type, "RUN") == 0 && bs->state < BPVM_BOOT_APP) {
-            wire_v1_send_error(id, "NOT_READY", "VM no disponible en el estado actual del boot");
-            return;
-        }
-    }
+    /* V7/H10 #473 (punto 10): la puerta, en el común. El bulk que rechaza sólo sigue en el cable en los verbos PUT:
+     * el del resto ya lo pre-leyó el paso de arriba. */
+    if (bpvm_repl_puerta_arranque(type, id, &obj, (int) board_boot_status()->state, lo_lee_el_comun)) return;
     /* El log NO se gatea por el estado del boot: si el arranque se ha quedado a
      * medias es justo cuando hace falta leerlo (vive en RAM + bpenv, no en el FS). */
     if (strcmp(type, "RUN")   == 0) { handle_run(id, &obj);   return; }

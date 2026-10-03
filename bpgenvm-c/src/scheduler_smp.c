@@ -331,9 +331,10 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
      * en core 0 — VM-cómputo concurrente con I/O sin paralelismo entre
      * threads BP (que se turnan cooperativamente en ese único worker).
      * Con 1 core (o en host pthread) el pin se ignora — no-op. */
+    int creados = 0;
     for (int i = 0; i < smp->n_workers; i++) {
         worker_arg_t* arg = (worker_arg_t*) bpvm_malloc(sizeof(*arg));
-        if (!arg) return -1;
+        if (!arg) break;
         arg->vm = vm;
         arg->worker_id = i;
         int core_id = 1;         /* core 1 = "core de la VM"; core 0 = I/O */
@@ -341,8 +342,20 @@ int bpvm_scheduler_run_smp(bpvm_t* vm) {
                                                 worker_loop, arg,
                                                 core_id) != 0) {
             bpvm_free(arg);
-            return -1;
+            break;
         }
+        creados++;
+    }
+    if (creados < smp->n_workers) {
+        /* #473 (punto 7; 3-oct) — UN WORKER QUE NO NACE: los que ya corren se paran y se UNEN antes de volver. Se
+         * volvía con -1 dejándolos en marcha sobre una VM que el llamador da por acabada (y destruye). Miran
+         * `shutdown` en cada decisión del planificador; el aviso despierta a los que esperan en la condición. */
+        bpvm_platform_mutex_lock(&smp->vm_lock);
+        smp->shutdown = true;
+        bpvm_platform_cond_broadcast(&smp->sched_cond);
+        bpvm_platform_mutex_unlock(&smp->vm_lock);
+        for (int i = 0; i < creados; i++) bpvm_platform_thread_join(&smp->worker_threads[i]);
+        return -1;
     }
 
     /* Joins. Si cualquier worker termina con shutdown=true, todos

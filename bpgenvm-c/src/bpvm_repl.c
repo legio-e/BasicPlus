@@ -26,6 +26,7 @@
 #include "bpvm_examen.h"    /* V7/H8 E1: el LIST examina los módulos y los packs */
 #include "crc32.h"          /* V7/H8 #495 (paso 4): el CRC de lo mandado, en el GET_END */
 #include "bpvm_io.h"        /* V7/H8 #495 (paso 4): la pila que le sobró a `io` (ioStackFree) */
+#include "bpvm_boot.h"      /* V7/H10 #473 (punto 10): la puerta del arranque, en el común */
 
 #include <stdio.h>
 #include <string.h>
@@ -952,6 +953,10 @@ static void repl_format(long id, json_obj_t* obj) {
         return;
     }
     if (s_ops->fs_format() != 0) {
+        /* #473 (466; 3-oct): las tres familias contestaban 0 fijo, y un FORMAT que fallaba decía OK (el sim sí lo
+         * propagaba). Ahora llega aquí; el porqué, al log, como cualquier fallo del FS. */
+        const char *code, *msg;
+        fs_fallo("format", "/", 0, &code, &msg);
         wire_v1_send_error(id, "INTERNAL_ERROR", "FORMAT: el FS no se pudo formatear");
         return;
     }
@@ -1080,17 +1085,11 @@ static int tragar_bulk(unsigned long n) { return bpvm_repl_drain_bulk(n); }
  * no es una mejora de paso: es DEVOLVER lo que la familia de referencia tenía.
  *
  * Se perdió en silencio porque `/sys`, `/lib` y `/app` se crean al montar: sólo
- * muerde subiendo a una carpeta nueva, que es lo que el IDE aún no hace. */
-static void crear_dirs_padre(const char* path) {
-    const char* ult = strrchr(path, '/');
-    if (!ult || ult == path) return;      /* en la raíz o sin carpeta: nada que crear */
-    char dir[BPVM_FS_PATH_MAX];
-    size_t n = (size_t)(ult - path);
-    if (n >= sizeof dir) return;          /* que lo rechace el write, con su error */
-    memcpy(dir, path, n);
-    dir[n] = '\0';
-    bpvm_fs_mkdir(dir);                   /* recursivo y ok-si-existe en los 3 backends */
-}
+ * muerde subiendo a una carpeta nueva, que es lo que el IDE aún no hace.
+ *
+ * #473 (lote D, 268; 3-oct): es `bpvm_fs_mkdir_padres`, de la fachada —la usan
+ * también las tres familias para la stdlib—. Si no puede, ni se mira: que lo
+ * rechace el write, con su motivo. */
 
 /* PUT — subida de un tirón (para ficheros que caben en el scratch; los grandes
  * van por PUT_BEGIN/DATA/END). */
@@ -1123,7 +1122,7 @@ static void repl_put(long id, json_obj_t* obj) {
         put_unica_borrar(path, (unsigned long) bulk, "el bulk no llego entero");   /* #495 */
         wire_v1_send_fatal("PROTOCOL_ERROR", "bulk underrun"); return;
     }
-    crear_dirs_padre(path);                             /* #455 */
+    (void) bpvm_fs_mkdir_padres(path);                  /* #455 */
     if (bpvm_fs_write(path, s_ops->put_buf, (uint32_t) bulk, 0) != 0) {
         const char *code, *msg;
         fs_fallo("put", path, (unsigned long) bulk, &code, &msg);   /* antes de borrar: mira el espacio */
@@ -1415,7 +1414,7 @@ static void repl_put_begin(long id, json_obj_t* obj) {
         wire_v1_send_error(id, "INVALID_PATH", "path demasiado largo"); return;
     }
     put_abortar("llego otra subida");                /* #495: una sesión a medias, borrada */
-    crear_dirs_padre(path);                          /* #455 */
+    (void) bpvm_fs_mkdir_padres(path);               /* #455 */
     if (bpvm_fs_file_block_size(path) > sizeof s_put_sess.abierto) {
         wire_v1_send_error(id, "INVALID_PATH", "path demasiado largo para abrir el fichero"); return;
     }
@@ -1571,6 +1570,29 @@ int bpvm_repl_verbo_de_fs(const char* type) {
     return 0;
 }
 
+/* V7/H10 #473 (punto 10; 3-oct) — la puerta del arranque, una (ver bpvm_repl.h). Los mensajes eran tres para lo
+ * mismo; queda el de la Pico, que dice en qué estado se quedó el arranque. */
+int bpvm_repl_puerta_arranque(const char* type, long id, json_obj_t* obj, int estado, int bulk_en_cable) {
+    char msg[112];
+    if (bpvm_repl_verbo_de_fs(type) && estado < BPVM_BOOT_FS) {
+        if (bulk_en_cable) {
+            long b_pend = json_get_long(obj, "bulk", 0);
+            if (b_pend > 0) (void) bpvm_repl_drain_bulk((unsigned long) b_pend);
+        }
+        snprintf(msg, sizeof msg, "FS no disponible en estado %d (%s): configurar particiones",
+                 estado, bpvm_boot_state_name((bpvm_boot_state_t) estado));
+        wire_v1_send_error(id, "NOT_READY", msg);
+        return 1;
+    }
+    if (type && strcmp(type, "RUN") == 0 && estado < BPVM_BOOT_APP) {
+        snprintf(msg, sizeof msg, "VM no disponible en estado %d (%s): configurar particiones",
+                 estado, bpvm_boot_state_name((bpvm_boot_state_t) estado));
+        wire_v1_send_error(id, "NOT_READY", msg);
+        return 1;
+    }
+    return 0;
+}
+
 int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);
@@ -1638,7 +1660,7 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
          * FS plano con '/' como namespace no hay nodos de directorio». Eso era
          * cierto del FS en RAM del STM32 y dejó de serlo hace tiempo: los TRES
          * backends (`fs_lfs.c`, `fs_host.c`) hacen `mkdir` recursivo y ok-si-existe.
-         * De hecho este mismo fichero ya lo llamaba —`crear_dirs_padre()` en cada
+         * De hecho este mismo fichero ya lo llamaba —`bpvm_fs_mkdir_padres()` en cada
          * PUT (#455)—, así que el común creaba directorios al subir un fichero y
          * decía «hecho, nada» cuando se le pedía uno. Lo destapó el arnés del
          * simulador (`U3.24`), que traía un MKDIR de verdad: unificar al stub era

@@ -220,6 +220,10 @@ int  bpvm_fs_exists(const char* path);   /* 1 / 0 */
 int  bpvm_fs_remove(const char* path);                    /* #240: 0 / -1 */
 int  bpvm_fs_rename(const char* from, const char* to);    /* #240: 0 / -1 */
 int  bpvm_fs_mkdir (const char* path);                    /* #240 2ª: 0 / -1 */
+/* #473 (lote D, 268; 3-oct) — crea las carpetas que le falten a la ruta de un FICHERO (todas menos la última
+ * pieza): lo que hacen el PUT del wire (#455) y el instalador de la stdlib antes de escribir. 0 si no falta nada o
+ * se crearon; -1 con el motivo anotado. `bpvm_fs_write` no las crea, y hace bien: es el contrato de `fopen`. */
+int  bpvm_fs_mkdir_padres(const char* path);
 int  bpvm_fs_rmdir (const char* path);                    /* #240 2ª: 0 / -1 */
 int  bpvm_fs_copy  (const char* from, const char* to);    /* #240 2ª: 0 / -1 */
 int  bpvm_fs_isdir (const char* path);                    /* #240 2ª: 1 / 0 */

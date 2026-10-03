@@ -336,6 +336,43 @@ static int fat_crc32(const char* path, uint32_t* crc_out) {
     return 0;
 }
 
+/* #473 (lote D, 236; 3-oct) — COPIAR dentro de la tarjeta. FAT no tenía `copy`, y la fachada no hace el «read+write»
+ * que prometía el comentario de esta tabla: `copyFile` en /sd lanzaba «error al copiar», y en la flash y en el PC
+ * copiaba. La forma de `fat_crc32`: los dos ficheros abiertos UNA vez y recorridos en secuencia (sin `f_lseek`); el
+ * trozo de 256 B pasa por la ventana de cada `FIL`, así que la tarjeta lee y escribe sector a sector igual. Sobrescribe
+ * el destino, como littlefs y el PC; y si el volumen se llena, «escritura corta», como `fat_write`. */
+static int fat_copy(const char* from, const char* to) {
+    const char* pf = entra(from);
+    if (!pf) return -1;
+    const char* pt = entra(to);
+    if (!pt) return -1;
+    if (pt[0] == '\0') return fat_fallo(FR_INVALID_NAME);
+    FIL fi, fo;
+    uint8_t buf[256];
+    int lleno = 0;
+    trabar();
+    FRESULT r = f_open(&fi, pf, FA_READ);
+    if (r == FR_OK) {
+        r = f_open(&fo, pt, FA_WRITE | FA_CREATE_ALWAYS);
+        if (r == FR_OK) {
+            for (;;) {
+                UINT leidos = 0, esc = 0;
+                r = f_read(&fi, buf, sizeof buf, &leidos);
+                if (r != FR_OK || leidos == 0) break;
+                r = f_write(&fo, buf, leidos, &esc);
+                if (r != FR_OK) break;
+                if (esc != leidos) { lleno = 1; break; }     /* el volumen se ha llenado */
+            }
+            FRESULT rc = f_close(&fo);                       /* el close es donde se vuelca */
+            if (r == FR_OK) r = rc;
+        }
+        f_close(&fi);
+    }
+    destrabar();
+    if (r != FR_OK) return fat_fallo(r);
+    return lleno ? fat_lleno() : 0;
+}
+
 static long fat_read_at(const char* path, uint32_t off, uint8_t* dst, uint32_t cap) {
     const char* p = entra(path);
     if (!p) return -1;
@@ -632,7 +669,7 @@ static const bpvm_fs_backend_t s_backend = {
     .rename   = fat_rename,
     .mkdir    = fat_mkdir,
     .rmdir    = fat_rmdir,
-    .copy     = NULL,          /* la fachada lo hará con read+write si hace falta */
+    .copy     = fat_copy,      /* #473 (lote D, 236) — `copyFile` en /sd */
     .isdir    = fat_isdir,
     .mtime_ms = fat_mtime_ms,
     .list     = fat_list,

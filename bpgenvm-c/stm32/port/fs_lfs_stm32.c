@@ -11,11 +11,13 @@
  *    un solo sitio escribe la flash del U5, sin copias que diverjan).
  *
  * 2) IMPLEMENTACIÓN del API legado stm32_fs.h SOBRE la fachada bpvm_fs+littlefs
- *    (mismo shape que fs_lfs_pico.c): fs_get a un scratch (contrato "válido hasta
- *    el siguiente fs op"), fs_put crea dirs padre, fs_count/fs_entry por recorrido
- *    BFS con paths PLANOS (como el FS viejo), fs_save no-op (littlefs committea en
- *    cada close), el boot monta. stm32_fs_register_bpvm no-op (el attach ya
- *    registró el backend).
+ *    (mismo shape que fs_lfs_pico.c): fs_put crea las carpetas que falten (el
+ *    instalador de /lib), las cuentas, fs_format, fs_save no-op (littlefs
+ *    committea en cada close), el boot monta (y vacía /lib). stm32_fs_register_bpvm
+ *    no-op (el attach ya registró el backend).
+ * #473 (lote D, 3-oct): fuera lo que no tenía llamadores (264) y las carpetas
+ * padre las crea la fachada (268, `bpvm_fs_mkdir_padres`); y el FORMAT dice si
+ * pudo (466: contestaba OK pasara lo que pasara).
  *
  * H9: la región del FS ya NO es fija — la pasa el boot a fs_init_at(offset,size),
  * con la región que define el env (bpvm_part). Nota: multi-.mdn con el scratch único es limitación
@@ -122,25 +124,6 @@ static void dirlist_cb(const char* name, int is_dir, uint32_t size, void* user) 
     d->n++;
 }
 
-/* snapshot BFS de paths PLANOS (raíz → "Hello.mod"; subdir → "/lib/Core.mod"),
- * como el FS viejo. Lo rellena fs_count(); fs_entry() lo lee (el wire llama
- * fs_count y luego fs_entry en secuencia). */
-/* #425 — las que NO cupieron en el ULTIMO snapshot, para que el wire lo diga
- * (ver fs_list_omitidas en fs.h). El STM32 tiene TRES topes, no dos: entradas
- * por directorio, directorios a visitar y ficheros del FS entero — y el tercero
- * cortaba con un `return` seco. Los tres suman aqui. */
-static int      s_list_omitidas = 0;
-int fs_list_omitidas(void) { return s_list_omitidas; }
-
-
-/* Los paths planos están acotados a LIST_NAME_MAX por contrato del FS (nombres
- * ≤ 64 incl. el path); snprintf trunca a salvo → silenciamos el aviso conservador
- * -Wformat-truncation (el build STM32 va con -Wall). El -Wrestrict lo evitamos
- * copiando pending[head] a un local antes de escribir en pending[tail]. */
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wformat-truncation"
-#pragma GCC diagnostic pop
-
 /* Vacía /lib tras montar: el FS viejo NO persistía /lib (fs_load lo saltaba) →
  * stm32_mods_install lo re-embebe FRESCO cada boot (evita stdlib rancia tras
  * actualizar el firmware). littlefs SÍ persiste → lo limpiamos a mano para
@@ -155,18 +138,6 @@ static void clear_lib(void) {
         snprintf(path, sizeof(path), "/lib/%s", dl.names[i]);
         bpvm_fs_remove(path);
     }
-}
-
-/* ── crear dirs padre (el FS viejo era PLANO; littlefs necesita /lib antes de /lib/x) ── */
-static void ensure_parent_dirs(const char* name) {
-    const char* last = strrchr(name, '/');
-    if (!last || last == name) return;          /* raíz o sin dir */
-    char dir[128];
-    size_t n = (size_t) (last - name);
-    if (n >= sizeof(dir)) return;
-    memcpy(dir, name, n);
-    dir[n] = '\0';
-    bpvm_fs_mkdir(dir);                          /* recursivo, ok-si-existe */
 }
 
 /* ── mount / boot (H9: región parametrizada) ──────────────────────────── */
@@ -224,24 +195,9 @@ static void log_fallo_fs(const char* op, const char* name, uint32_t size) {
 
 int fs_put(const char* name, const uint8_t* data, uint32_t size) {
     if (!name || name[0] == '\0') return -1;
-    ensure_parent_dirs(name);
+    (void) bpvm_fs_mkdir_padres(name);     /* #473 (268): si no puede, que lo diga el write */
     if (bpvm_fs_write(name, data, size, 0) != 0) { log_fallo_fs("put", name, size); return -1; }
     return 0;
-}
-
-/* #294 streaming PUT — apende un trozo (el PUT_BEGIN del wire crea/trunca con
- * fs_put(name,NULL,0)). Sube ficheros > buffer del wire sin buferizarlos enteros. */
-int fs_put_append(const char* name, const uint8_t* data, uint32_t size) {
-    if (!name || name[0] == '\0') return -1;
-    if (size == 0) return 0;
-    if (bpvm_fs_write(name, data, size, 1) != 0) { log_fallo_fs("append", name, size); return -1; }
-    return 0;
-}
-
-
-int fs_del(const char* name) {
-    if (!bpvm_fs_exists(name)) return -1;
-    return (bpvm_fs_remove(name) == 0) ? 0 : -1;
 }
 
 /* #461 — EL INDICE PERSISTENTE SE FUE AL COMUN.
@@ -266,12 +222,11 @@ uint32_t fs_used_bytes(void) {
     return u;
 }
 
-void fs_format(void) {
-    if (bpvm_fs_lfs_format() == 0) {
-        bpvm_fs_mkdir("/sys");
-        bpvm_fs_mkdir("/lib");
-        bpvm_fs_mkdir("/app");
-    }
+int fs_format(void) {
+    /* #473 (466): 0 sólo si formateó Y están las tres carpetas. */
+    if (bpvm_fs_lfs_format() != 0) return -1;
+    if (bpvm_fs_mkdir("/sys") != 0 || bpvm_fs_mkdir("/lib") != 0 || bpvm_fs_mkdir("/app") != 0) return -1;
+    return 0;
 }
 
 void fs_save(void) {

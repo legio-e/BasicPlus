@@ -126,7 +126,5 @@ idf_component_register(
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC)
 
-# fs_lfs_esp32.c: el BFS de fs_list hace snprintf de paths (acotados por la
-# estructura del FS, pero GCC no lo ve → -Wformat-truncation). ESP-IDF fuerza
-# -Werror (el Pico no) → relajamos SOLO este fichero (mismo código probado en RP2350).
-set_source_files_properties("../../esp32/common/fs_lfs_esp32.c" PROPERTIES COMPILE_FLAGS -Wno-format-truncation)
+# #473 (lote D, 264; 3-oct): aquí se relajaba -Wformat-truncation para fs_lfs_esp32.c, por el snprintf
+# del BFS de fs_list; fs_list se fue al común (#461) y el fichero ya no tiene ninguno.

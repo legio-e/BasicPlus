@@ -139,8 +139,8 @@ idf_component_register(
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas.
 target_compile_definitions(${COMPONENT_LIB} PRIVATE
     LFS_NO_DEBUG LFS_NO_WARN LFS_NO_ERROR LFS_NO_MALLOC)
-# fs_lfs_esp32.c: snprintf de paths acotado por el FS (falso positivo de -Wformat-truncation con -Werror).
-set_source_files_properties("../../esp32/common/fs_lfs_esp32.c" PROPERTIES COMPILE_FLAGS -Wno-format-truncation)
+# #473 (lote D, 264; 3-oct): aquí se relajaba -Wformat-truncation para fs_lfs_esp32.c, por el snprintf
+# del BFS de fs_list; fs_list se fue al común (#461) y el fichero ya no tiene ninguno.
 
 # Activa el camino TCP/Ethernet en main.c (por defecto = UART0, sin este define).
 if(BPVM_P4_WIRE STREQUAL "tcp")

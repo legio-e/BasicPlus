@@ -90,7 +90,7 @@
 						<entry excluding="CMSIS/Core/Template" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="Drivers"/>
 						<entry excluding="stm32_fs.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="port"/>
 						<entry excluding="bd" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="littlefs"/>
-						<entry excluding="fs_lfs_host.c|fs_host.c|platform_pthread.c|gui_display_sdl.c|fs_fat.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
+						<entry excluding="fs_lfs_host.c|fs_host.c|platform_pthread.c|gui_display_sdl.c|fs_fat.c|bpvm_sd.c|bpvm_sd_blk.c|bpvm_sd_spi_env.c|bpvm_blk_sdmmc_cfg.c|bpvm_blk.c" flags="VALUE_WORKSPACE_PATH|RESOLVED" kind="sourcePath" name="src"/>
 					</sourceEntries>
 				</configuration>
 			</storageModule>

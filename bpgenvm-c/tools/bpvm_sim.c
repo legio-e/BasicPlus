@@ -570,8 +570,12 @@ static void fs_walk(sb_t* sb) {
     snprintf(g_dirs[0], PATH_MAX_SIM, "%s", "/");
 
     /* Fase 1: recorrer (el índice avanza sobre una cola que crece). */
-    for (int i = 0; i < g_n_dirs && i < WALK_MAX_DIRS; i++)
+    for (int i = 0; i < g_n_dirs && i < WALK_MAX_DIRS; i++) {
+        /* #473 (lote D, 248; 3-oct): sólo el volumen propio, como `bpvm_fs_count_files`: con `--sd`, lo usado y la
+         * cuenta del INFO y del DF sumaban los ficheros de la tarjeta. */
+        if (i > 0 && !bpvm_fs_en_raiz(g_dirs[i])) continue;
         bpvm_fs_list(g_dirs[i], collect_cb, g_dirs[i]);
+    }
 
     /* Fase 2: emitir.
      *

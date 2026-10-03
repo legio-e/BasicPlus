@@ -107,6 +107,30 @@ int main(void) {
           "DEL de lo que no esta: NOT_FOUND (antes: el motivo de la operacion anterior)");
     l = linea_del_fallo("del", "/no-esta.txt");
     CHECK(strstr(l, "FALLO lfs=-2 NOENT (no existe)") != NULL, "la linea del log, la de siempre: «FALLO lfs=-2 NOENT»");
+
+    /* #473 (lote D, 268; 3-oct) — las carpetas que le faltan a un fichero las crea la FACHADA: estaba cuatro veces
+     * (el PUT común y una por familia, para /lib, con un búfer de 128). */
+    CHECK(bpvm_fs_mkdir_padres("/a/b/c/x.txt") == 0 && bpvm_fs_isdir("/a/b/c") == 1 && !bpvm_fs_exists("/a/b/c/x.txt"),
+          "#268: mkdir_padres de /a/b/c/x.txt crea /a/b/c, y el fichero no");
+    CHECK(bpvm_fs_mkdir_padres("/a/b/c/y.txt") == 0, "#268: otra vez, con las carpetas ya hechas: 0");
+    CHECK(bpvm_fs_mkdir_padres("/raiz.txt") == 0 && bpvm_fs_mkdir_padres("suelto.txt") == 0,
+          "#268: en la raiz o sin carpeta: 0, no falta nada");
+    CHECK(bpvm_fs_write("/a/f", (const uint8_t*) "x", 1, 0) == 0
+          && bpvm_fs_mkdir_padres("/a/f/x.txt") == -1 && es(BPVM_FS_FAIL_EXISTS),
+          "#268: una carpeta del camino que es un fichero: -1, EXISTS");
+    {
+        char hondo[300];
+        hondo[0] = '/';
+        memset(hondo + 1, 'b', 270);
+        memcpy(hondo + 271, "/x.txt", 7);
+        CHECK(bpvm_fs_mkdir_padres(hondo) == -1 && es(BPVM_FS_FAIL_NAME_TOO_LONG),
+              "#268: una carpeta de 271 caracteres: -1, NAME_TOO_LONG");
+    }
+    bpvm_fs_remove("/a/f");
+    bpvm_fs_rmdir("/a/b/c");
+    bpvm_fs_rmdir("/a/b");
+    bpvm_fs_rmdir("/a");
+    CHECK(!bpvm_fs_isdir("/a"), "#268: y se recoge (el volumen se llena despues)");
     {
         static uint8_t lleno[12 * 1024];
         int i, escritos = 0;

@@ -30,6 +30,7 @@
 #include "json_min.h"
 #include "bpvm.h"
 #include "bpvm_io.h"   /* V6/A1.5: el segundo hilo, comun a todas las familias */
+#include "bpvm_platform.h"   /* #473 (punto 7): ceder un tick en el lazo ocioso */
 #include "bpvm_internal.h"   /* recorrido de vm->modules[] para los .mdn del AOT */
 #include "bpvm_entry.h"      /* #344 — el RUN, escrito una vez */
 #include "bpvm_rtc.h"        /* H10 — TIME aplica la hora al RTC (bpvm_rtc_set_now_ms) */
@@ -215,7 +216,7 @@ static void stm32_repl_info(bpvm_repl_info_t* o) {
 static unsigned long stm32_repl_fs_total(void) { return (unsigned long) fs_total_bytes(); }
 static unsigned long stm32_repl_fs_used(void)  { return (unsigned long) fs_used_bytes(); }
 static int           stm32_repl_fs_count(void) { return fs_count(); }
-static int           stm32_repl_fs_format(void){ fs_format(); return 0; }
+static int           stm32_repl_fs_format(void){ return fs_format(); }   /* #473 (466): lo que pasó */
 static int           stm32_repl_fs_save(void)  { fs_save(); return 0; }
 
 /* El sello de compilación de ESTA familia. Ver la nota de `server_build` en
@@ -805,26 +806,9 @@ static void dispatch(int first_char) {
     }
     /* H9 — gating: sin FS montado, las ops de fichero no valen; sin VM, el RUN no.
      * HELLO/INFO/STATE/PING/TIME/RESET van SIEMPRE (para conectar y configurar). */
-    {
-        int st = (int) board_boot_status()->state;
-        /* V7/H8 #601 — la lista de verbos de fichero, UNA, en el común (antes, una copia por familia: esta
-         * cubrió RENAME/RMDIR en V6/U3 y la de la ESP32 se quedó atrás). */
-        int is_fs = bpvm_repl_verbo_de_fs(type);
-        if (is_fs && st < BPVM_BOOT_FS) {
-            /* El bulk que esta puerta rechaza hay que TRAGARSELO igual, o se
-             * queda en el cable y el mensaje siguiente se lee desde la mitad.
-             * Aquí no lo ha leído nadie todavía: el bloque de PACK_* retorna
-             * antes de llegar a esta puerta. */
-            long b_pend = json_get_long(&obj, "bulk", 0);
-            if (b_pend > 0) (void) bpvm_repl_drain_bulk((unsigned long) b_pend);
-            wire_v1_send_error(id, "NOT_READY", "FS no montado (configura particiones)");
-            return;
-        }
-        if (strcmp(type, "RUN") == 0 && st < BPVM_BOOT_APP) {
-            wire_v1_send_error(id, "NOT_READY", "VM no lista (configura particiones)");
-            return;
-        }
-    }
+    /* V7/H10 #473 (punto 10): la puerta, en el común. Aquí el bulk sigue en el cable siempre: no lo ha leído nadie
+     * todavía (el bloque de PACK_* retorna antes de llegar a esta puerta). */
+    if (bpvm_repl_puerta_arranque(type, id, &obj, (int) board_boot_status()->state, 1)) return;
 
     /* V6/U3 — PRIMERO el común: PING/TIME/LOG_DUMP/LOG_CLEAR viven en
      * src/bpvm_repl.c para las cuatro familias. Si lo atiende, hemos acabado.
@@ -1089,7 +1073,17 @@ static void stm32_lazo(void) {
     for (;;) {
         int c = stm32_wire_getchar();
         if (c == '{') dispatch(c);
-        else if (c < 0) (void) bpvm_repl_paso();   /* #495 (paso 4): sin nada que leer, el trozo siguiente de lo que se esté mandando */
+        else if (c < 0 && !bpvm_repl_paso()) {   /* #495 (paso 4): sin nada que leer, el trozo siguiente de lo que se esté mandando */
+#if defined(BOARD_WIRE_IRQn)
+            /* #473 (punto 7; 3-oct) — CEDER CUANDO NO HAY NADA QUE HACER. El lazo sondeaba el cable sin bloquearse
+             * nunca, y a la prioridad 2 de esta tarea la ociosa de FreeRTOS no corría jamás con la placa parada (ni
+             * su limpieza de tareas borradas, ni un WFI). Un tick (1 ms a 1 kHz): lo que llegue entretanto lo guarda
+             * el anillo de la RX (IRQ y DMA, 4 KB); sin anillo, la FIFO de 8 B no aguantaría el milisegundo, y por eso
+             * sólo aquí. Bloquearse de verdad hasta que llegue un byte no se puede: la interrupción del cable está por
+             * encima del umbral de FreeRTOS (no puede avisar a una tarea). */
+            bpvm_platform_thread_sleep_ms(1);
+#endif
+        }
 
         uint32_t now = HAL_GetTick();
         if (now - last_blink >= 500U) {     /* heartbeat */

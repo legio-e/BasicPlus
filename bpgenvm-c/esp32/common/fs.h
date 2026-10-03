@@ -75,11 +75,12 @@ typedef enum {
  * el climb se queda en estado 1 y el host conduce. Formatea si no monta. */
 fs_status_t fs_init_at(uint32_t fs_offset, uint32_t fs_size);
 
-/* Vacía el FS en RAM (no toca flash hasta el siguiente save). */
-void fs_format_ram(void);
+/* Reformatea el volumen EN CALIENTE y recrea /sys, /lib y /app (el FORMAT del
+ * wire). 0 / -1, con el motivo anotado en la fachada (#473, 466: era `void`, y
+ * el FORMAT contestaba OK aunque no hubiera podido). */
+int fs_format_ram(void);
 
-/* Persiste el estado actual a flash. Bloquea ~50 ms (erase+program).
- * Durante la operación se suspenden los IRQs. */
+/* No-op: littlefs persiste en cada close (el SAVE del wire). FS_OK. */
 fs_status_t fs_save_to_flash(void);
 
 /* LOTES: suspende el auto-guardado de fs_put/fs_delete (cada uno reescribe la
@@ -89,48 +90,22 @@ fs_status_t fs_save_to_flash(void);
 void fs_autosave_suspend(void);
 void fs_autosave_resume(int save_now);
 
-/* Itera los ficheros. `cb` recibe (name, size, user) por cada uno.
- * Si cb devuelve != 0 la iteración se aborta. */
-typedef int (*fs_list_cb_t)(const char* name, uint32_t size, void* user);
-
-/* #425 — cuantas entradas dejo FUERA el ultimo recorrido de fs_list. 0 = el
- * listado es COMPLETO. Valido inmediatamente despues de la llamada.
- *
- * Por que existe: el recorrido plano tiene topes (entradas por directorio y
- * directorios a visitar) y al pasarse recortaba EN SILENCIO — el firmware lo
- * anotaba en su log, pero por el wire salia una lista corta que el IDE pintaba
- * como si fuera todo. Un listado corto que no se declara corto es una mentira,
- * y de las que se creen. El wire lo manda ahora en LIST_REPLY.
- *
- * Es un accesor y no un parametro de salida porque las tres familias recorren
- * de formas distintas (callback aqui y en el ESP32, snapshot en el STM32): lo
- * que puede ser UNIFORME es el contrato de lo que se reporta, no la firma. */
-
 /* Lookup. Si existe, devuelve puntero a los bytes en RAM y rellena
  * *size_out. El puntero es válido hasta el siguiente fs_put/fs_delete. */
 /* H11 — fs_get RETIRADO: su contrato (devolver un PUNTERO a los bytes) obligaba
  * a un espejo estático de 64 KB con littlefs. Usar la fachada por trozos:
  * bpvm_fs_stat / bpvm_fs_read_at / bpvm_fs_read / bpvm_fs_crc32. */
 
-/* Inserta o sobreescribe. Si ya existe, libera el slot antiguo. */
+/* Escribe (o sobrescribe) el fichero entero, creando las carpetas que falten.
+ * Lo usa el instalador de la stdlib. #473 (264, 3-oct): fs_put_append,
+ * fs_delete y fs_status_str (declarada, sin cuerpo), fuera: sin llamadores. */
 fs_status_t fs_put(const char* name, const uint8_t* data, uint32_t size);
 
-/* #294 streaming PUT — apende un trozo (el PUT_BEGIN del wire crea/trunca el
- * fichero con fs_put(name,NULL,0)). Sube ficheros > buffer del wire sin
- * buferizarlos enteros. */
-fs_status_t fs_put_append(const char* name, const uint8_t* data, uint32_t size);
-
-/* Borra. */
-fs_status_t fs_delete(const char* name);
-
-/* Stats. */
+/* Stats (del volumen littlefs). */
 uint32_t fs_total_bytes(void);
 uint32_t fs_used_bytes(void);
 uint32_t fs_free_bytes(void);
 int      fs_file_count(void);
-
-/* Devuelve un literal con el mensaje de error. */
-const char* fs_status_str(fs_status_t s);
 
 /* #247 — registra este FS como backend de file I/O de BP (readFile/writeFile/
  * appendFile/fileExists + readFileBytes/writeFileBytes). Llamar tras fs_init(). */

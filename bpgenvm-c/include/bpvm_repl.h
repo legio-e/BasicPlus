@@ -198,6 +198,14 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj);
  *  la STM32, SAVE. Un verbo de fichero nuevo se añade aquí, una vez. */
 int bpvm_repl_verbo_de_fs(const char* type);
 
+/** V7/H10 #473 (punto 10; 3-oct) — LA PUERTA DEL ARRANQUE, una para las tres familias: sin el FS montado (estado del
+ *  arranque < BPVM_BOOT_FS) un verbo de fichero no pasa, y sin la VM (< BPVM_BOOT_APP) un RUN tampoco («si no hay
+ *  partición, nada con el sistema de ficheros», Eduardo). La lista ya era una (#601); la puerta seguía escrita tres
+ *  veces —el `if`, tragar el bulk y el NOT_READY del RUN—, con tres mensajes. Si rechaza, contesta NOT_READY con el
+ *  estado y devuelve 1; si no, 0. `bulk_en_cable`: el bulk del mensaje sigue sin leer (hay que tragárselo, o el
+ *  mensaje siguiente se lee desde la mitad de los datos). */
+int bpvm_repl_puerta_arranque(const char* type, long id, json_obj_t* obj, int estado, int bulk_en_cable);
+
 /** V7/H8 #495 — lo que la familia llama con CADA mensaje del lazo, en cuanto sabe su `type` y antes de despachar
  *  nada (también los que atiende ella: RUN, RESET...). Hoy, una cosa: si el verbo no puede convivir con una subida a
  *  medias —un HELLO, un RUN, un RESET, otra subida o un verbo que escribe en el FS—, la acaba: cierra el fichero y

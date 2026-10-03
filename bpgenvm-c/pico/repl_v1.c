@@ -1232,7 +1232,7 @@ void repl_v1_autorun(void) {
  * Se registra A MEDIAS a propósito: `info` y `put_buf` llegan en sus pasos. El
  * común no se fía del orden de la cadena para eso — cada verbo comprueba la
  * pieza que necesita y contesta UNSUPPORTED si falta. */
-static int  pico_repl_fs_format(void) { fs_format_ram(); return 0; }
+static int  pico_repl_fs_format(void) { return fs_format_ram(); }   /* #473 (466): lo que pasó */
 static int  pico_repl_fs_save(void)   { return fs_save_to_flash() == FS_OK ? 0 : -1; }
 static unsigned long pico_repl_fs_total(void) { return (unsigned long) fs_total_bytes(); }
 static unsigned long pico_repl_fs_used(void)  { return (unsigned long) fs_used_bytes(); }
@@ -1354,30 +1354,9 @@ void repl_v1_handle_request(int first_char) {
      * los comandos de fichero se RECHAZAN con error claro (nunca cuelgan ni
      * inventan un FS); RUN además necesita la VM (estado 3). Norma de Eduardo:
      * "si no hay partición, nada con el sistema de ficheros". */
-    {
-        const bpvm_boot_status_t* bs = board_boot_status();
-        int is_fs_cmd = bpvm_repl_verbo_de_fs(type);   /* V7/H8 #601: la lista, UNA, en el común */
-        if (is_fs_cmd && bs->state < BPVM_BOOT_FS) {
-            /* El bulk que esta puerta rechaza hay que TRAGARSELO igual, o se
-             * queda en el cable. Sólo el de los verbos PUT: el resto ya lo
-             * pre-leyó el paso 5. */
-            if (lo_lee_el_comun) {
-                long b_pend = json_get_long(&obj, "bulk", 0);
-                if (b_pend > 0) (void) bpvm_repl_drain_bulk((unsigned long) b_pend);
-            }
-            char msg[96];
-            snprintf(msg, sizeof msg,
-                     "FS no disponible en estado %d (%s): configurar particiones",
-                     (int) bs->state, bpvm_boot_state_name(bs->state));
-            wire_v1_send_error(id, "NOT_READY", msg);
-            return;
-        }
-        if (strcmp(type, "RUN") == 0 && bs->state < BPVM_BOOT_APP) {
-            wire_v1_send_error(id, "NOT_READY",
-                               "VM no disponible en el estado actual del boot");
-            return;
-        }
-    }
+    /* V7/H10 #473 (punto 10): la puerta, en el común. El bulk que rechaza sólo sigue en el cable en los verbos PUT:
+     * el resto ya lo pre-leyó el paso 5. */
+    if (bpvm_repl_puerta_arranque(type, id, &obj, (int) board_boot_status()->state, lo_lee_el_comun)) return;
     /* FILES */
     /* V6/U3 — el común, DESPUÉS de los propios y no antes (al revés que el
      * STM32) porque esta familia se migra por grupos: lo que esta placa siga
