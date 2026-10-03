@@ -13,6 +13,7 @@
 #include "bpvm.h"              /* #338: bpvm_scratch_take/give (zona compartida) */
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
+#include "bpvm_repl.h"           /* V7/H10: el handle común (bpvm_bmgr_handle) */
 #include "bpvm_pack.h"           /* H3 — cintura de burn de la zona de packs */
 #include "bpvm_part.h"
 #include "bpvm_env.h"
@@ -30,22 +31,16 @@
 
 /* Estado del boot + el layout del climb (estáticos: el layout debe sobrevivir para
  * que layer_fs lo use; el boot lo lee board_boot_status). s_layout_ok = el layout
- * validó en el boot → la zona de packs (BPVM_PART_PACKS) es direccionable (H3). */
+ * validó en el boot → la zona de packs (BPVM_PART_PACKS) es direccionable (H3).
+ * V7/H10 (el board_mgr común, D1): el ENV ya no se copia a la RAM —eran 16 KB de .bss—: la flash del U5 está mapeada
+ * y la vista común (bpvm_bmgr_vista) lee las copias en su sitio. */
 static bpvm_boot_status_t s_boot;
 static bpvm_part_layout_t s_layout;
 static int s_layout_ok = 0;
-/* Copias A/B del env para layer_partitions (8 KB c/u en .bss; fuera del stack). */
-static uint8_t s_env_a[BP_ENV_SECTOR];
-static uint8_t s_env_b[BP_ENV_SECTOR];
 
 const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
 
-/* ── cintura del env: lee/escribe las 2 copias A/B (flash interna mapeada) ── */
-
-static void env_read_slots(uint8_t* a, uint8_t* b) {
-    memcpy(a, (const void*) (uintptr_t) (FLASH_BASE + BP_ENV_A_OFFSET), BP_ENV_SECTOR);
-    memcpy(b, (const void*) (uintptr_t) (FLASH_BASE + BP_ENV_B_OFFSET), BP_ENV_SECTOR);
-}
+/* ── cintura del env: las 2 copias A/B (flash interna mapeada) ── */
 
 static int env_write_slot(int slot, const uint8_t* src) {
     uint32_t addr = FLASH_BASE + ((slot == 0) ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET);
@@ -86,6 +81,54 @@ static int packs_fl_program(void* u, uint32_t off, const uint8_t* d, uint32_t le
 static const bpvm_pack_flash_t s_packs_fl =
     { packs_fl_erase, packs_fl_program, NULL, BP_ENV_SECTOR /* pagina 8K */ };
 
+/* ── V7/H10, el board_mgr común (3-oct): LA CINTURA DE LA STM32 (bpvm_bmgr_familia_t) ──
+ * Lo que quedaba de propio en su `handle`: dónde están las copias (la flash mapeada), cómo se escribe un sector, lo de
+ * la placa en el gestor y la red .ld ↔ flash_layout_stm32.h —que desde #637 también está DENTRO de stm32_flash.c, para
+ * todo lo que escribe: aquí sólo da el motivo por el wire—. */
+static const uint8_t* env_copia(int slot) {
+    return (const uint8_t*) (uintptr_t) (FLASH_BASE + ((slot == 0) ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET));
+}
+
+static void env_rellenar(bpvm_bmgr_t* bm) {
+    bm->part_base = BP_PART_BASE;
+    bm->usable_flash = BP_USABLE_FLASH;   /* tamaño de flash fijo por placa; sin clamp */
+    bm->live = &s_boot;                   /* STATE cuenta el estado REAL del boot */
+    /* H3 — zona de packs: XIP directo sobre la partición PACKS. V7/H7 (Boot 2, fase 1): la que ve el gestor es la
+     * MONTADA —con el FS, la regla del arranque—, no la del layout: sin FS no hay zona, y PACK_LS dice por qué. */
+    uint32_t tam = 0;
+    const uint8_t* base = bpvm_pack_mounted(&tam);
+    if (base && tam > 0) {
+        bm->packs_base = base;
+        bm->packs_size = tam;
+        s_packs_off    = (uint32_t) ((uintptr_t) base - FLASH_BASE);   /* la cintura de burn escribe aquí */
+        bm->packs_flash = &s_packs_fl;
+    }
+    /* V7/H6 G5.b0 — la RAM de trabajo de un motor nativo: el bloque que el arranque apartó delante de la VM
+     * (pack_stm32.h). Sale a PACK_BURN_BEGIN; sin bloque, 0, y el IDE lo dice en vez de grabar un motor que no
+     * podría arrancar. */
+    bm->pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
+    bm->pack_ram_size = s_pack_ram_size;
+}
+
+static const char* env_no_vale(void) {
+    /* Red anti-divergencia .ld ↔ flash_layout_stm32.h: el env debe caer entre el fin del firmware y el inicio de los
+     * datos. La guarda de verdad está en stm32_flash.c (#637); esto la dice por el wire, con su nombre. */
+    if ((uintptr_t) (FLASH_BASE + BP_ENV_A_OFFSET) < (uintptr_t) __bp_flash_end
+        || (uintptr_t) (FLASH_BASE + BP_ENV_B_OFFSET + BP_ENV_SECTOR) > (uintptr_t) __bp_part_start)
+        return "layout de flash inconsistente (env fuera de la zona 2)";
+    return NULL;
+}
+
+static const bpvm_bmgr_familia_t s_familia = {
+    BP_ENV_SECTOR, env_copia, NULL, NULL, env_write_slot, env_rellenar, env_no_vale
+};
+
+/* La familia, registrada antes de la primera lectura del ENV: la vista común sin familia es un ENV vacío, y cualquier
+ * clave saldría con su valor por defecto sin decir nada. Quien lea primero, la registra. */
+static void asegura_familia(void) {
+    if (bpvm_bmgr_familia_actual() != &s_familia) bpvm_bmgr_familia(&s_familia);
+}
+
 /* ── arranque escalonado: particiones del env → FS (sub-rango de BP_DATA) → VM ── */
 
 /* #423 — leer una bandera del entorno desde fuera. El STM32 guardaba sus slots
@@ -93,68 +136,53 @@ static const bpvm_pack_flash_t s_packs_fl =
  * Lo necesita el interruptor del log (`log=0|1`), y se resuelve con esto en vez
  * de sacar los slots, que es estado que no tiene por que salir de aqui. */
 int board_mgr_stm32_env_bool(const char* key, int def) {
-    bpvm_env_t env;
-    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &env);
-    return bpvm_env_get_bool(&env, key, def);
+    asegura_familia();
+    return bpvm_env_get_bool(bpvm_bmgr_vista(), key, def);   /* V7/H10 (D1): el ENV de la flash */
 }
 
 /* Lo mismo para una clave numerica (hoy: `stack`, el reparto pilas/heap en KB). */
 long board_mgr_stm32_env_long(const char* key, long def) {
-    bpvm_env_t env;
-    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &env);
-    return bpvm_env_get_long(&env, key, def);
+    asegura_familia();
+    return bpvm_env_get_long(bpvm_bmgr_vista(), key, def);
 }
 
 /* V7/H6.c G4.a1 — y una clave de TEXTO, entera o nada (`bpvm_env_get_exacto`): la
  * primera que hace falta aquí son las líneas de los buses (`spi1=`, `i2c2=`). */
 int board_mgr_stm32_env_get(const char* key, char* buf, size_t cap) {
-    bpvm_env_t env;
-    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &env);
-    return bpvm_env_get_exacto(&env, key, buf, cap);
+    asegura_familia();
+    return bpvm_env_get_exacto(bpvm_bmgr_vista(), key, buf, cap);
 }
 
-/* V7/H6 G5.b0 — ver el .h: el ENV antes que el climb, para repartir la memoria. */
+/* V7/H6 G5.b0 — ver el .h: el ENV antes que el climb, para repartir la memoria. V7/H10: ya no se copia nada; aquí se
+ * crea el candado de la flash (D4: antes de que corra nadie más) y se registra la familia. */
 void board_mgr_stm32_env_temprano(void) {
-    env_read_slots(s_env_a, s_env_b);
+    stm32_flash_init();
+    asegura_familia();
 }
 
-/* V7/H7 (Boot 2, fase 4) — el ENV ENTERO, de sólo lectura, para el arranque común (las claves
- * del reparto, los buses, `log=`). Se elige en cada llamada, como los de arriba: las copias A/B
- * de la RAM son las que leyó el arranque. */
-static bpvm_env_t s_env;
+/* V7/H7 (Boot 2, fase 4) — el ENV ENTERO, de sólo lectura, para el arranque común (las claves del reparto, los buses,
+ * `log=`) y Machine.getEnv. V7/H10 (D1): el de la flash —lo último que se escribió—, no una foto del arranque. */
 const bpvm_env_t* board_mgr_stm32_env(void) {
-    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &s_env);
-    return &s_env;
+    asegura_familia();
+    return bpvm_bmgr_vista();
 }
 
-/* V7/H10 (#626) — el arranque común AÑADE una clave que falta (la fecha de la imagen, una
- * vez). Sobre las copias del arranque: el bloque nuevo se construye en la copia RANCIA
- * misma (bpvm_env_anadir con `out` NULL), sin pedir otro búfer, y se vuelca a la flash;
- * las vistas se eligen en cada llamada, así que el programa la ve sin reiniciar. Si la
- * flash no escribe, la copia rancia de la RAM se invalida: la vista no enseña lo que la
- * flash no tiene. */
+/* V7/H10 (#626) — el arranque común AÑADE una clave que falta (la fecha de la imagen, una vez), por el común: el
+ * bloque nuevo en la zona de rascar, por la cintura (con la guarda de #637), y la vista lo ve sin reiniciar. */
 int board_mgr_stm32_env_anadir(const char* clave, const char* valor) {
-    int slot = -1;
-    int r = bpvm_env_anadir(s_env_a, s_env_b, BP_ENV_SECTOR, clave, valor, NULL, &slot);
-    if (r != 0) return r;
-    uint8_t* nueva = (slot == 0) ? s_env_a : s_env_b;
-    if (env_write_slot(slot, nueva) != 0) {
-        memset(nueva, 0xFF, BPVM_ENV_HEADER_SIZE);
-        return -1;
-    }
-    return 0;
+    asegura_familia();
+    return bpvm_bmgr_anadir(clave, valor);
 }
 
 static bpvm_boot_step_t layer_partitions(void* u) {
     (void) u;
     bpvm_boot_step_t r; r.ok = 0; r.reason[0] = '\0';
-    env_read_slots(s_env_a, s_env_b);
-    bpvm_env_t env;
-    bpvm_env_pick(s_env_a, BP_ENV_SECTOR, s_env_b, BP_ENV_SECTOR, &env);
+    asegura_familia();
+    const bpvm_env_t* env = bpvm_bmgr_vista();   /* V7/H10: el ENV de la flash */
     int bad = -1;
     /* base = BP_PART_BASE, usable = fin de flash (fijo por placa; sin clamp #292
      * — el U5 conoce su tamaño de flash en compilación, no hay sorpresa JEDEC). */
-    bpvm_part_err_t e = bpvm_part_layout(&env, BP_PART_BASE, BP_USABLE_FLASH,
+    bpvm_part_err_t e = bpvm_part_layout(env, BP_PART_BASE, BP_USABLE_FLASH,
                                          BP_ENV_SECTOR, &s_layout, &bad);
     if (e == BPVM_PART_OK) {
         char l[160];   /* V7/H10: de dónde sale el reparto, y cómo queda (el TOTAL del FS bailaba el 26-ago) */
@@ -252,109 +280,10 @@ typedef char bp_chk_scratch_env[(BPVM_SCRATCH_BYTES >= 2u * BP_ENV_SECTOR) ? 1 :
 void board_mgr_stm32_handle(long id, const json_obj_t* obj, const char* type,
                             unsigned char* scratch, unsigned long scratch_len,
                             const unsigned char* bulk, unsigned long bulk_len) {
-    /* Red anti-divergencia .ld ↔ flash_layout_stm32.h: el env debe caer entre el
-     * fin del firmware y el inicio de los datos. Si alguien mueve las regiones del
-     * linker sin tocar el header (o al revés), tocar flash borraría CÓDIGO → se
-     * rechaza a gritos, nunca se escribe. */
-    if ((uintptr_t) (FLASH_BASE + BP_ENV_A_OFFSET) < (uintptr_t) __bp_flash_end
-        || (uintptr_t) (FLASH_BASE + BP_ENV_B_OFFSET + BP_ENV_SECTOR) > (uintptr_t) __bp_part_start) {
-        wire_v1_send_error(id, "INTERNAL_ERROR",
-                              "layout de flash inconsistente (env fuera de la zona 2)");
-        return;
-    }
-    /* #338 — DOS prestamistas en vez de uno (mismo reparto que Pico y ESP32): del
-     * buffer prestado salen el sector de TRABAJO y la respuesta; las dos copias del
-     * env las presta la ZONA DE RASCAR compartida, libre durante un comando del
-     * entorno porque sus otros usuarios son los PACK_x y ésos no lo tocan
-     * (bpvm_bmgr_needs_env). Aquí el sector del env son 8 KB —la página de borrado
-     * del U5, el doble que en RP2350/ESP32—, así que los números de esta familia son
-     * el doble: la zona son 16 KB y el buffer se queda en 12, no en 8. Es el
-     * silicio, no una excepción de diseño. */
-    const int con_env = bpvm_bmgr_needs_env(type);
-    /* Los PACK_x no usan sector de trabajo (sólo part_apply toca bm->scratch) y
-     * llegan con el buffer ya mordido por su bulk: el resto va entero a la respuesta. */
-    const unsigned long minimo = con_env ? (unsigned long) BP_ENV_SECTOR + 512u : 512u;
-    if (scratch == NULL || scratch_len < minimo) {
-        wire_v1_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
-        return;
-    }
-    uint8_t* sc        = con_env ? scratch : NULL;
-    char*    reply     = (char*)  (con_env ? scratch + BP_ENV_SECTOR : scratch);
-    size_t   reply_cap = (size_t) (con_env ? scratch_len - BP_ENV_SECTOR : scratch_len);
-
-    uint8_t* a = NULL;
-    uint8_t* b = NULL;
-    if (con_env) {
-        /* Contiguas y en ese orden: `b` cuelga de `a`. Una petición, un dueño. */
-        a = (uint8_t*) bpvm_scratch_take(2u * (size_t) BP_ENV_SECTOR, "bmgr-env");
-        if (a == NULL) {
-            wire_v1_send_error(id, "INTERNAL_ERROR",
-                                  "zona de scratch no disponible para el entorno");
-            return;
-        }
-        b = a + BP_ENV_SECTOR;
-        env_read_slots(a, b);   /* copias frescas del env desde flash */
-    }
-
-    bpvm_bmgr_t bm;
-    memset(&bm, 0, sizeof bm);           /* campos nuevos futuros nunca con basura */
-    bm.a = a; bm.b = b; bm.scratch = sc;
-    bm.sector = BP_ENV_SECTOR;
-    bm.part_base = BP_PART_BASE;
-    bm.usable_flash = BP_USABLE_FLASH;   /* tamaño de flash fijo por placa; sin clamp */
-    bm.live = &s_boot;                   /* STATE cuenta el estado REAL del boot */
-    /* H3 — zona de packs: XIP directo sobre la partición PACKS. V7/H7 (Boot 2, fase 1):
-     * la que ve el gestor es la MONTADA —con el FS, la regla del arranque—, no la del
-     * layout: sin FS no hay zona, y PACK_LS dice por qué. */
-    {
-        uint32_t tam = 0;
-        const uint8_t* base = bpvm_pack_mounted(&tam);
-        if (base && tam > 0) {
-            bm.packs_base = base;
-            bm.packs_size = tam;
-            s_packs_off   = (uint32_t) ((uintptr_t) base - FLASH_BASE);   /* la cintura de burn escribe aquí */
-            bm.packs_flash = &s_packs_fl;
-        }
-    }
-    /* V7/H6 G5.b0 — la RAM de trabajo de un motor nativo: el bloque que el arranque
-     * apartó delante de la VM (pack_stm32.h). Sale a PACK_BURN_BEGIN, que le dice al
-     * IDE contra qué RAM sellar el motor que va a grabar (el tope por encima de los
-     * vivos, bpvm_npack_ram_tope). Sin bloque, 0: el IDE lo dice en vez de grabar un
-     * motor que no podría arrancar. */
-    bm.pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
-    bm.pack_ram_size = s_pack_ram_size;
-
-    bpvm_bmgr_req_t req;
-    memset(&req, 0, sizeof req);
-    snprintf(req.type, sizeof req.type, "%s", type);
-    req.id = id;
-    req.has_key   = json_get_str(obj, "key",   req.key,   sizeof req.key)   >= 0;
-    req.has_value = json_get_str(obj, "value", req.value, sizeof req.value) >= 0;
-    for (int i = 0; i < BPVM_PART_COUNT; i++)
-        req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
-    req.off = json_get_long(obj, "offset", -1);     /* H3: PACK_ENTRIES/DEL/READ */
-    req.has_off = req.off >= 0;
-    req.size = json_get_long(obj, "size", -1);      /* H3: PACK_BURN_BEGIN */
-    req.has_size = req.size >= 0;
-    req.bulk = bulk;                                /* H3: PACK_BURN_DATA (ya recibido) */
-    req.bulk_len = (long) bulk_len;
-    {                                               /* H3: PACK_FORMAT (confirm=YES) */
-        char confirm[8];
-        req.confirm_yes = json_get_str(obj, "confirm", confirm, sizeof confirm) >= 0
-                          && strcmp(confirm, "YES") == 0;
-    }
-
-    int wrote = -1;
-    int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);
-    /* La zona se suelta en TODAS las salidas —quedársela colgada dejaría mudos los
-     * PACK_x y los comandos del entorno siguientes— y DESPUÉS del volcado, porque
-     * el sector que va a flash vive en ella. */
-    if (n < 0) {
-        if (con_env) bpvm_scratch_give("bmgr-env");
-        wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe");
-        return;
-    }
-    if (wrote >= 0) env_write_slot(wrote, wrote == 0 ? a : b);   /* RAM → flash */
-    if (con_env) bpvm_scratch_give("bmgr-env");
-    wire_v1_send_line(reply, (size_t) n);
+    /* V7/H10, el board_mgr común (3-oct): lo que había aquí —el reparto del búfer, las copias del ENV en la zona de
+     * rascar, el gestor, la petición desde el JSON, despachar y volcar— es el `handle` común (bpvm_repl.c), el mismo de
+     * las otras familias y del sim; lo propio de la STM32 es su cintura (s_familia, arriba). Y si la flash no escribe,
+     * FLASH_ERROR en vez del OK (D2, #636). */
+    asegura_familia();
+    bpvm_bmgr_handle(id, obj, type, scratch, scratch_len, bulk, bulk_len);
 }
