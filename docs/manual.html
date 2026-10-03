@@ -988,8 +988,13 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       recursión y sin llamadas que bloqueen) corre directa, sin ese paso.</li>
   <li><strong>Velocidad y <code>double</code></strong>: ninguna de las placas tiene
       FPU de doble precisión, así que un <code>double</code> en una native lo emula el
-      firmware y acelera mucho menos que el código entero. Si buscas velocidad en el
-      micro, usa <code>float</code>.</li>
+      firmware y acelera mucho menos que el código entero. Medido en una ESP32-C3 (sin
+      FPU) con el mismo bucle nativo e interpretado: con enteros, unas 100 veces más
+      rápido; con <code>double</code>, 5 veces (307 ms frente a 1609); con
+      <code>float</code>, que allí también se emula, casi 6 (200 frente a 1141). El
+      suelo lo pone la emulación, no el intérprete. Si buscas velocidad en el micro,
+      usa <code>float</code>: las placas con FPU de simple precisión (Cortex-M33,
+      ESP32-P4) lo hacen con una instrucción.</li>
   <li><strong>Depurar</strong>: en el PC una native corre interpretada y se depura
       como cualquier función; en la placa, el depurador no para dentro de ella.</li>
   <li><strong>Llamar funciones BP normales desde una native</strong> es

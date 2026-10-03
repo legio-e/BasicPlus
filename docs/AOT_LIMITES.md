@@ -68,6 +68,21 @@ buscas velocidad en el micro, usa `float`**. El Cortex-M33 lleva FPv5-**SP** y e
 P4 va con ABI `ilp32f`: un `double` no toca la FPU en ninguna de las tres
 familias. Que ahora *se pueda* no lo vuelve rápido.
 
+📏 **Medido** (`#585`, 3-oct, la C3 —RV32IMC a 160 MHz, sin FPU—; `samples/DblNat.bp`, en
+la ronda de V7: el mismo bucle de 50 000 vueltas × 4 operaciones, nativo e interpretado,
+con el resultado igual al bit; dos pasadas iguales al ms):
+
+| | nativo | interpretado | |
+|---|---:|---:|---:|
+| `double` | 307 ms | 1609 ms | ×5,2 |
+| `float` (sin FPU: también emulado) | 200 ms | 1141 ms | ×5,7 |
+| enteros (el control) | 9 ms | 943 ms | ×105 |
+
+La estimación de V6 (×3 en la Metro, con las rutinas del ROM) se queda corta, pero el
+fondo se confirma: la native se ahorra el intérprete y no la emulación —1,5 µs por
+operación de `double`—. En una placa con FPU de simple precisión, `float` es la
+instrucción: lo dirá `DblNat` en la ronda de cada placa.
+
 ### 2. `try` / `catch` DENTRO de una función `native`
 
 Lo rechaza el compilador. Lanzar (`throw`) sí se puede.
