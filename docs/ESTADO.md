@@ -41,7 +41,11 @@
 > con Eduardo: *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*, **H9 CERRADO**. Y para acabar, el
 > `board_mgr` común (pasos 0 a 5) y su lote en las NUEVE placas, todas verdes: `#636`–`#638` cerradas, D7 probado por
 > Eduardo en el IDE (y su aviso, sin modal), la tanda que llenaba la Nucleo y el `Gui` viejo de la C5, resueltos; y
-> **H10 CERRADO** (Eduardo), con D6 a SUELTAS (`#647`). Más abajo, «🔧 H10 (3-oct, noche)», «🧪 H9 (3-oct, noche)», «🔧 SUELTAS (3-oct,
+> **H10 CERRADO** (Eduardo), con D6 a SUELTAS (`#647`). **Traspaso** (Eduardo, al acabar): *«estamos finalizando V7,
+> en tiempo queda algo más de una semana»* —el **4-oct**, H12 según el plan por etapas (`V7_IDEAS` §H12), hasta donde
+> se pueda; si el 2º núcleo no es fiable al 100 %, se revierte y H12 se queda en las etapas 0 a 2—; las 16 SUELTAS,
+> entre medias o al final; y después documentar, la fase final de pruebas y publicar. Las placas, las nueve con la
+> imagen de hoy y sus packs cargando (sin «casi»); nada sin commit. Más abajo, «🔧 H10 (3-oct, noche)», «🧪 H9 (3-oct, noche)», «🔧 SUELTAS (3-oct,
 > noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y «(mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
