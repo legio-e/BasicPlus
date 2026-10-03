@@ -73,6 +73,10 @@ void  bpvm_alloc_prueba_fallar(const char* fichero);
  * quitarlo con NULL: una placa cuyo bloque libre mayor es `tope` (la C6 con la GUI, 7,9 KB). Vale también para
  * `bpvm_realloc`, que falla dejando el bloque de antes como estaba. */
 void  bpvm_alloc_prueba_tope(const char* fichero, size_t tope);
+/* #639 (3) — y el PRESUPUESTO: lo pedido desde `fichero` no pasa de `bytes` EN TOTAL (la memoria que se acaba, frente
+ * al tope, que es la memoria troceada); NULL, ninguno. `bpvm_alloc_prueba_gastado`: lo pedido desde que se puso. */
+void  bpvm_alloc_prueba_presupuesto(const char* fichero, long bytes);
+long  bpvm_alloc_prueba_gastado(void);
 
 #define bpvm_malloc(n)      bpvm_alloc_raw((n), 0, BPVM_ALLOC_VM, __FILE__, __LINE__)
 #define bpvm_calloc(n, sz)  bpvm_alloc_raw((size_t)(n) * (size_t)(sz), 1, BPVM_ALLOC_VM, __FILE__, __LINE__)

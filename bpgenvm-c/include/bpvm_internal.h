@@ -272,12 +272,13 @@ typedef struct {
  * Con el pool son 8 B por entrada mas el nombre exacto: los mismos 460 simbolos
  * pasan de 59 KB a ~16.
  *
- * ⚠️ `name_off` es un OFFSET dentro de `vm->sym_pool`, no un puntero, y es a
- * proposito: el pool se REALOJA al crecer. Para leer el nombre esta
- * `bpvm_symbol_name()`; el `const char*` que devuelve no sobrevive a un
- * registro nuevo, asi que no se guarda. */
+ * #639 (3-oct) — y el pool, en TROZOS de 2 KB que no se mueven nunca (Eduardo): era UN bloque que crecía con `realloc`,
+ * y crecer pedía otro bloque entero, más grande —en la C6 con la GUI, 16,4 KB seguidos con el mayor hueco de 13,3—.
+ * `name_off` dice el trozo y el sitio dentro (`trozo << 11 | sitio`); para leer el nombre, `bpvm_symbol_name()`. Como
+ * los trozos no se mueven, el `const char*` que devuelve sigue valiendo tras un registro nuevo (con el pool de un
+ * bloque, no). */
 typedef struct {
-    uint32_t name_off;         /* offset en vm->sym_pool (cadena terminada en 0) */
+    uint32_t name_off;         /* trozo << 11 | sitio en el trozo (la cadena, terminada en 0) */
     uint32_t abs_addr;
 } bpvm_symbol_t;
 
@@ -574,10 +575,13 @@ struct bpvm {
     bpvm_symbol_t* symbols;
     int            symbol_count;
     int            symbol_capacity;
-    /* #449 — pool de nombres: las cadenas van seguidas, cada una terminada en 0. */
-    char*          sym_pool;
-    uint32_t       sym_pool_len;
-    uint32_t       sym_pool_cap;
+    /* #449 — pool de nombres: las cadenas van seguidas, cada una terminada en 0. #639 (3-oct): en TROZOS de 2 KB que no
+     * se mueven (ver bpvm_symbol_t); un nombre no se parte entre dos. */
+    char**         sym_trozos;
+    int            sym_ntrozos;
+    int            sym_trozos_cap;
+    uint32_t       sym_trozo_usado;   /* lo ocupado del último trozo */
+    uint32_t       sym_pool_len;      /* los bytes de nombres, en total (para el diag) */
 
     /* F4 — alocador de regiones de stack para nuevos threads BP. Cada
      * Thread.start() reserva una región a partir de `next_thread_stack`. */

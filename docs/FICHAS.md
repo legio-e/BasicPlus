@@ -843,7 +843,16 @@ tabla de simbolos se quedo sin memoria: N sin registrar; el primero, no cupo 'Y'
 (`bpvm_alloc_prueba_tope`, nuevo): la línea base; un tope entre los nombres y el doble (carga igual, con la tabla más
 pequeña); la MITAD (el enlace los necesita: falla y dice la causa); y un poco menos (se pierde la cola de `Core` y corre,
 como `GuiShot`). Sabotajes: sólo el doble (rojo el 2), sin la causa (rojo el 3) y hacer fallar la carga (rojo el 3 y el
-4). Lo de fondo, la DRAM de la C6 y la C3, es `H13`. **Falta**: la C6 con el (2) y H13.
+4). **La C6 con el (2) y H13** (`57452355`, `db0c0150`; 3-oct): `GuiShot` corre otra vez y la DRAM libre tras él pasa
+de 11 316 a 18 628 B (el bloque mayor, de 6 400 a 13 312); `GuiWinJson` y `GuiArbolG2` ya dicen la causa, pero siguen
+sin enlazar: crecer el bloque de nombres de 16 a 16,4 KB pide uno NUEVO de 16,4 KB, y el hueco mayor es de 13,3 —crecer
+menos no basta si la memoria está troceada—. **El (3)**, decidido por Eduardo (3-oct): los nombres en TROZOS de 2 KB que
+no se mueven nunca (crecer es pedir 2 KB más; no se copia nada; y el puntero de `bpvm_symbol_name` ya no se queda
+colgado con un registro nuevo). `test-tablasim`, rehecha: la línea base; la memoria TROCEADA —ningún bloque de más de
+3 000 B, menos que los 7 624 B de nombres— carga y enlaza igual (lo de la C6); sin un hueco de 2 KB, la carga sigue y el
+enlace dice la causa; y la memoria que se ACABA al cargar (`bpvm_alloc_prueba_presupuesto`, nuevo): la carga sigue, y
+corre o el enlace dice la causa. Sabotajes: trozos de 4 KB (rojo el 1 y el 2), sin la causa (el 3 y el 4) y la carga
+que falla (el 3 y el 4). **Falta**: la C6 con el (3).
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 

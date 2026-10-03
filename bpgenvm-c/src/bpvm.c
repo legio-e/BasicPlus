@@ -149,6 +149,17 @@ void bpvm_alloc_prueba_tope(const char* fichero, size_t tope) { g_tope = tope; g
 static int pasa_del_tope(size_t n, const char* file) {
     return g_tope_en != NULL && file != NULL && n > g_tope && termina_en(file, g_tope_en);
 }
+/* #639 (3) — y el PRESUPUESTO: de `fichero`, nada más que `bytes` en total (la memoria que se ACABA). */
+static const char* volatile g_presu_en = NULL;
+static long g_presu = 0, g_gastado = 0;
+void bpvm_alloc_prueba_presupuesto(const char* fichero, long bytes) { g_presu = bytes; g_gastado = 0; g_presu_en = fichero; }
+long bpvm_alloc_prueba_gastado(void) { return g_gastado; }
+static int pasa_del_presupuesto(size_t n, const char* file) {
+    if (g_presu_en == NULL || file == NULL || !termina_en(file, g_presu_en)) return 0;
+    if (g_gastado + (long) n > g_presu) return 1;
+    g_gastado += (long) n;
+    return 0;
+}
 
 void* bpvm_alloc_raw(size_t n, int zero, bpvm_alloc_kind_t k,
                      const char* file, int line) {
@@ -156,7 +167,7 @@ void* bpvm_alloc_raw(size_t n, int zero, bpvm_alloc_kind_t k,
         g_fallar_en = NULL;   /* una vez */
         return NULL;
     }
-    if (pasa_del_tope(n, file)) return NULL;
+    if (pasa_del_tope(n, file) || pasa_del_presupuesto(n, file)) return NULL;
     uint8_t* raw = (uint8_t*) malloc(BPVM_BLK_HDR + n);
     if (!raw) return NULL;
     bpvm_blk_t* b = (bpvm_blk_t*) raw;
@@ -188,7 +199,7 @@ void* bpvm_realloc_at(void* p, size_t n, const char* file, int line) {
         bpvm_diag("[bpvm] bpvm_realloc: puntero que no reservó el núcleo (%p)", p);
         return NULL;
     }
-    if (pasa_del_tope(n, file)) return NULL;   /* #639: como un realloc que no cabe: el bloque de antes, intacto */
+    if (pasa_del_tope(n, file) || pasa_del_presupuesto(n, file)) return NULL;   /* #639: el bloque de antes, intacto */
     bpvm_alloc_kind_t k = BLK_IS_VM(old) ? BPVM_ALLOC_VM : BPVM_ALLOC_OS;
     /* Se desencadena ANTES de realloc: puede mover el bloque, y los vecinos
      * apuntarían a memoria liberada. Al volver se re-encadena (secuencia NUEVA
@@ -1729,7 +1740,8 @@ void bpvm_destroy(bpvm_t* vm) {
     }
     bpvm_free(vm->mutexes);
     bpvm_free(vm->symbols);
-    bpvm_free(vm->sym_pool);   /* #449 — el pool de nombres se va con la tabla */
+    for (int i = 0; i < vm->sym_ntrozos; i++) bpvm_free(vm->sym_trozos[i]);   /* #449/#639: los nombres, en trozos */
+    bpvm_free(vm->sym_trozos);
     bpvm_free(vm->scratch);
     bpvm_free(vm->gc_valid_map);
     /* #352 — el modelo del GUI es de la VM: se va con ella. Antes vivía en

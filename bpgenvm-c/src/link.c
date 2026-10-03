@@ -100,8 +100,9 @@ uint32_t bpvm_get_ext_table_addr(const bpvm_t* vm, uint32_t cs) {
 
 /* ---- Global symbol table ----
  *
- * Dos piezas: `vm->symbols` (array de registros de 8 B) y `vm->sym_pool` (las
- * cadenas, seguidas). Los valores son direcciones absolutas en memory[].
+ * Dos piezas: `vm->symbols` (array de registros de 8 B) y los nombres (las
+ * cadenas, seguidas, en trozos de 2 KB: #639). Los valores son direcciones absolutas
+ * en memory[].
  *
  * #449 — POR QUE EL POOL, y no un `char name[N]` mas corto. La medida del
  * 29-ago dice que los nombres reales son de 24 de media y 35 el mayor, asi que
@@ -111,11 +112,19 @@ uint32_t bpvm_get_ext_table_addr(const bpvm_t* vm, uint32_t cs) {
  * en silencio. Eso es peor que quedarse sin memoria, que al menos se ve. El
  * pool no trunca nunca y ademas cuesta menos. */
 
-/* Nombre del simbolo i. ⚠️ NO guardar el puntero a traves de un registro nuevo:
- * el pool se realoja al crecer y el puntero quedaria colgado. */
+/* #639 (3-oct) — LOS NOMBRES, EN TROZOS DE 2 KB QUE NO SE MUEVEN (Eduardo). Un pool de un bloque que crece con
+ * `realloc` pide, al crecer, un bloque NUEVO del tamaño entero: en la C6 con la GUI, tras H13, 18,6 KB libres y el
+ * mayor hueco de 13,3 —crecer de 16 a 16,4 KB no cabía—. En trozos, crecer es pedir 2 KB más, que caben en los huecos,
+ * y no se copia nada. Un nombre no se parte entre dos trozos (los nombres no llegan a 320 B: lo que queda al final de
+ * un trozo es poco). */
+#define TROZO_SIM      2048u
+#define TROZO_SIM_BITS 11u
+
+/* Nombre del simbolo i. Los trozos no se mueven: el puntero sigue valiendo tras un registro nuevo. */
 const char* bpvm_symbol_name(const bpvm_t* vm, int i) {
-    if (!vm->sym_pool || i < 0 || i >= vm->symbol_count) return "";
-    return vm->sym_pool + vm->symbols[i].name_off;
+    if (!vm->sym_trozos || i < 0 || i >= vm->symbol_count) return "";
+    uint32_t no = vm->symbols[i].name_off;
+    return vm->sym_trozos[no >> TROZO_SIM_BITS] + (no & (TROZO_SIM - 1u));
 }
 
 /* #639 (3-oct) — CRECER SIN PEDIR DE MAS. Las dos piezas de la tabla crecian siempre al DOBLE, y el doble de un bloque
@@ -167,17 +176,23 @@ static void con_la_causa(bpvm_t* vm) {
 bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
                                          uint32_t abs_addr) {
     size_t n = strlen(qualified);
+    if (n + 1u > TROZO_SIM) return tabla_sin_memoria(vm, qualified, n + 1u);   /* no pasa: no llegan a 320 */
 
-    /* 1) sitio en el pool para el nombre + su terminador. */
-    if (vm->sym_pool_len + n + 1u > vm->sym_pool_cap) {
-        uint32_t justo = vm->sym_pool_len + (uint32_t) n + 1u;
-        uint32_t doble = vm->sym_pool_cap ? vm->sym_pool_cap * 2u : 1024u;
-        while (doble < justo) doble *= 2u;
-        void* p = vm->sym_pool;
-        uint32_t cap = tabla_crecer(&p, vm->sym_pool_cap, doble, justo, 1u);
-        if (cap == 0) return tabla_sin_memoria(vm, qualified, justo);
-        vm->sym_pool = (char*) p;
-        vm->sym_pool_cap = cap;
+    /* 1) sitio para el nombre + su terminador: en el último trozo, o en uno NUEVO de 2 KB. */
+    if (vm->sym_ntrozos == 0 || vm->sym_trozo_usado + n + 1u > TROZO_SIM) {
+        if (vm->sym_ntrozos >= vm->sym_trozos_cap) {   /* la lista de trozos (punteros: crece poco) */
+            uint32_t justo = (uint32_t) vm->sym_ntrozos + 1u;
+            uint32_t doble = vm->sym_trozos_cap ? (uint32_t) vm->sym_trozos_cap * 2u : 8u;
+            void* p = vm->sym_trozos;
+            uint32_t cap = tabla_crecer(&p, (uint32_t) vm->sym_trozos_cap, doble, justo, sizeof(char*));
+            if (cap == 0) return tabla_sin_memoria(vm, qualified, (size_t) justo * sizeof(char*));
+            vm->sym_trozos = (char**) p;
+            vm->sym_trozos_cap = (int) cap;
+        }
+        char* trozo = (char*) bpvm_malloc(TROZO_SIM);
+        if (!trozo) return tabla_sin_memoria(vm, qualified, TROZO_SIM);
+        vm->sym_trozos[vm->sym_ntrozos++] = trozo;
+        vm->sym_trozo_usado = 0;
     }
 
     /* 2) sitio en la tabla. Se hace DESPUES del pool para que un fallo aqui no
@@ -193,10 +208,11 @@ bpvm_status_t bpvm_link_register_symbol(bpvm_t* vm, const char* qualified,
     }
 
     bpvm_symbol_t* s = &vm->symbols[vm->symbol_count++];
-    s->name_off = vm->sym_pool_len;
+    s->name_off = ((uint32_t) (vm->sym_ntrozos - 1) << TROZO_SIM_BITS) | vm->sym_trozo_usado;
     s->abs_addr = abs_addr;
-    memcpy(vm->sym_pool + vm->sym_pool_len, qualified, n + 1u);
-    vm->sym_pool_len += (uint32_t)(n + 1u);
+    memcpy(vm->sym_trozos[vm->sym_ntrozos - 1] + vm->sym_trozo_usado, qualified, n + 1u);
+    vm->sym_trozo_usado += (uint32_t)(n + 1u);
+    vm->sym_pool_len    += (uint32_t)(n + 1u);
     return BPVM_OK;
 }
 
@@ -1085,10 +1101,10 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
      * `malloc` de plataforma, que en la Pico 2 es un margen de 64 KB: cuando
      * este numero se acerca, el siguiente import no cabe. Sin esta linea el
      * consumidor mas grande del margen era invisible, y costo dos dias. */
-    bpvm_diag("[bpvm] tabla de simbolos: %d simbolos, %u B de nombres, %u B en total",
-              vm->symbol_count, (unsigned) vm->sym_pool_len,
+    bpvm_diag("[bpvm] tabla de simbolos: %d simbolos, %u B de nombres en %d trozos de 2 KB, %u B en total",
+              vm->symbol_count, (unsigned) vm->sym_pool_len, vm->sym_ntrozos,
               (unsigned)((size_t) vm->symbol_capacity * sizeof(bpvm_symbol_t)
-                         + vm->sym_pool_cap));
+                         + (size_t) vm->sym_ntrozos * TROZO_SIM));
     /* V7/H2 (#523, V0) — el cronometro del enlace, misma forma en las dos VMs. */
     bpvm_diag("[bpvm] enlace: %d modulos, %u busquedas, %u strcmp, %ld us",
               vm->module_count, s_link_busquedas, s_link_strcmp,
