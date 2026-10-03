@@ -249,7 +249,10 @@ static uint32_t stm32_image_crc(void) {
     return s_crc;
 }
 
+static const bpvm_repl_run_ops_t s_run_ops;   /* V7/H10: la cintura del RUN común, más abajo */
+
 static const bpvm_repl_ops_t s_repl_ops = {
+    .run           = &s_run_ops,   /* V7/H10, el RUN común, paso 3: NULL = el RUN de siempre (run_module_path) */
     .info          = stm32_repl_info,
     .image_crc     = stm32_image_crc,
     .info_extra    = NULL,     /* sin campos propios: los 18 comunes bastan */
@@ -682,14 +685,59 @@ static void run_module_path(const char* path, long id, const char* arg) {
     }
 }
 
+/* ── V7/H10, el RUN común, paso 3 (3-oct): LA CINTURA DE LA STM32 ─────────────────────────────────────────────────
+ * Lo que es suyo de verdad: el bloque de la VM (el que planificó el arranque), leer el anillo de la RX sin esperar,
+ * sus búferes, el reinicio, los motores nativos, el `.mdn` del FS a la arena, el LED y la línea `mem:`. Con esto, la
+ * STM32 deja de tirar la línea cuyo escape no cabía (el sink común), y gana el depurador. */
+static int stm32_run_memoria(uint8_t** base, size_t* bytes) {
+    if (s_vm_bytes == 0) return -1;             /* sin plan: no se arranca a medias */
+    *base = s_vm_base;
+    *bytes = s_vm_bytes;
+    return 0;
+}
+static int stm32_run_leer_linea(char* buf, size_t cap) {
+    int c = stm32_wire_getchar();
+    if (c < 0) return 0;
+    int n = wire_v1_recv_line(c, buf, cap);
+    return (n < 0) ? 0 : n;                     /* rota o estancada: se descarta */
+}
+static void stm32_run_led(int estado) {
+    if (estado > 0) { BOARD_LED_RUN_ON(); return; }
+    BOARD_LED_RUN_OFF();
+    if (estado < 0) BOARD_LED_ERR_ON();
+}
+static void stm32_run_despues(bpvm_t* vm) {
+    (void) vm;
+    stm32_mem_log();                            /* V7/H7: tras cada RUN, antes de soltar la VM */
+}
+static char s_run_dbg_linea[512];               /* los comandos del depurador son cortos (un pc, un id) */
+static char s_run_mensaje[1024];                /* RUN_REPLY, EXITED y las respuestas del depurador */
+
+static const bpvm_repl_run_ops_t s_run_ops = {
+    .memoria           = stm32_run_memoria,
+    .leer_linea        = stm32_run_leer_linea,
+    .linea             = s_line,          .linea_cap     = sizeof s_line,   /* el lazo está parado durante el RUN */
+    .dbg_linea         = s_run_dbg_linea, .dbg_linea_cap = sizeof s_run_dbg_linea,
+    .mensaje           = s_run_mensaje,   .mensaje_cap   = sizeof s_run_mensaje,
+    .reiniciar         = stm32_hacer_reset,
+    .cargar_motores    = packs_cargar_una_vez,
+    .mdn_del_fs        = stm32_mdn_del_fs,
+    .despues_de_correr = stm32_run_despues,
+    .led               = stm32_run_led,
+    .env_bool          = board_mgr_stm32_env_bool,
+    .io_cola           = STM32_IO_OQ_BYTES,
+};
+
 static void handle_run(long id, json_obj_t* obj) {
     const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
-    if (path == NULL) {
-        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
-    }
     /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
      * NULL, y manda el valor por defecto que declare el fuente. */
     const char* arg = json_str_inplace(obj, "arg");
+    /* V7/H10, el RUN común, paso 3 (3-oct): con la cintura puesta, el RUN es el común (`falta 'path'` incluido). */
+    if (s_repl_ops.run) { bpvm_repl_run(id, path, arg); return; }
+    if (path == NULL) {
+        wire_v1_send_error(id, "INVALID_PATH", "missing path"); return;
+    }
     run_module_path(path, id, arg);
 }
 
@@ -746,7 +794,8 @@ static void autorun_boot(void) {
         return;
     }
     log_printf("autorun: %s", path);
-    run_module_path(path, -1, NULL);   /* autorun: sin argumento, manda el defecto */
+    if (s_repl_ops.run) bpvm_repl_run(-1, path, NULL);   /* V7/H10: el RUN común; sin argumento, manda el defecto */
+    else                run_module_path(path, -1, NULL);
 }
 
 /* ---- dispatch ---- */
@@ -809,6 +858,10 @@ static void dispatch(int first_char) {
     /* V7/H10 #473 (punto 10): la puerta, en el común. Aquí el bulk sigue en el cable siempre: no lo ha leído nadie
      * todavía (el bloque de PACK_* retorna antes de llegar a esta puerta). */
     if (bpvm_repl_puerta_arranque(type, id, &obj, (int) board_boot_status()->state, 1)) return;
+
+    /* V7/H10, el RUN común (3-oct): el depurador, por primera vez en esta familia —PAUSE, SET_BP y CLR_BP antes del
+     * RUN; durante el RUN le llegan por la cola de control del poll común—. */
+    if (s_repl_ops.run && bpvm_repl_depurador_previo(type, id, &obj)) return;
 
     /* V6/U3 — PRIMERO el común: PING/TIME/LOG_DUMP/LOG_CLEAR viven en
      * src/bpvm_repl.c para las cuatro familias. Si lo atiende, hemos acabado.
