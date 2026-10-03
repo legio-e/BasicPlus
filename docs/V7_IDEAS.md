@@ -3761,10 +3761,19 @@ en todas; D9 el búfer del `EXITED`, uno por familia o un tamaño (detalle mío)
 - **paso 3** (`9c3cb27d`): la STM32 —deja de tirar líneas, las rutas largas ya valen y GANA EL DEPURADOR—;
 - **pasos 4 y 5** (`d56dbaab`): la Pico y las cinco ESP32. La ruta del RUN, COPIADA al empezar: en las placas apunta al
   búfer de línea del REPL, que es el que lee `io` durante el RUN.
-En las tres familias, su RUN de siempre se queda DETRÁS DEL PUNTERO: con `.run = NULL` vuelve a él. Compilan las
-ocho imágenes. **Falta** (paso 6): probarlo en placa (en el lote: la tanda en las nueve, KILL, RESET, el depurador en un
-breakpoint, un fallo de carga y `run_smoke`-a-mano en una placa), y entonces borrar los cuatro RUN viejos y sus sinks,
-el KILL en reposo y la escucha del autorun, la cabecera y el protocolo.
+En las tres familias, su RUN de siempre se quedó DETRÁS DEL PUNTERO hasta probarlo en placa.
+
+**El paso 6, hecho el 3-oct** (`5c2d6bb0`), tras probarlo en placa ese día —la Pico, la C6, el P4 y la Discovery:
+`run_placa.py` (los casos de `run_smoke` y `sim_dbg_smoke` por el cable serie, y lo que el sim no da: un KILL y un RESET
+con el programa corriendo de verdad, con su hilo `io`; nueve casos, A–I, verdes en las cuatro; la Discovery, con
+depurador por primera vez) y la tanda de V7 (todo IDÉNTICO salvo lo que no tiene la placa)—: fuera los RUN viejos de
+las tres familias con sus sinks, su EXITED, su poll, su latido y su cintura del depurador (−1 633 líneas; en la STM32,
+4,3 KB de búferes estáticos); el RUN, el KILL sin programa y el depurador de antes del RUN, en el despachador común (el
+sim deja su copia); la escucha de la ventana del autorun, una (`bpvm_repl_autorun_escucha`, por la cintura del RUN:
+una línea rota ya no cuenta como «hay alguien»); la cabecera y el protocolo (`BPVM_WIRE_PROTOCOL.md`: el RUN es uno,
+el KILL sin programa, las reglas de la salida y la del EXITED), al día. De paso, en la STM32, las rutas del `.mdn` y
+del autorun pasan de 80 y 64 B a `BPVM_FS_PATH_MAX`. Lo que se queda: el sink de `test/debug_listen.c` (una
+herramienta de pruebas de C, no del producto: el IDE depura con la VM-Java).
 
 ## H10 — el `board_mgr` común y la fachada de la flash (256): el análisis (3-oct; entra en V7, Eduardo, 2-oct)
 

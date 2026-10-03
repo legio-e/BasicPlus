@@ -30,9 +30,12 @@
 > **3-oct** — H10, el paso 1 del traspaso entero: los arreglos pequeños, todos en el PC y cada uno con su prueba
 > (`89da2e63`, `26ecfef6`, `c382a66c`): el lote D del FS de `#473` (236, 248, 264, 268, 276, 280, 466), la pantalla
 > que no arranca (180), tres de los diez (2, 7, 10), `#634` y `#635`, `G2` (a) y (b) y lo barato de `#477`. La red,
-> verde; las ocho imágenes compilan. Por la tarde, el `RUN` común, pasos 0 a 5 (el sim, la STM32, la Pico y las
-> ESP32; falta la placa), y el `board_mgr` común analizado y decidido por Eduardo (`#636`–`#638` abiertas). Más
-> abajo, «🔧 H10 (3-oct, mediodía y tarde)» y «🔧 H10 (3-oct, mañana)».
+> verde; las ocho imágenes compilan. A mediodía, el `RUN` común, pasos 0 a 5 (el sim, la STM32, la Pico y las
+> ESP32), y el `board_mgr` común analizado y decidido por Eduardo (`#636`–`#638` abiertas). Por la tarde, el lote de
+> placas: el `RUN` común en las cuatro y el paso 6 (`5c2d6bb0`: fuera los `RUN` viejos); `#639` (la tabla de símbolos,
+> en tres vueltas: ahora en trozos de 2 KB), y el hito H13 (la memoria de la C3 y la C6) con sus opciones del IDF, la
+> C6 grabada. G2, IDÉNTICO en el P4, la Discovery y la C6. Más abajo, «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y
+> «(mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
 > tarde, `#624` (subir una librería por su versión) y, de H10, el `Rtc` en hora (`#626`, la idea de Eduardo), visto en
@@ -1082,6 +1085,40 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🔧 H10 (3-oct, tarde) — EL LOTE DEL `RUN` COMÚN Y EL PASO 6; `#639` (la tabla de símbolos); H13 en la C6
+
+- **El lote** (OK de Eduardo: la Pico, la C6, el P4 y la Discovery), con las imágenes de los pasos 3 a 5: el `imageCrc`
+  de las cuatro, el compilado en el PC. `run_placa.py` (en el scratchpad: los casos de `run_smoke` y `sim_dbg_smoke` por
+  el cable serie, y lo que el sim no da: un KILL y un RESET con el programa corriendo de verdad, con su hilo `io`): los
+  nueve casos, verdes en las cuatro; la Discovery, con depurador por primera vez. La tanda de V7: todo IDÉNTICO salvo lo
+  que la placa no tiene. La SD del P4 (`sd_placa.py`): 236, 248, `#628`, `#630` y `#631`, verdes. La TF de la C6 «no
+  contesta» desde el arranque (¿está puesta?): anotado, sin tocar.
+- **Los packs**: la C6 y el P4 se quedaron en «casi» —la imagen creció una página y la zona se movió (el P4, de
+  `0x400b8000` a `0x400c8000`)—: no se miró con `nm` antes de grabar, y la nota de memoria lo decía (ahora lo dice más
+  alto; `nm_paginas.py`, en el scratchpad, lo mira). Con el OK de Eduardo, `PACK_FORMAT` y regrabado en las tres con
+  pantalla (la Discovery, para el Gui de G2). El P4 llevaba en `/lib` un `Gui.mod` viejo —subido hace tiempo; la imagen
+  no lo lleva y nada lo renueva— que tapaba al del pack: borrado. **G2 en placa: `GuiArbolG2` IDÉNTICO en el P4, la
+  Discovery y, al final del día, la C6.**
+- **El paso 6 del `RUN` común** (`5c2d6bb0`): fuera los `RUN` viejos de las tres familias (−1 633 líneas); el RUN, el
+  KILL sin programa y el depurador previo, en el despachador común; la escucha del autorun, una; el protocolo, al día.
+  Grabado en las cuatro: `run_placa` 34 de 34 y la tanda, igual.
+- **`#639`, la tabla de símbolos** (`fd03af31`, `57452355` y `f3fbc52c`): en la C6 con la GUI, `GuiWinJson` daba
+  «presente pero no exporta… ¿versión vieja?»: el símbolo se había perdido EN SILENCIO por falta de memoria. Tres
+  vueltas: crecer menos (Eduardo: «en vez de pasar de 8K a 16K, que pase a 10 o 12K»); apuntar lo que no cabe y seguir,
+  con la causa en el error (hacer fallar la carga rompía `GuiShot`, que corría con símbolos perdidos que no usa); y, visto
+  que tras H13 el hueco mayor de la C6 era de 13,3 KB, los nombres en TROZOS de 2 KB (Eduardo). Ahora la C6 corre las
+  tres de GUI, al límite: tras `GuiArbolG2`, 6 736 B libres y 476 de mínimo histórico. Lo que queda contiguo es el
+  array de registros (8 B por símbolo): en `GuiShot`, al pasar de 512, no cupo (se perdieron unos nombres que no usa).
+- **H13** (`a426fb8c`, `db0c0150`): Eduardo lo añade con la guía de RAM de Espressif (*«todo lo que sea ahorrar 10K o
+  más, bienvenido»*; *«en principio no tocamos ni optimizamos nada más»*). Medido con `idf.py size` en builds aparte: la
+  C3, −16 KB de SRAM estática; la C6, −9,5 KB; y ~2,5 KB más de heap en las dos (sin la tarea de timers de FreeRTOS).
+  En la C6, la DRAM libre tras `GuiShot`, de 11,3 a 18,6 KB. La C3, compilada; sin placa (no estaba en la mesa). A
+  pregunta de Eduardo, los hilos de FreeRTOS en la C6: `main` (el REPL y la VM, 16 KB) e `io` (6 KB, sólo durante un
+  RUN), y del IDF `IDLE`, `esp_timer` y —hasta H13— `Tmr Svc`.
+- **Commits** (sin push): `6e5b526f` (los `.npk` de G2 y `GuiArbolG2` en la tanda) · `a426fb8c` (H13, el hito) ·
+  `fd03af31` (`#639`) · `5c2d6bb0` (el paso 6) · `57452355` (`#639` 2) · `db0c0150` (H13, las opciones) · `f3fbc52c`
+  (`#639` 3, los trozos).
 
 ## 🔧 H10 (3-oct, mediodía y tarde) — EL `RUN` EN UN SOLO SITIO (pasos 0 a 5) y el `board_mgr` común, analizado y decidido
 
