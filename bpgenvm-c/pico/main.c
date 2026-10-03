@@ -33,6 +33,7 @@
 #include "log.h"
 #include "pack_pico.h"
 #include "board_mgr_pico.h"   /* H9: board_boot_status (estado real del boot) */
+#include "bpvm_bmgr_wire.h"   /* V7/H10, el board_mgr común: la vista del ENV (bpvm_bmgr_vista) */
 #include "flash_layout.h"     /* H9: BP_ENV_*, BP_PART_BASE (layout 3 zonas) */
 #include "bpvm_env.h"         /* H9: env de la zona 2 (bloque A/B) */
 #include "bpvm_bus.h"         /* V7/H6.c G4.a1: los buses del ENV */
@@ -1140,22 +1141,13 @@ static bpvm_status_t run_vm_once(int iteration) {
  * primera que falla (último estado bueno + motivo). STATE (wire) reporta este
  * estado REAL vía board_boot_status(), y repl_v1 gatea los comandos FS/RUN. */
 
-static bpvm_env_t         s_env;      /* env de la zona 2 (payload apunta a XIP) */
-static int                s_env_slot = -1;   /* #626: la copia elegida (0=A, 1=B; -1 ninguna) */
 static bpvm_part_layout_t s_layout;   /* particiones derivadas del env */
 static bpvm_boot_status_t s_boot;     /* estado REAL alcanzado por el boot */
 
 const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
 
-/* Elige la copia buena de las dos, por XIP (sin copia y sin FS). */
-static void env_elige(void) {
-    s_env_slot = bpvm_env_pick((const uint8_t*)(XIP_BASE + BP_ENV_A_OFFSET), FLASH_SECTOR_SIZE,
-                               (const uint8_t*)(XIP_BASE + BP_ENV_B_OFFSET), FLASH_SECTOR_SIZE,
-                               &s_env);
-}
-
 /* #355 — una clave booleana del ENV, para quien la necesite fuera de main.c.
- * El env ya vive aquí (s_env, payload en XIP); esto sólo abre la ventanilla en
+ * El env es la vista común (board_env, payload en XIP); esto sólo abre la ventanilla en
  * vez de repartir copias del bloque. Hoy la usa repl_v1 para el interruptor del
  * GC (`gc=0`): sirve para PARTIR el experimento en dos —misma memoria, mismo
  * programa, con y sin recolector— sin regrabar la placa entre prueba y prueba. */
@@ -1174,21 +1166,18 @@ int board_env_bool(const char* key, int def) {
  * la de la flash. Hasta entonces es la del arranque, como en las otras familias (que
  * la tienen copiada en RAM: aquí se ahorran esos 8 KB). */
 const bpvm_env_t* board_env(void) {
-    if (s_env_slot >= 0) {
-        bpvm_env_t e;
-        const uint8_t* blk = (const uint8_t*)(XIP_BASE + (s_env_slot == 0 ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET));
-        if (!bpvm_env_parse(blk, FLASH_SECTOR_SIZE, &e) || e.seq != s_env.seq) env_elige();
-    }
-    return &s_env;
+    /* V7/H10, el board_mgr común (D1, #638): la vista común, la de la FLASH. Volvía a elegir sólo si cambiaba la copia
+     * del arranque: el primer ENV_SET (que escribe la otra) no se veía, y el segundo sí, con lo del primero. Ahora toda
+     * escritura pasa por el común y la vista vuelve a elegir. Sigue sin copia: lee por XIP. */
+    board_mgr_pico_familia();
+    return bpvm_bmgr_vista();
 }
 
 /* V7/H10 (#626) — el arranque común anota una clave que falta (la fecha de la imagen):
  * la escribe el gestor de placa y la vista se elige otra vez, para que el programa la
  * vea sin reiniciar. */
 static int pico_env_anadir(const char* clave, const char* valor) {
-    int r = board_mgr_pico_env_anadir(clave, valor);
-    if (r == 0) env_elige();
-    return r;
+    return board_mgr_pico_env_anadir(clave, valor);   /* la vista común la ve sola (V7/H10) */
 }
 
 /* #327 — el layout REAL del arranque, para quien necesite una partición que no
@@ -1207,7 +1196,7 @@ static bpvm_boot_step_t layer_partitions(void* u) {
     uint32_t usable = bpvm_part_usable_flash(board_desc()->flash_bytes,
                                              PICO_FLASH_SIZE_BYTES);   /* clamp #292 */
     int bad = -1;
-    bpvm_part_err_t e = bpvm_part_layout(&s_env, BP_PART_BASE, usable,
+    bpvm_part_err_t e = bpvm_part_layout(board_env(), BP_PART_BASE, usable,
                                          FLASH_SECTOR_SIZE, &s_layout, &bad);
     if (e == BPVM_PART_OK) {
         char l[160];   /* V7/H10: de dónde sale el reparto, y cómo queda */
@@ -1270,7 +1259,7 @@ static void pico_memoria(void) {
         /* V7/H7 (Boot 2, fase 3) — el bloque de los motores por la regla COMÚN
          * (bpvm_packram_region): `packRam=` y, si no, `SQLite=`. Sin PSRAM, `packRam=`
          * cambia la cola de la SRAM, y eso va ANTES de enumerar. */
-        long pack_kb = bpvm_env_get_long(&s_env, "packRam", 0);
+        long pack_kb = bpvm_env_get_long(board_env(), "packRam", 0);
         int con_psram = board_desc()->psram_present && board_desc()->psram_bytes >= (1u << 20);
         if (!con_psram && pack_kb > 0) {
             uintptr_t ini = ((uintptr_t) &end + 7u) & ~(uintptr_t) 7u;   /* lo que queda sobre el margen de malloc */
@@ -1293,7 +1282,7 @@ static void pico_memoria(void) {
          * (un solo sitio, como #335); el plan solo la aparta. Sin PSRAM, sqlmem
          * dice OFF y aquí no hay reserva. */
         size_t sqlbytes = 0;
-        s_sqlite_asked_mb = bpvm_env_get_long(&s_env, "SQLite", 0);
+        s_sqlite_asked_mb = bpvm_env_get_long(board_env(), "SQLite", 0);
         /* #602 — para el INFO: qué clave pidió el bloque y cuánto, en su unidad (packRam= manda). */
         s_pack_ram_clave  = (pack_kb > 0) ? "packRam" : (s_sqlite_asked_mb > 0) ? "SQLite" : NULL;
         s_pack_ram_pedido = (pack_kb > 0) ? pack_kb : s_sqlite_asked_mb;
@@ -1311,7 +1300,7 @@ static void pico_memoria(void) {
         /* La Pico toma todo lo que el plan deje, salvo `vmheap=N` (KB, el bloque entero;
          * V7/H7): lo que no coja se queda para malloc —el techo de `_sbrk` es la base
          * del bloque—, que es donde van, por ejemplo, las pilas de los nativos. */
-        long vmheap_kb     = bpvm_env_get_long(&s_env, "vmheap", 0);
+        long vmheap_kb     = bpvm_env_get_long(board_env(), "vmheap", 0);
         cfg.objetivo       = bpvm_mem_objetivo_env(vmheap_kb, 0);
         if (vmheap_kb > 0) log_printf("vm: vmheap=%ld KB (ENV): el objetivo del bloque", vmheap_kb);
         cfg.vm_min         = VM_SRAM_MIN;
@@ -1469,7 +1458,7 @@ static void pico_con_fs(void) {
  * no tiene lector» y «la línea está mal escrita»—: no se toca la tarjeta. La monta el común
  * con el FS, y después de los buses: la línea corta (`sd=bus:2,cs:23`) se engancha a uno. */
 static void pico_sd(void) {
-    (void) bpvm_sd_blk_registrar_desde_env(&s_env);
+    (void) bpvm_sd_blk_registrar_desde_env(board_env());
 }
 
 /* 2b — el cable: el USB está abierto desde main(); aquí sólo el LED de la puesta en marcha. */
@@ -1593,12 +1582,13 @@ static void vm_task(void* arg) {
      *    Hardware puro — sin FS, sin env. */
     board_desc_early_init();
 
-    /* Env de la ZONA 2, por XIP (sin copia y sin FS): la verdad de la placa. */
-    env_elige();
+    /* Env de la ZONA 2, por XIP (sin copia y sin FS): la verdad de la placa. V7/H10: la vista común, con la cintura de
+     * la Pico registrada antes de la primera lectura. */
+    board_mgr_pico_familia();
 
     /* PSRAM conducida por el env (`psram=1` ∧ RP2350B → CS=GPIO47), ANTES de
      * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */
-    board_desc_psram_from_env(bpvm_env_get_bool(&s_env, "psram", 0));
+    board_desc_psram_from_env(bpvm_env_get_bool(board_env(), "psram", 0));
 
 #if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 3
     /* nivel 3 (H9): identidad + env + psram hechos, SIN tocar el FS aún. */

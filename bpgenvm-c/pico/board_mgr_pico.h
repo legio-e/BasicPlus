@@ -36,8 +36,12 @@ const bpvm_part_layout_t* board_partitions(void);
 
 /* V7/H10 (#626) — añadir al ENV una clave que falta (bpvm_env_anadir) y volcarla a la
  * flash: lo que el arranque común anota una vez (la fecha de la imagen). 0 escrita; 1 ya
- * estaba; -1 no se pudo. La vista (board_env) la vuelve a elegir quien llama: main.c. */
+ * estaba; -1 no se pudo. La vista común la ve sin reiniciar. */
 int board_mgr_pico_env_anadir(const char* clave, const char* valor);
+
+/* V7/H10, el board_mgr común — registra la cintura de la Pico (bpvm_bmgr_familia); main.c, antes de la primera
+ * lectura del ENV. Idempotente. */
+void board_mgr_pico_familia(void);
 
 /* Atiende un comando de gestión de placa ya parseado (obj) cuyo `type` es
  * STATE, ENV_x, PART_x. Lee el env de flash, despacha al núcleo compartido, envía la

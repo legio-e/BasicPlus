@@ -8,6 +8,7 @@
 #include "bpvm.h"        /* #338: bpvm_scratch_take/give (zona de rascar compartida) */
 #include "bpvm_bmgr.h"
 #include "bpvm_bmgr_wire.h"
+#include "bpvm_repl.h"   /* V7/H10: el handle común (bpvm_bmgr_handle) */
 #include "bpvm_part.h"
 #include "bpvm_pack.h"   /* #327: cintura de flash de la zona de packs */
 #include "wire_v1.h"
@@ -126,26 +127,54 @@ static int env_fuera_de_su_zona(void) {
         || (uintptr_t)(XIP_BASE + BP_ENV_B_OFFSET + BP_ENV_SECTOR) > (uintptr_t) __bp_zone3_start;
 }
 
-/* V7/H10 (#626) — el arranque común AÑADE una clave que falta (la fecha de la imagen, una
- * vez). Las dos copias se leen de la flash por XIP, sin copiarlas; el bloque nuevo se
- * construye en UN sector de la zona de rascar (libre en el arranque: sus usuarios son los
- * comandos del wire, que aún no llegan). La vista del ENV la vuelve a elegir main.c. */
+/* ── V7/H10, el board_mgr común (3-oct): LA CINTURA DE LA PICO (bpvm_bmgr_familia_t) ──
+ * Lo que quedaba de propio en su `handle` y en su `env_anadir`: las copias se leen por XIP (sin copia en RAM: la Pico
+ * se ahorra esos 8 KB), un sector se escribe por la cintura de flash (con su guarda y su candado), lo de la placa en el
+ * gestor y la red bp_memmap.ld ↔ flash_layout.h. Lo demás —el `handle`, la vista del ENV y el `anadir`— es común. */
+static const uint8_t* env_copia(int slot) {
+    return (const uint8_t*) (XIP_BASE + (slot == 0 ? BP_ENV_A_OFFSET : BP_ENV_B_OFFSET));
+}
+
+static void env_rellenar(bpvm_bmgr_t* bm) {
+    const board_desc_t* bd = board_desc();
+    bm->part_base = BP_PART_BASE;
+    /* usable CON clamp #292 (= el mismo número que usa el boot): desde la unificación el plan SE EJECUTA (el mount sale
+     * de aquí), así que proponer más de lo escribible sería ofrecer un layout que el arranque rechaza. */
+    bm->usable_flash = bpvm_part_usable_flash(bd ? bd->flash_bytes : 0u, PICO_FLASH_SIZE_BYTES);
+    bm->live = board_boot_status();   /* STATE cuenta el estado REAL alcanzado por el boot (no el plan del env) */
+    /* #327 — zona de packs: XIP directo sobre la partición PACKS. V7/H7 (Boot 2, fase 1): la MONTADA —con el FS, la
+     * regla del arranque—, no la del layout. Sin zona, el LS dice por qué. */
+    uint32_t tam = 0;
+    const uint8_t* base = bpvm_pack_mounted(&tam);
+    if (base && tam > 0) {
+        bm->packs_base  = base;
+        bm->packs_size  = tam;
+        s_packs_off     = (uint32_t) ((uintptr_t) base - XIP_BASE);   /* la cintura de burn escribe aquí */
+        bm->packs_flash = &s_packs_fl;
+    }
+    /* V5/H8 — la RAM de trabajo de un motor nativo: el PRINCIPIO del bloque de la BD. Ya lo calcula el arranque; aquí
+     * se expone para que PACK_BURN_BEGIN se lo diga al IDE. Si no hay bloque, 0, y el IDE lo dirá. */
+    bm->pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
+    bm->pack_ram_size = s_pack_ram_size;   /* V7/H6.c G1: el bloque que empieza ahí */
+}
+
+static const char* env_no_vale(void) {
+    return env_fuera_de_su_zona() ? "layout de flash inconsistente (env fuera de la zona 2)" : NULL;
+}
+
+static const bpvm_bmgr_familia_t s_familia = {
+    BP_ENV_SECTOR, env_copia, NULL, NULL, env_write, env_rellenar, env_no_vale
+};
+
+void board_mgr_pico_familia(void) {
+    if (bpvm_bmgr_familia_actual() != &s_familia) bpvm_bmgr_familia(&s_familia);
+}
+
+/* V7/H10 (#626) — el arranque común AÑADE una clave que falta (la fecha de la imagen, una vez), por el común: el
+ * bloque nuevo en la zona de rascar (libre en el arranque), por la cintura, y la vista lo ve sin reiniciar. */
 int board_mgr_pico_env_anadir(const char* clave, const char* valor) {
-    if (env_fuera_de_su_zona()) {
-        log_printf("env: layout de flash inconsistente (env fuera de la zona 2): no se escribe");
-        return -1;
-    }
-    uint8_t* out = (uint8_t*) bpvm_scratch_take((size_t) BP_ENV_SECTOR, "env-anadir");
-    if (out == NULL) {
-        log_printf("env: la zona de rascar no esta libre: no se anota %s", clave);
-        return -1;
-    }
-    int slot = -1;
-    int r = bpvm_env_anadir((uint8_t*)(XIP_BASE + BP_ENV_A_OFFSET), (uint8_t*)(XIP_BASE + BP_ENV_B_OFFSET),
-                            BP_ENV_SECTOR, clave, valor, out, &slot);
-    if (r == 0 && env_write(slot, out) != 0) r = -1;
-    bpvm_scratch_give("env-anadir");
-    return r;
+    board_mgr_pico_familia();
+    return bpvm_bmgr_anadir(clave, valor);
 }
 
 /* #338 — la zona compartida tiene que dar para las DOS copias del env de ESTA
@@ -157,130 +186,9 @@ typedef char bp_chk_scratch_env[(BPVM_SCRATCH_BYTES >= 2u * BP_ENV_SECTOR) ? 1 :
 void board_mgr_pico_handle(long id, const json_obj_t* obj, const char* type,
                            unsigned char* scratch, unsigned long scratch_len,
                            const unsigned char* bulk, unsigned long bulk_len) {
-    /* Red anti-divergencia bp_memmap.ld ↔ flash_layout.h (env_fuera_de_su_zona). */
-    if (env_fuera_de_su_zona()) {
-        wire_v1_send_error(id, "INTERNAL_ERROR",
-                           "layout de flash inconsistente (env fuera de la zona 2)");
-        return;
-    }
-    /* Sin BSS propio, y desde #338 con DOS prestamistas en vez de uno:
-     *
-     *   - del buffer prestado (s_put_buf, libre durante un comando de gestión)
-     *     salen sólo el sector de TRABAJO y la respuesta → 1 sector + reply;
-     *   - las dos copias del env las presta la ZONA DE RASCAR compartida, que
-     *     durante un comando del entorno está libre: sus otros usuarios son los
-     *     PACK_*, y ésos no tocan el env (bpvm_bmgr_needs_env, la frontera).
-     *
-     * El motivo es que antes el buffer del bulk tenía que dar para los TRES
-     * sectores a la vez (12 KB en la Pico) + la respuesta = 20 KB permanentes de
-     * SRAM que en esta placa se le restan al heap de la VM. Compartiendo con una
-     * zona que ya existía, el buffer baja a 8 KB y la memoria NO reaparece en
-     * otro sitio: se comparte, no se duplica. */
-    const int con_env = bpvm_bmgr_needs_env(type);
-    /* Los PACK_* no necesitan sector de trabajo (sólo part_apply usa bm->scratch),
-     * así que el buffer prestado va ENTERO a la respuesta. Importa: en el
-     * PACK_BURN_DATA el bulk ya se ha comido el principio del buffer y aquí llega
-     * sólo el resto — pedirle un sector que no va a usar lo dejaría sin sitio. */
-    const unsigned long minimo = con_env ? (unsigned long) BP_ENV_SECTOR + 512u : 512u;
-    if (scratch == NULL || scratch_len < minimo) {
-        wire_v1_send_error(id, "INTERNAL_ERROR", "scratch insuficiente");
-        return;
-    }
-    uint8_t* sc        = con_env ? scratch : NULL;
-    char*    reply     = (char*)  (con_env ? scratch + BP_ENV_SECTOR : scratch);
-    size_t   reply_cap = (size_t) (con_env ? scratch_len - BP_ENV_SECTOR : scratch_len);
-
-    uint8_t* a = NULL;
-    uint8_t* b = NULL;
-    if (con_env) {
-        /* Contiguas y en ese orden: `b` cuelga de `a`, como cuando las dos salían
-         * del mismo buffer. Una sola petición = un solo dueño que soltar. */
-        a = (uint8_t*) bpvm_scratch_take(2u * (size_t) BP_ENV_SECTOR, "bmgr-env");
-        if (a == NULL) {
-            wire_v1_send_error(id, "INTERNAL_ERROR",
-                               "zona de scratch no disponible para el entorno");
-            return;
-        }
-        b = a + BP_ENV_SECTOR;
-        /* Lee las dos copias del env desde flash (XIP) a la zona prestada. */
-        memcpy(a, (const void*)(XIP_BASE + BP_ENV_A_OFFSET), BP_ENV_SECTOR);
-        memcpy(b, (const void*)(XIP_BASE + BP_ENV_B_OFFSET), BP_ENV_SECTOR);
-    }
-
-    const board_desc_t* bd = board_desc();
-    bpvm_bmgr_t bm;
-    memset(&bm, 0, sizeof bm);   /* campos nuevos (p.ej. packs H3) nunca con basura de pila */
-    bm.a = a; bm.b = b; bm.scratch = sc;
-    bm.sector = BP_ENV_SECTOR;
-    bm.part_base = BP_PART_BASE;
-    /* usable CON clamp #292 (= el mismo número que usa el boot): desde la
-     * unificación el plan SE EJECUTA (el mount sale de aquí), así que proponer
-     * más de lo escribible sería ofrecer un layout que el arranque rechaza. */
-    bm.usable_flash = bpvm_part_usable_flash(bd ? bd->flash_bytes : 0u,
-                                             PICO_FLASH_SIZE_BYTES);
-    /* STATE cuenta el estado REAL alcanzado por el boot (no el plan del env). */
-    bm.live = board_boot_status();
-
-    /* #327 — zona de packs: XIP directo sobre la partición PACKS. V7/H7 (Boot 2, fase 1):
-     * la que ve el gestor es la MONTADA —con el FS, la regla del arranque—, no la del
-     * layout. Antes era la del layout, y con el FS caído PACK_LS enseñaba una zona que no
-     * estaba montada (e INFO decía packsBytes=0). Sin zona, el LS dice por qué. */
-    {
-        uint32_t tam = 0;
-        const uint8_t* base = bpvm_pack_mounted(&tam);
-        if (base && tam > 0) {
-            bm.packs_base  = base;
-            bm.packs_size  = tam;
-            s_packs_off    = (uint32_t) ((uintptr_t) base - XIP_BASE);   /* la cintura de burn escribe aquí */
-            bm.packs_flash = &s_packs_fl;
-        }
-    }
-
-    /* V5/H8 — la RAM de trabajo de un motor nativo: el PRINCIPIO del bloque de
-     * la BD (`[estaticos | arena]`). Ya lo calcula el arranque; aquí sólo se
-     * expone para que `PACK_BURN_BEGIN` pueda decírselo al IDE, que es quien
-     * relocaliza. Si no hay bloque, queda a 0 y el IDE lo dirá. */
-    bm.pack_ram_base = (uint32_t) (uintptr_t) s_pack_ram_base;
-    bm.pack_ram_size = s_pack_ram_size;   /* V7/H6.c G1: el bloque que empieza ahí (antes, sólo el de la BD) */
-
-    bpvm_bmgr_req_t req;
-    memset(&req, 0, sizeof req);
-    snprintf(req.type, sizeof req.type, "%s", type);
-    req.id = id;
-    req.has_key   = json_get_str(obj, "key",   req.key,   sizeof req.key)   >= 0;
-    req.has_value = json_get_str(obj, "value", req.value, sizeof req.value) >= 0;
-    for (int i = 0; i < BPVM_PART_COUNT; i++)
-        req.part_sizes[i] = json_get_long(obj, bpvm_part_name((bpvm_part_kind_t) i), -1);
-
-    /* H3 — los campos que piden los PACK_*. De los seis, el Pico rellenaba SOLO
-     * `bulk`: sin `off` no van PACK_ENTRIES/DEL/READ, sin `size` no arranca el
-     * BURN_BEGIN, y sin `confirm_yes` el FORMAT rechaza aunque el IDE mande el
-     * confirm (que lo manda). Encaminar los verbos y no rellenar su petición es
-     * la misma media función que dejar bm.packs_* a cero. Copiado del STM32,
-     * que es el que estaba completo. */
-    req.off      = json_get_long(obj, "offset", -1);   /* PACK_ENTRIES/DEL/READ */
-    req.has_off  = req.off >= 0;
-    req.size     = json_get_long(obj, "size", -1);     /* PACK_BURN_BEGIN */
-    req.has_size = req.size >= 0;
-    req.bulk     = bulk;                               /* PACK_BURN_DATA (ya recibido) */
-    req.bulk_len = (long) bulk_len;
-    {                                                  /* PACK_FORMAT (confirm=YES) */
-        char confirm[8];
-        req.confirm_yes = json_get_str(obj, "confirm", confirm, sizeof confirm) >= 0
-                          && strcmp(confirm, "YES") == 0;
-    }
-
-    int wrote = -1;
-    int n = bpvm_bmgr_wire_dispatch(&bm, &req, reply, reply_cap, &wrote);
-    /* La zona se suelta en TODAS las salidas: quedársela colgada dejaría mudos
-     * los PACK_* y los siguientes comandos del entorno. Y se suelta DESPUÉS del
-     * env_write, porque el sector que hay que volcar a flash vive en ella. */
-    if (n < 0) {
-        if (con_env) bpvm_scratch_give("bmgr-env");
-        wire_v1_send_error(id, "INTERNAL_ERROR", "reply de gestion no cabe");
-        return;
-    }
-    if (wrote >= 0) env_write(wrote, wrote == 0 ? a : b);   /* la cintura: RAM → flash */
-    if (con_env) bpvm_scratch_give("bmgr-env");
-    wire_v1_send_line(reply, (size_t) n);
+    /* V7/H10, el board_mgr común (3-oct): lo que había aquí es el `handle` común (bpvm_repl.c), el mismo de las otras
+     * familias y del sim; lo propio de la Pico es su cintura (s_familia, arriba). Y si la flash no escribe,
+     * FLASH_ERROR en vez del OK (D2, #636). */
+    board_mgr_pico_familia();
+    bpvm_bmgr_handle(id, obj, type, scratch, scratch_len, bulk, bulk_len);
 }
