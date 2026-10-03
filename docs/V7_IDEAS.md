@@ -3831,6 +3831,28 @@ pasa si se borra firmware, y no es permanente en ninguna familia).
 - **D7** tras `PART_APPLY`, ¿quién reinicia?: (a) la placa, después de contestar; (b) el IDE manda `RESET` y reconecta;
   (c) sólo cambiar el texto. El agente recomienda (b): la respuesta nunca se pierde en una carrera con el reinicio.
 
+**Decidido** (Eduardo, 3-oct):
+- **D1, el ENV**: *«Las variables de entorno se han de escribir y leer normalmente. Cuando entran en efecto no depende de
+  ellas, si una variable se lee al arrancar, entrará en efecto después de un reset. En cuanto a si se leen directamente
+  de la flash o de una copia en RAM, pues estamos en las mismas, depende del caso. En realidad deberían de leerse
+  siempre de la flash. Si lo que se está preguntando en realidad es qué valor está en vigor esa es otra variable.»* O
+  sea, al revés de lo que proponía el agente: el ENV se lee de la FLASH, siempre —el último valor escrito, en las
+  cuatro (`#638` se arregla por ahí: la vista de la Pico sigue siempre a la copia más nueva, y las ESP32 y la STM32 dejan
+  de leer la foto del arranque)—; CUÁNDO entra en efecto lo decide quien la lee (`gc=` y `latido=`, que se leen en
+  cada RUN, en el RUN siguiente; el reparto de memoria y las particiones, que se leen al arrancar, tras un reset); y el
+  valor EN VIGOR —lo que aplicó el arranque— es otra cosa, que se guarda y se dice aparte (no es el ENV). `env_smoke`,
+  que hoy exige que el programa siga viendo el ENV del arranque, cambia con ello;
+- **D2**: `FLASH_ERROR` («no se pudo escribir la flash; sigue el valor de antes»);
+- **D3 y D5, la flash: lo mínimo.** Eduardo preguntó por qué volvía si ya se había unificado: lo unificado (V7/H7,
+  `U1.4`, 30-sep, «la pequeña») fue DENTRO de cada familia —la Pico, un `pico_flash.c` para los cuatro que escriben, con
+  el candado y la zona permitida dentro; la STM32 ya tenía su `stm32_flash.c`; las ESP32, la partición del IDF—; lo que
+  no hay es una cara COMÚN, y el `board_mgr` común la necesita. Así que: una cara común DELGADA, sólo con lo que
+  necesita el `board_mgr` común (escribir el ENV y la zona de packs), que llama a la cintura que ya tiene cada familia;
+  y la guarda de zona dentro de `stm32_flash.c`, como la de la Pico (`#637`). El log y el FS, como están;
+- **D4** (mío: en la Pico no hay alternativa): el candado, en cada familia;
+- **D6**: para más adelante (*«esto hay que pensarlo»*);
+- **D7**: el IDE manda el `RESET` tras el `PART_APPLY` y se reconecta.
+
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 
 Eduardo, al vaciar H7 (*«lo del modelo final de H12, lo normal sería decidirlo en H12, pero bueno»*):
