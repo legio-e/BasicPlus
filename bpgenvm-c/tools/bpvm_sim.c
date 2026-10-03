@@ -694,24 +694,27 @@ static unsigned char g_sim_put_buf[64 * 1024];
 /* V7/H8 #495 — el búfer de FICHEROS del PUT troceado, aparte del de comunicaciones: un bloque del FS (SECTOR). */
 static unsigned char g_sim_fich_buf[SECTOR];
 
+/* V7/H10, el RUN común, paso 0 (3-oct): con NOMBRES, como las cintas de las tres familias. En orden, cada campo
+ * nuevo de bpvm_repl_ops_t obligaba a contar posiciones (y faltaba el último: el aviso de «missing initializer»). */
 static const bpvm_repl_ops_t SIM_REPL_OPS = {
-    sim_repl_info,
-    SERVER_NAME,
-    __DATE__ " " __TIME__,
-    "[\"META\",\"FILES\",\"TERMINAL\",\"BOARDMGR\",\"PACKS\"]",
-    g_sim_put_buf,
-    sizeof g_sim_put_buf,
-    NULL,                       /* after_put: littlefs ya persiste */
-    sim_repl_info_extra,
-    sim_fs_total,
-    sim_fs_used,
-    sim_fs_count,
-    sim_fs_format,
-    NULL,                       /* fs_save: idem — el común contesta OK, que es la verdad */
-    g_sim_fich_buf,             /* V7/H8 #495: el búfer de ficheros, un bloque (SECTOR) */
-    sizeof g_sim_fich_buf,
-    512,                        /* V7/H8 #495: el trozo y la ventana del HELLO, los de las placas */
-    4,
+    .info           = sim_repl_info,
+    .server_name    = SERVER_NAME,
+    .server_build   = __DATE__ " " __TIME__,
+    .capabilities   = "[\"META\",\"FILES\",\"TERMINAL\",\"BOARDMGR\",\"PACKS\"]",
+    .put_buf        = g_sim_put_buf,
+    .put_buf_size   = sizeof g_sim_put_buf,
+    .after_put      = NULL,                 /* littlefs ya persiste */
+    .info_extra     = sim_repl_info_extra,
+    .fs_total_bytes = sim_fs_total,
+    .fs_used_bytes  = sim_fs_used,
+    .fs_file_count  = sim_fs_count,
+    .fs_format      = sim_fs_format,
+    .fs_save        = NULL,                 /* idem — el común contesta OK, que es la verdad */
+    .fich_buf       = g_sim_fich_buf,       /* V7/H8 #495: el búfer de ficheros, un bloque (SECTOR) */
+    .fich_bytes     = sizeof g_sim_fich_buf,
+    .put_trozo      = 512,                  /* V7/H8 #495: el trozo y la ventana del HELLO, los de las placas */
+    .put_ventana    = 4,
+    .image_crc      = NULL,                 /* V7/H9: el sim no tiene imagen que sellar */
 };
 
 /* ── META ─────────────────────────────────────────────────────────────────── */

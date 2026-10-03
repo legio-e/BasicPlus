@@ -1,0 +1,214 @@
+#!/usr/bin/env python3
+"""run_smoke.py — V7/H10, el RUN común, paso 0 (3-oct): LO QUE HOY HACE EL RUN en los casos que la red no cubre.
+
+El RUN está escrito cuatro veces (la Pico, la ESP32, la STM32 y el micro simulado) y va a quedar en uno
+(`V7_IDEAS` §H10 «RUN en un solo sitio»), con unas reglas que Eduardo decidió el 2-oct. Antes de tocar nada, esto FIJA
+la conducta de HOY del micro simulado —el primero que estrenará el RUN común— en los casos que ninguna otra prueba
+mira; el paso que cambie una conducta cambiará aquí su expectativa en el mismo commit, y el diff dirá qué cambió:
+
+  1. un fallo de CARGA (falta un módulo): el estado, el exitCode y el mensaje del EXITED
+     (regla decidida: exitCode 2 y «falta el modulo 'X'»);
+  2. un NUL en mitad de una línea (hoy el sim corta en el primer NUL; regla: se escapa, \\u0000);
+  3. una línea de 512 caracteres de control (cada uno escapa a 6 bytes: 3072; la STM32 la tira entera);
+  4. un carácter UTF-8 que cae en el byte 512 (el hilo `io` trocea a 512 B sin mirar caracteres: el carácter sale
+     partido en dos tramas, cada una con un byte suelto; regla: no se parte nunca);
+  5. un KILL sin programa (hoy el sim contesta KILL_REPLY y las placas NO_SESSION; regla: NO_SESSION en todas).
+
+Lee el cable en BYTES (un carácter partido no es UTF-8 válido y un lector estricto lo tiraría). Necesita el compilador
+(lexer-java) y la librería de packs (packs/Stdlib.pack), como env_smoke.
+
+    python tools/run_smoke.py            (desde bpgenvm-c; BPVM_SIM= para otro simulador)
+"""
+import json, os, shutil, socket, subprocess, sys, tempfile, time
+
+try: sys.stdout.reconfigure(encoding="utf-8")
+except Exception: pass
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sim_smoke import SIM, STDLIB_PACK, STDLIB_DIR, JAR   # noqa: E402 — el mismo simulador y el mismo compilador
+
+PORT = 5127
+fails = 0
+
+
+def check(cond, msg):
+    global fails
+    print(("  ok  : " if cond else "  FAIL: ") + msg)
+    if not cond:
+        fails += 1
+
+
+class Cable:
+    """El wire en BYTES: cada línea se parsea con surrogateescape, y `crudo()` devuelve los bytes de un campo."""
+    def __init__(self, sock):
+        self.s = sock; self.buf = b""; self.id = 0
+
+    def linea(self):
+        while b"\n" not in self.buf:
+            c = self.s.recv(65536)
+            if not c:
+                raise EOFError("el sim cerró la conexión")
+            self.buf += c
+        l, self.buf = self.buf.split(b"\n", 1)
+        return json.loads(l.decode("utf-8", "surrogateescape"))
+
+    def call(self, typ, **campos):
+        self.id += 1
+        campos.update(type=typ, id=self.id)
+        self.s.sendall((json.dumps(campos) + "\n").encode())
+        return self.linea()
+
+    def call_bulk(self, typ, datos, **campos):
+        self.id += 1
+        campos.update(type=typ, id=self.id, bulk=len(datos))
+        self.s.sendall((json.dumps(campos) + "\n").encode() + datos)
+        return self.linea()
+
+    def run(self, path, timeout=60.0):
+        """RUN y lo que sale hasta el EXITED: (respuesta, [datos de cada OUTPUT, en bytes], exited)."""
+        r = self.call("RUN", path=path)
+        if r.get("type") != "RUN_REPLY":
+            return r, [], None
+        tramas, t0 = [], time.time()
+        while time.time() - t0 < timeout:
+            m = self.linea()
+            if m.get("type") == "OUTPUT":
+                tramas.append(m.get("data", "").encode("utf-8", "surrogateescape"))
+            elif m.get("type") == "EXITED":
+                return r, tramas, m
+        return r, tramas, None
+
+
+CASOS = """module RunCasos
+  import Str
+
+  function Main()
+    var nul: string := "a" + Str.fromCharCode(0) + "b"
+    print "nul=[" + nul + "]"
+    var ctl: string := ""
+    var i: integer := 0
+    while i < 512 do
+      ctl := ctl + Str.fromCharCode(1)
+      i := i + 1
+    endwh
+    print ctl
+    var largo: string := ""
+    i := 0
+    while i < 511 do
+      largo := largo + "a"
+      i := i + 1
+    endwh
+    print largo + Str.fromCharCode(241) + "z"
+    print "fin"
+  end Main
+end RunCasos
+"""
+
+FALTA = """module RunFalta
+  public function hola(): integer
+    return 1
+  end hola
+end RunFalta
+"""
+
+USA = """module RunUsa
+  import RunFalta
+
+  function Main()
+    print "no deberia llegar: " + RunFalta.hola()
+  end Main
+end RunUsa
+"""
+
+
+def compila(dest, nombre, fuente):
+    src = os.path.join(dest, nombre + ".bp")
+    with open(src, "w", encoding="utf-8") as f:
+        f.write(fuente)
+    rc = subprocess.run(["java", "-jar", JAR, src, "--compile", dest, "--backend=mivm", "--stdlibDir=" + STDLIB_DIR],
+                        cwd=dest, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    mod = os.path.join(dest, nombre + ".mod")
+    return mod if rc.returncode == 0 and os.path.exists(mod) else None
+
+
+def arranca(flash):
+    proc = subprocess.Popen([SIM, "--port=%d" % PORT, "--flash-file=" + flash, "--mem=1M", "--flash=4M",
+                             "--pack=" + STDLIB_PACK], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+    for _ in range(80):
+        try:
+            sock = socket.create_connection(("127.0.0.1", PORT), timeout=2.0)
+            sock.settimeout(60.0)
+            c = Cable(sock)
+            c.call("HELLO", protoVersion=1, clientName="run_smoke")
+            return proc, sock, c
+        except OSError:
+            time.sleep(0.1)
+    proc.kill()
+    raise RuntimeError("el sim no acepta conexión")
+
+
+def main():
+    if not os.path.exists(JAR) or shutil.which("java") is None or not os.path.exists(STDLIB_PACK):
+        print("FAIL: hacen falta el compilador (%s) y la librería de packs (%s)" % (JAR, STDLIB_PACK))
+        print("[status=FAIL]")
+        return 1
+    tmp = tempfile.mkdtemp(prefix="run_smoke_")
+    print("=== run_smoke (el RUN común, paso 0): lo que HOY hace el RUN del micro simulado ===")
+    mods = {}
+    for nombre, fuente in (("RunCasos", CASOS), ("RunFalta", FALTA), ("RunUsa", USA)):
+        mods[nombre] = compila(tmp, nombre, fuente)
+        check(mods[nombre] is not None, "compila %s" % nombre)
+    if None in mods.values():
+        print("[status=FAIL: %d]" % fails)
+        return 1
+    proc, sock, c = arranca(os.path.join(tmp, "sim.flash"))
+    try:
+        # 5 — el KILL sin programa (antes de nada: la placa está en reposo)
+        r = c.call("KILL")
+        check(r.get("type") == "KILL_REPLY",
+              "5. KILL sin programa -> HOY KILL_REPLY (las placas: NO_SESSION; regla: NO_SESSION) (dice %r %r)"
+              % (r.get("type"), r.get("code")))
+
+        # 1 — el fallo de carga: se sube RunUsa y NO RunFalta
+        with open(mods["RunUsa"], "rb") as f:
+            check(c.call_bulk("PUT", f.read(), path="/app/RunUsa.mod").get("type") == "PUT_REPLY", "1. PUT de RunUsa")
+        r, tramas, ex = c.run("/app/RunUsa.mod")
+        ex = ex or {}
+        msg = ex.get("errorMessage") or ""
+        print("       EXITED: status=%r exitCode=%r errorMessage=%r" % (ex.get("status"), ex.get("exitCode"), msg))
+        check(ex.get("status") == "RUNTIME_ERROR" and ex.get("exitCode") == -2
+              and msg.startswith("falta el modulo 'RunFalta'"),
+              "1. falta un módulo -> HOY RUNTIME_ERROR, exitCode -2 y «falta el modulo 'RunFalta'…» (regla: exitCode 2)")
+        check(tramas == [], "1. y no sale nada del programa")
+
+        # 2, 3, 4 — la salida
+        with open(mods["RunCasos"], "rb") as f:
+            check(c.call_bulk("PUT", f.read(), path="/app/RunCasos.mod").get("type") == "PUT_REPLY", "PUT de RunCasos")
+        r, tramas, ex = c.run("/app/RunCasos.mod")
+        ex = ex or {}
+        check(ex.get("status") == "OK", "RunCasos acaba bien (dice %r %r)" % (ex.get("status"), ex.get("errorMessage")))
+        todo = b"".join(tramas)
+        print("       %d tramas de OUTPUT, %d bytes: %s" % (len(tramas), len(todo), [len(t) for t in tramas]))
+        check(b"nul=[a\n" in todo or todo.startswith(b"nul=[a"),
+              "2. un NUL -> HOY la línea se corta en el NUL: sale «nul=[a» (regla: \\u0000 y el resto)")
+        check(b"nul=[a\x00b]" not in todo, "2. y lo de detrás del NUL no sale")
+        ctl = b"\x01" * 512
+        check(ctl in todo, "3. 512 controles -> HOY salen enteros en el sim (la STM32 los tira)")
+        ene = "ñ".encode("utf-8")
+        partida = any(t.endswith(ene[:1]) for t in tramas) and any(t.startswith(ene[1:]) for t in tramas)
+        check(partida,
+              "4. una ñ en el byte 512 -> HOY sale PARTIDA en dos tramas (un byte en cada una; regla: no se parte)")
+        check(todo.endswith(b"fin\n"), "y lo último, «fin»")
+    finally:
+        try:
+            sock.close()
+        finally:
+            proc.terminate()
+            try: proc.wait(timeout=5)
+            except Exception: proc.kill()
+    print("[status=OK]" if fails == 0 else "[status=FAIL: %d]" % fails)
+    return 0 if fails == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -15,7 +15,28 @@
 # El STEP repetido es la reproduccion mas barata de "la 2a vez se cuelga":
 # ejercita el mismo bucle de pausa una y otra vez. Si algun STEP no contesta
 # dentro del timeout, esta reproducido.
-import json, os, socket, subprocess, sys, tempfile, time
+#
+# V7/H10 (3-oct, el RUN comun, paso 0): A LA RED. Usaba un samples/Arith.mod MOD5 de mayo que ninguna VM carga ya,
+# asi que llevaba meses sin probar nada. Ahora compila su propio programa (con la stdlib del pack del IDE, como
+# env_smoke), usa el simulador de la red (BPVM_SIM) y prueba ademas #634 por el cable: un KILL con el programa en
+# pausa acaba en KILLED (antes, en placa, no paraba).
+import json, os, shutil, socket, subprocess, sys, tempfile, time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sim_smoke import SIM, STDLIB_PACK, STDLIB_DIR, JAR   # noqa: E402 — el simulador y el compilador de la red
+
+PASOS = """module DbgPasos
+  function Main()
+    var s: integer := 0
+    var i: integer := 0
+    while i < 50 do
+      s := s + i
+      i := i + 1
+    endwh
+    print "suma=" + s
+  end Main
+end DbgPasos
+"""
 
 STEPS = 8          # con 2 bastaria para el sintoma; 8 da margen para ver patron
 TIMEOUT = 5.0
@@ -56,23 +77,47 @@ class Wire:
                 raise RuntimeError("esperaba %s y llego %s: %s" % (mtype, m.get("type"), m))
         raise TimeoutError("%s no llego; por el camino: %s" % (mtype, seen))
 
+def compila(dest):
+    """El programa de los pasos, contra la stdlib de bpstdlib/. None si no se puede."""
+    if not os.path.exists(JAR) or shutil.which("java") is None:
+        return None
+    src = os.path.join(dest, "DbgPasos.bp")
+    with open(src, "w", encoding="utf-8") as f:
+        f.write(PASOS)
+    rc = subprocess.run(["java", "-jar", JAR, src, "--compile", dest, "--backend=mivm", "--stdlibDir=" + STDLIB_DIR],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    mod = os.path.join(dest, "DbgPasos.mod")
+    return mod if rc.returncode == 0 and os.path.exists(mod) else None
+
 def main():
-    mod = sys.argv[1] if len(sys.argv) > 1 else "samples/Arith.mod"
-    if not os.path.exists(mod):
-        print("no existe", mod); return 2
+    tmp = tempfile.mkdtemp(prefix="sim_dbg_")
+    mod = sys.argv[1] if len(sys.argv) > 1 else compila(tmp)
+    if not mod or not os.path.exists(mod):
+        print("  FAIL: no hay programa (sin el compilador %s, o no compila)" % JAR)
+        print("\n[status=FALLA]")
+        return 1
+    if not os.path.exists(STDLIB_PACK):
+        print("  FAIL: no esta la libreria de packs (%s)" % STDLIB_PACK)
+        print("\n[status=FALLA]")
+        return 1
     data = open(mod, "rb").read()
     name = os.path.basename(mod)
 
     port = free_port()
-    img  = os.path.join(tempfile.gettempdir(), "sim_dbg_fs.img")
-    if os.path.exists(img): os.remove(img)
-    exe = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "build", "bpvm-sim.exe"))
-    sim = subprocess.Popen([exe, "--port=%d" % port, "--fs=" + img],
+    img  = os.path.join(tmp, "sim_dbg_fs.img")
+    sim = subprocess.Popen([SIM, "--port=%d" % port, "--fs=" + img, "--pack=" + STDLIB_PACK],
                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    time.sleep(0.6)
     fails = []
     try:
-        s = socket.create_connection(("127.0.0.1", port), timeout=5)
+        s = None
+        for _ in range(60):
+            try:
+                s = socket.create_connection(("127.0.0.1", port), timeout=5)
+                break
+            except OSError:
+                time.sleep(0.1)
+        if s is None:
+            raise RuntimeError("el sim no acepta conexion")
         w = Wire(s)
         w.send({"type": "HELLO", "id": 1}); w.recv_until("HELLO_REPLY")
 
@@ -104,8 +149,24 @@ def main():
                 break
         if not fails:
             w.send({"type": "CONTINUE", "id": 200})
-            w.recv_until("EXITED", timeout=10.0)
-            print("  ok  : CONTINUE -> EXITED")
+            ex = w.recv_until("EXITED", timeout=10.0)
+            if ex.get("status") == "OK":
+                print("  ok  : CONTINUE -> EXITED OK")
+            else:
+                fails.append("CONTINUE -> EXITED %r (esperado OK)" % ex.get("status"))
+
+        # #634 (3-oct) — un KILL con el programa EN PAUSA: el Stop del IDE depurando. Tiene que acabar, y en KILLED.
+        if not fails:
+            w.send({"type": "PAUSE", "id": 300}); w.recv_until("PAUSE_REPLY")
+            w.send({"type": "RUN", "id": 301, "path": "/app/" + name})
+            w.recv_until("RUN_REPLY")
+            w.recv_until("BP_HIT")
+            w.send({"type": "KILL", "id": 302})
+            ex = w.recv_until("EXITED", timeout=10.0)
+            if ex.get("status") == "KILLED":
+                print("  ok  : #634: KILL en pausa -> EXITED KILLED")
+            else:
+                fails.append("#634: KILL en pausa -> EXITED %r (esperado KILLED)" % ex.get("status"))
     except Exception as e:
         fails.append("excepcion: %r" % (e,))
     finally:
@@ -114,9 +175,10 @@ def main():
             out = sim.stdout.read().decode(errors="replace") if sim.stdout else ""
         except Exception:
             out = ""
-        if out.strip():
+        if fails and out.strip():
             print("--- salida del sim ---")
             print(out[-1500:])
+        shutil.rmtree(tmp, ignore_errors=True)
 
     print("\n[status=%s]" % ("OK" if not fails else "FALLA"))
     for f in fails: print("  !!", f)
