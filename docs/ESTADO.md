@@ -1113,7 +1113,11 @@ la C6, la P4 y la Nucleo.
 - **H13** (`a426fb8c`, `db0c0150`): Eduardo lo añade con la guía de RAM de Espressif (*«todo lo que sea ahorrar 10K o
   más, bienvenido»*; *«en principio no tocamos ni optimizamos nada más»*). Medido con `idf.py size` en builds aparte: la
   C3, −16 KB de SRAM estática; la C6, −9,5 KB; y ~2,5 KB más de heap en las dos (sin la tarea de timers de FreeRTOS).
-  En la C6, la DRAM libre tras `GuiShot`, de 11,3 a 18,6 KB. La C3, compilada; sin placa (no estaba en la mesa). A
+  En la C6, la DRAM libre tras `GuiShot`, de 11,3 a 18,6 KB. La C3, al final de la tarde (Eduardo la conectó): la
+  tanda IDÉNTICA y `run_placa` 34 de 34 (con `Str` subido a `/lib` para el caso D y quitado después: su imagen no lo
+  lleva y no tiene packs); al arrancar, 259 KB libres y 136 tras la VM. Volvió el COM3 compartido con la C6 (re-enchufar
+  la C3 lo arregló) y una subida sin `MSYS_NO_PATHCONV=1` dejó `/C:/Program Files/Git/lib/Str.mod` en la placa: borrado,
+  con sus carpetas. A
   pregunta de Eduardo, los hilos de FreeRTOS en la C6: `main` (el REPL y la VM, 16 KB) e `io` (6 KB, sólo durante un
   RUN), y del IDF `IDLE`, `esp_timer` y —hasta H13— `Tmr Svc`.
 - **Commits** (sin push): `6e5b526f` (los `.npk` de G2 y `GuiArbolG2` en la tanda) · `a426fb8c` (H13, el hito) ·
