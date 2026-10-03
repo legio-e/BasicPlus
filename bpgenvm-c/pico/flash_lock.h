@@ -17,7 +17,7 @@
  *     Hay que PARQUEAR el otro core en una rutina residente en RAM
  *     mientras dura la operación. Eso es `multicore_lockout`:
  *       * el core víctima (worker, core 1) se registra una vez con
- *         `bpvm_flash_lock_init_victim()`;
+ *         `pico_flash_lock_init_victim()`;
  *       * el core escritor (REPL/comm, core 0) llama
  *         `multicore_lockout_start_blocking()` → el víctima salta a su
  *         handler en RAM y gira con IRQs off; tras la operación,
@@ -41,14 +41,14 @@
 /* Registra el core llamante como víctima de lockout. Debe llamarse UNA
  * vez, desde el core que NO escribe flash (worker, core 1), tras
  * arrancar su task. No-op en single-core. */
-void bpvm_flash_lock_init_victim(void);
+void pico_flash_lock_init_victim(void);
 
 /* Abre la ventana exclusiva. Devuelve el token de IRQs (pásalo a _end).
  * Single-core: == save_and_disable_interrupts().
  * Dual-core: parquea el otro core + save_and_disable_interrupts(). */
-uint32_t bpvm_flash_lock_begin(void);
+uint32_t pico_flash_lock_begin(void);
 
 /* Cierra la ventana. `token` es el valor que devolvió _begin. */
-void bpvm_flash_lock_end(uint32_t token);
+void pico_flash_lock_end(uint32_t token);
 
 #endif /* BPVM_FLASH_LOCK_H */

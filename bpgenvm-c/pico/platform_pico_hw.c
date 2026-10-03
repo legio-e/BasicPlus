@@ -40,5 +40,5 @@ uint32_t bpvm_platform_random_u32(void) {
  * víctima del bloqueo de flash, como hacía pico/platform_freertos.c
  * (`lockout_victim = (core_id != 0)`); sin afinidad (-1), no. */
 void bpvm_platform_thread_arranca(int core_id) {
-    if (core_id > 0) bpvm_flash_lock_init_victim();
+    if (core_id > 0) pico_flash_lock_init_victim();
 }

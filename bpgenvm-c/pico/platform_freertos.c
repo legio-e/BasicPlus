@@ -206,7 +206,7 @@ static void fr_thread_trampoline(void* pv) {
      * escribir flash (SAVE / log), puede parquearlo en RAM. No-op en
      * single-core. Se ejecuta una vez, en el contexto del propio core. */
     if (t->lockout_victim) {
-        bpvm_flash_lock_init_victim();
+        pico_flash_lock_init_victim();
     }
     t->entry(t->arg);
     /* #635 (3-oct) — lo que se mira DESPUÉS del aviso se lee ANTES. En cuanto `exited` se da, join puede correr (con

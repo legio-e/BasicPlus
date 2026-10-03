@@ -12,7 +12,7 @@
 #include "pico/multicore.h"     /* multicore_lockout_* */
 #endif
 
-void bpvm_flash_lock_init_victim(void) {
+void pico_flash_lock_init_victim(void) {
 #if ( configNUMBER_OF_CORES > 1 )
     /* Una sola vez por core víctima. Idempotente en el SDK (re-init
      * re-arma el handler), pero lo llamamos una vez al arrancar el
@@ -22,7 +22,7 @@ void bpvm_flash_lock_init_victim(void) {
     /* Single-core: nada que hacer — no hay otro core que parquear. */
 }
 
-uint32_t bpvm_flash_lock_begin(void) {
+uint32_t pico_flash_lock_begin(void) {
 #if ( configNUMBER_OF_CORES > 1 )
     /* Parquea el/los otro(s) core(s) en su handler RAM-resident ANTES
      * de tocar XIP. Bloqueante: vuelve cuando el otro core confirma que
@@ -32,7 +32,7 @@ uint32_t bpvm_flash_lock_begin(void) {
     return save_and_disable_interrupts();
 }
 
-void bpvm_flash_lock_end(uint32_t token) {
+void pico_flash_lock_end(uint32_t token) {
     restore_interrupts(token);
 #if ( configNUMBER_OF_CORES > 1 )
     multicore_lockout_end_blocking();
