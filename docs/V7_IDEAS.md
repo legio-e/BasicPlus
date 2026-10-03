@@ -4078,7 +4078,8 @@ salió por el camino:
   (`15d1366a`);
 - D2 (`FLASH_ERROR`) no se puede provocar en placa: se prueba en el sim (`--flash-falla`) y en C (`test-bmgr`).
 
-Queda D6 (el sim tan estricto como la placa), para más adelante (Eduardo: *«esto hay que pensarlo»*).
+D6 (el sim tan estricto como la placa; Eduardo: *«esto hay que pensarlo»*), a SUELTAS al cerrar H10 (Eduardo, 3-oct):
+`#647`. **H10 CERRADO el 3-oct.**
 
 ## H12 — los dos núcleos: el modelo de Eduardo (1-oct), y lo que hay
 

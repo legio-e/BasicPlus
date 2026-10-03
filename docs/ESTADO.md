@@ -40,8 +40,8 @@
 > salía RUNTIME_ERROR) y `#585` (`double` en una native, medido en la C3: ×5,2); `#577` decidida (getters, sin ABI) y,
 > con Eduardo: *«podemos cerrar H9 y H10 antes de pasar a otras cosas»*, **H9 CERRADO**. Y para acabar, el
 > `board_mgr` común (pasos 0 a 5) y su lote en las NUEVE placas, todas verdes: `#636`–`#638` cerradas, D7 probado por
-> Eduardo en el IDE (y su aviso, sin modal), la tanda que llenaba la Nucleo y el `Gui` viejo de la C5, resueltos. A H10
-> sólo le queda D6, «más adelante». Más abajo, «🔧 H10 (3-oct, noche)», «🧪 H9 (3-oct, noche)», «🔧 SUELTAS (3-oct,
+> Eduardo en el IDE (y su aviso, sin modal), la tanda que llenaba la Nucleo y el `Gui` viejo de la C5, resueltos; y
+> **H10 CERRADO** (Eduardo), con D6 a SUELTAS (`#647`). Más abajo, «🔧 H10 (3-oct, noche)», «🧪 H9 (3-oct, noche)», «🔧 SUELTAS (3-oct,
 > noche)», «🔧 H10 (3-oct, tarde)», «(mediodía y tarde)» y «(mañana)».
 >
 > **2-oct** — H9: la tanda en la C6 destapó `#619`–`#623`; las cuatro placas de la mesa, grabadas y en verde. Por la
@@ -1093,7 +1093,7 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
-## 🔧 H10 (3-oct, noche) — EL `board_mgr` COMÚN (pasos 0 a 5) y su lote en las NUEVE placas: `#636`–`#638` CERRADAS; D7, probado por Eduardo en el IDE
+## 🔧 H10 (3-oct, noche) — CERRADO (Eduardo): EL `board_mgr` COMÚN (pasos 0 a 5) y su lote en las NUEVE placas; `#636`–`#638` CERRADAS; D7, probado por Eduardo en el IDE
 
 - **Los pasos** (uno por commit; el plan, en `V7_IDEAS` §H10 «el `board_mgr` común»): 0, `pico_flash_lock_*`
   (`6a5b079d`); 1, el común —la cintura de una familia (`bpvm_bmgr_familia_t`), la VISTA del ENV de la flash con su
@@ -1122,8 +1122,10 @@ la C6, la P4 y la Nucleo.
 - **De paso**: `idf.py app-flash` vuelve a enlazar si cambió HEAD (la versión de la app sale de `git describe`): el
   `.elf` que se graba es el de ese momento. Y la primera HELLO tras arrancar una ESP32 por su USB puede perderse (el log
   del bootloader va antes): se repite.
-- **H10, lo que queda**: D6, el sim tan estricto como la placa (Eduardo: *«esto hay que pensarlo»*, «más adelante»). Lo
-  demás de la fila, hecho o fuera (a SUELTAS, a `#615`, a V8). Cerrarlo, Eduardo.
+- **H10 CERRADO** (Eduardo): lo único que quedaba, D6 —el sim tan estricto como la placa: su flash como NOR y su STATE
+  el del arranque; *«esto hay que pensarlo»*—, a SUELTAS como `#647`. Lo demás de la fila, hecho o fuera (a SUELTAS, a
+  `#615`, a V8). Las SUELTAS abiertas, 16: `#577` y `#584` (decididas: por hacer), `#578`, `#581`, `#582`, `#583`,
+  `#592`, `#614`, `#615` (aparcada), `#623`, `#642`–`#646` y `#647`. De V7 quedan, además, H12.
 
 ## 🧪 H9 (3-oct, noche) — CERRADO (Eduardo): el sello, visto; las nueve placas, limpias; `L15`, medido en la Metro
 
