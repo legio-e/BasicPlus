@@ -241,14 +241,9 @@ static int      g_screen_w   = 0;              /* --screen=WxH (0 = el default d
 static int      g_screen_h   = 0;
 static int      g_no_screen  = 0;              /* --no-screen: placa sin panel */
 
-/* Estado del servidor mientras hay un cliente: el sink de OUTPUT y el poll del
- * KILL son callbacks de la VM y necesitan el socket → global, igual que el
- * s_run_session de los firmwares. */
+/* El cliente: el cable del simulado. La sesión, el ack del KILL y el del RESET eran de aquí; desde el RUN común (V7/H10,
+ * paso 2) son de src/bpvm_repl.c, como en las placas que lo usen. */
 static sock_t g_cli         = BAD_SOCK;
-static long   g_session     = 0;    /* contador de sesiones RUN */
-static long   g_run_session = 0;    /* sesión activa (para el sink) */
-static long   g_kill_ack_id = -1;   /* KILL recibido durante el run (ack diferido) */
-static long   g_reset_ack_id = -1;  /* RESET recibido durante el run (mata y luego reinicia) */
 
 /* Cintura de "flash" del sim para el BURN (erase/program sobre la región RAM).
  * Bloque de borrado 4K (como Pico/ESP; el STM32 real usa 8K). */
@@ -694,6 +689,8 @@ static unsigned char g_sim_put_buf[64 * 1024];
 /* V7/H8 #495 — el búfer de FICHEROS del PUT troceado, aparte del de comunicaciones: un bloque del FS (SECTOR). */
 static unsigned char g_sim_fich_buf[SECTOR];
 
+static const bpvm_repl_run_ops_t SIM_RUN_OPS;   /* V7/H10: la cintura del RUN, más abajo */
+
 /* V7/H10, el RUN común, paso 0 (3-oct): con NOMBRES, como las cintas de las tres familias. En orden, cada campo
  * nuevo de bpvm_repl_ops_t obligaba a contar posiciones (y faltaba el último: el aviso de «missing initializer»). */
 static const bpvm_repl_ops_t SIM_REPL_OPS = {
@@ -715,6 +712,7 @@ static const bpvm_repl_ops_t SIM_REPL_OPS = {
     .put_trozo      = 512,                  /* V7/H8 #495: el trozo y la ventana del HELLO, los de las placas */
     .put_ventana    = 4,
     .image_crc      = NULL,                 /* V7/H9: el sim no tiene imagen que sellar */
+    .run            = &SIM_RUN_OPS,         /* V7/H10: el RUN común (el sim lo estrena) */
 };
 
 /* ── META ─────────────────────────────────────────────────────────────────── */
@@ -724,88 +722,9 @@ static const bpvm_repl_ops_t SIM_REPL_OPS = {
 
 /* Datos de la imagen del FS: hacen falta para re-formatear (cerrar → borrar el
  * fichero → volver a montar formateando), que es como se formatea una flash. */
-/* ── TERMINAL: RUN / KILL ─────────────────────────────────────────────────── */
-
-/* Cada print de la VM llega aquí → evento OUTPUT con los bytes escapados. */
-static void sim_output_sink(const char* s, size_t len, void* user) {
-    (void) user;
-    if (g_cli == BAD_SOCK) return;
-    size_t cap = len * 6 + 128;   /* el escape puede crecer x6 (\u00XX) */
-    char* buf = (char*) malloc(cap);
-    char* txt = (char*) malloc(len + 1);
-    if (!buf || !txt) { free(buf); free(txt); return; }
-    memcpy(txt, s, len); txt[len] = '\0';
-
-    sb_t sb; sb_init(&sb, buf, cap);
-    sb_raw(&sb, "{\"type\":\"OUTPUT\",\"session\":"); sb_long(&sb, g_run_session);
-    sb_raw(&sb, ",\"stream\":\"stdout\",\"data\":\""); sb_esc(&sb, txt);
-    sb_raw(&sb, "\"}");
-    if (sb.ok) send_line(g_cli, sb.buf);
-    free(txt); free(buf);
-}
-
-static void emit_exited(sock_t c, long session, const char* status, int code,
-                        unsigned long ms, const char* err_msg) {
-    /* #557 — el buffer, a la medida del mensaje (el escape puede crecer x6), como
-     * sim_output_sink: eran 640 B fijos y un error de enlace llega a 1.536 — con uno
-     * largo `s.ok` caía y el EXITED no salía. */
-    size_t cap = 256 + (err_msg ? strlen(err_msg) * 6 : 0);
-    char* buf = (char*) malloc(cap);
-    if (!buf) return;
-    sb_t s; sb_init(&s, buf, cap);
-    sb_raw(&s, "{\"type\":\"EXITED\",\"session\":"); sb_long(&s, session);
-    sb_raw(&s, ",\"status\":\""); sb_raw(&s, status);
-    sb_raw(&s, "\",\"exitCode\":"); sb_long(&s, code);
-    sb_raw(&s, ",\"elapsedMs\":"); sb_ulong(&s, ms);
-    sb_raw(&s, ",\"nativos\":"); sb_long(&s, bpvm_aot_count());   /* V7/H5: los thunks de ESTE RUN (sin receta, 0; con SQLITE=1, el puente) */
-    if (err_msg && err_msg[0]) { sb_raw(&s, ",\"errorMessage\":\""); sb_esc(&s, err_msg); sb_raw(&s, "\""); }
-    sb_raw(&s, "}");
-    if (s.ok) send_line(c, s.buf);
-    free(buf);
-}
-
-/* Poll del wire entre quanta (#257): KILL para el programa (ack diferido, tras
- * parar), HELLO se contesta al vuelo (el IDE puede conectar con algo corriendo
- * y ofrecer Stop) y cualquier otra cosa devuelve BUSY.
- *
- * V6/E1 (#452) — RESET entra en la lista blanca, con la MISMA forma que KILL.
- * El enunciado de la ficha era falso: RESET sí llegaba, y se rechazaba aquí a
- * propósito con BUSY porque no tenía rama. Ahora la tiene, y hace en dos tiempos
- * lo que Eduardo hacía a mano: marcar el id y devolver 1 para que el RUN muera
- * por el camino de siempre, y reiniciar DESPUÉS, ya fuera de `bpvm_run`. Ni un
- * reinicio desde dentro del intérprete, ni un segundo lector del cable. */
-/* V6/A1.1 — adaptador para el contrato de `io` (que no conoce la VM: sólo pasa
- * el `user` que le dieron, y aqui ese `user` es la propia vm). */
-static int sim_run_poll_cb(bpvm_t* vm, void* user);
-static int sim_io_poll(void* user) { return sim_run_poll_cb((bpvm_t*) user, NULL); }
-
-static int sim_run_poll_cb(bpvm_t* vm, void* user) {
-    (void) vm; (void) user;
-    (void) bpvm_repl_paso();                  /* #495 (paso 4): un trozo de lo que se esté mandando (GET, LIST) */
-    if (g_cli == BAD_SOCK || !sock_has_data(g_cli)) return 0;
-    char line[WIRE_LINE_MAX];
-    if (recv_line(g_cli, line, sizeof line) < 0) return 1;   /* peer cerró → parar */
-    json_obj_t obj;
-    if (json_parse(line, strlen(line), &obj) != 0) return 0;
-    char type[32] = {0};
-    json_get_str(&obj, "type", type, sizeof type);
-    long rid = json_get_long(&obj, "id", 0);
-    if (!strcmp(type, "KILL"))  { g_kill_ack_id = rid; return 1; }
-    if (!strcmp(type, "RESET")) { g_reset_ack_id = rid; return 1; }
-    /* U3.24 — el saludo lo construye el REPL comun (misma forma que en placa):
-     * el IDE puede conectar con algo corriendo y necesita el HELLO para
-     * ofrecer Stop. Lo demas se rechaza con BUSY. */
-    if (!strcmp(type, "HELLO")) {
-        bpvm_repl_antes_de_despachar(type);   /* #495 (paso 4): lo que se mandaba al cliente de antes, cortado */
-        (void) bpvm_repl_dispatch("HELLO", rid, &obj);
-        return 0;
-    }
-    /* #495 (paso 4) — los de lectura que no monopolizan el cable: el GET y el LIST troceados (un trozo por vuelta
-     * de `io`, entre la salida del programa) y STAT. */
-    if (bpvm_repl_atiende_en_run(type, &obj)) { (void) bpvm_repl_dispatch(type, rid, &obj); return 0; }
-    send_err(g_cli, rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
-    return 0;
-}
+/* ── TERMINAL: RUN / KILL ─────────────────────────────────────────────────── *
+ * V7/H10, el RUN común, paso 2 (3-oct): aquí vivían el sink de OUTPUT (cortaba en el primer NUL), el EXITED y el poll
+ * del RUN; los tres son del común (`bpvm_repl_run`, `wire_v1_salida`). De esta familia queda su cintura, más abajo. */
 
 /* Resuelve un nombre de módulo en el FS: base-dir del proyecto, tal cual,
  * /app/<name>, /lib/<name> (el IDE sube las deps a /lib). Mismo orden que los
@@ -839,12 +758,6 @@ static const uint8_t* sim_mdn_del_fs(void* user, const char* nombre, uint32_t* l
     *len = msz;
     return mdn;
 }
-static void sim_mdn_decir(void* user, const char* msg) {
-    (void) user;
-    char linea[240];
-    int n = snprintf(linea, sizeof linea, "[%s]\n", msg);
-    if (n > 0) sim_output_sink(linea, (size_t) n, NULL);
-}
 
 /* Los buffers de los .mod cargados tienen que seguir VIVOS mientras corre la VM
  * (el loader NO copia el código: apunta al buffer). Se liberan al terminar. */
@@ -872,227 +785,85 @@ static int module_loaded(const bpvm_t* vm, const char* name) {
     return 0;
 }
 
-/* ── #326 BANCO DE PRUEBAS DEL DEPURADOR ──────────────────────────────────
- * El micro simulado NO tenía ramo de depuración, y eso es justo lo que faltaba
- * para cazar el bug del Pico sin gastar flasheos: allí el 1er breakpoint va bien
- * y a partir del 2º se cuelga, y sólo pasa DESDE que se migró al núcleo portable
- * (el Pico con su código viejo funciona). Montando aquí el MISMO núcleo:
- *   - si el 2º breakpoint también falla → el bug está en bpvm_dbg_wire y se caza
- *     en el PC con depurador de verdad, no a ciegas en la placa.
- *   - si NO falla → es específico del Pico (pila, memoria, temporización) y ya
- *     sabemos por dónde mirar.
- * La cintura es idéntica a la del ESP32: traducir JSON ↔ comando tipado y
- * prestar buffers. La lógica vive toda en el núcleo. */
-static char s_dbg_reply[2048];
-static char s_dbg_line[WIRE_LINE_MAX];
+/* ── V7/H10, el RUN común, paso 2 (3-oct): LA CINTURA DEL SIMULADO ──────────────────────────────────────────────────
+ *
+ * El primero que estrena `bpvm_repl_run` (src/bpvm_repl.c). Aquí vivían su RUN, su depurador (#326: el banco de
+ * pruebas del de la Pico) y su poll —y el depurador y el poll leían el socket A LA VEZ—. Ahora el cable lo lee `io`
+ * (el poll común) y los comandos del depurador le llegan a la VM por la cola de control, como en las placas. De esta
+ * familia queda lo que es suyo de verdad: */
 
-static void dbgw_send(const char* line, size_t len, void* user) {
-    (void) user;
-    /* El buffer es NUESTRO (s_dbg_reply), así que se puede cerrar en `len` y
-     * reusar send_line, que espera NUL-terminado. */
-    if (len < sizeof s_dbg_reply) ((char*) line)[len] = '\0';
-    if (g_cli != BAD_SOCK) send_line(g_cli, line);
-}
-
-static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
-    (void) user;
-    if (g_cli == BAD_SOCK) return -1;
-    if (recv_line(g_cli, s_dbg_line, sizeof s_dbg_line) < 0) return -1;
-    json_obj_t o;
-    if (json_parse(s_dbg_line, strlen(s_dbg_line), &o) != 0) return -1;
-    char type[40];
-    if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
-    out->kind = bpvm_dbg_wire_kind(type);
-    out->id   = json_get_long(&o, "id",    0);
-    out->pc   = json_get_long(&o, "pc",   -1);
-    out->bpId = json_get_long(&o, "bpId", -1);
-    out->addr = json_get_long(&o, "addr", -1);
-    out->ref  = json_get_long(&o, "ref",   0);
+/* el bloque de la VM: el del micro simulado (--mem) */
+static int sim_run_memoria(uint8_t** base, size_t* bytes) {
+    *base = g_vm_mem;
+    *bytes = g_mem_size;
     return 0;
 }
 
-static bpvm_dbg_wire_t s_dbgw = {
-    dbgw_next_cmd, dbgw_send, NULL, s_dbg_reply, sizeof s_dbg_reply, 0
-};
-
-static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* cmd, long id,
-                               const json_obj_t* obj, const char* type) {
-    cmd->kind = bpvm_dbg_wire_kind(type);
-    cmd->id   = id;
-    cmd->pc   = json_get_long(obj, "pc",   -1);
-    cmd->bpId = json_get_long(obj, "bpId", -1);
-    cmd->addr = json_get_long(obj, "addr", -1);
-    cmd->ref  = json_get_long(obj, "ref",   0);
+/* una línea del socket SIN ESPERAR (si hay algo, la línea entera); <0, el cliente se ha ido */
+static int sim_run_leer_linea(char* buf, size_t cap) {
+    if (g_cli == BAD_SOCK) return -1;
+    if (!sock_has_data(g_cli)) return 0;
+    if (recv_line(g_cli, buf, cap) < 0) return -1;
+    return (int) strlen(buf);
 }
 
-static void handle_run(sock_t c, long id, json_obj_t* obj) {
-    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
-    if (path == NULL) {
-        send_err(c, id, "INVALID_PARAM", "falta path"); return;
-    }
-    /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional (no `args:[]`:
-     * el mini-parser de las placas no sabe leer arrays anidados). Si no viene,
-     * NULL, y manda el valor por defecto que declare el fuente. */
-    const char* run_arg = json_str_inplace(obj, "arg");
+static char s_run_linea[WIRE_LINE_MAX];       /* la de `io` */
+static char s_run_dbg_linea[WIRE_LINE_MAX];   /* la del depurador: un búfer por rol (A1.7) */
+static char s_run_mensaje[2048];              /* RUN_REPLY, EXITED y las respuestas del depurador */
 
-    /* H19-F1 — base-dir/main-module del proyecto si vive en /app/<proj>/. */
-    bpvm_fs_set_basedir_from_module(path);
-    bpvm_fs_set_main_module_path(path);
+/* el RESET pedido durante el RUN: no hay silicio que reiniciar; se contesta y se corta, que es lo que ve el IDE */
+static void sim_run_reiniciar(long id) {
+    send_ok(g_cli, "RESET_REPLY", id);
+    close_sock(g_cli);
+    g_cli = BAD_SOCK;
+}
 
-    { char probe[BPVM_FS_PATH_MAX]; uint32_t psz = 0;
-      if (bpvm_entry_resolve(path, probe, sizeof probe, &psz) != 0) {
-          send_err(c, id, "NOT_FOUND", "no existe"); return;
-      } }
-
-    long session = ++g_session;
-    g_run_session = session;
-    { char buf[96]; sb_t s; sb_init(&s, buf, sizeof buf);
-      sb_raw(&s, "{\"type\":\"RUN_REPLY\",\"id\":"); sb_long(&s, id);
-      sb_raw(&s, ",\"session\":"); sb_long(&s, session); sb_raw(&s, "}");
-      if (s.ok) send_line(c, s.buf); }
-
-    /* V6/U6.1 — EL MISMO REPARTO QUE LAS PLACAS.
-     *
-     * Aqui iba un `0`, que `bpvm_init` interpreta como «mitad y mitad». Las tres
-     * familias de placa reparten con `bpvm_stack_region_bytes` (25 %, suelo de
-     * 64 KB) desde hace tiempo — el censo `U6.0` encontro que los dos entornos de
-     * PC eran los unicos que no la llamaban.
-     *
-     * Importa mas desde `U3.24`, que hizo de este simulador el ARNES del REPL
-     * comun: un doble que reparte su memoria distinto de la placa es un doble
-     * MAS AMABLE que el original, y esos no cazan nada. Y ya mordio una vez —
-     * `repl_esp32.c` lo lleva escrito: «tenia una COPIA de la regla y se habia
-     * quedado en /2 mientras el Pico ya iba por /4». */
-    /* V6/#469 — el micro SIMULADO tampoco tiene ADC, y lo dice a proposito:
-     * registra el backend del host (la rampa determinista de siempre). Asi «no
-     * hay backend» queda reservado a una placa DE VERDAD que se lo dejo. */
-    bpvm_adc_set_backend(bpvm_adc_backend_host());
-    bpvm_t* vm = bpvm_init(g_vm_mem, g_mem_size,
-                           g_mem_size - bpvm_stack_region_bytes(g_mem_size));
-    /* V6/#412 — antes de arrancar: lo recoge el builtin __runArg. */
-    if (vm) bpvm_set_run_arg(vm, run_arg);
-    if (!vm) {
-        free_bufs();
-        emit_exited(c, session, "INTERNAL_ERROR", -1, 0, "no se pudo inicializar la VM");
-        g_run_session = 0;
-        return;
-    }
-    bpvm_set_output(vm, sim_output_sink, NULL);
-
-    clock_t t0 = clock();
-
-    /* #344 — UNA carga: bpvm_load_entry despacha .mod/.pack, resuelve las
-     * dependencias con la regla comun (FS y, si no, los packs grabados en XIP)
-     * y NOMBRA la que falte. Aqui vivia una copia POBRE de esa regla: cortaba
-     * el import por el primer punto y no sabia nada del pack en ejecucion. */
-    bpvm_entry_t entry;
-    memset(&entry, 0, sizeof entry);
-    bpvm_status_t st = bpvm_load_entry(vm, path, &entry);
-    const char* missing = entry.missing;
-    if (st == BPVM_OK && entry.from_pack) {
-        char m[160];
-        int n = snprintf(m, sizeof m, "[sim] ejecutando el pack '%s' (main=%s)\n",
-                         entry.resolved, entry.main_module);
-        if (n > 0) sim_output_sink(m, (size_t) n, NULL);
-    }
-
-    /* Overlay AOT (.mdn) del FS, si lo hay. El registry es GLOBAL → clear antes
-     * de cada RUN para no arrastrar thunks de una sesión anterior. */
-    bpvm_aot_clear();
-    /* [V7/H2, #493] EL BUCLE COMÚN (bpvm_mdn_escanear): FS + zona, el puente
-     * sigue a su módulo. El bucle propio de aquí encontraba el `.mdn` de un pack
-     * sólo porque la zona se disfrazaba de /app. */
-    if (st == BPVM_OK && !missing[0]) {
-        bpvm_mdn_escanear(vm, sim_mdn_del_fs, sim_mdn_decir, vm);
-    }
-
-    g_kill_ack_id = -1;
-    g_reset_ack_id = -1;
-    if (st == BPVM_OK && !missing[0]) {
-        /* #326 — si hay breakpoints o PAUSE pendientes, el núcleo los aplica y
-         * registra su pause_cb. Sin nada armado no hace nada (coste cero). */
-        s_dbgw.session = session;
-        if (bpvm_dbg_wire_armed()) bpvm_dbg_wire_arm(&s_dbgw, vm);
-        /* V6/A1.1 — el simulador es el `io` DEL PC CON TRANSPORTE: mientras
-         * `vm` ejecuta opcodes en este hilo, `io` lee el socket (KILL/HELLO al
-         * instante, ya no entre cuantos) y enmarca la salida del programa en
-         * OUTPUT, una vez POR LINEA en vez de uno por trozo. El sink y el poll
-         * son los mismos de antes; lo que cambia es QUIEN los llama, y que
-         * ahora sólo los llama un hilo — durante el RUN, `io`; fuera del RUN,
-         * el lazo del servidor. Nunca los dos a la vez. */
+/* los nativos que no vienen en un .mdn: el puente de SQLite (con SQLITE=1), por NOMBRE, con el módulo ya cargado */
+static void sim_run_tras_cargar(bpvm_t* vm) {
 #ifdef BPVM_SQLITE
-        /* El puente: las 16 `native` de SQLite.bp, por NOMBRE. Va AQUI —con el
-         * modulo ya cargado y ANTES de las dos ramas del run—: `register_by_name`
-         * se salta EN SILENCIO los simbolos que no encuentra, asi que ponerlo en
-         * la rama equivocada no da error: da el cuerpo de aviso del compilador
-         * («falta el codigo nativo del pack»), que es lo que me paso. */
-        aot_SQLite_register(vm);
+    aot_SQLite_register(vm);
+#else
+    (void) vm;
 #endif
-        bpvm_io_ops_t io_ops = { sim_io_poll, sim_output_sink, vm };
-        if (bpvm_io_start(vm, &io_ops, 0) != 0) {
-            st = bpvm_run(vm);                 /* sin hilo io: el camino de antes */
-        } else {
-            st = bpvm_run(vm);
-            bpvm_io_stop(vm);                  /* drena la salida ANTES del EXITED */
-        }
-    }
-    bpvm_dbg_wire_reset();   /* la siguiente sesión parte limpia */
-    unsigned long dt = (unsigned long) ((clock() - t0) * 1000L / CLOCKS_PER_SEC);
-
-    /* Ack diferido del KILL, ANTES del EXITED (como los firmwares). */
-    if (g_kill_ack_id >= 0) { send_ok(c, "KILL_REPLY", g_kill_ack_id); g_kill_ack_id = -1; }
-
-    if (missing[0]) {
-        /* Que el mensaje diga QUÉ hacer. El caso típico es un módulo de la
-         * librería (Core el primero, que se importa implícito): una placa lo
-         * trae embebido en el firmware y por eso el IDE no lo sube, pero el
-         * simulado arranca con el FS vacío y necesita el pack de la stdlib. */
-        char msg[256];
-        uint32_t pk_rs = 0;
-        int hay_packs = bpvm_pack_mounted(&pk_rs) != NULL;
-        snprintf(msg, sizeof msg,
-                 "falta el modulo '%s': no esta en el FS%s. %s",
-                 missing,
-                 hay_packs ? " ni en los packs grabados" : " y no hay ningun pack grabado",
-                 hay_packs ? "Comprueba que el pack que lo trae este en la libreria de packs."
-                           : "Si es de la libreria estandar, configura la libreria de packs "
-                             "(engranaje del micro simulado) y reinicia el simulador.");
-        emit_exited(c, session, "RUNTIME_ERROR", -2, 0, msg);
-    } else if (st != BPVM_OK && entry.fallo[0]) {
-        /* #421 — no se pudo ni CARGAR, y el porqué se sabe: la ruta y qué le
-         * pasa. Antes esto caía en la rama de abajo y salía `IO error` a secas,
-         * que es lo que el IDE enseñaba. Va antes del error de enlace porque un
-         * fichero que no se puede leer no llega a enlazarse. */
-        emit_exited(c, session, "RUNTIME_ERROR", bpvm_exit_code(st), dt, entry.fallo);
-    } else {
-        const char* link_err = bpvm_link_error(vm);
-        if (link_err[0]) {
-            emit_exited(c, session, "LINK_ERROR", bpvm_exit_code(st), dt, link_err);
-        } else {
-            emit_exited(c, session,
-                        (st == BPVM_OK)     ? "OK"
-                      : (st == BPVM_KILLED) ? "KILLED" : "RUNTIME_ERROR",
-                        bpvm_exit_code(st), dt,   /* #481 - la tabla comun */
-                        (st == BPVM_KILLED && g_reset_ack_id >= 0) ? BPVM_REPL_MSG_RESET   /* E1 */
-                      : (st == BPVM_OK || st == BPVM_KILLED) ? "" : bpvm_runtime_error(vm));
-        }
-    }
-    bpvm_destroy(vm);
-    free_bufs();
-    g_run_session = 0;
-
-    /* V6/E1 (#452) — el RESET pedido durante el RUN, servido AHORA: el programa
-     * ya murió y su EXITED ya salió, así que el IDE ve la secuencia completa
-     * (EXITED KILLED → RESET_REPLY → se cae la conexión) en vez de un BUSY que
-     * además se tragaba. Mismo efecto que el RESET en reposo, unas líneas abajo. */
-    if (g_reset_ack_id >= 0) {
-        send_ok(c, "RESET_REPLY", g_reset_ack_id);
-        g_reset_ack_id = -1;
-        close_sock(c);
-        g_cli = BAD_SOCK;
-    }
 }
 
+/* los .mdn que trajo el escáner viven todo el RUN (keep_buf); al acabar, fuera */
+static void sim_run_despues(bpvm_t* vm) {
+    (void) vm;
+    free_bufs();
+}
+
+/* el ENV del simulado, para `gc` y `latido` */
+static int sim_run_env_bool(const char* clave, int defecto) {
+    char v[8];
+    if (sim_env_get(clave, v, sizeof v) < 0) return defecto;
+    return v[0] == '1' || v[0] == 't' || v[0] == 'T' || v[0] == 's' || v[0] == 'S';
+}
+
+/* el consejo cuando falta un módulo: una placa trae la stdlib embebida; el simulado arranca con el FS vacío y
+ * necesita el pack de la stdlib */
+static const char* sim_run_consejo(void) {
+    uint32_t pk_rs = 0;
+    return (bpvm_pack_mounted(&pk_rs) != NULL)
+        ? "no esta en el FS ni en los packs grabados. Comprueba que el pack que lo trae este en la libreria de packs."
+        : "no esta en el FS y no hay ningun pack grabado. Si es de la libreria estandar, configura la libreria de "
+          "packs (engranaje del micro simulado) y reinicia el simulador.";
+}
+
+static const bpvm_repl_run_ops_t SIM_RUN_OPS = {
+    .memoria           = sim_run_memoria,
+    .leer_linea        = sim_run_leer_linea,
+    .linea             = s_run_linea,     .linea_cap     = sizeof s_run_linea,
+    .dbg_linea         = s_run_dbg_linea, .dbg_linea_cap = sizeof s_run_dbg_linea,
+    .mensaje           = s_run_mensaje,   .mensaje_cap   = sizeof s_run_mensaje,
+    .reiniciar         = sim_run_reiniciar,
+    .mdn_del_fs        = sim_mdn_del_fs,
+    .tras_cargar       = sim_run_tras_cargar,
+    .despues_de_correr = sim_run_despues,
+    .env_bool          = sim_run_env_bool,
+    .consejo_falta     = sim_run_consejo,
+    .io_cola           = 0,               /* la de por defecto */
+};
 
 /* ── dispatch de un request ───────────────────────────────────────────────── */
 
@@ -1105,11 +876,7 @@ static void handle(sock_t c, json_obj_t* obj) {
 
     /* #326 — ramo de depuración (pre-RUN): SET_BP / CLR_BP / PAUSE. El núcleo
      * acumula y contesta; si no es de su ramo devuelve 0 y seguimos. */
-    {
-        bpvm_dbg_cmd_t dcmd;
-        dbgw_cmd_from_json(&dcmd, id, obj, type);
-        if (dcmd.kind != BPVM_DBGC_OTHER && bpvm_dbg_wire_handle(&s_dbgw, &dcmd)) return;
-    }
+    if (bpvm_repl_depurador_previo(type, id, obj)) return;   /* V7/H10: el depurador común */
 
     /* U3.24 — EL COMUN PRIMERO. META (HELLO/PING/INFO/TIME/LOG_*) y FILES
      * (LIST, LIST_DIR, STAT, DF, GET, los tres PUT, DEL, MKDIR, RMDIR, RENAME,
@@ -1129,8 +896,10 @@ static void handle(sock_t c, json_obj_t* obj) {
     }
 
     /* TERMINAL */
-    if (!strcmp(type, "RUN"))  { handle_run(c, id, obj); return; }
-    if (!strcmp(type, "KILL")) { send_ok(c, "KILL_REPLY", id); return; }  /* nada corriendo */
+    /* V7/H10, el RUN común, paso 2 (3-oct). Y el KILL sin programa, NO_SESSION como en las placas (regla del 2-oct:
+     * aquí contestaba KILL_REPLY). */
+    if (!strcmp(type, "RUN"))  { bpvm_repl_run(id, json_str_inplace(obj, "path"), json_str_inplace(obj, "arg")); return; }
+    if (!strcmp(type, "KILL")) { wire_v1_send_error(id, "NO_SESSION", "no hay programa en ejecución"); return; }
 
     /* --- gestión de placa (STATE, ENV_x, PART_x, PACK_x): NÚCLEO COMPARTIDO con el
      *     firmware. El sim solo parsea el JSON al `req`, despacha, y —si hubo escritura—
@@ -1237,6 +1006,10 @@ int main(int argc, char** argv) {
     if (npos > 1) g_flash_path = pos[1];
     if (npos > 2) g_flash_size = (uint32_t) strtoul(pos[2], NULL, 0);
     if (g_flash_size == 0) g_flash_size = DEF_FLASH;
+    /* V6/#469 — el micro SIMULADO no tiene ADC y lo dice a propósito: el backend del host (la rampa determinista de
+     * siempre). Así «no hay backend» queda para una placa DE VERDAD que se lo dejó. Era en cada RUN (V7/H10: el RUN
+     * común no sabe de ADC); es un registro global que nada borra. */
+    bpvm_adc_set_backend(bpvm_adc_backend_host());
 
     /* --- RAM del micro: un solo buffer con la zona de packs TALLADA al final.
      * Igual que en test/main.c: así los offsets del código XIP (cb = puntero −

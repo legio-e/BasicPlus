@@ -97,6 +97,42 @@ typedef struct {
     long          pack_ram_pedido;
 } bpvm_repl_info_t;
 
+/* ── V7/H10 — EL RUN, EN UN SOLO SITIO: la cintura de cada familia (el RUN común, paso 2; 3-oct) ──────────────────
+ * `bpvm_repl_run` hace el RUN entero —resolver, la sesión, crear la VM, cargar, los nativos, el depurador, `io`, el
+ * poll, correr, el KILL_REPLY y el EXITED— con las reglas de Eduardo (2-oct, `V7_IDEAS` §H10 «RUN en un solo sitio»):
+ * un fallo de carga sale con exitCode 2 y «falta el modulo 'X'», «load: <fallo>» o «load: <estado>»; un KILL o un
+ * RESET, con SU texto y nunca el de una excepción vieja; OUTPUT es sólo del programa (los avisos van al log); `gc=0` y
+ * `latido=1` por el ENV; y el poll, «pegajoso» con un KILL pedido. Lo que es de verdad de cada familia, aquí. La que
+ * pone esta cintura en `bpvm_repl_ops_t.run` le pasa sus RUN (y su autorun, con id < 0); la que no, sigue con el suyo:
+ * así se migra una a una y se revierte limpio. */
+struct bpvm;
+typedef struct {
+    /* ── obligatorios ── */
+    /** El bloque de la VM (base y bytes). -1 = no hay: no se arranca a medias. */
+    int  (*memoria)(uint8_t** base, size_t* bytes);
+    /** Una línea del cable SIN ESPERAR: su longitud (>0), 0 si no hay nada (o llegó rota), <0 si el cable se ha ido
+     *  (el programa se para, como con un KILL). */
+    int  (*leer_linea)(char* buf, size_t cap);
+    /** El búfer de esa lectura (lo usa `io`) y el del depurador (lo usa la tarea de la VM): uno por rol (A1.7). */
+    char*  linea;     size_t linea_cap;
+    char*  dbg_linea; size_t dbg_linea_cap;
+    /** Donde se arman el RUN_REPLY, el EXITED y las respuestas del depurador (todo, en la tarea de la VM). */
+    char*  mensaje;   size_t mensaje_cap;
+    /** El RESET pedido durante el RUN, servido después del EXITED. No vuelve (o, en el simulado, corta el cable). */
+    void (*reiniciar)(long id);
+    /* ── opcionales: NULL = nada ── */
+    void (*cargar_motores)(void);                                  /* los packs nativos, una vez (antes de resolver) */
+    const uint8_t* (*mdn_del_fs)(void* user, const char* nombre, uint32_t* len);   /* `user` = la VM */
+    void (*tras_cargar)(struct bpvm* vm);                          /* los nativos de la imagen (por el enlazador) */
+    void (*antes_de_correr)(struct bpvm* vm);
+    int  (*correr)(struct bpvm* vm, int depurando);                /* NULL = bpvm_run (la Pico: su SMP) */
+    void (*despues_de_correr)(struct bpvm* vm);                    /* tras el EXITED, antes de soltar la VM */
+    void (*led)(int estado);                                       /* 1 corre, 0 acabó bien, -1 error */
+    int  (*env_bool)(const char* clave, int defecto);              /* `gc`, `latido`… */
+    const char* (*consejo_falta)(void);                            /* qué hacer si falta un módulo (el simulado) */
+    unsigned long io_cola;                                         /* la cola de salida de `io`; 0 = la de por defecto */
+} bpvm_repl_run_ops_t;
+
 typedef struct {
     /** Rellena los 18 campos comunes. Obligatoria. */
     void (*info)(bpvm_repl_info_t* out);
@@ -168,6 +204,9 @@ typedef struct {
      * compilar. La familia lo calcula la primera vez que se pide y lo guarda (recorrer la imagen cuesta unas decenas de
      * ms). NULL = no lo da, y el HELLO va sin el campo. */
     uint32_t (*image_crc)(void);
+
+    /* V7/H10 — el RUN común (arriba). NULL = la familia tiene el suyo. */
+    const bpvm_repl_run_ops_t* run;
 } bpvm_repl_ops_t;
 
 /** La familia registra su cintura UNA vez, antes de atender el primer mensaje.
@@ -239,6 +278,14 @@ int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj);
 /** El cliente se ha ido (la familia lo sabe cuando su cable lo dice: el socket del simulado): lo que se le mandaba,
  *  cortado, y su RAM y su fichero abierto, libres. Lo mismo que hace un HELLO, que es como se entera una placa. */
 void bpvm_repl_cliente_ido(void);
+
+/** V7/H10 — el RUN común (ver `bpvm_repl_run_ops_t`). `id` < 0: el autorun (sin cliente: ni RUN_REPLY, y los errores
+ *  de antes de empezar, al log). `arg`: el argumento de ejecución, o NULL. Lo llama la familia que pone `.run`. */
+void bpvm_repl_run(long id, const char* path, const char* arg);
+/** ¿Hay un RUN común en curso? */
+int  bpvm_repl_run_activo(void);
+/** Los comandos del depurador ANTES del RUN (PAUSE, SET_BP, CLR_BP), con el depurador común: 1 si lo atendió. */
+int  bpvm_repl_depurador_previo(const char* type, long id, json_obj_t* obj);
 
 /** V7/H8 (restos de E1, 28-sep) — el `errorMessage` del EXITED de un programa parado por un RESET, el MISMO en las
  *  cuatro (Pico, ESP32, STM32 y el micro simulado). El `poll` trata el RESET como un KILL —lo para, y reinicia

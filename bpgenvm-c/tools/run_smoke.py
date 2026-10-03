@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
-"""run_smoke.py — V7/H10, el RUN común, paso 0 (3-oct): LO QUE HOY HACE EL RUN en los casos que la red no cubre.
+"""run_smoke.py — V7/H10, el RUN común (3-oct): LO QUE HACE EL RUN en los casos que la red no cubre.
 
 El RUN está escrito cuatro veces (la Pico, la ESP32, la STM32 y el micro simulado) y va a quedar en uno
 (`V7_IDEAS` §H10 «RUN en un solo sitio»), con unas reglas que Eduardo decidió el 2-oct. Antes de tocar nada, esto FIJA
-la conducta de HOY del micro simulado —el primero que estrenará el RUN común— en los casos que ninguna otra prueba
-mira; el paso que cambie una conducta cambiará aquí su expectativa en el mismo commit, y el diff dirá qué cambió:
+la conducta del micro simulado —el primero que estrena el RUN común— en los casos que ninguna otra prueba mira. El paso 0
+la fijó tal como era; el paso 2 (el RUN común) cambió aquí las cuatro expectativas que cambian sus reglas, en el mismo
+commit —el diff dice qué cambió—:
 
-  1. un fallo de CARGA (falta un módulo): el estado, el exitCode y el mensaje del EXITED
-     (regla decidida: exitCode 2 y «falta el modulo 'X'»);
-  2. un NUL en mitad de una línea (hoy el sim corta en el primer NUL; regla: se escapa, \\u0000);
-  3. una línea de 512 caracteres de control (cada uno escapa a 6 bytes: 3072; la STM32 la tira entera);
-  4. un carácter UTF-8 que cae en el byte 512 (el hilo `io` trocea a 512 B sin mirar caracteres: el carácter sale
-     partido en dos tramas, cada una con un byte suelto; regla: no se parte nunca);
-  5. un KILL sin programa (hoy el sim contesta KILL_REPLY y las placas NO_SESSION; regla: NO_SESSION en todas).
+  1. un fallo de CARGA (falta un módulo): RUNTIME_ERROR, exitCode 2 —el «no se pudo cargar» de la tabla común— y
+     «falta el modulo 'X'…» (antes, en el sim, exitCode -2);
+  2. un NUL en mitad de una línea: sale \\u0000 y el resto de la línea (antes, el sim cortaba ahí, salto incluido);
+  3. una línea de 512 caracteres de control (cada uno escapa a 6 bytes: 3072): entera, en tramas de 1 KB (la STM32
+     la tiraba entera);
+  4. un carácter UTF-8 que cae en el byte 512 (el hilo `io` trocea a 512 B sin mirar caracteres): el sink común guarda
+     el byte suelto y el carácter sale ENTERO en la trama siguiente (antes, partido en dos tramas);
+  5. un KILL sin programa: NO_SESSION, como en las placas (antes, en el sim, KILL_REPLY).
 
 Lee el cable en BYTES (un carácter partido no es UTF-8 válido y un lector estricto lo tiraría). Necesita el compilador
 (lexer-java) y la librería de packs (packs/Stdlib.pack), como env_smoke.
@@ -153,7 +155,7 @@ def main():
         print("[status=FAIL]")
         return 1
     tmp = tempfile.mkdtemp(prefix="run_smoke_")
-    print("=== run_smoke (el RUN común, paso 0): lo que HOY hace el RUN del micro simulado ===")
+    print("=== run_smoke (el RUN común): lo que hace el RUN del micro simulado ===")
     mods = {}
     for nombre, fuente in (("RunCasos", CASOS), ("RunFalta", FALTA), ("RunUsa", USA)):
         mods[nombre] = compila(tmp, nombre, fuente)
@@ -165,8 +167,8 @@ def main():
     try:
         # 5 — el KILL sin programa (antes de nada: la placa está en reposo)
         r = c.call("KILL")
-        check(r.get("type") == "KILL_REPLY",
-              "5. KILL sin programa -> HOY KILL_REPLY (las placas: NO_SESSION; regla: NO_SESSION) (dice %r %r)"
+        check(r.get("type") == "ERROR" and r.get("code") == "NO_SESSION",
+              "5. KILL sin programa -> NO_SESSION, como en las placas (antes: KILL_REPLY) (dice %r %r)"
               % (r.get("type"), r.get("code")))
 
         # 1 — el fallo de carga: se sube RunUsa y NO RunFalta
@@ -176,9 +178,9 @@ def main():
         ex = ex or {}
         msg = ex.get("errorMessage") or ""
         print("       EXITED: status=%r exitCode=%r errorMessage=%r" % (ex.get("status"), ex.get("exitCode"), msg))
-        check(ex.get("status") == "RUNTIME_ERROR" and ex.get("exitCode") == -2
-              and msg.startswith("falta el modulo 'RunFalta'"),
-              "1. falta un módulo -> HOY RUNTIME_ERROR, exitCode -2 y «falta el modulo 'RunFalta'…» (regla: exitCode 2)")
+        check(ex.get("status") == "RUNTIME_ERROR" and ex.get("exitCode") == 2
+              and msg.startswith("falta el modulo 'RunFalta': "),
+              "1. falta un módulo -> RUNTIME_ERROR, exitCode 2 y «falta el modulo 'RunFalta': …» (antes: exitCode -2)")
         check(tramas == [], "1. y no sale nada del programa")
 
         # 2, 3, 4 — la salida
@@ -189,15 +191,14 @@ def main():
         check(ex.get("status") == "OK", "RunCasos acaba bien (dice %r %r)" % (ex.get("status"), ex.get("errorMessage")))
         todo = b"".join(tramas)
         print("       %d tramas de OUTPUT, %d bytes: %s" % (len(tramas), len(todo), [len(t) for t in tramas]))
-        check(b"nul=[a\n" in todo or todo.startswith(b"nul=[a"),
-              "2. un NUL -> HOY la línea se corta en el NUL: sale «nul=[a» (regla: \\u0000 y el resto)")
-        check(b"nul=[a\x00b]" not in todo, "2. y lo de detrás del NUL no sale")
+        check(b"nul=[a\x00b]\n" in todo,
+              "2. un NUL -> sale \\u0000 y el resto de la línea, salto incluido (antes: se cortaba en el NUL)")
         ctl = b"\x01" * 512
-        check(ctl in todo, "3. 512 controles -> HOY salen enteros en el sim (la STM32 los tira)")
+        check(ctl + b"\n" in todo, "3. 512 controles -> enteros, en tramas de 1 KB (la STM32 los tiraba)")
         ene = "ñ".encode("utf-8")
-        partida = any(t.endswith(ene[:1]) for t in tramas) and any(t.startswith(ene[1:]) for t in tramas)
-        check(partida,
-              "4. una ñ en el byte 512 -> HOY sale PARTIDA en dos tramas (un byte en cada una; regla: no se parte)")
+        partida = any(t.endswith(ene[:1]) for t in tramas) or any(t.startswith(ene[1:]) for t in tramas)
+        check(not partida and any(ene + b"z" in t for t in tramas),
+              "4. una ñ en el byte 512 -> ENTERA en una trama (antes: partida en dos)")
         check(todo.endswith(b"fin\n"), "y lo último, «fin»")
     finally:
         try:

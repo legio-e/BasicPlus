@@ -27,6 +27,10 @@
 #include "crc32.h"          /* V7/H8 #495 (paso 4): el CRC de lo mandado, en el GET_END */
 #include "bpvm_io.h"        /* V7/H8 #495 (paso 4): la pila que le sobró a `io` (ioStackFree) */
 #include "bpvm_boot.h"      /* V7/H10 #473 (punto 10): la puerta del arranque, en el común */
+#include "bpvm_internal.h"  /* V7/H10, el RUN común: el latido mira los hilos */
+#include "bpvm_dbg_wire.h"  /* V7/H10, el RUN común: el depurador, común */
+#include "bpvm_mdn_scan.h"  /* V7/H10, el RUN común: el escáner de .mdn */
+#include "aot_registry.h"   /* V7/H10, el RUN común: vaciar y contar el registro AOT */
 
 #include <stdio.h>
 #include <string.h>
@@ -1711,4 +1715,326 @@ int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
         return 1;
     }
     return 0;   /* no es del común: la familia sigue con su cadena */
+}
+
+
+/* ═════════════════════ V7/H10 — EL RUN, EN UN SOLO SITIO (el RUN común, paso 2; 3-oct) ═════════════════════
+ *
+ * Estaba escrito cuatro veces —la Pico, la ESP32, la STM32 y el micro simulado— y cada copia fallaba a su manera
+ * (`V7_IDEAS` §H10 «RUN en un solo sitio»): el exitCode de un fallo de carga, el texto del KILL (dos anteponían una
+ * excepción VIEJA), los avisos dentro de OUTPUT, el sink que tiraba o cortaba, el KILL que se podía perder entre
+ * arrancar `io` y `bpvm_run`. Aquí, una vez, con las reglas de Eduardo (2-oct). La cintura, en bpvm_repl.h.
+ *
+ * El estado es de UN RUN a la vez (la sesión lo guarda): estáticos, y lo dice. */
+static long             s_run_sesion    = 0;      /* la sesión en curso; 0 = ninguna */
+static long             s_run_siguiente = 1;
+static long             s_run_kill      = -1;     /* el id del KILL recibido durante el RUN */
+static long             s_run_reset     = -1;     /* el del RESET */
+static int              s_run_latido    = 0;
+static bpvm_t*          s_run_vm        = NULL;   /* la VM del RUN: la ven el poll y el depurador */
+static wire_v1_salida_t s_run_salida;
+
+int bpvm_repl_run_activo(void) { return s_run_sesion != 0; }
+
+static const bpvm_repl_run_ops_t* run_ops(void) { return s_ops ? s_ops->run : NULL; }
+
+/* La salida del programa: la llaman `io` (por líneas) y la VM si `io` no arrancó. El sink común (wire_v1_proto.c). */
+static void run_salida(const char* s, size_t n, void* user) {
+    wire_v1_salida((wire_v1_salida_t*) user, s, n);
+}
+
+/* V5/H4 — EL LATIDO (era de la Pico; desde el RUN común, de todas: `latido=1` en el ENV). Cada 256 vueltas del poll,
+ * el pc y el estado de cada hilo vivo, al log: para un cuelgue, dónde está girando. */
+static void run_latido(bpvm_t* vm) {
+    static unsigned n = 0;
+    if ((n++ & 0xFFu) != 0) return;
+    for (int i = 0; i < BPVM_MAX_THREADS; i++) {
+        if (vm->threads[i].status == BPVM_THREAD_TERMINATED) continue;
+        log_printf("latido: th%d pc=%lu estado=%d", i, (unsigned long) vm->threads[i].pc, (int) vm->threads[i].status);
+    }
+}
+
+/* EL POLL, durante el RUN: lo llama `io` en cada vuelta (y la VM entre cuantos si `io` no arrancó).
+ *   KILL / RESET  → se apunta su id y devuelve 1: el programa para. Y desde ahí, PEGAJOSO: devuelve 1 en cada vuelta
+ *                   sin leer más —`preparar_run` borra la bandera al empezar, y un KILL que llegara entre arrancar `io`
+ *                   y `bpvm_run` se perdía (V7_IDEAS: «el poll, pegajoso»)—;
+ *   HELLO         → se contesta al vuelo (el IDE puede conectar con algo corriendo y ofrecer Stop);
+ *   STAT, GET y LIST troceados → se atienden (#495, paso 4);
+ *   el depurador  → a la cola de control, de donde lo saca el lazo de pausa (un solo lector del cable, A1.7);
+ *   lo demás      → BUSY. */
+static int run_poll(void* user) {
+    const bpvm_repl_run_ops_t* r = run_ops();
+    (void) user;
+    if (s_run_latido && s_run_vm) run_latido(s_run_vm);
+    (void) bpvm_repl_paso();                    /* #495 (paso 4): un trozo de lo que se esté mandando */
+    if (s_run_kill >= 0 || s_run_reset >= 0) return 1;
+    if (!r || !r->leer_linea) return 0;
+    int n = r->leer_linea(r->linea, r->linea_cap);
+    if (n == 0) return 0;
+    if (n < 0) return 1;                        /* el cable se ha ido: el programa se para */
+    json_obj_t obj;
+    if (json_parse(r->linea, (size_t) n, &obj) != 0) return 0;
+    char type[24] = {0};
+    json_get_str(&obj, "type", type, sizeof type);
+    long rid = json_get_long(&obj, "id", 0);
+    if (strcmp(type, "KILL") == 0)  { s_run_kill = rid;  return 1; }
+    if (strcmp(type, "RESET") == 0) { s_run_reset = rid; return 1; }
+    if (strcmp(type, "HELLO") == 0) {
+        bpvm_repl_antes_de_despachar(type);     /* #495 (paso 4): lo que se mandaba al cliente de antes, cortado */
+        (void) bpvm_repl_dispatch(type, rid, &obj);
+        return 0;
+    }
+    if (bpvm_repl_atiende_en_run(type, &obj)) { (void) bpvm_repl_dispatch(type, rid, &obj); return 0; }
+    if (bpvm_dbg_wire_kind(type) != BPVM_DBGC_OTHER && s_run_vm && bpvm_io_running(s_run_vm)) {
+        if (bpvm_io_ctrl_push(s_run_vm, r->linea, (size_t) n) == 0) return 0;
+        /* no cupo: se contesta como siempre, que es mejor que el silencio */
+    }
+    wire_v1_send_error(rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
+    return 0;
+}
+static int run_poll_vm(bpvm_t* vm, void* user) { (void) vm; return run_poll(user); }
+
+/* EL DEPURADOR, su cintura (era la de la Pico y la ESP32, idéntica). Las respuestas salen con el cerrojo del cable
+ * de `io` (un escritor a la vez: `io` puede estar mandando la salida del programa). */
+static void run_dbg_manda(const char* line, size_t len, void* user) {
+    (void) user;
+    bpvm_io_tx_lock(s_run_vm);
+    wire_v1_send_line(line, len);
+    bpvm_io_tx_unlock(s_run_vm);
+}
+
+static int run_dbg_siguiente(bpvm_dbg_cmd_t* out, void* user) {
+    const bpvm_repl_run_ops_t* r = run_ops();
+    (void) user;
+    int n;
+    if (!r) return -1;
+    if (s_run_vm && bpvm_io_running(s_run_vm)) {
+        /* con `io`, el cable es suyo: el comando llega por la cola de control (espera acotada: el lazo de pausa mira
+         * el KILL en cada vuelta, #634) */
+        n = (int) bpvm_io_ctrl_pop(s_run_vm, r->dbg_linea, r->dbg_linea_cap, 200);
+    } else {
+        /* sin `io` (no arrancó): se lee el cable desde aquí, sin esperar */
+        n = r->leer_linea(r->dbg_linea, r->dbg_linea_cap);
+        if (n == 0) { bpvm_platform_thread_sleep_ms(20); return -1; }
+        if (n < 0)  { if (s_run_vm) bpvm_request_kill(s_run_vm); return -1; }
+    }
+    if (n <= 0) return -1;
+    json_obj_t o;
+    if (json_parse(r->dbg_linea, (size_t) n, &o) != 0) return -1;
+    char type[40];
+    if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
+    out->kind = bpvm_dbg_wire_kind(type);
+    out->id   = json_get_long(&o, "id",    0);
+    out->pc   = json_get_long(&o, "pc",   -1);
+    out->bpId = json_get_long(&o, "bpId", -1);
+    out->addr = json_get_long(&o, "addr", -1);
+    out->ref  = json_get_long(&o, "ref",   0);
+    if (out->kind == BPVM_DBGC_KILL) s_run_kill = out->id;   /* su KILL_REPLY, como el de `io` */
+    return 0;
+}
+
+static bpvm_dbg_wire_t s_run_dbgw = { run_dbg_siguiente, run_dbg_manda, NULL, NULL, 0, 0 };
+
+static void run_dbg_prepara(void) {
+    const bpvm_repl_run_ops_t* r = run_ops();
+    s_run_dbgw.reply     = r ? r->mensaje : NULL;
+    s_run_dbgw.reply_cap = r ? r->mensaje_cap : 0;
+}
+
+int bpvm_repl_depurador_previo(const char* type, long id, json_obj_t* obj) {
+    bpvm_dbg_cmd_t c;
+    if (!run_ops() || !run_ops()->mensaje) return 0;
+    memset(&c, 0, sizeof c);
+    c.kind = bpvm_dbg_wire_kind(type);
+    if (c.kind == BPVM_DBGC_OTHER) return 0;
+    c.id   = id;
+    c.pc   = json_get_long(obj, "pc",   -1);
+    c.bpId = json_get_long(obj, "bpId", -1);
+    c.addr = json_get_long(obj, "addr", -1);
+    c.ref  = json_get_long(obj, "ref",   0);
+    run_dbg_prepara();
+    return bpvm_dbg_wire_handle(&s_run_dbgw, &c);
+}
+
+/* Los avisos del escáner de `.mdn`: al LOG, no a OUTPUT, que es del programa (regla del 2-oct). */
+static void run_mdn_decir(void* user, const char* msg) {
+    (void) user;
+    log_printf("%s", msg);
+}
+
+/* EL EXITED, UNO: los campos en el orden de siempre, y el mensaje recortado si no cabe (#557: sale SIEMPRE). */
+static void run_exited(long sesion, const char* estado, int codigo, unsigned long ms, const char* msg) {
+    const bpvm_repl_run_ops_t* r = run_ops();
+    char*  b   = r->mensaje;
+    size_t cap = r->mensaje_cap;
+    int off = wire_v1_msg_begin_event(b, cap, 0, "EXITED");
+    if (off >= 0) off = wire_v1_field_long(b, cap, (size_t) off, "session", sesion);
+    if (off >= 0) off = wire_v1_field_string(b, cap, (size_t) off, "status", estado);
+    if (off >= 0) off = wire_v1_field_long(b, cap, (size_t) off, "exitCode", codigo);
+    if (off >= 0) off = wire_v1_field_long(b, cap, (size_t) off, "elapsedMs", (long) ms);
+    if (off >= 0) off = wire_v1_field_long(b, cap, (size_t) off, "nativos", (long) bpvm_aot_count());
+    if (msg && msg[0] && off >= 0) off = wire_v1_field_string_recortado(b, cap, (size_t) off, "errorMessage", msg, 1);
+    if (off >= 0) off = wire_v1_msg_end(b, cap, (size_t) off);
+    if (off >= 0) wire_v1_send_line(b, (size_t) off);
+    else          wire_v1_send_cstr("{\"type\":\"EXITED\",\"status\":\"INTERNAL_ERROR\",\"exitCode\":3}");
+}
+
+void bpvm_repl_run(long id, const char* path, const char* arg) {
+    const bpvm_repl_run_ops_t* r = run_ops();
+    if (!r || !r->memoria || !r->leer_linea || !r->mensaje || !r->reiniciar) {
+        if (id >= 0) wire_v1_send_error(id, "UNSUPPORTED", "RUN: a la cintura de esta familia le falta una pieza");
+        return;
+    }
+    if (!path || !path[0]) {
+        if (id >= 0) wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
+        return;
+    }
+    if (s_run_sesion != 0) {
+        if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
+        else         log_printf("autorun: BUSY (sesión activa) — ignorado");
+        return;
+    }
+    /* H19-F1 — la carpeta del proyecto (si el módulo vive en /app/<proj>/) y la ruta del principal. */
+    bpvm_fs_set_basedir_from_module(path);
+    /* V5/H4 — los motores nativos ANTES de resolver: si el programa usa una API de pack, tiene que estar publicada
+     * cuando llegue la primera llamada (en el RUN y no en el arranque: Eduardo, 7-ago). */
+    if (r->cargar_motores) r->cargar_motores();
+    {
+        char real[BPVM_FS_PATH_MAX];
+        uint32_t tam = 0;
+        if (bpvm_entry_resolve(path, real, sizeof real, &tam) != 0) {
+            if (id >= 0) wire_v1_send_error(id, "NOT_FOUND", "fichero no existe");
+            else {
+                log_printf("autorun: %s: fichero no existe — REPL normal", path);
+                if (r->led) r->led(-1);
+            }
+            return;
+        }
+    }
+
+    long sesion = s_run_siguiente++;
+    s_run_sesion = sesion;
+    if (id >= 0) {   /* el RUN_REPLY con la sesión, ANTES de ejecutar: el cliente sabe que se aceptó */
+        int off = wire_v1_msg_begin(r->mensaje, r->mensaje_cap, 0, "RUN_REPLY", id);
+        if (off >= 0) off = wire_v1_field_long(r->mensaje, r->mensaje_cap, (size_t) off, "session", sesion);
+        if (off >= 0) off = wire_v1_msg_end(r->mensaje, r->mensaje_cap, (size_t) off);
+        if (off >= 0) wire_v1_send_line(r->mensaje, (size_t) off);
+    }
+
+    /* La VM: el bloque de la familia, con el reparto común (bpvm_stack_region_bytes). */
+    uint8_t* base = NULL;
+    size_t   bytes = 0;
+    bpvm_t*  vm = NULL;
+    if (r->memoria(&base, &bytes) == 0 && base && bytes > 0) {
+        size_t pilas = bpvm_stack_region_bytes(bytes);
+        log_printf("vm: memoria %u KB -> heap %u KB + pilas %u KB", (unsigned) (bytes >> 10),
+                   (unsigned) ((bytes - pilas) >> 10), (unsigned) (pilas >> 10));
+        vm = bpvm_init(base, bytes, bytes - pilas);
+    } else {
+        log_printf("run: sin memoria planificada para la VM — no se ejecuta");
+    }
+    if (!vm) {
+        if (r->led) r->led(-1);
+        run_exited(sesion, "INTERNAL_ERROR", -1, 0, "no se pudo inicializar la VM");
+        s_run_sesion = 0;
+        return;
+    }
+    bpvm_set_run_arg(vm, arg);                 /* V6/#412: lo recoge __runArg antes de entrar en Main */
+    wire_v1_salida_inicia(&s_run_salida, sesion);
+    bpvm_set_output(vm, run_salida, &s_run_salida);
+    if (r->led) r->led(1);
+
+    /* [V6/N1.4] El registro AOT se vacía ANTES de cargar: un .mod con su bloque nativo dentro registra sus thunks
+     * mientras se carga, y vaciar después los borraba. */
+    bpvm_aot_clear();
+    bpvm_entry_t entry;
+    memset(&entry, 0, sizeof entry);
+    bpvm_status_t ls = bpvm_load_entry(vm, path, &entry);
+    if (ls != BPVM_OK) {
+        /* REGLA (2-oct): exitCode 2 —el «no se pudo cargar» de la tabla común y del CLI— y el porqué con su prefijo:
+         * «falta el modulo 'X'» (y el consejo de la familia, si lo da), «load: <fallo>» o «load: <estado>». */
+        char emsg[sizeof entry.fallo + 192];
+        const char* consejo = r->consejo_falta ? r->consejo_falta() : NULL;
+        if (entry.missing[0])
+            snprintf(emsg, sizeof emsg, "falta el modulo '%s'%s%s", entry.missing,
+                     consejo ? ": " : "", consejo ? consejo : "");
+        else if (entry.fallo[0]) snprintf(emsg, sizeof emsg, "load: %s", entry.fallo);
+        else                     snprintf(emsg, sizeof emsg, "load: %s", bpvm_status_str(ls));
+        log_printf("run: %s no carga: %s", path, emsg);
+        if (r->led) r->led(-1);
+        run_exited(sesion, "RUNTIME_ERROR", 2, 0, emsg);
+        bpvm_destroy(vm);
+        s_run_sesion = 0;
+        return;
+    }
+    if (entry.from_pack) log_printf("run: pack '%s' (main=%s)", entry.resolved, entry.main_module);
+
+    /* #355 — el interruptor del recolector, por el ENV (`gc=0`; por defecto encendido). Era sólo de la Pico. */
+    if (r->env_bool && !r->env_bool("gc", 1)) {
+        bpvm_set_gc_enabled(vm, 0);
+        log_printf("run: GC DESACTIVADO por el ENV (gc=0) — memoria de un solo uso");
+    }
+    if (r->tras_cargar) r->tras_cargar(vm);
+    /* [V7/H2, #493] el `.mdn` de cada módulo, del FS o del pack, con el bucle común; de la familia, traerlo del FS. */
+    (void) bpvm_mdn_escanear(vm, r->mdn_del_fs, run_mdn_decir, vm);
+    s_run_latido = r->env_bool ? r->env_bool("latido", 0) : 0;
+    if (s_run_latido) log_printf("latido: ENCENDIDO (ENV latido=1)");
+    if (r->antes_de_correr) r->antes_de_correr(vm);
+
+    /* El depurador: si el cliente dejó breakpoints o pidió PAUSE antes del RUN, los pendientes y el pause_cb. */
+    int depurando = bpvm_dbg_wire_armed();
+    run_dbg_prepara();
+    s_run_dbgw.session = sesion;
+    s_run_vm = vm;
+    if (depurando) {
+        bpvm_dbg_wire_arm(&s_run_dbgw, vm);
+        log_printf("run: con el depurador");
+    }
+    s_run_kill  = -1;
+    s_run_reset = -1;
+    bpvm_set_poll(vm, run_poll_vm, NULL);      /* sólo si `io` no arranca: con `io`, el cable es suyo */
+    bpvm_io_ops_t io_ops = { run_poll, run_salida, &s_run_salida };
+    int con_io = bpvm_io_start(vm, &io_ops, (size_t) r->io_cola) == 0;
+
+    log_printf("run: %s, sesión %ld", path, sesion);
+    /* REGLA (2-oct): elapsedMs, de `bpvm_run` a parar `io` (la última línea del programa, ya fuera). */
+    int64_t t0 = bpvm_platform_now_ms();
+    bpvm_status_t rs = r->correr ? (bpvm_status_t) r->correr(vm, depurando) : bpvm_run(vm);
+    /* Parar `io` ANTES de nada más: drena la cola entera, y el cable vuelve a ser de esta tarea (KILL_REPLY y EXITED). */
+    if (con_io) bpvm_io_stop(vm);
+    unsigned long dt = (unsigned long) (bpvm_platform_now_ms() - t0);
+    wire_v1_salida_cierra(&s_run_salida);      /* un carácter que se quedó a medias: U+FFFD, no se tira */
+    bpvm_set_poll(vm, NULL, NULL);
+    s_run_vm = NULL;
+    if (r->led) r->led((rs == BPVM_OK || rs == BPVM_KILLED) ? 0 : -1);
+
+    log_printf("run: %s acabó: %s", path,
+               (rs == BPVM_KILLED && s_run_reset >= 0) ? BPVM_REPL_MSG_RESET : bpvm_status_str(rs));
+    /* P-run-stop — el ack del KILL, diferido: KILL_REPLY y después EXITED (orden estable para el cliente). */
+    if (s_run_kill >= 0) { wire_v1_send_reply_empty("KILL_REPLY", s_run_kill); s_run_kill = -1; }
+
+    /* EL EXITED, UNA REGLA (2-oct): OK, sin mensaje; KILLED, el del RESET o el del KILL —NUNCA el de una excepción
+     * vieja: `rt_err` se escribe en cada throw, también en los atrapados—; LINK_ERROR, el de enlace; el resto, el
+     * detalle de la excepción o el nombre del estado. */
+    const char* link_err = bpvm_link_error(vm);
+    const char* rt_err   = bpvm_runtime_error(vm);
+    const char* estado;
+    const char* msg;
+    if (rs == BPVM_OK)            { estado = "OK";            msg = NULL; }
+    else if (rs == BPVM_KILLED)   { estado = "KILLED";        msg = (s_run_reset >= 0) ? BPVM_REPL_MSG_RESET : bpvm_status_str(rs); }
+    else if (link_err[0])         { estado = "LINK_ERROR";    msg = link_err; }
+    else                          { estado = "RUNTIME_ERROR"; msg = rt_err[0] ? rt_err : bpvm_status_str(rs); }
+    run_exited(sesion, estado, bpvm_exit_code(rs), dt, msg);
+
+    if (r->despues_de_correr) r->despues_de_correr(vm);
+    bpvm_destroy(vm);
+    s_run_sesion = 0;
+    bpvm_dbg_wire_reset();                     /* la siguiente sesión de depuración parte limpia */
+
+    /* V6/E1 (#452) — el RESET pedido durante el RUN, servido AHORA: el EXITED ya salió. */
+    if (s_run_reset >= 0) {
+        long rid = s_run_reset;
+        s_run_reset = -1;
+        r->reiniciar(rid);
+    }
 }
