@@ -17,7 +17,8 @@
 #include "json_min.h"
 #include "fs.h"
 #include "bpvm_fs.h"   /* H19-F1: base-dir por proyecto (bpvm_fs_set_basedir_from_module) */
-#include "bpvm_repl.h"     /* V6/U3: el REPL comun + la cintura de familia */
+#include "bpvm_repl.h"
+#include "bpvm_env.h"          /* V7/H10: gc y latido, del ENV, para el RUN común */     /* V6/U3: el REPL comun + la cintura de familia */
 
 #include "bpvm.h"
 #include "bpvm_internal.h"   /* recorrido de vm->modules[] para los .mdn del AOT */
@@ -881,14 +882,74 @@ static void run_module_path(const char* path, long id, const char* arg) {
     }
 }
 
+/* ── V7/H10, el RUN común, paso 5 (3-oct): LA CINTURA DE LAS ESP32 ────────────────────────────────────────────────
+ * Lo que es suyo de verdad: el bloque de la VM, el cable leído sin esperar (UART o USB-Serial-JTAG), sus búferes (uno
+ * por rol, A1.7), el reinicio, los motores nativos, el `.mdn` del FS a RAM EJECUTABLE (con su coherencia de cachés),
+ * `esp_aot_register` tras cargar —en su fichero, por el enlazador: en el P4 es el fuerte, en las demás el weak— y,
+ * después, devolver esa RAM y la línea `mem:` (la marca de agua de la DRAM interna, #336). */
+static int esp32_run_memoria(uint8_t** base, size_t* bytes) {
+    if (!s_vm_buffer || s_vm_buffer_size == 0) return -1;
+    *base = s_vm_buffer;
+    *bytes = (size_t) s_vm_buffer_size;
+    return 0;
+}
+static int esp32_run_leer_linea(char* buf, size_t cap) {
+    int c = wire_v1_try_getchar();
+    if (c < 0) return 0;
+    int n = wire_v1_recv_line(c, buf, cap);
+    return (n < 0) ? 0 : n;                     /* rota: se descarta */
+}
+static void esp32_run_reiniciar(long id) { handle_reset(id, NULL); }
+static void esp32_run_tras_cargar(bpvm_t* vm) {
+    esp_aot_register(vm);
+#if BPVM_ESP_AOT_MDN
+    s_mdn_exec_n = 0;                           /* la RAM ejecutable de los .mdn de ESTE RUN */
+#endif
+}
+static void esp32_run_despues(bpvm_t* vm) {
+    (void) vm;
+#if BPVM_ESP_AOT_MDN
+    for (int k = 0; k < s_mdn_exec_n; k++) heap_caps_free(s_mdn_exec[k]);
+    s_mdn_exec_n = 0;
+#endif
+    log_printf("mem: DRAM interna libre %u B | MINIMO HISTORICO %u B (bloque mayor %u B)",
+               (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+               (unsigned) heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
+               (unsigned) heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
+    log_flush();
+}
+static int esp32_run_env_bool(const char* clave, int defecto) {
+    return bpvm_env_get_bool(board_mgr_env(), clave, defecto);
+}
+
+static const bpvm_repl_run_ops_t s_run_ops = {
+    .memoria           = esp32_run_memoria,
+    .leer_linea        = esp32_run_leer_linea,
+    .linea             = s_line_buf,  .linea_cap     = sizeof s_line_buf,
+    .dbg_linea         = s_dbg_buf,   .dbg_linea_cap = sizeof s_dbg_buf,
+    .mensaje           = s_reply_buf, .mensaje_cap   = sizeof s_reply_buf,
+    .reiniciar         = esp32_run_reiniciar,
+    .cargar_motores    = packs_cargar_una_vez,
+#if BPVM_ESP_AOT_MDN
+    .mdn_del_fs        = esp32_mdn_del_fs,
+#endif
+    .tras_cargar       = esp32_run_tras_cargar,
+    .despues_de_correr = esp32_run_despues,
+    .env_bool          = esp32_run_env_bool,
+    .io_cola           = ESP32_IO_OQ_BYTES,
+};
+static bpvm_repl_ops_t s_repl_ops;   /* la cintura del REPL, más abajo: su `.run` elige el RUN */
+
 static void handle_run(long id, json_obj_t* obj) {
     const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
-    if (path == NULL) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'"); return;
-    }
     /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
      * NULL, y manda el valor por defecto que declare el fuente. */
     const char* arg = json_str_inplace(obj, "arg");
+    /* V7/H10, el RUN común, paso 5 (3-oct): con la cintura puesta, el RUN es el común. */
+    if (s_repl_ops.run) { bpvm_repl_run(id, path, arg); return; }
+    if (path == NULL) {
+        wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'"); return;
+    }
     run_module_path(path, id, arg);
 }
 
@@ -950,7 +1011,8 @@ void repl_esp32_autorun(void) {
         printf("[autorun] CANCELADO por el usuario — REPL normal\n");
         return;
     }
-    run_module_path(path, -1, NULL);   /* autorun: sin argumento, manda el defecto */
+    if (s_repl_ops.run) bpvm_repl_run(-1, path, NULL);   /* V7/H10: el RUN común; sin argumento, manda el defecto */
+    else                run_module_path(path, -1, NULL);
     printf("[autorun] terminado — REPL normal\n");
 }
 
@@ -1081,6 +1143,7 @@ static uint32_t esp32_image_crc(void) {
 }
 
 static bpvm_repl_ops_t s_repl_ops = {
+    .run            = &s_run_ops,     /* V7/H10, el RUN común, paso 5: NULL = el RUN de siempre (run_module_path) */
     .info           = esp32_repl_info,
     .image_crc      = esp32_image_crc,
     .server_name    = "bpvm-esp32",   /* se pisa en repl_esp32_run con el real */
@@ -1222,7 +1285,9 @@ static void handle_request(const char* line, int len) {
     /* #326 DEPURACIÓN pre-RUN: acumular breakpoints / pedir pausa inicial. Los
      * demás (CONTINUE, STEP, LOCALS, STACK, READ_*) los atiende el bucle de
      * pausa del núcleo INLINE, mientras la VM está detenida. */
-    {
+    if (s_repl_ops.run) {
+        if (bpvm_repl_depurador_previo(type, id, &obj)) return;   /* V7/H10: el depurador común */
+    } else {
         bpvm_dbg_cmd_t c;
         dbgw_cmd_from_json(&c, id, &obj, type);
         if (c.kind != BPVM_DBGC_OTHER && bpvm_dbg_wire_handle(&s_dbgw, &c)) return;

@@ -1889,6 +1889,11 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
         if (id >= 0) wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
         return;
     }
+    /* La ruta, COPIADA: en las placas apunta dentro del búfer de línea del REPL, y ése es el que lee `io` durante el
+     * RUN (`linea` de la cintura): un HELLO a mitad de programa la pisaría antes del log del final. */
+    char ruta[BPVM_FS_PATH_MAX];
+    snprintf(ruta, sizeof ruta, "%s", path);
+    path = ruta;
     if (s_run_sesion != 0) {
         if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
         else         log_printf("autorun: BUSY (sesión activa) — ignorado");

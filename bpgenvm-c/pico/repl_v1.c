@@ -1121,15 +1121,81 @@ static void run_module_path(const char* path, long id, const char* arg) {
     }
 }
 
+/* ── V7/H10, el RUN común, paso 4 (3-oct): LA CINTURA DE LA PICO ──────────────────────────────────────────────────
+ * Lo que es suyo de verdad: el bloque de la VM, el USB leído sin esperar, sus búferes (uno por rol, A1.7), el
+ * reinicio, los motores nativos, el `.mdn` del FS a la arena, la lista de módulos y el testigo del MPU antes de correr,
+ * su SMP (si el build lo pide) y, después, desarmar el MPU y la línea `mem:`. El latido y `gc=0`, que eran suyos, son
+ * ahora del común (en las cuatro, por el ENV). */
+static int pico_run_memoria(uint8_t** base, size_t* bytes) {
+    if (!s_vm_buffer || s_vm_buffer_size == 0) return -1;
+    *base = (uint8_t*) s_vm_buffer;
+    *bytes = (size_t) s_vm_buffer_size;
+    return 0;
+}
+static int pico_run_leer_linea(char* buf, size_t cap) {
+    int c = getchar_timeout_us(0);
+    if (c < 0) return 0;
+    int n = wire_v1_recv_line(c, buf, cap);
+    return (n < 0) ? 0 : n;                     /* rota: se descarta */
+}
+static void pico_run_reiniciar(long id) { handle_reset(id, NULL); }
+static void pico_run_antes(bpvm_t* vm) {
+    /* V5/H4 — qué módulos hay y de dónde salieron, antes de arrancar */
+    log_printf("modulos cargados: %d", vm->module_count);
+    for (int mi = 0; mi < vm->module_count; mi++)
+        log_printf("  [%d] %-12s %s cb=0x%08lX main=%ld", mi, vm->modules[mi].name,
+                   vm->modules[mi].en_pack ? "PACK" : "FS  ", (unsigned long) vm->modules[mi].cb,
+                   (long) vm->modules[mi].main_offset);
+    /* #440 — el testigo del MPU, detrás del ENV `mpu=1`, por el gancho post-enlace (ver run_module_path) */
+    if (board_env_bool("mpu", 0)) bpvm_set_after_link_hook(mpu_armar_tras_enlace);
+    log_printf("AOT: scan done, about to bpvm_run");
+    log_flush();   /* CHECKPOINT: lo que cuelgue después es la ejecución */
+}
+static int pico_run_correr(bpvm_t* vm, int depurando) {
+#if defined(BPVM_PICO_SMP_WORKERS) && BPVM_PICO_SMP_WORKERS >= 1
+    /* H2 Pico — el planificador de varios trabajadores, salvo depurando (el pause_cb, en la tarea de la VM) */
+    if (!depurando) {
+        log_printf("RUN/v1: SMP path n_workers=%d", BPVM_PICO_SMP_WORKERS);
+        return (int) bpvm_run_smp(vm, BPVM_PICO_SMP_WORKERS);
+    }
+#endif
+    (void) depurando;
+    return (int) bpvm_run(vm);
+}
+static void pico_run_despues(bpvm_t* vm) {
+    (void) vm;
+    { extern void bpvm_pico_mpu_desarmar(void); bpvm_pico_mpu_desarmar(); }   /* #440: SIEMPRE */
+    { extern void bpvm_pico_mem_log(void); bpvm_pico_mem_log(); }             /* V7/H7: la línea `mem:` */
+}
+
+static const bpvm_repl_run_ops_t s_run_ops = {
+    .memoria           = pico_run_memoria,
+    .leer_linea        = pico_run_leer_linea,
+    .linea             = s_line_buf,  .linea_cap     = sizeof s_line_buf,
+    .dbg_linea         = s_dbg_buf,   .dbg_linea_cap = sizeof s_dbg_buf,
+    .mensaje           = s_reply_buf, .mensaje_cap   = sizeof s_reply_buf,
+    .reiniciar         = pico_run_reiniciar,
+    .cargar_motores    = packs_cargar_una_vez,
+    .mdn_del_fs        = pico_mdn_del_fs,
+    .antes_de_correr   = pico_run_antes,
+    .correr            = pico_run_correr,
+    .despues_de_correr = pico_run_despues,
+    .env_bool          = board_env_bool,
+    .io_cola           = PICO_IO_OQ_BYTES,
+};
+static const bpvm_repl_ops_t s_repl_ops;   /* la cintura del REPL, más abajo: su `.run` elige el RUN */
+
 static void handle_run(long id, json_obj_t* obj) {
     const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
+    /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
+     * NULL, y manda el valor por defecto que declare el fuente. */
+    const char* arg = json_str_inplace(obj, "arg");
+    /* V7/H10, el RUN común, paso 4 (3-oct): con la cintura puesta, el RUN es el común. */
+    if (s_repl_ops.run) { bpvm_repl_run(id, path, arg); return; }
     if (path == NULL) {
         wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
         return;
     }
-    /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
-     * NULL, y manda el valor por defecto que declare el fuente. */
-    const char* arg = json_str_inplace(obj, "arg");
     run_module_path(path, id, arg);
 }
 
@@ -1220,7 +1286,8 @@ void repl_v1_autorun(void) {
         log_printf("autorun: CANCELADO por el usuario (Stop) — REPL normal");
         return;
     }
-    run_module_path(path, -1, NULL);   /* autorun: sin argumento, manda el defecto */
+    if (s_repl_ops.run) bpvm_repl_run(-1, path, NULL);   /* V7/H10: el RUN común; sin argumento, manda el defecto */
+    else                run_module_path(path, -1, NULL);
     log_printf("autorun: terminado — REPL normal");
 }
 
@@ -1254,6 +1321,7 @@ static uint32_t pico_image_crc(void) {
 }
 
 static const bpvm_repl_ops_t s_repl_ops = {
+    .run            = &s_run_ops,     /* V7/H10, el RUN común, paso 4: NULL = el RUN de siempre (run_module_path) */
     .info           = pico_repl_info,
     .image_crc      = pico_image_crc,
     .info_extra     = pico_repl_info_extra,
@@ -1396,7 +1464,9 @@ void repl_v1_handle_request(int first_char) {
      * inicial. Durante un RUN en modo debug, los comandos READ_INT,
      * READ_STRING, LOCALS, STACK, CONTINUE y STEP los atiende el bucle de
      * pausa del NÚCLEO (bpvm_dbg_wire) inline mientras la VM esta pausada. */
-    {
+    if (s_repl_ops.run) {
+        if (bpvm_repl_depurador_previo(type, id, &obj)) return;   /* V7/H10: el depurador común */
+    } else {
         bpvm_dbg_cmd_t c;
         dbgw_cmd_from_json(&c, id, &obj, type);
         if (c.kind != BPVM_DBGC_OTHER && bpvm_dbg_wire_handle(&s_dbgw, &c)) return;
