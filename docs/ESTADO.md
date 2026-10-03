@@ -1120,6 +1120,14 @@ la C6, la P4 y la Nucleo.
   con sus carpetas. A
   pregunta de Eduardo, los hilos de FreeRTOS en la C6: `main` (el REPL y la VM, 16 KB) e `io` (6 KB, sólo durante un
   RUN), y del IDF `IDLE`, `esp_timer` y —hasta H13— `Tmr Svc`.
+- **El traspaso** (pausa de Eduardo: *«después, a ver qué podemos cerrar»*). Abierto en H10: el `board_mgr` común
+  (`#636`–`#638`, con las decisiones de Eduardo del mediodía: `V7_IDEAS` §H10; sus pasos 0 a 7, el 0 sin cambio de
+  conducta). Riesgos y notas: la C6 con la GUI va AL LÍMITE (476 B de mínimo histórico tras `GuiArbolG2`) y lo que
+  queda en un bloque es el array de registros de la tabla (8 B por símbolo: al pasar de 512 pide 4 KB seguidos; en
+  `GuiShot` no cupo y se perdieron nombres que no usa); la TF de la C6 «no contesta» desde el arranque (¿puesta?); la
+  Pico, el P4 y la Discovery llevan `#639` (1) —les llega el (3) con el próximo lote; a ellas no les cambia nada—; y la
+  C3 y la C6 comparten COM3 cuando están las dos (una a una, o re-enchufar la que quede). Antes de grabar una ESP:
+  `nm_paginas.py` (scratchpad) con el `.elf` grabado y el nuevo; tras grabar, `STATE` (`casi`) además del `imageCrc`.
 - **Commits** (sin push): `6e5b526f` (los `.npk` de G2 y `GuiArbolG2` en la tanda) · `a426fb8c` (H13, el hito) ·
   `fd03af31` (`#639`) · `5c2d6bb0` (el paso 6) · `57452355` (`#639` 2) · `db0c0150` (H13, las opciones) · `f3fbc52c`
   (`#639` 3, los trozos).
