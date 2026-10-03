@@ -856,8 +856,8 @@ test-aotkill: $(LIBOBJ)
 	$(call aotmain,NatKill,build/aotkill)
 	$(CC) $(CFLAGS) -Isrc test/test_aotkill.c build/aotkill/aot_NatKill.c $(LIBOBJ) \
 	  -o build/test_aotkill.exe $(LDFLAGS)
-	@echo "--- P2b.1.d el kill de una native en un bucle sin fin (esperado: los dos KILLED, [status=OK]) ---"
-	@timeout 60 ./build/test_aotkill.exe samples/NatKill.mod 2>/dev/null || { echo "  ROJO: el kill no llegó (¿colgado? lo cortó el tope)"; exit 1; }
+	@echo "--- P2b.1.d el kill de una native en un bucle sin fin (esperado: las tres KILLED —la 3ª sin ejecutor, #640—, [status=OK]) ---"
+	@timeout 60 ./build/test_aotkill.exe samples/NatKill.mod 2>/dev/null || { echo "  ROJO: alguna pasada no salió KILLED (o el kill no llegó y la cortó el tope)"; exit 1; }
 
 # V7/H5 (P2b.2, 26-sep) — CUALQUIER INTRÍNSECA desde una native, por el despachador de la VM (call_builtin):
 # de Core y de otro módulo, una que lanza y un sleep que suspende la native mientras otro hilo avanza.

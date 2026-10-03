@@ -1535,6 +1535,11 @@ bpvm_status_t bpvm_run(bpvm_t* vm) {
     bpvm_status_t rs = bpvm_scheduler_run(vm);
     lineas_vaciar(vm);   /* V7/H7 #600 */
     cerrar_run(vm);
+    /* #640 (3-oct) — LA BANDERA ES LA VERDAD (#462), también cuando el main muere de una excepción: el kill de una
+     * native que corre SIN EJECUTOR (no cupo el suyo) la para LANZANDO, y sin atrapar el planificador devolvía
+     * RUNTIME_ERROR —«excepcion no atrapada: ... se ha detenido (kill)»— por un programa que se mandó parar. Como en
+     * bpvm_run_smp, que ya lo hacía. `test-aotkill`, la pasada sin ejecutor. */
+    if (vm->kill_requested) return BPVM_KILLED;
     return rs;
 }
 
