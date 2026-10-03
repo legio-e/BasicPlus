@@ -772,19 +772,6 @@ static void free_bufs(void) {
     g_n_bufs = 0;
 }
 
-/* Nombre del módulo dueño de un import ("Gui.Button" → "Gui"). */
-static void import_owner(const char* imp, char* out, size_t cap) {
-    size_t i = 0;
-    while (imp[i] && imp[i] != '.' && i < cap - 1) { out[i] = imp[i]; i++; }
-    out[i] = '\0';
-}
-
-static int module_loaded(const bpvm_t* vm, const char* name) {
-    for (int j = 0; j < vm->module_count; j++)
-        if (strcmp(vm->modules[j].name, name) == 0) return 1;
-    return 0;
-}
-
 /* ── V7/H10, el RUN común, paso 2 (3-oct): LA CINTURA DEL SIMULADO ──────────────────────────────────────────────────
  *
  * El primero que estrena `bpvm_repl_run` (src/bpvm_repl.c). Aquí vivían su RUN, su depurador (#326: el banco de
@@ -874,10 +861,6 @@ static void handle(sock_t c, json_obj_t* obj) {
     long id = json_get_long(obj, "id", -1);
     bpvm_repl_antes_de_despachar(type);   /* #495: un verbo que no convive con una subida a medias, la acaba */
 
-    /* #326 — ramo de depuración (pre-RUN): SET_BP / CLR_BP / PAUSE. El núcleo
-     * acumula y contesta; si no es de su ramo devuelve 0 y seguimos. */
-    if (bpvm_repl_depurador_previo(type, id, obj)) return;   /* V7/H10: el depurador común */
-
     /* U3.24 — EL COMUN PRIMERO. META (HELLO/PING/INFO/TIME/LOG_*) y FILES
      * (LIST, LIST_DIR, STAT, DF, GET, los tres PUT, DEL, MKDIR, RMDIR, RENAME,
      * FORMAT y SAVE) los
@@ -895,11 +878,8 @@ static void handle(sock_t c, json_obj_t* obj) {
         return;
     }
 
-    /* TERMINAL */
-    /* V7/H10, el RUN común, paso 2 (3-oct). Y el KILL sin programa, NO_SESSION como en las placas (regla del 2-oct:
-     * aquí contestaba KILL_REPLY). */
-    if (!strcmp(type, "RUN"))  { bpvm_repl_run(id, json_str_inplace(obj, "path"), json_str_inplace(obj, "arg")); return; }
-    if (!strcmp(type, "KILL")) { wire_v1_send_error(id, "NO_SESSION", "no hay programa en ejecución"); return; }
+    /* TERMINAL y DEBUG — el RUN, el KILL sin programa y el depurador de antes del RUN, en el común (arriba; V7/H10, el
+     * RUN común, paso 6). */
 
     /* --- gestión de placa (STATE, ENV_x, PART_x, PACK_x): NÚCLEO COMPARTIDO con el
      *     firmware. El sim solo parsea el JSON al `req`, despacha, y —si hubo escritura—

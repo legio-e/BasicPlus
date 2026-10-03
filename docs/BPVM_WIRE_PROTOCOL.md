@@ -297,6 +297,10 @@ Request: `{"type":"RESET","id":N}`
 
 Reply: `{"type":"RESET_REPLY","id":N}` + conexión cerrada en <500ms.
 
+Con un programa en marcha (V6/E1, `#452`): el programa para —su `EXITED` sale `KILLED`, «reiniciado por RESET»— y
+DESPUÉS van el `RESET_REPLY` y el reinicio. El micro simulado, que no tiene silicio que reiniciar, contesta y corta la
+conexión.
+
 #### `BOOTSEL` (request, solo Pico)
 
 Entra en modo bootloader. Disponible solo si capability `BOOTSEL`.
@@ -570,13 +574,22 @@ defecto ES la configuración de despliegue**.
 
 Reply: `{"type":"RUN_REPLY","id":N,"session":3}`
 
+**El RUN es UNO** (V7/H10, «el RUN común», 3-oct): las cuatro familias y el micro simulado ejecutan el mismo
+(`bpvm_repl_run`, `src/bpvm_repl.c`), cada una con su cintura —el bloque de la VM, leer el cable, reiniciar, sus
+nativos—, así que los textos de aquí y los del `EXITED` son los mismos en todas. Errores **antes** de arrancar (sin
+sesión ni `EXITED`): `INVALID_PARAM` «falta 'path'»; `NOT_FOUND` «fichero no existe» (la regla común: la carpeta del
+proyecto, la ruta tal cual, `/app`, `/lib`; rutas de hasta 255 caracteres); `BUSY` «ya hay una sesión RUN en curso».
+
 #### `KILL` (request)
 
-Mata un programa en ejecución.
+Mata el programa en ejecución.
 
-Request: `{"type":"KILL","id":N,"session":3}`
+Request: `{"type":"KILL","id":N}` (un `session` que mande el cliente no se mira: hay un RUN a la vez).
 
-Reply: `{"type":"KILL_REPLY","id":N}`
+Con un programa en marcha —también parado en un breakpoint (`#634`)—: `{"type":"KILL_REPLY","id":N}` y, **después**,
+el `EXITED` (`KILLED`, «terminado por KILL»). Sin programa: `ERROR` `NO_SESSION` «no hay programa en ejecución», en las
+cuatro familias y en el simulado (que contestaba `KILL_REPLY` hasta el 3-oct). Un `KILL` que llega mientras el programa
+arranca no se pierde: el poll se queda con él hasta que el programa para.
 
 #### Durante un RUN
 
@@ -600,6 +613,15 @@ Event: `{"type":"OUTPUT","session":3,"data":"hola mundo\n","stream":"stdout"}`
 
 `stream` puede ser `"stdout"` o `"stderr"` (futuro). Por defecto
 stdout.
+
+**Las reglas de la salida** (V7/H10, el sink común `wire_v1_salida`, en `src/wire_v1_proto.c`; 3-oct):
+- **sólo lo del programa**: los avisos del escáner de `.mdn` y del pack van al log de la placa, no aquí;
+- **nada se tira**: una línea larga sale en varias tramas de, como mucho, 1 KB de `data` ya escapado, y ninguna parte
+  un escape (`\u0001`) ni un carácter UTF-8 —el que llega a medias espera a la trama siguiente—; un byte que no es
+  UTF-8 sale como U+FFFD;
+- un NUL sale `\u0000` y la línea sigue (alguna familia cortaba ahí).
+
+El texto de una sesión es la concatenación de los `data` de sus `OUTPUT`, en orden.
 
 #### `PROMPT_REQUEST` (event)
 
@@ -639,12 +661,24 @@ Event:
 Si `status=RUNTIME_ERROR`, también `errorMessage` y opcionalmente
 `stackTrace`.
 
+**La regla del `EXITED`**, una para las cuatro familias y el simulado (V7/H10; Eduardo, 2-oct):
+- `OK`: `exitCode` 0, sin `errorMessage`;
+- un fallo de **carga** (el programa no llegó a correr): `RUNTIME_ERROR`, `exitCode` **2** —el «no se pudo cargar» de
+  la tabla común, el mismo que da el CLI— y `errorMessage` «falta el modulo 'X'» (con un consejo detrás, si la familia
+  lo tiene), «load: <el porqué del cargador>» o «load: <estado>»; sin `OUTPUT` antes;
+- `KILLED` (`exitCode` 130): «terminado por KILL», o «reiniciado por RESET» si lo paró un `RESET` —**nunca** el texto de
+  una excepción vieja: la Pico y la ESP32 anteponían la última que se había lanzado, aunque se hubiera atrapado—;
+- `LINK_ERROR`: el texto del enlace (abajo);
+- el resto, `RUNTIME_ERROR` con el detalle de la excepción, o el nombre del estado;
+- `INTERNAL_ERROR` (`exitCode` -1), «no se pudo inicializar la VM»: la placa no tenía el bloque de la VM.
+
+`elapsedMs` mide de arrancar el programa a que sale su última línea (de `bpvm_run` a parar el hilo `io`).
+
 **El EXITED sale SIEMPRE** (V7, `#557`, 25-sep): si el `errorMessage` no cabe en el
-buffer de la placa (1.024 B en la Pico y el STM32, 2.048 en la ESP32; el error de
-enlace llega a 1.536), va **recortado** en un límite de carácter y terminado en
-`...`. Antes, un mensaje que no cabía se llevaba el EXITED entero por delante, y el
-IDE se quedaba esperando el final de un programa que ya había terminado. El micro
-simulado lo manda siempre entero.
+buffer de la placa (1.024 B en la Pico y el STM32, 2.048 en la ESP32 y en el micro
+simulado; el error de enlace llega a 1.536), va **recortado** en un límite de carácter
+y terminado en `...`. Antes, un mensaje que no cabía se llevaba el EXITED entero por
+delante, y el IDE se quedaba esperando el final de un programa que ya había terminado.
 
 **`nativos`** (V7/H5, 25-sep): los thunks de código nativo (AOT, `.mdn`) que se
 registraron en ESTE RUN —0 si corrió todo interpretado—. Existe porque un

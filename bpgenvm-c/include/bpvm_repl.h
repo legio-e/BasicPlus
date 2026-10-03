@@ -102,9 +102,10 @@ typedef struct {
  * poll, correr, el KILL_REPLY y el EXITED— con las reglas de Eduardo (2-oct, `V7_IDEAS` §H10 «RUN en un solo sitio»):
  * un fallo de carga sale con exitCode 2 y «falta el modulo 'X'», «load: <fallo>» o «load: <estado>»; un KILL o un
  * RESET, con SU texto y nunca el de una excepción vieja; OUTPUT es sólo del programa (los avisos van al log); `gc=0` y
- * `latido=1` por el ENV; y el poll, «pegajoso» con un KILL pedido. Lo que es de verdad de cada familia, aquí. La que
- * pone esta cintura en `bpvm_repl_ops_t.run` le pasa sus RUN (y su autorun, con id < 0); la que no, sigue con el suyo:
- * así se migra una a una y se revierte limpio. */
+ * `latido=1` por el ENV; y el poll, «pegajoso» con un KILL pedido. Lo que es de verdad de cada familia, aquí. Las
+ * cuatro la ponen en `bpvm_repl_ops_t.run` (el paso 6, 3-oct, borró sus RUN viejos tras probar el común en placa): con
+ * ella, el despachador común atiende el RUN, el KILL sin programa y el depurador de antes del RUN, y la familia sólo
+ * llama a `bpvm_repl_run` en su autorun (con id < 0) y le presta `bpvm_repl_autorun_escucha` a la ventana de #345. */
 struct bpvm;
 typedef struct {
     /* ── obligatorios ── */
@@ -205,7 +206,8 @@ typedef struct {
      * ms). NULL = no lo da, y el HELLO va sin el campo. */
     uint32_t (*image_crc)(void);
 
-    /* V7/H10 — el RUN común (arriba). NULL = la familia tiene el suyo. */
+    /* V7/H10 — la cintura del RUN común (arriba). NULL = sin RUN: el despachador común no atiende RUN, KILL ni el
+     * depurador (hoy, ninguna familia). */
     const bpvm_repl_run_ops_t* run;
 } bpvm_repl_ops_t;
 
@@ -280,12 +282,14 @@ int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj);
 void bpvm_repl_cliente_ido(void);
 
 /** V7/H10 — el RUN común (ver `bpvm_repl_run_ops_t`). `id` < 0: el autorun (sin cliente: ni RUN_REPLY, y los errores
- *  de antes de empezar, al log). `arg`: el argumento de ejecución, o NULL. Lo llama la familia que pone `.run`. */
+ *  de antes de empezar, al log). `arg`: el argumento de ejecución, o NULL. Lo llaman el despachador común (el RUN del
+ *  cable) y la familia en su autorun. */
 void bpvm_repl_run(long id, const char* path, const char* arg);
 /** ¿Hay un RUN común en curso? */
 int  bpvm_repl_run_activo(void);
-/** Los comandos del depurador ANTES del RUN (PAUSE, SET_BP, CLR_BP), con el depurador común: 1 si lo atendió. */
-int  bpvm_repl_depurador_previo(const char* type, long id, json_obj_t* obj);
+/** V7/H10 (paso 6) — la `escucha` de la ventana del autorun (#345, `bpvm_autorun_wire_t`), por la cintura del RUN:
+ *  0 nada, 1 hay alguien (un HELLO se contesta), 2 un KILL (su KILL_REPLY sale aquí: no arrancar). */
+int  bpvm_repl_autorun_escucha(void* user);
 
 /** V7/H8 (restos de E1, 28-sep) — el `errorMessage` del EXITED de un programa parado por un RESET, el MISMO en las
  *  cuatro (Pico, ESP32, STM32 y el micro simulado). El `poll` trata el RESET como un KILL —lo para, y reinicia

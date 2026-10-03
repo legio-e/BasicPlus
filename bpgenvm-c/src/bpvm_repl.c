@@ -1597,7 +1597,21 @@ int bpvm_repl_puerta_arranque(const char* type, long id, json_obj_t* obj, int es
     return 0;
 }
 
+static int run_depurador_previo(const char* type, long id, json_obj_t* obj);   /* abajo, con el RUN común */
+
 int bpvm_repl_dispatch(const char* type, long id, json_obj_t* obj) {
+    /* V7/H10, el RUN común, paso 6 (3-oct): el RUN, el KILL sin programa y el depurador de antes del RUN (PAUSE,
+     * SET_BP, CLR_BP), AQUÍ, para las cuatro —antes, en el despachador de cada familia y en el del sim—. Con la cintura
+     * del RUN puesta. Durante un RUN no llegan aquí: el poll común lee del cable el KILL y los del depurador, y a un
+     * RUN le contesta BUSY. */
+    if (s_ops && s_ops->run) {
+        if (strcmp(type, "RUN") == 0) {
+            bpvm_repl_run(id, json_str_inplace(obj, "path"), json_str_inplace(obj, "arg"));
+            return 1;
+        }
+        if (strcmp(type, "KILL") == 0) { wire_v1_send_error(id, "NO_SESSION", "no hay programa en ejecución"); return 1; }
+        if (run_depurador_previo(type, id, obj)) return 1;
+    }
     if (strcmp(type, "PING") == 0) {
         wire_v1_send_reply_empty("PONG", id);
         return 1;
@@ -1794,6 +1808,27 @@ static int run_poll(void* user) {
 }
 static int run_poll_vm(bpvm_t* vm, void* user) { (void) vm; return run_poll(user); }
 
+/* V7/H10, el RUN común, paso 6 (3-oct): LA ESCUCHA DE LA VENTANA DEL AUTORUN (#345, `bpvm_autorun_wire_t.escucha`),
+ * una para las tres familias —era la misma en las tres, con su lector—. Lee una línea por la cintura del RUN: un KILL
+ * es el Stop del IDE (su KILL_REPLY, y «no arranques»: 2); un HELLO se contesta (hay alguien: 1); cualquier otra
+ * línea dice también que hay alguien (1) y no se contesta —la atenderá el REPL si no se arranca—; nada, 0. Una línea
+ * rota ya no cuenta como alguien: la cintura la descarta, como en el RUN. */
+int bpvm_repl_autorun_escucha(void* user) {
+    const bpvm_repl_run_ops_t* r = run_ops();
+    (void) user;
+    if (!r || !r->leer_linea) return 0;
+    int n = r->leer_linea(r->linea, r->linea_cap);
+    if (n <= 0) return 0;                       /* nada (o el cable se ha ido: nadie a quien esperar) */
+    json_obj_t obj;
+    if (json_parse(r->linea, (size_t) n, &obj) != 0) return 1;
+    char type[24] = {0};
+    json_get_str(&obj, "type", type, sizeof type);
+    long rid = json_get_long(&obj, "id", 0);
+    if (strcmp(type, "KILL") == 0) { wire_v1_send_reply_empty("KILL_REPLY", rid); return 2; }
+    if (strcmp(type, "HELLO") == 0) { (void) bpvm_repl_dispatch(type, rid, &obj); return 1; }
+    return 1;
+}
+
 /* EL DEPURADOR, su cintura (era la de la Pico y la ESP32, idéntica). Las respuestas salen con el cerrojo del cable
  * de `io` (un escritor a la vez: `io` puede estar mandando la salida del programa). */
 static void run_dbg_manda(const char* line, size_t len, void* user) {
@@ -1841,7 +1876,8 @@ static void run_dbg_prepara(void) {
     s_run_dbgw.reply_cap = r ? r->mensaje_cap : 0;
 }
 
-int bpvm_repl_depurador_previo(const char* type, long id, json_obj_t* obj) {
+/* Los comandos del depurador ANTES del RUN (PAUSE, SET_BP, CLR_BP): 1 si lo atendió. Lo pregunta el despachador. */
+static int run_depurador_previo(const char* type, long id, json_obj_t* obj) {
     bpvm_dbg_cmd_t c;
     if (!run_ops() || !run_ops()->mensaje) return 0;
     memset(&c, 0, sizeof c);

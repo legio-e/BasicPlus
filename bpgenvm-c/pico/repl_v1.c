@@ -33,7 +33,7 @@
 #include "bpvm_mdn_scan.h"   /* V5/H4: el escaneo del .mdn, compartido */
 
 #include "bpvm.h"
-#include "bpvm_internal.h"   /* inspect deps en handle_run */
+#include "bpvm_internal.h"   /* la cintura del RUN: los módulos cargados, al log antes de correr */
 #include "bpvm_machine.h"       /* INFO: uniqueId/boardName/temp/freq/uptime */
 #include "board_desc.h"      /* INFO: variante/gpio/flash/psram del board_desc */
 #include "board_mgr_pico.h"  /* H9: gestión de placa (entorno + particiones) */
@@ -161,50 +161,10 @@ static void mpu_armar_tras_enlace(bpvm_t* vm) {
  * de duplicar 32 K (modo-texto y modo-wire son mutuamente excluyentes). */
 
 /* ============================================================ */
-/* Helper: convierte código fs_status_t en (code, message) v1. */
-static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
-    switch (s) {
-        case FS_OK:                 *code = "OK";              *msg = "ok"; break;
-        case FS_ERR_NOT_FOUND:      *code = "NOT_FOUND";       *msg = "fichero no existe"; break;
-        case FS_ERR_EXISTS:         *code = "EXISTS";          *msg = "ya existe"; break;
-        case FS_ERR_NO_SPACE:       *code = "NO_SPACE";        *msg = "FS lleno"; break;
-        case FS_ERR_NAME_TOO_LONG:  *code = "INVALID_PATH";    *msg = "nombre demasiado largo"; break;
-        case FS_ERR_TOO_BIG:        *code = "NO_SPACE";        *msg = "fichero demasiado grande"; break;
-        case FS_ERR_TABLE_FULL:     *code = "NO_SPACE";        *msg = "tabla FS llena"; break;
-        case FS_ERR_BAD_FLASH:      *code = "INTERNAL_ERROR";  *msg = "flash op falló"; break;
-        case FS_ERR_INVALID:        *code = "INVALID_PARAM";   *msg = "argumento inválido"; break;
-        default:                     *code = "INTERNAL_ERROR";  *msg = "fs unknown"; break;
-    }
-}
+/* DEPURADOR — el lazo de pausa, sus dos costuras y el JSON -> comando son del común (V7/H10, el RUN común: el
+ * depurador de `src/bpvm_repl.c` sobre el núcleo de `src/bpvm_dbg_wire.c`). Aquí queda el búfer que le presta esta
+ * placa (`.dbg_linea` de la cintura del RUN). */
 
-/* ============================================================ */
-/* DEBUGGER del device (H6.b.3 / #140) — pause_cb + comandos wire v1.
- *
- * El núcleo portable (#215: bpvm_debug_*, pause_cb, accessors de frame)
- * hace el trabajo; aquí está SÓLO el transporte Pico. Cuando un
- * breakpoint pausa, el MISMO hilo del REPL (camino single-thread
- * bpvm_run) atiende inline READ_INT/READ_STRING/LOCALS/STACK/SET_BP/
- * CLR_BP/CONTINUE/STEP/STOP hasta reanudar — sin cond-var ni separación
- * de tasks. Es la misma lógica que el server host (test/debug_listen.c),
- * ya verificada por dbg_client.py y el oráculo Java<->C
- * (DeviceWireOracleSmoke). Pendiente: flash+test en placa.
- *
- * NOTA SMP: el pause_cb lee USB; eso sólo es seguro en la task que ya es
- * dueña de stdin (la del REPL). Por eso handle_run fuerza bpvm_run
- * (single-thread) cuando hay sesión de debug, aunque el build sea SMP. */
-
-/* Breakpoints fijados ANTES de RUN: la vm se crea por-RUN, así que se
- * acumulan y se aplican al arrancar. */
-/* ── #326 DEPURACIÓN: cintura del núcleo portable bpvm_dbg_wire ──
- * Todo este ramo (breakpoints, bucle de pausa, LOCALS/STACK/READ_*) vivía AQUÍ y
- * era la única implementación: ESP32 y STM32 se quedaron sin depurador. Se
- * extrajo LITERALMENTE a src/bpvm_dbg_wire.c (cc658bd) y se estrenó en la P4;
- * verificado en placa, el Pico se pasa al núcleo y borra su copia. Aquí queda
- * sólo lo no portable: traducir JSON ↔ comando tipado y prestar los buffers. */
-/* V6/A1.7 — la VM del RUN en curso: las dos costuras del depurador la necesitan
- * (para saber si `io` corre y para su cerrojo) y el contrato del ramo sólo pasa
- * un puntero de usuario, que ya lleva el contexto del depurador. Un RUN a la vez
- * lo garantiza s_active_session, igual que en `s_io_vm`. */
 /* V6/A1.7 - EL DEPURADOR TIENE SU PROPIO BUFFER, y no es un lujo.
  *
  * `s_line_buf` es del hilo `io`: ahi mete la linea que acaba de leer del cable.
@@ -218,61 +178,6 @@ static void map_fs_status(fs_status_t s, const char** code, const char** msg) {
  * ANTES de activarlos: la respuesta es que esta era una, y estaba puesta hoy
  * mismo. Un buffer por ROL, que es lo que deberia haber hecho desde el principio. */
 static char s_dbg_buf[WIRE_V1_LINE_MAX];
-
-static bpvm_t* s_dbg_vm = NULL;
-
-static void dbgw_send(const char* line, size_t len, void* user) {
-    (void) user;
-    /* V6/A1.7 — el cable tiene un escritor a la vez: aquí contesta la tarea `vm`
-     * desde un breakpoint, y `io` puede estar drenando lo último que el programa
-     * imprimió. Sin este cerrojo, dos líneas se entrelazan y el IDE ve un JSON
-     * roto. Sin `io`, las dos llamadas son no-ops. */
-    bpvm_io_tx_lock(s_dbg_vm);
-    wire_v1_send_line(line, len);
-    bpvm_io_tx_unlock(s_dbg_vm);
-}
-
-static int dbgw_next_cmd(bpvm_dbg_cmd_t* out, void* user) {
-    (void) user;
-    int n;
-    /* V6/A1.7 — con `io` en marcha, el cable NO se lee desde aquí: `io` es el
-     * único lector y deja los comandos en la cola de control. Sin `io` (autorun,
-     * o una familia sin hilos) se lee como siempre. Espera acotada para que un
-     * KILL o una desconexión no dejen la VM parada para siempre. */
-    if (bpvm_io_running(s_dbg_vm)) {
-        n = (int) bpvm_io_ctrl_pop(s_dbg_vm, s_dbg_buf, sizeof s_dbg_buf, 200);
-    } else {
-        n = wire_v1_recv_line(-1, s_dbg_buf, sizeof s_dbg_buf);
-    }
-    if (n <= 0) return -1;                       /* overflow / vacía: reintentar */
-    json_obj_t o;
-    if (json_parse(s_dbg_buf, (size_t) n, &o) != 0) return -1;
-    char type[40];
-    if (json_get_str(&o, "type", type, sizeof type) < 0) return -1;
-    out->kind = bpvm_dbg_wire_kind(type);
-    out->id   = json_get_long(&o, "id",    0);
-    out->pc   = json_get_long(&o, "pc",   -1);
-    out->bpId = json_get_long(&o, "bpId", -1);
-    out->addr = json_get_long(&o, "addr", -1);
-    out->ref  = json_get_long(&o, "ref",   0);
-    return 0;
-}
-
-/* Vive todo el RUN: el núcleo lo recibe como `user` del pause_cb. */
-static bpvm_dbg_wire_t s_dbgw = {
-    dbgw_next_cmd, dbgw_send, NULL, s_reply_buf, sizeof s_reply_buf, 0
-};
-
-/* Rellena un comando tipado desde el JSON ya parseado (camino fuera de pausa). */
-static void dbgw_cmd_from_json(bpvm_dbg_cmd_t* c, long id,
-                               const json_obj_t* obj, const char* type) {
-    c->kind = bpvm_dbg_wire_kind(type);
-    c->id   = id;
-    c->pc   = json_get_long(obj, "pc",   -1);
-    c->bpId = json_get_long(obj, "bpId", -1);
-    c->addr = json_get_long(obj, "addr", -1);
-    c->ref  = json_get_long(obj, "ref",   0);
-}
 
 /* ============================================================ */
 /* HELLO — META. */
@@ -496,228 +401,9 @@ static void handle_bootsel(long id, const json_obj_t* obj) {
 }
 
 /* ============================================================ */
-/* TERMINAL — RUN, OUTPUT streaming, EXITED. */
+/* TERMINAL — el RUN es el común (V7/H10: `bpvm_repl_run`, en src/bpvm_repl.c), con la cintura de abajo. El de esta
+ * placa —su sink, su EXITED, su poll y su latido— se borró en el paso 6 (3-oct), probado ya en placa. */
 
-/* Resolución de módulo: base-dir del proyecto, luego /app/ y /lib/. Replica la
- * lógica de fs_get_resolve en repl.c. La duplicamos aquí en lugar de exportarla
- * para mantener el desacoplamiento entre los dos repls durante la
- * migración. Cuando el legacy se borre, este queda como la canónica. */
-/* H11 — devuelve la RUTA que existe y su tamaño, no los bytes. Antes esto
- * resolvía a un puntero, y sostener ese puntero costaba un scratch estático de
- * 128 KB: el fichero entero en RAM sólo para que el loader lo copiase. Ahora el
- * llamante abre por esa ruta y lee por trozos. */
-static fs_status_t v1_resolve_path(const char* name, char* out, size_t out_cap,
-                                    uint32_t* size_out) {
-    /* #344 — la REGLA vive en el nucleo (bpvm_entry_resolve): basedir del
-     * proyecto -> tal cual -> /app -> /lib. Estas 15 lineas estaban COPIADAS
-     * palabra por palabra en Pico, ESP32 y STM32. Aqui solo queda la
-     * traduccion al fs_status_t que usa el mapeo de errores del wire. */
-    return (bpvm_entry_resolve(name, out, out_cap, size_out) == 0)
-           ? FS_OK : FS_ERR_NOT_FOUND;
-}
-
-/* (El lector por trozos vivía aquí. Se lo llevó #344: ahora el que abre el .mod
- * y lo lee a cachos es bpvm_load_entry_file, en el núcleo, para las cinco.) */
-
-/* Sesión activa (0 = ninguna). Sólo soportamos una sesión RUN a la
- * vez por ahora — KILL multi-sesión y RUN concurrente vendrán cuando
- * tengamos #136 arch-tasks. */
-static long s_active_session = 0;
-
-/* Contador monotónico de sesiones. Empieza en 1 (0 reservado para
- * "ninguna"). */
-static long s_next_session = 1;
-
-/* Contexto del sink v1: lleva la session a embeber en cada OUTPUT. */
-typedef struct {
-    long session;
-} v1_sink_ctx_t;
-
-/* Sink que la VM invoca para cada chunk de output del programa BP.
- * Cada chunk se envía como un evento OUTPUT con escape JSON. Chunks
- * pequeños generan eventos pequeños; el USB CDC del Pico tolera bien
- * muchos writes cortos.
- *
- * El campo `stream:"stdout"` está por simetría con DebugServer (Java
- * VM) y por extensibilidad — wire v1 §6.3 lo contempla por si en
- * algún momento separamos stderr del programa. */
-static void v1_output_sink(const char* data, size_t len, void* user) {
-    v1_sink_ctx_t* ctx = (v1_sink_ctx_t*) user;
-    /* #256 — la línea OUTPUT se construye con varios fputs/fprintf:
-     * el lock cubre la línea ENTERA para que el poll (HELLO/BUSY en-run)
-     * no pueda intercalar su reply a mitad. */
-    wire_v1_tx_lock();
-    fputs("{\"type\":\"OUTPUT\",\"session\":", stdout);
-    fprintf(stdout, "%ld,\"stream\":\"stdout\",\"data\":\"", ctx->session);
-    for (size_t i = 0; i < len; i++) {
-        char c = data[i];
-        switch (c) {
-            case '"':  fputs("\\\"", stdout); break;
-            case '\\': fputs("\\\\", stdout); break;
-            case '\n': fputs("\\n",  stdout); break;
-            case '\r': fputs("\\r",  stdout); break;
-            case '\t': fputs("\\t",  stdout); break;
-            default:
-                if ((unsigned char) c < 0x20) {
-                    fprintf(stdout, "\\u%04x", (unsigned) c);
-                } else {
-                    fputc(c, stdout);
-                }
-                break;
-        }
-    }
-    fputs("\"}\n", stdout);
-    fflush(stdout);
-    wire_v1_tx_unlock();
-}
-
-/* Mapea bpvm_status_t a (status_str, exitCode) del wire v1. */
-static void map_vm_status(bpvm_status_t rs, const char** status, int* exit_code) {
-    if (rs == BPVM_OK) {
-        *status    = "OK";
-        *exit_code = 0;
-    } else if (rs == BPVM_KILLED) {
-        /* P-run-stop (#257) — abortado por KILL del IDE. exitCode 130
-         * (convención 128+SIGINT); el cliente lo distingue de un error. */
-        *status    = "KILLED";
-        *exit_code = 130;
-    } else {
-        *status    = "RUNTIME_ERROR";
-        /* #481 - la TABLA comun, no el ordinal del enum. Antes esto mandaba al
-         * IDE un `exit 11` que no significaba nada y que cambiaria solo con
-         * reordenar bpvm_status_t. El detalle sigue viajando aparte, en el
-         * `errorMessage` de este mismo EXITED. */
-        *exit_code = bpvm_exit_code(rs);
-    }
-}
-
-/* ============================================================ */
-/* P-run-stop (#257) + P-autorun (#256) — wire durante el run.   */
-/*                                                               */
-/* La VM invoca este poll ENTRE quanta (bpvm_set_poll), en la    */
-/* task coordinadora (la misma que llamó a handle_run — la VM    */
-/* corre en el worker). Lee el wire sin bloquear; si llega una   */
-/* línea completa la consume:                                    */
-/*   KILL  → marca el ack pendiente y devuelve 1 (BPVM_KILLED).  */
-/*           El KILL_REPLY sale tras parar la VM, antes del      */
-/*           EXITED (orden estable para el cliente).             */
-/*   HELLO → HELLO_REPLY inmediato. Es la pieza que permite al   */
-/*           IDE CONECTARSE con un (auto)run en marcha y ofrecer */
-/*           Stop (#256: sin esto, un autorun infinito dejaría   */
-/*           la placa inalcanzable salvo reflash).               */
-/*   otra  → error BUSY inmediato (hasta #256 era diferido a fin */
-/*           de run: el explorer se comía el timeout).           */
-/* Las replies en caliente son seguras: cada línea del wire es   */
-/* atómica por el tx_lock (#256) — la comm task con sus OUTPUTs  */
-/* y este poll ya no pueden entrelazarse. s_reply_buf también es */
-/* seguro: su dueño (esta misma task) está bloqueado en bpvm_run */
-/* mientras el poll corre.                                       */
-/* ============================================================ */
-static long s_kill_ack_id = -1;   /* id del KILL recibido en-run, o -1 */
-static long s_reset_ack_id = -1;  /* id del RESET recibido en-run (#452), o -1 */
-
-static int s_latido_on = 0;   /* V5/H4: lo enciende el ENV `latido=1` */
-
-/* V5/H4 — EL LATIDO. Para un cuelgue, saber que "no responde" no vale de nada:
- * hace falta saber DONDE esta girando. El poll ya se llama periodicamente
- * durante el run, asi que cuesta un contador.
- *
- * Sale cada 256 pasadas para no ahogar el log —que en placa es flash— y dice el
- * pc y el estado de cada thread vivo. Si el cuelgue esta en el interprete,
- * veras el pc moverse (bucle) o clavado (bloqueado). Si NO sale ni una linea,
- * se colgo ANTES del primer quantum, que tambien es un dato.
- *
- * Se enciende con `aot_trace=1` en el ENV; apagado no cuesta ni una division. */
-static void latido(bpvm_t* vm) {
-    static unsigned n = 0;
-    if ((n++ & 0xFFu) != 0) return;
-    for (int i = 0; i < BPVM_MAX_THREADS; i++) {
-        if (vm->threads[i].status == BPVM_THREAD_TERMINATED) continue;
-        log_printf("latido: th%d pc=%lu estado=%d",
-                   i, (unsigned long) vm->threads[i].pc,
-                   (int) vm->threads[i].status);
-    }
-}
-
-static int pico_run_poll_cb(bpvm_t* vm, void* user);
-
-/* -- V6/A1.4 - LAS DOS TAREAS, TAMBIEN EN LA PICO --------------------------
- *
- * Igual que en el PC y en la familia ESP32: durante un RUN esta tarea (`vm_task`)
- * ejecuta opcodes y el hilo `io` (comun, src/bpvm_io.c) atiende el wire y enmarca
- * la salida por LINEAS. Lo unico de esta placa son las dos costuras de abajo.
- *
- * La cola, 1 KB: en la Pico la salida es USB CDC y ahi el cuello es el
- * transporte, no el amortiguador (medido: 2 000 lineas costaban 7,7 s con un
- * hilo, casi todo esperando al USB).
- *
- * `s_io_vm` existe porque el `poll` de esta placa SI necesita la VM (el latido
- * del LED), y el contrato de `io` solo pasa un puntero de usuario, que aqui es
- * el contexto del sink. Un solo RUN a la vez (lo guarda s_active_session), asi
- * que un estatico es la forma honesta de decirlo. */
-#define PICO_IO_OQ_BYTES 1024
-static bpvm_t* s_io_vm = NULL;
-
-static int pico_io_poll(void* user) {
-    (void) user;
-    return pico_run_poll_cb(s_io_vm, NULL);   /* el de siempre: latido, KILL, HELLO */
-}
-
-static int pico_run_poll_cb(bpvm_t* vm, void* user) {
-    (void) user;
-    if (s_latido_on) latido(vm);
-    (void) bpvm_repl_paso();                  /* #495 (paso 4): un trozo de lo que se esté mandando (GET, LIST) */
-    int c = getchar_timeout_us(0);
-    if (c < 0) return 0;                      /* nada pendiente */
-    int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
-    if (n < 0) return 0;                      /* línea rota: descartar */
-    json_obj_t obj;
-    if (json_parse(s_line_buf, (size_t) n, &obj) != 0) return 0;
-    char type[24] = {0};
-    json_get_str(&obj, "type", type, sizeof(type));
-    long rid = json_get_long(&obj, "id", 0);
-    if (strcmp(type, "KILL") == 0) {
-        s_kill_ack_id = rid;
-        return 1;                              /* → BPVM_KILLED */
-    }
-    /* V6/E1 (#452) — RESET, con la MISMA forma que KILL. El enunciado de la ficha
-     * era falso: RESET SÍ llegaba, y se rechazaba aquí a propósito con BUSY por no
-     * tener rama. En dos tiempos, que es lo que Eduardo hacía a mano: marcar el id
-     * y devolver 1 para que el RUN muera por el camino de siempre, y reiniciar
-     * DESPUÉS, ya fuera de `bpvm_run` y desde la tarea del REPL. Ni se reinicia
-     * desde dentro del intérprete, ni aparece un segundo lector del cable. */
-    if (strcmp(type, "RESET") == 0) {
-        s_reset_ack_id = rid;
-        return 1;                              /* → BPVM_KILLED, y luego reboot */
-    }
-    if (strcmp(type, "HELLO") == 0) {
-        bpvm_repl_antes_de_despachar(type);    /* #495 (paso 4): lo que se mandaba al cliente de antes, cortado */
-        bpvm_repl_dispatch(type, rid, &obj);   /* attach en caliente */
-        return 0;
-    }
-    /* #495 (paso 4) — los de lectura que no monopolizan el cable: el GET y el LIST troceados (un trozo por vuelta
-     * de `io`, entre la salida del programa) y STAT. */
-    if (bpvm_repl_atiende_en_run(type, &obj)) {
-        bpvm_repl_dispatch(type, rid, &obj);
-        return 0;
-    }
-    /* V6/A1.7 — si la línea es del ramo de depuración y `io` está en marcha,
-     * se DEPOSITA para que la saque el `next_cmd` del depurador (que corre en la
-     * tarea `vm`). Así sigue habiendo UN solo lector del cable: éste. Antes, un
-     * RUN con breakpoints arrancaba sin `io` para evitar el segundo lector. */
-    if (bpvm_dbg_wire_kind(type) != BPVM_DBGC_OTHER && bpvm_io_running(vm)) {
-        if (bpvm_io_ctrl_push(vm, s_line_buf, (size_t) n) == 0) return 0;
-        /* No cupo: se contesta como siempre, que es mejor que el silencio. */
-    }
-    wire_v1_send_error(rid, "BUSY", BPVM_REPL_OCUPADO_EN_RUN);
-    return 0;
-}
-
-/* Núcleo del RUN — compartido entre el comando RUN del wire (id >= 0)
- * y el autorun de boot (#256, id < 0). Con id < 0 no hay cliente: se
- * omite el RUN_REPLY y los errores de resolución van al log persistente
- * en vez de al wire. Todo lo demás (sesión, OUTPUT events, poll de
- * KILL/HELLO, EXITED) es idéntico — un autorun ES un run normal. */
 /* V5/H4 — LOS PACKS SE CARGAN AQUÍ, EN EL PRIMER Run.
  *
  * Un pack nativo publica su API al arrancar (`bp_pack_init` → `publica`), y un
@@ -762,7 +448,7 @@ static const uint8_t* pico_mdn_del_fs(void* user, const char* nombre,
     bpvm_t* vm = (bpvm_t*) user;
     char     real[BPVM_FS_PATH_MAX];   /* #456 - lo CONSTRUYE el resolvedor */
     uint32_t size = 0;
-    if (v1_resolve_path(nombre, real, sizeof(real), &size) != FS_OK) return NULL;
+    if (bpvm_entry_resolve(nombre, real, sizeof real, &size) != 0) return NULL;   /* #344: la regla común */
 
     /* H11 — ZERO-COPY: los thunks se registran como punteros DENTRO de este
      * buffer, así que tiene que seguir vivo toda la ejecución. Se reserva de la
@@ -783,343 +469,9 @@ static const uint8_t* pico_mdn_del_fs(void* user, const char* nombre,
     return dst;
 }
 
-static void pico_mdn_decir(void* user, const char* msg) {
-    (void) user;
-    log_printf("%s", msg);
-}
-
-/* V6/#412 — `arg` es el ARGUMENTO DE EJECUCION del programa, y viaja como
- * campo ESCALAR del RUN (no `args:[]`: el mini-parser de las placas no sabe
- * leer arrays anidados, ver json_min.h). NULL = no se dio, y manda el valor
- * por defecto que declare `Main(arg: string := ...)`.
- *
- * El AUTORUN no pasa ninguno, a proposito (Eduardo, 6-sep): el parametro es
- * para PROBAR el programa con distintas opciones; una vez probado se fija el
- * valor por defecto en el fuente, y la mision del autorun es solo que arranque
- * al encender el micro. O sea que el defecto ES la configuracion de despliegue. */
-static void run_module_path(const char* path, long id, const char* arg) {
-    if (s_active_session != 0) {
-        if (id >= 0) wire_v1_send_error(id, "BUSY", "ya hay una sesión RUN en curso");
-        else         log_printf("autorun: BUSY (sesión activa) — ignorado");
-        return;
-    }
-
-    /* H19-F1 — fija el base-dir del proyecto si el módulo vive en /app/<proj>/
-     * (el IDE manda la ruta cualificada). Plano (/app/X.mod o nombre suelto) →
-     * sin base-dir = modo plano. Se resetea en cada run. */
-    bpvm_fs_set_basedir_from_module(path);
-
-    /* V5/H4 — antes de nada, los packs: si el programa usa una API de pack,
-     * tiene que estar publicada cuando llegue la primera llamada. Ver arriba
-     * por qué aquí y no en el arranque. */
-    packs_cargar_una_vez();
-
-    /* 1. Resolver el módulo principal en el FS (ruta + tamaño; los bytes se
-     *    leen por trozos al cargarlo). */
-    char main_path[BPVM_FS_PATH_MAX]; uint32_t size;   /* #456 - salida del resolvedor */
-    fs_status_t fs_s = v1_resolve_path(path, main_path, sizeof(main_path), &size);
-    if (fs_s != FS_OK) {
-        const char* code; const char* msg;
-        map_fs_status(fs_s, &code, &msg);
-        if (id >= 0) wire_v1_send_error(id, code, msg);
-        else         log_printf("autorun: %s: %s — REPL normal", path, msg);
-        return;
-    }
-
-    /* 2. Asignar sessionId y mandar RUN_REPLY antes de empezar la
-     *    ejecución — así el cliente sabe que su petición fue aceptada
-     *    y empieza a esperar OUTPUT events. */
-    long session = s_next_session++;
-    s_active_session = session;
-    if (id >= 0) {
-        int off = wire_v1_msg_begin(s_reply_buf, sizeof(s_reply_buf), 0,
-                                      "RUN_REPLY", id);
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "session", session);
-        if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
-                                              (size_t) off);
-        if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
-    }
-
-    /* 3. Init VM + cargar módulo + resolver deps. Reparto heap/stacks =
-     * vm_stack_region_bytes (cálculo único, compartido con INFO). */
-    size_t stack_region = vm_stack_region_bytes();
-    log_printf("vm: memoria %u KB -> heap %u KB + stacks %u KB",
-               (unsigned)(s_vm_buffer_size >> 10),
-               (unsigned)((s_vm_buffer_size - stack_region) >> 10),
-               (unsigned)(stack_region >> 10));
-    bpvm_t* vm = bpvm_init(s_vm_buffer, s_vm_buffer_size,
-                           s_vm_buffer_size - stack_region);
-    /* V6/#412 — el argumento de ejecucion, antes de arrancar: lo recoge el
-     * builtin __runArg que `__startup` llama justo antes de entrar en Main. */
-    if (vm) bpvm_set_run_arg(vm, arg);
-    if (!vm) {
-        /* No podemos mandar RUN_REPLY de error porque ya enviamos el
-         * RUN_REPLY positivo. Emitimos EXITED con código de error. */
-        fputs("{\"type\":\"EXITED\",\"session\":", stdout);
-        fprintf(stdout, "%ld,\"status\":\"INTERNAL_ERROR\",\"exitCode\":-1,"
-                        "\"errorMessage\":\"bpvm_init failed\"}\n", session);
-        fflush(stdout);
-        s_active_session = 0;
-        return;
-    }
-
-    v1_sink_ctx_t sink_ctx = { session };
-    bpvm_set_output(vm, v1_output_sink, &sink_ctx);
-
-    /* [V6/N1.4] EL REGISTRO AOT SE VACIA AQUI, ANTES DE CARGAR — y el sitio
-     * importa. Estaba mas abajo, despues de la carga, porque la suposicion era
-     * «lo que llena el registry es el escaneo del FS». Con el bloque nativo
-     * EMBEBIDO en el .mod eso dejo de ser cierto: el modulo registra sus thunks
-     * mientras se carga, y un clear() posterior los borraba.
-     *
-     * Se vio en placa el 23-ago y de la peor manera: el log decia «1/1 thunks
-     * registrados (zero-copy)» y aun asi `fib(28) AOT` tardaba lo mismo que
-     * interpretado. Todo correcto, y sin efecto.
-     *
-     * Vaciar antes de cargar es ademas lo que siempre se quiso decir: el registro
-     * arranca limpio en cada RUN y luego ACUMULA — lo que traiga cada modulo y lo
-     * que encuentre el barrido de .mdn sueltos. */
-    bpvm_aot_clear();
-
-    /* #344 — UNA carga: bpvm_load_entry despacha .mod/.pack, lee por trozos,
-     * resuelve las dependencias con la regla comun (FS y, si no esta, los packs
-     * grabados en XIP) y NOMBRA la que falte. Aqui vivia el bucle de 4 pasadas
-     * copiado en las 4 familias, y ademas era una version POBRE: cortaba el
-     * import por el primer punto y no sabia nada del pack en ejecucion — que es
-     * lo que impedia ejecutar packs en la placa. */
-    bpvm_entry_t entry;
-    memset(&entry, 0, sizeof entry);
-    bpvm_status_t ls = bpvm_load_entry(vm, path, &entry);
-    if (ls != BPVM_OK) {
-        /* #421 — el PORQUÉ, con la ruta. Antes aquí salía «load: IO error»
-         * y el IDE mostraba `exit 1 (IO error)`: el firmware sabía lo que
-         * había pasado y no lo contaba.
-         * #557 — y por los constructores comunes, como el EXITED del final del RUN:
-         * con `fprintf` el nombre del módulo y el motivo iban SIN ESCAPAR (una comilla
-         * rompía el framing del wire: lo que #473 R20 arregló en el STM32). */
-        char emsg[sizeof entry.fallo + 16];
-        if (entry.missing[0])     snprintf(emsg, sizeof emsg, "falta el modulo '%s'", entry.missing);
-        else if (entry.fallo[0])  snprintf(emsg, sizeof emsg, "load: %s", entry.fallo);
-        else                      snprintf(emsg, sizeof emsg, "load: %s", bpvm_status_str(ls));
-        int off = wire_v1_msg_begin_event(s_reply_buf, sizeof(s_reply_buf), 0, "EXITED");
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "session", session);
-        if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                                   (size_t) off, "status", "RUNTIME_ERROR");
-        if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                                 (size_t) off, "exitCode", (long) ls);
-        if (off >= 0) off = wire_v1_field_string_recortado(s_reply_buf, sizeof(s_reply_buf),
-                                                   (size_t) off, "errorMessage", emsg, 1);
-        if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf), (size_t) off);
-        if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
-        bpvm_destroy(vm);
-        s_active_session = 0;
-        return;
-    }
-    if (entry.from_pack)
-        log_printf("run: pack '%s' (main=%s)", entry.resolved, entry.main_module);
-
-    /* #355 — INTERRUPTOR DEL RECOLECTOR (idea de Eduardo). `gc=0` en el ENV y la
-     * VM no recolecta: ni por umbral, ni al fallar una reserva, ni con el gc()
-     * manual (los tres pasan por bpvm_gc, que mira gc_suspended).
-     *
-     * Para qué: el bucle que se rompe mueve ~170 KB en un heap de 268 KB, o sea
-     * que CABE ENTERO sin recolectar. Eso permite partir el experimento en dos
-     * dejando TODO lo demás igual —misma placa, misma memoria, mismo programa—
-     * y quitando una sola cosa. Si sin GC va limpio, el agotamiento no es la
-     * causa; si se rompe igual, el GC queda absuelto y hay que mirar al
-     * alocador. Es la diferencia entre medir y opinar.
-     *
-     * Se lee del ENV y no de una macro para no gastar una grabación por cada
-     * cambio de idea. Por defecto va ENCENDIDO: apagarlo tiene que ser un acto
-     * deliberado, nunca el estado en que se queda la placa por descuido. */
-    if (!board_env_bool("gc", 1)) {
-        bpvm_set_gc_enabled(vm, 0);
-        log_printf("run: GC DESACTIVADO por el ENV (gc=0) — memoria de un solo uso");
-    }
-
-    /* 4b. (El vaciado del registro AOT se hizo ANTES de cargar — ver arriba.
-     *     Aqui borraria los thunks que el propio .mod trajo embebidos.) */
-
-    /* 4c. V5/H4 — el .mdn de cada módulo, del FS o del PACK.
-     *
-     * Esto era un bucle de 35 líneas aquí, y otros tres iguales en las otras
-     * familias. Ahora el bucle, el orden de búsqueda (el puente sigue a su
-     * módulo) y los mensajes están en `bpvm_mdn_escanear`; de esta familia
-     * queda sólo la cintura de arriba. */
-    log_printf("AOT: buscando el .mdn de %d modulos (FS + pack)", vm->module_count);
-    bpvm_mdn_escanear(vm, pico_mdn_del_fs, pico_mdn_decir, vm);
-    /* V5/H4 — QUE MODULOS HAY Y DE DONDE SALIERON, antes de arrancar.
-     *
-     * Sin esto no se ve si Core y Str llegaron a entrar, ni por que via. Y era
-     * justo el hueco: la resolucion de dependencias solo hablaba al fallar. */
-    log_printf("modulos cargados: %d", vm->module_count);
-    for (int mi = 0; mi < vm->module_count; mi++) {
-        log_printf("  [%d] %-12s %s cb=0x%08lX main=%ld",
-                   mi, vm->modules[mi].name,
-                   vm->modules[mi].en_pack ? "PACK" : "FS  ",
-                   (unsigned long) vm->modules[mi].cb,
-                   (long) vm->modules[mi].main_offset);
-    }
-    s_latido_on = board_env_bool("latido", 0);
-    if (s_latido_on) log_printf("latido: ENCENDIDO (ENV latido=1)");
-    /* #440 — EL TESTIGO DEL MPU, detrás del ENV `mpu=1` (por defecto NO).
-     *
-     * Marca el código de cada módulo como sólo lectura para que la escritura que
-     * lo pisa levante un DACCVIOL con su PC — el manejador de #447 lo cuenta.
-     *
-     * ⚠️ SE ARMA POR EL GANCHO POST-ENLACE, no aquí. Antes se hacía aquí, con un
-     * `bpvm_link_all` propio por delante, razonando que el enlace de `bpvm_run`
-     * sería inofensivo por ser idempotente. **Ese razonamiento era falso**:
-     * idempotente quiere decir que escribe el MISMO valor, pero sigue siendo una
-     * ESCRITURA, y al MPU el valor le da igual. El 29-ago eso tumbó `StackTrace`
-     * —un programa sano— con un DACCVIOL sobre su propio fixup de `eh_class`
-     * (`code_off=461`). El gancho dispara en el único instante correcto: después
-     * del último enlace y antes de la primera instrucción.
-     *
-     * Andamio de diagnóstico, no producción: una región mal calculada tumbaría
-     * una placa buena, y eso es peor que el bug que persigue. */
-    if (board_env_bool("mpu", 0)) {
-        bpvm_set_after_link_hook(mpu_armar_tras_enlace);
-    }
-
-    log_printf("AOT: scan done, about to bpvm_run");
-    log_flush();   /* CHECKPOINT — si vemos hasta aquí, fase D loaded
-                    * correctamente. Lo siguiente que crashee es la
-                    * ejecución del thunk desde el buffer del FS. */
-
-    /* 5. Ejecutar. Bloquea hasta que el programa termina. Cada print
-     *    del programa pasa por v1_output_sink → genera un OUTPUT event.
-     *
-     * H2 Pico — Si BPVM_PICO_SMP_WORKERS está definido y ≥1, usamos
-     * el scheduler multi-worker (bpvm_run_smp). Con N=1 ejercitamos
-     * TODA la maquinaria SMP (worker + comm task + queue + STW dance)
-     * sin paralelismo — validación safe sin riesgo de race. Con N=2
-     * activamos paralelismo real (un worker por core del RP2350 cuando
-     * #153 P-smp-tx-exclusive cierre el pinning).
-     *
-     * Sin el define (default actual), seguimos en el camino legacy
-     * single-thread — el cambio del runtime SMP NO afecta a usuarios
-     * que no opten in. */
-    /* H6.b.3 #140 — modo debug: si el cliente fijó breakpoints o pidió
-     * PAUSE antes de RUN, aplicar los pendientes + enganchar el pause_cb. */
-    int debugging = bpvm_dbg_wire_armed();
-    if (debugging) {
-        s_dbgw.session = session;
-        bpvm_dbg_wire_arm(&s_dbgw, vm);
-        log_printf("RUN/v1: DEBUG mode");
-    }
-
-    /* P-run-stop (#257) — poll del wire entre quanta para poder atender
-     * KILL (y desde #256, HELLO/BUSY en caliente). Solo en runs normales:
-     * en modo debug el pause_cb ya es el dueño del USB (dos lectores se
-     * robarían bytes). */
-    s_kill_ack_id = -1;
-    s_reset_ack_id = -1;
-    if (!debugging) bpvm_set_poll(vm, pico_run_poll_cb, NULL);
-
-    /* V6/A1.4 - arranca `io`. CON EL DEPURADOR ARMADO, NO: su `pause_cb` lee el
-     * USB desde ESTA tarea y dos lectores del mismo transporte es una carrera
-     * (el mismo interbloqueo que esta unas lineas mas abajo para el camino SMP,
-     * y por el mismo motivo). Se resuelve en A1.7. */
-    s_io_vm = vm;
-    bpvm_io_ops_t io_ops = { pico_io_poll, v1_output_sink, &sink_ctx };
-    /* V6/A1.7 — ya NO hay excepción con el depurador: `io` arranca igual, y los
-     * comandos del ramo le llegan a la VM por la cola de control. */
-    s_dbg_vm = vm;
-    int con_io = bpvm_io_start(vm, &io_ops, PICO_IO_OQ_BYTES) == 0;
-
-    uint32_t t0 = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS);
-    log_printf("RUN/v1 %s session=%ld", path, session);
-    bpvm_status_t rs;
-#if defined(BPVM_PICO_SMP_WORKERS) && BPVM_PICO_SMP_WORKERS >= 1
-    if (debugging) {
-        /* El pause_cb lee USB → sólo seguro en la task dueña de stdin
-         * (la del REPL). Forzamos single-thread aunque el build sea SMP. */
-        rs = bpvm_run(vm);
-    } else {
-        log_printf("RUN/v1: SMP path n_workers=%d", BPVM_PICO_SMP_WORKERS);
-        rs = bpvm_run_smp(vm, BPVM_PICO_SMP_WORKERS);
-    }
-#else
-    rs = bpvm_run(vm);
-#endif
-    /* Parar `io` ANTES de nada mas: drena la cola entera, asi que al volver de
-     * aqui la ultima linea del programa YA salio por el USB, y el wire vuelve a
-     * ser de esta tarea (que es quien manda KILL_REPLY y EXITED). */
-    if (con_io) bpvm_io_stop(vm);
-    s_io_vm = NULL;
-    s_dbg_vm = NULL;
-    uint32_t dt = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS) - t0;
-    /* #440 — desarmar SIEMPRE: la siguiente carga tiene que poder escribir el
-     * código de los módulos, y dejar el MPU puesto convertiría el Run siguiente
-     * en un fallo espurio. */
-    { extern void bpvm_pico_mpu_desarmar(void); bpvm_pico_mpu_desarmar(); }
-
-    log_printf("RUN/v1 %s finished: %s", path,
-               (rs == BPVM_KILLED && s_reset_ack_id >= 0) ? BPVM_REPL_MSG_RESET : bpvm_status_str(rs));
-
-    /* P-run-stop — ack diferido del KILL. Orden: KILL_REPLY → EXITED. */
-    bpvm_set_poll(vm, NULL, NULL);
-    if (s_kill_ack_id >= 0) {
-        wire_v1_send_reply_empty("KILL_REPLY", s_kill_ack_id);
-        s_kill_ack_id = -1;
-    }
-
-    /* 6. Emit EXITED. */
-    const char* status_str; int exit_code;
-    map_vm_status(rs, &status_str, &exit_code);
-    const char* link_err = bpvm_link_error(vm);   /* paso 4 — "" salvo fallo de link */
-    const char* rt_err   = bpvm_runtime_error(vm); /* detalle del RuntimeError no atrapado */
-    if (link_err[0]) status_str = "LINK_ERROR";
-    int off = wire_v1_msg_begin_event(s_reply_buf, sizeof(s_reply_buf), 0, "EXITED");
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "session", session);
-    if (off >= 0) off = wire_v1_field_string(s_reply_buf, sizeof(s_reply_buf),
-                                               (size_t) off, "status", status_str);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "exitCode", exit_code);
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "elapsedMs", (long) dt);
-    /* V7/H5 (25-sep) — los thunks nativos que registró ESTE RUN: la tanda comprueba con él que el AOT se usó (los números salen iguales interpretados). */
-    if (off >= 0) off = wire_v1_field_long(s_reply_buf, sizeof(s_reply_buf),
-                                             (size_t) off, "nativos", (long) bpvm_aot_count());
-    if (rs != BPVM_OK) {
-        /* Detalle > genérico: link_error, luego el detalle del RuntimeError
-         * (p.ej. "referencia a objeto eliminado"), y como último recurso el
-         * status genérico. Antes siempre iba el genérico "exit N". */
-        const char* emsg = link_err[0] ? link_err
-                         : (rt_err[0]   ? rt_err
-                         : (rs == BPVM_KILLED && s_reset_ack_id >= 0) ? BPVM_REPL_MSG_RESET   /* E1 */
-                                        : bpvm_status_str(rs));
-        /* #557 — recortado si no cabe: un error de enlace llega a 1.536 B y este
-         * buffer tiene 1.024; antes el EXITED entero se quedaba sin salir. */
-        if (off >= 0) off = wire_v1_field_string_recortado(s_reply_buf, sizeof(s_reply_buf),
-                                                   (size_t) off, "errorMessage", emsg, 1);
-    }
-    if (off >= 0) off = wire_v1_msg_end(s_reply_buf, sizeof(s_reply_buf),
-                                          (size_t) off);
-    if (off >= 0) wire_v1_send_line(s_reply_buf, (size_t) off);
-
-    /* V7/H7 — la línea `mem:` (main.c), como la ESP32: tras cada RUN y antes de
-     * soltar la VM, que es cuando la memoria hace pico. Sin log_flush: LOG_DUMP
-     * lee la RAM, y la flash ya se graba una vez por RUN (el CHECKPOINT). */
-    { extern void bpvm_pico_mem_log(void); bpvm_pico_mem_log(); }
-    bpvm_destroy(vm);
-    s_active_session = 0;
-    /* H6.b.3 — limpiar estado de debug de esta sesión. */
-    bpvm_dbg_wire_reset();
-
-    /* V6/E1 (#452) — el RESET pedido durante el RUN, servido AHORA: el programa
-     * ya murió y su EXITED ya salió, así que el IDE ve la secuencia entera
-     * (EXITED KILLED → RESET_REPLY → se cae el cable) en vez de un BUSY. No retorna. */
-    if (s_reset_ack_id >= 0) {
-        long rid = s_reset_ack_id;
-        s_reset_ack_id = -1;
-        handle_reset(rid, NULL);
-    }
-}
+/* V6/A1.4 — la cola de salida de `io`, 1 KB: en la Pico la salida es USB CDC y ahí el cuello es el transporte, no el
+ * amortiguador (medido: 2 000 líneas costaban 7,7 s con un hilo, casi todo esperando al USB). */
+#define PICO_IO_OQ_BYTES 1024
 
 /* ── V7/H10, el RUN común, paso 4 (3-oct): LA CINTURA DE LA PICO ──────────────────────────────────────────────────
  * Lo que es suyo de verdad: el bloque de la VM, el USB leído sin esperar, sus búferes (uno por rol, A1.7), el
@@ -1146,7 +498,11 @@ static void pico_run_antes(bpvm_t* vm) {
         log_printf("  [%d] %-12s %s cb=0x%08lX main=%ld", mi, vm->modules[mi].name,
                    vm->modules[mi].en_pack ? "PACK" : "FS  ", (unsigned long) vm->modules[mi].cb,
                    (long) vm->modules[mi].main_offset);
-    /* #440 — el testigo del MPU, detrás del ENV `mpu=1`, por el gancho post-enlace (ver run_module_path) */
+    /* #440 — EL TESTIGO DEL MPU, detrás del ENV `mpu=1` (por defecto NO): el código de cada módulo, de sólo lectura,
+     * para que la escritura que lo pisa levante un DACCVIOL con su PC (lo cuenta el manejador de #447). Se arma por
+     * el GANCHO POST-ENLACE y no aquí: el enlace de `bpvm_run` ESCRIBE aunque escriba el mismo valor, y al MPU el
+     * valor le da igual —el 29-ago tumbó `StackTrace`, un programa sano, sobre su propio fixup de `eh_class`—. Andamio
+     * de diagnóstico, no producción: una región mal calculada tumbaría una placa buena. */
     if (board_env_bool("mpu", 0)) bpvm_set_after_link_hook(mpu_armar_tras_enlace);
     log_printf("AOT: scan done, about to bpvm_run");
     log_flush();   /* CHECKPOINT: lo que cuelgue después es la ejecución */
@@ -1183,22 +539,6 @@ static const bpvm_repl_run_ops_t s_run_ops = {
     .env_bool          = board_env_bool,
     .io_cola           = PICO_IO_OQ_BYTES,
 };
-static const bpvm_repl_ops_t s_repl_ops;   /* la cintura del REPL, más abajo: su `.run` elige el RUN */
-
-static void handle_run(long id, json_obj_t* obj) {
-    const char* path = json_str_inplace(obj, "path");   /* #456 - sin copia, sin tope */
-    /* V6/#412 — el argumento de ejecucion: campo ESCALAR opcional. Si no viene,
-     * NULL, y manda el valor por defecto que declare el fuente. */
-    const char* arg = json_str_inplace(obj, "arg");
-    /* V7/H10, el RUN común, paso 4 (3-oct): con la cintura puesta, el RUN es el común. */
-    if (s_repl_ops.run) { bpvm_repl_run(id, path, arg); return; }
-    if (path == NULL) {
-        wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
-        return;
-    }
-    run_module_path(path, id, arg);
-}
-
 /* ============================================================ */
 /* #345 paso 2 — cintura del gate. Cuatro funciones y ni un verbo nuevo: el
  * HELLO que el IDE ya manda al conectar dice "hay alguien", y el KILL que ya
@@ -1207,29 +547,6 @@ static void pico_autorun_anuncia(const char* path, int ventana_ms, void* user) {
     (void) user;
     log_printf("autorun: %s arranca en %d ms — Stop en el IDE para cancelar",
                path, ventana_ms);
-}
-
-static int pico_autorun_escucha(void* user) {
-    (void) user;
-    int c = getchar_timeout_us(0);
-    if (c < 0) return 0;                       /* nada pendiente */
-    int n = wire_v1_recv_line(c, s_line_buf, sizeof(s_line_buf));
-    if (n < 0) return 1;                       /* línea rota, pero HAY alguien */
-    json_obj_t obj;
-    if (json_parse(s_line_buf, (size_t) n, &obj) != 0) return 1;
-    char type[24] = {0};
-    json_get_str(&obj, "type", type, sizeof(type));
-    long rid = json_get_long(&obj, "id", 0);
-    if (strcmp(type, "KILL") == 0) {
-        /* Se le contesta como a un KILL normal: para el IDE esto es su Stop de
-         * siempre, no un caso especial. */
-        wire_v1_send_reply_empty("KILL_REPLY", rid);
-        return 2;
-    }
-    if (strcmp(type, "HELLO") == 0) { bpvm_repl_dispatch(type, rid, &obj); return 1; }
-    /* Cualquier otra cosa: hay alguien al otro lado, que es lo que se
-     * preguntaba. No se contesta — el REPL la atenderá si no se arranca. */
-    return 1;
 }
 
 static void pico_autorun_espera(int ms, void* user) {
@@ -1241,7 +558,7 @@ static uint32_t pico_autorun_ahora(void* user) {
 }
 
 static const bpvm_autorun_wire_t s_autorun_wire = {
-    pico_autorun_anuncia, pico_autorun_escucha,
+    pico_autorun_anuncia, bpvm_repl_autorun_escucha,   /* V7/H10, el RUN común, paso 6: la escucha, la común */
     pico_autorun_espera,  pico_autorun_ahora, NULL
 };
 
@@ -1286,8 +603,7 @@ void repl_v1_autorun(void) {
         log_printf("autorun: CANCELADO por el usuario (Stop) — REPL normal");
         return;
     }
-    if (s_repl_ops.run) bpvm_repl_run(-1, path, NULL);   /* V7/H10: el RUN común; sin argumento, manda el defecto */
-    else                run_module_path(path, -1, NULL);
+    bpvm_repl_run(-1, path, NULL);   /* V7/H10: el RUN común; sin argumento, manda el defecto */
     log_printf("autorun: terminado — REPL normal");
 }
 
@@ -1321,7 +637,7 @@ static uint32_t pico_image_crc(void) {
 }
 
 static const bpvm_repl_ops_t s_repl_ops = {
-    .run            = &s_run_ops,     /* V7/H10, el RUN común, paso 4: NULL = el RUN de siempre (run_module_path) */
+    .run            = &s_run_ops,     /* V7/H10: la cintura del RUN común */
     .info           = pico_repl_info,
     .image_crc      = pico_image_crc,
     .info_extra     = pico_repl_info_extra,
@@ -1458,27 +774,9 @@ void repl_v1_handle_request(int first_char) {
                               (unsigned long) bulk_size);
         return;
     }
-    /* TERMINAL */
-    if (strcmp(type, "RUN")      == 0) { handle_run(id, &obj);      return; }
-    /* DEBUG (H6.b.3 #140) — pre-RUN: acumular breakpoints / pedir pausa
-     * inicial. Durante un RUN en modo debug, los comandos READ_INT,
-     * READ_STRING, LOCALS, STACK, CONTINUE y STEP los atiende el bucle de
-     * pausa del NÚCLEO (bpvm_dbg_wire) inline mientras la VM esta pausada. */
-    if (s_repl_ops.run) {
-        if (bpvm_repl_depurador_previo(type, id, &obj)) return;   /* V7/H10: el depurador común */
-    } else {
-        bpvm_dbg_cmd_t c;
-        dbgw_cmd_from_json(&c, id, &obj, type);
-        if (c.kind != BPVM_DBGC_OTHER && bpvm_dbg_wire_handle(&s_dbgw, &c)) return;
-    }
-    /* P-run-stop (#257) — KILL en idle: no hay nada que matar. El KILL
-     * útil llega DURANTE un RUN y lo atiende pico_run_poll_cb (la VM
-     * polea el wire entre quanta y termina con BPVM_KILLED). */
-    if (strcmp(type, "KILL")     == 0) {
-        wire_v1_send_error(id, "NO_SESSION",
-                            "no hay programa en ejecución");
-        return;
-    }
+    /* TERMINAL y DEBUG — el RUN, el depurador de antes del RUN (PAUSE, SET_BP, CLR_BP) y el KILL sin programa los
+     * atiende el común (bpvm_repl_dispatch; V7/H10, el RUN común, paso 6): durante un RUN, todo lo del cable lo lee
+     * el poll común. */
     /* PROMPT_RESPONSE: el builtin IO.prompt() aún no está implementado
      * en la VM C, así que nunca emitimos PROMPT_REQUEST. Si llega un
      * RESPONSE huérfano, ack silente. */
@@ -1500,7 +798,7 @@ void repl_v1_handle_request(int first_char) {
  * carácter y elegía protocolo — '{' al wire, cualquier otra cosa a modo texto.
  *
  * Esa convivencia costaba de verdad. El modo texto tenía su PROPIA resolución
- * de módulos (cmd_run duplicaba lo que hace handle_run aquí al lado), su propio
+ * de módulos (cmd_run duplicaba lo que hace el RUN del wire), su propio
  * GET, su propio PUT... es decir, un segundo camino para las mismas cosas que
  * nadie ejercitaba y que iba divergiendo en silencio. Y sobre todo: mantenía
  * vivos cuatro fs_get, que es justo lo que #305 viene a quitar.
