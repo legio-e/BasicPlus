@@ -72,6 +72,11 @@ typedef struct bpvm_cola {
     int para_permanentes;        /* 1: lo ejecutan los runs permanentes; 0: quien llamó a bpvm_run o bpvm_run_smp */
     int n_runs;                  /* cuántos lo ejecutan; con más de uno, vm->smp apunta aquí */
     int acabando;                /* el último run que sale lo está cerrando: los demás ya no lo tocan */
+    /* Los runs DENTRO del programa: de cogerlo (bpvm_cola_correr, bajo el cerrojo) a salir de él. No entran más que
+     * `n_runs`; y el que lo cierra espera a ser el único dentro antes de descolgarlo y avisar: un run que no tiene un
+     * hilo entre manos —dormido en la cola, o entre dos vueltas— todavía puede mirar la VM (la revisión adversarial de
+     * la 2a.2: con dos runs permanentes, el otro la leía ya destruida). */
+    int dentro;
     /* Los runs con un hilo entre manos: del momento de elegirlo a soltarlo, AUNQUE esperen dentro del cuanto a que otro
      * acabe de colectar. Es lo que decide el fin y el interbloqueo: «nadie tiene un hilo entre manos». No es
      * `running_workers` (el del GC), que descuenta al que espera al colector: contado con ése, otro run vería un
@@ -102,9 +107,11 @@ typedef struct bpvm_cola {
     int     ensayo_tras_cuanto_ms;   /* un run se entretiene después de su cuanto, con el hilo entre manos (el 0, esos
                                       * ms; el 1, cinco veces más: uno vuelve claramente antes que el otro) */
     int     ensayo_stw_ms;           /* el que esperó a otro colector tarda en volver a contarse (heap.c) */
+    int     ensayo_salida_ms;        /* un run que sale de un programa que se cierra tarda en contarse fuera */
     int     sabotaje_fin;            /* decidir el fin sin mirar si alguien tiene un hilo entre manos */
     int     sabotaje_contador;       /* contar «con un hilo entre manos» con el contador del GC */
     int     sabotaje_despertar;      /* el KILL no avisa a la cola (bpvm_request_kill) */
+    int     sabotaje_salida;         /* el que cierra no espera a que salgan los demás runs */
     int64_t t_ultimo_cuanto;         /* con el ensayo: cuándo volvió el último cuanto (µs)... */
     int64_t t_fin;                   /* ...y cuándo se decidió el fin (µs): el fin, siempre después */
 } bpvm_cola_t;

@@ -64,6 +64,14 @@ void bpvm_cola_despertar(void) {
 
 /* ─── COLGAR un programa: el main a la cola, prepararlo, publicarlo ──────────────────────────────────────────────── */
 
+/* Un programa que no se puede colgar: el porqué, al EXITED (runtime_error) y al log, no un «RuntimeError no atrapado»
+ * mudo (la revisión de la 2a.2). */
+static int no_se_cuelga(bpvm_t* vm, const char* porque) {
+    snprintf(vm->runtime_error, sizeof vm->runtime_error, "%s", porque);
+    bpvm_diag_urgente("[bpvm] %s", porque);
+    return BPVM_ERR_RUNTIME;
+}
+
 int bpvm_cola_colgar(bpvm_t* vm, int n_runs, int para_permanentes, bpvm_cola_al_acabar_fn al_acabar, void* user) {
     bpvm_cola_t* q = &bpvm_la_cola;
     if (!vm) return BPVM_ERR_BAD_PC;
@@ -71,14 +79,13 @@ int bpvm_cola_colgar(bpvm_t* vm, int n_runs, int para_permanentes, bpvm_cola_al_
     if (n_runs < 1) n_runs = 1;
     /* 1. El main, a la cola: desde aquí la cola es de este programa, hasta que se destruya. Antes de prepararlo: la
      *    preparación reserva memoria (las excepciones prefabricadas, con el main de ancla) y el GC busca sus raíces en
-     *    la cola. */
+     *    la cola. Para los runs permanentes, que los haya: si no, quien lo cuelga esperaría para siempre. */
     bpvm_platform_mutex_lock(&q->vm_lock);
-    int r = bpvm_hilos_meter_main(vm);
+    int sin_runs = para_permanentes && q->permanentes == 0;
+    int r = sin_runs ? 0 : bpvm_hilos_meter_main(vm);
     bpvm_platform_mutex_unlock(&q->vm_lock);
-    if (r != 0) {
-        bpvm_diag_urgente("[bpvm] la cola de hilos es de otro programa (o éste ya corrió): un programa a la vez (H12)");
-        return BPVM_ERR_RUNTIME;
-    }
+    if (sin_runs) return no_se_cuelga(vm, "no hay ningún run permanente en la cola que lo ejecute (H12)");
+    if (r != 0) return no_se_cuelga(vm, "la cola de hilos es de otro programa (o éste ya corrió): un programa a la vez (H12)");
     /* 2. Prepararlo (bpvm.c): enlazar, el main desde el punto de entrada, las excepciones prefabricadas. Si falla, no se
      *    publica; sus hilos se van con él al destruirlo. */
     bpvm_status_t ps = bpvm_programa_preparar(vm);
@@ -165,14 +172,21 @@ static void dormir(bpvm_cola_t* q, const bpvm_t* vm, int varios, int ms) {
     if (!varios) bpvm_platform_mutex_unlock(&q->vm_lock);
 }
 
-/* EL FIN, por el último run que sale: nadie más tiene un hilo entre manos. Con varios se entra con el cerrojo y se
- * suelta: `acabando` les dice a los demás que ya no lo toquen. Las líneas a medias pueden tener que esperar a `io`, que
- * vacía la salida, y `io` coge el cerrojo para avisar de un KILL: nunca se escribe con él cogido. Lo último,
- * descolgarlo y avisar a quien lo colgó: desde ahí este run no toca el programa (quien lo colgó lo destruye). */
+/* EL FIN, por el último run que sale: nadie más tiene un hilo entre manos. Con varios se entra con el cerrojo:
+ * `acabando` les dice a los demás que ya no lo toquen y que salgan, y éste espera a ser el ÚNICO dentro —uno sin hilo
+ * entre manos, dormido en la cola o entre dos vueltas, todavía puede mirar la VM: la revisión de la 2a.2—. Las líneas a
+ * medias pueden tener que esperar a `io`, que vacía la salida, y `io` coge el cerrojo para avisar de un KILL: nunca se
+ * escribe con él cogido. Lo último, descolgarlo —y salir él— y avisar a quien lo colgó: desde ahí ningún run toca el
+ * programa (quien lo colgó lo destruye). */
 static void acabar(bpvm_cola_t* q, bpvm_t* vm, int varios) {
     q->acabando = 1;
     if (q->ensayo_tras_cuanto_ms > 0) q->t_fin = bpvm_platform_now_us();   /* SÓLO PRUEBAS */
-    if (varios) bpvm_platform_mutex_unlock(&q->vm_lock);
+    if (varios) {
+        bpvm_platform_cond_broadcast(&q->sched_cond);                     /* los demás: que salgan */
+        while (q->dentro > 1 && !q->sabotaje_salida)                       /* (el sabotaje: SÓLO PRUEBAS) */
+            bpvm_platform_cond_wait(&q->sched_cond, &q->vm_lock);
+        bpvm_platform_mutex_unlock(&q->vm_lock);
+    }
     /* #342 — GUARDIÁN DE SALIDA. Si aún queda algo en la cola de eventos es que su destinatario no existe, o que un
      * handler post-mortem levantó eventos después de agotarse el presupuesto. Tirarlos es legítimo; tirarlos EN
      * SILENCIO es la familia de bug que costó #326. Que lo diga. */
@@ -204,14 +218,29 @@ static void acabar(bpvm_cola_t* q, bpvm_t* vm, int varios) {
     vm->smp = NULL;
     q->programa = NULL;           /* DESCOLGADO */
     q->acabando = 0;
+    q->dentro--;                  /* y sale éste, el último */
     bpvm_platform_cond_broadcast(&q->sched_cond);
     bpvm_platform_mutex_unlock(&q->vm_lock);
     if (cb) cb(vm, rs, user);
 }
 
-/* Un run sobre UN programa, hasta que acaba (o lo acaba otro run). */
-static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id) {
-    const int varios = (q->n_runs > 1);
+/* Un run que no lo cierra sale del programa: desde aquí no lo toca. El que lo cierra puede estar esperándolo. Con
+ * varios, se entra con el cerrojo cogido. */
+static void salir(bpvm_cola_t* q, int varios) {
+    if (q->ensayo_salida_ms > 0) {   /* SÓLO PRUEBAS (test_cola): la ventana ensanchada —tarda en contarse fuera— */
+        if (varios) bpvm_platform_mutex_unlock(&q->vm_lock);
+        bpvm_platform_thread_sleep_ms(q->ensayo_salida_ms);
+        varios = 0;                  /* (el cerrojo, suelto: se coge abajo) */
+    }
+    if (!varios) bpvm_platform_mutex_lock(&q->vm_lock);
+    q->dentro--;
+    bpvm_platform_cond_broadcast(&q->sched_cond);
+    bpvm_platform_mutex_unlock(&q->vm_lock);
+}
+
+/* Un run sobre UN programa, hasta que acaba (o lo acaba otro run). Entra contado en `dentro` (bpvm_cola_correr) y sale
+ * por acabar —si lo cierra él— o por salir: mientras tanto la VM vive, porque el que cierra lo espera. */
+static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
     for (;;) {
         /* P-run-stop (#257) — SIN `io`, el cable lo mira el planificador entre cuantos. Con `io` es suyo y un KILL llega
          * como kill_requested (A3: dos hilos no atienden el mismo transporte; `test-kill`, fases 4-6). */
@@ -226,8 +255,8 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id) {
         bpvm_platform_thread_yield();
 
         if (varios) bpvm_platform_mutex_lock(&q->vm_lock);
-        if (q->programa != vm || q->acabando) {       /* ya no es suyo: lo cierra otro run, o lo cerró */
-            if (varios) bpvm_platform_mutex_unlock(&q->vm_lock);
+        if (q->programa != vm || q->acabando) {       /* lo está cerrando otro run: a salir (lo espera) */
+            salir(q, varios);
             return;
         }
         if (varios && q->stop_the_world) {             /* otro run colecta (heap.c): a que acabe */
@@ -339,16 +368,20 @@ void bpvm_cola_correr(int permanente, int id) {
     const int para = permanente ? 1 : 0;
     for (;;) {
         bpvm_platform_mutex_lock(&q->vm_lock);
-        while (q->programa == NULL || q->para_permanentes != para || q->acabando) {
-            if (!permanente) {                 /* el suyo ya acabó (o lo está cerrando otro): vuelve */
+        /* Un programa publicado para los suyos, que no se esté cerrando y con sitio: no entran más runs que los que se
+         * publicaron (n_runs; con uno, el planificador va sin cerrojo y no puede haber otro dentro). */
+        while (q->programa == NULL || q->para_permanentes != para || q->acabando || q->dentro >= q->n_runs) {
+            if (!permanente) {                 /* el suyo ya acabó, lo está cerrando otro o no cabe: vuelve */
                 bpvm_platform_mutex_unlock(&q->vm_lock);
                 return;
             }
             bpvm_platform_cond_wait(&q->sched_cond, &q->vm_lock);   /* sin programa: dormido en la cola */
         }
         bpvm_t* vm = q->programa;
+        const int varios = (q->n_runs > 1);    /* leído aquí, con el cerrojo, con el programa que coge */
+        q->dentro++;
         bpvm_platform_mutex_unlock(&q->vm_lock);
-        correr_programa(q, vm, id);
+        correr_programa(q, vm, id, varios);    /* sale de él contado: por acabar o por salir */
         if (!permanente) return;
     }
 }

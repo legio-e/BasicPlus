@@ -1335,8 +1335,9 @@ test-gchondo: $(BIN)
 # V7/H12, etapa 2a.2 (4-oct) — LA COLA y su planificador, en lo que la red no ve por sí sola (test/test_cola.c): el
 # interbloqueo de verdad con uno y dos runs (Interbloqueo: RUNTIME_ERROR; con dos, antes de la 2a.2, colgado); el
 # interbloqueo FALSO que no puede salir (MutexGc con dos runs, el heap justo y la ventana ensanchada); y el fin, del
-# último run que suelta su hilo (FinJunto con dos runs y la ventana ensanchada). Y sus dos sabotajes, que tienen que dar
-# rojo: --sabotaje-contador (algún interbloqueo falso) y --sabotaje-fin (algún fin antes del último cuanto).
+# último run que suelta su hilo (FinJunto con dos runs y la ventana ensanchada); y que al avisar a quien lo colgó no
+# quede ningún run dentro (la revisión de la 2a.2). Y sus tres sabotajes, que tienen que dar rojo: --sabotaje-contador
+# (algún interbloqueo falso), --sabotaje-fin (algún fin antes del último cuanto) y --sabotaje-salida (algún run dentro).
 COLA_BIN = build/test_cola.exe
 test-cola: $(LIBOBJ)
 	@mkdir -p build
@@ -1346,9 +1347,9 @@ test-cola: $(LIBOBJ)
 	  echo "FAIL test-cola: faltan Interbloqueo.mod, MutexGc.mod o FinJunto.mod y no se han podido generar"; exit 1; \
 	fi
 	@$(CC) $(CFLAGS) -Isrc test/test_cola.c $(LIBOBJ) -o $(COLA_BIN) $(LDFLAGS)
-	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. PASS, 3. PASS y la linea OK) ---"
+	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2., 3. y 4. PASS y la linea OK) ---"
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod 2>/dev/null) || { echo "FAIL test-cola"; exit 1; }
-	@echo "--- y sus sabotajes (esperado: los dos, ROJOS, cada uno por lo suyo) ---"
+	@echo "--- y sus sabotajes (esperado: los tres, ROJOS, cada uno por lo suyo) ---"
 	@# El del contador: un interbloqueo FALSO dicho en stderr (detrás, el programa se descuelga con un run aún dentro
 	@# de su cuanto, que al despertar ya no lo encuentra: suele acabar en un fallo de segmento; por eso se mira el aviso).
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod --sabotaje-contador \
@@ -1361,7 +1362,12 @@ test-cola: $(LIBOBJ)
 	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab2.out; then \
 	   echo "  (rojo, como debe: el fin, decidido antes de que vuelva el último cuanto)"; \
 	 else echo "FAIL test-cola: el sabotaje del fin no se caza (salida $$st)"; exit 1; fi
-	@echo "PASS test-cola (y sus dos sabotajes, rojos)"
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod --sabotaje-salida \
+	   >../build/cola_sab3.out 2>/dev/null); st=$$?; cat build/cola_sab3.out; \
+	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab3.out; then \
+	   echo "  (rojo, como debe: el aviso llega con otro run todavía dentro del programa)"; \
+	 else echo "FAIL test-cola: el sabotaje de la salida no se caza (salida $$st)"; exit 1; fi
+	@echo "PASS test-cola (y sus tres sabotajes, rojos)"
 
 # V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS: cada hilo, una struct pedida al arrancarlo y devuelta al acabar (sin
 # array y sin tope; el diseño, de Eduardo). HilosMuchos arranca 120 hilos —40 de uno en uno, 40 a la vez esperando en

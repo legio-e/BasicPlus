@@ -14,8 +14,12 @@
  *     decide siempre después de que vuelva el último cuanto (las dos horas, en µs). La ventana, ensanchada: cada run se
  *     entretiene después de su cuanto, con el hilo entre manos —el 0, 5 ms; el 1, 25— (ensayo_tras_cuanto_ms).
  *     Sabotaje (--sabotaje-fin: el fin sin mirar si alguien tiene un hilo entre manos): pasadas al revés.
+ *  4. NADIE DENTRO AL AVISAR (FinJunto con dos runs, colgado con un aviso como el de la placa): cuando la cola avisa a
+ *     quien colgó el programa —que lo destruirá—, ya no queda ningún run dentro, tampoco uno sin hilo entre manos
+ *     dormido en la cola (la revisión adversarial de la 2a.2: con dos runs permanentes, el otro miraba la VM ya
+ *     destruida). Sabotaje (--sabotaje-salida: el que cierra no espera a que salgan los demás): alguno dentro.
  *
- * Uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod [--sabotaje-contador | --sabotaje-fin]
+ * Uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod [--sabotaje-contador | --sabotaje-fin | --sabotaje-salida]
  * Sale 0, con la línea «OK:» de la red, si todo pasa.
  */
 #include "bpvm.h"
@@ -116,23 +120,71 @@ static int ultimo(const char* mod, int sabotaje) {
     return malos ? 1 : 0;
 }
 
+/* 4. El aviso de la cola, como el de la placa (run_acabado): mira cuántos runs quedan dentro al avisar. */
+static int s_dentro_al_avisar = -1;
+static void al_acabar(bpvm_t* vm, int rs, void* user) {
+    (void) vm; (void) rs; (void) user;
+    s_dentro_al_avisar = bpvm_la_cola.dentro;
+}
+
+static int nadie_dentro(const char* mod, int sabotaje) {
+    int malos = 0, con_alguien = 0;
+    /* Las ventanas, ensanchadas: la de 3, porque sin ella el programa acaba antes de que el segundo run llegue a
+     * entrar; y la de la salida —el run que sale tarda 30 ms en contarse fuera—, porque sin ella sale mientras el que
+     * cierra escribe las líneas del final, y no queda nadie dentro al avisar (lo midió el sabotaje: 0 de 20 las dos
+     * veces). */
+    bpvm_la_cola.ensayo_tras_cuanto_ms = 5;
+    bpvm_la_cola.ensayo_salida_ms = 30;
+    bpvm_la_cola.sabotaje_salida = sabotaje;
+    for (int i = 0; i < PASADAS; i++) {
+        uint8_t* mem = (uint8_t*) calloc(1, 512 * 1024);
+        bpvm_t* vm = mem ? bpvm_init(mem, 512 * 1024, 0) : NULL;
+        if (!vm || bpvm_load_mod(vm, mod) != BPVM_OK) { malos++; if (vm) bpvm_destroy(vm); free(mem); continue; }
+        salida_t o;
+        memset(&o, 0, sizeof o);
+        bpvm_set_output(vm, guarda, &o);
+        s_dentro_al_avisar = -1;
+        int s = bpvm_cola_colgar(vm, 2, 0, al_acabar, NULL);   /* dos runs temporales, con aviso */
+        if (s == BPVM_OK) {
+            bpvm_cola_correr_n(2);
+            s = bpvm_la_cola.rs;
+        }
+        if (s_dentro_al_avisar > 0) con_alguien++;
+        if (s != BPVM_OK || s_dentro_al_avisar != 0 || !strstr(o.buf, "corto:") || !strstr(o.buf, "main:")) malos++;
+        bpvm_destroy(vm);
+        free(mem);
+    }
+    bpvm_la_cola.ensayo_tras_cuanto_ms = 0;
+    bpvm_la_cola.ensayo_salida_ms = 0;
+    bpvm_la_cola.sabotaje_salida = 0;
+    printf("[cola] 4. nadie dentro al avisar (dos runs, la ventana ensanchada%s): %d de %d bien; con algún run aún "
+           "dentro, %d %s\n",
+           sabotaje ? ", SABOTEADO" : "", PASADAS - malos, PASADAS, con_alguien, malos ? "FAIL" : "PASS");
+    return malos ? 1 : 0;
+}
+
 int main(int argc, char** argv) {
     bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
     if (argc < 4) {
-        fprintf(stderr, "uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod [--sabotaje-contador|--sabotaje-fin]\n");
+        fprintf(stderr, "uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod "
+                        "[--sabotaje-contador|--sabotaje-fin|--sabotaje-salida]\n");
         return 2;
     }
-    int sab_contador = 0, sab_fin = 0;
+    int sab_contador = 0, sab_fin = 0, sab_salida = 0;
     for (int i = 4; i < argc; i++) {
         if (!strcmp(argv[i], "--sabotaje-contador")) sab_contador = 1;
         else if (!strcmp(argv[i], "--sabotaje-fin")) sab_fin = 1;
+        else if (!strcmp(argv[i], "--sabotaje-salida")) sab_salida = 1;
     }
+    int sabotaje = sab_contador || sab_fin || sab_salida;
     int fallos = 0;
-    if (!sab_contador && !sab_fin) fallos += interbloqueo(argv[1]);
-    if (!sab_fin) fallos += falso(argv[2], sab_contador);
-    if (!sab_contador) fallos += ultimo(argv[3], sab_fin);
-    if (fallos == 0 && !sab_contador && !sab_fin)
-        printf("OK: la cola (H12 2a.2): el interbloqueo, con uno y dos runs; ni uno falso; y el fin, del último que sale\n");
+    if (!sabotaje) fallos += interbloqueo(argv[1]);
+    if (!sabotaje || sab_contador) fallos += falso(argv[2], sab_contador);
+    if (!sabotaje || sab_fin) fallos += ultimo(argv[3], sab_fin);
+    if (!sabotaje || sab_salida) fallos += nadie_dentro(argv[3], sab_salida);
+    if (fallos == 0 && !sabotaje)
+        printf("OK: la cola (H12 2a.2): el interbloqueo, con uno y dos runs; ni uno falso; el fin, del último que sale; "
+               "y nadie dentro al avisar\n");
     return fallos ? 1 : 0;
 }

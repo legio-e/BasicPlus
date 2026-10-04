@@ -2249,12 +2249,12 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
     bpvm_io_ops_t io_ops = { run_poll, run_salida, &s_run_salida };
     bpvm_status_t rs;
     int64_t t0;
-    if (s_tarea.en_cola) {
+    if (s_tarea.en_cola && bpvm_io_preparar(vm, &io_ops, (size_t) r->io_cola) == 0) {
         /* V7/H12, etapa 2a.2: el programa, a LA COLA; lo corre el run permanente y ésta hace de `io` hasta que acabe (el
-         * protocolo, arriba). Sin memoria para las colas de `io`, corre igual: `run` atiende el cable entre cuantos (el
-         * poll de arriba) y ésta sólo espera el «hecho», sin tocar el cable. */
-        int con_io = bpvm_io_preparar(vm, &io_ops, (size_t) r->io_cola) == 0;
-        log_printf("run: %s, sesión %ld%s", path, sesion, con_io ? "" : " (sin io: el cable lo atiende run)");
+         * protocolo, arriba). Sin memoria para las colas de `io`, el RUN de siempre (abajo: el programa en esta tarea,
+         * que atiende el cable entre cuantos): la pila de `run` no está medida para el despachador del cable (la
+         * revisión de la 2a.2). Un programa colgado así no lo coge el run permanente: no es para él. */
+        log_printf("run: %s, sesión %ld", path, sesion);
         /* REGLA (2-oct): elapsedMs, de colgarlo a parar `io` (la última línea del programa, ya fuera). */
         t0 = bpvm_platform_now_ms();
         s_tarea.fin = 0;
@@ -2262,14 +2262,12 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
         if (ps != BPVM_OK) {
             rs = (bpvm_status_t) ps;               /* no se publicó (un fallo de enlace…): nadie más la ha tocado */
         } else {
-            if (con_io) {
-                static volatile int ya = 1;   /* el sabotaje de las pruebas: cerrar la cola sin esperar a `run` */
-                bpvm_io_lazo(vm, s_tarea.sabotaje ? &ya : &s_tarea.fin);
-            }
+            static volatile int ya = 1;   /* el sabotaje de las pruebas: cerrar la cola sin esperar a `run` */
+            bpvm_io_lazo(vm, s_tarea.sabotaje ? &ya : &s_tarea.fin);
             bpvm_platform_sem_take(&s_tarea.hecho);   /* `run` ha soltado la VM: desde aquí, es de esta tarea */
             rs = (bpvm_status_t) s_tarea.rs;
         }
-        if (con_io) bpvm_io_stop(vm);              /* sin hilo que unir: libera las colas */
+        bpvm_io_stop(vm);                          /* sin hilo que unir: libera las colas */
     } else if (s_tarea.viva && bpvm_io_preparar(vm, &io_ops, (size_t) r->io_cola) == 0) {
         /* V7/H12, etapas 0 y 1 (el relevo de la etapa 1, con el interruptor a 0): el programa, en la tarea `run`; ésta
          * hace de `io` hasta que acabe (el protocolo, arriba) */

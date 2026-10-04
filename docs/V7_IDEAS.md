@@ -4487,7 +4487,14 @@ implica que la estructura deberá alojarse con malloc y que Thread BP debería t
   semáforo contador y el plazo arreglado; el `gc()` con stop-the-world; los eventos bajo el cerrojo; el KILL que despierta
   y atómico; el depurador y la GUI, con un solo run; el log con cerrojo. **Puerta**: la de la 2a, más las pruebas que
   provocan el aviso perdido (con su sabotaje) y horas de resistencia en la Pico 2. **Volver atrás**: `vm.runs=1` en el
-  ENV.
+  ENV. Y lo que añadió la revisión de la 2a.2 (4-oct): la condición de FreeRTOS, en sus TRES copias (`pico/`, `src/` y
+  `esp32/common/`), pierde avisos con dos esperando —también los de la cola de salida, con dos productores— y un plazo
+  que vence a la vez que un aviso deja una ficha suelta: un aviso por tarea (`xTaskNotifyGive`), con una prueba en placa
+  de tres esperadores; cada run permanente con su número (hoy los dos serían el 0); el RUN publica con tantos runs como
+  haya permanentes, y con uno si se depura; sin `io`, el cable lo miraría cada run (que lo mire uno); los eventos: el
+  encolado bajo el cerrojo, resucitar sólo a un hilo que no tenga run (`sched_owner == -1`; si no, la excepción sin
+  atrapar de un hilo que no es el main —#608— se tomaría por la del programa) y que el `join` cuente los eventos que su
+  hilo debe (#595).
 
 ### Etapa 2a.2 — la cola permanente y UN planificador (4-oct): el diseño, para revisar antes de tocar código
 
@@ -4526,9 +4533,10 @@ implica que la estructura deberá alojarse con malloc y que Thread BP debería t
    - Al acabar, **el último run que sale** escribe las líneas a medias y las líneas `pila:` y `hilos:` (fuera del
      cerrojo: escribir puede tener que esperar a `io`), lo DESCUELGA y avisa a `io` —`fin`, despertarlo y el «hecho»,
      como en la etapa 1—. Desde ahí no toca el programa: `io` manda el `EXITED` y lo destruye.
-   - Si `io` no puede nacer (no hay memoria para sus colas), el programa corre igualmente en `run`, sin `io`: `run`
-     atiende el cable entre cuantos (el camino de siempre sin `io`) y la tarea del REPL espera el «hecho» sin tocar el
-     cable. Hasta ahora, en ese caso, el programa corría en la tarea del REPL.
+   - Si `io` no puede nacer (no hay memoria para sus colas), el RUN de siempre: el programa corre en la tarea del REPL,
+     que atiende el cable entre cuantos, como antes de la 2a.2 (se pensó correrlo en `run`, y la revisión lo tumbó: la
+     pila de `run` no está medida para el despachador del cable). Un programa colgado así no es para los runs
+     permanentes: no lo cogen.
    - **En el PC, la STM32 y las pruebas de C**: `bpvm_run(vm)` cuelga el programa y hace de run el hilo que llama,
      hasta que acaba; `bpvm_run_smp(vm, N)`, N runs que acaban con él. La misma cola y el mismo planificador: sólo
      cambia quién espera el final. Y los runs permanentes sólo cogen lo que se publica para ellos (y `bpvm_run`, lo
@@ -4596,6 +4604,34 @@ planificador se deshiciera con git y no con el interruptor): *«Sí, con git»*.
 **Por pasos**, cada uno con su commit: (1) la cola y el planificador, en el PC —`bpvm_run` y `bpvm_run_smp` encima; la
 tarea `run` de las placas, todavía con el «trabajo»—, con la red entera; (2) los runs permanentes —el run espera en la
 cola e `io` cuelga—, con el simulado; (3) la Pico 2 y su puerta: una sola grabación para los dos pasos.
+
+**Hecho en el PC** (4-oct): el paso 1 (`b776a325`) con la red entera verde —la paridad 133/133 en MOD9 y en MOD8, el
+corpus con dos workers igual que con uno, la cápsula de V6, las pruebas de C, el simulado, la sombra y el estrés del
+heap— y sus pruebas nuevas, cada una con su sabotaje cazado: `test-kill`, fases 7-8 (un programa dormido una hora, con
+`io` y sin poll, para en ~300 ms —lo que tarda en llegar el KILL— con uno y con dos runs; sin el aviso a la cola no se
+para) y `test-cola` (el interbloqueo de verdad, RUNTIME_ERROR con uno y con dos runs; ninguno falso en 20 vueltas con
+la ventana ensanchada, y contando con el contador del GC, uno falso; el fin, del último que sale en 20 de 20, y
+decidiéndolo sin mirar, 20 de 20 al revés). Y el paso 2 (`156db15e`) con `check-sim` 11/11: mil RUN seguidos
+colgándose en la cola permanente (2,6 s), el KILL que despierta (11 ms) y su sabotaje, y el interruptor
+`--run-etapa1`. Compilan la Pico 2, el S3 y la Nucleo. Lo que se vio por el camino: con el sabotaje del contador,
+detrás del interbloqueo falso el programa se descuelga con un run todavía dentro de su cuanto, que al despertar ya no lo
+encuentra —un fallo de segmento—: es lo que evita «nadie tiene un hilo entre manos».
+
+**La revisión adversarial** (4-oct, un agente con el código; lo que pesa, comprobado a mano): en lo que corre hoy —un run
+en las placas, los runs del PC (que se unen antes de destruir la VM) y `bpvm_run`— no encontró ningún fallo. Con dos
+runs PERMANENTES (la 2b), dos críticos, ARREGLADOS ya porque son del protocolo de la cola: (1) «el último que sale»
+sólo contaba los runs con un hilo entre manos, y otro run sin hilo —dormido en la cola, o entre dos vueltas— todavía
+podía mirar la VM después del aviso, ya destruida (y si la siguiente caía en la misma dirección, tomarla por la suya);
+(2) nada limitaba cuántos runs entraban en un programa publicado para uno. El arreglo: la cola cuenta los runs DENTRO
+del programa (`dentro`: de cogerlo a salir de él); no entran más de los publicados, y el que lo cierra espera a ser el
+único dentro antes de descolgarlo y avisar. Su prueba, la parte 4 de `test-cola` (al avisar, nadie dentro; 20 de 20),
+con su sabotaje (el que cierra no espera: 20 de 20 con otro run dentro). Y los bajos, también: colgar con la cola
+ocupada, o para runs permanentes sin ninguno, dice el porqué en el EXITED (antes, «RuntimeError no atrapado» y el
+motivo sólo en el log); y sin memoria para `io` el programa vuelve a correr en la tarea del REPL, como antes de la 2a.2
+(la pila de `run` no está medida para el despachador del cable). Lo demás que señaló es de dos runs y va a la lista de
+la 2b (abajo). Una nota que se queda: la preparación corre en `io` con sus colas ya puestas y su lazo parado —si
+escribiera en la salida del programa y la llenara, `io` se esperaría a sí mismo—; hoy no escribe nada (el enlace no
+emite, los avisos son del cargador, que va antes), y así tiene que seguir.
 
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
