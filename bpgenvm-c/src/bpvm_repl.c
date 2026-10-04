@@ -1926,14 +1926,13 @@ static void run_salida(const char* s, size_t n, void* user) {
 }
 
 /* V5/H4 — EL LATIDO (era de la Pico; desde el RUN común, de todas: `latido=1` en el ENV). Cada 256 vueltas del poll,
- * el pc y el estado de cada hilo vivo, al log: para un cuelgue, dónde está girando. */
+ * al log: para un cuelgue, dónde está girando. V7/H12, etapa 2: lo corre `io` mientras el programa sigue en `run`, y
+ * las structs de los hilos se devuelven al acabar: no se recorre la cola desde aquí (sin cerrojo, sería leer memoria
+ * liberada). El último hilo elegido y su pc, que el planificador deja en dos campos sin punteros. */
 static void run_latido(bpvm_t* vm) {
     static unsigned n = 0;
     if ((n++ & 0xFFu) != 0) return;
-    for (int i = 0; i < BPVM_MAX_THREADS; i++) {
-        if (vm->threads[i].status == BPVM_THREAD_TERMINATED) continue;
-        log_printf("latido: th%d pc=%lu estado=%d", i, (unsigned long) vm->threads[i].pc, (int) vm->threads[i].status);
-    }
+    log_printf("latido: th%ld pc=%lu", (long) vm->latido_tid, (unsigned long) vm->latido_pc);
 }
 
 /* EL POLL, durante el RUN: lo llama `io` en cada vuelta (y la VM entre cuantos si `io` no arrancó).

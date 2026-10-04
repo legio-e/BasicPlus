@@ -411,9 +411,9 @@ static void gc_mark_phase(bpvm_t* vm) {
     if (vm->gc_descarrilo) return;
     s_gc_pila_n = 0;          /* #648: la pila de marcado, vacía (un GC anterior la deja así, pero no se supone) */
     s_gc_desbordada = 0;
-    /* 1. Stacks de threads. */
-    for (int t = 0; t < vm->thread_count; t++) {
-        const bpvm_thread_t* tc = &vm->threads[t];
+    /* 1. Stacks de threads (V7/H12, etapa 2: los de la cola, una vuelta). */
+    for (const bpvm_thread_t* tc = bpvm_hilos_primero(vm); tc; tc = bpvm_hilos_siguiente(vm, tc)) {
+        int t = tc->id;
         uint32_t lo = tc->stack_base;
         uint32_t hi = tc->sp;
         /* #355 — QUE SE VEA LO QUE SE ESCANEA. El marcado daba 44 bytes vivos con
@@ -438,8 +438,8 @@ static void gc_mark_phase(bpvm_t* vm) {
     }
     /* 2. allocAnchor por thread: objeto anclado durante el unwind de un
      *    RuntimeError (F5), raíz mientras no esté en la pila (H-001/GC-2). */
-    for (int t = 0; t < vm->thread_count; t++) {
-        uint32_t anchor = (uint32_t) vm->threads[t].alloc_anchor;
+    for (const bpvm_thread_t* tc = bpvm_hilos_primero(vm); tc; tc = bpvm_hilos_siguiente(vm, tc)) {
+        uint32_t anchor = (uint32_t) tc->alloc_anchor;
         if (anchor != 0) mark_recursive(vm, anchor);
     }
     /* 2a-bis. #430 — la excepcion PREFABRICADA del OOM (idea de Eduardo):
@@ -497,8 +497,9 @@ static void gc_mark_phase(bpvm_t* vm) {
      *     setjmp antes de pasar el testigo— está en la pila del ejecutor, desde donde se paró hasta el techo
      *     que apuntó su native más externa. Nadie más lo ve: la native no corre, así que el escaneo de abajo
      *     (el del native en curso) no la cubre. Palabra a palabra y conservador, como ese. */
-    for (int t = 0; t < vm->thread_count; t++) {
-        const struct bpvm_nativa* nv = vm->threads[t].nativa;
+    for (const bpvm_thread_t* th = bpvm_hilos_primero(vm); th; th = bpvm_hilos_siguiente(vm, th)) {
+        int t = th->id;
+        const struct bpvm_nativa* nv = th->nativa;
         if (nv == NULL || (nv->estado != BPVM_NATIVA_SUSPENDIDA && nv->estado != BPVM_NATIVA_PIDE_GC)) continue;
         if (nv->cc_nativa.cstack_hi == 0) {
             /* Sin marcos de native vivos: pide el GC tras salir de ella (construyendo la excepción con la que
@@ -1025,7 +1026,8 @@ static void compactar(bpvm_t* vm) {
     vm->heap_next = dst;
     vm->last_gc_heap_next = dst;
     vm->alloc_since_gc = 0u;
-    for (int t = 0; t < vm->thread_count; t++) vm->threads[t].alloc_anchor = 0;   /* un ancla es transitoria */
+    for (bpvm_thread_t* th = bpvm_hilos_primero(vm); th; th = bpvm_hilos_siguiente(vm, th))
+        th->alloc_anchor = 0;   /* un ancla es transitoria */
     bpvm_diag("[gc] compactado: bump %u -> %u (%u bloques movidos, %u clavados, %u huecos)",
               (unsigned) antes, (unsigned) vm->heap_next,
               (unsigned) movidos, (unsigned) clavados, (unsigned) huecos);
@@ -1041,8 +1043,7 @@ int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc) {
      * resucitar a un hilo con eventos pendientes (#342) y dejarlo a medias de un builtin o de una expresión con
      * una dirección cruda (la revisión de #595). Parado, los workers esperan antes de despertar a nadie. Un hilo
      * TERMINATED que aún debe eventos cuenta como vivo, como en miVM. */
-    for (int t = 0; t < vm->thread_count && r == 0; t++) {
-        const bpvm_thread_t* o = &vm->threads[t];
+    for (const bpvm_thread_t* o = bpvm_hilos_primero(vm); o && r == 0; o = bpvm_hilos_siguiente(vm, o)) {
         if (o != tc && (o->status != BPVM_THREAD_TERMINATED || bpvm_events_con_deuda(vm, o))) r = 2;
     }
     if (r == 0 && !vm->gc_suspended) {   /* con el GC apagado, nada: apagado es apagado (#355) */

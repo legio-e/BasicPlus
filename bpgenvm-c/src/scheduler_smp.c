@@ -30,41 +30,21 @@
 /*  Helpers (bajo vm_lock)                                       */
 /* ============================================================ */
 
-/* V7 #616 (1-oct) — EN RUEDA, como scheduler.c y como miVM (su cola): se busca desde el
- * siguiente al último que se eligió (`current_thread_idx`, que se escribe bajo vm_lock
- * al elegir), no desde el primero. Buscando siempre desde el 0, con más hilos listos que
- * workers los primeros acaparaban: con un worker, tres hilos que calculan sin ceder
- * corrían A entero, luego B, luego C; con dos, C no empezaba hasta que acababa A. */
-static int pick_next_runnable_locked(bpvm_t* vm) {
-    int n = vm->thread_count;
-    if (n <= 0) return -1;
-    int desde = vm->current_thread_idx;
-    for (int i = 0; i < n; i++) {
-        int idx = (desde + 1 + i) % n;
-        /* H2 — Sólo seleccionable si está RUNNABLE Y nadie lo tiene
-         * asignado actualmente (sched_owner == -1). El status se puede
-         * escribir desde el interp sin lock, por eso no basta — el
-         * worker que "tiene" el tc lo marca con su wid bajo vm_lock y
-         * lo libera bajo vm_lock al volver al scheduler. */
-        if (vm->threads[idx].status == BPVM_THREAD_RUNNABLE
-                && vm->threads[idx].sched_owner == -1) {
-            return idx;
-        }
-    }
-    return -1;
-}
+/* V7 #616 (1-oct) — EN RUEDA, como scheduler.c y como miVM (su cola): se busca desde el siguiente al último que se
+ * eligió, no desde el primero (buscando siempre desde el primero, con más hilos listos que workers, los primeros
+ * acaparaban). V7/H12, etapa 2: sobre LA COLA de hilos (threading.c, bpvm_hilos_elegir), una vuelta como mucho. H2 —
+ * sólo uno RUNNABLE Y que nadie tenga (sched_owner == -1): el status lo escribe el intérprete sin lock, así que no
+ * basta; el worker que tiene el tc lo marca con su wid bajo vm_lock y lo suelta bajo vm_lock al volver. */
 
 static int any_alive_locked(const bpvm_t* vm) {
-    for (int i = 0; i < vm->thread_count; i++) {
-        if (vm->threads[i].status != BPVM_THREAD_TERMINATED) return 1;
-    }
+    for (bpvm_thread_t* h = bpvm_hilos_primero(vm); h; h = bpvm_hilos_siguiente(vm, h))
+        if (h->status != BPVM_THREAD_TERMINATED) return 1;
     return 0;
 }
 
 static int64_t earliest_wake_locked(const bpvm_t* vm) {
     int64_t min = INT64_MAX;
-    for (int i = 0; i < vm->thread_count; i++) {
-        const bpvm_thread_t* tc = &vm->threads[i];
+    for (bpvm_thread_t* tc = bpvm_hilos_primero(vm); tc; tc = bpvm_hilos_siguiente(vm, tc)) {
         if (tc->status == BPVM_THREAD_BLOCKED_SLEEP && tc->wake_at_ms < min) {
             min = tc->wake_at_ms;
         }
@@ -88,23 +68,24 @@ static int do_wakeups_locked(bpvm_t* vm) {
      * que el handler, sólo con --smp; en miVM y sin SMP, después). Resucitado,
      * vuelve a estar RUNNABLE y el join espera a que salde su deuda. */
     woken += bpvm_events_revive_terminated(vm);
-    for (int i = 0; i < vm->thread_count; i++) {
-        bpvm_thread_t* tc = &vm->threads[i];
+    for (bpvm_thread_t* tc = bpvm_hilos_primero(vm); tc; tc = bpvm_hilos_siguiente(vm, tc)) {
         if (tc->status == BPVM_THREAD_BLOCKED_SLEEP && tc->wake_at_ms <= now) {
             tc->status = BPVM_THREAD_RUNNABLE;
             woken++;
-        } else if (tc->status == BPVM_THREAD_BLOCKED_JOIN
-                && tc->blocked_on_join >= 0
-                && tc->blocked_on_join < vm->thread_count
-                && vm->threads[tc->blocked_on_join].status == BPVM_THREAD_TERMINATED
-                /* ...y sin deuda: el TERMINATED se escribe sin cerrojo (interp.c), así que pudo llegar entre la
-                 * resurrección de arriba y esta línea; con deuda, la siguiente pasada lo resucita. */
-                && !bpvm_events_con_deuda(vm, &vm->threads[tc->blocked_on_join])) {
-            tc->blocked_on_join = -1;
-            tc->status = BPVM_THREAD_RUNNABLE;
-            woken++;
+        } else if (tc->status == BPVM_THREAD_BLOCKED_JOIN && tc->blocked_on_join >= 0) {
+            /* Su hilo terminó —o ya salió de la cola: su handle no resuelve (H12, etapa 2)—, y sin deuda: el
+             * TERMINATED se escribe sin cerrojo (interp.c), así que pudo llegar entre la resurrección de arriba y esta
+             * línea; con deuda, la siguiente pasada lo resucita. */
+            const bpvm_thread_t* t = bpvm_hilo_por_tid(vm, tc->blocked_on_join);
+            if (t == NULL || (t->status == BPVM_THREAD_TERMINATED && !bpvm_events_con_deuda(vm, t))) {
+                tc->blocked_on_join = -1;
+                tc->status = BPVM_THREAD_RUNNABLE;
+                woken++;
+            }
         }
     }
+    /* H12, etapa 2 — los que acabaron del todo salen de la cola: su struct y su pila, devueltas. */
+    bpvm_hilos_recoger(vm);
     return woken;
 }
 
@@ -139,7 +120,6 @@ static void worker_loop(void* raw) {
 
         /* ------- Scheduler decision bajo vm_lock ------- */
         bpvm_thread_t* tc = NULL;
-        int tc_idx = -1;
         bpvm_platform_mutex_lock(&smp->vm_lock);
         for (;;) {
             if (smp->shutdown) {
@@ -162,11 +142,8 @@ static void worker_loop(void* raw) {
                 continue;
             }
             do_wakeups_locked(vm);
-            tc_idx = pick_next_runnable_locked(vm);
-            if (tc_idx >= 0) {
-                tc = &vm->threads[tc_idx];
-                break;
-            }
+            tc = bpvm_hilos_elegir(vm, 1);
+            if (tc != NULL) break;
             if (!any_alive_locked(vm)) {
                 smp->shutdown = true;
                 bpvm_platform_cond_broadcast(&smp->sched_cond);
@@ -209,7 +186,6 @@ static void worker_loop(void* raw) {
          * el tc es nuestro y nadie más lo está ejecutando, así que su
          * pc/sp/bp/cs son los buenos y la cola no se toca en paralelo. */
         bpvm_event_drain_one(vm, tc);
-        vm->current_thread_idx = tc_idx;
         smp->running_workers++;
         bpvm_platform_mutex_unlock(&smp->vm_lock);
 
@@ -242,7 +218,7 @@ static void worker_loop(void* raw) {
         if (s != BPVM_OK) {
             /* Fallo terminal del intérprete → shutdown VM. */
             bpvm_diag_urgente("[bpvm-c smp w%d] interp error: status=%d",
-                    arg ? 0 : 0, (int) s);
+                    wid, (int) s);   /* era `arg ? 0 : 0`, con `arg` ya liberado: siempre 0 (el mapa del 4-oct) */
             if (smp->fallo == 0) smp->fallo = (int) s;   /* #596: el RUN acaba con ÉSTE */
             smp->shutdown = true;
         }

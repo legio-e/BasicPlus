@@ -97,8 +97,7 @@ int bpvm_events_con_deuda(const bpvm_t* vm, const bpvm_thread_t* tc) {
 
 int bpvm_events_revive_terminated(bpvm_t* vm) {
     int revived = 0;
-    for (int i = 0; i < vm->thread_count; i++) {
-        bpvm_thread_t* tc = &vm->threads[i];
+    for (bpvm_thread_t* tc = bpvm_hilos_primero(vm); tc; tc = bpvm_hilos_siguiente(vm, tc)) {   /* H12: la cola */
         if (tc->status != BPVM_THREAD_TERMINATED) continue;
         if (tc->ev_post_mortem == 0) continue;          /* ya saldó su deuda */
         int n = pending_for(vm, tc->id);

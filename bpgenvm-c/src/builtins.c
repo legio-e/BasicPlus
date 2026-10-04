@@ -2985,12 +2985,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int new_tid = bpvm_thread_spawn(vm, thread_ref);
         if (new_tid == -2)   /* #530: el mismo texto que miVM (no pasa con un Thread: Core.Thread tiene run()) */
             return builtin_throw(vm, tc, "Thread.start: run() no resoluble en la cadena de herencia");
-        /* V7/H7 #604 — los dos límites, atrapables y con el texto de miVM (antes, el programa moría con un error que no
-         * se atrapa): más de BPVM_MAX_THREADS vivos a la vez, o sin sitio para la pila que pide el hilo. */
+        /* V7/H7 #604 — los límites, atrapables (antes, el programa moría con un error que no se atrapa): sin sitio para
+         * la pila que pide el hilo —con el texto de miVM— o, desde la etapa 2 de H12 (sin tope de hilos: lo pone la
+         * memoria), sin memoria para su struct (la RAM del sistema; miVM no tiene ese límite). */
         if (new_tid == -1 || new_tid == -3) {
             char m[80];
             if (new_tid == -1) {
-                snprintf(m, sizeof m, "Thread.start: demasiados hilos vivos a la vez (%d)", BPVM_MAX_THREADS);
+                snprintf(m, sizeof m, "Thread.start: no hay memoria para el hilo");
             } else {
                 int32_t pedido = bpvm_read_i32_be(vm->memory + bpref_deref(vm, thread_ref) + 4 + 1 * 4);
                 snprintf(m, sizeof m, "Thread.start: no hay memoria para la pila del hilo (%ld B)",
@@ -3015,14 +3016,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* Convención: field[0] del Thread BP guarda el tid (escrito
          * por __threadStart). 0 = no spawneado todavía. */
         int32_t target_tid = bpvm_read_i32_be(vm->memory + ref_addr(vm, thread_ref) + 4 + 0 * 4);
-        if (target_tid <= 0 || target_tid >= vm->thread_count) {
-            push_i32(vm, tc, 0); return BPVM_OK;
+        /* V7/H12, etapa 2 — el __tid es el HANDLE de su struct en la cola: si no resuelve, el hilo acabó y salió (o
+         * no ha arrancado: 0). Mirarlo y bloquearse, bajo el cerrojo: otro worker puede estar sacando hilos de la
+         * cola a la vez. */
+        bpvm_smp_lock(vm);
+        const bpvm_thread_t* target = (target_tid > 0) ? bpvm_hilo_por_tid(vm, target_tid) : NULL;
+        if (target != NULL && target->status != BPVM_THREAD_TERMINATED) {
+            tc->blocked_on_join = target_tid;
+            tc->status = BPVM_THREAD_BLOCKED_JOIN;
         }
-        if (vm->threads[target_tid].status == BPVM_THREAD_TERMINATED) {
-            push_i32(vm, tc, 0); return BPVM_OK;
-        }
-        tc->blocked_on_join = target_tid;
-        tc->status = BPVM_THREAD_BLOCKED_JOIN;
+        bpvm_smp_unlock(vm);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3860,7 +3863,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          *    o el del puente de una native)—. Y ninguna native a medias en este hilo: una native no abre marco BP
          *    (sus variables son de C), así que el marco no lo diría; en miVM la native es bytecode y sí lo dice. */
         uint32_t tbp = tc->bp;
-        int desde_main = (tc == &vm->threads[0])
+        int desde_main = (tc == vm->hilo_main)
             && tbp > tc->stack_base
             && bpvm_read_u32_be(vm->memory + tbp - 8u) == tc->stack_base
             && bpvm_read_u32_be(vm->memory + tbp - 12u) >= BPVM_INITIAL_FREE_ADDR

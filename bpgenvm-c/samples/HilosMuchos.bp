@@ -2,13 +2,15 @@
 //
 // La VM-C no reutilizaba el hueco ni la pila de un hilo terminado: un programa sólo podía crear 32 hilos EN TODA SU
 // VIDA, y el 32 moría con «Thread.start falló», un error que no se atrapa (miVM creaba los que hicieran falta). Un
-// programa de días que lance un hilo por tarea moría así. Ahora las dos VMs reutilizan los huecos, y el límite es el
-// de hilos VIVOS a la vez (32, el main incluido): pasarlo es una RuntimeError atrapable, con el mismo texto en las dos.
+// programa de días que lance un hilo por tarea moría así. Después (#604) las dos VMs reutilizaban los huecos, con un
+// tope de 32 hilos VIVOS a la vez. Desde la etapa 2 de H12 (4-oct; Eduardo: «¿por qué tiene que haber un límite?»), sin
+// tope: cada hilo es una struct que se pide al arrancarlo y se devuelve al acabar, y el límite lo pone la memoria —sin
+// sitio para su pila, una RuntimeError atrapable, con el mismo texto en las dos—.
 //
 //   1. 40 hilos de uno en uno (start y join): los 40.
-//   2. hilos que esperan en un Mutex del main, hasta que start() dice que no caben: 31 arrancados (el main es el 32)
-//      y la excepción atrapada; luego el main suelta el Mutex, acaban todos y se unen.
-//   3. otros 40 de uno en uno, sobre los huecos que dejaron los de antes.
+//   2. 40 hilos que esperan a la vez en un Mutex del main —más de los 32 de antes—; si start() dijera que no caben, la
+//      excepción atrapada; luego el main suelta el Mutex, acaban todos y se unen.
+//   3. otros 40 de uno en uno, sobre las pilas que dejaron los de antes.
 module HilosMuchos
 
   class Tarea extends Thread

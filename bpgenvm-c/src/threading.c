@@ -1,10 +1,8 @@
 /*
  * threading.c — helpers para Thread y Mutex BP (F4 v1).
  *
- * F4 v1 — single-worker cooperative scheduler en main thread del
- * proceso. Sin pthreads adicionales. Cada Thread BP es un
- * ThreadContext del array vm->threads[]; el scheduler los va
- * pickeando round-robin. F4 v2 (futuro) puede migrar a multi-pthread.
+ * Cada hilo BP es, para la VM, una bpvm_thread_t pedida con malloc; la COLA de hilos son esas structs (una lista
+ * doble y circular: V7/H12, etapa 2, más abajo), y los planificadores la recorren en rueda.
  *
  * Mutex BP: pool dinámico indexado por mid (id de mutex). __mutexCreate
  * devuelve el id. El layout del objeto Mutex BP es opaco para nosotros
@@ -77,10 +75,14 @@ int bpvm_mutex_try_acquire(bpvm_t* vm, int mid, int tid) {
             m->owner_tid = tid;
             r = 1;                        /* tomado */
         } else {
-            /* Ocupado: apuntarse Y bloquearse, juntos y bajo el cerrojo. */
+            /* Ocupado: apuntarse Y bloquearse, juntos y bajo el cerrojo. (El que llama es el hilo en curso: está en la
+             * cola. H12, etapa 2: por su handle.) */
+            bpvm_thread_t* yo = bpvm_hilo_por_tid(vm, tid);
             bpvm_mutex_add_waiter_locked(vm, mid, tid);
-            vm->threads[tid].blocked_on_mutex = mid;
-            vm->threads[tid].status = BPVM_THREAD_BLOCKED_MUTEX;
+            if (yo != NULL) {
+                yo->blocked_on_mutex = mid;
+                yo->status = BPVM_THREAD_BLOCKED_MUTEX;
+            }
             r = 0;                        /* bloqueado */
         }
     }
@@ -98,11 +100,12 @@ int bpvm_mutex_release(bpvm_t* vm, int mid, int tid, int* owner_out) {
             r = -1;                       /* no es suyo: lo denuncia el llamante */
         } else {
             int next = bpvm_mutex_pop_waiter_locked(vm, mid);
-            if (next >= 0) {
+            bpvm_thread_t* sig = (next >= 0) ? bpvm_hilo_por_tid(vm, next) : NULL;   /* H12: por su handle */
+            if (sig != NULL) {
                 m->owner_tid = next;
-                vm->threads[next].blocked_on_mutex = -1;
-                if (vm->threads[next].status == BPVM_THREAD_BLOCKED_MUTEX) {
-                    vm->threads[next].status = BPVM_THREAD_RUNNABLE;
+                sig->blocked_on_mutex = -1;
+                if (sig->status == BPVM_THREAD_BLOCKED_MUTEX) {
+                    sig->status = BPVM_THREAD_RUNNABLE;
                 }
             } else {
                 m->owner_tid = -1;
@@ -180,43 +183,194 @@ int bpvm_mutex_pop_waiter(bpvm_t* vm, int mid) {
  * — depende de la subclass del usuario — tenemos que hacerlo via
  * INVOKE_VIRTUAL: empujamos `this` y llamamos `run` (slot 0).
  *
- * Devuelve el tid del thread nuevo; -1 si ya hay BPVM_MAX_THREADS vivos, -2 si run() no
+ * Devuelve el tid del thread nuevo; -1 si no hay memoria para su struct (H12), -2 si run() no
  * se resuelve en la cadena de herencia, -3 si no cabe su pila (V7/H7 #604: el builtin lanza
- * cada uno con su texto, el de miVM) y -4 si no hay objeto.
+ * cada uno con su texto; el de la pila, el de miVM) y -4 si no hay objeto.
  */
 
-/* V7/H7 #604 (29-sep) — ¿se puede dar el hueco `i` a un hilo nuevo? Sólo si su hilo acabó DEL TODO: terminado, sin
- * eventos que saldar (#342: a un hilo muerto con eventos pendientes se le resucita para atenderlos), sin nadie en su
- * `join` (el planificador despierta a los que esperan cuando lo VE terminado: no se le puede cambiar el hilo antes),
- * sin un worker encima (SMP) y sin un ejecutor de natives atado. Bajo vm_lock. */
-static int hueco_reutilizable(const bpvm_t* vm, int i) {
-    const bpvm_thread_t* t = &vm->threads[i];
-    if (t->status != BPVM_THREAD_TERMINATED || t->sched_owner != -1 || t->nativa != NULL) return 0;
-    if (bpvm_events_con_deuda(vm, t)) return 0;
-    for (int k = 0; k < vm->thread_count; k++)
-        if (vm->threads[k].status == BPVM_THREAD_BLOCKED_JOIN && vm->threads[k].blocked_on_join == i) return 0;
-    return 1;
+/* ═══ V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS ══════════════════════════════════════════════════════════════
+ *
+ * El diseño, de Eduardo: el hilo, para la VM, es una struct de C (bpvm_thread_t) pedida con malloc al arrancarlo y
+ * devuelta cuando sale de la cola; la cola son esas structs, una lista doble y circular (`next`, `back`) —sin array y
+ * sin tope: lo pone la memoria—; la VM guarda UNA (`vm->cola`, el punto donde sigue la rueda; NULL, vacía); y el
+ * Thread de BP tiene un handle a la suya, su `__tid`, que no se reutiliza nunca (`vm->sig_tid` sólo crece): resolverlo
+ * es dar una vuelta, y si no está, el hilo acabó. Antes (#604): 32 huecos fijos dentro de bpvm_t, reutilizados, y el
+ * `__tid` del Thread viejo había que ponerlo a 0 para que su `join` no esperase al hilo nuevo del mismo hueco. Todo lo
+ * que toca la cola está aquí y va bajo vm_lock (no-op con un solo worker). Y toda búsqueda da como mucho UNA vuelta:
+ * se para al volver al punto de partida. */
+
+bpvm_thread_t* bpvm_hilos_primero(const bpvm_t* vm) {
+    return vm->cola;
 }
 
-/* V7/H7 #604 — deja el hueco como nuevo. El Thread del hilo anterior, si su objeto sigue vivo, deja de apuntar aquí
- * —su `__tid` vuelve a 0—: su `join` vuelve enseguida, como el de un hilo terminado en miVM, en vez de esperar al hilo
- * nuevo. Y lo que el anterior dejara no pasa al nuevo: la pila de manejadores de excepción, el ancla del GC, el paso a
- * paso, la excepción de una native, la línea de `print`, la caché de cb y la marca de pila. Los búferes (eh_stack,
- * linea) se quedan y se reutilizan. */
-static void hueco_a_estrenar(bpvm_t* vm, bpvm_thread_t* tc, int tid) {
-    if (!bpref_is_null(tc->thread_ref_heap) && !bpvm_ref_dead(vm, tc->thread_ref_heap)) {
-        uint32_t viejo = bpref_deref(vm, tc->thread_ref_heap) + 4 + 0 * 4;
-        if (bpvm_read_i32_be(vm->memory + viejo) == tid) bpvm_write_i32_be(vm->memory + viejo, 0);
+bpvm_thread_t* bpvm_hilos_siguiente(const bpvm_t* vm, const bpvm_thread_t* h) {
+    return (h->next == vm->cola) ? NULL : h->next;   /* de vuelta al punto de partida: la vuelta acaba */
+}
+
+bpvm_thread_t* bpvm_hilo_por_tid(const bpvm_t* vm, int32_t tid) {
+    for (bpvm_thread_t* h = bpvm_hilos_primero(vm); h; h = bpvm_hilos_siguiente(vm, h))
+        if (h->id == tid) return h;
+    return NULL;
+}
+
+bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre) {
+    bpvm_thread_t* c = vm->cola;
+    if (c == NULL) return NULL;
+    bpvm_thread_t* h = c;
+    do {                                   /* desde el siguiente al punto de la rueda hasta él mismo: una vuelta */
+        h = h->next;
+        if (h->status == BPVM_THREAD_RUNNABLE && (!libre || h->sched_owner == -1)) {
+            vm->cola = h;                  /* la rueda sigue en el elegido: el próximo empieza en su siguiente */
+            vm->latido_tid = h->id;        /* para el latido, que lo lee desde otra tarea (sin punteros) */
+            vm->latido_pc = h->pc;
+            return h;
+        }
+    } while (h != c);
+    return NULL;
+}
+
+/* Mete `h` al final de la rueda: justo detrás del último elegido, así que le toca cuando le hayan tocado a todos. */
+static void cola_meter(bpvm_t* vm, bpvm_thread_t* h) {
+    if (++vm->hilos_en_cola > vm->hilos_max) vm->hilos_max = vm->hilos_en_cola;
+    bpvm_thread_t* c = vm->cola;
+    if (c == NULL) { h->next = h; h->back = h; vm->cola = h; return; }
+    h->next = c;
+    h->back = c->back;
+    c->back->next = h;
+    c->back = h;
+}
+
+/* Saca `h`. Si era el punto de la rueda, el punto pasa a su ANTERIOR: la próxima elección empieza en el siguiente de
+ * ése, que es el que venía detrás de `h` (con el siguiente se saltaría un turno). Si era el único, la cola queda vacía. */
+static void cola_sacar(bpvm_t* vm, bpvm_thread_t* h) {
+    vm->hilos_en_cola--;
+    if (h->next == h) {
+        vm->cola = NULL;
+    } else {
+        h->back->next = h->next;
+        h->next->back = h->back;
+        if (vm->cola == h) vm->cola = h->back;
     }
-    tc->eh_stack_size = 0;
-    tc->alloc_anchor = 0;
-    tc->dbg_step = 0;
-    tc->builtin_de_nativa = 0;
-    tc->excepcion_pendiente = 0;
-    tc->linea_len = 0;
-    tc->cb_cache_cs = 0;
-    tc->cb_cache_cb = 0;
-    tc->pila_max = 0;
+    h->next = h->back = NULL;
+}
+
+/* LAS REGIONES DE PILA, con la política de miVM (allocStackRegion/freeStackRegion), para que «no hay memoria para la
+ * pila del hilo» salte en el mismo sitio en las dos VMs: primero la PRIMERA región devuelta en la que quepa —recortada
+ * a lo pedido: el resto se pierde, como allí—; si no, una nueva por arriba. Las devueltas, en una lista FIFO guardada
+ * DENTRO de ellas: [base] la siguiente y [base+4] su tope (big-endian, como toda la memoria de la VM). */
+static int pila_reservar(bpvm_t* vm, uint32_t tam, uint32_t* base_out, uint32_t* cap_out) {
+    uint32_t prev = 0;
+    for (uint32_t r = vm->pilas_libres; r != 0; ) {
+        uint32_t sig = bpvm_read_u32_be(vm->memory + r);
+        uint32_t top = bpvm_read_u32_be(vm->memory + r + 4);
+        if (top - r >= tam) {
+            if (prev == 0) vm->pilas_libres = sig;
+            else           bpvm_write_u32_be(vm->memory + prev, sig);
+            if (vm->pilas_libres_fin == r) vm->pilas_libres_fin = prev;
+            *base_out = r;
+            *cap_out  = tam;
+            return 0;
+        }
+        prev = r;
+        r = sig;
+    }
+    uint32_t region = (tam + 7u) & ~7u;                        /* la siguiente base, alineada */
+    if (region < tam || vm->next_thread_stack > vm->memory_size
+            || region > vm->memory_size - vm->next_thread_stack)
+        return -1;                                             /* no cabe su pila */
+    *base_out = vm->next_thread_stack;
+    *cap_out  = region;
+    vm->next_thread_stack += region;
+    return 0;
+}
+
+static void pila_devolver(bpvm_t* vm, uint32_t base, uint32_t cap) {
+    if (cap < 8u) return;                                      /* no cabe ni el nudo de la lista: se pierde */
+    bpvm_write_u32_be(vm->memory + base, 0u);
+    bpvm_write_u32_be(vm->memory + base + 4, base + cap);
+    if (vm->pilas_libres_fin != 0) bpvm_write_u32_be(vm->memory + vm->pilas_libres_fin, base);
+    else                           vm->pilas_libres = base;
+    vm->pilas_libres_fin = base;
+}
+
+/* ¿Puede salir de la cola? Si su hilo acabó DEL TODO: terminado, sin un worker encima (SMP), sin un ejecutor de
+ * natives atado y sin eventos que saldar (#342: a un hilo muerto con eventos pendientes se le resucita para
+ * atenderlos). El main, no: sus cifras son del final del RUN (cerrar_run). Los que esperan su `join` no lo impiden:
+ * resuelven su handle, no lo encuentran y vuelven. */
+static int puede_salir(const bpvm_t* vm, const bpvm_thread_t* h) {
+    return h != vm->hilo_main && h->status == BPVM_THREAD_TERMINATED && h->sched_owner == -1
+        && h->nativa == NULL && !bpvm_events_con_deuda(vm, h);
+}
+
+/* #605 — ¿el más cerca de su tope, de los que no son el main? (la línea `pila:` del final del RUN, en bpvm.c) */
+void bpvm_hilo_apuntar_pila(bpvm_t* vm, const bpvm_thread_t* h) {
+    if (h == vm->hilo_main || h->pila_max <= h->stack_base) return;
+    uint32_t u = h->pila_max - h->stack_base, tot = h->stack_top - h->stack_base;
+    if (vm->pila_peor_total == 0 || (uint64_t) u * vm->pila_peor_total > (uint64_t) vm->pila_peor_usada * tot) {
+        vm->pila_peor_usada = u;
+        vm->pila_peor_total = tot;
+    }
+}
+
+static void hilo_devolver(bpvm_t* vm, bpvm_thread_t* h) {
+    bpvm_hilo_apuntar_pila(vm, h);
+    if (h != vm->hilo_main) pila_devolver(vm, h->stack_base, h->stack_cap);   /* la del main es fija */
+    bpvm_free(h->eh_stack);
+    bpvm_free(h->linea);
+    bpvm_free(h);
+}
+
+int bpvm_hilos_recoger(bpvm_t* vm) {
+    int n = 0;
+    for (;;) {
+        bpvm_thread_t* fuera = NULL;
+        for (bpvm_thread_t* h = bpvm_hilos_primero(vm); h; h = bpvm_hilos_siguiente(vm, h))
+            if (puede_salir(vm, h)) { fuera = h; break; }
+        if (fuera == NULL) return n;
+        cola_sacar(vm, fuera);   /* uno por vuelta: sacar mientras se recorre rompería la vuelta */
+        hilo_devolver(vm, fuera);
+        n++;
+    }
+}
+
+int bpvm_hilos_crear_main(bpvm_t* vm, uint32_t stack_base) {
+    bpvm_thread_t* m = (bpvm_thread_t*) bpvm_calloc(1, sizeof(bpvm_thread_t));
+    if (m == NULL) return -1;
+    m->id = 0;
+    m->stack_base = stack_base;
+    m->stack_top  = stack_base + BPVM_MAIN_STACK_BYTES;
+    m->stack_cap  = BPVM_MAIN_STACK_BYTES;
+    m->sp = m->stack_base;
+    m->bp = m->stack_base;
+    m->status = BPVM_THREAD_RUNNABLE;
+    m->blocked_on_mutex = -1;
+    m->blocked_on_join = -1;
+    m->sched_owner = -1;
+    m->ev_depth = 0;          /* H5.c: sin handler de evento en curso */
+    m->ev_post_mortem = -1;   /* #342: vivo; la deuda se calcula al morir */
+    vm->cola = NULL;
+    vm->hilo_main = m;
+    vm->sig_tid = 1;
+    vm->pilas_libres = vm->pilas_libres_fin = 0;
+    vm->hilos_en_cola = vm->hilos_max = 0;
+    cola_meter(vm, m);
+    return 0;
+}
+
+void bpvm_hilos_liberar(bpvm_t* vm) {
+    bpvm_thread_t* c = vm->cola;
+    if (c != NULL) {
+        bpvm_thread_t* h = c;
+        do {                                  /* una vuelta, guardando el siguiente antes de devolver */
+            bpvm_thread_t* sig = h->next;
+            bpvm_free(h->eh_stack);
+            bpvm_free(h->linea);
+            bpvm_free(h);
+            h = sig;
+        } while (h != c);
+    }
+    vm->cola = NULL;
+    vm->hilo_main = NULL;
 }
 
 int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
@@ -233,12 +387,9 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
     uint32_t target_cs = 0;
     if (bpvm_vt_resolver(vm, class_ptr, 0u, &off, &target_cs) != 0) return -2;
 
-    /* H2 — Thread spawn muta `thread_count`, `next_thread_stack` y
-     * `threads[tid]` — todo estado compartido. Bajo `vm_lock` en SMP;
-     * no-op en single-worker. La región de código que asigna el frame
-     * (escribir thread_ref, sp/bp/cs/pc, RUNNABLE) también va dentro,
-     * para que el scheduler no vea un tc "a medio crear" y lo intente
-     * pickear. */
+    /* H2 — crear un hilo toca la cola, `next_thread_stack` y las regiones devueltas: todo estado compartido. Bajo
+     * `vm_lock` en SMP; no-op con un worker. El marco inicial (thread_ref, sp/bp/cs/pc, RUNNABLE) también va dentro, y
+     * el hilo entra en la cola el ÚLTIMO, ya montado: el planificador no ve nunca uno a medio crear. */
     bpvm_smp_lock(vm);
 
     /* V7/H7 #604 — la pila que PIDE el hilo: el campo 1 del Thread (Thread(stackSize)); 0 = la de siempre, como en
@@ -246,34 +397,20 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
     int32_t  pedido = bpvm_read_i32_be(vm->memory + bpref_deref(vm, thread_ref) + 4 + 1 * 4);
     uint32_t tam    = (pedido > 0) ? (uint32_t) pedido : BPVM_THREAD_STACK_BYTES;
 
-    /* V7/H7 #604 — el HUECO y su región. Antes los dos sólo crecían: 32 hilos en TODA la vida del programa, y el 33
-     * mataba el programa. Primero, un hueco que ya acabó del todo y cuya región le quepa; si no, una región nueva, en un
-     * hueco nuevo o en uno acabado (su región vieja se queda sin usar). */
-    int tid = -1;
+    /* V7/H12, etapa 2 — su región (la primera devuelta en la que quepa, o una nueva: pila_reservar) y su struct, con
+     * malloc. Sin tope de hilos: el límite es la memoria. */
     uint32_t stack_base = 0, cap = 0;
-    for (int i = 1; i < vm->thread_count && tid < 0; i++) {
-        if (hueco_reutilizable(vm, i) && vm->threads[i].stack_cap >= tam) {
-            tid = i; stack_base = vm->threads[i].stack_base; cap = vm->threads[i].stack_cap;
-        }
+    if (pila_reservar(vm, tam, &stack_base, &cap) != 0) {
+        bpvm_smp_unlock(vm);
+        return -3;                                             /* no cabe su pila */
     }
-    if (tid < 0) {
-        int hueco = -1;
-        if (vm->thread_count < BPVM_MAX_THREADS) hueco = vm->thread_count;
-        for (int i = 1; i < vm->thread_count && hueco < 0; i++)
-            if (hueco_reutilizable(vm, i)) hueco = i;
-        if (hueco < 0) { bpvm_smp_unlock(vm); return -1; }        /* BPVM_MAX_THREADS vivos */
-        uint32_t region = (tam + 7u) & ~7u;                        /* la siguiente base, alineada */
-        if (region < tam || vm->next_thread_stack > vm->memory_size
-                || region > vm->memory_size - vm->next_thread_stack) {
-            bpvm_smp_unlock(vm);
-            return -3;                                             /* no cabe su pila */
-        }
-        stack_base = vm->next_thread_stack;
-        cap = region;
-        vm->next_thread_stack += region;
-        tid = hueco;
-        if (hueco == vm->thread_count) vm->thread_count++;
+    bpvm_thread_t* tc = (bpvm_thread_t*) bpvm_calloc(1, sizeof(bpvm_thread_t));
+    if (tc == NULL) {
+        pila_devolver(vm, stack_base, cap);
+        bpvm_smp_unlock(vm);
+        return -1;                                             /* no hay memoria para su struct */
     }
+    int32_t tid = vm->sig_tid++;                               /* el handle: no se reutiliza nunca */
 
     /* Layout inicial del frame: simulamos un CALL desde un caller
      * imaginario que ya pusheó `this` (thread_ref) en su stack.
@@ -290,8 +427,8 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
      * (Thread.run). Eso ya hace push de pc/bp/cs reales y entra al
      * cuerpo de run. Pero antes hay que tener `this` en el stack.
      */
-    bpvm_thread_t* tc = &vm->threads[tid];
-    hueco_a_estrenar(vm, tc, tid);
+    /* (calloc: lo demás nace a cero —la pila de manejadores, el ancla del GC, el paso a paso, la línea de `print`, la
+     * native, la marca de pila—.) */
     tc->id = tid;
     tc->stack_base = stack_base;
     tc->stack_top  = stack_base + tam;
@@ -340,6 +477,7 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
     tc->cs = target_cs;
     tc->pc = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) off;   /* H3.c: vtable → cb */
     tc->status = BPVM_THREAD_RUNNABLE;
+    cola_meter(vm, tc);   /* H12, etapa 2: ya montado, a la cola */
     /* Aviso al scheduler: hay un tc nuevo RUNNABLE. */
     if (vm->smp) {
         bpvm_platform_cond_broadcast(&vm->smp->sched_cond);

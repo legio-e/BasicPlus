@@ -421,26 +421,16 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     memory[BPVM_SENTINEL_EVENT_RETURN_ADDR]  = BPVM_SENTINEL_EVENT_RETURN;
     bpvm_event_queue_init(vm);
 
-    /* Thread main: región fija MAIN_STACK_BYTES a partir de stack_base. */
-    bpvm_thread_t* main_tc = &vm->threads[0];
-    main_tc->id = 0;
-    main_tc->stack_base = (uint32_t) stack_base;
-    main_tc->stack_top  = (uint32_t) stack_base + BPVM_MAIN_STACK_BYTES;
-    main_tc->stack_cap  = BPVM_MAIN_STACK_BYTES;
-    main_tc->sp = main_tc->stack_base;
-    main_tc->bp = main_tc->stack_base;
-    main_tc->status = BPVM_THREAD_RUNNABLE;
-    main_tc->blocked_on_mutex = -1;
-    main_tc->blocked_on_join = -1;
-    main_tc->sched_owner = -1;
-    main_tc->ev_depth = 0;       /* H5.c: sin handler de evento en curso */
-    main_tc->ev_post_mortem = -1; /* #342: vivo; la deuda se calcula al morir */
-    vm->thread_count = 1;
-    vm->current_thread_idx = 0;
+    /* Thread main: región fija MAIN_STACK_BYTES a partir de stack_base. V7/H12, etapa 2: su struct, con malloc, y en la
+     * cola de hilos (threading.c); sin memoria para ella no hay VM. */
+    if (bpvm_hilos_crear_main(vm, (uint32_t) stack_base) != 0) {
+        bpvm_free(vm);
+        return NULL;
+    }
 
     /* F4: el alocador de stacks de threads BP empieza tras la región
      * del main. Cada Thread.start() reserva BPVM_THREAD_STACK_BYTES. */
-    vm->next_thread_stack = main_tc->stack_top;
+    vm->next_thread_stack = vm->hilo_main->stack_top;
 
     /* H3 #158 — apuntar a la tabla global de helpers para AOT. El
      * código AOT C-emitido la usa vía vm->aot_helpers->func(...). */
@@ -1465,7 +1455,7 @@ void bpvm_set_after_link_hook(bpvm_after_link_fn fn) { g_after_link = fn; }
  * o muerto por un error de la VM, en medio de una línea): sale tal cual, sin salto, como salía antes. El hilo que
  * acaba solo ya lo ha vaciado al terminar (interp.c, `done`). */
 static void lineas_vaciar(bpvm_t* vm) {
-    for (int i = 0; i < vm->thread_count; i++) bpvm_linea_vaciar(vm, &vm->threads[i]);
+    for (bpvm_thread_t* h = bpvm_hilos_primero(vm); h; h = bpvm_hilos_siguiente(vm, h)) bpvm_linea_vaciar(vm, h);
 }
 
 /* V7/H7 #606 (29-sep) — LA PUESTA A PUNTO de un RUN, UNA para los dos planificadores. bpvm_run y bpvm_run_smp la
@@ -1483,7 +1473,9 @@ static bpvm_status_t preparar_run(bpvm_t* vm) {
     /* Inicializar thread main desde el entry-point antes de entrar al
      * scheduler. */
     if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
-    bpvm_thread_t* main_tc = &vm->threads[0];
+    bpvm_thread_t* main_tc = vm->hilo_main;   /* V7/H12, etapa 2: en la cola desde bpvm_init */
+    vm->pila_peor_usada = vm->pila_peor_total = 0;   /* #605: el peor de ESTE RUN */
+    vm->hilos_max = vm->hilos_en_cola;               /* H12: el máximo de ESTE RUN */
     main_tc->pc = vm->main_absolute_address;
     /* cs del módulo del entry-point (H3.c: por rango de CÓDIGO [cb, cb+size)). */
     {
@@ -1546,21 +1538,20 @@ static void cerrar_run(bpvm_t* vm) {
     /* V7/H7 #605 — CUÁNTA PILA USÓ (la marca de ENTER: con los locales, sin los operandos): el main, y el hilo que más
      * cerca estuvo de su tope. El instrumento para saber si bastan los 16 KB del main y lo que pide cada hilo; habla
      * siempre, como el guardián de la memoria. */
-    const bpvm_thread_t* m = &vm->threads[0];
+    const bpvm_thread_t* m = vm->hilo_main;
     unsigned mu = (m->pila_max > m->stack_base) ? (unsigned) (m->pila_max - m->stack_base) : 0u;
-    unsigned pu = 0u, pt = 0u;
-    int peor = -1;
-    for (int i = 1; i < vm->thread_count; i++) {
-        const bpvm_thread_t* t = &vm->threads[i];
-        if (t->pila_max <= t->stack_base) continue;
-        unsigned u = (unsigned) (t->pila_max - t->stack_base), tot = (unsigned) (t->stack_top - t->stack_base);
-        if (peor < 0 || (uint64_t) u * pt > (uint64_t) pu * tot) { peor = i; pu = u; pt = tot; }
-    }
-    if (peor >= 0)
+    /* V7/H12, etapa 2 — los que ya salieron de la cola se apuntaron al salir; los que quedan, ahora. */
+    for (bpvm_thread_t* t = bpvm_hilos_primero(vm); t; t = bpvm_hilos_siguiente(vm, t)) bpvm_hilo_apuntar_pila(vm, t);
+    unsigned pu = vm->pila_peor_usada, pt = vm->pila_peor_total;
+    if (pt > 0)
         bpvm_diag("[bpvm] pila: el main llegó a %u de %u B; el hilo más lleno, a %u de %u B", mu,
                   (unsigned) (m->stack_top - m->stack_base), pu, pt);
     else
         bpvm_diag("[bpvm] pila: el main llegó a %u de %u B", mu, (unsigned) (m->stack_top - m->stack_base));
+    /* V7/H12, etapa 2 — que la memoria de los hilos DECRECE: un hilo que acaba sale de la cola y devuelve su struct,
+     * así que «a la vez» es lo que hubo vivo, no lo que se arrancó (`make test-hilos`). */
+    bpvm_diag("[bpvm] hilos: %ld arrancados, como mucho %ld a la vez (el main incluido)",
+              (long) (vm->sig_tid - 1), (long) vm->hilos_max);
 }
 
 bpvm_status_t bpvm_run(bpvm_t* vm) {
@@ -1770,11 +1761,9 @@ void bpvm_destroy(bpvm_t* vm) {
             bpvm_free(m->refs);
         }
     }
-    /* Liberar EH stacks y mutex waiters. */
-    for (int i = 0; i < vm->thread_count; i++) {
-        bpvm_free(vm->threads[i].eh_stack);
-        bpvm_free(vm->threads[i].linea);   /* V7/H7 #600: la línea del `print` de ese hilo */
-    }
+    /* Liberar los hilos —sus structs, sus EH stacks y la línea de su `print` (#600): toda la cola (H12)— y los
+     * mutex waiters. */
+    bpvm_hilos_liberar(vm);
     for (int i = 0; i < vm->mutex_count; i++) {
         bpvm_free(vm->mutexes[i].waiters);
     }

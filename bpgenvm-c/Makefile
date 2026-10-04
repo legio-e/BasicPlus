@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1327,6 +1327,22 @@ test-gchondo: $(BIN)
 	   [ "$$pc" = "$$pj" ] || { echo "  la VM-Java dijo otra cosa:"; printf '%s\n' "$$pj" | sed 's/^/    /'; }; \
 	   exit 1; \
 	 fi
+
+# V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS: cada hilo, una struct pedida al arrancarlo y devuelta al acabar (sin
+# array y sin tope; el diseño, de Eduardo). HilosMuchos arranca 120 hilos —40 de uno en uno, 40 a la vez esperando en
+# un Mutex del main, otros 40 de uno en uno— y se exige que, a la vez, no haya habido más de 41 (los 40 y el main): si
+# un hilo acabado no saliera de la cola, serían 121. El sabotaje (la recogida apagada), medido el 4-oct: rojo.
+test-hilos: $(BIN)
+	$(call fixture,HilosMuchos)
+	$(call stdlibdep,Core)
+	@echo "--- H12 etapa 2: la cola de hilos decrece (esperado: los 40 unidos, 120 arrancados y como mucho 41 a la vez) ---"
+	@out=$$(cd samples && timeout 60 ../$(BIN) HilosMuchos.mod 2>build_hilos.err); st=$$?; \
+	 err=$$(cat samples/build_hilos.err); rm -f samples/build_hilos.err; \
+	 printf '%s\n' "$$out" | grep -vE 'INICIANDO|FIN DE'; printf '%s\n' "$$err" | grep -a 'hilos:'; \
+	 if [ $$st -eq 0 ] && printf '%s\n' "$$out" | grep -q 'unidos:  40' \
+	    && printf '%s\n' "$$err" | grep -q 'hilos: 120 arrancados, como mucho 41 a la vez'; then \
+	   echo "PASS test-hilos"; \
+	 else echo "FAIL test-hilos (salida $$st)"; exit 1; fi
 
 # #649 (4-oct) — la CARGA resuelve los imports SIN recursión. discover_deps se llamaba a sí misma por cada módulo que
 # cargaba, con ~1,7 KB de marco en la placa (sus rutas, en la pila): la Pico 2 gastaba ~12 KB de los 16 de la tarea del

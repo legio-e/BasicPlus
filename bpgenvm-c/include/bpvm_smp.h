@@ -51,8 +51,8 @@ typedef struct bpvm_smp {
      * (bpvm_smp_destroy) y para entonces la respuesta debe ser la misma. */
     int comm_task_on;
 
-    /* vm_lock global. Cubre: threads[].status, runQueue (implícita en
-     * threads[]), thread_count, heap_next/free_list, mutexes[]/mutex_count,
+    /* vm_lock global. Cubre: LA COLA DE HILOS (vm->cola, los next/back, meter, sacar y recoger: V7/H12, etapa 2) y el
+     * status de sus structs, las regiones de pila devueltas, heap_next/free_list, mutexes[]/mutex_count,
      * symbols[]/symbol_count, gc_in_progress. */
     bpvm_platform_mutex_handle_t vm_lock;
 

@@ -246,12 +246,6 @@ public class VirtualMachine {
     public static final int MAIN_STACK_BYTES = 16 * 1024;
 
     /**
-     * V7/H7 #604 (29-sep) — hilos VIVOS a la vez, el main incluido: el tope de la VM-C (BPVM_MAX_THREADS), también
-     * aquí, para que las dos digan lo mismo. Pasarlo es una RuntimeError atrapable con el mismo texto en las dos.
-     */
-    public static final int MAX_HILOS_VIVOS = 32;
-
-    /**
      * V7/H7 #605 (29-sep) — la ZONA ROJA de la pila: lo que una función puede apilar después de su ENTER sin volver
      * a mirar el tope (los operandos de una expresión, los argumentos de una llamada y los 12 B que empuja el CALL)
      * hasta el ENTER siguiente. La misma en la VM-C (BPVM_PILA_ZONA_ROJA): el desbordamiento salta en la misma
@@ -5810,18 +5804,14 @@ public class VirtualMachine {
                 long runResuelto = resolverVirtual(memory, classPtr, 0);
                 if (runResuelto == -1L)
                     throwBpRuntimeError(tc, "Thread.start: run() no resoluble en la cadena de herencia");
-                // V7/H7 #604 — los dos límites, como la VM-C y con su mismo texto: más hilos VIVOS de la cuenta, o sin
-                // sitio para su pila. Se deciden bajo el cerrojo y se lanzan FUERA (lanzar construye la excepción en el
-                // heap, y eso puede pedir un GC).
+                // V7/H7 #604 — el límite, como la VM-C y con su mismo texto: sin sitio para su pila. Se decide bajo el
+                // cerrojo y se lanza FUERA (lanzar construye la excepción en el heap, y eso puede pedir un GC). V7/H12,
+                // etapa 2 (4-oct; Eduardo: «¿por qué tiene que haber un límite?») — sin tope de hilos vivos, en las dos
+                // VMs: lo pone la memoria (era MAX_HILOS_VIVOS = 32, el de los huecos fijos de la VM-C).
                 String errorHilo = null;
                 synchronized (vmLock) {
-                    int vivos = 0;
-                    for (ThreadContext t : threads) if (t.getStatus() != ThreadStatus.TERMINATED) vivos++;
-                    if (vivos >= MAX_HILOS_VIVOS) {
-                        errorHilo = "Thread.start: demasiados hilos vivos a la vez (" + MAX_HILOS_VIVOS + ")";
-                    }
                     // 1) Crear el nuevo ThreadContext con su región de stack.
-                    int newTid = (errorHilo == null) ? spawnThread(stackSize) : -1;
+                    int newTid = spawnThread(stackSize);
                     if (errorHilo == null && newTid < 0) {
                         errorHilo = "Thread.start: no hay memoria para la pila del hilo ("
                                 + (stackSize > 0 ? stackSize : DEFAULT_THREAD_STACK_BYTES) + " B)";

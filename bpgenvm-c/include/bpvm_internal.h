@@ -136,8 +136,8 @@ typedef struct {
    F1 no carga deps, así que 8 sobra. F3+ puede crecer si hace falta. */
 #define BPVM_MAX_MODULES 16
 
-/* Máximo de threads BP simultáneos. F1: sólo main (= 1). */
-#define BPVM_MAX_THREADS 32
+/* Hilos BP: SIN tope desde la etapa 2 de H12 (4-oct; Eduardo: «¿por qué tiene que haber un límite?»). Lo pone la
+ * memoria: la struct de cada hilo (malloc) y su región de pila. Ver bpvm_t.cola. */
 
 /* ============================================================ */
 /*  Tipos                                                        */
@@ -392,6 +392,11 @@ struct bpvm_thread {
     char*    linea;
     uint32_t linea_len;
     uint32_t linea_cap;
+    /* V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS (bpvm_t.cola): el siguiente y el anterior, una lista doble y
+     * circular de las structs de los hilos vivos. Sólo los toca threading.c, bajo vm_lock. Al final de la struct: lo
+     * de arriba no se mueve. */
+    struct bpvm_thread* next;
+    struct bpvm_thread* back;
 };
 
 /* F5 — entry del handlerStack. */
@@ -601,10 +606,32 @@ struct bpvm {
     int          ev_head;
     int          ev_count;
 
-    /* Threads BP. F1: sólo main. */
-    bpvm_thread_t threads[BPVM_MAX_THREADS];
-    int           thread_count;
-    int           current_thread_idx;
+    /* V7/H12, etapa 2 (4-oct, el diseño de Eduardo) — LA COLA DE HILOS. Cada hilo, para la VM, es una
+     * bpvm_thread_t pedida con malloc al arrancarlo (la del main, al crear la VM) y devuelta cuando sale de la cola;
+     * la cola son esas structs, una lista doble y circular (`next`, `back`): sin array y sin tope (antes, 32 huecos
+     * fijos aquí dentro, 4,3 KB en un micro, se usaran o no). `cola` es el punto donde sigue la rueda: NULL, vacía.
+     * El Thread de BP tiene su handle, `__tid`, que no se reutiliza (`sig_tid` sólo crece, como en miVM):
+     * resolverlo es dar UNA vuelta (bpvm_hilo_por_tid); si no está, el hilo acabó. Todo, en threading.c. */
+    bpvm_thread_t* cola;
+    bpvm_thread_t* hilo_main;     /* el del main (tid 0): está en la cola todo el RUN */
+    int32_t        sig_tid;
+    /* Las regiones de pila devueltas: una lista FIFO guardada DENTRO de ellas ([base] la siguiente, [base+4] su
+     * tope), con la política de miVM (freedStackRegions): la primera en la que quepa, recortada a lo pedido. 0:
+     * ninguna. */
+    uint32_t       pilas_libres;
+    uint32_t       pilas_libres_fin;
+    /* Para el latido (bpvm_repl.c), que lo lee DESDE OTRA TAREA y sin cerrojo: el último hilo elegido, sin punteros
+     * (una struct se puede devolver mientras tanto). */
+    volatile int32_t  latido_tid;
+    volatile uint32_t latido_pc;
+    /* V7/H7 #605 — el hilo (que no es el main) que más cerca estuvo de su tope en este RUN: lo que usó y lo que tenía.
+     * Con la cola (H12) un hilo acabado ya no está al final del RUN: se apunta al devolverlo (threading.c). */
+    uint32_t       pila_peor_usada;
+    uint32_t       pila_peor_total;
+    /* H12, etapa 2 — cuántos hay en la cola ahora y como mucho en este RUN: la línea `hilos:` del final (bpvm.c), que
+     * enseña que la memoria DECRECE —un hilo que acaba sale y devuelve su struct— (`make test-hilos`). */
+    int32_t        hilos_en_cola;
+    int32_t        hilos_max;
 
     /* Output sink. */
     bpvm_output_cb output_cb;
@@ -1175,7 +1202,26 @@ void bpvm_mutex_add_waiter(bpvm_t* vm, int mid, int tid);
 int  bpvm_mutex_pop_waiter(bpvm_t* vm, int mid);
 
 /* Thread BP helpers (F4). */
-int  bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref);   /* tid; -1 ya hay BPVM_MAX_THREADS vivos; -2 run() no resoluble (#530); -3 no cabe su pila (#604) */
+int  bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref);   /* tid; -1 no hay memoria para su struct (H12); -2 run() no resoluble (#530); -3 no cabe su pila (#604) */
+
+/* V7/H12, etapa 2 — LA COLA DE HILOS (threading.c; ver bpvm_t.cola). Recorrerla es dar UNA vuelta:
+ *     for (bpvm_thread_t* h = bpvm_hilos_primero(vm); h; h = bpvm_hilos_siguiente(vm, h)) ...
+ * (sin sacar a nadie mientras tanto: eso es bpvm_hilos_recoger). En SMP, bajo vm_lock. */
+bpvm_thread_t* bpvm_hilos_primero(const bpvm_t* vm);
+bpvm_thread_t* bpvm_hilos_siguiente(const bpvm_t* vm, const bpvm_thread_t* h);
+/* El handle de un Thread de BP (su __tid) → su struct; NULL si ya no está (el hilo acabó y salió de la cola). */
+bpvm_thread_t* bpvm_hilo_por_tid(const bpvm_t* vm, int32_t tid);
+/* El siguiente listo en rueda —desde el siguiente al punto de la rueda, UNA vuelta—, y la rueda sigue en él. Con
+ * `libre`, sólo uno que no tenga ya un worker (SMP). NULL si no hay ninguno. */
+bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre);
+/* Saca de la cola y devuelve (struct y pila) los hilos que acabaron DEL TODO. Lo llaman los planificadores en su
+ * pasada de despertar, bajo vm_lock. Devuelve cuántos. */
+int  bpvm_hilos_recoger(bpvm_t* vm);
+/* La struct del main, en la cola (bpvm_init); 0 o -1 si no hay memoria. Y todas fuera (bpvm_destroy). */
+int  bpvm_hilos_crear_main(bpvm_t* vm, uint32_t stack_base);
+void bpvm_hilos_liberar(bpvm_t* vm);
+/* #605 — apunta la pila de `h` si es el hilo (no main) más cerca de su tope en este RUN. */
+void bpvm_hilo_apuntar_pila(bpvm_t* vm, const bpvm_thread_t* h);
 
 /* F5 — Exception handling helpers. */
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,

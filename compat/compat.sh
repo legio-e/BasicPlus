@@ -836,7 +836,7 @@ check_sim() {
 # Junto con la salida 0 (las que se repiten, como test-fslfsmt, salen con 1 si una vuelta falla).
 senal_testc() {
   case "$1" in
-    test-oom|test-excmsggc|test-gchole|test-gchondo|test-importhondo|test-rand|test-runguard) echo "^PASS $1\$" ;;
+    test-oom|test-excmsggc|test-gchole|test-gchondo|test-importhondo|test-hilos|test-rand|test-runguard) echo "^PASS $1\$" ;;
     test-lfs)        echo '^littlefs smoke OK' ;;
     test-lfsfile)    echo '^filebd read OK' ;;
     test-lfsfault)   echo '^littlefs fault-injection OK' ;;
@@ -873,7 +873,8 @@ check_testc() {
   # V7/H10, el board_mgr común (#637, 3-oct): y test-flash —la zona de la flash que se puede escribir—.
   # #648 (4-oct): y test-gchondo —el GC sin recursión, con la pila acotada en las dos VMs—.
   # #649 (4-oct): y test-importhondo —la carga sin recursión: una cadena de 13 imports no cuesta más pila que un módulo—.
-  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-bytenat test-xmodnat test-compressnat test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-fspos test-blk test-sdio test-listdir test-boot test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-rand test-runguard test-sd-turnos-control check-builtins"
+  # H12, etapa 2 (4-oct): y test-hilos —la cola de hilos sin array ni tope, y que decrece: un hilo acabado sale de ella—.
+  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-bytenat test-xmodnat test-compressnat test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-fspos test-blk test-sdio test-listdir test-boot test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-rand test-runguard test-sd-turnos-control check-builtins"
   n=$(echo $lista | wc -w)
   for t in $lista; do
     sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?

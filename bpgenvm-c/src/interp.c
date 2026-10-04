@@ -6,7 +6,7 @@
  * INVOKE_VIRTUAL, TRY/THROW, INSTANCEOF, FREE_REF, PRINT_STRING que
  * lee desde array). Eso queda para F2 (heap) y F3 (clases).
  *
- * Single-thread: usamos siempre vm->threads[0] (= main). El scheduler
+ * Single-thread: usamos siempre el hilo main (vm->hilo_main; V7/H12: la cola de hilos). El scheduler
  * propio de la VM viene en F4 con FreeRTOS.
  *
  * El intérprete trabaja sobre locales `pc`, `sp`, `bp`, `cs` que se
