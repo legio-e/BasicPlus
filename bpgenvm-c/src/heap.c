@@ -288,12 +288,27 @@ static int is_heap_ref(const bpvm_t* vm, uint32_t v) {
     return is_valid_header(vm, v - 4);
 }
 
+/* ═══ #648 (4-oct) — EL MARCADO SIN RECURSIÓN ═════════════════════════════════
+ *
+ * Marcaba llamándose a sí mismo por cada referencia: una lista enlazada de N nodos bajaba N niveles, 32 B de pila
+ * cada uno en la Pico, y una de ~360 desbordaba la tarea de la VM —STACK OVERFLOW y la placa colgada, sin decir nada
+ * (medido el 4-oct, en la revisión de H12)—. Ahora, una PILA DE MARCADO explícita y acotada: marcar un bloque es
+ * ponerle la marca y apilarlo; vaciar la pila es escanear los hijos de lo apilado (que se marcan y se apilan a su vez).
+ * Una lista no pasa nunca de un elemento: la pila sólo crece con bloques ANCHOS (un array de referencias). Si se
+ * llena, lo que no cabe queda marcado y sin escanear, se apunta, y al final de la fase de marcado se REPASA el heap:
+ * por cada bloque marcado, sus hijos —y otra vuelta si se volvió a llenar—. La pila, estática: el GC para a todos
+ * (stop-the-world) y no hay dos a la vez. Espejo de markObject en la VM-Java (allí la pila es de Java y no se llena). */
+#define GC_PILA_N 256u
+static uint32_t s_gc_pila[GC_PILA_N];   /* user_ref de bloques marcados con los hijos por escanear */
+static uint32_t s_gc_pila_n = 0;
+static int      s_gc_desbordada = 0;     /* alguno no cupo: sus hijos, en el repaso */
+
 /* `ref_word` es una PALABRA de referencia tal cual vive en pila/heap: un HANDLE
  * tageado (idx|TAG en la palabra baja) o una dirección cruda/constante sin tag.
  * bpref_deref la resuelve a user_ref (tabla si tageada, identidad si no) — espejo del
  * refDeref del scanRegion de miVM. Sin esto, un handle (idx|TAG > heap_next) se
- * rechazaría como no-heap y NADA vivo se marcaría. */
-static void mark_recursive(bpvm_t* vm, uint32_t ref_word) {
+ * rechazaría como no-heap y NADA vivo se marcaría. Marca el bloque (si es uno real, vivo y sin marcar) y lo apila. */
+static void gc_marca_uno(bpvm_t* vm, uint32_t ref_word) {
     bpref_t rr; rr.v = ref_word;
     uint32_t user_ref = bpref_deref(vm, rr);
     if (!is_heap_ref(vm, user_ref)) return;
@@ -302,7 +317,13 @@ static void mark_recursive(bpvm_t* vm, uint32_t ref_word) {
     if (tag & BPVM_TAG_MARK_BIT) return;   /* ya marcado */
     if (tag & BPVM_TAG_FREE_BIT) return;   /* libre, no marcar */
     bpvm_write_u32_be(vm->memory + header_addr, tag | BPVM_TAG_MARK_BIT);
+    if (s_gc_pila_n < GC_PILA_N) s_gc_pila[s_gc_pila_n++] = user_ref;
+    else s_gc_desbordada = 1;              /* marcado, y sus hijos en el repaso */
+}
 
+/* Los hijos de un bloque YA marcado: lo que antes era la recursión. */
+static void gc_hijos(bpvm_t* vm, uint32_t user_ref) {
+    uint32_t tag = bpvm_read_u32_be(vm->memory + user_ref - 4);
     int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
     uint32_t length = bpvm_read_u32_be(vm->memory + user_ref);
 
@@ -311,7 +332,7 @@ static void mark_recursive(bpvm_t* vm, uint32_t ref_word) {
             /* H1.2a (V4): elemento ref = 8 bytes (stride 8); la dirección va en la
              * palabra baja (big-endian) → read_i64 y (uint32_t) toma los 32 bajos. */
             uint32_t slot = (uint32_t) bpvm_read_i64_be(vm->memory + user_ref + 4 + i * 8);
-            mark_recursive(vm, slot);
+            gc_marca_uno(vm, slot);
         }
     } else if (type == BPVM_TYPE_OBJECT) {
         /* length = class_ptr. Lee field_bitmap del descriptor y traza
@@ -333,10 +354,42 @@ static void mark_recursive(bpvm_t* vm, uint32_t ref_word) {
                 /* H1.2a (V4): campo ref = 8 bytes (2 slots, bit en el slot base);
                  * dirección en la palabra baja → read_i64 + (uint32_t) low32. */
                 uint32_t slot = (uint32_t) bpvm_read_i64_be(vm->memory + user_ref + 4 + i * 4);
-                mark_recursive(vm, slot);
+                gc_marca_uno(vm, slot);
             }
         }
         (void) bw;
+    }
+}
+
+/* Escanea lo apilado hasta que no quede nada (lo que se va marcando entra por arriba). */
+static void gc_vacia(bpvm_t* vm) {
+    while (s_gc_pila_n > 0) gc_hijos(vm, s_gc_pila[--s_gc_pila_n]);
+}
+
+/* Una RAÍZ: se marca y se escanea todo lo que alcanza. Conserva el nombre de siempre —lo usan como función las raíces
+ * de la GUI y de los eventos—, pero ya no recurre (#648). */
+static void mark_recursive(bpvm_t* vm, uint32_t ref_word) {
+    gc_marca_uno(vm, ref_word);
+    gc_vacia(vm);
+}
+
+/* #648 — EL REPASO, si la pila se llenó: por cada bloque marcado del heap, sus hijos (los que estén sin marcar se
+ * marcan y se escanean); otra vuelta si se volvió a llenar. Recorre el heap como build_gc_valid_map, que ya lo validó
+ * en este mismo GC. */
+static void gc_repasa(bpvm_t* vm) {
+    while (s_gc_desbordada) {
+        s_gc_desbordada = 0;
+        uint32_t cur = vm->heap_start;
+        while (cur < vm->heap_next) {
+            uint32_t total = block_total_size(vm, cur);
+            if (total == 0 || total > vm->heap_top - vm->heap_start) break;   /* el mapa ya lo habría dicho */
+            uint32_t tag = bpvm_read_u32_be(vm->memory + cur);
+            if ((tag & BPVM_TAG_MARK_BIT) && !(tag & BPVM_TAG_FREE_BIT)) {
+                gc_hijos(vm, cur + 4);
+                gc_vacia(vm);
+            }
+            cur += total;
+        }
     }
 }
 
@@ -356,6 +409,8 @@ static void gc_mark_phase(bpvm_t* vm) {
     /* V7 #494 — con el recorrido descarrilado el mapa está truncado: marcar con él (y luego barrer) se
      * llevaría objetos VIVOS. Este GC no hace nada más; la reserva que lo pidió lanza la excepción. */
     if (vm->gc_descarrilo) return;
+    s_gc_pila_n = 0;          /* #648: la pila de marcado, vacía (un GC anterior la deja así, pero no se supone) */
+    s_gc_desbordada = 0;
     /* 1. Stacks de threads. */
     for (int t = 0; t < vm->thread_count; t++) {
         const bpvm_thread_t* tc = &vm->threads[t];
@@ -507,6 +562,8 @@ static void gc_mark_phase(bpvm_t* vm) {
             mark_recursive(vm, v);
         }
     }
+    /* #648 — si la pila de marcado se llenó con alguna raíz, lo marcado y sin escanear: el repaso. */
+    gc_repasa(vm);
 }
 
 /* #355 — ¿SE FUSIONAN DE VERDAD? (pregunta de Eduardo). Lo escribí, no lo probé.

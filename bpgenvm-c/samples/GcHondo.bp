@@ -1,0 +1,76 @@
+// GcHondo.bp — #648 (4-oct): el GC marca SIN recursión. Marcaba llamándose a sí mismo por cada referencia: una lista
+// enlazada de N nodos bajaba N niveles de pila, y en placa (16 KB de pila, 32 B por nivel) una de ~360 colgaba la VM sin
+// decir nada; en el PC no se veía en la VM-C (la pila de un hilo es de megas), y la VM-Java caía con 4000 (la recursión,
+// también). Aquí, las dos formas que tiene que aguantar:
+//   1. HONDA: una lista de 4000 nodos (con la recursión, 4000 niveles; diez veces el techo de la Pico 2, ~423, y aún
+//      cabe en su heap: pide 176 KB, medido);
+//   2. ANCHA: un array de 600 nodos con un hijo cada uno —llena la pila de marcado de la VM-C (256) y obliga al REPASO
+//      del heap—, y que nada vivo se pierda por el camino;
+//   3. y que lo que se suelta, se recoja.
+// En la red: en la paridad (las dos VMs, la misma salida) y en `make test-gchondo` (la VM-C en un hilo de 64 KB y la
+// VM-Java con -Xss256k: con la recursión, las dos caían).
+module GcHondo
+  public class Nodo
+    var sig: Nodo
+    var v: integer
+    public function Nodo(sig: Nodo, v: integer)
+      this.sig := sig
+      this.v := v
+    end Nodo
+    public function siguiente(): Nodo
+      return this.sig
+    end siguiente
+    public function valor(): integer
+      return this.v
+    end valor
+  end Nodo
+
+  function Main()
+    // 1. honda
+    var cab: Nodo := null
+    var i: integer := 0
+    while i < 4000 do
+      cab := Nodo(cab, i)
+      i := i + 1
+    endwh
+    gc()
+    var n: integer := 0
+    var suma: integer := 0
+    var p: Nodo := cab
+    while p != null do
+      n := n + 1
+      suma := suma + p.valor()
+      p := p.siguiente()
+    endwh
+    print "honda: " + n + " nodos, suma " + suma
+    // 2. ancha
+    var a: Object[] := newObjArray(600)
+    i := 0
+    while i < 600 do
+      a[i] := Nodo(Nodo(null, i * 2), i)
+      i := i + 1
+    endwh
+    gc()
+    var hijos: integer := 0
+    i := 0
+    while i < 600 do
+      var x: Nodo := Nodo(a[i])
+      hijos := hijos + x.siguiente().valor()
+      i := i + 1
+    endwh
+    print "ancha: 600 nodos, la suma de sus hijos " + hijos
+    // 3. lo suelto se recoge: la lista fuera, y el array sigue entero
+    cab := null
+    p := null
+    gc()
+    hijos := 0
+    i := 0
+    while i < 600 do
+      var y: Nodo := Nodo(a[i])
+      hijos := hijos + y.valor()
+      i := i + 1
+    endwh
+    print "tras soltar la lista: el array sigue, suma " + hijos
+    print "fin"
+  end Main
+end GcHondo

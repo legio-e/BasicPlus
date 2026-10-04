@@ -2113,42 +2113,55 @@ public class VirtualMachine {
         return valid;
     }
 
-    /** Marca un objeto como vivo y propaga si es array de refs o instancia con refs. */
-    private void markObject(int headerAddr, Set<Integer> valid) {
-        int tag = readInt32(headerAddr);
-        if ((tag & TAG_MARK_BIT) != 0) return; // ya marcado
-        writeInt32(headerAddr, tag | TAG_MARK_BIT);
+    /** #648 (4-oct): la pila de marcado (las cabeceras marcadas con los hijos por escanear). Del GC, que corre bajo
+     *  vmLock y para a todos: una sola a la vez. */
+    private final java.util.ArrayDeque<Integer> gcPila = new java.util.ArrayDeque<>();
 
-        int type = (tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
-        if (type == TYPE_ARRAY_REF) {
-            int length = readInt32(headerAddr + 4);
-            for (int i = 0; i < length; i++) {
-                // H1.2a (V4): elemento ref = 8 bytes (stride 8); la dirección va en la
-                // palabra baja (big-endian) → readI64 y (int) toma los 32 bajos.
-                int childRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);
-                int childHeader = refDeref(childRef) - 4; // user_ref apunta a length
-                if (valid.contains(childHeader)) {
-                    markObject(childHeader, valid);
+    /** Marca un objeto como vivo y propaga si es array de refs o instancia con refs. #648 (4-oct): SIN RECURSIÓN —se
+     *  llamaba a sí mismo por cada referencia, y una lista enlazada de decenas de miles de nodos desbordaba la pila de
+     *  Java (la VM-C, en placa, con unos cientos)—: marcar es poner la marca y apilar; luego se escanean los hijos de lo
+     *  apilado. Espejo de gc_marca_uno/gc_hijos/gc_vacia (heap.c), que además acota su pila (aquí no hace falta). */
+    private void markObject(int rootHeader, Set<Integer> valid) {
+        if (!marcaUno(rootHeader)) return;
+        gcPila.push(rootHeader);
+        while (!gcPila.isEmpty()) {
+            int headerAddr = gcPila.pop();
+            int tag = readInt32(headerAddr);
+            int type = (tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
+            if (type == TYPE_ARRAY_REF) {
+                int length = readInt32(headerAddr + 4);
+                for (int i = 0; i < length; i++) {
+                    // H1.2a (V4): elemento ref = 8 bytes (stride 8); la dirección va en la
+                    // palabra baja (big-endian) → readI64 y (int) toma los 32 bajos.
+                    int childRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);
+                    int childHeader = refDeref(childRef) - 4; // user_ref apunta a length
+                    if (valid.contains(childHeader) && marcaUno(childHeader)) gcPila.push(childHeader);
                 }
-            }
-        } else if (type == TYPE_OBJECT) {
-            int classPtr = readInt32(headerAddr + 4);
-            int numFields = readInt16(classPtr + CLS_OFF_NUM_FIELDS) & 0xFFFF;
-            int bitmapBase = classPtr + CLS_OFF_BITMAP_BASE;
-            // Los campos del objeto empiezan en headerAddr + 8 (justo tras tag y class_ptr).
-            for (int i = 0; i < numFields; i++) {
-                int word = readInt32(bitmapBase + (i >>> 5) * 4);
-                if (((word >> (i & 31)) & 1) != 0) {
-                    // H1.2a (V4): campo ref = 8 bytes (2 slots, bit en el slot base);
-                    // dirección en la palabra baja → readI64 + (int) low32.
-                    int childRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
-                    int childHeader = refDeref(childRef) - 4;
-                    if (valid.contains(childHeader)) {
-                        markObject(childHeader, valid);
+            } else if (type == TYPE_OBJECT) {
+                int classPtr = readInt32(headerAddr + 4);
+                int numFields = readInt16(classPtr + CLS_OFF_NUM_FIELDS) & 0xFFFF;
+                int bitmapBase = classPtr + CLS_OFF_BITMAP_BASE;
+                // Los campos del objeto empiezan en headerAddr + 8 (justo tras tag y class_ptr).
+                for (int i = 0; i < numFields; i++) {
+                    int word = readInt32(bitmapBase + (i >>> 5) * 4);
+                    if (((word >> (i & 31)) & 1) != 0) {
+                        // H1.2a (V4): campo ref = 8 bytes (2 slots, bit en el slot base);
+                        // dirección en la palabra baja → readI64 + (int) low32.
+                        int childRef = (int) readI64(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
+                        int childHeader = refDeref(childRef) - 4;
+                        if (valid.contains(childHeader) && marcaUno(childHeader)) gcPila.push(childHeader);
                     }
                 }
             }
         }
+    }
+
+    /** #648 — pone la marca si no la tenía: true si la ha puesto (hay que escanear sus hijos). */
+    private boolean marcaUno(int headerAddr) {
+        int tag = readInt32(headerAddr);
+        if ((tag & TAG_MARK_BIT) != 0) return false; // ya marcado
+        writeInt32(headerAddr, tag | TAG_MARK_BIT);
+        return true;
     }
 
     /** Escanea conservativamente una región de 4 bytes en 4 bytes. */

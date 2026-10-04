@@ -21,6 +21,11 @@
  *                                       --pack-del=<nombre> tumba (tombstone)
  *                                       un pack tras el grabado. Imprime el
  *                                       LIST resultante de la cadena.
+ *   bpgenvm-c --pila=N <m>             #648: TODO (la carga y el RUN) en un hilo
+ *                                       con N bytes de pila, como la tarea de la
+ *                                       placa: una recursión que en el PC pasa
+ *                                       (la pila de un hilo es de megas) aquí
+ *                                       revienta como allí.
  */
 
 #include "bpvm.h"
@@ -38,6 +43,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>    /* #648 --pila=: WaitForSingleObject */
+#include <process.h>    /* _beginthreadex */
+#else
+#include <pthread.h>
+#endif
 
 static size_t parse_size(const char* s) {
     char* end = NULL;
@@ -131,7 +143,7 @@ static void debug_trace_hook(bpvm_t* vm, bpvm_thread_t* tc,
     }
 }
 
-int main(int argc, char** argv) {
+static int main_real(int argc, char** argv) {
     /* stdout unbuffered para que un crash no se trague output. */
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -218,6 +230,7 @@ int main(int argc, char** argv) {
 #endif
         }
         else if (strncmp(a, "--libdir=", 9) == 0) { libdir = a + 9; }   /* V7/H2 (#493): /lib del PC */
+        else if (strncmp(a, "--pila=", 7) == 0) { /* #648: la atiende main(), antes de llegar aquí */ }
         else if (strncmp(a, "--pack=", 7) == 0) {
             if (n_pack_files >= PACKS_MAX_FILES) {
                 fprintf(stderr, "Demasiados --pack (max %d)\n", PACKS_MAX_FILES);
@@ -450,4 +463,60 @@ int main(int argc, char** argv) {
     (void) packs_region;   /* tallada dentro de mem: se libera con él */
     /* #481 - la TABLA, no el ordinal del enum: un `exit 11` no dice nada. */
     return bpvm_exit_code(s);
+}
+
+/* -- #648 (4-oct) - `--pila=N`: TODO en un hilo con N bytes de pila ----------
+ *
+ * En la placa, la carga corre en la tarea del REPL y el programa en la de `run`,
+ * con 16 KB de pila cada una; en el PC, en el hilo principal, con megas. Por eso
+ * el GC que marcaba recursivamente colgaba la Pico 2 con una lista de ~360 nodos
+ * y en el PC no se veía. Con `--pila=N`, la carga y el RUN corren en un hilo de N
+ * bytes, y una recursión sin tope revienta aquí como allí (`make test-gchondo`).
+ *
+ * En Windows la pila se pide RESERVADA (STACK_SIZE_PARAM_IS_A_RESERVATION): sin
+ * eso, N es sólo lo que se compromete al principio y el hilo crece hasta la
+ * reserva por defecto del ejecutable (2 MB), que es justo lo que no se quiere.
+ * (Por eso no se usa aquí bpvm_platform_thread_create_nativa: winpthreads pide
+ * la pila de esa otra forma.) */
+typedef struct { int argc; char** argv; int rc; } main_en_hilo_t;
+
+#ifdef _WIN32
+static unsigned __stdcall main_en_hilo(void* p) {
+    main_en_hilo_t* m = (main_en_hilo_t*) p;
+    m->rc = main_real(m->argc, m->argv);
+    return 0;
+}
+#else
+static void* main_en_hilo(void* p) {
+    main_en_hilo_t* m = (main_en_hilo_t*) p;
+    m->rc = main_real(m->argc, m->argv);
+    return NULL;
+}
+#endif
+
+int main(int argc, char** argv) {
+    size_t pila = 0;
+    for (int i = 1; i < argc; i++)
+        if (strncmp(argv[i], "--pila=", 7) == 0) pila = parse_size(argv[i] + 7);
+    if (pila == 0) return main_real(argc, argv);
+
+    main_en_hilo_t m = { argc, argv, 1 };
+#ifdef _WIN32
+    HANDLE h = (HANDLE) _beginthreadex(NULL, (unsigned) pila, main_en_hilo, &m,
+                                       STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
+    if (!h) { fprintf(stderr, "--pila: no se pudo crear el hilo de %zu B\n", pila); return 1; }
+    WaitForSingleObject(h, INFINITE);
+    CloseHandle(h);
+#else
+    pthread_attr_t at;
+    pthread_t t;
+    if (pthread_attr_init(&at) != 0 || pthread_attr_setstacksize(&at, pila) != 0
+        || pthread_create(&t, &at, main_en_hilo, &m) != 0) {
+        fprintf(stderr, "--pila: no se pudo crear el hilo de %zu B\n", pila);
+        return 1;
+    }
+    pthread_attr_destroy(&at);
+    pthread_join(t, NULL);
+#endif
+    return m.rc;
 }

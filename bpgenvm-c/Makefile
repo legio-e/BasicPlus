@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1306,6 +1306,27 @@ test-gchole: $(BIN)
 	$(call fixture,GcHoleStr)
 	@echo "--- #350 GC en builtins de cadenas (esperado: sub_malos=0, fb_malos=0, fin) ---"
 	@out=$$(cd samples && ../$(BIN) --mem=40960 GcHoleStr.mod 2>&1); st=$$?; 	 echo "$$out" | grep -vE 'INICIANDO|FIN DE'; 	 if echo "$$out" | grep -q 'sub_malos=0' && echo "$$out" | grep -q 'fb_malos=0' 	    && echo "$$out" | grep -q '^fin' && [ $$st -eq 0 ]; then 	   echo "PASS test-gchole"; 	 else echo "FAIL test-gchole"; exit 1; fi
+
+# #648 (4-oct) — el GC marca SIN recursión. Marcaba llamándose a sí mismo por cada referencia: una lista de N nodos
+# bajaba N niveles de pila, y la Pico 2 (16 KB de pila, 32 B por nivel) colgaba con ~360 sin decir nada; en el PC no
+# se veía, porque la pila de un hilo es de megas. Aquí, las DOS VMs con la pila acotada: la VM-C con --pila=65536 —la
+# carga y el RUN en un hilo de 64 KB, como la tarea de la placa— y la VM-Java con -Xss256k. El sabotaje, medido el
+# 4-oct: con la recursión, las dos caen antes de la primera línea (y la VM-C sin --pila pasa: eso escondía el PC).
+test-gchondo: $(BIN)
+	$(call fixture,GcHondo)
+	$(call stdlibdep,Core)
+	@echo "--- #648 el GC sin recursión: una lista de 4000 nodos con la pila acotada (esperado: las dos VMs hasta 'fin', con la misma salida) ---"
+	@oc=$$(cd samples && timeout 60 ../$(BIN) --pila=65536 GcHondo.mod 2>/dev/null); stc=$$?; \
+	 oj=$$(cd samples && timeout 60 java -Xss256k -jar ../../miVM/target/bpgenvm-1.0.jar GcHondo.mod 2>/dev/null); stj=$$?; \
+	 pc=$$(printf '%s\n' "$$oc" | grep -E '^(honda|ancha|tras|fin)'); pj=$$(printf '%s\n' "$$oj" | grep -E '^(honda|ancha|tras|fin)'); \
+	 printf '%s\n' "$$pc"; \
+	 if [ $$stc -eq 0 ] && [ $$stj -eq 0 ] && printf '%s\n' "$$pc" | grep -q '^fin$$' && [ "$$pc" = "$$pj" ]; then \
+	   echo "PASS test-gchondo"; \
+	 else \
+	   echo "FAIL test-gchondo (VM-C con 64 KB: salida $$stc; VM-Java con -Xss256k: salida $$stj)"; \
+	   [ "$$pc" = "$$pj" ] || { echo "  la VM-Java dijo otra cosa:"; printf '%s\n' "$$pj" | sed 's/^/    /'; }; \
+	   exit 1; \
+	 fi
 
 # #347 — random / randomInt. Un generador NO se comprueba por igualdad (cada
 # familia tiene su fuente, y la paridad dual-VM es CIEGA a esto). Se comprueba

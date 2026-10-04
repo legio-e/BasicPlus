@@ -42,6 +42,7 @@
     { "nombre": "FinallyAnidado", "fuente": "bpgenvm-c/samples/FinallyAnidado.bp" },
     { "nombre": "RtcEnHora",     "fuente": "bpgenvm-c/samples/RtcEnHora.bp" },
     { "nombre": "FicheroOCarpeta", "fuente": "bpgenvm-c/samples/FicheroOCarpeta.bp" },
+    { "nombre": "GcHondo",       "fuente": "bpgenvm-c/samples/GcHondo.bp", "heap_min_kb": 180, "timeout_s": 60 },
     { "nombre": "synclisttest",  "fuente": "samples/synclisttest.bp", "criterio": "aserciones", "memoria": "apretada", "heap_min_kb": 80, "timeout_s": 90 }
   ]
 }
