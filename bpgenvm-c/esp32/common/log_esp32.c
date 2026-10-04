@@ -29,6 +29,7 @@
 
 #include "esp_partition.h"
 #include "esp_timer.h"
+#include "freertos/FreeRTOS.h"   /* #653: portMUX, la sección crítica de una línea */
 
 #include <stdint.h>
 #include <string.h>
@@ -87,6 +88,12 @@ static int flash_write(const uint8_t* src, uint32_t len) {
     return esp_partition_write(s_part, BP_LOG_OFFSET, src, len) == ESP_OK ? 0 : -1;
 }
 
+/* #653 (4-oct) — la sección crítica de una línea: la del IDF (el spinlock y las interrupciones de este núcleo), la
+ * variante _SAFE, que vale también desde una interrupción. */
+static portMUX_TYPE s_log_mux = portMUX_INITIALIZER_UNLOCKED;
+static uint32_t log_entrar(void) { portENTER_CRITICAL_SAFE(&s_log_mux); return 0u; }
+static void     log_salir(uint32_t estado) { (void) estado; portEXIT_CRITICAL_SAFE(&s_log_mux); }
+
 void log_init(void) {
     /* Búsqueda propia (no la de board_mgr): el log arranca ANTES del climb del
      * boot, que es justo cuando interesa que ya esté grabando. */
@@ -94,10 +101,13 @@ void log_init(void) {
                                       ESP_PARTITION_SUBTYPE_ANY, "bpenv");
 
     bpvm_log_cintura_t c;
+    memset(&c, 0, sizeof c);   /* #653: los campos que se añadan nacen a NULL */
     c.now_ms      = now_ms;
     c.flash_read  = flash_read;
     c.flash_write = flash_write;
     c.region_buf  = s_region;
     c.region_size = BP_LOG_SIZE;
+    c.entrar      = log_entrar;
+    c.salir       = log_salir;
     bpvm_log_init(&c);
 }

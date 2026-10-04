@@ -51,6 +51,21 @@ typedef struct {
     /* Tamaño del sector de log en flash (múltiplo de la página de borrado del
      * micro: Pico 4 KB, STM32 8 KB, ESP32 4 KB). */
     uint32_t region_size;
+
+    /* #653 (4-oct) — LA SECCIÓN CRÍTICA de una línea: `entrar` antes de añadirla y
+     * `salir` después (mirar si cabe, copiar y sumar van juntos). Sin ella, dos
+     * tareas que escriben a la vez —`io` y `run`, desde la etapa 1 de H12— dejaban
+     * a una copiar FUERA de la región: mira que cabe, la expropian, la otra añade,
+     * y copia. La llaman también los ganchos de FreeRTOS y el arranque antes del
+     * planificador: tiene que valer en cualquier contexto (en FreeRTOS, enmascarar
+     * las interrupciones guardando el estado; no un mutex). `entrar` devuelve el
+     * estado que recibe `salir`. NULL los dos: nada (un solo escritor). */
+    uint32_t (*entrar)(void);
+    void     (*salir)(uint32_t estado);
+
+    /* SÓLO PRUEBAS (#653, test/test_logmt.c): se llama entre mirar que la línea cabe
+     * y copiarla —la ventana ensanchada—. NULL en las placas. */
+    void (*ensayo_entre)(void);
 } bpvm_log_cintura_t;
 
 /* Instala la cintura y recupera el snapshot de la sesión anterior (si el header es

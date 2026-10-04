@@ -49,12 +49,20 @@ static int flash_write(const uint8_t* src, uint32_t len) {
     return stm32_flash_write(addr, src, len);
 }
 
+/* #653 (4-oct) — la sección crítica de una línea: PRIMASK guardado (vale en cualquier contexto, con o sin el
+ * planificador). */
+static uint32_t log_entrar(void) { uint32_t p = __get_PRIMASK(); __disable_irq(); return p; }
+static void     log_salir(uint32_t estado) { __set_PRIMASK(estado); }
+
 void log_init(void) {
     bpvm_log_cintura_t c;
+    memset(&c, 0, sizeof c);   /* #653: los campos que se añadan nacen a NULL */
     c.now_ms      = now_ms;
     c.flash_read  = flash_read;
     c.flash_write = flash_write;
     c.region_buf  = s_region;
     c.region_size = BP_LOG_SIZE;
+    c.entrar      = log_entrar;
+    c.salir       = log_salir;
     bpvm_log_init(&c);
 }

@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-logmt test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1331,6 +1331,20 @@ test-gchondo: $(BIN)
 	   [ "$$pc" = "$$pj" ] || { echo "  la VM-Java dijo otra cosa:"; printf '%s\n' "$$pj" | sed 's/^/    /'; }; \
 	   exit 1; \
 	 fi
+
+# #653 (4-oct) — EL LOG CON DOS ESCRITORES: mirar si la línea cabe y copiarla no se pueden separar (la sección crítica
+# de la cintura). Dos hilos escriben sin parar en una región de 512 B con una guarda detrás: con la sección, intacta;
+# sin ella (--sin-seccion, el sabotaje: el log de antes), pisada —rojo—. Ver test/test_logmt.c.
+LOGMT_BIN = build/test_logmt.exe
+test-logmt: $(LIBOBJ)
+	@mkdir -p build
+	@$(CC) $(CFLAGS) -Isrc test/test_logmt.c $(LIBOBJ) -o $(LOGMT_BIN) $(LDFLAGS)
+	@echo "--- #653: el log con dos escritores (esperado: PASS y la linea OK) ---"
+	@timeout 120 ./$(LOGMT_BIN) || { echo "FAIL test-logmt"; exit 1; }
+	@echo "--- y su sabotaje (sin la seccion: esperado ROJO) ---"
+	@if timeout 120 ./$(LOGMT_BIN) --sin-seccion; then echo "FAIL test-logmt: sin la seccion pasa por verde"; exit 1; \
+	 else echo "  (rojo, como debe: sin la seccion, el log se sale de su region)"; fi
+	@echo "PASS test-logmt (y su sabotaje, rojo)"
 
 # V7/H12, etapa 2a.2 (4-oct) — LA COLA y su planificador, en lo que la red no ve por sí sola (test/test_cola.c): el
 # interbloqueo de verdad con uno y dos runs (Interbloqueo: RUNTIME_ERROR; con dos, antes de la 2a.2, colgado); el

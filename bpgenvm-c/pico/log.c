@@ -88,12 +88,21 @@ static int flash_write(const uint8_t* src, uint32_t len) {
     return pico_flash_write(LOG_FLASH_OFFSET, src, len);
 }
 
+/* #653 (4-oct) — la sección crítica de una línea: las interrupciones enmascaradas, guardando el estado (vale en
+ * cualquier contexto: los ganchos de FreeRTOS, el arranque antes del planificador). Con UN núcleo basta; con dos
+ * (H12, etapa 3) hará falta además un spinlock. */
+static uint32_t log_entrar(void) { return save_and_disable_interrupts(); }
+static void     log_salir(uint32_t estado) { restore_interrupts(estado); }
+
 void log_init(void) {
     bpvm_log_cintura_t c;
+    memset(&c, 0, sizeof c);   /* #653: los campos que se añadan nacen a NULL */
     c.now_ms      = now_ms;
     c.flash_read  = flash_read;
     c.flash_write = flash_write;
     c.region_buf  = bplog_region;
     c.region_size = LOG_REGION_BYTES;
+    c.entrar      = log_entrar;
+    c.salir       = log_salir;
     bpvm_log_init(&c);
 }

@@ -54,6 +54,7 @@ static void append_raw(const char* str, uint32_t n) {
         s_used -= drop;
         s_dropped = 1;
     }
+    if (s_c.ensayo_entre) s_c.ensayo_entre();   /* SÓLO PRUEBAS (#653): la ventana entre «cabe» y copiar */
     memcpy(d + s_used, str, n);
     s_used += n;
 }
@@ -155,8 +156,11 @@ void log_printf(const char* fmt, ...) {
     if (total == 0 || line[total - 1] != '\n') {
         if (total < (int) sizeof line - 1) line[total++] = '\n';
     }
+    /* #653 — añadir, de una vez: con dos escritores, mirar si cabe y copiar no pueden separarse (la cintura) */
+    uint32_t est = s_c.entrar ? s_c.entrar() : 0u;
     append_raw(line, (uint32_t) total);
     hdr_sync();   /* #439 — que el buffer se reconozca tras un reset */
+    if (s_c.salir) s_c.salir(est);
 }
 
 void log_flush(void) {
@@ -177,6 +181,7 @@ void log_flush(void) {
 
 void log_clear_ram(void) {
     if (!s_init) return;
+    uint32_t est = s_c.entrar ? s_c.entrar() : 0u;   /* #653: no a la vez que una línea que se añade */
     s_used = 0;
     /* #433 — y la bandera del anillo. Si no, tras vaciar el log el volcado
      * seguiria avisando de que "se tiraron lineas ANTIGUAS" cuando ya no falta
@@ -184,6 +189,7 @@ void log_clear_ram(void) {
      * (Misma correccion que lleva pico/log.c.) */
     s_dropped = 0;
     memset(data_ptr(), 0, data_cap());
+    if (s_c.salir) s_c.salir(est);
 }
 
 void log_clear_flash(void) {
