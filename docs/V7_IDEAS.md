@@ -4455,6 +4455,24 @@ siguientes, en el PC y la Pico 2; las demás placas, una vez, al final de H12.
   despierta a quien espera sin plazo; el depurador y la GUI son de un solo hilo; el log, la zona de rascar y algunos
   búferes estáticos, sin cerrojo.
 
+**Y dónde vive cada cosa** (4-oct, después; Eduardo): *«¿Estás utilizando punteros o referencias? Tal como lo veo
+deberían ser referencias»*; *«lo puedes poner todo dentro del objeto, pero vigila porque los objetos BP y las
+estructuras de C no tienen por qué coincidir»*. Poner los enlaces en el objeto `Thread` (campos nuevos de `Core.Thread`)
+dejaba fuera a los programas de V6 que la red sigue ejecutando (`SlotThreadSub` y `ThreadTrasMain`, de la cápsula: su
+`Thread` lo sintetizaba V6 en cada `.mod`, con dos campos). Y lo decidido, de Eduardo: *«Esto se puede hacer de muchas
+maneras pero cada una tiene consecuencias. Si haces una estructura de C que sea un Thread BP por mí vale, pero eso
+implica que la estructura deberá alojarse con malloc y que Thread BP debería tener un handle a la estructura C.»* Así:
+- **El hilo, para la VM, es una `struct` de C** (`bpvm_thread_t`: `pc`, `sp`, `bp`, los límites de su pila, el estado,
+  la pila de manejadores, el ejecutor de natives…), pedida con `malloc` al arrancar el hilo (la del `main`, al empezar
+  el RUN) y devuelta cuando sale de la cola. Uno por hilo VIVO: sin array y sin tope.
+- **La cola son esas estructuras**: `next` y `back`, una lista doble y circular; la VM guarda un puntero a una —el punto
+  donde sigue la rueda—, NULL si está vacía. Todo lo que la toca, en un solo módulo y bajo el cerrojo.
+- **El `Thread` de BP tiene un handle a su estructura: su `__tid`**, el número del hilo, que NO se reutiliza nunca
+  (como en la VM-Java). La VM lo resuelve dando UNA vuelta a la cola; si no está, el hilo acabó y su `join` vuelve
+  enseguida. BP nunca guarda un puntero de C, y un handle caducado no resuelve. El objeto `Thread` no cambia de forma:
+  valen los programas de V6.
+- *«No puede haber programas sin Core»* (Eduardo): uno que no usa nada de `Core` se carga hoy sin él (`hello`) → `#652`.
+
 **El plan, en dos pasos**, cada uno con su puerta escrita antes y su vuelta atrás (en el PC y después en la Pico 2):
 - **2a · la cola permanente, con UN run.** La cola —el cerrojo, la condición y la referencia— nace en el arranque y vive
   siempre. Los descriptores, una lista doble circular sin array y sin tope (y el tope, fuera de miVM). El run espera en
