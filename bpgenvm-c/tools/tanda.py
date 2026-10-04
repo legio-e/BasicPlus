@@ -1669,10 +1669,13 @@ def ejecutar_en_placa(w, sello, pantalla, p, o, sin_oraculo, inv, subidos, notas
         info2 = None
         r["abortar_placa"] = "transporte roto tras %s (INFO): %s" % (p["nombre"], e)
     if info2 is not None:
-        # V7/H12 (4-oct): y las marcas de pila —la de `run`, la de `io` y, en la Pico, la de la tarea del REPL—: con la
-        # tarea `run`, cuál de las pruebas hunde cada una, prueba a prueba (son marcas de agua: sólo bajan).
+        # V7/H12 (4-oct): y las marcas de pila —la de `run`, la de `io` y la de la tarea del REPL (la Pico; y las ESP32
+        # desde el lote de H12)—: con la tarea `run`, cuál de las pruebas hunde cada una, prueba a prueba (son marcas de
+        # agua: sólo bajan). Y el mínimo de RAM libre del heap del sistema (en la Pico, el de FreeRTOS; en las ESP32,
+        # la RAM interna): lo que manda en la C6.
         r["info_tras"] = {k: info2.get(k) for k in ("uptimeMs", "fsUsedBytes", "fsTotalBytes", "vmHeapBytes",
-                                                    "runStackFree", "ioStackFree", "vmTaskStackFreeBytes")}
+                                                    "runStackFree", "ioStackFree", "vmTaskStackFreeBytes",
+                                                    "rtosHeapMinFreeBytes")}
         up, up0 = info2.get("uptimeMs"), sello.get("uptime_ultimo")
         if isinstance(up, int) and isinstance(up0, int) and up < up0:
             r["reinicio"] = True
@@ -1824,9 +1827,11 @@ def escribir_informe(ruta, tanda):
                 L.append("- **la placa SE REINICIO durante %s** (uptimeMs decrecio; ver notas)" % r["prueba"])
             if r.get("info_tras"):
                 it = r["info_tras"]
-                L.append("- tras %s: uptimeMs=%s fsUsed=%s vmHeapBytes=%s pila libre: run=%s io=%s tareaREPL=%s" % (
+                L.append("- tras %s: uptimeMs=%s fsUsed=%s vmHeapBytes=%s pila libre: run=%s io=%s tareaREPL=%s"
+                         " heap del sistema, minimo libre=%s" % (
                     r["prueba"], it.get("uptimeMs"), it.get("fsUsedBytes"), it.get("vmHeapBytes"),
-                    it.get("runStackFree"), it.get("ioStackFree"), it.get("vmTaskStackFreeBytes")))
+                    it.get("runStackFree"), it.get("ioStackFree"), it.get("vmTaskStackFreeBytes"),
+                    it.get("rtosHeapMinFreeBytes")))
             if r.get("postmortem"):
                 L.append("<details><summary>%s: log post-mortem de la placa, tras recuperarla</summary>" % r["prueba"])
                 L.append("")

@@ -638,9 +638,23 @@ static uint32_t esp32_image_crc(void) {
     return s_crc;
 }
 
+/* V7/H12 (4-oct) — lo que el INFO común no sabe de la ESP32, para dimensionar las pilas de H12 con medidas y no a ojo:
+ * la marca de la pila de la tarea del REPL (`main`, o `wire_uart` en el P4) —con `run`, la que carga los programas y
+ * hace de `io`; el INFO lo atiende ella misma, así que la marca es la suya; en el IDF, en BYTES—, con el nombre de la de
+ * la Pico (vmTaskStackFreeBytes); y lo que quedó libre de RAM INTERNA en el peor momento desde el arranque
+ * (rtosHeapMinFreeBytes: de ahí salen las pilas de las tareas y todo lo que no va a la PSRAM; en la C6, lo que manda). */
+static int esp32_repl_info_extra(char* buf, unsigned long buf_max, int off) {
+    size_t max = (size_t) buf_max;
+    off = wire_v1_field_long(buf, max, (size_t) off, "vmTaskStackFreeBytes", (long) uxTaskGetStackHighWaterMark(NULL));
+    if (off < 0) return off;
+    return wire_v1_field_long(buf, max, (size_t) off, "rtosHeapMinFreeBytes",
+                              (long) heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
+}
+
 static bpvm_repl_ops_t s_repl_ops = {
     .run            = &s_run_ops,     /* V7/H10: la cintura del RUN común */
     .info           = esp32_repl_info,
+    .info_extra     = esp32_repl_info_extra,
     .image_crc      = esp32_image_crc,
     .server_name    = "bpvm-esp32",   /* se pisa en repl_esp32_run con el real */
     .server_build   = ESP32_BUILD_DATE,
@@ -809,16 +823,19 @@ static void handle_request(const char* line, int len) {
  * cintura de REPL» al saludar. La identidad ya está puesta (va antes). */
 /* V7/H12, etapas 0 y 1 (4-oct) — LA TAREA `run` (src/bpvm_repl.c): el programa en una tarea propia y permanente, y la
  * del REPL (`main`, o `wire_uart` en el P4) hace de `io` durante el RUN. El interruptor de la imagen,
- * BPVM_ESP32_RUN_TAREA: por ahora SÓLO EL P4 la enciende (su CMakeLists) —Eduardo: «una placa antes que todas»—; las
- * demás, el RUN de antes, hasta medirlas (la C3 y la C6 van justas de RAM interna, H13). */
+ * BPVM_ESP32_RUN_TAREA: encendida en TODA la familia, después de pasar su puerta el P4 (Eduardo: «si esto funciona...
+ * el cambio se queda para todos los micros»); con 0 en el CMakeLists de una placa, el RUN de antes. */
 #ifndef BPVM_ESP32_RUN_TAREA
-#define BPVM_ESP32_RUN_TAREA 0
+#define BPVM_ESP32_RUN_TAREA 1
 #endif
 #if BPVM_ESP32_RUN_TAREA
 /* Su pila, ESTÁTICA y en la RAM INTERNA (el .bss va a la DRAM): una pila en la PSRAM no puede escribir la flash —por lo
- * mismo, la del ejecutor de las natives—. 16 KB, como la de la Pico: el GC corre en ella y su marcado es recursivo
- * (#648). En el IDF, el tamaño de una pila va en BYTES (StackType_t es un byte). */
+ * mismo, la del ejecutor de las natives—. En el IDF, el tamaño de una pila va en BYTES (StackType_t es un byte). 16 KB
+ * por defecto, como la de la Pico; la C3 y la C6 —sin PSRAM, justas de RAM interna (H13), y sin SQLite— con 12, desde
+ * su CMakeLists: en `run`, el peor caso medido en el P4 (con la GUI, y aún con el GC recursivo de #648) fue ~6,5 KB. */
+#ifndef ESP32_RUN_PILA_BYTES
 #define ESP32_RUN_PILA_BYTES (16u * 1024u)
+#endif
 static StackType_t  s_run_pila[ESP32_RUN_PILA_BYTES / sizeof(StackType_t)];
 static StaticTask_t s_run_tcb;
 static TaskHandle_t s_run_task = NULL;
