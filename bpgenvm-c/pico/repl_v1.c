@@ -820,8 +820,8 @@ void repl_v1_handle_request(int first_char) {
 /* Su pila, ESTÁTICA: en el .bss, y la VM recibe menos ella sola (su bloque es «lo que queda» tras el .bss); ni el heap
  * de FreeRTOS ni el margen de malloc. 16 KB, LOS MISMOS que `vm_task`: el GC corre aquí y su marcado es RECURSIVO —32 B
  * por nivel de una cadena de referencias, medido el 4-oct: con 16 KB en `vm_task`, una lista de ~360 nodos ya
- * desbordaba—; con 12 KB, el techo bajaba a ~300. Sin los marcos del REPL encima, aquí cabe algo más (~425). Los 4 KB
- * de más salen del heap de FreeRTOS (FreeRTOSConfig.h): la VM pierde 12 KB, de 333 a ~321. */
+ * desbordaba—; con 12 KB, el techo bajaba a ~300. Sin los marcos del REPL encima, aquí cabe algo más (~425). El heap
+ * de FreeRTOS baja 8 KB para compensar (FreeRTOSConfig.h: el `io` de cada RUN ya no nace): la VM pierde 8 KB netos. */
 #define PICO_RUN_PILA_PALABRAS ((16u * 1024u) / sizeof(StackType_t))
 static StackType_t  s_run_pila[PICO_RUN_PILA_PALABRAS];
 static StaticTask_t s_run_tcb;

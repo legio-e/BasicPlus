@@ -72,11 +72,15 @@
 /* --- Heap del kernel (heap_4) --------------------------------- */
 /* El "memory[]" de la VM NO sale de aquí; es un array estático en main.c.
  * Este heap solo se usa para tasks/mutexes de FreeRTOS. V7/H12: con la tarea
- * `run`, 4 KB menos —los del `io` de cada RUN, que ya no nace—: el peor momento
- * medido (10,4 KB libres, la Metro, 3-oct) se queda igual, y esos 4 KB van a la
- * pila de `run`, que es donde corre el GC (su marcado es recursivo). */
+ * `run`, el `io` de cada RUN (4 KB) ya no nace, y lo que sobra va a compensar
+ * la pila de `run` (Eduardo, 4-oct: «si necesitamos más stack y nos ahorramos
+ * heap, podemos reducir un poco el heap para compensar»). Medido con 28 KB en la
+ * Pico 2 y la Metro (la tanda, y ~120 minutos de resistencia): el peor momento,
+ * 10,4–10,7 KB libres. Con 24, ~6,4 KB de margen —lo que vive aquí es la pila de
+ * `vm_task` (16 KB) y los objetos del núcleo—; `rtosHeapMinFreeBytes` en el INFO
+ * lo dice. La pila de `run` (16 KB, en el .bss) cuesta así 8 KB netos. */
 #if BPVM_PICO_RUN_TAREA
-#define configTOTAL_HEAP_SIZE                   ((size_t)(28 * 1024))
+#define configTOTAL_HEAP_SIZE                   ((size_t)(24 * 1024))
 #else
 #define configTOTAL_HEAP_SIZE                   ((size_t)(32 * 1024))
 #endif
