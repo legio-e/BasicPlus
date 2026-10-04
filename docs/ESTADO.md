@@ -33,9 +33,9 @@
 > con su puerta casi entera; la revisión adversarial, verificada a mano, y dos SUELTAS nuevas de antes de H12, `#648` (el
 > GC recursivo) y `#649` (la carga recursiva). La puerta, pasada en la Pico 2, la Metro y el P4 (`bd746302`); el heap de
 > FreeRTOS de la Pico a 24 KB (`9e0e8d12`, sin grabar); y `#648` y `#649`, CERRADAS (`07c16b4f` y `b2216270`), con
-> sus pruebas en la red. Lo siguiente: el lote de placas (las ESP32 con `run`, la Pico 2 y la Metro con el heap
-> nuevo; `GcHondo` e `ImportHondo` en la tanda, y las marcas de pila para encoger las de `run` y el REPL), con el OK
-> de Eduardo; después, la etapa 2. Más abajo, «🧵 H12 (4-oct)».
+> sus pruebas en la red. El lote, grabado en la Pico 2, la Metro, el P4, el S3, la C5 y la C6 (la tanda verde; en la
+> C6, GuiArbolG2 sin RAM: `#651`), y cortado ahí por Eduardo: las etapas siguientes, en el PC y la Pico 2; las demás
+> placas, al final de H12. Lo siguiente: la etapa 2. Más abajo, «🧵 H12 (4-oct)».
 >
 > **3-oct** — H10, el paso 1 del traspaso entero: los arreglos pequeños, todos en el PC y cada uno con su prueba
 > (`89da2e63`, `26ecfef6`, `c382a66c`): el lote D del FS de `#473` (236, 248, 264, 268, 276, 280, 466), la pantalla
@@ -1153,6 +1153,21 @@ la C6, la P4 y la Nucleo.
   camino: en Windows, una pila de hilo pedida a secas crece hasta 2 MB (hay que RESERVARLA), la reserva se redondea a
   64 KB, y al fondo Windows se guarda casi 20 KB. `GcHondo` e `ImportHondo`, también en la tanda de placa (`GcHondo`
   con 4000 nodos: pide 176 KB de heap y cabe en la Pico 2). La red entera, verde, con cada una.
+- **El lote** (con el OK de Eduardo): la Pico 2, la Metro y el P4 —la tanda verde en las tres, con GcHondo e
+  ImportHondo; `run` con 12,4 KB libres de 16 (antes 9,6: el peor caso ya no es el GC) y la tarea del REPL con 9 (antes
+  4,2); el heap de FreeRTOS a 24 KB, 6,3 KB libres en el peor momento; en la Metro, listas de 3 000 nodos sin mover la
+  marca de `run`; la Pico 2, 30 minutos de resistencia sin un fallo—. Y `run` en toda la familia ESP32 (`6bfe8559`): el
+  S3, la C5 y la C6, la tanda verde (en el S3, 17 saltadas: las de AOT —Xtensa no tiene receta— y las de GUI), `run_placa`
+  34 de 34 en el S3 y la C5, PrintBench en la C5 igual con `run` y sin ella (301 y 300 ms). La C6: sus packs, formateados
+  y regrabados (su bloque de motores está en la SRAM y se mueve con el `.bss`); `main` a 12 KB y `run` a 10 por sus
+  marcas (`10213416`); y GuiArbolG2 sin memoria al enlazar: el sistema necesita 110 KB en el peor momento y su margen es
+  de 104 —ya iba al límite; Eduardo: *«De momento no hagas nada… volveremos a ello»*, `#651`—. En su FS, un fichero suelto
+  de una subida sin `MSYS_NO_PATHCONV` (`/C:/Program Files/Git/app/AllocBench.mod`), borrado con su OK. Y `#650`, una
+  mejora de Eduardo: un módulo que está en el FS y en la zona, en la misma versión, del pack (no gasta RAM).
+- **Y se corta ahí** (Eduardo, al ver la puerta entera repetida placa a placa: *«Habíamos quedado que íbamos a trabajar
+  con la Pico primero y si todo iba bien pasamos al resto. Estas pruebas nos hacen que tengamos que probarlo todo varias
+  veces y llevan mucho tiempo»*): las etapas siguientes de H12, en el PC y en la Pico 2; las demás placas, una vez, al
+  final. La C3, la DK2 y la Nucleo, sin grabar.
 
 ## 🔧 H10 (3-oct, noche) — CERRADO (Eduardo): EL `board_mgr` COMÚN (pasos 0 a 5) y su lote en las NUEVE placas; `#636`–`#638` CERRADAS; D7, probado por Eduardo en el IDE
 
