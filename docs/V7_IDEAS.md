@@ -4409,6 +4409,67 @@ el `RUN` común de hoy. Las familias que no se han pasado siguen así (las ESP32
 familia a familia —las ESP32 (el `main`, 16 KB y prioridad 1); la STM32, cuyo REPL tiene que bloquearse de verdad antes
 (la interrupción del cable está por encima del umbral de FreeRTOS); y en las de pantalla, LVGL en `run`—.
 
+**El lote, y la regla** (4-oct): grabadas la Pico 2, la Metro y el P4, y `run` en toda la familia ESP32 en el S3, la C5 y
+la C6 (la tanda verde; en la C6, GuiArbolG2 sin RAM: `#651`). Eduardo, al ver la puerta entera repetida placa a placa:
+*«Habíamos quedado que íbamos a trabajar con la Pico primero y si todo iba bien pasamos al resto»* — las etapas
+siguientes, en el PC y la Pico 2; las demás placas, una vez, al final de H12.
+
+### Etapa 2 — la COLA de hilos BP, permanente, y los runs permanentes (4-oct): las decisiones, el mapa y el plan
+
+**Las decisiones de Eduardo** (4-oct, a la pregunta de cómo nacen los dos runs):
+- *«Runs permanentes sí, pero antes de crearlos hace falta la cola de Threads BP que también es permanente, aunque esté
+  vacía.»*
+- Como `Collections.SyncList`, pero *«tiene que ser en C y una cola, no una lista; por lo demás es muy parecida»*: cada
+  operación, atómica bajo un cerrojo; y quien saca de la cola vacía espera dormido —no con `sleep(1)`, como
+  `popBlocking`—. (La clase de BP no puede ser la cola: la cola existe antes que cualquier programa, y quien saca de ella
+  es el run, el C que ejecuta el bytecode.)
+- *«Si los Threads BP tuviesen una referencia 'next' y 'back' formarían ellos mismos una doble lista y no haría falta un
+  array.»* — una lista DOBLE e intrusiva en los propios descriptores, y UNA sola (*«no veo la necesidad de una
+  segunda»*): todos los hilos vivos, recorridos en rueda, saltando los que esperan (un `sleep`, un `Mutex`, un `join`).
+- *«¿Por qué tiene que haber un límite?»* — sin tope de hilos: el límite es la memoria (el descriptor, de la RAM del
+  sistema, y la pila BP, de la región de pilas), con el error que ya existe («no hay memoria para la pila del hilo»). En
+  las DOS VMs, por la paridad: el 32 de `#604` se va también de miVM. El número de un hilo nuevo, el más bajo libre,
+  como hoy.
+- *«Tiene que haber al menos una referencia a un elemento de la cola en la VM. Inicialmente puede ser null y si se vacía
+  puede volver a ser null. Es importante que cuando se busque el siguiente elemento (o el anterior) no se dé vueltas
+  indefinidamente.»* — la lista es CIRCULAR y la VM guarda una referencia: el cursor de la rueda (null, vacía). Buscar el
+  siguiente listo da como mucho UNA vuelta (se para al volver al punto de partida); si no hay ninguno, el run espera
+  dormido, y si nadie puede despertar a nadie, es un interbloqueo y se dice. (Hoy `bpvm_t` se rehace en cada RUN: la
+  referencia vive en la parte PERMANENTE de la VM, la cola, que nace con el arranque; los descriptores del programa
+  cuelgan de ella mientras corre.)
+
+**Lo que hay hoy** (el mapa verificado del 4-oct: un agente con el código; lo que pesa, comprobado a mano):
+- **Ninguna placa usa el planificador de varios workers**: la Pico no lo compila (`BPVM_PICO_SMP_WORKERS` no está en su
+  build) y las ESP32, la STM32 y el micro simulado corren el simple (`scheduler.c`); el de varios, sólo en el PC
+  (`--smp=N`).
+- **La tabla de hilos, un array FIJO** de 32 descriptores dentro de `bpvm_t`: 136 B cada uno en un micro de 32 bits,
+  4 352 B de los 12 376 de `bpvm_t`, que se pide a la RAM del sistema en cada RUN. **El planificador de varios workers**
+  (`bpvm_smp_t`: el cerrojo, la condición, `shutdown`, `fallo`…) nace y muere con cada RUN (`bpvm_smp_init`/`destroy`),
+  y sus workers también: el `join` es la barrera del fin del programa.
+- **Los dos planificadores no hacen lo mismo**: el simple cede el núcleo entre cuantos, detecta el interbloqueo (todos
+  bloqueados sin un `sleep`: RUNTIME_ERROR) y sirve al depurador (su pausa congela el programa entero); el de varios, no.
+- **Para dos runs falta, además** (de más a menos grave): el contexto del AOT y el testigo de fallos son GLOBALES en las
+  placas —`__thread` sólo en el PC— (crítico: un `longjmp` a la pila de otra tarea); la variable de condición de FreeRTOS
+  es un semáforo BINARIO (crítico: con dos esperando se pierde un aviso, y su plazo tiene una carrera); el `gc()` del
+  programa toma el cerrojo pero no para a los demás workers (alto); los eventos se encolan sin cerrojo (alto); el KILL no
+  despierta a quien espera sin plazo; el depurador y la GUI son de un solo hilo; el log, la zona de rascar y algunos
+  búferes estáticos, sin cerrojo.
+
+**El plan, en dos pasos**, cada uno con su puerta escrita antes y su vuelta atrás (en el PC y después en la Pico 2):
+- **2a · la cola permanente, con UN run.** La cola —el cerrojo, la condición y la referencia— nace en el arranque y vive
+  siempre. Los descriptores, una lista doble circular sin array y sin tope (y el tope, fuera de miVM). El run espera en
+  la cola; `io` carga la VM, la prepara (enlazar y prefabricar las excepciones, ANTES de colgarla) y la cuelga; cuando el
+  programa acaba, el último run que sale la descuelga y avisa a `io`, que manda el `EXITED`. UN planificador, el de la
+  cola, con lo que hoy sólo tiene el simple: ceder entre cuantos, el interbloqueo, la regla del KILL y el depurador (con
+  un run). **Puerta**: el corpus en las dos VMs, `check-smp`, las de estrés y `run_tarea_smoke` en el simulado; en la
+  Pico 2, la tanda, `run_placa`, PrintBench (±3 %) y la resistencia. **Volver atrás**: el interruptor de la imagen (el
+  RUN de la etapa 1).
+- **2b · el 2º run, con un núcleo.** Antes, los requisitos: un contexto del AOT de verdad por tarea; la condición con
+  semáforo contador y el plazo arreglado; el `gc()` con stop-the-world; los eventos bajo el cerrojo; el KILL que despierta
+  y atómico; el depurador y la GUI, con un solo run; el log con cerrojo. **Puerta**: la de la 2a, más las pruebas que
+  provocan el aviso perdido (con su sabotaje) y horas de resistencia en la Pico 2. **Volver atrás**: `vm.runs=1` en el
+  ENV.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
