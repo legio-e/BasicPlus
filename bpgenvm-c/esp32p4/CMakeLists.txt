@@ -30,6 +30,9 @@ idf_build_set_property(COMPILE_OPTIONS "-DBPVM_GUI" APPEND)
 # V7/H6 G5.a — la GUI por el PACK: los trampolines de gui_pack.c en vez de gui.c + LVGL (hasta aquí,
 # -DBPVM_LVGL y el lv_conf.h propio, que ya no hacen falta: el lv_conf va dentro del pack).
 idf_build_set_property(COMPILE_OPTIONS "-DBPVM_GUI_PACK" APPEND)
+# V7/H12, etapas 0 y 1 (4-oct) — la tarea `run` (esp32/common/repl_esp32.c): de la familia ESP32, por ahora sólo el P4
+# (Eduardo: «una placa antes que todas»). Con 0, el RUN de antes.
+idf_build_set_property(COMPILE_OPTIONS "-DBPVM_ESP32_RUN_TAREA=1" APPEND)
 
 # G6 (RETIRADO en #338) — este override subía el buffer de PUT porque Gui.mod
 # (~24 KB) no cabía entero en el buffer del wire. Eso era ANTES del streaming: desde

@@ -4264,6 +4264,142 @@ la vez) —consumo y latencia—. Y para la etapa 2, confirmado leyendo el kerne
 BINARIO pierde un aviso con dos esperando (y una espera con plazo que vence descuenta el contador aunque un aviso ya la
 hubiera contado); hoy ninguna tiene dos esperando a la vez.
 
+### Etapas 0 y 1 en la Pico 2 (4-oct): el diseño (decidido: `run` permanente)
+
+Eduardo (4-oct): *«nos centramos en una placa (la Pico 2) y más adelante lo aplicamos al resto»*. Por la cascada,
+primero el micro simulado —comparte `bpvm_io.c`, el `RUN` común y el REPL común—, después la Pico 2; la Metro lleva la
+misma imagen.
+
+**Lo que hay hoy** (leído el 4-oct, después del `RUN` común y del `board_mgr` común):
+- **La Pico**: `main()` crea UNA tarea, `vm_task` (16 KB de pila, del heap de FreeRTOS —32 KB en total—, prioridad 2),
+  que hace el arranque (el de la placa y el común, `boot2`), el autorun y el REPL (`repl_v1_run`: el USB sin esperar y,
+  si no hay nada, 10 ms dormida). Un `RUN` lo ejecuta ella misma (`bpvm_repl_run`): crea la VM, carga, contesta
+  `RUN_REPLY`, arranca `io` —otra tarea, 4 KB y prioridad 2: lee el cable (`run_poll`) y saca la salida por líneas— y
+  llama a `bpvm_run`; al volver, para `io` (cierra la cola, la drena entera y la une) y manda `KILL_REPLY` y `EXITED`.
+- **El simulado**: igual, con hilos: el principal acepta al cliente, hace de REPL y ejecuta el programa; `io`, un hilo
+  por `RUN`.
+- **Medido** (las tandas del 3-oct): a `vm_task` le sobraron 7,6 KB de sus 16 en la Metro tras la tanda entera (gasta
+  ~8,7 KB, con el arranque y el REPL); a `io`, 3,3 de 4 KB; el heap de FreeRTOS bajó a 10,4 KB libres en el peor momento.
+
+**El cambio**:
+- La tarea que arranca y hace de REPL se queda así PARA SIEMPRE y es **`io`**: durante un `RUN`, en vez de ejecutar el
+  programa, hace lo que hacía el `io` de cada `RUN` —el lazo de `io_loop`: la salida por líneas y el cable con
+  `run_poll`—.
+- El programa lo ejecuta una tarea nueva, **`run`**.
+- Entre las dos, dos avisos: **«trabajo»** (`io` → `run`: la VM ya cargada, y si se depura) y **«hecho»** (`run` →
+  `io`: lo que devolvió `bpvm_run`). La última línea antes del `EXITED`: `run`, al acabar, pone una bandera (`fin`:
+  ya no escribe más) y da el «hecho»; el lazo de `io` cierra la cola ÉL MISMO al ver la bandera y sale cuando queda
+  seca; después espera el «hecho», y sólo entonces `KILL_REPLY`, `EXITED` y destruir la VM. `run` no cierra ni
+  destruye nada de `io`: lo que se destruye lo destruye quien lo cerró, en su hilo (la primera idea, que `run` cerrara
+  la cola, dejaba una ventana: `io` podía destruir la cola con `run` aún dentro de su cierre).
+- Lo demás, como hoy: la carga y el `RUN_REPLY`, en `io` y antes del «trabajo»; el depurador, en `run` (su lazo de
+  pausa saca los comandos de la cola de control, que llena `io`); el `KILL`, `io` → `kill_requested`; el `RESET`,
+  después del `EXITED`.
+
+**La decisión**: ¿`run` nace con cada `RUN` y muere al acabar —la etapa 0 del plan— o nace con el arranque y espera
+—la etapa 1—? **Decidido por Eduardo (4-oct): `run` permanente, las dos etapas juntas.** Por qué (lo que se le
+propuso):
+- crear y borrar una tarea por `RUN`: una tarea que se borra a sí misma la acaba de liberar más tarde la ociosa de
+  FreeRTOS, y un `RUN` que llega enseguida (el IDE lo hace: `KILL` y otra vez `RUN`) pediría otros 12 KB con los
+  anteriores aún sin devolver —«no cabe»—, o, con la pila estática, pisaría la de una tarea que no ha acabado de morir;
+- la GUI del simulado (SDL, en Windows): una ventana sólo recibe sus mensajes en el hilo que la creó, y la crea el
+  programa la primera vez que usa la GUI (`lvgl_ensure_init`) y sigue abierta para el siguiente: con un hilo por `RUN`,
+  el segundo programa bombearía una ventana ajena, congelada. Con `run` permanente, todos los programas corren en el
+  mismo hilo;
+- y sería código que la etapa 1 tiraría.
+De la etapa 1 queda para su placa que la VM ociosa ceda el núcleo en la STM32 (allí el REPL no cede nunca).
+
+**La memoria** (la Pico): la pila de `run`, un array ESTÁTICO (`xTaskCreateStatic`), en el `.bss`: la VM recibe menos
+ella sola —su bloque es «lo que queda» tras el `.bss`—, sin tocar el margen de `malloc` (64 KB, que es de donde las
+natives sacan la suya). **16 KB, los mismos que `vm_task`** (se propusieron 12; la revisión adversarial lo tumbó): el
+GC corre en ella y su marcado es RECURSIVO —32 B por nivel de una cadena de referencias, medido en la Pico 2: con la
+imagen del 3-oct, una lista de ~360 nodos ya desbordaba (`#648`); con 12 KB, el techo bajaba a ~300—. Los 4 KB de más
+salen del heap de FreeRTOS (de 32 a 28 KB: el `io` de 4 KB de cada `RUN` ya no nace, y el peor momento se queda en los
+10,4 KB de antes). La VM, de 333 KB a 321. El INFO publica las dos marcas: `runStackFree` (la de `run`, nueva) e
+`ioStackFree` (la de la tarea del REPL, que hace de `io`).
+
+**La revisión adversarial** (4-oct, un agente con el código, verificada a mano): el protocolo aguanta con un núcleo
+—ni línea perdida, ni `EXITED` adelantado, ni semáforos desparejados (todas las salidas tempranas de `bpvm_repl_run` van
+antes del «trabajo»), ni uso tras liberar, ni interbloqueo del depurador—. Lo que salió, arreglado: (1) la pila, 16 KB
+(arriba); (2) el `EXITED` llegaba hasta 5 ms tarde en un programa que no imprime al final —nadie despertaba a `io`—: ahora
+`run`, tras poner `fin`, lo despierta sin cerrar la cola (saboteado: 18 ms por `RUN` en vez de 1,2; caso G de
+`run_tarea_smoke`); (3) `run` escribía en el log al nacer, a la vez que el arranque (el log no tiene cerrojo): lo dice
+quien la crea; (4) una tarea de FreeRTOS que vuelve cuelga la placa: `bpvm_repl_run_tarea` ya no vuelve nunca; y el
+comentario de `bpvm_dbg_wire.c` que decía que el `pause_cb` corría en la tarea del REPL. **Para dos runs o dos núcleos
+(etapas 2 y 3), lo que dejó apuntado**: el testigo de fallos y el `callctx` del AOT son globales (`bpvm_aot_helpers.c`):
+por tarea antes de la etapa 2; la variable de condición de semáforo BINARIO (ya en la lista); `run` no pasa por el
+trampolín que prepara el candado de la flash (`pico_flash_lock_init_victim`) ni tiene afinidad; el MPU de `mpu=1` lo
+arma `run` y lo desarma `io` (por núcleo, con dos); `thread_join` libera la pila de un ejecutor que aún puede correr en
+el otro núcleo; `fin`, `viva` y `kill_requested`, atómicos con orden; el log, con cerrojo; y `s_tarea`, `s_run_*` y el
+estado del depurador son únicos.
+
+**Hecho en el PC** (4-oct): el común (`bpvm_io_preparar`/`bpvm_io_lazo` y la tarea en `bpvm_repl.c`) y el simulado
+(`--run-viejo` es el interruptor). `check-sim`, 10 de 10; y `run_tarea_smoke` (en la red): mil `RUN` seguidos sin una
+línea perdida, la salida tardía, el `KILL` barriendo el final del programa (8 parados y 20 acabados solos, cada uno con
+su `EXITED` y su respuesta), la ventana ensanchada (`--ensayo-hecho=150`), el sabotaje cazado (`--sabotaje-cierre`: se
+pierde la última línea) y `--run-viejo`. Y la GUI del simulado con LVGL: dos programas seguidos, el segundo pinta en la
+ventana que creó el primero (capturas «PRIMERO» y «SEGUNDO»).
+
+**Lo compartido entre `io` y `run`** (el inventario, para la revisión adversarial):
+
+| qué | escribe | lee | lo protege |
+|---|---|---|---|
+| la VM (`bpvm_t`) | `io` la crea y la carga; `run` la ejecuta | `io` lee sus errores y la destruye | los dos avisos: nada antes del «trabajo», nada después del «hecho» |
+| `vm->io` (la cola de salida, la de control, el cerrojo del cable) | `io` la crea y la destruye; `run` escribe la salida | `io` la salida; `run` la de control | sus mutex, y los dos avisos |
+| `kill_requested` | `io` | `run`, entre cuantos | un núcleo: `volatile`; con dos, atómico (etapa 2) |
+| lo que devuelve `bpvm_run` | `run`, antes del «hecho» | `io`, después | el aviso |
+| `s_run_kill`, `s_run_reset` | `io` (`run_poll`); `run` sólo en el camino sin `io`, que deja de existir | `io` | — |
+| el cable | `io` y `run` (la salida; las respuestas del depurador) | `io` | el cerrojo del cable (`tx`) y el de `wire_v1` |
+| el latido (`latido=1`) | `run` (el pc y el estado de los hilos) | `io`, sin cerrojo | nada: diagnóstico, puede leer rancio (como hoy) |
+| el FS (un `GET`/`LIST` troceado mientras el programa usa ficheros) | los dos | los dos | el cerrojo del FS por trozo (`#495`, como hoy) |
+| el log | los dos | — | nada (como hoy; el mapa lo marcó bajo-medio) |
+
+**Las pruebas, primero en el simulado**: mil `RUN` seguidos de un programa que imprime y acaba (ni una línea perdida,
+el `EXITED` siempre detrás); un `KILL` justo cuando el programa acaba, barriendo el instante; un `RUN` nada más llegar
+el `EXITED`; la ventana ensanchada (como `#609`): una espera en `run` entre `bpvm_run` y el «hecho»; el sabotaje: `io`
+sin esperar el «hecho» destruye la VM con `run` aún dentro, y una prueba tiene que cazarlo; y la red entera
+(`check-sim`, `run_smoke`, `sim_dbg_smoke`, `env_smoke`).
+
+**La puerta** (la Pico 2): la tanda de V7 entera; `run_placa` 34 de 34 (el `KILL`, el `RESET` y el depurador con el
+programa corriendo); `PrintBench` como hoy (±3 %); las dos marcas de pila, con margen; el reposo (la ociosa corre, y
+un `RUN` arranca igual de rápido); y dos horas de resistencia (`RUN`, `KILL` y `RESET` en bucle, y la tanda) sin un
+cuelgue. Después, la Metro con la tanda.
+
+**La puerta en la Pico 2: PASADA** (4-oct, con el OK de Eduardo): la tanda de V7 verde; `run_placa` 34 de 34;
+PrintBench, +2,3 % en la mediana de 10 vueltas (836 frente a 817 ms; cada imagen baila ±5 % de una vuelta a otra, así
+que el ±3 % se mira con medianas de 10, no con tiradas sueltas); el heap de FreeRTOS, 10,4 KB libres en el peor momento,
+como antes; la pila de `run`, 9,6 KB libres en el peor momento de la tanda (el GC de `HeapInfo`) y el GC aguanta ~423
+niveles (antes ~360); la del REPL, ~4 KB libres —la CARGA de `TimeDemo`, que ya era suya: `#649`—; y **~120 minutos de
+resistencia, ~4 570 vueltas sin un fallo** (un programa de 21 líneas, un bucle parado con KILL a un instante al azar y
+una salida tardía, en bucle, con un RESET con programa cada 40 vueltas: ~114), las marcas de pila y del heap quietas. (La
+cortó el límite de 120 minutos de la herramienta unos segundos antes de su resumen: el log de la placa enseña vueltas
+normales hasta ese instante.)
+
+**La Metro y el P4: PASADA también** (4-oct, conectadas por Eduardo «para que puedas probar lo que quieras»; grabadas
+con su OK). La Metro, la imagen de la Pico 2: su VM entera va a la PSRAM (6 MB), así que los 12 KB de la SRAM no le
+quitan nada a la VM; su SQLite, vivo. El P4, la parte ESP32 escrita hoy (`repl_esp32.c`, encendida SÓLO en el P4 con
+`BPVM_ESP32_RUN_TAREA`): `run` con 16 KB estáticos en la RAM interna (una pila en la PSRAM no puede escribir la flash) y
+a la prioridad de `wire_uart` (5); sus packs (SQLite, Gui, Stdlib), vivos —el bloque de sus motores está en la PSRAM—.
+En las dos: la tanda verde —en el P4, con las tres de GUI: LVGL en `run`, sobre la pantalla de verdad—; `run_placa` 34
+de 34 —el depurador del P4, con su lazo de pausa en `run`—; PrintBench: el P4 idéntico (20 362 ms: lo limita su UART),
+la Metro +3 % en la mediana (877 frente a 851 ms), dentro del ruido (dos tandas de la MISMA imagen difieren un 5 %); el
+KILL, 2–6 ms en la Metro y 22–28 en el P4 (su tick de 10 ms); el GC de la Metro, ~423 niveles; y 30 minutos de
+resistencia en cada una, sin un fallo (1 101 y 974 vueltas, 27 y 24 RESET).
+
+**La memoria, ajustada** (Eduardo, 4-oct: *«si necesitamos más stack y nos ahorramos heap, podemos reducir un poco el
+heap para compensar»*): en la Pico, el heap de FreeRTOS de 28 a 24 KB —el peor momento medido dejaba 10,4–10,7 KB
+libres; con 24, ~6,4—, y la pila de `run` cuesta 8 KB netos. Compilado; se graba en el próximo lote. En la ESP32 no hay
+nada que ajustar: su heap es la RAM libre. Y con `#648` y `#649` arregladas (las dos recursiones), las dos pilas
+podrían bajar a ~8–10 KB.
+
+**Volver atrás**: un interruptor de la imagen —la familia pone o no su tarea `run` en la cintura del `RUN`—; sin ella,
+el `RUN` común de hoy. Las familias que no se han pasado siguen así (las ESP32 que no son el P4, y la STM32 —Eduardo:
+*«puede esperar»*: antes, su REPL tiene que esperar de verdad, o `run` iría a media velocidad—).
+
+**El orden**: (1) el simulado, con sus pruebas y la red; (2) la Pico 2 y su puerta; (3) la Metro; (4) el resto,
+familia a familia —las ESP32 (el `main`, 16 KB y prioridad 1); la STM32, cuyo REPL tiene que bloquearse de verdad antes
+(la interrupción del cable está por encima del umbral de FreeRTOS); y en las de pantalla, LVGL en `run`—.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

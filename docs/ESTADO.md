@@ -27,6 +27,12 @@
 
 ## Última sesión
 
+> **4-oct** — H12, las etapas 0 y 1 JUNTAS (Eduardo: «`run` permanente»; una placa antes que todas, la Pico 2): la
+> tarea del REPL hace de `io` durante el RUN y el programa corre en una tarea `run` que nace con el arranque. Hecho en
+> el PC (el común y el simulado, con `run_tarea_smoke` en la red; la red entera, verde) y en la Pico 2 (`03c86643`),
+> con su puerta casi entera; la revisión adversarial, verificada a mano, y dos SUELTAS nuevas de antes de H12, `#648` (el
+> GC recursivo) y `#649` (la carga recursiva). Más abajo, «🧵 H12 (4-oct)».
+>
 > **3-oct** — H10, el paso 1 del traspaso entero: los arreglos pequeños, todos en el PC y cada uno con su prueba
 > (`89da2e63`, `26ecfef6`, `c382a66c`): el lote D del FS de `#473` (236, 248, 264, 268, 276, 280, 466), la pantalla
 > que no arranca (180), tres de los diez (2, 7, 10), `#634` y `#635`, `G2` (a) y (b) y lo barato de `#477`. La red,
@@ -1096,6 +1102,43 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧵 H12 (4-oct) — LAS ETAPAS 0 Y 1: la tarea `run`, en el PC y en la Pico 2
+
+- **El encargo** (Eduardo): *«Continuamos H12. De momento nos centramos en una placa (la Pico 2?) y más adelante lo
+  aplicamos al resto»*. El mapa de la etapa 0 rehecho sobre el código de hoy (el del 2-oct era anterior al `RUN` común y
+  al `board_mgr` común) y el diseño en `V7_IDEAS` §H12 «Etapas 0 y 1 en la Pico 2». **Decidido por Eduardo**: `run`
+  PERMANENTE —las etapas 0 y 1 juntas—, porque una tarea por RUN se crearía y borraría con prisa (el IDE hace KILL y RUN
+  seguidos) y porque la ventana de la GUI del simulado se queda en el hilo que la creó.
+- **El PC primero** (la cascada): el común (`bpvm_io_preparar`/`bpvm_io_lazo`/`bpvm_io_despertar` y la tarea en
+  `bpvm_repl.c`, con dos avisos: «trabajo» y «hecho») y el simulado (`--run-viejo`, el interruptor). `run_tarea_smoke`,
+  nueva y en la red: mil RUN seguidos, la salida tardía, el KILL barriendo el final, la ventana ensanchada, el sabotaje
+  cazado, el interruptor y la latencia de un programa mudo. La GUI del simulado con LVGL: dos programas seguidos pintan
+  en la misma ventana. La red entera, verde (dos veces).
+- **La revisión adversarial** (un agente; lo que dijo, verificado a mano): el protocolo aguanta con un núcleo. Salieron
+  cuatro arreglos (la pila de `run` a 16 KB; despertar a `io` al acabar —saboteado: 18 ms por RUN en vez de 1,2—; el log
+  al nacer; una tarea que no vuelve) y, de fondo y de antes, **`#648`**: el marcado del GC es recursivo, 32 B por nivel,
+  y la Pico 2 se colgaba con una lista de ~360 nodos (medido sin colgarla, con la marca de agua); la imagen nueva,
+  ~423. Y la lista de lo que hará falta con dos núcleos, en `V7_IDEAS`.
+- **La Pico 2** (con el OK de Eduardo): la pila de `run`, 16 KB estáticos en el `.bss`; el heap de FreeRTOS, de 32 a 28
+  KB; la VM, de 333 a 321 KB. `run_placa` 34 de 34, la tanda verde, PrintBench +2,3 % (la mediana de 10: 836 frente a
+  817 ms; cada imagen baila ±5 %), el heap de FreeRTOS igual. La tanda apunta ahora las marcas de pila PRUEBA A PRUEBA:
+  la tarea del REPL llega a ~12 KB cargando `TimeDemo` (lo de siempre: la carga ya era suya; una comparación con los
+  8,7 KB «de ayer» estaba mal hecha, se midieron tras un reset) y de ahí **`#649`**: la carga recurre por nivel de
+  `import`, 1,7 KB cada uno. La resistencia de dos horas (RUN, KILL a destiempo, salida tardía y RESET), en marcha.
+- **La resistencia de la Pico 2**: ~120 minutos y ~4 570 vueltas sin un fallo (~114 RESET con programa). La cortó el
+  límite de 120 minutos de la herramienta (pedí 130; el máximo es 120) segundos antes de su resumen: lo pareció un
+  cuelgue y no lo era —el log de la placa enseña vueltas normales hasta ese instante—. Para la próxima: `--minutos`
+  por debajo del límite.
+- **La Metro y el P4** (conectadas por Eduardo, «para que puedas probar lo que quieras»; grabadas con su OK): la Metro,
+  la misma imagen (su VM está en la PSRAM: los 12 KB no le quitan nada); el P4, la parte ESP32 (`repl_esp32.c`,
+  encendida sólo en el P4: `run` con 16 KB en la RAM interna y a la prioridad de `wire_uart`, 5). Las dos, la puerta
+  pasada: la tanda —en el P4, con la GUI en `run`, sobre la pantalla—, `run_placa` 34 de 34, PrintBench (el P4
+  idéntico; la Metro +3 %, dentro del ruido) y 30 minutos de resistencia sin un fallo.
+- **Eduardo, a la vista de los números**: *«si esto funciona entiendo que el cambio se queda para todos los micros»*;
+  *«si necesitamos más stack y nos ahorramos heap, podemos reducir un poco el heap para compensar»* —en la Pico, el
+  heap de FreeRTOS de 28 a 24 KB, compilado—; *«lo del STM32 puede esperar»*. El orden que siguió: cerrar las etapas
+  0 y 1 (las otras ESP32 y el heap de la Pico, en un lote), `#648` y `#649`, y la etapa 2.
 
 ## 🔧 H10 (3-oct, noche) — CERRADO (Eduardo): EL `board_mgr` COMÚN (pasos 0 a 5) y su lote en las NUEVE placas; `#636`–`#638` CERRADAS; D7, probado por Eduardo en el IDE
 

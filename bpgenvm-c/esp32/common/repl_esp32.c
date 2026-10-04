@@ -807,9 +807,38 @@ static void handle_request(const char* line, int len) {
  * del autorun. Se registraba al entrar al REPL —o sea DESPUÉS del autorun—, y un IDE que
  * se conectaba con el autorun corriendo recibía «HELLO: este firmware no ha registrado su
  * cintura de REPL» al saludar. La identidad ya está puesta (va antes). */
+/* V7/H12, etapas 0 y 1 (4-oct) — LA TAREA `run` (src/bpvm_repl.c): el programa en una tarea propia y permanente, y la
+ * del REPL (`main`, o `wire_uart` en el P4) hace de `io` durante el RUN. El interruptor de la imagen,
+ * BPVM_ESP32_RUN_TAREA: por ahora SÓLO EL P4 la enciende (su CMakeLists) —Eduardo: «una placa antes que todas»—; las
+ * demás, el RUN de antes, hasta medirlas (la C3 y la C6 van justas de RAM interna, H13). */
+#ifndef BPVM_ESP32_RUN_TAREA
+#define BPVM_ESP32_RUN_TAREA 0
+#endif
+#if BPVM_ESP32_RUN_TAREA
+/* Su pila, ESTÁTICA y en la RAM INTERNA (el .bss va a la DRAM): una pila en la PSRAM no puede escribir la flash —por lo
+ * mismo, la del ejecutor de las natives—. 16 KB, como la de la Pico: el GC corre en ella y su marcado es recursivo
+ * (#648). En el IDF, el tamaño de una pila va en BYTES (StackType_t es un byte). */
+#define ESP32_RUN_PILA_BYTES (16u * 1024u)
+static StackType_t  s_run_pila[ESP32_RUN_PILA_BYTES / sizeof(StackType_t)];
+static StaticTask_t s_run_tcb;
+static TaskHandle_t s_run_task = NULL;
+#endif
+
 void repl_esp32_cintura(void) {
     s_repl_ops.server_name = s_board_id->server_name;   /* S3 o P4: lo dice la placa */
     bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3: la cintura, antes del primer mensaje */
+#if BPVM_ESP32_RUN_TAREA
+    /* A la MISMA prioridad que ésta, la que hace de `io` (el contrato de bpvm_platform.h: ni por debajo —el KILL no
+     * llegaba— ni por encima —PrintBench, más lento—): en el P4, 5. Antes del autorun: el arranque común llama aquí
+     * antes. Las ESP32 de hoy corren con un núcleo (UNICORE, o el chip sólo tiene uno): sin afinidad que dar. */
+    if (s_run_task == NULL && bpvm_repl_run_tarea_prepara() == 0)
+        s_run_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run", ESP32_RUN_PILA_BYTES, NULL,
+                                       uxTaskPriorityGet(NULL), s_run_pila, &s_run_tcb);
+    /* el log, desde aquí y no desde `run` (el log no tiene cerrojo) */
+    if (s_run_task == NULL) log_printf("run: no se pudo crear la tarea run: sigue el RUN de antes");
+    else log_printf("run: la tarea del programa, creada (%u KB de pila, prioridad %u)",
+                    (unsigned) (ESP32_RUN_PILA_BYTES / 1024u), (unsigned) uxTaskPriorityGet(NULL));
+#endif
 }
 
 void repl_esp32_run(void) {
