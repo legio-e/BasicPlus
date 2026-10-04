@@ -24,14 +24,19 @@ CONFIG_ESP_CONSOLE_UART_DEFAULT=y
 # inyectado entre las respuestas al probar el HELLO.
 CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
 
-# La task de app_main ejecuta el REPL + la VM. Holgura de stack C.
+# La task de app_main ejecuta el REPL (y, hasta H12, tambien la VM). Holgura de stack C.
 # 16 KB desde el 24-sep (tarde de placas de V7): con 8 KB, TimeDemo, GuiWinJson y GuiShot
 # REINICIABAN la C6 al empezar el RUN — «Stack protection fault» en la task main, visto con
 # la consola secundaria por USB—. La cadena: discover_deps (recursiva por el arbol de
 # dependencias, mas hondo en V7) -> bpvm_fs_stat -> lfs_stat -> lfs_dir_fetchmatch -> la
 # lectura SPI de la flash. Lo mismo que la C5 el 21-sep; alli se culpo al rebote de PSRAM,
 # pero la C6 no tiene PSRAM y tambien se comia los 8 KB.
-CONFIG_ESP_MAIN_TASK_STACK_SIZE=16384
+# 12 KB desde el 4-oct (H12, etapas 0 y 1): el programa corre en la tarea `run` y `main` solo
+# carga y hace de `io`; discover_deps ya no recurre (#649). Medido en la tanda de V7 con `run`:
+# `main` gasta como mucho ~7,4 KB (vmTaskStackFreeBytes del INFO). Y hacia falta: con 16 KB de
+# `main` y 12 de `run`, durante un RUN la RAM interna libre llegaba a 404 B y GuiArbolG2 se
+# quedaba sin memoria al enlazar. Con 12 + 10 (la de `run`, en el CMakeLists), los 22 KB de antes.
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=12288
 
 # Optimizar a tamaño.
 CONFIG_COMPILER_OPTIMIZATION_SIZE=y
