@@ -369,6 +369,10 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     if (stack_base == 0) stack_base = memory_size / 2;
     if (stack_base >= memory_size) return NULL;
     if (stack_base + BPVM_MAIN_STACK_BYTES > memory_size) return NULL;
+    /* V7/H12, etapa 2a.2 — LA COLA, permanente: en una placa ya la creó el arranque; en el PC, la primera VM. Sin ella
+     * no hay dónde colgar el programa. (Su cerrojo y su condición son de la plataforma: el guardián de #339 no los
+     * cuenta como del programa.) */
+    if (bpvm_cola_asegurar() != 0) return NULL;
 
     /* #339 — la marca se toma AQUÍ, antes de reservar nada nuestro, para que la
      * propia estructura del vm quede DENTRO de la ventana: si algún día se
@@ -421,8 +425,8 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     memory[BPVM_SENTINEL_EVENT_RETURN_ADDR]  = BPVM_SENTINEL_EVENT_RETURN;
     bpvm_event_queue_init(vm);
 
-    /* Thread main: región fija MAIN_STACK_BYTES a partir de stack_base. V7/H12, etapa 2: su struct, con malloc, y en la
-     * cola de hilos (threading.c); sin memoria para ella no hay VM. */
+    /* Thread main: región fija MAIN_STACK_BYTES a partir de stack_base. V7/H12, etapa 2: su struct, con malloc (a la
+     * cola entra al colgar el programa: threading.c); sin memoria para ella no hay VM. */
     if (bpvm_hilos_crear_main(vm, (uint32_t) stack_base) != 0) {
         bpvm_free(vm);
         return NULL;
@@ -1462,8 +1466,9 @@ static void lineas_vaciar(bpvm_t* vm) {
  * llevaban copiada y la copia se quedó atrás: el cs del `main` se buscaba en bpvm_run_smp por el rango viejo
  * [code_start, end_addr), que en un módulo XIP (de un pack) está vacío —end_addr == code_start—, y un `main` de la
  * zona de packs con --smp acababa en «PC fuera de rango»; bpvm_run se había arreglado en su día (H3.c) y su gemelo
- * no. Enlazar, el hilo `main` desde el punto de entrada, el cuanto y las dos excepciones prefabricadas. */
-static bpvm_status_t preparar_run(bpvm_t* vm) {
+ * no. Enlazar, el hilo `main` desde el punto de entrada, el cuanto y las dos excepciones prefabricadas. V7/H12, etapa
+ * 2a.2: la llama la cola al COLGAR el programa, con su main ya en la cola y antes de publicarlo (scheduler.c). */
+bpvm_status_t bpvm_programa_preparar(bpvm_t* vm) {
     vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
     /* F3 — resolver imports y aplicar class fixups antes de ejecutar. */
     bpvm_status_t ls = bpvm_link_all(vm);
@@ -1473,9 +1478,9 @@ static bpvm_status_t preparar_run(bpvm_t* vm) {
     /* Inicializar thread main desde el entry-point antes de entrar al
      * scheduler. */
     if (vm->main_absolute_address == 0) return BPVM_ERR_BAD_PC;
-    bpvm_thread_t* main_tc = vm->hilo_main;   /* V7/H12, etapa 2: en la cola desde bpvm_init */
+    bpvm_thread_t* main_tc = vm->hilo_main;   /* V7/H12, etapa 2a.2: ya en la cola (bpvm_cola_colgar) */
     vm->pila_peor_usada = vm->pila_peor_total = 0;   /* #605: el peor de ESTE RUN */
-    vm->hilos_max = vm->hilos_en_cola;               /* H12: el máximo de ESTE RUN */
+    vm->hilos_max = bpvm_la_cola.en_cola;            /* H12: el máximo de ESTE RUN (el main) */
     main_tc->pc = vm->main_absolute_address;
     /* cs del módulo del entry-point (H3.c: por rango de CÓDIGO [cb, cb+size)). */
     {
@@ -1554,37 +1559,33 @@ static void cerrar_run(bpvm_t* vm) {
               (long) (vm->sig_tid - 1), (long) vm->hilos_max);
 }
 
-bpvm_status_t bpvm_run(bpvm_t* vm) {
-    if (!vm) return BPVM_ERR_BAD_PC;
-    bpvm_status_t ps = preparar_run(vm);
-    if (ps != BPVM_OK) return ps;
-    bpvm_status_t rs = bpvm_scheduler_run(vm);
+/* V7/H12, etapa 2a.2 — EL CIERRE del programa, cuando acaba: lo que algún hilo dejó a mitad de un `print` (#600) y
+ * las líneas `pila:` e `hilos:` (#605, H12). Lo hace el último run que sale (scheduler.c), antes de descolgarlo. */
+void bpvm_programa_cerrar(bpvm_t* vm) {
     lineas_vaciar(vm);   /* V7/H7 #600 */
     cerrar_run(vm);
-    /* #640 (3-oct) — LA BANDERA ES LA VERDAD (#462), también cuando el main muere de una excepción: el kill de una
-     * native que corre SIN EJECUTOR (no cupo el suyo) la para LANZANDO, y sin atrapar el planificador devolvía
-     * RUNTIME_ERROR —«excepcion no atrapada: ... se ha detenido (kill)»— por un programa que se mandó parar. Como en
-     * bpvm_run_smp, que ya lo hacía. `test-aotkill`, la pasada sin ejecutor. */
-    if (vm->kill_requested) return BPVM_KILLED;
-    return rs;
 }
 
-/* H2 — variante SMP. Misma puesta a punto del main tc + n workers. */
+/* V7/H12, etapa 2a.2 — UN PROGRAMA HASTA EL FINAL, en el hilo que llama: el PC, la STM32 y las pruebas de C. Se cuelga
+ * en la cola (bpvm_smp.h: el main a la cola, prepararlo, publicarlo) y el que llama hace de run hasta que acaba —el
+ * mismo planificador que los runs permanentes de una placa—. Lo que devuelve, el del último run al descolgarlo: KILLED
+ * si se pidió parar, aunque acabase solo (#462, #640: el kill de una native que corre SIN EJECUTOR la para LANZANDO, y
+ * sin atrapar salía RUNTIME_ERROR por un programa que se mandó parar; `test-aotkill`, la pasada sin ejecutor); si no,
+ * el primer fallo, o RUNTIME_ERROR si un hilo murió sin atrapar (#608). */
+bpvm_status_t bpvm_run(bpvm_t* vm) {
+    return bpvm_run_smp(vm, 1);
+}
+
+/* H2 — con `n_workers` runs (el que llama y n-1 hilos que acaban con el programa; scheduler_smp.c). Con uno, como
+ * bpvm_run. */
 #include "bpvm_smp.h"
 bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers) {
     if (!vm) return BPVM_ERR_BAD_PC;
     if (n_workers < 1) n_workers = 1;
-    bpvm_status_t ps = preparar_run(vm);   /* #606: la misma que bpvm_run */
-    if (ps != BPVM_OK) return ps;
-
-    if (bpvm_smp_init(vm, n_workers) != 0) return BPVM_ERR_OOM;
-    int rc = bpvm_scheduler_run_smp(vm);
-    lineas_vaciar(vm);   /* V7/H7 #600 — antes de deshacer el SMP: su cola aún está */
-    bpvm_smp_destroy(vm);
-    cerrar_run(vm);
-    if (vm->kill_requested) return BPVM_KILLED;   /* P-run-stop */
-    /* #596 — rc es el estado del primer fallo de un worker (0 = ninguno), o -1 si no arrancaron los workers. */
-    return (rc < 0) ? BPVM_ERR_RUNTIME : (bpvm_status_t) rc;
+    int ps = bpvm_cola_colgar(vm, n_workers, 0, NULL, NULL);
+    if (ps != BPVM_OK) return (bpvm_status_t) ps;   /* no se publicó: un fallo de enlace, la cola ocupada… */
+    bpvm_cola_correr_n(n_workers);
+    return (bpvm_status_t) bpvm_la_cola.rs;
 }
 
 void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user) {
@@ -1627,7 +1628,12 @@ void bpvm_set_poll(bpvm_t* vm, bpvm_poll_cb_t cb, void* user) {
 
 void bpvm_request_kill(bpvm_t* vm) {
     if (!vm) return;
+    int antes = vm->kill_requested;
     vm->kill_requested = 1;
+    /* V7/H12, etapa 2a.2 — EL KILL DESPIERTA: un run que duerme en la cola (todos los hilos durmiendo, o esperando un
+     * hilo de otro run) lo ve ya, no al vencer su espera. Una vez: el poll «pegajoso» lo pide en cada vuelta. El run
+     * mira la bandera con el cerrojo cogido antes de dormirse, así que el aviso no se pierde. */
+    if (!antes && !bpvm_la_cola.sabotaje_despertar) bpvm_cola_despertar();   /* (el sabotaje: SÓLO PRUEBAS, test-kill) */
 }
 
 int bpvm_kill_requested(const bpvm_t* vm) {

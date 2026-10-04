@@ -192,19 +192,23 @@ int bpvm_mutex_pop_waiter(bpvm_t* vm, int mid) {
  *
  * El diseño, de Eduardo: el hilo, para la VM, es una struct de C (bpvm_thread_t) pedida con malloc al arrancarlo y
  * devuelta cuando sale de la cola; la cola son esas structs, una lista doble y circular (`next`, `back`) —sin array y
- * sin tope: lo pone la memoria—; la VM guarda UNA (`vm->cola`, el punto donde sigue la rueda; NULL, vacía); y el
- * Thread de BP tiene un handle a la suya, su `__tid`, que no se reutiliza nunca (`vm->sig_tid` sólo crece): resolverlo
- * es dar una vuelta, y si no está, el hilo acabó. Antes (#604): 32 huecos fijos dentro de bpvm_t, reutilizados, y el
- * `__tid` del Thread viejo había que ponerlo a 0 para que su `join` no esperase al hilo nuevo del mismo hueco. Todo lo
- * que toca la cola está aquí y va bajo vm_lock (no-op con un solo worker). Y toda búsqueda da como mucho UNA vuelta:
- * se para al volver al punto de partida. */
+ * sin tope: lo pone la memoria—; hay UNA referencia a ella (el punto donde sigue la rueda; NULL, vacía); y el Thread de
+ * BP tiene un handle a la suya, su `__tid`, que no se reutiliza nunca (`vm->sig_tid` sólo crece): resolverlo es dar una
+ * vuelta, y si no está, el hilo acabó. Antes (#604): 32 huecos fijos dentro de bpvm_t, reutilizados, y el `__tid` del
+ * Thread viejo había que ponerlo a 0 para que su `join` no esperase al hilo nuevo del mismo hueco. Desde la 2a.2 la
+ * cola es PERMANENTE (`bpvm_la_cola`, bpvm_smp.h: la referencia es su `punto`): los hilos de un programa entran al
+ * colgarlo —el main— o con Thread.start, salen al acabar, y los que quedan se van con él al destruirlo. Un programa a
+ * la vez: los hilos de `vm` son los de la cola si `vm` es su dueño; si no, ninguno. Todo lo que toca la cola está aquí
+ * y va bajo vm_lock (no-op con un run). Y toda búsqueda da como mucho UNA vuelta: se para al volver al punto de
+ * partida. */
 
 bpvm_thread_t* bpvm_hilos_primero(const bpvm_t* vm) {
-    return vm->cola;
+    return (bpvm_la_cola.dueno == vm) ? bpvm_la_cola.punto : NULL;
 }
 
 bpvm_thread_t* bpvm_hilos_siguiente(const bpvm_t* vm, const bpvm_thread_t* h) {
-    return (h->next == vm->cola) ? NULL : h->next;   /* de vuelta al punto de partida: la vuelta acaba */
+    (void) vm;
+    return (h->next == bpvm_la_cola.punto) ? NULL : h->next;   /* de vuelta al punto de partida: la vuelta acaba */
 }
 
 bpvm_thread_t* bpvm_hilo_por_tid(const bpvm_t* vm, int32_t tid) {
@@ -214,13 +218,13 @@ bpvm_thread_t* bpvm_hilo_por_tid(const bpvm_t* vm, int32_t tid) {
 }
 
 bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre) {
-    bpvm_thread_t* c = vm->cola;
+    bpvm_thread_t* c = bpvm_hilos_primero(vm);
     if (c == NULL) return NULL;
     bpvm_thread_t* h = c;
     do {                                   /* desde el siguiente al punto de la rueda hasta él mismo: una vuelta */
         h = h->next;
         if (h->status == BPVM_THREAD_RUNNABLE && (!libre || h->sched_owner == -1)) {
-            vm->cola = h;                  /* la rueda sigue en el elegido: el próximo empieza en su siguiente */
+            bpvm_la_cola.punto = h;        /* la rueda sigue en el elegido: el próximo empieza en su siguiente */
             vm->latido_tid = h->id;        /* para el latido, que lo lee desde otra tarea (sin punteros) */
             vm->latido_pc = h->pc;
             return h;
@@ -231,9 +235,10 @@ bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre) {
 
 /* Mete `h` al final de la rueda: justo detrás del último elegido, así que le toca cuando le hayan tocado a todos. */
 static void cola_meter(bpvm_t* vm, bpvm_thread_t* h) {
-    if (++vm->hilos_en_cola > vm->hilos_max) vm->hilos_max = vm->hilos_en_cola;
-    bpvm_thread_t* c = vm->cola;
-    if (c == NULL) { h->next = h; h->back = h; vm->cola = h; return; }
+    bpvm_cola_t* q = &bpvm_la_cola;
+    if (++q->en_cola > vm->hilos_max) vm->hilos_max = q->en_cola;
+    bpvm_thread_t* c = q->punto;
+    if (c == NULL) { h->next = h; h->back = h; q->punto = h; return; }
     h->next = c;
     h->back = c->back;
     c->back->next = h;
@@ -242,14 +247,15 @@ static void cola_meter(bpvm_t* vm, bpvm_thread_t* h) {
 
 /* Saca `h`. Si era el punto de la rueda, el punto pasa a su ANTERIOR: la próxima elección empieza en el siguiente de
  * ése, que es el que venía detrás de `h` (con el siguiente se saltaría un turno). Si era el único, la cola queda vacía. */
-static void cola_sacar(bpvm_t* vm, bpvm_thread_t* h) {
-    vm->hilos_en_cola--;
+static void cola_sacar(bpvm_thread_t* h) {
+    bpvm_cola_t* q = &bpvm_la_cola;
+    q->en_cola--;
     if (h->next == h) {
-        vm->cola = NULL;
+        q->punto = NULL;
     } else {
         h->back->next = h->next;
         h->next->back = h->back;
-        if (vm->cola == h) vm->cola = h->back;
+        if (q->punto == h) q->punto = h->back;
     }
     h->next = h->back = NULL;
 }
@@ -327,7 +333,7 @@ int bpvm_hilos_recoger(bpvm_t* vm) {
         for (bpvm_thread_t* h = bpvm_hilos_primero(vm); h; h = bpvm_hilos_siguiente(vm, h))
             if (puede_salir(vm, h)) { fuera = h; break; }
         if (fuera == NULL) return n;
-        cola_sacar(vm, fuera);   /* uno por vuelta: sacar mientras se recorre rompería la vuelta */
+        cola_sacar(fuera);   /* uno por vuelta: sacar mientras se recorre rompería la vuelta */
         hilo_devolver(vm, fuera);
         n++;
     }
@@ -348,17 +354,47 @@ int bpvm_hilos_crear_main(bpvm_t* vm, uint32_t stack_base) {
     m->sched_owner = -1;
     m->ev_depth = 0;          /* H5.c: sin handler de evento en curso */
     m->ev_post_mortem = -1;   /* #342: vivo; la deuda se calcula al morir */
-    vm->cola = NULL;
-    vm->hilo_main = m;
+    vm->hilo_main = m;        /* V7/H12, etapa 2a.2: a la cola entra al colgar el programa (bpvm_hilos_meter_main) */
     vm->sig_tid = 1;
     vm->pilas_libres = vm->pilas_libres_fin = 0;
-    vm->hilos_en_cola = vm->hilos_max = 0;
-    cola_meter(vm, m);
+    vm->hilos_max = 0;
     return 0;
 }
 
+/* V7/H12, etapa 2a.2 — el main, a la cola, al COLGAR el programa (bpvm_cola_colgar, con el cerrojo de la cola cogido):
+ * desde aquí, la cola es de `vm` hasta que se destruya. Antes de prepararlo: la preparación reserva memoria (las
+ * excepciones prefabricadas, con el main de ancla) y el GC busca sus raíces en la cola. -1 si la cola es de otro
+ * programa —o de éste, otra vez—: un programa a la vez. */
+int bpvm_hilos_meter_main(bpvm_t* vm) {
+    bpvm_cola_t* q = &bpvm_la_cola;
+    if (q->dueno != NULL || q->punto != NULL || vm->hilo_main == NULL) return -1;
+    q->dueno = vm;
+    q->en_cola = 0;
+    cola_meter(vm, vm->hilo_main);
+    return 0;
+}
+
+/* Todas fuera (bpvm_destroy, con los ejecutores de natives ya terminados: hasta entonces apuntan a sus hilos). Si la
+ * cola es de `vm`, se queda VACÍA —la referencia, a NULL— para el siguiente programa; si no se llegó a colgar, su main
+ * no estaba en ninguna cola y se devuelve solo. */
 void bpvm_hilos_liberar(bpvm_t* vm) {
-    bpvm_thread_t* c = vm->cola;
+    bpvm_cola_t* q = &bpvm_la_cola;
+    bpvm_thread_t* c = NULL;
+    int main_dentro = (vm->hilo_main != NULL && vm->hilo_main->next != NULL);
+    if (q->iniciada) bpvm_platform_mutex_lock(&q->vm_lock);
+    if (q->dueno == vm) {
+        if (q->programa == vm) {
+            /* no debe pasar: se destruye un programa publicado, que un run puede estar ejecutando */
+            bpvm_diag_urgente("[bpvm] se destruye un programa que sigue publicado en la cola (H12): se descuelga");
+            q->programa = NULL;
+            vm->smp = NULL;
+        }
+        c = q->punto;
+        q->punto = NULL;
+        q->dueno = NULL;
+        q->en_cola = 0;
+    }
+    if (q->iniciada) bpvm_platform_mutex_unlock(&q->vm_lock);
     if (c != NULL) {
         bpvm_thread_t* h = c;
         do {                                  /* una vuelta, guardando el siguiente antes de devolver */
@@ -369,7 +405,11 @@ void bpvm_hilos_liberar(bpvm_t* vm) {
             h = sig;
         } while (h != c);
     }
-    vm->cola = NULL;
+    if (!main_dentro && vm->hilo_main != NULL) {
+        bpvm_free(vm->hilo_main->eh_stack);
+        bpvm_free(vm->hilo_main->linea);
+        bpvm_free(vm->hilo_main);
+    }
     vm->hilo_main = NULL;
 }
 

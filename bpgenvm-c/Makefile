@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -458,8 +458,12 @@ test-kill: $(LIBOBJ)
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_kill.c \
 	    $(LIBOBJ) -o $(KILL_BIN) $(LDFLAGS); \
-	  echo "--- KILL cooperativo (esperado: 6x 'terminado por KILL ... PASS' y la linea OK) ---"; \
-	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod); \
+	  echo "--- KILL cooperativo (esperado: 8x 'terminado por KILL ... PASS' y la linea OK) ---"; \
+	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod) || exit 1; \
+	  echo "--- y el sabotaje del KILL que despierta (V7/H12 2a.2: sin el aviso a la cola, el programa dormido no se para; esperado: ROJO) ---"; \
+	  if (cd samples && timeout 15 ../$(KILL_BIN) KillLoop.mod KillSleep.mod --sabotaje-despertar); then \
+	    echo "FAIL test-kill: el sabotaje del aviso pasa por verde"; exit 1; \
+	  else echo "  (rojo, como debe: el KILL sin aviso no despierta al programa dormido)"; fi; \
 	fi
 
 # V7/H10 #634 (3-oct) — UN KILL CON EL PROGRAMA EN PAUSA: el lazo de pausa del depurador no miraba la bandera que pone
@@ -1327,6 +1331,37 @@ test-gchondo: $(BIN)
 	   [ "$$pc" = "$$pj" ] || { echo "  la VM-Java dijo otra cosa:"; printf '%s\n' "$$pj" | sed 's/^/    /'; }; \
 	   exit 1; \
 	 fi
+
+# V7/H12, etapa 2a.2 (4-oct) — LA COLA y su planificador, en lo que la red no ve por sí sola (test/test_cola.c): el
+# interbloqueo de verdad con uno y dos runs (Interbloqueo: RUNTIME_ERROR; con dos, antes de la 2a.2, colgado); el
+# interbloqueo FALSO que no puede salir (MutexGc con dos runs, el heap justo y la ventana ensanchada); y el fin, del
+# último run que suelta su hilo (FinJunto con dos runs y la ventana ensanchada). Y sus dos sabotajes, que tienen que dar
+# rojo: --sabotaje-contador (algún interbloqueo falso) y --sabotaje-fin (algún fin antes del último cuanto).
+COLA_BIN = build/test_cola.exe
+test-cola: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,Interbloqueo MutexGc FinJunto)
+	$(call stdlibdep,Core)
+	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ]; then \
+	  echo "FAIL test-cola: faltan Interbloqueo.mod, MutexGc.mod o FinJunto.mod y no se han podido generar"; exit 1; \
+	fi
+	@$(CC) $(CFLAGS) -Isrc test/test_cola.c $(LIBOBJ) -o $(COLA_BIN) $(LDFLAGS)
+	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. PASS, 3. PASS y la linea OK) ---"
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod 2>/dev/null) || { echo "FAIL test-cola"; exit 1; }
+	@echo "--- y sus sabotajes (esperado: los dos, ROJOS, cada uno por lo suyo) ---"
+	@# El del contador: un interbloqueo FALSO dicho en stderr (detrás, el programa se descuelga con un run aún dentro
+	@# de su cuanto, que al despertar ya no lo encuentra: suele acabar en un fallo de segmento; por eso se mira el aviso).
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod --sabotaje-contador \
+	   >../build/cola_sab1.out 2>../build/cola_sab1.err); st=$$?; \
+	 if [ $$st -ne 0 ] && grep -q 'deadlock' build/cola_sab1.err; then \
+	   echo "  (rojo, como debe: con el contador del GC sale un interbloqueo que no existe; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje del contador no se caza (salida $$st)"; cat build/cola_sab1.out; exit 1; fi
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod --sabotaje-fin \
+	   >../build/cola_sab2.out 2>/dev/null); st=$$?; cat build/cola_sab2.out; \
+	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab2.out; then \
+	   echo "  (rojo, como debe: el fin, decidido antes de que vuelva el último cuanto)"; \
+	 else echo "FAIL test-cola: el sabotaje del fin no se caza (salida $$st)"; exit 1; fi
+	@echo "PASS test-cola (y sus dos sabotajes, rojos)"
 
 # V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS: cada hilo, una struct pedida al arrancarlo y devuelta al acabar (sin
 # array y sin tope; el diseño, de Eduardo). HilosMuchos arranca 120 hilos —40 de uno en uno, 40 a la vez esperando en

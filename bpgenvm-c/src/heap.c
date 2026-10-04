@@ -905,8 +905,22 @@ static void stw_seguir(bpvm_t* vm) {
 static void stw_esperar_al_otro(bpvm_t* vm) {
     vm->smp->running_workers--;
     bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
-    while (vm->smp->stop_the_world) {
-        bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
+    int ensanchada = 0;
+    for (;;) {
+        while (vm->smp->stop_the_world) {
+            bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
+        }
+        /* SÓLO PRUEBAS (V7/H12, etapa 2a.2: test/test_cola.c) — la ventana ensanchada: tarda en volver a contarse, con
+         * su hilo a medias. Soltar el cerrojo aquí es como haber esperado más (quien llama aún no ha tocado nada y
+         * reintenta su reserva); a la vuelta se mira otra vez, que otro puede haber parado el mundo mientras tanto. */
+        if (vm->smp->ensayo_stw_ms > 0 && !ensanchada) {
+            ensanchada = 1;
+            bpvm_platform_mutex_unlock(&vm->smp->vm_lock);
+            bpvm_platform_thread_sleep_ms(vm->smp->ensayo_stw_ms);
+            bpvm_platform_mutex_lock(&vm->smp->vm_lock);
+            continue;
+        }
+        break;
     }
     vm->smp->running_workers++;
 }

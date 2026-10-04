@@ -4590,7 +4590,8 @@ implica que la estructura deberá alojarse con malloc y que Thread BP debería t
 **Volver atrás**: un interruptor de la imagen (`BPVM_RUN_EN_COLA=0`; en el simulado, `--run-etapa1`): el run espera el
 «trabajo» y ejecuta el programa con `bpvm_run`, como en la etapa 1. El planificador es el nuevo también ahí: los dos de
 hoy recorren la misma rueda, y dejarlos de reserva sería guardar dos planificadores que nadie prueba; si fallara el
-nuevo, se revierte su commit, que va aparte.
+nuevo, se revierte su commit, que va aparte. **Decidido por Eduardo** (4-oct, a la pregunta de si le valía que el
+planificador se deshiciera con git y no con el interruptor): *«Sí, con git»*.
 
 **Por pasos**, cada uno con su commit: (1) la cola y el planificador, en el PC —`bpvm_run` y `bpvm_run_smp` encima; la
 tarea `run` de las placas, todavía con el «trabajo»—, con la red entera; (2) los runs permanentes —el run espera en la

@@ -1,0 +1,51 @@
+// MutexGc.bp — V7/H12, etapa 2a.2 (4-oct): el interbloqueo FALSO, que no puede salir. Dos hilos se disputan un Mutex
+// y reservan sin parar, fuera y dentro de él; con dos runs y el heap justo hay colectas en las que un run espera,
+// DENTRO de su cuanto, a que el otro acabe de colectar —con su hilo a medias y el Mutex cogido— mientras el hilo del
+// otro se bloquea en ese Mutex. Si «nadie tiene un hilo entre manos» se contara con el contador del GC, que descuenta
+// al que espera, el otro run vería ahí un interbloqueo que no existe (test/test_cola.c, con la ventana ensanchada y su
+// sabotaje). Determinista en el resultado.
+module MutexGc
+  class Reservador extends Thread
+    var m: Mutex
+    var vueltas: integer
+    var hechos: integer
+
+    public function Reservador(mx: Mutex, n: integer)
+      super(4096)
+      this.m := mx
+      this.vueltas := n
+      this.hechos := 0
+    end Reservador
+
+    public function run()
+      var i: integer := 0
+      var s: string := ""
+      while i < this.vueltas do
+        s := "fuera " + intToString(i) + " " + intToString(i * 7)
+        this.m.lock()
+        s := s + " dentro " + intToString(i) + " " + intToString(i * 3)
+        if len(s) > 0 then
+          this.hechos := this.hechos + 1
+        endif
+        this.m.unlock()
+        i := i + 1
+      endwh
+    end run
+
+    public function total(): integer
+      return this.hechos
+    end total
+  end Reservador
+
+  function Main()
+    var mtx: Mutex := Mutex()
+    var a: Reservador := Reservador(mtx, 2000)
+    var b: Reservador := Reservador(mtx, 2000)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "total =", a.total() + b.total()
+    print "MutexGc: fin"
+  end Main
+end MutexGc

@@ -1,0 +1,41 @@
+// Interbloqueo.bp — V7/H12, etapa 2a.2 (4-oct): un INTERBLOQUEO de verdad. Dos hilos y dos Mutex cruzados: A coge m1
+// y pide m2; B coge m2 y pide m1 (cada uno duerme entre coger el suyo y pedir el otro, para que los dos tengan el suyo
+// cuando piden). El planificador de la VM-C lo ve —todos bloqueados, ninguno durmiendo y nadie con un hilo entre
+// manos— y acaba el programa en RUNTIME_ERROR con su aviso, con un run y con dos (test/test_cola.c; con dos, antes de
+// la 2a.2, el programa se quedaba colgado). La VM-Java no lo ve —se queda esperando, ya hoy—: no está en el corpus.
+module Interbloqueo
+  class Cruzado extends Thread
+    var primero: Mutex
+    var segundo: Mutex
+    var nombre: string
+
+    public function Cruzado(a: Mutex, b: Mutex, n: string)
+      super(4096)
+      this.primero := a
+      this.segundo := b
+      this.nombre := n
+    end Cruzado
+
+    public function run()
+      this.primero.lock()
+      print this.nombre, ": tengo el primero"
+      sleep(100)
+      this.segundo.lock()
+      print this.nombre, ": nunca llega"
+      this.segundo.unlock()
+      this.primero.unlock()
+    end run
+  end Cruzado
+
+  function Main()
+    var m1: Mutex := Mutex()
+    var m2: Mutex := Mutex()
+    var a: Cruzado := Cruzado(m1, m2, "A")
+    var b: Cruzado := Cruzado(m2, m1, "B")
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "Interbloqueo: nunca llega"
+  end Main
+end Interbloqueo

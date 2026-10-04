@@ -226,19 +226,19 @@ bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
 uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align);
 
 /*
- * Ejecuta el módulo cargado empezando en el entry-point principal.
- * Devuelve BPVM_OK si terminó normalmente (HALT del main thread).
- * Otros códigos indican el motivo del fallo.
+ * Ejecuta el módulo cargado empezando en el entry-point principal, en el
+ * hilo que llama, hasta que acaba. Devuelve BPVM_OK si terminó normalmente
+ * (HALT del main thread). Otros códigos indican el motivo del fallo.
+ * V7/H12, etapa 2a.2: cuelga el programa en LA COLA (bpvm_smp.h) y el que
+ * llama hace de run; un programa a la vez, y cada VM se ejecuta una vez.
  */
 bpvm_status_t bpvm_run(bpvm_t* vm);
 
 /*
- * H2 — Variante multi-worker. n_workers >= 1. El runtime arranca un
- * scheduler SMP con N pthreads + 1 comm task dedicado. El interp loop
- * corre lock-free salvo los safepoints (STW GC). Para n_workers=1 el
- * comportamiento es equivalente a bpvm_run() — ÚSALO solo si quieres
- * paralelismo real (n>=2). El bpvm_smp_destroy se llama automático
- * tras terminar el main thread.
+ * H2 — Variante con `n_workers` runs (>= 1): el que llama y n-1 hilos más,
+ * que acaban con el programa. El interp loop corre lock-free salvo los
+ * safepoints (STW GC). Con n_workers=1 es bpvm_run(). (Con más de uno y
+ * sin el hilo `io`, una comm task saca la salida.)
  */
 bpvm_status_t bpvm_run_smp(bpvm_t* vm, int n_workers);
 
