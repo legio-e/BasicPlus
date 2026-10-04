@@ -4392,6 +4392,15 @@ libres; con 24, ~6,4—, y la pila de `run` cuesta 8 KB netos. Compilado; se gra
 nada que ajustar: su heap es la RAM libre. Y con `#648` y `#649` arregladas (las dos recursiones), las dos pilas
 podrían bajar a ~8–10 KB.
 
+**Las dos recursiones, fuera** (`#648` y `#649`, 4-oct: `07c16b4f` y `b2216270`): el marcado del GC, en las dos VMs
+(la VM-Java también recurría, y con 4000 nodos ya caía en el PC), y la carga (`discover_deps`); las dos, con una pila
+explícita y el mismo resultado. Lo que cambia para H12: el peor momento de `run` en la tanda era el GC de `HeapInfo`
+(9,6 KB libres de 16 en la Pico 2, y ~423 niveles de lista como techo), y el de la tarea del REPL, la carga de
+`TimeDemo` (~4 KB libres). Sin recursiones, lo que gastan deja de depender del programa —de lo hondas que sean sus
+listas o sus cadenas de imports—, y las dos pilas pueden encoger: se mide en placa con el próximo lote (`GcHondo` e
+`ImportHondo`, en la tanda; las marcas, prueba a prueba) antes de decidir cuánto. En el PC, `--pila=N` (la carga y el
+RUN en un hilo con esa pila, y su marca de agua al acabar) mide antes de grabar: `hello`, 21 000 B en el PC de 64 bits.
+
 **Volver atrás**: un interruptor de la imagen —la familia pone o no su tarea `run` en la cintura del `RUN`—; sin ella,
 el `RUN` común de hoy. Las familias que no se han pasado siguen así (las ESP32 que no son el P4, y la STM32 —Eduardo:
 *«puede esperar»*: antes, su REPL tiene que esperar de verdad, o `run` iría a media velocidad—).

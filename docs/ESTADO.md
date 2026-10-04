@@ -31,7 +31,11 @@
 > tarea del REPL hace de `io` durante el RUN y el programa corre en una tarea `run` que nace con el arranque. Hecho en
 > el PC (el común y el simulado, con `run_tarea_smoke` en la red; la red entera, verde) y en la Pico 2 (`03c86643`),
 > con su puerta casi entera; la revisión adversarial, verificada a mano, y dos SUELTAS nuevas de antes de H12, `#648` (el
-> GC recursivo) y `#649` (la carga recursiva). Más abajo, «🧵 H12 (4-oct)».
+> GC recursivo) y `#649` (la carga recursiva). La puerta, pasada en la Pico 2, la Metro y el P4 (`bd746302`); el heap de
+> FreeRTOS de la Pico a 24 KB (`9e0e8d12`, sin grabar); y `#648` y `#649`, CERRADAS (`07c16b4f` y `b2216270`), con
+> sus pruebas en la red. Lo siguiente: el lote de placas (las ESP32 con `run`, la Pico 2 y la Metro con el heap
+> nuevo; `GcHondo` e `ImportHondo` en la tanda, y las marcas de pila para encoger las de `run` y el REPL), con el OK
+> de Eduardo; después, la etapa 2. Más abajo, «🧵 H12 (4-oct)».
 >
 > **3-oct** — H10, el paso 1 del traspaso entero: los arreglos pequeños, todos en el PC y cada uno con su prueba
 > (`89da2e63`, `26ecfef6`, `c382a66c`): el lote D del FS de `#473` (236, 248, 264, 268, 276, 280, 466), la pantalla
@@ -1139,6 +1143,16 @@ la C6, la P4 y la Nucleo.
   *«si necesitamos más stack y nos ahorramos heap, podemos reducir un poco el heap para compensar»* —en la Pico, el
   heap de FreeRTOS de 28 a 24 KB, compilado—; *«lo del STM32 puede esperar»*. El orden que siguió: cerrar las etapas
   0 y 1 (las otras ESP32 y el heap de la Pico, en un lote), `#648` y `#649`, y la etapa 2.
+- **`#648` y `#649`, CERRADAS** (`07c16b4f` y `b2216270`), antes que el lote: la C6 no tiene sitio para 16 KB más de
+  pila, y sin las recursiones las pilas pueden encoger. El GC marca sin recursión en las DOS VMs —la VM-Java recurría
+  igual, y con 4000 nodos ya caía en el PC—, con una pila de marcado de 256 entradas y el repaso del heap si se llena;
+  la carga recorre los imports con una pila de marcos, en el mismo orden de siempre. Las pruebas, nuevas y en la red:
+  `test-gchondo` (`GcHondo`: la VM-C en un hilo de 64 KB con `--pila`, opción nueva del ejecutable del PC, y la
+  VM-Java con `-Xss256k`) y `test-importhondo` (`ImportHondo`, 13 imports, con la marca de agua de `--pila`: con la
+  recursión, 44 744 B de pila frente a 20 616 de `hello`; sin ella, 21 000 y 21 000); las dos, saboteadas. Por el
+  camino: en Windows, una pila de hilo pedida a secas crece hasta 2 MB (hay que RESERVARLA), la reserva se redondea a
+  64 KB, y al fondo Windows se guarda casi 20 KB. `GcHondo` e `ImportHondo`, también en la tanda de placa (`GcHondo`
+  con 4000 nodos: pide 176 KB de heap y cabe en la Pico 2). La red entera, verde, con cada una.
 
 ## 🔧 H10 (3-oct, noche) — CERRADO (Eduardo): EL `board_mgr` COMÚN (pasos 0 a 5) y su lote en las NUEVE placas; `#636`–`#638` CERRADAS; D7, probado por Eduardo en el IDE
 
