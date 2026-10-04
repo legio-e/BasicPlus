@@ -18,6 +18,15 @@ de todas las etapas): provocando la carrera, ensanchando la ventana y saboteando
   G. un programa que NO imprime acaba tan deprisa como con `--run-viejo`: al acabar, `run` despierta a `io` (si no, `io`
      sólo lo ve al vencer su espera de 5 ms —en Windows, ~15—: saboteado el 4-oct, 18 ms por RUN en vez de 1,2).
 
+Desde la etapa 2a.2 (4-oct; `V7_IDEAS` §H12 «Etapa 2a.2») `run` espera en LA COLA y el RUN cuelga ahí el programa: A-E
+lo prueban así. Y además:
+
+  H. EL KILL DESPIERTA: un programa dormido una hora se para enseguida (con `io`, el planificador ya no se despierta cada
+     50 ms a mirar: lo despierta el aviso del KILL);
+  I. su SABOTAJE (`--sabotaje-despertar`: el KILL no avisa a la cola): el programa dormido no se para, y H tiene que
+     cazarlo;
+  J. el interruptor de la 2a.2 (`--run-etapa1`: `run` espera el «trabajo», como en la etapa 1): A, B, C y H.
+
     python tools/run_tarea_smoke.py [--vueltas=N]      (desde bpgenvm-c; BPVM_SIM= para otro simulador)
 """
 import os, shutil, sys, tempfile, time
@@ -88,6 +97,16 @@ VACIO = """module RunVacio
     var i: integer := 1
   end Main
 end RunVacio
+"""
+
+# Se duerme una hora: el KILL tiene que despertarlo (H).
+DORMIDO = """module RunDormido
+  function Main()
+    print "durmiendo"
+    sleep(3600000)
+    print "nunca llega"
+  end Main
+end RunDormido
 """
 
 ESPERADO_VEINTE = "".join("linea %d\n" % i for i in range(1, 21)) + "fin\n"
@@ -196,6 +215,43 @@ def caso_c(c, etiqueta):
           "%sC. y el barrido cae a los dos lados del final (si no, no ha barrido el instante)" % etiqueta)
 
 
+def caso_h(c, etiqueta, se_espera_bien=True):
+    """El KILL a un programa dormido una hora (2a.2: el aviso a la cola lo despierta). (bien, ms hasta el EXITED)."""
+    r = c.call("RUN", path="/app/RunDormido.mod")
+    if r.get("type") != "RUN_REPLY":
+        check(False, "%sH. RUN de RunDormido: %r" % (etiqueta, r.get("type")))
+        return False, None
+    t0, visto = time.time(), False
+    while time.time() - t0 < 10 and not visto:
+        m = c.linea()
+        if m.get("type") == "OUTPUT" and "durmiendo" in m.get("data", ""):
+            visto = True
+    time.sleep(0.3)                       # que esté dormido de verdad
+    c.id += 1
+    kid = c.id
+    tk = time.time()
+    c.s.sendall(('{"type":"KILL","id":%d}\n' % kid).encode())
+    ex, resp, ms = None, None, None
+    c.s.settimeout(3.0)
+    try:
+        while (ex is None or resp is None) and time.time() - tk < 3.0:
+            m = c.linea()
+            if m.get("type") == "EXITED":
+                ex, ms = m, (time.time() - tk) * 1000.0
+            elif m.get("id") == kid:
+                resp = m
+    except (socket.timeout, OSError):
+        pass
+    finally:
+        c.s.settimeout(30.0)
+    bien = visto and ex is not None and ex.get("status") == "KILLED" and resp is not None \
+        and resp.get("type") == "KILL_REPLY" and ms is not None and ms < 1000.0
+    if se_espera_bien:
+        check(bien, "%sH. el KILL despierta a un programa dormido una hora: el EXITED KILLED en %s ms, con su KILL_REPLY"
+              % (etiqueta, "%.0f" % ms if ms is not None else "—"))
+    return bien, ms
+
+
 def cuanto_vacio(c, vueltas=200):
     """Segundos de `vueltas` RUN de RunVacio (y cuántos acabaron mal)."""
     t0, malos = time.time(), 0
@@ -212,9 +268,10 @@ def main():
         print("[status=FAIL]")
         return 1
     tmp = tempfile.mkdtemp(prefix="run_tarea_")
-    print("=== run_tarea_smoke (V7/H12, etapas 0 y 1): la tarea `run` del micro simulado ===", flush=True)
+    print("=== run_tarea_smoke (V7/H12, etapas 0, 1 y 2a.2): la tarea `run` del micro simulado ===", flush=True)
     mods = {}
-    for nombre, fuente in (("RunVeinte", VEINTE), ("RunTarde", TARDE), ("RunCorto", CORTO), ("RunVacio", VACIO)):
+    for nombre, fuente in (("RunVeinte", VEINTE), ("RunTarde", TARDE), ("RunCorto", CORTO), ("RunVacio", VACIO),
+                           ("RunDormido", DORMIDO)):
         mods[nombre] = compila(tmp, nombre, fuente)
         check(mods[nombre] is not None, "compila %s" % nombre)
     if None in mods.values():
@@ -224,10 +281,11 @@ def main():
     # A, B y C: la tarea `run`, tal cual
     proc, sock, c = arranca(os.path.join(tmp, "a.flash"), [])
     try:
-        check(subir(c, mods), "PUT de los tres programas")
+        check(subir(c, mods), "PUT de los programas")
         caso_a(c, VUELTAS, "")
         caso_b(c, "")
         caso_c(c, "")
+        caso_h(c, "")
         t_tarea, malos_tarea = cuanto_vacio(c)
     finally:
         para(proc, sock)
@@ -266,6 +324,27 @@ def main():
     check(malos_tarea == 0 and malos_viejo == 0 and t_tarea <= 2 * t_viejo + 0.3,
           "G. 200 RUN de un programa que no imprime: %.2f s con la tarea run, %.2f s con --run-viejo (si `run` no "
           "despierta a `io` al acabar, cada uno espera los 5 ms de `io`)" % (t_tarea, t_viejo))
+
+    # I: el sabotaje del aviso —H tiene que salir mal—
+    proc, sock, c = arranca(os.path.join(tmp, "i.flash"), ["--sabotaje-despertar"])
+    try:
+        check(subir(c, mods), "I. PUT (con --sabotaje-despertar)")
+        bien, ms = caso_h(c, "I (sabotaje) ", se_espera_bien=False)
+        check(not bien, "I. el sabotaje (el KILL no avisa a la cola) SE CAZA: el programa dormido no se para (%s)"
+              % ("EXITED en %.0f ms" % ms if ms is not None else "sin EXITED en 3 s"))
+    finally:
+        para(proc, sock)
+
+    # J: el interruptor de la 2a.2 —`run` espera el «trabajo», como en la etapa 1—
+    proc, sock, c = arranca(os.path.join(tmp, "j.flash"), ["--run-etapa1"])
+    try:
+        check(subir(c, mods), "J. PUT (con --run-etapa1)")
+        caso_a(c, 20, "J (--run-etapa1) ")
+        caso_b(c, "J (--run-etapa1) ")
+        caso_c(c, "J (--run-etapa1) ")
+        caso_h(c, "J (--run-etapa1) ")
+    finally:
+        para(proc, sock)
 
     shutil.rmtree(tmp, ignore_errors=True)
     print("[status=OK]" if fails == 0 else "[status=FAIL: %d]" % fails)

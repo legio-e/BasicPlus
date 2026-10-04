@@ -324,17 +324,13 @@ target_compile_definitions(bpvm_pico PRIVATE
     PICO_MALLOC_PANIC=0
 )
 
-# H2 Pico SMP — opt-in al scheduler multi-worker.
-# Por defecto NO se define ⇒ repl_v1.c usa bpvm_run() (legacy).
-# Activar con:
-#   cmake .. -DBPVM_PICO_SMP_WORKERS=1   # validar arquitectura, sin paralelismo
-#   cmake .. -DBPVM_PICO_SMP_WORKERS=2   # paralelismo real (#153 cierra TX-excl)
-if (DEFINED BPVM_PICO_SMP_WORKERS)
-    message(STATUS "BPVM_PICO_SMP_WORKERS = ${BPVM_PICO_SMP_WORKERS}")
-    target_compile_definitions(bpvm_pico PRIVATE
-        BPVM_PICO_SMP_WORKERS=${BPVM_PICO_SMP_WORKERS}
-    )
-endif()
+# V7/H12, etapa 2a.2 — EL INTERRUPTOR de la imagen: la tarea `run` espera en LA COLA (1, por defecto) o el aviso
+# «trabajo», como en la etapa 1 (0: `cmake .. -DBPVM_RUN_EN_COLA=0`; va a la caché: para volver, -DBPVM_RUN_EN_COLA=1).
+# Aquí estaba BPVM_PICO_SMP_WORKERS, el opt-in al planificador de varios workers (H2), que ningún build definía:
+# desde la 2a.2 el planificador es uno, el de la cola, y el segundo run llega en la 2b.
+set(BPVM_RUN_EN_COLA 1 CACHE STRING "H12 2a.2: la tarea run espera en la cola (1) o el aviso trabajo de la etapa 1 (0)")
+message(STATUS "BPVM_RUN_EN_COLA = ${BPVM_RUN_EN_COLA}")
+target_compile_definitions(bpvm_pico PRIVATE BPVM_RUN_EN_COLA=${BPVM_RUN_EN_COLA})
 
 # H2 #153 — trazas a flash del comm task para depurar el cuelgue SMP.
 # Migas que sobreviven a un reset; se leen con el comando LOG.

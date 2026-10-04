@@ -40,6 +40,10 @@
  *   --ensayo-hecho=MS y --sabotaje-cierre: SÓLO PRUEBAS de la tarea `run` (run_tarea_smoke):
  *   la ventana ensanchada entre el final del programa y su aviso, y `io` cerrando la cola
  *   sin esperar al programa (la prueba tiene que cazarlo).
+ *   --run-etapa1: la tarea `run` espera el aviso «trabajo», como en la etapa 1 (el interruptor
+ *   de la 2a.2); por defecto espera en LA COLA (V7/H12, etapa 2a.2).
+ *   --sabotaje-despertar: SÓLO PRUEBAS (run_tarea_smoke): el KILL no despierta a la cola, y un
+ *   programa dormido no se para hasta que vence su sueño (la prueba tiene que cazarlo).
  *
  * Ver docs/BPVM_WIRE_PROTOCOL.md (catálogo de mensajes) y
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
@@ -974,6 +978,7 @@ int main(int argc, char** argv) {
     int zona_sucia = 0;
     int port = 5099;
     int run_viejo = 0, ensayo_hecho_ms = 0, sabotaje_cierre = 0;   /* V7/H12: la tarea `run` y sus pruebas */
+    int run_etapa1 = 0;   /* V7/H12, etapa 2a.2: el interruptor (el relevo de la etapa 1) */
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
@@ -991,6 +996,8 @@ int main(int argc, char** argv) {
         else if (!strcmp(a, "--run-viejo"))       run_viejo = 1;       /* V7/H12: el RUN de antes, para comparar */
         else if (!strncmp(a, "--ensayo-hecho=", 15)) ensayo_hecho_ms = atoi(a + 15);   /* V7/H12: SÓLO PRUEBAS */
         else if (!strcmp(a, "--sabotaje-cierre")) sabotaje_cierre = 1;               /* V7/H12: SÓLO PRUEBAS */
+        else if (!strcmp(a, "--run-etapa1"))     run_etapa1 = 1;   /* V7/H12, 2a.2: `run` espera el «trabajo», como en la etapa 1 */
+        else if (!strcmp(a, "--sabotaje-despertar")) bpvm_la_cola.sabotaje_despertar = 1;   /* V7/H12, 2a.2: SÓLO PRUEBAS */
         else if (!strncmp(a, "--sd=", 5))         g_sd_path = a + 5;   /* V7/H3: la tarjeta */
         /* H10 — pantalla. Con GUI=0 en el build se aceptan y se ignoran: el IDE
          * las pasa siempre sin tener que saber cómo se compiló el sim. */
@@ -1082,9 +1089,13 @@ int main(int argc, char** argv) {
     if (!run_viejo) {
         static bpvm_platform_thread_handle_t s_run_hilo;
         bpvm_repl_run_tarea_ensayo(ensayo_hecho_ms, sabotaje_cierre);
-        if (bpvm_repl_run_tarea_prepara() != 0
-                || bpvm_platform_thread_create_nativa(&s_run_hilo, bpvm_repl_run_tarea, NULL, 8u << 20) != 0)
+        if (run_etapa1) bpvm_repl_run_tarea_en_cola(0);   /* V7/H12, 2a.2: el interruptor, ANTES de prepararla */
+        if (bpvm_repl_run_tarea_prepara() != 0) {
+            fprintf(stderr, "sim: no se pudo preparar la tarea run: sigue el RUN de antes\n");
+        } else if (bpvm_platform_thread_create_nativa(&s_run_hilo, bpvm_repl_run_tarea, NULL, 8u << 20) != 0) {
+            bpvm_repl_run_tarea_no_nacio();   /* 2a.2: el RUN no cuelga programas para un run que no hay */
             fprintf(stderr, "sim: no se pudo crear la tarea run: sigue el RUN de antes\n");
+        }
     }
     /* V7/H3 — la SD, como una placa con ranura: registrar y montar en el arranque, ENCIMA del FS. */
     if (g_sd_path) {

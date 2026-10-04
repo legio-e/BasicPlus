@@ -852,9 +852,14 @@ void repl_esp32_cintura(void) {
         s_run_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run", ESP32_RUN_PILA_BYTES, NULL,
                                        uxTaskPriorityGet(NULL), s_run_pila, &s_run_tcb);
     /* el log, desde aquí y no desde `run` (el log no tiene cerrojo) */
-    if (s_run_task == NULL) log_printf("run: no se pudo crear la tarea run: sigue el RUN de antes");
-    else log_printf("run: la tarea del programa, creada (%u KB de pila, prioridad %u)",
-                    (unsigned) (ESP32_RUN_PILA_BYTES / 1024u), (unsigned) uxTaskPriorityGet(NULL));
+    if (s_run_task == NULL) {
+        bpvm_repl_run_tarea_no_nacio();   /* V7/H12, etapa 2a.2: que el RUN no cuelgue programas para un run que no hay */
+        log_printf("run: no se pudo crear la tarea run: sigue el RUN de antes");
+    } else {
+        log_printf("run: la tarea del programa, creada (%u KB de pila, prioridad %u; %s)",
+                   (unsigned) (ESP32_RUN_PILA_BYTES / 1024u), (unsigned) uxTaskPriorityGet(NULL),
+                   bpvm_repl_run_en_cola() ? "espera en la cola" : "espera el aviso «trabajo», como en la etapa 1");
+    }
 #endif
 }
 

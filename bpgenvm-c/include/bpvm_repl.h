@@ -126,7 +126,8 @@ typedef struct {
     const uint8_t* (*mdn_del_fs)(void* user, const char* nombre, uint32_t* len);   /* `user` = la VM */
     void (*tras_cargar)(struct bpvm* vm);                          /* los nativos de la imagen (por el enlazador) */
     void (*antes_de_correr)(struct bpvm* vm);
-    int  (*correr)(struct bpvm* vm, int depurando);                /* NULL = bpvm_run (la Pico: su SMP) */
+    /* (V7/H12, etapa 2a.2 — fuera `correr`: el programa lo corre el planificador de la cola; el de la Pico era su SMP,
+     *  que su build no encendía.) */
     void (*despues_de_correr)(struct bpvm* vm);                    /* tras el EXITED, antes de soltar la VM */
     void (*led)(int estado);                                       /* 1 corre, 0 acabó bien, -1 error */
     int  (*env_bool)(const char* clave, int defecto);              /* `gc`, `latido`… */
@@ -308,6 +309,13 @@ int  bpvm_repl_autorun_escucha(void* user);
  *  bpvm_platform.h). La que no, sigue con el RUN de siempre. El protocolo, en bpvm_repl.c. */
 int  bpvm_repl_run_tarea_prepara(void);
 void bpvm_repl_run_tarea(void* arg);
+/** V7/H12, etapa 2a.2 — dónde espera la tarea `run`: en LA COLA (1: es un run permanente, y el RUN cuelga ahí los
+ *  programas) o en el aviso «trabajo», como en la etapa 1 (0). Es el interruptor de la imagen (BPVM_RUN_EN_COLA, 1 por
+ *  defecto); el micro simulado lo cambia con --run-etapa1, antes de `prepara()`. */
+int  bpvm_repl_run_en_cola(void);
+void bpvm_repl_run_tarea_en_cola(int si);
+/** La familia llamó a `prepara()` y no pudo crear la tarea: el RUN no cuelga programas para un run que no hay. */
+void bpvm_repl_run_tarea_no_nacio(void);
 /** Lo que le sobró de pila a `run` tras el último programa, en bytes (-1: sin programa, o la plataforma no lo sabe).
  *  Va al INFO (`runStackFree`), como el de `io`: con eso se dimensiona su pila en cada familia. */
 long bpvm_repl_run_pila_libre(void);

@@ -507,17 +507,8 @@ static void pico_run_antes(bpvm_t* vm) {
     log_printf("AOT: scan done, about to bpvm_run");
     log_flush();   /* CHECKPOINT: lo que cuelgue después es la ejecución */
 }
-static int pico_run_correr(bpvm_t* vm, int depurando) {
-#if defined(BPVM_PICO_SMP_WORKERS) && BPVM_PICO_SMP_WORKERS >= 1
-    /* H2 Pico — el planificador de varios trabajadores, salvo depurando (el pause_cb, en la tarea de la VM) */
-    if (!depurando) {
-        log_printf("RUN/v1: SMP path n_workers=%d", BPVM_PICO_SMP_WORKERS);
-        return (int) bpvm_run_smp(vm, BPVM_PICO_SMP_WORKERS);
-    }
-#endif
-    (void) depurando;
-    return (int) bpvm_run(vm);
-}
+/* (V7/H12, etapa 2a.2 — fuera `pico_run_correr`, el camino SMP de la Pico: BPVM_PICO_SMP_WORKERS, que su build no
+ * definía. El programa lo corre el run permanente de la cola; en la 2b, el segundo run.) */
 static void pico_run_despues(bpvm_t* vm) {
     (void) vm;
     { extern void bpvm_pico_mpu_desarmar(void); bpvm_pico_mpu_desarmar(); }   /* #440: SIEMPRE */
@@ -534,7 +525,6 @@ static const bpvm_repl_run_ops_t s_run_ops = {
     .cargar_motores    = packs_cargar_una_vez,
     .mdn_del_fs        = pico_mdn_del_fs,
     .antes_de_correr   = pico_run_antes,
-    .correr            = pico_run_correr,
     .despues_de_correr = pico_run_despues,
     .env_bool          = board_env_bool,
     .io_cola           = PICO_IO_OQ_BYTES,
@@ -838,9 +828,14 @@ void repl_v1_cintura(void) {
                                        uxTaskPriorityGet(NULL), s_run_pila, &s_run_tcb);
     /* el log, desde aquí y no desde `run`: el log no tiene cerrojo, y `run` nacería escribiendo a la vez que el
      * arranque (la revisión del 4-oct) */
-    if (s_run_task == NULL) log_printf("run: no se pudo crear la tarea run: sigue el RUN de antes");
-    else log_printf("run: la tarea del programa, creada (%u KB de pila)",
-                    (unsigned) (PICO_RUN_PILA_PALABRAS * sizeof(StackType_t) / 1024u));
+    if (s_run_task == NULL) {
+        bpvm_repl_run_tarea_no_nacio();   /* V7/H12, etapa 2a.2: que el RUN no cuelgue programas para un run que no hay */
+        log_printf("run: no se pudo crear la tarea run: sigue el RUN de antes");
+    } else {
+        log_printf("run: la tarea del programa, creada (%u KB de pila; %s)",
+                   (unsigned) (PICO_RUN_PILA_PALABRAS * sizeof(StackType_t) / 1024u),
+                   bpvm_repl_run_en_cola() ? "espera en la cola" : "espera el aviso «trabajo», como en la etapa 1");
+    }
 #endif
 }
 
