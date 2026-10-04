@@ -4428,8 +4428,9 @@ siguientes, en el PC y la Pico 2; las demás placas, una vez, al final de H12.
   segunda»*): todos los hilos vivos, recorridos en rueda, saltando los que esperan (un `sleep`, un `Mutex`, un `join`).
 - *«¿Por qué tiene que haber un límite?»* — sin tope de hilos: el límite es la memoria (el descriptor, de la RAM del
   sistema, y la pila BP, de la región de pilas), con el error que ya existe («no hay memoria para la pila del hilo»). En
-  las DOS VMs, por la paridad: el 32 de `#604` se va también de miVM. El número de un hilo nuevo, el más bajo libre,
-  como hoy.
+  las DOS VMs, por la paridad: el 32 de `#604` se va también de miVM. El número de un hilo nuevo, el siguiente, sin
+  reutilizar ninguno (es su handle: abajo, «dónde vive cada cosa»; aquí decía «el más bajo libre, como hoy», y lo
+  corrigió la decisión de después).
 - *«Tiene que haber al menos una referencia a un elemento de la cola en la VM. Inicialmente puede ser null y si se vacía
   puede volver a ser null. Es importante que cuando se busque el siguiente elemento (o el anterior) no se dé vueltas
   indefinidamente.»* — la lista es CIRCULAR y la VM guarda una referencia: el cursor de la rueda (null, vacía). Buscar el
@@ -4487,6 +4488,113 @@ implica que la estructura deberá alojarse con malloc y que Thread BP debería t
   y atómico; el depurador y la GUI, con un solo run; el log con cerrojo. **Puerta**: la de la 2a, más las pruebas que
   provocan el aviso perdido (con su sabotaje) y horas de resistencia en la Pico 2. **Volver atrás**: `vm.runs=1` en el
   ENV.
+
+### Etapa 2a.2 — la cola permanente y UN planificador (4-oct): el diseño, para revisar antes de tocar código
+
+**Lo que hay hoy** (después de la 2a.1, leído en el código):
+- La rueda de hilos de la 2a.1 cuelga del PROGRAMA (`bpvm_t`): nace con él —el main, en `bpvm_init`— y se va con él.
+- Un programa lo ejecuta, según dónde: en las placas y el micro simulado, la tarea `run`, que espera el aviso «trabajo»
+  y llama a `bpvm_run`; en el PC (el ejecutable y más de 40 pruebas de C), el hilo que llama a `bpvm_run`, o los N
+  workers de `bpvm_run_smp`, que nacen y mueren con el programa; en la STM32, la tarea del REPL (no tiene `run`).
+- Dos planificadores que no hacen lo mismo: el simple (`scheduler.c`) cede el núcleo entre cuantos, ve el interbloqueo,
+  para en cuanto llega un KILL, y la pausa del depurador congela el programa entero; el de varios (`scheduler_smp.c`)
+  tiene el cerrojo, la condición, el mundo parado del GC y el primer fallo, pero ni cede ni ve el interbloqueo —se queda
+  esperando para siempre—, y su estado (`bpvm_smp_t`) nace y muere con cada RUN.
+
+**El diseño** —el plan de la etapa 2 («2a · la cola permanente, con UN run»), en detalle—:
+
+1. **La cola, un objeto PERMANENTE**: el cerrojo, la condición, **la referencia** —el punto de la rueda, el hilo por
+   donde sigue; NULL, vacía— y el programa publicado, más lo que los runs necesitan para repartirse el trabajo (cuántos
+   tienen un hilo entre manos, el mundo parado del GC, el primer fallo, la orden de parar). Es lo que hoy es
+   `bpvm_smp_t`, que deja de nacer y morir con cada RUN: nace con el arranque —en la placa, cuando la familia crea la
+   tarea `run`; en el PC, con la primera VM— y no muere nunca. Un programa a la vez: colgar uno con la cola ocupada es
+   un error, y se dice.
+2. **Los hilos, en la cola.** La rueda de la 2a.1 deja de colgar del programa y cuelga de la cola. El main entra al
+   COLGAR el programa, antes de PREPARARLO: la preparación reserva memoria (las dos excepciones prefabricadas, con el
+   main de ancla), y el GC busca sus raíces en la cola. Los demás entran con `Thread.start` y salen al acabar, como en
+   la 2a.1. Al acabar el programa, los que quedan —el main, y los que paró un KILL— se van con él, al destruirlo: hasta
+   entonces los necesitan el ejecutor de natives que los apunta, las líneas a medias del final y la línea `pila:`.
+   Destruido el programa, la cola queda vacía —la referencia, a NULL— hasta el siguiente. Una sola lista, como hasta
+   ahora.
+3. **Colgar, publicar y descolgar** (en la placa):
+   - `io` —la tarea del REPL— carga el programa, mete su main en la cola, lo prepara (el enlace, el main desde el punto
+     de entrada y las excepciones prefabricadas: hoy lo hacía `run` al empezar `bpvm_run`) y lo PUBLICA: desde ese
+     momento lo ven los runs. Después, su lazo hasta `fin` y el «hecho», como en la etapa 1. Si la preparación falla
+     (un fallo de enlace), no se publica, y el `EXITED` sale como hoy.
+   - El run espera dormido en la cola mientras no haya un programa publicado —no en el aviso «trabajo», que
+     desaparece—; con uno, el planificador (el punto 4).
+   - Al acabar, **el último run que sale** escribe las líneas a medias y las líneas `pila:` y `hilos:` (fuera del
+     cerrojo: escribir puede tener que esperar a `io`), lo DESCUELGA y avisa a `io` —`fin`, despertarlo y el «hecho»,
+     como en la etapa 1—. Desde ahí no toca el programa: `io` manda el `EXITED` y lo destruye.
+   - Si `io` no puede nacer (no hay memoria para sus colas), el programa corre igualmente en `run`, sin `io`: `run`
+     atiende el cable entre cuantos (el camino de siempre sin `io`) y la tarea del REPL espera el «hecho» sin tocar el
+     cable. Hasta ahora, en ese caso, el programa corría en la tarea del REPL.
+   - **En el PC, la STM32 y las pruebas de C**: `bpvm_run(vm)` cuelga el programa y hace de run el hilo que llama,
+     hasta que acaba; `bpvm_run_smp(vm, N)`, N runs que acaban con él. La misma cola y el mismo planificador: sólo
+     cambia quién espera el final. Y los runs permanentes sólo cogen lo que se publica para ellos (y `bpvm_run`, lo
+     suyo): si coincidieran alguna vez, que no debe pasar, un programa no lo ejecutarían a la vez dos que no se
+     esperan.
+4. **UN planificador, el de la cola** —fuera los dos de hoy—, con lo que hoy sólo tiene el simple. En cada vuelta, un
+   run:
+   - si el mundo está parado (otro run colecta), espera;
+   - con un **KILL**, un fallo o el STOP del depurador, deja de elegir; y si nadie tiene un hilo entre manos, el
+     programa acaba: KILLED si se pidió parar, aunque acabara solo (`#462`, `#640`); si no, con el primer fallo;
+   - despierta a los muertos con eventos pendientes (`#342`; antes que los `join`, `#595`), los sueños vencidos y los
+     `join` cumplidos, y saca de la cola a los que acabaron del todo (la 2a.1);
+   - elige en rueda (la 2a.1);
+   - si no hay ninguno listo: sin hilos vivos y sin nadie con uno entre manos, **el fin**; sin ninguno durmiendo y sin
+     nadie con uno entre manos, **el interbloqueo** —RUNTIME_ERROR, con el aviso de hoy; con `--smp`, hasta ahora, el
+     programa se quedaba colgado—; si no, duerme en la cola hasta el sueño más cercano;
+   - con uno: su evento pendiente (H5.c), **cede el núcleo** (`#462`: hoy sólo lo hace el simple) y le da un cuanto.
+
+   **«Nadie tiene un hilo entre manos» se cuenta aparte del contador del GC**: un run que espera a que otro acabe de
+   colectar no cuenta para el mundo parado, pero tiene su hilo a medias; contándolo con el mismo número, otro run
+   vería un interbloqueo que no existe (un hilo que espera el `Mutex` que tiene ése). **El KILL despierta**:
+   `bpvm_request_kill` avisa a la cola; hoy, con todos los hilos durmiendo, el run lo veía al vencer su espera —hasta
+   50 ms, el tope de esa espera, y sin el tope (`bpvm_run` sin `poll`), el sueño entero—. **El depurador, con un
+   run**: su pausa para al run, y con él al programa entero, como hoy. **Con un run, sin coste**: en la vuelta de cada
+   cuanto el run no toma el cerrojo —nadie más toca la rueda: `io` sólo pone `kill_requested` y avisa—; lo toma para
+   dormirse y para descolgar, como hoy el simple. Con dos (la 2b), siempre, y se mide.
+5. **Lo que se va**: el lazo de `scheduler_smp.c` (se queda lo que es sólo del PC: arrancar y unir los runs de
+   `bpvm_run_smp`, y la comm task del `--smp` sin `io`); el `bpvm_smp_init`/`destroy` de cada RUN; y el `correr` de la
+   cintura, con el camino SMP de la Pico (`BPVM_PICO_SMP_WORKERS`, que su build no define: código muerto; en la 2b lo
+   hace el segundo run).
+
+**Lo compartido entre `io` y `run`** (la tabla de la etapa 1, con lo que cambia; lo demás, igual):
+
+| qué | escribe | lee | lo protege |
+|---|---|---|---|
+| la cola: la referencia y el programa publicado | `io` mete el main y publica; el run descuelga; `io` la vacía al destruir el programa | los dos | su cerrojo; mientras el programa está publicado, con un run, la rueda la toca sólo el run |
+| la VM | `io` la crea, la carga y la prepara —ahora también el enlace y el main— antes de publicarla; el run la ejecuta | `io` lee sus errores y la destruye | publicar (`io` no la toca después) y el «hecho» (el run no la toca después) |
+| `kill_requested` | `io` (y el run, desde el depurador, si se va el cable) | el run | con un núcleo, `volatile`; el aviso, con el cerrojo de la cola: el run mira la bandera con el cerrojo cogido antes de dormirse, y no se pierde |
+
+**Las pruebas** (primero en el PC; cada una nueva, con su sabotaje):
+- la red entera: `compat check` (la paridad del corpus en MOD9, MOD8 y con dos workers, la cápsula de V6 y el estrés),
+  las pruebas de C, `check-smp`, `check-sim` y `run_tarea_smoke` (los mil RUN —si la cola no se vaciara, el siguiente
+  no se podría colgar—, el KILL barriendo el final, la ventana ensanchada);
+- **el KILL que despierta**: un programa con todos sus hilos durmiendo un minuto se para enseguida, con `bpvm_run`, con
+  dos runs y en el simulado. Sabotaje: sin el aviso, no se para hasta que vence el sueño;
+- **el interbloqueo**: dos hilos y dos `Mutex` cruzados → RUNTIME_ERROR, con uno y con dos runs (hoy, con dos,
+  colgado); y el FALSO, que no puede salir: hilos que se disputan un `Mutex` mientras reservan sin parar, con dos runs
+  y muchas vueltas (colectas con un run esperando a otro). Sabotaje: contar «con un hilo entre manos» con el contador
+  del GC → algún interbloqueo falso;
+- **el último que sale**: con dos runs y la ventana ensanchada (un run se entretiene después de su cuanto), el fin se
+  decide siempre después de que vuelva el último cuanto. Sabotaje: decidirlo sin mirar → rojo.
+
+(La VM-Java no ve el interbloqueo —se queda colgada, ya hoy—: esas dos, sólo en la VM-C, como `test-hilos`.)
+
+**La puerta**: todo lo de arriba, verde en el PC; en la Pico 2, la tanda de V7, `run_placa` 34 de 34, PrintBench ±3 %
+(la mediana de 10), las marcas de la pila de `run` y del heap de FreeRTOS con margen, y unas dos horas de resistencia
+(`RUN`, `KILL` y `RESET` en bucle, y la tanda) sin un fallo.
+
+**Volver atrás**: un interruptor de la imagen (`BPVM_RUN_EN_COLA=0`; en el simulado, `--run-etapa1`): el run espera el
+«trabajo» y ejecuta el programa con `bpvm_run`, como en la etapa 1. El planificador es el nuevo también ahí: los dos de
+hoy recorren la misma rueda, y dejarlos de reserva sería guardar dos planificadores que nadie prueba; si fallara el
+nuevo, se revierte su commit, que va aparte.
+
+**Por pasos**, cada uno con su commit: (1) la cola y el planificador, en el PC —`bpvm_run` y `bpvm_run_smp` encima; la
+tarea `run` de las placas, todavía con el «trabajo»—, con la red entera; (2) los runs permanentes —el run espera en la
+cola e `io` cuelga—, con el simulado; (3) la Pico 2 y su puerta: una sola grabación para los dos pasos.
 
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
