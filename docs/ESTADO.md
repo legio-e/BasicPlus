@@ -37,7 +37,12 @@
 > C6, GuiArbolG2 sin RAM: `#651`), y cortado ahí por Eduardo: las etapas siguientes, en el PC y la Pico 2; las demás
 > placas, al final de H12. Por la tarde, la etapa 2: el diseño de la cola de hilos con Eduardo (en C; cada hilo, una
 > struct con `malloc`; sin array y sin tope; el `Thread` de BP con un handle a la suya) y la 2a.1 hecha (`11fb8ffa`).
-> Lo siguiente: la 2a.2 (la cola permanente, con el `run` esperando en ella). Más abajo, «🧵 H12 (4-oct)».
+> Y por la noche, la **2a.2**: el diseño escrito y revisado con Eduardo (la vuelta atrás del planificador, por git), la
+> cola permanente y UN planificador (`b776a325`), los runs permanentes (`156db15e`) y la revisión adversarial con sus
+> arreglos (`3669215d`); la red entera, verde dos veces; y **la puerta, PASADA en la Pico 2** —la tanda, `run_placa`,
+> 110 minutos de resistencia sin un fallo—, con PrintBench (+6–8 %) pendiente de una A/B en el lote del final de H12
+> (Eduardo). Del mapa de la 2b, `#653` (el log sin cerrojo, de hoy) abierta y cerrada (`2d982cfd`). Lo siguiente: las
+> cuatro decisiones de la 2b y su diseño. Más abajo, «🧵 H12 (4-oct)».
 >
 > **3-oct** — H10, el paso 1 del traspaso entero: los arreglos pequeños, todos en el PC y cada uno con su prueba
 > (`89da2e63`, `26ecfef6`, `c382a66c`): el lote D del FS de `#473` (236, 248, 264, 268, 276, 280, 466), la pantalla
@@ -1186,12 +1191,59 @@ la C6, la P4 y la Nucleo.
   el `__tid`, el handle (no se reutiliza); las pilas devueltas, con la política de miVM; el `join`, bajo el cerrojo; el
   latido, sin recorrer hilos. `make test-hilos` (nueva): 120 hilos y como mucho 41 a la vez; con la recogida apagada,
   rojo. La red entera, verde; la imagen de la Pico compila.
-- **Para la próxima sesión**: la **2a.2** —la cola fuera del ciclo de vida de cada VM: nace con el arranque, el `run`
-  espera en ella en vez de en el aviso «trabajo», y un solo planificador con lo que hoy sólo tiene el simple (ceder, el
-  interbloqueo, la regla del KILL, el depurador con un run)—: diseño en detalle primero (lo que cambia en
-  `scheduler_smp.c`, `bpvm_repl.c` y la tarea `run`), puerta en el PC y en la Pico 2. Después la **2b** y sus
-  requisitos (por tarea el contexto del AOT; la condición con semáforo contador; el `gc()` con stop-the-world; los
-  eventos bajo el cerrojo; el KILL que despierta). Placas: sólo la Pico 2 hasta el final de H12.
+- **Para la próxima sesión** (escrito antes del descanso): la **2a.2** —la cola fuera del ciclo de vida de cada VM:
+  nace con el arranque, el `run` espera en ella en vez de en el aviso «trabajo», y un solo planificador con lo que hoy
+  sólo tiene el simple (ceder, el interbloqueo, la regla del KILL, el depurador con un run)—: diseño en detalle primero
+  (lo que cambia en `scheduler_smp.c`, `bpvm_repl.c` y la tarea `run`), puerta en el PC y en la Pico 2. Después la
+  **2b** y sus requisitos (por tarea el contexto del AOT; la condición con semáforo contador; el `gc()` con
+  stop-the-world; los eventos bajo el cerrojo; el KILL que despierta). Placas: sólo la Pico 2 hasta el final de H12.
+- **Después del descanso, la 2a.2** (el diseño, el código y la puerta en el PC; la Pico 2, en marcha):
+  - **El diseño, primero** (`V7_IDEAS` §H12 «Etapa 2a.2», `e12d9547`): la cola, un objeto permanente —el cerrojo, la
+    condición, la referencia y el programa publicado—, con los hilos dentro; `io` cuelga (el main a la cola, prepararlo,
+    publicarlo) y el último run que sale descuelga; UN planificador con lo del simple; sus pruebas, su puerta y su vuelta
+    atrás. La única pregunta para Eduardo, la vuelta atrás (la primera vez, mal planteada: *«no lo entiendo, ¿cuál es el
+    problema?»*; con un ejemplo, *«Sí, con git»*): el interruptor devuelve el relevo de la etapa 1, y el planificador
+    nuevo, si fallara, se revierte con git. Y una línea del mismo doc corregida: el número de un hilo no es «el más bajo
+    libre» desde la 2a.1.
+  - **El paso 1** (`b776a325`): la cola y el planificador, en el PC. La red entera verde a la primera, y dos pruebas
+    nuevas con sus sabotajes: `test-kill` fases 7-8 (el KILL despierta a un programa dormido una hora: ~300 ms, con uno
+    y con dos runs) y `test-cola` (el interbloqueo de verdad con uno y con dos runs —con dos, antes, colgado—; ninguno
+    falso; el fin, del último que sale). Por el camino, dos cosas de las pruebas, no del código: el sabotaje del
+    contador daba rojo con un fallo de segmento —el programa se descolgaba con un run aún en su cuanto—, así que se mira
+    el aviso del interbloqueo en stderr; y el del fin sólo se veía 1 de 20 veces, porque las dos horas caían en el mismo
+    milisegundo: a µs, y un run se entretiene más que el otro.
+  - **El paso 2** (`156db15e`): los runs permanentes —la tarea `run` espera en la cola y el RUN cuelga ahí el programa—,
+    con `check-sim` 11/11 y `run_tarea_smoke` ampliado (el KILL que despierta en 11 ms, su sabotaje, el interruptor
+    `--run-etapa1`). Compilan la Pico 2, el S3 y la Nucleo.
+  - **La revisión adversarial** (`3669215d`): nada roto en lo que corre hoy; dos críticos de dos runs permanentes (el que
+    cierra no esperaba a un run sin hilo, que podía leer la VM destruida; nada limitaba cuántos entraban), arreglados ya
+    contando los runs DENTRO de cada programa, con la parte 4 de `test-cola` y su sabotaje (que tampoco se veía al
+    principio: el otro run salía mientras el que cierra escribía; con su salida ensanchada, 20 de 20). Los bajos, también
+    (el porqué de un programa que no se cuelga, al EXITED; sin `io`, el RUN de siempre). Lo demás, a la lista de la 2b.
+    La red entera, verde otra vez.
+  - **La Pico 2** (con el OK de Eduardo): la tanda verde, `run_placa` 34 de 34, las marcas con margen. **PrintBench**,
+    887 y 900 ms (la mediana de 10, dos veces) frente a los 836 de la puerta de la etapa 1, con el intérprete igual (14
+    ms sin print). Eduardo, a la pregunta de si hacer ya una A/B grabando dos veces más: seguir; **la A/B, en el lote del
+    final de H12**. Y la resistencia, ampliada con un paso de la 2a.2 (un programa dormido una hora y un KILL): 110
+    minutos, 3 271 vueltas y 81 RESET SIN UN FALLO; el KILL al dormido, 5 ms de mediana y 16 como mucho; las marcas,
+    quietas. **La puerta de la 2a.2, PASADA** (PrintBench, pendiente de la A/B).
+  - **`#653`, abierta y cerrada** (`2d982cfd`): del mapa de la 2b salió algo que es de HOY —el log de las placas, sin
+    cerrojo, con `io` y `run` escribiendo desde la etapa 1, podía copiar una línea fuera de su región (en la Pico, encima
+    de `rng_state` y del `.data`)—. Una sección crítica por línea en la cintura (la Pico, las interrupciones; la ESP32,
+    `portENTER_CRITICAL_SAFE`; la STM32, PRIMASK) y `test-logmt` con su sabotaje (sin la sección, 168 B de la guarda
+    pisados; para verlo hubo que ensanchar la ventana: sin ella, 400 000 líneas no lo enseñaban). En placa, con el
+    próximo lote.
+  - **El mapa de la 2b** (un agente; lo que pesa, comprobado a mano), en `V7_IDEAS` §H12 «Etapa 2b»: cinco críticos
+    —el contexto del AOT global en los micros, la condición de FreeRTOS que pierde avisos (y un semáforo contador no
+    basta), el `gc()` del programa sin el mundo parado, una native aparcada por el mundo parado cuya pila de C no escanea
+    nadie (pasa ya en el PC con `--smp=2` y AOT: el comentario de `heap.c` que lo negaba es falso), el depósito de
+    ejecutores sin cerrojo—; los altos y los medios; un orden en seis pasos, el primero un arnés con el kernel de
+    FreeRTOS de verdad en el PC; y cuatro decisiones para Eduardo.
+- **Para la próxima sesión**: las cuatro decisiones de la 2b (`V7_IDEAS` §H12 «Etapa 2b»: la GUI y SQLite con un run;
+  la zona de rascar, esperar o fallar; dónde va la pila del segundo run en la Pico) y el diseño en detalle de su paso
+  0 —el arnés de la condición— y su paso 1; luego, paso a paso, cada uno con su prueba y su sabotaje. La A/B de
+  PrintBench y `#653` en placa, con el lote. Placas: la Pico 2, con la imagen de la 2a.2 (sin `#653`); las demás, hasta
+  el final de H12.
 
 ## 🔧 H10 (3-oct, noche) — CERRADO (Eduardo): EL `board_mgr` COMÚN (pasos 0 a 5) y su lote en las NUEVE placas; `#636`–`#638` CERRADAS; D7, probado por Eduardo en el IDE
 

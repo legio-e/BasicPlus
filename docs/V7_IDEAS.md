@@ -4633,6 +4633,69 @@ la 2b (abajo). Una nota que se queda: la preparación corre en `io` con sus cola
 escribiera en la salida del programa y la llenara, `io` se esperaría a sí mismo—; hoy no escribe nada (el enlace no
 emite, los avisos son del cargador, que va antes), y así tiene que seguir.
 
+**La puerta en la Pico 2** (4-oct, con el OK de Eduardo; la imagen de `3669215d`): la tanda de V7, verde (34 idénticas,
+las 3 de KILL paradas, `synclisttest` con sus aserciones y `MachineId` sin petar; las 3 de GUI, saltadas: no tiene
+pantalla); `run_placa` 34 de 34 (el depurador, con su lazo de pausa en `run`; el KILL en pausa y corriendo; el RESET);
+las marcas, con margen: a `run` le sobran 13,8 KB de 16, a la tarea del REPL 9, y al heap de FreeRTOS 6,4 KB en el peor
+momento (la cola es estática: la VM, 176 B menos). **PrintBench**: la mediana de 10, 887 y 900 ms en dos tandas
+seguidas, frente a los 836 de la puerta de la etapa 1 (+6–8 %); el tramo sin print —el del intérprete— igual (14 ms), y
+en la 2a.2 nada toca el camino de la salida (la cola de `io` y su lazo no han cambiado; la vuelta de cada cuanto, sin
+cerrojo, es la del simple). Aquellos 836 se midieron por la mañana, con otra imagen y otras placas en el USB.
+**Decidido por Eduardo** (4-oct, a la pregunta de si hacer ya una A/B grabando dos veces más): seguir con la
+resistencia; la A/B —la imagen de antes de la 2a.2 y la de ahora, en la misma sesión— va al lote del final de H12.
+**La resistencia**: 110 minutos (el límite de la herramienta), 3 271 vueltas SIN UN FALLO —cada una, las 20 líneas en
+orden, un bucle que no cede parado con un KILL a un instante al azar, la salida tardía y, nuevo de la 2a.2, un programa
+dormido una hora parado con un KILL: 5 ms de mediana y 16 como mucho del KILL al EXITED—, con 81 RESET con un programa
+corriendo; las marcas, quietas de principio a fin (`run`, 13,5 KB libres; la tarea del REPL, 9; el heap de FreeRTOS,
+6,4 KB en el peor momento). **La puerta de la 2a.2 en la Pico 2: PASADA**, con PrintBench pendiente de la A/B.
+
+### Etapa 2b — el 2º run, con UN núcleo: el MAPA (4-oct, noche), para el diseño
+
+Un agente recorrió el código con la lista de requisitos de la 2b (arriba) y lo que añadió la revisión de la 2a.2; lo
+que pesa, comprobado a mano. Lo que es de hoy ya se arregló aparte (`#653`, el log sin cerrojo). Lo que pide la 2b,
+por gravedad:
+
+- **Críticos** (con dos runs, corrupción o cuelgue):
+  - el contexto del AOT —el testigo de fallos y el `callctx`— es global en los micros: con dos runs, un `longjmp` a la
+    pila de otra tarea. Por tarea con los punteros TLS de FreeRTOS: la Pico, `configNUM_THREAD_LOCAL_STORAGE_POINTERS`
+    a 1; las ESP32, a 2 (el índice 0 es de pthreads y lwIP); la STM32 y el PC, como están. Lo necesitan cada run, cada
+    ejecutor de natives y la tarea del REPL cuando corre ella el programa;
+  - la variable de condición de FreeRTOS (sus tres copias) pierde avisos con dos esperando, y no basta un semáforo
+    contador (un tercero que llega después de un aviso se lleva la ficha de otro): una lista de esperadores, cada uno
+    con su notificación de tarea en un índice propio, con plazo y sin fichas sueltas; UNA implementación para las
+    tres. La necesita cualquier imagen con `vm.runs=2`, aunque el programa vaya con un run (el run ocioso espera en la
+    misma condición);
+  - el `gc()` del programa no para el mundo (sólo coge el cerrojo): con el otro run en marcha, colecta sobre una pila
+    rancia;
+  - UNA NATIVE APARCADA por el mundo parado deja su pila de C sin escanear: una reserva desde una native que encuentra
+    a otro run colectando espera DENTRO de la native, y el GC sólo mira la pila del colector y las natives
+    suspendidas (el comentario de `heap.c` que dice «nunca a mitad de un native» es falso). Pasa ya en el PC con
+    `--smp=2` y AOT, que ninguna prueba combina;
+  - el depósito de ejecutores de natives va sin cerrojo;
+- **Altos**: los eventos (encolar bajo el cerrojo; resucitar sólo a un hilo que no tenga run; el `join` que cuente
+  los eventos que su hilo debe); el puente native→BP sin ejecutor, que con el mundo parado da vueltas sin fin; la GUI
+  (LVGL y su modelo no son reentrantes); SQLite del pack, compilado sin hilos (la Metro).
+- **Medios y bajos**: la zona de rascar compartida (`listDir`, el `npShow`, los verbos del cable); el registro de
+  ficheros abiertos; el árbitro del bus (lo arregla la condición); el número de cada run; el RUN publicando con tantos
+  runs como permanentes; `vm.runs` leído en el arranque (`bpvm_boot2_claves`); y el coste: con dos runs cada cuanto
+  coge el cerrojo y avisa al otro —hay que medir un programa de un hilo—.
+
+**El orden propuesto**, cada paso con su puerta: (0) un arnés en el PC con el kernel de FreeRTOS de verdad (su port de
+Windows) para la condición —la de hoy tiene que salir ROJA: si no, el arnés no prueba nada—; (1) la condición nueva;
+(2) el contexto del AOT por tarea —la prueba, en el PC compilado SIN la TLS de hoy—; (3) los arreglos del núcleo, cada
+uno con su prueba y su sabotaje (el `gc()`, los eventos, los ejecutores, la native aparcada, el puente, la zona de
+rascar, los ficheros), y un lote en la Pico 2 con `vm.runs=1` (la puerta de la 2a.2 otra vez); (4) los dos runs
+permanentes en el simulado; (5) la Pico 2 con `vm.runs=2`: la tanda, `run_placa`, el estrés con dos runs, el aviso
+perdido con su imagen de control, PrintBench de un programa de un hilo, las pilas y dos horas de resistencia.
+
+**Para decidir, antes de diseñar en detalle**:
+- la GUI con dos runs: para la 2b, un programa que carga `Gui` o `Forms` va con UN run (el 0); `invokeLater`, para la
+  etapa 3 en el P4;
+- SQLite (la Metro), igual: con un run si el programa la carga;
+- la zona de rascar, cuando dos la piden a la vez: esperar a que la suelte el otro, o fallar con un error con nombre;
+- la pila del segundo run en la Pico: estática siempre (16 KB menos para la VM aunque `vm.runs=1`) o sacada del bloque
+  de la VM sólo si `vm.runs=2` (con `vm.runs=1`, la VM queda como hoy).
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
