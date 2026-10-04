@@ -35,7 +35,9 @@
 > FreeRTOS de la Pico a 24 KB (`9e0e8d12`, sin grabar); y `#648` y `#649`, CERRADAS (`07c16b4f` y `b2216270`), con
 > sus pruebas en la red. El lote, grabado en la Pico 2, la Metro, el P4, el S3, la C5 y la C6 (la tanda verde; en la
 > C6, GuiArbolG2 sin RAM: `#651`), y cortado ahí por Eduardo: las etapas siguientes, en el PC y la Pico 2; las demás
-> placas, al final de H12. Lo siguiente: la etapa 2. Más abajo, «🧵 H12 (4-oct)».
+> placas, al final de H12. Por la tarde, la etapa 2: el diseño de la cola de hilos con Eduardo (en C; cada hilo, una
+> struct con `malloc`; sin array y sin tope; el `Thread` de BP con un handle a la suya) y la 2a.1 hecha (`11fb8ffa`).
+> Lo siguiente: la 2a.2 (la cola permanente, con el `run` esperando en ella). Más abajo, «🧵 H12 (4-oct)».
 >
 > **3-oct** — H10, el paso 1 del traspaso entero: los arreglos pequeños, todos en el PC y cada uno con su prueba
 > (`89da2e63`, `26ecfef6`, `c382a66c`): el lote D del FS de `#473` (236, 248, 264, 268, 276, 280, 466), la pantalla
@@ -1168,6 +1170,28 @@ la C6, la P4 y la Nucleo.
   con la Pico primero y si todo iba bien pasamos al resto. Estas pruebas nos hacen que tengamos que probarlo todo varias
   veces y llevan mucho tiempo»*): las etapas siguientes de H12, en el PC y en la Pico 2; las demás placas, una vez, al
   final. La C3, la DK2 y la Nucleo, sin grabar.
+- **La etapa 2: el diseño, con Eduardo, paso a paso** (`V7_IDEAS` §H12 «Etapa 2»). El mapa del planificador (un
+  agente, verificado a mano): ninguna placa usa el de varios workers; la tabla de hilos, 32 huecos fijos dentro de
+  `bpvm_t`; el estado del planificador nace y muere con cada RUN; y para dos runs faltan cosas, dos críticas (el contexto
+  del AOT, global en las placas; la condición de FreeRTOS con semáforo binario). Lo que decidió Eduardo: los runs
+  permanentes, y antes *«la cola de Threads BP, también permanente aunque esté vacía»*; en C, *«una cola, no una
+  lista»*, como `SyncList`; *«next y back… y no haría falta un array»*; una sola lista; sin tope (*«¿por qué tiene que
+  haber un límite?»*; y luego: *«si lo hay tiene que tener en cuenta el número de núcleos, la velocidad y la
+  memoria»*); una referencia en la VM, null si está vacía, y buscar el siguiente sin dar vueltas indefinidamente; *«¿punteros
+  o referencias?»*; y al final, *«si haces una estructura de C que sea un Thread BP por mí vale, pero se aloja con
+  malloc y Thread BP tiene un handle a la estructura C»* —los enlaces dentro del objeto `Thread` dejaban fuera a los
+  programas de V6 de la cápsula—. *«Toda la etapa 2 en V7.»* Y *«no puede haber programas sin Core»*: `hello` se carga
+  sin él → `#652`.
+- **2a.1, hecha** (`11fb8ffa`): la cola de hilos, sin array y sin tope, en las dos VMs (fuera también el 32 de miVM);
+  el `__tid`, el handle (no se reutiliza); las pilas devueltas, con la política de miVM; el `join`, bajo el cerrojo; el
+  latido, sin recorrer hilos. `make test-hilos` (nueva): 120 hilos y como mucho 41 a la vez; con la recogida apagada,
+  rojo. La red entera, verde; la imagen de la Pico compila.
+- **Para la próxima sesión**: la **2a.2** —la cola fuera del ciclo de vida de cada VM: nace con el arranque, el `run`
+  espera en ella en vez de en el aviso «trabajo», y un solo planificador con lo que hoy sólo tiene el simple (ceder, el
+  interbloqueo, la regla del KILL, el depurador con un run)—: diseño en detalle primero (lo que cambia en
+  `scheduler_smp.c`, `bpvm_repl.c` y la tarea `run`), puerta en el PC y en la Pico 2. Después la **2b** y sus
+  requisitos (por tarea el contexto del AOT; la condición con semáforo contador; el `gc()` con stop-the-world; los
+  eventos bajo el cerrojo; el KILL que despierta). Placas: sólo la Pico 2 hasta el final de H12.
 
 ## 🔧 H10 (3-oct, noche) — CERRADO (Eduardo): EL `board_mgr` COMÚN (pasos 0 a 5) y su lote en las NUEVE placas; `#636`–`#638` CERRADAS; D7, probado por Eduardo en el IDE
 
