@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1325,6 +1325,35 @@ test-gchondo: $(BIN)
 	 else \
 	   echo "FAIL test-gchondo (VM-C con 64 KB: salida $$stc; VM-Java con -Xss256k: salida $$stj)"; \
 	   [ "$$pc" = "$$pj" ] || { echo "  la VM-Java dijo otra cosa:"; printf '%s\n' "$$pj" | sed 's/^/    /'; }; \
+	   exit 1; \
+	 fi
+
+# #649 (4-oct) — la CARGA resuelve los imports SIN recursión. discover_deps se llamaba a sí misma por cada módulo que
+# cargaba, con ~1,7 KB de marco en la placa (sus rutas, en la pila): la Pico 2 gastaba ~12 KB de los 16 de la tarea del
+# REPL cargando TimeDemo, y una cadena de 16 módulos (el tope) pedía ~27. Aquí, ImportHondo —una cadena de 13 imports:
+# 15 módulos con Core— con la MARCA DE AGUA de --pila (el hilo pinta su pila y mira hasta dónde se borró). Reventar no
+# sirve de prueba: en Windows la reserva se redondea a 64 KB y la recursión, con el tope de módulos, no llega. Se exige
+# que la cadena no cueste más de 8 KB de pila que `hello`, un módulo. Medido el 4-oct en el PC: la recursión, 26,7 KB
+# más (el sabotaje: rojo); el recorrido nuevo, 2,9.
+test-importhondo: $(BIN)
+	$(call fixture,hello)
+	$(call stdlibdep,Core)
+	@rm -rf build/importhondo && mkdir -p build/importhondo && cp ../bpstdlib/Core.mod build/importhondo/
+	@java -jar ../lexer-java/target/basicplus-frontend.jar samples/importhondo/ImportHondo.bp --compile build/importhondo --backend=mivm >build/importhondo/compila.log 2>&1; \
+	 if [ ! -f build/importhondo/ImportHondo.mod ] || [ ! -f build/importhondo/Eslabon13.mod ]; then \
+	   echo "  ✗ ImportHondo no compila:"; tail -5 build/importhondo/compila.log; exit 1; fi
+	@echo "--- #649 la carga sin recursión: una cadena de 13 imports no cuesta más pila que un módulo (esperado: hasta 'fin', y menos de 8 KB más que hello) ---"
+	@(cd build/importhondo && timeout 60 ../../$(BIN) --pila=131072 ImportHondo.mod >salida.txt 2>pila.txt); st=$$?; \
+	 (cd samples && timeout 60 ../$(BIN) --pila=131072 hello.mod >/dev/null 2>../build/importhondo/pila_hello.txt); sth=$$?; \
+	 u=$$(sed -n 's/^\[pila\] el hilo de --pila=[0-9]* uso \([0-9]*\) B$$/\1/p' build/importhondo/pila.txt); \
+	 h=$$(sed -n 's/^\[pila\] el hilo de --pila=[0-9]* uso \([0-9]*\) B$$/\1/p' build/importhondo/pila_hello.txt); \
+	 grep -vE 'INICIANDO|FIN DE' build/importhondo/salida.txt; \
+	 echo "  la pila: ImportHondo $${u:-?} B, hello $${h:-?} B"; \
+	 if [ $$st -eq 0 ] && [ $$sth -eq 0 ] && grep -q '^cadena de 13 imports: la suma de 1 a 13 es 91$$' build/importhondo/salida.txt \
+	    && grep -q '^fin$$' build/importhondo/salida.txt && [ -n "$$u" ] && [ -n "$$h" ] && [ $$((u - h)) -lt 8192 ]; then \
+	   echo "PASS test-importhondo"; \
+	 else \
+	   echo "FAIL test-importhondo (salida $$st, la de hello $$sth; la cadena tiene que costar menos de 8192 B más que hello)"; \
 	   exit 1; \
 	 fi
 

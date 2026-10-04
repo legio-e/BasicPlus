@@ -25,7 +25,9 @@
  *                                       con N bytes de pila, como la tarea de la
  *                                       placa: una recursión que en el PC pasa
  *                                       (la pila de un hilo es de megas) aquí
- *                                       revienta como allí.
+ *                                       revienta como allí. Y al acabar dice en
+ *                                       stderr cuánta usó (#649: la marca de
+ *                                       agua, como el INFO de la placa).
  */
 
 #include "bpvm.h"
@@ -477,19 +479,54 @@ static int main_real(int argc, char** argv) {
  * eso, N es sólo lo que se compromete al principio y el hilo crece hasta la
  * reserva por defecto del ejecutable (2 MB), que es justo lo que no se quiere.
  * (Por eso no se usa aquí bpvm_platform_thread_create_nativa: winpthreads pide
- * la pila de esa otra forma.) */
-typedef struct { int argc; char** argv; int rc; } main_en_hilo_t;
+ * la pila de esa otra forma.)
+ *
+ * #649 (4-oct) — Y LA MARCA DE AGUA, como la de FreeRTOS en el INFO de la placa:
+ * antes de empezar, el hilo PINTA casi toda su pila con un patrón, y al acabar
+ * mira hasta dónde se borró. Hace falta porque en Windows la reserva se redondea
+ * a 64 KB y una recursión de unas decenas de KB (la de la carga, #649: 16
+ * módulos como mucho, ~2 KB cada uno) no llega a reventar: se MIDE y se exige un
+ * tope (`make test-importhondo`). Sale por stderr: no es del programa. Lo que
+ * no se pinta, PILA_MARGEN: el marco de arriba y lo que Windows se guarda al
+ * fondo de la pila de un hilo (medido el 4-oct: dejando 16 KB, el pintado
+ * reventaba; con 20, no). */
+#define PILA_PATRON  0xA5u
+#define PILA_MARGEN  (24u * 1024u)
+
+typedef struct { int argc; char** argv; int rc; size_t pintada, usada; } main_en_hilo_t;
+
+static unsigned char* s_pila_fondo;  /* lo más hondo que se pintó */
+
+/* Pinta `n` bytes por debajo de su propio marco: un VLA (C99), que el gcc baja página a página —en Windows, por la
+ * guarda—; y el `asm` vacío con "memory" para que el optimizador no se salte un memset que nadie vuelve a leer. */
+static void __attribute__((noinline)) pila_pinta(size_t n) {
+    unsigned char zona[n];
+    memset(zona, PILA_PATRON, n);
+    __asm__ __volatile__("" : : "r"(zona) : "memory");
+    s_pila_fondo = zona;
+}
+
+/* Lo que se usó: de lo más hondo pintado hacia arriba, hasta el primer byte que ya no es el patrón. */
+static size_t pila_usada(size_t pintada) {
+    size_t i = 0;
+    while (i < pintada && s_pila_fondo[i] == PILA_PATRON) i++;
+    return pintada - i;
+}
+
+static void main_en_hilo_cuerpo(main_en_hilo_t* m) {
+    pila_pinta(m->pintada);
+    m->rc = main_real(m->argc, m->argv);
+    m->usada = pila_usada(m->pintada);
+}
 
 #ifdef _WIN32
 static unsigned __stdcall main_en_hilo(void* p) {
-    main_en_hilo_t* m = (main_en_hilo_t*) p;
-    m->rc = main_real(m->argc, m->argv);
+    main_en_hilo_cuerpo((main_en_hilo_t*) p);
     return 0;
 }
 #else
 static void* main_en_hilo(void* p) {
-    main_en_hilo_t* m = (main_en_hilo_t*) p;
-    m->rc = main_real(m->argc, m->argv);
+    main_en_hilo_cuerpo((main_en_hilo_t*) p);
     return NULL;
 }
 #endif
@@ -500,7 +537,11 @@ int main(int argc, char** argv) {
         if (strncmp(argv[i], "--pila=", 7) == 0) pila = parse_size(argv[i] + 7);
     if (pila == 0) return main_real(argc, argv);
 
-    main_en_hilo_t m = { argc, argv, 1 };
+    if (pila <= PILA_MARGEN) {
+        fprintf(stderr, "--pila: %zu B no da ni para el margen (%u B)\n", pila, (unsigned) PILA_MARGEN);
+        return 2;
+    }
+    main_en_hilo_t m = { argc, argv, 1, pila - PILA_MARGEN, 0 };
 #ifdef _WIN32
     HANDLE h = (HANDLE) _beginthreadex(NULL, (unsigned) pila, main_en_hilo, &m,
                                        STACK_SIZE_PARAM_IS_A_RESERVATION, NULL);
@@ -518,5 +559,7 @@ int main(int argc, char** argv) {
     pthread_attr_destroy(&at);
     pthread_join(t, NULL);
 #endif
+    fprintf(stderr, "[pila] el hilo de --pila=%zu uso %zu B%s\n", pila, m.usada,
+            m.usada >= m.pintada ? " o mas (todo lo pintado)" : "");
     return m.rc;
 }

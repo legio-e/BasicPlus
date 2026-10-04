@@ -1,0 +1,8 @@
+// Eslabon10.bp — #649: un eslabón de la cadena de imports de ImportHondo.bp.
+module Eslabon10
+  import Eslabon11
+
+  public function valor(): integer
+    return 10 + Eslabon11.valor()
+  end valor
+end Eslabon10

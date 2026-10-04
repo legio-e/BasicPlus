@@ -594,9 +594,9 @@ static void derive_owner(const char* qualified, char* lib, size_t lib_size,
 static bpvm_status_t load_from_pack(bpvm_t* vm, const bpvm_pack_src_t* src,
                                     const bpvm_pack_entry_t* e, const char* name);
 
-/* Resuelve recursivamente las dependencias del módulo en `mod_idx`,
- * cargándolas desde `search_dir` por convención de naming
- * (<lib>.<mod>.mod o <mod>.mod). */
+/* Resuelve las dependencias del módulo `raiz` y las de todo lo que va cargando
+ * (el cierre transitivo; #649: sin recursión, ver discover_deps), cargándolas
+ * desde `search_dir` por convención de naming (<lib>.<mod>.mod o <mod>.mod). */
 /* #421 — el cargador que DEJA DICHO por qué falló (en `vm->load_error`). Se
  * declara aquí porque `discover_deps`, de abajo, lo usa para las dependencias:
  * el fallo que de verdad le pasa a la gente no es el del módulo principal. */
@@ -612,13 +612,53 @@ static int mismo_contenido(const char* a, uint32_t asz, const char* b, uint32_t 
     return ca == cb;
 }
 
-static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_dir) {
-    /* Re-snapshot del import_count: si cargamos un dep, vm->modules crece
-     * pero el mod actual no muta. */
-    bpvm_module_t* m = &vm->modules[mod_idx];
-    int n = m->import_count;
-    for (int k = 0; k < n; k++) {
-        const char* imp = m->imports[k];
+/* ═══ #649 (4-oct) — LAS DEPENDENCIAS, SIN RECURSIÓN ════════════════════════════════════════════════════════════════
+ *
+ * `discover_deps` se llamaba a sí misma por cada módulo que cargaba, con ~1,7 KB de marco (las rutas de abajo, en la
+ * pila): en la Pico 2, la tarea que carga llegaba a ~12 KB de sus 16 con `TimeDemo`, y una cadena de 16 módulos (el
+ * tope, BPVM_MAX_MODULES) pedía ~27 —más que su pila— (medido el 4-oct, en la puerta de H12). Ahora, el MISMO recorrido
+ * —el mismo orden de cargas, de avisos y de comprobaciones de la norma— con una pila de marcos explícita y pequeña. Un
+ * marco son los imports de un módulo (el `k` de su `n`), o la RISTRA de módulos que acaba de traer una carga: desde
+ * `idx` hasta el module_count de CADA momento, como el `for` de antes, que volvía a mirar el tope en cada vuelta. Por el
+ * camino los índices sólo crecen —un marco de imports es siempre de un módulo cargado después que el de debajo—, así que
+ * no hay más de BPVM_MAX_MODULES de cada clase. */
+typedef struct {
+    uint8_t ristra;   /* 0: los imports del módulo `idx`; 1: los recién cargados, desde `idx` */
+    uint8_t idx;      /* < BPVM_MAX_MODULES */
+    int     k, n;     /* los imports: el siguiente y cuántos (`n`, al empezar el marco: si cargamos un dep,
+                       * vm->modules crece pero el mod actual no muta) */
+} dd_marco_t;
+#define DD_MARCOS (2 * BPVM_MAX_MODULES + 1)
+
+static int dd_empuja(bpvm_t* vm, dd_marco_t* pila, int* sp, int ristra, int idx) {
+    if (*sp >= DD_MARCOS) {   /* no pasa (los índices crecen por el camino); si pasara, que se diga */
+        load_err(vm, "dependencias: el recorrido pasa de %d marcos", DD_MARCOS);
+        return -1;
+    }
+    dd_marco_t* f = &pila[(*sp)++];
+    f->ristra = (uint8_t) ristra;
+    f->idx    = (uint8_t) idx;
+    f->k      = 0;
+    f->n      = ristra ? 0 : vm->modules[idx].import_count;
+    return 0;
+}
+
+static bpvm_status_t discover_deps(bpvm_t* vm, int raiz, const char* search_dir) {
+    dd_marco_t pila[DD_MARCOS];
+    int sp = 0;
+    if (dd_empuja(vm, pila, &sp, 0, raiz) != 0) return BPVM_ERR_OOM;
+    while (sp > 0) {
+        dd_marco_t* t = &pila[sp - 1];
+        if (t->ristra) {   /* el `for (j = desde; j < vm->module_count; j++)` de antes: el tope, en CADA vuelta */
+            if (t->idx >= vm->module_count) { sp--; continue; }
+            int j = t->idx++;
+            if (dd_empuja(vm, pila, &sp, 0, j) != 0) return BPVM_ERR_OOM;
+            continue;
+        }
+        if (t->k >= t->n) { sp--; continue; }
+        int mod_idx = t->idx;                   /* el importador: el parámetro de la versión recursiva */
+        bpvm_module_t* m = &vm->modules[mod_idx];
+        const char* imp = m->imports[t->k++];
         if (!imp || !imp[0]) continue;
         char lib[64], mod[64];
         derive_owner(imp, lib, sizeof(lib), mod, sizeof(mod));
@@ -694,10 +734,8 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
                         if (nr != BPVM_OK) return nr;
                     }
                 }
-                for (int j = idx0; j < vm->module_count; j++) {
-                    bpvm_status_t r = discover_deps(vm, j, search_dir);
-                    if (r != BPVM_OK) return r;
-                }
+                /* #649 — sus dependencias, antes que el siguiente import: un marco, no una llamada. */
+                if (dd_empuja(vm, pila, &sp, 1, idx0) != 0) return BPVM_ERR_OOM;
                 continue;                       /* resuelto dentro del pack */
             }
         }
@@ -805,11 +843,8 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int mod_idx, const char* search_d
                 if (nr != BPVM_OK) return nr;
             }
         }
-        /* Recursivo: descubre las deps de esta nueva carga. */
-        for (int j = idx_before; j < vm->module_count; j++) {
-            bpvm_status_t r = discover_deps(vm, j, search_dir);
-            if (r != BPVM_OK) return r;
-        }
+        /* Las deps de esta nueva carga, antes que el siguiente import (#649: un marco, no una llamada). */
+        if (dd_empuja(vm, pila, &sp, 1, idx_before) != 0) return BPVM_ERR_OOM;
     }
     return BPVM_OK;
 }
@@ -1081,7 +1116,7 @@ static void load_err(bpvm_t* vm, const char* fmt, ...) {
 
 /* Pasa el detalle de la VM a la estructura que el REPL manda por el wire. Son
  * dos sitios porque son dos vidas distintas: el de la VM lo escribe quien falla
- * (a veces recursivamente, cargando una dependencia) y el de `bpvm_entry_t` es
+ * (a veces a varios imports de distancia, cargando una dependencia) y el de `bpvm_entry_t` es
  * lo que ve el IDE. */
 static void recoge_fallo(bpvm_t* vm, bpvm_entry_t* e) {
     if (!vm || !e || e->fallo[0] || !vm->load_error[0]) return;
@@ -1409,7 +1444,7 @@ bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path) {
     int idx_before = vm->module_count;
     bpvm_status_t s = bpvm_loader_load(vm, path);
     if (s != BPVM_OK) return s;
-    /* Descubrir y cargar recursivamente las dependencias del módulo,
+    /* Descubrir y cargar las dependencias del módulo, y las de las suyas,
      * buscándolas en el mismo directorio que el .mod cargado. */
     char dir[256];
     path_dirname(path, dir, sizeof(dir));

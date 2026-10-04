@@ -678,7 +678,7 @@ struct bpvm {
      *
      * Va en la VM y no en un parámetro porque el fallo que de verdad ocurre no
      * es el del módulo principal, sino el de una DEPENDENCIA — y ésas se cargan
-     * en `discover_deps`, que es recursiva y no ve la estructura del llamante.
+     * en `discover_deps`, que recorre los imports por su cuenta y no ve la estructura del llamante.
      * Ése fue el agujero del primer intento (16-ago): se arregló el camino menos
      * frecuente. "" = sin error. Fijo, sin malloc. */
     char load_error[256];

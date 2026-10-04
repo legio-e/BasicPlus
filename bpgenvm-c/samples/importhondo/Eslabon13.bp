@@ -1,0 +1,6 @@
+// Eslabon13.bp — #649: el último eslabón de la cadena de imports de ImportHondo.bp.
+module Eslabon13
+  public function valor(): integer
+    return 13
+  end valor
+end Eslabon13
