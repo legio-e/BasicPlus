@@ -301,6 +301,21 @@ int  bpvm_repl_run_activo(void);
  *  0 nada, 1 hay alguien (un HELLO se contesta), 2 un KILL (su KILL_REPLY sale aquí: no arrancar). */
 int  bpvm_repl_autorun_escucha(void* user);
 
+/** V7/H12, etapas 0 y 1 (4-oct) — LA TAREA `run`: el programa en una tarea propia y PERMANENTE (nace con el arranque
+ *  y, sin programa, espera), y la del REPL hace de `io` durante el RUN. Es el interruptor de la imagen: la familia que
+ *  la quiere, en su arranque (antes del autorun), llama a `prepara()` y, si da 0, crea su tarea con
+ *  `bpvm_repl_run_tarea` de entrada, su pila y la MISMA prioridad que la del REPL (el contrato de `io`,
+ *  bpvm_platform.h). La que no, sigue con el RUN de siempre. El protocolo, en bpvm_repl.c. */
+int  bpvm_repl_run_tarea_prepara(void);
+void bpvm_repl_run_tarea(void* arg);
+/** Lo que le sobró de pila a `run` tras el último programa, en bytes (-1: sin programa, o la plataforma no lo sabe).
+ *  Va al INFO (`runStackFree`), como el de `io`: con eso se dimensiona su pila en cada familia. */
+long bpvm_repl_run_pila_libre(void);
+/** SÓLO PRUEBAS (las del micro simulado): `espera_ms` > 0 ensancha la ventana entre el final del programa y el aviso
+ *  de `run` (como `#609`); `sabotaje` hace que `io` cierre la cola de salida sin esperar a `run` —se pierde la salida
+ *  tardía, y la prueba tiene que cazarlo—. */
+void bpvm_repl_run_tarea_ensayo(int espera_ms, int sabotaje);
+
 /** V7/H8 (restos de E1, 28-sep) — el `errorMessage` del EXITED de un programa parado por un RESET, el MISMO en las
  *  cuatro (Pico, ESP32, STM32 y el micro simulado). El `poll` trata el RESET como un KILL —lo para, y reinicia
  *  después, fuera de `bpvm_run`— y el EXITED decía «terminado por KILL» (Pico y ESP32) o nada (STM32 y simulado). El

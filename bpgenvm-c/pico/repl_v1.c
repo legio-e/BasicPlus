@@ -813,8 +813,35 @@ void repl_v1_handle_request(int first_char) {
  * del autorun. Se registraba aquí, al entrar al REPL —o sea DESPUÉS del autorun—, y un IDE
  * que se conectaba con el autorun corriendo recibía «HELLO: este firmware no ha registrado
  * su cintura de REPL» al saludar (durante el autorun sólo se atienden HELLO, KILL y RESET). */
+/* V7/H12, etapas 0 y 1 (4-oct) — LA TAREA `run`: el programa en una tarea propia y permanente, y ésta (`vm_task`, la del
+ * arranque y el REPL) hace de `io` durante el RUN (src/bpvm_repl.c). El interruptor de la imagen, BPVM_PICO_RUN_TAREA,
+ * vive en FreeRTOSConfig.h (también cambia el heap de FreeRTOS): con 0, el RUN de antes. */
+#if BPVM_PICO_RUN_TAREA
+/* Su pila, ESTÁTICA: en el .bss, y la VM recibe menos ella sola (su bloque es «lo que queda» tras el .bss); ni el heap
+ * de FreeRTOS ni el margen de malloc. 16 KB, LOS MISMOS que `vm_task`: el GC corre aquí y su marcado es RECURSIVO —32 B
+ * por nivel de una cadena de referencias, medido el 4-oct: con 16 KB en `vm_task`, una lista de ~360 nodos ya
+ * desbordaba—; con 12 KB, el techo bajaba a ~300. Sin los marcos del REPL encima, aquí cabe algo más (~425). Los 4 KB
+ * de más salen del heap de FreeRTOS (FreeRTOSConfig.h): la VM pierde 12 KB, de 333 a ~321. */
+#define PICO_RUN_PILA_PALABRAS ((16u * 1024u) / sizeof(StackType_t))
+static StackType_t  s_run_pila[PICO_RUN_PILA_PALABRAS];
+static StaticTask_t s_run_tcb;
+static TaskHandle_t s_run_task = NULL;
+#endif
+
 void repl_v1_cintura(void) {
     bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3 g9: la cintura, antes del primer mensaje */
+#if BPVM_PICO_RUN_TAREA
+    /* A la MISMA prioridad que ésta, la que hace de `io` (el contrato de bpvm_platform.h: ni por debajo —el KILL no
+     * llegaba— ni por encima —PrintBench, más lento—). Antes del autorun: el arranque común llama aquí antes. */
+    if (s_run_task == NULL && bpvm_repl_run_tarea_prepara() == 0)
+        s_run_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run", PICO_RUN_PILA_PALABRAS, NULL,
+                                       uxTaskPriorityGet(NULL), s_run_pila, &s_run_tcb);
+    /* el log, desde aquí y no desde `run`: el log no tiene cerrojo, y `run` nacería escribiendo a la vez que el
+     * arranque (la revisión del 4-oct) */
+    if (s_run_task == NULL) log_printf("run: no se pudo crear la tarea run: sigue el RUN de antes");
+    else log_printf("run: la tarea del programa, creada (%u KB de pila)",
+                    (unsigned) (PICO_RUN_PILA_PALABRAS * sizeof(StackType_t) / 1024u));
+#endif
 }
 
 void repl_v1_run(void) {

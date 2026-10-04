@@ -105,9 +105,12 @@ static void trocear(struct bpvm_io* io, const char* s, size_t n) {
 /* #495 (paso 4) — la marca de agua de la pila de `io` en el último RUN (bpvm_io.h). */
 static long s_io_pila_libre = -1;
 
-static void io_loop(void* arg) {
-    struct bpvm_io* io = (struct bpvm_io*) arg;
+/* El lazo de `io`. Con `fin` a NULL (el hilo propio), sale cuando el que para cierra la cola y queda seca. Con `fin`
+ * (V7/H12: el lazo en la tarea del REPL), la cierra él mismo en cuanto `*fin` se pone a 1 —el productor ya no va a
+ * escribir más— y sale cuando queda seca. */
+static void io_vueltas(struct bpvm_io* io, volatile int* fin) {
     char tmp[IO_CHUNK];
+    int cerrada = 0;
     for (;;) {
         int eof = 0;
         size_t n = bpvm_oq_pop_timed(&io->oq, tmp, sizeof tmp, IO_POLL_MS, &eof);
@@ -117,9 +120,17 @@ static void io_loop(void* arg) {
         if (io->ops.poll && io->ops.poll(io->ops.user) != 0)
             bpvm_request_kill(io->vm);
         if (eof) break;                 /* cerrada y seca: no queda nada que dar */
+        if (fin && !cerrada && *fin) {  /* el productor ha acabado: lo que quede se drena en las vueltas siguientes */
+            bpvm_oq_close(&io->oq);
+            cerrada = 1;
+        }
     }
     purgar_linea(io);                   /* un `print` sin '\n' final también sale */
     s_io_pila_libre = (long) bpvm_platform_pila_libre_actual();   /* #495 (paso 4): lo que le sobró */
+}
+
+static void io_loop(void* arg) {
+    io_vueltas((struct bpvm_io*) arg, NULL);
 }
 
 long bpvm_io_pila_libre_ultima(void) {
@@ -128,23 +139,47 @@ long bpvm_io_pila_libre_ultima(void) {
 
 /* ─── API ───────────────────────────────────────────────────────────────── */
 
-int bpvm_io_start(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap) {
-    if (!vm || vm->io) return -1;
+/* Las colas y el cerrojo del cable, sin hilo: lo común a `start` y a `preparar`. */
+static struct bpvm_io* io_nuevo(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap) {
     struct bpvm_io* io = (struct bpvm_io*) bpvm_calloc(1, sizeof *io);
-    if (!io) return -1;
+    if (!io) return NULL;
     if (ops) io->ops = *ops;
     io->vm = vm;
     if (bpvm_oq_init(&io->oq, oq_cap > 0 ? oq_cap : IO_OQ_CAP_DEFAULT) != 0) {
         bpvm_free(io);
-        return -1;
+        return NULL;
     }
     if (bpvm_platform_mutex_init(&io->ctrl_mtx) != 0
             || bpvm_platform_cond_init(&io->ctrl_hay) != 0
             || bpvm_platform_mutex_init(&io->tx_mtx) != 0) {
         bpvm_oq_destroy(&io->oq);
         bpvm_free(io);
-        return -1;
+        return NULL;
     }
+    return io;
+}
+
+int bpvm_io_preparar(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap) {
+    if (!vm || vm->io) return -1;
+    struct bpvm_io* io = io_nuevo(vm, ops, oq_cap);
+    if (!io) return -1;
+    vm->io = io;            /* desde aquí, `print` encola; `arrancado` a 0: no hay hilo que unir */
+    return 0;
+}
+
+void bpvm_io_lazo(struct bpvm* vm, volatile int* fin) {
+    if (!vm || !vm->io || !fin) return;
+    io_vueltas(vm->io, fin);
+}
+
+void bpvm_io_despertar(struct bpvm* vm) {
+    if (vm && vm->io) bpvm_oq_despertar(&vm->io->oq);
+}
+
+int bpvm_io_start(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap) {
+    if (!vm || vm->io) return -1;
+    struct bpvm_io* io = io_nuevo(vm, ops, oq_cap);
+    if (!io) return -1;
     /* El puntero se publica ANTES de arrancar el hilo: en cuanto exista, el
      * lazo puede tocar la cola, y `emit_text` puede empezar a encolar. */
     vm->io = io;

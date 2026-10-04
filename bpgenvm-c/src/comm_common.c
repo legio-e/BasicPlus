@@ -159,3 +159,9 @@ void bpvm_oq_close(bpvm_output_queue_t* q) {
     bpvm_platform_cond_broadcast(&q->not_full);
     bpvm_platform_mutex_unlock(&q->mtx);
 }
+
+void bpvm_oq_despertar(bpvm_output_queue_t* q) {
+    bpvm_platform_mutex_lock(&q->mtx);
+    bpvm_platform_cond_broadcast(&q->not_empty);
+    bpvm_platform_mutex_unlock(&q->mtx);
+}

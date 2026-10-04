@@ -61,10 +61,25 @@
 #define configQUEUE_REGISTRY_SIZE               0
 #define configUSE_EVENT_GROUPS                  1
 
+/* --- V7/H12, etapas 0 y 1 (4-oct): LA TAREA `run` (pico/repl_v1.c) ----------
+ * El interruptor de la imagen: 1, el programa en la tarea `run` (permanente, su
+ * pila estática en el .bss) y `vm_task` hace de `io`; 0, el RUN de antes (el
+ * programa en `vm_task` y un `io` de 4 KB, de este heap, en cada RUN). */
+#ifndef BPVM_PICO_RUN_TAREA
+#define BPVM_PICO_RUN_TAREA                     1
+#endif
+
 /* --- Heap del kernel (heap_4) --------------------------------- */
 /* El "memory[]" de la VM NO sale de aquí; es un array estático en main.c.
- * Este heap solo se usa para tasks/mutexes de FreeRTOS. */
+ * Este heap solo se usa para tasks/mutexes de FreeRTOS. V7/H12: con la tarea
+ * `run`, 4 KB menos —los del `io` de cada RUN, que ya no nace—: el peor momento
+ * medido (10,4 KB libres, la Metro, 3-oct) se queda igual, y esos 4 KB van a la
+ * pila de `run`, que es donde corre el GC (su marcado es recursivo). */
+#if BPVM_PICO_RUN_TAREA
+#define configTOTAL_HEAP_SIZE                   ((size_t)(28 * 1024))
+#else
 #define configTOTAL_HEAP_SIZE                   ((size_t)(32 * 1024))
+#endif
 #define configSUPPORT_STATIC_ALLOCATION         1
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 

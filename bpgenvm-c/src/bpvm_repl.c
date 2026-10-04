@@ -887,6 +887,9 @@ static void repl_info(long id) {
     /* #495 (paso 4) — lo que le sobró de pila al hilo `io` en el último RUN (-1: sin RUN, o el PC no lo sabe). Corre el
      * GET y el LIST troceados durante un RUN, con 4 KB de pila en la Pico y la STM32: se mira, no se supone. */
     CAMPO_L("ioStackFree",  bpvm_io_pila_libre_ultima());
+    /* V7/H12, etapas 0 y 1: y lo que le sobró a la tarea `run` tras el último programa (-1: no la hay, o no lo sabe).
+     * Con `run`, `ioStackFree` es la tarea del REPL, que hace de `io` durante el RUN. */
+    CAMPO_L("runStackFree", bpvm_repl_run_pila_libre());
     CAMPO_L("fsTotalBytes", in.fs_total_bytes);
     CAMPO_L("fsUsedBytes",  in.fs_used_bytes);
     /* V6/T1 (11-sep) — la PANTALLA, si la placa la tiene: el runner de las
@@ -1853,6 +1856,70 @@ int bpvm_repl_run_activo(void) { return s_run_sesion != 0; }
 
 static const bpvm_repl_run_ops_t* run_ops(void) { return s_ops ? s_ops->run : NULL; }
 
+/* ═════════════════════ V7/H12, etapas 0 y 1 (4-oct) — LA TAREA `run` ═════════════════════
+ *
+ * El programa corre en una tarea propia y PERMANENTE —nace con el arranque y, sin programa, espera— y la tarea del
+ * REPL hace de `io` durante el RUN: el lazo de bpvm_io, en su hilo (bpvm_io_lazo), sin crear otro. Decidido por Eduardo
+ * (4-oct: «`run` permanente», las etapas 0 y 1 juntas; V7_IDEAS §H12 «Etapas 0 y 1 en la Pico 2»). La crea la familia
+ * (bpvm_repl.h); sin ella, el RUN de siempre.
+ *
+ * Entre las dos, dos avisos —semáforos binarios, uno por sentido, y cada uno con UN solo que espera—:
+ *   «trabajo» (io → run): la VM ya cargada y si se depura (`vm`, `depurando`, escritos antes de darlo);
+ *   «hecho»   (run → io): lo que devolvió `bpvm_run` (`rs`, escrito antes de darlo).
+ * La última línea antes del EXITED: `run`, al acabar, pone `fin` —desde ahí no escribe más— y el lazo de `io` cierra
+ * la cola él mismo y sale cuando queda seca; después espera el «hecho», y sólo entonces EXITED y destruir la VM. `run`
+ * no cierra ni destruye nada de `io`: lo que se destruye lo destruye quien lo cerró, en su hilo. */
+static struct {
+    bpvm_platform_sem_handle_t trabajo, hecho;
+    bpvm_t*      vm;            /* el programa: io, antes del «trabajo» */
+    int          depurando;
+    int          rs;            /* lo que devolvió bpvm_run: run, antes del «hecho» */
+    volatile int fin;           /* run ha acabado: io cierra la cola (bpvm_io_lazo) */
+    volatile int viva;          /* la tarea existe y espera: sin ella, el RUN de siempre */
+    long         pila_libre;    /* lo que le sobró de pila tras el último programa (-1: no lo sabe) */
+    int          ensayo_ms;     /* SÓLO PRUEBAS: la ventana ensanchada entre bpvm_run y `fin` */
+    int          sabotaje;      /* SÓLO PRUEBAS: io cierra la cola sin esperar a `fin` */
+} s_tarea = { NULL, NULL, NULL, 0, 0, 0, 0, -1, 0, 0 };
+
+int bpvm_repl_run_tarea_prepara(void) {
+    if (s_tarea.trabajo) return 0;
+    if (bpvm_platform_sem_init(&s_tarea.trabajo) != 0) return -1;
+    if (bpvm_platform_sem_init(&s_tarea.hecho) != 0) {
+        bpvm_platform_sem_destroy(&s_tarea.trabajo);
+        return -1;
+    }
+    return 0;
+}
+
+void bpvm_repl_run_tarea(void* arg) {
+    (void) arg;
+    /* NO VUELVE NUNCA: en FreeRTOS, una tarea que vuelve cuelga la placa (prvTaskExitError). Sin sus avisos —la familia
+     * no llamó a `prepara`, o no pudo— se queda dormida y `viva` sigue a 0: el RUN de siempre. Tampoco escribe en el
+     * log al nacer: el log no tiene cerrojo y nacería a la vez que el arranque (lo dice quien la crea). */
+    if (bpvm_repl_run_tarea_prepara() != 0)
+        for (;;) bpvm_platform_thread_sleep_ms(60000);
+    s_tarea.viva = 1;
+    for (;;) {
+        bpvm_platform_sem_take(&s_tarea.trabajo);
+        const bpvm_repl_run_ops_t* r = run_ops();
+        bpvm_t* vm = s_tarea.vm;
+        int rs = (r && r->correr) ? r->correr(vm, s_tarea.depurando) : (int) bpvm_run(vm);
+        if (s_tarea.ensayo_ms > 0) bpvm_platform_thread_sleep_ms(s_tarea.ensayo_ms);
+        s_tarea.pila_libre = (long) bpvm_platform_pila_libre_actual();
+        s_tarea.rs = rs;
+        s_tarea.fin = 1;                    /* ya no escribe más: io puede cerrar la cola */
+        bpvm_io_despertar(vm);              /* y que lo vea ya, no al vencer su espera de 5 ms (la cola vive hasta el «hecho») */
+        bpvm_platform_sem_give(&s_tarea.hecho);
+    }
+}
+
+long bpvm_repl_run_pila_libre(void) { return s_tarea.pila_libre; }
+
+void bpvm_repl_run_tarea_ensayo(int espera_ms, int sabotaje) {
+    s_tarea.ensayo_ms = espera_ms > 0 ? espera_ms : 0;
+    s_tarea.sabotaje  = sabotaje ? 1 : 0;
+}
+
 /* La salida del programa: la llaman `io` (por líneas) y la VM si `io` no arrancó. El sink común (wire_v1_proto.c). */
 static void run_salida(const char* s, size_t n, void* user) {
     wire_v1_salida((wire_v1_salida_t*) user, s, n);
@@ -2136,14 +2203,34 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
     s_run_reset = -1;
     bpvm_set_poll(vm, run_poll_vm, NULL);      /* sólo si `io` no arranca: con `io`, el cable es suyo */
     bpvm_io_ops_t io_ops = { run_poll, run_salida, &s_run_salida };
-    int con_io = bpvm_io_start(vm, &io_ops, (size_t) r->io_cola) == 0;
-
-    log_printf("run: %s, sesión %ld", path, sesion);
-    /* REGLA (2-oct): elapsedMs, de `bpvm_run` a parar `io` (la última línea del programa, ya fuera). */
-    int64_t t0 = bpvm_platform_now_ms();
-    bpvm_status_t rs = r->correr ? (bpvm_status_t) r->correr(vm, depurando) : bpvm_run(vm);
-    /* Parar `io` ANTES de nada más: drena la cola entera, y el cable vuelve a ser de esta tarea (KILL_REPLY y EXITED). */
-    if (con_io) bpvm_io_stop(vm);
+    bpvm_status_t rs;
+    int64_t t0;
+    if (s_tarea.viva && bpvm_io_preparar(vm, &io_ops, (size_t) r->io_cola) == 0) {
+        /* V7/H12, etapas 0 y 1: el programa, en la tarea `run`; ésta hace de `io` hasta que acabe (el protocolo, arriba) */
+        log_printf("run: %s, sesión %ld", path, sesion);
+        /* REGLA (2-oct): elapsedMs, de `bpvm_run` a parar `io` (la última línea del programa, ya fuera). */
+        t0 = bpvm_platform_now_ms();
+        s_tarea.vm = vm;
+        s_tarea.depurando = depurando;
+        s_tarea.fin = 0;
+        bpvm_platform_sem_give(&s_tarea.trabajo);
+        {
+            static volatile int ya = 1;   /* el sabotaje de las pruebas: cerrar la cola sin esperar a `run` */
+            bpvm_io_lazo(vm, s_tarea.sabotaje ? &ya : &s_tarea.fin);
+        }
+        bpvm_platform_sem_take(&s_tarea.hecho);   /* `run` ha soltado la VM: desde aquí, es de esta tarea */
+        rs = (bpvm_status_t) s_tarea.rs;
+        bpvm_io_stop(vm);                          /* sin hilo que unir: libera las colas */
+    } else {
+        int con_io = bpvm_io_start(vm, &io_ops, (size_t) r->io_cola) == 0;
+        log_printf("run: %s, sesión %ld", path, sesion);
+        /* REGLA (2-oct): elapsedMs, de `bpvm_run` a parar `io` (la última línea del programa, ya fuera). */
+        t0 = bpvm_platform_now_ms();
+        rs = r->correr ? (bpvm_status_t) r->correr(vm, depurando) : bpvm_run(vm);
+        /* Parar `io` ANTES de nada más: drena la cola entera, y el cable vuelve a ser de esta tarea (KILL_REPLY y
+         * EXITED). */
+        if (con_io) bpvm_io_stop(vm);
+    }
     unsigned long dt = (unsigned long) (bpvm_platform_now_ms() - t0);
     wire_v1_salida_cierra(&s_run_salida);      /* un carácter que se quedó a medias: U+FFFD, no se tira */
     bpvm_set_poll(vm, NULL, NULL);

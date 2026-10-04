@@ -58,4 +58,8 @@ size_t bpvm_oq_pop_timed(bpvm_output_queue_t* q, char* dst, size_t max,
  * Tras esto, push descarta y pop drena lo que queda y devuelve 0. */
 void   bpvm_oq_close(bpvm_output_queue_t* q);
 
+/* V7/H12 — despierta al consumidor SIN cerrar: el productor ha acabado y quiere
+ * que el lazo de `io` lo vea ya, no al vencer su espera (ver bpvm_io_despertar). */
+void   bpvm_oq_despertar(bpvm_output_queue_t* q);
+
 #endif /* BPVM_COMM_QUEUE_INTERNAL_H */

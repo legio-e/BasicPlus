@@ -89,6 +89,22 @@ typedef struct {
  * A partir de aquí, `print` NO escribe: encola. */
 int  bpvm_io_start(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap);
 
+/* ─── V7/H12, etapas 0 y 1 (4-oct): `io` SIN HILO PROPIO ──────────────────────
+ * Con la tarea `run` (bpvm_repl.h), el programa corre en ella y `io` es la tarea
+ * del REPL, que ya existe: no se crea otro hilo. `preparar` hace lo de `start`
+ * menos el hilo (las colas y el cerrojo del cable), y `lazo` corre el lazo de
+ * siempre EN EL HILO QUE LO LLAMA. Sale cuando `*fin` se pone a 1 —lo pone quien
+ * produce la salida al acabar: después ya no entra nada— y la cola queda seca: es
+ * `lazo` quien la cierra, nunca el productor, así que quien destruye la cola
+ * (`bpvm_io_stop`, también en este hilo) es el único que la ha cerrado. */
+int  bpvm_io_preparar(struct bpvm* vm, const bpvm_io_ops_t* ops, size_t oq_cap);
+void bpvm_io_lazo(struct bpvm* vm, volatile int* fin);
+/* El productor, después de poner `*fin`: despierta al lazo para que lo vea ya y no
+ * al vencer su espera de 5 ms (sin cerrar la cola: eso es del lazo). La cola vive
+ * hasta que quien corre `lazo` la destruye, y eso es después de que el productor
+ * haya acabado del todo (el «hecho» de la tarea `run`). */
+void bpvm_io_despertar(struct bpvm* vm);
+
 /* ─── V6/A1.7 — LA COLA DE CONTROL (io → vm), y por qué hace falta ───────────
  *
  * El depurador tenía un problema de forma: su `next_cmd` LEE EL WIRE, y lo hace

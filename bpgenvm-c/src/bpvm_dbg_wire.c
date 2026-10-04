@@ -6,8 +6,12 @@
  *
  * El estado es GLOBAL a propósito (una sesión de depuración por dispositivo,
  * igual que antes): breakpoints pendientes pre-RUN + vm activa + snapshot del
- * frame pausado. No se toca desde varias tasks: el pause_cb corre en la MISMA
- * task del REPL que atiende los comandos (la VM está detenida dentro de él).
+ * frame pausado. No se toca desde dos tasks A LA VEZ: antes del RUN lo toca la
+ * del REPL (los comandos previos: PAUSE, SET_BP, CLR_BP); durante el RUN, sólo
+ * la que ejecuta el programa —desde V7/H12 (4-oct), la tarea `run`—, en el
+ * pause_cb, que saca los comandos de la cola de control que llena `io` (la VM
+ * está detenida dentro de él). Los avisos de la tarea `run` (bpvm_repl.c)
+ * ordenan el paso de una a otra.
  */
 #include "bpvm_dbg_wire.h"
 /* BPVM_MAX_BREAKPOINTS, bpvm_mem_read_i32/u32 y las structs completas (vm->memory,

@@ -35,6 +35,11 @@
  *   flash usada): está sin formatear, y el micro llega a la app en «casi» (V7/H7).
  *   --flash-falla: la «flash» del ENV no escribe: un ENV_SET contesta FLASH_ERROR y sigue
  *   el valor de antes (V7/H10, el board_mgr común, D2: #636).
+ *   --run-viejo: el RUN de antes de H12 (el programa en el hilo del REPL, `io` un hilo por
+ *   RUN), para comparar; por defecto, la tarea `run` (V7/H12, etapas 0 y 1).
+ *   --ensayo-hecho=MS y --sabotaje-cierre: SÓLO PRUEBAS de la tarea `run` (run_tarea_smoke):
+ *   la ventana ensanchada entre el final del programa y su aviso, y `io` cerrando la cola
+ *   sin esperar al programa (la prueba tiene que cazarlo).
  *
  * Ver docs/BPVM_WIRE_PROTOCOL.md (catálogo de mensajes) y
  *     docs/H9_KERNEL_CAPAS.md §Comandos de gestión de placa.
@@ -968,6 +973,7 @@ int main(int argc, char** argv) {
     const char* packs[8]; int n_packs = 0;
     int zona_sucia = 0;
     int port = 5099;
+    int run_viejo = 0, ensayo_hecho_ms = 0, sabotaje_cierre = 0;   /* V7/H12: la tarea `run` y sus pruebas */
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
@@ -982,6 +988,9 @@ int main(int argc, char** argv) {
         else if (!strncmp(a, "--fs-size=", 10))   fs_size_arg = parse_size(a + 10);
         else if (!strncmp(a, "--board=", 8))      g_board = a + 8;
         else if (!strcmp(a, "--flash-falla"))     g_flash_falla = 1;   /* V7/H10 (D2): la flash del ENV no escribe */
+        else if (!strcmp(a, "--run-viejo"))       run_viejo = 1;       /* V7/H12: el RUN de antes, para comparar */
+        else if (!strncmp(a, "--ensayo-hecho=", 15)) ensayo_hecho_ms = atoi(a + 15);   /* V7/H12: SÓLO PRUEBAS */
+        else if (!strcmp(a, "--sabotaje-cierre")) sabotaje_cierre = 1;               /* V7/H12: SÓLO PRUEBAS */
         else if (!strncmp(a, "--sd=", 5))         g_sd_path = a + 5;   /* V7/H3: la tarjeta */
         /* H10 — pantalla. Con GUI=0 en el build se aceptan y se ignoran: el IDE
          * las pasa siempre sin tener que saber cómo se compiló el sim. */
@@ -1067,6 +1076,16 @@ int main(int argc, char** argv) {
     (void) bpvm_pack_montar_arranque(1, sim_montar_packs, sim_log_linea);
     g_bm.packs_base = bpvm_pack_mounted(&g_bm.packs_size);
     bpvm_repl_set_ops(&SIM_REPL_OPS);   /* U3.24: la cintura, antes del primer mensaje */
+    /* V7/H12, etapas 0 y 1 (4-oct) — LA TAREA `run`: el programa, en un hilo propio que nace aquí y espera; este hilo,
+     * el del REPL, hace de `io` durante el RUN. Su pila, la de un hilo corriente del PC (8 MB): aquí corre también la
+     * GUI —LVGL y la ventana SDL, que se queda en el hilo que la creó—. Con `--run-viejo`, el RUN de antes. */
+    if (!run_viejo) {
+        static bpvm_platform_thread_handle_t s_run_hilo;
+        bpvm_repl_run_tarea_ensayo(ensayo_hecho_ms, sabotaje_cierre);
+        if (bpvm_repl_run_tarea_prepara() != 0
+                || bpvm_platform_thread_create_nativa(&s_run_hilo, bpvm_repl_run_tarea, NULL, 8u << 20) != 0)
+            fprintf(stderr, "sim: no se pudo crear la tarea run: sigue el RUN de antes\n");
+    }
     /* V7/H3 — la SD, como una placa con ranura: registrar y montar en el arranque, ENCIMA del FS. */
     if (g_sd_path) {
         bpvm_sd_placa_registrar(&SIM_SD, &bpvm_fs_fat_ops, "fichero");

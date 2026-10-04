@@ -792,7 +792,9 @@ check_sim() {
   # sim_dbg_smoke y run_smoke: V7/H10, el RUN común, paso 0 (3-oct) —el depurador por el cable (con #634: un KILL en
   # pausa), que llevaba meses con un .mod MOD5 que ya nadie cargaba; y lo que HOY hace el RUN en los casos que nada más
   # mira (un fallo de carga, un NUL, 512 controles, un carácter en el byte 512, un KILL sin programa)—.
-  local smokes="sim_smoke boardsim_smoke io_smoke list_trunc_smoke sd_smoke reset_smoke env_smoke sim_dbg_smoke run_smoke" total   # reset_smoke: V7/H8 (28-sep); env_smoke: #626
+  # run_tarea_smoke: V7/H12, etapas 0 y 1 (4-oct) —la tarea `run`: mil RUN seguidos, la salida tardía, el KILL barriendo
+  # el final del programa, la ventana ensanchada, el sabotaje que tiene que cazar y el interruptor (`--run-viejo`)—.
+  local smokes="sim_smoke boardsim_smoke io_smoke list_trunc_smoke sd_smoke reset_smoke env_smoke sim_dbg_smoke run_smoke run_tarea_smoke" total   # reset_smoke: V7/H8 (28-sep); env_smoke: #626
   total=$(( $(echo $smokes | wc -w) + 1 ))
   bash "$HERE/stdlib_pack.sh" || fails=$((fails+1))
   if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
