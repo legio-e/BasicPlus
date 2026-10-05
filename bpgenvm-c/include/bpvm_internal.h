@@ -797,29 +797,58 @@ _Static_assert(offsetof(struct bpvm, aot_helpers) == sizeof(void*),
 /*  Helpers (util.c)                                             */
 /* ============================================================ */
 
-/* Lectura big-endian del memory[] (sin alignment requirements). */
+/* Lectura big-endian del memory[] (sin alignment requirements).
+ *
+ * V7/H12 (#660) — UNA PALABRA, DE UNA VEZ. Con dos runs (y con dos núcleos), otro hilo puede leer una palabra mientras
+ * ésta se escribe: byte a byte —en la Pico, a -Os, cuatro STRB; en el PC el compilador los junta y no se ve— se lee a
+ * medias, y una referencia a medias es una dirección que no es de nadie. Alineada, se lee y se escribe de una vez: una
+ * carga o un almacén atómicos y relajados (sin orden: sólo de una pieza), con su orden de bytes —en la M33, LDR/STR y
+ * REV, más corto que los cuatro bytes—. Sin alinear —los operandos del código: nadie los escribe a la vez—, byte a byte
+ * como siempre. Y lo compartido está siempre alineado: los objetos y los arrays (bpvm.c), las globales en huecos de 4
+ * desde CS (GC-2) con el bloque de cada módulo alineado por el cargador, la pila. `may_alias`: la memoria es de bytes. */
+typedef uint32_t __attribute__((__may_alias__)) bpvm_u32_a;
+typedef uint16_t __attribute__((__may_alias__)) bpvm_u16_a;
+#if defined(__BYTE_ORDER__) && defined(__ORDER_BIG_ENDIAN__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+#define BPVM_BE32(x) (x)
+#define BPVM_BE16(x) (x)
+#else
+#define BPVM_BE32(x) __builtin_bswap32(x)
+#define BPVM_BE16(x) __builtin_bswap16(x)
+#endif
+/* Los caminos sin alinear, fuera de línea (bpvm_util.c): son los raros, y así cada sitio que lee o escribe sólo lleva
+ * el alineado y un salto (medido el 5-oct: con los dos en línea, el ejecutable del PC crecía un 7 %). */
+uint32_t bpvm_read_u32_be_bytes(const uint8_t* p);
+uint16_t bpvm_read_u16_be_bytes(const uint8_t* p);
+void     bpvm_write_u32_be_bytes(uint8_t* p, uint32_t v);
+void     bpvm_write_u16_be_bytes(uint8_t* p, uint16_t v);
 static inline uint32_t bpvm_read_u32_be(const uint8_t* p) {
-    return ((uint32_t)p[0] << 24) | ((uint32_t)p[1] << 16)
-         | ((uint32_t)p[2] <<  8) |  (uint32_t)p[3];
+    if (__builtin_expect((((uintptr_t) p) & 3u) == 0u, 1))
+        return BPVM_BE32(__atomic_load_n((const bpvm_u32_a*) (const void*) p, __ATOMIC_RELAXED));
+    return bpvm_read_u32_be_bytes(p);
 }
 static inline int32_t bpvm_read_i32_be(const uint8_t* p) {
     return (int32_t) bpvm_read_u32_be(p);
 }
 static inline uint16_t bpvm_read_u16_be(const uint8_t* p) {
-    return (uint16_t)(((uint32_t)p[0] << 8) | (uint32_t)p[1]);
+    if (__builtin_expect((((uintptr_t) p) & 1u) == 0u, 1))
+        return BPVM_BE16(__atomic_load_n((const bpvm_u16_a*) (const void*) p, __ATOMIC_RELAXED));
+    return bpvm_read_u16_be_bytes(p);
 }
 static inline int16_t bpvm_read_i16_be(const uint8_t* p) {
     return (int16_t) bpvm_read_u16_be(p);
 }
 static inline void bpvm_write_u32_be(uint8_t* p, uint32_t v) {
-    p[0] = (uint8_t)(v >> 24);
-    p[1] = (uint8_t)(v >> 16);
-    p[2] = (uint8_t)(v >>  8);
-    p[3] = (uint8_t) v;
+    if (__builtin_expect((((uintptr_t) p) & 3u) == 0u, 1))
+        __atomic_store_n((bpvm_u32_a*) (void*) p, BPVM_BE32(v), __ATOMIC_RELAXED);
+    else
+        bpvm_write_u32_be_bytes(p, v);
 }
 /* V7/H2 (#523) — u16 big-endian (el sello +6 del descriptor y las ranuras efectivas). */
 static inline void bpvm_write_u16_be(uint8_t* p, uint16_t v) {
-    p[0] = (uint8_t) (v >> 8); p[1] = (uint8_t) v;
+    if (__builtin_expect((((uintptr_t) p) & 1u) == 0u, 1))
+        __atomic_store_n((bpvm_u16_a*) (void*) p, (uint16_t) BPVM_BE16(v), __ATOMIC_RELAXED);
+    else
+        bpvm_write_u16_be_bytes(p, v);
 }
 static inline void bpvm_write_i32_be(uint8_t* p, int32_t v) {
     bpvm_write_u32_be(p, (uint32_t) v);
@@ -904,13 +933,27 @@ int  bpvm_events_con_deuda(const bpvm_t* vm, const bpvm_thread_t* tc);   /* V7/H
  * (con TAG) pueden morir; null/constantes nunca. Lo consulta el deref de PROGRAMA
  * (opcodes de campo/array/invoke) para gritar "objeto eliminado". */
 static inline int bpvm_ref_dead(const bpvm_t* vm, bpref_t r) {
-    if ((r.v & BPVM_HANDLE_TAG) == 0u) return 0;
-    uint32_t idx = (uint32_t) r.v & ~BPVM_HANDLE_TAG;
     uint32_t gen = (uint32_t) (r.v >> 32);   /* generación embebida en la palabra alta */
+    if ((r.v & BPVM_HANDLE_TAG) == 0u) {
+        /* V7/H12 (#660) — sin TAG es null o una constante del bloque de datos, y su palabra alta es SIEMPRE 0. Si no lo
+         * es, es una referencia a medio escribir por otro run (la generación de un valor y la palabra baja de otro): hoy
+         * se daba por viva y se resolvía a la dirección 0, donde la «longitud» de un array son los bytes del principio
+         * de la memoria y un ASTORE escribía en cualquier sitio. Muerta: «objeto eliminado». (El sabotaje: SÓLO PRUEBAS,
+         * test-palabras.) */
+        if (gen == 0u || bpvm_sabotaje_desgarro) return 0;
+        bpvm_ref_rota_report(gen, (uint32_t) r.v, vm->handles.next);
+        return 1;
+    }
+    uint32_t idx = (uint32_t) r.v & ~BPVM_HANDLE_TAG;
     /* Paso 4b: compara la gen del handle con la del slot. Monotónico → todo handle
      * lleva gen=0, equivale al dead-flag; en 4c (reuso) un slot reciclado tiene gen
      * bumpeada y un handle rancio no matchea → grita. */
-    if (vm->handles.gen == NULL || idx == 0u || idx >= vm->handles.next) return 0;
+    /* V7/H12 (#660) — un handle que no puede existir (sin tabla, el índice 0 o fuera de ella) ya no se da por vivo: se
+     * resolvía a la dirección 0, como arriba. */
+    if (vm->handles.gen == NULL || idx == 0u || idx >= vm->handles.next) {
+        bpvm_ref_rota_report(gen, (uint32_t) r.v, vm->handles.next);
+        return 1;
+    }
     if (vm->handles.gen[idx] == gen) return 0;
     bpvm_uaf_report(idx, gen, vm->handles.gen[idx], vm->handles.next);
     return 1;

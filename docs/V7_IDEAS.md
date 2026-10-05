@@ -5120,6 +5120,29 @@ responsabilidad nuestra, a:=a+1 siendo a una variable local debe funcionar siemp
 compartidas, del programador (con los Mutex de BP); la VM y lo privado de cada hilo, nuestros. Se hacen (a), (b) y
 (c); la (d), no.
 
+#### El camino fino, hecho en el PC (5-oct; `#660`, `#661`)
+
+- **(a)**, como en el diseño, con un ajuste medido: los caminos sin alinear, FUERA de línea (`bpvm_util.c`) y el
+  alineado marcado como el probable. Con los dos en línea, el ejecutable del PC crecía un 7 % y el cálculo iba un 9,6 %
+  más lento; así, en una A/B alternada contra la VM de `#662` (la mediana de siete): cálculo +1,9 % —ruido—, arrays
+  −15 %, objetos −13 %, cadenas igual. En la Pico, el código crece 2 040 bytes (+0,5 %). Y el cargador alinea el bloque
+  de cada módulo en las dos VMs.
+- **(b)**, más sencilla que lo escrito: no hace falta rehacer los opcodes para resolver una sola vez. Con varios runs,
+  matar un handle sube su generación en el acto pero deja su dirección y aparta su número hasta el GC (que los aplica
+  antes de marcar): resolver dos veces en un paso da la misma dirección, la de un bloque que nadie reutiliza hasta el
+  GC.
+- **(c)**, y además: con TAG y un índice que no existe, muerta (se daba por viva y se resolvía a la dirección 0); el
+  control en `PRINT_STRING`/`PRINT_STR_NONL`, los únicos que recorrían una cadena sin mirarla (censados los demás: los
+  20 opcodes que resuelven, con él; `INSTANCEOF`/`CHECKCAST` validan la dirección por su cuenta); y su aviso propio, por
+  el canal normal y las tres primeras veces (el urgente vuelca el log a la flash, y un programa con una carrera puede
+  dar muchas).
+- **La prueba**, `test-palabras` (en la red): (a) dos hilos de verdad, 292 millones de lecturas mientras el otro escribe,
+  ninguna a medias; (b) soltar con varios runs y otra reserva no hereda el número, el GC lo devuelve; (c) las
+  referencias que no pueden existir, muertas, y null, una constante y un handle vivo, vivos. Tres sabotajes, rojos.
+  `test-smphandles`, que contaba con el reciclado en el acto, hace lo del GC cada 64 vueltas.
+- **miVM**: su `--workers` sigue con su carrera B1 (experimental desde V2): fuera de H12. Con un worker, nada de esto
+  cambia lo que hace; sólo el bloque alineado, igual en las dos (la paridad).
+
 **Las pruebas** (en el PC, con dos runs, cada una con su sabotaje): (a)+(c), un hilo que alterna referencias (y null)
 en un campo y otro que lo lee y lo usa sin parar, con la ventana ensanchada entre las dos palabras de un almacén (un
 gancho de prueba): con las piezas, sólo valores buenos o «objeto eliminado» atrapado; sin ellas, el proceso roto o un

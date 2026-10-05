@@ -859,6 +859,9 @@ void bpvm_gc_cuerpo(bpvm_t* vm) {
      * (ejecutando bytecode, con objetos recién creados que el GC aún no ve). No debe pasar nunca: se cuenta, y el fin del
      * programa lo dice (scheduler.c, acabar). Es lo que mira la prueba del `gc()` con dos runs (test_cola, parte 5). */
     if (vm->smp && vm->smp->running_workers > 1) vm->smp->gc_con_otro_dentro++;
+    /* V7/H12 (#661) — los números que mató un `owner` con varios runs, de vuelta, ANTES de marcar: una referencia
+     * rancia a uno de ellos ya no alcanza su bloque (bpvm_free_owned se lo dejó al GC), y el barrido lo libera. */
+    bpvm_handles_aplicar_pendientes(vm);
     gc_mark_phase(vm);
     if (vm->gc_descarrilo) return;   /* V7 #494: ni cerrar Files ni reciclar handles ni barrer */
     bpvm_files_gc(vm);         /* V7/H3 (#491): un File inalcanzable se cierra AQUÍ, con su bloque intacto y su handle vivo */

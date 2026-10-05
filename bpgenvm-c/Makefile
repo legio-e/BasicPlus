@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-logmt test-reserva test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1361,6 +1361,24 @@ test-reserva: $(LIBOBJ)
 	   echo "FAIL test-reserva: el sabotaje pasa por verde"; cat build/reserva_sab.out; exit 1; \
 	 else echo "  (rojo, como debe: por el camino normal, el error no cabe con el heap lleno)"; fi
 	@echo "PASS test-reserva (y su sabotaje, rojo)"
+
+# V7/H12 (5-oct), #660 y #661 — EL CAMINO FINO: las tres piezas que impiden que un programa que comparte memoria sin
+# Mutex rompa la VM (V7_IDEAS §H12 «El camino fino»): (a) las palabras alineadas, de una vez (dos hilos de verdad:
+# uno escribe, otro lee, y ninguna a medias); (b) con varios runs, el número de un handle soltado, de vuelta en el GC;
+# (c) la referencia que no puede existir, muerta. Un sabotaje por pieza, cada uno ROJO.
+PALABRAS_BIN = build/test_palabras.exe
+test-palabras: $(LIBOBJ)
+	@mkdir -p build
+	@$(CC) $(CFLAGS) -Isrc test/test_palabras.c $(LIBOBJ) -o $(PALABRAS_BIN) $(LDFLAGS)
+	@echo "--- #660/#661: el camino fino (esperado: todo ok y la linea OK) ---"
+	@timeout 120 ./$(PALABRAS_BIN) 2>/dev/null || { echo "FAIL test-palabras"; exit 1; }
+	@echo "--- y sus tres sabotajes (esperado: los tres ROJOS) ---"
+	@for s in bytes reciclar desgarro; do \
+	   if timeout 120 ./$(PALABRAS_BIN) --sabotaje-$$s >build/palabras_sab.out 2>/dev/null; then \
+	     echo "FAIL test-palabras: el sabotaje --sabotaje-$$s pasa por verde"; cat build/palabras_sab.out; exit 1; \
+	   else echo "  (rojo, como debe: --sabotaje-$$s: $$(grep -c '^FALLO' build/palabras_sab.out) comprobacion(es) mal)"; fi; \
+	 done
+	@echo "PASS test-palabras (y sus tres sabotajes, rojos)"
 
 # V7/H12, etapa 2b (5-oct) — LA VARIABLE DE CONDICIÓN DE FREERTOS (src/platform_freertos_cond.inc, la de las tres
 # familias), con el kernel de FreeRTOS DE VERDAD en el PC: su port de Windows (portable/MSVC-MingW), que no es el de

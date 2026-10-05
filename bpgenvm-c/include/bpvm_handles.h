@@ -57,6 +57,14 @@ typedef struct {
                             * crece / OOM). Una colecta por cruce, cero aritmética por alloc. */
     int       oom_avisado; /* el aviso de "sin sitio para más handles", una vez POR EJECUCIÓN:
                             * un static sería una vez por ARRANQUE y en la Pico calló (29-ago) */
+    /* V7/H12 (#661) — con más de un run, los números que mata un `owner` ESPERAN AL GC: su generación sube en el acto
+     * (las referencias rancias mueren ya: el contrato B), pero su dirección sigue en la tabla y no vuelven a la lista
+     * libre hasta que el GC, con el mundo parado y antes de marcar, los aplica (bpvm_handles_aplicar_pendientes). Así
+     * un paso que esté a mitad en otro run no ve su número reciclado ni la dirección 0 (V7_IDEAS §H12 «El camino
+     * fino», la pieza b). Con un run, como siempre: en el acto. */
+    uint32_t* pend_list;
+    uint32_t  pend_top;
+    uint32_t  pend_cap;
 } bpvm_handles_t;
 
 void    bpvm_handles_init(struct bpvm* vm);     /* tabla vacía (lazy), el tope del build, la marca sin cruzar */
@@ -84,11 +92,21 @@ int     bpvm_handles_grow(struct bpvm* vm);
  * (bump gen + addr=0 + free-list), para que un handle rancio GRITE. ANTES del sweep
  * de heap. Bajo el STW. */
 void    bpvm_handles_gc_sweep(struct bpvm* vm);
+/* V7/H12 (#661) — los números que mató un `owner` con varios runs, de vuelta: su dirección a 0 y su número a la lista
+ * libre. La llama el GC (bpvm_gc_cuerpo) con el mundo parado, ANTES de marcar: una referencia rancia ya no alcanza el
+ * bloque, y el barrido lo libera. */
+void    bpvm_handles_aplicar_pendientes(struct bpvm* vm);
+/* SÓLO PRUEBAS (test/test_palabras.c): cada uno, lo de antes, para ver la prueba en rojo. */
+extern int bpvm_sabotaje_reciclar;   /* #661: con varios runs, el número de un `owner` soltado, reciclado en el acto */
+extern int bpvm_sabotaje_desgarro;   /* #660: una referencia sin TAG con la palabra alta distinta de 0, viva */
 /* #430 — el tope en runtime; cliente real: el host de pruebas (--handlecap). */
 void    bpvm_set_handle_cap_max(struct bpvm* vm, uint32_t slots);
 /* H13/#17 — cuando el deref grita, DECIR QUÉ handle (bpvm_util.c): índice, la gen
  * del handle, la del slot y el next — distingue un truncamiento de un uso tras
  * liberar, que son bugs distintos con arreglos distintos. */
 void    bpvm_uaf_report(uint32_t idx, uint32_t gen_handle, uint32_t gen_slot, uint32_t handle_next);
+/* V7/H12 (#660) — una referencia que no puede existir (a medio escribir por otro run, o un índice fuera de la tabla):
+ * decirlo, por el canal normal y las tres primeras veces (bpvm_util.c). */
+void    bpvm_ref_rota_report(uint32_t alta, uint32_t baja, uint32_t handle_next);
 
 #endif /* BPVM_HANDLES_H */

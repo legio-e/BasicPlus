@@ -27,7 +27,14 @@ void bpvm_handles_init(bpvm_t* vm) {
     vm->handles.cap_max   = BPVM_HANDLE_CAP_MAX;   /* #430: tope del puerto (0 = sin tope) */
     vm->handles.pressure  = 0u;                    /* #430: la marca, sin cruzar */
     vm->handles.oom_avisado = 0;
+    vm->handles.pend_list = NULL;                  /* V7/H12 #661: los números que esperan al GC */
+    vm->handles.pend_top  = 0;
+    vm->handles.pend_cap  = 0;
 }
+
+/* SÓLO PRUEBAS (test/test_palabras.c) — bpvm_handles.h. */
+int bpvm_sabotaje_reciclar = 0;
+int bpvm_sabotaje_desgarro = 0;
 
 /* #451 — `addr` y `gen` NO SE LIBERAN: desde que la tabla vive dentro del bloque
  * de la VM apuntan a `vm->memory` y se van con él. La free-list sí sale del
@@ -36,6 +43,23 @@ void bpvm_handles_destroy(bpvm_t* vm) {
     bpvm_free(vm->handles.free_list);
     vm->handles.free_list = NULL;
     vm->handles.free_top = vm->handles.free_cap = 0;
+    bpvm_free(vm->handles.pend_list);
+    vm->handles.pend_list = NULL;
+    vm->handles.pend_top = vm->handles.pend_cap = 0;
+}
+
+/* Una de las dos listas de números (la libre, los que esperan al GC): apilar, creciendo con el malloc de plataforma.
+ * 0 si no hay memoria para crecer (quien llama decide). */
+static int lista_apilar(uint32_t** lista, uint32_t* top, uint32_t* cap, uint32_t idx) {
+    if (*top >= *cap) {
+        uint32_t nc = *cap ? *cap * 2u : 256u;
+        uint32_t* nl = (uint32_t*) bpvm_realloc(*lista, (size_t) nc * sizeof(uint32_t));
+        if (!nl) return 0;
+        *lista = nl;
+        *cap   = nc;
+    }
+    (*lista)[(*top)++] = idx;
+    return 1;
 }
 
 static void handle_kill_idx(bpvm_t* vm, uint32_t idx);   /* def. más abajo (junto a bpvm_handle_kill) */
@@ -300,14 +324,30 @@ static void handle_kill_idx(bpvm_t* vm, uint32_t idx) {
     if (vm->handles.gen == NULL || idx == 0u || idx >= vm->handles.next) return;
     vm->handles.gen[idx]++;                        /* gen bumpeada → handles rancios mueren */
     vm->handles.addr[idx] = 0u;                    /* slot libre en la tabla (paso 6) */
-    if (vm->handles.free_top >= vm->handles.free_cap) {
-        uint32_t nc = vm->handles.free_cap ? vm->handles.free_cap * 2u : 256u;
-        uint32_t* nl = (uint32_t*) bpvm_realloc(vm->handles.free_list, (size_t) nc * sizeof(uint32_t));
-        if (!nl) return;   /* sin free-list no reciclamos este slot (se pierde, no se corrompe) */
-        vm->handles.free_list = nl;
-        vm->handles.free_cap  = nc;
+    /* reciclar el slot; sin free-list no lo reciclamos (se pierde, no se corrompe) */
+    (void) lista_apilar(&vm->handles.free_list, &vm->handles.free_top, &vm->handles.free_cap, idx);
+}
+
+/* V7/H12 (#661) — lo mismo con varios runs, en dos tiempos: la generación sube YA (un handle rancio grita desde el paso
+ * siguiente), pero la dirección y el número esperan al GC (bpvm_handles_aplicar_pendientes). Un paso que esté a mitad
+ * en otro run y vuelva a resolver este handle —hoy, ALOAD/ASTORE resuelven dos veces: la longitud y el elemento—
+ * obtiene la MISMA dirección: la de un bloque soltado que nadie reutiliza hasta el GC (bpvm_free_owned se lo deja
+ * desde la 2b). Ni el número de otro objeto ni la dirección 0. Sin memoria para apuntarlo: la dirección se queda y el
+ * barrido de tabla del GC lo recoge cuando su bloque no se alcance (bpvm_handles_gc_sweep). */
+static void handle_kill_aplazado(bpvm_t* vm, uint32_t idx) {
+    if (vm->handles.gen == NULL || idx == 0u || idx >= vm->handles.next) return;
+    vm->handles.gen[idx]++;
+    (void) lista_apilar(&vm->handles.pend_list, &vm->handles.pend_top, &vm->handles.pend_cap, idx);
+}
+
+void bpvm_handles_aplicar_pendientes(bpvm_t* vm) {
+    for (uint32_t k = 0; k < vm->handles.pend_top; k++) {
+        uint32_t idx = vm->handles.pend_list[k];
+        if (idx == 0u || idx >= vm->handles.next || vm->handles.addr[idx] == 0u) continue;
+        vm->handles.addr[idx] = 0u;
+        (void) lista_apilar(&vm->handles.free_list, &vm->handles.free_top, &vm->handles.free_cap, idx);
     }
-    vm->handles.free_list[vm->handles.free_top++] = idx;   /* reciclar el slot */
+    vm->handles.pend_top = 0;
 }
 
 /* Paso 4c — libera el slot de un handle (owner-free): delega en handle_kill_idx.
@@ -322,7 +362,10 @@ int bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
      * free-list, etc). check+kill atómicos bajo el lock = el compareAndSet(slot,g,g+1).
      * V7/H12, 2b — y lo DICE: el que lo mató es el único que sigue soltándolo (bpvm_free_owned). */
     if (!bpvm_ref_dead(vm, r)) {
-        handle_kill_idx(vm, (uint32_t) r.v & ~BPVM_HANDLE_TAG);
+        uint32_t idx = (uint32_t) r.v & ~BPVM_HANDLE_TAG;
+        /* V7/H12 (#661) — con varios runs, en dos tiempos (el sabotaje: SÓLO PRUEBAS, test-palabras) */
+        if (vm->smp != NULL && !bpvm_sabotaje_reciclar) handle_kill_aplazado(vm, idx);
+        else                                            handle_kill_idx(vm, idx);
         mato = 1;
     }
     bpvm_smp_unlock(vm);

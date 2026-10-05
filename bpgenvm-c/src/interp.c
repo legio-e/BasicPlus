@@ -1765,6 +1765,10 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_PRINT_STRING:
         case OP_PRINT_STR_NONL: {
             sp -= BPVM_REF_SIZE; bpref_t s = bpref_load(vm, sp);
+            /* V7/H12 (#660) — el contrato B también aquí: era el único opcode que recorre un objeto sin mirarlo antes, y
+             * una cadena soltada (o una referencia a medio escribir por otro run) se resolvía a la dirección 0, cuya
+             * «longitud» son los bytes del principio de la memoria: cientos de millones que recorrer. */
+            if (bpvm_ref_dead(vm, s)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");
             const char* txt = NULL;
             uint32_t nbytes = 0;
             if (!bpref_is_null(s)) {

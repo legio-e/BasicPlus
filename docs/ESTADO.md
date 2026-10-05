@@ -1185,6 +1185,11 @@ la C6, la P4 y la Nucleo.
   de protección y es el usuario el que ha de utilizarlos. El resto es responsabilidad nuestra, a:=a+1 siendo a una
   variable local debe funcionar siempre.»* Y *«OK a a, b y c»*: las tres piezas del camino fino, para que un programa
   que no protege lo suyo lea valores malos pero nunca rompa la VM; fuera la (d).
+- **El camino fino, hecho en el PC** (`#660` y `#661`, cerradas; `V7_IDEAS` §«El camino fino, hecho en el PC»): las
+  palabras alineadas, de una vez (y el bloque de cada módulo, alineado, en las dos VMs); con varios runs, el número de
+  un handle soltado, de vuelta en el GC; la referencia que no puede existir, muerta (y `PRINT_STRING`, mirándola). En
+  el PC, igual o más rápido (arrays −15 %, objetos −13 %); en la Pico, +2 040 bytes de código. `test-palabras`, nueva,
+  con tres sabotajes; `test-smphandles`, puesta al día (contaba con el reciclado en el acto).
 - **El diseño del camino fino** (`#660`, `#661`; `V7_IDEAS` §«El camino fino»): palabra a palabra para lo compartido
   (y un cerrojo pequeño sólo para lo no alineado), una resolución validada por paso y el número de handle de vuelta en
   el GC; miVM tiene lo mismo (la memoria byte a byte, el número reciclado en el acto): (b) y (c) primero allí.

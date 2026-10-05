@@ -310,7 +310,11 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      *                ├─ data block (data_size bytes)
      *                └─ code block (code_size bytes)   [XIP: NO ocupa RAM]
      */
-    uint32_t module_base = vm->next_free_address;
+    /* V7/H12 (#660) — el bloque de cada módulo, ALINEADO a 4: sus globales están en huecos de 4 desde CS (GC-2), y con
+     * la base alineada quedan alineadas en la memoria, que es lo que pide escribirlas de una vez (bpvm_write_u32_be).
+     * Sin esto, el de un segundo módulo empezaba donde acabó el anterior (+64, abajo), cualquiera que fuese su tamaño.
+     * Igual en miVM (ModuleManager.loadModuleToMemory): las dos, la misma memoria. */
+    uint32_t module_base = (vm->next_free_address + 3u) & ~3u;
     uint32_t ext_table_size = (ext_count + (uint32_t) mod->ref_count) * BPVM_EXT_ENTRY_SIZE;   /* V7/H2 (#523): + las refs */
     uint32_t data_start  = module_base + ext_table_size;
     uint32_t code_start  = data_start + data_size;      /* = CS (ancla, SIEMPRE RAM) */

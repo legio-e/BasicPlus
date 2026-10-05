@@ -196,3 +196,32 @@ void bpvm_uaf_report(uint32_t idx, uint32_t gen_handle, uint32_t gen_slot,
                           " de verdad — el objeto se libero y alguien lo siguio usando.");
     }
 }
+
+/* V7/H12 (#660) — una referencia que NO PUEDE EXISTIR: sin TAG y con la palabra alta distinta de 0, o con TAG y un
+ * índice fuera de la tabla. Lo normal es un programa que comparte un campo sin Mutex y lee la referencia mientras otro
+ * run la escribe (la palabra alta de un valor y la baja de otro): el programa recibe «objeto eliminado» (bpvm_ref_dead).
+ * Por el canal normal, no el urgente (un programa así puede dar muchas, y el urgente vuelca el log a la flash), y las
+ * tres primeras: lo que se busca es el porqué, no la cuenta. */
+void bpvm_ref_rota_report(uint32_t alta, uint32_t baja, uint32_t handle_next) {
+    static unsigned dichas = 0;
+    if (dichas >= 3u) return;
+    dichas++;
+    bpvm_diag("[bpvm] referencia ROTA: palabra alta 0x%08lx, baja 0x%08lx (slots en uso=%lu): a medio escribir por otro"
+              " hilo (un campo compartido sin Mutex) o un indice que no existe; el programa recibe «objeto eliminado»",
+              (unsigned long) alta, (unsigned long) baja, (unsigned long) handle_next);
+}
+
+/* V7/H12 (#660) — los caminos SIN ALINEAR de bpvm_read/write_u32/u16_be (bpvm_internal.h): byte a byte, como siempre.
+ * Fuera de línea porque son los raros (los operandos del código); lo alineado, de una vez, va en línea. */
+uint32_t bpvm_read_u32_be_bytes(const uint8_t* p) {
+    return ((uint32_t) p[0] << 24) | ((uint32_t) p[1] << 16) | ((uint32_t) p[2] << 8) | (uint32_t) p[3];
+}
+uint16_t bpvm_read_u16_be_bytes(const uint8_t* p) {
+    return (uint16_t) (((uint32_t) p[0] << 8) | (uint32_t) p[1]);
+}
+void bpvm_write_u32_be_bytes(uint8_t* p, uint32_t v) {
+    p[0] = (uint8_t) (v >> 24); p[1] = (uint8_t) (v >> 16); p[2] = (uint8_t) (v >> 8); p[3] = (uint8_t) v;
+}
+void bpvm_write_u16_be_bytes(uint8_t* p, uint16_t v) {
+    p[0] = (uint8_t) (v >> 8); p[1] = (uint8_t) v;
+}

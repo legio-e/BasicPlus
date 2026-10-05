@@ -33,6 +33,14 @@ static int     g_iters;
 
 typedef struct { int tid; long corr; } targ_t;
 
+/* V7/H12 (#661, 5-oct) — con varios workers, el número de un handle soltado ESPERA AL GC (bpvm_handles.c): sin GC, la
+ * tabla se llenaba. Lo que hace el GC con el mundo parado, aquí bajo el mismo cerrojo que el alta y la baja (nadie
+ * resuelve un handle ya soltado), cada 64 vueltas. */
+static void como_el_gc(void) {
+    bpvm_smp_lock(g_vm);
+    bpvm_handles_aplicar_pendientes(g_vm);
+    bpvm_smp_unlock(g_vm);
+}
 static void* worker(void* p) {
     targ_t* a = (targ_t*) p;
     uint32_t base = (uint32_t)(a->tid + 1) * 1000000u;   /* !=0, único por thread */
@@ -42,6 +50,7 @@ static void* worker(void* p) {
         uint32_t got  = bpref_deref(g_vm, h);
         if (got != addr) a->corr++;                      /* otro thread robó el slot */
         bpvm_handle_kill(g_vm, h);
+        if ((i & 63) == 63) como_el_gc();
     }
     return NULL;
 }
@@ -75,6 +84,7 @@ int main(int argc, char** argv) {
     {
         bpref_t h1 = bpvm_handle_register(g_vm, 0xAAAAu);   /* idx=K, gen g */
         bpvm_handle_kill(g_vm, h1);                          /* gen g+1, slot K a free-list */
+        if (!nolock) como_el_gc();                           /* #661: con varios workers, K vuelve en el GC */
         bpref_t h2 = bpvm_handle_register(g_vm, 0xBBBBu);   /* reusa K, gen g+1 (ocupante vivo) */
         bpvm_handle_kill(g_vm, h1);                          /* RANCIO: sin gen-check mata h2 */
         /* h2 debe SEGUIR vivo: su addr intacto y su gen matchea. */
@@ -89,6 +99,7 @@ int main(int argc, char** argv) {
         bpref_t h = bpvm_handle_register(g_vm, (uint32_t) i + 1);
         bpvm_handle_kill(g_vm, h);
     }
+    if (!nolock) como_el_gc();   /* #661: los 8192, a la lista libre */
 
     pthread_t th[64];
     targ_t    ta[64];

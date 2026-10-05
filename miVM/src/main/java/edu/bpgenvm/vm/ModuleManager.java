@@ -833,7 +833,9 @@ public class ModuleManager {
     }
 
     private void loadModuleToMemory(ModSource source, String moduleName) throws IOException {
-        int moduleBase = nextFreeAddress;
+        // V7/H12 (#660) — el bloque de cada módulo, ALINEADO a 4, como en la VM-C (loader.c): sus globales están en
+        // huecos de 4 desde CS (GC-2) y la VM-C las escribe de una vez si están alineadas. Las dos, la misma memoria.
+        int moduleBase = (nextFreeAddress + 3) & ~3;
 
         try (DataInputStream in = source.open()) {
             int magic1 = in.readInt();
