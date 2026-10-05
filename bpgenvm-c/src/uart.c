@@ -76,14 +76,17 @@ void bpvm_uart_rx_ring_enable(int bus) {
     bpvm_diag("[uart] sin ranura de buffer RX para el bus %d (hay %d): ese bus seguira perdiendo bytes", bus, BPVM_UART_RX_SLOTS);
 }
 
-/* Desde la ISR de la familia. Sin cerrojos: un productor y un consumidor. */
+/* Desde la ISR de la familia. Sin cerrojos: un productor y un consumidor. V7/H12 3.1, paso 6 — con dos núcleos, la
+ * ISR y el que lee pueden ir cada uno en uno: el byte se escribe ANTES de publicar `head` (release) y el sitio se
+ * reutiliza DESPUÉS de ver el `tail` del consumidor (acquire); su gemelo, en rx_drenar. */
 void bpvm_uart_rx_push(int bus, uint8_t b) {
     uart_rx_t* r = rx_de(bus);
     if (!r) return;
-    uint16_t nh = (uint16_t) ((r->head + 1u) % BPVM_UART_RX_CAP);
-    if (nh == r->tail) { r->perdidos++; return; }   /* lleno: se cuenta, no se calla */
-    r->buf[r->head] = b;
-    r->head = nh;
+    uint16_t h  = r->head;   /* sólo lo escribe esta ISR */
+    uint16_t nh = (uint16_t) ((h + 1u) % BPVM_UART_RX_CAP);
+    if (nh == __atomic_load_n(&r->tail, __ATOMIC_ACQUIRE)) { r->perdidos++; return; }   /* lleno: se cuenta, no se calla */
+    r->buf[h] = b;
+    __atomic_store_n(&r->head, nh, __ATOMIC_RELEASE);
 }
 
 static int rx_cuantos(const uart_rx_t* r) {
@@ -100,9 +103,11 @@ static int rx_drenar(uart_rx_t* r, uint8_t* data, size_t n, int timeout_ms) {
          * hilos que leen el mismo bus (una carrera del programa) dejaban `tail` por delante de `head` —available()
          * daba 511 y salía basura— (la ISR, el productor, no lo toca). Sin esperar dentro. */
         bpvm_cerrojo_comun_cerrar();
-        while (got < n && r->tail != r->head) {
-            data[got++] = r->buf[r->tail];
-            r->tail = (uint16_t) ((r->tail + 1u) % BPVM_UART_RX_CAP);
+        while (got < n) {
+            uint16_t t = r->tail;   /* lo escribe sólo el consumidor (bajo el cerrojo común) */
+            if (t == __atomic_load_n(&r->head, __ATOMIC_ACQUIRE)) break;   /* 3.1, paso 6: ver bpvm_uart_rx_push */
+            data[got++] = r->buf[t];
+            __atomic_store_n(&r->tail, (uint16_t) ((t + 1u) % BPVM_UART_RX_CAP), __ATOMIC_RELEASE);
         }
         bpvm_cerrojo_comun_abrir();
         if (got >= n) break;

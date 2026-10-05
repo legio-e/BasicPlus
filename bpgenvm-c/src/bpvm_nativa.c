@@ -182,7 +182,7 @@ void bpvm_nativa_punto_control(struct bpvm* vm) {
         /* En su ejecutor: cede si hay un `kill` (el planificador lo verá y parará el programa) o si ya ha corrido
          * su rebanada (los demás hilos, y el cable: el planificador atiende al IDE entre quantums). Al reanudarse,
          * sigue en su bucle como si nada. */
-        if (vm->kill_requested || bpvm_platform_now_ms() - n->t_corriendo >= BPVM_NATIVA_REBANADA_MS) {
+        if (bpvm_kill_pedido(vm) || bpvm_platform_now_ms() - n->t_corriendo >= BPVM_NATIVA_REBANADA_MS) {
             tc->status = BPVM_THREAD_RUNNABLE;
             bpvm_nativa_ceder(vm, tc);
         }
@@ -190,7 +190,7 @@ void bpvm_nativa_punto_control(struct bpvm* vm) {
     }
     /* Sin ejecutor no puede suspenderse; pero un `kill` sí la para: lanza por el límite de fallos de #186 (si un
      * try/catch de BP lo atrapara, el planificador para el programa en el siguiente quantum). */
-    if (vm->kill_requested)
+    if (bpvm_kill_pedido(vm))
         vm->aot_helpers->throw_runtime(vm, "el programa se ha detenido (kill) dentro de una native");
 }
 

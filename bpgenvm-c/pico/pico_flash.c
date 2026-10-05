@@ -29,7 +29,8 @@ int pico_flash_erase(uint32_t off, uint32_t len) {
     if (len == 0) return 0;
     if (off % FLASH_SECTOR_SIZE != 0 || len % FLASH_SECTOR_SIZE != 0) return -1;
     if (!zona_valida(off, len)) return -1;
-    uint32_t tok = pico_flash_lock_begin();
+    uint32_t tok;
+    if (pico_flash_lock_begin(&tok) != 0) return -1;   /* V7/H12 3.1: con dos núcleos, sin las dos víctimas */
     flash_range_erase(off, len);
     pico_flash_lock_end(tok);
     return 0;
@@ -40,7 +41,8 @@ int pico_flash_write(uint32_t off, const uint8_t* src, uint32_t len) {
     if (src == NULL) return -1;
     if (off % FLASH_PAGE_SIZE != 0 || len % FLASH_PAGE_SIZE != 0) return -1;
     if (!zona_valida(off, len)) return -1;
-    uint32_t tok = pico_flash_lock_begin();
+    uint32_t tok;
+    if (pico_flash_lock_begin(&tok) != 0) return -1;   /* V7/H12 3.1: con dos núcleos, sin las dos víctimas */
     flash_range_program(off, src, len);
     pico_flash_lock_end(tok);
     return 0;

@@ -64,9 +64,14 @@ typedef struct {
     void     (*salir)(uint32_t estado);
 
     /* SÓLO PRUEBAS (#653, test/test_logmt.c): se llama entre mirar que la línea cabe
-     * y copiarla —la ventana ensanchada—. NULL en las placas. */
+     * y copiarla —la ventana ensanchada—; y en el volcado de antes de #658 (el
+     * sabotaje), entre leer lo usado y rellenar. NULL en las placas. */
     void (*ensayo_entre)(void);
 } bpvm_log_cintura_t;
+
+/* SÓLO PRUEBAS (#658, test/test_logmt.c): distinto de 0, `log_flush` vuelca como antes
+ * de #658 —sin la bandera de uno a la vez, y el relleno fuera de la sección—. */
+extern int bpvm_sabotaje_volcado;
 
 /* Instala la cintura y recupera el snapshot de la sesión anterior (si el header es
  * válido) → post-mortem. Llamar UNA vez antes del primer log_printf. */

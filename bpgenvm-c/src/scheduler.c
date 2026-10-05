@@ -193,7 +193,7 @@ static void despertar(bpvm_t* vm) {
  * cogido: bpvm_request_kill avisa con el mismo cerrojo, y el aviso no se pierde. */
 static void dormir(bpvm_cola_t* q, const bpvm_t* vm, int varios, int ms) {
     if (!varios) bpvm_platform_mutex_lock(&q->vm_lock);
-    if (!vm->kill_requested && q->programa == vm && !q->acabando) {
+    if (!bpvm_kill_pedido(vm) && q->programa == vm && !q->acabando) {
         if (ms < 0) bpvm_platform_cond_wait(&q->sched_cond, &q->vm_lock);
         else        (void) bpvm_platform_cond_timed_wait(&q->sched_cond, &q->vm_lock, ms);
     }
@@ -236,7 +236,7 @@ static void acabar(bpvm_cola_t* q, bpvm_t* vm, int varios) {
      * kill de una native sin ejecutor (#640). Si no, el primer fallo (#596); si no, RUNTIME_ERROR si un hilo que no es
      * el main murió sin atrapar (#608). */
     int rs;
-    if (vm->kill_requested)        rs = BPVM_KILLED;
+    if (bpvm_kill_pedido(vm))      rs = BPVM_KILLED;
     else if (q->fallo != 0)        rs = q->fallo;
     else if (vm->hilo_sin_atrapar) rs = BPVM_ERR_RUNTIME;
     else                           rs = BPVM_OK;
@@ -304,7 +304,7 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
 
         /* EL KILL, un fallo o el STOP del depurador: no se elige más; y cuando nadie tenga un hilo entre manos, el
          * fin. */
-        if (vm->kill_requested || q->parar) {
+        if (bpvm_kill_pedido(vm) || q->parar) {
             q->parar = 1;
             if (con_hilo == 0 || q->sabotaje_fin) { acabar(q, vm, varios); return; }
             dormir(q, vm, varios, -1);

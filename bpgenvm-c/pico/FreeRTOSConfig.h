@@ -104,6 +104,11 @@
 #define INCLUDE_xTaskGetSchedulerState          1
 #define INCLUDE_xTaskGetCurrentTaskHandle       1
 #define INCLUDE_xTimerPendFunctionCall          1
+#if ( configNUMBER_OF_CORES > 1 )
+/* V7/H12, etapa 3.1, paso 5 — cerrar el ejecutor de una native con dos núcleos: esperar a que esté SUSPENDIDO (y fuera
+ * de los dos núcleos) antes de borrarlo y devolver su memoria (pico/platform_freertos.c, bpvm_platform_thread_join). */
+#define INCLUDE_eTaskGetState                   1
+#endif
 /* #354 — marca de agua de las pilas. GRATIS aquí: lo que hace posible la medida
  * es que las pilas se rellenen con un patrón conocido al crearlas, y eso YA se
  * está pagando por `configCHECK_FOR_STACK_OVERFLOW 2` (arriba). Este define solo

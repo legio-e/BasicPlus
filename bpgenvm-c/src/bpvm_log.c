@@ -163,20 +163,53 @@ void log_printf(const char* fmt, ...) {
     if (s_c.salir) s_c.salir(est);
 }
 
-void log_flush(void) {
-    if (!s_init || !s_c.flash_write) return;
+/* #658 (5-oct; V7/H12, la 3.1) — EL VOLCADO, de uno en uno y sin perder ninguno. Dos a la vez mezclaban borrar y
+ * grabar (en la Pico, dos ventanas con candado separadas: A borra, B borra y graba, A graba encima —la flash sólo
+ * baja bits, y queda el AND de las dos imágenes—). No vale la sección: borrar dura milisegundos y, con dos núcleos,
+ * no se puede aparcar al otro con el spinlock cogido; ni un mutex: también vuelcan los ganchos y el arranque. Así que
+ * una BANDERA: el que la coge vuelca y, mientras quede un volcado PEDIDO, vuelve a volcar; el que la encuentra cogida
+ * deja su petición y se va (el que vuelca la verá: su vuelta siguiente graba lo que haya entonces en la región). La
+ * cabecera y el relleno, en cambio, DENTRO de la sección: el relleno pisaba la línea que otra tarea añadía justo ahí.
+ * Lo que se graba es la región tal cual esté al grabar —una línea que llegue entre medias va con su cabecera, que se
+ * pone en la misma sección—. */
+static volatile int s_volcando  = 0;   /* alguien está volcando */
+static volatile int s_pendiente = 0;   /* hay un volcado pedido que nadie ha empezado */
+int bpvm_sabotaje_volcado = 0;         /* SÓLO PRUEBAS (test/test_logmt.c): el volcado de antes de #658 */
 
-    /* Escribe el header en region_buf[0..16) y rellena tras la data con 0xFF
-     * (imagen limpia); luego vuelca la región ENTERA (el buffer ES la imagen). */
+static void volcar_de_antes(void) {    /* el sabotaje: sin bandera, y el relleno fuera de la sección */
     uint32_t magic = LOG_MAGIC, ver = LOG_VERSION, size = s_used, rsv = 0u;
     memcpy(s_c.region_buf + 0,  &magic, 4);
     memcpy(s_c.region_buf + 4,  &ver,   4);
     memcpy(s_c.region_buf + 8,  &size,  4);
     memcpy(s_c.region_buf + 12, &rsv,   4);
-    if (data_cap() > s_used)
-        memset(data_ptr() + s_used, 0xFF, data_cap() - s_used);
-
+    if (s_c.ensayo_entre) s_c.ensayo_entre();   /* la ventana ensanchada: entre leer `s_used` y rellenar */
+    if (data_cap() > size)
+        memset(data_ptr() + size, 0xFF, data_cap() - size);
     s_c.flash_write(s_c.region_buf, s_c.region_size);
+}
+
+void log_flush(void) {
+    if (!s_init || !s_c.flash_write) return;
+    if (bpvm_sabotaje_volcado) { volcar_de_antes(); return; }
+
+    __atomic_store_n(&s_pendiente, 1, __ATOMIC_SEQ_CST);
+    for (;;) {
+        if (__atomic_exchange_n(&s_volcando, 1, __ATOMIC_ACQ_REL) != 0) return;   /* el que vuelca, lo verá */
+        while (__atomic_exchange_n(&s_pendiente, 0, __ATOMIC_ACQ_REL) != 0) {
+            /* La cabecera (la de `hdr_sync`: también el anillo, que antes se grababa a 0) y el relleno con 0xFF tras
+             * la data (imagen limpia), de una vez con lo que se añade; el volcado, fuera (el buffer ES la imagen). */
+            uint32_t est = s_c.entrar ? s_c.entrar() : 0u;
+            hdr_sync();
+            if (data_cap() > s_used)
+                memset(data_ptr() + s_used, 0xFF, data_cap() - s_used);
+            if (s_c.salir) s_c.salir(est);
+            s_c.flash_write(s_c.region_buf, s_c.region_size);
+        }
+        __atomic_store_n(&s_volcando, 0, __ATOMIC_SEQ_CST);
+        /* Una petición que llegó después de la última vuelta y antes de soltar la bandera se fue sin volcar: si la
+         * hay, otra vez (y si otro cogió ya la bandera, es suya). */
+        if (__atomic_load_n(&s_pendiente, __ATOMIC_SEQ_CST) == 0) return;
+    }
 }
 
 void log_clear_ram(void) {

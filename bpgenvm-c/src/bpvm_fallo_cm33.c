@@ -34,8 +34,19 @@ void bpvm_cm33_fallo_informe(const struct bpvm_fault_frame* f, uint32_t exc_retu
     bpvm_log_set_enabled(1);
     log_printf("FALLO %s: CFSR=%08lX HFSR=%08lX", cual,
                (unsigned long) cfsr, (unsigned long) *SCB_HFSR);
+#if defined(configNUMBER_OF_CORES) && ( configNUMBER_OF_CORES > 1 )
+    /* V7/H12 3.1, paso 4 — con dos núcleos, `xTaskGetSchedulerState` coge los cerrojos del kernel, y desde un fallo
+     * —con el otro núcleo parado, quizá con ellos cogidos— se quedaría esperando, mudo. La tarea en curso se lee sin
+     * cerrojo (NULL: todavía ninguna). */
+    {
+        TaskHandle_t t = xTaskGetCurrentTaskHandle();
+        if (t != NULL) log_printf("FALLO  en la tarea '%s' (nucleo %lu)", pcTaskGetName(t),
+                                  (unsigned long) portGET_CORE_ID());
+    }
+#else
     if (xTaskGetSchedulerState() != taskSCHEDULER_NOT_STARTED)
         log_printf("FALLO  en la tarea '%s'", pcTaskGetName(NULL));
+#endif
     if (en_psp) {
         __asm volatile ("mrs %0, psp"    : "=r" (sp));
         __asm volatile ("mrs %0, psplim" : "=r" (lim));

@@ -44,7 +44,12 @@
 > verdes con uno y con dos runs, PrintBench +0,6 % y la resistencia de 110 minutos con dos runs (abajo). Y con *«2º
 > núcleo, puedes empezar a analizar»* —y *«Lo de la fecha es orientativo no una meta. Lo importante es que sea
 > fiable»*—, **el mapa de la etapa 3**, que destapó dos agujeros que YA tiene la 2b: `#660` y `#661` (la 2b no se cierra
-> sin ellos). Más abajo, «🧵 H12 (5-oct, mediodía)» y «🧵 H12 (5-oct)».
+> sin ellos). Por la tarde, `#662`, `#660` y `#661` (el camino fino, tras medir que el cerrojo por paso hacía más lentos
+> a dos hilos) y **la puerta de la 2b otra vez, pasada** (110 minutos con dos runs y un programa con carreras, sin un
+> fallo); y **la 3.1 escrita** —el arranque instrumentado, las dos víctimas de la flash, el log con spinlock y `#658`,
+> el ejecutor, las banderas con orden, el MPU en los dos núcleos y `vm.cores=1`—, con los caminos fatales decididos por
+> Eduardo: *«fatal error, el log y reset»* (contener el fallo, el MPU por tarea y el contador de reinicios, a V8). Más
+> abajo, «🧵 H12 (5-oct, tarde)», «(mediodía)» y «🧵 H12 (5-oct)».
 >
 > **4-oct** — H12, las etapas 0 y 1 JUNTAS (Eduardo: «`run` permanente»; una placa antes que todas, la Pico 2): la
 > tarea del REPL hace de `io` durante el RUN y el programa corre en una tarea `run` que nace con el arranque. Hecho en
@@ -1132,6 +1137,43 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧵 H12 (5-oct, tarde) — EL CAMINO FINO, LA PUERTA DE LA 2b OTRA VEZ (pasada), y LA 3.1 ESCRITA
+
+- **`#662`** (`aa33ffd3`): con dos runs, tras CADA cuanto se avisaba a la cola y se despertaba en vano al run ocioso;
+  ahora sólo si el hilo dejó de estar RUNNABLE o hubo un fallo. `test-cola` 16, con su sabotaje; y `test-iomt`, que
+  mezclaba los avisos de la VM con la salida del programa, separado.
+- **La regla de Eduardo sobre lo compartido** (*«La memoria que se utilice compartida por 2 threads BP es
+  responsabilidad del programador… El resto es responsabilidad nuestra, a:=a+1 siendo a una variable local debe
+  funcionar siempre»*) y **el camino fino** (`726fbf1a`): las palabras alineadas, de una vez (`#660`); con varios runs,
+  el número de un handle soltado vuelve en el GC (`#661`); y la referencia que no puede existir, muerta. `test-palabras`,
+  con tres sabotajes.
+- **La puerta en la Pico 2 destapó un +6 %** en `fib(26)`: los accesos con su comprobación de alineación no se ponían
+  en línea a `-Os` (cada acceso de la pila, una llamada). Una A/B de tres imágenes (OK de Eduardo) lo señaló, y
+  `00c71b5d`: por arquitectura —en la M33 y el x86, sin comprobar y siempre en línea; en RISC-V y Xtensa, con ella—:
+  `fib(26)` 2 835 ms (antes del camino fino, 3 178: −10,8 %).
+- **La puerta de la 2b otra vez** (la imagen de `00c71b5d`; OK de Eduardo para grabar y para el ENV): con uno y con
+  dos runs, la tanda con los mismos veredictos (`compat/informes/tanda_h12_fino.md`) y `run_placa` 34 de 34; `fib(26)`
+  2 835 y 2 948 ms (+4 % con dos: a afinar, el punto seguro de cada paso); y **la resistencia con dos runs y
+  `CarreraSinMutex`** —dos hilos que comparten memoria sin `Mutex`—, 110 minutos SIN FALLOS: 999 vueltas, 24 RESET y el
+  KILL a un dormido en 6 ms de mediana (25 de máximo). **La 2b, pasada**; la Pico 2, con `vm.runs=1` otra vez.
+- **Lo que dijo Eduardo por el camino**: no tiene sonda SWD (el arranque, instrumentado); el 2º run ocioso no debe
+  costar (`#662`); antes de los otros micros, las natives y LVGL con dos runs (para LVGL, su idea: una FIFO de
+  comandos).
+- **La 3.1, diseñada** (*«OK a los 2»*: el log de un fallo fatal en la RAM que sobrevive, y `vm.cores=1`) **y
+  escrita**: los pasos 0 a 8 en las dos imágenes de la Pico (`V7_IDEAS` §H12 «La etapa 3.1, el diseño», «Escrita en el
+  código»); `#658`, cerrada con su prueba (`test-logmt --volcado`, roja con el volcado de antes); y en el común, las
+  banderas con orden (el KILL, el `fin` del run, el anillo de la UART).
+- **Los caminos fatales, a vueltas con Eduardo**: *«¿por qué necesitas parar el núcleo 0?»* (escrito con una alarma del
+  timer: el SDK sólo resetea el 1); su principio, *«Lo importante es que IO sea sólido como una roca, todo lo demás
+  tiene solución»* —contener el fallo en el run y el MPU de la M33 para proteger el SO e `io`—; y la decisión: *«es un
+  tema complejo… a V8. De momento… fatal error, el log y reset»*. Hecho así (el perro guardián armado lo primero, el
+  informe en la RAM que sobrevive, la causa en el `INFO` y sin autorun en el arranque siguiente: la regla de H9 que
+  faltaba, que Eduardo recordaba —*«habíamos establecido un mecanismo para que el micro no entrase en bucle»*—); el
+  contador de reinicios de `V3_IDEAS`, a V8 con la contención y el MPU (*«OK, el contador a V8»*).
+- **Por hacer**: la red del PC por el común tocado (en marcha), los commits, y el primer lote de la 3.1 en la Pico 2
+  (con el OK de Eduardo): la imagen de UN núcleo —también cambia: la identidad, el ENV y la PSRAM pasan a `main()`—,
+  y la de dos, con `vm.cores=1` y con dos. Probar el camino fatal en la placa pide un gancho de prueba (a proponer).
 
 ## 🧵 H12 (5-oct, mediodía) — LA PUERTA DE LA 2b EN LA PICO 2, y EL MAPA DEL 2º NÚCLEO (con dos agujeros de la 2b)
 

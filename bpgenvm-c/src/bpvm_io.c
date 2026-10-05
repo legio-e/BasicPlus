@@ -120,7 +120,9 @@ static void io_vueltas(struct bpvm_io* io, volatile int* fin) {
         if (io->ops.poll && io->ops.poll(io->ops.user) != 0)
             bpvm_request_kill(io->vm);
         if (eof) break;                 /* cerrada y seca: no queda nada que dar */
-        if (fin && !cerrada && *fin) {  /* el productor ha acabado: lo que quede se drena en las vueltas siguientes */
+        if (fin && !cerrada && __atomic_load_n(fin, __ATOMIC_ACQUIRE)) {  /* el productor ha acabado (3.1, paso 6: con
+                                         * orden: lo escribe el run, quizá en el otro núcleo): lo que quede se drena en
+                                         * las vueltas siguientes */
             bpvm_oq_close(&io->oq);
             cerrada = 1;
         }

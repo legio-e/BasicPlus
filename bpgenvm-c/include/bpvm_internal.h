@@ -775,6 +775,14 @@ struct bpvm {
     char     sym_perdido[200];
 };
 
+/* V7/H12, etapa 3.1, paso 6 — EL KILL CRUZA NÚCLEOS: lo pide `io` (o el poll, o el depurador) y lo mira el run, que con
+ * dos núcleos corre en el otro. `volatile` sólo impide que el compilador se lo guarde; el orden entre núcleos lo dice
+ * el modelo de memoria: se escribe con release y se lee con acquire (lo que dejó dicho `A4`). En la M33 de la RP2350
+ * —en orden y sin caché de datos— cuesta lo mismo; en un micro con cachés (la P4), es lo que lo hace correcto. Se mira
+ * una vez por cuanto: no está en el camino de cada paso. */
+static inline int  bpvm_kill_pedido(const bpvm_t* vm) { return __atomic_load_n(&vm->kill_requested, __ATOMIC_ACQUIRE); }
+static inline void bpvm_kill_marcar(bpvm_t* vm, int v) { __atomic_store_n(&vm->kill_requested, v, __ATOMIC_RELEASE); }
+
 /* V7/H3 (#491) — en builtins.c. */
 void bpvm_files_gc(bpvm_t* vm);          /* entre la marca y el barrido: cierra lo inalcanzable */
 void bpvm_files_clavar(bpvm_t* vm);      /* V7/H7 #595: antes de compactar, el estado de lo abierto no se mueve */

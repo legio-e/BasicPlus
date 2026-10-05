@@ -19,6 +19,7 @@
  */
 
 #include "repl_v1.h"
+#include "nucleos.h"        /* V7/H12, etapa 3.1: el arranque completo y `vm.cores=1` */
 #include "wire_v1.h"
 #include "bpvm_repl.h"      /* V6/U3: los verbos comunes del REPL */
 #include "json_min.h"
@@ -572,11 +573,17 @@ static const bpvm_autorun_wire_t s_autorun_wire = {
 /* (comando `autorun off` de la consola) → reset.                */
 /* ============================================================ */
 void repl_v1_autorun(void) {
+    pico_arranque_completo();   /* V7/H12, etapa 3.1: el arranque, completo (con su primer volcado del log): el perro
+                                 * del arranque, apagado ANTES del programa —que puede durar lo que quiera— */
     /* #345 — leer y limpiar la primera línea lo hace el núcleo: eran las mismas
      * doce líneas en Pico, ESP32 y STM32. (#305 sigue valiendo: sólo la CABEZA
      * del fichero, que aquí se busca un renglón, no un fichero.) */
     char path[BPVM_FS_PATH_MAX];   /* #456 - este se CONSTRUYE (sale del fichero) */
     if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
+    if (pico_arranque_tras_fatal()) {   /* V7/H12 3.1, paso 4: un programa que falla al arrancar, en bucle, no */
+        log_printf("autorun: %s NO arranca: el arranque anterior acabo en un fallo fatal (ver el log)", path);
+        return;
+    }
     log_printf("autorun: %s", path);
 
     /* Gracia de arranque: el camino del RUN hace log_flush (erase de
@@ -836,6 +843,7 @@ void repl_v1_cintura(void) {
     if (s_run_task == NULL && bpvm_repl_run_tarea_prepara() == 0)
         s_run_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run", PICO_RUN_PILA_PALABRAS, NULL,
                                        uxTaskPriorityGet(NULL), s_run_pila, &s_run_tcb);
+    pico_tarea_nucleos(s_run_task);   /* V7/H12, etapa 3.1: `vm.cores=1` (NULL: nada) */
     /* el log, desde aquí y no desde `run`: el log no tiene cerrojo, y `run` nacería escribiendo a la vez que el
      * arranque (la revisión del 4-oct) */
     if (s_run_task == NULL) {
@@ -852,6 +860,7 @@ void repl_v1_cintura(void) {
         if (g_run2_pila != NULL && bpvm_repl_run_en_cola() && bpvm_repl_run_tarea_prepara() == 0) {
             s_run2_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run2", PICO_RUN_PILA_PALABRAS, (void*) (intptr_t) 1,
                                             uxTaskPriorityGet(NULL), (StackType_t*) g_run2_pila, &s_run2_tcb);
+            pico_tarea_nucleos(s_run2_task);   /* V7/H12, etapa 3.1: `vm.cores=1` (NULL: nada) */
             if (s_run2_task == NULL) bpvm_repl_run_tarea_no_nacio();
         }
         if (s_run2_task != NULL)
@@ -866,6 +875,7 @@ void repl_v1_cintura(void) {
 }
 
 void repl_v1_run(void) {
+    pico_arranque_completo();   /* V7/H12, etapa 3.1: también sin autorun (o con la placa degradada, que no lo mira) */
     log_printf("REPL entry (wire v1)");
     /* #326 CONTROL: se marca en TODO arranque, haya depurador o no. Es la
      * prueba de que el portador funciona — el equivalente a ejecutar T antes

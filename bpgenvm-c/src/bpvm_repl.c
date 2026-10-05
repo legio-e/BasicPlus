@@ -1935,7 +1935,7 @@ static void run_acabado(bpvm_t* vm, int rs, void* user) {
     if (s_tarea.ensayo_ms > 0) bpvm_platform_thread_sleep_ms(s_tarea.ensayo_ms);
     s_tarea.pila_libre = (long) bpvm_platform_pila_libre_actual();
     s_tarea.rs = rs;
-    s_tarea.fin = 1;
+    __atomic_store_n(&s_tarea.fin, 1, __ATOMIC_RELEASE);   /* 3.1, paso 6: io, quizá en el otro núcleo */
     bpvm_io_despertar(vm);
     bpvm_platform_sem_give(&s_tarea.hecho);
 }
@@ -1959,7 +1959,7 @@ void bpvm_repl_run_tarea(void* arg) {
         if (s_tarea.ensayo_ms > 0) bpvm_platform_thread_sleep_ms(s_tarea.ensayo_ms);
         s_tarea.pila_libre = (long) bpvm_platform_pila_libre_actual();
         s_tarea.rs = rs;
-        s_tarea.fin = 1;                    /* ya no escribe más: io puede cerrar la cola */
+        __atomic_store_n(&s_tarea.fin, 1, __ATOMIC_RELEASE);   /* ya no escribe más: io puede cerrar la cola */
         bpvm_io_despertar(vm);              /* y que lo vea ya, no al vencer su espera de 5 ms (la cola vive hasta el «hecho») */
         bpvm_platform_sem_give(&s_tarea.hecho);
     }

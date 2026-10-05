@@ -13,11 +13,14 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"   /* V7/H12, etapa 3.1: el MPU en los dos núcleos (mpu_aplicar) */
 
 #include "pico/stdlib.h"
 #include "pico/stdio_usb.h"
 #include "hardware/gpio.h"
 #include "hardware/watchdog.h"   /* paso 4 cierre — watchdog_caused_reboot (resetCause) */
+#include "flash_lock.h"          /* V7/H12, etapa 3.1: las dos víctimas del candado de la flash */
+#include "nucleos.h"             /* V7/H12, etapa 3.1: las marcas del arranque y `vm.cores=1` */
 
 #include "bpvm.h"
 #include "bpvm_alloc.h"      /* V7/H12, 2b: la pila del 2º run, de malloc con la VM en la PSRAM */
@@ -852,6 +855,72 @@ static const int8_t s_rp_adc_c_b[48] = { -1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,
  * el arranque del SDK, así que sobrevive a un reset (watchdog, RESET del IDE,
  * BOOTSEL no: eso es power-on y el magic del común lo detecta). */
 static uint32_t __uninitialized_ram(s_rp_migas)[20];
+
+/* V7/H12, etapa 3.1 — LAS MARCAS DEL ARRANQUE, UNA POR NÚCLEO, en RAM que sobrevive al reinicio: cada núcleo escribe
+ * SU palabra al pasar por cada paso (sin carreras), y el arranque siguiente las cuenta en el log. Sin sonda SWD
+ * (Eduardo no la tiene), son las que dirán DÓNDE se para un arranque de dos núcleos que se cuelgue (con el perro
+ * guardián del arranque, que reinicia; docs/V7_IDEAS.md §H12 «La etapa 3.1, el diseño», el paso 0). Los pasos: 0x01
+ * main, 0x02 la identidad (la flash, el ENV, la PSRAM), 0x03 vm_task creada, 0x04 el planificador (núcleo 0); 0x10
+ * vm_task, 0x11 las víctimas del candado de la flash (el 1 la pone su tarea), 0x12 el reparto, 0x13 la subida, 0x20
+ * el arranque completo (el autorun o el REPL, tras el primer volcado del log). */
+#define ARRANQUE_MAGIA 0xA5A50310u
+static uint32_t __uninitialized_ram(s_arranque)[3];   /* [0] la magia; [1] el último paso del núcleo 0; [2] el del 1 */
+void pico_marca_arranque(uint32_t paso) { s_arranque[1u + (get_core_num() & 1u)] = paso; }
+
+/* V7/H12, etapa 3.1, paso 4 — LA MARCA DE UN FALLO FATAL, en la misma RAM que sobrevive al reinicio: la pone
+ * pico_fatal (dos núcleos) antes de reiniciar, y el arranque siguiente la lee UNA vez —la borra—: lo dice el log, lo
+ * dice la causa del reinicio (el INFO) y NO hay autoarranque (un programa que falla al arrancar sería un bucle de
+ * reinicios; el IDE lo arranca a mano). */
+#define FATAL_MAGIA      0xFA7A1003u
+#define FATAL_PLAZO_MS   250u     /* lo que tiene el informe para escribirse (unas líneas: microsegundos) */
+static uint32_t __uninitialized_ram(s_fatal_marca)[2];   /* [0] la magia; [1] 1 + el núcleo que falló */
+static int s_tras_fatal = 0;
+int pico_arranque_tras_fatal(void) { return s_tras_fatal; }
+static void fatal_mirar_arranque(void) {
+    if (s_fatal_marca[0] == FATAL_MAGIA) {
+        s_tras_fatal = 1;
+        log_printf("boot: el arranque anterior acabo en un FALLO FATAL (nucleo %lu; su informe, arriba): sin autoarranque",
+                   (unsigned long) (s_fatal_marca[1] - 1u));
+    }
+    s_fatal_marca[0] = 0u;
+}
+
+#if ( configNUMBER_OF_CORES > 1 )
+/* V7/H12, etapa 3.1 — `vm.cores=1` en el ENV (la vuelta atrás que decidió Eduardo, sin grabar): la imagen de dos
+ * núcleos con TODAS nuestras tareas ancladas al 0; el 1, sólo con su tarea ociosa (y víctima del candado de la flash). */
+static int s_un_nucleo = 0;
+void pico_tarea_nucleos(TaskHandle_t t) { if (s_un_nucleo && t != NULL) vTaskCoreAffinitySet(t, 1u << 0); }
+
+/* V7/H12, etapa 3.1, paso 4 — UN FALLO FATAL CON DOS NÚCLEOS (el assert, la pila, la memoria de FreeRTOS, el panic
+ * del SDK y el HardFault): el informe al log y REINICIAR. Decidido por Eduardo (5-oct): «fatal error, el log y reset»;
+ * que el fallo de un run no tumbe la placa —terminar esa tarea y que `io` siga, con el MPU de la M33 protegiendo la
+ * memoria del SO y la de `io`— queda para V8 («es un tema complejo… hacemos lo que podemos, sabiendo que nos puede
+ * quedar algún caso suelto»). Ni se vuelca a la flash —aparcar al otro núcleo desde un fallo puede no volver: tiene
+ * las interrupciones apagadas, o espera un cerrojo que tenía el que falló— ni se para al otro núcleo: el log se queda
+ * en la RAM que sobrevive al reinicio, y el arranque siguiente lo encuentra («RAM SUPERVIVIENTE») y lo vuelca él. El
+ * perro guardián, LO PRIMERO: pase lo que pase después —el informe a medias, un cerrojo que no se suelta—, la placa
+ * se reinicia; nunca se queda muda. Cada camino fatal sigue como estaba (su informe, y su bucle): el perro lo corta. */
+static volatile uint32_t s_fatal = 0u;   /* 0, o 1 + el núcleo del primer fallo fatal */
+
+void pico_fatal(void) {
+    uint32_t yo = get_core_num(), antes = 0u;
+    if (!__atomic_compare_exchange_n(&s_fatal, &antes, 1u + yo, 0, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)) {
+        if (antes == 1u + yo) return;           /* este núcleo, otra vez (el gancho de la memoria acaba en el assert) */
+        (void) save_and_disable_interrupts();   /* el otro núcleo ya cuenta el suyo, y reinicia */
+        for (;;) __wfi();
+    }
+    watchdog_reboot(0u, 0u, FATAL_PLAZO_MS);
+    s_fatal_marca[1] = 1u + yo;
+    s_fatal_marca[0] = FATAL_MAGIA;
+    log_modo_fatal();          /* el volcado ya no toca la flash */
+    bpvm_log_set_enabled(1);   /* un fatal se registra aunque el log esté apagado (#423) */
+    log_printf("FATAL en el nucleo %lu: su informe, debajo; la placa se reinicia en %u ms (el log, en la RAM)",
+               (unsigned long) yo, (unsigned) FATAL_PLAZO_MS);
+}
+#else
+void pico_tarea_nucleos(TaskHandle_t t) { (void) t; }
+void pico_fatal(void) {}   /* con un núcleo, como hoy: el log a la flash, y parada (el LED en el assert) */
+#endif
 static const bpvm_caps_t s_rp_caps_a = {
     .micro = "rp2350a", .paquete = "QFN-60", .fabricante = "Raspberry Pi",
     .cpu_hz_max = 300000000u, .cpu_hz_min = 18000000u, .cpu_ajustable = 1,
@@ -951,6 +1020,7 @@ static int pico_pico_set_cpu_freq_mhz_impl(int mhz) {
  * disparó un watchdog ARMADO con watchdog_enable(), no cuando alguien pidió el
  * reinicio con watchdog_reboot(). El orden importa — el caso específico primero. */
 static const char* pico_pico_reset_cause_impl(void) {
+    if (s_tras_fatal)                    return "fallo fatal";     /* V7/H12 3.1: el perro, armado por pico_fatal */
     if (watchdog_enable_caused_reboot()) return "watchdog";        /* disparó de verdad */
     if (watchdog_caused_reboot())        return "reinicio pedido"; /* RESET del IDE */
     return "power-on/run";
@@ -1511,6 +1581,26 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .repl         = repl_v1_run,
 };
 
+#if ( configNUMBER_OF_CORES > 1 )
+/* V7/H12, etapa 3.1 — la tarea que registra a SU núcleo como víctima del candado de la flash (una anclada a cada uno;
+ * la crea vm_task al empezar). */
+static void victima_tarea(void* arg) {
+    (void) arg;
+    pico_flash_lock_init_victim();
+    if (get_core_num() == 1u) pico_marca_arranque(0x11);   /* el núcleo 1, vivo y víctima */
+    vTaskDelete(NULL);
+}
+#endif
+
+/* V7/H12, etapa 3.1 — el arranque llegó al REPL (la cintura, repl_v1.c): la marca y, con dos núcleos, el perro guardián
+ * del arranque, apagado (lo armó main antes del planificador). */
+void pico_arranque_completo(void) {
+    pico_marca_arranque(0x20);
+#if ( configNUMBER_OF_CORES > 1 )
+    watchdog_disable();
+#endif
+}
+
 static void vm_task(void* arg) {
     (void) arg;
 
@@ -1599,17 +1689,19 @@ static void vm_task(void* arg) {
 #endif
 
     /* ===== H9: subida escalonada (unificación 19-jul) =====
-     * 0) Identidad en el SUELO: variante (PACKAGE_SEL) + flash real (JEDEC).
-     *    Hardware puro — sin FS, sin env. */
-    board_desc_early_init();
-
-    /* Env de la ZONA 2, por XIP (sin copia y sin FS): la verdad de la placa. V7/H10: la vista común, con la cintura de
-     * la Pico registrada antes de la primera lectura. */
-    board_mgr_pico_familia();
-
-    /* PSRAM conducida por el env (`psram=1` ∧ RP2350B → CS=GPIO47), ANTES de
-     * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */
-    board_desc_psram_from_env(bpvm_env_get_bool(board_env(), "psram", 0));
+     * V7/H12, etapa 3.1 — la identidad (variante y flash), el ENV y la PSRAM se hacen ya en main(), antes del
+     * planificador: el sondeo de la flash y la PSRAM sacan la flash del XIP, y con dos núcleos aquí ya corre el otro. */
+    pico_marca_arranque(0x10);
+#if ( configNUMBER_OF_CORES > 1 )
+    /* V7/H12, etapa 3.1 — LAS DOS VÍCTIMAS del candado de la flash, antes de la primera escritura (la del montaje del
+     * FS, o el log): cada núcleo se registra a sí mismo, desde una tarea anclada a él (flash_lock.h). Hasta que los
+     * dos lo están, escribir la flash falla (y se dice) en vez de ir a ciegas. */
+    for (unsigned c = 0; c < 2u; c++)
+        xTaskCreateAffinitySet(victima_tarea, c ? "victima1" : "victima0", 512, NULL, tskIDLE_PRIORITY + 3, 1u << c, NULL);
+    for (int i = 0; pico_flash_lock_victimas() < 2 && i < 1000; i++) vTaskDelay(1);
+    log_printf("boot: el candado de la flash, con %d nucleo(s) victima(s)%s", pico_flash_lock_victimas(),
+               pico_flash_lock_victimas() < 2 ? " — FALTA uno: la flash no se escribira (pico_flash: -1)" : "");
+#endif
 
 #if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 3
     /* nivel 3 (H9): identidad + env + psram hechos, SIN tocar el FS aún. */
@@ -1627,7 +1719,9 @@ static void vm_task(void* arg) {
      * reparte (las claves `stack=` y `quantum=`, la memoria y la BIOS) y 2b sube (las capas,
      * la zona, /lib, los buses, la SD, la cintura del REPL, `log=`, el autorun con la placa
      * sana y el REPL, que no vuelve). */
+    pico_marca_arranque(0x12);
     bpvm_boot2_repartir(&s_boot2);
+    pico_marca_arranque(0x13);
     bpvm_boot2_subir(&s_boot2);   /* no vuelve: acaba en el REPL */
 
     /* H13 hallazgo 12 — AQUÍ CORRÍA UN fib(28) EN C EN CADA ARRANQUE. Era el
@@ -1644,12 +1738,18 @@ static void vm_task(void* arg) {
 void vAssertCalled(const char *pcFileName, unsigned long ulLine) {
     /* Best-effort: registra el assert en el log y flushea a flash
      * ANTES de detener los IRQs. Si log_flush funciona, en el siguiente
-     * arranque el comando LOG mostrará exactamente este ASSERT. */
+     * arranque el comando LOG mostrará exactamente este ASSERT.
+     * V7/H12 3.1, paso 4 — con dos núcleos, primero pico_fatal (el perro guardián armado: la placa se reinicia en
+     * 250 ms; el log, en la RAM, porque el volcado ya no toca la flash) y sin `printf`: con las interrupciones apagadas
+     * el cable no sale, y esperarlo sólo gastaría el plazo. */
+    pico_fatal();
     log_printf("ASSERT %s:%lu", pcFileName, ulLine);
     log_flush();
 
     taskDISABLE_INTERRUPTS();
+#if ( configNUMBER_OF_CORES == 1 )
     printf("[ASSERT] %s:%lu\n", pcFileName, ulLine);
+#endif
     for (;;) {
         led_set(1); for (volatile int i = 0; i < 2000000; i++);
         led_set(0); for (volatile int i = 0; i < 2000000; i++);
@@ -1657,18 +1757,24 @@ void vAssertCalled(const char *pcFileName, unsigned long ulLine) {
 }
 
 void vApplicationMallocFailedHook(void) {
+    pico_fatal();   /* V7/H12 3.1, paso 4 (ver vAssertCalled) */
     log_printf("MALLOC FAIL");
     log_flush();
+#if ( configNUMBER_OF_CORES == 1 )
     printf("[MALLOC FAIL]\n");
+#endif
     vAssertCalled(__FILE__, __LINE__);
 }
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     (void) xTask;
+    pico_fatal();   /* V7/H12 3.1, paso 4 (ver vAssertCalled) */
     bpvm_log_set_enabled(1);   /* V7/H5 P2b.3: fatal → se registra aunque el log esté apagado (#423) */
     log_printf("STACK OVERFLOW task=%s", pcTaskName ? pcTaskName : "?");
     log_flush();
+#if ( configNUMBER_OF_CORES == 1 )
     printf("[STACK OVERFLOW] task=%s\n", pcTaskName);
+#endif
     vAssertCalled(__FILE__, __LINE__);
 }
 
@@ -1766,6 +1872,16 @@ int main(void) {
      * resetCause — aquí se leía watchdog_caused_reboot() a secas, y un RESET
      * pedido por el wire (watchdog_reboot) salía en el log como "WATCHDOG". */
     log_printf("boot: causa del reset = %s", pico_pico_reset_cause_impl());
+    /* V7/H12, etapa 3.1 — las marcas del arranque ANTERIOR (una por núcleo; ver s_arranque): dónde estaba cada núcleo
+     * cuando se reinició. Después, las de éste, desde cero. */
+    if (s_arranque[0] == ARRANQUE_MAGIA)
+        log_printf("boot: el arranque anterior llego, en el nucleo 0, al paso 0x%02lx; en el 1, al 0x%02lx",
+                   (unsigned long) s_arranque[1], (unsigned long) s_arranque[2]);
+    s_arranque[0] = ARRANQUE_MAGIA;
+    s_arranque[1] = 0u;
+    s_arranque[2] = 0u;
+    pico_marca_arranque(0x01);
+    fatal_mirar_arranque();   /* paso 4: ¿acabó el anterior en un fallo fatal? */
 
     /* Conecta los backends de HW reales (Pico SDK) a los builtins de
      * la VM. Sin esto los handlers caen al stub con logging. */
@@ -1804,11 +1920,33 @@ int main(void) {
         sleep_ms(500);
     }
 #endif
+    /* ===== H9: subida escalonada (unificación 19-jul) — el BOOT 1 de la Pico, AQUÍ =====
+     * V7/H12, etapa 3.1 — antes del planificador (estaba en la primera línea de vm_task): el sondeo JEDEC saca la flash
+     * del XIP con sólo las interrupciones de ESTE núcleo apagadas, y la PSRAM reconfigura el QMI, que comparte con la
+     * flash; con dos núcleos, el otro estaría ejecutando desde la flash en ese momento. Aquí sólo vive el núcleo 0.
+     * 0) Identidad en el SUELO: variante (PACKAGE_SEL) + flash real (JEDEC). Hardware puro — sin FS, sin env. */
+    board_desc_early_init();
+    /* Env de la ZONA 2, por XIP (sin copia y sin FS): la verdad de la placa. V7/H10: la vista común, con la cintura de
+     * la Pico registrada antes de la primera lectura. */
+    board_mgr_pico_familia();
+    /* PSRAM conducida por el env (`psram=1` ∧ RP2350B → CS=GPIO47), ANTES de
+     * elegir el heap — "distribuir la memoria pronto" (Eduardo, H9). */
+    board_desc_psram_from_env(bpvm_env_get_bool(board_env(), "psram", 0));
+    pico_marca_arranque(0x02);
+#if ( configNUMBER_OF_CORES > 1 )
+    /* V7/H12, etapa 3.1 — `vm.cores=1`: todo en el núcleo 0 (la vuelta atrás sin grabar; ver pico_tarea_nucleos). */
+    s_un_nucleo = (bpvm_env_get_long(board_env(), "vm.cores", 2) == 1);
+    log_printf("boot: imagen de DOS nucleos%s", s_un_nucleo ? "; vm.cores=1: todas las tareas, en el nucleo 0" : "");
+    pico_flash_lock_prepara();   /* el mutex de la ventana, antes de que haya dos núcleos que escriban */
+#endif
+
     /* #354 — el handle se GUARDA (antes se tiraba con NULL). Sin él no se le
      * puede preguntar su marca de agua desde la task de comms, que es la que
      * responde al INFO. Es la unica razon del cambio: diagnostico. */
     BaseType_t r = xTaskCreate(vm_task, "vm_task", 4096, NULL,
                                 tskIDLE_PRIORITY + 2, &g_vm_task);
+    if (r == pdPASS) pico_tarea_nucleos(g_vm_task);
+    pico_marca_arranque(0x03);
     if (r != pdPASS) {
         log_printf("xTaskCreate(vm_task) FAILED");
         log_flush();
@@ -1823,6 +1961,14 @@ int main(void) {
      * REPL (scheduler/core1). LED apagado = boot OK. */
     led_set(1);
 #endif
+#if ( configNUMBER_OF_CORES > 1 )
+    /* V7/H12, etapa 3.1 — EL PERRO GUARDIÁN DEL ARRANQUE (sin sonda): si el arranque de dos núcleos se cuelga antes del
+     * REPL, la placa se reinicia sola y el arranque siguiente cuenta en el log hasta dónde llegó cada núcleo (las
+     * marcas). Lo apaga el REPL al llegar (pico_arranque_completo). 15 s (el tope del perro son 16,7): el arranque
+     * normal tarda menos de uno, y el que instala la stdlib en /lib, unos pocos. */
+    watchdog_enable(15000, true);
+#endif
+    pico_marca_arranque(0x04);
     vTaskStartScheduler();
     for (;;) {}
 #endif  /* BPVM_PICO_BRINGUP == 1 */
@@ -1948,7 +2094,7 @@ void bpvm_pico_mem_log(void) {
 #define MPU_RLAR_ADDR   0xE000EDA0u
 #define MPU_MAIR0_ADDR  0xE000EDC0u
 
-static int s_mpu_armado = 0;
+static int s_mpu_armado = 0;   /* se intentó armar (con dos núcleos, lo que dice si hay que desarmar) */
 
 /* Cuántas regiones tiene ESTE chip. Se lee, no se supone. */
 static unsigned mpu_regiones(void) {
@@ -1956,7 +2102,8 @@ static unsigned mpu_regiones(void) {
     return (unsigned) ((*t >> 8) & 0xFFu);
 }
 
-void bpvm_pico_mpu_desarmar(void) {
+/* Apaga el MPU del núcleo que lo ejecuta (sus registros están en SU bus privado). */
+static void mpu_apagar_aqui(void) {
     volatile uint32_t* ctrl = (volatile uint32_t*) MPU_CTRL_ADDR;
     volatile uint32_t* rnr  = (volatile uint32_t*) MPU_RNR_ADDR;
     volatile uint32_t* rlar = (volatile uint32_t*) MPU_RLAR_ADDR;
@@ -1974,11 +2121,7 @@ void bpvm_pico_mpu_desarmar(void) {
      * muerto por la basura del anterior.
      *
      * Se apagan TODAS, no `usadas`: el número de regiones de la vez anterior no
-     * se sabe aquí, y de todas formas apagar una que ya está apagada es gratis.
-     *
-     * Nótese que ya no hay guarda `if (!s_mpu_armado) return;`: precisamente lo
-     * que hay que limpiar es el estado que quedó de OTRA ejecución, cuando esa
-     * bandera vale 0. */
+     * se sabe aquí, y de todas formas apagar una que ya está apagada es gratis. */
     unsigned max = mpu_regiones();
     for (unsigned r = 0; r < max; r++) {
         *rnr  = r;
@@ -1986,25 +2129,91 @@ void bpvm_pico_mpu_desarmar(void) {
     }
     __asm volatile ("dsb" ::: "memory");
     __asm volatile ("isb");
+}
+
+/* Arma el MPU del núcleo que lo ejecuta con las regiones ya calculadas (siempre desde limpio: ver mpu_apagar_aqui). */
+static void mpu_poner_aqui(const uint32_t* rbar, const uint32_t* rlar, unsigned usadas) {
+    volatile uint32_t* ctrl  = (volatile uint32_t*) MPU_CTRL_ADDR;
+    volatile uint32_t* rnr   = (volatile uint32_t*) MPU_RNR_ADDR;
+    volatile uint32_t* rbarp = (volatile uint32_t*) MPU_RBAR_ADDR;
+    volatile uint32_t* rlarp = (volatile uint32_t*) MPU_RLAR_ADDR;
+    volatile uint32_t* mair0 = (volatile uint32_t*) MPU_MAIR0_ADDR;
+    mpu_apagar_aqui();
+    /* attr0 = Normal, write-back read/write-allocate. Sin esto la región sería
+     * Device-nGnRnE y el código NO SE PODRIA EJECUTAR desde ella. */
+    *mair0 = 0x000000FFu;
+    for (unsigned r = 0; r < usadas; r++) {
+        *rnr   = r;
+        *rbarp = rbar[r];
+        *rlarp = rlar[r];
+    }
+    __asm volatile ("dsb");
+    /* ENABLE | PRIVDEFENA: fuera de las regiones, los permisos de siempre. Sin
+     * PRIVDEFENA todo lo demas quedaria prohibido y la placa moriria al
+     * instante. */
+    *ctrl = (1u << 0) | (1u << 2);
+    __asm volatile ("dsb" ::: "memory");
+    __asm volatile ("isb");
+}
+
+#if ( configNUMBER_OF_CORES > 1 )
+/* V7/H12, etapa 3.1, paso 7 — EL MPU ES DE CADA NÚCLEO, y con dos una tarea pasa de uno a otro: armarlo sólo en el
+ * núcleo que enlaza dejaba el código sin proteger la mitad del tiempo (y desarmarlo sólo en uno, regiones vivas en el
+ * otro). Lo aplica en cada núcleo una tarea anclada a él, que hace eso y se va; se espera a las dos (con tope: si una
+ * no llega, el log lo dice). Sólo con `mpu=1` (desarmar sin haber armado no crea nada). */
+static struct { const uint32_t* rbar; const uint32_t* rlar; unsigned usadas; } s_mpu_encargo;
+static SemaphoreHandle_t s_mpu_hecho = NULL;
+
+static void mpu_tarea(void* p) {
+    (void) p;
+    if (s_mpu_encargo.usadas) mpu_poner_aqui(s_mpu_encargo.rbar, s_mpu_encargo.rlar, s_mpu_encargo.usadas);
+    else                      mpu_apagar_aqui();
+    xSemaphoreGive(s_mpu_hecho);
+    vTaskDelete(NULL);
+}
+
+static void mpu_aplicar(const uint32_t* rbar, const uint32_t* rlar, unsigned usadas) {
+    if (s_mpu_hecho == NULL) s_mpu_hecho = xSemaphoreCreateCounting(2, 0);
+    if (s_mpu_hecho == NULL) { log_printf("mpu: sin semaforo: NO se toca el MPU"); return; }
+    s_mpu_encargo.rbar = rbar; s_mpu_encargo.rlar = rlar; s_mpu_encargo.usadas = usadas;
+    int creadas = 0, hechas = 0;
+    for (UBaseType_t c = 0; c < 2u; c++)
+        if (xTaskCreateAffinitySet(mpu_tarea, "mpu", configMINIMAL_STACK_SIZE, NULL, configMAX_PRIORITIES - 1,
+                                   (UBaseType_t) 1u << c, NULL) == pdPASS)
+            creadas++;
+    for (int k = 0; k < creadas; k++)
+        if (xSemaphoreTake(s_mpu_hecho, pdMS_TO_TICKS(1000)) == pdTRUE) hechas++;
+    if (hechas < 2)
+        log_printf("mpu: OJO, %s en %d de los 2 nucleos", usadas ? "armado" : "desarmado", hechas);
+}
+#else
+static void mpu_aplicar(const uint32_t* rbar, const uint32_t* rlar, unsigned usadas) {
+    if (usadas) mpu_poner_aqui(rbar, rlar, usadas);
+    else        mpu_apagar_aqui();
+}
+#endif
+
+void bpvm_pico_mpu_desarmar(void) {
+    /* Nótese que con UN núcleo no hay guarda `if (!s_mpu_armado) return;`: lo que
+     * hay que limpiar es el estado que quedó de OTRA ejecución, y apagar cuesta
+     * unas escrituras. Con dos, desarmar es crear dos tareas: sólo si se armó (y
+     * armar empieza siempre desde limpio, en los dos). */
+#if ( configNUMBER_OF_CORES > 1 )
+    if (!s_mpu_armado) return;
+#endif
+    mpu_aplicar(NULL, NULL, 0u);
     s_mpu_armado = 0;
 }
+
+#define MPU_REGIONES_TOPE 16u   /* las que se calculan como mucho (la RP2350 tiene 8 por núcleo; se lee) */
 
 /* Protege el CÓDIGO de cada módulo cargado. `base` es vm->memory (las
  * direcciones de la VM son offsets sobre él). */
 void bpvm_pico_mpu_armar(const uint8_t* base, const bpvm_module_t* mods, int n) {
     unsigned max = mpu_regiones();
     if (max == 0u) { log_printf("mpu: este chip no declara regiones — no se arma"); return; }
-
-    volatile uint32_t* ctrl  = (volatile uint32_t*) MPU_CTRL_ADDR;
-    volatile uint32_t* rnr   = (volatile uint32_t*) MPU_RNR_ADDR;
-    volatile uint32_t* rbar  = (volatile uint32_t*) MPU_RBAR_ADDR;
-    volatile uint32_t* rlar  = (volatile uint32_t*) MPU_RLAR_ADDR;
-    volatile uint32_t* mair0 = (volatile uint32_t*) MPU_MAIR0_ADDR;
-
-    bpvm_pico_mpu_desarmar();
-    /* attr0 = Normal, write-back read/write-allocate. Sin esto la región sería
-     * Device-nGnRnE y el código NO SE PODRIA EJECUTAR desde ella. */
-    *mair0 = 0x000000FFu;
+    if (max > MPU_REGIONES_TOPE) max = MPU_REGIONES_TOPE;
+    static uint32_t rbar[MPU_REGIONES_TOPE], rlar[MPU_REGIONES_TOPE];   /* las lee la tarea de cada núcleo */
 
     unsigned usadas = 0;
     for (int i = 0; i < n && usadas < max; i++) {
@@ -2018,30 +2227,23 @@ void bpvm_pico_mpu_armar(const uint8_t* base, const bpvm_module_t* mods, int n) 
                         + mods[i].code_size) & ~31u;
         if (fin <= ini + 32u) continue;   /* código minúsculo: no cabe región */
 
-        *rnr  = usadas;
         /* RBAR: BASE[31:5] | SH=0 | AP=10 (RO, privilegiado) | XN=0 (ejecutable) */
-        *rbar = (ini & ~31u) | (2u << 1);
+        rbar[usadas] = (ini & ~31u) | (2u << 1);
         /* RLAR: LIMIT[31:5] (inclusivo) | AttrIndx=0 | EN=1 */
-        *rlar = ((fin - 32u) & ~31u) | 1u;
+        rlar[usadas] = ((fin - 32u) & ~31u) | 1u;
         log_printf("mpu: region %u = %s code [%08lX,%08lX) SOLO LECTURA",
                    usadas, mods[i].name, (unsigned long) ini, (unsigned long) fin);
         usadas++;
     }
-    if (usadas == 0u) { log_printf("mpu: nada que proteger"); return; }
+    s_mpu_armado = 1;   /* desde aquí, desarmar limpia (con dos núcleos, en los dos) */
+    if (usadas == 0u) { mpu_aplicar(NULL, NULL, 0u); log_printf("mpu: nada que proteger"); return; }
     if ((unsigned) n > max)
         log_printf("mpu: OJO, %d modulos y solo %u regiones — los ultimos SIN proteger",
                    n, max);
 
-    __asm volatile ("dsb");
-    /* ENABLE | PRIVDEFENA: fuera de las regiones, los permisos de siempre. Sin
-     * PRIVDEFENA todo lo demas quedaria prohibido y la placa moriria al
-     * instante. */
-    *ctrl = (1u << 0) | (1u << 2);
-    __asm volatile ("dsb" ::: "memory");
-    __asm volatile ("isb");
-    s_mpu_armado = 1;
-    log_printf("mpu: ARMADO (%u de %u regiones) — una escritura al codigo dara DACCVIOL",
-               usadas, max);
+    mpu_aplicar(rbar, rlar, usadas);
+    log_printf("mpu: ARMADO (%u de %u regiones%s) — una escritura al codigo dara DACCVIOL",
+               usadas, max, configNUMBER_OF_CORES > 1 ? ", en los dos nucleos" : "");
 }
 
 /* #447 — el panic, contado en el log en vez de por un cable que nadie lee.
@@ -2065,6 +2267,7 @@ void __attribute__((noreturn)) bpvm_pico_panic(const char* fmt, ...) {
     } else {
         msg[0] = '\0';
     }
+    pico_fatal();   /* V7/H12 3.1, paso 4 (ver vAssertCalled) */
     log_printf("PANIC: %s", msg[0] ? msg : "(sin mensaje)");
     log_flush();
     for (;;) { __asm volatile ("bkpt #0"); }
@@ -2101,6 +2304,7 @@ void __attribute__((noreturn)) bpvm_pico_panic(const char* fmt, ...) {
  * todos pasan por aqui. El desglose de cual fue lo da el CFSR. */
 void bpvm_pico_fault_hard(struct bpvm_fault_frame* f, uint32_t exc_return);
 void bpvm_pico_fault_hard(struct bpvm_fault_frame* f, uint32_t exc_return) {
+    pico_fatal();   /* V7/H12 3.1, paso 4 (ver vAssertCalled): con dos núcleos, el informe se queda en la RAM */
     bpvm_cm33_fallo_informe(f, exc_return, "HardFault");
 }
 

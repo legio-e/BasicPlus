@@ -1335,6 +1335,8 @@ test-gchondo: $(BIN)
 # #653 (4-oct) — EL LOG CON DOS ESCRITORES: mirar si la línea cabe y copiarla no se pueden separar (la sección crítica
 # de la cintura). Dos hilos escriben sin parar en una región de 512 B con una guarda detrás: con la sección, intacta;
 # sin ella (--sin-seccion, el sabotaje: el log de antes), pisada —rojo—. Ver test/test_logmt.c.
+# Y #658 (5-oct): con dos hilos más que vuelcan sin parar a una flash de mentira (grabar encima deja el AND), ningún
+# volcado encima de otro y todas las imágenes buenas; con el volcado de antes (--volcado --de-antes), rojo.
 LOGMT_BIN = build/test_logmt.exe
 test-logmt: $(LIBOBJ)
 	@mkdir -p build
@@ -1344,7 +1346,12 @@ test-logmt: $(LIBOBJ)
 	@echo "--- y su sabotaje (sin la seccion: esperado ROJO) ---"
 	@if timeout 120 ./$(LOGMT_BIN) --sin-seccion; then echo "FAIL test-logmt: sin la seccion pasa por verde"; exit 1; \
 	 else echo "  (rojo, como debe: sin la seccion, el log se sale de su region)"; fi
-	@echo "PASS test-logmt (y su sabotaje, rojo)"
+	@echo "--- #658: el volcado con dos a la vez (esperado: PASS y la linea OK) ---"
+	@timeout 120 ./$(LOGMT_BIN) --volcado || { echo "FAIL test-logmt (#658)"; exit 1; }
+	@echo "--- y su sabotaje (el volcado de antes: esperado ROJO) ---"
+	@if timeout 120 ./$(LOGMT_BIN) --volcado --de-antes; then echo "FAIL test-logmt: el volcado de antes pasa por verde"; exit 1; \
+	 else echo "  (rojo, como debe: el volcado de antes graba encima de otro o pisa lo que se anade)"; fi
+	@echo "PASS test-logmt (y sus dos sabotajes, rojos)"
 
 # #355, V7/H12 2b (5-oct) — LA RESERVA DE EMERGENCIA la gasta SÓLO una reserva para construir un error (test/
 # test_reserva.c): con el heap lleno, las normales no la tocan; el objeto y el mensaje del error, sí, y caben. Antes lo

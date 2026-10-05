@@ -24,6 +24,11 @@ extern "C" {
  * antes del primer `log_printf`. */
 void log_init(void);
 
+/* V7/H12, etapa 3.1, paso 4 — un fallo fatal con dos núcleos (lo llama `pico_fatal`, que después reinicia): el
+ * volcado ya no toca la flash —aparcar al otro núcleo podría no volver—; el log se queda en la RAM que sobrevive al
+ * reinicio, y lo vuelca el arranque siguiente. Con un núcleo, nada. No tiene vuelta. */
+void log_modo_fatal(void);
+
 #ifdef __cplusplus
 }
 #endif

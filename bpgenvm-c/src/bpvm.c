@@ -1485,7 +1485,7 @@ static void lineas_vaciar(bpvm_t* vm) {
  * no. Enlazar, el hilo `main` desde el punto de entrada, el cuanto y las dos excepciones prefabricadas. V7/H12, etapa
  * 2a.2: la llama la cola al COLGAR el programa, con su main ya en la cola y antes de publicarlo (scheduler.c). */
 bpvm_status_t bpvm_programa_preparar(bpvm_t* vm) {
-    vm->kill_requested = 0;   /* P-run-stop: los re-runs no nacen muertos */
+    bpvm_kill_marcar(vm, 0);   /* P-run-stop: los re-runs no nacen muertos */
     /* F3 — resolver imports y aplicar class fixups antes de ejecutar. */
     bpvm_status_t ls = bpvm_link_all(vm);
     if (ls != BPVM_OK) return ls;
@@ -1644,8 +1644,8 @@ void bpvm_set_poll(bpvm_t* vm, bpvm_poll_cb_t cb, void* user) {
 
 void bpvm_request_kill(bpvm_t* vm) {
     if (!vm) return;
-    int antes = vm->kill_requested;
-    vm->kill_requested = 1;
+    int antes = bpvm_kill_pedido(vm);
+    bpvm_kill_marcar(vm, 1);
     /* V7/H12, etapa 2a.2 — EL KILL DESPIERTA: un run que duerme en la cola (todos los hilos durmiendo, o esperando un
      * hilo de otro run) lo ve ya, no al vencer su espera. Una vez: el poll «pegajoso» lo pide en cada vuelta. El run
      * mira la bandera con el cerrojo cogido antes de dormirse, así que el aviso no se pierde. */
@@ -1653,7 +1653,7 @@ void bpvm_request_kill(bpvm_t* vm) {
 }
 
 int bpvm_kill_requested(const bpvm_t* vm) {
-    return vm ? vm->kill_requested : 0;
+    return vm ? bpvm_kill_pedido(vm) : 0;
 }
 
 void bpvm_set_pause_cb(bpvm_t* vm, bpvm_pause_cb_t cb, void* user) {

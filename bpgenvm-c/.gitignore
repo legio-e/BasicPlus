@@ -5,3 +5,4 @@ trace.txt
 out.txt
 *.flash
 boardsim.flash
+build2/

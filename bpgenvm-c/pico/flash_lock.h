@@ -15,40 +15,43 @@
  *     instrucciones desde XIP flash, y durante un `flash_range_erase`
  *     el flash no es accesible para fetch ⇒ hard fault en el otro core.
  *     Hay que PARQUEAR el otro core en una rutina residente en RAM
- *     mientras dura la operación. Eso es `multicore_lockout`:
- *       * el core víctima (worker, core 1) se registra una vez con
- *         `pico_flash_lock_init_victim()`;
- *       * el core escritor (REPL/comm, core 0) llama
- *         `multicore_lockout_start_blocking()` → el víctima salta a su
- *         handler en RAM y gira con IRQs off; tras la operación,
- *         `multicore_lockout_end_blocking()` lo libera.
+ *     mientras dura la operación. Eso es `multicore_lockout`.
  *
- * ⚠️  RIESGO DE BRING-UP (#153): `multicore_lockout_victim_init()`
- *     instala un handler en la IRQ del FIFO inter-core (SIO_IRQ_PROC1).
- *     El port FreeRTOS-SMP del RP2350 TAMBIÉN usa ese FIFO para señalizar
- *     entre cores. Si chocan, el lockout o el scheduler se cuelga. Es el
- *     mismo tipo de conflicto que tumbó USB CDC al meter `pico_flash` en
- *     FP2. POR ESO el dual-core es opt-in y NO se da por validado hasta
- *     probarlo en placa (ver docs/SMP_ARCH.md §"Port a Pico" runbook).
- *     Plan B si choca: barrera a nivel FreeRTOS (suspender el worker +
- *     girar el idle de core 1 en RAM) en vez del lockout del SDK.
+ * V7/H12, etapa 3.1 (5-oct; docs/V7_IDEAS.md §H12 «La etapa 3.1, el diseño»):
+ *   - LAS DOS VÍCTIMAS: cualquier núcleo puede escribir (las tareas no van ancladas), así que cada núcleo se registra a
+ *     sí mismo (`pico_flash_lock_init_victim`, desde una tarea anclada a él: lo hace el arranque, vm_task); antes sólo
+ *     se registraba un hilo anclado a un núcleo ≠ 0, y no hay ninguno.
+ *   - UN MUTEX NUESTRO para la ventana entera: `multicore_lockout_start_blocking` suelta el cerrojo del SDK en cuanto
+ *     aparca al otro núcleo, y antes de apagar las interrupciones otra tarea de ESTE núcleo podía abrir su propia
+ *     ventana y, al cerrarla, soltar al otro con la primera escribiendo todavía.
+ *   - ANTES DEL PLANIFICADOR sólo vive el núcleo 0 (el 1 lo arranca vTaskStartScheduler): no hay a quién aparcar. Y
+ *     con el planificador en marcha, no se escribe hasta que los dos núcleos son víctimas (se espera un rato; si no
+ *     llegan, la escritura FALLA y quien la pidió lo sabe: nunca a ciegas).
+ *   (El puerto de FreeRTOS de la RP2350 avisa entre núcleos con los doorbells; la FIFO, que usa el lockout, sólo la
+ *   usa al lanzar el núcleo 1, y el SDK apaga ahí su interrupción.)
  */
 #ifndef BPVM_FLASH_LOCK_H
 #define BPVM_FLASH_LOCK_H
 
 #include <stdint.h>
 
-/* Registra el core llamante como víctima de lockout. Debe llamarse UNA
- * vez, desde el core que NO escribe flash (worker, core 1), tras
- * arrancar su task. No-op en single-core. */
+/* Registra el NÚCLEO que la llama como víctima del lockout (cada núcleo, desde una tarea anclada a él). Idempotente.
+ * No-op con un núcleo. */
 void pico_flash_lock_init_victim(void);
 
-/* Abre la ventana exclusiva. Devuelve el token de IRQs (pásalo a _end).
- * Single-core: == save_and_disable_interrupts().
- * Dual-core: parquea el otro core + save_and_disable_interrupts(). */
-uint32_t pico_flash_lock_begin(void);
+/* El mutex de la ventana (dos núcleos), creado en main() antes del planificador. Sin él, _begin devuelve -1. No-op con
+ * un núcleo. */
+void pico_flash_lock_prepara(void);
 
-/* Cierra la ventana. `token` es el valor que devolvió _begin. */
+/* Cuántos núcleos están registrados como víctimas (con un núcleo, 1: no hace falta ninguno). */
+int  pico_flash_lock_victimas(void);
+
+/* Abre la ventana exclusiva y deja en *token el estado de las IRQs (pásalo a _end). 0 = abierta; -1 = no se puede
+ * escribir (con dos núcleos, uno no se ha registrado como víctima): no se ha tocado nada y no hay que llamar a _end.
+ * Single-core: save_and_disable_interrupts(). Dual-core: el mutex, aparcar al otro núcleo y apagar las IRQs. */
+int  pico_flash_lock_begin(uint32_t* token);
+
+/* Cierra la ventana. `token` es el valor que dejó _begin. */
 void pico_flash_lock_end(uint32_t token);
 
 #endif /* BPVM_FLASH_LOCK_H */

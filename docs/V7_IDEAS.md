@@ -5166,6 +5166,101 @@ compartidas, del programador (con los Mutex de BP); la VM y lo privado de cada h
   copia, como hoy; si la cola se llena, espera quien encola, y el hilo de la GUI nunca se espera a sí mismo. Igual con
   uno o dos runs, en el lado de la VM (antes del pack de LVGL). Por diseñar del todo cuando se llegue.
 
+#### La etapa 3.1, el diseño (5-oct, tarde; leído en el código mientras la resistencia de la 2b)
+
+Los dos núcleos de la RP2350 con UN run. La imagen ya se puede pedir (`-DBPVM_PICO_NUM_CORES=2`: `configNUMBER_OF_CORES`,
+la afinidad y las prioridades múltiples, `pico/FreeRTOSConfig.h`); lo que falta es lo que hoy sólo es seguro porque
+hay un núcleo. Paso a paso, cada uno con su prueba:
+
+0. **Arrancar, instrumentado** (sin sonda: Eduardo no la tiene). Las migas por núcleo en la RAM que sobrevive al
+   reinicio (`bpvm_breadcrumb_attach`), el perro guardián armado durante el arranque —si se cuelga, reinicia y el
+   arranque siguiente cuenta en el log las migas del anterior— y el LED. Primer objetivo: llegar al REPL con los dos
+   núcleos, sin hacer nada más. (En mayo, el núcleo 0 se quedaba DENTRO de `vTaskStartScheduler` esperando al 1.)
+1. **Lo que saca la flash del XIP, antes del planificador.** Hoy, en `vm_task` y con las tareas ya en marcha
+   (`pico/main.c:1604-1612`): el sondeo JEDEC (`board_desc_early_init` → `flash_do_cmd`, con sólo las interrupciones
+   del núcleo propio apagadas) y la PSRAM (`board_desc_psram_from_env`: reconfigura el QMI, que comparte con la flash;
+   sólo la Metro). A `main()`, con un solo núcleo vivo. La lectura del ENV (por XIP) se puede quedar donde está.
+2. **El candado de la flash** (`pico/flash_lock.c`, que usa la cintura `pico_flash.c`). (a) Las DOS víctimas: cada
+   núcleo se registra a sí mismo (`multicore_lockout_victim_init`): el 0 en `main()`; el 1, una tarea anclada a él al
+   arrancar, que avisa con un semáforo; y el arranque no escribe la flash hasta que los dos lo están —hoy sólo se
+   registraba un hilo anclado a un núcleo ≠ 0, y no hay ninguno: la primera escritura esperaría para siempre—. (b) Un
+   mutex NUESTRO que cubra la ventana entera: `multicore_lockout_start_blocking` suelta el cerrojo del SDK después de
+   aparcar al otro núcleo, y antes de apagar las interrupciones (`flash_lock.c:25-33`) otra tarea del mismo núcleo
+   podía abrir otra ventana y, al cerrarla, despertar al otro núcleo con la primera aún escribiendo. (El puerto de
+   FreeRTOS de la RP2350 avisa entre núcleos con los doorbells, no con la FIFO: la FIFO queda para el lockout.)
+3. **El log** (`pico/log.c`): su sección (`log_entrar`, hoy apagar las interrupciones: sólo el núcleo propio), con un
+   spinlock del SIO (`spin_lock_blocking`: vale en una tarea y en una interrupción). Y `#658` (el volcado a la flash,
+   fuera de la sección): copiar el log bajo el spinlock y escribirlo FUERA, con el candado de la flash —nunca aparcar al
+   otro núcleo con un spinlock cogido: si el otro está girando en él con las interrupciones apagadas, no puede
+   aparcarse, y los dos se quedan esperando—.
+4. **Los caminos fatales** (`vAssertCalled`, el desbordamiento de pila, la memoria de FreeRTOS, el HardFault): hoy
+   vuelcan el log a la flash, y con dos núcleos eso es aparcar al otro desde donde FreeRTOS tiene sus cerrojos cogidos:
+   un interbloqueo mudo. Lo propuesto: el log, en la RAM que sobrevive al reinicio (sin escribir la flash), el otro
+   núcleo, parado, y el LED, como hoy; el arranque siguiente lo encuentra («log: RAM SUPERVIVIENTE»). Lo que cambia: tras
+   un fallo fatal, si se corta la corriente antes de leerlo, ese log se pierde. **Decidido** (Eduardo, 5-oct: *«OK»*),
+   para la imagen de dos núcleos; con uno, como hoy.
+   **Y afinado al escribirlo** (5-oct, tarde; tres preguntas de Eduardo). Parar al otro núcleo resultó lo incómodo: al 1
+   lo para el SDK (lo reinicia), pero al 0 no hay con qué —escrito con una alarma del timer cuya interrupción forzaba
+   el 1—, y el tick de FreeRTOS vive en el 0. Eduardo: *«¿por qué necesitas parar el núcleo 0?»*; y el principio: *«Lo
+   importante es que IO sea sólido como una roca, todo lo demás tiene solución»* —contener el fallo en el run, que el
+   SO sigue estable: terminar la TAREA y no el núcleo, que suelte sus cerrojos y que `io` informe; y el MPU de la M33
+   protegiendo la memoria del SO y la de `io`—. Pero *«es un tema complejo. Lo podemos dejar para más adelante (V8).
+   De momento hacemos lo que podemos, sabiendo que nos puede quedar algún caso suelto. Para eso fatal error, el log y
+   reset»*. **Lo hecho**: con dos núcleos, cada camino fatal llama primero a `pico_fatal`, que ARMA EL PERRO GUARDIÁN
+   (250 ms: pase lo que pase después, la placa se reinicia; nunca muda), deja una marca en la RAM que sobrevive y pone
+   el log sin flash (el volcado ya no aparca al otro núcleo); ni se para al otro núcleo ni se cambia nada más de cada
+   camino —su informe, y su bucle: el perro lo corta—. El arranque siguiente lo dice (en el log, y como causa del
+   reinicio en el `INFO`: «fallo fatal»), vuelca el log a la flash como siempre y **no hace el autorun**: es la regla
+   de H9 que no se había hecho —*«un fallo previo o el flag de modo seguro lo inhiben»* (`H9_KERNEL_CAPAS.md` §3)—,
+   para los fallos fatales. Y el CONTADOR de reinicios de `V3_IDEAS` («Pagar doble»: varios seguidos, sin autorun),
+   que a un equipo autónomo le relanzaría la app tras un fallo suelto, a V8 (*«OK, el contador a V8»*) con la
+   contención y el MPU (`FICHAS`, el bloque de V8). La alarma, fuera.
+5. **Cerrar el ejecutor de una native** (`pico/platform_freertos.c`, `bpvm_platform_thread_join`): hoy se borra la
+   tarea y se libera su pila en cuanto avisa que acabó, y con dos núcleos puede estar todavía corriendo en el otro
+   (entre el aviso y su `vTaskSuspend`). Esperar a que esté suspendida (`eTaskGetState`) antes de borrarla.
+6. **Las banderas que cruzan núcleos, con orden**: `kill_requested` (`volatile int`, `include/bpvm_internal.h:670`),
+   el fin de la cola y el anillo de la UART, con `__atomic` (escribir con release, leer con acquire). Es lo que dejó
+   dicho `A4`.
+7. **El MPU** (`mpu=1`, `#440`): cada núcleo tiene el suyo; configurarlo en los dos.
+
+8. **La vuelta atrás** (decidido, Eduardo, 5-oct: *«OK»*): además de la imagen de un núcleo, un interruptor en el
+   ENV, `vm.cores=1`: la imagen de dos núcleos con todas las tareas ancladas al núcleo 0 (el 1, sólo con su tarea
+   ociosa: sigue siendo víctima del candado de la flash). Sirve para volver atrás sin grabar y para medir uno contra
+   dos núcleos con la MISMA imagen.
+
+**Escrita en el código** (5-oct, tarde; las dos imágenes de la Pico compilan —`pico/build`, un núcleo; `pico/build2`,
+`-DBPVM_PICO_NUM_CORES=2`—; sin grabar todavía):
+- **0** — las marcas del arranque, una palabra por núcleo en la RAM que sobrevive (`pico_marca_arranque`: 0x01 `main`,
+  0x02 la identidad, 0x03 `vm_task` creada, 0x04 el planificador; 0x10 `vm_task`, 0x11 el núcleo 1 víctima, 0x12 el
+  reparto, 0x13 la subida, 0x20 el arranque completo), que el arranque siguiente cuenta en el log; y con dos núcleos el
+  perro guardián del ARRANQUE (15 s; lo apaga el arranque completo, antes del autorun o del REPL).
+- **1** — el sondeo de la flash, el ENV y la PSRAM, de `vm_task` a `main()` (en las dos imágenes: una sola forma).
+- **2** — `pico/flash_lock.c`: cada núcleo se registra a sí mismo como víctima (dos tareas ancladas, al empezar
+  `vm_task`; hasta que están los dos, escribir la flash FALLA y se dice); el mutex de la ventana, nuestro, creado en
+  `main()`; y `pico_flash_lock_begin` devuelve -1 si no puede.
+- **3** — el log: con dos núcleos, un spinlock del SDK (`pico/log.c`); y `#658` en el común (`src/bpvm_log.c`): un
+  volcado a la vez con una bandera y su petición pendiente, y la cabecera y el relleno dentro de la sección. Con su
+  prueba, `test-logmt --volcado`, verde y roja con el volcado de antes (y roja también con sólo el relleno fuera).
+- **4** — los caminos fatales, como quedó decidido arriba (`pico_fatal`, en `pico/main.c`), y el informe del HardFault
+  sin `xTaskGetSchedulerState` con dos núcleos (coge los cerrojos del kernel; `src/bpvm_fallo_cm33.c`).
+- **5** — `bpvm_platform_thread_join` (`pico/platform_freertos.c`): el ejecutor, borrado sólo suspendido y fuera de
+  los dos núcleos (`eTaskGetState` y `xTaskGetCurrentTaskHandleForCore`).
+- **6** — en el común: `kill_requested` por `bpvm_kill_pedido`/`bpvm_kill_marcar` (acquire/release), el `fin` del
+  run a `io` y el anillo de la UART (el byte antes de publicar `head`; el sitio, después de ver `tail`).
+- **7** — el MPU de `mpu=1` en los dos núcleos: una tarea anclada a cada uno lo aplica, y se espera a las dos.
+- **8** — `vm.cores=1`, hecho con el 0.
+Y la red del PC, por el común tocado (`#658`, el paso 6).
+
+**La puerta de la 3.1** (la Pico 2, un run, la imagen de dos núcleos): arranca 20 de 20 (con el USB y sin él); la
+tanda y `run_placa`, verdes; escribir la flash con el otro núcleo ejecutando (un programa que escribe ficheros mientras
+otro calcula, el ENV y el log), sin un fallo; PrintBench (con `io` en el otro núcleo debería bajar) y `fib(26)`; y los
+110 minutos de resistencia. **Y la 3.2**, `vm.runs=2` con los dos núcleos: la puerta de la 2b otra vez y `ParaleloBench`
+en la placa —lo que gana de verdad un programa con dos hilos—.
+
+**Y para afinar** (medido en la puerta de la 2b): con dos runs, `fib(26)` va un 4 % más lento que con uno (2 948 contra
+2 835 ms): lo más probable, el punto seguro de cada paso, que con dos runs lee dos punteros (`vm->smp` y su
+`stop_the_world`): guardar la cola en una variable del cuanto. A medir en el próximo lote.
+
 **Las pruebas** (en el PC, con dos runs, cada una con su sabotaje): (a)+(c), un hilo que alterna referencias (y null)
 en un campo y otro que lo lee y lo usa sin parar, con la ventana ensanchada entre las dos palabras de un almacén (un
 gancho de prueba): con las piezas, sólo valores buenos o «objeto eliminado» atrapado; sin ellas, el proceso roto o un

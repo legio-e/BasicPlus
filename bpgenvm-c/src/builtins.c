@@ -1323,8 +1323,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * precisamente el que la placa con pantalla recorre. */
         if (vm->io == NULL && vm->poll_cb != NULL
                 && vm->poll_cb(vm, vm->poll_user) != 0)
-                vm->kill_requested = 1;
-            if (vm->kill_requested) break;
+                bpvm_kill_marcar(vm, 1);
+            if (bpvm_kill_pedido(vm)) break;
             if (!bpvm_gui_lvgl_window_open()) break;
             /* #462 - este lazo (el __guiRun de legado) SI bloquea por diseno: no
              * hay hilo BP al que cederle el turno porque el builtin no vuelve.
@@ -1369,13 +1369,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * precisamente el que la placa con pantalla recorre. */
         if (vm->io == NULL && vm->poll_cb != NULL
                 && vm->poll_cb(vm, vm->poll_user) != 0)
-            vm->kill_requested = 1;
+            bpvm_kill_marcar(vm, 1);
         /* #462 - el contrato cambia: -1 = "no queda nada, sal del lazo";
          * >= 0 = "vuelve dentro de N ms". Quien duerme esos ms es el lazo BP de
          * Gui.bp, con un `sleep` de BP -que bloquea ESE hilo BP y le pasa el
          * turno al siguiente-. Antes se devolvia un booleano y la espera se la
          * comia el bombeo, a nivel de SO, congelando a todos los hilos BP. */
-        if (vm->kill_requested) { push_i32(vm, tc, -1); return BPVM_OK; }
+        if (bpvm_kill_pedido(vm)) { push_i32(vm, tc, -1); return BPVM_OK; }
 #ifdef BPVM_GUI_RENDER   /* V7/H6: LVGL dentro, o por el pack */
         if (!bpvm_gui_lvgl_window_open()) {
             /* SIN VENTANA (--no-screen con LVGL, o la cerro el usuario): la salida

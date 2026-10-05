@@ -83,18 +83,40 @@ static int flash_read(uint8_t* dst, uint32_t len) {
 /* Erase + program de la región ENTERA, por la cintura (V7/H7 U1.4): el candado
  * —IRQs fuera y el otro núcleo parado, porque ejecutar desde flash mientras se
  * borra cuelga la placa— va dentro, en dos ventanas (borrar, programar). */
+#if ( configNUMBER_OF_CORES > 1 )
+static volatile int s_log_fatal = 0;   /* V7/H12 3.1, paso 4: ver log_modo_fatal */
+void log_modo_fatal(void) { s_log_fatal = 1; }
+#else
+void log_modo_fatal(void) {}
+#endif
+
 static int flash_write(const uint8_t* src, uint32_t len) {
+#if ( configNUMBER_OF_CORES > 1 )
+    if (s_log_fatal) return -1;   /* tras un fallo fatal, aparcar al otro núcleo podría no volver: el log, en la RAM
+                                     * (y el arranque siguiente lo vuelca) */
+#endif
     if (pico_flash_erase(LOG_FLASH_OFFSET, len) != 0) return -1;
     return pico_flash_write(LOG_FLASH_OFFSET, src, len);
 }
 
 /* #653 (4-oct) — la sección crítica de una línea: las interrupciones enmascaradas, guardando el estado (vale en
- * cualquier contexto: los ganchos de FreeRTOS, el arranque antes del planificador). Con UN núcleo basta; con dos
- * (H12, etapa 3) hará falta además un spinlock. */
+ * cualquier contexto: los ganchos de FreeRTOS, el arranque antes del planificador). Con UN núcleo basta.
+ * V7/H12, etapa 3.1 — con DOS, además un spinlock (el del SDK: en la RP2350 va por exclusivas, por su errata de los
+ * del SIO), que vale en una tarea, en una interrupción y antes del planificador: apagar las interrupciones sólo para
+ * al núcleo propio. Nunca se aparca al otro núcleo con él cogido (el volcado a la flash va FUERA: bpvm_log.c). */
+#if ( configNUMBER_OF_CORES > 1 )
+static spin_lock_t* s_log_spin = NULL;
+static uint32_t log_entrar(void) { return spin_lock_blocking(s_log_spin); }
+static void     log_salir(uint32_t estado) { spin_unlock(s_log_spin, estado); }
+#else
 static uint32_t log_entrar(void) { return save_and_disable_interrupts(); }
 static void     log_salir(uint32_t estado) { restore_interrupts(estado); }
+#endif
 
 void log_init(void) {
+#if ( configNUMBER_OF_CORES > 1 )
+    if (s_log_spin == NULL) s_log_spin = spin_lock_init(spin_lock_claim_unused(true));   /* V7/H12, etapa 3.1 */
+#endif
     bpvm_log_cintura_t c;
     memset(&c, 0, sizeof c);   /* #653: los campos que se añadan nacen a NULL */
     c.now_ms      = now_ms;

@@ -24,6 +24,7 @@
 #include "pico/rand.h"   /* get_rand_32 — bpvm_platform_random_u32 (#347) */
 
 #include "flash_lock.h"  /* #153 — registro de core víctima de lockout */
+#include "nucleos.h"     /* V7/H12, etapa 3.1: `vm.cores=1`, cada tarea al núcleo 0 */
 #include "bpvm_alloc.h"  /* V7/H5 P2b.3: la pila del ejecutor de natives, de malloc */
 
 #include <stdlib.h>
@@ -130,6 +131,7 @@ int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
         vPortFree(ft);
         return -1;
     }
+    pico_tarea_nucleos(ft->task);   /* V7/H12, etapa 3.1 */
     *t = (void*) ft;
     return 0;
 }
@@ -176,6 +178,7 @@ int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
      * CONSTRUIDO: no hay dos numeros que puedan divergir. */
     BaseType_t r = xTaskCreate(fr_thread_trampoline, "bpvm-io", 1024,
                                ft, uxTaskPriorityGet(NULL), &ft->task);
+    if (r == pdPASS) pico_tarea_nucleos(ft->task);   /* V7/H12, etapa 3.1 */
     if (r != pdPASS) {
         vSemaphoreDelete(ft->exited);
         vPortFree(ft);
@@ -230,6 +233,17 @@ void bpvm_platform_thread_join(bpvm_platform_thread_handle_t* t) {
     xSemaphoreTake(ft->exited, portMAX_DELAY);
     vSemaphoreDelete(ft->exited);
     if (ft->tcb) {   /* P2b.3 — el ejecutor de una native: se borra aquí y se devuelve su memoria (ver el trampolín) */
+#if ( configNUMBER_OF_CORES > 1 )
+        /* V7/H12 3.1, paso 5 — con dos núcleos, el aviso llega con el ejecutor TODAVÍA corriendo en el otro (entre darlo
+         * y suspenderse). Borrar una tarea que corre la deja a la tarea ociosa —su TCB, en la lista de las terminadas—,
+         * y devolver su memoria sería pisar una pila en uso y una lista del núcleo. Se espera a que esté suspendida y
+         * fuera de los dos núcleos: así ya no vuelve a correr, y borrarla es en el acto. (Sólo al acabar el programa:
+         * esperar un tick no se nota.) */
+        while (eTaskGetState(ft->task) != eSuspended
+               || xTaskGetCurrentTaskHandleForCore(0) == ft->task
+               || xTaskGetCurrentTaskHandleForCore(1) == ft->task)
+            vTaskDelay(1);
+#endif
         vTaskDelete(ft->task);
         bpvm_free(ft->tcb);
         bpvm_free(ft->pila);
@@ -282,6 +296,7 @@ int bpvm_platform_thread_create_nativa(bpvm_platform_thread_handle_t* t,
         ft->task = xTaskCreateStatic(fr_thread_trampoline, "bpvm-nat",
                                      (configSTACK_DEPTH_TYPE) (pila_bytes / sizeof(StackType_t)), ft,
                                      uxTaskPriorityGet(NULL), (StackType_t*) ft->pila, (StaticTask_t*) ft->tcb);
+    pico_tarea_nucleos(ft->task);   /* V7/H12, etapa 3.1 (NULL: nada) */
     if (ft->task == NULL) {
         if (ft->exited) vSemaphoreDelete(ft->exited);
         if (ft->tcb)  bpvm_free(ft->tcb);
