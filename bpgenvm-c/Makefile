@@ -1403,15 +1403,15 @@ test-frcond:
 COLA_BIN = build/test_cola.exe
 test-cola: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido)
+	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido UnHiloCalcula)
 	$(call stdlibdep,Core)
-	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ]; then \
-	  echo "FAIL test-cola: faltan los .mod de la prueba (Interbloqueo, MutexGc, FinJunto, GcConcurrente, EvDosRuns, EvHiloMuere, FicherosDosRuns y los de la revisión: OwnerCarrera, LineasLargas, JoinLinea, ListDirDos, ColectaAjena, ErrorPrimero, FileCompartido) y no se han podido generar"; exit 1; \
+	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ] || [ ! -f samples/UnHiloCalcula.mod ]; then \
+	  echo "FAIL test-cola: faltan los .mod de la prueba (Interbloqueo, MutexGc, FinJunto, GcConcurrente, EvDosRuns, EvHiloMuere, FicherosDosRuns y los de la revisión: OwnerCarrera, LineasLargas, JoinLinea, ListDirDos, ColectaAjena, ErrorPrimero, FileCompartido; y UnHiloCalcula, de #662) y no se han podido generar"; exit 1; \
 	fi
 	@$(CC) $(CFLAGS) -Isrc test/test_cola.c $(LIBOBJ) -o $(COLA_BIN) $(LDFLAGS)
-	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 15. PASS y la linea OK) ---"
+	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 16. PASS y la linea OK) ---"
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod 2>/dev/null) || { echo "FAIL test-cola"; exit 1; }
-	@echo "--- y sus sabotajes (esperado: los trece, ROJOS, cada uno por lo suyo) ---"
+	@echo "--- y sus sabotajes (esperado: los catorce, ROJOS, cada uno por lo suyo) ---"
 	@# El del contador: un interbloqueo FALSO dicho en stderr (detrás, el programa se descuelga con un run aún dentro
 	@# de su cuanto, que al despertar ya no lo encuentra: suele acabar en un fallo de segmento; por eso se mira el aviso).
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-contador \
@@ -1485,7 +1485,13 @@ test-cola: $(LIBOBJ)
 	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab13.out || [ $$st -ne 1 ]; }; then \
 	   echo "  (rojo, como debe: el EXITED dice el error de una excepción atrapada; salida $$st)"; \
 	 else echo "FAIL test-cola: el sabotaje --sabotaje-error no se caza (salida $$st)"; exit 1; fi
-	@echo "PASS test-cola (y sus trece sabotajes, rojos)"
+	@# #662: avisar a la cola tras CADA cuanto, como antes: el run ocioso se despierta en vano cientos de veces.
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-aviso \
+	   >../build/cola_sab14.out 2>/dev/null); st=$$?; cat build/cola_sab14.out; \
+	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab14.out; then \
+	   echo "  (rojo, como debe: con un hilo, el otro run se despierta en vano tras cada cuanto)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-aviso no se caza (salida $$st)"; exit 1; fi
+	@echo "PASS test-cola (y sus catorce sabotajes, rojos)"
 
 # V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS: cada hilo, una struct pedida al arrancarlo y devuelta al acabar (sin
 # array y sin tope; el diseño, de Eduardo). HilosMuchos arranca 120 hilos —40 de uno en uno, 40 a la vez esperando en
@@ -1862,6 +1868,9 @@ test-fslfsmt: $(LIBOBJ)
 # REALES (--smp=4). Verde = tamaños exactos + 0 líneas rotas.
 # V7/H7 (#599, 28-sep) — en la red (check-testc), y el verde que dice el comentario:
 # hasta hoy sólo se miraban las líneas rotas; ahora también cada tamaño y cada marca.
+# H12 (5-oct) — la SALIDA del programa, sin los avisos de la VM (stderr, a build/iomt.err): con 2>&1, el aviso
+# del final de un RUN con varios runs se colaba en mitad de una línea (la escribe otro hilo, la comm task) y la
+# comprobación de línea exacta fallaba con los valores bien (tras #662, que cambió el ritmo del final).
 test-iomt: $(BIN)
 	$(call fixture,IoMt)
 	@if [ ! -f samples/IoMt.mod ]; then \
@@ -1871,14 +1880,14 @@ test-iomt: $(BIN)
 	else \
 	  echo "--- B1.4b Threads BP + littlefs + --smp=4 (esperado: 200/200/200/600, 0 rotas) ---"; \
 	  rm -f build/iomt.img; \
-	  out=$$(cd samples && ../$(BIN) --fs=lfs:../build/iomt.img --smp=4 IoMt.mod 2>&1); \
+	  out=$$(cd samples && ../$(BIN) --fs=lfs:../build/iomt.img --smp=4 IoMt.mod 2>../build/iomt.err); \
 	  echo "$$out" | grep -vE 'INICIANDO|FIN DE'; \
 	  if echo "$$out" | grep -qx "own1 = 200" && echo "$$out" | grep -qx "own2 = 200" && \
 	     echo "$$out" | grep -qx "own3 = 200" && echo "$$out" | grep -qx "shared = 600" && \
 	     echo "$$out" | grep -qx "marcas a/b/c = 100 100 100" && echo "$$out" | grep -qx "lineas rotas = 0"; then \
 	    echo "OK: 3 hilos BP escriben 4 ficheros a la vez sobre littlefs con 4 workers: tamanos exactos, 0 lineas rotas"; \
-	  else echo "FAIL test-iomt"; exit 1; fi; \
-	  rm -f build/iomt.img; \
+	  else echo "FAIL test-iomt (los avisos de la VM, abajo)"; tail -15 build/iomt.err; exit 1; fi; \
+	  rm -f build/iomt.img build/iomt.err; \
 	fi
 
 # H2 fase A · B1.1 — la FACHADA bpvm_fs sobre littlefs (backend fs_lfs.c +

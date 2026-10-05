@@ -1174,6 +1174,20 @@ la C6, la P4 y la Nucleo.
   en los 67 opcodes compartidos) hace que dos hilos con arrays u objetos vayan MÁS LENTOS que un run (127 ms contra
   104; 141 contra 78): el cerrojo viaja entre las cachés de los núcleos. Descartado; el camino, el fino (`#660`,
   `#661`). Mi techo de Amdahl de una hora antes era falso: no contaba ese viaje. Por eso se mide.
+- **`#662`, partida y arreglada en el PC**: pesaba el aviso a la cola tras cada cuanto (no el `yield`); ahora sólo se
+  avisa si el hilo dejó de estar RUNNABLE o hubo un fallo (lo que deja listo a otro hilo ya avisaba por su cuenta). Un
+  hilo con dos runs, como con uno (`fib` 70 → 50 ms; con un run, 52). `test-cola` 16 con su sabotaje (2 vueltas sin
+  hilo contra 560). En la Pico, con el próximo lote. La red, verde salvo `test-iomt`, que era la prueba: mezclaba los
+  avisos de la VM con la salida y el aviso del final se colaba en mitad de una línea (los valores, bien siempre);
+  arreglada y pasada 20 de 20.
+- **La regla de Eduardo sobre lo compartido** (5-oct): *«La memoria que se utilice compartida por 2 threads BP es
+  responsabilidad del programador»*, y al concretar: *«Yo me refiero a properties y listas, el BP ya tiene mecanismos
+  de protección y es el usuario el que ha de utilizarlos. El resto es responsabilidad nuestra, a:=a+1 siendo a una
+  variable local debe funcionar siempre.»* Y *«OK a a, b y c»*: las tres piezas del camino fino, para que un programa
+  que no protege lo suyo lea valores malos pero nunca rompa la VM; fuera la (d).
+- **El diseño del camino fino** (`#660`, `#661`; `V7_IDEAS` §«El camino fino»): palabra a palabra para lo compartido
+  (y un cerrojo pequeño sólo para lo no alineado), una resolución validada por paso y el número de handle de vuelta en
+  el GC; miVM tiene lo mismo (la memoria byte a byte, el número reciclado en el acto): (b) y (c) primero allí.
 
 ## 🧵 H12 (5-oct) — LA 2b MÍNIMA EN EL PC: dos runs con código BP normal, la condición de FreeRTOS y la revisión
 

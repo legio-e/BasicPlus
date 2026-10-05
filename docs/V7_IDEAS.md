@@ -5063,6 +5063,71 @@ velocidad es el fino —los pasos compartidos en paralelo y sin cerrojo, cada un
 `#660` y `#661`—, que en el x86 no cuesta nada y en la M33 abarata la escritura (`REV` + `STR` en vez de cuatro
 `STRB`).
 
+#### El camino fino: `#660` y `#661`, el diseño (5-oct; Eduardo: *«adelante»*)
+
+**El principio**: los pasos compartidos corren en paralelo y sin cerrojo, y cada uno es seguro por sí mismo: resuelve
+cada referencia UNA vez, validada; lee y escribe lo compartido palabra a palabra, de una vez; y nada de lo que un paso
+tiene entre manos se recicla mientras dura.
+
+- **(a) Palabra a palabra** (`#660`). Los accesos de siempre de la VM (`bpvm_read_u32_be`/`bpvm_write_u32_be` y los
+  de 16 bits, `include/bpvm_internal.h:801-828`): si la dirección está alineada, una carga o un almacén de una vez
+  (`__atomic_load_n`/`__atomic_store_n`, relajados, con su orden de bytes: en la M33, `REV` + `STR`, más corto que los
+  cuatro `STRB` de hoy); si no —los operandos del código, que no se tocan a la vez—, byte a byte como hoy. Sin censo
+  de quién lee qué: todo lo alineado, de una vez, también lo que escriben los builtins. Los de 8 bytes (`long`,
+  `double`, una referencia), dos palabras. Para que lo compartido esté SIEMPRE alineado: los objetos y los arrays ya lo
+  están (`bpvm.c:75`); las globales, desde GC-2 (v3.0.1) en huecos múltiplos de 4 desde CS (`ModWriter.registerSymbol`),
+  pero el bloque de un segundo módulo empieza donde acabó el anterior, más 64 (`src/loader.c:550`, tras la subtabla
+  de clases de `:478-483`): el cargador lo alineará, en las dos VMs a la vez (la paridad).
+- **(b) Ningún handle se recicla en mitad de un paso** (`#661`). Con más de un run, matar un handle (soltar un
+  `owner`) sube su generación en el acto —las referencias rancias mueren desde el paso siguiente: el contrato B de
+  V4—, pero su DIRECCIÓN sigue en la tabla y su número no vuelve a la lista libre: lo hace el GC, con el mundo parado,
+  antes de marcar (el bloque ya esperaba al GC desde la 2b). Así, un paso que resuelve una referencia dos veces (hoy,
+  `ALOAD`/`ASTORE`: `bpref_arr_len` y luego `bpref_arr_elem`) obtiene la misma dirección las dos —como mucho, la de un
+  objeto recién soltado, cuya memoria nadie reutiliza hasta el GC: inofensivo, como si el paso hubiera ido justo
+  antes—; nunca la de otro objeto ni la dirección 0. No hace falta rehacer los opcodes para resolver una sola vez. Con
+  un run, como hoy.
+- **(c) La validación de una referencia** (`#660`). Con (a), una referencia leída a medias es una mezcla de PALABRAS:
+  la generación de un valor y el índice de otro. Las reglas: sin TAG, la palabra alta tiene que ser 0 (null y las
+  constantes del bloque de datos); con TAG, la generación de la referencia tiene que ser la del número en la tabla. Hoy
+  `bpvm_ref_dead` da por viva una referencia sin TAG aunque su palabra alta no sea 0: es el agujero de `#660` (la
+  dirección 0). Con la regla, rechazada.
+- **(d) Las generaciones, de un contador COMÚN** (el hueco que quedaba). Hoy cada número lleva su contador (0, 1, 2…),
+  y con números tan pequeños DOS hilos que escriben a la vez el mismo campo —una carrera del programa— pueden dejar en
+  él, para siempre, la generación de uno y el índice del otro; hoy eso da «objeto eliminado», pero cuando el GC recicle
+  ese número y su contador llegue a esa generación, la mezcla apuntaría a un objeto que no tiene nada que ver. Con un
+  contador común (cada alta y cada baja toman el siguiente valor), una generación no se repite en dos números: la
+  mezcla no puede coincidir nunca —salvo que el contador de 32 bits dé la vuelta Y caiga justo en ese número: una entre
+  cuatro mil millones—. Sin cerrojos ni coste: es la misma suma de hoy, en otro sitio. Y la generación de un handle ya
+  no es nunca 0: con TAG y palabra alta 0, también rechazada.
+- **Las dos VMs**: miVM tiene lo mismo (escribe la memoria byte a byte, `VirtualMachine.java:2595-2618`; recicla el
+  número en el acto, `handleKillIdx`; un contador por número), y su `--workers=2` corre el mismo riesgo. (b), (c) y
+  (d) son algoritmo: primero en miVM, como pide la cascada, y luego en la VM-C; (a) es representación: la VM-C (en
+  miVM, el mecanismo de Java 8 está por elegir: su `--workers` es experimental).
+- **Lo que ve el programa** (la pregunta 1 de arriba, contestada por el diseño): sin Mutex, un hilo que lee una
+  referencia que otro está escribiendo obtiene la vieja, la nueva o «objeto eliminado»; nunca otro objeto, y la VM
+  nunca se rompe. Siempre entera, como Java, pediría un cerrojo al escribir referencias: medido el coste de uno común
+  (arriba), queda para otra versión si hiciera falta.
+
+**La regla de Eduardo** (5-oct, al leer lo anterior): *«para que no nos volvamos locos. La memoria que se utilice
+compartida por 2 threads BP es responsabilidad del programador. Si quiere que esté segura debe protegerla de forma
+adecuada.»* Con eso, lo que lee un programa que comparte sin Mutex es cosa suya: fuera la pieza (d) —sólo servía a
+dos hilos que escriben a la vez el mismo campo sin protegerlo— y fuera cualquier garantía tipo Java sobre los valores.
+Lo que quedaba por decidir: si un programa así sólo puede leer valores malos, o si se acepta también que rompa la VM
+—hoy, en la Pico con dos runs, escribir en cualquier sitio de la memoria y colgarse más tarde, quizá sin decir nada—;
+las piezas (a), (b) y (c) son lo que lo impide. **Decidido** (Eduardo, 5-oct): *«OK a a, b y c. Yo me refiero a
+properties y listas, el BP ya tiene mecanismos de protección y es el usuario el que ha de utilizarlos. El resto es
+responsabilidad nuestra, a:=a+1 siendo a una variable local debe funcionar siempre.»* Las propiedades y las listas
+compartidas, del programador (con los Mutex de BP); la VM y lo privado de cada hilo, nuestros. Se hacen (a), (b) y
+(c); la (d), no.
+
+**Las pruebas** (en el PC, con dos runs, cada una con su sabotaje): (a)+(c), un hilo que alterna referencias (y null)
+en un campo y otro que lo lee y lo usa sin parar, con la ventana ensanchada entre las dos palabras de un almacén (un
+gancho de prueba): con las piezas, sólo valores buenos o «objeto eliminado» atrapado; sin ellas, el proceso roto o un
+array escrito fuera. (b), un hilo suelta un `owner` y reserva otro del mismo tipo mientras el otro escribe en el
+primero, con la ventana entre las dos resoluciones del paso: con la pieza, el nuevo intacto; sin ella, escrito por quien
+no era. (d), dos hilos escriben a la vez el mismo campo y otro suelta y reserva sin parar: ninguna lectura llega a otro
+objeto. Y después, la puerta de la 2b otra vez en la Pico 2 (con el OK de Eduardo para grabar).
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

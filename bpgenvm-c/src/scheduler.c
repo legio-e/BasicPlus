@@ -135,6 +135,7 @@ int bpvm_cola_colgar(bpvm_t* vm, int n_runs, int para_permanentes, bpvm_cola_al_
     q->t_ultimo_cuanto = q->t_fin = 0;
     q->cuantos[0] = q->cuantos[1] = 0;
     q->gc_con_otro_dentro = 0;
+    q->vueltas_sin_hilo = 0;
     q->programa = vm;
     bpvm_platform_cond_broadcast(&q->sched_cond);
     bpvm_platform_mutex_unlock(&q->vm_lock);
@@ -224,8 +225,8 @@ static void acabar(bpvm_cola_t* q, bpvm_t* vm, int varios) {
     bpvm_programa_cerrar(vm);   /* las líneas a medias (#600) y las líneas `pila:` e `hilos:` */
     /* 2b — con varios runs, cuánto trabajó cada uno: la prueba de que el segundo run de verdad ejecuta */
     if (q->n_runs > 1)
-        bpvm_diag("[bpvm] runs: %d; cuantos del run 0, %lu; del run 1, %lu", q->n_runs,
-                  (unsigned long) q->cuantos[0], (unsigned long) q->cuantos[1]);
+        bpvm_diag("[bpvm] runs: %d; cuantos del run 0, %lu; del run 1, %lu; vueltas sin hilo, %lu", q->n_runs,
+                  (unsigned long) q->cuantos[0], (unsigned long) q->cuantos[1], (unsigned long) q->vueltas_sin_hilo);
     if (q->gc_con_otro_dentro > 0)   /* no debe pasar: una colecta con otro run ejecutando (heap.c) */
         bpvm_diag_urgente("[bpvm] GC: %lu colecta(s) con OTRO run dentro de su cuanto (no debe pasar)",
                           (unsigned long) q->gc_con_otro_dentro);
@@ -318,6 +319,7 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
         /* Elegir en rueda: desde el siguiente al último elegido (#616). Con varios runs, sólo uno que no tenga otro. */
         bpvm_thread_t* tc = bpvm_hilos_elegir(vm, varios);
         if (tc == NULL) {
+            q->vueltas_sin_hilo++;   /* #662 (con varios, bajo el cerrojo) */
             int ms = -1;
             if (!hay_vivos(vm)) {
                 /* EL FIN: no queda nadie, y nadie tiene uno entre manos (con varios, el que lo tiene puede no haber
@@ -391,7 +393,15 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
             q->parar = 1;
         }
         if (varios) {
-            bpvm_platform_cond_broadcast(&q->sched_cond);   /* un hilo terminado o soltado puede despertar a otros */
+            /* #662 (5-oct) — avisar a la cola SÓLO si el cuanto cambió algo que pueda dar trabajo a otro run: el hilo
+             * terminó, se bloqueó o cedió (ya no está RUNNABLE), o hubo un fallo. Un cuanto agotado no cambia nada para
+             * los demás, y avisar tras CADA uno (cada 1 024 pasos) despertaba en vano al run ocioso: un programa de un
+             * hilo iba un 35 % más lento en el PC con dos runs y un 7,3 % en la Pico 2 (V7_IDEAS §H12 «La medida»). Lo
+             * que deja listo a OTRO hilo avisa por su cuenta: arrancarlo (bpvm_thread_spawn), soltar un Mutex con
+             * esperas (threading.c), el KILL (bpvm_request_kill) y parar el mundo (heap.c); los eventos, los atiende el
+             * hilo que los levanta. (El sabotaje: SÓLO PRUEBAS, test-cola 16.) */
+            if (tc->status != BPVM_THREAD_RUNNABLE || s != BPVM_OK || q->sabotaje_aviso)
+                bpvm_platform_cond_broadcast(&q->sched_cond);
             bpvm_platform_mutex_unlock(&q->vm_lock);
         }
     }
