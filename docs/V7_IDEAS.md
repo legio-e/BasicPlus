@@ -5350,7 +5350,11 @@ núcleo»*. Con `ParaleloPico` (`ParaleloBench` con tamaños para la placa: cuat
   esperan a que acabe una colecta y la zona de rascar, y la avisan parar, reanudar y cada «un run menos en marcha»;
   `sched_cond` se queda para el trabajo, el KILL y la salida. Su prueba, `test-cola` 17 (`CadenasUnHilo`: un hilo que
   concatena con dos runs): 2 vueltas sin hilo como mucho; con el sabotaje (el mundo avisa también a la cola, como
-  antes), hasta 243. Por medir en la placa.
+  antes), hasta 243 (`c3fe9277`, con la red del PC verde). **Medido en la placa** (dos núcleos, dos runs):
+  `CadenasSolo`, 2 vueltas sin hilo (antes 309), el hilo quieto en su run (579 cuantos en uno, 0 en el otro) y de 2 133
+  a ~2 010 ms (−6 %); `ParaleloPico`, igual en cálculo, arrays y objetos (×1,81, ×1,81, ×1,76) y las cadenas, de
+  2 337 / 2 273 a 2 172 / 2 173 ms. Los despertares eran una parte; lo que queda de las cadenas con dos runs es el
+  cerrojo de cada reserva y más colectas (el heap de dos runs, más pequeño): lo de V8, un trozo del almacén por run.
 - **La puerta de la 3.2** (dos runs en dos núcleos, con el código de `b9a6e5eb`, sin `mundo_cond`): la tanda, los mismos
   veredictos que con un núcleo y un run (`compat/informes/tanda_h12_32.md`); `run_placa` 34 de 34; y la resistencia de
   110 minutos con dos runs y el programa de carreras, **SIN FALLOS** (883 vueltas, 22 RESET, 883 carreras sin `Mutex`

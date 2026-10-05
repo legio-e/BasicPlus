@@ -1170,8 +1170,15 @@ la C6, la P4 y la Nucleo.
   prueba demasiado grande para el heap de dos runs. **La puerta de la 3.2, PASADA**: la tanda idéntica, `run_placa` 34
   de 34 y 110 minutos de resistencia con dos runs y el programa de carreras sin un fallo.
 - **Las cadenas**: Eduardo, *«no tiene sentido salvo que… el otro hilo tenga que esperar»*: cada GC despertaba en
-  vano al run ocioso (309 veces) y el hilo saltaba de núcleo. Arreglado en el PC: el mundo parado con su propia
-  condición (`mundo_cond`; `test-cola` 17, con su sabotaje). Su red del PC, en marcha; por validar en la placa, aparte.
+  vano al run ocioso (309 veces) y el hilo saltaba de núcleo. Arreglado (`c3fe9277`): el mundo parado con su propia
+  condición (`mundo_cond`; `test-cola` 17, con su sabotaje; la red del PC, verde). En la placa: 2 vueltas sin hilo y
+  −6 % en un hilo que concatena (el resto es el cerrojo de cada reserva: lo de V8); la tanda idéntica y `run_placa` 34
+  de 34; su resistencia de 110 minutos, lanzada a última hora (su resultado, en
+  `scratchpad/resist_mundo.log` de esta sesión: leerlo al empezar).
+- **Traspaso**: la Pico 2 se queda con la imagen de DOS núcleos (la de `c3fe9277`) y el ENV con `vm.runs=2` (sin
+  `vm.cores` ni `mpu`); los ficheros de las pruebas, borrados (OK de Eduardo). Lo que queda de H12: las natives y LVGL
+  con dos runs (antes de los otros micros), y el resto de placas una vez, al final; qué imagen y qué `vm.runs` van por
+  defecto en V7, lo decide Eduardo con estos números. Después: SUELTAS, documentar y las pruebas finales.
 - **Ideas de Eduardo, a V8** (FICHAS, el bloque de V8): reservar sin el cerrojo (un trozo del almacén por run), el
   disfraz de los TIEMPOS del simulador (el PC como perfilador), los builtins que esperan, que cedan el hilo BP. Y su
   marco para después de V7: *«nos centraremos más en las librerías y menos en el SO… Podremos ir algo más tranquilos»*.
