@@ -48,8 +48,11 @@
 > a dos hilos) y **la puerta de la 2b otra vez, pasada** (110 minutos con dos runs y un programa con carreras, sin un
 > fallo); y **la 3.1 escrita** —el arranque instrumentado, las dos víctimas de la flash, el log con spinlock y `#658`,
 > el ejecutor, las banderas con orden, el MPU en los dos núcleos y `vm.cores=1`—, con los caminos fatales decididos por
-> Eduardo: *«fatal error, el log y reset»* (contener el fallo, el MPU por tarea y el contador de reinicios, a V8). Más
-> abajo, «🧵 H12 (5-oct, tarde)», «(mediodía)» y «🧵 H12 (5-oct)».
+> Eduardo: *«fatal error, el log y reset»* (contener el fallo, el MPU por tarea y el contador de reinicios, a V8). Y por
+> la noche, **las puertas de la 3.1 y de la 3.2, PASADAS en la Pico 2** —con un interbloqueo del candado de la flash
+> cazado sin sonda y arreglado (el otro núcleo, aparcado como tarea)—, y la medida que pidió Eduardo: con dos hilos que
+> calculan, dos núcleos ganan ×1,55–1,67; el código de un hilo, un 10–14 % más lento con dos runs. Más abajo,
+> «🧵 H12 (5-oct, noche)», «(tarde)», «(mediodía)» y «🧵 H12 (5-oct)».
 >
 > **4-oct** — H12, las etapas 0 y 1 JUNTAS (Eduardo: «`run` permanente»; una placa antes que todas, la Pico 2): la
 > tarea del REPL hace de `io` durante el RUN y el programa corre en una tarea `run` que nace con el arranque. Hecho en
@@ -1137,6 +1140,41 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧵 H12 (5-oct, noche) — LAS PUERTAS DE LA 3.1 Y DE LA 3.2, PASADAS en la Pico 2 (y lo que cazaron)
+
+- **El lote** (OK de Eduardo): la imagen de un núcleo (la tanda idéntica a la de la 2b; `run_placa` 34 de 34) y la de
+  dos, primero con `vm.cores=1` y luego con los dos núcleos.
+- **EL fallo de la 3.1, cazado sin sonda** (`3438cf3d`): con la imagen de dos núcleos, `ThrowSinAtrapar` colgaba la
+  placa a veces —ni KILL ni RESET; Eduardo la reinició—. El log de la flash, VACÍO al arrancar (el último volcado,
+  cortado tras borrar), y unas marcas por núcleo en la RAM que sobrevive con el `Wdt` de BP en un programa que lanza sin
+  atrapar, en bucle: el núcleo 0 se quedaba dentro de `multicore_lockout_start` (0x52). El núcleo 1, a mitad de un
+  `vTaskSuspendAll` (el cerrojo de tareas del kernel), se aparcaba en la interrupción con él; el 0 lo necesitaba al
+  soltar el mutex del SDK. *«We cannot mix multicore_lockout and FreeRTOS»*, dice el SDK. El arreglo: un APARCADOR por
+  núcleo (una tarea: sólo corre cuando su núcleo no tiene cerrojos del kernel), con tope y sin cuelgues mudos. La
+  decisión del diseño («el lockout del SDK; flash_safe_execute, más piezas para lo mismo»), corregida en `V7_IDEAS`.
+- **Los caminos fatales, decididos por Eduardo** tras pensarlo juntos: *«fatal error, el log y reset»* (el perro, la
+  marca, el log en la RAM, sin autorun en el arranque siguiente —la regla de H9 que faltaba—); contener el fallo en el
+  run (`io` *«sólido como una roca»*), el MPU por tarea y el contador de reinicios, a V8. Probado entero en la placa con
+  `prueba.fallo=1` (un HardFault en el núcleo 1): reinicio en medio segundo, «fallo fatal» en el `INFO`, el informe en
+  el log y sin autorun.
+- **Dos arreglos más** (`b9a6e5eb`): la causa del reinicio del `INFO` («watchdog» sin haber disparado nada en cuanto se
+  armaba un perro, también con un núcleo y el `Wdt` de BP) y las tareas ociosas de la imagen de dos núcleos, que
+  giraban ejecutando desde la flash (ahora duermen: −3 %).
+- **La puerta de la 3.1, PASADA**: 20 de 20 arranques, la tanda idéntica, `run_placa` 34 de 34, 24 000 escrituras de
+  ficheros con el otro núcleo activo sin un fallo, el camino fatal y 110 minutos de resistencia sin fallos.
+- **La A/B de PrintBench**: no había regresión (la imagen de la mañana, medida a la vez, da 852 ms; la de hoy, 881).
+- **La 3.2** —cuánto gana un programa con dos hilos—: con dos núcleos frente a uno, cálculo ×1,67, arrays ×1,67,
+  objetos ×1,55; las cadenas, peor. El código de un hilo, un 10–14 % más lento con dos runs. El patrón de los
+  programas de Eduardo (órdenes + conversor, `PatronSondas`), 0–1 ms de retraso en todas. «No space in heap» era la
+  prueba demasiado grande para el heap de dos runs. **La puerta de la 3.2, PASADA**: la tanda idéntica, `run_placa` 34
+  de 34 y 110 minutos de resistencia con dos runs y el programa de carreras sin un fallo.
+- **Las cadenas**: Eduardo, *«no tiene sentido salvo que… el otro hilo tenga que esperar»*: cada GC despertaba en
+  vano al run ocioso (309 veces) y el hilo saltaba de núcleo. Arreglado en el PC: el mundo parado con su propia
+  condición (`mundo_cond`; `test-cola` 17, con su sabotaje). Su red del PC, en marcha; por validar en la placa, aparte.
+- **Ideas de Eduardo, a V8** (FICHAS, el bloque de V8): reservar sin el cerrojo (un trozo del almacén por run), el
+  disfraz de los TIEMPOS del simulador (el PC como perfilador), los builtins que esperan, que cedan el hilo BP. Y su
+  marco para después de V7: *«nos centraremos más en las librerías y menos en el SO… Podremos ir algo más tranquilos»*.
 
 ## 🧵 H12 (5-oct, tarde) — EL CAMINO FINO, LA PUERTA DE LA 2b OTRA VEZ (pasada), y LA 3.1 ESCRITA
 

@@ -5274,6 +5274,90 @@ otro calcula, el ENV y el log), sin un fallo; PrintBench (con `io` en el otro n�
 110 minutos de resistencia. **Y la 3.2**, `vm.runs=2` con los dos núcleos: la puerta de la 2b otra vez y `ParaleloBench`
 en la placa —lo que gana de verdad un programa con dos hilos—.
 
+**La puerta de la 3.1 en la Pico 2** (5-oct, tarde; con el OK de Eduardo para el lote: la imagen de un núcleo, la de
+dos con `vm.cores=1` y con los dos núcleos; los commits `05d02f74`, `3438cf3d` y `b9a6e5eb`):
+- **la imagen de UN núcleo** (también cambia: la identidad, el ENV y la PSRAM, antes del planificador): la tanda con
+  los mismos veredictos que la puerta de la 2b (34 idénticas, las 3 paradas a propósito, las 3 de la GUI saltadas y
+  `synclisttest` en «memoria apretada») y `run_placa` 34 de 34.
+- **la de dos núcleos con `vm.cores=1`**: arranca (el cuelgue de mayo no se repite: el núcleo 1 vive y lo dicen las
+  marcas); y la tanda destapó EL fallo de la 3.1 —`ThrowSinAtrapar` colgaba la placa, a veces—: el candado de la
+  flash, que aparcaba al otro núcleo por interrupción (arriba, el paso 2, «Corregido en la puerta»). Con el aparcador:
+  el programa que colgaba, 150 vueltas sin colgarse; la tanda, los mismos veredictos que con la imagen de un núcleo;
+  `run_placa` 34 de 34.
+- **con los dos núcleos**: 20 arranques seguidos de 20; la tanda, los mismos veredictos que con un núcleo, y
+  `run_placa` 34 de 34; escribir la flash con el otro núcleo activo —`IoMt`, tres hilos que escriben ficheros, 40 RUN
+  seguidos, con el ENV escrito y borrado entre RUN y RUN y el log volcado en cada uno: 24 000 escrituras—, sin un
+  fallo (cada RUN, 11,5 s contra 10,7 con un núcleo: aparcar como tarea cuesta en cada escritura); el programa que
+  colgaba, 150 vueltas sin colgarse; y **el camino fatal** (`prueba.fallo=1`: un HardFault al empezar un RUN, en el
+  núcleo 1): la placa se reinicia en medio segundo, el `INFO` dice «fallo fatal», el log trae el informe —la tarea,
+  la pila con su límite, el PC, UNDEFINSTR— y el arranque no hace el autorun (con `/sys/auto.txt` puesto, como lo
+  pone el IDE); limpio después, y un RESET normal vuelve a decir «reinicio pedido».
+- **Dos cosas más que destapó**: la causa del reinicio del `INFO` decía «watchdog» sin haber disparado nada en cuanto
+  se armaba un perro (`watchdog_enable_caused_reboot` mira una palabra que escribe el propio `watchdog_enable`; con un
+  núcleo, también tras el `Wdt` de un programa): ahora se calcula una vez al arrancar. Y las tareas ociosas de la
+  imagen de dos núcleos GIRABAN ejecutando desde la flash, compitiendo por la caché del XIP: ahora duermen (`__wfi`).
+- **Lo medido con UN run** (el PC en reposo; la tabla, con la misma placa):
+
+  | imagen | `fib(26)` | PrintBench |
+  |---|---|---|
+  | un núcleo | 2 843 ms | 889 ms |
+  | dos, ociosas girando: `vm.cores=1` / dos | 3 027 / 2 992 | 1 105 / 1 077 |
+  | dos, ociosas dormidas: `vm.cores=1` / dos | 2 924 / 2 895 | 1 080 / 1 063 |
+
+  Con un run, el 2º núcleo NO acelera: `io` en el otro núcleo apenas se nota (−2 %), y la imagen SMP cuesta un +1,8 %
+  en cálculo y un +20 % en `print` (cada aviso entre tareas pasa por los cerrojos del kernel SMP, y de un núcleo a
+  otro). La ganancia, si la hay, es con dos runs: la 3.2. Y aparte, PrintBench con la imagen de UN núcleo ha subido
+  desde la mañana (774 ms con la imagen de `4a608d49`; 881–889 desde el camino fino), con más dispersión: a mirar.
+- **La resistencia de 110 minutos con los dos núcleos: SIN FALLOS** (959 vueltas, 23 RESET, el KILL a un dormido en 7 ms
+  de mediana —22 de máximo— y las pilas quietas; el mínimo libre del heap de FreeRTOS, 4,4 KB —con un núcleo, 6,7—: a
+  vigilar). **La puerta de la 3.1, PASADA.**
+- **La A/B de PrintBench** (Eduardo: *«pruébalo»*): la imagen de la mañana (`4a608d49`), medida otra vez a la vez que la
+  de hoy, da 852 ms (791–870), no los 774 de la mañana; la de hoy, 881 (860–902). No hay regresión que perseguir (un +3 %,
+  dentro del ruido de esa prueba, que depende del PC que lee el USB); `fib(26)`, 3 179 contra 2 844: −10,5 %.
+
+#### La 3.2: dos runs en los dos núcleos (5-oct, noche)
+
+Eduardo: *«a ver si podemos medir cuánto ganamos al ejecutar un programa BP con 2 núcleos respecto a ejecutarlo con 1
+núcleo»*. Con `ParaleloPico` (`ParaleloBench` con tamaños para la placa: cuatro cargas, cada una dos veces seguidas en el
+`main` —secuencial— y en dos hilos a la vez —paralelo—), el mismo programa en tres configuraciones de la Pico 2
+(medianas de 3; ms, secuencial / paralelo):
+
+| configuración | cálculo | arrays | objetos | cadenas |
+|---|---|---|---|---|
+| 1 núcleo, 1 run | 2 168 / 2 176 | 3 037 / 3 047 | 2 528 / 2 538 | 1 347 / 1 487 |
+| 1 núcleo, 2 runs | 2 259 / 2 270 | 3 158 / 3 171 | 2 648 / 2 668 | 1 684 / 1 839 |
+| **2 núcleos, 2 runs** | 2 393 / **1 305** | 3 348 / **1 822** | 2 881 / **1 635** | 2 337 / 2 273 |
+
+- **Lo que gana un programa con dos hilos que trabajan a la vez**, con dos núcleos frente al mejor de un núcleo: cálculo
+  ×1,67, arrays ×1,67, objetos ×1,55; las cadenas, PEOR (×0,65). Frente a la misma configuración en secuencial, ×1,83,
+  ×1,84 y ×1,76 (la estimación de `PROJECT_ROADMAP` §5 era ×1,9 para el cálculo paralelizable).
+- **Lo que paga el código de UN hilo** con dos runs en dos núcleos: +10 % en cálculo y arrays, +14 % en objetos; y la
+  imagen de dos núcleos con UN run, +1,8 % (la 3.1). Con dos runs en un núcleo, +4 % (el punto seguro de cada paso).
+- **El patrón de los programas de Eduardo** (`PatronSondas`: un hilo atiende órdenes cada 10 ms y otro gestiona el
+  conversor —inicializar, esperar el «ready» con pausas hasta 500 ms y unos 50 ms de cálculo—, con una lista bajo
+  `Mutex`): en las tres configuraciones, el hilo de órdenes con 0–1 ms de retraso como mucho y cada lectura en 550–557
+  ms. Para ese patrón BP ya va bien con un núcleo (los dos hilos duermen casi siempre); el 2º núcleo no añade.
+- **«No space in heap»** en la 2ª vuelta con los tamaños primeros: la PRUEBA, demasiado grande para el heap de un
+  programa con dos runs (153 KB con dos runs en la imagen de dos núcleos; 195 con uno: la pila del 2º run sale del
+  bloque, y algo más); con tamaños menores, tres vueltas limpias en las tres configuraciones.
+- **Las cadenas, peor con dos núcleos**: Eduardo, *«no tiene sentido salvo que mientras un hilo está manipulando cadenas
+  el otro hilo tenga que esperar»*. Era eso. En paralelo, cada «+» reserva bajo el cerrojo de la VM (el heap es uno) y
+  cada GC para el mundo: casi en fila india. Y en SECUENCIAL —un hilo, el otro run ocioso—, `CadenasSolo` dio **309
+  «vueltas sin hilo»** —tantas como colectas— y su único hilo **repartido entre los dos runs** (137 y 442 cuantos):
+  cada GC avisaba a la cola al parar y al reanudar el mundo, y eso despertaba al run OCIOSO, que a veces se llevaba el
+  hilo al otro núcleo. `#662` quitó ese despertar al final de cada cuanto, no en el GC. **Arreglado en el PC**: el
+  mundo parado, con su propia condición (`mundo_cond`, `include/bpvm_smp.h`): la esperan el colector, los runs que
+  esperan a que acabe una colecta y la zona de rascar, y la avisan parar, reanudar y cada «un run menos en marcha»;
+  `sched_cond` se queda para el trabajo, el KILL y la salida. Su prueba, `test-cola` 17 (`CadenasUnHilo`: un hilo que
+  concatena con dos runs): 2 vueltas sin hilo como mucho; con el sabotaje (el mundo avisa también a la cola, como
+  antes), hasta 243. Por medir en la placa.
+- **La puerta de la 3.2** (dos runs en dos núcleos, con el código de `b9a6e5eb`, sin `mundo_cond`): la tanda, los mismos
+  veredictos que con un núcleo y un run (`compat/informes/tanda_h12_32.md`); `run_placa` 34 de 34; y la resistencia de
+  110 minutos con dos runs y el programa de carreras, **SIN FALLOS** (883 vueltas, 22 RESET, 883 carreras sin `Mutex`
+  sin que la VM se rompa, el KILL a un dormido en 8 ms de mediana —15 de máximo— y las pilas quietas). **La puerta de
+  la 3.2, PASADA.** El arreglo de `mundo_cond`, aparte (Eduardo: *«Ahora lo que interesa es que los 2 núcleos
+  funcione»*): la red del PC, y después su medida en la placa, la tanda y su propia resistencia.
+
 **Y para afinar** (medido en la puerta de la 2b): con dos runs, `fib(26)` va un 4 % más lento que con uno (2 948 contra
 2 835 ms): lo más probable, el punto seguro de cada paso, que con dos runs lee dos punteros (`vm->smp` y su
 `stop_the_world`): guardar la cola en una variable del cuanto. A medir en el próximo lote.
