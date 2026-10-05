@@ -5495,6 +5495,26 @@ aguantan** (la cuenta, antes de grabar): con la imagen nueva el código acaba en
 lectura en `0x400BB604`, por debajo de la página `0x400C0000`: la zona sigue en `0x400C8000`, donde está hoy; y ni
 `gui.c` ni la BIOS cambiaron desde la imagen que lleva (4-oct, 14:01, anterior a la 2b).
 
+#### LVGL con dos runs: la P4 (5 y 6-oct, noche; la imagen de `7c038943`, con el OK de Eduardo)
+
+Grabada sólo la aplicación (`idf.py -p COM15 app-flash`): los packs aguantaron como decía la cuenta —la zona en
+`0x400C8000`, el bloque de RAM de los motores en `0x48001000`, el `STATE` limpio, sin «casi»—. La P4 llevaba la imagen
+del 4-oct (anterior a la 2b): recibe H12 entero de una vez. Las pruebas, en `compat/informes/tanda_h12_p4.md`:
+- **Con un run** (el ENV como estaba): la tanda corta, 6 de 6; la de V7 entera, 42 pruebas —36 idénticas al PC (las
+  11 natives RISC-V incluidas), 2 «no peta», las 3 de KILL en PARADA y `synclisttest` con sus aserciones— y
+  `run_placa` 34 de 34.
+- **Con `vm.runs=2`** (el OK de Eduardo): el `INFO` con `runs` 2 y el log, «el 2o run, creado (vm.runs=2; 16 KB de
+  pila, RAM interna)»; la tanda de V7 entera, con los mismos veredictos —sus pruebas de GUI (`GuiWinJson`, `GuiShot`,
+  `GuiArbolG2`), ya con dos runs y en la pantalla de verdad—; `run_placa` 34 de 34; un programa de dos hilos en la
+  pantalla —uno pone su progreso en una etiqueta cada 20 ms, el otro sólo calcula— que acaba bien y cuya captura
+  (`Gui.shot`, 480×800) enseña los valores correctos (la suma del trabajador, la del PC); y **110 minutos de
+  resistencia con dos runs, SIN FALLOS** (1 089 vueltas, 27 RESET, 1 089 carreras; el KILL a un dormido, 24 ms de
+  mediana y 35 de máximo —el ida y vuelta de la UART de la P4, como antes de H12—; lo que sobró de pila en el peor
+  momento: `run` 11 648 B, `io` 24 604 y `run2` 13 320).
+- **Lo que falta ver en la placa**: CUÁNTOS viajes al run 0 hicieron los programas de GUI (la línea `runs:` del final).
+  El log de la P4 está apagado por defecto (`log=0`: sólo guarda el arranque) y sólo lo enciende el ENV: pedido a
+  Eduardo.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

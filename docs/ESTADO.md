@@ -53,8 +53,9 @@
 > cazado sin sonda y arreglado (el otro núcleo, aparcado como tarea)—, y la medida que pidió Eduardo: con dos hilos que
 > calculan, dos núcleos ganan ×1,55–1,67; el código de un hilo, un 10–14 % más lento con dos runs. Y a última hora,
 > la resistencia de `mundo_cond`, sin fallos (Eduardo: los dos núcleos, validados en la Pico 2 para el código BP
-> normal), y **LVGL con dos runs en el PC**: la llamada a la GUI VIAJA al run 0 (su «OK», en vez de la cola FIFO), con
-> la P4 como banco; el depurador, con un run, y las placas de un núcleo, con un run (decisiones de Eduardo). Más abajo,
+> normal), y **LVGL con dos runs**: la llamada a la GUI VIAJA al run 0 (su «OK», en vez de la cola FIFO), en el PC y
+> en la P4 (un núcleo, dos runs: la tanda, `run_placa` y 110 minutos de resistencia, verdes); el depurador, con un
+> run, y las placas de un núcleo, con un run (decisiones de Eduardo). Más abajo,
 > «🧵 H12 (5-oct, última hora)», «(noche)», «(tarde)», «(mediodía)» y «🧵 H12 (5-oct)».
 >
 > **4-oct** — H12, las etapas 0 y 1 JUNTAS (Eduardo: «`run` permanente»; una placa antes que todas, la Pico 2): la
@@ -1161,7 +1162,17 @@ la C6, la P4 y la Nucleo.
   tres programas seguidos en la misma ventana, el último con el depurador: verde; sin «con un run, el run 0», la ventana
   se queda sin atender una vez de cada tres.
 - **La familia ESP32, su 2º run** (`repl_esp32.c`: la pila de la RAM interna del heap, sólo con dos runs); compilan las
-  cinco ESP. Los packs de la P4 aguantan (la cuenta con `nm`: la zona sigue en `0x400C8000`).
+  cinco ESP. Los packs de la P4 aguantan (la cuenta con `nm`: la zona sigue en `0x400C8000`). La red del PC, verde
+  (`7c038943`).
+- **La P4** (grabada con el OK de Eduardo; los packs aguantaron, como decía la cuenta): con un run y con `vm.runs=2`, la
+  tanda de V7 entera con los mismos veredictos —las de GUI, con dos runs en la pantalla de verdad—, `run_placa` 34 de
+  34, un programa de dos hilos en la pantalla con su captura bien, y **110 minutos de resistencia con dos runs SIN
+  FALLOS** (1 089 vueltas; el KILL a un dormido, 24 ms de mediana: la UART de la P4). Falta ver en su log cuántos
+  viajes al run 0 hicieron los programas de GUI: su log está apagado por defecto y sólo lo enciende el ENV (`log=1`,
+  pedido a Eduardo).
+- **Traspaso**: la P4 se queda con la imagen de `7c038943` y `vm.runs=2` en el ENV; en su `/app`, los dos ficheros de
+  la prueba de la pantalla (`GuiP4DosRuns.mod` y `p4dos.shot`: borrarlos pide su OK). La Pico 2, como estaba (dos
+  núcleos, `vm.runs=2`).
 - **Las natives con dos runs, pensado con Eduardo** (sin código): la native usa DOS pilas —la de C (la del run si es
   directa; la de su ejecutor si puede ceder) y la BP del hilo que la llamó—; dos natives a la vez ya pasan con un run
   (cada una con su ejecutor); con dos runs lo que falta es el contexto POR TAREA (hoy, un global en los micros), el
