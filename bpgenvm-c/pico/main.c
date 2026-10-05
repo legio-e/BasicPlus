@@ -1020,11 +1020,20 @@ static int pico_pico_set_cpu_freq_mhz_impl(int mhz) {
  * watchdog_enable_caused_reboot() del SDK sí los separa: sólo es cierto cuando
  * disparó un watchdog ARMADO con watchdog_enable(), no cuando alguien pidió el
  * reinicio con watchdog_reboot(). El orden importa — el caso específico primero. */
-static const char* pico_pico_reset_cause_impl(void) {
-    if (s_tras_fatal)                    return "fallo fatal";     /* V7/H12 3.1: el perro, armado por pico_fatal */
+static const char* causa_reset_del_hardware(void) {
     if (watchdog_enable_caused_reboot()) return "watchdog";        /* disparó de verdad */
     if (watchdog_caused_reboot())        return "reinicio pedido"; /* RESET del IDE */
     return "power-on/run";
+}
+/* V7/H12, etapa 3.1 — la causa, UNA vez: la primera llamada es la del arranque (main, la línea «causa del reset»),
+ * antes del perro guardián del arranque. `watchdog_enable_caused_reboot()` mira una palabra (scratch[4]) que escribe
+ * el propio `watchdog_enable()`: preguntada después de armarlo, decía «watchdog» sin haber disparado nada (lo destapó
+ * la puerta de la 3.1, en el INFO). */
+static const char* s_causa_reset = NULL;
+static const char* pico_pico_reset_cause_impl(void) {
+    if (s_tras_fatal) return "fallo fatal";     /* V7/H12 3.1: el perro, armado por pico_fatal */
+    if (s_causa_reset == NULL) s_causa_reset = causa_reset_del_hardware();
+    return s_causa_reset;
 }
 
 static const bpvm_machine_backend_t s_pico_pico_backend = {
@@ -1741,6 +1750,14 @@ void vAssertCalled(const char *pcFileName, unsigned long ulLine) {
         led_set(0); for (volatile int i = 0; i < 2000000; i++);
     }
 }
+
+#if ( configNUMBER_OF_CORES > 1 )
+/* V7/H12, etapa 3.1 — las tareas ociosas, DORMIDAS hasta la siguiente interrupción (el tick en el 0; el aviso
+ * entre núcleos en el 1) en vez de girar: girar es ejecutar desde la flash sin parar, y la caché del XIP es de los dos
+ * núcleos. */
+void vApplicationIdleHook(void) { __wfi(); }
+void vApplicationPassiveIdleHook(void) { __wfi(); }
+#endif
 
 void vApplicationMallocFailedHook(void) {
     pico_fatal();   /* V7/H12 3.1, paso 4 (ver vAssertCalled) */

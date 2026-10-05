@@ -31,12 +31,18 @@
 /* Habilita vTaskCoreAffinitySet / xTaskCreateAffinitySet — base del
  * pinning comm→core0 / worker→core1 (bpvm_platform_thread_create_pinned). */
 #define configUSE_CORE_AFFINITY                 1
-/* No usamos hook en el passive idle (los N-1 idles extra de SMP). */
-#define configUSE_PASSIVE_IDLE_HOOK             0
+/* V7/H12, etapa 3.1: las tareas ociosas DUERMEN (__wfi) en vez de girar ejecutando desde la flash, que compite por
+ * la caché del XIP con el otro núcleo (pico/main.c, los ganchos). Medido en la Pico 2 con un run: fib(26) de 2 992
+ * a 2 895 ms con los dos núcleos, y de 3 027 a 2 924 con vm.cores=1. */
+#define configUSE_PASSIVE_IDLE_HOOK             1
 #endif
 
 #define configUSE_PREEMPTION                    1
+#if ( configNUMBER_OF_CORES > 1 )
+#define configUSE_IDLE_HOOK                     1   /* V7/H12 3.1: ver arriba */
+#else
 #define configUSE_IDLE_HOOK                     0
+#endif
 #define configUSE_TICK_HOOK                     0
 #define configUSE_DAEMON_TASK_STARTUP_HOOK      0
 #define configCPU_CLOCK_HZ                      150000000  /* RP2350 default */
