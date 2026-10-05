@@ -1160,8 +1160,12 @@ la C6, la P4 y la Nucleo.
   acabe el paso —con un núcleo, sí: el turno, que cierra `#660` y `#661` por construcción; con dos, los runs se
   turnarían y no se iría más rápido—; su objeción (*«el 2º núcleo es sobre todo para ejecutar los programas más
   rápido»*) y su segunda idea, bloquear el tick —con dos núcleos no sirve: no hay cambio, coinciden—; y lo que sale de
-  las dos: el paso entero, sólo para los pasos que tocan lo compartido (los privados, en paralelo). Por medir, si
-  Eduardo dice: qué parte de los pasos es privada en nuestros programas.
+  las dos: el paso entero, sólo para los pasos que tocan lo compartido (los privados, en paralelo). **Y medido**
+  (Eduardo: *«a mí me gusta medir antes de hacer cambios así que adelante»*; `V7_IDEAS` §«La medida», en el
+  scratchpad: una copia de `interp.c` con un contador por opcode y `ParaleloBench`, dos hilos con cuatro cargas): del 80
+  al 100 % de los pasos son privados; con dos runs en el PC, hoy, ×2,1 en cálculo y ×1,7 en arrays y objetos, y el
+  techo del paso entero para lo compartido queda por encima; las cadenas no escalan (la reserva y el GC); y una
+  sorpresa, `#662`: un programa de un hilo, un 35 % más lento con dos runs (el final de cada cuanto).
 
 ## 🧵 H12 (5-oct) — LA 2b MÍNIMA EN EL PC: dos runs con código BP normal, la condición de FreeRTOS y la revisión
 

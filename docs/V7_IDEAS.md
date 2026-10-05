@@ -5000,6 +5000,45 @@ se para en su primer paso compartido; afinar después, uno a uno); y lo que un p
 parte de los pasos es privada en nuestros programas (fib, PrintBench, AllocBench, SyncListTest, la tanda): es el
 techo de lo que ganaría, antes de escribir nada.
 
+#### La medida (5-oct; Eduardo: *«a mí me gusta medir antes de hacer cambios así que adelante»*)
+
+Un experimento en el scratchpad, sin tocar el repo: la VM-C del PC con un contador por opcode (una copia de
+`interp.c`; los demás objetos, los del build), y un programa de dos hilos, `ParaleloBench` (cuatro cargas, cada una dos
+veces seguidas en el main y en dos hilos a la vez), corrido con un run y con dos (`--smp=2`: dos runs en dos núcleos
+del PC, el diseño de la 2b de hoy, sin cerrojo en los pasos compartidos). El recuento vale para cualquier máquina (el
+mismo intérprete y el mismo bytecode); los tiempos son del PC, no de la Pico. (Los ciclos por opcode con `rdtsc` no
+sirven: leer el reloj cuesta lo que un paso barato.)
+
+**1. Qué parte de los pasos es privada** (por recuento; los 12 benchmarks de `samples/benchmarks` y 47 programas de la
+tanda): el cálculo puro, el 100 % (`fibobench`, `intbench`, `floatbench`, `Bench`, los `FloatBench`, `DblNat`); los
+arrays, del 86 al 95 % (`arraybench` 85,8, `sortbench` 87,0, `sumbench` 93,3, `BenchMem` 95,6); lo de objetos, GUI y
+JSON, del 80 al 88 % (`synclisttest` 81,2, `JsonDemo` 82,4, `GuiArbolG2` 83,0, `GcHondo` 87,9); con cadenas y
+builtins, del 80 al 94 % (`stringbench` 93,5 con un 6,5 % de builtins, `AllocBench` 83,0); y lo que imprime mucho, menos
+(`PrintBench` 81,8, `MathRango` 55,4). Los compartidos más frecuentes: `ALOAD`, `CALL_BUILTIN`, `INVOKE_VIRTUAL_REF`,
+`GET_FIELD`, `ALEN`.
+
+**2. Cuánto gana hoy un programa con dos hilos** (dos runs; con un run, el secuencial y el paralelo tardan lo mismo):
+
+| carga | pasos compartidos | techo del paso entero para lo compartido, `2/(1+s)` | medido hoy, dos runs (cuanto de 16 384) contra un run |
+|---|---|---|---|
+| cálculo (`fib(27)` ×2) | 0 % | 2,00× | **2,12×** (51 → 24 ms) |
+| arrays (sumar 20 000, ×60) | 6,7 % | 1,88× | **1,72×** (105 → 61 ms) |
+| objetos (lista de 5 000, ×60) | 14,1 % | 1,75× | **1,73×** (78 → 45 ms) |
+| cadenas (`s := s + "x"`, ×2 000) | 13,5 % | 1,76× | **0,61×** (329 → 536 ms: más LENTO) |
+
+El 2º núcleo SÍ hace los programas más rápidos: casi el doble en cálculo, ×1,7 con arrays y objetos. El paso entero
+para lo compartido costaría poco: su techo está por encima de lo medido hoy sin cerrojo. Las cadenas no escalan ni con
+un run (dos hilos que reservan a la vez tardan 458 ms contra 329 en secuencia): la reserva y el GC son de todos, y eso
+es aparte, con cualquier esquema.
+
+**3. Una sorpresa: con dos runs, un programa de UN hilo va un 35 % más lento** (`fib`: 51 → 71 ms), y no es el cálculo:
+es lo que se hace al final de cada cuanto, cada 1 024 pasos (el aviso a la cola que despierta al run ocioso,
+`src/scheduler.c:394`; el `yield`; el cerrojo). Con cuantos de 16 384 pasos desaparece (50 ms) y el paralelo mejora (30 → 24 ms). En
+la Pico, por medir: `fib(26)` con dos runs dio 3 411 ms, y falta el de un run (pide volver el ENV a `vm.runs=1`).
+
+Lo que falta por medir antes de decidir: el coste del cerrojo en cada paso compartido (un prototipo en el PC, con un
+run para el coste sin competencia y con dos para la competencia) y, en la etapa 3, lo mismo en la Pico.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
