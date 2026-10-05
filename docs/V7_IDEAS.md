@@ -5142,6 +5142,29 @@ compartidas, del programador (con los Mutex de BP); la VM y lo privado de cada h
   `test-smphandles`, que contaba con el reciclado en el acto, hace lo del GC cada 64 vueltas.
 - **miVM**: su `--workers` sigue con su carrera B1 (experimental desde V2): fuera de H12. Con un worker, nada de esto
   cambia lo que hace; sólo el bloque alineado, igual en las dos (la paridad).
+- **Corregido en la Pico** (A/B de tres imágenes con el OK de Eduardo): la versión con la comprobación de alineación
+  hacía `fib(26)` un 6 % más lento (3 367 contra 3 178 ms; con los accesos de antes, 3 171): a `-Os` no iba en línea y
+  cada acceso de la pila era una llamada. Por arquitectura: en la M33 y el x86 (una instrucción para una palabra sin
+  alinear, de una pieza si está alineada), sin comprobar y siempre en línea —leer una local y empujarla, un `LDR` y un
+  `STR`; el código de la Pico, 424 860 bytes, menos que esta mañana—; en RISC-V y Xtensa, con la comprobación.
+
+#### Lo que dijo Eduardo después (5-oct, tarde)
+
+- **La sonda SWD**: *«No tengo sonda SWD para la Pico.»* La 3.1 va como siempre con la Pico: las migas por núcleo en la
+  RAM que sobrevive al reinicio, el log en la flash, el LED y el perro guardián.
+- **El 2º run, inactivo**: *«se podría marcar como inactivo hasta que en la cola de Threads BP haya 2 entradas o más»*
+  —es lo que hace `#662`: el ocioso duerme en la cola y sólo lo despierta lo que puede darle trabajo—. Y la memoria
+  del 2º run (16 KB de pila) sólo le cuesta a la Pico 2: dos núcleos y sin PSRAM.
+- **Natives y LVGL, antes de pasar al resto de micros** (*«antes de pasar de la Pico al resto de micros queda por
+  resolver los nativos y LVGL ¿no?»*): sí. Hoy un programa con natives, GUI o SQLite corre con UN run aunque haya dos.
+- **LVGL con dos runs: una cola FIFO de comandos** (idea de Eduardo: *«¿El límite de LVGL se soluciona con una cola
+  FIFO de comandos? … lo normal es que 1 hilo crease un formulario y el otro cambie el texto de una etiqueta»*). Encaja
+  con lo que hay: `src/gui.c` ya guarda una copia de cada widget (tipo, texto, valor) y cada setter la actualiza y llama
+  a LVGL en el acto (`bpvm_gui_set_text` → `lv_label_set_text`). Con la cola: cada función que toca LVGL actualiza la
+  copia (con un cerrojo cortito) y deja el comando en la FIFO, desde cualquier hilo y también desde el de la GUI (el
+  orden); sólo el hilo en `Gui.run()` ejecuta los comandos, en orden, antes de cada vuelta de LVGL; las lecturas, de la
+  copia, como hoy; si la cola se llena, espera quien encola, y el hilo de la GUI nunca se espera a sí mismo. Igual con
+  uno o dos runs, en el lado de la VM (antes del pack de LVGL). Por diseñar del todo cuando se llegue.
 
 **Las pruebas** (en el PC, con dos runs, cada una con su sabotaje): (a)+(c), un hilo que alterna referencias (y null)
 en un campo y otro que lo lee y lo usa sin parar, con la ventana ensanchada entre las dos palabras de un almacén (un

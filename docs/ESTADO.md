@@ -1190,6 +1190,14 @@ la C6, la P4 y la Nucleo.
   un handle soltado, de vuelta en el GC; la referencia que no puede existir, muerta (y `PRINT_STRING`, mirándola). En
   el PC, igual o más rápido (arrays −15 %, objetos −13 %); en la Pico, +2 040 bytes de código. `test-palabras`, nueva,
   con tres sabotajes; `test-smphandles`, puesta al día (contaba con el reciclado en el acto).
+- **La puerta en la Pico 2, con un run, destapó un +6 %** en `fib(26)` (3 367 ms contra 3 178): una A/B de tres
+  imágenes (con el OK de Eduardo) señaló a los accesos nuevos —a `-Os` no iban en línea: una llamada por acceso—, y el
+  arreglo, por arquitectura (en la M33 y el x86, sin comprobar la alineación y siempre en línea; en las ESP32, con
+  ella). La imagen de la Pico, menor que la de la mañana. Y PrintBench no decide: la misma imagen, 774 ms por la
+  mañana y 846 en la A/B.
+- **Eduardo, por la tarde**: no hay sonda SWD; el 2º run, inactivo hasta que haya trabajo (lo hace `#662`); la
+  memoria del 2º run sólo le cuesta a la Pico; natives y LVGL antes del resto de micros, y para LVGL, su idea de una
+  cola FIFO de comandos (`V7_IDEAS` §«Lo que dijo Eduardo después»).
 - **El diseño del camino fino** (`#660`, `#661`; `V7_IDEAS` §«El camino fino»): palabra a palabra para lo compartido
   (y un cerrojo pequeño sólo para lo no alineado), una resolución validada por paso y el número de handle de vuelta en
   el GC; miVM tiene lo mismo (la memoria byte a byte, el número reciclado en el acto): (b) y (c) primero allí.

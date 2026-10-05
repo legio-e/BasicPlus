@@ -803,8 +803,8 @@ _Static_assert(offsetof(struct bpvm, aot_helpers) == sizeof(void*),
  * ésta se escribe: byte a byte —en la Pico, a -Os, cuatro STRB; en el PC el compilador los junta y no se ve— se lee a
  * medias, y una referencia a medias es una dirección que no es de nadie. Alineada, se lee y se escribe de una vez: una
  * carga o un almacén atómicos y relajados (sin orden: sólo de una pieza), con su orden de bytes —en la M33, LDR/STR y
- * REV, más corto que los cuatro bytes—. Sin alinear —los operandos del código: nadie los escribe a la vez—, byte a byte
- * como siempre. Y lo compartido está siempre alineado: los objetos y los arrays (bpvm.c), las globales en huecos de 4
+ * REV, más corto que los cuatro bytes—. Sin alinear —los operandos del código: nadie los escribe a la vez—, según la
+ * arquitectura (abajo). Y lo compartido está siempre alineado: los objetos y los arrays (bpvm.c), las globales en huecos de 4
  * desde CS (GC-2) con el bloque de cada módulo alineado por el cargador, la pila. `may_alias`: la memoria es de bytes. */
 typedef uint32_t __attribute__((__may_alias__)) bpvm_u32_a;
 typedef uint16_t __attribute__((__may_alias__)) bpvm_u16_a;
@@ -815,50 +815,62 @@ typedef uint16_t __attribute__((__may_alias__)) bpvm_u16_a;
 #define BPVM_BE32(x) __builtin_bswap32(x)
 #define BPVM_BE16(x) __builtin_bswap16(x)
 #endif
-/* Los caminos sin alinear, fuera de línea (bpvm_util.c): son los raros, y así cada sitio que lee o escribe sólo lleva
- * el alineado y un salto (medido el 5-oct: con los dos en línea, el ejecutable del PC crecía un 7 %). */
+/* POR ARQUITECTURA (medido el 5-oct en la Pico 2). La M33 (la Pico y las STM32) y el x86 (el PC) leen y escriben una
+ * palabra SIN ALINEAR con una sola instrucción, que es de una pieza si la dirección está alineada (lo compartido lo está
+ * siempre) y vale igual si no (los operandos del código): ahí no se comprueba nada, y en línea SIEMPRE —a -Os el
+ * compilador de la Pico no metía en línea la versión con la comprobación y cada acceso de la pila era una llamada:
+ * fib(26) +6 %; así, leer una local y empujarla son un LDR y un STR—. El resto (RISC-V y Xtensa: las ESP32) no lee
+ * palabras sin alinear: allí se comprueba la alineación, y lo raro, byte a byte y fuera de línea (bpvm_util.c). */
+#if defined(__ARM_FEATURE_UNALIGNED) || defined(__x86_64__) || defined(__i386__)
+#define BPVM_PALABRA_SIN_COMPROBAR 1
+#define BPVM_EN_LINEA __attribute__((__always_inline__))
+#else
+#define BPVM_EN_LINEA
+#endif
 uint32_t bpvm_read_u32_be_bytes(const uint8_t* p);
 uint16_t bpvm_read_u16_be_bytes(const uint8_t* p);
 void     bpvm_write_u32_be_bytes(uint8_t* p, uint32_t v);
 void     bpvm_write_u16_be_bytes(uint8_t* p, uint16_t v);
-static inline uint32_t bpvm_read_u32_be(const uint8_t* p) {
-    if (__builtin_expect((((uintptr_t) p) & 3u) == 0u, 1))
-        return BPVM_BE32(__atomic_load_n((const bpvm_u32_a*) (const void*) p, __ATOMIC_RELAXED));
-    return bpvm_read_u32_be_bytes(p);
+static inline BPVM_EN_LINEA uint32_t bpvm_read_u32_be(const uint8_t* p) {
+#ifndef BPVM_PALABRA_SIN_COMPROBAR
+    if (__builtin_expect((((uintptr_t) p) & 3u) != 0u, 0)) return bpvm_read_u32_be_bytes(p);
+#endif
+    return BPVM_BE32(__atomic_load_n((const bpvm_u32_a*) (const void*) p, __ATOMIC_RELAXED));
 }
-static inline int32_t bpvm_read_i32_be(const uint8_t* p) {
+static inline BPVM_EN_LINEA int32_t bpvm_read_i32_be(const uint8_t* p) {
     return (int32_t) bpvm_read_u32_be(p);
 }
-static inline uint16_t bpvm_read_u16_be(const uint8_t* p) {
-    if (__builtin_expect((((uintptr_t) p) & 1u) == 0u, 1))
-        return BPVM_BE16(__atomic_load_n((const bpvm_u16_a*) (const void*) p, __ATOMIC_RELAXED));
-    return bpvm_read_u16_be_bytes(p);
+static inline BPVM_EN_LINEA uint16_t bpvm_read_u16_be(const uint8_t* p) {
+#ifndef BPVM_PALABRA_SIN_COMPROBAR
+    if (__builtin_expect((((uintptr_t) p) & 1u) != 0u, 0)) return bpvm_read_u16_be_bytes(p);
+#endif
+    return BPVM_BE16(__atomic_load_n((const bpvm_u16_a*) (const void*) p, __ATOMIC_RELAXED));
 }
-static inline int16_t bpvm_read_i16_be(const uint8_t* p) {
+static inline BPVM_EN_LINEA int16_t bpvm_read_i16_be(const uint8_t* p) {
     return (int16_t) bpvm_read_u16_be(p);
 }
-static inline void bpvm_write_u32_be(uint8_t* p, uint32_t v) {
-    if (__builtin_expect((((uintptr_t) p) & 3u) == 0u, 1))
-        __atomic_store_n((bpvm_u32_a*) (void*) p, BPVM_BE32(v), __ATOMIC_RELAXED);
-    else
-        bpvm_write_u32_be_bytes(p, v);
+static inline BPVM_EN_LINEA void bpvm_write_u32_be(uint8_t* p, uint32_t v) {
+#ifndef BPVM_PALABRA_SIN_COMPROBAR
+    if (__builtin_expect((((uintptr_t) p) & 3u) != 0u, 0)) { bpvm_write_u32_be_bytes(p, v); return; }
+#endif
+    __atomic_store_n((bpvm_u32_a*) (void*) p, BPVM_BE32(v), __ATOMIC_RELAXED);
 }
 /* V7/H2 (#523) — u16 big-endian (el sello +6 del descriptor y las ranuras efectivas). */
-static inline void bpvm_write_u16_be(uint8_t* p, uint16_t v) {
-    if (__builtin_expect((((uintptr_t) p) & 1u) == 0u, 1))
-        __atomic_store_n((bpvm_u16_a*) (void*) p, (uint16_t) BPVM_BE16(v), __ATOMIC_RELAXED);
-    else
-        bpvm_write_u16_be_bytes(p, v);
+static inline BPVM_EN_LINEA void bpvm_write_u16_be(uint8_t* p, uint16_t v) {
+#ifndef BPVM_PALABRA_SIN_COMPROBAR
+    if (__builtin_expect((((uintptr_t) p) & 1u) != 0u, 0)) { bpvm_write_u16_be_bytes(p, v); return; }
+#endif
+    __atomic_store_n((bpvm_u16_a*) (void*) p, (uint16_t) BPVM_BE16(v), __ATOMIC_RELAXED);
 }
-static inline void bpvm_write_i32_be(uint8_t* p, int32_t v) {
+static inline BPVM_EN_LINEA void bpvm_write_i32_be(uint8_t* p, int32_t v) {
     bpvm_write_u32_be(p, (uint32_t) v);
 }
 /* H1.2 (V2): long i64 big-endian (high word en p, low en p+4). */
-static inline int64_t bpvm_read_i64_be(const uint8_t* p) {
+static inline BPVM_EN_LINEA int64_t bpvm_read_i64_be(const uint8_t* p) {
     return (int64_t)(((uint64_t) bpvm_read_u32_be(p) << 32)
                    |  (uint64_t) bpvm_read_u32_be(p + 4));
 }
-static inline void bpvm_write_i64_be(uint8_t* p, int64_t v) {
+static inline BPVM_EN_LINEA void bpvm_write_i64_be(uint8_t* p, int64_t v) {
     bpvm_write_u32_be(p,     (uint32_t)((uint64_t) v >> 32));
     bpvm_write_u32_be(p + 4, (uint32_t)  v);
 }

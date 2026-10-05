@@ -1157,6 +1157,17 @@ cuesta**, medido: en el PC, A/B alternada contra la VM de `#662` (la mediana de 
 arrays −15 %, objetos −13 %, cadenas igual; en la Pico, el código +2 040 bytes (+0,5 %). (miVM: su `--workers` sigue
 con su carrera B1, experimental desde V2; fuera de H12.)
 
+**Y en la Pico, una A/B que lo corrigió** (5-oct, tarde; con el OK de Eduardo para el lote): con esa versión, `fib(26)`
+con un run iba un 6 % más lento (3 367 ms contra 3 178). Tres imágenes grabadas y medidas: la de la mañana, 3 178; la
+nueva, 3 367; la nueva con los accesos de antes, 3 171 —eran los accesos—. A `-Os` el compilador de la Pico no metía en
+línea la versión con la comprobación de alineación (el salto y la llamada al camino lento le parecían grandes): cada
+acceso de la pila era una llamada a función. Forzarla en línea hinchaba el intérprete de 15,6 a 25 KB, más que la
+caché de la flash. El arreglo, **por arquitectura**: la M33 (la Pico y las STM32) y el x86 leen y escriben una palabra
+sin alinear con UNA instrucción —de una pieza si está alineada—, así que ahí no se comprueba nada y va siempre en línea
+(leer una local y empujarla: un `LDR` y un `STR`); en RISC-V y Xtensa (las ESP32), la comprobación, como estaba (su
+medida, en el lote del final de H12). La imagen de la Pico queda en 424 860 bytes de código, menos que la de la mañana
+(425 212). (PrintBench no decide: la MISMA imagen de la mañana dio 774 ms entonces y 846 en la A/B.)
+
 #### ✅ `#661` — con dos runs, el NÚMERO de handle de un `owner` soltado se recicla en el acto: el otro run, a mitad de una instrucción, puede escribir en el objeto nuevo que lo ha heredado (abierta el 5-oct, en el análisis del 2º núcleo; H12, la 2b · **CERRADA el 5-oct**, el commit de `#660` y `#661`; en la Pico 2, con la puerta de la 2b otra vez)
 
 **Visto el 5-oct, leyendo**: con dos runs, soltar un `owner` deja su HUECO para el GC (la 2b, esa mañana), pero mata
