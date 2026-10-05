@@ -319,6 +319,8 @@ void bpvm_repl_run_tarea_no_nacio(void);
 /** Lo que le sobró de pila a `run` tras el último programa, en bytes (-1: sin programa, o la plataforma no lo sabe).
  *  Va al INFO (`runStackFree`), como el de `io`: con eso se dimensiona su pila en cada familia. */
 long bpvm_repl_run_pila_libre(void);
+/** V7/H12, 2b: los runs permanentes en vigor (las tareas `run` creadas, en la cola); 0, sin tarea `run`. Al INFO (`runs`). */
+int  bpvm_repl_runs(void);
 /** SÓLO PRUEBAS (las del micro simulado): `espera_ms` > 0 ensancha la ventana entre el final del programa y el aviso
  *  de `run` (como `#609`); `sabotaje` hace que `io` cierre la cola de salida sin esperar a `run` —se pierde la salida
  *  tardía, y la prueba tiene que cazarlo—. */

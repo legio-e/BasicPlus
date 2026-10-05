@@ -89,3 +89,6 @@ CONFIG_FREERTOS_UNICORE=y
 # esto va a RAM interna) durante la escritura. Es la via del IDF —la ayuda de su Kconfig
 # lo dice tal cual— y la decision de Eduardo (1-oct): la interrupcion en RAM, no el DMA.
 CONFIG_UART_ISR_IN_IRAM=y
+# V7/H12 2b (5-oct): dos indices de notificacion por tarea; el 1, el de la condicion de la VM
+# (src/platform_freertos_cond.inc), que no se cruza con el 0 de los drivers.
+CONFIG_FREERTOS_TASK_NOTIFICATION_ARRAY_ENTRIES=2

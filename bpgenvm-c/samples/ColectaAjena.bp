@@ -1,0 +1,49 @@
+// ColectaAjena.bp — V7/H12, etapa 2b (5-oct, la revisión): UN gc() QUE ENCUENTRA EL MUNDO PARADO POR OTRA COSA.
+// Parar el mundo no es siempre colectar: Heap.compact() lo para, y con otro hilo vivo mira y no hace nada (lanza su
+// RuntimeError); la tabla de handles que crece, igual. Con dos runs, un gc() (o una reserva sin sitio) que llegaba en ese
+// momento esperaba al otro y volvía SIN colecta: un gc() que no colectaba, y una reserva que fallaba con «No space in
+// heap» sobre un heap lleno de basura. Ahora, si la cuenta de colectas no se movió mientras esperaba, colecta él.
+// test/test_cola.c, la parte 13, con su sabotaje. Determinista: «gc sin colecta: 0».
+module ColectaAjena
+  import Heap
+
+  class Colector extends Thread
+    var veces: integer
+    var sin: integer
+    public function Colector(n: integer)
+      super(8192)
+      this.veces := n
+      this.sin := 0
+    end Colector
+    public function run()
+      var i: integer := 0
+      while i < this.veces do
+        var c0: integer := Heap.getCollections()
+        gc()
+        if Heap.getCollections() == c0 then
+          this.sin := this.sin + 1
+        endif
+        i := i + 1
+      endwh
+    end run
+    public function sinColecta(): integer
+      return this.sin
+    end sinColecta
+  end Colector
+
+  function Main()
+    var t: Colector := Colector(2000)
+    t.start()
+    var j: integer := 0
+    while j < 2000 do
+      try
+        Heap.compact()
+      catch e: RuntimeError
+        // con otro hilo vivo no compacta: es lo que se quiere (para el mundo y no colecta)
+      endtry
+      j := j + 1
+    endwh
+    t.join()
+    print "gc sin colecta: " + t.sinColecta()
+  end Main
+end ColectaAjena

@@ -1,0 +1,55 @@
+// EvDosRuns.bp — V7/H12, etapa 2b (5-oct): EVENTOS CON DOS RUNS. Dos hilos levantan eventos a la vez, cada uno en su
+// run, a la misma cola de eventos de la VM; cada uno tiene su oyente, que cuenta los que atiende. Con un run nunca
+// coincidían dos `raise`; con dos, la cola tiene que estar bajo el cerrojo (el planificador saca de ella con él): si
+// no, un evento pisa a otro y se pierde (test/test_cola.c, la parte 6, con la ventana ensanchada y su sabotaje).
+// Determinista en el resultado: «a: 500 b: 500».
+module EvDosRuns
+  class Lanzador extends Thread
+    event aviso(n: integer)
+    var veces: integer
+
+    public function Lanzador(n: integer)
+      super(4096)
+      this.veces := n
+    end Lanzador
+
+    public function run()
+      var i: integer := 0
+      while i < this.veces do
+        raise aviso(i)
+        yield()
+        i := i + 1
+      endwh
+    end run
+  end Lanzador
+
+  class Oyente
+    var cuenta: integer
+
+    public function Oyente()
+      this.cuenta := 0
+    end Oyente
+
+    function event atender(n: integer)
+      this.cuenta := this.cuenta + 1
+    end atender
+
+    public function total(): integer
+      return this.cuenta
+    end total
+  end Oyente
+
+  function Main()
+    var a: Lanzador := Lanzador(500)
+    var b: Lanzador := Lanzador(500)
+    var oa: Oyente := Oyente()
+    var ob: Oyente := Oyente()
+    a.aviso := oa::atender
+    b.aviso := ob::atender
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "a: " + oa.total() + " b: " + ob.total()
+  end Main
+end EvDosRuns

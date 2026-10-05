@@ -336,6 +336,23 @@ void bpvm_set_quantum_ops(long ops) {
     g_quantum_ops = ops;
 }
 
+/* V7/H12, etapa 2b (5-oct; Eduardo: «ponemos el 2º run, conseguimos que funcione con lo mínimo y vamos ampliando la
+ * cobertura») — los runs permanentes: `vm.runs` del ENV. Dos, como mucho: uno por núcleo en las placas de dos (la
+ * etapa 3), y en la 2b, los dos en uno. */
+#define BPVM_RUNS_MAX 2
+static int g_runs = 1;
+
+void bpvm_set_runs(long n) {
+    if (n == 0) return;                                  /* sin la clave: los de siempre */
+    if (n < 1 || n > BPVM_RUNS_MAX) {
+        bpvm_diag("[bpvm] vm.runs=%ld fuera de rango (1..%d): se queda en %d", n, BPVM_RUNS_MAX, g_runs);
+        return;
+    }
+    g_runs = (int) n;
+}
+
+int bpvm_runs(void) { return g_runs; }
+
 size_t bpvm_stack_region_bytes(size_t total_bytes) {
     if (g_stack_kb) {
         size_t pedido = (size_t) g_stack_kb * 1024u;
@@ -407,7 +424,6 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->alloc_since_gc    = 0u;   /* #357 */
     vm->gc_bump_threshold = 0;   /* off hasta entonces */
     vm->heap_reserve = 0;        /* #355: se arma al fijar el heap real, no aquí */
-    vm->building_error = 0;      /* #355: 1 solo mientras se construye una excepcion */
     vm->main_absolute_address = 0;
     /* V4 — tabla de handles (lazy; V6/U5: en su módulo, bpvm_handles.c) + GC
      * suspendido durante la migración. */

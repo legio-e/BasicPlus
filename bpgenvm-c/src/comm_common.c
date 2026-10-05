@@ -20,12 +20,15 @@
 #include <string.h>
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 
+int bpvm_oq_sabotaje_lineas = 0;   /* SÓLO PRUEBAS (bpvm_smp.h) */
+
 int bpvm_oq_init(bpvm_output_queue_t* q, size_t cap) {
     q->buf = (char*) bpvm_malloc(cap);
     if (!q->buf) return -1;
     q->cap  = cap;
     q->head = q->tail = q->used = 0;
     q->closed = false;
+    q->escribiendo = false;
     if (bpvm_platform_mutex_init(&q->mtx) != 0) {
         bpvm_free(q->buf); q->buf = NULL; return -1;
     }
@@ -76,6 +79,12 @@ void bpvm_oq_pushv(bpvm_output_queue_t* q, const bpvm_trozo_t* t, int n) {
     for (int i = 0; i < n; i++) total += t[i].n;
     if (total == 0) return;
     bpvm_platform_mutex_lock(&q->mtx);
+    /* V7/H12, 2b (la revisión) — si otro productor va a mitad de una línea que no cabe (abajo, a trozos), se espera a
+     * que acabe: con dos runs, dos `print` a la vez, y uno no cabe en la cola (1 KB en la Pico). Con un run nunca pasa:
+     * el que escribe a trozos es el único productor. (El que acaba avisa con not_full.) */
+    while (q->escribiendo && !q->closed && !bpvm_oq_sabotaje_lineas) {
+        bpvm_platform_cond_wait(&q->not_full, &q->mtx);
+    }
     if (total <= q->cap) {
         while (q->cap - q->used < total && !q->closed) {
             bpvm_platform_cond_wait(&q->not_full, &q->mtx);
@@ -85,6 +94,7 @@ void bpvm_oq_pushv(bpvm_output_queue_t* q, const bpvm_trozo_t* t, int n) {
             bpvm_platform_cond_signal(&q->not_empty);
         }
     } else {
+        q->escribiendo = true;                 /* V7/H12, 2b: los demás, a esperar a que acabe la línea */
         for (int i = 0; i < n && !q->closed; i++) {
             size_t pushed = 0;
             while (pushed < t[i].n) {
@@ -100,6 +110,8 @@ void bpvm_oq_pushv(bpvm_output_queue_t* q, const bpvm_trozo_t* t, int n) {
                 bpvm_platform_cond_signal(&q->not_empty);
             }
         }
+        q->escribiendo = false;
+        bpvm_platform_cond_broadcast(&q->not_full);   /* los que esperaban a que acabase */
     }
     bpvm_platform_mutex_unlock(&q->mtx);
 }

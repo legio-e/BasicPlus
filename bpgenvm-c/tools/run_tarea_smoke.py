@@ -27,6 +27,11 @@ lo prueban así. Y además:
      cazarlo;
   J. el interruptor de la 2a.2 (`--run-etapa1`: `run` espera el «trabajo», como en la etapa 1): A, B, C y H.
 
+Y desde la etapa 2b (5-oct), DOS runs permanentes (`--runs=2`, como `vm.runs=2` en el ENV de una placa):
+
+  K. A, B, C y H con dos runs, y un programa de dos hilos que se reparten un contador bajo un Mutex (los dos runs
+     trabajan a la vez): el total exacto en cada RUN.
+
     python tools/run_tarea_smoke.py [--vueltas=N]      (desde bpgenvm-c; BPVM_SIM= para otro simulador)
 """
 import os, shutil, sys, tempfile, time
@@ -97,6 +102,45 @@ VACIO = """module RunVacio
     var i: integer := 1
   end Main
 end RunVacio
+"""
+
+# K (2b): dos hilos que suman bajo un Mutex; con dos runs, cada uno en el suyo. El total, exacto.
+DOS_HILOS = """module RunDosHilos
+  class Sumador extends Thread
+    var m: Mutex
+    var veces: integer
+    var hechos: integer
+    public function Sumador(mx: Mutex, n: integer)
+      super(4096)
+      this.m := mx
+      this.veces := n
+      this.hechos := 0
+    end Sumador
+    public function run()
+      var i: integer := 0
+      while i < this.veces do
+        this.m.lock()
+        this.hechos := this.hechos + 1
+        this.m.unlock()
+        i := i + 1
+      endwh
+    end run
+    public function total(): integer
+      return this.hechos
+    end total
+  end Sumador
+
+  function Main()
+    var mtx: Mutex := Mutex()
+    var a: Sumador := Sumador(mtx, 3000)
+    var b: Sumador := Sumador(mtx, 3000)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "total = " + (a.total() + b.total())
+  end Main
+end RunDosHilos
 """
 
 # Se duerme una hora: el KILL tiene que despertarlo (H).
@@ -271,7 +315,7 @@ def main():
     print("=== run_tarea_smoke (V7/H12, etapas 0, 1 y 2a.2): la tarea `run` del micro simulado ===", flush=True)
     mods = {}
     for nombre, fuente in (("RunVeinte", VEINTE), ("RunTarde", TARDE), ("RunCorto", CORTO), ("RunVacio", VACIO),
-                           ("RunDormido", DORMIDO)):
+                           ("RunDormido", DORMIDO), ("RunDosHilos", DOS_HILOS)):
         mods[nombre] = compila(tmp, nombre, fuente)
         check(mods[nombre] is not None, "compila %s" % nombre)
     if None in mods.values():
@@ -343,6 +387,26 @@ def main():
         caso_b(c, "J (--run-etapa1) ")
         caso_c(c, "J (--run-etapa1) ")
         caso_h(c, "J (--run-etapa1) ")
+    finally:
+        para(proc, sock)
+
+    # K: dos runs permanentes (2b)
+    proc, sock, c = arranca(os.path.join(tmp, "k.flash"), ["--runs=2"])
+    try:
+        check(subir(c, mods), "K. PUT (con --runs=2)")
+        caso_a(c, max(50, VUELTAS // 5), "K (dos runs) ")
+        caso_b(c, "K (dos runs) ")
+        caso_c(c, "K (dos runs) ")
+        caso_h(c, "K (dos runs) ")
+        malos = []
+        for k in range(50):
+            texto, ex, _ = correr(c, "RunDosHilos")
+            if ex is None or ex.get("status") != "OK" or texto != "total = 6000\n":
+                malos.append((k, ex and ex.get("status"), texto[-40:]))
+                if len(malos) >= 3:
+                    break
+        check(not malos, "K (dos runs) dos hilos bajo un Mutex, 50 RUN: el total exacto (6000) en todos%s"
+              % ("" if not malos else " — mal: %r" % malos))
     finally:
         para(proc, sock)
 

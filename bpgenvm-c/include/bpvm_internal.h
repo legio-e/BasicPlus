@@ -530,11 +530,9 @@ struct bpvm {
      * Sin esto, quedarse sin memoria significaba quedarse tambien sin poder
      * avisar. 0 = ya gastada (o desactivada). */
     uint32_t heap_reserve;
-    /* #355 — 1 mientras se esta CONSTRUYENDO una excepcion. Solo entonces puede
-     * gastarse la reserva de emergencia: soltarla en cualquier throw se la
-     * llevaba el primer RuntimeError de cualquier clase, y el aviso ademas
-     * mentia ("heap lleno" con el heap recien vaciado). Lo vio el log de la Pico. */
-    int      building_error;
+    /* (#355: aquí estuvo `building_error`, 1 mientras se construía una excepción: la reserva de arriba sólo se gasta
+     * entonces. V7/H12, 2b: con dos runs era de la VM, no del hilo —la veía el otro run—; ahora lo dice la propia
+     * reserva: bpvm_heap_nuevo_error.) */
     /* Camino 1 (H-008, v3.0.1): bitmap "¿es inicio de cabecera real?" (1 bit por
      * palabra de 4B del heap). Se reconstruye al empezar cada mark; el scan
      * conservativo solo valida candidatos cuya (v-4) esté aquí → un entero que
@@ -1074,6 +1072,10 @@ bpvm_status_t bpvm_interp_run(bpvm_t* vm);
  * bloque y el handle. Devuelve el handle (bpref_deref da la dirección, para llenar el contenido) o nulo si no cabe,
  * en el heap o en la tabla: quien llama lanza «No space in heap». No hay otra forma de poner un bloque en el heap. */
 bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes);
+/* #355 — lo mismo, para CONSTRUIR UN ERROR (bpvm_throw_runtime_error: su mensaje y su objeto): la única reserva que,
+ * si no cabe, puede gastar la reserva de emergencia. V7/H12, 2b (5-oct): lo dice la reserva, no una bandera de la VM
+ * —con dos runs, la del otro run—. */
+bpref_t bpvm_heap_nuevo_error(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes);
 /* El tamaño total de un bloque según su cabecera (el que usan el recorrido y el barrido): para las pruebas (#593). */
 uint32_t bpvm_heap_bloque_tam(const bpvm_t* vm, uint32_t header_addr);
 
@@ -1096,11 +1098,12 @@ int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc);
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
 void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);
-/* #355 — suelta la reserva de emergencia. La llama SOLO el camino del throw:
+/* #355 — suelta la reserva de emergencia. La llama SOLO una reserva para construir un error (bpvm_heap_nuevo_error):
  * si la soltara la reserva normal al fallar, se la quedaria el programa y el
  * error se volveria a quedar sin memoria con la que construirse. */
 uint32_t bpvm_heap_release_reserve(bpvm_t* vm);
 uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len);
+uint32_t bpvm_heap_alloc_string_error(bpvm_t* vm, const char* s, size_t len);   /* #355: el mensaje de un error */
 void     bpvm_heap_gc(bpvm_t* vm);
 
 /* interp.c — GAP-4: formateo canónico de double/float (byte-idéntico a

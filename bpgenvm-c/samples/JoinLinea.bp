@@ -1,0 +1,36 @@
+// JoinLinea.bp — V7/H12, etapa 2b (5-oct, la revisión): EL JOIN NO SE ADELANTA A LA ÚLTIMA LÍNEA DEL HILO. Un hilo
+// deja una línea a medias («a3», sin salto) y acaba: esa línea sale al terminar. El main hace join y sigue con «fin3».
+// Con un run, siempre «a3fin3». Con dos, el hilo queda TERMINATED antes de soltar su línea (en la placa, soltarla puede
+// esperar a `io` con la cola llena), y el join lo daba por acabado: «fin3» salía antes que «a3». test/test_cola.c, la
+// parte 11 (con esa ventana ensanchada y su sabotaje): la salida con dos runs, la misma que con uno.
+module JoinLinea
+  class Medio extends Thread
+    var i: integer
+    public function Medio(i: integer)
+      super(4096)
+      this.i := i
+    end Medio
+    // La línea a medias: la segunda pieza lanza, se atrapa, y «aN» queda pendiente hasta que el hilo acaba (#600).
+    public function run()
+      try
+        print "a" + this.i, this.falla()
+      catch e: RuntimeError
+      endtry
+    end run
+    function falla(): string
+      var x: integer[] := [1]
+      return "" + x[5]
+    end falla
+  end Medio
+
+  function Main()
+    var k: integer := 0
+    while k < 50 do
+      var m: Medio := Medio(k)
+      m.start()
+      m.join()
+      print "fin" + k
+      k := k + 1
+    endwh
+  end Main
+end JoinLinea

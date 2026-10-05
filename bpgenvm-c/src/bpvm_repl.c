@@ -33,6 +33,7 @@
 #include "aot_registry.h"   /* V7/H10, el RUN común: vaciar y contar el registro AOT */
 #include "bpvm_bmgr_wire.h" /* V7/H10, el board_mgr común: la familia, la vista del ENV y el despachador */
 
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -890,6 +891,9 @@ static void repl_info(long id) {
     /* V7/H12, etapas 0 y 1: y lo que le sobró a la tarea `run` tras el último programa (-1: no la hay, o no lo sabe).
      * Con `run`, `ioStackFree` es la tarea del REPL, que hace de `io` durante el RUN. */
     CAMPO_L("runStackFree", bpvm_repl_run_pila_libre());
+    /* V7/H12, 2b: los runs permanentes EN VIGOR —las tareas `run` que la familia creó y esperan en la cola—, no los que
+     * pide el ENV (`vm.runs`): una familia que aún no crea el 2º, o que no pudo, dice 1 (0: sin tarea `run`). */
+    CAMPO_L("runs",         bpvm_repl_runs());
     CAMPO_L("fsTotalBytes", in.fs_total_bytes);
     CAMPO_L("fsUsedBytes",  in.fs_used_bytes);
     /* V6/T1 (11-sep) — la PANTALLA, si la placa la tiene: el runner de las
@@ -1885,7 +1889,7 @@ static struct {
     int          rs;            /* lo que dio el programa: run, antes del «hecho» */
     volatile int fin;           /* run ha acabado: io cierra la cola (bpvm_io_lazo) */
     volatile int viva;          /* la tarea existe y espera el «trabajo» (etapa 1): sin ella, el RUN de siempre */
-    int          en_cola;       /* 2a.2: hay un run permanente en la cola (registrado al preparar): el RUN cuelga ahí */
+    int          en_cola;       /* los runs permanentes en la cola (registrados al preparar; 2b: los de `vm.runs`): el RUN cuelga ahí */
     long         pila_libre;    /* lo que le sobró de pila tras el último programa (-1: no lo sabe) */
     int          ensayo_ms;     /* SÓLO PRUEBAS: la ventana ensanchada entre el final del programa y `fin` */
     int          sabotaje;      /* SÓLO PRUEBAS: io cierra la cola sin esperar a `fin` */
@@ -1894,28 +1898,31 @@ static struct {
 int  bpvm_repl_run_en_cola(void) { return s_run_en_cola; }
 void bpvm_repl_run_tarea_en_cola(int si) { s_run_en_cola = si ? 1 : 0; }
 
+/* Una por cada tarea `run` que va a crear la familia (2b: tantas como `vm.runs`), ANTES de crearla. Lo común, la
+ * primera vez: el «hecho» (y el «trabajo», con el relevo de la etapa 1, que es de UN run: una segunda, -1). Y en la
+ * cola, un run permanente más: desde aquí el RUN cuelga los programas en ella aunque la tarea todavía no haya empezado
+ * (lo encontrará al nacer); si la familia no puede crearla, lo dice (bpvm_repl_run_tarea_no_nacio). */
 int bpvm_repl_run_tarea_prepara(void) {
-    if (s_tarea.hecho) return 0;
+    if (!s_tarea.hecho) {
+        if (!s_run_en_cola && bpvm_platform_sem_init(&s_tarea.trabajo) != 0) return -1;
+        if (bpvm_platform_sem_init(&s_tarea.hecho) != 0) {
+            if (!s_run_en_cola) bpvm_platform_sem_destroy(&s_tarea.trabajo);
+            return -1;
+        }
+    } else if (!s_run_en_cola) {
+        return -1;                                              /* el relevo de la etapa 1: un run */
+    }
     if (s_run_en_cola) {
         if (bpvm_cola_registrar_permanente() != 0) return -1;   /* la cola nace aquí, en el arranque */
-    } else if (bpvm_platform_sem_init(&s_tarea.trabajo) != 0) {
-        return -1;
+        s_tarea.en_cola++;
     }
-    if (bpvm_platform_sem_init(&s_tarea.hecho) != 0) {
-        if (s_run_en_cola) bpvm_cola_baja_permanente();
-        else               bpvm_platform_sem_destroy(&s_tarea.trabajo);
-        return -1;
-    }
-    /* Desde aquí el RUN cuelga los programas en la cola, aunque `run` todavía no haya empezado: lo encontrará al nacer.
-     * Si la familia no puede crearla, lo dice (bpvm_repl_run_tarea_no_nacio). */
-    s_tarea.en_cola = s_run_en_cola;
     return 0;
 }
 
 void bpvm_repl_run_tarea_no_nacio(void) {
-    if (s_tarea.en_cola) {
+    if (s_tarea.en_cola > 0) {
         bpvm_cola_baja_permanente();
-        s_tarea.en_cola = 0;
+        s_tarea.en_cola--;
     }
 }
 
@@ -1934,14 +1941,14 @@ static void run_acabado(bpvm_t* vm, int rs, void* user) {
 }
 
 void bpvm_repl_run_tarea(void* arg) {
-    (void) arg;
+    int id = (int) (intptr_t) arg;   /* 2b: el número de este run (0, 1…), el que la familia le dio al crearla */
     /* NO VUELVE NUNCA: en FreeRTOS, una tarea que vuelve cuelga la placa (prvTaskExitError). Sin sus avisos —la familia
      * no llamó a `prepara`, o no pudo— se queda dormida y `viva` sigue a 0: el RUN de siempre. Tampoco escribe en el
-     * log al nacer: el log no tiene cerrojo y nacería a la vez que el arranque (lo dice quien la crea). */
-    if (bpvm_repl_run_tarea_prepara() != 0)
+     * log al nacer: nacería a la vez que el arranque (lo dice quien la crea). */
+    if (!s_tarea.hecho)
         for (;;) bpvm_platform_thread_sleep_ms(60000);
     if (s_tarea.en_cola) {
-        bpvm_cola_correr(1, 0);   /* 2a.2: un run permanente, en la cola; no vuelve */
+        bpvm_cola_correr(1, id);  /* 2a.2: un run permanente, en la cola; no vuelve */
         for (;;) bpvm_platform_thread_sleep_ms(60000);
     }
     s_tarea.viva = 1;
@@ -1959,6 +1966,8 @@ void bpvm_repl_run_tarea(void* arg) {
 }
 
 long bpvm_repl_run_pila_libre(void) { return s_tarea.pila_libre; }
+
+int bpvm_repl_runs(void) { return s_tarea.en_cola; }
 
 void bpvm_repl_run_tarea_ensayo(int espera_ms, int sabotaje) {
     s_tarea.ensayo_ms = espera_ms > 0 ? espera_ms : 0;
@@ -2127,6 +2136,21 @@ static void run_exited(long sesion, const char* estado, int codigo, unsigned lon
     else          wire_v1_send_cstr("{\"type\":\"EXITED\",\"status\":\"INTERNAL_ERROR\",\"exitCode\":3}");
 }
 
+/* V7/H12, etapa 2b — UN PROGRAMA CON UN SOLO RUN aunque haya dos (Eduardo, 5-oct: «de momento solamente 2 run
+ * ejecutando código BP normal, sin AOT ni LVGL»): el depurador —su pausa congela el programa entero, y su estado es
+ * de un hilo— y, mientras tanto, lo que no está preparado para dos: las natives (el contexto del AOT es global en los
+ * micros), la GUI (LVGL no es reentrante) y SQLite (compilado sin hilos). `porque`, para el log. */
+static int un_solo_run(const bpvm_t* vm, int depurando, const char** porque) {
+    if (depurando)            { *porque = "el depurador"; return 1; }
+    if (bpvm_aot_count() > 0) { *porque = "natives";      return 1; }
+    for (int i = 0; i < vm->module_count; i++) {
+        const char* n = vm->modules[i].name;
+        if (!strcmp(n, "Gui"))    { *porque = "la GUI"; return 1; }
+        if (!strcmp(n, "SQLite")) { *porque = "SQLite"; return 1; }
+    }
+    return 0;
+}
+
 void bpvm_repl_run(long id, const char* path, const char* arg) {
     const bpvm_repl_run_ops_t* r = run_ops();
     if (!r || !r->memoria || !r->leer_linea || !r->mensaje || !r->reiniciar) {
@@ -2258,7 +2282,11 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
         /* REGLA (2-oct): elapsedMs, de colgarlo a parar `io` (la última línea del programa, ya fuera). */
         t0 = bpvm_platform_now_ms();
         s_tarea.fin = 0;
-        int ps = bpvm_cola_colgar(vm, 1, 1, run_acabado, NULL);
+        /* 2b: para los runs permanentes que haya (los de `vm.runs`), o para uno (un_solo_run) */
+        const char* porque = NULL;
+        int runs = un_solo_run(vm, depurando, &porque) ? 1 : s_tarea.en_cola;
+        if (runs < s_tarea.en_cola) log_printf("run: con un run de %d (%s)", s_tarea.en_cola, porque);
+        int ps = bpvm_cola_colgar(vm, runs, 1, run_acabado, NULL);
         if (ps != BPVM_OK) {
             rs = (bpvm_status_t) ps;               /* no se publicó (un fallo de enlace…): nadie más la ha tocado */
         } else {

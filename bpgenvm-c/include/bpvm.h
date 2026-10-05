@@ -120,6 +120,12 @@ void bpvm_set_stack_kb(unsigned long kb);
  * más cambios de contexto; ver el porqué en bpvm.c. */
 void bpvm_set_quantum_ops(long ops);
 
+/* V7/H12, etapa 2b — cuántos runs PERMANENTES ejecutan los programas en una placa (y en el micro simulado): la clave
+ * `vm.runs` del ENV, leída en el arranque (bpvm_boot2_claves); 1 o 2, 1 por defecto (y la vuelta atrás). Fuera de
+ * rango se ajusta y se dice. La familia crea esos runs al crear la tarea `run`. */
+void bpvm_set_runs(long n);
+int  bpvm_runs(void);
+
 /* Gancho de diagnóstico: se llama justo DESPUÉS de que `bpvm_run` resuelva el
  * enlace y ANTES de ejecutar una sola instrucción. NULL (el defecto) = nada.
  *
@@ -358,8 +364,17 @@ void bpvm_diag_urgente(const char* fmt, ...);
 /* Devuelve la zona (alineada para cualquier tipo) o NULL: no cabe, o ya la
  * tiene otro. `quien` es un literal corto para el aviso ("PACK_DEL"). */
 void*  bpvm_scratch_take(size_t n, const char* quien);
+void*  bpvm_scratch_take_quieto(size_t n, const char* quien);   /* V7/H12, 2b: sin el aviso si está ocupada */
 void   bpvm_scratch_give(const char* quien);
 size_t bpvm_scratch_capacity(void);
+/* V7/H12, 2b — el cerrojo con el que mirar si la zona está libre y quedársela van juntos: lo registra la VM al crear
+ * la cola (bpvm_cola_asegurar). Sin registrar —una herramienta que enlaza esto sin la VM, con un hilo—, ninguno. */
+typedef void (*bpvm_scratch_cerrojo_fn)(void);
+void   bpvm_scratch_set_cerrojo(bpvm_scratch_cerrojo_fn cerrar, bpvm_scratch_cerrojo_fn abrir);
+/* Y ese mismo cerrojo para servicios sin VM con una tabla pequeña compartida por dos runs (la HAL): secciones cortas,
+ * que no esperan, y nunca con el cerrojo de la VM ya cogido (es el mismo y no es recursivo). Sin registrar, nada. */
+void   bpvm_cerrojo_comun_cerrar(void);
+void   bpvm_cerrojo_comun_abrir(void);
 
 /*
  * Activa traza per-instrucción al stderr (para debug del intérprete

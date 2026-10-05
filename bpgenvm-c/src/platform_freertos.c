@@ -95,110 +95,12 @@ void bpvm_platform_mutex_unlock(bpvm_platform_mutex_handle_t* m) {
     xSemaphoreGive((SemaphoreHandle_t) *m);
 }
 
-/* ============================== Condvar ================================
- * FreeRTOS no tiene condvar. La clásica: un semáforo binario y una cuenta de
- * esperadores. Quien llama trae el mutex tomado; lo soltamos, esperamos la
- * señal y lo volvemos a tomar antes de salir. */
-
-typedef struct {
-    SemaphoreHandle_t sem;     /* binario, empieza a 0 */
-    SemaphoreHandle_t guard;   /* protege `waiters` */
-    int               waiters;
-} fr_cond_t;
-
-int bpvm_platform_cond_init(bpvm_platform_cond_handle_t* c) {
-    if (!c) return -1;
-    fr_cond_t* cv = (fr_cond_t*) pvPortMalloc(sizeof(fr_cond_t));
-    if (!cv) return -1;
-    cv->sem   = xSemaphoreCreateBinary();
-    cv->guard = xSemaphoreCreateMutex();
-    cv->waiters = 0;
-    if (!cv->sem || !cv->guard) {
-        if (cv->sem)   vSemaphoreDelete(cv->sem);
-        if (cv->guard) vSemaphoreDelete(cv->guard);
-        vPortFree(cv);
-        return -1;
-    }
-    *c = (void*) cv;
-    return 0;
-}
-
-void bpvm_platform_cond_destroy(bpvm_platform_cond_handle_t* c) {
-    if (!c || !*c) return;
-    fr_cond_t* cv = (fr_cond_t*) *c;
-    vSemaphoreDelete(cv->sem);
-    vSemaphoreDelete(cv->guard);
-    vPortFree(cv);
-    *c = NULL;
-}
-
-void bpvm_platform_cond_wait(bpvm_platform_cond_handle_t* c,
-                              bpvm_platform_mutex_handle_t* m) {
-    if (!c || !*c || !m || !*m) return;
-    fr_cond_t* cv = (fr_cond_t*) *c;
-    xSemaphoreTake(cv->guard, portMAX_DELAY);
-    cv->waiters++;
-    xSemaphoreGive(cv->guard);
-    xSemaphoreGive((SemaphoreHandle_t) *m);
-    xSemaphoreTake(cv->sem, portMAX_DELAY);
-    xSemaphoreTake((SemaphoreHandle_t) *m, portMAX_DELAY);
-}
-
-int bpvm_platform_cond_timed_wait(bpvm_platform_cond_handle_t* c,
-                                   bpvm_platform_mutex_handle_t* m, int ms) {
-    if (!c || !*c || !m || !*m) return 1;
-    fr_cond_t* cv = (fr_cond_t*) *c;
-    xSemaphoreTake(cv->guard, portMAX_DELAY);
-    cv->waiters++;
-    xSemaphoreGive(cv->guard);
-    xSemaphoreGive((SemaphoreHandle_t) *m);
-
-    /* V6/A1.2 — REDONDEAR HACIA ARRIBA, NUNCA A CERO.
-     *
-     * `pdMS_TO_TICKS(ms)` es una división entera: con el tick a 100 Hz,
-     * cualquier espera de menos de 10 ms da 0 ticks, y `xSemaphoreTake(sem, 0)`
-     * no espera — sondea. Quien pidió «hasta N ms» se encuentra con que no
-     * espera nada y gira en vacío. Lo destapó el hilo `io` en la C6: pedía 5 ms,
-     * se los daban a cero, y fib(28) pasó de 23 400 a 140 600 ms. Un tick es lo
-     * mínimo que este reloj sabe esperar, así que es lo correcto. */
-    TickType_t ticks = 0;
-    if (ms > 0) {
-        ticks = pdMS_TO_TICKS(ms);
-        if (ticks == 0) ticks = 1;
-    }
-    BaseType_t r = xSemaphoreTake(cv->sem, ticks);
-    xSemaphoreTake((SemaphoreHandle_t) *m, portMAX_DELAY);
-    if (r != pdTRUE) {
-        xSemaphoreTake(cv->guard, portMAX_DELAY);
-        if (cv->waiters > 0) cv->waiters--;
-        xSemaphoreGive(cv->guard);
-        return 1;                     /* venció el plazo */
-    }
-    return 0;
-}
-
-void bpvm_platform_cond_signal(bpvm_platform_cond_handle_t* c) {
-    if (!c || !*c) return;
-    fr_cond_t* cv = (fr_cond_t*) *c;
-    xSemaphoreTake(cv->guard, portMAX_DELAY);
-    int hay = cv->waiters;
-    if (hay > 0) cv->waiters--;
-    xSemaphoreGive(cv->guard);
-    if (hay > 0) xSemaphoreGive(cv->sem);
-}
-
-void bpvm_platform_cond_broadcast(bpvm_platform_cond_handle_t* c) {
-    if (!c || !*c) return;
-    fr_cond_t* cv = (fr_cond_t*) *c;
-    for (;;) {
-        xSemaphoreTake(cv->guard, portMAX_DELAY);
-        int hay = cv->waiters;
-        if (hay > 0) cv->waiters--;
-        xSemaphoreGive(cv->guard);
-        if (hay <= 0) break;
-        xSemaphoreGive(cv->sem);
-    }
-}
+/* ============================== Condvar ==========================
+ * V7/H12, etapa 2b (5-oct): la COMÚN a las tres familias (la Pico, la ESP32 y la STM32), en vez de una copia. La de
+ * antes —un semáforo binario y una cuenta de esperadores— perdía avisos con dos esperando (un `broadcast` despertaba
+ * a uno) y dejaba que un tercero se llevara el aviso de otro: con dos runs, un run dormido para siempre. El porqué y
+ * el cómo, allí; la prueba, test/test_frcond.c (make test-frcond), con el kernel de FreeRTOS de verdad. */
+#include "platform_freertos_cond.inc"
 
 /* ============================== Hilos ==================================
  * Cada hilo lleva su semáforo de «he terminado» para que `join` espere de

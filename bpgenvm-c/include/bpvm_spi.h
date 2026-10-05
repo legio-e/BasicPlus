@@ -33,6 +33,9 @@ typedef struct {
 } bpvm_spi_backend_t;
 
 void bpvm_spi_set_backend(const bpvm_spi_backend_t* backend);
+/* V7/H12, 2b — la memoria de la fachada (velocidad, modo y CS de cada bus, a «no se sabe»), con un solo hilo vivo:
+ * la llama bpvm_cola_asegurar. */
+void bpvm_spi_preparar(void);
 
 /* V7/H6.c G4.a1 — la puerta de los tres usuarios de un bus (el programa, el
  * firmware, los packs: BPVM_BUS_* de bpvm_bus.h). Aplica la regla de bpvm_bus.h

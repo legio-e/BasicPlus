@@ -43,6 +43,11 @@ static void hz_listo(void) {
 }
 static void hz_olvida(int bus) { hz_listo(); if (bus_ok(bus)) s_hz[bus] = s_modo[bus] = -1; }
 
+/* V7/H12, 2b (la revisión) — lo de arriba, con UN hilo vivo (bpvm_cola_asegurar, en el arranque): perezoso, dos runs a
+ * la vez podían hacerlo los dos —uno ya con su turno y su CS bajo, y el otro poniendo ese CS a «ninguno»: al soltar,
+ * el CS no subía—. hz_listo se queda (lo usa quien no pasa por ahí: las pruebas de la fachada). */
+void bpvm_spi_preparar(void) { hz_listo(); }
+
 /* V7/H6.c G4.a1 — la regla la pone bpvm_bus.c; aquí sólo se lleva a la cintura:
  * abrirla SOLO la primera vez. G4.a2: la velocidad ya NO se ajusta al abrir —se
  * cambiaría en mitad del turno de otro—; se ajusta al TOMAR el bus. */

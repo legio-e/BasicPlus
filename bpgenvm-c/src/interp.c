@@ -680,7 +680,15 @@ static void bpvm_free_owned(bpvm_t* vm, bpref_t r) {
     uint32_t header = addr - 4u;
     uint32_t tag = bpvm_read_u32_be(vm->memory + header);
     if ((tag & BPVM_TAG_FREE_BIT) != 0) return;                    /* ya libre */
-    bpvm_handle_kill(vm, r);   /* Paso 3/contrato B: el índice queda MUERTO → derefs futuros gritan */
+    /* Paso 3/contrato B: el índice queda MUERTO → derefs futuros gritan.
+     * V7/H12, 2b (la revisión) — Y LO SUELTA QUIEN LO MATA. Lo de arriba se mira sin cerrojo: con dos runs, dos hilos
+     * que asignan a la vez el MISMO campo owner (una carrera del programa: el propietario es uno, los hilos dos) leen
+     * el mismo objeto, los dos lo ven vivo, y los dos lo soltaban —el bloque dos veces en la lista de libres, que se
+     * apuntaba a sí misma: la siguiente reserva daba vueltas sin fin con el cerrojo cogido, o dos objetos en el mismo
+     * hueco—. Matarlo es mirar y matar juntos, bajo el cerrojo: el segundo lo encuentra muerto y no sigue. Con un run,
+     * la instrucción entera va de una vez y esto no cambia nada. */
+    if (bpvm_la_cola.sabotaje_owner) bpvm_handle_kill(vm, r);   /* SÓLO PRUEBAS (test_cola): el camino de antes */
+    else if (!bpvm_handle_kill(vm, r)) return;
     int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
 
     if (type == BPVM_TYPE_OBJECT) {
@@ -702,6 +710,13 @@ static void bpvm_free_owned(bpvm_t* vm, bpref_t r) {
             bpvm_free_owned(vm, slot);
         }
     }
+    /* V7/H12, 2b (la revisión) — con DOS runs el hueco no vuelve ya a la lista de libres: se lo lleva el siguiente GC
+     * (su handle está muerto: nadie lo marca, y el barrido lo suelta, con la cuenta de #593 en su sitio). Otro hilo, en
+     * el otro run, puede estar A MITAD de una instrucción sobre este objeto —miró que vivía y aún no ha escrito el
+     * campo— y, devuelto ya, el hueco podía ser de un objeto nuevo: escribiría en él, en silencio. El GC sólo corre
+     * con todos parados entre dos instrucciones. El objeto muere igual en el acto (quien lo use después recibe «objeto
+     * eliminado»); sólo su memoria espera. Con un run, como siempre: de vuelta en el acto. */
+    if (vm->smp != NULL && !bpvm_la_cola.sabotaje_owner) return;
     bpvm_heap_free_block(vm, header);   /* H-010: bloque consistente */
 }
 
@@ -2275,6 +2290,11 @@ done:
     }
     /* V7/H7 #600 — un hilo que acaba a mitad de un `print` (una excepción al calcular una pieza): lo que
      * llevaba sale tal cual, sin salto, como salía antes. */
-    if (tc->status == BPVM_THREAD_TERMINATED) bpvm_linea_vaciar(vm, tc);
+    if (tc->status == BPVM_THREAD_TERMINATED) {
+        /* SÓLO PRUEBAS (test_cola, H12 2b): la ventana entre TERMINATED y su última línea, ensanchada (en la placa,
+         * soltarla puede esperar a `io` con la cola llena) */
+        if (bpvm_la_cola.ensayo_linea_ms > 0 && tc->linea_len) bpvm_platform_thread_sleep_ms(bpvm_la_cola.ensayo_linea_ms);
+        bpvm_linea_vaciar(vm, tc);
+    }
     return exit_status;
 }

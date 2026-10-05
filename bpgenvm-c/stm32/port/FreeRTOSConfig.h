@@ -93,6 +93,9 @@ extern uint32_t SystemCoreClock;
  * kernel con configKERNEL_PROVIDED_STATIC_MEMORY. Lo demas sigue saliendo del
  * heap del kernel. */
 #define configSUPPORT_STATIC_ALLOCATION         1
+/* V7/H12 2b (5-oct): dos índices de notificación por tarea; el 1, el de la condición de la VM
+ * (src/platform_freertos_cond.inc), que no se cruza con el 0 de los stream buffers y los drivers. */
+#define configTASK_NOTIFICATION_ARRAY_ENTRIES   2
 #define configKERNEL_PROVIDED_STATIC_MEMORY     1
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 

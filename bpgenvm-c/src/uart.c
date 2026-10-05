@@ -96,10 +96,15 @@ static int rx_drenar(uart_rx_t* r, uint8_t* data, size_t n, int timeout_ms) {
     size_t got = 0;
     int64_t fin = bpvm_platform_now_ms() + (timeout_ms > 0 ? timeout_ms : 0);
     for (;;) {
+        /* V7/H12, 2b (la revisión) — sacar, bajo el cerrojo común: el anillo es de UN consumidor, y con dos runs dos
+         * hilos que leen el mismo bus (una carrera del programa) dejaban `tail` por delante de `head` —available()
+         * daba 511 y salía basura— (la ISR, el productor, no lo toca). Sin esperar dentro. */
+        bpvm_cerrojo_comun_cerrar();
         while (got < n && r->tail != r->head) {
             data[got++] = r->buf[r->tail];
             r->tail = (uint16_t) ((r->tail + 1u) % BPVM_UART_RX_CAP);
         }
+        bpvm_cerrojo_comun_abrir();
         if (got >= n) break;
         if (timeout_ms > 0 && bpvm_platform_now_ms() >= fin) break;
         if (timeout_ms == 0) break;                 /* sin espera: lo que hubiera */

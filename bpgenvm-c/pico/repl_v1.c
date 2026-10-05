@@ -64,6 +64,8 @@ extern int      s_sqlite_res;         /* motivo (bpvm_sqlite_res_t)            *
 extern long     s_sqlite_asked_mb;    /* lo que pedia el ENV                   */
 extern uint32_t s_vm_buffer_size;
 extern TaskHandle_t g_vm_task;        /* #354: para su marca de agua en el INFO */
+/* V7/H12, 2b: la tarea del 2º run (NULL: va con uno). Aquí arriba porque su marca de agua sale en el INFO. */
+static TaskHandle_t s_run2_task = NULL;
 
 #ifndef BPVM_PICO_BUILD_DATE
 #define BPVM_PICO_BUILD_DATE  __DATE__ " " __TIME__
@@ -368,6 +370,11 @@ static int pico_repl_info_extra(char* buf, unsigned long buf_max, int off) {
     if (g_vm_task != NULL) {
         UBaseType_t words = uxTaskGetStackHighWaterMark(g_vm_task);
         X_L("vmTaskStackFreeBytes", (size_t) words * sizeof(StackType_t));
+    }
+    /* V7/H12, 2b — la del 2º run (`runStackFree`, la común, es la del run que cerró el último programa). */
+    if (s_run2_task != NULL) {
+        UBaseType_t words = uxTaskGetStackHighWaterMark(s_run2_task);
+        X_L("run2StackFreeBytes", (size_t) words * sizeof(StackType_t));
     }
 #undef X_S
 #undef X_L
@@ -812,10 +819,13 @@ void repl_v1_handle_request(int first_char) {
  * por nivel de una cadena de referencias, medido el 4-oct: con 16 KB en `vm_task`, una lista de ~360 nodos ya
  * desbordaba—; con 12 KB, el techo bajaba a ~300. Sin los marcos del REPL encima, aquí cabe algo más (~425). El heap
  * de FreeRTOS baja 8 KB para compensar (FreeRTOSConfig.h: el `io` de cada RUN ya no nace): la VM pierde 8 KB netos. */
-#define PICO_RUN_PILA_PALABRAS ((16u * 1024u) / sizeof(StackType_t))
+#define PICO_RUN_PILA_PALABRAS (PICO_RUN_PILA_BYTES / sizeof(StackType_t))
 static StackType_t  s_run_pila[PICO_RUN_PILA_PALABRAS];
 static StaticTask_t s_run_tcb;
 static TaskHandle_t s_run_task = NULL;
+/* V7/H12, 2b — EL 2º RUN, con `vm.runs=2` en el ENV: su pila la apartó el arranque (g_run2_pila: del techo del bloque
+ * de la VM, o de malloc con la VM en la PSRAM); aquí, su TCB. Sin ella, la placa va con uno y lo dice. */
+static StaticTask_t s_run2_tcb;
 #endif
 
 void repl_v1_cintura(void) {
@@ -835,6 +845,22 @@ void repl_v1_cintura(void) {
         log_printf("run: la tarea del programa, creada (%u KB de pila; %s)",
                    (unsigned) (PICO_RUN_PILA_PALABRAS * sizeof(StackType_t) / 1024u),
                    bpvm_repl_run_en_cola() ? "espera en la cola" : "espera el aviso «trabajo», como en la etapa 1");
+    }
+    /* V7/H12, 2b — el 2º run: el run número 1, a la misma prioridad, en la misma cola. Sólo con la cola (con el relevo
+     * de la etapa 1, `prepara` no admite otro) y con la pila apartada en el arranque. */
+    if (s_run_task != NULL && bpvm_runs() >= 2) {
+        if (g_run2_pila != NULL && bpvm_repl_run_en_cola() && bpvm_repl_run_tarea_prepara() == 0) {
+            s_run2_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run2", PICO_RUN_PILA_PALABRAS, (void*) (intptr_t) 1,
+                                            uxTaskPriorityGet(NULL), (StackType_t*) g_run2_pila, &s_run2_tcb);
+            if (s_run2_task == NULL) bpvm_repl_run_tarea_no_nacio();
+        }
+        if (s_run2_task != NULL)
+            log_printf("run: el 2o run, creado (vm.runs=%d; %u KB de pila @ 0x%08x): dos runs en la cola",
+                       bpvm_runs(), (unsigned) (PICO_RUN_PILA_BYTES / 1024u), (unsigned) (uintptr_t) g_run2_pila);
+        else
+            log_printf("run: vm.runs=%d, pero el 2o run no se pudo crear (%s): va con uno", bpvm_runs(),
+                       g_run2_pila == NULL ? "sin pila apartada" : !bpvm_repl_run_en_cola() ? "sin la cola"
+                                                                  : "la tarea no nacio");
     }
 #endif
 }

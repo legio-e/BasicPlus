@@ -71,8 +71,10 @@ bpref_t bpvm_handle_register(struct bpvm* vm, uint32_t addr);
 /* V7/H7 #593 — lo mismo con el vm_lock YA tomado: para bpvm_heap_nuevo, el método único de la reserva. */
 bpref_t bpvm_handle_register_bajo_cerrojo(struct bpvm* vm, uint32_t addr);
 /* Paso 3 — marca MUERTO el índice de un handle (owner-free): bump de gen + el slot a
- * la free-list. No-op para null y constantes. Idempotente. */
-void    bpvm_handle_kill(struct bpvm* vm, bpref_t r);
+ * la free-list. No-op para null y constantes. Idempotente. V7/H12, 2b: devuelve 1 si
+ * lo mató ESTA llamada (estaba vivo; mirarlo y matarlo, juntos bajo el cerrojo) y 0 si
+ * no: con dos runs, de dos que sueltan el mismo objeto a la vez sólo sigue el primero. */
+int     bpvm_handle_kill(struct bpvm* vm, bpref_t r);
 /* #430 — crecimiento (×2, hacia abajo, dentro del bloque). 1 = hay sitio para
  * registrar; 0 = no cabe (choca con el heap vivo) o lo impide el tope. NO grita:
  * quien llama decide si es OOM (la puerta de heap_alloc) o aviso urgente

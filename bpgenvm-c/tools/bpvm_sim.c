@@ -42,6 +42,7 @@
  *   sin esperar al programa (la prueba tiene que cazarlo).
  *   --run-etapa1: la tarea `run` espera el aviso «trabajo», como en la etapa 1 (el interruptor
  *   de la 2a.2); por defecto espera en LA COLA (V7/H12, etapa 2a.2).
+ *   --runs=N: los runs permanentes (V7/H12, etapa 2b), como `vm.runs` en el ENV de una placa; lo pisa.
  *   --sabotaje-despertar: SÓLO PRUEBAS (run_tarea_smoke): el KILL no despierta a la cola, y un
  *   programa dormido no se para hasta que vence su sueño (la prueba tiene que cazarlo).
  *
@@ -979,6 +980,7 @@ int main(int argc, char** argv) {
     int port = 5099;
     int run_viejo = 0, ensayo_hecho_ms = 0, sabotaje_cierre = 0;   /* V7/H12: la tarea `run` y sus pruebas */
     int run_etapa1 = 0;   /* V7/H12, etapa 2a.2: el interruptor (el relevo de la etapa 1) */
+    long runs_arg = 0;    /* V7/H12, etapa 2b: --runs=N pisa el `vm.runs` del ENV (las pruebas) */
 
     for (int i = 1; i < argc; i++) {
         const char* a = argv[i];
@@ -996,6 +998,7 @@ int main(int argc, char** argv) {
         else if (!strcmp(a, "--run-viejo"))       run_viejo = 1;       /* V7/H12: el RUN de antes, para comparar */
         else if (!strncmp(a, "--ensayo-hecho=", 15)) ensayo_hecho_ms = atoi(a + 15);   /* V7/H12: SÓLO PRUEBAS */
         else if (!strcmp(a, "--sabotaje-cierre")) sabotaje_cierre = 1;               /* V7/H12: SÓLO PRUEBAS */
+        else if (!strncmp(a, "--runs=", 7))       runs_arg = atol(a + 7);   /* V7/H12, 2b: los runs permanentes */
         else if (!strcmp(a, "--run-etapa1"))     run_etapa1 = 1;   /* V7/H12, 2a.2: `run` espera el «trabajo», como en la etapa 1 */
         else if (!strcmp(a, "--sabotaje-despertar")) bpvm_la_cola.sabotaje_despertar = 1;   /* V7/H12, 2a.2: SÓLO PRUEBAS */
         else if (!strncmp(a, "--sd=", 5))         g_sd_path = a + 5;   /* V7/H3: la tarjeta */
@@ -1086,15 +1089,27 @@ int main(int argc, char** argv) {
     /* V7/H12, etapas 0 y 1 (4-oct) — LA TAREA `run`: el programa, en un hilo propio que nace aquí y espera; este hilo,
      * el del REPL, hace de `io` durante el RUN. Su pila, la de un hilo corriente del PC (8 MB): aquí corre también la
      * GUI —LVGL y la ventana SDL, que se queda en el hilo que la creó—. Con `--run-viejo`, el RUN de antes. */
+    /* V7/H12, etapa 2b — las claves del arranque (`stack=`, `quantum=` y `vm.runs`), ANTES de crear los runs: cuántos
+     * crear lo dice `vm.runs` (y `--runs=N`, para las pruebas). Era más abajo; como en la placa, antes de la cintura. */
+    bpvm_boot2_claves(bpvm_bmgr_vista());   /* V7/H7 (Boot 2, fase 4): stack= y quantum=, como las placas (sin ENV, nada) */
+    if (runs_arg > 0) bpvm_set_runs(runs_arg);
     if (!run_viejo) {
-        static bpvm_platform_thread_handle_t s_run_hilo;
+        static bpvm_platform_thread_handle_t s_run_hilos[2];
         bpvm_repl_run_tarea_ensayo(ensayo_hecho_ms, sabotaje_cierre);
         if (run_etapa1) bpvm_repl_run_tarea_en_cola(0);   /* V7/H12, 2a.2: el interruptor, ANTES de prepararla */
-        if (bpvm_repl_run_tarea_prepara() != 0) {
-            fprintf(stderr, "sim: no se pudo preparar la tarea run: sigue el RUN de antes\n");
-        } else if (bpvm_platform_thread_create_nativa(&s_run_hilo, bpvm_repl_run_tarea, NULL, 8u << 20) != 0) {
-            bpvm_repl_run_tarea_no_nacio();   /* 2a.2: el RUN no cuelga programas para un run que no hay */
-            fprintf(stderr, "sim: no se pudo crear la tarea run: sigue el RUN de antes\n");
+        /* 2b: un run por cada uno de `vm.runs` —con el relevo de la etapa 1, uno—, cada uno con su número */
+        int n = run_etapa1 ? 1 : bpvm_runs();
+        for (int i = 0; i < n && i < 2; i++) {
+            if (bpvm_repl_run_tarea_prepara() != 0) {
+                fprintf(stderr, "sim: no se pudo preparar el run %d%s\n", i, i == 0 ? ": sigue el RUN de antes" : "");
+                break;
+            }
+            if (bpvm_platform_thread_create_nativa(&s_run_hilos[i], bpvm_repl_run_tarea, (void*) (intptr_t) i,
+                                                   8u << 20) != 0) {
+                bpvm_repl_run_tarea_no_nacio();   /* 2a.2: el RUN no cuelga programas para un run que no hay */
+                fprintf(stderr, "sim: no se pudo crear el run %d%s\n", i, i == 0 ? ": sigue el RUN de antes" : "");
+                break;
+            }
         }
     }
     /* V7/H3 — la SD, como una placa con ranura: registrar y montar en el arranque, ENCIMA del FS. */
@@ -1111,7 +1126,7 @@ int main(int argc, char** argv) {
      * no en cada `Run`: en la placa el valor se recoge en el boot y hace falta un
      * reset para que entre. Aplicarlo por `Run` seria mas comodo y por eso mismo
      * infiel — el simulador tiene que doler donde duele la placa. */
-    bpvm_boot2_claves(bpvm_bmgr_vista());   /* V7/H7 (Boot 2, fase 4): stack= y quantum=, como las placas (sin ENV, nada) */
+    /* (las claves del arranque —`stack=`, `quantum=`, `vm.runs`—, arriba: antes de crear los runs) */
     bpvm_bus_desde_env(sim_env_get);   /* V7/H6.c G4.a1: los buses del ENV, en el boot como en la placa */
     /* V7/H10 — Machine.getEnv: el ENV de la flash (D1). El sim no anota la fecha de su imagen (no sube por el arranque
      * común): la pone quien la quiera probar (tools/env_smoke.py). */

@@ -66,6 +66,42 @@ static bpvm_fs_file_t* fhdr_de_ref(bpvm_t* vm, uint32_t ref) {
     uint8_t* b = fblk_de(vm, ref, NULL);
     return b ? (bpvm_fs_file_t*) b : NULL;
 }
+/* V7/H12, 2b — EL CERROJO DE LOS File: el de la VM (con un run, nada). Abrir, cerrar y cada operación del cursor miran
+ * si el fichero está abierto y hacen lo suyo con él cogido: con dos runs, otro hilo puede estar cerrando o abriendo el
+ * mismo a la vez (con un run, el builtin entero va de una vez). Nunca se lanza con él cogido: lanzar reserva memoria,
+ * y la reserva lo coge (no es recursivo). SÓLO PRUEBAS (test_cola): con el sabotaje, sin él. */
+static void ficheros_cerrar(bpvm_t* vm) { if (!bpvm_la_cola.sabotaje_ficheros) bpvm_smp_lock(vm); }
+static void ficheros_abrir(bpvm_t* vm)  { if (!bpvm_la_cola.sabotaje_ficheros) bpvm_smp_unlock(vm); }
+
+/* V7/H12, 2b (la revisión) — LA ZONA DE RASCAR PARA UN BUILTIN, con dos runs. Si la tiene el OTRO run (su listDir, su
+ * show), se espera a que la suelte —con dos runs, un programa correcto no puede recibir «ocupada»—; y se espera como se
+ * espera al colector: sin contarse en `running_workers`. El otro puede tenerla mientras reserva memoria (listDir) y
+ * necesitar parar el mundo; si éste esperase contado, el colector le esperaría a él y él a la zona: interbloqueo.
+ * Quien llama no tiene nada a medias (lo que necesita de la pila BP, ya copiado, o se vuelve a validar después). La
+ * zona no avisa al soltarse: se mira cada 5 ms. Con un run, la de siempre: ocupada (por `io`) es NULL, con su aviso.
+ * SÓLO PRUEBAS (test_cola): con el sabotaje, sin esperar —la de antes—. */
+static void* zona_para_un_builtin(bpvm_t* vm, size_t n, const char* quien) {
+    for (;;) {
+        void* z = bpvm_scratch_take_quieto(n, quien);
+        if (z != NULL || n > bpvm_scratch_capacity()) return z;
+        bpvm_cola_t* q = vm->smp;
+        if (q == NULL || bpvm_la_cola.sabotaje_zona) return bpvm_scratch_take(n, quien);   /* ocupada: con su aviso */
+        bpvm_platform_mutex_lock(&q->vm_lock);
+        q->running_workers--;
+        if (q->stop_the_world) bpvm_platform_cond_broadcast(&q->sched_cond);   /* el colector espera quedarse solo */
+        (void) bpvm_platform_cond_timed_wait(&q->sched_cond, &q->vm_lock, 5);
+        while (q->stop_the_world)                                               /* no volver a mitad de una colecta */
+            bpvm_platform_cond_wait(&q->sched_cond, &q->vm_lock);
+        q->running_workers++;
+        bpvm_platform_mutex_unlock(&q->vm_lock);
+    }
+}
+
+/* V7/H12, 2b (la revisión) — EL CERROJO DE LA HAL, con dos runs (con uno, nada): ver GPIO_INIT. El suyo, no el de la
+ * VM (bpvm_smp.h: la HAL puede escribir en la salida con él cogido). `vm->smp` no cambia mientras corre el programa. */
+static void hal_cerrar(bpvm_t* vm) { if (vm->smp) bpvm_platform_mutex_lock(&bpvm_la_cola.hal_lock); }
+static void hal_abrir(bpvm_t* vm)  { if (vm->smp) bpvm_platform_mutex_unlock(&bpvm_la_cola.hal_lock); }
+
 /* ¿Hay ya un fichero abierto con esa ruta y alguno de los dos escribe? */
 static int fichero_ya_abierto(bpvm_t* vm, const char* path, int mode) {
     for (uint32_t r = vm->files_head; r != 0; ) {
@@ -1722,7 +1758,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             *--end = '\0';
         }
         union { float f; int32_t i; } u;
+        /* V7/H12, 2b (la revisión) — strtod, bajo el cerrojo de la VM: el de newlib reparte sus números grandes desde
+         * una lista del estado global de la libc (Balloc), y en la Pico ese estado es UNO para todas las tareas (sin
+         * configUSE_NEWLIB_REENTRANT): dos runs a la vez la corromperían. Con un run, nada. */
+        bpvm_smp_lock(vm);
         u.f = (float) strtod(p, NULL);
+        bpvm_smp_unlock(vm);
         push_i32(vm, tc, u.i);
         return BPVM_OK;
     }
@@ -1798,7 +1839,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         const char* rpath = bpvm_fs_isdir(path) ? path : bpvm_fs_resolve(path, eff, sizeof(eff));
         /* La zona de rascar COMPARTIDA (#338), con su guardián: se pide y se devuelve. */
         listdir_acc_t acc; acc.cap = bpvm_scratch_capacity(); acc.len = 0; acc.n = 0; acc.desbordado = 0;
-        acc.buf = (uint8_t*) bpvm_scratch_take(acc.cap, "LISTDIR");
+        acc.buf = (uint8_t*) zona_para_un_builtin(vm, acc.cap, "LISTDIR");   /* V7/H12, 2b: con dos runs, espera */
         if (!acc.buf) return builtin_throw(vm, tc, "listDir: la zona de rascar está ocupada");
         char em[BPVM_FS_PATH_MAX + 80];
         int rl = bpvm_fs_list(rpath, listdir_cb, &acc);
@@ -1866,25 +1907,47 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char eff[BPVM_FS_PATH_MAX];
         const char* rpath = (mode == BPVM_FS_O_READ) ? bpvm_fs_resolve(path, eff, sizeof(eff)) : path;   /* como readFile / writeFile */
         char em[BPVM_FS_PATH_MAX + 64];
-        if (fichero_ya_abierto(vm, rpath, mode)) {
+        /* V7/H12, etapa 2b — mirar si ya está abierto, abrirlo y registrarlo, JUNTOS: con dos runs, dos hilos podían
+         * ver libre el mismo fichero y abrirlo los dos para escribir, o pisarse la lista de abiertos. Bajo el cerrojo
+         * de la VM (no-op con un run), en el orden de siempre: el de la VM y dentro el del FS (como el GC, que cierra
+         * ficheros con el mundo parado). La excepción, ya fuera: lanzarla reserva memoria. */
+        int ya, abierto = 0;
+        ficheros_cerrar(vm);
+        ya = fichero_ya_abierto(vm, rpath, mode);
+        if (bpvm_la_cola.ensayo_ficheros) bpvm_platform_thread_yield();   /* SÓLO PRUEBAS: la ventana ensanchada */
+        if (!ya && bpvm_fs_fopen(blk, cap, rpath, mode) == 0) {
+            fregistrar(vm, sref, (bpvm_fs_file_t*) blk);
+            abierto = 1;
+        }
+        ficheros_abrir(vm);
+        if (ya) {
             snprintf(em, sizeof(em), "File('%s', \"%s\"): ya está abierto", path, fmodo_txt(mode));
             return builtin_throw(vm, tc, em);
         }
-        if (bpvm_fs_fopen(blk, cap, rpath, mode) != 0) {
+        if (!abierto) {
             snprintf(em, sizeof(em), "File('%s', \"%s\"): no se pudo abrir", path, fmodo_txt(mode));
             return builtin_throw(vm, tc, em);
         }
-        fregistrar(vm, sref, (bpvm_fs_file_t*) blk);
         push_i32(vm, tc, 0);   /* void → dummy */
         return BPVM_OK;
     }
     case BUILTIN_FCLOSE: {
         uint32_t sref = pop_ref(vm, tc);
         uint8_t* blk = fblk_de(vm, sref, NULL);
+        /* V7/H12, 2b (la revisión) — mirar si está abierto, sacarlo de la lista y cerrarlo en el motor, TODO bajo el
+         * cerrojo (en el orden de siempre: el de la VM y dentro el del FS). Sacarlo bajo el cerrojo y cerrarlo fuera
+         * dejaba una ventana: otro run lo veía libre y lo abría para escribir con el de éste aún sin cerrar —en la SD,
+         * FatFs libera sus clusters al abrir para escribir, y el cierre de éste escribía en ellos: la tarjeta,
+         * corrompida—. Y dos hilos que cierran el mismo File no lo cierran dos veces. */
+        int err = 0;
+        ficheros_cerrar(vm);
         if (blk && bpvm_fs_fisopen(blk)) {
             fdesregistrar(vm, sref);
-            if (bpvm_fs_fclose(blk) != 0) return builtin_throw(vm, tc, "File.close(): error al cerrar");
+            if (bpvm_la_cola.ensayo_ficheros) bpvm_platform_thread_yield();   /* SÓLO PRUEBAS: la ventana ensanchada */
+            err = (bpvm_fs_fclose(blk) != 0);
         }
+        ficheros_abrir(vm);
+        if (err) return builtin_throw(vm, tc, "File.close(): error al cerrar");
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -1896,34 +1959,47 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t dref = pop_ref(vm, tc);
         uint32_t sref = pop_ref(vm, tc);
         uint8_t* blk = fblk_de(vm, sref, NULL);
-        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, es_lectura ? "File.read(): fichero cerrado" : "File.write(): fichero cerrado");
         uint32_t dcap = 0;
         uint8_t* d = fblk_de(vm, dref, &dcap);
-        if (!d) return builtin_throw(vm, tc, es_lectura ? "File.read(): buffer nulo" : "File.write(): buffer nulo");
-        if (off < 0 || n < 0 || (uint32_t) off > dcap || (uint32_t) n > dcap - (uint32_t) off)
-            return builtin_throw(vm, tc, es_lectura ? "File.read(): fuera del buffer" : "File.write(): fuera del buffer");
-        if (es_lectura) {
-            long r = bpvm_fs_fread(blk, d + off, (uint32_t) n);
-            if (r < 0) return builtin_throw(vm, tc, "File.read(): error de lectura");
-            push_i32(vm, tc, (int32_t) r);
+        /* V7/H12, 2b: lo de siempre, en el mismo orden (los mensajes, los de miVM), bajo el cerrojo de los File */
+        const char* fallo = NULL;
+        long r = 0;
+        ficheros_cerrar(vm);
+        if (!blk || !bpvm_fs_fisopen(blk))
+            fallo = es_lectura ? "File.read(): fichero cerrado" : "File.write(): fichero cerrado";
+        else if (!d)
+            fallo = es_lectura ? "File.read(): buffer nulo" : "File.write(): buffer nulo";
+        else if (off < 0 || n < 0 || (uint32_t) off > dcap || (uint32_t) n > dcap - (uint32_t) off)
+            fallo = es_lectura ? "File.read(): fuera del buffer" : "File.write(): fuera del buffer";
+        else if (es_lectura) {
+            r = bpvm_fs_fread(blk, d + off, (uint32_t) n);
+            if (r < 0) fallo = "File.read(): error de lectura";
+        } else if (((bpvm_fs_file_t*) blk)->mode == BPVM_FS_O_READ) {
+            fallo = "File.write(): abierto sólo para lectura";
         } else {
-            bpvm_fs_file_t* h = (bpvm_fs_file_t*) blk;
-            if (h->mode == BPVM_FS_O_READ) return builtin_throw(vm, tc, "File.write(): abierto sólo para lectura");
-            if (bpvm_fs_fwrite(blk, d + off, (uint32_t) n) < 0) return builtin_throw(vm, tc, "File.write(): error de escritura");
-            push_i32(vm, tc, 0);
+            if (bpvm_la_cola.ensayo_ficheros) bpvm_platform_thread_yield();   /* SÓLO PRUEBAS: la ventana ensanchada */
+            if (bpvm_fs_fwrite(blk, d + off, (uint32_t) n) < 0) fallo = "File.write(): error de escritura";
         }
+        ficheros_abrir(vm);
+        if (fallo) return builtin_throw(vm, tc, fallo);
+        push_i32(vm, tc, es_lectura ? (int32_t) r : 0);
         return BPVM_OK;
     }
     case BUILTIN_FSEEK: {
         int32_t  pos  = pop_i32(vm, tc);
         uint32_t sref = pop_ref(vm, tc);
         uint8_t* blk = fblk_de(vm, sref, NULL);
-        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, "File.seek(): fichero cerrado");
-        if (pos < 0 || bpvm_fs_fseek(blk, (uint32_t) pos) != 0) {
-            char em[96];
+        char em[96];
+        const char* fallo = NULL;
+        ficheros_cerrar(vm);   /* V7/H12, 2b: bajo el cerrojo de los File */
+        if (!blk || !bpvm_fs_fisopen(blk)) {
+            fallo = "File.seek(): fichero cerrado";
+        } else if (pos < 0 || bpvm_fs_fseek(blk, (uint32_t) pos) != 0) {
             snprintf(em, sizeof(em), "File.seek(%ld): fuera del fichero (tamaño %ld)", (long) pos, bpvm_fs_fsize(blk));
-            return builtin_throw(vm, tc, em);
+            fallo = em;
         }
+        ficheros_abrir(vm);
+        if (fallo) return builtin_throw(vm, tc, fallo);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -1931,8 +2007,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_FSIZE: {
         uint32_t sref = pop_ref(vm, tc);
         uint8_t* blk = fblk_de(vm, sref, NULL);
-        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, (id == BUILTIN_FTELL) ? "File.tell(): fichero cerrado" : "File.size(): fichero cerrado");
-        push_i32(vm, tc, (int32_t) ((id == BUILTIN_FTELL) ? bpvm_fs_ftell(blk) : bpvm_fs_fsize(blk)));
+        long v = 0;
+        ficheros_cerrar(vm);   /* V7/H12, 2b: bajo el cerrojo de los File */
+        int cerrado = (!blk || !bpvm_fs_fisopen(blk));
+        if (!cerrado) v = (id == BUILTIN_FTELL) ? bpvm_fs_ftell(blk) : bpvm_fs_fsize(blk);
+        ficheros_abrir(vm);
+        if (cerrado) return builtin_throw(vm, tc, (id == BUILTIN_FTELL) ? "File.tell(): fichero cerrado" : "File.size(): fichero cerrado");
+        push_i32(vm, tc, (int32_t) v);
         return BPVM_OK;
     }
     case BUILTIN_FREAD_LINE: {
@@ -1942,39 +2023,62 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * 0,9 ms por línea (FileBench). El "\r" final se quita, como hacía la de BP. */
         uint32_t sref = pop_ref(vm, tc);
         uint8_t* blk = fblk_de(vm, sref, NULL);
-        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, "File.readLine(): fichero cerrado");
-        long ini = bpvm_fs_ftell(blk);
+        /* V7/H12, 2b — en DOS tramos bajo el cerrojo de los File: contar la línea, y (tras reservar el string, que no
+         * puede hacerse con él cogido) leerla. Entre los dos, otro hilo pudo cerrarlo: se vuelve a mirar. */
+        const char* fallo = NULL;
+        long ini = 0;
         uint8_t tmp[128];
         uint32_t n = 0; int hay_nl = 0; uint8_t ult = 0;
-        for (;;) {
-            long r = bpvm_fs_fread(blk, tmp, sizeof tmp);
-            if (r < 0) return builtin_throw(vm, tc, "File.readLine(): error de lectura");
-            if (r == 0) break;
-            long k = 0;
-            while (k < r && tmp[k] != '\n') k++;
-            if (k > 0) ult = tmp[k - 1];
-            n += (uint32_t) k;
-            if (k < r) { hay_nl = 1; break; }
+        ficheros_cerrar(vm);
+        if (!blk || !bpvm_fs_fisopen(blk)) {
+            fallo = "File.readLine(): fichero cerrado";
+        } else {
+            ini = bpvm_fs_ftell(blk);
+            for (;;) {
+                long r = bpvm_fs_fread(blk, tmp, sizeof tmp);
+                if (r < 0) { fallo = "File.readLine(): error de lectura"; break; }
+                if (r == 0) break;
+                long k = 0;
+                while (k < r && tmp[k] != '\n') k++;
+                if (k > 0) ult = tmp[k - 1];
+                n += (uint32_t) k;
+                if (k < r) { hay_nl = 1; break; }
+            }
         }
+        ficheros_abrir(vm);
+        if (fallo) return builtin_throw(vm, tc, fallo);
         uint32_t len = (n > 0 && ult == '\r') ? n - 1 : n;
         bpref_t refh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (refh.v == 0u) return builtin_throw(vm, tc, "File.readLine(): sin memoria");
         uint32_t ref = bpref_deref(vm, refh);
+        ficheros_cerrar(vm);
         blk = fblk_de(vm, sref, NULL);   /* el heap no compacta, pero el GC pudo pasar: releer la dirección es gratis */
-        if (bpvm_fs_fseek(blk, (uint32_t) ini) != 0) return builtin_throw(vm, tc, "File.readLine(): error de lectura");
-        if (len > 0) {
-            long r = bpvm_fs_fread(blk, vm->memory + ref + 4, len);
-            if (r < 0 || (uint32_t) r != len) return builtin_throw(vm, tc, "File.readLine(): error de lectura");
+        if (!blk || !bpvm_fs_fisopen(blk)) {
+            fallo = "File.readLine(): fichero cerrado";
+        } else if (bpvm_fs_fseek(blk, (uint32_t) ini) != 0) {
+            fallo = "File.readLine(): error de lectura";
+        } else {
+            if (len > 0) {
+                long r = bpvm_fs_fread(blk, vm->memory + ref + 4, len);
+                if (r < 0 || (uint32_t) r != len) fallo = "File.readLine(): error de lectura";
+            }
+            if (!fallo && bpvm_fs_fseek(blk, (uint32_t) ini + n + (hay_nl ? 1u : 0u)) != 0)
+                fallo = "File.readLine(): error de lectura";
         }
-        if (bpvm_fs_fseek(blk, (uint32_t) ini + n + (hay_nl ? 1u : 0u)) != 0) return builtin_throw(vm, tc, "File.readLine(): error de lectura");
+        ficheros_abrir(vm);
+        if (fallo) return builtin_throw(vm, tc, fallo);
         bpref_push(vm, tc, refh);
         return BPVM_OK;
     }
     case BUILTIN_FFLUSH: {
         uint32_t sref = pop_ref(vm, tc);
         uint8_t* blk = fblk_de(vm, sref, NULL);
-        if (!blk || !bpvm_fs_fisopen(blk)) return builtin_throw(vm, tc, "File.flush(): fichero cerrado");
-        if (bpvm_fs_fflush(blk) != 0) return builtin_throw(vm, tc, "File.flush(): error de escritura");
+        const char* fallo = NULL;
+        ficheros_cerrar(vm);   /* V7/H12, 2b: bajo el cerrojo de los File */
+        if (!blk || !bpvm_fs_fisopen(blk)) fallo = "File.flush(): fichero cerrado";
+        else if (bpvm_fs_fflush(blk) != 0) fallo = "File.flush(): error de escritura";
+        ficheros_abrir(vm);
+        if (fallo) return builtin_throw(vm, tc, fallo);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -2865,6 +2969,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
             uint32_t cp = bpvm_read_u32_be(bpref_arr_elem(vm, ca, i, 4));
             uint8_t enc[4]; uint32_t el = utf8_encode(cp, enc);
+            /* V7/H12, 2b (la revisión) — nunca más allá de lo reservado: con dos runs, otro hilo puede cambiar el array
+             * entre las dos pasadas (un StringBuilder compartido sin Mutex) y la segunda medir más que la primera; con un
+             * run, el builtin va entero de una vez. La carrera es del programa (sale lo que salga); el bloque de al lado,
+             * intacto. */
+            if (w + el > total) break;
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
         tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado */
@@ -2974,8 +3083,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         /* Sin suscriptor no pasa nada: un evento es una NOTIFICACIÓN, y si
          * nadie escucha no hay error (decisión de diseño, modelo Swing). */
-        if (!bpref_is_null(recv) && dest != 0)
+        if (!bpref_is_null(recv) && dest != 0) {
+            /* V7/H12, 2b: con varios runs, el planificador saca de esta misma cola con el cerrojo cogido */
+            int con = !bpvm_la_cola.sabotaje_eventos;   /* (el sabotaje: SÓLO PRUEBAS, test_cola) */
+            if (con) bpvm_smp_lock(vm);
             bpvm_event_enqueue(vm, tc->id, recv.v, dest, nargs, masks, args);
+            if (con) bpvm_smp_unlock(vm);
+        }
         push_i32(vm, tc, 0);   /* void */
         return BPVM_OK;
     }
@@ -3019,9 +3133,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* V7/H12, etapa 2 — el __tid es el HANDLE de su struct en la cola: si no resuelve, el hilo acabó y salió (o
          * no ha arrancado: 0). Mirarlo y bloquearse, bajo el cerrojo: otro worker puede estar sacando hilos de la
          * cola a la vez. */
+        /* V7/H12, 2b (#595): y espera también si su hilo terminó DEBIENDO eventos —el planificador lo resucitará para
+         * atenderlos—, como el despertar del planificador. Con un run nunca coincide (entre el fin del hilo y este join
+         * pasa una vuelta del planificador, que ya lo ha resucitado); con dos, el join podía volver antes del handler. */
+        /* V7/H12, 2b (la revisión) — y espera si su hilo, ya TERMINATED, sigue en manos del otro run: termina antes de
+         * soltar su última línea (la que dejó a medias), y el join no puede adelantarse a ella. Con un run nunca pasa. */
         bpvm_smp_lock(vm);
         const bpvm_thread_t* target = (target_tid > 0) ? bpvm_hilo_por_tid(vm, target_tid) : NULL;
-        if (target != NULL && target->status != BPVM_THREAD_TERMINATED) {
+        if (target != NULL && (target->status != BPVM_THREAD_TERMINATED || bpvm_events_con_deuda(vm, target)
+                               || (target->sched_owner != -1 && !bpvm_la_cola.sabotaje_suyo))) {
             tc->blocked_on_join = target_tid;
             tc->status = BPVM_THREAD_BLOCKED_JOIN;
         }
@@ -3100,14 +3220,24 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * nombre; ANALOG (3) sólo fija el estado: el hardware lo pone el ADC (AnPin/Adc.Channel). */
         char em[128];
         if (mode < 0 || mode > 3) return builtin_throw(vm, tc, "Gpio.Pin: modo no válido (INPUT, OUTPUT, OPEN_COLLECTOR, ANALOG)");
-        if (bpvm_gpio_reclamar(pin, mode, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
-        if (mode != 3) bpvm_gpio_init(pin, mode);
+        /* V7/H12, 2b (la revisión) — LA HAL, BAJO SU CERROJO (hal_cerrar: el suyo, no el de la VM): reclamar un pin,
+         * abrir o soltar un bus (la cuenta y el hardware, juntos), iniciar una UART, una tira o un canal del ADC; y leer
+         * el ADC (elegir el canal y convertir), las migas y el reloj. Sus tablas —los pines, los buses, las ranuras de
+         * la UART, las tiras— y el ADC son de todos: con dos runs, dos hilos a la vez veían libre el mismo pin, o
+         * abierto un bus aún sin abrir, o uno leía el canal del otro. Con un run, nada. Y nunca se lanza con él cogido. */
+        hal_cerrar(vm);
+        int r = bpvm_gpio_reclamar(pin, mode, em, sizeof em);
+        if (r == 0 && mode != 3) bpvm_gpio_init(pin, mode);
+        hal_abrir(vm);
+        if (r != 0) return builtin_throw(vm, tc, em);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
     case BUILTIN_GPIO_RELEASE: {
         int pin = pop_i32(vm, tc);
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT) */
         bpvm_gpio_liberar(pin);
+        hal_abrir(vm);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3121,8 +3251,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int es_spi = (id == BUILTIN_SPI_RELEASE);
         char em[160];
         if (bpvm_gpio_instancia_ok(es_spi ? 2 : 1, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
-        if ((es_spi ? bpvm_spi_soltar(bus, BPVM_BUS_PROGRAMA, em, sizeof em)
-                    : bpvm_i2c_soltar(bus, BPVM_BUS_PROGRAMA, em, sizeof em)) != 0) return builtin_throw(vm, tc, em);
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT) */
+        int r = es_spi ? bpvm_spi_soltar(bus, BPVM_BUS_PROGRAMA, em, sizeof em)
+                       : bpvm_i2c_soltar(bus, BPVM_BUS_PROGRAMA, em, sizeof em);
+        hal_abrir(vm);
+        if (r != 0) return builtin_throw(vm, tc, em);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3167,7 +3300,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         { char em[128]; if (bpvm_gpio_instancia_ok(1, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
         /* V7/H6.c G4.a1 — el bus es COMPARTIDO: la configuración se establece una
          * vez (el ENV o el primero) y otra es un error con nombre; -1 = la que tenga. */
-        { char em[160]; if (bpvm_i2c_abrir(bus, sda, scl, baud, BPVM_BUS_PROGRAMA, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }
+        {
+            char em[160];
+            hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): la cuenta del bus y su hardware */
+            int r = bpvm_i2c_abrir(bus, sda, scl, baud, BPVM_BUS_PROGRAMA, em, sizeof em);
+            hal_abrir(vm);
+            if (r != 0) return builtin_throw(vm, tc, em);
+        }
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3246,6 +3385,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int64_t total = 0;
         uint8_t buf[BUS_TRAMO];
         bpvm_i2c_msg_t m[BPVM_I2C_MENSAJES_MAX];
+        /* V7/H12, 2b (la revisión) — cada operación se lee UNA vez (aquí, en la primera pasada) y las demás usan lo
+         * leído: con dos runs, otro hilo puede cambiar `ops` entre pasadas (una Transaction compartida sin Mutex), y la
+         * tercera copiaba al búfer de la pila lo que la primera no había validado. */
+        int32_t ks[BPVM_I2C_MENSAJES_MAX], ns[BPVM_I2C_MENSAJES_MAX];
         int r;
         if (bpvm_gpio_instancia_ok(1, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
         if (nops < 1 || nops > BPVM_I2C_MENSAJES_MAX) {
@@ -3257,6 +3400,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             int32_t k = arr_i32(vm, opsA, 2 * i), n = arr_i32(vm, opsA, 2 * i + 1);
             if (k != 1 && k != 2) { snprintf(em, sizeof em, "%s: la operación %" PRId32 " no es válida (%" PRId32 ")", nom, i + 1, k); return builtin_throw(vm, tc, em); }
             if (n < 0) { snprintf(em, sizeof em, "%s: count negativo (%" PRId32 ")", nom, n); return builtin_throw(vm, tc, em); }
+            ks[i] = k; ns[i] = n;
             total += n;
         }
         if (total > BUS_TRAMO) {
@@ -3264,13 +3408,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, em);
         }
         for (i = 0; i < nops; i++) {   /* ya caben: sumar ahora no se desborda */
-            if (arr_i32(vm, opsA, 2 * i) == 1) sale += arr_i32(vm, opsA, 2 * i + 1);
-            else                               entra += arr_i32(vm, opsA, 2 * i + 1);
+            if (ks[i] == 1) sale += ns[i];
+            else            entra += ns[i];
         }
         if (bus_array(vm, txRef, sale, nom, "el array tx", 0, &txA, em, sizeof em) != 0
             || bus_array(vm, rxRef, entra, nom, "el array rx", 0, &rxA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
         for (i = 0; i < nops; i++) {   /* cada mensaje, su trozo del búfer; los de escribir, ya llenos */
-            int32_t k = arr_i32(vm, opsA, 2 * i), n = arr_i32(vm, opsA, 2 * i + 1);
+            int32_t k = ks[i], n = ns[i];
             m[i].buf = buf + pos; m[i].n = (uint32_t) n; m[i].lee = (k == 2);
             if (k == 1) { bus_a_bytes(vm, txA, pt, (int) n, buf + pos); pt += n; }
             pos += n;
@@ -3412,7 +3556,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int bus  = pop_i32(vm, tc);
         { char em[128]; if (bpvm_gpio_instancia_ok(2, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
         /* V7/H6.c G4.a1 — como el I2C: se establece una vez; -1 = el pin que tenga el bus. */
-        { char em[160]; if (bpvm_spi_abrir(bus, sck, mosi, miso, baud, mode, BPVM_BUS_PROGRAMA, NULL, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }
+        {
+            char em[160];
+            hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): la cuenta del bus y su hardware */
+            int r = bpvm_spi_abrir(bus, sck, mosi, miso, baud, mode, BPVM_BUS_PROGRAMA, NULL, em, sizeof em);
+            hal_abrir(vm);
+            if (r != 0) return builtin_throw(vm, tc, em);
+        }
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3466,10 +3616,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (bpvm_gpio_instancia_ok(2, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
         if (hz <= 0) { snprintf(em, sizeof em, "Spi.Device: velocidad no válida (%d)", hz); return builtin_throw(vm, tc, em); }
         if (mode < 0 || mode > 3) { snprintf(em, sizeof em, "Spi.Device: modo no válido (%d): 0..3", mode); return builtin_throw(vm, tc, em); }
-        if (bpvm_spi_enganchar(bus, BPVM_BUS_PROGRAMA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
-        if (bpvm_gpio_reclamar(cs, BPVM_USO_OUTPUT, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
-        bpvm_gpio_init(cs, 1);
-        bpvm_gpio_write(cs, 1);
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): engancharse al bus y su CS */
+        int r = bpvm_spi_enganchar(bus, BPVM_BUS_PROGRAMA, em, sizeof em);
+        if (r == 0) r = bpvm_gpio_reclamar(cs, BPVM_USO_OUTPUT, em, sizeof em);
+        if (r == 0) {
+            bpvm_gpio_init(cs, 1);
+            bpvm_gpio_write(cs, 1);
+        }
+        hal_abrir(vm);
+        if (r != 0) return builtin_throw(vm, tc, em);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3556,13 +3711,27 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (bus_array(vm, txRef, (int32_t) sale, nom, "el array tx", 0, &txA, em, sizeof em) != 0
             || bus_array(vm, rxRef, (int32_t) entra, nom, "el array rx", 0, &rxA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
         if (bpvm_spi_tomar_transaccion(bus, cs, hz, mode, BPVM_BUS_PROGRAMA, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        int cambiada = 0;
         for (i = 0; i < nops && r == 0; i++) {
             int32_t k = arr_i32(vm, opsA, 2 * i), n = arr_i32(vm, opsA, 2 * i + 1);
+            /* V7/H12, 2b (la revisión) — se vuelve a mirar contra lo validado arriba: con dos runs, otro hilo puede
+             * cambiar `ops` entre las dos pasadas (una Transaction compartida sin Mutex), y la de transferir leía y
+             * escribía fuera de tx/rx y se saltaba el tope de tiempo del bus. `ops` son 2*nops enteros: no caben en la
+             * pila para leerlos una sola vez, como el I2C. */
+            if (k < DEV_WRITE || k > DEV_TRANSFER || n < 0
+                    || (k != DEV_READ && (int64_t) pt + n > sale) || (k != DEV_WRITE && (int64_t) pr + n > entra)) {
+                cambiada = 1;
+                break;
+            }
             r = dev_tramos(vm, bus, k != DEV_READ, k != DEV_WRITE, txA, pt, rxA, pr, n, tx, rx);
             if (k != DEV_READ)  pt += n;
             if (k != DEV_WRITE) pr += n;
         }
         bpvm_spi_dejar(bus);
+        if (cambiada) {
+            snprintf(em, sizeof em, "%s: la transacción cambió mientras se ejecutaba (¿compartida entre hilos sin Mutex?)", nom);
+            return builtin_throw(vm, tc, em);
+        }
         push_i32(vm, tc, r < 0 ? -1 : (int32_t) bytes);
         return BPVM_OK;
     }
@@ -3578,7 +3747,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int tx        = pop_i32(vm, tc);
         int bus       = pop_i32(vm, tc);
         { char em[128]; if (bpvm_gpio_instancia_ok(0, bus, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): su ranura del anillo de RX */
         bpvm_uart_init(bus, tx, rx, baud, data_bits, stop_bits, parity);
+        hal_abrir(vm);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3618,8 +3789,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_PULSE_INIT: {
         int edgeKind = pop_i32(vm, tc);
         int pin      = pop_i32(vm, tc);
-        { char em[128]; if (bpvm_gpio_reclamar(pin, BPVM_USO_PULSE, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
-        push_i32(vm, tc, (int32_t) bpvm_pulse_init(pin, edgeKind));
+        {
+            char em[128];
+            hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT) */
+            int r = bpvm_gpio_reclamar(pin, BPVM_USO_PULSE, em, sizeof em);   /* V7/H4 */
+            int id_cont = (r == 0) ? bpvm_pulse_init(pin, edgeKind) : -1;
+            hal_abrir(vm);
+            if (r != 0) return builtin_throw(vm, tc, em);
+            push_i32(vm, tc, (int32_t) id_cont);
+        }
         return BPVM_OK;
     }
     case BUILTIN_PULSE_START: {
@@ -3653,8 +3831,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_PWM_INIT: {
         int freqHz = pop_i32(vm, tc);
         int pin    = pop_i32(vm, tc);
-        { char em[128]; if (bpvm_gpio_reclamar(pin, BPVM_USO_PWM, em, sizeof em) != 0) return builtin_throw(vm, tc, em); }   /* V7/H4 */
-        push_i32(vm, tc, (int32_t) bpvm_pwm_init(pin, freqHz));
+        {
+            char em[128];
+            hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT) */
+            int r = bpvm_gpio_reclamar(pin, BPVM_USO_PWM, em, sizeof em);   /* V7/H4 */
+            int slice = (r == 0) ? bpvm_pwm_init(pin, freqHz) : -1;
+            hal_abrir(vm);
+            if (r != 0) return builtin_throw(vm, tc, em);
+            push_i32(vm, tc, (int32_t) slice);
+        }
         return BPVM_OK;
     }
     case BUILTIN_PWM_SET_FREQ: {
@@ -3736,7 +3921,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
     case BUILTIN_MACHINE_SET_MARK: {      /* H10 — breadcrumb: deja una miga */
         int32_t code = pop_i32(vm, tc);
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): leer el total y escribir la miga, juntos */
         bpvm_machine_set_mark((int) code);
+        hal_abrir(vm);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3754,7 +3941,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
     case BUILTIN_MACHINE_TEMP_C: {
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): el ADC (su canal y sus lecturas) */
         float v = bpvm_machine_temp_c();
+        hal_abrir(vm);
         /* Float en pila es bit-cast a u32 — la VM hace el mismo
          * truco para LITERAL_F32. */
         uint32_t bits;
@@ -3908,15 +4097,19 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* V7/H4 (26-sep, Eduardo) — con driver, el pin se valida contra la tabla como el del PWM y el del
          * Pulse (#479): «el pin 25 no existe en esp32s3», «es del SPI 2», «es de la flash o la PSRAM» (#574)…
          * Sin driver no se mira nada: el PC y NeoCatch siguen diciendo lo mismo en las dos VMs. */
-        if (bpvm_gpio_reclamar(pin, BPVM_USO_OUTPUT, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+        /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): el pin y la tabla de tiras del driver, de una vez */
+        hal_cerrar(vm);
+        int r = bpvm_gpio_reclamar(pin, BPVM_USO_OUTPUT, em, sizeof em);
         /* Y si el driver dice que no —sin canal libre—, se dice ESO: hasta hoy también era «no implementado». */
-        {
+        if (r == 0) {
             int k = snprintf(em, sizeof em, "Neopixel(%d): no se pudo iniciar: ", pin);
             if (!bpvm_neopixel_init(pin, em + k, sizeof em - (size_t) k)) {
                 if (!em[k]) snprintf(em + k, sizeof em - (size_t) k, "el driver no lo aceptó");
-                return builtin_throw(vm, tc, em);
+                r = -1;
             }
         }
+        hal_abrir(vm);
+        if (r != 0) return builtin_throw(vm, tc, em);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -3957,11 +4150,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * "single-worker: estático OK". Bajo SMP dos workers llamando a la vez
          * se pisaban EN SILENCIO; ahora el segundo se encuentra la zona cogida
          * y el guardián lo dice con nombres. */
-        uint32_t* npbuf = (uint32_t*) bpvm_scratch_take((size_t) (count > 0 ? count : 1) * sizeof(uint32_t),
-                                                        "__npShow");
+        /* V7/H12, 2b: con dos runs, si la tiene el otro, se espera (zona_para_un_builtin); y después se vuelve a
+         * validar el array, que mientras tanto pudo pasar un GC. */
+        uint32_t* npbuf = (uint32_t*) zona_para_un_builtin(vm, (size_t) (count > 0 ? count : 1) * sizeof(uint32_t),
+                                                           "__npShow");
         if (!npbuf) {          /* el guardián ya ha dicho por qué */
             push_i32(vm, tc, 0);
             return BPVM_OK;
+        }
+        if (bus_array(vm, grbRef, count, "neopixel.show", "el array", 0, &grbAddr, em, sizeof em) != 0) {
+            bpvm_scratch_give("__npShow");
+            return builtin_throw(vm, tc, em);
         }
         int n = (int) count;
         for (int i = 0; i < n; i++) {
@@ -3990,13 +4189,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* Wall clock en segundos. Si nadie ha llamado a setNowSec
          * desde el boot, devuelve segundos desde boot — todavía
          * útil como reloj monotónico. */
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): el desfase, 64 bits en una de 32 */
         int64_t now_ms = bpvm_rtc_now_ms();
+        hal_abrir(vm);
         push_i32(vm, tc, (int32_t) (now_ms / 1000));
         return BPVM_OK;
     }
     case BUILTIN_RTC_SET_NOW_SEC: {
         int32_t sec = pop_i32(vm, tc);
+        hal_cerrar(vm);   /* V7/H12, 2b: ídem */
         bpvm_rtc_set_now_ms((int64_t) sec * 1000LL);
+        hal_abrir(vm);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
@@ -4011,9 +4214,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             snprintf(em, sizeof em, "ADC: el canal %d no existe en %s (unidad 1: %d canales)", (int) ch, bpvm_caps()->micro, n);
             return builtin_throw(vm, tc, em);
         }
-        if (bpvm_gpio_reclamar(pin, BPVM_USO_ANALOG, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
-        int r = bpvm_adc_init_channel((int) ch);
-        if (r < 0) { snprintf(em, sizeof em, "ADC: el canal %d no se pudo iniciar en esta imagen", (int) ch); return builtin_throw(vm, tc, em); }
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT) */
+        int r = bpvm_gpio_reclamar(pin, BPVM_USO_ANALOG, em, sizeof em);
+        int ri = (r == 0) ? bpvm_adc_init_channel((int) ch) : 0;
+        hal_abrir(vm);
+        if (r != 0) return builtin_throw(vm, tc, em);
+        if (ri < 0) { snprintf(em, sizeof em, "ADC: el canal %d no se pudo iniciar en esta imagen", (int) ch); return builtin_throw(vm, tc, em); }
         push_i32(vm, tc, pin);
         return BPVM_OK;
     }
@@ -4028,14 +4234,22 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, em);
         }
         if (unit != 0) { snprintf(em, sizeof em, "el ADC del pin %d es la unidad %d y esta imagen sólo atiende la 1", (int) pin, unit + 1); return builtin_throw(vm, tc, em); }
-        if (bpvm_gpio_reclamar((int) pin, BPVM_USO_ANALOG, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
-        if (bpvm_adc_init_channel(ch) < 0) { snprintf(em, sizeof em, "ADC: el pin %d no se pudo iniciar en esta imagen", (int) pin); return builtin_throw(vm, tc, em); }
+        hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT) */
+        int r = bpvm_gpio_reclamar((int) pin, BPVM_USO_ANALOG, em, sizeof em);
+        int ri = (r == 0) ? bpvm_adc_init_channel(ch) : 0;
+        hal_abrir(vm);
+        if (r != 0) return builtin_throw(vm, tc, em);
+        if (ri < 0) { snprintf(em, sizeof em, "ADC: el pin %d no se pudo iniciar en esta imagen", (int) pin); return builtin_throw(vm, tc, em); }
         push_i32(vm, tc, ch);
         return BPVM_OK;
     }
     case BUILTIN_ADC_READ_CHANNEL: {
         int32_t ch = pop_i32(vm, tc);
-        push_i32(vm, tc, bpvm_adc_read_channel((int) ch));
+        /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT): elegir el canal y convertir, juntos (el conversor es uno) */
+        hal_cerrar(vm);
+        int v = bpvm_adc_read_channel((int) ch);
+        hal_abrir(vm);
+        push_i32(vm, tc, v);
         return BPVM_OK;
     }
     /* #480 - Sin backend NO se finge. Antes la fachada escribia

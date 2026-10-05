@@ -1,0 +1,37 @@
+// LineasLargas.bp — V7/H12, etapa 2b (5-oct, la revisión): DOS HILOS IMPRIMEN LÍNEAS QUE NO CABEN EN LA COLA DE
+// SALIDA (8192 caracteres; la cola es de 4 KB en el PC y de 1 KB en la Pico). Una línea así entra en la cola a trozos,
+// soltando su cerrojo entre uno y otro; con dos runs, el `print` del otro hilo se colaba entre dos trozos, y la línea
+// salía partida (#600: un `print` sale entero). test/test_cola.c, la parte 10: cada línea, 8192 veces la MISMA letra.
+module LineasLargas
+  class Imprime extends Thread
+    var c: string
+    var veces: integer
+    public function Imprime(c: string, n: integer)
+      super(8192)
+      this.c := c
+      this.veces := n
+    end Imprime
+    public function run()
+      var s: string := this.c
+      var n: integer := 1
+      while n < 8192 do
+        s := s + s
+        n := n * 2
+      endwh
+      var i: integer := 0
+      while i < this.veces do
+        print s
+        i := i + 1
+      endwh
+    end run
+  end Imprime
+
+  function Main()
+    var a: Imprime := Imprime("a", 20)
+    var b: Imprime := Imprime("b", 20)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+  end Main
+end LineasLargas

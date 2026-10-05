@@ -27,6 +27,21 @@
 
 ## Última sesión
 
+> **5-oct** — H12, **la 2b** (el 2º run, con un núcleo). Eduardo cambió el planteamiento de madrugada: *«Ponemos el 2º
+> run, conseguimos que funcione con lo mínimo y vamos ampliando la cobertura. De momento solamente 2 run ejecutando
+> código BP normal, sin AOT ni LVGL»*; y el GC, uno, el de hoy (su tarea GC, como mejora). Hecho en el PC: `vm.runs`,
+> el `gc()` con el mundo parado, los eventos, la zona de rascar, los ficheros (su regla, la de siempre: *«no se podía
+> abrir el mismo fichero 2 veces en modo escritura, pero en modo lectura sí»*), la reserva de emergencia por reserva y no
+> por bandera (`test-reserva`), y **la condición de FreeRTOS, una para las tres familias**, probada con el kernel de
+> FreeRTOS de verdad en el PC (`test-frcond`; la de antes, roja). La Pico, con su 2º run (la pila, del bloque de la VM
+> sólo con dos). Después, **una revisión adversarial en tres frentes** de lo que comparte el código BP normal con dos
+> runs: un `owner` soltado dos veces (Eduardo: ¿cómo, si el GC es uno? —la 2ª liberación llega detrás, pero miró
+> antes—), el `print` que no cabe, el `join`, la zona, el `gc()` tras un mundo parado ajeno (Eduardo: *«Heap.compact()
+> no funciona si hay Threads BP»* —justo eso: para el mundo y no colecta—), el error del programa, el cierre de un
+> `File` (mío de la mañana: la SD se habría corrompido), `strtod`, los builtins de dos pasadas y la HAL: arreglados,
+> `test-cola` 9 a 15 con sus sabotajes rojos, y `#654`–`#659` a SUELTAS. La red entera, verde. Por hacer: la puerta en
+> la Pico 2 con `vm.runs=2` (grabar y el ENV, con el OK de Eduardo). Más abajo, «🧵 H12 (5-oct)».
+>
 > **4-oct** — H12, las etapas 0 y 1 JUNTAS (Eduardo: «`run` permanente»; una placa antes que todas, la Pico 2): la
 > tarea del REPL hace de `io` durante el RUN y el programa corre en una tarea `run` que nace con el arranque. Hecho en
 > el PC (el común y el simulado, con `run_tarea_smoke` en la red; la red entera, verde) y en la Pico 2 (`03c86643`),
@@ -1113,6 +1128,41 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧵 H12 (5-oct) — LA 2b MÍNIMA EN EL PC: dos runs con código BP normal, la condición de FreeRTOS y la revisión
+
+- **El alcance, de Eduardo** (de madrugada, a las cuatro decisiones que se le propusieron): *«Ponemos el 2º run,
+  conseguimos que funcione con lo mínimo y vamos ampliando la cobertura. De momento solamente 2 run ejecutando código BP
+  normal, sin AOT ni LVGL»*. Preguntó qué querían decir «la condición de FreeRTOS pierde avisos» y «el `gc()` no para el
+  mundo» (explicados con un ejemplo cada uno), y propuso una tarea GC en la rueda; la respuesta, en `V7_IDEAS` §H12 (un
+  run que no corre no basta: hay que pararlo en un punto seguro); decidido el GC de hoy, uno (*«OK»*).
+- **Lo mínimo, en el PC**: `vm.runs` (ENV) y `--runs=N` (simulado); el `gc()` por `gc_stw`; los eventos (`raise` bajo
+  el cerrojo, no resucitar lo que otro run tiene, el `join` con deuda); la zona de rascar (mirar y coger, juntos); los
+  ficheros (mirar, abrir y apuntar, juntos: `test-cola` 8); la reserva de emergencia (#355) pedida por la reserva y no
+  por una bandera de la VM, con su primera prueba (`test-reserva`); un programa con natives, GUI, SQLite o depurador, con
+  un run. Las tandas contra el simulado con dos runs, como con uno.
+- **La condición de FreeRTOS** (`src/platform_freertos_cond.inc`, una para las tres familias; fuera 333 líneas de
+  copias): la de antes —un semáforo binario y una cuenta— perdía un aviso con dos esperando y dejaba que un tercero se
+  llevara el de otro. La nueva: cada esperador, en su pila y con SU notificación de tarea (índice 1). Probada con el
+  kernel de FreeRTOS de verdad en el PC (`make test-frcond`, su port de Windows): la de antes, roja —«2 esperando,
+  1 despiertos» y, sin plazo, un consumidor DORMIDO para siempre—. Compilan la Pico, la STM32 y la S3.
+- **La Pico, con su 2º run**: la pila (16 KB) del techo del bloque de la VM sólo con `vm.runs=2` (con PSRAM, de
+  malloc); el INFO con `runs` (los EN VIGOR) y `run2StackFreeBytes`. La resistencia (`resistencia_run.py`, en el
+  scratchpad) con `--runs=2` y un programa nuevo con estado compartido de verdad (`RunCompartido`).
+- **La revisión adversarial** (tres agentes: el núcleo; builtins y FS; la HAL), cada hallazgo comprobado a mano. Lo de
+  la 2b, arreglado con su prueba y su sabotaje (`test-cola` 9 a 15, trece sabotajes en rojo); el detalle, en
+  `V7_IDEAS` §H12 «La revisión adversarial de la 2b». Dos preguntas de Eduardo por el camino: *«Si GC solamente hay uno,
+  ¿cómo puede ser que 1 objeto se libere 2 veces?»* (no lo libera el GC: lo libera `owner`, y con dos hilos asignando el
+  mismo campo los dos lo veían vivo antes de soltarlo) y *«por definición solamente puede haber 1 propietario… la 2ª
+  liberación ha de llegar necesariamente detrás de la primera»* (sí: llega detrás, pero lo miró antes; el arreglo es su
+  regla llevada al final: el método único mira él, bajo el cerrojo). Y *«Heap.compact() no funciona si hay Threads BP»*:
+  por diseño, y la prueba lo usa a propósito —para el mundo y no colecta—.
+- **Dos fallos míos, cazados el mismo día**: el cierre de un `File` sacaba el fichero de la lista y lo cerraba en el
+  motor fuera del cerrojo (en la SD, otro run podía abrirlo para escribir en la ventana: clusters cruzados); y la zona de
+  rascar con el cerrojo de la cola hacía depender `bpvm_util.c` de la VM (`test-bmgr` no enlazaba). Y uno de método: el
+  sabotaje de la parte 15 salía verde —la ventana estaba en la fachada del FS, no en el builtin—; ensanchada ahí, el
+  proceso cae.
+- **SUELTAS nuevas** (anteriores a la 2b, o sólo diagnóstico): `#654`–`#659`.
 
 ## 🧵 H12 (4-oct) — LAS ETAPAS 0 Y 1: la tarea `run`, en el PC y en la Pico 2
 

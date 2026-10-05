@@ -20,10 +20,16 @@
 #include "bpvm_comm.h"
 #include "bpvm_io.h"
 #include "bpvm_platform.h"
+#include "bpvm_bus.h"     /* V7/H12, 2b: el árbitro de los buses, creado con un solo hilo vivo */
+#include "bpvm_spi.h"     /* y la memoria de la fachada SPI */
 #include <limits.h>
 #include <stdio.h>
 
 bpvm_cola_t bpvm_la_cola;
+
+/* V7/H12, 2b — el cerrojo de la zona de rascar (bpvm_util.c): el de la cola, que es permanente. */
+static void zona_cerrar(void) { bpvm_platform_mutex_lock(&bpvm_la_cola.vm_lock); }
+static void zona_abrir(void)  { bpvm_platform_mutex_unlock(&bpvm_la_cola.vm_lock); }
 
 int bpvm_cola_asegurar(void) {
     bpvm_cola_t* q = &bpvm_la_cola;
@@ -33,7 +39,18 @@ int bpvm_cola_asegurar(void) {
         bpvm_platform_mutex_destroy(&q->vm_lock);
         return -1;
     }
+    if (bpvm_platform_mutex_init(&q->hal_lock) != 0) {   /* V7/H12, 2b: el de la HAL (bpvm_smp.h) */
+        bpvm_platform_cond_destroy(&q->sched_cond);
+        bpvm_platform_mutex_destroy(&q->vm_lock);
+        return -1;
+    }
     q->iniciada = 1;
+    /* Esto corre con un solo hilo vivo (bpvm_init, o el arranque que registra la tarea `run`): lo que tiene que estar
+     * antes de que haya dos —la zona de rascar con su cerrojo; y el árbitro de los buses, que una placa crea en el
+     * arranque pero el PC creaba al primer turno, con dos runs a la vez (la revisión de la 2b)—. */
+    bpvm_scratch_set_cerrojo(zona_cerrar, zona_abrir);
+    bpvm_bus_arbitro_init();
+    bpvm_spi_preparar();   /* la memoria de la fachada SPI, que se iniciaba al primer uso */
     return 0;
 }
 
@@ -116,6 +133,8 @@ int bpvm_cola_colgar(bpvm_t* vm, int n_runs, int para_permanentes, bpvm_cola_al_
     q->gc_in_progress = false;
     q->running_workers = 0;
     q->t_ultimo_cuanto = q->t_fin = 0;
+    q->cuantos[0] = q->cuantos[1] = 0;
+    q->gc_con_otro_dentro = 0;
     q->programa = vm;
     bpvm_platform_cond_broadcast(&q->sched_cond);
     bpvm_platform_mutex_unlock(&q->vm_lock);
@@ -147,12 +166,20 @@ static int64_t sueno_mas_cercano(const bpvm_t* vm) {
 static void despertar(bpvm_t* vm) {
     bpvm_events_revive_terminated(vm);
     int64_t ahora = bpvm_platform_now_ms();
+    /* V7/H12, 2b (la revisión) — LO QUE OTRO RUN TIENE ENTRE MANOS NO SE TOCA, ni se da por acabado (la regla de la
+     * resurrección, events.c): su estado lo escribe ese run sin cerrojo, a mitad de su cuanto —un `sleep` pone la hora y
+     * el estado en dos escrituras; un hilo que termina queda TERMINATED antes de soltar su última línea—, y lo deja bueno
+     * al devolverlo (bajo el cerrojo, con aviso). Con un run, el que despierta es el único y no tiene ninguno: nada
+     * cambia. (SÓLO PRUEBAS: el sabotaje, sin mirarlo.) */
+    const int mirar = !bpvm_la_cola.sabotaje_suyo;
     for (bpvm_thread_t* tc = bpvm_hilos_primero(vm); tc; tc = bpvm_hilos_siguiente(vm, tc)) {
+        if (mirar && tc->sched_owner != -1) continue;
         if (tc->status == BPVM_THREAD_BLOCKED_SLEEP && tc->wake_at_ms <= ahora) {
             tc->status = BPVM_THREAD_RUNNABLE;
         } else if (tc->status == BPVM_THREAD_BLOCKED_JOIN && tc->blocked_on_join >= 0) {
             const bpvm_thread_t* t = bpvm_hilo_por_tid(vm, tc->blocked_on_join);
-            if (t == NULL || (t->status == BPVM_THREAD_TERMINATED && !bpvm_events_con_deuda(vm, t))) {
+            if (t == NULL || (t->status == BPVM_THREAD_TERMINATED && !bpvm_events_con_deuda(vm, t)
+                              && (!mirar || t->sched_owner == -1))) {
                 tc->blocked_on_join = -1;
                 tc->status = BPVM_THREAD_RUNNABLE;
             }
@@ -195,6 +222,13 @@ static void acabar(bpvm_cola_t* q, bpvm_t* vm, int varios) {
                   "(destinatario muerto o encolados por un handler tardío)", vm->ev_count);
     }
     bpvm_programa_cerrar(vm);   /* las líneas a medias (#600) y las líneas `pila:` e `hilos:` */
+    /* 2b — con varios runs, cuánto trabajó cada uno: la prueba de que el segundo run de verdad ejecuta */
+    if (q->n_runs > 1)
+        bpvm_diag("[bpvm] runs: %d; cuantos del run 0, %lu; del run 1, %lu", q->n_runs,
+                  (unsigned long) q->cuantos[0], (unsigned long) q->cuantos[1]);
+    if (q->gc_con_otro_dentro > 0)   /* no debe pasar: una colecta con otro run ejecutando (heap.c) */
+        bpvm_diag_urgente("[bpvm] GC: %lu colecta(s) con OTRO run dentro de su cuanto (no debe pasar)",
+                          (unsigned long) q->gc_con_otro_dentro);
     /* #462 — UN PROGRAMA AL QUE SE LE PIDIÓ PARAR DICE QUE FUE MATADO, SIEMPRE, aunque acabase solo: si no, el estado de
      * un `stop` dependía de DÓNDE cayera el KILL (medido el 5-sep con GuiColorDemo: `Gui.run()` acaba limpio al ver el
      * KILL, y el IDE recibía `exit 0`). La bandera es la verdad; también cuando el main muere de una excepción por el
@@ -320,6 +354,7 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
          * marcos seguidos se ejecutarían en orden inverso, y son FIFO. */
         tc->status = BPVM_THREAD_RUNNING;
         tc->sched_owner = id;
+        if (id >= 0 && id < 2) q->cuantos[id]++;
         bpvm_event_drain_one(vm, tc);
         q->con_hilo++;
         if (varios) {

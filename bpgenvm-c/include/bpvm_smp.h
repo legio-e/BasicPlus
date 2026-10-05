@@ -44,7 +44,13 @@ typedef struct bpvm_output_queue {
     bpvm_platform_cond_handle_t  not_empty;   /* consumer waits when used=0 */
     bpvm_platform_cond_handle_t  not_full;    /* producer waits when used=cap */
     volatile bool closed;    /* true tras stop → consumer drena y sale */
+    /* V7/H12, 2b (la revisión) — un productor a mitad de una línea que NO CABE en la cola (va a trozos, soltando el
+     * cerrojo entre uno y otro): los demás esperan a que acabe, o se colarían entre dos trozos (#600). */
+    bool escribiendo;
 } bpvm_output_queue_t;
+
+/* SÓLO PRUEBAS (test_cola): sin esperar al que escribe una línea a trozos, como antes (comm_common.c). */
+extern int bpvm_oq_sabotaje_lineas;
 
 /* El aviso a quien colgó un programa, cuando acaba (lo da el último run que sale, ya descolgado). */
 typedef void (*bpvm_cola_al_acabar_fn)(struct bpvm* vm, int rs, void* user);
@@ -60,6 +66,10 @@ typedef struct bpvm_cola {
     /* La condición: un programa publicado, un hilo que pasa a listo (un sueño que vence, un Mutex que se suelta, un join
      * cumplido, el GC que acaba), un KILL, el fin. */
     bpvm_platform_cond_handle_t  sched_cond;
+    /* V7/H12, 2b (la revisión) — EL CERROJO DE LA HAL (builtins.c): reclamar un pin, abrir un bus, el ADC… con dos
+     * runs. Propio y no el de la VM: lo que la HAL hace con él cogido puede escribir en la salida (las trazas de los
+     * stubs del PC son stdout), la salida puede esperar a `io`, e `io` coge el de la VM para avisar de un KILL. */
+    bpvm_platform_mutex_handle_t hal_lock;
     int permanentes;                          /* runs permanentes registrados (la tarea `run` de una placa) */
 
     /* — los hilos (threading.c) — */
@@ -84,6 +94,10 @@ typedef struct bpvm_cola {
     int con_hilo;
     int parar;                   /* un KILL, un fallo o el STOP del depurador: no se elige más */
     int fallo;                   /* V7/H7 #596: el estado (bpvm_status_t) del PRIMER fallo; 0 = ninguno */
+    uint32_t cuantos[2];         /* 2b: los cuantos que dio cada run (0 y 1) en este programa: la línea `runs:` del final */
+    /* 2b: colectas con OTRO run dentro de su cuanto (heap.c, bpvm_gc_cuerpo). No debe pasar nunca: el fin del programa
+     * lo dice, y la prueba del `gc()` con dos runs lo mira. Por programa. */
+    uint32_t gc_con_otro_dentro;
     int rs;                      /* lo que dio el programa: lo apunta el último run, al descolgarlo */
     bpvm_cola_al_acabar_fn al_acabar;
     void* al_acabar_user;
@@ -112,6 +126,18 @@ typedef struct bpvm_cola {
     int     sabotaje_contador;       /* contar «con un hilo entre manos» con el contador del GC */
     int     sabotaje_despertar;      /* el KILL no avisa a la cola (bpvm_request_kill) */
     int     sabotaje_salida;         /* el que cierra no espera a que salgan los demás runs */
+    int     sabotaje_gc;             /* 2b: el `gc()` del programa por el camino de antes (sin parar el mundo) */
+    int     sabotaje_eventos;        /* 2b: `raise` encola sin el cerrojo */
+    int     sabotaje_revive;         /* 2b: se resucita a un hilo que otro run aún tiene entre manos */
+    int     ensayo_eventos;          /* 2b: encolar cede el turno a mitad (la ventana ensanchada) */
+    int     sabotaje_ficheros;       /* 2b: los File (abrir, cerrar, el cursor) sin el cerrojo */
+    int     ensayo_ficheros;         /* 2b: abrir, cerrar y escribir ceden el turno a mitad (la ventana ensanchada) */
+    int     sabotaje_zona;           /* 2b: la zona de rascar ocupada por el otro run es un error, como antes */
+    int     sabotaje_colecta;        /* 2b: quien esperó a otro mundo parado vuelve sin mirar si colectó (gc_stw) */
+    int     sabotaje_owner;          /* 2b: soltar un owner como antes (sin mirar quién lo mató; el hueco, en el acto) */
+    int     sabotaje_suyo;           /* 2b: el despertar y el join, sin mirar si otro run tiene el hilo entre manos */
+    int     ensayo_linea_ms;         /* 2b: un hilo que termina tarda en soltar su línea a medias (interp.c) */
+    int     sabotaje_error;          /* 2b: el error del programa, como antes: lo escribe cada throw y gana el último */
     int64_t t_ultimo_cuanto;         /* con el ensayo: cuándo volvió el último cuanto (µs)... */
     int64_t t_fin;                   /* ...y cuándo se decidió el fin (µs): el fin, siempre después */
 } bpvm_cola_t;

@@ -416,6 +416,8 @@ int  bpvm_fs_fopen (void* blk, uint32_t cap, const char* path, int mode);
 int  bpvm_fs_fclose(void* blk);                                   /* idempotente; 0 / -1 */
 long bpvm_fs_fread (void* blk, uint8_t* dst, uint32_t n);         /* leídos; 0 = fin; -1 */
 long bpvm_fs_fwrite(void* blk, const uint8_t* src, uint32_t n);   /* escritos (== n) o -1 */
+/* SÓLO PRUEBAS (test_cola, V7/H12 2b): si no es NULL, fwrite la llama entre «¿abierto?» y el motor (la ventana). */
+extern void (*bpvm_fs_ensayo_cursor)(void);
 int  bpvm_fs_fseek (void* blk, uint32_t pos);                     /* 0..size; fuera → -1 */
 long bpvm_fs_ftell (void* blk);                                   /* -1 si cerrado */
 long bpvm_fs_fsize (void* blk);                                   /* -1 si cerrado */

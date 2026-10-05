@@ -20,6 +20,7 @@
 #include "hardware/watchdog.h"   /* paso 4 cierre — watchdog_caused_reboot (resetCause) */
 
 #include "bpvm.h"
+#include "bpvm_alloc.h"      /* V7/H12, 2b: la pila del 2º run, de malloc con la VM en la PSRAM */
 #include "bpvm_internal.h"   /* #440: el MPU necesita bpvm_module_t */
 #include "pico_mods.h"      /* V6/U4: la tabla GENERADA de la stdlib embebida (sólo datos) */
 #include "fs.h"
@@ -175,6 +176,7 @@ static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
 
 uint8_t* s_vm_buffer      = NULL;   /* se fija en boot (vm_sram_region o PSRAM) */
 uint32_t s_vm_buffer_size = 0;
+uint8_t* g_run2_pila      = NULL;   /* V7/H12, 2b: la pila del 2º run, del techo del bloque (repl_v1.h) */
 
 /* V5/H — bloque de la BD: se reserva en el arranque desde el ENV (`SQLite=<MB>`)
  * y NO se toca nunca más (criterio de Eduardo). Sale del principio de la ventana
@@ -1337,6 +1339,13 @@ static void pico_memoria(void) {
             log_printf("vm: heap en PSRAM %u MB @ 0x%08x (SRAM interna sin reservar)",
                        (unsigned)(s_vm_buffer_size / (1024u * 1024u)),
                        (unsigned)(uintptr_t) s_vm_buffer);
+            /* V7/H12, 2b — la pila del 2º run (`vm.runs=2`): con la VM en la PSRAM la SRAM queda para malloc, y una pila
+             * va en la SRAM (en la PSRAM sería lenta, y no se puede leer mientras se escribe la flash). */
+            if (bpvm_runs() >= 2) {
+                g_run2_pila = (uint8_t*) bpvm_malloc_os(PICO_RUN_PILA_BYTES);
+                log_printf("vm: vm.runs=%d: la pila del 2o run, %u KB de malloc (SRAM)%s", bpvm_runs(),
+                           (unsigned) (PICO_RUN_PILA_BYTES / 1024u), g_run2_pila ? "" : ": NO HAY; va con uno");
+            }
             /* El motivo de un NO se dice siempre: "se pidió mal" no puede
              * parecerse a "no se pidió" (patrón del clamp de #292). */
             if (sqlres != BPVM_SQLITE_OFF) {
@@ -1358,6 +1367,18 @@ static void pico_memoria(void) {
                        (pack_kb > 0) ? " (packRam= del ENV)" : "");
             s_vm_buffer      = reg[plan.idx].base + (reg[plan.idx].bytes - plan.bytes);
             s_vm_buffer_size = (uint32_t) plan.bytes;
+            /* V7/H12, 2b — LA PILA DEL 2º RUN (`vm.runs=2`), del TECHO del bloque: así sólo cuesta con dos runs, y el
+             * margen de malloc —abajo, pegado a `end`; su techo es la base del bloque (_sbrk)— no cambia. Estática en
+             * el .bss la pagaría también quien va con uno. Alineada a 8 (la pila de un Cortex-M). */
+            if (bpvm_runs() >= 2 && s_vm_buffer_size >= VM_SRAM_MIN + PICO_RUN_PILA_BYTES) {
+                s_vm_buffer_size = (s_vm_buffer_size - PICO_RUN_PILA_BYTES) & ~7u;
+                g_run2_pila      = s_vm_buffer + s_vm_buffer_size;
+                log_printf("vm: vm.runs=%d: la pila del 2o run, %u KB del techo del bloque @ 0x%08x",
+                           bpvm_runs(), (unsigned) (PICO_RUN_PILA_BYTES / 1024u), (unsigned) (uintptr_t) g_run2_pila);
+            } else if (bpvm_runs() >= 2) {
+                log_printf("vm: vm.runs=%d, pero el bloque (%u KB) no da para la pila del 2o run: va con uno",
+                           bpvm_runs(), (unsigned) (s_vm_buffer_size / 1024u));
+            }
             size_t stk = vm_stack_region_bytes();   /* la regla, no una copia */
             log_printf("vm: SRAM interna %u KB @ 0x%08x -> heap %u KB + stacks %u KB | libre para malloc: %u KB",
                        (unsigned)(s_vm_buffer_size / 1024u), (unsigned)(uintptr_t) s_vm_buffer,

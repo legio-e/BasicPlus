@@ -55,114 +55,11 @@ void bpvm_platform_mutex_unlock(bpvm_platform_mutex_handle_t* m) {
 }
 
 /* ============================== Condvar ==========================
- * Igual que el backend Pico: binary semaphore + contador de waiters
- * protegido por un guard mutex. */
-typedef struct {
-    SemaphoreHandle_t sem;
-    SemaphoreHandle_t guard;
-    int waiters;
-} es_cond_t;
-
-int bpvm_platform_cond_init(bpvm_platform_cond_handle_t* c) {
-    if (!c) return -1;
-    es_cond_t* cv = (es_cond_t*) pvPortMalloc(sizeof(es_cond_t));
-    if (!cv) return -1;
-    cv->sem = xSemaphoreCreateBinary();
-    cv->guard = xSemaphoreCreateMutex();
-    cv->waiters = 0;
-    if (!cv->sem || !cv->guard) {
-        if (cv->sem)   vSemaphoreDelete(cv->sem);
-        if (cv->guard) vSemaphoreDelete(cv->guard);
-        vPortFree(cv);
-        return -1;
-    }
-    *c = (void*) cv;
-    return 0;
-}
-
-void bpvm_platform_cond_destroy(bpvm_platform_cond_handle_t* c) {
-    if (!c || !*c) return;
-    es_cond_t* cv = (es_cond_t*) *c;
-    vSemaphoreDelete(cv->sem);
-    vSemaphoreDelete(cv->guard);
-    vPortFree(cv);
-    *c = NULL;
-}
-
-void bpvm_platform_cond_wait(bpvm_platform_cond_handle_t* c,
-                              bpvm_platform_mutex_handle_t* m) {
-    if (!c || !*c || !m || !*m) return;
-    es_cond_t* cv = (es_cond_t*) *c;
-    xSemaphoreTake(cv->guard, portMAX_DELAY);
-    cv->waiters++;
-    xSemaphoreGive(cv->guard);
-
-    xSemaphoreGive((SemaphoreHandle_t) *m);
-    xSemaphoreTake(cv->sem, portMAX_DELAY);
-    xSemaphoreTake((SemaphoreHandle_t) *m, portMAX_DELAY);
-}
-
-int bpvm_platform_cond_timed_wait(bpvm_platform_cond_handle_t* c,
-                                   bpvm_platform_mutex_handle_t* m, int ms) {
-    if (!c || !*c || !m || !*m) return 1;
-    es_cond_t* cv = (es_cond_t*) *c;
-    xSemaphoreTake(cv->guard, portMAX_DELAY);
-    cv->waiters++;
-    xSemaphoreGive(cv->guard);
-
-    xSemaphoreGive((SemaphoreHandle_t) *m);
-
-    /* V6/A1.2 - REDONDEAR HACIA ARRIBA, NUNCA A CERO.
-     *
-     * `pdMS_TO_TICKS(ms)` es una division entera: con el tick a 100 Hz, CUALQUIER
-     * espera menor de 10 ms da 0 ticks, y `xSemaphoreTake(sem, 0)` no espera - es
-     * un sondeo. Quien pidio "espera hasta N ms" se encuentra con que no espera
-     * nada y gira en vacio.
-     *
-     * Lo destapo el hilo `io` en la C6 (5-sep): su lazo pide 5 ms entre trago y
-     * trago, se los daban a cero, y el hilo consumia el 100 % de un nucleo que
-     * compartia con la VM. Medido: fib(28) paso de 23 400 ms a 140 600. El
-     * diseno no tenia la culpa; la tenia esta division.
-     *
-     * Un tick es el minimo que este reloj sabe esperar, asi que es lo correcto:
-     * "hasta N ms" nunca puede significar "nada". */
-    TickType_t ticks = 0;
-    if (ms > 0) {
-        ticks = pdMS_TO_TICKS(ms);
-        if (ticks == 0) ticks = 1;
-    }
-    BaseType_t r = xSemaphoreTake(cv->sem, ticks);
-
-    xSemaphoreTake((SemaphoreHandle_t) *m, portMAX_DELAY);
-
-    if (r != pdTRUE) {
-        xSemaphoreTake(cv->guard, portMAX_DELAY);
-        if (cv->waiters > 0) cv->waiters--;
-        xSemaphoreGive(cv->guard);
-        return 1;
-    }
-    return 0;
-}
-
-void bpvm_platform_cond_signal(bpvm_platform_cond_handle_t* c) {
-    if (!c || !*c) return;
-    es_cond_t* cv = (es_cond_t*) *c;
-    xSemaphoreTake(cv->guard, portMAX_DELAY);
-    int wake = cv->waiters > 0;
-    if (wake) cv->waiters--;
-    xSemaphoreGive(cv->guard);
-    if (wake) xSemaphoreGive(cv->sem);
-}
-
-void bpvm_platform_cond_broadcast(bpvm_platform_cond_handle_t* c) {
-    if (!c || !*c) return;
-    es_cond_t* cv = (es_cond_t*) *c;
-    xSemaphoreTake(cv->guard, portMAX_DELAY);
-    int n = cv->waiters;
-    cv->waiters = 0;
-    xSemaphoreGive(cv->guard);
-    for (int i = 0; i < n; i++) xSemaphoreGive(cv->sem);
-}
+ * V7/H12, etapa 2b (5-oct): la COMÚN a las tres familias (la Pico, la ESP32 y la STM32), en vez de una copia. La de
+ * antes —un semáforo binario y una cuenta de esperadores— perdía avisos con dos esperando (un `broadcast` despertaba
+ * a uno) y dejaba que un tercero se llevara el aviso de otro: con dos runs, un run dormido para siempre. El porqué y
+ * el cómo, allí; la prueba, test/test_frcond.c (make test-frcond), con el kernel de FreeRTOS de verdad. */
+#include "platform_freertos_cond.inc"
 
 /* ============================== Thread ===========================
  * ESP-IDF FreeRTOS es SMP (2 cores en el S3). xTaskCreatePinnedToCore

@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-logmt test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-logmt test-reserva test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1346,42 +1346,146 @@ test-logmt: $(LIBOBJ)
 	 else echo "  (rojo, como debe: sin la seccion, el log se sale de su region)"; fi
 	@echo "PASS test-logmt (y su sabotaje, rojo)"
 
+# #355, V7/H12 2b (5-oct) — LA RESERVA DE EMERGENCIA la gasta SÓLO una reserva para construir un error (test/
+# test_reserva.c): con el heap lleno, las normales no la tocan; el objeto y el mensaje del error, sí, y caben. Antes lo
+# decía una bandera de la VM, que con dos runs veía también el otro. Y su sabotaje (el objeto del error por el camino
+# normal), que tiene que dar rojo.
+RESERVA_BIN = build/test_reserva.exe
+test-reserva: $(LIBOBJ)
+	@mkdir -p build
+	@$(CC) $(CFLAGS) -Isrc test/test_reserva.c $(LIBOBJ) -o $(RESERVA_BIN) $(LDFLAGS)
+	@echo "--- #355: la reserva de emergencia, solo para construir un error (esperado: todo ok y la linea OK) ---"
+	@timeout 60 ./$(RESERVA_BIN) 2>/dev/null || { echo "FAIL test-reserva"; exit 1; }
+	@echo "--- y su sabotaje (el error por el camino normal: esperado ROJO) ---"
+	@if timeout 60 ./$(RESERVA_BIN) --sabotaje >build/reserva_sab.out 2>/dev/null; then \
+	   echo "FAIL test-reserva: el sabotaje pasa por verde"; cat build/reserva_sab.out; exit 1; \
+	 else echo "  (rojo, como debe: por el camino normal, el error no cabe con el heap lleno)"; fi
+	@echo "PASS test-reserva (y su sabotaje, rojo)"
+
+# V7/H12, etapa 2b (5-oct) — LA VARIABLE DE CONDICIÓN DE FREERTOS (src/platform_freertos_cond.inc, la de las tres
+# familias), con el kernel de FreeRTOS DE VERDAD en el PC: su port de Windows (portable/MSVC-MingW), que no es el de
+# pthreads —ése no pierde avisos—. test/test_frcond.c: broadcast con dos esperando, un aviso que no se lleva otro, el
+# plazo, el estrés con y sin plazo y ninguna ficha suelta. Con la condición de ANTES como control (--sabotaje), que
+# tiene que dar rojo. El kernel, el de la Pico y la STM32 (FreeRTOS-LTS), junto al repo.
+FREERTOS_KERNEL ?= ../FreeRTOS-LTS/FreeRTOS/FreeRTOS-Kernel
+FRCOND_BIN = build/test_frcond.exe
+FRCOND_INC = -Itest/frcond -I$(FREERTOS_KERNEL)/include -I$(FREERTOS_KERNEL)/portable/MSVC-MingW
+test-frcond:
+	@if [ ! -f $(FREERTOS_KERNEL)/tasks.c ]; then \
+	   echo "FAIL test-frcond: no esta el kernel de FreeRTOS en $(FREERTOS_KERNEL) (FREERTOS_KERNEL=...)"; exit 1; fi
+	@mkdir -p build/frcond
+	@for f in tasks queue list; do $(CC) -O1 -w $(FRCOND_INC) -c $(FREERTOS_KERNEL)/$$f.c -o build/frcond/$$f.o || exit 1; done
+	@$(CC) -O1 -w $(FRCOND_INC) -c $(FREERTOS_KERNEL)/portable/MSVC-MingW/port.c -o build/frcond/port.o
+	@$(CC) -O1 -w $(FRCOND_INC) -c $(FREERTOS_KERNEL)/portable/MemMang/heap_4.c -o build/frcond/heap_4.o
+	@$(CC) -O1 -Wall -Wextra -Werror $(FRCOND_INC) -Iinclude -Isrc -c test/test_frcond.c -o build/frcond/test_frcond.o
+	@$(CC) build/frcond/test_frcond.o build/frcond/tasks.o build/frcond/queue.o build/frcond/list.o \
+	   build/frcond/port.o build/frcond/heap_4.o -o $(FRCOND_BIN) -lwinmm
+	@echo "--- H12 2b: la condicion de FreeRTOS, con el kernel de verdad (esperado: 1 a 5b PASS y la linea OK) ---"
+	@timeout 120 ./$(FRCOND_BIN) || { echo "FAIL test-frcond"; exit 1; }
+	@echo "--- y su control: la condicion de ANTES (esperado ROJO: 1, 2 y 4b) ---"
+	@timeout 120 ./$(FRCOND_BIN) --sabotaje >build/frcond_sab.out; st=$$?; cat build/frcond_sab.out; \
+	 if [ $$st -ne 0 ] && grep -q '^\[frcond\] 1\..*FAIL' build/frcond_sab.out && grep -q '^\[frcond\] 2\..*FAIL' build/frcond_sab.out; then \
+	   echo "  (rojo, como debe: la de antes pierde avisos y deja que otro se lleve el de uno)"; \
+	 else echo "FAIL test-frcond: la condicion de antes pasa por verde (salida $$st)"; exit 1; fi
+	@echo "PASS test-frcond (y su control, rojo)"
+
 # V7/H12, etapa 2a.2 (4-oct) — LA COLA y su planificador, en lo que la red no ve por sí sola (test/test_cola.c): el
 # interbloqueo de verdad con uno y dos runs (Interbloqueo: RUNTIME_ERROR; con dos, antes de la 2a.2, colgado); el
 # interbloqueo FALSO que no puede salir (MutexGc con dos runs, el heap justo y la ventana ensanchada); y el fin, del
 # último run que suelta su hilo (FinJunto con dos runs y la ventana ensanchada); y que al avisar a quien lo colgó no
 # quede ningún run dentro (la revisión de la 2a.2). Y sus tres sabotajes, que tienen que dar rojo: --sabotaje-contador
 # (algún interbloqueo falso), --sabotaje-fin (algún fin antes del último cuanto) y --sabotaje-salida (algún run dentro).
+# La 2b (5-oct), con dos runs: el gc() del programa con el mundo parado (GcConcurrente), los eventos (EvDosRuns,
+# EvHiloMuere) y los ficheros abiertos (FicherosDosRuns); con sus sabotajes: --sabotaje-gc, --sabotaje-eventos,
+# --sabotaje-revive y --sabotaje-ficheros. Y lo de la revisión de la 2b (las partes 9 a 15): el owner en carrera, las
+# líneas que no caben en la cola, el join y la última línea, la zona de rascar, el gc() tras un mundo parado ajeno,
+# el error del programa y un File compartido; con --sabotaje-owner, -lineas, -suyo, -zona, -colecta y -error.
 COLA_BIN = build/test_cola.exe
 test-cola: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,Interbloqueo MutexGc FinJunto)
+	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido)
 	$(call stdlibdep,Core)
-	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ]; then \
-	  echo "FAIL test-cola: faltan Interbloqueo.mod, MutexGc.mod o FinJunto.mod y no se han podido generar"; exit 1; \
+	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ]; then \
+	  echo "FAIL test-cola: faltan los .mod de la prueba (Interbloqueo, MutexGc, FinJunto, GcConcurrente, EvDosRuns, EvHiloMuere, FicherosDosRuns y los de la revisión: OwnerCarrera, LineasLargas, JoinLinea, ListDirDos, ColectaAjena, ErrorPrimero, FileCompartido) y no se han podido generar"; exit 1; \
 	fi
 	@$(CC) $(CFLAGS) -Isrc test/test_cola.c $(LIBOBJ) -o $(COLA_BIN) $(LDFLAGS)
-	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2., 3. y 4. PASS y la linea OK) ---"
-	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod 2>/dev/null) || { echo "FAIL test-cola"; exit 1; }
-	@echo "--- y sus sabotajes (esperado: los tres, ROJOS, cada uno por lo suyo) ---"
+	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 15. PASS y la linea OK) ---"
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod 2>/dev/null) || { echo "FAIL test-cola"; exit 1; }
+	@echo "--- y sus sabotajes (esperado: los trece, ROJOS, cada uno por lo suyo) ---"
 	@# El del contador: un interbloqueo FALSO dicho en stderr (detrás, el programa se descuelga con un run aún dentro
 	@# de su cuanto, que al despertar ya no lo encuentra: suele acabar en un fallo de segmento; por eso se mira el aviso).
-	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod --sabotaje-contador \
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-contador \
 	   >../build/cola_sab1.out 2>../build/cola_sab1.err); st=$$?; \
 	 if [ $$st -ne 0 ] && grep -q 'deadlock' build/cola_sab1.err; then \
 	   echo "  (rojo, como debe: con el contador del GC sale un interbloqueo que no existe; salida $$st)"; \
 	 else echo "FAIL test-cola: el sabotaje del contador no se caza (salida $$st)"; cat build/cola_sab1.out; exit 1; fi
-	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod --sabotaje-fin \
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-fin \
 	   >../build/cola_sab2.out 2>/dev/null); st=$$?; cat build/cola_sab2.out; \
 	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab2.out; then \
 	   echo "  (rojo, como debe: el fin, decidido antes de que vuelva el último cuanto)"; \
 	 else echo "FAIL test-cola: el sabotaje del fin no se caza (salida $$st)"; exit 1; fi
-	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod --sabotaje-salida \
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-salida \
 	   >../build/cola_sab3.out 2>/dev/null); st=$$?; cat build/cola_sab3.out; \
 	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab3.out; then \
 	   echo "  (rojo, como debe: el aviso llega con otro run todavía dentro del programa)"; \
 	 else echo "FAIL test-cola: el sabotaje de la salida no se caza (salida $$st)"; exit 1; fi
-	@echo "PASS test-cola (y sus tres sabotajes, rojos)"
+	@# El del gc(): con el camino de antes, colectas con el otro run dentro de su cuanto (la regla, contada por
+	@# heap.c), o el proceso muerto por lo que eso rompe (salida 128 o mas).
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-gc \
+	   >../build/cola_sab4.out 2>/dev/null); st=$$?; cat build/cola_sab4.out; \
+	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab4.out || [ $$st -ge 128 ]; }; then \
+	   echo "  (rojo, como debe: el gc() de antes colecta con el otro run ejecutando; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje del gc() no se caza (salida $$st)"; exit 1; fi
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-eventos \
+	   >../build/cola_sab5.out 2>/dev/null); st=$$?; cat build/cola_sab5.out; \
+	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab5.out; then \
+	   echo "  (rojo, como debe: sin el cerrojo, dos raise a la vez pierden o pisan eventos)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-eventos no se caza (salida $$st)"; exit 1; fi
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-revive \
+	   >../build/cola_sab6.out 2>/dev/null); st=$$?; cat build/cola_sab6.out; \
+	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab6.out; then \
+	   echo "  (rojo, como debe: resucitado con otro run encima, el hilo que muere corta el programa)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-revive no se caza (salida $$st)"; exit 1; fi
+	@# El de los ficheros: sin el cerrojo, los dos hilos ven libre el fichero y lo abren a la vez (choques), o se
+	@# pisan la lista de abiertos (el proceso, muerto: salida 128 o mas).
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-ficheros \
+	   >../build/cola_sab7.out 2>/dev/null); st=$$?; cat build/cola_sab7.out; rm -f samples/comun_2b.txt samples/compartido_2b.txt; \
+	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab7.out || [ $$st -ne 1 ]; }; then \
+	   echo "  (rojo, como debe: sin el cerrojo, los dos abren el mismo fichero para escribir; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-ficheros no se caza (salida $$st)"; exit 1; fi
+	@# La revisión de la 2b (5-oct): el owner soltado dos veces puede dejar la reserva dando vueltas con el
+	@# cerrojo cogido (el proceso, colgado: el plazo lo para, salida 124) o romperlo (128 o más).
+	@(cd samples && timeout 90 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-owner \
+	   >../build/cola_sab8.out 2>/dev/null); st=$$?; cat build/cola_sab8.out; \
+	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab8.out || [ $$st -ne 1 ]; }; then \
+	   echo "  (rojo, como debe: dos hilos sueltan a la vez el mismo owner: el heap, roto o colgado; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-owner no se caza (salida $$st)"; exit 1; fi
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-lineas \
+	   >../build/cola_sab9.out 2>/dev/null); st=$$?; cat build/cola_sab9.out; \
+	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab9.out || [ $$st -ne 1 ]; }; then \
+	   echo "  (rojo, como debe: sin esperar al que escribe a trozos, una línea larga sale partida; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-lineas no se caza (salida $$st)"; exit 1; fi
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-suyo \
+	   >../build/cola_sab10.out 2>/dev/null); st=$$?; cat build/cola_sab10.out; \
+	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab10.out || [ $$st -ne 1 ]; }; then \
+	   echo "  (rojo, como debe: el join se adelanta a la última línea del hilo; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-suyo no se caza (salida $$st)"; exit 1; fi
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-zona \
+	   >../build/cola_sab11.out 2>/dev/null); st=$$?; cat build/cola_sab11.out; \
+	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab11.out || [ $$st -ne 1 ]; }; then \
+	   echo "  (rojo, como debe: la zona de rascar del otro run es un error en un programa correcto; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-zona no se caza (salida $$st)"; exit 1; fi
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-colecta \
+	   >../build/cola_sab12.out 2>/dev/null); st=$$?; cat build/cola_sab12.out; \
+	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab12.out || [ $$st -ne 1 ]; }; then \
+	   echo "  (rojo, como debe: un gc() vuelve sin colecta tras un mundo parado ajeno; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-colecta no se caza (salida $$st)"; exit 1; fi
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-error \
+	   >../build/cola_sab13.out 2>/dev/null); st=$$?; cat build/cola_sab13.out; \
+	 if [ $$st -ne 0 ] && { grep -q 'SABOTEADO.*FAIL' build/cola_sab13.out || [ $$st -ne 1 ]; }; then \
+	   echo "  (rojo, como debe: el EXITED dice el error de una excepción atrapada; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-error no se caza (salida $$st)"; exit 1; fi
+	@echo "PASS test-cola (y sus trece sabotajes, rojos)"
 
 # V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS: cada hilo, una struct pedida al arrancarlo y devuelta al acabar (sin
 # array y sin tope; el diseño, de Eduardo). HilosMuchos arranca 120 hilos —40 de uno en uno, 40 a la vez esperando en

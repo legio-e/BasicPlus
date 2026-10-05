@@ -40,6 +40,7 @@ int bpvm_event_enqueue(bpvm_t* vm, int tid, uint64_t recv, int32_t dest,
         return 0;
     }
     int idx = (vm->ev_head + vm->ev_count) % BPVM_EVENT_QUEUE_CAP;
+    if (bpvm_la_cola.ensayo_eventos) bpvm_platform_thread_yield();   /* SÓLO PRUEBAS (2b): la ventana ensanchada */
     bpvm_event_t* e = &vm->ev_queue[idx];
     e->recv  = recv;
     e->dest  = dest;
@@ -99,6 +100,10 @@ int bpvm_events_revive_terminated(bpvm_t* vm) {
     int revived = 0;
     for (bpvm_thread_t* tc = bpvm_hilos_primero(vm); tc; tc = bpvm_hilos_siguiente(vm, tc)) {   /* H12: la cola */
         if (tc->status != BPVM_THREAD_TERMINATED) continue;
+        /* V7/H12, 2b: no a uno que tiene OTRO run entre manos (acaba de terminar en su cuanto y aún no lo ha soltado):
+         * ese run, al volver, tiene que verlo TERMINATED —si no, la excepción sin atrapar de un hilo que no es el
+         * main (#608) se tomaría por la del programa—. Lo resucitará la siguiente pasada. Con un run nunca pasa. */
+        if (tc->sched_owner != -1 && !bpvm_la_cola.sabotaje_revive) continue;   /* (el sabotaje: SÓLO PRUEBAS) */
         if (tc->ev_post_mortem == 0) continue;          /* ya saldó su deuda */
         int n = pending_for(vm, tc->id);
         if (n == 0) { tc->ev_post_mortem = 0; continue; }

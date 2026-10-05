@@ -94,3 +94,6 @@ CONFIG_MCPWM_ISR_HANDLER_IN_IRAM=n
 CONFIG_PARLIO_TX_ISR_HANDLER_IN_IRAM=n
 CONFIG_PARLIO_RX_ISR_HANDLER_IN_IRAM=n
 CONFIG_FREERTOS_USE_TIMERS=n
+# V7/H12 2b (5-oct): dos indices de notificacion por tarea; el 1, el de la condicion de la VM
+# (src/platform_freertos_cond.inc), que no se cruza con el 0 de los drivers.
+CONFIG_FREERTOS_TASK_NOTIFICATION_ARRAY_ENTRIES=2

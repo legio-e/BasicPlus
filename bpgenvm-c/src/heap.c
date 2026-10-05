@@ -696,6 +696,14 @@ void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
      * veces (samples/OwnerSmp.bp). El barrido y la compactación también la tocan, pero con el mundo parado y el
      * cerrojo ya tomado; ésta es la única entrada desde el bytecode. Con un worker, el cerrojo no hace nada. */
     bpvm_smp_lock(vm);
+    /* V7/H12, 2b (la revisión) — y soltar uno ya libre no hace nada, mirado AQUÍ, bajo el cerrojo: dos veces en la
+     * lista de libres, la lista se apunta a sí misma (el nodo se enlaza consigo) y la siguiente reserva da vueltas sin
+     * fin. Quien llama ya lo mira (bpvm_free_owned, con el handle), pero fuera del cerrojo: esto es lo último. */
+    if ((bpvm_read_u32_be(vm->memory + header_addr) & BPVM_TAG_FREE_BIT) != 0u
+            && !bpvm_la_cola.sabotaje_owner) {   /* (el sabotaje: SÓLO PRUEBAS, test_cola) */
+        bpvm_smp_unlock(vm);
+        return;
+    }
     uint32_t size = block_total_size(vm, header_addr);
     if (size != 0) {   /* defensivo: 0 = no sabemos el tamaño, no tocar */
         add_to_free_list(vm, header_addr, size);
@@ -847,6 +855,10 @@ static void bpvm_gc(bpvm_t* vm) {
 /* V7/H5 P2b.3 — el GC en sí. Lo llama bpvm_gc y, por encargo de un ejecutor, el worker (sin el cerrojo del SMP:
  * el ejecutor que lo pide ya lo tiene tomado). */
 void bpvm_gc_cuerpo(bpvm_t* vm) {
+    /* V7/H12, etapa 2b — LA REGLA, mirada: con varios runs, una colecta no puede tener a otro run dentro de su cuanto
+     * (ejecutando bytecode, con objetos recién creados que el GC aún no ve). No debe pasar nunca: se cuenta, y el fin del
+     * programa lo dice (scheduler.c, acabar). Es lo que mira la prueba del `gc()` con dos runs (test_cola, parte 5). */
+    if (vm->smp && vm->smp->running_workers > 1) vm->smp->gc_con_otro_dentro++;
     gc_mark_phase(vm);
     if (vm->gc_descarrilo) return;   /* V7 #494: ni cerrar Files ni reciclar handles ni barrer */
     bpvm_files_gc(vm);         /* V7/H3 (#491): un File inalcanzable se cierra AQUÍ, con su bloque intacto y su handle vivo */
@@ -965,10 +977,16 @@ static void gc_stw(bpvm_t* vm) {
          * Y mientras espera se DESCUENTA de `running_workers`, porque no esta
          * ejecutando bytecode — si no, el colector lo estaria esperando a el.
          * Al volver, el heap ya esta colectado por el otro: el llamante reintenta
-         * su asignacion, que es lo que hace igualmente tras un GC propio. */
+         * su asignacion, que es lo que hace igualmente tras un GC propio.
+         *
+         * V7/H12, 2b (la revisión) — SI COLECTÓ. Parar el mundo no es siempre colectar: también lo paran la tabla
+         * que crece (tabla_crecer) y Heap.compact() —que, con otro hilo vivo, mira y no hace nada—. Volver de esas
+         * «sin colecta» daba un OOM que con un run no sale (la reserva reintentaba sobre el mismo heap) y un gc() del
+         * programa que no colectaba. Si la cuenta de colectas no se movió mientras se esperaba, colecta éste. */
         if (vm->smp->stop_the_world) {
+            uint32_t antes = vm->gc_colectas;
             stw_esperar_al_otro(vm);
-            return;
+            if (vm->gc_colectas != antes || bpvm_la_cola.sabotaje_colecta) return;   /* (sabotaje: SÓLO PRUEBAS) */
         }
     }
     stw_parar(vm);
@@ -1195,15 +1213,27 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
  * comprobaciones de build_gc_valid_map son exactas). Devuelve el handle —bpref_deref da la dirección, para llenar
  * el contenido— o nulo si no cabe, en el heap o en la tabla; quien llama lanza «No space in heap» y
  * bpvm_throw_runtime_error escoge la prefabricada que toque (#430, #494). Espejo de heapNuevo (miVM). */
-static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera);
+static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera, int para_error);
 
-bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes) {
+/* `para_error`: es para construir un error (#355), y sólo entonces, si no cabe, puede gastar la reserva de emergencia.
+ * V7/H12, 2b (5-oct): era una bandera de la VM (`building_error`), puesta mientras se construía la excepción; con dos
+ * runs la veía también el otro: una reserva cualquiera suya, con el heap lleno, se llevaba la reserva del error, y al
+ * acabar éste la bajaba con el otro aún construyendo el suyo. Ahora lo dice cada reserva, y no hay nada compartido. */
+static bpref_t heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes, int para_error) {
     bpref_t h = bpref_null();
     bpvm_smp_lock(vm);
-    uint32_t o = heap_reservar(vm, payload_bytes, type, cabecera);
+    uint32_t o = heap_reservar(vm, payload_bytes, type, cabecera, para_error);
     if (o != 0u) h = bpvm_handle_register_bajo_cerrojo(vm, o);
     bpvm_smp_unlock(vm);
     return h;
+}
+
+bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes) {
+    return heap_nuevo(vm, type, cabecera, payload_bytes, 0);
+}
+
+bpref_t bpvm_heap_nuevo_error(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes) {
+    return heap_nuevo(vm, type, cabecera, payload_bytes, 1);
 }
 
 /* V7/H7 #610 — la puerta de la TABLA de handles, en su función porque se mira DOS veces en heap_reservar: antes de
@@ -1260,7 +1290,7 @@ static int tabla_con_sitio(bpvm_t* vm) {
 /* El hueco: el GC proactivo, la presión de la tabla, la lista de libres, el bump y el OOM. Con el vm_lock tomado
  * (bpvm_heap_nuevo); sólo la llama él. Devuelve user_ref (= header_addr + 4), con la cabecera entera y el
  * contenido a cero, o 0 si no cabe. */
-static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera) {
+static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera, int para_error) {
     uint32_t total = align4(BPVM_OBJ_HEADER_SIZE + payload_bytes);
     if (total < BPVM_MIN_FREE_BLOCK) total = BPVM_MIN_FREE_BLOCK;
 
@@ -1343,13 +1373,13 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
              * cadenas VACIAS que se imprimen como lineas en blanco y revientan
              * al leerlas. Con handles el OOM es ATRAPABLE desde H1: esto tiene
              * que llegar ahi, no evaporarse. De momento GRITA. */
-            /* #355 — LA RESERVA SE GASTA AQUI Y SOLO AQUI: una reserva que
-             * falla MIENTRAS se construye una excepcion. Antes la soltaba el
+            /* #355 — LA RESERVA SE GASTA AQUI Y SOLO AQUI: una reserva PARA
+             * construir una excepcion que falla (`para_error`). Antes la soltaba el
              * throw nada mas entrar, y el log de la Pico lo delato — se la
              * llevaba el primer RuntimeError de cualquier clase y encima decia
              * "heap lleno" con el heap recien vaciado. La red es para cuando
              * de verdad no cabe el error, no para cada excepcion. */
-            if (vm->building_error && vm->heap_reserve != 0u) {
+            if (para_error && vm->heap_reserve != 0u) {
                 bpvm_heap_release_reserve(vm);
                 addr = try_allocate_inner(vm, total);
                 if (addr != 0) goto con_reserva;
@@ -1396,8 +1426,8 @@ con_reserva: ;
 /* Helper: aloca un string a partir de una const-string C. H2 (V2): los
  * strings son TYPE_ARRAY_I8 con los bytes UTF-8 tal cual (1 byte/elem).
  * `len` = nº de bytes de `s`. */
-uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len) {
-    bpref_t h = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) len, (uint32_t) len);   /* V7/H7 #593 */
+static uint32_t heap_alloc_string(bpvm_t* vm, const char* s, size_t len, int para_error) {
+    bpref_t h = heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) len, (uint32_t) len, para_error);   /* V7/H7 #593 */
     if (h.v == 0u) return 0;
     uint32_t ref = bpref_deref(vm, h);
     for (size_t i = 0; i < len; i++) {
@@ -1406,11 +1436,22 @@ uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len) {
     return (uint32_t) h.v;   /* string: idx|TAG (gen=0); reuso de strings = paso 6 */
 }
 
-/* Trigger manual de GC. Devuelve bytes liberados (aproximado: el delta
- * entre heap_next antes y después es 0 porque F2 v1 no compacta, así
- * que devolvemos 0). */
+uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len) {
+    return heap_alloc_string(vm, s, len, 0);
+}
+
+uint32_t bpvm_heap_alloc_string_error(bpvm_t* vm, const char* s, size_t len) {
+    return heap_alloc_string(vm, s, len, 1);
+}
+
+/* Trigger manual de GC (el `gc()` del programa). V7/H12, etapa 2b (5-oct): por el MISMO camino que el GC que salta
+ * solo al reservar —gc_stw—: con varios runs, el mundo parado (los demás, quietos en su punto seguro) y un colector a
+ * la vez (si otro ya colecta, se espera a que acabe: ésa es la colecta). Antes sólo cogía el cerrojo, y con dos runs
+ * recogía mientras el otro seguía ejecutando, con un objeto recién creado que el GC aún no veía. Con un run, igual
+ * que siempre. (SÓLO PRUEBAS: con el sabotaje de la cola, el camino de antes.) */
 void bpvm_heap_gc(bpvm_t* vm) {
     bpvm_smp_lock(vm);
-    bpvm_gc(vm);
+    if (bpvm_la_cola.sabotaje_gc) bpvm_gc(vm);
+    else                          gc_stw(vm);
     bpvm_smp_unlock(vm);
 }

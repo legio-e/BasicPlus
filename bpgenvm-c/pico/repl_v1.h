@@ -19,6 +19,7 @@
 #define BPVM_PICO_REPL_V1_H
 
 #include <stddef.h>
+#include <stdint.h>   /* V7/H12, 2b: g_run2_pila */
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,6 +55,13 @@ void repl_v1_run(void);
  * Se expone para que el arranque de main.c use EL MISMO cálculo que el RUN y
  * el INFO, en vez de copiarlo. */
 size_t vm_stack_region_bytes(void);
+
+/* V7/H12 — la pila de cada tarea `run`: 16 KB (el GC corre en ella y su marcado es recursivo; el porqué, en el .c). */
+#define PICO_RUN_PILA_BYTES (16u * 1024u)
+/* V7/H12, 2b — la pila del 2º run (`vm.runs=2` en el ENV): la aparta el arranque del TECHO del bloque de la VM (main.c,
+ * pico_memoria), así que sólo cuesta con dos runs. NULL: no se apartó (un run, o la VM en la PSRAM: entonces la
+ * cintura la pide a malloc, que tiene la SRAM libre). */
+extern uint8_t* g_run2_pila;
 
 #ifdef __cplusplus
 }

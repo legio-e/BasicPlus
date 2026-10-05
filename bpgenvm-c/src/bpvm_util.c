@@ -101,7 +101,31 @@ static const char* g_scratch_owner = NULL;
 
 size_t bpvm_scratch_capacity(void) { return sizeof g_scratch.bytes; }
 
-void* bpvm_scratch_take(size_t n, const char* quien) {
+/* V7/H12, etapa 2b (5-oct) — mirar si está libre y quedársela, JUNTOS: con dos runs (y con `io`, que la pide para el
+ * cable durante un RUN) dos podían verla libre a la vez y quedársela los dos. Con el cerrojo de la cola, que es
+ * permanente, y que la VM REGISTRA aquí al crearla (bpvm_scratch_set_cerrojo, desde bpvm_cola_asegurar): este fichero
+ * no depende de la VM —para eso vive aparte (arriba)—, y una herramienta que lo enlaza sin ella, con un solo hilo, no
+ * necesita cerrojo. En el arranque aún no lo hay, y sólo hay un hilo. Nadie la pide con ese cerrojo ya cogido (el GC
+ * y el planificador no la usan): no se anida. Ocupada, lo de siempre: NULL y el llamante falla con su nombre. */
+static void zona_nada(void) { }
+static bpvm_scratch_cerrojo_fn g_zona_cerrar = zona_nada;
+static bpvm_scratch_cerrojo_fn g_zona_abrir  = zona_nada;
+
+void bpvm_scratch_set_cerrojo(bpvm_scratch_cerrojo_fn cerrar, bpvm_scratch_cerrojo_fn abrir) {
+    g_zona_cerrar = (cerrar && abrir) ? cerrar : zona_nada;
+    g_zona_abrir  = (cerrar && abrir) ? abrir  : zona_nada;
+}
+
+static void zona_cerrar(void) { g_zona_cerrar(); }
+static void zona_abrir(void)  { g_zona_abrir(); }
+
+/* V7/H12, 2b — el MISMO cerrojo, para otros servicios sin VM que con dos runs comparten una tabla pequeña y no pueden
+ * pedirle el suyo a la VM (la HAL: el anillo de la UART, las migas, el reloj). Secciones cortas y que no esperan; y
+ * nunca con el cerrojo de la VM ya cogido (es el mismo, y no es recursivo). */
+void bpvm_cerrojo_comun_cerrar(void) { g_zona_cerrar(); }
+void bpvm_cerrojo_comun_abrir(void)  { g_zona_abrir(); }
+
+static void* scratch_take(size_t n, const char* quien, int avisar) {
     const char* q = quien ? quien : "?";
     if (n > sizeof g_scratch.bytes) {
         /* NO se trunca: el llamante recibe NULL y decide. Truncar en silencio
@@ -110,29 +134,42 @@ void* bpvm_scratch_take(size_t n, const char* quien) {
                   q, (unsigned long) n, (unsigned long) sizeof g_scratch.bytes);
         return NULL;
     }
-    if (g_scratch_owner) {
-        bpvm_diag("[bpvm] scratch OCUPADA: la tiene '%s' y la pide '%s' "
-                  "(dos operaciones a la vez que se creian exclusivas)",
-                  g_scratch_owner, q);
+    zona_cerrar();
+    const char* tenia = g_scratch_owner;
+    if (!tenia) g_scratch_owner = q;
+    zona_abrir();
+    if (tenia) {
+        if (avisar)
+            bpvm_diag("[bpvm] scratch OCUPADA: la tiene '%s' y la pide '%s' "
+                      "(dos operaciones a la vez que se creian exclusivas)",
+                      tenia, q);
         return NULL;
     }
-    g_scratch_owner = q;
     return g_scratch.bytes;
 }
 
+void* bpvm_scratch_take(size_t n, const char* quien) { return scratch_take(n, quien, 1); }
+
+/* V7/H12, 2b — la misma, sin el aviso si está ocupada: la usa quien va a esperar a que se suelte (un builtin con dos
+ * runs, cuando la tiene el otro: builtins.c). Que no cabe sí se avisa: eso no se arregla esperando. */
+void* bpvm_scratch_take_quieto(size_t n, const char* quien) { return scratch_take(n, quien, 0); }
+
 void bpvm_scratch_give(const char* quien) {
     const char* q = quien ? quien : "?";
-    if (!g_scratch_owner) {
+    zona_cerrar();
+    const char* tenia = g_scratch_owner;
+    g_scratch_owner = NULL;
+    zona_abrir();
+    if (!tenia) {
         bpvm_diag("[bpvm] scratch: '%s' la suelta sin haberla cogido", q);
         return;
     }
-    if (quien && g_scratch_owner != quien && strcmp(g_scratch_owner, quien) != 0) {
+    if (quien && tenia != quien && strcmp(tenia, quien) != 0) {
         /* Soltar la zona de otro le deja el trabajo a medias sin que se entere.
          * Se avisa Y se suelta igual: quedársela colgada bloquearía a todos. */
         bpvm_diag("[bpvm] scratch: la suelta '%s' pero la tenia '%s'",
-                  q, g_scratch_owner);
+                  q, tenia);
     }
-    g_scratch_owner = NULL;
 }
 
 /* ── H13/#17: el parte del use-after-free ──────────────────────────────────

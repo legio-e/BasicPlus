@@ -4688,13 +4688,134 @@ rascar, los ficheros), y un lote en la Pico 2 con `vm.runs=1` (la puerta de la 2
 permanentes en el simulado; (5) la Pico 2 con `vm.runs=2`: la tanda, `run_placa`, el estrés con dos runs, el aviso
 perdido con su imagen de control, PrintBench de un programa de un hilo, las pilas y dos horas de resistencia.
 
-**Para decidir, antes de diseñar en detalle**:
-- la GUI con dos runs: para la 2b, un programa que carga `Gui` o `Forms` va con UN run (el 0); `invokeLater`, para la
-  etapa 3 en el P4;
-- SQLite (la Metro), igual: con un run si el programa la carga;
-- la zona de rascar, cuando dos la piden a la vez: esperar a que la suelte el otro, o fallar con un error con nombre;
-- la pila del segundo run en la Pico: estática siempre (16 KB menos para la VM aunque `vm.runs=1`) o sacada del bloque
-  de la VM sólo si `vm.runs=2` (con `vm.runs=1`, la VM queda como hoy).
+**Se le propusieron cuatro decisiones** (la GUI y SQLite con un run, la zona de rascar, la pila del segundo run) y
+**Eduardo cambió el planteamiento** (5-oct, 00:15): *«El AOT de momento lo dejamos pendiente […] de momento hemos
+pospuesto los natives, así que este problema queda aparcado temporalmente […] Ponemos el 2º run, conseguimos que
+funcione con lo mínimo y vamos ampliando la cobertura. De momento solamente 2 run ejecutando código BP normal, sin AOT
+ni LVGL.»* Y preguntó qué querían decir dos de los críticos —explicados con un ejemplo: la condición (pieza nuestra
+sobre FreeRTOS: una caja de un aviso; con dos runs dormidos y un KILL, despierta uno, el otro no, y el programa no
+acaba) y el `gc()` (coge el cerrojo pero no para al otro run, que sigue ejecutando con un objeto nuevo que el GC no
+ve)—.
+
+**La 2b mínima** (el alcance de Eduardo): dos runs ejecutando código BP normal.
+1. el segundo run: su tarea, su número, y `vm.runs` en el ENV (la vuelta atrás);
+2. la condición con un aviso por run (las notificaciones de tarea de FreeRTOS); sin ella, cuelgues;
+3. el `gc()` del programa con el mundo parado;
+4. lo que comparte el código BP normal y hoy nada protege, porque con un run nunca coinciden dos hilos dentro de un
+   builtin: los eventos (`raise`), la zona de rascar de `listDir` y el registro de ficheros abiertos;
+5. mientras tanto, un programa que carga natives o la GUI va con UN run aunque haya dos (que no se rompa nada).
+Aparcado (AOT y natives, LVGL, SQLite): el contexto del AOT por tarea, la native aparcada por el mundo parado, el
+depósito de ejecutores, el puente native→BP. El orden: el micro simulado con dos runs permanentes primero; la Pico 2
+después (la condición de FreeRTOS sólo se puede probar allí: la de pthreads no pierde avisos).
+
+**El GC con dos runs** (5-oct, con Eduardo). Propuso una tarea GC en la rueda —IO, Run1, Run2, GC— que limpie cuando
+los runs no corren, y que los bloquee hasta acabar si `io` deja el turno pronto. Lo que se le explicó: que un run no
+corra no basta —FreeRTOS lo expropia en cualquier punto, cada tick, también a mitad de crear un objeto con su
+referencia aún en un registro, donde el GC no mira—; tiene que estar parado en un PUNTO SEGURO (entre dos
+instrucciones BP), y eso es el «mundo parado» que ya existe (el colector levanta la bandera, cada run la ve en su
+siguiente punto seguro y espera; el colector limpia y la baja). A *«Pero si tenemos 2 runs, ¿tenemos 2 GC? Eso no
+puede ser»*: no —un heap y una colecta a la vez; la hace el run que se queda sin memoria, y si el otro también se
+queda, no empieza otra: espera a que acabe y reintenta (`gc_stw`, «UN SOLO COLECTOR», probado con dos y cuatro runs en
+el PC)—. **Decidido** (Eduardo: *«OK»*): para el mínimo, el GC de hoy —uno, con el mundo parado—, con el `gc()` del
+programa por el mismo camino; la tarea GC de su esquema (un GC visible como tarea, que además podría limpiar en los
+ratos en que los dos runs ya esperan), como mejora después.
+
+#### La 2b mínima, en el PC (5-oct)
+
+Lo de la lista, hecho y probado en el PC, cada arreglo con su prueba y su sabotaje (en rojo):
+- **El 2º run**: `vm.runs` en el ENV (1..2; `bpvm_boot2_claves`, antes de la memoria y de la cintura); en el micro
+  simulado, `--runs=N`; el número de cada run (su marca en los hilos que tiene entre manos). Un programa con natives,
+  la GUI, SQLite o el depurador va con UNO aunque haya dos, y lo dice el log del RUN.
+- **El `gc()` del programa**, por `gc_stw`: el mundo parado. `test-cola` 5 (la regla: ninguna colecta con el otro run
+  dentro de su cuanto; con el camino de antes, miles).
+- **Los eventos** (`raise` encola bajo el cerrojo; no se resucita un hilo que otro run tiene entre manos; el `join`
+  cuenta los eventos que su hilo debe): `test-cola` 6 y 7.
+- **La zona de rascar**: mirar si está libre y quedársela, de una vez (con el cerrojo de la cola, que es permanente).
+- **Los ficheros abiertos**: la regla de siempre —para escribir, uno a la vez; para leer, los que quieran (Eduardo: *«no
+  se podía abrir el mismo fichero 2 veces en modo escritura, pero en modo lectura sí»*)— no cambia; lo que rompían dos
+  runs era CUMPLIRLA: los dos miraban «¿ya está abierto?» a la vez, lo veían libre y lo abrían los dos. Mirar, abrir y
+  apuntarlo es ahora un paso, bajo el cerrojo. `test-cola` 8 (`FicherosDosRuns`: dos escritores nunca a la vez, dos
+  lectores siempre; sin el cerrojo, «a la vez: 2»).
+- **La reserva de emergencia (#355)**: quién podía gastarla lo decía una bandera DE LA VM (`building_error`), puesta
+  mientras se construía una excepción: con dos runs la veía el otro —una reserva cualquiera suya se llevaba la del error,
+  y al acabar uno la bajaba con el otro aún construyendo—. Ahora lo dice cada reserva (`bpvm_heap_nuevo_error`,
+  `bpvm_heap_alloc_string_error`): nada compartido. No había NINGUNA prueba que la gastara: `test-reserva`.
+- **La condición de FreeRTOS**, UNA para las tres familias (`src/platform_freertos_cond.inc`, que incluyen
+  `src/platform_freertos.c` —la STM32—, `pico/platform_freertos.c` y `esp32/common/platform_esp32.c`; fuera 333 líneas
+  de copias): una lista de esperadores, cada uno en su pila y con SU notificación de tarea en un índice propio (el 1;
+  `configTASK_NOTIFICATION_ARRAY_ENTRIES` 2 en la Pico y la STM32, y en el `sdkconfig` de las cinco ESP). Probada en el PC
+  con el KERNEL DE FREERTOS DE VERDAD —su port de Windows, `make test-frcond`—, con la de antes como control, que sale
+  roja donde decía el mapa: un `broadcast` con dos esperando despierta a uno («2 esperando, 1 despiertos»), un tercero
+  se lleva el aviso de otro, y en el estrés con esperas sin plazo —como esperan los runs— uno se queda DORMIDO. Las tres
+  familias compilan con ella (la Pico, la STM32 y la S3: `fr_cond_esperar` en las tres imágenes).
+- **La Pico**: el 2º run, `run2`, a la misma prioridad. Su pila (16 KB, como la del primero: el marcado del GC es
+  recursivo y corre en el run que se queda sin memoria) sale del TECHO del bloque de la VM sólo con `vm.runs=2` —con la
+  VM en la PSRAM, de malloc, que tiene la SRAM—: con un run no cuesta nada (el `.bss` crece 96 B, el TCB). El INFO
+  dice los runs EN VIGOR (`runs`, común) y la marca de la pila del 2º (`run2StackFreeBytes`).
+
+Las tandas contra el micro simulado con `--runs=2`: la V7 (42 pruebas) igual que con uno —todo IDÉNTICO salvo lo que
+tampoco lo es con uno (`GuiShot`: el simulado sin GUI no deja la captura) y las de AOT, que el simulado salta—, con los
+cuantos repartidos entre los dos runs (115 659 y 81 229 en la más larga); `run_tarea_smoke` con el caso K.
+
+#### La revisión adversarial de la 2b (5-oct): lo que comparte el código BP normal con dos runs
+
+Tres frentes en paralelo —el núcleo; los builtins y el FS; la HAL y la plataforma—, con la pregunta: ¿qué estado
+compartido toca el código BP normal sin cerrojo, donde dos runs a la vez corrompen, cuelgan, pierden algo o dan otro
+resultado que con uno? Antes de la 2b nada de esto se veía: con un run, un builtin entero —y cada instrucción— va de
+una vez. Cada hallazgo, comprobado a mano; los de la 2b, arreglados con su prueba (`test-cola`, las partes 9 a 15) y su
+sabotaje, rojo:
+- **Un `owner` soltado dos veces** (parte 9, `OwnerCarrera`). Dos hilos que asignan a la vez el MISMO campo owner —el
+  propietario es uno; los hilos, dos, sin Mutex: la carrera es del programa, pero la VM no puede romperse— leían el
+  mismo objeto, los dos lo veían vivo y los dos lo soltaban: el bloque dos veces en la lista de libres, que se apuntaba
+  a sí misma (la reserva siguiente, dando vueltas con el cerrojo cogido: el sabotaje, el proceso colgado). Eduardo
+  preguntó cómo, si el GC es uno y liberar pasa por un método único: la 2ª liberación llega detrás, sí, pero MIRÓ si
+  vivía antes, fuera del cerrojo. Ahora suelta quien MATA el handle (`bpvm_handle_kill` dice si lo mató él: mirar y
+  matar van juntos), y soltar un bloque ya libre no hace nada. Y con dos runs el hueco no vuelve a la lista hasta el
+  siguiente GC: otro hilo puede estar a mitad de una instrucción sobre el objeto —miró que vivía y aún no ha escrito— y
+  el hueco, ya devuelto, podía ser de un objeto nuevo. El objeto muere en el acto («objeto eliminado» para quien lo use
+  después); sólo su memoria espera. Con un run, como siempre.
+- **Un `print` que no cabe en la cola de salida** (parte 10, `LineasLargas`: 8192 caracteres; la cola, 4 KB en el PC y
+  1 KB en la Pico): entra a trozos soltando el cerrojo, y el `print` del otro hilo se colaba entre dos (#600). Ahora,
+  quien escribe a trozos marca la cola; los demás esperan a que acabe.
+- **El `join` y el despertar dan por acabado un hilo que su run aún no ha soltado** (parte 11, `JoinLinea`): el hilo
+  queda TERMINATED antes de soltar su línea a medias, y «finN» salía antes que «aN». La regla de la resurrección,
+  general: lo que otro run tiene entre manos no se toca ni se da por acabado. Cubre también el `sleep` (la hora y el
+  estado en dos escrituras sin cerrojo).
+- **La zona de rascar, ocupada por el otro run** (parte 12, `ListDirDos`): un `listDir` correcto lanzaba «la zona de
+  rascar está ocupada». Ahora se espera, y sin contarse como run en marcha —el otro la tiene mientras reserva memoria y
+  puede necesitar parar el mundo—; el `show` del NeoPixel, igual (se saltaba la trama en silencio).
+- **Un `gc()` tras un mundo parado ajeno** (parte 13, `ColectaAjena`): parar el mundo no es siempre colectar (lo para
+  `Heap.compact()` —que con otro hilo vivo mira y no compacta— y la tabla de handles al crecer); quien llegaba en ese
+  momento volvía sin colecta: un `gc()` que no colectaba, y una reserva con «No space in heap» sobre un heap lleno de
+  basura. Ahora, si la cuenta de colectas no se movió mientras esperaba, colecta él.
+- **El error del programa, el primero** (parte 14, `ErrorPrimero`): cada `throw` escribía el texto del EXITED, también
+  los atrapados; un hilo moría sin atrapar (#608), otro atrapaba algo después, y el EXITED decía el de éste. Ya pasaba
+  con UN run. Ahora lo fija el primero que lo es, bajo el cerrojo.
+- **Los ficheros**: cerrar sacaba el fichero de la lista y lo cerraba en el motor FUERA del cerrojo (lo había hecho yo
+  esa mañana): en la ventana, otro run lo abría para escribir —en la SD, FatFs libera sus clusters y el cierre del
+  primero escribía en ellos: la tarjeta, corrompida—. Ahora mirar, sacarlo y cerrarlo van juntos, y cada operación del
+  cursor (leer, escribir, `seek`, `flush`, `readLine` en dos tramos) mira si está abierto y hace lo suyo bajo el cerrojo
+  de los File (parte 15, `FileCompartido`: un hilo escribe y otro cierra; con el sabotaje, el proceso caído —un motor ya
+  cerrado—). Y `parseFloat`: el `strtod` de newlib, que en la Pico reparte sus números grandes desde un estado único para
+  todas las tareas, bajo el cerrojo.
+- **Builtins que leen un array del programa en dos pasadas** (`__charsToString`, `__i2cExec`, `__spiDevExec`): con otro
+  hilo cambiándolo entre medias (un StringBuilder o una Transaction compartidos), escribían fuera del bloque, de la pila
+  de C o de tx/rx. Ahora: no más allá de lo reservado; cada operación leída una vez; o vuelta a mirar contra lo validado
+  (si cambió, «la transacción cambió mientras se ejecutaba»). Por construcción: provocarlo pide un hilo dentro del
+  builtin, entre sus dos pasadas.
+- **La HAL** (por construcción; la puerta en la placa lo ejercita): reclamar un pin, abrir o soltar un bus —la cuenta y
+  el hardware, juntos—, iniciar una UART, una tira o un canal del ADC, y leer el ADC —elegir el canal y convertir: el
+  conversor es uno, y un hilo leía el canal del otro—, las migas y el reloj (64 bits en una de 32), bajo un cerrojo de
+  la HAL (el suyo, no el de la VM: la HAL escribe trazas en la salida, la salida puede esperar a `io`, e `io` coge el de
+  la VM para avisar de un KILL). Sacar del anillo de la UART, bajo el cerrojo común. El árbitro de los buses y la memoria
+  de la fachada SPI, creados con un solo hilo vivo.
+- **Lo que se queda en fichas** (anterior a la 2b, o sólo diagnóstico): `#654` (el `STAT` con `base` cambia el proyecto
+  en mitad de un RUN), `#655` (un hilo resucitado sin evento que inyectar), `#656` (soltar un `owner`, recursivo),
+  `#657` (los builtins de fichero entero no miran los abiertos), `#658` (el volcado del log a la flash) y `#659` (el
+  diagnóstico que dos runs mezclan).
+- **Por un fallo de la red, mío**: la zona de rascar con el cerrojo de la cola hacía depender `bpvm_util.c` de la VM, y
+  ese fichero vive aparte para que las herramientas lo enlacen sin ella (`test-bmgr` no enlazaba). El cerrojo lo
+  registra ahora la VM con un gancho, como el canal de diagnóstico.
 
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)

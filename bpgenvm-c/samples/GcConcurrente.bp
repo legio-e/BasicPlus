@@ -1,0 +1,60 @@
+// GcConcurrente.bp — V7/H12, etapa 2b (5-oct): el `gc()` del programa con DOS runs. Un hilo pide colectas sin parar
+// mientras otro, en el otro run, construye cadenas y las comprueba. El `gc()` tiene que parar el mundo como el GC que
+// salta solo: si recogiera con el otro run ejecutando, un objeto recién creado que el GC todavía no ve se liberaría
+// vivo (test/test_cola.c, la parte 5, con su sabotaje). Determinista en el resultado: «errores: 0».
+module GcConcurrente
+  class Recolector extends Thread
+    var vueltas: integer
+
+    public function Recolector(n: integer)
+      super(4096)
+      this.vueltas := n
+    end Recolector
+
+    public function run()
+      var i: integer := 0
+      while i < this.vueltas do
+        gc()
+        i := i + 1
+      endwh
+    end run
+  end Recolector
+
+  class Constructor extends Thread
+    var n: integer
+    var errores: integer
+
+    public function Constructor(n: integer)
+      super(8192)
+      this.n := n
+      this.errores := 0
+    end Constructor
+
+    public function run()
+      var i: integer := 0
+      while i < this.n do
+        var s: string := "pieza " + intToString(i) + " de " + intToString(i * 3) + " fin"
+        var t: string := "pieza " + intToString(i)
+        t := t + " de " + intToString(i * 3) + " fin"
+        if s != t then
+          this.errores := this.errores + 1
+        endif
+        i := i + 1
+      endwh
+    end run
+
+    public function fallos(): integer
+      return this.errores
+    end fallos
+  end Constructor
+
+  function Main()
+    var r: Recolector := Recolector(300)
+    var c: Constructor := Constructor(3000)
+    r.start()
+    c.start()
+    r.join()
+    c.join()
+    print "errores: " + c.fallos()
+  end Main
+end GcConcurrente

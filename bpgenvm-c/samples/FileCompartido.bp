@@ -1,0 +1,60 @@
+// FileCompartido.bp — V7/H12, etapa 2b (5-oct, la revisión): UN File COMPARTIDO POR DOS HILOS, uno escribe y el otro
+// lo cierra. La carrera es del programa (sin Mutex: lo escrito, lo que salga), pero la VM no puede romperse: con dos
+// runs, los dos miraban «¿abierto?» a la vez y uno escribía —o volvía a cerrar— con el fichero ya cerrado por el otro
+// (en el PC, un FILE* cerrado: el proceso podía caer; en la placa, littlefs sobre un fichero cerrado). Ahora mirar y
+// hacer, juntos bajo el cerrojo de los File: el que llega tarde recibe «fichero cerrado». test/test_cola.c, la parte
+// 15, con la ventana ensanchada y su sabotaje. Determinista en el resultado: «rondas: 100».
+module FileCompartido
+  import IO
+
+  class Escribe extends Thread
+    var f: IO.File
+    public function Escribe(f: IO.File)
+      super(8192)
+      this.f := f
+    end Escribe
+    public function run()
+      var i: integer := 0
+      while i < 200 do
+        try
+          this.f.write(toBytes("linea\n"))
+        catch e: RuntimeError
+          // cerrado por el otro: fin
+          return
+        endtry
+        i := i + 1
+      endwh
+    end run
+  end Escribe
+
+  class Cierra extends Thread
+    var f: IO.File
+    public function Cierra(f: IO.File)
+      super(8192)
+      this.f := f
+    end Cierra
+    // espera a que el otro esté escribiendo (si no, cierra antes de que empiece y no se cruzan nunca)
+    public function run()
+      sleep(1)
+      this.f.close()
+      this.f.close()
+    end run
+  end Cierra
+
+  function Main()
+    var r: integer := 0
+    while r < 100 do
+      var f: IO.File := IO.File("compartido_2b.txt", "w")
+      var a: Escribe := Escribe(f)
+      var b: Cierra := Cierra(f)
+      a.start()
+      b.start()
+      a.join()
+      b.join()
+      f.close()
+      r := r + 1
+    endwh
+    print "rondas: " + r
+    IO.removeFile("compartido_2b.txt")
+  end Main
+end FileCompartido

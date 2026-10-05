@@ -312,15 +312,19 @@ static void handle_kill_idx(bpvm_t* vm, uint32_t idx) {
 
 /* Paso 4c — libera el slot de un handle (owner-free): delega en handle_kill_idx.
  * No-op para null/constantes. El TAG_FREE_BIT del bloque físico evita el doble-free real. */
-void bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
-    if ((r.v & BPVM_HANDLE_TAG) == 0u) return;
+int bpvm_handle_kill(bpvm_t* vm, bpref_t r) {
+    if ((r.v & BPVM_HANDLE_TAG) == 0u) return 0;
+    int mato = 0;
     bpvm_smp_lock(vm);   /* paso 7: serializa la free-list contra registers/kills de otros workers */
     /* Paso 7b.1 — FREE CON GENERACIÓN VALIDADA (refuerzo de la maqueta): solo el PRIMER
      * kill de un handle vivo actúa; un kill RANCIO (slot ya reciclado, gen no matchea) es
      * NO-OP seguro — si no, bumpearía la gen del ocupante NUEVO y lo corromperría (doble
-     * free-list, etc). check+kill atómicos bajo el lock = el compareAndSet(slot,g,g+1). */
+     * free-list, etc). check+kill atómicos bajo el lock = el compareAndSet(slot,g,g+1).
+     * V7/H12, 2b — y lo DICE: el que lo mató es el único que sigue soltándolo (bpvm_free_owned). */
     if (!bpvm_ref_dead(vm, r)) {
         handle_kill_idx(vm, (uint32_t) r.v & ~BPVM_HANDLE_TAG);
+        mato = 1;
     }
     bpvm_smp_unlock(vm);
+    return mato;
 }

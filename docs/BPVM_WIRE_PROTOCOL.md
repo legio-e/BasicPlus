@@ -272,6 +272,12 @@ agua); -1 si no ha habido RUN o la plataforma no lo sabe (el PC). Desde el paso 
 `LIST` troceados durante un RUN: se publica para mirarlo, no suponerlo. Con 4 KB sobraban 332 B en la S3 y 700 en la
 P4, y en la familia ESP32 pasó a 6 KB (2316 y 2748 libres); en la Pico y la STM32, 4 KB con 1208 libres (1-oct).
 
+`runs` (V7/H12, etapa 2b, 5-oct): los runs permanentes EN VIGOR —las tareas `run` que la placa creó y esperan en la
+cola—, no los que pide el ENV (`vm.runs`): una familia que aún no crea el segundo, o que no pudo (sin pila), dice 1; 0,
+sin tarea `run`. Un programa con natives, la GUI, SQLite o el depurador va con uno aunque haya dos (lo dice el log del
+RUN). `run2StackFreeBytes` (sólo la Pico, con dos runs): la marca de agua de la pila del segundo; `runStackFree` es la
+del run que cerró el último programa.
+
 #### `TIME` (request)
 
 Sincroniza el RTC del dispositivo con el wall clock del IDE.

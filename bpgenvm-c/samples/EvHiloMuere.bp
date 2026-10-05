@@ -1,0 +1,39 @@
+// EvHiloMuere.bp — V7/H12, etapa 2b (5-oct): UN HILO QUE MUERE DEBIENDO UN EVENTO, CON DOS RUNS. El hilo levanta un
+// evento y muere de una excepción sin atrapar; el main sigue imprimiendo. Una excepción sin atrapar en un hilo que no
+// es el main acaba ESE hilo, no el programa (#608): salen las 40 líneas del main, el handler, y al final RUNTIME_ERROR.
+// Con dos runs, el otro run no puede resucitar al hilo (para su evento pendiente, #342) mientras el run que lo ejecutó
+// aún lo tiene entre manos: ese run, al volver, lo vería vivo y tomaría su excepción por la del programa, que se
+// cortaría (test/test_cola.c, la parte 7, con la ventana ensanchada y su sabotaje).
+module EvHiloMuere
+  class Muere extends Thread
+    event adios(n: integer)
+
+    public function Muere()
+      super(4096)
+    end Muere
+
+    public function run()
+      raise adios(1)
+      throw RuntimeError("el hilo muere sin atrapar")
+    end run
+  end Muere
+
+  class Oyente
+    function event atender(n: integer)
+      print "handler"
+    end atender
+  end Oyente
+
+  function Main()
+    var t: Muere := Muere()
+    var o: Oyente := Oyente()
+    t.adios := o::atender
+    t.start()
+    var i: integer := 0
+    while i < 40 do
+      print "linea " + i
+      sleep(2)
+      i := i + 1
+    endwh
+  end Main
+end EvHiloMuere

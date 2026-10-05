@@ -757,12 +757,18 @@ long bpvm_fs_fread(void* blk, uint8_t* dst, uint32_t n) {
     return r;
 }
 
+/* SÓLO PRUEBAS (test_cola, V7/H12 2b): la ventana entre «¿está abierto?» y el motor, ensanchada. Mirar y llamar al motor
+ * no van juntos aquí: los junta, con dos runs, el cerrojo de los File de quien llama (builtins.c). Si otro hilo lo
+ * cerrase en medio, `h->be` ya sería NULL. */
+void (*bpvm_fs_ensayo_cursor)(void) = NULL;
+
 long bpvm_fs_fwrite(void* blk, const uint8_t* src, uint32_t n) {
     bpvm_fs_file_t* h = fh_de(blk);
     if (!h) return fs_falla(BPVM_FS_FAIL_OTHER, "el fichero no esta abierto");
     if (h->kind != 1 || h->mode == BPVM_FS_O_READ) return fs_falla(BPVM_FS_FAIL_OTHER, "el fichero es de solo lectura");
     if (!src && n) return fs_falla(BPVM_FS_FAIL_OTHER, "argumentos no validos");
     if (n == 0) return 0;
+    if (bpvm_fs_ensayo_cursor) bpvm_fs_ensayo_cursor();   /* SÓLO PRUEBAS */
     uint32_t n0 = s_fallo_n;
     long r = h->be->fwrite(fh_st(h), src, n);
     if (r < 0) return sin_motivo(-1, n0);

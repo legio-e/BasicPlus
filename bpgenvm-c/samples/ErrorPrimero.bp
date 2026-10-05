@@ -1,0 +1,31 @@
+// ErrorPrimero.bp — V7/H12, etapa 2b (5-oct, la revisión): EL ERROR DEL PROGRAMA ES EL PRIMERO. Un hilo muere sin
+// atrapar (un índice fuera de rango) y el programa sigue (#608); después el main ATRAPA una división por cero. El EXITED
+// (bpvm_runtime_error) tiene que decir el del hilo que murió, no el de la atrapada: hasta hoy cada throw escribía ese
+// texto, también los que se atrapan, y ganaba el último. Pasa ya con UN run; con dos, además, dos escrituras a la vez
+// lo mezclaban. test/test_cola.c, la parte 14. Determinista: «atrapada» y «fin», y RUNTIME_ERROR con el del hilo.
+module ErrorPrimero
+  import Core
+
+  class Muere extends Thread
+    public function Muere()
+      super(4096)
+    end Muere
+    public function run()
+      var a: integer[] := [1, 2, 3]
+      print a[99]
+    end run
+  end Muere
+
+  function Main()
+    var m: Muere := Muere()
+    m.start()
+    m.join()
+    try
+      var z: integer := 0
+      print 5 / z
+    catch e: RuntimeError
+      print "atrapada"
+    endtry
+    print "fin"
+  end Main
+end ErrorPrimero

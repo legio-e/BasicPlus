@@ -111,6 +111,7 @@ void bpvm_boot2_claves(const bpvm_env_t* env) {
      * en bpvm_stack_region_bytes(). Antes de la memoria: la línea de la Pico ya lo cuenta. */
     bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(env, "stack", 0));
     bpvm_set_quantum_ops(bpvm_env_get_long(env, "quantum", 0));   /* #462 */
+    bpvm_set_runs(bpvm_env_get_long(env, "vm.runs", 0));          /* V7/H12, 2b: los runs permanentes; antes de la cintura */
 }
 
 void bpvm_boot2_repartir(const bpvm_boot2_familia_t* f) {

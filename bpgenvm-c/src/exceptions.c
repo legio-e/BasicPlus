@@ -20,6 +20,25 @@
 #include <string.h>
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include "bpvm_out.h"     /* V7/H7 #607: la línea del hilo (bpvm_linea_*), para decir que un hilo muere */
+#include <stdarg.h>
+
+/* V7/H12, 2b (la revisión) — EL ERROR DEL PROGRAMA, el que dice el EXITED (bpvm_runtime_error): lo fija el PRIMERO que
+ * lo es —un hilo que muere sin atrapar, una excepción que no se pudo construir— y los de después no lo pisan. Antes lo
+ * escribía CADA throw, también los que se atrapan: un hilo moría sin atrapar (#608), otro atrapaba después cualquier
+ * error, y el EXITED decía el de éste. Y con dos runs, dos escrituras a la vez lo mezclaban. Bajo el cerrojo de la VM:
+ * nadie llega aquí con él cogido (el intérprete, y builtin_throw, que se llama sin él). El prólogo de cada programa lo
+ * deja vacío (bpvm.c). */
+static void fija_runtime_error(bpvm_t* vm, const char* fmt, ...) {
+    char texto[sizeof vm->runtime_error];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(texto, sizeof texto, fmt, ap);
+    va_end(ap);
+    bpvm_smp_lock(vm);
+    if (vm->runtime_error[0] == '\0' || bpvm_la_cola.sabotaje_error)   /* (el sabotaje: SÓLO PRUEBAS, test_cola) */
+        snprintf(vm->runtime_error, sizeof vm->runtime_error, "%s", texto);
+    bpvm_smp_unlock(vm);
+}
 
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,
                   int32_t saved_bp, int32_t saved_cs, int32_t expected_class) {
@@ -132,8 +151,8 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
     int es_excepcion = (exc_cls == 0u) || (thrown_class != 0u && is_descendant_of(vm, thrown_class, exc_cls));
     if (!es_excepcion) {
         bpvm_diag("[bpvm]   lo lanzado no es una excepcion (clase %s)", clase[0] ? clase : "desconocida");
-        if (clase[0]) snprintf(vm->runtime_error, sizeof(vm->runtime_error), "throw de un objeto que no es una excepcion: %.140s", clase);
-        else          snprintf(vm->runtime_error, sizeof(vm->runtime_error), "throw de un objeto que no es una excepcion");
+        if (clase[0]) fija_runtime_error(vm, "throw de un objeto que no es una excepcion: %.140s", clase);
+        else          fija_runtime_error(vm, "throw de un objeto que no es una excepcion");
         informa_hilo_muerto(vm, tc, "throw de un objeto que no es una excepcion",
                             strlen("throw de un objeto que no es una excepcion"));   /* #607 */
     } else
@@ -175,25 +194,21 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
              * hay objeto. */
             /* #532 — con la clase delante cuando se sabe: «excepcion no atrapada: Lib.MiError: texto». */
             if (n > 0 && clase[0]) {
-                snprintf(vm->runtime_error, sizeof(vm->runtime_error),
-                         "excepcion no atrapada: %.70s: %.90s", clase, buf);
+                fija_runtime_error(vm, "excepcion no atrapada: %.70s: %.90s", clase, buf);
             } else if (n > 0) {
-                snprintf(vm->runtime_error, sizeof(vm->runtime_error),
-                         "excepcion no atrapada: %.160s", buf);
+                fija_runtime_error(vm, "excepcion no atrapada: %.160s", buf);
             } else if (clase[0]) {
-                snprintf(vm->runtime_error, sizeof(vm->runtime_error),
-                         "excepcion no atrapada: %.150s (sin mensaje)", clase);
+                fija_runtime_error(vm, "excepcion no atrapada: %.150s (sin mensaje)", clase);
             } else {
-                snprintf(vm->runtime_error, sizeof(vm->runtime_error),
-                         "excepcion no atrapada (sin mensaje)");
+                fija_runtime_error(vm, "excepcion no atrapada (sin mensaje)");
             }
             if (n > 0) informa_hilo_muerto(vm, tc, buf, n);                                  /* #607 */
             else       informa_hilo_muerto(vm, tc, "(sin mensaje)", strlen("(sin mensaje)"));
         } else {
             /* Ni siquiera hay objeto de mensaje. Que se sepa QUE paso: «exit 11»
              * a secas no distingue esto de un fallo de la propia VM. */
-            if (clase[0]) snprintf(vm->runtime_error, sizeof(vm->runtime_error), "excepcion no atrapada: %.150s (sin mensaje)", clase);
-            else          snprintf(vm->runtime_error, sizeof(vm->runtime_error), "excepcion no atrapada (sin mensaje)");
+            if (clase[0]) fija_runtime_error(vm, "excepcion no atrapada: %.150s (sin mensaje)", clase);
+            else          fija_runtime_error(vm, "excepcion no atrapada (sin mensaje)");
             informa_hilo_muerto(vm, tc, "(sin mensaje)", strlen("(sin mensaje)"));        /* #607 */
         }
     }
@@ -213,7 +228,8 @@ static bpref_t exc_heap_descarrilado(bpvm_t* vm) {
     if (!vm->reserva_descarrilada) return bpref_null();
     vm->reserva_descarrilada = 0;
     if (vm->heap_exc.v == 0u) return bpref_null();
-    snprintf(vm->runtime_error, sizeof(vm->runtime_error), "%s", BPVM_MSG_HEAP_DESCARRILADO);
+    /* (V7/H12, 2b: aquí se fijaba también el error del programa; ya no —puede atraparse—: si no se atrapa, lo fija el
+     * camino de «no atrapada», con su clase y este mismo mensaje) */
     return vm->heap_exc;
 }
 
@@ -223,10 +239,12 @@ bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
         bpref_t d = exc_heap_descarrilado(vm);   /* V7 #494 */
         if (d.v != 0u) return d;
     }
-    /* Guarda el detalle para que el host / wire lo surtan si el error acaba
-     * NO atrapado (espejo de link_error). En cada throw; solo se reporta si el
-     * run termina en BPVM_ERR_RUNTIME. */
-    snprintf(vm->runtime_error, sizeof(vm->runtime_error), "%s", msg ? msg : "");
+    /* (Aquí se guardaba el detalle en CADA throw, para el EXITED si acababa sin atrapar. V7/H12, 2b: ya no —lo pisaba
+     * un throw atrapado después, de otro hilo—. Si la excepción se construye y no se atrapa, lo fija el camino de «no
+     * atrapada» con su texto; si NO se puede construir, el detalle lo fija aquí abajo cada salida nula, y el hilo muere
+     * con él. fija_runtime_error, arriba.) */
+    if (bpvm_la_cola.sabotaje_error)   /* SÓLO PRUEBAS (test_cola): el camino de antes */
+        snprintf(vm->runtime_error, sizeof(vm->runtime_error), "%s", msg ? msg : "");
     /* Buscar el class_ptr de RuntimeError exportado por algún módulo.
      * El frontend Java sintetiza la clase y la exporta como data
      * symbol "<lib>.<mod>.RuntimeError" / "<mod>.RuntimeError" — la
@@ -285,6 +303,7 @@ have_class:
         } else {
             bpvm_diag_urgente("[bpvm] throw: SIN CLASE RuntimeError exportada, no hay con "
                       "que construir la excepcion: %s", msg ? msg : "");
+            fija_runtime_error(vm, "%s", msg ? msg : "");   /* V7/H12, 2b: el detalle, para el EXITED */
         }
         return bpref_null();
     }
@@ -300,29 +319,29 @@ have_class:
      *
      * El sitio importa: soltarla en el camino de reserva normal seria peor que
      * no tenerla, porque se la quedaria el programa. Aqui solo se gasta cuando
-     * ya estamos construyendo un error, que es para lo que existe. */
-    vm->building_error = 1;
+     * ya estamos construyendo un error, que es para lo que existe.
+     *
+     * V7/H12, 2b (5-oct): «estamos construyendo un error» lo dice cada una de las dos reservas (las _error), no una
+     * bandera de la VM: con dos runs, la del otro run. */
 
     /* Alocar el string del mensaje. */
     size_t mlen = msg ? strlen(msg) : 0;
-    uint32_t msg_ref = bpvm_heap_alloc_string(vm, msg ? msg : "", mlen);
+    uint32_t msg_ref = bpvm_heap_alloc_string_error(vm, msg ? msg : "", mlen);
     if (msg_ref == 0) {
         bpref_t d = exc_heap_descarrilado(vm);   /* V7 #494: el GC de esta reserva descarriló */
-        if (d.v != 0u) { vm->building_error = 0; return d; }
+        if (d.v != 0u) return d;
         /* #430 — sin memoria ni para el mensaje: la PREFABRICADA (idea de
          * Eduardo). Construida en el prologo del RUN cuando construir era
-         * gratis; lanzarla no aloja NADA. El detalle especifico ya quedo en
-         * vm->runtime_error (arriba) para el reporte de no-atrapados; el
-         * catch de BP ve e.msg="No space in heap", que es la verdad. */
+         * gratis; lanzarla no aloja NADA. El catch de BP ve e.msg="No space in
+         * heap", que es la verdad (el detalle, en el aviso). */
         if (vm->oom_exc.v != 0) {
             bpvm_diag("[bpvm] throw: sin memoria para el mensaje -> "
                       "excepcion PREFABRICADA (#430)");
-            vm->building_error = 0;
             return vm->oom_exc;
         }
         bpvm_diag_urgente("[bpvm] throw: sin memoria para el MENSAJE (%u B) ni con la "
                   "reserva de emergencia soltada", (unsigned) mlen);
-        vm->building_error = 0;
+        fija_runtime_error(vm, "%s", msg ? msg : "");   /* V7/H12, 2b: el detalle, para el EXITED */
         return bpref_null();
     }
     /* GC-safety: el msg AÚN no vive en ninguna raíz y la alocación del objeto de
@@ -332,19 +351,18 @@ have_class:
 
     /* Alocar el objeto RuntimeError. */
     uint16_t num_fields = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
-    bpref_t obj_h = bpvm_heap_nuevo(vm, BPVM_TYPE_OBJECT, class_ptr, (uint32_t) num_fields * 4);   /* V7/H7 #593: con su clase y su handle, al nacer */
+    bpref_t obj_h = bpvm_heap_nuevo_error(vm, BPVM_TYPE_OBJECT, class_ptr, (uint32_t) num_fields * 4);   /* V7/H7 #593: con su clase y su handle, al nacer */
     if (obj_h.v == 0u) {
         bpref_t d = exc_heap_descarrilado(vm);   /* V7 #494: idem */
-        if (d.v != 0u) { vm->building_error = 0; return d; }
+        if (d.v != 0u) return d;
         if (vm->oom_exc.v != 0) {   /* #430: idem — la prefabricada */
             bpvm_diag("[bpvm] throw: sin memoria para el objeto -> "
                       "excepcion PREFABRICADA (#430)");
-            vm->building_error = 0;
             return vm->oom_exc;
         }
         bpvm_diag_urgente("[bpvm] throw: mensaje OK pero sin memoria para el OBJETO "
                   "RuntimeError (%u campos)", (unsigned) num_fields);
-        vm->building_error = 0;
+        fija_runtime_error(vm, "%s", msg ? msg : "");   /* V7/H12, 2b: el detalle, para el EXITED */
         return bpref_null();
     }
     /* La clase ya está en la cabecera y el handle dado de alta (el método único, #593); nulo arriba era también
@@ -362,6 +380,5 @@ have_class:
      * de otra forma. No tocamos el stack BP aquí — eso lo hace
      * eh_unwind tras encontrar handler. El ancla es idx|TAG. */
     tc->alloc_anchor = (int32_t) (uint32_t) obj_h.v;
-    vm->building_error = 0;
     return obj_h;
 }
