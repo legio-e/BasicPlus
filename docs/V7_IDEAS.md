@@ -4817,6 +4817,189 @@ sabotaje, rojo:
   ese fichero vive aparte para que las herramientas lo enlacen sin ella (`test-bmgr` no enlazaba). El cerrojo lo
   registra ahora la VM con un gancho, como el canal de diagnóstico.
 
+#### La puerta de la 2b en la Pico 2 (5-oct, con el OK de Eduardo para grabar y para el ENV)
+
+La imagen de `4a608d49`; con `vm.runs=1` y luego con `vm.runs=2` (el ENV, y un RESET: lo lee el arranque):
+
+| | un run | dos runs |
+|---|---|---|
+| tanda V7 | verde (el informe, `compat/informes/tanda_h12_2b.md`) | verde, el mismo resultado |
+| `run_placa` | 34 de 34 | 34 de 34 |
+| PrintBench (mediana de 10) | 774 ms | 779 ms (+0,6 %) |
+| `fib(26)` interpretado | (con un run, al final) | 3 411 ms (±1 ms) |
+| el heap de la VM (el INFO) | 240 112 B | 223 728 B: los 16 KB de la pila del 2º run salen del bloque |
+
+El arranque lo dice en el log («la pila del 2o run, 16 KB del techo del bloque @ 0x2007a000», «el 2o run, creado: dos
+runs en la cola»), y el INFO, `runs: 2`. PrintBench baja de los 887–900 ms de la puerta de la 2a.2 a 774: con esta
+imagen, la A/B pendiente se resuelve sola (lo más probable, la condición nueva: notificaciones de tarea en vez de un
+semáforo y su guarda en el camino de la salida; sin medir aparte). La resistencia con dos runs (`resistencia_run.py
+--runs=2`, con `RunCompartido`: un contador bajo un Mutex de dos hilos y basura para el GC), 110 minutos: **SIN
+FALLOS** —1 614 vueltas, 40 RESET y 161 INFO; el KILL a un programa dormido, 6 ms de mediana y 33 de máximo; las
+pilas, sin moverse (a `run` y a `run2` les sobran 12,5 KB de 16; a `io` y a la tarea de la VM, 8 960 B; el heap de
+FreeRTOS, 6 752 B libres en el peor momento)—. (El «mínimo −1» del resumen del script es el INFO justo tras un RESET,
+sin RUN todavía: no es una marca.)
+
+## Etapa 3 — el 2º núcleo: el MAPA (5-oct, para el diseño)
+
+Eduardo, al pasar la puerta de la 2b: *«Bien, 2º núcleo, puedes empezar a analizar»*, y *«Lo de la fecha es orientativo
+no una meta. Lo importante es que sea fiable.»* Tres lecturas en paralelo —lo decidido y medido; la plataforma (FreeRTOS
+de dos núcleos en la RP2350, la flash, el USB, las interrupciones); el orden de memoria entre dos núcleos de verdad, que
+el x86 del PC esconde—, y lo que pesa, comprobado a mano.
+
+**Lo que nadie recordaba**: la ÚNICA vez que se encendió el 2º núcleo de la Pico (29-may, `#153`, `SMP_ARCH.md`
+§«Dual-core: DIFERIDO A v2») el firmware NO ARRANCÓ: el núcleo 0, colgado DENTRO de `vTaskStartScheduler` esperando a
+que el 1 contestase —el LED fijo, el USB sin enumerar—; sin sonda SWD no se vio por qué, se aplazó y no se ha vuelto a
+intentar (`#153` no tiene ficha). Esa causa sigue sin saberse. Y hoy habría OTRA, nueva (el descriptor de placa es de
+junio) y verificada en el código: lo primero que hace la tarea de la VM, con el planificador ya en marcha, es leer el
+tamaño de la flash (`board_desc_early_init` → `detect_flash_bytes`, `pico/board_desc.c:31-40`), que saca la flash de
+XIP con sólo las interrupciones del núcleo PROPIO apagadas: el otro núcleo, ejecutando desde la flash, leería basura.
+Lo mismo, el arranque de la PSRAM. Los dos, antes del planificador; y el primer paso de la 3.1, un arranque de dos
+núcleos INSTRUMENTADO (las migas por núcleo y el perro guardián), para ver dónde se para, si se para.
+
+**Dos agujeros que YA tiene la 2b** (con dos runs en un núcleo; raros, pero de memoria corrompida; con dos núcleos,
+frecuentes), y que hay que cerrar ANTES de la etapa 3:
+1. **Valores escritos a trozos** (`#660`). La VM escribe una palabra byte a byte (`bpvm_write_u32_be`,
+   `include/bpvm_internal.h:814`; en la Pico, a `-Os`, cuatro escrituras de un byte —desensamblado el intérprete del
+   firmware—; en el PC el compilador las junta, y por eso no se ve), y una referencia —8 bytes— en dos. Un hilo que
+   publica un objeto en un campo y otro que lo mira sin Mutex (una carrera del programa, pero muy corriente: «¿ya está
+   el resultado?») puede leer una referencia a medio escribir: con el índice 0,
+   `bpvm_ref_dead` la da por viva y `bpref_deref` la resuelve a la dirección 0 —donde la «longitud» de un array son los
+   bytes centinela del principio de la memoria: cientos de millones—, y un `ASTORE` pasa la comprobación de límites y
+   escribe en cualquier sitio. Con un run no pasa: el cambio de hilo es entre instrucciones.
+2. **Soltar un objeto que el otro run está usando** (`#661`; incompleto lo de esta mañana): con dos runs, el HUECO de un
+   `owner` soltado espera al GC, pero su NÚMERO de handle se recicla en el acto. Un run comprueba que el objeto vive,
+   otro lo suelta y reserva otro con ese número, y el primero —que vuelve a resolver el handle a mitad de la
+   instrucción— escribe en el objeto nuevo (o en la dirección 0, como arriba).
+El arreglo, en tres piezas: (a) cada palabra de una vez (escribirla y leerla como palabra, con su orden de bytes; la
+precondición, todas las ranuras alineadas —hoy las globales de un segundo módulo pueden no estarlo: su bloque empieza
+donde acabó el código del anterior, más 64 (`src/loader.c:313-316` y `:550`); el cargador, en las dos VMs, redondeando;
+y dentro del bloque de datos, lo que coloque el compilador, por mirar—); (b) UNA resolución validada por instrucción
+(índice dentro de la tabla, dirección no nula, la generación leída DESPUÉS y la misma; si no, «objeto eliminado»), y
+la instrucción entera con esa dirección; (c) el
+número de handle de un objeto soltado, como su hueco, de vuelta en el GC. Con eso, una referencia desgarrada sólo da
+el valor viejo, el nuevo o «objeto eliminado». Pruebas: el desgarro se puede provocar ya en el PC (compilando el
+núcleo sin juntar escrituras, `-fno-store-merging`), y soltar mientras otro usa, con la ventana ensanchada; cada una
+con su sabotaje. Y la puerta de la 2b, otra vez, en la Pico 2.
+
+**Lo que la etapa 3.1 necesita** (el RTOS de dos núcleos con UN run; verificado en el código):
+- el arranque: lo que toca la flash fuera de su cintura (el sondeo, el ENV, la PSRAM), antes del planificador; y el
+  arranque instrumentado (las migas por núcleo y el perro guardián) para no ir a ciegas;
+- **el candado de la flash** (#153): hoy NADIE se registra como víctima (sólo un hilo anclado a un núcleo ≠ 0, y no hay
+  ninguno), así que la primera escritura de la flash esperaría a una víctima que no existe; la ventana del SDK no es
+  atómica entre tareas (suelta su mutex al aparcar al otro núcleo); los dos núcleos como víctimas, y un mutex nuestro
+  que cubra la ventana entera;
+- **el log**: su sección crítica sólo apaga las interrupciones del núcleo propio; un spinlock (y dentro, `#658`);
+- los caminos fatales (los ganchos de FreeRTOS corren con sus cerrojos cogidos: volcar el log ahí es un interbloqueo
+  mudo);
+- cerrar un ejecutor de natives (hoy se libera su pila con la tarea quizá aún corriendo en el otro núcleo: esperar a
+  que esté suspendida);
+- **el USB**, NO (lo dijo un agente y no se sostiene): la `stdio` del SDK lo protege con su mutex —se lee y se escribe
+  desde cualquier núcleo; sólo su arranque, en el núcleo de la alarma, el 0 (`stdio_usb.c:102-163`, `:195`)— y el
+  firmware no llama a TinyUSB por su cuenta (mirado); lo que queda del USB es lo de `A4`, abajo;
+- el MPU de `mpu=1` es por núcleo; y las banderas que cruzan núcleos (`kill_requested`, `fin`, el anillo de la UART),
+  con su orden explícito;
+- y lo que dejó dicho `A4` (`FICHAS`, el inventario del 5-sep, §3 «Lo que falta ANTES de activar el segundo núcleo»):
+  `kill_requested`, ya en la lista; y el USB de la Pico con un solo escritor —el diagnóstico de la VM ya va al log
+  (`#353`); lo que quede escribiendo en `stdout` fuera del cerrojo del cable, por censar—.
+(Lo que NO falta: `malloc` ya va con mutex —el puerto RP2350 de FreeRTOS enlaza `pico_multicore` y pone
+`PICO_USE_MALLOC_MUTEX`—, y los cerrojos del SDK cooperan con FreeRTOS, `configSUPPORT_PICO_SYNC_INTEROP`.)
+**Y la 3.2** (los dos runs en dos núcleos): la 2b ya hecha, con las tres piezas de arriba; y el orden de memoria, que
+en la M33 de la RP2350 (en orden y sin caché de datos) es sobre todo formal, en la P4 (RISC-V) real.
+
+**Lo que ya está decidido, y no se pregunta**: nada anclado —`io`, `run1` y `run2`, que los núcleos van tomando SIN
+anclar (Eduardo, 1-oct)—; las etapas intermedias, sólo en la Pico 2, y la Metro (lo único que prueba ella: la PSRAM
+con el candado de la flash), en el lote del final (4-oct); para el otro núcleo al escribir la flash, el
+`multicore_lockout` del SDK con un mutex nuestro (el `flash_safe_execute` crea una tarea por operación: más piezas
+para lo mismo); y un fallo fatal en un núcleo para la placa ENTERA —el otro núcleo, aparcado—, con el log en la
+flash, como hoy con uno (el LED parpadeando; no se reinicia).
+
+**Para Eduardo** (con su mecanismo y un ejemplo): (1) **el modelo de memoria de BP ante una carrera** (un programa con
+un campo que un hilo escribe y otro lee sin Mutex). Con las piezas de arriba, (a) el lector obtiene la referencia
+vieja, la nueva o «objeto eliminado» —una excepción en un programa con una carrera; la VM, intacta—, y si DOS hilos
+escriben a la vez el mismo campo, el campo puede quedarse «eliminado» (media de cada uno); o (b) como en Java, siempre
+entera, la vieja o la nueva, y de dos escritores gana el último: pide un cerrojo cortito al ESCRIBIR una referencia en
+el heap o en una global (leer, sin cerrojo: en orden y validada), con su coste, a medir. En los `long` y `double`, en
+los dos casos como Java: sin Mutex, pueden salir a medias (un valor que nadie escribió; la VM, intacta). (2) **La vuelta
+atrás de la 3**: sólo la imagen de un núcleo, o además un interruptor en el ENV (`vm.cores=1`: la imagen de dos núcleos
+con todo anclado al 0). (3) **¿Hay sonda SWD** para la Pico 2? (la de mayo se aplazó por no tenerla; vale otra Pico con
+`debugprobe`).
+
+**El orden propuesto**: (1) las tres piezas de la 2b (`#660` y `#661`), en el PC y con su prueba, y la puerta de la 2b
+otra vez en la Pico 2; (2) la 3.1, paso a paso, empezando por el arranque instrumentado; (3) la 3.2. Cada paso, con su
+puerta.
+
+#### El turno: el cambio de run, sólo entre dos pasos (Eduardo, 5-oct; por decidir)
+
+Eduardo, al leer `#660` y `#661`: *«el cambio de contexto de los runs, ¿no se puede aplazar hasta que se termina un paso
+completo (un paso es la interpretación de un opCode)? Y de esta forma nos aseguramos que las cosas terminan de una forma
+controlada.»*
+
+**Con un núcleo, sí.** Hoy FreeRTOS cambia de `run` a `run2` en cualquier tick, a mitad de un paso: los dos (y la tarea
+del REPL, que hace de `io`) tienen la MISMA prioridad, a propósito (`pico/repl_v1.c:833-834`: por debajo, el KILL no
+llegaba; por encima, PrintBench iba más lento), y el reparto por tiempo está puesto (`configUSE_TIME_SLICING`, por
+defecto). Quitar el reparto no sirve: castigaría a `io`. La herramienta es **el turno**: un cerrojo justo (por orden de
+llegada) que sólo se disputan los runs. Un run lo coge antes de elegir un hilo y ejecutar su cuanto (`src/scheduler.c`,
+`correr_programa`: 1 024 pasos, o hasta que el hilo cede o se bloquea) y lo suelta al acabarlo, y antes de dormirse en
+la cola. Si FreeRTOS le da la CPU al otro run a mitad de un paso, el otro está esperando el turno y no puede entrar:
+el paso acaba entero. `io` y las demás tareas siguen como hoy (no lo cogen).
+
+**Lo que arregla, por construcción**: `#660` y `#661` (nadie ve un paso a medias del otro run: ni una palabra a
+trozos ni un handle reciclado a mitad); la pregunta del modelo de memoria (cada paso, entero: también los `long` y los
+`double`; lo que no es atómico es lo de siempre, varios pasos —`x := x + 1`—, que ya pide un Mutex con un run); y el
+mundo parado del GC (quien colecta tiene el turno: el otro run está entre dos pasos, sin nada a medias, o dormido). Y
+no añade interbloqueos: el run que espera el turno está entre dos pasos y no tiene ningún otro cerrojo; la regla, el
+turno es el cerrojo de FUERA (nunca se coge teniendo otro). Coste: coger y soltar una vez por cuanto, no por paso.
+
+**El precio, con dos núcleos**: ya no hay un «cambio» que aplazar —los dos runs corren a la vez—, y el turno hace que
+se turnen: sólo un run ejecuta pasos en cada momento (como el GIL de Python). Dos hilos que calculan tardan con dos
+núcleos lo mismo que con uno. El 2º núcleo sí da: `io` en paralelo (la salida, el cable: la 3.1, con o sin turno) y un
+run que ESPERA dentro de un paso (la cola de salida llena, la SD, el bus) sin parar al otro, si esa espera suelta el
+turno —una lista corta y cerrada; cada una deja lo suyo completo antes de soltarlo y vuelve a resolver sus referencias
+al cogerlo—. Sin el turno (las tres piezas de arriba), dos hilos que calculan podrían tardar casi la mitad, sin medir.
+
+**La prueba**: un contador «dentro de un paso», por run: con el turno, nunca dos a la vez; el sabotaje (sin turno),
+dos. Las pruebas de la 2b de hoy (`test-cola` 9 a 15) siguen corriendo SIN el turno (un interruptor de prueba), para
+que los arreglos finos sigan probados.
+
+**La propuesta**: el turno para V7 —la 2b, segura por construcción; y la 3 con él—; correr en paralelo de verdad (las
+tres piezas y el modelo de memoria), en otra versión, medido contra el turno.
+
+#### Seguir pensando: el 2º núcleo es para ir más rápido (Eduardo, 5-oct)
+
+Eduardo, a lo del turno: *«En principio el 2º núcleo es sobre todo para ejecutar los programas más rápido, si al final
+no lo conseguimos es poco progreso así que merece la pena pensar un poco. Como idea, ¿qué pasaría si bloqueamos la
+interrupción de cambio de contexto (entiendo que es la de un timer de la CPU)?»*
+
+**Bloquear el tick** (sí: el temporizador SysTick, a 1 kHz; cada núcleo tiene el suyo). Con UN núcleo, bloquearlo
+durante un paso quita el cambio a mitad de paso POR TIEMPO, pero no el que provoca una espera dentro del paso (un
+builtin que espera la SD, la cola de salida llena, un cerrojo): ahí FreeRTOS cambia de tarea igual, y el otro run
+entra a mitad. Y un paso de más de 1 ms (un builtin largo) pierde ticks: el reloj de FreeRTOS se atrasa. Es un turno
+peor. Con DOS núcleos no sirve de nada: no hay cambio que bloquear —los dos runs ejecutan a la vez—; el núcleo 0
+escribe una referencia byte a byte mientras el 1, en esos mismos nanosegundos, la lee. No interviene ninguna
+interrupción: coinciden.
+
+**Lo que sí da de sí la idea del paso entero, con dos núcleos**: aplicarla sólo a los pasos que tocan lo COMPARTIDO.
+Un paso que sólo toca la pila de su hilo —la aritmética, las locales, los saltos, `CALL`/`RET`, `TRY_*`— no puede
+estorbar a nadie: nadie más mira esa pila (salvo el GC, con el mundo parado). Los que tocan lo de todos —objetos,
+arrays, globales, `NEW_*`, `INVOKE_*`/`INSTANCEOF`/`CHECKCAST` (leen la clase del objeto), `THROW`, `PRINT*`,
+`CALL_BUILTIN`, `FREE_REF`— van enteros, con un cerrojo cortito, uno a la vez. Así: los privados, en paralelo y sin
+cerrojo; los compartidos, como con el turno. `fib(26)` en dos hilos: todo privado, en paralelo; un bucle que suma un
+array: el `ALOAD`, de uno en uno, lo demás en paralelo.
+
+Por qué es seguro, y verificable: lo compartido sólo lo toca un paso a la vez, entero (el argumento del turno), y lo
+privado, un solo hilo. La clasificación no se fía al ojo: en el build de pruebas del PC, cada acceso al heap o a una
+global comprueba que el run tiene el cerrojo; un opcode mal clasificado es un error en la red. Y de regalo, lo que se
+prueba en el PC vale en la placa: como todo lo compartido va bajo el cerrojo (con sus barreras), ni las escrituras a
+trozos ni el orden de memoria de ARM/RISC-V importan, que es justo lo que el x86 esconde.
+
+Lo delicado, para el diseño: el coste del cerrojo en cada paso compartido (a medir: en la RP2350, con los spinlocks del
+SIO o las exclusivas de la M33); el GC (un run que espera el cerrojo cuenta como parado, con su `sp` guardado, o el
+mundo no se para nunca); los builtins que esperan dentro del paso (con el cerrojo, el otro run sigue con lo privado y
+se para en su primer paso compartido; afinar después, uno a uno); y lo que un paso privado pueda tocar sin parecerlo
+(contadores del perfilador, la tabla de enlaces si se rellenara al vuelo: por mirar). Lo primero, MEDIR en el PC qué
+parte de los pasos es privada en nuestros programas (fib, PrintBench, AllocBench, SyncListTest, la tanda): es el
+techo de lo que ganaría, antes de escribir nada.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

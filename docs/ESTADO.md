@@ -39,8 +39,12 @@
 > antes—), el `print` que no cabe, el `join`, la zona, el `gc()` tras un mundo parado ajeno (Eduardo: *«Heap.compact()
 > no funciona si hay Threads BP»* —justo eso: para el mundo y no colecta—), el error del programa, el cierre de un
 > `File` (mío de la mañana: la SD se habría corrompido), `strtod`, los builtins de dos pasadas y la HAL: arreglados,
-> `test-cola` 9 a 15 con sus sabotajes rojos, y `#654`–`#659` a SUELTAS. La red entera, verde. Por hacer: la puerta en
-> la Pico 2 con `vm.runs=2` (grabar y el ENV, con el OK de Eduardo). Más abajo, «🧵 H12 (5-oct)».
+> `test-cola` 9 a 15 con sus sabotajes rojos, y `#654`–`#659` a SUELTAS. La red entera, verde (`4a608d49`). A media
+> mañana, **la puerta en la Pico 2** (grabada, y el ENV con `vm.runs=2`, con el OK de Eduardo): la tanda y `run_placa`
+> verdes con uno y con dos runs, PrintBench +0,6 % y la resistencia de 110 minutos con dos runs (abajo). Y con *«2º
+> núcleo, puedes empezar a analizar»* —y *«Lo de la fecha es orientativo no una meta. Lo importante es que sea
+> fiable»*—, **el mapa de la etapa 3**, que destapó dos agujeros que YA tiene la 2b: `#660` y `#661` (la 2b no se cierra
+> sin ellos). Más abajo, «🧵 H12 (5-oct, mediodía)» y «🧵 H12 (5-oct)».
 >
 > **4-oct** — H12, las etapas 0 y 1 JUNTAS (Eduardo: «`run` permanente»; una placa antes que todas, la Pico 2): la
 > tarea del REPL hace de `io` durante el RUN y el programa corre en una tarea `run` que nace con el arranque. Hecho en
@@ -1128,6 +1132,36 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧵 H12 (5-oct, mediodía) — LA PUERTA DE LA 2b EN LA PICO 2, y EL MAPA DEL 2º NÚCLEO (con dos agujeros de la 2b)
+
+- **La puerta** (la imagen de `4a608d49`, grabada con el OK de Eduardo; el ENV, `vm.runs=1` y luego `vm.runs=2`, con un
+  RESET): la tanda V7 verde e idéntica con uno y con dos runs (`compat/informes/tanda_h12_2b.md`, las dos tandas);
+  `run_placa` 34 de 34 las dos veces; PrintBench 774 y 779 ms (+0,6 %; y por debajo de los 887–900 de la 2a.2, con lo
+  que la A/B pendiente se resuelve sola); `fib(26)` 3 411 ms con dos runs (con uno, por medir: pide volver el ENV a
+  `vm.runs=1`); el heap de la VM, 240 112 → 223 728 B (la pila del 2º run sale del bloque). La resistencia con dos
+  runs (`resistencia_run.py --runs=2`, con `RunCompartido`), 110 minutos SIN FALLOS: 1 614 vueltas, 40 RESET, el KILL
+  a un dormido en 6 ms de mediana (33 de máximo) y las pilas sin moverse.
+- **El mapa de la etapa 3** (tres agentes —lo decidido, la plataforma, el orden de memoria— y lo que pesa, comprobado a
+  mano; `V7_IDEAS` §H12 «Etapa 3 — el 2º núcleo: el MAPA»). Lo que nadie recordaba: la única vez que se encendió el 2º
+  núcleo de la Pico (29-may, `#153`) no arrancó, y no se ha vuelto a intentar; y hoy habría además otra causa, nueva:
+  el sondeo de la flash del arranque, con el planificador ya en marcha. Lo que pide la 3.1 y la 3.2, en la lista.
+- **Dos agujeros que YA tiene la 2b** —con dos runs en UN núcleo; raros, pero de memoria corrompida—: `#660` (la VM
+  escribe sus palabras byte a byte —desensamblado el intérprete de la Pico: cuatro `STRB`—, y una referencia leída a
+  medias resuelve a la dirección 0, donde un `ASTORE` escribe en cualquier sitio) y `#661` (el número de handle de un
+  `owner` soltado se recicla en el acto). Con un run no pasan. Hasta cerrarlos, `vm.runs=1` por defecto.
+- **Dos cosas de los agentes que no se sostenían**, mirando el código: que el fallo de mayo fuera el sondeo de la flash
+  (el descriptor de placa es de junio: es un riesgo de HOY, no la causa de entonces); y que el USB sólo fuera seguro
+  desde el núcleo 0 (la `stdio` del SDK lo protege con su mutex desde cualquier núcleo). Y una pregunta que ya estaba
+  contestada: anclar `io` al núcleo 0 (Eduardo, 1-oct: los núcleos toman los runs SIN anclar).
+- **Para Eduardo**, tres preguntas: el modelo de memoria de BP ante una carrera; la vuelta atrás de la 3 (sólo imagen,
+  o también un `vm.cores=1` en el ENV); y si hay sonda SWD.
+- **Y a vueltas con él** (`V7_IDEAS` §«El turno» y §«Seguir pensando»): su idea, que el cambio de run espere a que
+  acabe el paso —con un núcleo, sí: el turno, que cierra `#660` y `#661` por construcción; con dos, los runs se
+  turnarían y no se iría más rápido—; su objeción (*«el 2º núcleo es sobre todo para ejecutar los programas más
+  rápido»*) y su segunda idea, bloquear el tick —con dos núcleos no sirve: no hay cambio, coinciden—; y lo que sale de
+  las dos: el paso entero, sólo para los pasos que tocan lo compartido (los privados, en paralelo). Por medir, si
+  Eduardo dice: qué parte de los pasos es privada en nuestros programas.
 
 ## 🧵 H12 (5-oct) — LA 2b MÍNIMA EN EL PC: dos runs con código BP normal, la condición de FreeRTOS y la revisión
 
