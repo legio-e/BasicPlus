@@ -1,0 +1,69 @@
+// GuiVentanaDosRuns.bp — V7/H12, LVGL con dos runs, en una ventana DE VERDAD (el PC con LVGL=1; la P4): el lazo de la
+// GUI en su hilo (Gui.start), un botón que cuenta sus clics y un hilo TRABAJADOR que calcula y pone su progreso en una
+// etiqueta cada 20 ms. Con dos runs, todo lo que toca la GUI lo ejecuta el run 0 (el viaje); el cálculo, el run que
+// toque. En el PC lo conduce un guion (BPVM_GUI_SCRIPT: dos clics, la captura y cerrar): los dos clics llegan, el
+// trabajador acaba y la ventana no avisa de un bombeo desde otro hilo; con BPVM_SABOTAJE_GUI=1 (sin el viaje), sí.
+module GuiVentanaDosRuns
+  import Gui
+
+  class Marcador
+    var n: integer
+    var lbl: Gui.Label
+
+    public function Marcador(l: Gui.Label)
+      this.n := 0
+      this.lbl := l
+    end Marcador
+
+    function event btn_onClick(quien: Gui.Component)
+      this.n := this.n + 1
+      this.lbl.setText("clics: " + this.n)
+      print "clic " + this.n
+    end btn_onClick
+  end Marcador
+
+  class Trabajador extends Thread
+    var lbl: Gui.Label
+    var vueltas: integer
+    var suma: integer
+
+    public function Trabajador(l: Gui.Label, vueltas: integer)
+      super(8192)
+      this.lbl := l
+      this.vueltas := vueltas
+      this.suma := 0
+    end Trabajador
+
+    public function run()
+      var r: integer := 0
+      while r < this.vueltas do
+        var i: integer := 0
+        while i < 2000 do
+          this.suma := (this.suma * 31 + i) mod 1000003
+          i := i + 1
+        endwh
+        this.lbl.setText("trabajador: " + r + " / " + this.suma)
+        sleep(20)
+        r := r + 1
+      endwh
+      print "trabajador: " + this.vueltas + " vueltas, suma " + this.suma
+    end run
+  end Trabajador
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var estado: Gui.Label := Gui.Label(scr, "clics: 0")
+    estado.align(Gui.Align.TOP_MID, 0, 10)
+    var prog: Gui.Label := Gui.Label(scr, "trabajador: -")
+    prog.align(Gui.Align.TOP_MID, 0, 40)
+    var m: Marcador := Marcador(estado)
+    var btn: Gui.Button := Gui.Button(scr, "PULSA")
+    btn.onClick := m::btn_onClick
+    btn.align(Gui.Align.CENTER, 0, 0)
+    Gui.start()
+    var t: Trabajador := Trabajador(prog, 60)
+    t.start()
+    t.join()
+    print "fin del main"
+  end Main
+end GuiVentanaDosRuns

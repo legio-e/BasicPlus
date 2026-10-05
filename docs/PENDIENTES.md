@@ -196,9 +196,14 @@
   y `print b` sí puede caer. Para que varias líneas salgan juntas: un `StringBuilder` y un
   solo `print` (manual §14.5). El límite: una línea de más de 1 KB —lo que cabe de una vez
   en la cola de salida de la Pico— puede salir en trozos.
-- **Hasta 32 hilos VIVOS a la vez, el main incluido, y cada uno con la pila que pide** (29-sep,
-  `#604`/`#605`). Un hilo terminado deja su sitio, así que en su vida un programa crea los que
-  quiera; pasar de 32 a la vez, o pedir una pila que no cabe, es un `RuntimeError` en `start()`.
+- **Con dos runs (`vm.runs=2`), un programa que se DEPURA va con uno: el primero** (decidido por
+  Eduardo el 5-oct, V7/H12). El depurador para el programa entero y sigue a un hilo; con dos
+  runs ejecutando a la vez sería muy difícil de seguir (*«Alguna vez he tenido que depurar en Java
+  con varios hilos y es muy difícil de seguir»*). Los hilos BP siguen siendo varios —se turnan en
+  ese run, como con `vm.runs=1`—; lo que no hay mientras se depura es el segundo run.
+- **Los hilos VIVOS a la vez, los que quepan en la memoria, cada uno con la pila que pide**
+  (V7/H12, etapa 2: la cola de hilos, sin tope; hasta entonces, 32 a la vez —`#604`/`#605`—).
+  Un hilo terminado deja su sitio; pedir una pila que no cabe es un `RuntimeError` en `start()`.
   Una función que no cabe en la pila de su hilo lanza «desbordamiento de pila» (manual §14.1).
   El límite: una recursión DENTRO de una `native` corre, en la VM-C, en la pila de C de su
   ejecutor, y allí sólo la vigila miVM (que ejecuta la native como bytecode).

@@ -1,0 +1,61 @@
+// GuiDosRuns.bp — V7/H12, LVGL con dos runs (test-cola 18; docs/V7_IDEAS.md §H12 «LVGL con dos runs»): DOS hilos que
+// tocan la GUI a la vez. Cada uno con sus etiquetas: las crea, les cambia el texto, la x y el ancho, y los lee, una y
+// otra vez, con cálculo entre medias. Con dos runs, cada builtin de la GUI lo ejecuta el run 0: el hilo que llega a uno
+// en el run 1 VIAJA (vuelve a la cola marcado para el run 0, que repite la instrucción). La prueba cuenta los builtins
+// de la GUI ejecutados fuera del run 0: ninguno; con el sabotaje (sin viajar), alguno. Y el resultado, el mismo con uno
+// y con dos runs, y en la VM-Java.
+module GuiDosRuns
+  import Gui
+
+  class Pintor extends Thread
+    var scr: Gui.Screen
+    var base: integer
+    var suma: integer
+
+    public function Pintor(scr: Gui.Screen, base: integer)
+      super(8192)
+      this.scr := scr
+      this.base := base
+      this.suma := 0
+    end Pintor
+
+    // Cálculo entre dos llamadas a la GUI: el hilo trabaja en el run que le toque y vuelve a viajar en la siguiente.
+    function calcula(n: integer): integer
+      var a: integer := 0
+      var i: integer := 0
+      while i < n do
+        a := (a * 31 + i) mod 1000003
+        i := i + 1
+      endwh
+      return a
+    end calcula
+
+    public function run()
+      var r: integer := 0
+      while r < 40 do
+        var l: Gui.Label := Gui.Label(this.scr, "p" + this.base)
+        l.setText("pintor " + this.base + ", vuelta " + r)
+        l.x := this.base + r
+        l.width := 50 + r
+        this.suma := this.suma + l.x + l.width + this.calcula(300)
+        r := r + 1
+      endwh
+    end run
+
+    public function total(): integer
+      return this.suma
+    end total
+  end Pintor
+
+  function Main()
+    var scr: Gui.Screen := Gui.Screen()
+    var a: Pintor := Pintor(scr, 1000)
+    var b: Pintor := Pintor(scr, 2000)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "pintor 1000: " + a.total()
+    print "pintor 2000: " + b.total()
+  end Main
+end GuiDosRuns

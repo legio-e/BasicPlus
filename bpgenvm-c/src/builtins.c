@@ -992,7 +992,55 @@ int bpvm_builtin_cede(int id) {
     }
 }
 
+/* V7/H12 — LOS BUILTINS DE LA GUI: los BUILTIN_GUI_* de builtin_ids.h (entran en gui.c, y por él en LVGL), que con
+ * varios runs sólo ejecuta el run 0 (interp.c, OP_CALL_BUILTIN; docs/V7_IDEAS.md §H12 «LVGL con dos runs»). No son un
+ * rango —entre ellos hay de Machine, de App, los eventos…—: la lista, por nombre. Uno nuevo de la GUI va aquí: test-cola
+ * comprueba que están todos los de builtin_ids.h. */
+int bpvm_builtin_de_la_gui(int id) {
+    switch (id) {
+    case BUILTIN_GUI_SCREEN_ACTIVE: case BUILTIN_GUI_CREATE_OBJ: case BUILTIN_GUI_CREATE_LABEL:
+    case BUILTIN_GUI_CREATE_BUTTON: case BUILTIN_GUI_SET_TEXT: case BUILTIN_GUI_SET_WIDTH:
+    case BUILTIN_GUI_SET_HEIGHT: case BUILTIN_GUI_ALIGN: case BUILTIN_GUI_SET_BG_COLOR:
+    case BUILTIN_GUI_SET_TEXT_COLOR: case BUILTIN_GUI_SET_FONT: case BUILTIN_GUI_CLEAN: case BUILTIN_GUI_DELETE:
+    case BUILTIN_GUI_SCREEN_LOAD: case BUILTIN_GUI_RUN: case BUILTIN_GUI_DUMP_TREE: case BUILTIN_GUI_BIND_CLICK:
+    case BUILTIN_GUI_CLICK: case BUILTIN_GUI_SET_X: case BUILTIN_GUI_GET_X: case BUILTIN_GUI_SET_Y:
+    case BUILTIN_GUI_GET_Y: case BUILTIN_GUI_GET_WIDTH: case BUILTIN_GUI_GET_HEIGHT: case BUILTIN_GUI_SET_SCROLL_DIR:
+    case BUILTIN_GUI_GET_SCROLL_DIR: case BUILTIN_GUI_REFRESH: case BUILTIN_GUI_CREATE_CHECKBOX:
+    case BUILTIN_GUI_SET_CHECKED: case BUILTIN_GUI_GET_CHECKED: case BUILTIN_GUI_CHANGE:
+    case BUILTIN_GUI_CREATE_SWITCH: case BUILTIN_GUI_CREATE_SLIDER: case BUILTIN_GUI_CREATE_BAR:
+    case BUILTIN_GUI_SET_VALUE: case BUILTIN_GUI_GET_VALUE: case BUILTIN_GUI_SET_RANGE:
+    case BUILTIN_GUI_CREATE_SPINBOX: case BUILTIN_GUI_CREATE_LED: case BUILTIN_GUI_CREATE_DROPDOWN:
+    case BUILTIN_GUI_SET_OPTIONS: case BUILTIN_GUI_CREATE_TEXTAREA: case BUILTIN_GUI_GET_TEXT:
+    case BUILTIN_GUI_CREATE_LIST: case BUILTIN_GUI_CREATE_KEYBOARD: case BUILTIN_GUI_KEYBOARD_SET_TEXTAREA:
+    case BUILTIN_GUI_CREATE_MSGBOX: case BUILTIN_GUI_SET_BUTTONS: case BUILTIN_GUI_CREATE_TABVIEW:
+    case BUILTIN_GUI_TABVIEW_ADD_TAB: case BUILTIN_GUI_CREATE_TABLE: case BUILTIN_GUI_TABLE_SET_GRID:
+    case BUILTIN_GUI_TABLE_SET_CELL: case BUILTIN_GUI_TABLE_GET_CELL: case BUILTIN_GUI_IMAGE_NEW:
+    case BUILTIN_GUI_IMAGE_LOAD_FILE: case BUILTIN_GUI_IMAGE_WIDTH: case BUILTIN_GUI_IMAGE_HEIGHT:
+    case BUILTIN_GUI_CREATE_IMAGE_VIEW: case BUILTIN_GUI_IMAGE_VIEW_SET_IMAGE: case BUILTIN_GUI_IMAGE_VIEW_REFRESH:
+    case BUILTIN_GUI_SET_FONT_SIZE: case BUILTIN_GUI_GET_FONT_SIZE: case BUILTIN_GUI_TEXTAREA_SET_READONLY:
+    case BUILTIN_GUI_TEXTAREA_GET_READONLY: case BUILTIN_GUI_INVOKE_BY_NAME: case BUILTIN_GUI_INVOKE_BY_SLOT:
+    case BUILTIN_GUI_LOAD_FONT: case BUILTIN_GUI_SET_ROTATION: case BUILTIN_GUI_CREATE_CHART:
+    case BUILTIN_GUI_CHART_SET_POINTS: case BUILTIN_GUI_CHART_ADD_SERIES: case BUILTIN_GUI_CHART_PUSH:
+    case BUILTIN_GUI_CHART_SET_VALUE: case BUILTIN_GUI_CHART_SET_TYPE: case BUILTIN_GUI_RUN_ONCE:
+    case BUILTIN_GUI_SLOT_OF: case BUILTIN_GUI_GET_ALIGN: case BUILTIN_GUI_GET_ALIGN_DX:
+    case BUILTIN_GUI_GET_ALIGN_DY: case BUILTIN_GUI_GET_AUTH_WIDTH: case BUILTIN_GUI_GET_AUTH_HEIGHT:
+    case BUILTIN_GUI_SHOT:
+        return 1;
+    default:
+        return 0;
+    }
+}
+
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
+    /* V7/H12 — un builtin de la GUI FUERA del run 0 no debe pasar: el intérprete hace viajar al hilo (OP_CALL_BUILTIN).
+     * Se cuenta —el fin del programa lo dice, y test-cola 18 lo mira— y, llamado desde una native (que no puede viajar:
+     * sus marcos de C están debajo), es un error con nombre. Con un run (vm->smp NULL), nada. */
+    if (vm->smp != NULL && tc->sched_owner != 0 && bpvm_builtin_de_la_gui(id)) {
+        __atomic_fetch_add(&vm->smp->gui_fuera_del_run0, 1u, __ATOMIC_RELAXED);
+        if (tc->builtin_de_nativa)
+            return builtin_throw(vm, tc, "GUI: un builtin de la GUI desde una native, fuera del run 0 "
+                                         "(con dos runs, todavia no)");
+    }
     switch (id) {
 
     case BUILTIN_STRLEN: {

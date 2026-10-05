@@ -107,6 +107,11 @@ typedef struct bpvm_cola {
     /* #662: las vueltas de un run que no encontró hilo que elegir —un run ocioso que se despierta en vano—. Por programa:
      * la línea `runs:` del final, y la prueba de que un programa de un hilo no despierta al otro run tras cada cuanto. */
     uint32_t vueltas_sin_hilo;
+    /* V7/H12, LVGL con dos runs: los VIAJES al run 0 —un hilo que llegó a un builtin de la GUI en otro run y volvió a
+     * la cola para el 0 (interp.c)— y los builtins de la GUI ejecutados FUERA del run 0 (builtins.c), que no deben
+     * pasar nunca. Por programa: la línea `runs:` del final, y test-cola 18. */
+    uint32_t gui_viajes;
+    uint32_t gui_fuera_del_run0;
     int rs;                      /* lo que dio el programa: lo apunta el último run, al descolgarlo */
     bpvm_cola_al_acabar_fn al_acabar;
     void* al_acabar_user;
@@ -149,6 +154,7 @@ typedef struct bpvm_cola {
     int     sabotaje_error;          /* 2b: el error del programa, como antes: lo escribe cada throw y gana el último */
     int     sabotaje_aviso;          /* #662: avisar a la cola tras CADA cuanto, como antes (despierta al ocioso en vano) */
     int     sabotaje_mundo;          /* 3.2: el mundo parado avisa también en sched_cond, como antes (despierta al ocioso) */
+    int     sabotaje_gui;            /* LVGL con dos runs: un builtin de la GUI se ejecuta en el run que lo encuentra */
     int64_t t_ultimo_cuanto;         /* con el ensayo: cuándo volvió el último cuanto (µs)... */
     int64_t t_fin;                   /* ...y cuándo se decidió el fin (µs): el fin, siempre después */
 } bpvm_cola_t;

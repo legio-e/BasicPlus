@@ -643,12 +643,19 @@ static uint32_t esp32_image_crc(void) {
  * hace de `io`; el INFO lo atiende ella misma, así que la marca es la suya; en el IDF, en BYTES—, con el nombre de la de
  * la Pico (vmTaskStackFreeBytes); y lo que quedó libre de RAM INTERNA en el peor momento desde el arranque
  * (rtosHeapMinFreeBytes: de ahí salen las pilas de las tareas y todo lo que no va a la PSRAM; en la C6, lo que manda). */
+static long run2_pila_libre(void);   /* V7/H12, 2b: la marca de la pila del 2º run; -1 sin él (abajo, con la tarea) */
 static int esp32_repl_info_extra(char* buf, unsigned long buf_max, int off) {
     size_t max = (size_t) buf_max;
     off = wire_v1_field_long(buf, max, (size_t) off, "vmTaskStackFreeBytes", (long) uxTaskGetStackHighWaterMark(NULL));
     if (off < 0) return off;
-    return wire_v1_field_long(buf, max, (size_t) off, "rtosHeapMinFreeBytes",
-                              (long) heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
+    off = wire_v1_field_long(buf, max, (size_t) off, "rtosHeapMinFreeBytes",
+                             (long) heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL));
+    if (off < 0) return off;
+    /* V7/H12, 2b — la del 2º run, con el nombre de la Pico (`runStackFree`, la común, es la del run que cerró el último
+     * programa) */
+    long r2 = run2_pila_libre();
+    if (r2 >= 0) off = wire_v1_field_long(buf, max, (size_t) off, "run2StackFreeBytes", r2);
+    return off;
 }
 
 static bpvm_repl_ops_t s_repl_ops = {
@@ -839,7 +846,20 @@ static void handle_request(const char* line, int len) {
 static StackType_t  s_run_pila[ESP32_RUN_PILA_BYTES / sizeof(StackType_t)];
 static StaticTask_t s_run_tcb;
 static TaskHandle_t s_run_task = NULL;
+/* V7/H12, 2b — EL 2º RUN, con `vm.runs=2` en el ENV: el run número 1, a la misma prioridad, en la misma cola. Su pila,
+ * como la del primero, de la RAM INTERNA, pero del heap y sólo con dos runs: la C3 y la C6 van justas de RAM interna
+ * (H13), y con un run no la pagan. */
+static StackType_t* s_run2_pila = NULL;
+static StaticTask_t s_run2_tcb;
+static TaskHandle_t s_run2_task = NULL;
 #endif
+
+static long run2_pila_libre(void) {
+#if BPVM_ESP32_RUN_TAREA
+    if (s_run2_task != NULL) return (long) uxTaskGetStackHighWaterMark(s_run2_task);   /* en el IDF, BYTES */
+#endif
+    return -1;
+}
 
 void repl_esp32_cintura(void) {
     s_repl_ops.server_name = s_board_id->server_name;   /* S3 o P4: lo dice la placa */
@@ -859,6 +879,37 @@ void repl_esp32_cintura(void) {
         log_printf("run: la tarea del programa, creada (%u KB de pila, prioridad %u; %s)",
                    (unsigned) (ESP32_RUN_PILA_BYTES / 1024u), (unsigned) uxTaskPriorityGet(NULL),
                    bpvm_repl_run_en_cola() ? "espera en la cola" : "espera el aviso «trabajo», como en la etapa 1");
+    }
+    /* V7/H12, 2b — el 2º run: sólo con la cola (con el relevo de la etapa 1, `prepara` no admite otro) y con su pila.
+     * Sin él, la placa va con uno y lo dice. */
+    if (s_run_task != NULL && s_run2_task == NULL && bpvm_runs() >= 2) {
+        const char* porque = NULL;
+        if (!bpvm_repl_run_en_cola()) {
+            porque = "sin la cola";
+        } else {
+            s_run2_pila = (StackType_t*) heap_caps_malloc(ESP32_RUN_PILA_BYTES, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            if (s_run2_pila == NULL) {
+                porque = "sin RAM interna para su pila";
+            } else if (bpvm_repl_run_tarea_prepara() != 0) {
+                porque = "la cola no admite otro";
+            } else {
+                s_run2_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run2", ESP32_RUN_PILA_BYTES, (void*) (intptr_t) 1,
+                                                uxTaskPriorityGet(NULL), s_run2_pila, &s_run2_tcb);
+                if (s_run2_task == NULL) {
+                    bpvm_repl_run_tarea_no_nacio();
+                    porque = "la tarea no nacio";
+                }
+            }
+            if (s_run2_task == NULL && s_run2_pila != NULL) {
+                heap_caps_free(s_run2_pila);
+                s_run2_pila = NULL;
+            }
+        }
+        if (s_run2_task != NULL)
+            log_printf("run: el 2o run, creado (vm.runs=%d; %u KB de pila, RAM interna): dos runs en la cola",
+                       bpvm_runs(), (unsigned) (ESP32_RUN_PILA_BYTES / 1024u));
+        else
+            log_printf("run: vm.runs=%d, pero el 2o run no se pudo crear (%s): va con uno", bpvm_runs(), porque);
     }
 #endif
 }

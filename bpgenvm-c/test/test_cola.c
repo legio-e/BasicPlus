@@ -44,12 +44,16 @@
  *     del FS) —--sabotaje-ficheros: el proceso caído (un motor ya cerrado)—.
  * 16. (#662, la medida del 2º núcleo) un programa de UN hilo con dos runs (UnHiloCalcula): el otro run no se despierta en
  *     vano tras cada cuanto —--sabotaje-aviso: avisar tras cada uno, como antes: cientos de vueltas sin hilo—.
+ * 17. (la 3.2) un hilo que concatena con dos runs (CadenasUnHilo): el GC no despierta al otro run —--sabotaje-mundo—.
+ * 18. (LVGL con dos runs) dos hilos que tocan la GUI a la vez (GuiDosRuns): cada builtin de la GUI, en el run 0 —el hilo
+ *     del run 1 viaja—; --sabotaje-gui: ejecutado donde se encuentra, como antes: alguno fuera del run 0.
  *
  * Uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod
  *                FicherosDosRuns.mod
  *                [--sabotaje-contador | --sabotaje-fin | --sabotaje-salida | --sabotaje-gc | --sabotaje-eventos |
  *                 --sabotaje-revive | --sabotaje-ficheros | --sabotaje-owner | --sabotaje-lineas | --sabotaje-suyo |
- *                 --sabotaje-zona | --sabotaje-colecta | --sabotaje-error | --sabotaje-aviso]
+ *                 --sabotaje-zona | --sabotaje-colecta | --sabotaje-error | --sabotaje-aviso | --sabotaje-mundo |
+ *                 --sabotaje-gui]
  * Sale 0, con la línea «OK:» de la red, si todo pasa.
  */
 #include "bpvm.h"
@@ -516,6 +520,34 @@ static int cadenas_un_hilo(int sabotaje) {
                    PASADAS, detalle, ultimo);
 }
 
+/* 18. (V7/H12, LVGL con dos runs) DOS hilos que tocan la GUI a la vez, con dos runs (GuiDosRuns: cada uno crea sus
+ * etiquetas, les cambia el texto, la x y el ancho y los lee, con cálculo entre medias): cada builtin de la GUI lo
+ * ejecuta el run 0 —el hilo que llega a uno en el run 1 VIAJA—. Ninguno fuera del run 0, alguno de viaje en cada pasada
+ * (el camino, recorrido) y el resultado, el de un run y la VM-Java. Sabotaje (--sabotaje-gui: el builtin se ejecuta en
+ * el run que lo encuentra, como antes): alguno fuera del run 0. */
+static int gui_dos_runs(int sabotaje) {
+    int malos = 0; char ultimo[96] = "";
+    unsigned long fuera = 0, viajes = 0;
+    bpvm_la_cola.sabotaje_gui = sabotaje;
+    for (int i = 0; i < PASADAS; i++) {
+        salida_t o;
+        bpvm_status_t s = corre("GuiDosRuns.mod", 512 * 1024, 0, 2, &o);
+        unsigned long f = bpvm_la_cola.gui_fuera_del_run0, v = bpvm_la_cola.gui_viajes;   /* de esta pasada */
+        fuera += f;
+        viajes += v;
+        if (s != BPVM_OK || strstr(o.buf, "pintor 1000: 29274680") == NULL
+            || strstr(o.buf, "pintor 2000: 29314680") == NULL || f != 0 || v == 0) {
+            malos++;
+            snprintf(ultimo, sizeof ultimo, "%s, %lu fuera del run 0, %lu viajes", bpvm_status_str(s), f, v);
+        }
+    }
+    bpvm_la_cola.sabotaje_gui = 0;
+    char detalle[96];
+    snprintf(detalle, sizeof detalle, "; fuera del run 0, %lu; viajes al run 0, %lu", fuera, viajes);
+    return informe("18. dos hilos que tocan la GUI, con dos runs: todo en el run 0 (LVGL con dos runs)", sabotaje,
+                   malos, PASADAS, detalle, ultimo);
+}
+
 int main(int argc, char** argv) {
     bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -527,7 +559,7 @@ int main(int argc, char** argv) {
     }
     int sab_contador = 0, sab_fin = 0, sab_salida = 0, sab_gc = 0, sab_eventos = 0, sab_revive = 0, sab_ficheros = 0;
     int sab_owner = 0, sab_lineas = 0, sab_suyo = 0, sab_zona = 0, sab_colecta = 0, sab_error = 0, sab_aviso = 0;
-    int sab_mundo = 0;
+    int sab_mundo = 0, sab_gui = 0;
     for (int i = 8; i < argc; i++) {
         if (!strcmp(argv[i], "--sabotaje-contador")) sab_contador = 1;
         else if (!strcmp(argv[i], "--sabotaje-fin")) sab_fin = 1;
@@ -544,10 +576,11 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--sabotaje-error")) sab_error = 1;
         else if (!strcmp(argv[i], "--sabotaje-aviso")) sab_aviso = 1;
         else if (!strcmp(argv[i], "--sabotaje-mundo")) sab_mundo = 1;
+        else if (!strcmp(argv[i], "--sabotaje-gui")) sab_gui = 1;
     }
     int sabotaje = sab_contador || sab_fin || sab_salida || sab_gc || sab_eventos || sab_revive || sab_ficheros
                 || sab_owner || sab_lineas || sab_suyo || sab_zona || sab_colecta || sab_error || sab_aviso
-                || sab_mundo;
+                || sab_mundo || sab_gui;
     int fallos = 0;
     if (!sabotaje) fallos += interbloqueo(argv[1]);
     if (!sabotaje || sab_contador) fallos += falso(argv[2], sab_contador);
@@ -567,11 +600,12 @@ int main(int argc, char** argv) {
     if (!sabotaje || sab_ficheros) fallos += file_compartido(sab_ficheros);
     if (!sabotaje || sab_aviso) fallos += un_hilo(sab_aviso);   /* #662 */
     if (!sabotaje || sab_mundo) fallos += cadenas_un_hilo(sab_mundo);   /* la 3.2: el mundo, con su condición */
+    if (!sabotaje || sab_gui) fallos += gui_dos_runs(sab_gui);   /* LVGL con dos runs: la GUI, en el run 0 */
     if (fallos == 0 && !sabotaje)
         printf("OK: la cola (H12 2a.2 y 2b): el interbloqueo, con uno y dos runs; ni uno falso; el fin, del último que "
                "sale; nadie dentro al avisar; el gc() del programa, con el mundo parado; los eventos y los ficheros con "
                "dos runs; lo de la revisión: owner, líneas largas, el join, la zona, la colecta, el error y un File "
-               "compartido; y un hilo con dos runs no despierta al otro en vano, ni tras un cuanto (#662) ni tras una "
-               "colecta (la 3.2)\n");
+               "compartido; un hilo con dos runs no despierta al otro en vano, ni tras un cuanto (#662) ni tras una "
+               "colecta (la 3.2); y la GUI con dos runs, toda en el run 0\n");
     return fallos ? 1 : 0;
 }

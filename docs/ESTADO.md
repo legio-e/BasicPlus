@@ -51,8 +51,11 @@
 > Eduardo: *«fatal error, el log y reset»* (contener el fallo, el MPU por tarea y el contador de reinicios, a V8). Y por
 > la noche, **las puertas de la 3.1 y de la 3.2, PASADAS en la Pico 2** —con un interbloqueo del candado de la flash
 > cazado sin sonda y arreglado (el otro núcleo, aparcado como tarea)—, y la medida que pidió Eduardo: con dos hilos que
-> calculan, dos núcleos ganan ×1,55–1,67; el código de un hilo, un 10–14 % más lento con dos runs. Más abajo,
-> «🧵 H12 (5-oct, noche)», «(tarde)», «(mediodía)» y «🧵 H12 (5-oct)».
+> calculan, dos núcleos ganan ×1,55–1,67; el código de un hilo, un 10–14 % más lento con dos runs. Y a última hora,
+> la resistencia de `mundo_cond`, sin fallos (Eduardo: los dos núcleos, validados en la Pico 2 para el código BP
+> normal), y **LVGL con dos runs en el PC**: la llamada a la GUI VIAJA al run 0 (su «OK», en vez de la cola FIFO), con
+> la P4 como banco; el depurador, con un run, y las placas de un núcleo, con un run (decisiones de Eduardo). Más abajo,
+> «🧵 H12 (5-oct, última hora)», «(noche)», «(tarde)», «(mediodía)» y «🧵 H12 (5-oct)».
 >
 > **4-oct** — H12, las etapas 0 y 1 JUNTAS (Eduardo: «`run` permanente»; una placa antes que todas, la Pico 2): la
 > tarea del REPL hace de `io` durante el RUN y el programa corre en una tarea `run` que nace con el arranque. Hecho en
@@ -1141,6 +1144,30 @@ la C6, la P4 y la Nucleo.
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
 
+## 🧵 H12 (5-oct, última hora) — LVGL CON DOS RUNS en el PC: la llamada VIAJA al run 0
+
+- **La placa**: Eduardo, *«para probar el LVGL necesitamos una placa que tenga pantalla»* → la P4 con un núcleo y
+  `vm.runs=2` (la 2b de la familia ESP32), y antes el PC; los dos núcleos de la P4, con el resto de placas.
+- **El análisis cambió su idea de la cola FIFO** (`V7_IDEAS` §H12 «LVGL con dos runs: el análisis»): la ventana del PC
+  sólo la atiende el hilo de SO que la creó (SDL lee sus eventos dentro de `lv_timer_handler`, y en Windows la cola de
+  mensajes es de ese hilo), y hay lecturas que van a LVGL (el ancho de una etiqueta). Con cola o sin ella, la GUI tiene
+  que ser de UN run. La propuesta, con su mecanismo y su ejemplo (las sondas que cambian una etiqueta): no encolar el
+  comando, sino que el HILO viaje al run 0 para ejecutarlo. **Eduardo: «OK».**
+- **Hecho en el PC** (`V7_IDEAS` §«LVGL con dos runs: hecho en el PC»): el intérprete hace viajar al hilo (los 83
+  `BUILTIN_GUI_*`, por nombre), el planificador lo da sólo al run 0 —y con un run, el programa lo corre el run 0—, la GUI
+  ya no obliga a un run, y una guarda en la ventana del PC que avisa si otro hilo la bombea. `test-cola` 18: 20 de 20,
+  624 viajes y ninguno fuera del run 0; con el sabotaje, 5 143 en el run 1 y el modelo roto. La ventana de verdad con
+  dos runs (un guion de clics): verde; con el sabotaje, el programa SE CUELGA. El micro simulado (el camino del IDE),
+  tres programas seguidos en la misma ventana, el último con el depurador: verde; sin «con un run, el run 0», la ventana
+  se queda sin atender una vez de cada tres.
+- **La familia ESP32, su 2º run** (`repl_esp32.c`: la pila de la RAM interna del heap, sólo con dos runs); compilan las
+  cinco ESP. Los packs de la P4 aguantan (la cuenta con `nm`: la zona sigue en `0x400C8000`).
+- **Las natives con dos runs, pensado con Eduardo** (sin código): la native usa DOS pilas —la de C (la del run si es
+  directa; la de su ejecutor si puede ceder) y la BP del hilo que la llamó—; dos natives a la vez ya pasan con un run
+  (cada una con su ejecutor); con dos runs lo que falta es el contexto POR TAREA (hoy, un global en los micros), el
+  depósito de ejecutores con cerrojo y el GC con una native en medio. Eduardo: *«está algo mejor de lo que pensaba. Hay
+  que hacer unos cambios localizados»*.
+
 ## 🧵 H12 (5-oct, noche) — LAS PUERTAS DE LA 3.1 Y DE LA 3.2, PASADAS en la Pico 2 (y lo que cazaron)
 
 - **El lote** (OK de Eduardo): la imagen de un núcleo (la tanda idéntica a la de la 2b; `run_placa` 34 de 34) y la de
@@ -1173,8 +1200,8 @@ la C6, la P4 y la Nucleo.
   vano al run ocioso (309 veces) y el hilo saltaba de núcleo. Arreglado (`c3fe9277`): el mundo parado con su propia
   condición (`mundo_cond`; `test-cola` 17, con su sabotaje; la red del PC, verde). En la placa: 2 vueltas sin hilo y
   −6 % en un hilo que concatena (el resto es el cerrojo de cada reserva: lo de V8); la tanda idéntica y `run_placa` 34
-  de 34; su resistencia de 110 minutos, lanzada a última hora (su resultado, en
-  `scratchpad/resist_mundo.log` de esta sesión: leerlo al empezar).
+  de 34; y su resistencia de 110 minutos, **SIN FALLOS** (889 vueltas, 22 RESET, 889 carreras; el KILL a un dormido,
+  8 ms de mediana y 26 de máximo; las pilas quietas).
 - **Traspaso**: la Pico 2 se queda con la imagen de DOS núcleos (la de `c3fe9277`) y el ENV con `vm.runs=2` (sin
   `vm.cores` ni `mpu`); los ficheros de las pruebas, borrados (OK de Eduardo). Lo que queda de H12: las natives y LVGL
   con dos runs (antes de los otros micros), y el resto de placas una vez, al final; qué imagen y qué `vm.runs` van por

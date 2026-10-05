@@ -217,13 +217,14 @@ bpvm_thread_t* bpvm_hilo_por_tid(const bpvm_t* vm, int32_t tid) {
     return NULL;
 }
 
-bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre) {
+bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre, int run) {
     bpvm_thread_t* c = bpvm_hilos_primero(vm);
     if (c == NULL) return NULL;
     bpvm_thread_t* h = c;
     do {                                   /* desde el siguiente al punto de la rueda hasta él mismo: una vuelta */
         h = h->next;
-        if (h->status == BPVM_THREAD_RUNNABLE && (!libre || h->sched_owner == -1)) {
+        /* V7/H12 — el que espera al run 0 (un builtin de la GUI encontrado en otro run: interp.c) sólo lo elige el 0 */
+        if (h->status == BPVM_THREAD_RUNNABLE && (!libre || h->sched_owner == -1) && (!h->al_run0 || run == 0)) {
             bpvm_la_cola.punto = h;        /* la rueda sigue en el elegido: el próximo empieza en su siguiente */
             vm->latido_tid = h->id;        /* para el latido, que lo lee desde otra tarea (sin punteros) */
             vm->latido_pc = h->pc;
@@ -231,6 +232,12 @@ bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre) {
         }
     } while (h != c);
     return NULL;
+}
+
+int bpvm_hilos_esperan_al_run0(const bpvm_t* vm) {
+    for (const bpvm_thread_t* h = bpvm_hilos_primero(vm); h; h = bpvm_hilos_siguiente(vm, h))
+        if (h->al_run0 && h->status == BPVM_THREAD_RUNNABLE && h->sched_owner == -1) return 1;
+    return 0;
 }
 
 /* Mete `h` al final de la rueda: justo detrás del último elegido, así que le toca cuando le hayan tocado a todos. */

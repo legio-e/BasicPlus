@@ -397,6 +397,11 @@ struct bpvm_thread {
      * struct: lo de arriba no se mueve. */
     struct bpvm_thread* next;
     struct bpvm_thread* back;
+    /* V7/H12 — LA GUI, SÓLO EN EL RUN 0 (docs/V7_IDEAS.md §H12 «LVGL con dos runs»): 1 mientras el hilo espera a que el
+     * run 0 lo elija para repetir el builtin de la GUI que encontró en otro run (interp.c, OP_CALL_BUILTIN). Lo pone el
+     * intérprete del run que lo suelta; lo borra el run 0 al elegirlo (scheduler.c, bajo vm_lock). Al final: lo de
+     * arriba no se mueve. */
+    int al_run0;
 };
 
 /* F5 — entry del handlerStack. */
@@ -1181,6 +1186,9 @@ int bpvm_format_i64(char* out, int64_t v);
 
 /* builtins.c (F2) */
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
+/* V7/H12 — ¿es `id` un builtin de la GUI (los BUILTIN_GUI_*: entran en gui.c, y por él en LVGL)? Con varios runs sólo
+ * los ejecuta el run 0 (interp.c, OP_CALL_BUILTIN; docs/V7_IDEAS.md §H12 «LVGL con dos runs»). */
+int bpvm_builtin_de_la_gui(int id);
 
 /* V7/H5 P2b.2 — ¿este builtin cede o bloquea el hilo? (sleep, sleepSec, yield, Thread.join, Mutex.lock: los que
  * cambian tc->status). Sólo lo usa call_builtin como RESPALDO, donde la native no puede suspenderse: allí los
@@ -1280,8 +1288,12 @@ bpvm_thread_t* bpvm_hilos_siguiente(const bpvm_t* vm, const bpvm_thread_t* h);
 /* El handle de un Thread de BP (su __tid) → su struct; NULL si ya no está (el hilo acabó y salió de la cola). */
 bpvm_thread_t* bpvm_hilo_por_tid(const bpvm_t* vm, int32_t tid);
 /* El siguiente listo en rueda —desde el siguiente al punto de la rueda, UNA vuelta—, y la rueda sigue en él. Con
- * `libre`, sólo uno que no tenga ya un worker (SMP). NULL si no hay ninguno. */
-bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre);
+ * `libre`, sólo uno que no tenga ya un worker (SMP). `run`: el número del run que elige —uno que espera al run 0
+ * (`al_run0`, la GUI) sólo lo elige el 0—. NULL si no hay ninguno. */
+bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre, int run);
+/* V7/H12 — ¿Hay un hilo listo que sólo puede elegir el run 0 (`al_run0`)? Para un run que no es el 0 y no encuentra
+ * hilo: eso no es un interbloqueo, es trabajo del run 0. Bajo vm_lock. */
+int bpvm_hilos_esperan_al_run0(const bpvm_t* vm);
 /* Saca de la cola y devuelve (struct y pila) los hilos que acabaron DEL TODO. Lo llaman los planificadores en su
  * pasada de despertar, bajo vm_lock. Devuelve cuántos. */
 int  bpvm_hilos_recoger(bpvm_t* vm);

@@ -24,6 +24,13 @@
 static volatile int g_window_closed = 0;
 static volatile int g_shot_requested = 0;   /* F12 → captura de pantalla (docs) */
 
+/* V7/H12, LVGL con dos runs — LA VENTANA, SIEMPRE DESDE EL HILO QUE LA CREÓ. LVGL lee los eventos de SDL dentro de
+ * lv_timer_handler, y en Windows la cola de mensajes es del hilo que creó la ventana: bombeada desde otro, deja de
+ * responder. Con dos runs la GUI sólo la toca el run 0 (interp.c, el viaje); si algo la bombea desde otro hilo, que lo
+ * diga (la primera vez) y lo cuente. */
+static SDL_threadID  g_hilo_ventana   = 0;
+static unsigned long g_bombeos_ajenos = 0;
+
 /* Disparo NO interactivo de la captura: BPVM_GUI_SHOT_MS=<ms>.
  *
  * F12 exige un humano delante, y eso deja fuera dos casos que importan: que la
@@ -335,6 +342,7 @@ void bpvm_gui_disp_init(int w, int h) {
     if (g_headless) { disp_init_headless(w, h); return; }
     SDL_SetMainReady();
     lv_tick_set_cb(SDL_GetTicks);
+    g_hilo_ventana = SDL_ThreadID();   /* V7/H12: el único que la bombea */
     lv_display_t* d = lv_sdl_window_create(w, h);
     lv_sdl_window_set_title(d, g_title);
     lv_sdl_mouse_create();
@@ -350,6 +358,11 @@ void bpvm_gui_disp_init(int w, int h) {
 }
 
 uint32_t bpvm_gui_disp_pump(void) {
+    if (g_hilo_ventana != 0 && SDL_ThreadID() != g_hilo_ventana && g_bombeos_ajenos++ == 0) {
+        printf("[gui] AVISO: la ventana, bombeada desde OTRO hilo que el que la creo (no debe pasar: con dos runs, "
+               "la GUI es del run 0)\n");
+        fflush(stdout);
+    }
     uint32_t idle_ms = lv_timer_handler();
     /* BPVM_GUI_SHOT_MS: se lee en el primer pump (aquí SDL ya está arrancado, así
      * que SDL_GetTicks() vale) y la cuenta arranca desde el primer frame, que es

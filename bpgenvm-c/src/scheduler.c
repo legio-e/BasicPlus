@@ -147,6 +147,8 @@ int bpvm_cola_colgar(bpvm_t* vm, int n_runs, int para_permanentes, bpvm_cola_al_
     q->cuantos[0] = q->cuantos[1] = 0;
     q->gc_con_otro_dentro = 0;
     q->vueltas_sin_hilo = 0;
+    q->gui_viajes = 0;
+    q->gui_fuera_del_run0 = 0;
     q->programa = vm;
     bpvm_platform_cond_broadcast(&q->sched_cond);
     bpvm_platform_mutex_unlock(&q->vm_lock);
@@ -236,11 +238,15 @@ static void acabar(bpvm_cola_t* q, bpvm_t* vm, int varios) {
     bpvm_programa_cerrar(vm);   /* las líneas a medias (#600) y las líneas `pila:` e `hilos:` */
     /* 2b — con varios runs, cuánto trabajó cada uno: la prueba de que el segundo run de verdad ejecuta */
     if (q->n_runs > 1)
-        bpvm_diag("[bpvm] runs: %d; cuantos del run 0, %lu; del run 1, %lu; vueltas sin hilo, %lu", q->n_runs,
-                  (unsigned long) q->cuantos[0], (unsigned long) q->cuantos[1], (unsigned long) q->vueltas_sin_hilo);
+        bpvm_diag("[bpvm] runs: %d; cuantos del run 0, %lu; del run 1, %lu; vueltas sin hilo, %lu; viajes al run 0 "
+                  "(GUI), %lu", q->n_runs, (unsigned long) q->cuantos[0], (unsigned long) q->cuantos[1],
+                  (unsigned long) q->vueltas_sin_hilo, (unsigned long) q->gui_viajes);
     if (q->gc_con_otro_dentro > 0)   /* no debe pasar: una colecta con otro run ejecutando (heap.c) */
         bpvm_diag_urgente("[bpvm] GC: %lu colecta(s) con OTRO run dentro de su cuanto (no debe pasar)",
                           (unsigned long) q->gc_con_otro_dentro);
+    if (q->gui_fuera_del_run0 > 0)   /* no debe pasar: LVGL y gui.c, tocados desde otro run (builtins.c) */
+        bpvm_diag_urgente("[bpvm] GUI: %lu builtin(s) de la GUI FUERA del run 0 (no debe pasar)",
+                          (unsigned long) q->gui_fuera_del_run0);
     /* #462 — UN PROGRAMA AL QUE SE LE PIDIÓ PARAR DICE QUE FUE MATADO, SIEMPRE, aunque acabase solo: si no, el estado de
      * un `stop` dependía de DÓNDE cayera el KILL (medido el 5-sep con GuiColorDemo: `Gui.run()` acaba limpio al ver el
      * KILL, y el IDE recibía `exit 0`). La bandera es la verdad; también cuando el main muere de una excepción por el
@@ -327,8 +333,9 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
         despertar(vm);
         bpvm_hilos_recoger(vm);
 
-        /* Elegir en rueda: desde el siguiente al último elegido (#616). Con varios runs, sólo uno que no tenga otro. */
-        bpvm_thread_t* tc = bpvm_hilos_elegir(vm, varios);
+        /* Elegir en rueda: desde el siguiente al último elegido (#616). Con varios runs, sólo uno que no tenga otro; y
+         * uno que espera al run 0 (la GUI), sólo el 0. */
+        bpvm_thread_t* tc = bpvm_hilos_elegir(vm, varios, id);
         if (tc == NULL) {
             q->vueltas_sin_hilo++;   /* #662 (con varios, bajo el cerrojo) */
             int ms = -1;
@@ -340,8 +347,10 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
                 int64_t pronto = sueno_mas_cercano(vm);
                 if (pronto == INT64_MAX) {
                     /* EL INTERBLOQUEO: todos bloqueados, ninguno durmiendo y nadie con uno entre manos —con varios, el
-                     * que tiene uno puede despertar a otro (soltar un Mutex, acabar): se le espera—. */
-                    if (con_hilo == 0) {
+                     * que tiene uno puede despertar a otro (soltar un Mutex, acabar): se le espera—. V7/H12: y uno
+                     * listo que sólo puede elegir el run 0 (la GUI) no es un interbloqueo para otro run: es trabajo
+                     * del 0, al que su viaje ya avisó. */
+                    if (con_hilo == 0 && !(id != 0 && bpvm_hilos_esperan_al_run0(vm))) {
                         bpvm_diag_urgente("[bpvm-c sched] deadlock — todos los threads "
                                           "bloqueados sin posibilidad de progreso");
                         if (q->fallo == 0) q->fallo = BPVM_ERR_RUNTIME;
@@ -367,6 +376,11 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
          * marcos seguidos se ejecutarían en orden inverso, y son FIFO. */
         tc->status = BPVM_THREAD_RUNNING;
         tc->sched_owner = id;
+        /* V7/H12 — LA GUI, SÓLO EN EL RUN 0: el que llega de viaje (otro run lo soltó en un builtin de la GUI) repite
+         * aquí la instrucción, y desde ahora lo puede elegir cualquiera. Que el otro run lo sepa al acabar este cuanto
+         * (abajo): con dos hilos listos, si no, el otro seguiría dormido. */
+        const int de_viaje = tc->al_run0;
+        tc->al_run0 = 0;
         if (id >= 0 && id < 2) q->cuantos[id]++;
         bpvm_event_drain_one(vm, tc);
         q->con_hilo++;
@@ -410,8 +424,10 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
              * hilo iba un 35 % más lento en el PC con dos runs y un 7,3 % en la Pico 2 (V7_IDEAS §H12 «La medida»). Lo
              * que deja listo a OTRO hilo avisa por su cuenta: arrancarlo (bpvm_thread_spawn), soltar un Mutex con
              * esperas (threading.c), el KILL (bpvm_request_kill) y parar el mundo (heap.c); los eventos, los atiende el
-             * hilo que los levanta. (El sabotaje: SÓLO PRUEBAS, test-cola 16.) */
-            if (tc->status != BPVM_THREAD_RUNNABLE || s != BPVM_OK || q->sabotaje_aviso)
+             * hilo que los levanta. (El sabotaje: SÓLO PRUEBAS, test-cola 16.) V7/H12: y el VIAJE al run 0 —el hilo
+             * sigue listo, pero sólo para el 0, que puede estar dormido— y su vuelta —tras su cuanto en el 0, lo puede
+             * coger cualquiera—. */
+            if (tc->status != BPVM_THREAD_RUNNABLE || s != BPVM_OK || q->sabotaje_aviso || tc->al_run0 || de_viaje)
                 bpvm_platform_cond_broadcast(&q->sched_cond);
             bpvm_platform_mutex_unlock(&q->vm_lock);
         }
@@ -425,8 +441,11 @@ void bpvm_cola_correr(int permanente, int id) {
     for (;;) {
         bpvm_platform_mutex_lock(&q->vm_lock);
         /* Un programa publicado para los suyos, que no se esté cerrando y con sitio: no entran más runs que los que se
-         * publicaron (n_runs; con uno, el planificador va sin cerrojo y no puede haber otro dentro). */
-        while (q->programa == NULL || q->para_permanentes != para || q->acabando || q->dentro >= q->n_runs) {
+         * publicaron (n_runs; con uno, el planificador va sin cerrojo y no puede haber otro dentro). V7/H12: y uno para
+         * UN run lo corre el run 0 —antes, el primero que despertaba—: la GUI es del run 0 (la ventana del simulado,
+         * que sigue abierta para el siguiente programa, sólo la atiende el hilo que la creó). */
+        while (q->programa == NULL || q->para_permanentes != para || q->acabando || q->dentro >= q->n_runs
+               || (q->n_runs == 1 && id != 0)) {
             if (!permanente) {                 /* el suyo ya acabó, lo está cerrando otro o no cabe: vuelve */
                 bpvm_platform_mutex_unlock(&q->vm_lock);
                 return;

@@ -350,6 +350,16 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
         int y = 0;
         bpvm_status_t st = bpvm_interp_run_quantum(vm, tc, quantum, &y);
         if (st == BPVM_NATIVE_RETURN) break;
+        /* V7/H12 — un builtin de la GUI fuera del run 0 DENTRO de una llamada anidada (una native que llama a BP): el
+         * hilo no puede viajar al run 0 con los marcos de C de la native debajo, y repetir el cuanto lo intentaría sin
+         * fin. Hoy no pasa (un programa con natives va con un run); si pasa, que lo diga. */
+        if (st == BPVM_OK && tc->al_run0) {
+            tc->al_run0 = 0;
+            tc->cs = caller_cs;
+            vm->aot_helpers->throw_runtime(vm,
+                "GUI: un builtin de la GUI desde una native, fuera del run 0 (con dos runs, todavia no)");
+            return 0;   /* inalcanzable */
+        }
         if (st == BPVM_OK && puede_ceder
             && (tc->status == BPVM_THREAD_RUNNABLE || tc->status == BPVM_THREAD_BLOCKED_SLEEP
                 || tc->status == BPVM_THREAD_BLOCKED_MUTEX || tc->status == BPVM_THREAD_BLOCKED_JOIN)) {
@@ -1795,6 +1805,20 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         /* ---- F2: builtins ---- */
         case OP_CALL_BUILTIN: {
             uint16_t id = bpvm_read_u16_be(mem + pc); pc += 2;
+            /* V7/H12 — LA GUI, SÓLO EN EL RUN 0 (docs/V7_IDEAS.md §H12 «LVGL con dos runs»): LVGL y gui.c no son
+             * reentrantes, y la ventana del PC sólo la atiende el hilo que la creó. Con varios runs, un hilo que llega
+             * a un builtin de la GUI en otro run VIAJA: la instrucción sin hacer (sus argumentos siguen en la pila), el
+             * hilo listo para el run 0 y el cuanto acabado; el 0 lo elige y la repite. Con un run (vm->smp NULL),
+             * nada. (El sabotaje, SÓLO PRUEBAS: se ejecuta aquí mismo, como antes.) */
+            if (vm->smp != NULL && tc->sched_owner != 0 && bpvm_builtin_de_la_gui(id)
+                && !bpvm_la_cola.sabotaje_gui) {
+                pc -= 3;                              /* el opcode y su id: se repite entera */
+                tc->al_run0 = 1;
+                tc->status = BPVM_THREAD_RUNNABLE;
+                __atomic_fetch_add(&vm->smp->gui_viajes, 1u, __ATOMIC_RELAXED);
+                if (yielded) *yielded = 1;
+                goto done;
+            }
             tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
             bpvm_status_t bs = bpvm_call_builtin(vm, tc, id);
             sp = tc->sp; bp = tc->bp; pc = tc->pc; cs = tc->cs;

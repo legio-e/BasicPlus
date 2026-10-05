@@ -1428,15 +1428,22 @@ test-frcond:
 COLA_BIN = build/test_cola.exe
 test-cola: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido UnHiloCalcula CadenasUnHilo)
-	$(call stdlibdep,Core)
-	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ] || [ ! -f samples/UnHiloCalcula.mod ] || [ ! -f samples/CadenasUnHilo.mod ]; then \
-	  echo "FAIL test-cola: faltan los .mod de la prueba (Interbloqueo, MutexGc, FinJunto, GcConcurrente, EvDosRuns, EvHiloMuere, FicherosDosRuns y los de la revisión: OwnerCarrera, LineasLargas, JoinLinea, ListDirDos, ColectaAjena, ErrorPrimero, FileCompartido; y UnHiloCalcula, de #662; y CadenasUnHilo, de la 3.2) y no se han podido generar"; exit 1; \
+	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido UnHiloCalcula CadenasUnHilo GuiDosRuns)
+	$(call stdlibdep,Core Gui Json Collections Str)
+	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ] || [ ! -f samples/UnHiloCalcula.mod ] || [ ! -f samples/CadenasUnHilo.mod ] || [ ! -f samples/GuiDosRuns.mod ]; then \
+	  echo "FAIL test-cola: faltan los .mod de la prueba (Interbloqueo, MutexGc, FinJunto, GcConcurrente, EvDosRuns, EvHiloMuere, FicherosDosRuns y los de la revisión: OwnerCarrera, LineasLargas, JoinLinea, ListDirDos, ColectaAjena, ErrorPrimero, FileCompartido; y UnHiloCalcula, de #662; y CadenasUnHilo, de la 3.2; y GuiDosRuns, de LVGL con dos runs) y no se han podido generar"; exit 1; \
 	fi
+	@# V7/H12, LVGL con dos runs: la lista de los builtins de la GUI que sólo ejecuta el run 0 (builtins.c,
+	@# bpvm_builtin_de_la_gui) tiene TODOS los BUILTIN_GUI_* de builtin_ids.h: uno nuevo que se olvide ahí tocaría LVGL
+	@# desde otro run.
+	@faltan=$$(for n in $$(grep -o 'BUILTIN_GUI_[A-Z0-9_]*' src/builtin_ids.h | sort -u); do \
+	   awk '/^int bpvm_builtin_de_la_gui/,/^}/' src/builtins.c | grep -qw "$$n" || echo "$$n"; done); \
+	 if [ -n "$$faltan" ]; then echo "FAIL test-cola: builtins de la GUI que no viajan al run 0 (bpvm_builtin_de_la_gui): $$faltan"; exit 1; \
+	 else echo "--- los $$(grep -o 'BUILTIN_GUI_[A-Z0-9_]*' src/builtin_ids.h | sort -u | wc -l) builtins de la GUI, todos en la lista del run 0 ---"; fi
 	@$(CC) $(CFLAGS) -Isrc test/test_cola.c $(LIBOBJ) -o $(COLA_BIN) $(LDFLAGS)
-	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 16. PASS y la linea OK) ---"
+	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 18. PASS y la linea OK) ---"
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod 2>/dev/null) || { echo "FAIL test-cola"; exit 1; }
-	@echo "--- y sus sabotajes (esperado: los catorce, ROJOS, cada uno por lo suyo) ---"
+	@echo "--- y sus sabotajes (esperado: los dieciséis, ROJOS, cada uno por lo suyo) ---"
 	@# El del contador: un interbloqueo FALSO dicho en stderr (detrás, el programa se descuelga con un run aún dentro
 	@# de su cuanto, que al despertar ya no lo encuentra: suele acabar en un fallo de segmento; por eso se mira el aviso).
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-contador \
@@ -1522,7 +1529,14 @@ test-cola: $(LIBOBJ)
 	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab15.out; then \
 	   echo "  (rojo, como debe: con un hilo que reserva, cada colecta despierta al otro run en vano)"; \
 	 else echo "FAIL test-cola: el sabotaje --sabotaje-mundo no se caza (salida $$st)"; exit 1; fi
-	@echo "PASS test-cola (y sus quince sabotajes, rojos)"
+	@# V7/H12, LVGL con dos runs: el builtin de la GUI se ejecuta en el run que lo encuentra, como antes: LVGL y gui.c,
+	@# tocados desde el run 1.
+	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-gui \
+	   >../build/cola_sab16.out 2>/dev/null); st=$$?; cat build/cola_sab16.out; \
+	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab16.out; then \
+	   echo "  (rojo, como debe: sin el viaje, builtins de la GUI ejecutados en el run 1)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-gui no se caza (salida $$st)"; exit 1; fi
+	@echo "PASS test-cola (y sus dieciséis sabotajes, rojos)"
 
 # V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS: cada hilo, una struct pedida al arrancarlo y devuelta al acabar (sin
 # array y sin tope; el diseño, de Eduardo). HilosMuchos arranca 120 hilos —40 de uno en uno, 40 a la vez esperando en

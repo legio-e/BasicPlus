@@ -2139,13 +2139,14 @@ static void run_exited(long sesion, const char* estado, int codigo, unsigned lon
 /* V7/H12, etapa 2b — UN PROGRAMA CON UN SOLO RUN aunque haya dos (Eduardo, 5-oct: «de momento solamente 2 run
  * ejecutando código BP normal, sin AOT ni LVGL»): el depurador —su pausa congela el programa entero, y su estado es
  * de un hilo— y, mientras tanto, lo que no está preparado para dos: las natives (el contexto del AOT es global en los
- * micros), la GUI (LVGL no es reentrante) y SQLite (compilado sin hilos). `porque`, para el log. */
+ * micros) y SQLite (compilado sin hilos). La GUI ya va con dos: sus builtins sólo los ejecuta el run 0 (interp.c,
+ * OP_CALL_BUILTIN; V7_IDEAS §H12 «LVGL con dos runs»). Y con uno, lo corre el run 0 (scheduler.c). `porque`, para el
+ * log. */
 static int un_solo_run(const bpvm_t* vm, int depurando, const char** porque) {
     if (depurando)            { *porque = "el depurador"; return 1; }
     if (bpvm_aot_count() > 0) { *porque = "natives";      return 1; }
     for (int i = 0; i < vm->module_count; i++) {
         const char* n = vm->modules[i].name;
-        if (!strcmp(n, "Gui"))    { *porque = "la GUI"; return 1; }
         if (!strcmp(n, "SQLite")) { *porque = "SQLite"; return 1; }
     }
     return 0;

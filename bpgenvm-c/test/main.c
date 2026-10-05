@@ -41,6 +41,7 @@
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen (micro simulado) */
 #endif
+#include "bpvm_smp.h"   /* V7/H12: BPVM_SABOTAJE_GUI (SÓLO PRUEBAS) */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -286,6 +287,12 @@ static int main_real(int argc, char** argv) {
     if (getenv("BPVM_POISON")) {
         memset(mem, 0xAA, mem_size);
         fprintf(stderr, "[BPVM_POISON] buffer de %zu bytes envenenado con 0xAA\n", mem_size);
+    }
+    /* SÓLO PRUEBAS (V7/H12, LVGL con dos runs): BPVM_SABOTAJE_GUI=1, un builtin de la GUI se ejecuta en el run que lo
+     * encuentra, como antes del viaje al run 0 —para ver que la guarda de la ventana (gui_display_sdl.c) lo caza—. */
+    if (getenv("BPVM_SABOTAJE_GUI")) {
+        bpvm_la_cola.sabotaje_gui = 1;
+        fprintf(stderr, "[BPVM_SABOTAJE_GUI] la GUI, sin viajar al run 0 (SOLO PRUEBAS)\n");
     }
 
     /* V6/U6.1 — EL MISMO REPARTO QUE LAS PLACAS, TAMBIÉN SIN `--stack`.

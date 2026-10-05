@@ -5360,7 +5360,19 @@ núcleo»*. Con `ParaleloPico` (`ParaleloBench` con tamaños para la placa: cuat
   110 minutos con dos runs y el programa de carreras, **SIN FALLOS** (883 vueltas, 22 RESET, 883 carreras sin `Mutex`
   sin que la VM se rompa, el KILL a un dormido en 8 ms de mediana —15 de máximo— y las pilas quietas). **La puerta de
   la 3.2, PASADA.** El arreglo de `mundo_cond`, aparte (Eduardo: *«Ahora lo que interesa es que los 2 núcleos
-  funcione»*): la red del PC, y después su medida en la placa, la tanda y su propia resistencia.
+  funcione»*): la red del PC, y después su medida en la placa, la tanda y su propia resistencia: 110 minutos con dos
+  runs, **SIN FALLOS** (889 vueltas, 22 RESET, 889 carreras; el KILL a un dormido, 8 ms de mediana y 26 de máximo; las
+  pilas quietas).
+
+**Lo que dijo Eduardo al acabar** (5-oct, noche): *«Con la última prueba de resistencia los 2 núcleos quedan validados,
+a falta de terminar LVGL y natives, no?»* —sí, en la Pico 2 y para el código BP normal—. Y dos decisiones:
+- **El depurador, con UN run, el primero** (*«El debug de momento solamente sobre el run1. Alguna vez he tenido que
+  depurar en Java con varios hilos y es muy difícil de seguir. Así que de momento tiene esa limitación, se documenta y
+  ya»*): es lo que hace `un_solo_run` y, desde «LVGL con dos runs», con un run lo corre el run 0 (su Run1);
+  documentado en `PENDIENTES.md`.
+- **Las placas de UN núcleo, con un run** (*«C3, C5 y C6 más las STM32 tienen 1 núcleo así que 1 run, 2 runs no aporta
+  nada»*): el resto de placas de H12 son, para ellas, su tanda con la imagen nueva y `vm.runs=1`; el 2º run (la 2b)
+  sólo en las de dos núcleos —la Metro, la S3 y las P4— y en la P4 de hoy (un núcleo) como banco de LVGL con dos runs.
 
 **Y para afinar** (medido en la puerta de la 2b): con dos runs, `fib(26)` va un 4 % más lento que con uno (2 948 contra
 2 835 ms): lo más probable, el punto seguro de cada paso, que con dos runs lee dos punteros (`vm->smp` y su
@@ -5373,6 +5385,115 @@ array escrito fuera. (b), un hilo suelta un `owner` y reserva otro del mismo tip
 primero, con la ventana entre las dos resoluciones del paso: con la pieza, el nuevo intacto; sin ella, escrito por quien
 no era. (d), dos hilos escriben a la vez el mismo campo y otro suelta y reserva sin parar: ninguna lectura llega a otro
 objeto. Y después, la puerta de la 2b otra vez en la Pico 2 (con el OK de Eduardo para grabar).
+
+#### LVGL con dos runs: el análisis (5-oct, noche; leído en el código, para que Eduardo decida)
+
+Eduardo: *«para probar el LVGL necesitamos una placa que tenga pantalla»* → la P4, con un núcleo y `vm.runs=2` (la 2b
+de la familia ESP32), y antes el PC. Hoy un programa con GUI va con UN run (`un_solo_run`, `src/bpvm_repl.c`).
+
+**Lo que hay.** El lazo de la GUI es un hilo BP (`HiloGui`, `bpstdlib/Gui.bp`) que llama a `__guiRunOnce` (builtin 222):
+drena los eventos —cada uno, una llamada ANIDADA al handler (`bpvm_call_bp_from_builtin`)—, mira el KILL y da una
+vuelta de LVGL (`lv_timer_handler`). Los demás builtins de la GUI (crear, poner texto, leer el ancho…) entran en
+`src/gui.c`, que guarda una copia de cada control y llama a LVGL en el acto. Ni LVGL ni `gui.c` son reentrantes.
+
+**Lo que ha salido al leerlo, y cambia la idea de la cola FIFO:**
+- **La ventana del PC sólo la atiende el hilo de SO que la creó.** El driver SDL de LVGL (`lv_sdl_window_create`,
+  `src/gui_display_sdl.c`) lee los eventos de la ventana DENTRO de `lv_timer_handler`, y en Windows la cola de mensajes
+  es del hilo que creó la ventana (SDL: *sólo desde el hilo que arrancó el vídeo*). Con dos runs, `HiloGui` salta de un
+  run a otro entre cuantos: la vuelta que le toque al run 1, LVGL lee desde otro hilo y la ventana se queda sin atender.
+  O sea: **todo lo de la GUI tiene que hacerlo SIEMPRE el mismo run, con cola o sin ella.**
+- **Hay lecturas que van a LVGL**, no a la copia: el ancho de un control de tamaño automático (`bpvm_gui_get_width` →
+  `lv_obj_get_width`). Con una cola, leerlo justo después de cambiar el texto daría el ancho viejo, y leerlo desde otro
+  hilo es tocar LVGL a la vez que el lazo: las lecturas tendrían que esperar al lazo igual.
+
+**Las dos formas:**
+
+| | (A) la cola FIFO (la idea de Eduardo) | (B) **la llamada viaja al run 0** |
+|---|---|---|
+| mecanismo | cada setter actualiza la copia y deja el comando en la cola; el lazo los aplica antes de cada vuelta | cada builtin de la GUI se ejecuta SÓLO en el run 0; un hilo en el run 1 que llega a uno cede su cuanto marcado «para el run 0», y el run 0 repite la instrucción |
+| semántica | asíncrona: crear tiene que devolver un control que aún no existe; las lecturas que van a LVGL, esperando al lazo | la de hoy con un run: crear devuelve el control, leer tras escribir da lo escrito |
+| la ventana del PC | el lazo, fijo a un run aparte | resuelta: el run 0 es siempre el mismo hilo |
+| qué cambia | `gui.c` (separar «la copia» de «aplicar a LVGL»), que va DENTRO del pack: los tres packs, otra vez; el tamaño de la cola, qué hacer llena, y el formulario creado ANTES de arrancar el lazo (nadie la vacía) | sólo la VM: el intérprete y el planificador; ni `gui.c` ni el pack |
+| lo que espera un hilo | nada al escribir | lo que le quede al run 0 de su cuanto o de su vuelta de LVGL (milisegundos); mientras, el run 1 sigue con otros hilos |
+
+**(B), por dentro** (propuesta):
+1. En `OP_CALL_BUILTIN` (`src/interp.c`), un mapa de bits de los builtins de la GUI —no son un rango: 135–199, 206–207,
+   210, 214–220, 222–223, 234–239—. Si hay varios runs (`vm->smp`) y el hilo no está en el run 0 (`tc->sched_owner`):
+   el pc vuelve a la instrucción, el hilo queda RUNNABLE con `run_fijo = 0` y el cuanto acaba. Con un run, una
+   comparación y nada más.
+2. `bpvm_hilos_elegir` (`src/threading.c`) salta los hilos fijados a otro run; el run 0, al elegirlo, borra la marca:
+   el hilo sigue en el run 0 hasta acabar el cuanto, y en el siguiente lo coge cualquiera.
+3. El aviso: un hilo que queda listo para OTRO run avisa a la cola (`#662` sólo avisa si el hilo deja de estar
+   RUNNABLE, y éste lo sigue estando).
+4. El interbloqueo (`src/scheduler.c`): «ningún hilo que pueda elegir» ya no quiere decir «todos bloqueados»; uno listo
+   para el otro run es trabajo, no un interbloqueo.
+5. Un builtin de la GUI dentro de una llamada anidada fuera del run 0 (el puente de las natives) no puede ceder: si
+   llegara a pasar, un RuntimeError con nombre. Hoy no puede: las natives van con un run.
+6. Con UN run (las natives, el depurador, SQLite), entra el run 0 (hoy, el primero que despierta): la ventana que el
+   simulado deja abierta para el siguiente programa sigue en el mismo hilo.
+7. `un_solo_run` sin «la GUI».
+
+**Lo que no cambia**: el GC —el hilo que viaja cede en un punto seguro, como cualquier fin de cuanto—; las raíces de la
+GUI (`bpvm_gui_visit_roots`) se leen con el mundo parado, y nadie toca la copia fuera de un cuanto del run 0; los
+handlers, anidados dentro de `__guiRunOnce`, ya están en el run 0. El run 0: en el PC, el hilo que llama a `bpvm_run`
+(`src/scheduler_smp.c`); en las placas y el simulado, la tarea `run`, permanente.
+
+**El precio de (B)**: lo que se hace en la GUI no va en paralelo —LVGL no lo permite de ninguna forma— y un hilo que la
+toca mucho trabaja en el run 0 mientras lo hace.
+
+**Las pruebas**: en el PC con dos runs, un programa de dos hilos —uno con el lazo; el otro cambia una etiqueta y lee su
+ancho sin parar— y la cuenta de builtins de la GUI ejecutados fuera del run 0: 0; con el sabotaje (sin el viaje), no:
+rojo. Los samples de GUI con dos runs, con la paridad de la VM-Java. La ventana del PC con dos runs: que responda (los
+clics del guión, `BPVM_GUI_SCRIPT`, y la captura). En la P4, la 2b de la familia ESP32 —el 2º run— y después la GUI con
+dos runs en la pantalla de verdad.
+
+**Decidido** (Eduardo: *«OK»*): (B), la llamada viaja al run 0.
+
+#### LVGL con dos runs: hecho en el PC (5-oct, noche)
+
+**El código**, los siete puntos de (B):
+- `src/interp.c`, `OP_CALL_BUILTIN`: con varios runs (`vm->smp`), un builtin de la GUI en un hilo que no está en el run
+  0 deja el pc en la instrucción (`pc -= 3`, el opcode y su id), el hilo RUNNABLE con `al_run0` y el cuanto acabado.
+  Con un run, una comparación. En el puente de las natives (`bridge_run_bp_frame`), un hilo que vuelve con `al_run0`
+  es un RuntimeError con nombre, no una vuelta sin fin.
+- `src/threading.c`: `bpvm_hilos_elegir(vm, libre, run)` salta los que esperan al run 0 si quien elige no es el 0; y
+  `bpvm_hilos_esperan_al_run0`, para el interbloqueo.
+- `src/scheduler.c`: el run 0, al elegirlo, borra la marca; avisa a la cola un viaje (el hilo sigue RUNNABLE, `#662`
+  no avisaba) y la vuelta de uno (tras su cuanto en el 0 lo puede coger cualquiera); «ningún hilo que pueda elegir» no
+  es un interbloqueo para otro run si hay alguno esperando al 0; un programa para UN run lo coge el run 0 (antes, el
+  primero que despertaba); y la línea `runs:` del final, con los viajes; y un aviso urgente si algún builtin de la GUI
+  se ejecutó fuera del run 0.
+- `src/builtins.c`: `bpvm_builtin_de_la_gui` —los 83 `BUILTIN_GUI_*`, por nombre: no son un rango— y, al entrar en
+  `bpvm_call_builtin`, la cuenta de los ejecutados fuera del run 0 (un error con nombre si lo llama una native).
+- `src/bpvm_repl.c`: `un_solo_run` sin «la GUI».
+- `src/gui_display_sdl.c`: la GUARDA de la ventana del PC: el hilo que la crea es el único que la bombea; si otro lo
+  hace, «[gui] AVISO: la ventana, bombeada desde OTRO hilo…» (la primera vez).
+- `test/main.c`: `BPVM_SABOTAJE_GUI=1` (SÓLO PRUEBAS): el builtin, donde se encuentra, como antes.
+
+**Lo medido**:
+- **`test-cola` 18** (`samples/GuiDosRuns.bp`: dos hilos que crean 40 etiquetas cada uno y les cambian el texto, la x
+  y el ancho y los leen, con cálculo entre medias): 20 de 20, 624 viajes, NINGUNO fuera del run 0, el resultado de un
+  run y de la VM-Java. **Sabotaje** (`--sabotaje-gui`): 0 de 20, 5 143 builtins de la GUI en el run 1, y alguna pasada
+  muerta con un RuntimeError (el modelo de `gui.c`, roto). Los otros quince sabotajes, rojos. Y la lista de los 83,
+  comprobada contra `builtin_ids.h` (quitando uno a mano, lo dice).
+- **La ventana del PC** (`make LVGL=1`, `--smp=2`, `samples/GuiVentanaDosRuns.bp`: el lazo en su hilo, un botón y un
+  hilo trabajador que calcula y pone su progreso en una etiqueta cada 20 ms; un guion con dos clics, la captura y
+  cerrar): los dos clics, el trabajador hasta el final, la captura bien (`clics: 2`, `trabajador: 59 / 296512`) y 168
+  viajes. **Con el sabotaje, el programa SE CUELGA**: el trabajador no vuelve de su primer `setText` (la etiqueta se
+  queda en «trabajador: -») y lo mata el plazo. Y la guarda, con un trabajador que sólo calcula (el lazo es lo único
+  que toca la GUI): con el viaje, la GUI en el run 0 (263 cuantos) y el cálculo en el 1 (14 986), sin aviso; con el
+  sabotaje, el aviso.
+- **El micro simulado** (el camino del IDE; `make sim LVGL=1`, `--runs=2`): tres programas seguidos en la MISMA
+  ventana —dos con dos runs (el guion: los clics) y el tercero con el depurador (PAUSE antes del RUN: un run)—, tres
+  veces, sin un aviso. Sin la regla «con un run, el run 0», el aviso en una de tres: el programa del depurador cae en
+  el run 1 y la ventana del anterior se queda sin atender (en el IDE, congelada).
+
+**La familia ESP32, el 2º run** (`esp32/common/repl_esp32.c`): la tarea `run2`, el run número 1, con `vm.runs=2`; su
+pila, de la RAM interna del heap y sólo con dos runs (la C3 y la C6 van justas: con uno no la pagan); y
+`run2StackFreeBytes` en el `INFO`, como la Pico. Compilan las cinco (P4, S3, C3, C5 y C6). **Los packs de la P4
+aguantan** (la cuenta, antes de grabar): con la imagen nueva el código acaba en `0x400739DE` y los datos de sólo
+lectura en `0x400BB604`, por debajo de la página `0x400C0000`: la zona sigue en `0x400C8000`, donde está hoy; y ni
+`gui.c` ni la BIOS cambiaron desde la imagen que lleva (4-oct, 14:01, anterior a la 2b).
 
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
