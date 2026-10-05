@@ -491,6 +491,31 @@ static int un_hilo(int sabotaje) {
                    ultimo);
 }
 
+/* 17. (V7/H12, la 3.2) Un programa de UN hilo que concatena con dos runs (CadenasUnHilo): cada «+» reserva y el GC
+ * colecta cientos de veces; el mundo parado tiene su propia condición, así que las colectas no despiertan al run
+ * ocioso —sus vueltas sin hilo, unas pocas— y el resultado, bien. Sabotaje (--sabotaje-mundo: el mundo avisa también
+ * a la cola, como antes): tantas vueltas sin hilo como colectas. */
+static int cadenas_un_hilo(int sabotaje) {
+    int malos = 0; char ultimo[80] = "";
+    unsigned long mas = 0;
+    bpvm_la_cola.sabotaje_mundo = sabotaje;
+    for (int i = 0; i < PASADAS; i++) {
+        salida_t o;
+        bpvm_status_t s = corre("CadenasUnHilo.mod", 512 * 1024, 0, 2, &o);
+        unsigned long v = bpvm_la_cola.vueltas_sin_hilo;   /* de esta pasada (lo pone a 0 la siguiente al colgar) */
+        if (v > mas) mas = v;
+        if (s != BPVM_OK || strstr(o.buf, "resultado = 1920") == NULL || v > 20) {
+            malos++;
+            snprintf(ultimo, sizeof ultimo, "%s, %lu vueltas sin hilo", bpvm_status_str(s), v);
+        }
+    }
+    bpvm_la_cola.sabotaje_mundo = 0;
+    char detalle[64];
+    snprintf(detalle, sizeof detalle, "; vueltas sin hilo, %lu como mucho", mas);
+    return informe("17. un hilo que reserva, con dos runs: el GC no despierta al otro (la 3.2)", sabotaje, malos,
+                   PASADAS, detalle, ultimo);
+}
+
 int main(int argc, char** argv) {
     bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -502,6 +527,7 @@ int main(int argc, char** argv) {
     }
     int sab_contador = 0, sab_fin = 0, sab_salida = 0, sab_gc = 0, sab_eventos = 0, sab_revive = 0, sab_ficheros = 0;
     int sab_owner = 0, sab_lineas = 0, sab_suyo = 0, sab_zona = 0, sab_colecta = 0, sab_error = 0, sab_aviso = 0;
+    int sab_mundo = 0;
     for (int i = 8; i < argc; i++) {
         if (!strcmp(argv[i], "--sabotaje-contador")) sab_contador = 1;
         else if (!strcmp(argv[i], "--sabotaje-fin")) sab_fin = 1;
@@ -517,9 +543,11 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--sabotaje-colecta")) sab_colecta = 1;
         else if (!strcmp(argv[i], "--sabotaje-error")) sab_error = 1;
         else if (!strcmp(argv[i], "--sabotaje-aviso")) sab_aviso = 1;
+        else if (!strcmp(argv[i], "--sabotaje-mundo")) sab_mundo = 1;
     }
     int sabotaje = sab_contador || sab_fin || sab_salida || sab_gc || sab_eventos || sab_revive || sab_ficheros
-                || sab_owner || sab_lineas || sab_suyo || sab_zona || sab_colecta || sab_error || sab_aviso;
+                || sab_owner || sab_lineas || sab_suyo || sab_zona || sab_colecta || sab_error || sab_aviso
+                || sab_mundo;
     int fallos = 0;
     if (!sabotaje) fallos += interbloqueo(argv[1]);
     if (!sabotaje || sab_contador) fallos += falso(argv[2], sab_contador);
@@ -538,10 +566,12 @@ int main(int argc, char** argv) {
     if (!sabotaje || sab_error) fallos += error_primero(sab_error);
     if (!sabotaje || sab_ficheros) fallos += file_compartido(sab_ficheros);
     if (!sabotaje || sab_aviso) fallos += un_hilo(sab_aviso);   /* #662 */
+    if (!sabotaje || sab_mundo) fallos += cadenas_un_hilo(sab_mundo);   /* la 3.2: el mundo, con su condición */
     if (fallos == 0 && !sabotaje)
         printf("OK: la cola (H12 2a.2 y 2b): el interbloqueo, con uno y dos runs; ni uno falso; el fin, del último que "
                "sale; nadie dentro al avisar; el gc() del programa, con el mundo parado; los eventos y los ficheros con "
                "dos runs; lo de la revisión: owner, líneas largas, el join, la zona, la colecta, el error y un File "
-               "compartido; y un hilo con dos runs no despierta al otro en vano (#662)\n");
+               "compartido; y un hilo con dos runs no despierta al otro en vano, ni tras un cuanto (#662) ni tras una "
+               "colecta (la 3.2)\n");
     return fallos ? 1 : 0;
 }

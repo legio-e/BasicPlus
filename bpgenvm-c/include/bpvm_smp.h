@@ -66,6 +66,12 @@ typedef struct bpvm_cola {
     /* La condición: un programa publicado, un hilo que pasa a listo (un sueño que vence, un Mutex que se suelta, un join
      * cumplido, el GC que acaba), un KILL, el fin. */
     bpvm_platform_cond_handle_t  sched_cond;
+    /* V7/H12, la 3.2 — EL MUNDO PARADO, con su propia condición: la esperan el colector (a quedarse solo), los runs que
+     * esperan a que acabe una colecta y la zona de rascar; la avisan parar y reanudar el mundo y cada «un run menos en
+     * marcha». Antes era `sched_cond`, y cada GC despertaba en vano a los runs OCIOSOS (que esperan trabajo, no al
+     * mundo): con dos runs en dos núcleos, un programa de un hilo que reserva mucho —cadenas— iba un 27 % más lento,
+     * con tantas «vueltas sin hilo» como colectas y su único hilo saltando de un run a otro. */
+    bpvm_platform_cond_handle_t  mundo_cond;
     /* V7/H12, 2b (la revisión) — EL CERROJO DE LA HAL (builtins.c): reclamar un pin, abrir un bus, el ADC… con dos
      * runs. Propio y no el de la VM: lo que la HAL hace con él cogido puede escribir en la salida (las trazas de los
      * stubs del PC son stdout), la salida puede esperar a `io`, e `io` coge el de la VM para avisar de un KILL. */
@@ -142,6 +148,7 @@ typedef struct bpvm_cola {
     int     ensayo_linea_ms;         /* 2b: un hilo que termina tarda en soltar su línea a medias (interp.c) */
     int     sabotaje_error;          /* 2b: el error del programa, como antes: lo escribe cada throw y gana el último */
     int     sabotaje_aviso;          /* #662: avisar a la cola tras CADA cuanto, como antes (despierta al ocioso en vano) */
+    int     sabotaje_mundo;          /* 3.2: el mundo parado avisa también en sched_cond, como antes (despierta al ocioso) */
     int64_t t_ultimo_cuanto;         /* con el ensayo: cuándo volvió el último cuanto (µs)... */
     int64_t t_fin;                   /* ...y cuándo se decidió el fin (µs): el fin, siempre después */
 } bpvm_cola_t;
@@ -170,6 +177,10 @@ void bpvm_cola_correr(int permanente, int id);
 
 /* Que los runs que esperan dormidos miren otra vez (un KILL). */
 void bpvm_cola_despertar(void);
+
+/* V7/H12, la 3.2 — el aviso del MUNDO PARADO (parar, reanudar, un run menos en marcha), en su condición: sólo a quien
+ * espera al mundo; los runs ociosos no se enteran. Con el cerrojo de la cola cogido. */
+void bpvm_cola_aviso_mundo(bpvm_cola_t* q);
 
 /* Registra un run permanente (la tarea `run` de una placa, antes de crearla): desde ahí, el RUN cuelga los programas
  * para los permanentes. 0, o -1 si la cola no se puede crear. */

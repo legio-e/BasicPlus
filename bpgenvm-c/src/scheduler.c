@@ -39,7 +39,13 @@ int bpvm_cola_asegurar(void) {
         bpvm_platform_mutex_destroy(&q->vm_lock);
         return -1;
     }
+    if (bpvm_platform_cond_init(&q->mundo_cond) != 0) {  /* V7/H12, la 3.2: la del mundo parado (bpvm_smp.h) */
+        bpvm_platform_cond_destroy(&q->sched_cond);
+        bpvm_platform_mutex_destroy(&q->vm_lock);
+        return -1;
+    }
     if (bpvm_platform_mutex_init(&q->hal_lock) != 0) {   /* V7/H12, 2b: el de la HAL (bpvm_smp.h) */
+        bpvm_platform_cond_destroy(&q->mundo_cond);
         bpvm_platform_cond_destroy(&q->sched_cond);
         bpvm_platform_mutex_destroy(&q->vm_lock);
         return -1;
@@ -77,6 +83,11 @@ void bpvm_cola_despertar(void) {
     bpvm_platform_mutex_lock(&q->vm_lock);
     bpvm_platform_cond_broadcast(&q->sched_cond);
     bpvm_platform_mutex_unlock(&q->vm_lock);
+}
+
+void bpvm_cola_aviso_mundo(bpvm_cola_t* q) {
+    bpvm_platform_cond_broadcast(&q->mundo_cond);
+    if (q->sabotaje_mundo) bpvm_platform_cond_broadcast(&q->sched_cond);   /* SÓLO PRUEBAS: como antes (test-cola 17) */
 }
 
 /* ─── COLGAR un programa: el main a la cola, prepararlo, publicarlo ──────────────────────────────────────────────── */
@@ -295,7 +306,7 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
             return;
         }
         if (varios && q->stop_the_world) {             /* otro run colecta (heap.c): a que acabe */
-            bpvm_platform_cond_wait(&q->sched_cond, &q->vm_lock);
+            bpvm_platform_cond_wait(&q->mundo_cond, &q->vm_lock);   /* 3.2: la del mundo (bpvm_smp.h) */
             bpvm_platform_mutex_unlock(&q->vm_lock);
             continue;
         }
@@ -372,7 +383,7 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
         if (varios) {
             bpvm_platform_mutex_lock(&q->vm_lock);
             q->running_workers--;
-            if (q->stop_the_world) bpvm_platform_cond_broadcast(&q->sched_cond);   /* el colector espera quedarse solo */
+            if (q->stop_the_world) bpvm_cola_aviso_mundo(q);   /* el colector espera quedarse solo */
         }
         /* El cuanto agotado lo deja RUNNING: a la rueda otra vez. Si cedió o terminó, su estado ya es el bueno. */
         if (tc->status == BPVM_THREAD_RUNNING) tc->status = BPVM_THREAD_RUNNABLE;

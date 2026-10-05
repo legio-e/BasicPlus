@@ -905,25 +905,25 @@ void bpvm_heap_cuentas(bpvm_t* vm, bpvm_heap_cuentas_t* out) {
 static void stw_parar(bpvm_t* vm) {
     if (!vm->smp) return;
     vm->smp->stop_the_world = true;
-    bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+    bpvm_cola_aviso_mundo(vm->smp);   /* V7/H12, la 3.2: en la condición del mundo, no en la de la cola (bpvm_smp.h) */
     while (vm->smp->running_workers > 1) {
-        bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
+        bpvm_platform_cond_wait(&vm->smp->mundo_cond, &vm->smp->vm_lock);
     }
 }
 static void stw_seguir(bpvm_t* vm) {
     if (!vm->smp) return;
     vm->smp->stop_the_world = false;
-    bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+    bpvm_cola_aviso_mundo(vm->smp);
 }
 /* Si OTRO worker ya ha parado el mundo (está colectando), el que llega no puede esperarlo como un worker en marcha:
  * se descuenta de `running_workers` mientras espera a que acabe (ver gc_stw). Asume vm_lock tomado. */
 static void stw_esperar_al_otro(bpvm_t* vm) {
     vm->smp->running_workers--;
-    bpvm_platform_cond_broadcast(&vm->smp->sched_cond);
+    bpvm_cola_aviso_mundo(vm->smp);
     int ensanchada = 0;
     for (;;) {
         while (vm->smp->stop_the_world) {
-            bpvm_platform_cond_wait(&vm->smp->sched_cond, &vm->smp->vm_lock);
+            bpvm_platform_cond_wait(&vm->smp->mundo_cond, &vm->smp->vm_lock);
         }
         /* SÓLO PRUEBAS (V7/H12, etapa 2a.2: test/test_cola.c) — la ventana ensanchada: tarda en volver a contarse, con
          * su hilo a medias. Soltar el cerrojo aquí es como haber esperado más (quien llama aún no ha tocado nada y
