@@ -866,6 +866,7 @@ static uint32_t __uninitialized_ram(s_rp_migas)[20];
 #define ARRANQUE_MAGIA 0xA5A50310u
 static uint32_t __uninitialized_ram(s_arranque)[3];   /* [0] la magia; [1] el último paso del núcleo 0; [2] el del 1 */
 void pico_marca_arranque(uint32_t paso) { s_arranque[1u + (get_core_num() & 1u)] = paso; }
+uint32_t pico_marca_de(unsigned nucleo) { return s_arranque[1u + (nucleo & 1u)]; }
 
 /* V7/H12, etapa 3.1, paso 4 — LA MARCA DE UN FALLO FATAL, en la misma RAM que sobrevive al reinicio: la pone
  * pico_fatal (dos núcleos) antes de reiniciar, y el arranque siguiente la lee UNA vez —la borra—: lo dice el log, lo
@@ -1581,16 +1582,6 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .repl         = repl_v1_run,
 };
 
-#if ( configNUMBER_OF_CORES > 1 )
-/* V7/H12, etapa 3.1 — la tarea que registra a SU núcleo como víctima del candado de la flash (una anclada a cada uno;
- * la crea vm_task al empezar). */
-static void victima_tarea(void* arg) {
-    (void) arg;
-    pico_flash_lock_init_victim();
-    if (get_core_num() == 1u) pico_marca_arranque(0x11);   /* el núcleo 1, vivo y víctima */
-    vTaskDelete(NULL);
-}
-#endif
 
 /* V7/H12, etapa 3.1 — el arranque llegó al REPL (la cintura, repl_v1.c): la marca y, con dos núcleos, el perro guardián
  * del arranque, apagado (lo armó main antes del planificador). */
@@ -1693,13 +1684,8 @@ static void vm_task(void* arg) {
      * planificador: el sondeo de la flash y la PSRAM sacan la flash del XIP, y con dos núcleos aquí ya corre el otro. */
     pico_marca_arranque(0x10);
 #if ( configNUMBER_OF_CORES > 1 )
-    /* V7/H12, etapa 3.1 — LAS DOS VÍCTIMAS del candado de la flash, antes de la primera escritura (la del montaje del
-     * FS, o el log): cada núcleo se registra a sí mismo, desde una tarea anclada a él (flash_lock.h). Hasta que los
-     * dos lo están, escribir la flash falla (y se dice) en vez de ir a ciegas. */
-    for (unsigned c = 0; c < 2u; c++)
-        xTaskCreateAffinitySet(victima_tarea, c ? "victima1" : "victima0", 512, NULL, tskIDLE_PRIORITY + 3, 1u << c, NULL);
-    for (int i = 0; pico_flash_lock_victimas() < 2 && i < 1000; i++) vTaskDelay(1);
-    log_printf("boot: el candado de la flash, con %d nucleo(s) victima(s)%s", pico_flash_lock_victimas(),
+    /* V7/H12, etapa 3.1 — el candado de la flash: un APARCADOR en cada núcleo (pico/flash_lock.c), creado en main(). */
+    log_printf("boot: el candado de la flash, con %d aparcador(es)%s", pico_flash_lock_victimas(),
                pico_flash_lock_victimas() < 2 ? " — FALTA uno: la flash no se escribira (pico_flash: -1)" : "");
 #endif
 

@@ -36,6 +36,7 @@
 #include "bpvm_log.h"       /* el núcleo portable + la struct de cintura */
 #include "pico_flash.h"     /* V7/H7 U1.4: la cintura de flash (con el candado de #153 dentro) */
 #include "flash_layout.h"   /* H9: el log vive en la ZONA 2 (kernel) */
+#include "nucleos.h"        /* V7/H12, 3.1: las marcas (0x4X, el volcado) */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -95,8 +96,12 @@ static int flash_write(const uint8_t* src, uint32_t len) {
     if (s_log_fatal) return -1;   /* tras un fallo fatal, aparcar al otro núcleo podría no volver: el log, en la RAM
                                      * (y el arranque siguiente lo vuelca) */
 #endif
+    pico_marca_arranque(0x40);   /* V7/H12 3.1: el volcado, a punto de borrar */
     if (pico_flash_erase(LOG_FLASH_OFFSET, len) != 0) return -1;
-    return pico_flash_write(LOG_FLASH_OFFSET, src, len);
+    pico_marca_arranque(0x41);   /* borrado; a punto de grabar */
+    int r = pico_flash_write(LOG_FLASH_OFFSET, src, len);
+    pico_marca_arranque(0x42);   /* grabado */
+    return r;
 }
 
 /* #653 (4-oct) — la sección crítica de una línea: las interrupciones enmascaradas, guardando el estado (vale en

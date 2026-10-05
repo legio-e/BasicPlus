@@ -12,6 +12,8 @@
 /* Las marcas del arranque, una por núcleo, en RAM que sobrevive al reinicio: el arranque siguiente cuenta en el log
  * hasta qué paso llegó cada núcleo (sin sonda SWD, es lo que dice dónde se para un arranque que se cuelga). */
 void pico_marca_arranque(uint32_t paso);
+/* La última marca de un núcleo (para un diagnóstico: el candado de la flash cuando el otro no se aparca). */
+uint32_t pico_marca_de(unsigned nucleo);
 
 /* El arranque, completo (el autorun o el REPL, tras su primer volcado del log): su marca y, con dos núcleos, el perro
  * guardián del arranque, apagado. Se puede llamar dos veces. */

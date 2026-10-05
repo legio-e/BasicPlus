@@ -514,6 +514,14 @@ static void pico_run_antes(bpvm_t* vm) {
     if (board_env_bool("mpu", 0)) bpvm_set_after_link_hook(mpu_armar_tras_enlace);
     log_printf("AOT: scan done, about to bpvm_run");
     log_flush();   /* CHECKPOINT: lo que cuelgue después es la ejecución */
+    /* V7/H12, etapa 3.1, paso 4 — SÓLO PRUEBAS: `prueba.fallo=1` en el ENV provoca aquí un HardFault (una instrucción
+     * indefinida: UNDEFINSTR), para probar en la placa el camino fatal —con dos núcleos: el perro guardián, el informe en
+     * la RAM que sobrevive, la causa del reinicio y el arranque siguiente sin autorun—. Con la clave puesta, CADA RUN
+     * falla: se quita después. (Con un núcleo, la placa se queda parada como hoy.) */
+    if (board_env_bool("prueba.fallo", 0)) {
+        log_printf("prueba.fallo=1: un HardFault a proposito (SOLO PRUEBAS)");
+        __asm volatile ("udf #0");
+    }
 }
 /* (V7/H12, etapa 2a.2 — fuera `pico_run_correr`, el camino SMP de la Pico: BPVM_PICO_SMP_WORKERS, que su build no
  * definía. El programa lo corre el run permanente de la cola; en la 2b, el segundo run.) */

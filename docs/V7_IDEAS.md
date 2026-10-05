@@ -4908,10 +4908,12 @@ en la M33 de la RP2350 (en orden y sin caché de datos) es sobre todo formal, en
 
 **Lo que ya está decidido, y no se pregunta**: nada anclado —`io`, `run1` y `run2`, que los núcleos van tomando SIN
 anclar (Eduardo, 1-oct)—; las etapas intermedias, sólo en la Pico 2, y la Metro (lo único que prueba ella: la PSRAM
-con el candado de la flash), en el lote del final (4-oct); para el otro núcleo al escribir la flash, el
+con el candado de la flash), en el lote del final (4-oct); para el otro núcleo al escribir la flash, ~~el
 `multicore_lockout` del SDK con un mutex nuestro (el `flash_safe_execute` crea una tarea por operación: más piezas
-para lo mismo); y un fallo fatal en un núcleo para la placa ENTERA —el otro núcleo, aparcado—, con el log en la
-flash, como hoy con uno (el LED parpadeando; no se reinicia).
+para lo mismo)~~ —**NO**: la puerta de la 3.1 lo cazó (5-oct, tarde): aparcar al otro núcleo por interrupción se
+interbloquea con FreeRTOS SMP, y no era «lo mismo»: el SDK aparca con una tarea; abajo, «La etapa 3.1», el paso 2—; y
+un fallo fatal en un núcleo para la placa ENTERA —el otro núcleo, aparcado—, con el log en la flash, como hoy con uno
+(el LED parpadeando; no se reinicia) —también cambiado: «fatal error, el log y reset», el paso 4—.
 
 **Para Eduardo** (con su mecanismo y un ejemplo): (1) **el modelo de memoria de BP ante una carrera** (un programa con
 un campo que un hilo escribe y otro lee sin Mutex). Con las piezas de arriba, (a) el lector obtiene la referencia
@@ -5235,9 +5237,24 @@ hay un núcleo. Paso a paso, cada uno con su prueba:
   reparto, 0x13 la subida, 0x20 el arranque completo), que el arranque siguiente cuenta en el log; y con dos núcleos el
   perro guardián del ARRANQUE (15 s; lo apaga el arranque completo, antes del autorun o del REPL).
 - **1** — el sondeo de la flash, el ENV y la PSRAM, de `vm_task` a `main()` (en las dos imágenes: una sola forma).
-- **2** — `pico/flash_lock.c`: cada núcleo se registra a sí mismo como víctima (dos tareas ancladas, al empezar
-  `vm_task`; hasta que están los dos, escribir la flash FALLA y se dice); el mutex de la ventana, nuestro, creado en
-  `main()`; y `pico_flash_lock_begin` devuelve -1 si no puede.
+- **2** — `pico/flash_lock.c`: ~~cada núcleo se registra a sí mismo como víctima (dos tareas ancladas, al empezar
+  `vm_task`; hasta que están los dos, escribir la flash FALLA y se dice)~~; el mutex de la ventana, nuestro, creado en
+  `main()`; y `pico_flash_lock_begin` devuelve -1 si no puede. **Corregido en la puerta** (5-oct, tarde): con la
+  imagen de dos núcleos y `vm.cores=1`, `ThrowSinAtrapar` colgó la placa en la tanda —ni el KILL ni el RESET—, y no
+  siempre. Sin sonda: el log de la flash estaba VACÍO al arrancar (el último volcado, cortado tras borrar), y con unas
+  marcas en el volcado y en el candado, y el perro de BP (`Wdt`, que reinicia sin quitar la corriente: la RAM
+  sobrevive) en un programa que lanza sin atrapar, en bucle: el núcleo 0 se quedaba DENTRO de
+  `multicore_lockout_start` (la marca 0x52), y con un tope de 500 ms en el saludo, igual —el saludo terminaba; lo que
+  no volvía era lo de después—. El porqué: el núcleo 1 estaba a mitad de un `vTaskSuspendAll` (su tarea ociosa,
+  liberando una tarea borrada —con `mpu=1`, las del MPU, en cada RUN—: el cerrojo de tareas del kernel, cogido, con
+  las interrupciones abiertas), se aparcaba en la interrupción de la FIFO CON ESE CERROJO, y el núcleo 0, al soltar el
+  mutex del SDK (la interoperación con FreeRTOS: `xEventGroupSetBits` → `vTaskSuspendAll`), lo necesitaba. Lo dice el
+  propio SDK (`pico_flash/flash.c`): *«we cannot mix multicore_lockout and FreeRTOS»*, y con FreeRTOS SMP aparca con
+  una TAREA. **Arreglo**: un aparcador por núcleo —una tarea estática anclada, de la prioridad más alta, que espera un
+  aviso: sólo corre cuando su núcleo no tiene cerrojos del kernel—, que apaga sus interrupciones y espera en la RAM;
+  con tope (500 ms): si no se aparca, la escritura FALLA y el log dice qué corre en el otro núcleo —nunca un cuelgue
+  mudo—. Fuera las víctimas por interrupción. Visto: el bucle que colgaba en las primeras vueltas, 150 sin colgarse.
+  Lo que enseña: «más piezas para lo mismo» no era lo mismo; la elección del SDK tenía un porqué, y estaba escrito.
 - **3** — el log: con dos núcleos, un spinlock del SDK (`pico/log.c`); y `#658` en el común (`src/bpvm_log.c`): un
   volcado a la vez con una bandera y su petición pendiente, y la cabecera y el relleno dentro de la sección. Con su
   prueba, `test-logmt --volcado`, verde y roja con el volcado de antes (y roja también con sólo el relleno fuera).
