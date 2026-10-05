@@ -4826,7 +4826,7 @@ La imagen de `4a608d49`; con `vm.runs=1` y luego con `vm.runs=2` (el ENV, y un R
 | tanda V7 | verde (el informe, `compat/informes/tanda_h12_2b.md`) | verde, el mismo resultado |
 | `run_placa` | 34 de 34 | 34 de 34 |
 | PrintBench (mediana de 10) | 774 ms | 779 ms (+0,6 %) |
-| `fib(26)` interpretado | (con un run, al final) | 3 411 ms (±1 ms) |
+| `fib(26)` interpretado | 3 178 ms (siete veces, todas iguales; medido después, con el ENV vuelto a un run) | 3 411 ms (±1 ms): **+7,3 %**, `#662` |
 | el heap de la VM (el INFO) | 240 112 B | 223 728 B: los 16 KB de la pila del 2º run salen del bloque |
 
 El arranque lo dice en el log («la pila del 2o run, 16 KB del techo del bloque @ 0x2007a000», «el 2o run, creado: dos
@@ -5033,11 +5033,35 @@ es aparte, con cualquier esquema.
 
 **3. Una sorpresa: con dos runs, un programa de UN hilo va un 35 % más lento** (`fib`: 51 → 71 ms), y no es el cálculo:
 es lo que se hace al final de cada cuanto, cada 1 024 pasos (el aviso a la cola que despierta al run ocioso,
-`src/scheduler.c:394`; el `yield`; el cerrojo). Con cuantos de 16 384 pasos desaparece (50 ms) y el paralelo mejora (30 → 24 ms). En
-la Pico, por medir: `fib(26)` con dos runs dio 3 411 ms, y falta el de un run (pide volver el ENV a `vm.runs=1`).
+`src/scheduler.c:394`; el `yield`; el cerrojo). Con cuantos de 16 384 pasos desaparece (50 ms) y el paralelo mejora
+(30 → 24 ms). En la Pico 2, medido después (Eduardo: *«puedes medir con runs=1»*): `fib(26)`, 3 178 ms con un run y
+3 411 con dos, **+7,3 %** —menos que en el PC, pero está—.
 
 Lo que falta por medir antes de decidir: el coste del cerrojo en cada paso compartido (un prototipo en el PC, con un
 run para el coste sin competencia y con dos para la competencia) y, en la etapa 3, lo mismo en la Pico.
+
+**4. Medido: el cerrojo de los pasos compartidos se COME la ganancia** (5-oct, tras el balance de Eduardo: *«lo de los
+2 núcleos creo que es cuestión de solucionar problemas que van surgiendo… Así que adelante»*). El prototipo, otra copia
+de `interp.c` en el scratchpad: los 67 opcodes compartidos cogen un cerrojo (un spinlock con `__atomic_exchange`; si
+mientras espera otro run para el mundo, deshace el paso y sale como en el punto seguro), sólo con varios runs. Dos runs,
+cuanto de 16 384, la mediana de cinco (los resultados, bien en todas):
+
+| carga | hoy, sin cerrojo: secuencial / paralelo | con el cerrojo: secuencial / paralelo | tomas del cerrojo, y las que esperaron |
+|---|---|---|---|
+| cálculo | 51 / 25 ms | 55 / 27 ms | 56, ninguna |
+| arrays | 103 / 53 ms | 107 / **127** ms | 4,9 millones, el 13 % |
+| objetos | 78 / 43 ms | 84 / **141** ms | 4,9 millones, el 13 % |
+| cadenas | 330 / 529 ms | 336 / 490 ms | 0,6 millones, el 8 % |
+
+Con dos hilos que tocan lo compartido, el paralelo con el cerrojo va MÁS LENTO que un solo run (arrays, 127 ms contra
+104; objetos, 141 contra 78). El techo de Amdahl de la tabla 2 era falso: no contaba lo que cuesta que el cerrojo
+cambie de núcleo —en una CPU con caché, cada vez que el otro núcleo lo coge, la línea del cerrojo viaja de una caché a
+otra: unos 15 ns por toma, millones de veces—. Sin competencia, el cerrojo y la comprobación por paso cuestan del 4 al
+8 %. En la Pico (sin caché de datos, con los spinlocks del SIO) podría salir distinto; en la P4 (con cachés) y en el
+PC, no. **Conclusión**: un cerrojo para todos los pasos compartidos no sirve para ir más rápido; el camino que guarda la
+velocidad es el fino —los pasos compartidos en paralelo y sin cerrojo, cada uno seguro por sí mismo: las tres piezas de
+`#660` y `#661`—, que en el x86 no cuesta nada y en la M33 abarata la escritura (`REV` + `STR` en vez de cuatro
+`STRB`).
 
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)

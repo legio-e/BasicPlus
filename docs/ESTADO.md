@@ -1165,7 +1165,15 @@ la C6, la P4 y la Nucleo.
   scratchpad: una copia de `interp.c` con un contador por opcode y `ParaleloBench`, dos hilos con cuatro cargas): del 80
   al 100 % de los pasos son privados; con dos runs en el PC, hoy, ×2,1 en cálculo y ×1,7 en arrays y objetos, y el
   techo del paso entero para lo compartido queda por encima; las cadenas no escalan (la reserva y el GC); y una
-  sorpresa, `#662`: un programa de un hilo, un 35 % más lento con dos runs (el final de cada cuanto).
+  sorpresa, `#662`: un programa de un hilo, un 35 % más lento con dos runs (el final de cada cuanto); en la Pico 2,
+  con el ENV vuelto a `vm.runs=1` (OK de Eduardo; se queda así), `fib(26)` 3 178 ms contra 3 411 con dos: +7,3 %.
+- **El balance de Eduardo** (5-oct): *«De momento todo lo que se ha hecho está funcionando. Nos queda el último paso
+  que es trabajar con 2 núcleos pero lo hecho hasta ahora está muy bien. Lo de los 2 núcleos creo que es cuestión de
+  solucionar problemas que van surgiendo pero no veo de momento ningún problema insalvable. Así que adelante.»*
+- **Y la medida que decide** (`V7_IDEAS` §«La medida», 4): el prototipo del paso entero para lo compartido (un cerrojo
+  en los 67 opcodes compartidos) hace que dos hilos con arrays u objetos vayan MÁS LENTOS que un run (127 ms contra
+  104; 141 contra 78): el cerrojo viaja entre las cachés de los núcleos. Descartado; el camino, el fino (`#660`,
+  `#661`). Mi techo de Amdahl de una hora antes era falso: no contaba ese viaje. Por eso se mide.
 
 ## 🧵 H12 (5-oct) — LA 2b MÍNIMA EN EL PC: dos runs con código BP normal, la condición de FreeRTOS y la revisión
 
