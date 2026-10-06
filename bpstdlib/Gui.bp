@@ -587,6 +587,23 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
   // Regla de orden, la misma que en gui.c y en miVM: HIJOS ANTES QUE PADRE, y cada
   // nodo borra su propio lv_obj. Asi LVGL nunca cascadea por nosotros.
   // ============================================================================
+
+  // V7/H12 — EL CERROJO DEL ARBOL (decidido por Eduardo el 6-oct: «OK A»). Las
+  // listas de hijos son de la libreria, y crear o borrar un control las toca: dos
+  // hilos que creaban controles en el MISMO contenedor a la vez la rompian (con dos
+  // runs, 400 creadas y 399 hijos; con uno tambien podia pasar: el cuanto cambia a
+  // mitad de un add, mas raro). Uno para todo el arbol: altas y bajas son raras, y
+  // asi no hay un Mutex por boton (Button tambien es contenedor). Cada operacion de
+  // la lista va dentro, de una vez; recorrer el arbol (toJson, delete, clean) es una
+  // serie de esas, no una sola.
+  var cerrojoArbol: Mutex := Mutex()
+
+  // Lo usa Container: una clase no lee un var de modulo que no sea publico. No lo
+  // llames a mano.
+  public function __guiCerrojoArbol(): Mutex
+    return cerrojoArbol
+  end __guiCerrojoArbol
+
   public class Container extends Component
     var owner children: Collections.OwnerList
 
@@ -596,25 +613,49 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
 
     // Alta y baja: las llama Component (attach / delete). No las llames a mano.
     public function register(c: Component)
-      this.children.add(c)
+      var m: Mutex := __guiCerrojoArbol()
+      m.lock()
+      try
+        this.children.add(c)
+      finally
+        m.unlock()
+      endtry
     end register
     public function unregister(c: Component)
-      var i: integer := 0
-      var n: integer := this.children.length()
-      while i < n do
-        if Component(this.children.get(i)) == c then
-          this.children.remove(i)      // quita SIN liberar: el programa puede seguir sujetandolo
-          return
-        endif
-        i := i + 1
-      endwh
+      var m: Mutex := __guiCerrojoArbol()
+      m.lock()
+      try
+        var i: integer := 0
+        var n: integer := this.children.length()
+        while i < n do
+          if Component(this.children.get(i)) == c then
+            this.children.remove(i)      // quita SIN liberar: el programa puede seguir sujetandolo
+            return
+          endif
+          i := i + 1
+        endwh
+      finally
+        m.unlock()
+      endtry
     end unregister
 
     public function childCount(): integer
-      return this.children.length()
+      var m: Mutex := __guiCerrojoArbol()
+      m.lock()
+      try
+        return this.children.length()
+      finally
+        m.unlock()
+      endtry
     end childCount
     public function childAt(i: integer): Component
-      return Component(this.children.get(i))
+      var m: Mutex := __guiCerrojoArbol()
+      m.lock()
+      try
+        return Component(this.children.get(i))
+      finally
+        m.unlock()
+      endtry
     end childAt
 
     public function typeName(): string

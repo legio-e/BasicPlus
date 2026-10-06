@@ -3,1039 +3,1066 @@ module Gui
 source C:\lenguajes\pm\bpstdlib\Gui.bp
 lines
 0 0
-34 0
-45 0
-60 0
-74 0
-77 274
-91 0
-123 0
-139 0
-159 0
-179 0
-194 0
-208 0
-225 0
-240 0
-243 317
-264 0
-271 320
-288 0
-291 325
-312 0
-319 328
-336 0
-339 333
-360 0
-367 336
-384 0
-387 341
-408 0
-415 344
-432 0
-435 351
-456 0
-463 354
-480 0
-483 362
-504 0
-511 365
-528 0
-531 371
-545 372
-562 0
-565 375
-579 376
-596 0
-599 379
-613 380
-627 381
-641 382
-658 0
-661 386
-682 0
-685 390
-704 391
-717 392
-727 0
-730 398
-749 399
-762 400
-772 0
-775 405
-790 0
-793 428
-802 429
-814 0
-817 433
-832 0
-838 0
-841 442
-847 443
-868 444
-885 444
-911 445
-923 446
-935 447
-944 450
-956 451
-968 452
-1009 452
-1035 453
-1044 453
-1065 454
-1074 454
-1100 456
-1124 457
-1148 459
-1160 460
-1172 461
-1181 461
-1202 462
-1211 462
-1232 463
-1244 464
-1253 464
-1274 465
-1285 465
-1315 466
-1326 466
-1357 467
-1373 467
-1399 468
-1415 468
-1441 469
-1457 0
-1460 476
-1484 0
-1487 485
-1496 486
-1507 490
-1513 491
-1530 493
-1548 0
-1554 0
-1560 0
-1563 505
-1582 0
-1585 509
-1600 0
-1603 517
-1615 518
-1629 519
-1638 520
-1650 521
-1666 0
-1669 532
-1690 532
-1715 0
-1718 566
-1745 0
-1748 569
-1775 0
-1795 0
-1814 0
-1833 0
-1850 0
-1870 0
-1884 0
-1904 0
-1922 0
-1936 0
-1954 0
-1968 0
-1985 0
-1999 0
-2016 0
-2035 0
-2052 0
-2069 0
-2083 0
-2097 0
-2119 0
-2138 0
-2155 0
-2158 599
-2176 0
-2179 602
-2182 603
-2194 604
-2204 605
-2230 606
-2244 607
-2254 609
-2265 0
-2268 614
-2289 0
-2292 617
-2322 0
-2325 621
-2341 0
-2344 626
-2356 0
-2359 630
-2368 631
-2374 632
-2383 633
-2386 634
-2396 635
-2408 636
-2423 636
-2444 637
-2452 639
-2466 639
-2486 640
-2502 0
-2505 646
-2516 647
-2525 648
-2540 649
-2548 651
-2559 0
-2562 657
-2573 658
-2582 659
-2597 660
-2605 662
-2616 0
-2619 594
-2631 0
-2661 0
-2675 0
-2695 0
-2714 0
-2735 0
-2752 0
-2771 0
-2788 0
-2802 0
-2816 0
-2833 0
-2836 715
-2852 0
-2855 723
-2870 0
-2873 718
-2883 719
-2895 720
-2909 0
-2939 0
-2953 0
-2967 0
-2986 0
-2989 730
-3005 0
-3008 733
-3018 734
-3037 735
-3052 0
-3085 0
-3102 0
-3121 0
-3124 742
-3140 0
-3143 745
-3156 746
-3169 746
-3195 0
-3198 755
-3216 0
-3219 759
-3236 0
-3239 749
-3258 750
-3273 751
+41 0
+52 0
+67 0
+81 0
+84 274
+98 0
+130 0
+146 0
+166 0
+186 0
+201 0
+215 0
+232 0
+247 0
+250 317
+271 0
+278 320
+295 0
+298 325
+319 0
+326 328
+343 0
+346 333
+367 0
+374 336
+391 0
+394 341
+415 0
+422 344
+439 0
+442 351
+463 0
+470 354
+487 0
+490 362
+511 0
+518 365
+535 0
+538 371
+552 372
+569 0
+572 375
+586 376
+603 0
+606 379
+620 380
+634 381
+648 382
+665 0
+668 386
+689 0
+692 390
+711 391
+724 392
+734 0
+737 398
+756 399
+769 400
+779 0
+782 405
+797 0
+800 428
+809 429
+821 0
+824 433
+839 0
+845 0
+848 442
+854 443
+875 444
+892 444
+918 445
+930 446
+942 447
+951 450
+963 451
+975 452
+1016 452
+1042 453
+1051 453
+1072 454
+1081 454
+1107 456
+1131 457
+1155 459
+1167 460
+1179 461
+1188 461
+1209 462
+1218 462
+1239 463
+1251 464
+1260 464
+1281 465
+1292 465
+1322 466
+1333 466
+1364 467
+1380 467
+1406 468
+1422 468
+1448 469
+1464 0
+1467 476
+1491 0
+1494 485
+1503 486
+1514 490
+1520 491
+1537 493
+1555 0
+1561 0
+1567 0
+1570 505
+1589 0
+1592 509
+1607 0
+1610 517
+1622 518
+1636 519
+1645 520
+1657 521
+1673 0
+1676 532
+1697 532
+1722 0
+1725 566
+1752 0
+1755 569
+1782 0
+1802 0
+1821 0
+1840 0
+1857 0
+1877 0
+1891 0
+1911 0
+1929 0
+1943 0
+1961 0
+1975 0
+1992 0
+2006 0
+2023 0
+2042 0
+2059 0
+2076 0
+2090 0
+2104 0
+2126 0
+2145 0
+2162 0
+2165 616
+2173 617
+2182 618
+2189 619
+2205 621
+2222 621
+2248 0
+2251 625
+2259 626
+2268 627
+2275 628
+2278 629
+2290 630
+2300 631
+2326 632
+2340 633
+2341 638
+2360 635
+2369 638
+2386 638
+2412 0
+2415 643
+2423 644
+2432 645
+2439 646
+2452 648
+2467 648
+2484 648
+2511 0
+2514 652
+2522 653
+2531 654
+2538 655
+2559 657
+2574 657
+2596 657
+2624 0
+2627 662
+2643 0
+2646 667
+2658 0
+2661 671
+2670 672
+2676 673
+2685 674
+2688 675
+2698 676
+2710 677
+2725 677
+2746 678
+2754 680
+2768 680
+2788 681
+2804 0
+2807 687
+2818 688
+2827 689
+2842 690
+2850 692
+2861 0
+2864 698
+2875 699
+2884 700
+2899 701
+2907 703
+2918 0
+2921 611
+2933 0
+2963 0
+2977 0
+2997 0
+3016 0
+3037 0
+3054 0
+3073 0
+3090 0
+3104 0
+3118 0
+3135 0
+3138 756
+3154 0
+3157 764
+3172 0
+3175 759
+3185 760
+3197 761
+3211 0
+3241 0
+3255 0
+3269 0
 3288 0
-3324 0
-3344 0
-3363 0
-3380 0
-3396 0
-3413 0
-3416 767
-3432 0
-3435 772
-3449 773
-3465 774
-3478 775
-3509 0
-3512 780
-3526 780
-3539 781
-3568 0
-3571 799
-3581 800
-3600 801
-3612 802
-3625 803
-3669 0
-3705 0
-3725 0
-3745 0
-3764 0
-3781 0
-3784 831
-3805 0
-3812 834
-3829 0
-3832 812
-3848 0
-3851 815
-3864 816
-3877 816
-3900 817
-3912 817
-3936 0
-3939 826
-3957 0
-3960 820
-3979 821
-3994 822
-4009 0
-4045 0
-4065 0
-4084 0
-4101 0
-4118 0
-4121 856
-4142 0
-4149 859
-4166 0
-4169 844
-4185 0
-4188 847
-4200 847
-4224 0
-4227 850
-4246 851
-4261 0
-4294 0
+3291 771
+3307 0
+3310 774
+3320 775
+3339 776
+3354 0
+3387 0
+3404 0
+3423 0
+3426 783
+3442 0
+3445 786
+3458 787
+3471 787
+3497 0
+3500 796
+3518 0
+3521 800
+3538 0
+3541 790
+3560 791
+3575 792
+3590 0
+3626 0
+3646 0
+3665 0
+3682 0
+3698 0
+3715 0
+3718 808
+3734 0
+3737 813
+3751 814
+3767 815
+3780 816
+3811 0
+3814 821
+3828 821
+3841 822
+3870 0
+3873 840
+3883 841
+3902 842
+3914 843
+3927 844
+3971 0
+4007 0
+4027 0
+4047 0
+4066 0
+4083 0
+4086 872
+4107 0
+4114 875
+4131 0
+4134 853
+4150 0
+4153 856
+4166 857
+4179 857
+4202 858
+4214 858
+4238 0
+4241 867
+4259 0
+4262 861
+4281 862
+4296 863
 4311 0
-4330 0
 4347 0
-4350 896
-4371 0
-4378 899
-4395 0
-4398 869
-4414 0
-4417 872
-4471 873
-4492 874
-4518 876
-4532 876
-4562 0
-4565 888
-4581 889
-4589 890
-4597 891
-4607 0
-4610 879
-4629 880
-4644 0
-4677 0
-4694 0
-4712 0
-4731 0
-4748 0
-4751 935
-4772 0
-4779 938
-4796 0
-4799 908
-4815 0
-4818 911
-4872 912
-4893 913
-4919 915
-4933 915
-4963 0
-4966 927
-4982 928
-4990 929
-4998 930
-5008 0
-5011 918
-5030 919
-5045 0
-5078 0
-5095 0
-5113 0
-5132 0
-5149 0
-5152 974
-5173 0
-5180 977
-5197 0
-5200 947
-5216 0
-5219 950
-5273 951
-5294 952
-5320 954
-5334 954
-5364 0
-5367 966
-5383 967
-5391 968
-5399 969
-5409 0
-5412 957
-5431 958
-5446 0
-5479 0
-5496 0
-5514 0
-5533 0
-5550 0
-5553 1005
-5574 0
-5581 1008
-5598 0
-5601 986
-5617 0
-5620 989
-5634 989
-5664 0
-5667 997
-5683 0
-5686 1000
-5702 0
-5705 992
-5724 993
-5739 0
-5772 0
-5789 0
-5808 0
-5825 0
-5839 0
-5853 0
-5856 1035
-5877 0
-5884 1038
-5901 0
-5904 1017
-5920 0
-5923 1020
-5936 1021
-5949 1021
-5972 1022
-5986 1022
-6016 0
-6019 1030
-6037 0
-6040 1025
-6059 1026
+4367 0
+4386 0
+4403 0
+4420 0
+4423 897
+4444 0
+4451 900
+4468 0
+4471 885
+4487 0
+4490 888
+4502 888
+4526 0
+4529 891
+4548 892
+4563 0
+4596 0
+4613 0
+4632 0
+4649 0
+4652 937
+4673 0
+4680 940
+4697 0
+4700 910
+4716 0
+4719 913
+4773 914
+4794 915
+4820 917
+4834 917
+4864 0
+4867 929
+4883 930
+4891 931
+4899 932
+4909 0
+4912 920
+4931 921
+4946 0
+4979 0
+4996 0
+5014 0
+5033 0
+5050 0
+5053 976
+5074 0
+5081 979
+5098 0
+5101 949
+5117 0
+5120 952
+5174 953
+5195 954
+5221 956
+5235 956
+5265 0
+5268 968
+5284 969
+5292 970
+5300 971
+5310 0
+5313 959
+5332 960
+5347 0
+5380 0
+5397 0
+5415 0
+5434 0
+5451 0
+5454 1015
+5475 0
+5482 1018
+5499 0
+5502 988
+5518 0
+5521 991
+5575 992
+5596 993
+5622 995
+5636 995
+5666 0
+5669 1007
+5685 1008
+5693 1009
+5701 1010
+5711 0
+5714 998
+5733 999
+5748 0
+5781 0
+5798 0
+5816 0
+5835 0
+5852 0
+5855 1046
+5876 0
+5883 1049
+5900 0
+5903 1027
+5919 0
+5922 1030
+5936 1030
+5966 0
+5969 1038
+5985 0
+5988 1041
+6004 0
+6007 1033
+6026 1034
+6041 0
 6074 0
-6107 0
-6124 0
-6143 0
-6160 0
-6177 0
-6180 1060
+6091 0
+6110 0
+6127 0
+6141 0
+6155 0
+6158 1076
+6179 0
+6186 1079
 6203 0
-6212 1063
-6230 0
-6233 1071
-6256 0
-6263 1074
-6270 1075
-6288 1077
-6304 0
-6307 1047
-6323 0
-6326 1050
-6343 1050
-6370 1051
-6382 1051
-6406 0
-6409 1054
-6428 1055
-6443 0
-6476 0
-6493 0
-6512 0
-6529 0
-6532 1107
-6553 0
-6560 1110
-6577 0
-6580 1089
-6596 0
-6599 1092
-6612 1093
-6625 1093
-6648 1094
-6662 1094
-6692 0
-6695 1102
-6713 0
-6716 1097
-6735 1098
-6750 0
-6783 0
-6800 0
-6817 0
-6836 0
-6853 0
-6856 1119
-6872 0
-6875 1130
-6897 0
-6900 1122
-6919 1123
-6934 0
-6967 0
-6984 0
-7003 0
-7020 0
-7023 1164
-7044 0
-7051 1167
-7068 0
-7071 1141
-7087 0
-7090 1144
-7103 1145
-7116 1145
-7139 1146
-7155 1146
-7184 0
-7187 1157
-7202 1158
-7214 0
-7217 1149
-7236 1150
-7251 1151
-7266 0
-7302 0
+6206 1058
+6222 0
+6225 1061
+6238 1062
+6251 1062
+6274 1063
+6288 1063
+6318 0
+6321 1071
+6339 0
+6342 1066
+6361 1067
+6376 0
+6409 0
+6426 0
+6445 0
+6462 0
+6479 0
+6482 1101
+6505 0
+6514 1104
+6532 0
+6535 1112
+6558 0
+6565 1115
+6572 1116
+6590 1118
+6606 0
+6609 1088
+6625 0
+6628 1091
+6645 1091
+6672 1092
+6684 1092
+6708 0
+6711 1095
+6730 1096
+6745 0
+6778 0
+6795 0
+6814 0
+6831 0
+6834 1148
+6855 0
+6862 1151
+6879 0
+6882 1130
+6898 0
+6901 1133
+6914 1134
+6927 1134
+6950 1135
+6964 1135
+6994 0
+6997 1143
+7015 0
+7018 1138
+7037 1139
+7052 0
+7085 0
+7102 0
+7119 0
+7138 0
+7155 0
+7158 1160
+7174 0
+7177 1171
+7199 0
+7202 1163
+7221 1164
+7236 0
+7269 0
+7286 0
+7305 0
 7322 0
-7341 0
-7358 0
-7375 0
-7378 1178
-7394 0
-7397 1181
-7407 1182
-7421 0
-7453 0
-7469 0
-7488 0
-7491 1207
-7512 0
-7519 1210
-7536 0
-7539 1191
-7555 0
-7558 1200
-7598 1201
-7610 1202
-7626 0
-7629 1194
-7639 1195
-7658 1196
-7673 0
-7706 0
+7325 1205
+7346 0
+7353 1208
+7370 0
+7373 1182
+7389 0
+7392 1185
+7405 1186
+7418 1186
+7441 1187
+7457 1187
+7486 0
+7489 1198
+7504 1199
+7516 0
+7519 1190
+7538 1191
+7553 1192
+7568 0
+7604 0
+7624 0
+7643 0
+7660 0
+7677 0
+7680 1219
+7696 0
+7699 1222
+7709 1223
 7723 0
-7745 0
-7764 0
-7767 1226
-7783 0
-7786 1231
-7799 1231
-7825 1232
-7838 1232
-7861 1233
-7915 1234
-7936 1235
-7965 0
-7968 1258
-7984 1259
-7992 1260
-8000 1261
-8010 0
-8013 1266
-8027 1267
-8038 0
-8041 1272
-8064 0
-8067 1277
-8086 0
-8089 1282
-8110 0
-8113 1287
-8127 1288
-8138 0
-8141 1251
-8160 1252
-8175 0
-8208 0
-8225 0
-8244 0
-8262 0
-8281 0
-8298 0
-8314 0
-8332 0
-8348 0
-8368 0
-8371 1294
-8387 0
-8390 1299
-8423 1299
-8433 1300
-8454 1301
-8475 1302
-8478 1303
-8484 1304
-8487 1305
-8501 1306
-8507 1307
-8510 1308
-8524 1309
-8538 1310
-8551 1310
-8559 1311
-8574 1312
-8582 1314
-8594 1315
-8602 1317
-8609 1317
-8632 0
-8635 1327
-8651 1328
-8659 1329
+7755 0
+7771 0
+7790 0
+7793 1248
+7814 0
+7821 1251
+7838 0
+7841 1232
+7857 0
+7860 1241
+7900 1242
+7912 1243
+7928 0
+7931 1235
+7941 1236
+7960 1237
+7975 0
+8008 0
+8025 0
+8047 0
+8066 0
+8069 1267
+8085 0
+8088 1272
+8101 1272
+8127 1273
+8140 1273
+8163 1274
+8217 1275
+8238 1276
+8267 0
+8270 1299
+8286 1300
+8294 1301
+8302 1302
+8312 0
+8315 1307
+8329 1308
+8340 0
+8343 1313
+8366 0
+8369 1318
+8388 0
+8391 1323
+8412 0
+8415 1328
+8429 1329
+8440 0
+8443 1292
+8462 1293
+8477 0
+8510 0
+8527 0
+8546 0
+8564 0
+8583 0
+8600 0
+8616 0
+8634 0
+8650 0
 8670 0
-8673 1333
-8695 0
-8698 1337
-8725 0
-8728 1322
-8747 1323
-8762 0
-8795 0
-8812 0
-8830 0
-8853 0
-8872 0
-8889 0
-8910 0
-8925 0
-8939 0
-8942 1356
-8968 0
-8971 1361
-8992 0
-8995 1364
-9016 0
-9019 1351
-9034 0
+8673 1335
+8689 0
+8692 1340
+8725 1340
+8735 1341
+8756 1342
+8777 1343
+8780 1344
+8786 1345
+8789 1346
+8803 1347
+8809 1348
+8812 1349
+8826 1350
+8840 1351
+8853 1351
+8861 1352
+8876 1353
+8884 1355
+8896 1356
+8904 1358
+8911 1358
+8934 0
+8937 1368
+8953 1369
+8961 1370
+8972 0
+8975 1374
+8997 0
+9000 1378
+9027 0
+9030 1363
+9049 1364
 9064 0
-9078 0
-9095 0
-9115 0
+9097 0
+9114 0
 9132 0
-9135 1373
-9151 0
-9154 1381
-9176 0
-9179 1387
-9191 1388
-9206 0
-9209 1376
-9228 1377
-9243 0
-9276 0
-9293 0
-9312 0
-9326 0
-9343 0
-9346 1460
-9356 0
-9359 1487
-9362 1488
-9374 1489
-9379 1490
-9388 1491
-9400 1493
-9409 1494
-9426 0
-9429 1454
-9442 1455
-9452 0
-9455 1582
-9471 0
-9474 1596
-9483 1597
-9493 1598
-9510 1601
-9515 1602
-9530 1602
-9549 1603
-9564 1603
-9583 1604
-9599 0
-9602 1609
+9155 0
+9174 0
+9191 0
+9212 0
+9227 0
+9241 0
+9244 1397
+9270 0
+9273 1402
+9294 0
+9297 1405
+9318 0
+9321 1392
+9336 0
+9366 0
+9380 0
+9397 0
+9417 0
+9434 0
+9437 1414
+9453 0
+9456 1422
+9478 0
+9481 1428
+9493 1429
+9508 0
+9511 1417
+9530 1418
+9545 0
+9578 0
+9595 0
 9614 0
-9617 1585
-9627 1586
-9632 1587
-9646 1588
-9660 1589
-9674 1590
-9688 0
-9718 0
-9732 0
+9628 0
+9645 0
+9648 1501
+9658 0
+9661 1528
+9664 1529
+9676 1530
+9681 1531
+9690 1532
+9702 1534
+9711 1535
+9728 0
+9731 1495
+9744 1496
 9754 0
+9757 1623
 9773 0
-9787 0
-9790 1399
-9802 0
-9805 1403
-9817 0
-9820 1506
-9831 1507
-9841 1509
-9868 1510
-9880 0
-9883 1516
-9894 1517
-9911 0
-9914 1523
-9925 1524
-9934 1525
-9947 0
-9950 1535
-9957 1536
-9967 0
-9970 1545
-9987 0
-9990 1555
-9998 1556
-10007 1556
-10021 1557
-10031 1557
-10054 1558
-10064 1558
-10087 1559
-10097 1559
-10120 1560
-10142 0
-10145 1569
-10155 0
-10158 1617
-10173 1618
-10190 1619
-10203 1632
-10218 1633
-10231 1633
-10252 1634
-10271 1635
-10286 1639
-10292 1640
-10303 1641
-10316 1642
-10319 1643
-10334 1644
-10346 1645
-10372 1646
-10385 1649
-10401 0
-10404 1661
-10412 1662
-10421 1662
-10431 1663
-10439 1664
-10442 1665
-10452 1666
-10466 1667
-10474 1669
-10512 1669
-10533 1670
-10557 1671
-10566 1671
-10586 0
-10589 1697
-10605 1698
-10621 1699
-10631 1700
-10641 1701
-10662 1702
-10668 1703
-10674 1704
-10681 1704
-10692 1705
-10699 1705
-10710 1706
-10730 1708
-10757 1708
-10776 1709
-10803 1709
-10822 1711
-10835 1712
-10865 1713
-10899 1716
-10912 1717
-10942 1718
-10979 0
-10982 1726
-10998 1727
-11033 1729
-11049 1730
-11097 1732
-11113 1733
-11161 1735
-11177 1736
-11220 1737
-11240 1738
-11256 1740
-11272 1741
-11302 1742
-11322 1743
-11338 1745
-11354 1746
-11384 1747
-11419 1748
-11439 1749
-11455 1751
-11471 1752
-11501 1753
-11523 1754
-11539 1756
-11555 1757
-11586 1758
-11621 1759
-11641 1760
-11657 1762
-11673 1763
-11704 1764
-11739 1765
-11759 1766
-11775 1768
-11791 1769
-11822 1770
-11842 1771
-11858 1773
-11874 1774
-11905 1775
-11927 1776
-11947 1777
-11963 1779
-11979 1780
-12010 1781
-12032 1782
-12052 1783
-12068 1785
-12084 1786
-12128 1787
-12143 1787
-12170 1788
-12186 1791
-12202 1792
-12233 1793
-12248 1793
-12273 1794
-12299 1794
-12314 1795
-12351 1795
-12391 1796
-12407 1798
-12423 1799
-12454 1800
-12468 1801
-12482 1802
-12508 1803
-12523 1804
-12538 1805
-12551 1806
-12555 1807
-12589 1808
-12606 1809
-12610 1810
-12644 1811
-12673 1812
-12683 1814
-12704 1818
-12720 1820
-12735 1821
-12771 0
-12774 1830
-12788 1830
-12814 1834
-12828 1835
-12879 1837
-12893 1838
-12917 1840
-12931 1841
-12955 1844
-12969 1844
-12993 1845
-13007 1845
-13031 1846
-13045 1846
-13069 1847
-13083 1847
-13138 1848
-13153 1848
-13212 0
-13215 1855
-13223 1856
-13226 1857
-13308 1858
-13316 1860
-13319 1861
-13329 1862
-13339 1863
-13343 1864
-13375 1865
-13422 1867
-13475 1869
-13496 1871
-13505 1872
-13518 1874
-13531 1875
-13540 1877
-13553 0
-13556 1883
-13567 1884
-13577 1885
-13587 1886
-13591 1887
-13598 1888
-13607 1889
-13617 1890
-13630 1891
-13649 1893
-13663 1895
-13673 1896
-13681 1898
-13705 0
-13708 1903
-13717 1903
-13733 1904
-13742 1904
-13758 1905
-13767 1905
-13783 1906
-13792 1906
-13808 1907
-13821 1907
-13837 1908
-13850 1908
-13866 1909
-13879 1909
-13895 1910
-13908 1910
-13924 1911
-13940 0
-13943 1916
-13959 1916
-13972 1917
-13988 1917
-14001 1918
-14017 1918
-14030 1919
-14046 1919
-14059 1920
-14075 1920
-14092 1921
-14108 1921
-14125 1922
-14141 1922
-14158 1923
-14174 1923
-14191 1924
-14203 0
-14257 0
-14321 0
+9776 1637
+9785 1638
+9795 1639
+9812 1642
+9817 1643
+9832 1643
+9851 1644
+9866 1644
+9885 1645
+9901 0
+9904 1650
+9916 0
+9919 1626
+9929 1627
+9934 1628
+9948 1629
+9962 1630
+9976 1631
+9990 0
+10020 0
+10034 0
+10056 0
+10075 0
+10089 0
+10092 604
+10108 0
+10111 1440
+10123 0
+10126 1444
+10138 0
+10141 1547
+10152 1548
+10162 1550
+10189 1551
+10201 0
+10204 1557
+10215 1558
+10232 0
+10235 1564
+10246 1565
+10255 1566
+10268 0
+10271 1576
+10278 1577
+10288 0
+10291 1586
+10308 0
+10311 1596
+10319 1597
+10328 1597
+10342 1598
+10352 1598
+10375 1599
+10385 1599
+10408 1600
+10418 1600
+10441 1601
+10463 0
+10466 1610
+10476 0
+10479 1658
+10494 1659
+10511 1660
+10524 1673
+10539 1674
+10552 1674
+10573 1675
+10592 1676
+10607 1680
+10613 1681
+10624 1682
+10637 1683
+10640 1684
+10655 1685
+10667 1686
+10693 1687
+10706 1690
+10722 0
+10725 1702
+10733 1703
+10742 1703
+10752 1704
+10760 1705
+10763 1706
+10773 1707
+10787 1708
+10795 1710
+10833 1710
+10854 1711
+10878 1712
+10887 1712
+10907 0
+10910 1738
+10926 1739
+10942 1740
+10952 1741
+10962 1742
+10983 1743
+10989 1744
+10995 1745
+11002 1745
+11013 1746
+11020 1746
+11031 1747
+11051 1749
+11078 1749
+11097 1750
+11124 1750
+11143 1752
+11156 1753
+11186 1754
+11220 1757
+11233 1758
+11263 1759
+11300 0
+11303 1767
+11319 1768
+11354 1770
+11370 1771
+11418 1773
+11434 1774
+11482 1776
+11498 1777
+11541 1778
+11561 1779
+11577 1781
+11593 1782
+11623 1783
+11643 1784
+11659 1786
+11675 1787
+11705 1788
+11740 1789
+11760 1790
+11776 1792
+11792 1793
+11822 1794
+11844 1795
+11860 1797
+11876 1798
+11907 1799
+11942 1800
+11962 1801
+11978 1803
+11994 1804
+12025 1805
+12060 1806
+12080 1807
+12096 1809
+12112 1810
+12143 1811
+12163 1812
+12179 1814
+12195 1815
+12226 1816
+12248 1817
+12268 1818
+12284 1820
+12300 1821
+12331 1822
+12353 1823
+12373 1824
+12389 1826
+12405 1827
+12449 1828
+12464 1828
+12491 1829
+12507 1832
+12523 1833
+12554 1834
+12569 1834
+12594 1835
+12620 1835
+12635 1836
+12672 1836
+12712 1837
+12728 1839
+12744 1840
+12775 1841
+12789 1842
+12803 1843
+12829 1844
+12844 1845
+12859 1846
+12872 1847
+12876 1848
+12910 1849
+12927 1850
+12931 1851
+12965 1852
+12994 1853
+13004 1855
+13025 1859
+13041 1861
+13056 1862
+13092 0
+13095 1871
+13109 1871
+13135 1875
+13149 1876
+13200 1878
+13214 1879
+13238 1881
+13252 1882
+13276 1885
+13290 1885
+13314 1886
+13328 1886
+13352 1887
+13366 1887
+13390 1888
+13404 1888
+13459 1889
+13474 1889
+13533 0
+13536 1896
+13544 1897
+13547 1898
+13629 1899
+13637 1901
+13640 1902
+13650 1903
+13660 1904
+13664 1905
+13696 1906
+13743 1908
+13796 1910
+13817 1912
+13826 1913
+13839 1915
+13852 1916
+13861 1918
+13874 0
+13877 1924
+13888 1925
+13898 1926
+13908 1927
+13912 1928
+13919 1929
+13928 1930
+13938 1931
+13951 1932
+13970 1934
+13984 1936
+13994 1937
+14002 1939
+14026 0
+14029 1944
+14038 1944
+14054 1945
+14063 1945
+14079 1946
+14088 1946
+14104 1947
+14113 1947
+14129 1948
+14142 1948
+14158 1949
+14171 1949
+14187 1950
+14200 1950
+14216 1951
+14229 1951
+14245 1952
+14261 0
+14264 1957
+14280 1957
+14293 1958
+14309 1958
+14322 1959
+14338 1959
+14351 1960
+14367 1960
+14380 1961
+14396 1961
+14413 1962
+14429 1962
+14446 1963
+14462 1963
+14479 1964
+14495 1964
+14512 1965
+14524 0
+14527 599
+14536 0
+14590 0
+14654 0
 vars
-func Color.getRgb 45
+func Color.getRgb 52
 this -20 8 0 ?
-func Color.setRgb 60
+func Color.setRgb 67
 this -24 8 0 ?
-func Color.__init 74
+func Color.__init 81
 this -24 8 0 ?
 rgb -16 4 0 integer
-func __cls_new_Color(i) 91
+func __cls_new_Color(i) 98
 rgb -16 4 0 integer
-func __cls_init_Color(i) 123
+func __cls_init_Color(i) 130
 this -24 8 0 ?
 rgb -16 4 0 integer
-func Component.getLvglId 179
+func Component.getLvglId 186
 this -20 8 0 ?
-func Component.setLvglId 194
+func Component.setLvglId 201
 this -24 8 0 ?
-func Component.getName 208
+func Component.getName 215
 this -20 8 0 ?
-func Component.setName 225
+func Component.setName 232
 this -28 8 0 ?
-func Component.getX 240
+func Component.getX 247
 this -20 8 0 ?
-func Component.setX 264
+func Component.setX 271
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getY 288
+func Component.getY 295
 this -20 8 0 ?
-func Component.setY 312
+func Component.setY 319
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getWidth 336
+func Component.getWidth 343
 this -20 8 0 ?
-func Component.setWidth 360
+func Component.setWidth 367
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getHeight 384
+func Component.getHeight 391
 this -20 8 0 ?
-func Component.setHeight 408
+func Component.setHeight 415
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getScrollDir 432
+func Component.getScrollDir 439
 this -20 8 0 ?
-func Component.setScrollDir 456
+func Component.setScrollDir 463
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.getFontSize 480
+func Component.getFontSize 487
 this -20 8 0 ?
-func Component.setFontSize 504
+func Component.setFontSize 511
 this -24 8 0 ?
 v 0 4 0 ?
-func Component.setPos 528
+func Component.setPos 535
 this -28 8 0 ?
 px -20 4 0 integer
 py -16 4 0 integer
-func Component.setSize 562
+func Component.setSize 569
 this -28 8 0 ?
 w -20 4 0 integer
 h -16 4 0 integer
-func Component.setBounds 596
+func Component.setBounds 603
 this -36 8 0 ?
 px -28 4 0 integer
 py -24 4 0 integer
 w -20 4 0 integer
 h -16 4 0 integer
-func Component.align 658
+func Component.align 665
 this -32 8 0 ?
 a -24 4 0 integer
 dx -20 4 0 integer
 dy -16 4 0 integer
-func Component.setBgColor 682
+func Component.setBgColor 689
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.setTextColor 727
+func Component.setTextColor 734
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.refresh 772
+func Component.refresh 779
 this -20 8 0 ?
-func Component.setHandlerNames 790
+func Component.setHandlerNames 797
 this -36 8 0 ?
 clic -28 8 0 string
 change -20 8 0 string
-func Component.typeName 814
+func Component.typeName 821
 this -20 8 0 ?
-func Component.jsonProps 832
+func Component.jsonProps 839
 this -28 8 0 ?
 o -20 8 0 ref
-func Component.toJson 838
+func Component.toJson 845
 this -20 8 0 ?
 o 8 8 0 ?
 a 20 4 0 integer
@@ -1044,655 +1071,659 @@ dy 28 4 0 integer
 w 32 4 0 integer
 h 36 4 0 integer
 fs 40 4 0 integer
-func Component.toJsonText 1457
+func Component.toJsonText 1464
 this -20 8 0 ?
-func Component.attach 1484
+func Component.attach 1491
 this -28 8 0 ?
 padre -20 8 0 ref
 c 0 8 0 ?
-func Component.register 1548
+func Component.register 1555
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.unregister 1554
+func Component.unregister 1561
 this -28 8 0 ?
 c -20 8 0 ref
-func Component.getParent 1560
+func Component.getParent 1567
 this -20 8 0 ?
-func Component.clean 1582
+func Component.clean 1589
 this -20 8 0 ?
-func Component.delete 1600
+func Component.delete 1607
 this -20 8 0 ?
 c 4 8 0 ?
-func Component.__dtor 1666
+func Component.__dtor 1673
 this -20 8 0 ?
-func Component.__fireClick 1715
+func Component.__fireClick 1722
 this -20 8 0 ?
-func Component.__fireChange 1745
+func Component.__fireChange 1752
 this -20 8 0 ?
-func __cls_m_Component#toJsonText()s 1795
+func __cls_m_Component#toJsonText()s 1802
 this -20 8 0 ?
-func __cls_m_Component#typeName()s 1814
+func __cls_m_Component#typeName()s 1821
 this -20 8 0 ?
-func __cls_m_Component#jsonProps(LJson/JsonObject;)V 1833
+func __cls_m_Component#jsonProps(LJson/JsonObject;)V 1840
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Component#align(iii)V 1850
+func __cls_m_Component#align(iii)V 1857
 this -32 8 0 ?
 a -24 4 0 integer
 dx -20 4 0 integer
 dy -16 4 0 integer
-func __cls_m_Component#delete()V 1870
+func __cls_m_Component#delete()V 1877
 this -20 8 0 ?
-func __cls_m_Component#setHandlerNames(ss)V 1884
+func __cls_m_Component#setHandlerNames(ss)V 1891
 this -36 8 0 ?
 clic -28 8 0 string
 change -20 8 0 string
-func __cls_m_Component#setPos(ii)V 1904
+func __cls_m_Component#setPos(ii)V 1911
 this -28 8 0 ?
 px -20 4 0 integer
 py -16 4 0 integer
-func __cls_m_Component#__fireChange()V 1922
+func __cls_m_Component#__fireChange()V 1929
 this -20 8 0 ?
-func __cls_m_Component#setSize(ii)V 1936
+func __cls_m_Component#setSize(ii)V 1943
 this -28 8 0 ?
 w -20 4 0 integer
 h -16 4 0 integer
-func __cls_m_Component#__fireClick()V 1954
+func __cls_m_Component#__fireClick()V 1961
 this -20 8 0 ?
-func __cls_m_Component#setBgColor(LGui/Color;)V 1968
+func __cls_m_Component#setBgColor(LGui/Color;)V 1975
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Component#__dtor()V 1985
+func __cls_m_Component#__dtor()V 1992
 this -20 8 0 ?
-func __cls_m_Component#attach(LGui/Container;)V 1999
+func __cls_m_Component#attach(LGui/Container;)V 2006
 this -28 8 0 ?
 padre -20 8 0 ref
-func __cls_m_Component#getParent()LGui/Container; 2016
+func __cls_m_Component#getParent()LGui/Container; 2023
 this -20 8 0 ?
-func __cls_m_Component#setTextColor(LGui/Color;)V 2035
+func __cls_m_Component#setTextColor(LGui/Color;)V 2042
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Component#unregister(LGui/Component;)V 2052
+func __cls_m_Component#unregister(LGui/Component;)V 2059
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Component#refresh()V 2069
+func __cls_m_Component#refresh()V 2076
 this -20 8 0 ?
-func __cls_m_Component#clean()V 2083
+func __cls_m_Component#clean()V 2090
 this -20 8 0 ?
-func __cls_m_Component#setBounds(iiii)V 2097
+func __cls_m_Component#setBounds(iiii)V 2104
 this -36 8 0 ?
 px -28 4 0 integer
 py -24 4 0 integer
 w -20 4 0 integer
 h -16 4 0 integer
-func __cls_m_Component#toJson()LJson/JsonObject; 2119
+func __cls_m_Component#toJson()LJson/JsonObject; 2126
 this -20 8 0 ?
-func __cls_m_Component#register(LGui/Component;)V 2138
+func __cls_m_Component#register(LGui/Component;)V 2145
 this -28 8 0 ?
 c -20 8 0 ref
-func Container.register 2155
+func Container.register 2162
 this -28 8 0 ?
 c -20 8 0 ref
-func Container.unregister 2176
+m 0 8 0 ?
+func Container.unregister 2248
 this -28 8 0 ?
 c -20 8 0 ref
-i 0 4 0 integer
-n 4 4 0 integer
-func Container.childCount 2265
+m 0 8 0 ?
+i 12 4 0 integer
+n 16 4 0 integer
+func Container.childCount 2412
 this -20 8 0 ?
-func Container.childAt 2289
+m 4 8 0 ?
+func Container.childAt 2511
 this -24 8 0 ?
 i -16 4 0 integer
-func Container.typeName 2322
+m 8 8 0 ?
+func Container.typeName 2624
 this -20 8 0 ?
-func Container.jsonChild 2341
+func Container.jsonChild 2643
 this -28 8 0 ?
 c -20 8 0 ref
-func Container.toJson 2356
+func Container.toJson 2658
 this -20 8 0 ?
 o 8 8 0 ?
 arr 16 8 0 ?
 n 24 4 0 integer
 i 28 4 0 integer
 c 32 8 0 ?
-func Container.delete 2502
+func Container.delete 2804
 this -20 8 0 ?
 i 0 4 0 integer
-func Container.clean 2559
+func Container.clean 2861
 this -20 8 0 ?
 i 0 4 0 integer
-func Container.__init 2616
+func Container.__init 2918
 this -20 8 0 ?
-func __cls_init_Container() 2661
+func __cls_init_Container() 2963
 this -20 8 0 ?
-func __cls_m_Container#jsonChild(LGui/Component;)z 2675
+func __cls_m_Container#jsonChild(LGui/Component;)z 2977
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Container#toJson()LJson/JsonObject; 2695
+func __cls_m_Container#toJson()LJson/JsonObject; 2997
 this -20 8 0 ?
-func __cls_m_Container#childAt(i)LGui/Component; 2714
+func __cls_m_Container#childAt(i)LGui/Component; 3016
 this -24 8 0 ?
 i -16 4 0 integer
-func __cls_m_Container#unregister(LGui/Component;)V 2735
+func __cls_m_Container#unregister(LGui/Component;)V 3037
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Container#typeName()s 2752
+func __cls_m_Container#typeName()s 3054
 this -20 8 0 ?
-func __cls_m_Container#childCount()i 2771
+func __cls_m_Container#childCount()i 3073
 this -20 8 0 ?
-func __cls_m_Container#clean()V 2788
+func __cls_m_Container#clean()V 3090
 this -20 8 0 ?
-func __cls_m_Container#delete()V 2802
+func __cls_m_Container#delete()V 3104
 this -20 8 0 ?
-func __cls_m_Container#register(LGui/Component;)V 2816
+func __cls_m_Container#register(LGui/Component;)V 3118
 this -28 8 0 ?
 c -20 8 0 ref
-func Screen.typeName 2833
+func Screen.typeName 3135
 this -20 8 0 ?
-func Screen.load 2852
+func Screen.load 3154
 this -20 8 0 ?
-func Screen.__init 2870
+func Screen.__init 3172
 this -20 8 0 ?
-func __cls_init_Screen() 2939
+func __cls_init_Screen() 3241
 this -20 8 0 ?
-func __cls_m_Screen#load()V 2953
+func __cls_m_Screen#load()V 3255
 this -20 8 0 ?
-func __cls_m_Screen#typeName()s 2967
+func __cls_m_Screen#typeName()s 3269
 this -20 8 0 ?
-func Panel.typeName 2986
+func Panel.typeName 3288
 this -20 8 0 ?
-func Panel.__init 3005
+func Panel.__init 3307
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Panel(LGui/Container;) 3052
+func __cls_new_Panel(LGui/Container;) 3354
 parent -20 8 0 ref
-func __cls_init_Panel(LGui/Container;) 3085
+func __cls_init_Panel(LGui/Container;) 3387
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Panel#typeName()s 3102
+func __cls_m_Panel#typeName()s 3404
 this -20 8 0 ?
-func Label.typeName 3121
+func Label.typeName 3423
 this -20 8 0 ?
-func Label.jsonProps 3140
+func Label.jsonProps 3442
 this -28 8 0 ?
 o -20 8 0 ref
 t 0 8 0 string
-func Label.setText 3195
+func Label.setText 3497
 this -28 8 0 ?
 t -20 8 0 string
-func Label.setFont 3216
+func Label.setFont 3518
 this -24 8 0 ?
 font -16 4 0 integer
-func Label.__init 3236
+func Label.__init 3538
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_new_Label(LGui/Container;s) 3288
+func __cls_new_Label(LGui/Container;s) 3590
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Label(LGui/Container;s) 3324
+func __cls_init_Label(LGui/Container;s) 3626
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_m_Label#typeName()s 3344
+func __cls_m_Label#typeName()s 3646
 this -20 8 0 ?
-func __cls_m_Label#jsonProps(LJson/JsonObject;)V 3363
+func __cls_m_Label#jsonProps(LJson/JsonObject;)V 3665
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Label#setFont(i)V 3380
+func __cls_m_Label#setFont(i)V 3682
 this -24 8 0 ?
 font -16 4 0 integer
-func __cls_m_Label#setText(s)V 3396
+func __cls_m_Label#setText(s)V 3698
 this -28 8 0 ?
 t -20 8 0 string
-func Button.typeName 3413
+func Button.typeName 3715
 this -20 8 0 ?
-func Button.jsonProps 3432
+func Button.jsonProps 3734
 this -28 8 0 ?
 o -20 8 0 ref
 t 0 8 0 string
-func Button.jsonChild 3509
+func Button.jsonChild 3811
 this -28 8 0 ?
 c -20 8 0 ref
-func Button.__init 3568
+func Button.__init 3870
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_new_Button(LGui/Container;s) 3669
+func __cls_new_Button(LGui/Container;s) 3971
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Button(LGui/Container;s) 3705
+func __cls_init_Button(LGui/Container;s) 4007
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_m_Button#jsonChild(LGui/Component;)z 3725
+func __cls_m_Button#jsonChild(LGui/Component;)z 4027
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Button#typeName()s 3745
+func __cls_m_Button#typeName()s 4047
 this -20 8 0 ?
-func __cls_m_Button#jsonProps(LJson/JsonObject;)V 3764
+func __cls_m_Button#jsonProps(LJson/JsonObject;)V 4066
 this -28 8 0 ?
 o -20 8 0 ref
-func Checkbox.getChecked 3781
+func Checkbox.getChecked 4083
 this -20 8 0 ?
-func Checkbox.setChecked 3805
+func Checkbox.setChecked 4107
 this -24 8 0 ?
 v 0 4 0 ?
-func Checkbox.typeName 3829
+func Checkbox.typeName 4131
 this -20 8 0 ?
-func Checkbox.jsonProps 3848
+func Checkbox.jsonProps 4150
 this -28 8 0 ?
 o -20 8 0 ref
 t 0 8 0 string
-func Checkbox.setText 3936
+func Checkbox.setText 4238
 this -28 8 0 ?
 t -20 8 0 string
-func Checkbox.__init 3957
+func Checkbox.__init 4259
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_new_Checkbox(LGui/Container;s) 4009
+func __cls_new_Checkbox(LGui/Container;s) 4311
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_init_Checkbox(LGui/Container;s) 4045
+func __cls_init_Checkbox(LGui/Container;s) 4347
 this -36 8 0 ?
 parent -28 8 0 ref
 text -20 8 0 string
-func __cls_m_Checkbox#typeName()s 4065
+func __cls_m_Checkbox#typeName()s 4367
 this -20 8 0 ?
-func __cls_m_Checkbox#jsonProps(LJson/JsonObject;)V 4084
+func __cls_m_Checkbox#jsonProps(LJson/JsonObject;)V 4386
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Checkbox#setText(s)V 4101
+func __cls_m_Checkbox#setText(s)V 4403
 this -28 8 0 ?
 t -20 8 0 string
-func Toggle.getChecked 4118
+func Toggle.getChecked 4420
 this -20 8 0 ?
-func Toggle.setChecked 4142
+func Toggle.setChecked 4444
 this -24 8 0 ?
 v 0 4 0 ?
-func Toggle.typeName 4166
+func Toggle.typeName 4468
 this -20 8 0 ?
-func Toggle.jsonProps 4185
+func Toggle.jsonProps 4487
 this -28 8 0 ?
 o -20 8 0 ref
-func Toggle.__init 4224
+func Toggle.__init 4526
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Toggle(LGui/Container;) 4261
+func __cls_new_Toggle(LGui/Container;) 4563
 parent -20 8 0 ref
-func __cls_init_Toggle(LGui/Container;) 4294
+func __cls_init_Toggle(LGui/Container;) 4596
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Toggle#typeName()s 4311
+func __cls_m_Toggle#typeName()s 4613
 this -20 8 0 ?
-func __cls_m_Toggle#jsonProps(LJson/JsonObject;)V 4330
+func __cls_m_Toggle#jsonProps(LJson/JsonObject;)V 4632
 this -28 8 0 ?
 o -20 8 0 ref
-func Slider.getValue 4347
+func Slider.getValue 4649
 this -20 8 0 ?
-func Slider.setValue 4371
+func Slider.setValue 4673
 this -24 8 0 ?
 v 0 4 0 ?
-func Slider.typeName 4395
+func Slider.typeName 4697
 this -20 8 0 ?
-func Slider.jsonProps 4414
+func Slider.jsonProps 4716
 this -28 8 0 ?
 o -20 8 0 ref
-func Slider.setRange 4562
+func Slider.setRange 4864
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Slider.__init 4607
+func Slider.__init 4909
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Slider(LGui/Container;) 4644
+func __cls_new_Slider(LGui/Container;) 4946
 parent -20 8 0 ref
-func __cls_init_Slider(LGui/Container;) 4677
+func __cls_init_Slider(LGui/Container;) 4979
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Slider#setRange(ii)V 4694
+func __cls_m_Slider#setRange(ii)V 4996
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func __cls_m_Slider#typeName()s 4712
+func __cls_m_Slider#typeName()s 5014
 this -20 8 0 ?
-func __cls_m_Slider#jsonProps(LJson/JsonObject;)V 4731
+func __cls_m_Slider#jsonProps(LJson/JsonObject;)V 5033
 this -28 8 0 ?
 o -20 8 0 ref
-func Bar.getValue 4748
+func Bar.getValue 5050
 this -20 8 0 ?
-func Bar.setValue 4772
+func Bar.setValue 5074
 this -24 8 0 ?
 v 0 4 0 ?
-func Bar.typeName 4796
+func Bar.typeName 5098
 this -20 8 0 ?
-func Bar.jsonProps 4815
+func Bar.jsonProps 5117
 this -28 8 0 ?
 o -20 8 0 ref
-func Bar.setRange 4963
+func Bar.setRange 5265
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Bar.__init 5008
+func Bar.__init 5310
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Bar(LGui/Container;) 5045
+func __cls_new_Bar(LGui/Container;) 5347
 parent -20 8 0 ref
-func __cls_init_Bar(LGui/Container;) 5078
+func __cls_init_Bar(LGui/Container;) 5380
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Bar#setRange(ii)V 5095
+func __cls_m_Bar#setRange(ii)V 5397
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func __cls_m_Bar#typeName()s 5113
+func __cls_m_Bar#typeName()s 5415
 this -20 8 0 ?
-func __cls_m_Bar#jsonProps(LJson/JsonObject;)V 5132
+func __cls_m_Bar#jsonProps(LJson/JsonObject;)V 5434
 this -28 8 0 ?
 o -20 8 0 ref
-func Spinbox.getValue 5149
+func Spinbox.getValue 5451
 this -20 8 0 ?
-func Spinbox.setValue 5173
+func Spinbox.setValue 5475
 this -24 8 0 ?
 v 0 4 0 ?
-func Spinbox.typeName 5197
+func Spinbox.typeName 5499
 this -20 8 0 ?
-func Spinbox.jsonProps 5216
+func Spinbox.jsonProps 5518
 this -28 8 0 ?
 o -20 8 0 ref
-func Spinbox.setRange 5364
+func Spinbox.setRange 5666
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Spinbox.__init 5409
+func Spinbox.__init 5711
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Spinbox(LGui/Container;) 5446
+func __cls_new_Spinbox(LGui/Container;) 5748
 parent -20 8 0 ref
-func __cls_init_Spinbox(LGui/Container;) 5479
+func __cls_init_Spinbox(LGui/Container;) 5781
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Spinbox#setRange(ii)V 5496
+func __cls_m_Spinbox#setRange(ii)V 5798
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func __cls_m_Spinbox#typeName()s 5514
+func __cls_m_Spinbox#typeName()s 5816
 this -20 8 0 ?
-func __cls_m_Spinbox#jsonProps(LJson/JsonObject;)V 5533
+func __cls_m_Spinbox#jsonProps(LJson/JsonObject;)V 5835
 this -28 8 0 ?
 o -20 8 0 ref
-func Led.getValue 5550
+func Led.getValue 5852
 this -20 8 0 ?
-func Led.setValue 5574
+func Led.setValue 5876
 this -24 8 0 ?
 v 0 4 0 ?
-func Led.typeName 5598
+func Led.typeName 5900
 this -20 8 0 ?
-func Led.jsonProps 5617
+func Led.jsonProps 5919
 this -28 8 0 ?
 o -20 8 0 ref
-func Led.on 5664
+func Led.on 5966
 this -20 8 0 ?
-func Led.off 5683
+func Led.off 5985
 this -20 8 0 ?
-func Led.__init 5702
+func Led.__init 6004
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Led(LGui/Container;) 5739
+func __cls_new_Led(LGui/Container;) 6041
 parent -20 8 0 ref
-func __cls_init_Led(LGui/Container;) 5772
+func __cls_init_Led(LGui/Container;) 6074
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Led#typeName()s 5789
+func __cls_m_Led#typeName()s 6091
 this -20 8 0 ?
-func __cls_m_Led#jsonProps(LJson/JsonObject;)V 5808
+func __cls_m_Led#jsonProps(LJson/JsonObject;)V 6110
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Led#off()V 5825
+func __cls_m_Led#off()V 6127
 this -20 8 0 ?
-func __cls_m_Led#on()V 5839
+func __cls_m_Led#on()V 6141
 this -20 8 0 ?
-func Dropdown.getSelected 5853
+func Dropdown.getSelected 6155
 this -20 8 0 ?
-func Dropdown.setSelected 5877
+func Dropdown.setSelected 6179
 this -24 8 0 ?
 v 0 4 0 ?
-func Dropdown.typeName 5901
+func Dropdown.typeName 6203
 this -20 8 0 ?
-func Dropdown.jsonProps 5920
+func Dropdown.jsonProps 6222
 this -28 8 0 ?
 o -20 8 0 ref
 op 0 8 0 string
-func Dropdown.setOptions 6016
+func Dropdown.setOptions 6318
 this -28 8 0 ?
 opts -20 8 0 string
-func Dropdown.__init 6037
+func Dropdown.__init 6339
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Dropdown(LGui/Container;) 6074
+func __cls_new_Dropdown(LGui/Container;) 6376
 parent -20 8 0 ref
-func __cls_init_Dropdown(LGui/Container;) 6107
+func __cls_init_Dropdown(LGui/Container;) 6409
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Dropdown#typeName()s 6124
+func __cls_m_Dropdown#typeName()s 6426
 this -20 8 0 ?
-func __cls_m_Dropdown#setOptions(s)V 6143
+func __cls_m_Dropdown#setOptions(s)V 6445
 this -28 8 0 ?
 opts -20 8 0 string
-func __cls_m_Dropdown#jsonProps(LJson/JsonObject;)V 6160
+func __cls_m_Dropdown#jsonProps(LJson/JsonObject;)V 6462
 this -28 8 0 ?
 o -20 8 0 ref
-func Textarea.getText 6177
+func Textarea.getText 6479
 this -20 8 0 ?
-func Textarea.setText 6203
+func Textarea.setText 6505
 this -28 8 0 ?
 v 0 8 0 ?
-func Textarea.getReadOnly 6230
+func Textarea.getReadOnly 6532
 this -20 8 0 ?
-func Textarea.setReadOnly 6256
+func Textarea.setReadOnly 6558
 this -24 8 0 ?
 v 0 4 0 ?
-func Textarea.typeName 6304
+func Textarea.typeName 6606
 this -20 8 0 ?
-func Textarea.jsonProps 6323
+func Textarea.jsonProps 6625
 this -28 8 0 ?
 o -20 8 0 ref
-func Textarea.__init 6406
+func Textarea.__init 6708
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Textarea(LGui/Container;) 6443
+func __cls_new_Textarea(LGui/Container;) 6745
 parent -20 8 0 ref
-func __cls_init_Textarea(LGui/Container;) 6476
+func __cls_init_Textarea(LGui/Container;) 6778
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Textarea#typeName()s 6493
+func __cls_m_Textarea#typeName()s 6795
 this -20 8 0 ?
-func __cls_m_Textarea#jsonProps(LJson/JsonObject;)V 6512
+func __cls_m_Textarea#jsonProps(LJson/JsonObject;)V 6814
 this -28 8 0 ?
 o -20 8 0 ref
-func ListBox.getSelected 6529
+func ListBox.getSelected 6831
 this -20 8 0 ?
-func ListBox.setSelected 6553
+func ListBox.setSelected 6855
 this -24 8 0 ?
 v 0 4 0 ?
-func ListBox.typeName 6577
+func ListBox.typeName 6879
 this -20 8 0 ?
-func ListBox.jsonProps 6596
+func ListBox.jsonProps 6898
 this -28 8 0 ?
 o -20 8 0 ref
 it 0 8 0 string
-func ListBox.setItems 6692
+func ListBox.setItems 6994
 this -28 8 0 ?
 items -20 8 0 string
-func ListBox.__init 6713
+func ListBox.__init 7015
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_ListBox(LGui/Container;) 6750
+func __cls_new_ListBox(LGui/Container;) 7052
 parent -20 8 0 ref
-func __cls_init_ListBox(LGui/Container;) 6783
+func __cls_init_ListBox(LGui/Container;) 7085
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_ListBox#setItems(s)V 6800
+func __cls_m_ListBox#setItems(s)V 7102
 this -28 8 0 ?
 items -20 8 0 string
-func __cls_m_ListBox#typeName()s 6817
+func __cls_m_ListBox#typeName()s 7119
 this -20 8 0 ?
-func __cls_m_ListBox#jsonProps(LJson/JsonObject;)V 6836
+func __cls_m_ListBox#jsonProps(LJson/JsonObject;)V 7138
 this -28 8 0 ?
 o -20 8 0 ref
-func Keyboard.typeName 6853
+func Keyboard.typeName 7155
 this -20 8 0 ?
-func Keyboard.setTextarea 6872
+func Keyboard.setTextarea 7174
 this -28 8 0 ?
 ta -20 8 0 ref
-func Keyboard.__init 6897
+func Keyboard.__init 7199
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Keyboard(LGui/Container;) 6934
+func __cls_new_Keyboard(LGui/Container;) 7236
 parent -20 8 0 ref
-func __cls_init_Keyboard(LGui/Container;) 6967
+func __cls_init_Keyboard(LGui/Container;) 7269
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Keyboard#typeName()s 6984
+func __cls_m_Keyboard#typeName()s 7286
 this -20 8 0 ?
-func __cls_m_Keyboard#setTextarea(LGui/Textarea;)V 7003
+func __cls_m_Keyboard#setTextarea(LGui/Textarea;)V 7305
 this -28 8 0 ?
 ta -20 8 0 ref
-func Msgbox.getResult 7020
+func Msgbox.getResult 7322
 this -20 8 0 ?
-func Msgbox.setResult 7044
+func Msgbox.setResult 7346
 this -24 8 0 ?
 v 0 4 0 ?
-func Msgbox.typeName 7068
+func Msgbox.typeName 7370
 this -20 8 0 ?
-func Msgbox.jsonProps 7087
+func Msgbox.jsonProps 7389
 this -28 8 0 ?
 o -20 8 0 ref
 t 0 8 0 string
-func Msgbox.setButtons 7184
+func Msgbox.setButtons 7486
 this -28 8 0 ?
 labels -20 8 0 string
-func Msgbox.__init 7214
+func Msgbox.__init 7516
 this -36 8 0 ?
 parent -28 8 0 ref
 message -20 8 0 string
-func __cls_new_Msgbox(LGui/Container;s) 7266
+func __cls_new_Msgbox(LGui/Container;s) 7568
 parent -28 8 0 ref
 message -20 8 0 string
-func __cls_init_Msgbox(LGui/Container;s) 7302
+func __cls_init_Msgbox(LGui/Container;s) 7604
 this -36 8 0 ?
 parent -28 8 0 ref
 message -20 8 0 string
-func __cls_m_Msgbox#typeName()s 7322
+func __cls_m_Msgbox#typeName()s 7624
 this -20 8 0 ?
-func __cls_m_Msgbox#jsonProps(LJson/JsonObject;)V 7341
+func __cls_m_Msgbox#jsonProps(LJson/JsonObject;)V 7643
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Msgbox#setButtons(s)V 7358
+func __cls_m_Msgbox#setButtons(s)V 7660
 this -28 8 0 ?
 labels -20 8 0 string
-func TabPage.typeName 7375
+func TabPage.typeName 7677
 this -20 8 0 ?
-func TabPage.__init 7394
+func TabPage.__init 7696
 this -24 8 0 ?
 pageId -16 4 0 integer
-func __cls_new_TabPage(i) 7421
+func __cls_new_TabPage(i) 7723
 pageId -16 4 0 integer
-func __cls_init_TabPage(i) 7453
+func __cls_init_TabPage(i) 7755
 this -24 8 0 ?
 pageId -16 4 0 integer
-func __cls_m_TabPage#typeName()s 7469
+func __cls_m_TabPage#typeName()s 7771
 this -20 8 0 ?
-func Tabview.getActive 7488
+func Tabview.getActive 7790
 this -20 8 0 ?
-func Tabview.setActive 7512
+func Tabview.setActive 7814
 this -24 8 0 ?
 v 0 4 0 ?
-func Tabview.typeName 7536
+func Tabview.typeName 7838
 this -20 8 0 ?
-func Tabview.addTab 7555
+func Tabview.addTab 7857
 this -28 8 0 ?
 name -20 8 0 string
 p 8 8 0 ?
-func Tabview.__init 7626
+func Tabview.__init 7928
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Tabview(LGui/Container;) 7673
+func __cls_new_Tabview(LGui/Container;) 7975
 parent -20 8 0 ref
-func __cls_init_Tabview(LGui/Container;) 7706
+func __cls_init_Tabview(LGui/Container;) 8008
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Tabview#addTab(s)LGui/TabPage; 7723
+func __cls_m_Tabview#addTab(s)LGui/TabPage; 8025
 this -28 8 0 ?
 name -20 8 0 string
-func __cls_m_Tabview#typeName()s 7745
+func __cls_m_Tabview#typeName()s 8047
 this -20 8 0 ?
-func Chart.typeName 7764
+func Chart.typeName 8066
 this -20 8 0 ?
-func Chart.jsonProps 7783
+func Chart.jsonProps 8085
 this -28 8 0 ?
 o -20 8 0 ref
-func Chart.setRange 7965
+func Chart.setRange 8267
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func Chart.setPointCount 8010
+func Chart.setPointCount 8312
 this -24 8 0 ?
 n -16 4 0 integer
-func Chart.addSeries 8038
+func Chart.addSeries 8340
 this -24 8 0 ?
 rgb -16 4 0 integer
-func Chart.push 8064
+func Chart.push 8366
 this -28 8 0 ?
 series -20 4 0 integer
 v -16 4 0 integer
-func Chart.setValue 8086
+func Chart.setValue 8388
 this -32 8 0 ?
 series -24 4 0 integer
 idx -20 4 0 integer
 v -16 4 0 integer
-func Chart.setType 8110
+func Chart.setType 8412
 this -24 8 0 ?
 t -16 4 0 integer
-func Chart.__init 8138
+func Chart.__init 8440
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Chart(LGui/Container;) 8175
+func __cls_new_Chart(LGui/Container;) 8477
 parent -20 8 0 ref
-func __cls_init_Chart(LGui/Container;) 8208
+func __cls_init_Chart(LGui/Container;) 8510
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Chart#addSeries(i)i 8225
+func __cls_m_Chart#addSeries(i)i 8527
 this -24 8 0 ?
 rgb -16 4 0 integer
-func __cls_m_Chart#setRange(ii)V 8244
+func __cls_m_Chart#setRange(ii)V 8546
 this -28 8 0 ?
 mn -20 4 0 integer
 mx -16 4 0 integer
-func __cls_m_Chart#typeName()s 8262
+func __cls_m_Chart#typeName()s 8564
 this -20 8 0 ?
-func __cls_m_Chart#jsonProps(LJson/JsonObject;)V 8281
+func __cls_m_Chart#jsonProps(LJson/JsonObject;)V 8583
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Chart#setType(i)V 8298
+func __cls_m_Chart#setType(i)V 8600
 this -24 8 0 ?
 t -16 4 0 integer
-func __cls_m_Chart#push(ii)V 8314
+func __cls_m_Chart#push(ii)V 8616
 this -28 8 0 ?
 series -20 4 0 integer
 v -16 4 0 integer
-func __cls_m_Chart#setPointCount(i)V 8332
+func __cls_m_Chart#setPointCount(i)V 8634
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_Chart#setValue(iii)V 8348
+func __cls_m_Chart#setValue(iii)V 8650
 this -32 8 0 ?
 series -24 4 0 integer
 idx -20 4 0 integer
 v -16 4 0 integer
-func Table.typeName 8368
+func Table.typeName 8670
 this -20 8 0 ?
-func Table.jsonProps 8387
+func Table.jsonProps 8689
 this -28 8 0 ?
 o -20 8 0 ref
 algo 4 4 0 boolean
@@ -1701,131 +1732,131 @@ f 16 4 0 integer
 fila 20 8 0 ?
 c 28 4 0 integer
 celda 32 8 0 string
-func Table.setGrid 8632
+func Table.setGrid 8934
 this -28 8 0 ?
 rows -20 4 0 integer
 cols -16 4 0 integer
-func Table.setCell 8670
+func Table.setCell 8972
 this -36 8 0 ?
 row -28 4 0 integer
 col -24 4 0 integer
 text -20 8 0 string
-func Table.getCell 8695
+func Table.getCell 8997
 this -28 8 0 ?
 row -20 4 0 integer
 col -16 4 0 integer
-func Table.__init 8725
+func Table.__init 9027
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_Table(LGui/Container;) 8762
+func __cls_new_Table(LGui/Container;) 9064
 parent -20 8 0 ref
-func __cls_init_Table(LGui/Container;) 8795
+func __cls_init_Table(LGui/Container;) 9097
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_Table#setGrid(ii)V 8812
+func __cls_m_Table#setGrid(ii)V 9114
 this -28 8 0 ?
 rows -20 4 0 integer
 cols -16 4 0 integer
-func __cls_m_Table#getCell(ii)s 8830
+func __cls_m_Table#getCell(ii)s 9132
 this -28 8 0 ?
 row -20 4 0 integer
 col -16 4 0 integer
-func __cls_m_Table#typeName()s 8853
+func __cls_m_Table#typeName()s 9155
 this -20 8 0 ?
-func __cls_m_Table#jsonProps(LJson/JsonObject;)V 8872
+func __cls_m_Table#jsonProps(LJson/JsonObject;)V 9174
 this -28 8 0 ?
 o -20 8 0 ref
-func __cls_m_Table#setCell(iis)V 8889
+func __cls_m_Table#setCell(iis)V 9191
 this -36 8 0 ?
 row -28 4 0 integer
 col -24 4 0 integer
 text -20 8 0 string
-func Image.getAssetId 8910
+func Image.getAssetId 9212
 this -20 8 0 ?
-func Image.setAssetId 8925
+func Image.setAssetId 9227
 this -24 8 0 ?
-func Image.loadFile 8939
+func Image.loadFile 9241
 this -28 8 0 ?
 path -20 8 0 string
-func Image.width 8968
+func Image.width 9270
 this -20 8 0 ?
-func Image.height 8992
+func Image.height 9294
 this -20 8 0 ?
-func Image.__init 9016
+func Image.__init 9318
 this -20 8 0 ?
-func __cls_init_Image() 9064
+func __cls_init_Image() 9366
 this -20 8 0 ?
-func __cls_m_Image#width()i 9078
+func __cls_m_Image#width()i 9380
 this -20 8 0 ?
-func __cls_m_Image#loadFile(s)z 9095
+func __cls_m_Image#loadFile(s)z 9397
 this -28 8 0 ?
 path -20 8 0 string
-func __cls_m_Image#height()i 9115
+func __cls_m_Image#height()i 9417
 this -20 8 0 ?
-func ImageView.typeName 9132
+func ImageView.typeName 9434
 this -20 8 0 ?
-func ImageView.setImage 9151
+func ImageView.setImage 9453
 this -28 8 0 ?
 img -20 8 0 ref
-func ImageView.refresh 9176
+func ImageView.refresh 9478
 this -20 8 0 ?
-func ImageView.__init 9206
+func ImageView.__init 9508
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_new_ImageView(LGui/Container;) 9243
+func __cls_new_ImageView(LGui/Container;) 9545
 parent -20 8 0 ref
-func __cls_init_ImageView(LGui/Container;) 9276
+func __cls_init_ImageView(LGui/Container;) 9578
 this -28 8 0 ?
 parent -20 8 0 ref
-func __cls_m_ImageView#typeName()s 9293
+func __cls_m_ImageView#typeName()s 9595
 this -20 8 0 ?
-func __cls_m_ImageView#refresh()V 9312
+func __cls_m_ImageView#refresh()V 9614
 this -20 8 0 ?
-func __cls_m_ImageView#setImage(LGui/Image;)V 9326
+func __cls_m_ImageView#setImage(LGui/Image;)V 9628
 this -28 8 0 ?
 img -20 8 0 ref
-func HiloGui.pedirParada 9343
+func HiloGui.pedirParada 9645
 this -20 8 0 ?
-func HiloGui.run 9356
+func HiloGui.run 9658
 this -20 8 0 ?
 ocio 0 4 0 integer
-func HiloGui.__init 9426
+func HiloGui.__init 9728
 this -20 8 0 ?
-func Window.typeName 9452
+func Window.typeName 9754
 this -20 8 0 ?
-func Window.load 9471
+func Window.load 9773
 this -28 8 0 ?
 path -20 8 0 string
 root 8 8 0 ?
 node 16 8 0 ?
 w 24 8 0 ?
 scr 32 4 0 integer
-func Window.destroy 9599
+func Window.destroy 9901
 this -20 8 0 ?
-func Window.__init 9614
+func Window.__init 9916
 this -20 8 0 ?
 scr 4 4 0 integer
-func __cls_init_Window() 9718
+func __cls_init_Window() 10020
 this -20 8 0 ?
-func __cls_m_Window#load(s)LGui/Component; 9732
+func __cls_m_Window#load(s)LGui/Component; 10034
 this -28 8 0 ?
 path -20 8 0 string
-func __cls_m_Window#typeName()s 9754
+func __cls_m_Window#typeName()s 10056
 this -20 8 0 ?
-func __cls_m_Window#destroy()V 9773
+func __cls_m_Window#destroy()V 10075
 this -20 8 0 ?
-func __guiDispatch 9787
+func __guiDispatch 10108
 self -20 8 0 ref
-func __guiDispatchChange 9802
+func __guiDispatchChange 10123
 self -20 8 0 ref
-func loadFont 9967
+func loadFont 10288
 path -20 8 0 string
-func shot 9987
+func shot 10308
 path -20 8 0 string
 n 4 4 0 integer
-func setRotation 10142
+func setRotation 10463
 deg -16 4 0 integer
-func buildForm 10155
+func buildForm 10476
 node -36 8 0 ref
 parent -28 8 0 ref
 win -20 8 0 ref
@@ -1837,7 +1868,7 @@ cont 44 8 0 ?
 arr 52 8 0 ?
 i 60 4 0 integer
 child 64 8 0 ?
-func bindMember 10401
+func bindMember 10722
 win -36 8 0 ref
 w -28 8 0 ref
 nom -20 8 0 string
@@ -1845,7 +1876,7 @@ n 0 4 0 integer
 cs 4 8 0 ?
 i 12 4 0 integer
 slot 16 4 0 integer
-func bindHandler 10586
+func bindHandler 10907
 win -44 8 0 ref
 w -36 8 0 ref
 nom -28 8 0 string
@@ -1856,7 +1887,7 @@ clicExplicito 16 4 0 boolean
 changeExplicito 20 4 0 boolean
 hc 24 8 0 string
 hch 32 8 0 string
-func makeWidget 10979
+func makeWidget 11300
 t -36 8 0 string
 parent -28 8 0 ref
 node -20 8 0 ref
@@ -1878,40 +1909,40 @@ filasJ 296 8 0 ?
 f 304 4 0 integer
 fila 308 8 0 ?
 c 316 4 0 integer
-func applyCommon 12771
+func applyCommon 13092
 w -28 8 0 ref
 node -20 8 0 ref
-func colorFromHex 13212
+func colorFromHex 13533
 s -20 8 0 string
 n 4 4 0 integer
 i 8 4 0 integer
 acc 12 4 0 integer
 c 16 4 0 integer
 d 20 4 0 integer
-func colorToHex 13553
+func colorToHex 13874
 rgb -16 4 0 integer
 cs 8 8 0 ?
 v 16 4 0 integer
 i 20 4 0 integer
 d 24 4 0 integer
-func alignName 13705
+func alignName 14026
 a -16 4 0 integer
-func alignFromName 13940
+func alignFromName 14261
 a -20 8 0 string
-func __strconcat 14203
+func __strconcat 14536
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 d 16 4 0 ?
-func __strconcat3 14257
+func __strconcat3 14590
 s0 -36 8 0 ?
 s1 -28 8 0 ?
 s2 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strequals 14321
+func __strequals 14654
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

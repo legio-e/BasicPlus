@@ -1186,12 +1186,16 @@ la C6, la P4 y la Nucleo.
 - **N1 en los micros** (el contexto de la native, un puntero por tarea: la Pico, el de FreeRTOS; la P4 y la S3, un
   `__thread`), y con él las natives con dos runs en esas placas; compilan las nueve imágenes. `NatDosRuns` y
   `GuiAnidadaGc`, a la tanda de V7 (44 pruebas); contra el simulado con dos runs, la de la GUI idéntica.
-- **Traspaso**: la P4 se queda con la imagen de `7c038943` y `vm.runs=2` en el ENV; en su `/app`, los dos ficheros de
-  la prueba de la pantalla (`GuiP4DosRuns.mod` y `p4dos.shot`: borrarlos pide su OK). La Pico 2, como estaba (dos
-  núcleos, `vm.runs=2`). **El lote que espera el OK de Eduardo**: la Pico 2 (la imagen de dos núcleos) y la P4 con N1 y
-  el arreglo del cuelgue —la tanda de V7 entera, `run_placa`, y en la P4 la GUI en la pantalla—; y en la P4, `log=1`
-  (para ver los viajes al run 0) y borrar sus dos ficheros. Pendiente de decidir: la carrera de la librería `Gui`
-  ((A) un `Mutex` en `Container`, la propuesta, o (B) documentarlo).
+- **Por la mañana** (Eduardo: *«OK A, OK los lotes y OK log=1»*): **el lote de N1 y del cuelgue, verde** —la Pico 2
+  (las natives con dos runs: la tanda de V7, `run_placa` 34 de 34) y la P4 (la tanda de V7 con `GuiAnidadaGc` en la
+  pantalla y `NatDosRuns`; con `log=1`, los viajes al run 0 de las de GUI: 1, 15 y 7; quitado después)—. Y **(A), el
+  cerrojo del árbol en `Gui.bp`**: la `Gui` de antes perdía hijos en 7 de 40 pasadas; con el cerrojo, 40 de 40
+  (`test-cola` 20). La stdlib, recompilada como proyecto (compilar `Gui.bp` suelto le cambió la versión a `Core`: se
+  deshizo) y el pack de la librería, regenerado.
+- **Traspaso**: la Pico 2 (dos núcleos) y la P4 con la imagen de `8059f6ec`, las dos con `vm.runs=2`; en el `/app` de la
+  P4, los dos ficheros de la prueba de la pantalla (borrarlos pide su OK: no lo dio). Lo que queda de H12: el pack de
+  LVGL con el `Gui.mod` del cerrojo, a las placas con pantalla; el resto de placas, una vez; y qué imagen y qué `vm.runs`
+  van por defecto en V7 (Eduardo).
 - **Las natives con dos runs, pensado con Eduardo** (sin código): la native usa DOS pilas —la de C (la del run si es
   directa; la de su ejecutor si puede ceder) y la BP del hilo que la llamó—; dos natives a la vez ya pasan con un run
   (cada una con su ejecutor); con dos runs lo que falta es el contexto POR TAREA (hoy, un global en los micros), el

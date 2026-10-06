@@ -49,6 +49,8 @@
  *     del run 1 viaja—; --sabotaje-gui: ejecutado donde se encuentra, como antes: alguno fuera del run 0.
  * 19. una llamada anidada de la GUI, larga, mientras otro run colecta (GuiAnidadaGc): el puente se aparca con el mundo
  *     parado; --sabotaje-anidada: vuelve a entrar sin fin, como antes: el programa colgado (lo para el plazo).
+ * 20. dos hilos crean controles en el mismo contenedor (GuiMismoPadre): ni uno perdido (el cerrojo del árbol de Gui.bp;
+ *     el control, medido a mano con la Gui de antes).
  *
  * Uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod
  *                FicherosDosRuns.mod
@@ -578,6 +580,26 @@ static int gui_anidada(int sabotaje) {
                    sabotaje, malos, pasadas, NULL, ultimo);
 }
 
+/* 20. (V7/H12) DOS HILOS QUE CREAN CONTROLES EN EL MISMO CONTENEDOR a la vez, con dos runs (GuiMismoPadre): la lista de
+ * hijos es de la librería (Gui.bp, BP) y la protege el cerrojo del árbol (decidido por Eduardo el 6-oct: «OK A»): 400
+ * creadas, 400 hijos, en todas. Sin sabotaje por bandera —el fallo era de la librería BP, no de la VM—: el control se
+ * midió a mano con la Gui de antes (sin el cerrojo), 7 de 40 pasadas con hijos perdidos («400 creadas, 399 hijos»); con
+ * él, 40 de 40 bien. */
+static int gui_mismo_padre(void) {
+    int malos = 0; char ultimo[80] = "";
+    for (int i = 0; i < PASADAS; i++) {
+        salida_t o;
+        bpvm_status_t s = corre("GuiMismoPadre.mod", 512 * 1024, 0, 2, &o);
+        if (s != BPVM_OK || strstr(o.buf, "creadas: 400, hijos de la pantalla: 400") == NULL
+            || bpvm_la_cola.gui_fuera_del_run0 != 0) {
+            malos++;
+            resume(ultimo, sizeof ultimo, s, o.buf);
+        }
+    }
+    return informe("20. dos hilos crean controles en el mismo contenedor, con dos runs: ni uno perdido", 0, malos,
+                   PASADAS, NULL, ultimo);
+}
+
 int main(int argc, char** argv) {
     bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -633,6 +655,7 @@ int main(int argc, char** argv) {
     if (!sabotaje || sab_mundo) fallos += cadenas_un_hilo(sab_mundo);   /* la 3.2: el mundo, con su condición */
     if (!sabotaje || sab_gui) fallos += gui_dos_runs(sab_gui);   /* LVGL con dos runs: la GUI, en el run 0 */
     if (!sabotaje || sab_anidada) fallos += gui_anidada(sab_anidada);   /* y el puente, aparcado con el mundo */
+    if (!sabotaje) fallos += gui_mismo_padre();   /* y el árbol de la librería, con su cerrojo */
     if (fallos == 0 && !sabotaje)
         printf("OK: la cola (H12 2a.2 y 2b): el interbloqueo, con uno y dos runs; ni uno falso; el fin, del último que "
                "sale; nadie dentro al avisar; el gc() del programa, con el mundo parado; los eventos y los ficheros con "

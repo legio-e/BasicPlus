@@ -5574,6 +5574,29 @@ perdió en silencio. La prueba, arreglada para lo que prueba (cada pintor, en su
 La propuesta: (A), porque el programador sólo comparte la pantalla —algo natural— y no tiene forma de saber que crear
 un control toca una lista interna de la librería («lo compartido por el programa, es del programador; el resto, nuestro»).
 
+**Decidido: (A)** (Eduardo, 6-oct: *«OK A»*). **Hecho** (`bpstdlib/Gui.bp`): UN cerrojo para todo el árbol
+(`cerrojoArbol`, un `Mutex` de módulo creado en su `__init`; `Container` lo pide con `__guiCerrojoArbol()`: una clase no
+lee un var de módulo que no sea público), y dentro, con `try`/`finally`, cada operación de la lista: dar de alta, de
+baja, contar y coger uno. Recorrer el árbol (`toJson`, `delete`, `clean`) es una serie de ésas, no una sola (un `delete`
+dentro de otro se bloquearía: el `Mutex` no es reentrante). Uno y no uno por contenedor: altas y bajas son raras, y un
+`Button` también es contenedor. La stdlib, recompilada como PROYECTO (`--project bpstdlib/Stdlib.bpbuild`: compilar
+`Gui.bp` suelto le cambió la versión a `Core` —el `gen`, la cabecera— y se deshizo): sólo cambian `Gui.mod` y
+`Stdlib.mod`, y `packs/Stdlib.pack`, regenerado (`compat/stdlib_pack.sh --regenerar`). **Medido**: `GuiMismoPadre`
+(dos hilos, 200 etiquetas cada uno en la misma pantalla, dos runs), 40 pasadas: con la `Gui` de antes, **7 mal**; con el
+cerrojo, 40 de 40. `test-cola` 20 (sin sabotaje por bandera: el fallo era de la librería; el control, esa medida). **En
+las placas con pantalla, el `Gui.mod` va DENTRO del pack de LVGL**: el arreglo les llega al regrabar ese pack (el lote
+del final de H12).
+
+#### El lote de N1 y del cuelgue (6-oct, mañana; con el OK de Eduardo)
+
+- **La Pico 2** (la imagen de dos núcleos, `vm.runs=2`): la tanda de V7 —35 idénticas, entre ellas las 13 de natives
+  CON DOS RUNS (`NatDosRuns`, 3 de 3 thunks ARM), y las de GUI saltadas (sin pantalla)— y `run_placa` 34 de 34; en su
+  log, ningún programa mandado a un run.
+- **La P4** (la aplicación; los packs aguantaron otra vez): la tanda de V7 —38 idénticas: `GuiAnidadaGc` en la pantalla
+  de verdad (el puente aparcado: en el log, el run 1 con 1 427 cuantos reservando mientras el 0 corría el `invoke`) y
+  `NatDosRuns` con las natives RISC-V—; y con `log=1` (el OK de Eduardo; quitado después), los VIAJES al run 0 de las
+  de GUI: `GuiWinJson` 1, `GuiShot` 15, `GuiArbolG2` 7; y ningún builtin de la GUI fuera del run 0.
+
 **N1 en los micros, hecho** (6-oct, madrugada; compilan las dos imágenes de la Pico, las cinco ESP y las dos STM32):
 un PUNTERO por tarea a su contexto (`bpvm_aot_contexto_t`: el límite de fallos y el contexto de la llamada), no el
 contexto entero en cada tarea —lo que costaría en todas, también en las del sistema—. Lo ponen las tareas que corren
