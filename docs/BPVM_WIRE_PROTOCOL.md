@@ -274,9 +274,11 @@ P4, y en la familia ESP32 pasó a 6 KB (2316 y 2748 libres); en la Pico y la STM
 
 `runs` (V7/H12, etapa 2b, 5-oct): los runs permanentes EN VIGOR —las tareas `run` que la placa creó y esperan en la
 cola—, no los que pide el ENV (`vm.runs`): una familia que aún no crea el segundo, o que no pudo (sin pila), dice 1; 0,
-sin tarea `run`. Un programa con natives, la GUI, SQLite o el depurador va con uno aunque haya dos (lo dice el log del
-RUN). `run2StackFreeBytes` (sólo la Pico, con dos runs): la marca de agua de la pila del segundo; `runStackFree` es la
-del run que cerró el último programa.
+sin tarea `run` (la STM32, que corre el programa en la tarea del REPL). Sin `vm.runs` en el ENV, uno por núcleo de la
+imagen (V7/H12, 6-oct): dos en la Pico 2, la Metro, la S3 y la P4. Un programa con SQLite o el depurador va con uno
+aunque haya dos (lo dice el log del RUN); con natives, también, en las imágenes sin el contexto de la native por tarea
+(las de un núcleo); la GUI, con los dos (sus builtins los ejecuta el run 0). `run2StackFreeBytes` (con dos runs: la Pico
+y la familia ESP32): la marca de agua de la pila del segundo; `runStackFree` es la del run que cerró el último programa.
 
 #### `TIME` (request)
 

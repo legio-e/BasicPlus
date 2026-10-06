@@ -33,9 +33,12 @@
 > mañana, con *«OK A, OK los lotes y OK log=1»*: el lote de N1 y del cuelgue, verde en la Pico 2 y la P4, y **el cerrojo
 > del árbol de la `Gui`** (una carrera de la librería: 7 de 40 pasadas perdían hijos; con él, 40 de 40; `8e81c136`).
 > Después, *«si, activa los 2 nucleos en la S3 y la P4»* y **lo de por defecto en V7** (*«En la Pico y Metro, 2 nucleos
-> y 2 runs. En la P4 y la S3 igual. En el resto 1 nucleo y 1 run»*): hecho en el código y compilado, sin grabar —las
-> pruebas, por la tarde—. Más abajo, «🧵 H12 (6-oct, mañana)» y, de la madrugada, el final de «🧵 H12 (5-oct, última
-> hora)».
+> y 2 runs. En la P4 y la S3 igual. En el resto 1 nucleo y 1 run»*): hecho en el código y compilado (`1558123c`; su red
+> cazó una guarda floja de la madrugada, la de N3, y quedó apretada). Por la tarde, **el lote de los dos núcleos en las
+> nueve placas, verde**: la tanda de V7 con los mismos veredictos, `run_placa` 34 de 34 y 110 minutos de resistencia con
+> dos runs SIN FALLOS en la S3 y la P4; los packs de la GUI con el cerrojo en las cuatro con pantalla. Lo que quedaba de
+> H12, hecho: para cerrar (Eduardo). Más abajo, «🧵 H12 (6-oct, tarde)», «(mañana)» y, de la madrugada, el final de
+> «🧵 H12 (5-oct, última hora)».
 >
 > **5-oct** — H12, **la 2b** (el 2º run, con un núcleo). Eduardo cambió el planteamiento de madrugada: *«Ponemos el 2º
 > run, conseguimos que funcione con lo mínimo y vamos ampliando la cobertura. De momento solamente 2 run ejecutando
@@ -1154,6 +1157,25 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
+
+- **Con el OK de Eduardo** (*«Pico, Metro, S3 y P4 conectadas. Puedes grabar cuando quieras»*, y después las demás, de
+  una en una): las nueve con la imagen de `1558123c` y lo de por defecto, sin `vm.runs` en ningún ENV (a la P4 y a la
+  Pico 2 se les quitó el suyo: siguen con dos). La tanda de V7, con los mismos veredictos en todas; `run_placa` 34 de 34
+  en las cuatro de dos núcleos; **la resistencia de 110 minutos con dos runs, SIN FALLOS en la S3 y la P4** (536 y
+  1 160 vueltas); `GuiMismoPadre` en la pantalla de la P4, 5 de 5. `fib(26)` con uno y con dos runs: la P4, 2 520 y
+  2 500 ms; la S3, 8 084 y 8 297 (`V7_IDEAS` §H12 «El lote de los dos núcleos»).
+- **Los packs de la GUI con el cerrojo**, en las cuatro con pantalla: la P4 (el nuevo detrás del viejo: gana el
+  último); la C5 (también `DriverSpi`: la imagen movió su bloque de RAM una página y los dos dejaron de cargar —el `nm`
+  de la mañana, contra el build de la madrugada y no contra la imagen de la placa—); la C6 y la DK2, con su zona
+  FORMATEADA (el pack nuevo no cabía y un `packdel` no libera la flash; OK de Eduardo) y sus tres packs regrabados. De
+  paso, un verbo mal (`packformat` en vez de `packfmt`) dejó un `Stdlib` de más en la C6, sin daño: el formateo lo borró.
+- **Traspaso**: las nueve placas con la imagen de `1558123c`; la C6 y la DK2 con la zona de packs recién hecha (los
+  mismos packs que tenían, al día); en la P4 y la C5, un `Gui` viejo tapado en la zona (no estorba: gana el último). En
+  el `/app` de la P4, los tres ficheros de prueba de la pantalla, borrados (OK de Eduardo); quedan los programas de mis
+  pruebas de resistencia y medida (`Run*`, `CalcBench`, `CarreraSinMutex`). **Lo que quedaba de H12, hecho: para cerrar
+  (Eduardo).** Después, las SUELTAS, documentar, las pruebas finales y publicar.
 
 ## 🧵 H12 (6-oct, mañana) — LOS DOS NÚCLEOS EN LA S3 Y LA P4, y LO DE POR DEFECTO EN V7
 

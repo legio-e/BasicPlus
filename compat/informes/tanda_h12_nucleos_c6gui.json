@@ -1,0 +1,552 @@
+[
+ {
+  "fecha": "2026-10-06 16:41:09",
+  "lista": "bpgenvm-c\\tools\\tanda_v7.json",
+  "n_listadas": 44,
+  "filtro": "GuiWinJson,GuiShot,GuiArbolG2,GuiAnidadaGc",
+  "sin_oraculo": false,
+  "oraculo_info": {
+   "jar": "lexer-java\\target\\basicplus-frontend.jar",
+   "jar_hora": "2026-10-03 18:35:21",
+   "exe": "bpgenvm-c\\build\\bpgenvm-c.exe",
+   "exe_hora": "2026-10-06 08:06:51",
+   "sabor": "v2-gui1-lvgl0"
+  },
+  "pruebas": [
+   {
+    "nombre": "GuiWinJson",
+    "fuente": "samples/GuiWinJson.bp",
+    "criterio": "identico",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [
+     "samples/formdemo/resources/main.win"
+    ],
+    "artefactos": [],
+    "modulo": "GuiWinJson",
+    "memoria": "",
+    "heap_min_kb": 0
+   },
+   {
+    "nombre": "GuiShot",
+    "fuente": "samples/GuiShot.bp",
+    "criterio": "no-peta",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [],
+    "artefactos": [
+     "GuiShot.shot"
+    ],
+    "modulo": "GuiShot",
+    "memoria": "",
+    "heap_min_kb": 0
+   },
+   {
+    "nombre": "GuiArbolG2",
+    "fuente": "bpgenvm-c/samples/GuiArbolG2.bp",
+    "criterio": "identico",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "GuiArbolG2",
+    "memoria": "",
+    "heap_min_kb": 0
+   },
+   {
+    "nombre": "GuiAnidadaGc",
+    "fuente": "bpgenvm-c/samples/GuiAnidadaGc.bp",
+    "criterio": "identico",
+    "timeout_s": 120,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "GuiAnidadaGc",
+    "memoria": "",
+    "heap_min_kb": 0
+   }
+  ],
+  "oraculos": {
+   "GuiWinJson": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+    "crc": 2811896832,
+    "size": 2070,
+    "compilado": true,
+    "salida": "J1: {\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [480x320 align=0 +0,0]\n  panel [480x320 align=0 +0,0]\n    panel [480x320 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN",
+    "rc": 0,
+    "ms": 51,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nJ1: {\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\r\n-- arbol tras cargar main.win --\r\nscreen [480x320 align=0 +0,0]\r\n  panel [480x320 align=0 +0,0]\r\n    panel [480x320 align=0 +0,0]\r\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\r\n      button [-1x-1 align=4 +0,0]\r\n        label \"Saludar\" [-1x-1 align=0 +0,0]\r\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\r\n\r\nWIN: {\"type\":\"Window\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\r\nJ2 == J1: true\r\narbol igual: true\r\nhijos del panel: 3\r\nhijos del boton (la etiqueta): 1\r\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "(marca cruzada)\r\n[gc] pila t0: rango [393216..393944) = 182 palabras, 31 son refs al heap\r\n[gc] vivo=2416 liberado=28064 heap=[61312..91792) freelist=si\r\n[gc] reservas: de_lista=0 de_bump=584 astilla=0\r\n[gc] libres: 24 huecos, 28064 B en total, el mayor 13808 | altas=24 fusion_izq=0 fusion_der=0\r\n[bpvm] GC: bump 91792 -> 91792 (recupera 0 B, tope 42335, heap 61312..388032)\r\n[bpvm] pila: el main llegó a 1044 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiShot": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\GuiShot.mod",
+    "crc": 3925536650,
+    "size": 1344,
+    "compilado": true,
+    "salida": "captura: Gui.shot('GuiShot.shot'): sin pantalla\nscreen [480x320 align=0 +0,0]\n  panel [200x120 pos=20,40]\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\n  button [-1x-1 align=4 +0,60]\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\n  slider [-1x-1 align=8 +-10,-16 val=70]",
+    "rc": 0,
+    "ms": 373,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\ncaptura: Gui.shot('GuiShot.shot'): sin pantalla\r\nscreen [480x320 align=0 +0,0]\r\n  panel [200x120 pos=20,40]\r\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\r\n  button [-1x-1 align=4 +0,60]\r\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\r\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\r\n  slider [-1x-1 align=8 +-10,-16 val=70]\r\n\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "\r\n[bpvm] enlace tardio: 43 clases construidas, 361 refs, 6553 bytes de arena\r\n[bpvm] tabla de simbolos: 555 simbolos, 17127 B de nombres en 9 trozos de 2 KB, 26624 B en total\r\n[bpvm] enlace: 6 modulos, 43 busquedas, 11223 strcmp, 568 us\r\n[bpvm] tabla de handles: 0 -> 649 slots (5 KB dentro del heap) OK — techo del heap 388024, libre 319 KB\r\n[bpvm] pila: el main llegó a 356 de 16384 B; el hilo más lleno, a 28 de 8192 B\r\n[bpvm] hilos: 1 arrancados, como mucho 2 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiArbolG2": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiArbolG2",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiArbolG2\\GuiArbolG2.mod",
+    "crc": 3007073727,
+    "size": 5379,
+    "compilado": true,
+    "salida": "ok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\nok: (a) y su padre es el panel\nok: (a) y salen en su JSON\nok: (b) con el temporal vivo, el panel tiene 5 hijos\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\nok: (b) y del modelo\nok: (b) la pantalla con dueño local existe\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\nok: (a) J1 lleva el rango del slider\nok: (a) J1 lleva las opciones y los items\nok: (a) J1 lleva los botones del Msgbox\nok: (a) J1 lleva los colores\nok: (a) J1 lleva la forma del Chart\nok: (a) J1 lleva la rejilla del Table\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\nok: (a) y el panel reconstruido tiene sus 10 hijos\nscreen [480x320 align=0 +0,0]\n  panel [480x320 align=0 +0,0]\n    panel [-1x-1 align=0 +0,0]\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\n      slider [-1x-1 align=0 +0,0 val=20]\n      bar [-1x-1 align=0 +0,0 val=150]\n      spinbox [-1x-1 align=0 +0,0 val=7]\n      led [-1x-1 align=0 +0,0 val=1]\n      dropdown \"rojo\nverde\nazul\" [-1x-1 align=0 +0,0 val=2]\n      list \"x\ny\" [-1x-1 align=0 +0,0 val=1]\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\n      chart [-1x-1 align=0 +0,0]\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\n\nok: #477: sin giro, la linea de la pantalla no lo dice\nok: #477: girada, la linea de la pantalla dice rot=90\nscreen [320x480 align=0 +0,0 rot=90]\n\nPASS",
+    "rc": 0,
+    "ms": 56,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\r\nok: (a) y su padre es el panel\r\nok: (a) y salen en su JSON\r\nok: (b) con el temporal vivo, el panel tiene 5 hijos\r\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\r\nok: (b) y del modelo\r\nok: (b) la pantalla con dueño local existe\r\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\r\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\r\nok: (a) J1 lleva el rango del slider\r\nok: (a) J1 lleva las opciones y los items\r\nok: (a) J1 lleva los botones del Msgbox\r\nok: (a) J1 lleva los colores\r\nok: (a) J1 lleva la forma del Chart\r\nok: (a) J1 lleva la rejilla del Table\r\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\r\nok: (a) y el panel reconstruido tiene sus 10 hijos\r\nscreen [480x320 align=0 +0,0]\r\n  panel [480x320 align=0 +0,0]\r\n    panel [-1x-1 align=0 +0,0]\r\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\r\n      slider [-1x-1 align=0 +0,0 val=20]\r\n      bar [-1x-1 align=0 +0,0 val=150]\r\n      spinbox [-1x-1 align=0 +0,0 val=7]\r\n      led [-1x-1 align=0 +0,0 val=1]\r\n      dropdown \"rojo\r\nverde\r\nazul\" [-1x-1 align=0 +0,0 val=2]\r\n      list \"x\r\ny\" [-1x-1 align=0 +0,0 val=1]\r\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\r\n      chart [-1x-1 align=0 +0,0]\r\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\r\n\r\nok: #477: sin giro, la linea de la pantalla no lo dice\r\nok: #477: girada, la linea de la pantalla dice rot=90\r\nscreen [320x480 align=0 +0,0 rot=90]\r\n\r\nPASS\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": " cruzada)\r\n[gc] pila t0: rango [393216..393712) = 124 palabras, 37 son refs al heap\r\n[gc] vivo=11264 liberado=16288 heap=[63488..90936) freelist=si\r\n[gc] reservas: de_lista=477 de_bump=573 astilla=321\r\n[gc] libres: 77 huecos, 16184 B en total, el mayor 908 | altas=126 fusion_izq=0 fusion_der=1\r\n[bpvm] GC: bump 91040 -> 90936 (recupera 104 B, tope 42039, heap 63488..388064)\r\n[bpvm] pila: el main llegó a 1028 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiAnidadaGc": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiAnidadaGc",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiAnidadaGc\\GuiAnidadaGc.mod",
+    "crc": 2184744351,
+    "size": 1121,
+    "compilado": true,
+    "salida": "resultado = 472668",
+    "rc": 0,
+    "ms": 131,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nresultado = 472668\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "\r\n[bpvm] enlace tardio: 45 clases construidas, 358 refs, 6645 bytes de arena\r\n[bpvm] tabla de simbolos: 557 simbolos, 17184 B de nombres en 9 trozos de 2 KB, 26624 B en total\r\n[bpvm] enlace: 6 modulos, 33 busquedas, 10511 strcmp, 594 us\r\n[bpvm] tabla de handles: 0 -> 649 slots (5 KB dentro del heap) OK — techo del heap 388024, libre 319 KB\r\n[bpvm] pila: el main llegó a 140 de 16384 B; el hilo más lleno, a 32 de 8192 B\r\n[bpvm] hilos: 1 arrancados, como mucho 2 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiWinJson@240x240": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+    "crc": 2811896832,
+    "size": 2070,
+    "compilado": true,
+    "salida": "J1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [240x240 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN",
+    "rc": 0,
+    "ms": 50,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [
+     "--screen=240x240"
+    ],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nJ1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\r\n-- arbol tras cargar main.win --\r\nscreen [240x240 align=0 +0,0]\r\n  panel [240x240 align=0 +0,0]\r\n    panel [240x240 align=0 +0,0]\r\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\r\n      button [-1x-1 align=4 +0,0]\r\n        label \"Saludar\" [-1x-1 align=0 +0,0]\r\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\r\n\r\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\r\nJ2 == J1: true\r\narbol igual: true\r\nhijos del panel: 3\r\nhijos del boton (la etiqueta): 1\r\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "(marca cruzada)\r\n[gc] pila t0: rango [393216..393944) = 182 palabras, 31 son refs al heap\r\n[gc] vivo=2416 liberado=28064 heap=[61312..91792) freelist=si\r\n[gc] reservas: de_lista=0 de_bump=584 astilla=0\r\n[gc] libres: 24 huecos, 28064 B en total, el mayor 13808 | altas=24 fusion_izq=0 fusion_der=0\r\n[bpvm] GC: bump 91792 -> 91792 (recupera 0 B, tope 42335, heap 61312..388032)\r\n[bpvm] pila: el main llegó a 1044 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiShot@240x240": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\GuiShot.mod",
+    "crc": 3925536650,
+    "size": 1344,
+    "compilado": true,
+    "salida": "captura: Gui.shot('GuiShot.shot'): sin pantalla\nscreen [240x240 align=0 +0,0]\n  panel [200x120 pos=20,40]\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\n  button [-1x-1 align=4 +0,60]\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\n  slider [-1x-1 align=8 +-10,-16 val=70]",
+    "rc": 0,
+    "ms": 368,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [
+     "--screen=240x240"
+    ],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\ncaptura: Gui.shot('GuiShot.shot'): sin pantalla\r\nscreen [240x240 align=0 +0,0]\r\n  panel [200x120 pos=20,40]\r\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\r\n  button [-1x-1 align=4 +0,60]\r\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\r\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\r\n  slider [-1x-1 align=8 +-10,-16 val=70]\r\n\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "\r\n[bpvm] enlace tardio: 43 clases construidas, 361 refs, 6553 bytes de arena\r\n[bpvm] tabla de simbolos: 555 simbolos, 17127 B de nombres en 9 trozos de 2 KB, 26624 B en total\r\n[bpvm] enlace: 6 modulos, 43 busquedas, 11223 strcmp, 577 us\r\n[bpvm] tabla de handles: 0 -> 649 slots (5 KB dentro del heap) OK — techo del heap 388024, libre 319 KB\r\n[bpvm] pila: el main llegó a 356 de 16384 B; el hilo más lleno, a 28 de 8192 B\r\n[bpvm] hilos: 1 arrancados, como mucho 2 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiArbolG2@240x240": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiArbolG2",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiArbolG2\\GuiArbolG2.mod",
+    "crc": 3007073727,
+    "size": 5379,
+    "compilado": true,
+    "salida": "ok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\nok: (a) y su padre es el panel\nok: (a) y salen en su JSON\nok: (b) con el temporal vivo, el panel tiene 5 hijos\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\nok: (b) y del modelo\nok: (b) la pantalla con dueño local existe\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\nok: (a) J1 lleva el rango del slider\nok: (a) J1 lleva las opciones y los items\nok: (a) J1 lleva los botones del Msgbox\nok: (a) J1 lleva los colores\nok: (a) J1 lleva la forma del Chart\nok: (a) J1 lleva la rejilla del Table\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\nok: (a) y el panel reconstruido tiene sus 10 hijos\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [-1x-1 align=0 +0,0]\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\n      slider [-1x-1 align=0 +0,0 val=20]\n      bar [-1x-1 align=0 +0,0 val=150]\n      spinbox [-1x-1 align=0 +0,0 val=7]\n      led [-1x-1 align=0 +0,0 val=1]\n      dropdown \"rojo\nverde\nazul\" [-1x-1 align=0 +0,0 val=2]\n      list \"x\ny\" [-1x-1 align=0 +0,0 val=1]\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\n      chart [-1x-1 align=0 +0,0]\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\n\nok: #477: sin giro, la linea de la pantalla no lo dice\nok: #477: girada, la linea de la pantalla dice rot=90\nscreen [240x240 align=0 +0,0 rot=90]\n\nPASS",
+    "rc": 0,
+    "ms": 51,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [
+     "--screen=240x240"
+    ],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\r\nok: (a) y su padre es el panel\r\nok: (a) y salen en su JSON\r\nok: (b) con el temporal vivo, el panel tiene 5 hijos\r\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\r\nok: (b) y del modelo\r\nok: (b) la pantalla con dueño local existe\r\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\r\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\r\nok: (a) J1 lleva el rango del slider\r\nok: (a) J1 lleva las opciones y los items\r\nok: (a) J1 lleva los botones del Msgbox\r\nok: (a) J1 lleva los colores\r\nok: (a) J1 lleva la forma del Chart\r\nok: (a) J1 lleva la rejilla del Table\r\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\r\nok: (a) y el panel reconstruido tiene sus 10 hijos\r\nscreen [240x240 align=0 +0,0]\r\n  panel [240x240 align=0 +0,0]\r\n    panel [-1x-1 align=0 +0,0]\r\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\r\n      slider [-1x-1 align=0 +0,0 val=20]\r\n      bar [-1x-1 align=0 +0,0 val=150]\r\n      spinbox [-1x-1 align=0 +0,0 val=7]\r\n      led [-1x-1 align=0 +0,0 val=1]\r\n      dropdown \"rojo\r\nverde\r\nazul\" [-1x-1 align=0 +0,0 val=2]\r\n      list \"x\r\ny\" [-1x-1 align=0 +0,0 val=1]\r\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\r\n      chart [-1x-1 align=0 +0,0]\r\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\r\n\r\nok: #477: sin giro, la linea de la pantalla no lo dice\r\nok: #477: girada, la linea de la pantalla dice rot=90\r\nscreen [240x240 align=0 +0,0 rot=90]\r\n\r\nPASS\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": " cruzada)\r\n[gc] pila t0: rango [393216..393712) = 124 palabras, 37 son refs al heap\r\n[gc] vivo=11264 liberado=16288 heap=[63488..90936) freelist=si\r\n[gc] reservas: de_lista=477 de_bump=573 astilla=321\r\n[gc] libres: 77 huecos, 16184 B en total, el mayor 908 | altas=126 fusion_izq=0 fusion_der=1\r\n[bpvm] GC: bump 91040 -> 90936 (recupera 104 B, tope 42039, heap 63488..388064)\r\n[bpvm] pila: el main llegó a 1028 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiAnidadaGc@240x240": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiAnidadaGc",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiAnidadaGc\\GuiAnidadaGc.mod",
+    "crc": 2184744351,
+    "size": 1121,
+    "compilado": true,
+    "salida": "resultado = 472668",
+    "rc": 0,
+    "ms": 139,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [
+     "--screen=240x240"
+    ],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nresultado = 472668\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "\n[bpvm] enlace tardio: 45 clases construidas, 358 refs, 6645 bytes de arena\r\n[bpvm] tabla de simbolos: 557 simbolos, 17184 B de nombres en 9 trozos de 2 KB, 26624 B en total\r\n[bpvm] enlace: 6 modulos, 33 busquedas, 10511 strcmp, 1053 us\r\n[bpvm] tabla de handles: 0 -> 649 slots (5 KB dentro del heap) OK — techo del heap 388024, libre 319 KB\r\n[bpvm] pila: el main llegó a 140 de 16384 B; el hilo más lleno, a 32 de 8192 B\r\n[bpvm] hilos: 1 arrancados, como mucho 2 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   }
+  },
+  "placas": [
+   {
+    "sello": {
+     "boardName": "esp32c6",
+     "uniqueId": "58E6C5FFFEF9",
+     "serverName": "bpvm-esp32c6",
+     "serverBuild": "Oct  6 2026 07:41:23",
+     "imageCrc": "c2d3bb43",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "DEBUG",
+      "PACKS"
+     ],
+     "arch": 243,
+     "variant": null,
+     "cpuFreqHz": 160000000,
+     "resetReason": "software",
+     "uptimeMs": 15448,
+     "fsUsedBytes": 32768,
+     "fsTotalBytes": 1261568,
+     "vmHeapBytes": 65536,
+     "aotReceta": "RV32IMC_ILP32",
+     "mdnAbi": 9,
+     "uptime_ultimo": 55753,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM3",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "58E6C5FFFEF9",
+      "boardName": "esp32c6",
+      "arch": 243,
+      "aotReceta": "RV32IMC_ILP32",
+      "aotFlagsCrc": 2307952327,
+      "mdnAbi": 9,
+      "floatAbi": "ilp32",
+      "packsXipBase": 1108066304,
+      "packsBytes": 1261568,
+      "packRamBase": 1082290176,
+      "packRamBytes": 139264,
+      "packRamStatus": "ok",
+      "packRamKey": "packRam",
+      "packRamAsked": 136,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 160000000,
+      "uptimeMs": 15448,
+      "resetReason": "software",
+      "tempMilliC": 0,
+      "micro": "esp32c6",
+      "paquete": "",
+      "gpioCount": 23,
+      "pioCount": 0,
+      "pwmSlices": 6,
+      "pwmUnidad": "canal",
+      "adcChannels": 7,
+      "adcUnidades": 1,
+      "uartIds": "1",
+      "i2cIds": "0",
+      "spiIds": "2",
+      "flashBytes": 4194304,
+      "sramBytes": 524288,
+      "psramBytes": 0,
+      "vmHeapBytes": 65536,
+      "vmStackBytes": 65536,
+      "ioStackFree": -1,
+      "runStackFree": -1,
+      "runs": 1,
+      "fsTotalBytes": 1261568,
+      "fsUsedBytes": 32768,
+      "screenW": 240,
+      "screenH": 240,
+      "vmTaskStackFreeBytes": 8528,
+      "rtosHeapMinFreeBytes": 94932
+     },
+     "imagen_local": "la COMPILADA en el PC: bpgenvm-c/esp32c6/build/bpvm_esp32c6.bin (06-10 16:37)"
+    },
+    "pantalla": [
+     true,
+     "INFO screenW x screenH = 240x240"
+    ],
+    "resultados": [
+     {
+      "prueba": "GuiWinJson",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 922,
+      "ms_host": 50,
+      "exited": {
+       "type": "EXITED",
+       "session": 1,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 922,
+       "nativos": 0
+      },
+      "salida_placa": "J1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [240x240 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 17469,
+       "fsUsedBytes": 40960,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536,
+       "runStackFree": 6160,
+       "ioStackFree": 5588,
+       "vmTaskStackFreeBytes": 5588,
+       "rtosHeapMinFreeBytes": 6696
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/main.win",
+       "/app/GuiWinJson.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 1240,
+      "session": 1
+     },
+     {
+      "prueba": "GuiShot",
+      "veredicto": "NO-PETA",
+      "detalle": "EXITED OK exit=0",
+      "ms_placa": 496,
+      "ms_host": 368,
+      "exited": {
+       "type": "EXITED",
+       "session": 2,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 496,
+       "nativos": 0
+      },
+      "salida_placa": "captura escrita\nscreen [240x240 align=0 +0,0]\n  panel [200x120 pos=20,40]\n  label \"Hola captura\" [-1x-1 align=1 +0,8]\n  button [-1x-1 align=4 +0,60]\n    label \"Pulsa\" [-1x-1 align=0 +0,0]\n  checkbox \"Activo\" [-1x-1 align=6 +10,-10 val=1]\n  slider [-1x-1 align=8 +-10,-16 val=70]\n\n",
+      "diff": null,
+      "artefactos": [
+       {
+        "nombre": "GuiShot.shot",
+        "ok": true,
+        "detalle": "GET /app/GuiShot.shot: NOT_FOUND no existe; ok (3038 B)",
+        "local": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\esp32c6_58E6C5FFFEF9\\GuiShot.shot",
+        "png": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\esp32c6_58E6C5FFFEF9\\GuiShot.png",
+        "previo": "no existia",
+        "dudoso": null,
+        "remoto": "/GuiShot.shot",
+        "size": 3038,
+        "crc": "7459129a"
+       }
+      ],
+      "necesita_ojos": [
+       "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiShot\\esp32c6_58E6C5FFFEF9\\GuiShot.png"
+      ],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {
+       "GuiShot.shot": {
+        "existia": [],
+        "dudoso": null
+       }
+      },
+      "info_tras": {
+       "uptimeMs": 19070,
+       "fsUsedBytes": 40960,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536,
+       "runStackFree": 5284,
+       "ioStackFree": 5588,
+       "vmTaskStackFreeBytes": 5588,
+       "rtosHeapMinFreeBytes": 2368
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/GuiShot.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 827,
+      "session": 2
+     },
+     {
+      "prueba": "GuiArbolG2",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 887,
+      "ms_host": 51,
+      "exited": {
+       "type": "EXITED",
+       "session": 3,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 887,
+       "nativos": 0
+      },
+      "salida_placa": "ok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\nok: (a) y su padre es el panel\nok: (a) y salen en su JSON\nok: (b) con el temporal vivo, el panel tiene 5 hijos\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\nok: (b) y del modelo\nok: (b) la pantalla con dueño local existe\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\nok: (a) J1 lleva el rango del slider\nok: (a) J1 lleva las opciones y los items\nok: (a) J1 lleva los botones del Msgbox\nok: (a) J1 lleva los colores\nok: (a) J1 lleva la forma del Chart\nok: (a) J1 lleva la rejilla del Table\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\nok: (a) y el panel reconstruido tiene sus 10 hijos\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [-1x-1 align=0 +0,0]\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\n      slider [-1x-1 align=0 +0,0 val=20]\n      bar [-1x-1 align=0 +0,0 val=150]\n      spinbox [-1x-1 align=0 +0,0 val=7]\n      led [-1x-1 align=0 +0,0 val=1]\n      dropdown \"rojo\nverde\nazul\" [-1x-1 align=0 +0,0 val=2]\n      list \"x\ny\" [-1x-1 align=0 +0,0 val=1]\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\n      chart [-1x-1 align=0 +0,0]\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\n\nok: #477: sin giro, la linea de la pantalla no lo dice\nok: #477: girada, la linea de la pantalla dice rot=90\nscreen [240x240 align=0 +0,0 rot=90]\n\nPASS\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 21310,
+       "fsUsedBytes": 45056,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536,
+       "runStackFree": 5284,
+       "ioStackFree": 5588,
+       "vmTaskStackFreeBytes": 5588,
+       "rtosHeapMinFreeBytes": 2196
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/GuiArbolG2.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 1668,
+      "session": 3
+     },
+     {
+      "prueba": "GuiAnidadaGc",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 33572,
+      "ms_host": 139,
+      "exited": {
+       "type": "EXITED",
+       "session": 4,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 33572,
+       "nativos": 0
+      },
+      "salida_placa": "resultado = 472668\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 55753,
+       "fsUsedBytes": 40960,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 65536,
+       "runStackFree": 5284,
+       "ioStackFree": 5588,
+       "vmTaskStackFreeBytes": 5588,
+       "rtosHeapMinFreeBytes": 2052
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/GuiAnidadaGc.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 33926,
+      "session": 4
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/main.win",
+      "local": "samples\\formdemo\\resources\\main.win",
+      "size": 390,
+      "crc": "548edd67",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/GuiWinJson.mod",
+      "local": "bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+      "size": 2070,
+      "crc": "a79a2400",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/GuiShot.mod",
+      "local": "bpgenvm-c\\build\\tanda\\GuiShot\\GuiShot.mod",
+      "size": 1344,
+      "crc": "e9faef8a",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/GuiArbolG2.mod",
+      "local": "bpgenvm-c\\build\\tanda\\GuiArbolG2\\GuiArbolG2.mod",
+      "size": 5379,
+      "crc": "b33c4dbf",
+      "ok": true,
+      "detalle": "ok (por trozos)"
+     },
+     {
+      "remoto": "/app/GuiAnidadaGc.mod",
+      "local": "bpgenvm-c\\build\\tanda\\GuiAnidadaGc\\GuiAnidadaGc.mod",
+      "size": 1121,
+      "crc": "82388d9f",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "dependencia Core: en la zona de packs (pack:GuiMini/Core.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Gui: en la zona de packs (pack:GuiMini/Gui.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Json: en la zona de packs (pack:GuiMini/Json.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Collections: en la zona de packs (pack:GuiMini/Collections.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Str: en la zona de packs (pack:GuiMini/Str.mod, crc igual): se ejecuta XIP, no se sube",
+     "limpieza: 0 fichero(s) de /app borrados y los artefactos (GuiShot.shot)"
+    ],
+    "inventario_detalle": "0 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "aprieta": [
+     true,
+     "SRAM 512 KB, PSRAM 0 KB"
+    ],
+    "inventario": []
+   }
+  ]
+ }
+]

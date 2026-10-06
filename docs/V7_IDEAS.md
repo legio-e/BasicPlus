@@ -5693,6 +5693,42 @@ aparcadas que escanea (`nativas_aparcadas`, en la cola y en la línea `runs:`), 
 menos 100 (ve ~1 900)—. El control: con el sabotaje, y en la pasada interpretada, la cuenta es 0. La prueba no se
 alarga (4–6 s por pasada).
 
+#### El lote de los dos núcleos (6-oct, tarde; con el OK de Eduardo)
+
+Las nueve placas, con la imagen de `1558123c`: la S3 y la P4 con los dos núcleos encendidos, la Pico 2 y la Metro con
+la imagen de dos (ya la de por defecto), y TODAS sin `vm.runs` en el ENV —lo de por defecto: dos runs en las de dos
+núcleos, uno en las demás; a la P4 y a la Pico 2 se les quitó el `vm.runs=2` que llevaban, y su `INFO` dice `runs: 2`
+igual—.
+
+| placa | núcleos / runs | la tanda de V7 (44) | `run_placa` | además |
+|---|---|---|---|---|
+| P4 | 2 / 2 | 38 idénticas, como antes | 34 de 34 | resistencia de 110 min SIN FALLOS (1 160 vueltas, 29 RESET; el KILL a un dormido, 25 ms de mediana); `GuiMismoPadre`, 5 de 5 (400 hijos) |
+| S3 | 2 / 2 | 22 idénticas (las de GUI y las de natives, saltadas: sin pantalla, y Xtensa sin motor) | 34 de 34 | resistencia de 110 min SIN FALLOS (536 vueltas, 13 RESET; 28 ms) |
+| Pico 2 | 2 / 2 | 35 idénticas (las de GUI, saltadas) | 34 de 34 | — |
+| Metro | 2 / 2 | 35 idénticas | 34 de 34 | — |
+| C5 | 1 / 1 | 38 idénticas, con su pantalla | — | — |
+| C6 | 1 / 1 | 37 idénticas (`GcHondo` y `synclisttest`, saltadas: su heap) | — | — |
+| C3 | 1 / 1 | 34 idénticas (ídem, 48 KB de heap) | — | — |
+| Nucleo | 1 / — (sin tarea `run`) | 35 idénticas | — | — |
+| DK2 | 1 / — | 38 idénticas, con su pantalla | — | — |
+
+(En todas, `MachineId` y `GuiShot` no-peta, y `KillLoop`, `NatKill` y `NatRecurKill` paradas: sus criterios.) **Lo medido**
+con uno y con dos runs en la imagen de dos núcleos (`fib(26)`, mediana de 5; PrintBench, de 10): en la P4, 2 520 y
+2 500 ms —el 2º run no le cuesta a un programa de un hilo—; en la S3, 8 084 y 8 297 (+2,6 %; en la Pico 2 era un 10–14 %,
+la 3.2). PrintBench, el mismo con uno y con dos en las dos (~20,5 s): lo marca la UART del cable, no la CPU.
+
+**Los packs**: en la P4, el `Gui` nuevo (el del cerrojo) detrás del viejo —gana el último; el viejo queda tapado—. En la
+C5, la imagen MOVIÓ el bloque de RAM de los packs una página (0x420A1000 → 0x420B1000): `Gui` y `DriverSpi`, «realojado
+para OTRA dirección», regrabados —el `nm` de la mañana se miró contra el build de la madrugada, no contra la imagen que
+llevaba la placa, que era más vieja: lo que la nota de la memoria ya decía—. En la C6 y la DK2 el pack de la GUI nuevo
+no cabía en su zona (488 KB libres para 512; 304 para 752) y un `packdel` no libera la flash: `PACK_FORMAT` (OK de
+Eduardo) y los tres regrabados —la C6: Stdlib, DriverSpi y GuiMini; la DK2: Mini, SQLite y Gui—; sus pruebas de GUI,
+otra vez, bien. La S3 no tiene packs: que su texto pasara una página no le tocó nada. Y en el `/app` de la P4, los tres
+ficheros de prueba, borrados (OK de Eduardo).
+
+**Lo que quedaba de H12** —el pack de la GUI con el cerrojo a las placas con pantalla, y el resto de placas una vez—,
+**hecho**. Para cerrar, Eduardo.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 
