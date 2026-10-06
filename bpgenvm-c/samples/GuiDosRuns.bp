@@ -4,15 +4,18 @@
 // en el run 1 VIAJA (vuelve a la cola marcado para el run 0, que repite la instrucción). La prueba cuenta los builtins
 // de la GUI ejecutados fuera del run 0: ninguno; con el sabotaje (sin viajar), alguno. Y el resultado, el mismo con uno
 // y con dos runs, y en la VM-Java.
+// Cada pintor crea sus etiquetas en SU contenedor (un Panel que monta el main): la lista de hijos de un contenedor es de
+// la librería, código BP sin cerrojo, y dos hilos que crean controles en el MISMO contenedor a la vez la rompen (con dos
+// runs, una pasada de cada cien; con uno, más rara): eso es otra cosa (V7_IDEAS §H12).
 module GuiDosRuns
   import Gui
 
   class Pintor extends Thread
-    var scr: Gui.Screen
+    var scr: Gui.Panel
     var base: integer
     var suma: integer
 
-    public function Pintor(scr: Gui.Screen, base: integer)
+    public function Pintor(scr: Gui.Panel, base: integer)
       super(8192)
       this.scr := scr
       this.base := base
@@ -49,8 +52,8 @@ module GuiDosRuns
 
   function Main()
     var scr: Gui.Screen := Gui.Screen()
-    var a: Pintor := Pintor(scr, 1000)
-    var b: Pintor := Pintor(scr, 2000)
+    var a: Pintor := Pintor(Gui.Panel(scr), 1000)
+    var b: Pintor := Pintor(Gui.Panel(scr), 2000)
     a.start()
     b.start()
     a.join()

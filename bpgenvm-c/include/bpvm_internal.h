@@ -1132,6 +1132,13 @@ static inline void bpvm_smp_unlock(bpvm_t* vm) {
     }
 }
 
+/* heap.c, V7/H12 — esperar al mundo parado de OTRO run a mitad de algo: la pila de C de una native que espera dentro
+ * de sí misma, a la vista del colector (poner/quitar, con el cerrojo cogido; `nodo` en el marco de quien espera); y el
+ * puente —una llamada anidada que no vuelve al planificador— aparcado mientras dure el mundo parado. */
+void bpvm_aparcada_poner(bpvm_cola_t* q, bpvm_aparcada_t* nodo);
+void bpvm_aparcada_quitar(bpvm_cola_t* q, bpvm_aparcada_t* nodo);
+void bpvm_stw_aparcar_anidado(bpvm_t* vm);
+
 /* interp.c */
 bpvm_status_t bpvm_interp_run(bpvm_t* vm);
 

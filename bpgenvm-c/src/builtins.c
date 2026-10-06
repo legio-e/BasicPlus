@@ -87,11 +87,14 @@ static void* zona_para_un_builtin(bpvm_t* vm, size_t n, const char* quien) {
         bpvm_cola_t* q = vm->smp;
         if (q == NULL || bpvm_la_cola.sabotaje_zona) return bpvm_scratch_take(n, quien);   /* ocupada: con su aviso */
         bpvm_platform_mutex_lock(&q->vm_lock);
+        bpvm_aparcada_t nodo;                    /* V7/H12: llamado desde una native, su pila de C a la vista (heap.c) */
+        bpvm_aparcada_poner(q, &nodo);
         q->running_workers--;
         if (q->stop_the_world) bpvm_cola_aviso_mundo(q);                      /* el colector espera quedarse solo */
         (void) bpvm_platform_cond_timed_wait(&q->sched_cond, &q->vm_lock, 5);
         while (q->stop_the_world)                                               /* no volver a mitad de una colecta */
             bpvm_platform_cond_wait(&q->mundo_cond, &q->vm_lock);               /* 3.2: la del mundo (bpvm_smp.h) */
+        bpvm_aparcada_quitar(q, &nodo);
         q->running_workers++;
         bpvm_platform_mutex_unlock(&q->vm_lock);
     }

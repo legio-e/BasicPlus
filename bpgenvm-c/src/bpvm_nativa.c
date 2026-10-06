@@ -34,16 +34,29 @@ static void ejecutor(void* arg) {
     bpvm_platform_sem_give(&n->sem_worker);              /* terminado: a quien lo terminó */
 }
 
-/* Un ejecutor libre del depósito, o uno nuevo. NULL si no hay memoria para él. */
+/* Un ejecutor libre del depósito, o uno nuevo, YA RESERVADO para quien lo pide (CORRIENDO: lo va a usar en el acto).
+ * NULL si no hay memoria para él. V7/H12 — con dos runs, dos natives a la vez no pueden coger el mismo: mirar y
+ * reservar van juntos bajo el cerrojo de la VM, y uno nuevo entra en la lista con él (con un run, nada). Antes se
+ * devolvía el libre sin reservarlo y lo marcaba quien llamaba, más tarde. (El sabotaje y la ventana: SÓLO PRUEBAS.) */
 static bpvm_nativa_t* ejecutor_libre(bpvm_t* vm) {
     bpvm_nativa_t* n;
+    const int cerrojo = !bpvm_la_cola.sabotaje_deposito;
+    if (bpvm_la_cola.ensayo_sin_ejecutor) return NULL;   /* SÓLO PRUEBAS: como sin memoria para uno */
+    if (cerrojo) bpvm_smp_lock(vm);
     for (n = vm->nativas; n != NULL; n = n->sig)
-        if (n->estado == BPVM_NATIVA_LIBRE) return n;
+        if (n->estado == BPVM_NATIVA_LIBRE) break;
+    if (n != NULL) {
+        if (bpvm_la_cola.ensayo_deposito_ms > 0) bpvm_platform_thread_sleep_ms(bpvm_la_cola.ensayo_deposito_ms);
+        n->estado = BPVM_NATIVA_CORRIENDO;
+    }
+    if (cerrojo) bpvm_smp_unlock(vm);
+    if (n != NULL) return n;
     n = (bpvm_nativa_t*) bpvm_malloc(sizeof *n);
     if (n == NULL) return NULL;
     memset(n, 0, sizeof *n);
     n->vm = vm;
     n->pila_libre = -1;
+    n->estado = BPVM_NATIVA_CORRIENDO;
     if (bpvm_platform_sem_init(&n->sem_nativa) != 0) { bpvm_free(n); return NULL; }
     if (bpvm_platform_sem_init(&n->sem_worker) != 0) {
         bpvm_platform_sem_destroy(&n->sem_nativa);
@@ -56,16 +69,22 @@ static bpvm_nativa_t* ejecutor_libre(bpvm_t* vm) {
         bpvm_free(n);
         return NULL;
     }
+    if (cerrojo) bpvm_smp_lock(vm);
     n->sig = vm->nativas;
     vm->nativas = n;
+    if (cerrojo) bpvm_smp_unlock(vm);
     return n;
 }
 
-/* De vuelta al depósito: el hilo BP ya no está dentro de ninguna native. */
+/* De vuelta al depósito: el hilo BP ya no está dentro de ninguna native. V7/H12: bajo el cerrojo de la VM, como quien
+ * lo busca (con un run, nada). */
 static void soltar(bpvm_nativa_t* n) {
+    const int cerrojo = !bpvm_la_cola.sabotaje_deposito;
+    if (cerrojo) bpvm_smp_lock(n->vm);
     if (n->tc) n->tc->nativa = NULL;
     n->tc = NULL;
     n->estado = BPVM_NATIVA_LIBRE;
+    if (cerrojo) bpvm_smp_unlock(n->vm);
 }
 
 /* El lado del intérprete: le pasa el testigo a la native —nueva o suspendida— y vuelve cuando termina o se
@@ -182,7 +201,10 @@ void bpvm_nativa_punto_control(struct bpvm* vm) {
         /* En su ejecutor: cede si hay un `kill` (el planificador lo verá y parará el programa) o si ya ha corrido
          * su rebanada (los demás hilos, y el cable: el planificador atiende al IDE entre quantums). Al reanudarse,
          * sigue en su bucle como si nada. */
-        if (bpvm_kill_pedido(vm) || bpvm_platform_now_ms() - n->t_corriendo >= BPVM_NATIVA_REBANADA_MS) {
+        /* V7/H12: y si otro run ha parado el mundo para colectar —suspendida, su pila la escanea el colector (heap.c,
+         * 2e); antes esperaba hasta acabar su rebanada—. */
+        if (bpvm_kill_pedido(vm) || bpvm_platform_now_ms() - n->t_corriendo >= BPVM_NATIVA_REBANADA_MS
+            || (vm->smp != NULL && vm->smp->stop_the_world)) {
             tc->status = BPVM_THREAD_RUNNABLE;
             bpvm_nativa_ceder(vm, tc);
         }
@@ -192,6 +214,10 @@ void bpvm_nativa_punto_control(struct bpvm* vm) {
      * try/catch de BP lo atrapara, el planificador para el programa en el siguiente quantum). */
     if (bpvm_kill_pedido(vm))
         vm->aot_helpers->throw_runtime(vm, "el programa se ha detenido (kill) dentro de una native");
+    /* V7/H12 — y el mundo parado de otro run se espera AQUÍ, en su línea de bucle, con su pila de C a la vista del
+     * colector (heap.c). Antes el colector la esperaba hasta que acabase; y si su bucle esperaba a un hilo del otro
+     * run, para siempre. */
+    if (vm->smp != NULL && vm->smp->stop_the_world && !bpvm_la_cola.sabotaje_anidada) bpvm_stw_aparcar_anidado(vm);
 }
 
 void bpvm_nativa_liberar_todas(bpvm_t* vm) {

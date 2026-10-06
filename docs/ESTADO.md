@@ -1170,9 +1170,23 @@ la C6, la P4 y la Nucleo.
   FALLOS** (1 089 vueltas; el KILL a un dormido, 24 ms de mediana: la UART de la P4). Falta ver en su log cuántos
   viajes al run 0 hicieron los programas de GUI: su log está apagado por defecto y sólo lo enciende el ENV (`log=1`,
   pedido a Eduardo).
+- **Las natives con dos runs** (madrugada del 6-oct; `V7_IDEAS` §«Las natives con dos runs»): el mapa, N1 a N4; N2
+  (el depósito de ejecutores, con cerrojo), N3 (la pila de C de una native que espera al mundo dentro de sí, a la
+  vista del colector) y N4 (el puente y la línea del bucle, aparcados con el mundo parado), hechos en el PC, con
+  `test-nat2runs` y sus tres sabotajes (sin N3: nueve etiquetas malas con `status=OK`).
+- **Y un CUELGUE en la GUI con dos runs**, salido al hacer N4: lo que corre anidado en un builtin de la GUI (el
+  despacho de cada clic, `__guiInvokeBySlot`) no se aparcaba con el mundo parado del otro run. Arreglado (el mismo N4),
+  con `test-cola` 19 (10 de 10; con el sabotaje, colgado). La P4 lleva todavía la imagen sin el arreglo.
+- **Dos SUELTAS viejas de los formularios**: `#663` (`__guiInvokeByName` no encuentra nada desde el enlace tardío) y
+  `#664` (en la VM-Java, `__guiInvokeBySlot` no invoca: paridad).
+- **Una carrera en la librería `Gui`** (salió de `test-cola` 18, una pasada de ciento veinte): crear un control lo
+  apunta en la lista de hijos de su contenedor (BP, sin cerrojo); dos hilos creando en el MISMO contenedor a la vez la
+  rompen —con dos runs, 400 creadas y 399 hijos—. No es la VM. La prueba, arreglada (cada pintor, en su `Panel`); lo de
+  fondo, **para que decida Eduardo**: (A) un `Mutex` en `Container` (la propuesta) o (B) documentarlo.
 - **Traspaso**: la P4 se queda con la imagen de `7c038943` y `vm.runs=2` en el ENV; en su `/app`, los dos ficheros de
   la prueba de la pantalla (`GuiP4DosRuns.mod` y `p4dos.shot`: borrarlos pide su OK). La Pico 2, como estaba (dos
-  núcleos, `vm.runs=2`).
+  núcleos, `vm.runs=2`). Lo siguiente: N1 en los micros (la Pico, los punteros por tarea de FreeRTOS; las ESP32, su
+  `__thread`), y entonces las natives con dos runs en las placas; y el arreglo del cuelgue, a la P4.
 - **Las natives con dos runs, pensado con Eduardo** (sin código): la native usa DOS pilas —la de C (la del run si es
   directa; la de su ejecutor si puede ceder) y la BP del hilo que la llamó—; dos natives a la vez ya pasan con un run
   (cada una con su ejecutor); con dos runs lo que falta es el contexto POR TAREA (hoy, un global en los micros), el

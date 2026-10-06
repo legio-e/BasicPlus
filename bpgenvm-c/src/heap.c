@@ -490,8 +490,10 @@ static void gc_mark_phase(bpvm_t* vm) {
      *
      *     Con el callctx sin thunk activo (tc==NULL), cero trabajo: los
      *     programas sin AOT no pagan nada. Y en SMP el callctx es TLS por
-     *     worker, y el STW garantiza que los demás workers están aparcados en
-     *     frontera de quantum — nunca a mitad de un native. */
+     *     worker. Los demás workers están aparcados en frontera de quantum O,
+     *     desde V7/H12, esperando a este mundo DENTRO de una native (una reserva,
+     *     la zona, el puente): ésas apuntaron su pila para el 2f. Antes aquí
+     *     decía «nunca a mitad de un native», y con dos runs no era verdad. */
     /* 2e. V7/H5 P2b.1.c / P2b.3 — LAS NATIVES PARADAS EN SU EJECUTOR: suspendidas, o esperando a que el
      *     worker corra este mismo GC por ellas. Su estado de C —sus variables, y los registros, que volcó un
      *     setjmp antes de pasar el testigo— está en la pila del ejecutor, desde donde se paró hasta el techo
@@ -520,6 +522,23 @@ static void gc_mark_phase(bpvm_t* vm) {
             bpvm_diag("[gc] pila C de la native %s del hilo %d (en su ejecutor): [%p..%p) = %u palabras",
                       nv->estado == BPVM_NATIVA_PIDE_GC ? "que pide este GC" : "SUSPENDIDA",
                       t, (void*) lo, (void*) hi, (unsigned) palabras);
+        }
+    }
+    /* 2f. V7/H12 — LAS NATIVES DE OTRO RUN QUE ESPERAN A ESTE MUNDO PARADO DENTRO DE SÍ MISMAS (una reserva que
+     *     encontró a este colector trabajando, la zona de rascar, el puente): cada una dejó su trozo de pila de C, con
+     *     los registros volcados, en la lista de la cola (bpvm_aparcada_poner). Con un run no hay ninguna. Palabra a
+     *     palabra y conservador, como el 2d. */
+    if (vm->smp != NULL) {
+        for (const bpvm_aparcada_t* p = vm->smp->aparcadas; p != NULL; p = p->sig) {
+            uint32_t palabras = 0;
+            for (uintptr_t a = p->lo; a + 4u <= p->hi; a += 4u) {
+                uint32_t v;
+                memcpy(&v, (const void*) a, 4);
+                palabras++;
+                mark_recursive(vm, v);
+            }
+            bpvm_diag("[gc] pila C de una native de otro run, aparcada por este mundo: [%p..%p) = %u palabras",
+                      (void*) p->lo, (void*) p->hi, (unsigned) palabras);
         }
     }
     {
@@ -915,9 +934,35 @@ static void stw_seguir(bpvm_t* vm) {
     vm->smp->stop_the_world = false;
     bpvm_cola_aviso_mundo(vm->smp);
 }
+/* V7/H12 — UNA NATIVE QUE ESPERA AL MUNDO DENTRO DE SÍ MISMA (una reserva que encuentra a otro colectando, la zona de
+ * rascar, el puente native→BP): su pila de C, con los registros volcados, a la lista que escanea el colector del otro
+ * run (2f). Antes nadie la veía —el comentario del 2d decía «nunca a mitad de un native», y con dos runs no es verdad—:
+ * un handle que la native sólo tenía en un local se reciclaba bajo sus pies. `nodo` vive en el marco de quien espera,
+ * por debajo de los de la native: el trozo va de él al techo de su native más externa. Fuera de una native, nada. Con
+ * el cerrojo cogido. (El sabotaje: SÓLO PRUEBAS.) */
+void bpvm_aparcada_poner(bpvm_cola_t* q, bpvm_aparcada_t* nodo) {
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    nodo->hi = 0;
+    if (cc->tc == NULL || cc->cstack_hi == 0 || q->sabotaje_aparcada) return;
+    if (setjmp(nodo->regs) == 0) { /* volcado de registros, no un salto */ }
+    nodo->lo = ((uintptr_t) nodo + 3u) & ~(uintptr_t) 3u;
+    nodo->hi = cc->cstack_hi;
+    nodo->sig = q->aparcadas;
+    q->aparcadas = nodo;
+}
+void bpvm_aparcada_quitar(bpvm_cola_t* q, bpvm_aparcada_t* nodo) {
+    if (nodo->hi == 0) return;
+    for (bpvm_aparcada_t** p = &q->aparcadas; *p != NULL; p = &(*p)->sig)
+        if (*p == nodo) { *p = nodo->sig; break; }
+    nodo->hi = 0;
+}
+
 /* Si OTRO worker ya ha parado el mundo (está colectando), el que llega no puede esperarlo como un worker en marcha:
- * se descuenta de `running_workers` mientras espera a que acabe (ver gc_stw). Asume vm_lock tomado. */
+ * se descuenta de `running_workers` mientras espera a que acabe (ver gc_stw). Asume vm_lock tomado. V7/H12: y si
+ * espera dentro de una native, deja su pila de C a la vista del colector (bpvm_aparcada_poner). */
 static void stw_esperar_al_otro(bpvm_t* vm) {
+    bpvm_aparcada_t nodo;
+    bpvm_aparcada_poner(vm->smp, &nodo);
     vm->smp->running_workers--;
     bpvm_cola_aviso_mundo(vm->smp);
     int ensanchada = 0;
@@ -937,7 +982,21 @@ static void stw_esperar_al_otro(bpvm_t* vm) {
         }
         break;
     }
+    bpvm_aparcada_quitar(vm->smp, &nodo);   /* contado otra vez: ningún colector puede empezar sin él */
     vm->smp->running_workers++;
+}
+
+/* V7/H12 — EL MUNDO PARADO A MITAD DE UNA LLAMADA ANIDADA (el puente: un builtin de la GUI que llama a BP —el despacho
+ * de un clic, el `invoke` de un formulario— o una native sin ejecutor). El bucle anidado no vuelve al planificador:
+ * quien espera el mundo tiene que esperar aquí, sin contarse en marcha, como quien encuentra a otro colector en una
+ * reserva. Antes el puente volvía a entrar sin fin —el intérprete cortaba el cuanto en el punto seguro y el puente lo
+ * volvía a llamar—: el run giraba y el colector del otro lo esperaba para siempre. La pila BP del hilo ya está al día
+ * (el cuanto la guardó); la de C, si es de una native, la apunta stw_esperar_al_otro. */
+void bpvm_stw_aparcar_anidado(bpvm_t* vm) {
+    if (vm->smp == NULL) return;
+    bpvm_platform_mutex_lock(&vm->smp->vm_lock);
+    if (vm->smp->stop_the_world) stw_esperar_al_otro(vm);
+    bpvm_platform_mutex_unlock(&vm->smp->vm_lock);
 }
 
 /* V7/H7 #610 (29-sep) — LA TABLA CRECE CON EL MUNDO PARADO. bpvm_handles_grow la MUEVE —un memmove dentro del heap:
@@ -993,6 +1052,13 @@ static void gc_stw(bpvm_t* vm) {
         }
     }
     stw_parar(vm);
+    /* SÓLO PRUEBAS (V7/H12, test-nat2runs): la colecta, más larga con el mundo parado: las reservas del otro run la
+     * encuentran casi siempre, también las de dentro de una native (N3), y la prueba no depende de la suerte. Espera
+     * ACTIVA, en µs: un `sleep` de 1 ms en Windows duerme ~15, y con un GC por reserva la prueba se iba a 5 minutos. */
+    if (vm->smp != NULL && vm->smp->ensayo_colecta_us > 0) {
+        int64_t hasta = bpvm_platform_now_us() + vm->smp->ensayo_colecta_us;
+        while (bpvm_platform_now_us() < hasta) { /* nada */ }
+    }
     bpvm_gc(vm);
     stw_seguir(vm);
 }

@@ -1,0 +1,127 @@
+// NatDosRuns.bp — V7/H12, las natives con DOS RUNS (make test-nat2runs), con el GC colectando en cada reserva:
+//  - `etiqueta`, DIRECTA (sin bucle): dos reservas encadenadas, el intermedio sólo en un local de C. Dos hilos la
+//    llaman a la vez, uno en cada run: si una reserva encuentra al otro run colectando, espera DENTRO de la native y
+//    el colector tiene que escanear su pila de C (heap.c, 2f). Sin eso, el intermedio se recicla: etiquetas malas.
+//  - `suma`, con bucle: corre en un EJECUTOR. Dos hilos a la vez: dos ejecutores; el depósito no puede darles el mismo.
+//  - `girar`, con bucle: gira hasta que otro hilo cambia la global, y ese hilo reserva antes (el GC para el mundo). Sin
+//    ejecutor (la prueba lo fuerza), la native espera al mundo en su línea de bucle; sin eso, el colector la esperaba
+//    para siempre y el hilo que la suelta, a él: colgado.
+module NatDosRuns
+  import Core
+
+  var parar: integer := 0
+
+  public function pararYa()
+    parar := 1
+  end pararYa
+
+  public native function etiqueta(n: integer): string
+    return "valor " + intToString(n)
+  end etiqueta
+
+  public native function suma(n: integer): integer
+    var s: integer := 0
+    var i: integer := 0
+    while i < n do
+      s := (s + i) mod 1000003
+      i += 1
+    endwh
+    return s
+  end suma
+
+  native function girar(): integer
+    var vueltas: integer := 0
+    while parar == 0 do
+      vueltas += 1
+    endwh
+    return 1
+  end girar
+
+  public class Etiquetador extends Thread
+    var base: integer
+    var malos: integer
+
+    public function Etiquetador(base: integer)
+      super(0)
+      this.base := base
+      this.malos := 0
+    end Etiquetador
+
+    public function run()
+      var i: integer := 0
+      while i < 300 do
+        var n: integer := this.base + i
+        if etiqueta(n) != "valor " + intToString(n) then
+          this.malos := this.malos + 1
+        endif
+        i := i + 1
+      endwh
+    end run
+
+    public function cuantosMalos(): integer
+      return this.malos
+    end cuantosMalos
+  end Etiquetador
+
+  public class Sumador extends Thread
+    var malos: integer
+
+    public function Sumador()
+      super(0)
+      this.malos := 0
+    end Sumador
+
+    public function run()
+      var i: integer := 0
+      while i < 20 do
+        if suma(20000) != 199990000 mod 1000003 then
+          this.malos := this.malos + 1
+        endif
+        i := i + 1
+      endwh
+    end run
+
+    public function cuantosMalos(): integer
+      return this.malos
+    end cuantosMalos
+  end Sumador
+
+  public class Soltador extends Thread
+    public function Soltador()
+      super(0)
+    end Soltador
+
+    public function run()
+      var s: string := ""
+      var i: integer := 0
+      while i < 200 do
+        s := s + "x"
+        i := i + 1
+      endwh
+      pararYa()
+    end run
+  end Soltador
+
+  function Main()
+    var t: Soltador := Soltador()
+    t.start()
+    var r: integer := girar()
+    t.join()
+    print "girar: " + intToString(r)
+    var a: Etiquetador := Etiquetador(1000)
+    var b: Etiquetador := Etiquetador(5000)
+    a.start()
+    b.start()
+    a.join()
+    b.join()
+    print "etiquetas malas: " + intToString(a.cuantosMalos() + b.cuantosMalos())
+    var c: Sumador := Sumador()
+    var d: Sumador := Sumador()
+    c.start()
+    d.start()
+    c.join()
+    d.join()
+    print "sumas malas: " + intToString(c.cuantosMalos() + d.cuantosMalos())
+    print "fin"
+  end Main
+end NatDosRuns

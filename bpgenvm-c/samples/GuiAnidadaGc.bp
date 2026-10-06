@@ -1,0 +1,70 @@
+// GuiAnidadaGc.bp — V7/H12, LVGL con dos runs (test-cola 19): una llamada ANIDADA de la GUI larga mientras otro hilo
+// reserva sin parar (el GC para el mundo cada poco). `Gui.__guiInvokeBySlot` corre el método DENTRO del builtin, en el
+// run 0, por el mismo puente que el despacho de cada clic (`__guiRunOnce` → `__guiDispatch`); aquí, largo a propósito:
+// la ventana, abierta. El puente tiene que aparcarse con el mundo parado: antes volvía a entrar sin fin, el run 0
+// giraba, el colector del otro run lo esperaba para siempre y el programa se colgaba.
+module GuiAnidadaGc
+  import Gui
+
+  class Anfitrion
+    var resultado: integer
+
+    public function Anfitrion()
+      this.resultado := 0
+    end Anfitrion
+
+    // Lo que el `invoke` corre anidado: un cálculo largo, sin reservar (el mundo lo para el otro hilo).
+    public function trabajoLargo(quien: Object)
+      var a: integer := 0
+      var i: integer := 0
+      while i < 300000 do
+        a := (a * 31 + i) mod 1000003
+        i := i + 1
+      endwh
+      this.resultado := this.resultado + a
+    end trabajoLargo
+
+    public function total(): integer
+      return this.resultado
+    end total
+  end Anfitrion
+
+  class Reservador extends Thread
+    var parar: boolean
+
+    public function Reservador()
+      super(8192)
+      this.parar := false
+    end Reservador
+
+    public function pedirParada()
+      this.parar := true
+    end pedirParada
+
+    public function run()
+      while not this.parar do
+        var s: string := ""
+        var i: integer := 0
+        while i < 50 do
+          s := s + "x"
+          i := i + 1
+        endwh
+      endwh
+    end run
+  end Reservador
+
+  function Main()
+    var h: Anfitrion := Anfitrion()
+    var slot: integer := Gui.__guiSlotOf(h, "trabajoLargo")
+    var r: Reservador := Reservador()
+    r.start()
+    var k: integer := 0
+    while k < 6 do
+      Gui.__guiInvokeBySlot(h, slot, h)
+      k := k + 1
+    endwh
+    r.pedirParada()
+    r.join()
+    print "resultado = " + h.total()
+  end Main
+end GuiAnidadaGc

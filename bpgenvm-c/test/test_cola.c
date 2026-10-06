@@ -47,6 +47,8 @@
  * 17. (la 3.2) un hilo que concatena con dos runs (CadenasUnHilo): el GC no despierta al otro run —--sabotaje-mundo—.
  * 18. (LVGL con dos runs) dos hilos que tocan la GUI a la vez (GuiDosRuns): cada builtin de la GUI, en el run 0 —el hilo
  *     del run 1 viaja—; --sabotaje-gui: ejecutado donde se encuentra, como antes: alguno fuera del run 0.
+ * 19. una llamada anidada de la GUI, larga, mientras otro run colecta (GuiAnidadaGc): el puente se aparca con el mundo
+ *     parado; --sabotaje-anidada: vuelve a entrar sin fin, como antes: el programa colgado (lo para el plazo).
  *
  * Uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod
  *                FicherosDosRuns.mod
@@ -526,7 +528,7 @@ static int cadenas_un_hilo(int sabotaje) {
  * (el camino, recorrido) y el resultado, el de un run y la VM-Java. Sabotaje (--sabotaje-gui: el builtin se ejecuta en
  * el run que lo encuentra, como antes): alguno fuera del run 0. */
 static int gui_dos_runs(int sabotaje) {
-    int malos = 0; char ultimo[96] = "";
+    int malos = 0; char ultimo[160] = "";
     unsigned long fuera = 0, viajes = 0;
     bpvm_la_cola.sabotaje_gui = sabotaje;
     for (int i = 0; i < PASADAS; i++) {
@@ -536,16 +538,44 @@ static int gui_dos_runs(int sabotaje) {
         fuera += f;
         viajes += v;
         if (s != BPVM_OK || strstr(o.buf, "pintor 1000: 29274680") == NULL
-            || strstr(o.buf, "pintor 2000: 29314680") == NULL || f != 0 || v == 0) {
+            || strstr(o.buf, "pintor 2000: 29314680") == NULL || f != 0) {
             malos++;
-            snprintf(ultimo, sizeof ultimo, "%s, %lu fuera del run 0, %lu viajes", bpvm_status_str(s), f, v);
+            snprintf(ultimo, sizeof ultimo, "%s, %lu fuera del run 0, %lu viajes: %.40s", bpvm_status_str(s), f, v,
+                     s_error);
         }
+    }
+    /* El camino del viaje, recorrido: en el conjunto de las pasadas, no en cada una (en una pasada el run 0 puede
+     * quedarse con los dos pintores y no viajar nadie, sin que nada esté mal). */
+    if (viajes == 0 && !sabotaje) {
+        malos++;
+        snprintf(ultimo, sizeof ultimo, "ningún viaje al run 0 en %d pasadas: el camino, sin recorrer", PASADAS);
     }
     bpvm_la_cola.sabotaje_gui = 0;
     char detalle[96];
     snprintf(detalle, sizeof detalle, "; fuera del run 0, %lu; viajes al run 0, %lu", fuera, viajes);
     return informe("18. dos hilos que tocan la GUI, con dos runs: todo en el run 0 (LVGL con dos runs)", sabotaje,
                    malos, PASADAS, detalle, ultimo);
+}
+
+/* 19. (V7/H12) UNA LLAMADA ANIDADA larga —`Gui.__guiInvokeBySlot` corre el método dentro del builtin, en el run 0, por
+ * el puente del despacho de cada clic— mientras otro hilo reserva sin parar (GuiAnidadaGc): el puente se aparca con
+ * el mundo parado y el resultado sale. Sabotaje (--sabotaje-anidada: como antes, vuelve a entrar sin fin): el programa
+ * se cuelga —el run 0 gira y el colector del otro lo espera para siempre— y lo para el plazo de la red. */
+static int gui_anidada(int sabotaje) {
+    int malos = 0; char ultimo[80] = "";
+    const int pasadas = sabotaje ? 1 : 10;
+    bpvm_la_cola.sabotaje_anidada = sabotaje;
+    for (int i = 0; i < pasadas; i++) {
+        salida_t o;
+        bpvm_status_t s = corre("GuiAnidadaGc.mod", 512 * 1024, 0, 2, &o);
+        if (s != BPVM_OK || strstr(o.buf, "resultado = 472668") == NULL) {
+            malos++;
+            resume(ultimo, sizeof ultimo, s, o.buf);
+        }
+    }
+    bpvm_la_cola.sabotaje_anidada = 0;
+    return informe("19. una llamada anidada de la GUI, larga, mientras otro run colecta: el puente se aparca",
+                   sabotaje, malos, pasadas, NULL, ultimo);
 }
 
 int main(int argc, char** argv) {
@@ -559,7 +589,7 @@ int main(int argc, char** argv) {
     }
     int sab_contador = 0, sab_fin = 0, sab_salida = 0, sab_gc = 0, sab_eventos = 0, sab_revive = 0, sab_ficheros = 0;
     int sab_owner = 0, sab_lineas = 0, sab_suyo = 0, sab_zona = 0, sab_colecta = 0, sab_error = 0, sab_aviso = 0;
-    int sab_mundo = 0, sab_gui = 0;
+    int sab_mundo = 0, sab_gui = 0, sab_anidada = 0;
     for (int i = 8; i < argc; i++) {
         if (!strcmp(argv[i], "--sabotaje-contador")) sab_contador = 1;
         else if (!strcmp(argv[i], "--sabotaje-fin")) sab_fin = 1;
@@ -577,10 +607,11 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--sabotaje-aviso")) sab_aviso = 1;
         else if (!strcmp(argv[i], "--sabotaje-mundo")) sab_mundo = 1;
         else if (!strcmp(argv[i], "--sabotaje-gui")) sab_gui = 1;
+        else if (!strcmp(argv[i], "--sabotaje-anidada")) sab_anidada = 1;
     }
     int sabotaje = sab_contador || sab_fin || sab_salida || sab_gc || sab_eventos || sab_revive || sab_ficheros
                 || sab_owner || sab_lineas || sab_suyo || sab_zona || sab_colecta || sab_error || sab_aviso
-                || sab_mundo || sab_gui;
+                || sab_mundo || sab_gui || sab_anidada;
     int fallos = 0;
     if (!sabotaje) fallos += interbloqueo(argv[1]);
     if (!sabotaje || sab_contador) fallos += falso(argv[2], sab_contador);
@@ -601,11 +632,12 @@ int main(int argc, char** argv) {
     if (!sabotaje || sab_aviso) fallos += un_hilo(sab_aviso);   /* #662 */
     if (!sabotaje || sab_mundo) fallos += cadenas_un_hilo(sab_mundo);   /* la 3.2: el mundo, con su condición */
     if (!sabotaje || sab_gui) fallos += gui_dos_runs(sab_gui);   /* LVGL con dos runs: la GUI, en el run 0 */
+    if (!sabotaje || sab_anidada) fallos += gui_anidada(sab_anidada);   /* y el puente, aparcado con el mundo */
     if (fallos == 0 && !sabotaje)
         printf("OK: la cola (H12 2a.2 y 2b): el interbloqueo, con uno y dos runs; ni uno falso; el fin, del último que "
                "sale; nadie dentro al avisar; el gc() del programa, con el mundo parado; los eventos y los ficheros con "
                "dos runs; lo de la revisión: owner, líneas largas, el join, la zona, la colecta, el error y un File "
                "compartido; un hilo con dos runs no despierta al otro en vano, ni tras un cuanto (#662) ni tras una "
-               "colecta (la 3.2); y la GUI con dos runs, toda en el run 0\n");
+               "colecta (la 3.2); y la GUI con dos runs, toda en el run 0, con su puente aparcado si otro run colecta\n");
     return fallos ? 1 : 0;
 }

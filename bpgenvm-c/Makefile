@@ -861,6 +861,35 @@ test-aotexpropia: $(LIBOBJ)
 	 if [ "$$n" -ne 4 ]; then cat build/aotexpropia.aot; echo "  ROJO: $$n de 4 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 4/4 con el AOT, igual que interpretado"
 
+# V7/H12 — LAS NATIVES CON DOS RUNS (samples/NatDosRuns.bp; docs/V7_IDEAS.md §H12 «Las natives con dos runs»), con
+# el GC colectando en cada reserva: una native DIRECTA con dos reservas encadenadas, llamada a la vez desde los dos runs
+# (si una reserva encuentra al otro run colectando, espera dentro y el colector escanea su pila de C); dos natives con
+# bucle a la vez (dos ejecutores del depósito, nunca el mismo); y una native con bucle que espera a un hilo del otro run
+# que reserva (sin ejecutor, espera al mundo en su línea de bucle). El MISMO .mod con el AOT, con y sin ejecutor, da lo
+# que interpretado; y los tres sabotajes, rojos (el de la línea del bucle, colgado: lo corta el plazo). En check-testc.
+NAT2_BIN = build/test_nat2runs.exe
+test-nat2runs: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatDosRuns)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatDosRuns,build/aotnat2)
+	@$(CC) $(CFLAGS) -Isrc test/test_nat2runs.c build/aotnat2/aot_NatDosRuns.c $(LIBOBJ) -o $(NAT2_BIN) $(LDFLAGS)
+	@echo "--- V7/H12 las natives con dos runs (esperado: AOT == interpretado, con y sin ejecutor; y los tres sabotajes, ROJOS) ---"
+	@timeout 120 ./$(NAT2_BIN) samples/NatDosRuns.mod --interp 2>/dev/null > build/nat2.int; \
+	 if ! grep -q '^fin' build/nat2.int; then echo "  ROJO: la pasada interpretada no acaba"; cat build/nat2.int; exit 1; fi
+	@for m in "" "--sin-ejecutor"; do \
+	   timeout 120 ./$(NAT2_BIN) samples/NatDosRuns.mod $$m 2>build/nat2.err > build/nat2.aot; st=$$?; \
+	   if [ $$st -ne 0 ] || ! cmp -s build/nat2.int build/nat2.aot; then \
+	     echo "  ROJO (AOT $$m, salida $$st):"; diff build/nat2.int build/nat2.aot; grep -a 'status\|runtime_error' build/nat2.err; exit 1; fi; \
+	   echo "  ok: con el AOT y dos runs $$m, lo mismo que interpretado"; \
+	 done
+	@for sab in "--sabotaje-aparcada" "--sabotaje-deposito" "--sin-ejecutor --sabotaje-anidada"; do \
+	   timeout 30 ./$(NAT2_BIN) samples/NatDosRuns.mod $$sab 2>/dev/null > build/nat2.sab; st=$$?; \
+	   if [ $$st -ne 0 ] || ! cmp -s build/nat2.int build/nat2.sab; then echo "  (rojo, como debe: $$sab; salida $$st)"; \
+	   else echo "FAIL test-nat2runs: el sabotaje $$sab no se caza"; cat build/nat2.sab; exit 1; fi; \
+	 done
+	@echo "PASS test-nat2runs"
+
 # V7/H5 (P2b.1.d, 26-sep) — el KILL de una native en un bucle sin fin (con tope de tiempo).
 test-aotkill: $(LIBOBJ)
 	@mkdir -p build
@@ -1428,10 +1457,10 @@ test-frcond:
 COLA_BIN = build/test_cola.exe
 test-cola: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido UnHiloCalcula CadenasUnHilo GuiDosRuns)
+	$(call fixture,Interbloqueo MutexGc FinJunto GcConcurrente EvDosRuns EvHiloMuere FicherosDosRuns OwnerCarrera LineasLargas JoinLinea ListDirDos ColectaAjena ErrorPrimero FileCompartido UnHiloCalcula CadenasUnHilo GuiDosRuns GuiAnidadaGc)
 	$(call stdlibdep,Core Gui Json Collections Str)
-	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ] || [ ! -f samples/UnHiloCalcula.mod ] || [ ! -f samples/CadenasUnHilo.mod ] || [ ! -f samples/GuiDosRuns.mod ]; then \
-	  echo "FAIL test-cola: faltan los .mod de la prueba (Interbloqueo, MutexGc, FinJunto, GcConcurrente, EvDosRuns, EvHiloMuere, FicherosDosRuns y los de la revisión: OwnerCarrera, LineasLargas, JoinLinea, ListDirDos, ColectaAjena, ErrorPrimero, FileCompartido; y UnHiloCalcula, de #662; y CadenasUnHilo, de la 3.2; y GuiDosRuns, de LVGL con dos runs) y no se han podido generar"; exit 1; \
+	@if [ ! -f samples/Interbloqueo.mod ] || [ ! -f samples/MutexGc.mod ] || [ ! -f samples/FinJunto.mod ] || [ ! -f samples/GcConcurrente.mod ] || [ ! -f samples/EvDosRuns.mod ] || [ ! -f samples/EvHiloMuere.mod ] || [ ! -f samples/FicherosDosRuns.mod ] || [ ! -f samples/OwnerCarrera.mod ] || [ ! -f samples/LineasLargas.mod ] || [ ! -f samples/JoinLinea.mod ] || [ ! -f samples/ListDirDos.mod ] || [ ! -f samples/ColectaAjena.mod ] || [ ! -f samples/ErrorPrimero.mod ] || [ ! -f samples/FileCompartido.mod ] || [ ! -f samples/UnHiloCalcula.mod ] || [ ! -f samples/CadenasUnHilo.mod ] || [ ! -f samples/GuiDosRuns.mod ] || [ ! -f samples/GuiAnidadaGc.mod ]; then \
+	  echo "FAIL test-cola: faltan los .mod de la prueba (Interbloqueo, MutexGc, FinJunto, GcConcurrente, EvDosRuns, EvHiloMuere, FicherosDosRuns y los de la revisión: OwnerCarrera, LineasLargas, JoinLinea, ListDirDos, ColectaAjena, ErrorPrimero, FileCompartido; y UnHiloCalcula, de #662; y CadenasUnHilo, de la 3.2; y GuiDosRuns y GuiAnidadaGc, de LVGL con dos runs) y no se han podido generar"; exit 1; \
 	fi
 	@# V7/H12, LVGL con dos runs: la lista de los builtins de la GUI que sólo ejecuta el run 0 (builtins.c,
 	@# bpvm_builtin_de_la_gui) tiene TODOS los BUILTIN_GUI_* de builtin_ids.h: uno nuevo que se olvide ahí tocaría LVGL
@@ -1441,9 +1470,9 @@ test-cola: $(LIBOBJ)
 	 if [ -n "$$faltan" ]; then echo "FAIL test-cola: builtins de la GUI que no viajan al run 0 (bpvm_builtin_de_la_gui): $$faltan"; exit 1; \
 	 else echo "--- los $$(grep -o 'BUILTIN_GUI_[A-Z0-9_]*' src/builtin_ids.h | sort -u | wc -l) builtins de la GUI, todos en la lista del run 0 ---"; fi
 	@$(CC) $(CFLAGS) -Isrc test/test_cola.c $(LIBOBJ) -o $(COLA_BIN) $(LDFLAGS)
-	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 18. PASS y la linea OK) ---"
+	@echo "--- H12 2a.2: la cola (esperado: 1. dos PASS, 2. a 19. PASS y la linea OK) ---"
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod 2>/dev/null) || { echo "FAIL test-cola"; exit 1; }
-	@echo "--- y sus sabotajes (esperado: los dieciséis, ROJOS, cada uno por lo suyo) ---"
+	@echo "--- y sus sabotajes (esperado: los diecisiete, ROJOS, cada uno por lo suyo) ---"
 	@# El del contador: un interbloqueo FALSO dicho en stderr (detrás, el programa se descuelga con un run aún dentro
 	@# de su cuanto, que al despertar ya no lo encuentra: suele acabar en un fallo de segmento; por eso se mira el aviso).
 	@(cd samples && timeout 240 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-contador \
@@ -1536,7 +1565,14 @@ test-cola: $(LIBOBJ)
 	 if [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab16.out; then \
 	   echo "  (rojo, como debe: sin el viaje, builtins de la GUI ejecutados en el run 1)"; \
 	 else echo "FAIL test-cola: el sabotaje --sabotaje-gui no se caza (salida $$st)"; exit 1; fi
-	@echo "PASS test-cola (y sus dieciséis sabotajes, rojos)"
+	@# V7/H12: el puente (una llamada anidada de la GUI) vuelve a entrar sin fin con el mundo parado, como antes: el
+	@# programa se queda colgado —el run 0 gira, el colector del otro lo espera— y lo para el plazo (salida 124).
+	@(cd samples && timeout 30 ../$(COLA_BIN) Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod FicherosDosRuns.mod --sabotaje-anidada \
+	   >../build/cola_sab17.out 2>/dev/null); st=$$?; cat build/cola_sab17.out; \
+	 if [ $$st -eq 124 ] || { [ $$st -ne 0 ] && grep -q 'SABOTEADO.*FAIL' build/cola_sab17.out; }; then \
+	   echo "  (rojo, como debe: sin aparcarse, el puente gira con el mundo parado y el programa se cuelga; salida $$st)"; \
+	 else echo "FAIL test-cola: el sabotaje --sabotaje-anidada no se caza (salida $$st)"; exit 1; fi
+	@echo "PASS test-cola (y sus diecisiete sabotajes, rojos)"
 
 # V7/H12, etapa 2 (4-oct) — LA COLA DE HILOS: cada hilo, una struct pedida al arrancarlo y devuelta al acabar (sin
 # array y sin tope; el diseño, de Eduardo). HilosMuchos arranca 120 hilos —40 de uno en uno, 40 a la vez esperando en

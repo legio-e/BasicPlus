@@ -5515,6 +5515,70 @@ del 4-oct (anterior a la 2b): recibe H12 entero de una vez. Las pruebas, en `com
   El log de la P4 está apagado por defecto (`log=0`: sólo guarda el arranque) y sólo lo enciende el ENV: pedido a
   Eduardo.
 
+#### Las natives con dos runs: el mapa, y un fallo de la GUI que salió al hacerlo (6-oct, madrugada)
+
+Eduardo, tras pensarlo juntos (la native usa DOS pilas —la de C: la de su run si es directa, la de su ejecutor si
+puede ceder— y la BP del hilo que la llamó): *«está algo mejor de lo que pensaba. Hay que hacer unos cambios
+localizados»*. El mapa, leído en el código:
+
+| | qué pasa con dos runs | el arreglo |
+|---|---|---|
+| **N1** el contexto de la native (`bpvm_aot_callctx`, `bpvm_aot_fault_slot`: el hilo, su pila y adónde salta si lanza) | en el PC es uno por hilo del sistema (`__thread`); en los micros, UN global: dos natives a la vez se lo pisan | uno por tarea (los punteros por tarea de FreeRTOS), en las familias que tengan dos runs |
+| **N2** el depósito de ejecutores (`ejecutor_libre`, `soltar`) | se devolvía el libre SIN reservarlo, y la lista crecía sin cerrojo: dos natives podían coger el mismo ejecutor | mirar y reservar juntos, bajo el cerrojo de la VM |
+| **N3** una native que espera al mundo DENTRO de sí (una reserva que encuentra al otro run colectando, `stw_esperar_al_otro`; la zona de rascar) | se descuenta de los runs en marcha y el colector del otro no mira su pila de C —el comentario del GC decía «nunca a mitad de un native»—: un intermedio sólo en un local de C, reciclado | apunta su trozo de pila (con los registros volcados) en una lista de la cola, y el colector la escanea (`heap.c`, 2f) |
+| **N4** el puente native→BP sin ejecutor, y la línea del bucle de una native sin ejecutor | el mundo parado corta el cuanto anidado y el puente lo volvía a llamar SIN FIN; la línea del bucle no esperaba: el colector, para siempre | el puente y la línea del bucle se aparcan con el mundo parado (`bpvm_stw_aparcar_anidado`) |
+
+**El fallo que destapó N4 está en la GUI con dos runs (`7c038943`)**: el despacho de cada clic (`__guiRunOnce` →
+`__guiDispatch`) y `Gui.__guiInvokeBySlot` corren BP ANIDADO por ese mismo puente, en el run 0. Si el otro run para el
+mundo mientras tanto —un hilo que reserva y provoca un GC—, el run 0 giraba y el colector lo esperaba para siempre: un
+cuelgue. La ventana del despacho de un clic es pequeña (unas decenas de pasos) pero real: con el patrón de Eduardo
+(sondas + pantalla) acabaría pasando. Las pruebas de anoche no lo vieron (sus manejadores corren después, como evento,
+no anidados). Arreglado con N4, y `test-cola` 19 (`GuiAnidadaGc`: un `invoke` largo mientras otro hilo reserva sin
+parar): 10 de 10; con el sabotaje, colgado.
+
+**De paso, dos cosas viejas de los formularios** (fuera de H12; `#663` y `#664`, SUELTAS): `Gui.__guiInvokeByName` no encuentra nada desde el
+enlace tardío (`#523`: busca la clase del anfitrión en los datos de su módulo, y las clases ya no viven ahí) —no lo usa
+nadie—; y en la VM-Java `__guiInvokeBySlot` no invoca (la VM-C sí): una diferencia de paridad que ningún sample del
+corpus toca.
+
+**Hecho en el PC: N2, N3 y N4** (el PC ya tiene N1: su contexto es por hilo):
+- **N2** (`src/bpvm_nativa.c`): `ejecutor_libre` mira y reserva bajo el cerrojo de la VM (el ejecutor sale ya
+  CORRIENDO), y uno nuevo entra en la lista con él; `soltar`, igual.
+- **N3** (`src/heap.c`, `src/builtins.c`): `bpvm_aparcada_poner` / `quitar` —el trozo de pila de C de la native, desde
+  un nodo en el marco de quien espera (con los registros volcados por `setjmp`) hasta el techo de su native más
+  externa— en `stw_esperar_al_otro` y en la espera de la zona de rascar; el colector los escanea (el paso 2f).
+- **N4** (`src/interp.c`, `src/bpvm_nativa.c`): el puente se aparca con el mundo parado (`bpvm_stw_aparcar_anidado`); la
+  línea del bucle de una native en un ejecutor cede también con el mundo parado (antes, al acabar su rebanada de 5
+  ms) y la de una native sin ejecutor se aparca.
+- **Las pruebas**: `test-cola` 19 (la GUI: arriba) y **`test-nat2runs`** (`samples/NatDosRuns.bp`, con el GC
+  colectando en cada reserva y dos runs: una native DIRECTA con dos reservas encadenadas llamada a la vez desde los
+  dos runs; dos natives con bucle a la vez; y una que gira hasta que un hilo del otro run, que reserva, la suelte): con
+  el AOT, con y sin ejecutor, lo mismo que interpretado. Los sabotajes: sin apuntar la pila, **9 etiquetas malas con
+  `status=OK`** (la corrupción muda que N3 evita); sin el cerrojo del depósito, el programa muerto; sin aparcarse en la
+  línea del bucle, colgado.
+
+**Y una carrera en la LIBRERÍA `Gui` (no en la VM), para que decida Eduardo** (6-oct, madrugada): `test-cola` 18 falló
+UNA pasada de ciento veinte con un RuntimeError. No era el viaje (ningún builtin fuera del run 0): era `Gui.bp`. Crear
+un control lo apunta en la lista de hijos de su contenedor —`Container.register` → `this.children.add(c)`, código BP,
+una `OwnerList` sin cerrojo—, y los dos pintores de la prueba creaban etiquetas en la MISMA pantalla a la vez. Con
+dos runs las dos inserciones corren en paralelo de verdad y la lista se rompe; con uno también puede pasar (el cuanto
+puede cambiar a mitad de un `add`), pero es mucho más raro. Confirmado aparte (`GuiMismoPadre`: dos hilos, 200
+etiquetas cada uno en la misma pantalla): una de ocho pasadas con dos runs, **400 creadas y 399 hijos**: una se
+perdió en silencio. La prueba, arreglada para lo que prueba (cada pintor, en su `Panel`); lo de fondo:
+
+| | mecanismo | ejemplo (el patrón de Eduardo: el main monta el formulario; las sondas cambian textos) |
+|---|---|---|
+| **(A) la librería con cerrojo** | `Container` protege su lista de hijos con un `Mutex` de `Gui.bp` (dar de alta, de baja, recorrerla) | crear controles en el mismo contenedor desde dos hilos, correcto; cuesta un `lock`/`unlock` por control creado o borrado |
+| **(B) documentarlo** | «los controles de un contenedor, se crean y se borran desde UN hilo; cambiar textos y valores, desde cualquiera» | lo de Eduardo, sin cambios; dos hilos que crean en el mismo contenedor, un programa incorrecto (como compartir una lista sin `Mutex`) |
+
+La propuesta: (A), porque el programador sólo comparte la pantalla —algo natural— y no tiene forma de saber que crear
+un control toca una lista interna de la librería («lo compartido por el programa, es del programador; el resto, nuestro»).
+
+**Lo que queda: N1 en los micros**, y entonces `un_solo_run` sin «natives» en las placas que lo tengan. La familia
+ESP32 tiene `__thread` de verdad (el IDF le da a cada tarea su zona TLS): basta encenderlo en su build (la STM32 no:
+su `__thread` es el emulado, `#472`). La Pico, con los punteros por tarea de FreeRTOS (hoy, 0). Las placas de un núcleo
+van con un run (Eduardo): no lo necesitan.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

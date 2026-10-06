@@ -365,6 +365,15 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
                 || tc->status == BPVM_THREAD_BLOCKED_MUTEX || tc->status == BPVM_THREAD_BLOCKED_JOIN)) {
             if (bpvm_nativa_ceder(vm, tc)) continue;   /* suspendida… y reanudada: sigue interpretando */
         }
+        /* V7/H12 — EL MUNDO PARADO DE OTRO RUN cortó el cuanto anidado en su punto seguro: el puente no vuelve al
+         * planificador, así que se espera aquí, sin contarse en marcha (heap.c). Antes se volvía a entrar sin fin: este
+         * run giraba y el colector del otro lo esperaba para siempre —con dos runs, un clic de la GUI (su despacho
+         * corre aquí) mientras otro hilo reserva bastaba—. (El sabotaje: SÓLO PRUEBAS, test-cola 19.) */
+        if (st == BPVM_OK && tc->status == BPVM_THREAD_RUNNABLE && vm->smp != NULL && vm->smp->stop_the_world
+            && !bpvm_la_cola.sabotaje_anidada) {
+            bpvm_stw_aparcar_anidado(vm);
+            continue;
+        }
         if (st == BPVM_OK && tc->status == BPVM_THREAD_RUNNABLE) {
             continue;   /* quantum agotado: seguir interpretando */
         }

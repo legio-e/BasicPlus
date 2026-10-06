@@ -20,6 +20,7 @@
 #define BPVM_SMP_H
 
 #include "bpvm_platform.h"
+#include <setjmp.h>     /* V7/H12: los registros de una pila aparcada */
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -54,6 +55,18 @@ extern int bpvm_oq_sabotaje_lineas;
 
 /* El aviso a quien colgó un programa, cuando acaba (lo da el último run que sale, ya descolgado). */
 typedef void (*bpvm_cola_al_acabar_fn)(struct bpvm* vm, int rs, void* user);
+
+/* V7/H12 — UNA PILA DE C APARCADA: la de una native que espera al mundo parado de OTRO run DENTRO de sí misma (una
+ * reserva que encuentra a otro colectando, la zona de rascar, el puente native→BP). Sus handles viven en sus locales
+ * de C y en registros, y el colector del otro run no los ve: aquí deja el trozo [lo, hi) —desde este nodo, que vive en
+ * el marco de quien espera y guarda los registros volcados, hasta el techo de su native más externa— para que lo
+ * escanee (heap.c, 2f). Una lista de nodos en las pilas de quienes esperan, bajo vm_lock. */
+typedef struct bpvm_aparcada {
+    jmp_buf               regs;   /* los registros, volcados por setjmp: un handle puede vivir sólo en uno */
+    uintptr_t             lo;
+    uintptr_t             hi;     /* 0: no se apuntó (no estaba dentro de una native) */
+    struct bpvm_aparcada* sig;
+} bpvm_aparcada_t;
 
 /* ---------- La cola ----------------------------------------- */
 typedef struct bpvm_cola {
@@ -125,6 +138,9 @@ typedef struct bpvm_cola {
     /* Runs DENTRO del intérprete (el que espera a otro colector se descuenta: heap.c). El colector espera a quedarse
      * solo. */
     int running_workers;
+    /* V7/H12 — las pilas de C de las natives que esperan a este mundo parado DENTRO de sí mismas (heap.c: el colector
+     * las escanea). Bajo vm_lock. */
+    bpvm_aparcada_t* aparcadas;
 
     /* — el `--smp` del PC sin `io`: la comm task (comm_host.c) drena la salida — */
     int comm_task_on;
@@ -155,6 +171,12 @@ typedef struct bpvm_cola {
     int     sabotaje_aviso;          /* #662: avisar a la cola tras CADA cuanto, como antes (despierta al ocioso en vano) */
     int     sabotaje_mundo;          /* 3.2: el mundo parado avisa también en sched_cond, como antes (despierta al ocioso) */
     int     sabotaje_gui;            /* LVGL con dos runs: un builtin de la GUI se ejecuta en el run que lo encuentra */
+    int     sabotaje_anidada;        /* H12: el puente (una llamada anidada) no se aparca con el mundo parado, como antes */
+    int     sabotaje_aparcada;       /* H12: una native que espera al mundo dentro de sí no apunta su pila de C */
+    int     sabotaje_deposito;       /* H12: el depósito de ejecutores sin el cerrojo, como antes */
+    int     ensayo_deposito_ms;      /* H12: entre ver libre un ejecutor y reservarlo (la ventana ensanchada) */
+    int     ensayo_sin_ejecutor;     /* H12: ninguna native consigue ejecutor (como sin memoria): corren en la del run */
+    int     ensayo_colecta_us;       /* H12: cada colecta, más larga con el mundo parado (la ventana ensanchada de N3) */
     int64_t t_ultimo_cuanto;         /* con el ensayo: cuándo volvió el último cuanto (µs)... */
     int64_t t_fin;                   /* ...y cuándo se decidió el fin (µs): el fin, siempre después */
 } bpvm_cola_t;

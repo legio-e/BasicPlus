@@ -836,7 +836,7 @@ check_sim() {
 # Junto con la salida 0 (las que se repiten, como test-fslfsmt, salen con 1 si una vuelta falla).
 senal_testc() {
   case "$1" in
-    test-oom|test-excmsggc|test-gchole|test-gchondo|test-importhondo|test-hilos|test-rand|test-runguard) echo "^PASS $1\$" ;;
+    test-oom|test-excmsggc|test-gchole|test-gchondo|test-importhondo|test-hilos|test-rand|test-runguard|test-nat2runs) echo "^PASS $1\$" ;;
     test-lfs)        echo '^littlefs smoke OK' ;;
     test-lfsfile)    echo '^filebd read OK' ;;
     test-lfsfault)   echo '^littlefs fault-injection OK' ;;
@@ -881,7 +881,9 @@ check_testc() {
   # H12 2b (5-oct): y test-frcond —la condición de FreeRTOS con el kernel de verdad; con la de antes, roja—.
   # #660/#661 (5-oct): y test-palabras —el camino fino: palabras de una vez, el número de vuelta en el GC, la
   # referencia que no puede existir, muerta; con sus tres sabotajes—.
-  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-bytenat test-xmodnat test-compressnat test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-fspos test-blk test-sdio test-listdir test-boot test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-runguard test-sd-turnos-control check-builtins"
+  # V7/H12 (6-oct): y test-nat2runs —las natives con dos runs: el contexto, el depósito de ejecutores, la pila de C de
+  # una native que espera al mundo dentro de sí y la línea del bucle aparcada; con sus tres sabotajes—.
+  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-bytenat test-xmodnat test-compressnat test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-fspos test-blk test-sdio test-listdir test-boot test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-nat2runs test-logmt test-reserva test-palabras test-frcond test-rand test-runguard test-sd-turnos-control check-builtins"
   n=$(echo $lista | wc -w)
   for t in $lista; do
     sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?
