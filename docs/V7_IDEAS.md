@@ -5774,6 +5774,30 @@ el 0). Las claves del ENV, quitadas después: las dos placas, con lo de por defe
   5-oct), pero eso no lo explica todo. A mirar con una A/B de las imágenes intermedias. En la P4, PrintBench lo marca la
   UART del cable (~20,5 s), no la CPU.
 
+**La Metro** (Eduardo: *«no cuadran los tiempos con cadenas de la Pico y la P4… sospechar que en la Pico el heap esté
+penalizado por el tamaño… repetir las pruebas con la Metro»*): la misma imagen que la Pico 2, con los datos de la VM en
+su PSRAM —el heap de la VM, 5,5 MB; en la Pico 2, 214 KB; en la P4, 23,5 MB—. Lo mismo, con la imagen de un núcleo
+grabada un momento y vuelta a la de dos (ms):
+
+| | un núcleo | dos, 1 run | dos, 2 runs |
+|---|---|---|---|
+| `fib(26)` (un hilo) | **2 892** | **3 908 (+35 %)** | **4 095 (+42 %)** |
+| PrintBench (un hilo) | 857 | 1 311 | 1 302 |
+| dos hilos: cálculo | 2 209 | 2 296 | 1 955 (×1,13) |
+| dos hilos: arrays | 3 228 | 3 290 | 2 053 (×1,57) |
+| dos hilos: objetos | 2 919 | 3 089 | 2 186 (×1,34) |
+| dos hilos: cadenas | 2 169 | 2 439 | 2 882 (×0,75) |
+
+- **Las cadenas no es el tamaño del heap** (o no lo principal): con un heap 26 veces el de la Pico 2, la Metro tampoco
+  escala (×0,75); la P4 sí (×1,33). Lo que separa las dos RP2350 de la P4 es su memoria con dos núcleos.
+- **Lo que no se esperaba: en la Metro, la imagen de DOS núcleos cuesta un 35 % a un programa de UN hilo** (en la Pico 2,
+  un 1,8 %); por eso gana tan poco en cálculo con dos hilos (×1,13): parte un 35 % por detrás. **Y no es lo que hace el
+  otro núcleo**: con `vm.cores=1` —todas las tareas en el 0 y el 1 dormido—, `fib(26)` da 3 951 ms, lo mismo. Es la
+  imagen, y pega cuando los datos de la VM están en la PSRAM, que pasa por la caché del XIP (16 KB, la misma para el
+  código y para la PSRAM, y para los dos núcleos). La sospecha, sin medir: dónde cae el código del intérprete en la flash
+  y cómo choca en esa caché con los datos de la PSRAM (en la Pico 2 sólo hay código en ella) —la imagen de dos núcleos
+  lo mueve todo—, o algo del núcleo de FreeRTOS de dos. A `#665`, con PrintBench, que puede ser lo mismo.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

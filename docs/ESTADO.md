@@ -1181,6 +1181,11 @@ la C6, la P4 y la Nucleo.
   Pico 2 ×1,55–1,68 —como el 5-oct— y las cadenas, de ×0,65 a ×0,83; **la P4, ×2**. Un hilo: en la P4, sin coste; en la
   Pico, +1,8 % y +8,4 % con dos runs. Y una que no cuadra: PrintBench en la Pico de dos núcleos, +19 % desde el 5-oct, sin
   explicar —`#665`, a SUELTAS— (`V7_IDEAS` §H12 «Las medidas finales»).
+- **Y la Metro** (Eduardo sospechaba del tamaño del heap por las cadenas): con su heap de 5,5 MB en la PSRAM, las cadenas
+  tampoco escalan (×0,75): no es el tamaño. Pero salió otra cosa: **la imagen de dos núcleos le cuesta a la Metro un 35 %
+  en un programa de un hilo** (`fib(26)` 2 892 → 3 908 ms; en la Pico 2, un 1,8 %), y con `vm.cores=1` igual (3 951): es
+  la imagen, cuando los datos de la VM pasan por la caché del XIP. A `#665`. La Metro, de vuelta con la imagen de dos y su
+  ENV limpio.
 
 ## 🧵 H12 (6-oct, mañana) — LOS DOS NÚCLEOS EN LA S3 Y LA P4, y LO DE POR DEFECTO EN V7
 
