@@ -353,6 +353,21 @@ void bpvm_set_runs(long n) {
 
 int bpvm_runs(void) { return g_runs; }
 
+/* V7/H12 — `vm.cores=1` en el ENV: la vuelta atrás de los dos núcleos sin regrabar (Eduardo, 5-oct, para la Pico; 6-oct,
+ * al encender los dos en la S3 y la P4): las tareas de la VM, todas en el núcleo 0. 0 = sin la clave (los que haya). La
+ * Pico lo lee en su arranque (pico/main.c); la familia ESP32, de aquí, al crear cada tarea (su FreeRTOS no cambia la
+ * afinidad de una tarea ya creada). */
+static int g_cores = 0;
+void bpvm_set_cores(long n) {
+    if (n == 0) return;
+    if (n != 1 && n != 2) {
+        bpvm_diag("[bpvm] vm.cores=%ld fuera de rango (1 o 2): se queda en %d", n, g_cores);
+        return;
+    }
+    g_cores = (int) n;
+}
+int bpvm_cores(void) { return g_cores; }
+
 size_t bpvm_stack_region_bytes(size_t total_bytes) {
     if (g_stack_kb) {
         size_t pedido = (size_t) g_stack_kb * 1024u;

@@ -867,6 +867,9 @@ test-aotexpropia: $(LIBOBJ)
 # bucle a la vez (dos ejecutores del depósito, nunca el mismo); y una native con bucle que espera a un hilo del otro run
 # que reserva (sin ejecutor, espera al mundo en su línea de bucle). El MISMO .mod con el AOT, con y sin ejecutor, da lo
 # que interpretado; y los tres sabotajes, rojos (el de la línea del bucle, colgado: lo corta el plazo). En check-testc.
+# (6-oct) Y la pasada normal EJERCITA N3 —el colector ve natives aparcadas: al menos 100; medido, ~1 900—, con la
+# reserva desde una native 300 µs más lenta (test_nat2runs.c): sin eso N3 se daba ~1 vez de cada 100 llamadas, y su
+# sabotaje salió verde en la red (medido: 8 y 6 de 10 rojas); con eso, 10 de 10, con ~500 etiquetas malas de 600.
 NAT2_BIN = build/test_nat2runs.exe
 test-nat2runs: $(LIBOBJ)
 	@mkdir -p build
@@ -874,14 +877,17 @@ test-nat2runs: $(LIBOBJ)
 	$(call stdlibdep,Core)
 	$(call aotmain,NatDosRuns,build/aotnat2)
 	@$(CC) $(CFLAGS) -Isrc test/test_nat2runs.c build/aotnat2/aot_NatDosRuns.c $(LIBOBJ) -o $(NAT2_BIN) $(LDFLAGS)
-	@echo "--- V7/H12 las natives con dos runs (esperado: AOT == interpretado, con y sin ejecutor; y los tres sabotajes, ROJOS) ---"
+	@echo "--- V7/H12 las natives con dos runs (esperado: AOT == interpretado, con y sin ejecutor, con N3 ejercitado; y los tres sabotajes, ROJOS) ---"
 	@timeout 120 ./$(NAT2_BIN) samples/NatDosRuns.mod --interp 2>/dev/null > build/nat2.int; \
 	 if ! grep -q '^fin' build/nat2.int; then echo "  ROJO: la pasada interpretada no acaba"; cat build/nat2.int; exit 1; fi
 	@for m in "" "--sin-ejecutor"; do \
 	   timeout 120 ./$(NAT2_BIN) samples/NatDosRuns.mod $$m 2>build/nat2.err > build/nat2.aot; st=$$?; \
 	   if [ $$st -ne 0 ] || ! cmp -s build/nat2.int build/nat2.aot; then \
 	     echo "  ROJO (AOT $$m, salida $$st):"; diff build/nat2.int build/nat2.aot; grep -a 'status\|runtime_error' build/nat2.err; exit 1; fi; \
-	   echo "  ok: con el AOT y dos runs $$m, lo mismo que interpretado"; \
+	   vistas=$$(grep -ao 'nativas_aparcadas=[0-9]*' build/nat2.err | grep -o '[0-9]*$$'); \
+	   if [ "$${vistas:-0}" -lt 100 ]; then \
+	     echo "  ROJO (AOT $$m): N3 sin ejercitar: el colector vio $${vistas:-0} natives aparcadas (menos de 100)"; exit 1; fi; \
+	   echo "  ok: con el AOT y dos runs $$m, lo mismo que interpretado (N3, ejercitado $$vistas veces)"; \
 	 done
 	@for sab in "--sabotaje-aparcada" "--sabotaje-deposito" "--sin-ejecutor --sabotaje-anidada"; do \
 	   timeout 30 ./$(NAT2_BIN) samples/NatDosRuns.mod $$sab 2>/dev/null > build/nat2.sab; st=$$?; \

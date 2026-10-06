@@ -537,6 +537,7 @@ static void gc_mark_phase(bpvm_t* vm) {
                 palabras++;
                 mark_recursive(vm, v);
             }
+            vm->smp->nativas_aparcadas++;   /* con el mundo parado: sólo el colector lo toca */
             bpvm_diag("[gc] pila C de una native de otro run, aparcada por este mundo: [%p..%p) = %u palabras",
                       (void*) p->lo, (void*) p->hi, (unsigned) palabras);
         }
@@ -1290,6 +1291,19 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
  * acabar éste la bajaba con el otro aún construyendo el suyo. Ahora lo dice cada reserva, y no hay nada compartido. */
 static bpref_t heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes, int para_error) {
     bpref_t h = bpref_null();
+    /* SÓLO PRUEBAS (V7/H12, test-nat2runs) — una reserva hecha DESDE UNA NATIVE tarda en llegar: espera activa, en µs, y
+     * SIN el cerrojo (con él, el otro run ni podría empezar a colectar). Así el otro run tiene tiempo de parar el mundo,
+     * y la reserva lo encuentra con lo que la native lleva a medias sólo en su pila de C: el caso de N3 (heap.c, 2f).
+     * Sin esto la carrera la ganaba casi siempre la native —tras su propia colecta seguía al instante, y el otro run
+     * tardaba en despertar—: N3 se ejercitaba en ~1 de cada 100 llamadas, y su sabotaje salía verde 2 y 4 veces de cada
+     * 10 (dos medidas). Con 300 µs, 10 de 10 rojas y ~500 etiquetas malas de 600 (V7_IDEAS §«La guarda de N3»). */
+    if (vm->smp != NULL && vm->smp->ensayo_reserva_nativa_us > 0) {
+        const bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+        if (cc->tc != NULL && cc->cstack_hi != 0) {
+            int64_t hasta = bpvm_platform_now_us() + vm->smp->ensayo_reserva_nativa_us;
+            while (bpvm_platform_now_us() < hasta) { /* nada */ }
+        }
+    }
     bpvm_smp_lock(vm);
     uint32_t o = heap_reservar(vm, payload_bytes, type, cabecera, para_error);
     if (o != 0u) h = bpvm_handle_register_bajo_cerrojo(vm, o);

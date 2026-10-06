@@ -230,12 +230,15 @@ target_link_libraries(bpvm_pico PRIVATE
     FreeRTOS-Kernel-Heap4
 )
 
-# H2 #153 — número de cores. Default 1 (firmware que se envía hoy).
-# Activar dual-core con:  cmake .. -DBPVM_PICO_NUM_CORES=2
-# Eso inyecta configNUMBER_OF_CORES=2 (FreeRTOSConfig.h lo lee) y enlaza
-# pico_multicore para el flash lockout. Ver docs/SMP_ARCH.md runbook.
+# H2 #153 — número de cores. Inyecta configNUMBER_OF_CORES (FreeRTOSConfig.h lo lee) y,
+# con dos, enlaza pico_multicore para el flash lockout. Ver docs/SMP_ARCH.md runbook.
+# V7/H12 (6-oct) — por defecto, DOS: la imagen de V7 de la Pico 2 y la Metro (Eduardo: «En la
+# Pico y Metro, 2 nucleos y 2 runs»), validada en la etapa 3 de H12. Los runs por defecto
+# siguen a los núcleos (bpvm_boot2_repartir). La de un núcleo, la vuelta atrás grabando:
+#     cmake .. -DBPVM_PICO_NUM_CORES=1
+# (sin grabar: `vm.cores=1` y `vm.runs=1` en el ENV).
 if (NOT DEFINED BPVM_PICO_NUM_CORES)
-    set(BPVM_PICO_NUM_CORES 1)
+    set(BPVM_PICO_NUM_CORES 2)
 endif()
 message(STATUS "BPVM_PICO_NUM_CORES = ${BPVM_PICO_NUM_CORES}")
 target_compile_definitions(bpvm_pico PRIVATE

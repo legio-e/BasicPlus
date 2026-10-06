@@ -702,6 +702,8 @@ hola, Eduardo
   <tr><td><code>psram</code></td><td><code>1</code> enables the PSRAM as the VM heap (RP2350B only; the CS is fixed, GPIO47)</td><td>RP2350</td></tr>
   <tr><td><code>stack</code></td><td>kilobytes of stack (the rest of the VM memory goes to the heap); absent = the default split</td><td>all</td></tr>
   <tr><td><code>quantum</code></td><td>opcodes a thread executes before yielding; absent = 1024</td><td>all</td></tr>
+  <tr><td><code>vm.runs</code></td><td>how many of the program's threads run <strong>at the same time</strong> (<code>1</code> or <code>2</code>); absent = one per core: two on the Pico&nbsp;2, the Metro, the S3 and the P4, one on the C3, the C5 and the C6 — see below</td><td>RP2350 · ESP32</td></tr>
+  <tr><td><code>vm.cores</code></td><td><code>1</code>: every VM task on core 0, the way back from two cores without reflashing; absent = both</td><td>RP2350 · ESP32-S3 · ESP32-P4</td></tr>
   <tr><td><code>log</code></td><td>the post-mortem log: <code>1</code> on; absent = off</td><td>all</td></tr>
   <tr><td><code>gc</code></td><td>the garbage collector: <code>0</code> turns it off (to split an experiment in two); absent = on</td><td>RP2350</td></tr>
   <tr><td><code>latido</code></td><td>the heartbeat: <code>1</code> turns it on; absent = off</td><td>RP2350</td></tr>
@@ -746,6 +748,18 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   and to the micro's system, which is what lets the communications breathe on
   a single-core chip. At 1024 nobody should need to touch it; it is there for
   measuring, not for tuning.
+</p>
+
+<p>
+  <code>vm.runs</code> does not limit threads: a program can create as many as it
+  wants. It says how many of them <em>execute at the same time</em>, and on a two-core
+  board the normal setting is one per core. What you gain depends on the program: two
+  threads computing at once run almost twice as fast (×1.6 on the Pico&nbsp;2), but a
+  single-threaded program gains nothing, and with two runs it is somewhat slower
+  (10–14&nbsp;%); if that is your case, <code>vm.runs=1</code>. A program being debugged,
+  or one that uses SQLite, runs with one even when there are two. And should anything go
+  wrong with two cores, <code>vm.cores=1</code> plus <code>vm.runs=1</code> put the board
+  on one core without reflashing it.
 </p>
 
 <div class="note">

@@ -1589,6 +1589,7 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .cable        = pico_cable,
     .autorun      = repl_v1_autorun,
     .repl         = repl_v1_run,
+    .nucleos      = configNUMBER_OF_CORES,   /* V7/H12: la imagen de dos (la de por defecto), dos runs */
 };
 
 

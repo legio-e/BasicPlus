@@ -79,7 +79,14 @@ CONFIG_SPIRAM_IGNORE_NOTFOUND=y
 # para el bloque grande de la VM, no para la metralla del sistema.
 CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=2048
 
-CONFIG_FREERTOS_UNICORE=y
+# V7/H12 (6-oct-2026) — LOS DOS NUCLEOS, por decision de Eduardo («En la Pico y Metro, 2
+# nucleos y 2 runs. En la P4 y la S3 igual»). Hasta hoy, UNICORE (la orden de V6, en el
+# sdkconfig.defaults de la P4). Las tareas, sin afinidad, y `vm.cores=1` en el ENV las ancla
+# todas al nucleo 0 sin grabar (esp32/common/afinidad_esp32.h); los runs por defecto, uno por
+# nucleo (`vm.runs` del ENV manda). La vuelta atras grabando: `=y` aqui Y en el sdkconfig.
+# Escrito explicito y no borrado: el sdkconfig esta fuera de git, y el que siembre uno nuevo
+# tiene que ver la decision (que coincida con el valor por defecto del IDF no la escribe).
+CONFIG_FREERTOS_UNICORE=n
 
 # #495 (V7/H8) — LA INTERRUPCION DE LA UART, EN RAM. El wire va por UART0, y mientras la
 # ESP32 escribe en la flash se apaga la cache: las interrupciones que no estan en RAM

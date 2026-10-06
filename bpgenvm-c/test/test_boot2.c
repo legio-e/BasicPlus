@@ -5,7 +5,8 @@
  * se queda donde diga cada caso: sana, sin FS, sin VM, virgen, ganchos NULL. Se mira el
  * ORDEN (la cintura del REPL antes del cable y del autorun; la zona antes de /lib), las
  * PUERTAS de cada capa (con el FS, la zona, /lib y montar la SD; con la app sana, el
- * autorun) y las claves del ENV (`stack=`, `log=`), que la P4 por TCP no aplicaba.
+ * autorun) y las claves del ENV (`stack=`, `log=`), que la P4 por TCP no aplicaba. Y
+ * (V7/H12) los runs por defecto: uno por núcleo de la imagen, con `vm.runs` del ENV encima.
  *
  * La SD de la placa (bpvm_sd_placa.c) es capa de placa y no va en la lib del host: sus
  * dos funciones, de mentira, apuntan también.
@@ -256,6 +257,54 @@ int main(void) {
         bpvm_machine_set_env(NULL);
         g_env_ptr = &g_env;
         CHECK(bpvm_machine_env_get("stack", val, sizeof val) == -1, "sin registrar (la VM de host): -1");
+    }
+
+    printf("--- 8. V7/H12: un run por nucleo de la imagen; vm.runs y vm.cores del ENV mandan ---\n");
+    {
+        /* Eduardo (6-oct): «En la Pico y Metro, 2 nucleos y 2 runs. En la P4 y la S3 igual. En el resto 1 nucleo y 1 run». */
+        bpvm_boot2_familia_t dos = FAMILIA;
+        dos.nucleos = 2;
+        bpvm_boot2_familia_t uno = FAMILIA;
+        uno.nucleos = 1;
+
+        caso(BPVM_BOOT_APP, 0, "", 1);   /* el ENV de siempre: sin vm.runs */
+        bpvm_set_runs(1);
+        bpvm_boot2_repartir(&dos);
+        CHECK(bpvm_runs() == 2, "dos nucleos, el ENV sin vm.runs: dos runs");
+
+        caso(BPVM_BOOT_KERNEL, 1, "sin particiones en el env", 0);   /* virgen: sin ENV */
+        bpvm_set_runs(1);
+        bpvm_boot2_repartir(&dos);
+        CHECK(bpvm_runs() == 2, "dos nucleos y sin ENV (una placa virgen): dos runs");
+
+        static const char* VUELTA = "vm.runs=1\nvm.cores=1\n";
+        bpvm_env_t ev = g_env;
+        ev.payload = (const uint8_t*) VUELTA;
+        ev.payload_len = (uint16_t) strlen(VUELTA);
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_env_ptr = &ev;
+        bpvm_boot2_repartir(&dos);
+        CHECK(bpvm_runs() == 1 && bpvm_cores() == 1, "vm.runs=1 y vm.cores=1 del ENV mandan: la vuelta atras sin grabar");
+
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        bpvm_set_runs(2);
+        bpvm_boot2_repartir(&uno);
+        CHECK(bpvm_runs() == 1, "un nucleo: un run");
+
+        static const char* DOS_RUNS = "vm.runs=2\n";
+        bpvm_env_t e2 = g_env;
+        e2.payload = (const uint8_t*) DOS_RUNS;
+        e2.payload_len = (uint16_t) strlen(DOS_RUNS);
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_env_ptr = &e2;
+        bpvm_boot2_repartir(&uno);
+        CHECK(bpvm_runs() == 2, "un nucleo con vm.runs=2 en el ENV: dos runs (la etapa 2b: los dos en uno)");
+
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        bpvm_set_runs(1);
+        bpvm_boot2_repartir(&FAMILIA);   /* la de mentira no dice sus nucleos */
+        CHECK(bpvm_runs() == 1, "una familia que no dice sus nucleos: uno, lo de siempre");
+        bpvm_set_cores(2);
     }
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);

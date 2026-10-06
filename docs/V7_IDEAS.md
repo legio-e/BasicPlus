@@ -5615,6 +5615,84 @@ ESP32 tiene `__thread` de verdad (el IDF le da a cada tarea su zona TLS): basta 
 su `__thread` es el emulado, `#472`). La Pico, con los punteros por tarea de FreeRTOS (hoy, 0). Las placas de un núcleo
 van con un run (Eduardo): no lo necesitan.
 
+#### Los dos núcleos en la S3 y la P4, y lo de por defecto en V7 (6-oct, mañana)
+
+Eduardo: *«si, activa los 2 nucleos en la S3 y la P4»*; y, preguntado qué imagen y qué `vm.runs` van por defecto
+(con lo medido en la Pico 2 delante: un programa de un hilo no gana con el 2º núcleo —la imagen de dos con un run, +1,8 %
+en `fib(26)` y +20 % en PrintBench; con dos runs, un 10–14 % más lento— y dos hilos que calculan a la vez, ×1,6):
+*«En la Pico y Metro, 2 nucleos y 2 runs. En la P4 y la S3 igual. En el resto 1 nucleo y 1 run»*.
+
+- **Lo de por defecto: un run por núcleo de la imagen.** La familia del arranque común dice sus núcleos
+  (`bpvm_boot2_familia_t.nucleos`, su `configNUMBER_OF_CORES`; la STM32, 1) y `bpvm_boot2_repartir` pone esos runs
+  ANTES de las claves —`vm.runs` del ENV manda— y antes de la memoria (la Pico reserva ahí la pila del 2º run). Sin la
+  clave y sin ENV, igual. `test-boot2` 8 (dos núcleos sin la clave y en una placa virgen: dos; `vm.runs=1` y
+  `vm.cores=1`: la vuelta atrás; un núcleo: uno, y con `vm.runs=2`, dos —la 2b—). **La Pico y la Metro: la imagen de
+  dos núcleos, la de por defecto** (`BPVM_PICO_NUM_CORES` 2 en su `CMakeLists`; `pico/build`, el que graba
+  `flash_pico.py`, la construye ya así); la de uno, la vuelta atrás grabando (`-DBPVM_PICO_NUM_CORES=1`).
+- **La S3 y la P4, con los dos**: `CONFIG_FREERTOS_UNICORE=n` en sus `sdkconfig.defaults` —explícito y no borrado: el
+  `sdkconfig` está fuera de git, y el de la P4 llevaba la orden de V6, *«un solo núcleo hasta nueva orden»*, que se
+  queda escrita con la nueva— y en el `sdkconfig` local (los defaults sólo siembran uno nuevo). Las tareas, SIN
+  afinidad, como en la Pico (allí se validó así; el comentario de V6 preveía fijarlas a mano, y la medida de la 3.1 dijo
+  que no hace falta). `vm.cores=1` las ancla todas al núcleo 0 sin grabar (`bpvm_set_cores`, de
+  `bpvm_boot2_claves`; `esp32_afinidad()` en `esp32/common/afinidad_esp32.h`): el FreeRTOS del IDF no cambia la
+  afinidad de una tarea creada, así que cada una nace con la suya —`run` y `run2`, `io`, los ejecutores de las
+  natives, los hilos y, en la P4, la del cable y la del log por red—; la `main` de la S3 (la del REPL) la fija el IDF al
+  0 siempre. La línea del arranque, la de la Pico: «boot: imagen de DOS nucleos[; vm.cores=1: …]».
+- **Lo que se miró antes de encender, en el IDF de esta máquina (v6.0.1)**:
+  1. *Los atómicos y la PSRAM de la S3.* En Xtensa la instrucción atómica no vale sobre la RAM externa (el propio IDF lo
+     dice en `esp_cpu_compare_and_set`: *«the native CAS instruction cannot be used»*, y lo emula con un cerrojo), y el
+     bloque de la VM está en la PSRAM. Los atómicos de la VM que leen-modifican-escriben (`exchange`, `fetch_add`)
+     caen todos en la RAM interna: el volcado del log (`s_volcando`, `s_pendiente`, estáticas) y los contadores de la
+     cola (`vm->smp` es `&bpvm_la_cola`, estática); los demás son cargas y almacenamientos alineados (las palabras de
+     `#660`, los handles, el KILL, el `fin` del run, el anillo de la UART), que no usan esa instrucción y valen en la
+     PSRAM. Los objetos de FreeRTOS, en su heap: interno.
+  2. *Las cachés de instrucciones de la P4, una por núcleo.* El `.mdn` cargado a la RAM se invalida por dirección
+     (`esp_cache_msync`, tipo INST); para la RAM interna, el IDF usa `CACHE_LL_ID_ALL` →
+     `CACHE_MAP_L1_ICACHE_MASK`: las de los dos núcleos. En la S3, las natives van a IRAM, que no pasa por caché.
+  3. *Ningún cerrojo «de un núcleo»* en lo que se compila para la ESP32: ni `vTaskSuspendAll` ni interrupciones
+     apagadas como cerrojo (con el IDF de dos núcleos sólo pararían el propio); la sección crítica del log ya es el
+     spinlock del IDF (`#653`).
+  4. *Los perros guardianes.* El de tareas de la S3 no se arranca; el de la P4, sin pánico, vigila ahora también la
+     ociosa del 1 (un aviso por la consola USB, no por el cable: como ya pasaba con la del 0). El de interrupciones, con
+     el 1 también: el IDF lo lleva durante las escrituras de la flash (el otro núcleo, parado en IRAM).
+- **Compilan** las cinco ESP (la S3 y la P4 con `CONFIG_FREERTOS_NUMBER_OF_CORES` 2), la Pico (dos núcleos por
+  defecto, `pico_multicore` enlazado) y las dos STM32. **Los packs sellados** (el `nm` de los `.elf` de antes y de
+  ahora): en la P4, la C3, la C5 y la C6, las páginas de la app no cambian; **en la S3 el texto pasa una página de
+  64 KB por 1 868 B** (+2 858 B; la C3, con los mismos cambios y un núcleo, +258: el resto es el FreeRTOS de dos), y el
+  rodata se mueve una página: un pack nativo
+  sellado en la S3 habría que regrabarlo (mirarlo en la placa antes: `packRamBase` del `INFO` y el `STATE`).
+- **Por probar en la placa** (la tarde, con el OK de Eduardo): la S3 y la P4 con los dos núcleos —la tanda de V7,
+  `run_placa` y la resistencia, con uno y con dos runs— y la medida de `fib(26)` y PrintBench con uno y con dos; la
+  Metro con la imagen de dos; la C3, la C5, la C6, la Nucleo y la DK2, con un run; y los packs de la GUI con el
+  `Gui.mod` del cerrojo (la C5, la P4 y la DK2; `GuiMini` en la C6).
+
+#### La guarda de N3, apretada (6-oct, mañana; la red la cazó)
+
+La red de este cambio salió con un rojo: en `test-nat2runs`, el sabotaje de N3 (`--sabotaje-aparcada`: una native que
+espera al mundo dentro de sí no apunta su pila de C) **no se cazó** —«etiquetas malas: 0»—. No era la VM: era la
+prueba, que se fiaba de UNA pasada para un fallo probable. Medido dos veces: **8 y 6 de 10 pasadas saboteadas rojas**
+(de 0 a 11 etiquetas malas de 600 llamadas). Y peor que la guarda: la pasada normal ejercitaba N3 tan pocas veces que, si N3 se
+rompía, la red lo habría visto sólo a veces.
+
+**El porqué**: N3 pide que la SEGUNDA reserva de `etiqueta` (con el intermedio sólo en un local de C) encuentre al
+otro run colectando. Pero con el GC en cada reserva, la native solía colectar ella misma en la primera y seguía al
+instante; el otro run, que salía de esperar el mundo, tardaba en despertar: la carrera la ganaba casi siempre la
+native. **El arreglo**, un gancho de prueba como `ensayo_colecta_us`: `ensayo_reserva_nativa_us`, una reserva hecha
+DESDE UNA NATIVE espera unos µs —activa y SIN el cerrojo— antes de entrar (`heap_nuevo`). Medido (diez pasadas
+saboteadas y cinco normales por valor):
+
+| espera | N3 en la pasada normal (veces) | sabotaje: rojas | etiquetas malas (de 600) |
+|---|---|---|---|
+| 0 µs (antes) | 388 – 1 573 | 6 de 10 | 0 – 6 |
+| 100 µs | 1 891 – 2 158 | 10 de 10 | 358 – 496 |
+| **300 µs** (la de la prueba) | 1 857 – 1 921 | 10 de 10 | 501 – 526 |
+| 1000 µs | 1 851 – 1 903 | 10 de 10 | 524 – 548 |
+
+Y la receta ya no se fía de que la pasada normal «no falle»: exige que EJERCITE N3 —el colector cuenta las natives
+aparcadas que escanea (`nativas_aparcadas`, en la cola y en la línea `runs:`), y la pasada normal tiene que ver al
+menos 100 (ve ~1 900)—. El control: con el sabotaje, y en la pasada interpretada, la cuenta es 0. La prueba no se
+alarga (4–6 s por pasada).
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

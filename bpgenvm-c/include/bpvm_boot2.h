@@ -54,6 +54,12 @@ typedef struct {
     void (*cable)(void);          /* abrir el cable del wire */
     void (*autorun)(void);        /* /sys/auto.txt (bpvm_autorun_*) */
     void (*repl)(void);           /* el lazo del REPL: no vuelve (en las pruebas, sí) */
+
+    /* V7/H12 — los NÚCLEOS de esta imagen (su configNUMBER_OF_CORES), y con ellos los runs por defecto: uno por núcleo
+     * (Eduardo, 6-oct: «En la Pico y Metro, 2 nucleos y 2 runs. En la P4 y la S3 igual. En el resto 1 nucleo y 1
+     * run»). `vm.runs` del ENV manda sobre él. 0: la familia no lo dice, y va con uno. Al final, para que una familia
+     * escrita por posición (la de la prueba) siga valiendo. */
+    int nucleos;
 } bpvm_boot2_familia_t;
 
 /* Las claves del ENV que REPARTEN (`stack=`, `quantum=`): se leen en el arranque y hace

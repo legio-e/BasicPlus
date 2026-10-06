@@ -111,12 +111,17 @@ void bpvm_boot2_claves(const bpvm_env_t* env) {
      * en bpvm_stack_region_bytes(). Antes de la memoria: la línea de la Pico ya lo cuenta. */
     bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(env, "stack", 0));
     bpvm_set_quantum_ops(bpvm_env_get_long(env, "quantum", 0));   /* #462 */
-    bpvm_set_runs(bpvm_env_get_long(env, "vm.runs", 0));          /* V7/H12, 2b: los runs permanentes; antes de la cintura */
+    bpvm_set_runs(bpvm_env_get_long(env, "vm.runs", 0));          /* V7/H12, 2b: los runs permanentes; antes de la cintura
+                                                                     (sin la clave, uno por núcleo: bpvm_boot2_repartir) */
+    bpvm_set_cores(bpvm_env_get_long(env, "vm.cores", 0));        /* V7/H12: la vuelta atrás de los dos núcleos (ESP32) */
 }
 
 void bpvm_boot2_repartir(const bpvm_boot2_familia_t* f) {
     if (!f) return;
     fija(f);
+    /* V7/H12 — un run por núcleo de la imagen (Eduardo, 6-oct), ANTES de las claves: `vm.runs` del ENV manda sobre
+     * él. Y antes de la memoria: la Pico reserva la pila del 2º run en su reparto. */
+    bpvm_set_runs(f->nucleos);
     bpvm_boot2_claves(env_de(f));
     if (f->memoria) f->memoria();
     /* La BIOS de los motores, verificada aunque no haya ninguno grabado: un hueco que sólo

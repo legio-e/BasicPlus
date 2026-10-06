@@ -506,7 +506,8 @@ afecta al firmware que se envía (single-core por default, byte-idéntico).
 cmake .. -DBPVM_PICO_NUM_CORES=2 -DBPVM_PICO_SMP_WORKERS=2
 ```
 
-- `BPVM_PICO_NUM_CORES` (default **1**) → `configNUMBER_OF_CORES` en
+- `BPVM_PICO_NUM_CORES` (default **1** hasta V7; **2 desde V7/H12**, 6-oct-2026, por
+  decisión de Eduardo, validado en la etapa 3 de H12 —`docs/V7_IDEAS.md` §H12—) → `configNUMBER_OF_CORES` en
   FreeRTOSConfig.h. Con =2 el port RP2350_ARM_NTZ (que es SMP-capaz)
   arranca el segundo core en `vTaskStartScheduler`, activa
   `configRUN_MULTIPLE_PRIORITIES` + `configUSE_CORE_AFFINITY`, y CMake
@@ -591,7 +592,9 @@ Cada escalón se flashea y valida ANTES del siguiente. Fallback siempre
    plan B. Si pasa → log persiste y reboot recarga: dual-core completo.
 
 Mientras 2-3 no se validen en placa, `BPVM_PICO_NUM_CORES=2` queda
-marcado **experimental** y NO se envía.
+marcado **experimental** y NO se envía. *(V7/H12, 6-oct-2026: validado —las puertas de la
+etapa 3, con la tanda, `run_placa` y la resistencia— y desde entonces es la imagen por
+defecto; la vuelta atrás, `vm.cores=1` en el ENV o `-DBPVM_PICO_NUM_CORES=1`.)*
 
 ## Abstracción transport
 

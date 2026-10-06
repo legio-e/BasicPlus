@@ -149,6 +149,7 @@ int bpvm_cola_colgar(bpvm_t* vm, int n_runs, int para_permanentes, bpvm_cola_al_
     q->vueltas_sin_hilo = 0;
     q->gui_viajes = 0;
     q->gui_fuera_del_run0 = 0;
+    q->nativas_aparcadas = 0;
     q->programa = vm;
     bpvm_platform_cond_broadcast(&q->sched_cond);
     bpvm_platform_mutex_unlock(&q->vm_lock);
@@ -239,8 +240,9 @@ static void acabar(bpvm_cola_t* q, bpvm_t* vm, int varios) {
     /* 2b — con varios runs, cuánto trabajó cada uno: la prueba de que el segundo run de verdad ejecuta */
     if (q->n_runs > 1)
         bpvm_diag("[bpvm] runs: %d; cuantos del run 0, %lu; del run 1, %lu; vueltas sin hilo, %lu; viajes al run 0 "
-                  "(GUI), %lu", q->n_runs, (unsigned long) q->cuantos[0], (unsigned long) q->cuantos[1],
-                  (unsigned long) q->vueltas_sin_hilo, (unsigned long) q->gui_viajes);
+                  "(GUI), %lu; natives aparcadas vistas por el colector, %lu", q->n_runs, (unsigned long) q->cuantos[0],
+                  (unsigned long) q->cuantos[1], (unsigned long) q->vueltas_sin_hilo, (unsigned long) q->gui_viajes,
+                  (unsigned long) q->nativas_aparcadas);
     if (q->gc_con_otro_dentro > 0)   /* no debe pasar: una colecta con otro run ejecutando (heap.c) */
         bpvm_diag_urgente("[bpvm] GC: %lu colecta(s) con OTRO run dentro de su cuanto (no debe pasar)",
                           (unsigned long) q->gc_con_otro_dentro);

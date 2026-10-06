@@ -711,6 +711,8 @@ hola, Eduardo
   <tr><td><code>psram</code></td><td><code>1</code> activa la PSRAM como heap de la VM (sólo RP2350B; el CS es fijo, GPIO47)</td><td>RP2350</td></tr>
   <tr><td><code>stack</code></td><td>kilobytes de pila (el resto de la memoria de la VM va al montón); ausente = el reparto por defecto</td><td>todas</td></tr>
   <tr><td><code>quantum</code></td><td>opcodes que ejecuta un hilo antes de ceder el turno; ausente = 1024</td><td>todas</td></tr>
+  <tr><td><code>vm.runs</code></td><td>cuántos hilos del programa corren <strong>a la vez</strong> (<code>1</code> o <code>2</code>); ausente = uno por núcleo: dos en la Pico&nbsp;2, la Metro, la S3 y la P4, uno en la C3, la C5 y la C6 — ver abajo</td><td>RP2350 · ESP32</td></tr>
+  <tr><td><code>vm.cores</code></td><td><code>1</code>: todas las tareas de la VM en el núcleo 0, la vuelta atrás de los dos núcleos sin regrabar; ausente = los dos</td><td>RP2350 · ESP32-S3 · ESP32-P4</td></tr>
   <tr><td><code>log</code></td><td>el log post-mortem: <code>1</code> encendido; ausente = apagado</td><td>todas</td></tr>
   <tr><td><code>gc</code></td><td>el recolector de basura: <code>0</code> lo apaga (para partir un experimento en dos); ausente = encendido</td><td>RP2350</td></tr>
   <tr><td><code>latido</code></td><td>el latido de vida: <code>1</code> lo enciende; ausente = apagado</td><td>RP2350</td></tr>
@@ -757,6 +759,17 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   hilos del programa y al sistema del micro, que es lo que deja respirar a
   las comunicaciones en un chip de un solo núcleo. Con 1024 nadie debería
   tener que tocarlo; sirve para medir, no para afinar.
+</p>
+
+<p>
+  <code>vm.runs</code> no limita los hilos: un programa puede crear los que quiera. Dice
+  cuántos de ellos <em>ejecutan a la vez</em>, y en una placa de dos núcleos lo normal es
+  uno por núcleo. Lo que se gana depende del programa: dos hilos que calculan a la vez van
+  casi el doble de rápido (en la Pico&nbsp;2, ×1,6), pero un programa de un solo hilo no
+  gana nada, y con dos runs va algo más lento (un 10–14&nbsp;%); si es tu caso,
+  <code>vm.runs=1</code>. Un programa que se depura, o que usa SQLite, va con uno aunque
+  haya dos. Y si algo fallara con los dos núcleos, <code>vm.cores=1</code> y
+  <code>vm.runs=1</code> dejan la placa en un núcleo sin regrabarla.
 </p>
 
 <div class="note">

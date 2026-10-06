@@ -27,6 +27,16 @@
 
 ## Última sesión
 
+> **6-oct** — H12. De madrugada, **las natives con dos runs** (Eduardo: *«unos cambios localizados»*): N1 a N4 en el
+> PC con `test-nat2runs` (`204b4217`), y al hacerlo un CUELGUE de la GUI con dos runs (el puente anidado no se aparcaba
+> con el mundo parado), arreglado; N1 en los micros (el contexto de la native, uno por tarea: `8059f6ec`). Por la
+> mañana, con *«OK A, OK los lotes y OK log=1»*: el lote de N1 y del cuelgue, verde en la Pico 2 y la P4, y **el cerrojo
+> del árbol de la `Gui`** (una carrera de la librería: 7 de 40 pasadas perdían hijos; con él, 40 de 40; `8e81c136`).
+> Después, *«si, activa los 2 nucleos en la S3 y la P4»* y **lo de por defecto en V7** (*«En la Pico y Metro, 2 nucleos
+> y 2 runs. En la P4 y la S3 igual. En el resto 1 nucleo y 1 run»*): hecho en el código y compilado, sin grabar —las
+> pruebas, por la tarde—. Más abajo, «🧵 H12 (6-oct, mañana)» y, de la madrugada, el final de «🧵 H12 (5-oct, última
+> hora)».
+>
 > **5-oct** — H12, **la 2b** (el 2º run, con un núcleo). Eduardo cambió el planteamiento de madrugada: *«Ponemos el 2º
 > run, conseguimos que funcione con lo mínimo y vamos ampliando la cobertura. De momento solamente 2 run ejecutando
 > código BP normal, sin AOT ni LVGL»*; y el GC, uno, el de hoy (su tarea GC, como mejora). Hecho en el PC: `vm.runs`,
@@ -1144,6 +1154,32 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧵 H12 (6-oct, mañana) — LOS DOS NÚCLEOS EN LA S3 Y LA P4, y LO DE POR DEFECTO EN V7
+
+- **Eduardo**: *«si, activa los 2 nucleos en la S3 y la P4»*; y preguntado qué imagen y qué `vm.runs` van por defecto
+  (con lo medido en la Pico 2: un programa de un hilo no gana con el 2º núcleo; dos hilos que calculan, ×1,6): *«En la
+  Pico y Metro, 2 nucleos y 2 runs. En la P4 y la S3 igual. En el resto 1 nucleo y 1 run»*.
+- **Hecho** (`V7_IDEAS` §H12 «Los dos núcleos en la S3 y la P4»): un run por núcleo de la imagen —la familia del
+  arranque común dice sus núcleos, `vm.runs` del ENV manda; `test-boot2` 8—; la imagen de dos núcleos, la de por
+  defecto de la Pico y la Metro (`pico/build`); la S3 y la P4 sin `UNICORE` (en sus defaults, explícito, y en el
+  `sdkconfig` local), las tareas sin afinidad como en la Pico y `vm.cores=1`, todas al núcleo 0 sin grabar (cada tarea
+  nace con la suya: el IDF no la cambia después). En la guía del IDE (ES y EN), `vm.runs` y `vm.cores` en la tabla del
+  ENV.
+- **Mirado en el IDF antes de encender**: en Xtensa la instrucción atómica no vale sobre la PSRAM (el IDF lo emula en
+  `esp_cpu_compare_and_set`) —los atómicos de la VM que leen y escriben a la vez caen en la RAM interna; los demás son
+  cargas y almacenamientos, que valen—; en la P4 cada núcleo tiene su caché de instrucciones —el cargador del `.mdn`
+  invalida las dos (`CACHE_LL_ID_ALL`)—; ningún cerrojo «de un núcleo»; y los perros guardianes, sin sorpresas.
+- **Compilan** las ocho imágenes. Los packs sellados (`nm`): la P4, la C3, la C5 y la C6, en sus páginas; **la S3, una
+  página más** (su texto la pasa por 1 868 B): un pack nativo sellado allí, a regrabar.
+- **La red cazó una guarda mía floja**: el sabotaje de N3 en `test-nat2runs` salió VERDE (medido después, dos veces: 8
+  y 6 de 10 rojas; la pasada normal ejercitaba N3 muy pocas veces). Apretada con un gancho de prueba —la reserva desde una native,
+  300 µs más lenta— y una exigencia nueva —la pasada normal tiene que EJERCITAR N3: el colector cuenta las natives
+  aparcadas que ve (~1 900; al menos 100)—: 10 de 10 rojas, ~500 etiquetas malas de 600 (`V7_IDEAS` §«La guarda de N3,
+  apretada»).
+- **Traspaso**: nada grabado (Eduardo: las pruebas, por la tarde). El lote de la tarde, con su OK: la S3 y la P4 con
+  los dos núcleos (la tanda, `run_placa`, la resistencia, y `fib(26)` y PrintBench con uno y con dos), la Metro con la
+  imagen de dos, la C3, la C5, la C6, la Nucleo y la DK2 con un run, y los packs de la GUI con el `Gui.mod` del cerrojo.
 
 ## 🧵 H12 (5-oct, última hora) — LVGL CON DOS RUNS en el PC: la llamada VIAJA al run 0
 

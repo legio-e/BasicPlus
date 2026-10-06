@@ -121,10 +121,14 @@ void bpvm_set_stack_kb(unsigned long kb);
 void bpvm_set_quantum_ops(long ops);
 
 /* V7/H12, etapa 2b — cuántos runs PERMANENTES ejecutan los programas en una placa (y en el micro simulado): la clave
- * `vm.runs` del ENV, leída en el arranque (bpvm_boot2_claves); 1 o 2, 1 por defecto (y la vuelta atrás). Fuera de
- * rango se ajusta y se dice. La familia crea esos runs al crear la tarea `run`. */
+ * `vm.runs` del ENV, leída en el arranque (bpvm_boot2_claves); 1 o 2. Sin la clave, uno por núcleo de la imagen
+ * (bpvm_boot2_repartir; Eduardo, 6-oct); en el simulado y en una familia que no dice sus núcleos, 1. `vm.runs=1`, la
+ * vuelta atrás. Fuera de rango se ajusta y se dice. La familia crea esos runs al crear la tarea `run`. */
 void bpvm_set_runs(long n);
 int  bpvm_runs(void);
+/* V7/H12 — `vm.cores` del ENV (1: las tareas de la VM, todas en el núcleo 0; 0: sin la clave). bpvm.c. */
+void bpvm_set_cores(long n);
+int  bpvm_cores(void);
 
 /* Gancho de diagnóstico: se llama justo DESPUÉS de que `bpvm_run` resuelva el
  * enlace y ANTES de ejecutar una sola instrucción. NULL (el defecto) = nada.

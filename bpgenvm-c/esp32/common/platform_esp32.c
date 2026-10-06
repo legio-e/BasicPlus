@@ -20,6 +20,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+#include "afinidad_esp32.h"   /* V7/H12: el núcleo de las tareas (`vm.cores=1`) */
 
 #include "esp_timer.h"     /* esp_timer_get_time → now_ms */
 #include "esp_rom_sys.h"   /* esp_rom_delay_us  → busy_wait_us */
@@ -72,8 +73,10 @@ void bpvm_platform_aot_contexto_poner(struct bpvm_aot_contexto* c) { t_aot_conte
 #endif
 
 /* ============================== Thread ===========================
- * ESP-IDF FreeRTOS es SMP (2 cores en el S3). xTaskCreatePinnedToCore
- * con tskNO_AFFINITY = sin pin (cualquier core). El stack va en BYTES. */
+ * ESP-IDF FreeRTOS es SMP (2 cores en el S3 y la P4, encendidos desde
+ * V7/H12). xTaskCreatePinnedToCore con tskNO_AFFINITY = sin pin (cualquier
+ * core); la de nuestras tareas la da esp32_afinidad() (afinidad_esp32.h:
+ * con `vm.cores=1`, el 0). El stack va en BYTES. */
 
 #define BPVM_ESP32_THREAD_STACK_BYTES 4096
 
@@ -150,8 +153,9 @@ static int es_thread_spawn_pila(bpvm_platform_thread_handle_t* t,
  * es la tarea `main` (CONFIG_ESP_MAIN_TASK_PRIO, 1 por defecto), asi que aqui va
  * a 1: `io` atiende el wire aunque la VM este calculando, y como se bloquea en su
  * cola en cuanto no hay nada, no le quita tiempo (medido: fib(28) igual).
- * Sin afinidad a proposito: en el S3 y el P4 el planificador la pondra donde no
- * moleste, y fijarla al nucleo de I/O es cosa de A1.3 con las placas delante. */
+ * Sin afinidad: en el S3 y el P4 el planificador la pone donde no moleste (como
+ * en la Pico, validada asi en H12: `io` en el otro nucleo apenas se nota); con
+ * `vm.cores=1`, en el 0 con las demas (esp32_afinidad). */
 int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
                                     bpvm_thread_entry_t entry, void* arg) {
     /* #485 - `io` NO LLEVA NUMERO: hereda el de quien lo arranca.
@@ -166,13 +170,13 @@ int bpvm_platform_thread_create_io(bpvm_platform_thread_handle_t* t,
      * repl lo hacen desde el camino del RUN), asi que uxTaskPriorityGet(NULL)
      * ES la prioridad de la VM. Con esto el contrato pasa de vigilado a
      * CONSTRUIDO: no hay dos numeros que puedan divergir. */
-    return es_thread_spawn_pila(t, entry, arg, tskNO_AFFINITY, (int) uxTaskPriorityGet(NULL),
+    return es_thread_spawn_pila(t, entry, arg, esp32_afinidad(), (int) uxTaskPriorityGet(NULL),
                                 "bpvm-io", BPVM_ESP32_IO_STACK_BYTES);   /* #495 (paso 4): su pila, medida */
 }
 
 int bpvm_platform_thread_create(bpvm_platform_thread_handle_t* t,
                                  bpvm_thread_entry_t entry, void* arg) {
-    return es_thread_spawn(t, entry, arg, tskNO_AFFINITY);
+    return es_thread_spawn(t, entry, arg, esp32_afinidad());
 }
 
 /* En ESP32-S3 el pin a core SÍ es posible (SMP nativo). core_id válido
@@ -222,11 +226,11 @@ void bpvm_platform_sem_take(bpvm_platform_sem_handle_t* s) {
 
 /* El IDF reserva la pila de una tarea en la RAM INTERNA (su heap de FreeRTOS es MALLOC_CAP_INTERNAL): justo lo
  * que hace falta, porque con la pila en la PSRAM no se puede escribir la flash (spi_flash lo comprueba con un
- * assert). A la prioridad de la tarea de la VM, como `io`, y sin afinidad, como `io`. */
+ * assert). A la prioridad de la tarea de la VM, como `io`, y con su afinidad, como `io`. */
 int bpvm_platform_thread_create_nativa(bpvm_platform_thread_handle_t* t,
                                         bpvm_thread_entry_t entry, void* arg,
                                         uint32_t pila_bytes) {
-    return es_thread_spawn_pila(t, entry, arg, tskNO_AFFINITY, uxTaskPriorityGet(NULL),
+    return es_thread_spawn_pila(t, entry, arg, esp32_afinidad(), uxTaskPriorityGet(NULL),
                                 "bpvm-nat", pila_bytes);
 }
 

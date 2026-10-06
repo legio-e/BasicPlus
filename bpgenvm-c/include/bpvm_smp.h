@@ -125,6 +125,10 @@ typedef struct bpvm_cola {
      * pasar nunca. Por programa: la línea `runs:` del final, y test-cola 18. */
     uint32_t gui_viajes;
     uint32_t gui_fuera_del_run0;
+    /* V7/H12 (N3): las pilas de C de natives aparcadas con el mundo parado que escaneó un colector (heap.c, 2f). Por
+     * programa: la línea `runs:` del final, y test-nat2runs, que exige que la pasada normal ejercite N3 (no sólo que
+     * no falle: un camino ejecutado no es un camino probado). */
+    uint32_t nativas_aparcadas;
     int rs;                      /* lo que dio el programa: lo apunta el último run, al descolgarlo */
     bpvm_cola_al_acabar_fn al_acabar;
     void* al_acabar_user;
@@ -177,6 +181,7 @@ typedef struct bpvm_cola {
     int     ensayo_deposito_ms;      /* H12: entre ver libre un ejecutor y reservarlo (la ventana ensanchada) */
     int     ensayo_sin_ejecutor;     /* H12: ninguna native consigue ejecutor (como sin memoria): corren en la del run */
     int     ensayo_colecta_us;       /* H12: cada colecta, más larga con el mundo parado (la ventana ensanchada de N3) */
+    int     ensayo_reserva_nativa_us;/* H12: una reserva desde una native tarda en llegar, sin el cerrojo (N3, heap.c) */
     int64_t t_ultimo_cuanto;         /* con el ensayo: cuándo volvió el último cuanto (µs)... */
     int64_t t_fin;                   /* ...y cuándo se decidió el fin (µs): el fin, siempre después */
 } bpvm_cola_t;

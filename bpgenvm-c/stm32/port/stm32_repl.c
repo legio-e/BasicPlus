@@ -785,6 +785,7 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .cable        = stm32_cable,
     .autorun      = autorun_boot,
     .repl         = stm32_lazo,
+    .nucleos      = 1,                      /* V7/H12: un núcleo, un run */
 };
 
 void stm32_repl_run(void) {

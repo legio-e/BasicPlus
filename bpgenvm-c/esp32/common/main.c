@@ -31,6 +31,7 @@
 #include "bpvm_pack.h"          /* V7/H7 (Boot 2, fase 1): el montaje de la zona y su estado, comunes */
 #include "bpvm_boot2.h"        /* V7/H7 (Boot 2, fase 4): el arranque común, con los ganchos de aquí */
 #include "bpvm_env.h"
+#include "freertos/FreeRTOS.h" /* V7/H12: configNUMBER_OF_CORES, los runs por defecto */
 #include "log.h"               /* log persistente (post-mortem) — lo antes posible */
 #include "esp_heap_caps.h"     /* H11: el heap de la VM se pide en runtime, no es .bss */
 #include "esp_memory_utils.h"  /* #565: la vista de instrucciones de la SRAM */
@@ -287,6 +288,7 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .cable        = esp32_cable,
     .autorun      = repl_esp32_autorun,
     .repl         = repl_esp32_run,
+    .nucleos      = configNUMBER_OF_CORES,   /* V7/H12: la S3, dos (y dos runs); la C3, la C5 y la C6, uno */
 };
 
 void app_main(void)

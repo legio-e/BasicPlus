@@ -196,7 +196,8 @@
   y `print b` sí puede caer. Para que varias líneas salgan juntas: un `StringBuilder` y un
   solo `print` (manual §14.5). El límite: una línea de más de 1 KB —lo que cabe de una vez
   en la cola de salida de la Pico— puede salir en trozos.
-- **Con dos runs (`vm.runs=2`), un programa que se DEPURA va con uno: el primero** (decidido por
+- **Con dos runs (`vm.runs=2`, lo de por defecto en las placas de dos núcleos —la Pico 2, la
+  Metro, la S3 y la P4— desde el 6-oct), un programa que se DEPURA va con uno: el primero** (decidido por
   Eduardo el 5-oct, V7/H12). El depurador para el programa entero y sigue a un hilo; con dos
   runs ejecutando a la vez sería muy difícil de seguir (*«Alguna vez he tenido que depurar en Java
   con varios hilos y es muy difícil de seguir»*). Los hilos BP siguen siendo varios —se turnan en

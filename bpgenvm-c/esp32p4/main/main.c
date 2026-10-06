@@ -22,6 +22,7 @@
 #include <stdlib.h>           /* abort() si la reserva PSRAM falla */
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "afinidad_esp32.h"   /* V7/H12: el núcleo de las tareas de la P4 (`vm.cores=1`) */
 #include "freertos/event_groups.h"
 #include "esp_netif.h"
 #include "esp_eth.h"
@@ -366,6 +367,7 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .cable        = p4_cable,
     .autorun      = repl_esp32_autorun,
     .repl         = repl_esp32_run,
+    .nucleos      = configNUMBER_OF_CORES,   /* V7/H12: dos, y dos runs */
 };
 
 /* ---- La tarea del cable: la VM corre AQUÍ (stack holgado). Una para los dos transportes.
@@ -538,8 +540,9 @@ void app_main(void)
                                                    &got_ip_handler, NULL));
         ESP_ERROR_CHECK(esp_eth_start(eth_handle));
 
-        /* Canal de log (diagnóstico) — común a ambos transportes. */
-        xTaskCreate(tcp_log_task, "tcp_log", 4096, NULL, 5, NULL);
+        /* Canal de log (diagnóstico) — común a ambos transportes. V7/H12: con la afinidad de las nuestras
+         * (`vm.cores=1`, el núcleo 0; afinidad_esp32.h): las claves ya están leídas (bpvm_boot2_repartir, arriba). */
+        xTaskCreatePinnedToCore(tcp_log_task, "tcp_log", 4096, NULL, 5, NULL, esp32_afinidad());
     } else {
         ESP_LOGW(TAG, "Ethernet no disponible (%s) — sigo sin red: logs :5555 desactivados",
                  esp_err_to_name(eth_rc));
@@ -551,13 +554,14 @@ void app_main(void)
 #endif  /* BPVM_P4_NETLOG */
 
 #ifdef BPVM_P4_WIRE_TCP
-    /* Wire por TCP. */
-    xTaskCreate(wire_task, "wire_v1", 32768, NULL, 5, NULL);
+    /* Wire por TCP. V7/H12: la tarea del cable —la que hace de `io`—, con la afinidad de las nuestras. */
+    xTaskCreatePinnedToCore(wire_task, "wire_v1", 32768, NULL, 5, NULL, esp32_afinidad());
     ESP_LOGI(TAG, "P4 VM.3 (TCP): IP 192.168.2.2 | log %s:%d | wire v1 TCP *:%d",
              SERVER_IP, SERVER_PORT, WIRE_PORT);
 #else
-    /* Wire por UART0 (COM14) + Ethernet SOLO para logs (:5555) = red de seguridad. */
-    xTaskCreate(wire_task, "wire_uart", 32768, NULL, 5, NULL);
+    /* Wire por UART0 (COM14) + Ethernet SOLO para logs (:5555) = red de seguridad. V7/H12: con la afinidad de las
+     * nuestras, como en TCP. */
+    xTaskCreatePinnedToCore(wire_task, "wire_uart", 32768, NULL, 5, NULL, esp32_afinidad());
     ESP_LOGI(TAG, "P4 VM.3 (UART0 + Ethernet-logs): wire por COM14, logs por :5555");
 #endif
 

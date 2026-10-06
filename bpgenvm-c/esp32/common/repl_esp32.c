@@ -34,6 +34,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "afinidad_esp32.h"  /* V7/H12: el núcleo de `run` y `run2` (`vm.cores=1`) */
 #include "esp_system.h"      /* esp_restart */
 #include "esp_timer.h"       /* uptime */
 #include "esp_mac.h"         /* INFO: uniqueId desde la MAC de efuse */
@@ -864,13 +865,18 @@ static long run2_pila_libre(void) {
 void repl_esp32_cintura(void) {
     s_repl_ops.server_name = s_board_id->server_name;   /* S3 o P4: lo dice la placa */
     bpvm_repl_set_ops(&s_repl_ops);   /* V6/U3: la cintura, antes del primer mensaje */
+#if ( configNUMBER_OF_CORES > 1 )
+    /* V7/H12 (6-oct) — la línea de la Pico: la imagen y, con `vm.cores=1`, la vuelta atrás sin grabar. */
+    log_printf("boot: imagen de DOS nucleos%s", bpvm_cores() == 1 ? "; vm.cores=1: todas las tareas, en el nucleo 0" : "");
+#endif
 #if BPVM_ESP32_RUN_TAREA
     /* A la MISMA prioridad que ésta, la que hace de `io` (el contrato de bpvm_platform.h: ni por debajo —el KILL no
      * llegaba— ni por encima —PrintBench, más lento—): en el P4, 5. Antes del autorun: el arranque común llama aquí
-     * antes. Las ESP32 de hoy corren con un núcleo (UNICORE, o el chip sólo tiene uno): sin afinidad que dar. */
+     * antes. Sin afinidad: con los dos núcleos (la S3 y la P4, desde el 6-oct) los reparte el planificador, como en la
+     * Pico; con `vm.cores=1`, en el 0 (afinidad_esp32.h). En las de un núcleo, da igual. */
     if (s_run_task == NULL && bpvm_repl_run_tarea_prepara() == 0)
-        s_run_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run", ESP32_RUN_PILA_BYTES, NULL,
-                                       uxTaskPriorityGet(NULL), s_run_pila, &s_run_tcb);
+        s_run_task = xTaskCreateStaticPinnedToCore(bpvm_repl_run_tarea, "run", ESP32_RUN_PILA_BYTES, NULL,
+                                                   uxTaskPriorityGet(NULL), s_run_pila, &s_run_tcb, esp32_afinidad());
     /* el log, desde aquí y no desde `run` (el log no tiene cerrojo) */
     if (s_run_task == NULL) {
         bpvm_repl_run_tarea_no_nacio();   /* V7/H12, etapa 2a.2: que el RUN no cuelgue programas para un run que no hay */
@@ -893,8 +899,9 @@ void repl_esp32_cintura(void) {
             } else if (bpvm_repl_run_tarea_prepara() != 0) {
                 porque = "la cola no admite otro";
             } else {
-                s_run2_task = xTaskCreateStatic(bpvm_repl_run_tarea, "run2", ESP32_RUN_PILA_BYTES, (void*) (intptr_t) 1,
-                                                uxTaskPriorityGet(NULL), s_run2_pila, &s_run2_tcb);
+                s_run2_task = xTaskCreateStaticPinnedToCore(bpvm_repl_run_tarea, "run2", ESP32_RUN_PILA_BYTES,
+                                                            (void*) (intptr_t) 1, uxTaskPriorityGet(NULL), s_run2_pila,
+                                                            &s_run2_tcb, esp32_afinidad());
                 if (s_run2_task == NULL) {
                     bpvm_repl_run_tarea_no_nacio();
                     porque = "la tarea no nacio";
