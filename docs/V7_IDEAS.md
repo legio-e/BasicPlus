@@ -5798,6 +5798,10 @@ grabada un momento y vuelta a la de dos (ms):
   y cómo choca en esa caché con los datos de la PSRAM (en la Pico 2 sólo hay código en ella) —la imagen de dos núcleos
   lo mueve todo—, o algo del núcleo de FreeRTOS de dos. A `#665`, con PrintBench, que puede ser lo mismo.
 
+**H12, CERRADO** (6-oct; Eduardo: *«Tranquilo cerramos H12. Todo esto son cosas que hay que investigar pero ya en
+V8»*): los dos núcleos se quedan en V7 —dos núcleos y dos runs por defecto en la Pico 2, la Metro, la S3 y la P4; uno en
+las demás—, y `#665` (la imagen de dos núcleos de la RP2350, más lenta en la Metro y en PrintBench) pasa a V8.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

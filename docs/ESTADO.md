@@ -36,9 +36,12 @@
 > y 2 runs. En la P4 y la S3 igual. En el resto 1 nucleo y 1 run»*): hecho en el código y compilado (`1558123c`; su red
 > cazó una guarda floja de la madrugada, la de N3, y quedó apretada). Por la tarde, **el lote de los dos núcleos en las
 > nueve placas, verde**: la tanda de V7 con los mismos veredictos, `run_placa` 34 de 34 y 110 minutos de resistencia con
-> dos runs SIN FALLOS en la S3 y la P4; los packs de la GUI con el cerrojo en las cuatro con pantalla. Lo que quedaba de
-> H12, hecho: para cerrar (Eduardo). Más abajo, «🧵 H12 (6-oct, tarde)», «(mañana)» y, de la madrugada, el final de
-> «🧵 H12 (5-oct, última hora)».
+> dos runs SIN FALLOS en la S3 y la P4; los packs de la GUI con el cerrojo en las cuatro con pantalla. Y las medidas
+> finales con uno y con dos núcleos (la P4, ×2 con dos hilos; la Pico 2, ×1,55–1,68; la Metro destapó que la imagen de
+> dos núcleos le cuesta un 35 % a un programa de un hilo: `#665`). **H12 CERRADO** (Eduardo: *«Tranquilo cerramos H12.
+> Todo esto son cosas que hay que investigar pero ya en V8»*; `#665`, a V8). **Traspaso**: lo siguiente de V7, las
+> SUELTAS, documentar, las pruebas finales y publicar. Más abajo, «🧵 H12 (6-oct, tarde)», «(mañana)» y, de la
+> madrugada, el final de «🧵 H12 (5-oct, última hora)».
 >
 > **5-oct** — H12, **la 2b** (el 2º run, con un núcleo). Eduardo cambió el planteamiento de madrugada: *«Ponemos el 2º
 > run, conseguimos que funcione con lo mínimo y vamos ampliando la cobertura. De momento solamente 2 run ejecutando
