@@ -331,6 +331,9 @@ target_compile_definitions(bpvm_pico PRIVATE
 set(BPVM_RUN_EN_COLA 1 CACHE STRING "H12 2a.2: la tarea run espera en la cola (1) o el aviso trabajo de la etapa 1 (0)")
 message(STATUS "BPVM_RUN_EN_COLA = ${BPVM_RUN_EN_COLA}")
 target_compile_definitions(bpvm_pico PRIVATE BPVM_RUN_EN_COLA=${BPVM_RUN_EN_COLA})
+# V7/H12 (N1) — el contexto de las natives, uno por TAREA (el puntero por tarea de FreeRTOS: FreeRTOSConfig.h): con dos
+# runs, dos natives a la vez no se pisan el suyo. En las dos imágenes (con un núcleo, dos runs también se turnan).
+target_compile_definitions(bpvm_pico PRIVATE BPVM_AOT_POR_TAREA=1)
 
 # H2 #153 — trazas a flash del comm task para depurar el cuelgue SMP.
 # Migas que sobreviven a un reset; se leen con el comando LOG.

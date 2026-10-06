@@ -1406,6 +1406,29 @@ typedef struct {
 /* Contexto AOT del worker actual (TLS en host). */
 bpvm_aot_callctx_t* bpvm_aot_callctx(void);
 
+/* V7/H12 (N1) — EL CONTEXTO DE LA NATIVE, UNO POR TAREA, en los micros con dos runs (docs/V7_IDEAS.md §H12 «Las natives
+ * con dos runs»). En el PC lo da `__thread` (BPVM_TIENE_TLS). En un micro con BPVM_AOT_POR_TAREA, la plataforma guarda
+ * por tarea un PUNTERO a uno de éstos (la Pico, en el puntero por tarea de FreeRTOS; la familia ESP32, en un
+ * `__thread` de 4 bytes: el IDF le da a cada tarea su zona TLS); lo ponen las tareas que corren natives —cada run y
+ * cada ejecutor— y las demás usan el de siempre, uno para todo el micro. Sin esto, dos natives a la vez —una en cada
+ * run— se pisaban el contexto: el hilo, su pila y adónde saltar si lanza. */
+typedef struct bpvm_aot_contexto {
+    bpvm_aot_fault_t   fault;
+    bpvm_aot_callctx_t cc;
+} bpvm_aot_contexto_t;
+#if defined(BPVM_AOT_POR_TAREA)
+/* El de la tarea que llama (NULL: no puso ninguno) y ponerle uno (lo hace ella misma, al empezar). */
+bpvm_aot_contexto_t* bpvm_platform_aot_contexto(void);
+void                 bpvm_platform_aot_contexto_poner(bpvm_aot_contexto_t* c);
+#endif
+/* ¿Tiene esta imagen el contexto de la native por tarea (el PC, o N1 en el micro)? Con él, un programa con natives
+ * puede ir con dos runs (bpvm_repl.c, un_solo_run). */
+#if defined(BPVM_TIENE_TLS) || defined(BPVM_AOT_POR_TAREA)
+#  define BPVM_AOT_CONTEXTO_POR_TAREA 1
+#else
+#  define BPVM_AOT_CONTEXTO_POR_TAREA 0
+#endif
+
 /* Puente native→BP (docs/AOT_CROSS_MODULE.md §8). Llamado desde un thunk AOT
  * (vía vm->aot_helpers->call_bp_i32): monta un frame BP para la función en
  * `target_abs`, empuja `nargs` args de 4 bytes, corre un bucle de intérprete

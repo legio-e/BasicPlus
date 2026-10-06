@@ -63,6 +63,20 @@ void bpvm_platform_mutex_unlock(bpvm_platform_mutex_handle_t* m) {
  * el cómo, allí; la prueba, test/test_frcond.c (make test-frcond), con el kernel de FreeRTOS de verdad. */
 #include "platform_freertos_cond.inc"
 
+#if defined(BPVM_AOT_POR_TAREA)
+/* V7/H12 (N1) — EL CONTEXTO DE LAS NATIVES DE CADA TAREA (bpvm_internal.h, bpvm_aot_contexto_t), en su puntero por tarea
+ * de FreeRTOS (el 0: FreeRTOSConfig.h): lo ponen cada run y cada ejecutor al empezar; las demás tareas, NULL, usan el
+ * de siempre. Antes de arrancar el planificador no hay tarea a la que preguntar: NULL. */
+struct bpvm_aot_contexto;
+struct bpvm_aot_contexto* bpvm_platform_aot_contexto(void) {
+    if (xTaskGetSchedulerState() == taskSCHEDULER_NOT_STARTED) return NULL;
+    return (struct bpvm_aot_contexto*) pvTaskGetThreadLocalStoragePointer(NULL, 0);
+}
+void bpvm_platform_aot_contexto_poner(struct bpvm_aot_contexto* c) {
+    vTaskSetThreadLocalStoragePointer(NULL, 0, c);
+}
+#endif
+
 /* ============================== Thread ===========================
  * Wrapper para xTaskCreate. F4 v1 no llama a thread_create — la VM
  * corre todo en el task que invocó bpvm_run. Aquí estamos para

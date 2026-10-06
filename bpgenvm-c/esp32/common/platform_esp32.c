@@ -61,6 +61,16 @@ void bpvm_platform_mutex_unlock(bpvm_platform_mutex_handle_t* m) {
  * el cómo, allí; la prueba, test/test_frcond.c (make test-frcond), con el kernel de FreeRTOS de verdad. */
 #include "platform_freertos_cond.inc"
 
+#if defined(BPVM_AOT_POR_TAREA)
+/* V7/H12 (N1) — EL CONTEXTO DE LAS NATIVES DE CADA TAREA (bpvm_internal.h, bpvm_aot_contexto_t): un puntero en la zona
+ * TLS de la tarea —el IDF le da una a cada una en su pila (uxInitialiseStackTLS), así que `__thread` es por tarea—; 4
+ * bytes en cada tarea. Lo ponen cada run y cada ejecutor al empezar; las demás, NULL, usan el de siempre. */
+struct bpvm_aot_contexto;
+static __thread struct bpvm_aot_contexto* t_aot_contexto;
+struct bpvm_aot_contexto* bpvm_platform_aot_contexto(void) { return t_aot_contexto; }
+void bpvm_platform_aot_contexto_poner(struct bpvm_aot_contexto* c) { t_aot_contexto = c; }
+#endif
+
 /* ============================== Thread ===========================
  * ESP-IDF FreeRTOS es SMP (2 cores en el S3). xTaskCreatePinnedToCore
  * con tskNO_AFFINITY = sin pin (cualquier core). El stack va en BYTES. */

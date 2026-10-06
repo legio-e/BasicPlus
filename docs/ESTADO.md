@@ -1183,10 +1183,15 @@ la C6, la P4 y la Nucleo.
   apunta en la lista de hijos de su contenedor (BP, sin cerrojo); dos hilos creando en el MISMO contenedor a la vez la
   rompen —con dos runs, 400 creadas y 399 hijos—. No es la VM. La prueba, arreglada (cada pintor, en su `Panel`); lo de
   fondo, **para que decida Eduardo**: (A) un `Mutex` en `Container` (la propuesta) o (B) documentarlo.
+- **N1 en los micros** (el contexto de la native, un puntero por tarea: la Pico, el de FreeRTOS; la P4 y la S3, un
+  `__thread`), y con él las natives con dos runs en esas placas; compilan las nueve imágenes. `NatDosRuns` y
+  `GuiAnidadaGc`, a la tanda de V7 (44 pruebas); contra el simulado con dos runs, la de la GUI idéntica.
 - **Traspaso**: la P4 se queda con la imagen de `7c038943` y `vm.runs=2` en el ENV; en su `/app`, los dos ficheros de
   la prueba de la pantalla (`GuiP4DosRuns.mod` y `p4dos.shot`: borrarlos pide su OK). La Pico 2, como estaba (dos
-  núcleos, `vm.runs=2`). Lo siguiente: N1 en los micros (la Pico, los punteros por tarea de FreeRTOS; las ESP32, su
-  `__thread`), y entonces las natives con dos runs en las placas; y el arreglo del cuelgue, a la P4.
+  núcleos, `vm.runs=2`). **El lote que espera el OK de Eduardo**: la Pico 2 (la imagen de dos núcleos) y la P4 con N1 y
+  el arreglo del cuelgue —la tanda de V7 entera, `run_placa`, y en la P4 la GUI en la pantalla—; y en la P4, `log=1`
+  (para ver los viajes al run 0) y borrar sus dos ficheros. Pendiente de decidir: la carrera de la librería `Gui`
+  ((A) un `Mutex` en `Container`, la propuesta, o (B) documentarlo).
 - **Las natives con dos runs, pensado con Eduardo** (sin código): la native usa DOS pilas —la de C (la del run si es
   directa; la de su ejecutor si puede ceder) y la BP del hilo que la llamó—; dos natives a la vez ya pasan con un run
   (cada una con su ejecutor); con dos runs lo que falta es el contexto POR TAREA (hoy, un global en los micros), el

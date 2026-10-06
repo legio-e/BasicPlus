@@ -1942,6 +1942,11 @@ static void run_acabado(bpvm_t* vm, int rs, void* user) {
 
 void bpvm_repl_run_tarea(void* arg) {
     int id = (int) (intptr_t) arg;   /* 2b: el número de este run (0, 1…), el que la familia le dio al crearla */
+#if defined(BPVM_AOT_POR_TAREA)
+    /* V7/H12 (N1): el contexto de las natives que corra ESTE run, suyo y no el de todo el micro (bpvm_internal.h). */
+    static bpvm_aot_contexto_t s_contexto_run[2];
+    if (id >= 0 && id < 2) bpvm_platform_aot_contexto_poner(&s_contexto_run[id]);
+#endif
     /* NO VUELVE NUNCA: en FreeRTOS, una tarea que vuelve cuelga la placa (prvTaskExitError). Sin sus avisos —la familia
      * no llamó a `prepara`, o no pudo— se queda dormida y `viva` sigue a 0: el RUN de siempre. Tampoco escribe en el
      * log al nacer: nacería a la vez que el arranque (lo dice quien la crea). */
@@ -2138,13 +2143,15 @@ static void run_exited(long sesion, const char* estado, int codigo, unsigned lon
 
 /* V7/H12, etapa 2b — UN PROGRAMA CON UN SOLO RUN aunque haya dos (Eduardo, 5-oct: «de momento solamente 2 run
  * ejecutando código BP normal, sin AOT ni LVGL»): el depurador —su pausa congela el programa entero, y su estado es
- * de un hilo— y, mientras tanto, lo que no está preparado para dos: las natives (el contexto del AOT es global en los
- * micros) y SQLite (compilado sin hilos). La GUI ya va con dos: sus builtins sólo los ejecuta el run 0 (interp.c,
- * OP_CALL_BUILTIN; V7_IDEAS §H12 «LVGL con dos runs»). Y con uno, lo corre el run 0 (scheduler.c). `porque`, para el
- * log. */
+ * de un hilo— y, mientras tanto, lo que no está preparado para dos: SQLite (compilado sin hilos) y las natives en una
+ * imagen sin su contexto por tarea (N1; con él —el PC, la Pico, la P4, la S3—, las natives van con dos: V7_IDEAS §H12
+ * «Las natives con dos runs»). La GUI ya va con dos: sus builtins sólo los ejecuta el run 0 (interp.c, OP_CALL_BUILTIN;
+ * §«LVGL con dos runs»). Y con uno, lo corre el run 0 (scheduler.c). `porque`, para el log. */
 static int un_solo_run(const bpvm_t* vm, int depurando, const char** porque) {
     if (depurando)            { *porque = "el depurador"; return 1; }
-    if (bpvm_aot_count() > 0) { *porque = "natives";      return 1; }
+#if !BPVM_AOT_CONTEXTO_POR_TAREA
+    if (bpvm_aot_count() > 0) { *porque = "natives (esta imagen, sin su contexto por tarea)"; return 1; }
+#endif
     for (int i = 0; i < vm->module_count; i++) {
         const char* n = vm->modules[i].name;
         if (!strcmp(n, "SQLite")) { *porque = "SQLite"; return 1; }

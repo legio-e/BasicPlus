@@ -33,6 +33,10 @@ idf_build_set_property(COMPILE_OPTIONS "-DBPVM_GUI_PACK" APPEND)
 # V7/H12, etapas 0 y 1 (4-oct) — la tarea `run` (esp32/common/repl_esp32.c): el P4 fue la primera de la familia; desde
 # que pasó su puerta, encendida en todas por defecto. Para volver al RUN de antes en una placa:
 # idf_build_set_property(COMPILE_OPTIONS "-DBPVM_ESP32_RUN_TAREA=0" APPEND)
+# V7/H12 (N1) — el contexto de las natives, uno por TAREA (un `__thread` de 4 bytes: el IDF le da a cada tarea su zona
+# TLS; esp32/common/platform_esp32.c): con dos runs, dos natives a la vez no se pisan el suyo. Sólo en las de dos
+# núcleos (la P4 y la S3): las de uno van con un run (Eduardo).
+idf_build_set_property(COMPILE_OPTIONS "-DBPVM_AOT_POR_TAREA" APPEND)
 
 # G6 (RETIRADO en #338) — este override subía el buffer de PUT porque Gui.mod
 # (~24 KB) no cabía entero en el buffer del wire. Eso era ANTES del streaming: desde

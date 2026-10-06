@@ -53,7 +53,13 @@
 
 static BPVM_AOT_TLS bpvm_aot_fault_t g_aot_fault;
 
+/* V7/H12 (N1) — en un micro con BPVM_AOT_POR_TAREA, el de la tarea si puso uno (cada run y cada ejecutor); si no, el de
+ * siempre (bpvm_internal.h, bpvm_aot_contexto_t). */
 bpvm_aot_fault_t* bpvm_aot_fault_slot(void) {
+#if defined(BPVM_AOT_POR_TAREA)
+    bpvm_aot_contexto_t* c = bpvm_platform_aot_contexto();
+    if (c != NULL) return &c->fault;
+#endif
     return &g_aot_fault;
 }
 
@@ -63,6 +69,10 @@ bpvm_aot_fault_t* bpvm_aot_fault_slot(void) {
 static BPVM_AOT_TLS bpvm_aot_callctx_t g_aot_callctx;
 
 bpvm_aot_callctx_t* bpvm_aot_callctx(void) {
+#if defined(BPVM_AOT_POR_TAREA)
+    bpvm_aot_contexto_t* c = bpvm_platform_aot_contexto();
+    if (c != NULL) return &c->cc;
+#endif
     return &g_aot_callctx;
 }
 

@@ -109,6 +109,9 @@
 #define INCLUDE_vTaskDelay                      1
 #define INCLUDE_xTaskGetSchedulerState          1
 #define INCLUDE_xTaskGetCurrentTaskHandle       1
+/* V7/H12 (N1) — un puntero por tarea, el 0: el contexto de las natives de cada run y de cada ejecutor
+ * (platform_freertos.c, bpvm_platform_aot_contexto). 4 bytes más en cada TCB. */
+#define configNUM_THREAD_LOCAL_STORAGE_POINTERS 1
 #define INCLUDE_xTimerPendFunctionCall          1
 #if ( configNUMBER_OF_CORES > 1 )
 /* V7/H12, etapa 3.1, paso 5 — cerrar el ejecutor de una native con dos núcleos: esperar a que esté SUSPENDIDO (y fuera

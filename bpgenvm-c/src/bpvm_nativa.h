@@ -78,6 +78,12 @@ typedef struct bpvm_nativa {
     bpvm_platform_sem_handle_t    sem_nativa;   /* lo espera el ejecutor */
     bpvm_platform_sem_handle_t    sem_worker;   /* lo espera el intérprete */
     jmp_buf          fondo;        /* adónde salta el ejecutor si lo terminan parado a mitad de una native */
+#if defined(BPVM_AOT_POR_TAREA)
+    /* V7/H12 (N1): el contexto de las natives de ESTA tarea, el suyo (bpvm_internal.h): con dos runs, el global de las
+     * placas lo pisaría la native del otro run. Las vistas de arriba se siguen guardando y reponiendo (sobran, como en
+     * el PC). */
+    bpvm_aot_contexto_t contexto;
+#endif
 } bpvm_nativa_t;
 
 /* Lo que devuelven bpvm_nativa_llamar y bpvm_nativa_reanudar cuando la native se ha SUSPENDIDO: el hilo se queda

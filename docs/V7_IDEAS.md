@@ -5574,7 +5574,20 @@ perdió en silencio. La prueba, arreglada para lo que prueba (cada pintor, en su
 La propuesta: (A), porque el programador sólo comparte la pantalla —algo natural— y no tiene forma de saber que crear
 un control toca una lista interna de la librería («lo compartido por el programa, es del programador; el resto, nuestro»).
 
-**Lo que queda: N1 en los micros**, y entonces `un_solo_run` sin «natives» en las placas que lo tengan. La familia
+**N1 en los micros, hecho** (6-oct, madrugada; compilan las dos imágenes de la Pico, las cinco ESP y las dos STM32):
+un PUNTERO por tarea a su contexto (`bpvm_aot_contexto_t`: el límite de fallos y el contexto de la llamada), no el
+contexto entero en cada tarea —lo que costaría en todas, también en las del sistema—. Lo ponen las tareas que corren
+natives, cada run (`bpvm_repl_run_tarea`) y cada ejecutor (`ejecutor`), al empezar; las demás, sin puntero, usan el de
+siempre. La Pico (`BPVM_AOT_POR_TAREA`, en sus dos imágenes): el puntero por tarea de FreeRTOS, el 0
+(`configNUM_THREAD_LOCAL_STORAGE_POINTERS` 1: 4 bytes por TCB). La P4 y la S3 (las ESP32 de dos núcleos): un `__thread`
+de 4 bytes —el IDF le da a cada tarea su zona TLS en la pila (`uxInitialiseStackTLS`), y la imagen lo confirma:
+`t_aot_contexto` en `.flash.tbss`, al lado de `errno`—. La C3, la C5, la C6 y las STM32 (un núcleo, un run: Eduardo),
+sin él. Y `un_solo_run` deja de mandar a un run los programas con natives en las imágenes que lo tienen
+(`BPVM_AOT_CONTEXTO_POR_TAREA`: el PC, la Pico, la P4, la S3); SQLite y el depurador, con uno. Las vistas que el run y
+el ejecutor se guardan y reponen al pasarse el testigo sobran ahora, como en el PC, y se quedan. **En la placa, por
+probar** (con el OK de Eduardo): `NatDosRuns` y `GuiAnidadaGc`, a la tanda de V7 (`tools/tanda_v7.json`, 44
+pruebas); contra el micro simulado con dos runs, `GuiAnidadaGc` idéntica (las natives, saltadas: el simulado no ejecuta
+`.mdn`). La familia
 ESP32 tiene `__thread` de verdad (el IDF le da a cada tarea su zona TLS): basta encenderlo en su build (la STM32 no:
 su `__thread` es el emulado, `#472`). La Pico, con los punteros por tarea de FreeRTOS (hoy, 0). Las placas de un núcleo
 van con un run (Eduardo): no lo necesitan.

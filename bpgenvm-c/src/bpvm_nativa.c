@@ -20,6 +20,9 @@ static void pasar(bpvm_platform_sem_handle_t* al_otro, bpvm_platform_sem_handle_
  * MITAD de una native, salta aquí desde donde esperaba (bpvm_nativa_ceder), abandonando esos marcos. */
 static void ejecutor(void* arg) {
     bpvm_nativa_t* n = (bpvm_nativa_t*) arg;
+#if defined(BPVM_AOT_POR_TAREA)
+    bpvm_platform_aot_contexto_poner(&n->contexto);   /* V7/H12 (N1): el suyo, no el de todo el micro */
+#endif
     if (setjmp(n->fondo) == 0) {
         bpvm_platform_sem_take(&n->sem_nativa);          /* el primer encargo (o la orden de terminar) */
         while (!n->terminar) {
