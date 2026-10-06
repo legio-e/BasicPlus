@@ -5729,6 +5729,51 @@ ficheros de prueba, borrados (OK de Eduardo).
 **Lo que quedaba de H12** —el pack de la GUI con el cerrojo a las placas con pantalla, y el resto de placas una vez—,
 **hecho**. Para cerrar, Eduardo.
 
+#### Las medidas finales: uno y dos núcleos, la Pico 2 y la P4 (6-oct, tarde; con el OK de Eduardo)
+
+Eduardo: *«los tiempos finales de la Pico y la P4 con 1 y con 2 núcleos… no sé si algo ha cambiado desde entonces»*.
+Con las imágenes de `1558123c` (las del 5-oct eran anteriores a las natives con dos runs y a la GUI con dos runs): un
+hilo —`fib(26)`, mediana de 5; PrintBench, de 10— y DOS HILOS A LA VEZ —`ParaleloPico`, recompilado: cada carga dos
+veces en el `main` y en dos hilos; aquí, lo que tardan los dos trabajos de la mejor manera que tiene cada configuración
+(medianas de 3)—. «Un núcleo» es, en la Pico, la imagen de un núcleo (la de V6, grabada un momento y vuelta a la de
+dos), y en la P4 la vuelta atrás sin grabar (`vm.cores=1` y `vm.runs=1`: el FreeRTOS de dos núcleos, todas las tareas en
+el 0). Las claves del ENV, quitadas después: las dos placas, con lo de por defecto.
+
+**La Pico 2** (ms):
+
+| | un núcleo | dos, 1 run | dos, 2 runs |
+|---|---|---|---|
+| `fib(26)` (un hilo) | 2 866 | 2 918 (+1,8 %) | 3 108 (+8,4 %) |
+| PrintBench (un hilo) | 817 | 1 275 | 1 270 |
+| dos hilos: cálculo | 2 186 | 2 225 | **1 312 (×1,67)** |
+| dos hilos: arrays | 3 062 | 3 110 | **1 826 (×1,68)** |
+| dos hilos: objetos | 2 574 | 2 661 | **1 666 (×1,55)** |
+| dos hilos: cadenas | 1 233 | 1 318 | 1 483 (×0,83) |
+
+**La P4** (ms):
+
+| | un núcleo (`vm.cores=1`) | dos, 1 run | dos, 2 runs |
+|---|---|---|---|
+| `fib(26)` (un hilo) | 2 531 | 2 520 | 2 500 |
+| PrintBench (un hilo) | 20 534 | 20 545 | 20 373 |
+| dos hilos: cálculo | 1 957 | 1 949 | **974 (×2,01)** |
+| dos hilos: arrays | 2 840 | 2 829 | **1 433 (×1,98)** |
+| dos hilos: objetos | 2 543 | 2 532 | **1 288 (×1,97)** |
+| dos hilos: cadenas | 658 | 614 | **494 (×1,33)** |
+
+- **La ganancia con dos hilos, la del 5-oct en la Pico** (×1,67, ×1,67 y ×1,55) y **mejor en las cadenas** (de ×0,65 a
+  ×0,83: el arreglo de `mundo_cond`). **En la P4, el doble de verdad** (×2 en cálculo, arrays y objetos; ×1,33 en
+  cadenas): cada núcleo con su caché de instrucciones, y la PSRAM con su caché; en la Pico los dos núcleos comparten los
+  16 KB de la caché de la flash.
+- **Un programa de un hilo**: en la P4 no paga nada por el 2º núcleo ni por el 2º run; en la Pico, un 1,8 % por la
+  imagen de dos núcleos y un 8,4 % con dos runs.
+- **Una cifra que no cuadra, sin explicar**: PrintBench con la imagen de dos núcleos de la Pico, 1 270 ms hoy frente a
+  1 063 el 5-oct (+19 %), cuando con la de uno ha bajado (de 889 a 817). Mirado: lo de estos días no pasa por el camino de
+  `print` (el contexto de la native por tarea, N1, sólo se lee al llamar a una native, en el GC y en `Heap.compact`).
+  En la Pico PrintBench ya osciló un ±10 % entre imágenes por dónde cae el código en la caché de la flash (la A/B del
+  5-oct), pero eso no lo explica todo. A mirar con una A/B de las imágenes intermedias. En la P4, PrintBench lo marca la
+  UART del cable (~20,5 s), no la CPU.
+
 
 ## H8 — IDE y wire: el MAPA VERIFICADO (28-sep, para decidir el orden)
 

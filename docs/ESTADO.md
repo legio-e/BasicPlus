@@ -1176,6 +1176,11 @@ la C6, la P4 y la Nucleo.
   el `/app` de la P4, los tres ficheros de prueba de la pantalla, borrados (OK de Eduardo); quedan los programas de mis
   pruebas de resistencia y medida (`Run*`, `CalcBench`, `CarreraSinMutex`). **Lo que quedaba de H12, hecho: para cerrar
   (Eduardo).** Después, las SUELTAS, documentar, las pruebas finales y publicar.
+- **Las medidas finales** (Eduardo: *«los tiempos finales de la Pico y la P4 con 1 y con 2 núcleos»*; con su OK, la
+  imagen de un núcleo grabada un momento en la Pico y las claves del ENV, quitadas después): con dos hilos a la vez, la
+  Pico 2 ×1,55–1,68 —como el 5-oct— y las cadenas, de ×0,65 a ×0,83; **la P4, ×2**. Un hilo: en la P4, sin coste; en la
+  Pico, +1,8 % y +8,4 % con dos runs. Y una que no cuadra: PrintBench en la Pico de dos núcleos, +19 % desde el 5-oct, sin
+  explicar —`#665`, a SUELTAS— (`V7_IDEAS` §H12 «Las medidas finales»).
 
 ## 🧵 H12 (6-oct, mañana) — LOS DOS NÚCLEOS EN LA S3 Y LA P4, y LO DE POR DEFECTO EN V7
 
