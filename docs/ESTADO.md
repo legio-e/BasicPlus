@@ -1245,7 +1245,14 @@ la C6, la P4 y la Nucleo.
   por nombre con `base`) ponía esa carpeta en la global del proyecto un momento, con un programa en marcha: reproducido
   en el micro simulado —el programa vio su carpeta cambiada decenas de miles de veces en 300 preguntas—. Ahora la
   carpeta va como parámetro al resolvedor (`bpvm_entry_resolve_en`) y la global no se toca. `stat_base_smoke` en la
-  red (300 preguntas con el programa en marcha, «cambios: 0»), con su sabotaje rojo.
+  red (300 preguntas con el programa en marcha, «cambios: 0»), con su sabotaje rojo. (`817668c6`.)
+- **`#581`, CERRADA** (Eduardo conectó la C6 para la prueba que faltaba): `PinesSistema` en la C6 destapó que el 27
+  —el pad VDD_SPI, la ALIMENTACIÓN de la flash, un GPIO sólo con un eFuse quemado— salía «libre»: el IDF no lo reserva
+  y la tabla de `#574` sólo miraba lo reservado. Ahora el `chip_cfg.h` de la C3 (11), la C5 (19) y la C6 (27) dice el
+  pad y el arranque lee el eFuse. Grabada la C6 —sólo la app, con el OK de Eduardo—: los siete de la flash con su
+  error, `gpioCount` 22, y los packs donde estaban (DriverSpi y GuiMini cargados). La S3 y la C5 ya estaban hechas
+  con el lote de H12 (6-oct). **La C6 lleva ya la imagen de hoy** (`#656`, `#655`/`#652`, `#659`, `#657`, `#654` y
+  `#581`); **la C3 y la C5, al próximo lote**, con el resto de las placas.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

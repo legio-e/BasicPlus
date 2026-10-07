@@ -41,6 +41,10 @@
 #include "bpvm_neopixel.h"
 #endif
 #include "esp_private/esp_gpio_reserve.h"   /* #574: los pines que el IDF ya reservó (la flash, la PSRAM) */
+#ifdef CHIP_GPIO_VDD_SPI
+#include "esp_efuse.h"                      /* #581: ¿el pad VDD_SPI es un GPIO? Lo dice un eFuse (chip_cfg.h) */
+#include "esp_efuse_table.h"
+#endif
 #include "wire_v1.h"                        /* #574: los pines del cable del IDE */
 #include "esp_system.h"             /* paso 4 cierre — esp_reset_reason (causa de reset) */
 #include "esp_task_wdt.h"           /* cierre V3 — backend Wdt (Task Watchdog Timer) */
@@ -167,12 +171,23 @@ static void esp32_caps_init(void) {
      * cualquier driver de pines (main.c). Y los del cable del IDE, que el IDF no reserva: los dice su transporte
      * (decidido por Eduardo: «los pines del wire también»). Máscara 0 —para BP no están— y el motivo aparte. */
     const uint64_t del_wire = wire_v1_transport_pines();
+#ifdef CHIP_GPIO_VDD_SPI
+    /* #581 (7-oct) — y el pad VDD_SPI de la C3, la C5 y la C6 (chip_cfg.h): la ALIMENTACIÓN de la flash, un GPIO
+     * sólo con el eFuse VDD_SPI_AS_GPIO quemado. El IDF no lo reserva —no es un pin de datos—, y la tabla lo daba
+     * por libre: en la C6, un `Gpio.Pin(27, OUTPUT)` «salía libre» siendo la alimentación de la flash. Lo mira aquí
+     * el eFuse. */
+    const bool vdd_spi_es_gpio = esp_efuse_read_field_bit(ESP_EFUSE_VDD_SPI_AS_GPIO);
+#endif
     for (int g = 0; g < SOC_GPIO_PIN_COUNT; g++) {
         uint16_t m = 0;
         s_caps_adc_u[g] = -1; s_caps_adc_c[g] = -1;
         s_caps_sis[g] = 0;
         if (GPIO_IS_VALID_GPIO(g) && esp_gpio_is_reserved(1ULL << g)) {
             s_caps_sis[g] = BPVM_PIN_SIS_MEMORIA;
+#ifdef CHIP_GPIO_VDD_SPI
+        } else if (g == CHIP_GPIO_VDD_SPI && !vdd_spi_es_gpio) {
+            s_caps_sis[g] = BPVM_PIN_SIS_MEMORIA;     /* #581: la alimentación de la flash */
+#endif
         } else if (GPIO_IS_VALID_GPIO(g) && (del_wire & (1ULL << g))) {
             s_caps_sis[g] = BPVM_PIN_SIS_WIRE;
         } else if (GPIO_IS_VALID_GPIO(g)) {

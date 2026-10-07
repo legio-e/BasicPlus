@@ -86,4 +86,10 @@
 #include "board_mgr_esp32.h"   /* board_mgr_env() */
 #define CHIP_SD_REGISTRAR()  ((void) bpvm_sd_blk_registrar_desde_env(board_mgr_env()))
 
+/* #581 (7-oct) — EL PAD VDD_SPI: la ALIMENTACIÓN de la flash, que en el C6 es el GPIO27 (el IDF lo nombra así:
+ * `IO_MUX_GPIO27_REG` es el registro del pad VDD_SPI, en soc/io_mux_reg.h). Es un GPIO SÓLO con el eFuse
+ * VDD_SPI_AS_GPIO quemado; si no, para el programa no existe. El IDF no lo reserva —no es un pin de datos de la
+ * flash—: `esp32_caps_init` (gpio_esp32.c) lee el eFuse. */
+#define CHIP_GPIO_VDD_SPI  27
+
 #endif /* BPVM_CHIP_CFG_H */

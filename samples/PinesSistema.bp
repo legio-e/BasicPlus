@@ -1,7 +1,9 @@
 // PinesSistema.bp — #574 (V7/H4, 26-sep): los pines que usa el sistema ya no se le dan al programa. En la C6 la flash
-// va por los GPIO 24–30 (el 25 es su MISO) y el cable del IDE por el USB nativo (el 12 y el 13): la tabla los daba por
-// buenos y un Gpio.Pin(25, OUTPUT) le quitaba la flash al micro. Ahora cada uno da su error con nombre, y un pin libre
-// sigue libre. ⚠️ Sólo con una imagen que lleve #574: con una anterior, pedir el 25 cuelga la C6.
+// va por los GPIO 24–26 y 28–30 (el 25 es su MISO) y el cable del IDE por el USB nativo (el 12 y el 13): la tabla los
+// daba por buenos y un Gpio.Pin(25, OUTPUT) le quitaba la flash al micro. Ahora cada uno da su error con nombre, y un
+// pin libre sigue libre. ⚠️ Sólo con una imagen que lleve #574: con una anterior, pedir el 25 cuelga la C6.
+// #581 (7-oct): el 27 de la C6 es el pad VDD_SPI, la ALIMENTACIÓN de la flash —un GPIO sólo con un eFuse quemado—;
+// salía «libre». Ahora, como los de la flash (y el 11 de la C3 y el 19 de la C5, el mismo pad), salvo con el eFuse.
 module PinesSistema
   import Core
   import Gpio
@@ -36,6 +38,9 @@ module PinesSistema
     endwh
     prueba(12)
     prueba(13)
+    // #581: el pad VDD_SPI de la C3 (el 11) y de la C5 (el 19), como el 27 de la C6. En las demás, pines corrientes.
+    prueba(11)
+    prueba(19)
     prueba(2)
     // El RMT de la C6 tiene 2 canales de transmisión: la tercera tira no cabe.
     tira(2)

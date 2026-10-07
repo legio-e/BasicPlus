@@ -130,6 +130,7 @@ idf_component_register(
         esp_driver_rmt   # V7/H4: backend NeoPixel (WS2812) por RMT, en gpio_esp32.c
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
         esp_hw_support
+        efuse            # #581: el eFuse VDD_SPI_AS_GPIO, en gpio_esp32.c (CHIP_GPIO_VDD_SPI)
         esp_mm            # V6: esp_cache.h — el gate del .mdn AOT (el C5 es RISC-V)   # INFO: esp_mac.h (uniqueId desde efuse)
 )
 

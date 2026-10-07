@@ -70,4 +70,10 @@
 #include "bpvm_sd_placa.h"
 #define CHIP_SD_REGISTRAR()  bpvm_sd_placa_sin_sd("esta placa no tiene ranura de SD")
 
+/* #581 (7-oct) — EL PAD VDD_SPI: la ALIMENTACIÓN de la flash, que en el C3 es el GPIO11 (el IDF lo nombra así:
+ * `IO_MUX_GPIO11_REG` es el registro del pad VDD_SPI, en soc/io_mux_reg.h). Es un GPIO SÓLO con el eFuse
+ * VDD_SPI_AS_GPIO quemado; si no, para el programa no existe. El IDF no lo reserva —no es un pin de datos de la
+ * flash—: `esp32_caps_init` (gpio_esp32.c) lee el eFuse. */
+#define CHIP_GPIO_VDD_SPI  11
+
 #endif /* BPVM_CHIP_CFG_H */
