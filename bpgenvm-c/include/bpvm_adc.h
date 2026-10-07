@@ -41,6 +41,9 @@ void bpvm_adc_set_backend(const bpvm_adc_backend_t* backend);
  * devuelve un valor plausible: falla con ruido. */
 const bpvm_adc_backend_t* bpvm_adc_backend_host(void);
 
+/* V7 #659 — al fin de RUN (bpvm_destroy): la rampa del stub y el aviso de «sin backend», a cero. */
+void bpvm_adc_fin_de_run(void);
+
 int bpvm_adc_init_channel(int ch);
 int bpvm_adc_read_channel(int ch);
 

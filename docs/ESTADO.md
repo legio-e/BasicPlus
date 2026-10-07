@@ -34,8 +34,15 @@
 > resucitado cuyo evento no se inyecta termina por el sentinela (las dos VMs caían), y todo programa lleva `Core` (lo
 > trae el cargador a los `.mod` de antes, como los de V6) (`d3c8ab2d`). **`#664` cerrada**: en la VM-Java, una llamada
 > anidada de un builtin corría UN cuanto y abandonaba el resto (y el GC de otro worker, también); ahora sigue hasta que
-> el método vuelve y se aparca con el mundo parado, como el puente de la VM-C; `test-anidadalarga` en la red. Más
-> abajo, «🔧 SUELTAS (7-oct)».
+> el método vuelve y se aparca con el mundo parado, como el puente de la VM-C; `test-anidadalarga` en la red
+> (`95390da5`). **`#659` cerrada**: con dos runs, las trazas de bus del PC salían a trozos mezclados (10 de 10 pasadas):
+> ahora cada una, entera; la marca del heap descarrilado, de la tarea que reservó; y el ADC del stub y los avisos de un
+> `throw`, por RUN, no por proceso (dos llegaban al stdout). Más abajo, «🔧 SUELTAS (7-oct)». **Esperan una decisión de
+> Eduardo** (presentadas con su mecanismo y mi recomendación): `#657` (los builtins de fichero entero y los abiertos:
+> la SD, corrompida —el más urgente—), `#654` (el `STAT` con `base` en un RUN), `#663` (arreglar o quitar
+> `__guiInvokeByName`), la variante de `#577` (los getters de la tupla como funciones ocultas del módulo), `#592` (dónde
+> lee la native la marca del 2º temporizador: subir la ABI o un byte de la memoria reservada; o a V8), `#650` (qué es
+> «la misma versión»: los bytes o la interfaz) y `#578` (el estudio de si se puede); y `#623`, que lo piensa él.
 >
 > **6-oct** — H12. De madrugada, **las natives con dos runs** (Eduardo: *«unos cambios localizados»*): N1 a N4 en el
 > PC con `test-nat2runs` (`204b4217`), y al hacerlo un CUELGUE de la GUI con dos runs (el puente anidado no se aparcaba
@@ -1204,7 +1211,17 @@ la C6, la P4 y la Nucleo.
   sus tres sabotajes en rojo. `GuiAnidadaGc`: 472668 también en la VM-Java. La primera red, roja en la pasada MOD8:
   en MOD8 `__guiSlotOf` sólo ve las clases públicas (los marcadores son exports), en las dos VMs y de antes; la hija
   del sample, pública, y la diferencia, a `PUBLICAR.md` (la decisión de `--formato=8`). La segunda, verde: paridad 136
-  (MOD9, MOD8 y con dos workers), cápsula 59/59, pruebas de C 89/89, sombra 13/13, estrés y packs-abi.
+  (MOD9, MOD8 y con dos workers), cápsula 59/59, pruebas de C 89/89, sombra 13/13, estrés y packs-abi. (`95390da5`.)
+- **`#659`, CERRADA**, las tres partes, reproducida cada una antes de tocar: **(1)** con dos runs, las trazas de los
+  stubs de bus del PC salían a trozos y se mezclaban (`BusDosHilos`: 10 de 10 pasadas con líneas rotas): ahora se
+  componen y salen de un empujón (`bpvm_out_linea`); **(2)** la marca de la reserva que falló por el heap descarrilado,
+  de la tarea que reservó, no de la VM (con dos runs, el `throw` de otra se la llevaba); **(3)** lo que valía por
+  proceso, por RUN: los avisos de un `throw` (callaban pasado el quinto de la sesión) y el ADC del stub (en el micro
+  simulado, el segundo RUN leía otros valores y no avisaba de «sin backend»: eso es stdout). Pruebas nuevas:
+  `test-trazasbus`, `test-runtrasrun` y la quinta pasada de `test-heapdescarrilado`, cada una con su sabotaje. Las ocho
+  imágenes compilan. La red, verde salvo `test-blk`, que no ENLAZABA: enlaza `spi.c` suelta con los dobles de
+  `test/hal_stubs.c`, y les faltaba el `bpvm_out_linea` nuevo (también a `test-sd`, fuera de la red); el doble,
+  añadido, y las dos verdes.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

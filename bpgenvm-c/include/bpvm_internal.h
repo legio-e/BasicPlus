@@ -569,13 +569,17 @@ struct bpvm {
     /* V7 #494 (27-sep, Eduardo: ni avisar y seguir ni parar la VM — «una excepción») — EL HEAP
      * DESCARRILADO. `gc_descarrilo`: el recorrido de cabeceras del último GC no acabó en heap_next
      * (build_gc_valid_map); ese GC ni marca ni barre, porque con el mapa truncado barrer se lleva
-     * objetos vivos. `reserva_descarrilada`: la reserva que pidió ese GC falló por eso (devuelve 0,
-     * como sin memoria); bpvm_throw_runtime_error lo consume y lanza `heap_exc` —la prefabricada,
-     * construida en el prólogo del RUN como `oom_exc` y raíz del GC como ella— en vez de la de sin
-     * memoria. Espejo de miVM (gcDescarrilo / heapExc). */
+     * objetos vivos. La reserva que pidió ese GC falla por eso (devuelve 0, como sin memoria) y lo marca
+     * en SU tarea (`reserva_descarrilada`, en el contexto de la native: #659); bpvm_throw_runtime_error
+     * lo consume y lanza `heap_exc` —la prefabricada, construida en el prólogo del RUN como `oom_exc` y
+     * raíz del GC como ella— en vez de la de sin memoria. Espejo de miVM (gcDescarrilo / heapExc). */
     bpref_t   heap_exc;
     uint8_t   gc_descarrilo;
-    uint8_t   reserva_descarrilada;
+    /* V7 #659 (7-oct) — los avisos de un `throw` (builtin_throw e interp_throw_rt), los cinco primeros DE ESTE RUN. Eran
+     * `static`, de proceso: en una placa, pasado el quinto de la sesión ningún RUN decía nada; y con dos runs, el `++`
+     * perdía cuentas (ahora es atómico). */
+    int       avisos_throw;
+    int       avisos_throw_interp;
     int       gc_suspended;    /* 1 = GC no corre (migración a handles) */
 
     /* Módulos cargados. */
@@ -1409,6 +1413,12 @@ typedef struct {
      * pedido dentro de un ejecutor, le pasa el testigo al worker y corre en su pila. Va aquí porque esto ya es lo
      * que cada hilo ve como suyo (TLS en el PC; en las placas, la vista que se turnan el worker y la native). */
     struct bpvm_nativa* ejecutor;
+    /* V7 #659 (7-oct) — LA RESERVA QUE FALLÓ POR EL HEAP DESCARRILADO (#494), de ESTA tarea. Era una marca de la VM, y
+     * con dos runs la consumía el `throw` del otro: le llegaba la excepción del heap descarrilado a quien no reservó, y
+     * a quien reservó, la de sin memoria. La reserva que falla y el `throw` que la sigue van en la misma tarea, sin
+     * ceder entre medias: aquí cada una tiene la suya. Sólo vale con el heap de ESTE RUN descarrilado
+     * (`vm->gc_descarrilo`, que se borra al empezar cada RUN): una que se quedara sin consumir no se cuela en otro. */
+    uint8_t        reserva_descarrilada;
 } bpvm_aot_callctx_t;
 
 /* Contexto AOT del worker actual (TLS en host). */

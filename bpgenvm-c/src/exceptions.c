@@ -223,11 +223,13 @@ const char* bpvm_runtime_error(const bpvm_t* vm) {
 /* V7 #494 — si la última reserva falló porque el recorrido del heap se descarriló, la excepción es la
  * PREFABRICADA del heap descarrilado —reservar ya no es seguro—, sea cual sea el mensaje con que se pida (casi
  * siempre el de sin memoria, que es lo que dicen los que reciben un 0 de bpvm_heap_alloc). Consume la marca.
- * bpref_null() si no toca. Espejo de miVM, donde heapAlloc la lanza directamente. */
+ * bpref_null() si no toca. Espejo de miVM, donde heapAlloc la lanza directamente. V7 #659: la marca es de la TAREA que
+ * reservó (bpvm_internal.h, bpvm_aot_callctx_t): con dos runs, el `throw` de otro ya no se la lleva. */
 static bpref_t exc_heap_descarrilado(bpvm_t* vm) {
-    if (!vm->reserva_descarrilada) return bpref_null();
-    vm->reserva_descarrilada = 0;
-    if (vm->heap_exc.v == 0u) return bpref_null();
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    if (!cc->reserva_descarrilada) return bpref_null();
+    cc->reserva_descarrilada = 0;
+    if (!vm->gc_descarrilo || vm->heap_exc.v == 0u) return bpref_null();   /* una de otro RUN, sin consumir: no vale */
     /* (V7/H12, 2b: aquí se fijaba también el error del programa; ya no —puede atraparse—: si no se atrapa, lo fija el
      * camino de «no atrapada», con su clase y este mismo mensaje) */
     return vm->heap_exc;

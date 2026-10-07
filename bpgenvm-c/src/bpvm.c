@@ -12,6 +12,7 @@
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
 #include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
 #include "bpvm_gpio.h"    /* V7/H4: el estado de los pines se limpia al fin de RUN */
+#include "bpvm_adc.h"     /* V7 #659: y el del ADC */
 #include "bpvm_bus.h"     /* V7/H6.c G4.a1: y los buses del programa se sueltan */
 #include "bpvm_spi.h"
 #include "bpvm_i2c.h"
@@ -1571,7 +1572,7 @@ bpvm_status_t bpvm_programa_preparar(bpvm_t* vm) {
      * que miVM: las dos VMs dejan el heap igual. */
     vm->heap_exc.v = 0u;
     vm->gc_descarrilo = 0;
-    vm->reserva_descarrilada = 0;
+    bpvm_aot_callctx()->reserva_descarrilada = 0;   /* #659: la de esta tarea (la de las demás, sin el heap descarrilado, no vale) */
     vm->gc_colectas = 0;           /* V7 (28-sep): Heap.getCollections cuenta las de ESTE RUN */
     {
         vm->prefabricando_oom = 1;
@@ -1787,6 +1788,7 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_nativa_liberar_todas(vm);
     bpvm_files_fin_de_run(vm);      /* V7/H3 (#491): lo primero, con la memoria y la tabla de handles vivas */
     bpvm_gpio_estado_reset();       /* V7/H4 (#479): los pines vuelven a libres para el siguiente RUN */
+    bpvm_adc_fin_de_run();          /* V7 #659: y el ADC del stub, a cero (la rampa, el aviso de «sin backend») */
     bpvm_bus_fin_de_run(cerrar_bus);   /* V7/H6.c G4.a1: y los buses que sólo usaba el programa, se cierran */
     apagar_pack_en_ejecucion(vm);   /* V7/H2 (#493): el overlay no puede apuntar a un vm muerto */
     /* #339 — a una local: la estructura del vm se libera aquí abajo y el barrido

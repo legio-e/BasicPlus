@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -498,7 +498,8 @@ test-tablasim: $(LIBOBJ)
 
 # V7 #494 (27-sep) — el HEAP DESCARRILADO es UNA excepcion (decision de Eduardo): un gancho de depuracion
 # estropea la cabecera del primer bloque y el GC siguiente no barre; la reserva que lo pidio lanza la
-# prefabricada. Con su control (sin estropear). Ver test/test_heapdescarrilado.c.
+# prefabricada. Con su control (sin estropear). Ver test/test_heapdescarrilado.c. Y V7 #659 (7-oct): la marca de esa
+# reserva es de la TAREA que reservó —con dos runs, el `throw` de otra se la llevaba—: la quinta pasada, dos tareas.
 HEAPD_BIN = build/test_heapdescarrilado.exe
 test-heapdescarrilado: $(LIBOBJ)
 	@mkdir -p build
@@ -1432,6 +1433,40 @@ test-anidadalarga: $(BIN)
 	   [ "$$pj" = "$$p1" ] || { echo "  la VM-Java dijo otra cosa:"; printf '%s\n' "$$pj" | sed 's/^/    /'; }; \
 	   exit 1; \
 	 fi
+
+# #659 (7-oct) — UNA TRAZA DE BUS ES UNA LÍNEA, también con dos runs: el stub del PC escribía cada traza a trozos (un
+# bpvm_out por byte), y con dos hilos en dos buses las piezas de una línea se colaban entre las de otra en el stdout —el
+# oráculo de la paridad— (10 de 10 pasadas con líneas mezcladas). BusDosHilos (también en la paridad: tres hilos, SPI,
+# I2C y UART, las cinco trazas de varias piezas): CINCO pasadas con dos runs, y todas, ordenadas, lo de un run. Una sola
+# pasada con el arreglo quitado sale bien 1 de cada 20 veces: con cinco, el sabotaje no se escapa.
+test-trazasbus: $(BIN)
+	$(call fixture,BusDosHilos)
+	$(call stdlibdep,Core Spi I2c Uart Gpio Machine)
+	@echo "--- #659 las trazas de bus, enteras con dos runs (esperado: cinco pasadas con dos runs, ordenadas, iguales a la de un run) ---"
+	@ref=$$(cd samples && timeout 60 ../$(BIN) BusDosHilos.mod 2>/dev/null | grep -E '^\[(spi|i2c|uart)\]' | sort); \
+	 n=$$(printf '%s\n' "$$ref" | grep -c ''); malas=0; \
+	 for i in 1 2 3 4 5; do \
+	   o=$$(cd samples && timeout 60 ../$(BIN) --smp=2 BusDosHilos.mod 2>/dev/null | grep -E '^\[(spi|i2c|uart)\]' | sort); \
+	   [ "$$o" = "$$ref" ] || malas=$$((malas+1)); \
+	 done; \
+	 if [ $$n -ge 300 ] && [ $$malas -eq 0 ]; then \
+	   echo "  $$n trazas, enteras en las cinco pasadas con dos runs"; echo "PASS test-trazasbus"; \
+	 else \
+	   echo "FAIL test-trazasbus ($$n trazas con un run; $$malas de 5 pasadas con dos runs, distintas)"; exit 1; \
+	 fi
+
+# #659 (7-oct) — UN RUN TRAS OTRO EMPIEZA DE CERO: en una placa o en el micro simulado un proceso corre un RUN tras otro,
+# y valían por PROCESO la rampa del ADC del stub (el segundo RUN leía otros valores; la de la VM-Java empieza con cada
+# VM), el aviso de «sin backend de ADC» (sólo en el primero) y los avisos de un `throw` (los cinco primeros de toda la
+# sesión). RunTrasRun, dos veces en el mismo proceso: lo mismo, y los avisos en las dos. Ver test/test_runtrasrun.c.
+RUNTRAS_BIN = build/test_runtrasrun.exe
+test-runtrasrun: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,RunTrasRun)
+	$(call stdlibdep,Core Adc)
+	$(CC) $(CFLAGS) -Isrc test/test_runtrasrun.c $(LIBOBJ) -o $(RUNTRAS_BIN) $(LDFLAGS)
+	@echo "--- #659 un RUN tras otro empieza de cero (esperado: los seis 'ok' y la linea OK) ---"
+	cd samples && ../$(RUNTRAS_BIN) RunTrasRun.mod
 
 # #653 (4-oct) — EL LOG CON DOS ESCRITORES: mirar si la línea cabe y copiarla no se pueden separar (la sección crítica
 # de la cintura). Dos hilos escriben sin parar en una región de 512 B con una guarda detrás: con la sección, intacta;

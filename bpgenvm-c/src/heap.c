@@ -1266,7 +1266,7 @@ int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc) {
     }
     if (r == 0 && !vm->gc_suspended) {   /* con el GC apagado, nada: apagado es apagado (#355) */
         bpvm_gc_cuerpo(vm);
-        if (vm->gc_descarrilo) { vm->reserva_descarrilada = 1; r = 1; }   /* #494: sin recorrido fiable, no */
+        if (vm->gc_descarrilo) { bpvm_aot_callctx()->reserva_descarrilada = 1; r = 1; }   /* #494: sin recorrido fiable, no (#659: la marca, de la tarea) */
         else compactar(vm);
     }
     stw_seguir(vm);
@@ -1545,8 +1545,8 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
                       (int)((long) antes - (long) vm->heap_next),
                       (unsigned) vm->gc_bump_threshold,
                       (unsigned) vm->heap_start, (unsigned) vm->heap_top);
-            if (vm->gc_descarrilo) {   /* V7 #494: esta reserva lanza la del heap descarrilado */
-                vm->reserva_descarrilada = 1;
+            if (vm->gc_descarrilo) {   /* V7 #494: esta reserva lanza la del heap descarrilado (#659: la marca, de la tarea) */
+                bpvm_aot_callctx()->reserva_descarrilada = 1;
                 return 0;
             }
         }
@@ -1558,8 +1558,8 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
     if (addr == 0) {
         /* Sin sitio en free-list ni bump: STW GC y reintentar. */
         gc_stw(vm);
-        if (vm->gc_descarrilo) {   /* V7 #494: no hay reintento; la del heap descarrilado */
-            vm->reserva_descarrilada = 1;
+        if (vm->gc_descarrilo) {   /* V7 #494: no hay reintento; la del heap descarrilado (#659: la marca, de la tarea) */
+            bpvm_aot_callctx()->reserva_descarrilada = 1;
             return 0;
         }
         /* V7/H7 #610 — la tabla, otra vez: gc_stw soltó el cerrojo mientras esperaba, y otros workers pueden haberse

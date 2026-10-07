@@ -44,6 +44,19 @@ struct bpvm;
 /** Traza de fachada: sale por el MISMO camino que el `print` del programa. */
 void bpvm_out(const char* fmt, ...);
 
+/* ─── V7 #659 (7-oct) — UNA TRAZA EN VARIAS PIEZAS SALE ENTERA ──────────────────────────────────────────────
+ * Los stubs del PC (uart, spi, i2c) escriben su línea pieza a pieza —un byte del write cada vez—, y cada pieza era un
+ * bpvm_out: con dos hilos en dos buses (dos runs, o `--smp`), las piezas de una línea se colaban entre las de la otra
+ * en el stdout, que es el oráculo de la paridad (la VM-Java escribe cada línea de una vez). Ahora se componen en una
+ * `bpvm_out_linea_t` y salen de un empujón, por el camino de bpvm_out. La línea crece en el heap de la plataforma; sin
+ * memoria, lo compuesto sale ya y lo demás a trozos, como antes. */
+typedef struct { char* p; size_t n, cap; } bpvm_out_linea_t;
+#define BPVM_OUT_LINEA_VACIA { NULL, 0u, 0u }
+/** Una pieza más de la línea (formato de printf; una pieza, hasta 127 caracteres). */
+void bpvm_out_linea(bpvm_out_linea_t* l, const char* fmt, ...);
+/** La línea entera, de un empujón; y su memoria, de vuelta. */
+void bpvm_out_linea_fin(bpvm_out_linea_t* l);
+
 /** La fija `bpvm_init` y la borra `bpvm_destroy`. No la llames desde otro sitio. */
 void bpvm_out_set_vm(struct bpvm* vm);
 

@@ -569,9 +569,9 @@ static const char* recurso_no_esta(const char* path) {
 }
 
 static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
-    static int avisos = 0;
-    int hablar = (avisos < 5);
-    if (hablar) { avisos++; bpvm_diag("[bpvm] throw: \"%s\"", msg ? msg : ""); }
+    /* V7 #659: los cinco primeros de ESTE RUN (era un `static`, de proceso), sin perder cuentas con dos runs. */
+    int hablar = vm->avisos_throw < 5 && __atomic_fetch_add(&vm->avisos_throw, 1, __ATOMIC_RELAXED) < 5;
+    if (hablar) bpvm_diag("[bpvm] throw: \"%s\"", msg ? msg : "");
 
     bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
     if (bpref_is_null(ref)) {

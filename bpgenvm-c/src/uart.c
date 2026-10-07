@@ -143,18 +143,20 @@ int bpvm_uart_write(int bus, const uint8_t* data, size_t n) {
     if (g_backend && g_backend->write) {
         return g_backend->write(bus, data, n);
     }
-    bpvm_out("[uart] write bus=%d bytes=[", bus);
-    for (size_t i = 0; i < n; i++) bpvm_out("%s%02X", i ? " " : "", data[i]);
-    bpvm_out("] (\"");
+    bpvm_out_linea_t l = BPVM_OUT_LINEA_VACIA;   /* #659: la línea, entera */
+    bpvm_out_linea(&l, "[uart] write bus=%d bytes=[", bus);
+    for (size_t i = 0; i < n; i++) bpvm_out_linea(&l, "%s%02X", i ? " " : "", data[i]);
+    bpvm_out_linea(&l, "] (\"");
     for (size_t i = 0; i < n; i++) {
         char c = (char) data[i];
-        bpvm_out("%c", (c >= 32 && c < 127) ? c : '.');   /* #480 - NO putchar: ese escribe
+        bpvm_out_linea(&l, "%c", (c >= 32 && c < 127) ? c : '.');   /* #480 - NO putchar: ese escribe
                                                     * al FILE de C y se sale del sumidero de
                                                     * la VM, asi que el payload salia DESORDENADO
                                                     * (aparecia al principio de stdout) y el
                                                     * preview quedaba vacio. */
     }
-    bpvm_out("\")\n");
+    bpvm_out_linea(&l, "\")\n");
+    bpvm_out_linea_fin(&l);
     return (int) n;
 }
 

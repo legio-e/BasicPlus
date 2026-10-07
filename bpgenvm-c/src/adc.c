@@ -28,6 +28,8 @@ static const bpvm_adc_backend_t* g_backend = NULL;
  * estatico. La formula es la MISMA que miVM (VirtualMachine.java, ADC_*): si se
  * tocara una sin la otra, la paridad dual-VM se rompe. */
 static int g_stub_counter = 0;
+/* El aviso de «sin backend», una vez por RUN (lo borra bpvm_adc_fin_de_run). */
+static int s_avisado_sin_backend = 0;
 
 void bpvm_adc_set_backend(const bpvm_adc_backend_t* backend) {
     g_backend = backend;
@@ -64,14 +66,21 @@ static const bpvm_adc_backend_t s_backend_host = {
 
 const bpvm_adc_backend_t* bpvm_adc_backend_host(void) { return &s_backend_host; }
 
+/* V7 #659 (7-oct) — lo de ESTE RUN, a cero (bpvm_destroy, como los pines): la rampa del stub —la de miVM empieza con
+ * cada VM— y el aviso de «sin backend». Valían por PROCESO: en el micro simulado, o en una placa, un RUN tras otro, el
+ * segundo leía otros valores y no avisaba. */
+void bpvm_adc_fin_de_run(void) {
+    g_stub_counter = 0;
+    s_avisado_sin_backend = 0;
+}
+
 /* --- y la ausencia de backend, que ya NO devuelve un numero plausible ----- */
 /* ⚠️ El mensaje CABE en el buffer de `bpvm_out` (256 B): el primer intento
  * llevaba cuatro lineas y llegaba TRUNCADO a media palabra por el wire. Un aviso
  * cortado es peor que uno corto. */
 static int sin_backend(const char* que) {
-    static int avisado = 0;
-    if (!avisado) {
-        avisado = 1;
+    if (!s_avisado_sin_backend) {
+        s_avisado_sin_backend = 1;
         bpvm_out("[adc] %s: esta placa NO REGISTRA BACKEND DE ADC.\n"
                "      No es que la lectura sea 0: es que no hay de donde leerla.\n",
                que);

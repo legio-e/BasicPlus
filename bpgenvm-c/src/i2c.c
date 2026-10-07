@@ -56,9 +56,11 @@ static int crudo_write(int bus, int addr, const uint8_t* data, size_t n) {
     if (g_backend && g_backend->write) {
         return g_backend->write(bus, addr, data, n);
     }
-    bpvm_out("[i2c] write bus=%d addr=0x%02X bytes=[", bus, addr);
-    for (size_t i = 0; i < n; i++) bpvm_out("%s%02X", i ? " " : "", data[i]);
-    bpvm_out("]\n");
+    bpvm_out_linea_t l = BPVM_OUT_LINEA_VACIA;   /* #659: la línea, entera */
+    bpvm_out_linea(&l, "[i2c] write bus=%d addr=0x%02X bytes=[", bus, addr);
+    for (size_t i = 0; i < n; i++) bpvm_out_linea(&l, "%s%02X", i ? " " : "", data[i]);
+    bpvm_out_linea(&l, "]\n");
+    bpvm_out_linea_fin(&l);
     return (int) n;
 }
 
@@ -117,19 +119,21 @@ static int por_mensajes(int bus, int addr, const bpvm_i2c_msg_t* m, int nm) {
 static int stub_transaccion(int bus, int addr, const bpvm_i2c_msg_t* m, int nm) {
     int i, lee = 0;
     uint32_t j;
-    bpvm_out("[i2c] transaction bus=%d addr=0x%02X", bus, addr);
+    bpvm_out_linea_t l = BPVM_OUT_LINEA_VACIA;   /* #659: la línea, entera */
+    bpvm_out_linea(&l, "[i2c] transaction bus=%d addr=0x%02X", bus, addr);
     for (i = 0; i < nm; i++) {
         if (m[i].lee) {
             for (j = 0; j < m[i].n; j++) m[i].buf[j] = 0;
-            bpvm_out(" read=%u", (unsigned) m[i].n);
+            bpvm_out_linea(&l, " read=%u", (unsigned) m[i].n);
             lee = 1;
         } else {
-            bpvm_out(" write=[");
-            for (j = 0; j < m[i].n; j++) bpvm_out("%s%02X", j ? " " : "", m[i].buf[j]);
-            bpvm_out("]");
+            bpvm_out_linea(&l, " write=[");
+            for (j = 0; j < m[i].n; j++) bpvm_out_linea(&l, "%s%02X", j ? " " : "", m[i].buf[j]);
+            bpvm_out_linea(&l, "]");
         }
     }
-    bpvm_out(lee ? " (sim → ceros)\n" : "\n");
+    bpvm_out_linea(&l, "%s", lee ? " (sim → ceros)\n" : "\n");
+    bpvm_out_linea_fin(&l);
     return 0;
 }
 

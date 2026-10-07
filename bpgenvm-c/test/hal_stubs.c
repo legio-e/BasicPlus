@@ -12,6 +12,12 @@
 void bpvm_out(const char* fmt, ...)  { va_list ap; va_start(ap, fmt); vprintf(fmt, ap); va_end(ap); }
 void bpvm_diag(const char* fmt, ...) { va_list ap; va_start(ap, fmt); printf("[diag] "); vprintf(fmt, ap); printf("\n"); va_end(ap); }
 
+/* V7 #659 — la traza en varias piezas (bpvm_out.h), también de interp.c: estos tests son de UN hilo, así que cada
+ * pieza sale en el acto, como la de bpvm_out. */
+#include "bpvm_out.h"
+void bpvm_out_linea(bpvm_out_linea_t* l, const char* fmt, ...) { va_list ap; (void) l; va_start(ap, fmt); vprintf(fmt, ap); va_end(ap); }
+void bpvm_out_linea_fin(bpvm_out_linea_t* l) { (void) l; }
+
 /* V7/H6.c G4.a2 — el árbitro de los buses usa el mutex y la condvar de la
  * plataforma. Estos tests son de UN hilo y tapan el reloj a cero (ver test_sd.c),
  * así que no enlazan la plataforma de verdad: los dobles no bloquean nada y la

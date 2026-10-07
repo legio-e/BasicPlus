@@ -138,6 +138,11 @@ static bpvm_t* s_out_vm = NULL;
 
 void bpvm_out_set_vm(bpvm_t* vm) { s_out_vm = vm; }
 
+static void out_texto(const char* s, size_t len) {
+    if (s_out_vm) emit_text(s_out_vm, s, len);
+    else          fwrite(s, 1, len, stdout);   /* fachada suelta en una herramienta */
+}
+
 void bpvm_out(const char* fmt, ...) {
     char buf[256];
     va_list ap;
@@ -145,9 +150,42 @@ void bpvm_out(const char* fmt, ...) {
     int n = vsnprintf(buf, sizeof(buf), fmt, ap);
     va_end(ap);
     if (n <= 0) return;
+    out_texto(buf, ((size_t) n < sizeof(buf)) ? (size_t) n : sizeof(buf) - 1);
+}
+
+/* V7 #659 — una traza en varias piezas, compuesta y de UN empujón (el porqué, en bpvm_out.h). */
+void bpvm_out_linea(bpvm_out_linea_t* l, const char* fmt, ...) {
+    char buf[128];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    if (n <= 0) return;
     size_t len = ((size_t) n < sizeof(buf)) ? (size_t) n : sizeof(buf) - 1;
-    if (s_out_vm) emit_text(s_out_vm, buf, len);
-    else          fwrite(buf, 1, len, stdout);   /* fachada suelta en una herramienta */
+    if (l->n + len > l->cap) {
+        size_t cap = l->cap ? l->cap : 128u;
+        while (cap < l->n + len) cap *= 2u;
+        char* p = (char*) bpvm_malloc(cap);
+        if (!p) {   /* sin memoria: lo compuesto sale ya, y esta pieza detrás —a trozos, como antes— */
+            bpvm_out_linea_fin(l);
+            out_texto(buf, len);
+            return;
+        }
+        if (l->n) memcpy(p, l->p, l->n);
+        bpvm_free(l->p);
+        l->p = p;
+        l->cap = cap;
+    }
+    memcpy(l->p + l->n, buf, len);
+    l->n += len;
+}
+
+void bpvm_out_linea_fin(bpvm_out_linea_t* l) {
+    if (l->n) out_texto(l->p, l->n);
+    bpvm_free(l->p);
+    l->p = NULL;
+    l->n = 0u;
+    l->cap = 0u;
 }
 
 /* V7/H7 #600 — los números: con salto, la línea se cierra con ellos (bpvm_linea_fin); sin él, son una pieza. */
@@ -523,9 +561,10 @@ static int interp_throw_rt(bpvm_t* vm, bpvm_thread_t* tc,
      * Solo podia significar una cosa — el throw no venia de un builtin sino de
      * AQUI (el NEWARRAY del __strconcat, por ejemplo), y yo habia instrumentado
      * un solo camino de los dos. Media hora de teorias por un hueco de traza. */
-    static int avisos = 0;
-    int hablar = (avisos < 5);
-    if (hablar) { avisos++; bpvm_diag("[bpvm] throw (interp): \"%s\"", msg ? msg : ""); }
+    /* V7 #659: los cinco primeros de ESTE RUN (era un `static`, de proceso), sin perder cuentas con dos runs. */
+    int hablar = vm->avisos_throw_interp < 5
+                 && __atomic_fetch_add(&vm->avisos_throw_interp, 1, __ATOMIC_RELAXED) < 5;
+    if (hablar) bpvm_diag("[bpvm] throw (interp): \"%s\"", msg ? msg : "");
 
     tc->sp = *sp; tc->bp = *bp; tc->pc = *pc; tc->cs = *cs;
     bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
