@@ -226,7 +226,15 @@ int bpvm_event_drain_one(bpvm_t* vm, bpvm_thread_t* tc) {
          * muerto dejaría el presupuesto intacto y el thread volvería a
          * resucitar por un evento que ya no está. */
         if (tc->ev_post_mortem > 0) tc->ev_post_mortem--;
-        return inject(vm, tc, &copy);
+        int ok = inject(vm, tc, &copy);
+        /* #655 (7-oct) — UN RESUCITADO CUYO EVENTO NO SE PUEDE INYECTAR (el receptor murió entre el raise y el drenaje):
+         * se le resucitó SÓLO para saldarlo, y su pc apunta a DESPUÉS de su final; el planificador le daba el cuanto
+         * igual y corría desde ahí —un hilo que acabó en run() ejecutaba el OP_NATIVE_RETURN de pc=1 y el programa se
+         * paraba con NATIVE_RETURN—. Ahora va al sentinela de fin de hilo, la misma vuelta que un handler post-mortem
+         * que acaba bien: termina por el camino de siempre (y si aún debe otro evento, otra resurrección). Espejo de
+         * drainOneEvent (miVM). */
+        if (!ok && tc->ev_post_mortem >= 0) tc->pc = BPVM_SENTINEL_THREAD_EXIT_ADDR;
+        return ok;
     }
     return 0;
 }

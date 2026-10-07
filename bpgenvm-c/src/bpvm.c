@@ -650,6 +650,7 @@ static int mismo_contenido(const char* a, uint32_t asz, const char* b, uint32_t 
 typedef struct {
     uint8_t ristra;   /* 0: los imports del módulo `idx`; 1: los recién cargados, desde `idx` */
     uint8_t idx;      /* < BPVM_MAX_MODULES */
+    uint8_t core;     /* #652: el del módulo raíz de un programa —acabados sus imports, `Core` si aún no está— */
     int     k, n;     /* los imports: el siguiente y cuántos (`n`, al empezar el marco: si cargamos un dep,
                        * vm->modules crece pero el mod actual no muta) */
 } dd_marco_t;
@@ -663,15 +664,26 @@ static int dd_empuja(bpvm_t* vm, dd_marco_t* pila, int* sp, int ristra, int idx)
     dd_marco_t* f = &pila[(*sp)++];
     f->ristra = (uint8_t) ristra;
     f->idx    = (uint8_t) idx;
+    f->core   = 0u;
     f->k      = 0;
     f->n      = ristra ? 0 : vm->modules[idx].import_count;
     return 0;
 }
 
-static bpvm_status_t discover_deps(bpvm_t* vm, int raiz, const char* search_dir) {
+/* #652 (7-oct) — «NO PUEDE HABER PROGRAMAS SIN CORE» (Eduardo, 4-oct). Un módulo de hoy lo arrastra siempre (el
+ * compilador pone `import Core` en todo módulo desde H1, y su __init llama al de Core), pero uno de antes no: los de la
+ * cápsula de V6 que no usan nada de él —`Hello.mod`— se cargaban SIN Core (las dos VMs: «enlace: 1 modulos»), sin
+ * RuntimeError con el que construir una excepción («OOM sin prefabricar»). Con `con_core`, el marco del módulo raíz de
+ * un programa, acabados sus imports, carga `Core` si aún no está: por el MISMO camino que un import (el pack en
+ * ejecución, /app, /lib, la zona), y sin la norma de #500 —el raíz no se compiló contra él—. No se llama a su __init:
+ * Core no tiene globales que inicializar (si algún día las tiene, habrá que llamarlo aquí). Espejo de asegurarCore
+ * (miVM). La IMPORTACIÓN no se añade a la tabla del módulo: esa lista ES su tabla externa, y el enlace escribe una
+ * dirección por entrada. */
+static bpvm_status_t discover_deps(bpvm_t* vm, int raiz, const char* search_dir, int con_core) {
     dd_marco_t pila[DD_MARCOS];
     int sp = 0;
     if (dd_empuja(vm, pila, &sp, 0, raiz) != 0) return BPVM_ERR_OOM;
+    pila[0].core = (uint8_t) (con_core ? 1 : 0);
     while (sp > 0) {
         dd_marco_t* t = &pila[sp - 1];
         if (t->ristra) {   /* el `for (j = desde; j < vm->module_count; j++)` de antes: el tope, en CADA vuelta */
@@ -680,10 +692,20 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int raiz, const char* search_dir)
             if (dd_empuja(vm, pila, &sp, 0, j) != 0) return BPVM_ERR_OOM;
             continue;
         }
-        if (t->k >= t->n) { sp--; continue; }
+        int forzado = 0;                        /* #652: el Core que el programa no trae */
+        const char* imp;
+        if (t->k < t->n) {
+            imp = vm->modules[t->idx].imports[t->k++];
+        } else if (t->core) {
+            t->core = 0u;
+            if (module_index(vm, "", "Core") >= 0) continue;
+            imp = "Core.__init";
+            forzado = 1;
+        } else {
+            sp--;
+            continue;
+        }
         int mod_idx = t->idx;                   /* el importador: el parámetro de la versión recursiva */
-        bpvm_module_t* m = &vm->modules[mod_idx];
-        const char* imp = m->imports[t->k++];
         if (!imp || !imp[0]) continue;
         char lib[64], mod[64];
         derive_owner(imp, lib, sizeof(lib), mod, sizeof(mod));
@@ -696,7 +718,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int raiz, const char* search_dir)
             if (ya >= 0) {
                 /* V7/H2 (#500) — también cuando ya estaba cargada (otro importador
                  * la trajo): cada importador exige lo suyo. */
-                bpvm_status_t nr = comprobar_norma(vm, &vm->modules[mod_idx], canon, &vm->modules[ya]);
+                bpvm_status_t nr = forzado ? BPVM_OK : comprobar_norma(vm, &vm->modules[mod_idx], canon, &vm->modules[ya]);
                 if (nr != BPVM_OK) return nr;
                 continue;
             }
@@ -755,7 +777,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int raiz, const char* search_dir)
                 {
                     int ya = module_index(vm, lib, mod);
                     if (ya >= 0) {
-                        bpvm_status_t nr = comprobar_norma(vm, &vm->modules[mod_idx], canon, &vm->modules[ya]);
+                        bpvm_status_t nr = forzado ? BPVM_OK : comprobar_norma(vm, &vm->modules[mod_idx], canon, &vm->modules[ya]);
                         if (nr != BPVM_OK) return nr;
                     }
                 }
@@ -864,7 +886,7 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int raiz, const char* search_dir)
         {
             int ya = module_index(vm, lib, mod);
             if (ya >= 0) {
-                bpvm_status_t nr = comprobar_norma(vm, &vm->modules[mod_idx], canon, &vm->modules[ya]);
+                bpvm_status_t nr = forzado ? BPVM_OK : comprobar_norma(vm, &vm->modules[mod_idx], canon, &vm->modules[ya]);
                 if (nr != BPVM_OK) return nr;
             }
         }
@@ -1012,7 +1034,7 @@ bpvm_status_t bpvm_load_pack(bpvm_t* vm, const char* pack_path,
     char dir[256];
     path_dirname(pack_path, dir, sizeof dir);
     for (int j = idx_before; j < vm->module_count; j++) {
-        bpvm_status_t r = discover_deps(vm, j, dir);
+        bpvm_status_t r = discover_deps(vm, j, dir, j == idx_before);
         if (r != BPVM_OK) return r;
     }
     if (main_out && main_cap > 0) {
@@ -1318,7 +1340,7 @@ static bpvm_status_t cargar_principal_de_la_zona(bpvm_t* vm, bpvm_entry_t* e) {
     e->from_pack = 1;
     snprintf(e->main_module, sizeof e->main_module, "%.*s", (int)(sizeof e->main_module - 1), base);
     for (int j = idx_before; j < vm->module_count; j++) {
-        s = discover_deps(vm, j, "/app");
+        s = discover_deps(vm, j, "/app", j == idx_before);
         if (s != BPVM_OK) { recoge_fallo(vm, e); apagar_pack_en_ejecucion(vm); return s; }
     }
     return BPVM_OK;
@@ -1412,7 +1434,7 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
         char dir[256];
         path_dirname(e->resolved, dir, sizeof dir);
         for (int j = idx_before; j < vm->module_count; j++) {
-            s = discover_deps(vm, j, dir);
+            s = discover_deps(vm, j, dir, j == idx_before);
             if (s != BPVM_OK) { recoge_fallo(vm, e); return s; }   /* #421 */
         }
     }
@@ -1474,7 +1496,7 @@ bpvm_status_t bpvm_load_mod(bpvm_t* vm, const char* path) {
     char dir[256];
     path_dirname(path, dir, sizeof(dir));
     for (int j = idx_before; j < vm->module_count; j++) {
-        bpvm_status_t r = discover_deps(vm, j, dir);
+        bpvm_status_t r = discover_deps(vm, j, dir, j == idx_before);
         if (r != BPVM_OK) return r;
     }
     return BPVM_OK;

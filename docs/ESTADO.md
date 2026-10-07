@@ -30,7 +30,9 @@
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
 > **`#656` cerrada**: soltar un owner, sin recursión en las dos VMs (una cadena de 4000 owners tumbaba a la VM-C con la
-> pila de una placa y a la VM-Java ya con la suya); `test-ownerhondo` en la red. Más abajo, «🔧 SUELTAS (7-oct)».
+> pila de una placa y a la VM-Java ya con la suya); `test-ownerhondo` en la red. **`#655` y `#652`, cerradas**: el hilo
+> resucitado cuyo evento no se inyecta termina por el sentinela (las dos VMs caían), y todo programa lleva `Core` (lo
+> trae el cargador a los `.mod` de antes, como los de V6). Más abajo, «🔧 SUELTAS (7-oct)».
 >
 > **6-oct** — H12. De madrugada, **las natives con dos runs** (Eduardo: *«unos cambios localizados»*): N1 a N4 en el
 > PC con `test-nat2runs` (`204b4217`), y al hacerlo un CUELGUE de la GUI con dos runs (el puente anidado no se aparcaba
@@ -1180,6 +1182,16 @@ la C6, la P4 y la Nucleo.
   reservado de la cabecera, el 22, para lo que espera al repaso); en la VM-Java, la recursión imitada en el mismo orden.
   `test-ownerhondo` en la red, con su sabotaje rojo (las dos recursiones de vuelta: las dos caen) y el repaso exigido; a
   la tanda de V7 (45 pruebas). Y de paso, un diagnóstico del UAF que mentía con la generación 0.
+- **`#655`, CERRADA**: reproducido de forma determinista (`EvReceptorMuerto`: el receptor muere en el mismo cuanto que
+  el `raise`) y en las DOS VMs —la VM-C se paraba con NATIVE_RETURN, la VM-Java con «HALT en thread no-main»—. Si el
+  drenaje post-mortem no inyecta, el hilo va al sentinela de fin de hilo y termina por el camino de siempre (en la
+  VM-Java, volver a TERMINATED a mano dejaba sin liberar su pila y sin despertar al `join`); si debe otro evento, otra
+  resurrección. A la paridad y a la tanda (46 pruebas).
+- **`#652`, CERRADA**: el compilador de hoy no pierde `Core` (todo módulo lo importa desde H1); el que se cargaba sin él
+  era un `.mod` de antes, como el `Hello` de la cápsula de V6. Ahora lo trae el CARGADOR de las dos VMs cuando el
+  programa no lo trae, por el camino de un import y sin la norma. `test-coresiempre` en la red, con su sabotaje.
+  La red completa, verde con las dos: paridad 135 (también en MOD8 y con dos workers), cápsula 59/59, pruebas de C
+  88/88, sombra 13/13, estrés y packs-abi.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

@@ -376,6 +376,7 @@ public class ModuleManager {
             // El main se busca por su nombre de entrada: ya está DENTRO, así que
             // resolveModuleSource lo encuentra en el pack sin tocar el FS.
             discoverDependencies(main + ".mod", main, false);
+            asegurarCore();   // #652
             for (Map.Entry<String, ModSource> entry : discoveryQueue.entrySet()) {
                 loadModuleToMemory(entry.getValue(), entry.getKey());
             }
@@ -631,11 +632,34 @@ public class ModuleManager {
         discoveryQueue.clear();
         sombrasAvisadas.clear();
         discoverDependencies(filename, moduleName, true);
+        asegurarCore();   // #652
         for (Map.Entry<String, ModSource> entry : discoveryQueue.entrySet()) {
             loadModuleToMemory(entry.getValue(), entry.getKey());
         }
         linkAll();
         vm.setHeapStart(nextFreeAddress);
+    }
+
+    /**
+     * #652 (7-oct) — «NO PUEDE HABER PROGRAMAS SIN CORE» (Eduardo, 4-oct). Un módulo de hoy lo arrastra siempre (el
+     * compilador pone `import Core` en todo módulo desde H1), pero uno de antes no: los de la cápsula de V6 que no usan
+     * nada de él —`Hello.mod`— se cargaban SIN Core («enlace: 1 modulos»), sin RuntimeError con el que construir una
+     * excepción. Descubiertas las dependencias del programa, si Core no está, se descubre él: por el MISMO camino que
+     * un import (el pack en ejecución, /app, /lib), y sin la norma de #500 —el raíz no se compiló contra él—. No se
+     * llama a su __init: Core no tiene globales que inicializar. Si no se encuentra, se dice y se sigue (como un import
+     * que falta: sólo el enlace se quejaría, y nadie le pide nada). Espejo de discover_deps (bpvm.c, `con_core`).
+     */
+    private void asegurarCore() throws IOException {
+        if (discoveryQueue.containsKey("Core")) return;
+        Cabecera c;
+        try {
+            c = abrirCabecera("Core.mod", "Core", false);
+        } catch (IOException e) {   // la ruta resuelta no se abre: no está (abrirCabecera ya la puso en la cola)
+            discoveryQueue.remove("Core");
+            System.err.println("[miVM] dep 'Core' (todo programa lo lleva) NO ENCONTRADO: " + e.getMessage());
+            return;
+        }
+        descubrirImports(c, "Core");
     }
 
     /** La cabecera de un módulo recién resuelto: lo que hace falta para aplicar la

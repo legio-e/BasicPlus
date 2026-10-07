@@ -1390,6 +1390,23 @@ test-ownerhondo: $(BIN)
 	   exit 1; \
 	 fi
 
+# #652 (7-oct) — TODO PROGRAMA LLEVA CORE (Eduardo: «no puede haber programas sin Core»): un .mod de la cápsula de V6
+# que no lo importa (Hello: no usa nada de él) se cargaba SIN Core en las dos VMs («enlace: 1 modulos»; la VM-C, «OOM
+# sin prefabricar»: sin RuntimeError con el que construir una excepción). Ahora el cargador lo trae (discover_deps,
+# con_core; asegurarCore en miVM): las dos, «enlace: 2 modulos».
+test-coresiempre: $(BIN)
+	@echo "--- #652 todo programa lleva Core: el Hello de la capsula de V6, que no lo importa (esperado: las dos VMs lo enlazan con Core) ---"
+	@d=build/coresiempre; rm -rf $$d; mkdir -p $$d; cp ../compat/v6/golden/Hello.mod ../bpstdlib/Core.mod $$d/; \
+	 ec=$$(cd $$d && timeout 30 ../../$(BIN) Hello.mod 2>&1 >/dev/null); \
+	 ej=$$(cd $$d && timeout 30 java -jar ../../../miVM/target/bpgenvm-1.0.jar Hello.mod 2>&1 >/dev/null); \
+	 if printf '%s\n' "$$ec" | grep -q 'enlace: 2 modulos' && ! printf '%s\n' "$$ec" | grep -q 'OOM sin prefabricar' \
+	    && printf '%s\n' "$$ej" | grep -q 'enlace: 2 modulos'; then \
+	   echo "  las dos VMs: enlace de 2 modulos (Hello y Core)"; echo "PASS test-coresiempre"; \
+	 else \
+	   echo "FAIL test-coresiempre"; printf '%s\n' "$$ec" | grep -E 'enlace|OOM|Core' | sed 's/^/  VM-C: /'; \
+	   printf '%s\n' "$$ej" | grep -E 'enlace|Core' | sed 's/^/  VM-Java: /'; exit 1; \
+	 fi
+
 # #653 (4-oct) — EL LOG CON DOS ESCRITORES: mirar si la línea cabe y copiarla no se pueden separar (la sección crítica
 # de la cintura). Dos hilos escriben sin parar en una región de 512 B con una guarda detrás: con la sección, intacta;
 # sin ella (--sin-seccion, el sabotaje: el log de antes), pisada —rojo—. Ver test/test_logmt.c.

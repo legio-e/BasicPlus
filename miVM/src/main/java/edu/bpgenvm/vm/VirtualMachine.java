@@ -7432,15 +7432,25 @@ public class VirtualMachine {
             System.err.println("[ev] drain arg0=" + (ev.args.length > 0 ? ev.args[0] : -1)
                     + " tid=" + tc.id + " restoQ=[" + q.toString().trim() + "]");
         }
+        // #655 (7-oct) — UN RESUCITADO CUYO EVENTO NO SE PUEDE INYECTAR (el receptor murió entre el raise y el drenaje):
+        // se le resucitó SÓLO para saldarlo, y su pc apunta a DESPUÉS de su final; el scheduler le daba CPU igual y
+        // corría desde ahí («HALT en thread no-main»). Ahora va al sentinela de fin de thread (memory[0]) —la misma
+        // vuelta que un handler post-mortem que acaba bien—: termina por el camino de siempre (terminateThread: su pila,
+        // los join y, si aún debe otro evento, otra resurrección). Espejo de bpvm_event_drain_one (events.c).
+        if (!inyectaEvento(tc, ev) && tc.evPostMortem >= 0) tc.pc = 0;
+    }
 
+    /** El marco del handler de `ev` en la pila de `tc`; false si no se pudo (el receptor murió, la ranura no resuelve
+     *  o no hay pila): el evento se IGNORA. */
+    private boolean inyectaEvento(ThreadContext tc, PendingEvent ev) {
         // El receptor puede haber muerto entre el raise y el drenaje: es el caso
         // normal al destruir un suscriptor con eventos pendientes, y el diseño
         // dice que un evento sin quien lo escuche se IGNORA, no revienta.
         int idx = handleIdx(ev.recv);
         if ((ev.recv & HANDLE_TAG) != 0
-                && (idx <= 0 || idx >= handleNext || handleGen[idx] != handleGenOf(ev.recv))) return;
+                && (idx <= 0 || idx >= handleNext || handleGen[idx] != handleGenOf(ev.recv))) return false;
         int obj = refDeref(ev.recv);
-        if (obj == 0) return;
+        if (obj == 0) return false;
 
         // Resolver el slot sobre la clase REAL, subiendo por la herencia igual
         // que INVOKE_VIRTUAL.
@@ -7458,7 +7468,7 @@ public class VirtualMachine {
             if (parentOff == 0) {
                 System.err.println("[bpvm] evento: slot " + ev.dest + " no resoluble en la"
                         + " clase del receptor — descartado");
-                return;
+                return false;
             }
             desc = moduleManager.getCSForDataAddr(desc) + parentOff;
         }
@@ -7467,7 +7477,7 @@ public class VirtualMachine {
         for (int i = 0; i < ev.args.length; i++) need += ((ev.masks & (1 << (8 + i))) != 0) ? 8 : 4;
         if (tc.sp + need > tc.stackTop) {
             System.err.println("[bpvm] evento: sin pila en tid=" + tc.id + " — descartado");
-            return;
+            return false;
         }
 
         int sp = tc.sp;
@@ -7491,6 +7501,7 @@ public class VirtualMachine {
         tc.cs = targetCS;
         tc.pc = targetCS + methodOff;
         tc.evDepth++;
+        return true;
     }
 
     // ============================================================
