@@ -1637,6 +1637,10 @@ public final class AotCEmitter {
             emitThrowStmt((Ast.ThrowStmt) s);
             return;
         }
+        if (s instanceof Ast.DestructAssignStmt) {   /* V7 #577 */
+            emitDestructAssign((Ast.DestructAssignStmt) s);
+            return;
+        }
         if (s instanceof Ast.TryStmt) {
             /* #213 parte 2 — DIFERIDO con motivo: el código .mdn no puede
              * llamar setjmp (cero relocations externas — todo acceso al
@@ -2157,6 +2161,7 @@ public final class AotCEmitter {
          * el handle nulo ES el cero, asi que no hay nada que traducir: el mismo
          * valor que empuja el interprete con OP_NULL. */
         if (e instanceof Ast.NullLitExpr) { w.print("0"); return; }
+        if (e instanceof Ast.TupleExpr) { emitTupleExpr((Ast.TupleExpr) e); return; }   /* V7 #577 */
         if (e instanceof Ast.DoubleLitExpr) {
             /* #426 — sin sufijo: en C un literal de coma flotante YA es double.
              * `Double.toString` da la representacion mas corta que redondea de
@@ -2788,6 +2793,80 @@ public final class AotCEmitter {
      *  que el producto no tiene</b> y sacar de ahí una conclusión sobre la placa.
      *  Si vuelves a ver a `MdnPack` quejarse de un `.LC0`, la pregunta es si
      *  estás enlazando, no si hay que quitar el literal. */
+    /* ── V7 #577 (7-oct; Eduardo, 3-oct: «getters, sin ABI»; 7-oct: «la variante») — LAS TUPLAS DENTRO DE UNA NATIVE ──
+     * Una tupla es un objeto `__Tuple_<forma>`, y una native no lee campos: la lee y la construye llamando por el puente
+     * a funciones OCULTAS de su propio módulo, que sintetiza el compilador de bytecode (MivmEmitter,
+     * synthesizeTupleAccessorsParaNatives): `__tup_get_<forma>_<i>(t)` y `__tup_new_<forma>(a0, …)`. Ninguna clase gana
+     * ranuras, y sirven para una tupla que venga de otro módulo (la de `Str.parseInt`): el layout es el mismo por forma.
+     * Sólo formas que caben en el puente (4 bytes por valor); una con float, long o double, error al compilar. Cada
+     * campo, una llamada al intérprete (como una factoría). */
+    private String formaPuente(BpType bt, int line, String gesto) {
+        if (!(bt instanceof BpType.TupleType))
+            throw new UnsupportedAotException("AOT: " + gesto + " sin el tipo de la tupla resuelto (line " + line + ")");
+        String forma = MivmEmitter.formaDeTupla((BpType.TupleType) bt);
+        if (!MivmEmitter.formaCabeEnElPuente(forma))
+            throw new UnsupportedAotException("AOT: " + gesto + " en la native '" + currentFuncName + "' (line " + line
+                + "): la tupla lleva float, long o double, y el puente native→BP sólo lleva valores de 4 bytes (integer,"
+                + " boolean, string, referencias). Desestructúrala en BP y pásale los campos a la native.");
+        return forma;
+    }
+
+    /** `{ a, b } := expr` dentro de una native: la ref de la tupla a un local de C (el GC escanea la pila de la native),
+     *  y cada campo, por su accesor, a su variable local —del MISMO tipo que el campo: convertir aquí metería en C una
+     *  conversión que el `.mdn` no puede llevar—. `_` se salta. */
+    private void emitDestructAssign(Ast.DestructAssignStmt d) {
+        BpType bt = tipoDe(d.value);
+        String forma = formaPuente(bt, d.line, "desestructurar una tupla");
+        BpType.TupleType tt = (BpType.TupleType) bt;
+        String t = "__tup" + (++tempBuiltin);
+        indent();
+        w.print("int32_t " + t + " = ");
+        emitExpr(d.value);
+        w.println(";");
+        int n = Math.min(d.targets.size(), tt.elements.size());
+        for (int i = 0; i < n; i++) {
+            Ast.IExpr tg = d.targets.get(i);
+            String nombre = (tg instanceof Ast.IdentifierExpr) ? ((Ast.IdentifierExpr) tg).name : null;
+            if ("_".equals(nombre)) continue;
+            if (nombre == null || !localNames.contains(nombre))
+                throw new UnsupportedAotException("AOT: desestructurar una tupla en la native '" + currentFuncName
+                    + "' (line " + d.line + "): cada destino ha de ser una variable local de la native");
+            BpType el = tt.elements.get(i);
+            BpType tv = tipoDe(tg);
+            if (tv != null && !tv.sameAs(el))
+                throw new UnsupportedAotException("AOT: desestructurar una tupla en la native '" + currentFuncName
+                    + "' (line " + d.line + "): '" + nombre + "' es " + tv.display() + " y el campo " + i + " es " + el.display()
+                    + ": en una native, del mismo tipo (convierte después)");
+            indent();
+            w.print(cVar(nombre) + " = ");
+            emitLlamadaPuente(moduleName + "." + MivmEmitter.tupGetName(forma, i), new String[] { t }, 1, isRefBp(el));
+            w.println(";");
+        }
+        warnings.add("la función native '" + currentFuncName + "' desestructura una tupla (línea " + d.line
+            + "): cada campo cruza al intérprete por el puente native→BP");
+    }
+
+    /** `(a, b, …)` dentro de una native: la construye su accesor `__tup_new_<forma>`, y deja la ref. */
+    private void emitTupleExpr(Ast.TupleExpr te) {
+        BpType bt = tipoDe(te);
+        String forma = formaPuente(bt, te.line, "construir una tupla");
+        BpType.TupleType tt = (BpType.TupleType) bt;
+        int mask = 0;
+        for (int i = 0; i < tt.elements.size(); i++) if (isRefBp(tt.elements.get(i))) mask |= (1 << i);
+        emitCallBpEmission(moduleName + "." + MivmEmitter.tupNewName(forma), te.elements, te.line,
+            "el constructor de la tupla " + forma, mask, true);
+    }
+
+    /** La llamada por el puente con argumentos que ya son C (no expresiones del `.bp`): como emitCallBpEmission. */
+    private void emitLlamadaPuente(String qualified, String[] cArgs, int refMask, boolean retIsRef) {
+        String aviso = "AOT: la native '" + currentFuncName + "' pide '" + qualified
+            + "' y no está en los módulos cargados: recompila '" + moduleName + "'";
+        w.print("vm->aot_helpers->call_bp_i32(vm, aot_" + moduleName + "_busca(vm, \"" + qualified + "\", \""
+            + cEscapeBytes(aviso.getBytes(java.nio.charset.StandardCharsets.UTF_8)) + "\"), ");
+        w.print("(int32_t[]){ " + String.join(", ", cArgs) + " }, " + cArgs.length + ", " + refMask + "u, "
+            + (retIsRef ? 1 : 0) + ")");
+    }
+
     private void emitCallBpEmission(String qualified, List<Ast.IExpr> args, int line,
                                     String targetDesc, int refMask, boolean retIsRef) {
         warnings.add("la función native '" + currentFuncName + "' llama a " + targetDesc
@@ -3019,6 +3098,7 @@ public final class AotCEmitter {
     /** Fallback sin BpType: string/array/clase-o-any (default de cType) → ref. */
     private boolean isRefTypeRefFallback(Ast.TypeRef t) {
         if (t instanceof Ast.ArrayTypeRef) return true;
+        if (t instanceof Ast.TupleTypeRef) return true;   /* V7 #577: una tupla es un objeto */
         if (t instanceof Ast.SimpleTypeRef) {
             String n = ((Ast.SimpleTypeRef) t).name;
             switch (n) {
@@ -3071,6 +3151,11 @@ public final class AotCEmitter {
         if (t instanceof Ast.ArrayTypeRef) {
             /* Handle al heap. Element type se traduce a través de los
              * helpers array_load_<T> / array_store_<T> en el AccessExpr. */
+            return "int32_t";
+        }
+        if (t instanceof Ast.TupleTypeRef) {
+            /* V7 #577 — una tupla es un objeto: su ref, un handle i32, como una clase. Se lee y se construye por los
+             * accesores ocultos del módulo (emitDestructAssign, emitTupleExpr). */
             return "int32_t";
         }
         throw new UnsupportedAotException(

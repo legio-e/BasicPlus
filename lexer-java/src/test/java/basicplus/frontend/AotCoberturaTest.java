@@ -97,6 +97,10 @@ class AotCoberturaTest {
         //     tres nodos que N1 toca de lleno y que nadie medía.
         //   · ArrayLitExpr y NewObjectExpr entraron de verdad (N1.5).
         // Quedan TryStmt y TupleExpr, los dos aplazados a V7 a propósito.
+        // V7 #577 (7-oct-2026): 29 de 30. TupleExpr entró —desestructurar y construir una tupla dentro de una native,
+        // por los accesores ocultos del módulo (__tup_get_/__tup_new_) y el puente; una forma con float, long o double
+        // sigue rechazada—. Queda TryStmt (#578).
+        "TupleExpr",
         "ArrayLitExpr", "AssignStmt", "BinaryExpr", "BoolLitExpr", "BreakStmt",
         "CallExpr", "MemberAccessExpr", "NewObjectExpr", "ContinueStmt",
         "DoLoopStmt", "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr",

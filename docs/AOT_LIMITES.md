@@ -217,7 +217,13 @@ de cesión, transitivamente— corre sin ejecutor (de 5,2 a 0,05 µs por llamada
 Gui2 son directas. Las pruebas: `test-aotcede`, `test-aotexpropia`, `test-aotkill` y `test-aotdirecta` en
 `check-testc`, y `NatCede`/`NatExpropia`/`NatBuiltin` en la ronda de placas.
 
-Los cabos del AOT que quedan, cada uno en su ficha: leer un campo de una tupla (`#577`), `try`/`catch` dentro (`#578`),
+Las TUPLAS, desde `#577` (7-oct): una native desestructura (`{ a, b } := f()`, también la tupla de otro módulo) y
+construye (`return (a, b)`) por funciones ocultas de su módulo que sintetiza el compilador (`__tup_get_<forma>_<i>`,
+`__tup_new_<forma>`), llamadas por el puente: una llamada al intérprete por campo. Sólo formas de valores de 4 bytes
+(integer y estrechos, boolean, string, referencias); con `float`, `long` o `double`, error al compilar. Prueba:
+`make test-aottuplas`.
+
+Los cabos del AOT que quedan, cada uno en su ficha: `try`/`catch` dentro (`#578`),
 la línea de un error dentro de una native (`#582`), el depurador (`#583`) y medir `double` (`#585`).
 
 ## Dónde se hace cumplir
@@ -259,6 +265,7 @@ demuestra nada.
 
 **Foto del 24-ago-2026: 28 de 30.** Faltan `TryStmt` y `TupleExpr`, los dos
 aplazados a V7 a propósito (§2 y abajo).
+**Foto del 7-oct-2026: 29 de 30.** `TupleExpr` entró con `#577`; falta `TryStmt` (`#578`).
 
 ### ⚠️ Y la lección de este censo no es el número: es que MEDÍA MAL
 
@@ -318,7 +325,7 @@ cada alocación convierte esa ventana de lotería en certeza.
 | falta | nodo | motivo |
 |---|---|---|
 | `try`/`catch` dentro de native | `TryStmt` | el `.mdn` no puede usar `setjmp` (§2). Lanzar sí. **A V7 «por lo menos ver si es posible»** (Eduardo, 24-ago): la frase de arriba dice qué NO se puede usar, no que no haya otro camino — y ese enunciado ya ha fallado cinco veces en este mismo documento |
-| desestructurar `{a, b} := t` | `DestructAssignStmt`, `TupleExpr` | **aplazado a V7** (decisión de Eduardo, 24-ago). Una tupla es un objeto sintético y sus elementos son CAMPOS; leerlos desde native pediría un helper de campo que hoy no existe |
+| una tupla con `float`, `long` o `double` | `DestructAssignStmt`, `TupleExpr` | el puente native→BP lleva valores de 4 bytes: desestructúrala en BP y pásale los campos a la native. Las demás formas, hechas (`#577`, 7-oct) |
 | `for … in` sobre colecciones | `ForInRange` | el `for` numérico sí |
 | `instanceof` | `InstanceOfExpr` | sin medir siquiera: el fragmento que tenía no producía el nodo |
 | eventos, `parallel`, referencias a método, `enum` | varios | aquí no es emitir C: es decidir qué significan esas construcciones cuando el que corre es código nativo y no la VM |

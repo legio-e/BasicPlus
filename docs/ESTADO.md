@@ -1273,6 +1273,10 @@ la C6, la P4 y la Nucleo.
   dará mucha más robustez al SO y a la VM»*. Hoy no se destruye nada al acabar (la VM se descarta entera; el GC no
   llama destructores, a propósito: `#491`). Lo siguiente: el diseño en `V7_IDEAS` §«#668» —qué objetos, el orden, un
   destructor que lanza o se cuelga tras un STOP, la paridad— y sus decisiones, con un ejemplo cada una.
+- **`#577`, CERRADA** (Eduardo: *«OK, la variante»*): las tuplas dentro de una native, por accesores ocultos del
+  módulo que sintetiza el compilador (`__tup_get_`/`__tup_new_`) y el puente; también la tupla de otro módulo.
+  `test-aottuplas` (AOT == interpretado, 4/4, GC en cada alocación) con su sabotaje rojo, `NatTuplas` en la
+  paridad, la stdlib igual byte a byte, y `AotCoberturaTest` de 28 a 29 de 30 (queda `TryStmt`, `#578`).
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

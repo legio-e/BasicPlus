@@ -725,6 +725,9 @@ public final class MivmEmitter {
         //        objeto o llamar a una función), y antes de los helpers (puede concatenar).
         emitGlobalesFunction();
 
+        // 5-quater) V7 #577 — los accesores de las tuplas para las natives del módulo (__tup_get_/__tup_new_).
+        synthesizeTupleAccessorsParaNatives();
+
         // 6) Helpers pendientes (e.g. __strconcat) tras user functions.
         flushHelpers();
 
@@ -5916,6 +5919,79 @@ public final class MivmEmitter {
             }
             w.endClass();
         }
+    }
+
+    /** V7 #577 (7-oct; Eduardo, 3-oct: «getters, sin ABI»; 7-oct: «la variante») — LAS TUPLAS DENTRO DE UNA NATIVE.
+     *  Una native no lee campos de objetos (habla con la VM por los helpers y por el puente a funciones BP), así que
+     *  para desestructurar una tupla o devolver una construida llama por el puente (`call_bp_i32`) a funciones OCULTAS
+     *  de su propio módulo: `__tup_get_<forma>_<i>(t)` lee el campo i y `__tup_new_<forma>(a0, …)` la construye. Como
+     *  las factorías `__cls_new_<Clase>`, pero funciones y no métodos: ninguna clase gana ranuras de vtable, y valen
+     *  para una tupla que venga de un `.mod` compilado antes (el layout de `__Tuple_<forma>` es el mismo en todo módulo:
+     *  es lo que ya hace el intérprete al desestructurar). Sólo en un módulo con natives, y sólo las formas que caben en
+     *  el puente (4 bytes por valor: i, b, s, r). Sin la firma de R4: no cruzan de módulo —las llama la native del
+     *  mismo—, y el nombre ya lleva la forma. */
+    private void synthesizeTupleAccessorsParaNatives() throws IOException {
+        if (!moduloConNatives()) return;
+        for (java.util.Map.Entry<String, BpType.TupleType> e : tupleShapes.entrySet()) {
+            String cls = e.getKey();
+            BpType.TupleType tt = e.getValue();
+            String forma = formaDeTupla(tt);
+            if (!formaCabeEnElPuente(forma)) continue;
+            for (int i = 0; i < tt.elements.size(); i++) {
+                BpType el = tt.elements.get(i);
+                String nombre = tupGetName(forma, i);
+                w.addFunction(nombre, true);
+                declareParamByType("t", tt);
+                FunctionSymbol fs = new FunctionSymbol(nombre, true, false, false, null, null);
+                fs.returnType = el;
+                beginFunctionScope(fs, el);
+                try {
+                    w.emitGetParam("t");
+                    w.emitGetField(cls, "_" + i);   // is8-aware, como al desestructurar
+                    w.emitSetLocal("__result");
+                    emitFunctionEnd();
+                } finally { scopeStack.pop(); }
+            }
+            String nombre = tupNewName(forma);
+            w.addFunction(nombre, true);
+            for (int i = 0; i < tt.elements.size(); i++) declareParamByType("a" + i, tt.elements.get(i));
+            FunctionSymbol fs = new FunctionSymbol(nombre, true, false, false, null, null);
+            fs.returnType = tt;
+            beginFunctionScope(fs, tt);
+            try {
+                String temp = "__tupn";
+                declareLocalLong(temp);   // #281: la ref de la tupla, 8 bytes
+                w.emitNewObject(cls);
+                w.emitSetLocal(temp);
+                for (int i = 0; i < tt.elements.size(); i++) {
+                    w.emitGetLocal(temp);
+                    w.emitGetParam("a" + i);
+                    w.emitSetField(cls, "_" + i);
+                }
+                w.emitGetLocal(temp);
+                w.emitSetLocal("__result");
+                emitFunctionEnd();
+            } finally { scopeStack.pop(); }
+        }
+    }
+    /** V7 #577 — los nombres de los accesores (los usa también el AOT, que los pide por el puente). */
+    static String tupGetName(String forma, int i) { return "__tup_get_" + forma + "_" + i; }
+    static String tupNewName(String forma) { return "__tup_new_" + forma; }
+    /** La forma de una tupla: un código por elemento (`ii`, `bi`, `sr`…), lo que va tras `__Tuple_`. */
+    static String formaDeTupla(BpType.TupleType tt) { return tupleClassName(tt).substring("__Tuple_".length()); }
+    /** ¿Cabe la forma en el puente native→BP? 4 bytes por valor: integer (y estrechos), boolean, string, referencia. */
+    static boolean formaCabeEnElPuente(String forma) {
+        for (int i = 0; i < forma.length(); i++) if ("ibsr".indexOf(forma.charAt(i)) < 0) return false;
+        return true;
+    }
+    private boolean moduloConNatives() {
+        for (ITopLevelDecl dd : moduleAst.defs) {
+            if (dd instanceof FuncDef && ((FuncDef) dd).isNative && !((FuncDef) dd).isIntrinsic) return true;
+            if (dd instanceof ClassDef)
+                for (ITopLevelDecl m : ((ClassDef) dd).members)
+                    if (m instanceof FuncDef && ((FuncDef) m).isNative && !((FuncDef) m).isIntrinsic) return true;
+        }
+        return false;
     }
 
     /** Emite la construcción de una tupla `(e1, e2, ...)` y deja su ref en pila. */

@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -774,6 +774,26 @@ test-aotswitch: $(LIBOBJ)
 	 if ! cmp -s build/aotswitch.int build/aotswitch.aot; then diff build/aotswitch.int build/aotswitch.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 11 ]; then cat build/aotswitch.aot; echo "  ROJO: $$n de 11 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 11/11 con el AOT, igual que interpretado"
+
+# V7 #577 (7-oct) — LAS TUPLAS DENTRO DE UNA NATIVE (Eduardo: «getters, sin ABI»; «la variante»): desestructurar y
+# construir, por los accesores ocultos del módulo (__tup_get_/__tup_new_) que la native llama por el puente; también
+# la tupla de OTRO módulo (Str.parseInt). El MISMO .mod con el AOT y, con --interp, sin él (GC en cada alocación en los
+# dos): la misma salida, 4/4 y ningún FALLO. Ver test/test_aottuplas.c.
+test-aottuplas: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatTuplas)
+	$(call stdlibdep,Core Str)
+	$(call aotmain,NatTuplas,build/aottuplas)
+	$(CC) $(CFLAGS) -Isrc test/test_aottuplas.c build/aottuplas/aot_NatTuplas.c $(LIBOBJ) \
+	  -o build/test_aottuplas.exe $(LDFLAGS)
+	@echo "--- #577 las tuplas en una native (esperado: AOT == interpretado, 4/4, sin FALLO) ---"
+	@./build/test_aottuplas.exe samples/NatTuplas.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aottuplas.aot; \
+	 ./build/test_aottuplas.exe samples/NatTuplas.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aottuplas.int; \
+	 n=$$(grep -c '^ok ' build/aottuplas.aot); \
+	 if grep -q '^FALLO' build/aottuplas.aot build/aottuplas.int; then grep -h '^FALLO' build/aottuplas.aot build/aottuplas.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aottuplas.int build/aottuplas.aot; then diff build/aottuplas.int build/aottuplas.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 4 ]; then cat build/aottuplas.aot; echo "  ROJO: $$n de 4 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 4/4 con el AOT, igual que interpretado"
 
 # V7/H5 (#569/#570, 26-sep) — LA LISTA A MANO DEL AOT contra el camino interpretado: charAt,
 # charCodeAt, substring, intToString, len y los newXArray iban a COPIAS en C de sus builtins, y una copia

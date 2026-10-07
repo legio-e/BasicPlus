@@ -1,0 +1,91 @@
+// NatTuplas.bp — V7 #577 (7-oct): las TUPLAS dentro de una native (Eduardo, 3-oct: «getters, sin ABI»; 7-oct: «la
+// variante»). Una native no lee campos de objetos: desestructura y construye una tupla llamando por el puente a funciones
+// OCULTAS de su propio módulo (__tup_get_<forma>_<i>, __tup_new_<forma>) que sintetiza el compilador.
+//   - desestructurar la tupla de una función BP del mismo módulo;
+//   - una native que DEVUELVE una tupla (construida dentro);
+//   - desestructurar la tupla de OTRO módulo, compilado aparte (Str.parseInt): la razón de la variante —con métodos de la
+//     clase de la tupla, una que viniera de un .mod de antes daría «slot no resoluble»—;
+//   - una tupla con un string, y `_` para saltarse un campo.
+// Las native llevan su bytecode: interpretado corre igual. `make test-aottuplas` lo corre de las dos maneras (con el AOT,
+// con GC en cada alocación) y exige la MISMA salida, sin ningún FALLO.
+module NatTuplas
+  import Str
+
+  function divide(a: integer, b: integer): (integer, integer)
+    return (a / b, a mod b)
+  end divide
+
+  function etiqueta(n: string): (string, integer)
+    return ("<" + n + ">", strlen(n))
+  end etiqueta
+
+  // 1. Desestructurar la tupla de una función BP del mismo módulo.
+  native function sumaPartes(a: integer, b: integer): integer
+    var c: integer := 0
+    var r: integer := 0
+    { c, r } := divide(a, b)
+    return c * 1000 + r
+  end sumaPartes
+
+  // 2. Una native que DEVUELVE una tupla.
+  native function divideN(a: integer, b: integer): (integer, integer)
+    return (a / b, a mod b)
+  end divideN
+
+  // 3. La tupla de OTRO módulo (Str.parseInt: (err, valor); err, verdadero si no es un número).
+  native function parsea(s: string): integer
+    var err: boolean := false
+    var v: integer := 0
+    { err, v } := Str.parseInt(s)
+    if err then
+      return -1
+    endif
+    return v
+  end parsea
+
+  // 4. Una tupla con un string (construida en la native), y `_` para saltarse un campo.
+  native function envuelve(n: string): (string, integer)
+    var s: string := ""
+    var k: integer := 0
+    { s, k } := etiqueta(n)
+    var x: integer := 0
+    { _, x } := etiqueta(n + n)
+    return (s, k * 100 + x)
+  end envuelve
+
+  function Main()
+    var a1: integer := sumaPartes(17, 5)
+    if a1 == 3002 then
+      print "ok sumaPartes " + a1
+    else
+      print "FALLO sumaPartes " + a1
+    endif
+
+    var q: integer := 0
+    var r: integer := 0
+    { q, r } := divideN(23, 4)
+    if q == 5 and r == 3 then
+      print "ok divideN " + q + " " + r
+    else
+      print "FALLO divideN " + q + " " + r
+    endif
+
+    var p1: integer := parsea("1234")
+    var p2: integer := parsea("x1")
+    if p1 == 1234 and p2 == -1 then
+      print "ok parsea " + p1 + " " + p2
+    else
+      print "FALLO parsea " + p1 + " " + p2
+    endif
+
+    var s: string := ""
+    var k: integer := 0
+    { s, k } := envuelve("abc")
+    if s == "<abc>" and k == 306 then
+      print "ok envuelve " + s + " " + k
+    else
+      print "FALLO envuelve " + s + " " + k
+    endif
+    print "fin"
+  end Main
+end NatTuplas
