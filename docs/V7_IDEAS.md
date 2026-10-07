@@ -8307,3 +8307,10 @@ anidada; y, en la VM-Java, bajar la bandera del KILL y terminar `main` tras una 
 
 **El plan** (§6) se queda, con el paso 1 ampliado: la cascada con destructores y lo que aparta el GC, además de la fase
 del final.
+
+**El reparto del trabajo** (Eduardo, al cerrar el día): *«La destrucción del objeto en realidad la hace en gran
+medida su propio destructor, así que casi no hay que hacer nada. Es la típica división del trabajo de la POO.»* Cada
+clase sabe soltar lo suyo (`~Strip` su canal RMT, `~Pin` su pin a entrada, `~File` su fichero: `#667`); la VM sólo
+LLAMA a los destructores cuando libera —la cascada de un `owner`, el GC, el final— y no sabe nada de RMT ni de pines;
+y la red en C (4.8) es una red, no el mecanismo. Lo de fondo en la VM se reduce a poder llamar al destructor desde la
+cascada y desde el GC, y a que las dos VMs lo hagan en el mismo punto.
