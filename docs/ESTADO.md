@@ -1298,7 +1298,10 @@ la C6, la P4 y la Nucleo.
   también con un kill; y destruir un objeto destruye sus `owner`, primero los hijos, la regla del 11-sep): el diseño
   fino de los tres caminos y su plan —la VM-Java, la VM-C, los destructores y los `release()` de `#667` por familia, la
   GUI medida, las placas—; (2)
-  las SUELTAS: 19 abiertas (eran 26 esta mañana: 9 cerradas hoy, `#663` aparcada y 3 nuevas, `#666`–`#668`); (3) el
+  las SUELTAS: **15 abiertas** al cerrar el día (eran 26 por la mañana: 13 cerradas —`#656`, `#655`, `#652`, `#664`,
+  `#659`, `#657`, `#654`, `#581`, `#577`, `#642`, `#643`, `#644` y `#646`—, `#663` aparcada y 3 nuevas, `#666`–`#668`):
+  `#578`, `#582`, `#583`, `#584`, `#592`, `#614`, `#615`, `#623`, `#645`, `#647`, `#650`, `#651`, `#666`, `#667` y
+  `#668`; (3) el
   próximo lote de placas.
 - **La limpieza de los restos de `#473`** (Eduardo: *«Que te parece si hacemos limpieza de código del 642 al 646?»*;
   *«OK»* a hacer primero las que se cierran en el PC): **`#643`, `#644` y `#646`, CERRADAS** —`ldo` se queda y dice que
