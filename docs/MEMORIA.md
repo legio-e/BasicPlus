@@ -3,8 +3,8 @@
 > Eduardo, 7-oct-2026: *«Documenta el consumo de memoria. En C3 y C6 es importante ya que vamos muy justos de RAM.»*
 >
 > **Medido en la C6** el 7-oct con la imagen de ese día (`2609629c`) y `tools/medir_consumo.py`: dos pasadas, las mismas
-> cifras al byte. **La C3**, con lo medido en V6 y en el lote de H12 (6-oct); por volver a medir con la herramienta
-> cuando esté en la mesa. Las fichas: `#651` (la GUI de la C6, al límite), `#666` (lo que no se suelta al acabar un RUN),
+> cifras al byte. **La C3**, el mismo día y con la misma herramienta (imagen `8ec31ecd`; con `log=1` en su ENV para la
+> medida, y `log=0` otra vez después, como estaba). Las fichas: `#651` (la GUI de la C6, al límite), `#666` (lo que no se suelta al acabar un RUN),
 > `#667` (los destructores), `#650` (el módulo del pack que no gasta RAM).
 
 ## 1. Dos memorias que no hay que confundir
@@ -93,9 +93,21 @@ bloque de los packs, fuera de esta cuenta—. Los caminos para recortarlo, en `#
 - **El 6-oct** (el lote de H12, su `INFO`): el bloque de la VM era de 112 KB —**48 de heap de BP** y 64 de pilas—, no
   los 128 de su objetivo (el arranque lo baja de 4 en 4 KB si no cabe con su margen: el porqué, en su log de arranque),
   y el mínimo histórico del heap del sistema, 122 984 B.
-- Lo que gasta un programa es lo mismo que en la C6 (el mismo núcleo y los mismos drivers del IDF): lo que cambia es
-  cuánto queda. Sin el bloque de los packs, la C3 tiene más RAM del sistema que la C6, pero un heap de BP más pequeño.
-  **Por medir con `tools/medir_consumo.py`** (la serie de GUI no aplica: no tiene pantalla).
+- **Medido el 7-oct** (`tools/medir_consumo.py`; la serie de GUI no aplica: no tiene pantalla). **En reposo, tras un
+  programa vacío: 108 684 B libres, bloque mayor 86 016 B** —28 KB más que la C6: no tiene el bloque de los packs—.
+  Lo que gasta un programa es lo de la C6, al centenar de bytes: el mismo núcleo y los mismos drivers del IDF.
+
+| programa | en uso al acabar | peor momento | al acabar el RUN |
+|---|---|---|---|
+| `Importa5`: cinco módulos más de la stdlib | 36,7 KB | 43,8 KB | vuelve |
+| `Limpia`: importa `IO` | 5,6 KB | | vuelve |
+| `FicheroAbierto`: `IO` y un fichero abierto | 5,8 KB (el fichero, ~0,2 KB) | | vuelve |
+| `NatV7` / `FloatNat`: natives | 13,7 / 3,4 KB | 18,2 KB (`NatV7`) | vuelve |
+| `NeoUna` + `NeoTres`: dos tiras NeoPixel | 4,0 KB la primera (con el módulo) | | **no vuelve: ~1,5 KB, y el bloque mayor, de 86 a 78 KB** (`#666`) |
+| `PwmDos`: un PWM | 3,8 KB (con el módulo) | | **no vuelve: ~0,2 KB** (`#666`); la C3 no tiene contador de pulsos (`PulsoTres` lo atrapa) |
+
+  En la C3 lo justo es el **heap de BP** (48 KB), no la RAM del sistema: GcHondo, OwnerHondo y synclisttest se saltan
+  en su ronda por memoria.
 
 ## 6. Cómo medir
 

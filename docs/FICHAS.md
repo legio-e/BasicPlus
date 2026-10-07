@@ -1474,7 +1474,7 @@ por su dueño —un global, un local sin `owner`, todo tras un STOP— se queda 
 **Lo que pide el modelo de Eduardo**: que el fin del programa —normal, con un error o con un STOP— llame al destructor
 de cada objeto que tenga uno, y que ese destructor suelte su recurso (`#667`). Las piezas existen: la VM-C ya llama a
 un método BP desde C (`bpvm_call_bp_from_builtin`; por ranura, `bpvm_aot_call_method_i32`, que usan la GUI y las
-natives) y la VM-Java, con la llamada anidada de `#664`. **Por decidir** (el diseño, en `V7_IDEAS` §«#668»): qué
+natives) y la VM-Java, con la llamada anidada de `#664`. **Por decidir** (el diseño, en `V7_IDEAS` §«`#666`–`#668`»): qué
 objetos —los que el GC ya recogió no se pueden destruir: o el GC no recoge un objeto que aún tiene su recurso, o lo
 suelta él—; el orden —el inverso al de creación, como los `owner`: un `Spi.Device` antes que su bus—; un destructor que
 lanza (se apunta y se sigue) o que se cuelga tras un STOP (un tope de tiempo); y la paridad —el mismo orden y la misma
@@ -1485,6 +1485,11 @@ continúa con la liberación»*. (1) **La red**: tras la destrucción, lo que no
 nadie destruyó, un recurso que nadie soltó— se DICE, como el guardián de `#339` dice las reservas de C sin liberar (con
 quién: la clase, y el recurso); (2) **un error al liberar no corta la limpieza**: se atrapa, se apunta y se sigue con
 lo demás.
+**El diseño, escrito el 7-oct** (`V7_IDEAS` §«`#666`–`#668`», `53e392ca`): el mapa verificado del compilador y de las
+dos VMs, la propuesta y el plan (Java → C → placas). **Esperan a Eduardo cuatro decisiones**, cada una con su ejemplo:
+D1 nada libera un objeto con destructor sin destruirlo (el GC y la cascada lo dejan para el final); D2 el orden,
+inverso al de creación (un registro); D3 tras un STOP también, con un tope de tiempo; D4 la cascada de un `owner`,
+¿destruye en ese momento?
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
@@ -2833,8 +2838,9 @@ GPIO. **Arreglado**: el `chip_cfg.h` de la C3, la C5 y la C6 dice su pad (`CHIP_
 (`esp32/common/gpio_esp32.c`) lee el eFuse —sin quemar, el pin da el error de la flash—; `efuse` en los `REQUIRES` de
 las tres. `PinesSistema` prueba además el 11 y el 19. Grabada la C6 (sólo la app; el OK de Eduardo): los siete, «de la
 flash» —el eFuse de esta placa, sin quemar—, el 11 y el 19 libres, `gpioCount` de 23 a 22; la zona de packs y el bloque
-de RAM de los motores, donde estaban (`0x420bc000`, `0x40827000`), y `DriverSpi` y `GuiMini` cargados, `rc=0`. La C3
-y la C5 lo llevarán con su próxima grabación (el mismo código; su número, cotejado con `io_mux_reg.h`).
+de RAM de los motores, donde estaban (`0x420bc000`, `0x40827000`), y `DriverSpi` y `GuiMini` cargados, `rc=0`. **La C3
+y la C5, grabadas el mismo día** (el lote de la tarde): en la C3 el 11 y en la C5 el 19, «de la flash» —sus eFuses,
+sin quemar—; 13 y 19 GPIO para el programa.
 
 #### ✅ `#580` — parar una native: una recursiva SIN bucles no pasa nunca por la línea del bucle; y ninguna prueba ha parado una native EN PLACA (abierta 27-sep, al cerrar H5; SUELTA: el resto de `#379` · **CERRADA el 3-oct**: la (2), `09c82d15`; la (1), `d66e19d0`)
 

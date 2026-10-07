@@ -1265,7 +1265,9 @@ la C6, la P4 y la Nucleo.
   justos de RAM»*): `docs/MEMORIA.md`, medido en la C6 con `tools/medir_consumo.py` (nueva: un `reset` por serie y la
   línea `mem:` de cada RUN; dos pasadas, las mismas cifras). Lo que más pesa no es LVGL sino **las tablas del cargador
   y del enlazador**: de 3 a 6 KB por módulo importado aunque corra desde el pack (que ahorra el código, no las
-  tablas). La C3, por medir con la herramienta. Eduardo propuso subir la stdlib al pack para ahorrar: en la C6 ya lo
+  tablas). La C3, medida esa misma tarde (con `log=1` puesto para medir y quitado después, con el OK de Eduardo):
+  108 684 B libres en reposo, 28 KB más que la C6 (no tiene el bloque de los packs), y lo mismo por programa; en ella
+  lo justo es el heap de BP (48 KB). Eduardo propuso subir la stdlib al pack para ahorrar: en la C6 ya lo
   está —sus dependencias corren XIP, «crc igual»—, y aun así pesan las tablas (`#651`, los caminos).
 - **`#668`, ABIERTA, en V7** —el modelo de Eduardo para `#666`—: *«Mira si lo hacemos con objetos, al terminar el
   programa los objetos se destruyen y estos a su vez liberan los recursos, de esta manera no hace falta programar
@@ -1277,6 +1279,24 @@ la C6, la P4 y la Nucleo.
   módulo que sintetiza el compilador (`__tup_get_`/`__tup_new_`) y el puente; también la tupla de otro módulo.
   `test-aottuplas` (AOT == interpretado, 4/4, GC en cada alocación) con su sabotaje rojo, `NatTuplas` en la
   paridad, la stdlib igual byte a byte, y `AotCoberturaTest` de 28 a 29 de 30 (queda `TryStmt`, `#578`).
+  (`ce17a026`; la red, verde: paridad 139 de 139.)
+- **El diseño de `#668`** (`V7_IDEAS` §«`#666`–`#668`», `53e392ca`): el mapa verificado del compilador y de las dos
+  VMs —hoy sólo se destruye un `var owner` local; tras un KILL la VM-Java no puede correr BP y tras una excepción su
+  `main` queda RUNNING; no hay orden de creación en ninguna de las dos—, la propuesta (una fase de destrucción en los
+  tres finales, en un hilo limpio con una barrera, en orden inverso al de creación, con la red de seguridad de Eduardo
+  y la última red en C) y **cuatro decisiones que esperan a Eduardo**: D1 nada libera un objeto con destructor sin
+  destruirlo; D2 el orden, inverso al de creación; D3 tras un STOP también, con un tope; D4 la cascada de un `owner`,
+  ¿destruye?
+- **El lote de la C3 y la C5** (Eduardo: «Tienes la C3 y la C5 conectadas»; «OK, adelante con el lote»): sólo la app,
+  la imagen de hoy. `PinesSistema`: en la C3 el 11 y en la C5 el 19, «de la flash» —`#581`, comprobado en las tres C—.
+  Los packs de la C5 aguantaron (la zona y el bloque, donde estaban; los dos motores, `rc=0`). La ronda de V7
+  (`compat/informes/tanda_v7_c3c5_7oct.md`), sin un rojo: la C3, todas IDÉNTICAS con el nativo en uso; la C5, todas,
+  la GUI incluida. **La C6, la C3 y la C5 llevan la imagen de hoy**; la Pico 2, la Metro, la S3, la P4, la DK2 y la
+  Nucleo, al próximo lote.
+- **⏭️ AL RETOMAR** (Eduardo: pausa tras «esta tanda y el diseño»): (1) las decisiones D1–D4 de `#668`, y con ellas su
+  plan —la VM-Java, la VM-C, los destructores y los `release()` de `#667` por familia, la GUI medida, las placas—; (2)
+  las SUELTAS: 19 abiertas (eran 26 esta mañana: 9 cerradas hoy, `#663` aparcada y 3 nuevas, `#666`–`#668`); (3) el
+  próximo lote de placas.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 
