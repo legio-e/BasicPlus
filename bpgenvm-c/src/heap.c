@@ -732,6 +732,122 @@ void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
     bpvm_smp_unlock(vm);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * #656 (7-oct) — SOLTAR UN OWNER, SIN RECURSIÓN. Soltar un owner suelta en cascada sus campos owner y los elementos de
+ * un array owner; era una función que se llamaba a sí misma por cada uno (bpvm_free_owned, interp.c), así que una
+ * cadena de N owners bajaba N niveles de pila: en placa, con 16 KB en `run`, una larga desbordaba la tarea y la VM se
+ * colgaba sin decir nada (en el PC, con megas de pila, no se veía). La familia de #648 (el marcado del GC), y el mismo
+ * arreglo: una pila de trabajo pequeña y acotada —en la pila de C de quien suelta: con dos runs, dos pueden soltar a la
+ * vez—. Una cadena no pasa nunca de UN elemento —la pila sólo crece con un array owner ANCHO—; si se llena, lo que no
+ * cabe queda SEÑALADO en su cabecera (BPVM_TAG_SOLTANDO) y, vaciada la pila, se REPASA el heap buscándolo (otra vuelta,
+ * si se volvió a llenar: acaba, cada bloque se señala una vez como mucho). Nada se escribe en los CAMPOS de un objeto
+ * muerto: con dos runs, otro hilo puede estar a mitad de una instrucción sobre él.
+ *
+ * EL ORDEN cambia —antes, el bloque de un objeto volvía a la lista de libres DESPUÉS que los de sus hijos; ahora,
+ * antes—, y no se nota: la lista de libres va ordenada por dirección y funde los vecinos por los dos lados, así que
+ * acaba igual sea cual sea el orden (cambian sólo las cuentas de fusiones del diagnóstico). La VM-Java sí lo conserva
+ * (allí la lista es una pila y el orden decide el siguiente hueco): imita la recursión con una pila de Java. */
+#define SOLTAR_PILA_N 64u
+
+/* La entrada de antes: nulo, handle rancio, fuera del heap o ya libre, nada (eso hace segura la cascada ante un alias);
+ * si vale, su handle MUERE (bajo el cerrojo: con dos runs, el segundo que llega lo encuentra muerto y no sigue).
+ * Devuelve su cabecera, o 0. (El sabotaje de test_cola: SÓLO PRUEBAS.) */
+static uint32_t soltar_entra(bpvm_t* vm, bpref_t r) {
+    if (bpref_is_null(r)) return 0u;
+    if (bpvm_ref_dead(vm, r)) return 0u;
+    uint32_t addr = bpref_deref(vm, r);
+    if (addr < vm->heap_start || addr >= vm->heap_next) return 0u;
+    uint32_t header = addr - 4u;
+    if ((bpvm_read_u32_be(vm->memory + header) & BPVM_TAG_FREE_BIT) != 0u) return 0u;
+    if (bpvm_la_cola.sabotaje_owner) bpvm_handle_kill(vm, r);
+    else if (!bpvm_handle_kill(vm, r)) return 0u;
+    return header;
+}
+
+/* Un bloque ya muerto, a la pila de trabajo; si no cabe, señalado para el repaso. */
+static void soltar_apila(bpvm_t* vm, uint32_t header, uint32_t* pila, uint32_t* n, int* desborde) {
+    if (*n < SOLTAR_PILA_N) {
+        pila[(*n)++] = header;
+        return;
+    }
+    bpvm_write_u32_be(vm->memory + header, bpvm_read_u32_be(vm->memory + header) | BPVM_TAG_SOLTANDO);
+    *desborde = 1;
+}
+
+/* Un bloque ya muerto: sus hijos owner entran (mueren y se apilan) y el bloque vuelve a la lista de libres. Con dos
+ * runs el hueco no vuelve todavía: se lo lleva el siguiente GC —otro hilo, en el otro run, puede estar a mitad de una
+ * instrucción sobre este objeto, y devuelto ya, el hueco podía ser de uno nuevo—. Con un run, en el acto. */
+static void soltar_uno(bpvm_t* vm, uint32_t header, uint32_t* pila, uint32_t* n, int* desborde) {
+    uint32_t tag = bpvm_read_u32_be(vm->memory + header);
+    int type = (int) ((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
+    if (type == BPVM_TYPE_OBJECT) {
+        /* el sub-campo owner es una ref plana de 8 B: el bit del owner-bitmap está en su 1er slot (i*4) */
+        uint32_t class_ptr    = bpvm_read_u32_be(vm->memory + header + 4u);
+        uint32_t num_fields   = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
+        uint32_t bitmap_words = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_BITMAP_WORDS);
+        uint32_t owner_base   = class_ptr + BPVM_CLS_OFF_FIELD_BITMAP + bitmap_words * 4u;
+        for (uint32_t i = 0; i < num_fields; i++) {
+            uint32_t word = bpvm_read_u32_be(vm->memory + owner_base + (i >> 5) * 4u);
+            if (((word >> (i & 31)) & 1u) != 0u) {
+                uint32_t h = soltar_entra(vm, bpref_load(vm, header + BPVM_OBJ_HEADER_SIZE + i * 4u));
+                if (h != 0u) soltar_apila(vm, h, pila, n, desborde);
+            }
+        }
+    } else if (type == BPVM_TYPE_ARRAY_REF) {
+        uint32_t addr   = header + 4u;
+        uint32_t length = bpvm_read_u32_be(vm->memory + addr);
+        for (uint32_t i = 0; i < length; i++) {
+            uint32_t h = soltar_entra(vm, bpref_load(vm, addr + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE));
+            if (h != 0u) soltar_apila(vm, h, pila, n, desborde);
+        }
+    }
+    if (vm->smp != NULL && !bpvm_la_cola.sabotaje_owner) return;
+    bpvm_heap_free_block(vm, header);   /* H-010: bloque consistente */
+}
+
+void bpvm_heap_soltar_owned(bpvm_t* vm, bpref_t r) {
+    uint32_t pila[SOLTAR_PILA_N];
+    uint32_t n = 0u;
+    int desborde = 0;
+    uint32_t repasos = 0u;
+    uint32_t h = soltar_entra(vm, r);
+    if (h == 0u) return;
+    pila[n++] = h;
+    for (;;) {
+        while (n > 0u) soltar_uno(vm, pila[--n], pila, &n, &desborde);
+        if (!desborde) {
+            /* que se vea cuándo hizo falta el repaso (test-ownerhondo lo exige con su array ancho: un camino que
+             * nadie recorre no está probado) */
+            if (repasos > 0u)
+                bpvm_diag("[bpvm] soltar un owner: %u repaso(s) del heap (un array owner con mas de %u owners)",
+                          (unsigned) repasos, (unsigned) SOLTAR_PILA_N);
+            return;
+        }
+        repasos++;
+        /* EL REPASO: los señalados, a la pila —los que quepan; los demás, a la vuelta siguiente—. Con el cerrojo: con
+         * dos runs, el otro puede estar reservando (partiendo un hueco) mientras se recorre. Sólo se recoge: soltar
+         * durante el recorrido movería la lista de libres bajo los pies. */
+        desborde = 0;
+        bpvm_smp_lock(vm);
+        uint32_t cur = vm->heap_start;
+        while (cur < vm->heap_next) {
+            uint32_t total = block_total_size(vm, cur);
+            if (total == 0u || total > vm->heap_top - vm->heap_start) break;   /* descarrilado: lo dirá el GC (#494) */
+            uint32_t tag = bpvm_read_u32_be(vm->memory + cur);
+            if ((tag & BPVM_TAG_SOLTANDO) && !(tag & BPVM_TAG_FREE_BIT)) {
+                if (n < SOLTAR_PILA_N) {
+                    bpvm_write_u32_be(vm->memory + cur, tag & ~BPVM_TAG_SOLTANDO);
+                    pila[n++] = cur;
+                } else {
+                    desborde = 1;
+                }
+            }
+            cur += total;
+        }
+        bpvm_smp_unlock(vm);
+    }
+}
+
 /* H3 (V2): sweep que RECONSTRUYE la free-list coalesciendo runs de bloques
  * libres/muertos adyacentes, y RETROCEDE heap_next si el run final lo toca
  * (devuelve memoria al bump sin compactar). Espejo del gcLocked de la VM-Java. */

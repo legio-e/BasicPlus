@@ -174,12 +174,15 @@ void bpvm_scratch_give(const char* quien) {
 
 /* ── H13/#17: el parte del use-after-free ──────────────────────────────────
  * Tres números y una conclusión. La distinción que importa es si el handle
- * llegó con gen=0: eso NO es una referencia caducada, es un handle al que se le
- * cayeron los 32 bits altos por el camino (truncado a uint32 en algún sitio), y
- * sólo se manifiesta si ese slot se recicló alguna vez — de ahí que el mismo
- * programa vaya o no vaya según lo que se haya ejecutado antes.
+ * llegó con gen=0: puede ser un handle al que se le cayeron los 32 bits altos
+ * por el camino (truncado a uint32 en algún sitio), que sólo se manifiesta si
+ * ese slot se recicló alguna vez — de ahí que el mismo programa vaya o no vaya
+ * según lo que se haya ejecutado antes.
  * Ya nos ha mordido tres veces: #302 (puente native→BP), heap_alloc_string y el
- * msg del RuntimeError. Que el mensaje lo diga solo. */
+ * msg del RuntimeError. Que el mensaje lo diga solo.
+ * #656 (7-oct): pero gen=0 NO lo prueba: el PRIMER objeto de un slot nace con gen 0 (bpvm_handles.c, «slot fresco»),
+ * y un alias a él que sobrevive a su owner llega igual —gen 0 con el slot en 1—. Se decía «NO es una referencia
+ * caducada» y lo era (test-ownerhondo: sus testigos miran el primer nodo de la cadena). Ahora dice las dos. */
 void bpvm_uaf_report(uint32_t idx, uint32_t gen_handle, uint32_t gen_slot,
                      uint32_t handle_next) {
     bpvm_diag_urgente("[bpvm] UAF: idx=%lu  gen del handle=%lu  gen del slot=%lu"
@@ -187,9 +190,9 @@ void bpvm_uaf_report(uint32_t idx, uint32_t gen_handle, uint32_t gen_slot,
                       (unsigned long) idx, (unsigned long) gen_handle,
                       (unsigned long) gen_slot, (unsigned long) handle_next);
     if (gen_handle == 0u) {
-        bpvm_diag_urgente("[bpvm]   gen 0 con el slot en %lu: el handle perdio sus 32 bits"
-                          " ALTOS. NO es una referencia caducada: es un TRUNCAMIENTO"
-                          " (un bpref_t de 64b guardado en 32 en algun sitio).",
+        bpvm_diag_urgente("[bpvm]   gen 0 con el slot en %lu: o una referencia CADUCADA al PRIMER objeto de ese"
+                          " slot (nace con gen 0: el programa lo libero y lo siguio usando), o un TRUNCAMIENTO"
+                          " (el handle perdio sus 32 bits ALTOS: un bpref_t de 64b guardado en 32 en algun sitio).",
                           (unsigned long) gen_slot);
     } else {
         bpvm_diag_urgente("[bpvm]   las dos gen son != 0 y distintas: referencia CADUCADA"

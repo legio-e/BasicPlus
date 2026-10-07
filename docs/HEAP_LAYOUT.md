@@ -126,6 +126,11 @@ bit 23..0   reservados                 (0 hoy; futuro: hash/size cache)
 Mientras dura `Heap.compact()` (§2.5), y sólo entonces, el bit 31 de una cabecera significa ENHEBRADO (la
 cabecera guarda un índice de la tabla de handles, no la etiqueta) y el bit 23, CLAVADO. Fuera de ahí valen 0.
 
+Mientras se suelta un owner en la VM-C (`bpvm_heap_soltar_owned`, `#656`), y sólo entonces, el bit 22 es SOLTANDO
+(`0x00400000`): un bloque ya muerto cuyos hijos owner están por soltar y que no cupo en la pila de trabajo; el repaso
+del heap lo recoge y lo borra antes de acabar la instrucción. Fuera de ahí vale 0. (La VM-Java no lo usa: su pila es
+de Java y no se llena.)
+
 ### 2.2 Códigos de tipo (`TAG_TYPE`)
 
 | Valor | Constante | Significado |

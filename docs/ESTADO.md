@@ -27,6 +27,11 @@
 
 ## Última sesión
 
+> **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
+> verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
+> **`#656` cerrada**: soltar un owner, sin recursión en las dos VMs (una cadena de 4000 owners tumbaba a la VM-C con la
+> pila de una placa y a la VM-Java ya con la suya); `test-ownerhondo` en la red. Más abajo, «🔧 SUELTAS (7-oct)».
+>
 > **6-oct** — H12. De madrugada, **las natives con dos runs** (Eduardo: *«unos cambios localizados»*): N1 a N4 en el
 > PC con `test-nat2runs` (`204b4217`), y al hacerlo un CUELGUE de la GUI con dos runs (el puente anidado no se aparcaba
 > con el mundo parado), arreglado; N1 en los micros (el contexto de la native, uno por tarea: `8059f6ec`). Por la
@@ -1160,6 +1165,21 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🔧 SUELTAS (7-oct) — la lista, y `#656`: soltar un owner sin recursión
+
+- **La lista** (Eduardo: *«Empecemos por la lista de pendientes»*): 26 fichas abiertas en FICHAS, más `#665` en V8. Por
+  grupos: los fallos de verdad (`#657`, `#654`, `#656`, `#655`, `#652`, `#659`, `#663`, `#664`), los cabos de las
+  natives (`#577`, `#578`, `#592`, `#581` —sólo le queda `PinesSistema` en la C6—, y `#582`, `#583`, `#584`, decisiones de
+  fondo), memoria y packs (`#623`, `#650`, `#651`), rendimiento (`#614`, `#615`), limpieza (`#642`–`#646`) y herramientas
+  (`#647`). El orden, los fallos primero (no se publica con un fallo conocido); `#657`, `#654` y `#663` piden una
+  decisión de Eduardo, que se le traerá con su mecanismo y un ejemplo. Eduardo: *«OK»*.
+- **`#656`, CERRADA** (FICHAS: el detalle): soltar un owner recurría por cada campo owner; medido antes de tocar con
+  `OwnerHondo` (4000 en cadena, 600 en un array): la VM-C caía con 64 KB de pila y **la VM-Java también, con la suya por
+  defecto**. Ahora, sin recursión: en la VM-C, la pila de trabajo acotada y el repaso del heap de `#648` (un bit
+  reservado de la cabecera, el 22, para lo que espera al repaso); en la VM-Java, la recursión imitada en el mismo orden.
+  `test-ownerhondo` en la red, con su sabotaje rojo (las dos recursiones de vuelta: las dos caen) y el repaso exigido; a
+  la tanda de V7 (45 pruebas). Y de paso, un diagnóstico del UAF que mentía con la generación 0.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

@@ -1367,6 +1367,29 @@ test-gchondo: $(BIN)
 	   exit 1; \
 	 fi
 
+# #656 (7-oct) — SOLTAR UN OWNER SIN RECURSIÓN: una cadena de 4000 owners y un array owner de 600 con un hijo cada uno,
+# con la pila acotada en las dos VMs (la VM-C en un hilo de 64 KB, como una tarea de placa; la VM-Java con -Xss256k):
+# con la recursión de antes, la VM-C caía al soltar la cadena y la VM-Java, ya con su pila por defecto
+# (StackOverflowError). Las dos hasta 'fin', con la misma salida —los testigos encuentran muertos los nodos del fondo:
+# la cascada llegó—; y en la VM-C, el REPASO del heap tiene que haber corrido (el array ancho llena su pila de trabajo):
+# un camino que nadie recorre no está probado.
+test-ownerhondo: $(BIN)
+	$(call fixture,OwnerHondo)
+	$(call stdlibdep,Core)
+	@echo "--- #656 soltar un owner sin recursión: 4000 en cadena y 600 en un array, con la pila acotada (esperado: las dos VMs hasta 'fin', con la misma salida, y el repaso en la VM-C) ---"
+	@oc=$$(cd samples && timeout 60 ../$(BIN) --pila=65536 OwnerHondo.mod 2>build_ownerhondo.err); stc=$$?; \
+	 oj=$$(cd samples && timeout 60 java -Xss256k -jar ../../miVM/target/bpgenvm-1.0.jar OwnerHondo.mod 2>/dev/null); stj=$$?; \
+	 pc=$$(printf '%s\n' "$$oc" | grep -E '^(honda|ancha|otra|fin)'); pj=$$(printf '%s\n' "$$oj" | grep -E '^(honda|ancha|otra|fin)'); \
+	 rep=$$(grep -ao 'soltar un owner: [0-9]* repaso' samples/build_ownerhondo.err | head -1); rm -f samples/build_ownerhondo.err; \
+	 printf '%s\n' "$$pc"; \
+	 if [ $$stc -eq 0 ] && [ $$stj -eq 0 ] && printf '%s\n' "$$pc" | grep -q '^fin$$' && [ "$$pc" = "$$pj" ] && [ -n "$$rep" ]; then \
+	   echo "  ($$rep del heap en la VM-C)"; echo "PASS test-ownerhondo"; \
+	 else \
+	   echo "FAIL test-ownerhondo (VM-C con 64 KB: salida $$stc; VM-Java con -Xss256k: salida $$stj; repaso: '$$rep')"; \
+	   [ "$$pc" = "$$pj" ] || { echo "  la VM-Java dijo otra cosa:"; printf '%s\n' "$$pj" | sed 's/^/    /'; }; \
+	   exit 1; \
+	 fi
+
 # #653 (4-oct) — EL LOG CON DOS ESCRITORES: mirar si la línea cabe y copiarla no se pueden separar (la sección crítica
 # de la cintura). Dos hilos escriben sin parar en una región de 512 B con una guarda detrás: con la sección, intacta;
 # sin ella (--sin-seccion, el sabotaje: el log de antes), pisada —rojo—. Ver test/test_logmt.c.

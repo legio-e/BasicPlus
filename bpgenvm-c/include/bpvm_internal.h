@@ -73,6 +73,10 @@ typedef struct { uint64_t v; } bpref_t;
  * reservados: un bloque que no se mueve aunque tenga handle (el estado de un fichero abierto). Espejo de miVM. */
 #define BPVM_TAG_ENHEBRADO  0x80000000u
 #define BPVM_TAG_CLAVADO    0x00800000u
+/* #656 (7-oct) — otra marca que sólo existe MIENTRAS se suelta un owner (heap.c, bpvm_heap_soltar_owned), en otro bit
+ * de los reservados: un bloque ya muerto cuyos hijos owner están por soltar, que no cupo en la pila de trabajo y espera
+ * al repaso. Fuera de ahí vale 0. Sólo la VM-C (en la VM-Java, la pila es de Java y no se llena). */
+#define BPVM_TAG_SOLTANDO   0x00400000u
 
 /* Códigos de tipo de heap. */
 #define BPVM_TYPE_ARRAY_I8  0
@@ -1173,6 +1177,10 @@ int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc);
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
 void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);
+/* #656 — soltar un owner: su handle muere y, en cascada, los de sus campos owner y los elementos de un array owner, y
+ * sus bloques vuelven a la lista de libres (con dos runs, al siguiente GC). SIN recursión. La llama el FREE_REF y la
+ * asignación a un campo owner (interp.c, bpvm_free_owned). */
+void     bpvm_heap_soltar_owned(bpvm_t* vm, bpref_t r);
 /* #355 — suelta la reserva de emergencia. La llama SOLO una reserva para construir un error (bpvm_heap_nuevo_error):
  * si la soltara la reserva normal al fallar, se la quedaria el programa y el
  * error se volveria a quedar sin memoria con la que construirse. */

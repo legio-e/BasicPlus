@@ -675,68 +675,19 @@ static void emit_double(bpvm_t* vm, bpvm_thread_t* tc, double v, int newline) {
     emit_pieza_o_fin(vm, tc, buf, n, newline);   /* V7/H7 #600 */
 }
 
-/* V4 / H-006: liberación determinista y RECURSIVA de un ref owned — espejo de
+/* V4 / H-006: liberación determinista de un ref owned EN CASCADA — espejo de
  * freeOwnedObjectLocked de miVM. Recorre el owner-bitmap del descriptor de clase
  * y libera en cascada los sub-campos owner; para arrays de refs owned libera cada
  * slot. Al final libera el bloque contenedor sea cual sea su tipo (objeto, array
  * de refs, array de primitivos o string). Cada bloque queda CONSISTENTE
  * (size@+4 + free-list) vía bpvm_heap_free_block. NOP en null / fuera del heap /
- * ya-libre (FREE_BIT), lo que hace la recursión segura ante alias.
+ * ya-libre (FREE_BIT), lo que hace la cascada segura ante alias.
  *
- * El sub-campo owner es una ref PLANA de 8B: el bit del owner-bitmap está en el
- * 1er slot del campo (offset i*4 = high word), la dirección va en el low word;
- * bpref_load lo decodifica. Las direcciones ocupan 2 slots pero el bit sólo está
- * en el primero, así que el barrido por slot no lo procesa dos veces. */
+ * #656 (7-oct): era RECURSIVA —una cadena de N owners bajaba N niveles de pila de C y, en placa, desbordaba la tarea—;
+ * ahora la hace bpvm_heap_soltar_owned (heap.c), sin recursión. Las razones de cada paso (el handle que muere bajo el
+ * cerrojo, el hueco que con dos runs espera al GC), allí, con el código. */
 static void bpvm_free_owned(bpvm_t* vm, bpref_t r) {
-    if (bpref_is_null(r)) return;
-    /* Paso 7b.1 — free RANCIO (slot reciclado, gen no matchea) = NO-OP seguro: si no,
-     * derefearía al ocupante NUEVO y liberaría SU bloque/handle → corrupción. Debe ir
-     * ANTES del deref+free_block, no solo en handle_kill. (El doble-free del MISMO ref ya
-     * lo tapaba addr=0 del paso 6; esto cubre el rancio-a-slot-reusado.) */
-    if (bpvm_ref_dead(vm, r)) return;
-    uint32_t addr = bpref_deref(vm, r);
-    if (addr < vm->heap_start || addr >= vm->heap_next) return;   /* no-heap: NOP */
-    uint32_t header = addr - 4u;
-    uint32_t tag = bpvm_read_u32_be(vm->memory + header);
-    if ((tag & BPVM_TAG_FREE_BIT) != 0) return;                    /* ya libre */
-    /* Paso 3/contrato B: el índice queda MUERTO → derefs futuros gritan.
-     * V7/H12, 2b (la revisión) — Y LO SUELTA QUIEN LO MATA. Lo de arriba se mira sin cerrojo: con dos runs, dos hilos
-     * que asignan a la vez el MISMO campo owner (una carrera del programa: el propietario es uno, los hilos dos) leen
-     * el mismo objeto, los dos lo ven vivo, y los dos lo soltaban —el bloque dos veces en la lista de libres, que se
-     * apuntaba a sí misma: la siguiente reserva daba vueltas sin fin con el cerrojo cogido, o dos objetos en el mismo
-     * hueco—. Matarlo es mirar y matar juntos, bajo el cerrojo: el segundo lo encuentra muerto y no sigue. Con un run,
-     * la instrucción entera va de una vez y esto no cambia nada. */
-    if (bpvm_la_cola.sabotaje_owner) bpvm_handle_kill(vm, r);   /* SÓLO PRUEBAS (test_cola): el camino de antes */
-    else if (!bpvm_handle_kill(vm, r)) return;
-    int type = (int)((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
-
-    if (type == BPVM_TYPE_OBJECT) {
-        uint32_t class_ptr    = bpvm_read_u32_be(vm->memory + header + 4u);
-        uint32_t num_fields   = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_NUM_FIELDS);
-        uint32_t bitmap_words = bpvm_read_u16_be(vm->memory + class_ptr + BPVM_CLS_OFF_BITMAP_WORDS);
-        uint32_t owner_base   = class_ptr + BPVM_CLS_OFF_FIELD_BITMAP + bitmap_words * 4u;
-        for (uint32_t i = 0; i < num_fields; i++) {
-            uint32_t word = bpvm_read_u32_be(vm->memory + owner_base + (i >> 5) * 4u);
-            if (((word >> (i & 31)) & 1u) != 0u) {
-                bpref_t child = bpref_load(vm, header + BPVM_OBJ_HEADER_SIZE + i * 4u);
-                bpvm_free_owned(vm, child);
-            }
-        }
-    } else if (type == BPVM_TYPE_ARRAY_REF) {
-        uint32_t length = bpvm_read_u32_be(vm->memory + addr);
-        for (uint32_t i = 0; i < length; i++) {
-            bpref_t slot = bpref_load(vm, addr + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE);
-            bpvm_free_owned(vm, slot);
-        }
-    }
-    /* V7/H12, 2b (la revisión) — con DOS runs el hueco no vuelve ya a la lista de libres: se lo lleva el siguiente GC
-     * (su handle está muerto: nadie lo marca, y el barrido lo suelta, con la cuenta de #593 en su sitio). Otro hilo, en
-     * el otro run, puede estar A MITAD de una instrucción sobre este objeto —miró que vivía y aún no ha escrito el
-     * campo— y, devuelto ya, el hueco podía ser de un objeto nuevo: escribiría en él, en silencio. El GC sólo corre
-     * con todos parados entre dos instrucciones. El objeto muere igual en el acto (quien lo use después recibe «objeto
-     * eliminado»); sólo su memoria espera. Con un run, como siempre: de vuelta en el acto. */
-    if (vm->smp != NULL && !bpvm_la_cola.sabotaje_owner) return;
-    bpvm_heap_free_block(vm, header);   /* H-010: bloque consistente */
+    bpvm_heap_soltar_owned(vm, r);
 }
 
 /* Ejecuta el thread `tc` durante hasta `max_ops` opcodes o hasta que

@@ -7274,53 +7274,94 @@ public class VirtualMachine {
         synchronized (vmLock) { freeOwnedObjectLocked(ref); }
     }
 
-    /** Implementación de freeOwnedObject que asume vmLock ya adquirido (para llamadas recursivas). */
+    /**
+     * Implementación de freeOwnedObject que asume vmLock ya adquirido.
+     *
+     * #656 (7-oct) — SIN RECURSIÓN. Se llamaba a sí misma por cada campo owner y cada elemento de un array owner: una
+     * cadena de 4000 owners tumbaba al worker con StackOverflowError, con la pila por defecto (la VM-C, en placa,
+     * colgaba la tarea). Ahora imita la recursión con una pila de Java de marcos —{cabecera, tipo, siguiente campo o
+     * elemento}—, en el MISMO orden que antes: el handle de cada uno muere al entrar (padre antes que hijos, campo a
+     * campo) y su bloque vuelve a la lista de libres al salir (los hijos antes que el padre). El orden importa AQUÍ: la
+     * lista de libres es una pila (addToFreeList) y decide qué hueco se lleva la reserva siguiente. (La VM-C no lo
+     * conserva y no le hace falta: su lista va ordenada por dirección y funde los vecinos —heap.c, soltar un owner—.)
+     */
     private void freeOwnedObjectLocked(long ref) {
-        if (ref == 0) return;
+        int headerAddr = soltarEntra(ref);
+        if (headerAddr < 0) return;
+        ArrayDeque<int[]> pila = new ArrayDeque<>();
+        pila.push(soltarMarco(headerAddr));
+        while (!pila.isEmpty()) {
+            int[] marco = pila.peek();
+            int hijo = soltarSiguienteHijo(marco);
+            if (hijo >= 0) {
+                pila.push(soltarMarco(hijo));
+                continue;
+            }
+            // Para TYPE_ARRAY_I8/I16/I32 (sin refs) y para TYPE_OBJECT tras
+            // procesar sus owners, simplemente liberamos el bloque.
+            pila.pop();
+            int totalSize = objectTotalSize(marco[0]);
+            addToFreeList(marco[0], totalSize);
+            heapBloques--;   // V7/H7 #593: un bloque menos
+        }
+    }
+
+    /** La entrada de un owner que se suelta: los NO-OP de siempre y, si vale, su handle muere. Su cabecera, o -1. */
+    private int soltarEntra(long ref) {
+        if (ref == 0) return -1;
         // Paso 7b.1 — free RANCIO (slot reciclado, gen no matchea) = NO-OP seguro: si no,
         // derefearía al ocupante NUEVO y liberaría SU bloque → corrupción. ANTES del deref.
         if ((ref & HANDLE_TAG) != 0) {
             int hidx = handleIdx(ref);
-            if (hidx > 0 && hidx < handleNext && handleGen[hidx] != handleGenOf(ref)) return;
+            if (hidx > 0 && hidx < handleNext && handleGen[hidx] != handleGenOf(ref)) return -1;
         }
         int headerAddr = refDeref(ref) - 4;
-        if (headerAddr < heapStart || headerAddr >= heapNext) return;
+        if (headerAddr < heapStart || headerAddr >= heapNext) return -1;
         int tag = readInt32(headerAddr);
-        if ((tag & TAG_FREE_BIT) != 0) return;       // ya libre
+        if ((tag & TAG_FREE_BIT) != 0) return -1;    // ya libre
         handleKill(ref);   // Paso 3/contrato B: el índice queda MUERTO → derefs futuros gritan
-        int type = (tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
+        return headerAddr;
+    }
 
-        if (type == TYPE_OBJECT) {
-            // Liberación recursiva de campos owner según el class descriptor.
+    /** El marco de un bloque ya muerto: {cabecera, tipo, el siguiente campo o elemento por mirar}. */
+    private int[] soltarMarco(int headerAddr) {
+        int type = (readInt32(headerAddr) & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
+        return new int[] { headerAddr, type, 0 };
+    }
+
+    /** El siguiente hijo owner del marco que ENTRA (con su handle ya muerto), avanzando el marco; -1 si no quedan. */
+    private int soltarSiguienteHijo(int[] marco) {
+        int headerAddr = marco[0];
+        if (marco[1] == TYPE_OBJECT) {
+            // Los campos owner, según el class descriptor.
             int classPtr = readInt32(headerAddr + 4);
             int numFields  = readInt16(classPtr + CLS_OFF_NUM_FIELDS)   & 0xFFFF;
             int bitmapWords = readInt16(classPtr + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
             int ownerBitmapBase = classPtr + CLS_OFF_FIELD_BITMAP + bitmapWords * 4;
-            for (int i = 0; i < numFields; i++) {
+            while (marco[2] < numFields) {
+                int i = marco[2]++;
                 int word = readInt32(ownerBitmapBase + (i >>> 5) * 4);
                 if (((word >> (i & 31)) & 1) != 0) {
                     // V4: sub-campo owner = ref plana 8B (bit en el 1er slot; addr en el low word).
-                    long childRef = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
-                    freeOwnedObjectLocked(childRef);
+                    int h = soltarEntra(refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 4));
+                    if (h >= 0) return h;
                 }
             }
-        } else if (type == TYPE_ARRAY_REF) {
+        } else if (marco[1] == TYPE_ARRAY_REF) {
             // Cascada propietaria: si llegamos aquí es porque alguien (un campo
             // owner del objeto contenedor) considera que ESTE array de refs y
-            // su contenido le pertenecen. Liberamos cada slot non-null
-            // recursivamente y luego el array como bloque.
+            // su contenido le pertenecen. Cada slot non-null, y luego el array como bloque.
             int length = readInt32(headerAddr + 4);   // V4: vía headerAddr (ya derefeado; era readInt32(ref) crudo → con handle leía basura)
-            for (int i = 0; i < length; i++) {
-                long slotRef = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);   // V4 #2: handle 64b COMPLETO (gen) — como el caso OBJECT (5074) y VM-C bpref_load; era (int)readI64 = gen truncada
-                if (slotRef != 0) freeOwnedObjectLocked(slotRef);
+            while (marco[2] < length) {
+                int i = marco[2]++;
+                long slotRef = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);   // V4 #2: handle 64b COMPLETO (gen) — como el caso OBJECT y VM-C bpref_load; era (int)readI64 = gen truncada
+                if (slotRef != 0) {
+                    int h = soltarEntra(slotRef);
+                    if (h >= 0) return h;
+                }
             }
         }
-        // Para TYPE_ARRAY_I8/I16/I32 (sin refs) y para TYPE_OBJECT tras
-        // procesar sus owners, simplemente liberamos el bloque.
-
-        int totalSize = objectTotalSize(headerAddr);
-        addToFreeList(headerAddr, totalSize);
-        heapBloques--;   // V7/H7 #593: un bloque menos
+        return -1;
     }
 
     /**
