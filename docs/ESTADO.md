@@ -1267,6 +1267,12 @@ la C6, la P4 y la Nucleo.
   y del enlazador**: de 3 a 6 KB por módulo importado aunque corra desde el pack (que ahorra el código, no las
   tablas). La C3, por medir con la herramienta. Eduardo propuso subir la stdlib al pack para ahorrar: en la C6 ya lo
   está —sus dependencias corren XIP, «crc igual»—, y aun así pesan las tablas (`#651`, los caminos).
+- **`#668`, ABIERTA, en V7** —el modelo de Eduardo para `#666`—: *«Mira si lo hacemos con objetos, al terminar el
+  programa los objetos se destruyen y estos a su vez liberan los recursos, de esta manera no hace falta programar
+  código especial»*; los Gpio, *«por defecto deben ser input o nada»*; y *«me inclino que sí, que lo hagamos en V7, le
+  dará mucha más robustez al SO y a la VM»*. Hoy no se destruye nada al acabar (la VM se descarta entera; el GC no
+  llama destructores, a propósito: `#491`). Lo siguiente: el diseño en `V7_IDEAS` §«#668» —qué objetos, el orden, un
+  destructor que lanza o se cuelga tras un STOP, la paridad— y sus decisiones, con un ejemplo cada una.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 
