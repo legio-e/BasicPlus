@@ -2054,6 +2054,9 @@ test-fslfsmt: $(LIBOBJ)
 # H2 fase A · B1.4b — el requisito de multitarea A NIVEL BP: 3 Threads BP
 # escribiendo 4 ficheros a la vez sobre el ORÁCULO littlefs con 4 workers
 # REALES (--smp=4). Verde = tamaños exactos + 0 líneas rotas.
+# V7 #657 (7-oct) — el compartido, por el CANAL Log (Eduardo: «el log es diferente, es un canal de comunicación…
+# ahí sí que puede haber concurrencia como en el I2C o en el SPI»): un fichero abierto para escribir no se vuelve a
+# abrir, y tres appendFile que se cruzaban en él eran «ya está abierto». 300 líneas «[INFO ] x»: 3000 bytes.
 # V7/H7 (#599, 28-sep) — en la red (check-testc), y el verde que dice el comentario:
 # hasta hoy sólo se miraban las líneas rotas; ahora también cada tamaño y cada marca.
 # H12 (5-oct) — la SALIDA del programa, sin los avisos de la VM (stderr, a build/iomt.err): con 2>&1, el aviso
@@ -2061,17 +2064,18 @@ test-fslfsmt: $(LIBOBJ)
 # comprobación de línea exacta fallaba con los valores bien (tras #662, que cambió el ritmo del final).
 test-iomt: $(BIN)
 	$(call fixture,IoMt)
+	$(call stdlibdep,Core IO Log)
 	@if [ ! -f samples/IoMt.mod ]; then \
 	  echo "(skip test-iomt: falta samples/IoMt.mod — regenéralo con:"; \
 	  echo "   java -jar ../lexer-java/target/basicplus-frontend.jar \\"; \
 	  echo "        samples/IoMt.bp --compile samples --backend=mivm)"; \
 	else \
-	  echo "--- B1.4b Threads BP + littlefs + --smp=4 (esperado: 200/200/200/600, 0 rotas) ---"; \
+	  echo "--- B1.4b Threads BP + littlefs + --smp=4 (esperado: 200/200/200/3000, 0 rotas) ---"; \
 	  rm -f build/iomt.img; \
 	  out=$$(cd samples && ../$(BIN) --fs=lfs:../build/iomt.img --smp=4 IoMt.mod 2>../build/iomt.err); \
 	  echo "$$out" | grep -vE 'INICIANDO|FIN DE'; \
 	  if echo "$$out" | grep -qx "own1 = 200" && echo "$$out" | grep -qx "own2 = 200" && \
-	     echo "$$out" | grep -qx "own3 = 200" && echo "$$out" | grep -qx "shared = 600" && \
+	     echo "$$out" | grep -qx "own3 = 200" && echo "$$out" | grep -qx "shared = 3000" && \
 	     echo "$$out" | grep -qx "marcas a/b/c = 100 100 100" && echo "$$out" | grep -qx "lineas rotas = 0"; then \
 	    echo "OK: 3 hilos BP escriben 4 ficheros a la vez sobre littlefs con 4 workers: tamanos exactos, 0 lineas rotas"; \
 	  else echo "FAIL test-iomt (los avisos de la VM, abajo)"; tail -15 build/iomt.err; exit 1; fi; \

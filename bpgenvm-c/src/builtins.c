@@ -105,7 +105,12 @@ static void* zona_para_un_builtin(bpvm_t* vm, size_t n, const char* quien) {
 static void hal_cerrar(bpvm_t* vm) { if (vm->smp) bpvm_platform_mutex_lock(&bpvm_la_cola.hal_lock); }
 static void hal_abrir(bpvm_t* vm)  { if (vm->smp) bpvm_platform_mutex_unlock(&bpvm_la_cola.hal_lock); }
 
-/* ¿Hay ya un fichero abierto con esa ruta y alguno de los dos escribe? */
+/* V7 #657 — un fichero que tiene abierto un builtin de fichero entero mientras dura (abrir_breves): el apunte vive en la
+ * pila del builtin. */
+struct bpvm_abierto_breve { const char* path; int mode; struct bpvm_abierto_breve* sig; };
+typedef struct bpvm_abierto_breve bpvm_abierto_breve_t;
+
+/* ¿Hay ya un fichero abierto con esa ruta y alguno de los dos escribe? (Un File, o un builtin de fichero entero: #657.) */
 static int fichero_ya_abierto(bpvm_t* vm, const char* path, int mode) {
     for (uint32_t r = vm->files_head; r != 0; ) {
         bpvm_fs_file_t* h = fhdr_de_ref(vm, r);
@@ -113,7 +118,42 @@ static int fichero_ya_abierto(bpvm_t* vm, const char* path, int mode) {
         if (strcmp(bpvm_fs_fpath(h), path) == 0 && (mode != BPVM_FS_O_READ || h->mode != BPVM_FS_O_READ)) return 1;
         r = h->next;
     }
+    for (const bpvm_abierto_breve_t* a = vm->abiertos_breves; a != NULL; a = a->sig)
+        if (strcmp(a->path, path) == 0 && (mode != BPVM_FS_O_READ || a->mode != BPVM_FS_O_READ)) return 1;
     return 0;
+}
+
+/* V7 #657 (7-oct) — UN BUILTIN DE FICHERO ENTERO ES UN OPEN Y UN CLOSE. Eduardo: «trabajamos siempre con handlers sobre
+ * ficheros, así que siempre ha de haber un open y un close». writeFile, appendFile, removeFile, rename, copyFile y
+ * readFile abrían, hacían lo suyo y cerraban por su cuenta, sin mirar la lista de abiertos: con un File abierto para
+ * escribir, un writeFile al mismo fichero liberaba en la SD (FatFs, sin FF_FS_LOCK) la cadena de clusters del otro, y el
+ * cierre de éste escribía en ellos —el volumen, corrupto, con un solo hilo—. Ahora se apuntan en la lista MIENTRAS DURAN,
+ * como un File —mirar y apuntarse, juntos, bajo el cerrojo de los File: con dos runs, un File de otro hilo no se cuela
+ * en medio—, con su misma regla: un fichero abierto para escribir no se abre otra vez; para leer, los que quieran. Dos
+ * rutas (rename, copyFile), las dos o ninguna; la misma dos veces, una, para escribir. La excepción, fuera del cerrojo
+ * (lanzarla reserva memoria). Devuelve 0 si se apuntaron; si no, cuál choca (1 o 2). */
+static int abrir_breves(bpvm_t* vm, bpvm_abierto_breve_t* a, const char* p1, int m1,
+                        bpvm_abierto_breve_t* b, const char* p2, int m2) {
+    int choca = 0;
+    if (b != NULL && strcmp(p1, p2) == 0) { b = NULL; m1 = BPVM_FS_O_WRITE; }
+    ficheros_cerrar(vm);
+    if (fichero_ya_abierto(vm, p1, m1)) {
+        choca = 1;
+    } else if (b != NULL && fichero_ya_abierto(vm, p2, m2)) {
+        choca = 2;
+    } else {
+        a->path = p1; a->mode = m1; a->sig = vm->abiertos_breves; vm->abiertos_breves = a;
+        if (b != NULL) { b->path = p2; b->mode = m2; b->sig = vm->abiertos_breves; vm->abiertos_breves = b; }
+    }
+    ficheros_abrir(vm);
+    return choca;
+}
+static void cerrar_breves(bpvm_t* vm, bpvm_abierto_breve_t* a, bpvm_abierto_breve_t* b) {
+    ficheros_cerrar(vm);
+    for (bpvm_abierto_breve_t** p = &vm->abiertos_breves; *p != NULL; ) {
+        if (*p == a || *p == b) *p = (*p)->sig; else p = &(*p)->sig;
+    }
+    ficheros_abrir(vm);
 }
 static void fregistrar(bpvm_t* vm, uint32_t ref, bpvm_fs_file_t* h) {
     h->next = vm->files_head;
@@ -1826,6 +1866,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * el heap (cualquier tamaño). */
     case BUILTIN_READ_FILE:
     case BUILTIN_READ_FILE_BYTES: {   /* #247: idéntico — los bytes ya son crudos en heap */
+        const char* que = (id == BUILTIN_READ_FILE_BYTES) ? "readFileBytes" : "readFile";   /* #657: el que se llamó */
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
@@ -1834,22 +1875,31 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * cwd/literal, luego /app (modo plano). Los absolutos no se tocan. */
         char eff[600];
         const char* rpath = bpvm_fs_resolve(path, eff, sizeof(eff));
+        bpvm_abierto_breve_t ab;   /* V7 #657: un open para leer, mientras dura */
+        if (abrir_breves(vm, &ab, rpath, BPVM_FS_O_READ, NULL, NULL, 0) != 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "%s('%s'): ya está abierto", que, path);
+            return builtin_throw(vm, tc, em);
+        }
         uint32_t size = 0;
         if (bpvm_fs_stat(rpath, &size) != 0) {
             char em[576];
-            snprintf(em, sizeof(em), "readFile('%s'): no se pudo abrir", path);
+            cerrar_breves(vm, &ab, NULL);
+            snprintf(em, sizeof(em), "%s('%s'): no se pudo abrir", que, path);
             return builtin_throw(vm, tc, em);
         }
         bpref_t refh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, size, size); /* V7/H7 #593: la cabecera y el handle, al nacer */
-        if (refh.v == 0u) return builtin_throw(vm, tc, "readFile: sin memoria");
+        if (refh.v == 0u) { cerrar_breves(vm, &ab, NULL); return builtin_throw(vm, tc, "readFile: sin memoria"); }
         if (size > 0) {
             long n = bpvm_fs_read(rpath, vm->memory + bpref_deref(vm, refh) + 4, size);
             if (n < 0 || (uint32_t) n != size) {
                 char em[576];
-                snprintf(em, sizeof(em), "readFile('%s'): error de lectura", path);
+                cerrar_breves(vm, &ab, NULL);
+                snprintf(em, sizeof(em), "%s('%s'): error de lectura", que, path);
                 return builtin_throw(vm, tc, em);
             }
         }
+        cerrar_breves(vm, &ab, NULL);
         bpref_push(vm, tc, refh);
         return BPVM_OK;
     }
@@ -1857,6 +1907,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_WRITE_FILE_BYTES:    /* #247: idéntico — escribe los bytes crudos del array */
     case BUILTIN_APPEND_FILE: {
         int append = (id == BUILTIN_APPEND_FILE);
+        const char* que = append ? "appendFile" : (id == BUILTIN_WRITE_FILE_BYTES) ? "writeFileBytes" : "writeFile";   /* #657 */
         uint32_t cref = pop_ref(vm, tc);   /* content (empujado el último) */
         uint32_t pref = pop_ref(vm, tc);   /* path */
         char path[BPVM_FS_PATH_MAX];
@@ -1865,10 +1916,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t cad = (cref == 0) ? 0 : bpref_deref(vm, bpref_from_addr(cref));   /* V4: handle→addr */
         uint32_t clen = (cad == 0) ? 0 : bpvm_read_u32_be(vm->memory + cad);
         const uint8_t* cdata = (cad == 0) ? NULL : (vm->memory + cad + 4);
-        if (bpvm_fs_write(path, cdata, clen, append) != 0) {
+        bpvm_abierto_breve_t ab;   /* V7 #657: un open para escribir, mientras dura */
+        if (abrir_breves(vm, &ab, path, append ? BPVM_FS_O_APPEND : BPVM_FS_O_WRITE, NULL, NULL, 0) != 0) {
             char em[576];
-            snprintf(em, sizeof(em), "%s('%s'): error de escritura",
-                     append ? "appendFile" : "writeFile", path);
+            snprintf(em, sizeof(em), "%s('%s'): ya está abierto", que, path);
+            return builtin_throw(vm, tc, em);
+        }
+        int fallo = (bpvm_fs_write(path, cdata, clen, append) != 0);
+        cerrar_breves(vm, &ab, NULL);
+        if (fallo) {
+            char em[576];
+            snprintf(em, sizeof(em), "%s('%s'): error de escritura", que, path);
             return builtin_throw(vm, tc, em);
         }
         push_i32(vm, tc, 0);   /* void → dummy */
@@ -2155,7 +2213,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
             return builtin_throw(vm, tc, "path demasiado largo");
-        if (bpvm_fs_remove(path) != 0) {
+        bpvm_abierto_breve_t ab;   /* V7 #657: borrar es escribir: un open para escribir, mientras dura */
+        if (abrir_breves(vm, &ab, path, BPVM_FS_O_WRITE, NULL, NULL, 0) != 0) {
+            char em[576];
+            snprintf(em, sizeof(em), "removeFile('%s'): ya está abierto", path);
+            return builtin_throw(vm, tc, em);
+        }
+        int fallo = (bpvm_fs_remove(path) != 0);
+        cerrar_breves(vm, &ab, NULL);
+        if (fallo) {
             char em[576];
             snprintf(em, sizeof(em), "removeFile('%s'): error al borrar", path);
             return builtin_throw(vm, tc, em);
@@ -2170,7 +2236,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (read_bp_path(vm, fref, from, sizeof(from)) != 0 ||
             read_bp_path(vm, tref, to,   sizeof(to))   != 0)
             return builtin_throw(vm, tc, "path demasiado largo");
-        if (bpvm_fs_rename(from, to) != 0) {
+        bpvm_abierto_breve_t a1, a2;   /* V7 #657: los dos se escriben: dos opens para escribir, mientras dura */
+        int choca = abrir_breves(vm, &a1, from, BPVM_FS_O_WRITE, &a2, to, BPVM_FS_O_WRITE);
+        if (choca != 0) {
+            char em[1100];
+            snprintf(em, sizeof(em), "rename('%s' -> '%s'): '%s' ya está abierto", from, to, choca == 1 ? from : to);
+            return builtin_throw(vm, tc, em);
+        }
+        int fallo = (bpvm_fs_rename(from, to) != 0);
+        cerrar_breves(vm, &a1, &a2);
+        if (fallo) {
             char em[1100];
             snprintf(em, sizeof(em), "rename('%s' -> '%s'): error al renombrar", from, to);
             return builtin_throw(vm, tc, em);
@@ -2234,7 +2309,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (read_bp_path(vm, fref, from, sizeof(from)) != 0 ||
             read_bp_path(vm, tref, to,   sizeof(to))   != 0)
             return builtin_throw(vm, tc, "path demasiado largo");
-        if (bpvm_fs_copy(from, to) != 0) {
+        bpvm_abierto_breve_t a1, a2;   /* V7 #657: el origen se lee y el destino se escribe, mientras dura */
+        int choca = abrir_breves(vm, &a1, from, BPVM_FS_O_READ, &a2, to, BPVM_FS_O_WRITE);
+        if (choca != 0) {
+            char em[1100];
+            snprintf(em, sizeof(em), "copyFile('%s' -> '%s'): '%s' ya está abierto", from, to, choca == 1 ? from : to);
+            return builtin_throw(vm, tc, em);
+        }
+        int fallo = (bpvm_fs_copy(from, to) != 0);
+        cerrar_breves(vm, &a1, &a2);
+        if (fallo) {
             char em[1100];
             snprintf(em, sizeof(em), "copyFile('%s' -> '%s'): error al copiar", from, to);
             return builtin_throw(vm, tc, em);

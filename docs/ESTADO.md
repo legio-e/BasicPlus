@@ -38,9 +38,10 @@
 > (`95390da5`). **`#659` cerrada**: con dos runs, las trazas de bus del PC salían a trozos mezclados (10 de 10 pasadas):
 > ahora cada una, entera; la marca del heap descarrilado, de la tarea que reservó; y el ADC del stub y los avisos de un
 > `throw`, por RUN, no por proceso (dos llegaban al stdout). Más abajo, «🔧 SUELTAS (7-oct)». **Esperan una decisión de
-> Eduardo** (presentadas con su mecanismo y mi recomendación): `#657` (los builtins de fichero entero y los abiertos:
-> la SD, corrompida —el más urgente—), `#654` (el `STAT` con `base` en un RUN), `#663` (arreglar o quitar
-> `__guiInvokeByName`), la variante de `#577` (los getters de la tupla como funciones ocultas del módulo), `#592` (dónde
+> Eduardo** (presentadas con su mecanismo y mi recomendación): ~~`#657`~~ (decidida y cerrada el mismo día: un builtin
+> de fichero entero es un open y un close, con la regla de `File`), ~~`#654`~~ (decidida: «la (a)», la carpeta del otro
+> proyecto como parámetro, sin tocar la global), ~~`#663`~~ (aparcada: candidata a eliminar, se decide en V8 o V9),
+> ~~la variante de `#577`~~ (confirmada: los getters de la tupla, funciones ocultas del módulo de la native), `#592` (dónde
 > lee la native la marca del 2º temporizador: subir la ABI o un byte de la memoria reservada; o a V8), `#650` (qué es
 > «la misma versión»: los bytes o la interfaz) y `#578` (estudiado: se puede; por dónde le habla la native a la VM —helpers
 > nuevos con ABI 10, o el `call_builtin` de siempre con tres builtins nuevos— y si entra en V7); y `#623`, que lo piensa él.
@@ -1228,6 +1229,18 @@ la C6, la P4 y la Nucleo.
   native con `__builtin_longjmp` aterriza con los locales intactos —101 de 101 en el PC a `-O0`, `-O2` y `-Os`, anidado y
   desde seis marcos más abajo— y compila sin símbolos para Cortex-M33 y los dos RV32. Falta ejecutarlo en una placa, y
   la decisión de por dónde le habla la native a la VM (`V7_IDEAS` §«`#578` — ¿se puede?»).
+- **`#657`, DECIDIDA Y CERRADA** (Eduardo: *«Trabajamos siempre con handlers sobre ficheros, así que siempre ha de
+  haber un open y un close»*): un builtin de fichero entero es un open y un close, con la regla de `File` —uno abierto
+  para escribir no se abre otra vez; para leer, los que quieran—. En las dos VMs, cada uno se apunta en la lista de
+  abiertos mientras dura (mirar y apuntarse juntos, bajo el cerrojo), y chocar es «ya está abierto»; también
+  `readFile` y `readFileBytes`. La VM-Java, además: su `FOPEN` atómico como el de la VM-C, y los textos de error de esos
+  builtins, los de la VM-C. `FicheroYaAbierto` en la paridad y la tanda; sabotajes rojos en las dos VMs. La red, roja en
+  `test-iomt`: tres hilos con `appendFile` en un fichero común (el requisito B1.4b de H2), y con dos runs dos se
+  cruzaban. Le propuse a Eduardo que entre dos builtins el segundo esperase; su respuesta, la regla: *«Un fichero abierto
+  para escritura no puede volver a abrirse. Un fichero abierto para lectura no puede escribirse»* —un choque es un error,
+  sin esperas: el primero que lo abre impide al resto abrirlo—; y el log común de `IoMt` no es un fichero: *«El log es
+  diferente, es un canal de comunicación… Ahí sí que puede haber concurrencia como en el I2C o en el SPI»*. `IoMt`
+  registra en el canal `Log` (que ordena a sus escritores) en vez de hacer `appendFile` al mismo fichero.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

@@ -47,6 +47,7 @@
     { "nombre": "GcHondo",       "fuente": "bpgenvm-c/samples/GcHondo.bp", "heap_min_kb": 180, "timeout_s": 60 },
     { "nombre": "OwnerHondo",    "fuente": "bpgenvm-c/samples/OwnerHondo.bp", "heap_min_kb": 120, "timeout_s": 60 },
     { "nombre": "EvReceptorMuerto", "fuente": "bpgenvm-c/samples/EvReceptorMuerto.bp" },
+    { "nombre": "FicheroYaAbierto", "fuente": "bpgenvm-c/samples/FicheroYaAbierto.bp" },
     { "nombre": "ImportHondo",   "fuente": "bpgenvm-c/samples/importhondo/ImportHondo.bp" },
     { "nombre": "synclisttest",  "fuente": "samples/synclisttest.bp", "criterio": "aserciones", "memoria": "apretada", "heap_min_kb": 80, "timeout_s": 90 }
   ]

@@ -828,7 +828,10 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
           abrir — después manda la posición), <code>"r+"</code> (existe; lectura y escritura).
           Si no puede, <code>RuntimeError</code> con la ruta y el modo. La misma ruta ya abierta
           y alguno de los dos escribiendo → <code>RuntimeError</code> «ya está abierto»
-          (varios lectores, sí). Un recurso de pack se abre sólo en <code>"r"</code>.</td></tr>
+          (varios lectores, sí). Un recurso de pack se abre sólo en <code>"r"</code>. Los
+          verbos de fichero entero (<code>readFile</code>, <code>writeFile</code>,
+          <code>removeFile</code>…) son un <code>open</code> y un <code>close</code>: la misma
+          regla.</td></tr>
   <tr><td><code>close()</code></td><td>Cierra. Idempotente. <code>~File()</code> lo llama.</td></tr>
   <tr><td><code>isOpen(): boolean</code> · <code>path(): string</code></td><td>Estado y ruta con la que se abrió.</td></tr>
   <tr><td><code>size(): integer</code> · <code>tell(): integer</code> · <code>eof(): boolean</code></td>
@@ -2356,6 +2359,22 @@ ficheros funciona bajo <code>/sd</code>.</p>
   <tr><td><code>readFileBytes(ruta)</code></td><td>el contenido como bytes</td></tr>
   <tr><td><code>writeFileBytes(ruta, datos)</code></td><td>escribe bytes</td></tr>
 </table>
+
+<p>
+  <strong>Cada verbo es un <code>open</code> y un <code>close</code></strong>, como un
+  <code>IO.File</code> que se abre, hace lo suyo y se cierra, así que sigue su regla: un
+  fichero abierto para escribir no se abre otra vez; para leer, los que quieran. Con un
+  <code>File</code> abierto para escribir, <code>writeFile</code>, <code>appendFile</code>,
+  <code>readFile</code>, <code>removeFile</code>, <code>rename</code> o <code>copyFile</code>
+  sobre esa ruta dan <code>RuntimeError</code> «ya está abierto»; con uno abierto para leer,
+  leerlo (<code>readFile</code>, o copiar desde él) sí, y escribirlo, no. Y lo mismo entre
+  dos verbos: el primero que abre un fichero para escribir impide a los demás abrirlo — si dos
+  hilos hacen <code>appendFile</code> a la vez sobre el mismo fichero, el segundo recibe «ya
+  está abierto». (Antes no miraban: en la SD, escribir así un fichero abierto corrompía el
+  volumen.) Un <strong>registro</strong> que escriben varios hilos a la vez no es un fichero:
+  es un canal, el módulo <code>Log</code>, que admite escritores a la vez y los ordena (como
+  el árbitro de un bus I2C o SPI), y escribe él a su fichero.
+</p>
 
 <p>
   <strong>Y el módulo <code>IO</code></strong> para lo demás: <code>mkdir</code>,

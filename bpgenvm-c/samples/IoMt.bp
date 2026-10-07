@@ -1,12 +1,21 @@
 // IoMt.bp — B1.4b (H2): el requisito de multitarea de Eduardo — VARIOS
 // Threads BP leyendo/escribiendo VARIOS archivos a la vez. Cada hilo escribe
-// su fichero PROPIO y appendea una línea MARCADA al COMPARTIDO. Verificación
+// su fichero PROPIO y registra una línea MARCADA en el LOG común. Verificación
 // por PROPIEDADES (determinista aunque el orden no lo sea): tamaños exactos +
-// ninguna línea rota en el compartido + conteo por marcador exacto.
-// La atomicidad por llamada del lock grueso (B1.4) garantiza que una línea
-// de log jamás se entrelaza a medias con otra — el caso de uso del LOG.
+// ninguna línea rota en el log + conteo por marcador exacto.
+//
+// V7 #657 (7-oct) — EL LOG ES UN CANAL, NO UN FICHERO. Eduardo: «un fichero
+// abierto para escritura no puede volver a abrirse» —el primero que lo abre
+// impide al resto abrirlo: cada appendFile es un open y un close, y dos que se
+// cruzan sobre el mismo fichero son «ya está abierto»—; y «el log es diferente,
+// es un canal de comunicación, que puede grabarse en un archivo, en memoria,
+// TCP/IP, etc. Ahí sí que puede haber concurrencia como en el I2C o en el SPI».
+// Antes los tres hilos hacían appendFile al mismo fichero; ahora escriben al
+// canal Log (que ordena a sus escritores, como el árbitro de un bus) y el canal,
+// a su fichero.
 module IoMt
   import IO
+  import Log
 
   class Escritor extends Thread
     var propio: string
@@ -23,7 +32,7 @@ module IoMt
       var i: integer := 0
       while i < this.veces do
         appendFile(this.propio, "o\n")
-        appendFile("mt_shared.log", this.marca)
+        Log.info(this.marca)
         i := i + 1
       endwh
     end run
@@ -31,9 +40,12 @@ module IoMt
 
   function Main()
     writeFile("mt_shared.log", "")
-    var a: Escritor := Escritor("mt_own1.txt", "a\n", 100)
-    var b: Escritor := Escritor("mt_own2.txt", "b\n", 100)
-    var c: Escritor := Escritor("mt_own3.txt", "c\n", 100)
+    Log.setConsole(false)
+    Log.setMaxSize(1000000)
+    Log.setFile("mt_shared.log")
+    var a: Escritor := Escritor("mt_own1.txt", "a", 100)
+    var b: Escritor := Escritor("mt_own2.txt", "b", 100)
+    var c: Escritor := Escritor("mt_own3.txt", "c", 100)
     a.start()
     b.start()
     c.start()
@@ -46,8 +58,8 @@ module IoMt
     print "own3 =", IO.fileSize("mt_own3.txt")
     print "shared =", IO.fileSize("mt_shared.log")
 
-    // ninguna línea rota: el compartido es una secuencia de pares
-    // (marca, \n) y cada marca aparece EXACTAMENTE 100 veces
+    // ninguna línea rota: el log es una secuencia de líneas "[INFO ] x\n" (10
+    // bytes) y cada marca aparece EXACTAMENTE 100 veces
     var s: string := readFile("mt_shared.log")
     var na: integer := 0
     var nb: integer := 0
@@ -55,7 +67,10 @@ module IoMt
     var rotas: integer := 0
     var i: integer := 0
     while i < len(s) do
-      var ch: integer := charCodeAt(s, i)
+      if charCodeAt(s, i) != 91 or charCodeAt(s, i + 7) != 32 then
+        rotas := rotas + 1
+      endif
+      var ch: integer := charCodeAt(s, i + 8)
       if ch == 97 then
         na := na + 1
       elseif ch == 98 then
@@ -65,10 +80,10 @@ module IoMt
       else
         rotas := rotas + 1
       endif
-      if charCodeAt(s, i + 1) != 10 then
+      if charCodeAt(s, i + 9) != 10 then
         rotas := rotas + 1
       endif
-      i := i + 2
+      i := i + 10
     endwh
     print "marcas a/b/c =", na, nb, nc
     print "lineas rotas =", rotas

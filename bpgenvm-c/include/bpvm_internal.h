@@ -768,6 +768,10 @@ struct bpvm {
      * y la apertura duplicada. Al final, como todo lo nuevo: el prefijo del .mdn
      * no se toca. 0 = ninguno. */
     uint32_t files_head;
+    /* V7 #657 (7-oct) — y los que tiene abiertos un builtin de fichero entero MIENTRAS DURA (writeFile, readFile,
+     * removeFile, rename, copyFile…: un open y un close, como un File): cada apunte vive en la pila del builtin
+     * (builtins.c, abrir_breves). NULL = ninguno. */
+    struct bpvm_abierto_breve* abiertos_breves;
     /* V7/H5 P2b.3 — EL DEPÓSITO DE EJECUTORES de natives (src/bpvm_nativa.h): los hilos de la plataforma en los que
      * corren las natives, creados al entrar en la primera y reutilizados; se terminan en bpvm_destroy. Al final,
      * como todo lo nuevo: el prefijo del .mdn no se toca. */

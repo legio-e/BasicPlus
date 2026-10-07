@@ -1140,9 +1140,58 @@ public class VirtualMachine {
     private final java.util.LinkedHashMap<Long, CursorBP> ficherosAbiertos = new java.util.LinkedHashMap<>();
     private static String fmodoTxt(int mode) { return mode == 0 ? "r" : mode == 1 ? "w" : mode == 2 ? "a" : "r+"; }
     private CursorBP cursorDe(ThreadContext tc, long sref, String op) {
-        CursorBP c = (sref == 0) ? null : ficherosAbiertos.get(sref);
+        CursorBP c;
+        synchronized (ficherosAbiertos) { c = (sref == 0) ? null : ficherosAbiertos.get(sref); }   // V7 #657: bajo su cerrojo
         if (c == null) throwBpRuntimeError(tc, op + ": fichero cerrado");
         return c;
+    }
+
+    // ── V7 #657 (7-oct) — UN BUILTIN DE FICHERO ENTERO ES UN OPEN Y UN CLOSE ────────────────────────────────────
+    // Eduardo: «trabajamos siempre con handlers sobre ficheros, así que siempre ha de haber un open y un close».
+    // writeFile, appendFile, readFile, removeFile, rename y copyFile no miraban la lista de abiertos (en la SD de la
+    // VM-C, un writeFile a un fichero que un File tenía abierto para escribir corrompía el volumen): ahora se apuntan
+    // mientras duran, con la regla de File —un fichero abierto para escribir no se abre otra vez; para leer, los que
+    // quieran—. Mirar y apuntarse, juntos, bajo el cerrojo de la lista; la excepción, ya fuera (lanzar reserva en el
+    // heap, y el GC cierra ficheros con el de la VM cogido). Espejo de abrir_breves (builtins.c).
+    private static final class Breve { final String path; final int mode; Breve(String p, int m) { path = p; mode = m; } }
+    private final java.util.ArrayList<Breve> abiertosBreves = new java.util.ArrayList<>();   // bajo synchronized (ficherosAbiertos)
+    /** ¿Hay ya un fichero abierto con esa ruta y alguno de los dos escribe? (Un File o un builtin de fichero entero.)
+     *  Con el cerrojo de la lista cogido. Espejo de fichero_ya_abierto (builtins.c). */
+    private boolean ficheroYaAbierto(String clave, int mode) {
+        for (CursorBP o : ficherosAbiertos.values()) if (o.path.equals(clave) && (mode != 0 || o.mode != 0)) return true;
+        for (Breve b : abiertosBreves) if (b.path.equals(clave) && (mode != 0 || b.mode != 0)) return true;
+        return false;
+    }
+    /** La ruta con la que se compara, la de FOPEN: un recurso de pack, tal cual; un fichero, la del sandbox. */
+    private String claveFichero(ThreadContext tc, String path, byte[] dePack) {
+        return (dePack != null || esPackAjeno(path)) ? path : sandboxPath(tc, path).toString();
+    }
+    private Breve abreBreve(ThreadContext tc, String que, String path, String clave, int mode) {
+        Breve b = new Breve(clave, mode);
+        boolean ya;
+        synchronized (ficherosAbiertos) {
+            ya = ficheroYaAbierto(clave, mode);
+            if (!ya) abiertosBreves.add(b);
+        }
+        if (ya) throwBpRuntimeError(tc, que + "('" + path + "'): ya está abierto");
+        return b;
+    }
+    /** Dos rutas (rename, copyFile): las dos o ninguna; la misma dos veces, una, para escribir. */
+    private Breve[] abreBreves2(ThreadContext tc, String que, String p1, int m1, String p2, int m2) {
+        String c1 = claveFichero(tc, p1, null), c2 = claveFichero(tc, p2, null);
+        boolean misma = c1.equals(c2);
+        Breve b1 = new Breve(c1, misma ? 1 : m1), b2 = misma ? null : new Breve(c2, m2);
+        String choca = null;
+        synchronized (ficherosAbiertos) {
+            if (ficheroYaAbierto(b1.path, b1.mode)) choca = p1;
+            else if (b2 != null && ficheroYaAbierto(c2, m2)) choca = p2;
+            else { abiertosBreves.add(b1); if (b2 != null) abiertosBreves.add(b2); }
+        }
+        if (choca != null) throwBpRuntimeError(tc, que + "('" + p1 + "' -> '" + p2 + "'): '" + choca + "' ya está abierto");
+        return new Breve[] { b1, b2 };
+    }
+    private void cierraBreve(Breve... bs) {
+        synchronized (ficherosAbiertos) { for (Breve b : bs) if (b != null) abiertosBreves.remove(b); }
     }
     /** Entre la marca y el barrido del GC: un File inalcanzable se cierra aquí (espejo de bpvm_files_gc). */
     private void ficherosGc() {
@@ -5441,12 +5490,19 @@ public class VirtualMachine {
 
             case READ_FILE: {
                 String path = readVmString(popTcRef(tc));
+                byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
+                Breve ab = abreBreve(tc, "readFile", path, claveFichero(tc, path, data), 0);   // V7 #657: un open para leer, mientras dura
                 try {
-                    byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
                     if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
                     if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
-                    pushTcRef(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
                 } catch (java.io.IOException e) {
+                    data = null;
+                } finally {
+                    cierraBreve(ab);
+                }
+                if (data != null) {
+                    pushTcRef(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
+                } else {
                     // N-readfile-msg-skew — el mensaje era e.getMessage(): la ruta
                     // NORMALIZADA POR LA PLATAFORMA (en Windows, con barras
                     // invertidas), o sea distinto por SO y distinto de la VM-C.
@@ -5460,26 +5516,37 @@ public class VirtualMachine {
             case WRITE_FILE: {
                 String content = readVmString(popTcRef(tc));
                 String path    = readVmString(popTcRef(tc));
+                Breve ab = abreBreve(tc, "writeFile", path, claveFichero(tc, path, null), 1);   // V7 #657: un open para escribir, mientras dura
+                boolean fallo = false;
                 try {
                     java.nio.file.Files.write(sandboxPath(tc, path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "writeFile('" + path + "'): " + e.getMessage());
+                    fallo = true;
+                } finally {
+                    cierraBreve(ab);
                 }
+                // V7 #657 — el texto, el de la VM-C: el de Java (e.getMessage()) depende del SO
+                if (fallo) throwBpRuntimeError(tc, "writeFile('" + path + "'): error de escritura");
                 pushTc(tc, 0); // dummy
                 break;
             }
             case APPEND_FILE: {
                 String content = readVmString(popTcRef(tc));
                 String path    = readVmString(popTcRef(tc));
+                Breve ab = abreBreve(tc, "appendFile", path, claveFichero(tc, path, null), 2);   // V7 #657: un open para añadir, mientras dura
+                boolean fallo = false;
                 try {
                     java.nio.file.Files.write(sandboxPath(tc, path),
                             content.getBytes(java.nio.charset.StandardCharsets.UTF_8),
                             java.nio.file.StandardOpenOption.CREATE,
                             java.nio.file.StandardOpenOption.APPEND);
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "appendFile('" + path + "'): " + e.getMessage());
+                    fallo = true;
+                } finally {
+                    cierraBreve(ab);
                 }
+                if (fallo) throwBpRuntimeError(tc, "appendFile('" + path + "'): error de escritura");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0); // dummy
                 break;
             }
@@ -5500,32 +5567,41 @@ public class VirtualMachine {
                 c.mode = mode;
                 byte[] pk = (mode == 0) ? packResource(path) : null;   // #310 — el pack en ejecución va primero (sólo lectura)
                 c.path = (pk != null || esPackAjeno(path)) ? path : sandboxPath(tc, path).toString();
-                for (CursorBP o : ficherosAbiertos.values())
-                    if (o.path.equals(c.path) && (mode != 0 || o.mode != 0))
-                        throwBpRuntimeError(tc, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): ya está abierto");
-                try {
-                    if (pk != null) { c.mem = pk; c.size = pk.length; }
-                    else if (esPackAjeno(path)) throw new java.io.IOException(path);
-                    else {
-                        java.io.File f = new java.io.File(c.path);
-                        if ((mode == 0 || mode == 3) && !f.isFile()) throw new java.io.IOException(path);
-                        if (f.isDirectory()) throw new java.io.IOException(path);
-                        c.raf = new java.io.RandomAccessFile(f, mode == 0 ? "r" : "rw");
-                        if (mode == 1) c.raf.setLength(0);
-                        c.size = c.raf.length();
-                        if (mode == 2) c.pos = c.size;
+                // V7 #657 — mirar si ya está abierto, abrirlo y apuntarlo, JUNTOS, bajo el cerrojo de la lista (como la
+                // VM-C desde H12 2b: con dos workers, dos hilos podían verlo libre y abrirlo los dos para escribir); y la
+                // lista mira también los builtins de fichero entero. Las excepciones, ya fuera.
+                boolean ya, fallo = false;
+                synchronized (ficherosAbiertos) {
+                    ya = ficheroYaAbierto(c.path, mode);
+                    if (!ya) {
+                        try {
+                            if (pk != null) { c.mem = pk; c.size = pk.length; }
+                            else if (esPackAjeno(path)) throw new java.io.IOException(path);
+                            else {
+                                java.io.File f = new java.io.File(c.path);
+                                if ((mode == 0 || mode == 3) && !f.isFile()) throw new java.io.IOException(path);
+                                if (f.isDirectory()) throw new java.io.IOException(path);
+                                c.raf = new java.io.RandomAccessFile(f, mode == 0 ? "r" : "rw");
+                                if (mode == 1) c.raf.setLength(0);
+                                c.size = c.raf.length();
+                                if (mode == 2) c.pos = c.size;
+                            }
+                        } catch (java.io.IOException e) {
+                            cerrarCursor(c);
+                            fallo = true;
+                        }
+                        if (!fallo) ficherosAbiertos.put(sref, c);
                     }
-                } catch (java.io.IOException e) {
-                    cerrarCursor(c);
-                    throwBpRuntimeError(tc, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): no se pudo abrir");
                 }
-                ficherosAbiertos.put(sref, c);
+                if (ya) throwBpRuntimeError(tc, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): ya está abierto");
+                if (fallo) throwBpRuntimeError(tc, "File('" + path + "', \"" + fmodoTxt(mode) + "\"): no se pudo abrir");
                 pushTc(tc, 0);   // void → dummy
                 break;
             }
             case FCLOSE: {
                 long sref = popTcRef(tc);
-                CursorBP c = (sref == 0) ? null : ficherosAbiertos.remove(sref);
+                CursorBP c;
+                synchronized (ficherosAbiertos) { c = (sref == 0) ? null : ficherosAbiertos.remove(sref); }   // V7 #657: bajo su cerrojo
                 if (c != null) cerrarCursor(c);
                 pushTc(tc, 0);
                 break;
@@ -5637,18 +5713,22 @@ public class VirtualMachine {
                 // por String → preserva NUL/>127/UTF-8 inválido (a diferencia de
                 // readFile, que decodifica UTF-8 y es lossy para binario).
                 String path = readVmString(popTcRef(tc));
+                byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
+                Breve ab = abreBreve(tc, "readFileBytes", path, claveFichero(tc, path, data), 0);   // V7 #657: un open para leer, mientras dura
                 try {
-                    byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
                     if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
                     if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
-                    long outRef = heapNuevo(TYPE_ARRAY_I8, data.length, data.length);   // V7/H7 #593
-                    System.arraycopy(data, 0, memory, refDeref(outRef) + 4, data.length);
-                    ThreadContext me = currentTcLocal.get();
-                    if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG)
-                    pushTcRef(tc, outRef);   // 8B (byte[] es referencia — antes truncaba a 4B)
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "readFileBytes('" + path + "'): " + e.getMessage());
+                    data = null;
+                } finally {
+                    cierraBreve(ab);
                 }
+                if (data == null) throwBpRuntimeError(tc, "readFileBytes('" + path + "'): no se pudo abrir");   // V7 #657: el texto de la VM-C
+                long outRef = heapNuevo(TYPE_ARRAY_I8, data.length, data.length);   // V7/H7 #593
+                System.arraycopy(data, 0, memory, refDeref(outRef) + 4, data.length);
+                ThreadContext me = currentTcLocal.get();
+                if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG)
+                pushTcRef(tc, outRef);   // 8B (byte[] es referencia — antes truncaba a 4B)
                 break;
             }
             case WRITE_FILE_BYTES: {
@@ -5660,11 +5740,16 @@ public class VirtualMachine {
                 int n = (dataRef == 0) ? 0 : readInt32(dataRef);
                 byte[] out = new byte[n];
                 if (n > 0) System.arraycopy(memory, dataRef + 4, out, 0, n);
+                Breve ab = abreBreve(tc, "writeFileBytes", path, claveFichero(tc, path, null), 1);   // V7 #657: un open para escribir, mientras dura
+                boolean fallo = false;
                 try {
                     java.nio.file.Files.write(sandboxPath(tc, path), out);
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "writeFileBytes('" + path + "'): " + e.getMessage());
+                    fallo = true;
+                } finally {
+                    cierraBreve(ab);
                 }
+                if (fallo) throwBpRuntimeError(tc, "writeFileBytes('" + path + "'): error de escritura");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0); // dummy (void)
                 break;
             }
@@ -6234,36 +6319,48 @@ public class VirtualMachine {
             }
             case REMOVE_FILE: {
                 String p = readVmString(popTcRef(tc));
+                Breve ab = abreBreve(tc, "removeFile", p, claveFichero(tc, p, null), 1);   // V7 #657: borrar es escribir, mientras dura
+                boolean fallo = false;
                 try { java.nio.file.Files.delete(sandboxPath(tc, p)); }
-                catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "removeFile('" + p + "'): " + e.getMessage());
-                }
+                catch (java.io.IOException e) { fallo = true; }
+                finally { cierraBreve(ab); }
+                if (fallo) throwBpRuntimeError(tc, "removeFile('" + p + "'): error al borrar");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0);
                 break;
             }
             case RENAME: {
                 String to   = readVmString(popTcRef(tc));
                 String from = readVmString(popTcRef(tc));
+                Breve[] bs = abreBreves2(tc, "rename", from, 1, to, 1);   // V7 #657: los dos se escriben, mientras dura
+                boolean fallo = false;
                 try {
                     java.nio.file.Files.move(sandboxPath(tc, from),
                             sandboxPath(tc, to),
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "rename('" + from + "' → '" + to + "'): " + e.getMessage());
+                    fallo = true;
+                } finally {
+                    cierraBreve(bs);
                 }
+                if (fallo) throwBpRuntimeError(tc, "rename('" + from + "' -> '" + to + "'): error al renombrar");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0);
                 break;
             }
             case COPY_FILE: {
                 String to   = readVmString(popTcRef(tc));
                 String from = readVmString(popTcRef(tc));
+                Breve[] bs = abreBreves2(tc, "copyFile", from, 0, to, 1);   // V7 #657: el origen se lee y el destino se escribe, mientras dura
+                boolean fallo = false;
                 try {
                     java.nio.file.Files.copy(sandboxPath(tc, from),
                             sandboxPath(tc, to),
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                 } catch (java.io.IOException e) {
-                    throwBpRuntimeError(tc, "copyFile('" + from + "' → '" + to + "'): " + e.getMessage());
+                    fallo = true;
+                } finally {
+                    cierraBreve(bs);
                 }
+                if (fallo) throwBpRuntimeError(tc, "copyFile('" + from + "' -> '" + to + "'): error al copiar");   // V7 #657: el texto de la VM-C
                 pushTc(tc, 0);
                 break;
             }
