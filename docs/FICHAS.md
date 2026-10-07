@@ -1479,6 +1479,12 @@ objetos —los que el GC ya recogió no se pueden destruir: o el GC no recoge un
 suelta él—; el orden —el inverso al de creación, como los `owner`: un `Spi.Device` antes que su bus—; un destructor que
 lanza (se apunta y se sigue) o que se cuelga tras un STOP (un tope de tiempo); y la paridad —el mismo orden y la misma
 salida en las dos VMs—.
+**Decidido por Eduardo (7-oct), dos cosas más**: *«la lista de libres al final de la limpieza nos podría servir para
+diagnosticar si algo se quedó perdido, sería una red de seguridad. Si se produce un error al liberar, se atrapa y se
+continúa con la liberación»*. (1) **La red**: tras la destrucción, lo que no volvió a la lista de libres —un objeto que
+nadie destruyó, un recurso que nadie soltó— se DICE, como el guardián de `#339` dice las reservas de C sin liberar (con
+quién: la clase, y el recurso); (2) **un error al liberar no corta la limpieza**: se atrapa, se apunta y se sigue con
+lo demás.
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
