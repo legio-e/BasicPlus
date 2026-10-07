@@ -1240,7 +1240,12 @@ la C6, la P4 y la Nucleo.
   para escritura no puede volver a abrirse. Un fichero abierto para lectura no puede escribirse»* —un choque es un error,
   sin esperas: el primero que lo abre impide al resto abrirlo—; y el log común de `IoMt` no es un fichero: *«El log es
   diferente, es un canal de comunicación… Ahí sí que puede haber concurrencia como en el I2C o en el SPI»*. `IoMt`
-  registra en el canal `Log` (que ordena a sus escritores) en vez de hacer `appendFile` al mismo fichero.
+  registra en el canal `Log` (que ordena a sus escritores) en vez de hacer `appendFile` al mismo fichero. (`ae13bf25`.)
+- **`#654`, DECIDIDA Y CERRADA** (Eduardo: «la (a)»): la pregunta del IDE por las dependencias de OTRO proyecto (`STAT`
+  por nombre con `base`) ponía esa carpeta en la global del proyecto un momento, con un programa en marcha: reproducido
+  en el micro simulado —el programa vio su carpeta cambiada decenas de miles de veces en 300 preguntas—. Ahora la
+  carpeta va como parámetro al resolvedor (`bpvm_entry_resolve_en`) y la global no se toca. `stat_base_smoke` en la
+  red (300 preguntas con el programa en marcha, «cambios: 0»), con su sabotaje rojo.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

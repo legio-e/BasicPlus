@@ -101,6 +101,11 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e);
  * Devuelve 0 y rellena `out`/`size_out` si lo encuentra; -1 si no. */
 int bpvm_entry_resolve(const char* name, char* out, size_t out_cap,
                        uint32_t* size_out);
+/* V7 #654 — lo mismo con la carpeta del proyecto DADA ("" o NULL: sin proyecto), sin tocar la global: el STAT por
+ * nombre del cable pregunta por la de OTRO proyecto mientras el programa en marcha usa la suya. bpvm_entry_resolve es
+ * ésta con la global. */
+int bpvm_entry_resolve_en(const char* base, const char* name, char* out, size_t out_cap,
+                          uint32_t* size_out);
 
 /* V7/H6 (#468) — el `.mod` que la ZONA DE PACKS daría a la resolución para ese nombre
  * pelado ("Core.mod"): el del último pack de la cadena que lo lleve. Rellena el

@@ -252,6 +252,9 @@ long bpvm_fs_read_stream(const char* path, bpvm_fs_chunk_cb cb, void* user);
  * readFile / load(.win) / imágenes resuelven bajo esa raíz; los ABSOLUTOS
  * (/sys, /lib, /app/...) NO cambian. Sin base-dir = modo plano de hoy. */
 void        bpvm_fs_set_basedir(const char* dir);   /* NULL/"" = limpiar (plano) */
+/* V7 #654 — la carpeta de un proyecto como la deja set_basedir (sin '/' finales, recortada a `cap`), en `out`, SIN
+ * tocar la global: para preguntar por OTRO proyecto con uno en marcha. Devuelve `out`. */
+const char* bpvm_fs_basedir_normaliza(const char* dir, char* out, size_t cap);
 const char* bpvm_fs_basedir(void);                  /* "" si no hay proyecto (= projectPath) */
 /* H19 — ruta COMPLETA del módulo principal (entry) en ejecución. App.mainModulePath()
  * la devuelve; App.projectPath() devuelve bpvm_fs_basedir(); App.mainModule() = su

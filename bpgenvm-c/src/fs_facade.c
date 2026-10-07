@@ -81,13 +81,19 @@ static const bpvm_fs_backend_t* route(const char* path) {
 /* ── H19-F1 — base-dir por ejecución ─────────────────────────────────────── */
 static char g_basedir[256] = "";   /* "" = sin proyecto (modo plano) */
 
-void bpvm_fs_set_basedir(const char* dir) {
-    if (!dir || !dir[0]) { g_basedir[0] = '\0'; return; }
+const char* bpvm_fs_basedir_normaliza(const char* dir, char* out, size_t cap) {
+    if (cap == 0) return out;
+    if (!dir || !dir[0]) { out[0] = '\0'; return out; }
     size_t n = strlen(dir);
     while (n > 1 && dir[n - 1] == '/') n--;          /* quita '/' final(es) */
-    if (n >= sizeof(g_basedir)) n = sizeof(g_basedir) - 1;
-    memcpy(g_basedir, dir, n);
-    g_basedir[n] = '\0';
+    if (n >= cap) n = cap - 1;
+    memcpy(out, dir, n);
+    out[n] = '\0';
+    return out;
+}
+
+void bpvm_fs_set_basedir(const char* dir) {
+    bpvm_fs_basedir_normaliza(dir, g_basedir, sizeof(g_basedir));
 }
 
 const char* bpvm_fs_basedir(void) { return g_basedir; }

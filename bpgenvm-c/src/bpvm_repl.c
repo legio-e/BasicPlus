@@ -180,17 +180,17 @@ static void repl_stat(long id, json_obj_t* obj) {
             wire_v1_send_error(id, "INVALID_PARAM", "falta path o name");
             return;
         }
+        /* V7 #654 (7-oct) — la carpeta del OTRO proyecto, como PARÁMETRO del resolvedor (Eduardo: «la (a)»). Se ponía
+         * un momento en la global del proyecto y se devolvía después; y desde H12 esto lo atiende `io` CON UN PROGRAMA
+         * EN MARCHA, que en ese momento resolvía sus rutas relativas, App.projectPath() y pathAbsolute contra la
+         * carpeta del otro proyecto —o contra una a medio copiar—. */
         const char* base = json_str_inplace(obj, "base");
-        char antes[BPVM_FS_PATH_MAX];   /* el basedir que se salva y se restaura */
-        if (base) {
-            snprintf(antes, sizeof antes, "%s", bpvm_fs_basedir());
-            bpvm_fs_set_basedir(base);
-        }
+        char base_n[BPVM_FS_PATH_MAX];
+        const char* bd = base ? bpvm_fs_basedir_normaliza(base, base_n, sizeof base_n) : bpvm_fs_basedir();
         /* [V7/H2, #493] El resolvedor del RUN prueba también la zona de packs
          * (la última): un módulo que sólo esté en un pack grabado sale como
          * `pack:<P>/X.mod`, y el IDE sabe que no hace falta subirlo. */
-        int r = bpvm_entry_resolve(name, resuelto, sizeof(resuelto), &size);
-        if (base) bpvm_fs_set_basedir(antes);
+        int r = bpvm_entry_resolve_en(bd, name, resuelto, sizeof(resuelto), &size);
         if (r != 0) {
             wire_v1_send_error(id, "NOT_FOUND", "no existe");
             return;

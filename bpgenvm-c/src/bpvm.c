@@ -1107,12 +1107,18 @@ static int zona_resolve(const char* name, char* out, size_t cap, uint32_t* size)
 
 int bpvm_entry_resolve(const char* name, char* out, size_t out_cap,
                        uint32_t* size_out) {
+    return bpvm_entry_resolve_en(bpvm_fs_basedir(), name, out, out_cap, size_out);
+}
+
+int bpvm_entry_resolve_en(const char* base, const char* name, char* out, size_t out_cap,
+                          uint32_t* size_out) {
     if (!name || !out || out_cap == 0) return -1;
     uint32_t dummy; if (!size_out) size_out = &dummy;
     /* H19 — el base-dir del proyecto PRIMERO (la carpeta del módulo principal):
      * un import resuelve contra /app/<proj>/ antes que contra nada más. Plano
-     * (basedir="") o ruta absoluta → se salta este candidato. */
-    const char* bd = bpvm_fs_basedir();
+     * (basedir="") o ruta absoluta → se salta este candidato. V7 #654: la
+     * carpeta, la DADA (bpvm_entry_resolve da la global). */
+    const char* bd = base;
     if (bd && bd[0] && name[0] != '/') {
         snprintf(out, out_cap, "%s/%s", bd, name);
         if (bpvm_fs_stat(out, size_out) == 0) return 0;
