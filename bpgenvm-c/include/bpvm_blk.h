@@ -95,7 +95,9 @@ typedef struct {
 
     /* ¿Hay medio metido? 1 sí, 0 no.
      * Si la placa no tiene detector devuelve 1: no podemos saberlo, y decir
-     * «no hay» seria mentir. */
+     * «no hay» seria mentir. (V7 #642, 7-oct: lo cumplen las tres —la SD por
+     * SPI, el SDMMC del P4 y el micro simulado—, y quien monta lo entiende así:
+     * con un 1 sin detector, se intenta.) */
     int (*hay_medio)(void);
 
     /* Capacidad del MEDIO en bloques (no de la particion). 0 si no se sabe. */
