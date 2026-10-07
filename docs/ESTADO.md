@@ -1293,8 +1293,11 @@ la C6, la P4 y la Nucleo.
   (`compat/informes/tanda_v7_c3c5_7oct.md`), sin un rojo: la C3, todas IDÉNTICAS con el nativo en uso; la C5, todas,
   la GUI incluida. **La C6, la C3 y la C5 llevan la imagen de hoy**; la Pico 2, la Metro, la S3, la P4, la DK2 y la
   Nucleo, al próximo lote.
-- **⏭️ AL RETOMAR** (Eduardo: pausa tras «esta tanda y el diseño»): (1) las decisiones D1–D4 de `#668`, y con ellas su
-  plan —la VM-Java, la VM-C, los destructores y los `release()` de `#667` por familia, la GUI medida, las placas—; (2)
+- **⏭️ AL RETOMAR** (Eduardo: pausa tras «esta tanda y el diseño»): (1) `#668`, **DECIDIDO** (D1–D4, la noche del
+  7-oct: liberar es destruir, lo libere quien lo libere —el GC incluido—; de los hijos a los padres; al acabar, todo,
+  también con un kill; y destruir un objeto destruye sus `owner`, primero los hijos, la regla del 11-sep): el diseño
+  fino de los tres caminos y su plan —la VM-Java, la VM-C, los destructores y los `release()` de `#667` por familia, la
+  GUI medida, las placas—; (2)
   las SUELTAS: 19 abiertas (eran 26 esta mañana: 9 cerradas hoy, `#663` aparcada y 3 nuevas, `#666`–`#668`); (3) el
   próximo lote de placas.
 - **La limpieza de los restos de `#473`** (Eduardo: *«Que te parece si hacemos limpieza de código del 642 al 646?»*;

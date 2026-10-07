@@ -8259,3 +8259,51 @@ atrapa y se sigue; en V7.
 4. **D1 y D4 con la GUI**: medir `GuiChurn` y `GuiAnidadaGc` (memoria y tiempo).
 5. **Las placas, en un lote**: la C6 (`NeoUna` tras `PinesSistema` consigue su tira; GuiArbolG2 tras `PinesSistema`
    pasa); el PWM parado tras un STOP, en la Pico y en una ESP; y la ronda de V7.
+
+### 7. Decidido por Eduardo (7-oct, noche) — y lo que cambia del diseño
+
+- **D1 — NO** a «nada libera un objeto con destructor sin destruirlo» (4.5). La regla es más fuerte: *«Si liberamos
+  el objeto, ha de ejecutar su destructor y si el destructor ha de liberar resources que lo haga. Es la única manera
+  que no queden resources perdidos o abiertos.»* **Liberar es destruir**, lo libere quien lo libere: su `var owner`, la
+  reasignación, la cascada de su dueño, el GC o el final del programa. (Es lo que en V5 —9-ago, §«son CUATRO CAPAS»—
+  quedó abierto: «¿corre `~Clase()` si el objeto muere recogido por el GC?». Ahora, sí. Las capas 3 y 4 de entonces
+  siguen: el GC no pasa por falta de un descriptor, sólo por falta de memoria, y el agotamiento grita y el final suelta.)
+- **D2 — de los hijos a los padres, en orden inverso**: *«de los hijos hasta los padres, en orden inverso»*.
+- **D3 — al acabar, todo**: *«Si el programa termina, sea de la forma que sea, se han de liberar todos los recursos. En
+  condiciones normales los programas no terminan nunca, sin embargo en la fase de desarrollo es habitual incluso que
+  terminen con un kill. Y aquí es importante que todo vuelva a la situación original, si no pueden aparecer errores
+  raros por recursos ocupados, falta de memoria, etc. (eso nos pasaba con mucha frecuencia con el LVGL)»*.
+- **D4 — destruir un objeto destruye sus `owner`**: *«si se destruye un objeto se destruyen los owner, esto es la forma
+  de proceder normal»*.
+- **El orden DENTRO de un objeto** (pregunta del 7-oct; Eduardo: *«Esto ya se habló en su día… primero los hijos (y a
+  su vez los hijos de sus hijos) y después el objeto»*). Es la regla del 11-sep, de la revisión del modelo gráfico
+  (FICHAS, la del árbol de la GUI): *«la cascada baja hijos antes que padre, y en cada nodo C antes que BP»*. Destruir
+  `X` es: **(1)** destruir sus hijos `owner` —sus campos `owner` en orden inverso al de declaración; los elementos de una
+  `OwnerList`, del último al primero—, cada uno igual (sus hijos, su destructor, su memoria); **(2)** el destructor de
+  `X`; **(3)** su memoria. Consecuencia para quien programa: **en su destructor, un objeto ya no tiene a sus hijos
+  `owner`** —los destruyó la cascada—; lo que tenga que hacer con ellos, lo hace el destructor de cada hijo.
+
+**Lo que cambia del diseño (§4):**
+- **4.5 queda sustituido.** No se mantienen vivos los objetos con destructor hasta el final: se destruyen cuando se
+  liberan. Tres caminos, una regla:
+  - **la cascada de un `owner`** (`FREE_REF`, `SET_FIELD_OWNER`, la de una `OwnerList`): hoy es C y no llama a nadie
+    (`#491`, `#656`); pasa a recorrer el árbol en postorden —los hijos antes que el padre— y, en cada nodo, a llamar a
+    su destructor (BP, por la llamada anidada) antes de soltar su memoria. Iterativa, como la dejó `#656`.
+  - **el GC**: mientras para el mundo no puede ejecutar BP. Aparta los objetos inalcanzables que tienen destructor
+    —sin soltarlos todavía— y la fase de destrucción (4.2) los destruye en cuanto el mundo vuelve a andar, en orden
+    inverso al de creación, con las mismas reglas (4.6). Los hijos `owner` de uno apartado no se apartan por su
+    cuenta: los destruye la cascada de su dueño.
+  - **el final del programa** (4.1–4.8, como estaba): todo lo vivo, en orden inverso al de creación, hijos antes que
+    padres; y la red de seguridad.
+- **El registro de creación** (4.4) sigue haciendo falta: da el orden del final y el de lo que aparta el GC.
+- **La paridad** pide algo nuevo: un destructor que corre por el GC imprime cuando el GC pasa, así que las dos VMs
+  tienen que recoger en el MISMO punto. Hoy el corpus ya lo exige en parte (`HeapInfo`, `HeapCompact` y `GcHondo`
+  comparan el heap byte a byte); hay que medirlo con un programa cuyos destructores impriman, y con dos workers.
+
+**Las preguntas técnicas que quedan son mías, para el diseño fino** (no de Eduardo): en qué hilo y en qué momento
+exacto corre la destrucción de lo que aparta el GC sin romper la paridad (el hilo que pidió memoria, al volver de la
+reserva; o un hilo de la VM); cómo llama la cascada en C al destructor BP sin la barrera que hoy no tiene la llamada
+anidada; y, en la VM-Java, bajar la bandera del KILL y terminar `main` tras una excepción.
+
+**El plan** (§6) se queda, con el paso 1 ampliado: la cascada con destructores y lo que aparta el GC, además de la fase
+del final.

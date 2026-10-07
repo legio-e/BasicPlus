@@ -1514,6 +1514,15 @@ dos VMs, la propuesta y el plan (Java → C → placas). **Esperan a Eduardo cua
 D1 nada libera un objeto con destructor sin destruirlo (el GC y la cascada lo dejan para el final); D2 el orden,
 inverso al de creación (un registro); D3 tras un STOP también, con un tope de tiempo; D4 la cascada de un `owner`,
 ¿destruye en ese momento?
+**Decidido por Eduardo (7-oct, noche)** (`V7_IDEAS` §«`#666`–`#668`», 7): **D1, no** —más fuerte: *«Si liberamos el
+objeto, ha de ejecutar su destructor… Es la única manera que no queden resources perdidos o abiertos»*: liberar es
+destruir, lo libere quien lo libere, el GC incluido—; **D2**, *«de los hijos hasta los padres, en orden inverso»*;
+**D3**, *«Si el programa termina, sea de la forma que sea, se han de liberar todos los recursos… es importante que
+todo vuelva a la situación original»* (con un kill también: *«eso nos pasaba con mucha frecuencia con el LVGL»*);
+**D4**, *«si se destruye un objeto se destruyen los owner, esto es la forma de proceder normal»*. Y el orden dentro de
+un objeto, la regla del 11-sep (el árbol de la GUI): *«primero los hijos (y a su vez los hijos de sus hijos) y después
+el objeto»* —en su destructor, un objeto ya no tiene a sus hijos `owner`—. Lo siguiente: el diseño fino de los tres
+caminos (la cascada con destructores, lo que aparta el GC, el final) y hacerlo, Java → C → placas.
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
