@@ -1,0 +1,12 @@
+// Limpia.bp — borra lo que dejó FicheroAbierto en la placa (tools/medir_consumo.py lo corre al final de su serie).
+module Limpia
+  import Core
+  import IO
+
+  function Main()
+    if fileExists("/app/medida_mem.txt") then
+      IO.removeFile("/app/medida_mem.txt")
+    endif
+    print "fin"
+  end Main
+end Limpia

@@ -1,0 +1,17 @@
+// PwmDos.bp — un PWM en el GPIO2 (1 kHz, 50 %), en marcha al acabar.
+module PwmDos
+  import Core
+  import Pwm
+
+  function Main()
+    try
+      var s: Pwm.Slice := Pwm.Slice(2, 1000)
+      s.setDuty(50)
+      s.start()
+      print "PWM en el GPIO2: en marcha"
+    catch e: RuntimeError
+      print "PWM en el GPIO2: atrapado: " + e.msg
+    endtry
+    print "fin"
+  end Main
+end PwmDos

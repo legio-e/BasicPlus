@@ -1,0 +1,8 @@
+// Nada.bp — la línea base de la medida de memoria: un RUN que no toma ningún recurso.
+module Nada
+  import Core
+
+  function Main()
+    print "fin"
+  end Main
+end Nada

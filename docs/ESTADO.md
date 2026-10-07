@@ -1253,6 +1253,20 @@ la C6, la P4 y la Nucleo.
   error, `gpioCount` 22, y los packs donde estaban (DriverSpi y GuiMini cargados). La S3 y la C5 ya estaban hechas
   con el lote de H12 (6-oct). **La C6 lleva ya la imagen de hoy** (`#656`, `#655`/`#652`, `#659`, `#657`, `#654` y
   `#581`); **la C3 y la C5, al próximo lote**, con el resto de las placas.
+- **La ronda de V7 en la C6 con la imagen de hoy**: 40 IDÉNTICAS, las 3 PARADAS, 2 NO-PETA y 3 SALTADAS por memoria
+  (`compat/informes/tanda_v7_c6_7oct.md`); y un ERROR, GuiArbolG2 (`#651`), que destapó **`#666`, ABIERTA**: lo que un
+  programa enciende —PWM, contador, NeoPixel— sigue encendido y ocupado tras su RUN. La causa, probada en las dos
+  direcciones con la misma imagen: tras un `reset`, IDÉNTICO; tras `PinesSistema` (dos tiras), ERROR. Y un programa
+  nuevo que pide UNA tira no la consigue («no quedan canales RMT libres»). La regla ya está (G4: «el fin de RUN libera
+  lo que estableció el programa»); lo que hay que decidir con Eduardo es lo visible —soltar un PWM es pararlo, y un
+  `Gpio` que el programa dejó en alto sigue en alto—. Y **`#667`, la mejora de Eduardo**: *«Si un objeto BP consume un
+  recurso, el objeto debe tener un destructor y liberar si es posible el recurso»*.
+- **La memoria, documentada** (Eduardo: *«Documenta el consumo de memoria. En C3 y C6 es importante ya que vamos muy
+  justos de RAM»*): `docs/MEMORIA.md`, medido en la C6 con `tools/medir_consumo.py` (nueva: un `reset` por serie y la
+  línea `mem:` de cada RUN; dos pasadas, las mismas cifras). Lo que más pesa no es LVGL sino **las tablas del cargador
+  y del enlazador**: de 3 a 6 KB por módulo importado aunque corra desde el pack (que ahorra el código, no las
+  tablas). La C3, por medir con la herramienta. Eduardo propuso subir la stdlib al pack para ahorrar: en la C6 ya lo
+  está —sus dependencias corren XIP, «crc igual»—, y aun así pesan las tablas (`#651`, los caminos).
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

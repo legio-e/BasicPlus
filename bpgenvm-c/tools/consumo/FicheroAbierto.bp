@@ -1,0 +1,16 @@
+// FicheroAbierto.bp — un fichero abierto para escribir, que sigue abierto al acabar Main (lo cierra el fin de RUN): la
+// línea «mem:» del firmware se escribe antes de cerrarlo, así que lo cuenta. Un global: un local `owner` lo cerraría
+// su destructor al salir de Main.
+module FicheroAbierto
+  import Core
+  import IO
+
+  var f: IO.TextFile := null
+
+  function Main()
+    f := IO.TextFile("/app/medida_mem.txt", "w")
+    f.writeLine("una linea")
+    print "fichero abierto"
+    print "fin"
+  end Main
+end FicheroAbierto

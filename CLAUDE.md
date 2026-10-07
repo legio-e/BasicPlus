@@ -143,6 +143,8 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 - **Limitaciones del lenguaje de cara al usuario** → `docs/PENDIENTES.md`
 - **Formato del bytecode** → `docs/MOD_FORMAT.md` · **Opcodes** → `docs/OPCODES.md`
 - **Heap / memoria** → `docs/HEAP_LAYOUT.md` · **Builtins** → `docs/BUILTINS.md`
+- **La RAM de las placas** (dónde se va; la C3 y la C6 van justas) → `docs/MEMORIA.md` · se mide con
+  `bpgenvm-c/tools/medir_consumo.py`
 - **Protocolo de debug** → `docs/BPVM_WIRE_PROTOCOL.md`
 - **Referencia del lenguaje** → `docs/manual.html` · **Gramática** → `basicplus_grammar.ebnf.txt`
 - **AOT / native functions** → `docs/AOT_*.md`
