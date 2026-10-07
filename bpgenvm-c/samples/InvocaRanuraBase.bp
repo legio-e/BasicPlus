@@ -1,0 +1,14 @@
+// InvocaRanuraBase.bp — la BASE de InvocaRanura (#664): vive en su propio modulo para que el metodo heredado se
+// resuelva CRUZANDO la frontera (en la vtable de la hija, su ranura dice -1: «heredada»). Sin dos modulos no hay caso.
+module InvocaRanuraBase
+  public class Base
+    var avisos: integer
+    public function Base()
+      this.avisos := 0
+    end Base
+    public function heredado(quien: Object)
+      this.avisos := this.avisos + 1
+      print "heredado: avisos = " + this.avisos
+    end heredado
+  end Base
+end InvocaRanuraBase

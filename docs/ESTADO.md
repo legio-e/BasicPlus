@@ -32,7 +32,10 @@
 > **`#656` cerrada**: soltar un owner, sin recursión en las dos VMs (una cadena de 4000 owners tumbaba a la VM-C con la
 > pila de una placa y a la VM-Java ya con la suya); `test-ownerhondo` en la red. **`#655` y `#652`, cerradas**: el hilo
 > resucitado cuyo evento no se inyecta termina por el sentinela (las dos VMs caían), y todo programa lleva `Core` (lo
-> trae el cargador a los `.mod` de antes, como los de V6). Más abajo, «🔧 SUELTAS (7-oct)».
+> trae el cargador a los `.mod` de antes, como los de V6) (`d3c8ab2d`). **`#664` cerrada**: en la VM-Java, una llamada
+> anidada de un builtin corría UN cuanto y abandonaba el resto (y el GC de otro worker, también); ahora sigue hasta que
+> el método vuelve y se aparca con el mundo parado, como el puente de la VM-C; `test-anidadalarga` en la red. Más
+> abajo, «🔧 SUELTAS (7-oct)».
 >
 > **6-oct** — H12. De madrugada, **las natives con dos runs** (Eduardo: *«unos cambios localizados»*): N1 a N4 en el
 > PC con `test-nat2runs` (`204b4217`), y al hacerlo un CUELGUE de la GUI con dos runs (el puente anidado no se aparcaba
@@ -1191,7 +1194,17 @@ la C6, la P4 y la Nucleo.
   era un `.mod` de antes, como el `Hello` de la cápsula de V6. Ahora lo trae el CARGADOR de las dos VMs cuando el
   programa no lo trae, por el camino de un import y sin la norma. `test-coresiempre` en la red, con su sabotaje.
   La red completa, verde con las dos: paridad 135 (también en MOD8 y con dos workers), cápsula 59/59, pruebas de C
-  88/88, sombra 13/13, estrés y packs-abi.
+  88/88, sombra 13/13, estrés y packs-abi. (`#655` y `#652`: `d3c8ab2d`.)
+- **`#664`, CERRADA**: no era la ranura, era lo ANIDADO. En la VM-Java, las tres llamadas anidadas de un builtin (el
+  despacho de la GUI, `__guiInvokeByName`, `__guiInvokeBySlot`) corrían UN `runOnContext`, que desde `#531` es UN
+  cuanto: un método de más de 1024 instrucciones se abandonaba en silencio, y el GC de otro worker lo abandonaba igual.
+  Ahora un bucle para las tres (`correAnidado`), el del puente de la VM-C: sigue cuanto tras cuanto y, con el mundo
+  parado, se aparca y sigue. Y la ranura, por la regla del despacho virtual (un método heredado de otro módulo saltaba
+  a basura). `InvocaRanura` a la paridad y `test-anidadalarga` a la red (la VM-Java tiene que haberse aparcado), con
+  sus tres sabotajes en rojo. `GuiAnidadaGc`: 472668 también en la VM-Java. La primera red, roja en la pasada MOD8:
+  en MOD8 `__guiSlotOf` sólo ve las clases públicas (los marcadores son exports), en las dos VMs y de antes; la hija
+  del sample, pública, y la diferencia, a `PUBLICAR.md` (la decisión de `--formato=8`). La segunda, verde: paridad 136
+  (MOD9, MOD8 y con dos workers), cápsula 59/59, pruebas de C 89/89, sombra 13/13, estrés y packs-abi.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 

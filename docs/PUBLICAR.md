@@ -90,7 +90,10 @@ cada casilla (número, no «OK»):
       `--formato=8` se quedó como salida de emergencia «hasta cerrar V7». Lo usan el frente `check-mod8` de
       `compat.sh` (la foto «antes»: el corpus en MOD8 da el stdout de MOD9), las filas MOD8 del bloque V de
       `compat/mezcla.py` y los dos tests de marcadores del frontend. Si se va, se van con él; si se queda, se dice en
-      las notas. (Del cierre de H2, 24-sep.)
+      las notas. (Del cierre de H2, 24-sep.) Y si se queda, una diferencia con MOD9 que decir (vista el 7-oct, con
+      `#664`): en MOD8 la ranura por nombre (`Gui.__guiSlotOf`, la que usa `bindMember`) sale de los MARCADORES
+      `Clase#metodo#slot`, que sólo exporta una clase `public` —en MOD9, de la tabla de la clase, sea cual sea—: con
+      una clase no pública da -1 y el manejador se ignora en silencio. Las ventanas de Forms son `public class`.
 - ℹ️ `montar-zip.sh` ya habla MOD9 (`MOD_ACTUAL`, y los formatos viejos que se buscan dentro de los packs en
   `MOD_VIEJOS`): lo arregló el cierre de H2 (24-sep) — decía MOD7 y habría parado el paquete. Al subir de formato,
   las dos líneas.

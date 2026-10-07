@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1405,6 +1405,32 @@ test-coresiempre: $(BIN)
 	 else \
 	   echo "FAIL test-coresiempre"; printf '%s\n' "$$ec" | grep -E 'enlace|OOM|Core' | sed 's/^/  VM-C: /'; \
 	   printf '%s\n' "$$ej" | grep -E 'enlace|Core' | sed 's/^/  VM-Java: /'; exit 1; \
+	 fi
+
+# #664 (7-oct) — UNA LLAMADA ANIDADA LARGA, CON DOS WORKERS: Gui.__guiInvokeBySlot corre el método DENTRO del builtin,
+# y la VM-Java corría UN cuanto (1024 instrucciones, #531) y abandonaba el resto en silencio —y el GC de otro worker la
+# abandonaba igual—. InvocaRanura (también en la paridad): la VM-C con dos runs y la VM-Java con dos workers, la salida
+# de la VM-C con uno; y en la VM-Java el APARCAMIENTO tiene que haber ocurrido (el hilo que reserva sin parar para el
+# mundo en mitad de la llamada): un camino que nadie recorre no está probado. Sin aparcarse, la VM-Java se cuelga.
+test-anidadalarga: $(BIN)
+	$(call fixture,InvocaRanura)
+	$(call stdlibdep,Core Gui Json Collections Str)
+	@echo "--- #664 una llamada anidada larga con dos workers (esperado: las dos VMs, la salida de la VM-C con un run; y en la VM-Java, aparcada para el GC) ---"
+	@o1=$$(cd samples && timeout 60 ../$(BIN) InvocaRanura.mod 2>/dev/null); st1=$$?; \
+	 oc=$$(cd samples && timeout 60 ../$(BIN) --smp=2 InvocaRanura.mod 2>/dev/null); stc=$$?; \
+	 oj=$$(cd samples && timeout 60 java -Djava.awt.headless=true -jar ../../miVM/target/bpgenvm-1.0.jar --workers=2 InvocaRanura.mod 2>build_anidada.err); stj=$$?; \
+	 ap=$$(grep -ao 'aparcadas por el GC de otro worker: [0-9]*' samples/build_anidada.err | grep -o '[0-9]*$$'); rm -f samples/build_anidada.err; \
+	 p1=$$(printf '%s\n' "$$o1" | grep -E '^(largo|heredado|fin)'); pc=$$(printf '%s\n' "$$oc" | grep -E '^(largo|heredado|fin)'); \
+	 pj=$$(printf '%s\n' "$$oj" | grep -E '^(largo|heredado|fin)'); \
+	 printf '%s\n' "$$p1"; \
+	 if [ $$st1 -eq 0 ] && [ $$stc -eq 0 ] && [ $$stj -eq 0 ] && printf '%s\n' "$$p1" | grep -q '^fin$$' \
+	    && [ "$$pc" = "$$p1" ] && [ "$$pj" = "$$p1" ] && [ -n "$$ap" ] && [ "$$ap" -gt 0 ]; then \
+	   echo "  (la VM-Java, aparcada $$ap veces para el GC del otro worker)"; echo "PASS test-anidadalarga"; \
+	 else \
+	   echo "FAIL test-anidadalarga (VM-C con un run: salida $$st1; con dos: $$stc; VM-Java con dos workers: $$stj; aparcadas: '$$ap')"; \
+	   [ "$$pc" = "$$p1" ] || { echo "  la VM-C con dos runs dijo otra cosa:"; printf '%s\n' "$$pc" | sed 's/^/    /'; }; \
+	   [ "$$pj" = "$$p1" ] || { echo "  la VM-Java dijo otra cosa:"; printf '%s\n' "$$pj" | sed 's/^/    /'; }; \
+	   exit 1; \
 	 fi
 
 # #653 (4-oct) — EL LOG CON DOS ESCRITORES: mirar si la línea cabe y copiarla no se pueden separar (la sección crítica

@@ -2937,6 +2937,12 @@ public class VirtualMachine {
                     + " evento(s) sin atender (destinatario muerto o encolados"
                     + " por un handler tardío)");
         }
+        // V7 #664 — las veces que una llamada anidada esperó aparcada al GC de otro worker (correAnidado): que el
+        // caso se da lo cuenta la prueba (InvocaRanura con dos workers). Sólo si las hubo.
+        if (anidadasAparcadas > 0) {
+            System.err.println("[bpvm] llamadas anidadas aparcadas por el GC de otro worker: " + anidadasAparcadas);
+            anidadasAparcadas = 0;
+        }
         // La ventana se cierra AQUI, con el programa ya terminado. Sin esto,
         // un programa que use Gui.stop() imprime todo y NO TERMINA: el EDT de
         // AWT no es demonio y mantiene viva la JVM mientras haya una ventana.
@@ -7584,6 +7590,50 @@ public class VirtualMachine {
         return (drained > 0) ? 0 : GUI_OCIO_MS;
     }
 
+    private int anidadasAparcadas = 0;   // V7 #664: las veces que una llamada anidada aparcó (bajo vmLock); se dice al acabar el RUN
+
+    /**
+     * V7 #664 (7-oct) — CORRE UNA LLAMADA ANIDADA HASTA QUE VUELVE: la de un builtin que llama a BP (el despacho de
+     * la GUI, __guiInvokeByName, __guiInvokeBySlot), con su marco ya montado y el centinela debajo (PC 0 →
+     * THREAD_EXIT). Era UN runOnContext, y desde #531 un runOnContext es UN cuanto (1024 instrucciones): un método
+     * más largo se cortaba en silencio (GuiAnidadaGc: `resultado = 0` aquí, 472668 en la VM-C), y el punto seguro
+     * del GC de OTRO worker lo abandonaba igual. Ahora, como el puente de la VM-C (bridge_run_bp_frame, interp.c):
+     * el cuanto agotado o un `yield` → sigue; el mundo parado por otro worker → se aparca AQUÍ, apuntado como
+     * aparcado (el colector no espera a quien no corre), y sigue; un KILL → se deja, y lo atiende el lazo de fuera.
+     * Lo que no puede es CEDER de verdad (un sleep, un Mutex ocupado, un join): el worker está dentro de un builtin.
+     * Eso se corta, como en la VM-C, y lo dice (#607: por eso Forms ya no llama anidado).
+     */
+    private void correAnidado(ThreadContext tc, String quien) {
+        while (true) {
+            ExitSignal sig = runOnContext(tc);
+            if (sig != ExitSignal.YIELD || killRequested) return;   // ha vuelto (el centinela), o un KILL
+            ThreadStatus st = tc.getStatus();
+            if (st != ThreadStatus.RUNNING && st != ThreadStatus.RUNNABLE) {
+                System.err.println("[bpvm] " + quien + ": el metodo se bloqueo (" + st
+                        + ") dentro de una llamada anidada: se corta (no soportado; #607)");
+                return;
+            }
+            synchronized (vmLock) {
+                if (st == ThreadStatus.RUNNABLE) tc.setStatus(ThreadStatus.RUNNING, -1, "anidado");   // un yield: aqui no se cede
+                if (stopTheWorld) {
+                    // Como heapAlloc ante un GC en curso (#599): apuntarse Y avisar, esperar, y borrarse al salir.
+                    anidadasAparcadas++;
+                    parkedInHeapAlloc.add(tc.id);
+                    vmLock.notifyAll();
+                    try {
+                        while (stopTheWorld) vmLock.wait();
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("llamada anidada interrumpida esperando al GC");
+                    } finally {
+                        parkedInHeapAlloc.remove(tc.id);
+                    }
+                }
+            }
+            tc.yieldRequested = false;
+        }
+    }
+
     /**
      * Llama (anidado) a la función BP Gui.__guiDispatch(self), cuyo cuerpo es
      * self.onClick() — dispatch virtual que el COMPILADOR resuelve por nombre
@@ -7630,7 +7680,7 @@ public class VirtualMachine {
         tc.cs = dispCs;
         tc.yieldRequested = false;
         try {
-            runOnContext(tc);   // corre el dispatcher → self.onClick()/onChange() hasta el centinela
+            correAnidado(tc, "el despacho de la GUI");   // corre el dispatcher hasta el centinela (#664: aunque pase de un cuanto)
         } catch (Throwable t) {
             // Un handler que lanza no debe tumbar el lazo GUI: lo reportamos.
             System.err.println("[gui dispatch] " + t);
@@ -7680,7 +7730,7 @@ public class VirtualMachine {
         tc.cs = cs;
         tc.yieldRequested = false;
         try {
-            runOnContext(tc);
+            correAnidado(tc, "__guiInvokeByName");
         } finally {
             tc.sp = base;
             tc.bp = savedBp;
@@ -7702,11 +7752,13 @@ public class VirtualMachine {
     private void invokeHandlerBySlot(ThreadContext tc, int winRef, int slot, int sender) {
         if (winRef == 0 || slot < 0) return;            // sin ventana / handler ausente → ignorar
         int classPtr   = readInt32(refDeref(winRef));   // #302: deref handle→addr (como invokeHandlerByName)
-        int targetCS   = moduleManager.getCSForDataAddr(classPtr);
-        int bitmapW    = readInt16(classPtr + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
-        int vtableBase = classPtr + CLS_OFF_FIELD_BITMAP + 2 * bitmapW * 4;
-        int methodOff  = readInt32(vtableBase + slot * 4);
-        int methodPc   = targetCS + methodOff;
+        // #664 — la regla del despacho virtual (resolverVirtual: sube por los padres, cada uno con el CS de su
+        // módulo), como bpvm_vt_resolver en la VM-C; lo no resoluble se ignora. Leía la vtable de la clase a pelo: un
+        // método heredado de otro módulo (-1, «heredada») o una ranura de más saltaba a basura.
+        long resuelto  = resolverVirtual(memory, classPtr, slot);
+        if (resuelto == -1L) return;
+        int targetCS   = (int) (resuelto >>> 32);
+        int methodPc   = targetCS + (int) resuelto;
         int base = tc.sp;
         int savedPc = tc.pc, savedBp = tc.bp, savedCs = tc.cs;
         ThreadStatus savedStatus = tc.getStatus();
@@ -7724,7 +7776,7 @@ public class VirtualMachine {
         tc.cs = targetCS;
         tc.yieldRequested = false;
         try {
-            runOnContext(tc);
+            correAnidado(tc, "__guiInvokeBySlot");
         } finally {
             tc.sp = base;
             tc.bp = savedBp;
