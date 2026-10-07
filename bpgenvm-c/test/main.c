@@ -40,6 +40,9 @@
 #include "bpvm_rtc.h"   /* V7/H10 #625 — el reloj de pared, el del PC */
 #ifdef BPVM_GUI
 #include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen (micro simulado) */
+#ifdef BPVM_LVGL
+#include "bpvm_gui_host.h"   /* V7 #646: --no-screen (la ventana, sólo del PC) */
+#endif
 #endif
 #include "bpvm_smp.h"   /* V7/H12: BPVM_SABOTAJE_GUI (SÓLO PRUEBAS) */
 #include <stdio.h>

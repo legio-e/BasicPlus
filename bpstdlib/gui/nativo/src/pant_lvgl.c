@@ -134,7 +134,8 @@ int bpvm_gui_disp_native_size(int* w, int* h) {
 }
 
 void bpvm_gui_disp_init(int w, int h) {
-    (void) w; (void) h;   /* el tamaño lo da el driver; gui.c pasa el lógico */
+    /* V7 #644: con driver manda el tamaño del panel (s_w×s_h, el que gui.c ya pidió por disp_native_size); sin él
+     * —la pantalla muda—, el que pasa gui.c. */
     if (!g_bios) return;
     lv_tick_set_cb(pant_tick);
 

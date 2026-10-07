@@ -31,7 +31,6 @@ OUT_STUBS = os.path.join(RAIZ, 'bpgenvm-c', 'test', 'gui_pack_stubs.c')   # dobl
 
 # Las que NO cruzan: son del host/simulador (ventana SDL) o internas del pack.
 FUERA = {
-    'disp_set_headless', 'disp_set_exit_on_close', 'disp_set_title',   # host: la ventana
     'set_screen_size',                                                  # host/sim: --screen=
     'disp_init',                                                        # la llama gui.c por dentro
     'disponible', 'pack_reset',                                         # las define gui_pack.c mismo
@@ -258,13 +257,9 @@ def generar(fns):
         else:
             t.append('%s { return resolver() ? %s : 0; }' % (firma, llamada))
     t.append('')
-    t.append('/* Las del host/simulador no cruzan: en un micro no hay ventana ni --screen=. */')
+    t.append('/* La del host/simulador no cruza: en un micro no hay --screen=. (Los verbos de la ventana, ni eso:')
+    t.append(' * están en bpvm_gui_host.h, fuera de la costura —V7 #646—.) */')
     t.append('void bpvm_gui_set_screen_size(int w, int h) { (void) w; (void) h; }')
-    t.append('#ifdef BPVM_GUI_RENDER')
-    t.append('void bpvm_gui_disp_set_headless(int on) { (void) on; }')
-    t.append('void bpvm_gui_disp_set_exit_on_close(int on) { (void) on; }')
-    t.append('void bpvm_gui_disp_set_title(const char* title) { (void) title; }')
-    t.append('#endif')
     t.append('#else')
     t.append('typedef int bpvm_gui_pack_fuera;   /* ISO C: una unidad de compilación no puede quedar vacía */')
     t.append('#endif /* BPVM_GUI_PACK */')

@@ -213,13 +213,9 @@ int bpvm_gui_disp_is_open(void) { return resolver() ? s_t.disp_is_open() : 0; }
 void bpvm_gui_disp_set_rotation(int deg) { if (resolver()) s_t.disp_set_rotation(deg); }
 int bpvm_gui_disp_native_size(int* w, int* h) { return resolver() ? s_t.disp_native_size(w, h) : 0; }
 
-/* Las del host/simulador no cruzan: en un micro no hay ventana ni --screen=. */
+/* La del host/simulador no cruza: en un micro no hay --screen=. (Los verbos de la ventana, ni eso:
+ * están en bpvm_gui_host.h, fuera de la costura —V7 #646—.) */
 void bpvm_gui_set_screen_size(int w, int h) { (void) w; (void) h; }
-#ifdef BPVM_GUI_RENDER
-void bpvm_gui_disp_set_headless(int on) { (void) on; }
-void bpvm_gui_disp_set_exit_on_close(int on) { (void) on; }
-void bpvm_gui_disp_set_title(const char* title) { (void) title; }
-#endif
 #else
 typedef int bpvm_gui_pack_fuera;   /* ISO C: una unidad de compilación no puede quedar vacía */
 #endif /* BPVM_GUI_PACK */

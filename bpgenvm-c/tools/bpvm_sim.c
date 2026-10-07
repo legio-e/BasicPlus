@@ -78,6 +78,9 @@
 #ifdef BPVM_GUI
 #include "bpvm_entry.h"   /* #344 — el RUN, escrito una vez */
 #include "bpvm_gui.h"   /* H10 — --screen=WxH / --no-screen */
+#ifdef BPVM_LVGL
+#include "bpvm_gui_host.h"   /* V7 #646: la ventana del micro simulado (sólo del PC) */
+#endif
 #endif
 
 #include <stdio.h>

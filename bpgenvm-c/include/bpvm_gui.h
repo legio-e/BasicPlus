@@ -163,6 +163,9 @@ int  bpvm_gui_lvgl_window_open(void);
 /* H5.1 — backend de display (lo provee la PLATAFORMA; gui.c lo llama tras
  * lv_init()): host = SDL (src/gui_display_sdl.c), micro = LTDC (port/). El resto
  * del render —creación de widgets— es portable y vive en gui.c. */
+/* V7 #644 (7-oct) — `w`×`h`: el tamaño del screen que decidió gui.c —en un micro con panel, el del panel, que pidió
+ * antes por bpvm_gui_disp_native_size—. El display lo usa cuando no tiene tamaño propio (la ventana del PC; la
+ * pantalla muda del pack, sin driver); con panel, manda el del panel, y los dos coinciden. */
 void bpvm_gui_disp_init(int w, int h);   /* tick + display + (host) input/cierre */
 /* #462 - EL TOPE DE OCIO del lazo del GUI, y no es una corazonada: lo midio
  * #424 en el P4. LVGL pide su periodo de refresco (33 ms) y dormir tanto deja
@@ -187,19 +190,8 @@ void bpvm_gui_disp_set_rotation(int deg);/* orientación en runtime (deg validad
  * ANTES de crear el screen, así que el backend no puede depender de disp_init. */
 int  bpvm_gui_disp_native_size(int* w, int* h);
 
-/* H10 — micro simulado SIN pantalla: LVGL se monta contra un display fuera de
- * pantalla (los widgets se crean y el modelo funciona; no se abre ventana y
- * disp_is_open() da 0, así que Gui.run() vuelve en seguida). Sólo la implementa
- * el host (SDL); llamarla es cosa del host, gui.c nunca la invoca → los ports de
- * micro no tienen que definirla. En un build sin LVGL esto ya es lo que pasa. */
-void bpvm_gui_disp_set_headless(int on);
-/* Simulador: cerrar la ventana termina el proceso (ver gui_display_sdl.c). */
-void bpvm_gui_disp_set_exit_on_close(int on);
-
-/* #322 — título de la ventana. Sin llamarla, LVGL pone el suyo ("LVGL Simulator"),
- * que dice qué librería dibuja en vez de qué está corriendo. Llamar ANTES de
- * disp_init. Sólo la implementa el host (SDL); en un micro no hay ventana. */
-void bpvm_gui_disp_set_title(const char* title);
+/* V7 #646 (7-oct) — los verbos de la VENTANA (set_headless, set_exit_on_close, set_title) son sólo del PC: viven en
+ * bpvm_gui_host.h. Aquí, la costura con los micros, sólo lo que tiene un micro. */
 #endif
 
 /* H10 — tamaño del panel simulado (modelo). Antes de crear el screen. Vive fuera

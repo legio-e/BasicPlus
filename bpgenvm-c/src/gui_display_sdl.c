@@ -19,6 +19,7 @@
 #include <string.h>
 #include "lvgl.h"
 #include "bpvm_gui.h"
+#include "bpvm_gui_host.h"   /* V7 #646: los verbos de la ventana, sólo del PC */
 #include "crc32.h"
 
 static volatile int g_window_closed = 0;

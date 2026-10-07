@@ -44,7 +44,7 @@ typedef struct {
     int pwr;           /* GPIO que enciende el raíl; <0 = raíl fijo         */
     int pwr_activo_alto; /* 0 = enciende poniendo el pin a 0 (lo normal)    */
     int khz;           /* reloj de trabajo; 0 = el que ponga el driver      */
-    int ldo;           /* canal del LDO interno que alimenta las E/S; 0 = ninguno */
+    int ldo;           /* canal del LDO interno que alimenta las E/S —hoy sólo lo tiene el ESP32-P4 (V7 #643)—; 0 = ninguno */
 } bpvm_sdio_pines_t;
 
 /*

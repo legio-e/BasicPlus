@@ -1297,6 +1297,12 @@ la C6, la P4 y la Nucleo.
   plan —la VM-Java, la VM-C, los destructores y los `release()` de `#667` por familia, la GUI medida, las placas—; (2)
   las SUELTAS: 19 abiertas (eran 26 esta mañana: 9 cerradas hoy, `#663` aparcada y 3 nuevas, `#666`–`#668`); (3) el
   próximo lote de placas.
+- **La limpieza de los restos de `#473`** (Eduardo: *«Que te parece si hacemos limpieza de código del 642 al 646?»*;
+  *«OK»* a hacer primero las que se cierran en el PC): **`#643`, `#644` y `#646`, CERRADAS** —`ldo` se queda y dice que
+  es del P4; el contrato de `disp_init(w, h)`, escrito (quedan dos implementaciones, no cuatro, y las dos los usan);
+  los verbos de la ventana, a `bpvm_gui_host.h`, con la tabla del pack idéntica—. **`#642`**, mirada: las tres
+  familias ya cumplen el mismo contrato (0 sólo si se sabe que no hay tarjeta); la propuesta, escribirlo y cerrarla,
+  para Eduardo. **`#645`** (los dos drivers del GT911), para una sesión de placas: hay que tocar la pantalla.
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 
