@@ -2560,6 +2560,40 @@ puente: sólo lleva valores de 4 bytes, así que una tupla con `float`, `long` o
 compilar dentro de una native. La stdlib devuelve tuplas en `Str.parseInt` (`boolean`, `integer`), `parseLong`,
 `parseDouble`, `parseHex` y `Time.civilDesdeDias`.
 
+#### `#578` — `try`/`catch` DENTRO de una native: ¿se puede? (7-oct, el estudio)
+
+Eduardo, 24-ago: *«por lo menos ver si es posible»*. Lo que N1 dejó escrito (`FICHAS` §«🧩 V7 — `try`/`catch` dentro
+de una native»): el salto no es el problema —`__builtin_setjmp`/`__builtin_longjmp` se expanden en línea, sin
+símbolos externos—; lo que falta es ADÓNDE aterriza un `throw`, y el paso siguiente, un salto desde OTRO marco.
+
+**El experimento** (en el scratchpad, sin tocar el producto): una «native» con ocho locales vivos a través de la
+llamada (callee-saved), un `try` dentro de otro, y el «helper» de la VM en OTRA unidad de compilación que salta con
+`__builtin_longjmp` —desde su marco, y desde seis marcos más abajo—. **En el PC (x86-64), a `-O0`, `-O2` y `-Os`: 101 de
+101**, los locales intactos al aterrizar, el `try` de dentro y luego el de fuera. **Para las placas**, compilado con
+las dos ISA del AOT (Cortex-M33 `softfp`; RV32 `ilp32f` del P4 y `ilp32` de la C3 a la C6): cero símbolos de
+`setjmp`/`longjmp` —sólo los del experimento—. **Falta**, y es de placa: EJECUTARLO en una (el salto lo da la VM,
+compilada con la toolchain de su firmware, al marco del `.mdn`, compilado con la del AOT: dos GCC; el formato del
+búfer de `__builtin_setjmp` tiene que casar entre los dos).
+
+**Lo que haría falta en la VM.** Hoy un `throw` desde una native (`throw_runtime`, `throw_str`, `throw_ref`, el de un
+builtin llamado con `call_builtin`, el de una función BP por el puente) hace `longjmp` al LÍMITE de fallos del
+intérprete (`#186`; el más interno, `#571`). Con un `try` en la native, el más interno puede ser un MANEJADOR NATIVO:
+una pila de aterrizajes por hilo (el contexto de la native ya lo es), cada uno «límite» (el `jmp_buf` de libc de
+siempre) o «nativo» (el búfer de la native, con `__builtin_longjmp`); la excepción, en el hilo, para que el `catch` la
+recoja y mire su clase (y si no es, la relance hacia fuera); y el `try` vacía lo suyo al salir (también por
+`return`). Con P2b.3, en el ejecutor: su pila es la de la native, y el aterrizaje, también.
+
+**La decisión: por dónde le habla la native a la VM.**
+
+| | cómo | lo bueno | lo que cuesta |
+|---|---|---|---|
+| A | helpers nuevos en la tabla (`eh_push`, `eh_pop`, `eh_exc`) | lo limpio: la tabla es el contrato | sube la ABI (9 → 10): regenerar los `.mdn` de los packs y regrabar las placas con natives |
+| B | por el helper que ya hay, `call_builtin`, con tres builtins nuevos | sin tocar la ABI de helpers (el criterio del 27-sep: «buscar antes cómo emitirlo con lo que hay») | una native con `try` en una VM sin esos builtins falla al ejecutar el `try` («builtin no implementado»), no al cargar: el aviso de la ABI no la para |
+
+Por ejemplo, con B, `try h := Json.parse(s) catch e: Core.Exception h := null endtry` dentro de una native sale como
+`if (__builtin_setjmp(b) == 0) { call_builtin(EH_PUSH, b); h = …; call_builtin(EH_POP); } else { e =
+call_builtin(EH_EXC); … }`. Y en las dos, lo que ya pide el puente: valores de 4 bytes en la excepción (una ref).
+
 ## H7 — `#554`: concatenar en placa, y QUÉ ES un literal de cadena (27-sep, análisis)
 
 ### La causa, medida

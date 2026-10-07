@@ -42,7 +42,8 @@
 > la SD, corrompida —el más urgente—), `#654` (el `STAT` con `base` en un RUN), `#663` (arreglar o quitar
 > `__guiInvokeByName`), la variante de `#577` (los getters de la tupla como funciones ocultas del módulo), `#592` (dónde
 > lee la native la marca del 2º temporizador: subir la ABI o un byte de la memoria reservada; o a V8), `#650` (qué es
-> «la misma versión»: los bytes o la interfaz) y `#578` (el estudio de si se puede); y `#623`, que lo piensa él.
+> «la misma versión»: los bytes o la interfaz) y `#578` (estudiado: se puede; por dónde le habla la native a la VM —helpers
+> nuevos con ABI 10, o el `call_builtin` de siempre con tres builtins nuevos— y si entra en V7); y `#623`, que lo piensa él.
 >
 > **6-oct** — H12. De madrugada, **las natives con dos runs** (Eduardo: *«unos cambios localizados»*): N1 a N4 en el
 > PC con `test-nat2runs` (`204b4217`), y al hacerlo un CUELGUE de la GUI con dos runs (el puente anidado no se aparcaba
@@ -1221,7 +1222,12 @@ la C6, la P4 y la Nucleo.
   `test-trazasbus`, `test-runtrasrun` y la quinta pasada de `test-heapdescarrilado`, cada una con su sabotaje. Las ocho
   imágenes compilan. La red, verde salvo `test-blk`, que no ENLAZABA: enlaza `spi.c` suelta con los dobles de
   `test/hal_stubs.c`, y les faltaba el `bpvm_out_linea` nuevo (también a `test-sd`, fuera de la red); el doble,
-  añadido, y las dos verdes.
+  añadido, y las dos verdes. (`1d33e108`.)
+- **`#578`, ESTUDIADA** (Eduardo, 24-ago: «por lo menos ver si es posible»): un `try`/`catch` dentro de una native
+  se puede, en lo que se mide sin placa. El salto desde otra unidad de compilación (el helper de la VM) al marco de la
+  native con `__builtin_longjmp` aterriza con los locales intactos —101 de 101 en el PC a `-O0`, `-O2` y `-Os`, anidado y
+  desde seis marcos más abajo— y compila sin símbolos para Cortex-M33 y los dos RV32. Falta ejecutarlo en una placa, y
+  la decisión de por dónde le habla la native a la VM (`V7_IDEAS` §«`#578` — ¿se puede?»).
 
 ## 🧵 H12 (6-oct, tarde) — EL LOTE DE LOS DOS NÚCLEOS: las nueve placas, verdes
 
