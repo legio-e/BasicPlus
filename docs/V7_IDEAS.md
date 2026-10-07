@@ -8129,3 +8129,133 @@ de Eduardo).
 imagen de cada una ya no lleva LVGL.
 
 **✅ H6 CERRADO** (Eduardo, 26-sep).
+
+
+## `#666`–`#668` — al acabar un programa, sus objetos se destruyen y sueltan sus recursos (7-oct; el modelo de Eduardo; en V7)
+
+### 1. Lo que pidió Eduardo (7-oct)
+
+- *«Mira si lo hacemos con objetos, al terminar el programa los objetos se destruyen y estos a su vez liberan los
+  recursos, de esta manera no hace falta programar código especial.»*
+- *«Si un objeto BP consume un recurso, el objeto debe tener un destructor y liberar si es posible el recurso.»*
+- *«Los pines por defecto deben ser input o nada. Si están como output se debería revertir, lo mismo que el resto,
+  son objetos que consumen recursos así que al destruirse el objeto debería liberarse el recurso.»*
+- *«La lista de libres al final de la limpieza nos podría servir para diagnosticar si algo se quedó perdido, sería una
+  red de seguridad. Si se produce un error al liberar, se atrapa y se continúa con la liberación.»*
+- *«Me inclino que sí, que lo hagamos en V7, le dará mucha más robustez al SO y a la VM.»*
+
+### 2. Por qué: `#666`, medido en la C6
+
+- Las tiras NeoPixel de `PinesSistema` se quedan con sus dos canales RMT después de su RUN. Un programa nuevo que pide
+  UNA tira no la consigue: «no quedan canales RMT libres».
+- Con la misma imagen, GuiArbolG2 da IDÉNTICO tras un `reset` y ERROR («sin memoria para construir las clases») tras
+  `PinesSistema`: las tiras retienen ~1,5 KB y parten el heap del sistema (el bloque mayor, de 64 a 56 KB).
+- El censo: el NeoPixel (la PIO, el RMT), el contador de las ESP (PCNT) y el PWM, que en las tres familias **sigue
+  sacando la señal** tras el RUN: un motor movido por PWM no se para con el STOP.
+
+### 3. Lo que hay hoy (el mapa verificado del 7-oct: el compilador y las dos VMs)
+
+**El compilador.**
+- `~X` es el método `__dtor`: público, virtual, y el usuario no lo llama. El compilador sólo emite su llamada al morir
+  un `var owner` local (por cualquier salida de la función, también al reasignarlo) y en un `try var`. Cada destructor
+  acaba llamando al de su padre; si el del hijo lanza, el del padre no corre.
+- Los `var owner` **globales** no se destruyen nunca. Los campos `owner` y una `OwnerList` se liberan en cascada **sin
+  destructor** (`#491`). No hay finalizador: `__startup` es `__init`, `main` y `HALT`.
+- La ranura del `__dtor` no es fija (2 bajo `Object`, 4 bajo `Thread`): se resuelve por su nombre, `__dtor()V`.
+
+**La VM-C.**
+- El programa acaba en `acabar` (`scheduler.c`): cuando no queda hilo vivo, o antes por una excepción de `main` o un
+  KILL. Entre `acabar` y `bpvm_destroy` no corre nada de BP; el hilo `main` existe hasta `destroy`.
+- Ni el GC ni la cascada de `FREE_REF` ejecutan destructores. El GC cierra en C un `File` inalcanzable; el fin de RUN
+  cierra en C los ficheros, apunta los pines como libres (sin tocar el hardware) y cierra los buses del programa.
+- No hay orden de creación: los handles se reutilizan del último liberado al primero, las direcciones salen del
+  primer hueco que cabe y la cabecera no lleva número de secuencia.
+- `bpvm_call_bp_from_builtin` llama a BP desde C (cuantos anidados hasta que vuelve; si cede o se bloquea, error).
+  Una excepción que se escapa se busca en los manejadores de quien llama: hace falta una barrera. Tras un KILL hay que
+  bajar la bandera (`bpvm_kill_marcar(vm, 0)`).
+- Nadie mira el heap de BP al acabar: el guardián de `#339` sólo cuenta las reservas de C.
+
+**La VM-Java.**
+- El final de `run()` es Java: las líneas a medias, `gui.shutdown()`, los ficheros, los pines, los buses y «=== FIN DE
+  LA EJECUCIÓN ===».
+- **Tras un KILL no puede correr nada de BP**: la bandera no se baja nunca. **Tras una excepción de `main`, su hilo
+  queda RUNNING**, y un GC lanzado desde otro contexto esperaría para siempre.
+- Su llamada anidada (`correAnidado`) no guarda los manejadores: una excepción que se escapa va a uno viejo.
+- Tampoco hay orden de creación, ni destructores al final, ni informe de lo que queda. El ADC del stub no se pone a
+  cero (la VM-C sí) y no cierra los sockets.
+- Siempre vivos: las dos excepciones prefabricadas; un recuento de lo que queda tiene que excluirlas.
+
+### 4. El diseño (propuesta)
+
+**4.1 Cuándo.** Una fase nueva, **la destrucción**, al acabar el programa por cualquiera de sus tres caminos (fin
+normal, excepción no atrapada, STOP) y ANTES de la limpieza de hoy. En la VM-C, en `acabar`, con el programa aún
+colgado y su salida abierta (antes de `io_stop` y del EXITED). En la VM-Java, en la cola de `run()`, antes de
+`gui.shutdown()` y de los ficheros (`~Component` y `~File` los necesitan). La salida de los destructores es salida
+del programa: va antes del EXITED y de «=== FIN DE LA EJECUCIÓN ===», igual en las dos VMs.
+
+**4.2 Dónde corre.** Un solo hilo, el de la destrucción, con los demás ya parados: una pila limpia (raíz del GC),
+los manejadores vacíos y una **barrera** que atrapa todo. El KILL, bajado mientras dura. El hilo `main`, terminado
+como es debido en los tres caminos (en la VM-Java hoy queda RUNNING tras una excepción).
+
+**4.3 Qué objetos.** Los del heap cuya clase tiene un destructor no trivial (el `__dtor` resuelto no es el vacío de
+`Object` ni el de `Thread`).
+
+**4.4 El orden: el inverso al de creación**, como los `owner` locales. Hace falta un **registro**: al crear un objeto
+de una clase con destructor no trivial, la VM lo apunta en una lista en orden de creación; sale de ella al
+destruirse. Las dos VMs crean en el mismo orden (es el del programa): el mismo orden de destrucción y la misma salida.
+
+**4.5 Que no se escape ninguno** (la pieza más delicada). Hoy el GC y la cascada de un `owner` liberan sin destructor
+(`#491`), así que un objeto con recurso que el GC recoge a mitad de programa pierde su recurso para siempre: al final
+ya no está. Propuesta: **nada libera un objeto con destructor sin destruirlo** —el registro es una raíz del GC—: lo
+que no destruye su dueño, lo destruye el final. El precio, en memoria: los objetos con destructor que el programa
+suelta sin dueño viven hasta el final. `Gui.Component` tiene destructor: se mide con `GuiChurn` y `GuiAnidadaGc`.
+
+**4.6 Cada destructor**, en el hilo de la destrucción y con la barrera. Si lanza, se atrapa, se dice (stderr y log,
+con la clase: «el destructor de Gpio.Pin lanzó: …») y se sigue con los demás (Eduardo). Si cede o se bloquea, es un
+error y se sigue: los demás hilos ya no existen, y esperar a un mutex suyo sería esperar para siempre.
+
+**4.7 Tras un STOP, también**: es el caso del motor. Con un tope de tiempo para toda la pasada; un segundo STOP o el
+tope la cortan, y lo que quede lo suelta la red (4.8).
+
+**4.8 La red de seguridad** (Eduardo). Tras la pasada: (1) la VM recorre el heap: los objetos con destructor que
+sigan sin destruir, y lo que no vuelva a la lista de libres al soltar todo lo del programa (salvo lo siempre vivo),
+se DICE, con la clase, como el guardián de `#339` dice las reservas de C; (2) la plataforma suelta lo que quede de los
+recursos —los ficheros, los buses, los pines, y ahora los canales de PWM, contador y NeoPixel—: la última red, en C,
+que no depende de que corra BP.
+
+**4.9 Los recursos** (`#667`). Las clases que toman uno, con destructor y `release()`: `Gpio.Pin` (vuelve a entrada),
+`Adc.Channel`, `Pwm.Slice`, `Pulse.Counter`, `Neopixel.Strip`, los de SPI, I2C, UART y red, `IO.File`; el censo
+exacto, al hacerlo. Cada familia, con la función que suelta cada recurso (RMT, LEDC, PCNT, la PIO, los temporizadores
+de la STM32, el pin a entrada), y el host y el micro simulado con dobles que cuentan lo tomado y lo soltado.
+
+### 5. Las decisiones
+
+**Ya decididas** (Eduardo, 7-oct): con objetos; los Gpio, a entrada; la red de seguridad; un error al liberar se
+atrapa y se sigue; en V7.
+
+**Por decidir** (propuesta; Eduardo decide):
+- **D1 — nada libera un objeto con destructor sin destruirlo** (4.5). Ejemplo: `tira(2)` de `PinesSistema` deja su
+  `Strip` como basura; hoy, si el GC la recoge, el canal RMT se pierde hasta un `reset`; con D1 vive hasta el final y
+  su destructor suelta el canal. El precio: memoria, si un programa crea y suelta muchos objetos con destructor sin
+  dueño (las GUI: medirlo).
+- **D2 — el orden, el inverso al de creación** (4.4). Ejemplo: `bus := Spi.Bus(2, …)` y `pant := Spi.Device(bus, …)`:
+  primero `~Device`, que todavía usa el bus, y después el bus.
+- **D3 — tras un STOP, también, con un tope** (4.7; propuesta: 2 s para toda la pasada). Ejemplo: STOP con un motor
+  por PWM y un fichero abierto en la SD: el motor se para y el fichero se cierra; si un destructor se cuelga, a los
+  2 s se corta y la red suelta el resto.
+- **D4 — la cascada de un campo `owner` o de una `OwnerList`: ¿destruye?** Hoy libera sin destructor (`#491`). Ejemplo:
+  una clase `Robot` con `var owner motor: Pwm.Slice`; al morir el `Robot` (su `var owner` local sale de ámbito), ¿se
+  para el motor en ese momento (el destructor, en la cascada) o al acabar el programa (D1)? Recomendación: en ese
+  momento —es lo que dice «al destruirse el objeto debería liberarse el recurso»—, cambiando `#491`; toca la GUI (los
+  hijos de un contenedor se liberan así), y se mide igual que D1.
+
+### 6. El plan, por pasos que cierran algo (la cascada de siempre: Java → C → placas)
+
+1. **La VM-Java**: la fase de destrucción (el hilo limpio, el registro, el orden, la barrera, el KILL bajado, `main`
+   terminado tras una excepción) y la red del heap. Pruebas de paridad: un programa con destructores que imprimen,
+   acabado bien, con una excepción y con un STOP; objetos globales, locales sin `owner` y basura.
+2. **La VM-C**: lo mismo, con la VM-Java de oráculo (`stdout` idéntico).
+3. **`#667`**: los destructores y los `release()` de la stdlib, y cada familia; en el PC, con los dobles.
+4. **D1 y D4 con la GUI**: medir `GuiChurn` y `GuiAnidadaGc` (memoria y tiempo).
+5. **Las placas, en un lote**: la C6 (`NeoUna` tras `PinesSistema` consigue su tira; GuiArbolG2 tras `PinesSistema`
+   pasa); el PWM parado tras un STOP, en la Pico y en una ESP; y la ronda de V7.
