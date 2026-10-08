@@ -136,6 +136,10 @@ endif
 # pasaba la comprobación de abajo y la prueba corría con él, callada. Lo destapó test-aotcede: un .bp
 # que no compilaba, un .mod de antes y un C del AOT nuevo — y el fallo salió como una diferencia de
 # salida, no como «el compilador ha fallado».
+# V7 #668 (8-oct) — y si el COMPILADOR es más nuevo que el .mod, también: el guardián miraba el .bp y el formato,
+# no quién lo compiló. samples/OwnerHondo.mod era del 7-oct, de antes de #668 (soltaba con FREE_REF), y
+# test-ownerhondo seguía en verde sin pasar por la destrucción nueva —que en la Pico 2 se quedaba sin memoria con
+# ese mismo programa—. Un artefacto cachea por fuente; el que lo hace, también cuenta.
 define fixture
 @for s in ../bpstdlib/*.mod; do b=$$(basename $$s); if [ -f samples/$$b ] && ! cmp -s $$s samples/$$b; then echo "  (samples/$$b era otra version de la stdlib: se copia la de bpstdlib)"; cp $$s samples/$$b; fi; done
 @fmt=$(if $(2),$(2),9); want=$$(sed -n "s/.*BPVM_MAGIC_V$$fmt[[:space:]]*0x\([0-9A-Fa-f]\{8\}\).*/\1/p" include/bpvm_internal.h | head -1 | tr a-z A-Z); \
@@ -143,6 +147,7 @@ for m in $(1); do \
   why=""; \
   if [ ! -f samples/$$m.mod ]; then why="no existe"; \
   elif [ samples/$$m.bp -nt samples/$$m.mod ]; then why="el .bp es mas nuevo"; \
+  elif [ ../lexer-java/target/basicplus-frontend.jar -nt samples/$$m.mod ]; then why="el compilador es mas nuevo"; \
   else \
     got=$$(od -An -tx1 -N4 samples/$$m.mod | tr -d ' \n' | tr a-z A-Z); \
     if [ "$$got" != "$$want" ]; then why="formato $$got != $$want (rancio)"; fi; \
@@ -477,6 +482,38 @@ test-suelta: $(LIBOBJ)
 	$(CC) $(CFLAGS) -Isrc test/test_suelta.c $(LIBOBJ) -o $(SUELTA_BIN) $(LDFLAGS)
 	@echo "--- V7 #667: soltar los recursos (esperado: solo 'ok', [status=OK]) ---"
 	(cd samples && ../$(SUELTA_BIN) SueltaTodo.mod SueltaSinObjetos.mod)
+
+# V7 #668 con POCA memoria de plataforma (8-oct; la ronda de V7 en la Pico 2: OwnerHondo moría con «No space in heap»):
+# soltar un árbol de owner grande no pide memoria por nodo. Con las reservas de destruir.c a 4 KB como mucho, OwnerHondo
+# (sin destructores) y OwnerHondoDtor (con un vigía que sí tiene uno: hay que mirar los árboles), hasta el final.
+# V7 #668 (8-oct) — LO QUE SÓLO SE VE AL ACABAR: DestruyeFinal y DestruyeTrasError destruyen DESPUÉS del main (bien, o
+# tras un error), donde el sample ya no puede comprobarse solo, y la paridad no ve un fallo que las dos VMs tengan
+# igual —el atajo de esta mañana se comía el destructor del ÚLTIMO pendiente en las dos, y DestruyeFinal seguía en
+# PARIDAD OK sin «~global»—. Aquí, su salida contra la esperada, en las dos VMs.
+test-destruyefinal: $(BIN)
+	$(call fixture,DestruyeFinal DestruyeTrasError)
+	$(call stdlibdep,Core)
+	@ef=$$(printf 'fin del main (suelto-del-main)\n~propio\n~suelto-del-main\n~global'); \
+	 ee=$$(printf 'antes del error\n~propio\n~global'); malo=0; \
+	 for vm in c java; do \
+	   if [ $$vm = c ]; then run="../$(BIN)"; else run="java -jar ../../miVM/target/bpgenvm-1.0.jar"; fi; \
+	   of=$$(cd samples && timeout 60 $$run DestruyeFinal.mod 2>/dev/null | tr -d '\r' | grep -E '^(fin del main|~)'); \
+	   oe=$$(cd samples && timeout 60 $$run DestruyeTrasError.mod 2>/dev/null | tr -d '\r' | grep -E '^(antes del error|~)'); \
+	   if [ "$$of" = "$$ef" ]; then echo "  ok  $$vm: DestruyeFinal, los tres destructores, el más nuevo primero"; \
+	   else echo "  FAIL $$vm: DestruyeFinal dio: $$(printf '%s' "$$of" | tr '\n' '|')"; malo=1; fi; \
+	   if [ "$$oe" = "$$ee" ]; then echo "  ok  $$vm: DestruyeTrasError, tras el error, los dos destructores"; \
+	   else echo "  FAIL $$vm: DestruyeTrasError dio: $$(printf '%s' "$$oe" | tr '\n' '|')"; malo=1; fi; \
+	 done; \
+	 if [ $$malo -eq 0 ]; then echo "[status=OK]"; else echo "[status=FAIL]"; exit 1; fi
+
+DESPOCA_BIN = build/test_destruirpoca.exe
+test-destruirpoca: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,OwnerHondo OwnerHondoDtor)
+	$(call stdlibdep,Core)
+	$(CC) $(CFLAGS) -Isrc test/test_destruirpoca.c $(LIBOBJ) -o $(DESPOCA_BIN) $(LDFLAGS)
+	@echo "--- V7 #668 con poca memoria: soltar un árbol grande sin pedir memoria por nodo (esperado: solo 'ok', [status=OK]) ---"
+	(cd samples && ../$(DESPOCA_BIN) OwnerHondo.mod OwnerHondoDtor.mod)
 
 # V7/H10 #634 (3-oct) — UN KILL CON EL PROGRAMA EN PAUSA: el lazo de pausa del depurador no miraba la bandera que pone
 # `io` al recibir el KILL, y el Stop del IDE no paraba un programa detenido en un breakpoint (en placa). KillLoop parado

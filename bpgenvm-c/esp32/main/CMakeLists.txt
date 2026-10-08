@@ -107,6 +107,7 @@ idf_component_register(
         esp_driver_rmt   # V7/H4: backend NeoPixel (WS2812) por RMT, en gpio_esp32.c
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
         esp_hw_support   # INFO: esp_mac.h (uniqueId desde efuse)
+        esp_psram        # #670: esp_psram_is_initialized (los GPIO 33-37 de la PSRAM octal)
 )
 
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas

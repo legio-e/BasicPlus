@@ -1,0 +1,55 @@
+// SueltaNpA.bp — V7 #667, EN PLACA (#666, lo que lo abrió): toma TODAS las tiras NeoPixel que el programa tiene —en
+// las ESP, los canales RMT de transmisión (4 en la S3, 2 en la C5); en la RP2350, las máquinas de la PIO (4 en la Pico
+// 2; 3 en la Metro, que tiene la suya)—, las enciende y espera. La tanda lo PARA (un KILL): sus objetos se destruyen y
+// cada tira se apaga y suelta su canal. Lo comprueba SueltaNpB, que pide otras tantas en OTROS pines.
+module SueltaNpA
+  import Core
+  import Machine
+  import Neopixel
+
+  function pines(): integer[]
+    var m: string := Machine.getMicro()
+    if m == "esp32s3" then
+      var s3: integer[] := [16, 17, 18, 21]
+      return s3
+    endif
+    if m == "esp32c5" then
+      var c5: integer[] := [11, 12]
+      return c5
+    endif
+    if m == "rp2350a" then
+      var pa: integer[] := [2, 3, 4, 5]
+      return pa
+    endif
+    if m == "rp2350b" then
+      var pb: integer[] := [2, 3, 4]
+      return pb
+    endif
+    var otro: integer[] := [6]
+    return otro
+  end pines
+
+  function Main()
+    var p: integer[] := pines()
+    var vivas: List := List()
+    var i: integer := 0
+    while i < len(p) do
+      try
+        var t: Neopixel.Strip := Neopixel.Strip(p[i], 1)
+        t.setColor(0, 0, 8)
+        t.show()
+        vivas.add(t)
+      catch e: RuntimeError
+        print "la tira del pin " + intToString(p[i]) + " no se pudo tomar: " + e.msg
+        if contains(e.msg, "no implementado") then
+          i := len(p)
+        endif
+      endtry
+      i += 1
+    endwh
+    print "listo: " + intToString(vivas.length()) + " tiras encendidas; esperando el STOP"
+    while true do
+      sleep(50)
+    endwh
+  end Main
+end SueltaNpA

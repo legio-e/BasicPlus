@@ -7600,6 +7600,8 @@ public class VirtualMachine {
 
     /** Los objetos vivos de una clase CON destructor, en orden de creación (handles: Heap.compact mueve bloques). */
     private final java.util.LinkedHashSet<Long> registroDestruibles = new java.util.LinkedHashSet<>();
+    /** Lo último que sacó __siguientePendiente: mientras siga vivo, se está destruyendo (no está registrado ni pendiente). */
+    private long tomadoDestruir = 0L;
     /** Lo pendiente de destruir —lo que el GC encontró inalcanzable; al acabar, todo lo vivo—, el siguiente delante.
      *  Raíz del GC hasta que se destruye. */
     private final ArrayDeque<Long> pendientesDestruir = new ArrayDeque<>();
@@ -7780,8 +7782,17 @@ public class VirtualMachine {
      *  (true); si lo hay, no toca nada (false). Uno muerto o null: no hay nada que hacer (true). */
     private boolean liberaSiSinDestructores(long ref) {
         synchronized (vmLock) {
-            if (cabeceraViva(ref) < 0) return true;
-            if (arbolConDestructores(ref)) return false;
+            int h = cabeceraViva(ref);
+            if (h < 0) return true;
+            // Si no hay NADA vivo con destructor, ningún árbol tiene uno: sin recorrerlo, lo de antes de #668 (la VM-C,
+            // igual: allí el recorrido pedía memoria que la Pico 2 no tenía, 8-oct). «Nada»: él no tiene destructor, ni
+            // hay nadie registrado ni pendiente, y lo último sacado de la cola ya no vive —mientras vive se está
+            // destruyendo y no está en ninguno de los dos: sin esto, el ÚLTIMO pendiente se soltaba sin su destructor—.
+            boolean propio = ((readInt32(h) & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) == TYPE_OBJECT
+                    && tipoDestructorDeClase(readInt32(h + 4)) != 0;
+            boolean nadie = !propio && registroDestruibles.isEmpty() && pendientesDestruir.isEmpty()
+                    && cabeceraViva(tomadoDestruir) < 0;
+            if (!nadie && arbolConDestructores(ref)) return false;
             freeOwnedObjectLocked(ref);
             return true;
         }
@@ -7802,7 +7813,7 @@ public class VirtualMachine {
         synchronized (vmLock) {
             while (!pendientesDestruir.isEmpty()) {
                 long r = pendientesDestruir.pollFirst();
-                if (cabeceraViva(r) >= 0) return r;
+                if (cabeceraViva(r) >= 0) { tomadoDestruir = r; return r; }   // se va a destruir: el atajo lo ve
             }
             if (drenadorTid == tc.id) drenadorTid = -1;
             return 0L;

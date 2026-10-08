@@ -1,0 +1,76 @@
+// SueltaPwmA.bp — V7 #667, EN PLACA: toma TODOS los canales de PWM que el programa tiene (en las ESP, las ranuras del
+// LEDC: 6 en la S3, 4 en la C5; en la RP2350 no se agotan, y en la Pico 2 uno es el LED de la placa, el 25) y una UART,
+// los deja en marcha y espera. La tanda lo PARA (un KILL): al acabar así, sus objetos se destruyen (#668) y cada
+// destructor suelta lo suyo (#667). Lo comprueba SueltaPwmB, que pide otros tantos en OTROS pines: si estos no se
+// soltaron, no quedan. Los pines, los que la placa tiene libres (ni de un bus, ni de la pantalla, ni de la memoria).
+module SueltaPwmA
+  import Core
+  import Machine
+  import Pwm
+  import Uart
+
+  function pines(): integer[]
+    var m: string := Machine.getMicro()
+    if m == "esp32s3" then
+      var s3: integer[] := [4, 5, 6, 7, 8, 9]
+      return s3
+    endif
+    if m == "esp32c5" then
+      var c5: integer[] := [2, 3, 4, 5]
+      return c5
+    endif
+    if m == "rp2350a" then
+      var pa: integer[] := [10, 12, 25]
+      return pa
+    endif
+    if m == "rp2350b" then
+      var pb: integer[] := [10, 12]
+      return pb
+    endif
+    var otro: integer[] := [2, 3]
+    return otro
+  end pines
+
+  // La UART 1, en dos pines libres (tx, rx).
+  function pinesUart(): integer[]
+    var m: string := Machine.getMicro()
+    if m == "esp32s3" then
+      var s3: integer[] := [1, 2]
+      return s3
+    endif
+    if m == "esp32c5" then
+      var c5: integer[] := [11, 12]
+      return c5
+    endif
+    var rp: integer[] := [20, 21]
+    return rp
+  end pinesUart
+
+  function Main()
+    var p: integer[] := pines()
+    var vivos: List := List()
+    var i: integer := 0
+    while i < len(p) do
+      try
+        var s: Pwm.Slice := Pwm.Slice(p[i], 1000)
+        s.setDuty(10)
+        s.start()
+        vivos.add(s)
+      catch e: RuntimeError
+        print "el PWM del pin " + intToString(p[i]) + " no se pudo tomar: " + e.msg
+      endtry
+      i += 1
+    endwh
+    var u: integer[] := pinesUart()
+    try
+      var puerto: Uart.Port := Uart.Port(1, u[0], u[1], 9600, 8, 1, 0)
+      vivos.add(puerto)
+    catch e2: RuntimeError
+      print "la UART 1 no se pudo abrir: " + e2.msg
+    endtry
+    print "listo: " + intToString(vivos.length()) + " recursos en marcha; esperando el STOP"
+    while true do
+      sleep(50)
+    endwh
+  end Main
+end SueltaPwmA

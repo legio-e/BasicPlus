@@ -45,6 +45,9 @@
 #include "esp_efuse.h"                      /* #581: ¿el pad VDD_SPI es un GPIO? Lo dice un eFuse (chip_cfg.h) */
 #include "esp_efuse_table.h"
 #endif
+#if defined(CHIP_GPIO_OCTAL_DESDE) && CONFIG_SPIRAM
+#include "esp_psram.h"                      /* #670: ¿la PSRAM (octal) está en marcha? Sólo la S3 */
+#endif
 #include "wire_v1.h"                        /* #574: los pines del cable del IDE */
 #include "esp_system.h"             /* paso 4 cierre — esp_reset_reason (causa de reset) */
 #include "esp_task_wdt.h"           /* cierre V3 — backend Wdt (Task Watchdog Timer) */
@@ -186,6 +189,17 @@ static void esp32_caps_init(void) {
      * el eFuse. */
     const bool vdd_spi_es_gpio = esp_efuse_read_field_bit(ESP_EFUSE_VDD_SPI_AS_GPIO);
 #endif
+#ifdef CHIP_GPIO_OCTAL_DESDE
+    /* #670 (8-oct) — y los de la memoria OCTAL de la S3 (chip_cfg.h): el IDF tampoco los reserva. Una flash octal
+     * los usa siempre; una PSRAM octal, si arrancó. */
+    bool memoria_octal = false;
+#if CONFIG_ESPTOOLPY_OCT_FLASH
+    memoria_octal = true;
+#endif
+#if CONFIG_SPIRAM && CONFIG_SPIRAM_MODE_OCT
+    if (esp_psram_is_initialized()) memoria_octal = true;
+#endif
+#endif
     for (int g = 0; g < SOC_GPIO_PIN_COUNT; g++) {
         uint16_t m = 0;
         s_caps_adc_u[g] = -1; s_caps_adc_c[g] = -1;
@@ -195,6 +209,10 @@ static void esp32_caps_init(void) {
 #ifdef CHIP_GPIO_VDD_SPI
         } else if (g == CHIP_GPIO_VDD_SPI && !vdd_spi_es_gpio) {
             s_caps_sis[g] = BPVM_PIN_SIS_MEMORIA;     /* #581: la alimentación de la flash */
+#endif
+#ifdef CHIP_GPIO_OCTAL_DESDE
+        } else if (memoria_octal && g >= CHIP_GPIO_OCTAL_DESDE && g <= CHIP_GPIO_OCTAL_HASTA) {
+            s_caps_sis[g] = BPVM_PIN_SIS_MEMORIA;     /* #670: la PSRAM (o la flash) octal */
 #endif
         } else if (GPIO_IS_VALID_GPIO(g) && (del_wire & (1ULL << g))) {
             s_caps_sis[g] = BPVM_PIN_SIS_WIRE;

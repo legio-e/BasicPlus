@@ -77,4 +77,11 @@
 #include "bpvm_sd_placa.h"
 #define CHIP_SD_REGISTRAR()  bpvm_sd_placa_sin_sd("esta placa no tiene ranura de SD")
 
+/* #670 (8-oct) — LA MEMORIA OCTAL: en la S3, una PSRAM octal (la de la N16R8, CONFIG_SPIRAM_MODE_OCT) o una flash
+ * octal usan además los GPIO 33–37 (SPIIO4–7 y SPIDQS). El IDF no los reserva —la tabla de #574 los daba por libres:
+ * un Gpio.Pin(35, OUTPUT) le quitaba la PSRAM al micro—. `esp32_caps_init` (gpio_esp32.c) los aparta si esa memoria
+ * octal está en marcha. */
+#define CHIP_GPIO_OCTAL_DESDE  33
+#define CHIP_GPIO_OCTAL_HASTA  37
+
 #endif /* BPVM_CHIP_CFG_H */

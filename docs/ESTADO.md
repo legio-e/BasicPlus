@@ -1261,6 +1261,29 @@ la DK2 y la P4 no son «del sistema» (sin decidir si va ficha).
 
 **Lo siguiente**: las placas, en un lote (con el OK de Eduardo), la GUI medida y el STOP en la VM-Java con el IDE.
 
+## 🧪 `#668` y `#667` en placa (8-oct, mañana) — la Pico 2, la Metro, la S3 y la C5
+
+Con *«Las placas puedes probar con las que hay conectadas ahora, el resto de placas tiene que ser a la tarde»*. Y dos
+decisiones: los tres puntos de `#667`, como estaban; y los pines de la pantalla, *«deberían configurarse al mismo
+tiempo que el driver de la pantalla y en principio no utilizarse para otras cosas»* (`#669`).
+- **Antes de grabar**: la stdlib EMBEBIDA de las tres familias era del 2-oct —la imagen la repone en `/lib` al
+  arrancar: las placas habrían vuelto a la de antes de `#668`—. Regenerada (`e7b587ac`) y, desde hoy, en la red
+  (`scripts/check_mods_embebidos.py`).
+- **Grabadas** las cuatro (la C5 sin regrabar sus packs: `packRamBase` igual). La tanda de `#667`
+  (`tools/tanda_667.json`): 52 de 52; la ronda de V7: 187 de 188.
+- **La que no**: `OwnerHondo` en la Pico 2, «No space in heap» al soltar 4000 owners. Una REGRESIÓN de `#668`: la
+  mirada de `__liberaSiSinDestructores` pedía memoria a la plataforma por nodo. Arreglada en las dos VMs, con
+  `test-destruirpoca` (rojo con el código de antes). Y por qué la red no la vio: `samples/OwnerHondo.mod` era de antes
+  de `#668` y la macro `fixture` no regeneraba por un compilador más nuevo (ahora sí).
+- **Y mi atajo, mal a la primera**: se olvidaba del objeto que `__siguientePendiente` acaba de sacar (se está
+  destruyendo), y el ÚLTIMO pendiente salía sin su destructor —la red, en rojo en cuatro frentes: `DestruyeGc`,
+  `test-kill`, `test-suelta`—. Arreglado, y `test-destruyefinal` en la red: lo que se destruye después del `main` no se
+  comprueba solo, y con el fallo en las dos VMs la paridad seguía OK.
+- **Visto de paso**: `#670`, la S3 con PSRAM octal da al programa los GPIO 33–37 (los de la PSRAM). Arreglo hecho.
+
+**Lo siguiente**: grabar el arreglo (las cuatro; la S3 con `#670`) —pide el OK de Eduardo— y repetir `OwnerHondo` en
+la Pico 2; por la tarde, la C3, la C6 (`PinesSistema` y `GuiArbolG2`), la P4, la Nucleo y la DK2.
+
 ## 🔧 SUELTAS (7-oct) — la lista, y `#656`: soltar un owner sin recursión
 
 - **La lista** (Eduardo: *«Empecemos por la lista de pendientes»*): 26 fichas abiertas en FICHAS, más `#665` en V8. Por

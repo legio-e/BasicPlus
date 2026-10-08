@@ -1,0 +1,101 @@
+// SueltaRedA.bp — V7 #667, EN PLACA: lo mismo que SueltaPwmA y SueltaNpA juntos, pero SIN OBJETOS —las funciones del
+// módulo—, y acaba solo. Nadie tiene destructor: lo suelta la RED del final del RUN (los fin_de_run de la familia), que
+// lo dice en el log. Lo comprueban SueltaPwmB y SueltaNpB, otra vez, detrás.
+module SueltaRedA
+  import Core
+  import Machine
+  import Pwm
+  import Neopixel
+  import Uart
+
+  function pinesPwm(): integer[]
+    var m: string := Machine.getMicro()
+    if m == "esp32s3" then
+      var s3: integer[] := [4, 5, 6, 7, 8, 9]
+      return s3
+    endif
+    if m == "esp32c5" then
+      var c5: integer[] := [2, 3, 4, 5]
+      return c5
+    endif
+    var rp: integer[] := [10, 12]
+    return rp
+  end pinesPwm
+
+  function pinesTira(): integer[]
+    var m: string := Machine.getMicro()
+    if m == "esp32s3" then
+      var s3: integer[] := [16, 17, 18, 21]
+      return s3
+    endif
+    if m == "esp32c5" then
+      var c5: integer[] := [11, 12]
+      return c5
+    endif
+    if m == "rp2350a" then
+      var pa: integer[] := [2, 3, 4, 5]
+      return pa
+    endif
+    if m == "rp2350b" then
+      var pb: integer[] := [2, 3, 4]
+      return pb
+    endif
+    var otro: integer[] := [6]
+    return otro
+  end pinesTira
+
+  // La UART 1, en dos pines que no usan ni los PWM ni las tiras de este programa.
+  function pinesUart(): integer[]
+    var m: string := Machine.getMicro()
+    if m == "esp32s3" then
+      var s3: integer[] := [1, 2]
+      return s3
+    endif
+    if m == "esp32c5" then
+      var c5: integer[] := [24, 25]
+      return c5
+    endif
+    var rp: integer[] := [20, 21]
+    return rp
+  end pinesUart
+
+  function Main()
+    var n: integer := 0
+    var p: integer[] := pinesPwm()
+    var i: integer := 0
+    while i < len(p) do
+      try
+        var id: integer := Pwm.initSlice(p[i], 1000)
+        if id >= 0 then
+          Pwm.setDutyPct(id, p[i], 10)
+          Pwm.startSlice(id)
+          n += 1
+        endif
+      catch e: RuntimeError
+        print "el PWM del pin " + intToString(p[i]) + ": " + e.msg
+      endtry
+      i += 1
+    endwh
+    var t: integer[] := pinesTira()
+    var azul: integer[] := [8]
+    i := 0
+    while i < len(t) do
+      try
+        Neopixel.__npInit(t[i])
+        Neopixel.__npShow(t[i], azul, 1)
+        n += 1
+      catch e2: RuntimeError
+        print "la tira del pin " + intToString(t[i]) + ": " + e2.msg
+      endtry
+      i += 1
+    endwh
+    var u: integer[] := pinesUart()
+    try
+      Uart.init(1, u[0], u[1], 9600, 8, 1, 0)
+      n += 1
+    catch e3: RuntimeError
+      print "la UART 1: " + e3.msg
+    endtry
+    print "fin: " + intToString(n) + " recursos tomados sin objetos (los suelta la red del final del RUN)"
+  end Main
+end SueltaRedA

@@ -47,6 +47,9 @@ struct bpvm_destruir {
     uint32_t  vacio_obj_cs, vacio_thr_cs, desc_thread;
     int32_t   vacio_obj_off, vacio_thr_off;
     int32_t   drenador;   /* el tid + 1 del hilo en el que está metida __destruyePendientes; 0, ninguno */
+    uint64_t  tomado;     /* lo último que sacó __siguientePendiente: mientras siga vivo, se está destruyendo (y no
+                           * está ni en el registro ni en la cola) */
+    int       reg_incompleto;   /* un objeto con destructor no cupo en el registro: el registro no lo dice todo */
     uint32_t  dir_pend;   /* Core.__destruyePendientes: 0, sin buscar; 1, no está (un Core de antes); si no, su pc */
     uint32_t  cs_pend;
     /* La fase del final. */
@@ -226,27 +229,64 @@ static void hijos_owner(const bpvm_t* vm, uint32_t h, vec_t* out) {
     }
 }
 
-/* ¿Algún destructor en el árbol de owner de `r`, él incluido? Sin tocar nada. Sin memoria para recorrerlo: sí (lo
- * prudente: se ordena y se destruye, en vez de soltarlo sin destructores). */
+/* Un paso de la pila del recorrido de abajo: un bloque por mirar, o un array poseído a medio recorrer (el CURSOR: el
+ * array y su siguiente elemento). */
+typedef struct { uint64_t ref; uint32_t i; uint32_t cursor; } paso_t;
+typedef struct { paso_t* v; uint32_t n, cap; int sin_memoria; } pasos_t;
+static void pasos_mete(pasos_t* a, uint64_t ref, uint32_t cursor) {
+    if (a->n == a->cap) {
+        uint32_t cap = a->cap ? a->cap * 2u : 16u;
+        paso_t* q = (paso_t*) bpvm_realloc(a->v, (size_t) cap * sizeof(paso_t));
+        if (q == NULL) { a->sin_memoria = 1; return; }
+        a->v = q;
+        a->cap = cap;
+    }
+    a->v[a->n].ref = ref;
+    a->v[a->n].i = 0u;
+    a->v[a->n].cursor = cursor;
+    a->n++;
+}
+
+/* ¿Algún destructor en el árbol de owner de `r`, él incluido? Sin tocar nada.
+ *
+ * Con POCA memoria (visto en la Pico 2, 8-oct: OwnerHondo, una cadena de 4000 owners sin destructores, moría con «No
+ * space in heap» donde antes de #668 iba): ni conjunto de vistos —para 4000 pedía 32 KB a la plataforma, 48 mientras
+ * crecía— ni la pila con todos los hijos de un array: un array poseído va con un CURSOR. La memoria es la de la
+ * profundidad de arrays anidados y los campos owner de un objeto, nunca la del número de nodos: una cadena de 4000,
+ * dos pasos; un array de 600 con un hijo cada uno, tres. Contra un ciclo o un hijo con dos dueños, que sin vistos se
+ * recorrerían otra vez, un TOPE de vueltas: tantas como bloques caben en el heap. Pasado el tope, o sin memoria para la
+ * pila: sí (lo prudente: se ordena —con sus vistos— y se destruye; si no tenía ninguno, el mismo resultado). */
 static int arbol_con_destructores(bpvm_t* vm, struct bpvm_destruir* d, uint64_t r) {
-    uint32_t h0 = cabecera_viva(vm, r);
-    if (h0 == 0u) return 0;
-    vec_t pila = {0}, hijos = {0};
-    vistos_t vistos = {0};
+    if (cabecera_viva(vm, r) == 0u) return 0;
+    pasos_t pila = {0};
+    vec_t hijos = {0};
+    uint32_t tope = (vm->heap_next - vm->heap_start) / 8u + 1u, vueltas = 0u;   /* un bloque ocupa 8 B como poco */
     int hay = 0;
-    vec_mete(&pila, r);
-    vistos_mete(&vistos, h0);
-    while (pila.n > 0u && !hay) {
-        uint32_t h = cabecera_viva(vm, pila.v[--pila.n]);
+    pasos_mete(&pila, r, 0u);
+    while (pila.n > 0u && !pila.sin_memoria && !hijos.sin_memoria) {
+        if (++vueltas > tope) { hay = 1; break; }
+        paso_t* p = &pila.v[pila.n - 1u];
+        if (p->cursor) {                                   /* el siguiente elemento del array, o se acabó */
+            uint32_t ha = cabecera_viva(vm, p->ref);
+            uint32_t len = (ha != 0u) ? bpvm_read_u32_be(vm->memory + ha + 4u) : 0u;
+            if (p->i >= len) { pila.n--; continue; }
+            uint64_t e = bpref_load(vm, ha + 4u + BPVM_ARR_DATA_OFF + p->i * BPVM_REF_SIZE).v;
+            p->i++;                                        /* antes de meter: meter puede mover la pila */
+            if (cabecera_viva(vm, e) != 0u) pasos_mete(&pila, e, 0u);
+            continue;
+        }
+        uint64_t x = p->ref;
+        pila.n--;
+        uint32_t h = cabecera_viva(vm, x);
         if (h == 0u) continue;
+        if (tipo_de_bloque(vm, h) == BPVM_TYPE_ARRAY_REF) { pasos_mete(&pila, x, 1u); continue; }
         if (tipo_de_cabecera(vm, d, h) != 0) { hay = 1; break; }
         hijos.n = 0;
-        hijos_owner(vm, h, &hijos);
-        for (uint32_t k = 0; k < hijos.n; k++)
-            if (vistos_mete(&vistos, cabecera_viva(vm, hijos.v[k]))) vec_mete(&pila, hijos.v[k]);
-        if (pila.sin_memoria || hijos.sin_memoria || vistos.sin_memoria) { hay = 1; break; }
+        hijos_owner(vm, h, &hijos);                        /* un objeto: sus campos owner (pocos) */
+        for (uint32_t k = 0; k < hijos.n; k++) pasos_mete(&pila, hijos.v[k], 0u);
     }
-    bpvm_free(pila.v); bpvm_free(hijos.v); bpvm_free(vistos.t);
+    if (pila.sin_memoria || hijos.sin_memoria) hay = 1;
+    bpvm_free(pila.v); bpvm_free(hijos.v);
     return hay;
 }
 
@@ -283,8 +323,16 @@ static int orden_destruccion(bpvm_t* vm, uint64_t r, vec_t* out) {
 int bpvm_destruir_libera_si_sin(bpvm_t* vm, bpref_t r) {
     bpvm_smp_lock(vm);
     struct bpvm_destruir* d = estado(vm);
-    /* (sin memoria ni para la marca: se suelta como antes, sin destructores) */
-    int hay = d != NULL && cabecera_viva(vm, r.v) != 0u && arbol_con_destructores(vm, d, r.v);
+    /* (sin memoria ni para la marca: se suelta como antes, sin destructores). Y si no hay NADA vivo con destructor,
+     * ningún árbol tiene uno: se suelta sin recorrerlo, sin pagar nada (lo de antes de #668). «Nada» es: él no tiene
+     * destructor, el registro está vacío y entero (no perdió ningún alta), la cola también, y lo último que se sacó de
+     * ella ya no vive —mientras vive, se está destruyendo, y no está en ninguno de los dos: al destruir el ÚLTIMO
+     * pendiente, sin esto, el atajo lo soltaba sin su destructor (DestruyeGc)—. Un muerto en el registro, hasta la
+     * siguiente purga, sólo hace que se mire. */
+    uint32_t h = (d != NULL) ? cabecera_viva(vm, r.v) : 0u;
+    int nadie = h != 0u && !d->reg_incompleto && d->reg_n == 0u && d->pend_ini >= d->pend_n
+                && cabecera_viva(vm, d->tomado) == 0u && tipo_de_cabecera(vm, d, h) == 0;
+    int hay = h != 0u && !nadie && arbol_con_destructores(vm, d, r.v);
     bpvm_smp_unlock(vm);
     if (hay) return 0;
     bpvm_heap_soltar_owned(vm, r);   /* toma él los cerrojos que necesita */
@@ -354,6 +402,7 @@ uint64_t bpvm_destruir_siguiente(bpvm_t* vm, bpvm_thread_t* tc) {
         uint64_t x = d->pend[d->pend_ini++];
         if (cabecera_viva(vm, x) != 0u) { r = x; break; }
     }
+    if (r != 0u) d->tomado = r;   /* se va a destruir: el atajo de __liberaSiSinDestructores lo tiene que ver */
     if (d->pend_ini >= d->pend_n) {
         d->pend_ini = d->pend_n = 0u;
         if (r == 0u && d->drenador == tc->id + 1) d->drenador = 0;   /* vacía: el que la vaciaba deja de hacerlo */
@@ -400,7 +449,7 @@ void bpvm_destruir_al_nacer(bpvm_t* vm, bpref_t h, uint32_t class_ptr) {
             if (q != NULL) { d->reg = q; d->reg_cap = cap; }
         }
         if (d->reg_n < d->reg_cap) d->reg[d->reg_n++] = h.v;
-        else bpvm_diag_urgente("[bpvm] sin memoria para el registro de destructores: un objeto con destructor no "
+        else if ((d->reg_incompleto = 1)) bpvm_diag_urgente("[bpvm] sin memoria para el registro de destructores: un objeto con destructor no "
                                "se destruira al soltarlo el GC ni al acabar (#668)");
     }
     bpvm_smp_unlock(vm);

@@ -1,0 +1,124 @@
+// OwnerHondoDtor.bp — V7 #668 con POCA memoria (8-oct, la ronda de V7 en la Pico 2): soltar árboles de owner SIN
+// destructores mientras vive OTRO objeto que sí lo tiene. Con el registro de destructores no vacío hay que MIRAR el
+// árbol antes de soltarlo por la vía rápida, y esa mirada pedía memoria a la plataforma por cada nodo (un conjunto de
+// vistos: 32 KB para 4000, más de lo que le queda a la Pico 2): «No space in heap» donde antes de #668 no costaba nada.
+// Ahora la mirada va con la pila de su recorrido —un cursor por array—: las dos formas de OwnerHondo, la HONDA (una
+// cadena de 4000) y la ANCHA (un array owner de 600, cada uno con su hijo). La cascada tiene que llegar al final (los
+// testigos, muertos) y el vigía se destruye el último, al acabar el main. Lo corre test-destruirpoca con la memoria de
+// la plataforma apretada (bpvm_alloc_prueba_tope), y la red de paridad con la normal.
+module OwnerHondoDtor
+  public class Nodo
+    var owner sig: Nodo
+    var v: integer
+    public function Nodo(v: integer)
+      this.v := v
+    end Nodo
+    public function pon(s: Nodo)
+      this.sig := s
+    end pon
+    public function valor(): integer
+      return this.v
+    end valor
+    public function siguiente(): Nodo
+      return this.sig
+    end siguiente
+  end Nodo
+
+  public class Almacen
+    var owner items: Object[]
+    public function Almacen(n: integer)
+      this.items := newObjArray(n)
+    end Almacen
+    public function pon(i: integer, o: Object)
+      this.items[i] := o
+    end pon
+  end Almacen
+
+  // Con destructor: mientras vive, el registro de destructores no está vacío.
+  public class Vigia
+    public function Vigia()
+    end Vigia
+    public function ~Vigia()
+      print "~Vigia"
+    end ~Vigia
+  end Vigia
+
+  // Alias, NO owner: tienen que ver muertos los nodos del fondo.
+  public class Testigos
+    var a: Nodo
+    var b: Nodo
+    public function Testigos()
+    end Testigos
+    public function guarda(i: integer, n: Nodo)
+      if i == 0 then
+        this.a := n
+      else
+        this.b := n
+      endif
+    end guarda
+    public function muertos(): integer
+      var m: integer := 0
+      try
+        var x: integer := this.a.valor()
+      catch e: RuntimeError
+        m := m + 1
+      endtry
+      try
+        var y: integer := this.b.valor()
+      catch e: RuntimeError
+        m := m + 1
+      endtry
+      return m
+    end muertos
+  end Testigos
+
+  function cadena(n: integer, t: Testigos): Nodo
+    var cab: Nodo := Nodo(0)
+    var p: Nodo := cab
+    var i: integer := 1
+    while i < n do
+      var q: Nodo := Nodo(i)
+      p.pon(q)
+      p := q
+      if i == n / 2 then
+        t.guarda(0, q)
+      endif
+      i := i + 1
+    endwh
+    t.guarda(1, p)
+    return cab
+  end cadena
+
+  function honda(t: Testigos)
+    var owner lista: Nodo := cadena(4000, t)
+    print "honda: 4000 nodos"
+  end honda                 // aquí muere `lista`: se mira (hay un vigía vivo) y se suelta entera
+
+  function ancha(t: Testigos)
+    var owner a: Almacen := Almacen(600)
+    var i: integer := 0
+    while i < 600 do
+      var x: Nodo := Nodo(i)
+      x.pon(Nodo(i * 2))
+      a.pon(i, x)
+      if i == 0 then
+        t.guarda(0, x)
+      elseif i == 599 then
+        t.guarda(1, x.siguiente())
+      endif
+      i := i + 1
+    endwh
+    print "ancha: 600 nodos con su hijo"
+  end ancha
+
+  function Main()
+    var owner vigia: Vigia := Vigia()
+    var t1: Testigos := Testigos()
+    honda(t1)
+    print "honda, muertos: " + t1.muertos() + " de 2"
+    var t2: Testigos := Testigos()
+    ancha(t2)
+    print "ancha, muertos: " + t2.muertos() + " de 2"
+    print "fin"
+  end Main
+end OwnerHondoDtor

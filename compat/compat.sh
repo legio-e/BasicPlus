@@ -104,7 +104,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha NatTuplas CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles FormsSetter CedeCero DescarteAncho TempRetiene FinallyAnidado RtcPc RtcEnHora FicheroOCarpeta GuiOrdenHijos OwnerReasigna GuiArbolG2 GcHondo OwnerHondo EvReceptorMuerto InvocaRanura BusDosHilos FicheroYaAbierto DestruyeArbol DestruyeLanza DestruyeGc DestruyeFinal DestruyeTrasError SueltaRecursos bpgenvm-c/samples/importhondo/ImportHondo.bp"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha NatTuplas CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles FormsSetter CedeCero DescarteAncho TempRetiene FinallyAnidado RtcPc RtcEnHora FicheroOCarpeta GuiOrdenHijos OwnerReasigna GuiArbolG2 GcHondo OwnerHondo EvReceptorMuerto InvocaRanura BusDosHilos FicheroYaAbierto DestruyeArbol DestruyeLanza DestruyeGc DestruyeFinal DestruyeTrasError SueltaRecursos OwnerHondoDtor bpgenvm-c/samples/importhondo/ImportHondo.bp"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -890,7 +890,7 @@ check_testc() {
   # referencia que no puede existir, muerta; con sus tres sabotajes—.
   # V7/H12 (6-oct): y test-nat2runs —las natives con dos runs: el contexto, el depósito de ejecutores, la pila de C de
   # una native que espera al mundo dentro de sí y la línea del bucle aparcada; con sus tres sabotajes—.
-  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aottuplas test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-bytenat test-xmodnat test-compressnat test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-fspos test-blk test-sdio test-listdir test-boot test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-nat2runs test-logmt test-reserva test-palabras test-frcond test-rand test-runguard test-sd-turnos-control test-suelta check-builtins"
+  local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aottuplas test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-bytenat test-xmodnat test-compressnat test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-fspos test-blk test-sdio test-listdir test-boot test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-nat2runs test-logmt test-reserva test-palabras test-frcond test-rand test-runguard test-sd-turnos-control test-suelta test-destruirpoca test-destruyefinal check-builtins"
   n=$(echo $lista | wc -w)
   for t in $lista; do
     sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?
@@ -1222,6 +1222,13 @@ check_packs_abi() {
   python "$HERE/packs_abi.py"
 }
 
+# V7 #668 (8-oct) — la stdlib EMBEBIDA de las imágenes (pico_mods.c, esp32_mods.c, stm32_mods.c) es la de bpstdlib: la
+# imagen la repone en /lib al arrancar, y la del 2-oct habría devuelto las placas a la stdlib de antes de #668.
+check_mods_embebidos() {
+  echo "-- la stdlib embebida de las imagenes, la de bpstdlib (#668: la imagen la repone en /lib al arrancar) --"
+  python "$ROOT/bpgenvm-c/scripts/check_mods_embebidos.py"
+}
+
 # check_behaviour / check_opcodes / check_emit se conservan intactas arriba: son
 # el registro de lo que se verificaba contra V2 y siguen siendo reutilizables si
 # algun dia hay algo que comparar. Desde V4 NO se llaman (ver el aviso de abajo).
@@ -1277,7 +1284,8 @@ EOF
   # el heap justo con varios workers, en las dos VMs); y #613, un hilo que cede con cuatro workers.
   check_estres || fails=$((fails+1))
   check_packs_abi || fails=$((fails+1))
-  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + estres del heap + packs-abi VERDE' || echo "$fails frente(s) en ROJO") =="
+  check_mods_embebidos || fails=$((fails+1))
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + estres del heap + packs-abi + stdlib embebida VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }
 
@@ -1295,6 +1303,7 @@ case "${1:-}" in
   check-smp)  check_smp ;;
   check-estres) check_estres ;;
   check-packs-abi) check_packs_abi ;;
+  check-mods-embebidos) check_mods_embebidos ;;
   check-paridad) check_parity ;;   # V7/H9 (2-oct): sólo la paridad del corpus
   *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-estres|check-packs-abi|check-paridad}"; exit 2 ;;
 esac

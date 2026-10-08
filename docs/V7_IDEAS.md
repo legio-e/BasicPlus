@@ -8554,3 +8554,58 @@ que un CS debería llevar un pull-up por hardware y así sería mas seguro»*):
    ESP, con su pull-up; en la STM32, flotando). Y **un CS debe llevar un pull-up por hardware**: así ni un dispositivo
    soltado ni la placa al arrancar —antes de que el programa tome el CS— lo dejan seleccionado contestando en el MISO de
    los demás. Escrito en la referencia (§14.4, `Spi.Device`).
+
+### 11. En placa (8-oct): el lote de `#668` y `#667` en las cuatro conectadas (Pico 2, Metro, S3 y C5)
+
+Con *«Las placas puedes probar con las que hay conectadas ahora, el resto de placas tiene que ser a la tarde»*.
+
+**Las imágenes no llevaban la stdlib de hoy.** La stdlib de fábrica va en un C GENERADO por familia (`pico_mods.c`,
+`esp32_mods.c`, `stm32_mods.c`) y la imagen la REPONE en `/lib` al arrancar si la de la placa es de la misma
+generación con otro CRC (`#466`). Los tres eran del 2-oct: grabadas así, las placas habrían vuelto en cada arranque a
+un `Core` sin `__destruye` —`#668` y `#667` apagados, sin decirlo más que en el log—. Regenerados antes de grabar
+(`e7b587ac`), y desde hoy lo mira la red: `scripts/check_mods_embebidos.py`, módulo a módulo contra `bpstdlib` (con
+los del 2-oct: «17 de 17 distintos»).
+
+**Grabadas** la Pico 2, la Metro, la S3 y la C5 —la C5 sin regrabar sus packs: `packRamBase` igual (`0x420B1000`), y
+`Gui` y `DriverSpi` cargan—. En el log del arranque, la stdlib repuesta: `Core` de 22 399 a 22 841 B, `Pwm` de 2 280 a
+2 942…
+
+**La tanda de `#668` y `#667`** (`tools/tanda_667.json`; el informe, `compat/informes/tanda_667_8oct.md`): 13 pruebas
+en cada placa, las 52 en verde. Las cinco `Destruye*`, idénticas al PC; `KillDestruye`, parada en 10–36 ms, y tras el
+KILL —a mano: la tanda no guarda la salida de lo que se para— `~propio` y `~global`, el más nuevo primero. Y por
+PARES, lo que distingue soltado de no soltado: un A toma TODAS las unidades de la placa y se para con un STOP; su B
+pide otras tantas en OTROS pines, y sólo las consigue si A las soltó. En la S3, 6 PWM y la UART, y 4 tiras; en la C5,
+4 PWM y la UART, y 2 tiras —2 canales RMT, como la C6 de `#666`—; en la Pico 2, 4 tiras; en la Metro, 3 (la suya es la
+cuarta). Y `SueltaRedA`, lo mismo SIN objetos: la red del final lo dice en el log —«6 PWM seguían en marcha», «4
+tira(s)», «la UART 1», y los pines— y los B vuelven a tenerlo todo. (En la S3, una vez, 510 ms del KILL al EXITED de
+`SueltaPwmA`, dentro del plazo de 2 s; a mano, 37 ms: no se repite.)
+
+**La ronda de V7** (`compat/informes/tanda_v7_8oct.md`): 47 pruebas en cada placa, todo verde —la GUI de la C5
+incluida— salvo **`OwnerHondo` en la Pico 2**: «No space in heap» al soltar la cadena de 4000 (en la placa llegaba a
+«honda: 4000 nodos»). Era `#668`: para saber si un árbol tenía destructores, `__liberaSiSinDestructores` lo recorría
+con un conjunto de vistos que pide memoria a la PLATAFORMA —32 KB para 4000, 48 mientras crece; a la Pico 2 le quedan
+unos 16 de sus 64— y, sin ella, lo «prudente» era ordenarlo, que pide aún más (y un array de 4000 en el heap de BP).
+Antes de `#668`, soltarla no costaba nada. **Arreglado** en las dos VMs: (1) si no hay NADA vivo con destructor —ni en
+el registro ni pendiente—, no se mira el árbol: O(1), lo de antes; (2) en la VM-C, la mirada sin vistos y sin meter en
+la pila todos los hijos de un array: un CURSOR por array; su memoria es la de la profundidad de arrays anidados, nunca
+la del número de nodos (una cadena de 4000, dos pasos), y contra un ciclo, un tope de vueltas. La prueba, `make
+test-destruirpoca`, con las reservas de `destruir.c` a 4 KB como mucho (`bpvm_alloc_prueba_tope`): `OwnerHondo` y
+`OwnerHondoDtor` —las mismas formas con un vigía vivo CON destructor: hay que mirar—; con el `destruir.c` de antes,
+las dos fases en rojo.
+
+**Y por qué la red no lo vio**: `samples/OwnerHondo.mod` era del 7-oct, de antes de `#668`, y la macro `fixture` del
+Makefile lo regeneraba si el `.bp` era más nuevo o el formato no casaba, no si el COMPILADOR era más nuevo:
+`test-ownerhondo` seguía soltando con `FREE_REF`. Ahora también regenera por el compilador. Es la misma trampa que la
+stdlib embebida y que el build de la stdlib: un artefacto cachea por su fuente, y quien lo hace también cuenta.
+
+**Y el atajo, mal a la primera** (la red de después, en rojo en cuatro frentes): «nada vivo con destructor» lo miraba en
+el registro y en la cola de pendientes, y se olvidaba del objeto que `__siguientePendiente` acaba de SACAR —se está
+destruyendo: no está en ninguno de los dos—. Al destruir el ÚLTIMO pendiente, el atajo lo soltaba sin su destructor:
+`DestruyeGc` lo dijo («tenía que ser [suelto-hijo suelto]»), y `test-kill` y `test-suelta` también. Ahora el atajo
+exige además que el objeto mismo no tenga destructor y que lo último sacado de la cola ya no viva (y, en la VM-C, que el
+registro no haya perdido un alta por falta de memoria). Y lo que lo habría escondido: `DestruyeFinal` y
+`DestruyeTrasError` destruyen DESPUÉS del `main`, donde el sample ya no se comprueba solo, y con el fallo en las dos VMs
+la paridad seguía OK —sin «~global»—. Desde hoy, `make test-destruyefinal`: su salida contra la esperada, en las dos
+VMs (con el atajo malo, en rojo).
+
+**Visto en la S3**: `#670` —la PSRAM octal: los GPIO 33–37, al programa—, abierta; su arreglo, hecho.

@@ -1,0 +1,73 @@
+// SueltaPwmB.bp — V7 #667, EN PLACA: la otra mitad de SueltaPwmA (o de SueltaRedA). Pide tantos PWM como aquél, en
+// OTROS pines, y la UART 1 en otros dos: si lo del programa anterior no se soltó al acabar, en las ESP no quedan
+// ranuras del LEDC y sale FALLO con el motivo. Una línea «OK» por cada cosa que consigue. Al acabar, sus propios
+// objetos se destruyen y lo sueltan (el siguiente programa los vuelve a tener).
+module SueltaPwmB
+  import Core
+  import Machine
+  import Pwm
+  import Uart
+
+  function pines(): integer[]
+    var m: string := Machine.getMicro()
+    if m == "esp32s3" then
+      var s3: integer[] := [10, 11, 12, 13, 14, 15]
+      return s3
+    endif
+    if m == "esp32c5" then
+      var c5: integer[] := [24, 25, 26, 27]
+      return c5
+    endif
+    if m == "rp2350a" then
+      var pa: integer[] := [14, 16]
+      return pa
+    endif
+    if m == "rp2350b" then
+      var pb: integer[] := [14, 16]
+      return pb
+    endif
+    var otro: integer[] := [4, 5]
+    return otro
+  end pines
+
+  function pinesUart(): integer[]
+    var m: string := Machine.getMicro()
+    if m == "esp32s3" then
+      var s3: integer[] := [17, 18]
+      return s3
+    endif
+    if m == "esp32c5" then
+      var c5: integer[] := [28, 2]
+      return c5
+    endif
+    var rp: integer[] := [8, 9]
+    return rp
+  end pinesUart
+
+  function Main()
+    var p: integer[] := pines()
+    var vivos: List := List()
+    var i: integer := 0
+    while i < len(p) do
+      try
+        var s: Pwm.Slice := Pwm.Slice(p[i], 2000)
+        s.setDuty(50)
+        s.start()
+        vivos.add(s)
+        print "OK el PWM del pin " + intToString(p[i])
+      catch e: RuntimeError
+        print "FALLO el PWM del pin " + intToString(p[i]) + " no se pudo tomar: " + e.msg
+      endtry
+      i += 1
+    endwh
+    var u: integer[] := pinesUart()
+    try
+      var puerto: Uart.Port := Uart.Port(1, u[0], u[1], 9600, 8, 1, 0)
+      vivos.add(puerto)
+      print "OK la UART 1 en otros pines"
+    catch e2: RuntimeError
+      print "FALLO la UART 1 no se pudo abrir: " + e2.msg
+    endtry
+    print "fin: " + intToString(vivos.length()) + " recursos"
+  end Main
+end SueltaPwmB
