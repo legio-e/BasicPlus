@@ -40,6 +40,12 @@ typedef struct {
     void (*setDuty)(int sliceId, int pin, int dutyPct);
     void (*start)(int sliceId);
     void (*stop)(int sliceId);
+    /* V7 #667 — SOLTARLO (el destructor de Pwm.Slice): lo para, el canal queda libre para otro y el pin vuelve a como
+     * estaba en el reset. Por slice Y pin: los dos canales de un slice pueden ser de dos Slice. */
+    void (*release)(int sliceId, int pin);
+    /* V7 #667 — al acabar el RUN, lo que el programa dejó en marcha y nadie soltó (un programa que usa las funciones
+     * del módulo sin objetos, o una destrucción cortada): la red. Lo que suelta, lo dice. */
+    int  (*fin_de_run)(void);   /* cuántas soltó: lo dice la fachada */
 } bpvm_pwm_backend_t;
 
 void bpvm_pwm_set_backend(const bpvm_pwm_backend_t* backend);
@@ -50,6 +56,8 @@ void bpvm_pwm_set_freq(int sliceId, int freqHz);
 void bpvm_pwm_set_duty(int sliceId, int pin, int dutyPct);
 void bpvm_pwm_start(int sliceId);
 void bpvm_pwm_stop(int sliceId);
+void bpvm_pwm_release(int sliceId, int pin);   /* V7 #667 */
+void bpvm_pwm_fin_de_run(void);                /* V7 #667: la red del final del RUN (silenciosa en el PC) */
 
 #ifdef __cplusplus
 }

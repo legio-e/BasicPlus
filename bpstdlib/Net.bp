@@ -98,6 +98,11 @@ module Net
       endif
     end close
 
+    // V7 #667 (8-oct): la conexión que muere se cierra.
+    public function ~Tcp()
+      this.close()
+    end ~Tcp
+
   end Tcp
 
 end Net

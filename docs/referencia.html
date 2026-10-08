@@ -1141,8 +1141,8 @@ sleep(<span class="num">60000</span>)          <span class="comment">// y la jor
 <p>
   Razones: encapsulación (el id opaco del backend vive en la
   instancia), tipado (<code>var bus: Spi.Bus</code> documenta qué
-  representa la variable), y liberación de recursos cuando lleguen
-  finalizers.
+  representa la variable), y liberación de recursos: desde V7 cada clase que toma algo del hardware
+  lo suelta en su destructor (<a href="#stdlib-hw-soltar">«Soltar el recurso»</a>, abajo).
 </p>
 <p>
   Patrón canónico:
@@ -1195,6 +1195,31 @@ sleep(<span class="num">60000</span>)          <span class="comment">// y la jor
   <tr><td><code>Machine</code> (alias <code>Pico</code>)</td><td><em>(funcs + consts)</em></td>
       <td><em>Info del micro y la placa, singleton sin recursos — excepción documentada</em></td></tr>
 </table>
+
+<h4 id="stdlib-hw-soltar">Soltar el recurso (V7)</h4>
+<p>
+  <strong>Lo que un objeto toma del hardware lo suelta él</strong> (<code>#667</code>; Eduardo: «si un objeto BP
+  consume un recurso, el objeto debe tener un destructor y liberar si es posible el recurso»). Un
+  <code>Pwm.Slice</code>, un <code>Pulse.Counter</code>, una <code>Neopixel.Strip</code>, un <code>Uart.Port</code>,
+  un <code>Gpio.Pin</code>, un <code>Spi.Device</code> y un <code>Adc.Channel</code> tienen <code>release()</code> y
+  un destructor que lo llama. Soltar es <strong>pararlo, dejar su unidad libre para otro y devolver sus pines a
+  como estaban en el reset</strong> —una salida deja de serlo—; un LED de la placa (el GP25 de la Pico 2, los de la
+  Nucleo y la DK2) vuelve a ser del firmware, y una tira se apaga antes de soltarla. El destructor corre cuando el
+  objeto se libera, lo libere quien lo libere (<a href="manual.html#destructor">manual §9.4b</a>): al salir de su
+  ámbito un <code>var owner</code>, cuando el GC lo recoge y al acabar el programa —también tras un error o un
+  STOP—. Así que <strong>al acabar un programa, lo que tomó vuelve a como estaba</strong>: un PWM no se queda
+  sacando la señal, ni una tira encendida, ni su canal ocupado para el siguiente.
+</p>
+<p>
+  <code>release()</code> suelta antes, y una sola vez (el segundo, y el destructor después, no hacen nada).
+  <strong>Después, usar el objeto es un error con nombre</strong> («<code>Pwm.Slice del pin 12: ya se soltó con
+  release()</code>»): el canal que soltó puede ser ya de otro objeto. Lo que no suelta ningún objeto —las funciones
+  del módulo, como <code>Gpio.init</code> o <code>Uart.init</code>— lo suelta al acabar el RUN la red de la
+  plataforma, y lo dice en el diagnóstico («<code>[bpvm] fin de RUN: 1 PWM seguian en marcha: se paran y sus pines
+  vuelven al reset</code>»). <code>Wdt.Timer</code>: su destructor desarma el perro guardián.
+  <code>Spi.Bus</code> e <code>I2c.Bus</code> no tienen destructor <em>a propósito</em> —dos <code>Bus</code> con el
+  mismo id son el mismo bus—: los suelta su <code>release()</code> o el final del RUN.
+</p>
 
 <!-- =========================================================== -->
 
@@ -1268,7 +1293,10 @@ sleep(<span class="num">60000</span>)          <span class="comment">// y la jor
           <code>Pin.PULL_UP</code> / <code>Pin.PULL_DOWN</code>.</td></tr>
   <tr><td><code>release()</code></td>
       <td>V7: el pin vuelve a libre — otro <code>Pin</code> o un <code>AnPin</code> pueden tomarlo.
-          <code>~Pin()</code> lo llama: con <code>var owner</code> el pin se libera al salir del ámbito.</td></tr>
+          <code>~Pin()</code> lo llama: con <code>var owner</code> el pin se libera al salir del ámbito. Y vuelve a
+          como estaba en el reset (<code>#667</code>): una salida deja de serlo; un LED de la placa vuelve al
+          firmware. Después, usar el <code>Pin</code> es <code>RuntimeError</code> («Gpio.Pin 13: ya se soltó con
+          release()»).</td></tr>
 </table>
 <p>
   Static consts accesibles sin instanciar:
@@ -1300,7 +1328,8 @@ luz.release()                                          <span class="comment">// 
   <tr><td><code>AnPin(num)</code></td><td>Toma el pin como analógico y conecta su ADC (unidad y canal del mapa).</td></tr>
   <tr><td><code>read(): integer</code> · <code>readVolts(): float</code></td><td>Una conversión (0..4095) o en voltios (Vref 3,3). Si el backend no puede, <code>RuntimeError</code>.</td></tr>
   <tr><td><code>channel(): integer</code></td><td>El canal de ADC (unidad 1) al que está conectado este pin.</td></tr>
-  <tr><td><code>release()</code> · <code>~AnPin()</code></td><td>Heredados de <code>Pin</code>: el pin vuelve a libre.</td></tr>
+  <tr><td><code>release()</code> · <code>~AnPin()</code></td><td>Heredados de <code>Pin</code>: el pin vuelve a libre y
+      al reset; después, <code>read()</code> es <code>RuntimeError</code>.</td></tr>
 </table>
 
 <h4>13.11.2 API funcional de bajo nivel</h4>
@@ -1529,8 +1558,9 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
   <tr><td><code>execute(t: Spi.Transaction)</code></td>
       <td>Todas las operaciones de <code>t</code> en una transacción.</td></tr>
   <tr><td><code>release()</code> · <code>~Device()</code></td>
-      <td>Suelta el CS; el dispositivo ya no transfiere (con nombre: <code>el CS 5 no está
-          reservado como salida (¿release()?)</code>).</td></tr>
+      <td>Suelta el CS, que vuelve al reset (<code>#667</code>); el dispositivo ya no transfiere (con nombre:
+          <code>el CS 5 no está reservado como salida (¿release()?)</code>). El reset de la Pico tiene
+          pull-down: un dispositivo sin pull-up en su CS queda seleccionado, como al arrancar la placa.</td></tr>
 </table>
 <p>
   Una <code>Spi.Transaction</code> se <em>prepara</em> —<code>write</code>, <code>read</code> y
@@ -1652,6 +1682,11 @@ port.write(tx, <span class="num">4</span>)
 <span class="kw">if</span> hay &gt; <span class="num">0</span> <span class="kw">then</span>                            <span class="comment">// lee justo lo que hay</span>
   n := port.read(rx, min(hay, <span class="num">64</span>), <span class="num">0</span>)
 <span class="kw">endif</span></code></pre>
+<p>
+  <code>port.release()</code> —y <code>~Port()</code>, que lo llama— apaga la UART, suelta su buffer de recepción y
+  devuelve sus pines al reset (<code>#667</code>); después, usar el <code>Port</code> es <code>RuntimeError</code>.
+  Una UART abierta con <code>Uart.init</code>, sin objeto, la cierra el final del RUN.
+</p>
 
 <!-- =========================================================== -->
 
@@ -1687,11 +1722,15 @@ port.write(tx, <span class="num">4</span>)
           <code>Counter.FALLING</code> (1),
           <code>Counter.BOTH</code> (2; en RP2350 cae a RISING — no hay soporte HW de both).</td></tr>
   <tr><td><code>start()</code></td><td>Arranca el conteo.</td></tr>
-  <tr><td><code>stop()</code></td><td>Para el conteo y libera el slice.</td></tr>
+  <tr><td><code>stop()</code></td><td>Para el conteo (la cuenta y la unidad se conservan).</td></tr>
   <tr><td><code>value(): integer</code></td>
       <td>Cuenta actual. Contador de 16 bits → 0..65535. Reset
           periódico si necesitas más rango.</td></tr>
   <tr><td><code>reset()</code></td><td>Pone el contador a cero sin parar.</td></tr>
+  <tr><td><code>release()</code> · <code>~Counter()</code></td>
+      <td>V7 (<code>#667</code>): para el contador, suelta su unidad (el slice del RP2350, la unidad PCNT de las
+          ESP32, el timer del STM32) y el pin vuelve al reset. Lo llama el destructor. Después, usar el
+          <code>Counter</code> es <code>RuntimeError</code>.</td></tr>
 </table>
 
 <!-- =========================================================== -->
@@ -1734,6 +1773,11 @@ port.write(tx, <span class="num">4</span>)
           El duty actual se preserva.</td></tr>
   <tr><td><code>start()</code></td><td>Arranca la generación.</td></tr>
   <tr><td><code>stop()</code></td><td>Para. El pin queda en LOW.</td></tr>
+  <tr><td><code>release()</code> · <code>~Slice()</code></td>
+      <td>V7 (<code>#667</code>): para el PWM, suelta su canal (y el slice o el timer, si ya no lo usa nadie) y el
+          pin vuelve al reset. Lo llama el destructor: un <code>Slice</code> que muere —su owner, el GC, el final
+          del programa— no deja la señal en marcha. Después, usar el <code>Slice</code> es
+          <code>RuntimeError</code>.</td></tr>
 </table>
 <p>
   <strong>Tip combinado con Pulse:</strong> para verificar la
@@ -2038,6 +2082,9 @@ port.write(tx, <span class="num">4</span>)
           largas conocidas.</td></tr>
   <tr><td><code>reenable()</code></td>
       <td>Re-activa con el mismo timeout que tenía.</td></tr>
+  <tr><td><code>~Timer()</code></td>
+      <td>V7 (<code>#667</code>): si está activo, lo desactiva —un <code>Timer</code> que muere no deja la placa a
+          punto de reiniciarse sin nadie que lo alimente—. Al acabar el programa, también tras un error.</td></tr>
 </table>
 
 <!-- =========================================================== -->
@@ -2160,6 +2207,10 @@ tira.show()</code></pre>
   <tr><td><code>show()</code></td><td>Vuelca el framebuffer a la tira, de una vez (el WS2812 no admite tramos): como
     mucho 2048 LEDs (4096 en STM32); con más, <code>RuntimeError</code> con el motivo.</td></tr>
   <tr><td><code>count(): integer</code></td><td>Nº de LEDs.</td></tr>
+  <tr><td><code>release()</code> · <code>~Strip()</code></td>
+      <td>V7 (<code>#667</code>): apaga la tira (<code>clear()</code> y <code>show()</code>), suelta su máquina de
+          la PIO o su canal RMT y el pin vuelve al reset —la NeoPixel de la placa, al firmware—. Lo llama el
+          destructor. Después, usar la <code>Strip</code> es <code>RuntimeError</code>.</td></tr>
 </table>
 
 <h3 id="stdlib-freq">14.14 <code>Freq</code></h3>
@@ -2184,7 +2235,9 @@ tira.show()</code></pre>
       <td>Frecuencia máxima medible con esa ventana antes de desbordar el contador de
           16 bits; por encima, usa una ventana menor.</td></tr>
   <tr><td><code>close()</code></td>
-      <td>Libera el contador (deja el canal disponible para PWM, etc.).</td></tr>
+      <td>Suelta el contador —su unidad y su pin, como el <code>release()</code> de
+          <code>Pulse.Counter</code>—. El contador es <code>owner</code> del medidor: si el <code>Meter</code> muere,
+          lo suelta su destructor.</td></tr>
 </table>
 
 <h3 id="stdlib-net">14.15 <code>Net</code></h3>
@@ -2215,7 +2268,8 @@ tira.show()</code></pre>
       <code>""</code>. El peer cerró → <code>RuntimeError</code> atrapable.</li>
   <li><code>send(data: byte[]): integer</code> / <code>sendStr(s)</code> —
       envía todo o lanza <code>RuntimeError</code> (conexión rota).</li>
-  <li><code>isOpen()</code>, <code>close()</code> (tolerante). También hay
+  <li><code>isOpen()</code>, <code>close()</code> (tolerante; <code>~Tcp()</code> lo llama: una conexión que muere
+      se cierra). También hay
       funciones de módulo de bajo nivel (<code>Net.tcpConnect/tcpSend/
       tcpRecv/tcpClose</code>) con handle entero.</li>
 </ul>

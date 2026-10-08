@@ -15,6 +15,7 @@
  */
 
 #include "bpvm_out.h"
+#include "bpvm.h"   /* V7 #667: bpvm_diag (la red) */
 #include "bpvm_pulse.h"
 #include <stdio.h>
 
@@ -62,6 +63,21 @@ int bpvm_pulse_value(int counterId) {
     }
     bpvm_out("[pulse] value id=%d (sim → %d)\n", counterId, s_stub_value);
     return s_stub_value;
+}
+
+/* V7 #667 — soltarlo (el destructor de Pulse.Counter). En el PC, como los demás, se dice por la salida. */
+void bpvm_pulse_release(int counterId, int pin) {
+    if (g_backend && g_backend->release) {
+        g_backend->release(counterId, pin);
+        return;
+    }
+    bpvm_out("[pulse] release id=%d pin=%d (sim)\n", counterId, pin);
+}
+
+/* V7 #667 — la red del final del RUN: sólo en una placa. */
+void bpvm_pulse_fin_de_run(void) {
+    int n = (g_backend && g_backend->fin_de_run) ? g_backend->fin_de_run() : 0;
+    if (n > 0) bpvm_diag("[bpvm] fin de RUN: %d contador(es) seguian contando: se paran y sus pines vuelven al reset (#667)", n);
 }
 
 void bpvm_pulse_reset(int counterId) {

@@ -33,18 +33,18 @@ lines
 305 67
 316 68
 327 69
-343 0
-377 0
-395 0
-414 0
-435 0
-454 0
-468 0
-471 46
-483 0
-486 49
-498 0
-501 52
+417 0
+451 0
+469 0
+488 0
+509 0
+528 0
+542 0
+545 46
+557 0
+560 49
+572 0
+575 52
 vars
 func Meter.getPin 40
 this -20 8 0 ?
@@ -74,22 +74,22 @@ func Meter.__init 302
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_new_Meter(ii) 343
+func __cls_new_Meter(ii) 417
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_init_Meter(ii) 377
+func __cls_init_Meter(ii) 451
 this -28 8 0 ?
 pin -20 4 0 integer
 edge -16 4 0 integer
-func __cls_m_Meter#measureHz(i)i 395
+func __cls_m_Meter#measureHz(i)i 469
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func __cls_m_Meter#measureHzAvg(ii)i 414
+func __cls_m_Meter#measureHzAvg(ii)i 488
 this -28 8 0 ?
 windowMs -20 4 0 integer
 samples -16 4 0 integer
-func __cls_m_Meter#maxHz(i)i 435
+func __cls_m_Meter#maxHz(i)i 509
 this -24 8 0 ?
 windowMs -16 4 0 integer
-func __cls_m_Meter#close()V 454
+func __cls_m_Meter#close()V 528
 this -20 8 0 ?

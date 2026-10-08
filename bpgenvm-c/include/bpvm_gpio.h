@@ -33,6 +33,9 @@ typedef struct {
     void (*pull)(int pin, int pull_mode);      /* pull: 0=none, 1=up, 2=down */
     void (*write)(int pin, int value);         /* value: 0=LOW, !=0=HIGH */
     int  (*read)(int pin);                     /* devuelve 0 o 1 */
+    /* V7 #667 — el pin, a como estaba en el reset (Eduardo: «los pines por defecto deben ser input o nada»): una
+     * salida deja de serlo y sin pulls. Lo usan el release() de un Pin y la red del final del RUN. */
+    void (*soltar)(int pin);
 } bpvm_gpio_backend_t;
 
 /* ── V7/H4 (#479) — EL ESTADO DEL PIN, EN EL COMÚN ────────────────────────
@@ -52,6 +55,9 @@ int  bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap);   /* 0 = OK (y
 int  bpvm_gpio_reclamar_pack(int pin, int uso, char* err, size_t cap);
 int  bpvm_gpio_estado(int pin);                                     /* BPVM_GPIO_* */
 void bpvm_gpio_liberar(int pin);                                    /* release() de un programa: sólo lo suyo */
+/* V7 #667 — el release() de un Pin: si el pin era del programa (no de un pack ni de un bus) y estaba en uso, queda
+ * libre Y vuelve a como estaba en el reset en el hardware. 1 si lo soltó. */
+int  bpvm_gpio_soltar(int pin);
 /* V7/H6.c G4.a1 — los pines de un BUS (los pide y los suelta bpvm_bus.c): un programa
  * que los pida recibe «el pin 6 es del SPI 2»; ni el fin de RUN ni release() los sueltan. */
 int  bpvm_gpio_reservar_bus(int pin, int tipo, int id, char* err, size_t cap);

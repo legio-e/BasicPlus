@@ -65,6 +65,10 @@ module Uart
   public function availablePort(bus: integer): integer
     inline CALL_BUILTIN 93
   end availablePort
+  // V7 #667 (8-oct): apaga la UART, suelta su búfer de recepción y sus pines vuelven a como estaban en el reset.
+  public function releasePort(bus: integer, tx: integer, rx: integer)
+    inline CALL_BUILTIN 281
+  end releasePort
 
   // ---- Funciones top-level de compatibilidad ----
   public function init(bus: integer, tx: integer, rx: integer, baudrate: integer, dataBits: integer, stopBits: integer, parity: integer)
@@ -160,6 +164,9 @@ module Uart
     public property dataBits: integer    // 5..8 (típico 8)
     public property stopBits: integer    // 1 ó 2
     public property parity:   integer    // PARITY_NONE/ODD/EVEN
+    // V7 #667: lo que tomó es suyo (se lo dieron: el constructor no lanzó). release() y el destructor sólo
+    // sueltan lo suyo, una vez: un objeto cuyo constructor lanzó también se destruye (#668), y no tiene nada.
+    var tomado_: boolean
 
     // Constructor: configura el UART en HW. El backend del host
     // loguea pero no aborta para mantener la VM-host usable sin
@@ -173,25 +180,50 @@ module Uart
       this.stopBits := stopBits
       this.parity   := parity
       initPort(id, tx, rx, baudrate, dataBits, stopBits, parity)
+      this.tomado_ := true
     end Port
 
     // Escribe `count` bytes. Bloquea hasta que el TX FIFO los
     // acepta. Devuelve bytes escritos, -1 en error.
     public function write(data: integer[], count: integer): integer
+      this.vivo_()
       return writePort(this.id, data, count)
     end write
 
     // Lee hasta `count` bytes con timeout. Ver doc del intrínseco
     // readPort para semántica exacta de timeoutMs.
     public function read(data: integer[], count: integer, timeoutMs: integer): integer
+      this.vivo_()
       return readPort(this.id, data, count, timeoutMs)
     end read
 
     // Bytes disponibles para leer sin bloquear (0 si nada todavía,
     // -1 si el backend no implementa la query).
     public function available(): integer
+      this.vivo_()
       return availablePort(this.id)
     end available
+
+    // V7 #667 (8-oct) — SUELTA EL PUERTO: apaga la UART, suelta su búfer de recepción y sus pines vuelven a como
+    // estaban en el reset. Después el Port ya no sirve. Lo llama el destructor.
+    public function release()
+      if this.tomado_ then
+        this.tomado_ := false
+        releasePort(this.id, this.tx, this.rx)
+      endif
+    end release
+
+    public function ~Port()
+      this.release()
+    end ~Port
+
+    // V7 #667 (8-oct) — tras release() el objeto ya no tiene su recurso: usarlo es un error con nombre, no un
+    // silencio (el canal que soltó puede ser ya de otro objeto).
+    function vivo_()
+      if not this.tomado_ then
+        throw RuntimeError("Uart.Port " + intToString(this.id) + ": ya se soltó con release()")
+      endif
+    end vivo_
 
   end Port
 

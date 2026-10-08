@@ -143,66 +143,69 @@ lines
 2162 0
 2177 0
 2191 0
-2194 435
+2194 439
 2246 0
-2249 440
+2249 444
 2301 0
-2304 445
+2304 449
 2357 0
-2360 450
+2360 454
 2413 0
-2416 455
+2416 459
 2462 0
-2465 461
-2480 0
-2483 465
-2506 0
-2509 426
-2520 427
-2531 428
-2542 429
-2553 430
-2569 0
-2607 0
-2629 0
-2651 0
-2676 0
-2690 0
-2704 0
-2731 0
-2753 0
-2773 0
-2776 115
-2796 0
-2799 119
-2820 0
-2823 123
-2844 0
-2847 127
+2465 465
+2476 466
+2483 467
+2503 0
+2506 472
+2526 0
+2529 429
+2540 430
+2551 431
+2562 432
+2573 433
+2586 434
+2596 0
+2634 0
+2656 0
+2678 0
+2692 0
+2712 0
+2737 0
+2751 0
+2778 0
+2800 0
+2803 115
+2823 0
+2826 119
+2847 0
+2850 123
 2871 0
-2874 131
-2884 0
-2887 136
-2899 0
-2902 139
-2914 0
-2917 142
-2929 0
-2932 145
-2944 0
-2947 148
-2959 0
-2962 151
-2974 0
-2977 155
-2993 0
-2996 158
-3012 0
-3015 161
-3031 0
-3034 164
-3050 0
-3132 0
+2874 127
+2898 0
+2901 131
+2911 0
+2914 136
+2926 0
+2929 139
+2941 0
+2944 142
+2956 0
+2959 145
+2971 0
+2974 148
+2986 0
+2989 151
+3001 0
+3004 155
+3020 0
+3023 158
+3039 0
+3042 161
+3058 0
+3061 164
+3077 0
+3159 0
 vars
 func Bus.getId 40
 this -20 8 0 ?
@@ -412,81 +415,81 @@ this -28 8 0 ?
 t -20 8 0 ref
 func Device.release 2462
 this -20 8 0 ?
-func Device.__dtor 2480
+func Device.__dtor 2503
 this -20 8 0 ?
-func Device.__init 2506
+func Device.__init 2526
 this -36 8 0 ?
 bus -28 4 0 integer
 cs -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Device(iiii) 2569
+func __cls_new_Device(iiii) 2596
 bus -28 4 0 integer
 cs -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Device(iiii) 2607
+func __cls_init_Device(iiii) 2634
 this -36 8 0 ?
 bus -28 4 0 integer
 cs -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Device#read([ii)i 2629
+func __cls_m_Device#read([ii)i 2656
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Device#transfer([i[ii)i 2651
+func __cls_m_Device#release()V 2678
+this -20 8 0 ?
+func __cls_m_Device#execute(LSpi/Transaction;)i 2692
+this -28 8 0 ?
+t -20 8 0 ref
+func __cls_m_Device#transfer([i[ii)i 2712
 this -40 8 0 ?
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Device#__dtor()V 2676
+func __cls_m_Device#__dtor()V 2737
 this -20 8 0 ?
-func __cls_m_Device#release()V 2690
-this -20 8 0 ?
-func __cls_m_Device#writeRead([ii[ii)i 2704
+func __cls_m_Device#writeRead([ii[ii)i 2751
 this -44 8 0 ?
 tx -36 8 0 ref
 ntx -28 4 0 integer
 rx -24 8 0 ref
 nrx -16 4 0 integer
-func __cls_m_Device#write([ii)i 2731
+func __cls_m_Device#write([ii)i 2778
 this -32 8 0 ?
 data -24 8 0 ref
 count -16 4 0 integer
-func __cls_m_Device#execute(LSpi/Transaction;)i 2753
-this -28 8 0 ?
-t -20 8 0 ref
-func init 2773
+func init 2800
 bus -36 4 0 integer
 sck -32 4 0 integer
 mosi -28 4 0 integer
 miso -24 4 0 integer
 baudrate -20 4 0 integer
 mode -16 4 0 integer
-func write 2796
+func write 2823
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func read 2820
+func read 2847
 bus -28 4 0 integer
 data -24 8 0 ref
 count -16 4 0 integer
-func transfer 2844
+func transfer 2871
 bus -36 4 0 integer
 tx -32 8 0 ref
 rx -24 8 0 ref
 count -16 4 0 integer
-func release 2871
+func release 2898
 bus -16 4 0 integer
-func __strconcat4 3050
+func __strconcat4 3077
 s0 -44 8 0 ?
 s1 -36 8 0 ?
 s2 -28 8 0 ?
 s3 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strconcat8 3132
+func __strconcat8 3159
 s0 -76 8 0 ?
 s1 -68 8 0 ?
 s2 -60 8 0 ?

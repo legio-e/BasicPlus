@@ -79,11 +79,19 @@ static int esp32_gpio_read_impl(int pin) {
     return gpio_get_level((gpio_num_t) pin) ? 1 : 0;
 }
 
+/* V7 #667 (8-oct) — UN PIN QUE UN PROGRAMA SUELTA, A COMO ESTABA (Eduardo: «los pines por defecto deben ser input o
+ * nada. Si están como output se debería revertir»): el reset del IDF —función GPIO, sin salida ni entrada, con su
+ * pull-up—. Lo usan el release() de un Pin, los de un PWM, un contador, una tira o una UART, y la red. */
+static void esp32_pin_al_reset(int pin) {
+    if (pin >= 0) gpio_reset_pin((gpio_num_t) pin);
+}
+
 static const bpvm_gpio_backend_t s_esp32_gpio_backend = {
     .init  = esp32_gpio_init_impl,
     .pull  = esp32_gpio_pull_impl,
     .write = esp32_gpio_write_impl,
     .read  = esp32_gpio_read_impl,
+    .soltar = esp32_pin_al_reset,   /* V7 #667 */
 };
 
 /* ---- Pico (info de MCU) backend ----
@@ -226,7 +234,9 @@ static void esp32_caps_init(void) {
     s_caps.uart = s_caps_uart; s_caps.n_uart = (uint8_t) nu;
     s_caps.i2c = s_caps_i2c;   s_caps.n_i2c = (uint8_t) ni;
     s_caps.spi = s_caps_spi;   s_caps.n_spi = (uint8_t) ns;
-    s_caps.n_pwm = SOC_LEDC_CHANNEL_NUM; s_caps.pwm_unidad = "canal";
+    /* V7 #667: los que el programa puede usar —los canales 2..; el 1 es de la retroiluminación de la P4—, no los del
+     * chip (con ESP32_PWM_HAY, más abajo: 4 en la C3, la C5 y la C6; 6 en la S3 y la P4). */
+    s_caps.n_pwm = ((SOC_LEDC_CHANNEL_NUM - 2) < 6) ? (SOC_LEDC_CHANNEL_NUM - 2) : 6; s_caps.pwm_unidad = "canal";
     s_caps.n_adc = SOC_ADC_PERIPH_NUM;
     s_caps.pin = s_caps_pin; s_caps.n_pin = SOC_GPIO_PIN_COUNT;
     s_caps.pin_adc_unit = s_caps_adc_u; s_caps.pin_adc_ch = s_caps_adc_c;
@@ -296,10 +306,13 @@ static int esp32_uart_port(int bus) {
     }
 }
 
+static int s_uart_tx[3] = { -1, -1, -1 }, s_uart_rx[3] = { -1, -1, -1 };   /* V7 #667: por bus, para soltarla */
 static void esp32_uart_init_impl(int bus, int tx, int rx, int baudrate,
                                  int data_bits, int stop_bits, int parity) {
     int p = esp32_uart_port(bus);
     if (p < 0) return;
+    s_uart_tx[bus] = tx;
+    s_uart_rx[bus] = rx;
     uart_config_t cfg = {
         .baud_rate  = baudrate,
         .data_bits  = (data_bits == 7) ? UART_DATA_7_BITS : UART_DATA_8_BITS,
@@ -338,8 +351,19 @@ static int esp32_uart_available_impl(int bus) {
     return (uart_get_buffered_data_len((uart_port_t) p, &len) == ESP_OK) ? (int) len : -1;
 }
 
+/* V7 #667 — soltarla: el driver fuera (su búfer y su interrupción) y sus pines al reset. */
+static void esp32_uart_release_impl(int bus, int tx, int rx) {
+    int p = esp32_uart_port(bus);
+    if (p < 0) return;
+    if (uart_is_driver_installed((uart_port_t) p)) uart_driver_delete((uart_port_t) p);
+    esp32_pin_al_reset(tx >= 0 ? tx : s_uart_tx[bus]);
+    esp32_pin_al_reset(rx >= 0 ? rx : s_uart_rx[bus]);
+    s_uart_tx[bus] = s_uart_rx[bus] = -1;
+}
+
 static const bpvm_uart_backend_t s_esp32_uart_backend = {
     .init      = esp32_uart_init_impl,
+    .release   = esp32_uart_release_impl,   /* V7 #667 */
     .write     = esp32_uart_write_impl,
     .read      = esp32_uart_read_impl,
     .available = esp32_uart_available_impl,
@@ -700,6 +724,12 @@ static const bpvm_i2c_backend_t s_esp32_i2c_backend = {
  */
 #define ESP32_PWM_MODE  LEDC_LOW_SPEED_MODE
 #define ESP32_PWM_MAX   6              /* canales 2..7 */
+/* V7 #667 — los que hay DE VERDAD: los canales del chip menos el 0 y el 1. La C3, la C5 y la C6 tienen 6 (2..5: cuatro);
+ * la S3 y la P4, 8 (2..7: seis). Antes se daban seis en todas, y en las chicas el 5.º y el 6.º fallaban al configurar
+ * el canal —con la ranura ya gastada—. */
+#define ESP32_PWM_HAY   ((SOC_LEDC_CHANNEL_NUM - 2) < ESP32_PWM_MAX ? (SOC_LEDC_CHANNEL_NUM - 2) : ESP32_PWM_MAX)
+/* s_pwm_n es cuántas ranuras se han estrenado; una suelta tiene el pin a -1 y la reutiliza la siguiente. No se
+ * compacta: el sliceId de un programa ES el índice. */
 static int s_pwm_n = 0;
 static int s_pwm_pin[ESP32_PWM_MAX];
 static int s_pwm_chan[ESP32_PWM_MAX];
@@ -709,13 +739,14 @@ static const ledc_timer_t s_pwm_free_tmr[3] = { LEDC_TIMER_0, LEDC_TIMER_2, LEDC
 static int esp32_pwm_init_impl(int pin, int freqHz) {
     int idx = -1;
     for (int i = 0; i < s_pwm_n; i++) { if (s_pwm_pin[i] == pin) { idx = i; break; } }
+    if (idx < 0) for (int i = 0; i < s_pwm_n; i++) { if (s_pwm_pin[i] < 0) { idx = i; break; } }   /* V7 #667: una suelta */
     if (idx < 0) {
-        if (s_pwm_n >= ESP32_PWM_MAX) return -1;
+        if (s_pwm_n >= ESP32_PWM_HAY) return -1;
         idx = s_pwm_n++;
-        s_pwm_pin[idx]  = pin;
         s_pwm_chan[idx] = 2 + idx;                          /* canales 2..7 */
         s_pwm_tmr[idx]  = (int) s_pwm_free_tmr[idx % 3];    /* timers 0/2/3 */
     }
+    s_pwm_pin[idx] = pin;
     ledc_timer_config_t tcfg = {
         .speed_mode      = ESP32_PWM_MODE,
         .duty_resolution = LEDC_TIMER_13_BIT,
@@ -738,13 +769,13 @@ static int esp32_pwm_init_impl(int pin, int freqHz) {
 }
 
 static void esp32_pwm_set_freq_impl(int slice, int freqHz) {
-    if (slice < 0 || slice >= s_pwm_n) return;
+    if (slice < 0 || slice >= s_pwm_n || s_pwm_pin[slice] < 0) return;
     ledc_set_freq(ESP32_PWM_MODE, (ledc_timer_t) s_pwm_tmr[slice], (uint32_t) freqHz);
 }
 
 static void esp32_pwm_set_duty_impl(int slice, int pin, int dutyPct) {
     (void) pin;
-    if (slice < 0 || slice >= s_pwm_n) return;
+    if (slice < 0 || slice >= s_pwm_n || s_pwm_pin[slice] < 0) return;
     if (dutyPct < 0)   dutyPct = 0;
     if (dutyPct > 100) dutyPct = 100;
     uint32_t maxd = (1u << 13) - 1u;               /* 13-bit */
@@ -754,13 +785,39 @@ static void esp32_pwm_set_duty_impl(int slice, int pin, int dutyPct) {
 }
 
 static void esp32_pwm_start_impl(int slice) {
-    if (slice < 0 || slice >= s_pwm_n) return;
+    if (slice < 0 || slice >= s_pwm_n || s_pwm_pin[slice] < 0) return;
     ledc_update_duty(ESP32_PWM_MODE, (ledc_channel_t) s_pwm_chan[slice]);
 }
 
 static void esp32_pwm_stop_impl(int slice) {
-    if (slice < 0 || slice >= s_pwm_n) return;
+    if (slice < 0 || slice >= s_pwm_n || s_pwm_pin[slice] < 0) return;
     ledc_stop(ESP32_PWM_MODE, (ledc_channel_t) s_pwm_chan[slice], 0);   /* salida a 0 */
+}
+
+/* V7 #667 — SOLTARLO: parado, el canal desconfigurado (salida fuera y el GPIO devuelto), el pin al reset y, si su
+ * timer ya no lo usa ninguna otra ranura, también el timer —pausado antes: lo pide el IDF—. La ranura queda libre. */
+static void esp32_pwm_release_impl(int slice, int pin) {
+    (void) pin;
+    if (slice < 0 || slice >= s_pwm_n || s_pwm_pin[slice] < 0) return;
+    ledc_channel_t ch = (ledc_channel_t) s_pwm_chan[slice];
+    ledc_stop(ESP32_PWM_MODE, ch, 0);
+    ledc_channel_config_t cc = { .speed_mode = ESP32_PWM_MODE, .channel = ch, .deconfigure = true };
+    ledc_channel_config(&cc);
+    esp32_pin_al_reset(s_pwm_pin[slice]);
+    s_pwm_pin[slice] = -1;
+    int otro = 0;
+    for (int i = 0; i < s_pwm_n; i++) if (s_pwm_pin[i] >= 0 && s_pwm_tmr[i] == s_pwm_tmr[slice]) otro = 1;
+    if (!otro) {
+        ledc_timer_pause(ESP32_PWM_MODE, (ledc_timer_t) s_pwm_tmr[slice]);
+        ledc_timer_config_t tc = { .speed_mode = ESP32_PWM_MODE, .timer_num = (ledc_timer_t) s_pwm_tmr[slice], .deconfigure = true };
+        ledc_timer_config(&tc);
+    }
+}
+
+static int esp32_pwm_fin_de_run(void) {
+    int n = 0;
+    for (int i = 0; i < s_pwm_n; i++) if (s_pwm_pin[i] >= 0) { esp32_pwm_release_impl(i, s_pwm_pin[i]); n++; }
+    return n;
 }
 
 static const bpvm_pwm_backend_t s_esp32_pwm_backend = {
@@ -769,6 +826,8 @@ static const bpvm_pwm_backend_t s_esp32_pwm_backend = {
     .setDuty = esp32_pwm_set_duty_impl,
     .start   = esp32_pwm_start_impl,
     .stop    = esp32_pwm_stop_impl,
+    .release    = esp32_pwm_release_impl,   /* V7 #667 */
+    .fin_de_run = esp32_pwm_fin_de_run,
 };
 
 /* ===================== ADC (H14) =====================================
@@ -840,7 +899,9 @@ static int esp32_pulse_init_impl(int pin, int edgeKind) {
     for (int i = 0; i < s_pulse_n; i++) {
         if (s_pulse_pin[i] == pin) { pcnt_unit_clear_count(s_pulse_unit[i]); return i; }
     }
-    if (s_pulse_n >= ESP32_PULSE_MAX) return -1;
+    int libre = -1;   /* V7 #667: una ranura suelta (pin a -1) se reutiliza; no se compacta: el id ES el índice */
+    for (int i = 0; i < s_pulse_n; i++) if (s_pulse_pin[i] < 0) { libre = i; break; }
+    if (libre < 0 && s_pulse_n >= ESP32_PULSE_MAX) return -1;
     pcnt_unit_config_t ucfg = { .high_limit = 32767, .low_limit = -32768 };
     pcnt_unit_handle_t unit;
     if (pcnt_new_unit(&ucfg, &unit) != ESP_OK) return -1;
@@ -855,17 +916,37 @@ static int esp32_pulse_init_impl(int pin, int edgeKind) {
     pcnt_channel_set_edge_action(chan, pos, neg);
     pcnt_unit_enable(unit);
     pcnt_unit_clear_count(unit);
-    int idx = s_pulse_n++;
+    int idx = (libre >= 0) ? libre : s_pulse_n++;
     s_pulse_pin[idx] = pin; s_pulse_unit[idx] = unit; s_pulse_chan[idx] = chan;
     return idx;
 }
-static void esp32_pulse_start_impl(int id) { if (id >= 0 && id < s_pulse_n) pcnt_unit_start(s_pulse_unit[id]); }
-static void esp32_pulse_stop_impl(int id)  { if (id >= 0 && id < s_pulse_n) pcnt_unit_stop(s_pulse_unit[id]); }
+static int  esp32_pulse_vivo(int id) { return id >= 0 && id < s_pulse_n && s_pulse_pin[id] >= 0; }   /* V7 #667 */
+static void esp32_pulse_start_impl(int id) { if (esp32_pulse_vivo(id)) pcnt_unit_start(s_pulse_unit[id]); }
+static void esp32_pulse_stop_impl(int id)  { if (esp32_pulse_vivo(id)) pcnt_unit_stop(s_pulse_unit[id]); }
 static int  esp32_pulse_value_impl(int id) {
-    if (id < 0 || id >= s_pulse_n) return 0;
+    if (!esp32_pulse_vivo(id)) return 0;
     int c = 0; pcnt_unit_get_count(s_pulse_unit[id], &c); return c;
 }
-static void esp32_pulse_reset_impl(int id) { if (id >= 0 && id < s_pulse_n) pcnt_unit_clear_count(s_pulse_unit[id]); }
+static void esp32_pulse_reset_impl(int id) { if (esp32_pulse_vivo(id)) pcnt_unit_clear_count(s_pulse_unit[id]); }
+
+/* V7 #667 — SOLTARLO: parada, deshabilitada, su canal y su unidad borrados (vuelven al IDF) y el pin al reset. La
+ * ranura queda libre. */
+static void esp32_pulse_release_impl(int id, int pin) {
+    (void) pin;
+    if (!esp32_pulse_vivo(id)) return;
+    pcnt_unit_stop(s_pulse_unit[id]);
+    pcnt_unit_disable(s_pulse_unit[id]);
+    pcnt_del_channel(s_pulse_chan[id]);
+    pcnt_del_unit(s_pulse_unit[id]);
+    esp32_pin_al_reset(s_pulse_pin[id]);
+    s_pulse_pin[id] = -1;
+}
+
+static int esp32_pulse_fin_de_run(void) {
+    int n = 0;
+    for (int i = 0; i < s_pulse_n; i++) if (s_pulse_pin[i] >= 0) { esp32_pulse_release_impl(i, s_pulse_pin[i]); n++; }
+    return n;
+}
 
 static const bpvm_pulse_backend_t s_esp32_pulse_backend = {
     .init  = esp32_pulse_init_impl,
@@ -873,6 +954,8 @@ static const bpvm_pulse_backend_t s_esp32_pulse_backend = {
     .stop  = esp32_pulse_stop_impl,
     .value = esp32_pulse_value_impl,
     .reset = esp32_pulse_reset_impl,
+    .release    = esp32_pulse_release_impl,   /* V7 #667 */
+    .fin_de_run = esp32_pulse_fin_de_run,
 };
 #endif  /* SOC_PCNT_SUPPORTED */
 
@@ -987,15 +1070,21 @@ static int np_busca(int pin) {
     return -1;
 }
 
+/* V7 #667 — soltar la tira i: el canal RMT (y su memoria, su cola y su interrupción) y el traductor, de vuelta al IDF;
+ * la entrada, fuera de la tabla (se buscan por pin: el orden no importa). El pin lo deja quien llama. */
+static void np_suelta(int i) {
+    rmt_disable(s_np[i].ch);
+    rmt_del_channel(s_np[i].ch);
+    rmt_del_encoder(s_np[i].enc);
+    s_np[i] = s_np[--s_np_n];
+}
+
 static int esp32_np_init_impl(int pin, char* err, size_t n) {
     int i = np_busca(pin);
     if (i >= 0) {
         /* Ya iniciado: se REHACE. Un `Gpio.Pin` sobre este pin entre medias reconfigura el pad, y el RMT dejaría de
          * llegar al cable sin un error. */
-        rmt_disable(s_np[i].ch);
-        rmt_del_channel(s_np[i].ch);
-        rmt_del_encoder(s_np[i].enc);
-        s_np[i] = s_np[--s_np_n];
+        np_suelta(i);
     }
     if (s_np_n >= NP_MAX_TIRAS) { snprintf(err, n, "como mucho %d tiras a la vez", NP_MAX_TIRAS); return 0; }
     rmt_tx_channel_config_t cc = {
@@ -1036,9 +1125,26 @@ static void esp32_np_show_impl(int pin, const uint32_t* grb, int count) {
     if (e != ESP_OK) log_printf("neopixel: la trama del GPIO%d no salió (%s)", pin, esp_err_to_name(e));
 }
 
+/* V7 #667 — SOLTARLA (la Strip la apagó antes: show() es bloqueante, así que la trama ya salió entera) y su pin, al
+ * reset. */
+static void esp32_np_release_impl(int pin) {
+    int i = np_busca(pin);
+    if (i < 0) return;
+    np_suelta(i);
+    esp32_pin_al_reset(pin);
+}
+
+static int esp32_np_fin_de_run(void) {
+    int n = 0;
+    while (s_np_n > 0) { esp32_np_release_impl(s_np[0].pin); n++; }
+    return n;
+}
+
 static const bpvm_neopixel_backend_t s_esp32_np_backend = {
     .init = esp32_np_init_impl,
     .show = esp32_np_show_impl,
+    .release    = esp32_np_release_impl,   /* V7 #667 */
+    .fin_de_run = esp32_np_fin_de_run,
 };
 #endif /* SOC_RMT_SUPPORTED */
 

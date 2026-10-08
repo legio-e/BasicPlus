@@ -439,6 +439,42 @@ de ellos) se sigue soltando con `FREE_REF` / `SET_FIELD_OWNER`, sin llamar a nad
 
 ---
 
+## 278–281 — SOLTAR el recurso de un objeto  *(V7 #667, 8-oct)*
+
+Lo que usa el `release()` de las clases que toman un canal del hardware, y su destructor, que lo llama (#668: liberar
+es destruir). Eduardo: *«Si un objeto BP consume un recurso, el objeto debe tener un destructor y liberar si es posible
+el recurso»*. Cada uno PARA lo suyo, deja la unidad libre para otro y devuelve el pin (o los pines) a como estaban en
+el reset. Cómo, lo sabe el backend de cada familia (su `release`), el único que conoce el multiplexado de su micro;
+después, el común apunta el pin como libre. En el PC no hay hardware: los stubs lo dicen por la salida, igual en las
+dos VMs. En la stdlib, cada clase se los pide una vez y sólo si su constructor acabó (`tomado_`): un objeto cuyo
+constructor lanzó también se destruye, y no tiene nada que soltar.
+
+| id | firma | qué hace |
+|----|-------|----------|
+| 278 | `Pwm.releaseSlice(sliceId: integer, pin: integer)` | Para el PWM y suelta su canal: en la Pico el slice (si su otro canal no es de nadie); en las ESP la ranura del LEDC, y su temporizador si no lo comparte otra; en la STM32 el canal del timer, y el timer si no lo comparte otro (el TIM3 de la Nucleo). El pin, al reset. PC: `[pwm] release slice=S pin=P (sim)`. |
+| 279 | `Pulse.releaseSlice(counterId: integer, pin: integer)` | Para el contador y suelta su unidad: el slice de la Pico, la unidad PCNT de las ESP, el timer de la STM32. El pin, al reset. PC: `[pulse] release id=I pin=P (sim)`. |
+| 280 | `Neopixel.__npRelease(pin: integer)` | Suelta la máquina de la PIO (Pico) o el canal RMT (ESP) de la tira, tras dejar salir lo último que se le mandó. El pin, al reset; la tira de la PLACA (la NeoPixel de la Metro) no se suelta: vuelve a ser del firmware. `Strip.release()` la apaga antes (`clear()` y `show()`): los LED no se quedan encendidos. PC: nada. |
+| 281 | `Uart.releasePort(bus: integer, tx: integer, rx: integer)` | Apaga la UART (su interrupción y su driver o su periférico), suelta su anillo de recepción y sus pines vuelven al reset. PC: `[uart] release bus=B (sim)`. |
+
+Y el pin de un `Gpio.Pin` (254, `__gpioRelease`, el de siempre): ahora también vuelve al reset EN EL HARDWARE —una
+salida deja de serlo; Eduardo: *«los pines por defecto deben ser input o nada. Si están como output se debería
+revertir»*—, si era del programa y estaba en uso (lo de un pack o de un bus no se toca). Un LED de la PLACA no va al
+reset: vuelve a ser del firmware, como lo dejó su arranque (el GP25 de la Pico 2; el verde, el azul y el rojo de la
+Nucleo; el rojo y el verde de la DK2). En el PC, `[gpio] release pin=N`.
+
+**Tras `release()`, usar el objeto es un error con nombre** (`RuntimeError` «Pwm.Slice del pin 12: ya se soltó con
+release()»): el canal que soltó puede ser ya de otro objeto. Lo hacen `Pwm.Slice`, `Pulse.Counter`,
+`Neopixel.Strip`, `Uart.Port`, `Gpio.Pin` (y `AnPin`) y `Adc.Channel`; `Spi.Device` ya lo hacía en C (su CS).
+
+**La red del final del RUN** (`bpvm_destroy`, antes de soltar los pines): lo que ningún destructor soltó —un
+`Gpio.init` sin objeto, una destrucción cortada por el tope de 3 s— lo suelta el backend de cada familia
+(`fin_de_run`), y se dice por el diagnóstico: `[bpvm] fin de RUN: 1 PWM seguian en marcha: se paran y sus pines
+vuelven al reset (#667)`, y lo mismo con los contadores, las tiras, las UART y los pines. En el PC no hay hardware: la
+red calla. Las pruebas: `bpgenvm-c/samples/SueltaRecursos.bp` (la red de paridad) y `make test-suelta` (backends falsos
+que cuentan: con objetos lo sueltan sus destructores; sin objetos, la red).
+
+---
+
 ## Próximos builtins propuestos (no asignados todavía)
 
 - **`__threadCurrent()` → Thread**: devuelve el Thread BP del thread

@@ -9,73 +9,87 @@ lines
 69 0
 84 0
 98 0
-101 138
-116 0
-119 142
-142 0
-145 147
-161 0
-164 152
-180 0
-183 157
-195 158
-204 159
-222 161
-238 0
-241 167
-262 0
-265 172
-288 0
-291 177
-314 0
-317 185
-334 0
-337 131
-348 132
-359 133
-371 0
-405 0
-423 0
-437 0
-451 0
-468 0
-484 0
-498 0
-515 0
-529 0
-543 0
-560 0
-563 208
-580 0
-583 213
-594 214
-603 215
-631 217
-644 0
-647 221
-678 0
-681 202
-694 203
-708 0
-740 0
-756 0
-773 0
-790 0
-807 0
-810 68
-822 0
-825 71
-837 0
-840 74
-852 0
-855 77
-867 0
-870 80
-882 0
-885 83
-897 0
-900 86
-912 0
+101 143
+112 144
+119 145
+139 0
+142 150
+162 0
+165 156
+177 157
+208 0
+211 163
+220 164
+236 0
+239 169
+248 170
+264 0
+267 175
+276 176
+288 177
+297 178
+315 180
+331 0
+334 186
+343 187
+364 0
+367 192
+376 193
+399 0
+402 198
+411 199
+434 0
+437 207
+446 208
+463 0
+466 134
+477 135
+488 136
+497 137
+507 0
+541 0
+559 0
+573 0
+589 0
+603 0
+617 0
+634 0
+648 0
+665 0
+682 0
+696 0
+699 231
+716 0
+719 236
+728 237
+739 238
+748 239
+776 241
+789 0
+792 245
+823 0
+826 225
+839 226
+853 0
+885 0
+901 0
+918 0
+935 0
+952 0
+955 68
+967 0
+970 71
+982 0
+985 74
+997 0
+1000 77
+1012 0
+1015 80
+1027 0
+1030 83
+1042 0
+1045 86
+1057 0
 vars
 func Pin.getNum 40
 this -20 8 0 ?
@@ -87,76 +101,78 @@ func Pin.setMode 84
 this -24 8 0 ?
 func Pin.release 98
 this -20 8 0 ?
-func Pin.__dtor 116
+func Pin.__dtor 139
 this -20 8 0 ?
-func Pin.on 142
+func Pin.vivo_ 162
 this -20 8 0 ?
-func Pin.off 161
+func Pin.on 208
 this -20 8 0 ?
-func Pin.toggle 180
+func Pin.off 236
 this -20 8 0 ?
-v 0 4 0 integer
-func Pin.value 238
+func Pin.toggle 264
 this -20 8 0 ?
-func Pin.isHigh 262
+v 4 4 0 integer
+func Pin.value 331
 this -20 8 0 ?
-func Pin.isLow 288
+func Pin.isHigh 364
 this -20 8 0 ?
-func Pin.setPull 314
+func Pin.isLow 399
+this -20 8 0 ?
+func Pin.setPull 434
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func Pin.__init 334
+func Pin.__init 463
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_new_Pin(ii) 371
+func __cls_new_Pin(ii) 507
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_init_Pin(ii) 405
+func __cls_init_Pin(ii) 541
 this -28 8 0 ?
 num -20 4 0 integer
 mode -16 4 0 integer
-func __cls_m_Pin#__dtor()V 423
+func __cls_m_Pin#release()V 559
 this -20 8 0 ?
-func __cls_m_Pin#release()V 437
-this -20 8 0 ?
-func __cls_m_Pin#isLow()z 451
-this -20 8 0 ?
-func __cls_m_Pin#setPull(i)V 468
+func __cls_m_Pin#setPull(i)V 573
 this -24 8 0 ?
 pullMode -16 4 0 integer
-func __cls_m_Pin#toggle()V 484
+func __cls_m_Pin#toggle()V 589
 this -20 8 0 ?
-func __cls_m_Pin#value()i 498
+func __cls_m_Pin#off()V 603
 this -20 8 0 ?
-func __cls_m_Pin#off()V 515
+func __cls_m_Pin#isHigh()z 617
 this -20 8 0 ?
-func __cls_m_Pin#on()V 529
+func __cls_m_Pin#__dtor()V 634
 this -20 8 0 ?
-func __cls_m_Pin#isHigh()z 543
+func __cls_m_Pin#isLow()z 648
 this -20 8 0 ?
-func AnPin.channel 560
+func __cls_m_Pin#value()i 665
 this -20 8 0 ?
-func AnPin.read 580
+func __cls_m_Pin#on()V 682
 this -20 8 0 ?
-raw 4 4 0 integer
-func AnPin.readVolts 644
+func AnPin.channel 696
 this -20 8 0 ?
-func AnPin.__init 678
+func AnPin.read 716
+this -20 8 0 ?
+raw 8 4 0 integer
+func AnPin.readVolts 789
+this -20 8 0 ?
+func AnPin.__init 823
 this -24 8 0 ?
 num -16 4 0 integer
-func __cls_new_AnPin(i) 708
+func __cls_new_AnPin(i) 853
 num -16 4 0 integer
-func __cls_init_AnPin(i) 740
+func __cls_init_AnPin(i) 885
 this -24 8 0 ?
 num -16 4 0 integer
-func __cls_m_AnPin#read()i 756
+func __cls_m_AnPin#read()i 901
 this -20 8 0 ?
-func __cls_m_AnPin#channel()i 773
+func __cls_m_AnPin#channel()i 918
 this -20 8 0 ?
-func __cls_m_AnPin#readVolts()f 790
+func __cls_m_AnPin#readVolts()f 935
 this -20 8 0 ?
-func __strconcat3 912
+func __strconcat3 1057
 s0 -36 8 0 ?
 s1 -28 8 0 ?
 s2 -20 8 0 ?

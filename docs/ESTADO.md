@@ -36,6 +36,10 @@
 > destructor el padre veía el campo de un hijo ya destruido como «no es null» (ahora es null:
 > `__preparaDestructor`), y sin `io` el KILL del `poll_cb` es «pegajoso» y cortaba la fase del final nada más empezar
 > (`test-kill`, fases 9 y 10, con su sabotaje). Más abajo, «🧹 `#668` (8-oct)».
+> Después, **`#667` hecha** (salvo la placa): cada clase de la stdlib que toma un recurso lo suelta en su destructor y
+> con `release()` —lo para, deja la unidad libre y el pin al reset—, con los backends de las tres familias y la red del
+> final del RUN para lo que no suelta ningún objeto. Esperan a Eduardo tres decisiones (el destructor de un constructor
+> que lanzó, el perro guardián tras un error, el CS de un `Spi.Device`). Más abajo, «🔌 `#667` (8-oct)».
 >
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
@@ -1230,6 +1234,29 @@ por eso).
 **Lo siguiente**: el STOP en la VM-Java, a mano con el IDE (con un breakpoint dentro de un destructor: tras el STOP, el
 depurador volvería a parar en la fase del final); **`#667`**, los destructores de los recursos —`Pwm.Slice`, el de
 `#666`, no tiene: el PWM sigue tras el RUN—; medir la GUI; y las placas, en un lote.
+
+## 🔌 `#667` (8-oct) — cada objeto que toma un recurso lo suelta en su destructor
+
+Con *«OK, continua con 667»*. **Lo hecho** (`V7_IDEAS` §«`#666`–`#668`», 10):
+- **La stdlib**: `release()` y destructor en `Pwm.Slice`, `Pulse.Counter`, `Neopixel.Strip` (la apaga antes) y
+  `Uart.Port`; `Gpio.Pin`, `Spi.Device` y `Adc.Channel` sueltan sólo lo suyo y una vez (`tomado_`: #668 también
+  destruye un objeto cuyo constructor lanzó); `~Timer` desarma el perro, `~Tcp` cierra, el contador de `Freq.Meter`
+  es `owner`. Y tras `release()`, usar el objeto es un error con nombre (`vivo_()`).
+- **Cuatro primitivas** (278–281) que piden el `release` al backend; el de siempre del pin (254) lo devuelve ahora al
+  reset en el hardware. En el PC, los stubs lo dicen igual en las dos VMs.
+- **Los backends**, en las tres familias: la Pico (la tabla de quién usa cada slice; la tira, tras vaciar su FIFO), las
+  ESP (las ranuras del LEDC y del PCNT se reutilizan; el temporizador compartido, sólo si nadie más lo usa) y la STM32
+  (el TIM3 compartido de la Nucleo; la UART con su interrupción). Los LED de la placa vuelven al firmware.
+- **La red del final del RUN** en `bpvm_destroy`: los `fin_de_run` de cada familia, que dicen cuánto soltaron.
+- **Las pruebas**: `SueltaRecursos` en la red de paridad (PARIDAD OK) y `make test-suelta` (backends falsos que
+  cuentan: con objetos lo sueltan los destructores, sin ellos la red). Las imágenes —Pico, las cinco ESP y las dos
+  STM32— compilan sin avisos nuevos.
+
+**Esperan a Eduardo**: el destructor de un objeto cuyo constructor lanzó (hoy corre); el perro guardián tras un error
+(hoy se desarma: ya no reinicia la placa si el programa muere); el CS de un `Spi.Device` soltado (hoy, al reset: en la
+Pico con pull-down). Y visto de paso: los pines de la pantalla de la DK2 y la P4 no son «del sistema».
+
+**Lo siguiente**: las placas, en un lote (con el OK de Eduardo), la GUI medida y el STOP en la VM-Java con el IDE.
 
 ## 🔧 SUELTAS (7-oct) — la lista, y `#656`: soltar un owner sin recursión
 

@@ -62,6 +62,10 @@ typedef struct {
      * para más cuentas, el wrapper BP suma con un offset. */
     int  (*value)(int counterId);
     void (*reset)(int counterId);
+    /* V7 #667 — SOLTARLO (el destructor de Pulse.Counter): lo para, la unidad queda libre y el pin vuelve a como
+     * estaba en el reset. Y la red del final del RUN, como la del PWM. */
+    void (*release)(int counterId, int pin);
+    int  (*fin_de_run)(void);   /* cuántas soltó: lo dice la fachada */
 } bpvm_pulse_backend_t;
 
 void bpvm_pulse_set_backend(const bpvm_pulse_backend_t* backend);
@@ -72,6 +76,8 @@ void bpvm_pulse_start(int counterId);
 void bpvm_pulse_stop(int counterId);
 int  bpvm_pulse_value(int counterId);
 void bpvm_pulse_reset(int counterId);
+void bpvm_pulse_release(int counterId, int pin);   /* V7 #667 */
+void bpvm_pulse_fin_de_run(void);                  /* V7 #667: la red del final del RUN (silenciosa en el PC) */
 
 #ifdef __cplusplus
 }

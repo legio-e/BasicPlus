@@ -421,6 +421,9 @@ module Spi
     public property cs:       integer
     public property baudrate: integer
     public property mode:     integer    // 0..3
+    // V7 #667: lo que tomó es suyo (se lo dieron: el constructor no lanzó). release() y el destructor sólo
+    // sueltan lo suyo, una vez: un objeto cuyo constructor lanzó también se destruye (#668), y no tiene nada.
+    var tomado_: boolean
 
     public function Device(bus: integer, cs: integer, baudrate: integer, mode: integer)
       this.bus      := bus
@@ -428,6 +431,7 @@ module Spi
       this.baudrate := baudrate
       this.mode     := mode
       deviceOpen(bus, cs, baudrate, mode)
+      this.tomado_ := true
     end Device
 
     // Escribe `count` bytes.
@@ -458,11 +462,14 @@ module Spi
     // Suelta el CS: el pin vuelve a libre y el dispositivo ya no transfiere. Lo llama el
     // destructor.
     public function release()
-      Gpio.release(this.cs)
+      if this.tomado_ then
+        this.tomado_ := false
+        Gpio.release(this.cs)
+      endif
     end release
 
     public function ~Device()
-      Gpio.release(this.cs)
+      this.release()
     end ~Device
 
   end Device

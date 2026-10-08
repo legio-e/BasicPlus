@@ -1647,6 +1647,21 @@ module Core
   function __siguientePendiente(): any   // lo siguiente que la VM tiene pendiente de destruir, o null
     inline CALL_BUILTIN 277
   end __siguientePendiente
+  // V7 #667 (8-oct) — SOLTAR LO QUE UN OBJETO TOMÓ DEL HARDWARE: lo llaman sus destructores y su release() (Eduardo:
+  // «Si un objeto BP consume un recurso, el objeto debe tener un destructor y liberar si es posible el recurso»). Cada
+  // uno para lo suyo, suelta la unidad (el canal, la máquina, el periférico) y deja los pines como en el reset.
+  function __pwmRelease(sliceId: integer, pin: integer)   // Pwm.releaseSlice
+    inline CALL_BUILTIN 278
+  end __pwmRelease
+  function __pulseRelease(counterId: integer, pin: integer)   // Pulse.releaseSlice
+    inline CALL_BUILTIN 279
+  end __pulseRelease
+  function __npRelease(pin: integer)   // Neopixel.__npRelease
+    inline CALL_BUILTIN 280
+  end __npRelease
+  function __uartRelease(bus: integer, tx: integer, rx: integer)   // Uart.releasePort
+    inline CALL_BUILTIN 281
+  end __uartRelease
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

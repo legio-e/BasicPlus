@@ -13,6 +13,10 @@
 #include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
 #include "bpvm_gpio.h"    /* V7/H4: el estado de los pines se limpia al fin de RUN */
 #include "bpvm_adc.h"     /* V7 #659: y el del ADC */
+#include "bpvm_pwm.h"     /* V7 #667: y lo que el programa encendió y nadie soltó */
+#include "bpvm_pulse.h"
+#include "bpvm_neopixel.h"
+#include "bpvm_uart.h"
 #include "bpvm_bus.h"     /* V7/H6.c G4.a1: y los buses del programa se sueltan */
 #include "bpvm_spi.h"
 #include "bpvm_i2c.h"
@@ -1793,7 +1797,13 @@ void bpvm_destroy(bpvm_t* vm) {
      * que apuntan al programa; se le da la orden de terminar (salta a su fondo, abandonándolos) antes de tocar nada. */
     bpvm_nativa_liberar_todas(vm);
     bpvm_files_fin_de_run(vm);      /* V7/H3 (#491): lo primero, con la memoria y la tabla de handles vivas */
-    bpvm_gpio_estado_reset();       /* V7/H4 (#479): los pines vuelven a libres para el siguiente RUN */
+    /* V7 #667 — lo que el programa encendió y nadie soltó (sus destructores, en la fase del final de #668, ya lo han
+     * hecho; esto es la red): el PWM, los contadores, las tiras y las UART. Antes que los pines. */
+    bpvm_pwm_fin_de_run();
+    bpvm_pulse_fin_de_run();
+    bpvm_neopixel_fin_de_run();
+    bpvm_uart_fin_de_run();
+    bpvm_gpio_estado_reset();       /* V7/H4 (#479): los pines vuelven a libres para el siguiente RUN; V7 #667: y al reset */
     bpvm_adc_fin_de_run();          /* V7 #659: y el ADC del stub, a cero (la rampa, el aviso de «sin backend») */
     bpvm_bus_fin_de_run(cerrar_bus);   /* V7/H6.c G4.a1: y los buses que sólo usaba el programa, se cierran */
     apagar_pack_en_ejecucion(vm);   /* V7/H2 (#493): el overlay no puede apuntar a un vm muerto */

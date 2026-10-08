@@ -1,0 +1,31 @@
+// SueltaTodo.bp — V7 #667 (8-oct): lo corre test-suelta con backends FALSOS que cuentan (test/test_suelta.c). Cada
+// objeto que toma un recurso lo suelta al destruirse, viva lo que viva: un owner local (al salir de su ámbito), una
+// global y unos locales del main (en la fase del final, #668). La tira, apagada antes de soltarla.
+module SueltaTodo
+  import Gpio
+  import Pwm
+  import Pulse
+  import Neopixel
+  import Uart
+
+  public property contador: Pulse.Counter := null
+
+  function conOwner()
+    var owner p: Pwm.Slice := Pwm.Slice(10, 1000)
+    p.setDuty(25)
+    p.start()
+    var owner u: Uart.Port := Uart.Port(1, 4, 5, 115200, 8, 1, 0)
+  end conOwner
+
+  function main()
+    conOwner()
+    contador := Pulse.Counter(11, Pulse.RISING())
+    contador.start()
+    var tira: Neopixel.Strip := Neopixel.Strip(16, 3)
+    tira.setColor(0, 40, 0)
+    tira.show()
+    var led: Gpio.Pin := Gpio.Pin(25, Gpio.Pin.OUTPUT)
+    led.on()
+    print "fin del main"
+  end main
+end SueltaTodo

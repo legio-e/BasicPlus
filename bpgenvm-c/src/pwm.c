@@ -10,6 +10,7 @@
 
 #include "bpvm_out.h"
 #include "bpvm_pwm.h"
+#include "bpvm.h"   /* V7 #667: bpvm_diag (la red) */
 #include <stdio.h>
 
 static const bpvm_pwm_backend_t* g_backend = NULL;
@@ -57,4 +58,19 @@ void bpvm_pwm_stop(int sliceId) {
         return;
     }
     bpvm_out("[pwm] stop slice=%d (sim)\n", sliceId);
+}
+
+/* V7 #667 — soltarlo (el destructor de Pwm.Slice). En el PC, como los demás, se dice por la salida. */
+void bpvm_pwm_release(int sliceId, int pin) {
+    if (g_backend && g_backend->release) {
+        g_backend->release(sliceId, pin);
+        return;
+    }
+    bpvm_out("[pwm] release slice=%d pin=%d (sim)\n", sliceId, pin);
+}
+
+/* V7 #667 — la red del final del RUN: sólo en una placa (en el PC no hay nada en marcha, y no se escribe nada). */
+void bpvm_pwm_fin_de_run(void) {
+    int n = (g_backend && g_backend->fin_de_run) ? g_backend->fin_de_run() : 0;
+    if (n > 0) bpvm_diag("[bpvm] fin de RUN: %d PWM seguian en marcha: se paran y sus pines vuelven al reset (#667)", n);
 }

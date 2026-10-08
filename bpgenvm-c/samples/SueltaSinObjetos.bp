@@ -1,0 +1,20 @@
+// SueltaSinObjetos.bp — V7 #667 (8-oct): lo corre test-suelta con backends FALSOS que cuentan. Las funciones del
+// módulo, sin objetos: nadie tiene destructor que lo suelte, así que lo suelta la RED del final del RUN (la plataforma),
+// y lo dice.
+module SueltaSinObjetos
+  import Gpio
+  import Pwm
+  import Pulse
+  import Uart
+
+  function main()
+    var s: integer := Pwm.initSlice(12, 500)
+    Pwm.startSlice(s)
+    var c: integer := Pulse.initSlice(13, 0)
+    Pulse.startSlice(c)
+    Gpio.init(14, 1)
+    Gpio.write(14, 1)
+    Uart.initPort(1, 4, 5, 9600, 8, 1, 0)
+    print "fin del main"
+  end main
+end SueltaSinObjetos

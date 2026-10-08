@@ -33,6 +33,9 @@ typedef struct {
     int  (*write)(int bus, const uint8_t* data, size_t n);
     int  (*read)(int bus, uint8_t* data, size_t n, int timeout_ms);
     int  (*available)(int bus);
+    /* V7 #667 — SOLTARLA (el destructor de Uart.Port): la UART apagada y sus pines como estaban en el reset. El
+     * búfer de recepción lo suelta la fachada. */
+    void (*release)(int bus, int tx, int rx);
 } bpvm_uart_backend_t;
 
 void bpvm_uart_set_backend(const bpvm_uart_backend_t* backend);
@@ -65,6 +68,8 @@ void bpvm_uart_init(int bus, int tx, int rx, int baudrate,
 int  bpvm_uart_write(int bus, const uint8_t* data, size_t n);
 int  bpvm_uart_read(int bus, uint8_t* data, size_t n, int timeout_ms);
 int  bpvm_uart_available(int bus);
+void bpvm_uart_release(int bus, int tx, int rx);   /* V7 #667 */
+void bpvm_uart_fin_de_run(void);                   /* V7 #667: la red: lo que quedó abierto, apagado */
 
 #ifdef __cplusplus
 }

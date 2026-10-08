@@ -55,6 +55,10 @@ module Pwm
   public function stopSlice(sliceId: integer)
     inline CALL_BUILTIN 103
   end stopSlice
+  // V7 #667 (8-oct): lo para, el canal queda libre y el pin vuelve a como estaba en el reset.
+  public function releaseSlice(sliceId: integer, pin: integer)
+    inline CALL_BUILTIN 278
+  end releaseSlice
 
   // ============================================================
   // Clase Slice — wrapper OO sobre los intrínsecos.
@@ -71,6 +75,9 @@ module Pwm
     public property id:      integer   // sliceId devuelto por initSlice
     public property freqHz:  integer   // freq objetivo guardada para inspección
     public property dutyPct: integer   // último duty seteado (0..100)
+    // V7 #667: lo que tomó es suyo (se lo dieron: el constructor no lanzó). release() y el destructor sólo
+    // sueltan lo suyo, una vez: un objeto cuyo constructor lanzó también se destruye (#668), y no tiene nada.
+    var tomado_: boolean
 
     // Constructor: configura el slice del pin a la frecuencia
     // indicada. Duty arranca a 0 (pin LOW). Llama start() para
@@ -88,11 +95,13 @@ module Pwm
         var msg: string := "Pwm.Slice: pin " + intToString(pin) + " inválido"
         throw RuntimeError(msg)
       endif
+      this.tomado_ := true
     end Slice
 
     // Cambia el duty cycle (0..100). Aplicación inmediata: la
     // siguiente onda completa ya tiene el nuevo duty.
     public function setDuty(dutyPct: integer)
+      this.vivo_()
       this.dutyPct := dutyPct
       setDutyPct(this.id, this.pin, dutyPct)
     end setDuty
@@ -101,6 +110,7 @@ module Pwm
     // hay otra Slice usando el otro canal del mismo slice (raro
     // pero posible). El duty actual se preserva.
     public function setFreq(freqHz: integer)
+      this.vivo_()
       this.freqHz := freqHz
       setFreqHz(this.id, freqHz)
     end setFreq
@@ -108,13 +118,38 @@ module Pwm
     // Arranca la generación. Antes de esto el pin está flotante /
     // LOW según el reset del slice.
     public function start()
+      this.vivo_()
       startSlice(this.id)
     end start
 
     // Para la generación. El pin queda en LOW.
     public function stop()
+      this.vivo_()
       stopSlice(this.id)
     end stop
+
+    // V7 #667 (8-oct) — SUELTA EL CANAL: lo para, el canal queda libre para otro y el pin vuelve a como estaba en
+    // el reset (Eduardo: «los pines por defecto deben ser input o nada»). Después el Slice ya no sirve. Lo llama el
+    // destructor: un Slice que muere —su owner, el GC o el final del programa, también tras un STOP— no deja el PWM
+    // en marcha.
+    public function release()
+      if this.tomado_ then
+        this.tomado_ := false
+        releaseSlice(this.id, this.pin)
+      endif
+    end release
+
+    public function ~Slice()
+      this.release()
+    end ~Slice
+
+    // V7 #667 (8-oct) — tras release() el objeto ya no tiene su recurso: usarlo es un error con nombre, no un
+    // silencio (el canal que soltó puede ser ya de otro objeto).
+    function vivo_()
+      if not this.tomado_ then
+        throw RuntimeError("Pwm.Slice del pin " + intToString(this.pin) + ": ya se soltó con release()")
+      endif
+    end vivo_
 
   end Slice
 

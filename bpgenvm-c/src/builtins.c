@@ -3371,7 +3371,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_GPIO_RELEASE: {
         int pin = pop_i32(vm, tc);
         hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT) */
-        bpvm_gpio_liberar(pin);
+        (void) bpvm_gpio_soltar(pin);   /* V7 #667: libre Y, en el hardware, como en el reset */
         hal_abrir(vm);
         push_i32(vm, tc, 0);
         return BPVM_OK;
@@ -4001,6 +4001,47 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_PWM_STOP: {
         int sliceId = pop_i32(vm, tc);
         bpvm_pwm_stop(sliceId);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    /* V7 #667 — SOLTAR lo que un objeto tomó (sus destructores y su release()): el backend suelta la unidad y deja
+     * el pin como en el reset; el común lo apunta libre. Bajo el cerrojo de la HAL, como al tomarlo. */
+    case BUILTIN_PWM_RELEASE: {
+        int pin     = pop_i32(vm, tc);
+        int sliceId = pop_i32(vm, tc);
+        hal_cerrar(vm);
+        bpvm_pwm_release(sliceId, pin);
+        bpvm_gpio_liberar(pin);
+        hal_abrir(vm);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_PULSE_RELEASE: {
+        int pin       = pop_i32(vm, tc);
+        int counterId = pop_i32(vm, tc);
+        hal_cerrar(vm);
+        bpvm_pulse_release(counterId, pin);
+        bpvm_gpio_liberar(pin);
+        hal_abrir(vm);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_NP_RELEASE: {
+        int pin = pop_i32(vm, tc);
+        hal_cerrar(vm);
+        bpvm_neopixel_release(pin);
+        bpvm_gpio_liberar(pin);
+        hal_abrir(vm);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_UART_RELEASE: {
+        int rx  = pop_i32(vm, tc);
+        int tx  = pop_i32(vm, tc);
+        int bus = pop_i32(vm, tc);
+        hal_cerrar(vm);
+        bpvm_uart_release(bus, tx, rx);
+        hal_abrir(vm);
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }

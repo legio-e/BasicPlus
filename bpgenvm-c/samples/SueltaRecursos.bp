@@ -1,0 +1,89 @@
+// SueltaRecursos.bp — V7 #667 (8-oct): un objeto que toma un recurso del hardware lo suelta al destruirse —su
+// owner, el GC o el final del programa (#668)—, con release() antes si se quiere, y sólo lo suyo, una vez. En el PC no
+// hay hardware: los stubs lo dicen por la salida, igual en las dos VMs (en una placa el PWM se para, el canal queda
+// libre y el pin vuelve al reset). Lo que BP puede ver, se comprueba solo (una línea «FALLO» pone el sample en rojo):
+// un pin soltado se puede volver a tomar, y el destructor de un Pin cuyo constructor lanzó no suelta el pin de otro.
+module SueltaRecursos
+  import Gpio
+  import Pwm
+  import Pulse
+  import Uart
+
+  function conOwner()
+    var owner p: Pwm.Slice := Pwm.Slice(10, 1000)
+    p.setDuty(50)
+    p.start()
+    print "  pwm en marcha"
+  end conOwner
+
+  function aMano()
+    var owner c: Pulse.Counter := Pulse.Counter(11, Pulse.RISING())
+    c.release()
+    c.release()
+    print "  contador soltado a mano (el segundo release y el destructor no repiten)"
+  end aMano
+
+  // Tras release(), el objeto ya no tiene su recurso: usarlo es un error con nombre (en una placa, el canal soltado
+  // puede ser ya de otro objeto).
+  function usarTrasSoltar()
+    var owner p: Pwm.Slice := Pwm.Slice(12, 1000)
+    p.release()
+    try
+      p.setDuty(10)
+      print "FALLO: un Pwm.Slice soltado se pudo usar"
+    catch e1: RuntimeError
+      print "  ok  " + e1.msg
+    endtry
+    var owner q: Gpio.Pin := Gpio.Pin(13, Gpio.Pin.OUTPUT)
+    q.release()
+    try
+      q.toggle()
+      print "FALLO: un Gpio.Pin soltado se pudo usar"
+    catch e2: RuntimeError
+      print "  ok  " + e2.msg
+    endtry
+  end usarTrasSoltar
+
+  function pinQueSeSuelta()
+    var owner led: Gpio.Pin := Gpio.Pin(26, Gpio.Pin.OUTPUT)
+    led.on()
+  end pinQueSeSuelta
+
+  function fallaElPin(n: integer): boolean
+    try
+      var owner otro: Gpio.Pin := Gpio.Pin(n, Gpio.Pin.OUTPUT)
+      return false
+    catch e: RuntimeError
+      return true
+    endtry
+  end fallaElPin
+
+  function main()
+    print "== un owner suelta su PWM al salir =="
+    conOwner()
+    print "== release() a mano =="
+    aMano()
+    print "== usar un objeto soltado es un error con nombre =="
+    usarTrasSoltar()
+    print "== el pin de un Pin que muere vuelve a estar libre =="
+    pinQueSeSuelta()
+    var a: Gpio.AnPin := Gpio.AnPin(26)
+    print "  ok  el 26, analógico tras soltarlo: canal " + intToString(a.channel())
+    print "== el destructor de un Pin que no se pudo tomar no suelta el pin de otro =="
+    if not fallaElPin(26) then
+      print "FALLO: un Pin(26) de salida se pudo tomar con el 26 analógico"
+    endif
+    gc()
+    yield()
+    if not fallaElPin(26) then
+      print "FALLO: el destructor del Pin fallido soltó el 26, que es del AnPin"
+    else
+      print "  ok  el 26 sigue siendo del AnPin"
+    endif
+    print "== al acabar, lo que queda vivo (el más nuevo primero) =="
+    var led: Gpio.Pin := Gpio.Pin(25, Gpio.Pin.OUTPUT)
+    led.on()
+    var u: Uart.Port := Uart.Port(1, 4, 5, 9600, 8, 1, 0)
+    print "fin del main"
+  end main
+end SueltaRecursos

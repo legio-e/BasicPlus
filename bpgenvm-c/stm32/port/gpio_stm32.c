@@ -128,11 +128,44 @@ static int stm32_gpio_read_impl(int pin) {
     return (HAL_GPIO_ReadPin(port, (uint16_t) (1u << (pin & 0x0F))) == GPIO_PIN_SET) ? 1 : 0;
 }
 
+/* V7 #667 (8-oct) — UN PIN QUE UN PROGRAMA SUELTA, A COMO ESTABA (Eduardo: «los pines por defecto deben ser input o
+ * nada. Si están como output se debería revertir»): el reset del STM32 —analógico, sin pull: HAL_GPIO_DeInit—. Un
+ * LED de la PLACA, en cambio, vuelve a ser del firmware (el latido, el RUN, el error), como lo dejó su arranque. */
+static int stm32_led_de_placa(int pin) {
+#if defined(BPVM_BOARD_DK2)
+    if (pin == ((3 << 4) | 2) || pin == ((3 << 4) | 4)) {   /* PD2 rojo, PD4 verde: salidas de CubeMX */
+        GPIO_InitTypeDef cfg = {0};
+        cfg.Pin = (uint32_t) (1u << (pin & 0x0F));
+        cfg.Mode = GPIO_MODE_OUTPUT_PP;
+        cfg.Pull = GPIO_NOPULL;
+        cfg.Speed = GPIO_SPEED_FREQ_LOW;
+        HAL_GPIO_WritePin(GPIOD, (uint16_t) cfg.Pin, GPIO_PIN_RESET);
+        HAL_GPIO_Init(GPIOD, &cfg);
+        return 1;
+    }
+#else
+    if (pin == ((2 << 4) | 7)) { BSP_LED_Init(LED_GREEN); return 1; }   /* PC7: el latido */
+    if (pin == ((1 << 4) | 7)) { BSP_LED_Init(LED_BLUE);  return 1; }   /* PB7: el RUN */
+    if (pin == ((6 << 4) | 2)) { BSP_LED_Init(LED_RED);   return 1; }   /* PG2: el error */
+#endif
+    return 0;
+}
+
+static void stm32_pin_al_reset(int pin) {
+    if (pin < 0 || pin >= STM32_PIN_COUNT) return;
+    s_mode[pin] = 0;
+    s_pull[pin] = 0;
+    if (stm32_led_de_placa(pin)) return;
+    GPIO_TypeDef* port = port_of(pin >> 4);
+    if (port) HAL_GPIO_DeInit(port, (uint32_t) (1u << (pin & 0x0F)));
+}
+
 static const bpvm_gpio_backend_t s_gpio_backend = {
     .init  = stm32_gpio_init_impl,
     .pull  = stm32_gpio_pull_impl,
     .write = stm32_gpio_write_impl,
     .read  = stm32_gpio_read_impl,
+    .soltar = stm32_pin_al_reset,   /* V7 #667 */
 };
 
 /* ---- Pico (info de MCU) backend ---- */
@@ -582,10 +615,12 @@ static void stm32_uart_rx_irq_on(int bus) {
     bpvm_uart_rx_ring_enable(bus);
 }
 
+static int s_uart_tx[8] = { -1, -1, -1, -1, -1, -1, -1, -1 }, s_uart_rx[8] = { -1, -1, -1, -1, -1, -1, -1, -1 };   /* V7 #667 */
 static void stm32_uart_init_impl(int bus, int tx, int rx, int baudrate,
                                  int data_bits, int stop_bits, int parity) {
     UART_HandleTypeDef* h = uart_handle(bus);
     if (!h) return;
+    if (bus >= 0 && bus < 8) { s_uart_tx[bus] = tx; s_uart_rx[bus] = rx; }
     USART_TypeDef* inst;
     switch (bus) {                                 /* instancia + clock (antes MspInit de CubeMX) */
         case 2: inst = USART2; __HAL_RCC_USART2_CLK_ENABLE(); break;
@@ -656,8 +691,34 @@ static int stm32_uart_available_impl(int bus) {
     return -1;   /* MVP: no soportado (contrato del header) -> usar read con timeout */
 }
 
+/* V7 #667 — soltarla: su interrupción fuera, el periférico desinicializado y sus pines al reset. */
+static void stm32_uart_release_impl(int bus, int tx, int rx) {
+    UART_HandleTypeDef* h = uart_handle(bus);
+    if (!h || !h->Instance || bus < 0 || bus >= 8) return;
+    IRQn_Type irq;
+    switch (bus) {
+        case 2: irq = USART2_IRQn; break;
+        case 3: irq = USART3_IRQn; break;
+        case 4: irq = UART4_IRQn;  break;
+#ifdef UART5
+        case 5: irq = UART5_IRQn;  break;
+#endif
+#ifdef USART6
+        case 6: irq = USART6_IRQn; break;
+#endif
+        default: return;
+    }
+    __HAL_UART_DISABLE_IT(h, UART_IT_RXNE);
+    HAL_NVIC_DisableIRQ(irq);
+    HAL_UART_DeInit(h);
+    stm32_pin_al_reset(tx >= 0 ? tx : s_uart_tx[bus]);
+    stm32_pin_al_reset(rx >= 0 ? rx : s_uart_rx[bus]);
+    s_uart_tx[bus] = s_uart_rx[bus] = -1;
+}
+
 static const bpvm_uart_backend_t s_uart_backend = {
     .init      = stm32_uart_init_impl,
+    .release   = stm32_uart_release_impl,   /* V7 #667 */
     .write     = stm32_uart_write_impl,
     .read      = stm32_uart_read_impl,
     .available = stm32_uart_available_impl,
@@ -1144,12 +1205,33 @@ static void stm32_pwm_stop_impl(int sliceId) {
         HAL_TIM_PWM_Stop(&s_pwm_htim[sliceId], s_pwm_map[sliceId].channel);
 }
 
+/* V7 #667 — SOLTARLO: el canal parado, el timer desinicializado si no lo usa otro canal (en la Nucleo el TIM3 lo
+ * comparten PC7 y PC8) y el pin a como estaba —el LED de la placa, a su firmware—. */
+static void stm32_pwm_release_impl(int sliceId, int pin) {
+    (void) pin;
+    if (sliceId < 0 || sliceId >= PWM_SLICE_N || !s_pwm_on[sliceId]) return;
+    HAL_TIM_PWM_Stop(&s_pwm_htim[sliceId], s_pwm_map[sliceId].channel);
+    s_pwm_on[sliceId] = 0;
+    int otro = 0;
+    for (int i = 0; i < PWM_SLICE_N; i++) if (s_pwm_on[i] && s_pwm_map[i].inst == s_pwm_map[sliceId].inst) otro = 1;
+    if (!otro) HAL_TIM_PWM_DeInit(&s_pwm_htim[sliceId]);
+    stm32_pin_al_reset(s_pwm_map[sliceId].pin);
+}
+
+static int stm32_pwm_fin_de_run(void) {
+    int n = 0;
+    for (int i = 0; i < PWM_SLICE_N; i++) if (s_pwm_on[i]) { stm32_pwm_release_impl(i, s_pwm_map[i].pin); n++; }
+    return n;
+}
+
 static const bpvm_pwm_backend_t s_pwm_backend = {
     .init    = stm32_pwm_init_impl,
     .setFreq = stm32_pwm_set_freq_impl,
     .setDuty = stm32_pwm_set_duty_impl,
     .start   = stm32_pwm_start_impl,
     .stop    = stm32_pwm_stop_impl,
+    .release    = stm32_pwm_release_impl,   /* V7 #667 */
+    .fin_de_run = stm32_pwm_fin_de_run,
 };
 
 /* ===================== Pulse counter — H10 ================================
@@ -1240,12 +1322,31 @@ static void stm32_pulse_reset_impl(int counterId) {
         __HAL_TIM_SET_COUNTER(&s_pulse_htim[counterId], 0);
 }
 
+/* V7 #667 — SOLTARLO: el timer (entero: el reloj externo lo toma todo) parado y desinicializado, y el pin a como
+ * estaba. */
+static void stm32_pulse_release_impl(int counterId, int pin) {
+    (void) pin;
+    if (counterId < 0 || counterId >= PULSE_N || !s_pulse_on[counterId]) return;
+    HAL_TIM_Base_Stop(&s_pulse_htim[counterId]);
+    HAL_TIM_Base_DeInit(&s_pulse_htim[counterId]);
+    s_pulse_on[counterId] = 0;
+    stm32_pin_al_reset(s_pulse_map[counterId].pin);
+}
+
+static int stm32_pulse_fin_de_run(void) {
+    int n = 0;
+    for (int i = 0; i < PULSE_N; i++) if (s_pulse_on[i]) { stm32_pulse_release_impl(i, s_pulse_map[i].pin); n++; }
+    return n;
+}
+
 static const bpvm_pulse_backend_t s_pulse_backend = {
     .init  = stm32_pulse_init_impl,
     .start = stm32_pulse_start_impl,
     .stop  = stm32_pulse_stop_impl,
     .value = stm32_pulse_value_impl,
     .reset = stm32_pulse_reset_impl,
+    .release    = stm32_pulse_release_impl,   /* V7 #667 */
+    .fin_de_run = stm32_pulse_fin_de_run,
 };
 
 void stm32_hw_register(void) {

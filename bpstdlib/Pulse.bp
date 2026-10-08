@@ -57,6 +57,10 @@ module Pulse
   public function resetSlice(counterId: integer)
     inline CALL_BUILTIN 98
   end resetSlice
+  // V7 #667 (8-oct): lo para, la unidad queda libre y el pin vuelve a como estaba en el reset.
+  public function releaseSlice(counterId: integer, pin: integer)
+    inline CALL_BUILTIN 279
+  end releaseSlice
 
   // ---- Constantes de flanco ----
   public function RISING(): integer
@@ -73,12 +77,10 @@ module Pulse
   // Clase Counter — wrapper OO sobre los intrínsecos.
   //
   // Cada instancia encapsula el counterId que devolvió init() y
-  // mantiene el pin y el edgeKind para inspección. El destructor
-  // implícito de BP (al salir del scope o al GC del objeto)
-  // libera el slice — bueno, no del todo: el GC en BP no ejecuta
-  // finalizers hoy. Mientras tanto, llama stop() explícitamente
-  // si quieres liberar el slice. El próximo init() del mismo pin
-  // lo reabre.
+  // mantiene el pin y el edgeKind para inspección. V7 #667: su
+  // destructor suelta la unidad y el pin (lo libere quien lo libere:
+  // su owner, el GC o el final del programa, #668); release() lo
+  // hace antes.
   // ============================================================
   public class Counter
 
@@ -90,6 +92,9 @@ module Pulse
     public property pin:      integer
     public property edgeKind: integer
     public property id:       integer    // counterId devuelto por init()
+    // V7 #667: lo que tomó es suyo (se lo dieron: el constructor no lanzó). release() y el destructor sólo
+    // sueltan lo suyo, una vez: un objeto cuyo constructor lanzó también se destruye (#668), y no tiene nada.
+    var tomado_: boolean
 
     // Constructor: configura el slice PWM correspondiente al pin
     // en modo input-gated edge counting. Lanza RuntimeError si el
@@ -102,17 +107,20 @@ module Pulse
         var msg: string := "Pulse.Counter: pin " + intToString(pin) + " no es contador válido"
         throw RuntimeError(msg)
       endif
+      this.tomado_ := true
     end Counter
 
     // Arranca el conteo. Antes de esto, value() puede devolver
     // valores indefinidos.
     public function start()
+      this.vivo_()
       startSlice(this.id)
     end start
 
     // Para el conteo y libera el slice para que pueda usarse en
     // modo PWM normal de nuevo.
     public function stop()
+      this.vivo_()
       stopSlice(this.id)
     end stop
 
@@ -120,13 +128,36 @@ module Pulse
     // (rango 0..65535). Si necesitas más, llama reset() con
     // frecuencia y acumula en BP, o haz polling periódico.
     public function value(): integer
+      this.vivo_()
       return readSlice(this.id)
     end value
 
     // Pone el contador a cero sin parar el slice.
     public function reset()
+      this.vivo_()
       resetSlice(this.id)
     end reset
+
+    // V7 #667 (8-oct) — SUELTA EL CONTADOR: lo para, la unidad queda libre y el pin vuelve a como estaba en el
+    // reset. Después el Counter ya no sirve. Lo llama el destructor.
+    public function release()
+      if this.tomado_ then
+        this.tomado_ := false
+        releaseSlice(this.id, this.pin)
+      endif
+    end release
+
+    public function ~Counter()
+      this.release()
+    end ~Counter
+
+    // V7 #667 (8-oct) — tras release() el objeto ya no tiene su recurso: usarlo es un error con nombre, no un
+    // silencio (el canal que soltó puede ser ya de otro objeto).
+    function vivo_()
+      if not this.tomado_ then
+        throw RuntimeError("Pulse.Counter del pin " + intToString(this.pin) + ": ya se soltó con release()")
+      endif
+    end vivo_
 
   end Counter
 

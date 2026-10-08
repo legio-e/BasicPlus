@@ -466,6 +466,18 @@ test-kill: $(LIBOBJ)
 	  else echo "  (rojo, como debe: el KILL sin aviso no despierta al programa dormido)"; fi; \
 	fi
 
+# V7 #667 (8-oct) — LO QUE UN OBJETO TOMA DEL HARDWARE LO SUELTA SU DESTRUCTOR, y lo que nadie suelta, la red del
+# final del RUN: con backends FALSOS que cuentan (PWM, contador, tira, UART y pines). Dos programas: con objetos (los
+# destructores) y sin ellos (la red).
+SUELTA_BIN = build/test_suelta.exe
+test-suelta: $(LIBOBJ)
+	@mkdir -p build
+	@for m in Gpio Machine Pwm Pulse Neopixel Uart; do cp ../bpstdlib/$$m.mod samples/; done   # las suyas, junto al programa
+	$(call fixture,SueltaTodo SueltaSinObjetos)
+	$(CC) $(CFLAGS) -Isrc test/test_suelta.c $(LIBOBJ) -o $(SUELTA_BIN) $(LDFLAGS)
+	@echo "--- V7 #667: soltar los recursos (esperado: solo 'ok', [status=OK]) ---"
+	(cd samples && ../$(SUELTA_BIN) SueltaTodo.mod SueltaSinObjetos.mod)
+
 # V7/H10 #634 (3-oct) — UN KILL CON EL PROGRAMA EN PAUSA: el lazo de pausa del depurador no miraba la bandera que pone
 # `io` al recibir el KILL, y el Stop del IDE no paraba un programa detenido en un breakpoint (en placa). KillLoop parado
 # en su primer opcode y un `next_cmd` de mentira; sin el fixture, ROJO (no un «saltado» que pasa por verde).

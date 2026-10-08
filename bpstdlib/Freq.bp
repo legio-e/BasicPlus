@@ -59,7 +59,7 @@ module Freq
 
     public property pin:  integer
     public property edge: integer
-    var counter: Pulse.Counter
+    var owner counter: Pulse.Counter   // V7 #667: suyo: muere con el Meter (y su destructor lo suelta)
 
     // Configura el contador en el pin/flanco dados. Lanza
     // RuntimeError (vía Pulse.Counter) si el pin no es válido.
@@ -103,9 +103,9 @@ module Freq
       return (65535 * 1000) / windowMs
     end maxHz
 
-    // Libera el contador (deja el slice disponible para PWM, etc.).
+    // Libera el contador (deja el slice disponible para PWM, etc.). V7 #667: y su pin.
     public function close()
-      this.counter.stop()
+      this.counter.release()
     end close
 
   end Meter

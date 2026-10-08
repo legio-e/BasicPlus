@@ -123,12 +123,23 @@ static int rx_drenar(uart_rx_t* r, uint8_t* data, size_t n, int timeout_ms) {
     return (int) got;
 }
 
+/* V7 #667 — la ranura del bus, libre: un programa que usa otro bus en el RUN siguiente la encuentra (la STM32 tiene
+ * cinco UART y dos ranuras: antes, la tercera de la vida de la placa ya no tenía búfer). */
+static void rx_ring_soltar(int bus) {
+    uart_rx_t* r = rx_de(bus);
+    if (r) r->bus = -1;
+}
+
+/* V7 #667 — los buses que el programa abrió (para la red del final del RUN). */
+static uint8_t g_abierto[8];
+
 void bpvm_uart_set_backend(const bpvm_uart_backend_t* backend) {
     g_backend = backend;
 }
 
 void bpvm_uart_init(int bus, int tx, int rx, int baudrate,
                     int data_bits, int stop_bits, int parity) {
+    if (bus >= 0 && bus < (int) sizeof g_abierto) g_abierto[bus] = 1;   /* V7 #667: para la red */
     if (g_backend && g_backend->init) {
         g_backend->init(bus, tx, rx, baudrate, data_bits, stop_bits, parity);
         return;
@@ -137,6 +148,29 @@ void bpvm_uart_init(int bus, int tx, int rx, int baudrate,
            bus, tx, rx, baudrate, data_bits,
            parity == 1 ? 'O' : parity == 2 ? 'E' : 'N',
            stop_bits);
+}
+
+/* V7 #667 — soltarla (el destructor de Uart.Port): la UART apagada, su ranura del búfer libre y sus pines como en el
+ * reset. En el PC, como los demás, se dice por la salida. */
+void bpvm_uart_release(int bus, int tx, int rx) {
+    if (bus >= 0 && bus < (int) sizeof g_abierto) g_abierto[bus] = 0;
+    if (g_backend && g_backend->release) g_backend->release(bus, tx, rx);
+    else if (!g_backend) bpvm_out("[uart] release bus=%d (sim)\n", bus);
+    rx_ring_soltar(bus);
+}
+
+/* V7 #667 — la red del final del RUN: lo que el programa dejó abierto se apaga (sus pines, el backend no los sabe:
+ * los que quedaron como salida los devuelve la red de los pines). En el PC no se escribe nada. */
+void bpvm_uart_fin_de_run(void) {
+    for (int b = 0; b < (int) sizeof g_abierto; b++) {
+        if (!g_abierto[b]) continue;
+        g_abierto[b] = 0;
+        if (g_backend && g_backend->release) {
+            g_backend->release(b, -1, -1);
+            bpvm_diag("[bpvm] fin de RUN: la UART %d seguia abierta: se apaga (#667)", b);
+        }
+        rx_ring_soltar(b);
+    }
 }
 
 int bpvm_uart_write(int bus, const uint8_t* data, size_t n) {

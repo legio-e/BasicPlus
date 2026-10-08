@@ -1323,6 +1323,24 @@ end Base</code></pre>
   diagnóstico, con la clase) y la limpieza sigue con los demás: un destructor que falla no deja
   nada sin destruir.
 </p>
+<p>
+  <strong>Un recurso de la biblioteca, en un campo <code>owner</code></strong>: las clases de dispositivos
+  (<code>Pwm.Slice</code>, <code>Gpio.Pin</code>, <code>Uart.Port</code>…) ya sueltan lo suyo en su destructor
+  (V7, <code>#667</code>, <a href="referencia.html#stdlib-hw-soltar">Referencia §14.1</a>), así que una clase
+  que las usa no necesita destructor: el suyo muere con ella, antes que ella.
+</p>
+<pre><code><span class="kw">public class</span> Motor
+  <span class="kw">var owner</span> pwm: Pwm.Slice
+  <span class="kw">public function</span> Motor(pin: <span class="type">integer</span>)
+    <span class="kw">this</span>.pwm := Pwm.Slice(pin, <span class="num">20000</span>)   <span class="comment">// al morir el Motor, ~Slice para el PWM</span>
+  <span class="kw">end</span> Motor
+<span class="kw">end</span> Motor</code></pre>
+<p>
+  <strong>Un objeto cuyo constructor lanzó también se destruye</strong>: ya existe en memoria, y lo recoge el
+  GC (o el final del programa). Una clase que toma el recurso ella misma, con las funciones de un módulo, ha
+  de soltar en su destructor <em>sólo lo suyo</em>: lo apunta al final del constructor, cuando ya lo tiene, y lo
+  suelta una vez —es lo que hacen las clases de la biblioteca—.
+</p>
 
 <h3 id="props">9.5 Properties</h3>
 <pre><code><span class="kw">public class</span> Punto

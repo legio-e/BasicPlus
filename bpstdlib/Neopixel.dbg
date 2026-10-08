@@ -11,32 +11,51 @@ lines
 93 0
 110 0
 125 0
-128 54
-158 55
-196 0
-199 61
-221 62
-224 63
-239 64
-251 65
-262 0
-265 71
+128 62
+137 63
+167 64
+205 0
+208 70
+217 71
+239 72
+242 73
+257 74
+269 75
 280 0
-283 76
-312 0
-315 81
-333 0
-336 45
-347 46
-358 47
-372 48
-382 0
-416 0
-434 0
-456 0
-476 0
-490 0
-504 0
+283 81
+292 82
+307 0
+310 87
+319 88
+348 0
+351 93
+369 0
+372 100
+383 101
+392 102
+401 103
+408 104
+428 0
+431 109
+451 0
+454 115
+466 116
+497 0
+500 52
+511 53
+522 54
+536 55
+543 56
+553 0
+587 0
+605 0
+627 0
+641 0
+655 0
+669 0
+686 0
+706 0
+720 0
 vars
 func Strip.getPin_ 35
 this -20 8 0 ?
@@ -56,44 +75,60 @@ i -28 4 0 integer
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func Strip.setColor 196
+func Strip.setColor 205
 this -32 8 0 ?
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-c 0 4 0 integer
-i 4 4 0 integer
-func Strip.clear 262
+c 4 4 0 integer
+i 8 4 0 integer
+func Strip.clear 280
 this -20 8 0 ?
-func Strip.show 280
+func Strip.show 307
 this -20 8 0 ?
-func Strip.count 312
+func Strip.count 348
 this -20 8 0 ?
-func Strip.__init 333
+func Strip.release 369
+this -20 8 0 ?
+func Strip.__dtor 428
+this -20 8 0 ?
+func Strip.vivo_ 451
+this -20 8 0 ?
+func Strip.__init 497
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_new_Strip(ii) 382
+func __cls_new_Strip(ii) 553
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_init_Strip(ii) 416
+func __cls_init_Strip(ii) 587
 this -28 8 0 ?
 pin -20 4 0 integer
 count -16 4 0 integer
-func __cls_m_Strip#setPixel(iiii)V 434
+func __cls_m_Strip#setPixel(iiii)V 605
 this -36 8 0 ?
 i -28 4 0 integer
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func __cls_m_Strip#setColor(iii)V 456
+func __cls_m_Strip#release()V 627
+this -20 8 0 ?
+func __cls_m_Strip#clear()V 641
+this -20 8 0 ?
+func __cls_m_Strip#show()V 655
+this -20 8 0 ?
+func __cls_m_Strip#count()i 669
+this -20 8 0 ?
+func __cls_m_Strip#setColor(iii)V 686
 this -32 8 0 ?
 r -24 4 0 integer
 g -20 4 0 integer
 b -16 4 0 integer
-func __cls_m_Strip#clear()V 476
+func __cls_m_Strip#__dtor()V 706
 this -20 8 0 ?
-func __cls_m_Strip#show()V 490
-this -20 8 0 ?
-func __cls_m_Strip#count()i 504
-this -20 8 0 ?
+func __strconcat3 720
+s0 -36 8 0 ?
+s1 -28 8 0 ?
+s2 -20 8 0 ?
+out 0 8 0 ?
+d 8 4 0 ?

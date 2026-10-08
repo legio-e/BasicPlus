@@ -30,6 +30,10 @@ module Neopixel
   public function __npShow(pin: integer, grb: integer[], count: integer)
     inline CALL_BUILTIN 125
   end __npShow
+  // V7 #667 (8-oct): suelta la máquina (PIO) o el canal (RMT) del pin, y el pin vuelve a como estaba en el reset.
+  public function __npRelease(pin: integer)
+    inline CALL_BUILTIN 280
+  end __npRelease
 
   // ----------------------------------------------------------
   // Clase Strip — una tira (o un único LED, con count=1).
@@ -39,6 +43,9 @@ module Neopixel
     public property pin_: integer      // GPIO de datos
     public property n_:   integer      // número de píxeles
     public property px_:  integer[]    // color GRB empaquetado por píxel
+    // V7 #667: lo que tomó es suyo (se lo dieron: el constructor no lanzó). release() y el destructor sólo
+    // sueltan lo suyo, una vez: un objeto cuyo constructor lanzó también se destruye (#668), y no tiene nada.
+    var tomado_: boolean
 
     // Constructor: configura el pin para WS2812 y reserva el buffer.
     public function Strip(pin: integer, count: integer)
@@ -46,11 +53,13 @@ module Neopixel
       this.n_   := count
       this.px_  := newIntArray(count)
       __npInit(pin)
+      this.tomado_ := true
     end Strip
 
     // Color de un píxel (r, g, b en 0..255). Se guarda como GRB, el
     // orden que espera el WS2812 (el firmware lo manda tal cual).
     public function setPixel(i: integer, r: integer, g: integer, b: integer)
+      this.vivo_()
       if i >= 0 and i < this.n_ then
         this.px_[i] := (g * 65536) + (r * 256) + b
       endif
@@ -58,6 +67,7 @@ module Neopixel
 
     // Pinta TODOS los píxeles del mismo color.
     public function setColor(r: integer, g: integer, b: integer)
+      this.vivo_()
       var c: integer := (g * 65536) + (r * 256) + b
       var i: integer := 0
       while i < this.n_ do
@@ -68,11 +78,13 @@ module Neopixel
 
     // Apaga todos (no aplica hasta show()).
     public function clear()
+      this.vivo_()
       this.setColor(0, 0, 0)
     end clear
 
     // Vuelca el buffer al hardware (lo hace visible).
     public function show()
+      this.vivo_()
       __npShow(this.pin_, this.px_, this.n_)
     end show
 
@@ -80,6 +92,30 @@ module Neopixel
     public function count(): integer
       return this.n_
     end count
+
+    // V7 #667 (8-oct) — SUELTA LA TIRA: la apaga (todo como estaba: los LED no se quedan encendidos con lo último
+    // que se les mandó), suelta la máquina o el canal y el pin vuelve a como estaba en el reset. Después la Strip ya
+    // no sirve. Lo llama el destructor.
+    public function release()
+      if this.tomado_ then
+        this.clear()
+        this.show()
+        this.tomado_ := false
+        __npRelease(this.pin_)
+      endif
+    end release
+
+    public function ~Strip()
+      this.release()
+    end ~Strip
+
+    // V7 #667 (8-oct) — tras release() el objeto ya no tiene su recurso: usarlo es un error con nombre, no un
+    // silencio (el canal que soltó puede ser ya de otro objeto).
+    function vivo_()
+      if not this.tomado_ then
+        throw RuntimeError("Neopixel.Strip del pin " + intToString(this.pin_) + ": ya se soltó con release()")
+      endif
+    end vivo_
 
   end Strip
 

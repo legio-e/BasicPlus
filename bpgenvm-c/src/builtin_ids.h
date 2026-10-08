@@ -283,7 +283,11 @@ enum {
     BUILTIN_LIBERA_SOLO                  = 275,   /* __liberaSolo(x: any) */
     BUILTIN_AVISA_DESTRUCTOR             = 276,   /* __avisaDestructor(x: any, msg: string) */
     BUILTIN_SIGUIENTE_PENDIENTE          = 277,   /* __siguientePendiente(): any */
-    BUILTIN__CUANTOS = 278
+    BUILTIN_PWM_RELEASE                  = 278,   /* __pwmRelease(sliceId: integer, pin: integer) */
+    BUILTIN_PULSE_RELEASE                = 279,   /* __pulseRelease(counterId: integer, pin: integer) */
+    BUILTIN_NP_RELEASE                   = 280,   /* __npRelease(pin: integer) */
+    BUILTIN_UART_RELEASE                 = 281,   /* __uartRelease(bus: integer, tx: integer, rx: integer) */
+    BUILTIN__CUANTOS = 282
 };
 
 #endif

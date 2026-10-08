@@ -216,6 +216,18 @@ static void led_init(void) {
 
 static void led_set(int on) { gpio_put(PICO_DEFAULT_LED_PIN, on ? 1 : 0); }
 
+/* V7 #667 (8-oct) — UN PIN QUE UN PROGRAMA SUELTA, A COMO ESTABA (Eduardo: «los pines por defecto deben ser input o
+ * nada. Si están como output se debería revertir»). El de un programa, a «nada» —la función NULL, como al cerrar un
+ * bus, con el pull-down del reset—; el de la PLACA, a lo que la placa tenía: la tira de la Metro vuelve a la PIO y el
+ * LED de la Pico 2 vuelve a ser del firmware (en la Metro el 25 es la línea de la tira, no un LED). */
+static void pico_pin_al_reset(int pin) {
+    if (pin < 0) return;
+    if (neopixel_es_de_placa(pin)) { neopixel_reconectar(pin); return; }
+    if (pin == PICO_DEFAULT_LED_PIN && board_desc()->neopixel_pin != PICO_DEFAULT_LED_PIN) { led_init(); return; }
+    gpio_set_function((uint) pin, GPIO_FUNC_NULL);
+    gpio_set_pulls((uint) pin, false, true);
+}
+
 /* --- Backend GPIO del Pico SDK conectado a los builtins Gpio.* ----
  *
  * La VM C llama bpvm_gpio_init/write/read/pull; aquí redirigimos esos
@@ -250,6 +262,7 @@ static const bpvm_gpio_backend_t s_pico_gpio_backend = {
     .pull  = pico_gpio_pull_impl,
     .write = pico_gpio_write_impl,
     .read  = pico_gpio_read_impl,
+    .soltar = pico_pin_al_reset,   /* V7 #667 */
 };
 
 /* --- Backend NeoPixel (WS2812 vía PIO, H7.4) -------------------- */
@@ -263,9 +276,15 @@ static int  pico_np_init_impl(int pin, char* err, size_t n) {
 static void pico_np_show_impl(int pin, const uint32_t* grb, int count) {
     neopixel_show(pin, grb, count);
 }
+/* V7 #667 — soltar la tira (la de la placa se queda) y su pin, al reset. */
+static void pico_np_release_impl(int pin) {
+    if (neopixel_release(pin)) pico_pin_al_reset(pin);
+}
 static const bpvm_neopixel_backend_t s_pico_neopixel_backend = {
     .init = pico_np_init_impl,
     .show = pico_np_show_impl,
+    .release    = pico_np_release_impl,   /* V7 #667 */
+    .fin_de_run = neopixel_fin_de_run,
 };
 
 /* --- Backend I2C del Pico SDK ----------------------------------- */
@@ -424,9 +443,12 @@ static uart_inst_t* uart_inst_for(int bus) {
 }
 static void pico_uart_rx_irq_on(int bus);   /* V6/#473: definida abajo, con el anillo */
 
+static int s_uart_tx[2] = { -1, -1 }, s_uart_rx[2] = { -1, -1 };   /* V7 #667: para soltarla (la red no los sabe) */
 static void pico_uart_init_impl(int bus, int tx, int rx, int baud,
                                  int data_bits, int stop_bits, int parity) {
     uart_inst_t* inst = uart_inst_for(bus);
+    s_uart_tx[bus == 1] = tx;
+    s_uart_rx[bus == 1] = rx;
     uart_init(inst, (uint) baud);
     /* Configurar pines TX/RX a la función UART. RP2350 deja que
      * cualquiera de varios pares sirva — el SDK lo resuelve por la
@@ -522,8 +544,19 @@ static int pico_uart_available_impl(int bus) {
     uart_inst_t* inst = uart_inst_for(bus);
     return uart_is_readable(inst) ? 1 : 0;
 }
+/* V7 #667 — soltarla: sin interrupción de RX, el periférico apagado y sus pines al reset. */
+static void pico_uart_release_impl(int bus, int tx, int rx) {
+    int b = (bus == 1);
+    uart_inst_t* inst = uart_inst_for(bus);
+    uart_set_irq_enables(inst, false, false);
+    uart_deinit(inst);
+    pico_pin_al_reset(tx >= 0 ? tx : s_uart_tx[b]);
+    pico_pin_al_reset(rx >= 0 ? rx : s_uart_rx[b]);
+    s_uart_tx[b] = s_uart_rx[b] = -1;
+}
 static const bpvm_uart_backend_t s_pico_uart_backend = {
     .init      = pico_uart_init_impl,
+    .release   = pico_uart_release_impl,   /* V7 #667 */
     .write     = pico_uart_write_impl,
     .read      = pico_uart_read_impl,
     .available = pico_uart_available_impl,
@@ -557,6 +590,35 @@ static enum pwm_clkdiv_mode pico_pulse_edge_to_mode(int edgeKind) {
     }
 }
 
+/* V7 #667 — QUIÉN USA CADA PIN DE UN SLICE: 1, un PWM; 2, un contador. Un slice lo comparten sus dos canales (y los
+ * pines ±16): soltar el de un pin no puede parar el del otro. El slice se para cuando ya no lo usa ninguno. Tantos
+ * pines como el SDK de esta imagen —48: es la misma para la Pico 2 (RP2350A, 30) y la Metro (RP2350B)—. */
+#define PICO_SLICE_PINES ((int) NUM_BANK0_GPIOS)
+static uint8_t s_slice_uso[PICO_SLICE_PINES];
+
+static int pico_slice_en_uso(uint slice) {
+    for (int p = 0; p < PICO_SLICE_PINES; p++) if (s_slice_uso[p] && pwm_gpio_to_slice_num((uint) p) == slice) return 1;
+    return 0;
+}
+
+/* Suelta el pin de un PWM o de un contador: el pin al reset y, si el slice se queda sin nadie, parado. */
+static void pico_slice_soltar(int pin) {
+    if (pin < 0 || pin >= PICO_SLICE_PINES || !s_slice_uso[pin]) return;
+    s_slice_uso[pin] = 0;
+    pico_pin_al_reset(pin);
+    uint slice = pwm_gpio_to_slice_num((uint) pin);
+    if (!pico_slice_en_uso(slice)) {
+        pwm_set_enabled(slice, false);
+        pwm_set_counter(slice, 0);
+    }
+}
+
+static int pico_slice_fin_de_run(int uso) {
+    int n = 0;
+    for (int p = 0; p < PICO_SLICE_PINES; p++) if (s_slice_uso[p] == uso) { pico_slice_soltar(p); n++; }
+    return n;
+}
+
 static int pico_pulse_init_impl(int pin, int edgeKind) {
     /* Validación: el pin DEBE ser canal B de algún slice. */
     if (pwm_gpio_to_channel((uint) pin) != PWM_CHAN_B) {
@@ -584,6 +646,7 @@ static int pico_pulse_init_impl(int pin, int edgeKind) {
      * configurado, así que cualquier nivel inicial no incrementa
      * el contador erróneamente. */
     gpio_set_function((uint) pin, GPIO_FUNC_PWM);
+    if (pin >= 0 && pin < PICO_SLICE_PINES) s_slice_uso[pin] = 2;   /* V7 #667 */
     return (int) slice;
 }
 
@@ -603,12 +666,16 @@ static void pico_pulse_reset_impl(int counterId) {
     pwm_set_counter((uint) counterId, 0);
 }
 
+static void pico_pulse_release_impl(int counterId, int pin) { (void) counterId; pico_slice_soltar(pin); }   /* V7 #667 */
+static int  pico_pulse_fin_de_run(void) { return pico_slice_fin_de_run(2); }
 static const bpvm_pulse_backend_t s_pico_pulse_backend = {
     .init  = pico_pulse_init_impl,
     .start = pico_pulse_start_impl,
     .stop  = pico_pulse_stop_impl,
     .value = pico_pulse_value_impl,
     .reset = pico_pulse_reset_impl,
+    .release    = pico_pulse_release_impl,
+    .fin_de_run = pico_pulse_fin_de_run,
 };
 
 /* --- Backend PWM del Pico SDK -----------------------------------
@@ -674,6 +741,7 @@ static int pico_pwm_init_impl(int pin, int freqHz) {
     pwm_set_chan_level(slice, pwm_gpio_to_channel((uint) pin), 0);
 
     gpio_set_function((uint) pin, GPIO_FUNC_PWM);
+    if (pin >= 0 && pin < PICO_SLICE_PINES) s_slice_uso[pin] = 1;   /* V7 #667 */
     return (int) slice;
 }
 
@@ -710,12 +778,16 @@ static void pico_pwm_stop_impl(int sliceId) {
     pwm_set_enabled((uint) sliceId, false);
 }
 
+static void pico_pwm_release_impl(int sliceId, int pin) { (void) sliceId; pico_slice_soltar(pin); }   /* V7 #667 */
+static int  pico_pwm_fin_de_run(void) { return pico_slice_fin_de_run(1); }
 static const bpvm_pwm_backend_t s_pico_pwm_backend = {
     .init    = pico_pwm_init_impl,
     .setFreq = pico_pwm_set_freq_impl,
     .setDuty = pico_pwm_set_duty_impl,
     .start   = pico_pwm_start_impl,
     .stop    = pico_pwm_stop_impl,
+    .release    = pico_pwm_release_impl,
+    .fin_de_run = pico_pwm_fin_de_run,
 };
 
 /* --- Backend de info del MCU (Pico) -----------------------------
@@ -1535,7 +1607,7 @@ static void pico_con_fs(void) {
      * el LED onboard en verde tenue al boot. Valida la 1ª infra PIO de forma
      * visible antes de la clase BP (H7.4.b). Sin neopixelPin (Pico) → no-op. */
     if (board_desc()->neopixel_pin >= 0) {
-        if (neopixel_init(board_desc()->neopixel_pin)) {
+        if (neopixel_init_placa(board_desc()->neopixel_pin)) {   /* V7 #667: de la placa: ningún programa la suelta */
             uint32_t verde = (8u << 16);   /* GRB: g=8 (tenue), r=0, b=0 */
             neopixel_show(board_desc()->neopixel_pin, &verde, 1);
             log_printf("neopixel: onboard @ GP%d verde tenue (test H7.4.a)",

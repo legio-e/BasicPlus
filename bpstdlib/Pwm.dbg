@@ -13,30 +13,46 @@ lines
 122 0
 137 0
 151 0
-154 96
-165 97
-189 0
-192 104
-203 105
-220 0
-223 111
+154 104
+163 105
+174 106
+198 0
+201 113
+210 114
+221 115
 238 0
-241 116
-256 0
-259 83
-270 84
-281 85
-291 86
-307 87
-321 88
-338 89
-353 0
-387 0
-405 0
-421 0
-437 0
-451 0
-465 0
+241 121
+250 122
+265 0
+268 127
+277 128
+292 0
+295 136
+306 137
+313 138
+340 0
+343 143
+363 0
+366 149
+378 150
+409 0
+412 90
+423 91
+434 92
+444 93
+460 94
+474 95
+491 96
+503 98
+513 0
+547 0
+565 0
+579 0
+593 0
+609 0
+625 0
+639 0
+653 0
 vars
 func Slice.getPin 35
 this -20 8 0 ?
@@ -57,36 +73,46 @@ this -24 8 0 ?
 func Slice.setDuty 151
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func Slice.setFreq 189
+func Slice.setFreq 198
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func Slice.start 220
+func Slice.start 238
 this -20 8 0 ?
-func Slice.stop 238
+func Slice.stop 265
 this -20 8 0 ?
-func Slice.__init 256
+func Slice.release 292
+this -20 8 0 ?
+func Slice.__dtor 340
+this -20 8 0 ?
+func Slice.vivo_ 363
+this -20 8 0 ?
+func Slice.__init 409
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Slice(ii) 353
+func __cls_new_Slice(ii) 513
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_init_Slice(ii) 387
+func __cls_init_Slice(ii) 547
 this -28 8 0 ?
 pin -20 4 0 integer
 freqHz -16 4 0 integer
-func __cls_m_Slice#setFreq(i)V 405
+func __cls_m_Slice#release()V 565
+this -20 8 0 ?
+func __cls_m_Slice#start()V 579
+this -20 8 0 ?
+func __cls_m_Slice#setFreq(i)V 593
 this -24 8 0 ?
 freqHz -16 4 0 integer
-func __cls_m_Slice#setDuty(i)V 421
+func __cls_m_Slice#setDuty(i)V 609
 this -24 8 0 ?
 dutyPct -16 4 0 integer
-func __cls_m_Slice#stop()V 437
+func __cls_m_Slice#stop()V 625
 this -20 8 0 ?
-func __cls_m_Slice#start()V 451
+func __cls_m_Slice#__dtor()V 639
 this -20 8 0 ?
-func __strconcat3 465
+func __strconcat3 653
 s0 -36 8 0 ?
 s1 -28 8 0 ?
 s2 -20 8 0 ?

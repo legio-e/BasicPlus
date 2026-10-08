@@ -6459,8 +6459,12 @@ public class VirtualMachine {
             }
             case GPIO_RELEASE: {
                 int pin = popTc(tc);
-                // V7/H6.c G4.a1: release() suelta lo del programa; un pin de BUS no es suyo.
-                if (pin >= 0 && pin < pinEstado.length && pinDeBus[pin] == 0) pinEstado[pin] = 0;
+                // V7/H6.c G4.a1: release() suelta lo del programa; un pin de BUS no es suyo. V7 #667: y si estaba en uso,
+                // vuelve a como estaba en el reset —aquí, se dice, como el stub de la VM-C (bpvm_gpio_soltar)—.
+                if (pin >= 0 && pin < pinEstado.length && pinDeBus[pin] == 0 && pinEstado[pin] != 0) {
+                    pinEstado[pin] = 0;
+                    System.out.println("[gpio] release pin=" + pin);
+                }
                 pushTc(tc, 0);
                 break;
             }
@@ -6936,6 +6940,35 @@ public class VirtualMachine {
             case PWM_STOP: {
                 int sliceId = popTc(tc);
                 System.out.println("[pwm] stop slice=" + sliceId + " (sim)");
+                pushTc(tc, 0);
+                break;
+            }
+            // ── V7 #667 — SOLTAR lo que un objeto tomó (sus destructores y su release()): aquí no hay hardware; se dice,
+            // con los MISMOS textos que los stubs de la VM-C del PC. La tira no existe en el PC (NP_INIT lanza): nada.
+            case PWM_RELEASE: {
+                int pin     = popTc(tc);
+                int sliceId = popTc(tc);
+                System.out.println("[pwm] release slice=" + sliceId + " pin=" + pin + " (sim)");
+                pushTc(tc, 0);
+                break;
+            }
+            case PULSE_RELEASE: {
+                int pin       = popTc(tc);
+                int counterId = popTc(tc);
+                System.out.println("[pulse] release id=" + counterId + " pin=" + pin + " (sim)");
+                pushTc(tc, 0);
+                break;
+            }
+            case NP_RELEASE: {
+                popTc(tc);   // el pin
+                pushTc(tc, 0);
+                break;
+            }
+            case UART_RELEASE: {
+                popTc(tc);   // rx
+                popTc(tc);   // tx
+                int bus = popTc(tc);
+                System.out.println("[uart] release bus=" + bus + " (sim)");
                 pushTc(tc, 0);
                 break;
             }

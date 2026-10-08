@@ -9,6 +9,7 @@
 
 #include "bpvm_out.h"
 #include "bpvm_gpio.h"
+#include "bpvm.h"   /* V7 #667: bpvm_diag (la red del final del RUN) */
 #include <stdio.h>
 
 static const bpvm_gpio_backend_t* g_backend = NULL;
@@ -35,8 +36,33 @@ void bpvm_gpio_liberar(int pin) {
     if (pin < 0 || pin >= BPVM_CAPS_PIN_MAX || s_de_pack[pin] || s_de_bus[pin]) return;
     s_estado[pin] = 0;
 }
+/* V7 #667 — el release() de un Pin: lo suyo queda libre Y vuelve a como estaba en el reset en el hardware (Eduardo:
+ * «los pines por defecto deben ser input o nada. Si están como output se debería revertir»). Sólo si era del
+ * programa y estaba en uso: el destructor de un Pin cuya construcción falló no toca el pin de otro. En el PC, se dice
+ * por la salida, como los demás. */
+int bpvm_gpio_soltar(int pin) {
+    if (pin < 0 || pin >= BPVM_CAPS_PIN_MAX || s_de_pack[pin] || s_de_bus[pin] || s_estado[pin] == BPVM_GPIO_LIBRE)
+        return 0;
+    s_estado[pin] = 0;
+    if (g_backend && g_backend->soltar) g_backend->soltar(pin);
+    else if (!g_backend) bpvm_out("[gpio] release pin=%d\n", pin);
+    return 1;
+}
+
+/* V7 #667 — y la red del final del RUN: lo que el programa dejó en uso (un Gpio.init sin objeto, o una destrucción
+ * cortada) vuelve al reset en el hardware, y se dice. En el PC no hay hardware: no se escribe nada. Lo de un pack, se
+ * queda; lo de un bus, lo cierra bpvm_bus_fin_de_run. */
 void bpvm_gpio_estado_reset(void) {
-    for (int p = 0; p < BPVM_CAPS_PIN_MAX; p++) if (!s_de_pack[p]) s_estado[p] = 0;   /* los del pack se quedan */
+    int n = 0, primero = -1;
+    for (int p = 0; p < BPVM_CAPS_PIN_MAX; p++) {
+        if (s_de_pack[p]) continue;                                   /* los del pack se quedan */
+        if (s_estado[p] != BPVM_GPIO_LIBRE && !s_de_bus[p] && g_backend && g_backend->soltar) {
+            g_backend->soltar(p);
+            if (n++ == 0) primero = p;
+        }
+        s_estado[p] = 0;
+    }
+    if (n > 0) bpvm_diag("[bpvm] fin de RUN: %d pin(es) seguian en uso (el primero, el %d): vuelven al reset (#667)", n, primero);
 }
 
 int bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap) {

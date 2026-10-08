@@ -18,17 +18,21 @@ lines
 145 117
 155 118
 170 0
-173 70
-177 71
-190 72
-202 74
-213 75
-223 76
-233 0
-265 0
-281 0
-295 0
-309 0
+173 124
+185 125
+210 0
+213 70
+217 71
+230 72
+242 74
+253 75
+260 76
+273 0
+305 0
+321 0
+335 0
+349 0
+363 0
 vars
 func Timer.getTimeoutMs_ 35
 this -20 8 0 ?
@@ -44,18 +48,22 @@ func Timer.disable 121
 this -20 8 0 ?
 func Timer.reenable 142
 this -20 8 0 ?
-func Timer.__init 170
+func Timer.__dtor 170
+this -20 8 0 ?
+func Timer.__init 210
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
 t 0 4 0 integer
-func __cls_new_Timer(i) 233
+func __cls_new_Timer(i) 273
 timeoutMs -16 4 0 integer
-func __cls_init_Timer(i) 265
+func __cls_init_Timer(i) 305
 this -24 8 0 ?
 timeoutMs -16 4 0 integer
-func __cls_m_Timer#feed()V 281
+func __cls_m_Timer#feed()V 321
 this -20 8 0 ?
-func __cls_m_Timer#disable()V 295
+func __cls_m_Timer#__dtor()V 335
 this -20 8 0 ?
-func __cls_m_Timer#reenable()V 309
+func __cls_m_Timer#disable()V 349
+this -20 8 0 ?
+func __cls_m_Timer#reenable()V 363
 this -20 8 0 ?

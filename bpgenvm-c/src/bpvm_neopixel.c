@@ -4,6 +4,7 @@
  * En host (sin HW) no hay backend: el builtin lanza «no implementado en esta plataforma».
  */
 #include "bpvm_neopixel.h"
+#include "bpvm.h"   /* V7 #667: bpvm_diag (la red) */
 
 static const bpvm_neopixel_backend_t* g_backend = NULL;
 
@@ -27,4 +28,14 @@ void bpvm_neopixel_show(int pin, const uint32_t* grb, int count) {
     if (g_backend && g_backend->show) {
         g_backend->show(pin, grb, count);
     }
+}
+
+/* V7 #667 — soltar la tira del pin; y la red del final del RUN. En el PC no hay tiras: nada. */
+void bpvm_neopixel_release(int pin) {
+    if (g_backend && g_backend->release) g_backend->release(pin);
+}
+
+void bpvm_neopixel_fin_de_run(void) {
+    int n = (g_backend && g_backend->fin_de_run) ? g_backend->fin_de_run() : 0;
+    if (n > 0) bpvm_diag("[bpvm] fin de RUN: %d tira(s) NeoPixel seguian tomadas: se sueltan (#667)", n);
 }

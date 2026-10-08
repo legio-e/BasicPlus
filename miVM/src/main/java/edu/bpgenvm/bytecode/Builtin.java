@@ -287,7 +287,11 @@ public enum Builtin {
     PREPARA_DESTRUCTOR("__preparaDestructor"),   // [274] __preparaDestructor(x: any): integer
     LIBERA_SOLO("__liberaSolo"),   // [275] __liberaSolo(x: any)
     AVISA_DESTRUCTOR("__avisaDestructor"),   // [276] __avisaDestructor(x: any, msg: string)
-    SIGUIENTE_PENDIENTE("__siguientePendiente");   // [277] __siguientePendiente(): any
+    SIGUIENTE_PENDIENTE("__siguientePendiente"),   // [277] __siguientePendiente(): any
+    PWM_RELEASE("__pwmRelease"),   // [278] __pwmRelease(sliceId: integer, pin: integer)
+    PULSE_RELEASE("__pulseRelease"),   // [279] __pulseRelease(counterId: integer, pin: integer)
+    NP_RELEASE("__npRelease"),   // [280] __npRelease(pin: integer)
+    UART_RELEASE("__uartRelease");   // [281] __uartRelease(bus: integer, tx: integer, rx: integer)
 
     public final String bpName;
     public final int id;

@@ -17,6 +17,10 @@ typedef struct {
      * Idempotente por pin; un segundo init del mismo pin puede rehacer lo suyo. */
     int  (*init)(int pin, char* err, size_t n);
     void (*show)(int pin, const uint32_t* grb, int count);   /* empuja count palabras GRB; BLOQUEANTE */
+    /* V7 #667 — SOLTAR la tira del pin (el destructor de Neopixel.Strip, que antes la apaga): la máquina o el canal
+     * quedan libres y el pin vuelve a como estaba en el reset. Un pin sin tira: nada. Y la red del final del RUN. */
+    void (*release)(int pin);
+    int  (*fin_de_run)(void);   /* cuántas soltó: lo dice la fachada */
 } bpvm_neopixel_backend_t;
 
 void bpvm_neopixel_set_backend(const bpvm_neopixel_backend_t* backend);
@@ -28,5 +32,7 @@ int  bpvm_neopixel_disponible(void);
 /* Funciones efectivas. init: 1 OK, 0 fallo con el motivo en err (sin backend: 0 y err vacío). */
 int  bpvm_neopixel_init(int pin, char* err, size_t n);
 void bpvm_neopixel_show(int pin, const uint32_t* grb, int count);
+void bpvm_neopixel_release(int pin);   /* V7 #667 */
+void bpvm_neopixel_fin_de_run(void);   /* V7 #667: la red del final del RUN */
 
 #endif /* BPVM_NEOPIXEL_H */

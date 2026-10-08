@@ -8457,3 +8457,85 @@ VM-C. Lo que cambia respecto a 8:
   reanuda—); `#667` (los destructores de los recursos, paso 3); medir la GUI (paso 4); y las placas (paso 5). Y una
   limitación anotada: una `native` (AOT) no suelta sus `var owner` —el AOT no tiene owners—: lo que deja, lo destruye
   el GC.
+
+### 10. Hecho: `#667` (8-oct) — cada objeto que toma un recurso lo suelta en su destructor
+
+El paso 3 del plan. La división del trabajo de la POO (Eduardo): cada clase suelta lo suyo en su destructor; la VM
+sólo llama a los destructores (#668); la red del final del RUN es red, no mecanismo.
+
+**El censo de la stdlib**, por la primitiva (lo que toma algo del hardware o del sistema):
+
+| clase | qué toma | antes | ahora |
+|---|---|---|---|
+| `Pwm.Slice` | un canal PWM y su pin | `stop()` paraba la señal; el canal, tomado para siempre | `release()` y `~Slice` |
+| `Pulse.Counter` | una unidad de contar y su pin | ídem (`Pulse.bp`: «el GC no ejecuta finalizers hoy») | `release()` y `~Counter` |
+| `Neopixel.Strip` | una máquina de la PIO o un canal RMT, y su pin | nada | `release()` (la apaga antes) y `~Strip` |
+| `Uart.Port` | una UART, su anillo de RX y dos pines | nada | `release()` y `~Port` |
+| `Gpio.Pin` (y `AnPin`) | un pin | `~Pin` lo apuntaba como libre; el hardware, como lo dejó el programa | el pin vuelve al reset |
+| `Spi.Device` | su CS | `~Device` lo apuntaba como libre | el CS vuelve al reset |
+| `Adc.Channel` | su pin, analógico | `~Channel` lo apuntaba como libre | ídem, una vez |
+| `Wdt.Timer` | el perro guardián armado | nada: un `Timer` muerto y armado reinicia la placa | `~Timer` lo desarma si está activo |
+| `Net.Tcp` | un socket | `close()` | `~Tcp` lo cierra |
+| `Freq.Meter` | su `Pulse.Counter` | un campo normal | el campo es `owner`: muere con el `Meter` |
+| `IO.File`, `Gui.Component` | un fichero, un objeto de LVGL | ya tenían destructor | sin cambios |
+| `Spi.Bus`, `I2c.Bus` | el bus | `release()`; **sin destructor a propósito** (dos `Bus` con el mismo id son el MISMO bus) | sin cambios: los cierra `bpvm_bus_fin_de_run` |
+
+`Timer.Alarm` y `Rtc.Clock` no toman nada (`Alarm` es BP puro sobre `now()`; el RTC es de la placa).
+
+**Lo suyo, una vez** (`tomado_`): #668 también destruye un objeto cuyo constructor LANZÓ —existe en memoria—, y ése no
+tiene nada que soltar; peor, su pin puede ser de otro (un `Gpio.Pin(26)` que falla porque el 26 es de un `AnPin`: su
+destructor no puede soltar el 26). Cada clase pone `tomado_ := true` al final de su constructor, y `release()` sólo
+suelta si lo tiene, y lo pone a `false` antes: el segundo `release()` y el destructor tras un `release()` no repiten.
+
+**Tras `release()`, usar el objeto es un error con nombre** (`vivo_()`, al empezar cada método que usa el recurso:
+«Pwm.Slice del pin 12: ya se soltó con release()»). No es un capricho: el canal que soltó puede ser ya de otro objeto
+(en la Pico el slice; en las ESP la ranura del LEDC o la unidad PCNT se reutilizan), y escribir en él tocaría el
+hardware de otro en silencio. `count()` de una tira y `channel()` de un `AnPin` son como leer una propiedad: no
+miran. `Spi.Device` ya lo hacía en C (`dev_listo`: su CS ya no es una salida reservada).
+
+**Las primitivas** (`BUILTINS.md`, 278–281: `Pwm.releaseSlice`, `Pulse.releaseSlice`, `Neopixel.__npRelease`,
+`Uart.releasePort`) llaman al `release` del backend de la familia —el único que sabe cómo se multiplexa su micro— y
+después el común apunta el pin como libre. Y el de siempre del pin (254) llama ahora a `bpvm_gpio_soltar`: el estado
+y, si era del programa y estaba en uso, el `soltar` del backend. En el PC, los stubs lo dicen por la salida, el mismo
+texto en las dos VMs.
+
+**Volver «a como estaba» es, por familia, el reset del micro**: en la Pico, sin función y con el pull-down (el reset
+del RP2350); en las ESP, `gpio_reset_pin`; en la STM32, `HAL_GPIO_DeInit` (analógico, sin pull). **Salvo lo de la
+placa**, que vuelve a ser del firmware como lo dejó su arranque: el LED del GP25 de la Pico 2 (`led_init`), la
+NeoPixel de la Metro (a su máquina de la PIO, que no se suelta), los tres LED de la Nucleo (`BSP_LED_Init`) y los dos
+de la DK2 (salidas, apagados).
+
+**Por familia**, lo que salió al hacerlo:
+
+- **Pico**: un slice da DOS canales (A y B) y lo usan el PWM y el contador: una tabla de quién usa cada pin de un
+  slice; al soltar un canal, el slice sólo se para si ya no lo usa nadie. La tabla, del tamaño del SDK
+  (`NUM_BANK0_GPIOS`, 48): la imagen es la misma para la Pico 2 (30 GPIO) y la Metro (RP2350B, 48) —la escribí con 30
+  y lo cazó la revisión: un PWM en el GPIO 30..47 de la Metro habría escrito fuera—. Una tira no se suelta con datos en
+  vuelo: se espera a que la FIFO de la máquina se vacíe (como mucho 20 ms) y 100 µs más (el «reset» del WS2812) antes
+  de pararla.
+- **ESP**: las tablas de ranuras del LEDC y del PCNT sólo crecían (un programa que creaba y soltaba se quedaba sin
+  ranuras): ahora reutilizan las libres. El canal del LEDC se desconfigura (`deconfigure`), y su temporizador, si no
+  lo usa otra ranura (los temporizadores se comparten). El PCNT, en su orden: parar, deshabilitar, borrar el canal y
+  la unidad. La UART, `uart_driver_delete`. Y de paso, los canales que hay de verdad: el programa tiene los del 2 en
+  adelante (el 1 es de la retroiluminación de la P4): 4 en la C3, la C5 y la C6, 6 en la S3 y la P4 —antes se daban
+  seis en todas, y en las chicas el 5.º y el 6.º fallaban con la ranura ya gastada—; y `Machine.caps` decía los del
+  chip (dos de más): ahora, los que el programa puede usar.
+- **STM32**: el canal del timer se para; el timer, si no lo comparte otro canal (el TIM3 de la Nucleo da el PC7 y el
+  PC8), se desinicializa. El contador toma el timer entero (el reloj externo): parar y desinicializar. La UART: su
+  interrupción (RXNE y el NVIC) fuera, `HAL_UART_DeInit` y sus pines. No hay NeoPixel.
+
+**La red del final del RUN** (`bpvm_destroy`): los `fin_de_run` del PWM, el contador, la tira y la UART, y después el
+de los pines; cada uno devuelve cuántos soltó y la fachada lo dice (`[bpvm] fin de RUN: 1 PWM seguian en marcha: se
+paran y sus pines vuelven al reset (#667)`). Si la destrucción del final hizo su trabajo, la red no tiene nada que
+hacer y calla; en el PC no hay hardware y calla siempre (la cápsula de V6 no cambia).
+
+**Las pruebas**: `samples/SueltaRecursos.bp`, en la red de paridad (un owner que suelta su PWM, `release()` dos veces,
+usar lo soltado, un pin que vuelve libre, el destructor de un `Pin` fallido que no suelta el pin de otro, y el final,
+el más nuevo primero), y `make test-suelta`, con backends FALSOS que cuentan: con objetos, todo lo sueltan sus
+destructores y la red no tiene nada; sin objetos (las funciones del módulo), lo suelta todo la red. Las imágenes
+(Pico, las cinco ESP y las dos STM32) compilan sin avisos nuevos. **Falta la placa** (paso 5, con el lote).
+
+**Visto al hacerlo, fuera de `#667`**: los pines de la pantalla no están marcados como del sistema (`#574` sólo marca
+la memoria y el cable): en la DK2, `LCD_ON` (PE4) y la retroiluminación (PE6, `TIM3_CH4`); en la P4, la
+retroiluminación (GPIO26, LEDC) y el reset del panel (27). Un programa puede tomarlos —y desde `#667`, al soltarlos,
+vuelven al reset: la pantalla se apaga—.

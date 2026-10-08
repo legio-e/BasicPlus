@@ -11,33 +11,49 @@ lines
 93 0
 108 0
 122 0
-125 110
-140 0
-143 116
-158 0
-161 123
-182 0
-185 128
-200 0
-203 98
-214 99
-225 100
-241 101
-255 102
-272 103
-287 0
-321 0
-339 0
+125 116
+134 117
+149 0
+152 123
+161 124
+176 0
+179 131
+188 132
+209 0
+212 137
+221 138
+236 0
+239 144
+250 145
+257 146
+284 0
+287 151
+307 0
+310 157
+322 158
 353 0
-367 0
-381 0
-398 0
-401 63
-413 0
-416 66
-428 0
-431 69
-443 0
+356 103
+367 104
+378 105
+394 106
+408 107
+425 108
+437 110
+447 0
+481 0
+499 0
+513 0
+527 0
+541 0
+555 0
+569 0
+586 0
+589 67
+601 0
+604 70
+616 0
+619 73
+631 0
 vars
 func Counter.getPin 35
 this -20 8 0 ?
@@ -53,33 +69,43 @@ func Counter.setId 108
 this -24 8 0 ?
 func Counter.start 122
 this -20 8 0 ?
-func Counter.stop 140
+func Counter.stop 149
 this -20 8 0 ?
-func Counter.value 158
+func Counter.value 176
 this -20 8 0 ?
-func Counter.reset 182
+func Counter.reset 209
 this -20 8 0 ?
-func Counter.__init 200
+func Counter.release 236
+this -20 8 0 ?
+func Counter.__dtor 284
+this -20 8 0 ?
+func Counter.vivo_ 307
+this -20 8 0 ?
+func Counter.__init 353
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
 msg 4 8 0 string
-func __cls_new_Counter(ii) 287
+func __cls_new_Counter(ii) 447
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_init_Counter(ii) 321
+func __cls_init_Counter(ii) 481
 this -28 8 0 ?
 pin -20 4 0 integer
 edgeKind -16 4 0 integer
-func __cls_m_Counter#stop()V 339
+func __cls_m_Counter#stop()V 499
 this -20 8 0 ?
-func __cls_m_Counter#start()V 353
+func __cls_m_Counter#__dtor()V 513
 this -20 8 0 ?
-func __cls_m_Counter#reset()V 367
+func __cls_m_Counter#release()V 527
 this -20 8 0 ?
-func __cls_m_Counter#value()i 381
+func __cls_m_Counter#start()V 541
 this -20 8 0 ?
-func __strconcat3 443
+func __cls_m_Counter#reset()V 555
+this -20 8 0 ?
+func __cls_m_Counter#value()i 569
+this -20 8 0 ?
+func __strconcat3 631
 s0 -36 8 0 ?
 s1 -28 8 0 ?
 s2 -20 8 0 ?

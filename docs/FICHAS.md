@@ -1472,6 +1472,10 @@ el hardware no se toca). Y la mejora que va con ella, `#667`.
 **Decidido por Eduardo (7-oct): con OBJETOS**, sin código especial por periférico —*«Mira si lo hacemos con objetos,
 al terminar el programa los objetos se destruyen y estos a su vez liberan los recursos, de esta manera no hace falta
 programar código especial»*—: se arregla con `#667` (los destructores) y `#668` (la destrucción al acabar), en V7.
+**Hecho en el PC y en las imágenes (8-oct)**, con `#668` y `#667` (`V7_IDEAS` §«`#666`–`#668`», 9 y 10): al acabar un
+programa —bien, con un error o un STOP— sus objetos se destruyen y cada uno suelta lo suyo; lo que no suelta ningún
+objeto lo suelta la red del final del RUN, en las tres familias, y lo dice. Las salidas vuelven al reset. **Falta la
+placa**: la C6 con `PinesSistema` y luego `GuiArbolG2` (lo que la abrió), un PWM tras un STOP, y la ronda.
 
 #### 🟡 `#667` — MEJORA: un objeto BP que consume un recurso lleva DESTRUCTOR y lo libera (abierta el 7-oct, con `#666`; SUELTA, mejora — Eduardo: *«Si un objeto BP consume un recurso, el objeto debe tener un destructor y liberar si es posible el recurso. Lo puedes poner como mejora.»*)
 
@@ -1486,6 +1490,19 @@ cuando muere el objeto; el fin de RUN, lo que ningún destructor soltó (un glob
 están como output se debería revertir, lo mismo que el resto, son objetos que consumen recursos así que al destruirse
 el objeto debería liberarse el recurso»* —hoy `~Pin` llama a `release()`, que sólo apunta el pin como libre: tendrá
 que devolverlo a entrada en el hardware—.
+**Hecho (8-oct)** (`V7_IDEAS` §«`#666`–`#668`», 10) —sin cerrar: falta la placa—. El censo de la stdlib, por la
+primitiva: `Pwm.Slice`, `Pulse.Counter`, `Neopixel.Strip` y `Uart.Port` tienen ya `release()` y destructor; `Gpio.Pin`
+(y `AnPin`), `Spi.Device` y `Adc.Channel` devuelven el pin al reset; `~Timer` desarma el perro guardián, `~Tcp` cierra
+el socket y el contador de `Freq.Meter` es `owner`; `IO.File` y `Gui.Component` ya lo tenían; `Spi.Bus` e `I2c.Bus`
+siguen sin destructor a propósito. Cada clase suelta LO SUYO, una vez (`tomado_`: #668 también destruye un objeto
+cuyo constructor lanzó), y tras `release()` usar el objeto es un error con nombre. Cuatro primitivas (278–281,
+`BUILTINS.md`) que piden el `release` al backend de cada familia —Pico, ESP y STM32, hechos y compilados—, y el pin
+del `Gpio.Pin` vuelve al reset en el hardware; un LED de la placa, al firmware. Y la red del final del RUN, en
+`bpvm_destroy`: lo que no soltó ningún destructor (las funciones del módulo, sin objeto) lo sueltan los `fin_de_run`
+de las familias, y se dice. Las pruebas: `SueltaRecursos` en la red de paridad y `make test-suelta` (backends falsos
+que cuentan). **Por decidir con Eduardo**: el destructor de un objeto cuyo constructor lanzó (hoy corre: el objeto
+existe); el perro guardián al acabar tras un error (hoy se desarma: ya no reinicia la placa); y el CS de un
+`Spi.Device` soltado (hoy, al reset: en la Pico, con pull-down).
 
 #### 🟡 `#668` — AL ACABAR UN PROGRAMA, SUS OBJETOS SE DESTRUYEN: corre el destructor de cada objeto que lo tenga, y suelta su recurso —también tras un error o un STOP— (abierta el 7-oct, con `#666` y `#667`; **en V7** —Eduardo: *«me inclino que sí, que lo hagamos en V7, le dará mucha más robustez al SO y a la VM»*—)
 
@@ -1536,7 +1553,7 @@ rondas y con un tope de 3 s; lo que queda, se dice. Seis primitivas (272–277, 
 en la red de paridad —PARIDAD OK a la primera en la VM-C— y el STOP en `test-kill` (fases 9 y 10, uno y dos runs; con
 su sabotaje: destapó que el KILL «pegajoso» del `poll_cb` cortaba la fase del final nada más empezar). Y de paso:
 `x.f := x.f` en un campo `owner` ya no deja un handle muerto en el campo. Falta: el STOP en la VM-Java, a mano con el
-IDE; `#667`; medir la GUI; las placas.
+IDE; ~~`#667`~~ (hecha el 8-oct, salvo la placa); medir la GUI; las placas.
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
