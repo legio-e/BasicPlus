@@ -38,8 +38,9 @@
 > (`test-kill`, fases 9 y 10, con su sabotaje). Más abajo, «🧹 `#668` (8-oct)».
 > Después, **`#667` hecha** (salvo la placa): cada clase de la stdlib que toma un recurso lo suelta en su destructor y
 > con `release()` —lo para, deja la unidad libre y el pin al reset—, con los backends de las tres familias y la red del
-> final del RUN para lo que no suelta ningún objeto. Esperan a Eduardo tres decisiones (el destructor de un constructor
-> que lanzó, el perro guardián tras un error, el CS de un `Spi.Device`). Más abajo, «🔌 `#667` (8-oct)».
+> final del RUN para lo que no suelta ningún objeto (`0f1daa33`, la red verde). Las tres decisiones que dejó —el
+> destructor de un constructor que lanzó, el perro guardián tras un error, el CS de un `Spi.Device`—, Eduardo las dejó
+> como estaban (y un CS, con su pull-up por hardware). Más abajo, «🔌 `#667` (8-oct)».
 >
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
@@ -1252,9 +1253,11 @@ Con *«OK, continua con 667»*. **Lo hecho** (`V7_IDEAS` §«`#666`–`#668`», 
   cuentan: con objetos lo sueltan los destructores, sin ellos la red). Las imágenes —Pico, las cinco ESP y las dos
   STM32— compilan sin avisos nuevos.
 
-**Esperan a Eduardo**: el destructor de un objeto cuyo constructor lanzó (hoy corre); el perro guardián tras un error
-(hoy se desarma: ya no reinicia la placa si el programa muere); el CS de un `Spi.Device` soltado (hoy, al reset: en la
-Pico con pull-down). Y visto de paso: los pines de la pantalla de la DK2 y la P4 no son «del sistema».
+**Decidido por Eduardo, las tres como estaban** (*«1 OK, 2 OK, 3 OK pero es cierto que un CS debería llevar un
+pull-up por hardware y así sería mas seguro»*): el destructor de un objeto cuyo constructor lanzó corre; el perro
+guardián se desarma al acabar, también tras un error (rescata cuelgues); el CS de un `Spi.Device` soltado vuelve al
+reset, y la referencia dice ahora que un CS lleva un pull-up por hardware. Y visto de paso: los pines de la pantalla de
+la DK2 y la P4 no son «del sistema» (sin decidir si va ficha).
 
 **Lo siguiente**: las placas, en un lote (con el OK de Eduardo), la GUI medida y el STOP en la VM-Java con el IDE.
 

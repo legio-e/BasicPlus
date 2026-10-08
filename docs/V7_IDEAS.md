@@ -8539,3 +8539,18 @@ destructores y la red no tiene nada; sin objetos (las funciones del módulo), lo
 la memoria y el cable): en la DK2, `LCD_ON` (PE4) y la retroiluminación (PE6, `TIM3_CH4`); en la P4, la
 retroiluminación (GPIO26, LEDC) y el reset del panel (27). Un programa puede tomarlos —y desde `#667`, al soltarlos,
 vuelven al reset: la pantalla se apaga—.
+
+**Decidido por Eduardo (8-oct)**, las tres preguntas que dejó `#667`, como estaban (*«1 OK, 2 OK, 3 OK pero es cierto
+que un CS debería llevar un pull-up por hardware y así sería mas seguro»*):
+
+1. **El destructor de un objeto cuyo constructor lanzó, corre**: el objeto existe en memoria y lo recoge el GC (o el
+   final) —«liberar es destruir»—. Por eso cada clase suelta sólo lo suyo (la guarda `tomado_`; el manual, §9.4b, lo
+   cuenta para quien escribe una clase). La alternativa de C++ (si el constructor no acabó, su destructor no corre)
+   dejaba tomado hasta la red del final lo que el constructor hubiera tomado antes de lanzar.
+2. **El perro guardián se desarma al acabar el programa, también tras un error**: rescata un CUELGUE —el programa no
+   acaba y deja de alimentarlo—; un programa que acaba, bien, con un error o con un STOP, deja la placa como estaba.
+   Reiniciar un programa que muere sería otra cosa: una política del autoarranque.
+3. **El CS de un `Spi.Device` soltado vuelve al reset** (en la Pico, sin función y con el pull-down del reset; en las
+   ESP, con su pull-up; en la STM32, flotando). Y **un CS debe llevar un pull-up por hardware**: así ni un dispositivo
+   soltado ni la placa al arrancar —antes de que el programa tome el CS— lo dejan seleccionado contestando en el MISO de
+   los demás. Escrito en la referencia (§14.4, `Spi.Device`).

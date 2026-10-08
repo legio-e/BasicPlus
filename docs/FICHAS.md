@@ -1500,9 +1500,12 @@ cuyo constructor lanzó), y tras `release()` usar el objeto es un error con nomb
 del `Gpio.Pin` vuelve al reset en el hardware; un LED de la placa, al firmware. Y la red del final del RUN, en
 `bpvm_destroy`: lo que no soltó ningún destructor (las funciones del módulo, sin objeto) lo sueltan los `fin_de_run`
 de las familias, y se dice. Las pruebas: `SueltaRecursos` en la red de paridad y `make test-suelta` (backends falsos
-que cuentan). **Por decidir con Eduardo**: el destructor de un objeto cuyo constructor lanzó (hoy corre: el objeto
-existe); el perro guardián al acabar tras un error (hoy se desarma: ya no reinicia la placa); y el CS de un
-`Spi.Device` soltado (hoy, al reset: en la Pico, con pull-down).
+que cuentan). **Decidido por Eduardo (8-oct), las tres como estaban** —*«1 OK, 2 OK, 3 OK pero es cierto que un CS
+debería llevar un pull-up por hardware y así sería mas seguro»*—: (1) el destructor de un objeto cuyo constructor lanzó
+CORRE (el objeto existe; cada clase suelta sólo lo suyo, la guarda `tomado_`); (2) el perro guardián se desarma al
+acabar el programa, también tras un error: rescata un cuelgue, no reinicia un programa que acaba; (3) el CS de un
+`Spi.Device` soltado vuelve al reset —y un CS debe llevar un pull-up por hardware: así ni un dispositivo soltado ni la
+placa al arrancar lo dejan seleccionado (escrito en la referencia, §14.4)—.
 
 #### 🟡 `#668` — AL ACABAR UN PROGRAMA, SUS OBJETOS SE DESTRUYEN: corre el destructor de cada objeto que lo tenga, y suelta su recurso —también tras un error o un STOP— (abierta el 7-oct, con `#666` y `#667`; **en V7** —Eduardo: *«me inclino que sí, que lo hagamos en V7, le dará mucha más robustez al SO y a la VM»*—)
 

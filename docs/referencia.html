@@ -1541,7 +1541,10 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
   Un <code>Spi.Device(bus, cs, baudrate, mode)</code> es un dispositivo de un bus
   <strong>compartido</strong>: el bus por su número —el del fabricante— y ya establecido (su
   línea del ENV, o un <code>Spi.Bus</code> antes), y sólo lo suyo: su CS, su velocidad y su
-  modo. El constructor reserva el CS (salida, en reposo alto). Cada llamada es
+  modo. El constructor reserva el CS (salida, en reposo alto). <strong>El CS, con un pull-up por hardware</strong>
+  (Eduardo: «así sería más seguro»): mientras el programa no lo tiene —al arrancar la placa, o tras soltarlo, que
+  vuelve al reset— nadie lo sube, y sin él un dispositivo puede quedar seleccionado contestando en el MISO de los
+  demás. Cada llamada es
   <strong>una transacción</strong>: toma el bus, baja el CS, transfiere, sube el CS y lo
   suelta; mientras, nadie más usa el bus, y cada dispositivo va a su velocidad (la pantalla a
   40&nbsp;MHz y la tarjeta TF a 400&nbsp;kHz en el mismo bus). Devuelven los bytes (escritos,
@@ -1560,7 +1563,7 @@ bus.transfer(tx, rx, <span class="num">3</span>)</code></pre>
   <tr><td><code>release()</code> · <code>~Device()</code></td>
       <td>Suelta el CS, que vuelve al reset (<code>#667</code>); el dispositivo ya no transfiere (con nombre:
           <code>el CS 5 no está reservado como salida (¿release()?)</code>). El reset de la Pico tiene
-          pull-down: un dispositivo sin pull-up en su CS queda seleccionado, como al arrancar la placa.</td></tr>
+          pull-down: sin el pull-up del CS, el dispositivo queda seleccionado, como al arrancar la placa.</td></tr>
 </table>
 <p>
   Una <code>Spi.Transaction</code> se <em>prepara</em> —<code>write</code>, <code>read</code> y
@@ -2030,6 +2033,9 @@ port.write(tx, <span class="num">4</span>)
   Watchdog timer del MCU. Si no se &quot;alimenta&quot; dentro del
   timeout configurado, el chip se RESETEA automáticamente. Útil para
   recovery de cuelgues en deployments unattended.
+  Rescata un <strong>cuelgue</strong> —el programa sigue, pero deja de alimentarlo—; un programa que
+  <strong>acaba</strong> —bien, con un error o con un STOP— destruye su <code>Timer</code>, que lo desarma, y la
+  placa no se reinicia (V7, <code>#667</code>: al acabar, todo vuelve a como estaba).
 </p>
 <p>
   <strong>AVISO CRÍTICO:</strong> si activas el watchdog con un
