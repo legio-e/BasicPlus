@@ -8642,7 +8642,11 @@ bloques menos con la GUI: en la placa, ~30 KB de cabeceras (a medir en la C6, co
 queda, por tamaño: la estructura de la VM (9 KB), los trozos de 2 KB de la tabla de símbolos (`link.c`, 9 con la GUI:
 18 KB), las tablas de referencias (`loader.c`, 5: 8,6 KB) y la tabla de símbolos (`link.c`, 8 KB).
 
-### 2. `#650`: si el módulo del FS es IGUAL al de un pack, el del pack (decidido; por hacer)
+### 2. `#650`: si el módulo del FS es IGUAL al de un pack, el del pack (decidido y hecho, 8-oct)
+
+**Hecho**: el paso de la zona de `discover_deps` compara el tamaño y, si casa, el CRC (`bpvm_fs_crc32` del FS,
+`bpvm_crc32` de la zona); iguales, `have_fs = 0` y se carga XIP. La sombra tiene su caso (`lib3`: `/lib` con la MISMA
+`Str` variante que `StrPk`: la del pack; sin el cambio, rojo), junto al de antes (`/lib` con OTRA `Str`: eclipsa).
 
 Eduardo (8-oct): *«Misma versión, de momento mismo tamaño y CRC»*. Dónde: `discover_deps` (`bpvm.c`), el paso de la
 zona: hoy, con el módulo en `/app` o `/lib` y en la zona, gana el FS (se copia a la RAM) y el diag dice «del FS eclipsa

@@ -11,6 +11,7 @@
 #include "bpvm_aot_helpers.h"   /* H3 #158: tabla helpers para AOT */
 #include "bpvm_pack.h"          /* H3.c: resolución de imports contra la zona de packs */
 #include "bpvm_fs.h"            /* #310: un pack ejecutable vive en /app del FS */
+#include "crc32.h"              /* V7 #650: el CRC del módulo de la zona */
 #include "bpvm_gpio.h"    /* V7/H4: el estado de los pines se limpia al fin de RUN */
 #include "bpvm_adc.h"     /* V7 #659: y el del ADC */
 #include "bpvm_pwm.h"     /* V7 #667: y lo que el programa encendió y nadie soltó */
@@ -922,6 +923,18 @@ static bpvm_status_t discover_deps(bpvm_t* vm, int raiz, const char* search_dir,
          * especulando: *«hay que empezar viendo el error y acotando... lo que
          * necesitamos son más mensajes en el log que nos permitan ver un
          * rastro»*. Tenía razón: esto es barato y se queda. */
+        /* V7 #650 (8-oct) — el del FS y el de la zona, IGUALES (Eduardo: «Misma versión, de momento mismo tamaño y
+         * CRC»): el del PACK, que corre en su sitio (XIP); el del FS se copiaría entero a la RAM. El tamaño primero,
+         * que es gratis; el CRC, sólo si casa. Si difieren en algo, el del FS, como siempre: está ahí a propósito, y
+         * el diag dice «eclipsa». */
+        if (have_fs && pk_mod && fsz == pk_len) {
+            uint32_t crc_fs = 0;
+            if (bpvm_fs_crc32(found, &crc_fs) == 0 && crc_fs == bpvm_crc32(pk_mod, pk_len)) {
+                bpvm_diag("[bpvm-c] '%s' del FS es igual al del pack: se carga del pack (XIP, sin copiarlo a la RAM)",
+                          pname);
+                have_fs = 0;
+            }
+        }
         bpvm_diag("[bpvm-c] dep '%s' -> %s", pname,
                   have_fs ? found : "PACK (XIP)");
         int idx_before = vm->module_count;

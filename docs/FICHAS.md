@@ -1052,6 +1052,11 @@ bytes (tamaño y CRC, como ya compara el aviso «tapa al de /lib») o la versió
 VM-Java no tiene zona: la paridad no lo ve, y se prueba en el micro simulado y en placa.
 **Decidido por Eduardo (8-oct)**: *«Misma versión, de momento mismo tamaño y CRC»* —los bytes: si difieren en algo,
 gana el del FS, que está ahí a propósito—.
+**Hecho (8-oct)** (`V7_IDEAS` §«Memoria y packs», 2): en `discover_deps`, si el módulo del FS (`/app` o `/lib`) mide lo
+mismo que el de la zona y su CRC casa, se carga el del PACK, XIP, y el diag lo dice («del FS es igual al del pack: se
+carga del pack»); si difieren, el del FS, como siempre («eclipsa»). En la red, un caso más de la sombra (`/lib` con
+la misma `Str` que el pack: la del pack, XIP; sin el cambio, en rojo). Falta verlo en placa (la C6 con la GUI, esta
+tarde: lo que se ahorra cuando la tanda o el IDE suben a `/lib` una copia igual a la del pack).
 
 #### 🟡 `#651` — la C6 se queda sin RAM interna con la GUI: GuiArbolG2, «sin memoria para construir las clases» (abierta el 4-oct, en el lote de H12; SUELTA — Eduardo: «de momento no hagas nada… volveremos a ello»)
 

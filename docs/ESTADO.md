@@ -1295,7 +1295,9 @@ programa como *«un contenedor que nos garantice lo más posible que el programa
 - **`#651`, la primera parte, hecha**: un bloque por módulo para los nombres del cargador. Medido antes con un censo
   nuevo del guardián (`make censo-carga`): `GuiWinJson`, de 818 bloques a 54, con los mismos bytes (en la placa, ~760
   cabeceras menos). `test-censo` en la red (con el cargador de antes, rojo). La red entera, verde.
-- **`#650`**, por hacer: con el mismo tamaño y CRC, el módulo del pack (XIP) en vez del del FS.
+- **`#650`, hecha**: con el mismo tamaño y CRC, el módulo del pack (XIP) en vez del del FS. Un caso más en la sombra
+  (sin el cambio, rojo); y su total, que estaba escrito a mano y desfasado (decía 13 de 13 y eran 14), ahora 15. La
+  red entera, verde.
 - **`#623`**, por presentar: el plan del pack librería sin copias de la stdlib.
 
 ## 🔧 SUELTAS (7-oct) — la lista, y `#656`: soltar un owner sin recursión

@@ -996,6 +996,12 @@ EOF
     o="$( cd "$S" && "$V3_C" --libdir=lib --pack=StrPk.pack app/Limpio.mod 2>"$S/ecl.err" | filt )"
     if printf '%s' "$o" | grep -q "toHex(255) = ff" && ! printf '%s' "$o" | grep -q "aviso" && grep -q "eclipsa al del pack" "$S/ecl.err"; then echo "  ok  zona (VM-C): /lib eclipsa al pack (y el diag lo dice)"
     else echo "  ✗ zona: /lib deberia eclipsar al pack:"; printf '%s\n' "$o" | head -3 | sed 's/^/       /'; fails=$((fails+1)); fi
+    # V7 #650 (8-oct) — ...pero si /lib tiene los MISMOS bytes que el pack (tamaño y CRC), la del PACK: XIP, sin
+    # copiarla a la RAM (Eduardo: «Misma versión, de momento mismo tamaño y CRC»).
+    mkdir -p "$S/lib3"; cp "$S/lib2/"*.mod "$S/lib3/"; cp "$S/var/Str.mod" "$S/lib3/Str.mod"
+    o="$( cd "$S" && "$V3_C" --libdir=lib3 --pack=StrPk.pack app/Sombra.mod 2>"$S/igual.err" | filt )"
+    if printf '%s' "$o" | grep -q "VARIANTE:ff" && grep -q "del FS es igual al del pack" "$S/igual.err" && grep -q "cargado XIP desde pack" "$S/igual.err" && ! grep -q "eclipsa al del pack" "$S/igual.err"; then echo "  ok  zona (VM-C): /lib con la MISMA Str que el pack: la del pack, XIP (#650)"
+    else echo "  ✗ zona: con la misma Str en /lib y en el pack, esperaba la del pack (#650):"; grep -E "dep 'Str'|XIP|eclipsa|igual" "$S/igual.err" | sed 's/^/       /'; fails=$((fails+1)); fi
     # ...y un principal que SOLO vive en la zona arranca XIP con su pack primero.
     o="$( cd "$S/vacio" && "$V3_C" --libdir=../lib2 --pack=../AppPk.pack Sombra.mod 2>"$S/zona.err" | filt )"
     if printf '%s' "$o" | grep -q "VARIANTE:ff" && grep -q "cargado XIP desde el pack 'AppPk'" "$S/zona.err" && grep -q "dep 'Str' -> pack EN EJECUCION" "$S/zona.err"; then echo "  ok  zona (VM-C): el principal que solo vive en la zona corre XIP, su pack primero"
@@ -1116,7 +1122,8 @@ EOF
   else
     echo "  ✗ el esquema pack: no se pudo construir el pack ($R/build.log)"; fails=$((fails+1))
   fi
-  echo "  sombra: $((13 - fails))/13 casos"
+  # El total, a mano: al añadir un caso, súmalo (8-oct: decía 13 y ya eran 14; con el de #650, 15).
+  echo "  sombra: $((15 - fails))/15 casos"
   [ "$fails" -eq 0 ]
 }
 
