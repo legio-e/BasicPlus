@@ -641,6 +641,11 @@ static int esp32_i2c_abrir(int bus, int sda, int scl, int baudrate) {
     s_i2c_baud[bus]  = (baudrate > 0) ? (uint32_t) baudrate : 100000u;
     return 0;
 }
+/* V7 #669 — el bus del IDF de un I2C abierto (hw_esp32.h): el táctil de la P4 pone su dispositivo en él. */
+i2c_master_bus_handle_t esp32_i2c_bus_handle(int bus) {
+    return (bus >= 0 && bus <= 1 && s_i2c_ready[bus]) ? s_i2c_bus[bus] : NULL;
+}
+
 static void esp32_i2c_cerrar(int bus) {
     if (bus < 0 || bus > 1 || !s_i2c_ready[bus]) return;
     i2c_del_master_bus(s_i2c_bus[bus]);

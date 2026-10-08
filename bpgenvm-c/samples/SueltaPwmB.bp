@@ -26,6 +26,14 @@ module SueltaPwmB
       var pb: integer[] := [14, 16]
       return pb
     endif
+    if m == "esp32p4" then
+      var p4: integer[] := [21]
+      return p4
+    endif
+    if m == "stm32u5g9" then
+      var dk2: integer[] := [24]
+      return dk2
+    endif
     var otro: integer[] := [4, 5]
     return otro
   end pines
@@ -40,9 +48,25 @@ module SueltaPwmB
       var c5: integer[] := [28, 2]
       return c5
     endif
+    if m == "esp32p4" then
+      var p4: integer[] := newIntArray(0)
+      return p4
+    endif
+    if m == "stm32u5g9" then
+      var dk2: integer[] := [2, 3]
+      return dk2
+    endif
     var rp: integer[] := [8, 9]
     return rp
   end pinesUart
+
+  // La UART que se prueba: la 1 en las ESP y las RP2350; en la STM32 la 1 es el cable del IDE, así que la 2.
+  function uartId(): integer
+    if contains(Machine.getMicro(), "stm32") then
+      return 2
+    endif
+    return 1
+  end uartId
 
   function Main()
     var p: integer[] := pines()
@@ -61,13 +85,17 @@ module SueltaPwmB
       i += 1
     endwh
     var u: integer[] := pinesUart()
-    try
-      var puerto: Uart.Port := Uart.Port(1, u[0], u[1], 9600, 8, 1, 0)
-      vivos.add(puerto)
-      print "OK la UART 1 en otros pines"
-    catch e2: RuntimeError
-      print "FALLO la UART 1 no se pudo abrir: " + e2.msg
-    endtry
+    if len(u) >= 2 then
+      try
+        var puerto: Uart.Port := Uart.Port(uartId(), u[0], u[1], 9600, 8, 1, 0)
+        vivos.add(puerto)
+        print "OK la UART " + intToString(uartId()) + " en sus pines"
+      catch e2: RuntimeError
+        print "FALLO la UART " + intToString(uartId()) + " no se pudo abrir: " + e2.msg
+      endtry
+    else
+      print "OK sin UART libre en esta placa: no se prueba"
+    endif
     print "fin: " + intToString(vivos.length()) + " recursos"
   end Main
 end SueltaPwmB

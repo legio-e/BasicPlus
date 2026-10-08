@@ -446,6 +446,42 @@ int main(void) {
               "una tabla nueva (bpvm_caps_set) empieza sin reservas");
     }
 
+    /* ── 13. V7 #669 — EL BUS DEL TÁCTIL que declara la imagen: de la placa, y COMPARTIDO ── */
+    printf("\n== V7 #669: el bus del táctil de la imagen, compartido (Eduardo: «tiene que ser compartido») ==\n");
+    bpvm_bus_reset();
+    bpvm_i2c_set_backend(&I2C_NUEVA);
+    memset(i2c_abrir, 0, sizeof i2c_abrir);
+    memset(i2c_cerrar, 0, sizeof i2c_cerrar);
+    caso("la imagen declara el I2C 0 de su táctil (sda 32, scl 33, 100 kHz): la cintura NO se abre aún",
+         bpvm_bus_declarar_imagen(BPVM_BUS_I2C, 0, 32, 33, -1, 100000, "la imagen: el táctil de la pantalla", E, sizeof E) == 0
+         && i2c_abrir[0] == 0 && !bpvm_bus_abierto(BPVM_BUS_I2C, 0));
+    caso("sus pines son del bus: Pin(32) -> «el pin 32 es del I2C 0»",
+         bpvm_gpio_reclamar(32, BPVM_USO_OUTPUT, E, sizeof E) != 0 && err_es("el pin 32 es del I2C 0"));
+    caso("un programa con OTROS pines -> «(la imagen: el táctil de la pantalla): pides sda 30»",
+         bpvm_i2c_abrir(0, 30, 31, 100000, BPVM_BUS_PROGRAMA, E, sizeof E) != 0 && err_es("(la imagen: el táctil de la pantalla): pides sda 30"));
+    caso("a otra velocidad -> «pides 400 kHz»",
+         bpvm_i2c_abrir(0, 32, 33, 400000, BPVM_BUS_PROGRAMA, E, sizeof E) != 0 && err_es("pides 400 kHz"));
+    caso("con los mismos se engancha, y la cintura se abre ENTONCES (el primer usuario)",
+         bpvm_i2c_abrir(0, 32, 33, 100000, BPVM_BUS_PROGRAMA, E, sizeof E) == 0 && i2c_abrir[0] == 1);
+    caso("el táctil (el firmware) también, sin pines: la cintura no se abre otra vez",
+         bpvm_i2c_abrir(0, -1, -1, -1, BPVM_BUS_FIRMWARE, E, sizeof E) == 0 && i2c_abrir[0] == 1);
+    caso("el programa no lo suelta -> «es de la placa (la imagen: el táctil de la pantalla): no se suelta desde un programa»",
+         bpvm_i2c_soltar(0, BPVM_BUS_PROGRAMA, E, sizeof E) != 0
+         && err_es("el I2C 0 es de la placa (la imagen: el táctil de la pantalla): no se suelta desde un programa"));
+    bpvm_bus_fin_de_run(cerrar_cb);
+    CHECK(i2c_cerrar[0] == 0 && bpvm_bus_abierto(BPVM_BUS_I2C, 0),
+          "fin de RUN: el programa se va y el táctil sigue con su bus: no se cierra");
+    caso("el táctil lo suelta: se cierra, pero sigue declarado (Pin(32) sigue siendo del I2C 0)",
+         bpvm_i2c_soltar(0, BPVM_BUS_FIRMWARE, E, sizeof E) == 0 && i2c_cerrar[0] == 1
+         && bpvm_gpio_reclamar(32, BPVM_USO_OUTPUT, E, sizeof E) != 0 && err_es("es del I2C 0"));
+    caso("un programa SOLO: lo abre, y el fin de RUN lo cierra (nadie más lo usa)",
+         bpvm_i2c_abrir(0, -1, -1, -1, BPVM_BUS_PROGRAMA, E, sizeof E) == 0 && i2c_abrir[0] == 2);
+    bpvm_bus_fin_de_run(cerrar_cb);
+    CHECK(i2c_cerrar[0] == 2 && !bpvm_bus_abierto(BPVM_BUS_I2C, 0), "  cerrado, y sigue declarado para el táctil");
+    caso("una línea del ENV para el mismo bus sobra -> «ENV i2c0: es el bus de la imagen»",
+         bpvm_bus_declarar(BPVM_BUS_I2C, 0, "sda:32,scl:33", E, sizeof E) != 0 && err_es("ENV i2c0: es el bus de la imagen"));
+    bpvm_bus_reset();
+
     printf("\n[status=%s]\n", g_fail ? "FAIL" : "OK");
     return g_fail ? 1 : 0;
 }

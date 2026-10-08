@@ -1316,9 +1316,13 @@ de color), LCD_ON, la luz y el táctil—. `test-bus` §12 con su sabotaje, y `t
 estaban); `PinesPantalla.bp` en la ronda de V7. Las nueve imágenes compilan; la red entera, verde (pruebas de C,
 98 de 98).
 
-**Le queda una decisión a Eduardo**: el BUS del táctil —sus pines ya son de la pantalla, pero un `I2c.Bus` con otros
-pines del mismo periférico aún choca (la DK2 se queda sin táctil hasta reiniciar)—: (a) de la pantalla, ningún
-programa lo abre; o (b) compartido por el árbitro de G4. Recomendado: (a).
+**El BUS del táctil, compartido** (Eduardo: *«El I2c del táctil tiene que ser compartido. Hay placas donde ese
+I2c se utiliza también para controlar otros dispositivos»*; y la C5, con su QMI8658 en el I2C del táctil): la imagen
+DECLARA el bus de su táctil al publicar la pantalla, como una línea del ENV (`bpvm_bus_declarar_imagen`), y el
+táctil se engancha como el firmware —la P4 pone su GT911 en el bus del IDF; la DK2 lo lee por la fachada, con su
+turno—. Un programa lo comparte con los mismos pines a 100 kHz; con otros, error con nombre. `test-bus` §13 con su
+sabotaje; la red, verde otra vez. Las Suelta* de `#667`, con las ramas de la P4 (el 20 y el 21) y la DK2 (PB8 y la
+UART 2).
 
 **Lo siguiente**: la tarde de placas, como en la sección de abajo, ahora con `#669` (`PinesPantalla` en la P4 y la
 DK2); y antes, los pines libres de cada placa de la tarde para las pruebas de `#667` (hoy sólo traen los de la S3,

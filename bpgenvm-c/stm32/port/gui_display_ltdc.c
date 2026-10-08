@@ -2,7 +2,8 @@
  * gui_display_ltdc.c — la pantalla de la DK2 (STM32 LTDC): V3/H5.1; desde V7/H6 G5.b, su driver para el LVGL del pack.
  *
  * Pensado para la STM32U5G9J-DK2: panel 800x480 RGB, capa LTDC 0, RGB565 (16bpp, ~750 KB de framebuffer en
- * SRAM interna), retroiluminación por PWM (TIM3_CH4) y táctil GT911 por el I2C 2.
+ * SRAM interna), retroiluminación por PWM (TIM3_CH4) y táctil GT911 por el I2C 2 —desde #669, de la placa y
+ * COMPARTIDO por el árbitro de G4: la imagen lo declara y el táctil lo lee por la fachada, con su turno—.
  *
  * Con BPVM_GUI_PACK (V7/H6 G5.b, 26-sep) LVGL viene de un PACK (lvgl.npk.ARMV8), como en el P4, la C5 y la C6, y
  * busca su driver de pantalla por la marca 'PANT'. El LTDC es un periférico de la familia y no se presta por la
@@ -23,6 +24,8 @@
 #include "bpvm_pant.h"    /* V7/H6 G5.b: el contrato del driver de pantalla ('PANT') */
 #include "bpvm_bios.h"    /* V7/H6 G5.b: bpvm_bios_publica, el mismo registro que usan los packs */
 #include "bpvm_machine.h" /* V7 #669: bpvm_caps_reservar_sistema, los pines de la pantalla */
+#include "bpvm_bus.h"     /* V7 #669: el bus del táctil, de la placa y compartido */
+#include "bpvm_i2c.h"     /* V7 #669: el táctil lo lee por la fachada, con su turno */
 #include "log.h"
 
 /* Panel físico de la DK2. OJO: el tamaño "lógico" del modelo Gui (para el dumpTree / paridad miVM↔VM-C) es OTRO
@@ -36,7 +39,8 @@ static uint16_t s_framebuffer[LTDC_PANEL_W * LTDC_PANEL_H] __attribute__((aligne
 
 extern LTDC_HandleTypeDef hltdc;   /* CubeMX MX_LTDC_Init */
 extern TIM_HandleTypeDef  htim3;   /* CubeMX MX_TIM3_Init — CH4 = retro (BL_CTRL / PE6) */
-extern I2C_HandleTypeDef  hi2c2;   /* CubeMX MX_I2C2_Init — bus del táctil GT911 (PF0/PF1) */
+/* (El hi2c2 de CubeMX —MX_I2C2_Init— ya no se usa: desde #669 el I2C 2 lo abre la cintura de la familia, con su
+ * primer usuario, y el táctil lo lee por la fachada.) */
 
 /* ===== Táctil GT911 (H5.2) =====
  * Datos del BSP de ST (stm32u5g9j_discovery_ts.h + gt911_reg.h): GT911 en I²C2, dirección 0xBA (8-bit), registros
@@ -44,23 +48,29 @@ extern I2C_HandleTypeDef  hi2c2;   /* CubeMX MX_I2C2_Init — bus del táctil GT
  * 0x8150 (XL,XH,YL,YH → x=XH<<8|XL, y=YH<<8|YL); luego ACK escribiendo 0 en 0x814E para que el GT911 prepare el
  * siguiente frame. INT en PE5 (no se usa: se lee por sondeo, desde el lazo de la GUI). El punto sale en las
  * coordenadas del PANEL a 0°. */
-#define GT911_ADDR       0xBAU
-#define GT911_STAT_REG   0x814EU
-#define GT911_P1_XL_REG  0x8150U
+#define GT911_BUS        2         /* V7 #669: el I2C 2, de la placa y compartido */
+#define GT911_ADDR7      0x5DU     /* 0xBA en 8 bits, como lo da el BSP */
+#define GT911_HZ         100000    /* el de la cintura de la STM32 (su TIMINGR, fijo) */
+static const uint8_t GT911_STAT_REG[2]  = { 0x81, 0x4E };
+static const uint8_t GT911_P1_XL_REG[2] = { 0x81, 0x50 };
+static int s_tactil = 0;             /* V7 #669: el táctil se enganchó a su bus (pant_init) */
 
 static int32_t s_tx = 0, s_ty = 0;   /* último punto (LVGL lo quiere también en RELEASED) */
 static int     s_tpressed = 0;
 
 /* Lee el GT911 si tiene un frame nuevo y devuelve el estado (1 = pulsado). Sin frame nuevo, el de antes: el GT911
  * sólo avisa cuando cambia algo. */
+/* V7 #669: por la FACHADA (bpvm_i2c_escribir_leer, con su turno del árbitro), no por el hi2c2 de CubeMX: el bus es
+ * de la placa y lo comparten el táctil y lo que un programa ponga en él. Cada lectura, una transacción con repeated
+ * start (registro de 16 bits, el byte alto primero, como el HAL_I2C_Mem_Read de antes); un NAK es -1 sin log (se
+ * sondea cada pocos ms). */
 static int gt911_leer(void) {
     uint8_t st = 0;
-    if (HAL_I2C_Mem_Read(&hi2c2, GT911_ADDR, GT911_STAT_REG, I2C_MEMADD_SIZE_16BIT,
-                         &st, 1, 10) == HAL_OK && (st & 0x80U)) {
+    if (bpvm_i2c_escribir_leer(BPVM_BUS_FIRMWARE, GT911_BUS, GT911_ADDR7, GT911_STAT_REG, 2, &st, 1) == 1
+        && (st & 0x80U)) {
         if ((st & 0x0FU) >= 1U) {                      /* hay al menos un punto */
             uint8_t d[4];
-            if (HAL_I2C_Mem_Read(&hi2c2, GT911_ADDR, GT911_P1_XL_REG,
-                                 I2C_MEMADD_SIZE_16BIT, d, 4, 10) == HAL_OK) {
+            if (bpvm_i2c_escribir_leer(BPVM_BUS_FIRMWARE, GT911_BUS, GT911_ADDR7, GT911_P1_XL_REG, 2, d, 4) == 4) {
                 s_tx = (int32_t) (d[0] | (d[1] << 8));
                 s_ty = (int32_t) (d[2] | (d[3] << 8));
                 s_tpressed = 1;
@@ -68,9 +78,8 @@ static int gt911_leer(void) {
         } else {
             s_tpressed = 0;
         }
-        uint8_t zero = 0;                              /* ACK: prepara el siguiente frame */
-        HAL_I2C_Mem_Write(&hi2c2, GT911_ADDR, GT911_STAT_REG, I2C_MEMADD_SIZE_16BIT,
-                          &zero, 1, 10);
+        static const uint8_t ack[3] = { 0x81, 0x4E, 0x00 };   /* ACK: 0 en 0x814E, prepara el siguiente frame */
+        (void) bpvm_i2c_write_como(BPVM_BUS_FIRMWARE, GT911_BUS, GT911_ADDR7, ack, 3);
     }
     return s_tpressed;
 }
@@ -114,6 +123,13 @@ static int pant_init(void)
 {
     if (!s_pant_listo) {
         ltdc_encender();
+        /* V7 #669: el táctil se engancha a su bus como el firmware (lo declaró la imagen al publicar la pantalla); si
+         * un programa ya lo abrió con sus mismos pines, es el mismo. Sin bus, la GUI se ve y no reacciona, y se dice. */
+        char err[96];
+        s_tactil = bpvm_i2c_abrir(GT911_BUS, -1, -1, -1, BPVM_BUS_FIRMWARE, err, sizeof err) == 0;
+        if (!s_tactil)
+            log_printf("pantalla: el I2C %d del tactil no se pudo abrir (%s): la GUI se vera pero no reaccionara (#669)",
+                       GT911_BUS, err);
         s_pant_listo = 1;
     }
     return 0;
@@ -162,7 +178,7 @@ static void pant_flush(int x1, int y1, int x2, int y2, const uint8_t* px)
 
 static int pant_touch(int* x, int* y)
 {
-    if (!gt911_leer()) return 0;
+    if (!s_tactil || !gt911_leer()) return 0;
     /* El punto: indev_pointer_proc de lv_indev.c —del panel a 0° a la orientación actual—, como en el P4. */
     int32_t px = s_tx, py = s_ty;
     const int32_t W = LTDC_PANEL_W, H = LTDC_PANEL_H;
@@ -188,7 +204,8 @@ static const bpvm_pack_api_t s_pant_api = {
 /* V7 #669 (8-oct) — LOS PINES DE LA PANTALLA, del sistema desde que se publica su driver (Eduardo: «Los pines de la
  * pantalla deberían configurarse al mismo tiempo que el driver de la pantalla y en principio no utilizarse para otras
  * cosas»). En la DK2 los configura CubeMX al arrancar: las 28 líneas del LTDC (HAL_LTDC_MspInit), LCD_ON (PE4,
- * MX_GPIO_Init), la retroiluminación (PE6, TIM3_CH4), el INT del táctil (PE5) y su I2C2 (PF0, PF1; HAL_I2C_MspInit).
+ * MX_GPIO_Init), la retroiluminación (PE6, TIM3_CH4) y el INT del táctil (PE5). Su I2C2 (PF0, PF1) no: es un BUS de
+ * la placa y se COMPARTE (abajo).
  * Hasta hoy la tabla los daba todos por libres: un Pin(0x44) apagaba el panel, uno en una línea de color le quitaba
  * un bit, y desde #667, al soltarlos, volvían al reset. Fuera de Machine.pins(), como los del cable (#574). Pin BP =
  * puerto<<4 | bit (A = 0 … H = 7). El PWM de los programas va por TIM16 (PB8): no toca el TIM3 de la luz. */
@@ -201,8 +218,8 @@ static const uint8_t s_pines_pantalla[] = {
     PIN_('D', 8), PIN_('D', 9), PIN_('D', 10), PIN_('D', 11), PIN_('D', 12), PIN_('D', 13), PIN_('D', 14), PIN_('D', 15),
     PIN_('E', 0), PIN_('E', 7), PIN_('E', 8), PIN_('E', 9), PIN_('E', 10), PIN_('E', 11), PIN_('E', 12), PIN_('E', 13),
     PIN_('E', 14), PIN_('E', 15),
-    /* LCD_ON, la luz, el INT del táctil y su I2C2 */
-    PIN_('E', 4), PIN_('E', 6), PIN_('E', 5), PIN_('F', 0), PIN_('F', 1),
+    /* LCD_ON, la luz y el INT del táctil */
+    PIN_('E', 4), PIN_('E', 6), PIN_('E', 5),
 };
 
 static void stm32_pant_reservar_pines(void)
@@ -213,7 +230,16 @@ static void stm32_pant_reservar_pines(void)
         if (bpvm_caps_reservar_sistema(s_pines_pantalla[i], BPVM_PIN_SIS_PANTALLA, err, sizeof err) == 0) n++;
         else log_printf("pantalla: el pin %d NO se pudo reservar: %s", (int) s_pines_pantalla[i], err);
     }
-    log_printf("pantalla: %d pines suyos (el LTDC, LCD_ON, la luz y el tactil): fuera de Machine.pins() (#669)", n);
+    log_printf("pantalla: %d pines suyos (el LTDC, LCD_ON, la luz y el INT del tactil): fuera de Machine.pins() (#669)", n);
+    /* Y el bus del táctil, de la placa y COMPARTIDO (Eduardo: «El I2c del táctil tiene que ser compartido. Hay placas
+     * donde ese I2c se utiliza también para controlar otros dispositivos»): se declara como una línea del ENV. Sus
+     * pines son del bus («el pin 80 es del I2C 2»); un programa se engancha con los mismos y a la misma velocidad. */
+    if (bpvm_bus_declarar_imagen(BPVM_BUS_I2C, GT911_BUS, PIN_('F', 0), PIN_('F', 1), -1, GT911_HZ,
+                                 "la imagen: el táctil de la pantalla", err, sizeof err) == 0)
+        log_printf("pantalla: el I2C %d del tactil (sda %d, scl %d, %d kHz) es de la placa y se comparte (#669)",
+                   GT911_BUS, (int) PIN_('F', 0), (int) PIN_('F', 1), GT911_HZ / 1000);
+    else
+        log_printf("pantalla: el I2C %d del tactil NO se pudo declarar: %s", GT911_BUS, err);
 }
 
 void stm32_pant_publicar(void)

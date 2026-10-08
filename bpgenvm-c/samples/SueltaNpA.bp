@@ -25,6 +25,14 @@ module SueltaNpA
       var pb: integer[] := [2, 3, 4]
       return pb
     endif
+    if m == "esp32p4" then
+      var p4: integer[] := [21]
+      return p4
+    endif
+    if m == "stm32u5g9" then
+      var dk2: integer[] := [24]
+      return dk2
+    endif
     var otro: integer[] := [6]
     return otro
   end pines

@@ -1276,7 +1276,8 @@ sleep(<span class="num">60000</span>)          <span class="comment">// y la jor
           (<a href="#stdlib-machine-caps">§Machine</a>) y contra el estado de los pines, con nombre:
           «el pin 99 no existe en esp32c5», «el pin 26 está en uso analógico: primero release()». Y en una placa
           con la pantalla en la imagen (la P4, la DK2), sus pines son de ella desde el arranque: «el pin 26 de
-          esp32p4 es de la pantalla: no se puede usar» (<code>#669</code>).</td></tr>
+          esp32p4 es de la pantalla: no se puede usar» (<code>#669</code>). El I2C de su táctil, en cambio, es
+          un bus de la placa y se comparte: «el pin 7 es del I2C 0» (abajo, <code>I2c</code>).</td></tr>
   <tr><td><code>on()</code></td>
       <td>Pone el pin a HIGH (sólo si es <code>OUTPUT</code>).</td></tr>
   <tr><td><code>off()</code></td>

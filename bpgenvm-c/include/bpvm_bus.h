@@ -61,6 +61,14 @@ int  bpvm_bus_desde_env(bpvm_bus_env_get_fn env_get);
  * `err`. (La usa bpvm_bus_desde_env; va aparte para poder probarla.) */
 int  bpvm_bus_declarar(int tipo, int id, const char* valor, char* err, size_t cap);
 
+/* V7 #669 (8-oct) — un bus que DECLARA LA IMAGEN: el del táctil de su pantalla (la P4, la DK2), al publicar su
+ * driver, antes que el ENV. Como uno del ENV —sus pines, del bus («el pin 7 es del I2C 0»); se abre en la cintura con
+ * su primer usuario y se cierra cuando no queda ninguno; un programa no lo suelta— y COMPARTIDO con lo demás que haya
+ * en él (Eduardo: «El I2c del táctil tiene que ser compartido. Hay placas donde ese I2c se utiliza también para
+ * controlar otros dispositivos»): un programa se engancha con sus mismos pines y su velocidad. `que` (una cadena
+ * estática) dice de quién es, y sale en los errores. En I2C, p2 = -1. 0, o -1 con `err`. */
+int  bpvm_bus_declarar_imagen(int tipo, int id, int p0, int p1, int p2, int hz, const char* que, char* err, size_t cap);
+
 /* Abre un bus, o se engancha a él. SPI: p0..p2 = sck, mosi, miso; I2C: p0, p1 =
  * sda, scl (p2 se ignora). -1 = el que tenga. `hz`: en I2C la velocidad del bus
  * (<= 0 = la que tenga); en SPI se ignora (es de cada dispositivo). `quien`: un

@@ -31,6 +31,9 @@
 #include "bpvm_pant.h"          /* V7/H6 G5.a: el contrato del driver de pantalla ('PANT') */
 #include "bpvm_bios.h"          /* V7/H6 G5.a: bpvm_bios_publica, el mismo registro que usan los packs */
 #include "bpvm_machine.h"       /* V7 #669: bpvm_caps_reservar_sistema, los pines de la pantalla */
+#include "bpvm_bus.h"           /* V7 #669: el bus del táctil, de la placa y compartido */
+#include "bpvm_i2c.h"           /* V7 #669: el táctil se engancha a él como el firmware */
+#include "hw_esp32.h"           /* V7 #669: esp32_i2c_bus_handle, el bus del IDF que abrió la cintura */
 #endif
 #include "freertos/FreeRTOS.h"  /* G4: vTaskDelay en el bombeo */
 #include "freertos/task.h"
@@ -346,6 +349,7 @@ void p4_gfx_smoke_test(void)
 #define TOUCH_I2C_SDA   7
 #define TOUCH_I2C_SCL   8
 #define TOUCH_I2C_PORT  0
+#define TOUCH_I2C_HZ    100000   /* V7 #669: la del bus COMPARTIDO (la de un I2c.Bus estándar); el GT911 va a 100 kHz */
 
 static esp_lcd_touch_handle_t s_tp = NULL;
 
@@ -356,6 +360,7 @@ static esp_lcd_touch_handle_t p4_touch_try(i2c_master_bus_handle_t bus, uint16_t
     esp_lcd_panel_io_handle_t tp_io = NULL;
     esp_lcd_panel_io_i2c_config_t tp_io_cfg = ESP_LCD_TOUCH_IO_I2C_GT911_CONFIG();
     tp_io_cfg.dev_addr = addr;
+    tp_io_cfg.scl_speed_hz = TOUCH_I2C_HZ;   /* V7 #669: la del bus declarado */
     if (esp_lcd_new_panel_io_i2c(bus, &tp_io_cfg, &tp_io) != ESP_OK) return NULL;
 
     esp_lcd_touch_config_t tp_cfg = {
@@ -379,26 +384,29 @@ static esp_lcd_touch_handle_t p4_touch_try(i2c_master_bus_handle_t bus, uint16_t
     return tp;
 }
 
-/* Bus I2C nuevo + GT911. La dirección la fija el pin INT (NC en esta placa) durante
+/* El bus del táctil + el GT911. La dirección la fija el pin INT (NC en esta placa) durante
  * el reset por GPIO27 -> sale 0x14 o 0x5D de forma no determinista. Probamos AMBAS.
- * Si ninguna responde, NO abortamos: seguimos sin táctil (el botón se ve, no reacciona). */
+ * Si ninguna responde, NO abortamos: seguimos sin táctil (el botón se ve, no reacciona).
+ *
+ * V7 #669 (8-oct): el bus es de la PLACA y COMPARTIDO (Eduardo: «El I2c del táctil tiene que ser compartido»). Lo
+ * declaró la imagen al arrancar (p4_pant_reservar_pines); aquí el táctil se ENGANCHA como el firmware, por el árbitro
+ * de G4, y pone su GT911 en el bus del IDF que abrió la cintura: si un programa ya lo abrió (con sus mismos pines y su
+ * velocidad), es el MISMO bus, y el IDF reparte las transacciones. Al acabar un programa no se cierra mientras lo use
+ * el táctil. Antes lo abría por su cuenta (i2c_new_master_bus) y con ESP_ERROR_CHECK: si el puerto estaba tomado, la
+ * placa se reiniciaba. */
 static esp_lcd_touch_handle_t p4_touch_init(void)
 {
-    i2c_master_bus_handle_t i2c_bus = NULL;
-    i2c_master_bus_config_t bus_cfg = {
-        .clk_source                   = I2C_CLK_SRC_DEFAULT,
-        .sda_io_num                   = TOUCH_I2C_SDA,
-        .scl_io_num                   = TOUCH_I2C_SCL,
-        .i2c_port                     = TOUCH_I2C_PORT,
-        .flags.enable_internal_pullup = true,
-    };
-    esp_err_t eb = i2c_new_master_bus(&bus_cfg, &i2c_bus);
-    if (eb != ESP_OK) {
-        /* V7 #669: sin abortar (antes, ESP_ERROR_CHECK: la placa se reiniciaba). Sus pines son de la pantalla, pero un
-         * programa pudo abrir antes el I2C 0 con OTROS: el puerto está tomado. La pantalla sigue, sin táctil, y se dice. */
-        ESP_LOGE(TAG, "el I2C %d del tactil no se pudo abrir (%s): sin tactil", TOUCH_I2C_PORT, esp_err_to_name(eb));
+    char err[96];
+    if (bpvm_i2c_abrir(TOUCH_I2C_PORT, -1, -1, -1, BPVM_BUS_FIRMWARE, err, sizeof err) != 0) {
+        ESP_LOGE(TAG, "el I2C %d del tactil no se pudo abrir (%s): sin tactil", TOUCH_I2C_PORT, err);
         log_printf("pantalla: el I2C %d del tactil no se pudo abrir (%s): la GUI se vera pero no reaccionara (#669)",
-                   TOUCH_I2C_PORT, esp_err_to_name(eb));
+                   TOUCH_I2C_PORT, err);
+        return NULL;
+    }
+    i2c_master_bus_handle_t i2c_bus = esp32_i2c_bus_handle(TOUCH_I2C_PORT);
+    if (i2c_bus == NULL) {
+        log_printf("pantalla: el I2C %d del tactil no tiene bus del IDF: sin tactil (#669)", TOUCH_I2C_PORT);
+        (void) bpvm_i2c_soltar(TOUCH_I2C_PORT, BPVM_BUS_FIRMWARE, err, sizeof err);
         return NULL;
     }
 
@@ -414,7 +422,10 @@ static esp_lcd_touch_handle_t p4_touch_init(void)
         ESP_LOGW(TAG, "GT911 no respondió en 0x14; probando 0x5D...");
         tp = p4_touch_try(i2c_bus, ESP_LCD_TOUCH_IO_I2C_GT911_ADDRESS);                            /* 0x5D */
     }
-    if (!tp) ESP_LOGE(TAG, "GT911 no responde en 0x14 ni 0x5D (revisar FPC/cableado del táctil)");
+    if (!tp) {
+        ESP_LOGE(TAG, "GT911 no responde en 0x14 ni 0x5D (revisar FPC/cableado del táctil)");
+        (void) bpvm_i2c_soltar(TOUCH_I2C_PORT, BPVM_BUS_FIRMWARE, err, sizeof err);   /* V7 #669: sin táctil, no lo usa */
+    }
     return tp;
 }
 
@@ -553,8 +564,6 @@ static void p4_pant_reservar_pines(void)
     static const struct { int pin; const char* que; } P[] = {
         { BL_GPIO,       "la retroiluminacion" },
         { LCD_RST_GPIO,  "el reset del panel y del tactil" },
-        { TOUCH_I2C_SDA, "el SDA del tactil" },
-        { TOUCH_I2C_SCL, "el SCL del tactil" },
     };
     char err[96];
     int n = 0;
@@ -562,7 +571,16 @@ static void p4_pant_reservar_pines(void)
         if (bpvm_caps_reservar_sistema(P[i].pin, BPVM_PIN_SIS_PANTALLA, err, sizeof err) == 0) n++;
         else log_printf("pantalla: el GPIO%d (%s) NO se pudo reservar: %s", P[i].pin, P[i].que, err);
     }
-    log_printf("pantalla: %d pines suyos (la luz, el reset y el tactil): fuera de Machine.pins() (#669)", n);
+    log_printf("pantalla: %d pines suyos (la luz y el reset): fuera de Machine.pins() (#669)", n);
+    /* Y el bus del táctil, de la placa y COMPARTIDO (Eduardo: «El I2c del táctil tiene que ser compartido. Hay placas
+     * donde ese I2c se utiliza también para controlar otros dispositivos»): se declara como una línea del ENV. Sus
+     * pines son del bus («el pin 7 es del I2C 0»); un programa se engancha con los mismos y a la misma velocidad. */
+    if (bpvm_bus_declarar_imagen(BPVM_BUS_I2C, TOUCH_I2C_PORT, TOUCH_I2C_SDA, TOUCH_I2C_SCL, -1, TOUCH_I2C_HZ,
+                                 "la imagen: el táctil de la pantalla", err, sizeof err) == 0)
+        log_printf("pantalla: el I2C %d del tactil (sda %d, scl %d, %d kHz) es de la placa y se comparte (#669)",
+                   TOUCH_I2C_PORT, TOUCH_I2C_SDA, TOUCH_I2C_SCL, TOUCH_I2C_HZ / 1000);
+    else
+        log_printf("pantalla: el I2C %d del tactil NO se pudo declarar: %s", TOUCH_I2C_PORT, err);
 }
 
 void p4_pant_publicar(void)

@@ -1,13 +1,17 @@
 // PinesPantalla.bp — #669 (8-oct): los pines de la pantalla que pone la IMAGEN son suyos desde que se publica su
 // driver, al arrancar. Eduardo: «Los pines de la pantalla deberían configurarse al mismo tiempo que el driver de la
-// pantalla y en principio no utilizarse para otras cosas». En la P4: la luz (26), el reset del panel (27) y el táctil
-// (7 y 8). En la DK2: las 28 líneas del LTDC, LCD_ON (PE4), la luz (PE6), el INT del táctil (PE5) y su I2C2 (PF0,
-// PF1); aquí, una muestra. Pedir uno da «es de la pantalla» y no sale en Machine.pins(); un pin corriente sigue libre.
+// pantalla y en principio no utilizarse para otras cosas». En la P4: la luz (26) y el reset del panel (27). En la DK2:
+// las 28 líneas del LTDC, LCD_ON (PE4), la luz (PE6) y el INT del táctil (PE5); aquí, una muestra. Pedir uno da «es de
+// la pantalla» y no sale en Machine.pins(); un pin corriente sigue libre.
+// Y el BUS del táctil es de la placa y se COMPARTE (Eduardo: «El I2c del táctil tiene que ser compartido. Hay placas
+// donde ese I2c se utiliza también para controlar otros dispositivos»): sus pines son del bus («es del I2C 0»), un
+// programa lo abre con los mismos pines a 100 kHz y lo escanea, y con otros pines recibe un error con nombre.
 // En una placa sin pantalla de la imagen (las demás, el PC), lo dice y acaba. Se comprueba a sí mismo (OK / FALLO).
 // ⚠️ Sólo con una imagen que lleve #669: con una anterior, pedir el 26 de la P4 le quitaba la luz al panel.
 module PinesPantalla
   import Core
   import Gpio
+  import I2c
   import Machine
 
   // ¿Sale `pin` en Machine.pins()?
@@ -48,6 +52,44 @@ module PinesPantalla
     endif
   end dePantalla
 
+  // Un pin del bus del táctil: no es para un Gpio («es del I2C N»).
+  function delBus(pin: integer, bus: integer, que: string)
+    var msg: string := pide(pin)
+    if contains(msg, "es del I2C " + intToString(bus)) then
+      print "OK " + que + " (" + intToString(pin) + "): " + msg
+    else
+      print "FALLO " + que + " (" + intToString(pin) + "): " + msg
+    endif
+  end delBus
+
+  // El bus del táctil, compartido: con sus pines a 100 kHz se abre y se escanea (el táctil y lo que haya); con otros
+  // pines, el error dice de quién es.
+  function compartido(bus: integer, sda: integer, scl: integer, otroSda: integer, otroScl: integer)
+    try
+      var b: I2c.Bus := I2c.Bus(bus, sda, scl, I2c.Bus.STANDARD)
+      var dirs: integer[] := b.scan()
+      var txt: string := ""
+      var i: integer := 0
+      while i < len(dirs) do
+        txt := txt + " " + intToString(dirs[i])
+        i += 1
+      endwh
+      print "OK el I2C " + intToString(bus) + " del tactil se comparte: " + intToString(len(dirs)) + " dispositivo(s), en decimal:" + txt
+    catch e: RuntimeError
+      print "FALLO el I2C " + intToString(bus) + " del tactil no se pudo abrir con sus pines: " + e.msg
+    endtry
+    try
+      var o: I2c.Bus := I2c.Bus(bus, otroSda, otroScl, I2c.Bus.STANDARD)
+      print "FALLO el I2C " + intToString(bus) + " del tactil se abrio con OTROS pines (" + intToString(otroSda) + ")"
+    catch e2: RuntimeError
+      if contains(e2.msg, "el tactil de la pantalla") or contains(e2.msg, "el táctil de la pantalla") then
+        print "OK con otros pines: " + e2.msg
+      else
+        print "FALLO con otros pines, pero no dice de quien es: " + e2.msg
+      endif
+    endtry
+  end compartido
+
   function libre(pin: integer, que: string)
     var msg: string := pide(pin)
     if msg == "libre" and enLaLista(pin) then
@@ -63,18 +105,20 @@ module PinesPantalla
     if micro == "esp32p4" then
       dePantalla(26, "la luz")
       dePantalla(27, "el reset del panel")
-      dePantalla(7, "el SDA del tactil")
-      dePantalla(8, "el SCL del tactil")
+      delBus(7, 0, "el SDA del tactil")
+      delBus(8, 0, "el SCL del tactil")
+      compartido(0, 7, 8, 20, 21)
       libre(20, "un pin corriente (el SDA de Bme280IdP4)")
     elseif micro == "stm32u5g9" then
       dePantalla(68, "LCD_ON (PE4)")
       dePantalla(70, "la luz (PE6)")
       dePantalla(69, "el INT del tactil (PE5)")
-      dePantalla(80, "el SDA del tactil (PF0)")
-      dePantalla(81, "el SCL del tactil (PF1)")
       dePantalla(18, "el B1 del LTDC (PB2)")
       dePantalla(71, "el B6 del LTDC (PE7)")
       dePantalla(56, "el R3 del LTDC (PD8)")
+      delBus(80, 2, "el SDA del tactil (PF0)")
+      delBus(81, 2, "el SCL del tactil (PF1)")
+      compartido(2, 80, 81, 26, 27)
       libre(24, "el PWM de CN1 (PB8)")
     else
       print "OK sin pantalla de la imagen: nada que comprobar"

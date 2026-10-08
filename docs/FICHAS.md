@@ -1594,7 +1594,7 @@ objeto que `__siguientePendiente` acaba de sacar, y el ÚLTIMO pendiente se solt
 `test-kill` y `test-suelta` en rojo—; arreglado, y con `test-destruyefinal` (lo que sólo se ve al acabar, contra lo
 esperado, en las dos VMs), que la paridad no podía ver.
 
-#### 🟡 `#669` — los pines de la pantalla que pone la IMAGEN no están reservados: un programa puede tomarlos y apagar la pantalla (abierta el 8-oct, al hacer `#667`; SUELTA · **HECHO en el PC y en las imágenes el 8-oct**; falta la placa —la P4 y la DK2— y una decisión: el bus del táctil)
+#### 🟡 `#669` — los pines de la pantalla que pone la IMAGEN no están reservados: un programa puede tomarlos y apagar la pantalla (abierta el 8-oct, al hacer `#667`; SUELTA · **HECHO en el PC y en las imágenes el 8-oct**; y el bus del táctil, COMPARTIDO —decisión de Eduardo—; falta la placa, la P4 y la DK2)
 
 **Visto al hacer `#667`**: la tabla de capacidades sólo aparta los pines de la memoria y del cable (`#574`). En la DK2,
 `LCD_ON` (PE4) y la retroiluminación (PE6, `TIM3_CH4`), los configura CubeMX al arrancar; en la P4, la
@@ -1615,24 +1615,36 @@ pantalla»).
   (siguen en `Machine.pins()`; se toman y se sueltan con el pack): la pantalla de la imagen no se va en todo el
   arranque, como la flash. Lo que lee la tabla (`Machine.pins()` y sus cuentas, el ADC por canal) pasa ahora por
   la máscara.
-- **La P4**: la luz (26), el reset del panel y del táctil (27) y el táctil (7, 8). Y su táctil ya no ABORTA si el
+- **La P4**: la luz (26) y el reset del panel y del táctil (27) —y el bus del táctil, compartido: abajo—. Y su
+  táctil ya no ABORTA si el
   I2C 0 está tomado (era un `ESP_ERROR_CHECK`: la placa se reiniciaba): sigue sin táctil y lo dice. La luz ya la
   esquivaba el PWM de las ESP (su canal 1 y su timer 1).
 - **La DK2**: lo que CubeMX configura al arrancar para la pantalla, que la tabla daba por libre —las 28 líneas del
   LTDC (un `Pin` en una le quitaba un bit de color al panel), LCD_ON (PE4), la luz (PE6, `TIM3_CH4`), el INT del
-  táctil (PE5) y su I2C2 (PF0, PF1)—: 33 pines. El PWM de los programas va por TIM16: no toca el TIM3 de la luz.
+  táctil (PE5)—: 31 pines (su I2C2, PF0 y PF1, es el bus del táctil: abajo). El PWM de los programas va por TIM16:
+  no toca el TIM3 de la luz.
 - **Las pruebas**: `make test-bus` §12 (11 casos: ni un programa, ni un pack, ni un bus; un `release()` y el fin de
   RUN no la tocan; un pin ocupado o que no existe no se reserva; una tabla nueva empieza sin reservas), con su
   sabotaje (la máscara sin la capa: 5 en rojo). Y `test-bus` y `test-arbitro`, a la red: no estaban en ninguna. En
   placa, `samples/PinesPantalla.bp`, en la ronda de V7 (se comprueba a sí mismo; en las placas sin pantalla de la
   imagen, lo dice y acaba).
-- **Queda, y es decisión de Eduardo: el BUS del táctil.** Sus pines ya son de la pantalla, pero el periférico no:
-  en la DK2, un `I2c.Bus(2)` con OTROS pines del I2C2 reinicia el periférico del táctil y, al soltarlo, su
-  `HAL_I2C_DeInit` lo deja sin táctil hasta reiniciar la placa (hasta hoy sólo lo avisaba un comentario de
-  `gpio_stm32.c`); en la P4, un programa que abre el I2C 0 con otros pines ANTES de la primera GUI deja la pantalla
-  sin táctil (ya sin reinicio). Dos caminos: (a) el bus del táctil es de la pantalla —ningún programa lo abre, y se
-  dice con nombre—; (b) el de G4, el bus se COMPARTE —el táctil se registra en el árbitro y toma su turno en cada
-  lectura—, más trabajo en las dos imágenes.
+- **El BUS del táctil** (lo que quedaba): con sus pines «de la pantalla», el periférico seguía al alcance —en la
+  DK2, un `I2c.Bus(2)` con OTROS pines del I2C2 lo reiniciaba y, al soltarlo, su `HAL_I2C_DeInit` dejaba sin
+  táctil hasta reiniciar (hasta hoy sólo lo avisaba un comentario de `gpio_stm32.c`); en la P4, un programa que
+  abría el I2C 0 antes de la primera GUI la dejaba sin táctil—. Presentado con dos caminos —(a) de la pantalla,
+  ningún programa lo abre; (b) compartido, el de G4—, **Eduardo (8-oct): *«El I2c del táctil tiene que ser
+  compartido. Hay placas donde ese I2c se utiliza también para controlar otros dispositivos (en la C5 me suena que
+  hay un giróscopo, un sensor de temperatura y humedad)»*** —y la tabla de la C5: su QMI8658 (giróscopo y
+  acelerómetro) en GPIO0/GPIO1, el I2C del táctil—. **Hecho (la 2.ª parte)**: la imagen DECLARA el bus de su
+  táctil al publicar la pantalla, como una línea `i2cN=` del ENV (`bpvm_bus_declarar_imagen`: un origen más del
+  árbitro, con su nombre en los errores): sus pines son del bus («el pin 7 es del I2C 0»), un programa se engancha
+  con los mismos pines a 100 kHz y lo comparte, con otros pines o a otra velocidad recibe «el I2C 0 es sda 7, scl 8
+  a 100 kHz (la imagen: el táctil de la pantalla): pides sda 20», no lo suelta, y al acabar no se cierra mientras lo
+  use el táctil. El táctil se engancha como el FIRMWARE: la P4 pone su GT911 (el del IDF) en el bus del IDF que
+  abrió la cintura —el IDF reparte las transacciones—; la DK2 lo lee por la fachada, con su turno, y no por el
+  `hi2c2` de CubeMX. Así lo tienen ya la C5 y la C6, cuyo táctil va en su pack, por la BIOS. Pruebas: `make
+  test-bus` §13 (12 casos), con su sabotaje (5 en rojo); `PinesPantalla` lo comprueba en placa (abre el bus del
+  táctil con sus pines y lo escanea; con otros, el error con nombre).
 
 #### ✅ `#670` — la S3 con PSRAM OCTAL da al programa los GPIO 33–37, que son de la PSRAM (abierta el 8-oct, al preparar el lote de `#667`; SUELTA · **CERRADA el mismo día**, `12ba0b79`, vista en la S3)
 

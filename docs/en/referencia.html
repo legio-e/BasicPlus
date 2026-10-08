@@ -1246,7 +1246,8 @@ sleep(<span class="num">60000</span>)          <span class="comment">// and the 
           (<a href="#stdlib-machine-caps">§Machine</a>) and the pin states, by name:
           "el pin 99 no existe en esp32c5", "el pin 26 está en uso analógico: primero release()". And on a
           board with the screen in the image (the P4, the DK2), its pins are the screen's from boot: "el pin 26
-          de esp32p4 es de la pantalla: no se puede usar" (<code>#669</code>).</td></tr>
+          de esp32p4 es de la pantalla: no se puede usar" (<code>#669</code>). Its touch panel's I2C, instead,
+          is a board bus and is shared: "el pin 7 es del I2C 0" (below, <code>I2c</code>).</td></tr>
   <tr><td><code>on()</code></td>
       <td>Drives the pin HIGH (only if it is <code>OUTPUT</code>).</td></tr>
   <tr><td><code>off()</code></td>

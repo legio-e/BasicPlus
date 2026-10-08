@@ -16,7 +16,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { ORIGEN_LIBRE = 0, ORIGEN_ENV, ORIGEN_USUARIO };
+enum { ORIGEN_LIBRE = 0, ORIGEN_ENV, ORIGEN_USUARIO, ORIGEN_IMAGEN };   /* #669: el de la imagen, como el del ENV */
 
 typedef struct {
     unsigned char origen;       /* ORIGEN_*                                       */
@@ -25,6 +25,7 @@ typedef struct {
     unsigned char tope_ms;      /* G4.a3: el `ms:` de su línea del ENV; 0 = BPVM_BUS_TOPE_MS */
     short         p[3];         /* SPI sck/mosi/miso · I2C sda/scl/-1; -1 = no tiene */
     int           hz;           /* I2C: la del bus · SPI: 0                        */
+    const char*   que;          /* #669, ORIGEN_IMAGEN: de quién es («la imagen: el táctil…») */
 } bus_t;
 
 static bus_t s_bus[2][BPVM_BUS_ID_MAX];
@@ -57,11 +58,16 @@ static void pinta(int tipo, const bus_t* b, char* out, size_t cap) {
         o += (size_t) snprintf(out + o, cap - o, " a %d kHz", b->hz / 1000);
 }
 
-/* «(ENV spi2)» / «(lo abrió el programa)». */
+/* «(ENV spi2)» / «(lo abrió el programa)» / «(la imagen: el táctil de la pantalla)». */
 static void origen_txt(int tipo, int id, const bus_t* b, char* out, size_t cap) {
-    if (b->origen == ORIGEN_ENV) snprintf(out, cap, "ENV %s%d", tipo == BPVM_BUS_SPI ? "spi" : "i2c", id);
-    else                         snprintf(out, cap, "lo abrió %s", de_quien(b->quien));
+    if (b->origen == ORIGEN_ENV)         snprintf(out, cap, "ENV %s%d", tipo == BPVM_BUS_SPI ? "spi" : "i2c", id);
+    else if (b->origen == ORIGEN_IMAGEN) snprintf(out, cap, "%s", b->que ? b->que : "la imagen");   /* #669 */
+    else                                 snprintf(out, cap, "lo abrió %s", de_quien(b->quien));
 }
+
+/* #669 — de la PLACA: lo declaró el ENV o la imagen. Se abre con su primer usuario, se cierra sin ninguno y sigue
+ * declarado; un programa no lo suelta. */
+static int de_la_placa(const bus_t* b) { return b->origen == ORIGEN_ENV || b->origen == ORIGEN_IMAGEN; }
 
 /* Reserva en la tabla de H4 los pines de un bus que se ESTABLECE. Si uno no se
  * puede, suelta los que ya reservó: o todos o ninguno. */
@@ -96,6 +102,10 @@ int bpvm_bus_declarar(int tipo, int id, const char* valor, char* err, size_t cap
     char clave[8];
     snprintf(clave, sizeof clave, "%s%d", tipo == BPVM_BUS_SPI ? "spi" : "i2c", id);
     if (!b) { snprintf(err, cap, "ENV %s: no hay ese bus", clave); return -1; }
+    if (b->origen == ORIGEN_IMAGEN) {   /* #669: lo declaró la imagen antes (el táctil de su pantalla) */
+        snprintf(err, cap, "ENV %s: es el bus de la imagen (%s): la línea sobra", clave, b->que ? b->que : "la imagen");
+        return -1;
+    }
     if (b->origen != ORIGEN_LIBRE) { snprintf(err, cap, "ENV %s: el bus ya estaba establecido", clave); return -1; }
     if (!s || !*s) { snprintf(err, cap, "ENV %s: la línea está vacía", clave); return -1; }
     while (*s) {
@@ -144,6 +154,25 @@ int bpvm_bus_declarar(int tipo, int id, const char* valor, char* err, size_t cap
     b->tope_ms = (unsigned char) (ms > 0 ? ms : 0);
     b->origen = ORIGEN_ENV;
     b->usuarios = 0;
+    return 0;
+}
+
+int bpvm_bus_declarar_imagen(int tipo, int id, int p0, int p1, int p2, int hz, const char* que, char* err, size_t cap) {
+    bus_t* b = bus_de(tipo, id);
+    short p[3];
+    if (!b) { snprintf(err, cap, "%s %d: no hay ese bus", tipo == BPVM_BUS_I2C ? "I2C" : "SPI", id); return -1; }
+    if (b->origen != ORIGEN_LIBRE) { snprintf(err, cap, "el %s %d ya estaba establecido", NOMBRE[tipo], id); return -1; }
+    if (p0 < 0 || p1 < 0) { snprintf(err, cap, "el %s %d de la imagen: faltan sus pines", NOMBRE[tipo], id); return -1; }
+    p[0] = (short) p0;
+    p[1] = (short) p1;
+    p[2] = (short) ((tipo == BPVM_BUS_SPI && p2 >= 0) ? p2 : -1);
+    if (reserva(tipo, id, p, err, cap) != 0) return -1;
+    memcpy(b->p, p, sizeof p);
+    b->hz = (tipo == BPVM_BUS_I2C) ? (hz > 0 ? hz : 100000) : 0;
+    b->tope_ms = 0;
+    b->origen = ORIGEN_IMAGEN;
+    b->usuarios = 0;
+    b->que = que;
     return 0;
 }
 
@@ -205,7 +234,7 @@ int bpvm_bus_abrir(int tipo, int id, int p0, int p1, int p2, int hz, int quien,
         for (i = 0; i < n_pines(tipo); i++) {
             if (pide[i] < 0 || pide[i] == b->p[i]) continue;
             {
-                char ya[64], ori[24];
+                char ya[64], ori[48];
                 pinta(tipo, b, ya, sizeof ya);
                 origen_txt(tipo, id, b, ori, sizeof ori);
                 if (b->p[i] < 0)
@@ -216,7 +245,7 @@ int bpvm_bus_abrir(int tipo, int id, int p0, int p1, int p2, int hz, int quien,
             return -1;
         }
         if (tipo == BPVM_BUS_I2C && hz > 0 && hz != b->hz) {
-            char ya[64], ori[24];
+            char ya[64], ori[48];
             pinta(tipo, b, ya, sizeof ya);
             origen_txt(tipo, id, b, ori, sizeof ori);
             snprintf(err, cap, "el %s %d es %s (%s): pides %d kHz", NOMBRE[tipo], id, ya, ori, hz / 1000);
@@ -247,11 +276,12 @@ int bpvm_bus_soltar(int tipo, int id, int quien, char* err, size_t cap) {
         snprintf(err, cap, "el %s %d no lo tienes abierto", (tipo == BPVM_BUS_I2C) ? "I2C" : "SPI", id);
         return -1;
     }
-    if (b->origen == ORIGEN_ENV && quien == BPVM_BUS_PROGRAMA) {
-        /* El de la placa son las pistas del circuito: se «libera» quitando su línea.
+    if (de_la_placa(b) && quien == BPVM_BUS_PROGRAMA) {
+        /* El de la placa son las pistas del circuito: se «libera» quitando su línea (o, el de la imagen, nunca).
          * Dicho con nombre y no un no-op: el programa cree que ha soltado algo. */
-        snprintf(err, cap, "el %s %d es de la placa (ENV %s%d): no se suelta desde un programa",
-                 NOMBRE[tipo], id, tipo == BPVM_BUS_SPI ? "spi" : "i2c", id);
+        char ori[48];
+        origen_txt(tipo, id, b, ori, sizeof ori);
+        snprintf(err, cap, "el %s %d es de la placa (%s): no se suelta desde un programa", NOMBRE[tipo], id, ori);
         return -1;
     }
     if (b->usuarios & ~quien) {
@@ -261,7 +291,7 @@ int bpvm_bus_soltar(int tipo, int id, int quien, char* err, size_t cap) {
         return -1;
     }
     b->usuarios = (unsigned char) (b->usuarios & ~quien);
-    if (b->origen == ORIGEN_ENV) return b->usuarios == 0 ? 1 : 0;   /* se cierra, pero sigue declarado */
+    if (de_la_placa(b)) return b->usuarios == 0 ? 1 : 0;   /* se cierra, pero sigue declarado */
     suelta_pines(tipo, b->p);
     memset(b, 0, sizeof *b);
     return 1;
