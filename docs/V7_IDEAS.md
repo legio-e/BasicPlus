@@ -8314,3 +8314,86 @@ clase sabe soltar lo suyo (`~Strip` su canal RMT, `~Pin` su pin a entrada, `~Fil
 LLAMA a los destructores cuando libera —la cascada de un `owner`, el GC, el final— y no sabe nada de RMT ni de pines;
 y la red en C (4.8) es una red, no el mecanismo. Lo de fondo en la VM se reduce a poder llamar al destructor desde la
 cascada y desde el GC, y a que las dos VMs lo hagan en el mismo punto.
+
+### 8. El diseño fino (8-oct): los destructores corren como CÓDIGO BP NORMAL
+
+**La elección de fondo.** Hay dos maneras de que la VM ejecute un destructor:
+- **llamarlo desde C** (`bpvm_call_bp_from_builtin`, `correAnidado`): es lo que hace hoy el despacho de la GUI, y tiene
+  dos límites medidos en el código: la función BP **no puede ceder ni bloquearse** —un `sleep`, esperar un `Mutex` o
+  un `join` son un error (`interp.c`, `bridge_run_bp_frame`: «la función BP cedió/falló»)— y, con dos runs, un builtin
+  de la GUI fuera del run 0 también falla. Un `~Component` (borra su widget y toma el cerrojo del árbol de la GUI) o un
+  destructor que hace `join` de su hilo dejarían de funcionar;
+- **que corra como código BP corriente**, metido en un hilo como se meten los EVENTOS desde H5.c (`events.c`: el
+  planificador, entre cuantos, monta en el hilo un marco de llamada normal y la vuelta pasa por un sentinela; *«desde
+  ahí el handler es código BP corriente: puede ceder, bloquear y lanzar excepciones»*). Ya resucita un hilo terminado
+  que debe algo (`#342`, `#655`) y la cola es raíz del GC.
+
+**Propuesta: la segunda.** Un destructor es código como cualquier otro: puede bloquearse, esperar, hacer `join` o tocar
+la GUI. Y casi todo el trabajo va en BP —en `Core.bp`, el mismo bytecode en las dos VMs: el orden y lo que se imprime,
+idénticos por construcción—; la VM pone las piezas pequeñas.
+
+**Las piezas.**
+
+1. **`Core.__destruye(x)`** (BP; el corazón): destruye `x` y su árbol de `owner`, **primero los hijos y los hijos de
+   los hijos, después el objeto** (el orden de 7):
+   - lo primero pregunta a la VM si en el árbol hay algún objeto con destructor; si no lo hay —lo más común: árboles de
+     datos—, la VM lo suelta entero por la vía rápida de hoy, la cascada en C (`#656`), y se acaba;
+   - si lo hay, recorre el árbol en postorden con una pila explícita (una `List`: sin recursión, que el `OwnerHondo` de
+     4 000 en cadena ya tumbó una vez) y, por cada nodo: si su clase tiene destructor, `try n.~() catch` —el error, se
+     dice (con la clase) y se sigue: Eduardo—; y después `__liberaSolo(n)`, su memoria (sus hijos ya no están).
+2. **Quién la llama** —los cuatro caminos, una sola función—:
+   - **un `var owner` local** (al salir de su ámbito, al reasignarlo, un `try var`): el COMPILADOR emite
+     `Core.__destruye(x)` donde hoy emite `x.~()` y `FREE_REF x`. Síncrono: acaba antes de la sentencia siguiente;
+   - **un campo `owner`** al sustituirlo: el compilador emite leer el viejo, escribir el nuevo y `Core.__destruye(viejo)`
+     —hoy `SET_FIELD_OWNER` lee el viejo, lo suelta y escribe el nuevo, sin cerrojo (`interp.c`)—. Dos hilos que asignan
+     a la vez el mismo campo sin `Mutex` son cosa del programador (la regla de Eduardo de la memoria compartida, H12);
+     la VM no se rompe: el segundo que suelta encuentra el handle muerto y no hace nada (`OwnerCarrera`, la 2b);
+   - **el GC**: no puede ejecutar BP con el mundo parado. Al marcar, los objetos CON destructor que han quedado
+     inalcanzables no se sueltan: se resucitan (se marcan, y lo que alcanzan, para que su destructor encuentre vivo lo
+     que usa) y pasan a una cola de pendientes. Entre cuantos —como un evento—, el planificador mete en el hilo de turno
+     `Core.__destruyePendientes()`, que los destruye uno a uno con `__destruye`;
+   - **el final del programa** (normal, con un error o con un STOP): todo lo que queda vivo con destructor pasa a la cola
+     de pendientes, en ORDEN INVERSO AL DE CREACIÓN; el STOP se baja; los demás hilos se abandonan; el `main` se
+     resucita con la pila limpia y corre `Core.__destruyePendientes()` hasta acabar. Con un tope de tiempo, y un segundo
+     STOP la corta.
+3. **El registro de creación** (la VM): al crear un objeto de una clase con destructor, se apunta en una lista, en orden;
+   sale al destruirse. Da el orden del final y el de los pendientes del GC. Sólo de las clases con destructor: en un
+   programa de GUI, unos cientos de entradas.
+4. **«Esta clase tiene destructor»**: la VM lo calcula al enlazar, una vez por clase (su `__dtor` resuelto no es el
+   vacío de `Object` ni el de `Thread`).
+5. **La red de seguridad** (Eduardo), tras el final: (a) el registro, vacío —si no, se dice qué quedó, con la clase—;
+   (b) la lista de libres: un GC sin raíces lo suelta todo, y la lista tiene que cubrir el heap entero salvo lo siempre
+   vivo (las excepciones prefabricadas) —lo que no, se dice: se quedó perdido—; (c) la plataforma suelta lo que quede de
+   sus recursos (ficheros, buses, pines y los canales de `#667`) y lo dice.
+6. **Los recursos** (`#667`): los destructores de `Pwm.Slice`, `Pulse.Counter`, `Neopixel.Strip` y demás, con el builtin
+   que suelta cada recurso en cada familia; y `~Pin` (o `release()`) devuelve el pin a entrada. La VM no sabe nada de
+   periféricos: lo sabe cada clase (Eduardo: *«la típica división del trabajo de la POO»*).
+
+**Lo que hay que añadir a cada VM**: la cola de pendientes con su raíz en el GC, la resurrección al marcar, la
+inyección de una FUNCIÓN (hoy se inyectan métodos: receptor y ranura), el registro, la marca por clase y media docena
+de builtins pequeños (`__liberaSiSinDestructores`, `__tieneDestructor`,
+`__hijosOwner`, `__liberaSolo`, `__avisaDestructor`, `__siguientePendiente`). En la VM-Java, además: bajar el KILL y
+terminar bien el `main` tras una excepción (hoy se queda RUNNING).
+
+**Los efectos para quien programa** (para el manual): el destructor corre siempre que el objeto se libera, sea quien
+sea quien lo libere; corre como código normal (puede esperar, tocar la GUI); en él, el objeto ya no tiene a sus hijos
+`owner`; un error dentro se atrapa, se dice y la limpieza sigue; y al acabar el programa, también con un STOP, todo
+vuelve a como estaba.
+
+**La compatibilidad**: los `.mod` compilados antes (con `x.~()` y `FREE_REF`) siguen funcionando con el orden de antes
+(el padre primero, los hijos sin destructor); el `FREE_REF` de la VM no cambia. Ningún `.mod` publicado lleva
+destructores (llegaron en V7/H1), y los de las placas se recompilan con su lote.
+
+**La paridad**: lo que destruye el GC se destruye en el punto en que el GC pasa; las dos VMs recogen en el mismo punto
+con un worker (el corpus ya compara el heap byte a byte: `HeapInfo`, `HeapCompact`, `GcHondo`), y con dos workers el
+orden es libre como en el resto del corpus con `// smp: orden libre`. Se mide con un programa cuyos destructores
+impriman.
+
+**El plan, por pasos que cierran algo** (Java → C → placas):
+1. **La VM-Java**: las piezas 1–5, con `Core.__destruye` en `Core.bp` y el compilador; una batería de paridad (owner
+   local, campo owner, `OwnerList`, el GC, los globales, el final con un error y con un STOP), con sus sabotajes.
+2. **La VM-C**, con la VM-Java de oráculo.
+3. **`#667`**: los destructores de la stdlib y los builtins de cada familia (en el PC, con dobles que cuentan).
+4. **Medir la GUI** (`GuiChurn`, `GuiAnidadaGc`: memoria y tiempo) y la RAM de la C3 y la C6 (`docs/MEMORIA.md`).
+5. **Las placas, en un lote**: `NeoUna` tras `PinesSistema` en la C6, GuiArbolG2 tras `PinesSistema`, el PWM parado tras
+   un STOP, y la ronda de V7.
