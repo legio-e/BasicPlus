@@ -8,6 +8,14 @@ module SueltaNpB
 
   function pines(): integer[]
     var m: string := Machine.getMicro()
+    if m == "esp32c6" then
+      var c6: integer[] := [18, 19]
+      return c6
+    endif
+    if m == "stm32u575" then
+      var nu: integer[] := [39]
+      return nu
+    endif
     if m == "esp32s3" then
       var s3: integer[] := [38, 39, 40, 41]
       return s3

@@ -273,6 +273,11 @@ int32_t bpvm_npack_cargar_zona(const bpvm_npack_familia_t* f);
  * reiniciar la placa (lo que ya hay en RAM no se descarga). */
 void bpvm_npack_carga_reinicia(void);
 
+/* V7 #671 (8-oct) — ¿se saltó ya a algún motor en este arranque? Sus tablas (las que publicaron en la BIOS, y las
+ * que guardó quien las resolvió, gui_pack.c) apuntan a la flash de la zona tal como estaba: si la zona cambia
+ * (PACK_BURN_END, PACK_DEL, PACK_FORMAT), la placa se reinicia (Eduardo: «671 a»; bpvm_bmgr_wire.c). */
+int bpvm_npack_motores_cargados(void);
+
 #ifdef __cplusplus
 }
 #endif

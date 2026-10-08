@@ -169,6 +169,8 @@ static int32_t cargar(const bpvm_npack_familia_t* f) {
     return saltados > 0 ? saltados : -(int32_t) ultimo;
 }
 
+int bpvm_npack_motores_cargados(void) { return s_hecho; }   /* V7 #671 */
+
 void bpvm_npack_carga_reinicia(void) {
     s_hecho = 0;
     s_resultado = 0;

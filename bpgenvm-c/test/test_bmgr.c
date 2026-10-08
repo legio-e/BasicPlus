@@ -33,6 +33,9 @@ const char* bpvm_mdn_host_float_abi(void) { return ""; }
 /* V7/H7 (30-sep): y otra vez lo mismo —el wire de packs llama a bpvm_mods_resync desde #468 (25-sep) y la prueba
  * volvio a no enlazar—. Desde hoy esta en la red (check-testc), que es lo que faltaba. */
 void        bpvm_mods_resync(void)        { }
+/* V7 #671 — los motores «cargados», a mano: bpvm_npack_carga.c no entra en esta prueba. */
+static int g_cargados = 0;
+int bpvm_npack_motores_cargados(void) { return g_cargados; }
 
 static int g_fail = 0;
 #define CHECK(cond, msg) do { \
@@ -354,6 +357,74 @@ int main(void) {
         nn = bpvm_bmgr_wire_dispatch(&bmp, &rq, rep, sizeof rep, &wr3);
         CHECK(nn > 0 && strstr(rep, "\"ramBase\":0") != NULL && strstr(rep, "\"ramSize\":0") != NULL,
               "G1: sin bloque de RAM -> ramBase 0 (el IDE avisa, no graba un motor muerto)");
+    }
+
+    /* --- 10. V7 #671 (8-oct, Eduardo: «671 a»): con motores YA CARGADOS, cambiar la zona reinicia la placa ------
+     * Los motores se cargan una vez por arranque y sus tablas apuntan a la zona de antes (la DK2 cayó así, en un
+     * HardFault). Aquí, la mitad del común: la respuesta lo dice ("reinicia":true) y deja el reinicio PENDIENTE para el
+     * REPL, que lo hace tras mandarla. Sin motores cargados, nada. */
+    {
+        static union { uint8_t b[64u * 1024u]; uint32_t al; } zona2;
+        static uint8_t img[8192];
+        memset(zona2.b, 0xFF, sizeof zona2.b);
+        bpvm_pack_flash_t fl2 = { zf_erase, zf_program, zona2.b, 4096u };
+        bpvm_bmgr_t bmr;
+        memset(&bmr, 0, sizeof bmr);
+        bmr.packs_base = zona2.b; bmr.packs_size = (uint32_t) sizeof zona2.b; bmr.packs_flash = &fl2;
+        bpvm_bmgr_req_t rq;
+        char rep[512];
+        int wr = -1;
+        (void) bpvm_bmgr_wire_reinicio_pendiente();   /* limpio */
+
+        g_cargados = 0;
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_FORMAT"); rq.id = 31; rq.confirm_yes = 1;
+        int nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
+        CHECK(nn > 0 && strstr(rep, "PACK_FORMAT_REPLY") && !strstr(rep, "reinicia") && !bpvm_bmgr_wire_reinicio_pendiente(),
+              "#671: sin motores cargados, PACK_FORMAT no reinicia (los de la zona nueva, en el siguiente INFO)");
+
+        g_cargados = 1;
+        pon_pack_con_motor(zona2.b, 4096u, 0x48000000u, 6916u, 1368u);
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_DEL"); rq.id = 32; rq.off = 0; rq.has_off = 1;
+        nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
+        CHECK(nn > 0 && strstr(rep, "PACK_DEL_REPLY") && strstr(rep, "\"reinicia\":true"),
+              "#671: con motores cargados, PACK_DEL lo dice en la respuesta (\"reinicia\":true)");
+        CHECK(bpvm_bmgr_wire_reinicio_pendiente() == 1 && bpvm_bmgr_wire_reinicio_pendiente() == 0,
+              "#671: ...y deja el reinicio pendiente UNA vez (el REPL lo hace tras mandarla)");
+
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_FORMAT"); rq.id = 33; rq.confirm_yes = 0;
+        nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
+        CHECK(nn > 0 && strstr(rep, "falta confirm=YES") && !bpvm_bmgr_wire_reinicio_pendiente(),
+              "#671: un PACK_FORMAT rechazado (sin confirm) no reinicia nada");
+
+        rq.confirm_yes = 1; rq.id = 34;
+        nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
+        CHECK(nn > 0 && strstr(rep, "\"reinicia\":true") && bpvm_bmgr_wire_reinicio_pendiente() == 1,
+              "#671: con motores cargados, PACK_FORMAT tambien");
+
+        /* y PACK_BURN_END: un pack entero por el wire (BEGIN, DATA y END), en la zona recién formateada */
+        pon_pack_con_motor(img, (uint32_t) sizeof img, 0x48000000u, 6916u, 1368u);
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_BURN_BEGIN"); rq.id = 35; rq.size = (long) sizeof img; rq.has_size = 1;
+        nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
+        int bien = nn > 0 && strstr(rep, "PACK_BURN_BEGIN_REPLY") != NULL;
+        for (uint32_t o = 0; bien && o < (uint32_t) sizeof img; o += 1024u) {
+            memset(&rq, 0, sizeof rq);
+            snprintf(rq.type, sizeof rq.type, "PACK_BURN_DATA"); rq.id = 36;
+            rq.bulk = img + o; rq.bulk_len = 1024;
+            nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
+            bien = nn > 0 && strstr(rep, "PACK_BURN_DATA_REPLY") != NULL;
+        }
+        memset(&rq, 0, sizeof rq);
+        snprintf(rq.type, sizeof rq.type, "PACK_BURN_END"); rq.id = 37;
+        if (bien) nn = bpvm_bmgr_wire_dispatch(&bmr, &rq, rep, sizeof rep, &wr);
+        CHECK(bien && nn > 0 && strstr(rep, "PACK_BURN_END_REPLY") && strstr(rep, "\"reinicia\":true")
+              && bpvm_bmgr_wire_reinicio_pendiente() == 1,
+              "#671: con motores cargados, PACK_BURN_END tambien");
+        if (!bien) printf("    (el pack no llego entero: %s)\n", rep);
+        g_cargados = 0;
     }
 
     /* V7/H7 (30-sep) — el FS ARRIBA (la P4 Waveshare y la C5: 32 MB con una tabla que acaba en 16): PART_LS cuenta

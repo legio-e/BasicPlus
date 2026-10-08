@@ -66,6 +66,12 @@ int bpvm_bmgr_needs_env(const char* type);
 int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
                             char* out, size_t out_cap, int* wrote_slot);
 
+/* V7 #671 (8-oct) — un PACK_BURN_END, PACK_DEL o PACK_FORMAT que salió bien con motores YA cargados deja la placa
+ * pendiente de REINICIAR (su respuesta lo dice: "reinicia":true): las tablas de los motores apuntan a la zona de
+ * antes. Lo hace quien manda la respuesta (bpvm_repl.c, tras mandarla) con el `reiniciar` de la familia. 1 = sí, y se
+ * consume (la siguiente pregunta, 0). */
+int bpvm_bmgr_wire_reinicio_pendiente(void);
+
 /* Estado de arranque derivado del bmgr (para STATE y para el "escrutinio" del IDE):
  * virgen (sin env) → 0 (kernel); env pero sin particiones → 1; completo → 3. */
 int bpvm_bmgr_wire_state(const bpvm_bmgr_t* bm);

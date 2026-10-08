@@ -1708,6 +1708,16 @@ reinicia, pero desde ese momento las marcas de los motores dejan de estar —el 
 usarlas es un error con nombre («el pack 'LVGL' cambió: reinicia la placa para cargar el motor nuevo»); (c) recargar
 los motores en caliente: no —un motor no se descarga: su RAM, sus hilos—. Recomendada: (a), la más simple y la que
 deja siempre la placa en un estado correcto; con (b) queda un estado intermedio (sin motor hasta reiniciar).
+**Decidido por Eduardo (8-oct)**: *«671 a»*. **Hecho en el PC y en las imágenes (8-oct)** —sin cerrar: falta la
+placa—: `bpvm_npack_motores_cargados` dice si se saltó ya a algún motor; `bpvm_bmgr_wire.c`, en un `PACK_BURN_END`,
+`PACK_DEL` o `PACK_FORMAT` que sale bien con motores cargados, añade `"reinicia":true` a la respuesta y deja el
+reinicio pendiente; y el REPL común, tras mandarla, llama al `reiniciar` de la familia —el del RESET del cable: contesta
+`RESET_REPLY` con el mismo id, deja salir el cable y reinicia—. Sin motores cargados, nada (los de la zona nueva se
+cargan en el siguiente INFO o RUN). El IDE lo lee (`BpvmClient.reiniciaTrasPack`) y el panel de Packs lo dice y vuelve
+a conectar solo, por el camino de tras un `PART_APPLY` pero sin mandar RESET (`PicoExplorer.reconectarTrasReinicio`);
+`wire_serie.py` lo dice (y `packdel` para tras el primero). La prueba, `make test-bmgr` §10 (6 casos: sin motores, nada;
+con ellos, los tres verbos; uno rechazado, nada; pendiente una sola vez), con su sabotaje (4 en rojo). La referencia
+(§15.5, en las dos lenguas) lo cuenta.
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 

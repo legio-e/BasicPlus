@@ -11,6 +11,14 @@ module SueltaPwmA
 
   function pines(): integer[]
     var m: string := Machine.getMicro()
+    if m == "esp32c6" then
+      var c6: integer[] := [0, 1, 2, 3]
+      return c6
+    endif
+    if m == "stm32u575" then
+      var nu: integer[] := [39, 23, 40]
+      return nu
+    endif
     if m == "esp32s3" then
       var s3: integer[] := [4, 5, 6, 7, 8, 9]
       return s3
@@ -42,6 +50,14 @@ module SueltaPwmA
   // La UART 1, en dos pines libres (tx, rx).
   function pinesUart(): integer[]
     var m: string := Machine.getMicro()
+    if m == "esp32c6" then
+      var c6: integer[] := [16, 17]
+      return c6
+    endif
+    if m == "stm32u575" then
+      var nu: integer[] := newIntArray(0)
+      return nu
+    endif
     if m == "esp32s3" then
       var s3: integer[] := [1, 2]
       return s3

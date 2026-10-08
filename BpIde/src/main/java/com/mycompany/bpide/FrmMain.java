@@ -3393,6 +3393,11 @@ public class FrmMain extends javax.swing.JFrame
             if (picoExplorer == null) { alFallar.accept("sin explorador de dispositivo"); return; }
             picoExplorer.resetYReconectar(alVolver, alFallar);
         });
+        /* V7 #671 — y tras un PACK_* que reinicia la placa (motores ya cargados): reconectar, SIN mandar RESET. */
+        fb.setReconectador((alVolver, alFallar) -> {
+            if (picoExplorer == null) { alFallar.accept("sin explorador de dispositivo"); return; }
+            picoExplorer.reconectarTrasReinicio(alVolver, alFallar);
+        });
         fb.setSize(760, 520);
         fb.setLocationRelativeTo(this);
         fb.setVisible(true);

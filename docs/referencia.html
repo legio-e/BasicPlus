@@ -2753,6 +2753,13 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   a /lib (a la RAM)»</em>). Se graba igual: es memoria, no un error.
 </p>
 
+<p>
+  Y si la placa ya tenía cargados los <strong>motores</strong> de sus packs (los carga el primer programa o la
+  primera consulta), grabar, borrar o formatear un pack la <strong>reinicia</strong>: las tablas de esos motores
+  apuntan a la zona tal como estaba, y usarlas después del cambio saltaría a otra parte. El panel lo dice y vuelve a
+  conectar solo (<code>#671</code>).
+</p>
+
 <h3 id="usar">15.6 Usarlo desde un programa</h3>
 
 <p>

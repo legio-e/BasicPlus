@@ -87,6 +87,27 @@ public final class PacksPanel extends JPanel {
      *  la guarda el explorador al conectar). Se pide en vez de guardarla: entre
      *  que se conectó y que se graba puede haber cambiado de placa. */
     private java.util.function.IntSupplier archPlaca = () -> 0;
+    /** V7 #671 (8-oct) — tras grabar, borrar o formatear con motores ya cargados, la placa se reinicia SOLA (sus tablas
+     *  apuntaban a la zona de antes): el explorador de la ventana principal vuelve a conectar —sin mandar RESET— y la
+     *  ventana se engancha al cliente nuevo. Sin esto, se dice y se reconecta a mano. */
+    private BoardMgrPanel.Reiniciador reconectador;
+    public void setReconectador(BoardMgrPanel.Reiniciador r) { this.reconectador = r; }
+
+    /** V7 #671 — tras un cambio de la zona: si la placa dijo que se reinicia, se dice y se reconecta; si no, como
+     *  siempre, se refresca la lista. */
+    private void trasCambiarLaZona() {
+        if (client == null || !client.reiniciaTrasPack()) { refresh(); return; }
+        log.accept("[Packs] la placa tenía motores cargados y se REINICIA para cargar los de la zona nueva (#671)");
+        summaryLabel.setText("la placa se está reiniciando…");
+        if (reconectador == null) {
+            log.accept("[Packs] reconecta cuando vuelva");
+            return;
+        }
+        reconectador.reiniciar(
+            nuevo -> log.accept("[Packs] la placa ha vuelto con los motores de la zona nueva"),
+            motivo -> log.accept("[Packs] la placa no ha vuelto (" + motivo + "): reconecta a mano"));
+    }
+
     public void setArchPlaca(java.util.function.IntSupplier s) {
         if (s != null) this.archPlaca = s;
     }
@@ -393,7 +414,7 @@ public final class PacksPanel extends JPanel {
                     + (((Integer) r[2]).intValue() != ((Integer) r[0]).intValue()
                        ? " — podado de " + r[2] + " para esta placa" : "")
                     + ") en offset " + r[1]);
-            refresh();
+            trasCambiarLaZona();   /* V7 #671 */
         });
     }
 
@@ -493,7 +514,7 @@ public final class PacksPanel extends JPanel {
         if (ok != JOptionPane.YES_OPTION) return;
         bg(() -> { client.packDel(off, 30000); return null; }, r -> {
             log.accept("[Packs] '" + name + "' marcado como borrado (offset " + off + ")");
-            refresh();
+            trasCambiarLaZona();   /* V7 #671 */
         });
     }
 
@@ -513,7 +534,7 @@ public final class PacksPanel extends JPanel {
         summaryLabel.setText("formateando zona de packs…");
         bg(() -> { client.packFormat(30000); return null; }, r -> {
             log.accept("[Packs] zona de packs formateada");
-            refresh();
+            trasCambiarLaZona();   /* V7 #671 */
         });
     }
 

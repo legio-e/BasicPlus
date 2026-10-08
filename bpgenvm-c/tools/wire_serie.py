@@ -529,6 +529,15 @@ def cmd_pack(w, args):
     r = w.esperar("PACK_BURN_END_REPLY", 30)
     print("pack %s : %s" % (args[0], ("grabado en offset %s (%d B)" % (r.get("offset"), len(img))) if r
           else "FALLO al cerrar %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2]))
+    avisa_reinicio(r)
+
+
+def avisa_reinicio(r):
+    """V7 #671 (8-oct): con motores ya cargados, un PACK_BURN_END, PACK_DEL o PACK_FORMAT reinicia la placa (sus tablas
+    apuntaban a la zona de antes). La respuesta lo dice; aqui se cuenta, para no mandarle nada en esos segundos."""
+    if r and r.get("reinicia"):
+        print("  la placa tenia motores cargados y se REINICIA para cargar los de la zona nueva (#671): "
+              "espera unos segundos antes del siguiente comando")
 
 
 def cmd_env(w, args):
@@ -574,6 +583,11 @@ def cmd_packdel(w, args):
         d = w.esperar("PACK_DEL_REPLY", 30)
         print("packdel %s @%s: %s" % (args[0], pk.get("offset"),
               "borrado" if d else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2]))
+        if d and d.get("reinicia"):   # V7 #671: la placa se reinicia; lo demas, tras volver
+            avisa_reinicio(d)
+            if len(vivos) > 1:
+                print("  (los demas '%s', cuando vuelva: lanza packdel otra vez)" % args[0])
+            break
 
 
 def cmd_packformat(w, _):
@@ -655,6 +669,7 @@ def cmd_packfmt(w, _):
     w.send("PACK_FORMAT", confirm="YES")
     r = w.esperar("PACK_FORMAT_REPLY", 60)
     print("PACK_FORMAT:", "ok" if r else "FALLO %s" % [(m.get("code"), m.get("message")) for m in w.otros][:2])
+    avisa_reinicio(r)
 
 
 COMANDOS = {"info": cmd_info, "log": cmd_log, "list": cmd_list, "ciclo": cmd_ciclo,

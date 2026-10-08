@@ -2220,6 +2220,17 @@ public final class PicoExplorer extends JPanel {
      * Swing. Sin diálogo de confirmación: lo pide quien acaba de aplicar las particiones.
      */
     public void resetYReconectar(Consumer<BpvmClient> alVolver, Consumer<String> alFallar) {
+        reiniciarYReconectar(true, alVolver, alFallar);
+    }
+
+    /** V7 #671 (8-oct) — el gemelo SIN RESET: la placa ya se está reiniciando sola (un PACK_* con motores cargados) y
+     *  sólo hay que esperarla y volver a conectar, al mismo destino y con la misma paciencia (30 s). */
+    public void reconectarTrasReinicio(Consumer<BpvmClient> alVolver, Consumer<String> alFallar) {
+        reiniciarYReconectar(false, alVolver, alFallar);
+    }
+
+    private void reiniciarYReconectar(final boolean mandarReset, Consumer<BpvmClient> alVolver,
+                                      Consumer<String> alFallar) {
         if (!isConnected() || ultimoEndpoint == null || ultimaFabrica == null) {
             alFallar.accept("no hay conexión");
             return;
@@ -2231,11 +2242,13 @@ public final class PicoExplorer extends JPanel {
         setConnectedUI(false);
         rootNode.removeAllChildren();
         treeModel.reload();
-        status.setText("Reiniciando la placa (" + endpoint + ")…");
+        status.setText((mandarReset ? "Reiniciando la placa (" : "La placa se reinicia (#671) (") + endpoint + ")…");
         new SwingWorker<Object[], Void>() {
             @Override protected Object[] doInBackground() throws Exception {
-                try { viejo.reset(); } catch (IOException e) { /* un no explícito (BUSY…) se dice abajo */
-                    if (e.getMessage() != null && e.getMessage().contains("BUSY")) throw e;
+                if (mandarReset) {
+                    try { viejo.reset(); } catch (IOException e) { /* un no explícito (BUSY…) se dice abajo */
+                        if (e.getMessage() != null && e.getMessage().contains("BUSY")) throw e;
+                    }
                 }
                 try { viejo.close(); } catch (Exception ignore) { }
                 Thread.sleep(1500);   // que caiga antes de llamar a la puerta

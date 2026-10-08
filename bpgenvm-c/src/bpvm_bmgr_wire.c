@@ -26,6 +26,20 @@ static void sb_raw(sb_t* s, const char* str) {
     s->buf[s->off] = '\0';
 }
 static void sb_long(sb_t* s, long v) { char t[24]; snprintf(t, sizeof t, "%ld", v); sb_raw(s, t); }
+
+/* V7 #671 (8-oct, Eduardo: «671 a») — LA ZONA CAMBIÓ CON MOTORES CARGADOS: la placa se reinicia. Los motores se cargan
+ * UNA vez por arranque (bpvm_npack_cargar_zona), el registro de la BIOS no deja republicar una marca y gui_pack.c guarda
+ * la tabla que resolvió: tras grabar, borrar o formatear, sus punteros apuntan a la flash de ANTES. Visto en la DK2 —un
+ * HardFault NOCP con el PC en la LVGL vieja, donde ya estaba SQLite— y en la P4, un pánico. Sin motores cargados, nada:
+ * los de la zona nueva se cargan en el siguiente INFO o RUN. */
+static int s_reinicio = 0;
+int bpvm_bmgr_wire_reinicio_pendiente(void) { int r = s_reinicio; s_reinicio = 0; return r; }
+/* «,"reinicia":true» en la respuesta, y pendiente, si había motores cargados. */
+static void tras_cambiar_la_zona(sb_t* s) {
+    if (!bpvm_npack_motores_cargados()) return;
+    s_reinicio = 1;
+    sb_raw(s, ",\"reinicia\":true");
+}
 static void sb_esc(sb_t* s, const char* str) {   /* string JSON escapado, sin comillas */
     if (!s->ok) return;
     for (const char* p = str; *p; p++) {
@@ -393,7 +407,9 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         if (r < 0) return reply_pack_err(out, cap, id, r);
         bpvm_mods_resync();   /* V7/H6 (#468): lo que el pack nuevo sirve igual, fuera de /lib */
         sb_raw(&s, "{\"type\":\"PACK_BURN_END_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"offset\":"); sb_long(&s, r); sb_raw(&s, "}");
+        sb_raw(&s, ",\"offset\":"); sb_long(&s, r);
+        tras_cambiar_la_zona(&s);   /* V7 #671 */
+        sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "PACK_DEL")) {
@@ -425,7 +441,9 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
         if (r < 0) return reply_pack_err(out, cap, id, r);
         bpvm_mods_resync();   /* V7/H6 (#468): lo que el pack borrado servía vuelve a /lib desde la imagen, ya */
         sb_raw(&s, "{\"type\":\"PACK_DEL_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"offset\":"); sb_long(&s, req->off); sb_raw(&s, "}");
+        sb_raw(&s, ",\"offset\":"); sb_long(&s, req->off);
+        tras_cambiar_la_zona(&s);   /* V7 #671 */
+        sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "PACK_FORMAT")) {
@@ -442,7 +460,9 @@ int bpvm_bmgr_wire_dispatch(bpvm_bmgr_t* bm, const bpvm_bmgr_req_t* req,
             return reply_pack_err(out, cap, id, BPVM_PACK_ERR_IO);
         bpvm_mods_resync();   /* V7/H6 (#468): la zona vacía — /lib, entero desde la imagen, ya */
         sb_raw(&s, "{\"type\":\"PACK_FORMAT_REPLY\",\"id\":"); sb_long(&s, id);
-        sb_raw(&s, ",\"regionSize\":"); sb_long(&s, (long) bm->packs_size); sb_raw(&s, "}");
+        sb_raw(&s, ",\"regionSize\":"); sb_long(&s, (long) bm->packs_size);
+        tras_cambiar_la_zona(&s);   /* V7 #671 */
+        sb_raw(&s, "}");
         return s.ok ? (int) s.off : -1;
     }
     if (!strcmp(type, "PART_DEFAULTS")) {

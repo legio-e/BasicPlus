@@ -1408,6 +1408,8 @@ int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj) {
  * TRABAJO y la respuesta; las dos copias del ENV las presta la ZONA DE RASCAR, libre durante un comando del entorno
  * porque sus otros usuarios son los PACK_* y ésos no lo tocan (bpvm_bmgr_needs_env, la frontera). Los PACK_* no usan
  * sector de trabajo y llegan con el búfer ya mordido por su bulk: el resto va entero a la respuesta. */
+static const bpvm_repl_run_ops_t* run_ops(void);   /* V7 #671: el `reiniciar` de la familia (abajo) */
+
 void bpvm_bmgr_handle(long id, const json_obj_t* obj, const char* type,
                       unsigned char* scratch, unsigned long scratch_len,
                       const unsigned char* bulk, unsigned long bulk_len) {
@@ -1498,6 +1500,15 @@ void bpvm_bmgr_handle(long id, const json_obj_t* obj, const char* type,
     }
     if (con_env) bpvm_scratch_give("bmgr-env");
     wire_v1_send_line(reply, (size_t) n);
+    /* V7 #671 (8-oct, Eduardo: «671 a») — la zona cambió con motores ya cargados: sus tablas apuntan a la flash de
+     * antes. La respuesta ya lo dijo ("reinicia":true); ahora, el reinicio, con el de la familia (el del RESET del
+     * cable: contesta RESET_REPLY con el mismo id, deja salir el cable y reinicia). */
+    if (bpvm_bmgr_wire_reinicio_pendiente()) {
+        const bpvm_repl_run_ops_t* r = run_ops();
+        log_printf("packs: la zona cambio con motores ya cargados: la placa se reinicia para cargar los de ahora (#671)");
+        if (r && r->reiniciar) r->reiniciar(id);
+        else log_printf("packs: esta familia no sabe reiniciarse: reiniciala a mano (#671)");
+    }
 }
 
 static void reply_put_field(const char* type, long id, unsigned long val,

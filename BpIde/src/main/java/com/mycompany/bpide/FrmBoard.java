@@ -54,6 +54,17 @@ public class FrmBoard extends javax.swing.JFrame {
         }, alFallar));
     }
 
+    /** V7 #671 — tras un PACK_* que reinicia la placa (motores ya cargados), volver a conectar SIN mandar RESET (la
+     *  placa ya se reinicia sola). Al volver, la ventana se engancha al cliente NUEVO, como tras un PART_APPLY. */
+    public void setReconectador(BoardMgrPanel.Reiniciador r) {
+        if (packsPanel == null) return;
+        if (r == null) { packsPanel.setReconectador(null); return; }
+        packsPanel.setReconectador((alVolver, alFallar) -> r.reiniciar(nuevo -> {
+            attach(nuevo);
+            alVolver.accept(nuevo);
+        }, alFallar));
+    }
+
     public void attach(BpvmClient client) {
         this.clienteActual = client;   // #435: el diálogo del entorno lo necesita
         if (boardPanel != null) boardPanel.attach(client);

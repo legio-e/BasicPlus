@@ -1756,7 +1756,9 @@ public final class BpvmClient implements AutoCloseable {
             sendRequest("PACK_BURN_DATA", null, part, timeoutMs);
             if (cb != null) cb.avance(o + n, img.length);
         }
+        reiniciaTrasPack = false;
         Map<String, Object> end = sendRequest("PACK_BURN_END", null, null, timeoutMs);
+        reiniciaTrasPack = Json.getBool(end, "reinicia", false);   /* V7 #671 */
         return Json.getLong(end, "offset", -1);
     }
 
@@ -1765,13 +1767,23 @@ public final class BpvmClient implements AutoCloseable {
      *  restos de su uso anterior). Requiere confirm=YES en el wire; la UI pide
      *  la confirmación al usuario ANTES de llamar aquí. */
     public void packFormat(long timeoutMs) throws IOException {
-        sendRequest("PACK_FORMAT", "\"confirm\":\"YES\"", null, timeoutMs);
+        reiniciaTrasPack = false;
+        Map<String, Object> r = sendRequest("PACK_FORMAT", "\"confirm\":\"YES\"", null, timeoutMs);
+        reiniciaTrasPack = Json.getBool(r, "reinicia", false);   /* V7 #671 */
     }
+
+    /** V7 #671 (8-oct) — la última respuesta de PACK_BURN_END, PACK_DEL o PACK_FORMAT dijo {@code "reinicia":true}: la
+     *  placa tenía motores cargados y se está reiniciando para cargar los de la zona nueva (las tablas de los de antes
+     *  apuntaban a la flash de antes: la DK2 cayó así). Quien graba lo dice y vuelve a conectar. */
+    private volatile boolean reiniciaTrasPack = false;
+    public boolean reiniciaTrasPack() { return reiniciaTrasPack; }
 
     /** PACK_DEL — tombstone del pack en `offset`: se MARCA borrado (no se
      *  borra); el espacio se recupera compactando desde el PC. */
     public void packDel(long offset, long timeoutMs) throws IOException {
-        sendRequest("PACK_DEL", "\"offset\":" + offset, null, timeoutMs);
+        reiniciaTrasPack = false;
+        Map<String, Object> r = sendRequest("PACK_DEL", "\"offset\":" + offset, null, timeoutMs);
+        reiniciaTrasPack = Json.getBool(r, "reinicia", false);   /* V7 #671 */
     }
 
     /** Helper para serializar un string con comillas + escape. */

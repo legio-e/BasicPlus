@@ -2550,6 +2550,13 @@ the result is a <code>.pack</code> in the <code>outDir</code>:</p>
   not an error.
 </p>
 
+<p>
+  And if the board had already loaded its packs' <strong>engines</strong> (the first program or the first query
+  loads them), burning, deleting or formatting a pack <strong>restarts</strong> it: those engines' tables point to the
+  region as it was, and using them after the change would jump somewhere else. The panel says so and reconnects
+  by itself (<code>#671</code>).
+</p>
+
 <h3 id="packs-use">15.6 Using one from a program</h3>
 
 <p>Nothing special: <code>import</code> and that is it. A module living in a pack is
