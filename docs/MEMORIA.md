@@ -6,12 +6,17 @@
 > cifras al byte. **La C3**, el mismo día y con la misma herramienta (imagen `8ec31ecd`; con `log=1` en su ENV para la
 > medida, y `log=0` otra vez después, como estaba). Las fichas: `#651` (la GUI de la C6, al límite), `#666` (lo que no se suelta al acabar un RUN),
 > `#667` (los destructores), `#650` (el módulo del pack que no gasta RAM).
+>
+> **Remedida la C6 el 8-oct** (imagen `7c18cbb7`, de `cd9a8ad1`, con los packs nuevos de `#623`), tras `#651` (los
+> nombres del cargador, un bloque por módulo), `#650` y `#623` (la stdlib, XIP del `Stdlib.pack`) y `#666`–`#668` (lo
+> que se suelta al acabar). Las tablas dan las dos medidas: la del 8-oct y, entre paréntesis, la del 7-oct. La C3,
+> por remedir.
 
 ## 1. Dos memorias que no hay que confundir
 
 | | dónde está | en la C3 y la C6 | quién la gasta | cómo se mira |
 |---|---|---|---|---|
-| **el heap de BP** | dentro del bloque de la VM | fijo: 64 KB en la C6, 48 en la C3 (6-oct) | los objetos, strings y arrays del programa; el GC lo recoge | `Heap.getFree()`, `vmHeapBytes` del `INFO` |
+| **el heap de BP** | dentro del bloque de la VM | fijo: 63 KB en la C6 (8-oct; 64 hasta el 7-oct: §2), 48 en la C3 (6-oct) | los objetos, strings y arrays del programa; el GC lo recoge | `Heap.getFree()`, `vmHeapBytes` del `INFO` |
 | **la RAM del sistema** | el heap del IDF, fuera de la VM | lo que quede: en la C6, ~80 KB en reposo | el sistema, y lo que el núcleo pide en C para el programa: las tablas para cargarlo, los ficheros abiertos, la GUI, las natives, los periféricos | la línea `mem:` del log tras cada RUN (con `log=1`), `rtosHeapMinFreeBytes` del `INFO` (el mínimo histórico), «heap del sistema, mínimo libre» en la tanda |
 
 Un programa puede tener el heap de BP medio vacío y quedarse sin RAM del sistema: «enlace tardío: sin memoria para
@@ -23,12 +28,12 @@ encuentra un bloque contiguo—.
 | | |
 |---|---|
 | SRAM | 512 KB, sin PSRAM |
-| la imagen (código en IRAM, datos y `.bss`) | ~133 KB (`_heap_start` = `0x408214c0`) |
+| la imagen (código en IRAM, datos y `.bss`) | ~133 KB (`_heap_start` = `0x408215d0` el 8-oct; `0x408214c0` el 7-oct: 272 B más) |
 | el IDF, FreeRTOS y el arranque, antes de los packs | ~21 KB |
 | **el bloque de los packs** (`packRam=136` en el ENV) | **136 KB**: los estáticos de los motores de la placa —`DriverSpi` y `GuiMini`, 133 600 B, con el pool de LVGL de 64 KB— y 5 KB de arena |
-| **el bloque de la VM** | **128 KB**: 64 de heap de BP y 64 de pilas de los hilos. El arranque lo pide si deja al sistema su margen (`CHIP_MARGEN_SISTEMA`, 103 824 B): deja 103 864, 40 B por encima |
+| **el bloque de la VM** | **127 KB** (8-oct): 63 de heap de BP y 64 de pilas de los hilos (no bajan de 64). El arranque lo pide, en KB enteros, si deja al sistema su margen (`CHIP_MARGEN_SISTEMA`, 103 824 B): el 7-oct, con 128 KB, dejaba 103 864, 40 B por encima; con los 272 B de más de la imagen del 8-oct no llega, y baja 1 KB —que pierde el heap—. El log lo dice: «vm: memoria 127 KB -> heap 63 KB + pilas 64 KB» |
 | lo que el arranque reserva después | ~23 KB (entre otras cosas, la tarea del programa: 10 KB de pila) |
-| **en reposo, tras un programa vacío** | **80 936 B libres; bloque mayor, 65 536 B** |
+| **en reposo, tras un programa vacío** | **80 588 B libres; bloque mayor, 63 488 B** (8-oct; el 7-oct, 80 936 y 65 536) |
 
 El log del arranque lo dice (`heap: libre … | mayor …`, `vm: DRAM interna libre … | margen …`, `packs: bloque de
 RAM …`). Sin la GUI en pack —sin el bloque de 136 KB—, a la C6 le quedarían otros 136 KB.
@@ -36,22 +41,25 @@ RAM …`). Sin la GUI en pack —sin el bloque de 136 KB—, a la C6 le quedarí
 ## 3. Lo que gasta un programa: la C6
 
 La línea `mem:` se escribe al acabar el RUN y **antes** de liberar el programa: cuenta lo que el programa tenía vivo.
-«En uso al acabar» = 80 936 − el libre de esa línea; «peor momento» = 80 936 − el mínimo histórico (sólo cuando ese
-programa lo bajó). Todo se compara con un programa vacío (`Nada`: su módulo y `Core`).
+«En uso al acabar» = el libre en reposo (80 588; el 7-oct, 80 936) − el libre de esa línea; «peor momento» = el libre
+en reposo − el mínimo histórico (sólo cuando ese programa lo bajó). Todo se compara con un programa vacío (`Nada`: su
+módulo y `Core`). En KB de 1000 B, como el 7-oct; el bloque mayor, en KB de 1024.
 
 | programa | en uso al acabar | peor momento | al acabar el RUN |
 |---|---|---|---|
-| `Importa5`: cinco módulos más de la stdlib (Math, Str, Collections, Json, Time —y Rtc, que trae Time—), sin tocar nada | 36,0 KB | 42,8 KB | vuelve |
-| `Limpia`: importa `IO` | 5,4 KB | | vuelve |
-| `FicheroAbierto`: importa `IO` y deja un fichero abierto | 5,6 KB (el fichero, ~0,2 KB) | | vuelve: lo cierra el fin de RUN |
-| `NatV7` / `FloatNat`: natives (su código, en RAM ejecutable mientras corre el programa) | 13,5 / 3,2 KB | 17,9 KB (`NatV7`) | vuelve |
-| `GuiWinJson` / `GuiArbolG2`: GUI | 67,3 / 71,5 KB | 74,3 / 78,7 KB | vuelve |
-| `NeoUna` + `NeoTres`: dos tiras NeoPixel | 3,9 KB la primera (con el módulo) | | **no vuelve: ~1,5 KB, y parte el heap —el bloque mayor, de 64 a 56 KB—** (`#666`; el 7-oct, antes de `#667`: por remedir) |
-| `PwmDos` + `PulsoTres`: un PWM y un contador de pulsos | 3,7 KB el PWM (con el módulo) | | **no vuelve: ~0,4 KB; el bloque mayor, de 64 a 62 KB** (`#666`; el 7-oct, antes de `#667`: por remedir) |
+| `Importa5`: cinco módulos más de la stdlib (Math, Str, Collections, Json, Time —y Rtc, que trae Time—), sin tocar nada | 21,5 KB (36,0) | 27,9 KB (42,8) | vuelve |
+| `Limpia`: importa `IO` | 3,0 KB (5,4) | | vuelve |
+| `FicheroAbierto`: importa `IO` y deja un fichero abierto | 5,0 KB (5,6): 2,1 más que `Limpia` (el 7-oct, 0,2), sin desglosar | | vuelve: lo cierra el fin de RUN |
+| `NatV7` / `FloatNat`: natives (su código, en RAM ejecutable mientras corre el programa) | 12,5 / 2,2 KB (13,5 / 3,2) | 16,8 KB (17,9) (`NatV7`) | vuelve |
+| `GuiWinJson` / `GuiArbolG2`: GUI | 38,3 / 40,5 KB (67,3 / 71,5) | 44,6 / 46,0 KB (74,3 / 78,7) | vuelve |
+| `NeoUna` + `NeoTres`: dos tiras NeoPixel | 3,1 KB la primera, con el módulo (3,9) | | vuelve casi todo: quedan ~0,1 KB (~1,5), sin crecer al repetir; pero el bloque mayor se queda partido, de 62 a 57 KB (de 64 a 56), hasta el siguiente reset (`#666`) |
+| `PwmDos` + `PulsoTres`: un PWM y un contador de pulsos | 3,2 KB el PWM, con el módulo (3,7) | | vuelve casi todo: quedan ~0,3 KB (~0,4), sin crecer al repetir; el bloque mayor, de 62 a 58 KB (de 64 a 62) (`#666`) |
 
-**La GUI en la C6 va al límite**: en su peor momento deja 6,5 KB (GuiWinJson) y 2,2 KB (GuiArbolG2) de los 80. Con
-algo más ocupado —las tiras que dejó un programa anterior, sin más— GuiArbolG2 no carga: medido el 7-oct, con la
-misma imagen, IDÉNTICO tras un `reset` y ERROR tras `PinesSistema` (`#666`).
+**La GUI en la C6, desde el 8-oct, con holgura**: en su peor momento deja 36 008 B (GuiWinJson) y 34 592 B
+(GuiArbolG2); y tras `PinesSistema` —las tiras que la tumbaban—, IDÉNTICAS, con 35 920 y 34 488 B. Lo que se fue: las
+cabeceras de los nombres (`#651`) y las copias de la stdlib que se cargaban en RAM desde `/lib` (`#623`, `#650`): todo
+corre XIP del `Stdlib.pack`. **El 7-oct iba al límite**: dejaba 6,5 y 2,2 KB, y con algo más ocupado —las tiras que
+dejó un programa anterior, sin más— GuiArbolG2 no cargaba (IDÉNTICO tras un `reset` y ERROR tras `PinesSistema`).
 
 ### Por qué un módulo cuesta de 3 a 6 KB aunque venga de un pack
 
@@ -83,23 +91,28 @@ muchos menos bloques:
 | `GuiWinJson` | 6 | 54 | 54 696 |
 | `GuiArbolG2` | 6 | 54 | 56 543 |
 
-En la placa, ~760 cabeceras menos con la GUI (a medir en la C6). Lo que queda, por tamaño: la estructura de la VM
+En la placa, ~760 cabeceras menos con la GUI (medido en la C6 el 8-oct, junto con `#623` y `#650`: la GUI, 29–31 KB
+menos en uso; `IO`, de 5,4 a 3,0 KB). Lo que queda, por tamaño: la estructura de la VM
 (9 KB), los trozos de 2 KB de la tabla de símbolos (18 KB con la GUI), las tablas de referencias (8,6 KB) y la tabla de
 símbolos (8 KB). `test-censo`, en la red, no deja pasar de 100 bloques cargado.
 
 ## 4. Para programar en la C3 y la C6
 
-- **Importa sólo lo que uses**: cada módulo, de 3 a 6 KB de RAM del sistema mientras corre el programa (medido:
-  `IO`, 5,4 KB; cinco de la stdlib, 36 KB), aunque se ejecute desde un pack: el pack ahorra el código, no las tablas.
-- **La GUI en la C6 deja 2–7 KB** en su peor momento: un programa de GUI que importe más módulos, o que corra tras uno
-  que dejó periféricos tomados, puede no caber.
-- **Las natives** se llevan su código a la RAM ejecutable mientras corre el programa (`NatV7`: 18 KB en el peor
+- **Importa sólo lo que uses**: cada módulo, unos 3–4 KB de RAM del sistema mientras corre el programa (medido en la
+  C6 el 8-oct: `IO`, 3,0 KB; cinco de la stdlib, 21,5 KB; el 7-oct, 5,4 y 36), aunque se ejecute desde un pack: el
+  pack ahorra el código, no las tablas.
+- **La GUI en la C6 deja ~35 KB** en su peor momento (8-oct; el 7-oct, 2–7 KB), también tras un programa que tomó
+  periféricos: se sueltan al acabar.
+- **Las natives** se llevan su código a la RAM ejecutable mientras corre el programa (`NatV7`: 16,8 KB en el peor
   momento); al acabar, vuelve.
 - **NeoPixel, PWM y contador de pulsos**: desde V7 (`#667`, 8-oct) se SUELTAN al acabar el RUN —bien, con un
   error o con un STOP—: sus objetos los destruyen y lo que no, la red del final; el siguiente programa los vuelve
-  a tener (probado en placa: las ranuras del LEDC, los canales RMT y las máquinas de la PIO). Lo que vuelve de la
-  RAM, por remedir en la C3 y la C6 (las filas de arriba son del 7-oct, de antes).
-- **Los ficheros** cuestan poco (~0,2 KB abiertos); el módulo `IO`, 5,4 KB.
+  a tener (probado en placa: las ranuras del LEDC, los canales RMT y las máquinas de la PIO). La RAM, medida en la C6
+  el 8-oct: vuelve toda menos ~0,1 KB tras las tiras y ~0,3 KB tras el PWM y el contador, sin crecer al repetir;
+  pero el bloque mayor se queda partido (4–5 KB menos) hasta el siguiente reset. La C3, por remedir.
+- **Los ficheros**: el 7-oct, ~0,2 KB abiertos; el 8-oct, `FicheroAbierto` gasta 2,1 KB más que `Limpia` (sin
+  desglosar: por mirar si es el fichero o lo que guarda la VM, desde `#668`, para destruir sus objetos al acabar). El
+  módulo `IO`, 3,0 KB.
 
 ## 5. La C3
 

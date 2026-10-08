@@ -1,0 +1,317 @@
+[
+ {
+  "fecha": "2026-10-08 18:40:51",
+  "lista": "..\\..\\Users\\Eduardo\\AppData\\Local\\Temp\\claude\\C--lenguajes-pm-miVM\\576fc834-e260-4649-ba6c-131c549812a9\\scratchpad\\tanda_c6_650.json",
+  "n_listadas": 2,
+  "filtro": null,
+  "sin_oraculo": false,
+  "oraculo_info": {
+   "jar": "lexer-java\\target\\basicplus-frontend.jar",
+   "jar_hora": "2026-10-08 14:11:16",
+   "exe": "bpgenvm-c\\build\\bpgenvm-c.exe",
+   "exe_hora": "2026-10-08 17:57:08",
+   "sabor": "v2-gui1-lvgl0"
+  },
+  "pruebas": [
+   {
+    "nombre": "Importa5",
+    "fuente": "bpgenvm-c/tools/consumo/Importa5.bp",
+    "criterio": "no-peta",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "Importa5",
+    "memoria": "",
+    "heap_min_kb": 0
+   },
+   {
+    "nombre": "Importa5Copias",
+    "fuente": "bpgenvm-c/tools/consumo/Importa5.bp",
+    "criterio": "no-peta",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [
+     "bpstdlib/Str.mod",
+     "bpstdlib/Json.mod",
+     "bpstdlib/Collections.mod"
+    ],
+    "artefactos": [],
+    "modulo": "Importa5",
+    "memoria": "",
+    "heap_min_kb": 0
+   }
+  ],
+  "oraculos": {
+   "Importa5": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\Importa5",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\Importa5\\Importa5.mod",
+    "crc": 3881699771,
+    "size": 956,
+    "compilado": true,
+    "salida": "importa5: A -1 false true 3.141593\nfin",
+    "rc": 0,
+    "ms": 32,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nimporta5: A -1 false true 3.141593\r\nfin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "bpvm-c] dep 'Machine' -> Machine.mod\r\n[bpvm] enlace tardio: 17 clases construidas, 164 refs, 1928 bytes de arena\r\n[bpvm] tabla de simbolos: 440 simbolos, 12816 B de nombres en 7 trozos de 2 KB, 18432 B en total\r\n[bpvm] enlace: 8 modulos, 34 busquedas, 3709 strcmp, 354 us\r\n[bpvm] tabla de handles: 0 -> 689 slots (5 KB dentro del heap) OK — techo del heap 387704, libre 339 KB\r\n[bpvm] pila: el main llegó a 184 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "Importa5Copias": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\Importa5Copias",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\Importa5Copias\\Importa5.mod",
+    "crc": 3881699771,
+    "size": 956,
+    "compilado": true,
+    "salida": "importa5: A -1 false true 3.141593\nfin",
+    "rc": 0,
+    "ms": 24,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nimporta5: A -1 false true 3.141593\r\nfin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "bpvm-c] dep 'Machine' -> Machine.mod\r\n[bpvm] enlace tardio: 17 clases construidas, 164 refs, 1928 bytes de arena\r\n[bpvm] tabla de simbolos: 440 simbolos, 12816 B de nombres en 7 trozos de 2 KB, 18432 B en total\r\n[bpvm] enlace: 8 modulos, 34 busquedas, 3709 strcmp, 315 us\r\n[bpvm] tabla de handles: 0 -> 689 slots (5 KB dentro del heap) OK — techo del heap 387704, libre 339 KB\r\n[bpvm] pila: el main llegó a 184 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   }
+  },
+  "placas": [
+   {
+    "sello": {
+     "boardName": "esp32c6",
+     "uniqueId": "58E6C5FFFEF9",
+     "serverName": "bpvm-esp32c6",
+     "serverBuild": "Oct  8 2026 15:00:22",
+     "imageCrc": "7c18cbb7",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "DEBUG",
+      "PACKS"
+     ],
+     "arch": 243,
+     "variant": null,
+     "cpuFreqHz": 160000000,
+     "resetReason": "software",
+     "uptimeMs": 211641,
+     "fsUsedBytes": 32768,
+     "fsTotalBytes": 1261568,
+     "vmHeapBytes": 64512,
+     "aotReceta": "RV32IMC_ILP32",
+     "mdnAbi": 9,
+     "uptime_ultimo": 214700,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM3",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "58E6C5FFFEF9",
+      "boardName": "esp32c6",
+      "arch": 243,
+      "aotReceta": "RV32IMC_ILP32",
+      "aotFlagsCrc": 2307952327,
+      "mdnAbi": 9,
+      "floatAbi": "ilp32",
+      "packsXipBase": 1108066304,
+      "packsBytes": 1261568,
+      "packRamBase": 1082294272,
+      "packRamBytes": 139264,
+      "packRamStatus": "ok",
+      "packRamKey": "packRam",
+      "packRamAsked": 136,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 160000000,
+      "uptimeMs": 211641,
+      "resetReason": "software",
+      "tempMilliC": 0,
+      "micro": "esp32c6",
+      "paquete": "",
+      "gpioCount": 22,
+      "pioCount": 0,
+      "pwmSlices": 4,
+      "pwmUnidad": "canal",
+      "adcChannels": 7,
+      "adcUnidades": 1,
+      "uartIds": "1",
+      "i2cIds": "0",
+      "spiIds": "2",
+      "flashBytes": 4194304,
+      "sramBytes": 524288,
+      "psramBytes": 0,
+      "vmHeapBytes": 64512,
+      "vmStackBytes": 65536,
+      "ioStackFree": 5652,
+      "runStackFree": 6160,
+      "runs": 1,
+      "fsTotalBytes": 1261568,
+      "fsUsedBytes": 32768,
+      "screenW": 240,
+      "screenH": 240,
+      "vmTaskStackFreeBytes": 5652,
+      "rtosHeapMinFreeBytes": 34488
+     },
+     "imagen_local": "la COMPILADA en el PC: bpgenvm-c/esp32c6/build/bpvm_esp32c6.bin (08-10 18:22)"
+    },
+    "pantalla": [
+     true,
+     "INFO screenW x screenH = 240x240"
+    ],
+    "resultados": [
+     {
+      "prueba": "Importa5",
+      "veredicto": "NO-PETA",
+      "detalle": "EXITED OK exit=0",
+      "ms_placa": 36,
+      "ms_host": 32,
+      "exited": {
+       "type": "EXITED",
+       "session": 9,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 36,
+       "nativos": 0
+      },
+      "salida_placa": "importa5: A -1 false true 3.141593\nfin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 213258,
+       "fsUsedBytes": 36864,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 64512,
+       "runStackFree": 6160,
+       "ioStackFree": 5652,
+       "vmTaskStackFreeBytes": 5652,
+       "rtosHeapMinFreeBytes": 34488
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/Importa5.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 820,
+      "session": 9
+     },
+     {
+      "prueba": "Importa5Copias",
+      "veredicto": "NO-PETA",
+      "detalle": "EXITED OK exit=0",
+      "ms_placa": 37,
+      "ms_host": 24,
+      "exited": {
+       "type": "EXITED",
+       "session": 10,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 37,
+       "nativos": 0
+      },
+      "salida_placa": "importa5: A -1 false true 3.141593\nfin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 214700,
+       "fsUsedBytes": 86016,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 64512,
+       "runStackFree": 6160,
+       "ioStackFree": 5652,
+       "vmTaskStackFreeBytes": 5652,
+       "rtosHeapMinFreeBytes": 34488
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/Str.mod",
+       "/app/Json.mod",
+       "/app/Collections.mod",
+       "/app/Importa5.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 812,
+      "session": 10
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/Importa5.mod",
+      "local": "bpgenvm-c\\build\\tanda\\Importa5\\Importa5.mod",
+      "size": 956,
+      "crc": "e75e09bb",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/Str.mod",
+      "local": "bpstdlib\\Str.mod",
+      "size": 4607,
+      "crc": "4320a024",
+      "ok": true,
+      "detalle": "ok (por trozos)"
+     },
+     {
+      "remoto": "/app/Json.mod",
+      "local": "bpstdlib\\Json.mod",
+      "size": 22749,
+      "crc": "dc348e4c",
+      "ok": true,
+      "detalle": "ok (por trozos)"
+     },
+     {
+      "remoto": "/app/Collections.mod",
+      "local": "bpstdlib\\Collections.mod",
+      "size": 12439,
+      "crc": "738b2934",
+      "ok": true,
+      "detalle": "ok (por trozos)"
+     },
+     {
+      "remoto": "/app/Importa5.mod",
+      "local": "bpgenvm-c\\build\\tanda\\Importa5Copias\\Importa5.mod",
+      "size": 956,
+      "crc": "e75e09bb",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "dependencia Core: en la zona de packs (pack:Stdlib/Core.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Math: en la zona de packs (pack:Stdlib/Math.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Str: en la zona de packs (pack:Stdlib/Str.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Collections: en la zona de packs (pack:Stdlib/Collections.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Json: en la zona de packs (pack:Stdlib/Json.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Time: en la zona de packs (pack:Stdlib/Time.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Rtc: en la zona de packs (pack:Stdlib/Rtc.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Machine: en la zona de packs (pack:Stdlib/Machine.mod, crc igual): se ejecuta XIP, no se sube",
+     "limpieza: 0 fichero(s) de /app borrados"
+    ],
+    "inventario_detalle": "0 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "aprieta": [
+     true,
+     "SRAM 512 KB, PSRAM 0 KB"
+    ],
+    "inventario": []
+   }
+  ]
+ }
+]

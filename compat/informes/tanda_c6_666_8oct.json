@@ -1,0 +1,415 @@
+[
+ {
+  "fecha": "2026-10-08 18:38:34",
+  "lista": "..\\..\\Users\\Eduardo\\AppData\\Local\\Temp\\claude\\C--lenguajes-pm-miVM\\576fc834-e260-4649-ba6c-131c549812a9\\scratchpad\\tanda_c6_extra.json",
+  "n_listadas": 3,
+  "filtro": null,
+  "sin_oraculo": false,
+  "oraculo_info": {
+   "jar": "lexer-java\\target\\basicplus-frontend.jar",
+   "jar_hora": "2026-10-08 14:11:16",
+   "exe": "bpgenvm-c\\build\\bpgenvm-c.exe",
+   "exe_hora": "2026-10-08 17:57:08",
+   "sabor": "v2-gui1-lvgl0"
+  },
+  "pruebas": [
+   {
+    "nombre": "PinesSistema",
+    "fuente": "samples/PinesSistema.bp",
+    "criterio": "no-peta",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "PinesSistema",
+    "memoria": "",
+    "heap_min_kb": 0
+   },
+   {
+    "nombre": "GuiWinJson",
+    "fuente": "samples/GuiWinJson.bp",
+    "criterio": "identico",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [
+     "samples/formdemo/resources/main.win"
+    ],
+    "artefactos": [],
+    "modulo": "GuiWinJson",
+    "memoria": "",
+    "heap_min_kb": 0
+   },
+   {
+    "nombre": "GuiArbolG2",
+    "fuente": "bpgenvm-c/samples/GuiArbolG2.bp",
+    "criterio": "identico",
+    "timeout_s": 60,
+    "necesita": [
+     "pantalla"
+    ],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "GuiArbolG2",
+    "memoria": "",
+    "heap_min_kb": 0
+   }
+  ],
+  "oraculos": {
+   "PinesSistema": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\PinesSistema",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\PinesSistema\\PinesSistema.mod",
+    "crc": 1027968450,
+    "size": 1056,
+    "compilado": true,
+    "salida": "micro: host, GPIO para el programa: 30\n[gpio] init pin=24 mode=OUTPUT\nok GPIO24: libre\n[gpio] release pin=24\n[gpio] init pin=25 mode=OUTPUT\nok GPIO25: libre\n[gpio] release pin=25\n[gpio] init pin=26 mode=OUTPUT\nok GPIO26: libre\n[gpio] release pin=26\n[gpio] init pin=27 mode=OUTPUT\nok GPIO27: libre\n[gpio] release pin=27\n[gpio] init pin=28 mode=OUTPUT\nok GPIO28: libre\n[gpio] release pin=28\n[gpio] init pin=29 mode=OUTPUT\nok GPIO29: libre\n[gpio] release pin=29\nok GPIO30: el pin 30 no existe en host\n[gpio] init pin=12 mode=OUTPUT\nok GPIO12: libre\n[gpio] release pin=12\n[gpio] init pin=13 mode=OUTPUT\nok GPIO13: libre\n[gpio] release pin=13\n[gpio] init pin=11 mode=OUTPUT\nok GPIO11: libre\n[gpio] release pin=11\n[gpio] init pin=19 mode=OUTPUT\nok GPIO19: libre\n[gpio] release pin=19\n[gpio] init pin=2 mode=OUTPUT\nok GPIO2: libre\n[gpio] release pin=2\nok NeoPixel en el GPIO2: atrapada: Neopixel(2): no implementado en esta plataforma\nok NeoPixel en el GPIO3: atrapada: Neopixel(3): no implementado en esta plataforma\nok NeoPixel en el GPIO1: atrapada: Neopixel(1): no implementado en esta plataforma\nfin",
+    "rc": 0,
+    "ms": 16,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nmicro: host, GPIO para el programa: 30\r\n[gpio] init pin=24 mode=OUTPUT\r\nok GPIO24: libre\r\n[gpio] release pin=24\r\n[gpio] init pin=25 mode=OUTPUT\r\nok GPIO25: libre\r\n[gpio] release pin=25\r\n[gpio] init pin=26 mode=OUTPUT\r\nok GPIO26: libre\r\n[gpio] release pin=26\r\n[gpio] init pin=27 mode=OUTPUT\r\nok GPIO27: libre\r\n[gpio] release pin=27\r\n[gpio] init pin=28 mode=OUTPUT\r\nok GPIO28: libre\r\n[gpio] release pin=28\r\n[gpio] init pin=29 mode=OUTPUT\r\nok GPIO29: libre\r\n[gpio] release pin=29\r\nok GPIO30: el pin 30 no existe en host\r\n[gpio] init pin=12 mode=OUTPUT\r\nok GPIO12: libre\r\n[gpio] release pin=12\r\n[gpio] init pin=13 mode=OUTPUT\r\nok GPIO13: libre\r\n[gpio] release pin=13\r\n[gpio] init pin=11 mode=OUTPUT\r\nok GPIO11: libre\r\n[gpio] release pin=11\r\n[gpio] init pin=19 mode=OUTPUT\r\nok GPIO19: libre\r\n[gpio] release pin=19\r\n[gpio] init pin=2 mode=OUTPUT\r\nok GPIO2: libre\r\n[gpio] release pin=2\r\nok NeoPixel en el GPIO2: atrapada: Neopixel(2): no implementado en esta plataforma\r\nok NeoPixel en el GPIO3: atrapada: Neopixel(3): no implementado en esta plataforma\r\nok NeoPixel en el GPIO1: atrapada: Neopixel(1): no implementado en esta plataforma\r\nfin\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "APADA por un catch del programa\r\n[bpvm] throw: \"Neopixel(2): no implementado en esta plataforma\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] throw: \"Neopixel(3): no implementado en esta plataforma\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] throw: \"Neopixel(1): no implementado en esta plataforma\"\r\n[bpvm] throw: ATRAPADA por un catch del programa\r\n[bpvm] pila: el main llegó a 184 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiWinJson": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+    "crc": 1603270613,
+    "size": 2070,
+    "compilado": true,
+    "salida": "J1: {\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [480x320 align=0 +0,0]\n  panel [480x320 align=0 +0,0]\n    panel [480x320 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN",
+    "rc": 0,
+    "ms": 54,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nJ1: {\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\r\n-- arbol tras cargar main.win --\r\nscreen [480x320 align=0 +0,0]\r\n  panel [480x320 align=0 +0,0]\r\n    panel [480x320 align=0 +0,0]\r\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\r\n      button [-1x-1 align=4 +0,0]\r\n        label \"Saludar\" [-1x-1 align=0 +0,0]\r\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\r\n\r\nWIN: {\"type\":\"Window\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Panel\",\"width\":480,\"height\":320,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\r\nJ2 == J1: true\r\narbol igual: true\r\nhijos del panel: 3\r\nhijos del boton (la etiqueta): 1\r\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "): \"referencia nula: llamada a un método de un objeto null\"\r\n[bpvm] throw (interp): ATRAPADA por un catch del programa\r\n[bpvm] el destructor de Gui.Panel lanzó: referencia nula: llamada a un método de un objeto null — se sigue con la limpieza\r\n[bpvm] el destructor de GuiWinJson.MainWin lanzó: referencia nula: llamada a un método de un objeto null — se sigue con la limpieza\r\n[bpvm] pila: el main llegó a 1056 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiArbolG2": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiArbolG2",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiArbolG2\\GuiArbolG2.mod",
+    "crc": 3739365352,
+    "size": 5331,
+    "compilado": true,
+    "salida": "ok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\nok: (a) y su padre es el panel\nok: (a) y salen en su JSON\nok: (b) con el temporal vivo, el panel tiene 5 hijos\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\nok: (b) y del modelo\nok: (b) la pantalla con dueño local existe\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\nok: (a) J1 lleva el rango del slider\nok: (a) J1 lleva las opciones y los items\nok: (a) J1 lleva los botones del Msgbox\nok: (a) J1 lleva los colores\nok: (a) J1 lleva la forma del Chart\nok: (a) J1 lleva la rejilla del Table\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\nok: (a) y el panel reconstruido tiene sus 10 hijos\nscreen [480x320 align=0 +0,0]\n  panel [480x320 align=0 +0,0]\n    panel [-1x-1 align=0 +0,0]\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\n      slider [-1x-1 align=0 +0,0 val=20]\n      bar [-1x-1 align=0 +0,0 val=150]\n      spinbox [-1x-1 align=0 +0,0 val=7]\n      led [-1x-1 align=0 +0,0 val=1]\n      dropdown \"rojo\nverde\nazul\" [-1x-1 align=0 +0,0 val=2]\n      list \"x\ny\" [-1x-1 align=0 +0,0 val=1]\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\n      chart [-1x-1 align=0 +0,0]\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\n\nok: #477: sin giro, la linea de la pantalla no lo dice\nok: #477: girada, la linea de la pantalla dice rot=90\nscreen [320x480 align=0 +0,0 rot=90]\n\nPASS",
+    "rc": 0,
+    "ms": 57,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\r\nok: (a) y su padre es el panel\r\nok: (a) y salen en su JSON\r\nok: (b) con el temporal vivo, el panel tiene 5 hijos\r\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\r\nok: (b) y del modelo\r\nok: (b) la pantalla con dueño local existe\r\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\r\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\r\nok: (a) J1 lleva el rango del slider\r\nok: (a) J1 lleva las opciones y los items\r\nok: (a) J1 lleva los botones del Msgbox\r\nok: (a) J1 lleva los colores\r\nok: (a) J1 lleva la forma del Chart\r\nok: (a) J1 lleva la rejilla del Table\r\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\r\nok: (a) y el panel reconstruido tiene sus 10 hijos\r\nscreen [480x320 align=0 +0,0]\r\n  panel [480x320 align=0 +0,0]\r\n    panel [-1x-1 align=0 +0,0]\r\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\r\n      slider [-1x-1 align=0 +0,0 val=20]\r\n      bar [-1x-1 align=0 +0,0 val=150]\r\n      spinbox [-1x-1 align=0 +0,0 val=7]\r\n      led [-1x-1 align=0 +0,0 val=1]\r\n      dropdown \"rojo\r\nverde\r\nazul\" [-1x-1 align=0 +0,0 val=2]\r\n      list \"x\r\ny\" [-1x-1 align=0 +0,0 val=1]\r\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\r\n      chart [-1x-1 align=0 +0,0]\r\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\r\n\r\nok: #477: sin giro, la linea de la pantalla no lo dice\r\nok: #477: girada, la linea de la pantalla dice rot=90\r\nscreen [320x480 align=0 +0,0 rot=90]\r\n\r\nPASS\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "structor de Gui.Window lanzó: referencia nula: llamada a un método de un objeto null — se sigue con la limpieza\r\n[bpvm] throw (interp): \"referencia nula: llamada a un método de un objeto null\"\r\n[bpvm] throw (interp): ATRAPADA por un catch del programa\r\n[bpvm] el destructor de Gui.Panel lanzó: referencia nula: llamada a un método de un objeto null — se sigue con la limpieza\r\n[bpvm] pila: el main llegó a 1028 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiWinJson@240x240": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+    "crc": 1603270613,
+    "size": 2070,
+    "compilado": true,
+    "salida": "J1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [240x240 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN",
+    "rc": 0,
+    "ms": 50,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [
+     "--screen=240x240"
+    ],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nJ1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\r\n-- arbol tras cargar main.win --\r\nscreen [240x240 align=0 +0,0]\r\n  panel [240x240 align=0 +0,0]\r\n    panel [240x240 align=0 +0,0]\r\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\r\n      button [-1x-1 align=4 +0,0]\r\n        label \"Saludar\" [-1x-1 align=0 +0,0]\r\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\r\n\r\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\r\nJ2 == J1: true\r\narbol igual: true\r\nhijos del panel: 3\r\nhijos del boton (la etiqueta): 1\r\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\r\nFIN\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "): \"referencia nula: llamada a un método de un objeto null\"\r\n[bpvm] throw (interp): ATRAPADA por un catch del programa\r\n[bpvm] el destructor de Gui.Panel lanzó: referencia nula: llamada a un método de un objeto null — se sigue con la limpieza\r\n[bpvm] el destructor de GuiWinJson.MainWin lanzó: referencia nula: llamada a un método de un objeto null — se sigue con la limpieza\r\n[bpvm] pila: el main llegó a 1056 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   },
+   "GuiArbolG2@240x240": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiArbolG2",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\GuiArbolG2\\GuiArbolG2.mod",
+    "crc": 3739365352,
+    "size": 5331,
+    "compilado": true,
+    "salida": "ok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\nok: (a) y su padre es el panel\nok: (a) y salen en su JSON\nok: (b) con el temporal vivo, el panel tiene 5 hijos\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\nok: (b) y del modelo\nok: (b) la pantalla con dueño local existe\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\nok: (a) J1 lleva el rango del slider\nok: (a) J1 lleva las opciones y los items\nok: (a) J1 lleva los botones del Msgbox\nok: (a) J1 lleva los colores\nok: (a) J1 lleva la forma del Chart\nok: (a) J1 lleva la rejilla del Table\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\nok: (a) y el panel reconstruido tiene sus 10 hijos\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [-1x-1 align=0 +0,0]\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\n      slider [-1x-1 align=0 +0,0 val=20]\n      bar [-1x-1 align=0 +0,0 val=150]\n      spinbox [-1x-1 align=0 +0,0 val=7]\n      led [-1x-1 align=0 +0,0 val=1]\n      dropdown \"rojo\nverde\nazul\" [-1x-1 align=0 +0,0 val=2]\n      list \"x\ny\" [-1x-1 align=0 +0,0 val=1]\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\n      chart [-1x-1 align=0 +0,0]\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\n\nok: #477: sin giro, la linea de la pantalla no lo dice\nok: #477: girada, la linea de la pantalla dice rot=90\nscreen [240x240 align=0 +0,0 rot=90]\n\nPASS",
+    "rc": 0,
+    "ms": 56,
+    "error": null,
+    "ejecutado": true,
+    "compilacion": "compilado suelto",
+    "args": [
+     "--screen=240x240"
+    ],
+    "salida_cruda": "=== INICIANDO EJECUCION DE LA VM-C ===\r\nok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\r\nok: (a) y su padre es el panel\r\nok: (a) y salen en su JSON\r\nok: (b) con el temporal vivo, el panel tiene 5 hijos\r\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\r\nok: (b) y del modelo\r\nok: (b) la pantalla con dueño local existe\r\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\r\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\r\nok: (a) J1 lleva el rango del slider\r\nok: (a) J1 lleva las opciones y los items\r\nok: (a) J1 lleva los botones del Msgbox\r\nok: (a) J1 lleva los colores\r\nok: (a) J1 lleva la forma del Chart\r\nok: (a) J1 lleva la rejilla del Table\r\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\r\nok: (a) y el panel reconstruido tiene sus 10 hijos\r\nscreen [240x240 align=0 +0,0]\r\n  panel [240x240 align=0 +0,0]\r\n    panel [-1x-1 align=0 +0,0]\r\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\r\n      slider [-1x-1 align=0 +0,0 val=20]\r\n      bar [-1x-1 align=0 +0,0 val=150]\r\n      spinbox [-1x-1 align=0 +0,0 val=7]\r\n      led [-1x-1 align=0 +0,0 val=1]\r\n      dropdown \"rojo\r\nverde\r\nazul\" [-1x-1 align=0 +0,0 val=2]\r\n      list \"x\r\ny\" [-1x-1 align=0 +0,0 val=1]\r\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\r\n      chart [-1x-1 align=0 +0,0]\r\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\r\n\r\nok: #477: sin giro, la linea de la pantalla no lo dice\r\nok: #477: girada, la linea de la pantalla dice rot=90\r\nscreen [240x240 align=0 +0,0 rot=90]\r\n\r\nPASS\r\n=== FIN DE LA EJECUCION (status=OK) ===\r\n",
+    "stderr_cola": "structor de Gui.Window lanzó: referencia nula: llamada a un método de un objeto null — se sigue con la limpieza\r\n[bpvm] throw (interp): \"referencia nula: llamada a un método de un objeto null\"\r\n[bpvm] throw (interp): ATRAPADA por un catch del programa\r\n[bpvm] el destructor de Gui.Panel lanzó: referencia nula: llamada a un método de un objeto null — se sigue con la limpieza\r\n[bpvm] pila: el main llegó a 1028 de 16384 B\r\n[bpvm] hilos: 0 arrancados, como mucho 1 a la vez (el main incluido)\r\n[bpvm] fin de RUN: la memoria del programa vuelve a su sitio (0 bloques sin liberar; plataforma: 7 vivos)\r\n"
+   }
+  },
+  "placas": [
+   {
+    "sello": {
+     "boardName": "esp32c6",
+     "uniqueId": "58E6C5FFFEF9",
+     "serverName": "bpvm-esp32c6",
+     "serverBuild": "Oct  8 2026 15:00:22",
+     "imageCrc": "7c18cbb7",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "DEBUG",
+      "PACKS"
+     ],
+     "arch": 243,
+     "variant": null,
+     "cpuFreqHz": 160000000,
+     "resetReason": "software",
+     "uptimeMs": 75332,
+     "fsUsedBytes": 32768,
+     "fsTotalBytes": 1261568,
+     "vmHeapBytes": 64512,
+     "aotReceta": "RV32IMC_ILP32",
+     "mdnAbi": 9,
+     "uptime_ultimo": 82005,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM3",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "58E6C5FFFEF9",
+      "boardName": "esp32c6",
+      "arch": 243,
+      "aotReceta": "RV32IMC_ILP32",
+      "aotFlagsCrc": 2307952327,
+      "mdnAbi": 9,
+      "floatAbi": "ilp32",
+      "packsXipBase": 1108066304,
+      "packsBytes": 1261568,
+      "packRamBase": 1082294272,
+      "packRamBytes": 139264,
+      "packRamStatus": "ok",
+      "packRamKey": "packRam",
+      "packRamAsked": 136,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 160000000,
+      "uptimeMs": 75332,
+      "resetReason": "software",
+      "tempMilliC": 0,
+      "micro": "esp32c6",
+      "paquete": "",
+      "gpioCount": 22,
+      "pioCount": 0,
+      "pwmSlices": 4,
+      "pwmUnidad": "canal",
+      "adcChannels": 7,
+      "adcUnidades": 1,
+      "uartIds": "1",
+      "i2cIds": "0",
+      "spiIds": "2",
+      "flashBytes": 4194304,
+      "sramBytes": 524288,
+      "psramBytes": 0,
+      "vmHeapBytes": 64512,
+      "vmStackBytes": 65536,
+      "ioStackFree": 5864,
+      "runStackFree": 7620,
+      "runs": 1,
+      "fsTotalBytes": 1261568,
+      "fsUsedBytes": 32768,
+      "screenW": 240,
+      "screenH": 240,
+      "vmTaskStackFreeBytes": 5864,
+      "rtosHeapMinFreeBytes": 63772
+     },
+     "imagen_local": "la COMPILADA en el PC: bpgenvm-c/esp32c6/build/bpvm_esp32c6.bin (08-10 18:22)"
+    },
+    "pantalla": [
+     true,
+     "INFO screenW x screenH = 240x240"
+    ],
+    "resultados": [
+     {
+      "prueba": "PinesSistema",
+      "veredicto": "NO-PETA",
+      "detalle": "EXITED OK exit=0",
+      "ms_placa": 29,
+      "ms_host": 16,
+      "exited": {
+       "type": "EXITED",
+       "session": 6,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 29,
+       "nativos": 0
+      },
+      "salida_placa": "micro: esp32c6, GPIO para el programa: 22\nok GPIO24: el pin 24 de esp32c6 es de la flash o la PSRAM: no se puede usar\nok GPIO25: el pin 25 de esp32c6 es de la flash o la PSRAM: no se puede usar\nok GPIO26: el pin 26 de esp32c6 es de la flash o la PSRAM: no se puede usar\nok GPIO27: el pin 27 de esp32c6 es de la flash o la PSRAM: no se puede usar\nok GPIO28: el pin 28 de esp32c6 es de la flash o la PSRAM: no se puede usar\nok GPIO29: el pin 29 de esp32c6 es de la flash o la PSRAM: no se puede usar\nok GPIO30: el pin 30 de esp32c6 es de la flash o la PSRAM: no se puede usar\nok GPIO12: el pin 12 de esp32c6 es del cable del IDE (el wire): no se puede usar\nok GPIO13: el pin 13 de esp32c6 es del cable del IDE (el wire): no se puede usar\nok GPIO11: libre\nok GPIO19: libre\nok GPIO2: libre\nok NeoPixel en el GPIO2: iniciado\nok NeoPixel en el GPIO3: iniciado\nok NeoPixel en el GPIO1: atrapada: Neopixel(1): no se pudo iniciar: no quedan canales RMT libres\nfin\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 76216,
+       "fsUsedBytes": 36864,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 64512,
+       "runStackFree": 6720,
+       "ioStackFree": 5864,
+       "vmTaskStackFreeBytes": 5864,
+       "rtosHeapMinFreeBytes": 63772
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/PinesSistema.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 411,
+      "session": 6
+     },
+     {
+      "prueba": "GuiWinJson",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 1036,
+      "ms_host": 50,
+      "exited": {
+       "type": "EXITED",
+       "session": 7,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 1036,
+       "nativos": 0
+      },
+      "salida_placa": "J1: {\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}\n-- arbol tras cargar main.win --\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [240x240 align=0 +0,0]\n      label \"Demo de Forms — Camino A\" [-1x-1 align=1 +0,12]\n      button [-1x-1 align=4 +0,0]\n        label \"Saludar\" [-1x-1 align=0 +0,0]\n      checkbox \"Activar\" [-1x-1 align=7 +0,-20 val=0]\n\nWIN: {\"type\":\"Window\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Panel\",\"width\":240,\"height\":240,\"children\":[{\"type\":\"Label\",\"text\":\"Demo de Forms — Camino A\",\"align\":\"TOP_MID\",\"y\":12},{\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"},{\"type\":\"Checkbox\",\"text\":\"Activar\",\"align\":\"BOTTOM_MID\",\"y\":-20,\"change\":\"onActivar\"}]}]}\nJ2 == J1: true\narbol igual: true\nhijos del panel: 3\nhijos del boton (la etiqueta): 1\nboton en JSON: {\"type\":\"Button\",\"text\":\"Saludar\",\"align\":\"CENTER\",\"clic\":\"onSaludar\"}\nFIN\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 79069,
+       "fsUsedBytes": 40960,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 64512,
+       "runStackFree": 6160,
+       "ioStackFree": 5652,
+       "vmTaskStackFreeBytes": 5652,
+       "rtosHeapMinFreeBytes": 35920
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/main.win",
+       "/app/GuiWinJson.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 1668,
+      "session": 7
+     },
+     {
+      "prueba": "GuiArbolG2",
+      "veredicto": "IDENTICO",
+      "detalle": "EXITED OK exit=0; host rc=0",
+      "ms_placa": 1046,
+      "ms_host": 56,
+      "exited": {
+       "type": "EXITED",
+       "session": 8,
+       "status": "OK",
+       "exitCode": 0,
+       "elapsedMs": 1046,
+       "nativos": 0
+      },
+      "salida_placa": "ok: (a) Bar, Led, Chart y Table cuentan: el panel tiene 4 hijos\nok: (a) y su padre es el panel\nok: (a) y salen en su JSON\nok: (b) con el temporal vivo, el panel tiene 5 hijos\nok: (b) al volver, el temporal se ha ido del panel: 4 hijos\nok: (b) y del modelo\nok: (b) la pantalla con dueño local existe\nok: (b) la pantalla sigue en el modelo tras su dueño local, con lo suyo\nJ1: {\"type\":\"Panel\",\"children\":[{\"type\":\"Label\",\"text\":\"etiqueta\",\"bgColor\":\"0x10A0FF\",\"textColor\":\"0x00FF00\"},{\"type\":\"Slider\",\"min\":10,\"max\":50,\"value\":20},{\"type\":\"Bar\",\"min\":0,\"max\":200,\"value\":150},{\"type\":\"Spinbox\",\"value\":7},{\"type\":\"Led\",\"value\":1},{\"type\":\"Dropdown\",\"options\":\"rojo\\nverde\\nazul\",\"selected\":2},{\"type\":\"ListBox\",\"items\":\"x\\ny\",\"selected\":1},{\"type\":\"Msgbox\",\"text\":\"hola\",\"buttons\":\"Si\\nNo\"},{\"type\":\"Chart\",\"points\":20,\"chartType\":\"BARS\",\"min\":-10,\"max\":10},{\"type\":\"Table\",\"rows\":2,\"cols\":3,\"cells\":[[\"a\",\"\",\"\"],[\"\",\"\",\"f\"]]}]}\nok: (a) J1 lleva el rango del slider\nok: (a) J1 lleva las opciones y los items\nok: (a) J1 lleva los botones del Msgbox\nok: (a) J1 lleva los colores\nok: (a) J1 lleva la forma del Chart\nok: (a) J1 lleva la rejilla del Table\nok: (a) J2 == J1: lo que se escribe, se lee y se vuelve a escribir igual\nok: (a) y el panel reconstruido tiene sus 10 hijos\nscreen [240x240 align=0 +0,0]\n  panel [240x240 align=0 +0,0]\n    panel [-1x-1 align=0 +0,0]\n      label \"etiqueta\" [-1x-1 align=0 +0,0]\n      slider [-1x-1 align=0 +0,0 val=20]\n      bar [-1x-1 align=0 +0,0 val=150]\n      spinbox [-1x-1 align=0 +0,0 val=7]\n      led [-1x-1 align=0 +0,0 val=1]\n      dropdown \"rojo\nverde\nazul\" [-1x-1 align=0 +0,0 val=2]\n      list \"x\ny\" [-1x-1 align=0 +0,0 val=1]\n      msgbox \"hola\" [-1x-1 align=0 +0,0 val=0]\n      chart [-1x-1 align=0 +0,0]\n      table [-1x-1 align=0 +0,0 grid=2x3 \"a|||||f\"]\n\nok: #477: sin giro, la linea de la pantalla no lo dice\nok: #477: girada, la linea de la pantalla dice rot=90\nscreen [240x240 align=0 +0,0 rot=90]\n\nPASS\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 82005,
+       "fsUsedBytes": 40960,
+       "fsTotalBytes": 1261568,
+       "vmHeapBytes": 64512,
+       "runStackFree": 6160,
+       "ioStackFree": 5652,
+       "vmTaskStackFreeBytes": 5652,
+       "rtosHeapMinFreeBytes": 34488
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/GuiArbolG2.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 2477,
+      "session": 8
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/PinesSistema.mod",
+      "local": "bpgenvm-c\\build\\tanda\\PinesSistema\\PinesSistema.mod",
+      "size": 1056,
+      "crc": "3d458dc2",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/main.win",
+      "local": "samples\\formdemo\\resources\\main.win",
+      "size": 390,
+      "crc": "548edd67",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/GuiWinJson.mod",
+      "local": "bpgenvm-c\\build\\tanda\\GuiWinJson\\GuiWinJson.mod",
+      "size": 2070,
+      "crc": "5f8ff7d5",
+      "ok": true,
+      "detalle": "ok"
+     },
+     {
+      "remoto": "/app/GuiArbolG2.mod",
+      "local": "bpgenvm-c\\build\\tanda\\GuiArbolG2\\GuiArbolG2.mod",
+      "size": 5331,
+      "crc": "dee22fe8",
+      "ok": true,
+      "detalle": "ok (por trozos)"
+     }
+    ],
+    "notas": [
+     "dependencia Core: en la zona de packs (pack:Stdlib/Core.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Gpio: en la zona de packs (pack:Stdlib/Gpio.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Machine: en la zona de packs (pack:Stdlib/Machine.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Neopixel: en la zona de packs (pack:Stdlib/Neopixel.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Gui: en la zona de packs (pack:Stdlib/Gui.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Json: en la zona de packs (pack:Stdlib/Json.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Collections: en la zona de packs (pack:Stdlib/Collections.mod, crc igual): se ejecuta XIP, no se sube",
+     "dependencia Str: en la zona de packs (pack:Stdlib/Str.mod, crc igual): se ejecuta XIP, no se sube",
+     "limpieza: 0 fichero(s) de /app borrados"
+    ],
+    "inventario_detalle": "0 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "aprieta": [
+     true,
+     "SRAM 512 KB, PSRAM 0 KB"
+    ],
+    "inventario": []
+   }
+  ]
+ }
+]

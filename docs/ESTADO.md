@@ -56,6 +56,11 @@
 > `#667`, 13 de 13, en las dos —la DK2, la primera STM32 que suelta—; **`#669` CERRADA** (en la P4, el I2C del táctil
 > compartido ve tres chips); y **`#671` abierta**: tras grabar un pack con motor sin reiniciar, la placa salta a las
 > tablas del motor viejo —se cayeron las dos en la primera pasada—. Más abajo, «🧪 La tarde de placas (8-oct)».
+> Y **la noche de placas, la C6, la C5 y la Nucleo** (con *«671 a»*: hecha, `cd9a8ad1`; y los lotes con su OK): la
+> ronda de V7 y la tanda de `#667`, verdes en las tres; los packs nuevos de `#623` (la Nucleo, sólo el Stdlib: *«con
+> la librería estandar es suficiente»*); en la C6, lo que abrió `#666` —`PinesSistema` y detrás la GUI— IDÉNTICO, y
+> la RAM remedida: la GUI deja ~35 KB en su peor momento (eran 2–7). **Cerradas `#671`, `#650` y `#651`.** Falta la
+> C3 para cerrar `#666`–`#668`. Más abajo, «🧪 La noche de placas (8-oct)».
 >
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
@@ -1301,6 +1306,37 @@ la Pico 2; por la tarde, la C3, la C6 (`PinesSistema` y `GuiArbolG2`), la P4, la
 **Hecho, con *«OK para grabar»***: grabadas las cuatro con `12ba0b79` (la C5, sin regrabar sus packs:
 `packRamBase` igual). `OwnerHondo` en la Pico 2, hasta «fin»; la S3 ya no da los GPIO 33–37 («el pin 35 de esp32s3 es
 de la flash o la PSRAM: no se puede usar»); la tanda de `#667`, 52 de 52 otra vez, y la ronda de V7, 188 de 188.
+
+## 🧪 La noche de placas (8-oct): la C6, la C5 y la Nucleo — `#671`, `#650` y `#651` cerradas
+
+**`#671`, hecha** (Eduardo: *«671 a»*; `cd9a8ad1`): con motores ya cargados, grabar, borrar o formatear un pack
+REINICIA la placa —contesta con `"reinicia":true`, lo deja en su log y reinicia por el camino del RESET del cable—;
+el IDE y `wire_serie.py` lo dicen, y el IDE vuelve a conectar solo. `make test-bmgr` §10, con su sabotaje; la red,
+verde.
+
+Con *«La c5, la c6 y la nucleo conectadas»*, al lote *«OK»* (la C6 y la C5) y, para los packs de la Nucleo, *«con la
+librería estandar es suficiente»*:
+- **Grabadas** con la imagen de `cd9a8ad1` (la Nucleo por SWD, con su número de serie) y su zona FORMATEADA con los
+  packs de `#623`: la C6, Stdlib, DriverSpi y GuiMini; la C5, Stdlib (no lo tenía), Gui y DriverSpi; la Nucleo,
+  sólo el Stdlib (fuera SQLite y Mini).
+- **`#671` en placa**: el formateo de la C5 (motores cargados por un programa) y el de la Nucleo (cargados por la
+  tanda) contestaron `"reinicia"`, lo dejaron en el log y volvieron a arrancar; la C6, sin motores cargados,
+  formateó sin reiniciar. **CERRADA.**
+- **La ronda de V7 y la tanda de `#667`**, verdes en las tres (las saltadas, las de siempre: en la C6, tres por su
+  heap; en la Nucleo, las de GUI). La Nucleo, repetida con su Stdlib.pack: ya no sube nada a `/lib`.
+- **En la C6**: lo que abrió `#666` —`PinesSistema` y DETRÁS `GuiWinJson` y `GuiArbolG2`—, IDÉNTICO, con 35 920 y
+  34 488 B libres en el peor momento (el 7-oct, 3 144 y el ERROR); `tools/medir_consumo.py` entero
+  (`compat/informes/consumo_c6_8oct.md`; `docs/MEMORIA.md`, remedida): la GUI, de 67–71 KB en uso a 38–41; y `#650`
+  con `Importa5` y tres copias iguales en `/app`: «del FS es igual al del pack: se carga del pack», y la misma RAM.
+  **`#650` y `#651`, CERRADAS.**
+- **De paso**: el heap de BP de la C6 es de 63 KB con esta imagen (era de 64). El 7-oct, el bloque de la VM dejaba al
+  sistema 40 B por encima de su margen; hoy la imagen tiene 272 B más de estáticos, y el arranque baja el bloque a
+  127 KB. No es un fallo —el arranque protege el margen del sistema y lo dice en su log—, pero lo poco que sobraba
+  es para saberlo: escrito en `MEMORIA.md` y en `#651`.
+
+**Lo siguiente**: la C3 (para cerrar `#666`–`#668`; y su RAM, por remedir); el lote de la imagen de hoy en la P4, la
+DK2 y las cuatro de la mañana, mirando sus zonas (`#623`: las que tienen SQLite o Mini); y después, las SUELTAS que
+esperaban (las decisiones de Eduardo, `#614`, `#615` y `#645`).
 
 ## 🧪 La tarde de placas (8-oct): la P4 y la DK2 — `#669` cerrada, `#671` abierta
 
