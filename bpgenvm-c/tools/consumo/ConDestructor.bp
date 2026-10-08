@@ -1,0 +1,23 @@
+// ConDestructor.bp — un objeto con destructor vivo al acabar (un global), sin IO: lo que cuesta la destrucción del
+// final de #668 en la línea «mem:» del firmware (se escribe después de ella y antes de liberar el programa). Medido en
+// la C6 el 8-oct: 2,1 KB sobre Nada, lo mismo que FicheroAbierto sobre Limpia.
+module ConDestructor
+  import Core
+
+  public class Cosa
+    public property n: integer := 0
+    public function Cosa()
+      this.n := 1
+    end Cosa
+    public function ~Cosa()
+      this.n := 0
+    end ~Cosa
+  end Cosa
+
+  var c: Cosa := null
+
+  function Main()
+    c := Cosa()
+    print "fin"
+  end Main
+end ConDestructor

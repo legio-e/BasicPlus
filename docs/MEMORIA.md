@@ -49,7 +49,8 @@ módulo y `Core`). En KB de 1000 B, como el 7-oct; el bloque mayor, en KB de 102
 |---|---|---|---|
 | `Importa5`: cinco módulos más de la stdlib (Math, Str, Collections, Json, Time —y Rtc, que trae Time—), sin tocar nada | 21,5 KB (36,0) | 27,9 KB (42,8) | vuelve |
 | `Limpia`: importa `IO` | 3,0 KB (5,4) | | vuelve |
-| `FicheroAbierto`: importa `IO` y deja un fichero abierto | 5,0 KB (5,6): 2,1 más que `Limpia` (el 7-oct, 0,2), sin desglosar | | vuelve: lo cierra el fin de RUN |
+| `FicheroAbierto`: importa `IO` y deja un fichero abierto | 5,0 KB (5,6): 2,1 más que `Limpia` —no es el fichero: `FicheroCerrado`, con el fichero cerrado, gasta lo mismo; es la destrucción del final, la fila siguiente— | | vuelve: lo cierra su destructor |
+| `ConDestructor`: un objeto con destructor vivo al acabar, sin `IO` | 2,1 KB (—) | | vuelve: es la destrucción del final de `#668`, que corre antes de la línea `mem:`; se suelta con el programa |
 | `NatV7` / `FloatNat`: natives (su código, en RAM ejecutable mientras corre el programa) | 12,5 / 2,2 KB (13,5 / 3,2) | 16,8 KB (17,9) (`NatV7`) | vuelve |
 | `GuiWinJson` / `GuiArbolG2`: GUI | 38,3 / 40,5 KB (67,3 / 71,5) | 44,6 / 46,0 KB (74,3 / 78,7) | vuelve |
 | `NeoUna` + `NeoTres`: dos tiras NeoPixel | 3,1 KB la primera, con el módulo (3,9) | | vuelve casi todo: quedan ~0,1 KB (~1,5), sin crecer al repetir; pero el bloque mayor se queda partido, de 62 a 57 KB (de 64 a 56), hasta el siguiente reset (`#666`) |
@@ -110,9 +111,10 @@ símbolos (8 KB). `test-censo`, en la red, no deja pasar de 100 bloques cargado.
   a tener (probado en placa: las ranuras del LEDC, los canales RMT y las máquinas de la PIO). La RAM, medida en la C6
   el 8-oct: vuelve toda menos ~0,1 KB tras las tiras y ~0,3 KB tras el PWM y el contador, sin crecer al repetir;
   pero el bloque mayor se queda partido (4–5 KB menos) hasta el siguiente reset. La C3, por remedir.
-- **Los ficheros**: el 7-oct, ~0,2 KB abiertos; el 8-oct, `FicheroAbierto` gasta 2,1 KB más que `Limpia` (sin
-  desglosar: por mirar si es el fichero o lo que guarda la VM, desde `#668`, para destruir sus objetos al acabar). El
-  módulo `IO`, 3,0 KB.
+- **Los ficheros** cuestan poco (el 7-oct, ~0,2 KB abiertos; desde `#668` su destructor los cierra antes de la línea
+  `mem:`); el módulo `IO`, 3,0 KB. **Un objeto con destructor vivo al acabar** —un fichero, un periférico, un
+  componente de la GUI— cuesta ~2,1 KB de RAM del sistema en la destrucción del final (`#668`; medido con
+  `ConDestructor`, sin `IO`: la serie `destructor` de la herramienta), que vuelven al liberar el programa.
 
 ## 5. La C3
 

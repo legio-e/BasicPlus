@@ -40,6 +40,8 @@ SERIES = [
      ["Nada", "PwmDos", "PwmDos", "PulsoTres", "PulsoTres", "Nada"]),
     ("modulos_fichero", "cinco módulos más de la stdlib, y un fichero abierto (Limpia lo borra después)",
      ["Nada", "Importa5", "Nada", "FicheroAbierto", "Nada", "Limpia"]),
+    ("destructor", "un objeto con destructor vivo al acabar (#668), y un fichero cerrado y uno abierto (8-oct)",
+     ["Nada", "ConDestructor", "Nada", "Limpia", "FicheroCerrado", "Nada", "FicheroAbierto", "Nada", "Limpia"]),
     ("gui", "dos programas de GUI",
      ["Nada", "GuiWinJson", "Nada", "GuiArbolG2", "Nada"]),
     ("natives", "dos programas con natives (su código, en RAM ejecutable)",
