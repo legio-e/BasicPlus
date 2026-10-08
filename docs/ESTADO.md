@@ -61,6 +61,9 @@
 > la librería estandar es suficiente»*); en la C6, lo que abrió `#666` —`PinesSistema` y detrás la GUI— IDÉNTICO, y
 > la RAM remedida: la GUI deja ~35 KB en su peor momento (eran 2–7). **Cerradas `#671`, `#650` y `#651`.** Falta la
 > C3 para cerrar `#666`–`#668`. Más abajo, «🧪 La noche de placas (8-oct)».
+> Al parar (Eduardo: *«Hacemos un descanso»*), todo con commit y sin nada corriendo. **Traspaso**: lo que falta para
+> cerrar V7, en «Lo siguiente» de esa sección —la C3; el lote de la imagen de hoy en la P4, la DK2, la Pico 2, la
+> Metro y la S3, mirando sus packs; las SUELTAS que esperan a Eduardo; documentar, las pruebas finales y publicar—.
 >
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
@@ -1333,6 +1336,10 @@ librería estandar es suficiente»*:
   sistema 40 B por encima de su margen; hoy la imagen tiene 272 B más de estáticos, y el arranque baja el bloque a
   127 KB. No es un fallo —el arranque protege el margen del sistema y lo dice en su log—, pero lo poco que sobraba
   es para saberlo: escrito en `MEMORIA.md` y en `#651`.
+- **Y lo que costaba un fichero** (después, con una serie nueva de `tools/medir_consumo.py`, `destructor`;
+  `933062b2`): los 2,1 KB de más de `FicheroAbierto` sobre `Limpia` (el 7-oct, 0,2) no son el fichero —su
+  destructor lo cierra en la destrucción del final de `#668`, antes de la línea `mem:`; `FicheroCerrado` gasta lo
+  mismo—, sino esa destrucción: `ConDestructor`, sin `IO`, gasta 2,1 KB sobre `Nada`. Vuelven al liberar el programa.
 
 **Lo siguiente**: la C3 (para cerrar `#666`–`#668`; y su RAM, por remedir); el lote de la imagen de hoy en la P4, la
 DK2 y las cuatro de la mañana, mirando sus zonas (`#623`: las que tienen SQLite o Mini); y después, las SUELTAS que
