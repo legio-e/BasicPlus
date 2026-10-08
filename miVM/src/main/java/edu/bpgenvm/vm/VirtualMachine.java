@@ -2307,6 +2307,10 @@ public class VirtualMachine {
             }
         }
 
+        // V7 #668 — lo pendiente de destruir sigue vivo; lo que tiene destructor y nadie alcanza se resucita y pasa a
+        // pendientes (lo destruye Core.__destruyePendientes, entre cuantos). Antes de ficherosGc y de los barridos.
+        destruccionEnElGc(valid);
+
         ficherosGc();   // V7/H3 (#491): un File inalcanzable se cierra AQUÍ, con su bloque intacto y su handle vivo
 
         // Paso 6 — BARRIDO DE TABLA (handle-aware): un slot VIVO (addr!=0) cuyo bloque
@@ -2943,6 +2947,7 @@ public class VirtualMachine {
             // idem: sin RuntimeError no hay prefabricada
         }
 
+        destruccionAlEmpezar();   // V7 #668: el registro y las colas, de este RUN
         // main arranca RUNNABLE en la cola; el primer worker que lo pille lo ejecuta.
         synchronized (vmLock) {
             main.setStatus(ThreadStatus.RUNNABLE, -1, "L2158");
@@ -2970,6 +2975,10 @@ public class VirtualMachine {
         // V7/H7 #600 — lo que algún hilo dejara a mitad de un `print` (el programa parado, o muerto por un
         // error de la VM, en medio de una línea): tal cual, sin salto, como salía antes. El que acaba solo ya lo
         // ha vaciado en terminateThread. Espejo de lineas_vaciar (bpvm.c).
+        synchronized (vmLock) { for (ThreadContext t : threads) lineaVaciar(t); }
+        // V7 #668 — LA FASE DE DESTRUCCIÓN DEL FINAL: lo vivo con destructor se destruye, el más nuevo primero, acabe
+        // el programa como acabe. Antes de cerrar la ventana, los ficheros, los pines y los buses: ésos son la red.
+        faseDestruccionFinal(main);
         synchronized (vmLock) { for (ThreadContext t : threads) lineaVaciar(t); }
         // Asegura que el último output del programa BP llegue al sink
         // antes de que la VM termine — crítico cuando el sink es un
@@ -3067,6 +3076,7 @@ public class VirtualMachine {
                         // Dentro del vmLock y con el tc ya asignado a este worker:
                         // nadie más lo está ejecutando, su estado es el bueno.
                         drainOneEvent(tc);
+                        inyectaDestruccion(tc);   // V7 #668: y lo pendiente de destruir, como un evento más
                     }
                     ExitSignal sig;
                     currentTcLocal.set(tc);
@@ -3960,8 +3970,10 @@ public class VirtualMachine {
                     // y sincronizar tc.sp, para cerrar la ventana en que
                     // otro worker pudiera disparar GC con el ref en tránsito.
                     synchronized (vmLock) {
-                        refStore(mem, sp, heapNuevo(TYPE_OBJECT, classPtr, numFields * 4)); sp += REF_SIZE;   // V4: push del ref nuevo; V7/H7 #593: nace entero
+                        long nuevo = heapNuevo(TYPE_OBJECT, classPtr, numFields * 4);
+                        refStore(mem, sp, nuevo); sp += REF_SIZE;   // V4: push del ref nuevo; V7/H7 #593: nace entero
                         tc.sp = sp;
+                        if (tipoDestructorDeClase(classPtr) != 0) registroDestruibles.add(nuevo);   // V7 #668: se destruirá
                     }
                     break;
                 }
@@ -6952,6 +6964,52 @@ public class VirtualMachine {
                 pushTcRef(tc, allocVmString("unknown"));
                 break;
             }
+            // ── V7 #668 — LIBERAR ES DESTRUIR: las primitivas de Core.__destruye y Core.__destruyePendientes.
+            case LIBERA_SI_SIN_DESTRUCTORES: {   // ningún destructor en su árbol de owner: lo suelta entero
+                long x = popTcRef(tc);
+                pushTc(tc, liberaSiSinDestructores(x) ? 1 : 0);
+                break;
+            }
+            case ORDEN_DESTRUCCION: {   // su árbol de owner en el orden de destruir: los hijos antes que su padre
+                long x = refLoad(memory, tc.sp - REF_SIZE);   // se queda en la pila mientras se reserva: es raíz
+                List<Long> orden;
+                synchronized (vmLock) { orden = ordenDestruccion(x); }
+                long arr = allocVmRefArray(orden.size());
+                int base = refDeref(arr) + 4;
+                for (int i = 0; i < orden.size(); i++) refStore(memory, base + i * 8, orden.get(i));
+                popTcRef(tc);
+                pushTcRef(tc, arr);
+                break;
+            }
+            case PREPARA_DESTRUCTOR: {   // 0, ninguno; 1, el de una clase de Object; 2, el de un Thread
+                long x = popTcRef(tc);
+                int t;
+                synchronized (vmLock) {
+                    t = tipoDestructorDeRef(x);
+                    if (t != 0) olvidaHijosDestruidos(x);   // en su destructor ya no tiene a sus hijos owner
+                }
+                pushTc(tc, t);
+                break;
+            }
+            case LIBERA_SOLO: {   // la memoria de ese bloque y nada más: sus hijos ya no están
+                liberaSolo(popTcRef(tc));
+                pushTc(tc, 0);
+                break;
+            }
+            case AVISA_DESTRUCTOR: {   // un destructor lanzó: se dice, con la clase, y se sigue
+                long msg = popTcRef(tc);
+                long x = popTcRef(tc);
+                String clase;
+                synchronized (vmLock) { clase = claseParaAviso(x); }
+                System.err.println("[bpvm] el destructor de " + clase + " lanzó: " + readVmString(msg)
+                        + " — se sigue con la limpieza");
+                pushTc(tc, 0);
+                break;
+            }
+            case SIGUIENTE_PENDIENTE: {   // lo siguiente que hay pendiente de destruir, o null
+                pushTcRef(tc, siguientePendiente(tc));
+                break;
+            }
             case MACHINE_GET_ENV: {       // V7/H10 #626 — el ENV de la placa: el PC no tiene, y la VM-C de host tampoco
                 popTcRef(tc);             // la clave
                 pushTcRef(tc, allocVmString(""));
@@ -7423,6 +7481,7 @@ public class VirtualMachine {
         int tag = readInt32(headerAddr);
         if ((tag & TAG_FREE_BIT) != 0) return -1;    // ya libre
         handleKill(ref);   // Paso 3/contrato B: el índice queda MUERTO → derefs futuros gritan
+        if (!registroDestruibles.isEmpty()) registroDestruibles.remove(ref);   // V7 #668: ya no hay que destruirlo
         return headerAddr;
     }
 
@@ -7497,6 +7556,397 @@ public class VirtualMachine {
     }
 
     // ============================================================
+    // V7 #668 (8-oct) — LIBERAR ES DESTRUIR (Eduardo: «Si liberamos el objeto, ha de ejecutar su destructor y si el
+    // destructor ha de liberar resources que lo haga. Es la única manera que no queden resources perdidos o
+    // abiertos»). La VM pone las piezas pequeñas; el recorrido y las llamadas son BP —Core.__destruye y
+    // Core.__destruyePendientes—, el mismo bytecode en las dos VMs. Un objeto con destructor se destruye lo libere
+    // quien lo libere: su `owner` (el compilador llama a Core.__destruye), el GC (no lo suelta: lo resucita y lo deja
+    // pendiente) o el final del programa (todo lo vivo, el más nuevo primero). Primero los hijos `owner`, después el
+    // objeto (la regla del 11-sep). Diseño: V7_IDEAS §«#666–#668», 7 y 8. Espejo de destruir.c (VM-C).
+    // ============================================================
+
+    /** Los objetos vivos de una clase CON destructor, en orden de creación (handles: Heap.compact mueve bloques). */
+    private final java.util.LinkedHashSet<Long> registroDestruibles = new java.util.LinkedHashSet<>();
+    /** Lo pendiente de destruir —lo que el GC encontró inalcanzable; al acabar, todo lo vivo—, el siguiente delante.
+     *  Raíz del GC hasta que se destruye. */
+    private final ArrayDeque<Long> pendientesDestruir = new ArrayDeque<>();
+    /** Descriptor → 0 sin destructor propio, 1 el de una clase de Object, 2 el de un Thread. Una vez por clase y RUN. */
+    private final java.util.HashMap<Integer, Integer> tipoDestructorPorClase = new java.util.HashMap<>();
+    private long dtorVacioObject = -2L, dtorVacioThread = -2L;
+    private int descThread = 0;
+    /** El hilo en el que está metida la llamada a Core.__destruyePendientes, o -1: uno a la vez. */
+    private int drenadorTid = -1;
+    private int dirDestruyePendientes = 0, csDestruyePendientes = 0;
+    /** La fase de destrucción del final: ya no se entregan eventos (el programa ha acabado). */
+    private volatile boolean faseFinal = false;
+    /** El tope de la destrucción del final: lo que no acabe en este tiempo se dice, y lo suelta la plataforma. */
+    private static final long TOPE_DESTRUCCION_MS = 3000;
+
+    /** Al empezar un RUN: nada de lo de otro programa (los descriptores pueden caer en las mismas direcciones). */
+    private void destruccionAlEmpezar() {
+        synchronized (vmLock) {
+            registroDestruibles.clear();
+            pendientesDestruir.clear();
+            tipoDestructorPorClase.clear();
+            dtorVacioObject = -2L; dtorVacioThread = -2L; descThread = 0;
+            drenadorTid = -1;
+            dirDestruyePendientes = 0; csDestruyePendientes = 0;
+            faseFinal = false;
+        }
+    }
+
+    /** 0 si la clase no tiene destructor propio (el vacío de Object o el de Thread, o ninguno: una tupla); 1 si es una
+     *  clase de Object con destructor; 2 si es un Thread con destructor —otra raíz: su destructor no está en la ranura
+     *  del de Object, allí está join—. Bajo vmLock. */
+    private int tipoDestructorDeClase(int desc) {
+        Integer t = tipoDestructorPorClase.get(desc);
+        if (t != null) return t;
+        int r = 0;
+        int slot = moduleManager.slotOfMarker(desc, "__dtor");
+        if (slot >= 0) {
+            long dt = resolverVirtual(memory, desc, slot);
+            asegurarDtorsVacios();
+            if (dt != -1L && dt != dtorVacioObject && dt != dtorVacioThread)
+                r = (descThread != 0 && isDescendantOf(desc, descThread)) ? 2 : 1;
+        }
+        tipoDestructorPorClase.put(desc, r);
+        return r;
+    }
+
+    private void asegurarDtorsVacios() {
+        if (dtorVacioObject != -2L) return;
+        dtorVacioObject = -1L; dtorVacioThread = -1L;
+        Integer o = moduleManager.resolveGlobal("Core.Object");
+        if (o != null) {
+            int s = moduleManager.slotOfMarker(o, "__dtor");
+            if (s >= 0) dtorVacioObject = resolverVirtual(memory, o, s);
+        }
+        Integer th = moduleManager.resolveGlobal("Core.Thread");
+        if (th != null) {
+            descThread = th;
+            int s = moduleManager.slotOfMarker(th, "__dtor");
+            if (s >= 0) dtorVacioThread = resolverVirtual(memory, th, s);
+        }
+    }
+
+    /** La cabecera de un ref VIVO (su generación, en el heap, no libre), o -1. Sin tocar nada. */
+    private int cabeceraViva(long ref) {
+        if (ref == 0) return -1;
+        if ((ref & HANDLE_TAG) != 0) {
+            int hidx = handleIdx(ref);
+            if (hidx <= 0 || hidx >= handleNext || handleGen[hidx] != handleGenOf(ref)) return -1;
+        }
+        int h = refDeref(ref) - 4;
+        if (h < heapStart || h >= heapNext) return -1;
+        if ((readInt32(h) & TAG_FREE_BIT) != 0) return -1;
+        return h;
+    }
+
+    /** El tipo de destructor de lo que apunta `ref`: 0 si es null, está muerto, no es un objeto o su clase no tiene. */
+    private int tipoDestructorDeRef(long ref) {
+        int h = cabeceraViva(ref);
+        if (h < 0) return 0;
+        if (((readInt32(h) & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) != TYPE_OBJECT) return 0;
+        return tipoDestructorDeClase(readInt32(h + 4));
+    }
+
+    /** Antes de su destructor (bajo vmLock): los campos owner de `ref` que apuntan a un hijo ya destruido pasan a null.
+     *  Sus hijos se destruyen antes que él (la regla del 11-sep), y en su destructor «ya no los tiene»: un handle muerto
+     *  en el campo diría «no es null» y usarlo gritaría. Los que siguen vivos no se tocan. */
+    private void olvidaHijosDestruidos(long ref) {
+        int h = cabeceraViva(ref);
+        if (h < 0 || ((readInt32(h) & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) != TYPE_OBJECT) return;
+        int classPtr = readInt32(h + 4);
+        int numFields   = readInt16(classPtr + CLS_OFF_NUM_FIELDS)   & 0xFFFF;
+        int bitmapWords = readInt16(classPtr + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
+        int ownerBitmapBase = classPtr + CLS_OFF_FIELD_BITMAP + bitmapWords * 4;
+        for (int i = 0; i < numFields; i++) {
+            int word = readInt32(ownerBitmapBase + (i >>> 5) * 4);
+            if (((word >> (i & 31)) & 1) == 0) continue;
+            int at = h + OBJ_HEADER_SIZE + i * 4;
+            long r = refLoad(memory, at);
+            if (r != 0 && cabeceraViva(r) < 0) refStore(memory, at, 0L);
+        }
+    }
+
+    /** Los hijos owner VIVOS de un bloque vivo, en orden de declaración y sin tocarlos: los campos owner de un objeto
+     *  (su descriptor) o los elementos de un array de refs poseído. Espejo de soltarSiguienteHijo, sin matar a nadie. */
+    private void hijosOwner(int headerAddr, List<Long> out) {
+        int type = (readInt32(headerAddr) & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
+        if (type == TYPE_OBJECT) {
+            int classPtr = readInt32(headerAddr + 4);
+            int numFields   = readInt16(classPtr + CLS_OFF_NUM_FIELDS)   & 0xFFFF;
+            int bitmapWords = readInt16(classPtr + CLS_OFF_BITMAP_WORDS) & 0xFFFF;
+            int ownerBitmapBase = classPtr + CLS_OFF_FIELD_BITMAP + bitmapWords * 4;
+            for (int i = 0; i < numFields; i++) {
+                int word = readInt32(ownerBitmapBase + (i >>> 5) * 4);
+                if (((word >> (i & 31)) & 1) != 0) {
+                    long r = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 4);
+                    if (cabeceraViva(r) >= 0) out.add(r);
+                }
+            }
+        } else if (type == TYPE_ARRAY_REF) {
+            int length = readInt32(headerAddr + 4);
+            for (int i = 0; i < length; i++) {
+                long r = refLoad(memory, headerAddr + OBJ_HEADER_SIZE + i * 8);
+                if (cabeceraViva(r) >= 0) out.add(r);
+            }
+        }
+    }
+
+    /** ¿Algún destructor en el árbol de owner de `ref`, él incluido? Sin tocar nada (`vistos`, contra un ciclo). */
+    private boolean arbolConDestructores(long ref) {
+        int h0 = cabeceraViva(ref);
+        if (h0 < 0) return false;
+        ArrayDeque<Integer> pila = new ArrayDeque<>();
+        HashSet<Integer> vistos = new HashSet<>();
+        ArrayList<Long> hijos = new ArrayList<>();
+        pila.push(h0);
+        vistos.add(h0);
+        while (!pila.isEmpty()) {
+            int h = pila.pop();
+            if (((readInt32(h) & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) == TYPE_OBJECT
+                    && tipoDestructorDeClase(readInt32(h + 4)) != 0) return true;
+            hijos.clear();
+            hijosOwner(h, hijos);
+            for (long r : hijos) {
+                int hh = cabeceraViva(r);
+                if (hh >= 0 && vistos.add(hh)) pila.push(hh);
+            }
+        }
+        return false;
+    }
+
+    /** El árbol de owner de `ref` en el orden de destruir: los hijos antes que su padre y, entre hermanos, del último al
+     *  primero (Eduardo: «de los hijos hasta los padres, en orden inverso»); `ref`, el último. Es el preorden con los
+     *  hijos en orden de declaración, dado la vuelta. */
+    private List<Long> ordenDestruccion(long ref) {
+        ArrayList<Long> pre = new ArrayList<>();
+        int h0 = cabeceraViva(ref);
+        if (h0 < 0) return pre;
+        ArrayDeque<Long> pila = new ArrayDeque<>();
+        HashSet<Integer> vistos = new HashSet<>();
+        ArrayList<Long> hijos = new ArrayList<>();
+        pila.push(ref);
+        vistos.add(h0);
+        while (!pila.isEmpty()) {
+            long r = pila.pop();
+            pre.add(r);
+            hijos.clear();
+            hijosOwner(cabeceraViva(r), hijos);
+            for (int i = hijos.size() - 1; i >= 0; i--) {   // a la pila al revés: salen en orden de declaración
+                long c = hijos.get(i);
+                if (vistos.add(cabeceraViva(c))) pila.push(c);
+            }
+        }
+        java.util.Collections.reverse(pre);
+        return pre;
+    }
+
+    /** __liberaSiSinDestructores: si en el árbol no hay ningún destructor, lo suelta entero por la cascada de siempre
+     *  (true); si lo hay, no toca nada (false). Uno muerto o null: no hay nada que hacer (true). */
+    private boolean liberaSiSinDestructores(long ref) {
+        synchronized (vmLock) {
+            if (cabeceraViva(ref) < 0) return true;
+            if (arbolConDestructores(ref)) return false;
+            freeOwnedObjectLocked(ref);
+            return true;
+        }
+    }
+
+    /** __liberaSolo: la memoria de ESE bloque y nada más (sus hijos owner ya se destruyeron, antes que él). */
+    private void liberaSolo(long ref) {
+        synchronized (vmLock) {
+            int h = soltarEntra(ref);
+            if (h < 0) return;
+            addToFreeList(h, objectTotalSize(h));
+            heapBloques--;   // V7/H7 #593: un bloque menos
+        }
+    }
+
+    /** __siguientePendiente: el siguiente vivo de la cola, o null (0); al vaciarse, el que la vaciaba deja de hacerlo. */
+    private long siguientePendiente(ThreadContext tc) {
+        synchronized (vmLock) {
+            while (!pendientesDestruir.isEmpty()) {
+                long r = pendientesDestruir.pollFirst();
+                if (cabeceraViva(r) >= 0) return r;
+            }
+            if (drenadorTid == tc.id) drenadorTid = -1;
+            return 0L;
+        }
+    }
+
+    /** El nombre de la clase de `ref` para un aviso (`Mod.Clase`), o "?". */
+    private String claseParaAviso(long ref) {
+        int h = cabeceraViva(ref);
+        if (h < 0 || ((readInt32(h) & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) != TYPE_OBJECT) return "?";
+        String n = moduleManager.nombreDeClase(readInt32(h + 4));
+        return n != null ? n : "?";
+    }
+
+    /** GC (bajo su STW, tras marcar las raíces): lo pendiente sigue vivo; y lo que tiene destructor y ha quedado
+     *  inalcanzable NO se suelta: se resucita —con lo que alcanza, para que su destructor encuentre vivo lo que usa— y
+     *  pasa a pendientes, el más nuevo primero. Antes de ficherosGc: un File con destructor lo cierra su destructor. */
+    private void destruccionEnElGc(Set<Integer> valid) {
+        for (long p : pendientesDestruir) {
+            int h = cabeceraViva(p);
+            if (h >= 0 && valid.contains(h)) markObject(h, valid);
+        }
+        if (registroDestruibles.isEmpty()) return;
+        ArrayList<Long> muertos = null;
+        for (java.util.Iterator<Long> it = registroDestruibles.iterator(); it.hasNext(); ) {
+            long r = it.next();
+            int h = cabeceraViva(r);
+            if (h < 0 || !valid.contains(h)) { it.remove(); continue; }   // ya lo soltó otro camino
+            if ((readInt32(h) & TAG_MARK_BIT) == 0) {
+                if (muertos == null) muertos = new ArrayList<>();
+                muertos.add(r);
+                it.remove();
+            }
+        }
+        if (muertos == null) return;
+        for (int i = muertos.size() - 1; i >= 0; i--) pendientesDestruir.addLast(muertos.get(i));
+        for (long r : muertos) {
+            int h = cabeceraViva(r);
+            if (h >= 0) markObject(h, valid);
+        }
+    }
+
+    private boolean resolverDestruyePendientes() {
+        if (dirDestruyePendientes != 0) return dirDestruyePendientes > 0;
+        Integer a = moduleManager.resolveGlobal("Core.__destruyePendientes");
+        if (a == null) { dirDestruyePendientes = -1; return false; }   // un Core de antes de #668
+        dirDestruyePendientes = a;
+        csDestruyePendientes = moduleManager.getModuleBaseFromPC(a);
+        return true;
+    }
+
+    /** ENTRE CUANTOS (bajo vmLock, con `tc` ya de este worker, tras los eventos): si hay algo pendiente de destruir y
+     *  nadie lo está vaciando, se mete en `tc` la llamada a Core.__destruyePendientes, como un evento. */
+    private void inyectaDestruccion(ThreadContext tc) {
+        if (pendientesDestruir.isEmpty() || drenadorTid >= 0 || tc.evDepth > 0) return;
+        if (!resolverDestruyePendientes()) return;
+        if (inyectaFuncion(tc, dirDestruyePendientes, csDestruyePendientes)) drenadorTid = tc.id;
+    }
+
+    /** El marco de una llamada a una FUNCIÓN de módulo sin argumentos en la pila de `tc`: como inyectaEvento —el PC de
+     *  reanudación debajo; vuelve por el sentinela EVENT_RETURN (memory[2]); al fin de hilo si lo habían resucitado—. */
+    private boolean inyectaFuncion(ThreadContext tc, int dir, int cs) {
+        if (tc.sp + 16 > tc.stackTop) {
+            System.err.println("[bpvm] destruir: sin pila en tid=" + tc.id + " — se deja para luego");
+            return false;
+        }
+        byte[] mem = memory;
+        int sp = tc.sp;
+        int resumePc = (tc.evPostMortem >= 0) ? 0 : tc.pc;
+        writeI32(mem, sp, resumePc); sp += 4;   // PC de reanudación, bajo todo
+        writeI32(mem, sp, 2); sp += 4;          // saved PC = sentinela EVENT_RETURN (memory[2])
+        writeI32(mem, sp, tc.bp); sp += 4;
+        writeI32(mem, sp, tc.cs); sp += 4;
+        tc.sp = sp;
+        tc.bp = sp;
+        tc.cs = cs;
+        tc.pc = dir;
+        tc.evDepth++;
+        return true;
+    }
+
+    /** LA FASE DE DESTRUCCIÓN DEL FINAL (Eduardo: «Si el programa termina, sea de la forma que sea, se han de liberar
+     *  todos los recursos… es importante que todo vuelva a la situación original»). Con el programa acabado —bien, con
+     *  un error o con un STOP—: lo vivo con destructor pasa a pendientes, el más nuevo primero; el STOP se baja; los
+     *  demás hilos se abandonan (sus mutex y su pila, sueltos); y el main, con la pila limpia, corre
+     *  Core.__destruyePendientes en un worker como los de run(). Por rondas (lo que un destructor deje vivo con
+     *  destructor, en la siguiente) y con un tope; lo que no se destruya se dice. Tras un fallo interno de la VM o con
+     *  el heap descarrilado no se corre nada: lo suelta la plataforma. */
+    private void faseDestruccionFinal(ThreadContext main) {
+        synchronized (vmLock) {
+            if (registroDestruibles.isEmpty() && pendientesDestruir.isEmpty()) return;
+            String sinCorrer = null;
+            if (falloInterno || gcDescarrilo) sinCorrer = "la VM ha fallado (lo suelta la plataforma)";
+            else if (!resolverDestruyePendientes()) sinCorrer = "el Core no tiene __destruyePendientes (es de antes de #668)";
+            if (sinCorrer != null) {
+                System.err.println("[bpvm] fin de RUN: " + (registroDestruibles.size() + pendientesDestruir.size())
+                        + " objeto(s) con destructor sin destruir: " + sinCorrer);
+                registroDestruibles.clear();
+                pendientesDestruir.clear();
+                return;
+            }
+        }
+        boolean matado = killRequested;
+        long fin = System.currentTimeMillis() + TOPE_DESTRUCCION_MS;
+        boolean cortado = false, porTope = false;
+        faseFinal = true;
+        for (int ronda = 0; ronda < 8 && !cortado; ronda++) {
+            synchronized (vmLock) {
+                ArrayList<Long> vivos = new ArrayList<>(registroDestruibles);
+                registroDestruibles.clear();
+                for (int i = vivos.size() - 1; i >= 0; i--) {
+                    long r = vivos.get(i);
+                    if (cabeceraViva(r) >= 0) pendientesDestruir.addLast(r);
+                }
+                if (pendientesDestruir.isEmpty()) break;
+                killRequested = false;
+                vmShutdown = false;
+                for (ThreadContext t : threads) {
+                    if (t.id == 0 || t.getStatus() == ThreadStatus.TERMINATED) continue;
+                    t.ownerThread = null;
+                    t.setStatus(ThreadStatus.TERMINATED, -1, "668");
+                    freeStackRegion(t.stackBase, t.stackTop);
+                    t.waiters.clear();
+                }
+                // Los mutex, todos libres y sin nadie esperando: sus dueños se han abandonado (soltarlos de uno en uno
+                // se los pasaría a uno que espera, que volvería a estar listo), y los destructores pueden necesitarlos.
+                for (JavaMutex jm : mutexes) { jm.ownerTid = JavaMutex.FREE; jm.waiters.clear(); }
+                runQueue.clear();
+                main.ownerThread = null;
+                main.sp = main.stackBase;
+                main.bp = main.stackBase;
+                main.handlerStack.clear();
+                main.ehHandlerPc = -1;
+                main.blockedOnMutexId = -1;
+                main.evDepth = 0;
+                main.evPostMortem = 0;   // al volver, al fin de hilo (memory[0]); y sin deudas de eventos: no resucita
+                main.allocAnchor = 0;
+                main.yieldRequested = false;
+                main.pc = 0;
+                if (!inyectaFuncion(main, dirDestruyePendientes, csDestruyePendientes)) break;
+                drenadorTid = 0;
+                main.setStatus(ThreadStatus.RUNNABLE, -1, "668");
+                runQueue.addFirst(0);
+            }
+            Thread w = new Thread(new WorkerLoop(0), "bpgenvm-destruccion");
+            w.setDaemon(false);
+            w.start();
+            long queda = fin - System.currentTimeMillis();
+            try { w.join(Math.max(1L, queda)); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            if (w.isAlive()) {
+                System.err.println("[bpvm] fin de RUN: la destrucción no ha acabado en " + TOPE_DESTRUCCION_MS
+                        + " ms: se corta (lo que quede lo suelta la plataforma)");
+                cortado = true;
+                porTope = true;
+                requestKill();
+                try { w.join(); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+            } else if (killRequested) {
+                cortado = true;   // un STOP durante la destrucción: se respeta
+            }
+        }
+        faseFinal = false;
+        synchronized (vmLock) {
+            int quedan = 0;
+            String primero = "?";
+            for (long r : pendientesDestruir) if (cabeceraViva(r) >= 0 && quedan++ == 0) primero = claseParaAviso(r);
+            for (long r : registroDestruibles) if (cabeceraViva(r) >= 0 && quedan++ == 0) primero = claseParaAviso(r);
+            if (quedan > 0) System.err.println("[bpvm] fin de RUN: quedaron sin destruir " + quedan
+                    + " objeto(s) con destructor (el primero, de " + primero + ")");
+            pendientesDestruir.clear();
+            registroDestruibles.clear();
+            drenadorTid = -1;
+            // El resultado: el KILL de antes, o un STOP del usuario durante la fase (el del tope no es suyo).
+            killRequested = matado || (killRequested && !porTope);
+        }
+    }
+
+    // ============================================================
     // H5.c — Drenaje de la cola de eventos (espejo de events.c)
     // ============================================================
 
@@ -7518,6 +7968,7 @@ public class VirtualMachine {
      */
     private void drainOneEvent(ThreadContext tc) {
         if (tc.evDepth > 0) return;   // un handler a la vez: FIFO de verdad
+        if (faseFinal) return;        // V7 #668: el programa ha acabado; en la destrucción del final no hay eventos
         PendingEvent ev = null;
         for (java.util.Iterator<PendingEvent> it = eventQueue.iterator(); it.hasNext(); ) {
             PendingEvent e = it.next();

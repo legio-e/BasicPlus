@@ -8397,3 +8397,63 @@ impriman.
 4. **Medir la GUI** (`GuiChurn`, `GuiAnidadaGc`: memoria y tiempo) y la RAM de la C3 y la C6 (`docs/MEMORIA.md`).
 5. **Las placas, en un lote**: `NeoUna` tras `PinesSistema` en la C6, GuiArbolG2 tras `PinesSistema`, el PWM parado tras
    un STOP, y la ronda de V7.
+
+### 9. Hecho en las dos VMs (8-oct): lo que salió al hacerlo
+
+Los pasos 1 y 2 del plan, con la VM-Java de oráculo: `Core.__destruye` y `Core.__destruyePendientes` en `Core.bp`; el
+compilador (`MivmEmitter`: `emitDestruyeLocal`, `emitSetFieldOwnerDestruye`); en la VM-Java, el bloque «V7 #668» de
+`VirtualMachine.java`; en la VM-C, `src/destruir.c` (dado de alta en las siete listas de build) y sus enganches. La
+batería, en la red de paridad: `bpgenvm-c/samples/Destruye{Arbol,Lanza,Gc,Final,TrasError}.bp` —el orden de un árbol
+(un `var owner`, un campo reasignado, a null y a sí mismo, una `OwnerList`, un array poseído, un padre sin destructor,
+un hilo), el destructor que lanza, el GC, el final y el final tras un error—: las cinco, PARIDAD OK a la primera en la
+VM-C. Lo que cambia respecto a 8:
+
+- **El orden lo da la VM** (`__ordenDestruccion`, 273), no un recorrido en BP con una `List`: BP no puede leer los
+  campos `owner` de un objeto cualquiera (Eduardo: *«En BP no tenemos nada de eso y hay que confiar en cada objeto haga
+  su trabajo»*). Devuelve el árbol en postorden —los hijos antes que su padre; entre hermanos, del último al primero—,
+  con un conjunto de vistos (un hijo con dos dueños, o un ciclo, sale una vez). BP recorre ese array y llama a cada
+  destructor dentro de su `try`.
+- **«En su destructor ya no tiene a sus hijos owner» se cumple de verdad**: la prueba lo destapó —el padre veía el campo
+  de un hijo ya destruido como «no es null» (guarda un handle muerto), y usarlo grita—. Así que `__preparaDestructor`
+  (274), además de decir qué destructor tiene (0, 1 de `Object`, 2 de `Thread`), pone a null los campos `owner` que
+  apuntan a un hijo ya destruido. Los que siguen vivos no se tocan.
+- **Las seis primitivas** (`docs/BUILTINS.md`, 272–277): `__liberaSiSinDestructores` (la vía rápida: un árbol sin
+  destructores se suelta entero por la cascada de siempre), `__ordenDestruccion`, `__preparaDestructor`,
+  `__liberaSolo`, `__avisaDestructor` y `__siguientePendiente`. `Thread` es otra raíz —su destructor no está en la
+  ranura del de `Object`, allí está `join`—: `Core` tiene una llamada para cada una (`__dtorDeObject`,
+  `__dtorDeThread`). Llamar a `__dtor` sólo se permite en `Core` (el semántico).
+- **«Esta clase tiene destructor» se calcula al crear el primer objeto de la clase**, no al enlazar: una vez por clase,
+  en una caché (la VM-Java, un mapa; la VM-C, una tabla de direcciones abiertas). El mismo resultado sin tocar el
+  enlazador ni el formato del descriptor, que no tiene hueco libre.
+- **El registro**: en la VM-Java sale al soltarse (`soltarEntra`); en la VM-C se purga perezosamente —al llenarse y en
+  cada GC—: un muerto se reconoce por la generación de su handle, que sube en el acto también con dos runs. 8 B por
+  objeto vivo con destructor; nada si el programa no tiene ninguno.
+- **Un campo `owner` reasignado**: se escribe el nuevo y DESPUÉS se destruye el viejo, si no es null ni el mismo. De
+  paso se arregla lo de antes: `x.f := x.f` con `SET_FIELD_OWNER` soltaba el viejo —que era el mismo— y dejaba en el
+  campo un handle muerto.
+- **Un owner cuyo tipo no puede tener destructor** (un string, un número, un array de ellos) se sigue soltando con
+  `FREE_REF` / `SET_FIELD_OWNER`, sin llamar a nadie; y con un `Core` de antes de #668, todo como antes. Un `var owner`
+  local de tipo array no lo admite el lenguaje (sólo clases): el array poseído se prueba con un campo, como el de
+  `OwnerList`.
+- **El final**, por rondas (lo que un destructor deje vivo con destructor, en la siguiente; hasta 8) y con un tope de
+  3 s; sin eventos (el programa ha acabado); los demás hilos, abandonados (sin deudas de eventos: no resucitan) y los
+  `Mutex`, TODOS libres y sin nadie esperando —soltarlos de uno en uno se los pasaba a un hilo abandonado que esperaba,
+  que volvía a estar listo: lo vi al escribirlo en Java—. El resultado del programa es el de antes de la fase (un
+  error, un STOP), o un STOP del usuario durante ella; el del tope no cuenta como del usuario. No se corre nada —y se
+  dice— con el heap descarrilado, tras un fallo interno de la VM (Java), con el `main` dentro de una native (C) o con
+  un `Core` de antes de #668. En la VM-C la fase es un estado del planificador: donde iba a acabar (sin hilos, KILL o
+  fallo, o un interbloqueo), monta una ronda en el `main` y sigue; en la VM-Java, un worker más tras los de `run()`.
+- **La red de seguridad**: (a) hecha: lo que queda con destructor sin destruir se dice, con cuántos y la clase del
+  primero; (c) la de la plataforma (ficheros, pines, buses) sigue detrás, como estaba. (b), la lista de libres tras un
+  GC sin raíces, todavía no.
+- **El STOP, probado en la VM-C**: `test-kill`, fases 9 y 10 (`samples/KillDestruye.bp`: una global y un `var owner`
+  del main con destructor, y el main dormido en un bucle): matado con uno y con dos runs, se destruyen los dos —el más
+  nuevo primero— y sale KILLED. Y destapó un fallo: sin el hilo `io`, el KILL llega por el `poll_cb` viejo, que lo pide
+  EN CADA VUELTA (es «pegajoso»): en la fase del final volvía a pedirlo en el acto y la cortaba nada más empezar. En la
+  fase del final el planificador ya no lo consulta (la corta su tope; un KILL por `io`, el del IDE y las placas, sí).
+  El sabotaje —quitar esa guarda— da las dos fases en rojo («quedaron sin destruir 2»).
+- **Pendiente**: el STOP en la VM-Java, a mano con el IDE (y un caso fino para entonces: con un breakpoint DENTRO de un
+  destructor, tras el STOP el depurador volvería a parar en la fase del final —el `STOP` del controlador sólo
+  reanuda—); `#667` (los destructores de los recursos, paso 3); medir la GUI (paso 4); y las placas (paso 5). Y una
+  limitación anotada: una `native` (AOT) no suelta sus `var owner` —el AOT no tiene owners—: lo que deja, lo destruye
+  el GC.

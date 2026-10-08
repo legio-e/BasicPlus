@@ -3072,8 +3072,10 @@ public final class SemanticAnalyzer {
             }
             checkVisibility(ma.line, ma.column, sub, ct.cls);
             if (sub instanceof VarSymbol) exigirUsoDeArrayFijo(ma, (VarSymbol) sub, ma.line, ma.column);   // V7/H1 #19
-            if (Symbol.FunctionSymbol.DTOR.equals(ma.member))   // V7/H1: ni `x.__dtor()` ni `super.__dtor()`
-                err(ma.line, ma.column, "el destructor lo llama el lenguaje (al morir un `var owner`), no se llama desde el código");
+            // V7/H1: ni `x.__dtor()` ni `super.__dtor()`. V7 #668: salvo en el módulo raíz —Core.__destruye es quien lo
+            // llama cuando el lenguaje libera un objeto (su owner, el GC o el final del programa)—.
+            if (Symbol.FunctionSymbol.DTOR.equals(ma.member) && !esRaiz())
+                err(ma.line, ma.column, "el destructor lo llama el lenguaje (al liberar el objeto), no se llama desde el código");
             info.exprSymbols.put(ma, sub);
             // H5.a-E3 — la sobrecarga de métodos se resuelve sobre la clase del
             // RECEPTOR (ve las suyas y las heredadas); lookupInstance devuelve una

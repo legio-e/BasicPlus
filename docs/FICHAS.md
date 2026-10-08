@@ -1523,6 +1523,20 @@ todo vuelva a la situación original»* (con un kill también: *«eso nos pasaba
 un objeto, la regla del 11-sep (el árbol de la GUI): *«primero los hijos (y a su vez los hijos de sus hijos) y después
 el objeto»* —en su destructor, un objeto ya no tiene a sus hijos `owner`—. Lo siguiente: el diseño fino de los tres
 caminos (la cascada con destructores, lo que aparta el GC, el final) y hacerlo, Java → C → placas.
+**Hecho en las dos VMs (8-oct)** (`V7_IDEAS` §«`#666`–`#668`», 9) —sin cerrar: faltan `#667`, la GUI medida y las
+placas—. LIBERAR ES DESTRUIR, con los destructores como código BP normal (Eduardo, 8-oct: *«Como código BP normal»*):
+`Core.__destruye(x)` destruye el árbol de `owner` —los hijos antes, de los últimos a los primeros; en su destructor un
+objeto ya no tiene a sus hijos `owner` (son null)—, con un `try` por destructor (el que lanza se dice y se sigue); el
+compilador la llama al morir un `owner` —un `var owner` al salir de su ámbito, al reasignarlo o al acabar un
+`try var`; un campo `owner` al reasignarlo—; el GC no suelta lo que tiene destructor: lo resucita y lo deja pendiente,
+y la VM mete `Core.__destruyePendientes` en un hilo entre cuantos, como un evento; y al acabar —bien, con un error, un
+STOP o un interbloqueo— se destruye todo lo vivo con destructor, el más nuevo primero, en el `main` resucitado, por
+rondas y con un tope de 3 s; lo que queda, se dice. Seis primitivas (272–277, `BUILTINS.md`); en la VM-C,
+`src/destruir.c`, dado de alta en las siete listas de build. Las pruebas: `Destruye{Arbol,Lanza,Gc,Final,TrasError}`
+en la red de paridad —PARIDAD OK a la primera en la VM-C— y el STOP en `test-kill` (fases 9 y 10, uno y dos runs; con
+su sabotaje: destapó que el KILL «pegajoso» del `poll_cb` cortaba la fase del final nada más empezar). Y de paso:
+`x.f := x.f` en un campo `owner` ya no deja un handle muerto en el campo. Falta: el STOP en la VM-Java, a mano con el
+IDE; `#667`; medir la GUI; las placas.
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 

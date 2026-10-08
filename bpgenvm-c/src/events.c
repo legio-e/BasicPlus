@@ -207,6 +207,7 @@ static int inject(bpvm_t* vm, bpvm_thread_t* tc, const bpvm_event_t* e) {
  * queda encima), y los eventos son FIFO. */
 int bpvm_event_drain_one(bpvm_t* vm, bpvm_thread_t* tc) {
     if (tc->ev_depth > 0) return 0;   /* un handler a la vez: FIFO de verdad */
+    if (bpvm_destruir_en_fase_final(vm)) return 0;   /* V7 #668: el programa ha acabado; en la destrucción, sin eventos */
     for (int k = 0; k < vm->ev_count; k++) {
         int idx = (vm->ev_head + k) % BPVM_EVENT_QUEUE_CAP;
         bpvm_event_t* e = &vm->ev_queue[idx];

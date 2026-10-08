@@ -4041,6 +4041,52 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_ref(vm, tc, ref);
         return BPVM_OK;
     }
+    /* ── V7 #668 — LIBERAR ES DESTRUIR: las primitivas de Core.__destruye y Core.__destruyePendientes (destruir.c). */
+    case BUILTIN_LIBERA_SI_SIN_DESTRUCTORES: {   /* ningún destructor en su árbol de owner: lo suelta entero */
+        bpref_t x = bpref_pop(vm, tc);
+        push_i32(vm, tc, bpvm_destruir_libera_si_sin(vm, x));
+        return BPVM_OK;
+    }
+    case BUILTIN_ORDEN_DESTRUCCION: {   /* su árbol de owner en el orden de destruir: los hijos antes que su padre */
+        bpref_t x = bpref_load(vm, tc->sp - BPVM_REF_SIZE);   /* se queda en la pila mientras se reserva: es raíz */
+        uint64_t* orden = NULL;
+        uint32_t n = 0;
+        if (bpvm_destruir_orden(vm, x, &orden, &n) != 0) return builtin_throw(vm, tc, "No space in heap");
+        bpref_t arr = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_REF, n, n * BPVM_REF_SIZE);
+        if (arr.v == 0u) { bpvm_free(orden); return builtin_throw(vm, tc, "No space in heap"); }
+        uint32_t base = bpref_deref(vm, arr) + BPVM_ARR_DATA_OFF;
+        for (uint32_t i = 0; i < n; i++) { bpref_t e; e.v = orden[i]; bpref_store(vm, base + i * BPVM_REF_SIZE, e); }
+        bpvm_free(orden);
+        (void) bpref_pop(vm, tc);
+        bpref_push(vm, tc, arr);
+        return BPVM_OK;
+    }
+    case BUILTIN_PREPARA_DESTRUCTOR: {   /* 0, ninguno; 1, de Object; 2, de Thread; y olvida a sus hijos owner destruidos */
+        bpref_t x = bpref_pop(vm, tc);
+        push_i32(vm, tc, bpvm_destruir_prepara(vm, x));
+        return BPVM_OK;
+    }
+    case BUILTIN_LIBERA_SOLO: {   /* la memoria de ese bloque y nada más: sus hijos ya no están */
+        bpref_t x = bpref_pop(vm, tc);
+        bpvm_heap_soltar_solo(vm, x);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_AVISA_DESTRUCTOR: {   /* un destructor lanzó: se dice, con la clase, y se sigue */
+        uint32_t msg = pop_ref(vm, tc);
+        bpref_t x = bpref_pop(vm, tc);
+        char clase[160], texto[200];
+        bpvm_destruir_nombre(vm, x, clase, sizeof clase);
+        (void) read_bp_string(vm, msg, texto, sizeof texto);
+        bpvm_diag_urgente("[bpvm] el destructor de %s lanzó: %s — se sigue con la limpieza", clase, texto);
+        push_i32(vm, tc, 0);
+        return BPVM_OK;
+    }
+    case BUILTIN_SIGUIENTE_PENDIENTE: {   /* lo siguiente que hay pendiente de destruir, o null */
+        bpref_t r; r.v = bpvm_destruir_siguiente(vm, tc);
+        bpref_push(vm, tc, r);
+        return BPVM_OK;
+    }
     case BUILTIN_MACHINE_GET_ENV: {   /* V7/H10 #626 — una clave del ENV de la placa; "" si no está (el PC no tiene ENV) */
         uint32_t kref = pop_ref(vm, tc);
         char clave[64], valor[256];   /* las del wire: una clave cabe en 63, un valor en 191 (bpvm_bmgr_req_t) */

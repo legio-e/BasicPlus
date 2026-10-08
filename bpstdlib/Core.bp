@@ -725,6 +725,56 @@ module Core
   end List
 
   // ------------------------------------------------------------------------------
+  // V7 #668 (8-oct) — LIBERAR ES DESTRUIR (Eduardo: «Si liberamos el objeto, ha de ejecutar su destructor y si el
+  // destructor ha de liberar resources que lo haga»). Un objeto se destruye —corre su destructor y se suelta— lo
+  // libere quien lo libere: su `var owner` (el compilador llama aquí), el GC o el final del programa (la VM mete en un
+  // hilo __destruyePendientes, como un evento). Primero los hijos `owner` (y los de los hijos), después el objeto: la
+  // regla del 11-sep. Cada destructor es código BP corriente (puede esperar, tocar la GUI); si lanza, se dice y se
+  // sigue (Eduardo: «se atrapa y se continúa con la liberación»). Thread es otra raíz: su destructor no está en la
+  // ranura del de Object (allí está join), así que cada raíz tiene su llamada.
+  // ------------------------------------------------------------------------------
+  function __dtorDeObject(o: Object)
+    o.__dtor()
+  end __dtorDeObject
+  function __dtorDeThread(t: Thread)
+    t.__dtor()
+  end __dtorDeThread
+
+  public function __destruye(x: any)
+    if __liberaSiSinDestructores(x) then   // ningún destructor en el árbol: la cascada de siempre, en la VM
+      return
+    endif
+    var orden: any[] := __ordenDestruccion(x)   // el árbol en postorden: los hijos antes, de los últimos a los primeros
+    var i: integer := 0
+    while i < len(orden) do
+      var n: any := orden[i]
+      var raiz: integer := __preparaDestructor(n)   // 0, ninguno; 1, de Object; 2, de Thread (y sin sus hijos owner)
+      if raiz != 0 then
+        try
+          if raiz == 1 then
+            __dtorDeObject(n)
+          else
+            __dtorDeThread(n)
+          endif
+        catch e: Exception
+          __avisaDestructor(n, e.msg)
+        endtry
+      endif
+      __liberaSolo(n)
+      i := i + 1
+    endwh
+  end __destruye
+
+  // Lo que la VM tiene pendiente de destruir (lo que el GC encontró inalcanzable, o todo lo vivo al acabar), uno a uno.
+  public function __destruyePendientes()
+    var o: any := __siguientePendiente()
+    while o != null do
+      __destruye(o)
+      o := __siguientePendiente()
+    endwh
+  end __destruyePendientes
+
+  // ------------------------------------------------------------------------------
   // LAS PRIMITIVAS DE LA VM (H1, 20-sep) — una función por builtin, en orden de id. El
   // cuerpo es su bytecode (`inline CALL_BUILTIN <id>`, o el opcode directo): Builtin.java y
   // el enum de builtins.c se GENERAN de estas líneas (scripts/gen_builtins.py), y el id es
@@ -1578,6 +1628,25 @@ module Core
   function __machineGetEnv(key: string): string   // Machine.getEnv
     inline CALL_BUILTIN 271
   end __machineGetEnv
+  // V7 #668 (8-oct) — LIBERAR ES DESTRUIR: las primitivas de __destruye y __destruyePendientes.
+  function __liberaSiSinDestructores(x: any): boolean   // sin ningún destructor en su árbol de owner: lo suelta entero
+    inline CALL_BUILTIN 272
+  end __liberaSiSinDestructores
+  function __ordenDestruccion(x: any): any[]   // su árbol de owner en postorden: los hijos antes, de los últimos a los primeros
+    inline CALL_BUILTIN 273
+  end __ordenDestruccion
+  function __preparaDestructor(x: any): integer   // 0, sin destructor; 1, de Object; 2, de Thread. Si tiene, olvida a sus hijos owner (ya destruidos)
+    inline CALL_BUILTIN 274
+  end __preparaDestructor
+  function __liberaSolo(x: any)   // su memoria y nada más: sus hijos ya no están
+    inline CALL_BUILTIN 275
+  end __liberaSolo
+  function __avisaDestructor(x: any, msg: string)   // un destructor lanzó: se dice, con la clase, y se sigue
+    inline CALL_BUILTIN 276
+  end __avisaDestructor
+  function __siguientePendiente(): any   // lo siguiente que la VM tiene pendiente de destruir, o null
+    inline CALL_BUILTIN 277
+  end __siguientePendiente
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

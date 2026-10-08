@@ -141,6 +141,50 @@ static int run_phase_io(int phase, const char* mod_path, int runs, int con_poll_
     return pass ? 0 : 1;
 }
 
+/* Fase 9 — V7 #668 (8-oct): UN PROGRAMA MATADO TAMBIÉN SE DESTRUYE. KillDestruye.mod tiene una global y un `var owner`
+ * del main con destructor y duerme en un bucle: tras el KILL, la fase del final destruye los dos —el más nuevo primero,
+ * «~propio» y después «~global»— y el programa acaba como matado (el KILL de antes manda en el resultado). */
+static char   s_salida[1024];
+static size_t s_salida_n = 0;
+
+static void captura(const char* s, size_t len, void* user) {
+    (void) user;
+    if (s_salida_n + len >= sizeof s_salida) len = sizeof s_salida - 1 - s_salida_n;
+    memcpy(s_salida + s_salida_n, s, len);
+    s_salida_n += len;
+    s_salida[s_salida_n] = '\0';
+}
+
+static int run_phase_destruye(int phase, const char* mod_path, int smp) {
+    size_t mem_size = 512 * 1024;
+    uint8_t* mem = (uint8_t*) calloc(1, mem_size);
+    if (!mem) { fprintf(stderr, "OOM\n"); return 1; }
+    bpvm_t* vm = bpvm_init(mem, mem_size, 0);
+    if (!vm) { fprintf(stderr, "bpvm_init failed\n"); free(mem); return 1; }
+    bpvm_status_t s = bpvm_load_mod(vm, mod_path);
+    if (s != BPVM_OK) {
+        fprintf(stderr, "load_mod %s: %s\n", mod_path, bpvm_status_str(s));
+        bpvm_destroy(vm); free(mem); return 1;
+    }
+    s_salida_n = 0;
+    s_salida[0] = '\0';
+    bpvm_set_output(vm, captura, NULL);
+    s_polls = 0;
+    bpvm_set_poll(vm, kill_after_20, NULL);
+    long long t0 = now_ms();
+    s = smp ? bpvm_run_smp(vm, 2) : bpvm_run(vm);
+    long long dt = now_ms() - t0;
+    const char* p = strstr(s_salida, "~propio");
+    const char* g = strstr(s_salida, "~global");
+    int pass = (s == BPVM_KILLED) && (dt < 5000) && p != NULL && g != NULL && p < g;
+    fprintf(stderr, "[kill] fase %d: matado con %s: status=%s (%lld ms), destruidos%s%s %s\n",
+            phase, smp ? "dos runs" : "un run", bpvm_status_str(s), dt, p ? " ~propio" : "", g ? " ~global" : "",
+            pass ? "PASS" : "FAIL");
+    if (!pass) fprintf(stderr, "[kill] fase %d: la salida fue: %s\n", phase, s_salida);
+    bpvm_destroy(vm); free(mem);
+    return pass ? 0 : 1;
+}
+
 int main(int argc, char** argv) {
     /* #344 — el nucleo resuelve por la FACHADA del FS (antes fopen a
      * pelo), asi que un driver de host tiene que registrar su backend. */
@@ -148,6 +192,8 @@ int main(int argc, char** argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     const char* loop_mod  = (argc > 1) ? argv[1] : "KillLoop.mod";
     const char* sleep_mod = (argc > 2) ? argv[2] : "KillSleep.mod";
+    /* V7 #668 — el tercero, el programa que se destruye al matarlo (salvo que sea el sabotaje de abajo) */
+    const char* destruye_mod = (argc > 3 && strcmp(argv[3], "--sabotaje-despertar") != 0) ? argv[3] : "KillDestruye.mod";
     /* V7/H12, 2a.2 — SÓLO PRUEBAS: el KILL no avisa a la cola. Sólo las fases 7-8 (las demás tienen un poll que las
      * despierta); y no acaban: quien lo corre pone un `timeout` y espera rojo. */
     if (argc > 3 && !strcmp(argv[3], "--sabotaje-despertar")) {
@@ -165,8 +211,10 @@ int main(int argc, char** argv) {
     rc |= run_phase_io(6, sleep_mod, 1, 1, 5000);
     rc |= run_phase_io(7, sleep_mod, 0, 0, 2000);
     rc |= run_phase_io(8, sleep_mod, 2, 0, 2000);
+    rc |= run_phase_destruye(9, destruye_mod, 0);
+    rc |= run_phase_destruye(10, destruye_mod, 1);
     if (rc == 0)   /* la señal buena de check-testc (compat.sh) */
-        printf("OK: KILL cooperativo, 8 fases (sin io, con io y con io en SMP: el poll viejo, 0 veces; y el KILL que "
-               "despierta a un programa dormido, con uno y dos runs)\n");
+        printf("OK: KILL cooperativo, 10 fases (sin io, con io y con io en SMP: el poll viejo, 0 veces; el KILL que "
+               "despierta a un programa dormido, con uno y dos runs; y el programa matado que se destruye, #668)\n");
     return rc;
 }

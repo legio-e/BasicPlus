@@ -141,6 +141,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/scheduler.c
     ${BPVM_C_ROOT}/src/threading.c
     ${BPVM_C_ROOT}/src/events.c
+    ${BPVM_C_ROOT}/src/destruir.c
     ${BPVM_C_ROOT}/src/exceptions.c
     ${BPVM_C_ROOT}/src/gpio.c
     ${BPVM_C_ROOT}/src/i2c.c

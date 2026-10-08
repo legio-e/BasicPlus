@@ -585,6 +585,11 @@ static void gc_mark_phase(bpvm_t* vm) {
     }
     /* #648 — si la pila de marcado se llenó con alguna raíz, lo marcado y sin escanear: el repaso. */
     gc_repasa(vm);
+    /* 4. V7 #668 — lo pendiente de destruir, raíz; y lo que tiene destructor y nadie alcanza NO se suelta: se resucita
+     *    y pasa a pendientes (lo destruye Core.__destruyePendientes, entre cuantos). Tras TODAS las raíces y su repaso:
+     *    lo que queda sin marcar es lo inalcanzable de verdad. Antes de los Files y de los barridos. */
+    bpvm_destruir_en_el_gc(vm, mark_recursive);
+    gc_repasa(vm);
 }
 
 /* #355 — ¿SE FUSIONAN DE VERDAD? (pregunta de Eduardo). Lo escribí, no lo probé.
@@ -803,6 +808,16 @@ static void soltar_uno(bpvm_t* vm, uint32_t header, uint32_t* pila, uint32_t* n,
     }
     if (vm->smp != NULL && !bpvm_la_cola.sabotaje_owner) return;
     bpvm_heap_free_block(vm, header);   /* H-010: bloque consistente */
+}
+
+/* V7 #668 — soltar UN bloque y nada más (Core.__liberaSolo, tras su destructor): sus hijos owner ya se destruyeron,
+ * antes que él. La misma entrada que la cascada (su handle muere) y su bloque, como soltar_uno: a la lista de libres;
+ * con dos runs, al siguiente GC. */
+void bpvm_heap_soltar_solo(bpvm_t* vm, bpref_t r) {
+    uint32_t h = soltar_entra(vm, r);
+    if (h == 0u) return;
+    if (vm->smp != NULL && !bpvm_la_cola.sabotaje_owner) return;
+    bpvm_heap_free_block(vm, h);
 }
 
 void bpvm_heap_soltar_owned(bpvm_t* vm, bpref_t r) {

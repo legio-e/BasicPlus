@@ -81,6 +81,10 @@ static int is_descendant_of(const bpvm_t* vm, uint32_t obj_class, uint32_t targe
     return 0;
 }
 
+int bpvm_clase_desciende(const bpvm_t* vm, uint32_t clase, uint32_t de) {   /* V7 #668 (destruir.c) */
+    return is_descendant_of(vm, clase, de);
+}
+
 /* V7/H7 #607 (30-sep, Eduardo: «lo que sea pero que no sea mudo») — un hilo que NO es el main muere por una
  * excepción que nadie atrapa: se DICE en la salida del programa —la consola del PC y la del IDE con la placa—, no
  * sólo por el diagnóstico, que en la placa va al log. Pasa sobre todo mientras se desarrolla (el manejador de un

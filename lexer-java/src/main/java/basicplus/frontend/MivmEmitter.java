@@ -2832,10 +2832,13 @@ public final class MivmEmitter {
         return false;
     }
 
-    /** Emite SET_FIELD o SET_FIELD_OWNER según corresponda. */
+    /** Emite SET_FIELD o SET_FIELD_OWNER según corresponda. V7 #668: en un owner, el valor viejo se destruye. */
     private void emitSetFieldAuto(String className, String fieldName) throws IOException {
         if (isOwnerInstanceField(className, fieldName)) {
-            w.emitSetFieldOwner(className, fieldName);
+            emitSetFieldOwnerDestruye(tipoDeCampo(className, fieldName),
+                    () -> w.emitGetField(className, fieldName),
+                    () -> w.emitSetField(className, fieldName),
+                    () -> w.emitSetFieldOwner(className, fieldName));
         } else {
             w.emitSetField(className, fieldName);
         }
@@ -2870,12 +2873,16 @@ public final class MivmEmitter {
         ClassSymbol c = claseDeLaRef(receptor, v.ownerClass);
         if (mod9() && c != null && porRef(c)) {   // V7/H2 (#523): por referencia
             int r = refCampo(c, claveCampo(v.name, v.type));
-            if (v.isOwner) w.emitSetFieldOwnerRef(r); else w.emitSetFieldRef(r, occupies8Bytes(v.type));
+            if (v.isOwner) emitSetFieldOwnerDestruye(v.type, () -> w.emitGetFieldRef(r, occupies8Bytes(v.type)),
+                    () -> w.emitSetFieldRef(r, occupies8Bytes(v.type)), () -> w.emitSetFieldOwnerRef(r));   // V7 #668
+            else w.emitSetFieldRef(r, occupies8Bytes(v.type));
             return;
         }
         if (v.ownerClass != null && v.ownerClass.isExternal) {
             if (v.externalSlot < 0) { errors.add("campo '" + v.name + "' de la clase externa '" + v.ownerClass.name + "' sin ranura publicada: recompila el módulo dueño (interfaz anterior a bpi 8)"); return; }
-            if (v.isOwner) w.emitSetFieldOwnerBySlot(v.externalSlot);
+            if (v.isOwner) emitSetFieldOwnerDestruye(v.type, () -> w.emitGetFieldBySlot(v.externalSlot, occupies8Bytes(v.type)),
+                    () -> w.emitSetFieldBySlot(v.externalSlot, occupies8Bytes(v.type)),
+                    () -> w.emitSetFieldOwnerBySlot(v.externalSlot));   // V7 #668
             else           w.emitSetFieldBySlot(v.externalSlot, occupies8Bytes(v.type));
         } else {
             emitSetFieldAuto(v.ownerClass.name, v.name);
@@ -3242,9 +3249,8 @@ public final class MivmEmitter {
                             // V7/H10 #633 (2-oct): el valor viejo MUERE, así que su destructor corre, como al salir del
                             // ámbito. Se liberaba sin él: `var owner f := IO.File(…)` y luego `f := IO.File(…)` dejaba
                             // el primero abierto hasta el GC, contra lo que promete `~File()`.
-                            emitDestruirLocal(targetName);
-                            w.emitGetLocal(targetName);
-                            w.emitFreeRef();
+                            // V7 #668 (8-oct): y sus hijos owner, antes que él y cada uno con su destructor.
+                            emitDestruyeLocal(targetName);
                         } else {
                             return; // no-op
                         }
@@ -4205,25 +4211,18 @@ public final class MivmEmitter {
     }
 
     /** Destruye y libera cada owner local del scope actual, en orden INVERSO al de declaración
-     *  (V5_IDEAS, 9-ago: «un q sacado de un db tiene que morir ANTES que el db»): si no es null,
-     *  su destructor (virtual: el de la clase real del objeto) y después FREE_REF; el VM hace
-     *  no-op con una ref null, y el destructor no se llama sobre null. */
+     *  (V5_IDEAS, 9-ago: «un q sacado de un db tiene que morir ANTES que el db»). V7 #668: con
+     *  Core.__destruye —sus hijos owner primero, cada uno con su destructor; después él—. */
     private void emitFreeOwnerLocals() throws IOException {
         FuncScope scope = scopeStack.peek();
         java.util.List<String> names = new ArrayList<>(scope.ownerLocals);
         java.util.Collections.reverse(names);
-        for (String name : names) {
-            emitDestruirLocal(name);
-            w.emitGetLocal(name);
-            w.emitFreeRef();
-        }
+        for (String name : names) emitDestruyeLocal(name);
     }
     /** V7/H1 — al salir de un `try var`: destruye, libera y pone a null el recurso (así la
      *  limpieza de la función, que también lo tiene por owner, no hace nada con él). */
     private void emitReleaseOwner(String name) throws IOException {
-        emitDestruirLocal(name);
-        w.emitGetLocal(name);
-        w.emitFreeRef();
+        emitDestruyeLocal(name);   // V7 #668
         w.emit(OpCode.LPUSH); w.emitLong(0L);
         w.emitSetLocal(name);
     }
@@ -4245,6 +4244,110 @@ public final class MivmEmitter {
         w.emitSetLocal(discard);
         w.declareLabel(skip);
     }
+    /** V7 #668 — Core.__destruye tal como la ve este módulo (la suya, compilando Core; el stub importado, en los
+     *  demás), o null: un Core de antes de #668, y entonces un owner se libera como antes (el destructor del de arriba
+     *  y FREE_REF, o SET_FIELD_OWNER). */
+    private FunctionSymbol destruyeDeCore() {
+        if (destruyeBuscado) return destruye;
+        destruyeBuscado = true;
+        if (info.module != null && "Core".equals(info.module.name)) {
+            Symbol s = info.module.members.resolve("__destruye");
+            destruye = (s instanceof FunctionSymbol) ? (FunctionSymbol) s : null;
+        } else if (info.module != null) {
+            for (Symbol m : info.module.members.getSymbols())
+                if (m instanceof Symbol.ImportedNamespaceSymbol && "Core".equals(((Symbol.ImportedNamespaceSymbol) m).moduleName))
+                    destruye = ((Symbol.ImportedNamespaceSymbol) m).functions.get("__destruye");
+        }
+        return destruye;
+    }
+    private FunctionSymbol destruye;
+    private boolean destruyeBuscado;
+
+    /** V7 #668 — con el objeto en la pila: `Core.__destruye(x)`, y se tira lo que deja la llamada. */
+    private void emitLlamaDestruye() throws IOException {
+        FunctionSymbol fs = destruyeDeCore();
+        if (fs.isExternal) w.emitCallExt(nombreExterno(fs), fs.externalFromPath);
+        else w.emitCall(emitName(fs));
+        String discard = "__dtor_discard_" + (tempCounter++);
+        declareLocal(discard);
+        w.emitSetLocal(discard);
+    }
+
+    /** V7 #668 — ¿puede haber un destructor en lo que posee un owner de este tipo? No en un string, un número o un
+     *  array de ellos: ésos se sueltan con FREE_REF, sin llamar a nadie. Una clase, `any` o lo que no se sabe: sí. */
+    private static boolean puedeTenerDestructor(BpType t) {
+        if (t instanceof PrimitiveType || t instanceof EnumType) return false;
+        if (t instanceof ArrayType) return puedeTenerDestructor(((ArrayType) t).element);
+        return true;
+    }
+
+    /** V7 #668 (8-oct) — LIBERAR ES DESTRUIR: un owner local muere (al salir de su ámbito, al reasignarlo, al acabar
+     *  un `try var`) y, si no es null, Core.__destruye lo destruye entero —sus hijos owner primero, cada uno con su
+     *  destructor; después él—. Antes corría sólo el destructor del de arriba y FREE_REF soltaba a los hijos sin los
+     *  suyos. Si el tipo no puede tener destructor, o el Core es de antes de #668, como antes. */
+    private void emitDestruyeLocal(String name) throws IOException {
+        if (destruyeDeCore() == null || !puedeTenerDestructor(tiposDeOwners.get(name))) {
+            emitDestruirLocal(name);
+            w.emitGetLocal(name);
+            w.emitFreeRef();
+            return;
+        }
+        int skip = w.newLabel();
+        w.emitGetLocal(name);
+        w.emit(OpCode.LPUSH); w.emitLong(0L);
+        w.emit(OpCode.LNEQ);
+        w.emitJumpIfFalse(skip);
+        w.emitGetLocal(name);
+        emitLlamaDestruye();
+        w.declareLabel(skip);
+    }
+
+    /** Un trozo de bytecode por emitir (el acceso a un campo: por nombre, por ranura o por referencia). */
+    private interface Emite { void emite() throws IOException; }
+
+    /** V7 #668 — `obj.f := val` en un campo owner: el valor viejo MUERE —con sus hijos owner, cada uno con su
+     *  destructor (Core.__destruye)—; SET_FIELD_OWNER sólo lo soltaba. Con la pila `obj, val`: a dos ocultas; se lee el
+     *  viejo, se escribe el nuevo con el SET_FIELD de siempre y, si el viejo no es null ni el mismo (`x.f := x.f`), se
+     *  destruye. Si el tipo no puede tener destructor, o el Core es de antes de #668, el SET_FIELD_OWNER de siempre. */
+    private void emitSetFieldOwnerDestruye(BpType tipo, Emite leeCampo, Emite escribeCampo, Emite escribeOwner) throws IOException {
+        if (destruyeDeCore() == null || !puedeTenerDestructor(tipo)) { escribeOwner.emite(); return; }
+        int k = tempCounter++;
+        String vVal = "__own_val_" + k, vObj = "__own_obj_" + k, vViejo = "__own_viejo_" + k;
+        declareLocalLong(vVal);
+        declareLocalLong(vObj);
+        declareLocalLong(vViejo);
+        w.emitSetLocal(vVal);
+        w.emitSetLocal(vObj);
+        w.emitGetLocal(vObj);
+        leeCampo.emite();
+        w.emitSetLocal(vViejo);
+        w.emitGetLocal(vObj);
+        w.emitGetLocal(vVal);
+        escribeCampo.emite();
+        int fin = w.newLabel();
+        w.emitGetLocal(vViejo);
+        w.emit(OpCode.LPUSH); w.emitLong(0L);
+        w.emit(OpCode.LNEQ);
+        w.emitJumpIfFalse(fin);
+        w.emitGetLocal(vViejo);
+        w.emitGetLocal(vVal);
+        w.emit(OpCode.LNEQ);
+        w.emitJumpIfFalse(fin);
+        w.emitGetLocal(vViejo);
+        emitLlamaDestruye();
+        w.declareLabel(fin);
+    }
+
+    /** El tipo del campo (o del backing de una property) de una clase de este módulo, o null. */
+    private BpType tipoDeCampo(String className, String fieldName) {
+        Symbol cs = (info.module != null) ? info.module.members.resolve(className) : null;
+        if (!(cs instanceof ClassSymbol)) return null;
+        Symbol m = ((ClassSymbol) cs).lookupInstance(fieldName);
+        if (m instanceof VarSymbol)      return ((VarSymbol) m).type;
+        if (m instanceof PropertySymbol) return ((PropertySymbol) m).type;
+        return null;
+    }
+
     /** El destructor visible desde `cls` (el suyo o el heredado; Core.Object lo declara vacío). */
     private static FunctionSymbol dtorDe(ClassSymbol cls) {
         Symbol m = cls.lookupInstance(Symbol.FunctionSymbol.DTOR);

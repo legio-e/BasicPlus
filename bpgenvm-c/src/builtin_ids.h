@@ -277,7 +277,13 @@ enum {
     BUILTIN_HEAP_COLLECTIONS             = 269,   /* __heapCollections(): integer */
     BUILTIN_HEAP_COMPACT                 = 270,   /* __heapCompact() */
     BUILTIN_MACHINE_GET_ENV              = 271,   /* __machineGetEnv(key: string): string */
-    BUILTIN__CUANTOS = 272
+    BUILTIN_LIBERA_SI_SIN_DESTRUCTORES   = 272,   /* __liberaSiSinDestructores(x: any): boolean */
+    BUILTIN_ORDEN_DESTRUCCION            = 273,   /* __ordenDestruccion(x: any): any[] */
+    BUILTIN_PREPARA_DESTRUCTOR           = 274,   /* __preparaDestructor(x: any): integer */
+    BUILTIN_LIBERA_SOLO                  = 275,   /* __liberaSolo(x: any) */
+    BUILTIN_AVISA_DESTRUCTOR             = 276,   /* __avisaDestructor(x: any, msg: string) */
+    BUILTIN_SIGUIENTE_PENDIENTE          = 277,   /* __siguientePendiente(): any */
+    BUILTIN__CUANTOS = 278
 };
 
 #endif

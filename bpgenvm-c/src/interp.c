@@ -1857,7 +1857,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
              * sitio en el heap o en la tabla (#430): el mismo OOM, atrapable. */
             { bpref_t h = bpvm_heap_nuevo(vm, BPVM_TYPE_OBJECT, class_ptr, (uint32_t) num_fields * 4);
               if (h.v == 0u) BPVM_RT_THROW("No space in heap");   /* H1: OOM = RuntimeError ATRAPABLE, nunca colgar */
-              bpref_store(vm, sp, h); } sp += BPVM_REF_SIZE;
+              bpref_store(vm, sp, h);
+              bpvm_destruir_al_nacer(vm, h, class_ptr); } sp += BPVM_REF_SIZE;   /* V7 #668: con destructor, se destruirá */
             mem = vm->memory;
             break;
         }

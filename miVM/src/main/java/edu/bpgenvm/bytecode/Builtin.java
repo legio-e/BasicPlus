@@ -281,7 +281,13 @@ public enum Builtin {
     HEAP_HANDLES("__heapHandles"),   // [268] __heapHandles(): integer
     HEAP_COLLECTIONS("__heapCollections"),   // [269] __heapCollections(): integer
     HEAP_COMPACT("__heapCompact"),   // [270] __heapCompact()
-    MACHINE_GET_ENV("__machineGetEnv");   // [271] __machineGetEnv(key: string): string
+    MACHINE_GET_ENV("__machineGetEnv"),   // [271] __machineGetEnv(key: string): string
+    LIBERA_SI_SIN_DESTRUCTORES("__liberaSiSinDestructores"),   // [272] __liberaSiSinDestructores(x: any): boolean
+    ORDEN_DESTRUCCION("__ordenDestruccion"),   // [273] __ordenDestruccion(x: any): any[]
+    PREPARA_DESTRUCTOR("__preparaDestructor"),   // [274] __preparaDestructor(x: any): integer
+    LIBERA_SOLO("__liberaSolo"),   // [275] __liberaSolo(x: any)
+    AVISA_DESTRUCTOR("__avisaDestructor"),   // [276] __avisaDestructor(x: any, msg: string)
+    SIGUIENTE_PENDIENTE("__siguientePendiente");   // [277] __siguientePendiente(): any
 
     public final String bpName;
     public final int id;

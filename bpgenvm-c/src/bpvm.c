@@ -1806,6 +1806,7 @@ void bpvm_destroy(bpvm_t* vm) {
      * pasarlos por `bpvm_free` seria liberar memoria que no es nuestra. Se van
      * con el bloque. La free-list si sigue saliendo del malloc de plataforma. */
     bpvm_handles_destroy(vm);          /* V4/paso 4c: la free-list (la tabla se va con el bloque) */
+    bpvm_destruir_liberar(vm);         /* V7 #668: el registro, la cola y la marca por clase */
     /* Liberar módulos cargados. */
     for (int i = 0; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];

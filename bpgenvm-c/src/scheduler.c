@@ -298,7 +298,10 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
     for (;;) {
         /* P-run-stop (#257) — SIN `io`, el cable lo mira el planificador entre cuantos. Con `io` es suyo y un KILL llega
          * como kill_requested (A3: dos hilos no atienden el mismo transporte; `test-kill`, fases 4-6). */
-        if (vm->io == NULL && vm->poll_cb != NULL && vm->poll_cb(vm, vm->poll_user) != 0)
+        /* V7 #668 — en la fase del final, no: ese KILL es «pegajoso» (lo pide en cada vuelta) y cortaría la
+         * destrucción nada más empezar. La corta su tope (destruir.c); un KILL por `io`, sí. */
+        if (vm->io == NULL && vm->poll_cb != NULL && !bpvm_destruir_en_fase_final(vm)
+                && vm->poll_cb(vm, vm->poll_user) != 0)
             bpvm_request_kill(vm);
 
         /* #462 — CEDER EL NÚCLEO ENTRE CUANTOS. Observación de Eduardo (31-ago): *«en las STM32, cuando se ejecuta un
@@ -318,6 +321,7 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
             bpvm_platform_mutex_unlock(&q->vm_lock);
             continue;
         }
+        bpvm_destruir_vigila(vm);   /* V7 #668: el tope de la destrucción del final */
         /* «Nadie tiene un hilo entre manos» (bpvm_smp.h: `con_hilo`, no `running_workers`). */
         const int con_hilo = q->sabotaje_contador ? q->running_workers : q->con_hilo;
 
@@ -325,7 +329,13 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
          * fin. */
         if (bpvm_kill_pedido(vm) || q->parar) {
             q->parar = 1;
-            if (con_hilo == 0 || q->sabotaje_fin) { acabar(q, vm, varios); return; }
+            if (con_hilo == 0 || q->sabotaje_fin) {
+                /* V7 #668 — antes de acabar, la destrucción de lo que queda vivo (también tras un KILL o un fallo):
+                 * si hay una ronda montada, a ella. */
+                if (con_hilo == 0 && bpvm_destruir_fase_final(vm)) { if (varios) bpvm_platform_mutex_unlock(&q->vm_lock); continue; }
+                acabar(q, vm, varios);
+                return;
+            }
             dormir(q, vm, varios, -1);
             if (varios) bpvm_platform_mutex_unlock(&q->vm_lock);
             continue;
@@ -344,7 +354,12 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
             if (!hay_vivos(vm)) {
                 /* EL FIN: no queda nadie, y nadie tiene uno entre manos (con varios, el que lo tiene puede no haber
                  * vuelto todavía: se le espera). */
-                if (con_hilo == 0 || q->sabotaje_fin) { acabar(q, vm, varios); return; }
+                if (con_hilo == 0 || q->sabotaje_fin) {
+                    /* V7 #668 — antes de acabar, la destrucción de lo que queda vivo: si hay una ronda montada, a ella. */
+                    if (con_hilo == 0 && bpvm_destruir_fase_final(vm)) { if (varios) bpvm_platform_mutex_unlock(&q->vm_lock); continue; }
+                    acabar(q, vm, varios);
+                    return;
+                }
             } else {
                 int64_t pronto = sueno_mas_cercano(vm);
                 if (pronto == INT64_MAX) {
@@ -357,6 +372,8 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
                                           "bloqueados sin posibilidad de progreso");
                         if (q->fallo == 0) q->fallo = BPVM_ERR_RUNTIME;
                         q->parar = 1;
+                        /* V7 #668 — también tras un interbloqueo, la destrucción de lo que queda vivo. */
+                        if (bpvm_destruir_fase_final(vm)) { if (varios) bpvm_platform_mutex_unlock(&q->vm_lock); continue; }
                         acabar(q, vm, varios);
                         return;
                     }
@@ -385,6 +402,7 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
         tc->al_run0 = 0;
         if (id >= 0 && id < 2) q->cuantos[id]++;
         bpvm_event_drain_one(vm, tc);
+        bpvm_destruir_inyecta(vm, tc);   /* V7 #668: y lo pendiente de destruir, como un evento más */
         q->con_hilo++;
         if (varios) {
             q->running_workers++;

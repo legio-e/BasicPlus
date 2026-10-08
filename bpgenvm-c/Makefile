@@ -39,7 +39,7 @@ CFLAGS  += -MMD -MP
 # VM — llama al cable (wire_v1_send_*) que el CLI de host no tiene. Su sitio
 # son los CUATRO firmwares (+ el simulador cuando migre). Ver bpvm_repl.h.
 SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/builtins.c \
-          src/link.c src/scheduler.c src/threading.c src/exceptions.c src/events.c \
+          src/link.c src/scheduler.c src/threading.c src/exceptions.c src/events.c src/destruir.c \
           src/platform_pthread.c src/gpio.c src/i2c.c src/spi.c src/uart.c \
           src/pulse.c src/pwm.c src/bpvm_machine.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
           src/aot_registry.c src/bpvm_aot_helpers.c src/mdn_loader.c \
@@ -451,15 +451,15 @@ test-net: $(LIBOBJ)
 KILL_BIN = build/test_kill.exe
 test-kill: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,KillLoop KillSleep)
+	$(call fixture,KillLoop KillSleep KillDestruye)
 	@if [ ! -f samples/KillLoop.mod ] || [ ! -f samples/KillSleep.mod ]; then \
 	  echo "(skip test-kill: no hay samples/KillLoop.mod / KillSleep.mod y no se han"; \
 	  echo " podido generar — ¿está construido ../lexer-java/target/basicplus-frontend.jar?)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_kill.c \
 	    $(LIBOBJ) -o $(KILL_BIN) $(LDFLAGS); \
-	  echo "--- KILL cooperativo (esperado: 8x 'terminado por KILL ... PASS' y la linea OK) ---"; \
-	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod) || exit 1; \
+	  echo "--- KILL cooperativo (esperado: 10x PASS —la 9 y la 10, el programa matado que se destruye: #668— y la linea OK) ---"; \
+	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod KillDestruye.mod) || exit 1; \
 	  echo "--- y el sabotaje del KILL que despierta (V7/H12 2a.2: sin el aviso a la cola, el programa dormido no se para; esperado: ROJO) ---"; \
 	  if (cd samples && timeout 15 ../$(KILL_BIN) KillLoop.mod KillSleep.mod --sabotaje-despertar); then \
 	    echo "FAIL test-kill: el sabotaje del aviso pasa por verde"; exit 1; \

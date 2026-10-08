@@ -27,6 +27,16 @@
 
 ## Última sesión
 
+> **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
+> DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y
+> `Core.__destruyePendientes` en `Core.bp`, seis primitivas (272–277), el compilador (un `owner` que muere llama a
+> `__destruye`), la VM-Java y la VM-C (`src/destruir.c`): el registro de lo que nace con destructor, la resurrección en
+> el GC, la inyección entre cuantos y la fase del final, por rondas y con tope. Las cinco pruebas nuevas
+> (`Destruye*`), PARIDAD OK a la primera en la VM-C; la red entera, verde. Al probar salieron dos cosas: en su
+> destructor el padre veía el campo de un hijo ya destruido como «no es null» (ahora es null:
+> `__preparaDestructor`), y sin `io` el KILL del `poll_cb` es «pegajoso» y cortaba la fase del final nada más empezar
+> (`test-kill`, fases 9 y 10, con su sabotaje). Más abajo, «🧹 `#668` (8-oct)».
+>
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
 > **`#656` cerrada**: soltar un owner, sin recursión en las dos VMs (una cadena de 4000 owners tumbaba a la VM-C con la
@@ -1179,6 +1189,47 @@ la C6, la P4 y la Nucleo.
 - `#586`: la documentación del AOT al día tras P2b (manual en los dos idiomas, `AOT_LIMITES`, `PENDIENTES`). Y lo
   que se me había quedado de hoy en inglés: la referencia en inglés sin `Heap` (`#594`, `#595`), y el índice de
   las dos referencias sin la 13.19.
+
+## 🧹 `#668` (8-oct) — LIBERAR ES DESTRUIR, hecho en las dos VMs
+
+**Lo decidido** (7-oct, noche, y el diseño fino del 8): un objeto con destructor se destruye lo libere quien lo
+libere —su `owner`, el GC o el final del programa—; primero los hijos `owner`, de los últimos a los primeros, y
+después él; un destructor que lanza se dice y la limpieza sigue; al acabar, de la forma que sea, todo vuelve a como
+estaba. Y la forma (Eduardo, 8-oct): *«Como código BP normal»* —el destructor no se llama desde C, se mete en un hilo
+como un evento—.
+
+**Lo hecho**, Java → C, con la VM-Java de oráculo:
+- **`Core.bp`**: `__destruye(x)` (la vía rápida si el árbol no tiene destructores; si no, el árbol en el orden de
+  destruir y cada destructor dentro de su `try`), `__destruyePendientes()` y una llamada por raíz (`__dtorDeObject`,
+  `__dtorDeThread`: el `__dtor` de `Thread` no está en la ranura del de `Object`, allí está `join`). Seis primitivas,
+  272–277 (`docs/BUILTINS.md`).
+- **El compilador**: un `var owner` que muere (ámbito, reasignación, `try var`) llama a `Core.__destruye`; un campo
+  `owner` reasignado destruye el viejo tras escribir el nuevo (y `x.f := x.f` ya no deja un handle muerto). Un tipo
+  que no puede tener destructor (string, números, arrays de ellos), como antes.
+- **La VM-Java** (el bloque «V7 #668») y **la VM-C** (`src/destruir.c`, en las siete listas de build): el registro de
+  creación, la marca por clase (al crear el primero), la resurrección en el GC, la inyección de
+  `__destruyePendientes` entre cuantos y la fase del final —el `main` resucitado, los demás hilos abandonados, los
+  `Mutex` libres, sin eventos, por rondas y con un tope de 3 s; lo que queda, se dice—.
+- **Las pruebas**: `bpgenvm-c/samples/Destruye{Arbol,Lanza,Gc,Final,TrasError}.bp` en la red de paridad (PARIDAD OK a
+  la primera en la VM-C) y el STOP en `test-kill` (fases 9 y 10, `KillDestruye.bp`, uno y dos runs).
+
+**Lo que destapó probarlo**:
+1. **El padre veía a su hijo destruido como «no es null»**: el campo guardaba el handle muerto, y usarlo grita.
+   `DestruyeArbol` lo comprueba en el destructor; arreglado en `__preparaDestructor` (274): antes de su destructor, los
+   campos `owner` que apuntan a un hijo ya destruido pasan a null.
+2. **El KILL «pegajoso»**: sin el hilo `io`, el KILL llega por el `poll_cb` viejo, que lo pide en CADA vuelta; en la
+   fase del final volvía a pedirlo en el acto y la cortaba nada más empezar. Ya no se consulta en ella (la corta su
+   tope; un KILL por `io`, sí). El sabotaje —quitar esa guarda— da las fases 9 y 10 en rojo.
+3. **Un `Mutex` soltado de uno en uno revivía a un hilo abandonado** (en Java, al escribirlo: el siguiente que esperaba
+   pasaba a listo): en la fase del final se ponen todos libres a la vez, en las dos VMs.
+
+**La red**: verde entera —paridad 144, MOD8 144, dos workers 144, la cápsula V6, la norma, la sombra, las pruebas de C
+y el estrés—, con `packs/Stdlib.pack` regenerado (el simulado lo exige byte a byte: la primera pasada salió roja sólo
+por eso).
+
+**Lo siguiente**: el STOP en la VM-Java, a mano con el IDE (con un breakpoint dentro de un destructor: tras el STOP, el
+depurador volvería a parar en la fase del final); **`#667`**, los destructores de los recursos —`Pwm.Slice`, el de
+`#666`, no tiene: el PWM sigue tras el RUN—; medir la GUI; y las placas, en un lote.
 
 ## 🔧 SUELTAS (7-oct) — la lista, y `#656`: soltar un owner sin recursión
 

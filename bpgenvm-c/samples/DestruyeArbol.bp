@@ -1,0 +1,137 @@
+// DestruyeArbol.bp — V7 #668 (8-oct): LIBERAR ES DESTRUIR. Al morir un `owner` muere con él todo lo que posee, y
+// cada objeto con su destructor: primero los hijos (y los hijos de los hijos), después él; entre hermanos, del último
+// al primero (Eduardo: «de los hijos hasta los padres, en orden inverso»). Antes corría sólo el destructor del de
+// arriba y la cascada soltaba a sus hijos SIN los suyos. Vale para un `var owner`, para un campo owner que se
+// reasigna, para una OwnerList, para un array poseído y para un hilo. Se comprueba solo: el orden se anota y se
+// compara con el esperado (una línea «FALLO» pone el sample en rojo).
+module DestruyeArbol
+  import Collections
+
+  public property traza: string := ""
+
+  public class Nodo
+    public property nombre: string
+    var owner primero: Nodo
+    var owner segundo: Nodo
+    public function Nodo(n: string)
+      this.nombre := n
+    end Nodo
+    public function hijos(a: Nodo, b: Nodo)
+      this.primero := a
+      this.segundo := b
+    end hijos
+    public function ponPrimero(a: Nodo)
+      this.primero := a
+    end ponPrimero
+    public function repitePrimero()
+      this.primero := this.primero      // el mismo: no muere nada
+    end repitePrimero
+    public function ~Nodo()
+      // Sus hijos owner ya no están: se destruyeron antes que él.
+      if this.primero != null then
+        print "FALLO: " + this.nombre + " aún tiene a su primer hijo en su destructor"
+      endif
+      traza := traza + this.nombre + " "
+    end ~Nodo
+  end Nodo
+
+  // Sin destructor propio, pero con un hijo que sí lo tiene: el hijo también se destruye.
+  public class Caja
+    var owner dentro: Nodo
+    public function Caja(n: Nodo)
+      this.dentro := n
+    end Caja
+  end Caja
+
+  // Un array poseído por un campo owner: sus elementos son hijos del que lo posee.
+  public class Estante
+    var owner cosas: Nodo[]
+    public function Estante()
+      this.cosas := [Nodo("p"), Nodo("q"), Nodo("r")]
+    end Estante
+  end Estante
+
+  // Un hilo con destructor: su destructor no está en la ranura del de Object (allí está join).
+  public class Trabajador extends Thread
+    public property nombre: string
+    public function Trabajador(n: string)
+      super(0)
+      this.nombre := n
+    end Trabajador
+    public function run()
+      traza := traza + "corre-" + this.nombre + " "
+    end run
+    public function ~Trabajador()
+      traza := traza + "~" + this.nombre + " "
+    end ~Trabajador
+  end Trabajador
+
+  function comprueba(esperada: string, que: string)
+    if traza != esperada then
+      print "FALLO: " + que + ": [" + traza + "], y tenía que ser [" + esperada + "]"
+    else
+      print "ok  " + que + ": " + traza
+    endif
+    traza := ""
+  end comprueba
+
+  function arbol()
+    var owner a: Nodo := Nodo("a")
+    var b: Nodo := Nodo("b")
+    var c: Nodo := Nodo("c")
+    b.hijos(Nodo("b1"), Nodo("b2"))
+    a.hijos(b, c)
+  end arbol
+
+  function reasigna()
+    var owner a: Nodo := Nodo("a")
+    var b: Nodo := Nodo("b")
+    b.hijos(Nodo("b1"), Nodo("b2"))
+    a.ponPrimero(b)
+    a.ponPrimero(Nodo("n"))
+    comprueba("b2 b1 b ", "reasignar un campo owner destruye el viejo, con sus hijos")
+    a.repitePrimero()
+    comprueba("", "reasignarle lo mismo no destruye nada")
+    a.ponPrimero(null)
+    comprueba("n ", "a null también destruye el viejo")
+  end reasigna
+
+  function lista()
+    var owner l: Collections.OwnerList := Collections.OwnerList()
+    var k: integer := 0
+    while k < 5 do
+      l.add(Nodo("e" + k))
+      k := k + 1
+    endwh
+  end lista
+
+  function caja()
+    var owner c: Caja := Caja(Nodo("x"))
+  end caja
+
+  function arrayPoseido()
+    var owner e: Estante := Estante()
+  end arrayPoseido
+
+  function hilo()
+    var owner t: Trabajador := Trabajador("t")
+    t.start()
+    t.join()
+  end hilo
+
+  function main()
+    arbol()
+    comprueba("c b2 b1 b a ", "un owner local: los hijos antes, del último al primero")
+    reasigna()
+    comprueba("a ", "y al salir, el que quedaba")
+    lista()
+    comprueba("e4 e3 e2 e1 e0 ", "una OwnerList destruye sus elementos, del último al primero")
+    caja()
+    comprueba("x ", "un padre sin destructor no se salta el de su hijo")
+    arrayPoseido()
+    comprueba("r q p ", "un array poseído, del último al primero")
+    hilo()
+    comprueba("corre-t ~t ", "un hilo con destructor")
+    print "fin"
+  end main
+end DestruyeArbol

@@ -59,6 +59,7 @@ idf_component_register(
         "../../src/link.c"
         "../../src/scheduler.c"
         "../../src/events.c"           # H5.c: cola de eventos + inyección del handler entre quanta
+        "../../src/destruir.c"         # V7 #668: liberar es destruir (el registro, la cola, la fase del final)
         "../../src/bpvm_dbg_wire.c"   # #326: ramo de depuracion del wire (portable, ex-Pico)
         "../../src/bpvm_log.c"         # log post-mortem: núcleo portable (idéntico en las 3 familias)
         "../../src/bpvm_listdir.c"     # V5/H6: LIST_DIR comun (salio del repl del Pico)

@@ -413,6 +413,32 @@ miVM, donde el PC tampoco tiene. Una clave de más de 63 bytes no puede estar (`
 
 ---
 
+## 272–277 — las primitivas de LIBERAR ES DESTRUIR  *(V7 #668, 8-oct)*
+
+Las usan `Core.__destruye(x)` y `Core.__destruyePendientes()`, que son BP: el recorrido y las llamadas a los
+destructores son el MISMO bytecode en las dos VMs, y aquí sólo está lo que BP no puede hacer (Eduardo: «La destrucción
+del objeto en realidad la hace en gran medida su propio destructor… la típica división del trabajo de la POO»). Todas
+son privadas de `Core`. El diseño, en `docs/V7_IDEAS.md` §«#666–#668», 7 y 8; la VM-C, en `src/destruir.c`.
+
+| id | firma | qué hace |
+|----|-------|----------|
+| 272 | `__liberaSiSinDestructores(x: any): boolean` | Si en el árbol de owner de `x` (él, sus campos owner y los elementos de un array poseído, hasta abajo) no hay ningún destructor, lo suelta entero por la cascada de siempre y devuelve `true`. Si lo hay, no toca nada: `false`. Un `x` null o muerto: `true`. Es la vía rápida: un owner sin destructores no paga más que antes. |
+| 273 | `__ordenDestruccion(x: any): any[]` | El árbol de owner de `x` en el orden de destruir: los hijos antes que su padre y, entre hermanos, del último al primero (Eduardo: «de los hijos hasta los padres, en orden inverso»); `x`, el último. Un hijo que aparece dos veces (dos dueños, o un ciclo) sale una. Sin memoria para ordenarlo: `RuntimeError` «No space in heap». |
+| 274 | `__preparaDestructor(x: any): integer` | Qué destructor tiene `x`: 0, ninguno (el vacío de `Object` o de `Thread`, o un array); 1, el de una clase de `Object`; 2, el de un `Thread` —otra raíz: su destructor no está en la ranura del de `Object` (allí está `join`), así que `Core` tiene una llamada para cada una—. Y si tiene, lo deja listo para él: sus campos owner que apuntan a un hijo ya destruido pasan a null («en su destructor un objeto ya no tiene a sus hijos owner»; un handle muerto en el campo diría «no es null» y usarlo gritaría). |
+| 275 | `__liberaSolo(x: any)` | La memoria de ESE bloque y nada más (sus hijos ya se destruyeron, antes que él): su handle muere y el bloque vuelve a la lista de libres (con dos runs, al siguiente GC). |
+| 276 | `__avisaDestructor(x: any, msg: string)` | Un destructor lanzó: se dice por el diagnóstico, con la clase de `x` (`[bpvm] el destructor de Mod.Clase lanzó: msg — se sigue con la limpieza`), y la limpieza sigue (Eduardo: «se atrapa y se continúa con la liberación»). |
+| 277 | `__siguientePendiente(): any` | Lo siguiente de la cola de lo pendiente de destruir —lo que el GC encontró inalcanzable con destructor, o, al acabar el programa, todo lo vivo con destructor, el más nuevo primero—, o null. Al vaciarse, el hilo que la vaciaba deja de hacerlo. |
+
+Quién llama a `Core.__destruye`: el compilador, al morir un owner —un `var owner` al salir de su ámbito, al reasignarlo
+o al acabar un `try var`; un campo owner al reasignarlo (el viejo, tras escribir el nuevo, si no es null ni el mismo)—;
+y `Core.__destruyePendientes`, para lo que el GC encontró inalcanzable y para el final del programa. A ésa la mete la
+VM en un hilo, entre cuantos, como un evento (vuelve por el sentinela `EVENT_RETURN`): los destructores corren como
+código BP corriente, no llamados desde C. Un owner cuyo tipo no puede tener destructor (un string, un número, un array
+de ellos) se sigue soltando con `FREE_REF` / `SET_FIELD_OWNER`, sin llamar a nadie; y con un `Core` de antes de #668
+(sin `__destruye`), todo como antes. Las pruebas: `bpgenvm-c/samples/Destruye*.bp` (la red de paridad).
+
+---
+
 ## Próximos builtins propuestos (no asignados todavía)
 
 - **`__threadCurrent()` → Thread**: devuelve el Thread BP del thread

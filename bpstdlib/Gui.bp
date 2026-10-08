@@ -527,7 +527,7 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
     //    del padre: sin esto el nodo seguía en la tabla y en pantalla, con un puntero al objeto ya liberado (un clic
     //    posterior podía llegar a OTRO objeto si el hueco se reciclaba). La PANTALLA no: es del backend y vive todo el
     //    RUN. El dueño normal de un widget es su contenedor (Eduardo: «owner solamente puede haber uno activo; el owner
-    //    debe estar en su contenedor»); la cascada de una OwnerList y el GC liberan sin destructor (#491). --
+    //    debe estar en su contenedor»). Desde V7 #668 corre también al soltarlo su contenedor, el GC o el final. --
     public function ~Component()
       if this.typeName() != "Screen" then this.delete()
     end ~Component

@@ -431,6 +431,31 @@ lines
 5779 561
 5787 563
 5806 0
+5809 737
+5820 0
+5823 740
+5834 0
+5837 744
+5848 745
+5858 747
+5867 748
+5870 749
+5882 750
+5891 751
+5899 752
+5908 753
+5915 754
+5924 755
+5939 757
+5958 760
+5982 763
+5990 764
+6001 0
+6004 770
+6010 771
+6021 772
+6031 773
+6042 0
 vars
 func Object.toString 30
 this -20 8 0 ?
@@ -923,7 +948,20 @@ nd 28 4 0 integer
 d 32 4 0 integer
 sb 36 8 0 ?
 i 60 4 0 integer
-func __strconcat 5806
+func __dtorDeObject 5806
+o -20 8 0 ref
+func __dtorDeThread 5820
+t -20 8 0 ref
+func __destruye 5834
+x -20 8 0 ?
+orden 0 8 0 ?
+i 8 4 0 integer
+n 12 8 0 ?
+raiz 20 4 0 integer
+e 28 8 0 ?
+func __destruyePendientes 6001
+o 0 8 0 ?
+func __strconcat 6042
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

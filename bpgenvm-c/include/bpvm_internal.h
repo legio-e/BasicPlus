@@ -790,6 +790,10 @@ struct bpvm {
      * que no está, su mensaje da esta causa (link.c). Al final: el prefijo del .mdn no se toca. */
     int      sym_perdidos;
     char     sym_perdido[200];
+    /* V7 #668 (8-oct) — LIBERAR ES DESTRUIR (destruir.c): el registro de lo que tiene destructor, la cola de lo
+     * pendiente de destruir, la marca por clase y la fase del final. NULL hasta el primer objeto. Al final: el prefijo
+     * del .mdn no se toca. */
+    struct bpvm_destruir* destruir;
 };
 
 /* V7/H12, etapa 3.1, paso 6 — EL KILL CRUZA NÚCLEOS: lo pide `io` (o el poll, o el depurador) y lo mira el run, que con
@@ -1194,8 +1198,29 @@ void     bpvm_heap_soltar_owned(bpvm_t* vm, bpref_t r);
  * error se volveria a quedar sin memoria con la que construirse. */
 uint32_t bpvm_heap_release_reserve(bpvm_t* vm);
 uint32_t bpvm_heap_alloc_string(bpvm_t* vm, const char* s, size_t len);
+/* V7 #668 — soltar UN bloque y nada más (Core.__liberaSolo): sus hijos owner ya se destruyeron, antes que él. */
+void     bpvm_heap_soltar_solo(bpvm_t* vm, bpref_t r);
 uint32_t bpvm_heap_alloc_string_error(bpvm_t* vm, const char* s, size_t len);   /* #355: el mensaje de un error */
 void     bpvm_heap_gc(bpvm_t* vm);
+
+/* destruir.c — V7 #668 (8-oct): LIBERAR ES DESTRUIR. Un objeto con destructor se destruye lo libere quien lo libere:
+ * su owner (Core.__destruye), el GC (lo resucita y lo deja pendiente) o el final del programa (todo lo vivo, el más
+ * nuevo primero). Los destructores corren como código BP corriente: Core.__destruyePendientes, metida en un hilo
+ * entre cuantos como un evento. Las primitivas de Core (272..277) las llama builtins.c. */
+void     bpvm_destruir_al_nacer(bpvm_t* vm, bpref_t h, uint32_t class_ptr);    /* NEW_OBJECT: con destructor, al registro */
+void     bpvm_destruir_en_el_gc(bpvm_t* vm, void (*marca)(bpvm_t*, uint32_t)); /* el marcado: pendientes y resucitados */
+void     bpvm_destruir_inyecta(bpvm_t* vm, bpvm_thread_t* tc);                 /* entre cuantos, tras los eventos */
+int      bpvm_destruir_en_fase_final(const bpvm_t* vm);                         /* la fase del final: sin eventos */
+void     bpvm_destruir_vigila(bpvm_t* vm);                                      /* el tope de la fase del final */
+int      bpvm_destruir_fase_final(bpvm_t* vm);   /* antes de acabar (cerrojo cogido): 1 = hay una ronda montada */
+void     bpvm_destruir_liberar(bpvm_t* vm);                                     /* bpvm_destroy */
+int      bpvm_destruir_libera_si_sin(bpvm_t* vm, bpref_t r);
+int      bpvm_destruir_orden(bpvm_t* vm, bpref_t r, uint64_t** out, uint32_t* n);
+int      bpvm_destruir_prepara(bpvm_t* vm, bpref_t r);
+void     bpvm_destruir_nombre(bpvm_t* vm, bpref_t r, char* out, size_t cap);
+uint64_t bpvm_destruir_siguiente(bpvm_t* vm, bpvm_thread_t* tc);
+/* exceptions.c — V7 #668: ¿la clase `clase` desciende de `de`? (la regla de los catch; destruir.c la usa con Thread) */
+int      bpvm_clase_desciende(const bpvm_t* vm, uint32_t clase, uint32_t de);
 
 /* interp.c — GAP-4: formateo canónico de double/float (byte-idéntico a
  * VirtualMachine.formatBpDouble). L13: también lo usan los builtins
