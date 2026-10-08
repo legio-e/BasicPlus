@@ -9,6 +9,7 @@
 
 #include "bpvm_out.h"
 #include "bpvm_machine.h"
+#include "bpvm_gpio.h"       /* #669: bpvm_gpio_de_alguien */
 #include "bpvm_platform.h"   /* H13 h41: reloj monotono para el uptime sin backend */
 #include <stdio.h>
 #include <string.h>
@@ -142,30 +143,42 @@ static const bpvm_caps_t s_host_caps = {
     .breadcrumb = 0,
 };
 static const bpvm_caps_t* g_caps = &s_host_caps;
+/* V7 #669 — las reservas del SISTEMA hechas al arrancar (la pantalla de la imagen), ENCIMA de la tabla de la familia:
+ * ésa es const, y quien sabe qué pines lleva la pantalla es su driver. Por pin, el BPVM_PIN_SIS_*; 0 = ninguna. Todo
+ * el que lee la tabla pasa por bpvm_caps_pin_mask, que las mira. */
+static uint8_t s_reserva_sis[BPVM_CAPS_PIN_MAX];
 
-void bpvm_caps_set(const bpvm_caps_t* caps) { g_caps = caps ? caps : &s_host_caps; }
+void bpvm_caps_set(const bpvm_caps_t* caps) {
+    g_caps = caps ? caps : &s_host_caps;
+    memset(s_reserva_sis, 0, sizeof s_reserva_sis);   /* #669: una tabla nueva, sin reservas */
+}
 const bpvm_caps_t* bpvm_caps(void) { return g_caps; }
 
 int bpvm_caps_pin_mask(int pin) {
-    return (pin >= 0 && pin < (int) g_caps->n_pin && g_caps->pin) ? (int) g_caps->pin[pin] : 0;
+    if (pin < 0 || pin >= (int) g_caps->n_pin || !g_caps->pin) return 0;
+    if (pin < BPVM_CAPS_PIN_MAX && s_reserva_sis[pin]) return 0;   /* #669: del sistema desde el arranque */
+    return (int) g_caps->pin[pin];
 }
 void bpvm_caps_pin_ausente(int pin, char* err, size_t cap) {
-    int sis = (g_caps->pin_sistema && pin >= 0 && pin < (int) g_caps->n_pin) ? g_caps->pin_sistema[pin] : 0;
+    int sis = (pin >= 0 && pin < BPVM_CAPS_PIN_MAX && s_reserva_sis[pin]) ? s_reserva_sis[pin]          /* #669 */
+            : (g_caps->pin_sistema && pin >= 0 && pin < (int) g_caps->n_pin) ? g_caps->pin_sistema[pin] : 0;
     if (sis == BPVM_PIN_SIS_MEMORIA)
         snprintf(err, cap, "el pin %d de %s es de la flash o la PSRAM: no se puede usar", pin, g_caps->micro);
     else if (sis == BPVM_PIN_SIS_WIRE)
         snprintf(err, cap, "el pin %d de %s es del cable del IDE (el wire): no se puede usar", pin, g_caps->micro);
+    else if (sis == BPVM_PIN_SIS_PANTALLA)
+        snprintf(err, cap, "el pin %d de %s es de la pantalla: no se puede usar", pin, g_caps->micro);
     else
         snprintf(err, cap, "el pin %d no existe en %s", pin, g_caps->micro);
 }
 int bpvm_caps_pins_con(uint16_t bit) {
     int n = 0;
-    for (int i = 0; i < (int) g_caps->n_pin; i++) if (g_caps->pin && (g_caps->pin[i] & bit)) n++;
+    for (int i = 0; i < (int) g_caps->n_pin; i++) if (bpvm_caps_pin_mask(i) & bit) n++;   /* #669: por la máscara */
     return n;
 }
 int bpvm_caps_gpio_count(void) {
     int n = 0;
-    for (int i = 0; i < (int) g_caps->n_pin; i++) if (g_caps->pin && g_caps->pin[i]) n++;
+    for (int i = 0; i < (int) g_caps->n_pin; i++) if (bpvm_caps_pin_mask(i)) n++;         /* #669: por la máscara */
     return n;
 }
 int bpvm_caps_adc_de_pin(int pin, int* unit, int* ch) {
@@ -176,9 +189,21 @@ int bpvm_caps_adc_de_pin(int pin, int* unit, int* ch) {
 }
 int bpvm_caps_pin_de_adc(int unit, int ch) {
     for (int i = 0; i < (int) g_caps->n_pin; i++)
-        if ((g_caps->pin[i] & BPVM_PIN_ANALOG) && g_caps->pin_adc_unit[i] == unit && g_caps->pin_adc_ch[i] == ch) return i;
+        if ((bpvm_caps_pin_mask(i) & BPVM_PIN_ANALOG) && g_caps->pin_adc_unit[i] == unit && g_caps->pin_adc_ch[i] == ch) return i;
     return -1;
 }
+int bpvm_caps_reservar_sistema(int pin, unsigned motivo, char* err, size_t cap) {
+    if (pin < 0 || pin >= BPVM_CAPS_PIN_MAX || motivo == 0u || motivo > 255u) {
+        snprintf(err, cap, "el pin %d no se puede reservar: fuera de la tabla", pin);
+        return -1;
+    }
+    if (s_reserva_sis[pin] == (uint8_t) motivo) return 0;           /* ya lo era: la misma reserva otra vez */
+    if (!bpvm_caps_pin_mask(pin)) { bpvm_caps_pin_ausente(pin, err, cap); return -1; }   /* no existe, o es de otro */
+    if (bpvm_gpio_de_alguien(pin)) { snprintf(err, cap, "el pin %d ya está en uso", pin); return -1; }
+    s_reserva_sis[pin] = (uint8_t) motivo;
+    return 0;
+}
+
 int bpvm_caps_instancia_ok(const uint8_t* lista, int n, int id) {
     for (int i = 0; i < n; i++) if (lista && lista[i] == id) return 1;
     return 0;

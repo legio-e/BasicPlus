@@ -22,6 +22,7 @@
 
 #include "bpvm_pant.h"    /* V7/H6 G5.b: el contrato del driver de pantalla ('PANT') */
 #include "bpvm_bios.h"    /* V7/H6 G5.b: bpvm_bios_publica, el mismo registro que usan los packs */
+#include "bpvm_machine.h" /* V7 #669: bpvm_caps_reservar_sistema, los pines de la pantalla */
 #include "log.h"
 
 /* Panel físico de la DK2. OJO: el tamaño "lógico" del modelo Gui (para el dumpTree / paridad miVM↔VM-C) es OTRO
@@ -184,6 +185,37 @@ static const bpvm_pack_api_t s_pant_api = {
     (uint32_t) (sizeof s_pant_syms / sizeof s_pant_syms[0]), s_pant_syms
 };
 
+/* V7 #669 (8-oct) — LOS PINES DE LA PANTALLA, del sistema desde que se publica su driver (Eduardo: «Los pines de la
+ * pantalla deberían configurarse al mismo tiempo que el driver de la pantalla y en principio no utilizarse para otras
+ * cosas»). En la DK2 los configura CubeMX al arrancar: las 28 líneas del LTDC (HAL_LTDC_MspInit), LCD_ON (PE4,
+ * MX_GPIO_Init), la retroiluminación (PE6, TIM3_CH4), el INT del táctil (PE5) y su I2C2 (PF0, PF1; HAL_I2C_MspInit).
+ * Hasta hoy la tabla los daba todos por libres: un Pin(0x44) apagaba el panel, uno en una línea de color le quitaba
+ * un bit, y desde #667, al soltarlos, volvían al reset. Fuera de Machine.pins(), como los del cable (#574). Pin BP =
+ * puerto<<4 | bit (A = 0 … H = 7). El PWM de los programas va por TIM16 (PB8): no toca el TIM3 de la luz. */
+#define PIN_(puerto, bit) ((uint8_t) ((((puerto) - 'A') << 4) | (bit)))
+static const uint8_t s_pines_pantalla[] = {
+    /* el LTDC: B1 B0 · R0 R1 G0 G1 · B4 B5 CLK DE · R3..R7 VSYNC B2 B3 · HSYNC B6 B7 G2..G7 R2 */
+    PIN_('B', 2), PIN_('B', 9),
+    PIN_('C', 6), PIN_('C', 7), PIN_('C', 8), PIN_('C', 9),
+    PIN_('D', 0), PIN_('D', 1), PIN_('D', 3), PIN_('D', 6),
+    PIN_('D', 8), PIN_('D', 9), PIN_('D', 10), PIN_('D', 11), PIN_('D', 12), PIN_('D', 13), PIN_('D', 14), PIN_('D', 15),
+    PIN_('E', 0), PIN_('E', 7), PIN_('E', 8), PIN_('E', 9), PIN_('E', 10), PIN_('E', 11), PIN_('E', 12), PIN_('E', 13),
+    PIN_('E', 14), PIN_('E', 15),
+    /* LCD_ON, la luz, el INT del táctil y su I2C2 */
+    PIN_('E', 4), PIN_('E', 6), PIN_('E', 5), PIN_('F', 0), PIN_('F', 1),
+};
+
+static void stm32_pant_reservar_pines(void)
+{
+    char err[96];
+    int n = 0;
+    for (size_t i = 0; i < sizeof s_pines_pantalla; i++) {
+        if (bpvm_caps_reservar_sistema(s_pines_pantalla[i], BPVM_PIN_SIS_PANTALLA, err, sizeof err) == 0) n++;
+        else log_printf("pantalla: el pin %d NO se pudo reservar: %s", (int) s_pines_pantalla[i], err);
+    }
+    log_printf("pantalla: %d pines suyos (el LTDC, LCD_ON, la luz y el tactil): fuera de Machine.pins() (#669)", n);
+}
+
 void stm32_pant_publicar(void)
 {
     /* Al arrancar, antes que ningún pack: el de LVGL la busca en su PRIMER USO (el primer Gui.Screen), así que el
@@ -192,7 +224,9 @@ void stm32_pant_publicar(void)
     int r = bpvm_bios_publica(BPVM_PANT_MARCA, &s_pant_api);
     if (r != 0)
         log_printf("pantalla: la DK2 NO pudo publicar 'PANT' (publica = %d): la GUI del pack no tendra pantalla", r);
-    else
+    else {
         log_printf("pantalla: la DK2 publica 'PANT' desde la imagen (LTDC 800x480, tactil GT911, gira)");
+        stm32_pant_reservar_pines();   /* V7 #669: al mismo tiempo que su driver */
+    }
 }
 #endif /* BPVM_GUI_PACK */

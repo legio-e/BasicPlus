@@ -27,6 +27,9 @@ static uint8_t s_de_pack[BPVM_CAPS_PIN_MAX];   /* V7/H6: 1 = lo tomó un código
 static uint8_t s_de_bus[BPVM_CAPS_PIN_MAX];
 
 int  bpvm_gpio_estado(int pin) { return (pin >= 0 && pin < BPVM_CAPS_PIN_MAX) ? s_estado[pin] : 0; }
+int  bpvm_gpio_de_alguien(int pin) {
+    return pin >= 0 && pin < BPVM_CAPS_PIN_MAX && (s_estado[pin] || s_de_pack[pin] || s_de_bus[pin]);
+}
 /* release() de un PROGRAMA: suelta lo suyo y nada más. Hasta G4.a1 también borraba
  * la marca de pack, así que un `Gpio.release(9)` —o el destructor de un Pin(9) cuya
  * construcción había fallado con «lo usa un código nativo»— le quitaba el pin DC a

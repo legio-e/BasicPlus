@@ -418,6 +418,34 @@ int main(void) {
 
     g4a3();
 
+    /* ── 12. V7 #669 — LA PANTALLA DE LA IMAGEN: sus pines, del sistema desde que se publica su driver ── */
+    printf("\n== V7 #669: los pines de la pantalla de la imagen, como los de la flash (#574) ==\n");
+    bpvm_bus_reset();
+    {
+        int antes = bpvm_caps_gpio_count(), dig = bpvm_caps_pins_con(BPVM_PIN_DIGITAL);
+        caso("la pantalla reserva el pin 37 (libre)", bpvm_caps_reservar_sistema(37, BPVM_PIN_SIS_PANTALLA, E, sizeof E) == 0);
+        caso("y otra vez: nada (el driver publicado dos veces)", bpvm_caps_reservar_sistema(37, BPVM_PIN_SIS_PANTALLA, E, sizeof E) == 0);
+        CHECK(bpvm_caps_pin_mask(37) == 0 && bpvm_caps_gpio_count() == antes - 1 && bpvm_caps_pins_con(BPVM_PIN_DIGITAL) == dig - 1,
+              "  ya no está para BP: su máscara es 0, y Machine.pins() y las cuentas tienen uno menos");
+        caso("Pin(37) de un programa -> «el pin 37 de micro de prueba es de la pantalla: no se puede usar»",
+             bpvm_gpio_reclamar(37, BPVM_USO_OUTPUT, E, sizeof E) != 0 && err_es("el pin 37 de micro de prueba es de la pantalla: no se puede usar"));
+        caso("ni un pack -> «es de la pantalla»", bpvm_gpio_reclamar_pack(37, BPVM_USO_OUTPUT, E, sizeof E) != 0 && err_es("es de la pantalla"));
+        caso("ni un bus: el I2C 1 con SCL en el 37 -> «es de la pantalla», y el bus sigue libre",
+             bpvm_i2c_abrir(1, 36, 37, 100000, BPVM_BUS_PROGRAMA, E, sizeof E) != 0 && err_es("es de la pantalla") && !bpvm_bus_abierto(BPVM_BUS_I2C, 1));
+        caso("  sin su SDA reservado a medias (o todos o ninguno): Pin(36) vale", bpvm_gpio_reclamar(36, BPVM_USO_OUTPUT, E, sizeof E) == 0);
+        caso("un pin que ya tiene el programa NO se reserva -> «el pin 36 ya está en uso»",
+             bpvm_caps_reservar_sistema(36, BPVM_PIN_SIS_PANTALLA, E, sizeof E) != 0 && err_es("el pin 36 ya está en uso"));
+        bpvm_gpio_liberar(36);
+        caso("un pin que no existe NO se reserva -> «el pin 45 no existe en micro de prueba»",
+             bpvm_caps_reservar_sistema(45, BPVM_PIN_SIS_PANTALLA, E, sizeof E) != 0 && err_es("el pin 45 no existe en micro de prueba"));
+        bpvm_gpio_soltar(37);
+        bpvm_gpio_estado_reset();
+        CHECK(bpvm_caps_pin_mask(37) == 0, "un release() y el fin de RUN no la tocan: sigue siendo de la pantalla");
+        bpvm_caps_set(&s_caps);
+        CHECK(bpvm_caps_pin_mask(37) == BPVM_PIN_DIGITAL && bpvm_caps_gpio_count() == antes,
+              "una tabla nueva (bpvm_caps_set) empieza sin reservas");
+    }
+
     printf("\n[status=%s]\n", g_fail ? "FAIL" : "OK");
     return g_fail ? 1 : 0;
 }

@@ -104,6 +104,7 @@ typedef struct {
  * los de la flash (en la C6, el GPIO25 es su MISO) y los del cable del IDE (decidido por Eduardo: también esos). */
 #define BPVM_PIN_SIS_MEMORIA 1u      /* la flash o la PSRAM: el sistema los reserva al arrancar */
 #define BPVM_PIN_SIS_WIRE    2u      /* el cable del IDE (el wire): quitárselo corta la conexión */
+#define BPVM_PIN_SIS_PANTALLA 3u     /* #669: la pantalla de la IMAGEN (la reserva su driver al publicarse) */
 
 typedef struct {
     const char*     micro;          /* "esp32c5" — el ID canónico (Machine.getMicro, INFO.boardName) */
@@ -147,10 +148,18 @@ const bpvm_caps_t* bpvm_caps(void);                     /* nunca NULL */
 /* Derivados (una sola forma de contar, para el INFO y para BP): */
 int bpvm_caps_gpio_count(void);                          /* pines con máscara != 0 */
 int bpvm_caps_pins_con(uint16_t bit);                    /* cuántos pines tienen ese bit */
-int bpvm_caps_pin_mask(int pin);                         /* la máscara del pin, 0 si no existe */
+int bpvm_caps_pin_mask(int pin);                         /* la máscara del pin, 0 si no existe o es del sistema */
 /* #574 — el texto de por qué `pin` no está: «el pin 7 no existe en rp2350a», «el pin 25 de esp32c6 es de la flash o
  * la PSRAM», «el pin 12 de esp32c6 es del cable del IDE (el wire)». Para los errores de las fachadas. */
 void bpvm_caps_pin_ausente(int pin, char* err, size_t cap);
+/* V7 #669 (8-oct) — un pin pasa a ser del SISTEMA en el arranque: la pantalla de la IMAGEN reserva los suyos al
+ * publicar su driver (Eduardo: «Los pines de la pantalla deberían configurarse al mismo tiempo que el driver de la
+ * pantalla y en principio no utilizarse para otras cosas»). Desde ahí es como los de la flash y el cable (#574): su
+ * máscara es 0 —fuera de Machine.pins() y de toda validación: un Pin, un bus, un pack— y el error lo dice («el pin
+ * 26 de esp32p4 es de la pantalla: no se puede usar»). `motivo`, un BPVM_PIN_SIS_*. Va encima de la tabla de la
+ * familia (que es const): quien sabe qué pines lleva la pantalla es su driver. Un pin que no existe o que ya tiene
+ * alguien no se reserva: -1 y el porqué en `err`. bpvm_caps_set las borra: una tabla nueva empieza sin reservas. */
+int bpvm_caps_reservar_sistema(int pin, unsigned motivo, char* err, size_t cap);
 int bpvm_caps_adc_de_pin(int pin, int* unit, int* ch);   /* 0 y rellena, o -1 si no es analógico */
 int bpvm_caps_pin_de_adc(int unit, int ch);              /* el GPIO de ese canal, o -1 */
 int bpvm_caps_instancia_ok(const uint8_t* lista, int n, int id);   /* ¿id está en la lista? */

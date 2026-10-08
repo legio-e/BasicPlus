@@ -54,6 +54,7 @@ int  bpvm_gpio_reclamar(int pin, int uso, char* err, size_t cap);   /* 0 = OK (y
  * un código nativo». El pack vive mientras viva la placa; el programa, no. */
 int  bpvm_gpio_reclamar_pack(int pin, int uso, char* err, size_t cap);
 int  bpvm_gpio_estado(int pin);                                     /* BPVM_GPIO_* */
+int  bpvm_gpio_de_alguien(int pin);       /* V7 #669: 1 si lo tiene un programa, un pack o un bus */
 void bpvm_gpio_liberar(int pin);                                    /* release() de un programa: sólo lo suyo */
 /* V7 #667 — el release() de un Pin: si el pin era del programa (no de un pack ni de un bus) y estaba en uso, queda
  * libre Y vuelve a como estaba en el reset en el hardware. 1 si lo soltó. */

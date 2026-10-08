@@ -49,6 +49,7 @@
     { "nombre": "EvReceptorMuerto", "fuente": "bpgenvm-c/samples/EvReceptorMuerto.bp" },
     { "nombre": "FicheroYaAbierto", "fuente": "bpgenvm-c/samples/FicheroYaAbierto.bp" },
     { "nombre": "ImportHondo",   "fuente": "bpgenvm-c/samples/importhondo/ImportHondo.bp" },
-    { "nombre": "synclisttest",  "fuente": "samples/synclisttest.bp", "criterio": "aserciones", "memoria": "apretada", "heap_min_kb": 80, "timeout_s": 90 }
+    { "nombre": "synclisttest",  "fuente": "samples/synclisttest.bp", "criterio": "aserciones", "memoria": "apretada", "heap_min_kb": 80, "timeout_s": 90 },
+    { "nombre": "PinesPantalla", "fuente": "bpgenvm-c/samples/PinesPantalla.bp", "criterio": "aserciones" }
   ]
 }

@@ -1274,7 +1274,9 @@ sleep(<span class="num">60000</span>)          <span class="comment">// y la jor
           ESP32 y STM32; en RP2350 es <code>RuntimeError</code> «no puede salir en colector abierto»).
           <strong>Lo valida el común contra la tabla de capacidades del micro</strong>
           (<a href="#stdlib-machine-caps">§Machine</a>) y contra el estado de los pines, con nombre:
-          «el pin 99 no existe en esp32c5», «el pin 26 está en uso analógico: primero release()».</td></tr>
+          «el pin 99 no existe en esp32c5», «el pin 26 está en uso analógico: primero release()». Y en una placa
+          con la pantalla en la imagen (la P4, la DK2), sus pines son de ella desde el arranque: «el pin 26 de
+          esp32p4 es de la pantalla: no se puede usar» (<code>#669</code>).</td></tr>
   <tr><td><code>on()</code></td>
       <td>Pone el pin a HIGH (sólo si es <code>OUTPUT</code>).</td></tr>
   <tr><td><code>off()</code></td>
@@ -1963,7 +1965,9 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>pins()</code> · <code>analogPins()</code> · <code>pwmPins()</code> · <code>pulsePins()</code> · <code>openDrainPins()</code>: <code>integer[]</code></td>
       <td>El <strong>mapa de pines</strong>: los GPIO que existen, y cuáles pueden leer analógico
           (<code>AnPin</code>), dar PWM, contar pulsos o salir en colector abierto. Lo que en BP se
-          construye por pin se pregunta por pin.</td></tr>
+          construye por pin se pregunta por pin. No salen los del sistema: los de la flash o la PSRAM, los
+          del cable del IDE y, en una placa con la pantalla en la imagen (la P4, la DK2), los de la pantalla
+          (<code>#574</code>, <code>#669</code>).</td></tr>
   <tr><td><code>hasPin(n)</code> · <code>isAnalog(n)</code> · <code>isInputOnly(n)</code>: <code>boolean</code></td>
       <td>Preguntas sobre un pin concreto (un GPIO que no existe: <code>hasPin</code> falso).</td></tr>
   <tr><td><code>manufacturer()</code> · <code>package()</code> · <code>pwmUnit()</code>: <code>string</code></td>
@@ -2192,7 +2196,7 @@ port.write(tx, <span class="num">4</span>)
   Tira de LEDs WS2812 ("NeoPixel"). La conduce la PIO en el RP2350 (Pico 2 / Metro) y el RMT en la
   familia ESP32 (S3, C3, C5, C6, P4; probado con el LED de la S3, en el GPIO48); en el STM32 el
   constructor lanza <code>RuntimeError</code> («no implementado en esta plataforma»). El pin se valida
-  contra la tabla del micro: uno que no existe, que es de un bus, de la flash o del cable del IDE da
+  contra la tabla del micro: uno que no existe, que es de un bus, de la flash, del cable del IDE o de la pantalla da
   un <code>RuntimeError</code> con el motivo. A la vez caben tantas tiras como canales tiene el micro
   (4 en el RP2350, la S3 y el P4; 2 en la C3, la C5 y la C6); con una más, <code>RuntimeError</code>
   («no se pudo iniciar: …»). Patrón framebuffer: los <code>set*</code> escriben en memoria y

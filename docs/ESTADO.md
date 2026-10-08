@@ -48,6 +48,10 @@
 > `3bfe9bd9`) y `#623` (un pack LIBRERÍA ya no lleva la stdlib; el de la GUI, sólo el motor, y la sonda Gui2, un
 > programa de prueba —Eduardo: *«intentemos ahorrar memoria»*—). Falta todo ello en las placas de la tarde (la C3, la
 > C6, la P4, la Nucleo y la DK2) y regrabar los packs. Más abajo, «🧠 El grupo «memoria y packs»».
+> Y después, el repaso de las SUELTAS con Eduardo (*«El resto de pendientes (3, 4 y 5) esperamos a cerrar todo lo
+> anterior, para no tener demasiadas cosas abiertas»*) y **`#669` hecha en el PC** (*«OK 669»*): los pines de la
+> pantalla de la imagen, del sistema desde que se publica su driver —la P4 y la DK2, que tenía 28 líneas del LTDC al
+> alcance de un `Pin`—. Queda una decisión suya: el bus del táctil. Más abajo, «🖥️ `#669` (8-oct, tarde)».
 >
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
@@ -1293,6 +1297,32 @@ la Pico 2; por la tarde, la C3, la C6 (`PinesSistema` y `GuiArbolG2`), la P4, la
 **Hecho, con *«OK para grabar»***: grabadas las cuatro con `12ba0b79` (la C5, sin regrabar sus packs:
 `packRamBase` igual). `OwnerHondo` en la Pico 2, hasta «fin»; la S3 ya no da los GPIO 33–37 («el pin 35 de esp32s3 es
 de la flash o la PSRAM: no se puede usar»); la tanda de `#667`, 52 de 52 otra vez, y la ronda de V7, 188 de 188.
+
+## 🖥️ `#669` (8-oct, tarde) — los pines de la pantalla de la imagen, del sistema; y el repaso de las SUELTAS
+
+**El repaso** (Eduardo: *«Repasamos la lista de pendientes cuando puedas»*): 19 abiertas, por grupos —hechas que
+sólo esperan la placa (`#666`–`#668`, `#650`, `#651`, `#623`), decidida por hacer (`#669`), las que esperan una
+decisión suya (`#578`, `#592`, `#582`–`#584`, `#647`), por acotar (`#614`, `#615`), limpieza (`#645`) y V8 (`#663`,
+`#665`, `#490`)—. `#670`, cerrada al repasar: estaba vista en la S3 desde la mañana y la ficha no lo decía. Eduardo:
+*«OK 669. A la tarde las pruebas en placas. El resto de pendientes (3, 4 y 5) esperamos a cerrar todo lo anterior,
+para no tener demasiadas cosas abiertas»*.
+
+**`#669`, hecha en el PC** (FICHAS: el detalle). El driver de pantalla de la imagen marca sus pines como del
+SISTEMA al publicarse (`bpvm_caps_reservar_sistema`, una capa encima de la tabla de capacidades): como los de la
+flash, fuera de `Machine.pins()` y de toda validación, con «el pin 26 de esp32p4 es de la pantalla: no se puede
+usar». La P4: la luz, el reset y el táctil (26, 27, 7, 8), y su táctil ya no reinicia la placa si el I2C 0 está
+tomado. La DK2: 33 pines —las 28 líneas del LTDC, que la tabla daba por libres (un `Pin` en una le quitaba un bit
+de color), LCD_ON, la luz y el táctil—. `test-bus` §12 con su sabotaje, y `test-bus` y `test-arbitro` a la red (no
+estaban); `PinesPantalla.bp` en la ronda de V7. Las nueve imágenes compilan; la red entera, verde (pruebas de C,
+98 de 98).
+
+**Le queda una decisión a Eduardo**: el BUS del táctil —sus pines ya son de la pantalla, pero un `I2c.Bus` con otros
+pines del mismo periférico aún choca (la DK2 se queda sin táctil hasta reiniciar)—: (a) de la pantalla, ningún
+programa lo abre; o (b) compartido por el árbitro de G4. Recomendado: (a).
+
+**Lo siguiente**: la tarde de placas, como en la sección de abajo, ahora con `#669` (`PinesPantalla` en la P4 y la
+DK2); y antes, los pines libres de cada placa de la tarde para las pruebas de `#667` (hoy sólo traen los de la S3,
+la C5 y las RP2350).
 
 ## 🧠 El grupo «memoria y packs» (8-oct, tarde) — `#651`, `#650` y `#623`
 

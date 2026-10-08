@@ -1,0 +1,84 @@
+// PinesPantalla.bp — #669 (8-oct): los pines de la pantalla que pone la IMAGEN son suyos desde que se publica su
+// driver, al arrancar. Eduardo: «Los pines de la pantalla deberían configurarse al mismo tiempo que el driver de la
+// pantalla y en principio no utilizarse para otras cosas». En la P4: la luz (26), el reset del panel (27) y el táctil
+// (7 y 8). En la DK2: las 28 líneas del LTDC, LCD_ON (PE4), la luz (PE6), el INT del táctil (PE5) y su I2C2 (PF0,
+// PF1); aquí, una muestra. Pedir uno da «es de la pantalla» y no sale en Machine.pins(); un pin corriente sigue libre.
+// En una placa sin pantalla de la imagen (las demás, el PC), lo dice y acaba. Se comprueba a sí mismo (OK / FALLO).
+// ⚠️ Sólo con una imagen que lleve #669: con una anterior, pedir el 26 de la P4 le quitaba la luz al panel.
+module PinesPantalla
+  import Core
+  import Gpio
+  import Machine
+
+  // ¿Sale `pin` en Machine.pins()?
+  function enLaLista(pin: integer): boolean
+    var l: integer[] := Machine.pins()
+    var i: integer := 0
+    while i < len(l) do
+      if l[i] == pin then
+        return true
+      endif
+      i += 1
+    endwh
+    return false
+  end enLaLista
+
+  // Lo que contesta pedir el pin como entrada: «libre» o el mensaje del error.
+  function pide(pin: integer): string
+    var msg: string := "libre"
+    try
+      var p: Gpio.Pin := Gpio.Pin(pin, Gpio.Pin.INPUT)
+      Gpio.release(pin)
+    catch e: RuntimeError
+      msg := e.msg
+    endtry
+    return msg
+  end pide
+
+  function dePantalla(pin: integer, que: string)
+    var msg: string := pide(pin)
+    if contains(msg, "es de la pantalla") then
+      if enLaLista(pin) then
+        print "FALLO " + que + " (" + intToString(pin) + "): da el error, pero sale en Machine.pins()"
+      else
+        print "OK " + que + " (" + intToString(pin) + "): " + msg
+      endif
+    else
+      print "FALLO " + que + " (" + intToString(pin) + "): " + msg
+    endif
+  end dePantalla
+
+  function libre(pin: integer, que: string)
+    var msg: string := pide(pin)
+    if msg == "libre" and enLaLista(pin) then
+      print "OK " + que + " (" + intToString(pin) + "): libre"
+    else
+      print "FALLO " + que + " (" + intToString(pin) + "): " + msg
+    endif
+  end libre
+
+  function Main()
+    var micro: string := Machine.getMicro()
+    print "micro: " + micro + ", GPIO para el programa: " + intToString(Machine.gpioCount())
+    if micro == "esp32p4" then
+      dePantalla(26, "la luz")
+      dePantalla(27, "el reset del panel")
+      dePantalla(7, "el SDA del tactil")
+      dePantalla(8, "el SCL del tactil")
+      libre(20, "un pin corriente (el SDA de Bme280IdP4)")
+    elseif micro == "stm32u5g9" then
+      dePantalla(68, "LCD_ON (PE4)")
+      dePantalla(70, "la luz (PE6)")
+      dePantalla(69, "el INT del tactil (PE5)")
+      dePantalla(80, "el SDA del tactil (PF0)")
+      dePantalla(81, "el SCL del tactil (PF1)")
+      dePantalla(18, "el B1 del LTDC (PB2)")
+      dePantalla(71, "el B6 del LTDC (PE7)")
+      dePantalla(56, "el R3 del LTDC (PD8)")
+      libre(24, "el PWM de CN1 (PB8)")
+    else
+      print "OK sin pantalla de la imagen: nada que comprobar"
+    endif
+    print "fin"
+  end Main
+end PinesPantalla

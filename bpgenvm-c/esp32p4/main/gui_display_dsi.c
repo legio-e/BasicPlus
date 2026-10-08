@@ -30,6 +30,7 @@
 #if defined(BPVM_GUI_PACK)
 #include "bpvm_pant.h"          /* V7/H6 G5.a: el contrato del driver de pantalla ('PANT') */
 #include "bpvm_bios.h"          /* V7/H6 G5.a: bpvm_bios_publica, el mismo registro que usan los packs */
+#include "bpvm_machine.h"       /* V7 #669: bpvm_caps_reservar_sistema, los pines de la pantalla */
 #endif
 #include "freertos/FreeRTOS.h"  /* G4: vTaskDelay en el bombeo */
 #include "freertos/task.h"
@@ -391,7 +392,15 @@ static esp_lcd_touch_handle_t p4_touch_init(void)
         .i2c_port                     = TOUCH_I2C_PORT,
         .flags.enable_internal_pullup = true,
     };
-    ESP_ERROR_CHECK(i2c_new_master_bus(&bus_cfg, &i2c_bus));
+    esp_err_t eb = i2c_new_master_bus(&bus_cfg, &i2c_bus);
+    if (eb != ESP_OK) {
+        /* V7 #669: sin abortar (antes, ESP_ERROR_CHECK: la placa se reiniciaba). Sus pines son de la pantalla, pero un
+         * programa pudo abrir antes el I2C 0 con OTROS: el puerto está tomado. La pantalla sigue, sin táctil, y se dice. */
+        ESP_LOGE(TAG, "el I2C %d del tactil no se pudo abrir (%s): sin tactil", TOUCH_I2C_PORT, esp_err_to_name(eb));
+        log_printf("pantalla: el I2C %d del tactil no se pudo abrir (%s): la GUI se vera pero no reaccionara (#669)",
+                   TOUCH_I2C_PORT, esp_err_to_name(eb));
+        return NULL;
+    }
 
     /* El GT911 comparte el reset con el panel (GPIO27) y tarda ~100-200 ms en
      * responder por I2C tras ese reset. Lo sondeábamos ~10 ms después -> "i2c
@@ -534,6 +543,28 @@ static const bpvm_pack_api_t s_pant_api = {
     (uint32_t) (sizeof s_pant_syms / sizeof s_pant_syms[0]), s_pant_syms
 };
 
+/* V7 #669 (8-oct) — LOS PINES DE LA PANTALLA, del sistema desde que se publica su driver (Eduardo: «Los pines de la
+ * pantalla deberían configurarse al mismo tiempo que el driver de la pantalla y en principio no utilizarse para otras
+ * cosas»). El panel se configura en su primer uso (pant_init), pero sus pines son suyos desde el arranque: un programa
+ * que los pida antes no puede dejarla sin luz ni sin reset —y desde #667, al soltarlos, volvían al reset—. Fuera de
+ * Machine.pins(), como los de la flash (#574). El LEDC de la luz (canal 1, timer 1) ya lo esquivaba el PWM. */
+static void p4_pant_reservar_pines(void)
+{
+    static const struct { int pin; const char* que; } P[] = {
+        { BL_GPIO,       "la retroiluminacion" },
+        { LCD_RST_GPIO,  "el reset del panel y del tactil" },
+        { TOUCH_I2C_SDA, "el SDA del tactil" },
+        { TOUCH_I2C_SCL, "el SCL del tactil" },
+    };
+    char err[96];
+    int n = 0;
+    for (size_t i = 0; i < sizeof P / sizeof P[0]; i++) {
+        if (bpvm_caps_reservar_sistema(P[i].pin, BPVM_PIN_SIS_PANTALLA, err, sizeof err) == 0) n++;
+        else log_printf("pantalla: el GPIO%d (%s) NO se pudo reservar: %s", P[i].pin, P[i].que, err);
+    }
+    log_printf("pantalla: %d pines suyos (la luz, el reset y el tactil): fuera de Machine.pins() (#669)", n);
+}
+
 void p4_pant_publicar(void)
 {
     /* Al arrancar, antes que ningún pack: el de LVGL la busca en su PRIMER USO (el primer Gui.Screen), así que el
@@ -545,6 +576,7 @@ void p4_pant_publicar(void)
         log_printf("pantalla: el P4 NO pudo publicar 'PANT' (publica = %d)", r);
     } else {
         log_printf("pantalla: el P4 publica 'PANT' desde la imagen (MIPI-DSI, el panel del ENV, tactil GT911)");
+        p4_pant_reservar_pines();   /* V7 #669: al mismo tiempo que su driver */
     }
 }
 #endif /* BPVM_GUI_PACK */

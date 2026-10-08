@@ -746,7 +746,9 @@ static const bpvm_uart_backend_t s_uart_backend = {
 /* v3 "lo correcto": handles PROPIOS; init completo en el constructor, sin
  * MX_I2Cn_Init de CubeMX -> los pines no se reservan en el boot. bus N -> I2Cn.
  * OJO DK2: I2C2 lo usa el TACTIL (GT911) via CubeMX -> en la DK2 NO uses el bus 2
- * desde BP (chocaria con el tactil). */
+ * desde BP (chocaria con el tactil). Desde #669 sus pines (PF0, PF1) son de la pantalla
+ * (gui_display_ltdc.c): un I2c.Bus(2) en ellos recibe «es de la pantalla»; con OTROS pines
+ * del I2C2 todavia chocaria (el bus del tactil: ver FICHAS #669). */
 static I2C_HandleTypeDef s_i2c[7];   /* indexado por nº de bus (1..6) */
 
 static I2C_HandleTypeDef* i2c_handle(int bus) {

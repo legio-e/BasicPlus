@@ -1594,7 +1594,7 @@ objeto que `__siguientePendiente` acaba de sacar, y el ÚLTIMO pendiente se solt
 `test-kill` y `test-suelta` en rojo—; arreglado, y con `test-destruyefinal` (lo que sólo se ve al acabar, contra lo
 esperado, en las dos VMs), que la paridad no podía ver.
 
-#### 🟡 `#669` — los pines de la pantalla que pone la IMAGEN no están reservados: un programa puede tomarlos y apagar la pantalla (abierta el 8-oct, al hacer `#667`; SUELTA)
+#### 🟡 `#669` — los pines de la pantalla que pone la IMAGEN no están reservados: un programa puede tomarlos y apagar la pantalla (abierta el 8-oct, al hacer `#667`; SUELTA · **HECHO en el PC y en las imágenes el 8-oct**; falta la placa —la P4 y la DK2— y una decisión: el bus del táctil)
 
 **Visto al hacer `#667`**: la tabla de capacidades sólo aparta los pines de la memoria y del cable (`#574`). En la DK2,
 `LCD_ON` (PE4) y la retroiluminación (PE6, `TIM3_CH4`), los configura CubeMX al arrancar; en la P4, la
@@ -1606,6 +1606,33 @@ nativo»).
 pantalla y en principio no utilizarse para otras cosas»*: el driver de la imagen los RESERVA cuando configura la
 pantalla, como un pack los suyos, y un programa que los pide recibe un error con nombre («el pin N es de la
 pantalla»).
+**Hecho en el PC y en las imágenes (8-oct)** —sin cerrar: falta la placa, la P4 y la DK2, esta tarde—:
+- **El mecanismo**: una capa de reservas del SISTEMA encima de la tabla de capacidades
+  (`bpvm_caps_reservar_sistema`, `src/bpvm_machine.c`) que el driver de la imagen marca al publicarse (`'PANT'`, al
+  arrancar: antes de los buses del ENV, de los packs y de ningún programa). Un pin así es como los de la flash y el
+  cable (`#574`): máscara 0 —fuera de `Machine.pins()` y de toda validación: un `Pin`, un bus, un pack, un ADC— y el
+  error lo dice: «el pin 26 de esp32p4 es de la pantalla: no se puede usar». No con la marca de los pines de un pack
+  (siguen en `Machine.pins()`; se toman y se sueltan con el pack): la pantalla de la imagen no se va en todo el
+  arranque, como la flash. Lo que lee la tabla (`Machine.pins()` y sus cuentas, el ADC por canal) pasa ahora por
+  la máscara.
+- **La P4**: la luz (26), el reset del panel y del táctil (27) y el táctil (7, 8). Y su táctil ya no ABORTA si el
+  I2C 0 está tomado (era un `ESP_ERROR_CHECK`: la placa se reiniciaba): sigue sin táctil y lo dice. La luz ya la
+  esquivaba el PWM de las ESP (su canal 1 y su timer 1).
+- **La DK2**: lo que CubeMX configura al arrancar para la pantalla, que la tabla daba por libre —las 28 líneas del
+  LTDC (un `Pin` en una le quitaba un bit de color al panel), LCD_ON (PE4), la luz (PE6, `TIM3_CH4`), el INT del
+  táctil (PE5) y su I2C2 (PF0, PF1)—: 33 pines. El PWM de los programas va por TIM16: no toca el TIM3 de la luz.
+- **Las pruebas**: `make test-bus` §12 (11 casos: ni un programa, ni un pack, ni un bus; un `release()` y el fin de
+  RUN no la tocan; un pin ocupado o que no existe no se reserva; una tabla nueva empieza sin reservas), con su
+  sabotaje (la máscara sin la capa: 5 en rojo). Y `test-bus` y `test-arbitro`, a la red: no estaban en ninguna. En
+  placa, `samples/PinesPantalla.bp`, en la ronda de V7 (se comprueba a sí mismo; en las placas sin pantalla de la
+  imagen, lo dice y acaba).
+- **Queda, y es decisión de Eduardo: el BUS del táctil.** Sus pines ya son de la pantalla, pero el periférico no:
+  en la DK2, un `I2c.Bus(2)` con OTROS pines del I2C2 reinicia el periférico del táctil y, al soltarlo, su
+  `HAL_I2C_DeInit` lo deja sin táctil hasta reiniciar la placa (hasta hoy sólo lo avisaba un comentario de
+  `gpio_stm32.c`); en la P4, un programa que abre el I2C 0 con otros pines ANTES de la primera GUI deja la pantalla
+  sin táctil (ya sin reinicio). Dos caminos: (a) el bus del táctil es de la pantalla —ningún programa lo abre, y se
+  dice con nombre—; (b) el de G4, el bus se COMPARTE —el táctil se registra en el árbitro y toma su turno en cada
+  lectura—, más trabajo en las dos imágenes.
 
 #### ✅ `#670` — la S3 con PSRAM OCTAL da al programa los GPIO 33–37, que son de la PSRAM (abierta el 8-oct, al preparar el lote de `#667`; SUELTA · **CERRADA el mismo día**, `12ba0b79`, vista en la S3)
 
@@ -1869,7 +1896,7 @@ hoy f99660c9: vale y NO se sube—», y `GuiWinJson` y `GuiShot` corren con ello
 ninguna. De paso: la Pico tiene en `/lib` un `Gui.mod` MOD6 (de V5); con la regla, formato incompatible → si un programa
 lo pide, se sube el de hoy.
 
-#### 🟡 `#623` — los packs de la GUI llevan COPIAS de la stdlib que se quedan rancias cuando ésta cambia: como entre packs gana el último grabado, tapan las del `Stdlib.pack`; la tanda sube entonces las frescas a `/lib`, que se cargan en RAM, y en la C6 no caben (abierta 2-oct, en la tanda de H9 en la C6; preexistente; SUELTA desde el 3-oct —salió de H9 al cerrarlo, Eduardo— · **HECHO en el PC el 8-oct**: un pack librería ya no lleva la stdlib; falta regrabar los packs en las placas)
+#### 🟡 `#623` — los packs de la GUI llevan COPIAS de la stdlib que se quedan rancias cuando ésta cambia: como entre packs gana el último grabado, tapan las del `Stdlib.pack`; la tanda sube entonces las frescas a `/lib`, que se cargan en RAM, y en la C6 no caben (abierta 2-oct, en la tanda de H9 en la C6; preexistente; SUELTA desde el 3-oct —salió de H9 al cerrarlo, Eduardo— · **HECHO en el PC el 8-oct**, `04a82963`: un pack librería ya no lleva la stdlib; falta regrabar los packs en las placas)
 
 **Visto el 2-oct**: en la tanda, `GuiWinJson` acabó en la C6 con «No space in heap» —el mismo programa había ido bien
 minutos antes, recién grabados los packs—. **Acotado cambiando una cosa**: el `.mod` del compilador de antes y el de

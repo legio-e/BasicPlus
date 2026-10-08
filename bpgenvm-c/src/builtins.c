@@ -4194,12 +4194,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             case 7: bit = BPVM_PIN_OPEN_DRAIN; break;
             default: return builtin_throw(vm, tc, "Machine: clase de capacidad desconocida");
         }
-        if (bit) { n = 0; for (int i = 0; i < (int) c->n_pin; i++) if (c->pin && (c->pin[i] & bit)) n++; }
+        /* #669: por la máscara, que mira las reservas del sistema (la pantalla de la imagen): esos pines no están */
+        if (bit) { n = 0; for (int i = 0; i < (int) c->n_pin; i++) if (bpvm_caps_pin_mask(i) & bit) n++; }
         bpref_t arrh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I32, (uint32_t) n, (uint32_t) n * 4u); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (arrh.v == 0u) return builtin_throw(vm, tc, "Machine: sin memoria");
         uint32_t arr = bpref_deref(vm, arrh);
         int k = 0;
-        if (bit) { for (int i = 0; i < (int) c->n_pin; i++) if (c->pin && (c->pin[i] & bit)) bpvm_write_i32_be(vm->memory + arr + 4 + 4 * (k++), i); }
+        if (bit) { for (int i = 0; i < (int) c->n_pin; i++) if (bpvm_caps_pin_mask(i) & bit) bpvm_write_i32_be(vm->memory + arr + 4 + 4 * (k++), i); }
         else     { for (int i = 0; i < n; i++) bpvm_write_i32_be(vm->memory + arr + 4 + 4 * (k++), lista[i]); }
         bpref_push(vm, tc, arrh);
         return BPVM_OK;
