@@ -367,7 +367,7 @@ public final class Main {
             dondeBuscar.addAll(ctx.dependencyPaths);
             Path packPath = PackStep.buildPack(proj, new PackStep.Cierre(
                     ctx.modsUsados, ctx.packsRequeridos, ctx.raizTieneMain,
-                    ctx.raizEntry, dondeBuscar));
+                    ctx.raizEntry, dondeBuscar, ctx.stdlibDir));   /* V7 #623: la stdlib no entra en un pack librería */
             System.out.println("pack generado: " + packPath);
         }
         return success;
@@ -1190,6 +1190,11 @@ public final class Main {
     // RESOLUCIÓN DE DEPS (.bpi y .bp)
     // ============================================================
     private static void ensureInterfaceForImport(Ast.ImportNode imp, Path importerSrc, Ctx ctx, int depth) throws IOException {
+        /* V7 #623 (8-oct) — `import v1 from pack "LVGL"` NO es un módulo: es la versión de la API de un pack nativo
+         * (Ast.ImportNode#packNativoMarca), y no tiene interfaz que asegurar. Se buscaba como un módulo llamado `v1` y
+         * salía «no se localizó .bp ni .bpi para import 'v1'; se omitirá», que el barrido de samples cuenta como un
+         * import omitido (Gui2, al pasar a samples/guipack/; y SQLite). El recorrido del AOT ya lo saltaba. */
+        if (imp.packNativoMarca != null) return;
         String qualifiedName = joinPath(imp.path);
         String library = libraryFromImportPath(imp);
         String moduleName = imp.path.get(imp.path.size() - 1);

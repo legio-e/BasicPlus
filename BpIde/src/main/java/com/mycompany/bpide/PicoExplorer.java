@@ -1132,7 +1132,11 @@ public final class PicoExplorer extends JPanel {
                 if (st == null) {
                     // No lo tiene (o firmware sin STAT por nombre): a donde le toca.
                     depRemote = isLib ? ("/lib/" + dep.getName()) : appPath(prefix, dep.getName());
-                    motivo = "la placa no lo tiene"; subir = true;
+                    /* V7 #623 (8-oct): un pack librería ya no lleva la stdlib; lo que la placa no tiene se sube a /lib, que
+                     * se carga en la RAM (en la C6 no cabe la GUI). Con el Stdlib.pack grabado no haría falta: XIP. */
+                    motivo = isLib ? "la placa no lo tiene (a /lib, que se carga en la RAM; con el Stdlib.pack grabado"
+                                     + " correria XIP desde el)" : "la placa no lo tiene";
+                    subir = true;
                 } else if (isLib) {
                     /* V7/H9 #624 — una LIBRERÍA: la regla de Eduardo (2-oct, la de Java), en ReglaDeSubida: el formato
                      * (MAGIC) compatible y la versión de la placa igual o superior a la mínima —la del .mod contra el

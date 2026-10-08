@@ -3494,6 +3494,27 @@ del `Stdlib.pack` o de `/lib`—, y así ninguna copia vieja tapa la de todos. E
 el constructor no mete la stdlib en un pack librería (o lo rechaza, diciendo cuáles); quien graba avisa si un pack
 librería necesita el `Stdlib.pack` y la placa no lo tiene (2); y los packs de la GUI se regraban sin copias (4).
 
+**Presentado y decidido (8-oct)**: el plan de arriba, con el ejemplo del pack de la GUI —que llevaba, además de las
+copias, la sonda Gui2—. Eduardo: *«Si, Gui2 lo puedes dejar como programa de test pero ya no dentro del Pack,
+intentemos ahorrar memoria»*.
+
+**Hecho (8-oct)**, en el PC (`FICHAS` `#623`):
+
+1. **El constructor no mete la stdlib en un pack librería** (`PackStep.buildPack`, 1a): fuera todo módulo que haya en
+   el `stdlibDir` —del `outDir`, de las dependencias y del cierre—, y lo dice. Elegí dejarla fuera avisando, no
+   rechazar el build: la receta vieja que copia la stdlib al `outDir` sigue funcionando y sale bien. El pack programa,
+   como siempre (el cierre entero). La excepción, `"stdlib": true` (sólo `Stdlib.bpbuild`): declarada, no deducida.
+2. **Quien graba avisa, pero sólo de lo que la placa no tiene**: la cuenta (lo que los módulos del pack importan de
+   la stdlib sin llevarlo) se cruza con la placa por STAT por nombre (FS y zona). Lo que salió al medirlo: tras el
+   cambio, todos los packs librería importan Core, y el de la GUI SÓLO Core (Gui.mod lo importan los programas, no el
+   motor), así que «la placa no tiene el Stdlib.pack» habría saltado con todos y no habría dicho nada del pack que se
+   graba. El caso de la GUI se dice donde se sabe, al ejecutar: lo que el IDE sube a /lib «se carga en la RAM; con el
+   Stdlib.pack grabado correría XIP».
+3. **El pack programa** lleva el cierre de su programa, la stdlib incluida, y va primero cuando corre su programa
+   (`#493`): nada que cambiar.
+4. **Los packs, reconstruidos** (los siete librería; la GUI, sólo el motor + `GuiLvgl.bp`; la sonda Gui2 a
+   `samples/guipack/`). Falta regrabarlos en las placas, con el `Stdlib.pack` donde no esté.
+
 ## H10 — el `Rtc`: saber si el equipo está en hora (2-oct, idea de Eduardo; decidido y hecho: `#626`)
 
 **El problema** (`V7_BACKLOG` H10): en la Pico y las ESP32 el reloj de pared es por software y empieza en 0 a cada
@@ -8654,6 +8675,8 @@ al del pack». Con los mismos bytes —el tamaño primero, que es gratis; el CRC
 el diag lo dice; si difieren en algo, el del FS, como hoy (está ahí a propósito). La VM-Java no tiene zona: se prueba en
 el micro simulado y en placa.
 
-### 3. `#623`: el pack PROGRAMA, un contenedor (la dirección, confirmada; el plan, por presentar)
+### 3. `#623`: un pack LIBRERÍA no lleva la stdlib; el PROGRAMA, un contenedor (decidido y hecho en el PC, 8-oct)
 
-Ver §«H9 — `#623`» (arriba), con lo que dijo Eduardo el 8-oct.
+Ver §«H9 — `#623`» (arriba): lo que dijo Eduardo el 8-oct, el plan y lo hecho. En dos líneas: el constructor deja la
+stdlib fuera de todo pack librería (y lo dice), quien graba avisa de lo que la placa no tiene, y el pack de la GUI es
+sólo el motor —la sonda Gui2, un programa de prueba—; ~114 KB menos en la zona de una placa con la GUI.

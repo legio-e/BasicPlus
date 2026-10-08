@@ -92,8 +92,8 @@ el PC sin placa, como en el host.
 > contador, NeoPixel) sigue encendido y ocupado tras su RUN: el PWM sigue sacando la señal, y en las ESP los canales no
 > se sueltan—, y la mejora que trae, `#667` —un objeto BP que consume un recurso lleva destructor y lo libera—, y
 > `#668` —al acabar un programa, sus objetos se destruyen y sueltan sus recursos; en V7—; y del 8-oct, al hacer `#667`,
-> `#669` —los pines de la pantalla que pone la imagen, sin reservar— y `#670` —la S3 con PSRAM octal da al programa
-> los GPIO 33–37, que son de la PSRAM—)
+> `#669` —los pines de la pantalla que pone la imagen, sin reservar— y ~~`#670`~~ —la S3 con PSRAM octal da al programa
+> los GPIO 33–37, que son de la PSRAM; cerrada el mismo día, `12ba0b79`—)
 > ~~`#581`~~ (cerrada el 7-oct: con `PinesSistema` en la C6, que destapó el pad VDD_SPI) `#582` `#583` `#584` ~~`#585`~~ (cerrada el 3-oct, `ff1135cc`) ~~`#586`~~ (cerrada el 28-sep, `95de38bc`), y las que salen del análisis de `#554` (27-sep): ~~`#587`~~ (H7; cerrada el 27-sep, `ec5b15c7`), ~~`#588`~~ (SUELTA; cerrada el 27-sep, `455ca895`) y ~~`#589`~~ (H8; cerrada el 27-sep, `b777f25f`), ~~`#544`~~
 > (H4; cerrada el 25-sep: no se reproduce) y ~~`#554`~~ (H7; cerrada el 27-sep, `e5761dd1`) —y `#490`, en V8—. Y del 27-sep, al hacer `#589`: ~~`#590`~~ (SUELTA; cerrada el 27-sep, `dd2e06e5`: el valor inicial de las globales, el modelo de Eduardo) y ~~`#591`~~ (H8; cerrada el 28-sep, `d3a60e5c`), y al hacer `#531`: `#592` (SUELTA: el 2º temporizador de las natives de la VM-C), y al hacer `#494`: ~~`#593`~~ (H7: el punto ciego del guardián del heap; cerrada el 29-sep, `41c27547`: la reserva en un método único); y del 28-sep, ~~`#594`~~ (H7: el módulo `Heap`, cerrada el mismo día, `ac0f3d71`), ~~`#595`~~ (H7: `Heap.compact()`, cerrada el mismo día, `6b265162`), ~~`#596`~~ (H7: con `--smp`, una excepción sin atrapar acababa en OK; cerrada el mismo día, `cdedb1d1`), ~~`#597`~~ (H7: `Net.recv` dejaba un bloque que mentía su tamaño; cerrada el mismo día, `6e362e2e`), ~~`#598`~~ (H7: el GC sin memoria para su mapa lo barría todo; ídem), ~~`#599`~~ (H7: miVM con dos workers se quedaba colgada en el GC; vista al medir el corpus con SMP; cerrada el mismo día, `c539c27c`, con el corpus con dos workers en la red) , ~~`#600`~~ (H7: con dos workers, la línea de un hilo se partía con la de otro; cerrada el mismo día, `cc073e52`: un `print` sale entero) y ~~`#601`~~ (H8: la puerta de «sin FS» de la ESP32 no paraba `FORMAT` y compañía; al mapear H8; cerrada el mismo día, `1a75a498`), ~~`#602`~~ (H8: el bloque de RAM de los motores en el `INFO`; cerrada el 1-oct, `a6f7ff7f`), y del mapa de H7 (29-sep) ~~`#603`~~ (con `--smp`, soltar un objeto con dueño corrompía el heap de la VM-C; cerrada el mismo día, `a907435d`), ~~`#604`~~ (la VM-C, 32 hilos en toda la vida del programa) y ~~`#605`~~ (el muro de la pila; cerradas el mismo día, `98c640e9`) y ~~`#606`~~ (dos latentes del XIP; cerrada el mismo día, `a907435d`); y al probar `#606`, ~~`#607`~~ (un manejador de la GUI no podía ceder; cerrada el 30-sep, `85de188f`: el setter de Forms, con el opcode `INVOKE_SLOT`; y el hilo que muere sin atrapar lo dice en la salida), y al probar `#605`, ~~`#608`~~ (una excepción sin atrapar en un hilo acaba ese hilo y el programa sale con error, «la A» de Eduardo; cerrada el mismo día, `41c27547`), y ~~`#609`~~ (`test-listen` se corta a veces con un `TimeoutError`; H8/H9; cerrada el 2-oct, `1dab3a66`), y de la prueba de estrés del heap (29-sep, noche): ~~`#610`~~ (VM-C: la tabla de handles crecía moviéndose con otros workers leyéndola; cerrada el mismo día, `b4bb28fb`), ~~`#611`~~ (miVM: `split` y `listDir` perdían los trozos si la reserva colectaba; cerrada el mismo día, `c0015787`), ~~`#612`~~ (miVM: un error de Java en un worker acababa el RUN sin decir nada; cerrada el mismo día, `cf476205`); y del 30-sep, ~~`#613`~~ (miVM: un hilo que cede con `sleep(0)` podía acabar en dos workers a la vez —B1 por otro camino—; cerrada el mismo día, `d6d72384`), y al grabar la C5 tras medir los márgenes, `#614` (`GuiFlushBench`: cambiar una etiqueta cuesta más que hace una semana —la C5, de 1 a 5,8 ms; la DK2, de 1,0 a 1,8—; SUELTA); y del 1-oct, al vaciar H7, `#615` (la Pico sobre el backend común de FreeRTOS: aparcada sin fecha, Eduardo; SUELTA), y al hablar de los runs, ~~`#616`~~ (H12: el planificador de varios runs de la VM-C no repartía en rueda; cerrada el mismo día, `c671d3a2`), y al probar el paso 4 de `#495` con el cliente del IDE, ~~`#617`~~ (H8: el servidor del wire de la VM-Java no tenía la subida por trozos y atendía a un cliente por proceso; cerrada el mismo día, `b33794df`), y al grabar la C5 con el paso 4, ~~`#618`~~ (H8: el cliente del IDE perdía bytes leyendo de uno en uno de un puerto rápido; cerrada el mismo día, `34167432`). Decisiones de Eduardo pendientes: ~~`#590`~~ (decidida el 27-sep: el modelo de las globales), ~~`#542`~~ (decidida el 25-sep: un import sin interfaz es un error de carga), ~~`#579`~~ (decidida el 3-oct: cerrada con la evidencia), `#582`/`#583` (la línea y el debugger: «una decisión de fondo»; antes, el análisis y la medida), ~~`#584`~~ (decidida el 3-oct: podar sólo ahorra) y,
 > al publicar, `--formato=8` (la SD de la C6 quedó decidida el 24-sep: tras `H6.b`). Lo demás abierto no tiene número: está en la fila de su hito, abajo.
@@ -1607,7 +1607,7 @@ pantalla y en principio no utilizarse para otras cosas»*: el driver de la image
 pantalla, como un pack los suyos, y un programa que los pide recibe un error con nombre («el pin N es de la
 pantalla»).
 
-#### 🔴 `#670` — la S3 con PSRAM OCTAL da al programa los GPIO 33–37, que son de la PSRAM (abierta el 8-oct, al preparar el lote de `#667`; SUELTA)
+#### ✅ `#670` — la S3 con PSRAM OCTAL da al programa los GPIO 33–37, que son de la PSRAM (abierta el 8-oct, al preparar el lote de `#667`; SUELTA · **CERRADA el mismo día**, `12ba0b79`, vista en la S3)
 
 **Visto el 8-oct**: `Machine.pins()` de la S3 (N16R8) da 0–21, 33–42 y 45–48, y su imagen va con
 `CONFIG_SPIRAM_MODE_OCT=y` (el `INFO`: 8 MB de PSRAM, en marcha). En la S3, la PSRAM octal usa los GPIO 33–37 (SPIIO4–7
@@ -1616,9 +1616,11 @@ cinco el IDF no los reserva: un `Gpio.Pin(35, OUTPUT)` —o un PWM, o una tira�
 programa corriendo, lo mismo que `#574` arregló en la C6 con la flash. **Sin probar en la placa, a propósito** (se
 colgaría, con lo que tenga en la PSRAM). El arreglo, como el de la VDD_SPI de `#581`: con la PSRAM (o la flash)
 octal en marcha, los cinco, `BPVM_PIN_SIS_MEMORIA` —«el pin 35 es de la memoria»—.
-**Hecho (8-oct), sin grabar**: el `chip_cfg.h` de la S3 dice los pines (`CHIP_GPIO_OCTAL_DESDE`/`_HASTA`: 33–37) y
-`esp32_caps_init` los aparta si la flash es octal o la PSRAM octal arrancó (`esp_psram_is_initialized`). Falta
-grabarlo en la S3 y ver que `Machine.pins()` ya no los da.
+**Hecho (8-oct)** (`12ba0b79`): el `chip_cfg.h` de la S3 dice los pines (`CHIP_GPIO_OCTAL_DESDE`/`_HASTA`: 33–37) y
+`esp32_caps_init` los aparta si la flash es octal o la PSRAM octal arrancó (`esp_psram_is_initialized`).
+**Visto en la S3 (8-oct, mañana)**, grabada con esa imagen (el OK de Eduardo, «OK para grabar»): `Machine.pins()` ya
+no da los GPIO 33–37, y pedir uno lo dice con nombre —«el pin 35 de esp32s3 es de la flash o la PSRAM: no se puede
+usar»—. La tanda de `#667` y la ronda de V7, verdes en ella. **CERRADA.** (Faltaba anotarlo aquí: lo decía `ESTADO`.)
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
@@ -1867,7 +1869,7 @@ hoy f99660c9: vale y NO se sube—», y `GuiWinJson` y `GuiShot` corren con ello
 ninguna. De paso: la Pico tiene en `/lib` un `Gui.mod` MOD6 (de V5); con la regla, formato incompatible → si un programa
 lo pide, se sube el de hoy.
 
-#### 🟡 `#623` — los packs de la GUI llevan COPIAS de la stdlib que se quedan rancias cuando ésta cambia: como entre packs gana el último grabado, tapan las del `Stdlib.pack`; la tanda sube entonces las frescas a `/lib`, que se cargan en RAM, y en la C6 no caben (abierta 2-oct, en la tanda de H9 en la C6; preexistente; SUELTA desde el 3-oct —salió de H9 al cerrarlo, Eduardo— · lo inmediato hecho, falta la guarda)
+#### 🟡 `#623` — los packs de la GUI llevan COPIAS de la stdlib que se quedan rancias cuando ésta cambia: como entre packs gana el último grabado, tapan las del `Stdlib.pack`; la tanda sube entonces las frescas a `/lib`, que se cargan en RAM, y en la C6 no caben (abierta 2-oct, en la tanda de H9 en la C6; preexistente; SUELTA desde el 3-oct —salió de H9 al cerrarlo, Eduardo— · **HECHO en el PC el 8-oct**: un pack librería ya no lleva la stdlib; falta regrabar los packs en las placas)
 
 **Visto el 2-oct**: en la tanda, `GuiWinJson` acabó en la C6 con «No space in heap» —el mismo programa había ido bien
 minutos antes, recién grabados los packs—. **Acotado cambiando una cosa**: el `.mod` del compilador de antes y el de
@@ -1915,6 +1917,43 @@ garantice lo más posible que el programa y los módulos son autocontenidos, for
 problemas por falta de módulos o módulos de otras versiones»*. O sea: las copias de la stdlib dentro de un pack
 PROGRAMA son a propósito —el programa corre con las versiones con que se hizo, juntas—; el problema de esta ficha es
 que las de un pack de LIBRERÍA (la GUI) tapan a las de todos. El diseño, por hacer: `V7_IDEAS` §«`#623`».
+
+**Decidido y hecho en el PC (8-oct)** (`V7_IDEAS` §«H9 — `#623`»). Eduardo, al plan: *«Si, Gui2 lo puedes dejar
+como programa de test pero ya no dentro del Pack, intentemos ahorrar memoria»*.
+- **El constructor** (`PackStep`): un pack LIBRERÍA (su raíz no tiene `main`) no lleva NINGÚN módulo de la stdlib
+  —ni los del `outDir` (las recetas los copiaban a mano), ni las dependencias, ni el cierre— y lo dice: «pack:
+  LIBRERIA sin la stdlib (#623): Core, Str no van dentro; la placa los saca del Stdlib.pack (o de /lib)». «De la
+  stdlib» = lo hay en el `stdlibDir` del BpVM.cfg. Un pack PROGRAMA, como siempre: el contenedor entero, con la
+  stdlib que use. La excepción, declarada: el proyecto que ES la stdlib (`"stdlib": true` en `Stdlib.bpbuild`; su
+  pack sale con los 30, comprobado con `compat/stdlib_pack.sh`). La prueba, `PackStepTest.packLibreriaSinStdlib`
+  (librería, programa y la stdlib, y la cuenta del aviso).
+- **El pack de la GUI, sólo el motor**: `Gui.bpbuild` compila `GuiLvgl.bp`, que sólo lo identifica (como `GuiMini.bp`),
+  y la sonda Gui2 sale del pack a un programa de prueba, `samples/guipack/` (con `GuiPack`, en su carpeta porque el
+  AOT del Run compila todo el `sourceDir`; sus `native` las compila el IDE al ejecutar, y sus `.mdn` versionados de
+  `bpstdlib/gui/nativo/` se van). Las recetas (`Gui`, `GuiMini`, el LEEME de SQLite) ya no copian la stdlib, y la
+  referencia lo cuenta (§15.2 y §15.5, en español y en inglés).
+- **Lo que se ahorra**, reconstruidos los siete packs librería (B): Gui 2 326 528 → 2 211 840; GuiMini 573 440 →
+  458 752; DriverSpi 57 344 → 32 768; DriverC5 32 768 → 8 192; Mini 32 768 → 8 192; SQLite 1 138 688 → 1 114 112;
+  DriverNulo igual (no llevaba). En una placa, el de la GUI son ~114 KB de módulos menos en la zona (Collections,
+  Core, Gui, Gui2, Json y Str), y ninguna copia que se quede rancia: DriverC5, SQLite y Mini llevaban un Core viejo
+  (21 683 B; el de hoy, 22 399), y SQLite un Str viejo.
+- **Quien graba avisa, módulo a módulo**: el panel de Packs del IDE y `wire_serie.py pack` cuentan lo que los
+  módulos del pack importan de la stdlib sin llevarlo (`PackStep.stdlibQueImporta`; en Python, la misma cuenta) y
+  preguntan a la placa por cada uno (STAT por nombre: el FS y la zona de packs). De lo que NO tiene: «'SQLite' usa
+  Str de la stdlib, no lo lleva (…) y la placa no lo tiene: graba también el Stdlib.pack, o el RUN lo subirá a /lib
+  (a la RAM)». Sólo eso: un «usa Core» de cada pack en una placa sin el `Stdlib.pack` saltaría siempre (Core está en
+  toda imagen), y el pack de la GUI ya sólo importa Core —lo de la GUI lo importan los PROGRAMAS—. Por eso, al
+  ejecutar, el IDE dice además que lo que sube a /lib va a la RAM («con el Stdlib.pack grabado correría XIP»).
+  Probado con una placa de mentira (4 casos: sin el `Stdlib.pack`, con él, la GUI, una placa vacía).
+- **De paso**: el compilador buscaba `import v1 from pack "LVGL"` como un módulo llamado `v1` («no se localizó .bp
+  ni .bpi para import 'v1'; se omitirá», que el barrido de samples contaba como import omitido al llegar Gui2 a
+  `samples/`); ahora lo salta, como ya hacía el AOT —los `.mod` de SQLite, Orm y Gui2 salen idénticos—. Y el
+  docstring de `tanda.stat_por_nombre` decía que la zona de packs no contesta al STAT por nombre: sí contesta
+  (`bpvm_entry_resolve_en`).
+
+**Falta, en placa** (con el OK de Eduardo, por lotes): regrabar los packs de la GUI y de los drivers con los nuevos
+y el `Stdlib.pack` donde no esté (la C5 no lo tiene), y pasar la tanda de la GUI. Mientras, las placas siguen con los
+packs viejos: funcionan, pero sus copias tapan las del `Stdlib.pack`.
 
 #### ✅ `#622` — el ANCLA de la reserva no se soltaba al publicar el objeto: en la VM-Java, lo último que reservó cada hilo seguía siendo raíz hasta su siguiente reserva; en la VM-C, la última excepción que construyó la VM (abierta y cerrada el 2-oct, al medir `#621` con `TempRetiene`; preexistente; H9 · **CERRADA el 2-oct**, `9f41fd7a`)
 

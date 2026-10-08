@@ -167,6 +167,11 @@ public final class BpBuild {
      *  un pack EJECUTABLE (el `main` va al manifest). */
     public String out = "normal";
 
+    /** V7 #623 (8-oct) — este proyecto ES la librería estándar (`"stdlib": true`, sólo en `Stdlib.bpbuild`): su pack
+     *  la lleva entera. Cualquier otro pack LIBRERÍA no lleva ningún módulo de la stdlib —la placa los saca del
+     *  `Stdlib.pack` o de `/lib`—; ver PackStep. */
+    public boolean esLaStdlib;
+
     /** V5/H5 — base de datos del proyecto, para el ORM. Path ABSOLUTO ya
      *  resuelto, o null si el proyecto no declara ninguna.
      *
@@ -483,6 +488,13 @@ public final class BpBuild {
             if (!o.equals("normal") && !o.equals("pack"))
                 throw new IOException(file + ": 'out' debe ser 'normal' o 'pack', no '" + o + "'");
             b.out = o;
+        }
+        // V7 #623: "stdlib": true, sólo el proyecto de la librería estándar (ver esLaStdlib)
+        Object stdVal = map.get("stdlib");
+        if (stdVal != null) {
+            if (!(stdVal instanceof Boolean))
+                throw new IOException(file + ": 'stdlib' debe ser true o false");
+            b.esLaStdlib = (Boolean) stdVal;
         }
         return b;
     }

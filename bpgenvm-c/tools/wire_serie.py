@@ -364,6 +364,101 @@ def cmd_packs(w, _):
         print("  " + falta)
 
 
+def _entradas_pack(b):
+    """Las entradas de un .pack por su indice (cabecera de 128 B, entradas de 48 B, big-endian: bpvm_pack.h), como
+    compat/packs_abi.py: [(tipo, nombre, bytes)]. [] si no es un pack."""
+    import struct
+    if len(b) < 128 or b[0:4] != b"BPAK":
+        return []
+    total = min(struct.unpack(">I", b[8:12])[0], len(b))
+    out, off = [], 128
+    while off + 48 <= total and b[off:off + 4] != b"\xff\xff\xff\xff":
+        nombre = b[off + 4:off + 36].split(b"\x00", 1)[0].decode("utf-8", "replace")
+        largo = struct.unpack(">I", b[off + 36:off + 40])[0]
+        datos = off + 48
+        if largo > total - datos:
+            break
+        out.append((b[off:off + 4].split(b"\x00", 1)[0].decode("ascii", "replace"), nombre, b[datos:datos + largo]))
+        off = datos + ((largo + 3) & ~3)
+    return out
+
+
+def _duenos_de_imports(mod):
+    """Los duenos de lo que importa un .mod (MOD6 en adelante): `Str.toHex` -> `Str`. Como PackStep.duenosDeImports:
+    la cabecera crece con la version (MOD6 8 enteros, MOD7 9, MOD8 y MOD9 11), luego `library` y luego `imports`
+    (count, y por import dos UTF: el nombre y el fromPath). Un .mod que no se deje leer no aporta nada."""
+    import struct
+    out = []
+    enteros = {b"MOD6": 8, b"MOD7": 9, b"MOD8": 11, b"MOD9": 11}.get(mod[0:4])
+    if enteros is None:
+        return out
+    try:
+        cab = struct.unpack(">%di" % enteros, mod[:4 * enteros])
+        imp = mod[4 * enteros + cab[6]:4 * enteros + cab[6] + cab[3]]     # tras `library`; `importsSize` bytes
+        q = 4
+        for _ in range(struct.unpack(">i", imp[0:4])[0]):
+            for k in (0, 1):
+                n = struct.unpack(">H", imp[q:q + 2])[0]
+                s = imp[q + 2:q + 2 + n].decode("utf-8", "replace")
+                q += 2 + n
+                p = s.rfind(".")
+                if k == 0 and p > 0 and s[:p] not in out:
+                    out.append(s[:p])
+    except struct.error:
+        pass
+    return out
+
+
+def stdlib_que_importa(img, stdlib_dir):
+    """V7 #623 (8-oct): los modulos de la STDLIB que importan los de un pack y que el pack NO lleva -- los que tiene
+    que poner la placa, del Stdlib.pack (XIP) o de /lib (a la RAM) --. La cuenta de PackStep.stdlibQueImporta (la del
+    panel de Packs del IDE): desde #623 un pack LIBRERIA no lleva la stdlib. Vacia para el Stdlib.pack y para un pack
+    PROGRAMA, que lo llevan todo."""
+    import os
+    ents = _entradas_pack(img)
+    hay = set(nombre for tipo, nombre, _ in ents if tipo == "mod")
+    usa = set()
+    for tipo, _, datos in ents:
+        if tipo == "mod":
+            usa.update(d for d in _duenos_de_imports(datos) if d not in hay)
+    return sorted(d for d in usa if os.path.isfile(os.path.join(stdlib_dir, d + ".mod")))
+
+
+def _stat_nombre(w, fich):
+    """STAT por nombre: True si la placa resuelve `fich` (/app, /lib o la zona de packs: bpvm_entry_resolve), False si
+    contesta NOT_FOUND, None si no contesta. Vuelve en cuanto llega la respuesta (o el ERROR de esa peticion)."""
+    mi = w.send("STAT", name=fich)
+    t0 = time.time()
+    while time.time() - t0 < 10:
+        for m in w._bocado():
+            if m.get("id") != mi:
+                continue
+            if m.get("type") == "STAT_REPLY":
+                return bool(m.get("path"))
+            if m.get("type") == "ERROR":
+                return False if m.get("code") == "NOT_FOUND" else None
+    return None
+
+
+def avisar_stdlib(w, img):
+    """V7 #623: si el pack usa modulos de la stdlib que no lleva y que la PLACA NO TIENE (STAT por nombre: ni en el FS
+    ni en un pack), decirlo, como el panel de Packs del IDE. Solo esos: decir "usa Core" de cada pack en una placa sin
+    el Stdlib.pack seria un aviso que salta siempre (Core esta en toda imagen). Se graba igual: es memoria, no un error."""
+    import os
+    faltan = []
+    for m in stdlib_que_importa(img, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "bpstdlib")):
+        tiene = _stat_nombre(w, m + ".mod")
+        if tiene is None:
+            print("AVISO: el pack usa %s de la stdlib y no lo lleva (#623), y la placa no contesta si lo tiene" % m)
+        elif not tiene:
+            faltan.append(m)
+    if faltan:
+        lo = "lo" if len(faltan) == 1 else "los"
+        print("AVISO: el pack usa %s de la stdlib, no %s lleva (un pack libreria no lleva la stdlib, #623) y la placa"
+              " no %s tiene: graba tambien el Stdlib.pack (wire_serie.py COMx pack packs/Stdlib.pack), o el RUN %s"
+              " subira a /lib, a la RAM" % (", ".join(faltan), lo, lo, lo))
+
+
 def cmd_pack(w, args):
     """Graba un .pack en la zona de packs (F1, 12-sep) por el MISMO camino que el
     panel de Packs del IDE: `pack <fichero.pack> [arch]`. Con `arch` (arm | riscv)
@@ -388,6 +483,7 @@ def cmd_pack(w, args):
                              os.path.join(raiz, "bpgenvm-c", "tools", "packtool", "PackTool.java")],
                             capture_output=True, text=True)
         if jc.returncode != 0: print("javac PackTool:", jc.stderr[-400:]); return
+    avisar_stdlib(w, open(args[0], "rb").read())       # V7 #623: la stdlib que no lleva, si la placa no la tiene
     tmpd = tempfile.mkdtemp(prefix="pack_")
     if arch:
         podado = os.path.join(tmpd, "podado.pack")

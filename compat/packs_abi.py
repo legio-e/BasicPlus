@@ -3,10 +3,12 @@
 
 POR QUE EXISTE. La VM rechaza un `.mdn` cuya ABI no sea EXACTAMENTE la suya
 (`mdn_loader.c`: `h->abi_version != MDN_ABI_VERSION`), y las `native` externas de
-un pack nativo (SQLite.bp, Gui2.bp: `import v1 from pack "XXXX"`) no tienen otro
+un pack nativo (SQLite.bp: `import v1 from pack "XXXX"`) no tienen otro
 cuerpo que uno que LANZA «falta el codigo nativo del pack». O sea que subir la ABI
-sin regenerar los `.mdn` de los packs deja SQLite y Gui2 sin funcionar en TODAS las
-placas con imagen nueva. Pasó el 20-ago (#504: ABI 4 contra 6) y otra vez el 26-sep
+sin regenerar los `.mdn` de los packs deja SQLite sin funcionar en TODAS las
+placas con imagen nueva. (Hasta el 8-oct también Gui2, la sonda del pack de la GUI;
+desde #623 es un programa de prueba, samples/guipack/, y su `.mdn` lo compila el IDE
+al ejecutar, en la ABI del día.) Pasó el 20-ago (#504: ABI 4 contra 6) y otra vez el 26-sep
 (la 9 de P2b.1.d), aunque el LEEME de SQLite lo decía: nada lo miraba. Esto lo mira.
 
 QUE COMPRUEBA

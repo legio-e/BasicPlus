@@ -1,0 +1,11 @@
+module GuiLvgl
+  // El modulo BP del PACK DE LA GUI (V7 #623, 8-oct). El pack es el MOTOR: LVGL 9.2.2 + gui.c, el
+  // .npk de cada familia, y publica 'LVGL'; la pantalla la pone el pack de su driver ('PANT').
+  // Gui.mod y lo demas de la stdlib NO van dentro: la placa los saca del Stdlib.pack (XIP). Hasta
+  // el 8-oct llevaba copias, que se quedaban rancias y tapaban las del Stdlib.pack para todos, y la
+  // sonda Gui2, que ahora es un programa de prueba (samples/guipack/). Este modulo solo lo
+  // identifica, como GuiMini en el pack de las pantallas pequenas.
+  public function nombre(): string
+    return "LVGL 9.2.2: el motor de la GUI (Gui.mod, del Stdlib.pack)"
+  end nombre
+end GuiLvgl

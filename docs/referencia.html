@@ -2645,6 +2645,17 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   falta)»</em>).
 </p>
 
+<p>
+  <strong>Y la librería estándar va distinto en cada uno</strong> (desde V7). Un pack
+  <strong>ejecutable</strong> es un contenedor: lleva su programa y todo lo que éste importa,
+  la librería estándar incluida, para que corra con las versiones con que se hizo, pase lo que
+  pase fuera. Un pack <strong>librería</strong> no lleva ningún módulo de la librería estándar:
+  el compilador los deja fuera y lo dice (<em>«pack: LIBRERIA sin la stdlib (#623): Core, Str no
+  van dentro; la placa los saca del Stdlib.pack (o de /lib)»</em>), y la placa los toma del
+  <code>Stdlib.pack</code> —sin copiarlos a la RAM— o de <code>/lib</code>. Así, una copia vieja
+  dentro de una librería no puede tapar la de todos.
+</p>
+
 <h3 id="construir">15.3 Construir uno</h3>
 
 <p>
@@ -2728,6 +2739,13 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <p>
   El arranque de la placa también informa: dice dónde está la zona, cuánto ocupa y si ha
   podido mapearla.
+</p>
+
+<p>
+  Al grabar un pack librería, el panel pregunta a la placa por los módulos de la librería
+  estándar que el pack usa y no lleva; si le falta alguno, lo dice (<em>«'SQLite' usa Str de la
+  stdlib, no lo lleva … y la placa no lo tiene: graba también el Stdlib.pack, o el RUN lo subirá
+  a /lib (a la RAM)»</em>). Se graba igual: es memoria, no un error.
 </p>
 
 <h3 id="usar">15.6 Usarlo desde un programa</h3>

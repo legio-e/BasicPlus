@@ -2485,6 +2485,16 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
 
 <p>You do not declare it: the compiler works it out and says so when building.</p>
 
+<p>
+  <strong>And the standard library goes differently in each</strong> (since V7). An
+  <strong>executable</strong> pack is a container: it carries its program and everything it
+  imports, standard library included, so it runs with the versions it was made with, whatever
+  happens outside. A <strong>library</strong> pack carries no standard-library module at all: the
+  compiler leaves them out and says so, and the board takes them from the <code>Stdlib.pack</code>
+  (without copying them to RAM) or from <code>/lib</code>. That way an old copy inside a library
+  cannot shadow everyone's.
+</p>
+
 <h3 id="packs-build">15.3 Building one</h3>
 
 <p>A pack comes out of a <strong>project</strong>. The key in the <code>.bpbuild</code> is <code>"out": "pack"</code>:</p>
@@ -2527,6 +2537,13 @@ the result is a <code>.pack</code> in the <code>outDir</code>:</p>
 <h3 id="packs-burn">15.5 Burning and managing them</h3>
 
 <p>In the IDE, the <strong>Packs</strong> panel: <em>Refresh</em>, <em>Copy pack to board…</em>, <em>Delete</em> and <em>Format region…</em>.</p>
+
+<p>
+  When you burn a library pack, the panel asks the board about the standard-library modules the
+  pack uses and does not carry; if one is missing, it says so (burn the <code>Stdlib.pack</code>
+  too, or a RUN will upload it to <code>/lib</code>, in RAM). It is burned anyway: it is memory,
+  not an error.
+</p>
 
 <h3 id="packs-use">15.6 Using one from a program</h3>
 

@@ -8,12 +8,12 @@
     "",
     "   VARIANTE=mini bash bpstdlib/gui/nativo/src/build_lvgl.sh imc [KB del pool, 64]",
     "   cp bpstdlib/gui/nativo/mini/lvgl.npk.* bpstdlib/gui/mini/out/",
-    "   cp bpstdlib/{Gui,Json,Collections,Str,Core}.mod bpstdlib/gui/mini/out/     <- LOS CANONICOS",
     "   java -jar lexer-java/target/basicplus-frontend.jar --project bpstdlib/gui/mini/GuiMini.bpbuild --backend=mivm",
     "   python bpgenvm-c/tools/wire_serie.py COMx pack bpstdlib/gui/mini/out/GuiMini.pack riscv-imc",
     "",
-    "El nativo y los .mod canonicos se COPIAN, como en ../Gui.bpbuild (alli esta el porque: el pack",
-    "recoge del outDir los tipos mod/mdn/npk, y un modulo de la stdlib sin sellar no entra, #563)."
+    "El nativo se COPIA, como en ../Gui.bpbuild (alli esta el porque: el pack recoge del outDir los",
+    "tipos mod/mdn/npk). Y la stdlib NO va dentro (V7 #623, 8-oct): Gui.mod y los suyos los saca la",
+    "placa del Stdlib.pack, que tiene que estar grabado (en la C6, sin el no cabe la GUI)."
   ],
   "sourceDir":    ".",
   "sources":      ["./GuiMini.bp"],
@@ -21,5 +21,5 @@
   "dependencies": [],
   "out":          "pack",
   "pack":         { "name": "GuiMini", "version": "9.2.2", "provides": "LVGL",
-                    "notas": "LVGL 9.2.2 + Gui.mod para pantallas pequenas: 256 widgets, fuentes hasta 24 px, 1 bufer; la pantalla la pone el pack de su driver ('PANT')" }
+                    "notas": "LVGL 9.2.2 para pantallas pequenas (Gui.mod, del Stdlib.pack): 256 widgets, fuentes hasta 24 px, 1 bufer; la pantalla la pone el pack de su driver ('PANT')" }
 }

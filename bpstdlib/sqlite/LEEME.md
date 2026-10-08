@@ -51,13 +51,14 @@ ORM) y `notas/p4/` (el proyecto), y eso costaba dos cosas concretas:
     nativo/SQLite.mdn.ARMV8     3.180 B     ← el puente AOT (lo emite el
     nativo/SQLite.mdn.RISCV     4.054 B        compilador, pero necesita el
                                                toolchain cruzado para enlazar)
-            │  + SQLite.bp y Orm.bp compilados, + Core.mod y Str.mod
-            │    ⚠️ Core.mod y Str.mod se COPIAN de bpstdlib/ (los canonicos)
-            │    justo antes de construir: en el P4 la zona de packs gana a
-            │    /lib, asi que un Str.mod rancio dentro del pack (12-sep: uno
-            │    MOD6 del 20-ago) tapa al del firmware para TODOS los programas.
+            │  + SQLite.bp y Orm.bp compilados. Y NADA de la stdlib (V7 #623,
+            │    8-oct): Core y Str los saca la placa del Stdlib.pack. Hasta
+            │    entonces iban copias dentro, y una rancia (12-sep: un Str.mod
+            │    MOD6 del 20-ago) tapaba la del firmware para TODOS los
+            │    programas; ahora el compilador no mete la stdlib en un pack
+            │    LIBRERIA, y lo dice al construirlo.
             ▼
-    out/SQLite.pack          1.122.304 B
+    out/SQLite.pack          1.114.112 B   (con Core y Str, 1.138.688)
 
 **Son DOS por familia**: el binario (`.npk`) y el puente (`.mdn`). Los cuatro
 están versionados a propósito, por la misma razón por la que lo están los `.mod`
@@ -98,6 +99,11 @@ una entrada `mdn` de un pack grabable (`packs/`, los `out/`) va en otra ABI que 
 Reconstruir y comparar el pack con el anterior. Si sale de otro tamaño, falta
 algo: la última vez faltaban `Core.mod`, `Str.mod` y los dos `.mdn`, y la
 diferencia (16 KB) lo cantó antes de que nadie lo grabara en una placa.
+
+Desde `#623` (8-oct) `Core.mod` y `Str.mod` ya NO van, a propósito: un pack librería no lleva la
+stdlib, la placa la saca del `Stdlib.pack` (y quien graba lo avisa si la placa no lo tiene). Lo que
+tiene que llevar: `SQLite.mod`, `Orm.mod`, los dos `.mdn`, los dos `.npk` y el manifest
+(`python compat/packs_abi.py --listar bpstdlib/sqlite/out/SQLite.pack`).
 
 Los `.mod` sí pueden cambiar de tamaño legítimamente cuando cambia el compilador
 —al regenerar el 15-ago, `Orm.mod` pasó de tener `any` en su interfaz a tener

@@ -294,6 +294,37 @@ public final class PacksPanel extends JPanel {
         }
     }
 
+    /** [V7 #623, 8-oct] Un pack LIBRERÍA ya no lleva la stdlib: la saca la placa del Stdlib.pack (XIP) o de
+     *  /lib (a la RAM; en la C6 no cabe la GUI). Si este pack usa módulos de la stdlib que no lleva y que la
+     *  PLACA NO TIENE —STAT por nombre: ni en el FS ni en un pack—, se dice cuáles, y se graba igual. Sólo
+     *  ésos: decir «usa Core» de cada pack en una placa sin el Stdlib.pack sería un aviso que salta siempre
+     *  (Core está en toda imagen). Cuáles son de la stdlib lo dice la carpeta `stdlibDir` del BpVM.cfg más
+     *  cercano al pack (sin cfg, todos los que importa y no lleva). */
+    private void avisarStdlib(byte[] img, java.io.File f) {
+        try {
+            basicplus.pack.PackReader.Pack p = basicplus.pack.PackReader.read(img);
+            java.nio.file.Path sdir = null;
+            try {
+                edu.bpgenvm.config.VmConfig cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(
+                        f.getAbsoluteFile().getParentFile().toPath());
+                if (cfg.sourcePath == null || cfg.stdlibDir == null || cfg.stdlibDir.isEmpty())
+                    cfg = edu.bpgenvm.config.VmConfig.loadDefaultFor(null);
+                if (cfg.sourcePath != null && cfg.stdlibDir != null && !cfg.stdlibDir.isEmpty())
+                    sdir = java.nio.file.Paths.get(cfg.stdlibDir);
+            } catch (Throwable sinCfg) { /* sin cfg: cuenta todo lo que importa y no lleva */ }
+            java.util.List<String> usa = basicplus.frontend.PackStep.stdlibQueImporta(p.entries, sdir);
+            java.util.List<String> faltan = new java.util.ArrayList<>();
+            for (String m : usa) if (client.statModule(m + ".mod", null, T) == null) faltan.add(m);
+            if (faltan.isEmpty()) return;
+            String lo = faltan.size() == 1 ? "lo" : "los";
+            log.accept("[Packs] AVISO: '" + p.nombre + "' usa " + String.join(", ", faltan) + " de la stdlib, no " + lo
+                + " lleva (un pack libreria no lleva la stdlib, #623) y la placa no " + lo + " tiene: graba tambien el"
+                + " Stdlib.pack, o el RUN " + lo + " subira a /lib (a la RAM)\n");
+        } catch (Exception e) {
+            /* Un pack que no se deja leer lo dirá el grabado, no este aviso. */
+        }
+    }
+
     public void grabarPack(final java.io.File f) {
         if (client == null) { summaryLabel.setText("(sin conexión)"); return; }
         if (f == null || !f.isFile()) { summaryLabel.setText("(no es un fichero)"); return; }
@@ -312,6 +343,7 @@ public final class PacksPanel extends JPanel {
              * pack es autocontenido salvo por estos (Eduardo: «como un docker
              * ... salvo SQLite u otros similares»). */
             avisarPacksRequeridos(img);
+            avisarStdlib(img, f);                    /* V7 #623: y la stdlib que no lleva */
 
             /* ── V5/H8: EL PACK SE PREPARA PARA ESTA PLACA ──────────────────
              *

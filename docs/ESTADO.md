@@ -41,6 +41,13 @@
 > final del RUN para lo que no suelta ningún objeto (`0f1daa33`, la red verde). Las tres decisiones que dejó —el
 > destructor de un constructor que lanzó, el perro guardián tras un error, el CS de un `Spi.Device`—, Eduardo las dejó
 > como estaban (y un CS, con su pull-up por hardware). Más abajo, «🔌 `#667` (8-oct)».
+> Por la tarde, **`#668` y `#667` EN PLACA** en las cuatro de la mesa —la Pico 2 destapó una regresión de `#668`
+> (soltar 4000 owners pedía memoria por nodo), arreglada con su prueba (`12ba0b79`); y `#670`, la S3 con PSRAM
+> octal—, y **el grupo «memoria y packs»**: `#651`, la primera parte (los nombres del cargador, un bloque por módulo:
+> GuiWinJson de 818 bloques a 54; `53350bd9`), `#650` (el módulo igual en el FS y en un pack se carga del pack, XIP;
+> `3bfe9bd9`) y `#623` (un pack LIBRERÍA ya no lleva la stdlib; el de la GUI, sólo el motor, y la sonda Gui2, un
+> programa de prueba —Eduardo: *«intentemos ahorrar memoria»*—). Falta todo ello en las placas de la tarde (la C3, la
+> C6, la P4, la Nucleo y la DK2) y regrabar los packs. Más abajo, «🧠 El grupo «memoria y packs»».
 >
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
@@ -1298,7 +1305,22 @@ programa como *«un contenedor que nos garantice lo más posible que el programa
 - **`#650`, hecha**: con el mismo tamaño y CRC, el módulo del pack (XIP) en vez del del FS. Un caso más en la sombra
   (sin el cambio, rojo); y su total, que estaba escrito a mano y desfasado (decía 13 de 13 y eran 14), ahora 15. La
   red entera, verde.
-- **`#623`**, por presentar: el plan del pack librería sin copias de la stdlib.
+- **`#623`, hecha en el PC** (FICHAS: el detalle). Presentado el plan con el ejemplo de la GUI, Eduardo: *«Si, Gui2
+  lo puedes dejar como programa de test pero ya no dentro del Pack, intentemos ahorrar memoria»*. El constructor deja
+  la stdlib fuera de todo pack LIBRERÍA y lo dice (la excepción, `"stdlib": true`, sólo `Stdlib.bpbuild`: su pack
+  sigue con los 30); el pack de la GUI es el motor y `GuiLvgl.bp`, que lo identifica, y la sonda Gui2 se va con
+  `GuiPack` a `samples/guipack/`. Reconstruidos los siete packs librería: la GUI, ~114 KB menos en la zona de una
+  placa; tres llevaban un Core viejo. Quien graba (el panel de Packs del IDE, `wire_serie.py pack`) avisa de lo que
+  el pack usa de la stdlib y la PLACA no tiene (STAT por nombre): la primera versión, «la placa no tiene el
+  Stdlib.pack», habría saltado con todos los packs —todos importan Core, y el de la GUI ya SÓLO Core—, así que se
+  pregunta módulo a módulo; y al ejecutar, el IDE dice que lo que sube a /lib va a la RAM. De paso, el compilador
+  ya no busca `import v1 from pack` como un módulo llamado `v1` (el barrido de samples lo contaba como omitido).
+  El frontend, 276 de 276; la red entera, verde.
+
+**Lo siguiente**: la tarde de placas (con el OK de Eduardo, por lotes, diciendo qué lleva cada uno): la C3, la C6,
+la P4, la Nucleo y la DK2 con las imágenes de hoy (`#667`, `#668`, `#670`, `#651`, `#650`), y los packs nuevos de la
+GUI y los drivers, con el `Stdlib.pack` donde no esté (la C5 no lo tiene); la tanda de `#667`, la ronda de V7, la C6
+con `PinesSistema` y `GuiArbolG2`, y `tools/medir_consumo.py` en la C6 (lo que ahorra `#651`).
 
 ## 🔧 SUELTAS (7-oct) — la lista, y `#656`: soltar un owner sin recursión
 

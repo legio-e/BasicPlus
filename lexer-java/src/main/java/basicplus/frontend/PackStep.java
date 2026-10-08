@@ -88,6 +88,9 @@ public final class PackStep {
          *  (la stdlib, los `dependencies` del proyecto): los mismos sitios en los
          *  que busca el compilador. Vacío = no se completa el cierre. */
         public final List<Path> dondeBuscar;
+        /** [V7 #623] La carpeta de la STDLIB (la de BpVM.cfg), o null: lo que hay en ella no entra en un pack
+         *  LIBRERÍA. Null = no se sabe, y entonces como antes. */
+        public final Path stdlibDir;
 
         public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec) {
             this(mods, packs, ejec, "", java.util.Collections.emptyList());
@@ -97,15 +100,39 @@ public final class PackStep {
         }
         public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec, String mainEntry,
                       List<Path> dondeBuscar) {
+            this(mods, packs, ejec, mainEntry, dondeBuscar, null);
+        }
+        public Cierre(Map<String, Path> mods, Set<String> packs, boolean ejec, String mainEntry,
+                      List<Path> dondeBuscar, Path stdlibDir) {
             this.modsExternos = mods; this.packsRequeridos = packs; this.ejecutable = ejec;
             this.mainEntry = (mainEntry == null) ? "" : mainEntry;
             this.dondeBuscar = (dondeBuscar == null) ? java.util.Collections.<Path>emptyList() : dondeBuscar;
+            this.stdlibDir = stdlibDir;
         }
         /** Para los llamantes que aún no lo calculan: se comporta como antes. */
         public static Cierre desconocido() {
             return new Cierre(java.util.Collections.emptyMap(),
                               java.util.Collections.emptySet(), true);
         }
+    }
+
+    /** [V7 #623] Los módulos de la STDLIB que los de un pack importan y el pack NO lleva: los que tiene que poner
+     *  la placa, del Stdlib.pack (XIP) o de /lib (a la RAM). Es para quien graba (el panel de Packs del IDE;
+     *  `wire_serie.py pack` hace la misma cuenta): desde #623 un pack LIBRERÍA no lleva la stdlib, y en una placa
+     *  sin el Stdlib.pack eso es RAM —en la C6 no cabe la GUI—. «De la stdlib» = lo hay en `stdlibDir`; con
+     *  `stdlibDir` null (no se sabe) cuenta todo lo que importa y no lleva. Ordenados. Vacío para el Stdlib.pack
+     *  y para un pack PROGRAMA, que lo llevan todo. */
+    public static List<String> stdlibQueImporta(List<PackEntry> entries, Path stdlibDir) {
+        List<String> r = new ArrayList<>();
+        for (String d : duenosQueFaltan(entries))
+            if (stdlibDir == null || esDeLaStdlib(stdlibDir, d)) r.add(d);
+        java.util.Collections.sort(r);
+        return r;
+    }
+
+    /** [V7 #623] ¿`nombre` es un módulo de la stdlib? Lo es si la carpeta de la stdlib lo tiene. */
+    static boolean esDeLaStdlib(Path stdlibDir, String nombre) {
+        return stdlibDir != null && Files.isRegularFile(stdlibDir.resolve(nombre + ".mod"));
     }
 
     /** Compatibilidad: sin cierre, el pack sale como salía. */
@@ -124,6 +151,27 @@ public final class PackStep {
 
         // 1) módulos + nativo del outDir (filtrados a .mod/.mdn: nunca .bpi/.slots)
         collectDir(outDir, entries, OUTDIR_TYPES);
+
+        /* 1a) [V7 #623, 8-oct] UN PACK LIBRERÍA NO LLEVA LA STDLIB.
+         *
+         * Eduardo: el pack PROGRAMA es «una especie de contenedor que nos garantice lo más posible que el programa y
+         * los módulos son autocontenidos», y lleva lo que su programa usa, la stdlib incluida (abajo, 1b y 1c). Un
+         * pack LIBRERÍA (su raíz no tiene `main`) no: sus copias de la stdlib se quedaban rancias al cambiar ésta y,
+         * como entre packs gana el último grabado, tapaban las del Stdlib.pack para TODOS los programas —en la C6, a
+         * la RAM y sin memoria (#623)—. Así que aquí no entra ningún módulo de la stdlib —ni del outDir (la receta de
+         * la GUI los copiaba a mano), ni de las dependencias, ni del cierre—: la placa los saca del Stdlib.pack (XIP)
+         * o de /lib. Y se dice cuáles. La excepción, declarada: el proyecto que ES la stdlib (`"stdlib": true`). */
+        boolean sinStdlib = !cierre.ejecutable && cierre.stdlibDir != null && !proj.esLaStdlib;
+        java.util.TreeSet<String> fueraStdlib = new java.util.TreeSet<>();
+        if (sinStdlib) {
+            for (java.util.Iterator<PackEntry> it = entries.iterator(); it.hasNext(); ) {
+                PackEntry e = it.next();
+                if (("mod".equals(e.tipo) || "mdn".equals(e.tipo)) && esDeLaStdlib(cierre.stdlibDir, e.nombre)) {
+                    fueraStdlib.add(e.nombre);
+                    it.remove();
+                }
+            }
+        }
         // Lo que ha aportado el outDir, ANTES de mezclar los resources. El pack se
         // valida contra esto y no contra el total: un proyecto con resources/ y
         // CERO módulos dejaba la lista no-vacía y se colaba (ver abajo).
@@ -149,6 +197,7 @@ public final class PackStep {
             String base = mod.getFileName().toString();
             if (!base.endsWith(".mod")) continue;
             String nombre = base.substring(0, base.length() - 4);
+            if (sinStdlib && esDeLaStdlib(cierre.stdlibDir, nombre)) { fueraStdlib.add(nombre); continue; }   // #623
             if (yaEsta(entries, "mod", nombre)) continue;      // el del outDir manda
             if (!Files.isRegularFile(mod)) continue;
             entries.add(new PackEntry("mod", nombre, Files.readAllBytes(mod)));
@@ -181,6 +230,7 @@ public final class PackStep {
             if (faltan.isEmpty()) break;
             int antes = entries.size();
             for (String canon : faltan) {
+                if (sinStdlib && esDeLaStdlib(cierre.stdlibDir, canon)) { fueraStdlib.add(canon); continue; }   // #623
                 Path mod = localizarModulo(canon + ".mod", cierre.dondeBuscar, outDir);
                 if (mod == null) {
                     System.out.println("pack: aviso — '" + canon + "' lo importa un modulo del pack y no se "
@@ -196,6 +246,10 @@ public final class PackStep {
         if (cerrados > 0)
             System.out.println("pack: " + cerrados + " modulo(s) mas para cerrar las dependencias "
                 + "(un pack es autocontenido: lo que importa va dentro)");
+        if (!fueraStdlib.isEmpty())
+            System.out.println("pack: LIBRERIA sin la stdlib (#623): " + String.join(", ", fueraStdlib)
+                + (fueraStdlib.size() == 1 ? " no va dentro; la placa lo saca" : " no van dentro; la placa los saca")
+                + " del Stdlib.pack (o de /lib)");
 
         /* 1d) [V7/H6, #563] UN MÓDULO DE LA STDLIB SIN SELLAR NO ENTRA EN UN PACK.
          *

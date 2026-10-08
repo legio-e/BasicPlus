@@ -4,6 +4,14 @@
 //  Idea de Eduardo (22-sep): *«¿se podría probar en la P4 sin desactivar el LVGL
 //  actual? No sé, con un Gui2.bp que llame a la LVGL del pack.»*
 //
+//  Desde el 8-oct (#623) vive AQUÍ, en el programa de prueba `samples/guipack/`,
+//  y no dentro del pack de la GUI: el pack es sólo el motor (Eduardo: «Gui2 lo
+//  puedes dejar como programa de test pero ya no dentro del Pack, intentemos
+//  ahorrar memoria»). Sus `native` las compila el AOT del IDE para la placa al
+//  ejecutar, y su `.mod` y su `.mdn` van a /app con GuiPack. Y lo de las «dos
+//  instancias» de abajo es del P4 del 22-sep: desde V7/H6 ninguna imagen lleva
+//  LVGL, y `Gui` también va al pack, por los trampolines de `src/gui_pack.c`.
+//
 //  Y es lo que es: la MISMA tabla que publica el pack bajo 'LVGL' —la que la VM
 //  consume por los trampolines de `src/gui_pack.c` en una placa sin LVGL dentro—
 //  vista aquí por el OTRO camino, el de `native … from pack`. No hay builtins de

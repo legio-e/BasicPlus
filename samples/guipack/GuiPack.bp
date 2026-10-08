@@ -17,6 +17,11 @@
 // proceso, cada una con sus globales, y sólo se mueve la que se llama.
 //
 // No va en el corpus de paridad: necesita una placa con el pack grabado.
+//
+// Ni dentro del pack (#623, 8-oct): `Gui2` está aquí al lado, y el proyecto
+// (GuiPack.bpbuild) lo compila con su nativo para la placa. Desde V7/H6 la imagen
+// ya no lleva LVGL: `Gui` también habla con el pack, por los trampolines de
+// `src/gui_pack.c`, así que hoy las dos llaman a la MISMA LVGL.
 module GuiPack
   import Gui
   import Gui2

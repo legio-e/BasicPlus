@@ -93,6 +93,60 @@ class PackStepTest {
         assertTrue(conCore, "con el Core sellado, el pack se construye y lo lleva");
     }
 
+    /** [V7 #623, 8-oct] Un pack LIBRERÍA no lleva la stdlib —ni la del outDir (la receta de la GUI la copiaba), ni la de
+     *  las dependencias, ni la del cierre—; el pack PROGRAMA, sí (el contenedor de Eduardo); y el proyecto que ES la
+     *  stdlib (`"stdlib": true`), también. */
+    @Test void packLibreriaSinStdlib(@TempDir Path tmp) throws Exception {
+        Path outDir = Files.createDirectories(tmp.resolve("out"));
+        Path stdlib = Files.createDirectories(tmp.resolve("stdlib"));
+        Files.write(stdlib.resolve("Core.mod"), modSintetico(9, 7));
+        Files.write(stdlib.resolve("Gui.mod"), modSintetico(9, 7, "Core.print"));
+        Files.write(stdlib.resolve("Json.mod"), modSintetico(9, 7, "Core.print"));
+        Files.write(outDir.resolve("Lib.mod"), modSintetico(9, 7, "Gui.f", "Core.print", "Ayuda.g"));
+        Files.write(outDir.resolve("Gui.mod"), modSintetico(9, 7, "Core.print"));       /* la copia de la receta */
+        Path deps = Files.createDirectories(tmp.resolve("deps"));
+        Files.write(deps.resolve("Ayuda.mod"), modSintetico(9, 7, "Json.h"));         /* una dependencia que NO es stdlib */
+        java.util.Map<String, Path> externos = new java.util.HashMap<>();
+        externos.put("Json", stdlib.resolve("Json.mod"));                               /* una externa que SÍ es stdlib */
+        java.util.List<Path> donde = java.util.Arrays.asList(stdlib, deps);
+        BpBuild b = new BpBuild();
+        b.projectDir = tmp.toString(); b.outDir = outDir.toString(); b.main = "Lib"; b.out = "pack"; b.packName = "Lib";
+
+        /* librería: sólo lo suyo y su dependencia de fuera de la stdlib */
+        Set<String> lib = entradas(PackStep.buildPack(b, new PackStep.Cierre(externos, java.util.Collections.emptySet(),
+                false, "", donde, stdlib)));
+        assertTrue(lib.contains("mod:Lib") && lib.contains("mod:Ayuda"), "lo suyo y su dependencia: " + lib);
+        assertFalse(lib.contains("mod:Gui") || lib.contains("mod:Core") || lib.contains("mod:Json"),
+                    "ningún módulo de la stdlib en un pack librería: " + lib);
+        /* y quien graba sabe cuáles le tiene que poner la placa (el aviso del panel de Packs): los de la stdlib que
+         * importan Lib y su dependencia, no la dependencia misma, que va dentro */
+        java.util.List<PackEntry> deLib = PackReader.read(Files.readAllBytes(outDir.resolve("Lib.pack"))).entries;
+        assertEquals(java.util.Arrays.asList("Core", "Gui", "Json"), PackStep.stdlibQueImporta(deLib, stdlib));
+        assertEquals(java.util.Arrays.asList("Core", "Gui", "Json"), PackStep.stdlibQueImporta(deLib, null),
+                     "sin saber dónde está la stdlib, todo lo que importa y no lleva");
+
+        /* programa: el contenedor entero, la stdlib incluida */
+        Set<String> prog = entradas(PackStep.buildPack(b, new PackStep.Cierre(externos, java.util.Collections.emptySet(),
+                true, "", donde, stdlib)));
+        assertTrue(prog.contains("mod:Gui") && prog.contains("mod:Core") && prog.contains("mod:Json"),
+                   "un pack programa lleva la stdlib que usa: " + prog);
+        assertTrue(PackStep.stdlibQueImporta(PackReader.read(Files.readAllBytes(outDir.resolve("Lib.pack"))).entries,
+                   stdlib).isEmpty(), "un pack programa no pide nada a la placa");
+
+        /* el proyecto que ES la stdlib: la lleva */
+        b.esLaStdlib = true;
+        Set<String> std = entradas(PackStep.buildPack(b, new PackStep.Cierre(externos, java.util.Collections.emptySet(),
+                false, "", donde, stdlib)));
+        assertTrue(std.contains("mod:Gui") && std.contains("mod:Json"), "el pack de la stdlib la lleva: " + std);
+    }
+
+    private static Set<String> entradas(Path pack) throws Exception {
+        PackReader.Pack p = PackReader.read(Files.readAllBytes(pack));
+        Set<String> got = new HashSet<>();
+        for (PackEntry e : p.entries) got.add(e.tipo + ":" + e.nombre);
+        return got;
+    }
+
     @Test void empaquetaOutDirMasResourcesMasManifest(@TempDir Path tmp) throws Exception {
         Path outDir = Files.createDirectories(tmp.resolve("out"));
         Files.write(outDir.resolve("App.mod"),    "app-bytecode".getBytes(StandardCharsets.UTF_8));

@@ -1173,8 +1173,9 @@ def put_con_busy(w, data, remoto):
 
 def stat_por_nombre(w, fich):
     """STAT name= : la placa resuelve con bpvm_entry_resolve (basedir -> tal cual
-    -> /app -> /lib; desde V7/H2 #493 sin /sys y sin que la zona de packs conteste
-    por basename), y dice path y crc. El RUN busca sus dependencias en ese
+    -> /app -> /lib -> la zona de packs, que contesta `pack:<Pack>/X.mod`; desde
+    V7/H2 #493 sin /sys), y dice path y crc. (Decia que la zona no contestaba: lo
+    corrige el comentario de bpvm_entry_resolve_en, que es el codigo, 8-oct.) El RUN busca sus dependencias en ese
     mismo orden salvo el «tal cual». Devuelve (path, crc, magic, gen) o (None, None, None, None).
     V7/H9 #624: y el formato (MAGIC) y la versión (`gen`, de la cabecera desde MOD8; -1 si no la dice)."""
     st = w.llamar("STAT", "STAT_REPLY", 10, name=fich, crc=True)

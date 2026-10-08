@@ -18,12 +18,16 @@
     "en el pack cosas que no son la libreria.",
     "",
     "aot: no. El pack es PORTABLE (mismo .pack para las 3 familias); el .mdn es",
-    "codigo nativo de una arquitectura concreta y se genera por proyecto."
+    "codigo nativo de una arquitectura concreta y se genera por proyecto.",
+    "",
+    "stdlib: true (V7 #623) -- este proyecto ES la libreria estandar: su pack la lleva entera.",
+    "Cualquier otro pack LIBRERIA no lleva ningun modulo de la stdlib: la placa los saca de aqui."
   ],
   "sourceDir": ".",
   "outDir": "out",
   "main": "Stdlib",
   "version": 7,
   "dependencies": [],
-  "out": "pack"
+  "out": "pack",
+  "stdlib": true
 }

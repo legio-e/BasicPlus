@@ -1,0 +1,22 @@
+{
+  "_comentario": [
+    "GuiPack: la SONDA del pack de la GUI (V7/H6), un PROGRAMA DE PRUEBA. Desde el 8-oct (#623)",
+    "Gui2 vive aqui, al lado, y no dentro del pack de la GUI: el pack es solo el motor (Eduardo:",
+    "'Gui2 lo puedes dejar como programa de test pero ya no dentro del Pack, intentemos ahorrar",
+    "memoria'). La placa necesita grabados el pack Gui (o GuiMini), el de su driver y el Stdlib.pack.",
+    "",
+    "   java -jar lexer-java/target/basicplus-frontend.jar --project samples/guipack/GuiPack.bpbuild --backend=mivm",
+    "",
+    "Las native de Gui2 (import v1 from pack 'LVGL') las compila el AOT del IDE para la placa al",
+    "ejecutar (aot.enabled): Gui2.mod y su .mdn van a /app con el programa. Sin el .mdn, cada",
+    "native lanza 'falta el codigo nativo del pack'.",
+    "",
+    "En su carpeta y no en samples/ a proposito: el AOT del Run compila TODO el sourceDir del",
+    "proyecto (AotBuild.buildProject), y en samples/ son cientos de .bp."
+  ],
+  "sourceDir":    ".",
+  "sources":      ["./GuiPack.bp", "./Gui2.bp"],
+  "outDir":       "out",
+  "dependencies": [],
+  "aot":          { "enabled": true, "targets": ["arm", "riscv"] }
+}
