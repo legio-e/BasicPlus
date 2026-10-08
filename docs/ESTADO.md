@@ -52,6 +52,10 @@
 > anterior, para no tener demasiadas cosas abiertas»*) y **`#669` hecha en el PC** (*«OK 669»*): los pines de la
 > pantalla de la imagen, del sistema desde que se publica su driver —la P4 y la DK2, que tenía 28 líneas del LTDC al
 > alcance de un `Pin`—. Queda una decisión suya: el bus del táctil. Más abajo, «🖥️ `#669` (8-oct, tarde)».
+> El bus, COMPARTIDO (Eduardo); y **la tarde de placas, la P4 y la DK2**: la ronda de V7, 48 de 48, y la tanda de
+> `#667`, 13 de 13, en las dos —la DK2, la primera STM32 que suelta—; **`#669` CERRADA** (en la P4, el I2C del táctil
+> compartido ve tres chips); y **`#671` abierta**: tras grabar un pack con motor sin reiniciar, la placa salta a las
+> tablas del motor viejo —se cayeron las dos en la primera pasada—. Más abajo, «🧪 La tarde de placas (8-oct)».
 >
 > **7-oct** — LAS SUELTAS, con H12 cerrado: la lista de las 26 abiertas presentada a Eduardo (por grupos: fallos de
 > verdad, cabos de las natives, memoria y packs, rendimiento, limpieza y herramientas) y el orden —primero los fallos—.
@@ -1297,6 +1301,29 @@ la Pico 2; por la tarde, la C3, la C6 (`PinesSistema` y `GuiArbolG2`), la P4, la
 **Hecho, con *«OK para grabar»***: grabadas las cuatro con `12ba0b79` (la C5, sin regrabar sus packs:
 `packRamBase` igual). `OwnerHondo` en la Pico 2, hasta «fin»; la S3 ya no da los GPIO 33–37 («el pin 35 de esp32s3 es
 de la flash o la PSRAM: no se puede usar»); la tanda de `#667`, 52 de 52 otra vez, y la ronda de V7, 188 de 188.
+
+## 🧪 La tarde de placas (8-oct): la P4 y la DK2 — `#669` cerrada, `#671` abierta
+
+Con *«La P4 y la Discovery conectadas»* y, al lote, *«OK»*:
+- **Grabadas** con la imagen de `19220258` (la DK2 por SWD; la P4, la app) y su zona FORMATEADA con los packs nuevos
+  de `#623` —la DK2: Stdlib (no lo tenía), Mini, SQLite y Gui; la P4: Stdlib, SQLite y Gui—. Las dos dicen al
+  arrancar que el I2C del táctil es de la placa y se comparte.
+- **La primera pasada cayó**: la DK2, en un HardFault (NOCP, con el PC dentro de la LVGL de ANTES, donde ahora está
+  SQLite), y la P4, con un pánico (su INFO salió «?» y las pruebas de GUI y de nativo, SALTADAS). No es de hoy: es
+  **`#671`** (abierta, FICHAS) —los motores se cargan una vez por arranque y la tabla de la LVGL se guarda: tras
+  grabar o formatear un pack con motor SIN reiniciar, la placa salta a la flash de antes—. Las dos, reiniciadas. Y un
+  error mío de procedimiento: miré los puertos con la tanda de `#667` recién arrancada (no le hizo daño: su P4, 13 de
+  13).
+- **Repetida**: la ronda de V7, **48 de 48 en las dos** (GUI y nativo incluidos); la tanda de `#667`, **13 de 13 en las
+  dos** —la DK2, la primera STM32 en la que se prueba soltar: el PWM de PB8 y la UART 2—. Y `PinesPantalla` a mano:
+  en la P4, el I2C 0 del táctil abierto por el programa ve TRES dispositivos (24, 64 y 93: el táctil y otros dos chips
+  de la placa en el mismo bus) —el caso de Eduardo—; en la DK2, el GT911 (93). **`#669`, CERRADA.**
+
+**Lo siguiente**: la decisión de Eduardo sobre `#671` —(a) la placa se reinicia sola tras grabar, borrar o formatear
+un pack con motor (recomendada), o (b) olvida esos motores y lo dice hasta que se reinicie—; y las placas que faltan:
+la C3, la C6 (con `PinesSistema`, `GuiArbolG2` y `tools/medir_consumo.py`: lo de `#651`) y la Nucleo, con la imagen de
+hoy; la C5 con sus packs nuevos y el Stdlib.pack que no tiene; y las cuatro de la mañana, con la imagen de hoy. Las
+pruebas de `#667` necesitan los pines libres de la C3, la C6 y la Nucleo (y más de la P4, para agotarla).
 
 ## 🖥️ `#669` (8-oct, tarde) — los pines de la pantalla de la imagen, del sistema; y el repaso de las SUELTAS
 

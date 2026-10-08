@@ -92,8 +92,9 @@ el PC sin placa, como en el host.
 > contador, NeoPixel) sigue encendido y ocupado tras su RUN: el PWM sigue sacando la señal, y en las ESP los canales no
 > se sueltan—, y la mejora que trae, `#667` —un objeto BP que consume un recurso lleva destructor y lo libera—, y
 > `#668` —al acabar un programa, sus objetos se destruyen y sueltan sus recursos; en V7—; y del 8-oct, al hacer `#667`,
-> `#669` —los pines de la pantalla que pone la imagen, sin reservar— y ~~`#670`~~ —la S3 con PSRAM octal da al programa
-> los GPIO 33–37, que son de la PSRAM; cerrada el mismo día, `12ba0b79`—)
+> ~~`#669`~~ —los pines de la pantalla que pone la imagen, sin reservar; cerrada el mismo día, `3b0f99e4` y `19220258`— y ~~`#670`~~ —la S3 con PSRAM octal da al programa
+> los GPIO 33–37, que son de la PSRAM; cerrada el mismo día, `12ba0b79`—; y en la tarde de placas, `#671` —tras
+> grabar o borrar un pack con motor sin reiniciar, la placa salta a las tablas del motor viejo—)
 > ~~`#581`~~ (cerrada el 7-oct: con `PinesSistema` en la C6, que destapó el pad VDD_SPI) `#582` `#583` `#584` ~~`#585`~~ (cerrada el 3-oct, `ff1135cc`) ~~`#586`~~ (cerrada el 28-sep, `95de38bc`), y las que salen del análisis de `#554` (27-sep): ~~`#587`~~ (H7; cerrada el 27-sep, `ec5b15c7`), ~~`#588`~~ (SUELTA; cerrada el 27-sep, `455ca895`) y ~~`#589`~~ (H8; cerrada el 27-sep, `b777f25f`), ~~`#544`~~
 > (H4; cerrada el 25-sep: no se reproduce) y ~~`#554`~~ (H7; cerrada el 27-sep, `e5761dd1`) —y `#490`, en V8—. Y del 27-sep, al hacer `#589`: ~~`#590`~~ (SUELTA; cerrada el 27-sep, `dd2e06e5`: el valor inicial de las globales, el modelo de Eduardo) y ~~`#591`~~ (H8; cerrada el 28-sep, `d3a60e5c`), y al hacer `#531`: `#592` (SUELTA: el 2º temporizador de las natives de la VM-C), y al hacer `#494`: ~~`#593`~~ (H7: el punto ciego del guardián del heap; cerrada el 29-sep, `41c27547`: la reserva en un método único); y del 28-sep, ~~`#594`~~ (H7: el módulo `Heap`, cerrada el mismo día, `ac0f3d71`), ~~`#595`~~ (H7: `Heap.compact()`, cerrada el mismo día, `6b265162`), ~~`#596`~~ (H7: con `--smp`, una excepción sin atrapar acababa en OK; cerrada el mismo día, `cdedb1d1`), ~~`#597`~~ (H7: `Net.recv` dejaba un bloque que mentía su tamaño; cerrada el mismo día, `6e362e2e`), ~~`#598`~~ (H7: el GC sin memoria para su mapa lo barría todo; ídem), ~~`#599`~~ (H7: miVM con dos workers se quedaba colgada en el GC; vista al medir el corpus con SMP; cerrada el mismo día, `c539c27c`, con el corpus con dos workers en la red) , ~~`#600`~~ (H7: con dos workers, la línea de un hilo se partía con la de otro; cerrada el mismo día, `cc073e52`: un `print` sale entero) y ~~`#601`~~ (H8: la puerta de «sin FS» de la ESP32 no paraba `FORMAT` y compañía; al mapear H8; cerrada el mismo día, `1a75a498`), ~~`#602`~~ (H8: el bloque de RAM de los motores en el `INFO`; cerrada el 1-oct, `a6f7ff7f`), y del mapa de H7 (29-sep) ~~`#603`~~ (con `--smp`, soltar un objeto con dueño corrompía el heap de la VM-C; cerrada el mismo día, `a907435d`), ~~`#604`~~ (la VM-C, 32 hilos en toda la vida del programa) y ~~`#605`~~ (el muro de la pila; cerradas el mismo día, `98c640e9`) y ~~`#606`~~ (dos latentes del XIP; cerrada el mismo día, `a907435d`); y al probar `#606`, ~~`#607`~~ (un manejador de la GUI no podía ceder; cerrada el 30-sep, `85de188f`: el setter de Forms, con el opcode `INVOKE_SLOT`; y el hilo que muere sin atrapar lo dice en la salida), y al probar `#605`, ~~`#608`~~ (una excepción sin atrapar en un hilo acaba ese hilo y el programa sale con error, «la A» de Eduardo; cerrada el mismo día, `41c27547`), y ~~`#609`~~ (`test-listen` se corta a veces con un `TimeoutError`; H8/H9; cerrada el 2-oct, `1dab3a66`), y de la prueba de estrés del heap (29-sep, noche): ~~`#610`~~ (VM-C: la tabla de handles crecía moviéndose con otros workers leyéndola; cerrada el mismo día, `b4bb28fb`), ~~`#611`~~ (miVM: `split` y `listDir` perdían los trozos si la reserva colectaba; cerrada el mismo día, `c0015787`), ~~`#612`~~ (miVM: un error de Java en un worker acababa el RUN sin decir nada; cerrada el mismo día, `cf476205`); y del 30-sep, ~~`#613`~~ (miVM: un hilo que cede con `sleep(0)` podía acabar en dos workers a la vez —B1 por otro camino—; cerrada el mismo día, `d6d72384`), y al grabar la C5 tras medir los márgenes, `#614` (`GuiFlushBench`: cambiar una etiqueta cuesta más que hace una semana —la C5, de 1 a 5,8 ms; la DK2, de 1,0 a 1,8—; SUELTA); y del 1-oct, al vaciar H7, `#615` (la Pico sobre el backend común de FreeRTOS: aparcada sin fecha, Eduardo; SUELTA), y al hablar de los runs, ~~`#616`~~ (H12: el planificador de varios runs de la VM-C no repartía en rueda; cerrada el mismo día, `c671d3a2`), y al probar el paso 4 de `#495` con el cliente del IDE, ~~`#617`~~ (H8: el servidor del wire de la VM-Java no tenía la subida por trozos y atendía a un cliente por proceso; cerrada el mismo día, `b33794df`), y al grabar la C5 con el paso 4, ~~`#618`~~ (H8: el cliente del IDE perdía bytes leyendo de uno en uno de un puerto rápido; cerrada el mismo día, `34167432`). Decisiones de Eduardo pendientes: ~~`#590`~~ (decidida el 27-sep: el modelo de las globales), ~~`#542`~~ (decidida el 25-sep: un import sin interfaz es un error de carga), ~~`#579`~~ (decidida el 3-oct: cerrada con la evidencia), `#582`/`#583` (la línea y el debugger: «una decisión de fondo»; antes, el análisis y la medida), ~~`#584`~~ (decidida el 3-oct: podar sólo ahorra) y,
 > al publicar, `--formato=8` (la SD de la C6 quedó decidida el 24-sep: tras `H6.b`). Lo demás abierto no tiene número: está en la fila de su hito, abajo.
@@ -1495,6 +1496,11 @@ placa**: la C6 con `PinesSistema` y luego `GuiArbolG2` (lo que la abrió), un PW
 **En placa (8-oct)**, la mañana, en las cuatro conectadas: un PWM tras un STOP se suelta (`SueltaPwmA` y `SueltaPwmB`:
 en las ESP, el siguiente programa vuelve a tener todas las ranuras del LEDC), y las tiras también, en la C5 —2 canales
 RMT, como la C6—. La C6, por la tarde.
+**En placa (8-oct, tarde)**, la P4 y la DK2 —la DK2, la PRIMERA STM32 en la que se prueba soltar—, grabadas
+con la imagen de `19220258` y sus packs nuevos (`#623`): la tanda de `#667`, 13 de 13 en las dos (la DK2, el PWM
+de PB8 y la UART 2 en PA2/PA3; la P4, el 20 y el 21: sólo que no pete, sin UART —son los únicos pines libres
+verificados—), y la ronda de V7, 48 de 48 en las dos. (Una primera pasada cayó por `#671`, que no es de aquí: los
+packs regrabados sin reiniciar.) **Falta**: la C3, la C6 y la Nucleo.
 
 #### 🟡 `#667` — MEJORA: un objeto BP que consume un recurso lleva DESTRUCTOR y lo libera (abierta el 7-oct, con `#666`; SUELTA, mejora — Eduardo: *«Si un objeto BP consume un recurso, el objeto debe tener un destructor y liberar si es posible el recurso. Lo puedes poner como mejora.»*)
 
@@ -1531,6 +1537,11 @@ las pide en otros pines—: la S3, 6 PWM y la UART, y 4 tiras; la C5, 4 PWM y la
 Metro, 3. Y sin objetos (`SueltaRedA`), la red del final lo suelta y lo dice. Antes de grabar hubo que regenerar la
 stdlib EMBEBIDA de las tres familias (era del 2-oct: la imagen habría repuesto en `/lib` la de antes de `#668`); desde
 hoy lo mira la red (`scripts/check_mods_embebidos.py`). **Falta**: la C3, la C6, la P4, la Nucleo y la DK2 (la tarde).
+**En placa (8-oct, tarde)**, la P4 y la DK2 —la DK2, la PRIMERA STM32 en la que se prueba soltar—, grabadas
+con la imagen de `19220258` y sus packs nuevos (`#623`): la tanda de `#667`, 13 de 13 en las dos (la DK2, el PWM
+de PB8 y la UART 2 en PA2/PA3; la P4, el 20 y el 21: sólo que no pete, sin UART —son los únicos pines libres
+verificados—), y la ronda de V7, 48 de 48 en las dos. (Una primera pasada cayó por `#671`, que no es de aquí: los
+packs regrabados sin reiniciar.) **Falta**: la C3, la C6 y la Nucleo.
 
 #### 🟡 `#668` — AL ACABAR UN PROGRAMA, SUS OBJETOS SE DESTRUYEN: corre el destructor de cada objeto que lo tenga, y suelta su recurso —también tras un error o un STOP— (abierta el 7-oct, con `#666` y `#667`; **en V7** —Eduardo: *«me inclino que sí, que lo hagamos en V7, le dará mucha más robustez al SO y a la VM»*—)
 
@@ -1593,8 +1604,13 @@ array), con `test-destruirpoca` (la memoria de `destruir.c` a 4 KB; con el códi
 objeto que `__siguientePendiente` acaba de sacar, y el ÚLTIMO pendiente se soltaba sin su destructor: `DestruyeGc`,
 `test-kill` y `test-suelta` en rojo—; arreglado, y con `test-destruyefinal` (lo que sólo se ve al acabar, contra lo
 esperado, en las dos VMs), que la paridad no podía ver.
+**En placa (8-oct, tarde)**, la P4 y la DK2 —la DK2, la PRIMERA STM32 en la que se prueba soltar—, grabadas
+con la imagen de `19220258` y sus packs nuevos (`#623`): la tanda de `#667`, 13 de 13 en las dos (la DK2, el PWM
+de PB8 y la UART 2 en PA2/PA3; la P4, el 20 y el 21: sólo que no pete, sin UART —son los únicos pines libres
+verificados—), y la ronda de V7, 48 de 48 en las dos. (Una primera pasada cayó por `#671`, que no es de aquí: los
+packs regrabados sin reiniciar.) **Falta**: la C3, la C6 y la Nucleo.
 
-#### 🟡 `#669` — los pines de la pantalla que pone la IMAGEN no están reservados: un programa puede tomarlos y apagar la pantalla (abierta el 8-oct, al hacer `#667`; SUELTA · **HECHO en el PC y en las imágenes el 8-oct**; y el bus del táctil, COMPARTIDO —decisión de Eduardo—; falta la placa, la P4 y la DK2)
+#### ✅ `#669` — los pines de la pantalla que pone la IMAGEN no están reservados: un programa puede tomarlos y apagar la pantalla (abierta el 8-oct, al hacer `#667`; SUELTA · **CERRADA el mismo día**, `3b0f99e4` y `19220258`, vista en la P4 y la DK2 —y el bus del táctil, COMPARTIDO: decisión de Eduardo—)
 
 **Visto al hacer `#667`**: la tabla de capacidades sólo aparta los pines de la memoria y del cable (`#574`). En la DK2,
 `LCD_ON` (PE4) y la retroiluminación (PE6, `TIM3_CH4`), los configura CubeMX al arrancar; en la P4, la
@@ -1646,6 +1662,14 @@ pantalla»).
   test-bus` §13 (12 casos), con su sabotaje (5 en rojo); `PinesPantalla` lo comprueba en placa (abre el bus del
   táctil con sus pines y lo escanea; con otros, el error con nombre).
 
+**Vista en placa (8-oct, tarde)**, la P4 y la DK2 —las dos con la pantalla en la imagen—, con la imagen de `19220258`:
+`PinesPantalla` en la ronda de V7, verde en las dos, y a mano: en la DK2, 95 GPIO para el programa (128, menos los 2
+del cable y los 31 de la pantalla), «el pin 68 de stm32u5g9 es de la pantalla: no se puede usar», «el pin 80 es del I2C
+2», y el I2C 2 abierto por el programa con sus pines encuentra el GT911 (93 = 0x5D); en la P4, el I2C 0 compartido
+encuentra TRES dispositivos —24, 64 y 93: el GT911 y otros dos chips de la placa en el mismo bus, justo el caso de
+Eduardo—, y con otros pines, «el I2C 0 es sda 7, scl 8 a 100 kHz (la imagen: el táctil de la pantalla): pides sda
+20». **CERRADA.**
+
 #### ✅ `#670` — la S3 con PSRAM OCTAL da al programa los GPIO 33–37, que son de la PSRAM (abierta el 8-oct, al preparar el lote de `#667`; SUELTA · **CERRADA el mismo día**, `12ba0b79`, vista en la S3)
 
 **Visto el 8-oct**: `Machine.pins()` de la S3 (N16R8) da 0–21, 33–42 y 45–48, y su imagen va con
@@ -1660,6 +1684,30 @@ octal en marcha, los cinco, `BPVM_PIN_SIS_MEMORIA` —«el pin 35 es de la memor
 **Visto en la S3 (8-oct, mañana)**, grabada con esa imagen (el OK de Eduardo, «OK para grabar»): `Machine.pins()` ya
 no da los GPIO 33–37, y pedir uno lo dice con nombre —«el pin 35 de esp32s3 es de la flash o la PSRAM: no se puede
 usar»—. La tanda de `#667` y la ronda de V7, verdes en ella. **CERRADA.** (Faltaba anotarlo aquí: lo decía `ESTADO`.)
+
+#### 🔴 `#671` — tras grabar, borrar o formatear un pack con MOTOR nativo SIN reiniciar, la placa sigue con las tablas del motor VIEJO: el primer uso de la GUI (o de SQLite) salta a donde ahora hay otro pack —la DK2, HardFault; la P4, pánico y reinicio— (abierta el 8-oct, en la tarde de placas de `#623` y `#669`; SUELTA; preexistente)
+
+**Visto el 8-oct**, al regrabar los packs de la DK2 y la P4 (`PACK_FORMAT` y los nuevos, sin reiniciar): la ronda de
+V7 pidió el INFO —que pregunta el tamaño de la pantalla a la LVGL del pack— y la DK2 cayó («FALLO HardFault … en la
+tarea 'vm' … PC=082FA94C LR=08020D63 … causa: NOCP»; el LR, `repl_info`) y la P4 se reinició (su INFO salió «?», y
+las pruebas de GUI y de nativo, SALTADAS). El PC es la LVGL de ANTES (en 0x082F80B0, según el log de la DK2) más
+0x289C; tras el formateo, ahí está el motor de SQLite (0x082B40F0–0x08320000): un salto a bytes que no son código.
+**La causa**: `bpvm_npack_cargar_zona` carga los motores UNA vez por arranque (`s_hecho`: «volver a saltar
+republicaría sus marcas»), el registro de la BIOS no deja republicar una marca (-3) y `gui_pack.c` guarda la tabla
+resuelta (`#619`: «sólo el éxito, que no cambia sin reiniciar: un motor no se descarga»). Pero grabar, borrar o
+formatear SÍ la cambia: las tablas del registro y la guardada apuntan a la flash de antes. Preexistente desde que hay
+motores en packs (H6); no se veía porque, tras grabar un pack, casi siempre se reiniciaba la placa. Un usuario que
+graba el pack de la GUI desde el IDE y ejecuta sin reiniciar se lo encuentra.
+
+**Lo inmediato** (hecho): las dos placas reiniciadas —la DK2 por el ST-Link, la P4 ya lo había hecho sola— y las
+tandas repetidas.
+
+**Por decidir** (Eduardo), con el mecanismo: (a) la placa se REINICIA sola tras un `PACK_BURN_END`, `PACK_DEL` o
+`PACK_FORMAT` si ya había motores cargados (contesta primero; quien graba lo dice y vuelve a conectar); (b) no se
+reinicia, pero desde ese momento las marcas de los motores dejan de estar —el registro y `gui_pack` las olvidan— y
+usarlas es un error con nombre («el pack 'LVGL' cambió: reinicia la placa para cargar el motor nuevo»); (c) recargar
+los motores en caliente: no —un motor no se descarga: su RAM, sus hilos—. Recomendada: (a), la más simple y la que
+deja siempre la placa en un estado correcto; con (b) queda un estado intermedio (sin motor hasta reiniciar).
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
@@ -1993,6 +2041,13 @@ como programa de test pero ya no dentro del Pack, intentemos ahorrar memoria»*.
 **Falta, en placa** (con el OK de Eduardo, por lotes): regrabar los packs de la GUI y de los drivers con los nuevos
 y el `Stdlib.pack` donde no esté (la C5 no lo tiene), y pasar la tanda de la GUI. Mientras, las placas siguen con los
 packs viejos: funcionan, pero sus copias tapan las del `Stdlib.pack`.
+**En placa (8-oct, tarde)**: la DK2 y la P4, con su zona FORMATEADA y los packs nuevos (OK de Eduardo) —la DK2:
+Stdlib (no lo tenía; y en ella `/lib` se vacía en cada arranque), Mini, SQLite y Gui; la P4: Stdlib, SQLite y Gui—.
+Podados, la Gui de la DK2 pasa de 770 048 a 655 360 B y la de la P4 de 843 776 a 720 896; el SQLite, −24 KB en las
+dos; el Mini, de 24 576 a 8 192. Al grabar, la placa saca de `/lib` lo que sirve el Stdlib.pack con los mismos bytes
+(«lo sirve el pack 'Stdlib' … en sitio, XIP»), y el aviso de lo que falta no saltó: no faltaba nada. Con ellos, la
+ronda de V7 —GUI incluida, con Gui.mod XIP del Stdlib.pack— y la tanda de `#667`, verdes en las dos. **Falta**: la C5
+(Gui, DriverC5 y el Stdlib.pack que no tiene), la C6 (GuiMini y DriverSpi) y las demás con SQLite o Mini.
 
 #### ✅ `#622` — el ANCLA de la reserva no se soltaba al publicar el objeto: en la VM-Java, lo último que reservó cada hilo seguía siendo raíz hasta su siguiente reserva; en la VM-C, la última excepción que construyó la VM (abierta y cerrada el 2-oct, al medir `#621` con `TempRetiene`; preexistente; H9 · **CERRADA el 2-oct**, `9f41fd7a`)
 
