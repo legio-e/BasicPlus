@@ -1050,6 +1050,8 @@ diferencia entre caber o no. La mejora: si los dos son la MISMA versión, el del
 (el del FS es entonces una versión a propósito, y el aviso lo dice). Por decidir: qué es «la misma versión» —los
 bytes (tamaño y CRC, como ya compara el aviso «tapa al de /lib») o la versión de la interfaz (la norma, `#500`)—. La
 VM-Java no tiene zona: la paridad no lo ve, y se prueba en el micro simulado y en placa.
+**Decidido por Eduardo (8-oct)**: *«Misma versión, de momento mismo tamaño y CRC»* —los bytes: si difieren en algo,
+gana el del FS, que está ahí a propósito—.
 
 #### 🟡 `#651` — la C6 se queda sin RAM interna con la GUI: GuiArbolG2, «sin memoria para construir las clases» (abierta el 4-oct, en el lote de H12; SUELTA — Eduardo: «de momento no hagas nada… volveremos a ello»)
 
@@ -1075,6 +1077,13 @@ de `#339`, ~30 KB más (estimado). El pool de LVGL va en el bloque de los packs,
 de 3 a 6 KB de RAM del sistema aunque corra desde el pack. **Los caminos, con números, para cuando se vuelva a ello**:
 los nombres de un módulo XIP, apuntando al módulo en la zona en vez de copiarlos (por ahí va `#650`); un bloque por
 módulo para sus nombres en vez de uno por nombre (las cabeceras: ~30 KB); o el margen (la VM en 118 KB).
+**Hecho, la primera parte (8-oct)** (`V7_IDEAS` §«Memoria y packs», 1; Eduardo: *«al final hay que hacerlos todos»*):
+**un bloque por módulo para sus nombres**. Medido antes de tocar, con un censo nuevo del guardián por quién pide cada
+bloque (`bpvm_alloc_censo`, `make censo-carga`): de los 818 bloques de `GuiWinJson`, 770 eran nombres sueltos del
+cargador (la clase y la clave de cada referencia, los imports y las dependencias). Ahora: `GuiWinJson` y `GuiArbolG2`,
+54 bloques cada uno (eran 818 y 881), con los mismos bytes; `Importa5`, 67 (eran 436). Y lo vigila la red:
+`test-censo`, un tope de 100 bloques cargado (con el cargador de antes, en rojo). Lo de la C6, con la tiras ya
+soltadas (`#667`) y estos ~30 KB de cabeceras de menos, se mide esta tarde (`tools/medir_consumo.py`).
 
 #### ✅ `#652` — un programa que no usa nada de `Core` se carga SIN `Core` (`hello`): todo programa tiene que llevarlo (abierta el 4-oct, en el diseño de la etapa 2 de H12; SUELTA · **CERRADA el 7-oct**, `d3c8ab2d`)
 
@@ -1896,6 +1905,11 @@ stdlib de hoy, sube lo que no casa y, por su regla, deja `/lib` como está (`lim
 Lo de la imagen lo repone su arranque; lo de un pack no lo repone nadie. Una salida más para pensarlo: que la tanda
 deje `/lib` como lo encontró, o que suba esas dependencias a `/app`, que borra al acabar (mirar antes la norma de
 `#493` para la stdlib en `/app`).
+**Eduardo (8-oct), el pack PROGRAMA**: *«Lo de Pack programa era para convertirlo en una especie de contenedor que nos
+garantice lo más posible que el programa y los módulos son autocontenidos, formando un bloque homogéneo y que no haya
+problemas por falta de módulos o módulos de otras versiones»*. O sea: las copias de la stdlib dentro de un pack
+PROGRAMA son a propósito —el programa corre con las versiones con que se hizo, juntas—; el problema de esta ficha es
+que las de un pack de LIBRERÍA (la GUI) tapan a las de todos. El diseño, por hacer: `V7_IDEAS` §«`#623`».
 
 #### ✅ `#622` — el ANCLA de la reserva no se soltaba al publicar el objeto: en la VM-Java, lo último que reservó cada hilo seguía siendo raíz hasta su siguiente reserva; en la VM-C, la última excepción que construyó la VM (abierta y cerrada el 2-oct, al medir `#621` con `TempRetiene`; preexistente; H9 · **CERRADA el 2-oct**, `9f41fd7a`)
 

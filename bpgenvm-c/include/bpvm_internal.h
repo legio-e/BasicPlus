@@ -231,7 +231,7 @@ typedef struct {
 
     /* F3 — imports cualificados (e.g. "L2Lib.Counter.__init"). Cada
      * entry k corresponde al slot k de la ext-table. */
-    char**   imports;          /* malloc-ed; cada slot también malloc-ed */
+    char**   imports;          /* malloc-ed; cada slot apunta a `nombres` (V7 #651) */
     int      import_count;     /* = ext_count si las leemos */
     /* V7/H2 (MOD8) — la subtabla `deps`: contra qué (gen, ifaceCrc) se compiló
      * cada dependencia, por nombre lógico cualificado (`Core`, `acme.LibHdr`). */
@@ -261,6 +261,9 @@ typedef struct {
     const uint8_t* clases;
     uint32_t     clases_len;
     uint8_t      enlazado_tarde;   /* compilado contra otra interfaz: el enlace decidió (diag) */
+    /* V7 #651 (8-oct) — los NOMBRES del módulo (imports[], dep_names[] y la clase y la clave de refs[]) viven aquí,
+     * seguidos, cada uno terminado en 0: UN bloque por módulo, no uno por nombre. Se suelta entero. */
+    char*        nombres;
 } bpvm_module_t;
 
 /* Tabla global de símbolos exportados (F3).

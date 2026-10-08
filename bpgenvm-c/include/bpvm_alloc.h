@@ -113,6 +113,12 @@ uint64_t bpvm_alloc_sweep(uint64_t mark);
 typedef void (*bpvm_alloc_report_fn)(const char* linea);
 void bpvm_alloc_set_report(bpvm_alloc_report_fn fn);
 
+/* V7 #651 (8-oct) — EL CENSO: los bloques DE LA VM vivos con secuencia >= `mark`, agrupados por quién los pidió
+ * (fichero y línea), los que más bloques primero; una línea por origen —los `max` primeros, y el resto sumado— por
+ * `fn` (NULL: el informe de siempre). Para medir lo que se lleva cargar un programa; no reserva nada al contar.
+ * Devuelve cuántos bloques contó. */
+uint32_t bpvm_alloc_censo(uint64_t mark, int max, bpvm_alloc_report_fn fn);
+
 /* Bloques vivos ahora mismo, por familia — para tests y diagnóstico. */
 uint32_t bpvm_alloc_live_blocks(bpvm_alloc_kind_t k);
 uint64_t bpvm_alloc_live_bytes (bpvm_alloc_kind_t k);

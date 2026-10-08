@@ -1283,6 +1283,20 @@ tiempo que el driver de la pantalla y en principio no utilizarse para otras cosa
 
 **Lo siguiente**: grabar el arreglo (las cuatro; la S3 con `#670`) —pide el OK de Eduardo— y repetir `OwnerHondo` en
 la Pico 2; por la tarde, la C3, la C6 (`PinesSistema` y `GuiArbolG2`), la P4, la Nucleo y la DK2.
+**Hecho, con *«OK para grabar»***: grabadas las cuatro con `12ba0b79` (la C5, sin regrabar sus packs:
+`packRamBase` igual). `OwnerHondo` en la Pico 2, hasta «fin»; la S3 ya no da los GPIO 33–37 («el pin 35 de esp32s3 es
+de la flash o la PSRAM: no se puede usar»); la tanda de `#667`, 52 de 52 otra vez, y la ronda de V7, 188 de 188.
+
+## 🧠 El grupo «memoria y packs» (8-oct, tarde) — `#651`, `#650` y `#623`
+
+Eduardo: *«Había un grupo de pendientes que agrupaste como "memoria". ¿Qué tal para hacer a continuación…? Al final hay
+que hacerlos todos»*. Y dos decisiones: `#650`, *«misma versión, de momento mismo tamaño y CRC»*; `#623`, el pack
+programa como *«un contenedor que nos garantice lo más posible que el programa y los módulos son autocontenidos»*.
+- **`#651`, la primera parte, hecha**: un bloque por módulo para los nombres del cargador. Medido antes con un censo
+  nuevo del guardián (`make censo-carga`): `GuiWinJson`, de 818 bloques a 54, con los mismos bytes (en la placa, ~760
+  cabeceras menos). `test-censo` en la red (con el cargador de antes, rojo). La red entera, verde.
+- **`#650`**, por hacer: con el mismo tamaño y CRC, el módulo del pack (XIP) en vez del del FS.
+- **`#623`**, por presentar: el plan del pack librería sin copias de la stdlib.
 
 ## 🔧 SUELTAS (7-oct) — la lista, y `#656`: soltar un owner sin recursión
 

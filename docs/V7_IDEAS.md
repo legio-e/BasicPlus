@@ -3485,6 +3485,15 @@ tanda del 2-oct, después: «pack:GuiMini/Gui.mod, crc igual: se ejecuta XIP, no
 3. ¿Un pack PROGRAMA lleva las 30 o sólo el cierre de su programa? Hoy, el cierre.
 4. Lo ya grabado: los packs de la GUI de la P4, la DK2 y la C5 llevan copias viejas; con la regla nueva, al regrabarlos.
 
+**Eduardo (8-oct), el pack PROGRAMA**: *«Lo de Pack programa era para convertirlo en una especie de contenedor que nos
+garantice lo más posible que el programa y los módulos son autocontenidos, formando un bloque homogéneo y que no haya
+problemas por falta de módulos o módulos de otras versiones»*. Lo que confirma la dirección de arriba: el pack PROGRAMA
+lleva su programa y TODO lo que necesita —el cierre, con las copias de la stdlib que use, a propósito— y, cuando corre
+su programa, va primero (eso ya lo hace el cargador, `#493`); el pack LIBRERÍA no lleva copias de la stdlib —la saca
+del `Stdlib.pack` o de `/lib`—, y así ninguna copia vieja tapa la de todos. El plan, para presentarlo con su ejemplo:
+el constructor no mete la stdlib en un pack librería (o lo rechaza, diciendo cuáles); quien graba avisa si un pack
+librería necesita el `Stdlib.pack` y la placa no lo tiene (2); y los packs de la GUI se regraban sin copias (4).
+
 ## H10 — el `Rtc`: saber si el equipo está en hora (2-oct, idea de Eduardo; decidido y hecho: `#626`)
 
 **El problema** (`V7_BACKLOG` H10): en la Pico y las ESP32 el reloj de pared es por software y empieza en 0 a cada
@@ -8609,3 +8618,38 @@ la paridad seguía OK —sin «~global»—. Desde hoy, `make test-destruyefinal
 VMs (con el atajo malo, en rojo).
 
 **Visto en la S3**: `#670` —la PSRAM octal: los GPIO 33–37, al programa—, abierta; su arreglo, hecho.
+
+## Memoria y packs: `#651`, `#650` y `#623` (8-oct; el grupo que pidió Eduardo: *«al final hay que hacerlos todos»*)
+
+### 1. `#651`, primera parte: los nombres del cargador, UN bloque por módulo (hecho)
+
+**Medido antes de tocar** —el censo del guardián con el programa cargado y antes de correrlo (`bpvm_alloc_censo`,
+nuevo; `make censo-carga`): de los 818 bloques de `GuiWinJson`, 770 eran NOMBRES sueltos que guarda el cargador
+(`loader.c`): la clase y la clave de cada referencia (361 + 361), los imports (38) y las dependencias (10). Cada uno,
+un `bpvm_strdup`; en la placa, cada uno con la cabecera del guardián de `#339` (32 B) y la del heap. Ahora, los nombres
+de un módulo van seguidos en UN bloque: se pide lo que mide su sección de imports, se llena (cada nombre apuntado por
+su desplazamiento), se encoge a lo que ocupan y se ponen los punteros (encoger puede moverlo).
+
+| programa (PC, 8 B por puntero) | antes | después |
+|---|---|---|
+| `Nada` | 14 bloques, 15 622 B | 14 bloques, 15 751 B |
+| `Importa5` | 436 bloques, 36 919 B | 67 bloques, 37 048 B |
+| `GuiWinJson` | 818 bloques, 54 567 B | 54 bloques, 54 696 B |
+| `GuiArbolG2` | 881 bloques, 56 414 B | 54 bloques, 56 543 B |
+
+Los mismos bytes (+129: un puntero más en cada una de las 16 ranuras de módulo de `bpvm_t`; en la placa, +64) y 764
+bloques menos con la GUI: en la placa, ~30 KB de cabeceras (a medir en la C6, con `tools/medir_consumo.py`). Lo que
+queda, por tamaño: la estructura de la VM (9 KB), los trozos de 2 KB de la tabla de símbolos (`link.c`, 9 con la GUI:
+18 KB), las tablas de referencias (`loader.c`, 5: 8,6 KB) y la tabla de símbolos (`link.c`, 8 KB).
+
+### 2. `#650`: si el módulo del FS es IGUAL al de un pack, el del pack (decidido; por hacer)
+
+Eduardo (8-oct): *«Misma versión, de momento mismo tamaño y CRC»*. Dónde: `discover_deps` (`bpvm.c`), el paso de la
+zona: hoy, con el módulo en `/app` o `/lib` y en la zona, gana el FS (se copia a la RAM) y el diag dice «del FS eclipsa
+al del pack». Con los mismos bytes —el tamaño primero, que es gratis; el CRC sólo si casa—, se carga el del pack, XIP, y
+el diag lo dice; si difieren en algo, el del FS, como hoy (está ahí a propósito). La VM-Java no tiene zona: se prueba en
+el micro simulado y en placa.
+
+### 3. `#623`: el pack PROGRAMA, un contenedor (la dirección, confirmada; el plan, por presentar)
+
+Ver §«H9 — `#623`» (arriba), con lo que dijo Eduardo el 8-oct.

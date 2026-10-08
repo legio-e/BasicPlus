@@ -515,6 +515,32 @@ test-destruirpoca: $(LIBOBJ)
 	@echo "--- V7 #668 con poca memoria: soltar un árbol grande sin pedir memoria por nodo (esperado: solo 'ok', [status=OK]) ---"
 	(cd samples && ../$(DESPOCA_BIN) OwnerHondo.mod OwnerHondoDtor.mod)
 
+# V7 #651 (8-oct) — EL CENSO DE LA CARGA: lo que se lleva CARGAR un programa, por quién lo pide (MEMORIA.md, «por qué
+# un módulo cuesta de 3 a 6 KB aunque venga de un pack»). Una medida, sin veredicto: Nada, Importa5, GuiWinJson y
+# GuiArbolG2, cada uno en una VM nueva, con el censo del guardián antes de correrlo.
+CENSO_BIN = build/censo_carga.exe
+censo-carga: $(LIBOBJ)
+	@mkdir -p build/censo
+	@cp ../bpstdlib/*.mod build/censo/
+	@for f in tools/consumo/Nada.bp tools/consumo/Importa5.bp ../samples/GuiWinJson.bp samples/GuiArbolG2.bp; do \
+	   java -jar ../lexer-java/target/basicplus-frontend.jar $$f --compile build/censo --backend=mivm > /dev/null 2>&1 || echo "  (no compila: $$f)"; \
+	 done
+	$(CC) $(CFLAGS) -Isrc test/censo_carga.c $(LIBOBJ) -o $(CENSO_BIN) $(LDFLAGS)
+	(cd build/censo && ../censo_carga.exe Nada.mod Importa5.mod GuiWinJson.mod GuiArbolG2.mod)
+
+# V7 #651 (8-oct) — y como PRUEBA, en la red: cargados, Importa5, GuiWinJson y GuiArbolG2 no pasan de 100 bloques de la
+# VM (con un bloque por nombre eran 436, 818 y 881; con uno por módulo, 67, 54 y 54). En la placa cada bloque lleva la
+# cabecera del guardián de #339: que el cargador no vuelva a pedir uno por nombre sin que se note.
+test-censo: $(LIBOBJ)
+	@mkdir -p build/censo
+	@cp ../bpstdlib/*.mod build/censo/
+	@for f in tools/consumo/Importa5.bp ../samples/GuiWinJson.bp samples/GuiArbolG2.bp; do \
+	   java -jar ../lexer-java/target/basicplus-frontend.jar $$f --compile build/censo --backend=mivm > /dev/null 2>&1 || echo "  FAIL no compila: $$f"; \
+	 done
+	@$(CC) $(CFLAGS) -Isrc test/censo_carga.c $(LIBOBJ) -o $(CENSO_BIN) $(LDFLAGS)
+	@(cd build/censo && ../censo_carga.exe --tope=100 Importa5.mod GuiWinJson.mod GuiArbolG2.mod > ../censo_tope.txt); rc=$$?; \
+	 grep -E '^(ok|FAIL|\[status)' build/censo_tope.txt; exit $$rc
+
 # V7/H10 #634 (3-oct) — UN KILL CON EL PROGRAMA EN PAUSA: el lazo de pausa del depurador no miraba la bandera que pone
 # `io` al recibir el KILL, y el Stop del IDE no paraba un programa detenido en un breakpoint (en placa). KillLoop parado
 # en su primer opcode y un `next_cmd` de mentira; sin el fixture, ROJO (no un «saltado» que pasa por verde).

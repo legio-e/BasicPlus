@@ -297,6 +297,62 @@ uint64_t bpvm_alloc_sweep(uint64_t mark) {
     return bytes;
 }
 
+/* V7 #651 (8-oct) — EL CENSO (ver bpvm_alloc.h). Los orígenes, en una tabla fija: contar no puede pedir memoria al
+ * guardián que cuenta. Los que no caben en ella van al resto. */
+#define CENSO_MAX 128
+static struct { const char* file; int line; uint32_t n; uint64_t bytes; } g_censo[CENSO_MAX];
+
+uint32_t bpvm_alloc_censo(uint64_t mark, int max, bpvm_alloc_report_fn fn) {
+    char linea[200];
+    bpvm_alloc_report_fn out = fn ? fn : g_report;
+    int no = 0;
+    uint32_t total = 0, resto_n = 0;
+    uint64_t total_b = 0, resto_b = 0;
+    int lk = blk_lock();
+    for (const bpvm_blk_t* b = g_blk_head; b; b = b->next) {
+        if (!BLK_IS_VM(b) || b->seq < mark) continue;
+        total++;
+        total_b += (uint64_t) b->size;
+        int k = 0;
+        while (k < no && !(g_censo[k].file == b->file && g_censo[k].line == b->line)) k++;
+        if (k == no) {
+            if (no == CENSO_MAX) { resto_n++; resto_b += (uint64_t) b->size; continue; }
+            g_censo[no].file = b->file; g_censo[no].line = b->line; g_censo[no].n = 0; g_censo[no].bytes = 0;
+            no++;
+        }
+        g_censo[k].n++;
+        g_censo[k].bytes += (uint64_t) b->size;
+    }
+    /* los que más bloques, primero (pocos: una inserción basta) */
+    for (int i = 1; i < no; i++) {
+        int j = i;
+        while (j > 0 && g_censo[j - 1].n < g_censo[j].n) {
+            const char* f = g_censo[j].file; int l = g_censo[j].line; uint32_t n = g_censo[j].n; uint64_t by = g_censo[j].bytes;
+            g_censo[j] = g_censo[j - 1];
+            g_censo[j - 1].file = f; g_censo[j - 1].line = l; g_censo[j - 1].n = n; g_censo[j - 1].bytes = by;
+            j--;
+        }
+    }
+    blk_unlock(lk);
+    snprintf(linea, sizeof linea, "[censo] %lu bloque(s) de la VM vivos, %lu B, desde %d sitio(s)",
+             (unsigned long) total, (unsigned long) total_b, no + (resto_n ? 1 : 0));
+    out(linea);
+    for (int i = 0; i < no; i++) {
+        if (i >= max) { resto_n += g_censo[i].n; resto_b += g_censo[i].bytes; continue; }
+        const char* f = g_censo[i].file ? g_censo[i].file : "?";
+        const char* barra = strrchr(f, '/');
+        if (barra) f = barra + 1;
+        snprintf(linea, sizeof linea, "[censo] %5lu bloque(s) %7lu B  %s:%d",
+                 (unsigned long) g_censo[i].n, (unsigned long) g_censo[i].bytes, f, g_censo[i].line);
+        out(linea);
+    }
+    if (resto_n) {
+        snprintf(linea, sizeof linea, "[censo] %5lu bloque(s) %7lu B  (el resto)", (unsigned long) resto_n, (unsigned long) resto_b);
+        out(linea);
+    }
+    return total;
+}
+
 /* ENV `stack` — el usuario fija el tamaño de la región de pilas, en KB.
  *
  * 0 (o la clave ausente) = la regla de siempre, que es lo que estaba antes de
@@ -1820,24 +1876,16 @@ void bpvm_destroy(bpvm_t* vm) {
     /* Liberar módulos cargados. */
     for (int i = 0; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];
-        if (m->imports) {
-            for (int k = 0; k < m->import_count; k++) bpvm_free(m->imports[k]);
-            bpvm_free(m->imports);
-        }
-        if (m->dep_names) {   /* V7/H2 (MOD8) */
-            for (int k = 0; k < m->dep_count; k++) bpvm_free(m->dep_names[k]);
-            bpvm_free(m->dep_names);
-        }
+        bpvm_free(m->imports);     /* V7 #651: sus nombres viven en m->nombres */
+        bpvm_free(m->dep_names);   /* V7/H2 (MOD8) */
         bpvm_free(m->dep_gen);
         bpvm_free(m->dep_crc);
         bpvm_free(m->dep_flags);
         bpvm_free(m->dep_avisado);
         bpvm_free(m->class_fixups);
         bpvm_free(m->eh_class_fixups);
-        if (m->refs) {   /* V7/H2 (#523) — V10 (R4/J-2): la subtabla refs se quedaba viva → «FUGA» en todo RUN MOD9 */
-            for (int k = 0; k < m->ref_count; k++) { bpvm_free(m->refs[k].clase); bpvm_free(m->refs[k].clave); }
-            bpvm_free(m->refs);
-        }
+        bpvm_free(m->refs);        /* V7/H2 (#523) — V10 (R4/J-2): la subtabla refs se quedaba viva → «FUGA» en todo RUN MOD9 */
+        bpvm_free(m->nombres);     /* V7 #651: los nombres de imports, dep_names y refs, en un bloque */
     }
     /* Liberar los hilos —sus structs, sus EH stacks y la línea de su `print` (#600): toda la cola (H12)— y los
      * mutex waiters. */

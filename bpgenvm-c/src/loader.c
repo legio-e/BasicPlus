@@ -168,6 +168,32 @@ int bpvm_mod_examina(const uint8_t* cab, size_t n, uint32_t tam, char* motivo, s
 /* Cuerpo común de la carga. `xip` (H3.c): el código NO se copia a RAM — queda
  * direccionado en sitio (los bytes de `data` deben ser persistentes: la región
  * de packs montada). CS queda anclado en RAM como siempre; solo cb difiere. */
+/* V7 #651 (8-oct) — un nombre al bloque de nombres del módulo (mod->nombres): seguido del anterior, terminado en 0.
+ * Cabe siempre: el bloque mide lo que la sección de imports, donde cada nombre ocupaba su longitud y 2 de prefijo.
+ * Devuelve su DESPLAZAMIENTO, disfrazado de puntero hasta que el bloque se encoja y se pongan los de verdad
+ * (nombres_a_punteros): encogerlo puede moverlo. */
+static char* nombre_al_bloque(bpvm_module_t* mod, size_t* usado, const char* s) {
+    size_t at = *usado, n = strlen(s) + 1u;
+    memcpy(mod->nombres + at, s, n);
+    *usado += n;
+    return (char*) (uintptr_t) at;
+}
+
+/* El bloque, a su medida —se pidió lo que mide la sección, y en ella hay más que nombres: los prefijos, los fromPath
+ * que no se guardan, las generaciones—, y los desplazamientos, a punteros. Si no puede encogerse, se queda el de
+ * antes: vale igual. */
+static void nombres_a_punteros(bpvm_module_t* mod, size_t usado) {
+    if (!mod->nombres) return;
+    char* a = (char*) bpvm_realloc(mod->nombres, usado ? usado : 1u);
+    if (a) mod->nombres = a;
+    for (int i = 0; i < mod->import_count; i++) mod->imports[i] = mod->nombres + (uintptr_t) mod->imports[i];
+    for (int i = 0; i < mod->dep_count; i++) mod->dep_names[i] = mod->nombres + (uintptr_t) mod->dep_names[i];
+    for (int i = 0; i < mod->ref_count; i++) {
+        mod->refs[i].clase = mod->nombres + (uintptr_t) mod->refs[i].clase;
+        mod->refs[i].clave = mod->nombres + (uintptr_t) mod->refs[i].clave;
+    }
+}
+
 static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                                       bpvm_read_at_fn rd, void* rd_user,
                                       size_t size, const char* name_hint, int xip) {
@@ -228,6 +254,13 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
 
     /* --- Imports (count + (name UTF, fromPath UTF) * count) --- */
     size_t imports_ini = c.pos;
+    /* V7 #651 (8-oct) — LOS NOMBRES, EN UN BLOQUE: los de lo que importa, de sus dependencias y de sus referencias.
+     * Antes, un bloque por nombre —~800 con la GUI; en la placa, cada uno con la cabecera del guardián de #339—. */
+    size_t nombres_usado = 0;
+    if (imports_size > 0) {
+        mod->nombres = (char*) bpvm_malloc((size_t) imports_size + 1u);
+        if (!mod->nombres) return BPVM_ERR_OOM;
+    }
     uint32_t ext_count;
     if (bc_read_be32(&c, &ext_count) != 0)             return BPVM_ERR_IO;
     mod->ext_count = ext_count;
@@ -244,8 +277,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             if (bc_read_writeutf(&c, tmp_from, sizeof(tmp_from)) != 0) {
                 return BPVM_ERR_IO;
             }
-            mod->imports[i] = bpvm_strdup(tmp_name);
-            if (!mod->imports[i]) return BPVM_ERR_OOM;
+            mod->imports[i] = nombre_al_bloque(mod, &nombres_usado, tmp_name);
         }
     }
     /* V7/H2 (MOD8, #500) — la subtabla `deps` va DETRÁS de las entradas, dentro
@@ -271,8 +303,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                 if (bc_read_be32(&c, &mod->dep_gen[i]) != 0)               return BPVM_ERR_IO;
                 if (bc_read_be32(&c, &mod->dep_crc[i]) != 0)               return BPVM_ERR_IO;
                 if (bc_read_be32(&c, &mod->dep_flags[i]) != 0)             return BPVM_ERR_IO;
-                mod->dep_names[i] = bpvm_strdup(tmp_mod);
-                if (!mod->dep_names[i]) return BPVM_ERR_OOM;
+                mod->dep_names[i] = nombre_al_bloque(mod, &nombres_usado, tmp_mod);
                 mod->dep_count = (int) (i + 1);
             }
         }
@@ -294,13 +325,13 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                 if (bc_read_writeutf(&c, tmp_k, sizeof(tmp_k)) != 0)     return BPVM_ERR_IO;
                 mod->refs[i].kind    = k[0];
                 mod->refs[i].dep_idx = (int16_t) (((uint16_t) k[1] << 8) | k[2]);
-                mod->refs[i].clase   = bpvm_strdup(tmp_c);
-                mod->refs[i].clave   = bpvm_strdup(tmp_k);
-                if (!mod->refs[i].clase || !mod->refs[i].clave) return BPVM_ERR_OOM;
+                mod->refs[i].clase   = nombre_al_bloque(mod, &nombres_usado, tmp_c);
+                mod->refs[i].clave   = nombre_al_bloque(mod, &nombres_usado, tmp_k);
                 mod->ref_count = (int) (i + 1);
             }
         }
     }
+    nombres_a_punteros(mod, nombres_usado);   /* V7 #651: el bloque a su medida, y ya con punteros */
     if (c.pos - imports_ini < imports_size) {
         if (bc_skip(&c, imports_size - (c.pos - imports_ini)) != 0) return BPVM_ERR_IO;
     }
