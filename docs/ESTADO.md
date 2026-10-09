@@ -85,11 +85,15 @@
 > de V7, verde (`tanda_v7_9oct_pico2`: 46 de 50 y las 4 de la GUI saltadas). **Las nueve placas, con su ronda de V7
 > verde.** **Al cerrar el día**, Eduardo: *«Todos los pendientes cerrados, todos los hitos cerrados. Falta documentar y
 > las pruebas finales. Bastante por hoy, la documentación mañana»*. **Lo siguiente**: la documentación (10-oct), las
-> pruebas finales y publicar. ⚠️ Y lo que `FICHAS` aún tiene abierto, sólo con un paso en placa: `#666`, `#667` y
-> `#668` en la C3 (la tanda de `#667` con sus pines del ENV, y `PinesSistema`) y `#623` (la zona de packs de la Metro,
-> la S3 y la C3: si llevan SQLite o Mini con su copia vieja de la stdlib, regrabarlos sin ella; la Pico 2, mirada: sólo
-> el `Stdlib.pack`); y `#615`, aparcada sin fecha (Eduardo, 1-oct: *«ya veremos si lo resolvemos en V7 o la pasamos
-> a V8»*).
+> pruebas finales y publicar. Quedaban en `FICHAS` cuatro con sólo un paso en placa, y se hicieron esa misma noche
+> (Eduardo: *«¿Y no lo podemos hacer ahora?»*): **`#666`, `#667` y `#668`, CERRADAS** en la C3 —la tanda de `#667`, 13
+> de 13, con la C3 en las tablas de pines de las `Suelta*`, que no la tenían— y **`#623`, CERRADA**: la Metro llevaba
+> el `SQLite` viejo, del que cargaba `Core` —`PACK_FORMAT`, el `Stdlib.pack` y el `SQLite` nuevo; `SqlDemo` bien y su
+> ronda verde—; la C3 y la S3 tenían la zona vacía, y las dos, con el `Stdlib.pack` (Eduardo): la C3, grabada y con la
+> ronda verde (`tanda_v7_9oct_c3_metro`). ⚠️ **Y una nueva, `#676`: la S3 se reinicia con un panic al grabarle el
+> `Stdlib.pack`**, al cerrar —falta el texto del panic, que sale por su consola (el USB-Serial-JTAG, el otro
+> conector)—. Es un fallo y va antes de publicar. `#615`, aparcada sin fecha (Eduardo, 1-oct: *«ya veremos si lo
+> resolvemos en V7 o la pasamos a V8»*).
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y

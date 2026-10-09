@@ -14,6 +14,10 @@ module SueltaRedA
       var c6: integer[] := [0, 1, 2, 3]
       return c6
     endif
+    if m == "esp32c3" then
+      var c3: integer[] := [0, 1, 2, 3]
+      return c3
+    endif
     if m == "stm32u575" then
       var nu: integer[] := [39, 23, 40]
       return nu
@@ -43,6 +47,10 @@ module SueltaRedA
     if m == "esp32c6" then
       var c6: integer[] := [10, 11]
       return c6
+    endif
+    if m == "esp32c3" then
+      var c3: integer[] := [4, 5]
+      return c3
     endif
     if m == "stm32u575" then
       var nu: integer[] := [39]
@@ -82,6 +90,10 @@ module SueltaRedA
     if m == "esp32c6" then
       var c6: integer[] := [16, 17]
       return c6
+    endif
+    if m == "esp32c3" then
+      var c3: integer[] := [21, 20]
+      return c3
     endif
     if m == "stm32u575" then
       var nu: integer[] := newIntArray(0)

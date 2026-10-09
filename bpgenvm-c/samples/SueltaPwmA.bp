@@ -15,6 +15,10 @@ module SueltaPwmA
       var c6: integer[] := [0, 1, 2, 3]
       return c6
     endif
+    if m == "esp32c3" then
+      var c3: integer[] := [0, 1, 2, 3]
+      return c3
+    endif
     if m == "stm32u575" then
       var nu: integer[] := [39, 23, 40]
       return nu
@@ -53,6 +57,10 @@ module SueltaPwmA
     if m == "esp32c6" then
       var c6: integer[] := [16, 17]
       return c6
+    endif
+    if m == "esp32c3" then
+      var c3: integer[] := [21, 20]
+      return c3
     endif
     if m == "stm32u575" then
       var nu: integer[] := newIntArray(0)
