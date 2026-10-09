@@ -3364,6 +3364,24 @@ salen de dos GCC; una imagen de prueba, con su OK); si no aterriza bien, se canc
 el motivo real —el de hoy todavía da el falso: «#213: .mdn no puede usar setjmp»—. Después, la VM-C (los aterrizajes
 por hilo, también en el ejecutor de P2b), el AOT (el `try`, el `catch` por clase, relanzar lo que no es suyo y el
 `finally`), las pruebas en el PC y la placa.
+**La VM, hecha en el PC (9-oct; los pasos 1 y 2; `V7_IDEAS` §«`#578`», «El paso 1, en concreto»).** Lo primero que
+salió fue `#672` (una excepción del BP al que llama una native ni siquiera llegaba a la native: arreglada aparte,
+`2f0a786c`). Después: el aterrizaje (`void* t[7]` en el marco de la native, con su `__builtin_setjmp`) y **el salto lo
+da una función del propio `.mdn`** (`salta`, con `__builtin_longjmp`): el mismo GCC a los dos lados —la VM no salta,
+llama a esa función—, así que el riesgo de la puerta (que el búfer casara entre el GCC de la imagen y el del AOT)
+desaparece. En el límite de fallos, `nativo` (el aterrizaje más interno), que cada `aot_call_guarded` guarda, vacía y
+repone. **Cuatro operaciones** por `call_builtin`, con números negativos (no son builtins de `Core`; la tabla de
+helpers no cambia): EH_PUSH, EH_POP (si no es el más interno, un error con nombre), EH_EXC y EH_ES —la cuarta, el
+`catch` por clase, por el NOMBRE canónico de cada clase de la cadena (vale para una privada del módulo)—. Aterrizan
+`throw_runtime`/`throw_str` (con un `try` abierto, construyen antes el `RuntimeError`), `throw_ref`, lo que lanza un
+builtin y lo que sale de BP por el puente; un `kill` pedido, no (sube al límite: un `catch` en un bucle lo tragaría).
+**La prueba**, `make test-aottryvm` (en `check-testc`, 101/101): natives ESCRITAS A MANO —el C que emitirá el AOT—
+para las funciones de `samples/NatTryVm.bp`: lo lanzan la native, un builtin, una función BP por el puente y otra
+native detrás de BP; un `try` dentro de otro, un `catch` que no es suyo, un `return` dentro, un `try` en un bucle y un
+`throw` desde un `catch`; GC en cada reserva; a `-O0`, `-O2` y `-Os`, la salida del intérprete (12 de 12), 17 llamadas
+a las natives y 13 aterrizajes; el aterrizaje desparejado, con su error. Los sabotajes, rojos: sin aterrizar (el
+`t1` sin atrapar) y el límite que no vacía los aterrizajes de fuera (el 6b: el suelo del puente se quedaba en la
+pila y el RUN acababa en «native-return (interno)»). Compilan la Pico 2 y la P4.
 
 #### ✅ `#577` — una native no puede LEER un campo de una tupla (abierta 27-sep, al cerrar H5; SUELTA: un resto de `N1` · **CERRADA el 7-oct**, el commit de `#577`)
 

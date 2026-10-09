@@ -517,6 +517,22 @@ struct aot_helpers_v2 {
     int64_t (*call_builtin)(struct bpvm* vm, int32_t id, const char* tipos, const int64_t* args, int32_t tipo_ret);
 };
 
+/* ─── V7 #578 (9-oct) — EL `try` DENTRO DE UNA NATIVE ────────────────────────────────────────────────────────────
+ * La native le habla a la VM por call_builtin, con cuatro números NEGATIVOS: no son builtins de Core —BP no los ve, ni
+ * la VM-Java— y la tabla de helpers no cambia (la opción B de Eduardo). Una VM anterior los rechaza al ejecutar el
+ * `try` («builtin -1 no soportado en esta VM»). docs/V7_IDEAS.md §«#578», el paso 1. */
+#define BPVM_NATIVA_EH_PUSH  (-1)   /* "l": el aterrizaje → 'v'. El más interno del hilo hasta su EH_POP.               */
+#define BPVM_NATIVA_EH_POP   (-2)   /* "l": el mismo → 'v'. Lo quita; si no es el más interno, un error con su nombre.  */
+#define BPVM_NATIVA_EH_EXC   (-3)   /* "" → 'r': la excepción que aterrizó (y la suelta del ancla del hilo).           */
+#define BPVM_NATIVA_EH_ES    (-4)   /* "rl": la excepción y "Lib.Mod.Clase" → 'i': 1 si es de esa clase o de una hija. */
+/* EL ATERRIZAJE: `void* t[BPVM_ATERRIZAJE_PALABRAS]` en el marco de la native. t[0..4], el búfer de __builtin_setjmp;
+ * t[BPVM_ATERRIZAJE_ANTERIOR], el de debajo (lo escribe la VM); t[BPVM_ATERRIZAJE_SALTA], una función de SU módulo que
+ * hace __builtin_longjmp(t, 1). El salto lo da el mismo GCC que hizo el __builtin_setjmp —el de la VM puede ser otro—:
+ * la VM no salta, llama a esa función. */
+#define BPVM_ATERRIZAJE_ANTERIOR  5
+#define BPVM_ATERRIZAJE_SALTA     6
+#define BPVM_ATERRIZAJE_PALABRAS  7
+
 /* V7/H5 P2b.2 — los bits de un float/double, para cruzar hacia call_builtin por una palabra de 64 bits. Son
  * movimientos de enteros (sin FPU, tampoco llaman a libgcc). */
 static inline int64_t bpvm_aot_f32_bits(float f)   { union { float f; int32_t i; } u; u.f = f; return (int64_t) u.i; }

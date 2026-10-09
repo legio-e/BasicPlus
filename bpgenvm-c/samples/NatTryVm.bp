@@ -1,0 +1,183 @@
+// NatTryVm.bp — #578 (V7, 9-oct): el `try` DENTRO de una native, el lado de la VM. Las funciones son BP; el arnés
+// (test/test_aottryvm.c) les pone natives ESCRITAS A MANO —el C que emitirá el AOT: __builtin_setjmp y las cuatro
+// operaciones del límite por call_builtin— y la salida tiene que ser la del intérprete (`--interp`).
+module NatTryVm
+  import Core
+
+  public class MiError extends RuntimeError
+    public function MiError(m: string)
+      super(m)
+    end MiError
+  end MiError
+
+  public function lanzaBP(x: integer): integer
+    if x > 0 then
+      throw MiError("bp " + intToString(x))
+    endif
+    return 7
+  end lanzaBP
+
+  // 1. un throw de la native (throw_runtime) dentro del try; un local cambiado dentro, leído en el catch
+  public function t1(x: integer): integer
+    var r: integer := 0
+    try
+      r := 10
+      if x > 0 then
+        throw RuntimeError("t1")
+      endif
+      r := 20
+    catch e: RuntimeError
+      r := r + 100
+    endtry
+    return r
+  end t1
+
+  // 2. lo lanza un builtin (charAt fuera de rango), por call_builtin
+  public function t2(i: integer): integer
+    var r: integer := 1
+    try
+      var s: string := charAt("abc", i)
+      r := 2
+    catch e: RuntimeError
+      r := 3
+    endtry
+    return r
+  end t2
+
+  // 3. lo lanza una función BP por el puente: MiError, atrapada por su clase (la primera que casa)
+  public function t3(x: integer): integer
+    var r: integer := 0
+    try
+      r := lanzaBP(x)
+    catch e: MiError
+      r := -1
+    catch e: RuntimeError
+      r := -2
+    endtry
+    return r
+  end t3
+
+  // 4. un catch que no es suyo: la relanza, y la atrapa el try de fuera, en la misma native
+  public function t4(x: integer): integer
+    var r: integer := 0
+    try
+      try
+        r := 1
+        throw RuntimeError("t4")
+      catch e: MiError
+        r := 50
+      endtry
+    catch e: RuntimeError
+      r := r + 40
+    endtry
+    return r
+  end t4
+
+  // 5. de una native a otra, sin el intérprete de por medio: lanza la de dentro, atrapa la de fuera; y un
+  //    `return` dentro del try y del catch
+  public function interior5(x: integer): integer
+    if x > 1 then
+      throw RuntimeError("t5")
+    endif
+    return x * 3
+  end interior5
+
+  public function t5(x: integer): integer
+    try
+      return interior5(x) + 1
+    catch e: RuntimeError
+      return -5
+    endtry
+  end t5
+
+  // 6. la native llama a BP, que llama a OTRA native que lanza sin try: cruza su límite y el suelo del puente
+  //    (#672), y la atrapa el try de la primera
+  public function lanzaNativa(x: integer): integer
+    if x > 0 then
+      throw RuntimeError("t6")
+    endif
+    return 1
+  end lanzaNativa
+
+  public function puente6(x: integer): integer
+    return lanzaNativa(x) + 1
+  end puente6
+
+  public function t6(x: integer): integer
+    var r: integer := 5
+    try
+      r := puente6(x)
+    catch e: RuntimeError
+      r := r * 10
+    endtry
+    return r
+  end t6
+
+  // 7. un try en un bucle, con GC en cada reserva: los aterrizajes, siempre a la par
+  public function t7(n: integer): integer
+    var s: integer := 0
+    var i: integer := 0
+    while i < n do
+      try
+        if i mod 3 == 0 then
+          throw RuntimeError("t7 " + intToString(i))
+        endif
+        s += i
+      catch e: RuntimeError
+        s += 1000
+      endtry
+      i += 1
+    endwh
+    return s
+  end t7
+
+  // 8. lo que lanza un catch va hacia fuera (su aterrizaje ya no está): lo atrapa Main
+  public function t8(x: integer): integer
+    try
+      throw RuntimeError("t8 dentro")
+    catch e: RuntimeError
+      throw RuntimeError("t8 desde el catch")
+    endtry
+    return 0
+  end t8
+
+  // 9. la excepción que aterriza, entera: su mensaje (el getter, por el puente)
+  public function t9(x: integer): string
+    try
+      throw MiError("nueve " + intToString(x))
+    catch e: RuntimeError
+      return "t9 " + e.msg
+    endtry
+    return "FALLO 9"
+  end t9
+
+  // 10. con --desparejado, su native cierra un aterrizaje que no es el más interno: el programa acaba con el error
+  public function t10(x: integer): integer
+    return x
+  end t10
+
+  function Main()
+    print "ok 1 " + intToString(t1(0)) + " " + intToString(t1(1))
+    print "ok 2 " + intToString(t2(1)) + " " + intToString(t2(9))
+    print "ok 3 " + intToString(t3(0)) + " " + intToString(t3(1))
+    print "ok 4 " + intToString(t4(0))
+    print "ok 5 " + intToString(t5(1)) + " " + intToString(t5(2))
+    // 6b: tras el 6, un throw que atrapa un try de Main de DEBAJO: si el aterrizaje del 6 se hubiera saltado el
+    //     límite de la native de dentro, el suelo de su puente seguiría en la pila y se la quedaría
+    try
+      print "ok 6 " + intToString(t6(0)) + " " + intToString(t6(1))
+      throw RuntimeError("6 despues")
+    catch e: RuntimeError
+      print "ok 6b " + e.msg
+    endtry
+    print "ok 7 " + intToString(t7(10))
+    try
+      print "FALLO 8: no lanzo " + intToString(t8(1))
+    catch e: RuntimeError
+      print "ok 8 " + e.msg
+    endtry
+    print "ok 9 " + t9(9)
+    print "ok 10 " + intToString(t10(10))
+    print "ok fin"
+  end Main
+end NatTryVm

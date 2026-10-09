@@ -1239,6 +1239,10 @@ void     bpvm_destruir_nombre(bpvm_t* vm, bpref_t r, char* out, size_t cap);
 uint64_t bpvm_destruir_siguiente(bpvm_t* vm, bpvm_thread_t* tc);
 /* exceptions.c — V7 #668: ¿la clase `clase` desciende de `de`? (la regla de los catch; destruir.c la usa con Thread) */
 int      bpvm_clase_desciende(const bpvm_t* vm, uint32_t clase, uint32_t de);
+/* V7 #578 — 1 si `clase` o una de sus madres se llama `nombre` ("Lib.Mod.Clase", el canónico de la 4.5): el `catch` por
+ * clase de una native (EH_ES). Por el NOMBRE, no por la dirección: vale para una clase privada del módulo, que no está
+ * en la tabla de símbolos. */
+int      bpvm_clase_se_llama(const bpvm_t* vm, uint32_t clase, const char* nombre);
 
 /* interp.c — GAP-4: formateo canónico de double/float (byte-idéntico a
  * VirtualMachine.formatBpDouble). L13: también lo usan los builtins
@@ -1419,6 +1423,11 @@ typedef struct {
      * una clase de usuario creada via factory __cls_new_* por el puente). El
      * boundary la propaga tal cual en vez de construir un RuntimeError. */
     volatile uint32_t pending_ref;
+    /* V7 #578 — el ATERRIZAJE más interno de un `try` dentro de una native (el `void* t[7]` de su marco:
+     * BPVM_ATERRIZAJE_* en bpvm_aot_helpers.h), o NULL. Una excepción dentro de la native salta ahí antes que al
+     * límite (con ella en `pending_ref`, que el `catch` recoge con EH_EXC). Cada aot_call_guarded lo guarda, lo vacía
+     * y lo repone al salir: los de una native de fuera quedan debajo de su límite. */
+    void**       nativo;
 } bpvm_aot_fault_t;
 
 /* Devuelve el slot de fault del worker actual (TLS en host). */

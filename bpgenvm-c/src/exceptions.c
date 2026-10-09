@@ -85,6 +85,23 @@ int bpvm_clase_desciende(const bpvm_t* vm, uint32_t clase, uint32_t de) {   /* V
     return is_descendant_of(vm, clase, de);
 }
 
+/* V7 #578 — el `catch` por clase de una native: la misma subida que is_descendant_of, mirando el NOMBRE de cada clase
+ * (el canónico de la 4.5 de su módulo). Una madre sin nombre (de un módulo sin 4.5) no puede ser la del `catch`: el
+ * enlace no deja que un módulo nuevo nombre una clase de uno así. */
+int bpvm_clase_se_llama(const bpvm_t* vm, uint32_t clase, const char* nombre) {
+    uint32_t cur = clase;
+    for (int prof = 0; cur != 0 && prof < 64; prof++) {
+        if (cur + BPVM_CLS_OFF_FIELD_BITMAP > vm->memory_size) return 0;
+        char nm[256];
+        if (bpvm_link_nombre_de_clase(vm, cur, nm, sizeof nm) && strcmp(nm, nombre) == 0) return 1;
+        int32_t parent_off = bpvm_read_i32_be(vm->memory + cur + BPVM_CLS_OFF_PARENT_OFF);
+        if (parent_off == 0) return 0;
+        uint32_t cur_cs = bpvm_get_cs_for_data_addr(vm, cur);
+        cur = (uint32_t)((int32_t) cur_cs + parent_off);
+    }
+    return 0;
+}
+
 /* V7/H7 #607 (30-sep, Eduardo: «lo que sea pero que no sea mudo») — un hilo que NO es el main muere por una
  * excepción que nadie atrapa: se DICE en la salida del programa —la consola del PC y la del IDE con la placa—, no
  * sólo por el diagnóstico, que en la placa va al log. Pasa sobre todo mientras se desarrolla (el manejador de un

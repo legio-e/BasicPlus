@@ -299,18 +299,28 @@ int bpvm_aot_call_guarded(bpvm_t* vm, bpvm_thread_t* tc,
      * del intérprete lo hacen siempre. Aquí `*sp` aún es el valor PRE-pop, así
      * que los slots de los argumentos quedan dentro del rango escaneado. */
     tc->sp = *sp;
+    /* V7 #578 — los aterrizajes de los `try` de una native de FUERA quedan debajo de este límite: lo que lance ésta
+     * llega aquí (y de aquí, por el intérprete, a su `try` si está). Fijado antes del setjmp, como los de arriba. */
+    void** prev_nativo = f->nativo;
+    f->nativo = NULL;
     f->buf = &mi_buf;
     if (setjmp(mi_buf) == 0) {
         f->armed = 1;
         f->pending_ref = 0;   /* #213: estado fresco por invocación */
         aot(vm, sp, bp);
+        /* #578 — una native vuelve con todos sus `try` cerrados; si no, el AOT se equivocó (el registro estaba en su
+         * marco, ya muerto). Se dice y se sigue: el de fuera se repone igual. */
+        if (f->nativo != NULL)
+            bpvm_diag_urgente("[aot] #578: una native vuelve con un try sin cerrar (el C del AOT no saca su aterrizaje)");
         f->armed = prev_armed;
         f->buf = prev_buf;    /* #571 */
+        f->nativo = prev_nativo;
         *cc = prev_cc;
         return 0;
     }
     f->armed = prev_armed;
     f->buf = prev_buf;        /* #571: el de fuera, otra vez */
+    f->nativo = prev_nativo;  /* #578 */
     *cc = prev_cc;
     /* #213 — si el native dejó una excepción YA construida (throw_ref de una
      * clase de usuario via factory), propagarla tal cual; si no, construir el

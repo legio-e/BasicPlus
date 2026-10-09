@@ -215,6 +215,30 @@ static int64_t h_imod64(bpvm_t* vm, int64_t a, int64_t b) {
 /* ---------- Control de ejecución ----------
  * throw_runtime levanta un BpThreadFault que sube por la pila de
  * frames hasta el handler más cercano (o tumba el thread). */
+
+/* V7 #578 — si el aterrizaje más interno es el `try` de una native (f->nativo), salta a él con la excepción y NO
+ * vuelve: sale de la cadena (su `catch` ya no es suyo: lo que lance va hacia fuera), la excepción queda en el límite
+ * para EH_EXC y anclada en el hilo, y el hilo vuelve a la pila BP de la native. El salto lo da la función de SU módulo
+ * (t[BPVM_ATERRIZAJE_SALTA]), con el mismo GCC que hizo el __builtin_setjmp. Vuelve sin hacer nada si no hay
+ * aterrizaje, o si hay un `kill` pedido: ése no lo atrapa una native —sin ejecutor, un `catch` en un bucle lo
+ * tragaría para siempre—; sube al límite y el intérprete para el programa. */
+static void aterriza_en_la_native(bpvm_t* vm, bpvm_aot_fault_t* f, uint32_t exc) {
+    void** t = f->nativo;
+    bpvm_aot_callctx_t* cc;
+    void (*salta)(void**);
+    if (t == NULL || exc == 0 || bpvm_kill_pedido(vm)) return;
+    cc = bpvm_aot_callctx();
+    f->nativo = (void**) t[BPVM_ATERRIZAJE_ANTERIOR];
+    f->pending_ref = exc;
+    f->msg[0] = '\0';
+    if (cc->tc != NULL) {
+        cc->tc->alloc_anchor = (int32_t) exc;
+        if (cc->sp_p != NULL) cc->tc->sp = *cc->sp_p;
+    }
+    salta = (void (*)(void**)) (uintptr_t) t[BPVM_ATERRIZAJE_SALTA];
+    salta(t);   /* __builtin_longjmp(t, 1): no vuelve */
+}
+
 static void h_throw_runtime(bpvm_t* vm, const char* msg) {
     (void) vm;
     /* #186: si el call-site AOT del intérprete armó un boundary en este
@@ -224,6 +248,15 @@ static void h_throw_runtime(bpvm_t* vm, const char* msg) {
      * basura como antes. */
     bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
     if (f->armed) {
+        /* V7 #578 — con un `try` de la native por encima del límite, la excepción se construye AQUÍ: su `catch` mira
+         * la clase y lee el mensaje. Si no se puede (sin memoria), al límite, que lo intenta otra vez. */
+        if (f->nativo != NULL && !bpvm_kill_pedido(vm)) {
+            bpvm_thread_t* tc = bpvm_aot_callctx()->tc;
+            if (tc != NULL) {
+                bpref_t r = bpvm_throw_runtime_error(vm, tc, msg ? msg : "");
+                if (!bpref_is_null(r)) aterriza_en_la_native(vm, f, (uint32_t) r.v);
+            }
+        }
         size_t n = msg ? strlen(msg) : 0;
         if (n > sizeof(f->msg) - 1) n = sizeof(f->msg) - 1;
         if (msg && n) memcpy(f->msg, msg, n);
@@ -259,6 +292,7 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
     (void) vm;
     bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
     if (f->armed) {
+        aterriza_en_la_native(vm, f, exc_ref);   /* V7 #578: el `try` de la native, si lo hay (no vuelve) */
         f->pending_ref = exc_ref;
         f->msg[0] = 0;
         longjmp(*f->buf, 1);  /* no retorna (#571: el límite más interno) */
@@ -269,6 +303,56 @@ static void h_throw_ref(bpvm_t* vm, uint32_t exc_ref) {
 /* V7/H5 P2b.2 — CUALQUIER builtin desde una native. Ver la tabla (bpvm_aot_helpers.h). Como el puente
  * nativo→BP: los argumentos van a la pila BP del hilo, encima de su sp vivo (el estable de la native: el GC
  * los ve, están bajo tc->sp), se llama al despachador y se saca lo que el builtin dejó. */
+/* V7 #578 — EL `try` DENTRO DE UNA NATIVE: las cuatro operaciones del límite (BPVM_NATIVA_EH_*, bpvm_aot_helpers.h).
+ * Sin pasar por la pila BP: los argumentos son de C (la dirección del aterrizaje, el nombre de una clase). */
+static int64_t nativa_eh(bpvm_t* vm, int32_t id, const char* tipos, const int64_t* args, int32_t tipo_ret) {
+    bpvm_aot_fault_t* f = bpvm_aot_fault_slot();
+    bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
+    const char* espera = id == BPVM_NATIVA_EH_EXC ? "" : id == BPVM_NATIVA_EH_ES ? "rl" : "l";
+    int32_t devuelve = id == BPVM_NATIVA_EH_EXC ? 'r' : id == BPVM_NATIVA_EH_ES ? 'i' : 'v';
+    if (id < BPVM_NATIVA_EH_ES || tipos == NULL || strcmp(tipos, espera) != 0 || tipo_ret != devuelve) {
+        h_throw_runtime(vm, "try en una native: operacion o argumentos que no son los suyos (#578)");
+        return 0;
+    }
+    if (!f->armed || cc->tc == NULL) {
+        h_throw_runtime(vm, "try en una native: fuera de su limite de fallos (#578)");
+        return 0;
+    }
+    switch (id) {
+    case BPVM_NATIVA_EH_PUSH: {
+        void** t = (void**) (intptr_t) args[0];
+        t[BPVM_ATERRIZAJE_ANTERIOR] = (void*) f->nativo;
+        f->nativo = t;
+        return 0;
+    }
+    case BPVM_NATIVA_EH_POP: {
+        void** t = (void**) (intptr_t) args[0];
+        if (f->nativo != t) {
+            f->nativo = NULL;   /* la cadena ya no es de fiar: lo que se lance, al límite */
+            h_throw_runtime(vm, "try en una native: se cierra uno que no es el mas interno (el C del AOT se equivoco, #578)");
+            return 0;
+        }
+        f->nativo = (void**) t[BPVM_ATERRIZAJE_ANTERIOR];
+        return 0;
+    }
+    case BPVM_NATIVA_EH_EXC: {
+        uint32_t e = f->pending_ref;
+        f->pending_ref = 0;
+        if ((uint32_t) cc->tc->alloc_anchor == e) cc->tc->alloc_anchor = 0;   /* desde aquí la tiene la native */
+        return (int64_t) e;
+    }
+    default: {   /* BPVM_NATIVA_EH_ES */
+        uint32_t e = (uint32_t) args[0];
+        const char* nombre = (const char*) (intptr_t) args[1];
+        uint32_t addr;
+        if (e == 0 || nombre == NULL) return 0;
+        addr = A(vm, e);
+        if (addr == 0) return 0;
+        return bpvm_clase_se_llama(vm, bpvm_read_u32_be(vm->memory + addr), nombre) ? 1 : 0;
+    }
+    }
+}
+
 static int64_t h_call_builtin(bpvm_t* vm, int32_t id, const char* tipos, const int64_t* args, int32_t tipo_ret) {
     bpvm_aot_callctx_t* cc = bpvm_aot_callctx();
     bpvm_thread_t* tc = cc->tc;
@@ -277,6 +361,7 @@ static int64_t h_call_builtin(bpvm_t* vm, int32_t id, const char* tipos, const i
     int64_t r = 0;
     bpvm_status_t st;
     int i;
+    if (id < 0) return nativa_eh(vm, id, tipos, args, tipo_ret);   /* V7 #578 */
     if (tc == NULL || cc->sp_p == NULL) {
         h_throw_runtime(vm, "call_builtin: fuera de una native");
         return 0;
