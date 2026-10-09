@@ -98,6 +98,18 @@
 > graba y se usa, su ronda de V7 verde e idéntica a la de la mañana (`tanda_v7_9oct_s3`), y la caché probada con un
 > `PACK_DEL`. Las demás ESP llevan la imagen de antes: no lo necesitan, pero el arreglo va en el lote final. Y `#615`,
 > aparcada desde el 1-oct, **a V8** (Eduardo: *«615 a v8»*). **No queda ninguna ficha abierta de V7.**
+> **⏭️ Mañana (10-oct): DOCUMENTAR** —el `D1` de V7, con el método del de V6 (`FICHAS`, «📚 `D1`»): medir, no leer;
+> editores en paralelo y un verificador independiente—. **Y la idea de Eduardo**: *«repasar todos los issues de V7 y
+> ver si alguno de ellos representa cambios en la documentación»* —todas las fichas de V7, no sólo las marcadas—.
+> **Lo medido el 9-oct por la noche** (para no repetirlo): `samples_sweep` **399/399**; `doc_frags`, 302 bloques BP:
+> 161 OK, 135 trozo, 2 error-esperado y **4 FALLO**, los cuatro de V7 —manual ES §4.2.1 (un array fijo: «'Media' no
+> tiene miembro 'n'»), §5.3 (`var owner`, un esquema con «…» unicode) y §9.4b (el destructor usa `IO.open`/`close`,
+> que no existen); manual EN §4.2.1 (un array fijo a nivel de módulo, que V7 prohíbe)—. Al día en español: manual y
+> referencia (31 y 28 commits en V7), `PENDIENTES`, `BUILTINS`; el inglés, por detrás (manual +225 líneas frente a
+> +457; nada del destructor). **Sin tocar en V7**: las dos portadas, `QUICKSTART`, `INSTALAR_FIRMWARE`, `RELEASES`
+> (v7.0, con la introducción de Eduardo), `index` ES/EN, `cheatsheet`, `basedatos` ES/EN, `bp-desde-dentro`,
+> `opcodes`, `gui` EN. **Lo único grave**: la instalación no dice ni la C5 ni que la pantalla llega en PACKS (en las
+> cuatro con pantalla, el de la GUI; en la C5 y la C6, además, el del driver de su panel).
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y
