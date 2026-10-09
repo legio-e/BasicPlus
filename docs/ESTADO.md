@@ -71,7 +71,8 @@
 > C5 con la imagen nueva). **`#645` CERRADA** (Eduardo: «No hace falta unificar»: el GT911 de la P4 es el componente
 > de Espressif; el de la DK2, nuestro sobre la HAL BP).
 > **La tarde de placas**: la C5, la C6, la Metro, la C3 y la Nucleo con la imagen nueva (OK de Eduardo); la ronda de V7,
-> verde en la C5, la C6, la Metro y la C3 (la Nucleo se desconectó antes de la suya). Y **`#675`**: la Metro se colgaba
+> verde en la C5, la C6, la Metro y la C3, y en la Nucleo después (se había desconectado antes de la suya;
+> `tanda_v7_9oct_nucleo`: 46 de 50 y las 4 de la GUI saltadas, sin pantalla). Y **`#675`**: la Metro se colgaba
 > en el primer RUN —la marca de `#592` se sumaba con LDREX/STREX sobre la PSRAM, donde el acceso exclusivo no se cumple:
 > la interrupción del reloj giraba para siempre—; ahora una lectura y una escritura; la Metro, con su ronda verde:
 > CERRADA. **`#614` CERRADA** (Eduardo: «(a)», mirarla en V7): **no era una regresión; era el instrumento**. El «1 ms
@@ -80,9 +81,8 @@
 > cronometrado con una imagen de prueba que no entra al árbol), y el motor del 23-sep pinta igual que el de hoy. La C5,
 > de vuelta a la imagen y los packs del lote (el pack de prueba, borrado con el OK de Eduardo; en `/app` quedan
 > `GuiPinta614` y `GuiFlushViejo`, de la prueba).
-> **Lo siguiente**: la ronda de la Nucleo (se desconectó antes de la suya) y la Pico 2 con la imagen de `#675` —no la
-> necesita, no tiene PSRAM, pero es la misma imagen que la Metro—, en el próximo lote; y después, documentar, las
-> pruebas finales y publicar.
+> **Lo siguiente**: la Pico 2 con la imagen de `#675` —no la necesita, no tiene PSRAM, pero es la misma imagen que la
+> Metro; compilada y al día, falta conectarla—; y después, documentar, las pruebas finales y publicar.
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y

@@ -3500,7 +3500,9 @@ en las cuatro (`tanda_v7_9oct_tarde`), y `NatTry` IDÉNTICO con sus 12 natives e
 (Cortex-M33 de dos familias y RV32). **CERRADA.** **Y el resto del lote (9-oct, tarde y noche)**: la C5 y la C6 (la
 imagen de la mañana; sus packs de la GUI cargan sin regrabar: el bloque de RAM y la zona, en su sitio), la Metro (con el
 arreglo de `#675`) y la C3 (lo mismo), con la ronda de V7 verde en las cuatro —`NatTry` y `NatPuente` idénticos y en
-nativo también en RV32IMC—; la Nucleo, grabada y sin ronda (se desconectó antes).
+nativo también en RV32IMC—; y la Nucleo, que se había desconectado antes de la suya, con la ronda verde después
+(`tanda_v7_9oct_nucleo`: 46 de 50 y las 4 de la GUI saltadas, sin pantalla; `NatTry` y `NatPuente` idénticos y en
+nativo).
 
 #### ✅ `#577` — una native no puede LEER un campo de una tupla (abierta 27-sep, al cerrar H5; SUELTA: un resto de `N1` · **CERRADA el 7-oct**, el commit de `#577`)
 
