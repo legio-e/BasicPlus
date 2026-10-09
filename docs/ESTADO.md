@@ -81,8 +81,9 @@
 > cronometrado con una imagen de prueba que no entra al árbol), y el motor del 23-sep pinta igual que el de hoy. La C5,
 > de vuelta a la imagen y los packs del lote (el pack de prueba, borrado con el OK de Eduardo; en `/app` quedan
 > `GuiPinta614` y `GuiFlushViejo`, de la prueba).
-> **Lo siguiente**: la Pico 2 con la imagen de `#675` —no la necesita, no tiene PSRAM, pero es la misma imagen que la
-> Metro; compilada y al día, falta conectarla—; y después, documentar, las pruebas finales y publicar.
+> Y la Pico 2 con la imagen de `#675` —no la necesita, no tiene PSRAM, pero es la misma imagen que la Metro—: la ronda
+> de V7, verde (`tanda_v7_9oct_pico2`: 46 de 50 y las 4 de la GUI saltadas). **Las nueve placas, con su ronda de V7
+> verde.** **Lo siguiente**: documentar, las pruebas finales y publicar.
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y

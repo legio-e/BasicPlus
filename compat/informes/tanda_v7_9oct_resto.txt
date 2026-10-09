@@ -1,0 +1,412 @@
+=== tanda 2026-10-09 15:17:04 ===
+oraculo: jar C:\lenguajes\pm\lexer-java\target\basicplus-frontend.jar (2026-10-09 11:20:44)
+         exe C:\lenguajes\pm\bpgenvm-c\build\bpgenvm-c.exe (2026-10-09 09:53:45) sabor v2-gui1-lvgl0
+-- oraculo (PC) --
+  MathRango        rc=0    13 ms  29 lineas  (crc f3a5cb9d, 1611 B)
+  ThrowSinAtrapar  rc=1     8 ms  1 lineas  (crc 735903f3, 295 B)
+  ThreadTrasMain   rc=0   332 ms  3 lineas  (crc 15cc0889, 532 B)
+  MachineId        rc=0     9 ms  3 lineas  (crc 8004edfc, 484 B)
+  Destructor       rc=0     9 ms  33 lineas  (crc e746e599, 4510 B)
+  TimeDemo         rc=0    15 ms  13 lineas  (crc 3110e034, 1504 B)
+  ArrayFijo        rc=0    10 ms  11 lineas  (crc 00bb8451, 2359 B)
+  MoveRango        rc=0    15 ms  26 lineas  (crc 7e3d19a7, 3670 B)
+  HiloUsa          rc=0    11 ms  8 lineas  (crc 6f9e917f, 2189 B)
+  GuiWinJson       rc=0    60 ms  17 lineas  (crc 5f8ff7d5, 2070 B)
+  GuiShot          rc=0   376 ms  8 lineas  (crc e6444711, 1344 B)
+  GuiArbolG2       rc=0    58 ms  39 lineas  (crc dee22fe8, 5331 B)
+  GuiAnidadaGc     rc=0   134 ms  1 lineas  (crc 6865ab41, 1121 B)
+  NatNew           rc=0     8 ms  10 lineas  (crc b29ec49f, 2087 B)
+  NatV7            rc=0    11 ms  11 lineas  (crc 059fc19f, 1557 B)
+  FloatNat         rc=0     7 ms  40 lineas  (crc ea8800a0, 4877 B)
+  NatCede          rc=0    93 ms  7 lineas  (crc a6b6cd87, 1499 B)
+  NatExpropia      rc=0    10 ms  4 lineas  (crc 9e59cba5, 905 B)
+  NatDosRuns       rc=0    43 ms  4 lineas  (crc 7836f3a7, 3016 B)
+  NatBuiltin       rc=0    51 ms  8 lineas  (crc 59b04ec9, 1592 B)
+  NatAnida         rc=0    10 ms  3 lineas  (crc 41e5fd02, 734 B)
+  NatPuente        rc=0    12 ms  9 lineas  (crc 744c1ee7, 1995 B)
+  NatTry           rc=0    11 ms  16 lineas  (crc ab1b73fd, 3280 B)
+  NatDirecta       rc=0     8 ms  9 lineas  (crc 3d1d78ee, 1018 B)
+  NatCoste         rc=0    12 ms  2 lineas  (crc 234aaff5, 772 B)
+  NatNombres       rc=0     8 ms  6 lineas  (crc 54fe052b, 1444 B)
+  NatEstrecha      rc=0    13 ms  23 lineas  (crc 51d06e90, 1767 B)
+  DblNat           rc=0    36 ms  4 lineas  (crc bddd36bf, 1859 B)
+  KillLoop         rc=None  None ms  0 lineas  (crc 456e06ad, 233 B)
+  NatKill          rc=None  None ms  0 lineas  (crc 71e2616e, 401 B)
+  NatRecurKill     rc=None  None ms  0 lineas  (crc 3ae72427, 420 B)
+  CatCadena        rc=0     9 ms  24 lineas  (crc 85063b5a, 3879 B)
+  CatCrono         rc=0    11 ms  2 lineas  (crc 8d3cc0f5, 886 B)
+  SbPiezas         rc=0     9 ms  12 lineas  (crc ac6879a6, 1979 B)
+  SbCrono          rc=0    13 ms  2 lineas  (crc a33dae64, 819 B)
+  HeapInfo         rc=0    11 ms  10 lineas  (crc 443490ab, 1225 B)
+  HeapCompact      rc=0    18 ms  17 lineas  (crc 210ef9c3, 3577 B)
+  HeapReposo       rc=0    78 ms  8 lineas  (crc 8dc76e48, 2803 B)
+  DescarteAncho    rc=0    22 ms  5 lineas  (crc f0e60888, 1730 B)
+  TempRetiene      rc=0    14 ms  13 lineas  (crc 6ece6049, 3177 B)
+  FinallyAnidado   rc=0    10 ms  5 lineas  (crc 998f3f08, 1951 B)
+  RtcEnHora        rc=0    13 ms  7 lineas  (crc 7001120e, 1301 B)
+  FicheroOCarpeta  rc=0    11 ms  7 lineas  (crc fc4f9456, 792 B)
+  GcHondo          rc=0    12 ms  4 lineas  (crc cd18fc7b, 1584 B)
+  OwnerHondo       rc=0    16 ms  7 lineas  (crc 91f74fc6, 3824 B)
+  EvReceptorMuerto rc=0     9 ms  2 lineas  (crc 190344cf, 1404 B)
+  FicheroYaAbierto rc=0    16 ms  15 lineas  (crc 3a02aac4, 1259 B)
+  ImportHondo      rc=0    36 ms  2 lineas  (crc 7d9e336d, 399 B)
+  synclisttest     rc=0    28 ms  11 lineas  (crc c40fca88, 3860 B)
+  PinesPantalla    rc=0    15 ms  3 lineas  (crc 8c74d3a8, 3169 B)
+-- placas --
+  COM6: HELLO_REPLY de bpvm-esp32c5 (Oct  9 2026 10:56:49)
+  COM3: HELLO_REPLY de bpvm-esp32c6 (Oct  9 2026 10:57:19)
+  COM4: HELLO_REPLY de bpvm-pico (Oct  9 2026 10:05:09)
+  COM5: HELLO_REPLY de bpvm-stm32 (Oct  9 2026 10:59:07)
+  al conectar: nada corria (KILL: NO_SESSION)
+  imagen: la COMPILADA en el PC: bpgenvm-c/esp32c5/build/bpvm_esp32c5.bin (09-10 15:15)
+placa esp32c5 id=10BDA3FEFFDF build=Oct  9 2026 10:56:49 imagen=a453dfb0 (serie COM6) pantalla=si [INFO screenW x screenH = 240x320]
+  MathRango
+    RUN /app/MathRango.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  ThrowSinAtrapar
+    RUN /app/ThrowSinAtrapar.mod (timeout 30 s)
+    -> IDENTICO: EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: ?ndice fuera de rango 99 (length=3)); host rc=1
+  ThreadTrasMain
+    RUN /app/ThreadTrasMain.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  MachineId
+    RUN /app/MachineId.mod (timeout 30 s)
+    -> NO-PETA: EXITED OK exit=0
+  Destructor
+    RUN /app/Destructor.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  TimeDemo
+    RUN /app/TimeDemo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  ArrayFijo
+    RUN /app/ArrayFijo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  MoveRango
+    RUN /app/MoveRango.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  HiloUsa
+    RUN /app/HiloUsa.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  GuiWinJson
+    oraculo del host con --screen=240x320
+    RUN /app/GuiWinJson.mod (timeout 60 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  GuiShot
+    oraculo del host con --screen=240x320
+    RUN /app/GuiShot.mod (timeout 60 s)
+    -> NO-PETA: EXITED OK exit=0
+  GuiArbolG2
+    oraculo del host con --screen=240x320
+    RUN /app/GuiArbolG2.mod (timeout 60 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  GuiAnidadaGc
+    oraculo del host con --screen=240x320
+    RUN /app/GuiAnidadaGc.mod (timeout 120 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  NatNew
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatNew.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMC_ILP32)
+  NatV7
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatV7.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMC_ILP32)
+  FloatNat
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/FloatNat.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 23/23 thunks (RV32IMC_ILP32)
+  NatCede
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatCede.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32)
+  NatExpropia
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatExpropia.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 1/1 thunks (RV32IMC_ILP32)
+  NatDosRuns
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatDosRuns.mod (timeout 120 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 3/3 thunks (RV32IMC_ILP32)
+  NatBuiltin
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatBuiltin.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 6/6 thunks (RV32IMC_ILP32)
+  NatAnida
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatAnida.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32)
+  NatPuente
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatPuente.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 6/6 thunks (RV32IMC_ILP32)
+  NatTry
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatTry.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 12/12 thunks (RV32IMC_ILP32)
+  NatDirecta
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatDirecta.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 9/9 thunks (RV32IMC_ILP32)
+  NatCoste
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatCoste.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32)
+  NatNombres
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatNombres.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMC_ILP32)
+  NatEstrecha
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatEstrecha.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMC_ILP32)
+  DblNat
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/DblNat.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 3/3 thunks (RV32IMC_ILP32)
+  KillLoop
+    RUN /app/KillLoop.mod (timeout 10 s, KILL a los 500 ms)
+    -> PARADA: KILL a los 500 ms; el EXITED, 49 ms despues: EXITED KILLED exit=130 (terminado por KILL)
+  NatKill
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatKill.mod (timeout 10 s, KILL a los 500 ms)
+    -> PARADA: KILL a los 500 ms; el EXITED, 3 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (RV32IMC_ILP32)
+  NatRecurKill
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatRecurKill.mod (timeout 10 s, KILL a los 500 ms)
+    -> PARADA: KILL a los 500 ms; el EXITED, 2 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (RV32IMC_ILP32)
+  CatCadena
+    RUN /app/CatCadena.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  CatCrono
+    RUN /app/CatCrono.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  SbPiezas
+    RUN /app/SbPiezas.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  SbCrono
+    RUN /app/SbCrono.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  HeapInfo
+    RUN /app/HeapInfo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  HeapCompact
+    RUN /app/HeapCompact.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  HeapReposo
+    RUN /app/HeapReposo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  DescarteAncho
+    RUN /app/DescarteAncho.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  TempRetiene
+    RUN /app/TempRetiene.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  FinallyAnidado
+    RUN /app/FinallyAnidado.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  RtcEnHora
+    RUN /app/RtcEnHora.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  FicheroOCarpeta
+    RUN /app/FicheroOCarpeta.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  GcHondo
+    RUN /app/GcHondo.mod (timeout 60 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  OwnerHondo
+    RUN /app/OwnerHondo.mod (timeout 60 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  EvReceptorMuerto
+    RUN /app/EvReceptorMuerto.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  FicheroYaAbierto
+    RUN /app/FicheroYaAbierto.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  ImportHondo
+    RUN /app/ImportHondo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  synclisttest
+    RUN /app/SyncListTest.mod (timeout 90 s)
+    -> ASERCIONES: 3 comprobaciones OK y ninguna mala (EXITED OK exit=0)
+  PinesPantalla
+    RUN /app/PinesPantalla.mod (timeout 30 s)
+    -> ASERCIONES: 1 comprobaciones OK y ninguna mala (EXITED OK exit=0)
+  limpieza: 0 fichero(s) de /app borrados y los artefactos (GuiShot.shot)
+  al conectar: nada corria (KILL: NO_SESSION)
+  imagen: la COMPILADA en el PC: bpgenvm-c/esp32c6/build/bpvm_esp32c6.bin (09-10 15:16)
+placa esp32c6 id=58E6C5FFFEF9 build=Oct  9 2026 10:57:19 imagen=abe09865 (serie COM3) pantalla=si [INFO screenW x screenH = 240x240]
+  MathRango
+    RUN /app/MathRango.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  ThrowSinAtrapar
+    RUN /app/ThrowSinAtrapar.mod (timeout 30 s)
+    -> IDENTICO: EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: ?ndice fuera de rango 99 (length=3)); host rc=1
+  ThreadTrasMain
+    RUN /app/ThreadTrasMain.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  MachineId
+    RUN /app/MachineId.mod (timeout 30 s)
+    -> NO-PETA: EXITED OK exit=0
+  Destructor
+    RUN /app/Destructor.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  TimeDemo
+    RUN /app/TimeDemo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  ArrayFijo
+    RUN /app/ArrayFijo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  MoveRango
+    RUN /app/MoveRango.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  HiloUsa
+    RUN /app/HiloUsa.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  GuiWinJson
+    oraculo del host con --screen=240x240
+    RUN /app/GuiWinJson.mod (timeout 60 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  GuiShot
+    oraculo del host con --screen=240x240
+    RUN /app/GuiShot.mod (timeout 60 s)
+    -> NO-PETA: EXITED OK exit=0
+  GuiArbolG2
+    oraculo del host con --screen=240x240
+    RUN /app/GuiArbolG2.mod (timeout 60 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  GuiAnidadaGc
+    oraculo del host con --screen=240x240
+    RUN /app/GuiAnidadaGc.mod (timeout 120 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  NatNew
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatNew.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMC_ILP32)
+  NatV7
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatV7.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMC_ILP32)
+  FloatNat
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/FloatNat.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 23/23 thunks (RV32IMC_ILP32)
+  NatCede
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatCede.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32)
+  NatExpropia
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatExpropia.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 1/1 thunks (RV32IMC_ILP32)
+  NatDosRuns
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatDosRuns.mod (timeout 120 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 3/3 thunks (RV32IMC_ILP32)
+  NatBuiltin
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatBuiltin.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 6/6 thunks (RV32IMC_ILP32)
+  NatAnida
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatAnida.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32)
+  NatPuente
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatPuente.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 6/6 thunks (RV32IMC_ILP32)
+  NatTry
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatTry.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 12/12 thunks (RV32IMC_ILP32)
+  NatDirecta
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatDirecta.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 9/9 thunks (RV32IMC_ILP32)
+  NatCoste
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatCoste.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMC_ILP32)
+  NatNombres
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatNombres.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMC_ILP32)
+  NatEstrecha
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatEstrecha.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMC_ILP32)
+  DblNat
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/DblNat.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0; nativo 3/3 thunks (RV32IMC_ILP32)
+  KillLoop
+    RUN /app/KillLoop.mod (timeout 10 s, KILL a los 500 ms)
+    -> PARADA: KILL a los 500 ms; el EXITED, 35 ms despues: EXITED KILLED exit=130 (terminado por KILL)
+  NatKill
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatKill.mod (timeout 10 s, KILL a los 500 ms)
+    -> PARADA: KILL a los 500 ms; el EXITED, 28 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (RV32IMC_ILP32)
+  NatRecurKill
+    AOT: fundiendo el nativo para RV32IMC_ILP32
+    RUN /app/NatRecurKill.mod (timeout 10 s, KILL a los 500 ms)
+    -> PARADA: KILL a los 500 ms; el EXITED, 31 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (RV32IMC_ILP32)
+  CatCadena
+    RUN /app/CatCadena.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  CatCrono
+    RUN /app/CatCrono.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  SbPiezas
+    RUN /app/SbPiezas.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  SbCrono
+    RUN /app/SbCrono.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  HeapInfo
+    RUN /app/HeapInfo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  HeapCompact
+    RUN /app/HeapCompact.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  HeapReposo
+    RUN /app/HeapReposo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  DescarteAncho
+    RUN /app/DescarteAncho.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  TempRetiene
+    RUN /app/TempRetiene.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  FinallyAnidado
+    RUN /app/FinallyAnidado.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  RtcEnHora
+    RUN /app/RtcEnHora.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  FicheroOCarpeta
+    RUN /app/FicheroOCarpeta.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  GcHondo
+    -> SALTADA: necesita 180 KB de heap y la VM de esta placa da 63 KB (vmHeapBytes del INFO)
+  OwnerHondo
+    -> SALTADA: necesita 120 KB de heap y la VM de esta placa da 63 KB (vmHeapBytes del INFO)
+  EvReceptorMuerto
+    RUN /app/EvReceptorMuerto.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  FicheroYaAbierto
+    RUN /app/FicheroYaAbierto.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  ImportHondo
+    RUN /app/ImportHondo.mod (timeout 30 s)
+    -> IDENTICO: EXITED OK exit=0; host rc=0
+  synclisttest
+    -> SALTADA: necesita 80 KB de heap y la VM de esta placa da 63 KB (vmHeapBytes del INFO)
+  PinesPantalla
+    RUN /app/PinesPantalla.mod (timeout 30 s)
+    -> ASERCIONES: 1 comprobaciones OK y ninguna mala (EXITED OK exit=0)
+  limpieza: 0 fichero(s) de /app borrados y los artefactos (GuiShot.shot)
+  al conectar: nada corria (KILL: NO_SESSION)
+  imagen: la COMPILADA en el PC: bpgenvm-c/pico/build/bpvm_pico.elf (09-10 10:05)
+placa rp2350b id=4CE219E14C8F8E1C build=Oct  9 2026 10:05:09 imagen=efb9b535 (serie COM4) pantalla=no [INFO sin screenW/screenH: la imagen no lleva LVGL]
+  MathRango
+    RUN /app/MathRango.mod (timeout 30 s)
+    COLGADA sin EXITED tras el KILL: se recupera la placa

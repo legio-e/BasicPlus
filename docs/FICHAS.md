@@ -1869,8 +1869,9 @@ escrito, y la placa lo dijo.) El `KILL` (`bpvm_kill_marcar`) sumaba igual. Las d
 `s_en_vuelo` y `s_marca`, en la SRAM, siguen atómicos. En el PC, `test-aotpesada`, `test-aotkill`, `test-kill` y
 `test-aottryvm`, verdes. **En placa** (OK de Eduardo): la Metro con la imagen arreglada ejecuta `MathRango` (EXITED OK,
 35 ms), y la ronda de V7 entera, verde (`tanda_v7_9oct_noche`: 40 idénticas, las tres del KILL PARADAS a tiempo —el
-KILL también sube la marca—, `NatTry` y `NatPuente` con sus natives en nativo). La red de C, 102/102. **CERRADA.** (La
-Pico 2 lleva la imagen de la RP2350 de antes del arreglo: no le hace falta —sin PSRAM—; la tendrá con el próximo lote.)
+KILL también sube la marca—, `NatTry` y `NatPuente` con sus natives en nativo). La red de C, 102/102. **CERRADA.** Y la
+Pico 2, que no lo necesita —sin PSRAM— pero lleva la misma imagen, grabada con ella esa noche: la ronda de V7, verde
+(`tanda_v7_9oct_pico2`: 46 de 50 y las 4 de la GUI saltadas, sin pantalla; el KILL de las natives, a los 8–10 ms).
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
@@ -3500,7 +3501,8 @@ en las cuatro (`tanda_v7_9oct_tarde`), y `NatTry` IDÉNTICO con sus 12 natives e
 (Cortex-M33 de dos familias y RV32). **CERRADA.** **Y el resto del lote (9-oct, tarde y noche)**: la C5 y la C6 (la
 imagen de la mañana; sus packs de la GUI cargan sin regrabar: el bloque de RAM y la zona, en su sitio), la Metro (con el
 arreglo de `#675`) y la C3 (lo mismo), con la ronda de V7 verde en las cuatro —`NatTry` y `NatPuente` idénticos y en
-nativo también en RV32IMC—; y la Nucleo, que se había desconectado antes de la suya, con la ronda verde después
+nativo también en RV32IMC; la C5 (50 de 50) y la C6 (47, y 3 saltadas por el heap) no tienen informe, porque esa
+tanda se atascó después con la Metro (`#675`): sus resultados, en su log, `tanda_v7_9oct_resto.txt`—; y la Nucleo, que se había desconectado antes de la suya, con la ronda verde después
 (`tanda_v7_9oct_nucleo`: 46 de 50 y las 4 de la GUI saltadas, sin pantalla; `NatTry` y `NatPuente` idénticos y en
 nativo).
 
