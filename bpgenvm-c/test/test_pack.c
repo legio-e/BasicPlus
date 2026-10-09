@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "flash_estricta.h"   /* V7 #647: la flash de la prueba, la más estricta de las placas */
 
 static int g_fail = 0;
 #define CHECK(cond, msg) do { \
@@ -131,20 +132,20 @@ static int cuenta(const char* pajar, const char* aguja) {
     return k;
 }
 
+/* V7 #647 (9-oct) — la flash de la prueba, la COMÚN y estricta (flash_estricta.h): antes era write-once byte a byte,
+ * que deja programar dos veces un mismo quadword de 16 por trozos —la U5 no—. Lo que se niega lo dice. */
+static flash_estricta_t g_fe = { g_fl, FLREG, 4096u, "", 0 };
 static int fl_erase(void* u, uint32_t off, uint32_t len) {
     (void) u;
-    if ((off % 4096u) != 0 || (len % 4096u) != 0 || off + len > FLREG) return -1;
-    memset(g_fl + off, 0xFF, len);
-    return 0;
+    if (flash_estricta_erase(&g_fe, off, len) == 0) return 0;
+    printf("  (la flash de la prueba: %s)\n", g_fe.error);
+    return -1;
 }
 static int fl_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) {
     (void) u;
-    if (off + len > FLREG) return -1;
-    for (uint32_t i = 0; i < len; i++) {
-        if (g_fl[off + i] != 0xFF) return -1;   /* write-once: doble-program = error */
-        g_fl[off + i] = d[i];
-    }
-    return 0;
+    if (flash_estricta_program(&g_fe, off, d, len) == 0) return 0;
+    printf("  (la flash de la prueba: %s)\n", g_fe.error);
+    return -1;
 }
 
 /* V7/H7 (Boot 2, fase 1) — el gancho de montaje de la familia, en host: monta la región

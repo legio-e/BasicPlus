@@ -48,19 +48,36 @@ class Wire:
 def main():
     flash = os.path.join(tempfile.gettempdir(), "boardsim_smoke.flash")
     if os.path.exists(flash): os.remove(flash)   # placa VIRGEN
-    proc = subprocess.Popen([SIM, str(PORT), flash, "4194304"],
-                            stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-    try:
-        # esperar a que el sim escuche
-        sock = None
-        for _ in range(50):
+    vivo = {"proc": None, "sock": None}
+
+    def arranca():
+        vivo["proc"] = subprocess.Popen([SIM, str(PORT), flash, "4194304"],
+                                        stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        for _ in range(50):          # esperar a que el sim escuche
             try:
-                sock = socket.create_connection(("127.0.0.1", PORT), timeout=1.0); break
+                vivo["sock"] = socket.create_connection(("127.0.0.1", PORT), timeout=1.0)
+                return Wire(vivo["sock"])
             except OSError:
                 time.sleep(0.1)
-        if sock is None:
+        return None
+
+    def relanza():
+        """V7 #647 (b, 9-oct) — como una placa: se reinicia y arranca con lo que diga su flash (su plan de
+        particiones lo aplica AL ARRANCAR, no al recibir el PART_APPLY)."""
+        try: vivo["sock"].close()
+        except Exception: pass
+        vivo["proc"].terminate()
+        try: vivo["proc"].wait(timeout=3)
+        except subprocess.TimeoutExpired: vivo["proc"].kill()
+        w2 = arranca()
+        if w2 is not None:
+            w2.call("HELLO", protoVersion=1, clientName="smoke")
+        return w2
+
+    try:
+        w = arranca()
+        if w is None:
             print("FAIL: el sim no aceptó conexión"); return 1
-        w = Wire(sock)
 
         print("=== boardsim smoke (H9 protocolo de gestión de placa) ===")
 
@@ -126,16 +143,36 @@ def main():
         check(r.get("type") == "PART_APPLY_REPLY", "PART_APPLY fs=3M → OK (packs=resto puede ser 0)")
         r = w.call("PART_LS")
         check(r["parts"][1]["size"] == 0, "packs derivado = 0")
+        # 6c. V7 #647 (b, 9-oct) — una placa APLICA las particiones al arrancar: hasta reiniciar, lo montado es lo de
+        #     antes. El sim decía ya el FS del plan con el de antes montado; ahora, como una placa.
+        r = w.call("INFO")
+        check(r.get("fsTotalBytes") == 0x100000,
+              "#647 sin reiniciar, INFO dice el FS MONTADO (1 MB), no el del plan (dice %r)" % r.get("fsTotalBytes"))
+        w = relanza()
+        check(w is not None, "#647 el sim se reinicia, como la placa tras un PART_APPLY")
+        if w is None:
+            return 1
+        r = w.call("INFO")
+        check(r.get("fsTotalBytes") == 0x300000,
+              "#647 reiniciado: el FS del plan, 3 MB (dice %r)" % r.get("fsTotalBytes"))
+        r = w.call("PACK_LS")
+        check(r.get("type") == "ERROR" and r.get("code") == "UNSUPPORTED",
+              "#647 reiniciado con packs=0: SIN zona de packs, como una placa (dice %r)" % r.get("message"))
+        r = w.call("STATE")
+        check(r.get("state") == 3, "#647 reiniciado: estado 3, del arranque")
         r = w.call("PART_APPLY", fs=0x100000)   # restaurar el layout para lo que sigue
         check(r.get("type") == "PART_APPLY_REPLY", "restaurar fs=1M")
 
-        # 7. persistencia: reconectar y comprobar que el estado sigue
-        sock.close()
-        sock = socket.create_connection(("127.0.0.1", PORT), timeout=1.0)
-        w = Wire(sock)
-        w.call("HELLO", protoVersion=1)
+        # 7. persistencia: REINICIAR (#647: antes, sólo reconectar) y comprobar que el estado sigue
+        w = relanza()
+        check(w is not None, "#647 reiniciado otra vez")
+        if w is None:
+            return 1
         r = w.call("STATE")
-        check(r.get("state") == 3, "reconexión: el estado persiste (flash-file A/B) → sigue en 3")
+        check(r.get("state") == 3, "reinicio: el estado persiste (flash-file A/B) → sigue en 3")
+        r = w.call("INFO")
+        check(r.get("fsTotalBytes") == 0x100000,
+              "#647 reiniciado con fs=1M: el FS montado, 1 MB (dice %r)" % r.get("fsTotalBytes"))
         r = w.call("ENV_GET", key="psram")
         check(r.get("value") == "1", "reconexión: psram=1 persistió")
 
@@ -241,9 +278,10 @@ def main():
         print("[status=OK]" if fails == 0 else f"[status=FAIL: {fails}]")
         return 0 if fails == 0 else 1
     finally:
-        proc.terminate()
-        try: proc.wait(timeout=3)
-        except subprocess.TimeoutExpired: proc.kill()
+        if vivo["proc"] is not None:
+            vivo["proc"].terminate()
+            try: vivo["proc"].wait(timeout=3)
+            except subprocess.TimeoutExpired: vivo["proc"].kill()
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -27,6 +27,20 @@
 
 ## Última sesión
 
+> **9-oct** — **Las seis SUELTAS que esperaban a Eduardo, decididas una a una** (*«Me las explicas 1 a 1 y me
+> preguntas lo que necesites»*; `8c94ad76`): `#578` (*«B, y sí, entra en V7»*: el `try` dentro de una native, por el
+> `call_builtin` de siempre, sin subir la ABI; primero el salto en placa), `#592` (*«B y entra en V7»*: el 2º
+> temporizador, la marca en la región reservada de la memoria de la VM), `#583` (*«No depuramos las natives»*, *«1b
+> en V7»*: el IDE lo dice al poner un breakpoint dentro), `#647` (*«OK, V7»*); y a V8, `#582` (B: la placa dice dónde
+> y el PC lo traduce; medido, día y medio —y visto al decidirla: en placa NINGÚN error dice su línea—) y `#584` (el
+> `.mod` multifamilia, con la WiFi). Y una idea de Eduardo para V8: el micro simulado con periféricos (la UART a un
+> puerto serie del PC) y su ventana de configuración.
+> **`#647` CERRADA**: una flash de mentira, la más estricta de las placas, para el simulado y las dos pruebas del
+> gestor (con su sabotaje: el `PACK_DEL` sin borrar, rojo), y el simulado aplicando las particiones al arrancar, como
+> una placa (`boardsim_smoke` lo reinicia). La red entera, verde (paridad 146, cápsula 59, norma 9/9, sim 12/12, pruebas de C 98/98, sombra 15/15, MOD8, dos workers, estrés, packs-abi, stdlib embebida).
+> **Lo siguiente** (V7): `#583` (el aviso del IDE, unas horas), `#592` (un día) y `#578` (uno o dos; su primer paso
+> pide grabar una imagen de prueba, con el OK de Eduardo); y en placa, la C3 y el lote de la imagen de hoy.
+>
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y
 > `Core.__destruyePendientes` en `Core.bp`, seis primitivas (272–277), el compilador (un `owner` que muere llama a

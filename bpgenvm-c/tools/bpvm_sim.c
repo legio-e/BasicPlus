@@ -88,6 +88,8 @@
 #include <string.h>
 #include <time.h>
 
+#include "../test/flash_estricta.h"   /* V7 #647: la flash de la zona de packs, la más estricta de las placas */
+
 #ifdef BPVM_SQLITE
 /* V6 — EL SIMULADOR CON BASE DE DATOS (`make sim SQLITE=1`).
  *
@@ -264,22 +266,29 @@ static int      g_no_screen  = 0;              /* --no-screen: placa sin panel *
 static sock_t g_cli         = BAD_SOCK;
 
 /* Cintura de "flash" del sim para el BURN (erase/program sobre la región RAM).
- * Bloque de borrado 4K (como Pico/ESP; el STM32 real usa 8K). */
+ * Bloque de borrado 4K (como Pico/ESP; el STM32 real usa 8K).
+ * V7 #647 (9-oct) — y ESTRICTA: hasta hoy copiaba encima de lo ya escrito (un memcpy), más amable que cualquier
+ * placa. Ahora, la flash más estricta de las familias (test/flash_estricta.h): borrar por bloques, programar por
+ * quadwords de 16 y cada uno UNA vez entre borrados. Lo que lo incumple no se escribe, la cintura falla (el gestor
+ * contesta el error de flash) y el porqué sale aquí, con la dirección. */
+static flash_estricta_t g_packs_estricta;   /* mem/size/bloque, en main (g_packs se talla allí) */
 static int sim_pack_erase(void* u, uint32_t off, uint32_t len) {
     (void) u;
-    if (off + len > PACKS_REGION_SIZE) return -1;
-    memset(g_packs + off, 0xFF, len);
-    return 0;
+    if (flash_estricta_erase(&g_packs_estricta, off, len) == 0) return 0;
+    fprintf(stderr, "sim: zona de packs: %s (#647)\n", g_packs_estricta.error);
+    return -1;
 }
 static int sim_pack_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) {
     (void) u;
-    if (off + len > PACKS_REGION_SIZE) return -1;
-    memcpy(g_packs + off, d, len);
-    return 0;
+    if (flash_estricta_program(&g_packs_estricta, off, d, len) == 0) return 0;
+    fprintf(stderr, "sim: zona de packs: %s (#647)\n", g_packs_estricta.error);
+    return -1;
 }
 static const bpvm_pack_flash_t g_packs_fl = { sim_pack_erase, sim_pack_program, NULL, 4096u };
 
-static int packs_preload(const char* path) {
+/* `zona`: los bytes de la zona que se montará (#647: la partición de packs del plan, como una placa). */
+static int packs_preload(const char* path, uint32_t zona) {
+    if (zona == 0u) { fprintf(stderr, "sim: --pack: %s no cabe: el plan no tiene zona de packs\n", path); return -1; }
     FILE* f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "sim: --pack: no puedo abrir %s\n", path); return -1; }
     fseek(f, 0, SEEK_END);
@@ -291,7 +300,7 @@ static int packs_preload(const char* path) {
         free(img); fclose(f); return -1;
     }
     fclose(f);
-    int32_t off = bpvm_pack_add(g_packs, PACKS_REGION_SIZE, img, (uint32_t) sz);
+    int32_t off = bpvm_pack_add(g_packs, zona, img, (uint32_t) sz);
     free(img);
     if (off < 0) {
         fprintf(stderr, "sim: --pack: %s %s\n", path,
@@ -660,6 +669,16 @@ static uint32_t fs_partition_size(void) {
     return p ? p->size : 0;
 }
 
+/* V7 #647 (b, 9-oct) — la partición de PACKS del plan, para montar la zona al arrancar como una placa. Devuelve 1 si la
+ * flash está provisionada (y su tamaño en *tam, que puede ser 0: «sin zona»), 0 si no (flash virgen). */
+static int packs_partition_size(uint32_t* tam) {
+    bpvm_part_layout_t lay;
+    if (bpvm_bmgr_part_layout(&g_bm, SECTOR, &lay, NULL) != BPVM_PART_OK) return 0;
+    const bpvm_part_t* p = bpvm_part_get(&lay, BPVM_PART_PACKS);
+    *tam = p ? p->size : 0u;
+    return 1;
+}
+
 /* ── V6/U3.24 — LA CINTURA DEL SIMULADOR ────────────────────────────────────
  *
  * A partir de aquí el sim atiende los verbos de META y FILES con el MISMO
@@ -674,6 +693,7 @@ static uint32_t fs_partition_size(void) {
  * el fichero y volver a montar. */
 
 static uint32_t fs_partition_size(void);      /* definido más abajo */
+static unsigned long sim_fs_total(void);      /* ídem */
 static void     fs_walk(sb_t* sb);
 
 static void sim_repl_info(bpvm_repl_info_t* out) {
@@ -692,7 +712,7 @@ static void sim_repl_info(bpvm_repl_info_t* out) {
     out->flash_bytes  = (unsigned long) g_flash_size;
     out->sram_bytes   = (unsigned long) g_mem_size;
     out->psram_bytes  = (unsigned long) g_psram_size;
-    out->fs_total_bytes = (unsigned long) fs_partition_size();
+    out->fs_total_bytes = sim_fs_total();   /* #647 (b): el MONTADO al arrancar, no el del plan */
     out->fs_used_bytes  = (unsigned long) g_tally.used;
     /* V6/U6.1 — el reparto de la VM, que iba a CERO mientras las placas daban el
      * numero real. Es el dato con el que se compara "cuanta memoria tiene el
@@ -715,12 +735,15 @@ static int sim_repl_info_extra(char* buf, unsigned long buf_max, int off) {
                               g_no_screen ? 0 : (g_screen_h > 0 ? g_screen_h : 320));
 }
 
-static unsigned long sim_fs_total(void) { return (unsigned long) fs_partition_size(); }
 static unsigned long sim_fs_used(void)  { fs_walk(NULL); return g_tally.used; }
 static int           sim_fs_count(void) { fs_walk(NULL); return g_tally.count; }
 
 static char     g_fs_img[PATH_MAX_SIM] = "";
 static unsigned g_fs_blocks = 0;
+/* V7 #647 (b, 9-oct) — el tamaño del FS es el del FS MONTADO al arrancar, como en las placas (`bpvm_fs_lfs_stats`):
+ * hasta hoy salía del PLAN de particiones (`fs_partition_size`), así que tras un PART_APPLY el sim decía ya el tamaño
+ * nuevo con el FS de antes montado —una placa lo dice cuando se reinicia y lo monta—. */
+static unsigned long sim_fs_total(void) { return (unsigned long) g_fs_blocks * SECTOR; }
 
 static int sim_fs_format(void) {
     bpvm_fs_lfs_filebd_close();
@@ -1039,6 +1062,9 @@ int main(int argc, char** argv) {
     }
     g_packs = g_vm_mem + g_mem_size;
     memset(g_packs, 0xFF, PACKS_REGION_SIZE);   /* zona de packs virgen */
+    g_packs_estricta.mem    = g_packs;          /* #647: su flash estricta, sobre la misma región */
+    g_packs_estricta.size   = PACKS_REGION_SIZE;
+    g_packs_estricta.bloque = g_packs_fl.erase_block;
     /* Un pack que no entra NO tumba el simulador (22-ago). Antes era `return 1`
      * y bastaba con que el IDE le pasara `SQLite.pack` —1,08 MB contra el 1 MB
      * de aqui abajo— para que el micro simulado no arrancase: exit 1 nada mas
@@ -1051,17 +1077,10 @@ int main(int argc, char** argv) {
      * entra de sobra y es la que hace falta para casi todo.
      *
      * (Que SQLite no corra en el simulador es OTRA cosa, sabida y documentada:
-     * no hay motor nativo para PC. Eso no se arregla aqui.) */
-    int cargados = 0, fuera = 0;
-    for (int i = 0; i < n_packs; i++) {
-        if (packs_preload(packs[i]) == 0) cargados++;
-        else                              fuera++;
-    }
-    if (fuera > 0)
-        fprintf(stderr, "sim: %d pack(s) fuera y %d cargado(s) — el simulador"
-                        " arranca igual con los que si caben\n", fuera, cargados);
-    if (zona_sucia) memset(g_packs, 0x5A, 64);   /* restos: el byte 0 no es BPAK ni 0xFF */
-    /* (V7/H7: la zona se monta DESPUÉS del FS, con la regla común; ver abajo.) */
+     * no hay motor nativo para PC. Eso no se arregla aqui.)
+     *
+     * V7 #647 (9-oct): los packs se precargan DESPUÉS de leer el plan, en la zona que se va a montar —la partición de
+     * packs, como una placa—; con la flash virgen, el mega de siempre. */
 
     /* --- "flash" del env (A/B) + gestor de placa --- */
     flash_load();
@@ -1070,6 +1089,21 @@ int main(int argc, char** argv) {
     g_bm.part_base = PART_BASE;
     g_bm.usable_flash = bpvm_part_usable_flash(g_flash_size, 0);
     g_bm.packs_flash = &g_packs_fl;   /* la zona que ve el gestor: la montada (tras el FS) */
+
+    {
+        uint32_t zona = PACKS_REGION_SIZE, part = 0;
+        if (packs_partition_size(&part) && part < zona) zona = part;
+        int cargados = 0, fuera = 0;
+        for (int i = 0; i < n_packs; i++) {
+            if (packs_preload(packs[i], zona) == 0) cargados++;
+            else                                    fuera++;
+        }
+        if (fuera > 0)
+            fprintf(stderr, "sim: %d pack(s) fuera y %d cargado(s) — el simulador"
+                            " arranca igual con los que si caben\n", fuera, cargados);
+    }
+    if (zona_sucia) memset(g_packs, 0x5A, 64);   /* restos: el byte 0 no es BPAK ni 0xFF */
+    /* (V7/H7: la zona se monta DESPUÉS del FS, con la regla común; ver abajo.) */
 
     /* --- FS: littlefs sobre una imagen en fichero (MISMO motor que el micro).
      * El tamaño sale de la partición FS si la placa ya está provisionada; si no
@@ -1212,7 +1246,16 @@ int main(int argc, char** argv) {
     }
 }
 
+/* V7 #647 (b, 9-oct) — como una placa: la zona que se monta al arrancar es la PARTICIÓN de packs del plan (hasta el
+ * mega que el sim talla), y con la partición a 0, no hay zona. Hasta hoy montaba siempre el mega, dijera lo que dijera
+ * el plan. Una flash VIRGEN (sin particiones) sigue con el mega, como el FS, para trabajar desde el minuto cero. */
 static int sim_montar_packs(void) {
-    bpvm_pack_mount(g_packs, g_packs, PACKS_REGION_SIZE);
+    uint32_t tam = PACKS_REGION_SIZE, part = 0;
+    if (packs_partition_size(&part)) {
+        if (part == 0u) return 0;          /* provisionada sin zona de packs: como la placa, SIN */
+        if (part < tam) tam = part;
+    }
+    bpvm_pack_mount(g_packs, g_packs, tam);
+    g_packs_estricta.size = tam;           /* la flash estricta, del tamaño de la zona montada */
     return 1;
 }

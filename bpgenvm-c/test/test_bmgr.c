@@ -17,6 +17,7 @@
 #include "mdn_loader.h"       /* ídem */
 #include <stdio.h>
 #include <string.h>
+#include "flash_estricta.h"   /* V7 #647: la flash de la zona, la más estricta de las placas */
 
 /* DOBLES. `bpvm_pack.c` engancha la zona al FS como respaldo de lectura (#362)
  * y `bpvm_npack.c` pregunta la arquitectura en su escalera: nada de eso se
@@ -81,8 +82,20 @@ static int fam_env_set(const char* key, const char* value) {
     return bpvm_bmgr_escribir(slot, slot == 0 ? a : b);
 }
 
-static int zf_erase(void* u, uint32_t off, uint32_t len) { memset((uint8_t*) u + off, 0xFF, len); return 0; }
-static int zf_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) { memcpy((uint8_t*) u + off, d, len); return 0; }
+/* V7 #647 (9-oct) — la flash de la zona, ESTRICTA (flash_estricta.h): hasta hoy copiaba encima de lo escrito, más
+ * amable que cualquier placa. `u` es su flash_estricta_t; lo que se niega lo dice. */
+static int zf_erase(void* u, uint32_t off, uint32_t len) {
+    flash_estricta_t* f = (flash_estricta_t*) u;
+    if (flash_estricta_erase(f, off, len) == 0) return 0;
+    printf("  (la flash de la prueba: %s)\n", f->error);
+    return -1;
+}
+static int zf_program(void* u, uint32_t off, const uint8_t* d, uint32_t len) {
+    flash_estricta_t* f = (flash_estricta_t*) u;
+    if (flash_estricta_program(f, off, d, len) == 0) return 0;
+    printf("  (la flash de la prueba: %s)\n", f->error);
+    return -1;
+}
 static void be32w(uint8_t* p, uint32_t v) { p[0] = (uint8_t)(v >> 24); p[1] = (uint8_t)(v >> 16); p[2] = (uint8_t)(v >> 8); p[3] = (uint8_t) v; }
 static void be16w(uint8_t* p, uint16_t v) { p[0] = (uint8_t)(v >> 8); p[1] = (uint8_t) v; }
 static void pon_pack_con_motor(uint8_t* p, uint32_t total, uint32_t ram, uint32_t data, uint32_t bss) {
@@ -325,7 +338,9 @@ int main(void) {
     {
         static union { uint8_t b[64u * 1024u]; uint32_t al; } zona;
         memset(zona.b, 0xFF, sizeof zona.b);
-        bpvm_pack_flash_t fl = { zf_erase, zf_program, zona.b, 4096u };
+        static flash_estricta_t fe;
+        fe.mem = zona.b; fe.size = (uint32_t) sizeof zona.b; fe.bloque = 4096u;
+        bpvm_pack_flash_t fl = { zf_erase, zf_program, &fe, 4096u };
         bpvm_bmgr_t bmp;
         memset(&bmp, 0, sizeof bmp);
         bmp.packs_base = zona.b; bmp.packs_size = (uint32_t) sizeof zona.b; bmp.packs_flash = &fl;
@@ -367,7 +382,9 @@ int main(void) {
         static union { uint8_t b[64u * 1024u]; uint32_t al; } zona2;
         static uint8_t img[8192];
         memset(zona2.b, 0xFF, sizeof zona2.b);
-        bpvm_pack_flash_t fl2 = { zf_erase, zf_program, zona2.b, 4096u };
+        static flash_estricta_t fe2;
+        fe2.mem = zona2.b; fe2.size = (uint32_t) sizeof zona2.b; fe2.bloque = 4096u;
+        bpvm_pack_flash_t fl2 = { zf_erase, zf_program, &fe2, 4096u };
         bpvm_bmgr_t bmr;
         memset(&bmr, 0, sizeof bmr);
         bmr.packs_base = zona2.b; bmr.packs_size = (uint32_t) sizeof zona2.b; bmr.packs_flash = &fl2;
