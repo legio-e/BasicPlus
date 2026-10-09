@@ -8816,3 +8816,20 @@ Un `return`, `break` o `continue` que sale del `try` saca antes su aterrizaje y 
 `throw_runtime`, `throw_ref`, un builtin y una función BP por el puente; un `try` dentro de otro; un `catch` que no es
 suyo y relanza; locales modificados dentro del `try` y leídos en el `catch`, a `-O0`, `-O2` y `-Os`; y el aterrizaje
 desparejado, un error con nombre.
+
+#### Lo hecho (9-oct)
+
+- **`#672`** (`2f0a786c`): el suelo del puente —lo de arriba—.
+- **La VM** (`659e5576`): los pasos 1 y 2, con `test-aottryvm` (natives escritas a mano: 12 de 12 a `-O0`, `-O2` y
+  `-Os`, 17 llamadas, 13 aterrizajes; y sus dos sabotajes, rojos).
+- **LA PUERTA, pasada SIN grabar**: como el salto lo da el `.mdn`, la imagen de hoy bastaba. `PuertaTry` (en
+  `build/e578/placa`, de usar y tirar): natives escritas a mano que aterrizan con su `__builtin_setjmp` desde seis
+  marcos más abajo, con locales —uno `float`— cambiados antes del salto y leídos después, en la pila del worker y en
+  la de un ejecutor, y quinientos aterrizajes en un bucle: IDÉNTICO en la Pico 2, la STM32 y la P4. El ensamblador lo
+  explica: la función con el `try` guarda al entrar todos los registros que debe conservar —también `d8`–`d15` en
+  ARM— y recarga sus locales de la pila en el aterrizaje; `salta` sólo repone `fp` y `sp` y salta.
+- **El emisor** (pasos 4 y 5): `AotCEmitter.emitTryStmt` y `cierraTrys`; `test-aottry` (`NatTry`, doce natives, 13 de
+  13 con el AOT y sin él) y `NatTry`/`NatPuente` en la ronda de V7. Y al mirar cómo lo hace el emisor de bytecode,
+  dos fallos suyos: `#673` (un `break`/`continue` que sale de un `try` no cerraba su manejador ni corría su
+  `finally`; hecho) y `#674` (un `return` dentro de un `finally` revienta el compilador; por decidir).
+- **Falta**: la ronda en placa con la imagen del próximo lote.

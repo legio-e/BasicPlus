@@ -49,8 +49,22 @@
 > los 10–30 ms. **Y una corrección**: la medida de la mañana decía la marca más barata que el contador en un bucle con
 > llamadas; era falso —aquella variante no cedía nunca—; con la imagen nueva, +1,9 % en la Pico 2 y +0,5 % en la P4.
 > Se le dijo a Eduardo y se corrigió en los documentos; la regla se queda (ese ~2 % es no colgar la placa).
-> **Lo siguiente** (V7): `#578` (el `try` dentro de una native: primero el salto en placa, con una imagen de prueba y
-> el OK de Eduardo); en placa, la C3, la Metro, la C5, la C6 y la Nucleo con la imagen nueva.
+> **`#578`, en el PC entero** (sin cerrar: falta la ronda en placa). Al empezar salió **`#672`** (`2f0a786c`): una
+> excepción que lanza el BP al que llama una native, sin atraparla, buscaba manejador por DEBAJO de la native —el
+> resto del programa corría dos veces—; el suelo del puente, `test-aotpuente`. **La VM** (`659e5576`): el aterrizaje
+> con `__builtin_setjmp` en el marco de la native y **el salto desde una función del propio `.mdn`** (el mismo GCC a los
+> dos lados: el riesgo de la puerta desaparece), cuatro operaciones por `call_builtin` con números negativos (la tabla
+> de helpers no cambia; la cuarta, el `catch` por clase, por nombre), `test-aottryvm` con natives escritas a mano.
+> **La puerta, pasada SIN grabar**: `PuertaTry` (natives a mano fundidas con la receta de cada placa) IDÉNTICO en la
+> Pico 2, la STM32 y la P4 con la imagen de hoy. **El emisor**: `AotCEmitter` traduce `try`/`catch`/`finally` (y el
+> `return`, `break` y `continue` que salen de él); `test-aottry` (`NatTry`, doce natives) y `NatTry`/`NatPuente` en la
+> ronda de V7. Y del emisor de bytecode, mirando cómo lo hacía: **`#673`** (un `break`/`continue` que sale de un
+> `try` no cerraba su manejador ni corría su `finally`, en las dos VMs: hecha, `BreakTry` en la paridad) y **`#674`**
+> (un `return` dentro de un `finally` revienta el compilador: **por decidir, Eduardo** —prohibirlo, recomendado, o
+> permitirlo como Java—). La red, verde (paridad 147, pruebas de C 102/102).
+> **Lo siguiente** (V7): el LOTE de placas —la imagen con `#672` y `#578`; la C3, la Metro, la C5, la C6 y la Nucleo,
+> que no tienen la de `2e65457b`— con su OK, y la ronda de V7 (con `NatTry` y `NatPuente`); `#674`, cuando decida
+> Eduardo; y las SUELTAS que quedan (`#614`, `#645`).
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y

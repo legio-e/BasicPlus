@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1231,6 +1231,31 @@ test-aottryvm: $(LIBOBJ)
 	 ./build/test_aottryvm_O2.exe samples/NatTryVm.mod --desparejado 2>build/aottryvm.err >/dev/null; \
 	 if ! grep -a -q 'se cierra uno que no es el mas interno' build/aottryvm.err; then grep -a '^\[status\|^\[runtime_error' build/aottryvm.err; echo "  ROJO: el aterrizaje desparejado no dio su error"; exit 1; fi; \
 	 echo "[status=OK] 12/12 a -O0, -O2 y -Os, igual que interpretado; 17 llamadas y 13 aterrizajes; el desparejado, con su error"
+
+# V7 #578 (9-oct) — EL `try` DENTRO DE UNA NATIVE, traducido por el AOT (AotCEmitter): samples/NatTry.bp —un throw de
+# la native con un local cambiado, el mensaje leído en el catch, una clase del usuario por el puente, un catch que no
+# es suyo, el finally en sus tres salidas, break y continue con finally (#673), un builtin, catch sin tipo y sin
+# variable, un try en un bucle, lo que lanza un catch con finally, de una native a otra y relanzar con `throw e`—, con
+# GC en cada reserva. Las 12 natives, todas traducidas; el mismo .mod con el AOT y sin él: la misma salida, entera
+# (con los `print` de los finally, en su sitio), y acaba en OK.
+test-aottry: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatTry)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatTry,build/aottry)
+	$(CC) $(CFLAGS) -Isrc test/test_aottry.c build/aottry/aot_NatTry.c $(LIBOBJ) \
+	  -o build/test_aottry.exe $(LDFLAGS)
+	@echo "--- #578 try dentro de una native, el AOT (esperado: 12 natives; AOT == interpretado, 13/13, sin FALLO) ---"
+	@t=$$(grep -c 'bpvm_aot_register_by_name' build/aottry/aot_NatTry.c); \
+	 if [ "$$t" -ne 12 ]; then echo "  ROJO: el AOT tradujo $$t de 12 natives"; exit 1; fi; \
+	 ./build/test_aottry.exe samples/NatTry.mod 2>build/aottry.err | grep -a -E '^(ok|FALLO) |^  \(' > build/aottry.aot; \
+	 ./build/test_aottry.exe samples/NatTry.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) |^  \(' > build/aottry.int; \
+	 n=$$(grep -c '^ok ' build/aottry.aot); \
+	 if ! grep -a -q '^\[status=OK\]' build/aottry.err; then grep -a '^\[status\|^\[runtime_error' build/aottry.err; echo "  ROJO: el programa no acabo en OK con el AOT"; exit 1; fi; \
+	 if grep -q '^FALLO' build/aottry.aot build/aottry.int; then grep -h '^FALLO' build/aottry.aot build/aottry.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aottry.int build/aottry.aot; then diff build/aottry.int build/aottry.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 13 ]; then cat build/aottry.aot; echo "  ROJO: $$n de 13 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 13/13 con las 12 natives traducidas, igual que interpretado"
 
 # V7/H5 (#559, 25-sep) — LA COMA FLOTANTE DENTRO DE UNA NATIVE, ejecutada en el PC por sus DOS
 # caminos. El .c que el AOT genera se compila tal cual (la FPU del PC hace los float, como el P4 y

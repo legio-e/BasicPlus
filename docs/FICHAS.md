@@ -96,7 +96,10 @@ el PC sin placa, como en el host.
 > los GPIO 33–37, que son de la PSRAM; cerrada el mismo día, `12ba0b79`—; y en la tarde de placas, ~~`#671`~~ —tras
 > grabar o borrar un pack con motor sin reiniciar, la placa salta a las tablas del motor viejo; cerrada el mismo día, `cd9a8ad1`—;
 > y del 9-oct, al hacer `#578`, `#672` —una excepción que lanza el código BP al que llama una native, sin atraparla, buscaba
-> manejador por DEBAJO de la native: el resto del programa corría dos veces; hecha en el PC, falta la placa—)
+> manejador por DEBAJO de la native: el resto del programa corría dos veces; hecha en el PC, falta la placa—, y `#673`
+> —un `break` o un `continue` que sale de un `try` no cerraba su manejador ni corría su `finally`, en las dos VMs; hecha—, y
+> `#674` —un `return` dentro de un `finally` revienta el compilador (`StackOverflowError`); por decidir: prohibirlo o
+> permitirlo—)
 > ~~`#581`~~ (cerrada el 7-oct: con `PinesSistema` en la C6, que destapó el pad VDD_SPI) `#582` `#583` `#584` ~~`#585`~~ (cerrada el 3-oct, `ff1135cc`) ~~`#586`~~ (cerrada el 28-sep, `95de38bc`), y las que salen del análisis de `#554` (27-sep): ~~`#587`~~ (H7; cerrada el 27-sep, `ec5b15c7`), ~~`#588`~~ (SUELTA; cerrada el 27-sep, `455ca895`) y ~~`#589`~~ (H8; cerrada el 27-sep, `b777f25f`), ~~`#544`~~
 > (H4; cerrada el 25-sep: no se reproduce) y ~~`#554`~~ (H7; cerrada el 27-sep, `e5761dd1`) —y `#490`, en V8—. Y del 27-sep, al hacer `#589`: ~~`#590`~~ (SUELTA; cerrada el 27-sep, `dd2e06e5`: el valor inicial de las globales, el modelo de Eduardo) y ~~`#591`~~ (H8; cerrada el 28-sep, `d3a60e5c`), y al hacer `#531`: ~~`#592`~~ (SUELTA: el 2º temporizador de las natives de la VM-C; cerrada el 9-oct, `2e65457b`), y al hacer `#494`: ~~`#593`~~ (H7: el punto ciego del guardián del heap; cerrada el 29-sep, `41c27547`: la reserva en un método único); y del 28-sep, ~~`#594`~~ (H7: el módulo `Heap`, cerrada el mismo día, `ac0f3d71`), ~~`#595`~~ (H7: `Heap.compact()`, cerrada el mismo día, `6b265162`), ~~`#596`~~ (H7: con `--smp`, una excepción sin atrapar acababa en OK; cerrada el mismo día, `cdedb1d1`), ~~`#597`~~ (H7: `Net.recv` dejaba un bloque que mentía su tamaño; cerrada el mismo día, `6e362e2e`), ~~`#598`~~ (H7: el GC sin memoria para su mapa lo barría todo; ídem), ~~`#599`~~ (H7: miVM con dos workers se quedaba colgada en el GC; vista al medir el corpus con SMP; cerrada el mismo día, `c539c27c`, con el corpus con dos workers en la red) , ~~`#600`~~ (H7: con dos workers, la línea de un hilo se partía con la de otro; cerrada el mismo día, `cc073e52`: un `print` sale entero) y ~~`#601`~~ (H8: la puerta de «sin FS» de la ESP32 no paraba `FORMAT` y compañía; al mapear H8; cerrada el mismo día, `1a75a498`), ~~`#602`~~ (H8: el bloque de RAM de los motores en el `INFO`; cerrada el 1-oct, `a6f7ff7f`), y del mapa de H7 (29-sep) ~~`#603`~~ (con `--smp`, soltar un objeto con dueño corrompía el heap de la VM-C; cerrada el mismo día, `a907435d`), ~~`#604`~~ (la VM-C, 32 hilos en toda la vida del programa) y ~~`#605`~~ (el muro de la pila; cerradas el mismo día, `98c640e9`) y ~~`#606`~~ (dos latentes del XIP; cerrada el mismo día, `a907435d`); y al probar `#606`, ~~`#607`~~ (un manejador de la GUI no podía ceder; cerrada el 30-sep, `85de188f`: el setter de Forms, con el opcode `INVOKE_SLOT`; y el hilo que muere sin atrapar lo dice en la salida), y al probar `#605`, ~~`#608`~~ (una excepción sin atrapar en un hilo acaba ese hilo y el programa sale con error, «la A» de Eduardo; cerrada el mismo día, `41c27547`), y ~~`#609`~~ (`test-listen` se corta a veces con un `TimeoutError`; H8/H9; cerrada el 2-oct, `1dab3a66`), y de la prueba de estrés del heap (29-sep, noche): ~~`#610`~~ (VM-C: la tabla de handles crecía moviéndose con otros workers leyéndola; cerrada el mismo día, `b4bb28fb`), ~~`#611`~~ (miVM: `split` y `listDir` perdían los trozos si la reserva colectaba; cerrada el mismo día, `c0015787`), ~~`#612`~~ (miVM: un error de Java en un worker acababa el RUN sin decir nada; cerrada el mismo día, `cf476205`); y del 30-sep, ~~`#613`~~ (miVM: un hilo que cede con `sleep(0)` podía acabar en dos workers a la vez —B1 por otro camino—; cerrada el mismo día, `d6d72384`), y al grabar la C5 tras medir los márgenes, `#614` (`GuiFlushBench`: cambiar una etiqueta cuesta más que hace una semana —la C5, de 1 a 5,8 ms; la DK2, de 1,0 a 1,8—; SUELTA); y del 1-oct, al vaciar H7, `#615` (la Pico sobre el backend común de FreeRTOS: aparcada sin fecha, Eduardo; SUELTA), y al hablar de los runs, ~~`#616`~~ (H12: el planificador de varios runs de la VM-C no repartía en rueda; cerrada el mismo día, `c671d3a2`), y al probar el paso 4 de `#495` con el cliente del IDE, ~~`#617`~~ (H8: el servidor del wire de la VM-Java no tenía la subida por trozos y atendía a un cliente por proceso; cerrada el mismo día, `b33794df`), y al grabar la C5 con el paso 4, ~~`#618`~~ (H8: el cliente del IDE perdía bytes leyendo de uno en uno de un puerto rápido; cerrada el mismo día, `34167432`). Decisiones de Eduardo pendientes: ~~`#590`~~ (decidida el 27-sep: el modelo de las globales), ~~`#542`~~ (decidida el 25-sep: un import sin interfaz es un error de carga), ~~`#579`~~ (decidida el 3-oct: cerrada con la evidencia), ~~`#582`~~/~~`#583`~~ (la línea y el debugger; decididas el 9-oct: `#582`, a V8; `#583`, las natives no se depuran
 > —cerrada—), ~~`#584`~~ (decidida el 3-oct: podar sólo ahorra) y,
@@ -1803,6 +1806,36 @@ excepción y un `throw` de `Main` después —ni un suelo rancio—; GC en cada 
 programa acaba en OK; la VM-Java da lo mismo), en `check-testc`. El sabotaje (sin el suelo): las líneas repetidas,
 «= 0» y «native-return (interno)». **Falta**: verlo en placa, con el lote de `#578`.
 
+#### ✅ `#673` — un `break` o un `continue` que sale de un `try` no cierra su manejador ni corre su `finally`: el `catch` se queda en la pila y atrapa lo que lance después el código de FUERA —el programa vuelve a entrar en el bucle por su `catch`—, en las dos VMs (abierta el 9-oct, al hacer `#578`; SUELTA; preexistente, del compilador · **CERRADA el mismo día**, el commit de `#673`)
+
+**Visto el 9-oct**, al mirar cómo traduce el compilador de bytecode un `return` dentro de un `try` (para que el `try`
+de una native, `#578`, haga lo mismo): el `return` cierra los manejadores abiertos y corre los `finally`
+(`MivmEmitter.emitReturn`, con `tryStack`), pero `break` y `continue` saltaban sin más. Con `break` dentro de un `try`
+de un bucle, el `finally` no corría y el `catch` seguía en la pila: un `throw` posterior SIN `try` alrededor lo atrapaba
+ese `catch` rancio y el programa volvía a entrar en el bucle por él (las dos VMs, igual: la paridad no lo ve). Del
+compilador, desde siempre.
+
+**Hecho (9-oct)**: `emitBreak` y `emitContinue` cierran los `try` abiertos por encima del bucle —sus manejadores y su
+`finally`, del más interno al más externo, como `emitReturn`—; cada bucle apunta cuántos había al entrar (en un
+`switch`, `continue` es del bucle de fuera). La prueba, `samples/BreakTry.bp` en la paridad (se comprueba sola: un
+`break` desde un `try` con `catch` y `finally`, un `continue` con `finally`, un `break` que sale de dos `try` anidados en
+un `for`, un `break` dentro de un `catch` y un `throw` sin `try` tras el bucle); con el compilador de antes, cuatro de
+los cinco mal y dos FALLO. La stdlib no cambia (el proyecto, recompilado: 30 de 30 `.mod` iguales byte a byte; ninguno
+sale de un `try` con `break`), ni los samples (el censo: sólo `BreakTry`); los 281 tests del compilador, verdes.
+
+#### 🟡 `#674` — un `return` dentro de un `finally` revienta el compilador (`StackOverflowError`, sin línea ni motivo) (abierta el 9-oct, al hacer `#673`; SUELTA; preexistente, del compilador)
+
+**Visto el 9-oct**: `try … return 1 … finally if x > 5 then return 2 endif endtry` no compila: el compilador de bytecode
+se cae con `StackOverflowError`. El `return` del cuerpo emite el `finally` en línea (`emitReturn`, con la pila de `try`
+entera); el `return` de dentro del `finally` vuelve a emitir el mismo `finally`, y así sin fin. Nadie tiene código así
+(no compila). `#673` no lo hereda: su `break`/`continue` emite cada `finally` con su `try` ya fuera de la pila, y el AOT
+de `#578`, igual. **Por decidir** (Eduardo), con el mecanismo: (a) **prohibirlo** —un error de compilación con su línea:
+«un `finally` no puede salir con `return`, `break` ni `continue`», como C#—: el `finally` es para soltar, y salir de él
+TAPA la excepción que iba en vuelo (`try throw X finally return 0 endtry` devolvería 0 y la `X` desaparecería sin
+una palabra); (b) **permitirlo**, como Java: el `return` del `finally` gana y la excepción en vuelo se pierde —arreglar
+la emisión como la de `#673`—. Recomendada: (a). Un `throw` dentro de un `finally` seguiría valiendo (sustituye a la
+que iba en vuelo, en los dos lenguajes), y un `break` a un bucle de DENTRO del `finally`, también.
+
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
 **Visto el 2-oct, leyendo**: el botón Stop del IDE, en depuración, manda `KILL` (`BpvmClient.java:660-664`). En la Pico
@@ -3382,6 +3415,29 @@ native detrás de BP; un `try` dentro de otro, un `catch` que no es suyo, un `re
 a las natives y 13 aterrizajes; el aterrizaje desparejado, con su error. Los sabotajes, rojos: sin aterrizar (el
 `t1` sin atrapar) y el límite que no vacía los aterrizajes de fuera (el 6b: el suelo del puente se quedaba en la
 pila y el RUN acababa en «native-return (interno)»). Compilan la Pico 2 y la P4.
+**La puerta en placa, PASADA sin grabar (9-oct)**: como el salto lo da el propio `.mdn`, se pudo probar con la imagen de
+hoy. `PuertaTry` (de usar y tirar, en `build/e578/placa`): natives escritas a mano, fundidas en el `.mod` con la receta
+de cada placa, que aterrizan con su `__builtin_setjmp` desde seis marcos más abajo, con locales —uno `float`— cambiados
+antes del salto y leídos después, en la pila del worker y en la de un ejecutor, y quinientos aterrizajes en un bucle:
+**IDÉNTICO** al intérprete en la **Pico 2** y la **STM32** (Cortex-M33) y en la **P4** (RV32), con `nativos=3`. Lo de la
+VM (las cuatro operaciones) va en el próximo lote, con el emisor.
+**El emisor, hecho (9-oct; los pasos 4 y 5).** `AotCEmitter` traduce el `try` de una native: el aterrizaje con su
+`__builtin_setjmp`, el cuerpo entre EH_PUSH y EH_POP, y en el `else` la excepción (EH_EXC) contra cada `catch` en su
+orden —por la clase con EH_ES y su nombre canónico (`ClaveCanonica`); `catch e` y `catch` sin tipo, todo—; si no casa
+ninguno, `throw_ref` hacia fuera. El `finally` en todas las salidas, como el emisor de bytecode: al acabar el cuerpo y
+cada `catch`, antes de relanzar, y en un `return`, `break` o `continue` que sale del `try` (el valor del `return`
+primero; `cierraTrys`, con cada `finally` emitido con su `try` ya fuera de la pila); con `finally`, el cuerpo de cada
+`catch` va en su propio aterrizaje. El salto (`aot_<M>__try_salta`) y las operaciones van en el C del módulo, fuera
+del cuerpo: una native con `try` puede seguir siendo directa. `try var` dentro de una native, un error con su
+remedio; el falso «no puede usar setjmp», fuera. Las natives SIN `try` salen con el C de antes, byte a byte
+(`NatAnida`, `NatPuente`). **La prueba**, `make test-aottry` (en `check-testc`): `samples/NatTry.bp`, doce natives
+—un `throw` con un local cambiado, el mensaje leído en el `catch`, una clase del usuario por el puente, un `catch`
+que no es suyo, el `finally` en sus tres salidas, `break` y `continue` con `finally`, un builtin, `catch` sin tipo y
+sin variable, un `try` en un bucle, lo que lanza un `catch` con `finally`, de una native a otra y `throw e`—, todas
+traducidas; con el AOT y sin él, la misma salida (13 de 13, con los `print` de los `finally` en su sitio), GC en cada
+reserva; la VM-Java, lo mismo. El C compila sin un aviso con las tres recetas de las placas (Cortex-M33, la P4 y
+RV32IMC). `AotCoberturaTest`: 30 de 30. `NatTry` y `NatPuente`, en la ronda de V7 (`tools/tanda_v7.json`). **Falta**:
+la ronda en placa, con la imagen del próximo lote (la de las cuatro operaciones).
 
 #### ✅ `#577` — una native no puede LEER un campo de una tupla (abierta 27-sep, al cerrar H5; SUELTA: un resto de `N1` · **CERRADA el 7-oct**, el commit de `#577`)
 

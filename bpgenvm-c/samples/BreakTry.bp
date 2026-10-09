@@ -1,0 +1,118 @@
+// BreakTry.bp — #673 (V7, 9-oct): un `break` o un `continue` que sale de un `try` cierra su manejador y corre su
+// `finally`, como un `return`. Antes no: el `catch` del `try` del que se salía seguía en la pila de manejadores y
+// atrapaba lo que lanzara después el código de FUERA —volvía a entrar en el bucle por su `catch`—, y su `finally` no
+// corría. Se comprueba solo: una línea FALLO es rojo aunque las dos VMs digan lo mismo.
+module BreakTry
+  import Core
+
+  // 1. break desde un try con catch y finally; después, un throw de fuera que nadie de dentro debe ver
+  function uno(): string
+    var traza: string := ""
+    var i: integer := 0
+    while i < 5 do
+      try
+        i += 1
+        if i == 2 then
+          break
+        endif
+      catch e: RuntimeError
+        return "FALLO 1: el catch del bucle atrapo algo de fuera: " + e.msg
+      finally
+        traza := traza + "f" + intToString(i)
+      endtry
+    endwh
+    try
+      throw RuntimeError("de fuera")
+    catch e: RuntimeError
+      traza := traza + " fuera:" + e.msg
+    endtry
+    return traza
+  end uno
+
+  // 2. continue desde un try con finally
+  function dos(): string
+    var traza: string := ""
+    var j: integer := 0
+    while j < 3 do
+      j += 1
+      try
+        if j == 1 then
+          continue
+        endif
+        traza := traza + "c" + intToString(j)
+      finally
+        traza := traza + "f" + intToString(j)
+      endtry
+    endwh
+    return traza
+  end dos
+
+  // 3. break que sale de DOS try anidados (el de dentro con catch, el de fuera con finally): los dos se cierran, del
+  //    de dentro al de fuera; y un for
+  function tres(): string
+    var traza: string := ""
+    for k := 1 to 4 do
+      try
+        try
+          if k == 3 then
+            break
+          endif
+          traza := traza + "k" + intToString(k)
+        catch e: RuntimeError
+          traza := traza + "FALLO-catch"
+        finally
+          traza := traza + "a"
+        endtry
+      finally
+        traza := traza + "b"
+      endtry
+    next k
+    return traza
+  end tres
+
+  // 4. un break dentro de un catch (con finally): el catch se cierra y el finally corre
+  function cuatro(): string
+    var traza: string := ""
+    while true do
+      try
+        throw RuntimeError("x")
+      catch e: RuntimeError
+        traza := traza + "c"
+        break
+      finally
+        traza := traza + "f"
+      endtry
+    endwh
+    return traza
+  end cuatro
+
+  // 5. tras salir con break, un throw SIN try alrededor tiene que salir de la función (lo atrapa Main)
+  function cinco()
+    var i: integer := 0
+    while i < 3 do
+      try
+        i += 1
+        if i == 2 then
+          break
+        endif
+      catch e: RuntimeError
+        print "FALLO 5: el catch del bucle atrapo algo de fuera: " + e.msg
+        return
+      endtry
+    endwh
+    throw RuntimeError("sin try alrededor")
+  end cinco
+
+  function Main()
+    print "ok 1 " + uno()
+    print "ok 2 " + dos()
+    print "ok 3 " + tres()
+    print "ok 4 " + cuatro()
+    try
+      cinco()
+      print "FALLO 5: cinco() no lanzo"
+    catch e: RuntimeError
+      print "ok 5 " + e.msg
+    endtry
+  end Main
+end BreakTry

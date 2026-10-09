@@ -960,9 +960,10 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       del builtin que el intérprete, así que da lo mismo. Un fallo en runtime
       (índice fuera de rango, referencia null) o un
       <code>throw RuntimeError("…")</code> dentro de la native se propaga
-      al <code>try/catch</code> BP que envuelva la llamada, con el mensaje del
+      al <code>try/catch</code> que lo envuelva —desde V7, también uno DENTRO de la propia
+      native, con su <code>catch</code> por clase y su <code>finally</code>—, con el mensaje del
       intérprete (la línea exacta dentro de la native, todavía no). Lo que aún NO
-      cabe — <code>try/catch</code> dentro de la native, tuplas con campos <code>float</code>,
+      cabe — <code>try var</code> (el recurso que el bloque suelta) dentro de la native, tuplas con campos <code>float</code>,
       <code>long</code> o <code>double</code> (las demás sí, desde V7),
       <code>instanceof</code>, eventos, <code>parallel</code>,
       <code>for … in</code>, <strong>leer o
@@ -2170,9 +2171,10 @@ explícito (<a href="#imports">§10.3</a>), <code>catch e</code> como
 del <code>.mod</code> v7 (<a href="#funciones-native">§8.3</a>) y la carrera B1
 del SMP (<a href="#conc-gc">§14.4</a>).</p>
 <ul>
-  <li><code>try/catch</code> DENTRO de una <code>native function</code>
-      (lanzar desde la native y atrapar FUERA sí funciona): el código nativo
-      no embebe setjmp; diferido con diseño anotado. Tampoco <code>instanceof</code>, eventos
+  <li><code>try var</code> (el recurso <code>owner</code> que el bloque suelta) DENTRO de una
+      <code>native function</code>: decláralo antes con <code>var</code> y suéltalo en un
+      <code>finally</code> (desde V7 un <code>try/catch/finally</code> dentro de una native sí
+      funciona). Tampoco <code>instanceof</code>, eventos
       ni tuplas con campos <code>float</code>, <code>long</code> o <code>double</code> dentro de
       una native (error de compilación, <a href="#funciones-native">§8.3</a>).</li>
   <li>Array de tamaño fijo <code>tipo[N]</code> a nivel de módulo y

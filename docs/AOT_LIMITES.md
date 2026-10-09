@@ -83,15 +83,19 @@ fondo se confirma: la native se ahorra el intérprete y no la emulación —1,5 
 operación de `double`—. En una placa con FPU de simple precisión, `float` es la
 instrucción: lo dirá `DblNat` en la ronda de cada placa.
 
-### 2. `try` / `catch` DENTRO de una función `native`
+### 2. `try` / `catch` DENTRO de una función `native` — ✅ desde V7 (`#578`, 9-oct)
 
-Lo rechaza el compilador. Lanzar (`throw`) sí se puede.
+Se puede: `try`, `catch` por clase (en su orden; `catch e` y `catch` sin tipo atrapan todo), relanzar (`throw e`) y
+`finally` en todas las salidas —también un `return`, `break` o `continue` que sale del `try`—. Lo que lance la
+propia native, un helper, un builtin, una función BP a la que llama u otra native aterriza en su `try`. Cómo
+(`V7_IDEAS` §«`#578`»): cada `try` es un aterrizaje con `__builtin_setjmp` en el marco de la native, apilado en la VM
+por `call_builtin` (cuatro operaciones con números negativos: la tabla de helpers no cambia), y el salto lo da una
+función del propio `.mdn` (el mismo GCC a los dos lados). Lo que queda fuera: `try var` (el recurso `owner`):
+decláralo antes y suéltalo en un `finally`. Un `try` cuesta dos llamadas a la VM (apilar y sacar su aterrizaje)
+y que la función guarde todos sus registros al entrar: en un bucle muy apretado, mejor fuera.
 
-**Qué hacer**: envolver la llamada a la función `native` en un `try` desde
-código BP normal. Las excepciones que lance la nativa se propagan y se atrapan
-ahí.
-
-> ⚠️ Aquí ponía que «el `.mdn` no puede usar `setjmp` (#213)». **Era falso**: `__builtin_setjmp` y
+> ⚠️ Aquí ponía que «el `.mdn` no puede usar `setjmp` (#213)», y hasta el 9-oct, que lo rechazaba el compilador.
+> **Lo primero era falso**: `__builtin_setjmp` y
 > `__builtin_longjmp` se compilan en línea (medido el 24-ago: 52 B en ARM, 60 en RISC-V), sin símbolos
 > externos. Lo que falta de verdad es DÓNDE aterriza un `throw`: el `eh_stack` del intérprete no sabe de
 > un manejador nativo. Es `#578` (V7), con el planteamiento de Eduardo: darle a la native las primitivas de
@@ -241,8 +245,8 @@ asegurarnos que el compilador funciona correctamente. Se puede detectar con test
 cada native contra su interpretada, y la tanda, cada placa contra el PC—. El IDE lo dice al poner el breakpoint
 (`NativaEnLinea`, en el compilador: por el texto, la `function` más cercana por encima y su `end`).
 
-Los cabos del AOT que quedan, cada uno en su ficha: `try`/`catch` dentro (`#578`, en V7) y la línea de un error
-dentro de una native (`#582`, en V8: la placa dirá dónde y el PC lo traducirá).
+El cabo del AOT que queda, en su ficha: la línea de un error dentro de una native (`#582`, en V8: la placa dirá
+dónde y el PC lo traducirá). El `try`/`catch` dentro, hecho (`#578`, 9-oct; §2).
 
 ## Dónde se hace cumplir
 
@@ -284,6 +288,7 @@ demuestra nada.
 **Foto del 24-ago-2026: 28 de 30.** Faltan `TryStmt` y `TupleExpr`, los dos
 aplazados a V7 a propósito (§2 y abajo).
 **Foto del 7-oct-2026: 29 de 30.** `TupleExpr` entró con `#577`; falta `TryStmt` (`#578`).
+**Foto del 9-oct-2026: 30 de 30.** `TryStmt` entró con `#578` (§2).
 
 ### ⚠️ Y la lección de este censo no es el número: es que MEDÍA MAL
 
@@ -342,7 +347,7 @@ cada alocación convierte esa ventana de lotería en certeza.
 
 | falta | nodo | motivo |
 |---|---|---|
-| `try`/`catch` dentro de native | `TryStmt` | el `.mdn` no puede usar `setjmp` (§2). Lanzar sí. **A V7 «por lo menos ver si es posible»** (Eduardo, 24-ago): la frase de arriba dice qué NO se puede usar, no que no haya otro camino — y ese enunciado ya ha fallado cinco veces en este mismo documento |
+| `try var` dentro de native | `TryStmt` con recurso | el recurso `owner` que el bloque suelta: decláralo antes y suéltalo en un `finally`. El `try`/`catch`/`finally`, sí (`#578`, §2) |
 | una tupla con `float`, `long` o `double` | `DestructAssignStmt`, `TupleExpr` | el puente native→BP lleva valores de 4 bytes: desestructúrala en BP y pásale los campos a la native. Las demás formas, hechas (`#577`, 7-oct) |
 | `for … in` sobre colecciones | `ForInRange` | el `for` numérico sí |
 | `instanceof` | `InstanceOfExpr` | sin medir siquiera: el fragmento que tenía no producía el nodo |

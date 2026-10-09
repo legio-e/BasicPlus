@@ -107,6 +107,29 @@ public final class AotCEmitter {
     /** #546 — ídem para el sujeto de un switch sobre string ({@code __swN}). */
     private int switchCounter = 0;
 
+    /** V7 #578 (9-oct) — EL `try` DENTRO DE UNA NATIVE (docs/V7_IDEAS.md §«#578»). Los abiertos en la función que se
+     *  emite, del más interno al más externo, como el `tryStack` de MivmEmitter: su aterrizaje apilado en la VM (null en
+     *  el cuerpo de un `catch` sin `finally`: el suyo ya no está) y su `finally`. Un `return`, `break` o `continue` que
+     *  sale de ellos los cierra antes (`cierraTrys`). */
+    private static final class TryAot {
+        final String aterrizaje;
+        final List<Ast.IStmt> finallyBody;
+        TryAot(String aterrizaje, List<Ast.IStmt> finallyBody) {
+            this.aterrizaje = aterrizaje;
+            this.finallyBody = finallyBody;
+        }
+    }
+    private final java.util.ArrayDeque<TryAot> trysAbiertos = new java.util.ArrayDeque<>();
+    /** V7 #578/#673 — por bucle (y por switch), cuántos `try` había abiertos al entrar: {para `break`, para `continue`}
+     *  (en un switch, `continue` es del bucle de fuera). */
+    private final java.util.ArrayDeque<int[]> trysDeBucle = new java.util.ArrayDeque<>();
+    /** V7 #578 — para nombres únicos en una función (`__bpvm_tN`, `__bpvm_eN`, `__bpvm_retN`). */
+    private int tryCounter = 0;
+    /** V7 #578 — alguna native del módulo tiene un `try`: el C lleva el salto y las operaciones del límite. */
+    private boolean usaTry = false;
+    /** V7 #578 — el tipo de C que devuelve la función que se emite (el `return` de dentro de un `try` lo guarda). */
+    private String cRetActual = "void";
+
     /** #580 (1), decidido por Eduardo el 3-oct («como un bucle») — UNA RECURSIÓN ES UN BUCLE. Una native que puede
      *  volver a entrar en sí misma por llamadas de C entre natives del módulo (`fib` → `fib`; `a` → `b` → `a`) no pasa
      *  nunca por la línea del bucle si no tiene bucles —ni cede ni ve un `kill`: `fib(40)` en la C3, 32 s sin poder
@@ -740,6 +763,10 @@ public final class AotCEmitter {
         // (MivmEmitter.offsetsDeGlobales), no una convención propia.
         precomputeModuleVarOffsets(module);
 
+        /* V7 #578 — ¿alguna native con un `try`? Entonces el C lleva su salto y sus operaciones (emitHeader). */
+        usaTry = false;
+        for (Ast.FuncDef f : nativeFuncs) if (f.body != null && contieneTry(f.body)) usaTry = true;
+
         // Header del archivo.
         emitHeader();
 
@@ -928,6 +955,32 @@ public final class AotCEmitter {
             w.println("    return s;");
             w.println("}");
         }
+        if (usaTry) {
+            /* V7 #578 — el `try` dentro de una native. El SALTO lo da esta función, del mismo C que el __builtin_setjmp
+             * de cada aterrizaje (el mismo GCC a los dos lados: la VM no salta, la llama); y las cuatro operaciones del
+             * límite van por call_builtin, con los números negativos de bpvm_aot_helpers.h —la tabla de helpers no
+             * cambia—. Nunca ceden el hilo: aquí, y no en el cuerpo, para que una native con `try` siga pudiendo ser
+             * directa (nativesDirectas mira el cuerpo). */
+            String m = "aot_" + moduleName;
+            w.println("/* V7 #578 — el `try` dentro de una native: el salto (con el mismo GCC que el __builtin_setjmp de cada");
+            w.println(" * aterrizaje) y las operaciones del límite, por call_builtin (no ceden nunca el hilo). */");
+            w.println("static void " + m + "__try_salta(void** t) __attribute__((noreturn, noinline));");
+            w.println("static void " + m + "__try_salta(void** t) { __builtin_longjmp(t, 1); }");
+            w.println("static inline void " + m + "__try_eh(struct bpvm* vm, int32_t op, void** t) {");
+            w.println("    int64_t a[1];");
+            w.println("    a[0] = (int64_t) (intptr_t) t;");
+            w.println("    (void) vm->aot_helpers->call_builtin(vm, op, \"l\", a, 'v');");
+            w.println("}");
+            w.println("static inline uint32_t " + m + "__try_exc(struct bpvm* vm) {");
+            w.println("    return (uint32_t) vm->aot_helpers->call_builtin(vm, BPVM_NATIVA_EH_EXC, \"\", (const int64_t*) 0, 'r');");
+            w.println("}");
+            w.println("static inline int32_t " + m + "__try_es(struct bpvm* vm, uint32_t e, const char* clase) {");
+            w.println("    int64_t a[2];");
+            w.println("    a[0] = (int64_t) e;");
+            w.println("    a[1] = (int64_t) (intptr_t) clase;");
+            w.println("    return (int32_t) vm->aot_helpers->call_builtin(vm, BPVM_NATIVA_EH_ES, \"rl\", a, 'i');");
+            w.println("}");
+        }
         w.println();
         w.println("/* Forward decls de las funciones AOT de este módulo. */");
         for (Ast.FuncDef f : nativeFuncDefs.values()) {
@@ -997,6 +1050,8 @@ public final class AotCEmitter {
         retActual = tipoDeclarado(f.returnType);
         String fname = "aot_" + moduleName + "_" + cId(f.name.name);
         String cRet  = cType(f.returnType);
+        cRetActual = cRet;                                           /* V7 #578 */
+        trysAbiertos.clear(); trysDeBucle.clear(); tryCounter = 0;   /* V7 #578 */
         w.print("static " + cRet + " " + fname + "(struct bpvm* vm");
         for (Ast.Param p : f.params) {
             w.print(", " + cType(p.type) + " " + cVar(p.name));
@@ -1390,6 +1445,26 @@ public final class AotCEmitter {
     // ==================== Statements ====================
 
     private void emitStmt(Ast.IStmt s) {
+        if (s instanceof Ast.ReturnStmt && !trysAbiertos.isEmpty()) {
+            /* V7 #578 — un `return` dentro de un `try`: el valor primero (si lanza, lo atrapa ese `try`), luego cierra
+             * los `try` abiertos —saca sus aterrizajes y corre sus `finally`, del más interno al más externo— y sale. */
+            Ast.ReturnStmt r = (Ast.ReturnStmt) s;
+            indent(); w.println("{");
+            indentLevel++;
+            String rv = null;
+            if (r.value != null) {
+                rv = "__bpvm_ret" + (tryCounter++);
+                indent();
+                w.print(cRetActual + " " + rv + " = ");
+                emitComo(r.value, retActual);
+                w.println(";");
+            }
+            cierraTrys(0);
+            indent(); w.println(rv != null ? "return " + rv + ";" : "return;");
+            indentLevel--;
+            indent(); w.println("}");
+            return;
+        }
         if (s instanceof Ast.ReturnStmt) {
             Ast.ReturnStmt r = (Ast.ReturnStmt) s;
             indent();
@@ -1633,10 +1708,12 @@ public final class AotCEmitter {
             return;
         }
         if (s instanceof Ast.BreakStmt) {
+            if (!trysDeBucle.isEmpty()) cierraTrys(trysDeBucle.peek()[0]);   /* V7 #578/#673: los `try` de encima */
             indent(); w.println("break;");
             return;
         }
         if (s instanceof Ast.ContinueStmt) {
+            if (!trysDeBucle.isEmpty()) cierraTrys(trysDeBucle.peek()[1]);   /* V7 #578/#673 */
             indent(); w.println("continue;");
             return;
         }
@@ -1662,19 +1739,8 @@ public final class AotCEmitter {
             return;
         }
         if (s instanceof Ast.TryStmt) {
-            /* #213 parte 2 — DIFERIDO con motivo: el código .mdn no puede
-             * llamar setjmp (cero relocations externas — todo acceso al
-             * runtime va via vm->aot_helpers, y un jmp_buf local del native
-             * no sobrevive al longjmp del helper sin un refactor de locals
-             * a context-struct + helper eh_native_try). El throw HACIA fuera
-             * sí funciona (#186/#175/#213): envuelve la LLAMADA al native
-             * en try/catch BP. */
-            throw new UnsupportedAotException(
-                "AOT: try/catch DENTRO de una función native no está soportado "
-                + "(#213: .mdn no puede usar setjmp). Workaround: envuelve la "
-                + "LLAMADA al native en try/catch BP — los throw del native "
-                + "(RuntimeError o clases de usuario) sí se cazan ahí. line "
-                + ((Ast.Node) s).line);
+            emitTryStmt((Ast.TryStmt) s);   /* V7 #578 */
+            return;
         }
         throw new UnsupportedAotException(
             "AOT: statement no soportado: " + s.getClass().getSimpleName()
@@ -1696,11 +1762,10 @@ public final class AotCEmitter {
      *  ref resultante viaja por throw_ref → boundary → eh_unwind, igual
      *  que un throw BP normal. Requiere clase public (la factory solo se
      *  sintetiza para public) y ctor con firma i32 (límite v1 del puente).
-     *  Lo que NO soporta esta fase: try/catch DENTRO de native (.mdn no
-     *  puede llamar setjmp — cero relocations externas; necesitaría
-     *  helpers eh_native_try + locals en context struct, diferido). En los
-     *  casos no soportados lanzamos UnsupportedAotException y el módulo
-     *  cae a bytecode interpretado (donde sí funciona). */
+     *  Y desde V7 #578, un `try`/`catch` DENTRO de la native atrapa estos
+     *  throw antes del límite (emitTryStmt: la VM salta al aterrizaje más
+     *  interno). En los casos no soportados lanzamos UnsupportedAotException
+     *  y la native es un error de compilación (#519) con su motivo. */
     private void emitThrowStmt(Ast.ThrowStmt ts) {
         /* Fast path: throw RuntimeError("literal") → throw_runtime con el
          * cstring directo (sin alocar string en el heap). */
@@ -1744,8 +1809,7 @@ public final class AotCEmitter {
         }
         throw new UnsupportedAotException(
             "AOT: en native `throw` soporta RuntimeError(string) y clases de "
-            + "usuario public que desciendan de Exception "
-            + "(try/catch DENTRO de native = pendiente #175b). line "
+            + "usuario public que desciendan de Exception. line "
             + ts.line);
     }
 
@@ -1998,7 +2062,9 @@ public final class AotCEmitter {
         w.flush();
         StringBuffer b = out.getBuffer();
         int desde = b.length();
+        trysDeBucle.push(new int[] { trysAbiertos.size(), trysAbiertos.size() });   /* V7 #578/#673 */
         for (Ast.IStmt st : body) emitStmt(st);
+        trysDeBucle.pop();
         w.flush();
         String cuerpo = b.substring(desde);
         b.setLength(desde);
@@ -2105,6 +2171,10 @@ public final class AotCEmitter {
             w.println(alLong ? ")) {" : ") {");
         }
         indentLevel++;
+        /* V7 #578/#673 — un `break` dentro de un case sale del switch (cierra los `try` abiertos dentro); `continue`, del
+         * bucle de fuera. */
+        int[] fuera = trysDeBucle.peek();
+        trysDeBucle.push(new int[] { trysAbiertos.size(), fuera != null ? fuera[1] : trysAbiertos.size() });
         int k = 0;
         for (Ast.CaseClause cc : sw.cases) {
             k++;
@@ -2132,6 +2202,7 @@ public final class AotCEmitter {
             indentLevel--;
             indent(); w.println("}");
         }
+        trysDeBucle.pop();   /* V7 #578/#673 (si la emisión falla a medias, emitFunction la vacía en la siguiente) */
         indentLevel--;
         indent(); w.println("}");
         if (esString) {
@@ -2146,6 +2217,187 @@ public final class AotCEmitter {
             for (Ast.IExpr v : cc.values)
                 if (isLongExpr(v)) return true;
         return false;
+    }
+
+    // ==================== V7 #578: el `try` dentro de una native ====================
+
+    /** ¿Hay un `try` en estas sentencias (a cualquier profundidad)? */
+    private static boolean contieneTry(List<Ast.IStmt> ss) {
+        if (ss == null) return false;
+        for (Ast.IStmt s : ss) {
+            if (s instanceof Ast.TryStmt) return true;
+            if (s instanceof Ast.IfStmt) {
+                Ast.IfStmt i = (Ast.IfStmt) s;
+                if (i.then_ != null && contieneTry(i.then_.body)) return true;
+                if (i.elseIfs != null) for (Ast.IfClause ei : i.elseIfs) if (contieneTry(ei.body)) return true;
+                if (contieneTry(i.else_)) return true;
+            } else if (s instanceof Ast.WhileStmt) {
+                if (contieneTry(((Ast.WhileStmt) s).body)) return true;
+            } else if (s instanceof Ast.DoLoopStmt) {
+                if (contieneTry(((Ast.DoLoopStmt) s).body)) return true;
+            } else if (s instanceof Ast.ForStmt) {
+                if (contieneTry(((Ast.ForStmt) s).body)) return true;
+            } else if (s instanceof Ast.SwitchStmt) {
+                Ast.SwitchStmt sw = (Ast.SwitchStmt) s;
+                for (Ast.CaseClause cc : sw.cases) if (contieneTry(cc.body)) return true;
+                if (contieneTry(sw.defaultBody)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** V7 #578 (9-oct) — el `try` DENTRO de una native (docs/V7_IDEAS.md §«#578»). Un aterrizaje por `try` (`void* t[7]`
+     *  con su __builtin_setjmp, apilado en la VM con EH_PUSH): si algo lanza dentro —la native, un helper, un builtin, la
+     *  función BP a la que llama, otra native—, la VM salta aquí con la excepción, que el `else` recoge (EH_EXC) y prueba
+     *  contra cada `catch` en su orden, por la CLASE (EH_ES, con su nombre canónico, el de `#533`); si ninguno casa, la
+     *  relanza (throw_ref) hacia el `try` de fuera o el límite de la native. El `finally` corre en todas las salidas, como
+     *  en el emisor de bytecode: al acabar el cuerpo, al acabar un `catch`, antes de relanzar, y en un `return`,
+     *  `break` o `continue` que sale del `try` (cierraTrys); y con `finally`, el cuerpo de cada `catch` va en su propio
+     *  aterrizaje: lo que lance corre el `finally` y sale. */
+    private void emitTryStmt(Ast.TryStmt ts) {
+        if (ts.recurso != null) {
+            throw new UnsupportedAotException(
+                "AOT: `try var` (un recurso owner que el bloque suelta al salir) dentro de una native, todavia no (line "
+                + ts.line + "): declaralo antes con `var` y sueltalo en un `finally`, o quita 'native'.");
+        }
+        List<Ast.IStmt> fin = (ts.finallyBody != null && !ts.finallyBody.isEmpty()) ? ts.finallyBody : null;
+        if (ts.catches.isEmpty() && fin == null) {   // ni catch ni finally: el cuerpo, como en el bytecode
+            indent(); w.println("{");
+            indentLevel++;
+            for (Ast.IStmt st : ts.body) emitStmt(st);
+            indentLevel--;
+            indent(); w.println("}");
+            return;
+        }
+        String m = "aot_" + moduleName;
+        int n = tryCounter++;
+        String t = "__bpvm_t" + n, e = "__bpvm_e" + n;
+        indent(); w.println("{   /* try (linea " + ts.line + ") — #578 */");
+        indentLevel++;
+        indent(); w.println("void* " + t + "[BPVM_ATERRIZAJE_PALABRAS];");
+        indent(); w.println(t + "[BPVM_ATERRIZAJE_SALTA] = (void*) (uintptr_t) " + m + "__try_salta;");
+        indent(); w.println("if (__builtin_setjmp(" + t + ") == 0) {");
+        indentLevel++;
+        indent(); w.println(m + "__try_eh(vm, BPVM_NATIVA_EH_PUSH, " + t + ");");
+        trysAbiertos.push(new TryAot(t, fin));
+        for (Ast.IStmt st : ts.body) emitStmt(st);
+        trysAbiertos.pop();
+        indent(); w.println(m + "__try_eh(vm, BPVM_NATIVA_EH_POP, " + t + ");");
+        if (fin != null) emitFinally(fin);
+        indentLevel--;
+        indent(); w.println("} else {");
+        indentLevel++;
+        indent(); w.println("uint32_t " + e + " = " + m + "__try_exc(vm);");
+        indent(); w.println("(void) " + e + ";   /* un `catch` sin variable no la usa */");
+        boolean abierto = false, todo = false;
+        for (Ast.CatchClause cc : ts.catches) {
+            indent();
+            if (cc.exceptionType == null) {   // `catch e` o `catch`: cualquier excepción (siempre el último)
+                w.println(abierto ? "} else {" : "{");
+                todo = true;
+            } else {
+                w.println((abierto ? "} else if (" : "if (") + m + "__try_es(vm, " + e + ", \""
+                          + claseDelCatch(cc) + "\")) {");
+            }
+            abierto = true;
+            indentLevel++;
+            emitCuerpoDeCatch(cc, e, fin);
+            indentLevel--;
+            if (todo) break;
+        }
+        if (!todo) {   // ninguno casa: el finally y fuera
+            indent(); w.println(abierto ? "} else {" : "{");
+            indentLevel++;
+            if (fin != null) emitFinally(fin);
+            indent(); w.println("vm->aot_helpers->throw_ref(vm, " + e + ");");
+            indentLevel--;
+        }
+        indent(); w.println("}");
+        indentLevel--;
+        indent(); w.println("}");
+        indentLevel--;
+        indent(); w.println("}");
+    }
+
+    /** V7 #578 — el nombre canónico de la clase de un `catch` (el que la VM compara en EH_ES con el de cada clase de la
+     *  cadena de la excepción: `bpvm_clase_se_llama`). */
+    private String claseDelCatch(Ast.CatchClause cc) {
+        Symbol.ClassSymbol cls = (semInfo != null) ? semInfo.catchClassSymbols.get(cc) : null;
+        if (cls == null) {
+            throw new UnsupportedAotException(
+                "AOT: el `catch` de '" + cc.exceptionType + "' (line " + cc.line + "): no se resolvio su clase.");
+        }
+        try {
+            return Symbol.ClaveCanonica.clase(cls, moduloLocal);
+        } catch (Symbol.ClaveCanonica.TipoSinResolver ex) {
+            throw new UnsupportedAotException("AOT: " + ex.getMessage() + " (el `catch` de la line " + cc.line + ")");
+        }
+    }
+
+    /** V7 #578 — el cuerpo de un `catch`: su variable (la excepción, una ref) y sus sentencias. Con `finally`, dentro de
+     *  su propio aterrizaje —lo que lance corre el `finally` y sale— y el `finally` al acabar. */
+    private void emitCuerpoDeCatch(Ast.CatchClause cc, String e, List<Ast.IStmt> fin) {
+        if (cc.varName != null) {
+            indent(); w.println("int32_t " + cVar(cc.varName) + " = (int32_t) " + e + ";");
+            indent(); w.println("(void) " + cVar(cc.varName) + ";");
+            localNames.add(cc.varName);
+        }
+        if (fin == null) {
+            for (Ast.IStmt st : cc.body) emitStmt(st);
+            return;
+        }
+        String m = "aot_" + moduleName;
+        int n = tryCounter++;
+        String t = "__bpvm_t" + n, x = "__bpvm_e" + n;
+        indent(); w.println("{   /* el catch, con su aterrizaje: lo que lance corre el finally y sale */");
+        indentLevel++;
+        indent(); w.println("void* " + t + "[BPVM_ATERRIZAJE_PALABRAS];");
+        indent(); w.println(t + "[BPVM_ATERRIZAJE_SALTA] = (void*) (uintptr_t) " + m + "__try_salta;");
+        indent(); w.println("if (__builtin_setjmp(" + t + ") == 0) {");
+        indentLevel++;
+        indent(); w.println(m + "__try_eh(vm, BPVM_NATIVA_EH_PUSH, " + t + ");");
+        trysAbiertos.push(new TryAot(t, fin));
+        for (Ast.IStmt st : cc.body) emitStmt(st);
+        trysAbiertos.pop();
+        indent(); w.println(m + "__try_eh(vm, BPVM_NATIVA_EH_POP, " + t + ");");
+        indentLevel--;
+        indent(); w.println("} else {");
+        indentLevel++;
+        indent(); w.println("uint32_t " + x + " = " + m + "__try_exc(vm);");
+        emitFinally(fin);
+        indent(); w.println("vm->aot_helpers->throw_ref(vm, " + x + ");");
+        indentLevel--;
+        indent(); w.println("}");
+        indentLevel--;
+        indent(); w.println("}");
+        emitFinally(fin);
+    }
+
+    /** V7 #578 — un `finally`, en su propio bloque de C: sale varias veces (al acabar, en cada `catch`, antes de relanzar,
+     *  en cada salto que sale del `try`) y sus `var` no pueden chocar entre ellas. */
+    private void emitFinally(List<Ast.IStmt> fin) {
+        indent(); w.println("{   /* finally */");
+        indentLevel++;
+        for (Ast.IStmt st : fin) emitStmt(st);
+        indentLevel--;
+        indent(); w.println("}");
+    }
+
+    /** V7 #578/#673 — un salto (`return`, `break`, `continue`) que sale de los `try` abiertos por encima de {@code prof}:
+     *  saca sus aterrizajes y corre sus `finally`, del más interno al más externo. Cada `finally` se emite con su `try`
+     *  ya FUERA de la pila (y los de dentro): un salto dentro de ese `finally` cierra sólo los de fuera. */
+    private void cierraTrys(int prof) {
+        String m = "aot_" + moduleName;
+        java.util.ArrayDeque<TryAot> quitados = new java.util.ArrayDeque<>();
+        while (trysAbiertos.size() > prof) {
+            TryAot f = trysAbiertos.pop();
+            quitados.push(f);
+            if (f.aterrizaje != null) {
+                indent(); w.println(m + "__try_eh(vm, BPVM_NATIVA_EH_POP, " + f.aterrizaje + ");");
+            }
+            if (f.finallyBody != null) emitFinally(f.finallyBody);
+        }
+        while (!quitados.isEmpty()) trysAbiertos.push(quitados.pop());   // lo que sigue al salto sigue dentro de ellos
     }
 
     private void emitIfStmt(Ast.IfStmt iff) {

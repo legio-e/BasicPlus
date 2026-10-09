@@ -924,9 +924,10 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       result is the same. A runtime failure
       (index out of range, null reference) or a
       <code>throw RuntimeError("…")</code> inside the native propagates to the
-      BP <code>try/catch</code> that wraps the call, with the interpreter's message
+      <code>try/catch</code> that wraps it —since V7, also one INSIDE the native itself, with
+      its <code>catch</code> by class and its <code>finally</code>—, with the interpreter's message
       (the exact line inside the native, not yet). What still does NOT fit —
-      <code>try/catch</code> inside the native, tuples with <code>float</code>, <code>long</code>
+      <code>try var</code> (the resource the block releases) inside the native, tuples with <code>float</code>, <code>long</code>
       or <code>double</code> fields (the others do fit, since V7), <code>instanceof</code>,
       events, <code>parallel</code>, <code>for … in</code>,
       <strong>reading or writing fields</strong>
@@ -1971,9 +1972,10 @@ in V3 automatic AOT from the IDE and the GUI
 the <code>.mod</code> v7 (<a href="#funciones-native">§8.3</a>) and the SMP race
 B1 (<a href="#conc-gc">§14.4</a>).</p>
 <ul>
-  <li><code>try/catch</code> INSIDE a <code>native function</code>
-      (throwing from the native and catching OUTSIDE does work): the native
-      code does not embed setjmp; deferred, with the design noted. Nor <code>instanceof</code>,
+  <li><code>try var</code> (the <code>owner</code> resource the block releases) INSIDE a
+      <code>native function</code>: declare it before with <code>var</code> and release it in a
+      <code>finally</code> (since V7 a <code>try/catch/finally</code> inside a native does
+      work). Nor <code>instanceof</code>,
       events or tuples with <code>float</code>, <code>long</code> or <code>double</code> fields
       inside a native (compile error, <a href="#funciones-native">§8.3</a>).</li>
   <li>Fixed-size array <code>type[N]</code> as a class field and inside a

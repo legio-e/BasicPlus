@@ -100,6 +100,9 @@ class AotCoberturaTest {
         // V7 #577 (7-oct-2026): 29 de 30. TupleExpr entró —desestructurar y construir una tupla dentro de una native,
         // por los accesores ocultos del módulo (__tup_get_/__tup_new_) y el puente; una forma con float, long o double
         // sigue rechazada—. Queda TryStmt (#578).
+        // V7 #578 (9-oct-2026): 30 de 30. TryStmt entró —el aterrizaje con __builtin_setjmp, las cuatro operaciones
+        // del límite por call_builtin y el salto desde una función del propio .mdn—.
+        "TryStmt",
         "TupleExpr",
         "ArrayLitExpr", "AssignStmt", "BinaryExpr", "BoolLitExpr", "BreakStmt",
         "CallExpr", "MemberAccessExpr", "NewObjectExpr", "ContinueStmt",

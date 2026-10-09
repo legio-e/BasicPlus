@@ -514,10 +514,16 @@ public final class MivmEmitter {
          *  switch, `continue` es del bucle de fuera: su profundidad, la de aquél. */
         final int profBreak;
         final int profContinue;
-        LoopLabels(int cont, int brk) { this(cont, brk, ocultasDeSentencia.size()); }
-        LoopLabels(int cont, int brk, int profContinue) {
+        /** V7 #673 — cuántos `try` había abiertos (`tryStack`) al entrar en el bucle: un `break`/`continue` cierra los
+         *  de ENCIMA —sus manejadores y su `finally`—, como un `return` los de toda la función. En un switch,
+         *  `continue` es del bucle de fuera: su profundidad, la de aquél. */
+        final int trysBreak;
+        final int trysContinue;
+        LoopLabels(int cont, int brk) { this(cont, brk, ocultasDeSentencia.size(), tryStack.size()); }
+        LoopLabels(int cont, int brk, int profContinue, int trysContinue) {
             this.continueLabel = cont; this.breakLabel = brk;
             this.profBreak = ocultasDeSentencia.size(); this.profContinue = profContinue;
+            this.trysBreak = tryStack.size(); this.trysContinue = trysContinue;
         }
     }
 
@@ -3772,7 +3778,8 @@ public final class MivmEmitter {
         // contuviera y, sin bucle, el emisor fallaba sin línea.
         LoopLabels fuera = loopStack.peek();
         loopStack.push(new LoopLabels(fuera != null ? fuera.continueLabel : end, end,
-                                      fuera != null ? fuera.profContinue : ocultasDeSentencia.size()));
+                                      fuera != null ? fuera.profContinue : ocultasDeSentencia.size(),
+                                      fuera != null ? fuera.trysContinue : tryStack.size()));
         try {
             for (CaseClause cc : s.cases) {
                 int bodyLabel = w.newLabel();
@@ -4843,14 +4850,36 @@ public final class MivmEmitter {
 
     private void emitBreak() throws IOException {
         if (loopStack.isEmpty()) { errors.add("break fuera de bucle"); return; }
+        cierraTrysHasta(loopStack.peek().trysBreak);   // V7 #673
         limpiaHasta(loopStack.peek().profBreak);   // V7/H9 #621
         w.emitJump(loopStack.peek().breakLabel);
     }
 
     private void emitContinue() throws IOException {
         if (loopStack.isEmpty()) { errors.add("continue fuera de bucle"); return; }
+        cierraTrysHasta(loopStack.peek().trysContinue);   // V7 #673
         limpiaHasta(loopStack.peek().profContinue);   // V7/H9 #621
         w.emitJump(loopStack.peek().continueLabel);
+    }
+
+    /** V7 #673 (9-oct) — un salto que sale de los `try` abiertos por encima de {@code prof} (`break`, `continue`)
+     *  cierra sus manejadores y corre su `finally`, del más interno al más externo, como {@code emitReturn} con los de
+     *  toda la función. Antes no se cerraban: el `catch` de un `try` del que se salía con `break` seguía en la pila de
+     *  manejadores y atrapaba lo que lanzara después el código de FUERA (que volvía a entrar en el bucle por su
+     *  `catch`), y su `finally` no corría. Cada `finally` se emite con su `try` ya FUERA de la pila (y los de dentro):
+     *  un `break` dentro de ese `finally` cierra sólo los de fuera —con la pila entera volvería a emitir el mismo
+     *  `finally` sin fin, como le pasa hoy a un `return` dentro de un `finally` (`#674`)—. */
+    private void cierraTrysHasta(int prof) throws IOException {
+        java.util.ArrayDeque<TryFrame> quitados = new java.util.ArrayDeque<>();
+        while (tryStack.size() > prof) {   // del más interno al más externo
+            TryFrame f = tryStack.pop();
+            quitados.push(f);
+            for (int i = 0; i < f.activeHandlers; i++) w.emitTryEnd();
+            if (f.finallyBody != null) {
+                for (IStmt st : f.finallyBody) emitStmt(st);
+            }
+        }
+        while (!quitados.isEmpty()) tryStack.push(quitados.pop());   // lo que sigue al salto sigue dentro de ellos
     }
 
     /** V7/H9 #621 — un salto que sale de las sentencias abiertas por encima de la profundidad {@code prof}: lo

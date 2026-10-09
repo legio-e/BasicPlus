@@ -24,6 +24,8 @@
     { "nombre": "NatDosRuns",  "fuente": "bpgenvm-c/samples/NatDosRuns.bp",  "aot": true, "timeout_s": 120 },
     { "nombre": "NatBuiltin",  "fuente": "bpgenvm-c/samples/NatBuiltin.bp",  "aot": true },
     { "nombre": "NatAnida",    "fuente": "bpgenvm-c/samples/NatAnida.bp",    "aot": true },
+    { "nombre": "NatPuente",   "fuente": "bpgenvm-c/samples/NatPuente.bp",   "aot": true },
+    { "nombre": "NatTry",      "fuente": "bpgenvm-c/samples/NatTry.bp",      "aot": true },
     { "nombre": "NatDirecta",  "fuente": "bpgenvm-c/samples/NatDirecta.bp",  "aot": true },
     { "nombre": "NatCoste",    "fuente": "bpgenvm-c/samples/NatCoste.bp",    "aot": true, "ignorar": ["^  tiempo: "] },
     { "nombre": "NatNombres",  "fuente": "bpgenvm-c/samples/NatNombres.bp",  "aot": true },
