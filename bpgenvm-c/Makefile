@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1182,6 +1182,28 @@ test-aotanida: $(LIBOBJ)
 	 if ! cmp -s build/aotanida.int build/aotanida.aot; then diff build/aotanida.int build/aotanida.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 3 ]; then cat build/aotanida.aot; echo "  ROJO: $$n de 3 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 3/3 con el AOT, igual que interpretado"
+
+# V7 #672 (9-oct) — UNA EXCEPCIÓN QUE LANZA EL CÓDIGO BP AL QUE LLAMA UNA NATIVE, sin atraparla: sale por la native
+# hasta el `try` de fuera, como en el intérprete (el suelo del puente). Antes buscaba manejador por debajo de la native
+# con sus marcos de C vivos: el resto del programa corría dos veces y acababa con «la función BP cedió/falló». Ocho
+# casos (cruzar una y dos natives, una clase del usuario, un BP que la atrapa entre dos natives, la native otra vez
+# sin excepción y un throw de Main después: ni un suelo rancio), con GC en cada reserva; AOT == interpretado.
+test-aotpuente: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatPuente)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatPuente,build/aotpuente)
+	$(CC) $(CFLAGS) -Isrc test/test_aotpuente.c build/aotpuente/aot_NatPuente.c $(LIBOBJ) \
+	  -o build/test_aotpuente.exe $(LDFLAGS)
+	@echo "--- #672 una excepcion de BP cruza la native (esperado: AOT == interpretado, 9/9, sin FALLO) ---"
+	@./build/test_aotpuente.exe samples/NatPuente.mod 2>build/aotpuente.err | grep -a -E '^(ok|FALLO) ' > build/aotpuente.aot; \
+	 ./build/test_aotpuente.exe samples/NatPuente.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotpuente.int; \
+	 n=$$(grep -c '^ok ' build/aotpuente.aot); \
+	 if ! grep -a -q '^\[status=OK\]' build/aotpuente.err; then grep -a '^\[status\|^\[runtime_error' build/aotpuente.err; echo "  ROJO: el programa no acabo en OK con el AOT"; exit 1; fi; \
+	 if grep -q '^FALLO' build/aotpuente.aot build/aotpuente.int; then grep -h '^FALLO' build/aotpuente.aot build/aotpuente.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotpuente.int build/aotpuente.aot; then diff build/aotpuente.int build/aotpuente.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 9 ]; then cat build/aotpuente.aot; echo "  ROJO: $$n de 9 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 9/9 con el AOT, igual que interpretado"
 
 # V7/H5 (#559, 25-sep) — LA COMA FLOTANTE DENTRO DE UNA NATIVE, ejecutada en el PC por sus DOS
 # caminos. El .c que el AOT genera se compila tal cual (la FPU del PC hace los float, como el P4 y

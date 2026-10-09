@@ -341,11 +341,29 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
                                    bpvm_aot_callctx_t* cc,
                                    uint32_t target_cs, uint32_t target_abs,
                                    const int32_t* args, int nargs, uint32_t ref_mask,
-                                   int ret_is_ref) {
+                                   int ret_is_ref, int desde_nativa) {
     uint8_t* mem = vm->memory;
     uint32_t sp = *cc->sp_p;        /* registros vivos del intérprete exterior */
     uint32_t bp = *cc->bp_p;
     uint32_t caller_cs = tc->cs;
+
+    /* V7 #672 (9-oct) — EL SUELO DE LAS EXCEPCIONES. Una excepción que el código BP no atrapa no puede buscar
+     * manejador por DEBAJO de la native: sus marcos de C siguen vivos. Lo hacía —el `catch` de fuera corría DENTRO de
+     * este intérprete anidado, encima de la native, y al acabar el programa el puente decía «la función BP
+     * cedió/falló»—. Ahora el puente apila un `catch` de cualquier clase cuyo código es el sentinela de vuelta, con la
+     * pila de la native: la excepción que llega hasta él sale de aquí y se relanza DENTRO de la native (throw_ref, al
+     * acabar), que la deja pasar —o la atrapa su `try`, #578— hasta el límite de fallos, como en el intérprete. Lo
+     * que el código anidado apiló se va con él en cualquier salida (`suelo`). El puente de un builtin (la GUI de
+     * legado) no lo pone: allí no hay native a la que salir. */
+    int suelo = tc->eh_stack_size;
+    if (desde_nativa) {
+        bpvm_eh_push(tc, (int32_t) BPVM_SENTINEL_NATIVE_RETURN_ADDR, (int32_t) sp, (int32_t) bp,
+                     (int32_t) caller_cs, 0 /* cualquier clase */);
+        if (tc->eh_stack_size != suelo + 1) {
+            vm->aot_helpers->throw_runtime(vm, "call_bp: sin memoria para el suelo de las excepciones del puente");
+            return 0;   /* inalcanzable */
+        }
+    }
 
     /* Frame falso (réplica exacta de OP_CALL): args, luego saved pc/bp/cs.
      *
@@ -394,6 +412,7 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
         if (st == BPVM_OK && tc->al_run0) {
             tc->al_run0 = 0;
             tc->cs = caller_cs;
+            tc->eh_stack_size = suelo;   /* #672 */
             vm->aot_helpers->throw_runtime(vm,
                 "GUI: un builtin de la GUI desde una native, fuera del run 0 (con dos runs, todavia no)");
             return 0;   /* inalcanzable */
@@ -417,10 +436,29 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
         }
         /* Bloqueo, terminación o error no soportado por el puente v1. */
         tc->cs = caller_cs;
+        tc->eh_stack_size = suelo;   /* #672 */
         vm->aot_helpers->throw_runtime(vm,
             "call_bp/call_method: la función BP cedió/falló (no soportado por el puente v1)");
         return 0;   /* inalcanzable */
     }
+
+    /* V7 #672 — el suelo la atrapó: el código BP lanzó y nadie la atrapó por encima. eh_unwind la dejó en la cima
+     * de la pila (8 bytes); la native recupera su estado y la relanza. Hasta que la recoja quien la atrape, su raíz
+     * es el ancla del hilo: en la pila BP ya no está. */
+    if (desde_nativa && tc->eh_stack_size <= suelo) {
+        bpref_t exc;
+        exc.v = (uint64_t) bpvm_read_i64_be(vm->memory + tc->sp - 8);
+        tc->eh_stack_size = suelo;
+        tc->builtin_de_nativa = prev_bdn;
+        tc->sp = *cc->sp_p;
+        tc->bp = *cc->bp_p;
+        tc->cs = caller_cs;
+        tc->status = BPVM_THREAD_RUNNING;
+        tc->alloc_anchor = (int32_t) (uint32_t) exc.v;
+        vm->aot_helpers->throw_ref(vm, (uint32_t) exc.v);
+        return 0;   /* inalcanzable */
+    }
+    tc->eh_stack_size = suelo;   /* #672: el suelo fuera (la función volvió con sus `try` cerrados) */
 
     /* #302 paso 2 — retorno-ref: la función BP dejó 8 bytes (handle) en el top;
      * si no, 4 (i32). En ambos casos el VALOR útil son los 4 bytes bajos (rsp-4,
@@ -461,7 +499,7 @@ int32_t bpvm_aot_call_bp_i32(bpvm_t* vm, uint32_t target_abs,
     /* #302 paso 2 — el AOT (aot_helpers v2) ya provee ref_mask/ret_is_ref reales:
      * los args-ref se ensanchan a 8 bytes con regen y el retorno-ref popea 8. */
     return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, args, nargs,
-                               ref_mask, ret_is_ref);
+                               ref_mask, ret_is_ref, 1 /* #672: desde una native */);
 }
 
 /* H4 — puente BUILTIN→función BP (upcall de eventos GUI). Como bpvm_aot_call_bp_i32
@@ -489,7 +527,8 @@ int32_t bpvm_call_bp_from_builtin(bpvm_t* vm, bpvm_thread_t* tc,
     bpvm_aot_callctx_t cc;
     cc.tc = tc; cc.sp_p = &sp; cc.bp_p = &bp;
     int32_t r = bridge_run_bp_frame(vm, tc, &cc, target_cs, target_abs, args, nargs,
-                                    ref_mask, 0 /*ret_is_ref: el handler onClick es void*/);
+                                    ref_mask, 0 /*ret_is_ref: el handler onClick es void*/,
+                                    0 /* #672: sin suelo (no hay native a la que salir) */);
     tc->sp = base;       /* descarta el frame de la llamada + el retorno (void) */
     tc->bp = bp;         /* bridge restauró bp del caller vía cc->bp_p */
     tc->pc = saved_pc;   /* CRÍTICO: el dispatcher re-lee tc->pc tras el builtin */
@@ -544,7 +583,7 @@ int32_t bpvm_aot_call_method_i32(bpvm_t* vm, uint32_t this_ref, int slot,
      * los args-ref del usuario van desplazados un bit (ref_mask << 1). */
     uint32_t frame_mask = (ref_mask << 1) | 1u;
     return bridge_run_bp_frame(vm, tc, cc, target_cs, target_abs, buf, total,
-                               frame_mask, ret_is_ref);
+                               frame_mask, ret_is_ref, 1 /* #672: desde una native */);
 }
 
 /* BUG-7 — Lanza un RuntimeError BP desde un opcode del intérprete (no-native):

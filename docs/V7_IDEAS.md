@@ -8757,3 +8757,62 @@ El orden, con la puerta delante:
    lo que no es suyo), el `finally`, y un `return` o un `break` dentro del `try` (sacar su aterrizaje antes de salir).
 5. **Las pruebas**: `test-aottry` (la native contra su interpretada, con GC en cada alocación) en `check-testc`, un
    sample en la paridad (`NatTry`) y la ronda de natives en placa.
+
+#### El paso 1, en concreto (9-oct)
+
+**Lo primero que salió: `#672`.** El experimento de partida (una native que llama a una función BP que lanza, con el
+`try` FUERA, en `Main`) destapó que hoy esa excepción ni siquiera llega a la native: `bpvm_eh_unwind` recorre toda la
+pila de manejadores del hilo y le daba el control al `catch` de `Main` dentro del intérprete anidado del puente, con la
+native debajo (el resto del programa corría dos veces). Arreglado aparte, porque es un fallo de hoy, con o sin `#578`:
+el SUELO del puente —un `catch` de cualquier clase con el sentinela de vuelta como código—; lo que llega hasta él sale
+a la native y ésta lo relanza con `throw_ref`. Para `#578` es justo lo que hacía falta: lo que lanza una función BP
+llamada desde la native ya pasa por `throw_ref`, como lo que lanza un builtin por `call_builtin`.
+
+**El aterrizaje** es un `void* t[7]` en el marco de la native: `t[0..4]`, el búfer de `__builtin_setjmp`; `t[5]`, el de
+debajo (lo escribe la VM); `t[6]`, una función de SU módulo, `aot_<M>___salta`, que hace `__builtin_longjmp(t, 1)`.
+**El salto lo da el mismo GCC que hizo el `__builtin_setjmp`**: la VM no ejecuta `__builtin_longjmp`, llama a esa
+función. Así el riesgo que la puerta debía medir —que el búfer casara entre el GCC de la imagen y el del AOT—
+desaparece. La puerta en placa se queda (que salte bien con el código en la flash, en la pila del ejecutor y con las
+vigilancias de pila de cada familia), pero ya no pregunta si casan dos compiladores.
+
+**En el hilo**: el límite de fallos (`bpvm_aot_fault_t`) gana `nativo`, el aterrizaje más interno o NULL. Cada
+`aot_call_guarded` lo guarda, lo vacía y lo repone al salir, por las dos salidas: los `try` de una native de fuera
+quedan debajo de su límite. Con P2b.3 viaja solo (el ejecutor copia la vista entera al pasar el testigo).
+
+**Cuatro operaciones por `call_builtin`**, con números NEGATIVOS: no son builtins de `Core` (BP no las ve, ni la VM-Java)
+y `h_call_builtin` las atiende sin pasar por la pila BP. `-1` EH_PUSH(t); `-2` EH_POP(t) —si `t` no es el más interno,
+un error con nombre: el emisor se equivocó—; `-3` EH_EXC() → la excepción que aterrizó (y la suelta del ancla); `-4`
+EH_ES(e, "Lib.Mod.Clase") → ¿es de esa clase o de una hija? Cuatro y no tres: la cuarta es el `catch` por clase, que
+no tenía con qué hacerse (entre los helpers no hay `instanceof`); compara el nombre canónico de cada clase de la cadena
+(`bpvm_link_nombre_de_clase`, el de la 4.5 de su módulo) con el que escribe el emisor (`ClaveCanonica`, el de `#533`):
+vale para una clase privada del módulo, que no está en la tabla de símbolos. Una VM sin ellas dice «builtin -1 no
+soportado en esta VM» al ejecutar el `try` (lo aceptado con B).
+
+**Aterrizar**: `throw_runtime` y `throw_str` —con un aterrizaje, construyen ANTES el `RuntimeError`: su `catch` mira la
+clase y lee `e.msg`—, `throw_ref`, lo que lanza un builtin y lo que sale de BP por el puente (los dos, por `throw_ref`):
+si hay aterrizaje, sale de la cadena (su `catch` ya no es suyo: lo que lance va hacia fuera), la excepción queda en el
+límite y anclada en el hilo, `tc->sp` vuelve al de la native, y se llama a su `salta`; si no, al límite de fallos, como
+hoy.
+
+**El código** que emitirá el AOT (el paso 4), por ejemplo para `try … catch e: RuntimeError … finally … endtry`:
+
+```c
+{   void* t0[BPVM_ATERRIZAJE_PALABRAS];
+    t0[BPVM_ATERRIZAJE_SALTA] = (void*) aot_M___salta;
+    if (__builtin_setjmp(t0) == 0) {
+        EH_PUSH(t0);  /* el cuerpo */  EH_POP(t0);  /* el finally */
+    } else {
+        uint32_t e0 = EH_EXC();
+        if (EH_ES(e0, "Core.RuntimeError")) { e = e0; /* el catch (con su aterrizaje si hay finally) */ /* el finally */ }
+        else { /* el finally */ throw_ref(e0); }
+    }
+}
+```
+
+Un `return`, `break` o `continue` que sale del `try` saca antes su aterrizaje y corre el `finally`, como el
+`TryFrame` del emisor de bytecode.
+
+**La prueba del paso 1-2**, `test-aottryvm`: una native escrita a mano (el C que emitirá el AOT) que aterriza desde
+`throw_runtime`, `throw_ref`, un builtin y una función BP por el puente; un `try` dentro de otro; un `catch` que no es
+suyo y relanza; locales modificados dentro del `try` y leídos en el `catch`, a `-O0`, `-O2` y `-Os`; y el aterrizaje
+desparejado, un error con nombre.
