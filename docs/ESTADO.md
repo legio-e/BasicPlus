@@ -67,7 +67,9 @@
 > (Eduardo: «Prohibirlo»): un `return`, `break` o `continue` que sale de un `finally` es un error de compilación con su
 > línea (`FinallySale` en la carpeta de los errores, 49/49); el manual y la gramática lo dicen.
 > **Lo siguiente** (V7): la Metro, la C3, la C5, la C6 y la Nucleo con la imagen nueva (las imágenes, compiladas) y su
-> ronda, cuando Eduardo las conecte; y las SUELTAS que quedan (`#614`, `#645`).
+> ronda, esta tarde (Eduardo: «esta tarde hacemos ronda de placas»), y en ella `#614` (medir `GuiFlushBench` en la
+> C5 con la imagen nueva). **`#645` CERRADA** (Eduardo: «No hace falta unificar»: el GT911 de la P4 es el componente
+> de Espressif; el de la DK2, nuestro sobre la HAL BP).
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y
