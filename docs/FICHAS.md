@@ -980,6 +980,13 @@ lectura-modificación-escritura de `PACK_DEL` existe por esa regla, y en el PC n
 escribiera dos veces un sector sin borrarlo, la placa leería basura y el sim diría OK. (b) **Su STATE** sale del plan
 del ENV y no del arranque real (`boardsim_smoke` tendría que reiniciar el sim tras `PART_APPLY`, como ya hace
 `env_smoke`). Eduardo (3-oct): *«esto hay que pensarlo»*; al cerrar H10, a SUELTAS.
+**Decidido por Eduardo (9-oct)**: *«OK, V7»*, con la propuesta: el simulado, LA PLACA MÁS ESTRICTA de todas —lo que
+pase en él pasa en todas—. (a) Su flash sólo pasa bits de 1 a 0 y cada bloque de 16 bytes se programa UNA vez entre
+borrados (la regla de la U5, la más dura; su cintura salta los grupos todo-0xFF, `board_mgr_stm32.c`), y lo que lo
+incumpla es un error con nombre («programar sin borrar en 0x…») en vez de copiar encima, como hace hoy
+(`sim_pack_program`, un `memcpy`); (b) tras cambiar las particiones, se reinicia de verdad, como `env_smoke`. Lo que
+destape en el gestor, con su ficha. Antes de las pruebas finales: una red para lo cambiado esta semana en los packs
+(`#623`, `#671`).
 
 #### ✅ `#648` — el GC marca RECURSIVAMENTE: una cadena de unos cientos de objetos desborda la pila de la VM en placa, y la placa se cuelga sin decir nada (abierta el 4-oct, en la revisión adversarial de las etapas 0 y 1 de H12; SUELTA · **CERRADA el 4-oct**, `07c16b4f`)
 
@@ -2920,6 +2927,13 @@ natives: no toca el cuanto por instrucciones del código interpretado (`#531`), 
 entreguen un evento en la misma instrucción. Falta: el temporizador en cada plataforma (el tick de FreeRTOS en las
 ESP y la Pico, el SysTick del STM32, un hilo en el PC), medir lo que cuesta mirar la marca en el bucle caliente de
 una native, y una prueba con vueltas pesadas (hoy tardaría en ceder; con él, no).
+**Decidido por Eduardo (9-oct)**: *«B y entra en V7»* —la marca, en un byte de la región RESERVADA del principio de
+la memoria de la VM (`[0, BPVM_INITIAL_FREE_ADDR)`: hoy sólo usan el 0, el 1 y el 2 los centinelas de fin de hilo,
+vuelta del puente y vuelta de un evento), que la native ya sabe leer (`vm->memory`, el prefijo congelado): la ABI no
+cambia—. El temporizador sube un CONTADOR ahí cada 5 ms (y el KILL lo toca), y la native lo compara con el que vio
+al empezar su turno —sin borrar nada, así vale con dos runs—; la comprobación de cada vuelta sustituye a la cuenta
+de hoy, y lo mismo a la entrada de las recursivas (`#580`) si sale igual de barato. Antes de cerrarla, medido en el
+bucle caliente (`sumaHasta`) y la prueba con vueltas pesadas. En el PC con Windows, ~15 ms (su reloj no da menos).
 
 #### ✅ `#591` — un breakpoint en la ÚLTIMA línea de un módulo para también DENTRO de los helpers que sintetiza el compilador (`__strconcat`…): no tienen línea en el `.dbg` y heredan la última del mapa (abierta 27-sep, al hacer `#589`; preexistente; H8 · **CERRADA el 28-sep**, `d3a60e5c`)
 
@@ -3092,7 +3106,7 @@ por operación de `double`). El número, en el manual (§8.3, «Velocidad y `dou
 `float`) y en `AOT_LIMITES` §1; y `DblNat`, en la ronda de V7: las placas con FPU simple (la Metro, la Pico, la
 Discovery, la Nucleo, el P4) darán su número con su próxima ronda.
 
-#### 🟡 `#584` — la cola de la fusión `.mod`/`.mdn`: el `.mod` MULTIFAMILIA, la poda como UNA función y `putIfChanged` con lo podado (abierta 27-sep, al cerrar H5; SUELTA)
+#### 🧊 `#584` — la cola de la fusión `.mod`/`.mdn`: el `.mod` MULTIFAMILIA, la poda como UNA función y `putIfChanged` con lo podado (abierta 27-sep, al cerrar H5; SUELTA · **a V8**, Eduardo, 9-oct: con la WiFi, desplegar un mismo programa a varias placas)
 
 La fusión está hecha —el formato v7, con un bloque nativo por familia; hoy N=1: el IDE sólo funde el de la placa
 conectada— y su aviso era *«lo caro no es la fusión, es su cola»*. Lo que falta, según el diseño (`V6_IDEAS` §«El
@@ -3106,6 +3120,11 @@ multifamilia tiene que salir «rechazado (rc=-7)» en el diagnóstico de la C6. 
 **Decidido el 3-oct** (Eduardo): **podar sólo ahorra flash** —la placa tolera los bloques de otras familias; podar es una
 optimización de espacio, no un requisito—. Lo que queda: el `.mod` multifamilia, la poda como una función y comparar lo
 podado al decidir si subir.
+**A V8** (Eduardo, 9-oct: *«V8»*). Hoy no falla nada: el IDE compila en cada Run para la placa que tiene delante, un
+`.mod` llevado a mano a otra familia corre con sus natives interpretadas (la placa tolera el bloque ajeno) y los packs
+ya llevan varias familias (SQLite: ARM y RISC-V). El `.mod` multifamilia sirve para llevar el mismo programa a varias
+placas sin el IDE delante —una SD, o la WiFi de V8—: va con ella. Coste estimado, un día largo (el IDE, la poda común,
+la comparación de lo podado, las pruebas y la placa: el bloque del P4 en la C6, «rechazado (rc=-7)»).
 
 #### 🟡 `#583` — el DEBUGGER y las natives (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT)
 
@@ -3116,8 +3135,17 @@ riesgo escrito (§«⚠️ Y el riesgo de fondo»): depurar un artefacto que no 
 variantes en el `.mod` (con marcas y sin ellas) y un campo en la cabecera. Y uno nuevo de P2b.3 (§H5.P2b.3, «por
 mirar»): el depurador parado en código BP llamado DESDE una native, que ahora corre en un ejecutor —«si molesta, con
 el depurador las natives corren directas»—. Sin decisión de Eduardo todavía. Va con `#582`: la misma marca.
+**Decidido por Eduardo (9-oct)**: *«No depuramos las natives. Si quieres ejecutar paso a paso le quitas native, para
+verificar el algoritmo vale. La haces native cuando estás seguro que funciona. ¿Qué ocurre si la compilación de
+natives tiene un bug? Ese es nuestro trabajo, asegurarnos que el compilador funciona correctamente. Se puede detectar
+con test de caja negra y para solucionarlo hay que verificar el resultado del compilador»* (las `test-aot*`, cada
+native contra su interpretada, y la tanda, cada placa contra el PC). Y entre parar al entrar en la native (un día:
+la placa salta al código nativo en el `CALL`, sin pasar por el bytecode de la función) y dejarlo como está pero
+DICHO: *«1b en V7»*. **Lo que se hace**: un breakpoint dentro de una native sigue sin parar en la placa —en el PC sí:
+la VM Java las corre interpretadas—, pero el IDE lo dice al ponerlo («es una native: no para dentro; quítale `native`
+para seguirla paso a paso») y el manual lo explica (la referencia y `AOT_LIMITES.md`). Sin cambio en la placa.
 
-#### 🟡 `#582` — la LÍNEA de un error dentro de una native: el fallo sale sin origen (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT)
+#### 🧊 `#582` — la LÍNEA de un error dentro de una native: el fallo sale sin origen (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT · **decidida B y a V8** el 9-oct: Eduardo, *«B, lo pasamos a V8 salvo que veas que no es demasiado costoso»*; medido, día y medio)
 
 *«…cómo se puede localizar en qué línea ocurrió»* (Eduardo, 21-ago; `V7_IDEAS` §«Los cabos sueltos del AOT»). Un
 `RuntimeError` desde una native dice QUÉ pasó —con el texto del intérprete— pero no DÓNDE: la estructura del fallo
@@ -3127,6 +3155,21 @@ línea del error y el breakpoint quedan con la base puesta»)— pero con otra d
 hacia atrás, y la línea del error, una por sentencia (§«📐 Un matiz que cambia el coste»); o un mapa
 dirección→línea en el `.mdn`, por función y no por instrucción. Sin decidir y sin medir lo que cuesta por sentencia:
 análisis y medida antes de programar; decide Eduardo.
+**Visto al decidirla (9-oct)**: no es sólo de las natives. En una placa NINGÚN error dice su línea —el EXITED lleva el
+mensaje, «excepcion no atrapada: Core.RuntimeError: División por cero», y nada más, también en código interpretado—;
+sólo la VM Java del PC saca la traza («at DestruyeTrasError.main+163 (PC=715) [DestruyeTrasError.bp:23]»). La placa
+no tiene el `.dbg`: la regla del cable, la placa da direcciones y el PC pone los nombres.
+**Decidido por Eduardo (9-oct)**: *«B, lo pasamos a V8 salvo que veas que no es demasiado costoso y entonces lo podemos
+mantener en V7»*. **B** —(A) era la marca de línea por sentencia en la native, que cuesta en cada sentencia—: la placa
+dice DÓNDE y el PC lo traduce. En el bytecode, el `cs`/`pc` del `throw`, apuntado al lanzar (sólo en el camino del
+error); en una native, la dirección de vuelta de la llamada que falló (en el camino del error de cada helper; al
+entrar en `call_builtin` y en el puente, para lo que lanza más abajo). El EXITED lo lleva, con la cadena de llamadas
+(hasta 8, como la traza de la VM Java), y el IDE y la tanda lo traducen: el `.dbg` para el bytecode, y para las
+natives la tabla de líneas que escribe el propio GCC —el C del AOT con `#line N "X.bp"`, compilado con `-g`, que no
+cambia el código (comprobarlo: el `.mdn` con y sin `-g`, idéntico byte a byte); la tabla, en el PC—: «División por
+cero (Prueba.bp:23)». Coste en la placa, prácticamente cero. **El coste del trabajo, medido: día y medio** —la placa y
+el EXITED (el común: `exceptions.c`, `bpvm_repl.c`), el cable documentado, el IDE, la tanda (un lector del `.dbg` en
+Python), el AOT y las pruebas—: en la recta final, con `#578` y `#592` dentro, **a V8**.
 
 #### ✅ `#581` — P2b.3.d en las ESP: la S3, la C3, la C5 y la C6 siguen con la ABI 8 —rechazan todo `.mdn` nuevo y corren interpretado— (abierta 27-sep, al cerrar H5; SUELTA: el resto de la sesión de placas de P2b.3 · **CERRADA el 7-oct**, el commit de `#581`)
 
@@ -3199,7 +3242,8 @@ tanda salió IDÉNTICA al PC con el nativo en uso (los thunks, en el EXITED) tam
 
 #### 🟡 `#578` — `try`/`catch` DENTRO de una native (abierta 27-sep, al cerrar H5; SUELTA: un resto de `N1`)
 
-Hoy el AOT lo rechaza y la native corre interpretada. La objeción que se daba —«el `.mdn` no puede usar `setjmp`»—
+Hoy el AOT lo rechaza: desde `#519` (24-sep) es un ERROR DE COMPILACIÓN —«`native` es una promesa»—, con el
+nombre y la línea (antes, la native corría interpretada; la ficha lo decía así hasta el 9-oct). La objeción que se daba —«el `.mdn` no puede usar `setjmp`»—
 ERA FALSA (`N1`, V6, en esta sección: §«🧩 V7 — `try`/`catch` dentro de una native»): `__builtin_setjmp` y
 `__builtin_longjmp` se compilan en línea (medido el 24-ago: 52 B en ARM, 60 en RISC-V), sin símbolos externos. Lo
 abierto es dónde aterriza un `throw`: el `eh_stack` del intérprete no sabe de un manejador nativo. El planteamiento
@@ -3215,6 +3259,12 @@ placas compila con cero símbolos de `setjmp`/`longjmp` (Cortex-M33 y los dos RV
 VM y el `.mdn` salen de dos GCC: el búfer tiene que casar). **Por decidir** (Eduardo): por dónde le habla la native a la
 VM —(A) helpers nuevos, ABI 10, o (B) el `call_builtin` que ya hay con tres builtins nuevos, sin tocar la ABI de
 helpers—, y si entra en V7.
+**Decidido por Eduardo (9-oct)**: *«B, y sí, entra en V7»* —por el `call_builtin` de siempre, con tres builtins
+nuevos; la ABI de helpers no cambia—. El orden: primero el SALTO en una placa ARM y en una RISC-V (la VM y el `.mdn`
+salen de dos GCC; una imagen de prueba, con su OK); si no aterriza bien, se cancela, y el error de compilación dice
+el motivo real —el de hoy todavía da el falso: «#213: .mdn no puede usar setjmp»—. Después, la VM-C (los aterrizajes
+por hilo, también en el ejecutor de P2b), el AOT (el `try`, el `catch` por clase, relanzar lo que no es suyo y el
+`finally`), las pruebas en el PC y la placa.
 
 #### ✅ `#577` — una native no puede LEER un campo de una tupla (abierta 27-sep, al cerrar H5; SUELTA: un resto de `N1` · **CERRADA el 7-oct**, el commit de `#577`)
 
@@ -5955,6 +6005,13 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >   y parar el mundo, y meter en la capa de plataforma del PC (`platform_pthread.c`) el retraso que iguale esa
 >   proporción. La prueba de que sirve: que reproduzca lo que el PC no vio el 5-oct —un hilo que concatena con dos runs,
 >   igual en el PC y un 73 % más lento en la Pico 2 (`V7_IDEAS` §H12, «La 3.2»)—.
+> - **el micro simulado con periféricos, y su ventana de configuración** (Eduardo, 9-oct, al decidir `#647`: *«Estoy
+>   pensando en añadir algunos periféricos también al emulador empezando por la UART que nosotros mapearíamos a un
+>   puerto serie. Vamos a necesitar una ventana de configuración del emulador para poder decir la resolución de la
+>   pantalla, los puertos, etc. Esto último iría en V8»*): la `Uart` de un programa, en el simulado, a un puerto serie
+>   del PC; y una ventana en el IDE para configurarlo —la resolución de la pantalla, qué puerto del PC hace de cada
+>   UART…—, que hoy se configura con opciones de la línea de comandos (`--mem`, `--flash`, `--sd`, `--board`…). Va
+>   con «el simulador con disfraces», arriba.
 > - **`#663`, `Gui.__guiInvokeByName`: CANDIDATA A ELIMINAR** (Eduardo, 7-oct: *«esperamos un poco a ver cómo
 >   evolucionan las cosas (1 o 2 versiones como mucho para decidir)»*): desde el enlace tardío no encuentra nada y el
 >   handler se ignora en silencio; no lo usa nadie (los formularios van por ranura, `#607`). Se decide en V8 o V9:
