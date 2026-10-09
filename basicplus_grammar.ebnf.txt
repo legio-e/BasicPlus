@@ -485,7 +485,11 @@ try_stmt ::= 'try' NEWLINE
    Si hay varias 'catch' clauses, se prueban en el orden escrito y se
    ejecuta el cuerpo de la primera que coincida. Por tanto, una clausula
    'catch' sin tipo (atrapa todo) tiene que ir SIEMPRE la última, o las
-   posteriores quedan inalcanzables (error de compilación).             *)
+   posteriores quedan inalcanzables (error de compilación).
+
+   V7 #674: el 'finally' corre en todas las salidas del 'try' (también un 'return',
+   'break' o 'continue' que sale de él), y no puede salir él con 'return', 'break'
+   ni 'continue' (error de compilación): taparía la excepción que fuera en vuelo.  *)
 
 catch_clause ::= 'catch' [ name [ ':' exception_type ] ] NEWLINE
                  body ;

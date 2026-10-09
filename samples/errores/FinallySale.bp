@@ -1,0 +1,67 @@
+// FinallySale.bp — un `finally` no puede salir con `return`, `break` ni `continue` (#674, V7): taparía la excepción
+// que fuera en vuelo (`try throw X finally return 0 endtry` devolvería 0 y la X desaparecería sin una palabra). Un
+// `throw` dentro sí vale, y un `break` a un bucle de DENTRO del `finally`, también: no salen de él.
+module FinallySale
+  import Core
+
+  function conReturn(x: integer): integer
+    try
+      if x > 0 then
+        throw RuntimeError("x")
+      endif
+    finally
+      return 0
+    endtry
+    return 1
+  end conReturn
+
+  function conBreak(): integer
+    var n: integer := 0
+    while n < 3 do
+      n += 1
+      try
+        n += 10
+      finally
+        break
+      endtry
+    endwh
+    return n
+  end conBreak
+
+  function conContinue(): integer
+    var n: integer := 0
+    while n < 3 do
+      n += 1
+      try
+        n += 10
+      finally
+        continue
+      endtry
+    endwh
+    return n
+  end conContinue
+
+  // lo que SÍ vale: un bucle dentro del finally con su break, y un throw
+  function vale(): integer
+    var n: integer := 0
+    try
+      n := 1
+    finally
+      var k: integer := 0
+      while true do
+        k += 1
+        if k > 2 then
+          break
+        endif
+      endwh
+      if k < 0 then
+        throw RuntimeError("nunca")
+      endif
+    endtry
+    return n
+  end vale
+
+  function Main()
+    print conReturn(1) + conBreak() + conContinue() + vale()
+  end Main
+end FinallySale

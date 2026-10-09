@@ -1802,7 +1802,11 @@ otra sin problema.</p>
       <code>catch e</code> (sin tipo) es <code>catch e: Exception</code>: atrapa
       cualquier excepción y <code>e</code> tiene su <code>msg</code>. Va siempre la
       última (las cláusulas se prueban en orden).</li>
-  <li><code>finally</code> se ejecuta siempre (con o sin excepción).</li>
+  <li><code>finally</code> se ejecuta siempre (con o sin excepción) —también cuando un <code>return</code>,
+      <code>break</code> o <code>continue</code> sale del <code>try</code>—. Y no puede salir él con
+      <code>return</code>, <code>break</code> ni <code>continue</code> (error de compilación): taparía la excepción
+      que fuera en vuelo. Un <code>throw</code> dentro sí vale, y un <code>break</code> a un bucle de dentro del
+      <code>finally</code>, también.</li>
   <li><code>throw expr</code> lanza el valor. Si es una clase, su class_ptr
       se usa para el match de <code>catch</code> tipado.</li>
   <li>Todas las excepciones descienden de <code>Exception</code> (con su

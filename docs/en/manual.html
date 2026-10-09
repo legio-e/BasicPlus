@@ -1610,7 +1610,11 @@ Within one module, two classes may refer to each other with no problem.</p>
       <code>catch e</code> (no type) is <code>catch e: Exception</code>: it catches
       any exception and <code>e</code> has its <code>msg</code>. It always goes last
       (clauses are tried in order).</li>
-  <li><code>finally</code> always runs (with or without an exception).</li>
+  <li><code>finally</code> always runs (with or without an exception) —also when a <code>return</code>,
+      <code>break</code> or <code>continue</code> leaves the <code>try</code>—. And it cannot leave with
+      <code>return</code>, <code>break</code> or <code>continue</code> itself (compile error): it would hide the
+      exception in flight. A <code>throw</code> inside is fine, and so is a <code>break</code> to a loop inside the
+      <code>finally</code>.</li>
   <li><code>throw expr</code> throws the value. If it is a class, its class_ptr
       is used for the typed <code>catch</code> match.</li>
   <li>All exceptions descend from <code>Exception</code> (with its

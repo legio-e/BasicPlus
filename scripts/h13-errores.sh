@@ -74,6 +74,9 @@ SwitchMal|switch sobre 'double': un real no se compara
 SwitchMal|valor de 'case' de tipo 'float'
 SwitchMal|para comparar referencias, usa if
 PropFieldTipo|no se puede asignar 'string' a 'integer'
+FinallySale|un 'finally' no puede salir con 'return'
+FinallySale|un 'finally' no puede salir con 'break'
+FinallySale|un 'finally' no puede salir con 'continue'
 "
 
 ok=0; mal=0

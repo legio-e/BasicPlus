@@ -117,6 +117,10 @@ public final class SemanticAnalyzer {
     private String setterParamName;
     private int loopDepth;
     private int switchDepth;
+    /** V7 #674 (9-oct, Eduardo: «Prohibirlo») — los `finally` abiertos, con {loopDepth, switchDepth} al entrar en cada
+     *  uno: un `return` dentro de un `finally`, o un `break`/`continue` que sale de él (su bucle o su switch está FUERA),
+     *  es un error —taparía la excepción que fuera en vuelo; y el compilador se caía con un `StackOverflowError`—. */
+    private final java.util.ArrayDeque<int[]> finallysAbiertos = new java.util.ArrayDeque<>();
     private boolean seenSuperCallInCtor;
     private boolean isFirstStmtOfCtor;
 
@@ -1815,7 +1819,12 @@ public final class SemanticAnalyzer {
         else if (s instanceof ForStmt)      analyzeFor((ForStmt) s, scope);
         else if (s instanceof TryStmt)      analyzeTry((TryStmt) s, scope);
         else if (s instanceof Ast.ReleaseOwnerStmt) { }   // V7/H1: lo pone el parser en un `try var`; sólo el emisor lo mira
-        else if (s instanceof ReturnStmt)   analyzeReturn((ReturnStmt) s, scope);
+        else if (s instanceof ReturnStmt) {
+            if (!finallysAbiertos.isEmpty())   // V7 #674
+                err(((ReturnStmt) s).line, ((ReturnStmt) s).column, "un 'finally' no puede salir con 'return': "
+                    + "taparia la excepcion que fuera en vuelo (#674); devuelve el valor despues del 'endtry'");
+            analyzeReturn((ReturnStmt) s, scope);
+        }
         else if (s instanceof Ast.DestructAssignStmt) analyzeDestructAssign((Ast.DestructAssignStmt) s, scope);
         else if (s instanceof ThrowStmt) {
             // #248 — solo se lanzan instancias de Exception (o descendientes).
@@ -1845,11 +1854,18 @@ public final class SemanticAnalyzer {
             BreakStmt b = (BreakStmt) s;
             if (loopDepth == 0 && switchDepth == 0)
                 err(b.line, b.column, "'break' fuera de bucle o switch");
+            else if (!finallysAbiertos.isEmpty()   // V7 #674: su bucle o su switch, fuera del finally
+                     && loopDepth + switchDepth == finallysAbiertos.peek()[0] + finallysAbiertos.peek()[1])
+                err(b.line, b.column, "un 'finally' no puede salir con 'break': taparia la excepcion que fuera en "
+                    + "vuelo (#674)");
         }
         else if (s instanceof ContinueStmt) {
             ContinueStmt cs = (ContinueStmt) s;
             if (loopDepth == 0)
                 err(cs.line, cs.column, "'continue' fuera de bucle");
+            else if (!finallysAbiertos.isEmpty() && loopDepth == finallysAbiertos.peek()[0])   // V7 #674
+                err(cs.line, cs.column, "un 'finally' no puede salir con 'continue': taparia la excepcion que fuera "
+                    + "en vuelo (#674)");
         }
         else if (s instanceof ExprStmt) {
             ExprStmt es = (ExprStmt) s;
@@ -2562,7 +2578,14 @@ public final class SemanticAnalyzer {
             }
             analyzeBody(cl.body, inner);
         }
-        if (tr.finallyBody != null) analyzeBody(tr.finallyBody, new Scope("finally", scope));
+        if (tr.finallyBody != null) {
+            finallysAbiertos.push(new int[] { loopDepth, switchDepth });   // V7 #674
+            try {
+                analyzeBody(tr.finallyBody, new Scope("finally", scope));
+            } finally {
+                finallysAbiertos.pop();
+            }
+        }
     }
 
     /** #248 — true si la clase desciende de Exception (por NOMBRE en la cadena

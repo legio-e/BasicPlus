@@ -60,11 +60,14 @@
 > `return`, `break` y `continue` que salen de él); `test-aottry` (`NatTry`, doce natives) y `NatTry`/`NatPuente` en la
 > ronda de V7. Y del emisor de bytecode, mirando cómo lo hacía: **`#673`** (un `break`/`continue` que sale de un
 > `try` no cerraba su manejador ni corría su `finally`, en las dos VMs: hecha, `BreakTry` en la paridad) y **`#674`**
-> (un `return` dentro de un `finally` revienta el compilador: **por decidir, Eduardo** —prohibirlo, recomendado, o
-> permitirlo como Java—). La red, verde (paridad 147, pruebas de C 102/102).
-> **Lo siguiente** (V7): el LOTE de placas —la imagen con `#672` y `#578`; la C3, la Metro, la C5, la C6 y la Nucleo,
-> que no tienen la de `2e65457b`— con su OK, y la ronda de V7 (con `NatTry` y `NatPuente`); `#674`, cuando decida
-> Eduardo; y las SUELTAS que quedan (`#614`, `#645`).
+> (un `return` dentro de un `finally` revienta el compilador). La red, verde (paridad 147, pruebas de C 102/102).
+> **El lote** (Eduardo: «OK al lote»): la Pico 2, la DK2, la P4 y la S3 con la imagen nueva (`#672` y `#578`); la ronda
+> de V7, verde en las cuatro (`tanda_v7_9oct_tarde`: 50 pruebas cada una, sin un rojo), con `NatTry` y `NatPuente`
+> IDÉNTICOS y todas sus natives en nativo en la Pico 2, la DK2 y la P4: **`#578` y `#672`, CERRADAS**. **`#674`**
+> (Eduardo: «Prohibirlo»): un `return`, `break` o `continue` que sale de un `finally` es un error de compilación con su
+> línea (`FinallySale` en la carpeta de los errores, 49/49); el manual y la gramática lo dicen.
+> **Lo siguiente** (V7): la Metro, la C3, la C5, la C6 y la Nucleo con la imagen nueva (las imágenes, compiladas) y su
+> ronda, cuando Eduardo las conecte; y las SUELTAS que quedan (`#614`, `#645`).
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y
