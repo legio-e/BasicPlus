@@ -108,6 +108,7 @@ idf_component_register(
         spi_flash        # INFO: esp_flash_get_size (flash real montada)
         esp_hw_support   # INFO: esp_mac.h (uniqueId desde efuse)
         esp_psram        # #670: esp_psram_is_initialized (los GPIO 33-37 de la PSRAM octal)
+        esp_mm           # #676: la zona de packs por el bus de DATOS (esp_mmu_paddr_to_vaddr) y su caché (esp_cache_msync)
 )
 
 # H2-B3: littlefs — buffers estáticos (LFS_NO_MALLOC) + trazas silenciadas

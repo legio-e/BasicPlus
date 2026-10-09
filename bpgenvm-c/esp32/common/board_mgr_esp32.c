@@ -28,6 +28,8 @@
 #include "esp_flash.h"    /* #328 — el tamaño REAL del chip, no el que dice la tabla */
 #include "esp_flash_chips/esp_flash_types.h"   /* V7/H7: el `size` del chip, para subirlo al físico (FS arriba) */
 #include "esp_log.h"
+#include "esp_mmu_map.h"  /* #676: esp_mmu_paddr_to_vaddr — la direccion de DATOS de unas paginas ya mapeadas */
+#include "esp_cache.h"    /* #676: esp_cache_msync — invalidar esa vista tras escribir la flash */
 
 #include <stdint.h>
 #include <string.h>
@@ -109,7 +111,7 @@ const bpvm_env_t* board_mgr_env(void) {
  * resultado escondiendo que una familia está a medias; esto lo deja a la vista.
  */
 static const uint8_t* s_packs_view      = 0;   /* por donde se LEE la zona */
-static const uint8_t* s_packs_view_exec = 0;   /* por donde se SALTA (== view salvo S3/C3) */
+static const uint8_t* s_packs_view_exec = 0;   /* por donde se SALTA (== view salvo en la S3: #676) */
 static uint32_t       s_packs_view_size = 0;
 
 void board_mgr_esp32_set_packs_view(const void* base_lectura,
@@ -159,15 +161,16 @@ void board_mgr_esp32_set_packs_view(const void* base_lectura,
  * sistema deberia ser identico, igual que el environment».
  *
  * Lo unico que cambia entre micros es cuantas direcciones devuelve la MMU:
- *   ⚠️ 9-sep: MEDIDO EN PLACA, LAS CUATRO DAN LA MISMA. C3 y S3 incluidos
- *   (INST @0x4207c000 = DATA, e INST @0x4287e000 = DATA). Lo que se creia —que
- *   el S3 y el C3 las separan por no declarar `SOC_MMU_DI_VADDR_SHARED`— es
- *   FALSO: ese macro no lo mira nadie, la decision es la comparacion de abajo.
- *   El caso de dos vistas sigue soportado por si aparece, pero hoy no lo usa
- *   nadie. Lo de abajo describe el mecanismo, no el reparto de chips:
- *   una vista  -> INST y DATA dan LA MISMA
- *   dos vistas -> se lee por DATA y se
- *                                          ejecuta por INST
+ *   una vista  -> INST y DATA dan LA MISMA (los RISC-V: C3, C5, C6 y P4)
+ *   dos vistas -> se lee por DATA y se ejecuta por INST (la S3, Xtensa)
+ *   ⚠️ #676 (9-oct): el 9-sep se midio «las cuatro dan la misma, la S3 incluida»
+ *   y se dio por bueno. En la S3 era el IDF: al pedir DATA, las paginas ya estaban
+ *   mapeadas (por la peticion de INST) y `esp_mmu_map` devuelve el bloque que hay
+ *   —la direccion de INSTRUCCIONES—, que `spi_flash_mmap` da por buena. En Xtensa
+ *   el bus de instrucciones solo se lee de 4 en 4 bytes: un byte suelto es un
+ *   LoadStoreError. Con la S3 sin packs no se habia visto; su Stdlib.pack la
+ *   tumbo en el CRC del END. La direccion de DATOS se le pide ahora a la MMU
+ *   (`esp_mmu_paddr_to_vaddr`), abajo.
  * Antes el segundo caso se reconocia y se ABANDONABA («NO se salta hasta que eso
  * este escrito»). Ya esta escrito, y no hizo falta codigo de familia: solo dejar
  * de suponer que un puntero sirve para las dos cosas (ver `bpvm_pack_mount`).
@@ -210,6 +213,18 @@ int board_mgr_esp32_mapear_packs(void) {
      * (630a221e): desde entonces un fallo salia como «err=258» y nada mas. */
     uint32_t fis_ini = (uint32_t) bpdata->address + packs->offset;
     uint32_t fis_fin = fis_ini + packs->size;
+
+    /* #676 — LA VISTA DE DATOS, A LA MMU. Lo que devolvio la peticion de DATA arriba es, si las paginas ya estaban
+     * mapeadas, la direccion de INST (ver la cabecera). La MMU de la S3 es una sola tabla para los dos buses: las
+     * mismas paginas se ven tambien por el de DATOS, y esta llamada da esa direccion. En los RISC-V devuelve la misma
+     * que INST y no se toca nada: solo cambia el micro en el que de verdad hay dos. */
+    void* v_datos = NULL;
+    if (ei == ESP_OK
+        && esp_mmu_paddr_to_vaddr((esp_paddr_t) fis_ini, MMU_TARGET_FLASH0, MMU_VADDR_DATA, &v_datos) == ESP_OK
+        && v_datos != NULL && v_datos != s_map_inst) {
+        s_map_data = v_datos;
+        ed = ESP_OK;
+    }
     log_printf("pack: zona %u KB en bpdata+0x%x (fisica %u..%u KB) | INST %s @%p | DATA %s @%p%s",
                (unsigned) (packs->size / 1024u), (unsigned) packs->offset,
                (unsigned) (fis_ini / 1024u), (unsigned) (fis_fin / 1024u),
@@ -228,8 +243,7 @@ int board_mgr_esp32_mapear_packs(void) {
     if (ed == ESP_OK && s_map_data != s_map_inst) {
         /* Dos vistas: se lee por DATA (acepta accesos de cualquier ancho) y se
          * salta por INST. La traduccion la hace `bpvm_pack_exec_ptr` en el unico
-         * sitio donde el puntero pasa de dato a codigo.
-         * ⚠️ 9-sep: NINGUN micro nuestro entra por aqui — medido en C3 y S3. */
+         * sitio donde el puntero pasa de dato a codigo. Entra la S3 (#676). */
         board_mgr_esp32_set_packs_view(s_map_data, s_map_inst, packs->size);
     } else if (ed == ESP_OK) {
         /* P4 y C6: la misma direccion para las dos cosas. */
@@ -259,18 +273,38 @@ static uint32_t packs_off_en_bpdata(void) {
     return pp ? pp->offset : 0u;
 }
 
+/* #676 — tras escribir la flash, el IDF invalida la cache por la direccion del bloque que tiene registrado: la de
+ * INSTRUCCIONES (`spi_flash_check_and_flush_cache`), y en la S3 la ROM invalida la cache del bus de esa direccion,
+ * no la del otro. Si la zona se LEE por el de DATOS, las lineas que ya estaban en su cache se quedarian con lo de
+ * antes: la relectura del END —o el siguiente PACK_LS— veria la flash vieja. Se invalidan aqui, alineadas a la linea
+ * (64 B cubre las tres longitudes que admite la S3). Con una sola vista ya lo hizo el IDF y no se toca nada. */
+static void packs_invalida_lectura(uint32_t off, uint32_t len) {
+    if (s_packs_view == 0 || s_packs_view == s_packs_view_exec || len == 0u) return;
+    uint32_t a = off & ~63u;
+    uint32_t b = (off + len + 63u) & ~63u;
+    esp_err_t e = esp_cache_msync((void*) (uintptr_t) (s_packs_view + a), b - a,
+                                  ESP_CACHE_MSYNC_FLAG_DIR_M2C | ESP_CACHE_MSYNC_FLAG_TYPE_DATA);
+    if (e != ESP_OK)
+        log_printf("pack: no se pudo invalidar la cache de lectura de la zona (+0x%x, %u B): %s",
+                   (unsigned) a, (unsigned) (b - a), esp_err_to_name(e));
+}
+
 static int packs_fl_erase(void* user, uint32_t off, uint32_t len) {
     (void) user;
     if (!s_bpdata) return -1;
-    return esp_partition_erase_range(s_bpdata, packs_off_en_bpdata() + off, len)
-           == ESP_OK ? 0 : -1;
+    int r = esp_partition_erase_range(s_bpdata, packs_off_en_bpdata() + off, len)
+            == ESP_OK ? 0 : -1;
+    packs_invalida_lectura(off, len);   /* #676: tambien si falla —lo que haya quedado escrito, que se lea—. */
+    return r;
 }
 
 static int packs_fl_program(void* user, uint32_t off, const uint8_t* d, uint32_t len) {
     (void) user;
     if (!s_bpdata) return -1;
-    return esp_partition_write(s_bpdata, packs_off_en_bpdata() + off, d, len)
-           == ESP_OK ? 0 : -1;
+    int r = esp_partition_write(s_bpdata, packs_off_en_bpdata() + off, d, len)
+            == ESP_OK ? 0 : -1;
+    packs_invalida_lectura(off, len);   /* #676 */
+    return r;
 }
 
 static const bpvm_pack_flash_t s_packs_fl = {

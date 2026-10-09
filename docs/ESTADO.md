@@ -90,10 +90,14 @@
 > de 13, con la C3 en las tablas de pines de las `Suelta*`, que no la tenían— y **`#623`, CERRADA**: la Metro llevaba
 > el `SQLite` viejo, del que cargaba `Core` —`PACK_FORMAT`, el `Stdlib.pack` y el `SQLite` nuevo; `SqlDemo` bien y su
 > ronda verde—; la C3 y la S3 tenían la zona vacía, y las dos, con el `Stdlib.pack` (Eduardo): la C3, grabada y con la
-> ronda verde (`tanda_v7_9oct_c3_metro`). ⚠️ **Y una nueva, `#676`: la S3 se reinicia con un panic al grabarle el
-> `Stdlib.pack`**, al cerrar —falta el texto del panic, que sale por su consola (el USB-Serial-JTAG, el otro
-> conector)—. Es un fallo y va antes de publicar. `#615`, aparcada sin fecha (Eduardo, 1-oct: *«ya veremos si lo
-> resolvemos en V7 o la pasamos a V8»*).
+> ronda verde (`tanda_v7_9oct_c3_metro`). **Y una nueva, `#676`, abierta y CERRADA esa noche: la S3 se reiniciaba
+> con un panic al grabarle el `Stdlib.pack`.** Con su consola enchufada (Eduardo): un LoadStoreError en el CRC del
+> cierre —la zona se leía por la dirección del bus de INSTRUCCIONES, que en Xtensa no admite bytes sueltos: el IDF
+> devolvía para DATA el bloque ya mapeado para INST—. Arreglo: la dirección de datos se le pide a la MMU y, tras
+> escribir la flash, se invalida su caché; en los RISC-V no cambia nada. La S3, grabada (OK de Eduardo): el pack se
+> graba y se usa, su ronda de V7 verde e idéntica a la de la mañana (`tanda_v7_9oct_s3`), y la caché probada con un
+> `PACK_DEL`. Las demás ESP llevan la imagen de antes: no lo necesitan, pero el arreglo va en el lote final. Y `#615`,
+> aparcada desde el 1-oct, **a V8** (Eduardo: *«615 a v8»*). **No queda ninguna ficha abierta de V7.**
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y
