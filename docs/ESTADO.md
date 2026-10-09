@@ -38,8 +38,19 @@
 > **`#647` CERRADA**: una flash de mentira, la más estricta de las placas, para el simulado y las dos pruebas del
 > gestor (con su sabotaje: el `PACK_DEL` sin borrar, rojo), y el simulado aplicando las particiones al arrancar, como
 > una placa (`boardsim_smoke` lo reinicia). La red entera, verde (paridad 146, cápsula 59, norma 9/9, sim 12/12, pruebas de C 98/98, sombra 15/15, MOD8, dos workers, estrés, packs-abi, stdlib embebida).
-> **Lo siguiente** (V7): `#583` (el aviso del IDE, unas horas), `#592` (un día) y `#578` (uno o dos; su primer paso
-> pide grabar una imagen de prueba, con el OK de Eduardo); y en placa, la C3 y el lote de la imagen de hoy.
+> **`#583` CERRADA** (`4d4ef3ac`): el IDE dice, al poner un breakpoint dentro de una native, que en la placa no para
+> (`NativaEnLinea`, en el compilador, con su prueba); el manual lo explica. **`#592` CERRADA** (`2e65457b` y el commit
+> de la placa): el 2º temporizador —la marca en `vm->memory + 0x80`, que sube el reloj de cada familia cada 5 ms y el
+> KILL—; un bucle que llama a algo la mira en cada vuelta, uno sin llamadas sigue con el contador (la regla, con
+> Eduardo: «OK»). `test-aotpesada` en la red (99/99). **El lote de placas** (OK de Eduardo): la Pico 2, la P4, la DK2 y
+> la S3 con la imagen nueva (la Pico 2, con su Stdlib.pack otra vez); la ronda de V7 y la tanda de `#667`, verdes en
+> las cuatro. **El antes y el después de `#592`**: `NatPesadaPlaca` (vueltas lentas) COLGABA la Pico 2, la P4 y la DK2
+> con la imagen de antes —sin KILL ni cable; la Pico 2 volvió con el toque a 1200 baudios de su USB—, y ahora para a
+> los 10–30 ms. **Y una corrección**: la medida de la mañana decía la marca más barata que el contador en un bucle con
+> llamadas; era falso —aquella variante no cedía nunca—; con la imagen nueva, +1,9 % en la Pico 2 y +0,5 % en la P4.
+> Se le dijo a Eduardo y se corrigió en los documentos; la regla se queda (ese ~2 % es no colgar la placa).
+> **Lo siguiente** (V7): `#578` (el `try` dentro de una native: primero el salto en placa, con una imagen de prueba y
+> el OK de Eduardo); en placa, la C3, la Metro, la C5, la C6 y la Nucleo con la imagen nueva.
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y

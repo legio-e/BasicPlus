@@ -1,0 +1,24 @@
+// NatPesadaPlaca.bp — V7 #592 (9-oct): la hermana de NatPesada para PLACA. Una native cuyas vueltas son lentas —cada
+// una, un indexOf de lo que no está en una cadena de 32 KB: cerca de un ms en una Pico— y que no acaba nunca. Hasta
+// hoy cedía cada 1024 vueltas: cerca de un segundo sin atender a nadie, y el KILL esperando otro tanto. Con la MARCA del
+// 2º temporizador, a los ~5 ms. 32 KB para que quepa (con su array, 64 KB de heap). En la tanda, con un KILL: PARADA.
+module NatPesadaPlaca
+  native function pesada(s: string): integer
+    var n: integer := 0
+    while 1 == 1 do
+      n += indexOf(s, "zz")
+      if n < -1000000 then
+        n := 0
+      endif
+    endwh
+    return n
+  end pesada
+
+  function Main()
+    var b: byte[] := newByteArray(32768)
+    var s: string := fromBytes(b)
+    print "ok pesada: entra en la native"
+    var r: integer := pesada(s)
+    print "FALLO: la native volvio " + intToString(r)
+  end Main
+end NatPesadaPlaca

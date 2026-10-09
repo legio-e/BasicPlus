@@ -1,0 +1,533 @@
+[
+ {
+  "fecha": "2026-10-09 08:48:11",
+  "lista": "bpgenvm-c\\tools\\tanda_592.json",
+  "n_listadas": 1,
+  "filtro": null,
+  "sin_oraculo": false,
+  "oraculo_info": {
+   "jar": "lexer-java\\target\\basicplus-frontend.jar",
+   "jar_hora": "2026-10-09 08:24:01",
+   "exe": "bpgenvm-c\\build\\bpgenvm-c.exe",
+   "exe_hora": "2026-10-09 08:13:46",
+   "sabor": "v2-gui1-lvgl0"
+  },
+  "pruebas": [
+   {
+    "nombre": "NatPesadaPlaca",
+    "fuente": "bpgenvm-c/samples/NatPesadaPlaca.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatPesadaPlaca",
+    "memoria": "",
+    "heap_min_kb": 0
+   }
+  ],
+  "oraculos": {
+   "NatPesadaPlaca": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatPesadaPlaca",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\NatPesadaPlaca.mod",
+    "crc": 3021035364,
+    "size": 449,
+    "compilado": true,
+    "salida": null,
+    "rc": null,
+    "ms": null,
+    "error": null,
+    "ejecutado": false,
+    "compilacion": "compilado suelto",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=76, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] NatPesadaPlaca.mod lleva dentro el nativo de arm (180 B, secci�n native � 449 -> 630 B)\r\n[aot] [aot] NatPesadaPlaca: 1 thunk(s), 120 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-ARMV8M_MAIN_SOFTFP\\NatPesadaPlaca.mod",
+      "thunks": 1,
+      "crc": 1154649968,
+      "size": 630
+     },
+     "RV32IMAFC_ILP32F": {
+      "receta": "RV32IMAFC_ILP32F",
+      "log": "[aot] receta RV32IMAFC_ILP32F -> destino riscv\r\n[aot] [aot] riscv: receta RV32IMAFC_ILP32F (huella 85db4373) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=76, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] NatPesadaPlaca.mod lleva dentro el nativo de riscv (208 B, secci�n native � 449 -> 658 B)\r\n[aot] [aot] NatPesadaPlaca: 1 thunk(s), 148 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-RV32IMAFC_ILP32F\\NatPesadaPlaca.mod",
+      "thunks": 1,
+      "crc": 2051308228,
+      "size": 658
+     }
+    }
+   }
+  },
+  "placas": [
+   {
+    "sello": {
+     "boardName": "rp2350a",
+     "uniqueId": "46CED5A69C399BD2",
+     "serverName": "bpvm-pico",
+     "serverBuild": "Oct  8 2026 08:51:35",
+     "imageCrc": "24a0ed2e",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "DEBUG",
+      "PACKS",
+      "BOOTSEL"
+     ],
+     "arch": 40,
+     "variant": "A",
+     "cpuFreqHz": 150000000,
+     "resetReason": "power-on/run",
+     "uptimeMs": 11523478,
+     "fsUsedBytes": 237568,
+     "fsTotalBytes": 1048576,
+     "vmHeapBytes": 219344,
+     "aotReceta": "ARMV8M_MAIN_SOFTFP",
+     "mdnAbi": 9,
+     "uptime_ultimo": 11523478,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM22",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "46CED5A69C399BD2",
+      "boardName": "rp2350a",
+      "arch": 40,
+      "aotReceta": "ARMV8M_MAIN_SOFTFP",
+      "aotFlagsCrc": 1597191390,
+      "mdnAbi": 9,
+      "floatAbi": "softfp",
+      "packsXipBase": 271581184,
+      "packsBytes": 1048576,
+      "packRamBase": 537387008,
+      "packRamBytes": 8192,
+      "packRamStatus": "off",
+      "packRamKey": "",
+      "packRamAsked": 0,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 150000000,
+      "uptimeMs": 11523478,
+      "resetReason": "power-on/run",
+      "tempMilliC": 18258,
+      "micro": "rp2350a",
+      "paquete": "QFN-60",
+      "gpioCount": 30,
+      "pioCount": 3,
+      "pwmSlices": 12,
+      "pwmUnidad": "slice",
+      "adcChannels": 4,
+      "adcUnidades": 1,
+      "uartIds": "0,1",
+      "i2cIds": "0,1",
+      "spiIds": "0,1",
+      "flashBytes": 4194304,
+      "sramBytes": 532480,
+      "psramBytes": 0,
+      "vmHeapBytes": 219344,
+      "vmStackBytes": 92160,
+      "ioStackFree": 9064,
+      "runStackFree": 13368,
+      "runs": 2,
+      "fsTotalBytes": 1048576,
+      "fsUsedBytes": 237568,
+      "variant": "A",
+      "rtosHeapMinFreeBytes": 6352,
+      "vmTaskStackFreeBytes": 9064,
+      "run2StackFreeBytes": 13368
+     },
+     "imagen_local": "OTRA: la compilada en el PC (bpgenvm-c/pico/build/bpvm_pico.elf (09-10 08:19)) da 219d7796"
+    },
+    "pantalla": [
+     false,
+     "INFO sin screenW/screenH: la imagen no lleva LVGL"
+    ],
+    "resultados": [
+     {
+      "prueba": "NatPesadaPlaca",
+      "veredicto": "COLGADA",
+      "detalle": "sin EXITED en 30 s; tras KILL: tampoco EXITED en 5 s; recuperacion: no contesta al RESET por el wire, y rp2350a no se reinicia sin manos: desenchufa y enchufa la placa",
+      "ms_placa": null,
+      "ms_host": null,
+      "exited": null,
+      "salida_placa": "ok pesada: entra en la native\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": false,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": null,
+      "reinicio": false,
+      "abortar_placa": "colgada en NatPesadaPlaca y no se recupera: no contesta al RESET por el wire, y rp2350a no se reinicia sin manos: desenchufa y enchufa la placa",
+      "propios": [
+       "/app/NatPesadaPlaca.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 35434,
+      "session": 7,
+      "postmortem": ""
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/NatPesadaPlaca.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-ARMV8M_MAIN_SOFTFP\\NatPesadaPlaca.mod",
+      "size": 630,
+      "crc": "44d28f70",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "la placa NO lleva la imagen compilada en el PC: imageCrc 24a0ed2e, bpgenvm-c/pico/build/bpvm_pico.elf (09-10 08:19) da 219d7796",
+     "dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)",
+     "NatPesadaPlaca: COLGADA; no contesta al RESET por el wire, y rp2350a no se reinicia sin manos: desenchufa y enchufa la placa"
+    ],
+    "inventario_detalle": "30 ficheros en /lib+/app, omitidos=0",
+    "error": "colgada en NatPesadaPlaca y no se recupera: no contesta al RESET por el wire, y rp2350a no se reinicia sin manos: desenchufa y enchufa la placa",
+    "aprieta": [
+     true,
+     "SRAM 520 KB, PSRAM 0 KB"
+    ],
+    "inventario": [
+     "/app/CalcBench.mod",
+     "/app/CarreraSinMutex.mod",
+     "/app/Hello.mod",
+     "/app/MarcaArray.mod",
+     "/app/MarcaBucle.mod",
+     "/app/ParaleloPico.mod",
+     "/app/RunCompartido.mod",
+     "/app/RunDormido.mod",
+     "/app/RunTarde.mod",
+     "/app/RunVeinte.mod",
+     "/lib/Adc.mod",
+     "/lib/Collections.mod",
+     "/lib/Core.mod",
+     "/lib/Gpio.mod",
+     "/lib/Heap.mod",
+     "/lib/I2c.mod",
+     "/lib/IO.mod",
+     "/lib/Machine.mod",
+     "/lib/Math.mod",
+     "/lib/Neopixel.mod",
+     "/lib/Pico.mod",
+     "/lib/Pulse.mod",
+     "/lib/Pwm.mod",
+     "/lib/Rtc.mod",
+     "/lib/Spi.mod",
+     "/lib/Str.mod",
+     "/lib/Time.mod",
+     "/lib/Timer.mod",
+     "/lib/Uart.mod",
+     "/lib/Wdt.mod"
+    ]
+   },
+   {
+    "sello": {
+     "boardName": "esp32p4",
+     "uniqueId": "E8F60AE0B380",
+     "serverName": "bpvm-esp32p4",
+     "serverBuild": "Oct  8 2026 14:58:55",
+     "imageCrc": "4d69b438",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "DEBUG",
+      "PACKS"
+     ],
+     "arch": 243,
+     "variant": null,
+     "cpuFreqHz": 360000000,
+     "resetReason": "power-on",
+     "uptimeMs": 11500221,
+     "fsUsedBytes": 163840,
+     "fsTotalBytes": 16777216,
+     "vmHeapBytes": 24637440,
+     "aotReceta": "RV32IMAFC_ILP32F",
+     "mdnAbi": 9,
+     "uptime_ultimo": 11167,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM15",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "E8F60AE0B380",
+      "boardName": "esp32p4",
+      "arch": 243,
+      "aotReceta": "RV32IMAFC_ILP32F",
+      "aotFlagsCrc": 2245739379,
+      "mdnAbi": 9,
+      "floatAbi": "ilp32f",
+      "packsXipBase": 1074561024,
+      "packsBytes": 10387456,
+      "packRamBase": 1207963648,
+      "packRamBytes": 4194304,
+      "packRamStatus": "ok",
+      "packRamKey": "SQLite",
+      "packRamAsked": 4,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 360000000,
+      "uptimeMs": 11500221,
+      "resetReason": "power-on",
+      "tempMilliC": 0,
+      "micro": "esp32p4",
+      "paquete": "",
+      "gpioCount": 51,
+      "pioCount": 0,
+      "pwmSlices": 6,
+      "pwmUnidad": "canal",
+      "adcChannels": 14,
+      "adcUnidades": 2,
+      "uartIds": "1,2",
+      "i2cIds": "0,1",
+      "spiIds": "2,3",
+      "flashBytes": 33554432,
+      "sramBytes": 786432,
+      "psramBytes": 33554432,
+      "vmHeapBytes": 24637440,
+      "vmStackBytes": 524288,
+      "ioStackFree": 25684,
+      "runStackFree": 13340,
+      "runs": 2,
+      "fsTotalBytes": 16777216,
+      "fsUsedBytes": 163840,
+      "screenW": 480,
+      "screenH": 800,
+      "vmTaskStackFreeBytes": 25684,
+      "rtosHeapMinFreeBytes": 423011,
+      "run2StackFreeBytes": 13292
+     },
+     "imagen_local": "OTRA: la compilada en el PC (bpgenvm-c/esp32p4/build/bpvm_esp32p4.bin (09-10 08:22)) da 406b4cdc"
+    },
+    "pantalla": [
+     true,
+     "INFO screenW x screenH = 480x800"
+    ],
+    "resultados": [
+     {
+      "prueba": "NatPesadaPlaca",
+      "veredicto": "COLGADA",
+      "detalle": "sin EXITED en 30 s; tras KILL: tampoco EXITED en 5 s; recuperacion: reinicio por el cable (RTS; el wire no contesto al RESET): vuelve (resetReason=power-on, uptimeMs=10318)",
+      "ms_placa": null,
+      "ms_host": null,
+      "exited": null,
+      "salida_placa": "ok pesada: entra en la native\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": false,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 11167,
+       "fsUsedBytes": 167936,
+       "fsTotalBytes": 16777216,
+       "vmHeapBytes": 24637440,
+       "runStackFree": -1,
+       "ioStackFree": -1,
+       "vmTaskStackFreeBytes": 28744,
+       "rtosHeapMinFreeBytes": 427943
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/NatPesadaPlaca.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 35604,
+      "session": 7,
+      "postmortem": "[   61] flash: el FS va ARRIBA, 16384..32768 KB (16384 KB); bpdata, entera para los packs (10144 KB); part.fs.size no se aplica en esta placa\n[   62] particiones: el FS arriba de bpdata (la flash del chip; el ENV no reparte) — fs 16384 KB @0x9e8000, packs 10144 KB @0x0\n[   63] fs: bpfsalto @0x1000000 size=16384 KB | region FS +0x0 size=16384 KB\n[  146] fs: 15 ficheros, 155648/16777216 bytes usados\n[  266] boot: estado 3 (app)\n[  267] pack: zona 10144 KB en bpdata+0x0 (fisica 6240..16384 KB) | INST ok @0x400c8000 | DATA ok @0x400c8000\n[  267] pack: zona montada en 0x400c8000 (10144 KB) — modulos y .mdn visibles\n[  268] packs: zona lista, 3 pack(s) (3 vivo(s)), 8688 KB libres de 10144\n[  336] pantalla: el P4 publica 'PANT' desde la imagen (MIPI-DSI, el panel del ENV, tactil GT911)\n[  337] pantalla: 2 pines suyos (la luz y el reset): fuera de Machine.pins() (#669)\n[  337] pantalla: el I2C 0 del tactil (sda 7, scl 8, 100 kHz) es de la placa y se comparte (#669)\n[  337] sd: SDIO slot 0, 4 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz (por defecto)\n[  416] sd: montada en /sd por SDMMC (particion en el bloque 2048)\n[  416] boot: imagen de DOS nucleos\n[  417] run: la tarea del programa, creada (16 KB de pila, prioridad 5; espera en la cola)\n[  417] run: el 2o run, creado (vm.runs=2; 16 KB de pila, RAM interna): dos runs en la cola\n[   56] === boot ESP32-P4 ===\n[   56] log: arranque en frio (cargado de flash)\n[   60] packs: bloque de RAM 4096 KB @0x48001000 en PSRAM (packRam=0 KB, SQLite=4 MB) — los estaticos de cada motor y la arena se reparten al cargar\n[   60] psram: libre 28669 KB | mayor 28160 KB | bloques: 2 libres, 1 usados\n[   60] vm: 24573 KB en PSRAM (todo lo que deja el margen de la región)\n[   60] vm: heap 24572 KB en PSRAM @0x48401004 (PSRAM libre 4093 KB) | DRAM interna libre 478727 B (bloque mayor 376832 B)\n[   60] bios: tabla COMPLETA (47 ranuras)\n[   61] flash: configurada 16384 KB | chip fisico 32768 KB | bpdata acaba en 16384 KB\n[   61] flash: el FS va ARRIBA, 16384..32768 KB (16384 KB); bpdata, entera para los packs (10144 KB); part.fs.size no se aplica en esta placa\n[   62] particiones: el FS arriba de bpdata (la flash del chip; el ENV no reparte) — fs 16384 KB @0x9e8000, packs 10144 KB @0x0\n[   63] fs: bpfsalto @0x1000000 size=16384 KB | region FS +0x0 size=16384 KB\n[  144] fs: 18 ficheros, 167936/16777216 bytes usados\n[  266] boot: estado 3 (app)\n[  267] pack: zona 10144 KB en bpdata+0x0 (fisica 6240..16384 KB) | INST ok @0x400c8000 | DATA ok @0x400c8000\n[  267] pack: zona montada en 0x400c8000 (10144 KB) — modulos y .mdn visibles\n[  268] packs: zona lista, 3 pack(s) (3 vivo(s)), 8688 KB libres de 10144\n[  337] pantalla: el P4 publica 'PANT' desde la imagen (MIPI-DSI, el panel del ENV, tactil GT911)\n[  337] pantalla: 2 pines suyos (la luz y el reset): fuera de Machine.pins() (#669)\n[  337] pantalla: el I2C 0 del tactil (sda 7, scl 8, 100 kHz) es de la placa y se comparte (#669)\n[  337] sd: SDIO slot 0, 4 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz (por defecto)\n[  377] sd: montada en /sd por SDMMC (particion en el bloque 2048)\n[  377] boot: imagen de DOS nucleos\n[  377] run: la tarea del programa, creada (16 KB de pila, prioridad 5; espera en la cola)\n[  377] run: el 2o run, creado (vm.runs=2; 16 KB de pila, RAM interna): dos runs en la cola"
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/NatPesadaPlaca.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-RV32IMAFC_ILP32F\\NatPesadaPlaca.mod",
+      "size": 658,
+      "crc": "7a447ac4",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "la placa NO lleva la imagen compilada en el PC: imageCrc 4d69b438, bpgenvm-c/esp32p4/build/bpvm_esp32p4.bin (09-10 08:22) da 406b4cdc",
+     "dependencia Core: en la zona de packs (pack:Stdlib/Core.mod, crc igual): se ejecuta XIP, no se sube",
+     "NatPesadaPlaca: COLGADA; reinicio por el cable (RTS; el wire no contesto al RESET): vuelve (resetReason=power-on, uptimeMs=10318)",
+     "limpieza: 0 fichero(s) de /app borrados"
+    ],
+    "inventario_detalle": "14 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "aprieta": [
+     false,
+     "SRAM 768 KB, PSRAM 32768 KB"
+    ],
+    "inventario": [
+     "/app/CalcBench.mod",
+     "/app/CarreraSinMutex.mod",
+     "/app/MarcaArray.mod",
+     "/app/MarcaBucle.mod",
+     "/app/ParaleloPico.mod",
+     "/app/PinesPantalla.mod",
+     "/app/RunCompartido.mod",
+     "/app/RunDormido.mod",
+     "/app/RunGira.mod",
+     "/app/RunTarde.mod",
+     "/app/RunVeinte.mod",
+     "/lib/Collections.mod",
+     "/lib/Json.mod",
+     "/lib/Str.mod"
+    ]
+   },
+   {
+    "sello": {
+     "boardName": "stm32u5g9",
+     "uniqueId": "20353850553250040015002D",
+     "serverName": "bpvm-stm32",
+     "serverBuild": "Oct  8 2026 16:20:34",
+     "imageCrc": "b2891a18",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "PACKS"
+     ],
+     "arch": 40,
+     "variant": null,
+     "cpuFreqHz": 160000000,
+     "resetReason": "power-on/brown-out",
+     "uptimeMs": 11555295,
+     "fsUsedBytes": 81920,
+     "fsTotalBytes": 1032192,
+     "vmHeapBytes": 786432,
+     "aotReceta": "ARMV8M_MAIN_SOFTFP",
+     "mdnAbi": 9,
+     "uptime_ultimo": 11555295,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM12",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "20353850553250040015002D",
+      "boardName": "stm32u5g9",
+      "arch": 40,
+      "aotReceta": "ARMV8M_MAIN_SOFTFP",
+      "aotFlagsCrc": 1597191390,
+      "mdnAbi": 9,
+      "floatAbi": "softfp",
+      "packsXipBase": 136839168,
+      "packsBytes": 1572864,
+      "packRamBase": 536870912,
+      "packRamBytes": 786432,
+      "packRamStatus": "ok",
+      "packRamKey": "packRam",
+      "packRamAsked": 768,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 160000000,
+      "uptimeMs": 11555295,
+      "resetReason": "power-on/brown-out",
+      "tempMilliC": 0,
+      "micro": "stm32u5g9",
+      "paquete": "LQFP144",
+      "gpioCount": 95,
+      "pioCount": 0,
+      "pwmSlices": 1,
+      "pwmUnidad": "canal",
+      "adcChannels": 20,
+      "adcUnidades": 3,
+      "uartIds": "2,3,4,5,6",
+      "i2cIds": "1,2,3,4,5",
+      "spiIds": "1,2,3",
+      "flashBytes": 4194304,
+      "sramBytes": 3080192,
+      "psramBytes": 0,
+      "vmHeapBytes": 786432,
+      "vmStackBytes": 262144,
+      "ioStackFree": -1,
+      "runStackFree": -1,
+      "runs": 0,
+      "fsTotalBytes": 1032192,
+      "fsUsedBytes": 81920,
+      "screenW": 800,
+      "screenH": 480
+     },
+     "imagen_local": "OTRA: la compilada en el PC (bpgenvm-c/stm32/Discovery_u5g9j/Discovery_u5g9j/Debug/Discovery_u5g9j.elf (09-10 08:20)) da 8a51ed36"
+    },
+    "pantalla": [
+     true,
+     "INFO screenW x screenH = 800x480"
+    ],
+    "resultados": [
+     {
+      "prueba": "NatPesadaPlaca",
+      "veredicto": "COLGADA",
+      "detalle": "sin EXITED en 30 s; tras KILL: tampoco EXITED en 5 s; recuperacion: no contesta al RESET por el wire, y stm32u5g9 no se reinicia sin manos: reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton",
+      "ms_placa": null,
+      "ms_host": null,
+      "exited": null,
+      "salida_placa": "ok pesada: entra en la native\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": false,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": null,
+      "reinicio": false,
+      "abortar_placa": "colgada en NatPesadaPlaca y no se recupera: no contesta al RESET por el wire, y stm32u5g9 no se reinicia sin manos: reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton",
+      "propios": [
+       "/app/NatPesadaPlaca.mod"
+      ],
+      "tipos_extra": [],
+      "ms_wire": 35440,
+      "session": 1,
+      "postmortem": ""
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/NatPesadaPlaca.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-ARMV8M_MAIN_SOFTFP\\NatPesadaPlaca.mod",
+      "size": 630,
+      "crc": "44d28f70",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "la placa NO lleva la imagen compilada en el PC: imageCrc b2891a18, bpgenvm-c/stm32/Discovery_u5g9j/Discovery_u5g9j/Debug/Discovery_u5g9j.elf (09-10 08:20) da 8a51ed36",
+     "dependencia Core: en la zona de packs (pack:Stdlib/Core.mod, crc igual): se ejecuta XIP, no se sube",
+     "NatPesadaPlaca: COLGADA; no contesta al RESET por el wire, y stm32u5g9 no se reinicia sin manos: reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton"
+    ],
+    "inventario_detalle": "1 ficheros en /lib+/app, omitidos=0",
+    "error": "colgada en NatPesadaPlaca y no se recupera: no contesta al RESET por el wire, y stm32u5g9 no se reinicia sin manos: reiniciala con la sonda (STM32_Programmer_CLI -hardRst) o su boton",
+    "aprieta": [
+     false,
+     "SRAM 3008 KB, PSRAM 0 KB"
+    ],
+    "inventario": [
+     "/app/PinesPantalla.mod"
+    ]
+   }
+  ]
+ }
+]

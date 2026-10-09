@@ -1,0 +1,728 @@
+[
+ {
+  "fecha": "2026-10-09 09:09:43",
+  "lista": "bpgenvm-c\\tools\\tanda_592.json",
+  "n_listadas": 1,
+  "filtro": null,
+  "sin_oraculo": false,
+  "oraculo_info": {
+   "jar": "lexer-java\\target\\basicplus-frontend.jar",
+   "jar_hora": "2026-10-09 08:24:01",
+   "exe": "bpgenvm-c\\build\\bpgenvm-c.exe",
+   "exe_hora": "2026-10-09 08:13:46",
+   "sabor": "v2-gui1-lvgl0"
+  },
+  "pruebas": [
+   {
+    "nombre": "NatPesadaPlaca",
+    "fuente": "bpgenvm-c/samples/NatPesadaPlaca.bp",
+    "criterio": "identico",
+    "timeout_s": 30,
+    "necesita": [],
+    "recursos": [],
+    "artefactos": [],
+    "modulo": "NatPesadaPlaca",
+    "memoria": "",
+    "heap_min_kb": 0
+   }
+  ],
+  "oraculos": {
+   "NatPesadaPlaca": {
+    "work": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatPesadaPlaca",
+    "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\NatPesadaPlaca.mod",
+    "crc": 3021035364,
+    "size": 449,
+    "compilado": true,
+    "salida": null,
+    "rc": null,
+    "ms": null,
+    "error": null,
+    "ejecutado": false,
+    "compilacion": "compilado suelto",
+    "aot": {
+     "ARMV8M_MAIN_SOFTFP": {
+      "receta": "ARMV8M_MAIN_SOFTFP",
+      "log": "[aot] receta ARMV8M_MAIN_SOFTFP -> destino arm\r\n[aot] [aot] arm: receta ARMV8M_MAIN_SOFTFP (huella 5f3334de) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=76, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] NatPesadaPlaca.mod lleva dentro el nativo de arm (180 B, secci�n native � 449 -> 630 B)\r\n[aot] [aot] NatPesadaPlaca: 1 thunk(s), 120 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-ARMV8M_MAIN_SOFTFP\\NatPesadaPlaca.mod",
+      "thunks": 1,
+      "crc": 1154649968,
+      "size": 630
+     },
+     "RV32IMAFC_ILP32F": {
+      "receta": "RV32IMAFC_ILP32F",
+      "log": "[aot] receta RV32IMAFC_ILP32F -> destino riscv\r\n[aot] [aot] riscv: receta RV32IMAFC_ILP32F (huella 85db4373) de bpvm_aot_recetas.h\r\n-- cargado import 'Core' desde Core.mod (funcs=76, consts=0, enums=0, props=0, classes=13) --\r\n[aot] [aot] NatPesadaPlaca.mod lleva dentro el nativo de riscv (208 B, secci�n native � 449 -> 658 B)\r\n[aot] [aot] NatPesadaPlaca: 1 thunk(s), 148 B nativo � dentro del .mod\r\n[aot] toolchainMissing=false mdn=[]\r\n",
+      "mod": "C:\\lenguajes\\pm\\bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-RV32IMAFC_ILP32F\\NatPesadaPlaca.mod",
+      "thunks": 1,
+      "crc": 2051308228,
+      "size": 658
+     }
+    }
+   }
+  },
+  "placas": [
+   {
+    "sello": {
+     "boardName": "rp2350a",
+     "uniqueId": "46CED5A69C399BD2",
+     "serverName": "bpvm-pico",
+     "serverBuild": "Oct  9 2026 08:19:47",
+     "imageCrc": "219d7796",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "DEBUG",
+      "PACKS",
+      "BOOTSEL"
+     ],
+     "arch": 40,
+     "variant": "A",
+     "cpuFreqHz": 150000000,
+     "resetReason": "power-on/run",
+     "uptimeMs": 162057,
+     "fsUsedBytes": 118784,
+     "fsTotalBytes": 1048576,
+     "vmHeapBytes": 219104,
+     "aotReceta": "ARMV8M_MAIN_SOFTFP",
+     "mdnAbi": 9,
+     "uptime_ultimo": 163423,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM22",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "46CED5A69C399BD2",
+      "boardName": "rp2350a",
+      "arch": 40,
+      "aotReceta": "ARMV8M_MAIN_SOFTFP",
+      "aotFlagsCrc": 1597191390,
+      "mdnAbi": 9,
+      "floatAbi": "softfp",
+      "packsXipBase": 271581184,
+      "packsBytes": 1048576,
+      "packRamBase": 537387008,
+      "packRamBytes": 8192,
+      "packRamStatus": "off",
+      "packRamKey": "",
+      "packRamAsked": 0,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 150000000,
+      "uptimeMs": 162057,
+      "resetReason": "power-on/run",
+      "tempMilliC": 18609,
+      "micro": "rp2350a",
+      "paquete": "QFN-60",
+      "gpioCount": 30,
+      "pioCount": 3,
+      "pwmSlices": 12,
+      "pwmUnidad": "slice",
+      "adcChannels": 4,
+      "adcUnidades": 1,
+      "uartIds": "0,1",
+      "i2cIds": "0,1",
+      "spiIds": "0,1",
+      "flashBytes": 4194304,
+      "sramBytes": 532480,
+      "psramBytes": 0,
+      "vmHeapBytes": 219104,
+      "vmStackBytes": 92160,
+      "ioStackFree": -1,
+      "runStackFree": -1,
+      "runs": 2,
+      "fsTotalBytes": 1048576,
+      "fsUsedBytes": 118784,
+      "variant": "A",
+      "rtosHeapMinFreeBytes": 7264,
+      "vmTaskStackFreeBytes": 12496,
+      "run2StackFreeBytes": 16128
+     },
+     "imagen_local": "la COMPILADA en el PC: bpgenvm-c/pico/build/bpvm_pico.elf (09-10 08:19)"
+    },
+    "pantalla": [
+     false,
+     "INFO sin screenW/screenH: la imagen no lleva LVGL"
+    ],
+    "resultados": [
+     {
+      "prueba": "NatPesadaPlaca",
+      "veredicto": "PARADA",
+      "detalle": "KILL a los 500 ms; el EXITED, 10 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 432,
+      "ms_host": null,
+      "exited": {
+       "type": "EXITED",
+       "session": 1,
+       "status": "KILLED",
+       "exitCode": 130,
+       "elapsedMs": 432,
+       "nativos": 1,
+       "errorMessage": "terminado por KILL"
+      },
+      "salida_placa": "ok pesada: entra en la native\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 163423,
+       "fsUsedBytes": 118784,
+       "fsTotalBytes": 1048576,
+       "vmHeapBytes": 219104,
+       "runStackFree": 15344,
+       "ioStackFree": 9776,
+       "vmTaskStackFreeBytes": 9776,
+       "rtosHeapMinFreeBytes": 6352
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/NatPesadaPlaca.mod"
+      ],
+      "tipos_extra": [
+       "KILL_REPLY"
+      ],
+      "ms_wire": 658,
+      "session": 1,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 1,
+       "nativos": 1,
+       "crc": 1154649968,
+       "size": 630
+      }
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/NatPesadaPlaca.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-ARMV8M_MAIN_SOFTFP\\NatPesadaPlaca.mod",
+      "size": 630,
+      "crc": "44d28f70",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "dependencia Core: en la zona de packs (pack:Stdlib/Core.mod, crc igual): se ejecuta XIP, no se sube",
+     "limpieza: 0 fichero(s) de /app borrados"
+    ],
+    "inventario_detalle": "13 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "aprieta": [
+     true,
+     "SRAM 520 KB, PSRAM 0 KB"
+    ],
+    "inventario": [
+     "/app/CalcBench.mod",
+     "/app/CarreraSinMutex.mod",
+     "/app/Hello.mod",
+     "/app/MarcaArray.mod",
+     "/app/MarcaBucle.mod",
+     "/app/NatPesadaPlaca.mod",
+     "/app/ParaleloPico.mod",
+     "/app/RunCompartido.mod",
+     "/app/RunDormido.mod",
+     "/app/RunTarde.mod",
+     "/app/RunVeinte.mod",
+     "/lib/Collections.mod",
+     "/lib/Str.mod"
+    ]
+   },
+   {
+    "sello": {
+     "boardName": "esp32p4",
+     "uniqueId": "E8F60AE0B380",
+     "serverName": "bpvm-esp32p4",
+     "serverBuild": "Oct  9 2026 08:21:58",
+     "imageCrc": "aaedab10",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "DEBUG",
+      "PACKS"
+     ],
+     "arch": 243,
+     "variant": null,
+     "cpuFreqHz": 360000000,
+     "resetReason": "power-on",
+     "uptimeMs": 76549,
+     "fsUsedBytes": 167936,
+     "fsTotalBytes": 16777216,
+     "vmHeapBytes": 24637440,
+     "aotReceta": "RV32IMAFC_ILP32F",
+     "mdnAbi": 9,
+     "uptime_ultimo": 78269,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM15",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "E8F60AE0B380",
+      "boardName": "esp32p4",
+      "arch": 243,
+      "aotReceta": "RV32IMAFC_ILP32F",
+      "aotFlagsCrc": 2245739379,
+      "mdnAbi": 9,
+      "floatAbi": "ilp32f",
+      "packsXipBase": 1074561024,
+      "packsBytes": 10387456,
+      "packRamBase": 1207963648,
+      "packRamBytes": 4194304,
+      "packRamStatus": "ok",
+      "packRamKey": "SQLite",
+      "packRamAsked": 4,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 360000000,
+      "uptimeMs": 76549,
+      "resetReason": "power-on",
+      "tempMilliC": 0,
+      "micro": "esp32p4",
+      "paquete": "",
+      "gpioCount": 51,
+      "pioCount": 0,
+      "pwmSlices": 6,
+      "pwmUnidad": "canal",
+      "adcChannels": 14,
+      "adcUnidades": 2,
+      "uartIds": "1,2",
+      "i2cIds": "0,1",
+      "spiIds": "2,3",
+      "flashBytes": 33554432,
+      "sramBytes": 786432,
+      "psramBytes": 33554432,
+      "vmHeapBytes": 24637440,
+      "vmStackBytes": 524288,
+      "ioStackFree": -1,
+      "runStackFree": -1,
+      "runs": 2,
+      "fsTotalBytes": 16777216,
+      "fsUsedBytes": 167936,
+      "screenW": 480,
+      "screenH": 800,
+      "vmTaskStackFreeBytes": 28752,
+      "rtosHeapMinFreeBytes": 422995,
+      "run2StackFreeBytes": 15884
+     },
+     "imagen_local": "la COMPILADA en el PC: bpgenvm-c/esp32p4/build/bpvm_esp32p4.bin (09-10 09:08)"
+    },
+    "pantalla": [
+     true,
+     "INFO screenW x screenH = 480x800"
+    ],
+    "resultados": [
+     {
+      "prueba": "NatPesadaPlaca",
+      "veredicto": "PARADA",
+      "detalle": "KILL a los 500 ms; el EXITED, 30 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (RV32IMAFC_ILP32F)",
+      "ms_placa": 451,
+      "ms_host": null,
+      "exited": {
+       "type": "EXITED",
+       "session": 1,
+       "status": "KILLED",
+       "exitCode": 130,
+       "elapsedMs": 451,
+       "nativos": 1,
+       "errorMessage": "terminado por KILL"
+      },
+      "salida_placa": "ok pesada: entra en la native\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 78269,
+       "fsUsedBytes": 172032,
+       "fsTotalBytes": 16777216,
+       "vmHeapBytes": 24637440,
+       "runStackFree": 15508,
+       "ioStackFree": 25692,
+       "vmTaskStackFreeBytes": 25692,
+       "rtosHeapMinFreeBytes": 414799
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/NatPesadaPlaca.mod"
+      ],
+      "tipos_extra": [
+       "KILL_REPLY"
+      ],
+      "ms_wire": 597,
+      "session": 1,
+      "aot": {
+       "receta": "RV32IMAFC_ILP32F",
+       "thunks": 1,
+       "nativos": 1,
+       "crc": 2051308228,
+       "size": 658
+      }
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/NatPesadaPlaca.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-RV32IMAFC_ILP32F\\NatPesadaPlaca.mod",
+      "size": 658,
+      "crc": "7a447ac4",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "dependencia Core: en la zona de packs (pack:Stdlib/Core.mod, crc igual): se ejecuta XIP, no se sube",
+     "limpieza: 0 fichero(s) de /app borrados"
+    ],
+    "inventario_detalle": "15 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "aprieta": [
+     false,
+     "SRAM 768 KB, PSRAM 32768 KB"
+    ],
+    "inventario": [
+     "/app/CalcBench.mod",
+     "/app/CarreraSinMutex.mod",
+     "/app/MarcaArray.mod",
+     "/app/MarcaBucle.mod",
+     "/app/MideIndexOf.mod",
+     "/app/ParaleloPico.mod",
+     "/app/PinesPantalla.mod",
+     "/app/RunCompartido.mod",
+     "/app/RunDormido.mod",
+     "/app/RunGira.mod",
+     "/app/RunTarde.mod",
+     "/app/RunVeinte.mod",
+     "/lib/Collections.mod",
+     "/lib/Json.mod",
+     "/lib/Str.mod"
+    ]
+   },
+   {
+    "sello": {
+     "boardName": "stm32u5g9",
+     "uniqueId": "20353850553250040015002D",
+     "serverName": "bpvm-stm32",
+     "serverBuild": "Oct  9 2026 08:20:23",
+     "imageCrc": "8a51ed36",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "PACKS"
+     ],
+     "arch": 40,
+     "variant": null,
+     "cpuFreqHz": 160000000,
+     "resetReason": "pin (NRST)",
+     "uptimeMs": 25102,
+     "fsUsedBytes": 90112,
+     "fsTotalBytes": 1032192,
+     "vmHeapBytes": 786432,
+     "aotReceta": "ARMV8M_MAIN_SOFTFP",
+     "mdnAbi": 9,
+     "uptime_ultimo": 26299,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM12",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "20353850553250040015002D",
+      "boardName": "stm32u5g9",
+      "arch": 40,
+      "aotReceta": "ARMV8M_MAIN_SOFTFP",
+      "aotFlagsCrc": 1597191390,
+      "mdnAbi": 9,
+      "floatAbi": "softfp",
+      "packsXipBase": 136839168,
+      "packsBytes": 1572864,
+      "packRamBase": 536870912,
+      "packRamBytes": 786432,
+      "packRamStatus": "ok",
+      "packRamKey": "packRam",
+      "packRamAsked": 768,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 160000000,
+      "uptimeMs": 25102,
+      "resetReason": "pin (NRST)",
+      "tempMilliC": 0,
+      "micro": "stm32u5g9",
+      "paquete": "LQFP144",
+      "gpioCount": 95,
+      "pioCount": 0,
+      "pwmSlices": 1,
+      "pwmUnidad": "canal",
+      "adcChannels": 20,
+      "adcUnidades": 3,
+      "uartIds": "2,3,4,5,6",
+      "i2cIds": "1,2,3,4,5",
+      "spiIds": "1,2,3",
+      "flashBytes": 4194304,
+      "sramBytes": 3080192,
+      "psramBytes": 0,
+      "vmHeapBytes": 786432,
+      "vmStackBytes": 262144,
+      "ioStackFree": -1,
+      "runStackFree": -1,
+      "runs": 0,
+      "fsTotalBytes": 1032192,
+      "fsUsedBytes": 90112,
+      "screenW": 800,
+      "screenH": 480
+     },
+     "imagen_local": "la COMPILADA en el PC: bpgenvm-c/stm32/Discovery_u5g9j/Discovery_u5g9j/Debug/Discovery_u5g9j.elf (09-10 08:20)"
+    },
+    "pantalla": [
+     true,
+     "INFO screenW x screenH = 800x480"
+    ],
+    "resultados": [
+     {
+      "prueba": "NatPesadaPlaca",
+      "veredicto": "PARADA",
+      "detalle": "KILL a los 500 ms; el EXITED, 20 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (ARMV8M_MAIN_SOFTFP)",
+      "ms_placa": 657,
+      "ms_host": null,
+      "exited": {
+       "type": "EXITED",
+       "session": 1,
+       "status": "KILLED",
+       "exitCode": 130,
+       "elapsedMs": 657,
+       "nativos": 1,
+       "errorMessage": "terminado por KILL"
+      },
+      "salida_placa": "ok pesada: entra en la native\n",
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": true,
+      "termino": true,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": {
+       "uptimeMs": 26299,
+       "fsUsedBytes": 90112,
+       "fsTotalBytes": 1032192,
+       "vmHeapBytes": 786432,
+       "runStackFree": -1,
+       "ioStackFree": 3272,
+       "vmTaskStackFreeBytes": null,
+       "rtosHeapMinFreeBytes": null
+      },
+      "reinicio": false,
+      "abortar_placa": null,
+      "propios": [
+       "/app/NatPesadaPlaca.mod"
+      ],
+      "tipos_extra": [
+       "KILL_REPLY"
+      ],
+      "ms_wire": 730,
+      "session": 1,
+      "aot": {
+       "receta": "ARMV8M_MAIN_SOFTFP",
+       "thunks": 1,
+       "nativos": 1,
+       "crc": 1154649968,
+       "size": 630
+      }
+     }
+    ],
+    "subidos": [
+     {
+      "remoto": "/app/NatPesadaPlaca.mod",
+      "local": "bpgenvm-c\\build\\tanda\\NatPesadaPlaca\\aot-ARMV8M_MAIN_SOFTFP\\NatPesadaPlaca.mod",
+      "size": 630,
+      "crc": "44d28f70",
+      "ok": true,
+      "detalle": "ok"
+     }
+    ],
+    "notas": [
+     "dependencia Core: en la zona de packs (pack:Stdlib/Core.mod, crc igual): se ejecuta XIP, no se sube",
+     "limpieza: 0 fichero(s) de /app borrados"
+    ],
+    "inventario_detalle": "2 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "aprieta": [
+     false,
+     "SRAM 3008 KB, PSRAM 0 KB"
+    ],
+    "inventario": [
+     "/app/NatPesadaPlaca.mod",
+     "/app/PinesPantalla.mod"
+    ]
+   },
+   {
+    "sello": {
+     "boardName": "esp32s3",
+     "uniqueId": "98A316E6EE90",
+     "serverName": "bpvm-esp32",
+     "serverBuild": "Oct  9 2026 08:21:22",
+     "imageCrc": "436cc8ec",
+     "capabilities": [
+      "META",
+      "FILES",
+      "TERMINAL",
+      "DEBUG",
+      "PACKS"
+     ],
+     "arch": 94,
+     "variant": null,
+     "cpuFreqHz": 240000000,
+     "resetReason": "power-on",
+     "uptimeMs": 38761,
+     "fsUsedBytes": 212992,
+     "fsTotalBytes": 10248192,
+     "vmHeapBytes": 7336960,
+     "aotReceta": "",
+     "mdnAbi": 0,
+     "uptime_ultimo": 38761,
+     "arranque": [
+      false,
+      "nada corria (KILL: NO_SESSION)"
+     ],
+     "transporte": "serie",
+     "puerto": "COM9",
+     "info": {
+      "type": "INFO_REPLY",
+      "id": 3,
+      "uniqueId": "98A316E6EE90",
+      "boardName": "esp32s3",
+      "arch": 94,
+      "aotReceta": "",
+      "aotFlagsCrc": 0,
+      "mdnAbi": 0,
+      "floatAbi": "",
+      "packsXipBase": 1116397568,
+      "packsBytes": 5382144,
+      "packRamBase": 0,
+      "packRamBytes": 0,
+      "packRamStatus": "off",
+      "packRamKey": "",
+      "packRamAsked": 0,
+      "packRamMinMb": 2,
+      "cpuFreqHz": 240000000,
+      "uptimeMs": 38761,
+      "resetReason": "power-on",
+      "tempMilliC": 0,
+      "micro": "esp32s3",
+      "paquete": "",
+      "gpioCount": 31,
+      "pioCount": 0,
+      "pwmSlices": 6,
+      "pwmUnidad": "canal",
+      "adcChannels": 20,
+      "adcUnidades": 2,
+      "uartIds": "1,2",
+      "i2cIds": "0,1",
+      "spiIds": "2,3",
+      "flashBytes": 16777216,
+      "sramBytes": 524288,
+      "psramBytes": 8388608,
+      "vmHeapBytes": 7336960,
+      "vmStackBytes": 524288,
+      "ioStackFree": -1,
+      "runStackFree": -1,
+      "runs": 2,
+      "fsTotalBytes": 10248192,
+      "fsUsedBytes": 212992,
+      "vmTaskStackFreeBytes": 12104,
+      "rtosHeapMinFreeBytes": 247903,
+      "run2StackFreeBytes": 15564
+     },
+     "imagen_local": "la COMPILADA en el PC: bpgenvm-c/esp32/build/bpvm_esp32.bin (09-10 09:09)"
+    },
+    "pantalla": [
+     false,
+     "INFO sin screenW/screenH: la imagen no lleva LVGL"
+    ],
+    "resultados": [
+     {
+      "prueba": "NatPesadaPlaca",
+      "veredicto": "SALTADA",
+      "detalle": "prueba de AOT y esta placa no tiene receta (aotReceta vacia en su INFO: x86 o Xtensa): aqui el codigo nativo no se puede probar",
+      "ms_placa": null,
+      "ms_host": null,
+      "exited": null,
+      "salida_placa": null,
+      "diff": null,
+      "artefactos": [],
+      "necesita_ojos": [],
+      "arranco": false,
+      "termino": false,
+      "rezagados": [],
+      "basura": [],
+      "artefactos_previos": {},
+      "info_tras": null,
+      "reinicio": false,
+      "abortar_placa": null
+     }
+    ],
+    "subidos": [],
+    "notas": [
+     "limpieza: 0 fichero(s) de /app borrados"
+    ],
+    "inventario_detalle": "29 ficheros en /lib+/app, omitidos=0",
+    "error": null,
+    "aprieta": [
+     false,
+     "SRAM 512 KB, PSRAM 8192 KB"
+    ],
+    "inventario": [
+     "/app/CalcBench.mod",
+     "/app/CarreraSinMutex.mod",
+     "/app/Pin35.mod",
+     "/app/PinesPlaca.mod",
+     "/app/RunCompartido.mod",
+     "/app/RunDormido.mod",
+     "/app/RunGira.mod",
+     "/app/RunTarde.mod",
+     "/app/RunVeinte.mod",
+     "/lib/Adc.mod",
+     "/lib/Collections.mod",
+     "/lib/Core.mod",
+     "/lib/Gpio.mod",
+     "/lib/Heap.mod",
+     "/lib/I2c.mod",
+     "/lib/IO.mod",
+     "/lib/Machine.mod",
+     "/lib/Math.mod",
+     "/lib/Neopixel.mod",
+     "/lib/Pico.mod",
+     "/lib/Pulse.mod",
+     "/lib/Pwm.mod",
+     "/lib/Rtc.mod",
+     "/lib/Spi.mod",
+     "/lib/Str.mod",
+     "/lib/Time.mod",
+     "/lib/Timer.mod",
+     "/lib/Uart.mod",
+     "/lib/Wdt.mod"
+    ]
+   }
+  ]
+ }
+]

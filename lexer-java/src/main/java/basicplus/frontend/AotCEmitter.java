@@ -1971,10 +1971,11 @@ public final class AotCEmitter {
 
     /* V7 #592 (9-oct) — LA MARCA DEL 2º TEMPORIZADOR (idea de Eduardo): un contador en vm->memory que la plataforma sube
      * cada ~5 ms y el KILL también (BPVM_MARCA_TIEMPO_ADDR, bpvm_internal.h). La regla, medida en placa antes de
-     * escribirla (Eduardo: «OK»): un bucle cuyo cuerpo LLAMA a algo mira la marca en cada vuelta —más barato que el
-     * contador, y cede a los ~5 ms aunque cada vuelta sea lenta—; uno SIN llamadas sigue con el contador —sus vueltas
-     * son cortas por fuerza, y ahí el contador es más barato: en la Pico 2, el bucle más apretado, 1329 ms con el
-     * contador y 1875 con la marca—. */
+     * escribirla (Eduardo: «OK»): un bucle cuyo cuerpo LLAMA a algo mira la marca en cada vuelta y cede a los ~5 ms
+     * aunque cada vuelta sea lenta —cuesta algo más que el contador: +1,9 % en la Pico 2 y +0,5 % en la P4, en un
+     * bucle que recorre un array; es lo que cuesta que una native con vueltas lentas no deje la placa sin cable—; uno
+     * SIN llamadas sigue con el contador —sus vueltas son cortas por fuerza, y ahí la marca costaría mucho más: en la
+     * Pico 2, el bucle más apretado, 1329 ms con el contador y 1875 con la marca—. */
     private static final String MARCA_P = "__bpvm_pm";
     private static final String MARCA_V = "__bpvm_m";
     private static final String MARCA_HUECO = "/*@marca592@*/";

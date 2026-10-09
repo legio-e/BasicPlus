@@ -200,14 +200,16 @@ Hasta V6 una native corría de un tirón: el Stop esperaba a que volviera y ning
 - **Se suspende** si llama a algo que bloquea —`sleep`, una función BP que espera un `Mutex`, un builtin que
   bloquea—, y los demás hilos siguen.
 - **Cede el turno** en un cálculo largo: la *línea del bucle* —`punto_control` cada 1024 vueltas— la expropia a
-  los 5 ms. **Y desde `#592` (9-oct), el 2º temporizador** (idea de Eduardo): un bucle cuyo cuerpo LLAMA a algo (un
-  helper, un builtin, una función BP, otra native) mira en CADA vuelta una marca que el reloj de la plataforma sube
-  cada 5 ms —y el KILL también— (`vm->memory + BPVM_MARCA_TIEMPO_ADDR`, la región reservada: la ABI no cambia), así
-  que cede a tiempo aunque cada vuelta sea lenta (`NatPesada`, vueltas de un `indexOf` de 256 KB: parada a los 350 ms
-  en vez de 5,2 s; `make test-aotpesada`); uno SIN llamadas sigue con el contador, más barato ahí (en la Pico 2, el
-  bucle más apretado: 1329 ms con el contador, 1875 con la marca). Medido en placa antes de escribirlo: en un bucle con
-  llamadas la marca sale más barata que el contador (la Pico 2, 2499 frente a 2564 ms; la P4, 1417 frente a 1426). Medido en la Pico 2 (P2b.0): +33 % en el bucle más apretado, +15 % en uno menos; el nativo sigue 134 y
+  los 5 ms. Medido en la Pico 2 (P2b.0): +33 % en el bucle más apretado, +15 % en uno menos; el nativo sigue 134 y
   96 veces más rápido que interpretado.
+- **Y desde `#592` (9-oct), el 2º temporizador** (idea de Eduardo): un bucle cuyo cuerpo LLAMA a algo (un helper, un
+  builtin, una función BP, otra native) mira en CADA vuelta una marca que el reloj de la plataforma sube cada 5 ms —y
+  el KILL también— (`vm->memory + BPVM_MARCA_TIEMPO_ADDR`, la región reservada: la ABI no cambia), así que cede a
+  tiempo aunque cada vuelta sea lenta. En placa, `NatPesadaPlaca` (cada vuelta, un `indexOf` de 32 KB): con la imagen
+  de antes colgaba la placa —ni el KILL, ni el cable—; ahora, PARADA a los 10–30 ms. En el PC, `make test-aotpesada`:
+  350 ms en vez de 5,2 s. Cuesta algo más que el contador en esos bucles (+1,9 % en la Pico 2 y +0,5 % en la P4, en
+  uno que recorre un array). Uno SIN llamadas sigue con el contador: sus vueltas son cortas por fuerza, y ahí la marca
+  costaría mucho más (en la Pico 2, el bucle más apretado: 1875 frente a 1329 ms).
 - **Una recursión cuenta como un bucle** (`#580`, 3-oct; Eduardo: *«como un bucle»*): una native que puede volver a
   entrar en sí misma por llamadas entre natives del módulo —`fib` → `fib`, `a` → `b` → `a`— lleva la marca a la
   ENTRADA: cada 1024 entradas, `punto_control`. Sin ella, una recursiva sin bucles ni cedía ni se podía parar (en la

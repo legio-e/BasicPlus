@@ -8708,10 +8708,14 @@ interpretada). Lo que se hace:
 - **Hecho (9-oct)**, con dos cambios sobre lo de abajo, medidos o razonados: la marca va en `vm->memory[0x80..0x84)`
   y no en `[4..8)` —un campo de un objeto null se lee en los primeros bytes (el array null de `builtins.c` que leía
   `memory[4..]`)—; y LA REGLA, medida en placa (`build/m592`) y aceptada por Eduardo (*«OK»*): sólo los bucles que
-  LLAMAN a algo miran la marca —en ellos es más barata que el contador: la Pico 2, 2499 frente a 2564 ms; la P4, 1417
-  frente a 1426—; los que no llaman a nada siguen con el contador —ahí la marca costaría +41 % en la Pico 2 (1875
-  frente a 1329 ms en el bucle más apretado), y sus vueltas son cortas por fuerza—. `test-aotpesada`: una native con
-  vueltas lentas, parada a los 350 ms (con el contador, 5,2 s).
+  LLAMAN a algo miran la marca; los que no llaman a nada siguen con el contador —ahí la marca costaría mucho más (en
+  la Pico 2, el bucle más apretado: 1875 frente a 1329 ms), y sus vueltas son cortas por fuerza—. `test-aotpesada`:
+  una native con vueltas lentas, parada a los 350 ms (con el contador, 5,2 s). **Corregido con la placa (9-oct)**: en
+  un bucle con llamadas la marca NO es más barata que el contador, como se dijo —aquella variante no cedía nunca: en
+  la imagen de entonces nadie subía la marca—; con la imagen nueva y todas cediendo, cuesta +1,9 % en la Pico 2 (2620
+  frente a 2571 ms) y +0,5 % en la P4 (1472 frente a 1465). Es lo que cuesta que una native con vueltas lentas no
+  deje la placa sin cable: con la imagen de antes, `NatPesadaPlaca` colgaba la Pico 2, la P4 y la DK2; con la nueva,
+  PARADA a los 10–30 ms.
 - **La marca**: 4 bytes en `vm->memory[4..8)`, dentro de la región reservada `[0, BPVM_INITIAL_FREE_ADDR)` —el 0, el
   1 y el 2 son los centinelas de fin de hilo, de vuelta del puente y de vuelta de un evento—: un CONTADOR de 32 bits,
   alineado y en el orden de la CPU (lo escribe la plataforma y lo lee la native, la misma CPU: no es un valor de BP).
