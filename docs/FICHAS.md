@@ -2218,7 +2218,8 @@ C5 (Stdlib —no lo tenía—, Gui y DriverSpi; tenía dos Gui y dos DriverSpi) 
 fuera SQLite y Mini). Con ellos, la ronda de V7 y la tanda de `#667`, verdes en las tres, y todas las dependencias
 XIP del `Stdlib.pack` («crc igual: se ejecuta XIP, no se sube»): la Nucleo, que antes subía a `/lib` la stdlib que
 usaba (19 módulos tras la ronda), ya no sube nada. Lo que se ahorra en la C6, en `#651`. **Falta**: las demás con
-SQLite o Mini (la Pico 2, la Metro, la S3 y la C3: se mira su zona en el lote de la imagen de hoy).
+SQLite o Mini (la Pico 2, la Metro, la S3 y la C3: se mira su zona en el lote de la imagen de hoy). **La Pico 2,
+mirada (9-oct, noche)**: su zona sólo lleva el `Stdlib.pack`, nada que regrabar. **Falta**: la Metro, la S3 y la C3.
 
 #### ✅ `#622` — el ANCLA de la reserva no se soltaba al publicar el objeto: en la VM-Java, lo último que reservó cada hilo seguía siendo raíz hasta su siguiente reserva; en la VM-C, la última excepción que construyó la VM (abierta y cerrada el 2-oct, al medir `#621` con `TempRetiene`; preexistente; H9 · **CERRADA el 2-oct**, `9f41fd7a`)
 
@@ -3048,7 +3049,7 @@ intacto—, con su sabotaje en las dos VMs. Ningún falso positivo en la red (co
 `test-packhelp` —roto fuera de la red desde `#571`: el `jmp_buf` del slot de fallos pasó a puntero—, arreglado, y
 con `test-freelist` y `test-mem` a `check-testc`.
 
-#### 🟡 `#592` — una native de la VM-C mira el reloj sólo cada 1024 vueltas de su bucle: con vueltas pesadas tarda mucho más que su rebanada de 5 ms en ceder — un 2º temporizador (idea de Eduardo) (abierta 27-sep, al hacer `#531`; SUELTA · **CERRADA el 9-oct**, `2e65457b`, vista en la Pico 2, la P4 y la DK2)
+#### ✅ `#592` — una native de la VM-C mira el reloj sólo cada 1024 vueltas de su bucle: con vueltas pesadas tarda mucho más que su rebanada de 5 ms en ceder — un 2º temporizador (idea de Eduardo) (abierta 27-sep, al hacer `#531`; SUELTA · **CERRADA el 9-oct**, `2e65457b`, vista en la Pico 2, la P4 y la DK2)
 
 Una native cede el hilo por TIEMPO —no tiene instrucciones que contar—: su «línea del bucle» llama a `punto_control`
 cada 1024 vueltas, y éste cede si lleva `BPVM_NATIVA_REBANADA_MS` (5 ms) o si hay un `kill` (`bpvm_nativa.c`). Si
