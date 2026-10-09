@@ -74,8 +74,15 @@
 > verde en la C5, la C6, la Metro y la C3 (la Nucleo se desconectó antes de la suya). Y **`#675`**: la Metro se colgaba
 > en el primer RUN —la marca de `#592` se sumaba con LDREX/STREX sobre la PSRAM, donde el acceso exclusivo no se cumple:
 > la interrupción del reloj giraba para siempre—; ahora una lectura y una escritura; la Metro, con su ronda verde:
-> CERRADA. **`#614`** (Eduardo: «(a)», acotarlo en V7): no son las fuentes —un rectángulo sin texto cuesta como la
-> etiqueta—, sino un FIJO de ~4 ms por repintado en la C5; a cronometrar con una imagen de prueba (OK de Eduardo).
+> CERRADA. **`#614` CERRADA** (Eduardo: «(a)», mirarla en V7): **no era una regresión; era el instrumento**. El «1 ms
+> por etiqueta» de la C5 (25-sep) se midió con el `GuiFlushBench` de antes de su arreglo, que no esperaba al refresco
+> de LVGL: ese ejemplo, hoy, vuelve a dar «1 ms»; el arreglado, 5,8 (el táctil 1,2 + LVGL 3,2 + el SPI 1,1,
+> cronometrado con una imagen de prueba que no entra al árbol), y el motor del 23-sep pinta igual que el de hoy. La C5,
+> de vuelta a la imagen y los packs del lote (el pack de prueba, borrado con el OK de Eduardo; en `/app` quedan
+> `GuiPinta614` y `GuiFlushViejo`, de la prueba).
+> **Lo siguiente**: la ronda de la Nucleo (se desconectó antes de la suya) y la Pico 2 con la imagen de `#675` —no la
+> necesita, no tiene PSRAM, pero es la misma imagen que la Metro—, en el próximo lote; y después, documentar, las
+> pruebas finales y publicar.
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y

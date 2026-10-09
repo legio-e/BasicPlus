@@ -7555,6 +7555,10 @@ la v8. Queda la cintura (`esp32/common/gpio_esp32.c`), que hoy parte esa franja 
 **Medido antes, en la C5** (25-sep): `GuiFlushBench` 147 ms por pantalla y 1 ms por etiqueta; `SdCard` 4,2 s;
 `C5SdGui`, la pantalla sola con 30 ms de peor hueco y con la TF 63 ms (0 ficheros distintos); `C5Bus` bien.
 
+> ⚠️ (`#614`, 9-oct) Ese «1 ms por etiqueta» —aquí y en las dos medidas de la C5 de más arriba— no era real: el
+> ejemplo de entonces no esperaba al refresco de LVGL (lo arregló `f0412363`, §H6.14) y la etiqueta casi nunca se
+> repintaba. Con el ejemplo arreglado, una etiqueta cuesta 5,8 ms en la C5; la pantalla entera sí medía bien.
+
 **Las decisiones:**
 1. **El bus se abre CON DMA** (`SPI_DMA_CH_AUTO`) y `max_transfer_sz` de 16 KB: una franja en UNA transacción (también
    la de un panel de 320×480, 15 360 B); por encima, la cintura trocea a 16 KB. Lo mismo en el `init` de siempre.
