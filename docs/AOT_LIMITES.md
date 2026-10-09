@@ -200,7 +200,13 @@ Hasta V6 una native corría de un tirón: el Stop esperaba a que volviera y ning
 - **Se suspende** si llama a algo que bloquea —`sleep`, una función BP que espera un `Mutex`, un builtin que
   bloquea—, y los demás hilos siguen.
 - **Cede el turno** en un cálculo largo: la *línea del bucle* —`punto_control` cada 1024 vueltas— la expropia a
-  los 5 ms. Medido en la Pico 2 (P2b.0): +33 % en el bucle más apretado, +15 % en uno menos; el nativo sigue 134 y
+  los 5 ms. **Y desde `#592` (9-oct), el 2º temporizador** (idea de Eduardo): un bucle cuyo cuerpo LLAMA a algo (un
+  helper, un builtin, una función BP, otra native) mira en CADA vuelta una marca que el reloj de la plataforma sube
+  cada 5 ms —y el KILL también— (`vm->memory + BPVM_MARCA_TIEMPO_ADDR`, la región reservada: la ABI no cambia), así
+  que cede a tiempo aunque cada vuelta sea lenta (`NatPesada`, vueltas de un `indexOf` de 256 KB: parada a los 350 ms
+  en vez de 5,2 s; `make test-aotpesada`); uno SIN llamadas sigue con el contador, más barato ahí (en la Pico 2, el
+  bucle más apretado: 1329 ms con el contador, 1875 con la marca). Medido en placa antes de escribirlo: en un bucle con
+  llamadas la marca sale más barata que el contador (la Pico 2, 2499 frente a 2564 ms; la P4, 1417 frente a 1426). Medido en la Pico 2 (P2b.0): +33 % en el bucle más apretado, +15 % en uno menos; el nativo sigue 134 y
   96 veces más rápido que interpretado.
 - **Una recursión cuenta como un bucle** (`#580`, 3-oct; Eduardo: *«como un bucle»*): una native que puede volver a
   entrar en sí misma por llamadas entre natives del módulo —`fib` → `fib`, `a` → `b` → `a`— lleva la marca a la

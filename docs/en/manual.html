@@ -942,13 +942,16 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       something that blocks —<code>sleep</code>, <code>lock()</code> on a busy
       <code>Mutex</code>, a BP function that waits— it <strong>is suspended</strong>
       and the other threads carry on; in a long computation it <strong>yields its
-      turn</strong> every 5 ms (it checks in its loops, every 1024 iterations), and
-      the IDE's <strong>Stop</strong> halts it even inside an infinite loop. Inside,
-      it runs on a thread of its own on the platform and passes the baton back and
-      forth with the interpreter; a native that cannot yield (no loops and no calls
-      that block) runs directly, without that step. What is missing: a recursive
-      native <em>without loops</em> never reaches that check, and cannot be stopped
-      until it returns.</li>
+      turn</strong> every 5 ms —it checks in its loops: on every iteration of a loop that
+      calls something, through a mark the board's clock raises every 5 ms, so it yields in
+      time even if each iteration is slow; and every 1024 iterations in a loop without
+      calls, whose iterations are short by force—, and the IDE's <strong>Stop</strong> halts
+      it even inside an infinite loop. A <strong>recursion counts as a loop</strong>: a native
+      that calls itself —or another one that calls it back— checks on entry, every 1024
+      calls, so it also yields and stops even without loops. Inside, it runs on a thread of
+      its own on the platform and passes the baton back and forth with the interpreter; a
+      native that cannot yield (no loops, no recursion and no calls that block) runs directly,
+      without that step.</li>
   <li><strong>Speed and <code>double</code></strong>: none of the boards has a
       double-precision FPU, so a <code>double</code> in a native is emulated by the
       firmware and speeds up much less than integer code. If you want speed on the

@@ -312,3 +312,9 @@ void bpvm_platform_thread_sleep_ms(int ms) {
     if (ticks == 0) ticks = 1;     /* mismo motivo que arriba: dormir 0 no es dormir */
     vTaskDelay(ticks);
 }
+
+/* V7 #592 (9-oct) — EL 2º TEMPORIZADOR: el gancho del tick de FreeRTOS (configUSE_TICK_HOOK = 1 en el FreeRTOSConfig.h
+ * de cada familia de este fichero: la STM32, y la Pico con -DBPVM_PICO_PLATFORM_COMUN), que cuenta hasta 5 ms y sube la
+ * marca de las natives; ya está en marcha, así que arrancarlo es no hacer nada. */
+void bpvm_platform_reloj_marca(void) { }
+void vApplicationTickHook(void) { bpvm_marca_tiempo_tick((uint32_t) portTICK_PERIOD_MS); }

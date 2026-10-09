@@ -52,6 +52,13 @@ memorySize└──────────────────────�
   = `THREAD_EXIT`, que termina el thread sin tumbar la VM. Para el
   thread main, el equivalente es `0x00 = HALT` que sí termina la VM.
 
+- **memory[1] y memory[2]**: los centinelas de vuelta del puente native→BP y de un handler de evento (VM-C).
+
+- **memory[0x80..0x84)** (VM-C, V7 `#592`): la MARCA del 2º temporizador —un contador de 32 bits en el orden de la
+  CPU, no un valor de BP—, que el reloj de la plataforma sube cada ~5 ms y el KILL también; las natives la miran en
+  sus bucles que llaman a algo. Lejos del 0 a propósito (un campo de un objeto null se lee en los primeros bytes).
+  Contrato con los `.mdn`: no se mueve.
+
 - **`nextFreeAddress` arranca en `0x0100`** (256 bytes reservados al
   inicio; pueden usarse para constantes especiales en el futuro). Cada
   `loadModuleToMemory` aloca su bloque a partir de ahí, redondeando

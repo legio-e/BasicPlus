@@ -962,7 +962,8 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       <code>throw RuntimeError("…")</code> dentro de la native se propaga
       al <code>try/catch</code> BP que envuelva la llamada, con el mensaje del
       intérprete (la línea exacta dentro de la native, todavía no). Lo que aún NO
-      cabe — <code>try/catch</code> dentro de la native, tuplas,
+      cabe — <code>try/catch</code> dentro de la native, tuplas con campos <code>float</code>,
+      <code>long</code> o <code>double</code> (las demás sí, desde V7),
       <code>instanceof</code>, eventos, <code>parallel</code>,
       <code>for … in</code>, <strong>leer o
       escribir campos</strong> (propios o heredados: usa un getter), <strong>llamar a
@@ -978,9 +979,11 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       que bloquea —<code>sleep</code>, el <code>lock()</code> de un <code>Mutex</code>
       ocupado, una función BP que espera— <strong>se suspende</strong> y los demás
       hilos siguen; en un cálculo
-      largo <strong>cede el turno</strong> cada 5 ms (lo mira en sus bucles, cada
-      1024 vueltas), y el <strong>Stop</strong> del IDE la para aunque esté en un
-      bucle infinito. Una <strong>recursión cuenta como un bucle</strong>: una native
+      largo <strong>cede el turno</strong> cada 5 ms —lo mira en sus bucles: en cada vuelta
+      de un bucle que llama a algo, por una marca que el reloj de la placa sube cada 5 ms, así
+      que cede a tiempo aunque cada vuelta sea lenta; y cada 1024 vueltas en uno sin llamadas,
+      cuyas vueltas son cortas por fuerza—, y el <strong>Stop</strong> del IDE la para aunque
+      esté en un bucle infinito. Una <strong>recursión cuenta como un bucle</strong>: una native
       que se llama a sí misma —o a otra que la vuelve a llamar— lo mira al entrar,
       cada 1024 llamadas, así que también cede y se para aunque no tenga bucles.
       Por dentro corre en un hilo propio de la plataforma y se pasa
@@ -996,7 +999,12 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       usa <code>float</code>: las placas con FPU de simple precisión (Cortex-M33,
       ESP32-P4) lo hacen con una instrucción.</li>
   <li><strong>Depurar</strong>: en el PC una native corre interpretada y se depura
-      como cualquier función; en la placa, el depurador no para dentro de ella.</li>
+      como cualquier función; en la placa, el depurador <strong>no para dentro de ella</strong>
+      (corre como código máquina), y el IDE lo dice al poner un breakpoint dentro. Para
+      seguirla paso a paso en la placa, <strong>quítale <code>native</code></strong>: sirve para
+      verificar el algoritmo; pónselo cuando funcione. Lo que se depura es el algoritmo; que la
+      traducción a C dé lo mismo que el intérprete es trabajo del compilador, y lo vigilan sus
+      pruebas (cada native contra su versión interpretada, y cada placa contra el PC).</li>
   <li><strong>Llamar funciones BP normales desde una native</strong> es
       posible (el puente existe), pero cruza de vuelta al intérprete: lo
       ganado en velocidad se pierde en cada cruce. El compilador lo detecta
@@ -2164,9 +2172,9 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
 <ul>
   <li><code>try/catch</code> DENTRO de una <code>native function</code>
       (lanzar desde la native y atrapar FUERA sí funciona): el código nativo
-      no embebe setjmp; diferido con diseño anotado. Tampoco tuplas,
-      <code>instanceof</code> ni eventos dentro de una native (error de
-      compilación, <a href="#funciones-native">§8.3</a>).</li>
+      no embebe setjmp; diferido con diseño anotado. Tampoco <code>instanceof</code>, eventos
+      ni tuplas con campos <code>float</code>, <code>long</code> o <code>double</code> dentro de
+      una native (error de compilación, <a href="#funciones-native">§8.3</a>).</li>
   <li>Array de tamaño fijo <code>tipo[N]</code> a nivel de módulo y
       dentro de una <code>native function</code> (error de compilación con
       alternativa: <code>tipo[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>

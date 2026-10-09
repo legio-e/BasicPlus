@@ -145,6 +145,16 @@ int64_t bpvm_platform_now_ms(void);
  * fuente que now_ms en cada familia (time_us_64 / esp_timer / DWT / monotonic). */
 int64_t bpvm_platform_now_us(void);
 
+/* V7 #592 (9-oct) — EL 2º TEMPORIZADOR: arranca (la primera vez; las siguientes, nada) el reloj de la plataforma que
+ * llama a bpvm_marca_tiempo_avanza cada ~5 ms (o a bpvm_marca_tiempo_tick en cada tick). Por familia: la Pico y la
+ * STM32, el gancho del tick de FreeRTOS (1 ms; ya está en marcha); las ESP, un esp_timer de 5 ms (su tick de FreeRTOS
+ * es de 10 ms); el PC, un hilo (en Windows, ~15 ms: su reloj no da menos). */
+void bpvm_platform_reloj_marca(void);
+/* Lo que llama ese reloj (el núcleo, src/bpvm_nativa.c): `avanza` sube la marca de la VM viva; `tick`, desde un tick de
+ * `ms` milisegundos, la sube cada 5. Valen desde una interrupción. */
+void bpvm_marca_tiempo_avanza(void);
+void bpvm_marca_tiempo_tick(uint32_t ms);
+
 /* Busy-wait sub-milisegundo. NO cede CPU al scheduler — gira en un
  * loop comprobando el reloj hasta que pasan `us` microsegundos. Útil
  * para timing crítico (setup/hold de chips, bit-bang fino) donde un

@@ -233,6 +233,31 @@ int64_t bpvm_platform_now_ms(void) {
     return (int64_t) ts.tv_sec * 1000 + ts.tv_nsec / 1000000;
 }
 
+/* V7 #592 (9-oct) — EL 2º TEMPORIZADOR del PC: un hilo que sube la marca cada 5 ms (en Windows el sleep dura ~15: su
+ * reloj no da menos). Nace con la primera VM y vive lo que el proceso, desligado. Sin él (no se pudo crear), una
+ * native cede igual por el contador de sus bucles sin llamadas y por el KILL, que también sube la marca. */
+static void* reloj_marca_hilo(void* arg) {
+    (void) arg;
+    for (;;) {
+        struct timespec ts = {0, 5L * 1000000L};
+        nanosleep(&ts, NULL);
+        bpvm_marca_tiempo_avanza();
+    }
+    return NULL;
+}
+static void reloj_marca_arranca(void) {
+    pthread_attr_t a;
+    pthread_t h;
+    pthread_attr_init(&a);
+    pthread_attr_setdetachstate(&a, PTHREAD_CREATE_DETACHED);
+    (void) pthread_create(&h, &a, reloj_marca_hilo, NULL);
+    pthread_attr_destroy(&a);
+}
+void bpvm_platform_reloj_marca(void) {
+    static pthread_once_t una = PTHREAD_ONCE_INIT;
+    (void) pthread_once(&una, reloj_marca_arranca);
+}
+
 int64_t bpvm_platform_now_us(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);

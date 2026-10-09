@@ -244,3 +244,44 @@ void bpvm_nativa_liberar_todas(bpvm_t* vm) {
     }
     vm->nativas = NULL;
 }
+
+/* ─── V7 #592 (9-oct) — LA MARCA DEL 2º TEMPORIZADOR ────────────────────────────────────────────────────────────────
+ * Idea de Eduardo (27-sep): «si se quiere afinar más, un 2º timer». Un contador en la memoria de la VM
+ * (BPVM_MARCA_TIEMPO_ADDR) que el reloj de la plataforma sube cada ~5 ms y el KILL también; las natives lo miran en sus
+ * bucles que llaman a algo y, si cambió, llaman a punto_control. Así una native cede a los ~5 ms aunque cada vuelta sea
+ * lenta (hasta hoy, cada 1024 vueltas: con vueltas de 1 ms, un segundo sin atender a nadie, y el KILL esperando).
+ *
+ * Una VM viva a la vez (la última que nació: en las placas, la única). `s_en_vuelo` cuenta los avances a medio hacer
+ * para que la BAJA los espere: en el PC la memoria de la VM se libera después, y el hilo del reloj no puede escribir en
+ * ella (en las placas el bloque de la VM no se mueve en toda la vida de la imagen). */
+static uint32_t* volatile s_marca    = NULL;
+static volatile int       s_en_vuelo = 0;
+
+void bpvm_marca_tiempo_alta(bpvm_t* vm) {
+    uint32_t* m = (uint32_t*) (void*) (vm->memory + BPVM_MARCA_TIEMPO_ADDR);
+    __atomic_store_n(m, 0u, __ATOMIC_RELEASE);
+    __atomic_store_n(&s_marca, m, __ATOMIC_SEQ_CST);
+    bpvm_platform_reloj_marca();
+}
+
+void bpvm_marca_tiempo_baja(bpvm_t* vm) {
+    uint32_t* m = (uint32_t*) (void*) (vm->memory + BPVM_MARCA_TIEMPO_ADDR);
+    if (__atomic_load_n(&s_marca, __ATOMIC_SEQ_CST) == m) __atomic_store_n(&s_marca, (uint32_t*) NULL, __ATOMIC_SEQ_CST);
+    while (__atomic_load_n(&s_en_vuelo, __ATOMIC_SEQ_CST) != 0) { /* un avance a medio hacer: son unas instrucciones */ }
+}
+
+void bpvm_marca_tiempo_avanza(void) {
+    __atomic_fetch_add(&s_en_vuelo, 1, __ATOMIC_SEQ_CST);
+    uint32_t* m = __atomic_load_n(&s_marca, __ATOMIC_SEQ_CST);
+    if (m != NULL) (void) __atomic_fetch_add(m, 1u, __ATOMIC_RELEASE);
+    __atomic_fetch_sub(&s_en_vuelo, 1, __ATOMIC_SEQ_CST);
+}
+
+void bpvm_marca_tiempo_tick(uint32_t ms) {
+    static uint32_t acum = 0;   /* sólo lo llama el tick: un único llamador, sin carrera */
+    acum += ms;
+    if (acum >= (uint32_t) BPVM_NATIVA_REBANADA_MS) {
+        acum = 0;
+        bpvm_marca_tiempo_avanza();
+    }
+}

@@ -121,6 +121,15 @@ typedef struct { uint64_t v; } bpref_t;
 #define BPVM_SENTINEL_EVENT_RETURN      0x6F
 #define BPVM_SENTINEL_EVENT_RETURN_ADDR 2u
 
+/* V7 #592 (9-oct) — LA MARCA DEL 2º TEMPORIZADOR (idea de Eduardo; «B»: en la región reservada, sin subir la ABI).
+ * Un contador de 32 bits en el orden de la CPU —no es un valor de BP: lo sube la plataforma y lo lee la native, la misma
+ * CPU—, alineado, que el reloj de la plataforma sube cada ~5 ms (bpvm_marca_tiempo_avanza) y el KILL también
+ * (bpvm_kill_marcar). Una native lo lee en cada vuelta de un bucle que llama a algo —por un puntero guardado al entrar,
+ * por `vm->memory`, el prefijo congelado— y si cambió, llama a punto_control: así cede a los ~5 ms aunque cada vuelta
+ * sea lenta. Lejos del 0 a propósito: un campo de un objeto null se lee en los primeros bytes (builtins.c, el array
+ * null que leía memory[4..]). ⚠️ CONTRATO con los .mdn ya generados, como el prefijo congelado: NO SE MUEVE. */
+#define BPVM_MARCA_TIEMPO_ADDR          0x80u
+
 /* H5.c — COLA DE EVENTOS. Aridad acotada (el usuario escribe la firma natural;
  * la entrada de cola es de tamaño fijo). `masks` la rellena el COMPILADOR:
  * bits 0-3 = el argumento es referencia (para el GC), bits 8-11 = ocupa 8
@@ -805,7 +814,13 @@ struct bpvm {
  * —en orden y sin caché de datos— cuesta lo mismo; en un micro con cachés (la P4), es lo que lo hace correcto. Se mira
  * una vez por cuanto: no está en el camino de cada paso. */
 static inline int  bpvm_kill_pedido(const bpvm_t* vm) { return __atomic_load_n(&vm->kill_requested, __ATOMIC_ACQUIRE); }
-static inline void bpvm_kill_marcar(bpvm_t* vm, int v) { __atomic_store_n(&vm->kill_requested, v, __ATOMIC_RELEASE); }
+/* V7 #592 — y un KILL sube la MARCA del 2º temporizador: una native en un bucle que llama a algo lo ve en la vuelta
+ * siguiente y llama a punto_control, que la para (sin esperar al reloj). */
+static inline void bpvm_kill_marcar(bpvm_t* vm, int v) {
+    __atomic_store_n(&vm->kill_requested, v, __ATOMIC_RELEASE);
+    if (v && vm->memory != NULL)
+        (void) __atomic_fetch_add((uint32_t*) (void*) (vm->memory + BPVM_MARCA_TIEMPO_ADDR), 1u, __ATOMIC_RELEASE);
+}
 
 /* V7/H3 (#491) — en builtins.c. */
 void bpvm_files_gc(bpvm_t* vm);          /* entre la marca y el barrido: cierra lo inalcanzable */

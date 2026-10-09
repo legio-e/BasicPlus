@@ -140,4 +140,12 @@ void bpvm_gc_cuerpo(bpvm_t* vm);
  * abandonando esos marcos) y devuelve su memoria. Dice la marca de agua de la pila de cada uno. */
 void bpvm_nativa_liberar_todas(bpvm_t* vm);
 
+/* V7 #592 (9-oct) — LA MARCA DEL 2º TEMPORIZADOR (vm->memory + BPVM_MARCA_TIEMPO_ADDR, bpvm_internal.h). La VM se da
+ * de ALTA al nacer (la pone a 0 y arranca el reloj de la plataforma, bpvm_platform_reloj_marca, la primera vez) y de
+ * BAJA al morir (y espera a un avance a medio hacer: en el PC, su memoria se libera). El reloj llama a `avanza` cada
+ * ~5 ms —o a `tick` con lo que dura su tick, que cuenta hasta 5—; desde una interrupción también. */
+void bpvm_marca_tiempo_alta(bpvm_t* vm);
+void bpvm_marca_tiempo_baja(bpvm_t* vm);
+/* (bpvm_marca_tiempo_avanza y bpvm_marca_tiempo_tick, en bpvm_platform.h: las llama el reloj de cada plataforma.) */
+
 #endif /* BPVM_NATIVA_H */

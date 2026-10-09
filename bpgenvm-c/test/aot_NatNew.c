@@ -50,12 +50,14 @@ static int32_t aot_NatNew_sumaArray(struct bpvm* vm, int32_t bp_n) {
                   *  globals/arrays/builtins. */
     int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
     (void) __bpvm_cuenta;
+    volatile const uint32_t* __bpvm_pm = (volatile const uint32_t*) (vm->memory + BPVM_MARCA_TIEMPO_ADDR);   /* #592: la marca del 2º temporizador */
+    uint32_t __bpvm_m = *__bpvm_pm;
     (void) bp_n;
     int32_t bp_v = ({ int32_t __arr = vm->aot_helpers->newarray_i32(vm, 4); vm->aot_helpers->array_store_i32(vm, (uint32_t) __arr, 0, 10); vm->aot_helpers->array_store_i32(vm, (uint32_t) __arr, 1, 20); vm->aot_helpers->array_store_i32(vm, (uint32_t) __arr, 2, 30); vm->aot_helpers->array_store_i32(vm, (uint32_t) __arr, 3, 40); __arr; });
     int32_t bp_t = 0;
     int32_t bp_i = 0;
     while ((bp_i < 4)) {
-        if (__builtin_expect(--__bpvm_cuenta == 0, 0)) { __bpvm_cuenta = 1024; vm->aot_helpers->punto_control(vm); }   /* P2b.1.d */
+        if (__builtin_expect(*__bpvm_pm != __bpvm_m, 0)) { __bpvm_m = *__bpvm_pm; vm->aot_helpers->punto_control(vm); }   /* #592: la marca */
         bp_t += vm->aot_helpers->array_load_i32(vm, bp_v, bp_i);
         bp_i += 1;
     }

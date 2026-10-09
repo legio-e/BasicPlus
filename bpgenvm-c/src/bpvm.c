@@ -517,6 +517,8 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     memory[BPVM_SENTINEL_NATIVE_RETURN_ADDR] = BPVM_SENTINEL_NATIVE_RETURN;
     memory[BPVM_SENTINEL_EVENT_RETURN_ADDR]  = BPVM_SENTINEL_EVENT_RETURN;
     bpvm_event_queue_init(vm);
+    /* V7 #592 — y la MARCA del 2º temporizador, a 0 y dada de alta (el reloj de la plataforma la sube cada ~5 ms). */
+    bpvm_marca_tiempo_alta(vm);
 
     /* Thread main: región fija MAIN_STACK_BYTES a partir de stack_base. V7/H12, etapa 2: su struct, con malloc (a la
      * cola entra al colgar el programa: threading.c); sin memoria para ella no hay VM. */
@@ -1865,6 +1867,9 @@ void bpvm_destroy(bpvm_t* vm) {
     /* V7/H5 P2b.3 — los ejecutores de natives, lo PRIMERO: un ejecutor parado a mitad de una native tiene marcos
      * que apuntan al programa; se le da la orden de terminar (salta a su fondo, abandonándolos) antes de tocar nada. */
     bpvm_nativa_liberar_todas(vm);
+    /* V7 #592 — la marca del 2º temporizador, de baja: en el PC quien creó la VM libera su memoria después, y el reloj
+     * no puede escribir en ella. */
+    bpvm_marca_tiempo_baja(vm);
     bpvm_files_fin_de_run(vm);      /* V7/H3 (#491): lo primero, con la memoria y la tabla de handles vivas */
     /* V7 #667 — lo que el programa encendió y nadie soltó (sus destructores, en la fase del final de #668, ya lo han
      * hecho; esto es la red): el PWM, los contadores, las tiras y las UART. Antes que los pines. */

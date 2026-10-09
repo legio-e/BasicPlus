@@ -52,7 +52,7 @@ extern uint32_t SystemCoreClock;
 #define configUSE_PREEMPTION                    1
 #define configUSE_TIME_SLICING                  1   /* A1: `vm` e `io` van a la MISMA prioridad y se turnan por tiempo */
 #define configUSE_IDLE_HOOK                     0
-#define configUSE_TICK_HOOK                     0
+#define configUSE_TICK_HOOK                     1   /* V7 #592: el 2º temporizador de las natives (platform_freertos.c) */
 #define configIDLE_SHOULD_YIELD                 1
 #define configMAX_PRIORITIES                    8
 #define configMAX_TASK_NAME_LEN                 16

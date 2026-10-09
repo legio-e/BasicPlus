@@ -43,7 +43,7 @@
 #else
 #define configUSE_IDLE_HOOK                     0
 #endif
-#define configUSE_TICK_HOOK                     0
+#define configUSE_TICK_HOOK                     1   /* V7 #592: el 2º temporizador de las natives (platform_freertos.c) */
 #define configUSE_DAEMON_TASK_STARTUP_HOOK      0
 #define configCPU_CLOCK_HZ                      150000000  /* RP2350 default */
 #define configTICK_RATE_HZ                      ((TickType_t)1000)

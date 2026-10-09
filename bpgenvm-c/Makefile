@@ -993,6 +993,16 @@ test-nat2runs: $(LIBOBJ)
 	@echo "PASS test-nat2runs"
 
 # V7/H5 (P2b.1.d, 26-sep) — el KILL de una native en un bucle sin fin (con tope de tiempo).
+test-aotpesada: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatPesada)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatPesada,build/aotpesada)
+	$(CC) $(CFLAGS) -Isrc test/test_aotpesada.c build/aotpesada/aot_NatPesada.c $(LIBOBJ) \
+	  -o build/test_aotpesada.exe $(LDFLAGS)
+	@echo "--- V7 #592 una native con vueltas LENTAS cede a tiempo por la marca del 2º temporizador (esperado: las dos KILLED bajo el tope, [status=OK]) ---"
+	@timeout 60 ./build/test_aotpesada.exe samples/NatPesada.mod 2>/dev/null || { echo "  ROJO: alguna pasada no salió KILLED bajo el tope (la native no cedió a tiempo)"; exit 1; }
+
 test-aotkill: $(LIBOBJ)
 	@mkdir -p build
 	$(call fixture,NatKill NatRecurKill)

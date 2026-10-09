@@ -2954,6 +2954,34 @@ cambia—. El temporizador sube un CONTADOR ahí cada 5 ms (y el KILL lo toca), 
 al empezar su turno —sin borrar nada, así vale con dos runs—; la comprobación de cada vuelta sustituye a la cuenta
 de hoy, y lo mismo a la entrada de las recursivas (`#580`) si sale igual de barato. Antes de cerrarla, medido en el
 bucle caliente (`sumaHasta`) y la prueba con vueltas pesadas. En el PC con Windows, ~15 ms (su reloj no da menos).
+**Medido en placa antes de programar (9-oct)** (`bpgenvm-c/build/m592`, el método de P2b.0: el C del AOT retocado a
+mano, fundido en el `.mod`, y el control byte a byte con el del AOT): la marca leída por un puntero guardado al
+entrar, contra el contador de hoy y contra nada. **El bucle sin llamadas** (`sumaHasta`, 20 M vueltas): en la Pico 2,
+804 ms sin nada, 1329 con el contador y 1875 con la marca —el doble que el contador: GCC, con dos registros más
+ocupados, saca `n` de la pila en cada vuelta—; en la P4, 334, 527 y 500. **El bucle que recorre un array** (dos
+helpers por vuelta, 2 M vueltas): en la Pico 2, 2419, 2564 y 2499 ms; en la P4, 1403, 1426 y 1417 —la marca, más
+barata que el contador en los dos—. **La regla** (Eduardo: *«OK»*): un bucle cuyo cuerpo LLAMA a algo (un helper, un
+builtin, una función BP, otra native) mira la marca en cada vuelta —más barato que hoy, y cede a los ~5 ms aunque
+cada vuelta sea lenta—; uno SIN llamadas sigue con el contador —sus vueltas son cortas por fuerza: 1024 son, como
+mucho, unos pocos ms—. Ningún caso más lento que hoy.
+**Hecho en el PC y en las imágenes (9-oct)** —sin cerrar: falta la placa—:
+- **La marca**, en `vm->memory[0x80..0x84)` (`BPVM_MARCA_TIEMPO_ADDR`, `bpvm_internal.h`), y no en `[4..8)`: un campo
+  de un objeto null se lee en los primeros bytes. Un contador de 32 bits en el orden de la CPU: la VM lo pone a 0 y lo
+  da de ALTA al nacer y de BAJA al morir (`bpvm_marca_tiempo_alta`/`_baja`, `bpvm_nativa.c`: la baja espera a un avance
+  a medio hacer —en el PC la memoria de la VM se libera—); el KILL lo sube (`bpvm_kill_marcar`).
+- **El reloj, por familia** (`bpvm_platform_reloj_marca`): la Pico y la STM32, el gancho del tick de FreeRTOS (1 ms;
+  `configUSE_TICK_HOOK` a 1; cuenta hasta 5); las ESP, un `esp_timer` de 5 ms (su tick es de 10); el PC, un hilo (en
+  Windows, ~15 ms).
+- **El emisor** (`AotCEmitter.emitCuerpoDeBucle`): emite el cuerpo del bucle primero y, por el C que sale, sabe si
+  llama a algo; la línea, la marca o el contador; y el prólogo declara la marca sólo si algún bucle suyo la mira (una
+  native sin esos bucles sale con el C de antes: `sumaHasta`, igual).
+- **La prueba**, `make test-aotpesada` (en `check-testc`): `NatPesada`, cada vuelta un `indexOf` de 256 KB, y el KILL
+  al vigésimo turno: parada a los 350 ms; **el sabotaje** (el contador también en los bucles que llaman), 5248 ms, rojo.
+  `test/aot_NatNew.c` regenerado (su bucle llama: mira la marca). El frontend, 281; las nueve imágenes compilan; la red
+  entera, verde (pruebas de C 99/99). Los documentos: el manual §8.3 (es y en; el inglés aún decía que una recursiva
+  sin bucles no se podía parar, de antes de `#580`), `AOT_LIMITES` §7, `HEAP_LAYOUT` y `V7_IDEAS`.
+- **Falta, en placa**: la ronda de natives, `NatPesada` con un KILL, y la medida con el AOT de verdad (la Pico 2 y la
+  P4).
 
 #### ✅ `#591` — un breakpoint en la ÚLTIMA línea de un módulo para también DENTRO de los helpers que sintetiza el compilador (`__strconcat`…): no tienen línea en el `.dbg` y heredan la última del mapa (abierta 27-sep, al hacer `#589`; preexistente; H8 · **CERRADA el 28-sep**, `d3a60e5c`)
 

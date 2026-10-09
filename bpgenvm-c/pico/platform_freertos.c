@@ -366,6 +366,13 @@ int64_t bpvm_platform_now_ms(void) {
 
 int64_t bpvm_platform_now_us(void) { return (int64_t) time_us_64(); }
 
+/* V7 #592 (9-oct) — EL 2º TEMPORIZADOR: el gancho del tick de FreeRTOS (configUSE_TICK_HOOK = 1, FreeRTOSConfig.h), que
+ * cuenta hasta 5 ms y sube la marca de las natives; ya está en marcha, así que arrancarlo es no hacer nada. (Con el
+ * reloj del CPU cambiado —Pico.setCpuFreqMHz— el tick corre a otro paso, como dice now_ms arriba: la marca sube algo
+ * antes o después; quien decide si ceder, punto_control, mira el reloj de verdad.) */
+void bpvm_platform_reloj_marca(void) { }
+void vApplicationTickHook(void) { bpvm_marca_tiempo_tick((uint32_t) portTICK_PERIOD_MS); }
+
 void bpvm_platform_busy_wait_us(int us) {
     if (us <= 0) return;
     /* busy_wait_us() del Pico SDK lee el timer hardware del RP2350 y

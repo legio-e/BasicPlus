@@ -991,6 +991,8 @@ public final class AotCEmitter {
     // ==================== Función AOT ====================
 
     private void emitFunction(Ast.FuncDef f) {
+        w.flush();
+        final int inicioFuncion = out.getBuffer().length();   /* V7 #592: para rellenar el hueco de la marca */
         currentFuncName = f.name.name;   /* #211 — para mensajes de aviso */
         retActual = tipoDeclarado(f.returnType);
         String fname = "aot_" + moduleName + "_" + cId(f.name.name);
@@ -1009,6 +1011,10 @@ public final class AotCEmitter {
          * frente a +7 de mirar un indicador en memoria en cada una. */
         w.println("    int32_t " + CUENTA + " = " + CUENTA_VUELTAS + ";   /* P2b.1.d: la línea del bucle */");
         w.println("    (void) " + CUENTA + ";");
+        /* V7 #592 — el sitio de la MARCA del 2º temporizador: al acabar la función se rellena si algún bucle suyo la
+         * mira (los que llaman a algo: emitCuerpoDeBucle) y si no, se quita —una native sin esos bucles no paga la
+         * lectura al entrar, y su C sale como antes—. */
+        w.println(MARCA_HUECO);
 
         /* #172 — Si el módulo tiene globals declarados, exponemos `mem`
          * y `cs` al cuerpo de la función. `cs` se resuelve UNA VEZ por
@@ -1050,6 +1056,22 @@ public final class AotCEmitter {
         }
         w.println("}");
         w.println();
+        rellenaHuecoDeLaMarca(inicioFuncion);
+    }
+
+    /** V7 #592 — el hueco del prólogo: las dos líneas de la marca si algún bucle de la función la mira; si no, nada. */
+    private void rellenaHuecoDeLaMarca(int inicio) {
+        w.flush();
+        StringBuffer b = out.getBuffer();
+        String sep = System.lineSeparator();
+        String hueco = MARCA_HUECO + sep;
+        int h = b.indexOf(hueco, inicio);
+        if (h < 0) return;
+        boolean mira = b.indexOf("*" + MARCA_P + " != ", h) >= 0;
+        b.replace(h, h + hueco.length(), !mira ? "" :
+            "    volatile const uint32_t* " + MARCA_P + " = (volatile const uint32_t*) (vm->memory + BPVM_MARCA_TIEMPO_ADDR);"
+            + "   /* #592: la marca del 2º temporizador */" + sep
+            + "    uint32_t " + MARCA_V + " = *" + MARCA_P + ";" + sep);
     }
 
     // ============ V5/H4: puente a un pack nativo ============
@@ -1530,8 +1552,7 @@ public final class AotCEmitter {
             emitExpr(wl.condition);
             w.println(") {");
             indentLevel++;
-            emitLineaDelBucle();
-            for (Ast.IStmt st : wl.body) emitStmt(st);
+            emitCuerpoDeBucle(wl.body);
             indentLevel--;
             indent();
             w.println("}");
@@ -1595,8 +1616,7 @@ public final class AotCEmitter {
             indent();
             w.println("do {");
             indentLevel++;
-            emitLineaDelBucle();
-            for (Ast.IStmt st : dl.body) emitStmt(st);
+            emitCuerpoDeBucle(dl.body);
             indentLevel--;
             indent();
             if (dl.condition == null) {
@@ -1949,10 +1969,40 @@ public final class AotCEmitter {
     private static final String CUENTA = "__bpvm_cuenta";
     private static final int CUENTA_VUELTAS = 1024;
 
-    private void emitLineaDelBucle() {
+    /* V7 #592 (9-oct) — LA MARCA DEL 2º TEMPORIZADOR (idea de Eduardo): un contador en vm->memory que la plataforma sube
+     * cada ~5 ms y el KILL también (BPVM_MARCA_TIEMPO_ADDR, bpvm_internal.h). La regla, medida en placa antes de
+     * escribirla (Eduardo: «OK»): un bucle cuyo cuerpo LLAMA a algo mira la marca en cada vuelta —más barato que el
+     * contador, y cede a los ~5 ms aunque cada vuelta sea lenta—; uno SIN llamadas sigue con el contador —sus vueltas
+     * son cortas por fuerza, y ahí el contador es más barato: en la Pico 2, el bucle más apretado, 1329 ms con el
+     * contador y 1875 con la marca—. */
+    private static final String MARCA_P = "__bpvm_pm";
+    private static final String MARCA_V = "__bpvm_m";
+    private static final String MARCA_HUECO = "/*@marca592@*/";
+
+    private void emitLineaDelBucle(boolean llama) {
         indent();
-        w.println("if (__builtin_expect(--" + CUENTA + " == 0, 0)) { " + CUENTA + " = " + CUENTA_VUELTAS
-                  + "; vm->aot_helpers->punto_control(vm); }   /* P2b.1.d */");
+        if (llama) {
+            w.println("if (__builtin_expect(*" + MARCA_P + " != " + MARCA_V + ", 0)) { " + MARCA_V + " = *" + MARCA_P
+                      + "; vm->aot_helpers->punto_control(vm); }   /* #592: la marca */");
+        } else {
+            w.println("if (__builtin_expect(--" + CUENTA + " == 0, 0)) { " + CUENTA + " = " + CUENTA_VUELTAS
+                      + "; vm->aot_helpers->punto_control(vm); }   /* P2b.1.d */");
+        }
+    }
+
+    /** V7 #592 — el cuerpo de un bucle con su línea DELANTE: se emite primero el cuerpo y, por el C que sale, se sabe si
+     *  llama a algo (un helper de la VM —los builtins y las funciones BP van por ellos— u otra native del módulo, o un
+     *  bucle de dentro); y la línea, la que toca. */
+    private void emitCuerpoDeBucle(List<Ast.IStmt> body) {
+        w.flush();
+        StringBuffer b = out.getBuffer();
+        int desde = b.length();
+        for (Ast.IStmt st : body) emitStmt(st);
+        w.flush();
+        String cuerpo = b.substring(desde);
+        b.setLength(desde);
+        emitLineaDelBucle(cuerpo.contains("aot_helpers->") || cuerpo.contains("aot_" + moduleName + "_"));
+        w.print(cuerpo);
     }
 
     private void emitForStmt(Ast.ForStmt fs) {
@@ -1999,8 +2049,7 @@ public final class AotCEmitter {
         w.println("for (; (" + step + " > 0) ? (" + it + " <= " + end + ") : ("
                   + it + " >= " + end + "); " + it + " += " + step + ") {");
         indentLevel++;
-        emitLineaDelBucle();
-        for (Ast.IStmt st : fs.body) emitStmt(st);
+        emitCuerpoDeBucle(fs.body);
         indentLevel--;
         indent(); w.println("}");
 

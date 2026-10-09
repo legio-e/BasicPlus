@@ -8705,6 +8705,13 @@ interpretada). Lo que se hace:
 
 ### `#592` — el 2º temporizador (B: la marca, en la memoria reservada; la ABI no cambia)
 
+- **Hecho (9-oct)**, con dos cambios sobre lo de abajo, medidos o razonados: la marca va en `vm->memory[0x80..0x84)`
+  y no en `[4..8)` —un campo de un objeto null se lee en los primeros bytes (el array null de `builtins.c` que leía
+  `memory[4..]`)—; y LA REGLA, medida en placa (`build/m592`) y aceptada por Eduardo (*«OK»*): sólo los bucles que
+  LLAMAN a algo miran la marca —en ellos es más barata que el contador: la Pico 2, 2499 frente a 2564 ms; la P4, 1417
+  frente a 1426—; los que no llaman a nada siguen con el contador —ahí la marca costaría +41 % en la Pico 2 (1875
+  frente a 1329 ms en el bucle más apretado), y sus vueltas son cortas por fuerza—. `test-aotpesada`: una native con
+  vueltas lentas, parada a los 350 ms (con el contador, 5,2 s).
 - **La marca**: 4 bytes en `vm->memory[4..8)`, dentro de la región reservada `[0, BPVM_INITIAL_FREE_ADDR)` —el 0, el
   1 y el 2 son los centinelas de fin de hilo, de vuelta del puente y de vuelta de un evento—: un CONTADOR de 32 bits,
   alineado y en el orden de la CPU (lo escribe la plataforma y lo lee la native, la misma CPU: no es un valor de BP).

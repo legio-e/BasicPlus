@@ -979,9 +979,11 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       que bloquea —<code>sleep</code>, el <code>lock()</code> de un <code>Mutex</code>
       ocupado, una función BP que espera— <strong>se suspende</strong> y los demás
       hilos siguen; en un cálculo
-      largo <strong>cede el turno</strong> cada 5 ms (lo mira en sus bucles, cada
-      1024 vueltas), y el <strong>Stop</strong> del IDE la para aunque esté en un
-      bucle infinito. Una <strong>recursión cuenta como un bucle</strong>: una native
+      largo <strong>cede el turno</strong> cada 5 ms —lo mira en sus bucles: en cada vuelta
+      de un bucle que llama a algo, por una marca que el reloj de la placa sube cada 5 ms, así
+      que cede a tiempo aunque cada vuelta sea lenta; y cada 1024 vueltas en uno sin llamadas,
+      cuyas vueltas son cortas por fuerza—, y el <strong>Stop</strong> del IDE la para aunque
+      esté en un bucle infinito. Una <strong>recursión cuenta como un bucle</strong>: una native
       que se llama a sí misma —o a otra que la vuelve a llamar— lo mira al entrar,
       cada 1024 llamadas, así que también cede y se para aunque no tenga bucles.
       Por dentro corre en un hilo propio de la plataforma y se pasa

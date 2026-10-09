@@ -271,6 +271,18 @@ int64_t bpvm_platform_now_ms(void) {
 
 int64_t bpvm_platform_now_us(void) { return (int64_t) esp_timer_get_time(); }
 
+/* V7 #592 (9-oct) — EL 2º TEMPORIZADOR de las ESP: un esp_timer periódico de 5 ms que sube la marca de las natives (el
+ * tick de FreeRTOS de las ESP es de 10 ms —CONFIG_FREERTOS_HZ=100—: no da 5). Corre en la tarea del esp_timer, por
+ * encima de las de la VM; nace con la primera VM. Si no se pudiera crear, una native cede igual por el contador de sus
+ * bucles sin llamadas y por el KILL, que también sube la marca. */
+static void reloj_marca_cb(void* arg) { (void) arg; bpvm_marca_tiempo_avanza(); }
+void bpvm_platform_reloj_marca(void) {
+    static esp_timer_handle_t s_reloj = NULL;
+    if (s_reloj != NULL) return;
+    const esp_timer_create_args_t a = { .callback = reloj_marca_cb, .arg = NULL, .name = "bpvm_marca" };
+    if (esp_timer_create(&a, &s_reloj) == ESP_OK) (void) esp_timer_start_periodic(s_reloj, 5000);
+}
+
 void bpvm_platform_busy_wait_us(int us) {
     if (us <= 0) return;
     /* esp_rom_delay_us gira sin ceder al scheduler — para timings
