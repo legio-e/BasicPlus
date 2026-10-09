@@ -8680,3 +8680,69 @@ el micro simulado y en placa.
 Ver §«H9 — `#623`» (arriba): lo que dijo Eduardo el 8-oct, el plan y lo hecho. En dos líneas: el constructor deja la
 stdlib fuera de todo pack librería (y lo dice), quien graba avisa de lo que la placa no tiene, y el pack de la GUI es
 sólo el motor —la sonda Gui2, un programa de prueba—; ~114 KB menos en la zona de una placa con la GUI.
+
+## Las natives: `#583`, `#592` y `#578` (9-oct; decididas por Eduardo, en V7) — el diseño, antes de programar
+
+Eduardo, al repasarlas una a una: `#583` *«No depuramos las natives… 1b en V7»*, `#592` *«B y entra en V7»*, `#578`
+*«B, y sí, entra en V7»*. (Y a V8, `#582` —la línea de un error— y `#584` —el `.mod` multifamilia—.) El orden de trabajo:
+`#583` (unas horas), `#592` (un día) y `#578` (uno o dos, con una puerta en placa al principio).
+
+### `#583` — el aviso del IDE (1b)
+
+No se depura dentro de una native: *«Si quieres ejecutar paso a paso le quitas native, para verificar el algoritmo
+vale. La haces native cuando estás seguro que funciona»*. Un breakpoint dentro sigue sin parar en la placa (la placa
+salta al código máquina en el `CALL`, sin pasar por el bytecode de la función); en el PC sí para (allí corre
+interpretada). Lo que se hace:
+- **¿Está la línea dentro de una native?** Por el TEXTO, no por el árbol —el editor tiene el fuente a medio escribir—:
+  la declaración de `function` más cercana por encima (con `native` entre sus modificadores, o sin él) y su `end
+  <nombre>` por debajo (el nombre entero: `end Mi.crear`, `end ~Recurso`). En el compilador (`NativaEnLinea`), con su
+  prueba JUnit, y el IDE lo llama.
+- **El IDE lo dice al poner el breakpoint** (`FrmMain.onToggleBreakpoint`, F9): en la consola, «dentro de la native
+  'suma': en la placa no para dentro (corre como código máquina; en el PC, sí). Para seguirla paso a paso, quítale
+  `native`».
+- **El manual** (§8.3, «Depurar», en las dos lenguas) y `AOT_LIMITES.md`. De paso, §8.3 aún daba las tuplas por no
+  soportadas dentro de una native, y desde `#577` (7-oct) lo están (salvo con campos `float`, `long` o `double`).
+
+### `#592` — el 2º temporizador (B: la marca, en la memoria reservada; la ABI no cambia)
+
+- **La marca**: 4 bytes en `vm->memory[4..8)`, dentro de la región reservada `[0, BPVM_INITIAL_FREE_ADDR)` —el 0, el
+  1 y el 2 son los centinelas de fin de hilo, de vuelta del puente y de vuelta de un evento—: un CONTADOR de 32 bits,
+  alineado y en el orden de la CPU (lo escribe la plataforma y lo lee la native, la misma CPU: no es un valor de BP).
+  La native lo alcanza por `vm->memory`, el prefijo congelado de `bpvm_t`: ni campo nuevo ni helper.
+- **Quién la sube, cada 5 ms**: una función común (`src/`, una sola) a la que llama el reloj de cada plataforma, y que
+  sube el contador de la VM registrada (la VM se registra al crearse y se borra al destruirse; en las placas el
+  bloque de la VM no se mueve en toda la vida de la imagen). El reloj, por familia: en las **ESP**, un `esp_timer`
+  periódico —el tick de FreeRTOS de las ESP es de 10 ms (`CONFIG_FREERTOS_HZ=100`): no da 5—; en la **Pico**, un
+  temporizador de repetición del SDK (o el gancho del tick, de 1 ms); en la **STM32**, el gancho del tick de FreeRTOS
+  (1 ms; `configUSE_TICK_HOOK` a 1, cada 5); en el **PC**, un hilo (en Windows, ~15 ms: su reloj no da menos).
+- **El KILL también la sube**: la native lo ve en la vuelta siguiente y para (hoy, hasta 1024 vueltas después).
+- **La native**: al entrar, `volatile const uint32_t* __bpvm_pm = (…)(vm->memory + 4); uint32_t __bpvm_m = *__bpvm_pm;`
+  (el bloque no se mueve mientras corre: `Heap.compact` no se puede llamar desde una native, `#595`); y en cada línea
+  del bucle, en vez de la cuenta de 1024, `if (__builtin_expect(*__bpvm_pm != __bpvm_m, 0)) { __bpvm_m = *__bpvm_pm;
+  punto_control(vm); }`. `punto_control` sigue decidiendo (cede si lleva 5 ms; para si hay un KILL). La entrada de las
+  RECURSIVAS (`#580`) se queda con su contador mientras la marca no salga igual de barata (el 3-oct, en la C3: +11
+  ciclos la marca, +7,6 el contador).
+- **Compatibilidad**: un `.mdn` de antes (la cuenta) en una VM nueva funciona; uno nuevo en una VM de antes no cedería
+  por tiempo (la marca no se mueve) —sólo pasa con las imágenes de V7 a medias del laboratorio: todas se regraban—.
+- **Las pruebas**: en el PC, una native cuyas vueltas son pesadas (un builtin lento en cada una): cede y para por KILL
+  en ~10 ms (hoy, ~1 s); y en placa, lo que cuesta en el bucle más apretado (`sumaHasta`, en la Pico 2 y la C3), y la
+  ronda de natives.
+
+### `#578` — `try`/`catch` dentro de una native (B: tres builtins por `call_builtin`; la ABI de helpers no cambia)
+
+El orden, con la puerta delante:
+1. **La VM-C**: una pila de ATERRIZAJES por hilo —el «límite» de siempre (`jmp_buf` de libc) y los de las natives (el
+   búfer de `__builtin_setjmp` de la native)—; los tres builtins (`EH_PUSH(búfer)`, `EH_POP()`, `EH_EXC()`); y los
+   caminos de un fallo dentro de una native (`throw_runtime`, `throw_str`, `throw_ref`, lo que lanza un builtin por
+   `call_builtin`, lo que lanza una función BP por el puente) aterrizan en el más interno, con la excepción en el hilo.
+   También en el ejecutor de P2b (su pila es la de la native).
+2. **En el PC**, con una native escrita a mano (el camino AOT del PC compila con el mismo GCC a los dos lados).
+3. **LA PUERTA, en placa**: una ARM y una RISC-V. El salto lo da la VM (el GCC de su firmware) al marco del `.mdn` (el
+   GCC del AOT): el búfer de `__builtin_setjmp` tiene que casar entre los dos. Con una native escrita a mano y fundida
+   en el `.mod` (el método de P2b.0) y una imagen con los builtins nuevos —grabarla, con el OK de Eduardo—. Si no
+   aterriza bien, se cancela: un `try` dentro de una native sigue siendo un error de compilación, con el motivo real
+   (el de hoy dice el falso: «#213: .mdn no puede usar setjmp»).
+4. **El emisor** (`AotCEmitter`): el `try` (`__builtin_setjmp` + `EH_PUSH`/`EH_POP`), el `catch` por clase (y relanzar
+   lo que no es suyo), el `finally`, y un `return` o un `break` dentro del `try` (sacar su aterrizaje antes de salir).
+5. **Las pruebas**: `test-aottry` (la native contra su interpretada, con GC en cada alocación) en `check-testc`, un
+   sample en la paridad (`NatTry`) y la ronda de natives en placa.

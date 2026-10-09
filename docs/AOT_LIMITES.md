@@ -223,8 +223,18 @@ construye (`return (a, b)`) por funciones ocultas de su módulo que sintetiza el
 (integer y estrechos, boolean, string, referencias); con `float`, `long` o `double`, error al compilar. Prueba:
 `make test-aottuplas`.
 
-Los cabos del AOT que quedan, cada uno en su ficha: `try`/`catch` dentro (`#578`),
-la línea de un error dentro de una native (`#582`), el depurador (`#583`) y medir `double` (`#585`).
+### 8. Depurar: no dentro de una native *(V7, `#583`)*
+
+Un breakpoint dentro de una native no para en la placa: el `CALL` salta al código máquina sin pasar por el bytecode
+de la función. En el PC sí para (allí corre interpretada). **Decidido por Eduardo (9-oct)**: *«No depuramos las
+natives. Si quieres ejecutar paso a paso le quitas native, para verificar el algoritmo vale. La haces native cuando
+estás seguro que funciona. ¿Qué ocurre si la compilación de natives tiene un bug? Ese es nuestro trabajo,
+asegurarnos que el compilador funciona correctamente. Se puede detectar con test de caja negra»* —las `test-aot*`,
+cada native contra su interpretada, y la tanda, cada placa contra el PC—. El IDE lo dice al poner el breakpoint
+(`NativaEnLinea`, en el compilador: por el texto, la `function` más cercana por encima y su `end`).
+
+Los cabos del AOT que quedan, cada uno en su ficha: `try`/`catch` dentro (`#578`, en V7) y la línea de un error
+dentro de una native (`#582`, en V8: la placa dirá dónde y el PC lo traducirá).
 
 ## Dónde se hace cumplir
 

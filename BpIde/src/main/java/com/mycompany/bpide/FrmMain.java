@@ -1817,7 +1817,18 @@ public class FrmMain extends javax.swing.JFrame
             return;
         }
         int line = caretLine(editorArea);
-        debug.toggleBreakpoint(currentFile.getFileName().toString(), line);
+        boolean puesto = debug.toggleBreakpoint(currentFile.getFileName().toString(), line);
+        /* V7 #583 (9-oct) — un breakpoint DENTRO de una native no para en la placa: el CALL salta al código máquina
+         * sin pasar por el bytecode de la función (en el PC sí para: allí corre interpretada). Se dice al ponerlo.
+         * Eduardo: «No depuramos las natives. Si quieres ejecutar paso a paso le quitas native». */
+        if (puesto) {
+            String nativa = basicplus.frontend.NativaEnLinea.nativaQueContiene(editorArea.getText(), line);
+            if (nativa != null) {
+                appendConsola("== Breakpoint en la línea " + line + ", dentro de la native '" + nativa
+                        + "': en la placa NO para dentro (corre como código máquina; en el PC, sí)."
+                        + " Para seguirla paso a paso, quítale `native` ==\n");
+            }
+        }
     }
 
     /** Devuelve la línea 1-based del caret en el editor. */

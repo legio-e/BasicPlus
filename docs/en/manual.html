@@ -926,7 +926,8 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       <code>throw RuntimeError("…")</code> inside the native propagates to the
       BP <code>try/catch</code> that wraps the call, with the interpreter's message
       (the exact line inside the native, not yet). What still does NOT fit —
-      <code>try/catch</code> inside the native, tuples, <code>instanceof</code>,
+      <code>try/catch</code> inside the native, tuples with <code>float</code>, <code>long</code>
+      or <code>double</code> fields (the others do fit, since V7), <code>instanceof</code>,
       events, <code>parallel</code>, <code>for … in</code>,
       <strong>reading or writing fields</strong>
       (own or inherited: use a getter), <strong>calling static methods or
@@ -953,8 +954,13 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       firmware and speeds up much less than integer code. If you want speed on the
       micro, use <code>float</code>.</li>
   <li><strong>Debugging</strong>: on the PC a native runs interpreted and is
-      debugged like any other function; on the board, the debugger does not stop
-      inside it.</li>
+      debugged like any other function; on the board, the debugger <strong>does not stop
+      inside it</strong> (it runs as machine code), and the IDE says so when you set a
+      breakpoint inside one. To step through it on the board, <strong>remove
+      <code>native</code></strong>: that is how you verify the algorithm; put it back once it
+      works. What you debug is the algorithm; that the translation to C gives the same as the
+      interpreter is the compiler's job, and its tests watch it (each native against its
+      interpreted version, and each board against the PC).</li>
   <li><strong>Calling normal BP functions from a native</strong> is possible
       (the bridge exists), but it crosses back into the interpreter: the speed
       gained is lost on every crossing. The compiler detects this and emits a
@@ -1964,9 +1970,9 @@ B1 (<a href="#conc-gc">§14.4</a>).</p>
 <ul>
   <li><code>try/catch</code> INSIDE a <code>native function</code>
       (throwing from the native and catching OUTSIDE does work): the native
-      code does not embed setjmp; deferred, with the design noted. Nor tuples,
-      <code>instanceof</code> or events inside a native (compile error,
-      <a href="#funciones-native">§8.3</a>).</li>
+      code does not embed setjmp; deferred, with the design noted. Nor <code>instanceof</code>,
+      events or tuples with <code>float</code>, <code>long</code> or <code>double</code> fields
+      inside a native (compile error, <a href="#funciones-native">§8.3</a>).</li>
   <li>Fixed-size array <code>type[N]</code> as a class field and inside a
       <code>native function</code> (compile error, with the alternative:
       <code>type[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
