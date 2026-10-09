@@ -99,7 +99,8 @@ el PC sin placa, como en el host.
 > manejador por DEBAJO de la native: el resto del programa corría dos veces; cerrada el mismo día, en placa—, y `#673`
 > —un `break` o un `continue` que sale de un `try` no cerraba su manejador ni corría su `finally`, en las dos VMs; hecha—, y
 > `#674` —un `return` dentro de un `finally` revienta el compilador (`StackOverflowError`); decidido y hecho el mismo
-> día: prohibido—)
+> día: prohibido—; y en el lote de la tarde, `#675` —la Metro, con la VM en la PSRAM, se colgaba en el primer RUN:
+> la marca de `#592` se sumaba con un acceso exclusivo que allí no se cumple nunca—)
 > ~~`#581`~~ (cerrada el 7-oct: con `PinesSistema` en la C6, que destapó el pad VDD_SPI) `#582` `#583` `#584` ~~`#585`~~ (cerrada el 3-oct, `ff1135cc`) ~~`#586`~~ (cerrada el 28-sep, `95de38bc`), y las que salen del análisis de `#554` (27-sep): ~~`#587`~~ (H7; cerrada el 27-sep, `ec5b15c7`), ~~`#588`~~ (SUELTA; cerrada el 27-sep, `455ca895`) y ~~`#589`~~ (H8; cerrada el 27-sep, `b777f25f`), ~~`#544`~~
 > (H4; cerrada el 25-sep: no se reproduce) y ~~`#554`~~ (H7; cerrada el 27-sep, `e5761dd1`) —y `#490`, en V8—. Y del 27-sep, al hacer `#589`: ~~`#590`~~ (SUELTA; cerrada el 27-sep, `dd2e06e5`: el valor inicial de las globales, el modelo de Eduardo) y ~~`#591`~~ (H8; cerrada el 28-sep, `d3a60e5c`), y al hacer `#531`: ~~`#592`~~ (SUELTA: el 2º temporizador de las natives de la VM-C; cerrada el 9-oct, `2e65457b`), y al hacer `#494`: ~~`#593`~~ (H7: el punto ciego del guardián del heap; cerrada el 29-sep, `41c27547`: la reserva en un método único); y del 28-sep, ~~`#594`~~ (H7: el módulo `Heap`, cerrada el mismo día, `ac0f3d71`), ~~`#595`~~ (H7: `Heap.compact()`, cerrada el mismo día, `6b265162`), ~~`#596`~~ (H7: con `--smp`, una excepción sin atrapar acababa en OK; cerrada el mismo día, `cdedb1d1`), ~~`#597`~~ (H7: `Net.recv` dejaba un bloque que mentía su tamaño; cerrada el mismo día, `6e362e2e`), ~~`#598`~~ (H7: el GC sin memoria para su mapa lo barría todo; ídem), ~~`#599`~~ (H7: miVM con dos workers se quedaba colgada en el GC; vista al medir el corpus con SMP; cerrada el mismo día, `c539c27c`, con el corpus con dos workers en la red) , ~~`#600`~~ (H7: con dos workers, la línea de un hilo se partía con la de otro; cerrada el mismo día, `cc073e52`: un `print` sale entero) y ~~`#601`~~ (H8: la puerta de «sin FS» de la ESP32 no paraba `FORMAT` y compañía; al mapear H8; cerrada el mismo día, `1a75a498`), ~~`#602`~~ (H8: el bloque de RAM de los motores en el `INFO`; cerrada el 1-oct, `a6f7ff7f`), y del mapa de H7 (29-sep) ~~`#603`~~ (con `--smp`, soltar un objeto con dueño corrompía el heap de la VM-C; cerrada el mismo día, `a907435d`), ~~`#604`~~ (la VM-C, 32 hilos en toda la vida del programa) y ~~`#605`~~ (el muro de la pila; cerradas el mismo día, `98c640e9`) y ~~`#606`~~ (dos latentes del XIP; cerrada el mismo día, `a907435d`); y al probar `#606`, ~~`#607`~~ (un manejador de la GUI no podía ceder; cerrada el 30-sep, `85de188f`: el setter de Forms, con el opcode `INVOKE_SLOT`; y el hilo que muere sin atrapar lo dice en la salida), y al probar `#605`, ~~`#608`~~ (una excepción sin atrapar en un hilo acaba ese hilo y el programa sale con error, «la A» de Eduardo; cerrada el mismo día, `41c27547`), y ~~`#609`~~ (`test-listen` se corta a veces con un `TimeoutError`; H8/H9; cerrada el 2-oct, `1dab3a66`), y de la prueba de estrés del heap (29-sep, noche): ~~`#610`~~ (VM-C: la tabla de handles crecía moviéndose con otros workers leyéndola; cerrada el mismo día, `b4bb28fb`), ~~`#611`~~ (miVM: `split` y `listDir` perdían los trozos si la reserva colectaba; cerrada el mismo día, `c0015787`), ~~`#612`~~ (miVM: un error de Java en un worker acababa el RUN sin decir nada; cerrada el mismo día, `cf476205`); y del 30-sep, ~~`#613`~~ (miVM: un hilo que cede con `sleep(0)` podía acabar en dos workers a la vez —B1 por otro camino—; cerrada el mismo día, `d6d72384`), y al grabar la C5 tras medir los márgenes, `#614` (`GuiFlushBench`: cambiar una etiqueta cuesta más que hace una semana —la C5, de 1 a 5,8 ms; la DK2, de 1,0 a 1,8—; SUELTA); y del 1-oct, al vaciar H7, `#615` (la Pico sobre el backend común de FreeRTOS: aparcada sin fecha, Eduardo; SUELTA), y al hablar de los runs, ~~`#616`~~ (H12: el planificador de varios runs de la VM-C no repartía en rueda; cerrada el mismo día, `c671d3a2`), y al probar el paso 4 de `#495` con el cliente del IDE, ~~`#617`~~ (H8: el servidor del wire de la VM-Java no tenía la subida por trozos y atendía a un cliente por proceso; cerrada el mismo día, `b33794df`), y al grabar la C5 con el paso 4, ~~`#618`~~ (H8: el cliente del IDE perdía bytes leyendo de uno en uno de un puerto rápido; cerrada el mismo día, `34167432`). Decisiones de Eduardo pendientes: ~~`#590`~~ (decidida el 27-sep: el modelo de las globales), ~~`#542`~~ (decidida el 25-sep: un import sin interfaz es un error de carga), ~~`#579`~~ (decidida el 3-oct: cerrada con la evidencia), ~~`#582`~~/~~`#583`~~ (la línea y el debugger; decididas el 9-oct: `#582`, a V8; `#583`, las natives no se depuran
 > —cerrada—), ~~`#584`~~ (decidida el 3-oct: podar sólo ahorra) y,
@@ -1851,6 +1852,26 @@ en la carpeta de los errores (`scripts/h13-errores.sh`: 49 de 49): los tres erro
 bucle con su `break` dentro del `finally` y un `throw`). La stdlib, igual byte a byte; el manual (§11, en las dos
 lenguas) y la gramática lo dicen. **CERRADA.**
 
+#### ✅ `#675` — la Metro se cuelga en el primer RUN con la imagen de `#592`: la marca del 2º temporizador vive en la memoria de la VM, que en la Metro está en la PSRAM, y se sumaba con un `fetch_add` (LDREX/STREX) que allí no se cumple nunca: la interrupción del reloj giraba para siempre (abierta el 9-oct, en el lote de la tarde; SUELTA; de `#592`, de esta mañana · **CERRADA el mismo día**, el commit de `#675`, vista en la Metro)
+
+**Visto el 9-oct (tarde)**, en la ronda de V7 de las placas que faltaban: la C5 y la C6, verdes; la Metro, COLGADA en
+su primera prueba (`MathRango`), sin EXITED ni USB —el arnés se quedó bloqueado en su puerto y hubo que desenchufarla—.
+La Pico 2, con la MISMA imagen, había pasado la ronda entera por la mañana. **La causa**: la marca de `#592`
+(`vm->memory + 0x80`) la sube cada 5 ms el gancho del tick, DENTRO de la interrupción, con `__atomic_fetch_add`: en el
+Cortex-M33, un bucle LDREX/STLEX (visto en el ensamblador de la imagen). En la Metro la memoria de la VM está en la
+PSRAM («vm: heap en PSRAM 6 MB @ 0x11200000», su log), y allí el acceso exclusivo no se cumple: el STLEX falla
+siempre y el bucle no acaba —el reloj se para en el primer RUN, que es cuando la VM da de alta la marca—. La Pico 2 la
+tiene en la SRAM. (En el RISC-V del RP2350 está escrito que las atómicas sólo valen en la SRAM; en el M33 no lo encontré
+escrito, y la placa lo dijo.) El `KILL` (`bpvm_kill_marcar`) sumaba igual. Las demás con PSRAM (la P4 y la S3) pasaron.
+
+**Hecho (9-oct, noche)**: las dos sumas, una lectura y una escritura SIN acceso exclusivo (en la imagen: `ldr`, `adds`,
+`stl`); si coinciden el reloj y un KILL se pierde una suma, y da igual —la native sólo mira que la marca CAMBIE—.
+`s_en_vuelo` y `s_marca`, en la SRAM, siguen atómicos. En el PC, `test-aotpesada`, `test-aotkill`, `test-kill` y
+`test-aottryvm`, verdes. **En placa** (OK de Eduardo): la Metro con la imagen arreglada ejecuta `MathRango` (EXITED OK,
+35 ms), y la ronda de V7 entera, verde (`tanda_v7_9oct_noche`: 40 idénticas, las tres del KILL PARADAS a tiempo —el
+KILL también sube la marca—, `NatTry` y `NatPuente` con sus natives en nativo). La red de C, 102/102. **CERRADA.** (La
+Pico 2 lleva la imagen de la RP2350 de antes del arreglo: no le hace falta —sin PSRAM—; la tendrá con el próximo lote.)
+
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
 **Visto el 2-oct, leyendo**: el botón Stop del IDE, en depuración, manda `KILL` (`BpvmClient.java:660-664`). En la Pico
@@ -3455,8 +3476,10 @@ RV32IMC). `AotCoberturaTest`: 30 de 30. `NatTry` y `NatPuente`, en la ronda de V
 la ronda en placa, con la imagen del próximo lote (la de las cuatro operaciones).
 **En placa (9-oct, OK de Eduardo al lote)**: la Pico 2, la DK2, la P4 y la S3 con la imagen nueva; la ronda de V7, verde
 en las cuatro (`tanda_v7_9oct_tarde`), y `NatTry` IDÉNTICO con sus 12 natives en nativo en la Pico 2, la DK2 y la P4
-(Cortex-M33 de dos familias y RV32). **CERRADA.** (La Metro, la C3, la C5, la C6 y la Nucleo, con la imagen en cuanto
-se conecten: el lote sigue.)
+(Cortex-M33 de dos familias y RV32). **CERRADA.** **Y el resto del lote (9-oct, tarde y noche)**: la C5 y la C6 (la
+imagen de la mañana; sus packs de la GUI cargan sin regrabar: el bloque de RAM y la zona, en su sitio), la Metro (con el
+arreglo de `#675`) y la C3 (lo mismo), con la ronda de V7 verde en las cuatro —`NatTry` y `NatPuente` idénticos y en
+nativo también en RV32IMC—; la Nucleo, grabada y sin ronda (se desconectó antes).
 
 #### ✅ `#577` — una native no puede LEER un campo de una tupla (abierta 27-sep, al cerrar H5; SUELTA: un resto de `N1` · **CERRADA el 7-oct**, el commit de `#577`)
 

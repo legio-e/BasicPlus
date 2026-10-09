@@ -70,6 +70,12 @@
 > ronda, esta tarde (Eduardo: «esta tarde hacemos ronda de placas»), y en ella `#614` (medir `GuiFlushBench` en la
 > C5 con la imagen nueva). **`#645` CERRADA** (Eduardo: «No hace falta unificar»: el GT911 de la P4 es el componente
 > de Espressif; el de la DK2, nuestro sobre la HAL BP).
+> **La tarde de placas**: la C5, la C6, la Metro, la C3 y la Nucleo con la imagen nueva (OK de Eduardo); la ronda de V7,
+> verde en la C5, la C6, la Metro y la C3 (la Nucleo se desconectó antes de la suya). Y **`#675`**: la Metro se colgaba
+> en el primer RUN —la marca de `#592` se sumaba con LDREX/STREX sobre la PSRAM, donde el acceso exclusivo no se cumple:
+> la interrupción del reloj giraba para siempre—; ahora una lectura y una escritura; la Metro, con su ronda verde:
+> CERRADA. **`#614`** (Eduardo: «(a)», acotarlo en V7): no son las fuentes —un rectángulo sin texto cuesta como la
+> etiqueta—, sino un FIJO de ~4 ms por repintado en la C5; a cronometrar con una imagen de prueba (OK de Eduardo).
 >
 > **8-oct** — **`#668` hecha en las dos VMs** (sin cerrar: faltan `#667`, la GUI medida y las placas): LIBERAR ES
 > DESTRUIR, con los destructores como código BP normal (Eduardo: *«Como código BP normal»*). `Core.__destruye` y

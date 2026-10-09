@@ -273,7 +273,11 @@ void bpvm_marca_tiempo_baja(bpvm_t* vm) {
 void bpvm_marca_tiempo_avanza(void) {
     __atomic_fetch_add(&s_en_vuelo, 1, __ATOMIC_SEQ_CST);
     uint32_t* m = __atomic_load_n(&s_marca, __ATOMIC_SEQ_CST);
-    if (m != NULL) (void) __atomic_fetch_add(m, 1u, __ATOMIC_RELEASE);
+    /* V7 #675 — una lectura y una escritura, SIN acceso exclusivo: la memoria de la VM puede estar en la PSRAM (la
+     * Metro), y allí el STREX del RP2350 no se cumple nunca —un fetch_add giraba para siempre DENTRO de la interrupción
+     * del reloj, y la placa se colgaba en el primer RUN—. Si coinciden dos (el reloj y un KILL) se pierde una suma: da
+     * igual, la native sólo mira que CAMBIE. (s_en_vuelo y s_marca están en la SRAM: ésos sí, atómicos.) */
+    if (m != NULL) __atomic_store_n(m, __atomic_load_n(m, __ATOMIC_RELAXED) + 1u, __ATOMIC_RELEASE);
     __atomic_fetch_sub(&s_en_vuelo, 1, __ATOMIC_SEQ_CST);
 }
 

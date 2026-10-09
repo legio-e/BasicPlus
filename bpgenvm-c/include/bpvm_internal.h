@@ -818,8 +818,12 @@ static inline int  bpvm_kill_pedido(const bpvm_t* vm) { return __atomic_load_n(&
  * siguiente y llama a punto_control, que la para (sin esperar al reloj). */
 static inline void bpvm_kill_marcar(bpvm_t* vm, int v) {
     __atomic_store_n(&vm->kill_requested, v, __ATOMIC_RELEASE);
-    if (v && vm->memory != NULL)
-        (void) __atomic_fetch_add((uint32_t*) (void*) (vm->memory + BPVM_MARCA_TIEMPO_ADDR), 1u, __ATOMIC_RELEASE);
+    if (v && vm->memory != NULL) {
+        /* V7 #675 — sin acceso exclusivo, como el reloj (bpvm_marca_tiempo_avanza): en la PSRAM de la Metro el STREX no
+         * se cumple nunca. Una suma perdida da igual: la native sólo mira que la marca CAMBIE. */
+        uint32_t* m = (uint32_t*) (void*) (vm->memory + BPVM_MARCA_TIEMPO_ADDR);
+        __atomic_store_n(m, __atomic_load_n(m, __ATOMIC_RELAXED) + 1u, __ATOMIC_RELEASE);
+    }
 }
 
 /* V7/H3 (#491) — en builtins.c. */
