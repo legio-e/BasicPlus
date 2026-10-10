@@ -1927,8 +1927,9 @@ public final class MivmEmitter {
             //    sólo hace `this.__syncMutex := Mutex()`. Sin esto, las
             //    sync properties operarían sobre un mutex "null" y los
             //    locks petarían.
-            if ((declaresSyncMutex || SemanticAnalyzer.tieneInicializadores(cd)) && !hasUserCtor) {
-                synthesizeSyncMutexCtor(cls, declaresSyncMutex, cd);   // #511: también por inicializadores
+            if ((declaresSyncMutex || SemanticAnalyzer.tieneInicializadores(cd) || SemanticAnalyzer.tieneCamposFijos(cd))
+                    && !hasUserCtor) {
+                synthesizeSyncMutexCtor(cls, declaresSyncMutex, cd);   // #511: también por inicializadores; #680: por campos fijos
             }
 
             // 5) L2: factory cross-module. Para cada `public class` emitimos

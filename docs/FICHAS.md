@@ -1986,6 +1986,16 @@ su compilación; `montar-zip.sh` exige los cinco y que cada uno sea, byte a byte
 `GuiMini`—; el `LEEME` del ZIP, con ocho imágenes, la C5 y la pantalla en packs; y `packs/README.md`, con las tres
 filas de la GUI.
 
+#### ✅ `#680` — una clase con un campo de tamaño fijo `tipo[N]` y SIN constructor ni inicializadores dejaba el array sin longitud: `len` 0 y «índice fuera de rango» al primer acceso, en las dos VMs (abierta y CERRADA el 10-oct, del `D1`: lo vio el editor del manual)
+
+La longitud la escribe el `__init` de la clase (`emitInitDeCamposFijos`, V7/H1 #19), y el constructor sintético sólo se
+generaba por un `sync` o por inicializadores (`#511`/`#527`): una clase con sólo campos fijos no tenía `__init`. El
+ejemplo del manual no tropezaba porque llevaba un inicializador. **Hecho**: `tieneCamposFijos(ClassDef)`, la misma
+condición en el analizador (`sintetizarCtores`) y en el emisor (el constructor sintético). `bpgenvm-c/samples/CampoFijo.bp`
+en la paridad —la clase sola, con un inicializador, una subclase sin constructor, otra con el suyo y una nieta con su
+propio campo fijo—: con el compilador de antes, «Caja: 0» y la excepción en las dos VMs; ahora, las seis idénticas. El
+frontend con sus pruebas; la red entera, verde (paridad 148, MOD8, dos workers, estrés, `packs-abi`, stdlib embebida).
+
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
 **Visto el 2-oct, leyendo**: el botón Stop del IDE, en depuración, manda `KILL` (`BpvmClient.java:660-664`). En la Pico

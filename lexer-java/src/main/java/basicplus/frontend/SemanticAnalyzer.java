@@ -650,7 +650,7 @@ public final class SemanticAnalyzer {
         if (cls.isExternal || cls.astNode == null || cls.constructor != null || prof > 64) return;
         if (cls.baseClass != null) sintetizarCtores(cls.baseClass, prof + 1);   // el padre primero
         boolean porSync = tieneSyncPropia(cls.astNode) && !ancestroConSync(cls);
-        if (!porSync && !tieneInicializadores(cls.astNode)) return;
+        if (!porSync && !tieneInicializadores(cls.astNode) && !tieneCamposFijos(cls.astNode)) return;   // #680
         ClassSymbol base = cls.baseClass;
         FunctionSymbol baseCtor = (base != null) ? base.findConstructor() : null;
         FunctionSymbol cabeza = null, cola = null;
@@ -675,6 +675,19 @@ public final class SemanticAnalyzer {
         if (cuantos > 1)
             for (FunctionSymbol k = cabeza; k != null; k = k.nextOverload) { k.overloaded = true; k.slotKey = (k == cabeza) ? k.name : k.overloadMangle(); }
         cls.constructor = cabeza;
+    }
+
+    /** #680 — ¿la clase declara un campo de INSTANCIA de tamaño fijo `tipo[N]`? Su cabecera (la longitud) la escribe el
+     *  `__init` de la clase (`emitInitDeCamposFijos`), así que sin constructor de usuario hace falta uno sintético: sin
+     *  él, una clase con sólo campos fijos daba `len` 0 y «índice fuera de rango» al primer acceso, en las dos VMs. */
+    static boolean tieneCamposFijos(ClassDef cd) {
+        for (ITopLevelDecl m : cd.members) {
+            if (!(m instanceof VarDecl)) continue;
+            VarDecl v = (VarDecl) m;
+            if (v.type instanceof ArrayTypeRef && ((ArrayTypeRef) v.type).size != null
+                    && !v.names.isEmpty() && !v.names.get(0).isStatic()) return true;
+        }
+        return false;
     }
 
     /** #511 — ¿algún campo o property de INSTANCIA de la clase lleva `:= valor`? */
