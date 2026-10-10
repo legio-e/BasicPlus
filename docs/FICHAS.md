@@ -1915,6 +1915,54 @@ del pack; la ronda de V7, verde e idéntica a la de la mañana (`tanda_v7_9oct_s
 pantalla—); y la caché, probada: tras un `PACK_DEL`, el `PACK_LS` del momento lo da por BORRADO sin reiniciar, y el
 pack se vuelve a grabar. **CERRADA.**
 
+#### 📚 `D1` — LA DOCUMENTACIÓN DE V7 (abierto el 10-oct)
+
+**El método**, el del `D1` de V6 (en el archivo, «📚 `D1` — LA DOCUMENTACIÓN DE V6»): medir, no leer; editores en
+paralelo y un verificador independiente. **Y la idea de Eduardo** (9-oct): *«repasar todos los issues de V7 y ver si
+alguno de ellos representa cambios en la documentación»* —las 184 fichas de la sección de V7, no sólo las marcadas—.
+
+**Lo medido el 9-oct (noche)**: `samples_sweep` 399/399; `doc_frags`, 302 bloques BP: 161 OK, 135 trozo, 2
+error-esperado y 4 FALLO, los cuatro de V7 (manual ES §4.2.1, §5.3 y §9.4b; manual EN §4.2.1). Sin tocar en V7: las dos
+portadas, `QUICKSTART`, `INSTALAR_FIRMWARE`, `RELEASES`, `index` ES/EN, `cheatsheet`, `basedatos` ES/EN,
+`bp-desde-dentro`, `opcodes` y `gui` EN; el inglés, por detrás del español. Lo único grave: la instalación no dice ni la
+C5 ni que la pantalla llega en packs.
+
+**La introducción de Eduardo para las notas de V7** (10-oct), tal cual la escribió:
+
+> Basic Plus Versión 7
+> En esta versión nos hemos centrado en 3 puntos:
+>
+> - En la versiones se desarrolló la zona de Packs. Una dirección fija de las flash donde los packs se pueden grabar y que no necesitan cargarse en RAM ahorrando memoria. Inicialmente se pensó para utilizar los módulos pero que luego se extendió a código nativo. El primer gran logro fué poder cargar el SQLite. Ahora en esta versión 7 lo hemos extendido al LVGL. Todo esto representan un cambio de paradigma, nos permite crear una imagen por micro y es el usuario el que decide si incorpora el SQLite y el entorno gráfico. Todo esto sin necesidad de crear imágines ni compilar código C.
+>
+> - La versión 6 era para arreglar un montón de cosas que se habian quedado a medias y bugs. Esta versión 7 es mas de lo mismo, se han solucionado una ingente cantidad de cosas pendientes. Entre ellas las funciones nativas que en algunos casos había funciones que no podían convertir a native y que ahora practicamente se ha reducido a cero.
+>
+> - El tercer punto es la habilitación del segundo núcleo para aumentar el rendimiento en los programas Basic Plus que utilicen varios Threads. Aquí en todos los micros de 2 nucleos se ha mejorado el rendimiento pero así como en la ESP32-P4 se ha conseguido un rendimiento entre el 150% y el 190%, pero que en el caso del RP23500 la mejora va entre el 100% y el 150%, todavía no sabemos la razón.
+>
+> En resumen, esta versión que podía haber sido una versión de transición se ha convertido en una gran versión. Destacar un enorme trabajo de Claude Code tanto en la revisión del código, las pruebas y el código nuevo.
+
+Sobre ella, Eduardo (10-oct): *«Puedes corregir, ampliar y complementar lo que consideres, como siempre»*; y las cifras
+del segundo núcleo, **a lo medido** en H12 (sus medidas finales, dos hilos a la vez: la P4 ×2 y las cadenas ×1,33; la
+Pico 2 ×1,55–1,68 y las cadenas ×0,83; la Metro ×1,13).
+
+**El inventario (10-oct)**: siete lectores en paralelo, de sólo lectura —las fichas de V7 y los hitos H1–H13 en cuatro
+tandas (la idea de Eduardo), la instalación y las portadas, lo que le falta al inglés y los documentos satélite—. Lo que
+dio: **unas 50 frases que V7 dejó falsas** (las que más se repiten: `import Core` «obligatorio», «un solo núcleo», las
+`native` «interpretadas» en la C3 y la C6, MOD7/MOD8, `listDir` «sólo en la VM Java», BUSY durante un RUN, «siete
+imágenes, nueve placas», la DK2 «no rota», el I2C del táctil de la P4 «usa el bus 1»); **unas 30 cosas sin documentar**
+—las graves: que la pantalla llega en packs y el `packRam=` que piden, en la instalación; la C5; las claves nuevas del
+ENV; `#665`—; y **el inglés, 44 puntos y unas 443 líneas por detrás**, diciendo lo contrario en `T[N]`, `#590`, `#493` y
+el cast. `BUILTINS.md` documenta 104 de 282 (19 de los 42 nuevos); `opcodes.html`, 110 de 189.
+**Fuera de los documentos**: el ZIP saldría sin los packs de la GUI y con el `SQLite.pack` viejo de `packs/` (27-sep, con
+sus copias de la stdlib) —el empaquetado—; el diálogo INFO del IDE dice «PWM: 12 salidas» (son slices) y el `--help` de
+la VM Java da el orden viejo de los imports; el IDE sigue en 6.0 en su `pom` (al publicar, 7.0).
+**El plan**, el de V6: nueve editores en paralelo, uno por documento y con el español y el inglés a la vez, sobre una
+hoja de hechos común (el parque —ocho imágenes, diez placas, nueve probadas en V7—, los packs de cada placa con
+pantalla, los dos núcleos, lo del lenguaje y la introducción de Eduardo corregida), cada fragmento compilado con
+`doc_frags`: (1) portadas e índice; (2) `QUICKSTART` e `INSTALAR_FIRMWARE`; (3) el manual; (4) la referencia; (5) `gui`;
+(6) la guía del IDE; (7) `PENDIENTES`, `BUILTINS`, `opcodes`, `SHOT_FORMAT`; (8) `cheatsheet`, `basedatos`,
+`bp-desde-dentro`; (9) `RELEASES` v7.0. Detrás, un verificador independiente que no edita; aparte, el empaquetado y los
+dos fallos; al final, la copia del manual en el IDE y su `jar`; y Eduardo lee las notas de V7.
+
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
 **Visto el 2-oct, leyendo**: el botón Stop del IDE, en depuración, manda `KILL` (`BpvmClient.java:660-664`). En la Pico
