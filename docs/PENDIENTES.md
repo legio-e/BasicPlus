@@ -17,11 +17,14 @@
 > documento venía a evitar.
 >
 > **Mapa de docs:**
-> - **`docs/FICHAS.md`** — el registro de fichas. **La fuente de verdad.**
+> - **`docs/FICHAS.md`** — el registro de fichas. **La fuente de verdad.** Lo que viene
+>   después de V7 —la WiFi, el Bluetooth y el bajo consumo, y lo que V7 dejó para
+>   entonces— está en su bloque de V8.
 > - **`docs/ESTADO.md`** — el traspaso entre sesiones (diario, por fechas).
+> - **`V7_BACKLOG.md`** / **`V7_IDEAS.md`** — el plan de V7 y su diseño (el porqué de
+>   cada decisión).
 > - **`V6_BACKLOG.md`** / **`V5_BACKLOG.md`** / **`V4_BACKLOG.md`** / **`HECHO_V*.md`** —
 >   snapshots inmutables de versiones cerradas.
-> - **`V7_BACKLOG.md`** / **`V7_IDEAS.md`** — la versión EN CURSO: lo aplazado y su diseño.
 >
 > Convención: L=limitación · N=hallazgo · M=mejora. (Los bugs, **B**, se fueron a
 > `FICHAS.md`: tienen estado.)
@@ -76,7 +79,7 @@
   | | conserva el log | lo pierde |
   |---|---|---|
   | **ESP32-S3 / P4** | reset por software (el `reset` del IDE), panic/excepción, watchdog | **el botón RST de la placa** y desenchufar |
-  | **RP2350 (Pico 2 / Metro)** | reset por software (el `reset` del IDE) | **el botón de reset de la Metro** (el pin de RUN: medido el 3-oct, arranque en frío) y desenchufar |
+  | **RP2350 (Pico 2 / Metro)** | reset por software (el `reset` del IDE) y, con la imagen de dos núcleos (la de V7), un fallo fatal: la reinicia el perro guardián (ver «Para V8») | **el botón de reset de la Metro** (el pin de RUN: medido el 3-oct, arranque en frío) y desenchufar |
   | **STM32** | el botón NRST (medido en la Nucleo el 24-sep: «pin (NRST)» y las líneas de antes) | desenchufar |
 
   Lo que sorprende es el ESP32 —su botón RST tira del pin EN y corta el dominio
@@ -96,6 +99,11 @@
   familias, mata el programa y reinicia después. `kill` + `reset` sigue valiendo. El
   `kill` llega aunque el programa esté colgado —está probado sobre un bucle cerrado
   que no cede el turno— y no borra el log, así que la autopsia sale entera igual.
+  Desde V7 (`#495`) atiende además `STAT` y el `GET` y el `LIST` **troceados**, que son
+  los que pide el IDE: el explorador lista y baja ficheros con el programa en marcha
+  (un log, un `.shot`), y sus trozos van entre la salida del programa. Lo demás —subir,
+  borrar, crear una carpeta, un `GET` entero como el de `wire_serie.py`— contesta
+  `BUSY` hasta que el programa acaba.
 
 - **L17 — un `catch` sin tipo ES `catch e: Exception`** (V6, 30-ago). No es un caso
   aparte: el compilador le pone ese tipo al AST, así que `catch e` y
@@ -103,65 +111,46 @@
   - `e.msg` funciona sin escribir el tipo;
   - **imprimir la excepción muestra su mensaje** (`Exception.toString()` devuelve `msg`),
     no `object@1234`;
-  - y como `Exception` es un tipo de `Core`, un módulo que use `catch` necesita
-    `import Core` — ver **L16**.
+  - `Exception` es un tipo de `Core`, que todo módulo importa sin escribirlo (**L16**).
 
   No se pierde ninguna captura: `throw` sólo acepta instancias de `Exception`, y el
   compilador lo rechaza si no lo es.
 
-- **L16 — si usas un tipo de `Core`, tienes que escribir `import Core`** (V6, 30-ago).
-  Vale para `List`, los envoltorios de los primitivos (`Integer`, `Long`, `Float`,
-  `Double`, `Boolean`), `Comparable`, `Exception` y `RuntimeError` — o sea que **atrapar
-  un error también pide el import**:
+- **L16 — `import Core` es implícito** (V7/H1, 20-sep; en V6 había que escribirlo). El
+  compilador lo añade a todo módulo que no lo escriba —salvo al propio `Core`—: se puede
+  poner o no, y da lo mismo. `List`, los envoltorios de los primitivos (`Integer`, `Long`,
+  `Float`, `Double`, `Boolean`), `Comparable`, `Exception` y `RuntimeError` se escriben sin
+  más, igual que las cuatro clases del lenguaje —`Object`, `Thread`, `Mutex` y
+  `StringBuilder`—, que desde V7 son clases BasicPlus de `Core.bp` (manual §10.0).
 
-  ```basicplus
-  module L16
-    import Core          // <- hace falta para el catch de abajo y para List
+  En V6 la norma era la contraria (`#458`, 30-ago: *«si se utiliza un tipo de Core, se ha
+  de importar Core»*). Hasta entonces el compilador ya lo inyectaba, pero en una sola de
+  sus dos pasadas, y un módulo que exponía un tipo de `Core` en una firma pública
+  **perdía ese miembro** al importarlo otro. Ahora lo pone el parser, y las dos pasadas
+  ven el mismo árbol. Los demás imports siguen sin ser transitivos (**L18**). Este
+  programa compila y ejecuta tal cual —imprime `2` en las dos VMs— sin importar nada:
 
-    function leer(): List
-      var l: List := List()
-      try
-        l.add("uno")
-        throw RuntimeError("fallo de prueba")
-      catch e: RuntimeError
-        l.add(e.msg)
-      endtry
-      return l
-    end leer
+```basicplus
+module L16
+  // sin `import Core`: lo pone el compilador
 
-    public function Main()
-      var l: List := leer()
-      print l.length()
-    end Main
-  end L16
-  ```
+  function leer(): List
+    var l: List := List()
+    try
+      l.add("uno")
+      throw RuntimeError("fallo de prueba")
+    catch e: RuntimeError
+      l.add(e.msg)
+    endtry
+    return l
+  end leer
 
-  (Compila y ejecuta tal cual: imprime `2` en las dos VMs.)
-
-  **Antes no hacía falta**: el compilador inyectaba el `import` por su cuenta. Se quitó
-  porque lo inyectaba en una de sus dos pasadas y no en la otra, y eso hacía que un módulo
-  que expusiera un tipo de `Core` en una firma pública **perdiera ese miembro** al ser
-  importado por otro — con el error apareciendo en el consumidor, lejos de la causa.
-  Norma de Eduardo: *«la norma tiene que ser sencilla: si se utiliza un tipo de Core, se
-  ha de importar Core»*.
-
-  **`Object` NO lo necesita**: es un tipo real, con `toString()` y `compareTo()`, pero
-  vive en el lenguaje y no en `Core` — como `integer` o `string`.
-
-  Si se te olvida, lo que dice el compilador depende de por dónde tropiece:
-  - usas `List` sin el import → `tipo 'List' no encontrado` (y detrás
-    `no se puede llamar a 'List'`);
-  - `catch e: RuntimeError` sin el import → `tipo de excepción 'RuntimeError' no es
-    una clase`.
-
-  **La regla es transitiva, y los imports no lo son** (`#492`, `#498`). Si importas un
-  módulo cuyas clases extienden un tipo de `Core` —`Collections`, cuyas `SyncList`,
-  `OwnerList`… extienden `Core.List`— tienes que importar `Core` también, aunque tu
-  código no nombre `List`. Aquí el mensaje sí señala el arreglo:
-
-  ```
-  la clase 'SyncList' extiende 'Core.List' y este modulo no importa 'Core': anade `import Core` (los imports no son transitivos)
-  ```
+  public function Main()
+    var l: List := leer()
+    print l.length()
+  end Main
+end L16
+```
 
 - **L18 — lo que cruza la frontera de un módulo, y lo que no** (V6, `#492` → ✅ V7,
   14-sep-2026). Desde V7 la interfaz de un módulo exporta **todo lo que un descendiente
@@ -183,8 +172,11 @@
   - **los imports no son transitivos.** Si `Mid` importa `Base` y te devuelve un
     `Base.Animal`, para nombrar ese tipo —o llamar a sus métodos— tu módulo tiene que
     escribir `import Base` él mismo; si no, `tipo cualificado 'Base.Animal' no
-    encontrado` (o `el tipo 'Base.Animal' no tiene miembros`). Es la misma regla de
-    L16 con `Core`.
+    encontrado` (o `el tipo 'Base.Animal' no tiene miembros`). Lo mismo si usas una
+    clase de `Mid` que extiende `Base.Animal`: sin `import Base`, el compilador avisa
+    (`base cross-module 'Base.Animal' de la clase importada 'Mid.Gato' no resuelta
+    (¿falta el import de su módulo?)`) y no ve lo que hereda. La excepción es `Core`,
+    que se importa siempre (**L16**).
 
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia
@@ -201,20 +193,50 @@
   Eduardo el 5-oct, V7/H12). El depurador para el programa entero y sigue a un hilo; con dos
   runs ejecutando a la vez sería muy difícil de seguir (*«Alguna vez he tenido que depurar en Java
   con varios hilos y es muy difícil de seguir»*). Los hilos BP siguen siendo varios —se turnan en
-  ese run, como con `vm.runs=1`—; lo que no hay mientras se depura es el segundo run.
+  ese run, como con `vm.runs=1`—; lo que no hay mientras se depura es el segundo run. Un programa
+  que usa SQLite también va con uno (el motor está compilado sin hilos).
 - **Los hilos VIVOS a la vez, los que quepan en la memoria, cada uno con la pila que pide**
   (V7/H12, etapa 2: la cola de hilos, sin tope; hasta entonces, 32 a la vez —`#604`/`#605`—).
   Un hilo terminado deja su sitio; pedir una pila que no cabe es un `RuntimeError` en `start()`.
   Una función que no cabe en la pila de su hilo lanza «desbordamiento de pila» (manual §14.1).
   El límite: una recursión DENTRO de una `native` corre, en la VM-C, en la pila de C de su
   ejecutor, y allí sólo la vigila miVM (que ejecuta la native como bytecode).
+- **Dentro de una `native`, casi todo; no todo** (V7/H5). Desde V7 caben `try`/`catch`/`finally`
+  (`#578`) y las tuplas (`#577`). Siguen fuera, cada uno con un error de compilación que dice
+  el remedio: un `try var` (declara el recurso antes con `var` y suéltalo en un `finally`) y
+  una tupla con un campo `float`, `long` o `double` (desestructúrala en BP y pásale los
+  campos). Lo demás que el AOT no traduce —leer campos o llamar a estáticos (L18), un
+  `for … in` sobre una colección, `instanceof`, los eventos…— también es un error de
+  compilación con su línea (`#519`): `native` es una promesa. La lista, en `AOT_LIMITES.md`.
+  - **En la placa, el depurador no para dentro de una `native`** (decidido el 9-oct, `#583`):
+    allí corre como código máquina; en el PC sí para, porque la VM Java la interpreta. El IDE
+    lo avisa al poner el breakpoint; para seguirla paso a paso, quítale `native` mientras la
+    depuras.
+  - **En el ESP32-S3 todo se ejecuta interpretado** (`#488`, fuera del plan). El AOT
+    genera ARM Thumb-2 y RISC-V; **no genera Xtensa**, y de momento no se va a hacer. Las
+    `native function` compilan y corren, pero a la velocidad del intérprete. Aceleran:
+    RP2350, STM32, ESP32-P4 y, desde V7, **la C5, la C3 y la C6** (RISC-V sin FPU, destino
+    `ilp32`; probado en placa en la C5, la C3 y la C6 el 25-sep). En ellas los `float` van
+    por las rutinas del firmware (`#559`): dan lo mismo que interpretados, pero aceleran
+    menos que el código entero. En el PC —VM Java y micro simulado— todo es interpretado,
+    y así se comparan los tiempos.
+- **La GUI, sólo en las placas con pantalla, y por packs** (V7/H6). La llevan las imágenes de
+  la C5, la C6, las P4 y la DK2; las de la Pico 2 y la Metro, la S3, la C3 y la Nucleo, no:
+  allí `Gui.Screen()` lanza `builtin 135 no soportado en esta VM (subconjunto C)`. Y donde
+  la hay, LVGL ya no va dentro de la imagen: llega en el pack de la GUI (`Gui.pack`, o
+  `GuiMini.pack` en la C6) y, en la C5 y la C6, con el del driver de pantalla
+  (`DriverSpi.pack`, que lee la placa de su ENV). Se graban una vez desde el IDE, con un
+  bloque de RAM para los motores en el ENV (`packRam=<KB>`). Si falta algo, el programa lo
+  sabe al crear su pantalla: «GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega
+  por el pack)» o «GUI: no hay driver de pantalla ('PANT'): graba el pack del driver de
+  esta placa». Qué pide cada placa, en `gui.html` §23.4. En el PC no hace falta nada.
 
 
 ### `input()` sólo funciona en el PC, no en el micro (decidido el 26-ago; `listDir` YA está en las dos desde V7/H3)
 
 `input()` / `IO.prompt()` abre su ventana en el IDE cuando el programa corre en la **VM
-Java**. Es un builtin del compilador (se llama sin `import`) y **compila igual para todo
-el mundo**, pero en la **VM-C —o sea en cualquier placa y en el micro simulado— lanza un
+Java**. Es una primitiva de la raíz (`Core`: se llama sin `import` ni cualificar) y **compila
+igual para todo el mundo**, pero en la **VM-C —o sea en cualquier placa y en el micro simulado— lanza un
 `RuntimeError` atrapable**:
 
 ```
@@ -277,7 +299,7 @@ var p: Par := Par(lst.get(0))
 
 ```basic
 var m: Collections.Map := Collections.Map()   // 2) un Map, si lo que quieres es buscar por clave
-m.put("hi", Integer(42))                      //    (import Collections, y Core por L16)
+m.put("hi", Integer(42))                      //    (import Collections; Core va siempre, L16)
 ```
 
 El ejemplo `samples/TupleFirstClass.bp` lo enseña de las dos maneras.
@@ -287,54 +309,75 @@ El ejemplo `samples/TupleFirstClass.bp` lo enseña de las dos maneras.
 propiedad — es lo que hace `samples/MemInfo.bp`, donde la lista sólo sirve de ancla
 contra el recolector.
 
-## ⏭️ Aplazado a V7 — lo que conviene saber al programar hoy
+## ⏭️ Para V8 — lo que conviene saber al programar hoy
 
-Decisiones de V6 que no son bugs sino piezas que no están. El estado de cada una vive en
-su ficha (`docs/FICHAS.md`); aquí, lo que cambia al escribir un programa.
+Lo que V7 deja para V8: el tema de V8 —la WiFi, el Bluetooth y el bajo consumo— y lo que
+se aplazó al cerrar V7. No son bugs: son piezas que no están, o que están a medias. El
+estado de cada una vive en su ficha (el bloque de V8 de `docs/FICHAS.md`); aquí, lo que
+cambia al escribir un programa.
 
 - **No hay bajo consumo** (`#490`). El micro nunca duerme: sin nada que hacer sigue
   girando (y en el STM32 la tarea ociosa ni siquiera llega a correr). No existe un
   `sleep` de placa ni fuentes de despertar en BP: un programa a batería no puede
-  ahorrar hoy. Es de **V8**, con la WiFi y el Bluetooth.
-- **`GET` y `LS` contestan `BUSY` mientras corre un programa** (`#495`). El
-  explorador de ficheros del IDE no lista ni baja nada durante un RUN; `HELLO`, `KILL` y
-  `RESET` sí llegan. Los ficheros que escribe el programa (un `.shot`, un log) se bajan
-  al terminar o tras `kill`.
-- **Una dependencia más antigua que el módulo principal pasa en silencio** (`#500`).
-  El cargador rechaza un `.mod` de formato incompatible y el enlazador grita si un slot
-  no cuadra, pero no mira la **versión** de la stdlib con la que compilaste: un `Core`
-  del mismo formato pero más viejo —el de un pack, o una copia olvidada en `/app`, que
-  tapa a `/lib` (`#493`)— se carga sin aviso. Mientras llega la norma: no dejes módulos
-  de stdlib en `/app` ni packs con stdlib dentro en la placa; el log del RUN dice de
-  dónde carga cada dependencia (`dep 'Str' -> /app/Str.mod`).
-- **Dentro de una `native`**: no hay `try`/`catch` (envuelve la llamada en uno desde BP:
-  `#578`), no se lee el campo de una tupla (`#577`), un error no dice en qué línea de la
-  native pasó (`#582`) y en la placa el depurador no para dentro de ella (`#583`). El detalle,
-  en `AOT_LIMITES.md`.
-- **En el ESP32-S3 todo se ejecuta interpretado** (`#488`, fuera del plan). El AOT
-  genera ARM Thumb-2 y RISC-V; **no genera Xtensa**, y de momento no se va a hacer. Las
-  `native function` compilan y corren, pero a la velocidad del intérprete.
-  Aceleran hoy: RP2350, STM32, ESP32-P4 y, desde V7, **la C5, la C3 y la C6** (RISC-V
-  sin FPU, destino `ilp32`; probado en placa en la C5, la C3 y la C6 el 25-sep).
-  En ellas los `float` van por las rutinas del firmware (`#559`): dan lo mismo que
-  interpretados, pero aceleran menos que el código entero. En el PC —VM Java y micro
-  simulado— todo es interpretado, y así se comparan los tiempos.
+  ahorrar hoy.
+- **No hay red en la placa.** `Net` (el cliente TCP) sólo tiene el backend del PC; en una
+  placa lanza `RuntimeError` («Net: sin red en esta plataforma»). La WiFi y el Bluetooth
+  son el tema de V8.
+- **En la RP2350, la imagen de dos núcleos —la de V7— hace más lento un programa de un
+  solo hilo** (`#665`). En la Metro, `fib(26)` tarda 3 908 ms frente a 2 892 con la imagen
+  de un núcleo (+35 %), y con `vm.cores=1` lo mismo (3 951): es la imagen, no el otro
+  núcleo, y pega porque allí los datos de la VM están en la PSRAM. En la Pico 2 el cálculo
+  apenas lo nota (+1,8 % con un run, +8,4 % con dos), pero lo que imprime mucho sí:
+  PrintBench, 1 270 ms frente a 817. Y dos hilos que trabajan con cadenas no ganan con el
+  segundo núcleo (×0,83 en la Pico 2, ×0,75 en la Metro). `vm.runs=1` quita lo que cuesta el
+  segundo run; lo de la imagen sólo se recupera con la de un núcleo, que se compila aparte
+  (`cmake .. -DBPVM_PICO_NUM_CORES=1`). Se investiga en V8; lo que se gana con dos hilos, en
+  el manual §14.6.
+- **Un fallo fatal reinicia la placa** (que el fallo de un run no la tumbe es de V8). Un
+  error del programa es una excepción y, como mucho, acaba su hilo; un fallo *fatal* —un
+  HardFault, la memoria del sistema agotada, una comprobación interna que falla— es del
+  sistema. En la Pico 2 y la Metro, con la imagen de dos núcleos, la placa deja el informe en
+  el log —en una RAM que sobrevive al reinicio—, se reinicia sola en medio segundo, lo dice
+  al arrancar («fallo fatal» en `Machine.resetCause()` y en el INFO del IDE) y **no lanza el
+  autorun**: un programa que fallara nada más arrancar sería un bucle de reinicios; desde el
+  IDE se arranca a mano (manual §14.6). **En las ESP32 —la S3 y la P4 también— no hay esa
+  guarda**: un fallo así es un *panic* del IDF, la placa se reinicia y **vuelve a lanzar el
+  autorun**; si el programa cae otra vez, otro reinicio. La salida es la ventana del
+  autorun: con el IDE conectado, al arrancar da unos segundos para pararlo con *Stop*. Para
+  V8: terminar sólo el run que falla y que `io` siga, el MPU protegiendo la memoria del
+  sistema y un contador de reinicios contra el bucle del autorun.
+- **En la placa, un error no dice en qué línea pasó** (`#582`). Al acabar, la placa da el
+  mensaje —`excepcion no atrapada: Core.RuntimeError: División por cero`— y nada más, en
+  código interpretado y en una `native`; la traza con la línea sólo la da la VM Java del
+  PC. La placa no tiene el `.dbg` (da direcciones, y el PC pone los nombres): en V8, la
+  placa dirá dónde y el IDE lo traducirá a su línea.
+- **Un `.mod` lleva el código nativo de UNA familia** (`#584`). El IDE compila en cada Run
+  para la placa que tiene delante y funde en el `.mod` el bloque nativo de su familia;
+  llevado a mano a una placa de otra familia, el programa corre igual, pero sus `native` van
+  interpretadas (la placa tolera el bloque ajeno). El `.mod` multifamilia —el mismo fichero
+  para cualquier placa— es de V8, con la WiFi.
+- **El depurador no despliega los objetos** (`M5`). Un local que es un objeto sale como
+  `@<valor>`, sin sus campos ni sus properties (heredadas o no). Pide el layout de cada clase
+  en el `.dbg` y una vista en árbol en el IDE: V8.
+- **Con un run, un `read` de `Uart` que espera para a los demás hilos.**
+  `Uart.Port.read(datos, n, timeoutMs)` espera a nivel del sistema —el run duerme de
+  milisegundo en milisegundo hasta que llegan los bytes o vence el plazo—: con UN run (las
+  placas de un núcleo, o `vm.runs=1`), mientras un hilo espera ahí, los demás hilos BP no
+  avanzan. `sleep` no lo hace (duerme sólo su hilo), y con dos runs la espera retiene sólo
+  el suyo. Lo que funciona con un run: mirar `available()` y, si no hay nada, `sleep`. En
+  V8, esas esperas cederán el hilo, como `sleep`.
+- **La C3 va justa de memoria.** Su VM se queda en 120 KB —48 de heap de BP— y lo que no
+  quepa ahí no corre en ella (`docs/MEMORIA.md`). Optimizarla —coser sus dos regiones de
+  memoria y devolverle los 128 KB de VM— es de V8.
+- **Lo que el silicio tiene y la HAL aún no da**: la PIO del RP2350, programable desde BP, y
+  más UART en las ESP32 (hoy un programa tiene, como mucho, la 1 y la 2: las de más de la
+  P4 y la de bajo consumo de la C5, la C6 y la P4, todavía no). Las dos, para V8.
 
-## 🟢 Pulido (no urgente)
+## 🔬 Prueba de resistencia larga (idea de Eduardo, 3-ago; para V8)
 
-*(El aviso del «pwm» y el truncado mudo del árbol se subieron a `docs/FICHAS.md`
-el 17-ago: tienen trabajo pendiente, así que su sitio es el registro.)*
-
-- **M2 — auto-unbox `any → primitive` con check en runtime** (variante "segura"
-  de L1; coste: tag de tipo en cada `any`; discutible si compensa).
-- **M5 — debugger: inspección de properties heredadas** (verificar que se recorre
-  la cadena de herencia al inspeccionar; relacionado con N11).
-
-## 🔬 Prueba de resistencia larga (idea de Eduardo, 3-ago — post-V4)
-
-Dejar una placa corriendo **días** y ver hasta dónde aguanta. No entra en V4: en
-plena campaña de publicación no es razonable, y una prueba así no se improvisa.
-Anotado para hacerla con calma.
+Dejar una placa corriendo **días** y ver hasta dónde aguanta. No entró en V4 (en plena
+campaña de publicación no era razonable, y una prueba así no se improvisa); decidido el
+2-oct, se hace en V8, con calma.
 
 Lo que la haría útil, y no sólo larga:
 

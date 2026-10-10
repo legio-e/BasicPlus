@@ -171,8 +171,8 @@
     <strong>identically</strong> on the PC and on the micro.
   </p>
   <div class="badges">
-    <span class="badge">V6 · order in the micros</span>
-    <span class="badge">RP2350 · ESP32 S3/C3/C6/P4 · STM32</span>
+    <span class="badge">V7 · one image per micro</span>
+    <span class="badge">RP2350 · ESP32 S3/C3/C5/C6/P4 · STM32</span>
     <span class="badge">Two VMs · one byte-identical output</span>
     <span class="badge">Handle-based memory</span>
     <span class="badge">Tested on real hardware</span>
@@ -190,7 +190,7 @@
 
 <p>
   The same program you debug on your desktop later blinks an LED on a
-  Raspberry Pi Pico 2, an ESP32 (S3, C3, C6 or P4) or an STM32 — no recompiling, no
+  Raspberry Pi Pico 2, an ESP32 (S3, C3, C5, C6 or P4) or an STM32 — no recompiling, no
   <code>#ifdef</code>, no surprises. On a PC with no GPIO the hardware
   builtins log to the console; on the board they drive real pins. The
   bytecode is the same, byte for byte.
@@ -237,18 +237,36 @@
 
 
 <p style="margin-top:1.4rem">
-  <strong>New in V6 — order in the micros:</strong> whatever did the same job on every
-  micro is now shared code (a bit over 90 % of each image, measured), so adding a micro from
-  a family we already support is comparatively easy. Two new micros come in, the
-  <strong>ESP32-C3</strong> and the <strong>ESP32-C6</strong> (with the first SPI display);
-  the GUI runs in its own thread and its component tree can be saved and reloaded as JSON;
-  the micro's screen can be <strong>captured</strong> from the PC (<code>Gui.shot</code>);
-  the IDE keeps talking to the board while a program runs; and a semi-automatic test system
-  drives the boards. Seven images for nine boards; verified on real hardware across eight
-  boards and three architectures. Everything from V5 — the SD card, SQLite, the ORM and
-  packs — is still there. Details in the
-  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v6.0">v6.0 release</a> and the
-  <a href="../RELEASES.md">release notes</a> <em>(Spanish)</em>.
+  <strong>New in V7 — one image per micro.</strong> This version centres on three things:
+</p>
+<ul>
+  <li><strong>Packs.</strong> What SQLite already did — an engine that does not live inside the
+  VM but in a pack that runs from flash — <strong>LVGL</strong>, the engine behind the graphical
+  interface, now does too: no image carries the screen any more. There is <strong>one image per
+  micro</strong>, and it is the user who decides whether to add SQLite and the graphical
+  environment, without building images or compiling any C: you burn the pack from the IDE.</li>
+  <li><strong>Finishing what was pending</strong>: a huge number of items. Among them,
+  <code>native</code> functions: the cases that could not be turned into one are practically
+  down to zero — they call any builtin, yield, stop with Stop and hold a
+  <code>try</code>/<code>catch</code>/<code>finally</code> —, and on the <strong>ESP32-C3, C5 and
+  C6</strong> (RISC-V without FPU) they are compiled and accelerated too.</li>
+  <li><strong>The second core.</strong> On the dual-core boards — Pico 2, Metro, S3 and P4 — two
+  BP threads run at the same time: with two threads working at once, the ESP32-P4 reaches
+  between 133 % and 200 % of one core's performance, and the RP2350 between 113 % (Metro) and
+  168 % (Pico 2). A known limitation, left for V8: on the RP2350 the dual-core image slows down
+  a single-threaded program (by up to 35 % on the Metro).</li>
+</ul>
+<p>
+  And what you'll notice: a new board, the <strong>ESP32-C5</strong>, with its touch screen;
+  <strong>destructors</strong> (<code>~Class()</code>), and when a program ends — normally, with
+  an error or with a Stop — each object releases what it took: a PWM stops, the outputs go back
+  to their reset state; the <code>Time</code> and <code>Heap</code> modules; and the IDE lists and
+  reads the board's files while a program runs. Eight images for ten boards; the V7 test round,
+  green on nine, across three architectures. Details in the
+  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v7.0">v7.0 release</a> and the
+  <a href="../RELEASES.md">release notes</a> <em>(Spanish)</em>; what V6 brought — the shared
+  microcontroller code, the C3 and the C6, the GUI in its own thread, screen capture — is in the
+  <a href="https://github.com/legio-e/BasicPlus/releases/tag/v6.0">v6.0 release</a>.
 </p>
 
 <h2>Getting started</h2>
@@ -259,7 +277,7 @@
   </a>
   <a class="card" href="INSTALAR_FIRMWARE.md">
     <span class="t">Installing the firmware →</span>
-    <span class="d">Flash the VM on each micro (prebuilt image or built by you): Pico/Metro, ESP32 (S3, C3, C6, P4), STM32.</span>
+    <span class="d">Flash the VM on each micro (prebuilt image or built by you): Pico/Metro, ESP32 (S3, C3, C5, C6, P4), STM32; and the packs a board with a screen needs.</span>
   </a>
 </div>
 
@@ -316,14 +334,14 @@
   </a>
   <a class="card" href="../RELEASES.md">
     <span class="t">Release notes → <small>(Spanish)</small></span>
-    <span class="d">What v6.0 brings, what changes when upgrading from v5, the downloadable artifacts and what is not there yet.</span>
+    <span class="d">What v7.0 brings, what changes when upgrading from v6, the downloadable artifacts and what is not there yet.</span>
   </a>
 </div>
 
 <p style="margin-top:1.2rem">Low-level specs <em>(Spanish)</em>:</p>
 <ul class="specs">
   <li>→ <a href="../MOD_FORMAT.md"><code>.mod</code> format</a> — the bytecode binary spec.</li>
-  <li>→ <a href="../OPCODES.md">Opcodes</a> — the semantics of all 175 instructions (plus a <a href="../opcodes.html">browsable view</a>, partial: the V1 opcodes with their AOT translation).</li>
+  <li>→ <a href="../OPCODES.md">Opcodes</a> — the semantics of all 189 instructions (plus a <a href="../opcodes.html">browsable view</a>, partial: the V1 opcodes with their AOT translation).</li>
   <li>→ <a href="../HEAP_LAYOUT.md">Heap layout</a> — the runtime <code>memory[]</code>.</li>
   <li>→ <a href="../BUILTINS.md">Builtins</a> — the <code>CALL_BUILTIN</code> catalog.</li>
   <li>→ <a href="../BPVM_WIRE_PROTOCOL.md">Wire protocol</a> — the JSON-per-line PC↔board link.</li>
@@ -338,39 +356,52 @@
     <td>Both VMs; TCP daemon for the IDE.</td>
   </tr>
   <tr>
-    <td>Raspberry Pi <strong>Pico 2</strong> and Adafruit <strong>Metro RP2350</strong></td>
+    <td>Raspberry Pi <strong>Pico 2</strong> and Adafruit <strong>Metro RP2350</strong> (Cortex-M33, dual core)</td>
     <td>USB-CDC</td>
-    <td>A <strong>single image</strong> for both boards: the variant (A/B) is detected in hardware; board name and pins come from <code>/sys/board.json</code>; the Metro's PSRAM is enabled in the environment (<code>psram=1</code>). AOT enabled.</td>
+    <td>A <strong>single image</strong> for both boards: the variant (A/B) is detected in hardware; board name and pins come from <code>/sys/board.json</code>; the Metro's PSRAM is enabled in the environment (<code>psram=1</code>). By default two BP threads run at once, one per core. AOT enabled.</td>
   </tr>
   <tr>
-    <td><strong>ESP32-S3</strong> (Xtensa LX7)</td>
+    <td><strong>ESP32-S3</strong> (Xtensa LX7, dual core)</td>
     <td>UART0</td>
-    <td>Persistent FS on a dedicated partition; console over native USB. 8 MB PSRAM as the VM heap, and a pack area. <code>native</code> runs interpreted (no AOT on Xtensa).</td>
+    <td>Persistent FS on a dedicated partition; console over native USB. 8 MB PSRAM as the VM heap, and a pack area. By default two BP threads run at once, one per core. <code>native</code> runs interpreted (no AOT on Xtensa).</td>
   </tr>
   <tr>
-    <td><strong>ESP32-C3</strong> and <strong>ESP32-C6</strong> (RISC-V, single core) — <em>new in V6</em></td>
+    <td><strong>ESP32-C3</strong> and <strong>ESP32-C6</strong> (RISC-V without FPU, single core) — <em>since V6</em></td>
     <td>USB-Serial-JTAG (the only USB)</td>
-    <td>Same ESP-IDF port; the console goes over UART0. The <strong>C6</strong> (Waveshare ESP32-C6-LCD-1.3) adds the first <strong>SPI</strong> display: ST7789 240×240, no touch. A pack area on both. <code>native</code> runs interpreted (RISC-V without FPU; no compile target yet).</td>
+    <td>Same ESP-IDF port; the console goes over UART0. No PSRAM: the VM gets up to 128 KB. The Waveshare <strong>C6</strong> (ESP32-C6-LCD-1.3) has an <strong>SPI</strong> display, ST7789 240×240 with no touch, painted by the <code>GuiMini</code> and <code>DriverSpi</code> packs (with the <code>Stdlib</code> pack too, or the GUI doesn't fit). A pack area on both. AOT enabled since V7 (<code>ilp32</code>).</td>
   </tr>
   <tr>
-    <td><strong>ESP32-P4</strong> (RISC-V) — with a screen</td>
+    <td><strong>ESP32-C5</strong> (RISC-V without FPU, single core) — <em>new in V7</em>, with a screen</td>
+    <td>USB-Serial-JTAG (the only USB)</td>
+    <td>The Waveshare ESP32-C5-Touch-LCD-2.8: 8 MB of PSRAM for the VM, 32 MB of flash, a TF slot and an ST7789 240×320 <strong>SPI</strong> display with touch, painted by the <code>Gui</code> and <code>DriverSpi</code> packs. The console goes over UART0. AOT enabled (<code>ilp32</code>).</td>
+  </tr>
+  <tr>
+    <td><strong>ESP32-P4</strong> (RISC-V, dual core) — with a screen</td>
     <td>UART</td>
-    <td>LVGL GUI on a MIPI-DSI panel + touch. A <strong>single image</strong> for the Function-EV kit (EK79007 1024×600) and the Waveshare 4.3" (ST7701 480×800); the panel is chosen at <em>runtime</em> from the environment (<code>display=st7701</code>). AOT enabled (RISC-V).</td>
+    <td>LVGL GUI on a MIPI-DSI panel + touch: the panel driver comes in the image, LVGL in the <code>Gui</code> pack. A <strong>single image</strong> for the Function-EV kit (EK79007 1024×600) and the Waveshare 4.3" (ST7701 480×800); the panel is chosen at <em>runtime</em> from the environment (<code>display=st7701</code>). By default two BP threads run at once, one per core. AOT enabled (RISC-V).</td>
   </tr>
   <tr>
     <td><strong>STM32</strong> (Nucleo-U575ZI-Q · Discovery U5G9J-DK2)</td>
     <td>ST-LINK VCP</td>
-    <td>FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350). The <strong>Discovery DK2</strong> adds an LTDC 800×480 screen + touch (GUI).</td>
+    <td>FS in internal flash; AOT enabled (same Cortex-M33 as the RP2350). The <strong>Discovery DK2</strong> adds an LTDC 800×480 screen + touch: the panel driver comes in the image, LVGL in the <code>Gui</code> pack. <code>Adc</code> works (ADC1, since V7); <code>Wdt</code> does not: its IWDG cannot be stopped once started.</td>
   </tr>
 </table>
 <p>
-  On all of them: two system threads, <code>vm</code> and <code>io</code>, so the board
-  keeps answering the cable while the program runs; a "wire v1" REPL with file upload,
-  remote RUN and a run argument (<code>run X &lt;arg&gt;</code>),
-  <strong>Stop</strong> (instant KILL without resetting the board),
-  <strong>autorun</strong> (<code>/sys/auto.txt</code> starts your program on
-  power-up, and the IDE can attach live), unified exit codes and on-device debugging with
-  breakpoints. Seven images in total.
+  Eight images for ten boards. A board with a screen needs, besides its image, the screen's
+  packs — burned from the IDE: <em>Placa</em> → <em>Packs</em> — and a RAM block for their
+  engine (<code>packRam=</code> in the environment): what to burn on each one, in
+  <a href="INSTALAR_FIRMWARE.md">Installing the firmware</a>.
+</p>
+<p>
+  On all of them: the cable has a system thread of its own, <code>io</code>, apart from the
+  program, so the board keeps answering the cable while the program runs — and, since V7, also
+  lists and reads files —; a "wire v1" REPL with file upload, remote RUN and a run argument
+  (<code>run X &lt;arg&gt;</code>), <strong>Stop</strong> (instant KILL without resetting the
+  board), <strong>autorun</strong> (<code>/sys/auto.txt</code> starts your program on power-up,
+  and the IDE can attach live), unified exit codes and on-device debugging with breakpoints
+  (while debugging, the program's threads take turns, as on a single core). On the dual-core
+  boards, <code>vm.cores=1</code> and <code>vm.runs=1</code> in the environment take the board
+  back to one core without reflashing.
 </p>
 
 <h2>Verified on real hardware</h2>
@@ -398,27 +429,30 @@
   On the <strong>STM32</strong> (Nucleo-U575ZI-Q) the <strong>four critical
   buses</strong> were also validated on the board with real sensors: GPIO,
   <strong>SPI</strong> (BME688), <strong>UART</strong> (loopback) and
-  <strong>I2C</strong> (BMP280, T/P). And on the <strong>ESP32-S3</strong>
+  <strong>I2C</strong> (BME280, T/P). And on the <strong>ESP32-S3</strong>
   (DevKitC) those <strong>same four buses</strong> were validated on the
   board with real sensors (BME688 over SPI, BME280 over I2C, GPIO and UART
   loopbacks) — the <strong>three families are on par</strong>. On STM32 and
-  ESP32 the non-critical peripherals (PWM/ADC/RTC/WDT) got their hardware
-  backend in v3. The <strong>Metro RP2350B</strong> shares the firmware image
-  with the Pico — one <code>.uf2</code> for both, the variant is detected at
-  runtime. V6 added the <strong>ESP32-C3</strong> and <strong>ESP32-C6</strong>, and the
-  UART gained a 512-byte receive ring on all five families (measured on Pico 2 and
-  Discovery). In all, <strong>eight boards and three architectures</strong> verified on real
-  hardware.
+  ESP32 the non-critical peripherals work too (PWM, ADC and RTC; the STM32's
+  external ADC since V7); the watchdog, on the ESP32s — the STM32 has none, on
+  purpose: its IWDG cannot be stopped once started. The <strong>Metro RP2350B</strong>
+  shares the firmware image with the Pico — one <code>.uf2</code> for both, the
+  variant is detected at runtime. V6 added the <strong>ESP32-C3</strong> and
+  <strong>ESP32-C6</strong> (and the UART gained a 512-byte receive ring), and V7 the
+  <strong>ESP32-C5</strong>. The V7 test round passed on <strong>nine boards and three
+  architectures</strong>: Pico 2, Metro, S3, C3, C5, C6, Waveshare P4, Nucleo and DK2.
 </p>
 
 <p>
   <strong>Boards with a screen (since V3).</strong> The GUI (LVGL) has been verified on
-  hardware on all four: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + GT911 touch),
+  hardware on all five: <strong>STM32U5G9J-DK2</strong> (LTDC 800×480 + GT911 touch),
   <strong>ESP32-P4-Function-EV</strong> (EK79007 1024×600),
-  <strong>Waveshare ESP32-P4</strong> (ST7701 480×800) and, since V6,
-  <strong>Waveshare ESP32-C6-LCD-1.3</strong> (ST7789 240×240 over SPI) — widget catalogue,
-  colour, <code>.win</code> forms, touch and screen capture (<code>Gui.shot</code>), with the
-  same bytecode on all four. The program's screen is the size of the panel.
+  <strong>Waveshare ESP32-P4</strong> (ST7701 480×800),
+  <strong>Waveshare ESP32-C6-LCD-1.3</strong> (ST7789 240×240 over SPI) and, since V7,
+  <strong>Waveshare ESP32-C5-Touch-LCD-2.8</strong> (ST7789 240×320 over SPI + touch) — widget
+  catalogue, colour, <code>.win</code> forms, touch and screen capture (<code>Gui.shot</code>),
+  with the same bytecode on all of them. In V7, with LVGL from a pack, on four of them; the
+  Function-EV kit was last verified in V6. The program's screen is the size of the panel.
 </p>
 
 <h2>Credits</h2>
@@ -452,7 +486,7 @@
 <footer>
   BasicPlus — documentation written alongside the development.
   Frontend <code>lexer-java</code> · VMs <code>miVM</code> (Java) and
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32 S3·C3·C6·P4 / STM32) · IDE
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32 S3·C3·C5·C6·P4 / STM32) · IDE
   <code>BpIde</code>. MIT license.
 </footer>
 

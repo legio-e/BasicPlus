@@ -209,7 +209,7 @@
     <li class="sub"><a href="#ej-preview">23.1 Preview on the PC</a></li>
     <li class="sub"><a href="#ej-host">23.2 Real render on the PC</a></li>
     <li class="sub"><a href="#ej-placa">23.3 On the board</a></li>
-    <li class="sub"><a href="#ej-pantalla">23.4 The displays and rotation</a></li>
+    <li class="sub"><a href="#ej-pantalla">23.4 The displays, their packs and rotation</a></li>
     <li class="sub"><a href="#ej-shot">23.5 Screenshot: Gui.shot</a></li>
 
     <li class="group"><a href="#referencia">24. Gui.* quick reference</a></li>
@@ -265,7 +265,7 @@
   <tr><th>VM</th><th>Render</th><th>Where</th></tr>
   <tr><td>miVM (Java)</td><td>Swing</td><td>PC — quick preview from the IDE</td></tr>
   <tr><td>VM-C (host)</td><td>LVGL + SDL window</td><td>PC — identical to the board render</td></tr>
-  <tr><td>VM-C (device)</td><td>LVGL + display</td><td>Microcontroller with a display: STM32U5G9J-DK2, ESP32-P4 (kit and Waveshare) and ESP32-C6-LCD-1.3 (§23.4)</td></tr>
+  <tr><td>VM-C (device)</td><td>LVGL (from the GUI pack) + display</td><td>Microcontroller with a display: ESP32-C5-Touch-LCD-2.8, ESP32-C6-LCD-1.3, ESP32-P4 (kit and Waveshare) and STM32U5G9J-DK2, with its display packs burnt (§23.4)</td></tr>
 </table>
 <p>
   All three execute the <strong>same bytecode</strong> and build the <strong>same widget model</strong>;
@@ -286,7 +286,8 @@
       with the LVGL render (<code>make&nbsp;LVGL=1</code>) and an SDL window.</li>
   <li><strong>On the board</strong> — the IDE's <em>Run on Device</em> button; it uploads the
       <code>.mod</code> and the project's <code>resources/</code> and runs it on the real display. See
-      the <a href="guia-ide.html">IDE guide</a>.</li>
+      the <a href="guia-ide.html">IDE guide</a>. Before that, once per board, you burn its display packs:
+      since V7, LVGL is not in the firmware image (§23.4).</li>
 </ul>
 
 <h3 id="intro-primeros">18.3 First steps of a GUI project</h3>
@@ -307,8 +308,9 @@
       micro brings graphics support — with <strong>DSI</strong> preferably, if the display is medium or
       large.</li>
   <li><strong>A good option is a display that includes the micro</strong> — like the boards with an
-      integrated ESP32-P4; and, for small things, an SPI display like the one on the ESP32-C6-LCD-1.3
-      (240×240, no touch). The four supported displays are in §23.4.</li>
+      integrated ESP32-P4; and, for small things, an SPI display like the one on the ESP32-C5-Touch-LCD-2.8
+      (240×320, touch) or the one on the ESP32-C6-LCD-1.3 (240×240, no touch). The five supported displays,
+      and what each one needs, are in §23.4.</li>
 </ul>
 <div class="note">
   <p>To get a feel for the RAM: the <em>framebuffer</em> alone of a 1024×600 display in 16-bit color
@@ -419,7 +421,8 @@
 <p>
   <strong>The screen is the size of the panel.</strong> The <code>480x320</code> above is the <em>host</em>
   default; on the board <code>scr.width</code>/<code>scr.height</code> and the dump report the real panel
-  size: 240×240 on the C6, 800×480 on the DK2, 1024×600 on the P4 (480×800 on the Waveshare). The same
+  size: 240×320 on the C5, 240×240 on the C6, 800×480 on the DK2, 1024×600 on the P4 (480×800 on the
+  Waveshare). The same
   program gives a different dump on each display. To make the PC mimic a given board, the host C VM accepts
   <code>--screen=WxH</code> (§23.2).
 </p>
@@ -448,6 +451,13 @@
   <code>Slider</code>…) descend from <code>Component</code> directly. Every constructor takes the parent as
   <code>parent: Container</code>: a <code>Label</code> inside a <code>Checkbox</code> does not compile. The
   tree is yours to walk and dump (<code>toJson()</code>, §24.2).
+</p>
+<p>
+  <strong>A widget's owner is its container</strong>: on creation it registers with it, and it stays there until
+  a <code>delete()</code> (its own or an ancestor's). If you also hold it with a local <code>var owner</code>, when
+  that goes out of scope its destructor removes it from the tree and from the screen and unregisters it from its
+  container (V7, 3-Oct); the screen (<code>Screen</code>) is never removed that way. For everything else, a plain
+  reference.
 </p>
 <div class="note">
   <p><strong>OO policy.</strong> Like the rest of the library, widgets are classes: no public fields,
@@ -579,7 +589,9 @@ ta.readOnly := <span class="kw">true</span></code></pre>
 t.<span class="fn">setGrid</span>(<span class="num">2</span>, <span class="num">3</span>)
 t.<span class="fn">setCell</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="str">"Name"</span>)
 t.<span class="fn">setCell</span>(<span class="num">1</span>, <span class="num">0</span>, <span class="str">"Ann"</span>)</code></pre>
-<p class="soon">In the <code>.win</code> (JSON): pending — the cell grid is nested structure (2nd phase). For now, by code.</p>
+<p>The same in the <code>.win</code> (JSON; since V7): the grid and, if any cell says something, all of them, row by
+row —it is what <code>toJson()</code> writes—:</p>
+<pre><code>{ "type": "Table", "rows": 2, "cols": 3, "cells": [["Name", "", ""], ["Ann", "", ""]] }</code></pre>
 
 <h3 id="w-tab">20.6 Tabview</h3>
 <p>
@@ -673,9 +685,10 @@ b.<span class="fn">setTextColor</span>(Gui.<span class="fn">Color</span>(<span c
 <h4>Compiled catalog — by size</h4>
 <p>
   The <code>fontSize</code> property of any widget sets the text size in pixels, picking from the catalog
-  of fonts compiled into the firmware: <strong>Montserrat</strong> at
+  of fonts compiled with LVGL (on the board, inside the GUI pack, §23.4): <strong>Montserrat</strong> at
   <code>12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48</code> px (default, 14). The value must match one of
-  those sizes; otherwise the default font is used.
+  those sizes; otherwise the default font is used. The pack for small displays (<code>GuiMini</code>, the C6's)
+  only goes up to 24&nbsp;px: a larger size comes out at 24, and the board's log says so once.
 </p>
 <pre><code><span class="kw">var</span> t: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"Title"</span>)
 t.fontSize := <span class="num">32</span></code></pre>
@@ -791,9 +804,12 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 <span class="comment">// and in the button's onClick, ONE line:</span>
 <span class="fn">Task</span>(<span class="kw">this</span>.lbl).<span class="fn">start</span>()</code></pre>
 <p>
-  BP threads interleave by quanta on a single worker (same on the PC and on the board): the
-  handler returns, the GUI stays alive, and the task can <strong>update widgets
-  directly</strong> — each operation (<code>setText</code>…) is atomic at the quantum level.
+  The handler returns, the GUI stays alive, and the task can <strong>update widgets
+  directly</strong>: each GUI operation (<code>setText</code>…) is done whole, with no other thread cutting in.
+  On the PC and on almost every display board, BP threads take turns by quanta on a single processor; on the P4,
+  which since V7 runs two at once, one per core (<code>vm.runs</code>,
+  <a href="guia-ide.html#entorno">IDE guide §9.3</a>), the VM hands every GUI call to the first of the two
+  —the display's—, with nothing for the program to do.
   Full demo: <code>samples/GuiAsyncDemo.bp</code>.
 </p>
 <p>
@@ -897,6 +913,7 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this objec
   <tr><td><code>--screen=WxH</code></td><td>Screen size (default 480×320). With <code>--screen=240x240</code> the PC mimics the C6: the dump and <code>toJson()</code> come out as on the board.</td></tr>
   <tr><td><code>--no-screen</code></td><td>No window: the program runs the same (and <code>Gui.shot</code> captures the same), useful in automated tests.</td></tr>
   <tr><td><code>--basedir=DIR</code></td><td>Root for relative paths (<code>readFile</code>, <code>load</code>, images) when not launching from the project folder.</td></tr>
+  <tr><td><code>--libdir=DIR</code></td><td>The PC's <code>/lib</code>: where the standard library is when it is not next to the program (what <code>stdlibDir</code> in <code>BpVM.cfg</code> is for the Java VM). Modules are looked up in the program's folder, then here, then in the packs (<code>--pack=</code>).</td></tr>
   <tr><td><code>--trace</code></td><td>Per-instruction trace (diagnostics).</td></tr>
 </table>
 
@@ -907,33 +924,157 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this objec
   <code>.win</code> files go as they are, §22.4), and runs it on the real
   display. <code>print</code> output goes to the IDE console; <em>Stop</em> (Ctrl+F2) kills the run.
 </p>
+<div class="note">
+  <p><strong>What it does not upload is the display.</strong> Since V7 the board's GUI comes in packs —the engine,
+  LVGL, and the driver of its display— that are burnt once, plus a RAM block in its ENV. Which packs and which
+  lines each board needs, and what a program sees if something is missing, in §23.4.</p>
+</div>
 <p>
   To make the application start <strong>when the board powers up</strong>, with no PC, use autorun from
   the explorer console:
 </p>
 <pre><code>/&gt; autorun MyApp      (and to remove it:  autorun off)</code></pre>
-<div class="warn">
-  <p><strong>After stopping a GUI with Stop, reset the board</strong> before the next Run: the display
-  can be left in an inconsistent state. This is a known limitation of this version (see §25).</p>
-</div>
-
-<h3 id="ej-pantalla">23.4 The displays and rotation</h3>
 <p>
-  Four supported displays. On all of them the screen is the size of the panel (§19.1):
+  When a program ends —normally, with an error or with <em>Stop</em>—, the board leaves a clean display for the
+  next one: a new screen, without the previous program's widgets, colors or events, and at 0°. Since V7 there is
+  no need to reset the board between one run and the next.
+</p>
+
+<h3 id="ej-pantalla">23.4 The displays, their packs and rotation</h3>
+<p>
+  Five boards with a display. On all of them the screen is the size of the panel (§19.1):
 </p>
 <table>
-  <tr><th>Board</th><th>Panel</th><th>Size</th><th>Touch</th><th>How it is chosen</th></tr>
-  <tr><td>STM32U5G9J-DK2</td><td>LTDC, 5"</td><td>800×480</td><td>yes</td><td>the DK2 <code>stm32</code> image</td></tr>
-  <tr><td>ESP32-P4-Function-EV</td><td>EK79007, MIPI-DSI, 7"</td><td>1024×600</td><td>yes</td><td>ENV <code>display=ek79007</code> <em>(P4 default)</em></td></tr>
-  <tr><td>Waveshare ESP32-P4 Touch-LCD-4.3</td><td>ST7701, MIPI-DSI, 4.3"</td><td>480×800 (portrait)</td><td>yes</td><td>ENV <code>display=st7701</code></td></tr>
-  <tr><td>Waveshare ESP32-C6-LCD-1.3</td><td>ST7789, SPI, 1.3"</td><td>240×240</td><td>no</td><td>the <code>esp32c6</code> image</td></tr>
+  <tr><th>Board</th><th>Panel</th><th>Size</th><th>Touch</th></tr>
+  <tr><td>Waveshare ESP32-C5-Touch-LCD-2.8</td><td>ST7789, SPI, 2.8"</td><td>240×320</td><td>yes</td></tr>
+  <tr><td>Waveshare ESP32-C6-LCD-1.3</td><td>ST7789, SPI, 1.3"</td><td>240×240</td><td>no</td></tr>
+  <tr><td>ESP32-P4-Function-EV</td><td>EK79007, MIPI-DSI, 7"</td><td>1024×600</td><td>yes</td></tr>
+  <tr><td>Waveshare ESP32-P4 Touch-LCD-4.3</td><td>ST7701, MIPI-DSI, 4.3"</td><td>480×800 (portrait)</td><td>yes</td></tr>
+  <tr><td>STM32U5G9J-DK2</td><td>LTDC, 5"</td><td>800×480</td><td>yes</td></tr>
 </table>
+<p>
+  The other boards —the Pico&nbsp;2, the Metro, the S3, the C3 and the Nucleo— have no GUI: their image does not
+  carry it.
+</p>
+
+<h4 id="ej-packs">The display comes in packs (V7)</h4>
+<p>
+  Since V7 no image carries LVGL: the GUI engine goes in a pack that is burnt into the board's pack area, and
+  whoever uses the board decides whether it has a display, not the image. A board with a display needs three
+  things:
+</p>
+<ul>
+  <li><strong>the LVGL pack</strong>: <code>Gui.pack</code> or, on a small display without PSRAM,
+      <code>GuiMini.pack</code> —the same LVGL with room for 256 widgets (§25), fonts up to 24&nbsp;px (§21.2) and
+      screenshots of up to 40&nbsp;KB (§23.5)—. One or the other, not both.</li>
+  <li><strong>the driver of its display</strong>, which publishes itself under the <code>'PANT'</code> mark: on the
+      P4 and the DK2 the image carries it (their MIPI-DSI and LTDC); on the C5 and the C6 it is another pack,
+      <code>DriverSpi.pack</code>, the generic driver for SPI displays, which reads the board from a few ENV lines
+      (below).</li>
+  <li><strong>a RAM block for the native engines</strong>: <code>packRam=&lt;KB&gt;</code> in the ENV (or
+      <code>SQLite=&lt;MB&gt;</code>, the database one, which works the same). Without it no engine loads —neither
+      the GUI nor SQLite—, and the IDE's INFO says so on its «RAM packs» line. The block is shared by every engine:
+      the GUI's asks for about 380&nbsp;KB (<code>GuiMini</code> and <code>DriverSpi</code> together, about 130), and
+      if you also use SQLite, add its share.</li>
+</ul>
+<table>
+  <tr><th>Board</th><th>Packs</th><th>In the ENV</th></tr>
+  <tr><td>ESP32-C5 (Waveshare 2.8")</td><td><code>Gui.pack</code> + <code>DriverSpi.pack</code></td><td><code>packRam=512</code> and the lines of its display (below)</td></tr>
+  <tr><td>ESP32-C6 (Waveshare 1.3")</td><td><code>Stdlib.pack</code> + <code>GuiMini.pack</code> + <code>DriverSpi.pack</code></td><td><code>packRam=136</code> and the lines of its display (below)</td></tr>
+  <tr><td>ESP32-P4 (the kit and the Waveshare)</td><td><code>Gui.pack</code></td><td><code>SQLite=4</code> (or <code>packRam=&lt;KB&gt;</code>); on the Waveshare, also <code>display=st7701</code></td></tr>
+  <tr><td>STM32U5G9J-DK2</td><td><code>Stdlib.pack</code> (recommended) + <code>Gui.pack</code></td><td><code>packRam=768</code></td></tr>
+</table>
+<p>
+  The packs come in the <code>packs/</code> folder of the BasicPlus package, and the same <code>Gui.pack</code>
+  serves the three boards that use it: when burning it, the IDE keeps the engine of the board in front of it.
+  Neither the LVGL pack nor the driver pack carries the standard library (V7): the board takes <code>Gui.mod</code>
+  and its companions from the <code>Stdlib.pack</code>, if it is burnt —from the flash, without spending RAM—, or
+  from <code>/lib</code>, into RAM. On the C6 the <code>Stdlib.pack</code> is a must: without it the GUI does not
+  fit.
+</p>
+<p>
+  They are burnt from the IDE —the <em>Placa</em> button, «Copiar pack a la placa…»
+  (<a href="guia-ide.html#packs-panel">IDE guide §10.3</a>)— <strong>after</strong> setting the ENV (the
+  <em>Entorno</em> button, <a href="guia-ide.html#entorno">§9.3</a>) and resetting the board: the ENV is read at
+  boot, and each engine is sealed for the RAM block the board has when it is burnt (if you change
+  <code>packRam=</code> later, burn it again). Step by step, and when to burn again, in
+  «<a href="INSTALAR_FIRMWARE.md#packs">The board's packs</a>» (INSTALAR_FIRMWARE).
+</p>
+
+<h4 id="ej-env-spi">The ENV lines of the C5 and the C6</h4>
+<p>
+  The generic driver knows nothing about the board: the ENV tells it, one line per bus and one per device. The
+  C5's, with its touch panel and the pin expander that drives it:
+</p>
+<pre><code>spi2=sck:6,mosi:7,miso:8
+i2c0=sda:0,scl:1,khz:400
+lcd=st7789,spi:2,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv
+exp=ch32,i2c:0,addr:0x24
+touch=cst3530,i2c:0,addr:0x58,rst:x0
+packRam=512</code></pre>
+<p>The C6's, with no touch:</p>
+<pre><code>spi2=sck:7,mosi:6,miso:5
+lcd=st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv
+packRam=136</code></pre>
+<p>
+  The <code>miso</code> in <code>spi2=</code> belongs to the TF card, which sits on the same bus as the display
+  (its <code>sd=</code> line, in the <a href="referencia.html#stdlib-sd">reference, §14.17</a>): the bus is shared,
+  and what is exclusive to each device is its CS.
+</p>
+
+<h4 id="ej-otra-spi">Another SPI display, without writing C</h4>
+<p>
+  <code>DriverSpi</code> is not one board's driver: it is made for any MIPI-DCS controller over 4-wire SPI
+  (ST7789, ILI9341, GC9A01, ST7796…), and tested with the ST7789 of the C5 and the C6 (the pack that ships with
+  BasicPlus is built for their family, RISC-V without FPU). The board goes in the ENV and the controller in a text
+  file, so another display of that kind is described rather than programmed:
+</p>
+<ul>
+  <li><code>spiN=</code> (and <code>i2cN=</code>, if there is touch or an expander): the pins of each bus.</li>
+  <li><code>lcd=</code>: the controller (the name of its <code>.seq</code>), <code>spi:N</code>, <code>dc:</code>,
+      <code>cs:</code> and the size of the glass at 0° (<code>w:</code>, <code>h:</code>); and when needed,
+      <code>rst:</code> and <code>bl:</code> (reset and backlight), <code>mhz:</code> (20 if not given, and never
+      above what the controller's datasheet allows: 62 on the ST7789), <code>ram:</code> and <code>off:</code> (when
+      the controller's memory is larger than the glass, as on the C6), <code>inv</code>, <code>bgr</code> and
+      <code>seq:</code>. A pin is a GPIO (<code>21</code>) or an expander output (<code>x1</code>).</li>
+  <li><code>touch=</code> and <code>exp=</code>: the touch panel and the pin expander (today, the C5's CST3530 and
+      CH32). Without <code>touch=</code>, the display has no touch.</li>
+  <li>the controller's <strong>start-up sequence</strong>, in a <code>.seq</code>: the ST7789's travels inside the
+      pack; another one you write yourself —copying the one in the manufacturer's example— and name it with
+      <code>seq:/sys/mio.seq</code>.</li>
+</ul>
+<p>
+  What every driver provides —<code>init</code>, <code>size</code>, <code>flush</code> and, if it can,
+  <code>rotate</code> and <code>touch</code>— is the <code>'PANT'</code> contract, the same for
+  <code>DriverSpi</code> as for the image drivers of the P4 and the DK2: that is why the same LVGL pack serves
+  them all.
+</p>
+
+<h4 id="ej-sin-pack">If something is missing</h4>
+<p>
+  The first <code>Gui.Screen()</code> says so, with a (catchable) <code>RuntimeError</code>, instead of leaving the
+  screen black:
+</p>
+<table>
+  <tr><th>If…</th><th>the program gets</th></tr>
+  <tr><td>the image has no GUI (the Pico&nbsp;2, the Metro, the S3, the C3, the Nucleo)</td><td><code>builtin 135 no soportado en esta VM (subconjunto C)</code></td></tr>
+  <tr><td>the LVGL pack is not there… or it is, but its engine did not load: no <code>packRam=</code>, or the block changed since it was burnt</td><td><code>GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)</code></td></tr>
+  <tr><td>the display driver is not there (on the C5 and the C6, <code>DriverSpi.pack</code>)</td><td><code>GUI: no hay driver de pantalla ('PANT'): graba el pack del driver de esta placa</code></td></tr>
+  <tr><td>an ENV line of the display is wrong</td><td>the reason, by name: <code>GUI: pantalla: ENV lcd: falta 'dc'</code></td></tr>
+  <tr><td>the display does not start</td><td><code>GUI: la pantalla no arranco: su driver fallo al iniciarse (el motivo, en el log)</code></td></tr>
+</table>
+<p>
+  The rest is in the board's log: which engines it loaded and, if one did not, why.
+</p>
+
+<h4 id="ej-rotacion">The P4 panel, the C6 and rotation</h4>
 <p>
   The ESP32-P4 firmware is a <strong>single image</strong> with a panel catalog: it picks one when the GUI
   starts by reading the <code>display</code> key of the <strong>board environment</strong> (the IDE's
   <em>Entorno</em> button, <a href="guia-ide.html#entorno">IDE guide §9.3</a>). With no key, or an unknown
-  value, it uses the default panel. The C6 has no touch: its GUI is output only (indicators, charts,
-  status), and an image with LVGL fits in its 128&nbsp;KB of VM.
+  value, it uses the default panel, the kit's (<code>ek79007</code>). The C6 has no touch: its GUI is output only
+  (indicators, charts, status); and it has no PSRAM, so it carries the small pack and the standard library in
+  flash, and with <code>packRam=136</code> its VM is left with about 127&nbsp;KB (63 of heap).
 </p>
 <p>
   The <strong>orientation</strong> is changed at runtime, LVGL style:
@@ -942,8 +1083,8 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this objec
 <p>
   The rotation swaps the logical dimensions and the touch panel is transformed automatically —
   <code>align</code> keeps working with no changes. The natural place to call it is at the start, before
-  creating widgets. Available on the ESP32-P4 (both boards), on the ESP32-C6, on the LVGL host and in the
-  Swing preview; on the STM32 (DK2) it does not rotate in this version (it warns and carries on).
+  creating widgets. It rotates on all five boards —the DK2, since V7—, on the LVGL host and in the Swing
+  preview; and the rotation lasts as long as the program: the next one starts at 0°.
 </p>
 
 <h3 id="ej-shot">23.5 Screenshot: <code>Gui.shot</code></h3>
@@ -951,9 +1092,10 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this objec
   <code>Gui.shot(path): integer</code> writes the screen <strong>as LVGL drew it</strong> to a
   <code>.shot</code> file (RGB565 in strips, compressed; format in <code>docs/SHOT_FORMAT.md</code>) and
   returns the bytes written. It goes through the same path on the host (with a window or
-  <code>--no-screen</code>), on miVM and on the four displays. On failure it throws a catchable
+  <code>--no-screen</code>), on miVM and on the five displays. On failure it throws a catchable
   <code>RuntimeError</code>: «sin pantalla» (C VM built without LVGL, or miVM without a window), «error de
-  escritura», «no cabe en el tope de captura» or «sin memoria».
+  escritura», «no cabe en el tope de captura» (256&nbsp;KB; 40 with <code>GuiMini</code>, the C6's pack) or «sin
+  memoria».
 </p>
 <pre><code>Gui.<span class="fn">start</span>()
 <span class="fn">sleep</span>(<span class="num">300</span>)                          <span class="comment">// pump BEFORE capturing</span>
@@ -968,8 +1110,8 @@ Gui.<span class="fn">join</span>()</code></pre>
 </p>
 <p>
   On the board the file lands in the file system (path as is, like <code>writeFile</code>) and is
-  downloaded <strong>once the program has ended</strong> — during a RUN <code>get</code> answers BUSY —
-  with the <code>get</code> command of the IDE console. The PC turns it into a PNG with a script that only
+  downloaded with the <code>get</code> command of the IDE console —since V7, also while the program is running:
+  the board sends it in chunks, between its output—. The PC turns it into a PNG with a script that only
   needs Python:
 </p>
 <pre><code>python bpgenvm-c/tools/shot2png.py MyApp.shot        (leaves MyApp.png next to it)</code></pre>
@@ -1026,9 +1168,10 @@ Gui.<span class="fn">join</span>()</code></pre>
   <tr><td><code>refresh()</code></td><td>function</td><td>Forces a repaint of the widget.</td></tr>
   <tr><td><code>getParent(): Container</code></td><td>function</td><td>The container that holds it; <code>null</code> at the root (<code>Screen</code>, <code>Window</code>).</td></tr>
   <tr><td><code>typeName(): string</code></td><td>function</td><td>The class name (<code>"Label"</code>, <code>"Button"</code>…), the same <code>type</code> as in the <code>.win</code>.</td></tr>
-  <tr><td><code>toJson(): Json.JsonObject</code> / <code>toJsonText(): string</code></td><td>function</td><td>The subtree in <code>.win</code> format: <code>type</code>, <code>name</code>, what is specific to the widget (<code>text</code>, <code>checked</code>, <code>value</code>…), <code>align</code> by name with <code>x</code>/<code>y</code> as offsets, <code>width</code>/<code>height</code> only when not automatic, <code>fontSize</code>, and the explicit <code>clic</code>/<code>change</code>. What <code>Window.load</code> loaded comes back out the same (round trip). <code>toJsonText</code> gives the text without having to import <code>Json</code>.</td></tr>
+  <tr><td><code>toJson(): Json.JsonObject</code> / <code>toJsonText(): string</code></td><td>function</td><td>The subtree in <code>.win</code> format: <code>type</code>, <code>name</code>, what is specific to the widget (<code>text</code>, <code>checked</code>, <code>value</code>…), <code>align</code> by name with <code>x</code>/<code>y</code> as offsets, <code>width</code>/<code>height</code> only when not automatic, <code>fontSize</code>, the colors, and the explicit <code>clic</code>/<code>change</code>. What <code>Window.load</code> loaded comes back out the same (round trip). <code>toJsonText</code> gives the text without having to import <code>Json</code>.</td></tr>
   <tr><td><code>clean()</code></td><td>function</td><td>Removes the widget's CHILDREN (the widget stays).</td></tr>
   <tr><td><code>delete()</code></td><td>function</td><td>Removes the widget and its children (children before parent) and unregisters it from its parent. <strong>Idempotent</strong>: deleting twice does not fail.</td></tr>
+  <tr><td><code>~Component()</code></td><td>destructor</td><td>Not called by hand: the language calls it when the object is released —a <code>var owner</code> going out of scope, the GC, the end of the program— and it does a <code>delete()</code> (§19.2). The <code>Screen</code> is not removed this way. <em>(V7.)</em></td></tr>
   <tr><td><code>onClick</code> / <code>onChange</code></td><td><strong>event</strong></td><td>Subscribed with <code>::</code>: <code>button.onClick := window::button_onClick</code>. See <a href="#ev-codigo">§22.5</a>. <em>(In V3 these were virtual methods you overrode by subclassing; not any more.)</em></td></tr>
 </table>
 <p>
@@ -1048,11 +1191,12 @@ Gui.<span class="fn">join</span>()</code></pre>
 <h3 id="ref-widgets">24.3 Widgets</h3>
 <p>
   In every constructor <code>parent</code> is a <code>Container</code> (§24.2). The classes marked
-  <em>(Container)</em> can have children; the rest are leaves.
+  <em>(Container)</em> can have children; the rest are leaves. On the board, with the widget table full, a
+  constructor throws <code>RuntimeError</code> (§25).
 </p>
 <table>
   <tr><th>Class</th><th>Constructor</th><th>Own members</th></tr>
-  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — makes this screen the visible one. It is the size of the panel (§19.1).</td></tr>
+  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — makes this screen the visible one. It is the size of the panel (§19.1). On a board without the GUI —without its packs, or with a display that does not start— the constructor throws <code>RuntimeError</code> with the reason (§23.4).</td></tr>
   <tr><td><code>Panel</code> <em>(Container)</em></td><td><code>Panel(parent)</code></td><td>— (grouping container; everything inherited).</td></tr>
   <tr><td><code>Label</code></td><td><code>Label(parent, text)</code></td><td><code>setText(t)</code>, <code>setFont(id)</code>.</td></tr>
   <tr><td><code>Button</code> <em>(Container)</em></td><td><code>Button(parent, text := "")</code></td><td>— (the click arrives via handler or <code>onClick</code>). With text it carries a child <code>Label</code>; without text it is an empty container.</td></tr>
@@ -1080,6 +1224,13 @@ Gui.<span class="fn">join</span>()</code></pre>
 <h2 id="matices">25. Fine print and limitations</h2>
 <p>Worth knowing before it surprises you. None of them blocks the work; all have a way out.</p>
 
+<h3>Without its packs, the board does not paint (V7)</h3>
+<p>
+  A board that painted with the image alone in V6 needs, in V7, its display packs as well, and the engines' RAM
+  block in its ENV. Without them, the first <code>Gui.Screen()</code> throws a <code>RuntimeError</code> saying
+  what is missing. What each board needs, in §23.4.
+</p>
+
 <h3>The screen is the size of the panel</h3>
 <p>
   Since V6 the tree no longer models a fixed 480×320: on the board it is the size of the real panel (§19.1),
@@ -1092,10 +1243,14 @@ Gui.<span class="fn">join</span>()</code></pre>
 
 <h3>What <code>toJson()</code> does not save yet</h3>
 <p>
-  Ranges (<code>min</code>/<code>max</code>), options and items, the <code>Msgbox</code> buttons, colors and
-  tab titles. And <code>Bar</code>, <code>Led</code>, <code>Chart</code> and <code>Table</code> do not register
-  with their parent: they do not count in <code>childCount()</code> nor appear in <code>toJson()</code>, even
-  though they are painted and the <code>__guiDumpTree()</code> dump does list them.
+  Since V7 (3-Oct) it saves the ranges (<code>min</code>/<code>max</code>), the options and the items, the
+  <code>Msgbox</code> buttons, the colors (<code>bgColor</code>/<code>textColor</code>, as <code>"0xRRGGBB"</code>),
+  the shape of a <code>Chart</code> (<code>points</code>, <code>chartType</code>, its range) and the grid of a
+  <code>Table</code> (<code>rows</code>, <code>cols</code> and <code>cells</code>); and <code>Bar</code>,
+  <code>Led</code>, <code>Chart</code> and <code>Table</code> are in the tree like the rest (they count in
+  <code>childCount()</code> and get their clicks). What it does not save yet: the tab titles, the image of an
+  <code>ImageView</code> and the field of a <code>Keyboard</code> (and the loader does not build those three from a
+  <code>.win</code>); nor the series and samples of a <code>Chart</code>, which are the program's data, not shape.
 </p>
 
 <h3>Swing preview: an approximation</h3>
@@ -1108,10 +1263,9 @@ Gui.<span class="fn">join</span>()</code></pre>
 
 <h3>Display state between runs (board)</h3>
 <p>
-  If a GUI is cut short — IDE <em>Stop</em>, or an error — the board's display can be left in an
-  inconsistent state and the next run may behave oddly (e.g. residual colors). <strong>Reset the
-  board</strong> and you are done. Known limitation of this version; programs that end normally do not
-  suffer it.
+  Up to V6, a GUI cut short —IDE <em>Stop</em>, or an error— could leave leftovers of the previous program on the
+  board's display (its colors, for example), and you had to reset the board. Since V7, when any program ends the
+  board starts a clean screen for the next one: without its widgets, colors or events, and at 0° (§23.3).
 </p>
 
 <h3>Default font: ASCII only</h3>
@@ -1120,17 +1274,26 @@ Gui.<span class="fn">join</span>()</code></pre>
   <code>.bin</code> with the Latin-1 range and load it with <code>loadFont</code>.
 </p>
 
-<h3>ESP32-P4: I2C bus 0 belongs to the touch panel</h3>
+<h3>The touch panel's I2C bus is shared (P4 and DK2)</h3>
 <p>
-  On P4 display boards, the touch controller lives on I2C bus&nbsp;0: if a BP program opens that bus, it
-  steps on it. For your own I2C peripherals <strong>always use bus 1</strong>.
+  On the P4 and the DK2 the display driver lives in the image, and the I2C bus of its touch panel —I2C&nbsp;0 on
+  the P4 (SDA 7, SCL 8), I2C&nbsp;2 on the DK2 (PF0 and PF1, pins 80 and 81)— <strong>belongs to the board and is
+  shared</strong> (V7), at 100&nbsp;kHz: a program opens it with those pins (or with <code>-1</code>, "whatever it
+  has") and talks to its own devices on it. With other pins or at another speed it gets an error by name —«el I2C
+  0 es sda 7, scl 8 a 100 kHz (la imagen: el táctil de la pantalla): pides sda 20»—, and it cannot release it. The
+  display's other pins —on the P4, backlight and reset; on the DK2, the backlight and the LTDC ones, among
+  others— are not the program's: «el pin 26 de esp32p4 es de la pantalla: no se puede usar». How a bus is shared,
+  in the
+  <a href="referencia.html#stdlib-i2c">reference, §14.3</a>.
 </p>
 
-<h3>Rotation on STM32 (DK2)</h3>
+<h3>The widget table has a limit (board)</h3>
 <p>
-  <code>Gui.setRotation</code> rotates on the ESP32-P4, on the ESP32-C6, on the LVGL host and in the preview;
-  on the DK2 (STM32/LTDC) it is not implemented in this version — the program continues, with a warning, in
-  the native orientation.
+  On the board —and on the PC's C VM— the model has room for <strong>512</strong> live widgets at a time
+  (<strong>256</strong> with <code>GuiMini</code>, the C6's pack), the screen included; what you remove with
+  <code>delete()</code> frees its slot. Past that, the constructor throws a catchable <code>RuntimeError</code>
+  —«Gui: no caben mas widgets: esta GUI tiene sitio para 256»— instead of leaving the widget unpainted without a
+  word, as up to V6. miVM has no limit.
 </p>
 
 </main>

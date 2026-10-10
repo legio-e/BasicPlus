@@ -209,7 +209,7 @@
     <li class="sub"><a href="#ej-preview">23.1 Vista previa en el PC</a></li>
     <li class="sub"><a href="#ej-host">23.2 Render real en el PC</a></li>
     <li class="sub"><a href="#ej-placa">23.3 En la placa</a></li>
-    <li class="sub"><a href="#ej-pantalla">23.4 Las pantallas y la rotación</a></li>
+    <li class="sub"><a href="#ej-pantalla">23.4 Las pantallas, sus packs y la rotación</a></li>
     <li class="sub"><a href="#ej-shot">23.5 Captura de pantalla: Gui.shot</a></li>
 
     <li class="group"><a href="#referencia">24. Referencia rápida Gui.*</a></li>
@@ -265,7 +265,7 @@
   <tr><th>VM</th><th>Render</th><th>Dónde</th></tr>
   <tr><td>miVM (Java)</td><td>Swing</td><td>PC — vista previa rápida desde el IDE</td></tr>
   <tr><td>VM-C (host)</td><td>LVGL + ventana SDL</td><td>PC — idéntica al render de la placa</td></tr>
-  <tr><td>VM-C (device)</td><td>LVGL + pantalla</td><td>Microcontrolador con pantalla: STM32U5G9J-DK2, ESP32-P4 (kit y Waveshare) y ESP32-C6-LCD-1.3 (§23.4)</td></tr>
+  <tr><td>VM-C (device)</td><td>LVGL (del pack de la GUI) + pantalla</td><td>Microcontrolador con pantalla: ESP32-C5-Touch-LCD-2.8, ESP32-C6-LCD-1.3, ESP32-P4 (kit y Waveshare) y STM32U5G9J-DK2, con los packs de su pantalla grabados (§23.4)</td></tr>
 </table>
 <p>
   Las tres ejecutan el <strong>mismo bytecode</strong> y construyen el <strong>mismo modelo</strong> de
@@ -286,7 +286,8 @@
       con render LVGL (<code>make&nbsp;LVGL=1</code>) y una ventana SDL.</li>
   <li><strong>En la placa</strong> — botón <em>Run on Device</em> del IDE; sube el <code>.mod</code> y los
       <code>resources/</code> del proyecto y lo ejecuta sobre la pantalla real. Ver la
-      <a href="guia-ide.html">Guía del IDE</a>.</li>
+      <a href="guia-ide.html">Guía del IDE</a>. Antes, una vez por placa, se graban los packs de su pantalla:
+      desde V7, LVGL no va en la imagen del firmware (§23.4).</li>
 </ul>
 
 <h3 id="intro-primeros">18.3 Primeros pasos de un proyecto GUI</h3>
@@ -307,8 +308,9 @@
       que el micro ya traiga soporte gráfico — con <strong>DSI</strong> mejor, si la pantalla es mediana o
       grande.</li>
   <li><strong>Una buena opción son las pantallas que incluyen un micro</strong> — como las placas con
-      ESP32-P4 integrado; y, para lo pequeño, una pantalla SPI como la del ESP32-C6-LCD-1.3 (240×240, sin
-      táctil). Las cuatro pantallas soportadas, en §23.4.</li>
+      ESP32-P4 integrado; y, para lo pequeño, una pantalla SPI como la de la ESP32-C5-Touch-LCD-2.8 (240×320,
+      táctil) o la de la ESP32-C6-LCD-1.3 (240×240, sin táctil). Las cinco pantallas soportadas, y lo que
+      necesita cada una, en §23.4.</li>
 </ul>
 <div class="note">
   <p>Para hacerse una idea de la RAM: solo el <em>framebuffer</em> de una pantalla de 1024×600 en color de
@@ -418,7 +420,8 @@
 <p>
   <strong>El screen mide lo que mide el panel.</strong> El <code>480x320</code> de arriba es el tamaño por
   defecto del <em>host</em>; en la placa <code>scr.width</code>/<code>scr.height</code> y el volcado dicen el
-  tamaño real del panel: 240×240 en el C6, 800×480 en la DK2, 1024×600 en el P4 (480×800 en la Waveshare).
+  tamaño real del panel: 240×320 en la C5, 240×240 en la C6, 800×480 en la DK2, 1024×600 en el P4 (480×800 en
+  la Waveshare).
   El mismo programa da un volcado distinto en cada pantalla. Para que el PC imite a una placa concreta, la
   VM-C de host acepta <code>--screen=WxH</code> (§23.2).
 </p>
@@ -583,7 +586,9 @@ ta.readOnly := <span class="kw">true</span></code></pre>
 t.<span class="fn">setGrid</span>(<span class="num">2</span>, <span class="num">3</span>)
 t.<span class="fn">setCell</span>(<span class="num">0</span>, <span class="num">0</span>, <span class="str">"Nombre"</span>)
 t.<span class="fn">setCell</span>(<span class="num">1</span>, <span class="num">0</span>, <span class="str">"Ana"</span>)</code></pre>
-<p class="soon">En el <code>.win</code> (JSON): pendiente — la rejilla de celdas es estructura anidada (2ª fase). Por ahora, por código.</p>
+<p>Lo mismo en el <code>.win</code> (JSON; desde V7): la rejilla y, si alguna celda dice algo, todas, fila a fila —es
+lo que escribe <code>toJson()</code>—:</p>
+<pre><code>{ "type": "Table", "rows": 2, "cols": 3, "cells": [["Nombre", "", ""], ["Ana", "", ""]] }</code></pre>
 
 <h3 id="w-tab">20.6 Tabview</h3>
 <p>
@@ -677,9 +682,10 @@ b.<span class="fn">setTextColor</span>(Gui.<span class="fn">Color</span>(<span c
 <h4>Catálogo compilado — por tamaño</h4>
 <p>
   La propiedad <code>fontSize</code> de cualquier widget fija el tamaño de texto en píxeles, eligiendo del
-  catálogo de fuentes compiladas en el firmware: <strong>Montserrat</strong> en
+  catálogo de fuentes compiladas con LVGL (en la placa, dentro del pack de la GUI, §23.4): <strong>Montserrat</strong> en
   <code>12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48</code> px (por defecto, 14). El valor debe coincidir con uno
-  de esos tamaños; si no, se usa la fuente por defecto.
+  de esos tamaños; si no, se usa la fuente por defecto. El pack de las pantallas pequeñas (<code>GuiMini</code>, el
+  de la C6) sólo trae hasta 24&nbsp;px: un tamaño mayor sale con la de 24, y el log de la placa lo dice una vez.
 </p>
 <pre><code><span class="kw">var</span> t: Gui.<span class="type">Label</span> := Gui.<span class="fn">Label</span>(scr, <span class="str">"Título"</span>)
 t.fontSize := <span class="num">32</span></code></pre>
@@ -792,9 +798,12 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 <span class="comment">// y en el onClick del botón, UNA línea:</span>
 <span class="fn">Tarea</span>(<span class="kw">this</span>.lbl).<span class="fn">start</span>()</code></pre>
 <p>
-  Los threads de BP se entrelazan por cuantos en un solo worker (igual en el PC que en la placa):
-  el handler vuelve, la GUI sigue viva, y la tarea puede <strong>actualizar widgets
-  directamente</strong> — cada operación (<code>setText</code>…) es atómica a nivel de cuanto.
+  El handler vuelve, la GUI sigue viva, y la tarea puede <strong>actualizar widgets
+  directamente</strong>: cada operación de la GUI (<code>setText</code>…) se hace entera, sin que otro hilo la corte.
+  En el PC y en casi todas las placas con pantalla los threads de BP se turnan por cuantos en un solo procesador;
+  en la P4, que desde V7 ejecuta dos a la vez, uno por núcleo (<code>vm.runs</code>,
+  <a href="guia-ide.html#entorno">guía del IDE §9.3</a>), la VM pasa cada llamada a la GUI al primero de los dos
+  —el de la pantalla—, sin que el programa tenga que hacer nada.
   Demo completa: <code>samples/GuiAsyncDemo.bp</code>.
 </p>
 <p>
@@ -907,33 +916,152 @@ boton1.onClick := pantalla::boton1_onClick</code></pre>
   van tal cual, §22.4), y lo ejecuta sobre la pantalla real. Los <code>print</code>
   salen por la consola del IDE; <em>Stop</em> (Ctrl+F2) mata la ejecución.
 </p>
+<div class="note">
+  <p><strong>Lo que no sube es la pantalla.</strong> Desde V7 la GUI de la placa llega en packs —el motor, LVGL, y
+  el driver de su pantalla— que se graban una vez, más un bloque de RAM en su ENV. Qué packs y qué líneas pide cada
+  placa, y lo que ve un programa si falta algo, en §23.4.</p>
+</div>
 <p>
   Para que la aplicación arranque <strong>al encender la placa</strong>, sin PC, se usa el autorun desde la
   consola del explorer:
 </p>
 <pre><code>/&gt; autorun MiApp      (y para quitarlo:  autorun off)</code></pre>
-<div class="warn">
-  <p><strong>Tras parar una GUI con Stop, resetea la placa</strong> antes del siguiente Run: la pantalla puede
-  quedar en estado inconsistente. Es una limitación conocida de esta versión (ver §25).</p>
-</div>
-
-<h3 id="ej-pantalla">23.4 Las pantallas y la rotación</h3>
 <p>
-  Cuatro pantallas soportadas. En todas el screen mide lo que mide el panel (§19.1):
+  Al acabar un programa —bien, con un error o con <em>Stop</em>—, la placa le deja al siguiente la pantalla
+  limpia: una pantalla nueva, sin los widgets, los colores ni los eventos del anterior, y a 0°. Desde V7 ya no
+  hace falta resetear la placa entre una ejecución y otra.
+</p>
+
+<h3 id="ej-pantalla">23.4 Las pantallas, sus packs y la rotación</h3>
+<p>
+  Cinco placas con pantalla. En todas el screen mide lo que mide el panel (§19.1):
 </p>
 <table>
-  <tr><th>Placa</th><th>Panel</th><th>Tamaño</th><th>Táctil</th><th>Cómo se elige</th></tr>
-  <tr><td>STM32U5G9J-DK2</td><td>LTDC, 5"</td><td>800×480</td><td>sí</td><td>imagen <code>stm32</code> de la DK2</td></tr>
-  <tr><td>ESP32-P4-Function-EV</td><td>EK79007, MIPI-DSI, 7"</td><td>1024×600</td><td>sí</td><td>ENV <code>display=ek79007</code> <em>(defecto del P4)</em></td></tr>
-  <tr><td>Waveshare ESP32-P4 Touch-LCD-4.3</td><td>ST7701, MIPI-DSI, 4.3"</td><td>480×800 (vertical)</td><td>sí</td><td>ENV <code>display=st7701</code></td></tr>
-  <tr><td>Waveshare ESP32-C6-LCD-1.3</td><td>ST7789, SPI, 1.3"</td><td>240×240</td><td>no</td><td>imagen <code>esp32c6</code></td></tr>
+  <tr><th>Placa</th><th>Panel</th><th>Tamaño</th><th>Táctil</th></tr>
+  <tr><td>Waveshare ESP32-C5-Touch-LCD-2.8</td><td>ST7789, SPI, 2.8"</td><td>240×320</td><td>sí</td></tr>
+  <tr><td>Waveshare ESP32-C6-LCD-1.3</td><td>ST7789, SPI, 1.3"</td><td>240×240</td><td>no</td></tr>
+  <tr><td>ESP32-P4-Function-EV</td><td>EK79007, MIPI-DSI, 7"</td><td>1024×600</td><td>sí</td></tr>
+  <tr><td>Waveshare ESP32-P4 Touch-LCD-4.3</td><td>ST7701, MIPI-DSI, 4.3"</td><td>480×800 (vertical)</td><td>sí</td></tr>
+  <tr><td>STM32U5G9J-DK2</td><td>LTDC, 5"</td><td>800×480</td><td>sí</td></tr>
 </table>
+<p>
+  Las demás placas —la Pico&nbsp;2, la Metro, la S3, la C3 y la Nucleo— no tienen GUI: su imagen no la lleva.
+</p>
+
+<h4 id="ej-packs">La pantalla llega en packs (V7)</h4>
+<p>
+  Desde V7 ninguna imagen lleva LVGL: el motor de la GUI va en un pack que se graba en la zona de packs de la
+  placa, y la pantalla la decide quien usa la placa, no la imagen. Una placa con pantalla necesita tres cosas:
+</p>
+<ul>
+  <li><strong>el pack de LVGL</strong>: <code>Gui.pack</code> o, en una pantalla pequeña sin PSRAM,
+      <code>GuiMini.pack</code> —el mismo LVGL con sitio para 256 widgets (§25), fuentes hasta 24&nbsp;px (§21.2) y
+      capturas de hasta 40&nbsp;KB (§23.5)—. Uno u otro, no los dos.</li>
+  <li><strong>el driver de su pantalla</strong>, que se publica con la marca <code>'PANT'</code>: en la P4 y la DK2
+      lo lleva la imagen (su MIPI-DSI y su LTDC); en la C5 y la C6 es otro pack, <code>DriverSpi.pack</code>, el
+      driver genérico de pantallas SPI, que lee la placa de unas líneas del ENV (abajo).</li>
+  <li><strong>un bloque de RAM para los motores nativos</strong>: <code>packRam=&lt;KB&gt;</code> en el ENV (o
+      <code>SQLite=&lt;MB&gt;</code>, la de la base de datos, que vale igual). Sin él no carga ningún motor —ni la GUI
+      ni SQLite—, y el INFO del IDE lo dice en su línea «RAM packs». El bloque lo comparten todos los motores: el
+      de la GUI pide unos 380&nbsp;KB (<code>GuiMini</code> y <code>DriverSpi</code> juntos, unos 130), y si además
+      usas SQLite, súmale lo suyo.</li>
+</ul>
+<table>
+  <tr><th>Placa</th><th>Packs</th><th>En el ENV</th></tr>
+  <tr><td>ESP32-C5 (Waveshare 2.8")</td><td><code>Gui.pack</code> + <code>DriverSpi.pack</code></td><td><code>packRam=512</code> y las líneas de su pantalla (abajo)</td></tr>
+  <tr><td>ESP32-C6 (Waveshare 1.3")</td><td><code>Stdlib.pack</code> + <code>GuiMini.pack</code> + <code>DriverSpi.pack</code></td><td><code>packRam=136</code> y las líneas de su pantalla (abajo)</td></tr>
+  <tr><td>ESP32-P4 (el kit y la Waveshare)</td><td><code>Gui.pack</code></td><td><code>SQLite=4</code> (o <code>packRam=&lt;KB&gt;</code>); en la Waveshare, además, <code>display=st7701</code></td></tr>
+  <tr><td>STM32U5G9J-DK2</td><td><code>Stdlib.pack</code> (recomendado) + <code>Gui.pack</code></td><td><code>packRam=768</code></td></tr>
+</table>
+<p>
+  Los packs vienen en la carpeta <code>packs/</code> del paquete de BasicPlus, y el mismo <code>Gui.pack</code>
+  vale para las tres placas que lo usan: al grabarlo, el IDE se queda con el motor de la que tiene delante. Ni el
+  pack de LVGL ni el del driver llevan la biblioteca estándar (V7): <code>Gui.mod</code> y los suyos los toma la
+  placa del <code>Stdlib.pack</code>, si está grabado —desde la flash, sin gastar RAM—, o de <code>/lib</code>, a la
+  RAM. En la C6 el <code>Stdlib.pack</code> es imprescindible: sin él no cabe la GUI.
+</p>
+<p>
+  Se graban desde el IDE —el botón <em>Placa</em>, «Copiar pack a la placa…»
+  (<a href="guia-ide.html#packs-panel">guía del IDE §10.3</a>)— <strong>después</strong> de poner el ENV (el botón
+  <em>Entorno</em>, <a href="guia-ide.html#entorno">§9.3</a>) y reiniciar la placa: el ENV se lee al arrancar, y
+  cada motor queda sellado para el bloque de RAM que la placa tiene al grabarlo (si luego cambias
+  <code>packRam=</code>, hay que volver a grabarlo). El paso a paso, y cuándo regrabar, en
+  «<a href="INSTALAR_FIRMWARE.md#packs">Los packs de la placa</a>» (INSTALAR_FIRMWARE).
+</p>
+
+<h4 id="ej-env-spi">Las líneas del ENV de la C5 y la C6</h4>
+<p>
+  El driver genérico no sabe nada de la placa: se lo dice el ENV, una línea por bus y una por dispositivo. Las de
+  la C5, con su táctil y el expansor de pines que lo gobierna:
+</p>
+<pre><code>spi2=sck:6,mosi:7,miso:8
+i2c0=sda:0,scl:1,khz:400
+lcd=st7789,spi:2,dc:9,cs:10,rst:x1,bl:xpwm,mhz:40,w:240,h:320,inv
+exp=ch32,i2c:0,addr:0x24
+touch=cst3530,i2c:0,addr:0x58,rst:x0
+packRam=512</code></pre>
+<p>Las de la C6, sin táctil:</p>
+<pre><code>spi2=sck:7,mosi:6,miso:5
+lcd=st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv
+packRam=136</code></pre>
+<p>
+  El <code>miso</code> de <code>spi2=</code> es de la tarjeta TF, que va en el mismo bus que la pantalla (su línea
+  <code>sd=</code>, en la <a href="referencia.html#stdlib-sd">referencia, §14.17</a>): el bus se comparte, y lo
+  exclusivo de cada dispositivo es su CS.
+</p>
+
+<h4 id="ej-otra-spi">Otra pantalla SPI, sin escribir C</h4>
+<p>
+  <code>DriverSpi</code> no es el driver de una placa: está hecho para cualquier controlador MIPI-DCS por SPI de 4
+  hilos (ST7789, ILI9341, GC9A01, ST7796…), y probado con el ST7789 de la C5 y la C6 (el pack que viene con
+  BasicPlus es el de su familia, RISC-V sin FPU). La placa va en el ENV y el controlador en un fichero de texto, así
+  que otra pantalla de ésas se describe en vez de programarse:
+</p>
+<ul>
+  <li><code>spiN=</code> (y <code>i2cN=</code>, si hay táctil o expansor): los pines de cada bus.</li>
+  <li><code>lcd=</code>: el controlador (el nombre de su <code>.seq</code>), <code>spi:N</code>, <code>dc:</code>,
+      <code>cs:</code> y el tamaño del cristal a 0° (<code>w:</code>, <code>h:</code>); y si hacen falta,
+      <code>rst:</code> y <code>bl:</code> (el reset y la luz), <code>mhz:</code> (20 si no se dice, y nunca más de lo
+      que da la hoja del controlador: 62 en el ST7789), <code>ram:</code> y <code>off:</code> (si la memoria del
+      controlador es mayor que el cristal, como en la C6), <code>inv</code>, <code>bgr</code> y <code>seq:</code>. Un
+      pin es un GPIO (<code>21</code>) o una salida del expansor (<code>x1</code>).</li>
+  <li><code>touch=</code> y <code>exp=</code>: el táctil y el expansor de pines (hoy, el CST3530 y el CH32 de la C5).
+      Sin <code>touch=</code>, la pantalla no tiene táctil.</li>
+  <li>la <strong>secuencia de arranque</strong> del controlador, en un <code>.seq</code>: la del ST7789 va dentro del
+      pack; la de otro la escribes tú —copiando la del ejemplo del fabricante— y la nombras con
+      <code>seq:/sys/mio.seq</code>.</li>
+</ul>
+<p>
+  Lo que da cualquier driver —<code>init</code>, <code>size</code>, <code>flush</code> y, si saben,
+  <code>rotate</code> y <code>touch</code>— es el contrato <code>'PANT'</code>, el mismo para <code>DriverSpi</code>
+  que para los de la imagen de la P4 y la DK2: por eso el mismo pack de LVGL vale para todas.
+</p>
+
+<h4 id="ej-sin-pack">Si falta algo</h4>
+<p>
+  Lo dice el primer <code>Gui.Screen()</code>, con un <code>RuntimeError</code> (atrapable), en vez de dejar la
+  pantalla negra:
+</p>
+<table>
+  <tr><th>Si…</th><th>el programa recibe</th></tr>
+  <tr><td>la imagen no tiene GUI (la Pico&nbsp;2, la Metro, la S3, la C3, la Nucleo)</td><td><code>builtin 135 no soportado en esta VM (subconjunto C)</code></td></tr>
+  <tr><td>no está el pack de LVGL… o está, pero su motor no cargó: sin <code>packRam=</code>, o con el bloque cambiado desde que se grabó</td><td><code>GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)</code></td></tr>
+  <tr><td>no está el driver de la pantalla (en la C5 y la C6, <code>DriverSpi.pack</code>)</td><td><code>GUI: no hay driver de pantalla ('PANT'): graba el pack del driver de esta placa</code></td></tr>
+  <tr><td>una línea del ENV de la pantalla está mal</td><td>el motivo, con nombre: <code>GUI: pantalla: ENV lcd: falta 'dc'</code></td></tr>
+  <tr><td>la pantalla no arranca</td><td><code>GUI: la pantalla no arranco: su driver fallo al iniciarse (el motivo, en el log)</code></td></tr>
+</table>
+<p>
+  El resto lo cuenta el log de la placa: qué motores cargó y, si alguno no, por qué.
+</p>
+
+<h4 id="ej-rotacion">El panel del P4, la C6 y la rotación</h4>
 <p>
   El firmware del ESP32-P4 es una <strong>imagen única</strong> con un catálogo de paneles: elige uno al
   arrancar la GUI leyendo la clave <code>display</code> del <strong>entorno de la placa</strong> (el botón
   <em>Entorno</em> del IDE, <a href="guia-ide.html#entorno">guía del IDE §9.3</a>). Sin clave, o con un valor
-  desconocido, usa el panel por defecto. El C6 no tiene táctil: su GUI es de salida (indicadores, gráficas,
-  estado), y una imagen con LVGL cabe en sus 128&nbsp;KB de VM.
+  desconocido, usa el panel por defecto, el del kit (<code>ek79007</code>). La C6 no tiene táctil: su GUI es de
+  salida (indicadores, gráficas, estado); y no tiene PSRAM, así que lleva el pack pequeño y la biblioteca estándar
+  en la flash, y con <code>packRam=136</code> a su VM le quedan unos 127&nbsp;KB (63 de heap).
 </p>
 <p>
   La <strong>orientación</strong> se cambia en runtime, al estilo LVGL:
@@ -941,9 +1069,9 @@ boton1.onClick := pantalla::boton1_onClick</code></pre>
 <pre><code>Gui.<span class="fn">setRotation</span>(<span class="num">90</span>)    <span class="comment">// 0, 90, 180 o 270 grados</span></code></pre>
 <p>
   El giro intercambia las dimensiones lógicas y el táctil se transforma solo — los <code>align</code> siguen
-  funcionando sin tocar nada. Lo natural es llamarlo al principio, antes de crear widgets. Disponible en el
-  ESP32-P4 (ambas placas), en el ESP32-C6, en el host LVGL y en la vista previa Swing; en la STM32 (DK2) no
-  rota en esta versión (avisa y continúa).
+  funcionando sin tocar nada. Lo natural es llamarlo al principio, antes de crear widgets. Gira en las cinco
+  placas —la DK2, desde V7—, en el host LVGL y en la vista previa Swing; y el giro dura lo que el programa: el
+  siguiente empieza a 0°.
 </p>
 
 <h3 id="ej-shot">23.5 Captura de pantalla: <code>Gui.shot</code></h3>
@@ -951,8 +1079,9 @@ boton1.onClick := pantalla::boton1_onClick</code></pre>
   <code>Gui.shot(path): integer</code> escribe la pantalla <strong>tal como LVGL la dibujó</strong> en un fichero
   <code>.shot</code> (RGB565 por franjas, comprimido; formato en <code>docs/SHOT_FORMAT.md</code>) y devuelve los
   bytes escritos. Funciona por el mismo camino en el host (con ventana o <code>--no-screen</code>), en miVM y en
-  las cuatro pantallas. Si falla, lanza <code>RuntimeError</code> atrapable: «sin pantalla» (VM-C compilada sin
-  LVGL, o miVM sin ventana), «error de escritura», «no cabe en el tope de captura» o «sin memoria».
+  las cinco pantallas. Si falla, lanza <code>RuntimeError</code> atrapable: «sin pantalla» (VM-C compilada sin
+  LVGL, o miVM sin ventana), «error de escritura», «no cabe en el tope de captura» (256&nbsp;KB; 40 con
+  <code>GuiMini</code>, el pack de la C6) o «sin memoria».
 </p>
 <pre><code>Gui.<span class="fn">start</span>()
 <span class="fn">sleep</span>(<span class="num">300</span>)                          <span class="comment">// bombear ANTES de capturar</span>
@@ -966,8 +1095,8 @@ Gui.<span class="fn">join</span>()</code></pre>
 </p>
 <p>
   En la placa el fichero queda en el sistema de archivos (ruta tal cual, como <code>writeFile</code>) y se baja
-  <strong>cuando el programa ha terminado</strong> —durante un RUN el <code>get</code> contesta BUSY— con el
-  <code>get</code> de la consola del IDE. El PC lo pasa a PNG con un script que sólo necesita Python:
+  con el <code>get</code> de la consola del IDE —desde V7, también con el programa en marcha: la placa lo manda a
+  trozos, entre su salida—. El PC lo pasa a PNG con un script que sólo necesita Python:
 </p>
 <pre><code>python bpgenvm-c/tools/shot2png.py MiApp.shot        (deja MiApp.png al lado)</code></pre>
 <p>
@@ -1026,6 +1155,7 @@ Gui.<span class="fn">join</span>()</code></pre>
   <tr><td><code>toJson(): Json.JsonObject</code> / <code>toJsonText(): string</code></td><td>función</td><td>El subárbol en formato <code>.win</code>: <code>type</code>, <code>name</code>, lo propio del widget (<code>text</code>, <code>checked</code>, <code>value</code>…), <code>align</code> por nombre con <code>x</code>/<code>y</code> como desplazamientos, <code>width</code>/<code>height</code> sólo si no son automáticos, <code>fontSize</code>, los colores, y los <code>clic</code>/<code>change</code> explícitos. Lo que cargó <code>Window.load</code> vuelve a salir igual (ida y vuelta). <code>toJsonText</code> da el texto sin tener que importar <code>Json</code>.</td></tr>
   <tr><td><code>clean()</code></td><td>función</td><td>Elimina los HIJOS del widget (él queda).</td></tr>
   <tr><td><code>delete()</code></td><td>función</td><td>Elimina el widget y sus hijos (hijos antes que padre) y lo da de baja en su padre. <strong>Idempotente</strong>: borrar dos veces no falla.</td></tr>
+  <tr><td><code>~Component()</code></td><td>destructor</td><td>No se llama a mano: lo llama el lenguaje cuando el objeto se libera —un <code>var owner</code> que sale de ámbito, el GC, el final del programa— y hace un <code>delete()</code> (§19.2). La <code>Screen</code> no se borra así. <em>(V7.)</em></td></tr>
   <tr><td><code>onClick</code> / <code>onChange</code></td><td><strong>evento</strong></td><td>Se suscriben con <code>::</code>: <code>boton.onClick := ventana::boton_onClick</code>. Ver <a href="#ev-codigo">§22.5</a>. <em>(En V3 eran métodos virtuales que se sobrescribían subclaseando; ya no.)</em></td></tr>
 </table>
 <p>
@@ -1045,11 +1175,12 @@ Gui.<span class="fn">join</span>()</code></pre>
 <h3 id="ref-widgets">24.3 Widgets</h3>
 <p>
   En todos los constructores <code>parent</code> es un <code>Container</code> (§24.2). Las clases marcadas
-  <em>(Container)</em> pueden tener hijos; el resto son hojas.
+  <em>(Container)</em> pueden tener hijos; el resto son hojas. En la placa, con la tabla de widgets llena, un
+  constructor lanza <code>RuntimeError</code> (§25).
 </p>
 <table>
   <tr><th>Clase</th><th>Constructor</th><th>Miembros propios</th></tr>
-  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — activa esta pantalla como visible. Mide lo que mide el panel (§19.1).</td></tr>
+  <tr><td><code>Screen</code> <em>(Container)</em></td><td><code>Screen()</code></td><td><code>load()</code> — activa esta pantalla como visible. Mide lo que mide el panel (§19.1). En una placa sin la GUI —sin sus packs, o con una pantalla que no arranca— el constructor lanza <code>RuntimeError</code> con el motivo (§23.4).</td></tr>
   <tr><td><code>Panel</code> <em>(Container)</em></td><td><code>Panel(parent)</code></td><td>— (contenedor para agrupar; todo lo hereda).</td></tr>
   <tr><td><code>Label</code></td><td><code>Label(parent, text)</code></td><td><code>setText(t)</code>, <code>setFont(id)</code>.</td></tr>
   <tr><td><code>Button</code> <em>(Container)</em></td><td><code>Button(parent, text := "")</code></td><td>— (el clic llega por handler o <code>onClick</code>). Con texto lleva un <code>Label</code> hijo; sin texto es un contenedor vacío.</td></tr>
@@ -1076,6 +1207,13 @@ Gui.<span class="fn">join</span>()</code></pre>
 <!-- ============================================================ -->
 <h2 id="matices">25. Matices y limitaciones</h2>
 <p>Lo que conviene saber antes de que sorprenda. Ninguno impide trabajar; todos tienen salida.</p>
+
+<h3>Sin sus packs, la placa no pinta (V7)</h3>
+<p>
+  Una placa que en V6 pintaba con la imagen sola necesita en V7, además, los packs de su pantalla y el bloque de
+  RAM de los motores en su ENV. Sin ellos, el primer <code>Gui.Screen()</code> lanza un <code>RuntimeError</code>
+  que dice qué falta. Qué pide cada placa, en §23.4.
+</p>
 
 <h3>El screen mide lo que mide el panel</h3>
 <p>
@@ -1108,9 +1246,10 @@ Gui.<span class="fn">join</span>()</code></pre>
 
 <h3>Estado de la pantalla entre ejecuciones (placa)</h3>
 <p>
-  Si una GUI se corta a medias — <em>Stop</em> del IDE, o un error — la pantalla de la placa puede quedar en un
-  estado inconsistente y la siguiente ejecución comportarse raro (p. ej. colores residuales). <strong>Resetea la
-  placa</strong> y listo. Limitación conocida de esta versión; los programas que terminan normalmente no la sufren.
+  Hasta V6, una GUI cortada a medias —<em>Stop</em> del IDE, o un error— podía dejar en la pantalla de la placa
+  restos del programa anterior (por ejemplo, sus colores) y había que resetearla. Desde V7, al acabar cualquier
+  programa la placa estrena una pantalla limpia para el siguiente: sin sus widgets, sus colores ni sus eventos, y a
+  0° (§23.3).
 </p>
 
 <h3>Fuente por defecto: solo ASCII</h3>
@@ -1119,17 +1258,26 @@ Gui.<span class="fn">join</span>()</code></pre>
   <code>.bin</code> con el rango Latin-1 y cárgalo con <code>loadFont</code>.
 </p>
 
-<h3>ESP32-P4: el bus I2C 0 es del táctil</h3>
+<h3>El bus I2C del táctil se comparte (P4 y DK2)</h3>
 <p>
-  En las placas P4 con pantalla, el controlador táctil vive en el bus I2C&nbsp;0: si un programa BP abre ese bus,
-  se lo pisa. Para periféricos I2C propios usa <strong>siempre el bus 1</strong>.
+  En la P4 y la DK2 el driver de la pantalla va en la imagen, y el bus I2C de su táctil —el I2C&nbsp;0 en la P4
+  (SDA 7, SCL 8), el I2C&nbsp;2 en la DK2 (PF0 y PF1, los pines 80 y 81)— es <strong>de la placa y se
+  comparte</strong> (V7), a 100&nbsp;kHz: un programa lo abre con esos pines (o con <code>-1</code>, «los que
+  tenga») y habla en él con sus propios dispositivos. Con otros pines o a otra velocidad recibe un error con nombre
+  —«el I2C 0 es sda 7, scl 8 a 100 kHz (la imagen: el táctil de la pantalla): pides sda 20»—, y no puede
+  soltarlo. Los demás pines de la pantalla —en la P4, la luz y el reset; en la DK2, la luz y los del LTDC, entre
+  otros— no son del programa: «el pin 26 de esp32p4 es de la pantalla: no se puede usar». Cómo se comparte un
+  bus, en la
+  <a href="referencia.html#stdlib-i2c">referencia, §14.3</a>.
 </p>
 
-<h3>Rotación en STM32 (DK2)</h3>
+<h3>La tabla de widgets tiene tope (placa)</h3>
 <p>
-  <code>Gui.setRotation</code> gira en el ESP32-P4, en el ESP32-C6, en el host LVGL y en la vista previa; en la
-  DK2 (STM32/LTDC) no está implementado en esta versión — el programa sigue, con un aviso, en la orientación
-  nativa.
+  En la placa —y en la VM-C del PC— el modelo tiene sitio para <strong>512</strong> widgets vivos a la vez
+  (<strong>256</strong> con <code>GuiMini</code>, el pack de la C6), contando la pantalla; lo que se borra con
+  <code>delete()</code> deja su sitio. Al pasarse, el constructor lanza un <code>RuntimeError</code> atrapable
+  —«Gui: no caben mas widgets: esta GUI tiene sitio para 256»— en vez de dejar el widget sin pintar y sin decir
+  nada, como hasta V6. En miVM no hay tope.
 </p>
 
 </main>

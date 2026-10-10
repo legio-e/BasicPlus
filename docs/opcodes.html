@@ -236,10 +236,12 @@
   <h1>Catálogo de opcodes BasicPlus VM</h1>
   <div class="subtitle">
     Bytecode <code>.mod</code> — vista navegable <strong>PARCIAL</strong>: los 110 opcodes de V1
-    (<code>0x00..0x70</code>) con su traducción AOT. Los 65 aditivos de V2–V6
-    (<code>0x6F</code>, <code>0x71..0xB0</code>: <code>long</code>, <code>double</code>, potencia,
-    <code>CHECKCAST</code>, sentinelas) <strong>no están aquí</strong>: el catálogo completo (175)
-    es <code>docs/OPCODES.md</code>; la fuente, <code>bpgenvm-c/include/bpvm_opcodes.h</code>.
+    (<code>0x00..0x70</code>). Los 65 aditivos de V2–V6 (<code>0x6F</code>, <code>0x71..0xB0</code>:
+    <code>long</code>, <code>double</code>, potencia, <code>CHECKCAST</code>, sentinelas) y los 14 de V7
+    (<code>0xB1..0xBE</code>: los <code>_REF</code> del enlace tardío, <code>LEA_FIELD</code>,
+    <code>LEA_FIELD_REF</code> e <code>INVOKE_SLOT</code>) <strong>no están aquí</strong>: el catálogo
+    completo (189) es <code>docs/OPCODES.md</code>; la fuente, <code>bpgenvm-c/include/bpvm_opcodes.h</code>.
+    La columna «AOT C» es el diseño de H3 (V3), no lo que hace el AOT de hoy (ver su convención, abajo).
   </div>
   <input type="text" id="search" placeholder="Filtrar por mnemónico, hex code, palabra en la semántica o código AOT..." autocomplete="off">
 </header>
@@ -266,6 +268,12 @@
 
 <section class="legend" id="aot-conv">
   <h2>Convención de la columna "AOT C"</h2>
+  <p><strong>Ojo: es el boceto de H3 (V3), no el AOT de hoy.</strong> El AOT que se hizo no traduce
+  el bytecode opcode a opcode: traduce a C el árbol de cada función <code>native</code>
+  (<code>AotCEmitter</code>, en el compilador), con sus locales como variables de C, y los
+  <code>vm_op_*</code> de esta columna no existen en el código. Se queda como referencia de lo que
+  hace cada opcode visto desde C. Lo que hace el AOT de verdad, y lo que no traduce, en el manual §8.3
+  y en <code>docs/AOT_LIMITES.md</code>.</p>
   <p>Cada opcode incluye su traducción a C para el generador AOT (H3). Las
   categorías visualmente marcadas:</p>
   <ul style="margin:8px 0 12px 16px;">
@@ -544,7 +552,7 @@ wr32(mem+r+4+slot*4, v);</pre></td></tr>
       <tr><td class="code">0x56</td><td class="mnem">PRINT_NONL</td><td class="operand">—</td><td class="stack">( v -- )</td><td class="sem">Int sin newline.</td><td class="aot"><pre class="helper">→ vm_op_print_i32(vm, &amp;sp, /*nl=*/0);</pre></td></tr>
       <tr><td class="code">0x57</td><td class="mnem">FPRINT_NONL</td><td class="operand">—</td><td class="stack">( f -- )</td><td class="sem">Float sin newline.</td><td class="aot"><pre class="helper">→ vm_op_print_f32(vm, &amp;sp, /*nl=*/0);</pre></td></tr>
       <tr><td class="code">0x58</td><td class="mnem">PRINT_STR_NONL</td><td class="operand">—</td><td class="stack">( ref -- )</td><td class="sem">String sin newline.</td><td class="aot"><pre class="helper">→ vm_op_print_string(vm, &amp;sp, /*nl=*/0);</pre></td></tr>
-      <tr><td class="code">0x59</td><td class="mnem">PRINT_NL</td><td class="operand">—</td><td class="stack">( -- )</td><td class="sem">Newline solo.</td><td class="aot"><pre class="helper">→ vm_op_print_nl(vm);</pre></td></tr>
+      <tr><td class="code">0x59</td><td class="mnem">PRINT_NL</td><td class="operand">—</td><td class="stack">( -- )</td><td class="sem">Newline: desde V7 (<code>#600</code>) saca la línea del hilo entera, de una vez.</td><td class="aot"><pre class="helper">→ vm_op_print_nl(vm);</pre></td></tr>
       <tr><td class="code">0x5A</td><td class="mnem">CALL_BUILTIN</td><td class="operand">u16 id</td><td class="stack">( args -- result )</td><td class="sem">Despacha al builtin <code>id</code>.</td><td class="aot"><pre class="helper">→ vm_op_call_builtin(vm, &amp;sp, &amp;bp, id);
 // AOT puede inlinear builtins concretos
 // si los conoce (Math.sqrt → sqrtf, etc.)</pre></td></tr>
@@ -557,7 +565,7 @@ wr32(mem+r+4+slot*4, v);</pre></td></tr>
 // "tail call" o usar setjmp/longjmp</pre></td></tr>
       <tr><td class="code">0x5E</td><td class="mnem">INSTANCEOF</td><td class="operand">i16 csOff</td><td class="stack">( ref -- 1|0 )</td><td class="sem">Sube por parent_offset buscando match.</td><td class="aot"><pre class="helper">→ vm_op_instanceof(vm, &amp;sp, cs+csOff);
 // class hierarchy walk — siempre helper</pre></td></tr>
-      <tr><td class="code">0x5F</td><td class="mnem">FREE_REF</td><td class="operand">—</td><td class="stack">( ref -- )</td><td class="sem">Liberación determinista.</td><td class="aot"><pre class="helper">→ vm_op_free_ref(vm, &amp;sp);
+      <tr><td class="code">0x5F</td><td class="mnem">FREE_REF</td><td class="operand">—</td><td class="stack">( ref -- )</td><td class="sem">Liberación determinista. Desde V7 (<code>#668</code>) el compilador lo emite sólo para lo que no puede tener destructor; lo demás muere por <code>Core.__destruye</code> (ver <code>OPCODES.md</code>).</td><td class="aot"><pre class="helper">→ vm_op_free_ref(vm, &amp;sp);
 // recorre owner_bitmap recursivo</pre></td></tr>
     </tbody>
   </table>
@@ -568,7 +576,7 @@ wr32(mem+r+4+slot*4, v);</pre></td></tr>
   <table>
     <thead><tr><th>Code</th><th>Op</th><th>Operando</th><th>Stack</th><th>Semántica</th><th>AOT C</th></tr></thead>
     <tbody>
-      <tr><td class="code">0x60</td><td class="mnem">SET_FIELD_OWNER</td><td class="operand">u8 slot</td><td class="stack">( ref v -- )</td><td class="sem">SET_FIELD + FREE_REF del previo.</td><td class="aot"><pre class="helper">→ vm_op_set_field_owner(vm, &amp;sp, slot);</pre></td></tr>
+      <tr><td class="code">0x60</td><td class="mnem">SET_FIELD_OWNER</td><td class="operand">u8 slot</td><td class="stack">( ref v -- )</td><td class="sem">SET_FIELD + FREE_REF del previo. Desde V7 (<code>#668</code>), sólo para un campo <code>owner</code> que no puede tener destructor.</td><td class="aot"><pre class="helper">→ vm_op_set_field_owner(vm, &amp;sp, slot);</pre></td></tr>
       <tr><td class="code">0x61</td><td class="mnem">PUSH_0</td><td class="operand">—</td><td class="stack">( -- 0 )</td><td class="sem">Push literal 0.</td><td class="aot"><pre>wr32(mem+sp, 0); sp += 4;</pre></td></tr>
       <tr><td class="code">0x62</td><td class="mnem">PUSH_1</td><td class="operand">—</td><td class="stack">( -- 1 )</td><td class="sem">Push literal 1.</td><td class="aot"><pre>wr32(mem+sp, 1); sp += 4;</pre></td></tr>
       <tr><td class="code">0x63</td><td class="mnem">PUSH_2</td><td class="operand">—</td><td class="stack">( -- 2 )</td><td class="sem">Push literal 2.</td><td class="aot"><pre>wr32(mem+sp, 2); sp += 4;</pre></td></tr>
@@ -618,6 +626,23 @@ sp += 4;</pre></td></tr>
 
 <section class="footer-notes" id="aot-abi">
   <h2>ABI de frontera AOT ↔ BP (H3)</h2>
+  <p><strong>Lo que hay hoy (V7)</strong>, frente al diseño de H3 que sigue:</p>
+  <ul>
+    <li>No hay tabla <code>bpvm_func_entry_t</code> ni <code>bpvm_resolve_call</code>: <code>OP_CALL</code> y
+      <code>OP_CALL_EXT</code> buscan la dirección de destino en el registro del AOT
+      (<code>aot_registry.c</code>, <code>bpvm_aot_lookup_flags</code>) y, si tiene un thunk, lo llaman sin
+      crear marco BP (el patrón ②).</li>
+    <li>El thunk corre con su límite de fallos (<code>bpvm_aot_call_guarded</code>): un error dentro de la
+      native llega al <code>try</code> de BP que envuelva la llamada, y desde V7 (<code>#578</code>) la native
+      puede llevar sus propios <code>try</code>/<code>catch</code>/<code>finally</code>.</li>
+    <li>Desde V7 (P2b.3) una native que puede ceder corre en un <strong>ejecutor</strong>: un hilo de la
+      plataforma, con su propia pila, que se pasa el testigo con el intérprete (<code>bpvm_nativa.c</code>).
+      Así cede a los ~5&nbsp;ms, la para un <code>KILL</code> y puede llamar a código BP que se bloquea. Una
+      native sin puntos de cesión corre <em>directa</em>, sin ejecutor.</li>
+    <li>El patrón ④ es el puente <code>vm-&gt;aot_helpers-&gt;call_bp_i32</code>: monta un marco BP cuya
+      vuelta es el centinela <code>NATIVE_RETURN</code> (<code>0xAA</code>) y corre el intérprete anidado hasta
+      él.</li>
+  </ul>
   <p>Cuando una función está marcada <code>native</code> y compilada a AOT,
   cohabita con código BP interpretado. Las llamadas entre los dos mundos
   cruzan una <strong>frontera de ABI</strong>: la convención BP usa el
@@ -808,10 +833,14 @@ found:
       <tr><td class="mnem">TRY_HANDLER_I32_I16</td><td class="code">6</td><td class="sem">TRY_BEGIN (handlerRel i32, clsOff i16)</td></tr>
     </tbody>
   </table>
-  <p style="margin-top:12px;">Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.</p>
+  <p style="margin-top:12px;">Tamaño total de la instrucción = 1 (opcode) + tamaño del operando. Son los
+  operandos de V1; los de V2–V7 (<code>IMM_I64</code>, <code>CAST_*</code>, <code>TRY_HANDLER_I32_I32</code>,
+  los de los <code>_REF</code>…), en <code>docs/OPCODES.md</code>.</p>
 
   <h3 style="margin-top:18px;">Códigos no asignados</h3>
-  <p><code>0x6D..0x6F</code>, <code>0x71..0xFF</code> libres para futuras extensiones. Si una implementación encuentra un opcode no listado, debe fallar con <code>"Opcode no implementado: 0x%02X en PC %d"</code>.</p>
+  <p><code>0x6D..0x6E</code> y <code>0xBF..0xFF</code> libres (67). <code>0x6F</code> (<code>EVENT_RETURN</code>) y
+  <code>0x71..0xBE</code> están asignados: los describe <code>docs/OPCODES.md</code>. Total asignado: 189 (miVM,
+  188: <code>0xAA</code>, <code>NATIVE_RETURN</code>, es sólo de la VM-C). Si una implementación encuentra un opcode no listado, debe fallar con <code>"Opcode no implementado: 0x%02X en PC %d"</code>.</p>
 </section>
 
 </main>

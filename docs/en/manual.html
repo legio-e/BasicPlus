@@ -167,6 +167,7 @@
     <li class="sub"><a href="#identificadores">3.2 Identifiers</a></li>
     <li class="sub"><a href="#keywords">3.3 Reserved words</a></li>
     <li class="sub"><a href="#literales">3.4 Literals</a></li>
+    <li class="sub"><a href="#multilinea">3.5 Line continuation</a></li>
 
     <li class="group"><a href="#tipos">4. Types</a></li>
     <li class="sub"><a href="#primitivos">4.1 Primitives</a></li>
@@ -193,22 +194,25 @@
     <li class="sub"><a href="#defaults">8.1 Default parameter values</a></li>
     <li class="sub"><a href="#tuplas">8.2 Tuples (multiple return)</a></li>
     <li class="sub"><a href="#funciones-native">8.3 native functions (AOT)</a></li>
+    <li class="sub"><a href="#inline">8.3b Intrinsic functions: <code>inline</code></a></li>
     <li class="sub"><a href="#sobrecarga">8.4 Function overloading</a></li>
     <li class="group"><a href="#clases">9. Classes</a></li>
     <li class="sub"><a href="#campos">9.1 Fields</a></li>
     <li class="sub"><a href="#metodos">9.2 Methods</a></li>
     <li class="sub"><a href="#ctor">9.3 Constructor</a></li>
     <li class="sub"><a href="#herencia">9.4 Inheritance</a></li>
+    <li class="sub"><a href="#destructor">9.4b The destructor ~Class()</a></li>
     <li class="sub"><a href="#props">9.5 Properties</a></li>
     <li class="sub"><a href="#static">9.6 Static members / final</a></li>
     <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
 
     <li class="group"><a href="#modulos">10. Modules</a></li>
+    <li class="sub"><a href="#raiz">10.0 The root module: Core</a></li>
     <li class="sub"><a href="#library">10.1 library</a></li>
     <li class="sub"><a href="#main">10.2 main / initializer</a></li>
     <li class="sub"><a href="#imports">10.3 import / from</a></li>
     <li class="sub"><a href="#interfaces">10.4 module interface (withdrawn)</a></li>
-    <li class="sub"><a href="#encapsulacion">10.7 Class↔module encapsulation</a></li>
+    <li class="sub"><a href="#encapsulacion">10.5 Class↔module encapsulation</a></li>
     <li class="sub"><a href="#dospasadas">10.6 Two passes and cycles between modules</a></li>
 
     <li class="group"><a href="#excepciones">11. Exceptions</a></li>
@@ -220,6 +224,7 @@
     <li class="sub"><a href="#conc-encapsulacion">14.3 Encapsulation of case bodies</a></li>
     <li class="sub"><a href="#conc-gc">14.4 GC and concurrency</a></li>
     <li class="sub"><a href="#conc-print">14.5 print with several threads</a></li>
+    <li class="sub"><a href="#conc-nucleos">14.6 Two cores</a></li>
 
 
 
@@ -233,8 +238,8 @@
   <h2>Reference (separate volume)</h2>
   <ul>
     <li class="group"><a href="referencia.html#stdlib">13. Standard library</a></li>
-    <li class="group"><a href="referencia.html#cli">15. Compilation &amp; execution</a></li>
-    <li class="group"><a href="referencia.html#artefactos">16. On-disk artifacts</a></li>
+    <li class="group"><a href="referencia.html#cli">16. Compilation &amp; execution</a></li>
+    <li class="group"><a href="referencia.html#artefactos">17. On-disk artifacts</a></li>
   </ul>
   <h2>Graphics (separate volume)</h2>
   <ul>
@@ -251,7 +256,7 @@
 <h1>BasicPlus — Language manual</h1>
 <p style="color:var(--fg-muted)">
   A structured, typed, module-oriented language. A Java frontend compiles to
-  its own bytecode (the <code>.mod</code> v7 format, "MOD7"), executed by the
+  its own bytecode (the <code>.mod</code> v9 format, "MOD9"), executed by the
   <code>bpgenvm</code> VM (mark-and-sweep GC, deterministic owner handling,
   typed exceptions).
 </p>
@@ -269,7 +274,7 @@
 java -jar basicplus-frontend.jar samples/hola.bp --compile out --backend=mivm
 
 <span class="comment">// 2) Execution: the VM loads the root .mod; the .mod files of its imports are
-//    found by the convention <library>.<Module>.mod or via 'from "..."'</span>
+//    looked up by name, &lt;library&gt;.&lt;Module&gt;.mod (§10.3)</span>
 java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <!-- =========================================================== -->
@@ -301,9 +306,13 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <h3 id="identificadores">3.2 Identifiers</h3>
 <p>
   A letter or <code>_</code> followed by letters, digits or <code>_</code>.
-  Case-sensitive. Names starting with a double underscore
-  (<code>__name</code>) are reserved by convention for the compiler and the
-  stdlib (e.g. <code>__init</code>, <code>__newRefArray</code>).
+  Case-sensitive, and <strong>63 characters</strong> at most (a longer one is a compile
+  error; a function's full signature —its name with the types of its parameters— may be
+  160). Names starting with a double underscore (<code>__name</code>) belong to
+  <strong>the system</strong>: the VM's primitives and the names the compiler synthesizes
+  (<code>__init</code>, <code>__prop_get_x</code>…). Declaring one —a variable, a field, a
+  parameter, a class, a constant, an enum, a property or a private function— is a compile
+  error (V7).
 </p>
 
 <h3 id="keywords">3.3 Reserved words</h3>
@@ -315,7 +324,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Declarations</td>
       <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code> <code>enum</code>
           <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code>
-          <code>event</code> <code>raise</code></td></tr>
+          <code>event</code> <code>raise</code> <code>inline</code> (<a href="#inline">§8.3b</a>)</td></tr>
   <tr><td>Visibility / modifiers</td>
       <td><code>public</code> <code>private</code> <code>final</code> <code>owner</code> <code>sync</code></td></tr>
   <tr><td>Instance</td>
@@ -396,6 +405,20 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   zero-extends according to the type). Assigning an out-of-range literal is a
   compile error, with the exact range in the message.
 </p>
+<p>
+  <strong>A caveat about <code>double</code> on the RP2350</strong> (Pico 2,
+  Metro): <em>subnormal</em> values —those below
+  <code>2.2250738585072014e-308</code>— are flushed to <code>0</code>. Everything
+  above that boundary is exact, and byte-identical to the PC, the ESP32-P4 and the
+  STM32. The reason is that that board's SDK uses optimized floating-point routines
+  that drop subnormals in exchange for speed (measured: recovering them would cost
+  24 % of the time in all <code>double</code> arithmetic).
+  In practice it affects nothing: <code>double</code> is used for measurements that
+  need precision, and instrumentation works with 6 or 8 significant digits, not with
+  three-digit negative powers of ten. The only thing worth knowing is that a
+  computation that <em>underflows</em> will give <code>0</code> on that board and a
+  tiny number on the others.
+</p>
 <h4>4.1.1 Promotion and casts</h4>
 <p>
   In mixed operations and assignment there is <strong>automatic promotion to
@@ -430,40 +453,40 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h4>4.2.1 Fixed-size arrays &nbsp;<code>T[N]</code></h4>
 <p>
-  The size is an <strong>integer literal &gt; 0</strong> known at compile time,
-  and the elements are <strong>primitives</strong> (integers, narrow types,
-  <code>long</code>, <code>float</code>, <code>double</code>,
-  <code>boolean</code> — for <code>string</code> or classes use
-  <code>T[]</code>). The variable <em>IS</em> the array: it has a
-  <strong>fixed binding</strong> (it cannot be reassigned; its elements are
-  writable, though). Where it lives depends on the scope:
+  A fixed array <strong>is not a reference</strong>: it is storage in place. It lives in the
+  function's frame (a local variable) or inside the object (a <code>private var</code> field of
+  a class), and it can only be <strong>indexed</strong> (<code>buf[i]</code>, with a range check
+  at run time), <strong>iterated</strong> (<code>for x in buf</code>) and <strong>measured</strong>
+  (<code>len(buf)</code>). Any other use —assigning it to another variable, passing it to a
+  function, returning it, storing it in a field— is a compile error: there is no reference to
+  hand out, and that is why it can neither escape nor outlive its owner. The size is an
+  <strong>integer literal &gt; 0</strong> and the elements are <strong>primitives</strong>
+  (integers, narrow types, <code>long</code>, <code>float</code>, <code>double</code>,
+  <code>boolean</code>; for <code>string</code> or classes use <code>T[]</code>). A literal
+  initializer may be shorter than N: the rest stays at zero.
 </p>
 <table>
   <tr><th>Scope</th><th>Where it lives</th></tr>
-  <tr><td>Module global</td><td>Baked into the data block of the <code>.mod</code> (including the literal initializer): zero heap and zero startup code.</td></tr>
-  <tr><td>Function local</td><td>An N-element heap array, zero-allocated when the declaration is entered. Managed by the GC like any array.</td></tr>
-  <tr><td>Class field</td><td><strong>Not supported</strong> (compile error): declare <code>T[]</code> and initialize it in the constructor with <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.</td></tr>
+  <tr><td>Function local</td><td>In the frame: <code>4 + N·width</code> bytes, zeroed when it is declared. No heap, no GC.</td></tr>
+  <tr><td>Class <code>private var</code> field</td><td>Inside the object: <code>1 + ⌈N·width/4⌉</code> slots (up to 255), zeroed when the object is constructed. Only the class itself indexes it.</td></tr>
+  <tr><td>Module global</td><td><strong>No</strong> (compile error): at module level write <code>T[]</code>, with a literal <code>[…]</code> or <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.</td></tr>
 </table>
-<pre><code><span class="comment">// Module: baked into the data block; the literal initializer may be shorter</span>
-<span class="comment">// than N — the rest stays at zero. [1,2,250] fits in byte[4] (it is validated</span>
-<span class="comment">// element by element, not by array assignability).</span>
-<span class="kw">var</span> tabla: <span class="type">integer</span>[<span class="num">4</span>] := [<span class="num">10</span>, <span class="num">20</span>, <span class="num">30</span>]   <span class="comment">// → 10,20,30,0</span>
-<span class="kw">var</span> mascara: <span class="type">byte</span>[<span class="num">4</span>] := [<span class="num">1</span>, <span class="num">2</span>, <span class="num">250</span>]
+<pre><code><span class="kw">public class</span> Media
+  <span class="kw">private var</span> muestras: <span class="type">integer</span>[<span class="num">8</span>]      <span class="comment">// inside the object</span>
+  <span class="kw">var</span> n: <span class="type">integer</span> := <span class="num">0</span>                   <span class="comment">// how many so far</span>
+  <span class="kw">public function</span> add(v: <span class="type">integer</span>)
+    <span class="kw">this</span>.muestras[<span class="kw">this</span>.n <span class="kw">mod</span> len(<span class="kw">this</span>.muestras)] := v
+    <span class="kw">this</span>.n := <span class="kw">this</span>.n + <span class="num">1</span>
+  <span class="kw">end</span> add
+<span class="kw">end</span> Media
 
 <span class="kw">function</span> Main()
-  <span class="comment">// Local: N elements at zero on the heap; len() and iteration work</span>
-  <span class="kw">var</span> buf: <span class="type">byte</span>[<span class="num">64</span>]                    <span class="comment">// typical I2C/SPI buffer</span>
+  <span class="kw">var</span> buf: <span class="type">byte</span>[<span class="num">64</span>]                    <span class="comment">// in the frame, zeroed</span>
+  <span class="kw">var</span> mascara: <span class="type">byte</span>[<span class="num">4</span>] := [<span class="num">1</span>, <span class="num">2</span>, <span class="num">250</span>]   <span class="comment">// the 4th stays at 0</span>
   buf[<span class="num">0</span>] := <span class="num">42</span>
   <span class="kw">print</span> len(buf)                       <span class="comment">// 64</span>
-  <span class="comment">// buf := other    ← error: fixed binding (write to its elements instead)</span>
+  <span class="comment">// suma(buf)   ← error: not a reference (copy it into a T[] if it must be passed)</span>
 <span class="kw">end</span> Main</code></pre>
-<p>
-  A local fixed array is a normal heap array: it can be passed to a function
-  that takes <code>T[]</code> and disappears via GC once it is no longer
-  referenced. The module one lives in the data block and is never freed. There
-  are no <em>const</em> arrays: a module <code>const</code> only accepts
-  primitive literals (see <a href="#const">§5.2</a>).
-</p>
 
 <h4>4.2.2 Variable-size arrays &nbsp;<code>T[]</code></h4>
 <p>
@@ -478,7 +501,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <span class="comment">// From a function: split, listDir, etc. return arrays</span>
 <span class="kw">var</span> partes: <span class="type">string</span>[] := split(<span class="str">"a,b,c"</span>, <span class="str">","</span>)
-<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// PC Java VM only (§17)</span></code></pre>
+<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// sorted; on both VMs and on the board</span></code></pre>
 <p>
   The VM uses five physical heap types depending on the element width:
   <code>TYPE_ARRAY_I8</code> (byte/int8 and UTF-8 strings),
@@ -524,6 +547,12 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   Enums are symbolic names for <code>integer</code> constants. They auto-number
   from 0 unless assigned explicitly.
 </p>
+<p>
+  An enum is a type of its own, and closed: an integer does not convert into it —<code>Dia(2)</code>
+  is a compile error: "'Dia' es un enum: no se llama ni se convierte desde un entero (usa
+  Dia.VALOR)"—. When printed, or in a string, it gives its number: with <code>d</code> from
+  above, <code>print "d=" + d</code> gives <code>d=2</code>, just like <code>print d</code> (V7).
+</p>
 
 <h3 id="clases-tipo">4.4 Classes</h3>
 <p>
@@ -554,10 +583,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   cast — <code>List</code>'s typed getters, in the reference.
 </p>
 <p>
-  The cast <code>Class(x)</code> only accepts an <code>Object</code> as its source. To go down
-  between two classes of the same hierarchy (<code>Dog(a)</code> with <code>a: Animal</code>)
-  the compiler reads it as a constructor call and rejects it: go through an
-  <code>Object</code> variable first (<a href="#pendientes">§17</a>).
+  The cast <code>Class(x)</code> goes down from an <code>Object</code> or from any ancestor of
+  the class (<code>Perro(a)</code> with <code>a: Animal</code>); if the value is not of that
+  class, it throws at run time. If the class has a constructor that accepts that argument, the
+  constructor wins.
 </p>
 
 <!-- =========================================================== -->
@@ -573,12 +602,22 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <span class="kw">var</span> pts: <span class="type">integer</span>[<span class="num">100</span>]                  <span class="comment">// fixed array (§4.2.1)</span>
 <span class="kw">var</span> p: Punto := Punto(<span class="num">3</span>, <span class="num">4</span>)             <span class="comment">// class ref</span></code></pre>
 <p>
-  At module level, a <code>var</code> with a <strong>literal</strong>
-  initializer (numeric/boolean/string) is <em>baked</em> into the data block of
-  the <code>.mod</code>: it generates no startup code and the variable remains
-  reassignable. A non-literal module initializer is ignored with a warning —
-  assign it in the module's initializer function (the function with the same
-  name as the module).
+  <strong>A global variable is always worth what its declaration says.</strong>
+  Globals —module <code>var</code>s and properties, and a class's static
+  <code>var</code>s and properties— live in the module's constant space: with no
+  initial value they are 0 (or <code>null</code>); with a <strong>literal</strong>
+  value (numeric/boolean/string), it is <em>baked</em> into the <code>.mod</code>,
+  with no startup code, and the variable remains reassignable. Any other initial
+  value —an array literal, a call, an object, an expression— is <em>computed when
+  the module loads</em>, in the order they are written, after the modules it
+  imports have been initialized and before its initializer function (the function
+  with the same name as the module), which finds them already set.
+</p>
+<p>
+  A <code>string</code> or an array with no value —a global or a field that nobody has
+  assigned— is <code>null</code>, and it behaves as empty: it prints and concatenates as
+  <code>""</code> and <code>len</code> gives 0, the same on both VMs. Indexing it, on the other
+  hand, throws a <code>RuntimeError</code> (index out of range).
 </p>
 <p>
   <strong>A local variable is initialized before it is read.</strong> A module <code>var</code> with no
@@ -616,9 +655,26 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <h3 id="var-owner">5.3 <code>var owner</code></h3>
 <pre><code><span class="kw">var owner</span> r: Recurso := Recurso(<span class="str">"db"</span>)
-<span class="comment">// when it goes out of scope or is reassigned, the object it points to is freed
-// deterministically via FREE_REF (including the owner cascade).</span></code></pre>
-<p>Full detail in <a href="#owner">§12 Owner semantics</a>.</p>
+<span class="comment">// when the function is left —normal end, return or exception— the object is
+// DESTROYED (§9.4b): first what it owns, each with its destructor, and then
+// the object itself (~Recurso). Several owners die in REVERSE declaration order.</span></code></pre>
+<p>
+  A local <code>var owner</code> <strong>cannot escape</strong>: it can neither be returned with
+  <code>return</code> nor stored in a field or an array (compile error), because once the
+  function is left the object no longer exists. Passing it as an argument is fine (a loan).
+  And to release a resource when leaving a <em>block</em>, rather than the function:
+</p>
+<pre><code><span class="kw">try var</span> f: IO.TextFile := IO.TextFile(<span class="str">"datos.txt"</span>, <span class="str">"r"</span>)
+  <span class="kw">while not</span> f.eof() <span class="kw">do</span>
+    <span class="kw">print</span> f.readLine()
+  <span class="kw">endwh</span>
+<span class="kw">endtry</span>                <span class="comment">// f is destroyed here (~File() closes the file), however you leave</span></code></pre>
+<p>
+  <code>try var</code> is sugar: the resource is a <code>var owner</code> of the enclosing scope
+  and the <code>finally</code> releases it; it accepts <code>catch</code> and <code>finally</code>
+  like any <code>try</code> (the resource is released after them). Full detail in
+  <a href="#owner">§12 Owner semantics</a>.
+</p>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
@@ -628,13 +684,15 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Arithmetic</td><td><code>+ - * / mod</code> (with int↔float coercion)</td></tr>
   <tr><td>Power</td><td><code>^</code> — <code>2 ^ 10</code> = 1024. <code>int^int</code> is exact (integer);
       <code>float^int</code> by squaring; <code>float^float</code> via exp·ln (float)</td></tr>
-  <tr><td>Bitwise (integer only)</td><td><code>&amp; | xor shl shr</code> and unary <code>~</code></td></tr>
+  <tr><td>Bitwise (integer only)</td><td><code>&amp; | xor shl shr</code> (there is no bitwise NOT: <code>x xor -1</code>; <code>~</code> belongs to the destructor, <a href="#destructor">§9.4b</a>)</td></tr>
   <tr><td>Comparison</td><td><code>== != &lt; &lt;= &gt; &gt;=</code></td></tr>
   <tr><td>Logical</td><td><code>and or not</code></td></tr>
   <tr><td>Assignment</td><td><code>:= += -=</code></td></tr>
   <tr><td>Access</td><td><code>.</code> (member) <code>[]</code> (index) <code>()</code> (call)</td></tr>
   <tr><td>Type test</td><td><code>x instanceof Foo</code></td></tr>
-  <tr><td>String</td><td><code>+</code> concatenates (coerces scalars to string)</td></tr>
+  <tr><td>String</td><td><code>+</code> concatenates: it turns primitives, enums (their number) and objects
+      (<code>toString()</code>) into text; an array, a tuple, the <code>null</code> literal or a call with no
+      value have no conversion, and it is a compile error ("no hay conversión a string")</td></tr>
 </table>
 <p>
   Precedence (lowest to highest):
@@ -700,9 +758,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   iteration variable (documentation use).
 </p>
 <p>
-  <strong>Current limit of <code>step</code>:</strong> it only takes a positive integer
-  literal. <code>step -1</code> (a unary over the literal) or a variable do not compile
-  ("for step solo soporta literal int"); to count downwards use <code>while</code>.
+  <code>step</code> is a signed <code>integer</code>: a constant (<code>step -1</code> counts
+  downwards) or an expression, which is evaluated only once before entering; if the step is
+  negative the loop goes on while <code>i &gt;= to</code>. A written <code>step 0</code> is a
+  compile error.
 </p>
 
 <h3 id="switch">7.4 <code>switch</code></h3>
@@ -883,10 +942,12 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
 <ul>
   <li><strong>Additive</strong>: the <code>.mod</code> ALWAYS contains the
       function's bytecode. The native code travels <strong>inside the same
-      <code>.mod</code></strong> (the <code>native</code> section of the v7
-      format; there is no longer a separate application <code>.mdn</code>) and
-      the runtime uses it if it matches the micro's architecture; otherwise the
-      function runs interpreted. Not compiling the AOT never breaks the program.</li>
+      <code>.mod</code></strong> (its <code>native</code> section; there is no
+      longer a separate application <code>.mdn</code>) and
+      the runtime uses it if it matches the micro's architecture and its firmware's
+      version (its ABI); otherwise the function runs interpreted —one from another
+      version, such as that of a V6 <code>.mod</code>, is rejected with a warning—. Not
+      compiling the AOT never breaks the program.</li>
   <li><strong>Per-platform behavior</strong>:
     <table>
       <tr><th>Platform</th><th><code>native</code> function</th></tr>
@@ -955,8 +1016,13 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       without that step.</li>
   <li><strong>Speed and <code>double</code></strong>: none of the boards has a
       double-precision FPU, so a <code>double</code> in a native is emulated by the
-      firmware and speeds up much less than integer code. If you want speed on the
-      micro, use <code>float</code>.</li>
+      firmware and speeds up much less than integer code. Measured on an ESP32-C3 (no
+      FPU) with the same loop native and interpreted: with integers, about 100 times
+      faster; with <code>double</code>, 5 times (307 ms against 1609); with
+      <code>float</code>, which is emulated there too, almost 6 (200 against 1141). The
+      floor is set by the emulation, not by the interpreter. If you want speed on the micro,
+      use <code>float</code>: the boards with a single-precision FPU (Cortex-M33,
+      ESP32-P4) do it with one instruction.</li>
   <li><strong>Debugging</strong>: on the PC a native runs interpreted and is
       debugged like any other function; on the board, the debugger <strong>does not stop
       inside it</strong> (it runs as machine code), and the IDE says so when you set a
@@ -976,10 +1042,10 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
       toolchain</strong> (<code>arm-none-eabi-gcc</code> — a standard install of
       the <em>Arm GNU Toolchain</em> or on the <code>PATH</code>; set manually
       in <em>Project → AOT (toolchain)…</em>; installation:
-      <a href="guia-ide.html#aot">IDE Guide §5.1</a>); for the ESP32-P4, the
-      <code>riscv32-esp-elf-gcc</code> of the ESP-IDF install. It emits C,
-      compiles PIC code and <strong>merges it into the <code>.mod</code></strong>
-      (<code>native</code> section, v7) before uploading. If there is no
+      <a href="guia-ide.html#aot">IDE Guide §5.1</a>); for the RISC-V ESP32s (the P4, the
+      C3, the C5 and the C6), the <code>riscv32-esp-elf-gcc</code> of the ESP-IDF install. It
+      emits C, compiles PIC code and <strong>merges it into the <code>.mod</code></strong>
+      (into its <code>native</code> section) before uploading. If there is no
       toolchain, it <strong>warns and the program runs interpreted</strong>. The
       step can also be done by hand (<code>AotMain</code> emits C → the target's
       gcc → <code>MdnPack</code> packages it; the
@@ -987,6 +1053,24 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
 </ul>
 
 <!-- =========================================================== -->
+
+<h3 id="inline">8.3b Intrinsic functions: the <code>inline</code> body</h3>
+<p>
+  An <strong>intrinsic</strong> is a normal function whose body is written bytecode, one
+  instruction per line, like Turbo Pascal's <code>inline($CD/$21)</code>:
+</p>
+<pre><code><span class="kw">public function</span> <span class="fn">sin</span>(x: <span class="type">float</span>): <span class="type">float</span>
+  <span class="kw">inline</span> CALL_BUILTIN 24
+<span class="kw">end</span> sin</code></pre>
+<p>
+  The compiler generates no code for it in the <code>.mod</code>: at each call it inserts that
+  bytecode as is, with the arguments already on the stack (the mnemonic is the one in
+  <code>docs/OPCODES.md</code>; the number, the builtin's id in both VMs). That is how the
+  functions of <code>Math</code> are written, and their signature travels in the module's
+  interface like any other. It is the syntax of the standard library and of the root module; a
+  normal program does not need it.
+</p>
+
 <!-- =========================================================== -->
 <h3 id="sobrecarga">8.4 Function overloading</h3>
 <p>You can declare <strong>several functions with the same name</strong> as long as
@@ -1053,7 +1137,7 @@ overloads <strong>or</strong> a default value, but not both covering the same ca
 
 <h2 id="clases">9. Classes</h2>
 <pre><code><span class="kw">public class</span> Persona
-  <span class="kw">var</span> nombre: <span class="type">string</span>   <span class="comment">// fields are ALWAYS private</span>
+  <span class="kw">var</span> nombre: <span class="type">string</span>   <span class="comment">// a field is NEVER public</span>
   <span class="kw">var</span> edad:   <span class="type">integer</span>
 
   <span class="kw">public function</span> Persona(nombre: <span class="type">string</span>, edad: <span class="type">integer</span>)
@@ -1068,30 +1152,49 @@ overloads <strong>or</strong> a default value, but not both covering the same ca
 
 <h3 id="campos">9.1 Fields</h3>
 <p>
-  A <code>var</code> inside the class declares an instance field, and fields
-  are <strong>always private</strong>: they are read and written through
-  <code>this.field</code> inside the class, and are not touched from outside.
-  Marking a field <code>public</code> is a <strong>compile error</strong>, and
+  A <code>var</code> inside the class declares an instance field, and a field
+  is <strong>never public</strong>: it is read and written through
+  <code>this.field</code> inside the class (and its descendants, below), and is not
+  touched from outside. Marking a field <code>public</code> is a <strong>compile error</strong>, and
   the message points you at the right alternative: <code>public property</code>
   (§9.5), which exposes a get/set and keeps the backing field private. The
   reason is by design: what crosses the module boundary is a
   <em>contract</em>, not the internal representation.
 </p>
 <p>
-  A field does NOT allow a fixed-size array <code>type[N]</code> (compile
-  error): declare <code>type[]</code> and initialize it in the constructor with
-  <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
+  A field may be a fixed-size array <code>type[N]</code> if it is <code>private var</code>:
+  it lives inside the object and only the class itself indexes it (<a href="#arrays">§4.2.1</a>).
+  If it has to be seen or passed, declare <code>type[]</code> and initialize it in the constructor
+  with <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
   A field is <em>protected</em> (or <code>private</code>): its class and its
   descendants see it, also those in another module — since V7 the interface publishes
   the non-private fields with their slot (<a href="#visibilidad">§9.2.1</a>); to
   expose a value to <em>anyone</em>, use a <code>property</code>.
 </p>
+<p>
+  <strong>Initializers.</strong> An instance field (or property) may carry
+  <code>:= value</code>: <code>var n: integer := 5</code>, <code>var s: string := "hola"</code>,
+  <code>public property etiqueta: string := "sin nombre"</code>. They run <em>once</em> per
+  object, in declaration order, inside the constructor right after the <code>super(...)</code>
+  (written or implicit) and before its body — as in Java. A class with initializers and no
+  constructor gets one that runs them: with no arguments or, if its parent has a constructor, one
+  per overload of the parent's, with the same parameters, which it passes on with
+  <code>super(...)</code> —so it is still constructed the same way: <code>Tarea(4096)</code> with
+  <code>Tarea extends Thread</code>—. The value is any expression (a literal, a construction, a
+  call), but it cannot use <code>this</code> or other fields: that is what the constructor is for.
+</p>
+<p>
+  <strong>The limit of a class.</strong> A class takes up to 256 methods (counting the inherited
+  ones and its properties' accessors) and 256 field slots (a reference, a <code>long</code> or a
+  <code>double</code> take two). Going over is a compile error, with the class's line.
+</p>
 
 <h3 id="metodos">9.2 Methods</h3>
 <p>
   Like functions but inside the class. The implicit parameter <code>this</code>
-  points to the instance. All non-static methods are virtual (dynamic dispatch
-  via vtable).
+  points to the instance. Non-static methods are virtual (dynamic dispatch
+  via vtable) <strong>except the <code>private</code> ones</strong>, which are called
+  directly — see <a href="#visibilidad">9.2.1</a>.
 </p>
 
 <h4 id="visibilidad">9.2.1 Visibility: the three levels</h4>
@@ -1154,16 +1257,35 @@ end Base</code></pre>
 <h3 id="ctor">9.3 Constructor</h3>
 <p>
   A function with the same name as the class. It runs when you do
-  <code>ClassName(args)</code>. When <code>super(args)</code> is called, it must
-  be the first statement.
+  <code>ClassName(args)</code>. <strong>The first line of the constructor says how the object
+  is built</strong>, and there are three forms:
+</p>
+<ul>
+  <li><strong>Nothing</strong> — implicit <code>super()</code> (Java model): if the class has a
+      base, the compiler <em>injects</em> the call to the parent's no-argument constructor. If the
+      parent's constructor <em>requires</em> arguments, the explicit call is mandatory (compile
+      error if missing). If the parent has no constructor, there is nothing to call.</li>
+  <li><strong><code>super(args)</code></strong> — the parent through that constructor; it must be
+      the first statement.</li>
+  <li><strong><code>ClassName(args)</code></strong> — <em>delegation</em>: this same object is
+      initialized by that other overload of the constructor (which in turn does its
+      <code>super</code> and the initializers), and then the body goes on. Only as the first
+      statement: anywhere else <code>ClassName(args)</code> is a new object, as always. A
+      constructor cannot delegate to itself or in a cycle, nor delegate and also call
+      <code>super(...)</code>.</li>
+</ul>
+<p>
+  The <a href="#campos">initializers</a> of fields and properties run after the
+  <code>super</code> and before the body, in the constructor that does the <code>super</code>; the
+  one that delegates does not repeat them.
 </p>
 <p>
-  <strong>Implicit <code>super()</code> (Java model).</strong> If the class has
-  a base and its constructor does not call <code>super(...)</code>, the compiler
-  <em>injects</em> the call to the parent's no-argument constructor. If the
-  parent's constructor <em>requires</em> arguments, the explicit call is
-  mandatory (compile error if missing). If the parent has no constructor, there
-  is nothing to call and nothing is injected.
+  <strong>Visibility.</strong> That of any member: <code>private</code> is private (only the class
+  itself constructs it or delegates to it), <code>public</code> is public, and saying nothing makes
+  it <em>protected</em>: the class and its subclasses use it (from <code>super(...)</code> or by
+  constructing it), also those in another module, but not just anyone. A non-public constructor
+  of a public class travels in the interface with its mark, and it is the module that uses it that
+  gets the error.
 </p>
 
 <h3 id="herencia">9.4 Inheritance</h3>
@@ -1191,11 +1313,79 @@ end Base</code></pre>
   <strong>cross-module</strong>: the base class can come from another imported
   library (vtable, protected fields, statics and <code>super(...)</code> by
   signature included: <a href="#visibilidad">§9.2.1</a> and <a href="#static">§9.6</a>).
-  <code>x instanceof Foo</code> checks the dynamic type at runtime, with one
-  condition: <code>Foo</code> has to be a class <em>declared in the current
-  module</em> (a local child of an imported base is fine; the imported base, or
-  <code>Exception</code>/<code>RuntimeError</code>, is not — for exceptions use the
-  typed <code>catch</code>).
+  <code>x instanceof Foo</code> checks the dynamic type at runtime, and <code>Foo</code>
+  can be any class, also one from another module (<code>o instanceof Lib.Base</code>,
+  <code>e instanceof RuntimeError</code>; since V7).
+</p>
+<p>
+  <strong>The root.</strong> A class with no <code>extends</code> descends from <code>Object</code>
+  (<code>toString()</code>, <code>compareTo(other)</code>), which is a class written in BasicPlus in
+  <code>Core.bp</code>, like <code>Thread</code>, <code>Mutex</code> and <code>StringBuilder</code>
+  (<a href="#raiz">§10.0</a>). <code>Object</code> and <code>Thread</code> are declared there as
+  <code>public root class</code>: a <em>root class</em> descends from nothing — that is why a
+  <code>Thread</code> is not an <code>Object</code>: its <code>run()</code> has to be the first
+  method of its table, which is what the VM starts. <code>root</code> can only be written in
+  <code>Core</code>; in any other module it is an error.
+</p>
+
+<h3 id="destructor">9.4b The destructor: <code>~Class()</code></h3>
+<pre><code><span class="kw">public class</span> Valvula
+  <span class="kw">var</span> pin: <span class="type">integer</span> := -<span class="num">1</span>               <span class="comment">// -1: no pin yet</span>
+  <span class="kw">public function</span> Valvula(pin: <span class="type">integer</span>)
+    Gpio.init(pin, Gpio.OUTPUT())
+    Gpio.write(pin, <span class="num">1</span>)                 <span class="comment">// opens</span>
+    <span class="kw">this</span>.pin := pin                    <span class="comment">// now it is its own: noted at the end</span>
+  <span class="kw">end</span> Valvula
+  <span class="kw">public function</span> ~Valvula()           <span class="comment">// the opposite of the constructor</span>
+    <span class="kw">if</span> <span class="kw">this</span>.pin &gt;= <span class="num">0</span> <span class="kw">then</span>
+      Gpio.write(<span class="kw">this</span>.pin, <span class="num">0</span>)        <span class="comment">// closes</span>
+      Gpio.release(<span class="kw">this</span>.pin)          <span class="comment">// and the pin goes back to how it was</span>
+    <span class="kw">endif</span>
+  <span class="kw">end</span> ~Valvula
+<span class="kw">end</span> Valvula</code></pre>
+<p>
+  "What destroying this means" is written <strong>once</strong>, in the class, and not at every
+  place where it is used. The destructor is named like its class, takes no parameters and returns
+  nothing, and <strong>the language calls it</strong>, never the code, <strong>every time the
+  object is freed, whoever frees it</strong> (V7, <code>#668</code>): when its owner dies —a local
+  <code>var owner</code> when it leaves its scope, when it is reassigned or when a
+  <code>try var</code> ends (<a href="#var-owner">§5.3</a>); an <code>owner</code> field when it is
+  reassigned or when the object holding it is destroyed—; when the GC collects it because nobody
+  reaches it any more (it runs shortly after, between two scheduler turns); and when the program
+  ends —also after an error or a STOP—, everything still alive that has a destructor, newest
+  first (with a 3 s cap), so that everything goes back to how it was. It is virtual: the one of
+  the object's real class runs, and when a child's finishes, its parent's runs. Every class has
+  one (<code>Object</code> declares it empty in <code>Core.bp</code>): it is only overridden when
+  there is an external resource to release — a descriptor, a query, a mutex, a pin.
+</p>
+<p>
+  <strong>The order</strong>: first what the object owns —its <code>owner</code> fields, and theirs,
+  from the last to the first— and then the object itself; so <strong>in its destructor, its
+  <code>owner</code> fields are already <code>null</code></strong>. A destructor is normal code: it
+  can wait, touch the GUI or <code>join</code> a thread. And if it throws an exception, that is
+  reported (through the diagnostics, with the class) and the cleanup goes on with the others: a
+  destructor that fails leaves nothing undestroyed.
+</p>
+<p>
+  <strong>A library resource, in an <code>owner</code> field</strong>: the device classes
+  (<code>Pwm.Slice</code>, <code>Gpio.Pin</code>, <code>Uart.Port</code>…) already release what is
+  theirs in their destructor (V7, <code>#667</code>,
+  <a href="referencia.html#stdlib-hw-soltar">Reference §14.1</a>), so a class that uses them needs
+  no destructor: theirs dies with it, before it.
+</p>
+<pre><code><span class="kw">public class</span> Motor
+  <span class="kw">var owner</span> pwm: Pwm.Slice
+  <span class="kw">public function</span> Motor(pin: <span class="type">integer</span>)
+    <span class="kw">this</span>.pwm := Pwm.Slice(pin, <span class="num">20000</span>)   <span class="comment">// when the Motor dies, ~Slice stops the PWM</span>
+  <span class="kw">end</span> Motor
+<span class="kw">end</span> Motor</code></pre>
+<p>
+  <strong>An object whose constructor threw is destroyed too</strong>: it already exists in memory,
+  and the GC (or the end of the program) collects it. A class that takes the resource itself, with
+  a module's functions, has to release in its destructor <em>only what is its own</em>: it notes it
+  at the end of the constructor, once it has it, and releases it once —that is what the library
+  classes do, and what <code>Valvula</code> does with its <code>pin</code>: if
+  <code>Gpio.init</code> throws, it stays at -1 and its destructor touches nothing—.
 </p>
 
 <h3 id="props">9.5 Properties</h3>
@@ -1231,6 +1421,12 @@ end Base</code></pre>
     <span class="kw">field</span> := v * <span class="num">2</span>             <span class="comment">// stores twice the value</span>
   <span class="kw">endset</span>
 <span class="kw">endprop</span></code></pre>
+<p>
+  A subclass can <strong>redeclare</strong> a property of its parent: it is an override —its
+  accessors are virtual and the child brings its own backing field—, so the parent's code that
+  reads it sees the child's. It works the same with a parent in the same module as in another
+  (<code>#529</code>, V7).
+</p>
 
 <h4>sync properties (thread-safe)</h4>
 <pre><code><span class="kw">public class</span> Account
@@ -1249,8 +1445,10 @@ end Base</code></pre>
       (inherited by subclasses — it is declared only once, in the first link of
       the hierarchy that needs sync).</li>
   <li>Initializes it with <code>Mutex()</code> on entering the constructor. If
-      the class has no user constructor, it synthesizes a default one that only
-      performs that initialization.</li>
+      the class has no constructor of its own, gives it its constructors, as with the
+      <a href="#campos">initializers</a>: one per overload of the parent's constructor,
+      with the same parameters (passed on with <code>super(...)</code>), or one with no
+      arguments if the parent has none.</li>
   <li>Inserts <code>this.__syncMutex.lock()</code> at the start and
       <code>this.__syncMutex.unlock()</code> at the end of each
       <code>getX</code>/<code>setX</code>.</li>
@@ -1270,7 +1468,9 @@ end Base</code></pre>
 <p>
   A <code>return</code> inside the custom body of a sync get/set correctly
   releases the mutex: the emitter injects the <code>unlock</code> before the
-  jump to the exit point (no explicit try/finally is needed in BP). The same
+  jump to the exit point (no explicit try/finally is needed in BP). And an
+  exception leaving the body —a <code>throw</code>, or an error inside a function
+  it calls— releases it too before going on its way (V7). The same
   applies to module-level sync properties.
 </p>
 
@@ -1314,10 +1514,10 @@ end Base</code></pre>
 <p>
   The identifier <code>tick</code> within the module itself resolves to the
   getter/setter (not the global directly), so encapsulation is respected inside
-  the owning module too. If you need to initialize the property with a value
-  other than zero, do it in the module's initializer function (the function
-  with the same name as the module), just as with a module-level
-  <code>var</code>.
+  the owning module too. A module property takes its initial value just like a
+  module-level <code>var</code> (see <a href="#var">§5.1</a>): a literal is baked into
+  the module, and any other expression is computed when it loads, before the
+  module's initializer function.
 </p>
 <p>
   <code>sync</code> is also valid on module properties:
@@ -1339,8 +1539,6 @@ end Base</code></pre>
   <li>Module-level <code>owner</code> properties are not supported (classes only).</li>
   <li><code>final</code> is not supported at module level (the modifier applies
       only to class properties).</li>
-  <li>The property's init expression is ignored at compile time; use the
-      module's initializer function to set the initial value.</li>
 </ul>
 
 <h3 id="static">9.6 Static members / <code>final</code></h3>
@@ -1402,13 +1600,48 @@ Counter.bump()</code></pre>
   <span class="kw">end</span> Caja
 <span class="kw">end</span> Caja</code></pre>
 <p>
-  When a <code>Caja</code> is freed (via FREE_REF), its owner field
-  <code>contenido</code> is freed too, recursively.
+  When a <code>Caja</code> is destroyed —whoever frees it: its owner, the GC or the end of
+  the program—, its owner field <code>contenido</code> is destroyed and freed too, before it
+  and recursively (<a href="#destructor">§9.4b</a>). When the field is reassigned, the previous
+  value is destroyed before the new one is written.
 </p>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <h2 id="modulos">10. Modules</h2>
+<h3 id="raiz">10.0 The root module: <code>Core</code></h3>
+<p>
+  <code>Core</code> is the system module (Turbo Pascal's <code>System</code> unit), written in
+  BasicPlus and compiled as the <strong>root</strong>: its public functions are visible
+  <em>unqualified</em> in every program, whether it imports <code>Core</code> or not —
+  <code>strlen</code>, <code>abs</code>, <code>parseInt</code>, <code>now</code>,
+  <code>newIntArray</code>… They are declared in <code>bpstdlib/Core.bp</code>, one per line, as
+  functions with an <code>inline</code> body (<a href="#inline">§8.3b</a>), and that file is the
+  only source of the primitive table of both virtual machines: <code>Builtin.java</code> and
+  <code>builtin_ids.h</code> are generated from it.
+</p>
+<p>
+  <strong><code>import Core</code> is implicit.</strong> The compiler adds it to the tree of every
+  module that does not write it (except <code>Core</code> itself): you can write it or leave it
+  out, and the result is the same. Its classes (<code>List</code>, <code>Exception</code>,
+  <code>Integer</code>…) are written unqualified, and the four classes of the language
+  —<code>Object</code>, <code>Thread</code>, <code>Mutex</code>, <code>StringBuilder</code>— are
+  BasicPlus classes of <code>Core.bp</code>: until V7 the compiler wrote them in Java and copied
+  all four into every <code>.mod</code> (≈1.3 KB per module, whether it used threads or not); now
+  they are compiled once and every module references them. The order of their fields and methods
+  is a contract with both VMs (<code>Thread.run()</code> in slot 0, the tid in field 0…) and it is
+  noted in the file itself. That is why redeclaring one of the four in another module is a compile
+  error: "'Thread' es una clase del lenguaje (Core): no se puede redeclarar".
+</p>
+<p>
+  An intrinsic is a normal function, and it <strong>is overloaded</strong> like any other:
+  <code>Math.sign(x: integer)</code> and <code>Math.sign(x: float)</code> are two functions with the
+  same name (until V7 the second one was called <code>signF</code>), and <code>len</code> is two
+  overloads in the root — <code>len(s: string)</code> and <code>len(a: any[])</code> — instead of a
+  special case in the compiler. <code>any[]</code> ("an array of anything": any <code>T[]</code>
+  fits) can only be written in <code>Core</code>, like <code>any</code>. There is no sugar over a
+  class: the length of a <code>List</code> is <code>lista.length()</code>.
+</p>
 
 <h3 id="library">10.1 <code>library</code> (optional)</h3>
 <pre><code><span class="kw">library</span> <span class="str">"com.example.app"</span>
@@ -1460,23 +1693,33 @@ Counter.bump()</code></pre>
 <ul>
   <li>The last segment of the path is the local alias (<code>Util</code>,
       <code>Helper</code>). You use it as <code>Util.foo()</code>.</li>
-  <li><code>from "&lt;path&gt;"</code> tells the VM where to find the
-      <code>.mod</code> at runtime. Compilable when the frontend locates the
-      source <code>.bp</code> by deriving the path.</li>
-  <li><strong><code>import Core</code> is mandatory</strong> as soon as the module
-      names a <code>Core</code> type: <code>List</code>, <code>Integer</code>/<code>Long</code>/<code>Float</code>/<code>Double</code>/<code>Boolean</code>,
-      <code>Comparable</code>, <code>Exception</code>, <code>RuntimeError</code> — and
-      therefore any <code>try/catch</code> or <code>throw</code> (<a href="#excepciones">§11</a>).
-      No import is implicit (since V6); without it the compiler says "tipo 'List' no
-      encontrado" or "tipo de excepción 'RuntimeError' no es una clase".
-      <code>Thread</code>, <code>Mutex</code> and <code>StringBuilder</code> are
-      compiler builtins and do not need it.</li>
-  <li><strong>Imports are not transitive.</strong> Importing
-      <code>Collections</code> does not bring in <code>Core</code>: if its classes extend
-      <code>Core</code> types (<code>SyncList extends Core.List</code>), the module that
-      uses them has to import both — the compiler says so: "la clase 'SyncList'
-      extiende 'Core.List' y este modulo no importa 'Core': anade `import Core`". The
-      same goes for any module whose interface returns types from a third one.</li>
+  <li><code>from "&lt;path&gt;"</code> tells the <strong>compiler</strong> where to find the
+      <code>.mod</code> (or the <code>.bp</code>) to take the interface from. At run time the VM
+      looks the module up by its name, always in the same order: the running pack, the program's
+      folder (<code>/app</code>), the standard library (<code>/lib</code>) and the pack zone — the
+      <code>from</code> path is not used.</li>
+  <li><strong><code>import Core</code> is not needed</strong> (since V7): the compiler adds it to
+      every module (<a href="#raiz">§10.0</a>), so the <code>Core</code> types
+      —<code>List</code>, <code>Integer</code>/<code>Long</code>/<code>Float</code>/<code>Double</code>/<code>Boolean</code>,
+      <code>Comparable</code>, <code>Exception</code>, <code>RuntimeError</code>— and
+      <code>try/catch</code> or <code>throw</code> (<a href="#excepciones">§11</a>) are used without
+      writing it. Writing it changes nothing.</li>
+  <li><strong>Imports are not transitive</strong> (<code>Core</code> aside, which is always
+      there). Importing <code>A</code> does not bring in the modules <code>A</code> imports: if a
+      class of <code>A</code> extends one of <code>B</code>, or a signature of <code>A</code> uses an
+      enum of <code>B</code>, the module that uses them has to import <code>B</code> too — the
+      compiler says so: "la clase 'X' extiende 'B.Y' y este modulo no importa 'B': anade
+      `import B` (los imports no son transitivos)".</li>
+  <li><strong>A library can grow without recompiling its users</strong> (since V7, <em>late
+      binding</em>): a <code>.mod</code> carries its references to other modules' classes by name and
+      signature, and the loader resolves them against the version it finds. An added method,
+      field or property —or a reordering— breaks nobody, as in Java; what would break —removing a
+      member, changing its signature or its type— is rejected <em>at load time</em>, naming the
+      symbol: "'Usa' necesita 'Lib.Sensor.nombre()s' y 'Lib' (gen 0) no lo tiene (tiene
+      'nombre()i'): recompila 'Usa'". And a dependency older than the version the module was
+      compiled against does not load either: "'Lib' (gen 2) es mas antiguo que el que 'Usa'
+      necesita (gen 3): actualiza /lib o recompila" (a library's version, its <em>gen</em>, is
+      the <code>version</code> key of its <code>.bpbuild</code>).</li>
   <li><strong>What crosses the module boundary</strong> (since V7): everything a
       descendant or a client can name — functions, classes with their public and
       protected methods, properties and fields, <em>all</em> constructor overloads
@@ -1495,7 +1738,9 @@ decision, 30-Aug-2026), along with the samples that used them.</p>
 users</em>— is still a goal, and the intended shape is <strong>module
 inheritance</strong>: keep the original module and add one that inherits from it. It is
 <strong>deliberately on hold</strong>, because it needs effective version control that
-does not exist yet. It will be revisited then.</p>
+does not exist yet. It will be revisited then. One part is already here: since V7, a library
+can <em>grow</em> —add methods, fields or properties— without recompiling its users
+(<a href="#imports">§10.3</a>).</p>
 <p>To compose functionality today: plain <code>import</code> (§10.3) and <strong>class
 inheritance</strong> (§9), which does exist and is used — the standard library has 38
 cases, from <code>SyncList extends Core.List</code> to
@@ -1615,15 +1860,15 @@ Within one module, two classes may refer to each other with no problem.</p>
       <code>return</code>, <code>break</code> or <code>continue</code> itself (compile error): it would hide the
       exception in flight. A <code>throw</code> inside is fine, and so is a <code>break</code> to a loop inside the
       <code>finally</code>.</li>
+  <li>The <code>catch</code> is optional: a <code>try … finally … endtry</code>, with just the
+      cleanup, is fine too (V7). If an exception is thrown, the <code>finally</code> runs and the
+      exception goes on to the enclosing <code>try</code>.</li>
   <li><code>throw expr</code> throws the value. If it is a class, its class_ptr
       is used for the typed <code>catch</code> match.</li>
   <li>All exceptions descend from <code>Exception</code> (with its
-      <code>msg</code> property), which lives in the standard module
-      <code>Core</code> along with <code>RuntimeError</code>. <strong>The module has
-      to write <code>import Core</code></strong> to use <code>try</code>/<code>catch</code>,
-      <code>throw</code> or to name <code>Exception</code>/<code>RuntimeError</code>
-      (<a href="#imports">§10.3</a>); without it, "tipo de excepción 'RuntimeError' no
-      es una clase".</li>
+      <code>msg</code> property), which lives in the root module
+      <code>Core</code> along with <code>RuntimeError</code>; since <code>Core</code> is always
+      imported (<a href="#raiz">§10.0</a>), they are used without writing anything.</li>
   <li><code>print e</code> prints the <strong>message</strong>:
       <code>Exception.toString()</code> returns <code>msg</code>, and
       <code>RuntimeError</code> and user exceptions inherit it.</li>
@@ -1645,9 +1890,12 @@ Within one module, two classes may refer to each other with no problem.</p>
 <span class="kw">catch</span> e: RuntimeError
   <span class="kw">print</span> <span class="str">"it did not fit: "</span> + e.msg
 <span class="kw">endtry</span></code></pre></li>
-  <li>An uncaught exception ends the program with <strong>exit code 1</strong>
-      (the same on both VMs and on the board); the report is diagnostic, not program
-      output: the Java VM shows a stack trace with the symbolic name of each frame,
+  <li>An exception that nobody catches on the <code>main</code> thread ends the program with
+      <strong>exit code 1</strong> (the same on both VMs and on the board); on another thread it
+      ends <em>that</em> thread, the others carry on, and at the end the program exits with 1 all
+      the same (<a href="#conc-modelo">§14.1</a>). The report names the exception's class
+      (<code>Core.RuntimeError: …</code>, <code>MiMod.MiError: …</code>) and it is diagnostic, not
+      program output: the Java VM shows a stack trace with the symbolic name of each frame,
       the C VM the message, and the IDE picks it up in its console
       (<code>help error</code> lists the codes).</li>
 </ul>
@@ -1658,32 +1906,39 @@ Within one module, two classes may refer to each other with no problem.</p>
 <p>
   BP supports <em>deterministic</em> object destruction as a complement to the
   traditional GC. The basic rule: an object can have <strong>one</strong>
-  owner; when the owner is freed, the owned object is freed too (cascade).
+  owner; when the owner dies, the owned object dies too (cascade). And dying
+  is being <em>destroyed</em>: its destructor runs (<a href="#destructor">§9.4b</a>)
+  and then its memory is freed.
 </p>
 
 <h3>12.1 <code>var owner x: T</code></h3>
 <ul>
   <li>On assigning <code>x := y</code>, the previous value of <code>x</code> is
-      freed (FREE_REF) beforehand.</li>
-  <li>On leaving scope, the current value of <code>x</code> is freed.</li>
+      destroyed beforehand.</li>
+  <li>On leaving scope —normal end, <code>return</code> or exception—, the current value
+      of <code>x</code> is destroyed.</li>
   <li>Assigning <code>x</code> to a non-owner variable copies the ref without
       transferring ownership (it still belongs to <code>x</code>).</li>
-  <li>Assigning to another owner variable transfers: the source is left at
-      <code>null</code> without being freed.</li>
+  <li>Assigning to another local owner variable transfers: the source is left at
+      <code>null</code> without being destroyed.</li>
+  <li>A local <code>var owner</code> does not escape: it is neither returned nor stored in a
+      field or an array (compile error, <a href="#var-owner">§5.3</a>).</li>
 </ul>
 
 <h3>12.2 Fields <code>owner</code></h3>
 <p>
-  <code>var owner f: T</code> inside a class. The class descriptor holds
-  a bitmap of owners; when the instance is freed, each marked slot is freed
-  recursively. The opcode <code>SET_FIELD_OWNER</code> frees the field's
-  previous value before writing the new one (an owner-safe atomic assignment).
+  <code>var owner f: T</code> inside a class. The class descriptor marks which
+  fields are owners; when the instance is destroyed, each of them is destroyed
+  before it, from the last to the first (in its destructor, the instance already
+  has them at <code>null</code>). When the field is reassigned, the previous value is
+  destroyed before the new one is written (an owner-safe assignment).
 </p>
 
 <h3>12.3 Cascade through ref arrays</h3>
 <p>
-  If an owner field holds a reference to a <code>TYPE_ARRAY_REF</code> array,
-  freeing the container also frees all the array's non-null slots. This is the
+  If an owner field holds a reference to a <code>TYPE_ARRAY_REF</code> array, its
+  elements belong to the object too: when the container is destroyed, all the
+  array's non-null elements are destroyed, each with its destructor. This is the
   mechanism behind <a href="referencia.html#stdlib-ownerlist">OwnerList</a>.
 </p>
 
@@ -1692,9 +1947,15 @@ Within one module, two classes may refer to each other with no problem.</p>
 <h2 id="concurrencia">14. Concurrency</h2>
 <p>
   BP threads are run by N <em>workers</em> (real OS threads) that share out the
-  queued threads. The default is <code>N=1</code>, as on the micro (a single core);
-  SMP is <em>opt-in</em>: <code>--workers=N</code> on the Java VM (see
-  <a href="referencia.html#cli-vm">§16.2</a>) and <code>--smp=N</code> on the PC C VM.
+  queued threads. On the PC the default is <code>N=1</code>, and SMP is <em>opt-in</em>:
+  <code>--workers=N</code> on the Java VM (see
+  <a href="referencia.html#cli-vm">§16.2</a>) and <code>--smp=N</code> on the PC C VM. On the
+  board, since V7, the <strong>dual-core</strong> ones —the Pico&nbsp;2, the Metro, the ESP32-S3
+  and the ESP32-P4— run two threads of the program truly at the same time, one per core (each
+  on a <em>run</em>, a system task); the others —the C3, the C5, the C6 and the STM32s—, one at
+  a time. On the dual-core ones, the ENV keys <code>vm.runs</code> and <code>vm.cores</code>
+  change it without reflashing (<a href="guia-ide.html#entorno">IDE Guide §9.3</a>); what it
+  means for the program, in <a href="#conc-nucleos">§14.6</a>.
 </p>
 
 <h3 id="conc-modelo">14.1 Execution model</h3>
@@ -1721,11 +1982,11 @@ Within one module, two classes may refer to each other with no problem.</p>
       the program ends. And it says so right then, on the program output (the
       PC console, the IDE's with a board):
       <code>=== excepcion no atrapada en un hilo (el hilo termina): &lt;message&gt; ===</code>.</li>
-  <li>Up to <strong>32 threads can be alive at once</strong>, main included.
-      A finished thread frees its place for another, so over its lifetime a
-      program can create as many as it wants. <code>start()</code> throws a
-      <code>RuntimeError</code> if 32 are already alive, or if there is no
-      memory left for the stack it asks for.</li>
+  <li><strong>There is no limit on live threads</strong> (since V7): memory sets it, because
+      each one takes the stack it asks for. A finished thread frees its place for another, so
+      over its lifetime a program can create as many as it wants. <code>start()</code> throws a
+      <code>RuntimeError</code> if there is no memory left for the stack it asks for ("no hay
+      memoria para la pila del hilo").</li>
   <li>Each BP thread has its own context (<code>ThreadContext</code>): PC, SP,
       BP, CS, stack region, exception-handler stack. The heap (including objects
       owned by threads) is <strong>shared</strong>.</li>
@@ -1821,7 +2082,7 @@ shared object</code></pre>
   holes. <code>Heap.compact()</code> does move —it slides what is alive to the start of the
   heap, with the world stopped—, but only when the program asks and under controlled
   conditions: from <code>Main</code>, with no other thread alive and never from a
-  <code>native</code> (reference §13.19). It is possible because a reference is a
+  <code>native</code> (<a href="referencia.html#stdlib-heap">reference §13.19</a>). It is possible because a reference is a
   <em>handle</em>: moving an object is changing its entry in the table.
 </p>
 <p>
@@ -1837,8 +2098,8 @@ shared object</code></pre>
   closed in V6: only the worker that owns a thread decides about it, and on the C VM
   the <code>Mutex</code> became atomic. <code>synctest.bp</code>,
   <code>synclisttest.bp</code> and <code>modpropsync.bp</code> are the reference
-  tests. SMP remains opt-in (one worker by default) and on the board the VM runs on
-  a single core.
+  tests. On the PC, SMP remains opt-in (one worker by default); on the board, the C VM
+  uses both cores where there are two (<a href="#conc-nucleos">§14.6</a>).
 </p>
 
 <!-- =========================================================== -->
@@ -1868,6 +2129,42 @@ sb.appendStr(<span class="str">"Humidity: "</span> + h)
   And a trace the VM writes <em>while</em> a piece is being computed (on the PC,
   those of the simulated peripherals: <code>[gpio] read pin=25 …</code>) comes out
   before the line, not in the middle.
+</p>
+
+<h3 id="conc-nucleos">14.6 Two cores: what is shared, and a fatal failure</h3>
+<p>
+  On a dual-core board (the Pico&nbsp;2, the Metro, the S3 and the P4), two threads of the
+  program run <strong>at the same time</strong>, each on its own core. Nothing changes that was
+  not already true with one —the thread switch can also fall between two reads—, but now it
+  really happens, and more often. The rule is this: <strong>memory shared by two threads is the
+  program's business; the VM's memory is the VM's</strong>. What two threads read and write at
+  the same time —a field of a shared object, a list, a property— is protected with a
+  <a href="referencia.html#stdlib-mutex"><code>Mutex</code></a> or with a
+  <a href="#props"><code>sync</code> property</a>. Without it, the result is that of any race —a
+  counter that loses additions, a list half changed—, but the VM does not break: its heap, its
+  tables and the GC are protected, and a <code>print</code> comes out whole
+  (<a href="#conc-print">§14.5</a>). The GUI protects itself: every operation on its widgets is
+  run by the same run, so they can be touched from any thread.
+</p>
+<p>
+  What you gain depends on the program: two threads computing at the same time go almost twice
+  as fast (measured: ×2 on the P4, ×1.55–1.68 on the Pico&nbsp;2, ×1.13 on the Metro); with
+  strings, little or nothing (×1.33 on the P4; on the Pico&nbsp;2, ×0.83: it loses); and a
+  single-threaded program gains nothing (<a href="#pendientes">§17</a>).
+  A program being debugged, or one that uses SQLite, runs with one run even if there are two.
+  The figures, and how to go back to one core without reflashing, are in the
+  <a href="guia-ide.html#entorno">IDE Guide §9.3</a>.
+</p>
+<p>
+  <strong>A fatal failure.</strong> An error of the program is an exception
+  (<a href="#excepciones">§11</a>): it is caught or, at most, it ends its thread. A <em>fatal
+  failure</em> is something else: the board's system cannot go on —a HardFault, the system's
+  memory exhausted, an internal check that fails—. On the Pico&nbsp;2 and the Metro, with two
+  cores, the board leaves the report in the log —in RAM that survives the reboot—, reboots by
+  itself in half a second and, when it starts, says so (<code>Machine.resetCause()</code> and
+  the IDE's INFO give "fallo fatal") and <strong>does not launch the autorun</strong>: a program
+  that failed right at startup would be a reboot loop; from the IDE it is started by hand.
+  Keeping the failure of one run from bringing the whole board down is for V8.
 </p>
 
 <h2 id="eventos">15. Events</h2>
@@ -1964,17 +2261,24 @@ that receives it.</p>
 <!-- =========================================================== -->
 
 <h2 id="pendientes">17. Pending / not supported</h2>
-<p style="color:var(--fg-muted)">Status at the close of V6 (September 2026). What
-was here and is now done: classes/properties in the interface
+<p style="color:var(--fg-muted)">Status at the close of V7 (October 2026). What
+was here and is now done: up to V6, classes/properties in the interface
 (cross-module), qualified types <code>Mod.Class</code>,
 <code>Collections.Map</code>, the project file, the GC's stop-the-world
-safepoint (the Java VM also runs at 1 worker by default, like the device),
-in V3 automatic AOT from the IDE and the GUI
-(<a href="gui.html">separate volume</a>), and in V6 the explicit
-<code>import Core</code> (<a href="#imports">§10.3</a>), <code>catch e</code> as
+safepoint, automatic AOT from the IDE, the GUI
+(<a href="gui.html">separate volume</a>), <code>catch e</code> as
 <code>Exception</code> (<a href="#excepciones">§11</a>), the native code inside
-the <code>.mod</code> v7 (<a href="#funciones-native">§8.3</a>) and the SMP race
-B1 (<a href="#conc-gc">§14.4</a>).</p>
+the <code>.mod</code> (<a href="#funciones-native">§8.3</a>) and the SMP race
+B1 (<a href="#conc-gc">§14.4</a>); and in V7, the root module with an implicit
+<code>import Core</code> (<a href="#raiz">§10.0</a>), the destructor and <code>try var</code>
+(<a href="#destructor">§9.4b</a>) —owners are destroyed also when an exception goes out—,
+the cast from any ancestor (<a href="#any">§4.5</a>), the signed <code>step</code>
+(<a href="#for">§7.3</a>), <code>instanceof</code> of a class from another module
+(<a href="#herencia">§9.4</a>), protected fields, statics and constructor overloads across
+modules (<a href="#imports">§10.3</a>), <code>listDir</code> on both VMs,
+<code>try/catch/finally</code> inside a native (<a href="#funciones-native">§8.3</a>), threads
+with no limit (<a href="#conc-modelo">§14.1</a>) and the two cores on the board
+(<a href="#conc-nucleos">§14.6</a>).</p>
 <ul>
   <li><code>try var</code> (the <code>owner</code> resource the block releases) INSIDE a
       <code>native function</code>: declare it before with <code>var</code> and release it in a
@@ -1982,7 +2286,7 @@ B1 (<a href="#conc-gc">§14.4</a>).</p>
       work). Nor <code>instanceof</code>,
       events or tuples with <code>float</code>, <code>long</code> or <code>double</code> fields
       inside a native (compile error, <a href="#funciones-native">§8.3</a>).</li>
-  <li>Fixed-size array <code>type[N]</code> as a class field and inside a
+  <li>Fixed-size array <code>type[N]</code> at module level and inside a
       <code>native function</code> (compile error, with the alternative:
       <code>type[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
   <li><strong>AOT on the ESP32-S3 (Xtensa)</strong> — its <code>native</code> functions
@@ -1995,17 +2299,10 @@ B1 (<a href="#conc-gc">§14.4</a>).</p>
       RP2350 and the STM32; and since V7 so do <strong>the C5, the C3 and the C6</strong>
       (RISC-V without FPU, <code>ilp32</code> target:
       <a href="#funciones-native">§8.3</a>).</li>
-  <li><strong>Across modules</strong> (<a href="#imports">§10.3</a>):
-      <code>x instanceof Foo</code> only accepts a class declared in the current
-      module (<a href="#herencia">§9.4</a>). (Protected fields, statics and constructor
-      overloads cross since V7.)</li>
-  <li>The downcast <code>Class(x)</code> only accepts an <code>Object</code> source
-      (<a href="#any">§4.5</a>).</li>
-  <li><code>step</code> of the numeric <code>for</code>: only a positive integer
-      literal (<a href="#for">§7.3</a>).</li>
-  <li><code>listDir()</code> and <code>input()</code> only exist on the PC Java VM;
-      on the C VM (PC and boards) they throw <code>RuntimeError</code> ("builtin N no
-      soportado") — the same <code>.mod</code> does not give the same output on both VMs.</li>
+  <li><code>input()</code> only exists on the PC Java VM; on the C VM (PC and boards) it
+      throws <code>RuntimeError</code> ("builtin 37 no soportado en esta VM") — the same
+      <code>.mod</code> does not give the same output on both VMs. (<code>listDir()</code>, which
+      was here, works on both since V7.)</li>
   <li>Performance improvement (not functionality): a <code>native</code>'s call
       to a function in ANOTHER module already works, but crosses the interpreter
       bridge (the compiler warns). The improvement — dispatching native→native
@@ -2013,32 +2310,33 @@ B1 (<a href="#conc-gc">§14.4</a>).</p>
       <code>docs/AOT_CROSS_MODULE.md</code> (v4). Within the same module it is
       already a direct C call.</li>
   <li>Networking on the micros: the TCP client (the <code>Net</code> module,
-      §13.29) works on PC; on the boards the WiFi+lwIP backend is
-      missing — for now it throws a catchable RuntimeError there. No date (the
-      long-range course puts it in V8).</li>
+      <a href="referencia.html#stdlib-net">§14.15</a>) works on PC; on the boards the WiFi+lwIP
+      backend is missing — for now it throws a catchable RuntimeError there. It is V8's job,
+      along with Bluetooth.</li>
   <li><code>owner</code> / <code>final</code> do not apply to module properties.</li>
   <li><code>Mutex</code> is non-reentrant; no <code>Semaphore</code> /
       <code>Channel</code> in the stdlib.</li>
-  <li>Owners on exception paths (some throw paths skip the deterministic free).</li>
   <li>Closures over the enclosing scope's locals in <code>case</code> bodies of
       the <code>parallel</code> statement (today only stdlib + module
       non-globals are visible — see <a href="#conc-encapsulacion">§14.3</a>).</li>
-  <li><code>Adc</code>: on RP2350B boards (48 GPIO) channels 4-7 are not yet
-      exposed in BP (common subset 0..3; the backend already supports them).</li>
-  <li>Dual-core on-board: the VM runs on a single core on the device. SMP
-      exists on the PC as opt-in (<a href="#concurrencia">§14</a>); enabling it on
-      the micro was left outside the version plan (decision of September 2026).</li>
+  <li>With the RP2350's dual-core image —the default one on the Pico&nbsp;2 and the Metro—, a
+      single-threaded program runs slower than it should: on the Metro, by 35&nbsp;% (also with
+      <code>vm.cores=1</code>: it is the image, not the other core); on the Pico&nbsp;2, one that
+      prints a lot, by 19&nbsp;%. And strings gain nothing with two threads
+      (<a href="#conc-nucleos">§14.6</a>). It is being investigated in V8 (<code>#665</code>).</li>
+  <li>Keeping the fatal failure of one run from bringing the whole board down
+      (<a href="#conc-nucleos">§14.6</a>): in V8.</li>
   <li>Generics / type parameters in user classes.</li>
-  <li>Explicit versioning of library contracts (covered pragmatically with
-      <code>extends</code>).</li>
+  <li>Explicit versioning of library contracts (covered in practice by each library's
+      generation and late binding: <a href="#imports">§10.3</a>).</li>
 </ul>
 
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus reference manual — generated alongside development.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) and
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-C3 / ESP32-C6 / ESP32-P4 / STM32U5) ·
-  Format <code>.mod</code> v7 (interface and native code embedded).<br>
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-C3 / ESP32-C5 / ESP32-C6 / ESP32-P4 / STM32U5) ·
+  Format <code>.mod</code> v9 (late binding; interface and native code embedded).<br>
   BasicPlus rests on other people’s work —
   <a href="creditos.html">credits and acknowledgements</a>.
 </p>

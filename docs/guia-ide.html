@@ -257,9 +257,9 @@
   <li><strong>Resources</strong> — ficheros de datos que el Run copia
       al micro tal cual (configuraciones, tablas…).</li>
   <li><strong>Output</strong> — lo que produce el compilador: los
-      <code>.mod</code> (bytecode, con su interfaz dentro — y, si el
-      proyecto usa <code>native</code>, también el código máquina: desde
-      el formato v7 no hay <code>.mdn</code> suelto), y el
+      <code>.mod</code> (bytecode en formato MOD9, con su interfaz dentro — y,
+      si el proyecto usa <code>native</code>, también el código máquina: va
+      dentro, no en un <code>.mdn</code> suelto), y el
       <code>.pack</code> si el proyecto empaqueta (§10).</li>
   <li><strong>Dependencies</strong> — módulos importados resueltos.</li>
 </ul>
@@ -297,20 +297,34 @@
   <li><strong>Run → Stop</strong> (Ctrl+F2): aborta el programa en
       marcha — local o en placa — sin reiniciar nada. En la placa es un
       KILL cooperativo: la VM muere limpia y el micro sigue
-      respondiendo. El programa termina con código 130.</li>
+      respondiendo, también si el programa está dentro de una función
+      <code>native</code> larga. El programa termina con código 130.</li>
 </ul>
 <p>
+  Al acabar un programa —bien, con un error o con Stop—, sus objetos se
+  destruyen y cada uno suelta lo suyo: un PWM se para, los pines y los buses
+  quedan libres (<a href="manual.html#destructor">manual §9.4b</a>). Lo que no
+  suelte ningún objeto lo suelta la placa al final del RUN, y las salidas
+  vuelven a como estaban tras el reset. Esa destrucción tiene un tope de 3 s:
+  lo que no acabe, lo suelta la placa y el log lo dice.
+</p>
+<p>
   <strong>Las dependencias no se retransmiten.</strong> Antes de subir,
-  el IDE pregunta a la placa por cada módulo que el programa importa y
-  sólo sube el que falta, el que la placa tiene de una versión anterior o
-  el que tiene la misma versión con CRC distinto; si la placa lo tiene
-  más nuevo, se queda el suyo. La Consola dice de dónde carga cada uno
-  (ruta y CRC) y avisa si esa copia no es la que el proyecto pondría —
-  cuando algo falla por una dependencia, esa línea es la que dice de
-  dónde salió el módulo. La biblioteca estándar sigue la misma regla: va en
-  el firmware (§6) y sólo se sube el módulo que a la placa le falte, sea de
-  versión anterior o tenga otro CRC (no toda la stdlib va embebida en todas las
-  imágenes).
+  el IDE pregunta a la placa por cada módulo que el programa importa, y la
+  placa lo busca donde lo cargaría (§10.2). Un módulo <em>del programa</em>
+  se sube si falta, si la placa lo tiene en un formato anterior o si,
+  siendo el mismo, su CRC es otro (lo acabas de recompilar); si la placa lo
+  tiene más nuevo, se queda el suyo. Uno de la <em>biblioteca estándar</em>
+  sigue la regla de las librerías: lo que el programa pide es una versión
+  mínima —la del <code>.mod</code> contra el que se compiló—, y si la placa
+  tiene ésa o una posterior, en el mismo formato, vale aunque sea otra
+  compilación (otro CRC): no se sube. Sólo se sube el que falta, el de otro
+  formato o el de una versión anterior a la mínima, y va a <code>/lib</code>
+  (la stdlib va en la imagen de la placa —no entera en todas— o en el
+  <code>Stdlib.pack</code>, §10.3). La Consola dice de dónde carga cada uno
+  (ruta y CRC) y por qué lo sube o no, y avisa si esa copia no es la que el
+  proyecto pondría — cuando algo falla por una dependencia, esa línea es la
+  que dice de dónde salió el módulo.
 </p>
 <p>
   Al terminar, la Consola cierra con el código de salida, el motivo y
@@ -338,7 +352,7 @@
 <p>
   Si el programa usa <code>function native</code>, en <em>Run on Device</em> el
   IDE compila esas funciones a código máquina y lo funde <strong>dentro del
-  propio <code>.mod</code></strong> (formato v7): se sube un solo fichero y no
+  propio <code>.mod</code></strong>: se sube un solo fichero y no
   hay dos que puedan desparejarse. Para ese paso hace falta un
   <strong>compilador de C cruzado</strong> — y <strong>no viene con
   BasicPlus</strong>: no es nuestro, así que se instala aparte. Cuál, depende
@@ -360,25 +374,24 @@
         de instalación de Espressif</a>) — <strong>versión 6 o posterior</strong></td>
   </tr>
   <tr>
+    <td>ESP32-C3, ESP32-C5 y ESP32-C6</td>
+    <td><code>riscv32-esp-elf-gcc</code></td>
+    <td>el mismo del ESP-IDF: son RISC-V <em>sin FPU</em>, y el IDE compila para
+        ellas lo suyo (destino <code>riscv-imc</code>, ABI <code>ilp32</code>) porque
+        la placa le dice su receta</td>
+  </tr>
+  <tr>
     <td>ESP32-S3</td>
     <td>—</td>
     <td>en esta versión <code>native</code> corre <em>interpretado</em> en el S3</td>
   </tr>
-  <tr>
-    <td>ESP32-C3 y ESP32-C6</td>
-    <td>—</td>
-    <td>también <em>interpretado</em>: son RISC-V <em>sin FPU</em> y el único
-        destino RISC-V del IDE es el del P4 (con FPU); su firmware no carga bloques
-        nativos, así que si activas AOT el blob del P4 se ignora y la función corre
-        interpretada (<code>#502</code>, V7)</td>
-  </tr>
 </table>
 <p class="warn">
   <strong>Lo del ESP-IDF hay que decirlo claro.</strong> Programar en BasicPlus
-  <em>no</em> exige tener el ESP-IDF instalado — se puede tener un P4, escribir,
-  subir y ejecutar sin haber visto nunca una línea de C. El ESP-IDF hace falta
-  <strong>sólo</strong> si quieres usar <code>function native</code> en esa placa,
-  y entonces se instala aparte por la guía de Espressif. Y que sea
+  <em>no</em> exige tener el ESP-IDF instalado — se puede tener una P4, una C3, una
+  C5 o una C6, escribir, subir y ejecutar sin haber visto nunca una línea de C. El
+  ESP-IDF hace falta <strong>sólo</strong> si quieres usar <code>function native</code>
+  en esas placas, y entonces se instala aparte por la guía de Espressif. Y que sea
   <strong>la versión 6 o posterior</strong>: el P4 necesita un compilador RISC-V
   que las versiones anteriores no traen en condiciones, y compilar con uno viejo
   da problemas en vez de un error claro. Si tienes varias instaladas, el IDE
@@ -401,7 +414,9 @@
   <code>arm-none-eabi-gcc</code> y la raíz de <code>bpgenvm-c</code> (aporta
   las cabeceras del runtime), cada una con su botón <em>Detectar</em>. Ese
   ajuste es por máquina; qué proyectos usan AOT (y para qué placa) va en el
-  <code>.bpbuild</code> del proyecto (sección <code>"aot"</code>).
+  <code>.bpbuild</code> del proyecto (sección <code>"aot"</code>). El de RISC-V
+  lo busca en las herramientas del ESP-IDF (la versión más nueva) o en el
+  <code>PATH</code>.
 </p>
 <p class="note">
   El compilador es <strong>opcional</strong>, y esto es lo importante: si no
@@ -409,6 +424,15 @@
   <em>interpretadas</em> — mismo comportamiento, menos velocidad en los kernels
   de cómputo. Todo lo demás (compilar, subir, ejecutar, depurar, packs, la
   interfaz gráfica) funciona igual sin haber instalado nada.
+</p>
+<p>
+  <strong>La imagen de la placa y el IDE, de la misma versión.</strong> El código
+  máquina que genera el IDE habla con la imagen por una interfaz que cambia entre
+  versiones: la placa dice la suya (el <em>ABI nativo</em> del Info, §8) y, si no
+  es la que genera este IDE, el IDE no compila el nativo —el cargador de la placa
+  lo rechazaría—: lo dice en la Consola con el remedio (regrabar la placa con la
+  imagen de esta versión o, si la imagen es más nueva, poner el IDE al día) y las
+  funciones corren interpretadas.
 </p>
 
 <h2 id="placa">6. Conectarse a la placa</h2>
@@ -422,7 +446,11 @@
   <li><code>/lib</code> — la biblioteca estándar embebida en el
       firmware. El firmware la repone solo en cada arranque, módulo a
       módulo: si falta, si el que hay es de una versión anterior o si,
-      siendo la misma, su CRC no coincide. Lo que hay en <code>/app</code>
+      siendo la misma, es distinto (tamaño o CRC); uno más nuevo —el que
+      subió el IDE con un programa que lo necesita— se deja. Y con el
+      <code>Stdlib.pack</code> grabado, lo que el pack sirve con los mismos
+      bytes <strong>sale de <code>/lib</code></strong>: se carga del pack,
+      desde la flash, sin gastar RAM (§10.3). Lo que hay en <code>/app</code>
       no se toca nunca.</li>
   <li><code>/sys</code> — configuración: <code>board.json</code>
       (identidad de la placa), <code>device.json</code>,
@@ -431,9 +459,11 @@
 <p class="warn">
   <strong>No subas copias de la biblioteca estándar a <code>/app</code>.</strong>
   Al cargar, <code>/app</code> gana a <code>/lib</code>: un <code>Gui.mod</code>
-  viejo olvidado en <code>/app</code> tapa al del firmware sin ningún aviso, y
-  el síntoma apunta a otro sitio. Si actualizas el firmware, limpia
-  <code>/app</code> de módulos que no sean tuyos.
+  viejo olvidado en <code>/app</code> tapa al del firmware, y el síntoma apunta a
+  otro sitio. Desde V7, si en <code>/lib</code> hay otro distinto, la Consola lo
+  avisa en la salida del programa (<code>aviso: 'Gui' cargado desde /app, tapa al
+  de /lib</code>). Si actualizas el firmware, limpia <code>/app</code> de módulos
+  que no sean tuyos.
 </p>
 <p>
   La botonera opera sobre el fichero seleccionado:
@@ -443,6 +473,15 @@
   <em>Log</em>/<em>Clr Log</em> (el log persistente del firmware),
   <em>Reset</em> e <em>Info</em> (§8). La barra inferior del panel
   resume el FS: ficheros, bytes usados y libres.
+</p>
+<p>
+  El árbol pinta en <strong>rojo</strong> los <code>.mod</code>, <code>.mdn</code> y
+  <code>.pack</code> que la VM no podría cargar —dañados, o de un formato que no
+  entiende—, y el motivo sale al dejar el ratón encima («La placa no lo cargaría:
+  …»). Los ficheros suben y bajan a trozos, del tamaño que dice la placa; y una
+  subida que se corta —se va el cable, llega otra subida, un RUN— <strong>se
+  borra</strong> en la placa: no se queda la versión anterior haciéndose pasar por
+  la nueva.
 </p>
 <p>
   El mismo panel sirve para la <em>VM Java (TCP v1)</em>: apuntas a un
@@ -565,10 +604,10 @@ hola, Eduardo
 <table>
   <tr><th>exit</th><th>significa</th></tr>
   <tr><td><code>0</code></td><td>terminó bien</td></tr>
-  <tr><td><code>1</code></td><td>excepción BP no atrapada — el programa se murió por su cuenta</td></tr>
-  <tr><td><code>2</code></td><td>no se pudo cargar el módulo: no está, no es un <code>.mod</code>, o su ABI es vieja</td></tr>
-  <tr><td><code>3</code></td><td>fallo interno de la VM (opcode o pc inválidos) — no es culpa del programa, repórtalo</td></tr>
-  <tr><td><code>4</code></td><td>sin memoria: heap agotado o desbordamiento de pila</td></tr>
+  <tr><td><code>1</code></td><td>excepción BP no atrapada — el programa se murió por su cuenta. También el desbordamiento de pila («desbordamiento de pila (el hilo tiene N B)») y el heap lleno («No space in heap»), que son <code>RuntimeError</code> atrapables. Si la excepción es de un hilo que no es el main, acaba sólo ese hilo: los demás siguen y, al final, el programa sale con 1</td></tr>
+  <tr><td><code>2</code></td><td>no se pudo cargar el módulo: no está, no es un <code>.mod</code>, su ABI es vieja, o una dependencia es más antigua que la que necesita</td></tr>
+  <tr><td><code>3</code></td><td>fallo interno de la VM (opcode o pc inválidos, o un error interno de la VM Java) — no es culpa del programa, repórtalo</td></tr>
+  <tr><td><code>4</code></td><td>sin memoria para cargar o arrancar el programa (el que llena el heap mientras corre recibe un <code>RuntimeError</code>: es el 1)</td></tr>
   <tr><td><code>130</code></td><td>parado con Stop / <code>kill</code></td></tr>
   <tr><td><code>131</code></td><td>parado por el depurador</td></tr>
 </table>
@@ -596,12 +635,14 @@ hola, Eduardo
 <p>
   Dos de ellos merecen subrayado: <code>kill</code> aborta el programa
   en ejecución (equivale a Run → Stop) y <code>autorun</code> gestiona
-  el arranque autónomo (§12). Si conectas con un programa corriendo, el
-  explorador avisará «placa ocupada» — <code>kill</code> recupera el
-  control. Con un programa en marcha la placa atiende sólo
-  <code>kill</code>, <code>reset</code> y el saludo de conexión; todo lo demás
-  (<code>dir</code>, <code>get</code>…) contesta ocupado hasta que termine.
-  <code>reset</code> sí llega con el programa corriendo: no hace falta
+  el arranque autónomo (§12). Con un programa en marcha la placa atiende el
+  saludo de conexión, <code>kill</code> y <code>reset</code> y, desde V7, también
+  <strong>las lecturas</strong>: el árbol del explorador se refresca, y
+  <code>get</code>, <code>type</code>, <code>edit</code> y <em>Download</em> bajan
+  ficheros —a trozos, entre la salida del programa—. Todo lo demás (subir, borrar,
+  <code>dir</code>, <code>mem</code>, <code>log</code>…) contesta ocupado hasta que
+  termine, y el explorador lo dice: «placa ocupada» — <code>kill</code> recupera
+  el control. <code>reset</code> sí llega con el programa corriendo: no hace falta
   matarlo antes.
 </p>
 
@@ -616,19 +657,45 @@ hola, Eduardo
   ENV (<code>psram=1</code>, §9.3) y autoprobada (8 MB, usada como heap de
   la VM), la ocupación del FS y el uptime.
 </p>
+<p>
+  La captura es anterior a V7. Hoy cada dato va en su línea —el PWM, contado en
+  <em>slices</em>: 12 en la RP2350, de dos salidas cada uno— y el diálogo dice
+  además:
+</p>
+<ul>
+  <li><strong>RAM packs</strong> — el bloque de RAM de los motores nativos de los
+      packs (§9.3): su tamaño, su dirección y la clave del ENV que lo pidió
+      (<code>packRam=512</code>). Si no lo hay, lo dice con el remedio: «no hay: un
+      pack nativo no podría cargar. Añade packRam=&lt;KB&gt; (o SQLite=2 para la BD)
+      al entorno de la placa y reinicia».</li>
+  <li><strong>Zona packs</strong> — el tamaño de la zona de packs y la dirección con
+      que la ve la CPU.</li>
+  <li><strong>Receta AOT</strong> y <strong>ABI nativo</strong> — para qué compila el
+      IDE las funciones <code>native</code> de esta placa (§5.1). «ABI nativo: 9 (la
+      misma que genera este IDE)» quiere decir que la imagen y el IDE casan; si no,
+      la línea lo marca con ⚠ y el nativo no se compila para ella: hay que regrabar
+      la placa con la imagen de esta versión, o poner el IDE al día si la imagen es
+      más nueva. (En la S3, que no tiene AOT: «sin receta».)</li>
+  <li><strong>Reset</strong> — la causa del último reinicio; en la Pico&nbsp;2 y la
+      Metro, «fallo fatal» tras uno (§12).</li>
+</ul>
 
 <h2 id="gestion">9. Gestión de placa: arranque y particiones</h2>
 <p>
   <strong>Placa</strong> en la barra de herramientas (o <strong>Gestión de
   placa…</strong> en el menú) abre una ventana aparte que trabaja sobre la
-  conexión ya abierta. A la izquierda, el <em>estado del arranque</em>, las
-  <em>variables de entorno</em> y las <em>particiones</em>; a la derecha, los
-  <em>packs</em> (§10).
+  conexión ya abierta. A la izquierda, arriba, el <em>estado del arranque</em> y el
+  botón <em>Variables de entorno…</em> (§9.3; también <strong>Entorno</strong> en la
+  barra); debajo, una <em>carpeta del PC</em> —de entrada, la de los packs de la
+  instalación, para grabarlos con <em>Añadir a la placa</em> (§10.3)— y las
+  <em>particiones</em>; a la derecha, los <em>packs</em> (§10).
 </p>
 <p>
   No hace falta buscarla: al conectar, el IDE le pregunta su estado a la placa
-  y, <strong>si está sin configurar o degradada, se ofrece a abrirla</strong>.
-  Con una placa sana y configurada no dice nada.
+  y, <strong>si está sin configurar o degradada, se ofrece a abrirla</strong>; y
+  también si está <em>casi</em> bien: llega a la app, pero la zona de packs no deja
+  grabar (sin formatear, o con la cadena rota) o el motor de un pack no ha cargado.
+  Lo dice con el motivo. Con una placa sana y configurada no dice nada.
 </p>
 
 <h3 id="estados">9.1 El arranque es escalonado</h3>
@@ -678,8 +745,14 @@ hola, Eduardo
   Antes de tocar nada, el firmware <strong>valida</strong>: ningún tamaño a
   cero, cada uno múltiplo del sector de borrado, y la suma cabe en la flash
   disponible. Si algo no cuadra, <strong>el entorno no se toca</strong> y el
-  mensaje dice qué partición y qué problema. Aplicado el cambio, la placa se
-  reinicia y sube con el reparto nuevo.
+  mensaje dice qué partición y qué problema. Aplicado el cambio, el IDE reinicia
+  la placa, que sube con el reparto nuevo, y vuelve a conectar.
+</p>
+<p>
+  En las placas de <strong>32 MB de flash</strong> —la C5 y la P4 de Waveshare— no
+  hay reparto que hacer: el <em>File System</em> es la flash que el chip tiene por
+  encima de la zona de datos (los 16 MB de arriba) y los packs se quedan la zona
+  entera. Si se le pide un reparto, la placa lo dice.
 </p>
 <p class="warn">
   <strong>Cambiar el reparto mueve las zonas de sitio.</strong> Lo que hubiera
@@ -691,31 +764,47 @@ hola, Eduardo
 <h3 id="entorno">9.3 Variables de entorno</h3>
 <p>
   Ajustes que viven en la placa, fuera del sistema de archivos, y que el
-  firmware lee al arrancar: por ejemplo qué panel de pantalla lleva esa placa
+  firmware lee: por ejemplo qué panel de pantalla lleva esa placa
   concreta, o si tiene PSRAM (esta última, con casilla propia por lo común que
-  es). Se añaden, editan y borran desde la tabla. Los tamaños de partición
-  también viven ahí, pero <strong>no</strong> se listan aquí: los gestiona la
-  sección de particiones, para que no se puedan tocar por dos caminos.
+  es). Se abren con <strong>Entorno</strong> en la barra (o <em>Variables de
+  entorno…</em> en la ventana de la placa) y se añaden, editan y borran desde la
+  tabla. Los tamaños de partición también viven ahí, pero <strong>no</strong> se
+  listan aquí: los gestiona la sección de particiones, para que no se puedan tocar
+  por dos caminos.
+</p>
+
+<p>
+  <strong>Cuándo valen.</strong> Casi todas se leen al arrancar: tras cambiar una,
+  <code>reset</code>. <code>gc</code> y <code>latido</code> se leen en cada RUN, y valen
+  ya para el programa siguiente. Y un programa puede leer cualquiera con
+  <code>Machine.getEnv("clave")</code> (<a href="referencia.html#stdlib-pico">referencia
+  §14.9</a>).
 </p>
 
 <p>
   Las que el firmware <strong>lee</strong> hoy, qué ajusta cada una y en qué
-  familia cuenta (en las demás se guarda, pero nadie la mira):
+  familia cuenta (en las demás se guarda, pero nadie la mira). Fuera de la tabla
+  quedan sólo un par de diagnóstico, para pruebas:
 </p>
 
 <table>
   <tr><th>clave</th><th>qué ajusta</th><th>familia</th></tr>
+  <tr><td><code>packRam</code></td><td>kilobytes del <strong>bloque de RAM de los motores</strong> de los packs —la interfaz gráfica, SQLite, el driver de pantalla—, en páginas de 4 KB. Sin él ni <code>SQLite</code> no hay bloque (en la RP2350, uno de 8 KB) y ni la GUI ni SQLite cargan — ver abajo</td><td>todas</td></tr>
+  <tr><td><code>SQLite</code></td><td>el mismo bloque, en megabytes (mínimo 2, máximo 4095): la forma de pedirlo para la base de datos. Si están las dos, manda <code>packRam</code></td><td>todas</td></tr>
   <tr><td><code>display</code></td><td>qué panel de pantalla lleva (p.ej. <code>st7701</code> en el P4 de Waveshare; ausente = el panel del kit)</td><td>ESP32-P4</td></tr>
-  <tr><td><code>sd</code></td><td>el lector de tarjeta: <strong>valor estructurado</strong> y distinto por bus — ver abajo</td><td>RP2350 · ESP32-P4</td></tr>
-  <tr><td><code>SQLite</code></td><td>megabytes de arena para la base de datos (mínimo 2, máximo 4095); ausente = sin base de datos</td><td>RP2350 · ESP32-P4</td></tr>
+  <tr><td><code>lcd</code> · <code>exp</code> · <code>touch</code></td><td>una pantalla por SPI, para el driver del pack <code>DriverSpi</code>: el panel, el expansor de pines y el táctil — ver abajo</td><td>las que llevan <code>DriverSpi</code>: la C5 y la C6</td></tr>
+  <tr><td><code>spi<em>N</em></code> · <code>i2c<em>N</em></code></td><td>los pines del bus <em>N</em>, que declara la placa (<code>spi2=sck:6,mosi:7,miso:8</code>; en I²C también la velocidad: <code>i2c0=sda:0,scl:1,khz:400</code>). Quedan reservados, y abrir ese bus con otros es un error con nombre; <code>ms:</code> fija el tope de un turno (20 ms si no; 100 como mucho). Detalle en la referencia: <a href="referencia.html#stdlib-i2c">I2c</a> y <a href="referencia.html#stdlib-spi">Spi</a></td><td>todas</td></tr>
+  <tr><td><code>sd</code></td><td>el lector de tarjeta: <strong>valor estructurado</strong> y distinto por bus — ver abajo</td><td>RP2350 · ESP32-C5 y C6 (SPI) · ESP32-P4 (SDIO)</td></tr>
   <tr><td><code>psram</code></td><td><code>1</code> activa la PSRAM como heap de la VM (sólo RP2350B; el CS es fijo, GPIO47)</td><td>RP2350</td></tr>
+  <tr><td><code>vmheap</code></td><td>kilobytes del bloque de la VM entero —montón y pilas; <code>stack</code> lo reparte por dentro—; ausente = el de la imagen — ver abajo</td><td>todas</td></tr>
   <tr><td><code>stack</code></td><td>kilobytes de pila (el resto de la memoria de la VM va al montón); ausente = el reparto por defecto</td><td>todas</td></tr>
   <tr><td><code>quantum</code></td><td>opcodes que ejecuta un hilo antes de ceder el turno; ausente = 1024</td><td>todas</td></tr>
   <tr><td><code>vm.runs</code></td><td>cuántos hilos del programa corren <strong>a la vez</strong> (<code>1</code> o <code>2</code>); ausente = uno por núcleo: dos en la Pico&nbsp;2, la Metro, la S3 y la P4, uno en la C3, la C5 y la C6 — ver abajo</td><td>RP2350 · ESP32</td></tr>
   <tr><td><code>vm.cores</code></td><td><code>1</code>: todas las tareas de la VM en el núcleo 0, la vuelta atrás de los dos núcleos sin regrabar; ausente = los dos</td><td>RP2350 · ESP32-S3 · ESP32-P4</td></tr>
   <tr><td><code>log</code></td><td>el log post-mortem: <code>1</code> encendido; ausente = apagado</td><td>todas</td></tr>
-  <tr><td><code>gc</code></td><td>el recolector de basura: <code>0</code> lo apaga (para partir un experimento en dos); ausente = encendido</td><td>RP2350</td></tr>
-  <tr><td><code>latido</code></td><td>el latido de vida: <code>1</code> lo enciende; ausente = apagado</td><td>RP2350</td></tr>
+  <tr><td><code>gc</code></td><td>el recolector de basura: <code>0</code> lo apaga (para partir un experimento en dos); ausente = encendido. Se lee en cada RUN</td><td>todas</td></tr>
+  <tr><td><code>latido</code></td><td>el latido de vida, en el log: <code>1</code> lo enciende; ausente = apagado. Se lee en cada RUN</td><td>todas</td></tr>
+  <tr><td><code>imagen.fecha</code></td><td>no se pone: <strong>la escribe la placa</strong>, una vez, en su primer arranque —la fecha de su imagen, en segundos desde 1970—. <code>Rtc.Clock.isSet()</code> la usa para saber si el reloj está en hora (<a href="referencia.html#stdlib-rtc">referencia §14.10</a>); si se borra, la placa la vuelve a anotar al arrancar</td><td>todas</td></tr>
 </table>
 
 <p class="note">
@@ -728,17 +817,61 @@ hola, Eduardo
 </p>
 
 <p>
-  <code>sd</code> es la única con estructura dentro, porque describe un cableado y ése
-  cambia con el bus:
+  <code>packRam</code> es la que pide <strong>la pantalla</strong>, y SQLite. Los motores
+  nativos de los packs —LVGL, SQLite, el driver de pantalla— no guardan sus datos en la
+  memoria de la VM sino en un bloque aparte, que la placa reserva al arrancar, antes que
+  la VM, del tamaño que diga <code>packRam</code> (o <code>SQLite</code>); lo que se da al
+  bloque se le quita a la VM. Sin bloque no carga ningún motor, y el <em>Info</em> lo dice
+  con el remedio (§8). Los motores se graban sellados para su sitio en el bloque: al
+  cambiarlo, lo seguro es regrabarlos (<a href="INSTALAR_FIRMWARE.md#regrabar">cuándo
+  regrabar</a>). Cuánto pide cada placa con pantalla, en la
+  <a href="INSTALAR_FIRMWARE.md#packs">instalación</a>.
+</p>
+
+<p>
+  <code>lcd</code>, <code>exp</code> y <code>touch</code> describen una pantalla por SPI
+  —un ST7789, un ILI9341…— para el driver genérico del pack <code>DriverSpi</code>, que no
+  sabe de placas: cada placa dice la suya en su ENV, una línea por bus y una por
+  dispositivo. <code>lcd</code> lleva el controlador, su bus y lo suyo (<code>dc</code>,
+  <code>cs</code>, el tamaño, el reloj…); <code>exp</code>, el expansor de pines por I²C,
+  si algún pin del panel va por él; <code>touch</code>, el táctil (sin ella, la pantalla
+  no tiene táctil). La de la C6:
+</p>
+
+<pre><code>spi2=sck:7,mosi:6,miso:5
+lcd=st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv
+packRam=136</code></pre>
+
+<p>
+  Una errata no deja la pantalla negra en silencio: el programa recibe el motivo
+  («GUI: pantalla: ENV lcd: falta 'dc'»). Las líneas de la C5, con su táctil, en la
+  <a href="INSTALAR_FIRMWARE.md#panel-spi">instalación</a>.
+</p>
+
+<p>
+  <code>sd</code> tiene estructura dentro porque describe un cableado, y ése cambia con
+  el bus:
 </p>
 
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40                 <span class="comment">// RP2350, por SPI</span>
+sd=bus:2,cs:23,khz:10000                              <span class="comment">// ESP32-C5, por SPI: el bus de spi2</span>
 sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// ESP32-P4, por SDIO</span></code></pre>
 
 <p>
-  En SDIO admite además <code>d1</code>…<code>d3</code> (para 4 bits), <code>slot</code>,
-  <code>khz</code> y <code>ldo</code>; en SPI, <code>cd</code> es opcional. El detalle está
-  en la <a href="referencia.html#stdlib-sd">tarjeta SD</a>.
+  En SPI, si el lector va en un bus que la placa ya declara (<code>spi2=…</code>), basta
+  con decir cuál (<code>bus</code>) y su <code>cs</code>: los pines son los del bus.
+  <code>cd</code> es opcional (activo en bajo; <code>cdalto:1</code> si es al revés) y
+  <code>khz</code> fija el reloj (sin él, 25 MHz). En SDIO admite además
+  <code>d1</code>…<code>d3</code> (para 4 bits), <code>slot</code>, <code>khz</code> y
+  <code>ldo</code>. El detalle está en la <a href="referencia.html#stdlib-sd">tarjeta SD</a>.
+</p>
+
+<p>
+  <code>vmheap</code> fija el tamaño del bloque de la VM, que sin ella es el de la
+  imagen: por encima de lo que cabe manda lo que cabe, y por debajo del mínimo no hay
+  VM —el log lo dice con los números—. Una VM más pequeña deja RAM al sistema (en las
+  STM32, donde ese bloque es fijo, sólo sirve para probar cómo iría el programa en una
+  placa más pequeña).
 </p>
 
 <p>
@@ -748,9 +881,10 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   al montón, y para casi todo está bien. Pero esa proporción es una apuesta sobre el
   programa: uno con muchos hilos se queda sin pilas teniendo montón de sobra, y uno de un
   solo hilo que mueve datos desperdicia ese 25&nbsp;%. <code>stack=100</code> pide 100 KB de
-  pilas; quitar la clave vuelve al reparto de siempre. Cada hilo consume 2 KB y el
-  principal 16, así que el número sale de contar hilos. Si te pasas de lo que cabe, el
-  firmware lo ajusta y <strong>lo dice en el log</strong> — no se queda callado.
+  pilas; quitar la clave vuelve al reparto de siempre. Cada hilo consume la pila que pide
+  (<code>Thread(stackSize)</code>; 2 KB si no pide nada) y el principal 16, así que el
+  número sale de contar hilos. Si te pasas de lo que cabe, el firmware lo ajusta y
+  <strong>lo dice en el log</strong> — no se queda callado.
 </p>
 
 <p>
@@ -764,12 +898,27 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 <p>
   <code>vm.runs</code> no limita los hilos: un programa puede crear los que quiera. Dice
   cuántos de ellos <em>ejecutan a la vez</em>, y en una placa de dos núcleos lo normal es
-  uno por núcleo. Lo que se gana depende del programa: dos hilos que calculan a la vez van
-  casi el doble de rápido (en la Pico&nbsp;2, ×1,6), pero un programa de un solo hilo no
-  gana nada, y con dos runs va algo más lento (un 10–14&nbsp;%); si es tu caso,
-  <code>vm.runs=1</code>. Un programa que se depura, o que usa SQLite, va con uno aunque
-  haya dos. Y si algo fallara con los dos núcleos, <code>vm.cores=1</code> y
-  <code>vm.runs=1</code> dejan la placa en un núcleo sin regrabarla.
+  uno por núcleo. Lo que se gana depende del programa y de la placa. Con dos hilos que
+  trabajan a la vez, la P4 va el doble de rápido, la Pico&nbsp;2 entre ×1,55 y ×1,68 y la
+  Metro entre ×1,13 y ×1,57; lo que trabaja con cadenas escala poco en la P4 (×1,33), y en
+  la RP2350 va más lento con dos hilos que con uno. Un programa de un solo hilo no gana
+  nada: en la P4 tampoco pierde, y en la Pico&nbsp;2 va algo más lento con dos runs que con
+  uno (<code>fib(26)</code>, un 6,5&nbsp;%); si es tu caso, <code>vm.runs=1</code>. Un
+  programa que se depura, o que usa SQLite, va con uno aunque haya dos. Y si algo fallara
+  con los dos núcleos, <code>vm.cores=1</code> y <code>vm.runs=1</code> dejan la placa en un
+  núcleo sin regrabarla.
+</p>
+
+<p class="warn">
+  <strong>Limitación conocida (<code>#665</code>, para V8).</strong> En la RP2350 —la
+  Pico&nbsp;2 y la Metro— es la propia imagen de dos núcleos, la de por defecto, la que hace
+  más lento un programa de un solo hilo, con uno o con dos runs. En la Metro, con la VM en
+  la PSRAM, el cálculo va un 35&nbsp;% más lento (<code>fib(26)</code>, 3&nbsp;908&nbsp;ms frente
+  a 2&nbsp;892 con la imagen de un núcleo; con <code>vm.cores=1</code>, 3&nbsp;951); en la
+  Pico&nbsp;2 el cálculo apenas lo nota (un 2&nbsp;%), pero lo que escribe mucho por
+  <code>print</code> sí (PrintBench, 1&nbsp;275&nbsp;ms frente a 817). Ni <code>vm.runs=1</code>
+  ni <code>vm.cores=1</code> lo arreglan —es la imagen, no los runs—: la vuelta atrás es
+  compilar la imagen de un núcleo (<a href="INSTALAR_FIRMWARE.md#nucleos">instalación</a>).
 </p>
 
 <div class="note">
@@ -777,7 +926,7 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
     <strong>Que la configuración viva aquí y no en el código es deliberado.</strong> Un
     <code>.mod</code> corre igual en dos placas cableadas distinto porque lo que cambia —
     los pines, el panel, la memoria — lo dice la placa, no el programa. Es lo mismo que
-    permite una sola imagen de firmware por familia.
+    permite una sola imagen de firmware por micro.
   </p>
 </div>
 
@@ -810,6 +959,17 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   <li>un <em>manifest</em> con el <code>main</code>, que es lo que lo hace
       <strong>ejecutable</strong>.</li>
 </ul>
+<p>
+  Un pack <strong>con <code>main</code></strong> —un programa— lleva además todo lo
+  que sus módulos importan, la biblioteca estándar incluida: los mismos
+  <code>.mod</code> contra los que se compiló. Es autocontenido, como un contenedor, y
+  lo que lleva dentro es lo que se ejecuta (§10.2). Uno <strong>sin
+  <code>main</code></strong> —una librería— no lleva la biblioteca estándar: la toma
+  de la placa, del <code>Stdlib.pack</code> o de <code>/lib</code>, y el compilador dice
+  qué módulos ha dejado fuera. Los packs con motor nativo (la interfaz gráfica,
+  SQLite, el driver de pantalla) vienen hechos en la carpeta <code>packs/</code> de
+  la instalación (§10.3).
+</p>
 <p class="note">
   Dentro del pack, cada fichero se identifica por <strong>(extensión,
   nombre)</strong> — sin ruta. De ahí dos límites del formato: la
@@ -822,15 +982,19 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 <p><strong>Como biblioteca.</strong> Un pack grabado en la zona de packs aporta
   sus módulos al <code>import</code>, igual que si estuvieran sueltos:</p>
 <pre><code><span class="kw">import</span> Graficas                        <span class="comment">// donde se encuentre</span>
-<span class="kw">import</span> Graficas <span class="kw">from pack</span> MisLibs      <span class="comment">// de ese pack y no de otro</span></code></pre>
+<span class="kw">import</span> Graficas <span class="kw">from pack</span> MisLibs      <span class="comment">// su interfaz, de ese pack</span></code></pre>
 <p>
-  Sin cualificar, se resuelve buscando (<code>/app</code>, <code>/lib</code>, la zona de
-  packs, por ese orden); con <code>from pack</code>, se fija el origen. El sistema de
+  En la placa, un módulo se busca por su nombre y siempre en el mismo orden: el pack en
+  ejecución, <code>/app</code>, <code>/lib</code> y la zona de packs. <code>from pack</code>
+  es para el compilador: toma la interfaz de ese pack de la biblioteca de packs del PC
+  —sin necesitar sus fuentes— y, si el proyecto se empaqueta, el pack anota que necesita
+  ese otro; el IDE avisa al grabarlo si la placa no lo tiene (§10.3). El sistema de
   archivos tiene preferencia sobre la zona de packs, así que un módulo suelto en
-  <code>/lib</code> eclipsa al del pack — cómodo para probar un arreglo sin regrabar
-  nada. Y un módulo de la stdlib que se quede en <code>/app</code> tapa al de
-  <code>/lib</code>: desde V7 la consola lo avisa (<code>aviso: 'Str' cargado desde /app,
-  tapa al de /lib</code>).
+  <code>/lib</code> que sea <em>distinto</em> del del pack lo eclipsa — cómodo para
+  probar un arreglo sin regrabar nada; si es idéntico (tamaño y CRC), se carga el del
+  pack, en sitio y sin gastar RAM. Y un módulo de la stdlib que se quede en
+  <code>/app</code> tapa al de <code>/lib</code>: desde V7 la consola lo avisa
+  (<code>aviso: 'Str' cargado desde /app, tapa al de /lib</code>).
 </p>
 <p><strong>Como aplicación.</strong> Un pack con <code>main</code> se ejecuta
   directamente, y mientras corre <strong>sus recursos se leen solos</strong>: no
@@ -843,25 +1007,29 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   archivos. De la ruta sólo cuenta el nombre del fichero — los directorios se
   ignoran, porque dentro del pack no hay carpetas.
 </p>
-<p class="warn">
-  <strong>Limitación de esta versión.</strong> Los recursos se leen del
-  <strong>pack en ejecución</strong> y del <strong>sistema de archivos</strong>,
-  pero <strong>no</strong> de los packs grabados en la zona de packs: de ésos
-  hoy sólo se aprovechan los <em>módulos</em>. Una fuente o un icono dentro de
-  un pack de biblioteca están ahí, pero no se pueden leer todavía.
+<p class="note">
+  <strong>Los recursos de los packs grabados</strong> también se leen, en la placa:
+  por su nombre, si no están en el pack en ejecución ni en el sistema de archivos
+  —la zona de packs es el último sitio donde se busca—, o pidiéndoselos a un pack
+  concreto: <code>readFile("pack:Iconos/logo.png")</code>. (En el PC, la VM Java no
+  tiene zona de packs: allí cuentan el pack en ejecución y el sistema de archivos.)
 </p>
 
 <h3 id="packs-panel">10.3 El panel de packs</h3>
 <p>
   En la ventana de gestión de placa (§9), a la derecha. La tabla lista los
-  packs grabados con su nombre, tamaño y <strong>fecha de construcción</strong>
-  — que es lo que permite ver de un vistazo si el que hay en la placa es más
-  viejo que el que acabas de compilar. Al seleccionar uno se ven los ficheros
-  que lleva dentro. Debajo, una barra con la ocupación de la zona.
+  packs grabados con su nombre, su versión, su tamaño y su <strong>fecha de
+  construcción</strong> — que es lo que permite ver de un vistazo si el que hay en la
+  placa es más viejo que el que acabas de compilar —, si está activo o borrado y su
+  CRC: uno con la cabecera o el contenido dañados sale en <strong>rojo</strong>
+  (CRC «MAL»). Al seleccionar uno se ven los ficheros que lleva dentro. Debajo, una
+  barra con la ocupación de la zona.
 </p>
 <ul>
   <li><strong>Copiar pack a la placa…</strong> — graba un <code>.pack</code> del
-      PC al final de la cadena.</li>
+      PC al final de la cadena. Lo mismo hace <em>Añadir a la placa</em>, a la
+      izquierda de la ventana, con el <code>.pack</code> que elijas en la carpeta que
+      enseña: de entrada, la <code>packs/</code> de la instalación.</li>
   <li><strong>Borrar</strong> — lo marca como retirado. Deja de usarse
       <em>inmediatamente</em>, pero <strong>sigue ocupando sitio</strong> hasta
       compactar: en una flash NOR se puede tachar sin borrar, y tachar es
@@ -871,12 +1039,42 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
       cuántos retirados antiguos no se listan (la barra de ocupación los cuenta
       todos).</li>
   <li><strong>Formatear zona…</strong> — la deja en blanco. Es también la
-      salida cuando la zona trae restos de un uso anterior de esa flash.</li>
+      salida cuando la zona trae restos de un uso anterior de esa flash: el resumen
+      dice entonces «zona sin formatear».</li>
 </ul>
+<p>
+  Al grabar, el IDE <strong>prepara el pack para esa placa</strong>: de un pack con
+  motor nativo se queda con el de su arquitectura y lo sella para el sitio que la
+  placa le da en la flash y en su bloque de RAM (§9.3, <code>packRam</code>); si el
+  motor no cabe en el bloque, lo dice antes de mandar nada. Y avisa, aunque graba
+  igual, si a ese pack le va a faltar algo en la placa: otro pack que declara
+  necesitar, o módulos de la biblioteca estándar que no lleva y la placa no tiene
+  («graba también el Stdlib.pack»).
+</p>
+<p>
+  Si la placa ya tenía cargados los <strong>motores</strong> de sus packs —los carga el
+  primer programa o el primer <em>Info</em>—, grabar, borrar o formatear cualquier
+  pack la <strong>reinicia</strong>: las tablas de esos motores apuntan a la zona tal
+  como estaba. El panel lo dice y vuelve a conectar solo; espera a que vuelva antes
+  de seguir.
+</p>
 <p>
   Para actualizar un pack, el orden es <strong>grabar el nuevo y luego retirar
   el viejo</strong>: si dos packs traen el mismo módulo, gana el último de la
-  cadena.
+  cadena. Con los packs con motor, lo seguro es formatear la zona y grabarlos todos
+  otra vez (<a href="INSTALAR_FIRMWARE.md#regrabar">cuándo regrabar</a>).
+</p>
+<p>
+  <strong>Los packs de la instalación</strong>, en <code>packs/</code>:
+  <code>Stdlib.pack</code>, la biblioteca estándar —desde el pack se ejecuta en la
+  flash, sin gastar RAM: al grabarlo, la placa quita de <code>/lib</code> lo que el
+  pack sirve igual, y al borrarlo lo repone—; <code>SQLite.pack</code>, la base de
+  datos; <code>Gui.pack</code> y <code>GuiMini.pack</code>, la interfaz gráfica
+  (<code>GuiMini</code>, recortada para la C6); y <code>DriverSpi.pack</code>, el
+  driver de las pantallas por SPI de la C5 y la C6. <strong>Desde V7 la interfaz
+  gráfica no va en ninguna imagen</strong>: sin sus packs, una placa con pantalla no
+  pinta. Qué lleva cada una, en qué orden y con qué ENV, en la
+  <a href="INSTALAR_FIRMWARE.md#packs">instalación</a>.
 </p>
 
 <h2 id="debug">11. Depurar</h2>
@@ -902,8 +1100,16 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   <em>Variables</em> muestra los locales por nombre con su tipo y valor
   en ese instante (aquí <code>led</code> y <code>i</code> dentro del
   bucle). El recorrido es idéntico depurando en la VM local o sobre el
-  propio micro.
+  propio micro, con dos diferencias en la placa:
 </p>
+<ul>
+  <li>Una función <code>native</code> compilada corre como código máquina, y el
+      depurador <strong>no para dentro</strong> (en el PC sí: allí corre
+      interpretada). Al poner un breakpoint en una, el IDE lo avisa en la Consola;
+      para seguirla paso a paso, quítale <code>native</code>.</li>
+  <li>Un programa que se depura va con un solo run, aunque la placa tenga dos
+      (§9.3).</li>
+</ul>
 
 <h2 id="autorun">12. Dispositivo autónomo</h2>
 <p>
@@ -915,11 +1121,20 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   nunca hace falta reflashear. Detalle completo en el
   <a href="QUICKSTART.md">inicio rápido</a>.
 </p>
+<p>
+  En la Pico&nbsp;2 y la Metro (la imagen de dos núcleos, la de por defecto), un
+  <strong>fallo fatal</strong> —no una excepción del programa, sino un fallo del
+  sistema: un HardFault, una pila de tarea desbordada…— deja su informe en el log,
+  aunque esté apagado, y reinicia la placa; y ese arranque <strong>no lanza el
+  autorun</strong>: un programa que fallara al arrancar la tendría reiniciándose sin
+  fin. El log lo dice, el <em>Info</em> da «fallo fatal» como causa del reinicio, y el
+  programa se arranca a mano desde el IDE.
+</p>
 
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
   Guía del IDE BasicPlus — capturas de Eduardo sobre una Metro RP2350;
-  escrita al cierre de V2 y puesta al día en cada versión (V6, septiembre de 2026).
+  escrita al cierre de V2 y puesta al día en cada versión (V7, octubre de 2026).
 </p>
 
 </main>

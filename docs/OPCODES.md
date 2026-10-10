@@ -171,13 +171,13 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | 0x5C | `TRY_END` | — | `( -- )` | Pop top del `handlerStack`. Cierre normal del try (sin excepción). |
 | 0x5D | `THROW` | — | `( ref -- )` | Pop `ref`. Si `ref == 0` → RuntimeError "throw null". Busca un handler en `handlerStack` cuya `expectedClass` matchee (= 0 o `isDescendantOf(class(ref), expected)`). Si encuentra: restaura sp/bp/cs/pc desde la entry, pop la pila a esa entry, push `ref` al sp restaurado (el catch lo recibe en local 0). Si no encuentra: BpThreadFault con stack trace BP. |
 | 0x5E | `INSTANCEOF` | `i16` csOff | `( ref -- 1|0 )` | `expected = cs + csOff`. Si `ref == 0` → push 0. Sino, sube por `parent_offset` desde `mem[ref]` (con `getCSForDataAddr` para cross-module) y push 1 si encuentra `expected`. |
-| 0x5F | `FREE_REF` | — | `( ref -- )` | Liberación determinista. Si `ref` es objeto `TYPE_OBJECT`, recorre los `owner_bitmap` bits del descriptor y libera los fields owners recursivamente, luego marca el bloque como TAG_FREE y lo añade al freeListHead. NOP si `ref == 0` o tipo no liberable. |
+| 0x5F | `FREE_REF` | — | `( ref -- )` | Liberación determinista. Si `ref` es objeto `TYPE_OBJECT`, recorre los `owner_bitmap` bits del descriptor y libera los fields owners recursivamente, luego marca el bloque como TAG_FREE y lo añade al freeListHead. NOP si `ref == 0` o tipo no liberable. Desde V7 (`#668`, liberar es destruir) el compilador lo emite sólo para un owner cuyo tipo no puede tener destructor (un string, un número, un array de ellos); el que puede tenerlo muere por `Core.__destruye`, que corre los destructores, hijos primero (`BUILTINS.md` §272–277). La semántica del opcode no cambia. |
 
 ## 0x60..0x70 — owner field + compactos + threading
 
 | Code | Op | Operando | Stack effect | Semántica |
 |---|---|---|---|---|
-| 0x60 | `SET_FIELD_OWNER` | `u8` slot | `( ref v -- )` | Como SET_FIELD pero libera el ref anterior del slot (FREE_REF) antes de escribir el nuevo. Usado para fields declarados `owner`. |
+| 0x60 | `SET_FIELD_OWNER` | `u8` slot | `( ref v -- )` | Como SET_FIELD pero libera el ref anterior del slot (FREE_REF) antes de escribir el nuevo. Usado para fields declarados `owner` cuyo tipo no puede tener destructor; si puede (V7, `#668`), el compilador escribe el campo como uno normal y destruye el valor viejo con `Core.__destruye` (si no es null ni el mismo). |
 | 0x61 | `PUSH_0` | — | `( -- 0 )` | |
 | 0x62 | `PUSH_1` | — | `( -- 1 )` | |
 | 0x63 | `PUSH_2` | — | `( -- 2 )` | |
@@ -342,7 +342,7 @@ inserta `this` como primer param).
 
 Para `INVOKE_VIRTUAL slot, numArgs` (L2 v3):
 
-```
+```text
 this = peek(sp - 4 - numArgs*4)
 if this == 0: throwBpRuntimeError("null receiver")
 classPtr = mem[this]
@@ -400,7 +400,8 @@ acaba en algún descriptor sin parent (parentOff == 0).
 | IMM_U8 | 1 | LRET (paramsCount en slots), GET/SET_FIELD_LONG (slot) |
 | CAST_I16_I16 | 4 | CHECKCAST (clsOff i16, nameOff i16) |
 | CAST_I32_I16 | 6 | CHECKCAST_EXT (clsOff i32, nameOff i16) |
-| IDX_U16 | 2 | los `_REF` de un operando (GET/SET_FIELD*_REF, NEW_OBJECT_REF, INSTANCEOF_REF, PUSH_REF) |
+| IDX_U16 | 2 | los `_REF` de un operando (GET/SET_FIELD*_REF, NEW_OBJECT_REF, INSTANCEOF_REF, PUSH_REF, LEA_FIELD_REF) |
+| IMM_U8 | 1 | LEA_FIELD (slot), INVOKE_SLOT (numArgs) |
 | IDX_U16_NUMARGS_U8 | 3 | INVOKE_VIRTUAL_REF (idx u16, numArgs u8) |
 | IDX_U16_NAME_I16 | 4 | CHECKCAST_REF (idx u16, nameOff i16) |
 | TRY_HANDLER_I32_IDX_U16 | 6 | TRY_BEGIN_REF (handlerRel i32, idx u16) |

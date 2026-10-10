@@ -2,8 +2,9 @@
 
 > **Qué es.** Lo que escribe `Gui.shot(path)`: la pantalla **tal como LVGL la dibujó**, en el
 > formato de píxel de las placas (RGB565), troceada en franjas y comprimida. Se escribe **igual**
-> desde el host (VM-C con SDL, también `--no-screen`) y desde las tres placas con pantalla (C6,
-> P4, DK2), por el **mismo camino** (el gancho del flush de LVGL), y se baja con el `GET` de siempre.
+> desde el host (VM-C con SDL, también `--no-screen`) y desde las placas con pantalla (la C5, la
+> C6, las P4 y la DK2), por el **mismo camino** (el gancho del flush de LVGL), y se baja con el
+> `GET` de siempre. Desde V7 (H6) ese camino viaja con LVGL en el pack de la GUI, no en la imagen.
 > El PC lo convierte a PNG con `bpgenvm-c/tools/shot2png.py`.
 >
 > **Qué NO es.** No es el oráculo automático de la GUI (eso es el árbol: `toJson()` / `dumpTree`,
@@ -66,10 +67,12 @@ bloque donde dice su rectángulo.
 
 ## Contrato de `Gui.shot(path)`
 
-- La ejecuta el hilo `vm` (todo hilo BP corre sobre esa tarea, que es donde vive LVGL): no reentra
-  LVGL ni compite con `Gui.run()`. Con `--smp=N` (varios workers, sólo host) **no está soportada**.
+- Corre donde vive LVGL —la tarea del sistema que ejecuta el programa—, así que no reentra LVGL ni
+  compite con `Gui.run()`. Con dos runs (V7/H12) esa tarea es la del run 0: el hilo que la pide
+  desde el otro run viaja a él, como todo builtin de la GUI.
 - Devuelve los **bytes escritos** (> 0). Falla con `RuntimeError` atrapable y mensaje fijo:
-  `Gui.shot('p'): sin pantalla` (build sin LVGL, o miVM sin ventana) ·
+  `Gui.shot('p'): sin pantalla` (un build sin LVGL —en el PC, sin `LVGL=1`—, o miVM sin ventana;
+  en placa, sin el pack de la GUI el programa ya falla antes, al crear su `Screen`) ·
   `Gui.shot('p'): error de escritura` · `Gui.shot('p'): no cabe en el tope de captura` (la comprimida
   supera el tope `BPVM_SHOT_MAX`) · `Gui.shot('p'): sin memoria`.
 - El `path` se usa **tal cual**, como `writeFile`: en placa, relativo a la raíz del littlefs; en el
@@ -84,8 +87,10 @@ bloque donde dice su rectángulo.
   limitada a lo que queda libre y el buffer crece (×2) hasta el tope; sólo si el fichero final no
   cabe sale «no cabe». Medido: 480×320 ruidosa → 74 KB con el tope por defecto; con 20 KB, «no
   cabe» y sin fichero; la normal (4,4 KB) cabe en 20 KB.
-- El fichero **sólo se puede bajar cuando el programa ha terminado** (o tras `KILL`): el wire
-  contesta `BUSY` a `GET` durante un RUN en las cinco implementaciones. Flujo de prueba:
+- El fichero se baja con el `GET` de siempre. Desde V7 (`#495`), también **con el programa en
+  marcha**: el explorador del IDE pide el `GET` troceado (`"chunked":true`) y la placa lo manda a
+  trozos, entre la salida del programa. Un `GET` entero —el de `wire_serie.py`, abajo— sigue
+  contestando `BUSY` hasta que el programa acaba (o tras `KILL`). Flujo de prueba:
   `RUN → (shot dentro) → EXITED → GET → shot2png.py`.
 
 ## Lo que la primera captura enseñó (11-sep, host + Discovery)
@@ -99,8 +104,10 @@ bloque donde dice su rectángulo.
   con ventana (DIRECT) son 14 franjas de 24. El lector no supone ninguna de las dos.
 - **En la Discovery `/lib` se VACÍA en cada arranque** (`fs_lfs_stm32.c:clear_lib`) y se reinstala
   sólo lo embebido — un `Gui.mod` subido a mano a `/lib` muere al primer reset. Los módulos de
-  stdlib que no van en la imagen (`Gui`, `Json`, `Collections`, `Str`) van a **`/app`**, que es
-  donde los deja el IDE. (Ojo `#493`: `/app` tapa a `/lib`.)
+  stdlib que no van en la imagen (`Gui`, `Json`, `Collections`, `Str`) iban entonces a **`/app`**,
+  donde los dejaba el IDE. (Desde V7 el IDE sube a `/lib` lo que falte de la stdlib, y en la DK2
+  lo recomendado es el `Stdlib.pack`, que la sirve desde la flash; y `#493`: `/app` tapa a `/lib`,
+  con un aviso.)
 - Números reales: DK2 800×480 → **20 bloques, 6 956 B (110×), `GET` en 643 ms** a 115 200; **C6 240×240 →
   10 bloques, 2 862 B (40×), `GET` en 8 ms** por USB-JTAG; **P4 1024×600 → 25 bloques, 8 885 B (138×),
   `GET` en 820 ms**, y girado 90° la lógica 600×1024 con `rot=1`; host 480×320 → 4,4 KB (70×); miVM
@@ -122,3 +129,5 @@ bloque donde dice su rectángulo.
 | host | 480×320 (`--screen=`) | 307 200 B | DIRECT: 1 flush entero (`--no-screen`: 10 filas) | 14 |
 
 `BPVM_SHOT_MAX` (tope del comprimido en RAM): 256 KB por defecto; 40 KB en el C6 (68 KB libres).
+Desde V7 lo fija el pack de la GUI, que es donde va el código de la captura: 256 KB en `Gui.pack`,
+40 KB en `GuiMini.pack` (el de la C6).

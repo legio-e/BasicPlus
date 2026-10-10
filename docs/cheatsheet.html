@@ -53,7 +53,7 @@
 <header>
   <h1>BasicPlus <span>— one page</span></h1>
   <p class="sub">A small, statically typed language for microcontrollers. One bytecode
-     runs on a PC and on RP2350, ESP32 (S3, C3, C6, P4) and STM32 boards.</p>
+     runs on a PC and on RP2350, ESP32 (S3, C3, C5, C6, P4) and STM32 boards.</p>
 </header>
 
 <main>
@@ -161,7 +161,10 @@ c.bump(<span class="t">5</span>)
      <code>property</code>, so the day you need to validate it — or guard it with a
      mutex — no caller changes. Single inheritance with
      <code>extends</code>, <code>super(…)</code>, <code>instanceof</code>, and an
-     <code>Object</code> root under everything.</p>
+     <code>Object</code> root under every class (threads excepted: <code>Thread</code>
+     is a root of its own). A destructor, <code>function ~Counter()</code>, runs
+     whenever the object is freed — by its <code>owner</code>, by the GC or when the
+     program ends — so a class that takes a resource gives it back.</p>
 </section>
 
 <section>
@@ -190,9 +193,7 @@ c.bump(<span class="t">5</span>)                 <span class="c">// instance    
 
 <section>
   <h2>Errors</h2>
-<pre><span class="k">import</span> Core              <span class="c">// exceptions live in Core</span>
-
-<span class="k">try</span>
+<pre><span class="k">try</span>
   <span class="k">var</span> v: <span class="t">integer</span> <span class="k">:=</span> risky()
 <span class="k">catch</span> e: RuntimeError
   <span class="k">print</span> <span class="s">"caught: "</span> + e.msg
@@ -206,9 +207,9 @@ c.bump(<span class="t">5</span>)                 <span class="c">// instance    
   <p class="note">One hierarchy: <code>Object → Exception → RuntimeError</code>.
      Runtime faults (divide by zero, index out of range, null reference) are
      <code>RuntimeError</code> and you catch them like any other — even when the
-     fault happens inside a function compiled to machine code. Anything from
-     <code>Core</code> (<code>Exception</code>, <code>List</code>, the wrappers)
-     needs an explicit <code>import Core</code>.</p>
+     fault happens inside a function compiled to machine code. <code>Exception</code>,
+     <code>List</code> and the wrappers live in <code>Core</code>, the root module,
+     which every module imports on its own: no <code>import Core</code> needed.</p>
 </section>
 
 <section>
@@ -233,8 +234,10 @@ w.join()
 m.lock()
 <span class="c">// critical section</span>
 m.unlock()</pre>
-  <p class="note">Green threads, scheduled by the VM itself — same model on the PC
-     and on the board. Also <code>SyncList</code> with a blocking
+  <p class="note">The VM's own threads, scheduled by the VM itself — same model on the
+     PC and on the board. On dual-core boards (Pico&nbsp;2, Metro, ESP32-S3, ESP32-P4)
+     two of them run at once, one per core: whatever threads share, guard it with a
+     <code>Mutex</code>. Also <code>SyncList</code> with a blocking
      <code>popBlocking()</code> for producer/consumer.</p>
 </section>
 
@@ -245,10 +248,12 @@ m.unlock()</pre>
   <span class="k">return</span> fib(n-<span class="t">1</span>) + fib(n-<span class="t">2</span>)
 <span class="k">end</span> fib</pre>
   <p class="note">The compiler also emits C for that function, builds it and stores the
-     machine code <b>inside the <code>.mod</code></b>. Measured on a board:
-     <b>fib(28) 8,946 ms interpreted → 85 ms native</b>. Accelerated on RP2350, STM32
-     and ESP32-P4; on ESP32-S3/C3/C6 (no AOT target yet) the bytecode still runs —
-     same result, no speed-up. Bytecode is always the safety net.</p>
+     machine code <b>inside the <code>.mod</code></b>. Measured on an ESP32-C3 (V7) with
+     an integer loop: <b>943 ms interpreted → 9 ms native</b>, about 100× (with
+     <code>double</code> — no board has a double-precision FPU — 5×). Accelerated on RP2350,
+     STM32, ESP32-P4 and, since V7, ESP32-C3, C5 and C6; on the ESP32-S3 (no AOT
+     target) the bytecode runs instead — same result, no speed-up. Bytecode is always
+     the safety net.</p>
 </section>
 
 <section>
@@ -267,16 +272,18 @@ m.unlock()</pre>
   <span class="k">endwh</span>
 <span class="k">end</span> Main</pre>
   <p class="note">Every peripheral is a class: <code>Gpio.Pin</code>,
-     <code>I2c.Bus</code>, <code>Spi.Bus</code>, <code>Uart.Port</code>,
-     <code>Pwm.Slice</code>, <code>Adc.Channel</code>, <code>Rtc.Clock</code>,
-     <code>Wdt.Timer</code>, <code>Timer.Alarm</code>. <b>The same program runs on
+     <code>I2c.Bus</code>, <code>Spi.Bus</code>, <code>Spi.Device</code>,
+     <code>Uart.Port</code>, <code>Pwm.Slice</code>, <code>Adc.Channel</code>,
+     <code>Rtc.Clock</code>, <code>Wdt.Timer</code>, <code>Timer.Alarm</code>. Each
+     gives back what it took — its pins, its channel — when it is released or
+     destroyed, and at the latest when the program ends. <b>The same program runs on
      every family</b> — only the pin numbers change.</p>
 </section>
 
 <section>
   <h2>Build &amp; run</h2>
-<pre><span class="c"># compile one file</span>
-java -jar basicplus-frontend.jar Hello.bp
+<pre><span class="c"># compile one file (writes Hello.mod here)</span>
+java -jar basicplus-frontend.jar Hello.bp --compile .
 
 <span class="c"># run it on the PC</span>
 java -jar bpgenvm.jar Hello.mod
@@ -285,7 +292,8 @@ java -jar bpgenvm.jar Hello.mod
 { <span class="s">"sourceDir"</span>: <span class="s">"src"</span>, <span class="s">"outDir"</span>: <span class="s">"out"</span>,
   <span class="s">"main"</span>: <span class="s">"App"</span>, <span class="s">"dependencies"</span>: [] }</pre>
   <p class="note">From the IDE it is one menu: run on the PC, on the simulated micro
-     or on a board — with breakpoints and variable inspection in all three.</p>
+     or on a board — with breakpoints and variable inspection in all three (on a
+     board, not inside a <code>native</code> function: it runs as machine code).</p>
 </section>
 
 <section>

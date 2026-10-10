@@ -3,11 +3,16 @@
 > 🇪🇸 [Versión en español](../QUICKSTART.md)
 
 From zero to a blinking LED (or a "hello" on the console) in a few minutes,
-platform by platform: PC, RP2350 (Pico 2 / Metro), ESP32-S3, ESP32-C3 and
-C6, ESP32-P4 and STM32 (Nucleo and Discovery). For the fine detail of each
-port: the READMEs in `bpgenvm-c/pico`, `bpgenvm-c/esp32` and
+platform by platform: PC, RP2350 (Pico 2 / Metro), ESP32-S3, ESP32-C3, C5
+and C6, ESP32-P4 and STM32 (Nucleo and Discovery). For the fine detail of
+each port: the READMEs in `bpgenvm-c/pico`, `bpgenvm-c/esp32` and
 `bpgenvm-c/stm32`, and the `sdkconfig.defaults` of `bpgenvm-c/esp32p4`,
-`esp32c3` and `esp32c6`.
+`esp32c3`, `esp32c5` and `esp32c6`.
+
+> **The display boards** (the C5, the C6, the P4s and the Discovery) need,
+> besides the image, **their packs**: since V7 the GUI is not in the
+> firmware. What to burn and how: [The board's
+> packs](INSTALAR_FIRMWARE.md#packs).
 
 ---
 
@@ -16,7 +21,8 @@ port: the READMEs in `bpgenvm-c/pico`, `bpgenvm-c/esp32` and
 Requirements: JDK 8+, Maven, GCC (MinGW on Windows), `make`. Optional, for
 `function native` on a board: the **Arm GNU Toolchain** (`arm-none-eabi-gcc`)
 for RP2350/STM32 and the ESP-IDF RISC-V one (`riscv32-esp-elf-gcc`) for the
-ESP32-P4 — installation and setup in the [IDE guide](guia-ide.html#aot).
+ESP32-P4, the C3, the C5 and the C6 — installation and setup in the [IDE
+guide](guia-ide.html#aot).
 
 ```sh
 # Toolchain (compiler + Java VM) and host C VM
@@ -54,7 +60,7 @@ program.
 detected by the firmware from the hardware; the rest is decided at runtime
 (the Metro case, below).
 
-**Flashing**: hold BOOTSEL while plugging the USB → an `RPI-RP2` drive
+**Flashing**: hold BOOTSEL while plugging the USB → an `RP2350` drive
 appears → copy `bpvm_pico.uf2` → the board reboots by itself with the VM
 inside. Where to get/build the image and the Metro case:
 [INSTALAR_FIRMWARE](INSTALAR_FIRMWARE.md).
@@ -62,8 +68,13 @@ inside. Where to get/build the image and the Metro case:
 **First program from the IDE**:
 
 1. Open the IDE → lower panel (*Explorer*) → pick the board's COM port →
-   **Connect**. You will see the micro's file tree (`/lib` with the
-   stdlib, `/app`, `/sys`).
+   **Connect**. You will see the micro's file tree (`/lib` with the image's
+   stdlib —nearly empty if the board carries the `Stdlib.pack`—, `/app`,
+   `/sys`). **The first time**, a freshly flashed board comes without
+   partitions: the IDE offers to open **Gestión de placa** (board
+   management) → *Proponer defaults* → *Aplicar tamaños*, and the board
+   restarts ([IDE guide §9.2](guia-ide.html#particiones); the C5 and the
+   Waveshare P4 lay themselves out).
 2. Open `samples/blink.bp` → **Run on Device**. The IDE uploads the
    `.mod` (and any missing dependencies) and the LED blinks. The program
    output arrives at the console.
@@ -80,6 +91,11 @@ inside. Where to get/build the image and the Metro case:
 From then on the board starts your program by itself when powered, no PC.
 The IDE can still connect while the program runs: `kill` stops it,
 `autorun off` removes it. Reflashing is never needed.
+
+**Two cores** (since V7): the image uses both cores of the RP2350, and two
+threads of your program run at the same time. A single-threaded program
+gains nothing: `vm.runs=1` in the ENV leaves it with one ([the detail and
+its known limitation](INSTALAR_FIRMWARE.md#nucleos)).
 
 **Metro RP2350 (variant B)**: the 48 GPIOs come on their own (variant
 detected). The rest lives in two places:
@@ -110,29 +126,47 @@ build it yourself).
 
 Then: IDE → Connect to the bridge port → same flow as on the Pico
 (Run on Device, console, autorun). The module's 8 MB of PSRAM is used as VM
-memory on its own. On the S3, `native function`s run interpreted (there is
-no AOT for Xtensa) and the `Net` module has no backend yet.
+memory on its own. Since V7 it uses both its cores: two threads of your
+program run at the same time ([two cores](INSTALAR_FIRMWARE.md#nucleos)). On
+the S3, `native function`s run interpreted (there is no AOT for Xtensa) and
+the `Net` module has no backend yet.
 
 ---
 
-## 4. ESP32-C3 and ESP32-C6
+## 4. ESP32-C3, ESP32-C5 and ESP32-C6
 
-Both RISC-V boards have **a single USB connector** (the native
+The three RISC-V boards have **a single USB connector** (the native
 USB-Serial-JTAG) and the **wire** goes through it: one cable and the IDE
-connects. The log console comes out on UART0 (C3: GPIO20/21; C6:
-GPIO16/17) — only needed with an adapter, for debugging; the boot log can
-be read from the IDE anyway (`log`).
+connects. The log console comes out on UART0 (C3: GPIO20/21; C5: GPIO11/12;
+C6: GPIO16/17) — only needed with an adapter, for debugging; the boot log
+can be read from the IDE anyway (`log`).
 
 **Flashing**: download mode is entered **by hand** — hold BOOT, press and
 release RESET, release BOOT — and the merged image is written with
-`esptool --chip esp32c3` (or `esp32c6`). When done, RESET again. Details in
-[INSTALAR_FIRMWARE](INSTALAR_FIRMWARE.md).
+`esptool --chip esp32c3` (or `esp32c5`, `esp32c6`). When done, RESET again.
+Details in [INSTALAR_FIRMWARE](INSTALAR_FIRMWARE.md).
 
 Then: IDE → Connect to the only port → same flow (Run on Device, console,
-autorun). The VM gets 128 KB on both. The **Waveshare C6
-(ESP32-C6-LCD-1.3)** carries an ST7789 240×240 SPI display, no touch: GUI
-programs paint on it ([GUI guide](gui.html)). `native function`s run
-interpreted (the IDE has no RISC-V target without FPU yet).
+autorun). `native function`s are compiled and accelerated (AOT, `ilp32` ABI,
+with the ESP-IDF's `riscv32-esp-elf-gcc`).
+
+- **The C3 and the C6** have no PSRAM: the VM gets up to 128 KB (the boot
+  goes lower if they do not fit with what the system needs; the **Info**
+  button says how many). On them the `Stdlib.pack` is worth having
+  ([what it is](INSTALAR_FIRMWARE.md#stdlib-pack)).
+- **The Waveshare C6 (ESP32-C6-LCD-1.3)** carries an ST7789 240×240 SPI
+  display, no touch. Painting on it takes its packs —`Stdlib.pack`,
+  `GuiMini.pack` and `DriverSpi.pack`—, `packRam=136` and two panel lines in
+  the ENV: [The board's packs](INSTALAR_FIRMWARE.md#packs). Then, the [GUI
+  guide](gui.html).
+- **The C5** (Waveshare ESP32-C5-Touch-LCD-2.8, *new in V7*) has 8 MB of
+  PSRAM —the VM goes there, by itself— and 32 MB of flash, which lays itself
+  out: no partitions to make. Its 2.8" touch display (ST7789 240×320,
+  CST3530 touch) paints with `Gui.pack`, `DriverSpi.pack`, `packRam=512` and
+  the panel lines in the ENV ([The board's
+  packs](INSTALAR_FIRMWARE.md#packs)); it has a TF slot. If you merge the
+  image yourself, mind that its bootloader goes at 0x2000 and its flash is
+  32 MB ([INSTALAR_FIRMWARE](INSTALAR_FIRMWARE.md#esp32-c5)).
 
 ---
 
@@ -148,11 +182,15 @@ key, it boots with the EV profile.
 goes through the **USB-UART bridge** port, as on the S3.
 
 Then: IDE → Connect → same flow (Run on Device, console, autorun). And
-**the display**: GUI programs (`import Gui`) paint on the touch panel —
-full detail in the [GUI guide](gui.html). On the Waveshare, set
-`display=st7701` from the IDE's **Entorno** (environment) button and
-`reset` ([guide §23.4](gui.html#ej-pantalla)). AOT enabled (RISC-V with
-FPU): `native function`s are accelerated as on the ARM boards.
+**the display**: since V7 it comes through a pack —`Gui.pack` and a RAM
+block in the ENV, `SQLite=4`: [The board's
+packs](INSTALAR_FIRMWARE.md#packs)—; with them, GUI programs (`import Gui`)
+paint on the touch panel — full detail in the [GUI guide](gui.html). On the
+Waveshare, also set `display=st7701` from the IDE's **Entorno**
+(environment) button and `reset` ([guide §23.4](gui.html#ej-pantalla)). AOT
+enabled (RISC-V with FPU): `native function`s are accelerated as on the ARM
+boards. And it uses both its cores: two threads of your program run at the
+same time ([two cores](INSTALAR_FIRMWARE.md#nucleos)).
 
 ---
 
@@ -167,8 +205,10 @@ alternatives (`STM32_Programmer_CLI`) and building it yourself (CubeIDE) in
 The wire goes through the **ST-LINK VCP** — the same USB cable. IDE →
 Connect to that COM → Run on Device / console / autorun, same as on the
 other boards. AOT enabled (same Cortex-M33 as the RP2350). The **Discovery**
-adds the 800×480 LTDC display with touch: GUI programs paint on it. This
-family has no `Adc` and no `Wdt` (they throw `RuntimeError`).
+adds the 800×480 LTDC display with touch; since V7, GUI programs paint on it
+with `Gui.pack` and `packRam=768` in the ENV ([The board's
+packs](INSTALAR_FIRMWARE.md#packs)). On this family `Adc` works (ADC1,
+since V7); `Wdt` has no backend: it throws `RuntimeError`.
 
 ---
 
@@ -177,7 +217,8 @@ family has no `Adc` and no `Wdt` (they throw `RuntimeError`).
 - **[Language manual](manual.html)** and **[Reference](referencia.html)**
   (stdlib, CLI, on-disk artifacts) — the full documentation.
 - **[Graphical interface](gui.html)** — the GUI on display boards
-  (ESP32-P4, STM32-DK2, ESP32-C6): widgets, color and fonts, `.win` forms.
+  (ESP32-P4, STM32-DK2, ESP32-C5, ESP32-C6): widgets, color and fonts,
+  `.win` forms.
 - `samples/` — examples: OO GPIO, I²C/SPI/UART, threads, exceptions,
   tuples, `native` AOT, TCP…
 - `docs/PENDIENTES.md` *(Spanish)* — the language's known limitations, stated plainly.

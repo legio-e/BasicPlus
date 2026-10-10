@@ -209,15 +209,15 @@
     <li class="sub"><a href="#from">15.7 Decir de dónde viene un módulo</a></li>
     <li class="sub"><a href="#descubrir">15.8 Descubrirlos en ejecución</a></li>
     <li class="sub"><a href="#nativo">15.9 Packs con código nativo</a></li>
-    <li class="sub"><a href="#trampas">15.10 Trampas conocidas</a></li>
+    <li class="sub"><a href="#packs-traps">15.10 Trampas conocidas</a></li>
     <li class="group"><a href="#cli">16. Compilación &amp; ejecución</a></li>
     <li class="sub"><a href="#cli-frontend">16.1 Frontend</a></li>
     <li class="sub"><a href="#cli-vm">16.2 VM (bpgenvm)</a></li>
     <li class="sub"><a href="#cli-disasm">16.3 Disasm</a></li>
-    <li class="sub"><a href="#cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / C3 / C6 / P4 / STM32)</a></li>
+    <li class="sub"><a href="#cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / C3 / C5 / C6 / P4 / STM32)</a></li>
     <li class="group"><a href="#artefactos">17. Artefactos en disco</a></li>
-    <li class="sub"><a href="#mod">17.1 .mod (binario, MOD7)</a></li>
-    <li class="sub"><a href="#bpi">17.2 Interfaz del módulo (texto, v7)</a></li>
+    <li class="sub"><a href="#mod">17.1 .mod (binario, MOD9)</a></li>
+    <li class="sub"><a href="#bpi">17.2 Interfaz del módulo (texto, v9)</a></li>
     <li class="sub"><a href="#dbg">17.3 .dbg (info de depuración, v3)</a></li>
     <li class="sub"><a href="#mdn">17.4 El código nativo (sección <code>native</code> y .mdn)</a></li>
     <li class="sub"><a href="#proyecto">17.5 .bpbuild / .bpproject (JSON)</a></li>
@@ -282,8 +282,7 @@
 
 <h3 id="stdlib-list">13.2 <code>List</code></h3>
 
-<pre><code><span class="kw">import</span> Core                        <span class="comment">// List, Integer, RuntimeError… viven en Core (§13.3)</span>
-
+<pre><code><span class="comment">// List, Integer, RuntimeError… viven en Core, que todo módulo importa solo (§13.3)</span>
 <span class="kw">var</span> l: <span class="type">List</span> := <span class="type">List</span>()
 l.<span class="fn">add</span>(<span class="num">10</span>)                       <span class="comment">// se envuelve solo en un Integer</span>
 l.<span class="fn">add</span>(Persona(<span class="str">"Ana"</span>, <span class="num">30</span>))       <span class="comment">// un objeto, tal cual</span>
@@ -353,9 +352,7 @@ l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
   permite meterlos en una <code>List</code> o en un <code>Map</code>.
 </p>
 
-<pre><code><span class="kw">import</span> Core
-
-<span class="kw">var</span> o: <span class="type">Object</span> := <span class="type">Integer</span>(<span class="num">5</span>)
+<pre><code><span class="kw">var</span> o: <span class="type">Object</span> := <span class="type">Integer</span>(<span class="num">5</span>)
 <span class="kw">var</span> i: <span class="type">Integer</span> := <span class="type">Integer</span>(o)      <span class="comment">// downcast; si no lo es, lanza</span>
 <span class="kw">print</span> i.<span class="fn">value</span>()                  <span class="comment">// 5</span></code></pre>
 
@@ -394,30 +391,26 @@ l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
   </p>
 </div>
 
-<p class="warn">
-  <strong>Se escriben sin cualificar, pero hay que importar <code>Core</code>.</strong>
+<p class="note">
+  <strong>Se escriben sin cualificar, y sin importar nada.</strong>
   <code>Integer</code>, <code>List</code>, <code>Exception</code>, <code>RuntimeError</code>
-  y los demás viven en <code>Core</code>, y desde V6 el módulo que los usa tiene que
-  llevar <code>import Core</code> (ya no se importa solo). Se escriben sin cualificar
-  (<code>Integer</code>, no <code>Core.Integer</code>). Los imports <strong>no son
-  transitivos</strong>: si importas un módulo cuyas clases extienden las de Core
-  (<code>Collections</code>), también hace falta. Sin él, el compilador lo dice:
-  «<code>tipo 'List' no encontrado</code>», «<code>tipo de excepción 'RuntimeError' no es
-  una clase</code>» o «<code>la clase 'SyncList' extiende 'Core.List' y este modulo no
-  importa 'Core': anade `import Core`</code>».
+  y los demás viven en <code>Core</code>, el módulo raíz, y desde V7 todo módulo lo importa
+  solo: <code>import Core</code> se puede escribir u omitir, y da lo mismo (en V6 era
+  obligatorio; ver <a href="manual.html#raiz">manual §10.0</a>). Se escriben sin cualificar
+  (<code>Integer</code>, no <code>Core.Integer</code>). Lo que sigue valiendo para los demás
+  módulos: los imports <strong>no son transitivos</strong> — si nombras un tipo de un
+  módulo, ese módulo lo importas tú.
 </p>
 
 <h3 id="stdlib-ownerlist">13.4 <code>OwnerList</code></h3>
-<pre><code><span class="kw">import</span> Core
-
-<span class="kw">var owner</span> ol: OwnerList := OwnerList()
+<pre><code><span class="kw">var owner</span> ol: OwnerList := OwnerList()
 ol.add(Recurso(<span class="str">"A"</span>))
 ol.add(Recurso(<span class="str">"B"</span>))
 ol.removeAndFree(<span class="num">0</span>)               <span class="comment">// libera 'A' determinísticamente</span>
 <span class="comment">// al salir de scope: libera el array Y todos los items (cascada de FREE_REF)</span></code></pre>
 <p>
   Hereda de <code>List</code> (vive en <code>Collections</code>; el compilador la
-  resuelve por el nombre pelado, pero hace falta <code>import Core</code>). Su descriptor
+  resuelve por el nombre pelado, sin <code>import</code>). Su descriptor
   marca el array de elementos como <code>owner</code>, así que al liberarse la lista
   (por <code>var owner</code> o por cascada) los items se liberan también. Desde V6 posee
   <strong>de verdad</strong>: una segunda referencia a un elemento muere con la lista
@@ -432,9 +425,7 @@ ol.removeAndFree(<span class="num">0</span>)               <span class="comment"
 </ul>
 
 <h3 id="stdlib-synclist">13.5 <code>SyncList</code></h3>
-<pre><code><span class="kw">import</span> Core
-
-<span class="kw">var</span> sl: SyncList := SyncList()
+<pre><code><span class="kw">var</span> sl: SyncList := SyncList()
 sl.add(Item(<span class="num">1</span>))                     <span class="comment">// atómico</span>
 sl.add(Item(<span class="num">2</span>))
 <span class="kw">var</span> n: <span class="type">integer</span> := sl.length()        <span class="comment">// atómico</span>
@@ -443,7 +434,7 @@ sl.remove(<span class="num">0</span>)                        <span class="commen
 <span class="kw">var</span> last: Item := Item(sl.pop())    <span class="comment">// atómico; null si está vacía</span></code></pre>
 <p>
   Hereda de <code>List</code> (vive en <code>Collections</code>, como
-  <code>OwnerList</code>; hace falta <code>import Core</code>) y añade un
+  <code>OwnerList</code>, y se usa igual, sin <code>import</code>) y añade un
   <code>Mutex</code> propio por instancia. Cada operación pública
   (<code>add</code>, <code>get</code>, <code>set</code>, <code>length</code>,
   <code>remove</code>) está envuelta con <code>lock</code>/<code>unlock</code>,
@@ -494,13 +485,16 @@ sb.appendInt(<span class="num">42</span>)
 <span class="kw">print</span> sb.toString()              <span class="comment">// "Hola, mundo!42"</span>
 <span class="kw">print</span> sb.length()                <span class="comment">// → 14</span></code></pre>
 <p>
-  Constructor sin args (capacidad inicial 64). Doubling automático.
+  Constructor sin argumentos. Guarda <strong>piezas</strong>: cada <code>appendStr</code> y cada
+  <code>appendInt</code> es una, y los caracteres sueltos de <code>appendChar</code> (un code point
+  cada uno) se juntan de 64 en 64; <code>toString()</code> las une de una vez —una reserva y una
+  copia por pieza—, así que añadir no vuelve a copiar lo que ya había (V7, <code>#587</code>: antes
+  guardaba cada carácter en 4 bytes y <code>appendStr</code> copiaba carácter a carácter).
+  <code>length()</code> cuenta los caracteres cuando se le pide.
 </p>
 
 <h3 id="stdlib-rterr">13.7 <code>RuntimeError</code></h3>
-<pre><code><span class="kw">import</span> Core
-
-<span class="kw">try</span>
+<pre><code><span class="kw">try</span>
   <span class="kw">throw</span> RuntimeError(<span class="str">"algo fallo"</span>)
 <span class="kw">catch</span> e: RuntimeError
   <span class="kw">print</span> e.msg                    <span class="comment">// algo fallo</span>
@@ -509,8 +503,8 @@ sb.appendInt(<span class="num">42</span>)
   Error nativo de la VM (índice fuera de rango, null, división por cero,
   builtin fallido...) y también lanzable a mano. Vive en el módulo
   <code>Core</code> junto a su base <code>Exception</code> (property
-  <code>msg: string</code>), así que el módulo que lanza o atrapa lleva
-  <code>import Core</code> (desde V6; antes era implícito). Un
+  <code>msg: string</code>), y <code>Core</code> se importa solo: lanzar o atrapar no pide
+  ningún <code>import</code> (desde V7; en V6 había que escribir <code>import Core</code>). Un
   <code>catch e</code> sin tipo es <code>catch e: Exception</code>, y
   <code>print e</code> imprime el mensaje (<code>toString()</code> devuelve
   <code>msg</code>). Las excepciones propias extienden <code>Exception</code> (ver
@@ -540,11 +534,14 @@ sb.appendInt(<span class="num">42</span>)
   w.join()
 <span class="kw">end</span> main</code></pre>
 <p>
-  Clase base de los threads BP. Sintetizada por el emisor; siempre
-  disponible sin <code>import</code>. Para crear un thread subclasea
+  Clase base de los threads BP. Es una clase de <code>Core</code> escrita en BP (desde V7;
+  antes la sintetizaba el compilador en cada módulo), así que está siempre disponible sin
+  <code>import</code>; y es una clase <em>raíz</em>: no desciende de <code>Object</code> (su
+  <code>run()</code> ocupa la ranura 0). Para crear un thread subclasea
   <code>Thread</code> y sobrescribe <code>run()</code>. El constructor
-  recibe el tamaño de stack (bytes; default interno 2&nbsp;KB para workers,
-  16&nbsp;KB para el main del programa).
+  recibe el tamaño de stack en bytes, y se respeta (V7; <code>0</code> = el de por defecto,
+  2&nbsp;KB; el main del programa tiene 16&nbsp;KB). Una llamada que no cabe en la pila del
+  hilo lanza <code>RuntimeError</code> «desbordamiento de pila (el hilo tiene N B)», atrapable.
 </p>
 <table>
   <tr><th>Método</th><th>Descripción</th></tr>
@@ -555,7 +552,7 @@ sb.appendInt(<span class="num">42</span>)
           termina. Slot 0 de la vtable (fijo por convención).</td></tr>
   <tr><td><code>start()</code></td>
       <td>Arranca el thread: la VM aloca su región de stack, lo encola RUNNABLE
-          y un worker Java lo recogerá.</td></tr>
+          y el planificador de la VM lo pondrá a correr.</td></tr>
   <tr><td><code>join()</code></td>
       <td>Bloquea el thread llamador hasta que <em>este</em> thread termine.
           Si ya terminó es no-op.</td></tr>
@@ -576,10 +573,9 @@ m.lock()                <span class="comment">// bloquea si está tomado por otr
 <span class="comment">// sección crítica</span>
 m.unlock()              <span class="comment">// libera y hand-off al primer waiter</span></code></pre>
 <p>
-  Lock no reentrante para coordinar entre threads BP. Sintetizado por el
-  emisor; siempre disponible sin <code>import</code>. Internamente la
-  instancia guarda un id <code>__mid</code> que apunta a un mutex Java de
-  la VM (<code>JavaMutex</code> bajo <code>vmLock</code>).
+  Lock no reentrante para coordinar entre threads BP. Como <code>Thread</code>, es una
+  clase de <code>Core</code> escrita en BP (V7); siempre disponible sin <code>import</code>.
+  Internamente la instancia guarda un id <code>__mid</code> que apunta a un mutex de la VM.
 </p>
 <table>
   <tr><th>Método</th><th>Descripción</th></tr>
@@ -636,8 +632,9 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 <h3 id="stdlib-math">13.10 <code>Math</code></h3>
 <p>
   Funciones matemáticas accesibles tras <code>import Math</code>. Todas
-  son <code>intrinsic</code>: el call-site <code>Math.foo(...)</code>
-  se traduce inline al CALL_BUILTIN equivalente — no hay overhead de
+  son intrínsecas (<a href="manual.html#inline">manual §8.3b</a>): su cuerpo es
+  <code>inline CALL_BUILTIN n</code>, y el call-site <code>Math.foo(...)</code>
+  lleva ese CALL_BUILTIN en su sitio — no hay overhead de
   call vs. el operador nativo. Las funciones implícitas
   (<a href="#stdlib-funcs">§13.1</a>) no se duplican aquí.
 </p>
@@ -702,7 +699,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
 <h3 id="stdlib-io">13.11 <code>IO</code></h3>
 <p>
   Manipulación de paths y operaciones de filesystem accesibles tras
-  <code>import IO</code>. Todas las funciones son <code>intrinsic</code>.
+  <code>import IO</code>. Todas las funciones son intrínsecas.
   Las funciones de path NO acceden al disco — sólo manipulan la string.
   Las que sí acceden lanzan <code>RuntimeError</code> atrapable si fallan.
 </p>
@@ -711,7 +708,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   directorios de verdad — <code>readFile</code>/<code>writeFile</code>/
   <code>appendFile</code>/<code>fileExists</code>/<code>removeFile</code>/
   <code>rename</code>/<code>fileSize</code>/<code>mkdir</code>/<code>rmdir</code>/
-  <code>copyFile</code>/<code>isDirectory</code> funcionan igual que en el PC.
+  <code>copyFile</code>/<code>isDirectory</code>/<code>dirExists</code> funcionan igual que en el PC.
   La única excepción es <code>lastModified</code>: littlefs no guarda fechas,
   así que lanza <code>RuntimeError</code> atrapable en vez de inventarse una.
 </p>
@@ -798,7 +795,7 @@ m.unlock()              <span class="comment">// libera y hand-off al primer wai
   <strong>lo dice</strong> en la consola. Lo que quieras que sea observable —escrituras que
   otro vaya a leer— pasa por <code>close()</code>, <code>flush()</code> o un
   <code>~File()</code> con <code>var owner</code> / <code>try var</code>
-  (<a href="manual.html#owner">manual §5.3</a>): el camino del recolector es sólo la red.
+  (<a href="manual.html#var-owner">manual §5.3</a>): el camino del recolector es sólo la red.
 </p>
 <pre><code><span class="kw">import</span> IO
 
@@ -936,11 +933,9 @@ Log.error(<span class="str">"sensor no responde"</span>)</code></pre>
   Los envoltorios <code>Integer</code>/<code>Long</code>/<code>Double</code>/
   <code>Float</code>/<code>Boolean</code> con los que un primitivo entra como
   clave o valor son los de <code>Core</code> (§13.3), no de este módulo —
-  y como sus clases extienden las de Core, <code>import Collections</code>
-  va acompañado de <code>import Core</code>.
+  y <code>Core</code>, como en todo módulo, se importa solo.
 </p>
-<pre><code><span class="kw">import</span> Core
-<span class="kw">import</span> Collections
+<pre><code><span class="kw">import</span> Collections
 
 <span class="kw">var</span> edades: Collections.Map := Collections.stringMap()
 edades.put(<span class="str">"ana"</span>, Integer(<span class="num">30</span>))
@@ -1337,7 +1332,7 @@ luz.release()                                          <span class="comment">// 
 
 <h4>13.11.2 API funcional de bajo nivel</h4>
 <p>
-  Las primitivas <code>intrinsic</code> que <code>Pin</code> usa por
+  Las primitivas intrínsecas que <code>Pin</code> usa por
   debajo. Útiles para drivers de dispositivo que ya gestionan su
   propio modelo de pines (CS de SPI, sync de ADCs, etc.) y no quieren
   el overhead de un objeto Pin por línea.
@@ -1800,17 +1795,19 @@ port.write(tx, <span class="num">4</span>)
   Convertidor analógico-digital del MCU, <strong>visto por canal</strong> (la unidad 1). Desde V7 la
   vista <strong>por pin</strong> es <a href="#stdlib-anpin"><code>Gpio.AnPin</code></a>, y las dos acaban
   en el mismo sitio: <code>Adc.Channel(ch)</code> existe si el mapa de pines del micro tiene un pin con
-  ese canal (S3 0..9, C5 0..5, RP2350 0..3, U5 0..19), lo valida el común con nombre («ADC: el canal 7
-  no existe en rp2350a (unidad 1: 4 canales)») y ese pin pasa a analógico —un <code>Gpio.Pin</code>
-  sobre él es error hasta <code>release()</code> (<code>~Channel()</code> lo llama). El RP2350 tiene
-  4 canales accesibles vía GPIO:
+  ese canal (S3 0..9, C5 0..5, RP2350A 0..3, RP2350B 0..7, U5 0..19), lo valida el común con nombre
+  («ADC: el canal 7 no existe en rp2350a (unidad 1: 4 canales)») y ese pin pasa a analógico —un
+  <code>Gpio.Pin</code> sobre él es error hasta <code>release()</code> (<code>~Channel()</code> lo
+  llama). En el RP2350 cada canal va en un pin fijo, y cuántos hay depende de la variante (la imagen
+  es la misma: la variante la lee del silicio al arrancar):
 </p>
 <table>
-  <tr><th>Canal</th><th>Pin</th></tr>
-  <tr><td><code>CH0</code></td><td>GP26</td></tr>
-  <tr><td><code>CH1</code></td><td>GP27</td></tr>
-  <tr><td><code>CH2</code></td><td>GP28</td></tr>
-  <tr><td><code>CH3</code></td><td>GP29</td></tr>
+  <tr><th>Canal</th><th>RP2350A (Pico 2)</th><th>RP2350B (Metro)</th></tr>
+  <tr><td><code>CH0</code></td><td>GP26</td><td>GP40</td></tr>
+  <tr><td><code>CH1</code></td><td>GP27</td><td>GP41</td></tr>
+  <tr><td><code>CH2</code></td><td>GP28</td><td>GP42</td></tr>
+  <tr><td><code>CH3</code></td><td>GP29</td><td>GP43</td></tr>
+  <tr><td><code>4</code> … <code>7</code></td><td>—</td><td>GP44 … GP47</td></tr>
 </table>
 <p>
   Resolución 12-bit (0..4095), referencia Vref ≈ 3.3 V típico. Para
@@ -1838,8 +1835,9 @@ port.write(tx, <span class="num">4</span>)
 <table>
   <tr><th>Miembro</th><th>Descripción</th></tr>
   <tr><td><code>Channel(ch)</code></td>
-      <td>Constructor. <code>ch</code>: <code>Channel.CH0</code>..<code>CH3</code>.
-          Lanza <code>RuntimeError</code> si ch fuera de rango.</td></tr>
+      <td>Constructor. <code>ch</code>: <code>Channel.CH0</code>..<code>CH3</code>, o el número
+          del canal (en el RP2350B, hasta el 7). Si el micro no tiene ese canal, o su pin está en
+          uso, <code>RuntimeError</code> con el motivo.</td></tr>
   <tr><td><code>read(): integer</code></td>
       <td>Lectura raw 0..4095. Bloquea ~2 µs por conversión.</td></tr>
   <tr><td><code>readVolts(): float</code></td>
@@ -1847,6 +1845,11 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>readAvg(n): integer</code></td>
       <td>Media de N lecturas. Reduce ruido en sensores analógicos.
           Coste: N × 2 µs.</td></tr>
+  <tr><td><code>release()</code> · <code>~Channel()</code></td>
+      <td>V7 (<code>#667</code>): el pin vuelve a libre y al reset —otro objeto, o un
+          <code>Gpio.Pin</code>, puede tomarlo—. Lo llama el destructor. Después, usar el
+          <code>Channel</code> es <code>RuntimeError</code> («Adc.Channel 0: ya se soltó con
+          release()»).</td></tr>
 </table>
 <p>
   Static consts: <code>Channel.CH0</code> (0), <code>CH1</code> (1),
@@ -1894,7 +1897,7 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>getMicro(): string</code></td>
       <td><strong>El chip</strong>, siempre real y específico: <code>"rp2350a"</code>
           (Pico 2) o <code>"rp2350b"</code> (Metro) — lo lee del silicio —,
-          <code>"esp32s3"</code>, <code>"esp32c3"</code>, <code>"esp32c6"</code>,
+          <code>"esp32s3"</code>, <code>"esp32c3"</code>, <code>"esp32c5"</code>, <code>"esp32c6"</code>,
           <code>"esp32p4"</code>, <code>"stm32u5"</code>; en el PC, <code>"host"</code>.
           <em>V6.</em></td></tr>
   <tr><td><code>getBoard(): string</code></td>
@@ -1927,8 +1930,17 @@ port.write(tx, <span class="num">4</span>)
           Para el encapsulado real, <code>package()</code>.</td></tr>
   <tr><td><code>resetCause(): string</code></td>
       <td>Por qué se reinició el micro: <code>"watchdog"</code>, <code>"power-on/run"</code>,
-          <code>"reinicio pedido"</code> (RESET del IDE)… según la familia. En el PC,
+          <code>"reinicio pedido"</code> (RESET del IDE), <code>"fallo fatal"</code> (el RP2350 con dos
+          núcleos, V7: ver <a href="#cli-autorun">el arranque autónomo</a>)… según la familia. En el PC,
           <code>"unknown"</code>.</td></tr>
+  <tr><td><code>getEnv(key): string</code></td>
+      <td>V7 (<code>#626</code>): el valor de una clave del ENV de la placa —sus
+          <a href="guia-ide.html#entorno">variables de entorno</a>, las <code>clave=valor</code> que
+          el IDE enseña y edita—, o <code>""</code> si no está. Las claves no distinguen mayúsculas.
+          Se lee de la flash: lo último que se escribió, también sin reiniciar (<code>#638</code>);
+          lo que la placa configura al arrancar (<code>stack</code>, <code>vm.runs</code>…) cambia en
+          el arranque siguiente. Un valor de más de 255 bytes es <code>RuntimeError</code>. En el PC no
+          hay ENV: siempre <code>""</code>.</td></tr>
   <tr><td><code>setMark(code)</code> · <code>markCount()</code> · <code>markAt(i)</code> · <code>bootCount()</code></td>
       <td>Rastro de «migas» en RAM retenida que sobrevive al reset: la app deja marcas por
           fases y tras un reinicio inesperado lee el camino que llevó al fallo
@@ -2002,8 +2014,18 @@ port.write(tx, <span class="num">4</span>)
 <p>
   El IDE BPIDE envía un comando <code>TIME &lt;epochsec&gt;</code>
   automáticamente al conectar al dispositivo. Tras eso,
-  <code>epochSec()</code> devuelve hora UTC real. Si no se calibra,
-  devuelve segundos desde boot — todavía útil como reloj relativo.
+  <code>epochSec()</code> devuelve hora UTC real. Si no se calibra: en la Pico y las ESP32,
+  que no tienen reloj de hardware, devuelve segundos desde boot (empieza en 0 a cada
+  arranque) — todavía útil como reloj relativo —; en el STM32 la lleva el RTC del chip, que
+  conserva la hora tras un reset; y en el PC es la hora del PC, en las dos VMs (V7,
+  <code>#625</code>: antes la VM-C contaba desde el arranque del PC).
+</p>
+<p>
+  <strong>¿Está en hora?</strong> (V7, <code>#626</code>). La placa anota en su ENV, la primera
+  vez que arranca sin ella, la fecha de su imagen (la clave <code>imagen.fecha</code>, en
+  segundos desde 1970; una vez, para no gastar la flash), y ninguna hora correcta puede ser
+  anterior: <code>isSet()</code> lo compara. Un programa con autorun, que arranca sin el IDE,
+  sabe así si su hora es inventada.
 </p>
 <p>
   API limitada a SEGUNDOS porque BP solo tiene int32; rango
@@ -2014,10 +2036,11 @@ port.write(tx, <span class="num">4</span>)
 
 <span class="kw">function</span> <span class="fn">main</span>(arg: <span class="type">string</span>)
   <span class="kw">var</span> clk: Rtc.Clock := Rtc.Clock()
+  <span class="kw">if not</span> clk.isSet() <span class="kw">then</span>            <span class="comment">// V7: la hora no es de verdad</span>
+    <span class="comment">// Calibrar manualmente si hace falta:</span>
+    clk.setEpochSec(<span class="num">1716544800</span>)   <span class="comment">// 2024-05-24 10:00:00 UTC</span>
+  <span class="kw">endif</span>
   <span class="kw">print</span> <span class="str">"epoch ahora:"</span>, clk.epochSec()
-
-  <span class="comment">// Calibrar manualmente si hace falta:</span>
-  clk.setEpochSec(<span class="num">1716544800</span>)   <span class="comment">// 2024-05-24 10:00:00 UTC</span>
 <span class="kw">end</span> main</code></pre>
 <table>
   <tr><th>Miembro</th><th>Descripción</th></tr>
@@ -2025,10 +2048,18 @@ port.write(tx, <span class="num">4</span>)
       <td>Constructor sin argumentos. El backend mantiene el offset
           globalmente (singleton lógico).</td></tr>
   <tr><td><code>epochSec(): integer</code></td>
-      <td>Segundos desde epoch Unix. Sin calibrar, segundos desde boot.</td></tr>
+      <td>Segundos desde epoch Unix. Sin calibrar, segundos desde boot en la Pico y las ESP32;
+          en el PC, la hora del PC.</td></tr>
   <tr><td><code>setEpochSec(sec)</code></td>
       <td>Calibra: a partir de aquí, <code>epochSec()</code> devuelve
           <code>sec + tiempo_transcurrido_desde_aquí</code>.</td></tr>
+  <tr><td><code>isSet(): boolean</code></td>
+      <td>V7 (<code>#626</code>): <code>true</code> si el reloj está en hora, o sea si
+          <code>epochSec()</code> no es anterior a <code>imagen.fecha</code> (con un día de margen:
+          la fecha de la imagen no lleva zona horaria). Sin esa clave —el PC, que no tiene ENV—,
+          <code>true</code>. Si la clave no son segundos, <code>RuntimeError</code> con su valor.
+          La clave se lee con <code>Machine.getEnv("imagen.fecha")</code>
+          (<a href="#stdlib-pico">§14.9</a>).</td></tr>
 </table>
 
 <!-- =========================================================== -->
@@ -2060,7 +2091,7 @@ port.write(tx, <span class="num">4</span>)
 <table>
   <tr><th>familia</th><th>Wdt</th></tr>
   <tr><td>RP2350 (Pico 2, Metro)</td><td>sí, completo: <code>disable()</code> lo para de verdad</td></tr>
-  <tr><td>ESP32 (S3, C3, C6, P4)</td><td>sí, completo (Task WDT; <code>disable()</code> da de baja la tarea)</td></tr>
+  <tr><td>ESP32 (S3, C3, C5, C6, P4)</td><td>sí, completo (Task WDT; <code>disable()</code> da de baja la tarea)</td></tr>
   <tr><td>STM32 (Nucleo, Discovery)</td><td><strong>no</strong>: el IWDG del U5 no se puede parar una vez armado, así que la imagen no lo ofrece</td></tr>
   <tr><td>PC (las dos VMs)</td><td><strong>no</strong> (no hay chip que resetear)</td></tr>
 </table>
@@ -2304,8 +2335,20 @@ tira.show()</code></pre>
   <code>setTextarea</code>, cualquier widget se serializa con <code>toJson()</code>,
   <code>Gui.shot(ruta)</code> captura la pantalla a un <code>.shot</code>
   (<code>bpgenvm-c/tools/shot2png.py</code> lo pasa a PNG) y el screen mide lo que mide el
-  panel de la placa (en el host, 480×320 salvo <code>--screen=WxH</code>). Cuatro pantallas
-  verificadas: DK2, P4 (kit y Waveshare) y ESP32-C6 (ST7789 240×240 por SPI).
+  panel de la placa (en el host, 480×320 salvo <code>--screen=WxH</code>).
+</p>
+<p>
+  <strong>Lo que cambia en V7: la GUI llega en un pack.</strong> LVGL, el motor de la interfaz,
+  ya no va dentro de ninguna imagen: se graba en la placa como un pack más —<code>Gui.pack</code>
+  (la C5, las P4 y la DK2) o <code>GuiMini.pack</code>, recortado para pantallas pequeñas (la
+  C6)— y, en las placas con la pantalla por SPI (la C5 y la C6), también el del driver,
+  <code>DriverSpi.pack</code>, que lee el panel de la placa de su ENV. Los motores de los packs
+  necesitan su bloque de RAM, <code>packRam=&lt;KB&gt;</code> en el ENV (§15.9). Sin el pack,
+  <code>Gui.Screen()</code> lo dice: «<code>GUI: esta placa no tiene el pack 'LVGL' grabado (la
+  GUI llega por el pack)</code>». El detalle de cada placa, en la
+  <a href="gui.html#ej-pantalla">guía de gráficos §23.4</a>. Cinco pantallas: la DK2, la P4 (kit
+  y Waveshare), la ESP32-C6 (ST7789 240×240 por SPI) y, nueva en V7, la ESP32-C5 (ST7789 240×320
+  por SPI, con táctil).
 </p>
 
 <h3 id="stdlib-sd">14.17 Tarjeta SD</h3>
@@ -2325,8 +2368,10 @@ tira.show()</code></pre>
 <table>
   <tr><th>familia</th><th>tarjeta SD</th><th>cómo</th></tr>
   <tr><td><strong>RP2350</strong> (Pico 2, Metro)</td><td>sí</td><td>por SPI</td></tr>
+  <tr><td><strong>ESP32</strong> (C5, C6)</td><td>sí</td><td>por SPI, en el bus de la pantalla (V7)</td></tr>
   <tr><td><strong>ESP32</strong> (P4)</td><td>sí</td><td>por SDIO, 1 o 4 bits</td></tr>
-  <tr><td><strong>STM32</strong></td><td>todavía no</td><td>—</td></tr>
+  <tr><td><strong>ESP32</strong> (S3, C3)</td><td>no</td><td>—</td></tr>
+  <tr><td><strong>STM32</strong></td><td>todavía no</td><td>— (ninguna del parque trae ranura)</td></tr>
 </table>
 
 <div class="note">
@@ -2334,13 +2379,16 @@ tira.show()</code></pre>
     <strong>La tarjeta es una capacidad de la IMAGEN, no de la placa.</strong> El
     firmware de RP2350 es único para Pico 2 y Metro. Lo que la Metro tiene de más es el
     <strong>lector soldado</strong>; en una Pico 2 puedes cablear un lector a los pines
-    que quieras y funciona igual, sin firmware especial. Lo mismo en la familia ESP32.
+    que quieras y funciona igual, sin firmware especial. Lo mismo con las imágenes de la
+    C5, la C6 y el P4; las de la S3 y la C3 no traen lector.
   </p>
 </div>
 
 <p>
-  Las placas que traen lector y funcionan enchufando la tarjeta y ya: <strong>Metro</strong>
-  (RP2350) y <strong>ESP32-P4</strong>.
+  Las placas que traen lector —basta su línea del entorno (abajo) y enchufar la tarjeta—:
+  <strong>Metro</strong> (RP2350), <strong>ESP32-P4</strong> y las Waveshare de la
+  <strong>ESP32-C5</strong> y la <strong>ESP32-C6</strong> (su ranura TF va en el SPI de la
+  pantalla).
 </p>
 
 <h4 id="pines">14.17.2 Decirle dónde está el lector</h4>
@@ -2356,7 +2404,8 @@ tira.show()</code></pre>
 
 <p><strong>En la ESP32-C5</strong> (SPI, en el mismo bus que la pantalla) — la forma corta: los pines son
   del bus, que la placa declara en su propia línea (<code>spi2=sck:6,mosi:7,miso:8</code>), y la SD sólo
-  dice cuál, su CS y su velocidad:</p>
+  dice cuál, su CS y su velocidad (en la <strong>ESP32-C6</strong>, igual con su CS:
+  <code>sd=bus:2,cs:4,khz:10000</code>):</p>
 <pre><code>sd=bus:2,cs:23,khz:10000</code></pre>
 
 <p><strong>En ESP32-P4</strong> (SDIO) — así está el P4:</p>
@@ -2402,6 +2451,15 @@ sd: montada en /sd por SDMMC (particion en el bloque 2048)</code></pre>
   tarjeta; si sale la segunda, la tarjeta ya está y lo que falle es tuyo.
 </p>
 
+<p>
+  <strong>Sacarla y meterla con la placa en marcha</strong> (V7). En el RP2350, con el
+  <em>card detect</em> en la línea —el <code>cd</code> de la Metro—, el firmware vigila la ranura
+  y lo dice en el log, sin reiniciar: «<code>tarjeta RETIRADA — /sd desmontado</code>» y, al
+  volver a meterla, «<code>tarjeta METIDA — /sd montado</code>». En las demás (la C5, la C6, el
+  P4), una tarjeta metida después de arrancar se monta con <code>sd mount</code> en la consola
+  del IDE (<a href="guia-ide.html#consola">guía del IDE §7</a>).
+</p>
+
 <h4 id="usarla">14.17.4 Usarla: es sólo una ruta</h4>
 
 <p>Con la tarjeta montada —que lo hace la placa sola—, todo lo que ya sabes hacer con
@@ -2444,7 +2502,7 @@ ficheros funciona bajo <code>/sd</code>.</p>
 <p>
   <strong>Y el módulo <code>IO</code></strong> para lo demás: <code>mkdir</code>,
   <code>rmdir</code>, <code>removeFile</code>, <code>rename</code>, <code>copyFile</code>,
-  <code>fileSize</code>, <code>isDirectory</code>, <code>lastModified</code>, y la familia
+  <code>fileSize</code>, <code>isDirectory</code>, <code>dirExists</code>, <code>lastModified</code>, y la familia
   de rutas <code>pathJoin</code>, <code>pathParent</code>, <code>pathBasename</code>,
   <code>pathExtension</code>, <code>pathAbsolute</code>.
 </p>
@@ -2791,17 +2849,21 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 </p>
 <p class="warn">
   <strong><code>/lib</code> eclipsa al pack, y <code>/app</code> eclipsa a <code>/lib</code>.</strong>
-  Si hay un <code>Core.mod</code> en <code>/lib</code> y otro dentro de un pack, gana el de
+  Si hay un <code>Core.mod</code> en <code>/lib</code> y otro distinto dentro de un pack, gana el de
   <code>/lib</code> — y el diagnóstico lo dice: <em>«'Core' del FS eclipsa al del pack»</em>.
   Es una regla útil (puedes sustituir un módulo del pack sin regrabarlo) y una trampa a
-  partes iguales.<br><br>
+  partes iguales. Si las dos copias son <strong>iguales</strong> (el mismo tamaño y el mismo
+  CRC), no hay nada que eclipsar: se carga la del pack, en su sitio, sin gastar RAM
+  (V7, <code>#650</code>), y el diagnóstico dice <em>«'Core' del FS es igual al del pack: se
+  carga del pack»</em>.<br><br>
   La trampa más común es la otra: una copia vieja de un módulo de la stdlib en
   <code>/app</code> (un resto de otra sesión) tapa al de <code>/lib</code>, y el programa se
   comporta como una versión anterior. Desde V7 eso <strong>se dice en la salida del
   programa</strong>, no sólo en el log:
-  <code>aviso: 'Str' cargado desde /app, tapa al de /lib</code>. Cuando algo se comporte como
-  una versión anterior, mira esa línea; y si el módulo de <code>/app</code> es además de otra
-  versión, la norma de versiones (§17.1) lo rechaza directamente.
+  <code>aviso: 'Str' cargado desde /app, tapa al de /lib</code> (sólo si las dos copias son
+  distintas). Cuando algo se comporte como una versión anterior, mira esa línea; y si el módulo
+  de <code>/app</code> es más antiguo que el que el programa necesita, la norma de versiones
+  (§17.1) lo rechaza directamente.
 </p>
 
 <h3 id="from">15.7 Decir de dónde viene un módulo</h3>
@@ -2833,8 +2895,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   nadie se lo diga por adelantado:
 </p>
 
-<pre><code><span class="kw">import</span> Core
-<span class="kw">import</span> Packs
+<pre><code><span class="kw">import</span> Packs
 
 <span class="kw">var</span> p: <span class="type">List</span> := Packs.<span class="fn">list</span>()
 <span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">0</span>
@@ -2858,11 +2919,21 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 
 <ul>
   <li><strong>El nativo es por arquitectura.</strong> Un <code>.npk</code> de ARM no vale
-  en RISC-V. Un pack puede llevar los dos.</li>
+  en RISC-V, ni el del P4 (con FPU) en la C5, la C3 o la C6 (sin ella). Un pack puede llevar
+  varios, y al grabarlo cada placa se queda con el suyo.</li>
   <li><strong>Se ejecuta desde la flash</strong>, mapeada, sin copiarse a RAM.</li>
   <li><strong>El código del pack no puede tocar el montón de la plataforma.</strong> Lo que
   necesita del sistema —ficheros, reloj, memoria— se lo presta el firmware en una tabla, y
   su memoria sale de una arena aparte. Por eso un pack no llama a <code>malloc</code>.</li>
+  <li><strong>Esa memoria es un bloque que se pide en el entorno de la placa</strong> (V7).
+  Los motores nativos —SQLite, LVGL, el driver de una pantalla— sacan sus datos y su arena de
+  un bloque de RAM que la placa reserva al arrancar: <code>packRam=&lt;KB&gt;</code> en sus
+  <a href="guia-ide.html#entorno">variables de entorno</a> (o <code>SQLite=&lt;MB&gt;</code>,
+  2 como mínimo, si sólo va la base de datos), y un reset. Sin él no carga ningún motor, y el
+  INFO del IDE lo dice: <em>«RAM packs: no hay: un pack nativo no podría cargar. Añade
+  packRam=&lt;KB&gt; …»</em>. Cuánto pide cada placa lo dicen la
+  <a href="gui.html#ej-pantalla">guía de gráficos</a> y la de <a href="basedatos.html">bases de
+  datos</a>.</li>
 </ul>
 
 <p>
@@ -2871,7 +2942,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <code>bpstdlib/sqlite/LEEME.md</code>.
 </p>
 
-<h3 id="trampas">15.10 Trampas conocidas</h3>
+<h3 id="packs-traps">15.10 Trampas conocidas</h3>
 
 <p>
   <strong>Un pack realojado para otra dirección no vale.</strong> El nativo se graba
@@ -2882,8 +2953,8 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 </p>
 
 <p>
-  <strong>El FS eclipsa al pack</strong> (ver §6). La causa más común de «esto se comporta
-  como la versión de antes».
+  <strong>El FS eclipsa al pack</strong> (ver §15.6) cuando su copia es distinta. La causa más
+  común de «esto se comporta como la versión de antes».
 </p>
 
 <p>
@@ -2912,6 +2983,10 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <tr><td><code>--quiet</code></td><td>Sólo diagnósticos.</td></tr>
   <tr><td><code>--compile &lt;dir&gt;</code></td><td>Compila a <code>.mod</code> (la interfaz va dentro).</td></tr>
   <tr><td><code>--interface &lt;dir&gt;</code></td><td>Sólo analiza y construye la interfaz — sin código y sin fichero de salida.</td></tr>
+  <tr><td><code>--project &lt;fichero.bpbuild&gt;</code></td><td>Compila el proyecto entero (<a href="#cli-bpbuild">.bpbuild</a>); con <code>"out": "pack"</code>, monta el pack (§15.3).</td></tr>
+  <tr><td><code>--dao</code></td><td>Con <code>--project</code>: genera los DAO de las entidades y para (ver <a href="basedatos.html">bases de datos</a>).</td></tr>
+  <tr><td><code>--stdlibDir=&lt;dir&gt;</code></td><td>La biblioteca estándar contra la que se compila (V7). Manda sobre el <code>stdlibDir</code> del <a href="#cli-vmcfg">BpVM.cfg</a> que el compilador encuentra solo.</td></tr>
+  <tr><td><code>--formato=9|8</code></td><td>El formato del <code>.mod</code> (V7): <code>9</code>, el de V7 y el predeterminado; <code>8</code>, el anterior, como salida de emergencia (§17.1).</td></tr>
   <tr><td><code>--backend=jvm|mivm</code></td><td>Backend (mivm es el predeterminado).</td></tr>
 </table>
 <p>
@@ -2963,10 +3038,12 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
       que quepa al menos <code>MAIN_STACK_BYTES</code>). Si pones
       <code>memorySize</code> pero no <code>stackBase</code>, se deriva
       a <code>memorySize/2</code>.</li>
-  <li><code>stdlibDir</code> (path al directorio donde la VM busca los
-      módulos stdlib &mdash; <code>Json.mod</code> hoy, más en el futuro
-      &mdash; cuando un import no resuelve desde el cwd o desde el
-      <code>fromPath</code> del importer).</li>
+  <li><code>stdlibDir</code> (el directorio de la biblioteca estándar: el <code>/lib</code> del
+      PC). La VM busca ahí una dependencia que no está junto al programa —el orden entero, el
+      mismo que en la placa, en §15.6; ni el directorio actual ni el <code>from</code> del
+      import cuentan (V7)—, y el compilador compila contra ella. <code>--stdlibDir &lt;dir&gt;</code>
+      en la línea de órdenes manda sobre él; en la VM-C de host, el mismo papel lo hace
+      <code>--libdir=&lt;dir&gt;</code>.</li>
 </ul>
 <p>
   El parser admite comentarios <code>// hasta-fin-de-línea</code>. No
@@ -3016,14 +3093,19 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
       Paths relativos se resuelven respecto al .bpproject.</li>
 </ul>
 <p>
-  <strong>Resolución completa de un import</strong>:
+  <strong>Resolución completa de un import</strong> (V7: el mismo orden que la VM-C y la placa, §15.6):
 </p>
 <ol>
-  <li>Como esté indicado (cwd o absoluto).</li>
-  <li>Cada <code>modulePaths[i]/&lt;basename&gt;</code> en orden.</li>
+  <li>El pack en ejecución, si el programa arrancó desde uno.</li>
+  <li>La carpeta del <code>.mod</code> raíz (y el directorio de trabajo, si la VM tiene uno) y
+      cada <code>modulePaths[i]/&lt;basename&gt;</code>, en orden.</li>
   <li><code>stdlibDir/&lt;basename&gt;</code> (de BpVM.cfg).</li>
-  <li>Si nada existe, FileNotFound con mensaje claro.</li>
+  <li>Si nada existe, la carga falla con «<code>falta el modulo 'X'</code>» (salida 2).</li>
 </ol>
+<p>
+  El directorio actual ya no cuenta, ni la ruta del <code>from</code> del import, que es una
+  pista para el compilador (§15.7).
+</p>
 <p>
   El parser admite comentarios <code>//</code>. Soporta arrays
   (a diferencia del BpVM.cfg, que es plano). Ver
@@ -3067,6 +3149,11 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <li><code>dependencies</code> (array de strings, opcional): cada entrada
       es un directorio (busca cualquier <code>.mod</code> dentro al resolver
       imports) o un fichero <code>.mod</code> concreto.</li>
+  <li><code>version</code> (entero, opcional; V7): la <strong>generación</strong> del
+      proyecto. Cada <code>.mod</code> que compila la lleva en su cabecera, y la norma de
+      versiones (§17.1) la usa: una dependencia más antigua que la que el módulo necesita se
+      rechaza al cargar. Sin ella, 0. No es la <code>"version"</code> de la sección
+      <code>"pack"</code> (§15.3), que es texto libre.</li>
 </ul>
 <p>
   <strong>Resolución de imports en modo proyecto</strong>:
@@ -3107,21 +3194,29 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   con anotaciones (nombre de función, sección, jumps con destino).
 </p>
 
-<h3 id="cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / C3 / C6 / P4 / STM32)</h3>
+<h3 id="cli-mcu">16.4 Ejecución en microcontroladores (RP2350 / ESP32-S3 / C3 / C5 / C6 / P4 / STM32)</h3>
 <p>
   Desde el IDE, <em>Run on Device</em> ejecuta el módulo en un MCU conectado
   por puerto serie (protocolo «wire v1»): el IDE sube el <code>.mod</code>
   y las deps que falten (pregunta a la placa por cada una y sólo sube lo que no
-  está o está rancio; la stdlib vive en <code>/lib</code>, que el firmware repone
-  solo al arrancar, y los módulos de la app van a <code>/app</code>), lo ejecuta y
+  está o está rancio —una librería, por su versión: otra compilación de la misma versión
+  no se sube—; la stdlib vive en <code>/lib</code>, que el firmware repone solo al arrancar,
+  o en el <code>Stdlib.pack</code> si está grabado, y los módulos de la app van a
+  <code>/app</code>), lo ejecuta y
   muestra la salida. Los ficheros persisten en el FS del dispositivo entre
   reinicios. Un programa en ejecución se aborta con <em>Run → Stop</em> (Ctrl+F2) o
   el comando <code>kill</code> de la consola, sin reiniciar la placa.
 </p>
 <p>
-  Cinco familias, siete imágenes, nueve placas. La memoria de la VM (heap + pilas de
+  Cinco familias, ocho imágenes, diez placas. La memoria de la VM (heap + pilas de
   los hilos BP) la decide cada imagen al arrancar y lo dice en el log; <code>stack=N</code>
   (KB) en el entorno de la placa cambia el reparto entre pilas y montón.
+</p>
+<p>
+  <strong>Dos núcleos</strong> (V7). En la Pico&nbsp;2, la Metro, la S3 y la P4 la VM ejecuta por
+  defecto dos hilos BP a la vez, uno por núcleo; en las demás, uno. <code>vm.runs=1</code> y
+  <code>vm.cores=1</code> en el entorno vuelven a uno sin regrabar (el detalle, en la
+  <a href="guia-ide.html#entorno">guía del IDE §9.3</a>).
 </p>
 <table>
   <tr><th>MCU</th><th>RAM de la VM</th><th>Notas</th></tr>
@@ -3137,15 +3232,16 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
           el USB nativo (USB-Serial-JTAG). FS persistente en partición
           dedicada; zona de packs desde V6. <code>native</code> interpretada
           (sin AOT en Xtensa; fuera del plan).</td></tr>
-  <tr><td>ESP32-C3 · ESP32-C6 (RISC-V, un núcleo) <em>— nuevas en V6</em></td>
-      <td>128 KB</td>
+  <tr><td>ESP32-C3 · ESP32-C5 · ESP32-C6 (RISC-V, un núcleo) <em>— la C3 y la C6, nuevas en V6; la C5, en V7</em></td>
+      <td>C3 y C6: unos 128 KB de SRAM (lo que quepa: la C6, 127 KB, 63 de heap; la C3, 112, 48 de
+          heap); C5: ~6,5 MB en PSRAM</td>
       <td>Un solo conector USB: el wire va por el USB-Serial-JTAG y la consola por
-          UART0. Grabar = BOOT+RESET a mano. <strong>Sin AOT</strong>: son RV32 sin FPU
-          y el único destino RISC-V del IDE es el del P4 (con FPU); su firmware no carga
-          ningún bloque nativo y las <code>native</code> corren interpretadas (ficha
-          <code>#502</code>, V7).
-          Packs en el C6. El <strong>ESP32-C6-LCD-1.3</strong> trae la primera pantalla
-          SPI (ST7789 240×240, sin táctil) y corre la GUI con esos 128 KB.</td></tr>
+          UART0. Grabar = BOOT+RESET a mano. <code>native</code> <strong>acelerada</strong> por
+          AOT desde V7 (destino <code>riscv32-imc</code>: RV32 sin FPU, ABI <code>ilp32</code>, §17.4).
+          Zona de packs en las tres. La <strong>ESP32-C6-LCD-1.3</strong> trae una pantalla SPI
+          (ST7789 240×240, sin táctil) y la <strong>ESP32-C5-Touch-LCD-2.8</strong> de Waveshare
+          (32 MB de flash, 8 MB de PSRAM), una ST7789 240×320 con táctil; en las dos la GUI llega
+          por packs (§14.16) y la ranura TF va en el SPI de la pantalla.</td></tr>
   <tr><td>ESP32-P4 (RISC-V)</td>
       <td>en PSRAM (toda la libre menos los 4 MB del display: decenas de MB)</td>
       <td>Wire v1 por UART (puerto del bridge USB-UART). <strong>Imagen de
@@ -3153,7 +3249,8 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
           elige con la clave <code>display</code> del entorno de la placa
           (<code>display=st7701</code> para la Waveshare; ver la
           <a href="gui.html#ej-pantalla">guía de gráficos §23.4</a>). FS en
-          PSRAM persistido a flash; GUI sobre pantalla MIPI-DSI con táctil;
+          PSRAM persistido a flash; GUI sobre pantalla MIPI-DSI con táctil (LVGL, desde V7
+          en el <code>Gui.pack</code>, §14.16);
           tarjeta SD por SDIO. <code>native</code> <strong>acelerada</strong> por AOT
           (RISC-V, desde V4).</td></tr>
   <tr><td>STM32U5 (Nucleo-U575ZI-Q · STM32U5G9J-DK2)</td>
@@ -3161,11 +3258,12 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
       <td>Wire v1 por el VCP del ST-LINK; FS y packs en la flash interna que
           queda tras el firmware. <code>native</code> acelerada por AOT
           (mismo Cortex-M33 que el RP2350). La DK2 lleva la pantalla LTDC 800×480
-          con táctil. Sin ADC, sin watchdog (§14.11) y sin tarjeta SD todavía.</td></tr>
+          con táctil (LVGL, desde V7 en el <code>Gui.pack</code>). <code>Adc</code> desde V7 (el ADC1,
+          §14.8); sin watchdog (§14.11) y sin tarjeta SD.</td></tr>
 </table>
 <p>
   El <strong>lenguaje y el bytecode son idénticos</strong> en todas las
-  plataformas (PC, RP2350, ESP32-S3/C3/C6/P4, STM32): el mismo <code>.mod</code>
+  plataformas (PC, RP2350, ESP32-S3/C3/C5/C6/P4, STM32): el mismo <code>.mod</code>
   corre en cualquiera. Sólo difieren la capa de backend de hardware (GPIO, I²C,
   SPI…) y la aceleración AOT, que es específica de arquitectura. Qué periférico
   falta en qué familia lo dice cada sección de §14; la fachada que no tiene backend
@@ -3173,7 +3271,10 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 </p>
 <p>
   Los códigos de salida son los mismos en las dos VMs y en las cinco familias:
-  0 bien · 1 excepción BP no atrapada · 2 no se pudo cargar · 3 fallo interno de la
+  0 bien · 1 excepción BP no atrapada (también la de un hilo que no es el main: ese hilo acaba,
+  los demás siguen y el programa sale con 1; y un desbordamiento de pila, que desde V7 es un
+  <code>RuntimeError</code>) · 2 no se pudo cargar (también una dependencia rechazada por la
+  norma de versiones, §17.1) · 3 fallo interno de la
   VM · 4 sin memoria · 130 Stop/KILL · 131 depurador. El IDE los explica con
   <code>help error</code>.
 </p>
@@ -3197,17 +3298,26 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   a una placa con un autorun en marcha (aunque sea un bucle infinito),
   pararlo con <code>kill</code> y retirarlo con <code>autorun off</code> —
   nunca hace falta reflashear. Si la ruta no existe o el programa termina,
-  el firmware sigue al REPL normal (no hay bucles de arranque). La misma
-  salvedad del Stop aplica aquí: una <code>native function</code> larga no
-  es interrumpible hasta volver al intérprete.
+  el firmware sigue al REPL normal (no hay bucles de arranque). Desde V7 eso vale
+  también con una <code>native function</code> en un bucle largo: el Stop la para
+  (<a href="manual.html#funciones-native">manual §8.3</a>).
+</p>
+<p>
+  <strong>Tras un fallo fatal, sin autorun</strong> (V7). En el RP2350 con dos núcleos —la
+  imagen de por defecto—, un fallo fatal (un HardFault, la memoria o la pila del sistema) deja su
+  informe en el log y <strong>reinicia la placa</strong>. El arranque siguiente lo dice —en el
+  log, y como causa del reinicio: <code>Machine.resetCause()</code> es <code>"fallo fatal"</code>—
+  y <strong>no lanza el autorun</strong> («<code>autorun: … NO arranca: el arranque anterior
+  acabo en un fallo fatal</code>»): un programa que falla al arrancar sería un bucle de
+  reinicios. Se arranca a mano desde el IDE.
 </p>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <h2 id="artefactos">17. Artefactos en disco</h2>
 
-<h3 id="mod">17.1 <code>.mod</code> (binario, MOD8)</h3>
-<pre>[MAGIC=0x4D4F4438]            4 bytes  "MOD8"
+<h3 id="mod">17.1 <code>.mod</code> (binario, MOD9)</h3>
+<pre>[MAGIC=0x4D4F4439]            4 bytes  "MOD9"
 [dataSize]                    4
 [mainOffset]                  4   offset al __startup, o -1
 [importsSize]                 4
@@ -3215,15 +3325,15 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 [codeSize]                    4
 [librarySize]                 4
 [interfaceSize]               4   texto de interfaz (v6+)
-[nativeSize]                  4   código nativo AOT (v7); 0 si no lleva
-[gen]                         4   generación: la "version" del proyecto (v8); 0 si suelto
-[ifaceCrc]                    4   CRC32 de la sección interface (v8)
+[nativeSize]                  4   código nativo AOT (v7+); 0 si no lleva
+[gen]                         4   generación: la "version" del proyecto (v8+); 0 si suelto
+[ifaceCrc]                    4   CRC32 de la sección interface (v8+)
 --- header (44) ---
 [library   bytes]             librarySize
-[imports   bytes]             importsSize   pares (name, fromPath) UTF + subtabla deps (v8)
-[exports   bytes]             exportsSize   pares (name, offset)
+[imports   bytes]             importsSize   pares (name, fromPath) UTF + subtabla deps (v8+) + subtabla refs (v9)
+[exports   bytes]             exportsSize   pares (name, offset) + subtabla CLASES (v9)
 [interface bytes]             interfaceSize texto de interfaz (§17.2)
-[native    bytes]             nativeSize    blobs .mdn, uno por arquitectura (§17.4)
+[native    bytes]             nativeSize    blobs .mdn, uno por familia (§17.4)
 [data block]                  dataSize      strings, constantes, class descriptors
 [code]                        codeSize      bytecode</pre>
 <p>
@@ -3250,14 +3360,19 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <code>imports</code> una subtabla <code>deps</code> con, por cada módulo del que depende,
   la generación y el CRC de interfaz contra los que se compiló, y si extiende alguna clase
   suya. Con eso las VMs aplican <strong>la norma de versiones</strong> al cargar, y la
-  dicen por la salida del programa con el mismo texto en las dos:
+  dicen por la salida del programa con el mismo texto en las dos (la carga falla, salida 2):
 </p>
 <ul>
   <li>una dependencia <em>más antigua</em> de lo que el módulo necesita se rechaza:
-      <code>'Core' (gen 6) es mas antiguo que el que 'App' necesita (gen 7): actualiza /lib o recompila</code>;</li>
-  <li>la misma generación con <em>otra interfaz</em> se rechaza:
-      <code>'Str' (gen 7, interfaz 3e1a...) no es la interfaz con la que se compilo 'App' (interfaz 9c02...): recompila</code>;</li>
-  <li>una dependencia <em>más reciente</em> se acepta si enlaza — salvo que el módulo
+      <code>'Core' (gen 6) es mas antiguo que el que 'App' necesita (gen 7): actualiza /lib o recompila</code>.
+      La generación es la clave <code>"version"</code> (un entero) del <code>.bpbuild</code> que
+      compiló la dependencia; la de la biblioteca estándar de V7 es la 7;</li>
+  <li>si la dependencia es v9, la norma no mira más: una más reciente, o con otra interfaz, la
+      decide el enlace tardío (abajo). Con una dependencia v8 —compilada con
+      <code>--formato=8</code>— la norma sigue entera: la misma generación con <em>otra
+      interfaz</em> se rechaza
+      (<code>'Str' (gen 7, interfaz 3e1a...) no es la interfaz con la que se compilo 'App' (interfaz 9c02...): recompila</code>),
+      y una <em>más reciente</em> se acepta si enlaza — salvo que el módulo
       <strong>extienda</strong> una clase suya: los hijos pueden ser más recientes que los
       padres, los padres no pueden ser más recientes que los hijos (el hijo coloca sus
       campos y métodos detrás de los del padre);</li>
@@ -3265,28 +3380,67 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
       se comprueba (se anota en el diagnóstico).</li>
 </ul>
 <p>
-  Los cargadores ejecutan <strong>v6, v7 y v8</strong> (el ABI es el mismo).
+  <strong>v9 = el enlace tardío</strong> (V7, el formato que emite el compilador). La misma
+  cabecera de 44 bytes; cambia lo que el módulo dice de las clases de <em>otros</em> módulos.
+  Hasta v8 llevaba sus números horneados —la ranura de cada método en la vtable, el offset de
+  cada campo, el descriptor de la clase—, y un cambio de forma en la librería (un método nuevo en
+  medio, un campo más) los dejaba mal. Un v9 lleva <strong>referencias por nombre</strong> —la
+  clase, el miembro y su firma con el retorno— en una subtabla <code>refs</code> al final de
+  <code>imports</code>, y publica sus propias clases en una subtabla <code>CLASES</code> de
+  <code>exports</code>; el cargador construye al cargar las clases que heredan de otro módulo y
+  resuelve cada referencia una vez. El criterio es el de Java:
+</p>
+<ul>
+  <li><strong>compatibilidad hacia atrás</strong>: un programa compilado contra una librería
+      corre con una versión más nueva de ella aunque le haya añadido métodos, campos o
+      properties, o los haya reordenado —también si el programa extiende sus clases—, sin
+      recompilarlo;</li>
+  <li><strong>lo incompatible se rechaza al cargar, nombrando el símbolo</strong> —un miembro
+      que el programa usa y ya no está, o que cambió de firma o de tipo—:
+      <code>'App' necesita 'Lib.Base.k()s' y 'Lib' (gen 8) no lo tiene (tiene 'k()i'): recompila 'App'</code>.
+      Nada corre en silencio con el miembro equivocado. El texto es el mismo en las dos VMs y
+      sale como <code>=== ERROR DE LINK: … ===</code> (por el wire, <code>LINK_ERROR</code>).</li>
+</ul>
+<p>
+  <strong>Los límites del enlace por nombre.</strong> Un identificador tiene como máximo
+  <strong>63 caracteres</strong> (uno más largo es un error de compilación: «<code>identificador
+  demasiado largo (70 caracteres; el maximo es 63)</code>»), y la firma de un miembro —la clase,
+  el nombre, los parámetros y el retorno— como máximo <strong>160</strong> (el compilador la
+  rechaza: «<code>… tiene 170 caracteres (maximo 160): acorta los nombres o divide la
+  funcion</code>»). Así ningún nombre se trunca en una VM y no en la otra.
+</p>
+<p>
+  Los cargadores ejecutan <strong>v6, v7, v8 y v9</strong> (el ABI es el mismo).
   <strong>v5</strong> (<code>MAGIC "MOD5"</code>, header de 28 bytes) se
   <strong>rechaza</strong>: es anterior al ensanchado de referencias 4→8 bytes y
   correrlo corrompería en silencio. El tamaño del header depende del MAGIC:
-  28 / 32 / 36 / 44 bytes para v5 / v6 / v7 / v8.
+  28 / 32 / 36 / 44 / 44 bytes para v5 / v6 / v7 / v8 / v9.
+</p>
+<p class="warn">
+  <strong>De V6 a V7.</strong> El compilador de V7 emite v9 (con <code>--formato=8</code>, el v8
+  de antes, como salida de emergencia, §16.1). Las VMs de V7 cargan los <code>.mod</code> de V6
+  (v7): uno que sólo usa funciones y sus propias clases corre tal cual. Pero la biblioteca estándar
+  de V7 es v9 entera, y un módulo de V6 que use sus <strong>clases</strong> —<code>List</code>,
+  <code>RuntimeError</code>, <code>Gpio.Pin</code>…— no enlaza: lo que busca por su nombre de antes
+  ya no existe, y el cargador lo dice
+  (<code>lib 'Core' presente pero no exporta 'Core.__cls_new_List' (la usa 'App'; version vieja?)</code>):
+  ése se recompila. Su código nativo, tampoco: es de otra ABI (§17.4), y la función corre
+  interpretada. Al revés, un módulo v9 que usa las clases de una dependencia v7 o v8 se rechaza
+  nombrándola (<code>'Lib' es MOD8 y 'App' necesita su tabla de clases: recompila 'Lib'</code>). Hacia
+  atrás sí, hacia delante no: una imagen de V6 no carga un v9.
 </p>
 
-<h3 id="bpi">17.2 Interfaz del módulo (texto, v7)</h3>
+<h3 id="bpi">17.2 Interfaz del módulo (texto, v9)</h3>
 <p>
   El texto que viaja en la sección <code>interface</code> del
   <code>.mod</code> (§17.1). Hasta V3 se escribía en un fichero
   <code>.bpi</code> aparte; desde V4 <strong>no se genera ningún
-  fichero</strong>: es una sección del propio módulo. El formato del
-  texto no ha cambiado, y su línea de versión conserva la palabra
-  <code>bpi</code> como marca.
+  fichero</strong>: es una sección del propio módulo, y su línea de versión
+  conserva la palabra <code>bpi</code> como marca.
 </p>
-<pre>bpi 7
+<pre>bpi 9
 library com.example
 module Util
-interface true                <span class="comment">// sólo si module interface</span>
-extends com.example.Base      <span class="comment">// sólo si interface hija</span>
-implements com.example.LogApi <span class="comment">// sólo en módulo concreto</span>
 func suma(a:integer,b:integer):integer public
 func label(text:string,prefix:string="["):string public  <span class="comment">// defaults viajan</span>
 const PI:float=3.14159 public
@@ -3294,19 +3448,22 @@ enum Color public
   ROJO=0
   VERDE=1
 end enum
-class Punto public extends Base   <span class="comment">// clases completas (L2 v3)</span>
-  layout 2 5 - -                  <span class="comment">// nº fields / tamaño vtable / owner masks</span>
+class Punto public extends Core.Object   <span class="comment">// clases completas (L2 v3)</span>
   ctor(x:integer,y:integer)
+  ctor+(x:integer)                       <span class="comment">// otra sobrecarga del constructor</span>
   method modulo():double public
   prop x:integer public
 end class</pre>
 <p>
-  La interfaz v7 exporta funciones (con defaults), consts
+  La interfaz exporta funciones (con defaults), consts
   (inlineadas en el importador), enums, arrays de primitivos, tuplas en
-  signatures, y <strong>clases completas</strong> (layout, constructor,
+  signatures, y <strong>clases completas</strong> (constructores,
   métodos, properties, herencia — incluso cross-module). Todos los tipos
   primitivos del lenguaje (incl. <code>long</code>/<code>double</code>/
-  estrechos) valen en signatures. Al vivir dentro del <code>.mod</code>,
+  estrechos) valen en signatures. <strong>Desde la <code>bpi 9</code> (V7) no lleva
+  números</strong>: ni <code>layout</code> (cuántos campos, el tamaño de la vtable), ni ranuras,
+  ni offsets —la forma de una clase la decide el cargador al enlazar (§17.1)—, y un tipo de
+  otro módulo va cualificado (<code>Core.Object</code>). Al vivir dentro del <code>.mod</code>,
   no puede quedarse rancia respecto al código que describe: se emiten
   juntos o no se emiten.
 </p>
@@ -3339,17 +3496,27 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   <code>native</code> en <em>Run on Device</em>, funde el blob en el
   <code>.mod</code> y <strong>no escribe ningún <code>.mdn</code> suelto</strong> de la
   aplicación (retira incluso el que quedara de una versión anterior, en el PC y en
-  la placa). Así no hay dos ficheros que puedan desparejarse. Con varias familias,
-  cada compilación añade su blob y el módulo acaba llevándolos todos, cada uno con
-  su <code>arch</code>. El fichero <code>.mdn</code> suelto sólo sigue existiendo
-  como ingrediente de los <strong>packs</strong> (<code>SQLite.mdn.RISCV</code> y
+  la placa). Así no hay dos ficheros que puedan desparejarse. <strong>En V7 el
+  <code>.mod</code> lleva el blob de UNA familia</strong>: el IDE lo recompila en cada
+  <em>Run on Device</em> y funde el de la placa conectada. Llevado a una placa de otra
+  familia, ese blob se ignora y sus <code>native</code> corren interpretadas; el
+  <code>.mod</code> multifamilia —un blob por familia, el mismo fichero para cualquier
+  placa— queda para V8 (<code>#584</code>). El fichero <code>.mdn</code> suelto sólo sigue
+  existiendo como ingrediente de los <strong>packs</strong> (<code>SQLite.mdn.RISCV</code> y
   hermanos, §15.4).
+</p>
+<p>
+  <strong>La ABI del nativo es la 9 en V7.</strong> Un blob de otra ABI —el de un
+  <code>.mod</code> o un pack de V6 en una imagen de V7, o al revés— no carga: la placa lo
+  rechaza con aviso y la función corre interpretada; un pack con nativo de V6 (el
+  <code>SQLite.pack</code>) se regraba con el de V7. El INFO del IDE dice la ABI de la placa
+  («ABI nativo: 9»), y si no es la que genera el IDE, no le compila el nativo y dice el remedio.
 </p>
 <table>
   <tr><th>familia</th><th><code>native</code></th></tr>
   <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>acelerada — destino <code>arm-cortex-m33</code> (<code>arm-none-eabi-gcc</code>)</td></tr>
   <tr><td>ESP32-P4 (RV32 con FPU)</td><td>acelerada — destino <code>riscv32-esp-p4</code> (<code>riscv32-esp-elf-gcc</code>)</td></tr>
-  <tr><td>ESP32-C3 · C6 (RV32 sin FPU)</td><td>interpretada: el único destino RISC-V es el del P4 (<code>ilp32f</code>) y este firmware (<code>ilp32</code>) no carga bloques nativos — un blob del P4 se ignora (<code>#502</code>, V7)</td></tr>
+  <tr><td>ESP32-C3 · C5 · C6 (RV32 sin FPU)</td><td>acelerada desde V7 — destino <code>riscv32-imc</code> (ABI <code>ilp32</code>; el mismo <code>riscv32-esp-elf-gcc</code>); sin FPU, cada operación de <code>float</code> o <code>double</code> la hace el firmware, y acelera menos que el código entero</td></tr>
   <tr><td>ESP32-S3 (Xtensa)</td><td>interpretada (sin AOT; fuera del plan)</td></tr>
   <tr><td>PC (las dos VMs)</td><td>interpretada; el host tiene su propia ejecución nativa de prueba</td></tr>
 </table>
@@ -3384,8 +3551,8 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus reference manual — generado al hilo del desarrollo.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) y
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / C3 / C6 / P4 / STM32) ·
-  Formato <code>.mod</code> v7 (interfaz embebida + sección <code>native</code>).<br>
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / C3 / C5 / C6 / P4 / STM32) ·
+  Formato <code>.mod</code> v9 (enlace tardío; interfaz embebida + sección <code>native</code>).<br>
   BasicPlus se apoya en trabajo de otros —
   <a href="creditos.html">créditos y agradecimientos</a>.
 </p>

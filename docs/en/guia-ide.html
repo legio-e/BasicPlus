@@ -257,9 +257,9 @@
   <li><strong>Resources</strong> — data files that Run copies to the
       micro as-is (configuration, tables…).</li>
   <li><strong>Output</strong> — what the compiler produces: the
-      <code>.mod</code> files (bytecode, with their interface inside — and,
-      if the project uses <code>native</code>, the machine code too: since
-      format v7 there is no loose <code>.mdn</code>), and the
+      <code>.mod</code> files (bytecode in format MOD9, with their interface
+      inside — and, if the project uses <code>native</code>, the machine code
+      too: it goes inside, not in a loose <code>.mdn</code>), and the
       <code>.pack</code> if the project packages (§10).</li>
   <li><strong>Dependencies</strong> — resolved imported modules.</li>
 </ul>
@@ -296,20 +296,35 @@
   <li><strong>Run → Stop</strong> (Ctrl+F2): aborts the running program —
       local or on the board — without resetting anything. On the board it
       is a cooperative KILL: the VM dies cleanly and the micro keeps
-      responding. The program ends with exit code 130.</li>
+      responding, also when the program is inside a long
+      <code>native</code> function. The program ends with exit code 130.</li>
 </ul>
 <p>
+  When a program ends —fine, with an error or with Stop— its objects are
+  destroyed and each one releases what it holds: a PWM stops, the pins and the
+  buses are free again (<a href="manual.html#destructor">manual §9.4b</a>).
+  Whatever no object releases, the board releases at the end of the RUN, and
+  the outputs go back to how they were after reset. That destruction has a 3 s
+  limit: whatever does not finish, the board releases, and the log says so.
+</p>
+<p>
   <strong>Dependencies are not re-sent.</strong> Before uploading, the IDE
-  asks the board about every module the program imports and uploads only
-  the one that is missing, the one the board has in an older version, or
-  the one with the same version but a different CRC; if the board has a
-  newer one, the board's copy stays. The Console says where each one is
-  loaded from (path and CRC) and warns if that copy is not the one the
-  project would put there — when something fails because of a dependency,
-  that line is the one that tells where the module came from. The standard
-  library follows the same rule: it travels in the firmware (§6) and only the
-  module the board lacks, has an older version of or has with a different CRC is
-  uploaded (not every image embeds the whole stdlib).
+  asks the board about every module the program imports, and the board looks
+  for it where it would load it from (§10.2). A module <em>of the program</em>
+  is uploaded if it is missing, if the board has it in an older format, or if,
+  being the same format, its CRC differs (you have just recompiled it); if the
+  board has a newer one, the board's copy stays. One from the <em>standard
+  library</em> follows the rule for libraries: what the program asks for is a
+  minimum version —that of the <code>.mod</code> it was compiled against— and
+  if the board has that one or a later one, in the same format, it is valid
+  even if it is another build (another CRC): it is not uploaded. Only the
+  missing one, the one in another format or the one older than the minimum is
+  uploaded, and it goes to <code>/lib</code> (the stdlib travels in the board's
+  image —not the whole of it in every image— or in the <code>Stdlib.pack</code>,
+  §10.3). The Console says where each one is loaded from (path and CRC) and why
+  it is uploaded or not, and warns if that copy is not the one the project
+  would put there — when something fails because of a dependency, that line
+  is the one that tells where the module came from.
 </p>
 <p>
   On completion, the Console closes with the exit code, the reason and
@@ -336,7 +351,7 @@
 <p>
   If the program uses <code>function native</code>, on <em>Run on Device</em> the
   IDE compiles those functions to machine code and fuses it <strong>inside the
-  <code>.mod</code> itself</strong> (format v7): a single file is uploaded and
+  <code>.mod</code> itself</strong>: a single file is uploaded and
   there are no two files that can drift apart. That step needs a <strong>cross C
   compiler</strong> — and it <strong>does not ship with BasicPlus</strong>: it is
   not ours, so you install it separately. Which one depends on the board:
@@ -358,25 +373,24 @@
         install guide</a>) — <strong>version 6 or later</strong></td>
   </tr>
   <tr>
+    <td>ESP32-C3, ESP32-C5 and ESP32-C6</td>
+    <td><code>riscv32-esp-elf-gcc</code></td>
+    <td>the same one from ESP-IDF: they are RISC-V <em>without FPU</em>, and the
+        IDE compiles what suits them (target <code>riscv-imc</code>, ABI
+        <code>ilp32</code>) because the board tells it its recipe</td>
+  </tr>
+  <tr>
     <td>ESP32-S3</td>
     <td>—</td>
     <td>in this version <code>native</code> runs <em>interpreted</em> on the S3</td>
   </tr>
-  <tr>
-    <td>ESP32-C3 and ESP32-C6</td>
-    <td>—</td>
-    <td>also <em>interpreted</em>: they are RISC-V <em>without FPU</em> and the
-        IDE's only RISC-V target is the P4's (with FPU); their firmware loads no native
-        blocks, so if you enable AOT the P4 blob is ignored and the function runs
-        interpreted (<code>#502</code>, V7)</td>
-  </tr>
 </table>
 <p class="warn">
   <strong>About ESP-IDF, to be clear.</strong> Programming in BasicPlus does
-  <em>not</em> require ESP-IDF — you can own a P4 and write, upload and run
-  without ever seeing a line of C. ESP-IDF is needed <strong>only</strong> if you
-  want <code>function native</code> on that board, and then you install it
-  separately following Espressif's guide. And make it <strong>version 6 or
+  <em>not</em> require ESP-IDF — you can own a P4, a C3, a C5 or a C6 and write,
+  upload and run without ever seeing a line of C. ESP-IDF is needed
+  <strong>only</strong> if you want <code>function native</code> on those boards,
+  and then you install it separately following Espressif's guide. And make it <strong>version 6 or
   later</strong>: the P4 needs a RISC-V compiler that earlier versions do not
   carry properly, and building with an old one gives you trouble rather than a
   clear error. If you have several installed, the IDE takes the newest.
@@ -399,7 +413,8 @@
   provides the runtime headers), each with its own <em>Detectar</em>
   button. That setting is per machine; which projects use AOT (and for
   which board) lives in the project's <code>.bpbuild</code> (the
-  <code>"aot"</code> section).
+  <code>"aot"</code> section). The RISC-V one is looked for among the ESP-IDF
+  tools (the newest version) or on the <code>PATH</code>.
 </p>
 <p class="note">
   The compiler is <strong>optional</strong>, and this is the point: if it is not
@@ -407,6 +422,16 @@
   <em>interpreted</em> — same behaviour, less speed in compute kernels.
   Everything else (compiling, uploading, running, debugging, packs, the
   graphical interface) works the same without installing anything.
+</p>
+<p>
+  <strong>The board's image and the IDE, of the same version.</strong> The
+  machine code the IDE generates talks to the image through an interface that
+  changes between versions: the board states its own (the <em>ABI nativo</em>
+  line of the Info, §8) and, if it is not the one this IDE generates, the IDE
+  does not compile the native code —the board's loader would reject it—: it says
+  so in the Console with the remedy (reflash the board with this version's image
+  or, if the image is newer, bring the IDE up to date) and the functions run
+  interpreted.
 </p>
 
 <h2 id="placa">6. Connecting to the board</h2>
@@ -420,7 +445,11 @@
   <li><code>/lib</code> — the standard library embedded in the firmware.
       The firmware restores it by itself on every boot, module by module:
       if it is missing, if the one there is an older version, or if it is
-      the same version with a different CRC. Whatever is in
+      the same version but different (size or CRC); a newer one —the one the
+      IDE uploaded with a program that needs it— is left alone. And with the
+      <code>Stdlib.pack</code> burnt, whatever the pack serves with the same
+      bytes <strong>leaves <code>/lib</code></strong>: it is loaded from the
+      pack, from flash, without spending RAM (§10.3). Whatever is in
       <code>/app</code> is never touched.</li>
   <li><code>/sys</code> — configuration: <code>board.json</code> (board
       identity), <code>device.json</code>, <code>auto.txt</code> (autorun,
@@ -429,9 +458,11 @@
 <p class="warn">
   <strong>Do not upload copies of the standard library to <code>/app</code>.</strong>
   When loading, <code>/app</code> wins over <code>/lib</code>: an old
-  <code>Gui.mod</code> forgotten in <code>/app</code> shadows the firmware's
-  with no warning at all, and the symptom points somewhere else. If you update
-  the firmware, clean <code>/app</code> of any module that is not yours.
+  <code>Gui.mod</code> forgotten in <code>/app</code> shadows the firmware's,
+  and the symptom points somewhere else. Since V7, if <code>/lib</code> holds a
+  different one, the Console warns in the program's output (<code>aviso: 'Gui'
+  cargado desde /app, tapa al de /lib</code>). If you update the firmware, clean
+  <code>/app</code> of any module that is not yours.
 </p>
 <p>
   The button bar operates on the selected file: <em>Refresh</em>,
@@ -440,6 +471,15 @@
   <em>Save</em> (persists the FS to flash), <em>Log</em>/<em>Clr Log</em>
   (the firmware's persistent log), <em>Reset</em> and <em>Info</em> (§8).
   The panel's bottom bar summarizes the FS: files, used and free bytes.
+</p>
+<p>
+  The tree paints in <strong>red</strong> the <code>.mod</code>, <code>.mdn</code>
+  and <code>.pack</code> files the VM could not load —damaged, or in a format it
+  does not understand—, and the reason shows when you hover over it («La placa no
+  lo cargaría: …», the board would not load it). Files go up and down in chunks,
+  of the size the board states; and an upload that is cut —the cable goes, another
+  upload arrives, a RUN— <strong>is deleted</strong> on the board: the previous
+  version does not stay there passing itself off as the new one.
 </p>
 <p>
   The same panel serves the <em>Java VM (TCP v1)</em>: point it at a local
@@ -561,10 +601,10 @@ hola, Eduardo
 <table>
   <tr><th>exit</th><th>means</th></tr>
   <tr><td><code>0</code></td><td>finished fine</td></tr>
-  <tr><td><code>1</code></td><td>uncaught BP exception — the program died on its own</td></tr>
-  <tr><td><code>2</code></td><td>the module could not be loaded: not there, not a <code>.mod</code>, or its ABI is old</td></tr>
-  <tr><td><code>3</code></td><td>internal VM failure (bad opcode or pc) — not the program's fault, report it</td></tr>
-  <tr><td><code>4</code></td><td>out of memory: heap exhausted or stack overflow</td></tr>
+  <tr><td><code>1</code></td><td>uncaught BP exception — the program died on its own. Also a stack overflow («desbordamiento de pila (el hilo tiene N B)») and a full heap («No space in heap»), which are catchable <code>RuntimeError</code>s. If the exception belongs to a thread that is not the main one, only that thread ends: the others go on and, at the end, the program exits with 1</td></tr>
+  <tr><td><code>2</code></td><td>the module could not be loaded: not there, not a <code>.mod</code>, its ABI is old, or a dependency is older than the one it needs</td></tr>
+  <tr><td><code>3</code></td><td>internal VM failure (bad opcode or pc, or an internal error of the Java VM) — not the program's fault, report it</td></tr>
+  <tr><td><code>4</code></td><td>out of memory to load or start the program (one that fills the heap while running gets a <code>RuntimeError</code>: that is the 1)</td></tr>
   <tr><td><code>130</code></td><td>stopped with Stop / <code>kill</code></td></tr>
   <tr><td><code>131</code></td><td>stopped by the debugger</td></tr>
 </table>
@@ -590,13 +630,15 @@ hola, Eduardo
 <p>
   Two of them deserve a highlight: <code>kill</code> aborts the running
   program (equivalent to Run → Stop) and <code>autorun</code> manages the
-  standalone startup (§12). If you connect while a program is running, the
-  explorer will report the board as busy — <code>kill</code> takes back
-  control. While a program runs the board only serves <code>kill</code>,
-  <code>reset</code> and the connection greeting; everything else
-  (<code>dir</code>, <code>get</code>…) answers busy until it ends.
-  <code>reset</code> does get through with the program running: no need to
-  kill it first.
+  standalone startup (§12). While a program runs the board serves the
+  connection greeting, <code>kill</code> and <code>reset</code> and, since V7,
+  also <strong>reads</strong>: the explorer tree refreshes, and <code>get</code>,
+  <code>type</code>, <code>edit</code> and <em>Download</em> fetch files —in
+  chunks, between the program's output—. Everything else (uploading, deleting,
+  <code>dir</code>, <code>mem</code>, <code>log</code>…) answers busy until it
+  ends, and the explorer says so: «placa ocupada» (board busy) —
+  <code>kill</code> takes back control. <code>reset</code> does get through with
+  the program running: no need to kill it first.
 </p>
 
 <h2 id="info">8. Device INFO</h2>
@@ -610,19 +652,49 @@ hola, Eduardo
   PSRAM enabled by the ENV (<code>psram=1</code>, §9.3) and self-tested
   (8 MB, used as the VM heap), FS usage and uptime.
 </p>
+<p>
+  The screenshot predates V7. Today each item has its own line —the PWM, counted
+  in <em>slices</em>: 12 on the RP2350, two outputs each— and the dialog also
+  says:
+</p>
+<ul>
+  <li><strong>RAM packs</strong> — the RAM block for the packs' native engines
+      (§9.3): its size, its address and the ENV key that asked for it
+      (<code>packRam=512</code>). If there is none, it says so with the remedy:
+      «no hay: un pack nativo no podría cargar. Añade packRam=&lt;KB&gt; (o
+      SQLite=2 para la BD) al entorno de la placa y reinicia» (none: a native pack
+      could not load; add packRam=&lt;KB&gt; to the board's environment and
+      reboot).</li>
+  <li><strong>Zona packs</strong> — the size of the packs area and the address
+      the CPU sees it at.</li>
+  <li><strong>Receta AOT</strong> and <strong>ABI nativo</strong> — what the IDE
+      compiles this board's <code>native</code> functions for (§5.1). «ABI nativo:
+      9 (la misma que genera este IDE)» means the image and the IDE match; if they
+      do not, the line marks it with ⚠ and no native code is compiled for it: reflash
+      the board with this version's image, or bring the IDE up to date if the image
+      is newer. (On the S3, which has no AOT: «sin receta», no recipe.)</li>
+  <li><strong>Reset</strong> — the cause of the last reboot; on the Pico&nbsp;2 and
+      the Metro, «fallo fatal» (fatal failure) after one (§12).</li>
+</ul>
 
 <h2 id="gestion">9. Board management: boot and partitions</h2>
 <p>
-  <strong>Board</strong> in the toolbar (or <strong>Board management…</strong>
-  in the menu) opens a separate window that works over the connection you
-  already have. On the left, the <em>boot state</em>, the <em>environment
-  variables</em> and the <em>partitions</em>; on the right, the <em>packs</em>
-  (§10).
+  <strong>Placa</strong> (board) in the toolbar (or <strong>Gestión de
+  placa…</strong>, board management, in the menu) opens a separate window that
+  works over the connection you already have. On the left, at the top, the
+  <em>boot state</em> and the <em>Variables de entorno…</em> button (§9.3; also
+  <strong>Entorno</strong> on the toolbar); below, a <em>folder of the PC</em> —at
+  first, the installation's packs folder, to burn them with <em>Añadir a la
+  placa</em> (add to the board, §10.3)— and the <em>partitions</em>; on the right,
+  the <em>packs</em> (§10).
 </p>
 <p>
   You do not have to go looking for it: on connecting, the IDE asks the board
   for its state and, <strong>if it is unconfigured or degraded, offers to open
-  it</strong>. With a healthy, configured board it says nothing.
+  it</strong>; and also if it is <em>almost</em> fine: it reaches the app, but the
+  packs area does not let you burn (unformatted, or with a broken chain) or the
+  engine of a pack has not loaded. It says so with the reason. With a healthy,
+  configured board it says nothing.
 </p>
 
 <h3 id="estados">9.1 Booting happens in stages</h3>
@@ -669,7 +741,14 @@ hola, Eduardo
   zero, each one a multiple of the erase sector, and the sum fits in the
   available flash. If something does not add up, <strong>the environment is left
   untouched</strong> and the message says which partition and what problem.
-  Once applied, the board reboots and comes up with the new layout.
+  Once applied, the IDE reboots the board, which comes up with the new layout,
+  and connects again.
+</p>
+<p>
+  On the boards with <strong>32 MB of flash</strong> —the C5 and the Waveshare
+  P4— there is no split to make: the <em>File System</em> is the flash the chip
+  has above the data area (the upper 16 MB) and the packs keep the whole area. If
+  asked for a split, the board says so.
 </p>
 <p class="warn">
   <strong>Changing the split moves the areas.</strong> Whatever was written in
@@ -680,33 +759,48 @@ hola, Eduardo
 
 <h3 id="entorno">9.3 Environment variables</h3>
 <p>
-  Settings that live on the board, outside the filesystem, read by the firmware
-  at boot: which display panel this particular board carries, for instance, or
-  whether it has PSRAM (that one has a checkbox of its own, being so common).
-  They are added, edited and removed from the table. Partition sizes also live
-  there, but are <strong>not</strong> listed here: the partitions section
+  Settings that live on the board, outside the filesystem, read by the firmware:
+  which display panel this particular board carries, for instance, or whether it
+  has PSRAM (that one has a checkbox of its own, being so common). They open with
+  <strong>Entorno</strong> on the toolbar (or <em>Variables de entorno…</em> in the
+  board window) and are added, edited and removed from the table. Partition sizes
+  also live there, but are <strong>not</strong> listed here: the partitions section
   manages them, so they cannot be changed through two different doors.
+</p>
+
+<p>
+  <strong>When they apply.</strong> Almost all of them are read at boot: after
+  changing one, <code>reset</code>. <code>gc</code> and <code>latido</code> are read on
+  every RUN, and apply right away to the next program. And a program can read any of
+  them with <code>Machine.getEnv("key")</code> (<a href="referencia.html#stdlib-pico">reference
+  §14.9</a>).
 </p>
 
 <p>
   The ones the firmware actually <strong>reads</strong> today, what each one
   sets and in which family it counts (elsewhere it is stored, but nobody looks
-  at it):
+  at it). Only a couple of diagnostic ones, for testing, are left out of the
+  table:
 </p>
 
 <table>
   <tr><th>key</th><th>what it sets</th><th>family</th></tr>
+  <tr><td><code>packRam</code></td><td>kilobytes of the <strong>RAM block for the engines</strong> of the packs —the graphical interface, SQLite, the display driver—, in 4 KB pages. Without it or <code>SQLite</code> there is no block (on the RP2350, an 8 KB one) and neither the GUI nor SQLite loads — see below</td><td>all</td></tr>
+  <tr><td><code>SQLite</code></td><td>the same block, in megabytes (minimum 2, maximum 4095): the way to ask for it for the database. If both are there, <code>packRam</code> wins</td><td>all</td></tr>
   <tr><td><code>display</code></td><td>which display panel it carries (e.g. <code>st7701</code> on the Waveshare P4; absent = the kit's panel)</td><td>ESP32-P4</td></tr>
-  <tr><td><code>sd</code></td><td>the card reader: <strong>structured value</strong>, different per bus — see below</td><td>RP2350 · ESP32-P4</td></tr>
-  <tr><td><code>SQLite</code></td><td>megabytes of arena for the database (minimum 2, maximum 4095); absent = no database</td><td>RP2350 · ESP32-P4</td></tr>
+  <tr><td><code>lcd</code> · <code>exp</code> · <code>touch</code></td><td>an SPI display, for the driver of the <code>DriverSpi</code> pack: the panel, the pin expander and the touch controller — see below</td><td>those carrying <code>DriverSpi</code>: the C5 and the C6</td></tr>
+  <tr><td><code>spi<em>N</em></code> · <code>i2c<em>N</em></code></td><td>the pins of bus <em>N</em>, declared by the board (<code>spi2=sck:6,mosi:7,miso:8</code>; on I²C the speed too: <code>i2c0=sda:0,scl:1,khz:400</code>). They are reserved, and opening that bus with other pins is an error with a name; <code>ms:</code> sets the limit of one turn (20 ms otherwise; 100 at most). Details in the reference: <a href="referencia.html#stdlib-i2c">I2c</a> and <a href="referencia.html#stdlib-spi">Spi</a></td><td>all</td></tr>
+  <tr><td><code>sd</code></td><td>the card reader: <strong>structured value</strong>, different per bus — see below</td><td>RP2350 · ESP32-C5 and C6 (SPI) · ESP32-P4 (SDIO)</td></tr>
   <tr><td><code>psram</code></td><td><code>1</code> enables the PSRAM as the VM heap (RP2350B only; the CS is fixed, GPIO47)</td><td>RP2350</td></tr>
+  <tr><td><code>vmheap</code></td><td>kilobytes of the whole VM block —heap and stacks; <code>stack</code> splits it inside—; absent = the image's — see below</td><td>all</td></tr>
   <tr><td><code>stack</code></td><td>kilobytes of stack (the rest of the VM memory goes to the heap); absent = the default split</td><td>all</td></tr>
   <tr><td><code>quantum</code></td><td>opcodes a thread executes before yielding; absent = 1024</td><td>all</td></tr>
   <tr><td><code>vm.runs</code></td><td>how many of the program's threads run <strong>at the same time</strong> (<code>1</code> or <code>2</code>); absent = one per core: two on the Pico&nbsp;2, the Metro, the S3 and the P4, one on the C3, the C5 and the C6 — see below</td><td>RP2350 · ESP32</td></tr>
   <tr><td><code>vm.cores</code></td><td><code>1</code>: every VM task on core 0, the way back from two cores without reflashing; absent = both</td><td>RP2350 · ESP32-S3 · ESP32-P4</td></tr>
   <tr><td><code>log</code></td><td>the post-mortem log: <code>1</code> on; absent = off</td><td>all</td></tr>
-  <tr><td><code>gc</code></td><td>the garbage collector: <code>0</code> turns it off (to split an experiment in two); absent = on</td><td>RP2350</td></tr>
-  <tr><td><code>latido</code></td><td>the heartbeat: <code>1</code> turns it on; absent = off</td><td>RP2350</td></tr>
+  <tr><td><code>gc</code></td><td>the garbage collector: <code>0</code> turns it off (to split an experiment in two); absent = on. Read on every RUN</td><td>all</td></tr>
+  <tr><td><code>latido</code></td><td>the heartbeat, in the log: <code>1</code> turns it on; absent = off. Read on every RUN</td><td>all</td></tr>
+  <tr><td><code>imagen.fecha</code></td><td>you do not set it: <strong>the board writes it</strong>, once, on its first boot —the date of its image, in seconds since 1970—. <code>Rtc.Clock.isSet()</code> uses it to know whether the clock has been set (<a href="referencia.html#stdlib-rtc">reference §14.10</a>); if it is deleted, the board writes it again at boot</td><td>all</td></tr>
 </table>
 
 <p class="note">
@@ -717,15 +811,65 @@ hola, Eduardo
   and pins (RP2350) live in <code>/sys/board.json</code>.
 </p>
 
-<p><code>sd</code> is the only one with structure inside, because it describes a wiring and that changes with the bus:</p>
+<p>
+  <code>packRam</code> is the one <strong>the display</strong> asks for, and SQLite.
+  The packs' native engines —LVGL, SQLite, the display driver— do not keep their data
+  in the VM's memory but in a separate block, which the board sets aside at boot,
+  before the VM, with the size <code>packRam</code> (or <code>SQLite</code>) says;
+  what goes to the block is taken from the VM. Without a block no engine loads, and
+  the <em>Info</em> says so with the remedy (§8). The engines are burnt sealed for
+  their place in the block: after changing it, the safe thing is to burn them again
+  (<a href="INSTALAR_FIRMWARE.md#regrabar">when to re-burn</a>). How much each board
+  with a display asks for, in the <a href="INSTALAR_FIRMWARE.md#packs">installation
+  guide</a>.
+</p>
+
+<p>
+  <code>lcd</code>, <code>exp</code> and <code>touch</code> describe an SPI display
+  —an ST7789, an ILI9341…— for the generic driver of the <code>DriverSpi</code> pack,
+  which knows nothing about boards: each board states its own in its ENV, one line
+  per bus and one per device. <code>lcd</code> carries the controller, its bus and
+  what is its own (<code>dc</code>, <code>cs</code>, the size, the clock…);
+  <code>exp</code>, the I²C pin expander, if some pin of the panel goes through it;
+  <code>touch</code>, the touch controller (without it, the display has no touch).
+  The C6's:
+</p>
+
+<pre><code>spi2=sck:7,mosi:6,miso:5
+lcd=st7789,spi:2,dc:15,cs:14,rst:21,bl:22,mhz:40,w:240,h:240,ram:240x320,inv
+packRam=136</code></pre>
+
+<p>
+  A typo does not leave the display silently black: the program gets the reason
+  («GUI: pantalla: ENV lcd: falta 'dc'»). The C5's lines, with its touch, are in the
+  <a href="INSTALAR_FIRMWARE.md#panel-spi">installation guide</a>.
+</p>
+
+<p>
+  <code>sd</code> has structure inside because it describes a wiring, and that
+  changes with the bus:
+</p>
 
 <pre><code>sd=sck:34,mosi:35,miso:36,cs:39,cd:40                 <span class="comment">// RP2350, over SPI</span>
+sd=bus:2,cs:23,khz:10000                              <span class="comment">// ESP32-C5, over SPI: the spi2 bus</span>
 sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// ESP32-P4, over SDIO</span></code></pre>
 
 <p>
-  On SDIO it also takes <code>d1</code>…<code>d3</code> (for 4 bits), <code>slot</code>,
-  <code>khz</code> and <code>ldo</code>; on SPI, <code>cd</code> is optional. The detail is in
+  On SPI, if the reader sits on a bus the board already declares (<code>spi2=…</code>),
+  it is enough to say which one (<code>bus</code>) and its <code>cs</code>: the pins are
+  the bus's. <code>cd</code> is optional (active low; <code>cdalto:1</code> if it is the
+  other way round) and <code>khz</code> sets the clock (without it, 25 MHz). On SDIO it
+  also takes <code>d1</code>…<code>d3</code> (for 4 bits), <code>slot</code>,
+  <code>khz</code> and <code>ldo</code>. The detail is in
   <a href="referencia.html#stdlib-sd">the SD card section</a>.
+</p>
+
+<p>
+  <code>vmheap</code> sets the size of the VM block, which without it is the
+  image's: above what fits, what fits rules, and below the minimum there is no VM
+  —the log says so with the numbers—. A smaller VM leaves RAM to the system (on the
+  STM32 boards, where that block is fixed, it only serves to try how the program
+  would run on a smaller board).
 </p>
 
 <p>
@@ -736,10 +880,11 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   everything that is fine. But that ratio is a bet on the program: one with
   many threads runs out of stack with heap to spare, and a single-threaded one
   that moves data wastes that 25&nbsp;%. <code>stack=100</code> asks for 100 KB
-  of stacks; removing the key returns to the usual split. Each thread takes
-  2 KB and the main one 16, so the number comes from counting threads. If you
-  ask for more than fits, the firmware adjusts it and <strong>says so in the
-  log</strong> — it does not stay quiet.
+  of stacks; removing the key returns to the usual split. Each thread takes the
+  stack it asks for (<code>Thread(stackSize)</code>; 2 KB if it asks for none) and
+  the main one 16, so the number comes from counting threads. If you ask for more
+  than fits, the firmware adjusts it and <strong>says so in the log</strong> — it
+  does not stay quiet.
 </p>
 
 <p>
@@ -753,13 +898,29 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 <p>
   <code>vm.runs</code> does not limit threads: a program can create as many as it
   wants. It says how many of them <em>execute at the same time</em>, and on a two-core
-  board the normal setting is one per core. What you gain depends on the program: two
-  threads computing at once run almost twice as fast (×1.6 on the Pico&nbsp;2), but a
-  single-threaded program gains nothing, and with two runs it is somewhat slower
-  (10–14&nbsp;%); if that is your case, <code>vm.runs=1</code>. A program being debugged,
-  or one that uses SQLite, runs with one even when there are two. And should anything go
-  wrong with two cores, <code>vm.cores=1</code> plus <code>vm.runs=1</code> put the board
-  on one core without reflashing it.
+  board the normal setting is one per core. What you gain depends on the program and on
+  the board. With two threads working at once, the P4 runs twice as fast, the
+  Pico&nbsp;2 between ×1.55 and ×1.68 and the Metro between ×1.13 and ×1.57; work on
+  strings scales little on the P4 (×1.33), and on the RP2350 it is slower with two
+  threads than with one. A single-threaded program gains nothing: on the P4 it does not
+  lose either, and on the Pico&nbsp;2 it is somewhat slower with two runs than with one
+  (<code>fib(26)</code>, 6.5&nbsp;%); if that is your case, <code>vm.runs=1</code>. A
+  program being debugged, or one that uses SQLite, runs with one even when there are two.
+  And should anything go wrong with two cores, <code>vm.cores=1</code> plus
+  <code>vm.runs=1</code> put the board on one core without reflashing it.
+</p>
+
+<p class="warn">
+  <strong>Known limitation (<code>#665</code>, for V8).</strong> On the RP2350 —the
+  Pico&nbsp;2 and the Metro— it is the dual-core image itself, the default one, that
+  makes a single-threaded program slower, with one run or with two. On the Metro, with
+  the VM in PSRAM, computing is 35&nbsp;% slower (<code>fib(26)</code>, 3&nbsp;908&nbsp;ms
+  against 2&nbsp;892 with the single-core image; with <code>vm.cores=1</code>, 3&nbsp;951);
+  on the Pico&nbsp;2 computing barely notices it (2&nbsp;%), but heavy output through
+  <code>print</code> does (PrintBench, 1&nbsp;275&nbsp;ms against 817). Neither
+  <code>vm.runs=1</code> nor <code>vm.cores=1</code> fixes it —it is the image, not the
+  runs—: the way back is to build the single-core image
+  (<a href="INSTALAR_FIRMWARE.md#nucleos">installation guide</a>).
 </p>
 
 <div class="note">
@@ -767,7 +928,7 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
     <strong>Keeping the configuration here and not in the code is deliberate.</strong> A
     <code>.mod</code> runs the same on two differently wired boards because what changes —the
     pins, the panel, the memory— is stated by the board, not by the program. It is the same
-    thing that allows a single firmware image per family.
+    thing that allows a single firmware image per microcontroller.
   </p>
 </div>
 
@@ -797,6 +958,17 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   <li>a <em>manifest</em> with the <code>main</code>, which is what makes it
       <strong>executable</strong>.</li>
 </ul>
+<p>
+  A pack <strong>with a <code>main</code></strong> —a program— also carries
+  everything its modules import, the standard library included: the very
+  <code>.mod</code> files it was compiled against. It is self-contained, like a
+  container, and what it carries inside is what runs (§10.2). One <strong>without a
+  <code>main</code></strong> —a library— does not carry the standard library: it
+  takes it from the board, from the <code>Stdlib.pack</code> or from
+  <code>/lib</code>, and the compiler says which modules it has left out. The packs
+  with a native engine (the graphical interface, SQLite, the display driver) come
+  ready-made in the installation's <code>packs/</code> folder (§10.3).
+</p>
 <p class="note">
   Inside the pack every file is identified by <strong>(extension, name)</strong>
   — with no path. Hence two limits of the format: the <strong>extension, 4
@@ -809,12 +981,20 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 <p><strong>As a library.</strong> A pack burnt into the packs area contributes
   its modules to <code>import</code>, just as if they were loose files:</p>
 <pre><code><span class="kw">import</span> Graficas                        <span class="comment">// wherever it is found</span>
-<span class="kw">import</span> Graficas <span class="kw">from pack</span> MisLibs      <span class="comment">// from that pack and no other</span></code></pre>
+<span class="kw">import</span> Graficas <span class="kw">from pack</span> MisLibs      <span class="comment">// its interface, from that pack</span></code></pre>
 <p>
-  Unqualified, it is resolved by searching; with <code>from pack</code>, the
-  origin is fixed. The filesystem takes precedence over the packs area, so a
-  loose module in <code>/lib</code> eclipses the one in the pack — handy for
-  testing a fix without re-burning anything.
+  On the board, a module is looked up by its name and always in the same order: the
+  running pack, <code>/app</code>, <code>/lib</code> and the packs area.
+  <code>from pack</code> is for the compiler: it takes the interface from that pack
+  in the PC's pack library —with no need for its sources— and, if the project is
+  packaged, the pack records that it needs that other one; the IDE warns when burning
+  it if the board does not have it (§10.3). The filesystem takes precedence over the
+  packs area, so a loose module in <code>/lib</code> that is <em>different</em> from
+  the pack's eclipses it — handy for testing a fix without re-burning anything; if it
+  is identical (size and CRC), the pack's is loaded, in place and without spending
+  RAM. And a stdlib module left in <code>/app</code> shadows the one in
+  <code>/lib</code>: since V7 the console warns about it (<code>aviso: 'Str' cargado
+  desde /app, tapa al de /lib</code>).
 </p>
 <p><strong>As an application.</strong> A pack with a <code>main</code> runs
   directly, and while it runs <strong>its resources are read by themselves</strong>:
@@ -827,26 +1007,31 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   counts in the path — directories are ignored, because there are no folders
   inside a pack.
 </p>
-<p class="warn">
-  <strong>Limitation in this version.</strong> Resources are read from the
-  <strong>running pack</strong> and from the <strong>filesystem</strong>, but
-  <strong>not</strong> from packs burnt into the packs area: from those, only
-  the <em>modules</em> are usable today. A font or an icon inside a library pack
-  is there, but cannot be read yet.
+<p class="note">
+  <strong>The resources of burnt packs</strong> are read too, on the board: by their
+  name, if they are neither in the running pack nor in the filesystem —the packs
+  area is the last place searched—, or by asking a specific pack for them:
+  <code>readFile("pack:Iconos/logo.png")</code>. (On the PC, the Java VM has no packs
+  area: there, the running pack and the filesystem are what counts.)
 </p>
 
 <h3 id="packs-panel">10.3 The packs panel</h3>
 <p>
   In the board management window (§9), on the right. The table lists the burnt
-  packs with their name, size and <strong>build date</strong> — which is what
-  lets you see at a glance whether the one on the board is older than the one
-  you just compiled. Selecting one shows the files it carries. Below, a bar with
-  the area's usage.
+  packs with their name, their version, their size and their <strong>build
+  date</strong> — which is what lets you see at a glance whether the one on the
+  board is older than the one you just compiled —, whether it is active or deleted,
+  and its CRC: one whose header or content is damaged shows in <strong>red</strong>
+  (CRC «MAL», bad). Selecting one shows the files it carries. Below, a bar with the
+  area's usage.
 </p>
 <ul>
-  <li><strong>Copy pack to the board…</strong> — burns a <code>.pack</code> from
-      the PC at the end of the chain.</li>
-  <li><strong>Delete</strong> — marks it as retired. It stops being used
+  <li><strong>Copiar pack a la placa…</strong> (copy pack to the board) — burns a
+      <code>.pack</code> from the PC at the end of the chain. <em>Añadir a la
+      placa</em> (add to the board), on the left of the window, does the same with
+      the <code>.pack</code> you pick in the folder it shows: at first, the
+      installation's <code>packs/</code>.</li>
+  <li><strong>Borrar</strong> (delete) — marks it as retired. It stops being used
       <em>immediately</em>, but <strong>still takes up space</strong> until
       compaction: on NOR flash you can cross something out without erasing, and
       crossing out is safe. That is why the table also shows the retired ones —
@@ -854,13 +1039,45 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
       always, and in the room left the most recently retired; if the chain is
       longer, the summary says how many older retired ones are not listed (the
       usage bar counts them all).</li>
-  <li><strong>Format area…</strong> — leaves it blank. It is also the way out
-      when the area carries leftovers from a previous use of that flash.</li>
+  <li><strong>Formatear zona…</strong> (format area) — leaves it blank. It is also
+      the way out when the area carries leftovers from a previous use of that flash:
+      the summary then says «zona sin formatear» (area not formatted).</li>
 </ul>
+<p>
+  When burning, the IDE <strong>prepares the pack for that board</strong>: from a
+  pack with a native engine it keeps the one for its architecture and seals it for
+  the place the board gives it in the flash and in its RAM block (§9.3,
+  <code>packRam</code>); if the engine does not fit in the block, it says so before
+  sending anything. And it warns, though it burns anyway, if that pack is going to
+  lack something on the board: another pack it declares it needs, or standard
+  library modules it does not carry and the board does not have («graba también el
+  Stdlib.pack», burn the Stdlib.pack too).
+</p>
+<p>
+  If the board already had the <strong>engines</strong> of its packs loaded —the
+  first program or the first <em>Info</em> loads them—, burning, deleting or
+  formatting any pack <strong>reboots</strong> it: those engines' tables point to the
+  area as it was. The panel says so and connects again by itself; wait for it to come
+  back before going on.
+</p>
 <p>
   To update a pack, the order is <strong>burn the new one, then retire the
   old</strong>: if two packs carry the same module, the last one in the chain
-  wins.
+  wins. With packs that carry an engine, the safe thing is to format the area and
+  burn them all again (<a href="INSTALAR_FIRMWARE.md#regrabar">when to re-burn</a>).
+</p>
+<p>
+  <strong>The installation's packs</strong>, in <code>packs/</code>:
+  <code>Stdlib.pack</code>, the standard library —from the pack it runs in flash,
+  without spending RAM: when you burn it, the board removes from <code>/lib</code>
+  what the pack serves identically, and when you delete it, it puts it back—;
+  <code>SQLite.pack</code>, the database; <code>Gui.pack</code> and
+  <code>GuiMini.pack</code>, the graphical interface (<code>GuiMini</code>, trimmed
+  down for the C6); and <code>DriverSpi.pack</code>, the driver of the C5's and the
+  C6's SPI displays. <strong>Since V7 the graphical interface is in no image</strong>:
+  without its packs, a board with a display does not paint. What each one carries, in
+  which order and with which ENV, in the <a href="INSTALAR_FIRMWARE.md#packs">installation
+  guide</a>.
 </p>
 
 <h2 id="debug">11. Debugging</h2>
@@ -885,8 +1102,17 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   the current line highlighted, and the <em>Variables</em> tab shows the
   locals by name with their type and value at that instant (here
   <code>led</code> and <code>i</code> inside the loop). The workflow is
-  identical whether you debug on the local VM or on the micro itself.
+  identical whether you debug on the local VM or on the micro itself, with two
+  differences on the board:
 </p>
+<ul>
+  <li>A compiled <code>native</code> function runs as machine code, and the
+      debugger <strong>does not stop inside it</strong> (on the PC it does: there it
+      runs interpreted). When you set a breakpoint in one, the IDE warns in the
+      Console; to step through it, remove its <code>native</code>.</li>
+  <li>A program being debugged runs with a single run, even if the board has two
+      (§9.3).</li>
+</ul>
 
 <h2 id="autorun">12. Standalone device</h2>
 <p>
@@ -898,11 +1124,20 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   reflashing ever needed. Full detail in the
   <a href="QUICKSTART.md">quick start</a>.
 </p>
+<p>
+  On the Pico&nbsp;2 and the Metro (the dual-core image, the default one), a
+  <strong>fatal failure</strong> —not an exception of the program, but a failure of
+  the system: a HardFault, an overflowed task stack…— leaves its report in the log,
+  even if the log is off, and reboots the board; and that boot <strong>does not
+  launch the autorun</strong>: a program that failed on start would keep the board
+  rebooting forever. The log says so, the <em>Info</em> gives «fallo fatal» as the
+  cause of the reboot, and the program is started by hand from the IDE.
+</p>
 
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus IDE guide — screenshots by Eduardo on a Metro RP2350; written at the
-  V2 close-out and brought up to date with every version (V6, September 2026).
+  V2 close-out and brought up to date with every version (V7, October 2026).
 </p>
 
 </main>

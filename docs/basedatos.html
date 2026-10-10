@@ -186,23 +186,26 @@
 
 <p>
   BasicPlus habla con <strong>SQLite</strong>. El mismo motor, el mismo fichero
-  <code>.db</code> y el mismo código en el PC, en la Metro y en el ESP32-P4. Se puede
-  usar de dos maneras, y las dos son legítimas:
-</p>
-
-<p>
-  <strong>Qué placas pueden.</strong> Hacen falta dos cosas: código nativo del motor para esa
-  arquitectura y RAM para su arena (2 MB como mínimo). Las cumplen la <strong>Metro RP2350</strong>
-  con PSRAM (<code>psram=1</code> en el entorno; la Pico 2 no la tiene) y los dos
-  <strong>ESP32-P4</strong> (kit y Waveshare). El <strong>ESP32-S3</strong> tiene zona de packs pero
-  no hay binario para Xtensa; el <strong>C3</strong> y el <strong>C6</strong> no tienen PSRAM; y los
-  <strong>STM32</strong> no tienen RAM externa ni tarjeta.
+  <code>.db</code> y el mismo código en el PC, en la Metro, en el ESP32-P4 y en las STM32. Se
+  puede usar de dos maneras, y las dos son legítimas:
 </p>
 
 <ul>
   <li><strong>con SQL</strong>, escribiendo las sentencias a mano — directo y sin sorpresas;</li>
   <li><strong>con el ORM</strong>, que las escribe por ti a partir de tus clases.</li>
 </ul>
+
+<p>
+  <strong>Qué placas pueden.</strong> Hacen falta dos cosas: código nativo del motor para esa
+  arquitectura —el pack lo trae para ARM (RP2350 y STM32) y para el RISC-V del ESP32-P4— y RAM
+  para su arena (<a href="#pack">§1</a>). Las cumplen la <strong>Metro RP2350</strong> con PSRAM
+  (<code>psram=1</code> en el entorno; la Pico 2 no la tiene), los dos <strong>ESP32-P4</strong>
+  (kit y Waveshare) y, desde V7, las dos <strong>STM32</strong> —la Discovery y la Nucleo—, que
+  corren <code>SqlDemo</code> con la base en la flash; sin RAM externa, su arena es de cientos de
+  KB y no de megas: para bases pequeñas. El <strong>ESP32-S3</strong> tiene zona de packs pero no
+  hay binario para Xtensa, y tampoco lo hay para el RISC-V sin FPU del <strong>C3</strong>, el
+  <strong>C5</strong> y el <strong>C6</strong>.
+</p>
 
 <h2 id="pack">1. El pack: instalarlo antes de nada</h2>
 
@@ -213,28 +216,49 @@
   por qué pagarlo.
 </p>
 
-<p><strong>Construir el pack</strong> (una vez, o cuando cambie la librería):</p>
+<p>
+  <strong>El pack viene hecho</strong>, en la carpeta <code>packs/</code> del paquete. Sólo hay
+  que construirlo si cambias la librería, desde el repositorio:
+</p>
 
 <pre><code>java -jar lexer-java/target/basicplus-frontend.jar \
      --project bpstdlib/sqlite/SQLite.bpbuild --backend=mivm</code></pre>
 
 <p>
+  (Antes, copia a <code>bpstdlib/sqlite/out/</code> lo que hay en <code>bpstdlib/sqlite/nativo/</code>,
+  los motores ya compilados: el compilador no los genera, los recoge. El detalle, en
+  <code>bpstdlib/sqlite/LEEME.md</code>.)
+</p>
+
+<p>
   <strong>Grabarlo en la placa</strong>: en el IDE, panel de <em>Packs</em> →
   <strong>«Copiar pack a la placa…»</strong> y elige <code>packs/SQLite.pack</code>. Ahí
-  mismo están <em>Refrescar</em>, <em>Borrar</em> y <em>Formatear zona</em>.
+  mismo están <em>Refrescar</em>, <em>Borrar</em> y <em>Formatear zona</em>. Desde V7 el pack
+  <strong>no lleva copia de la biblioteca estándar</strong>: <code>Core</code> y <code>Str</code>
+  los toma la placa del <code>Stdlib.pack</code>, desde la flash y sin gastar RAM, o de
+  <code>/lib</code>, en RAM. Graba también <code>packs/Stdlib.pack</code> si la placa no lo
+  tiene —sobre todo en las que no tienen PSRAM—; si al grabar falta algo, el panel lo avisa.
 </p>
 
 <p>
   <strong>Darle memoria.</strong> SQLite trabaja sobre una <strong>arena</strong> propia,
-  separada del montón de la VM, y su tamaño se declara en el entorno de la placa:
+  separada del montón de la VM. Sale del <strong>bloque de RAM de los motores nativos</strong>,
+  que la placa reserva al arrancar con el tamaño que diga su entorno (tras cambiarlo, un
+  reinicio):
 </p>
 
 <pre><code>SQLite=4</code></pre>
 
 <p>
-  Cuatro megabytes es lo que usa el P4. <strong>El mínimo son 2</strong> y el máximo 4095;
-  por debajo de 2 el pack no arranca, igual que con <code>SQLite=0</code> o si no cabe — y
-  el arranque lo dice en su línea <code>bd:</code>.
+  En megas: cuatro es lo que usa el P4; <strong>el mínimo son 2</strong> y el máximo 4095.
+  Desde V7 hay además una clave genérica, <code>packRam=&lt;KB&gt;</code>, en kilobytes y sin
+  ese mínimo, que <strong>manda sobre <code>SQLite=</code></strong> si están las dos; con ella
+  corren <code>SqlDemo</code> las placas sin PSRAM: la Discovery con <code>packRam=512</code> y
+  la Nucleo con <code>packRam=256</code>. El bloque es de <strong>todos</strong> los motores de
+  la placa: si carga también el de la interfaz gráfica, a SQLite le queda lo que deje LVGL. Sin
+  bloque —ninguna de las dos claves, <code>SQLite=</code> por debajo de 2 o un valor que no
+  cabe— el pack no arranca; el arranque lo dice en su línea <code>packs:</code>, y el INFO del
+  IDE, en «RAM packs», con el remedio.
 </p>
 
 <p class="warn">
@@ -575,7 +599,8 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
 
 <p class="warn">
   <strong>Pero vigila la memoria.</strong> Las dos conexiones salen de la <strong>misma
-  arena</strong>, la que declara <code>SQLite=&lt;MB&gt;</code> en el entorno, y no crece:
+  arena</strong>, la del bloque que declara el entorno (<code>SQLite=</code> o
+  <code>packRam=</code>, <a href="#pack">§1</a>), y no crece:
   cada base abierta se lleva su caché de páginas y sus estructuras. En un PC esto no se
   nota; en un micro con 4 MB de arena, sí.
 </p>
@@ -605,10 +630,10 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
 
 <p>
   <strong>Dónde vive la base.</strong> En la placa con tarjeta, en la tarjeta:
-  <code>/sd/medidas.db</code>; sin tarjeta (P4, simulador), en la flash del micro:
-  <code>medidas.db</code>. <strong>No la pongas en <code>resources/</code></strong>,
-  que esa carpeta se copia al micro en cada ejecución y se machacaría tu base con la del
-  proyecto.
+  <code>/sd/medidas.db</code>; sin tarjeta —y en el micro simulado del IDE, que no la
+  tiene—, en la flash del micro: <code>medidas.db</code>. <strong>No la pongas en
+  <code>resources/</code></strong>, que esa carpeta se copia al micro en cada ejecución y se
+  machacaría tu base con la del proyecto.
 </p>
 
 <p>
@@ -626,6 +651,12 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
   <code>run SqlDemo /sd/otra.db</code> la que digas; los dos CLI del PC lo aceptan como segundo
   argumento tras el <code>.mod</code>. El <strong>autorun</strong> no pasa argumento: arranca con
   el defecto del fuente.
+</p>
+
+<p>
+  <strong>Un núcleo.</strong> En las placas de dos núcleos (la Metro, el P4), un programa que
+  usa SQLite ejecuta sus hilos de uno en uno, como en una placa de un núcleo: el motor está
+  compilado sin hilos. Funciona igual; sólo que no aprovecha el segundo núcleo.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>

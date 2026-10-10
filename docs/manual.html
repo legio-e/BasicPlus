@@ -167,6 +167,7 @@
     <li class="sub"><a href="#identificadores">3.2 Identificadores</a></li>
     <li class="sub"><a href="#keywords">3.3 Palabras reservadas</a></li>
     <li class="sub"><a href="#literales">3.4 Literales</a></li>
+    <li class="sub"><a href="#multilinea">3.5 Continuación de línea</a></li>
 
     <li class="group"><a href="#tipos">4. Tipos</a></li>
     <li class="sub"><a href="#primitivos">4.1 Primitivos</a></li>
@@ -223,6 +224,7 @@
     <li class="sub"><a href="#conc-encapsulacion">14.3 Encapsulación de cuerpos de case</a></li>
     <li class="sub"><a href="#conc-gc">14.4 GC y concurrencia</a></li>
     <li class="sub"><a href="#conc-print">14.5 print con varios threads</a></li>
+    <li class="sub"><a href="#conc-nucleos">14.6 Dos núcleos</a></li>
 
 
 
@@ -236,8 +238,8 @@
   <h2>Referencia (volumen aparte)</h2>
   <ul>
     <li class="group"><a href="referencia.html#stdlib">13. Biblioteca estándar</a></li>
-    <li class="group"><a href="referencia.html#cli">15. Compilación &amp; ejecución</a></li>
-    <li class="group"><a href="referencia.html#artefactos">16. Artefactos en disco</a></li>
+    <li class="group"><a href="referencia.html#cli">16. Compilación &amp; ejecución</a></li>
+    <li class="group"><a href="referencia.html#artefactos">17. Artefactos en disco</a></li>
   </ul>
   <h2>Gráficos (volumen aparte)</h2>
   <ul>
@@ -251,7 +253,7 @@
 <h1>BasicPlus — Manual del lenguaje</h1>
 <p style="color:var(--fg-muted)">
   Lenguaje estructurado tipado, orientado a módulos. Frontend en Java compila a
-  un bytecode propio (formato <code>.mod</code> v7, "MOD7") ejecutado por la VM
+  un bytecode propio (formato <code>.mod</code> v9, "MOD9") ejecutado por la VM
   <code>bpgenvm</code> (mark-and-sweep GC, manejo determinístico de owners,
   excepciones tipadas).
 </p>
@@ -269,7 +271,7 @@
 java -jar basicplus-frontend.jar samples/hola.bp --compile out --backend=mivm
 
 <span class="comment">// 2) Ejecución: la VM carga el .mod raíz; los .mod de los imports los
-//    encuentra por convención <library>.<Module>.mod o por 'from "..."'</span>
+//    busca por su nombre, &lt;library&gt;.&lt;Module&gt;.mod (§10.3)</span>
 java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <!-- =========================================================== -->
@@ -301,9 +303,13 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <h3 id="identificadores">3.2 Identificadores</h3>
 <p>
   Letra o <code>_</code> seguido de letras, dígitos o <code>_</code>.
-  Case-sensitive. Los nombres que empiezan por doble guion bajo
-  (<code>__nombre</code>) se reservan por convención para el compilador y
-  la stdlib (e.g. <code>__init</code>, <code>__newRefArray</code>).
+  Case-sensitive, y de <strong>63 caracteres</strong> como máximo (uno más largo es error
+  de compilación; la firma completa de una función —su nombre con los tipos de sus
+  parámetros— admite 160). Los nombres que empiezan por doble guion bajo
+  (<code>__nombre</code>) son <strong>del sistema</strong>: las primitivas de la VM y los
+  nombres que sintetiza el compilador (<code>__init</code>, <code>__prop_get_x</code>…).
+  Declarar uno —una variable, un campo, un parámetro, una clase, una constante, un enum, una
+  property o una función privada— es un error de compilación (V7).
 </p>
 
 <h3 id="keywords">3.3 Palabras reservadas</h3>
@@ -315,7 +321,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Declaraciones</td>
       <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code> <code>enum</code>
           <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code>
-          <code>event</code> <code>raise</code></td></tr>
+          <code>event</code> <code>raise</code> <code>inline</code> (<a href="#inline">§8.3b</a>)</td></tr>
   <tr><td>Visibilidad / mods</td>
       <td><code>public</code> <code>private</code> <code>final</code> <code>owner</code> <code>sync</code></td></tr>
   <tr><td>Instancia</td>
@@ -464,8 +470,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 </table>
 <pre><code><span class="kw">public class</span> Media
   <span class="kw">private var</span> muestras: <span class="type">integer</span>[<span class="num">8</span>]      <span class="comment">// en el objeto</span>
+  <span class="kw">var</span> n: <span class="type">integer</span> := <span class="num">0</span>                   <span class="comment">// cuántas lleva</span>
   <span class="kw">public function</span> add(v: <span class="type">integer</span>)
     <span class="kw">this</span>.muestras[<span class="kw">this</span>.n <span class="kw">mod</span> len(<span class="kw">this</span>.muestras)] := v
+    <span class="kw">this</span>.n := <span class="kw">this</span>.n + <span class="num">1</span>
   <span class="kw">end</span> add
 <span class="kw">end</span> Media
 
@@ -490,7 +498,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <span class="comment">// Desde una función: split, listDir, etc. devuelven arrays</span>
 <span class="kw">var</span> partes: <span class="type">string</span>[] := split(<span class="str">"a,b,c"</span>, <span class="str">","</span>)
-<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// sólo en la VM Java del PC (§17)</span></code></pre>
+<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// ordenados; en las dos VMs y en la placa</span></code></pre>
 <p>
   La VM usa cinco tipos físicos en el heap según el ancho del elemento:
   <code>TYPE_ARRAY_I8</code> (byte/int8 y strings UTF-8),
@@ -536,6 +544,12 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <p>
   Los enums son nombres simbólicos para constantes <code>integer</code>.
   Auto-numeran desde 0 salvo asignación explícita.
+</p>
+<p>
+  Un enum es un tipo propio y cerrado: un entero no se convierte en él —<code>Dia(2)</code> es
+  error de compilación: «'Dia' es un enum: no se llama ni se convierte desde un entero (usa
+  Dia.VALOR)»—. Al imprimirlo, o en una cadena, sale su número: con <code>d</code> de arriba,
+  <code>print "d=" + d</code> da <code>d=2</code>, como <code>print d</code> (V7).
 </p>
 
 <h3 id="clases-tipo">4.4 Clases</h3>
@@ -599,6 +613,12 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   el mismo nombre que el módulo), que ya las encuentra puestas.
 </p>
 <p>
+  Un <code>string</code> o un array sin valor —una global o un campo que nadie ha asignado— es
+  <code>null</code>, y se porta como vacío: se imprime y se concatena como <code>""</code> y
+  <code>len</code> da 0, igual en las dos VMs. Indexarlo, en cambio, lanza un
+  <code>RuntimeError</code> (índice fuera de rango).
+</p>
+<p>
   <strong>Una variable local se inicializa antes de leerla.</strong> Una <code>var</code> de módulo sin
   inicializador vale 0 (o <code>null</code>): vive en el bloque de datos del <code>.mod</code>. Una
   <em>local</em> sin inicializador tiene un valor <strong>indeterminado</strong> —lo que hubiera en la
@@ -643,9 +663,11 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   al salir de la función el objeto ya no existe. Pasarlo como argumento sí vale (un préstamo).
   Y para soltar un recurso al salir de un <em>bloque</em>, no de la función:
 </p>
-<pre><code><span class="kw">try var</span> q: Consulta := db.query(<span class="str">"SELECT …"</span>)
-  <span class="kw">while</span> q.next() <span class="kw">do</span> … <span class="kw">endwh</span>
-<span class="kw">endtry</span>                <span class="comment">// q se destruye y se libera aquí, salgas por donde salgas</span></code></pre>
+<pre><code><span class="kw">try var</span> f: IO.TextFile := IO.TextFile(<span class="str">"datos.txt"</span>, <span class="str">"r"</span>)
+  <span class="kw">while not</span> f.eof() <span class="kw">do</span>
+    <span class="kw">print</span> f.readLine()
+  <span class="kw">endwh</span>
+<span class="kw">endtry</span>                <span class="comment">// f se destruye aquí (~File() cierra el fichero), salgas por donde salgas</span></code></pre>
 <p>
   <code>try var</code> es azúcar: el recurso es un <code>var owner</code> del ámbito de fuera y el
   <code>finally</code> lo suelta; admite <code>catch</code> y <code>finally</code> como cualquier
@@ -667,7 +689,9 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Asignación</td><td><code>:= += -=</code></td></tr>
   <tr><td>Acceso</td><td><code>.</code> (member) <code>[]</code> (index) <code>()</code> (call)</td></tr>
   <tr><td>Type test</td><td><code>x instanceof Foo</code></td></tr>
-  <tr><td>String</td><td><code>+</code> concatena (coerciona escalares a string)</td></tr>
+  <tr><td>String</td><td><code>+</code> concatena: convierte a texto los primitivos, los enums (su número) y
+      los objetos (<code>toString()</code>); un array, una tupla, el literal <code>null</code> o una llamada
+      sin valor no tienen conversión, y es error de compilación («no hay conversión a string»)</td></tr>
 </table>
 <p>
   Precedencia (de menor a mayor):
@@ -919,10 +943,11 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
 <ul>
   <li><strong>Aditivo</strong>: el <code>.mod</code> SIEMPRE contiene el
       bytecode de la función. El código nativo viaja <strong>dentro del mismo
-      <code>.mod</code></strong> (sección <code>native</code> del formato v7; ya
+      <code>.mod</code></strong> (su sección <code>native</code>; ya
       no hay un <code>.mdn</code> suelto de la aplicación) y el runtime lo usa si
-      es de la arquitectura del micro; si no, la función corre interpretada. No
-      compilar el AOT nunca rompe el programa.</li>
+      es de la arquitectura del micro y de la versión de su firmware (su ABI); si no, la
+      función corre interpretada —el de otra versión, como el de un <code>.mod</code> de V6,
+      se rechaza con un aviso—. No compilar el AOT nunca rompe el programa.</li>
   <li><strong>Comportamiento por plataforma</strong>:
     <table>
       <tr><th>Plataforma</th><th>Función <code>native</code></th></tr>
@@ -1017,10 +1042,10 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       (<code>arm-none-eabi-gcc</code> — instalación estándar del <em>Arm GNU
       Toolchain</em> o <code>PATH</code>; se fija a mano en <em>Project → AOT
       (toolchain)…</em>; instalación: <a href="guia-ide.html#aot">Guía del IDE
-      §5.1</a>); para el ESP32-P4, el <code>riscv32-esp-elf-gcc</code> de la
-      instalación de ESP-IDF. Emite C, compila código PIC y lo
-      <strong>funde en el <code>.mod</code></strong> (sección <code>native</code>,
-      v7) antes de subirlo. Si no hay toolchain, <strong>avisa y el programa corre
+      §5.1</a>); para las ESP32 RISC-V (la P4, la C3, la C5 y la C6), el
+      <code>riscv32-esp-elf-gcc</code> de la instalación de ESP-IDF. Emite C, compila código PIC y lo
+      <strong>funde en el <code>.mod</code></strong> (en su sección <code>native</code>)
+      antes de subirlo. Si no hay toolchain, <strong>avisa y el programa corre
       interpretado</strong>. El paso también puede hacerse a mano
       (<code>AotMain</code> emite C → gcc del destino → <code>MdnPack</code>
       empaqueta; el script <code>bpgenvm-c/pico/build_mdn.sh</code> encadena los
@@ -1113,7 +1138,7 @@ mismo caso.</p>
 <!-- =========================================================== -->
 <h2 id="clases">9. Clases</h2>
 <pre><code><span class="kw">public class</span> Persona
-  <span class="kw">var</span> nombre: <span class="type">string</span>   <span class="comment">// los campos son SIEMPRE privados</span>
+  <span class="kw">var</span> nombre: <span class="type">string</span>   <span class="comment">// un campo NUNCA es público</span>
   <span class="kw">var</span> edad:   <span class="type">integer</span>
 
   <span class="kw">public function</span> Persona(nombre: <span class="type">string</span>, edad: <span class="type">integer</span>)
@@ -1128,10 +1153,10 @@ mismo caso.</p>
 
 <h3 id="campos">9.1 Campos</h3>
 <p>
-  <code>var</code> dentro de la clase declara un campo de instancia, y los
-  campos son <strong>siempre privados</strong>: se leen y escriben por
-  <code>this.campo</code> dentro de la clase, y desde fuera no se tocan.
-  Marcar un campo <code>public</code> es un <strong>error de
+  <code>var</code> dentro de la clase declara un campo de instancia, y un
+  campo <strong>nunca es público</strong>: se lee y se escribe por
+  <code>this.campo</code> dentro de la clase (y de sus descendientes, abajo), y desde
+  fuera no se toca. Marcar un campo <code>public</code> es un <strong>error de
   compilación</strong>, y el mensaje te manda a la alternativa correcta:
   <code>public property</code> (§9.5), que expone un get/set y deja el
   campo de respaldo privado. La razón es de diseño: lo que cruza la
@@ -1154,9 +1179,18 @@ mismo caso.</p>
   <code>public property etiqueta: string := "sin nombre"</code>. Se ejecutan <em>una</em> vez por
   objeto, en orden de declaración, dentro del constructor justo después del <code>super(...)</code>
   (escrito o implícito) y antes de su cuerpo — como en Java. Una clase con inicializadores y sin
-  constructor recibe uno sin argumentos que los ejecuta. El valor es una expresión cualquiera
+  constructor recibe uno que los ejecuta: sin argumentos o, si su padre tiene constructor, uno
+  por cada sobrecarga del padre, con sus mismos parámetros, que se los pasa con
+  <code>super(...)</code> —así se sigue construyendo igual: <code>Tarea(4096)</code> con
+  <code>Tarea extends Thread</code>—. El valor es una expresión cualquiera
   (un literal, una construcción, una llamada), pero no puede usar <code>this</code> ni otros
   campos: para eso está el constructor.
+</p>
+<p>
+  <strong>El tope de una clase.</strong> Una clase admite hasta 256 métodos (con los heredados
+  y los accesores de sus properties) y 256 ranuras de campo (una referencia, un
+  <code>long</code> o un <code>double</code> ocupan dos). Pasarse es un error de compilación con
+  la línea de la clase.
 </p>
 
 <h3 id="metodos">9.2 Métodos</h3>
@@ -1282,11 +1316,9 @@ end Base</code></pre>
   <strong>cross-module</strong>: la clase base puede venir de otra librería
   importada (vtable, campos protegidos, estáticos y <code>super(...)</code> por
   firma incluidos: <a href="#visibilidad">§9.2.1</a> y <a href="#static">§9.6</a>).
-  <code>x instanceof Foo</code> comprueba el tipo dinámico en runtime, con una
-  condición: <code>Foo</code> tiene que ser una clase <em>declarada en el propio
-  módulo</em> (una hija local de una base importada vale; la base importada, o
-  <code>Exception</code>/<code>RuntimeError</code>, no — para las excepciones está
-  el <code>catch</code> tipado).
+  <code>x instanceof Foo</code> comprueba el tipo dinámico en runtime, y <code>Foo</code>
+  puede ser cualquier clase, también una de otro módulo (<code>o instanceof Lib.Base</code>,
+  <code>e instanceof RuntimeError</code>; desde V7).
 </p>
 <p>
   <strong>La raíz.</strong> Una clase sin <code>extends</code> desciende de <code>Object</code>
@@ -1300,15 +1332,20 @@ end Base</code></pre>
 </p>
 
 <h3 id="destructor">9.4b El destructor: <code>~Clase()</code></h3>
-<pre><code><span class="kw">public class</span> Fichero
-  <span class="kw">var</span> fd: <span class="type">integer</span>
-  <span class="kw">public function</span> Fichero(ruta: <span class="type">string</span>)
-    <span class="kw">this</span>.fd := IO.open(ruta)
-  <span class="kw">end</span> Fichero
-  <span class="kw">public function</span> ~Fichero()          <span class="comment">// el contrario del constructor</span>
-    IO.close(<span class="kw">this</span>.fd)
-  <span class="kw">end</span> ~Fichero
-<span class="kw">end</span> Fichero</code></pre>
+<pre><code><span class="kw">public class</span> Valvula
+  <span class="kw">var</span> pin: <span class="type">integer</span> := -<span class="num">1</span>               <span class="comment">// -1: todavía no tiene pin</span>
+  <span class="kw">public function</span> Valvula(pin: <span class="type">integer</span>)
+    Gpio.init(pin, Gpio.OUTPUT())
+    Gpio.write(pin, <span class="num">1</span>)                 <span class="comment">// abre</span>
+    <span class="kw">this</span>.pin := pin                    <span class="comment">// ya es suyo: lo apunta al final</span>
+  <span class="kw">end</span> Valvula
+  <span class="kw">public function</span> ~Valvula()           <span class="comment">// el contrario del constructor</span>
+    <span class="kw">if</span> <span class="kw">this</span>.pin &gt;= <span class="num">0</span> <span class="kw">then</span>
+      Gpio.write(<span class="kw">this</span>.pin, <span class="num">0</span>)        <span class="comment">// cierra</span>
+      Gpio.release(<span class="kw">this</span>.pin)          <span class="comment">// y el pin vuelve a como estaba</span>
+    <span class="kw">endif</span>
+  <span class="kw">end</span> ~Valvula
+<span class="kw">end</span> Valvula</code></pre>
 <p>
   «Qué significa destruir esto» se escribe <strong>una vez</strong>, en la clase, y no en cada
   sitio donde se usa. El destructor se llama como su clase, no lleva parámetros ni devuelve nada, y
@@ -1318,11 +1355,11 @@ end Base</code></pre>
   <code>try var</code> (<a href="#var-owner">§5.3</a>); un campo <code>owner</code> al reasignarlo o al
   destruirse el objeto que lo tiene—; cuando el GC lo recoge porque ya nadie lo alcanza (corre poco
   después, entre dos turnos del planificador); y al acabar el programa —también tras un error o un
-  STOP—, todo lo que queda vivo con destructor, el más nuevo primero, para que todo vuelva a como
-  estaba. Es virtual: corre el de la clase real del objeto, y al acabar el de una hija corre el de
-  su padre. Toda clase tiene uno (<code>Object</code> lo declara vacío en <code>Core.bp</code>): sólo
-  se sobrescribe cuando hay un recurso externo que soltar — un descriptor, una consulta, un mutex,
-  un pin.
+  STOP—, todo lo que queda vivo con destructor, el más nuevo primero (con un tope de 3 s), para que
+  todo vuelva a como estaba. Es virtual: corre el de la clase real del objeto, y al acabar el de
+  una hija corre el de su padre. Toda clase tiene uno (<code>Object</code> lo declara vacío en
+  <code>Core.bp</code>): sólo se sobrescribe cuando hay un recurso externo que soltar — un
+  descriptor, una consulta, un mutex, un pin.
 </p>
 <p>
   <strong>El orden</strong>: primero lo que el objeto posee —sus campos <code>owner</code>, y los de
@@ -1348,7 +1385,8 @@ end Base</code></pre>
   <strong>Un objeto cuyo constructor lanzó también se destruye</strong>: ya existe en memoria, y lo recoge el
   GC (o el final del programa). Una clase que toma el recurso ella misma, con las funciones de un módulo, ha
   de soltar en su destructor <em>sólo lo suyo</em>: lo apunta al final del constructor, cuando ya lo tiene, y lo
-  suelta una vez —es lo que hacen las clases de la biblioteca—.
+  suelta una vez —es lo que hacen las clases de la biblioteca, y lo que hace <code>Valvula</code> con su
+  <code>pin</code>: si <code>Gpio.init</code> lanza, se queda en -1 y su destructor no toca nada—.
 </p>
 
 <h3 id="props">9.5 Properties</h3>
@@ -1385,6 +1423,12 @@ end Base</code></pre>
     <span class="kw">field</span> := v * <span class="num">2</span>             <span class="comment">// guarda el doble</span>
   <span class="kw">endset</span>
 <span class="kw">endprop</span></code></pre>
+<p>
+  Una subclase puede <strong>redeclarar</strong> una property de su padre: es una
+  redefinición —sus accesores son virtuales y la hija trae su propio campo de respaldo—, así
+  que el código del padre que la lee ve la de la hija. Vale igual con un padre del mismo
+  módulo que de otro (<code>#529</code>, V7).
+</p>
 
 <h4>Properties sync (thread-safe)</h4>
 <pre><code><span class="kw">public class</span> Account
@@ -1403,8 +1447,10 @@ end Base</code></pre>
       (heredado por subclases — sólo se declara una vez en el primer eslabón
       de la jerarquía que necesita sync).</li>
   <li>Lo inicializa con <code>Mutex()</code> al entrar al constructor. Si la
-      clase no tiene constructor de usuario, sintetiza uno por defecto que
-      sólo hace esa inicialización.</li>
+      clase no tiene constructor propio, le da los suyos, como con los
+      <a href="#campos">inicializadores</a>: uno por cada sobrecarga del constructor del
+      padre, con sus mismos parámetros (que pasa con <code>super(...)</code>), o uno sin
+      argumentos si el padre no tiene.</li>
   <li>Inserta <code>this.__syncMutex.lock()</code> al inicio y
       <code>this.__syncMutex.unlock()</code> al final de cada
       <code>getX</code>/<code>setX</code>.</li>
@@ -1426,6 +1472,8 @@ end Base</code></pre>
   Un <code>return</code> dentro del cuerpo custom de get/set sync libera
   correctamente el mutex: el emisor inyecta el <code>unlock</code> antes
   del salto al punto de salida (no hace falta try/finally explícito en BP).
+  Y una excepción que salga del cuerpo —un <code>throw</code> o un error dentro de una
+  función a la que llama— también lo suelta antes de seguir su camino (V7).
   Lo mismo aplica a sync properties a nivel módulo.
 </p>
 
@@ -1495,8 +1543,6 @@ end Base</code></pre>
   <li>No se soportan properties <code>owner</code> a nivel módulo (sólo en clases).</li>
   <li>No se soporta <code>final</code> a nivel módulo (el modificador
       sólo aplica a properties de clase).</li>
-  <li>El init expression de la property se ignora en compile-time; usa la
-      función inicializadora del módulo para fijar el valor inicial.</li>
 </ul>
 
 <h3 id="static">9.6 Miembros estáticos / <code>final</code></h3>
@@ -1559,8 +1605,10 @@ Counter.bump()</code></pre>
   <span class="kw">end</span> Caja
 <span class="kw">end</span> Caja</code></pre>
 <p>
-  Cuando una <code>Caja</code> se libera (via FREE_REF), su campo owner
-  <code>contenido</code> se libera también, recursivamente.
+  Cuando una <code>Caja</code> se destruye —la libere quien la libere: su dueño, el GC o el
+  final del programa—, su campo owner <code>contenido</code> se destruye y se libera también, antes
+  que ella y recursivamente (<a href="#destructor">§9.4b</a>). Al reasignar el campo, el valor
+  anterior se destruye antes de escribir el nuevo.
 </p>
 
 <!-- =========================================================== -->
@@ -1575,8 +1623,6 @@ Counter.bump()</code></pre>
   <code>bpstdlib/Core.bp</code>, una por línea, como funciones con cuerpo <code>inline</code>
   (<a href="#inline">§8.3b</a>), y ese fichero es la única fuente de la tabla de primitivas de las
   dos máquinas virtuales: <code>Builtin.java</code> y <code>builtin_ids.h</code> se generan de él.
-  Sus <em>tipos</em> (<code>Exception</code>, <code>Integer</code>…) sí se importan: «si se usa un
-  tipo de Core, se importa Core».
 </p>
 <p>
   <strong><code>import Core</code> es implícito.</strong> El compilador lo añade al árbol de todo
@@ -1587,7 +1633,9 @@ Counter.bump()</code></pre>
   el compilador las escribía en Java y copiaba las cuatro en cada <code>.mod</code> (≈1,3 KB por
   módulo, usara hilos o no); ahora se compilan una vez y cada módulo las referencia. El orden de sus
   campos y métodos es un contrato con las dos VMs (<code>Thread.run()</code> en la ranura 0, el tid
-  en el campo 0…) y está anotado en el propio fichero.
+  en el campo 0…) y está anotado en el propio fichero. Por eso redeclarar una de las cuatro en otro
+  módulo es un error de compilación: «'Thread' es una clase del lenguaje (Core): no se puede
+  redeclarar».
 </p>
 <p>
   Una intrínseca es una función normal, y <strong>se sobrecarga</strong> como cualquier otra:
@@ -1654,20 +1702,28 @@ Counter.bump()</code></pre>
       la VM busca el módulo por su nombre, siempre en el mismo orden: el pack en
       ejecución, la carpeta del programa (<code>/app</code>), la biblioteca estándar
       (<code>/lib</code>) y la zona de packs — la ruta del <code>from</code> no se usa.</li>
-  <li><strong><code>import Core</code> es obligatorio</strong> en cuanto el módulo
-      nombra un tipo de <code>Core</code>: <code>List</code>, <code>Integer</code>/<code>Long</code>/<code>Float</code>/<code>Double</code>/<code>Boolean</code>,
-      <code>Comparable</code>, <code>Exception</code>, <code>RuntimeError</code> — y por
-      tanto cualquier <code>try/catch</code> o <code>throw</code> (<a href="#excepciones">§11</a>).
-      Ningún import es implícito (desde V6); sin él, el compilador dice «tipo 'List' no
-      encontrado» o «tipo de excepción 'RuntimeError' no es una clase».
-      <code>Thread</code>, <code>Mutex</code> y <code>StringBuilder</code> son
-      builtins del compilador y no lo necesitan.</li>
-  <li><strong>Los imports no son transitivos.</strong> Importar
-      <code>Collections</code> no trae <code>Core</code>: si sus clases extienden
-      tipos de <code>Core</code> (<code>SyncList extends Core.List</code>), el módulo que
-      las usa tiene que importar los dos — el compilador lo dice: «la clase 'SyncList'
-      extiende 'Core.List' y este modulo no importa 'Core': anade `import Core`». Lo
-      mismo con cualquier módulo cuya interfaz devuelva tipos de un tercero.</li>
+  <li><strong><code>import Core</code> no hace falta</strong> (desde V7): el compilador lo
+      añade a todo módulo (<a href="#raiz">§10.0</a>), así que los tipos de <code>Core</code>
+      —<code>List</code>, <code>Integer</code>/<code>Long</code>/<code>Float</code>/<code>Double</code>/<code>Boolean</code>,
+      <code>Comparable</code>, <code>Exception</code>, <code>RuntimeError</code>— y
+      <code>try/catch</code> o <code>throw</code> (<a href="#excepciones">§11</a>) se usan sin
+      escribirlo. Escribirlo no cambia nada.</li>
+  <li><strong>Los imports no son transitivos</strong> (<code>Core</code> aparte, que va
+      siempre). Importar <code>A</code> no trae los módulos que <code>A</code> importa: si una
+      clase de <code>A</code> extiende una de <code>B</code>, o una firma de <code>A</code> usa un
+      enum de <code>B</code>, el módulo que las usa tiene que importar <code>B</code> también — el
+      compilador lo dice: «la clase 'X' extiende 'B.Y' y este modulo no importa 'B': anade
+      `import B` (los imports no son transitivos)».</li>
+  <li><strong>Una librería puede crecer sin recompilar a quien la usa</strong> (desde V7, el
+      <em>enlace tardío</em>): un <code>.mod</code> lleva sus referencias a las clases de otros
+      módulos por nombre y firma, y el cargador las resuelve contra la versión que encuentra. Un
+      método, un campo o una property añadidos —o reordenados— no rompen a nadie, como en Java; lo
+      que sí rompería —quitar un miembro, cambiar su firma o su tipo— se rechaza <em>al cargar</em>,
+      nombrando el símbolo: «'Usa' necesita 'Lib.Sensor.nombre()s' y 'Lib' (gen 0) no lo tiene
+      (tiene 'nombre()i'): recompila 'Usa'». Y una dependencia más antigua que la versión contra
+      la que se compiló el módulo tampoco carga: «'Lib' (gen 2) es mas antiguo que el que 'Usa'
+      necesita (gen 3): actualiza /lib o recompila» (la versión de una librería, su
+      <em>gen</em>, es la clave <code>version</code> de su <code>.bpbuild</code>).</li>
   <li><strong>Qué cruza la frontera del módulo</strong> (desde V7): todo lo que un
       descendiente o un cliente pueden nombrar — funciones, clases con sus métodos,
       properties y campos públicos y protegidos, <em>todas</em> las sobrecargas del
@@ -1686,7 +1742,9 @@ defendible— ni para módulos. Las secciones que aquí describían
 quien lo usaba</em>— sigue siendo un objetivo, y la forma prevista es la
 <strong>herencia entre módulos</strong>: dejar el módulo original y añadir otro que
 herede de él. Está <strong>en suspenso a propósito</strong>, porque para que funcione
-hace falta un control de versiones efectivo que hoy no existe. Se retomará entonces.</p>
+hace falta un control de versiones efectivo que hoy no existe. Se retomará entonces. Una parte
+ya está: desde V7, una librería puede <em>crecer</em> —añadir métodos, campos o properties— sin
+recompilar a quien la usa (<a href="#imports">§10.3</a>).</p>
 <p>Para componer funcionalidad hoy: <code>import</code> normal (§10.3) y
 <strong>herencia entre clases</strong> (§9), que sí existe y se usa —la biblioteca
 estándar tiene 38 casos, de <code>SyncList extends Core.List</code> a
@@ -1807,15 +1865,15 @@ otra sin problema.</p>
       <code>return</code>, <code>break</code> ni <code>continue</code> (error de compilación): taparía la excepción
       que fuera en vuelo. Un <code>throw</code> dentro sí vale, y un <code>break</code> a un bucle de dentro del
       <code>finally</code>, también.</li>
+  <li>El <code>catch</code> es opcional: un <code>try … finally … endtry</code>, sólo con la
+      limpieza, también vale (V7). Si salta una excepción, el <code>finally</code> corre y ella
+      sigue su camino hacia el <code>try</code> de fuera.</li>
   <li><code>throw expr</code> lanza el valor. Si es una clase, su class_ptr
       se usa para el match de <code>catch</code> tipado.</li>
   <li>Todas las excepciones descienden de <code>Exception</code> (con su
-      property <code>msg</code>), que vive en el módulo estándar <code>Core</code>
-      junto a <code>RuntimeError</code>. <strong>El módulo tiene que escribir
-      <code>import Core</code></strong> para usar <code>try</code>/<code>catch</code>,
-      <code>throw</code> o nombrar <code>Exception</code>/<code>RuntimeError</code>
-      (<a href="#imports">§10.3</a>); sin él, «tipo de excepción 'RuntimeError' no es
-      una clase».</li>
+      property <code>msg</code>), que vive en el módulo raíz <code>Core</code>
+      junto a <code>RuntimeError</code>; como <code>Core</code> se importa siempre
+      (<a href="#raiz">§10.0</a>), se usan sin escribir nada.</li>
   <li><code>print e</code> imprime el <strong>mensaje</strong>:
       <code>Exception.toString()</code> devuelve <code>msg</code> y lo heredan
       <code>RuntimeError</code> y las excepciones de usuario.</li>
@@ -1838,8 +1896,11 @@ otra sin problema.</p>
 <span class="kw">catch</span> e: RuntimeError
   <span class="kw">print</span> <span class="str">"no ha cabido: "</span> + e.msg
 <span class="kw">endtry</span></code></pre></li>
-  <li>Una excepción no atrapada termina el programa con <strong>código de salida
-      1</strong> (igual en las dos VMs y en placa); el informe es diagnóstico, no
+  <li>Una excepción que nadie atrapa en el thread <code>main</code> termina el programa con
+      <strong>código de salida 1</strong> (igual en las dos VMs y en placa); en otro thread
+      acaba <em>ese</em> thread, los demás siguen, y al final el programa sale igualmente con 1
+      (<a href="#conc-modelo">§14.1</a>). El informe nombra la clase de la excepción
+      (<code>Core.RuntimeError: …</code>, <code>MiMod.MiError: …</code>) y es diagnóstico, no
       salida del programa: la VM Java enseña un stack trace con el nombre simbólico
       de cada frame, la VM-C el mensaje, y el IDE lo recoge en su consola
       (<code>help error</code> lista los códigos).</li>
@@ -1851,35 +1912,40 @@ otra sin problema.</p>
 <p>
   BP soporta destrucción <em>determinística</em> de objetos en complemento al
   GC tradicional. La regla básica: un objeto puede tener <strong>un</strong>
-  propietario; al liberarse el propietario, el objeto poseído también se
-  libera (cascada).
+  propietario; al morir el propietario, el objeto poseído muere también
+  (cascada). Y morir es <em>destruirse</em>: corre su destructor
+  (<a href="#destructor">§9.4b</a>) y después se libera su memoria.
 </p>
 
 <h3>12.1 <code>var owner x: T</code></h3>
 <ul>
   <li>Al asignar <code>x := y</code>, el anterior valor de <code>x</code> se
-      libera (FREE_REF) antes.</li>
-  <li>Al salir de scope, se libera el valor actual de <code>x</code>.</li>
+      destruye antes.</li>
+  <li>Al salir de scope —fin normal, <code>return</code> o excepción—, se destruye el
+      valor actual de <code>x</code>.</li>
   <li>Asignar <code>x</code> a una variable no-owner copia la ref sin
       transferir propiedad (sigue siendo de <code>x</code>).</li>
-  <li>Asignar a otra variable owner transfiere: la fuente queda a
-      <code>null</code> sin liberar.</li>
+  <li>Asignar a otra variable owner local transfiere: la fuente queda a
+      <code>null</code> sin destruirse.</li>
+  <li>Un <code>var owner</code> local no escapa: ni se devuelve ni se guarda en un campo o
+      en un array (error de compilación, <a href="#var-owner">§5.3</a>).</li>
 </ul>
 
 <h3>12.2 Fields <code>owner</code></h3>
 <p>
   <code>var owner f: T</code> dentro de una clase. El descriptor de
-  la clase guarda un bitmap de owners; al liberar la instancia, cada slot
-  marcado se libera recursivamente. El opcode <code>SET_FIELD_OWNER</code>
-  libera el valor anterior del campo antes de escribir el nuevo (asignación
-  atómica owner-safe).
+  la clase marca qué campos son owner; al destruir la instancia, cada uno se destruye
+  antes que ella, del último al primero (en su destructor, la instancia ya los tiene a
+  <code>null</code>). Al reasignar el campo, el valor anterior se destruye antes de escribir
+  el nuevo (asignación owner-safe).
 </p>
 
 <h3>12.3 Cascada por arrays de refs</h3>
 <p>
   Si un campo owner contiene una referencia a un array
-  <code>TYPE_ARRAY_REF</code>, al liberarse el contenedor se liberan también
-  todos los slots no-null del array. Esta es la mecánica que sustenta
+  <code>TYPE_ARRAY_REF</code>, sus elementos también son del objeto: al destruirse el
+  contenedor se destruyen todos los no nulos del array, cada uno con su destructor. Esta
+  es la mecánica que sustenta
   <a href="referencia.html#stdlib-ownerlist">OwnerList</a>.
 </p>
 
@@ -1888,10 +1954,15 @@ otra sin problema.</p>
 <h2 id="concurrencia">14. Concurrencia</h2>
 <p>
   Los threads BP los ejecutan N <em>workers</em> (hilos reales del SO) que se
-  reparten los threads encolados. Por defecto <code>N=1</code>, igual que en el
-  micro (un solo core); el SMP es <em>opt-in</em>: <code>--workers=N</code> en la VM
+  reparten los threads encolados. En el PC, por defecto <code>N=1</code>, y el SMP es
+  <em>opt-in</em>: <code>--workers=N</code> en la VM
   Java (ver <a href="referencia.html#cli-vm">§16.2</a>) y <code>--smp=N</code> en la
-  VM-C de PC.
+  VM-C de PC. En la placa, desde V7, las de <strong>dos núcleos</strong> —la Pico&nbsp;2, la
+  Metro, la ESP32-S3 y la ESP32-P4— ejecutan dos threads del programa a la vez de verdad, uno
+  por núcleo (cada uno en un <em>run</em>, una tarea del sistema); las demás —la C3, la C5, la
+  C6 y las STM32—, uno cada vez. En las de dos núcleos, las claves <code>vm.runs</code> y
+  <code>vm.cores</code> del ENV lo cambian sin regrabar (<a href="guia-ide.html#entorno">guía del
+  IDE §9.3</a>); lo que supone para el programa, en <a href="#conc-nucleos">§14.6</a>.
 </p>
 
 <h3 id="conc-modelo">14.1 Modelo de ejecución</h3>
@@ -1918,11 +1989,11 @@ otra sin problema.</p>
       programa. Y lo dice en ese momento, en la salida del programa (la
       consola del PC, la del IDE con la placa):
       <code>=== excepcion no atrapada en un hilo (el hilo termina): &lt;mensaje&gt; ===</code>.</li>
-  <li>Caben hasta <strong>32 threads vivos a la vez</strong>, el main incluido.
-      Un thread terminado deja su sitio a otro, así que a lo largo de su vida un
-      programa puede crear todos los que quiera. <code>start()</code> lanza
-      <code>RuntimeError</code> si ya hay 32 vivos, o si no queda memoria para la
-      pila que pide.</li>
+  <li><strong>No hay tope de threads vivos</strong> (desde V7): lo pone la memoria, porque
+      cada uno se lleva la pila que pide. Un thread terminado deja su sitio a otro, así que a
+      lo largo de su vida un programa puede crear todos los que quiera. <code>start()</code>
+      lanza <code>RuntimeError</code> si no queda memoria para la pila que pide («no hay memoria
+      para la pila del hilo»).</li>
   <li>Cada thread BP tiene su propio contexto (<code>ThreadContext</code>):
       PC, SP, BP, CS, región de stack, pila de handlers de excepción. El
       heap (incluyendo objetos owned por threads) es <strong>compartido</strong>.</li>
@@ -2019,7 +2090,7 @@ objeto compartido</code></pre>
   <code>Heap.compact()</code> sí mueve —desliza lo vivo al principio del heap, con el
   mundo parado—, pero sólo a petición del programa y en condiciones controladas:
   desde <code>Main</code>, sin otros hilos vivos y nunca desde una <code>native</code>
-  (referencia §13.19). Es posible porque una referencia es un <em>handle</em>: mover
+  (<a href="referencia.html#stdlib-heap">referencia §13.19</a>). Es posible porque una referencia es un <em>handle</em>: mover
   un objeto es cambiar su entrada de la tabla.
 </p>
 <p>
@@ -2035,8 +2106,8 @@ objeto compartido</code></pre>
   thread) se cerró en V6: sólo decide sobre un thread el worker que lo posee, y
   en la VM-C el <code>Mutex</code> pasó a ser atómico. <code>synctest.bp</code>,
   <code>synclisttest.bp</code> y <code>modpropsync.bp</code> son las pruebas de
-  referencia. El SMP sigue siendo opt-in (un worker por defecto) y en placa la VM
-  corre en un solo core.
+  referencia. En el PC el SMP sigue siendo opt-in (un worker por defecto); en la placa,
+  la VM-C usa los dos núcleos donde los hay (<a href="#conc-nucleos">§14.6</a>).
 </p>
 
 <!-- =========================================================== -->
@@ -2068,6 +2139,42 @@ sb.appendStr(<span class="str">"Humedad: "</span> + h)
   <em>mientras</em> se calcula una pieza (en el PC, las de los periféricos
   simulados: <code>[gpio] read pin=25 …</code>) sale antes que la línea, no en
   medio.
+</p>
+
+<h3 id="conc-nucleos">14.6 Dos núcleos: lo compartido y el fallo fatal</h3>
+<p>
+  En una placa de dos núcleos (la Pico&nbsp;2, la Metro, la S3 y la P4), dos threads del
+  programa ejecutan <strong>a la vez</strong>, cada uno en su núcleo. No cambia nada que no
+  fuera cierto con uno —el cambio de turno también puede caer entre dos lecturas—, pero ahora
+  pasa de verdad, y más a menudo. La regla es ésta: <strong>la memoria que comparten dos
+  threads es cosa del programa; la de la VM, de la VM</strong>. Lo que dos threads leen y
+  escriben a la vez —un campo de un objeto compartido, una lista, una property— se protege con
+  un <a href="referencia.html#stdlib-mutex"><code>Mutex</code></a> o con una
+  <a href="#props">property <code>sync</code></a>. Sin él, el resultado es el de cualquier
+  carrera —un contador que pierde sumas, una lista a medio cambiar—, pero la VM no se rompe:
+  su heap, sus tablas y el GC están protegidos, y un <code>print</code> sale entero
+  (<a href="#conc-print">§14.5</a>). La GUI se protege sola: cada operación sobre sus
+  widgets la ejecuta el mismo run, así que se pueden tocar desde cualquier thread.
+</p>
+<p>
+  Lo que se gana depende del programa: dos threads que calculan a la vez van casi el doble de
+  rápido (medido: ×2 en la P4, ×1,55–1,68 en la Pico&nbsp;2, ×1,13 en la Metro); con cadenas,
+  poco o nada (×1,33 en la P4; en la Pico&nbsp;2, ×0,83: pierde); y un programa de un solo thread
+  no gana nada (<a href="#pendientes">§17</a>).
+  Un programa que se depura, o que usa SQLite, va con un run aunque haya dos. Las cifras, y
+  cómo volver a un núcleo sin regrabar, en la <a href="guia-ide.html#entorno">guía del IDE
+  §9.3</a>.
+</p>
+<p>
+  <strong>Un fallo fatal.</strong> Un error del programa es una excepción
+  (<a href="#excepciones">§11</a>): se atrapa o, como mucho, acaba su thread. Un <em>fallo
+  fatal</em> es otra cosa: el sistema de la placa ya no puede seguir —un HardFault, la memoria
+  del sistema agotada, una comprobación interna que falla—. En la Pico&nbsp;2 y la Metro, con
+  dos núcleos, la placa deja el informe en el log —en una RAM que sobrevive al reinicio—, se
+  reinicia sola en medio segundo y, al arrancar, lo dice (<code>Machine.resetCause()</code> y el
+  INFO del IDE dan «fallo fatal») y <strong>no lanza el autorun</strong>: un programa que fallara
+  nada más arrancar sería un bucle de reinicios; desde el IDE se arranca a mano. Que el fallo de
+  un run no tumbe la placa entera es de V8.
 </p>
 
 <h2 id="eventos">15. Eventos</h2>
@@ -2163,17 +2270,24 @@ el hilo que lo recibe.</p>
 
 <!-- =========================================================== -->
 <h2 id="pendientes">17. Pendientes / no soportado</h2>
-<p style="color:var(--fg-muted)">Estado al cierre de V6 (septiembre 2026). Lo
-que estaba aquí y ya se hizo: clases/properties en la interfaz
+<p style="color:var(--fg-muted)">Estado al cierre de V7 (octubre de 2026). Lo
+que estaba aquí y ya se hizo: hasta V6, clases/properties en la interfaz
 (cross-module), tipos cualificados <code>Mod.Clase</code>,
 <code>Collections.Map</code>, fichero de proyecto, el safepoint
-stop-the-world del GC (la VM-Java corre además a 1 worker por defecto,
-igual que el device), en V3 el AOT automático desde el IDE y la GUI
-(<a href="gui.html">volumen aparte</a>), y en V6 el <code>import Core</code>
-explícito (<a href="#imports">§10.3</a>), <code>catch e</code> como
+stop-the-world del GC, el AOT automático desde el IDE, la GUI
+(<a href="gui.html">volumen aparte</a>), <code>catch e</code> como
 <code>Exception</code> (<a href="#excepciones">§11</a>), el código nativo dentro
-del <code>.mod</code> v7 (<a href="#funciones-native">§8.3</a>) y la carrera B1
-del SMP (<a href="#conc-gc">§14.4</a>).</p>
+del <code>.mod</code> (<a href="#funciones-native">§8.3</a>) y la carrera B1
+del SMP (<a href="#conc-gc">§14.4</a>); y en V7, el módulo raíz con <code>import Core</code>
+implícito (<a href="#raiz">§10.0</a>), el destructor y <code>try var</code>
+(<a href="#destructor">§9.4b</a>) —los owners se destruyen también cuando sale una
+excepción—, el cast desde cualquier antepasado (<a href="#any">§4.5</a>), el <code>step</code>
+con signo (<a href="#for">§7.3</a>), <code>instanceof</code> de una clase de otro módulo
+(<a href="#herencia">§9.4</a>), los campos protegidos, los estáticos y las sobrecargas del
+constructor entre módulos (<a href="#imports">§10.3</a>), <code>listDir</code> en las dos VMs,
+<code>try/catch/finally</code> dentro de una native (<a href="#funciones-native">§8.3</a>), los
+threads sin tope (<a href="#conc-modelo">§14.1</a>) y los dos núcleos en la placa
+(<a href="#conc-nucleos">§14.6</a>).</p>
 <ul>
   <li><code>try var</code> (el recurso <code>owner</code> que el bloque suelta) DENTRO de una
       <code>native function</code>: decláralo antes con <code>var</code> y suéltalo en un
@@ -2193,47 +2307,45 @@ del SMP (<a href="#conc-gc">§14.4</a>).</p>
       <br><strong>El ESP32-P4 SÍ acelera</strong> (RISC-V, desde V4), igual que el RP2350
       y el STM32; y desde V7 también <strong>la C5, la C3 y la C6</strong> (RISC-V sin
       FPU, destino <code>ilp32</code>: <a href="#funciones-native">§8.3</a>).</li>
-  <li><strong>Entre módulos</strong> (<a href="#imports">§10.3</a>):
-      <code>x instanceof Foo</code> sólo admite una clase declarada en el propio
-      módulo (<a href="#herencia">§9.4</a>). (Campos protegidos, estáticos y
-      sobrecargas del constructor cruzan desde V7.)</li>
-  <li><code>listDir()</code> e <code>input()</code> sólo existen en la VM Java del
-      PC; en la VM-C (PC y placas) lanzan <code>RuntimeError</code> («builtin N no
-      soportado») — el mismo <code>.mod</code> no da la misma salida en las dos VMs.</li>
+  <li><code>input()</code> sólo existe en la VM Java del PC; en la VM-C (PC y placas)
+      lanza <code>RuntimeError</code> («builtin 37 no soportado en esta VM») — el mismo
+      <code>.mod</code> no da la misma salida en las dos VMs. (<code>listDir()</code>, que
+      estaba aquí, funciona en las dos desde V7.)</li>
   <li>Mejora de rendimiento (no de funcionalidad): la llamada de una
       <code>native</code> a una función de OTRO módulo ya funciona, pero
       cruza por el puente del intérprete (el compilador avisa). La mejora
       — despachar native→native directo, sin re-entrar al intérprete —
       tiene el diseño cerrado en <code>docs/AOT_CROSS_MODULE.md</code> (v4).
       Dentro del mismo módulo ya es llamada C directa.</li>
-  <li>Red en los micros: el cliente TCP (módulo <code>Net</code>, §13.29)
-      funciona en PC; en las placas falta el backend WiFi+lwIP — hoy allí
-      lanza RuntimeError atrapable. Sin fecha (el rumbo largo lo sitúa en V8).</li>
+  <li>Red en los micros: el cliente TCP (módulo <code>Net</code>,
+      <a href="referencia.html#stdlib-net">§14.15</a>) funciona en PC; en las placas falta el
+      backend WiFi+lwIP — hoy allí lanza RuntimeError atrapable. Es lo de V8, con el
+      Bluetooth.</li>
   <li><code>owner</code> / <code>final</code> no aplican a property de
       módulo.</li>
   <li><code>Mutex</code> no reentrante; sin <code>Semaphore</code> /
       <code>Channel</code> en stdlib.</li>
-  <li>Owners en caminos de excepción (algunos paths de throw saltan el
-      free determinístico).</li>
   <li>Closures sobre locales del encerrador en cuerpos de <code>case</code>
       del statement <code>parallel</code> (hoy sólo se ven stdlib + módulo
       no-globals — ver <a href="#conc-encapsulacion">§14.3</a>).</li>
-  <li><code>Adc</code>: en placas RP2350B (48 GPIO) los canales 4-7 aún no
-      se exponen en BP (subset común 0..3; el backend ya los soporta).</li>
-  <li>Dual-core en placa: la VM corre en un solo core en el device. El SMP
-      existe en el PC como opt-in (<a href="#concurrencia">§14</a>); activarlo en
-      el micro quedó fuera del plan de versiones (decisión de septiembre 2026).</li>
+  <li>Con la imagen de dos núcleos del RP2350 —la de por defecto en la Pico&nbsp;2 y la
+      Metro—, un programa de un solo thread va más lento de lo que debería: en la Metro, un
+      35&nbsp;% (también con <code>vm.cores=1</code>: es la imagen, no el otro núcleo); en la
+      Pico&nbsp;2, uno que imprime mucho, un 19&nbsp;%. Y las cadenas no ganan con dos threads
+      (<a href="#conc-nucleos">§14.6</a>). Se investiga en V8 (<code>#665</code>).</li>
+  <li>Que el fallo fatal de un run no tumbe la placa entera
+      (<a href="#conc-nucleos">§14.6</a>): en V8.</li>
   <li>Genéricos / type parameters en clases del usuario.</li>
-  <li>Versionado explícito de contratos de librería (cubierto
-      pragmáticamente con <code>extends</code>).</li>
+  <li>Versionado explícito de contratos de librería (cubierto en la práctica por la
+      generación de cada librería y el enlace tardío: <a href="#imports">§10.3</a>).</li>
 </ul>
 
 <hr>
 <p style="color:var(--fg-muted); font-size:0.85em">
   BasicPlus reference manual — generado al hilo del desarrollo.
   Frontend: <code>lexer-java</code> · VMs: <code>miVM</code> (Java) y
-  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-C3 / ESP32-C6 / ESP32-P4 / STM32U5) ·
-  Formato <code>.mod</code> v7 (interfaz y código nativo embebidos).<br>
+  <code>bpgenvm-c</code> (host + RP2350 / ESP32-S3 / ESP32-C3 / ESP32-C5 / ESP32-C6 / ESP32-P4 / STM32U5) ·
+  Formato <code>.mod</code> v9 (enlace tardío; interfaz y código nativo embebidos).<br>
   BasicPlus se apoya en trabajo de otros —
   <a href="creditos.html">créditos y agradecimientos</a>.
 </p>

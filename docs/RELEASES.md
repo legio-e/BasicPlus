@@ -1,8 +1,593 @@
 # Notas de versión — BasicPlus
 
 > Borrador del cuerpo de la *release* de GitHub. La etiqueta propuesta es
-> `v6.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`, v5 en
-> `v5.0`). Ajusta versión/fecha al publicar.
+> `v7.0` (v1 cerró en `v1.0`, v2 en `v2.0`, v3 en `v3.0`/`v3.0.1`, v4 en `v4.0`, v5 en
+> `v5.0`, v6 en `v6.0`). Ajusta versión/fecha al publicar.
+
+---
+
+## v7.0 — octubre 2026 · «una imagen por micro»
+
+En esta versión nos hemos centrado en tres puntos:
+
+- **Los packs.** En las versiones anteriores se desarrolló la zona de packs: una zona fija de la flash donde se graban
+  los packs, que no necesitan cargarse en RAM, y así se ahorra memoria. Se pensó primero para los módulos y luego se
+  extendió al código nativo; el primer gran logro fue poder cargar SQLite. En esta versión 7 lo hemos extendido a
+  LVGL, el motor de la interfaz gráfica. Todo esto representa un cambio de paradigma: hay una imagen por micro, y es el
+  usuario el que decide si incorpora SQLite y el entorno gráfico, sin necesidad de crear imágenes ni compilar código C.
+- **Terminar lo pendiente.** La versión 6 era para arreglar un montón de cosas que se habían quedado a medias, y bugs.
+  Esta versión 7 es más de lo mismo: se ha resuelto una ingente cantidad de cosas pendientes. Entre ellas, las
+  funciones nativas: había casos que no se podían convertir a `native`, y ahora prácticamente se han reducido a cero.
+- **El segundo núcleo.** Lo hemos habilitado para aumentar el rendimiento de los programas BasicPlus que usan varios
+  hilos. En todos los micros de dos núcleos ha mejorado el rendimiento, aunque no por igual: con dos hilos trabajando a
+  la vez, en la ESP32-P4 se consigue entre el 133 % y el 200 % del rendimiento de un núcleo, y en el RP2350, entre el
+  113 % (Metro) y el 168 % (Pico 2). Todavía no sabemos la razón de la diferencia.
+
+En resumen, esta versión, que podía haber sido una versión de transición, se ha convertido en una gran versión. Hay que
+destacar el enorme trabajo de Claude Code, tanto en la revisión del código como en las pruebas y en el código nuevo.
+
+Lo que no cambia es el invariante de siempre: el mismo bytecode, la misma salida
+byte a byte en las dos VMs, y todo verificado en placa.
+
+### Los packs: la pantalla, la base de datos y la biblioteca, a elección del usuario
+
+**LVGL sale de las imágenes** (hito H6). Ninguna de las ocho imágenes lleva ya el motor
+de la interfaz gráfica: va en un pack que se graba en la zona de packs, como SQLite desde
+V5. Cada micro tiene una sola imagen, lleve la placa pantalla o no, y las imágenes
+adelgazan: la de la P4, 644 KB de flash y 368 KB de RAM estática menos; la de la DK2,
+627 KB de flash y 179 KB de RAM; la de la C6, 626 KB. La P4 y la DK2 siguen llevando en
+la imagen el driver de su panel y de su táctil; en la C5 y la C6, también el driver es
+un pack.
+
+Qué se graba en cada placa con pantalla, además de la imagen:
+
+| placa | pantalla | packs | bloque de RAM (en el Entorno) |
+|---|---|---|---|
+| ESP32-C5 (Waveshare ESP32-C5-Touch-LCD-2.8) | ST7789 240×320 por SPI + táctil CST3530 | `Gui` + `DriverSpi` | `packRam=512` |
+| ESP32-C6 (Waveshare ESP32-C6-LCD-1.3) | ST7789 240×240 por SPI | `GuiMini` + `DriverSpi` + `Stdlib` | `packRam=136` |
+| ESP32-P4 (kit EV y Waveshare 4,3") | MIPI-DSI + táctil | `Gui` | `SQLite=4` o `packRam=<KB>` |
+| Discovery STM32U5G9J-DK2 | LTDC 800×480 + táctil GT911 | `Gui` | `packRam=768` |
+
+En la C5 y la C6 la pantalla se describe además en el Entorno de la placa —las líneas
+`spi2=` y `lcd=` y, en la C5, `i2c0=`, `exp=` y `touch=`—: es de la placa, no de la
+imagen. Las líneas exactas, en [INSTALAR_FIRMWARE.md](INSTALAR_FIRMWARE.md), «Los packs
+de la placa». `Gui.pack` es uno para las tres arquitecturas: lleva el motor de cada una,
+y a la placa sólo va el suyo.
+
+**Cómo se graba**: en el IDE, botón **Placa** → pestaña **Packs** → **Copiar pack a la
+placa…**. El IDE poda el pack a la familia de la placa y sella su motor para el bloque de
+RAM que ella le da (si no cabe, lo dice antes de grabar); si la zona está sin formatear,
+**Formatear zona…**. Si la placa ya tenía motores cargados, grabar, borrar o formatear un
+pack la reinicia sola, y el IDE vuelve a conectar (`#671`).
+
+**El bloque de RAM de los motores** se pide en el **Entorno** de la placa —`packRam=<KB>`,
+o `SQLite=<MB>` como en V6— y vale desde el siguiente arranque. Sin él, el INFO del IDE lo
+dice («RAM packs: no hay: un pack nativo no podría cargar…») y no carga ningún motor, ni
+el de la GUI ni el de SQLite; con él, se reparte entre todos los grabados: la P4 carga
+LVGL y SQLite en el mismo arranque. Y sin el pack de la GUI, `Gui.Screen()` lanza un
+`RuntimeError` con el motivo: «esta placa no tiene el pack 'LVGL' grabado (la GUI llega
+por el pack)».
+
+**El `Stdlib.pack`** (`#468`): la biblioteca estándar entera en la zona de packs,
+ejecutada desde la flash (XIP) sin copiarse a la RAM. Al grabarlo, la placa quita de
+`/lib` las copias que el pack sirve con los mismos bytes, y las repone si se borra el
+pack; y una copia idéntica que quede en el sistema de ficheros también se carga del pack
+(`#650`). Conviene en las placas sin PSRAM —la C3, la Pico 2, la Nucleo y la DK2—, y en
+la C6 es imprescindible para la GUI: sin él, sus módulos se cargan en la RAM y no caben.
+
+**Los packs de librería ya no llevan la biblioteca estándar** (`#623`): `SQLite`, `Gui`,
+`GuiMini` y `DriverSpi` traen sólo lo suyo y la toman del `Stdlib.pack` (o de `/lib`, a la
+RAM). Antes cada uno llevaba sus copias, que se quedaban viejas y tapaban a las buenas. Al
+grabar uno, el panel de Packs avisa si a la placa le falta algo («graba también el
+Stdlib.pack»). Un pack *programa* —el que tiene `main`— sigue llevando todo lo que usa,
+la stdlib incluida: es un contenedor.
+
+**Los motores nativos, también en las STM32**: en la DK2 corren SQLite (`SqlDemo` entero)
+y la GUI, cada uno con su parte del bloque.
+
+**La S3 ya graba packs** (`#676`): se reiniciaba con un *panic* al grabar uno —leía la
+zona por la dirección del bus de instrucciones, que en Xtensa no admite lecturas de un
+byte—; ahora la lee por el de datos.
+
+**Un panel SPI nuevo no necesita código C**: `DriverSpi` es un driver genérico para
+paneles MIPI-DCS por SPI de 4 hilos. La placa se describe en el Entorno —una línea por bus
+y una por dispositivo— y el controlador, en un fichero de texto con su secuencia de
+arranque: el del ST7789 viene en el pack, y el de otro chip lo puede escribir el usuario
+(`seq:`). El reloj del SPI no pasa del máximo de la hoja de datos del controlador (`#567`:
+62 MHz en el ST7789).
+
+### Placas
+
+**Entra la ESP32-C5** (hito H11): la Waveshare ESP32-C5-Touch-LCD-2.8, un RISC-V sin FPU
+con 8 MB de PSRAM, 32 MB de flash, pantalla ST7789 de 240×320 por SPI con táctil CST3530 y
+ranura TF. Como la C3 y la C6, tiene **un solo USB**, el del cable del IDE, y se pone en
+modo de grabación con BOOT+RESET (`esptool --chip esp32c5`); la consola del sistema sale
+por la UART0 (GPIO11/12). La VM va a la PSRAM (7 677 KB), el sistema de ficheros a los
+16 MB de arriba de la flash —solo, sin tocar las particiones—, sus `native` se compilan
+(abajo) y su pantalla y su TF comparten el bus SPI.
+
+El parque de V7 son **ocho imágenes y diez placas**, en tres arquitecturas (Cortex-M33,
+RISC-V con y sin FPU, y Xtensa):
+
+| imagen | placas que sirve |
+|---|---|
+| `bpvm_pico.uf2` | Pico 2 · Metro RP2350B |
+| `bpvm_esp32_merged.bin` | ESP32-S3 |
+| `bpvm_esp32c3_merged.bin` | ESP32-C3 |
+| `bpvm_esp32c5_merged.bin` | ESP32-C5 *(nueva)* |
+| `bpvm_esp32c6_merged.bin` | ESP32-C6 |
+| `bpvm_esp32p4_merged.bin` | P4 kit · P4 Waveshare |
+| `bpvm_stm32_nucleo.bin` | Nucleo U575 |
+| `bpvm_stm32_dk2.bin` | Discovery U5G9J |
+
+Nueve de las diez han pasado la ronda de pruebas de V7; la que falta, el kit
+ESP32-P4-Function-EV, comparte imagen con la P4 de Waveshare y se probó por última vez en
+V6.
+
+Y en las que ya estaban:
+
+- **La Pico 2, la Metro, la S3 y la P4** ejecutan con dos núcleos (abajo).
+- **La DK2 gira** (`Gui.setRotation`), que en V6 no hacía.
+- **Las STM32 tienen `Adc`** (el ADC1, a 12 bits; en V6 lanzaba) y cargan packs con motor
+  nativo.
+- **La familia ESP32 tiene `Neopixel`** (por el RMT), y las migas de `Machine`
+  (`setMark`…) funcionan en las tres familias.
+- **La SD, en el código común**: la C5 y la C6 la leen por SPI, compartiendo el bus con la
+  pantalla (`sd=bus:N,cs:M,khz:K` en el Entorno); la Metro deja sacar y meter la tarjeta
+  sin reiniciar, y en la P4 `sd mount` monta la que se mete después de arrancar (`#566`).
+- **La C3 y la C6**: las opciones del ESP-IDF, una a una, les devuelven 16 y 9,5 KB de
+  SRAM (hito H13).
+- **Los pines del sistema** —los de la flash y la PSRAM, y los del cable del IDE— y los de
+  la pantalla que pone la imagen ya no se ofrecen al programa: pedirlos es un error con
+  nombre (`#574`, `#669`, `#670`).
+
+### Los dos núcleos
+
+**Dos núcleos por defecto en la Pico 2, la Metro, la S3 y la P4** (hito H12): la VM
+ejecuta dos hilos del programa a la vez, uno en cada núcleo. Las demás —la C3, la C5, la
+C6 y las dos STM32— tienen un núcleo y siguen con uno. Un programa de un solo hilo no
+cambia; uno con varios, los reparte. Y se vuelve atrás sin regrabar, con dos claves del
+Entorno: `vm.runs=1` (un hilo a la vez) y `vm.cores=1` (todo en el primer núcleo).
+
+En la Pico 2, la Metro y las ESP32, el sistema son el hilo `io` —el cable, la salida, el
+log y la pantalla— y un hilo `run` por núcleo que ejecuta el programa (en V6, `vm` e `io`);
+las STM32 siguen con su tarea `vm`. Dos casos van con un solo `run` aunque haya dos: un
+programa que se depura y uno que usa SQLite. La GUI funciona con dos: sus llamadas las
+ejecuta siempre el mismo `run`, y el árbol de componentes lleva su cerrojo.
+
+Lo medido con dos hilos que trabajan a la vez, frente a un núcleo:
+
+| placa | cálculo, arrays, objetos | cadenas | un programa de un hilo |
+|---|---|---|---|
+| ESP32-P4 | ×2 | ×1,33 | igual |
+| Pico 2 | ×1,55–1,68 | ×0,83 | un 1,8 % más lento con la imagen de dos núcleos; un 8,4 % con dos `run` |
+| Metro | ×1,13 en cálculo | ×0,75 | un 35 % más lento (`#665`, abajo) |
+
+**Lo compartido lo protege el programa.** Con dos núcleos, dos hilos que tocan los mismos
+datos sin un `Mutex` pueden pisarse de verdad: es cosa del programa, como en Java. La VM,
+en cambio, no se rompe —en la Pico 2, un programa que lo hace a propósito corrió 999
+veces sin romperla (`#660`, `#661`)—, y un `print` sale entero aunque dos hilos impriman a
+la vez (`#600`).
+
+**Un fallo fatal con dos núcleos** (en la RP2350): la placa deja su informe en el log y se
+reinicia en medio segundo; el INFO dice «fallo fatal», y el arranque siguiente no lanza el
+autorun —un programa que fallara al arrancar sería un bucle de reinicios—.
+
+### El lenguaje y la biblioteca estándar
+
+**El módulo raíz** (hito H1). `Object`, `Thread`, `Mutex` y `StringBuilder` están escritas
+en BasicPlus, en `Core.bp`, y `Core` es el módulo del sistema: **`import Core` ya no hace
+falta** —lo pone el compilador en todo módulo; escribirlo sigue valiendo—. Un `Thread` no
+es un `Object`, y redeclarar una de esas cuatro clases es un error.
+
+**El destructor `~Clase()`.** El contrario del constructor: lo llama el lenguaje cada vez
+que el objeto se libera, lo libere quien lo libere —su `var owner` al salir del ámbito,
+al reasignarlo o con una excepción; el GC; el final del programa (`#668`)—. Es virtual y
+encadena con el del padre; si lanza, se dice y la limpieza sigue. Y el bloque **`try var`**
+suelta su recurso al salir del bloque, salga por donde salga:
+
+```basic
+module Registro
+  public class Fichero
+    var nombre: string
+    public function Fichero(n: string)
+      this.nombre := n
+      print "abre " + n
+    end Fichero
+    public function ~Fichero()
+      print "cierra " + this.nombre
+    end ~Fichero
+  end Fichero
+
+  public function main()
+    var owner a: Fichero := Fichero("a")
+    try var b: Fichero := Fichero("b")
+      print "trabajando con b"
+    endtry                    // cierra b
+    print "fin de main"
+  end main                    // cierra a
+end Registro
+```
+
+**Al acabar un programa, todo vuelve a como estaba** (`#666`–`#668`). Bien, con un error
+o con el Stop del IDE, se destruyen sus objetos —el más nuevo primero, y de cada uno,
+antes lo que posee—, y cada clase de la biblioteca que toma algo del hardware lo suelta
+en su destructor: `Pwm.Slice`, `Pulse.Counter`, `Neopixel.Strip` y `Uart.Port` tienen
+`release()` y destructor; `Gpio.Pin`, `Spi.Device` y `Adc.Channel` devuelven el pin al
+estado de reset; `~Timer` desarma el perro guardián y `~Tcp` cierra la conexión. Usar un
+objeto después de su `release()` es un error con nombre. Lo que no suelta ningún objeto
+lo suelta el sistema al final del RUN, y lo dice.
+
+**Arrays fijos que no son referencias** (`#19`). Un `tipo[N]` vive en el marco de la
+función o dentro del objeto —un campo `private var`—, sin heap ni GC; se indexa, se
+recorre y se mide con `len()`, pero no se pasa, ni se asigna, ni se devuelve. A nivel de
+módulo ya no existe (allí, `tipo[]`).
+
+```basic
+public class Media
+  private var muestras: integer[8]   // dentro del objeto: ni heap ni GC
+  var n: integer := 0
+
+  public function add(v: integer)
+    this.muestras[this.n mod len(this.muestras)] := v
+    this.n := this.n + 1
+  end add
+end Media
+```
+
+**Compatibilidad entre versiones, como Java** (hito H2, `#523`). El `.mod` pasa al formato
+**MOD9**: ya no lleva las ranuras ni los desplazamientos de las clases de otros módulos,
+sino referencias por nombre que la VM resuelve al cargar. Un programa compilado contra
+una librería corre con una versión más nueva de ella —con métodos, campos o properties
+añadidos o reordenados—, y lo incompatible se rechaza al cargar nombrando el símbolo
+(«…: recompila 'X'»). Una dependencia más antigua que la que pide el módulo también se
+rechaza, con su texto (`#500`; salida 2).
+
+**Un solo orden para buscar los módulos** (`#493`), en el PC y en la placa y en las dos
+VMs: el pack que se ejecuta → `/app` → `/lib` → la zona de packs. La ruta del `from` es
+una pista para el compilador y no se usa al ejecutar; y si un módulo de `/app` tapa al de
+`/lib`, la salida lo avisa (`aviso: 'Str' cargado desde /app, tapa al de /lib`). El
+`--help` de la VM Java ya da ese orden (`#678`).
+
+Y el resto del lenguaje:
+
+- `Math.sign` se sobrecarga: `sign(float)` sustituye a `signF`; y `len` vale para una
+  cadena y para cualquier array.
+- Una global vale lo que dice su declaración (`#590`): un literal se graba en el `.mod`;
+  cualquier otra expresión —un array literal, una llamada, un objeto— se calcula al cargar
+  el módulo, antes de su función inicializadora. También las properties de módulo, cuyo
+  valor inicial V6 descartaba.
+- `Clase(x)` baja desde cualquier antepasado, no sólo desde `Object` (`Perro(a)` con
+  `a: Animal`); e `instanceof` acepta una clase de otro módulo (`instanceof Lib.Clase`).
+- El `step` de un `for` admite un entero con signo o una expresión (`#506`).
+- Inicializadores de campo (`var n: integer := 5`), un constructor que delega en otro
+  (`MiClase(args)` en su primera línea) y la visibilidad del constructor, que ahora se
+  aplica (`#511`, `#515`).
+- `switch` sobre un entero, un `long`, un `boolean`, un enum o un `string` (`#546`).
+- `try … finally` sin `catch` (`#532`); un `break` o un `continue` que sale de un `try`
+  corre su `finally` (`#673`); y un `finally` no puede salir con `return`, `break` ni
+  `continue` (`#674`), porque taparía la excepción que fuera en vuelo:
+
+```basic error
+function lee(): integer
+  try
+    return 1
+  finally
+    return 2      // error: un 'finally' no puede salir con 'return'
+  endtry
+end lee
+```
+
+- Leer una variable local que todavía no tiene valor es un error de compilación (`#540`).
+- Un enum en una cadena es su número (`"c=" + c` da `c=1`) (`#522`).
+
+**La biblioteca estándar:**
+
+- `IO.File` e `IO.TextFile` (`#491`): un fichero abierto con su cursor (`seek`, `skip`,
+  `readLine`, `eof`…), todo su estado en el objeto y sin tope de ficheros abiertos; con
+  `var owner` o `try var`, se cierra solo.
+- `IO.dirExists`, y `fileExists` sólo para ficheros, igual en todas partes (`#630`);
+  `IO.mkdir` crea las carpetas intermedias también en la SD (`#631`); y `listDir` funciona
+  ya en la VM-C y en las placas.
+- Cada verbo de fichero entero (`writeFile`, `appendFile`, `readFile`, `removeFile`…) es
+  una apertura y un cierre: si choca con un fichero abierto, «ya está abierto» (`#657`).
+- Dos módulos nuevos: `Time` (`Time.Date` sobre un `long` de segundos, sin el tope de 2038)
+  y `Heap` (el estado del heap desde el programa, y `Heap.compact()`).
+- `Collections.Map` con sobrecargas tipadas: claves `integer`, `string` u objeto, y el
+  valor con su tipo (`getInteger`, `getString`…).
+- `Machine.getEnv(clave)` lee el Entorno de la placa, y `Rtc.Clock.isSet()` dice si el
+  reloj está en hora (`#626`).
+- La tabla de capacidades de cada micro (`Machine.uarts()`, `i2cs()`, `spis()`,
+  `hasPin()`…) y el estado del pin (`Pin.ANALOG`, `Pin.OPEN_COLLECTOR`, `Gpio.AnPin`, y
+  `Adc.Channel` por el mapa de pines).
+- Los buses compartidos: sus pines en el Entorno (`spiN=`, `i2cN=`), un árbitro que da el
+  bus por turnos, y `Spi.Device`, `Spi.Transaction`, `I2c.Transaction` y `writeRead`.
+- Las cadenas, mucho más rápidas en placa: 192 concatenaciones en la Metro, de 2 122 a
+  44 ms (`#554`); y `StringBuilder` guarda piezas: `appendStr`, de 94 a 19 ms (`#587`).
+
+```basic
+print Math.sign(-2.5)                      // -1 (en V6, Math.signF)
+var d: Time.Date := Time.Date(2038, 1, 19, 3, 14, 8)
+print d.addDays(1).toDateString()          // 2038-01-20
+
+try var f: IO.TextFile := IO.TextFile("datos/medidas.csv", "r")
+  while not f.eof() do
+    print f.readLine()
+  endwh
+endtry                                     // el fichero se cierra aquí
+```
+
+### El código nativo
+
+**Una `native` es un hilo más** (hito H5). Si llama a algo que bloquea —`sleep`, un
+`Mutex` ocupado, una función BP que espera— se suspende y los demás hilos siguen; en un
+cálculo largo cede el turno cada 5 ms, y **el Stop del IDE la para** aunque esté en un
+bucle infinito (una recursión cuenta como un bucle: `#580`). Mirarlo cuesta poco: en la
+Pico 2, una native sigue siendo entre 96 y 134 veces más rápida que interpretada.
+
+**Casi todo se puede convertir a `native`.** Una native llama a cualquier función
+intrínseca de la stdlib —`Math.sin`, `sqrt`, `startsWith`, `sleep`…— por el mismo código
+que el intérprete; lleva `try`/`catch`/`finally` dentro (`#578`), lee y devuelve tuplas
+(`#577`), hace conversiones estrechas (`byte(x)`, `int16(x)`…), usa `float`, `double` y
+`long` en todas las placas, y llama a métodos de una clase de otro módulo (`#533`). Lo
+poco que queda fuera —leer campos, los estáticos, `for … in`, `instanceof`, un `try var`
+dentro…— lo dice el compilador con su línea (manual §8.3), también en un método `native`
+de una clase, que en V6 corría interpretado sin decir nada (`#519`).
+
+```basic
+native function media(datos: integer[], n: integer): integer
+  try
+    var s: integer := 0
+    var i: integer := 0
+    while i < n do
+      s := s + datos[i]
+      i := i + 1
+    endwh
+    return s / n
+  catch e: RuntimeError
+    return 0              // n = 0: la división lanza, y se atrapa dentro
+  endtry
+end media
+```
+
+**La C3, la C5 y la C6 compilan sus natives** (destino `riscv-imc`, ABI `ilp32`, con el
+mismo `riscv32-esp-elf-gcc` del ESP-IDF que la P4). Medido en la C5: una suma que tarda
+124 ms interpretada, 1 ms nativa; en la C3, con enteros, unas 100 veces más rápida; con
+`double`, 5 veces (307 ms frente a 1 609), y con `float`, casi 6 (200 frente a 1 141): sin
+FPU, las dos se emulan. La S3 (Xtensa) sigue interpretando.
+
+**Depurar**: en el PC una native se depura como cualquier función; en la placa el
+depurador no para dentro de ella —corre como código máquina—, y el IDE lo dice al poner el
+breakpoint (`#583`). **Y la ABI**: los `.mdn` de V7 son de la ABI 9; el INFO del IDE dice
+la de la placa («ABI nativo: 9»), y si no casa con la suya, el IDE no compila un nativo
+que la placa rechazaría y dice cómo arreglarlo (`#576`).
+
+### Interfaz gráfica
+
+- **LVGL, en un pack** (arriba). Y la DK2 ya gira, como las demás.
+- **El árbol de componentes, completo**: `Bar`, `Led`, `Chart` y `Table` se dan de alta en
+  su contenedor —cuentan en `childCount()` y reciben clics—, y `toJson()` guarda los
+  rangos, las opciones y los ítems, los botones de un `Msgbox`, los colores, la forma de un
+  `Chart` y la rejilla de un `Table` (faltan los títulos de las pestañas, la imagen de un
+  `ImageView`, el campo de un `Keyboard` y las series de un `Chart`). El dueño de un widget
+  es su contenedor; con un `var owner` local, su destructor lo borra del árbol y de la
+  pantalla.
+- **`GuiMini`**, el LVGL de las pantallas pequeñas (la C6): 256 widgets, fuentes hasta
+  24 px y un solo búfer de dibujo. Llenar la tabla de widgets lanza «Gui: no caben mas
+  widgets: esta GUI tiene sitio para N» (512 con `Gui`; `#568`); en V6 el widget de más,
+  simplemente, no aparecía.
+- **Un manejador** (el `onClick` de un botón, Forms, un evento) puede ceder y lanzar
+  (`#607`), y un hilo que muere sin atrapar su excepción lo dice en la salida.
+- **El I2C del táctil de la P4 es un bus compartido** (`#669`): un programa se engancha a él
+  con sus mismos pines a 100 kHz; con otros, recibe un error con nombre.
+- **Pintar la pantalla entera**, con LVGL en el pack: 25 ms en la P4 (480×800), 35 en la
+  C6, 48 en la DK2 (37 con LVGL en la imagen) y 70 en la C5.
+
+### El IDE
+
+- **Durante un RUN se pueden bajar ficheros y refrescar el árbol** (`#495`): el `GET` y el
+  `LIST` van por trozos, entre la salida del programa, y un `KILL` no espera a que acaben.
+  Lo que escribe en la placa sigue esperando a que el programa termine.
+- **Las subidas, por trozos** (`#495`): la placa dice en el saludo qué trozo y qué ventana
+  admite, el IDE reintenta si falla el cable, y una subida que se corta se borra —no queda
+  un fichero a medias que parezca el nuevo—. La Pico 2 sube 64 KB en 1,1 s.
+- **Lo dañado, en rojo**: el árbol marca los `.mod`, `.mdn` y `.pack` que la placa no
+  cargaría, con el motivo; y el panel de Packs, los packs mal.
+- **El INFO dice más**: el bloque de RAM de los motores («RAM packs», `#602`), la receta del
+  AOT y la ABI de nativo de la placa (`#576`), y el PWM en la unidad de cada micro —12
+  slices en la RP2350— (`#677`).
+- **Las librerías se suben por su versión** (`#624`): una librería —la stdlib, lo
+  instalado— sólo viaja si la placa no la tiene, si la tiene en otro formato o si su
+  versión es anterior a la que pide el programa; otra compilación de la misma versión ya no
+  se sube. Las dependencias salen de los `.mod`, también el `Core` implícito (`#538`).
+- **El panel de Packs** avisa de la stdlib que le falta a un pack (`#623`), dice «no cabe»
+  antes de grabar un motor y reconecta solo cuando la placa se reinicia tras grabar
+  (`#671`). Y una placa con la zona de packs sin formatear lo dice al conectar, y el IDE
+  ofrece la gestión de placa.
+- **El depurador** avisa al poner un breakpoint dentro de una native (`#583`), y el Stop con
+  el programa parado en un breakpoint de la placa ya lo para (`#634`).
+- El IDE reinicia la placa tras aplicar las particiones, y el micro simulado se porta como
+  una placa: su flash es tan estricta como la de verdad y aplica las particiones al
+  arrancar (`#647`).
+- El jar pasa a `BpIde-7.0.jar`.
+
+### La ejecución y la memoria
+
+- **Hilos sin tope** (`#604`): un programa crea los que quepan en la memoria —en V6 la VM-C
+  admitía 32 en toda su vida—, y `Thread(stackSize)` se respeta (0 = 2 KB).
+- **La pila se vigila** (`#605`): una función que no cabe lanza `RuntimeError`
+  «desbordamiento de pila (el hilo tiene N B)», atrapable e igual en las dos VMs.
+- **Una excepción sin atrapar en un hilo que no es el `main` acaba ese hilo** (`#608`): los
+  demás siguen, y al final el programa sale con 1.
+- **El módulo `Heap`** (`#594`): el tamaño, lo libre, el mayor bloque libre, los handles y
+  las pasadas del GC, desde el programa; y `Heap.compact()` (`#595`), que compacta a
+  petición —sólo desde `main` y sin otros hilos vivos—.
+- **`vmheap=<KB>`** en el Entorno fija el tamaño del bloque de la VM (hito H7).
+- **Cargar un programa gasta menos RAM del sistema** (`#651`): los nombres que necesita el
+  enlazador van en un bloque por módulo y no en uno por nombre (`GuiWinJson`, de 818 a 54
+  bloques). La C6 con la GUI deja ~34 KB libres en su peor momento (antes, 2), y su VM
+  queda en 127 KB: 63 de heap y 64 de pilas.
+- **En las placas de 32 MB** (la C5 y la P4 de Waveshare), el sistema de ficheros va en los
+  16 MB de arriba de la flash y la zona de packs se queda el resto; ese reparto no se cambia
+  desde el editor de particiones.
+- El cuanto de la VM Java se cuenta en instrucciones (1 024), como en la VM-C: el
+  intercalado de hilos y eventos es el mismo en las dos (`#531`).
+
+### Pruebas
+
+- **La ronda de V7**: 50 pruebas por placa (`tools/tanda_v7.json`), con la salida comparada
+  con la del PC, verde en las nueve placas el 9-oct —saltando lo que una placa no tiene: la
+  pantalla, el AOT en la S3, memoria en la C6—. Y la de soltar los recursos (`#667`), 13 por
+  placa: un programa toma todos los PWM, las UART o las tiras NeoPixel de la placa, se para
+  con un Stop, y el siguiente los vuelve a tener.
+- **Los dos núcleos**: 110 minutos de resistencia con dos `run` en la Pico 2, la S3 y la P4,
+  sin un fallo.
+- **La red de paridad dual-VM** pasa de 59 a 147 casos; y las VMs de V7 siguen ejecutando
+  byte a byte los 59 `.mod` de V6 de la cápsula, con su stdlib.
+- **102 pruebas de C** de la VM en la red (el AOT, el depurador, el arranque, la memoria…), y
+  los 49 programas de `samples/errores/`, que tienen que fallar, fallan con su línea.
+- Los 399 programas de `samples/` compilan con el compilador de V7.
+
+### Bugs de V6 corregidos
+
+- **Una lista enlazada de unos cientos de nodos colgaba la placa**: el marcado del GC era
+  recursivo y desbordaba la pila sin decir nada (en la Pico 2, unos 360 nodos; `#648`).
+  Igual al soltar una cadena larga de `owner` (`#656`) y al cargar un programa con muchos
+  niveles de `import` (`#649`).
+- **Un hilo que recursaba de más pisaba en silencio la pila del vecino**: nadie vigilaba el
+  desbordamiento (`#605`).
+- **Un `switch` sobre un `string`, un `long`, un `double` o un objeto no casaba nunca** —iba
+  siempre al `default`—, y un `break` dentro de un `case` salía del bucle de fuera (`#546`).
+- **`continue` en un `for` no avanzaba la variable**: el bucle no acababa (`#548`).
+- **Un `break` o un `continue` que salía de un `try` no corría su `finally`** y dejaba su
+  `catch` armado para lo que lanzara el código de fuera (`#673`); y un `return` dentro de un
+  `finally` tumbaba el compilador (`#674`).
+- **`"c=" + c` con un enum reventaba el heap** en las dos VMs, y `Color(1)` devolvía basura
+  (`#522`).
+- **Imprimir un objeto de una subclase de `Thread` ejecutaba su `run()`** (`#526`).
+- **Las sobrecargas de un método entre módulos llamaban a otro método en silencio** (`#514`),
+  y una derivada sin constructor, construida desde otro módulo, perdía los argumentos
+  (`#513`).
+- **El valor inicial de una property de módulo se descartaba**: valía `null` (`#590`).
+- **Una llamada usada como sentencia que devuelve 8 bytes** —una cadena, un `long`, un
+  objeto— dejaba basura en la pila: en un bucle, la desbordaba (`#620`).
+- **Un manejador de la GUI no podía ceder**: un `sleep` dentro lo cortaba en silencio; y si
+  lanzaba, la VM-C acababa con «OK» (`#607`). Y **una excepción sin atrapar en un hilo**
+  acababa el programa en una VM y no en la otra (`#608`).
+- **En las natives**: la posición de las globales se calculaba mal tras una global `string`,
+  `long` o `double`, y la native leía otra palabra (`#588`); un módulo con variables
+  globales corría entero interpretado en placa (`#562`); y una native que llamaba a BP que
+  llamaba a otra native podía matar el proceso al lanzar (`#571`).
+- **La S3 se reiniciaba al grabarle un pack** (`#676`), **la C3 y la C6 perdían por el cable
+  las líneas de más de 2 KB** (`#545`), y **la P4 no montaba una tarjeta metida después de
+  arrancar** (`#566`).
+- **Lo que un programa encendía seguía encendido**: el PWM sacando su señal tras el Stop, y
+  los canales de PWM y NeoPixel de las ESP32 sin soltar (`#666`).
+- **La VM-C recortaba en silencio** el `count` de los builtins de bus (a 64 en I2C, a 256 en
+  SPI y UART; `#534`) y la tira NeoPixel, a 256 LEDs (`#536`).
+- **`fileExists` de una carpeta** decía `true` en una VM y `false` en la otra (`#630`), y en
+  la SD `mkdir` no creaba las carpetas intermedias (`#631`).
+
+### Qué implica al actualizar desde V6
+
+⚠️ **Graba la imagen de V7 y vuelve a grabar los packs.** El código nativo de los packs de
+V7 es de la ABI 9 y sus motores van sellados para el bloque de RAM de la placa: los de V6
+no cargan —SQLite deja de funcionar— y el `Stdlib.pack` de V6 lleva la biblioteca en el
+formato viejo. Lo más limpio, en el panel de Packs: **Formatear zona…** y grabar los de V7.
+Una imagen de V6 no ejecuta un `.mod` de V7: lo rechaza.
+
+📌 **En las placas con pantalla** (la C5, la C6, las P4 y la DK2), sin los packs de la GUI
+no se pinta nada: graba los de la tabla de arriba, pon el bloque de RAM en el Entorno y,
+en la C5 y la C6, las líneas de su pantalla; y reinicia.
+
+📌 **Recompila los `.mod`.** El compilador de V7 escribe MOD9. Las VMs de V7 todavía cargan
+un `.mod` de V6, pero sólo corre si no usa clases de la biblioteca: con los 59 programas de
+V6 de la cápsula de compatibilidad y la biblioteca de V7, 41 dan lo mismo que en V6 y 18 no
+enlazan —los que construyen una clase de la biblioteca o llaman a sus métodos: una
+excepción, un envoltorio, `Gui.Screen`, `Adc.Channel`…—, y lo dicen: «lib 'Core' presente
+pero no exporta …». Y su código nativo es de otra ABI: la placa lo rechaza y la función
+corre interpretada. El IDE recompila en cada Run; lo que hay que mirar es lo que quedó en
+`/app` —el programa del autorun, sobre todo—: vuelve a ejecutarlo desde el IDE, o bórralo.
+
+📌 **Lo que rompe fuentes de V6:**
+- **`Math.signF(x)` es `Math.sign(x)`**: `signF` ya no existe.
+- **Los arrays fijos `tipo[N]`**: a nivel de módulo no compilan (usa `tipo[]`), y uno local
+  ya no se pasa a una función que pide `tipo[]`, ni se asigna, ni se devuelve.
+- **Leer una variable local sin valor** no compila; en V6 leía lo que hubiera en la pila.
+- **Un `switch` sobre un real o un objeto** no compila (en V6 compilaba y no casaba nunca).
+- **Un `finally` no puede salir** con `return`, `break` ni `continue`.
+- **`step 0`, `Color(1)` —un enum desde un entero— y concatenar a una cadena un array, una
+  tupla o el literal `null`** son errores de compilación; y un nombre que empieza por `__`
+  es del sistema.
+- **La visibilidad se aplica** (`#515`, `#508`): un constructor sin `public` es protegido
+  —lo usan su clase y sus subclases, no el resto: en V6 se llamaba desde cualquier sitio—,
+  uno `private`, sólo su clase; y un campo o una property `private` ya no se lee desde una
+  subclase.
+- **Un método `native` de clase que el AOT no puede traducir** es un error (`#519`).
+
+📌 **Lo que cambia de comportamiento sin que el compilador avise:**
+- **Con dos núcleos, dos hilos corren a la vez de verdad** (la Pico 2, la Metro, la S3 y la
+  P4): lo que compartan sin un `Mutex` puede pisarse más a menudo que antes. `vm.runs=1`
+  deja la placa con un hilo a la vez, como en V6.
+- **Al acabar un programa —también con el Stop— se destruyen sus objetos y todo vuelve al
+  reset**: un PWM se para, una salida deja de serlo, el perro guardián se desarma. Un
+  programa que contaba con dejar algo encendido al acabar, ya no lo deja.
+- **Una excepción sin atrapar en un hilo** que no es el `main` acaba ese hilo y no el
+  programa; al final, el programa sale con 1.
+- **Un desbordamiento de pila es un `RuntimeError`** atrapable; sin atrapar, salida 1.
+- **Las globales no literales se calculan al cargar**, antes de la función inicializadora,
+  y una property de módulo con valor inicial ya no vale `null`.
+- **`from "<ruta>"` ya no se usa al ejecutar**: la VM busca cada módulo por su nombre, en el
+  orden de arriba.
+- **Una librería se sube por su versión**: recompilarla sin subir su `"version"` no la
+  vuelve a subir a la placa.
+- **`fileExists` de una carpeta** da `false` en todas partes (para las carpetas,
+  `IO.dirExists`).
+- **Los pines del sistema y los de la pantalla** ya no se pueden pedir: es un error con
+  nombre.
+
+📌 **Lo que no rompe:** `import Core` escrito sigue compilando; un `.mod` de V6 que no use
+clases de la biblioteca se sigue ejecutando; `Pico.*` sigue siendo alias de `Machine`; y
+`SQLite=<MB>` sigue valiendo para el bloque de RAM.
+
+### Lo que todavía no
+
+- **La imagen de dos núcleos de la RP2350 es más lenta de lo que debería** (`#665`): en la
+  Metro, con los datos de la VM en la PSRAM, un programa de un hilo va un 35 % más lento que
+  con la imagen de un núcleo —también con `vm.cores=1`: es la imagen—; en la Pico 2,
+  `PrintBench`, un 19 %; y las cadenas no escalan con dos hilos (×0,83 en la Pico 2, ×0,75
+  en la Metro). Se investiga en V8; mientras, la imagen de un núcleo se compila con
+  `-DBPVM_PICO_NUM_CORES=1`.
+- **Un error en la placa no dice su línea** (`#582`): el mensaje sí, la línea no —ni en
+  código interpretado ni en una native—; la VM Java del PC da la traza entera. V8.
+- **Un `.mod` lleva el nativo de una sola familia** (`#584`): llevado a mano a otra, sus
+  natives corren interpretadas. El `.mod` multifamilia, en V8.
+- **No hay red, ni Bluetooth, ni bajo consumo en placa**: `Net` lanza «Net: sin red en esta
+  plataforma» y el micro nunca duerme. Son V8.
+- **El depurador** va con un solo `run` en las placas de dos núcleos, no para dentro de una
+  native en la placa y no despliega objetos (eso, en V8).
+- **Un fallo fatal de la VM tumba la placa** —un HardFault, una pila del sistema
+  desbordada—: con dos núcleos, la reinicia (arriba); contenerlo en el hilo que falló es
+  de V8.
+- **La S3 no tiene AOT** (Xtensa): sus natives corren interpretadas.
+- **El `Wdt` de las STM32 lanza**: su IWDG no se puede parar por software, y «completo o no
+  se implementa». Y las STM32 no tienen ni `Neopixel` ni SD.
+- **La C3 tiene menos VM de la que debería**: su bloque ya no llega a los 128 KB de V6 —el
+  asignador del sistema no da tanto seguido—; devolvérselos es de V8.
+- **`input()`** sigue funcionando sólo en la VM Java.
+
+### Artefactos de la release
+
+**Un solo adjunto**: `BasicPlus-7.0-win.zip` (su `sha256` va en la página de la release y
+en `dist/BasicPlus-7.0-win.zip.sha256`). Dentro: `BpIde-7.0.jar` y `bpide.bat`, `bin/` (el
+micro simulado, con LVGL, más `SDL2.dll`), `bpstdlib/` (fuentes y `.mod` de la librería),
+**`packs/`** con los **cinco packs** de V7 —`Stdlib.pack`, `SQLite.pack`, `Gui.pack`,
+`GuiMini.pack` y `DriverSpi.pack`, cada uno, byte a byte, el de su compilación (`#679`)—,
+`bpdevices/`, `samples/`, `docs/` (la ayuda que abre el IDE, ES y EN), `bpgenvm-c/`
+(cabeceras y fuentes que necesita el AOT) y **`firmware/`** con las **ocho imágenes** de la
+tabla de arriba, su `SHA256SUMS.txt`, un `LEEME.md` y las plantillas de `board.json` del
+RP2350 en `firmware/boards/`. Cómo instalar cada una, y qué packs lleva cada placa:
+**[INSTALAR_FIRMWARE.md](INSTALAR_FIRMWARE.md)**.
 
 ---
 

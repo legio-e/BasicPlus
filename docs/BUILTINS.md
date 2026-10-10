@@ -1,13 +1,23 @@
 # Catálogo de builtins (`CALL_BUILTIN id`)
 
-Documento canónico de los builtins de la VM BP. Cada builtin tiene:
+Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tabla es
+`bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
+cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
+`Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
+id—. Hoy son **282** (0–281). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
-- `bpName`: nombre con el que el frontend lo resuelve al ver una
-  llamada. Builtins implícitos (sin prefijo `__`) son visibles desde BP
-  sin import; los intrínsecos `__*` son uso interno de la stdlib y
-  módulos como Math/IO los exponen con nombres limpios.
+- `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
+  builtins por nombre (fuera `Intrinsics.java`): una llamada a `strlen` es una
+  llamada a la función de la raíz, y en su sitio el compilador mete su cuerpo
+  `inline`, el `CALL_BUILTIN` (manual §8.3b). Las públicas de
+  `Core` (sin prefijo `__`) se ven sin cualificar en todo programa; las `__*` son
+  para la stdlib, y módulos como Math/IO las exponen con nombres limpios (a veces
+  con su propia declaración `inline CALL_BUILTIN n`, como `Machine`).
 - Stack effect y semántica.
+
+No todos tienen aquí su fila: los que no, por rangos, en «Los que no tienen fila
+aquí», al final; su firma exacta, en `builtin_ids.h`.
 
 Convención general:
 - Cada builtin **pop** sus argumentos del stack del thread (en orden:
@@ -127,7 +137,7 @@ Convención general:
 | 39 | `writeFile` | `(path, content: string)` | `void` | Sobreescribe. Crea el fichero si no existe. RTErr sandbox. |
 | 40 | `appendFile` | `(path, content: string)` | `void` | Append. RTErr sandbox. |
 | 41 | `fileExists` | `(path: string)` | `bool` | Sólo FICHEROS: una carpeta da `false` (V7/H10 #630, 2-oct, Eduardo; la VM-Java decía `true`, la VM-C `false`). Para una carpeta, `IO.dirExists`. RTErr sandbox. |
-| 42 | `listDir` | `(path: string)` | `string[]` | **Sólo VM-Java**: nombres de los entries (no recursivo). RTErr si no es dir. En la VM-C lanza RTErr `builtin 42 no soportado en esta VM (subconjunto C)`: no está implementado en placa (V7). |
+| 42 | `listDir` | `(path: string)` | `string[]` | Nombres de las entradas (no recursivo), **ordenados por bytes**, en las dos VMs y en placa (V7/H3, 21-sep: la VM-C no lo tenía; el orden de un listado es del FS, y el mismo programa tiene que imprimir lo mismo en el PC y en la placa). RTErr `listDir('p'): no se pudo abrir` (antes miVM devolvía una lista vacía); en la VM-C, también `demasiadas entradas` si los nombres no caben en la zona de rascar. |
 | 126 | `readFileBytes` | `(path: string)` | `byte[]` | Lee fichero entero como `byte[]` crudo (binario sin pérdidas: NUL/>127/UTF-8 inválido). #247. |
 | 127 | `writeFileBytes` | `(path, data: byte[])` | `void` | Escribe los bytes crudos del `byte[]` (sobreescribe). #247. |
 
@@ -218,9 +228,11 @@ Convención general:
 > `string` y `byte[]` comparten el layout `TYPE_ARRAY_I8`; la conversión es una
 > copia del payload con distinto tipo estático.
 >
-> **Nota de paridad C/Java (V6):** la VM-C (host/MCU) implementa hoy **todos** los
-> builtins salvo cuatro: `input` (37), `listDir` (42), `heapFrag` (121) y
-> `heapMap` (122). Ver **§ Paridad VM-C** para el fallo limpio de esos cuatro.
+> **Nota de paridad C/Java (V7):** la VM-C (host/MCU) implementa hoy **todos** los
+> builtins salvo tres: `input` (37), `heapFrag` (121) y `heapMap` (122) —`listDir` (42)
+> está en las dos desde V7/H3—. Ver **§ Paridad VM-C** para el fallo limpio de esos tres.
+> Y los de la GUI (`__gui*`) sólo existen donde hay GUI: el PC y las imágenes con
+> pantalla.
 
 ---
 
@@ -254,25 +266,25 @@ byte-idéntico**, invariante central del proyecto dual-VM. Portarlos exige
 verificar la igualdad bit-a-bit del resultado (o compartir implementación):
 trabajo de **H10**.
 
-### Clasificación (estado en V6, 12-sep-2026)
+### Clasificación (estado en V7, octubre de 2026)
 
 Lo de arriba es la historia de GAP-1 (junio). Desde entonces se portó casi todo — los
 float con el formateador canónico GAP-4 (L13) y los string por codepoint — y el FS del
 device es littlefs (V4/H2), así que «IO filesystem host-only» dejó de ser verdad. Medido
-contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 240 entradas):
+contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 282 entradas; en V6, 240):
 
 | Clase | Builtins | En VM-C |
 |---|---|---|
-| **Portados** | strings (0..15, `split`, `charCodeAt`, `toBytes`/`fromBytes`), numéricas y float/math (16..33, `random*`, Math `__*` 56..63 y `clamp`/`wrap`/`hypot`/`remap`), `now`/`sleep`/`gc`, arrays y threading/Mutex, **ficheros** (`readFile`/`writeFile`/`appendFile`/`fileExists`, `readFileBytes`/`writeFileBytes`) y **rutas/FS de IO** (`__path*` 64..68, `__mkdir`…`__lastModified` 69..76), `__throwRte`, `__longToString`/`__doubleToString`, GUI, packs, eventos, `App.*`, `Machine.*` | ✅ todos |
-| **HW (device)** | Gpio/I2c/Spi/Uart/Pwm/Adc/Rtc/Wdt/Pulse/Machine/NeoPixel | ✅ sí. **Sin backend ya no se inventan valores (V6)**: en el PC, Gpio/Pwm/Pulse/Uart/Spi/Machine escriben la misma línea de simulación en las dos VMs; NeoPixel donde no hay driver (ESP32/STM32/PC) y Wdt en STM32/PC lanzan `RuntimeError`; Adc lanza si la conversión falla. **Los de bus (I2c 83–84, Spi 87–89, Uart 91–92, #534)**: array `null`, `count` < 0 o `count` > longitud → `RuntimeError` con el mismo texto en las dos VMs; SPI y UART sin tope, en tramos de 256 (una llamada al driver y una línea de simulación por tramo; en `Uart.read` el plazo cuenta por tramo); I2C es una transacción, no se parte: tope de 256 con error. Detalle por familia en `referencia.html` §14. |
+| **Portados** | strings (0..15, `split`, `charCodeAt`, `toBytes`/`fromBytes`, `__strCopy` 263), numéricas y float/math (16..33, `random*`, Math `__*` 56..63 y `clamp`/`wrap`/`hypot`/`remap`), `now`/`sleep`/`gc`, arrays y threading/Mutex, **ficheros** (`readFile`/`writeFile`/`appendFile`/`fileExists`, `readFileBytes`/`writeFileBytes`, `listDir` desde V7, y el cursor de `IO.File` 240..249) y **rutas/FS de IO** (`__path*` 64..68, `__mkdir`…`__lastModified` 69..76), `__throwRte`, `__longToString`/`__doubleToString`, packs, eventos, `App.*`, `Machine.*` (con la tabla de capacidades 250..253 y `getEnv` 271), el módulo `Heap` y `Heap.compact` (264..270), y las de liberar es destruir (272..277) | ✅ todos |
+| **GUI** (`__gui*`: 135..199, 206..207, 210, 214..220, 222..223, 234..239) | widgets, eventos de la GUI, rotación, `Chart`, `Gui.shot` | ✅ en el PC y en las imágenes con pantalla (la C5, la C6, las P4 y la DK2; LVGL llega por el pack). En las demás imágenes no están: lanzan `builtin N no soportado en esta VM (subconjunto C)` |
+| **HW (device)** | Gpio/I2c/Spi/Uart/Pwm/Adc/Rtc/Wdt/Pulse/Machine/NeoPixel, y en V7 los buses con dispositivo y transacción (254..262) y el `release()` de cada recurso (278..281) | ✅ sí. **Sin backend ya no se inventan valores (V6)**: en el PC, Gpio/Pwm/Pulse/Uart/Spi/Machine escriben la misma línea de simulación en las dos VMs; NeoPixel donde no hay driver (STM32 y PC; la familia ESP32 lo tiene desde V7/H4, por el RMT) y Wdt en STM32/PC lanzan `RuntimeError`; Adc lanza si la conversión falla. **Los de bus (I2c 83–84, Spi 87–89, Uart 91–92, #534)**: array `null`, `count` < 0 o `count` > longitud → `RuntimeError` con el mismo texto en las dos VMs; SPI y UART sin tope, en tramos de 256 (una llamada al driver y una línea de simulación por tramo; en `Uart.read` el plazo cuenta por tramo); I2C es una transacción, no se parte: tope de 256 con error. Detalle por familia en `referencia.html` §14. |
 | **Red (`Net`, 131..134)** | `tcpConnect`/`tcpSend`/`tcpRecv`/`tcpClose` | ✅ en las dos VMs del PC; **en placa no hay backend** (WiFi = V8): lanzan `Net: sin red en esta plataforma` |
 | **Sólo VM-Java, por decisión** | `input` (37), `__prompt` (77 — en la VM-C lanza `prompt: no hay IDE conectado`) | ❌ decidido (`PENDIENTES.md`) |
-| **Sólo VM-Java, sin implementar** | `listDir` (42) | ❌ → fallo limpio; V7 |
 | **Java-only (diagnóstico)** | `heapFrag`/`heapMap` (121/122) | ❌ intencional (herramientas de la VM-Java) |
 
-> `input` y `listDir` **compilan** sin import en cualquier módulo: el fallo llega en
-> ejecución, en la placa. Es el único punto donde el mismo `.mod` da salida distinta en
-> las dos VMs a propósito.
+> `input` **compila** sin import en cualquier módulo: el fallo llega en ejecución, en la
+> placa. Con `heapFrag`/`heapMap` (diagnóstico), es el único punto donde el mismo `.mod`
+> da salida distinta en las dos VMs a propósito.
 
 ---
 
@@ -338,6 +350,69 @@ byte-idéntico entre VMs y, deliberadamente, idéntico a `print v`. Lo emite
 > VMs al formateador GAP-4 (antes la VM-Java usaba `Float.toString`, así que
 > `"" + f` y `print f` podían diferir ENTRE SÍ para valores de más de 6
 > decimales).
+
+## 240–249 — el cursor de `IO.File`  *(V7/H3 #491, 21-sep)*
+
+Lo que usan `IO.File` e `IO.TextFile`: un fichero abierto con su cursor, y TODO su estado en el objeto. El objeto
+reserva un `byte[]` de estado (`newByteArray(__fstateSize(path))`) y cada primitiva recibe ese bloque como primer
+argumento; la VM enhebra por esos bloques su registro de abiertos, así que el GC cierra lo inalcanzable y el fin de
+RUN cierra lo que quede. No hay tope de ficheros abiertos. La regla de los abiertos es la de los verbos de fichero
+entero (#657): un fichero abierto para escribir no se vuelve a abrir; para leer, los que se quiera. Mismos textos de
+error en las dos VMs.
+
+| id | firma | qué hace |
+|----|-------|----------|
+| 240 | `__fstateSize(path: string): integer` | Los bytes del bloque de estado para esa ruta: los que pide el motor del FS (littlefs o FAT), lo mayor entre leerla (resuelta como `readFile`) y escribirla (tal cual, como `writeFile`). En miVM, 0: el estado vive en Java. |
+| 241 | `__fopen(st: byte[], path: string, mode: integer)` | Abre `path` sobre el bloque `st`. Modos: 0 `"r"` (existe; sólo lectura), 1 `"w"` (crea o trunca), 2 `"a"` (crea si falta; el cursor al final), 3 `"r+"` (existe; lectura y escritura). La lectura resuelve la ruta como `readFile`; la escritura la toma tal cual. RTErr: `File: modo no válido`, `File: sin bloque de estado`, `File: el objeto ya tiene un fichero abierto`, `File('p', "w"): ya está abierto` (otro lo tiene abierto y la regla no lo deja), `File('p', "r"): no se pudo abrir`. |
+| 242 | `__fclose(st: byte[])` | Cierra. Idempotente: cerrar lo cerrado no hace nada. RTErr `File.close(): error al cerrar` si falla el motor. |
+| 243 | `__fread(st: byte[], dst: byte[], off: integer, n: integer): integer` | Lee hasta `n` bytes desde el cursor en `dst[off..]`; devuelve los leídos (0 = fin). RTErr: `File.read(): fichero cerrado`, `… buffer nulo`, `… fuera del buffer`, `… error de lectura`. |
+| 244 | `__fwrite(st: byte[], src: byte[], off: integer, n: integer)` | Escribe `n` bytes de `src[off..]` en el cursor. RTErr: los de `__fread` (con `File.write()`) y `File.write(): abierto sólo para lectura`. |
+| 245 | `__fseek(st: byte[], pos: integer)` | Pone el cursor en `pos`, dentro de `[0, tamaño]` (extender es escribir al final). Fuera: RTErr `File.seek(N): fuera del fichero (tamaño M)`. |
+| 246 | `__ftell(st: byte[]): integer` | La posición del cursor. |
+| 247 | `__fsize(st: byte[]): integer` | El tamaño del fichero abierto. |
+| 248 | `__fflush(st: byte[])` | Lleva al medio lo escrito (vuelca la caché del motor). RTErr `File.flush(): error de escritura`. |
+| 249 | `__freadLine(st: byte[]): string` | `TextFile.readLine`, en nativo: la línea siguiente sin su `\n` (ni el `\r` de un `\r\n`), y el cursor tras ella; `""` al final (lo dice `eof()`). En BP salía 15× más lenta que `readFile` + `split` en la Pico (`FileBench`). |
+
+En las placas, `IO.File` funciona igual en la flash (littlefs) y en la SD (`/sd`, FAT).
+
+## 250–253 — la tabla de capacidades del micro  *(V7/H4, 22-sep)*
+
+Una sola tabla por micro, la que publica su imagen, para el INFO del IDE, para BP y para validar las fachadas. Las
+usa `Machine` (`uarts()`, `i2cs()`, `spis()`, `pins()`, `analogPins()`, `pwmPins()`, `pulsePins()`,
+`openDrainPins()`, `hasPin()`, `isAnalog()`, `isInputOnly()`, `pwmUnit()`, `manufacturer()`, `package()`,
+`adcUnits()`, `hasBreadcrumb()`, `MAX_CPU_MHZ()`, `MIN_CPU_MHZ()`), con su propia declaración privada de cada una.
+Los pines del sistema —los de la flash o la PSRAM, los del cable del IDE y los de la pantalla que pone la imagen
+(#574, #669)— no aparecen. En el PC, las dos VMs dan el mismo perfil, el del RP2350A (30 GPIO, el ADC en 26..29,
+UART, I2C y SPI 0 y 1, 12 slices de PWM). Una clase que no existe: RTErr `Machine: clase de capacidad desconocida`.
+
+| id | firma | qué hace |
+|----|-------|----------|
+| 250 | `__capsArray(kind: integer): integer[]` | Un array: 0, las UART válidas (lo que acepta `Uart.Port(id, …)`); 1, las I2C; 2, las SPI; 3, los pines que existen; 4, los analógicos; 5, los de PWM; 6, los de contador de pulsos; 7, los de colector abierto. |
+| 251 | `__capsInt(kind: integer): integer` | Un número: 0, la frecuencia máxima de la CPU (Hz); 1, la mínima; 2, si se puede ajustar (0/1); 3, las salidas PWM; 4, las unidades ADC; 5, si hay migas (`setMark`, 0/1); 6, el tamaño del mapa de pines. |
+| 252 | `__capsStr(kind: integer): string` | Un texto: 0, el micro; 1, el paquete (la variante: `QFN-60`/`QFN-80` en el RP2350); 2, el fabricante; 3, la unidad en que cuenta el PWM (`slice` o `canal`). |
+| 253 | `__capsPin(pin: integer): integer` | La máscara del pin (0 = no existe, o es del sistema): 1 digital, 2 analógico, 4 PWM, 8 pulsos, 16 colector abierto, 32 sólo entrada. |
+
+## 254–262 — pines y buses: soltar, el dispositivo y la transacción  *(V7/H4 y H6.c, 22–24 sep)*
+
+El estado de cada pin y de cada bus lo lleva el común (la HAL BP), igual en todas las familias. Un bus es
+COMPARTIDO —el programa, los packs y la TF pueden usar el mismo— y lo exclusivo es el dispositivo, su CS: un árbitro
+da el bus por turnos, y cada llamada es UNA transacción en un turno. La configuración del bus la fija el ENV
+(`spiN=`, `i2cN=`) o el primero que lo abre; otra distinta es un error con nombre. Una transacción se calcula antes
+contra el tope de tiempo del bus —el `ms:` de su línea del ENV; 20 ms si no lo dice, nunca más de 100—: si no cabe,
+RTErr sin tocar el cable (`SPI 2: la transacción ocuparía el bus N ms a V (máximo M ms)`). En el PC, las dos VMs
+escriben la misma línea de simulación.
+
+| id | firma | qué hace |
+|----|-------|----------|
+| 254 | `__gpioRelease(pin: integer)` | `Gpio.release(pin)`, lo que llama `release()` (y el destructor) de `Gpio.Pin`, `Gpio.AnPin` y `Adc.Channel`: el pin vuelve a libre y, desde #667, también en el hardware, como en el reset, si era del programa y estaba en uso (el de un bus o un pack no se toca; un LED de la placa vuelve al firmware). PC: `[gpio] release pin=N`. |
+| 255 | `__adcInitPin(pin: integer): integer` | La vista del ADC POR PIN (`Gpio.AnPin`): busca su (unidad, canal) en el mapa, reserva el pin como analógico, inicia el canal y devuelve el canal. RTErr: el pin no existe o es del sistema (#574), `el pin N de <micro> no es analógico`, `el ADC del pin N es la unidad U y esta imagen sólo atiende la 1`, `ADC: el pin N no se pudo iniciar en esta imagen`. |
+| 256 | `__spiRelease(bus: integer)` | `Spi.Bus.release()`: el programa suelta el bus; si nadie más lo usa, se cierra y sus pines quedan libres (otro puede abrirlo distinto). RTErr: `el SPI N no lo tienes abierto`, `el SPI N es de la placa (…): no se suelta desde un programa` (el del ENV), `el SPI N lo usa también <un pack, el firmware>: no se puede soltar`. |
+| 257 | `__i2cRelease(bus: integer)` | `I2c.Bus.release()`: lo mismo para un I2C. |
+| 258 | `__spiDevOpen(bus: integer, cs: integer, baudrate: integer, mode: integer)` | `Spi.Device(bus, cs, baudrate, mode)`: se engancha al bus, que ya tiene que estar establecido (por el ENV o por un `Spi.Bus`), y reserva su CS como salida, en reposo alto. Cada dispositivo lleva su velocidad y su modo (0..3). RTErr: velocidad o modo no válidos, el bus sin establecer, el CS ocupado. |
+| 259 | `__spiDevXfer(bus, cs, baudrate, mode, op, tx: integer[], ntx, rx: integer[], nrx): integer` | Una operación del `Spi.Device`, en una transacción con su CS bajado: `op` 1 `write` (`ntx` bytes de `tx`), 2 `read` (`nrx` en `rx`), 3 `transfer` (`ntx` en los dos sentidos a la vez), 4 `writeRead` (escribe `ntx` y lee `nrx` sin soltar el CS). Devuelve los bytes (`nrx` en `read` y `writeRead`; `ntx` en los demás), o -1 si el driver falla. RTErr: `spi.write: el CS N no está reservado como salida (¿release()?)`, `… el SPI N no está abierto`, los de los arrays y el del tope. |
+| 260 | `__spiDevExec(bus, cs, baudrate, mode, ops: integer[], nops, tx: integer[], rx: integer[]): integer` | `Spi.Device.execute(t)`: la `Spi.Transaction` que reúne `Spi.bp` —`ops`, pares (tipo, bytes): 1 escribir, 2 leer, 3 transferir; `tx`, todo lo que se escribe, seguido; `rx`, todo lo que se lee— en UNA transacción, con el CS bajado de principio a fin. Se valida entera antes (cada operación, los arrays, el tope). Devuelve el total de bytes, o -1. Si otro hilo cambia la transacción mientras corre: `spi.execute: la transacción cambió mientras se ejecutaba (¿compartida entre hilos sin Mutex?)`. |
+| 261 | `__i2cWriteRead(bus, addr, tx: integer[], ntx, rx: integer[], nrx): integer` | `I2c.Bus.writeRead` (e `I2c.writeRead`): escribe `ntx` bytes y lee `nrx` con un *repeated start* entre los dos, sin soltar el bus. Hasta 256 bytes por transacción. Devuelve `nrx`, o -1 si el dispositivo no contesta (es su respuesta, como en `read`/`write`); lo que no la deja empezar —el tope, el bus, el turno— es RTErr. |
+| 262 | `__i2cExec(bus, addr, ops: integer[], nops, tx: integer[], rx: integer[]): integer` | `I2c.Bus.execute(addr, t)`: la `I2c.Transaction` —de 1 a 3 mensajes, `ops` en pares (1 escribir, 2 leer; bytes)—, con *repeated start* entre ellos; hasta 256 bytes en total. Devuelve el total de bytes, o -1 si el dispositivo no contesta. RTErr: `i2c.execute: una transacción lleva de 1 a 3 mensajes (tiene N)`, una operación no válida, un `count` negativo, el tope. |
 
 ## 263 — `__strCopy(src: string, dst: byte[], pos: integer)` → integer  *(#554, V7/H7)*
 
@@ -442,7 +517,8 @@ de ellos) se sigue soltando con `FREE_REF` / `SET_FIELD_OWNER`, sin llamar a nad
 ## 278–281 — SOLTAR el recurso de un objeto  *(V7 #667, 8-oct)*
 
 Lo que usa el `release()` de las clases que toman un canal del hardware, y su destructor, que lo llama (#668: liberar
-es destruir). Eduardo: *«Si un objeto BP consume un recurso, el objeto debe tener un destructor y liberar si es posible
+es destruir). En `Core` se llaman `__pwmRelease`, `__pulseRelease`, `__npRelease` y `__uartRelease`; la tabla da el
+nombre con que los declara cada módulo de la stdlib. Eduardo: *«Si un objeto BP consume un recurso, el objeto debe tener un destructor y liberar si es posible
 el recurso»*. Cada uno PARA lo suyo, deja la unidad libre para otro y devuelve el pin (o los pines) a como estaban en
 el reset. Cómo, lo sabe el backend de cada familia (su `release`), el único que conoce el multiplexado de su micro;
 después, el común apunta el pin como libre. En el PC no hay hardware: los stubs lo dicen por la salida, igual en las
@@ -472,6 +548,36 @@ release()»): el canal que soltó puede ser ya de otro objeto. Lo hacen `Pwm.Sli
 vuelven al reset (#667)`, y lo mismo con los contadores, las tiras, las UART y los pines. En el PC no hay hardware: la
 red calla. Las pruebas: `bpgenvm-c/samples/SueltaRecursos.bp` (la red de paridad) y `make test-suelta` (backends falsos
 que cuentan: con objetos lo sueltan sus destructores; sin objetos, la red).
+
+---
+
+## Los que no tienen fila aquí  *(el mapa por rangos)*
+
+Los de los periféricos, la GUI y algunos sueltos no tienen todavía su fila en este catálogo. Su firma exacta está en
+`bpgenvm-c/src/builtin_ids.h` (generado de `Core.bp`, con la firma BP al lado), y lo que hacen, en la clase de la stdlib
+que los usa (`referencia.html` §13–§15 y `gui.html`):
+
+| ids | qué son | los usa |
+|-----|---------|---------|
+| 78–81 | `__gpioInit`/`Write`/`Read`/`Pull` | `Gpio` |
+| 82–84, 86–89 | `__i2cInit`/`Write`/`Read`; `__spiInit`/`Write`/`Read`/`Transfer` | `I2c`, `Spi` |
+| 85 | `newIntArray` | la raíz (`Core`) |
+| 90–93 | `__uartInit`/`Write`/`Read`/`Available` | `Uart` |
+| 94–98, 99–103 | el contador de pulsos y el PWM | `Pulse`, `Pwm` |
+| 104–108, 111, 123, 201–205, 208–209, 233 | la identidad y el estado del micro: id, placa, temperatura, reloj de la CPU, `uptime`, causa del reset, las migas (`setMark`…), arranques, contadores, el micro | `Machine` |
+| 109–110 | `sleepSec`, `sleepUs` | la raíz |
+| 112–113 | el reloj (`__rtcNowSec`/`SetNowSec`) | `Rtc` |
+| 114–115 | `__adcInitChannel`/`ReadChannel` | `Adc` |
+| 116–118 | `__wdtEnable`/`Feed`/`Disable` | `Wdt` |
+| 121–122 | `heapFrag`, `heapMap` (sólo miVM) | la raíz |
+| 124–125 | `__npInit`/`Show` | `Neopixel` |
+| 131–134 | `__tcpConnect`/`Send`/`Recv`/`Close` (sólo con backend en el PC) | `Net` |
+| 135–199, 206–207, 210, 214–220, 222–223, 234–239 | la GUI: widgets, eventos, fuentes, rotación, `Chart`, los formularios, `Gui.shot` | `Gui` |
+| 200 | `eval` | la raíz |
+| 211–213 | el programa en ejecución (`mainModule`, `mainModulePath`, `projectPath`) | `App` |
+| 221, 232 | `__eventRaise`, `__runArg` | sólo el compilador |
+| 224–227 | recorrer la zona de packs y lo que lleva cada uno | `Packs` |
+| 228–231 | `clamp`, `wrap`, `hypot`, `remap` | `Math` |
 
 ---
 

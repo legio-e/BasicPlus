@@ -186,23 +186,27 @@
 
 <p>
   BasicPlus talks to <strong>SQLite</strong>. The same engine, the same <code>.db</code> file
-  and the same code on the PC, on the Metro and on the ESP32-P4. It can be used two ways, and
-  both are legitimate:
-</p>
-
-<p>
-  <strong>Which boards can.</strong> Two things are needed: native code of the engine for that
-  architecture, and RAM for its arena (2 MB at least). The <strong>Metro RP2350</strong> with
-  PSRAM (<code>psram=1</code> in the environment; the Pico 2 has none) and both
-  <strong>ESP32-P4</strong> boards (kit and Waveshare) meet them. The <strong>ESP32-S3</strong> has
-  a pack area but there is no Xtensa binary; the <strong>C3</strong> and <strong>C6</strong> have
-  no PSRAM; and the <strong>STM32</strong> boards have neither external RAM nor a card.
+  and the same code on the PC, on the Metro, on the ESP32-P4 and on the STM32 boards. It can be
+  used two ways, and both are legitimate:
 </p>
 
 <ul>
   <li><strong>with SQL</strong>, writing the statements yourself — direct and no surprises;</li>
   <li><strong>with the ORM</strong>, which writes them for you from your classes.</li>
 </ul>
+
+<p>
+  <strong>Which boards can.</strong> Two things are needed: native code of the engine for that
+  architecture —the pack brings it for ARM (RP2350 and STM32) and for the ESP32-P4's RISC-V— and
+  RAM for its arena (<a href="#pack">§1</a>). The <strong>Metro RP2350</strong> with PSRAM
+  (<code>psram=1</code> in the environment; the Pico 2 has none), both <strong>ESP32-P4</strong>
+  boards (kit and Waveshare) and, since V7, both <strong>STM32</strong> boards —the Discovery and
+  the Nucleo— meet them; the STM32s run <code>SqlDemo</code> with the database in flash, but with
+  no external RAM their arena is hundreds of KB, not megabytes: for small databases. The
+  <strong>ESP32-S3</strong> has a pack area but there is no Xtensa binary, and there is none either
+  for the FPU-less RISC-V of the <strong>C3</strong>, the <strong>C5</strong> and the
+  <strong>C6</strong>.
+</p>
 
 <h2 id="pack">1. The pack: install it first</h2>
 
@@ -212,27 +216,50 @@
   than the whole VM, and whoever does not use databases should not pay for it.
 </p>
 
-<p><strong>Build the pack</strong> (once, or whenever the library changes):</p>
+<p>
+  <strong>The pack comes built</strong>, in the package's <code>packs/</code> folder. It only
+  needs building if you change the library, from the repository:
+</p>
 
 <pre><code>java -jar lexer-java/target/basicplus-frontend.jar \
      --project bpstdlib/sqlite/SQLite.bpbuild --backend=mivm</code></pre>
 
 <p>
+  (First copy what is in <code>bpstdlib/sqlite/nativo/</code> into <code>bpstdlib/sqlite/out/</code>
+  —the engines, already compiled: the compiler does not generate them, it picks them up. The
+  details are in <code>bpstdlib/sqlite/LEEME.md</code>.)
+</p>
+
+<p>
   <strong>Burn it onto the board</strong>: in the IDE, <em>Packs</em> panel →
   <strong>«Copy pack to board…»</strong> and pick <code>packs/SQLite.pack</code>.
+  <em>Refresh</em>, <em>Delete</em> and <em>Format region…</em> are right there too. Since V7
+  the pack <strong>carries no copy of the standard library</strong>: the board takes
+  <code>Core</code> and <code>Str</code> from the <code>Stdlib.pack</code>, from flash and without
+  spending RAM, or from <code>/lib</code>, in RAM. Burn <code>packs/Stdlib.pack</code> too if the
+  board does not have it —above all on boards without PSRAM—; if something is missing when you
+  burn, the panel says so.
 </p>
 
 <p>
   <strong>Give it memory.</strong> SQLite works on an <strong>arena</strong> of its own,
-  separate from the VM heap, and its size is declared in the board's environment:
+  separate from the VM heap. It comes out of the <strong>RAM block for native engines</strong>,
+  which the board reserves at boot with the size its environment says (after changing it, a
+  reset):
 </p>
 
 <pre><code>SQLite=4</code></pre>
 
 <p>
-  Four megabytes is what the P4 uses. <strong>The minimum is 2</strong> and the maximum 4095;
-  below 2 the pack will not start, same as with <code>SQLite=0</code> or if it does not fit —
-  and boot says so on its <code>bd:</code> line.
+  In megabytes: four is what the P4 uses; <strong>the minimum is 2</strong> and the maximum
+  4095. Since V7 there is also a generic key, <code>packRam=&lt;KB&gt;</code>, in kilobytes and
+  without that minimum, which <strong>takes precedence over <code>SQLite=</code></strong> when
+  both are there; with it the boards without PSRAM run <code>SqlDemo</code>: the Discovery
+  with <code>packRam=512</code> and the Nucleo with <code>packRam=256</code>. The block belongs to <strong>all</strong> the engines on the board:
+  if it also loads the graphical interface's, SQLite gets whatever LVGL leaves. With no block
+  —neither key, <code>SQLite=</code> below 2 or a value that does not fit— the pack will not
+  start; boot says so on its <code>packs:</code> line, and the IDE's INFO under «RAM packs»,
+  with the remedy.
 </p>
 
 <p class="warn">
@@ -444,6 +471,8 @@ w.<span class="fn">eq</span>(<span class="str">"sensor_id"</span>, <span class="
   <span class="kw">end</span> loadBySensor
 <span class="kw">end</span> ReadingDaoPlus</code></pre>
 
+<p>That way you can regenerate whenever you like, which is exactly what it is designed for.</p>
+
 <h2 id="verificar">8. Verifying your entities against the real database</h2>
 
 <p>
@@ -558,7 +587,8 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
 
 <p class="warn">
   <strong>But watch the memory.</strong> Both connections come out of the <strong>same
-  arena</strong>, the one declared by <code>SQLite=&lt;MB&gt;</code>, and it does not grow: every
+  arena</strong>, the one of the block the environment declares (<code>SQLite=</code> or
+  <code>packRam=</code>, <a href="#pack">§1</a>), and it does not grow: every
   open database takes its own page cache and structures. On a PC you do not notice; on a micro
   with a 4 MB arena you do.
 </p>
@@ -588,9 +618,10 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
 
 <p>
   <strong>Where the database lives.</strong> On a board with a card, on the card:
-  <code>/sd/readings.db</code>; without one (P4, simulator), in the micro's flash:
-  <code>readings.db</code>. <strong>Do not put it in <code>resources/</code></strong> — that
-  folder is copied to the micro on every run and would overwrite your database with the project's.
+  <code>/sd/readings.db</code>; without one —and on the IDE's simulated micro, which has none—,
+  in the micro's flash: <code>readings.db</code>. <strong>Do not put it in
+  <code>resources/</code></strong> — that folder is copied to the micro on every run and would
+  overwrite your database with the project's.
 </p>
 
 <p>
@@ -608,6 +639,12 @@ b.<span class="fn">connect</span>(<span class="str">"/sd/config.db"</span>)</cod
   <code>run SqlDemo /sd/other.db</code> whatever you say; both PC CLIs take it as a second argument
   after the <code>.mod</code>. <strong>Autorun</strong> passes no argument: it starts with the
   source's default.
+</p>
+
+<p>
+  <strong>One core.</strong> On dual-core boards (the Metro, the P4), a program that uses SQLite
+  runs its threads one at a time, as on a single-core board: the engine is compiled without
+  threads. It works the same; it just does not use the second core.
 </p>
 
 <h2 id="seguir">Where to go next</h2>
