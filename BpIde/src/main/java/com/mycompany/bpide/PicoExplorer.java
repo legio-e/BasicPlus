@@ -2386,12 +2386,19 @@ public final class PicoExplorer extends JPanel {
                         .append(String.format(java.util.Locale.US, "%.1f", mtc / 1000.0))
                         .append(" °C\n");
         sb.append("GPIO        : ").append(ilong(m, "gpioCount")).append('\n');
-        /* El campo del wire se llama `pwmSlices` por historia, pero lleva
-         * SALIDAS en las tres familias (Pico 24, ESP32 8, STM32 28). Se dice,
-         * porque el banner de arranque de la Pico anuncia 12 SLICES de la misma
-         * placa: sin la unidad, las dos cifras parecen contradecirse. */
+        /* El campo del wire se llama `pwmSlices` por historia. Desde V7 (H4, la tabla de
+         * capacidades) cuenta lo que la placa da al programa —12 SLICES en la RP2350, los
+         * canales del LEDC o de los temporizadores en las ESP32 y las STM32— y el INFO trae
+         * su unidad, `pwmUnidad` («slice» o «canal»). #677: aquí ponía «salidas» a secas, y
+         * en la Pico 2 se leía «12 salidas» siendo 12 slices (24 salidas). Un firmware sin
+         * `pwmUnidad` contaba salidas: se queda esa palabra. */
         sb.append("PIO         : ").append(ilong(m, "pioCount")).append('\n');
-        sb.append("PWM         : ").append(ilong(m, "pwmSlices")).append(" salidas\n");
+        long nPwm = ilong(m, "pwmSlices");
+        String uPwm = istr(m, "pwmUnidad");
+        String pwmUnidades = uPwm.isEmpty() ? "salidas"
+                           : nPwm == 1 ? uPwm
+                           : "canal".equals(uPwm) ? "canales" : uPwm + "s";
+        sb.append("PWM         : ").append(nPwm).append(' ').append(pwmUnidades).append('\n');
         sb.append("ADC         : ").append(ilong(m, "adcChannels")).append(" canales\n");
         sb.append("Flash       : ").append(human(ilong(m, "flashBytes"))).append('\n');
         sb.append("SRAM        : ").append(human(ilong(m, "sramBytes"))).append('\n');

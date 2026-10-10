@@ -7,7 +7,14 @@ placa (o en el micro simulado) desde el panel de Packs.
 | Pack | Qué trae | Se construye con |
 |---|---|---|
 | `Stdlib.pack` | La librería estándar completa (29 módulos el 23-sep: Core, Str, Collections, Json, IO, Math, Time, Gui, Net, App, Packs, Machine y los de hardware) — los MISMOS `.mod` que `bpstdlib/`, byte a byte, y eso lo **comprueba la red** (`compat/stdlib_pack.sh`, `#537`); se reconstruye con **cada cambio de la stdlib**, no sólo con cada versión (el del 20-ago era MOD6 y tapaba al `/lib` fresco del P4, `#493`; el del 18-sep no tenía las clases del lenguaje en Core y daba `LINK_ERROR` en el micro simulado, `#537`) | `bpstdlib/Stdlib.bpbuild` |
-| `SQLite.pack` | El motor SQLite y su ORM: los módulos `SQLite` y `Orm`, más el código nativo precompilado (`.npk` + `.mdn`) para **ARM y RISC-V** | `bpstdlib/sqlite/SQLite.bpbuild` |
+| `SQLite.pack` | El motor SQLite y su ORM: los módulos `SQLite` y `Orm`, más el código nativo precompilado (`.npk` + `.mdn`) para **ARM y RISC-V** (desde V7, sin copias de la stdlib: `#623`) | `bpstdlib/sqlite/SQLite.bpbuild` |
+| `Gui.pack` | V7/H6: LVGL 9.2.2, el motor de la interfaz gráfica, para **ARM y RISC-V** —sin él, ninguna placa con pantalla pinta: LVGL ya no va en las imágenes—. Para la C5, las P4 y la DK2 | `bpstdlib/gui/Gui.bpbuild` |
+| `GuiMini.pack` | El mismo LVGL recortado para pantallas pequeñas (menos RAM: la C6) | `bpstdlib/gui/mini/GuiMini.bpbuild` |
+| `DriverSpi.pack` | El driver de los paneles por SPI (ST7789…) y su táctil, configurado por el ENV de la placa (`lcd=`, `exp=`, `touch=`): la C5 y la C6 | `bpstdlib/gui/drivers/spi/DriverSpi.bpbuild` |
+
+**Los packs no están en el repo** (`.gitignore`; salvo `Stdlib.pack`, que ya lo estaba): se construyen con su
+`.bpbuild` y se copian aquí antes de montar el ZIP. `scripts/montar-zip.sh` exige los cinco y que cada uno sea, byte a
+byte, el que sale de su compilación (`#679`: V7 iba a publicarse sin los de la GUI y con un `SQLite.pack` del 27-sep).
 
 ## Para qué sirve el `Stdlib.pack` en una placa (V7/H6, `#468`)
 

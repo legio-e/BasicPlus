@@ -1963,6 +1963,29 @@ pantalla, los dos núcleos, lo del lenguaje y la introducción de Eduardo correg
 `bp-desde-dentro`; (9) `RELEASES` v7.0. Detrás, un verificador independiente que no edita; aparte, el empaquetado y los
 dos fallos; al final, la copia del manual en el IDE y su `jar`; y Eduardo lee las notas de V7.
 
+#### ✅ `#677` — el diálogo INFO del IDE decía «PWM: 12 salidas» en la Pico 2, y son 12 slices (24 salidas) (abierta y CERRADA el 10-oct, del inventario del `D1`)
+
+Desde V7 (H4, la tabla de capacidades) el INFO cuenta lo que la placa da al programa —12 slices en la RP2350, los
+canales del LEDC o de los temporizadores en las ESP32 y las STM32— y trae su unidad, `pwmUnidad`; el IDE seguía
+poniendo «salidas» (su comentario, de V6, decía que el campo contaba salidas). Ahora pone la unidad del INFO
+(`PicoExplorer.java`); con un firmware sin el campo, «salidas». Compila; el `jar`, con el del `D1`.
+
+#### ✅ `#678` — el `--help` de la VM Java daba el orden viejo de los imports, «as-given → modulePaths → stdlibDir → cwd» (abierta y CERRADA el 10-oct, del inventario del `D1`)
+
+Ahora el de `#493`, el mismo de la VM-C: el pack en ejecución → la carpeta del módulo raíz → el workdir → los
+`modulePaths` → `stdlibDir`; ni el cwd ni el `from` del import (`ModuleManager.java`, `resolveModulePath`).
+
+#### ✅ `#679` — el ZIP de V7 iba a salir sin los packs de la GUI y con un `SQLite.pack` del 27-sep (abierta y CERRADA el 10-oct, del inventario del `D1`)
+
+`packs/` no está en el repo —los packs son artefactos de distribución, `.gitignore`, criterio de Eduardo del 13-ago— y
+`montar-zip.sh` copiaba lo que hubiera: faltaban `Gui`, `GuiMini` y `DriverSpi` —sin los que ninguna placa con pantalla
+pinta— y el `SQLite.pack` era el viejo, con las copias de la stdlib que `#623` quitó. **Hecho**: los cinco, copiados de
+su compilación; `montar-zip.sh` exige los cinco y que cada uno sea, byte a byte, el de su `.bpbuild` —probada aparte
+(el script entero, con el `pom` aún en 6.0, rehace `dist/BasicPlus-6.0-win`, el oráculo de V6): falla con el
+`Stdlib.pack` del 9-oct de las 10:08 (los mismos módulos; sólo la fecha de su cabecera), pasa con los cinco y falla sin
+`GuiMini`—; el `LEEME` del ZIP, con ocho imágenes, la C5 y la pantalla en packs; y `packs/README.md`, con las tres
+filas de la GUI.
+
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 
 **Visto el 2-oct, leyendo**: el botón Stop del IDE, en depuración, manda `KILL` (`BpvmClient.java:660-664`). En la Pico

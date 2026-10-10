@@ -32,6 +32,25 @@ echo "== BasicPlus $VER =="
 # así que un jar viejo con otro nombre se detecta aquí y no en la release).
 [ -f "$JAR" ] || { echo "FALTA $JAR — 'mvn package' en BpIde primero"; exit 1; }
 
+# #679 (10-oct, el D1 de V7) — LOS PACKS, LOS DE LA COMPILACIÓN. `packs/` no está en el repo (son
+# artefactos: .gitignore) y nadie lo rellena solo: V7 iba a publicarse SIN los packs de la GUI —sin
+# los que ninguna placa con pantalla pinta, porque LVGL ya no va en las imágenes— y con un
+# SQLite.pack del 27-sep, con las copias de la stdlib que #623 quitó. Aquí se exige que estén los
+# cinco y que cada uno sea, byte a byte, el que sale de su .bpbuild.
+for par in "Stdlib.pack:bpstdlib/out/Stdlib.pack" \
+           "SQLite.pack:bpstdlib/sqlite/out/SQLite.pack" \
+           "Gui.pack:bpstdlib/gui/out/Gui.pack" \
+           "GuiMini.pack:bpstdlib/gui/mini/out/GuiMini.pack" \
+           "DriverSpi.pack:bpstdlib/gui/drivers/spi/out/DriverSpi.pack"; do
+    pk="${par%%:*}"; src="${par#*:}"
+    if [ ! -f "$RAIZ/$src" ]; then
+        echo "FALTA $src — compila su .bpbuild (packs/README.md) antes de montar el ZIP"; exit 1
+    fi
+    if [ ! -f "$RAIZ/packs/$pk" ] || ! cmp -s "$RAIZ/packs/$pk" "$RAIZ/$src"; then
+        echo "packs/$pk FALTA o NO es el de la compilación — cp $src packs/"; exit 1
+    fi
+done
+
 rm -rf "$OUT"; mkdir -p "$OUT"/{bin,packs,docs,firmware,bpstdlib,bpdevices,samples}
 
 # --- el IDE -----------------------------------------------------------------
@@ -136,13 +155,14 @@ cp "$RAIZ/dist/firmware/"*.uf2 "$RAIZ/dist/firmware/"*.bin \
 # El README de dist/firmware es la nota INTERNA (habla de H13, PUBLICAR.md, «ayer»):
 # al usuario le vale INSTALAR_FIRMWARE.md, que viaja en docs/. Un LEEME corto apunta.
 cat > "$OUT/firmware/LEEME.md" <<'LEEME'
-# firmware/ — las siete imágenes de BasicPlus
+# firmware/ — las ocho imágenes de BasicPlus
 
 | fichero | placas |
 |---|---|
 | `bpvm_pico.uf2` | Raspberry Pi Pico 2 · Adafruit Metro RP2350 |
 | `bpvm_esp32_merged.bin` | ESP32-S3 |
 | `bpvm_esp32c3_merged.bin` | ESP32-C3 |
+| `bpvm_esp32c5_merged.bin` | ESP32-C5 (Waveshare ESP32-C5-Touch-LCD-2.8) |
 | `bpvm_esp32c6_merged.bin` | ESP32-C6 (Waveshare ESP32-C6-LCD-1.3) |
 | `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" |
 | `bpvm_stm32_nucleo.bin` | Nucleo-U575ZI-Q |
@@ -150,7 +170,12 @@ cat > "$OUT/firmware/LEEME.md" <<'LEEME'
 
 Cómo se graba cada una: `docs/INSTALAR_FIRMWARE.md` (`docs/en/INSTALAR_FIRMWARE.md`).
 Los `_merged.bin` van al **offset 0** (bootloader + particiones + aplicación en un
-solo fichero). `SHA256SUMS.txt` sella las siete: `sha256sum -c SHA256SUMS.txt`.
+solo fichero). `SHA256SUMS.txt` sella las ocho: `sha256sum -c SHA256SUMS.txt`.
+
+**La pantalla no va en las imágenes**: en las placas con pantalla (la C5, la C6, las
+P4 y la DK2) hay que grabar además el pack de la GUI, que está en `packs/` junto con
+los demás (Stdlib, SQLite, Gui, GuiMini y DriverSpi). Qué pack lleva cada placa y cómo
+se graba desde el IDE: `docs/INSTALAR_FIRMWARE.md`, «Los packs de la placa».
 `boards/` trae las plantillas de `/sys/board.json` del RP2350 (la Metro lo necesita
 para su nombre y su NeoPixel; la Pico 2 no).
 LEEME

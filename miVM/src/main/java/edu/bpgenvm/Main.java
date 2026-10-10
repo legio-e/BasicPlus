@@ -486,6 +486,8 @@ public class Main {
         out.println("    \"main\":        \"out/MyApp.mod\",       // .mod del módulo de arranque");
         out.println("    \"modulePaths\": [\"out\", \"../shared\"]   // dirs donde buscar imports");
         out.println("  }");
-        out.println("Resolución de imports: as-given → modulePaths → stdlibDir → cwd.");
+        out.println("Resolución de imports (el mismo orden que la VM-C): el pack en ejecución →");
+        out.println("  la carpeta del módulo raíz → el workdir → los modulePaths → stdlibDir.");
+        out.println("  Ni el cwd ni el `from` del import cuentan (el `from` es una pista del compilador).");
     }
 }
