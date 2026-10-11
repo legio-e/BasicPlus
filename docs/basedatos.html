@@ -186,7 +186,7 @@
 
 <p>
   BasicPlus habla con <strong>SQLite</strong>. El mismo motor, el mismo fichero
-  <code>.db</code> y el mismo código en el PC, en la Metro, en el ESP32-P4 y en las STM32. Se
+  <code>.db</code> y el mismo código en el PC, en la Metro, en el ESP32-P4 y en la Discovery (STM32). Se
   puede usar de dos maneras, y las dos son legítimas:
 </p>
 
@@ -200,9 +200,10 @@
   arquitectura —el pack lo trae para ARM (RP2350 y STM32) y para el RISC-V del ESP32-P4— y RAM
   para su arena (<a href="#pack">§1</a>). Las cumplen la <strong>Metro RP2350</strong> con PSRAM
   (<code>psram=1</code> en el entorno; la Pico 2 no la tiene), los dos <strong>ESP32-P4</strong>
-  (kit y Waveshare) y, desde V7, las dos <strong>STM32</strong> —la Discovery y la Nucleo—, que
-  corren <code>SqlDemo</code> con la base en la flash; sin RAM externa, su arena es de cientos de
-  KB y no de megas: para bases pequeñas. El <strong>ESP32-S3</strong> tiene zona de packs pero no
+  (kit y Waveshare) y, desde V7, la <strong>Discovery</strong> (STM32), que corre
+  <code>SqlDemo</code> con la base en la flash; sin RAM externa, su arena es de cientos de KB y no
+  de megas: para bases pequeñas. La <strong>Nucleo</strong>, no: no tiene memoria suficiente para
+  una base de datos, y en V7 su zona de packs lleva sólo el <code>Stdlib.pack</code>. El <strong>ESP32-S3</strong> tiene zona de packs pero no
   hay binario para Xtensa, y tampoco lo hay para el RISC-V sin FPU del <strong>C3</strong>, el
   <strong>C5</strong> y el <strong>C6</strong>.
 </p>
@@ -253,8 +254,8 @@
   En megas: cuatro es lo que usa el P4; <strong>el mínimo son 2</strong> y el máximo 4095.
   Desde V7 hay además una clave genérica, <code>packRam=&lt;KB&gt;</code>, en kilobytes y sin
   ese mínimo, que <strong>manda sobre <code>SQLite=</code></strong> si están las dos; con ella
-  corren <code>SqlDemo</code> las placas sin PSRAM: la Discovery con <code>packRam=512</code> y
-  la Nucleo con <code>packRam=256</code>. El bloque es de <strong>todos</strong> los motores de
+  corre <code>SqlDemo</code> la Discovery, sin PSRAM, con <code>packRam=512</code>. El bloque es
+  de <strong>todos</strong> los motores de
   la placa: si carga también el de la interfaz gráfica, a SQLite le queda lo que deje LVGL. Sin
   bloque —ninguna de las dos claves, <code>SQLite=</code> por debajo de 2 o un valor que no
   cabe— el pack no arranca; el arranque lo dice en su línea <code>packs:</code>, y el INFO del

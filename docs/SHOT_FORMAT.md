@@ -124,6 +124,7 @@ bloque donde dice su rectángulo.
 | | pantalla | crudo RGB565 | banda LVGL | franjas de 24 |
 |---|---|---|---|---|
 | C6 | 240×240 | 115 200 B | 24 filas (11 520 B) | 10 |
+| C5 | 240×320 | 153 600 B | 24 filas (11 520 B) | 14 |
 | DK2 | 800×480 | 768 000 B | 48 filas | 20 |
 | P4 | 1024×600 | 1 228 800 B | 120 filas | 25 |
 | host | 480×320 (`--screen=`) | 307 200 B | DIRECT: 1 flush entero (`--no-screen`: 10 filas) | 14 |

@@ -467,7 +467,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 </p>
 <table>
   <tr><th>Scope</th><th>Where it lives</th></tr>
-  <tr><td>Function local</td><td>In the frame: <code>4 + N·width</code> bytes, zeroed when it is declared. No heap, no GC.</td></tr>
+  <tr><td>Function local</td><td>In the frame: <code>4 + ⌈N·width/4⌉·4</code> bytes (the data is rounded up to 4: a <code>byte[3]</code> takes 8), zeroed when it is declared. No heap, no GC.</td></tr>
   <tr><td>Class <code>private var</code> field</td><td>Inside the object: <code>1 + ⌈N·width/4⌉</code> slots (up to 255), zeroed when the object is constructed. Only the class itself indexes it.</td></tr>
   <tr><td>Module global</td><td><strong>No</strong> (compile error): at module level write <code>T[]</code>, with a literal <code>[…]</code> or <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.</td></tr>
 </table>
@@ -605,7 +605,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <strong>A global variable is always worth what its declaration says.</strong>
   Globals —module <code>var</code>s and properties, and a class's static
   <code>var</code>s and properties— live in the module's constant space: with no
-  initial value they are 0 (or <code>null</code>); with a <strong>literal</strong>
+  initial value they are 0 (or <code>null</code>; a <code>string</code>, <code>""</code>); with a <strong>literal</strong>
   value (numeric/boolean/string), it is <em>baked</em> into the <code>.mod</code>,
   with no startup code, and the variable remains reassignable. Any other initial
   value —an array literal, a call, an object, an expression— is <em>computed when
@@ -614,14 +614,19 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   with the same name as the module), which finds them already set.
 </p>
 <p>
-  A <code>string</code> or an array with no value —a global or a field that nobody has
-  assigned— is <code>null</code>, and it behaves as empty: it prints and concatenates as
-  <code>""</code> and <code>len</code> gives 0, the same on both VMs. Indexing it, on the other
-  hand, throws a <code>RuntimeError</code> (index out of range).
+  A global <code>string</code> or a <code>string</code> field with no value —that nobody has
+  assigned— is <code>""</code>: it prints and concatenates as <code>""</code>, <code>len</code> gives 0 and
+  <code>charAt(s, 0)</code> throws the same <code>RuntimeError</code> as with <code>""</code>
+  ("charAt: idx fuera de rango 0 (len=0)"), the same on both VMs. (A <code>string</code> is a
+  scalar: it does not take <code>null</code>; assigning it is a compile error.) A global array or an
+  array field with no value is indeed <code>null</code>: <code>len</code> gives 0 and a <code>for</code> over it does
+  not loop at all, but indexing it throws a <code>RuntimeError</code> (index out of range), the
+  same on both VMs; and <code>print</code> does not show its contents (for one with no value it
+  prints 0).
 </p>
 <p>
   <strong>A local variable is initialized before it is read.</strong> A module <code>var</code> with no
-  initializer is 0 (or <code>null</code>): it lives in the data block of the <code>.mod</code>. A
+  initializer is 0 (or <code>null</code>; a <code>string</code>, <code>""</code>): it lives in the data block of the <code>.mod</code>. A
   <em>local</em> with no initializer has an <strong>indeterminate</strong> value —whatever was on the
   stack—, so reading it before giving it a value is a <strong>compile error</strong>, with its line. The
   compiler checks that along <em>every</em> path that reaches a read —the branches of an <code>if</code>,
@@ -957,7 +962,7 @@ label(<span class="str">"hi"</span>, <span class="str">"&lt;"</span>, <span clas
           <td>AOT-accelerated — same Thumb-2 code as the RP2350
               (≈45× measured on an LZSS kernel on-board).</td></tr>
       <tr><td>ESP32-P4 (RISC-V with FPU)</td>
-          <td>AOT-accelerated (target <code>riscv32-esp-p4</code>, since V4).</td></tr>
+          <td>AOT-accelerated (target <code>riscv</code> —<code>riscv32-esp-p4</code>—, since V4).</td></tr>
       <tr><td>ESP32-C5 / ESP32-C3 / ESP32-C6 (RISC-V without FPU)</td>
           <td>AOT-accelerated (target <code>riscv-imc</code>, <code>ilp32</code> ABI, since
               V7; tested on the board on the C5, the C3 and the C6). Without an FPU, every
@@ -1705,11 +1710,24 @@ Counter.bump()</code></pre>
       <code>try/catch</code> or <code>throw</code> (<a href="#excepciones">§11</a>) are used without
       writing it. Writing it changes nothing.</li>
   <li><strong>Imports are not transitive</strong> (<code>Core</code> aside, which is always
-      there). Importing <code>A</code> does not bring in the modules <code>A</code> imports: if a
-      class of <code>A</code> extends one of <code>B</code>, or a signature of <code>A</code> uses an
-      enum of <code>B</code>, the module that uses them has to import <code>B</code> too — the
-      compiler says so: "la clase 'X' extiende 'B.Y' y este modulo no importa 'B': anade
-      `import B` (los imports no son transitivos)".</li>
+      there). Importing <code>A</code> does not bring in the modules <code>A</code> imports: to
+      name a type of <code>B</code> you have to import <code>B</code> ("tipo cualificado 'B.Y'
+      no encontrado"), and also if what you use from <code>A</code> depends on <code>B</code>. The
+      compiler says so depending on the case:
+      <ul>
+        <li>a signature of <code>A</code> (of a function or of a method) uses an enum of
+            <code>B</code>: it is an error, even if you do not use that signature — "la firma de
+            'A.f' usa el enum 'B.E' y este módulo no importa 'B' (un enum no puede cruzar sin
+            resolver): añade `import B`";</li>
+        <li>a class of <code>A</code> extends one of <code>B</code>: it is a <em>warning</em>
+            —"base cross-module 'B.Y' de la clase importada 'A.X' no resuelta (¿falta el import
+            de su módulo?) — sin sus miembros heredados"— and the class is used without what it
+            inherits from <code>B</code>: calling an inherited member is an error ("'X' no tiene
+            miembro de instancia 'm'");</li>
+        <li>a class of yours extends one of <code>B</code> without importing it: it is an error —
+            "la clase 'Z' extiende 'B.Y' y este modulo no importa 'B': anade `import B` (los
+            imports no son transitivos)".</li>
+      </ul></li>
   <li><strong>A library can grow without recompiling its users</strong> (since V7, <em>late
       binding</em>): a <code>.mod</code> carries its references to other modules' classes by name and
       signature, and the loader resolves them against the version it finds. An added method,
@@ -1893,11 +1911,16 @@ Within one module, two classes may refer to each other with no problem.</p>
   <li>An exception that nobody catches on the <code>main</code> thread ends the program with
       <strong>exit code 1</strong> (the same on both VMs and on the board); on another thread it
       ends <em>that</em> thread, the others carry on, and at the end the program exits with 1 all
-      the same (<a href="#conc-modelo">§14.1</a>). The report names the exception's class
-      (<code>Core.RuntimeError: …</code>, <code>MiMod.MiError: …</code>) and it is diagnostic, not
-      program output: the Java VM shows a stack trace with the symbolic name of each frame,
-      the C VM the message, and the IDE picks it up in its console
-      (<code>help error</code> lists the codes).</li>
+      the same (<a href="#conc-modelo">§14.1</a>). The report is diagnostic, not program output,
+      and the IDE picks it up in its console (<code>help error</code> lists the codes); but the
+      two VMs do not give it the same way. The C VM —the boards' one— names the exception's
+      class and its message, whether the program or the VM itself threw it
+      (<code>excepcion no atrapada: Core.RuntimeError: División por cero</code>,
+      <code>… MiMod.MiError: …</code>). The Java VM, with a <code>throw</code> of the
+      program, names the class too (<code>Excepción no atrapada: MiMod.MiError: …</code>) and adds
+      a stack trace with the symbolic name and the line of each frame; but with an error of the VM
+      itself —division by zero, index out of range…— it only gives the message
+      (<code>"División por cero"</code>), with neither the class nor the stack trace.</li>
 </ul>
 
 <!-- =========================================================== -->
@@ -2094,12 +2117,16 @@ shared object</code></pre>
   whoever created it.
 </p>
 <p>
-  The SMP race <strong>B1</strong> (two workers on the same thread context) was
-  closed in V6: only the worker that owns a thread decides about it, and on the C VM
-  the <code>Mutex</code> became atomic. <code>synctest.bp</code>,
-  <code>synclisttest.bp</code> and <code>modpropsync.bp</code> are the reference
-  tests. On the PC, SMP remains opt-in (one worker by default); on the board, the C VM
-  uses both cores where there are two (<a href="#conc-nucleos">§14.6</a>).
+  The Java VM's SMP race <strong>B1</strong> (two workers on the same thread context)
+  <strong>is not closed</strong>: with more than one worker (<code>--workers</code>), the
+  Java VM is still experimental, as it has been since V2. Two of its paths have been
+  closed —in V6, the one that was showing (only the worker that owns a thread decides
+  about it); in V7, the one of a <code>sleep(0)</code> (<code>#613</code>)—, but it is not
+  proven that it has no others. The C VM does not have it (its scheduler does not claim a
+  thread that still has an owner), and since V6 its <code>Mutex</code> is atomic.
+  <code>synctest.bp</code>, <code>synclisttest.bp</code> and <code>modpropsync.bp</code> are
+  the reference tests. On the PC, SMP remains opt-in (one worker by default); on the
+  board, the C VM uses both cores where there are two (<a href="#conc-nucleos">§14.6</a>).
 </p>
 
 <!-- =========================================================== -->
@@ -2147,8 +2174,9 @@ sb.appendStr(<span class="str">"Humidity: "</span> + h)
   run by the same run, so they can be touched from any thread.
 </p>
 <p>
-  What you gain depends on the program: two threads computing at the same time go almost twice
-  as fast (measured: ×2 on the P4, ×1.55–1.68 on the Pico&nbsp;2, ×1.13 on the Metro); with
+  What you gain depends on the program and on the board: two threads computing at the same time
+  go faster, up to twice as fast (measured: ×2 on the P4, ×1.55–1.68 on the Pico&nbsp;2, ×1.13 on
+  the Metro); with
   strings, little or nothing (×1.33 on the P4; on the Pico&nbsp;2, ×0.83: it loses); and a
   single-threaded program gains nothing (<a href="#pendientes">§17</a>).
   A program being debugged, or one that uses SQLite, runs with one run even if there are two.
@@ -2163,8 +2191,14 @@ sb.appendStr(<span class="str">"Humidity: "</span> + h)
   cores, the board leaves the report in the log —in RAM that survives the reboot—, reboots by
   itself in half a second and, when it starts, says so (<code>Machine.resetCause()</code> and
   the IDE's INFO give "fallo fatal") and <strong>does not launch the autorun</strong>: a program
-  that failed right at startup would be a reboot loop; from the IDE it is started by hand.
-  Keeping the failure of one run from bringing the whole board down is for V8.
+  that failed right at startup would be a reboot loop; from the IDE it is started by hand. The
+  ESP32 boards do the same with the autorun: after a panic (a processor exception) or the
+  interrupt watchdog, the board reboots and the next boot <strong>does not launch it</strong> and
+  says so in the log and on the console (<code>Machine.resetCause()</code> gives
+  <code>panic/exception</code> or <code>int-watchdog</code>). The task watchdog, the one the
+  <code>Wdt</code> module arms, is not a fatal failure: after it, the autorun is launched. On the
+  STM32 boards, a HardFault leaves the report in the log and the board stopped. Keeping the
+  failure of one run from bringing the whole board down is for V8.
 </p>
 
 <h2 id="eventos">15. Events</h2>
@@ -2267,9 +2301,8 @@ was here and is now done: up to V6, classes/properties in the interface
 <code>Collections.Map</code>, the project file, the GC's stop-the-world
 safepoint, automatic AOT from the IDE, the GUI
 (<a href="gui.html">separate volume</a>), <code>catch e</code> as
-<code>Exception</code> (<a href="#excepciones">§11</a>), the native code inside
-the <code>.mod</code> (<a href="#funciones-native">§8.3</a>) and the SMP race
-B1 (<a href="#conc-gc">§14.4</a>); and in V7, the root module with an implicit
+<code>Exception</code> (<a href="#excepciones">§11</a>) and the native code inside
+the <code>.mod</code> (<a href="#funciones-native">§8.3</a>); and in V7, the root module with an implicit
 <code>import Core</code> (<a href="#raiz">§10.0</a>), the destructor and <code>try var</code>
 (<a href="#destructor">§9.4b</a>) —owners are destroyed also when an exception goes out—,
 the cast from any ancestor (<a href="#any">§4.5</a>), the signed <code>step</code>
@@ -2292,12 +2325,12 @@ with no limit (<a href="#conc-modelo">§14.1</a>) and the two cores on the board
   <li><strong>AOT on the ESP32-S3 (Xtensa)</strong> — its <code>native</code> functions
       run <strong>interpreted</strong>: the AOT emits ARM (Thumb-2) and RISC-V, not
       Xtensa. The IDE says so at compile time, naming the targets that do exist, and the
-      program still works — just without the speedup. <em>Measured on 22-ago on an S3
+      program still works — just without the speedup. <em>Measured on 22 Aug on an S3
       DevKit: <code>fib(28)</code> takes the same time either way.</em> No date,
       outside the version plan.
       <br><strong>The ESP32-P4 DOES accelerate</strong> (RISC-V, since V4), like the
       RP2350 and the STM32; and since V7 so do <strong>the C5, the C3 and the C6</strong>
-      (RISC-V without FPU, <code>ilp32</code> target:
+      (RISC-V without FPU, target <code>riscv-imc</code>, <code>ilp32</code> ABI:
       <a href="#funciones-native">§8.3</a>).</li>
   <li><code>input()</code> only exists on the PC Java VM; on the C VM (PC and boards) it
       throws <code>RuntimeError</code> ("builtin 37 no soportado en esta VM") — the same
@@ -2319,10 +2352,14 @@ with no limit (<a href="#conc-modelo">§14.1</a>) and the two cores on the board
   <li>Closures over the enclosing scope's locals in <code>case</code> bodies of
       the <code>parallel</code> statement (today only stdlib + module
       non-globals are visible — see <a href="#conc-encapsulacion">§14.3</a>).</li>
+  <li>More than one worker on the Java VM (<code>--workers</code>, the PC's SMP): experimental
+      since V2, with the B1 race (<a href="#conc-gc">§14.4</a>). By default it runs with one; on
+      the board, the two cores are used by the C VM (<a href="#conc-nucleos">§14.6</a>).</li>
   <li>With the RP2350's dual-core image —the default one on the Pico&nbsp;2 and the Metro—, a
       single-threaded program runs slower than it should: on the Metro, by 35&nbsp;% (also with
       <code>vm.cores=1</code>: it is the image, not the other core); on the Pico&nbsp;2, one that
-      prints a lot, by 19&nbsp;%. And strings gain nothing with two threads
+      prints a lot (<code>PrintBench</code>) takes 1&nbsp;270&nbsp;ms against 817 with the single-core image, and
+      pure computation 1.8&nbsp;% more. And strings gain nothing with two threads
       (<a href="#conc-nucleos">§14.6</a>). It is being investigated in V8 (<code>#665</code>).</li>
   <li>Keeping the fatal failure of one run from bringing the whole board down
       (<a href="#conc-nucleos">§14.6</a>): in V8.</li>

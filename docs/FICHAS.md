@@ -1915,7 +1915,7 @@ del pack; la ronda de V7, verde e idéntica a la de la mañana (`tanda_v7_9oct_s
 pantalla—); y la caché, probada: tras un `PACK_DEL`, el `PACK_LS` del momento lo da por BORRADO sin reiniciar, y el
 pack se vuelve a grabar. **CERRADA.**
 
-#### 📚 `D1` — LA DOCUMENTACIÓN DE V7 (abierto el 10-oct)
+#### 📚 `D1` — LA DOCUMENTACIÓN DE V7 (abierto el 10-oct · escrita, verificada y corregida el 11-oct; falta que Eduardo lea las notas de v7.0)
 
 **El método**, el del `D1` de V6 (en el archivo, «📚 `D1` — LA DOCUMENTACIÓN DE V6»): medir, no leer; editores en
 paralelo y un verificador independiente. **Y la idea de Eduardo** (9-oct): *«repasar todos los issues de V7 y ver si
@@ -1963,6 +1963,25 @@ pantalla, los dos núcleos, lo del lenguaje y la introducción de Eduardo correg
 `bp-desde-dentro`; (9) `RELEASES` v7.0. Detrás, un verificador independiente que no edita; aparte, el empaquetado y los
 dos fallos; al final, la copia del manual en el IDE y su `jar`; y Eduardo lee las notas de V7.
 
+**Hecho (10 y 11-oct).** Escribieron los nueve editores (WIP `ef37121a`). Tres verificadores independientes, sin editar,
+midieron los 27 documentos: 8 FALSO, 19 DUDOSO y 35 cosméticos, y ninguna frase falsa del inventario seguía viva. Tres
+correctores, uno por informe, lo aplicaron en ES y EN. Se dejan las cosas que esperan a la placa: la pantalla limpia tras
+Stop, los ADC 4–7 de la Metro y los tamaños de memoria de la Metro, la S3 y la C5. **De Eduardo (11-oct)**:
+- V7, sin subtítulo.
+- Las cifras del segundo núcleo, coherentes: la P4, «el 200 % (en las cadenas, el 133 %)»; el RP2350, 113–168 % sin las
+  cadenas, que allí van más lentas.
+- **Un apéndice nuevo en la referencia, «A. Las claves del ENV»**: *«en esta versión han aparecido un montón de
+  variables y es imposible acordarse de todas»*. Recoge las 24 claves, sus valores, qué hacen, en qué placas y cuándo se
+  leen, sacadas de un censo del código. La tabla del §9.3 de la guía del IDE pasa a él.
+
+Además, los destinos AOT, con la familia de `aot.targets` y su nombre largo. Al final:
+- `doc_frags`: 602 bloques en 25 documentos, 314 compilados, **0 FALLO**.
+- 1 024 enlaces internos en 26 documentos, 0 rotos.
+- El manual del IDE, idéntico al de `docs/`, y `BpIde-7.0.jar`.
+
+**Del `D1` salieron** `#677`–`#680` (cerradas) y `#681`–`#687` (abiertas). La documentación ya describe lo decidido de
+`#681`, `#682`, `#684` y `#685`. **Falta**: que Eduardo lea las notas de v7.0.
+
 #### ✅ `#677` — el diálogo INFO del IDE decía «PWM: 12 salidas» en la Pico 2, y son 12 slices (24 salidas) (abierta y CERRADA el 10-oct, del inventario del `D1`)
 
 Desde V7 (H4, la tabla de capacidades) el INFO cuenta lo que la placa da al programa —12 slices en la RP2350, los
@@ -1995,6 +2014,62 @@ condición en el analizador (`sintetizarCtores`) y en el emisor (el constructor 
 en la paridad —la clase sola, con un inicializador, una subclase sin constructor, otra con el suyo y una nieta con su
 propio campo fijo—: con el compilador de antes, «Caja: 0» y la excepción en las dos VMs; ahora, las seis idénticas. El
 frontend con sus pruebas; la red entera, verde (paridad 148, MOD8, dos workers, estrés, `packs-abi`, stdlib embebida).
+
+#### `#681` — las ESP32 lanzan el autorun aunque el arranque anterior acabara en un fallo fatal (pánico o watchdog de interrupción): un autorun que revienta deja la placa reiniciándose sin fin (abierta el 10-oct, del `D1`; Eduardo: «Sí, en V7») — EN CURSO
+
+**Hecho, sin commit**: `repl_esp32_autorun` mira `esp_reset_reason()` y, con `ESP_RST_PANIC` o `ESP_RST_INT_WDT`, NO lanza
+el autorun y lo dice en el log y en la consola (el `ESP_RST_TASK_WDT` del módulo `Wdt` sí relanza, como antes). Para
+probarlo, el gemelo del `prueba.fallo=1` de la Pico en `esp32_run_tras_cargar` (un `abort()`, SÓLO PRUEBAS). Las cinco
+imágenes ESP compilan. **Falta**: la prueba en la S3 o la P4 —grabar y poner la clave en el ENV, con el OK de Eduardo— y
+el commit.
+
+#### `#682` — con el pack de la GUI grabado pero su motor sin cargar (sin `packRam=`, o con el motor rechazado), la GUI decía «esta placa no tiene el pack 'LVGL' grabado»: falso, y manda a grabar lo que ya está (abierta el 10-oct, del `D1`; Eduardo: «Sí, en V7») — EN CURSO
+
+**Hecho, sin commit**: `bpvm_npack_por_que_falta(npk)` (`bpvm_npack_carga.c`) distingue «falta packRam= en el ENV», el
+aviso del motor y «mira el log de la placa»; `gui_pack.c` lo pone en el mensaje; `test_guipack.c`, con el doble y el caso
+1a. Las imágenes compilan. **Ojo (11-oct)**: `gui_pack.c` es GENERADO (`scripts/gen_gui_pack.py`, «NO EDITAR») y el cambio
+se hizo a mano: `test-guipack` falla con «DESACTUALIZADO». Va al generador (`RESOLVER_C`) y se regenera. Y el motivo
+llega al programa en el mensaje de una excepción, que se corta a 90 bytes (`exceptions.c:218`, lo vio el corrector 1 del
+`D1`): con el aviso largo del motor («realojado para OTRA direccion…»), el IDE lo enseña cortado. **Falta**: eso;
+`test-guipack` y la red (`compat.sh check`); la prueba en una placa con GUI sin `packRam=` (con el OK); el commit.
+
+#### `#683` — la ayuda de los códigos de salida del IDE (`PicoExplorer`) daba el 4 como «sin memoria» en general: llenar el heap o la pila MIENTRAS corre es un `RuntimeError`, y sin atrapar sale con el 1 (abierta el 10-oct, del `D1`) — EN CURSO
+
+**Hecho, sin commit**. **Falta**: rehacer `BpIde` (ya 7.0 en el pom; con el IDE cerrado) y el commit.
+
+#### `#684` — `charAt` sobre un string SIN VALOR (una global `var gs: string` sin inicializar): miVM lanza «idx fuera de rango» como con `""`, y la VM-C devuelve `""` y sigue (`builtins.c:946`) —paridad rota— (abierta el 10-oct, del verificador 2 del `D1`) — ABIERTA
+
+Un `null` escrito no llega: un string es escalar y `null` no se le asigna. `var s: string := null` y
+`charAt("abc", null)` son errores de compilación, comprobado el 11-oct; Eduardo: *«es un error de compilación, no un
+error de runtime»*. Una LOCAL leída sin valor, también: es la asignación definida de `#540`. Lo que queda es una GLOBAL
+o un CAMPO: *«las variables globales siempre se inicializan»* (Eduardo, `#540`) y los objetos nacen a cero. Un string
+así compila y vale `""` (print, concatenación y `len`, `#512`). Así que
+`charAt(gs, 0)` tiene que ser lo que es `charAt("", 0)`: el índice fuera de rango, en ejecución. miVM lo hace así
+(`readVmString(0)` es `""`). `bpvm_prim_char_at` se salta la comprobación cuando `s == 0`. **El arreglo**: con
+`s == 0`, el mismo error que con el vacío. Antes, censar las demás primitivas de cadena de la VM-C con el mismo
+`if (s != 0u)`. La documentación lo describe así, con «sin valor» y no «null».
+
+#### `#685` — la VM-C corta a 127 caracteres los nombres exportados (`loader.c:458` y `:485`) y el compilador no pone tope a las funciones de módulo: una firma de 142, llamada desde otro módulo, corre en miVM y NO enlaza en la VM-C —paridad rota— (abierta el 10-oct, del verificador 2 del `D1`) — ABIERTA
+
+Mirado el 11-oct: el tope de V10 (16-sep), «firma canónica ≤ 160», lo aplica `ModWriter.exigirClaveCorta` sólo a las
+refs (`requireRef`) y a los métodos (`setMethodMeta`). Las funciones exportadas no pasan por él, y el cargador de la VM-C
+copia los nombres de los exports en `char name[128]`. **El arreglo**: `exigirClaveCorta` en el ÚNICO sitio que escribe
+la tabla de exports (funciones, alias y símbolos de datos, ~l. 2696 de `ModWriter`), y los búferes de la VM-C a la
+medida del lenguaje. Antes, censarlos: `loader.c` (`name[128]` ×2, `pqual[128]` ×2) y `link.c` (`nm[128]`; `canon[160]`
+en la l. 613, que deja 159; `"%.120s.%.120s"` en la l. 866). La documentación ya da el 160 para las funciones.
+
+#### `#686` — en la P4, un ENV que deja a la VM menos de 2 MB (`vmheap`, o `packRam`/`SQLite` que se comen el resto) hace `abort()` en CADA arranque: un bucle de reinicios sin IDE, y el ENV en la flash (abierta el 11-oct, del censo del ENV para el apéndice del `D1`) — ABIERTA
+
+`esp32p4/main/main.c:430` y el `abort()` de `:449-451`. En las demás familias, por debajo del suelo (64 KB) la placa
+arranca sin VM, degradada, y el IDE la ve. Aquí la única salida es borrar el ENV con esptool. **Propuesta**: lo mismo
+que las demás, el arranque degradado con el motivo. La documentación (el apéndice del ENV) avisa del mínimo.
+
+#### `#687` — un número del ENV con un 0 delante se lee en OCTAL y en silencio: `stack=064` son 52 KB (abierta el 11-oct, del censo del ENV) — ABIERTA
+
+El lector de enteros del ENV usa `strtol` con base 0. Nadie escribe octal en un ENV: es una trampa callada. **Propuesta**:
+decimal o `0x`, y lo demás, error en el log con la clave. De paso, el micro simulado (`tools/bpvm_sim.c`) lee `gc` y
+`latido` con otro lector: `gc=yes` apaga el GC en el simulado y en la placa no. La documentación dice «decimal o `0x`,
+sin un 0 delante».
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 

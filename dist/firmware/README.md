@@ -30,8 +30,9 @@ el panel sale del **ENV** (`display=st7701`), no de la imagen (#311). En V7 son 
 ficheros**: el empaquetador copia `*.uf2` y `*.bin` sin contar, así que se cuentan a
 mano (`ls *.uf2 *.bin | wc -l` → 8).
 
-Desde V7 la pantalla de la C5, la C6, las P4 y la DK2 no va en su imagen: llega en los
-packs de la GUI, que no se sellan aquí. Viven en `packs/` y los vigila el empaquetador
+Desde V7 LVGL, el motor de la GUI, no va en ninguna imagen —la P4 y la DK2 llevan en la
+suya sólo el driver de su panel; la C5 y la C6, ni eso—: llega en los packs de la GUI, que
+no se sellan aquí. Viven en `packs/` y los vigila el empaquetador
 (`#679`: exige los cinco y que cada uno sea, byte a byte, el de su compilación).
 
 ## Sellado
@@ -48,7 +49,7 @@ Y antes de publicar se comprueba que nadie la ha tocado:
 cd dist/firmware && sha256sum -c SHA256SUMS.txt
 ```
 
-`SHA256SUMS.txt` **sí va al repo**; los binarios **no** (son unos 6 MB y van dentro del
+`SHA256SUMS.txt` **sí va al repo**; los binarios **no** (son unos 5,5 MB y van dentro del
 ZIP, en `firmware/`). Así queda escrito en el historial qué se probó exactamente, sin
 engordar el repo. Y el informe de `tanda.py` de cada placa (`compat/informes/`) anota el
 sello de la imagen que corría (`imageCrc`, del `HELLO`).

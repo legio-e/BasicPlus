@@ -27,6 +27,52 @@
 
 ## Última sesión
 
+> **11-oct** — **La documentación de V7, verificada y corregida; un apéndice nuevo con las claves del ENV.**
+>
+> **Lo que dijo Eduardo:**
+> - Me puse a arreglar `#684`/`#685` y paró: *«si estamos documentando, ¿por qué estamos arreglando código?»*. Los bugs
+>   van a FICHAS y se arreglan después (memoria nueva).
+> - Con `#684` me hizo buscar lo ya tratado antes de probar: `#540` (una local sin valor es error de compilación; una
+>   global, inicializada). El caso es una global, que vale `""`.
+>
+> **Lo hecho:**
+> - Tres correctores aplicaron los informes de los verificadores (8 FALSO, 19 DUDOSO, 35 cosméticos) en ES y EN.
+> - V7, sin subtítulo, por decisión de Eduardo.
+> - Pidió una referencia de las variables del ENV. Un censo del código dio 24 claves, y salió el **apéndice A de la
+>   referencia**; la tabla de la guía §9.3 pasó a él. Del censo, `#686` (la P4 en bucle de reinicios con un `vmheap`
+>   pequeño) y `#687` (el octal callado).
+> - `doc_frags`, 0 FALLO en 25 documentos; 1 024 enlaces, 0 rotos.
+> - El manual, copiado al IDE, y `BpIde-7.0.jar`. El IDE estaba cerrado: el `javaw` abierto era un juego.
+>
+> **Sin commit, a propósito, el código que espera**: `#681` (con el `prueba.fallo` de las ESP32), `#682` (hay que
+> pasarlo al GENERADOR: `test-guipack` dice «DESACTUALIZADO») y `#683`. Los informes, en `C:\tmp\d1v7_10oct\`.
+>
+> **Lo siguiente**:
+> 1. Que Eduardo lea las notas de v7.0.
+> 2. El código, `#681`–`#687`, con la red.
+> 3. #681/#682 en placa, con su OK.
+> 4. Las pruebas finales en placa: Stop y la pantalla limpia, ADC 4–7 de la Metro, los tamaños de memoria.
+> 5. Publicar: `PUBLICAR.md`, `--formato=8`, `dist/firmware` con las imágenes de V7.
+
+> **10-oct** — **La documentación de V7 (`D1`): escrita por nueve editores y verificada a medias; la sesión se cortó por
+> la cuota de uso.** Commits: `55beed1d` (#677 #678 #679), `ef37121a` (WIP: lo de los editores), `66e3b15b` (#680).
+> **En el árbol, SIN commit**: la armonización de cifras (PrintBench «1 270 ms frente a 817» en el manual §17, INSTALAR y
+> RELEASES; `BpIde-7.0.jar` en la guía §1 y QUICKSTART; basedatos sin la Nucleo), `BpIde/pom.xml` a 7.0, `bpide.bat`,
+> `CLAUDE.md`, y #681 #682 #683 (su estado, en FICHAS). **Los informes** —HECHOS.md, inventario, editores, verificadores—
+> están copiados en `C:\tmp\d1v7_10oct\`. Verificador 1 (la entrada): 3 FALSO, todos en RELEASES («pestaña Packs»: no hay
+> pestaña; «`io` atiende la pantalla»: no, A1.6; «49 programas»: son 49 comprobaciones sobre 18), 5 DUDOSO (a INSTALAR le
+> falta «recompila» y el aviso del autorun en `/app`). Verificador 2 (manual y basedatos): 2 FALSO (F1 el mensaje citado
+> para los imports no transitivos; F2 «160» sólo vale para métodos), 5 DUDOSO, y dos bugs de paridad → #684 y #685; su
+> «#680 sin commit» ya no vale. Verificador 3 (referencia y guías, cerrado antes de tiempo; lo no comprobado, en su §6c): 3 FALSO (`BUILTINS.md:482`:
+> `getEnv` lee la flash desde #638; los canales ADC de la U5 son 1..17, no «0..19»; la VM de la DK2 tiene 1792 KB, no
+> 1536), 9 DUDOSO —D8/D9: al entrar #681 y #682 hay que cambiar PENDIENTES:343-348, referencia §16.4, la guía §8/§12 y la
+> tabla «Si falta algo» de gui (`:1048`)—, 14 cosméticos.
+> **Para Eduardo**: los DUDOSO que tocan su texto (el rango de la P4 con las cadenas y el del RP2350 sin ellas; «un solo
+> hilo no cambia» frente a +35 % en la Metro), la carrera B1 del `--workers` de miVM (el manual la da por cerrada en V6;
+> `FICHAS.md:1392`, viva), la Nucleo en basedatos y el subtítulo «una imagen por micro». **Lo siguiente**: arreglar los
+> FALSO/DUDOSO; #682 en el host y la red; #681/#682 en placa (con OK); el manual a `BpIde/src/main/resources/` y rehacer
+> BpIde 7.0 (IDE cerrado); #684/#685; cerrar el `D1`; commit.
+
 > **9-oct** — **Las seis SUELTAS que esperaban a Eduardo, decididas una a una** (*«Me las explicas 1 a 1 y me
 > preguntas lo que necesites»*; `8c94ad76`): `#578` (*«B, y sí, entra en V7»*: el `try` dentro de una native, por el
 > `call_builtin` de siempre, sin subir la ABI; primero el salto en placa), `#592` (*«B y entra en V7»*: el 2º

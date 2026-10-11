@@ -6,7 +6,7 @@
 
 ---
 
-## v7.0 — octubre 2026 · «una imagen por micro»
+## v7.0 — octubre 2026
 
 En esta versión nos hemos centrado en tres puntos:
 
@@ -20,8 +20,9 @@ En esta versión nos hemos centrado en tres puntos:
   funciones nativas: había casos que no se podían convertir a `native`, y ahora prácticamente se han reducido a cero.
 - **El segundo núcleo.** Lo hemos habilitado para aumentar el rendimiento de los programas BasicPlus que usan varios
   hilos. En todos los micros de dos núcleos ha mejorado el rendimiento, aunque no por igual: con dos hilos trabajando a
-  la vez, en la ESP32-P4 se consigue entre el 133 % y el 200 % del rendimiento de un núcleo, y en el RP2350, entre el
-  113 % (Metro) y el 168 % (Pico 2). Todavía no sabemos la razón de la diferencia.
+  la vez, en la ESP32-P4 se consigue el 200 % del rendimiento de un núcleo (en las cadenas, el 133 %), y en el RP2350,
+  entre el 113 % (Metro) y el 168 % (Pico 2); allí, en cambio, las cadenas van más lentas que con uno. Todavía no sabemos
+  la razón de la diferencia.
 
 En resumen, esta versión, que podía haber sido una versión de transición, se ha convertido en una gran versión. Hay que
 destacar el enorme trabajo de Claude Code, tanto en la revisión del código como en las pruebas y en el código nuevo.
@@ -51,22 +52,24 @@ Qué se graba en cada placa con pantalla, además de la imagen:
 En la C5 y la C6 la pantalla se describe además en el Entorno de la placa —las líneas
 `spi2=` y `lcd=` y, en la C5, `i2c0=`, `exp=` y `touch=`—: es de la placa, no de la
 imagen. Las líneas exactas, en [INSTALAR_FIRMWARE.md](INSTALAR_FIRMWARE.md), «Los packs
-de la placa». `Gui.pack` es uno para las tres arquitecturas: lleva el motor de cada una,
-y a la placa sólo va el suyo.
+de la placa». `Gui.pack` es uno para todas las placas: lleva tres motores —Cortex-M33,
+RISC-V con FPU y RISC-V sin FPU—, y a la placa sólo va el suyo.
 
-**Cómo se graba**: en el IDE, botón **Placa** → pestaña **Packs** → **Copiar pack a la
-placa…**. El IDE poda el pack a la familia de la placa y sella su motor para el bloque de
-RAM que ella le da (si no cabe, lo dice antes de grabar); si la zona está sin formatear,
-**Formatear zona…**. Si la placa ya tenía motores cargados, grabar, borrar o formatear un
-pack la reinicia sola, y el IDE vuelve a conectar (`#671`).
+**Cómo se graba**: en el IDE, botón **Placa** (la ventana *Gestión de placa*) → a la
+derecha, el panel de packs → **Copiar pack a la placa…**. El IDE poda el pack a la familia
+de la placa y sella su motor para el bloque de RAM que ella le da (si no cabe, lo dice
+antes de grabar); si la zona está sin formatear, **Formatear zona…**. Si la placa ya tenía
+motores cargados, grabar, borrar o formatear un pack la reinicia sola, y el IDE vuelve a
+conectar (`#671`).
 
 **El bloque de RAM de los motores** se pide en el **Entorno** de la placa —`packRam=<KB>`,
 o `SQLite=<MB>` como en V6— y vale desde el siguiente arranque. Sin él, el INFO del IDE lo
 dice («RAM packs: no hay: un pack nativo no podría cargar…») y no carga ningún motor, ni
 el de la GUI ni el de SQLite; con él, se reparte entre todos los grabados: la P4 carga
 LVGL y SQLite en el mismo arranque. Y sin el pack de la GUI, `Gui.Screen()` lanza un
-`RuntimeError` con el motivo: «esta placa no tiene el pack 'LVGL' grabado (la GUI llega
-por el pack)».
+`RuntimeError` con el motivo —«esta placa no tiene el pack 'LVGL' grabado (la GUI llega
+por el pack)»—, y con el pack grabado pero su motor sin cargar, el porqué: «el pack de la
+GUI esta, pero su motor no cargo: falta packRam= en el ENV» (`#682`).
 
 **El `Stdlib.pack`** (`#468`): la biblioteca estándar entera en la zona de packs,
 ejecutada desde la flash (XIP) sin copiarse a la RAM. Al grabarlo, la placa quita de
@@ -78,7 +81,7 @@ la C6 es imprescindible para la GUI: sin él, sus módulos se cargan en la RAM y
 **Los packs de librería ya no llevan la biblioteca estándar** (`#623`): `SQLite`, `Gui`,
 `GuiMini` y `DriverSpi` traen sólo lo suyo y la toman del `Stdlib.pack` (o de `/lib`, a la
 RAM). Antes cada uno llevaba sus copias, que se quedaban viejas y tapaban a las buenas. Al
-grabar uno, el panel de Packs avisa si a la placa le falta algo («graba también el
+grabar uno, el panel de Packs avisa si a la placa le falta algo («graba tambien el
 Stdlib.pack»). Un pack *programa* —el que tiene `main`— sigue llevando todo lo que usa,
 la stdlib incluida: es un contenedor.
 
@@ -145,12 +148,13 @@ Y en las que ya estaban:
 
 **Dos núcleos por defecto en la Pico 2, la Metro, la S3 y la P4** (hito H12): la VM
 ejecuta dos hilos del programa a la vez, uno en cada núcleo. Las demás —la C3, la C5, la
-C6 y las dos STM32— tienen un núcleo y siguen con uno. Un programa de un solo hilo no
-cambia; uno con varios, los reparte. Y se vuelve atrás sin regrabar, con dos claves del
+C6 y las dos STM32— tienen un núcleo y siguen con uno. Un programa no cambia: si tiene un
+solo hilo, no gana nada —en el RP2350, incluso va más lento: la tabla de abajo—; si tiene
+varios, la VM los reparte. Y se vuelve atrás sin regrabar, con dos claves del
 Entorno: `vm.runs=1` (un hilo a la vez) y `vm.cores=1` (todo en el primer núcleo).
 
-En la Pico 2, la Metro y las ESP32, el sistema son el hilo `io` —el cable, la salida, el
-log y la pantalla— y un hilo `run` por núcleo que ejecuta el programa (en V6, `vm` e `io`);
+En la Pico 2, la Metro y las ESP32, el sistema son el hilo `io` —el cable, la salida y el
+log— y un hilo `run` por núcleo que ejecuta el programa (en V6, `vm` e `io`);
 las STM32 siguen con su tarea `vm`. Dos casos van con un solo `run` aunque haya dos: un
 programa que se depura y uno que usa SQLite. La GUI funciona con dos: sus llamadas las
 ejecuta siempre el mismo `run`, y el árbol de componentes lleva su cerrojo.
@@ -161,7 +165,7 @@ Lo medido con dos hilos que trabajan a la vez, frente a un núcleo:
 |---|---|---|---|
 | ESP32-P4 | ×2 | ×1,33 | igual |
 | Pico 2 | ×1,55–1,68 | ×0,83 | un 1,8 % más lento con la imagen de dos núcleos; un 8,4 % con dos `run` |
-| Metro | ×1,13 en cálculo | ×0,75 | un 35 % más lento (`#665`, abajo) |
+| Metro | ×1,13–1,57 | ×0,75 | un 35 % más lento (`#665`, abajo) |
 
 **Lo compartido lo protege el programa.** Con dos núcleos, dos hilos que tocan los mismos
 datos sin un `Mutex` pueden pisarse de verdad: es cosa del programa, como en Java. La VM,
@@ -171,7 +175,11 @@ la vez (`#600`).
 
 **Un fallo fatal con dos núcleos** (en la RP2350): la placa deja su informe en el log y se
 reinicia en medio segundo; el INFO dice «fallo fatal», y el arranque siguiente no lanza el
-autorun —un programa que fallara al arrancar sería un bucle de reinicios—.
+autorun —un programa que fallara al arrancar sería un bucle de reinicios—. **Las ESP32
+tampoco lanzan el autorun** tras un pánico o el perro guardián de las interrupciones, con
+uno o con dos núcleos (`#681`): lo dicen en el log y en la consola, y el INFO da la causa
+(`panic/exception`, `int-watchdog`). El perro guardián del módulo `Wdt` no es un fallo
+fatal: tras él, el autorun se lanza.
 
 ### El lenguaje y la biblioteca estándar
 
@@ -323,7 +331,8 @@ endtry                                     // el fichero se cierra aquí
 `Mutex` ocupado, una función BP que espera— se suspende y los demás hilos siguen; en un
 cálculo largo cede el turno cada 5 ms, y **el Stop del IDE la para** aunque esté en un
 bucle infinito (una recursión cuenta como un bucle: `#580`). Mirarlo cuesta poco: en la
-Pico 2, una native sigue siendo entre 96 y 134 veces más rápida que interpretada.
+Pico 2, en los dos bucles de enteros con que se midió, una native sigue siendo 134 y 96
+veces más rápida que interpretada.
 
 **Casi todo se puede convertir a `native`.** Una native llama a cualquier función
 intrínseca de la stdlib —`Math.sin`, `sqrt`, `startsWith`, `sleep`…— por el mismo código
@@ -331,8 +340,9 @@ que el intérprete; lleva `try`/`catch`/`finally` dentro (`#578`), lee y devuelv
 (`#577`), hace conversiones estrechas (`byte(x)`, `int16(x)`…), usa `float`, `double` y
 `long` en todas las placas, y llama a métodos de una clase de otro módulo (`#533`). Lo
 poco que queda fuera —leer campos, los estáticos, `for … in`, `instanceof`, un `try var`
-dentro…— lo dice el compilador con su línea (manual §8.3), también en un método `native`
-de una clase, que en V6 corría interpretado sin decir nada (`#519`).
+dentro, una tupla con un campo `float`, `long` o `double`…— lo dice el compilador con su
+línea (manual §8.3), también en un método `native` de una clase, que en V6 corría
+interpretado sin decir nada (`#519`).
 
 ```basic
 native function media(datos: integer[], n: integer): integer
@@ -442,10 +452,11 @@ que la placa rechazaría y dice cómo arreglarlo (`#576`).
   con un Stop, y el siguiente los vuelve a tener.
 - **Los dos núcleos**: 110 minutos de resistencia con dos `run` en la Pico 2, la S3 y la P4,
   sin un fallo.
-- **La red de paridad dual-VM** pasa de 59 a 147 casos; y las VMs de V7 siguen ejecutando
+- **La red de paridad dual-VM** pasa de 59 a 148 casos; y las VMs de V7 siguen ejecutando
   byte a byte los 59 `.mod` de V6 de la cápsula, con su stdlib.
 - **102 pruebas de C** de la VM en la red (el AOT, el depurador, el arranque, la memoria…), y
-  los 49 programas de `samples/errores/`, que tienen que fallar, fallan con su línea.
+  18 programas de `samples/errores/`, que tienen que fallar, fallan con el mensaje que toca
+  (49 comprobaciones).
 - Los 399 programas de `samples/` compilan con el compilador de V7.
 
 ### Bugs de V6 corregidos
@@ -545,6 +556,8 @@ corre interpretada. El IDE recompila en cada Run; lo que hay que mirar es lo que
   `IO.dirExists`).
 - **Los pines del sistema y los de la pantalla** ya no se pueden pedir: es un error con
   nombre.
+- **Tras un fallo fatal, la placa no relanza el autorun** (la RP2350 con dos núcleos y las
+  ESP32): se queda esperando al IDE. Tras el perro guardián del módulo `Wdt`, sí.
 
 📌 **Lo que no rompe:** `import Core` escrito sigue compilando; un `.mod` de V6 que no use
 clases de la biblioteca se sigue ejecutando; `Pico.*` sigue siendo alias de `Machine`; y
@@ -555,8 +568,9 @@ clases de la biblioteca se sigue ejecutando; `Pico.*` sigue siendo alias de `Mac
 - **La imagen de dos núcleos de la RP2350 es más lenta de lo que debería** (`#665`): en la
   Metro, con los datos de la VM en la PSRAM, un programa de un hilo va un 35 % más lento que
   con la imagen de un núcleo —también con `vm.cores=1`: es la imagen—; en la Pico 2,
-  `PrintBench`, un 19 %; y las cadenas no escalan con dos hilos (×0,83 en la Pico 2, ×0,75
-  en la Metro). Se investiga en V8; mientras, la imagen de un núcleo se compila con
+  `PrintBench` tarda 1 270 ms frente a 817 con la de un núcleo (el cálculo puro, un 1,8 %
+  más); y las cadenas no escalan con dos hilos (×0,83 en la Pico 2, ×0,75 en la Metro). Se
+  investiga en V8; mientras, la imagen de un núcleo se compila con
   `-DBPVM_PICO_NUM_CORES=1`.
 - **Un error en la placa no dice su línea** (`#582`): el mensaje sí, la línea no —ni en
   código interpretado ni en una native—; la VM Java del PC da la traza entera. V8.
@@ -567,8 +581,8 @@ clases de la biblioteca se sigue ejecutando; `Pico.*` sigue siendo alias de `Mac
 - **El depurador** va con un solo `run` en las placas de dos núcleos, no para dentro de una
   native en la placa y no despliega objetos (eso, en V8).
 - **Un fallo fatal de la VM tumba la placa** —un HardFault, una pila del sistema
-  desbordada—: con dos núcleos, la reinicia (arriba); contenerlo en el hilo que falló es
-  de V8.
+  desbordada—: la RP2350 con dos núcleos y las ESP32 se reinician sin lanzar el autorun
+  (arriba), y las STM32 se quedan paradas; contenerlo en el hilo que falló es de V8.
 - **La S3 no tiene AOT** (Xtensa): sus natives corren interpretadas.
 - **El `Wdt` de las STM32 lanza**: su IWDG no se puede parar por software, y «completo o no
   se implementa». Y las STM32 no tienen ni `Neopixel` ni SD.

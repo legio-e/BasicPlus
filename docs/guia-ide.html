@@ -202,7 +202,7 @@
 </p>
 <pre><code>bpide.bat</code></pre>
 <p>o, si lo prefieres a mano:</p>
-<pre><code>java -jar BpIde-6.0.jar</code></pre>
+<pre><code>java -jar BpIde-7.0.jar</code></pre>
 <p>
   Junto al <code>.jar</code> viajan las carpetas de las que el IDE tira solo,
   <strong>sin configurar nada</strong>: la biblioteca de packs
@@ -447,7 +447,10 @@
       firmware. El firmware la repone solo en cada arranque, módulo a
       módulo: si falta, si el que hay es de una versión anterior o si,
       siendo la misma, es distinto (tamaño o CRC); uno más nuevo —el que
-      subió el IDE con un programa que lo necesita— se deja. Y con el
+      subió el IDE con un programa que lo necesita— se deja (salvo en las
+      STM32, que vacían <code>/lib</code> en cada arranque y la reponen de
+      la imagen: lo que subió el IDE no sobrevive a un reinicio, y lo vuelve
+      a subir el Run siguiente). Y con el
       <code>Stdlib.pack</code> grabado, lo que el pack sirve con los mismos
       bytes <strong>sale de <code>/lib</code></strong>: se carga del pack,
       desde la flash, sin gastar RAM (§10.3). Lo que hay en <code>/app</code>
@@ -604,7 +607,7 @@ hola, Eduardo
 <table>
   <tr><th>exit</th><th>significa</th></tr>
   <tr><td><code>0</code></td><td>terminó bien</td></tr>
-  <tr><td><code>1</code></td><td>excepción BP no atrapada — el programa se murió por su cuenta. También el desbordamiento de pila («desbordamiento de pila (el hilo tiene N B)») y el heap lleno («No space in heap»), que son <code>RuntimeError</code> atrapables. Si la excepción es de un hilo que no es el main, acaba sólo ese hilo: los demás siguen y, al final, el programa sale con 1</td></tr>
+  <tr><td><code>1</code></td><td>excepción BP no atrapada — el programa se murió por su cuenta. También el desbordamiento de pila («desbordamiento de pila (el hilo tiene N B)») y el heap lleno («No space in heap»), que son <code>RuntimeError</code> atrapables. Si la excepción es de un hilo que no es el main, acaba sólo ese hilo: los demás siguen y, al final, el programa sale con 1. Y un error de enlace (<code>=== ERROR DE LINK: … ===</code>: una dependencia que no exporta lo que el programa usa), que sale con 1 y no con el 2</td></tr>
   <tr><td><code>2</code></td><td>no se pudo cargar el módulo: no está, no es un <code>.mod</code>, su ABI es vieja, o una dependencia es más antigua que la que necesita</td></tr>
   <tr><td><code>3</code></td><td>fallo interno de la VM (opcode o pc inválidos, o un error interno de la VM Java) — no es culpa del programa, repórtalo</td></tr>
   <tr><td><code>4</code></td><td>sin memoria para cargar o arrancar el programa (el que llena el heap mientras corre recibe un <code>RuntimeError</code>: es el 1)</td></tr>
@@ -676,8 +679,9 @@ hola, Eduardo
       la línea lo marca con ⚠ y el nativo no se compila para ella: hay que regrabar
       la placa con la imagen de esta versión, o poner el IDE al día si la imagen es
       más nueva. (En la S3, que no tiene AOT: «sin receta».)</li>
-  <li><strong>Reset</strong> — la causa del último reinicio; en la Pico&nbsp;2 y la
-      Metro, «fallo fatal» tras uno (§12).</li>
+  <li><strong>Reset</strong> — la causa del último reinicio; tras un fallo fatal (§12),
+      «fallo fatal» en la Pico&nbsp;2 y la Metro, y en las ESP32 la del chip:
+      «panic/exception» o «int-watchdog».</li>
 </ul>
 
 <h2 id="gestion">9. Gestión de placa: arranque y particiones</h2>
@@ -774,47 +778,20 @@ hola, Eduardo
 </p>
 
 <p>
-  <strong>Cuándo valen.</strong> Casi todas se leen al arrancar: tras cambiar una,
-  <code>reset</code>. <code>gc</code> y <code>latido</code> se leen en cada RUN, y valen
-  ya para el programa siguiente. Y un programa puede leer cualquiera con
-  <code>Machine.getEnv("clave")</code> (<a href="referencia.html#stdlib-pico">referencia
-  §14.9</a>).
+  <strong>Qué claves hay.</strong> La lista entera —cada clave, sus valores y el que toma si
+  falta, qué hace, en qué placas cuenta y cuándo se lee— está en la
+  <a href="referencia.html#env">referencia, apéndice A</a>, con cómo se escriben los números y
+  los sí/no. Aquí, lo que pide más explicación.
 </p>
 
 <p>
-  Las que el firmware <strong>lee</strong> hoy, qué ajusta cada una y en qué
-  familia cuenta (en las demás se guarda, pero nadie la mira). Fuera de la tabla
-  quedan sólo un par de diagnóstico, para pruebas:
+  <strong>Cuándo valen.</strong> Casi todas se leen al arrancar: tras cambiar una,
+  <code>reset</code>. <code>gc</code> y <code>latido</code> se leen en cada RUN, y valen
+  ya para el programa siguiente; las de la pantalla, al arrancar la GUI. Y un programa puede
+  leer cualquiera con <code>Machine.getEnv("clave")</code>
+  (<a href="referencia.html#stdlib-pico">referencia §14.9</a>).
 </p>
 
-<table>
-  <tr><th>clave</th><th>qué ajusta</th><th>familia</th></tr>
-  <tr><td><code>packRam</code></td><td>kilobytes del <strong>bloque de RAM de los motores</strong> de los packs —la interfaz gráfica, SQLite, el driver de pantalla—, en páginas de 4 KB. Sin él ni <code>SQLite</code> no hay bloque (en la RP2350, uno de 8 KB) y ni la GUI ni SQLite cargan — ver abajo</td><td>todas</td></tr>
-  <tr><td><code>SQLite</code></td><td>el mismo bloque, en megabytes (mínimo 2, máximo 4095): la forma de pedirlo para la base de datos. Si están las dos, manda <code>packRam</code></td><td>todas</td></tr>
-  <tr><td><code>display</code></td><td>qué panel de pantalla lleva (p.ej. <code>st7701</code> en el P4 de Waveshare; ausente = el panel del kit)</td><td>ESP32-P4</td></tr>
-  <tr><td><code>lcd</code> · <code>exp</code> · <code>touch</code></td><td>una pantalla por SPI, para el driver del pack <code>DriverSpi</code>: el panel, el expansor de pines y el táctil — ver abajo</td><td>las que llevan <code>DriverSpi</code>: la C5 y la C6</td></tr>
-  <tr><td><code>spi<em>N</em></code> · <code>i2c<em>N</em></code></td><td>los pines del bus <em>N</em>, que declara la placa (<code>spi2=sck:6,mosi:7,miso:8</code>; en I²C también la velocidad: <code>i2c0=sda:0,scl:1,khz:400</code>). Quedan reservados, y abrir ese bus con otros es un error con nombre; <code>ms:</code> fija el tope de un turno (20 ms si no; 100 como mucho). Detalle en la referencia: <a href="referencia.html#stdlib-i2c">I2c</a> y <a href="referencia.html#stdlib-spi">Spi</a></td><td>todas</td></tr>
-  <tr><td><code>sd</code></td><td>el lector de tarjeta: <strong>valor estructurado</strong> y distinto por bus — ver abajo</td><td>RP2350 · ESP32-C5 y C6 (SPI) · ESP32-P4 (SDIO)</td></tr>
-  <tr><td><code>psram</code></td><td><code>1</code> activa la PSRAM como heap de la VM (sólo RP2350B; el CS es fijo, GPIO47)</td><td>RP2350</td></tr>
-  <tr><td><code>vmheap</code></td><td>kilobytes del bloque de la VM entero —montón y pilas; <code>stack</code> lo reparte por dentro—; ausente = el de la imagen — ver abajo</td><td>todas</td></tr>
-  <tr><td><code>stack</code></td><td>kilobytes de pila (el resto de la memoria de la VM va al montón); ausente = el reparto por defecto</td><td>todas</td></tr>
-  <tr><td><code>quantum</code></td><td>opcodes que ejecuta un hilo antes de ceder el turno; ausente = 1024</td><td>todas</td></tr>
-  <tr><td><code>vm.runs</code></td><td>cuántos hilos del programa corren <strong>a la vez</strong> (<code>1</code> o <code>2</code>); ausente = uno por núcleo: dos en la Pico&nbsp;2, la Metro, la S3 y la P4, uno en la C3, la C5 y la C6 — ver abajo</td><td>RP2350 · ESP32</td></tr>
-  <tr><td><code>vm.cores</code></td><td><code>1</code>: todas las tareas de la VM en el núcleo 0, la vuelta atrás de los dos núcleos sin regrabar; ausente = los dos</td><td>RP2350 · ESP32-S3 · ESP32-P4</td></tr>
-  <tr><td><code>log</code></td><td>el log post-mortem: <code>1</code> encendido; ausente = apagado</td><td>todas</td></tr>
-  <tr><td><code>gc</code></td><td>el recolector de basura: <code>0</code> lo apaga (para partir un experimento en dos); ausente = encendido. Se lee en cada RUN</td><td>todas</td></tr>
-  <tr><td><code>latido</code></td><td>el latido de vida, en el log: <code>1</code> lo enciende; ausente = apagado. Se lee en cada RUN</td><td>todas</td></tr>
-  <tr><td><code>imagen.fecha</code></td><td>no se pone: <strong>la escribe la placa</strong>, una vez, en su primer arranque —la fecha de su imagen, en segundos desde 1970—. <code>Rtc.Clock.isSet()</code> la usa para saber si el reloj está en hora (<a href="referencia.html#stdlib-rtc">referencia §14.10</a>); si se borra, la placa la vuelve a anotar al arrancar</td><td>todas</td></tr>
-</table>
-
-<p class="note">
-  <code>board</code>, <code>psramCsPin</code>, <code>flashSizeBytes</code> y
-  <code>gpioCount</code> pueden aparecer en la tabla de una placa antigua:
-  <strong>se guardan pero no se leen</strong>. La variante y la flash las
-  detecta el firmware por el propio chip, el CS de la PSRAM es fijo, y la
-  identidad y los pines de la placa (RP2350) viven en
-  <code>/sys/board.json</code>.
-</p>
 
 <p>
   <code>packRam</code> es la que pide <strong>la pantalla</strong>, y SQLite. Los motores
@@ -916,7 +893,7 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   la PSRAM, el cálculo va un 35&nbsp;% más lento (<code>fib(26)</code>, 3&nbsp;908&nbsp;ms frente
   a 2&nbsp;892 con la imagen de un núcleo; con <code>vm.cores=1</code>, 3&nbsp;951); en la
   Pico&nbsp;2 el cálculo apenas lo nota (un 2&nbsp;%), pero lo que escribe mucho por
-  <code>print</code> sí (PrintBench, 1&nbsp;275&nbsp;ms frente a 817). Ni <code>vm.runs=1</code>
+  <code>print</code> sí (PrintBench, 1&nbsp;270&nbsp;ms frente a 817). Ni <code>vm.runs=1</code>
   ni <code>vm.cores=1</code> lo arreglan —es la imagen, no los runs—: la vuelta atrás es
   compilar la imagen de un núcleo (<a href="INSTALAR_FIRMWARE.md#nucleos">instalación</a>).
 </p>
@@ -1049,7 +1026,7 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   motor no cabe en el bloque, lo dice antes de mandar nada. Y avisa, aunque graba
   igual, si a ese pack le va a faltar algo en la placa: otro pack que declara
   necesitar, o módulos de la biblioteca estándar que no lleva y la placa no tiene
-  («graba también el Stdlib.pack»).
+  («graba tambien el Stdlib.pack»).
 </p>
 <p>
   Si la placa ya tenía cargados los <strong>motores</strong> de sus packs —los carga el
@@ -1125,10 +1102,16 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   En la Pico&nbsp;2 y la Metro (la imagen de dos núcleos, la de por defecto), un
   <strong>fallo fatal</strong> —no una excepción del programa, sino un fallo del
   sistema: un HardFault, una pila de tarea desbordada…— deja su informe en el log,
-  aunque esté apagado, y reinicia la placa; y ese arranque <strong>no lanza el
-  autorun</strong>: un programa que fallara al arrancar la tendría reiniciándose sin
-  fin. El log lo dice, el <em>Info</em> da «fallo fatal» como causa del reinicio, y el
-  programa se arranca a mano desde el IDE.
+  aunque esté apagado, y reinicia la placa; en las ESP32, un fallo así es un pánico
+  del IDF (o su perro de interrupciones), que da su informe por la consola y también
+  reinicia la placa. Y ese arranque <strong>no lanza el autorun</strong>: un programa
+  que fallara al arrancar la tendría reiniciándose sin fin. El log lo dice
+  («autorun: … NO arranca: el arranque anterior acabo en un fallo fatal»; las ESP32,
+  también la consola), el <em>Info</em> da la causa del reinicio —«fallo fatal» en la
+  RP2350; «panic/exception» o «int-watchdog» en las ESP32— y el programa se arranca a
+  mano desde el IDE. El perro del módulo <code>Wdt</code> no es un fallo fatal: tras
+  él, el autorun se lanza. En las STM32, un HardFault deja su informe en el log y la
+  placa parada: no se reinicia sola.
 </p>
 
 <hr>

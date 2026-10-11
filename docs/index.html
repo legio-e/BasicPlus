@@ -171,7 +171,7 @@
     <strong>idéntico</strong> en el PC y en el micro.
   </p>
   <div class="badges">
-    <span class="badge">V7 · una imagen por micro</span>
+    <span class="badge">V7</span>
     <span class="badge">RP2350 · ESP32 S3/C3/C5/C6/P4 · STM32</span>
     <span class="badge">Memoria por handles</span>
     <span class="badge">Dos VMs · una salida byte-idéntica</span>
@@ -236,12 +236,12 @@
 </p>
 
 <p style="margin-top:1.4rem">
-  <strong>Nuevo en V7 — una imagen por micro.</strong> Esta versión se ha centrado en tres puntos:
+  <strong>Nuevo en V7.</strong> Esta versión se ha centrado en tres puntos:
 </p>
 <ul>
   <li><strong>Los packs.</strong> Lo que ya hacía SQLite —un motor que no va dentro de la VM,
   sino en un pack que se ejecuta desde la flash— lo hace ahora también <strong>LVGL</strong>, el
-  motor de la interfaz gráfica: ninguna imagen lleva ya la pantalla. Hay <strong>una imagen por
+  motor de la interfaz gráfica, que ya no va en ninguna imagen. Hay <strong>una imagen por
   micro</strong>, y es el usuario el que decide si incorpora SQLite y el entorno gráfico, sin
   crear imágenes ni compilar código C: graba el pack desde el IDE.</li>
   <li><strong>Terminar lo pendiente</strong>: una ingente cantidad de cosas. Entre ellas, las
@@ -251,10 +251,10 @@
   la C6</strong> (RISC-V sin FPU) también se compilan y aceleran.</li>
   <li><strong>El segundo núcleo.</strong> En las placas de dos núcleos —la Pico 2, la Metro, la
   S3 y la P4— dos hilos BP corren a la vez: con dos hilos trabajando a la vez, la ESP32-P4
-  consigue entre el 133 % y el 200 % del rendimiento de un núcleo, y el RP2350, entre el
-  113 % (Metro) y el 168 % (Pico 2). Una limitación conocida, que queda para V8: en el RP2350
+  consigue el 200 % del rendimiento de un núcleo (en las cadenas, el 133 %), y el RP2350, entre
+  el 113 % (Metro) y el 168 % (Pico 2). Una limitación conocida, que queda para V8: en el RP2350
   la imagen de dos núcleos hace más lento un programa de un solo hilo (hasta un 35 % en la
-  Metro).</li>
+  Metro), y allí las cadenas no escalan con dos hilos.</li>
 </ul>
 <p>
   Y lo que se nota al usarla: una placa nueva, la <strong>ESP32-C5</strong>, con su pantalla
@@ -396,7 +396,7 @@
   En todas: el cable tiene su propio hilo de sistema, <code>io</code>, aparte del programa, así
   que la placa atiende el cable mientras el programa corre —y, desde V7, también lista y lee
   ficheros—; REPL «wire v1» con subida de ficheros, RUN remoto y argumento de ejecución
-  (<code>run X &lt;arg&gt;</code>), <strong>Stop</strong> (KILL al instante, sin resetear la
+  (<code>run X &lt;arg&gt;</code>), <strong>Stop</strong> (KILL cooperativo, sin resetear la
   placa), <strong>autorun</strong> (<code>/sys/auto.txt</code> arranca tu programa al
   encender, y el IDE puede conectarse en caliente), códigos de salida unificados y debug
   on-device con breakpoints (mientras se depura, los hilos del programa se turnan, como con un

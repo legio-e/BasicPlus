@@ -22,7 +22,8 @@ byte, el que sale de su compilación (`#679`: V7 iba a publicarse sin los de la 
 dentro de la imagen y el sistema la copia a `/lib`; de ahí se carga EN RAM. Con el `Stdlib.pack` grabado, cada módulo
 que el pack sirve con los mismos bytes que la imagen se carga **en sitio** desde la flash (XIP): a la RAM sólo va su
 parte de datos, no el código. El instalador de la imagen lo sabe: al arrancar mira la zona de packs y quita de `/lib`
-su copia de lo que el pack ya sirve igual (una más nueva que alguien haya puesto en `/lib` se queda, y tapa al pack).
+su copia de lo que el pack ya sirve igual (una más nueva que alguien haya puesto en `/lib` se queda, y tapa al pack;
+salvo en las STM32, que vacían `/lib` en cada arranque: `clear_lib`, `stm32/port/fs_lfs_stm32.c`).
 
 **Borrar el pack no deja la placa sin librería**: la imagen sigue siendo la fuente. Al borrarlo (o al formatear la
 zona), `/lib` se repone desde la imagen en el acto, sin esperar a reiniciar; y lo mismo al revés: al grabarlo, las

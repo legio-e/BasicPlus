@@ -34,7 +34,7 @@ end Blink
 En un PC sin GPIO los builtins de hardware loggean por stdout; en la placa
 mueven pines de verdad. El programa es el mismo byte a byte.
 
-## Nuevo en V7 — una imagen por micro
+## Nuevo en V7
 
 V7 se ha centrado en tres puntos:
 
@@ -42,7 +42,7 @@ V7 se ha centrado en tres puntos:
   flash donde se graban los packs, que se usan allí mismo, sin cargarse en RAM.
   Se pensó primero para los módulos y luego se extendió al código nativo —el
   primer gran logro fue SQLite—, y V7 la extiende a **LVGL**, el motor de la
-  interfaz gráfica: ninguna imagen lleva ya la pantalla. Hay una imagen por
+  interfaz gráfica, que ya no va en ninguna imagen. Hay una imagen por
   micro, y **el usuario** decide si incorpora SQLite y la pantalla, sin crear
   imágenes ni compilar código C: graba el pack desde el IDE (*Placa* →
   *Packs*).
@@ -53,11 +53,11 @@ V7 se ha centrado en tres puntos:
   C6** (RISC-V sin FPU) ahora también se compila y acelera.
 - **El segundo núcleo.** En las placas de dos núcleos —la Pico 2, la Metro, la
   S3 y la P4— dos hilos BP corren a la vez. Con dos hilos trabajando a la vez,
-  la ESP32-P4 consigue entre el 133 % y el 200 % del rendimiento de un núcleo,
-  y el RP2350, entre el 113 % (Metro) y el 168 % (Pico 2). Una limitación
-  conocida, que queda para V8: en el RP2350 la imagen de dos núcleos hace más
-  lento un programa de un solo hilo (hasta un 35 % en la Metro), y allí las
-  cadenas no escalan con dos hilos.
+  la ESP32-P4 consigue el 200 % del rendimiento de un núcleo (en las cadenas,
+  el 133 %), y el RP2350, entre el 113 % (Metro) y el 168 % (Pico 2). Una
+  limitación conocida, que queda para V8: en el RP2350 la imagen de dos núcleos
+  hace más lento un programa de un solo hilo (hasta un 35 % en la Metro), y
+  allí las cadenas no escalan con dos hilos.
 
 Y lo que se nota al usarla: una placa nueva, la **ESP32-C5** (Waveshare
 ESP32-C5-Touch-LCD-2.8: pantalla táctil de 2,8", 8 MB de PSRAM, 32 MB de flash
@@ -244,7 +244,7 @@ miVM/         VM Java + debugger + daemon TCP
 bpgenvm-c/    VM C99: host + firmwares de RP2350, ESP32-S3/C3/C5/C6/P4, STM32
 BpIde/        IDE Swing (fat-jar)
 bpstdlib/     biblioteca estándar (fuentes .bp + .mod compilados); los packs de la GUI, en gui/
-packs/        packs precompilados (la biblioteca estándar, SQLite…)
+packs/        los packs; en el repo, sólo Stdlib.pack (los demás se construyen o vienen en la release)
 samples/      programas de ejemplo
 docs/         manual, guía gráfica, specs (.mod, opcodes, heap, wire), backlog
 ```
@@ -302,7 +302,7 @@ precompilados** —imágenes y packs— de la [última release](https://github.c
 
 ## Estado
 
-**V7 — una imagen por micro** (octubre 2026). La V1 demostró la idea; la V2 la
+**V7** (octubre 2026). La V1 demostró la idea; la V2 la
 endureció y la amplió; la V3 le puso cara; la V4 le arregló los cimientos; la V5
 le dio dónde guardar cosas; la V6 puso orden en el código de los
 microcontroladores; **la V7 deja una imagen por micro**: la pantalla se une a

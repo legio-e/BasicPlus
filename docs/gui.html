@@ -1045,7 +1045,8 @@ packRam=136</code></pre>
 <table>
   <tr><th>Si…</th><th>el programa recibe</th></tr>
   <tr><td>la imagen no tiene GUI (la Pico&nbsp;2, la Metro, la S3, la C3, la Nucleo)</td><td><code>builtin 135 no soportado en esta VM (subconjunto C)</code></td></tr>
-  <tr><td>no está el pack de LVGL… o está, pero su motor no cargó: sin <code>packRam=</code>, o con el bloque cambiado desde que se grabó</td><td><code>GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)</code></td></tr>
+  <tr><td>no está el pack de LVGL</td><td><code>GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)</code></td></tr>
+  <tr><td>el pack de LVGL está, pero su motor no cargó: sin <code>packRam=</code> en el ENV, o con el bloque cambiado desde que se grabó</td><td><code>GUI: el pack de la GUI esta, pero su motor no cargo: falta packRam= en el ENV</code> —o, tras los dos puntos, el aviso del motor (<code>realojado para OTRA direccion — regrabalo desde el IDE</code>) o <code>mira el log de la placa</code></td></tr>
   <tr><td>no está el driver de la pantalla (en la C5 y la C6, <code>DriverSpi.pack</code>)</td><td><code>GUI: no hay driver de pantalla ('PANT'): graba el pack del driver de esta placa</code></td></tr>
   <tr><td>una línea del ENV de la pantalla está mal</td><td>el motivo, con nombre: <code>GUI: pantalla: ENV lcd: falta 'dc'</code></td></tr>
   <tr><td>la pantalla no arranca</td><td><code>GUI: la pantalla no arranco: su driver fallo al iniciarse (el motivo, en el log)</code></td></tr>

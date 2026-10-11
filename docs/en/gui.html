@@ -840,9 +840,10 @@ l.<span class="fn">setFont</span>(fid)</code></pre>
 <h3 id="ev-codigo">22.5 Subscribing from code (without a <code>.win</code>)</h3>
 <p>
   Everything above goes through a <code>.win</code> file, which is the
-  comfortable path. But a widget you build in code needs no file at all: its
-  events are subscribed with <code>::</code>, naming the object and the method
-  that will attend to them.
+  comfortable path. But a widget you build in code needs no file at all:
+  <code>onClick</code> and <code>onChange</code> are
+  <a href="manual.html#eventos"><strong>events</strong></a> of the language, subscribed
+  with <code>::</code>, naming the object and the method that will attend to them.
 </p>
 <pre><code><span class="kw">var</span> boton: Gui.<span class="type">Button</span> := Gui.<span class="fn">Button</span>(panel, <span class="str">"Start"</span>)
 boton.onClick := pantalla::boton_onClick     <span class="comment">// this object attends it</span></code></pre>
@@ -869,13 +870,16 @@ boton.onClick := pantalla::boton_onClick     <span class="comment">// this objec
 <div class="warn">
   <p><strong>Migrating from V3.</strong> This <em>replaces</em> the old model
   and it <strong>breaks</strong> programs: a program that subclassed the widget
-  to attend a button no longer works.</p>
-<pre><code><span class="comment">// V3 — no longer valid          // V4</span>
-<span class="kw">class</span> MyButton <span class="kw">extends</span> Gui.<span class="type">Button</span>     boton.onClick := pantalla::boton_onClick
+  to attend a button no longer works. If you come from V3, change</p>
+<pre><code><span class="comment">// V3 — no longer valid</span>
+<span class="kw">class</span> MyButton <span class="kw">extends</span> Gui.<span class="type">Button</span>
   <span class="kw">public function</span> <span class="fn">onClick</span>()
     ...
   <span class="kw">end</span> onClick
 <span class="kw">end</span> MyButton</code></pre>
+  <p>into this, which also saves you the class:</p>
+<pre><code><span class="comment">// V4</span>
+boton.onClick := pantalla::boton_onClick</code></pre>
   <p>The reason for the change: the old model <strong>forced you to create a
   type for every button</strong> you wanted to attend. The event does the same
   job in one line, and the handler can live wherever it makes sense.</p>
@@ -1058,7 +1062,8 @@ packRam=136</code></pre>
 <table>
   <tr><th>If…</th><th>the program gets</th></tr>
   <tr><td>the image has no GUI (the Pico&nbsp;2, the Metro, the S3, the C3, the Nucleo)</td><td><code>builtin 135 no soportado en esta VM (subconjunto C)</code></td></tr>
-  <tr><td>the LVGL pack is not there… or it is, but its engine did not load: no <code>packRam=</code>, or the block changed since it was burnt</td><td><code>GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)</code></td></tr>
+  <tr><td>the LVGL pack is not there</td><td><code>GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)</code></td></tr>
+  <tr><td>the LVGL pack is there, but its engine did not load: no <code>packRam=</code> in the ENV, or the block changed since it was burnt</td><td><code>GUI: el pack de la GUI esta, pero su motor no cargo: falta packRam= en el ENV</code> —or, after the colon, the engine's warning (<code>realojado para OTRA direccion — regrabalo desde el IDE</code>) or <code>mira el log de la placa</code></td></tr>
   <tr><td>the display driver is not there (on the C5 and the C6, <code>DriverSpi.pack</code>)</td><td><code>GUI: no hay driver de pantalla ('PANT'): graba el pack del driver de esta placa</code></td></tr>
   <tr><td>an ENV line of the display is wrong</td><td>the reason, by name: <code>GUI: pantalla: ENV lcd: falta 'dc'</code></td></tr>
   <tr><td>the display does not start</td><td><code>GUI: la pantalla no arranco: su driver fallo al iniciarse (el motivo, en el log)</code></td></tr>

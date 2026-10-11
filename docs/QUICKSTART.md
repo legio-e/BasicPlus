@@ -45,7 +45,7 @@ del proyecto.
 
 ```sh
 mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-6.0.jar     # o bpide.bat, en la raíz del repo
+java -jar BpIde/target/BpIde-7.0.jar     # o bpide.bat, en la raíz (cambia antes su ruta)
 ```
 
 Abre `samples/blink.bp`, botón **Compile**, menú **Run** — la salida
@@ -68,13 +68,13 @@ conseguir/compilar la imagen y el caso Metro:
 **Primer programa desde el IDE**:
 
 1. Abre el IDE → panel inferior (*Explorer*) → selecciona el puerto COM
-   de la placa → **Connect**. Verás el árbol de ficheros del micro
-   (`/lib` con la stdlib de la imagen —casi vacío si la placa lleva el
-   `Stdlib.pack`—, `/app`, `/sys`). **La primera vez**, una placa recién
-   grabada viene sin particiones: el IDE se ofrece a abrir la **Gestión de
-   placa** → *Proponer defaults* → *Aplicar tamaños*, y la placa se reinicia
-   ([guía del IDE §9.2](guia-ide.html#particiones); la C5 y la P4 de
-   Waveshare se reparten solas).
+   de la placa → **Connect**. **La primera vez**, una placa recién grabada
+   viene sin particiones: el IDE se ofrece a abrir la **Gestión de placa** →
+   *Proponer defaults* → *Aplicar tamaños*, y la placa se reinicia ([guía
+   del IDE §9.2](guia-ide.html#particiones); la C5 y la P4 de Waveshare se
+   reparten solas). Después verás el árbol de ficheros del micro (`/lib`
+   con la stdlib de la imagen —casi vacío si la placa lleva el
+   `Stdlib.pack`—, `/app`, `/sys`).
 2. Abre `samples/blink.bp` → **Run on Device**. El IDE sube el `.mod`
    (y las dependencias que falten) y el LED parpadea. La salida del
    programa llega a la consola.
@@ -133,8 +133,8 @@ el módulo `Net` aún no tiene backend.
 
 ## 4. ESP32-C3, ESP32-C5 y ESP32-C6
 
-Las tres placas RISC-V tienen **un solo conector USB** (el USB-Serial-JTAG
-nativo) y por él va el **wire**: un cable y el IDE conecta. La consola de
+Las tres tienen **un solo conector USB** (el USB-Serial-JTAG nativo) y
+por él va el **wire**: un cable y el IDE conecta. La consola de
 logs sale por UART0 (C3: GPIO20/21; C5: GPIO11/12; C6: GPIO16/17) — solo
 hace falta con un adaptador, para depurar; el log de arranque se lee
 igualmente desde el IDE (`log`).

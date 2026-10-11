@@ -82,6 +82,10 @@
   | **RP2350 (Pico 2 / Metro)** | reset por software (el `reset` del IDE) y, con la imagen de dos núcleos (la de V7), un fallo fatal: la reinicia el perro guardián (ver «Para V8») | **el botón de reset de la Metro** (el pin de RUN: medido el 3-oct, arranque en frío) y desenchufar |
   | **STM32** | el botón NRST (medido en la Nucleo el 24-sep: «pin (NRST)» y las líneas de antes) | desenchufar |
 
+  La C3, la C5 y la C6 no están en la tabla porque no se ha medido: llevan el mismo log que la
+  S3 y la P4 —el mismo código, la misma región que el arranque no borra—, y lo esperable es
+  que se porten igual, pero nadie lo ha visto.
+
   Lo que sorprende es el ESP32 —su botón RST tira del pin EN y corta el dominio
   digital entero, así que cuenta como arranque en frío— y la Metro: aquí ponía que su
   botón (el pin de RUN) conservaba el log, sin haberlo medido, y no lo conserva. Medido
@@ -228,8 +232,9 @@ end L16
   (`DriverSpi.pack`, que lee la placa de su ENV). Se graban una vez desde el IDE, con un
   bloque de RAM para los motores en el ENV (`packRam=<KB>`). Si falta algo, el programa lo
   sabe al crear su pantalla: «GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega
-  por el pack)» o «GUI: no hay driver de pantalla ('PANT'): graba el pack del driver de
-  esta placa». Qué pide cada placa, en `gui.html` §23.4. En el PC no hace falta nada.
+  por el pack)», «GUI: el pack de la GUI esta, pero su motor no cargo: falta packRam= en el
+  ENV» o «GUI: no hay driver de pantalla ('PANT'): graba el pack del driver de esta placa».
+  Qué pide cada placa, en `gui.html` §23.4. En el PC no hace falta nada.
 
 
 ### `input()` sólo funciona en el PC, no en el micro (decidido el 26-ago; `listDir` YA está en las dos desde V7/H3)
@@ -326,26 +331,32 @@ cambia al escribir un programa.
 - **En la RP2350, la imagen de dos núcleos —la de V7— hace más lento un programa de un
   solo hilo** (`#665`). En la Metro, `fib(26)` tarda 3 908 ms frente a 2 892 con la imagen
   de un núcleo (+35 %), y con `vm.cores=1` lo mismo (3 951): es la imagen, no el otro
-  núcleo, y pega porque allí los datos de la VM están en la PSRAM. En la Pico 2 el cálculo
+  núcleo, y pega cuando los datos de la VM están en la PSRAM (que sea por la PSRAM es la
+  sospecha, sin medir: falta probar la Metro con `psram=0`). En la Pico 2 el cálculo
   apenas lo nota (+1,8 % con un run, +8,4 % con dos), pero lo que imprime mucho sí:
   PrintBench, 1 270 ms frente a 817. Y dos hilos que trabajan con cadenas no ganan con el
   segundo núcleo (×0,83 en la Pico 2, ×0,75 en la Metro). `vm.runs=1` quita lo que cuesta el
   segundo run; lo de la imagen sólo se recupera con la de un núcleo, que se compila aparte
   (`cmake .. -DBPVM_PICO_NUM_CORES=1`). Se investiga en V8; lo que se gana con dos hilos, en
   el manual §14.6.
-- **Un fallo fatal reinicia la placa** (que el fallo de un run no la tumbe es de V8). Un
+- **Un fallo fatal tumba la placa entera** (que el fallo de un run no la tumbe es de V8). Un
   error del programa es una excepción y, como mucho, acaba su hilo; un fallo *fatal* —un
   HardFault, la memoria del sistema agotada, una comprobación interna que falla— es del
   sistema. En la Pico 2 y la Metro, con la imagen de dos núcleos, la placa deja el informe en
-  el log —en una RAM que sobrevive al reinicio—, se reinicia sola en medio segundo, lo dice
-  al arrancar («fallo fatal» en `Machine.resetCause()` y en el INFO del IDE) y **no lanza el
-  autorun**: un programa que fallara nada más arrancar sería un bucle de reinicios; desde el
-  IDE se arranca a mano (manual §14.6). **En las ESP32 —la S3 y la P4 también— no hay esa
-  guarda**: un fallo así es un *panic* del IDF, la placa se reinicia y **vuelve a lanzar el
-  autorun**; si el programa cae otra vez, otro reinicio. La salida es la ventana del
-  autorun: con el IDE conectado, al arrancar da unos segundos para pararlo con *Stop*. Para
-  V8: terminar sólo el run que falla y que `io` siga, el MPU protegiendo la memoria del
-  sistema y un contador de reinicios contra el bucle del autorun.
+  el log —en una RAM que sobrevive al reinicio—, el perro guardián la reinicia a los 250 ms,
+  lo dice al arrancar («fallo fatal» en `Machine.resetCause()` y en el INFO del IDE) y **no
+  lanza el autorun**: un programa que fallara nada más arrancar sería un bucle de reinicios;
+  desde el IDE se arranca a mano (manual §14.6). **En las ESP32, lo mismo**: un fallo así es
+  un *panic* del IDF —o su perro de interrupciones—, la placa se reinicia y **no lanza el
+  autorun**; lo dicen el log («autorun: … NO arranca: el arranque anterior acabo en un fallo
+  fatal (panic/exception; ver el log)») y la consola, y la causa del reinicio es la del chip
+  («panic/exception» o «int-watchdog»). El perro de tareas del módulo `Wdt` no es un fallo
+  fatal: tras él, el autorun sí se lanza (y si el programa vuelve a caer, la salida es la
+  ventana del autorun: con el IDE conectado, al arrancar da unos segundos para pararlo con
+  *Stop*). **En las STM32** (la Nucleo y la DK2), un HardFault deja su informe en el log y la
+  placa **parada**: no se reinicia sola. Para V8: terminar sólo el run que falla y que `io`
+  siga, el MPU protegiendo la memoria del sistema y un contador de reinicios contra el bucle
+  del autorun.
 - **En la placa, un error no dice en qué línea pasó** (`#582`). Al acabar, la placa da el
   mensaje —`excepcion no atrapada: Core.RuntimeError: División por cero`— y nada más, en
   código interpretado y en una `native`; la traza con la línea sólo la da la VM Java del
@@ -366,7 +377,8 @@ cambia al escribir un programa.
   avanzan. `sleep` no lo hace (duerme sólo su hilo), y con dos runs la espera retiene sólo
   el suyo. Lo que funciona con un run: mirar `available()` y, si no hay nada, `sleep`. En
   V8, esas esperas cederán el hilo, como `sleep`.
-- **La C3 va justa de memoria.** Su VM se queda en 120 KB —48 de heap de BP— y lo que no
+- **La C3 va justa de memoria.** Su VM se queda en 112 KB —48 de heap de BP, medido el
+  6-oct— y lo que no
   quepa ahí no corre en ella (`docs/MEMORIA.md`). Optimizarla —coser sus dos regiones de
   memoria y devolverle los 128 KB de VM— es de V8.
 - **Lo que el silicio tiene y la HAL aún no da**: la PIO del RP2350, programable desde BP, y

@@ -33,15 +33,15 @@ end Blink
 On a PC with no GPIO the hardware builtins log to stdout; on the board they
 drive real pins. The program is the same, byte for byte.
 
-## New in V7 — one image per micro
+## New in V7
 
 V7 centres on three things:
 
 - **Packs: one image per micro.** The pack zone is a fixed area of the flash
   where packs are burned and used in place, without being loaded into RAM. It
   started with modules, then native code — SQLite was the first big win — and
-  V7 extends it to **LVGL**, the engine behind the graphical interface: no
-  firmware image carries the screen any more. There is one image per micro,
+  V7 extends it to **LVGL**, the engine behind the graphical interface, which
+  no firmware image carries any more. There is one image per micro,
   and **you** decide whether to add SQLite and the screen, without building
   images or compiling any C: you burn the pack from the IDE (*Placa* →
   *Packs*).
@@ -52,7 +52,7 @@ V7 centres on three things:
   (RISC-V without FPU) it is now compiled and accelerated too.
 - **The second core.** On the dual-core boards — Pico 2, Metro, S3 and P4 —
   two BP threads run at the same time. With two threads working at once, the
-  ESP32-P4 reaches between 133 % and 200 % of one core's performance, and the
+  ESP32-P4 reaches 200 % of one core's performance (133 % on strings), and the
   RP2350 between 113 % (Metro) and 168 % (Pico 2). A known limitation, left
   for V8: on the RP2350 the dual-core image slows down a single-threaded
   program (by up to 35 % on the Metro), and strings don't scale there with two
@@ -241,7 +241,7 @@ miVM/         Java VM + debugger + TCP daemon
 bpgenvm-c/    C99 VM: host + firmwares for RP2350, ESP32-S3/C3/C5/C6/P4, STM32
 BpIde/        Swing IDE (fat-jar)
 bpstdlib/     standard library (.bp sources + compiled .mod); the GUI packs, in gui/
-packs/        prebuilt packs (the standard library, SQLite…)
+packs/        the packs; in the repo, only Stdlib.pack (the others are built or come in the release)
 samples/      example programs
 docs/         manual, GUI guide, specs (.mod, opcodes, heap, wire), backlog
 ```
@@ -304,7 +304,7 @@ Documentation is available in **English** (`docs/en/`) and
 
 ## Status
 
-**V7 — one image per micro** (October 2026). V1 proved the idea; V2 hardened and
+**V7** (October 2026). V1 proved the idea; V2 hardened and
 broadened it; V3 gave it a face; V4 fixed its foundations; V5 gave it somewhere to
 put things; V6 put the microcontroller code in order; **V7 leaves one image per
 micro**: the screen joins SQLite in a pack, and the user decides what goes on top,

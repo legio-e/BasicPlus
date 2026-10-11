@@ -46,6 +46,11 @@ After flashing, the flow is the same everywhere: IDE → Explorer →
 > longer in the image**: without its packs, the display does not paint. And
 > any V6 packs you had (SQLite) are not valid in V7: format the zone and
 > burn the ones in the package. All of it in [The board's packs](#packs).
+> **And recompile your programs**: a V6 `.mod` that uses library classes
+> does not link against the V7 library. The IDE recompiles on every Run;
+> what to check is what was left in `/app` —the autorun program above all—:
+> run it again from the IDE, or delete it ([v7.0 release
+> notes](../RELEASES.md), *Spanish*).
 
 > The firmware is only reflashed when the **VM** changes. Your programs
 > (`.mod`) live in the board's internal filesystem and are uploaded from
@@ -80,8 +85,9 @@ After flashing, the flow is the same everywhere: IDE → Explorer →
 > leave the board on one without reflashing it.
 > **Known limitation (`#665`, moved to V8):** on the Pico 2 and the Metro,
 > the dual-core image makes a single-threaded program slower —on the Metro,
-> by 35 %, also with `vm.cores=1`; on the Pico 2, PrintBench by 19 %—; if you
-> notice it, you can build the single-core one (below, *Building it*).
+> by 35 %, also with `vm.cores=1`; on the Pico 2, PrintBench 1 270 ms
+> against 817—; if you notice it, you can build the single-core one (below,
+> *Building it*).
 
 ---
 
@@ -175,6 +181,16 @@ ESP32 images.)
 
 The module's 8 MB of PSRAM (WROOM-1) is enabled on its own: nothing to
 configure. Since V7 the S3 uses both its cores ([two cores](#nucleos)).
+
+If the previous boot ended in a fatal fault —a panic (an exception) or the
+interrupt watchdog—, the board **does not launch the autorun**: it says so
+in the log (`log` in the console) and on its log console («[autorun] … NO
+arranca: el arranque anterior acabo en un fallo fatal», it does not start:
+the previous boot ended in a fatal fault), **Info** gives the cause of the
+last reset (`panic/exception` or `int-watchdog`) and the program is launched
+by hand from the IDE. The
+watchdog of the `Wdt` module is not a fatal fault: after it, the autorun is
+launched. (Applies to all five ESP32 images.)
 
 ---
 
@@ -359,6 +375,9 @@ Two options, simplest first:
 its display driver and the Nucleo one does not. Flashing the wrong one breaks nothing, but
 the board will not do what you expect.
 
+On both, a fatal system fault (a `HardFault`) leaves the board stopped: it does not restart
+by itself.
+
 ### B. Building it
 
 The port is built inside an **STM32CubeIDE** project (one per board); the integration
@@ -421,9 +440,14 @@ The P4 and the DK2 take no driver pack: the driver for their display
 If it does not paint, the program says what is missing:
 
 - «GUI: esta placa no tiene el pack 'LVGL' grabado» (no 'LVGL' pack burned)
-  — the GUI pack is missing, or it is there but its engine does not load:
-  no RAM block (**Info** says so) or sealed for another spot ([when to burn
-  again](#regrabar)).
+  — the GUI pack is missing.
+- «GUI: el pack de la GUI esta, pero su motor no cargo: …» (the GUI pack is
+  there, but its engine did not load) — the pack is burned and its engine
+  does not load. After the colon comes the reason: «falta packRam= en el
+  ENV» (packRam= missing in the ENV: no RAM block; **Info** says so too),
+  the engine's warning (for example, «realojado para OTRA direccion…»,
+  relocated for ANOTHER address: [when to burn again](#regrabar)) or «mira el
+  log de la placa» (look at the board's log).
 - «GUI: no hay driver de pantalla ('PANT')…» (no display driver) — on the
   C5 and the C6, `DriverSpi.pack` is missing.
 - «GUI: pantalla: …» (display: …) — a typo in the panel lines
@@ -497,7 +521,7 @@ Nucleo and the DK2—, and on the C6 it is **essential for the GUI**: without
 it, `Gui` and the modules it uses go to RAM and do not fit. Library packs
 (the GUI, SQLite) carry no copy of the library: they take it from the
 `Stdlib.pack` or from `/lib`. If the board is missing something when you
-burn one, the panel warns: «graba también el Stdlib.pack» (burn the
+burn one, the panel warns: «graba tambien el Stdlib.pack» (burn the
 Stdlib.pack too).
 
 <a id="regrabar"></a>
@@ -505,7 +529,9 @@ Stdlib.pack too).
 
 A pack with an engine (`Gui`, `GuiMini`, `DriverSpi`, `SQLite`) is **sealed**
 for its spot in flash and in the RAM block. If that spot changes, the engine
-does not load (and the GUI says it has no pack). It must be burned again:
+does not load (and the GUI says so: «el pack de la GUI esta, pero su motor
+no cargo: …», the GUI pack is there but its engine did not load). It must
+be burned again:
 
 - after changing `packRam` or `SQLite` in the ENV;
 - after flashing a new image, if it moves the zone or the block (simplest:
@@ -528,5 +554,5 @@ last line says whether the image and the IDE match: «9 (la misma que genera
 este IDE)» (the same one this IDE generates) is a V7 image with a V7 IDE. If
 they do not match, or the line is missing (an image older than V7), flash the
 image from this package —or, if the image is newer than the IDE, update the
-IDE—. (On the S3, which has no AOT, it says «sin receta» (no recipe) in any
-version.) Info does not show the image's build date.
+IDE—. (On the S3, which has no AOT, a V7 image says «sin receta», no
+recipe.) Info does not show the image's build date.

@@ -423,8 +423,9 @@ mano: la usan los helpers `__strconcat(a, b)` y `__strconcatN(s0 … sN-1)` que 
 byte en bytecode: ~10 ms por concatenación de una cadena de 2 KB en placa.
 
 `src` es una cadena en cualquiera de sus **dos** formas: un handle del heap o la referencia cruda de un literal del
-bloque de datos (`LEA_GLOBAL`) —de cualquier módulo, compilado antes o después—, o `null`, que es la cadena vacía
-(`#512`). Por eso es un builtin propio de las cadenas y no `move`, que rechaza lo que no tiene cabecera de heap.
+bloque de datos (`LEA_GLOBAL`) —de cualquier módulo, compilado antes o después—. Una cadena **sin valor** (una global
+o un campo `string` sin inicializar, cuya referencia es 0) cuenta como la cadena vacía (`#512`). Por eso es un builtin
+propio de las cadenas y no `move`, que rechaza lo que no tiene cabecera de heap.
 `dst` tiene que ser un array de bytes del heap. Errores (con el mismo texto en las dos VMs): `strCopy: dst es null`,
 `dst no es ref a heap`, `dst apunta a bloque libre`, `dst no es un array de bytes (type=N)`, `fuera de rango (pos=…
 bytes=… dst=…)` — ninguno sale del helper, que reserva justo lo que copia.
@@ -479,7 +480,9 @@ Lo usa `Machine.getEnv(key)`: el valor de la clave en el ENV —las variables `c
 «Variables del entorno» del IDE—, o `""` si no está. Decisión de Eduardo (2-oct): una primitiva GENERAL, con la que
 `Rtc.Clock.isSet()` se escribe en BP (lee `imagen.fecha`, la fecha de la imagen que el arranque anota una vez). La
 regla es la del ENV: claves sin distinguir mayúsculas, y el valor ENTERO o nada (`bpvm_env_get_exacto`, la de la
-ranura `env_get` de la BIOS). Es el ENV que leyó el arranque, como el hardware que configura.
+ranura `env_get` de la BIOS). Es la vista de la FLASH, lo último que se escribió, y se lee en cada llamada: un
+`ENV_SET` del IDE se ve sin reiniciar (#638, 3-oct); lo que el arranque configura con el ENV (`stack`, `vm.runs`…)
+cambia en el arranque siguiente.
 
 En la VM-C, el ENV lo registra el arranque común (`bpvm_machine_set_env`, en Boot 2), que es quien sabe dónde está
 el de cada familia; el micro simulado registra el suyo. Sin registrar —la VM-C de host— no hay ENV: `""`, como en

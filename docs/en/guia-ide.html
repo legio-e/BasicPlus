@@ -203,7 +203,7 @@
 </p>
 <pre><code>bpide.bat</code></pre>
 <p>or, by hand:</p>
-<pre><code>java -jar BpIde-6.0.jar</code></pre>
+<pre><code>java -jar BpIde-7.0.jar</code></pre>
 <p>
   Next to the <code>.jar</code> travel the folders the IDE finds by itself,
   <strong>with nothing to configure</strong>: the pack library
@@ -446,7 +446,10 @@
       The firmware restores it by itself on every boot, module by module:
       if it is missing, if the one there is an older version, or if it is
       the same version but different (size or CRC); a newer one —the one the
-      IDE uploaded with a program that needs it— is left alone. And with the
+      IDE uploaded with a program that needs it— is left alone (except on the
+      STM32, which empty <code>/lib</code> on every boot and restore it from
+      the image: what the IDE uploaded does not survive a restart, and the
+      next Run uploads it again). And with the
       <code>Stdlib.pack</code> burnt, whatever the pack serves with the same
       bytes <strong>leaves <code>/lib</code></strong>: it is loaded from the
       pack, from flash, without spending RAM (§10.3). Whatever is in
@@ -601,7 +604,7 @@ hola, Eduardo
 <table>
   <tr><th>exit</th><th>means</th></tr>
   <tr><td><code>0</code></td><td>finished fine</td></tr>
-  <tr><td><code>1</code></td><td>uncaught BP exception — the program died on its own. Also a stack overflow («desbordamiento de pila (el hilo tiene N B)») and a full heap («No space in heap»), which are catchable <code>RuntimeError</code>s. If the exception belongs to a thread that is not the main one, only that thread ends: the others go on and, at the end, the program exits with 1</td></tr>
+  <tr><td><code>1</code></td><td>uncaught BP exception — the program died on its own. Also a stack overflow («desbordamiento de pila (el hilo tiene N B)») and a full heap («No space in heap»), which are catchable <code>RuntimeError</code>s. If the exception belongs to a thread that is not the main one, only that thread ends: the others go on and, at the end, the program exits with 1. And a link error (<code>=== ERROR DE LINK: … ===</code>: a dependency that does not export what the program uses), which exits with 1 and not with 2</td></tr>
   <tr><td><code>2</code></td><td>the module could not be loaded: not there, not a <code>.mod</code>, its ABI is old, or a dependency is older than the one it needs</td></tr>
   <tr><td><code>3</code></td><td>internal VM failure (bad opcode or pc, or an internal error of the Java VM) — not the program's fault, report it</td></tr>
   <tr><td><code>4</code></td><td>out of memory to load or start the program (one that fills the heap while running gets a <code>RuntimeError</code>: that is the 1)</td></tr>
@@ -673,8 +676,9 @@ hola, Eduardo
       do not, the line marks it with ⚠ and no native code is compiled for it: reflash
       the board with this version's image, or bring the IDE up to date if the image
       is newer. (On the S3, which has no AOT: «sin receta», no recipe.)</li>
-  <li><strong>Reset</strong> — the cause of the last reboot; on the Pico&nbsp;2 and
-      the Metro, «fallo fatal» (fatal failure) after one (§12).</li>
+  <li><strong>Reset</strong> — the cause of the last reboot; after a fatal failure
+      (§12), «fallo fatal» (fatal failure) on the Pico&nbsp;2 and the Metro, and on the
+      ESP32 the chip's own: «panic/exception» or «int-watchdog».</li>
 </ul>
 
 <h2 id="gestion">9. Board management: boot and partitions</h2>
@@ -769,46 +773,18 @@ hola, Eduardo
 </p>
 
 <p>
-  <strong>When they apply.</strong> Almost all of them are read at boot: after
-  changing one, <code>reset</code>. <code>gc</code> and <code>latido</code> are read on
-  every RUN, and apply right away to the next program. And a program can read any of
-  them with <code>Machine.getEnv("key")</code> (<a href="referencia.html#stdlib-pico">reference
-  §14.9</a>).
+  <strong>Which keys there are.</strong> The full list —each key, its values and the one it
+  takes when missing, what it does, on which boards it counts and when it is read— is in the
+  <a href="referencia.html#env">reference, appendix A</a>, together with how numbers and
+  yes/no values are written. Here, what needs more explaining.
 </p>
 
 <p>
-  The ones the firmware actually <strong>reads</strong> today, what each one
-  sets and in which family it counts (elsewhere it is stored, but nobody looks
-  at it). Only a couple of diagnostic ones, for testing, are left out of the
-  table:
-</p>
-
-<table>
-  <tr><th>key</th><th>what it sets</th><th>family</th></tr>
-  <tr><td><code>packRam</code></td><td>kilobytes of the <strong>RAM block for the engines</strong> of the packs —the graphical interface, SQLite, the display driver—, in 4 KB pages. Without it or <code>SQLite</code> there is no block (on the RP2350, an 8 KB one) and neither the GUI nor SQLite loads — see below</td><td>all</td></tr>
-  <tr><td><code>SQLite</code></td><td>the same block, in megabytes (minimum 2, maximum 4095): the way to ask for it for the database. If both are there, <code>packRam</code> wins</td><td>all</td></tr>
-  <tr><td><code>display</code></td><td>which display panel it carries (e.g. <code>st7701</code> on the Waveshare P4; absent = the kit's panel)</td><td>ESP32-P4</td></tr>
-  <tr><td><code>lcd</code> · <code>exp</code> · <code>touch</code></td><td>an SPI display, for the driver of the <code>DriverSpi</code> pack: the panel, the pin expander and the touch controller — see below</td><td>those carrying <code>DriverSpi</code>: the C5 and the C6</td></tr>
-  <tr><td><code>spi<em>N</em></code> · <code>i2c<em>N</em></code></td><td>the pins of bus <em>N</em>, declared by the board (<code>spi2=sck:6,mosi:7,miso:8</code>; on I²C the speed too: <code>i2c0=sda:0,scl:1,khz:400</code>). They are reserved, and opening that bus with other pins is an error with a name; <code>ms:</code> sets the limit of one turn (20 ms otherwise; 100 at most). Details in the reference: <a href="referencia.html#stdlib-i2c">I2c</a> and <a href="referencia.html#stdlib-spi">Spi</a></td><td>all</td></tr>
-  <tr><td><code>sd</code></td><td>the card reader: <strong>structured value</strong>, different per bus — see below</td><td>RP2350 · ESP32-C5 and C6 (SPI) · ESP32-P4 (SDIO)</td></tr>
-  <tr><td><code>psram</code></td><td><code>1</code> enables the PSRAM as the VM heap (RP2350B only; the CS is fixed, GPIO47)</td><td>RP2350</td></tr>
-  <tr><td><code>vmheap</code></td><td>kilobytes of the whole VM block —heap and stacks; <code>stack</code> splits it inside—; absent = the image's — see below</td><td>all</td></tr>
-  <tr><td><code>stack</code></td><td>kilobytes of stack (the rest of the VM memory goes to the heap); absent = the default split</td><td>all</td></tr>
-  <tr><td><code>quantum</code></td><td>opcodes a thread executes before yielding; absent = 1024</td><td>all</td></tr>
-  <tr><td><code>vm.runs</code></td><td>how many of the program's threads run <strong>at the same time</strong> (<code>1</code> or <code>2</code>); absent = one per core: two on the Pico&nbsp;2, the Metro, the S3 and the P4, one on the C3, the C5 and the C6 — see below</td><td>RP2350 · ESP32</td></tr>
-  <tr><td><code>vm.cores</code></td><td><code>1</code>: every VM task on core 0, the way back from two cores without reflashing; absent = both</td><td>RP2350 · ESP32-S3 · ESP32-P4</td></tr>
-  <tr><td><code>log</code></td><td>the post-mortem log: <code>1</code> on; absent = off</td><td>all</td></tr>
-  <tr><td><code>gc</code></td><td>the garbage collector: <code>0</code> turns it off (to split an experiment in two); absent = on. Read on every RUN</td><td>all</td></tr>
-  <tr><td><code>latido</code></td><td>the heartbeat, in the log: <code>1</code> turns it on; absent = off. Read on every RUN</td><td>all</td></tr>
-  <tr><td><code>imagen.fecha</code></td><td>you do not set it: <strong>the board writes it</strong>, once, on its first boot —the date of its image, in seconds since 1970—. <code>Rtc.Clock.isSet()</code> uses it to know whether the clock has been set (<a href="referencia.html#stdlib-rtc">reference §14.10</a>); if it is deleted, the board writes it again at boot</td><td>all</td></tr>
-</table>
-
-<p class="note">
-  <code>board</code>, <code>psramCsPin</code>, <code>flashSizeBytes</code> and
-  <code>gpioCount</code> may show up in an older board's table: <strong>they
-  are stored but not read</strong>. The firmware detects the variant and the
-  flash from the chip itself, the PSRAM CS is fixed, and the board's identity
-  and pins (RP2350) live in <code>/sys/board.json</code>.
+  <strong>When they apply.</strong> Almost all of them are read at boot: after
+  changing one, <code>reset</code>. <code>gc</code> and <code>latido</code> are read on
+  every RUN, and apply right away to the next program; the screen ones, when the GUI starts.
+  And a program can read any of them with <code>Machine.getEnv("key")</code>
+  (<a href="referencia.html#stdlib-pico">reference §14.9</a>).
 </p>
 
 <p>
@@ -917,7 +893,7 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   the VM in PSRAM, computing is 35&nbsp;% slower (<code>fib(26)</code>, 3&nbsp;908&nbsp;ms
   against 2&nbsp;892 with the single-core image; with <code>vm.cores=1</code>, 3&nbsp;951);
   on the Pico&nbsp;2 computing barely notices it (2&nbsp;%), but heavy output through
-  <code>print</code> does (PrintBench, 1&nbsp;275&nbsp;ms against 817). Neither
+  <code>print</code> does (PrintBench, 1&nbsp;270&nbsp;ms against 817). Neither
   <code>vm.runs=1</code> nor <code>vm.cores=1</code> fixes it —it is the image, not the
   runs—: the way back is to build the single-core image
   (<a href="INSTALAR_FIRMWARE.md#nucleos">installation guide</a>).
@@ -1050,7 +1026,7 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   <code>packRam</code>); if the engine does not fit in the block, it says so before
   sending anything. And it warns, though it burns anyway, if that pack is going to
   lack something on the board: another pack it declares it needs, or standard
-  library modules it does not carry and the board does not have («graba también el
+  library modules it does not carry and the board does not have («graba tambien el
   Stdlib.pack», burn the Stdlib.pack too).
 </p>
 <p>
@@ -1128,10 +1104,16 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
   On the Pico&nbsp;2 and the Metro (the dual-core image, the default one), a
   <strong>fatal failure</strong> —not an exception of the program, but a failure of
   the system: a HardFault, an overflowed task stack…— leaves its report in the log,
-  even if the log is off, and reboots the board; and that boot <strong>does not
-  launch the autorun</strong>: a program that failed on start would keep the board
-  rebooting forever. The log says so, the <em>Info</em> gives «fallo fatal» as the
-  cause of the reboot, and the program is started by hand from the IDE.
+  even if the log is off, and reboots the board; on the ESP32, such a failure is an
+  IDF panic (or its interrupt watchdog), which gives its report on the console and
+  also reboots the board. And that boot <strong>does not launch the autorun</strong>:
+  a program that failed on start would keep the board rebooting forever. The log says
+  so («autorun: … NO arranca: el arranque anterior acabo en un fallo fatal»; on the
+  ESP32, the console too), the <em>Info</em> gives the cause of the reboot —«fallo
+  fatal» on the RP2350; «panic/exception» or «int-watchdog» on the ESP32— and the
+  program is started by hand from the IDE. The watchdog of the <code>Wdt</code> module
+  is not a fatal failure: after it, the autorun is launched. On the STM32, a HardFault
+  leaves its report in the log and the board stopped: it does not reboot by itself.
 </p>
 
 <hr>

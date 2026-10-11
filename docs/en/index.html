@@ -171,7 +171,7 @@
     <strong>identically</strong> on the PC and on the micro.
   </p>
   <div class="badges">
-    <span class="badge">V7 · one image per micro</span>
+    <span class="badge">V7</span>
     <span class="badge">RP2350 · ESP32 S3/C3/C5/C6/P4 · STM32</span>
     <span class="badge">Two VMs · one byte-identical output</span>
     <span class="badge">Handle-based memory</span>
@@ -237,12 +237,12 @@
 
 
 <p style="margin-top:1.4rem">
-  <strong>New in V7 — one image per micro.</strong> This version centres on three things:
+  <strong>New in V7.</strong> This version centres on three things:
 </p>
 <ul>
   <li><strong>Packs.</strong> What SQLite already did — an engine that does not live inside the
   VM but in a pack that runs from flash — <strong>LVGL</strong>, the engine behind the graphical
-  interface, now does too: no image carries the screen any more. There is <strong>one image per
+  interface, now does too: no image carries it any more. There is <strong>one image per
   micro</strong>, and it is the user who decides whether to add SQLite and the graphical
   environment, without building images or compiling any C: you burn the pack from the IDE.</li>
   <li><strong>Finishing what was pending</strong>: a huge number of items. Among them,
@@ -252,9 +252,10 @@
   C6</strong> (RISC-V without FPU) they are compiled and accelerated too.</li>
   <li><strong>The second core.</strong> On the dual-core boards — Pico 2, Metro, S3 and P4 — two
   BP threads run at the same time: with two threads working at once, the ESP32-P4 reaches
-  between 133 % and 200 % of one core's performance, and the RP2350 between 113 % (Metro) and
+  200 % of one core's performance (133 % on strings), and the RP2350 between 113 % (Metro) and
   168 % (Pico 2). A known limitation, left for V8: on the RP2350 the dual-core image slows down
-  a single-threaded program (by up to 35 % on the Metro).</li>
+  a single-threaded program (by up to 35 % on the Metro), and strings don't scale there with two
+  threads.</li>
 </ul>
 <p>
   And what you'll notice: a new board, the <strong>ESP32-C5</strong>, with its touch screen;
@@ -396,7 +397,7 @@
   On all of them: the cable has a system thread of its own, <code>io</code>, apart from the
   program, so the board keeps answering the cable while the program runs — and, since V7, also
   lists and reads files —; a "wire v1" REPL with file upload, remote RUN and a run argument
-  (<code>run X &lt;arg&gt;</code>), <strong>Stop</strong> (instant KILL without resetting the
+  (<code>run X &lt;arg&gt;</code>), <strong>Stop</strong> (cooperative KILL without resetting the
   board), <strong>autorun</strong> (<code>/sys/auto.txt</code> starts your program on power-up,
   and the IDE can attach live), unified exit codes and on-device debugging with breakpoints
   (while debugging, the program's threads take turns, as on a single core). On the dual-core

@@ -45,6 +45,10 @@ al puerto serie → Run on Device / consola / `autorun` (ver
 > pantalla **la GUI ya no va en la imagen**: sin sus packs, la pantalla no
 > pinta. Y los packs que tuvieras de V6 (SQLite) no valen en V7: formatea la
 > zona y graba los del paquete. Todo en [Los packs de la placa](#packs).
+> **Y recompila tus programas**: un `.mod` de V6 que use clases de la
+> biblioteca no enlaza con la de V7. El IDE recompila en cada Run; lo que hay
+> que mirar es lo que quedó en `/app` —el programa del autorun, sobre todo—:
+> vuelve a ejecutarlo desde el IDE, o bórralo ([notas de v7.0](RELEASES.md)).
 
 > El firmware solo se reflashea cuando cambia la **VM**. Tus programas
 > (`.mod`) viven en el filesystem interno de la placa y se suben desde el
@@ -78,8 +82,8 @@ al puerto serie → Run on Device / consola / `autorun` (ver
 > `vm.cores=1` y `vm.runs=1` dejan la placa en uno sin regrabarla.
 > **Limitación conocida (`#665`, a V8):** en la Pico 2 y la Metro, la imagen
 > de dos núcleos hace más lento un programa de un hilo —en la Metro, un 35 %,
-> también con `vm.cores=1`; en la Pico 2, PrintBench un 19 %—; quien lo note
-> puede compilar la de un núcleo (abajo, *Compilarla*).
+> también con `vm.cores=1`; en la Pico 2, PrintBench 1 270 ms frente a
+> 817—; quien lo note puede compilar la de un núcleo (abajo, *Compilarla*).
 
 ---
 
@@ -174,6 +178,14 @@ imágenes ESP32.)
 
 La PSRAM de 8 MB del módulo (WROOM-1) se activa sola: no hay nada que
 configurar. Desde V7 la S3 usa sus dos núcleos ([dos núcleos](#nucleos)).
+
+Si el arranque anterior acabó en un fallo fatal —un pánico (una excepción) o
+el perro guardián de las interrupciones—, la placa **no lanza el autorun**:
+lo dice en el log (`log` en la consola) y en su consola de logs («[autorun]
+… NO arranca: el arranque anterior acabo en un fallo fatal»), el **Info** da
+la causa del último reset (`panic/exception` o `int-watchdog`) y el programa
+se lanza a mano desde el IDE. El perro guardián del módulo `Wdt` no es un fallo fatal: tras él, el
+autorun se lanza. (Vale para las cinco imágenes ESP32.)
 
 ---
 
@@ -356,6 +368,9 @@ Dos opciones, de más simple a más completa:
 lleva el driver de su pantalla y la de la Nucleo no. Flashear la que no es no rompe nada,
 pero la placa no hará lo que esperas.
 
+En las dos, un fallo fatal del sistema (un `HardFault`) deja la placa parada: no se
+reinicia sola.
+
 ### B. Compilarla
 
 El port se construye dentro de un proyecto **STM32CubeIDE** (uno por placa); la guía de
@@ -415,8 +430,12 @@ con su táctil) va en la imagen.
 Si no pinta, el programa dice qué falta:
 
 - «GUI: esta placa no tiene el pack 'LVGL' grabado» — falta el pack de la
-  GUI, o está pero su motor no carga: sin bloque de RAM (lo dice el
-  **Info**) o sellado para otro sitio ([cuándo regrabar](#regrabar)).
+  GUI.
+- «GUI: el pack de la GUI esta, pero su motor no cargo: …» — el pack está
+  grabado y su motor no carga. Detrás de los dos puntos va el porqué:
+  «falta packRam= en el ENV» (sin bloque de RAM; también lo dice el
+  **Info**), el aviso del motor (por ejemplo, «realojado para OTRA
+  direccion…»: [cuándo regrabar](#regrabar)) o «mira el log de la placa».
 - «GUI: no hay driver de pantalla ('PANT')…» — en la C5 y la C6, falta
   `DriverSpi.pack`.
 - «GUI: pantalla: …» — una errata en las líneas del panel
@@ -490,14 +509,15 @@ DK2—, y en la C6 es **imprescindible para la GUI**: sin él, `Gui` y los
 módulos que usa van a la RAM y no caben. Los packs de librería (la GUI,
 SQLite) no llevan copia de la biblioteca: la toman del `Stdlib.pack` o de
 `/lib`. Si al grabar uno a la placa le falta algo, el panel avisa: «graba
-también el Stdlib.pack».
+tambien el Stdlib.pack».
 
 <a id="regrabar"></a>
 ### Cuándo regrabar
 
 Un pack con motor (`Gui`, `GuiMini`, `DriverSpi`, `SQLite`) queda **sellado**
 para su sitio en la flash y en el bloque de RAM. Si ese sitio cambia, el motor
-no carga (y la GUI dice que no tiene el pack). Hay que regrabarlo:
+no carga (y la GUI lo dice: «el pack de la GUI esta, pero su motor no
+cargo: …»). Hay que regrabarlo:
 
 - al cambiar `packRam` o `SQLite` en el ENV;
 - tras grabar una imagen nueva, si mueve la zona o el bloque (lo más sencillo:
@@ -519,5 +539,5 @@ Esa última línea dice si la imagen y el IDE casan: «9 (la misma que genera
 este IDE)» es una imagen de V7 con un IDE de V7. Si no casan, o la línea no
 aparece (una imagen anterior a V7), graba la imagen de este paquete —o, si la
 imagen es más nueva que el IDE, pon el IDE al día—. (En la S3, que no tiene
-AOT, dice «sin receta» en cualquier versión.) El Info no muestra la fecha de
+AOT, una imagen de V7 dice «sin receta».) El Info no muestra la fecha de
 compilación de la imagen.

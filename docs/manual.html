@@ -464,7 +464,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 </p>
 <table>
   <tr><th>Ámbito</th><th>Dónde vive</th></tr>
-  <tr><td>Local de función</td><td>En el marco: <code>4 + N·ancho</code> bytes, a cero al declararlo. Ni heap ni GC.</td></tr>
+  <tr><td>Local de función</td><td>En el marco: <code>4 + ⌈N·ancho/4⌉·4</code> bytes (los datos se redondean a 4: un <code>byte[3]</code> ocupa 8), a cero al declararlo. Ni heap ni GC.</td></tr>
   <tr><td>Campo <code>private var</code> de clase</td><td>Dentro del objeto: <code>1 + ⌈N·ancho/4⌉</code> ranuras (hasta 255), a cero al construirlo. Sólo lo indexa la propia clase.</td></tr>
   <tr><td>Global de módulo</td><td><strong>No</strong> (error de compilación): a nivel de módulo escribe <code>T[]</code>, con un literal <code>[…]</code> o <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.</td></tr>
 </table>
@@ -603,7 +603,8 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <strong>Una variable global siempre vale lo que dice su declaración.</strong>
   Las globales —las <code>var</code> y las property de módulo, y las
   <code>var</code> y las property estáticas de una clase— viven en el espacio
-  de constantes del módulo: sin valor inicial valen 0 (o <code>null</code>);
+  de constantes del módulo: sin valor inicial valen 0 (o <code>null</code>; un
+  <code>string</code>, <code>""</code>);
   con un valor <strong>literal</strong> (numérico/boolean/string), queda
   <em>grabado</em> en el <code>.mod</code>, sin código de arranque, y la
   variable sigue siendo reasignable. Cualquier otro valor inicial —un array
@@ -613,14 +614,18 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   el mismo nombre que el módulo), que ya las encuentra puestas.
 </p>
 <p>
-  Un <code>string</code> o un array sin valor —una global o un campo que nadie ha asignado— es
-  <code>null</code>, y se porta como vacío: se imprime y se concatena como <code>""</code> y
-  <code>len</code> da 0, igual en las dos VMs. Indexarlo, en cambio, lanza un
-  <code>RuntimeError</code> (índice fuera de rango).
+  Un <code>string</code> global o un campo <code>string</code> sin valor —que nadie ha asignado—
+  vale <code>""</code>: se imprime y se concatena como <code>""</code>, <code>len</code> da 0 y
+  <code>charAt(s, 0)</code> lanza el mismo <code>RuntimeError</code> que con <code>""</code>
+  («charAt: idx fuera de rango 0 (len=0)»), igual en las dos VMs. (Un <code>string</code> es un
+  escalar: no admite <code>null</code>; asignárselo es error de compilación.) Un array global o un
+  campo array sin valor sí es <code>null</code>: <code>len</code> da 0 y un <code>for</code> sobre él no da ninguna
+  vuelta, pero indexarlo lanza un <code>RuntimeError</code> (índice fuera de rango), igual en las
+  dos VMs; y <code>print</code> no enseña su contenido (de uno sin valor imprime 0).
 </p>
 <p>
   <strong>Una variable local se inicializa antes de leerla.</strong> Una <code>var</code> de módulo sin
-  inicializador vale 0 (o <code>null</code>): vive en el bloque de datos del <code>.mod</code>. Una
+  inicializador vale 0 (o <code>null</code>; un <code>string</code>, <code>""</code>): vive en el bloque de datos del <code>.mod</code>. Una
   <em>local</em> sin inicializador tiene un valor <strong>indeterminado</strong> —lo que hubiera en la
   pila—, así que leerla antes de darle valor es un <strong>error de compilación</strong>, con su línea. El
   compilador comprueba que, por <em>todos</em> los caminos que llegan a una lectura —las ramas de un
@@ -957,7 +962,7 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
           <td>Acelerada por AOT — mismo código Thumb-2 que el RP2350
               (≈45× medido en un kernel LZSS en placa).</td></tr>
       <tr><td>ESP32-P4 (RISC-V con FPU)</td>
-          <td>Acelerada por AOT (destino <code>riscv32-esp-p4</code>, desde V4).</td></tr>
+          <td>Acelerada por AOT (destino <code>riscv</code> —<code>riscv32-esp-p4</code>—, desde V4).</td></tr>
       <tr><td>ESP32-C5 / ESP32-C3 / ESP32-C6 (RISC-V sin FPU)</td>
           <td>Acelerada por AOT (destino <code>riscv-imc</code>, ABI <code>ilp32</code>,
               desde V7; probada en placa en la C5, la C3 y la C6). Sin FPU, cada
@@ -1709,11 +1714,24 @@ Counter.bump()</code></pre>
       <code>try/catch</code> o <code>throw</code> (<a href="#excepciones">§11</a>) se usan sin
       escribirlo. Escribirlo no cambia nada.</li>
   <li><strong>Los imports no son transitivos</strong> (<code>Core</code> aparte, que va
-      siempre). Importar <code>A</code> no trae los módulos que <code>A</code> importa: si una
-      clase de <code>A</code> extiende una de <code>B</code>, o una firma de <code>A</code> usa un
-      enum de <code>B</code>, el módulo que las usa tiene que importar <code>B</code> también — el
-      compilador lo dice: «la clase 'X' extiende 'B.Y' y este modulo no importa 'B': anade
-      `import B` (los imports no son transitivos)».</li>
+      siempre). Importar <code>A</code> no trae los módulos que <code>A</code> importa: para
+      nombrar un tipo de <code>B</code> hay que importar <code>B</code> («tipo cualificado 'B.Y'
+      no encontrado»), y también si lo que usas de <code>A</code> depende de <code>B</code>. El
+      compilador lo dice según el caso:
+      <ul>
+        <li>una firma de <code>A</code> (de una función o de un método) usa un enum de
+            <code>B</code>: es un error, aunque no uses esa firma — «la firma de 'A.f' usa el enum
+            'B.E' y este módulo no importa 'B' (un enum no puede cruzar sin resolver): añade
+            `import B`»;</li>
+        <li>una clase de <code>A</code> extiende una de <code>B</code>: es un <em>aviso</em>
+            —«base cross-module 'B.Y' de la clase importada 'A.X' no resuelta (¿falta el import
+            de su módulo?) — sin sus miembros heredados»— y la clase se usa sin lo que hereda de
+            <code>B</code>: llamar a un miembro heredado es un error («'X' no tiene miembro de
+            instancia 'm'»);</li>
+        <li>una clase tuya extiende una de <code>B</code> sin importarlo: es un error — «la clase
+            'Z' extiende 'B.Y' y este modulo no importa 'B': anade `import B` (los imports no son
+            transitivos)».</li>
+      </ul></li>
   <li><strong>Una librería puede crecer sin recompilar a quien la usa</strong> (desde V7, el
       <em>enlace tardío</em>): un <code>.mod</code> lleva sus referencias a las clases de otros
       módulos por nombre y firma, y el cargador las resuelve contra la versión que encuentra. Un
@@ -1899,11 +1917,16 @@ otra sin problema.</p>
   <li>Una excepción que nadie atrapa en el thread <code>main</code> termina el programa con
       <strong>código de salida 1</strong> (igual en las dos VMs y en placa); en otro thread
       acaba <em>ese</em> thread, los demás siguen, y al final el programa sale igualmente con 1
-      (<a href="#conc-modelo">§14.1</a>). El informe nombra la clase de la excepción
-      (<code>Core.RuntimeError: …</code>, <code>MiMod.MiError: …</code>) y es diagnóstico, no
-      salida del programa: la VM Java enseña un stack trace con el nombre simbólico
-      de cada frame, la VM-C el mensaje, y el IDE lo recoge en su consola
-      (<code>help error</code> lista los códigos).</li>
+      (<a href="#conc-modelo">§14.1</a>). El informe es diagnóstico, no salida del programa, y
+      el IDE lo recoge en su consola (<code>help error</code> lista los códigos); pero las dos
+      VMs no lo dan igual. La VM-C —la de las placas— nombra la clase de la excepción y su
+      mensaje, la lance el programa o la propia VM
+      (<code>excepcion no atrapada: Core.RuntimeError: División por cero</code>,
+      <code>… MiMod.MiError: …</code>). La VM Java, con un <code>throw</code> del programa, también
+      nombra la clase (<code>Excepción no atrapada: MiMod.MiError: …</code>) y añade un stack
+      trace con el nombre simbólico y la línea de cada frame; pero con un error de la propia VM
+      —división por cero, índice fuera de rango…— sólo da el mensaje
+      (<code>"División por cero"</code>), sin la clase ni el stack trace.</li>
 </ul>
 
 <!-- =========================================================== -->
@@ -2102,12 +2125,16 @@ objeto compartido</code></pre>
   ref llegue al stack de quien lo creó.
 </p>
 <p>
-  La carrera <strong>B1</strong> del SMP (dos workers sobre el mismo contexto de
-  thread) se cerró en V6: sólo decide sobre un thread el worker que lo posee, y
-  en la VM-C el <code>Mutex</code> pasó a ser atómico. <code>synctest.bp</code>,
-  <code>synclisttest.bp</code> y <code>modpropsync.bp</code> son las pruebas de
-  referencia. En el PC el SMP sigue siendo opt-in (un worker por defecto); en la placa,
-  la VM-C usa los dos núcleos donde los hay (<a href="#conc-nucleos">§14.6</a>).
+  La carrera <strong>B1</strong> del SMP de la VM Java (dos workers sobre el mismo
+  contexto de thread) <strong>no está cerrada</strong>: con más de un worker
+  (<code>--workers</code>), la VM Java sigue siendo experimental, como desde V2. Se han
+  cerrado dos caminos suyos —en V6, el que se veía (sólo decide sobre un thread el
+  worker que lo posee); en V7, el de un <code>sleep(0)</code> (<code>#613</code>)—, pero
+  no está demostrado que no tenga más. La VM-C no la tiene (su planificador no reclama
+  un thread que aún tiene dueño), y desde V6 su <code>Mutex</code> es atómico.
+  <code>synctest.bp</code>, <code>synclisttest.bp</code> y <code>modpropsync.bp</code> son
+  las pruebas de referencia. En el PC el SMP sigue siendo opt-in (un worker por defecto);
+  en la placa, la VM-C usa los dos núcleos donde los hay (<a href="#conc-nucleos">§14.6</a>).
 </p>
 
 <!-- =========================================================== -->
@@ -2157,8 +2184,8 @@ sb.appendStr(<span class="str">"Humedad: "</span> + h)
   widgets la ejecuta el mismo run, así que se pueden tocar desde cualquier thread.
 </p>
 <p>
-  Lo que se gana depende del programa: dos threads que calculan a la vez van casi el doble de
-  rápido (medido: ×2 en la P4, ×1,55–1,68 en la Pico&nbsp;2, ×1,13 en la Metro); con cadenas,
+  Lo que se gana depende del programa y de la placa: dos threads que calculan a la vez van más
+  rápido, hasta el doble (medido: ×2 en la P4, ×1,55–1,68 en la Pico&nbsp;2, ×1,13 en la Metro); con cadenas,
   poco o nada (×1,33 en la P4; en la Pico&nbsp;2, ×0,83: pierde); y un programa de un solo thread
   no gana nada (<a href="#pendientes">§17</a>).
   Un programa que se depura, o que usa SQLite, va con un run aunque haya dos. Las cifras, y
@@ -2173,8 +2200,14 @@ sb.appendStr(<span class="str">"Humedad: "</span> + h)
   dos núcleos, la placa deja el informe en el log —en una RAM que sobrevive al reinicio—, se
   reinicia sola en medio segundo y, al arrancar, lo dice (<code>Machine.resetCause()</code> y el
   INFO del IDE dan «fallo fatal») y <strong>no lanza el autorun</strong>: un programa que fallara
-  nada más arrancar sería un bucle de reinicios; desde el IDE se arranca a mano. Que el fallo de
-  un run no tumbe la placa entera es de V8.
+  nada más arrancar sería un bucle de reinicios; desde el IDE se arranca a mano. Las ESP32 hacen
+  lo mismo con el autorun: tras un pánico (una excepción del procesador) o el perro guardián de
+  las interrupciones, la placa se reinicia y el arranque siguiente <strong>no lo lanza</strong> y
+  lo dice en el log y en la consola (<code>Machine.resetCause()</code> da
+  <code>panic/exception</code> o <code>int-watchdog</code>). El perro guardián de tareas, el que
+  arma el módulo <code>Wdt</code>, no es un fallo fatal: tras él, el autorun sí se lanza. En las
+  STM32, un HardFault deja el informe en el log y la placa parada. Que el fallo de un run no
+  tumbe la placa entera es de V8.
 </p>
 
 <h2 id="eventos">15. Eventos</h2>
@@ -2276,9 +2309,8 @@ que estaba aquí y ya se hizo: hasta V6, clases/properties en la interfaz
 <code>Collections.Map</code>, fichero de proyecto, el safepoint
 stop-the-world del GC, el AOT automático desde el IDE, la GUI
 (<a href="gui.html">volumen aparte</a>), <code>catch e</code> como
-<code>Exception</code> (<a href="#excepciones">§11</a>), el código nativo dentro
-del <code>.mod</code> (<a href="#funciones-native">§8.3</a>) y la carrera B1
-del SMP (<a href="#conc-gc">§14.4</a>); y en V7, el módulo raíz con <code>import Core</code>
+<code>Exception</code> (<a href="#excepciones">§11</a>) y el código nativo dentro
+del <code>.mod</code> (<a href="#funciones-native">§8.3</a>); y en V7, el módulo raíz con <code>import Core</code>
 implícito (<a href="#raiz">§10.0</a>), el destructor y <code>try var</code>
 (<a href="#destructor">§9.4b</a>) —los owners se destruyen también cuando sale una
 excepción—, el cast desde cualquier antepasado (<a href="#any">§4.5</a>), el <code>step</code>
@@ -2306,7 +2338,7 @@ threads sin tope (<a href="#conc-modelo">§14.1</a>) y los dos núcleos en la pl
       fuera del plan de versiones.
       <br><strong>El ESP32-P4 SÍ acelera</strong> (RISC-V, desde V4), igual que el RP2350
       y el STM32; y desde V7 también <strong>la C5, la C3 y la C6</strong> (RISC-V sin
-      FPU, destino <code>ilp32</code>: <a href="#funciones-native">§8.3</a>).</li>
+      FPU, destino <code>riscv-imc</code>, ABI <code>ilp32</code>: <a href="#funciones-native">§8.3</a>).</li>
   <li><code>input()</code> sólo existe en la VM Java del PC; en la VM-C (PC y placas)
       lanza <code>RuntimeError</code> («builtin 37 no soportado en esta VM») — el mismo
       <code>.mod</code> no da la misma salida en las dos VMs. (<code>listDir()</code>, que
@@ -2328,10 +2360,14 @@ threads sin tope (<a href="#conc-modelo">§14.1</a>) y los dos núcleos en la pl
   <li>Closures sobre locales del encerrador en cuerpos de <code>case</code>
       del statement <code>parallel</code> (hoy sólo se ven stdlib + módulo
       no-globals — ver <a href="#conc-encapsulacion">§14.3</a>).</li>
+  <li>Más de un worker en la VM Java (<code>--workers</code>, el SMP del PC): experimental
+      desde V2, con la carrera B1 (<a href="#conc-gc">§14.4</a>). Por defecto va con uno; en
+      la placa, los dos núcleos los usa la VM-C (<a href="#conc-nucleos">§14.6</a>).</li>
   <li>Con la imagen de dos núcleos del RP2350 —la de por defecto en la Pico&nbsp;2 y la
       Metro—, un programa de un solo thread va más lento de lo que debería: en la Metro, un
       35&nbsp;% (también con <code>vm.cores=1</code>: es la imagen, no el otro núcleo); en la
-      Pico&nbsp;2, uno que imprime mucho, un 19&nbsp;%. Y las cadenas no ganan con dos threads
+      Pico&nbsp;2, uno que imprime mucho (<code>PrintBench</code>) tarda 1&nbsp;270&nbsp;ms frente a 817 con la imagen
+      de un núcleo, y el cálculo puro, un 1,8&nbsp;% más. Y las cadenas no ganan con dos threads
       (<a href="#conc-nucleos">§14.6</a>). Se investiga en V8 (<code>#665</code>).</li>
   <li>Que el fallo fatal de un run no tumbe la placa entera
       (<a href="#conc-nucleos">§14.6</a>): en V8.</li>

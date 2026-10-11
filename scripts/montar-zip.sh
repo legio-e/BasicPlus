@@ -163,7 +163,7 @@ cat > "$OUT/firmware/LEEME.md" <<'LEEME'
 | `bpvm_esp32_merged.bin` | ESP32-S3 |
 | `bpvm_esp32c3_merged.bin` | ESP32-C3 |
 | `bpvm_esp32c5_merged.bin` | ESP32-C5 (Waveshare ESP32-C5-Touch-LCD-2.8) |
-| `bpvm_esp32c6_merged.bin` | ESP32-C6 (Waveshare ESP32-C6-LCD-1.3) |
+| `bpvm_esp32c6_merged.bin` | ESP32-C6 (y la Waveshare ESP32-C6-LCD-1.3, con su pantalla por packs) |
 | `bpvm_esp32p4_merged.bin` | ESP32-P4-Function-EV · Waveshare ESP32-P4 4.3" |
 | `bpvm_stm32_nucleo.bin` | Nucleo-U575ZI-Q |
 | `bpvm_stm32_dk2.bin` | Discovery STM32U5G9J-DK2 |

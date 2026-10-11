@@ -186,7 +186,7 @@
 
 <p>
   BasicPlus talks to <strong>SQLite</strong>. The same engine, the same <code>.db</code> file
-  and the same code on the PC, on the Metro, on the ESP32-P4 and on the STM32 boards. It can be
+  and the same code on the PC, on the Metro, on the ESP32-P4 and on the Discovery (STM32). It can be
   used two ways, and both are legitimate:
 </p>
 
@@ -200,9 +200,11 @@
   architecture —the pack brings it for ARM (RP2350 and STM32) and for the ESP32-P4's RISC-V— and
   RAM for its arena (<a href="#pack">§1</a>). The <strong>Metro RP2350</strong> with PSRAM
   (<code>psram=1</code> in the environment; the Pico 2 has none), both <strong>ESP32-P4</strong>
-  boards (kit and Waveshare) and, since V7, both <strong>STM32</strong> boards —the Discovery and
-  the Nucleo— meet them; the STM32s run <code>SqlDemo</code> with the database in flash, but with
-  no external RAM their arena is hundreds of KB, not megabytes: for small databases. The
+  boards (kit and Waveshare) and, since V7, the <strong>Discovery</strong> (STM32) meet them; the
+  Discovery runs <code>SqlDemo</code> with the database in flash, but with no external RAM its arena
+  is hundreds of KB, not megabytes: for small databases. The <strong>Nucleo</strong> does not: it
+  does not have enough memory for a database, and in V7 its pack area carries only the
+  <code>Stdlib.pack</code>. The
   <strong>ESP32-S3</strong> has a pack area but there is no Xtensa binary, and there is none either
   for the FPU-less RISC-V of the <strong>C3</strong>, the <strong>C5</strong> and the
   <strong>C6</strong>.
@@ -254,8 +256,8 @@
   In megabytes: four is what the P4 uses; <strong>the minimum is 2</strong> and the maximum
   4095. Since V7 there is also a generic key, <code>packRam=&lt;KB&gt;</code>, in kilobytes and
   without that minimum, which <strong>takes precedence over <code>SQLite=</code></strong> when
-  both are there; with it the boards without PSRAM run <code>SqlDemo</code>: the Discovery
-  with <code>packRam=512</code> and the Nucleo with <code>packRam=256</code>. The block belongs to <strong>all</strong> the engines on the board:
+  both are there; with it the Discovery, which has no PSRAM, runs <code>SqlDemo</code> with
+  <code>packRam=512</code>. The block belongs to <strong>all</strong> the engines on the board:
   if it also loads the graphical interface's, SQLite gets whatever LVGL leaves. With no block
   —neither key, <code>SQLite=</code> below 2 or a value that does not fit— the pack will not
   start; boot says so on its <code>packs:</code> line, and the IDE's INFO under «RAM packs»,
@@ -326,7 +328,8 @@ q.<span class="fn">release</span>()</code></pre>
 <p>
   Columns go <strong>by index, starting at 0</strong>, like BP arrays. There are also
   <code>columnCount()</code>, <code>columnName(i)</code> and <code>columnType(i)</code> for
-  walking a table you do not know in advance.
+  walking a table you do not know in advance. And <code>getInt</code>, <code>getLong</code>,
+  <code>getDouble</code> and <code>getStr</code> to read.
 </p>
 
 <div class="note">
@@ -532,7 +535,10 @@ w.<span class="fn">eq</span>(<span class="str">"sensor_id"</span>, <span class="
 <span class="kw">endwh</span>
 q.<span class="fn">release</span>()</code></pre>
 
-<p><strong>By pages</strong>, when you need the results together:</p>
+<p>
+  <strong>By pages</strong>, when you need the results together (to sort them, show them or
+  send them):
+</p>
 
 <pre><code><span class="kw">var</span> q: SQLite.<span class="type">Query</span> := db.<span class="fn">query</span>(<span class="str">"SELECT n FROM t ORDER BY n LIMIT 2 OFFSET 2"</span>)</code></pre>
 

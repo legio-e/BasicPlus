@@ -200,15 +200,15 @@
     <li class="sub"><a href="#stdlib-sd">14.17 Tarjeta SD</a></li>
     <li class="group"><a href="#seguir">Por dónde seguir</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
-    <li class="sub"><a href="#quees">15.1 Qué es un pack, y qué no</a></li>
-    <li class="sub"><a href="#tipos">15.2 Dos tipos: librería y ejecutable</a></li>
-    <li class="sub"><a href="#construir">15.3 Construir uno</a></li>
-    <li class="sub"><a href="#dentro">15.4 Qué entra dentro</a></li>
-    <li class="sub"><a href="#grabar">15.5 Grabarlo y gestionarlo</a></li>
-    <li class="sub"><a href="#usar">15.6 Usarlo desde un programa</a></li>
-    <li class="sub"><a href="#from">15.7 Decir de dónde viene un módulo</a></li>
-    <li class="sub"><a href="#descubrir">15.8 Descubrirlos en ejecución</a></li>
-    <li class="sub"><a href="#nativo">15.9 Packs con código nativo</a></li>
+    <li class="sub"><a href="#packs-what">15.1 Qué es un pack, y qué no</a></li>
+    <li class="sub"><a href="#packs-kinds">15.2 Dos tipos: librería y ejecutable</a></li>
+    <li class="sub"><a href="#packs-build">15.3 Construir uno</a></li>
+    <li class="sub"><a href="#packs-inside">15.4 Qué entra dentro</a></li>
+    <li class="sub"><a href="#packs-burn">15.5 Grabarlo y gestionarlo</a></li>
+    <li class="sub"><a href="#packs-use">15.6 Usarlo desde un programa</a></li>
+    <li class="sub"><a href="#packs-from">15.7 Decir de dónde viene un módulo</a></li>
+    <li class="sub"><a href="#packs-discover">15.8 Descubrirlos en ejecución</a></li>
+    <li class="sub"><a href="#packs-native">15.9 Packs con código nativo</a></li>
     <li class="sub"><a href="#packs-traps">15.10 Trampas conocidas</a></li>
     <li class="group"><a href="#cli">16. Compilación &amp; ejecución</a></li>
     <li class="sub"><a href="#cli-frontend">16.1 Frontend</a></li>
@@ -221,6 +221,7 @@
     <li class="sub"><a href="#dbg">17.3 .dbg (info de depuración, v3)</a></li>
     <li class="sub"><a href="#mdn">17.4 El código nativo (sección <code>native</code> y .mdn)</a></li>
     <li class="sub"><a href="#proyecto">17.5 .bpbuild / .bpproject (JSON)</a></li>
+    <li class="group"><a href="#env">A. Las claves del ENV</a></li>
   </ul>
 </nav>
 <main>
@@ -274,7 +275,7 @@
       <td><code>readFile(path)</code> <code>writeFile(path, content)</code>
           <code>appendFile(path, content)</code> <code>fileExists(path)</code> <em>&mdash; sólo ficheros: una carpeta da
           <code>false</code> (para una carpeta, <code>IO.dirExists</code>)</em>
-          <code>listDir(path)</code> <em>&mdash; nombres ordenados por bytes; <code>RuntimeError</code> si no se puede abrir (ver <a href="#listar">&sect;14.17.6</a>)</em></td></tr>
+          <code>listDir(path)</code> <em>&mdash; nombres ordenados por bytes; <code>RuntimeError</code> si no se puede abrir (ver <a href="#stdlib-sd-list">&sect;14.17.6</a>)</em></td></tr>
   <tr><td>Internos (stdlib)</td>
       <td><code>__newRefArray(cap)</code> <code>__growRefArray(arr, cap)</code>
           <code>__growIntArray(arr, cap)</code> <code>__charsToString(chars, len)</code></td></tr>
@@ -309,7 +310,7 @@ l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
   <tr><td><code>remove(idx)</code></td><td>lo quita y corre los de detrás</td></tr>
 </table>
 
-<h4 id="stdlib-list-tipados">Sacar valores: los captadores tipados</h4>
+<h4 id="stdlib-list-typed">Sacar valores: los captadores tipados</h4>
 
 <p>
   <code>get</code> devuelve <code>Object</code>, así que para un objeto hace falta un cast
@@ -1234,7 +1235,7 @@ sleep(<span class="num">60000</span>)          <span class="comment">// y la jor
   para drivers que las necesiten).
 </p>
 
-<h4>13.11.1 Clase <code>Gpio.Pin</code> (recomendado)</h4>
+<h4>14.2.1 Clase <code>Gpio.Pin</code> (recomendado)</h4>
 <p>
   Cada instancia encapsula el número de pin y el modo. El constructor
   configura el pin; los métodos <code>on()</code>/<code>off()</code>
@@ -1330,7 +1331,7 @@ luz.release()                                          <span class="comment">// 
       al reset; después, <code>read()</code> es <code>RuntimeError</code>.</td></tr>
 </table>
 
-<h4>13.11.2 API funcional de bajo nivel</h4>
+<h4>14.2.2 API funcional de bajo nivel</h4>
 <p>
   Las primitivas intrínsecas que <code>Pin</code> usa por
   debajo. Útiles para drivers de dispositivo que ya gestionan su
@@ -1795,7 +1796,7 @@ port.write(tx, <span class="num">4</span>)
   Convertidor analógico-digital del MCU, <strong>visto por canal</strong> (la unidad 1). Desde V7 la
   vista <strong>por pin</strong> es <a href="#stdlib-anpin"><code>Gpio.AnPin</code></a>, y las dos acaban
   en el mismo sitio: <code>Adc.Channel(ch)</code> existe si el mapa de pines del micro tiene un pin con
-  ese canal (S3 0..9, C5 0..5, RP2350A 0..3, RP2350B 0..7, U5 0..19), lo valida el común con nombre
+  ese canal (S3 0..9, C5 0..5, RP2350A 0..3, RP2350B 0..7, U5 1..17), lo valida el común con nombre
   («ADC: el canal 7 no existe en rp2350a (unidad 1: 4 canales)») y ese pin pasa a analógico —un
   <code>Gpio.Pin</code> sobre él es error hasta <code>release()</code> (<code>~Channel()</code> lo
   llama). En el RP2350 cada canal va en un pin fijo, y cuántos hay depende de la variante (la imagen
@@ -1836,8 +1837,9 @@ port.write(tx, <span class="num">4</span>)
   <tr><th>Miembro</th><th>Descripción</th></tr>
   <tr><td><code>Channel(ch)</code></td>
       <td>Constructor. <code>ch</code>: <code>Channel.CH0</code>..<code>CH3</code>, o el número
-          del canal (en el RP2350B, hasta el 7). Si el micro no tiene ese canal, o su pin está en
-          uso, <code>RuntimeError</code> con el motivo.</td></tr>
+          del canal (en el RP2350B, hasta el 7; en el U5, del 1 al 17: allí no hay canal 0). Si el
+          micro no tiene ese canal, o su pin está en uso, <code>RuntimeError</code> con el
+          motivo.</td></tr>
   <tr><td><code>read(): integer</code></td>
       <td>Lectura raw 0..4095. Bloquea ~2 µs por conversión.</td></tr>
   <tr><td><code>readVolts(): float</code></td>
@@ -1931,8 +1933,9 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>resetCause(): string</code></td>
       <td>Por qué se reinició el micro: <code>"watchdog"</code>, <code>"power-on/run"</code>,
           <code>"reinicio pedido"</code> (RESET del IDE), <code>"fallo fatal"</code> (el RP2350 con dos
-          núcleos, V7: ver <a href="#cli-autorun">el arranque autónomo</a>)… según la familia. En el PC,
-          <code>"unknown"</code>.</td></tr>
+          núcleos, V7: ver <a href="#cli-autorun">el arranque autónomo</a>)… según la familia; en las
+          ESP32, la del chip (<code>"panic/exception"</code>, <code>"int-watchdog"</code>,
+          <code>"task-watchdog"</code>…). En el PC, <code>"unknown"</code>.</td></tr>
   <tr><td><code>getEnv(key): string</code></td>
       <td>V7 (<code>#626</code>): el valor de una clave del ENV de la placa —sus
           <a href="guia-ide.html#entorno">variables de entorno</a>, las <code>clave=valor</code> que
@@ -2015,7 +2018,8 @@ port.write(tx, <span class="num">4</span>)
   El IDE BPIDE envía un comando <code>TIME &lt;epochsec&gt;</code>
   automáticamente al conectar al dispositivo. Tras eso,
   <code>epochSec()</code> devuelve hora UTC real. Si no se calibra: en la Pico y las ESP32,
-  que no tienen reloj de hardware, devuelve segundos desde boot (empieza en 0 a cada
+  donde la imagen no usa reloj de hardware (el RP2350 no lo tiene, y el de las ESP32 no se
+  usa), devuelve segundos desde boot (empieza en 0 a cada
   arranque) — todavía útil como reloj relativo —; en el STM32 la lleva el RTC del chip, que
   conserva la hora tras un reset; y en el PC es la hora del PC, en las dos VMs (V7,
   <code>#625</code>: antes la VM-C contaba desde el arranque del PC).
@@ -2345,7 +2349,8 @@ tira.show()</code></pre>
   <code>DriverSpi.pack</code>, que lee el panel de la placa de su ENV. Los motores de los packs
   necesitan su bloque de RAM, <code>packRam=&lt;KB&gt;</code> en el ENV (§15.9). Sin el pack,
   <code>Gui.Screen()</code> lo dice: «<code>GUI: esta placa no tiene el pack 'LVGL' grabado (la
-  GUI llega por el pack)</code>». El detalle de cada placa, en la
+  GUI llega por el pack)</code>»; y con el pack pero sin el bloque, «<code>GUI: el pack de la GUI
+  esta, pero su motor no cargo: falta packRam= en el ENV</code>». El detalle de cada placa, en la
   <a href="gui.html#ej-pantalla">guía de gráficos §23.4</a>. Cinco pantallas: la DK2, la P4 (kit
   y Waveshare), la ESP32-C6 (ST7789 240×240 por SPI) y, nueva en V7, la ESP32-C5 (ST7789 240×320
   por SPI, con táctil).
@@ -2363,7 +2368,7 @@ tira.show()</code></pre>
 
 <pre><code><span class="fn">writeFile</span>(<span class="str">"/sd/medidas.csv"</span>, <span class="str">"hora;valor\n"</span>)</code></pre>
 
-<h4 id="donde">14.17.1 Dónde funciona</h4>
+<h4 id="stdlib-sd-where">14.17.1 Dónde funciona</h4>
 
 <table>
   <tr><th>familia</th><th>tarjeta SD</th><th>cómo</th></tr>
@@ -2391,7 +2396,7 @@ tira.show()</code></pre>
   pantalla).
 </p>
 
-<h4 id="pines">14.17.2 Decirle dónde está el lector</h4>
+<h4 id="stdlib-sd-pins">14.17.2 Decirle dónde está el lector</h4>
 
 <p>
   Los pines <strong>no van en el código</strong>: van en el entorno de la placa, en la
@@ -2432,7 +2437,7 @@ tira.show()</code></pre>
   de la línea.
 </p>
 
-<h4 id="montaje">14.17.3 Comprobar que ha montado</h4>
+<h4 id="stdlib-sd-mount">14.17.3 Comprobar que ha montado</h4>
 
 <p>
   <strong>No hay que montar nada.</strong> Si la placa tiene el lector configurado,
@@ -2441,7 +2446,7 @@ tira.show()</code></pre>
   sospechar del programa. En el P4:
 </p>
 
-<pre><code>sd: SDIO slot 0, 4 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz
+<pre><code>sd: SDIO slot 0, 1 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz (por defecto)
 sd: montada en /sd por SDMMC (particion en el bloque 2048)</code></pre>
 
 <p>
@@ -2460,7 +2465,7 @@ sd: montada en /sd por SDMMC (particion en el bloque 2048)</code></pre>
   del IDE (<a href="guia-ide.html#consola">guía del IDE §7</a>).
 </p>
 
-<h4 id="usarla">14.17.4 Usarla: es sólo una ruta</h4>
+<h4 id="stdlib-sd-use">14.17.4 Usarla: es sólo una ruta</h4>
 
 <p>Con la tarjeta montada —que lo hace la placa sola—, todo lo que ya sabes hacer con
 ficheros funciona bajo <code>/sd</code>.</p>
@@ -2478,7 +2483,7 @@ ficheros funciona bajo <code>/sd</code>.</p>
   <tr><td><code>writeFile(ruta, texto)</code></td><td>lo escribe; si existía, <strong>trunca</strong></td></tr>
   <tr><td><code>appendFile(ruta, texto)</code></td><td>añade al final</td></tr>
   <tr><td><code>fileExists(ruta)</code></td><td><code>true</code> / <code>false</code> &mdash; sólo ficheros (una carpeta: <code>IO.dirExists</code>)</td></tr>
-  <tr><td><code>listDir(ruta)</code></td><td>lo que hay en un directorio, ordenado — ver <a href="#listar">§14.17.6</a></td></tr>
+  <tr><td><code>listDir(ruta)</code></td><td>lo que hay en un directorio, ordenado — ver <a href="#stdlib-sd-list">§14.17.6</a></td></tr>
   <tr><td><code>readFileBytes(ruta)</code></td><td>el contenido como bytes</td></tr>
   <tr><td><code>writeFileBytes(ruta, datos)</code></td><td>escribe bytes</td></tr>
 </table>
@@ -2521,7 +2526,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <code>\0</code>.
 </p>
 
-<h4 id="dosfs">14.17.5 Dos sistemas de ficheros, uno al lado del otro</h4>
+<h4 id="stdlib-sd-fs">14.17.5 Dos sistemas de ficheros, uno al lado del otro</h4>
 
 <p>Conviene tenerlo claro porque explica varias diferencias:</p>
 
@@ -2544,7 +2549,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   Probadas en placa: una SanDisk de 128 GB en Metro y P4, y una de 32 GB en la Metro.
 </p>
 
-<h4 id="listar">14.17.6 Recorrer un directorio</h4>
+<h4 id="stdlib-sd-list">14.17.6 Recorrer un directorio</h4>
 
 <pre><code><span class="kw">var</span> nombres: <span class="type">string</span>[] := <span class="fn">listDir</span>(<span class="str">"/sd/registros"</span>)
 <span class="kw">for</span> f <span class="kw">in</span> nombres <span class="kw">do</span>
@@ -2592,7 +2597,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   (ver <a href="basedatos.html">bases de datos</a>).
 </p>
 
-<h4 id="trampas">14.17.8 Trampas conocidas</h4>
+<h4 id="stdlib-sd-traps">14.17.8 Trampas conocidas</h4>
 
 <p>
   <strong>Sin pull-up, un bus no calla: MIENTE.</strong> Si cableas tu propio lector, no
@@ -2657,7 +2662,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   toda la VM junta. En un pack, sólo está en las placas donde alguien lo quiso.</li>
 </ul>
 
-<h3 id="quees">15.1 Qué es un pack, y qué no</h3>
+<h3 id="packs-what">15.1 Qué es un pack, y qué no</h3>
 
 <p>
   <strong>No es una librería del lenguaje.</strong> Las librerías (<code>Math</code>,
@@ -2690,7 +2695,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   </p>
 </div>
 
-<h3 id="tipos">15.2 Dos tipos: librería y ejecutable</h3>
+<h3 id="packs-kinds">15.2 Dos tipos: librería y ejecutable</h3>
 
 <p>La diferencia es una sola cosa: <strong>si el módulo raíz tiene <code>main</code></strong>.</p>
 
@@ -2719,7 +2724,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   dentro de una librería no puede tapar la de todos.
 </p>
 
-<h3 id="construir">15.3 Construir uno</h3>
+<h3 id="packs-build">15.3 Construir uno</h3>
 
 <p>
   Un pack sale de un <strong>proyecto</strong>. En el <code>.bpbuild</code>, la clave es
@@ -2758,7 +2763,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   nativo; una librería de puro BP no la necesita.
 </p>
 
-<h3 id="dentro">15.4 Qué entra dentro</h3>
+<h3 id="packs-inside">15.4 Qué entra dentro</h3>
 
 <p>Cuando el proyecto dice <code>"out": "pack"</code>, se empaqueta:</p>
 
@@ -2784,7 +2789,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   </p>
 </div>
 
-<h3 id="grabar">15.5 Grabarlo y gestionarlo</h3>
+<h3 id="packs-burn">15.5 Grabarlo y gestionarlo</h3>
 
 <p>
   En el IDE, panel de <strong>Packs</strong>. Ahí está todo lo que se puede hacer con la
@@ -2806,9 +2811,10 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 
 <p>
   Al grabar un pack librería, el panel pregunta a la placa por los módulos de la librería
-  estándar que el pack usa y no lleva; si le falta alguno, lo dice (<em>«'SQLite' usa Str de la
-  stdlib, no lo lleva … y la placa no lo tiene: graba también el Stdlib.pack, o el RUN lo subirá
-  a /lib (a la RAM)»</em>). Se graba igual: es memoria, no un error.
+  estándar que el pack usa y no lleva; si le falta alguno, lo dice (<em>«[Packs] AVISO: 'SQLite'
+  usa Str de la stdlib, no lo lleva (un pack libreria no lleva la stdlib, #623) y la placa no lo
+  tiene: graba tambien el Stdlib.pack, o el RUN lo subira a /lib (a la RAM)»</em>). Se graba
+  igual: es memoria, no un error.
 </p>
 
 <p>
@@ -2818,7 +2824,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   conectar solo (<code>#671</code>).
 </p>
 
-<h3 id="usar">15.6 Usarlo desde un programa</h3>
+<h3 id="packs-use">15.6 Usarlo desde un programa</h3>
 
 <p>
   Nada especial: <code>import</code> y ya. Un módulo que vive en un pack se importa igual
@@ -2866,7 +2872,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   (§17.1) lo rechaza directamente.
 </p>
 
-<h3 id="from">15.7 Decir de dónde viene un módulo</h3>
+<h3 id="packs-from">15.7 Decir de dónde viene un módulo</h3>
 
 <p>
   Normalmente no hace falta. Cuando sí —porque el módulo no está donde se le busca, o
@@ -2888,7 +2894,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   fuentes del PC no significa nada en la placa.
 </p>
 
-<h3 id="descubrir">15.8 Descubrirlos en ejecución</h3>
+<h3 id="packs-discover">15.8 Descubrirlos en ejecución</h3>
 
 <p>
   Un programa puede averiguar por sí mismo qué packs hay grabados y qué llevan, sin que
@@ -2910,7 +2916,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   fuentes que encuentre.
 </p>
 
-<h3 id="nativo">15.9 Packs con código nativo</h3>
+<h3 id="packs-native">15.9 Packs con código nativo</h3>
 
 <p>
   Un pack puede llevar código máquina y ejecutarlo en la placa. Es lo que hace posible
@@ -2931,7 +2937,9 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
   <a href="guia-ide.html#entorno">variables de entorno</a> (o <code>SQLite=&lt;MB&gt;</code>,
   2 como mínimo, si sólo va la base de datos), y un reset. Sin él no carga ningún motor, y el
   INFO del IDE lo dice: <em>«RAM packs: no hay: un pack nativo no podría cargar. Añade
-  packRam=&lt;KB&gt; …»</em>. Cuánto pide cada placa lo dicen la
+  packRam=&lt;KB&gt; …»</em>. La RP2350 es la excepción: sin la clave tiene uno de 8 KB
+  («8 KB @ … (por defecto)» en el INFO), y ahí ni la GUI ni SQLite cargan. Cuánto pide cada
+  placa lo dicen la
   <a href="gui.html#ej-pantalla">guía de gráficos</a> y la de <a href="basedatos.html">bases de
   datos</a>.</li>
 </ul>
@@ -3221,7 +3229,8 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <table>
   <tr><th>MCU</th><th>RAM de la VM</th><th>Notas</th></tr>
   <tr><td>RP2350 (Pico 2 / Metro RP2350)</td>
-      <td>~357 KB de SRAM; la Metro con <code>psram=1</code> en el entorno, 6 MB en PSRAM</td>
+      <td>la SRAM que deja el sistema (en la Pico&nbsp;2, 214 KB de heap, medido el 6-oct, más las pilas
+          de los hilos); la Metro con <code>psram=1</code> en el entorno, 6 MB en PSRAM</td>
       <td>Wire v1 por USB-CDC; imagen de firmware única para ambas placas: la
           variante (A/B) la lee del silicio, y <code>/sys/board.json</code> sólo aporta
           el nombre de la placa y sus pines (LED, NeoPixel).
@@ -3237,7 +3246,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
           heap); C5: ~6,5 MB en PSRAM</td>
       <td>Un solo conector USB: el wire va por el USB-Serial-JTAG y la consola por
           UART0. Grabar = BOOT+RESET a mano. <code>native</code> <strong>acelerada</strong> por
-          AOT desde V7 (destino <code>riscv32-imc</code>: RV32 sin FPU, ABI <code>ilp32</code>, §17.4).
+          AOT desde V7 (destino <code>riscv-imc</code>: RV32 sin FPU, ABI <code>ilp32</code>, §17.4).
           Zona de packs en las tres. La <strong>ESP32-C6-LCD-1.3</strong> trae una pantalla SPI
           (ST7789 240×240, sin táctil) y la <strong>ESP32-C5-Touch-LCD-2.8</strong> de Waveshare
           (32 MB de flash, 8 MB de PSRAM), una ST7789 240×320 con táctil; en las dos la GUI llega
@@ -3254,7 +3263,7 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
           tarjeta SD por SDIO. <code>native</code> <strong>acelerada</strong> por AOT
           (RISC-V, desde V4).</td></tr>
   <tr><td>STM32U5 (Nucleo-U575ZI-Q · STM32U5G9J-DK2)</td>
-      <td>Nucleo 512 KB · Discovery 1536 KB</td>
+      <td>Nucleo 512 KB · Discovery 1792 KB (1 MB con el <code>packRam=768</code> de la GUI)</td>
       <td>Wire v1 por el VCP del ST-LINK; FS y packs en la flash interna que
           queda tras el firmware. <code>native</code> acelerada por AOT
           (mismo Cortex-M33 que el RP2350). La DK2 lleva la pantalla LTDC 800×480
@@ -3272,10 +3281,12 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <p>
   Los códigos de salida son los mismos en las dos VMs y en las cinco familias:
   0 bien · 1 excepción BP no atrapada (también la de un hilo que no es el main: ese hilo acaba,
-  los demás siguen y el programa sale con 1; y un desbordamiento de pila, que desde V7 es un
-  <code>RuntimeError</code>) · 2 no se pudo cargar (también una dependencia rechazada por la
-  norma de versiones, §17.1) · 3 fallo interno de la
-  VM · 4 sin memoria · 130 Stop/KILL · 131 depurador. El IDE los explica con
+  los demás siguen y el programa sale con 1; un desbordamiento de pila, que desde V7 es un
+  <code>RuntimeError</code>, y el heap lleno; y un error de enlace,
+  <code>=== ERROR DE LINK: … ===</code>, §17.1) · 2 no se pudo cargar (también una dependencia
+  rechazada por la norma de versiones, §17.1) · 3 fallo interno de la VM · 4 sin memoria para
+  cargar o arrancar el programa (el que llena el heap mientras corre recibe un
+  <code>RuntimeError</code>: es el 1) · 130 Stop/KILL · 131 depurador. El IDE los explica con
   <code>help error</code>.
 </p>
 
@@ -3305,11 +3316,16 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <p>
   <strong>Tras un fallo fatal, sin autorun</strong> (V7). En el RP2350 con dos núcleos —la
   imagen de por defecto—, un fallo fatal (un HardFault, la memoria o la pila del sistema) deja su
-  informe en el log y <strong>reinicia la placa</strong>. El arranque siguiente lo dice —en el
-  log, y como causa del reinicio: <code>Machine.resetCause()</code> es <code>"fallo fatal"</code>—
-  y <strong>no lanza el autorun</strong> («<code>autorun: … NO arranca: el arranque anterior
-  acabo en un fallo fatal</code>»): un programa que falla al arrancar sería un bucle de
-  reinicios. Se arranca a mano desde el IDE.
+  informe en el log y <strong>reinicia la placa</strong>; en las ESP32, un fallo así es un pánico
+  del IDF (o su perro de interrupciones), que da su informe por la consola y también
+  <strong>reinicia la placa</strong>. El arranque siguiente lo dice —en el log, y como causa del
+  reinicio: <code>Machine.resetCause()</code> es <code>"fallo fatal"</code> en el RP2350, y
+  <code>"panic/exception"</code> o <code>"int-watchdog"</code> en las ESP32— y <strong>no lanza
+  el autorun</strong> («<code>autorun: … NO arranca: el arranque anterior acabo en un fallo
+  fatal</code>»; las ESP32 lo dicen también en la consola): un programa que falla al arrancar
+  sería un bucle de reinicios. Se arranca a mano desde el IDE. El perro del módulo
+  <code>Wdt</code> no es un fallo fatal: tras él, el autorun se lanza. En las STM32, un HardFault
+  deja su informe en el log y la placa <strong>parada</strong>: no se reinicia sola.
 </p>
 
 <!-- =========================================================== -->
@@ -3404,8 +3420,9 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <p>
   <strong>Los límites del enlace por nombre.</strong> Un identificador tiene como máximo
   <strong>63 caracteres</strong> (uno más largo es un error de compilación: «<code>identificador
-  demasiado largo (70 caracteres; el maximo es 63)</code>»), y la firma de un miembro —la clase,
-  el nombre, los parámetros y el retorno— como máximo <strong>160</strong> (el compilador la
+  demasiado largo (70 caracteres; el maximo es 63)</code>»), y la firma de una función —un
+  método de una clase o una función del módulo: su clase, si la tiene, el nombre, los parámetros
+  y el retorno— como máximo <strong>160</strong> (el compilador la
   rechaza: «<code>… tiene 170 caracteres (maximo 160): acorta los nombres o divide la
   funcion</code>»). Así ningún nombre se trunca en una VM y no en la otra.
 </p>
@@ -3513,10 +3530,10 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   («ABI nativo: 9»), y si no es la que genera el IDE, no le compila el nativo y dice el remedio.
 </p>
 <table>
-  <tr><th>familia</th><th><code>native</code></th></tr>
-  <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>acelerada — destino <code>arm-cortex-m33</code> (<code>arm-none-eabi-gcc</code>)</td></tr>
-  <tr><td>ESP32-P4 (RV32 con FPU)</td><td>acelerada — destino <code>riscv32-esp-p4</code> (<code>riscv32-esp-elf-gcc</code>)</td></tr>
-  <tr><td>ESP32-C3 · C5 · C6 (RV32 sin FPU)</td><td>acelerada desde V7 — destino <code>riscv32-imc</code> (ABI <code>ilp32</code>; el mismo <code>riscv32-esp-elf-gcc</code>); sin FPU, cada operación de <code>float</code> o <code>double</code> la hace el firmware, y acelera menos que el código entero</td></tr>
+  <tr><th>familia</th><th><code>native</code> — destino: la familia (la de <code>aot.targets</code>) y su nombre largo</th></tr>
+  <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>acelerada — destino <code>arm</code> (<code>arm-cortex-m33</code>; <code>arm-none-eabi-gcc</code>)</td></tr>
+  <tr><td>ESP32-P4 (RV32 con FPU)</td><td>acelerada — destino <code>riscv</code> (<code>riscv32-esp-p4</code>; <code>riscv32-esp-elf-gcc</code>)</td></tr>
+  <tr><td>ESP32-C3 · C5 · C6 (RV32 sin FPU)</td><td>acelerada desde V7 — destino <code>riscv-imc</code> (<code>riscv32-imc</code>; ABI <code>ilp32</code>; el mismo <code>riscv32-esp-elf-gcc</code>); sin FPU, cada operación de <code>float</code> o <code>double</code> la hace el firmware, y acelera menos que el código entero</td></tr>
   <tr><td>ESP32-S3 (Xtensa)</td><td>interpretada (sin AOT; fuera del plan)</td></tr>
   <tr><td>PC (las dos VMs)</td><td>interpretada; el host tiene su propia ejecución nativa de prueba</td></tr>
 </table>
@@ -3544,6 +3561,65 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   <code>bpgenvm App.bpproject</code> lo ejecuta. El IDE usa el
   <code>.bpbuild</code> como definición de proyecto (árbol Sources /
   Resources / Output / Dependencies).
+</p>
+
+<!-- =========================================================== -->
+<h2 id="env">A. Las claves del ENV</h2>
+<p>
+  El ENV son los ajustes <code>clave=valor</code> que viven en la flash de la placa, fuera del
+  sistema de archivos: el firmware los lee y el IDE los edita (<strong>Entorno</strong> en la
+  barra; <a href="guia-ide.html#entorno">guía del IDE §9.3</a>). Un programa lee cualquiera con
+  <code>Machine.getEnv("clave")</code> (<a href="#stdlib-pico">§14.9</a>), de la flash y sin
+  reiniciar; en el PC, siempre <code>""</code>. Ésta es la lista entera de las que lee el
+  firmware de V7.
+</p>
+<p>
+  <strong>Cómo se escriben.</strong> Las claves no distinguen mayúsculas. Los números van en
+  decimal o con <code>0x</code>, y <strong>sin un 0 delante</strong>: hoy se lee en octal
+  (<code>stack=064</code> son 52 KB; <code>#687</code>). Los sí/no, <code>1</code> o
+  <code>0</code> (valen también <code>si</code>, <code>yes</code>, <code>true</code> y
+  <code>on</code>). Sin espacios alrededor del <code>=</code>.
+  <strong>Cuándo valen.</strong> Las que se leen al arrancar piden un reset. Las de cada RUN
+  valen ya para el programa siguiente. Las de la pantalla se leen al arrancar la GUI (el
+  primer <code>Gui.Screen()</code>), y en la práctica también piden un reset.
+</p>
+<table>
+  <tr><th>clave</th><th>valores (por defecto)</th><th>qué hace</th><th>placas</th><th>se lee</th></tr>
+  <tr><td colspan="5"><strong>La memoria</strong></td></tr>
+  <tr><td><code>packRam</code></td><td>KB, en páginas de 4 KB; tiene que dejar 128 KB a la VM. Sin ella, no hay bloque (en la RP2350, uno de 8 KB)</td><td>El bloque de RAM de los motores nativos de los packs —LVGL, SQLite, el driver de pantalla—, reservado antes que la VM: lo que se le da se le quita a la VM. Manda sobre <code>SQLite</code>. Al cambiarlo, lo seguro es regrabar los motores</td><td>todas</td><td>al arrancar</td></tr>
+  <tr><td><code>SQLite</code></td><td>MB, de 2 a 4095</td><td>El mismo bloque, pedido en MB para la base de datos; sólo cuenta sin <code>packRam</code>. Cabe donde quedan 2 MB libres</td><td>la Metro con <code>psram=1</code> · S3 · C5 · P4</td><td>al arrancar</td></tr>
+  <tr><td><code>psram</code></td><td><code>1</code> / <code>0</code> (0)</td><td>Enciende la PSRAM de la Metro (CS fijo, GPIO47) y la VM pasa a ella. En la Pico 2 lo dice y no hace nada; las ESP32 la deciden por su imagen</td><td>RP2350</td><td>al arrancar</td></tr>
+  <tr><td><code>vmheap</code></td><td>KB; por defecto, lo que deje el reparto (en la C3 y la C6, 128)</td><td>El bloque de la VM entero, montón y pilas. Por encima del techo, el techo; por debajo de 64 KB no hay VM y la placa arranca degradada. <strong>En la P4, no menos de 2 MB</strong> (tampoco por culpa de <code>packRam</code> o <code>SQLite</code>): con menos no arranca, y hay que borrar el ENV con esptool (<code>#686</code>)</td><td>todas</td><td>al arrancar</td></tr>
+  <tr><td><code>stack</code></td><td>KB; por defecto, el 25 % del bloque, entre 64 y 512 KB (con un bloque de 128 KB, la mitad)</td><td>La parte del bloque de la VM para las pilas de los hilos; el resto es montón. Se acota entre 16 KB y la mitad del bloque, y lo dice</td><td>todas</td><td>al arrancar</td></tr>
+  <tr><td colspan="5"><strong>Los hilos y los núcleos</strong></td></tr>
+  <tr><td><code>quantum</code></td><td>opcodes (1024)</td><td>Cuántos opcodes corre un hilo antes de ceder el turno</td><td>todas</td><td>al arrancar</td></tr>
+  <tr><td><code>vm.runs</code></td><td><code>1</code> o <code>2</code>; por defecto, uno por núcleo: 2 en la Pico 2, la Metro, la S3 y la P4; 1 en las demás</td><td>Cuántos hilos del programa corren a la vez. En la C3, la C5 y la C6, <code>2</code> pone el segundo en el mismo núcleo</td><td>RP2350 · ESP32</td><td>al arrancar</td></tr>
+  <tr><td><code>vm.cores</code></td><td><code>1</code> (por defecto, los dos)</td><td>Todas las tareas de la VM en el núcleo 0: la vuelta atrás de los dos núcleos, sin regrabar</td><td>RP2350 · S3 · P4</td><td>al arrancar</td></tr>
+  <tr><td colspan="5"><strong>La pantalla</strong></td></tr>
+  <tr><td><code>display</code></td><td><code>ek79007</code> (por defecto: la Function-EV, 1024×600) o <code>st7701</code> (la Waveshare de 4,3", 480×800)</td><td>El panel MIPI-DSI de la placa</td><td>P4</td><td>al arrancar la GUI</td></tr>
+  <tr><td><code>lcd</code></td><td><code>&lt;controlador&gt;,spi:N,dc:N,cs:N,w:N,h:N</code>; y <code>rst:P</code>, <code>bl:P</code>, <code>mhz:N</code> (20), <code>ram:WxH</code>, <code>off:XxY</code>, <code>seq:CAMINO</code>, <code>inv</code>, <code>bgr</code>, <code>traza</code>. P es un GPIO, o <code>x0</code>…<code>x7</code> del expansor (<code>xpwm</code>, sólo en <code>bl</code>)</td><td>Un panel por SPI —ST7789, ILI9341…— para el driver del pack <code>DriverSpi</code>; exige su línea <code>spiN</code></td><td>C5 · C6</td><td>al arrancar la GUI</td></tr>
+  <tr><td><code>exp</code></td><td><code>ch32,i2c:N,addr:N</code></td><td>El expansor de pines por I²C (el CH32V003 de Waveshare); exige su línea <code>i2cN</code></td><td>C5 · C6</td><td>al arrancar la GUI</td></tr>
+  <tr><td><code>touch</code></td><td><code>cst3530,addr:N[,i2c:N][,rst:P]</code>; sin <code>i2c</code>, el de <code>exp</code></td><td>El táctil de esa pantalla; sin la línea, no hay táctil</td><td>C5 · C6</td><td>al cargar el pack y al arrancar la GUI</td></tr>
+  <tr><td colspan="5"><strong>Los buses y la tarjeta SD</strong></td></tr>
+  <tr><td><code>spiN</code></td><td><code>sck:N,mosi:N[,miso:N][,ms:N]</code>; <code>ms</code> de 1 a 100 (20)</td><td>Declara el bus N de la placa: sus pines quedan reservados y quien lo abra se engancha con ellos; <code>ms</code> es el tope de un turno. Una subclave mal escrita es un error en el log, y el bus se queda sin declarar</td><td>N: RP2350 0–1 · S3 y P4 2–3 · C3, C5 y C6 2 · STM32 1–3</td><td>al arrancar</td></tr>
+  <tr><td><code>i2cN</code></td><td><code>sda:N,scl:N[,khz:N][,ms:N]</code>; <code>khz</code> 100</td><td>Igual, con la velocidad del bus. El I²C del táctil lo declara la imagen (P4: <code>i2c0</code>; DK2: <code>i2c2</code>), y una línea para él se rechaza</td><td>N: RP2350, S3 y P4 0–1 · C3, C5 y C6 0 · Nucleo 1–4 · DK2 1–5</td><td>al arrancar</td></tr>
+  <tr><td><code>sd</code> (SPI)</td><td><code>cs:N</code>; <code>sck</code>, <code>mosi</code> y <code>miso</code> si el bus no está en <code>spiN</code>; <code>bus:N</code> (0), <code>cd:N</code>, <code>cdalto:1</code>, <code>khz:N</code> (25000)</td><td>El lector de tarjeta por SPI (<a href="#stdlib-sd">§14.17</a>)</td><td>RP2350 · C5 · C6</td><td>al arrancar</td></tr>
+  <tr><td><code>sd</code> (SDIO)</td><td><code>clk:N,cmd:N,d0:N</code>, y <code>d1</code>, <code>d2</code> y <code>d3</code> las tres (4 bits) o ninguna (1 bit); <code>pwr:N</code>, <code>pwralto:1</code>, <code>slot:N</code> (0), <code>khz:N</code> (20000), <code>ldo:N</code> (4; 0 = sin LDO)</td><td>El lector de tarjeta por SDMMC (<a href="#stdlib-sd">§14.17</a>)</td><td>P4</td><td>al arrancar</td></tr>
+  <tr><td colspan="5"><strong>El almacenamiento</strong></td></tr>
+  <tr><td><code>part.fs.size</code></td><td>bytes, múltiplo del sector (4 KB; en las STM32, 8 KB)</td><td>El tamaño del sistema de archivos; los packs se llevan el resto de la zona. No se edita a mano: lo pone el asistente de particiones del IDE</td><td>todas, salvo la C5 y la P4 de Waveshare (32 MB: el sistema de archivos va arriba)</td><td>al arrancar</td></tr>
+  <tr><td colspan="5"><strong>El diagnóstico</strong></td></tr>
+  <tr><td><code>log</code></td><td><code>1</code> / <code>0</code> (0)</td><td>1: el log de la flash sigue grabando tras el arranque —cada RUN, el latido…—. El arranque se graba siempre</td><td>todas</td><td>al arrancar</td></tr>
+  <tr><td><code>gc</code></td><td><code>1</code> / <code>0</code> (1)</td><td>0 apaga el recolector de basura para ese RUN</td><td>todas</td><td>en cada RUN</td></tr>
+  <tr><td><code>latido</code></td><td><code>1</code> / <code>0</code> (0)</td><td>1: una línea de vida en el log cada 256 vueltas del RUN; sólo queda con <code>log=1</code></td><td>todas</td><td>en cada RUN</td></tr>
+  <tr><td colspan="5"><strong>La escribe la placa</strong></td></tr>
+  <tr><td><code>imagen.fecha</code></td><td>segundos desde 1970</td><td>No se pone: la placa la anota en su primer arranque —la fecha de su imagen— y <code>Rtc.Clock.isSet()</code> la usa para saber si el reloj está en hora (<a href="#stdlib-rtc">§14.10</a>). Borrada, vuelve al arrancar; no cambia al grabar otra imagen</td><td>todas</td><td>al arrancar</td></tr>
+  <tr><td colspan="5"><strong>Sólo para pruebas</strong> (no en una placa de uso)</td></tr>
+  <tr><td><code>mpu</code></td><td><code>1</code> / <code>0</code> (0)</td><td>El código de cada módulo, de sólo lectura: una escritura que lo pise para la placa con su PC. Andamio de diagnóstico</td><td>RP2350</td><td>en cada RUN</td></tr>
+  <tr><td><code>prueba.fallo</code></td><td><code>1</code> / <code>0</code> (0)</td><td>Un fallo fatal a propósito en <strong>cada</strong> RUN, para probar el camino del fallo fatal. Se quita después</td><td>RP2350 · ESP32</td><td>en cada RUN</td></tr>
+</table>
+<p>
+  <code>board</code>, <code>psramCsPin</code>, <code>flashSizeBytes</code> y <code>gpioCount</code>
+  pueden aparecer en el ENV de una placa antigua: se guardan y nadie las lee.
 </p>
 
 <!-- =========================================================== -->

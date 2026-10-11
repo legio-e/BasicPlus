@@ -221,6 +221,7 @@
     <li class="sub"><a href="#dbg">17.3 .dbg (debug information, v3)</a></li>
     <li class="sub"><a href="#mdn">17.4 Native code (the <code>native</code> section and .mdn)</a></li>
     <li class="sub"><a href="#proyecto">17.5 .bpbuild / .bpproject (JSON)</a></li>
+    <li class="group"><a href="#env">A. The ENV keys</a></li>
   </ul>
 </nav>
 <main>
@@ -1242,7 +1243,7 @@ sleep(<span class="num">60000</span>)          <span class="comment">// and the 
   for drivers that need them).
 </p>
 
-<h4>13.11.1 The <code>Gpio.Pin</code> class (recommended)</h4>
+<h4>14.2.1 The <code>Gpio.Pin</code> class (recommended)</h4>
 <p>
   Each instance encapsulates the pin number and the mode. The constructor
   configures the pin; the <code>on()</code>/<code>off()</code> methods
@@ -1336,7 +1337,7 @@ light.release()                                            <span class="comment"
       its reset state; afterwards, <code>read()</code> is a <code>RuntimeError</code>.</td></tr>
 </table>
 
-<h4>13.11.2 Low-level functional API</h4>
+<h4>14.2.2 Low-level functional API</h4>
 <p>
   The intrinsic primitives that <code>Pin</code> uses
   underneath. Useful for device drivers that already manage their
@@ -1803,7 +1804,7 @@ port.write(tx, <span class="num">4</span>)
   The MCU's analog-to-digital converter, <strong>seen by channel</strong> (unit 1). Since V7 the
   view <strong>by pin</strong> is <a href="#stdlib-anpin"><code>Gpio.AnPin</code></a>, and both end up
   in the same place: <code>Adc.Channel(ch)</code> exists if the micro's pin map has a pin with that
-  channel (S3 0..9, C5 0..5, RP2350A 0..3, RP2350B 0..7, U5 0..19), the common layer validates it by
+  channel (S3 0..9, C5 0..5, RP2350A 0..3, RP2350B 0..7, U5 1..17), the common layer validates it by
   name («ADC: el canal 7 no existe en rp2350a (unidad 1: 4 canales)») and that pin turns analog —a
   <code>Gpio.Pin</code> on it is an error until <code>release()</code> (<code>~Channel()</code> calls
   it). On the RP2350 each channel sits on a fixed pin, and how many there are depends on the variant
@@ -1844,8 +1845,9 @@ port.write(tx, <span class="num">4</span>)
   <tr><th>Member</th><th>Description</th></tr>
   <tr><td><code>Channel(ch)</code></td>
       <td>Constructor. <code>ch</code>: <code>Channel.CH0</code>..<code>CH3</code>, or the channel
-          number (on the RP2350B, up to 7). If the micro does not have that channel, or its pin is in
-          use, <code>RuntimeError</code> with the reason.</td></tr>
+          number (on the RP2350B, up to 7; on the U5, from 1 to 17: there is no channel 0 there). If
+          the micro does not have that channel, or its pin is in use, <code>RuntimeError</code> with
+          the reason.</td></tr>
   <tr><td><code>read(): integer</code></td>
       <td>Raw reading 0..4095. Blocks ~2 µs per conversion.</td></tr>
   <tr><td><code>readVolts(): float</code></td>
@@ -1938,8 +1940,9 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>resetCause(): string</code></td>
       <td>Why the micro restarted: <code>"watchdog"</code>, <code>"power-on/run"</code>,
           <code>"reinicio pedido"</code> (RESET from the IDE), <code>"fallo fatal"</code> (the RP2350 with
-          two cores, V7: see <a href="#cli-autorun">autonomous startup</a>)… depending on the family.
-          On the PC, <code>"unknown"</code>.</td></tr>
+          two cores, V7: see <a href="#cli-autorun">autonomous startup</a>)… depending on the family; on
+          the ESP32, the chip's own (<code>"panic/exception"</code>, <code>"int-watchdog"</code>,
+          <code>"task-watchdog"</code>…). On the PC, <code>"unknown"</code>.</td></tr>
   <tr><td><code>getEnv(key): string</code></td>
       <td>V7 (<code>#626</code>): the value of a key of the board's ENV —its
           <a href="guia-ide.html#entorno">environment variables</a>, the <code>key=value</code> pairs the
@@ -2023,7 +2026,8 @@ port.write(tx, <span class="num">4</span>)
   The BPIDE IDE sends a <code>TIME &lt;epochsec&gt;</code> command
   automatically when it connects to the device. After that,
   <code>epochSec()</code> returns the real UTC time. If not calibrated: on the Pico and the
-  ESP32s, which have no hardware clock, it returns seconds since boot (it starts at 0 on every
+  ESP32s, where the image uses no hardware clock (the RP2350 has none, and the ESP32's is not
+  used), it returns seconds since boot (it starts at 0 on every
   boot) — still useful as a relative clock —; on the STM32 the chip's RTC keeps it, and it
   survives a reset; and on the PC it is the PC's time, on both VMs (V7, <code>#625</code>: the C
   VM used to count from the PC's boot).
@@ -2355,9 +2359,10 @@ strip.show()</code></pre>
   the boards with an SPI display (the C5 and the C6), also the driver's, <code>DriverSpi.pack</code>,
   which reads the board's panel from its ENV. The packs' engines need their RAM block,
   <code>packRam=&lt;KB&gt;</code> in the ENV (§15.9). Without the pack, <code>Gui.Screen()</code> says
-  so: «<code>GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)</code>».
-  Board-by-board detail in the <a href="gui.html#ej-pantalla">graphics guide §23.4</a>. Five
-  displays: the DK2, the P4 (kit and Waveshare), the ESP32-C6 (ST7789 240×240 over SPI) and, new in
+  so: «<code>GUI: esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)</code>»;
+  and with the pack but without the block, «<code>GUI: el pack de la GUI esta, pero su motor no
+  cargo: falta packRam= en el ENV</code>». Board-by-board detail in the
+  <a href="gui.html#ej-pantalla">graphics guide §23.4</a>. Five displays: the DK2, the P4 (kit and Waveshare), the ESP32-C6 (ST7789 240×240 over SPI) and, new in
   V7, the ESP32-C5 (ST7789 240×320 over SPI, with touch).
 </p>
 
@@ -2449,7 +2454,7 @@ strip.show()</code></pre>
   P4:
 </p>
 
-<pre><code>sd: SDIO slot 0, 4 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz
+<pre><code>sd: SDIO slot 0, 1 bit(s), clk 43 cmd 44 d0 39 | pwr 45 (activo bajo) | ldo 4 | 20000 kHz (por defecto)
 sd: montada en /sd por SDMMC (particion en el bloque 2048)</code></pre>
 
 <p>
@@ -2806,9 +2811,10 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/logs"</span>)
 
 <p>
   When you burn a library pack, the panel asks the board about the standard-library modules the
-  pack uses and does not carry; if one is missing, it says so (<em>«'SQLite' usa Str de la
-  stdlib, no lo lleva … y la placa no lo tiene: graba también el Stdlib.pack, o el RUN lo subirá
-  a /lib (a la RAM)»</em>). It is burned anyway: it is memory, not an error.
+  pack uses and does not carry; if one is missing, it says so (<em>«[Packs] AVISO: 'SQLite' usa
+  Str de la stdlib, no lo lleva (un pack libreria no lleva la stdlib, #623) y la placa no lo
+  tiene: graba tambien el Stdlib.pack, o el RUN lo subira a /lib (a la RAM)»</em>). It is burned
+  anyway: it is memory, not an error.
 </p>
 
 <p>
@@ -2927,7 +2933,8 @@ imported exactly like one living in <code>/lib</code>.</p>
   <a href="guia-ide.html#entorno">environment variables</a> (or <code>SQLite=&lt;MB&gt;</code>, 2 at
   least, if only the database goes), and a reset. Without it no engine loads, and the IDE's INFO
   says so: <em>«RAM packs: no hay: un pack nativo no podría cargar. Añade packRam=&lt;KB&gt; …»</em>.
-  How much each board needs is in the <a href="gui.html#ej-pantalla">graphics guide</a> and in the
+  The RP2350 is the exception: without the key it has an 8 KB one («8 KB @ … (por defecto)» in
+  the INFO), and neither the GUI nor SQLite loads there. How much each board needs is in the <a href="gui.html#ej-pantalla">graphics guide</a> and in the
   <a href="basedatos.html">databases</a> one.</li>
 </ul>
 
@@ -3212,7 +3219,8 @@ imported exactly like one living in <code>/lib</code>.</p>
 <table>
   <tr><th>MCU</th><th>VM RAM</th><th>Notes</th></tr>
   <tr><td>RP2350 (Pico 2 / Metro RP2350)</td>
-      <td>~357 KB of SRAM; the Metro with <code>psram=1</code> in the environment, 6 MB in PSRAM</td>
+      <td>the SRAM the system leaves (on the Pico&nbsp;2, 214 KB of heap, measured on 6 Oct, plus the
+          threads' stacks); the Metro with <code>psram=1</code> in the environment, 6 MB in PSRAM</td>
       <td>Wire v1 over USB-CDC; a single firmware image for both boards: the
           variant (A/B) is read from the silicon, and <code>/sys/board.json</code> only
           supplies the board name and its pins (LED, NeoPixel).
@@ -3228,7 +3236,7 @@ imported exactly like one living in <code>/lib</code>.</p>
           48 of heap); C5: ~6.5 MB in PSRAM</td>
       <td>A single USB connector: the wire goes over USB-Serial-JTAG and the console over
           UART0. Flashing = BOOT+RESET by hand. <code>native</code> <strong>accelerated</strong> by
-          AOT since V7 (target <code>riscv32-imc</code>: RV32 without FPU, <code>ilp32</code> ABI, §17.4).
+          AOT since V7 (target <code>riscv-imc</code>: RV32 without FPU, <code>ilp32</code> ABI, §17.4).
           Pack region on all three. The <strong>ESP32-C6-LCD-1.3</strong> brings an SPI display
           (ST7789 240×240, no touch) and Waveshare's <strong>ESP32-C5-Touch-LCD-2.8</strong> (32 MB of
           flash, 8 MB of PSRAM), an ST7789 240×320 with touch; on both the GUI comes in packs (§14.16)
@@ -3245,7 +3253,7 @@ imported exactly like one living in <code>/lib</code>.</p>
           over SDIO. <code>native</code> <strong>accelerated</strong> by AOT
           (RISC-V, since V4).</td></tr>
   <tr><td>STM32U5 (Nucleo-U575ZI-Q · STM32U5G9J-DK2)</td>
-      <td>Nucleo 512 KB · Discovery 1536 KB</td>
+      <td>Nucleo 512 KB · Discovery 1792 KB (1 MB with the GUI's <code>packRam=768</code>)</td>
       <td>Wire v1 over the ST-LINK's VCP; FS and packs in the internal flash left
           after the firmware. <code>native</code> accelerated by AOT
           (same Cortex-M33 as the RP2350). The DK2 carries the 800×480 LTDC display
@@ -3264,11 +3272,12 @@ imported exactly like one living in <code>/lib</code>.</p>
 <p>
   Exit codes are the same on both VMs and the five families:
   0 fine · 1 uncaught BP exception (also one in a thread that is not the main one: that thread
-  ends, the others go on and the program exits with 1; and a stack overflow, which since V7 is a
-  <code>RuntimeError</code>) · 2 could not load (also a dependency rejected by the version rule,
-  §17.1) · 3 internal VM failure · 4 out
-  of memory · 130 Stop/KILL · 131 debugger. The IDE explains them with
-  <code>help error</code>.
+  ends, the others go on and the program exits with 1; a stack overflow, which since V7 is a
+  <code>RuntimeError</code>, and a full heap; and a link error,
+  <code>=== ERROR DE LINK: … ===</code>, §17.1) · 2 could not load (also a dependency rejected by
+  the version rule, §17.1) · 3 internal VM failure · 4 out of memory to load or start the program
+  (one that fills the heap while running gets a <code>RuntimeError</code>: that is the 1) · 130
+  Stop/KILL · 131 debugger. The IDE explains them with <code>help error</code>.
 </p>
 
 <h4 id="cli-autorun">Autonomous startup (<code>/sys/auto.txt</code>)</h4>
@@ -3297,11 +3306,17 @@ imported exactly like one living in <code>/lib</code>.</p>
 <p>
   <strong>After a fatal failure, no autorun</strong> (V7). On the RP2350 with two cores —the
   default image—, a fatal failure (a HardFault, the system's memory or stack) leaves its report in
-  the log and <strong>restarts the board</strong>. The next boot says so —in the log, and as the
-  restart cause: <code>Machine.resetCause()</code> is <code>"fallo fatal"</code>— and <strong>does
-  not launch the autorun</strong> («<code>autorun: … NO arranca: el arranque anterior acabo en un
-  fallo fatal</code>»): a program that fails at boot would be a restart loop. You start it by hand
-  from the IDE.
+  the log and <strong>restarts the board</strong>; on the ESP32, such a failure is an IDF panic (or
+  its interrupt watchdog), which gives its report on the console and also <strong>restarts the
+  board</strong>. The next boot says so —in the log, and as the restart cause:
+  <code>Machine.resetCause()</code> is <code>"fallo fatal"</code> on the RP2350, and
+  <code>"panic/exception"</code> or <code>"int-watchdog"</code> on the ESP32— and <strong>does not
+  launch the autorun</strong> («<code>autorun: … NO arranca: el arranque anterior acabo en un
+  fallo fatal</code>»; the ESP32 also say it on the console): a program that fails at boot would
+  be a restart loop. You start it by hand from the IDE. The watchdog of the <code>Wdt</code>
+  module is not a fatal failure: after it, the autorun is launched. On the STM32, a HardFault
+  leaves its report in the log and the board <strong>stopped</strong>: it does not restart by
+  itself.
 </p>
 
 <!-- =========================================================== -->
@@ -3394,8 +3409,9 @@ imported exactly like one living in <code>/lib</code>.</p>
 <p>
   <strong>The limits of binding by name.</strong> An identifier has at most
   <strong>63 characters</strong> (a longer one is a compile error: «<code>identificador demasiado
-  largo (70 caracteres; el maximo es 63)</code>»), and a member's signature —the class, the name,
-  the parameters and the return type— at most <strong>160</strong> (the compiler rejects it:
+  largo (70 caracteres; el maximo es 63)</code>»), and a function's signature —a class method or
+  a module function: its class, if it has one, the name, the parameters and the return type— at
+  most <strong>160</strong> (the compiler rejects it:
   «<code>… tiene 170 caracteres (maximo 160): acorta los nombres o divide la funcion</code>»). That
   way no name is ever truncated on one VM and not on the other.
 </p>
@@ -3502,10 +3518,10 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   code for it and states the remedy.
 </p>
 <table>
-  <tr><th>family</th><th><code>native</code></th></tr>
-  <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>accelerated — target <code>arm-cortex-m33</code> (<code>arm-none-eabi-gcc</code>)</td></tr>
-  <tr><td>ESP32-P4 (RV32 with FPU)</td><td>accelerated — target <code>riscv32-esp-p4</code> (<code>riscv32-esp-elf-gcc</code>)</td></tr>
-  <tr><td>ESP32-C3 · C5 · C6 (RV32 without FPU)</td><td>accelerated since V7 — target <code>riscv32-imc</code> (<code>ilp32</code> ABI; the same <code>riscv32-esp-elf-gcc</code>); with no FPU, every <code>float</code> or <code>double</code> operation is done by the firmware, and it speeds up less than integer code</td></tr>
+  <tr><th>family</th><th><code>native</code> — target: the family (the one in <code>aot.targets</code>) and its long name</th></tr>
+  <tr><td>RP2350 · STM32U5 (Cortex-M33)</td><td>accelerated — target <code>arm</code> (<code>arm-cortex-m33</code>; <code>arm-none-eabi-gcc</code>)</td></tr>
+  <tr><td>ESP32-P4 (RV32 with FPU)</td><td>accelerated — target <code>riscv</code> (<code>riscv32-esp-p4</code>; <code>riscv32-esp-elf-gcc</code>)</td></tr>
+  <tr><td>ESP32-C3 · C5 · C6 (RV32 without FPU)</td><td>accelerated since V7 — target <code>riscv-imc</code> (<code>riscv32-imc</code>; <code>ilp32</code> ABI; the same <code>riscv32-esp-elf-gcc</code>); with no FPU, every <code>float</code> or <code>double</code> operation is done by the firmware, and it speeds up less than integer code</td></tr>
   <tr><td>ESP32-S3 (Xtensa)</td><td>interpreted (no AOT; out of plan)</td></tr>
   <tr><td>PC (both VMs)</td><td>interpreted; the host has its own native path for tests only</td></tr>
 </table>
@@ -3533,6 +3549,65 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   <code>bpgenvm App.bpproject</code> runs it. The IDE uses the
   <code>.bpbuild</code> as the project definition (the Sources /
   Resources / Output / Dependencies tree).
+</p>
+
+<!-- =========================================================== -->
+<h2 id="env">A. The ENV keys</h2>
+<p>
+  The ENV is the set of <code>key=value</code> settings that live in the board's flash, outside
+  the file system: the firmware reads them and the IDE edits them (<strong>Entorno</strong>
+  on the toolbar; <a href="guia-ide.html#entorno">IDE guide §9.3</a>). A program reads any of
+  them with <code>Machine.getEnv("key")</code> (<a href="#stdlib-pico">§14.9</a>), from the
+  flash and without rebooting; on the PC, always <code>""</code>. This is the full list of the
+  ones V7's firmware reads.
+</p>
+<p>
+  <strong>How they are written.</strong> Keys are case-insensitive. Numbers go in decimal or with
+  <code>0x</code>, and <strong>without a leading 0</strong>: today it is read as octal
+  (<code>stack=064</code> is 52 KB; <code>#687</code>). Yes/no values are <code>1</code> or
+  <code>0</code> (<code>si</code>, <code>yes</code>, <code>true</code> and <code>on</code> also
+  work). No spaces around the <code>=</code>.
+  <strong>When they take effect.</strong> Those read at boot need a reset. Those read on each RUN
+  apply to the next program. The screen ones are read when the GUI starts (the first
+  <code>Gui.Screen()</code>), which in practice also means a reset.
+</p>
+<table>
+  <tr><th>key</th><th>values (default)</th><th>what it does</th><th>boards</th><th>read</th></tr>
+  <tr><td colspan="5"><strong>Memory</strong></td></tr>
+  <tr><td><code>packRam</code></td><td>KB, in 4 KB pages; it must leave 128 KB to the VM. Without it, no block (on the RP2350, an 8 KB one)</td><td>The RAM block for the packs' native engines —LVGL, SQLite, the screen driver—, reserved before the VM: whatever it gets is taken from the VM. It wins over <code>SQLite</code>. When it changes, the safe thing is to re-burn the engines</td><td>all</td><td>at boot</td></tr>
+  <tr><td><code>SQLite</code></td><td>MB, from 2 to 4095</td><td>The same block, asked for in MB for the database; it only counts without <code>packRam</code>. It fits where 2 MB are free</td><td>the Metro with <code>psram=1</code> · S3 · C5 · P4</td><td>at boot</td></tr>
+  <tr><td><code>psram</code></td><td><code>1</code> / <code>0</code> (0)</td><td>Turns on the Metro's PSRAM (fixed CS, GPIO47) and the VM moves to it. On the Pico 2 it says so and does nothing; the ESP32s decide it by their image</td><td>RP2350</td><td>at boot</td></tr>
+  <tr><td><code>vmheap</code></td><td>KB; by default, whatever the split leaves (on the C3 and C6, 128)</td><td>The whole VM block, heap and stacks. Above the ceiling, the ceiling; below 64 KB there is no VM and the board boots degraded. <strong>On the P4, no less than 2 MB</strong> (nor because of <code>packRam</code> or <code>SQLite</code>): with less it does not boot, and the ENV has to be erased with esptool (<code>#686</code>)</td><td>all</td><td>at boot</td></tr>
+  <tr><td><code>stack</code></td><td>KB; by default, 25 % of the block, between 64 and 512 KB (with a 128 KB block, half)</td><td>The part of the VM block for the threads' stacks; the rest is heap. It is clamped between 16 KB and half the block, and it says so</td><td>all</td><td>at boot</td></tr>
+  <tr><td colspan="5"><strong>Threads and cores</strong></td></tr>
+  <tr><td><code>quantum</code></td><td>opcodes (1024)</td><td>How many opcodes a thread runs before yielding its turn</td><td>all</td><td>at boot</td></tr>
+  <tr><td><code>vm.runs</code></td><td><code>1</code> or <code>2</code>; by default, one per core: 2 on the Pico 2, the Metro, the S3 and the P4; 1 on the rest</td><td>How many of the program's threads run at once. On the C3, C5 and C6, <code>2</code> puts the second one on the same core</td><td>RP2350 · ESP32</td><td>at boot</td></tr>
+  <tr><td><code>vm.cores</code></td><td><code>1</code> (by default, both)</td><td>Every VM task on core 0: the way back from two cores, without re-flashing</td><td>RP2350 · S3 · P4</td><td>at boot</td></tr>
+  <tr><td colspan="5"><strong>The screen</strong></td></tr>
+  <tr><td><code>display</code></td><td><code>ek79007</code> (default: the Function-EV, 1024×600) or <code>st7701</code> (the Waveshare 4.3", 480×800)</td><td>The board's MIPI-DSI panel</td><td>P4</td><td>when the GUI starts</td></tr>
+  <tr><td><code>lcd</code></td><td><code>&lt;controller&gt;,spi:N,dc:N,cs:N,w:N,h:N</code>; and <code>rst:P</code>, <code>bl:P</code>, <code>mhz:N</code> (20), <code>ram:WxH</code>, <code>off:XxY</code>, <code>seq:PATH</code>, <code>inv</code>, <code>bgr</code>, <code>traza</code>. P is a GPIO, or <code>x0</code>…<code>x7</code> on the expander (<code>xpwm</code>, only for <code>bl</code>)</td><td>An SPI panel —ST7789, ILI9341…— for the <code>DriverSpi</code> pack's driver; it needs its <code>spiN</code> line</td><td>C5 · C6</td><td>when the GUI starts</td></tr>
+  <tr><td><code>exp</code></td><td><code>ch32,i2c:N,addr:N</code></td><td>The I²C pin expander (Waveshare's CH32V003); it needs its <code>i2cN</code> line</td><td>C5 · C6</td><td>when the GUI starts</td></tr>
+  <tr><td><code>touch</code></td><td><code>cst3530,addr:N[,i2c:N][,rst:P]</code>; without <code>i2c</code>, the one in <code>exp</code></td><td>That screen's touch panel; without the line, no touch</td><td>C5 · C6</td><td>when the pack loads and when the GUI starts</td></tr>
+  <tr><td colspan="5"><strong>Buses and the SD card</strong></td></tr>
+  <tr><td><code>spiN</code></td><td><code>sck:N,mosi:N[,miso:N][,ms:N]</code>; <code>ms</code> from 1 to 100 (20)</td><td>Declares the board's bus N: its pins are reserved and whoever opens it hooks onto them; <code>ms</code> caps one turn. A misspelt subkey is an error in the log, and the bus stays undeclared</td><td>N: RP2350 0–1 · S3 and P4 2–3 · C3, C5 and C6 2 · STM32 1–3</td><td>at boot</td></tr>
+  <tr><td><code>i2cN</code></td><td><code>sda:N,scl:N[,khz:N][,ms:N]</code>; <code>khz</code> 100</td><td>The same, with the bus speed. The touch panel's I²C is declared by the image (P4: <code>i2c0</code>; DK2: <code>i2c2</code>), and a line for it is rejected</td><td>N: RP2350, S3 and P4 0–1 · C3, C5 and C6 0 · Nucleo 1–4 · DK2 1–5</td><td>at boot</td></tr>
+  <tr><td><code>sd</code> (SPI)</td><td><code>cs:N</code>; <code>sck</code>, <code>mosi</code> and <code>miso</code> if the bus is not in <code>spiN</code>; <code>bus:N</code> (0), <code>cd:N</code>, <code>cdalto:1</code>, <code>khz:N</code> (25000)</td><td>The SPI card reader (<a href="#stdlib-sd">§14.17</a>)</td><td>RP2350 · C5 · C6</td><td>at boot</td></tr>
+  <tr><td><code>sd</code> (SDIO)</td><td><code>clk:N,cmd:N,d0:N</code>, and <code>d1</code>, <code>d2</code> and <code>d3</code> all three (4 bits) or none (1 bit); <code>pwr:N</code>, <code>pwralto:1</code>, <code>slot:N</code> (0), <code>khz:N</code> (20000), <code>ldo:N</code> (4; 0 = no LDO)</td><td>The SDMMC card reader (<a href="#stdlib-sd">§14.17</a>)</td><td>P4</td><td>at boot</td></tr>
+  <tr><td colspan="5"><strong>Storage</strong></td></tr>
+  <tr><td><code>part.fs.size</code></td><td>bytes, a multiple of the sector (4 KB; on the STM32s, 8 KB)</td><td>The size of the file system; the packs take the rest of the zone. Not edited by hand: the IDE's partition wizard sets it</td><td>all except the C5 and the Waveshare P4 (32 MB: the file system goes on top)</td><td>at boot</td></tr>
+  <tr><td colspan="5"><strong>Diagnostics</strong></td></tr>
+  <tr><td><code>log</code></td><td><code>1</code> / <code>0</code> (0)</td><td>1: the flash log keeps recording after boot —each RUN, the heartbeat…—. The boot is always recorded</td><td>all</td><td>at boot</td></tr>
+  <tr><td><code>gc</code></td><td><code>1</code> / <code>0</code> (1)</td><td>0 turns the garbage collector off for that RUN</td><td>all</td><td>on each RUN</td></tr>
+  <tr><td><code>latido</code></td><td><code>1</code> / <code>0</code> (0)</td><td>1: a heartbeat line in the log every 256 turns of the RUN; it only stays with <code>log=1</code></td><td>all</td><td>on each RUN</td></tr>
+  <tr><td colspan="5"><strong>Written by the board</strong></td></tr>
+  <tr><td><code>imagen.fecha</code></td><td>seconds since 1970</td><td>Not set by hand: the board writes it on its first boot —the date of its image— and <code>Rtc.Clock.isSet()</code> uses it to know whether the clock is set (<a href="#stdlib-rtc">§14.10</a>). Erased, it comes back at boot; it does not change when another image is burnt</td><td>all</td><td>at boot</td></tr>
+  <tr><td colspan="5"><strong>Testing only</strong> (not on a board in use)</td></tr>
+  <tr><td><code>mpu</code></td><td><code>1</code> / <code>0</code> (0)</td><td>Each module's code becomes read-only: a write that steps on it stops the board with its PC. A diagnostic scaffold</td><td>RP2350</td><td>on each RUN</td></tr>
+  <tr><td><code>prueba.fallo</code></td><td><code>1</code> / <code>0</code> (0)</td><td>A deliberate fatal fault on <strong>every</strong> RUN, to test the fatal-fault path. Remove it afterwards</td><td>RP2350 · ESP32</td><td>on each RUN</td></tr>
+</table>
+<p>
+  <code>board</code>, <code>psramCsPin</code>, <code>flashSizeBytes</code> and <code>gpioCount</code>
+  may show up in an old board's ENV: they are kept and nobody reads them.
 </p>
 
 <!-- =========================================================== -->

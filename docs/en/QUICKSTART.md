@@ -45,7 +45,7 @@ invariant.
 
 ```sh
 mvn -f BpIde/pom.xml package
-java -jar BpIde/target/BpIde-6.0.jar     # or bpide.bat, at the repo root
+java -jar BpIde/target/BpIde-7.0.jar     # or bpide.bat, at the root (fix its path first)
 ```
 
 Open `samples/blink.bp`, **Compile** button, **Run** menu — the output
@@ -68,13 +68,13 @@ inside. Where to get/build the image and the Metro case:
 **First program from the IDE**:
 
 1. Open the IDE → lower panel (*Explorer*) → pick the board's COM port →
-   **Connect**. You will see the micro's file tree (`/lib` with the image's
-   stdlib —nearly empty if the board carries the `Stdlib.pack`—, `/app`,
-   `/sys`). **The first time**, a freshly flashed board comes without
+   **Connect**. **The first time**, a freshly flashed board comes without
    partitions: the IDE offers to open **Gestión de placa** (board
    management) → *Proponer defaults* → *Aplicar tamaños*, and the board
    restarts ([IDE guide §9.2](guia-ide.html#particiones); the C5 and the
-   Waveshare P4 lay themselves out).
+   Waveshare P4 lay themselves out). Then you will see the micro's file tree
+   (`/lib` with the image's stdlib —nearly empty if the board carries the
+   `Stdlib.pack`—, `/app`, `/sys`).
 2. Open `samples/blink.bp` → **Run on Device**. The IDE uploads the
    `.mod` (and any missing dependencies) and the LED blinks. The program
    output arrives at the console.
@@ -135,8 +135,8 @@ the `Net` module has no backend yet.
 
 ## 4. ESP32-C3, ESP32-C5 and ESP32-C6
 
-The three RISC-V boards have **a single USB connector** (the native
-USB-Serial-JTAG) and the **wire** goes through it: one cable and the IDE
+All three have **a single USB connector** (the native USB-Serial-JTAG)
+and the **wire** goes through it: one cable and the IDE
 connects. The log console comes out on UART0 (C3: GPIO20/21; C5: GPIO11/12;
 C6: GPIO16/17) — only needed with an adapter, for debugging; the boot log
 can be read from the IDE anyway (`log`).

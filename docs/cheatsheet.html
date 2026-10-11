@@ -274,10 +274,14 @@ m.unlock()</pre>
   <p class="note">Every peripheral is a class: <code>Gpio.Pin</code>,
      <code>I2c.Bus</code>, <code>Spi.Bus</code>, <code>Spi.Device</code>,
      <code>Uart.Port</code>, <code>Pwm.Slice</code>, <code>Adc.Channel</code>,
-     <code>Rtc.Clock</code>, <code>Wdt.Timer</code>, <code>Timer.Alarm</code>. Each
-     gives back what it took — its pins, its channel — when it is released or
-     destroyed, and at the latest when the program ends. <b>The same program runs on
-     every family</b> — only the pin numbers change.</p>
+     <code>Rtc.Clock</code>, <code>Wdt.Timer</code>, <code>Timer.Alarm</code>. One that
+     takes something — its pins, its channel — gives it back with its
+     <code>release()</code> or when it is destroyed (a bus, <code>I2c.Bus</code> or
+     <code>Spi.Bus</code>, only with <code>release()</code>: it has no destructor, on
+     purpose), and in any case when the program ends. <b>The same program runs on
+     every family</b> — only the pin numbers change, as long as the board has what it
+     uses: there is no <code>Wdt</code> on the STM32 boards, for instance (it throws a
+     catchable <code>RuntimeError</code>), and the GUI needs a screen and its packs.</p>
 </section>
 
 <section>
