@@ -60,14 +60,16 @@
 >   - `h13-errores` 50/50 y `samples_sweep` 399/399.
 >   - Las ocho imágenes compilan, y `BpIde-7.0.jar`.
 >
+> **El `D1`, cerrado** (Eduardo: *«¿cerramos la documentación?»*). Las notas de v7.0 las lee él al final, antes de
+> publicar.
+>
 > **Lo siguiente**:
-> 1. Que Eduardo lea las notas de v7.0.
-> 2. Las pruebas finales en placa, con sus OK:
+> 1. Las pruebas finales en placa, con sus OK:
 >    - `#681`: `prueba.fallo=1` y un autorun en una ESP32.
 >    - `#682`: una placa con GUI sin `packRam=`.
 >    - `#686`: `vmheap=1024` en la P4.
 >    - Stop y la pantalla limpia, los ADC 4–7 de la Metro y los tamaños de memoria de la Metro, la S3 y la C5.
-> 3. Publicar: `PUBLICAR.md`, `--formato=8`, `dist/firmware` con las imágenes de V7.
+> 2. Publicar: que Eduardo lea las notas de v7.0, `PUBLICAR.md`, `--formato=8`, `dist/firmware` con las imágenes de V7.
 
 > **10-oct** — **La documentación de V7 (`D1`): escrita por nueve editores y verificada a medias; la sesión se cortó por
 > la cuota de uso.** Commits: `55beed1d` (#677 #678 #679), `ef37121a` (WIP: lo de los editores), `66e3b15b` (#680).

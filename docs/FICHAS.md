@@ -1915,7 +1915,7 @@ del pack; la ronda de V7, verde e idéntica a la de la mañana (`tanda_v7_9oct_s
 pantalla—); y la caché, probada: tras un `PACK_DEL`, el `PACK_LS` del momento lo da por BORRADO sin reiniciar, y el
 pack se vuelve a grabar. **CERRADA.**
 
-#### 📚 `D1` — LA DOCUMENTACIÓN DE V7 (abierto el 10-oct · escrita, verificada y corregida el 11-oct; falta que Eduardo lea las notas de v7.0)
+#### 📚 `D1` — LA DOCUMENTACIÓN DE V7 (abierto el 10-oct · ✅ **CERRADO el 11-oct**, `2e4105a5` y `f2eef8b6`; Eduardo lee las notas de v7.0 antes de publicar)
 
 **El método**, el del `D1` de V6 (en el archivo, «📚 `D1` — LA DOCUMENTACIÓN DE V6»): medir, no leer; editores en
 paralelo y un verificador independiente. **Y la idea de Eduardo** (9-oct): *«repasar todos los issues de V7 y ver si
@@ -1980,7 +1980,9 @@ Además, los destinos AOT, con la familia de `aot.targets` y su nombre largo. Al
 - El manual del IDE, idéntico al de `docs/`, y `BpIde-7.0.jar`.
 
 **Del `D1` salieron** `#677`–`#680` (cerradas) y `#681`–`#687` (abiertas). La documentación ya describe lo decidido de
-`#681`, `#682`, `#684` y `#685`. **Falta**: que Eduardo lea las notas de v7.0.
+`#681`, `#682`, `#684` y `#685`, ya cerradas (`f2eef8b6`), como `#686` y `#687`.
+**Cerrado el 11-oct** (Eduardo: *«¿cerramos la documentación?»*). Las notas de v7.0 las lee Eduardo al final, antes
+de publicar: las pruebas en placa todavía pueden cambiar algún párrafo.
 
 #### ✅ `#677` — el diálogo INFO del IDE decía «PWM: 12 salidas» en la Pico 2, y son 12 slices (24 salidas) (abierta y CERRADA el 10-oct, del inventario del `D1`)
 
