@@ -63,7 +63,7 @@
 > **El `D1`, cerrado** (Eduardo: *«¿cerramos la documentación?»*). Las notas de v7.0, leídas por él. La parte de los
 > hilos mezcla los del SO y los de BP, pero explicarlo bien pide la arquitectura: se deja así (Eduardo).
 >
-> **Lo siguiente**:
+> **Lo siguiente** (Eduardo: *«las pruebas lo dejamos hasta mañana»*, el 12-oct):
 > 1. Las pruebas finales en placa, con sus OK:
 >    - `#681`: `prueba.fallo=1` y un autorun en una ESP32.
 >    - `#682`: una placa con GUI sin `packRam=`.
