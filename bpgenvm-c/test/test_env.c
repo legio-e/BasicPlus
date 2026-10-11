@@ -222,6 +222,18 @@ int main(void) {
               "una clave con '=' o salto, vacía, o un valor con salto: -1");
     }
 
+    /* #687 (11-oct) — los lectores de un valor: decimal o 0x, NUNCA octal; y el mismo sí/no para la placa y el
+     * micro simulado (el suyo leía `yes` como no). */
+    CHECK(bpvm_env_parse_long("064", -1) == 64L, "parse_long: un 0 delante no es octal (064 son 64)");
+    CHECK(bpvm_env_parse_long("0x40", -1) == 64L && bpvm_env_parse_long("0X40", -1) == 64L, "parse_long: 0x es hexadecimal");
+    CHECK(bpvm_env_parse_long("-12", 0) == -12L && bpvm_env_parse_long("+7", 0) == 7L, "parse_long: con signo");
+    CHECK(bpvm_env_parse_long("08", -1) == 8L, "parse_long: 08 (que en octal no parseaba) son 8");
+    CHECK(bpvm_env_parse_long("abc", 5) == 5L && bpvm_env_parse_long("", 5) == 5L, "parse_long: lo que no parsea, el defecto");
+    CHECK(bpvm_env_parse_bool("yes", 0) == 1 && bpvm_env_parse_bool("on", 0) == 1 && bpvm_env_parse_bool("y", 0) == 1,
+          "parse_bool: yes, on, y = si");
+    CHECK(bpvm_env_parse_bool("no", 1) == 0 && bpvm_env_parse_bool("0", 1) == 0, "parse_bool: no, 0 = no");
+    CHECK(bpvm_env_parse_bool("quizas", 1) == 1 && bpvm_env_parse_bool("quizas", 0) == 0, "parse_bool: lo demas, el defecto");
+
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;
 }

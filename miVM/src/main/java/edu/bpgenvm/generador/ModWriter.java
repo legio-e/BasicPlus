@@ -1142,6 +1142,16 @@ public class ModWriter {
         if (clave != null && clave.length() > 160) throw new RuntimeException("la firma '" + clave.substring(0, 40) + "…' de '" + de + "' tiene "
                 + clave.length() + " caracteres (maximo 160): acorta los nombres o divide la funcion");
     }
+
+    /** #685 (11-oct) — lo que va a la tabla de exports pasa por el MISMO tope: las funciones de módulo no pasaban por
+     *  `exigirClaveCorta`, y la VM-C copiaba cada nombre exportado en 128 B. Una función pública de más de 127
+     *  caracteres —dos parámetros de una clase de nombre largo— se cortaba allí en silencio y no enlazaba desde otro
+     *  módulo, mientras miVM la ejecutaba. Ahora la VM-C los cabe enteros (`BPVM_FIRMA_MAX`) y aquí no pasa uno más
+     *  largo. Se mira al escribir la tabla: es el único sitio por el que pasan TODOS (funciones, alias y datos). */
+    private static void exigirExportCorto(String nombre) {
+        int p = nombre.indexOf('(');
+        exigirClaveCorta(nombre, p > 0 ? nombre.substring(0, p) : nombre);
+    }
     public void setMethodMeta(String simpleName, String clave, boolean override, boolean privado) {
         exigirClaveCorta(clave, simpleName);
         exigeFormato9("setMethodMeta");
@@ -2695,6 +2705,7 @@ public class ModWriter {
 
         exportOut.writeInt(exportFunctions.size() + exportAliases.size());
         for (String func : exportFunctions) {
+            exigirExportCorto(func);
             exportOut.writeUTF(func);
             exportOut.writeInt(functionAddresses.get(func));
         }
@@ -2704,6 +2715,7 @@ public class ModWriter {
             Integer rel = functionAddresses.get(a.getValue());
             if (rel == null)
                 throw new RuntimeException("alias de export '" + a.getKey() + "' → función no encontrada: " + a.getValue());
+            exigirExportCorto(a.getKey());
             exportOut.writeUTF(a.getKey());
             exportOut.writeInt(rel);
         }
@@ -2722,6 +2734,7 @@ public class ModWriter {
         if (writeDataExports) {
             exportOut.writeInt(exportDataSymbols.size());
             for (String name : exportDataSymbols) {
+                exigirExportCorto(name);
                 exportOut.writeUTF(name);
                 exportOut.writeInt(dataSymbolOffset.get(name));
             }

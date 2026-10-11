@@ -447,8 +447,16 @@ static void vm_buffer_init_psram(void)
         want -= 1024u * 1024u;
     }
     if (s_vm_buffer == NULL) {
-        ESP_LOGE(TAG, "PSRAM: no se pudo reservar el heap de la VM (%s) - abort", linea);
-        abort();
+        /* #686 (11-oct) — no es fatal, como en las demás familias: el kernel sigue vivo y el IDE habla con la placa
+         * (H9: el arranque escalonado la da por degradada, sin VM, y el REPL no corre nada). Era un abort() en CADA
+         * arranque: con un `vmheap` —o un `packRam`/`SQLite`— que dejaba a la VM menos de 2 MB, un bucle de reinicios
+         * sin IDE, con el ENV que lo causa en la flash, y sólo esptool lo borraba. La línea del plan ya dice por qué. */
+        s_vm_buffer_size = 0;
+        ESP_LOGE(TAG, "PSRAM: sin bloque para la VM (%s)", linea);
+        log_printf("vm: AVISO sin RAM para el bloque de la VM — %s", linea);
+        printf("[boot] AVISO: sin RAM para el heap de la VM — %s\n", linea);
+        log_flush();
+        return;
     }
     s_vm_buffer_size = (uint32_t) want;
     ESP_LOGI(TAG, "VM heap en PSRAM: %u KiB (reserva display %u KiB, PSRAM libre %u KiB) @ %p",

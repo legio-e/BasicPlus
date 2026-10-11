@@ -1,0 +1,9 @@
+// FirmaUsa.bp — #685 (11-oct): llama desde otro módulo a FirmaLib.libre, cuya firma exportada tiene 156
+// caracteres. Las dos VMs la tienen que enlazar e imprimir lo mismo; antes, la VM-C decía «presente pero no
+// exporta… ¿versión vieja?».
+module FirmaUsa
+  import FirmaLib
+  function Main()
+    print "libre: " + FirmaLib.libre(null, null)
+  end Main
+end FirmaUsa

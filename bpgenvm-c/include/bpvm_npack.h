@@ -278,6 +278,11 @@ void bpvm_npack_carga_reinicia(void);
  * (PACK_BURN_END, PACK_DEL, PACK_FORMAT), la placa se reinicia (Eduardo: «671 a»; bpvm_bmgr_wire.c). */
 int bpvm_npack_motores_cargados(void);
 
+/* V7 #682 (10-oct) — ¿por qué no está el motor `npk` (p. ej. "lvgl")? NULL si en la zona no hay ningún pack vivo con
+ * ese motor; si lo hay, el porqué, corto: «falta packRam= en el ENV», el aviso que el cargador dejó sobre ese pack, o
+ * «mira el log de la placa». Para quien ya sabe que el motor no publicó su API (gui_pack.c). */
+const char* bpvm_npack_por_que_falta(const char* npk);
+
 #ifdef __cplusplus
 }
 #endif

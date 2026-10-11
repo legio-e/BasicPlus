@@ -437,6 +437,14 @@ static void esp32_run_tras_cargar(bpvm_t* vm) {
 #if BPVM_ESP_AOT_MDN
     s_mdn_exec_n = 0;                           /* la RAM ejecutable de los .mdn de ESTE RUN */
 #endif
+    /* #681 (10-oct) — SÓLO PRUEBAS, el gemelo del de la Pico (V7/H12, etapa 3.1, paso 4): `prueba.fallo=1` en el ENV
+     * provoca aquí un PÁNICO (abort), para probar en la placa el camino fatal —el reinicio por pánico y el arranque
+     * siguiente sin autorun—. Con la clave puesta, CADA RUN falla: se quita después. */
+    if (bpvm_env_get_bool(board_mgr_env(), "prueba.fallo", 0)) {
+        log_printf("prueba.fallo=1: un panico a proposito (SOLO PRUEBAS)");
+        log_flush();
+        abort();
+    }
 }
 static void esp32_run_despues(bpvm_t* vm) {
     (void) vm;
@@ -502,6 +510,20 @@ void repl_esp32_autorun(void) {
      * valiendo: sólo la CABEZA del fichero, nunca el espejo de 64 KB.) */
     char path[BPVM_FS_PATH_MAX];   /* #456 - este se CONSTRUYE (sale del fichero) */
     if (!bpvm_autorun_entry(path, sizeof path)) return;   /* sin autorun */
+
+    /* #681 (10-oct) — LO DE LA PICO, EN LA ESP32 (V7/H12, etapa 3.1, paso 4; la decisión de Eduardo para los fallos
+     * fatales: «el log y reset», y el arranque siguiente SIN autorun). Un programa de autorun que falla al arrancar
+     * dejaba la placa reiniciándose en bucle. Aquí la marca la da el propio chip: el motivo del reinicio, el mismo que
+     * enseña el INFO. Cuentan el PÁNICO (una excepción, un abort, un assert) y el perro de INTERRUPCIONES (el sistema
+     * colgado con las interrupciones cortadas); NO el perro de tareas, que en la ESP32 es el del módulo `Wdt` del
+     * programa —cuando ése salta, relanzar el autorun es justo lo que el usuario quiere—. El IDE lo arranca a mano. */
+    esp_reset_reason_t motivo = esp_reset_reason();
+    if (motivo == ESP_RST_PANIC || motivo == ESP_RST_INT_WDT) {
+        log_printf("autorun: %s NO arranca: el arranque anterior acabo en un fallo fatal (%s; ver el log)",
+                   path, motivo == ESP_RST_PANIC ? "panic/exception" : "int-watchdog");
+        printf("[autorun] %s NO arranca: el arranque anterior acabo en un fallo fatal\n", path);
+        return;
+    }
 
     /* #345 paso 2 — la ventana de rescate. Decide el usuario. */
     if (!bpvm_autorun_gate(&s_autorun_wire, path, 500, 10000)) {

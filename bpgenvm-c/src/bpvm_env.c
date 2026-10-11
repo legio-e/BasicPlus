@@ -114,11 +114,11 @@ int bpvm_env_get_exacto(const bpvm_env_t* env, const char* key, char* val_out, s
     return n;
 }
 
-int bpvm_env_get_bool(const bpvm_env_t* env, const char* key, int def) {
-    char v[8];
-    int n = bpvm_env_get(env, key, v, sizeof v);
-    if (n < 0) return def;
-    if (n == 1) {
+/* #687 (11-oct) — el lector de un sí/no, el MISMO para la placa y el micro simulado (que tenía el suyo: `gc=yes`
+ * apagaba el GC en el simulado y lo dejaba encendido en la placa). */
+int bpvm_env_parse_bool(const char* v, int def) {
+    if (!v) return def;
+    if (v[0] && !v[1]) {
         switch (v[0]) {
         case '1': case 'y': case 'Y': case 't': case 'T':
         case 's': case 'S':                               return 1;  /* sí */
@@ -132,14 +132,28 @@ int bpvm_env_get_bool(const bpvm_env_t* env, const char* key, int def) {
     return def;
 }
 
-long bpvm_env_get_long(const bpvm_env_t* env, const char* key, long def) {
-    char v[24];
-    int n = bpvm_env_get(env, key, v, sizeof v);
-    if (n <= 0) return def;
+/* #687 (11-oct) — un número del ENV va en decimal, o en hexadecimal con `0x`. Se leía con base 0, y un 0 delante
+ * pasaba a OCTAL en silencio: `stack=064` eran 52 KB. Nadie escribe octal en un ENV: `064` son 64. */
+long bpvm_env_parse_long(const char* v, long def) {
+    if (!v || !*v) return def;
+    const char* d = (*v == '-' || *v == '+') ? v + 1 : v;
+    int hex = d[0] == '0' && (d[1] == 'x' || d[1] == 'X');
     char* endp = NULL;
-    long r = strtol(v, &endp, 0);   /* base 0: acepta 0x… y decimal */
+    long r = strtol(v, &endp, hex ? 16 : 10);
     if (endp == v) return def;      /* nada parseable */
     return r;
+}
+
+int bpvm_env_get_bool(const bpvm_env_t* env, const char* key, int def) {
+    char v[8];
+    if (bpvm_env_get(env, key, v, sizeof v) < 0) return def;
+    return bpvm_env_parse_bool(v, def);
+}
+
+long bpvm_env_get_long(const bpvm_env_t* env, const char* key, long def) {
+    char v[24];
+    if (bpvm_env_get(env, key, v, sizeof v) <= 0) return def;
+    return bpvm_env_parse_long(v, def);
 }
 
 /* El MARCO alrededor de un payload que ya está en su sitio (`out + 16`): la cabecera, el CRC y el relleno. Lo

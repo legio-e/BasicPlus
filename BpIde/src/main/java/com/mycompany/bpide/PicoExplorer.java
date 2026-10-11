@@ -477,10 +477,17 @@ public final class PicoExplorer extends JPanel {
                         || arg.equalsIgnoreCase("exit")) {
                     emitLine("  códigos de salida de un programa (el `exit N` del EXITED):");
                     emitLine("      0   terminó bien");
-                    emitLine("      1   excepción BP no atrapada — el programa se murió por su cuenta");
-                    emitLine("      2   no se pudo cargar el módulo (no está, no es un .mod, o su ABI es vieja)");
+                    // #683 (10-oct, del D1 de V7): la tabla entera de la guía del IDE §7. Desde #605 llenar el heap
+                    // o la pila MIENTRAS corre es un RuntimeError (atrapable; sin atrapar, el 1): el 4 queda para
+                    // no poder ni cargar ni arrancar. Y un error de enlace también sale con el 1, no con el 2.
+                    emitLine("      1   excepción BP no atrapada — el programa se murió por su cuenta. También el");
+                    emitLine("          heap lleno y el desbordamiento de pila (RuntimeError atrapables), la de un");
+                    emitLine("          hilo que no es el main (acaba ese hilo; al final, el programa sale con 1)");
+                    emitLine("          y un error de enlace (una dependencia no exporta lo que el programa usa)");
+                    emitLine("      2   no se pudo cargar el módulo (no está, no es un .mod, su ABI es vieja, o una");
+                    emitLine("          dependencia es más antigua que la que necesita)");
                     emitLine("      3   fallo interno de la VM — esto NO es culpa del programa, repórtalo");
-                    emitLine("      4   sin memoria: heap agotado o desbordamiento de pila");
+                    emitLine("      4   sin memoria para cargar o arrancar el programa");
                     emitLine("    130   parado con Stop/KILL (convención 128+SIGINT)");
                     emitLine("    131   parado por el depurador");
                     emitLine("  el número dice QUÉ pasó; el POR QUÉ va en el mensaje que lo acompaña");

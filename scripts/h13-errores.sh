@@ -77,6 +77,7 @@ PropFieldTipo|no se puede asignar 'string' a 'integer'
 FinallySale|un 'finally' no puede salir con 'return'
 FinallySale|un 'finally' no puede salir con 'break'
 FinallySale|un 'finally' no puede salir con 'continue'
+FirmaLarga|caracteres (maximo 160)
 "
 
 ok=0; mal=0

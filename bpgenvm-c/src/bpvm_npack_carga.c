@@ -17,6 +17,7 @@
 
 static int     s_hecho     = 0;   /* la guarda: se saltó a algún motor (ver bpvm_npack.h) */
 static int32_t s_resultado = 0;
+static int     s_sin_bloque = 0;  /* V7 #682: el último intento no cargó nada por no haber bloque de RAM */
 
 static void di(const bpvm_npack_familia_t* f, const char* fmt, ...) {
     if (!f->log) return;
@@ -103,6 +104,7 @@ static int32_t saltar(const bpvm_npack_familia_t* f, const bpvm_npack_carga_t* c
 static int32_t cargar(const bpvm_npack_familia_t* f) {
     uint32_t zbytes = 0;
     const uint8_t* zona = bpvm_pack_mounted(&zbytes);
+    s_sin_bloque = 0;
     if (!zona || zbytes == 0) {
         di(f, "pack: no hay zona de packs montada — no se carga ningun motor");
         return -(int32_t) BPVM_NPACK_E_MAGIC;
@@ -110,6 +112,7 @@ static int32_t cargar(const bpvm_npack_familia_t* f) {
     if (!f->ram || f->ram_bytes == 0) {
         di(f, "pack: no hay bloque de RAM para los motores (ni packRam= ni SQLite= en el ENV, "
               "o no cupo) — no se carga ninguno");
+        s_sin_bloque = 1;   /* #682: para que quien eche en falta un motor sepa por qué */
         return -(int32_t) BPVM_NPACK_E_TAMANO;
     }
     /* La BIOS, comprobada ANTES de prestarla: un hueco se manifestaría DENTRO del motor,
@@ -171,9 +174,39 @@ static int32_t cargar(const bpvm_npack_familia_t* f) {
 
 int bpvm_npack_motores_cargados(void) { return s_hecho; }   /* V7 #671 */
 
+/* V7 #682 (10-oct) — POR QUÉ FALTA UN MOTOR, para quien lo eche en falta. La GUI decía «esta placa no tiene el pack
+ * 'LVGL' grabado» también con el pack grabado y su motor sin cargar —sin `packRam=` en el ENV—, y eso engaña. NULL si
+ * en la zona no hay ningún pack vivo con un motor de ese nombre (y entonces «no está» es la verdad); si lo hay, el
+ * porqué, corto (el EXITED recorta el mensaje): el bloque de RAM que falta, el aviso que dejó el cargador sobre ESE pack
+ * o, si no dejó ninguno, el log. Lo pregunta quien ya sabe que el motor no publicó su API. */
+const char* bpvm_npack_por_que_falta(const char* npk) {
+    static char porque[160];   /* del tamaño del aviso que copia: las imágenes compilan con -Werror=format-truncation */
+    uint32_t zbytes = 0;
+    const uint8_t* zona = bpvm_pack_mounted(&zbytes);
+    if (!npk || !zona || zbytes == 0) return NULL;
+    bpvm_npack_carga_t c[BPVM_NPACK_MAX];
+    bpvm_npack_plan_t  p;
+    int vistos = bpvm_npack_planear(zona, zbytes, 0, 0, NULL, c, BPVM_NPACK_MAX, &p);   /* sólo los nombres */
+    int n = (vistos < BPVM_NPACK_MAX) ? vistos : BPVM_NPACK_MAX;
+    for (int i = 0; i < n; i++) {
+        if (strcmp(c[i].npk, npk) != 0) continue;
+        if (s_sin_bloque) return "falta packRam= en el ENV";
+        char av[160], quien[BPVM_PACK_NAME_LEN + 4];
+        snprintf(quien, sizeof quien, "'%s'", c[i].pack);
+        if (bpvm_pack_aviso_motor_de(av, sizeof av) && strstr(av, quien)) {
+            const char* tras = strstr(av, "su motor: ");
+            snprintf(porque, sizeof porque, "%s", tras ? tras + 10 : av);
+            return porque;
+        }
+        return "mira el log de la placa";
+    }
+    return NULL;
+}
+
 void bpvm_npack_carga_reinicia(void) {
     s_hecho = 0;
     s_resultado = 0;
+    s_sin_bloque = 0;
     bpvm_pack_aviso_motor(NULL);
 }
 

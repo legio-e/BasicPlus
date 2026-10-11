@@ -93,6 +93,12 @@ int bpvm_env_get_exacto(const bpvm_env_t* env, const char* key, char* val_out, s
 int  bpvm_env_get_bool(const bpvm_env_t* env, const char* key, int def);
 long bpvm_env_get_long(const bpvm_env_t* env, const char* key, long def);
 
+/* #687 (11-oct) — los LECTORES de un valor ya leído, los mismos para todos: la placa (las dos de arriba) y el micro
+ * simulado, que tenía el suyo y leía `gc=yes` al revés que la placa. Un número va en decimal o con `0x`: un 0 delante
+ * NO es octal (`064` son 64). `def` si no parsea. */
+int  bpvm_env_parse_bool(const char* v, int def);
+long bpvm_env_parse_long(const char* v, long def);
+
 /* Serializa un payload "clave=valor\n..." a un bloque completo (marco + crc + seq)
  * en `out` (cap `out_cap`, típicamente el tamaño de sector), rellenando con 0xFF
  * hasta `out_cap`. Devuelve los bytes usados (marco+payload, sin el pad), o -1 si

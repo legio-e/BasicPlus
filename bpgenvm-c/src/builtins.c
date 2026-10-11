@@ -946,19 +946,20 @@ int32_t bpvm_prim_char_code_at(bpvm_t* vm, uint32_t s, int32_t i) {
 int bpvm_prim_char_at(bpvm_t* vm, uint32_t s, int32_t i, bpref_t* out, char* err, size_t n) {
     uint8_t enc[4];
     uint32_t enc_len = 0, o, k;
-    if (s != 0u) {
-        uint32_t nbytes = bpvm_read_u32_be(vm->memory + s);
-        const uint8_t* p = vm->memory + s + BPVM_ARR_DATA_OFF;
-        uint32_t ncp = utf8_cp_count(p, nbytes);
-        uint32_t off, adv;
-        if (i < 0 || (uint32_t) i >= ncp) {
-            /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
-            snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
-            return -1;
-        }
-        off = utf8_byte_offset(p, nbytes, (uint32_t) i);
-        enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
+    /* #684 (11-oct) — un string SIN VALOR (una global o un campo sin inicializar: `s == 0`) es el vacío, como en
+     * miVM (`readVmString(0)` es ""): su índice está fuera de rango igual que el de "". Aquí se saltaba la
+     * comprobación y devolvía "" —el programa seguía en la VM-C y lanzaba en miVM—. */
+    uint32_t nbytes = s ? bpvm_read_u32_be(vm->memory + s) : 0u;
+    const uint8_t* p = s ? vm->memory + s + BPVM_ARR_DATA_OFF : vm->memory;
+    uint32_t ncp = s ? utf8_cp_count(p, nbytes) : 0u;
+    uint32_t off, adv;
+    if (i < 0 || (uint32_t) i >= ncp) {
+        /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
+        snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
+        return -1;
     }
+    off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+    enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
     *out = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, enc_len, enc_len); /* V7/H7 #593: la cabecera y el handle, al nacer */
     if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355, #430 */
     o = bpref_deref(vm, *out);

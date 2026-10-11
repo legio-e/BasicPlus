@@ -24,6 +24,7 @@
 #include "bpvm_pant.h"        /* V7/H6.c G2-G3: la MARCA del driver de pantalla y su `estado` */
 #include "bpvm_alloc.h"
 #include "bpvm.h"
+#include "bpvm_npack.h"       /* V7 #682: bpvm_npack_por_que_falta — el pack está pero su motor no cargó */
 #include <string.h>
 #include <stdio.h>
 
@@ -46,7 +47,12 @@ static int resolver(void) {
     const bpvm_pack_api_t* api = (const bpvm_pack_api_t*) bpvm_bios_busca(BPVM_GUI_MARCA);
     if (api == 0) {
         if (s_estado == 0 || s_api_mala != 0) { s_dicho = 0; s_api_mala = 0; }   /* una causa nueva: se dice */
-        snprintf(s_motivo, sizeof s_motivo, "esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)");
+        /* V7 #682 — si el pack de la GUI SÍ está grabado y es su motor el que no cargó (sin `packRam=` en el ENV, un
+         * sello de otra imagen…), se dice eso: «no tiene el pack» salía también entonces, y engañaba. Corto: el EXITED
+         * recorta el mensaje a unos 90 caracteres. */
+        const char* porque = bpvm_npack_por_que_falta("lvgl");
+        if (porque) snprintf(s_motivo, sizeof s_motivo, "el pack de la GUI esta, pero su motor no cargo: %s", porque);
+        else        snprintf(s_motivo, sizeof s_motivo, "esta placa no tiene el pack 'LVGL' grabado (la GUI llega por el pack)");
         s_estado = -1; decir(); return 0;
     }
     if (api == s_api_mala) return 0;       /* la misma tabla que no valía: su motivo ya está dicho */

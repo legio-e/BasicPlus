@@ -41,6 +41,19 @@ module StrNulo
     catch e: Exception
       print "indice sobre nulo: excepcion atrapada"
     endtry
+    // #684 (11-oct): charAt de un string sin valor es charAt de "": el índice, fuera de rango —
+    // la VM-C se saltaba la comprobación y devolvía "" (el programa seguía), miVM lanzaba.
+    try
+      print "charAt sin valor=[" + charAt(s, 0) + "]"
+      print "NO deberia llegar aqui"
+    catch e: RuntimeError
+      print "charAt sin valor: " + e.msg
+    endtry
+    try
+      print "charAt vacio=[" + charAt("", 0) + "]"
+    catch e: RuntimeError
+      print "charAt vacio: " + e.msg
+    endtry
     s := "ya"
     print "s=" + s
   end main

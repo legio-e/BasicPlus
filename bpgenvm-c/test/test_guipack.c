@@ -45,6 +45,13 @@ extern const bpvm_pack_api_t bpvm_gui_api_stubs;
 extern const bpvm_pack_sym_t bpvm_gui_stub_syms[];
 extern int g_stub_llamadas, g_stub_dump_free;
 
+/* V7 #682 — el doble del CARGADOR de motores: qué dice de un motor que no publicó su API. NULL = en la zona no hay
+ * ningún pack con ese motor (y «no tiene el pack» es la verdad). */
+static const char* g_por_que = 0;
+const char* bpvm_npack_por_que_falta(const char* npk) {
+    return (npk && strcmp(npk, "lvgl") == 0) ? g_por_que : 0;
+}
+
 /* V7/H6.c G2 — un DRIVER DE PANTALLA de mentira. La VM sólo mira que 'PANT' esté
  * publicada (el driver lo usa el pack de LVGL, no la VM); y con él se prueba
  * también el resolvedor del contrato (bpvm_pant.h), que es de la cabecera. */
@@ -90,6 +97,22 @@ int main(void) {
         char* d = (char*) 1; size_t n = bpvm_gui_dump_tree(&d);
         CHECK(n == 0 && d == 0, "dump_tree sin pack -> 0 bytes y NULL");
         CHECK(g_stub_llamadas == 0, "y el doble no recibio NADA");
+    }
+
+    /* ── 1a. V7 #682: el pack de la GUI GRABADO pero su motor SIN CARGAR (sin packRam= en el ENV) ──
+     * Antes salía «no tiene el pack 'LVGL' grabado» también aquí, y engañaba: el pack está. */
+    {
+        bpvm_bios_packs_reset(); bpvm_gui_pack_reset();
+        g_por_que = "falta packRam= en el ENV";
+        const char* m = 0;
+        CHECK(bpvm_gui_disponible(&m) == 0, "#682: pack grabado, motor sin cargar -> disponible() = 0");
+        CHECK(m && strstr(m, "el pack de la GUI esta, pero su motor no cargo: falta packRam= en el ENV") != 0,
+              "#682: y el motivo dice que el pack ESTA y por que su motor no cargo");
+        CHECK(m && strstr(m, "no tiene el pack") == 0, "#682: ... y no dice «no tiene el pack»");
+        g_por_que = 0;
+        bpvm_gui_pack_reset();
+        CHECK(bpvm_gui_disponible(&m) == 0 && m && strstr(m, "no tiene el pack 'LVGL'") != 0,
+              "#682: sin ese motor en la zona, «no tiene el pack 'LVGL'» sigue siendo la verdad");
     }
 
     /* ── 1b. V7/H6.c G2: el pack de LVGL SIN driver de pantalla ('PANT') ──

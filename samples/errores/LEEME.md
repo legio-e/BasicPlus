@@ -29,6 +29,7 @@ fallan por diseño.
 | `SwitchMal.bp` | el sujeto de un `switch` es un entero, un boolean, un enum o un string (comparado por su contenido): un **real** no —la igualdad exacta de reales es una trampa—, ni un `case` real contra un entero, y un **objeto** tampoco (comparar referencias es cosa de `if`) (#546) | `switch sobre 'double': un real no se compara…` · `valor de 'case' de tipo 'float'…` · `…para comparar referencias, usa if` |
 | `PropFieldTipo.bp` | dentro de un `get`/`set`, `field` tiene el tipo de su property: asignarle otro es un error, como a cualquier variable (#547) | `no se puede asignar 'string' a 'integer'` |
 | `FinallySale.bp` | un `finally` no puede salir con `return`, `break` ni `continue`: taparía la excepción que fuera en vuelo. Un `throw` dentro sí vale, y un `break` a un bucle de DENTRO del `finally`, también (#674) | `un 'finally' no puede salir con 'return'` · `… con 'break'` · `… con 'continue'` (y ninguno en `vale`) |
+| `FirmaLarga.bp` | la firma de una función —su nombre con los tipos de sus parámetros— tiene un tope de 160 caracteres, también en las funciones de módulo: aquí, tres parámetros de una clase de 63 dan 240 (#685) | `la firma 'demasiado(…' de 'demasiado' tiene 240 caracteres (maximo 160)` |
 | `paralleltest_scope_violate.bp` | dentro de un `parallel`, un `case` no puede tocar una variable global | `no puede acceder a la variable global 'globalVar'; usa una const, una función o un objeto compartido` |
 
 Fíjate en que los mensajes **dicen qué hacer**, no sólo qué está mal: el de `parallel`

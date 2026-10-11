@@ -890,11 +890,12 @@ static void sim_run_despues(bpvm_t* vm) {
     free_bufs();
 }
 
-/* el ENV del simulado, para `gc` y `latido` */
+/* el ENV del simulado, para `gc` y `latido` — #687: con el lector de la placa (tenía el suyo, y `gc=yes` apagaba aquí
+ * el GC que la placa deja encendido) */
 static int sim_run_env_bool(const char* clave, int defecto) {
     char v[8];
     if (sim_env_get(clave, v, sizeof v) < 0) return defecto;
-    return v[0] == '1' || v[0] == 't' || v[0] == 'T' || v[0] == 's' || v[0] == 'S';
+    return bpvm_env_parse_bool(v, defecto);
 }
 
 /* el consejo cuando falta un módulo: una placa trae la stdlib embebida; el simulado arranca con el FS vacío y

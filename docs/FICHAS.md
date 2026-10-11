@@ -2015,29 +2015,34 @@ en la paridad —la clase sola, con un inicializador, una subclase sin construct
 propio campo fijo—: con el compilador de antes, «Caja: 0» y la excepción en las dos VMs; ahora, las seis idénticas. El
 frontend con sus pruebas; la red entera, verde (paridad 148, MOD8, dos workers, estrés, `packs-abi`, stdlib embebida).
 
-#### `#681` — las ESP32 lanzan el autorun aunque el arranque anterior acabara en un fallo fatal (pánico o watchdog de interrupción): un autorun que revienta deja la placa reiniciándose sin fin (abierta el 10-oct, del `D1`; Eduardo: «Sí, en V7») — EN CURSO
+#### ✅ `#681` — las ESP32 lanzan el autorun aunque el arranque anterior acabara en un fallo fatal (pánico o watchdog de interrupción): un autorun que revienta deja la placa reiniciándose sin fin (abierta el 10-oct, del `D1`; Eduardo: «Sí, en V7» · **CERRADA el 11-oct**, el commit de `#681`–`#687`; en placa, en las pruebas finales)
 
-**Hecho, sin commit**: `repl_esp32_autorun` mira `esp_reset_reason()` y, con `ESP_RST_PANIC` o `ESP_RST_INT_WDT`, NO lanza
-el autorun y lo dice en el log y en la consola (el `ESP_RST_TASK_WDT` del módulo `Wdt` sí relanza, como antes). Para
-probarlo, el gemelo del `prueba.fallo=1` de la Pico en `esp32_run_tras_cargar` (un `abort()`, SÓLO PRUEBAS). Las cinco
-imágenes ESP compilan. **Falta**: la prueba en la S3 o la P4 —grabar y poner la clave en el ENV, con el OK de Eduardo— y
-el commit.
+**Hecho**: `repl_esp32_autorun` mira `esp_reset_reason()` y, con `ESP_RST_PANIC` o `ESP_RST_INT_WDT`, NO lanza el autorun
+y lo dice en el log y en la consola (el `ESP_RST_TASK_WDT` del módulo `Wdt` sí relanza, como antes). Para probarlo, el
+gemelo del `prueba.fallo=1` de la Pico en `esp32_run_tras_cargar` (un `abort()`, SÓLO PRUEBAS). Las ocho imágenes
+compilan y la red está verde. **En placa, en las pruebas finales**: Eduardo (11-oct), *«no hace falta grabar en placa
+salvo quizás en una. Justo a continuación viene la fase de pruebas»*. Se prueba con `prueba.fallo=1` y un autorun en una
+ESP32.
 
-#### `#682` — con el pack de la GUI grabado pero su motor sin cargar (sin `packRam=`, o con el motor rechazado), la GUI decía «esta placa no tiene el pack 'LVGL' grabado»: falso, y manda a grabar lo que ya está (abierta el 10-oct, del `D1`; Eduardo: «Sí, en V7») — EN CURSO
+#### ✅ `#682` — con el pack de la GUI grabado pero su motor sin cargar (sin `packRam=`, o con el motor rechazado), la GUI decía «esta placa no tiene el pack 'LVGL' grabado»: falso, y manda a grabar lo que ya está (abierta el 10-oct, del `D1`; Eduardo: «Sí, en V7» · **CERRADA el 11-oct**, el commit de `#681`–`#687`; en placa, en las pruebas finales)
 
 **Hecho, sin commit**: `bpvm_npack_por_que_falta(npk)` (`bpvm_npack_carga.c`) distingue «falta packRam= en el ENV», el
 aviso del motor y «mira el log de la placa»; `gui_pack.c` lo pone en el mensaje; `test_guipack.c`, con el doble y el caso
 1a. Las imágenes compilan. **Ojo (11-oct)**: `gui_pack.c` es GENERADO (`scripts/gen_gui_pack.py`, «NO EDITAR») y el cambio
 se hizo a mano: `test-guipack` falla con «DESACTUALIZADO». Va al generador (`RESOLVER_C`) y se regenera. Y el motivo
 llega al programa en el mensaje de una excepción, que se corta a 90 bytes (`exceptions.c:218`, lo vio el corrector 1 del
-`D1`): con el aviso largo del motor («realojado para OTRA direccion…»), el IDE lo enseña cortado. **Falta**: eso;
-`test-guipack` y la red (`compat.sh check`); la prueba en una placa con GUI sin `packRam=` (con el OK); el commit.
+`D1`): con el aviso largo del motor («realojado para OTRA direccion…»), el IDE lo enseña cortado.
+**Hecho (11-oct)**: el cambio está en el generador (`RESOLVER_C` y el `#include`), y `gui_pack.c` sale de él
+(`--comprobar`: al día); `test-guipack`, verde. El corte a 90 bytes es sólo del RESUMEN de una excepción sin atrapar
+(`runtime_error[192]`): quien la atrapa recibe el mensaje entero, y el de `#682` cabe con sus motivos cortos. **En placa,
+en las pruebas finales**: una placa con GUI y sin `packRam=`.
 
-#### `#683` — la ayuda de los códigos de salida del IDE (`PicoExplorer`) daba el 4 como «sin memoria» en general: llenar el heap o la pila MIENTRAS corre es un `RuntimeError`, y sin atrapar sale con el 1 (abierta el 10-oct, del `D1`) — EN CURSO
+#### ✅ `#683` — la ayuda de los códigos de salida del IDE (`PicoExplorer`) daba el 4 como «sin memoria» en general: llenar el heap o la pila MIENTRAS corre es un `RuntimeError`, y sin atrapar sale con el 1 (abierta el 10-oct, del `D1` · **CERRADA el 11-oct**, el commit de `#681`–`#687`)
 
-**Hecho, sin commit**. **Falta**: rehacer `BpIde` (ya 7.0 en el pom; con el IDE cerrado) y el commit.
+**Hecho**: la ayuda entera, como la tabla de la guía §7. El 1 también es el heap lleno, la pila, la excepción de un hilo
+y el error de enlace; el 2 incluye una dependencia más antigua; el 4, sólo cargar o arrancar. `BpIde-7.0.jar`, rehecho.
 
-#### `#684` — `charAt` sobre un string SIN VALOR (una global `var gs: string` sin inicializar): miVM lanza «idx fuera de rango» como con `""`, y la VM-C devuelve `""` y sigue (`builtins.c:946`) —paridad rota— (abierta el 10-oct, del verificador 2 del `D1`) — ABIERTA
+#### ✅ `#684` — `charAt` sobre un string SIN VALOR (una global `var gs: string` sin inicializar): miVM lanza «idx fuera de rango» como con `""`, y la VM-C devuelve `""` y sigue (`builtins.c:946`) —paridad rota— (abierta el 10-oct, del verificador 2 del `D1` · **CERRADA el 11-oct**, el commit de `#681`–`#687`)
 
 Un `null` escrito no llega: un string es escalar y `null` no se le asigna. `var s: string := null` y
 `charAt("abc", null)` son errores de compilación, comprobado el 11-oct; Eduardo: *«es un error de compilación, no un
@@ -2048,8 +2053,12 @@ así compila y vale `""` (print, concatenación y `len`, `#512`). Así que
 (`readVmString(0)` es `""`). `bpvm_prim_char_at` se salta la comprobación cuando `s == 0`. **El arreglo**: con
 `s == 0`, el mismo error que con el vacío. Antes, censar las demás primitivas de cadena de la VM-C con el mismo
 `if (s != 0u)`. La documentación lo describe así, con «sin valor» y no «null».
+**Hecho (11-oct)**: `bpvm_prim_char_at` trata `s == 0` como el vacío, y la misma primitiva sirve al AOT. El censo: era la
+ÚNICA primitiva de cadena de la VM-C con ese salto; `substring` sin valor ya daba `""` en las dos. `StrNulo`, que está
+en la paridad, lleva los dos casos: el string sin valor y `""`. Con la VM-C de antes salían «charAt sin valor=[]» y «NO
+deberia llegar aqui»; con la nueva, las dos VMs dan lo mismo.
 
-#### `#685` — la VM-C corta a 127 caracteres los nombres exportados (`loader.c:458` y `:485`) y el compilador no pone tope a las funciones de módulo: una firma de 142, llamada desde otro módulo, corre en miVM y NO enlaza en la VM-C —paridad rota— (abierta el 10-oct, del verificador 2 del `D1`) — ABIERTA
+#### ✅ `#685` — la VM-C corta a 127 caracteres los nombres exportados (`loader.c:458` y `:485`) y el compilador no pone tope a las funciones de módulo: una firma de 142, llamada desde otro módulo, corre en miVM y NO enlaza en la VM-C —paridad rota— (abierta el 10-oct, del verificador 2 del `D1` · **CERRADA el 11-oct**, el commit de `#681`–`#687`)
 
 Mirado el 11-oct: el tope de V10 (16-sep), «firma canónica ≤ 160», lo aplica `ModWriter.exigirClaveCorta` sólo a las
 refs (`requireRef`) y a los métodos (`setMethodMeta`). Las funciones exportadas no pasan por él, y el cargador de la VM-C
@@ -2057,19 +2066,38 @@ copia los nombres de los exports en `char name[128]`. **El arreglo**: `exigirCla
 la tabla de exports (funciones, alias y símbolos de datos, ~l. 2696 de `ModWriter`), y los búferes de la VM-C a la
 medida del lenguaje. Antes, censarlos: `loader.c` (`name[128]` ×2, `pqual[128]` ×2) y `link.c` (`nm[128]`; `canon[160]`
 en la l. 613, que deja 159; `"%.120s.%.120s"` en la l. 866). La documentación ya da el 160 para las funciones.
+**Hecho (11-oct)**:
+- En el compilador, `ModWriter.exigirExportCorto`, al escribir la tabla de exports: es el único sitio por el que pasan
+  todos (funciones, alias y datos).
+- En la VM-C, `BPVM_FIRMA_MAX` (160) en `bpvm_internal.h`. El cargador copia el nombre entero o falla con el motivo:
+  «'X' exporta un nombre de N caracteres (el maximo es 160): recompila 'X'».
+- El censo de `link.c`: sus `nm[128]` son nombres de CLASE (≤ 63), no firmas, y la tabla de símbolos guarda los
+  nombres en un pool sin tope (`#449`). Los `pqual[128]` del cargador son de los fixups 4.3/4.4, que MOD9 no usa.
 
-#### `#686` — en la P4, un ENV que deja a la VM menos de 2 MB (`vmheap`, o `packRam`/`SQLite` que se comen el resto) hace `abort()` en CADA arranque: un bucle de reinicios sin IDE, y el ENV en la flash (abierta el 11-oct, del censo del ENV para el apéndice del `D1`) — ABIERTA
+Las pruebas:
+- `FirmaLib`/`FirmaUsa`, en la paridad: una firma de 156 caracteres. Con la VM-C de antes, el ERROR DE LINK.
+- `samples/errores/FirmaLarga.bp`, con 240 caracteres, en `h13-errores` (50/50).
+- `samples_sweep`: 399/399.
+
+#### ✅ `#686` — en la P4, un ENV que deja a la VM menos de 2 MB (`vmheap`, o `packRam`/`SQLite` que se comen el resto) hace `abort()` en CADA arranque: un bucle de reinicios sin IDE, y el ENV en la flash (abierta el 11-oct, del censo del ENV para el apéndice del `D1` · **CERRADA el mismo día**, el commit de `#681`–`#687`; en placa, en las pruebas finales)
 
 `esp32p4/main/main.c:430` y el `abort()` de `:449-451`. En las demás familias, por debajo del suelo (64 KB) la placa
 arranca sin VM, degradada, y el IDE la ve. Aquí la única salida es borrar el ENV con esptool. **Propuesta**: lo mismo
 que las demás, el arranque degradado con el motivo. La documentación (el apéndice del ENV) avisa del mínimo.
+**Hecho**: sin el `abort()`. La P4 arranca degradada como la S3: el gestor de placa y el REPL, comunes, ya sabían
+arrancar sin bloque de la VM. Lo dice en la consola y en el log: «[boot] AVISO: sin RAM para el heap de la VM — …». El
+apéndice del ENV, al día. **En placa, en las pruebas finales**: `vmheap=1024` en la P4, y corregirlo desde el IDE.
 
-#### `#687` — un número del ENV con un 0 delante se lee en OCTAL y en silencio: `stack=064` son 52 KB (abierta el 11-oct, del censo del ENV) — ABIERTA
+#### ✅ `#687` — un número del ENV con un 0 delante se lee en OCTAL y en silencio: `stack=064` son 52 KB (abierta el 11-oct, del censo del ENV · **CERRADA el mismo día**, el commit de `#681`–`#687`)
 
 El lector de enteros del ENV usa `strtol` con base 0. Nadie escribe octal en un ENV: es una trampa callada. **Propuesta**:
 decimal o `0x`, y lo demás, error en el log con la clave. De paso, el micro simulado (`tools/bpvm_sim.c`) lee `gc` y
 `latido` con otro lector: `gc=yes` apaga el GC en el simulado y en la placa no. La documentación dice «decimal o `0x`,
 sin un 0 delante».
+**Hecho**: `bpvm_env_parse_long` (decimal, o hexadecimal con `0x`) y `bpvm_env_parse_bool`, en `bpvm_env.c`, son ya los
+únicos lectores, de la placa y del simulado (`sim_run_env_bool`). Lo que no parsea da el defecto, como antes. Lo del
+«error en el log», no: `bpvm_env.c` no tiene log, y lo enlazan pruebas sin él. `test-env` lleva ocho casos nuevos
+(`064` = 64, `08` = 8, `0x40`, el signo, `yes`…). El apéndice dice ya «un 0 delante no cambia nada».
 
 #### ✅ `#634` — el STOP del IDE con el programa parado en un breakpoint, en placa, no para nada: el IDE manda `KILL`, y el lazo de pausa del depurador no lo mira (abierta el 2-oct, del mapa del hilo `io`; H10 · **CERRADA el 3-oct**, `26ecfef6`)
 

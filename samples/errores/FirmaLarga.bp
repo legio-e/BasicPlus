@@ -1,0 +1,15 @@
+// FirmaLarga.bp — #685 (11-oct): la firma de una función tiene un tope, 160 caracteres (V10), y vale también
+// para las funciones de módulo. Aquí, tres parámetros de una clase de 63 caracteres: el nombre exportado,
+// demasiado(LFirmaLarga/<clase>;…)i, tiene 240. Antes compilaba, corría en miVM y no enlazaba en la VM-C.
+module FirmaLarga
+  public class CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+  end CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+
+  public function demasiado(a: CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC, b: CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC, c: CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC): integer
+    return 1
+  end demasiado
+
+  function Main()
+    print demasiado(null, null, null)
+  end Main
+end FirmaLarga

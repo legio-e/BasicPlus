@@ -44,15 +44,30 @@
 > - `doc_frags`, 0 FALLO en 25 documentos; 1 024 enlaces, 0 rotos.
 > - El manual, copiado al IDE, y `BpIde-7.0.jar`. El IDE estaba cerrado: el `javaw` abierto era un juego.
 >
-> **Sin commit, a propósito, el código que espera**: `#681` (con el `prueba.fallo` de las ESP32), `#682` (hay que
-> pasarlo al GENERADOR: `test-guipack` dice «DESACTUALIZADO») y `#683`. Los informes, en `C:\tmp\d1v7_10oct\`.
+> El commit de la documentación, `2e4105a5`. Los informes, en `C:\tmp\d1v7_10oct\`.
+>
+> **Después, el código** (Eduardo: *«arreglemos los pendientes. No hace falta grabar en placa salvo quizás en una»*):
+> - `#681`–`#687`, cerradas en un solo commit:
+>   - `#682`, pasada al generador.
+>   - `#684`: `charAt` de un string sin valor, como `""`.
+>   - `#685`: el tope de 160 también en los exports; la VM-C los cabe enteros.
+>   - `#686`: la P4 arranca degradada en vez de `abort()`.
+>   - `#687`: decimal o `0x`, un solo lector para la placa y el simulado.
+> - Antes de arreglar, la VM-C de la mañana reprodujo los dos fallos de paridad.
+> - Lo medido:
+>   - La red verde: paridad 149/149 (MOD9, MOD8 y dos workers), C 102/102, sombra 15/15, estrés, `packs-abi`, stdlib
+>     embebida, cápsula V6, norma y simulado.
+>   - `h13-errores` 50/50 y `samples_sweep` 399/399.
+>   - Las ocho imágenes compilan, y `BpIde-7.0.jar`.
 >
 > **Lo siguiente**:
 > 1. Que Eduardo lea las notas de v7.0.
-> 2. El código, `#681`–`#687`, con la red.
-> 3. #681/#682 en placa, con su OK.
-> 4. Las pruebas finales en placa: Stop y la pantalla limpia, ADC 4–7 de la Metro, los tamaños de memoria.
-> 5. Publicar: `PUBLICAR.md`, `--formato=8`, `dist/firmware` con las imágenes de V7.
+> 2. Las pruebas finales en placa, con sus OK:
+>    - `#681`: `prueba.fallo=1` y un autorun en una ESP32.
+>    - `#682`: una placa con GUI sin `packRam=`.
+>    - `#686`: `vmheap=1024` en la P4.
+>    - Stop y la pantalla limpia, los ADC 4–7 de la Metro y los tamaños de memoria de la Metro, la S3 y la C5.
+> 3. Publicar: `PUBLICAR.md`, `--formato=8`, `dist/firmware` con las imágenes de V7.
 
 > **10-oct** — **La documentación de V7 (`D1`): escrita por nueve editores y verificada a medias; la sesión se cortó por
 > la cuota de uso.** Commits: `55beed1d` (#677 #678 #679), `ef37121a` (WIP: lo de los editores), `66e3b15b` (#680).

@@ -275,6 +275,10 @@ typedef struct {
     char*        nombres;
 } bpvm_module_t;
 
+/* V10 (16-sep) — la firma canónica más larga del lenguaje: la que deja pasar el compilador (`ModWriter.exigirClaveCorta`,
+ * en las refs y los métodos, y desde #685 en los exports). Un búfer de la VM-C que copia una firma la cabe ENTERA. */
+#define BPVM_FIRMA_MAX 160
+
 /* Tabla global de símbolos exportados (F3).
  *
  * #449 — EL NOMBRE NO VIVE AQUI, SINO EN UN POOL. Antes esto era

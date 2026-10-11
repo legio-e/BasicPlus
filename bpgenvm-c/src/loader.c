@@ -194,6 +194,16 @@ static void nombres_a_punteros(bpvm_module_t* mod, size_t usado) {
     }
 }
 
+/* #685 (11-oct) — un nombre exportado se copia ENTERO o la carga falla con el motivo. Cabía en 128 B y el resto se
+ * cortaba en silencio: una función pública de más de 127 caracteres —dos parámetros de una clase de nombre largo— no
+ * enlazaba desde otro módulo («presente pero no exporta…»), mientras miVM la ejecutaba. El compilador no deja pasar uno
+ * de más de BPVM_FIRMA_MAX (`ModWriter.exigirExportCorto`): uno más largo viene de un .mod que no es suyo. */
+static bpvm_status_t export_largo(bpvm_t* vm, const bpvm_module_t* mod, unsigned nlen) {
+    snprintf(vm->load_error, sizeof vm->load_error, "'%s' exporta un nombre de %u caracteres (el maximo es %d): recompila '%s'",
+             mod->name, nlen, BPVM_FIRMA_MAX, mod->name);
+    return BPVM_ERR_BAD_HEADER;
+}
+
 static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                                       bpvm_read_at_fn rd, void* rd_user,
                                       size_t size, const char* name_hint, int xip) {
@@ -455,8 +465,9 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
             if (exp_off + 2 > exports_size) break;
             uint16_t nlen = bpvm_read_u16_be(exp_buf + exp_off); exp_off += 2;
             if (exp_off + nlen + 4 > exports_size) break;
-            char name[128]; size_t nl = nlen < sizeof(name) - 1 ? nlen : sizeof(name) - 1;
-            memcpy(name, exp_buf + exp_off, nl); name[nl] = '\0';
+            if (nlen > BPVM_FIRMA_MAX) return export_largo(vm, mod, nlen);   /* #685: entero o nada */
+            char name[BPVM_FIRMA_MAX + 1];
+            memcpy(name, exp_buf + exp_off, nlen); name[nlen] = '\0';
             exp_off += nlen;
             int32_t rel = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
             uint32_t abs = mod_cb + (uint32_t) rel;   /* función → base de CÓDIGO (XIP: flash) */
@@ -482,8 +493,9 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
                 if (exp_off + 2 > exports_size) break;
                 uint16_t nlen = bpvm_read_u16_be(exp_buf + exp_off); exp_off += 2;
                 if (exp_off + nlen + 4 > exports_size) break;
-                char name[128]; size_t nl = nlen < sizeof(name) - 1 ? nlen : sizeof(name) - 1;
-                memcpy(name, exp_buf + exp_off, nl); name[nl] = '\0';
+                if (nlen > BPVM_FIRMA_MAX) return export_largo(vm, mod, nlen);   /* #685: entero o nada */
+                char name[BPVM_FIRMA_MAX + 1];
+                memcpy(name, exp_buf + exp_off, nlen); name[nlen] = '\0';
                 exp_off += nlen;
                 int32_t cs_off = bpvm_read_i32_be(exp_buf + exp_off); exp_off += 4;
                 /* data export → ancla CS (RAM): descriptors/constantes viven en data. */
