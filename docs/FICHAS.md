@@ -1524,6 +1524,29 @@ Falta la otra mitad: la imagen de UN núcleo con `psram=0`, que separa la PSRAM 
 (`bp_find_bytes`) llama a `memcmp` en cada posición, unos 240 ns por byte en las dos configuraciones, sin cerrojo. Con
 `memchr` para el primer byte iría bastante más rápido: es una mejora, no un fallo.
 
+**Y concatenar, desglosado el 12-oct** (Eduardo: *«concatenar es especialmente lento en nuestra implementación y no
+lo debería ser… ¿estás seguro que es porque se llama al GC?»*). Medido, no supuesto:
+- **En el PC, sí era el GC, por sus líneas de diagnóstico.** Cada recolección escribe cinco líneas `[gc] …` a stderr.
+  Una copia de la VM-C con cronómetros, en el scratchpad y no en el repo, da: 300 × 1 000 concatenaciones en un heap
+  de 233 KB, 1 368 ms, de los que 1 308 son esas líneas (25 808, a unos 50 µs cada una). Sin ellas, 83 ms (×16), y las
+  5 160 recolecciones de verdad suman unos 30 ms. El umbral de 1/8 del heap (H3 de V2, `gc_bump_threshold`) hace que
+  se recoja cada ~29 KB de basura, unas 60 concatenaciones; no es que una cadena necesite 29 KB.
+- **En la placa, no.** Allí las líneas van al log, apagado por defecto, y sólo se formatean. En la Metro (`ConcatGc`:
+  recolecciones forzadas cada k concatenaciones) cada una cuesta ~1,6 ms, y con la PSRAM el bucle sólo hace 11.
+- **El desglose en la placa** (`Desglose`: los mismos 16 × 1 000 pasos; la Metro con la VM en la SRAM, como una Pico):
+  - el bucle solo, 6,9 µs por vuelta, unos 0,5 µs por opcode (~80 ciclos a 150 MHz);
+  - la llamada a la función de concatenar, 10 µs;
+  - reservar ~500 B, con sus 280 recolecciones, 34 µs;
+  - las dos copias `__strCopy`, ~40 µs.
+
+  `memmove` y `memset` van por palabras. Ningún paso está roto: concatenar da muchos pasos y todos van al ritmo del
+  intérprete en la RP2350, unas 170 veces más lento que la VM-C del PC en `fib`, `indexOf` o reservar. Con la PSRAM,
+  reservar y copiar van además 2-3 veces más lentos.
+- **Lo que se podría hacer, a decidir:**
+  - que el GC no formatee ni escriba cinco líneas en cada recolección;
+  - concatenar en UNA operación nativa (reservar sin poner a cero y copiar), en vez de una función BP con tres pasos;
+  - y la velocidad del intérprete en la RP2350, que es lo de esta ficha.
+
 
 **Medido el 6-oct** (`V7_IDEAS` §H12 «Las medidas finales»), con la imagen de `1558123c`: PrintBench, 1 270 ms con la
 imagen de DOS núcleos (con uno o con dos runs, igual) frente a 1 063 el 5-oct (la puerta de la 3.1, «ociosas
