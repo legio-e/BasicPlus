@@ -27,8 +27,8 @@
 
 ## Última sesión
 
-> **12-oct** — **Las pruebas finales de V7 (`F1`): los pasos 0 a 4, hechos. Las diez placas, con la imagen final y su
-> tanda. Quedan el IDE desde el ZIP (Eduardo) y publicar.**
+> **12-oct** — **Las pruebas finales de V7 (`F1`): los pasos 0 a 5, hechos. Las diez placas, con la imagen final y su
+> tanda; el IDE desde el ZIP, probado por Eduardo (y `#692`, arreglado). Queda publicar.**
 >
 > **Lo que dijo Eduardo:**
 > - Antes de las pruebas, los strings: por qué van lentos en las placas. Medido en `#665`: en el PC, el 94 % de
@@ -49,12 +49,25 @@
 >   saltadas que ahora corren» de la DK2 eran falsas. Rehecho placa a placa (en la memoria de `tanda.py`).
 >
 > Los commits: `b96d141d`, `4d22c39a`, `ae0e1c99` (`#689`), `97e6660e` (`#690`), `61217be7`, `2842cd70` (`#691`),
-> `8afcf8c7` y el de este cierre. Los informes, `compat/informes/f1_v7_*`. El ZIP, `dist/BasicPlus-7.0-win.zip`,
-> sha256 `c9327bcc…`.
+> `8afcf8c7`, `fd16dd1e` y el de `#692`. Los informes, `compat/informes/f1_v7_*`.
 >
-> **Lo siguiente:**
-> 1. El paso 5: Eduardo prueba el IDE desde la carpeta del ZIP (`dist/BasicPlus-7.0-win`).
-> 2. El paso 6: `PUBLICAR.md` renovado para v7.0 (y decidir `--formato=8`), el tag `v7.0`, el push y la web.
+> **El paso 5, por la tarde y la noche** (Eduardo, el IDE desde el ZIP): todo bien salvo el Stop de un programa con GUI
+> en la P4, que no lo paraba. Acotado entre los dos («sólo falla P4 + IDE»), con una traza del cable en una copia del
+> IDE y una imagen de diagnóstico de la P4, salió `#692`: el IDE escribía la línea y su `\n` en dos veces, y con el CH343
+> el `\n` llegaba tarde y la placa tiraba la línea. Arreglado en miVM (`WireFraming.sendLine`, una escritura), sin tocar
+> el firmware, y visto por Eduardo. La P4, otra vez con la imagen de la release. De paso, `#693`–`#696`, abiertas y no
+> graves. El ZIP, `dist/BasicPlus-7.0-win.zip`, sha256 `8c54f18a…`.
+>
+> Un tropiezo mío: mi lanzador del IDE de pruebas arrancaba en la carpeta del ZIP; al rehacerlo, el empaquetador la vació
+> (no pudo borrarla: la tenía una ventana de terminal) y hubo que regenerarla con la ventana cerrada.
+>
+> Eduardo, al acabar: *«de todas las pruebas solamente hemos encontrado 1 fallo que está solucionado. Es buena señal,
+> otras veces encontrábamos más fallos y las pruebas no eran tan completas como ahora»*.
+>
+> **Lo siguiente** (Eduardo: *«mañana hacemos alguna prueba final para asegurarnos que todo sigue funcionando y
+> publicamos»*; y *«mañana publicamos por la tarde»*, el 13-oct):
+> 1. Una prueba final con el ZIP de hoy (`8c54f18a…`), para confirmar que todo sigue funcionando.
+> 2. El paso 6, publicar: `PUBLICAR.md` renovado para v7.0 (y decidir `--formato=8`), el tag `v7.0`, el push y la web.
 >
 > **Riesgos:** ninguno abierto del `F1`. Si se toca código antes de publicar, otra vez las imágenes, el ZIP y las
 > tandas.

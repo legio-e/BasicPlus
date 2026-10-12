@@ -2167,6 +2167,74 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
   P4 y el kit; y `#691`, que salió aquí, en una placa de cada familia y en la S3.
 - **Lo que queda**: el paso 5 (el IDE desde la carpeta del ZIP, Eduardo) y el 6 (publicar). El ZIP es el de
   `c9327bcc…`.
+- **Paso 5, el IDE desde el ZIP** (Eduardo, a mano): *«todas las pruebas OK»*, el ORM incluido, salvo una: en la P4, el
+  Stop de un programa con GUI no lo paraba. Acotado entre los dos —en la DK2 y en el micro simulado sí para; mis clientes,
+  también contra la P4—, salió `#692`: el IDE escribía la línea y su `\n` en dos veces, y con el CH343 de la P4 el `\n`
+  llegaba tarde y la placa tiraba la línea. Arreglado en el IDE, sin tocar el firmware, y visto por Eduardo en la P4. El
+  ZIP, rehecho: sha256 `8c54f18a…`. De paso, `#693`–`#696`, abiertas y no graves (Eduardo: *«creo que lo podemos dar por
+  bueno. Lo que queda no es grave»*).
+- **Lo que queda**: el paso 6, publicar.
+
+#### ✅ `#692` — en la P4, el Stop del IDE no para el programa: el IDE escribe la línea y su `\n` en dos veces, con el CH343 el `\n` llega tarde y la placa tira la línea (abierta el 12-oct, en el `F1` de V7, en las pruebas a mano de Eduardo · **CERRADA el mismo día**, el commit de `#692`; en placa, la P4, por Eduardo)
+
+Visto por Eduardo con el IDE del ZIP en la P4 Waveshare: `GuiClickDemo` con Run y, en la consola, `stop` (o `kill`). La
+consola dice «KILL enviado a la placa», pero el programa sigue y no llega el «exit 130». En la DK2 y en el micro simulado
+sí para. Acotado (Eduardo: *«el problema en teoría está únicamente en P4 <-> IDE, en cualquier otro caso funciona»*):
+- la placa atiende el KILL de pyserial y el de un arnés con las clases del IDE (`SerialBackend`), también con toques
+  reales, con la secuencia exacta del botón Run y repitiendo con pyserial, mensaje a mensaje, lo que mandó el IDE;
+- con la traza del cable en una copia de diagnóstico del IDE: el KILL sale bien formado y con su sesión, y no vuelve
+  nada. Un `dir` 20 s antes, en el mismo RUN, sí tuvo su BUSY;
+- con una imagen de diagnóstico de la P4 que apunta lo que lee el RUN del cable:
+  `recv_line: ESTANCADA tras 35 B: {"type":"KILL","id":15,"session":1}`. El KILL llega entero, pero su `\n` no llega en
+  300 ms y la placa tira la línea, en silencio (`WIRE_V1_ESTANCADA_MS`, de `#473`: que una línea cortada no se coma la
+  siguiente).
+
+**La causa**: `WireFraming.sendLine` escribe la línea y el `\n` en dos `write`. En la P4, con su puente CH343 en Windows,
+ese `\n` suelto puede llegar más de 300 ms después. pyserial manda la línea de una vez, y la DK2 (ST-Link) no tiene ese
+retraso. Le puede pasar a cualquier línea del IDE; el KILL, que va sin respuesta, se pierde sin que nadie lo sepa: el IDE
+dice «KILL enviado» igual.
+
+**El arreglo** (Eduardo: *«arreglar el IDE ahora»*; lo demás, *«de 1 en 1»*): `sendLine`, la línea y su `\n` en un solo
+`write`. Sólo el IDE (`miVM` y `BpIde`); el firmware no cambia.
+
+**Hecho (12-oct)**: `WireFraming.sendLine` (miVM) arma la línea con su `\n` y la escribe de una vez; la usan el cliente
+del IDE y el servidor de depuración de miVM. Rehechos miVM (con sus pruebas), `BpIde-7.0.jar` y el ZIP (`8c54f18a…`); el
+firmware no cambia. En la P4, con el IDE nuevo, Eduardo: `kill` y *«exit 130 (terminado por KILL) en 7410 ms … Ahora
+funciona OK»*; y en el log de la imagen de diagnóstico, `run_poll: 35 B: {"type":"KILL","id":19,"session":1}`, `KILL id 19
+-> s_run_kill` y `acabó: terminado por KILL`. La P4, otra vez con la imagen de la release (`0f8dfdd8`).
+
+El camino, por si vuelve: una copia del IDE con la traza del cable (`-Dbpide.traza=<fichero>`, en `C:\tmp\c685`) y una
+imagen de la P4 que apuntaba cada línea que lee el RUN. Las dos, fuera de la release.
+
+Lo demás que salió aquí, en sus fichas (`#693`–`#696`). Eduardo: *«lo que queda no es grave»*.
+
+#### 🔵 `#693` — una línea que se estanca 300 ms en la placa se tira EN SILENCIO, y 300 ms es poco para algunos puentes USB-serie (abierta el 12-oct, de `#692`; Eduardo: no es grave)
+
+`wire_v1_recv_line` (ESP32; ver las demás familias) devuelve -2 y el lector la descarta sin decir nada: así se perdía el
+KILL de `#692`. Con `#692` el IDE ya no parte las líneas, pero otro cliente podría. Dos cosas a decidir: decirlo (el log, o
+un `ERROR` al cliente) y si 300 ms es el plazo (el del bulk son 3 s). Es firmware: las ocho imágenes.
+
+#### 🔵 `#694` — el IDE da por enviado lo que no sabe si llegó: «KILL enviado» sin esperar el `KILL_REPLY`, y un RUN que la placa rechaza se tira en silencio (abierta el 12-oct, de `#692`; Eduardo: no es grave)
+
+El KILL y el RUN van «sin respuesta» (`sendOneShot`), y las respuestas con `id` que no esperaba nadie se descartan («Silencioso
+por diseño»). Así, un KILL perdido decía «KILL enviado», y un RUN con la ruta mal (`NOT_FOUND`) dejaba el `run()` esperando
+el `EXITED` una hora. «Errores sí, silenciosos no»: el KILL debería esperar su `KILL_REPLY` (o el `NO_SESSION`) y decir qué
+pasó, y el RUN, su `RUN_REPLY` o su `ERROR`.
+
+#### 🔵 `#695` — al parar un programa de GUI, el destructor de `Gui.Button` lanza «referencia nula» y quedan objetos sin destruir (abierta el 12-oct, en el `F1`; Eduardo: *«tiene un problema pero se repone y todo sigue en marcha»*)
+
+En el log de la P4, al parar `GuiClickDemo` o `GuiColorDemo`: «el destructor de Gui.Button lanzó: referencia nula: llamada
+a un método de un objeto null — se sigue con la limpieza» (una vez por botón) y, con `GuiColorDemo`, «quedaron sin destruir
+8 objeto(s) con destructor (el primero, de Gui.Label)». La memoria vuelve entera. La sospecha, sin comprobar: el `Button`
+es contenedor; al soltar su lista de hijos, el destructor del `Label` hijo llama a `unregister` sobre un padre cuya lista se
+está soltando. Reproducir en el PC (las dos VMs) antes de tocar nada.
+
+#### 🔵 `#696` — el IDE del ZIP compila contra un `Core` distinto del de las placas: «compilado contra otra interfaz (b8813a81 != 3897795d); enlace tardío» (abierta el 12-oct, en el `F1`; Eduardo: no es grave)
+
+En la P4, cada programa que compila el IDE del ZIP: el `Core` del IDE no es el `/lib/Core.mod` que repone la imagen, y el
+IDE dice de `Json`, `Collections` y `Str` «otra compilación (CRC distinto): vale». El enlace tardío lo resuelve, pero la
+release debería llevar la misma biblioteca en los dos lados. Mirar qué stdlib lleva dentro `BpIde-7.0.jar` y cuál las
+imágenes (la red dice «los 18 módulos embebidos son los de bpstdlib»).
 
 #### ✅ `#691` — con `vmheap` por debajo del suelo, el RUN dice «configurar particiones»; y la STM32, sin VM, se da por sana (abierta el 12-oct, en el `F1` de V7, al probar `#686` en la P4 · **CERRADA el mismo día**, `2842cd70` y el commit del lote; en placa, la Nucleo, la Metro y el kit P4 EV)
 

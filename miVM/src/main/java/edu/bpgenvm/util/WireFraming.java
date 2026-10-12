@@ -81,10 +81,16 @@ public final class WireFraming {
     /**
      * Escribe `jsonLine` (UTF-8) + `\n`. NO flush — el caller lo hace
      * tras enviar también el bulk si toca (ver sendBulk).
+     *
+     * #692 (12-oct) — la línea y su `\n`, en UN solo write. Eran dos, y en la P4 (su puente CH343, en Windows) el `\n`
+     * suelto llegaba a veces más de 300 ms después: la placa da por cortada una línea que se estanca ese tiempo
+     * (WIRE_V1_ESTANCADA_MS, #473) y la tira. Así se perdía el KILL del Stop del IDE, en silencio.
      */
     public static void sendLine(OutputStream out, String jsonLine) throws IOException {
-        out.write(jsonLine.getBytes(StandardCharsets.UTF_8));
-        out.write('\n');
+        byte[] texto = jsonLine.getBytes(StandardCharsets.UTF_8);
+        byte[] linea = java.util.Arrays.copyOf(texto, texto.length + 1);
+        linea[texto.length] = '\n';
+        out.write(linea);
     }
 
     /**
