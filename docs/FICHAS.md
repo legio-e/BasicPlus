@@ -1507,6 +1507,23 @@ están en la PSRAM (la Metro), que comparte con el código la caché del XIP. Po
 diferencia baja al 2 % de la Pico 2, es el camino de la PSRAM—; y mirar el mapa de las dos imágenes (dónde cae el bucle
 del intérprete en la flash).
 
+**Medido el 12-oct**, la mitad de eso. Eduardo: *«¿cuál es la explicación de que el trabajo con los strings sea tan
+lento? … La Metro va todavía más lento que la Pico y ahí no hay restricciones de heap»*. En la Metro, con la imagen de
+dos núcleos del 9-oct y sin regrabar, `MetroPsram` (`fib(24)`, 16 × 1 000 concatenaciones y 2 000 `indexOf` en 1 001 B;
+mediana de tres vueltas), `psram=1` frente a `psram=0`:
+
+| | `psram=1` | `psram=0` |
+|---|---|---|
+| `fib(24)` | 1 418 ms | 1 227 ms (−13 %) |
+| concatenar | 3 103 ms | 1 457 ms (×2,1) |
+| `indexOf` | 503 ms | 481 ms (−4 %) |
+
+De vuelta a `psram=1`, las mismas cifras. **Es la PSRAM, no el tamaño del heap**: crear cadenas (reservar memoria
+nueva, copiar, colectar) va el doble de lento con la VM en ella, y leer una cadena que cabe en la caché, casi igual.
+Falta la otra mitad: la imagen de UN núcleo con `psram=0`, que separa la PSRAM de la imagen. Y de paso: `indexOf`
+(`bp_find_bytes`) llama a `memcmp` en cada posición, unos 240 ns por byte en las dos configuraciones, sin cerrojo. Con
+`memchr` para el primer byte iría bastante más rápido: es una mejora, no un fallo.
+
 
 **Medido el 6-oct** (`V7_IDEAS` §H12 «Las medidas finales»), con la imagen de `1558123c`: PrintBench, 1 270 ms con la
 imagen de DOS núcleos (con uno o con dos runs, igual) frente a 1 063 el 5-oct (la puerta de la 3.1, «ociosas
