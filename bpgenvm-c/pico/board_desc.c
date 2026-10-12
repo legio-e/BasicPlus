@@ -10,6 +10,7 @@
 #include "log.h"
 #include "bpvm_fs.h"   /* #305 — lectura directa, sin pasar por el scratch */
 #include "psram.h"
+#include "bpvm_machine.h" /* #689: bpvm_caps_reservar_sistema — el CS de la PSRAM, del sistema */
 #include "hardware/flash.h"   /* flash_do_cmd (JEDEC ID) */
 #include "hardware/sync.h"    /* save_and_disable_interrupts (#256) */
 #include "hardware/structs/sysinfo.h"  /* SYSINFO.PACKAGE_SEL → variante A/B */
@@ -152,6 +153,12 @@ void board_desc_psram_from_env(int psram_flag) {
         d->psram_bytes   = (unsigned) sz;
         log_printf("psram: %u MB usable @ GP%d (QPI + RW OK, ventana 0x%08x)",
                    mb, d->psram_cs_pin, (unsigned) PSRAM_XIP_BASE);
+        /* #689 (12-oct, el F1 de V7) — su CS es del SISTEMA. Un programa que abriera el GP47 (`Gpio.Pin(47)`,
+         * `Adc.Channel(7)`) le cambiaría la función al pin, y la PSRAM —con la VM dentro— dejaría de contestar.
+         * Como las ESP32 con su flash y su PSRAM (#581, #670): «el pin 47 de rp2350b es de la flash o la PSRAM». */
+        char err[96];
+        if (bpvm_caps_reservar_sistema(d->psram_cs_pin, BPVM_PIN_SIS_MEMORIA, err, sizeof err) != 0)
+            log_printf("psram: el GP%d no se pudo reservar: %s", d->psram_cs_pin, err);
     }
 }
 

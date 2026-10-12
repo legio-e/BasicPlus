@@ -1816,7 +1816,7 @@ port.write(tx, <span class="num">4</span>)
   <tr><td><code>CH1</code></td><td>GP27</td><td>GP41</td></tr>
   <tr><td><code>CH2</code></td><td>GP28</td><td>GP42</td></tr>
   <tr><td><code>CH3</code></td><td>GP29</td><td>GP43</td></tr>
-  <tr><td><code>4</code> … <code>7</code></td><td>—</td><td>GP44 … GP47</td></tr>
+  <tr><td><code>4</code> … <code>7</code></td><td>—</td><td>GP44 … GP47 (with <code>psram=1</code>, GP47 is the PSRAM's CS and belongs to the system: channel 7 cannot be used)</td></tr>
 </table>
 <p>
   12-bit resolution (0..4095), reference Vref ≈ 3.3 V typical. To
@@ -3576,7 +3576,7 @@ vars ...         <span class="comment">// variable name → frame slot (per func
   <tr><td colspan="5"><strong>Memory</strong></td></tr>
   <tr><td><code>packRam</code></td><td>KB, in 4 KB pages; it must leave 128 KB to the VM. Without it, no block (on the RP2350, an 8 KB one)</td><td>The RAM block for the packs' native engines —LVGL, SQLite, the screen driver—, reserved before the VM: whatever it gets is taken from the VM. It wins over <code>SQLite</code>. When it changes, the safe thing is to re-burn the engines</td><td>all</td><td>at boot</td></tr>
   <tr><td><code>SQLite</code></td><td>MB, from 2 to 4095</td><td>The same block, asked for in MB for the database; it only counts without <code>packRam</code>. It fits where 2 MB are free</td><td>the Metro with <code>psram=1</code> · S3 · C5 · P4</td><td>at boot</td></tr>
-  <tr><td><code>psram</code></td><td><code>1</code> / <code>0</code> (0)</td><td>Turns on the Metro's PSRAM (fixed CS, GPIO47) and the VM moves to it. On the Pico 2 it says so and does nothing; the ESP32s decide it by their image</td><td>RP2350</td><td>at boot</td></tr>
+  <tr><td><code>psram</code></td><td><code>1</code> / <code>0</code> (0)</td><td>Turns on the Metro's PSRAM (fixed CS, GPIO47, which then belongs to the system) and the VM moves to it. On the Pico 2 it says so and does nothing; the ESP32s decide it by their image</td><td>RP2350</td><td>at boot</td></tr>
   <tr><td><code>vmheap</code></td><td>KB; by default, whatever the split leaves (on the C3 and C6, 128)</td><td>The whole VM block, heap and stacks. Above the ceiling, the ceiling; below the floor —64 KB; on the P4, 2 MB, also when <code>packRam</code> or <code>SQLite</code> take the rest— there is no VM: the board boots degraded and says so, and the ENV is fixed from the IDE</td><td>all</td><td>at boot</td></tr>
   <tr><td><code>stack</code></td><td>KB; by default, 25 % of the block, between 64 and 512 KB (with a 128 KB block, half)</td><td>The part of the VM block for the threads' stacks; the rest is heap. It is clamped between 16 KB and half the block, and it says so</td><td>all</td><td>at boot</td></tr>
   <tr><td colspan="5"><strong>Threads and cores</strong></td></tr>

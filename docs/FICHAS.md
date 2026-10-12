@@ -2076,6 +2076,44 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
   - `samples/guipack` sin clasificar: va a las internas, porque es la sonda del pack de la GUI (Eduardo, 8-oct: *«Gui2
     lo puedes dejar como programa de test»*).
   - `#688`, abajo.
+- **Paso 3, el lote RP2350**, con el OK de Eduardo. La Pico 2 y la Metro se grabaron desde el ZIP por BOOTSEL; la
+  unidad, por su etiqueta. Su zona se formateó y se grabaron sus packs como dice `INSTALAR`: la Pico 2, el
+  `Stdlib.pack`; la Metro, el `Stdlib.pack` y el `SQLite.pack`. Al formatear con el motor de SQLite cargado, la Metro
+  se reinició sola, como dice la guía. Antes de la prueba de los ADC salió `#689`, el GP47 sin reservar, y se arregló.
+  Con la imagen final (`f2a1b493`):
+  - las dos tandas, con los mismos 50 veredictos que el 9-oct;
+  - en la Metro, los packs sobreviven al regrabado y el motor de SQLite carga;
+  - `SqlDemo`, bien;
+  - los canales ADC 4–6 se leen, y el 7 y el GP47 se rechazan con nombre;
+  - la memoria, como la referencia: 8 MB de PSRAM, 2 para SQLite y 6 para la VM.
+
+  El ZIP queda en sha256 `a692a4fd…`.
+
+#### ✅ `#689` — la Metro con `psram=1` NO reserva el GP47, el CS de su PSRAM: un programa puede abrir `Gpio.Pin(47)` o `Adc.Channel(7)` y dejar sin servicio la PSRAM, donde vive la VM (abierta el 12-oct, en el `F1` de V7, al preparar la prueba de los ADC 4–7 · **CERRADA el mismo día**, el commit de `#689`; en placa, la Metro)
+
+Visto leyendo antes de probar: las ESP32 marcan como del sistema los pines de su flash y su PSRAM (`#581`, `#670`;
+`BPVM_PIN_SIS_MEMORIA`) y las STM32 tienen su tabla, pero la RP2350 no marca ninguno. El GP47 de la Metro es el canal 7
+del ADC de la RP2350B, y la referencia §14.8 lo daba como usable. Eduardo: *«la Metro necesita un pin para el CS de la
+PSRAM, debería estar reservado»*. **Hecho, sin commit**: `board_desc_psram_from_env` (`pico/board_desc.c`), con la
+PSRAM ya en marcha, lo reserva (`bpvm_caps_reservar_sistema(47, BPVM_PIN_SIS_MEMORIA)`): «el pin 47 de rp2350b es de
+la flash o la PSRAM: no se puede usar». La referencia lo dice, en ES y EN. **Falta**: sellar la imagen de la Pico y
+el ZIP otra vez, y regrabar y repasar las dos RP2350 (con el OK de Eduardo): el GP47 en la Metro, los canales 4–6 y la
+tanda.
+**En la placa** (12-oct; la imagen `03f06b1e`, con el OK de Eduardo para regrabar las dos RP2350):
+- La Pico 2 y la Metro, cada una con su tanda: los mismos 50 veredictos que el 9-oct.
+- En la Metro, con `psram=1` (`MetroGp47`): los canales 4–6 se leen; `Gpio.Pin(47)` da «el pin 47 de rp2350b es de la
+  flash o la PSRAM: no se puede usar»; y la PSRAM sigue contestando.
+- El canal 7 también se rechazaba, pero con un texto que se contradecía: «el canal 7 no existe en rp2350b (unidad 1:
+  8 canales)». Eduardo: arreglarlo ya. **Hecho, sin commit**: `BUILTIN_ADC_INIT_CHANNEL` (`builtins.c`) busca el canal
+  en la tabla sin las reservas y, si está, dice su pin y su motivo: «ADC: el canal 7: el pin 47 de rp2350b es de la
+  flash o la PSRAM: no se puede usar». Es código común: las ocho imágenes, otra vez.
+- **Con la imagen final** (`f2a1b493`): la red verde (paridad 149/149, C 102/102); las ocho imágenes selladas otra
+  vez; el simulado del ZIP, recompilado con el arreglo; y en la Metro el canal 7 da ya el texto nuevo. La Pico 2 y la
+  Metro, con su tanda, dan los mismos 50 veredictos que el 9-oct.
+
+**Otro pin para el CS, a V8** (Eduardo, 12-oct): *«El pin 47 es el de por defecto y el que viene en el manual de
+hardware de Raspberry, pero eso no quiere decir que no pueda utilizarse otro. No hace falta cambiar nada ahora, pero en
+la V8 podemos corregirlo»*. Sería una clave del ENV para el CS (por defecto 47); la reserva seguiría al pin que diga.
 
 #### ✅ `#688` — `montar-zip.sh` moría EN SILENCIO, tras el título, con los packs limpios (abierta y CERRADA el 12-oct, en el `F1` de V7)
 

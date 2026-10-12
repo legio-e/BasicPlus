@@ -4434,8 +4434,19 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         char em[128];
         int pin = bpvm_caps_pin_de_adc(0, (int) ch);
         if (pin < 0) {
-            int n = 0; for (int i = 0; i < (int) bpvm_caps()->n_pin; i++) if (bpvm_caps()->pin_adc_unit && bpvm_caps()->pin_adc_unit[i] == 0) n++;
-            snprintf(em, sizeof em, "ADC: el canal %d no existe en %s (unidad 1: %d canales)", (int) ch, bpvm_caps()->micro, n);
+            /* #689 (12-oct, el F1 de V7) — un canal que EXISTE pero cuyo pin es del sistema (el GP47 de la Metro con la
+             * PSRAM: su CS) no es «no existe»: se dice el pin y su motivo. Decía «el canal 7 no existe en rp2350b
+             * (unidad 1: 8 canales)», que se contradice a sí mismo. */
+            const bpvm_caps_t* c = bpvm_caps();
+            int n = 0, crudo = -1;
+            for (int i = 0; i < (int) c->n_pin; i++)
+                if (c->pin_adc_unit && c->pin_adc_unit[i] == 0) { n++; if (crudo < 0 && c->pin_adc_ch[i] == ch) crudo = i; }
+            if (crudo >= 0) {
+                char porque[96];
+                bpvm_caps_pin_ausente(crudo, porque, sizeof porque);
+                snprintf(em, sizeof em, "ADC: el canal %d: %s", (int) ch, porque);
+            } else
+                snprintf(em, sizeof em, "ADC: el canal %d no existe en %s (unidad 1: %d canales)", (int) ch, c->micro, n);
             return builtin_throw(vm, tc, em);
         }
         hal_cerrar(vm);   /* V7/H12, 2b: la HAL, bajo el cerrojo (GPIO_INIT) */
