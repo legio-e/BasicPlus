@@ -1475,6 +1475,11 @@ void bpvm_gui_reset(void) {
         lv_obj_t* vieja = lv_screen_active();
         lv_screen_load(lv_obj_create(NULL));
         lv_obj_delete(vieja);
+        /* #690 (12-oct, el F1 de V7) — y se PINTA ya. lv_screen_load sólo la marca: el repintado lo hace LVGL cuando
+         * alguien lo bombea, y en la placa, con el programa parado, no lo bombea nadie. Tras un Stop el panel se
+         * quedaba con lo último del programa (visto en la DK2), aunque el siguiente sí estrenaba la pantalla limpia. En
+         * el PC no se notaba: su ventana se bombea siempre. Sólo si este programa tocó la GUI. */
+        if (la_uso) lv_refr_now(NULL);
     }
     s_fuente_avisada = 0;                    /* V7/H6.b: el aviso de la fuente, una vez por programa */
 #if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN

@@ -2088,6 +2088,35 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
   - la memoria, como la referencia: 8 MB de PSRAM, 2 para SQLite y 6 para la VM.
 
   El ZIP queda en sha256 `a692a4fd…`.
+- **Paso 3, el lote STM32 + C3**, con el OK de Eduardo. La Nucleo y la DK2 se grabaron desde el ZIP por SWD, con la
+  sonda por su número de serie; el programador confirmó cada placa y verificó la escritura. La C3, con esptool en el
+  offset 0. Los packs, según `INSTALAR`:
+  - la Nucleo, el `Stdlib.pack`, y su ENV limpio de restos de pruebas (`packRam`, `sqlite`, `psram`): 384 KB de
+    heap en vez de 192;
+  - la DK2, el `Stdlib.pack` y el `Gui.pack` (`packRam=768`);
+  - la C3, el `Stdlib.pack`.
+
+  Las tandas: la Nucleo y la C3 dan los mismos 50 veredictos que el 9-oct. La DK2 no tiene ninguno peor: 21 pruebas que
+  el 9-oct se saltaron ahora corren (18 idénticas, 2 PARADA, 1 NO-PETA). En la DK2, a mano, `GuiDemo` y el Stop: la
+  pantalla NO quedaba limpia, y salió `#690`, arreglado. Y `#682`, probado. El ZIP queda en sha256 `4ebfc1d9…`.
+
+#### ✅ `#690` — tras un Stop, la pantalla de la placa se queda con lo último del programa: la guía de la GUI (§23.3, §25) promete «la pantalla limpia» (abierta el 12-oct, en el `F1` de V7, en la DK2 · **CERRADA el mismo día**, el commit de `#690`; en placa, la DK2)
+
+Visto por Eduardo en la DK2: `GuiDemo` corriendo, el Stop (`KILL`, 26 ms, `EXITED KILLED 130`) y la pantalla con el
+título y el botón. Con otro programa (`GuiOtra`: sólo una etiqueta, otro fondo) se ve sólo lo suyo: **el estado SÍ se
+limpia** (`bpvm_gui_reset` estrena pantalla al acabar el RUN) y **lo que falta es pintarla**. `lv_screen_load` sólo
+la marca; el repintado lo hace LVGL cuando alguien lo bombea, y en la placa, con el programa parado, no lo bombea
+nadie. En el PC no se notaba, porque la ventana se bombea siempre. Eduardo: arreglarlo (mejor que cambiar la guía).
+**Hecho, sin commit**: `lv_refr_now(NULL)` tras estrenar la pantalla, si el programa tocó la GUI (`src/gui.c`). Ese
+código vive en el MOTOR del pack de la GUI, no en las imágenes (ninguna define `BPVM_LVGL`: no cambian). **Falta**:
+- los motores (`build_lvgl.sh` arm, p4, imc y el Mini) y los packs `Gui` y `GuiMini`;
+- el simulado y el ZIP;
+- regrabar el `Gui.pack` de la DK2 y verlo (Eduardo). La P4, la C5 y la C6 recibirán ya los nuevos.
+
+**Hecho** (12-oct): los cuatro motores, reconstruidos con su script; crecen de 36 a 60 B. Los packs `Gui` y `GuiMini`,
+el simulado y el ZIP (`4ebfc1d9…`), rehechos. En la DK2, la zona formateada y regrabada con el `Gui.pack` nuevo:
+`GuiDemo`, el Stop y *«sí, pantalla totalmente en blanco»* (Eduardo). Su tanda, igual con el pack nuevo que con el
+anterior (50/50).
 
 #### ✅ `#689` — la Metro con `psram=1` NO reserva el GP47, el CS de su PSRAM: un programa puede abrir `Gpio.Pin(47)` o `Adc.Channel(7)` y dejar sin servicio la PSRAM, donde vive la VM (abierta el 12-oct, en el `F1` de V7, al preparar la prueba de los ADC 4–7 · **CERRADA el mismo día**, el commit de `#689`; en placa, la Metro)
 
@@ -2175,7 +2204,9 @@ llega al programa en el mensaje de una excepción, que se corta a 90 bytes (`exc
 **Hecho (11-oct)**: el cambio está en el generador (`RESOLVER_C` y el `#include`), y `gui_pack.c` sale de él
 (`--comprobar`: al día); `test-guipack`, verde. El corte a 90 bytes es sólo del RESUMEN de una excepción sin atrapar
 (`runtime_error[192]`): quien la atrapa recibe el mensaje entero, y el de `#682` cabe con sus motivos cortos. **En placa,
-en las pruebas finales**: una placa con GUI y sin `packRam=`.
+en las pruebas finales**: una placa con GUI y sin `packRam=`. **Hecho en la DK2** (12-oct, `F1`): sin `packRam`,
+`GuiDemo` acaba con «excepcion no atrapada: Core.RuntimeError: GUI: el pack de la GUI esta, pero su motor no cargo:
+falta packRam= en el ENV», entero. Con `packRam=768` otra vez, la GUI vuelve.
 
 #### ✅ `#683` — la ayuda de los códigos de salida del IDE (`PicoExplorer`) daba el 4 como «sin memoria» en general: llenar el heap o la pila MIENTRAS corre es un `RuntimeError`, y sin atrapar sale con el 1 (abierta el 10-oct, del `D1` · **CERRADA el 11-oct**, el commit de `#681`–`#687`)
 
