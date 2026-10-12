@@ -2075,7 +2075,16 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
   dos idiomas y 376 samples. El empaquetador se paró dos veces:
   - `samples/guipack` sin clasificar: va a las internas, porque es la sonda del pack de la GUI (Eduardo, 8-oct: *«Gui2
     lo puedes dejar como programa de test»*).
-  - `#688`, abajo. — el diálogo INFO del IDE decía «PWM: 12 salidas» en la Pico 2, y son 12 slices (24 salidas) (abierta y CERRADA el 10-oct, del inventario del `D1`)
+  - `#688`, abajo.
+
+#### ✅ `#688` — `montar-zip.sh` moría EN SILENCIO, tras el título, con los packs limpios (abierta y CERRADA el 12-oct, en el `F1` de V7)
+
+La guarda de los `.mod` viejos dentro de cada pack contaba con `grep … | wc -l` bajo `set -euo pipefail`. Desde
+`#623` ningún pack lleva `.mod` de otro formato, `grep` no encuentra nada y devuelve 1, y la asignación tumbaba el
+script con el código 1 sin decir nada. **Hecho** (`b96d141d`): `{ grep … || true; } | wc -l`; «ninguno» no es un error.
+Con eso el ZIP salió entero.
+
+#### ✅ `#677` — el diálogo INFO del IDE decía «PWM: 12 salidas» en la Pico 2, y son 12 slices (24 salidas) (abierta y CERRADA el 10-oct, del inventario del `D1`)
 
 Desde V7 (H4, la tabla de capacidades) el INFO cuenta lo que la placa da al programa —12 slices en la RP2350, los
 canales del LEDC o de los temporizadores en las ESP32 y las STM32— y trae su unidad, `pwmUnidad`; el IDE seguía
