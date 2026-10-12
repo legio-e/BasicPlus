@@ -2096,9 +2096,74 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
   - la DK2, el `Stdlib.pack` y el `Gui.pack` (`packRam=768`);
   - la C3, el `Stdlib.pack`.
 
-  Las tandas: la Nucleo y la C3 dan los mismos 50 veredictos que el 9-oct. La DK2 no tiene ninguno peor: 21 pruebas que
-  el 9-oct se saltaron ahora corren (18 idénticas, 2 PARADA, 1 NO-PETA). En la DK2, a mano, `GuiDemo` y el Stop: la
+  Las tandas: las tres placas dan los mismos 50 veredictos que el 9-oct. En la DK2, a mano, `GuiDemo` y el Stop: la
   pantalla NO quedaba limpia, y salió `#690`, arreglado. Y `#682`, probado. El ZIP queda en sha256 `4ebfc1d9…`.
+
+  Corregido el mismo día: aquí ponía que en la DK2 «21 pruebas que el 9-oct se saltaron ahora corren». Era el
+  comparador de veredictos, que casaba por el nombre de la prueba y no por la placa: con un informe de varias placas,
+  la última pisaba a las demás. Rehecho placa a placa, la DK2 da 50 de 50 iguales. Las demás comparaciones de este
+  `F1` se rehicieron igual y se sostienen.
+- **Paso 3, el lote ESP32 (C5, C6 y P4)**, con el OK de Eduardo. Las tres, grabadas desde el ZIP con esptool: la
+  imagen fusionada, en el 0. Sus zonas, formateadas, y los packs según `INSTALAR`:
+  - la C5, `packRam=512`, el `Gui.pack` y el `DriverSpi.pack`;
+  - la C6, el `Stdlib.pack`, el `GuiMini.pack` y el `DriverSpi.pack` (su `packRam=136` ya estaba);
+  - la P4, el `Gui.pack` y el `SQLite.pack` (`SQLite=4` ya estaba).
+
+  Las tandas: la C5 y la C6 dan los mismos 48 veredictos que el 8-oct, y las dos pruebas que se añadieron después
+  (`NatPuente`, `NatTry`), idénticas; la P4, los mismos 50 que el 9-oct. La memoria, como dice la referencia: la C5,
+  6,5 MB de heap en PSRAM; la C6, 63 KB de heap y 64 de pilas. A mano, en la P4:
+  - `SqlDemo`, bien.
+  - `#681`: con `log=1`, un programa en `/app`, `/sys/auto.txt` apuntándole y `prueba.fallo=1`, un reset. El autorun
+    arrancó, el pánico reinició la placa y, al volver (`resetReason: panic/exception`), el log dice «autorun:
+    /app/AutoTest.mod NO arranca: el arranque anterior acabo en un fallo fatal (panic/exception; ver el log)» y la
+    placa se queda en el REPL. Después, fuera `prueba.fallo`, `/sys/auto.txt` y `log`.
+  - `#686`: con `vmheap=1024`, por debajo del suelo de la P4 (2 MB), arranca degradada (estado 2), lo dice en el log,
+    no mira el autorun y contesta al IDE (HELLO, INFO con `vmHeapBytes: 0`, el log y el ENV). Pero el RUN se rechaza
+    diciendo «configurar particiones»: `#691`, abajo. Sin `vmheap`, la P4 vuelve sana, con 24 MB de heap.
+
+  En el ENV de la C5 y la C6 quedan restos de pruebas anteriores que no son de `INSTALAR`: `log=1` en las dos,
+  `traza` en el `lcd` de la C5 y `quantum=0` en la C6 (el valor por defecto). Quitarlos, a decidir por Eduardo.
+
+#### 🔴 `#691` — con `vmheap` por debajo del suelo, el RUN dice «configurar particiones»; y la STM32, sin VM, se da por sana (abierta el 12-oct, en el `F1` de V7, al probar `#686` en la P4)
+
+Probando `#686` en la P4 (`vmheap=1024`, por debajo de su suelo de 2 MB), la placa hace lo que promete la referencia
+(apéndice A, `vmheap`): arranca degradada, lo dice y contesta al IDE. El log:
+
+```
+vm: el objetivo (1024 KB) no llega al suelo (2048 KB) — sin VM (en PSRAM cabían 24573 KB)
+vm: AVISO sin RAM para el bloque de la VM — vm: el objetivo (1024 KB) no llega al suelo (2048 KB) — sin VM (…)
+boot: estado 2 (fs) DEGRADADO: heap de la VM no disponible
+autorun: no se mira — la placa no llegó sana (estado 2, degradada)
+```
+
+Lo que falla es lo que se le dice al usuario:
+1. **El RUN le manda a otro sitio**: `NOT_READY` «VM no disponible en estado 2 (fs): configurar particiones». Las
+   particiones están bien —el FS está montado—; lo que sobra es el `vmheap` del ENV. La puerta es una para las tres
+   familias (`bpvm_repl_puerta_arranque`, en `src/bpvm_repl.c`, de `#473` punto 10) y sólo recibe el NÚMERO del
+   estado: la pista de los verbos de fichero sin FS se copió al RUN, que se para también en el estado 2, con el FS
+   montado. El motivo está en `board_boot_status()->reason`, al lado del estado que le pasan las tres familias, y no
+   le llega.
+2. **El motivo no dice la causa**: «heap de la VM no disponible» (`layer_app`, en la ESP32 —la de la P4 también— y en
+   la Pico). La causa la da la línea del plan («el objetivo (1024 KB) no llega al suelo (2048 KB)»), que sólo va al
+   log. El panel de placas del IDE enseña el motivo: «⚠ DEGRADADO: heap de la VM no disponible».
+3. **La STM32 no llega a degradada**: su `layer_app` da siempre bien —«la memoria de la VM del STM32 es un array
+   estático → SIEMPRE presente»—, pero con `vmheap` por debajo del suelo el plan no deja VM (`s_vm_bytes = 0`). La
+   placa dice «estado 3 (app)», sana; el RUN pasa la puerta y acaba en `EXITED INTERNAL_ERROR` «no se pudo
+   inicializar la VM» (en el log, «run: sin memoria planificada para la VM — no se ejecuta»). Leído en el código, no
+   probado en placa. La referencia promete lo mismo en todas: «no hay VM: la placa arranca degradada y lo dice».
+4. Menor: en el log de la P4 la causa sale dos veces, en la línea del plan y en el AVISO, que la repite con su «vm: »
+   dentro.
+
+**El arreglo propuesto, sin hacer:**
+- la puerta recibe también el motivo del arranque: un RUN en el estado 2 (el FS montado, sin VM) dice «VM no
+  disponible: <motivo>», y «configurar particiones» se queda para lo que no tiene FS;
+- el motivo de `layer_app` dice la causa: la del plan, recortada a los 64 B del motivo (`BPVM_BOOT_REASON_MAX`) —por
+  ejemplo, «sin VM: vmheap=1024 KB no llega al suelo (2048 KB)»—, en la ESP32, la Pico y la STM32;
+- la STM32, degradada como las demás cuando el plan no deja VM. El orden lo permite: el arranque común hace el plan
+  (`memoria`) antes de subir las capas (`subir`, en `bpvm_boot2.c`).
+
+**El coste**: el común y las tres familias, o sea las ocho imágenes, que ya pasaron sus tandas en este `F1`. Su
+prueba: la red, y en placa, `vmheap` por debajo del suelo en una de cada familia.
 
 #### ✅ `#690` — tras un Stop, la pantalla de la placa se queda con lo último del programa: la guía de la GUI (§23.3, §25) promete «la pantalla limpia» (abierta el 12-oct, en el `F1` de V7, en la DK2 · **CERRADA el mismo día**, el commit de `#690`; en placa, la DK2)
 
