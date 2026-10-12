@@ -2125,8 +2125,8 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
   `traza` en el `lcd` de la C5 y `quantum=0` en la C6 (el valor por defecto). Eduardo: *dejarlos*. Y los ficheros de
   las pruebas en las placas, también.
 - **Paso 3, `#691`**: de la prueba de `#686` salió `#691`, y su arreglo cambió las ocho imágenes. Sellado otra vez, el
-  ZIP. Eduardo: regrabar una placa por familia, no todas. Con la imagen final quedan la Metro, la Nucleo y el kit P4 EV
-  (en placa, `#691`, abajo). Las demás del `F1` siguen con la imagen de antes de `#691`.
+  ZIP. Eduardo: regrabar una placa por familia, no todas. Con la imagen final, primero la Metro, la Nucleo y el kit P4
+  EV (en placa, `#691`, abajo); después Eduardo fue conectando las demás y se regrabaron todas (abajo).
 - **Paso 3, el kit P4 EV**, con el OK de Eduardo. Llevaba la imagen de V6 (12-sep), y es la única placa que en V7 no se
   había probado. Grabado desde el ZIP: arranca sano, con su FS (43 ficheros), y anota sola la fecha de la imagen. Su
   zona tenía el `SQLite.pack` de V6: formateada, con el `Gui.pack` y el `SQLite.pack` de V7 (`SQLite=4` ya estaba).
@@ -2134,9 +2134,39 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
     Nucleo, regrabadas, los mismos 50 que esta mañana.
   - A mano: `SqlDemo`, bien; `GuiDemo` en su pantalla de 7", *«sí, se ve bien»* (Eduardo); y el Stop.
   - `INSTALAR`, la portada y las notas decían que el kit se probó por última vez en V6: ya son las diez placas.
-- **La S3**, pendiente: Eduardo la desconectó antes de grabarla y la vuelve a conectar luego. Su lote está aprobado:
-  grabar, PACK_FORMAT (su `Stdlib.pack` no lo pide `INSTALAR`), la tanda, la memoria (~7 MB) y `vmheap` por debajo del
-  suelo.
+- **Paso 3, la S3**, con el OK de Eduardo (la desconectó antes de grabarla y la volvió a conectar). Grabada desde el
+  ZIP con la imagen final; su zona, formateada: el `Stdlib.pack` que llevaba no lo pide `INSTALAR`, porque tiene PSRAM.
+  - La memoria, la de la referencia: 8 MB de PSRAM y un bloque de 7,5 MB para la VM (7 MB de heap y 512 KB de pilas).
+  - La tanda, los mismos 50 veredictos que el 9-oct. Las `Nat*` se saltan: en Xtensa no hay AOT.
+  - `#691`, como en las otras tres: con `vmheap=32`, degradada y con el motivo en el estado, el RUN y el log; sin él,
+    sana.
+- **La Pico 2 y la DK2**, regrabadas con la imagen final (Eduardo las conectó: *«las dos: grabar y tanda»*). La DK2
+  lleva una imagen propia, distinta de la de la Nucleo, que con `#691` no había corrido en ninguna placa. Sus packs y
+  su ENV, sin tocar. Las dos tandas, los mismos 50 veredictos que esta mañana (la Pico 2, con el `imageCrc` de la
+  Metro: es la misma imagen). En la DK2, `GuiDemo`: *«sí, se ve bien»* (Eduardo); y el Stop.
+- **La C3 y la C5**, regrabadas con la imagen final, también con el OK de Eduardo: cada una lleva su propia imagen.
+  Arrancan con la memoria de la referencia (la C3, 48 KB de heap; la C5, 6,5 MB en PSRAM). Las dos tandas, los mismos
+  50 veredictos que esta mañana.
+- **La P4 Waveshare y la C6**, regrabadas también (Eduardo: la C6 entra en el puerto de la C3, cuando acabó su tanda).
+  Las dos tandas, los mismos 50 veredictos que esta mañana.
+- **El paso 3, cerrado: las diez placas con la imagen final** (`2842cd70`), y en cada una su tanda, con los mismos
+  veredictos que su base. El `imageCrc` de cada imagen, el que da el `HELLO` (el sello de la fecha no la identifica):
+
+  | imagen | placas | `imageCrc` |
+  |---|---|---|
+  | `bpvm_pico.uf2` | Pico 2, Metro | `25ddff16` |
+  | `bpvm_stm32_nucleo.bin` | Nucleo | `5a00a987` |
+  | `bpvm_stm32_dk2.bin` | DK2 | `adfd127a` |
+  | `bpvm_esp32_merged.bin` | S3 | `4cb973c5` |
+  | `bpvm_esp32c3_merged.bin` | C3 | `13c5c9e9` |
+  | `bpvm_esp32c5_merged.bin` | C5 | `b52ce9a1` |
+  | `bpvm_esp32c6_merged.bin` | C6 | `c883f08a` |
+  | `bpvm_esp32p4_merged.bin` | P4 Waveshare, kit P4 EV | `0f8dfdd8` |
+- **El paso 4, cubierto**: `#681` y `#686` en la P4; `#682` y el Stop con la pantalla limpia en la DK2; los ADC 4–7 de
+  la Metro; la memoria de la Metro, la S3 y la C5 (y de paso la C3 y la C6), como la referencia; SQLite en la Metro, la
+  P4 y el kit; y `#691`, que salió aquí, en una placa de cada familia y en la S3.
+- **Lo que queda**: el paso 5 (el IDE desde la carpeta del ZIP, Eduardo) y el 6 (publicar). El ZIP es el de
+  `c9327bcc…`.
 
 #### ✅ `#691` — con `vmheap` por debajo del suelo, el RUN dice «configurar particiones»; y la STM32, sin VM, se da por sana (abierta el 12-oct, en el `F1` de V7, al probar `#686` en la P4 · **CERRADA el mismo día**, `2842cd70` y el commit del lote; en placa, la Nucleo, la Metro y el kit P4 EV)
 
@@ -2212,7 +2242,8 @@ reset:
 | kit P4 EV | 1024 | lo mismo, con «(2048 KB)» | estado 3, 24 MB, corre |
 
 En las tres, el INFO da `vmHeapBytes: 0`, y el log, el AVISO, «boot: estado 2 (fs) DEGRADADO: <motivo>» y el autorun que
-no se mira. La Nucleo, que antes se decía sana, ahora se queda degradada como las demás. Su ENV, como estaba.
+no se mira. La Nucleo, que antes se decía sana, ahora se queda degradada como las demás. Su ENV, como estaba. Y
+después, lo mismo en la S3 (`vmheap=32`; sin él, 7 MB).
 
 #### ✅ `#690` — tras un Stop, la pantalla de la placa se queda con lo último del programa: la guía de la GUI (§23.3, §25) promete «la pantalla limpia» (abierta el 12-oct, en el `F1` de V7, en la DK2 · **CERRADA el mismo día**, el commit de `#690`; en placa, la DK2)
 

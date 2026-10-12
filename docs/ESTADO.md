@@ -27,6 +27,38 @@
 
 ## Última sesión
 
+> **12-oct** — **Las pruebas finales de V7 (`F1`): los pasos 0 a 4, hechos. Las diez placas, con la imagen final y su
+> tanda. Quedan el IDE desde el ZIP (Eduardo) y publicar.**
+>
+> **Lo que dijo Eduardo:**
+> - Antes de las pruebas, los strings: por qué van lentos en las placas. Medido en `#665`: en el PC, el 94 % de
+>   concatenar eran las líneas de diagnóstico del GC; en la placa, el ritmo del intérprete y la PSRAM. A V8.
+> - El GP47 de la Metro con PSRAM, reservado (`#689`); otro pin para el CS, a V8.
+> - `#691`, arreglarlo ahora, no en V8. Regrabar una placa por familia, no todas; luego fue conectando las demás y se
+>   regrabaron todas.
+> - Los restos de pruebas en el ENV de la C5 y la C6, y los ficheros de prueba en las placas: dejarlos.
+>
+> **Lo hecho** (el detalle, en el `F1` de FICHAS):
+> - Pasos 0–2: el congelado, las guardas del PC en verde, las ocho imágenes selladas, los packs y el ZIP (`#688`).
+> - Paso 3, por lotes: RP2350 (salió `#689`), STM32 + C3 (salió `#690`, la pantalla limpia tras un Stop) y ESP32.
+>   La prueba de `#686` en la P4 sacó `#691`: arreglado, la red en verde, y las ocho imágenes y el ZIP, sellados otra
+>   vez. Las diez placas quedan con la imagen final, cada una con su tanda y los mismos veredictos que su base. El kit
+>   P4 EV, que venía de V6, pasa la ronda de V7: ya son diez placas en la portada, `INSTALAR` y las notas.
+> - Paso 4: `#681`, `#682`, `#686`, el Stop y la pantalla, los ADC de la Metro, la memoria y SQLite, hechos.
+> - Una corrección: el comparador de veredictos casaba por el nombre de la prueba y mezclaba placas. Las «21
+>   saltadas que ahora corren» de la DK2 eran falsas. Rehecho placa a placa (en la memoria de `tanda.py`).
+>
+> Los commits: `b96d141d`, `4d22c39a`, `ae0e1c99` (`#689`), `97e6660e` (`#690`), `61217be7`, `2842cd70` (`#691`),
+> `8afcf8c7` y el de este cierre. Los informes, `compat/informes/f1_v7_*`. El ZIP, `dist/BasicPlus-7.0-win.zip`,
+> sha256 `c9327bcc…`.
+>
+> **Lo siguiente:**
+> 1. El paso 5: Eduardo prueba el IDE desde la carpeta del ZIP (`dist/BasicPlus-7.0-win`).
+> 2. El paso 6: `PUBLICAR.md` renovado para v7.0 (y decidir `--formato=8`), el tag `v7.0`, el push y la web.
+>
+> **Riesgos:** ninguno abierto del `F1`. Si se toca código antes de publicar, otra vez las imágenes, el ZIP y las
+> tandas.
+
 > **11-oct** — **La documentación de V7, verificada y corregida; un apéndice nuevo con las claves del ENV.**
 >
 > **Lo que dijo Eduardo:**
