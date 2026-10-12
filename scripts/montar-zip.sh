@@ -220,7 +220,11 @@ PUBLICAR_DIRS="benchmarks errores external formdemo imageproject packlib plugins
 #    la raiz que importan por ruta (appwithfromimpl -> plugins/filelogger.mod,
 #    frompathtest -> external/helper.mod). Sin ellas esos tres no compilan desde
 #    la instalacion. Misma familia que el hallazgo 6.
-INTERNAS_DIRS="aottest formev formmin holes resources pendientes"
+INTERNAS_DIRS="aottest formev formmin guipack holes resources pendientes"
+#    guipack/       = la SONDA del pack de la GUI (V7/H6, #623): un programa de prueba que habla con
+#                     la LVGL de la imagen y con la del pack a la vez; necesita una placa con el pack
+#                     grabado (Eduardo, 8-oct: «Gui2 lo puedes dejar como programa de test»). Decidido
+#                     en el F1 de V7 (12-oct), al pararse el script por ella.
 #    pendientes/    = ejemplos que DEBERIAN funcionar y hoy no, por un fallo nuestro.
 #                     Se quedan en el repo porque son la prueba de regresion —el dia
 #                     que compilen, esta arreglado— pero NO se publican: un ejemplo
@@ -357,7 +361,9 @@ done < <(find "$OUT" -name '*.mod')
 # (24-sep: era sólo MOD6, escrito a mano; con MOD9 se escapaban un MOD7 y un MOD8).
 for pk in "$OUT"/packs/*.pack; do
     [ -f "$pk" ] || continue
-    viejos="$(grep -a -o -E "$MOD_VIEJOS" "$pk" | wc -l)"
+    # #688 (12-oct, el F1 de V7) — sin NINGÚN .mod viejo dentro (lo bueno, desde #623), grep devuelve 1 y con
+    # `pipefail` el script moría aquí EN SILENCIO, tras el título: «ninguno» no es un error.
+    viejos="$( { grep -a -o -E "$MOD_VIEJOS" "$pk" || true; } | wc -l)"
     if [ "$viejos" -gt 0 ]; then
         MALOS="$MALOS
   $(printf '%-6s %s  (lleva %s modulos de un formato anterior dentro: %s)' "PACK" "${pk#$OUT/}" "$viejos" "$(grep -a -o -E "$MOD_VIEJOS" "$pk" | sort -u | tr '\n' ' ')")"

@@ -2026,7 +2026,56 @@ parte de los threads está poco clara porque se están mezclando los Threads del
 sencillo, para explicarlo bien hay que entender la arquitectura y eso sería demasiado para unas notas. Así que lo
 dejamos así.»*
 
-#### ✅ `#677` — el diálogo INFO del IDE decía «PWM: 12 salidas» en la Pico 2, y son 12 slices (24 salidas) (abierta y CERRADA el 10-oct, del inventario del `D1`)
+#### 🧪 `F1` — LAS PRUEBAS FINALES DE V7 (abierto el 12-oct) · 🧊 CODE FREEZE V7 desde el mismo día
+
+Eduardo: *«¿cómo quieres hacer las pruebas finales?»*. El plan es el de V6 (su `F1`, 12-sep), más lo nuevo de V7: la
+pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
+0. **Congelado**: sólo entran arreglos de lo que salga aquí, cada uno con su ficha.
+1. **Las guardas del PC, sobre el árbol final**: `compat.sh check`, `samples_sweep`, `doc_frags` con los enlaces, y
+   `h13-errores`.
+2. **Lo que se publica, montado antes de probar**:
+   - las ocho imágenes del mismo árbol, selladas en `dist/firmware` (`SHA256SUMS.txt`);
+   - los cinco packs de su compilación;
+   - `BpIde-7.0.jar` y el simulado con LVGL;
+   - el ZIP `BasicPlus-7.0-win`, de `montar-zip.sh`.
+
+   Se prueba lo que sale del ZIP.
+3. **Las placas, por lotes de familia** (RP2350, STM32, ESP32). Cada una se graba desde el ZIP siguiendo
+   `INSTALAR_FIRMWARE`, packs incluidos, y se pasa por `tanda.py`. Cada lote, con el OK de Eduardo.
+4. **A mano, lo que la tanda no cubre**:
+   - `#681`, `#682` y `#686`;
+   - Stop y la pantalla limpia;
+   - los ADC 4–7 de la Metro;
+   - los tamaños de memoria de la Metro, la S3 y la C5;
+   - SQLite en la Metro y la P4.
+
+   Si un punto no queda cubierto, una prueba adicional sólo para él (Eduardo).
+5. **El IDE desde la carpeta del ZIP**, lo prueba Eduardo.
+6. **Publicar**: `PUBLICAR.md` renovado para v7.0 (y decidir `--formato=8`), el tag `v7.0`, el push y la web.
+
+**Avance (12-oct)**:
+- **Paso 1**: `doc_frags`, 0 FALLO en 25 documentos (314 compilados); 1 024 enlaces internos, 0 rotos;
+  `h13-errores`, 50/50; `samples_sweep`, 399/399.
+- **Paso 2, las imágenes**: las ocho selladas en `dist/firmware` desde los builds de `f2eef8b6`, el último cambio
+  de código de firmware. La Pico, el `.uf2`. Las STM32, `objcopy` desde el `.elf`: los `.bin` de al lado eran de
+  agosto. Las ESP, `esptool merge-bin @flash_args` con su nombre. `SHA256SUMS.txt` regenerado y comprobado: ocho.
+- **Paso 1, la red** sobre el árbol final: verde (paridad 149/149 en MOD9, MOD8 y dos workers; C 102/102; sombra
+  15/15; estrés, `packs-abi`, stdlib embebida, cápsula V6, norma y simulado).
+- **Paso 2, los packs**:
+  - El `Stdlib.pack` es igual, byte a byte, a los 30 módulos de la stdlib (`stdlib_pack.sh`).
+  - Los tres de la GUI, del 8-oct, ya tienen la forma de `#623`: el motor y un módulo de ~300 B. Sus fuentes no han
+    cambiado.
+  - El `SQLite.pack`, reconstruido con el compilador final: sólo cambian la fecha y su comprobación (5 bytes). Sus
+    puentes `.mdn` (ABI 9, del 27-sep) valen: sus 16 natives no tienen bucles ni `try`, que es lo único que tocaron
+    `#578` y `#592`, y `SQLite.bp` no cambia desde el 22-sep.
+- **Paso 2, el simulado**: `make sim LVGL=1 SQLITE=1`, con 2 024 símbolos `lv_`, 305 `sqlite3_` y `SDL2.dll`. Después,
+  el host otra vez sin LVGL, el sabor que pide la red.
+- **Paso 2, el ZIP**: `dist/BasicPlus-7.0-win.zip`, 28 MB, sha256 `447d2016…6b6b`. Lleva ocho imágenes con su sha256,
+  los cinco packs, `BpIde-7.0.jar` (su manual, el de `docs/`), el simulado con LVGL y SQLite, la documentación en los
+  dos idiomas y 376 samples. El empaquetador se paró dos veces:
+  - `samples/guipack` sin clasificar: va a las internas, porque es la sonda del pack de la GUI (Eduardo, 8-oct: *«Gui2
+    lo puedes dejar como programa de test»*).
+  - `#688`, abajo. — el diálogo INFO del IDE decía «PWM: 12 salidas» en la Pico 2, y son 12 slices (24 salidas) (abierta y CERRADA el 10-oct, del inventario del `D1`)
 
 Desde V7 (H4, la tabla de capacidades) el INFO cuenta lo que la placa da al programa —12 slices en la RP2350, los
 canales del LEDC o de los temporizadores en las ESP32 y las STM32— y trae su unidad, `pwmUnidad`; el IDE seguía
