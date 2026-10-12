@@ -19,6 +19,11 @@ void stm32_repl_run(void);
  * diga cuánto llega a usar. Llamar en main() justo antes de arrancar FreeRTOS. */
 void stm32_msp_pintar(void);
 
+/* #691 (12-oct) — si el arranque dejó a la VM SIN bloque (el plan no se lo dio: `vmheap` por debajo del suelo…), el
+ * porqué; si lo tiene, NULL. Lo pregunta la capa de la app del arranque (board_mgr_stm32.c), que hasta aquí la daba
+ * por buena siempre —el array de la VM es estático— y la placa se decía sana sin VM. */
+const char* stm32_vm_sin_bloque(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -77,6 +77,14 @@ const char* bpvm_boot_state_name(bpvm_boot_state_t s);
  * escritos (sin NUL), o -1 si no cabe. */
 int bpvm_boot_state_report(const bpvm_boot_status_t* st, char* buf, size_t cap);
 
+/* #691 (12-oct) — el NOT_READY de la puerta del arranque (bpvm_repl_puerta_arranque), en una línea: qué falta y POR
+ * QUÉ. Un verbo de fichero sin el FS montado: «FS no disponible en estado N (nombre): configurar particiones». Un RUN
+ * sin la VM: si tampoco hay FS, lo mismo con «VM»; con el FS montado, lo que falla es la VM y se dice su motivo —el
+ * del arranque: `vmheap` por debajo del suelo, la VM que no cabe…—, no las particiones, que están bien. Antes eran las
+ * particiones siempre: con `vmheap=1024` en la P4, el RUN mandaba al usuario a otro sitio. `quiere_vm`: 1 para el
+ * RUN, 0 para un verbo de fichero. Devuelve chars escritos. */
+int bpvm_boot_no_listo_msg(const bpvm_boot_status_t* st, int quiere_vm, char* buf, size_t cap);
+
 #ifdef __cplusplus
 }
 #endif

@@ -5,7 +5,7 @@
 #include "bpvm_boot.h"
 
 #include <string.h>
-#include <stdio.h>   /* snprintf (solo en state_report) */
+#include <stdio.h>   /* snprintf (state_report y no_listo_msg) */
 
 static void copy_reason(char* dst, const char* src) {
     if (!src) { dst[0] = '\0'; return; }
@@ -67,4 +67,19 @@ int bpvm_boot_state_report(const bpvm_boot_status_t* st, char* buf, size_t cap) 
                      st->degraded, st->reason);
     if (w < 0 || (size_t) w >= cap) return -1;
     return w;
+}
+
+/* #691 — ver bpvm_boot.h. Sin estado (no pasa: las familias dan el suyo), como el kernel: nada montado. */
+int bpvm_boot_no_listo_msg(const bpvm_boot_status_t* st, int quiere_vm, char* buf, size_t cap) {
+    if (!buf || cap == 0) return 0;
+    int estado = st ? (int) st->state : (int) BPVM_BOOT_KERNEL;
+    const char* nombre = bpvm_boot_state_name((bpvm_boot_state_t) estado);
+    int n;
+    if (quiere_vm && estado >= (int) BPVM_BOOT_FS)
+        n = snprintf(buf, cap, "VM no disponible en estado %d (%s): %s", estado, nombre,
+                     (st && st->reason[0]) ? st->reason : "la placa no llego a la app");
+    else
+        n = snprintf(buf, cap, "%s no disponible en estado %d (%s): configurar particiones",
+                     quiere_vm ? "VM" : "FS", estado, nombre);
+    return (n < 0) ? 0 : n;
 }

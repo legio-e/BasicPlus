@@ -60,6 +60,9 @@
 #include "bpvm_sd_placa.h"    /* V7/H3 SD.3: la SD de la placa, en el comun */
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
+/* #691 (12-oct) — POR QUÉ no hay VM, si no la hay (vacío si la hay): el motivo de la capa de la app (layer_app, en
+ * board_mgr_esp32.c), que es lo que ven la línea «boot: estado», el panel del IDE y el NOT_READY de un RUN. */
+char           s_vm_motivo[BPVM_BOOT_REASON_MAX] = "";
 
 /* V6/U6.9 — LO QUE EL ESP32 OFRECE: una region compartida, la DRAM interna.
  * `bytes` es el bloque CONTIGUO mayor y `libre` el total: las dos restricciones de
@@ -198,8 +201,13 @@ static void vm_buffer_init(void) {
     } else {
         /* No es fatal: el kernel sigue vivo y el host puede hablar con la placa
          * (H9). Lo que no habra es VM — y el climb lo reportara. La linea del plan
-         * ya dijo por que (NO CABE + techo + suelo). */
-        printf("[boot] AVISO: sin RAM para el heap de la VM — %s\n", linea);
+         * ya dijo por que (NO CABE + techo + suelo).
+         * #691 — y el MOTIVO corto, el que sube al estado del arranque y al IDE. Si el
+         * plan cabia, es la escalera la que no encontro ni el suelo, y eso la linea
+         * del plan no lo decia: decia «vm: N KB en …», como si hubiera VM. */
+        bpvm_mem_sin_vm_motivo(&plan, reg, &cfg, vmheap_kb, s_vm_motivo, sizeof s_vm_motivo);
+        log_printf("vm: AVISO la placa arranca SIN VM: %s", s_vm_motivo);
+        printf("[boot] AVISO: la placa arranca SIN VM: %s\n", s_vm_motivo);
         log_flush();
     }
 }

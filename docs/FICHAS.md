@@ -2165,6 +2165,28 @@ Lo que falla es lo que se le dice al usuario:
 **El coste**: el común y las tres familias, o sea las ocho imágenes, que ya pasaron sus tandas en este `F1`. Su
 prueba: la red, y en placa, `vmheap` por debajo del suelo en una de cada familia.
 
+Eduardo: *arreglarlo ahora*. **Hecho (12-oct), sin cerrar** (falta la placa):
+- `bpvm_mem_sin_vm_motivo` (`src/bpvm_mem.c`): el motivo corto de una placa sin VM, en los 64 B del arranque. Cuatro
+  textos: «vmheap=1024 KB no llega al suelo de la VM (2048 KB)» (sin la clave, «el objetivo (…)»); «la VM no cabe en
+  PSRAM (1500 KB; el suelo, 2048 KB)»; «la VM no cabe en PSRAM: el asignador no da ni 2048 KB» (el plan cabía y la
+  escalera de las ESP32 no encontró ni el suelo; la línea del plan decía «vm: N KB en …», como si hubiera VM); y «la
+  placa no ofrece memoria para la VM».
+- Las tres familias lo dejan al planificar —con una línea `vm: AVISO la placa arranca SIN VM: <motivo>`— y su
+  `layer_app` lo sube al estado. La STM32, con `stm32_vm_sin_bloque()`: sin bloque, degradada como las demás. La P4
+  deja de repetir la línea del plan en su AVISO.
+- `bpvm_boot_no_listo_msg` (`src/bpvm_boot.c`): el NOT_READY de la puerta. Un RUN con el FS montado y sin VM:
+  «VM no disponible en estado 2 (fs): vmheap=1024 KB no llega al suelo de la VM (2048 KB)»; sin FS, «configurar
+  particiones», como antes. La puerta recibe el estado entero (`board_boot_status()`), no su número.
+- Las pruebas: `test-mem`, cada texto y que el más ancho quepa (63 B con «SRAM estática» y cifras de cinco dígitos);
+  `test-boot`, el mensaje de la puerta en cada caso. Las dos, verdes. El host, el simulado, la Pico, las dos STM32 y
+  las cinco ESP compilan con los textos dentro.
+- La referencia (ES y EN), `vmheap`: «arranca degradada y dice por qué —en el panel de la placa y al ejecutar—».
+- La red, verde con el arreglo (paridad 149/149 en MOD9, MOD8 y dos workers; cápsula 59/59; C 102/102; sombra
+  15/15; estrés, `packs-abi` y stdlib embebida). Las ocho imágenes, selladas otra vez desde este árbol, y el ZIP
+  rehecho con ellas, el simulado con LVGL y SQLite y la referencia nueva: sha256 `8c548d83…`.
+- En placa (Eduardo: *«basta con una por familia»*): la S3 y el kit P4 EV, que se graban ahora con la imagen final,
+  y la Pico 2 y la Nucleo. Las demás placas del `F1` se quedan con la imagen de antes de `#691`.
+
 #### ✅ `#690` — tras un Stop, la pantalla de la placa se queda con lo último del programa: la guía de la GUI (§23.3, §25) promete «la pantalla limpia» (abierta el 12-oct, en el `F1` de V7, en la DK2 · **CERRADA el mismo día**, el commit de `#690`; en placa, la DK2)
 
 Visto por Eduardo en la DK2: `GuiDemo` corriendo, el Stop (`KILL`, 26 ms, `EXITED KILLED 130`) y la pantalla con el

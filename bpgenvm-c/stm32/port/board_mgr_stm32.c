@@ -23,6 +23,7 @@
 #include "flash_layout_stm32.h"  /* BP_ENV_A/B_OFFSET, BP_PART_BASE, BP_USABLE_FLASH, símbolos .ld */
 #include "pack_stm32.h"          /* V7/H6 G5.b0: el bloque de RAM de los motores (PACK_BURN_BEGIN) */
 #include "log.h"                 /* V7/H7: el gancho del montaje dice por qué no hay zona */
+#include "stm32_repl.h"          /* #691: stm32_vm_sin_bloque, para la capa de la app */
 
 #include "main.h"                /* FLASH_BASE */
 #include <stdint.h>
@@ -213,8 +214,14 @@ static bpvm_boot_step_t layer_fs(void* u) {
 static bpvm_boot_step_t layer_app(void* u) {
     (void) u;
     /* La memoria de la VM del STM32 es un array estático (s_vm_mem en el repl) →
-     * SIEMPRE presente (a diferencia del ESP32, que la saca de PSRAM en runtime). */
+     * SIEMPRE presente (a diferencia del ESP32, que la saca de PSRAM en runtime).
+     * Pero el BLOQUE de la VM es lo que el plan le dé de él, y con `vmheap` por debajo
+     * del suelo no le da nada: #691 (12-oct), la placa se decía sana y el RUN acababa
+     * en «no se pudo inicializar la VM». Ahora se queda degradada, como las demás, y
+     * dice por qué. El plan va antes: el arranque común reparte (`memoria`) y luego sube. */
     bpvm_boot_step_t r; r.ok = 1; r.reason[0] = '\0';
+    const char* sin = stm32_vm_sin_bloque();
+    if (sin) { r.ok = 0; snprintf(r.reason, sizeof r.reason, "%s", sin); }
     return r;
 }
 

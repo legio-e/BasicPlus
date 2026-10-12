@@ -752,7 +752,7 @@ void repl_v1_handle_request(int first_char) {
      * "si no hay partición, nada con el sistema de ficheros". */
     /* V7/H10 #473 (punto 10): la puerta, en el común. El bulk que rechaza sólo sigue en el cable en los verbos PUT:
      * el resto ya lo pre-leyó el paso 5. */
-    if (bpvm_repl_puerta_arranque(type, id, &obj, (int) board_boot_status()->state, lo_lee_el_comun)) return;
+    if (bpvm_repl_puerta_arranque(type, id, &obj, board_boot_status(), lo_lee_el_comun)) return;   /* #691: con su motivo */
     /* FILES */
     /* V6/U3 — el común, DESPUÉS de los propios y no antes (al revés que el
      * STM32) porque esta familia se migra por grupos: lo que esta placa siga

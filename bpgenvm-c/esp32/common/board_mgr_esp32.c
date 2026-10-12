@@ -78,6 +78,7 @@ static void asegura_familia(void);
 /* La memoria de la VM la definen los main.c (S3 array SRAM / P4 puntero PSRAM). */
 extern uint8_t* s_vm_buffer;
 extern uint32_t s_vm_buffer_size;
+extern char     s_vm_motivo[];   /* #691: por qué no hay VM, del main.c de la imagen (vacío si la hay) */
 
 const bpvm_boot_status_t* board_boot_status(void) { return &s_boot; }
 
@@ -483,7 +484,8 @@ static bpvm_boot_step_t layer_app(void* u) {
     (void) u;
     bpvm_boot_step_t r; r.reason[0] = '\0';
     r.ok = (s_vm_buffer != NULL && s_vm_buffer_size > 0);
-    if (!r.ok) snprintf(r.reason, sizeof r.reason, "heap de la VM no disponible");
+    /* #691 — el motivo de verdad, el que dejó la memoria: «heap de la VM no disponible» no decía la causa. */
+    if (!r.ok) snprintf(r.reason, sizeof r.reason, "%s", s_vm_motivo[0] ? s_vm_motivo : "heap de la VM no disponible");
     return r;
 }
 

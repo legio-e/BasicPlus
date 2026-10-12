@@ -74,6 +74,7 @@ static const char *TAG = "bpvm_p4";
 #define VM_MEM_MIN                (2u * 1024u * 1024u)    /* piso si algo va mal */
 uint8_t*       s_vm_buffer      = NULL;
 uint32_t       s_vm_buffer_size = 0;
+char           s_vm_motivo[BPVM_BOOT_REASON_MAX] = "";   /* #691: por qué no hay VM (ver esp32/common/main.c) */
 
 /* V5/H7 — el bloque de la BD (SQLite), mordido de la PSRAM ANTES que el heap de
  * la VM (V7/H6: en el común). */
@@ -450,11 +451,14 @@ static void vm_buffer_init_psram(void)
         /* #686 (11-oct) — no es fatal, como en las demás familias: el kernel sigue vivo y el IDE habla con la placa
          * (H9: el arranque escalonado la da por degradada, sin VM, y el REPL no corre nada). Era un abort() en CADA
          * arranque: con un `vmheap` —o un `packRam`/`SQLite`— que dejaba a la VM menos de 2 MB, un bucle de reinicios
-         * sin IDE, con el ENV que lo causa en la flash, y sólo esptool lo borraba. La línea del plan ya dice por qué. */
+         * sin IDE, con el ENV que lo causa en la flash, y sólo esptool lo borraba. La línea del plan ya dice por qué.
+         * #691 (12-oct) — y el MOTIVO corto, el que sube al estado del arranque y al IDE; el AVISO repetía la línea del
+         * plan entera, que acababa dos veces en el log. */
         s_vm_buffer_size = 0;
-        ESP_LOGE(TAG, "PSRAM: sin bloque para la VM (%s)", linea);
-        log_printf("vm: AVISO sin RAM para el bloque de la VM — %s", linea);
-        printf("[boot] AVISO: sin RAM para el heap de la VM — %s\n", linea);
+        bpvm_mem_sin_vm_motivo(&plan, reg, &cfg, vmheap_kb, s_vm_motivo, sizeof s_vm_motivo);
+        ESP_LOGE(TAG, "PSRAM: sin bloque para la VM (%s)", s_vm_motivo);
+        log_printf("vm: AVISO la placa arranca SIN VM: %s", s_vm_motivo);
+        printf("[boot] AVISO: la placa arranca SIN VM: %s\n", s_vm_motivo);
         log_flush();
         return;
     }

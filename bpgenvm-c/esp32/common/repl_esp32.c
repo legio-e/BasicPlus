@@ -818,7 +818,7 @@ static void handle_request(const char* line, int len) {
      * con el sistema de ficheros" (Eduardo). */
     /* V7/H10 #473 (punto 10): la puerta, en el común. El bulk que rechaza sólo sigue en el cable en los verbos PUT:
      * el del resto ya lo pre-leyó el paso de arriba. */
-    if (bpvm_repl_puerta_arranque(type, id, &obj, (int) board_boot_status()->state, lo_lee_el_comun)) return;
+    if (bpvm_repl_puerta_arranque(type, id, &obj, board_boot_status(), lo_lee_el_comun)) return;   /* #691: con su motivo */
     /* El log NO se gatea por el estado del boot: si el arranque se ha quedado a
      * medias es justo cuando hace falta leerlo (vive en RAM + bpenv, no en el FS). */
     /* TERMINAL y DEBUG — el RUN, el depurador de antes del RUN (PAUSE, SET_BP, CLR_BP) y el KILL sin programa los

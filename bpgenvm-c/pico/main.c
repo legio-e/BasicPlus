@@ -180,6 +180,8 @@ static int pico_mem_regiones(bpvm_mem_region_t* out, int max) {
 uint8_t* s_vm_buffer      = NULL;   /* se fija en boot (vm_sram_region o PSRAM) */
 uint32_t s_vm_buffer_size = 0;
 uint8_t* g_run2_pila      = NULL;   /* V7/H12, 2b: la pila del 2º run, del techo del bloque (repl_v1.h) */
+/* #691 (12-oct) — por qué no hay VM, si el plan no la dio (vacío si la hay): el motivo de layer_app. */
+static char s_vm_motivo[BPVM_BOOT_REASON_MAX] = "";
 
 /* V5/H — bloque de la BD: se reserva en el arranque desde el ENV (`SQLite=<MB>`)
  * y NO se toca nunca más (criterio de Eduardo). Sale del principio de la ventana
@@ -1382,7 +1384,8 @@ static bpvm_boot_step_t layer_app(void* u) {
     (void) u;
     bpvm_boot_step_t r; r.reason[0] = '\0';
     r.ok = (s_vm_buffer != NULL && s_vm_buffer_size > 0);
-    if (!r.ok) snprintf(r.reason, sizeof r.reason, "heap de la VM no disponible");
+    /* #691 — el motivo de verdad, el que dejó pico_memoria: «heap de la VM no disponible» no decía la causa. */
+    if (!r.ok) snprintf(r.reason, sizeof r.reason, "%s", s_vm_motivo[0] ? s_vm_motivo : "heap de la VM no disponible");
     return r;
 }
 
@@ -1472,6 +1475,9 @@ static void pico_memoria(void) {
             s_vm_buffer = NULL; s_vm_buffer_size = 0;
             s_pack_ram_base = (uint8_t*) cola_base();
             s_pack_ram_size = s_cola_bytes;
+            /* #691 — el motivo corto, el que sube al estado del arranque y al IDE (la línea del plan, sólo al log). */
+            bpvm_mem_sin_vm_motivo(&plan, reg, &cfg, vmheap_kb, s_vm_motivo, sizeof s_vm_motivo);
+            log_printf("vm: AVISO la placa arranca SIN VM: %s", s_vm_motivo);
             log_flush();
         } else if (reg[plan.idx].exclusiva) {
             /* TOMAR de la PSRAM: la reserva delante, la VM detrás. */

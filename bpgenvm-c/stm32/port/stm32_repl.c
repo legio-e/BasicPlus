@@ -118,6 +118,9 @@ extern char __bp_ram_start[];  /* el .ld: ORIGIN(RAM) */
  * la línea del log son las mismas que en las otras cuatro placas. 0 = sin plan. */
 static size_t  s_vm_bytes = 0;
 #define VM_MEM_MIN  (64u * 1024u)             /* el suelo de las cinco placas */
+/* #691 (12-oct) — por qué no hay VM, si el plan no la dio (vacío si la hay): el motivo de la capa de la app del
+ * arranque (board_mgr_stm32.c), por stm32_vm_sin_bloque(). */
+static char    s_vm_motivo[BPVM_BOOT_REASON_MAX] = "";
 
 /* ---- helpers de envío ---- */
 
@@ -349,6 +352,12 @@ static void packs_cargar_una_vez(void) {
  * Lo que es suyo de verdad: el bloque de la VM (el que planificó el arranque), leer el anillo de la RX sin esperar,
  * sus búferes, el reinicio, los motores nativos, el `.mdn` del FS a la arena, el LED y la línea `mem:`. Con esto, la
  * STM32 deja de tirar la línea cuyo escape no cabía (el sink común), y gana el depurador. */
+/* #691 — ver stm32_repl.h. */
+const char* stm32_vm_sin_bloque(void) {
+    if (s_vm_bytes) return NULL;
+    return s_vm_motivo[0] ? s_vm_motivo : "la VM no tiene bloque";
+}
+
 static int stm32_run_memoria(uint8_t** base, size_t* bytes) {
     if (s_vm_bytes == 0) return -1;             /* sin plan: no se arranca a medias */
     *base = s_vm_base;
@@ -487,7 +496,7 @@ static void dispatch(int first_char) {
      * HELLO/INFO/STATE/PING/TIME/RESET van SIEMPRE (para conectar y configurar). */
     /* V7/H10 #473 (punto 10): la puerta, en el común. Aquí el bulk sigue en el cable siempre: no lo ha leído nadie
      * todavía (el bloque de PACK_* retorna antes de llegar a esta puerta). */
-    if (bpvm_repl_puerta_arranque(type, id, &obj, (int) board_boot_status()->state, 1)) return;
+    if (bpvm_repl_puerta_arranque(type, id, &obj, board_boot_status(), 1)) return;   /* #691: con su motivo */
 
     /* V6/U3 — PRIMERO el común: PING/TIME/LOG_DUMP/LOG_CLEAR viven en
      * src/bpvm_repl.c para las cuatro familias. Si lo atiende, hemos acabado.
@@ -630,6 +639,11 @@ static void stm32_mem_planificar(void) {
     bpvm_mem_plan_str(&plan, reg, &cfg, linea, sizeof linea);
     log_printf("%s", linea);
     s_vm_bytes = (plan.res == BPVM_MEM_OK) ? plan.bytes : 0;
+    if (!s_vm_bytes) {
+        /* #691 — sin VM: el motivo corto, el que sube al estado del arranque y al IDE. */
+        bpvm_mem_sin_vm_motivo(&plan, reg, &cfg, vmheap_kb, s_vm_motivo, sizeof s_vm_motivo);
+        log_printf("vm: AVISO la placa arranca SIN VM: %s", s_vm_motivo);
+    }
 
     /* TOMAR: el bloque delante, la VM detrás. */
     size_t res = (plan.res == BPVM_MEM_OK) ? plan.reserva_bytes : 0;

@@ -12,6 +12,7 @@
  *   make test-mem
  */
 #include "bpvm_mem.h"
+#include "bpvm_boot.h"   /* #691: BPVM_BOOT_REASON_MAX, donde tiene que caber el motivo (sólo la macro) */
 #include <stdio.h>
 #include <string.h>
 
@@ -228,9 +229,77 @@ static void caso_vmheap(void) {
           "vmheap=32: la linea dice que es lo PEDIDO, no la region: %s", s);
 }
 
+/* #691 (12-oct) — EL MOTIVO de una placa sin VM, el que sube al estado del arranque, al panel del IDE y al NOT_READY de
+ * un RUN. Lo cazó la P4 con `vmheap=1024` (su suelo son 2 MB): el motivo era «heap de la VM no disponible» y el RUN
+ * mandaba a «configurar particiones». Cada texto, y que quepa en los 64 B del motivo con lo más ancho del parque. */
+static void caso_motivo(void) {
+    char m[BPVM_BOOT_REASON_MAX];
+    bpvm_mem_plan_t p;
+
+    /* La P4 del 12-oct: 32 MB de PSRAM, 4 de margen, SQLite=4 ya tomado; vmheap=1024 KB y el suelo, 2 MB. */
+    bpvm_mem_region_t p4[1] = {{ NULL, 28160u * 1024u, 28669u * 1024u, 1, 4u * 1024u * 1024u, "PSRAM" }};
+    bpvm_mem_cfg_t c1 = { bpvm_mem_objetivo_env(1024, 0), 2u * 1024u * 1024u, 0, NULL };
+    bpvm_mem_plan(p4, 1, &c1, &p);
+    bpvm_mem_sin_vm_motivo(&p, p4, &c1, 1024, m, sizeof m);
+    CHECK(p.res == BPVM_MEM_NO_CABE && !strcmp(m, "vmheap=1024 KB no llega al suelo de la VM (2048 KB)"),
+          "motivo, la P4 con vmheap=1024: nombra la clave del ENV: \"%s\"", m);
+
+    /* Lo mismo con el objetivo de la imagen (sin la clave): no se nombra una clave que no está. */
+    bpvm_mem_region_t pico[1] = {{ (unsigned char*) 0x20014BF8, 431432, 431432, 0, 65536, "SRAM interna" }};
+    bpvm_mem_cfg_t c2 = { 32u * 1024u, 64u * 1024u, 0, NULL };
+    bpvm_mem_plan(pico, 1, &c2, &p);
+    bpvm_mem_sin_vm_motivo(&p, pico, &c2, 0, m, sizeof m);
+    CHECK(!strcmp(m, "el objetivo (32 KB) no llega al suelo de la VM (64 KB)"),
+          "motivo, un objetivo de la imagen bajo el suelo: \"%s\"", m);
+
+    /* La región no da el suelo (caso_suelo: 90 KB, 40 de margen): no es lo pedido, es la memoria. */
+    bpvm_mem_region_t chica[1] = {{ NULL, 90u * 1024u, 90u * 1024u, 0, 40u * 1024u, "SRAM" }};
+    bpvm_mem_cfg_t c3 = { 128u * 1024u, 64u * 1024u, 0, NULL };
+    bpvm_mem_plan(chica, 1, &c3, &p);
+    bpvm_mem_sin_vm_motivo(&p, chica, &c3, 128, m, sizeof m);
+    CHECK(!strcmp(m, "la VM no cabe en SRAM (50 KB; el suelo, 64 KB)"),
+          "motivo, la region no da el suelo (aunque haya vmheap, no es lo pedido): \"%s\"", m);
+
+    /* El plan cabía y el asignador no dio ni el suelo (la escalera de las ESP32). */
+    bpvm_mem_cfg_t c4 = { 0, 2u * 1024u * 1024u, 0, NULL };
+    bpvm_mem_plan(p4, 1, &c4, &p);
+    bpvm_mem_sin_vm_motivo(&p, p4, &c4, 0, m, sizeof m);
+    CHECK(p.res == BPVM_MEM_OK && !strcmp(m, "la VM no cabe en PSRAM: el asignador no da ni 2048 KB"),
+          "motivo, el plan cabia y no se pudo tomar: \"%s\"", m);
+
+    /* Sin regiones. */
+    bpvm_mem_plan(NULL, 0, &c1, &p);
+    bpvm_mem_sin_vm_motivo(&p, NULL, &c1, 0, m, sizeof m);
+    CHECK(!strcmp(m, "la placa no ofrece memoria para la VM"), "motivo, sin regiones: \"%s\"", m);
+
+    /* LO MÁS ANCHO: la región de nombre más largo («SRAM estática», 14 B con la tilde) y cifras de cinco dígitos, más
+     * de las que da el parque (32 MB). Si no cabe en los 64 B, el motivo se trunca y se pierde justo la cifra. */
+    bpvm_mem_region_t ancha[1] = {{ NULL, 32767u * 1024u, 32767u * 1024u, 1, 0, "SRAM estática" }};
+    int n;
+    bpvm_mem_cfg_t c5 = { 0, 33000u * 1024u, 0, NULL };            /* la región no da el suelo */
+    bpvm_mem_plan(ancha, 1, &c5, &p);
+    n = bpvm_mem_sin_vm_motivo(&p, ancha, &c5, 0, m, sizeof m);
+    CHECK(n > 0 && n < BPVM_BOOT_REASON_MAX && strstr(m, "(32767 KB; el suelo, 33000 KB)") != NULL,
+          "motivo, el de la region mas ancho cabe entero (%d B de %d): \"%s\"", n, BPVM_BOOT_REASON_MAX - 1, m);
+    bpvm_mem_cfg_t c6 = { 0, 33000u * 1024u - 1024u * 1024u, 0, NULL };   /* cabe: el del asignador */
+    bpvm_mem_plan(ancha, 1, &c6, &p);
+    n = bpvm_mem_sin_vm_motivo(&p, ancha, &c6, 0, m, sizeof m);
+    CHECK(n > 0 && n < BPVM_BOOT_REASON_MAX && strstr(m, "no da ni 31976 KB") != NULL,
+          "motivo, el del asignador mas ancho cabe entero (%d B): \"%s\"", n, m);
+    bpvm_mem_cfg_t c7 = { 32000u * 1024u, 33000u * 1024u, 0, NULL };   /* lo pedido no llega al suelo */
+    bpvm_mem_plan(ancha, 1, &c7, &p);
+    n = bpvm_mem_sin_vm_motivo(&p, ancha, &c7, 0, m, sizeof m);
+    CHECK(n > 0 && n < BPVM_BOOT_REASON_MAX && strstr(m, "(32000 KB) no llega al suelo de la VM (33000 KB)") != NULL,
+          "motivo, el del objetivo mas ancho cabe entero (%d B): \"%s\"", n, m);
+    n = bpvm_mem_sin_vm_motivo(&p, ancha, &c7, 32000, m, sizeof m);
+    CHECK(n > 0 && n < BPVM_BOOT_REASON_MAX && !strcmp(m, "vmheap=32000 KB no llega al suelo de la VM (33000 KB)"),
+          "motivo, el de vmheap mas ancho cabe entero (%d B): \"%s\"", n, m);
+}
+
 int main(void) {
     printf("=== test_mem: el planificador contra las placas medidas ===\n");
     caso_c3(); caso_c6(); caso_s3(); caso_s3_psram(); caso_metro_psram(); caso_pico_sram(); caso_suelo(); caso_exclusiva_con_margen(); caso_p4(); caso_stm32(); caso_discovery(); caso_vmheap();
+    caso_motivo();
     printf("[status=%s]\n", fallos ? "FAIL" : "OK");
     return fallos ? 1 : 0;
 }

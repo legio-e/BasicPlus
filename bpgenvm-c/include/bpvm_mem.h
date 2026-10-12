@@ -97,6 +97,16 @@ size_t bpvm_mem_objetivo_env(long vmheap_kb, size_t por_defecto);
 int bpvm_mem_plan_str(const bpvm_mem_plan_t* p, const bpvm_mem_region_t* r,
                       const bpvm_mem_cfg_t* cfg, char* buf, size_t cap);
 
+/* #691 (12-oct) — POR QUÉ NO HAY VM, en corto: el motivo del arranque (`reason` de bpvm_boot_status_t, 64 B con el
+ * NUL), que es lo que enseñan la línea «boot: estado», el panel de placas del IDE y el NOT_READY de un RUN. La línea
+ * del plan lo dice con todos los números, pero sólo va al log; esto dice lo que el usuario puede cambiar. Antes el
+ * motivo era «heap de la VM no disponible», sin causa, y con `vmheap=1024` en la P4 el RUN mandaba a «configurar
+ * particiones». `vmheap_kb`, la clave del ENV (0 si no está): si lo que no llega al suelo es lo PEDIDO, se nombra.
+ * Lo llama la familia que se queda SIN VM: con el plan sin caber, su porqué; con el plan bien, es que no pudo TOMAR
+ * el bloque (el asignador no dio ni el suelo). Devuelve chars escritos. */
+int bpvm_mem_sin_vm_motivo(const bpvm_mem_plan_t* p, const bpvm_mem_region_t* r,
+                           const bpvm_mem_cfg_t* cfg, long vmheap_kb, char* buf, size_t cap);
+
 #ifdef __cplusplus
 }
 #endif

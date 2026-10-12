@@ -53,6 +53,7 @@
 #define BPVM_REPL_H
 
 #include "json_min.h"
+#include "bpvm_boot.h"   /* #691: la puerta del arranque recibe el estado con su motivo */
 
 #ifdef __cplusplus
 extern "C" {
@@ -245,8 +246,11 @@ int bpvm_repl_verbo_de_fs(const char* type);
  *  partición, nada con el sistema de ficheros», Eduardo). La lista ya era una (#601); la puerta seguía escrita tres
  *  veces —el `if`, tragar el bulk y el NOT_READY del RUN—, con tres mensajes. Si rechaza, contesta NOT_READY con el
  *  estado y devuelve 1; si no, 0. `bulk_en_cable`: el bulk del mensaje sigue sin leer (hay que tragárselo, o el
- *  mensaje siguiente se lee desde la mitad de los datos). */
-int bpvm_repl_puerta_arranque(const char* type, long id, json_obj_t* obj, int estado, int bulk_en_cable);
+ *  mensaje siguiente se lee desde la mitad de los datos).
+ *  #691 (12-oct): recibe el ESTADO entero —el de board_boot_status()—, no sólo su número, para decir el motivo: un RUN
+ *  con el FS montado y sin VM dice por qué no hay VM (bpvm_boot_no_listo_msg), no «configurar particiones». */
+int bpvm_repl_puerta_arranque(const char* type, long id, json_obj_t* obj, const bpvm_boot_status_t* st,
+                              int bulk_en_cable);
 
 /** V7/H8 #495 — lo que la familia llama con CADA mensaje del lazo, en cuanto sabe su `type` y antes de despachar
  *  nada (también los que atiende ella: RUN, RESET...). Hoy, una cosa: si el verbo no puede convivir con una subida a

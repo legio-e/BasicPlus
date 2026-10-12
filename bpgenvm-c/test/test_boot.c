@@ -135,6 +135,42 @@ int main(void) {
         printf("       STATE: %s\n", buf);
     }
 
+    /* --- 9. #691 (12-oct): el NOT_READY de la puerta dice QUÉ falta y POR QUÉ. Con `vmheap=1024` en la P4, el RUN
+     *        mandaba a «configurar particiones» con el FS montado; lo que faltaba era la VM, y su motivo estaba en el
+     *        estado. El buffer, el de la puerta (112). --- */
+    {
+        char msg[112];
+        bpvm_boot_status_t sin_vm = { BPVM_BOOT_FS, 1, "vmheap=1024 KB no llega al suelo de la VM (2048 KB)" };
+        bpvm_boot_no_listo_msg(&sin_vm, 1, msg, sizeof msg);
+        CHECK(!strcmp(msg, "VM no disponible en estado 2 (fs): vmheap=1024 KB no llega al suelo de la VM (2048 KB)"),
+              "RUN con el FS montado y sin VM: el motivo, no las particiones");
+        printf("       NOT_READY: %s\n", msg);
+
+        bpvm_boot_status_t sin_fs = { BPVM_BOOT_PARTITIONS, 1, "littlefs no monta ni formatea" };
+        bpvm_boot_no_listo_msg(&sin_fs, 1, msg, sizeof msg);
+        CHECK(!strcmp(msg, "VM no disponible en estado 1 (particiones): configurar particiones"),
+              "RUN sin FS: configurar particiones, como antes");
+        bpvm_boot_no_listo_msg(&sin_fs, 0, msg, sizeof msg);
+        CHECK(!strcmp(msg, "FS no disponible en estado 1 (particiones): configurar particiones"),
+              "verbo de fichero sin FS: como antes");
+
+        bpvm_boot_status_t tope = { BPVM_BOOT_FS, 0, "" };   /* el tope en FS: parada a propósito, sin motivo */
+        bpvm_boot_no_listo_msg(&tope, 1, msg, sizeof msg);
+        CHECK(!strcmp(msg, "VM no disponible en estado 2 (fs): la placa no llego a la app"),
+              "RUN en FS sin motivo: se dice que no llegó a la app, no las particiones");
+
+        bpvm_boot_no_listo_msg(NULL, 1, msg, sizeof msg);
+        CHECK(strstr(msg, "estado 0 (kernel): configurar particiones") != NULL, "sin estado: como el kernel");
+
+        /* El motivo más largo (63 B) cabe entero en el mensaje. */
+        bpvm_boot_status_t largo = { BPVM_BOOT_FS, 1, "" };
+        memset(largo.reason, 'x', BPVM_BOOT_REASON_MAX - 1);
+        largo.reason[BPVM_BOOT_REASON_MAX - 1] = '\0';
+        int w = bpvm_boot_no_listo_msg(&largo, 1, msg, sizeof msg);
+        CHECK(w > 0 && (size_t) w < sizeof msg && strstr(msg, largo.reason) != NULL,
+              "el motivo mas largo cabe entero en el NOT_READY de la puerta");
+    }
+
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);
     return g_fail == 0 ? 0 : 1;
 }

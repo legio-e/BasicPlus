@@ -1694,22 +1694,23 @@ int bpvm_repl_verbo_de_fs(const char* type) {
 }
 
 /* V7/H10 #473 (punto 10; 3-oct) — la puerta del arranque, una (ver bpvm_repl.h). Los mensajes eran tres para lo
- * mismo; queda el de la Pico, que dice en qué estado se quedó el arranque. */
-int bpvm_repl_puerta_arranque(const char* type, long id, json_obj_t* obj, int estado, int bulk_en_cable) {
-    char msg[112];
+ * mismo; queda el de la Pico, que dice en qué estado se quedó el arranque. #691 (12-oct): y, sin VM con el FS
+ * montado, por qué no hay VM (el motivo del arranque); el mensaje lo compone bpvm_boot_no_listo_msg. */
+int bpvm_repl_puerta_arranque(const char* type, long id, json_obj_t* obj, const bpvm_boot_status_t* st,
+                              int bulk_en_cable) {
+    char msg[112];   /* «VM no disponible en estado 2 (fs): » son 35, y el motivo, 63 como mucho */
+    const int estado = st ? (int) st->state : (int) BPVM_BOOT_APP;   /* las tres familias dan siempre el suyo */
     if (bpvm_repl_verbo_de_fs(type) && estado < BPVM_BOOT_FS) {
         if (bulk_en_cable) {
             long b_pend = json_get_long(obj, "bulk", 0);
             if (b_pend > 0) (void) bpvm_repl_drain_bulk((unsigned long) b_pend);
         }
-        snprintf(msg, sizeof msg, "FS no disponible en estado %d (%s): configurar particiones",
-                 estado, bpvm_boot_state_name((bpvm_boot_state_t) estado));
+        (void) bpvm_boot_no_listo_msg(st, 0, msg, sizeof msg);
         wire_v1_send_error(id, "NOT_READY", msg);
         return 1;
     }
     if (type && strcmp(type, "RUN") == 0 && estado < BPVM_BOOT_APP) {
-        snprintf(msg, sizeof msg, "VM no disponible en estado %d (%s): configurar particiones",
-                 estado, bpvm_boot_state_name((bpvm_boot_state_t) estado));
+        (void) bpvm_boot_no_listo_msg(st, 1, msg, sizeof msg);
         wire_v1_send_error(id, "NOT_READY", msg);
         return 1;
     }

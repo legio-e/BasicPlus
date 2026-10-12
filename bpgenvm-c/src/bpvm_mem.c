@@ -138,3 +138,38 @@ int bpvm_mem_plan_str(const bpvm_mem_plan_t* p, const bpvm_mem_region_t* r,
     }
     return (n < 0) ? 0 : n;
 }
+
+/* #691 — ver bpvm_mem.h. Los textos caben en los 64 B del motivo con la región más larga («SRAM estática», 14 B) y
+ * los números más anchos del parque (test_mem lo comprueba): truncar el motivo es perder justo la cifra. */
+int bpvm_mem_sin_vm_motivo(const bpvm_mem_plan_t* p, const bpvm_mem_region_t* r,
+                           const bpvm_mem_cfg_t* cfg, long vmheap_kb, char* buf, size_t cap)
+{
+    if (!buf || cap == 0) return 0;
+    buf[0] = '\0';
+    if (!p) return 0;
+    const char* nombre = (p->idx >= 0 && r) ? (r[p->idx].nombre ? r[p->idx].nombre : "?") : "-";
+    unsigned suelo = (unsigned)((cfg ? cfg->vm_min : 0) / 1024u);
+    int n;
+    switch (p->res) {
+    case BPVM_MEM_NO_CABE:
+        if (cfg && cfg->objetivo && cfg->objetivo < p->techo) {
+            /* Cabía: lo que no llega al suelo es lo PEDIDO, y casi siempre es la clave del ENV. */
+            if (vmheap_kb > 0)
+                n = snprintf(buf, cap, "vmheap=%ld KB no llega al suelo de la VM (%u KB)", vmheap_kb, suelo);
+            else
+                n = snprintf(buf, cap, "el objetivo (%u KB) no llega al suelo de la VM (%u KB)",
+                             (unsigned)(cfg->objetivo / 1024u), suelo);
+        } else
+            n = snprintf(buf, cap, "la VM no cabe en %s (%u KB; el suelo, %u KB)",
+                         nombre, (unsigned)(p->techo / 1024u), suelo);
+        break;
+    case BPVM_MEM_OK:
+        /* El plan cabía y la familia no pudo tomarlo: el asignador no dio ni el suelo (la escalera de las ESP32). */
+        n = snprintf(buf, cap, "la VM no cabe en %s: el asignador no da ni %u KB", nombre, suelo);
+        break;
+    default:
+        n = snprintf(buf, cap, "la placa no ofrece memoria para la VM");
+        break;
+    }
+    return (n < 0) ? 0 : n;
+}
