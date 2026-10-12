@@ -315,8 +315,8 @@ en el ENV (`SQLite=4`, el mismo que usa SQLite) —ver
 táctil sí va en la imagen. La P4 usa sus dos núcleos
 ([dos núcleos](#nucleos)). La Waveshare, con 32 MB de flash, pone sola el
 sistema de archivos en los 16 MB de arriba; el kit EV, de 16 MB, se reparte
-como las demás. En V7 se ha probado en la Waveshare; el kit EV, en V6 (su
-perfil sigue en la imagen, y es el de por defecto).
+como las demás. En V7 se han probado las dos; el kit EV no necesita clave: su
+perfil es el de por defecto.
 
 ### A. Imagen precompilada (esptool)
 

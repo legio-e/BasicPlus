@@ -321,9 +321,8 @@ in the ENV (`SQLite=4`, the same one SQLite uses) —see
 [The board's packs](#packs)—. The MIPI-DSI panel and touch driver does live
 in the image. The P4 uses both its cores ([two cores](#nucleos)). The
 Waveshare, with 32 MB of flash, puts the filesystem into the top 16 MB by
-itself; the 16 MB EV kit is laid out like the others. In V7 it was tested on
-the Waveshare; the EV kit, in V6 (its profile is still in the image, and it
-is the default one).
+itself; the 16 MB EV kit is laid out like the others. In V7 both were tested;
+the EV kit needs no key: its profile is the default one.
 
 ### A. Prebuilt image (esptool)
 

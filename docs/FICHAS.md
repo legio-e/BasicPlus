@@ -2122,9 +2122,23 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
     diciendo «configurar particiones»: `#691`, abajo. Sin `vmheap`, la P4 vuelve sana, con 24 MB de heap.
 
   En el ENV de la C5 y la C6 quedan restos de pruebas anteriores que no son de `INSTALAR`: `log=1` en las dos,
-  `traza` en el `lcd` de la C5 y `quantum=0` en la C6 (el valor por defecto). Quitarlos, a decidir por Eduardo.
+  `traza` en el `lcd` de la C5 y `quantum=0` en la C6 (el valor por defecto). Eduardo: *dejarlos*. Y los ficheros de
+  las pruebas en las placas, también.
+- **Paso 3, `#691`**: de la prueba de `#686` salió `#691`, y su arreglo cambió las ocho imágenes. Sellado otra vez, el
+  ZIP. Eduardo: regrabar una placa por familia, no todas. Con la imagen final quedan la Metro, la Nucleo y el kit P4 EV
+  (en placa, `#691`, abajo). Las demás del `F1` siguen con la imagen de antes de `#691`.
+- **Paso 3, el kit P4 EV**, con el OK de Eduardo. Llevaba la imagen de V6 (12-sep), y es la única placa que en V7 no se
+  había probado. Grabado desde el ZIP: arranca sano, con su FS (43 ficheros), y anota sola la fecha de la imagen. Su
+  zona tenía el `SQLite.pack` de V6: formateada, con el `Gui.pack` y el `SQLite.pack` de V7 (`SQLite=4` ya estaba).
+  - La tanda, con su pantalla de 1024×600 de oráculo, da los mismos 50 veredictos que la P4 Waveshare. La Metro y la
+    Nucleo, regrabadas, los mismos 50 que esta mañana.
+  - A mano: `SqlDemo`, bien; `GuiDemo` en su pantalla de 7", *«sí, se ve bien»* (Eduardo); y el Stop.
+  - `INSTALAR`, la portada y las notas decían que el kit se probó por última vez en V6: ya son las diez placas.
+- **La S3**, pendiente: Eduardo la desconectó antes de grabarla y la vuelve a conectar luego. Su lote está aprobado:
+  grabar, PACK_FORMAT (su `Stdlib.pack` no lo pide `INSTALAR`), la tanda, la memoria (~7 MB) y `vmheap` por debajo del
+  suelo.
 
-#### 🔴 `#691` — con `vmheap` por debajo del suelo, el RUN dice «configurar particiones»; y la STM32, sin VM, se da por sana (abierta el 12-oct, en el `F1` de V7, al probar `#686` en la P4)
+#### ✅ `#691` — con `vmheap` por debajo del suelo, el RUN dice «configurar particiones»; y la STM32, sin VM, se da por sana (abierta el 12-oct, en el `F1` de V7, al probar `#686` en la P4 · **CERRADA el mismo día**, `2842cd70` y el commit del lote; en placa, la Nucleo, la Metro y el kit P4 EV)
 
 Probando `#686` en la P4 (`vmheap=1024`, por debajo de su suelo de 2 MB), la placa hace lo que promete la referencia
 (apéndice A, `vmheap`): arranca degradada, lo dice y contesta al IDE. El log:
@@ -2165,7 +2179,7 @@ Lo que falla es lo que se le dice al usuario:
 **El coste**: el común y las tres familias, o sea las ocho imágenes, que ya pasaron sus tandas en este `F1`. Su
 prueba: la red, y en placa, `vmheap` por debajo del suelo en una de cada familia.
 
-Eduardo: *arreglarlo ahora*. **Hecho (12-oct), sin cerrar** (falta la placa):
+Eduardo: *arreglarlo ahora*. **Hecho (12-oct)**, `2842cd70`:
 - `bpvm_mem_sin_vm_motivo` (`src/bpvm_mem.c`): el motivo corto de una placa sin VM, en los 64 B del arranque. Cuatro
   textos: «vmheap=1024 KB no llega al suelo de la VM (2048 KB)» (sin la clave, «el objetivo (…)»); «la VM no cabe en
   PSRAM (1500 KB; el suelo, 2048 KB)»; «la VM no cabe en PSRAM: el asignador no da ni 2048 KB» (el plan cabía y la
@@ -2186,6 +2200,19 @@ Eduardo: *arreglarlo ahora*. **Hecho (12-oct), sin cerrar** (falta la placa):
   rehecho con ellas, el simulado con LVGL y SQLite y la referencia nueva: sha256 `8c548d83…`.
 - En placa (Eduardo: *«basta con una por familia»*): la S3 y el kit P4 EV, que se graban ahora con la imagen final,
   y la Pico 2 y la Nucleo. Las demás placas del `F1` se quedan con la imagen de antes de `#691`.
+
+**En placa** (12-oct), una por familia con la imagen final: la Nucleo, la Metro —en vez de la Pico 2: la conectó
+Eduardo, y es la misma imagen— y el kit P4 EV. En cada una, un programa en `/app`, `vmheap` por debajo del suelo y un
+reset:
+
+| placa | `vmheap` | el estado (`STATE`) y el RUN | sin `vmheap` |
+|---|---|---|---|
+| Nucleo | 32 | estado 2, degradada: «vmheap=32 KB no llega al suelo de la VM (64 KB)»; el RUN, `NOT_READY` «VM no disponible en estado 2 (fs): vmheap=32 KB no llega al suelo de la VM (64 KB)» | estado 3, 384 KB, corre |
+| Metro | 32 | lo mismo | estado 3, 5,5 MB, corre |
+| kit P4 EV | 1024 | lo mismo, con «(2048 KB)» | estado 3, 24 MB, corre |
+
+En las tres, el INFO da `vmHeapBytes: 0`, y el log, el AVISO, «boot: estado 2 (fs) DEGRADADO: <motivo>» y el autorun que
+no se mira. La Nucleo, que antes se decía sana, ahora se queda degradada como las demás. Su ENV, como estaba.
 
 #### ✅ `#690` — tras un Stop, la pantalla de la placa se queda con lo último del programa: la guía de la GUI (§23.3, §25) promete «la pantalla limpia» (abierta el 12-oct, en el `F1` de V7, en la DK2 · **CERRADA el mismo día**, el commit de `#690`; en placa, la DK2)
 

@@ -123,9 +123,7 @@ RISC-V con y sin FPU, y Xtensa):
 | `bpvm_stm32_nucleo.bin` | Nucleo U575 |
 | `bpvm_stm32_dk2.bin` | Discovery U5G9J |
 
-Nueve de las diez han pasado la ronda de pruebas de V7; la que falta, el kit
-ESP32-P4-Function-EV, comparte imagen con la P4 de Waveshare y se probó por última vez en
-V6.
+Las diez han pasado la ronda de pruebas de V7.
 
 Y en las que ya estaban:
 
