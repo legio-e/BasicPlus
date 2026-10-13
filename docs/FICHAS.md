@@ -106,7 +106,7 @@ el PC sin placa, como en el host.
 > ~~`#581`~~ (cerrada el 7-oct: con `PinesSistema` en la C6, que destapó el pad VDD_SPI) `#582` `#583` `#584` ~~`#585`~~ (cerrada el 3-oct, `ff1135cc`) ~~`#586`~~ (cerrada el 28-sep, `95de38bc`), y las que salen del análisis de `#554` (27-sep): ~~`#587`~~ (H7; cerrada el 27-sep, `ec5b15c7`), ~~`#588`~~ (SUELTA; cerrada el 27-sep, `455ca895`) y ~~`#589`~~ (H8; cerrada el 27-sep, `b777f25f`), ~~`#544`~~
 > (H4; cerrada el 25-sep: no se reproduce) y ~~`#554`~~ (H7; cerrada el 27-sep, `e5761dd1`) —y `#490`, en V8—. Y del 27-sep, al hacer `#589`: ~~`#590`~~ (SUELTA; cerrada el 27-sep, `dd2e06e5`: el valor inicial de las globales, el modelo de Eduardo) y ~~`#591`~~ (H8; cerrada el 28-sep, `d3a60e5c`), y al hacer `#531`: ~~`#592`~~ (SUELTA: el 2º temporizador de las natives de la VM-C; cerrada el 9-oct, `2e65457b`), y al hacer `#494`: ~~`#593`~~ (H7: el punto ciego del guardián del heap; cerrada el 29-sep, `41c27547`: la reserva en un método único); y del 28-sep, ~~`#594`~~ (H7: el módulo `Heap`, cerrada el mismo día, `ac0f3d71`), ~~`#595`~~ (H7: `Heap.compact()`, cerrada el mismo día, `6b265162`), ~~`#596`~~ (H7: con `--smp`, una excepción sin atrapar acababa en OK; cerrada el mismo día, `cdedb1d1`), ~~`#597`~~ (H7: `Net.recv` dejaba un bloque que mentía su tamaño; cerrada el mismo día, `6e362e2e`), ~~`#598`~~ (H7: el GC sin memoria para su mapa lo barría todo; ídem), ~~`#599`~~ (H7: miVM con dos workers se quedaba colgada en el GC; vista al medir el corpus con SMP; cerrada el mismo día, `c539c27c`, con el corpus con dos workers en la red) , ~~`#600`~~ (H7: con dos workers, la línea de un hilo se partía con la de otro; cerrada el mismo día, `cc073e52`: un `print` sale entero) y ~~`#601`~~ (H8: la puerta de «sin FS» de la ESP32 no paraba `FORMAT` y compañía; al mapear H8; cerrada el mismo día, `1a75a498`), ~~`#602`~~ (H8: el bloque de RAM de los motores en el `INFO`; cerrada el 1-oct, `a6f7ff7f`), y del mapa de H7 (29-sep) ~~`#603`~~ (con `--smp`, soltar un objeto con dueño corrompía el heap de la VM-C; cerrada el mismo día, `a907435d`), ~~`#604`~~ (la VM-C, 32 hilos en toda la vida del programa) y ~~`#605`~~ (el muro de la pila; cerradas el mismo día, `98c640e9`) y ~~`#606`~~ (dos latentes del XIP; cerrada el mismo día, `a907435d`); y al probar `#606`, ~~`#607`~~ (un manejador de la GUI no podía ceder; cerrada el 30-sep, `85de188f`: el setter de Forms, con el opcode `INVOKE_SLOT`; y el hilo que muere sin atrapar lo dice en la salida), y al probar `#605`, ~~`#608`~~ (una excepción sin atrapar en un hilo acaba ese hilo y el programa sale con error, «la A» de Eduardo; cerrada el mismo día, `41c27547`), y ~~`#609`~~ (`test-listen` se corta a veces con un `TimeoutError`; H8/H9; cerrada el 2-oct, `1dab3a66`), y de la prueba de estrés del heap (29-sep, noche): ~~`#610`~~ (VM-C: la tabla de handles crecía moviéndose con otros workers leyéndola; cerrada el mismo día, `b4bb28fb`), ~~`#611`~~ (miVM: `split` y `listDir` perdían los trozos si la reserva colectaba; cerrada el mismo día, `c0015787`), ~~`#612`~~ (miVM: un error de Java en un worker acababa el RUN sin decir nada; cerrada el mismo día, `cf476205`); y del 30-sep, ~~`#613`~~ (miVM: un hilo que cede con `sleep(0)` podía acabar en dos workers a la vez —B1 por otro camino—; cerrada el mismo día, `d6d72384`), y al grabar la C5 tras medir los márgenes, ~~`#614`~~ (`GuiFlushBench`: cambiar una etiqueta cuesta más que hace una semana —la C5, de 1 a 5,8 ms; la DK2, de 1,0 a 1,8—; SUELTA; cerrada el 9-oct: no era una regresión —el «1 ms» de la C5 lo daba el ejemplo de antes de arreglarlo—); y del 1-oct, al vaciar H7, `#615` (la Pico sobre el backend común de FreeRTOS: aparcada sin fecha, Eduardo; SUELTA; **a V8** el 9-oct, Eduardo), y al hablar de los runs, ~~`#616`~~ (H12: el planificador de varios runs de la VM-C no repartía en rueda; cerrada el mismo día, `c671d3a2`), y al probar el paso 4 de `#495` con el cliente del IDE, ~~`#617`~~ (H8: el servidor del wire de la VM-Java no tenía la subida por trozos y atendía a un cliente por proceso; cerrada el mismo día, `b33794df`), y al grabar la C5 con el paso 4, ~~`#618`~~ (H8: el cliente del IDE perdía bytes leyendo de uno en uno de un puerto rápido; cerrada el mismo día, `34167432`). Decisiones de Eduardo pendientes: ~~`#590`~~ (decidida el 27-sep: el modelo de las globales), ~~`#542`~~ (decidida el 25-sep: un import sin interfaz es un error de carga), ~~`#579`~~ (decidida el 3-oct: cerrada con la evidencia), ~~`#582`~~/~~`#583`~~ (la línea y el debugger; decididas el 9-oct: `#582`, a V8; `#583`, las natives no se depuran
 > —cerrada—), ~~`#584`~~ (decidida el 3-oct: podar sólo ahorra) y,
-> al publicar, `--formato=8` (la SD de la C6 quedó decidida el 24-sep: tras `H6.b`). Lo demás abierto no tiene número: está en la fila de su hito, abajo.
+> al publicar, ~~`--formato=8`~~ (decidida el 13-oct, Eduardo: se queda como está) (la SD de la C6 quedó decidida el 24-sep: tras `H6.b`). Lo demás abierto no tiene número: está en la fila de su hito, abajo.
 >
 > ### 📊 EL CENSO DE V7, al 13-sep-2026 — hecho al abrir la versión, ficha a ficha
 >
@@ -2174,6 +2174,33 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
   ZIP, rehecho: sha256 `8c54f18a…`. De paso, `#693`–`#696`, abiertas y no graves (Eduardo: *«creo que lo podemos dar por
   bueno. Lo que queda no es grave»*).
 - **Lo que queda**: el paso 6, publicar.
+- **Paso 6, preparado (13-oct)**. Eduardo, con el ZIP de `8c54f18a…`: *«estoy probando el ZIP, todo OK»*. Al repasar
+  `PUBLICAR.md` casilla a casilla salieron tres cosas que el `F1` no había mirado:
+  - **Las suites de Maven**: no van en `compat.sh` y el paso 1 no las tenía. Verdes: `lexer-java` 281/281, `miVM`
+    57/57.
+  - **Textos desfasados**:
+    - «nueve placas», en cinco frases: los dos README, la de arriba de las dos `index.html` y la ronda de las
+      notas. El paso 3 sumó el kit P4 EV y corrigió `INSTALAR`, el párrafo de las placas y la tabla de las notas,
+      pero no éstas.
+    - En las notas, dos números de antes de `#685`: 148 casos de paridad (son 149) y 18 programas de errores (19, con
+      50 comprobaciones).
+
+    Corregidos los siete.
+  - **El ZIP, rehecho**: tres de esos ficheros viajan en él. El empaquetador paró la primera vez —el simulado estaba
+    en el sabor de la red, sin LVGL— y se rehízo con `make sim LVGL=1 SQLITE=1`. Queda en sha256 `8f843444…`. Frente
+    al probado, de 718 ficheros cambian cuatro: los tres de la ayuda, con las correcciones, y `bpvm-sim.exe`, sólo en
+    el sello de la hora de compilación (las mismas fuentes; 2 024 `lv_`, 305 `sqlite3_`). Las ocho imágenes, las de
+    `dist/firmware`. Después, el host y el simulado vuelven al sabor de la red.
+
+  Decisiones de Eduardo:
+  - `--formato=8` **se queda como está**: *«la salida normal es MOD9 no? Así que también puedan generar MOD8 no es
+    problema»*. La referencia ya lo documenta y las notas no lo nombran.
+  - La release, **sin lema**: «BasicPlus v7.0».
+
+  `PUBLICAR.md`, renovado para v7.0, con el pre-flight de V7 medido y las tres trampas en sus casillas. El cuerpo de la
+  release, bilingüe, en `dist/release-v7.0.md`, desde las notas. Ni las notas ni la release nombran `#693`–`#696`, las
+  cuatro no graves (Eduardo: *«lo que queda no es grave»*).
+- **Lo que queda**: el tag `v7.0`, el push, la release y la web, con el OK de Eduardo.
 
 #### ✅ `#692` — en la P4, el Stop del IDE no para el programa: el IDE escribe la línea y su `\n` en dos veces, con el CH343 el `\n` llega tarde y la placa tira la línea (abierta el 12-oct, en el `F1` de V7, en las pruebas a mano de Eduardo · **CERRADA el mismo día**, el commit de `#692`; en placa, la P4, por Eduardo)
 

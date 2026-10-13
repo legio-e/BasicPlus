@@ -213,7 +213,8 @@ those **same four buses** were validated on the board with real sensors
 non-graphical families are on par**. The **Metro RP2350B** shares the firmware
 image with the Pico. The **ESP32-C3** and **ESP32-C6** joined in V6, and the
 **ESP32-C5** in V7, with the same shared code. The V7 test round passed on
-nine boards: Pico 2, Metro, S3, C3, C5, C6, Waveshare P4, Nucleo and DK2.
+ten boards: Pico 2, Metro, S3, C3, C5, C6, both P4s (the Function-EV kit and the
+Waveshare), Nucleo and DK2.
 
 **The boards with a screen (since V3).** The GUI (LVGL) has been verified on the
 board on all five: **STM32U5G9J-DK2** (LTDC 800×480 + GT911 touch),
@@ -221,8 +222,7 @@ board on all five: **STM32U5G9J-DK2** (LTDC 800×480 + GT911 touch),
 480×800), **Waveshare ESP32-C6-LCD-1.3** (ST7789 240×240, no touch) and
 **Waveshare ESP32-C5-Touch-LCD-2.8** (ST7789 240×320 + touch) — widget
 catalog, color, `.win` forms and touch, the same bytecode on all of them. In
-V7, with LVGL from a pack, on four of them; the Function-EV kit was last
-verified in V6.
+V7, with LVGL from a pack, on all five.
 
 ## The IDE
 
@@ -313,7 +313,7 @@ items — `native` functions now cover practically the whole language, and a
 program's objects release their resources when it ends — and turns on the second
 core of the dual-core boards. A new board comes in, the **ESP32-C5**, with a touch
 screen. Eight images for ten boards and three architectures; verified on real
-hardware on **nine of the ten** (the ESP32-P4-Function-EV kit, last in V6).
+hardware on **all ten**.
 
 Downloads and full detail: the
 **[v7.0 release](https://github.com/legio-e/BasicPlus/releases/tag/v7.0)** and the

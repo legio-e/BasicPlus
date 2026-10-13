@@ -27,6 +27,37 @@
 
 ## Última sesión
 
+> **13-oct (tarde)** — **El paso 6 del `F1`, preparado: `PUBLICAR.md` para v7.0, el ZIP rehecho (`8f843444…`) y el
+> cuerpo de la release. Falta el OK de Eduardo para el tag, el push, la release y la web.**
+>
+> **Lo que dijo Eduardo:**
+> - La prueba final del ZIP de ayer (`8c54f18a…`): *«estoy probando el ZIP, todo OK»*.
+> - `--formato=8`: *«la salida normal es MOD9 no? Así que también puedan generar MOD8 no es problema. Déjalo como
+>   está»*.
+> - Rehacer el ZIP con las correcciones de la ayuda: sí. La release, sin lema (como dijo el 11-oct de las notas: V7,
+>   sin subtítulo).
+>
+> **Lo hecho** (el detalle, en el `F1` de FICHAS):
+> - El repaso de `PUBLICAR.md`, casilla a casilla. Las suites de Maven no van en `compat.sh` y el `F1` no las había
+>   pasado: verdes, 281/281 y 57/57.
+> - Las cuatro portadas pasan la guarda, pero cinco frases seguían en «nueve placas»: los dos README, la frase de
+>   arriba de las dos `index.html` y la ronda de las notas. Ayer se corrigieron otras y éstas no. Y dos números de las
+>   notas eran de antes de `#685` (148 → 149 casos; 18 → 19 programas de errores, 49 → 50 comprobaciones).
+>   Corregidos.
+> - El ZIP, rehecho. El empaquetador paró primero: el simulado estaba sin LVGL, en el sabor de la red. Con
+>   `make sim LVGL=1 SQLITE=1`, `8f843444…`. Comparado con el probado: de 718 ficheros, cambian los tres de la ayuda y
+>   el sello de la hora del simulado. Luego, el host y el simulado, otra vez en el sabor de la red.
+> - `PUBLICAR.md`, renovado para v7.0: el pre-flight de V7 con lo medido, y en sus casillas lo que se escapó (las
+>   suites, el sabor del simulado, la carpeta libre del ZIP, los números de las portadas, comparar placa a placa).
+> - El cuerpo de la release, bilingüe, en `dist/release-v7.0.md` (fuera de git, como el de v6.0).
+>
+> **Lo siguiente**, con el OK de Eduardo: el tag `v7.0` sobre el commit de hoy, `git push origin main` y el tag, la
+> release con el ZIP (`gh release create`), y comprobar Pages y el sha256 del ZIP descargado. Después, el commit de
+> «V7 publicada».
+>
+> **Riesgos:** ninguno nuevo. El ZIP que se publica no es byte a byte el que probó Eduardo; la diferencia está medida
+> y explicada (arriba).
+
 > **12-oct** — **Las pruebas finales de V7 (`F1`): los pasos 0 a 5, hechos. Las diez placas, con la imagen final y su
 > tanda; el IDE desde el ZIP, probado por Eduardo (y `#692`, arreglado). Queda publicar.**
 >

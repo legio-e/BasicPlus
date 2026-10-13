@@ -444,17 +444,17 @@ que la placa rechazaría y dice cómo arreglarlo (`#576`).
 ### Pruebas
 
 - **La ronda de V7**: 50 pruebas por placa (`tools/tanda_v7.json`), con la salida comparada
-  con la del PC, verde en las nueve placas el 9-oct —saltando lo que una placa no tiene: la
-  pantalla, el AOT en la S3, memoria en la C6—. Y la de soltar los recursos (`#667`), 13 por
-  placa: un programa toma todos los PWM, las UART o las tiras NeoPixel de la placa, se para
-  con un Stop, y el siguiente los vuelve a tener.
+  con la del PC, verde en las diez placas el 12-oct, con las imágenes que se publican
+  —saltando lo que una placa no tiene: la pantalla, el AOT en la S3, memoria en la C6—. Y la
+  de soltar los recursos (`#667`), 13 por placa: un programa toma todos los PWM, las UART o
+  las tiras NeoPixel de la placa, se para con un Stop, y el siguiente los vuelve a tener.
 - **Los dos núcleos**: 110 minutos de resistencia con dos `run` en la Pico 2, la S3 y la P4,
   sin un fallo.
-- **La red de paridad dual-VM** pasa de 59 a 148 casos; y las VMs de V7 siguen ejecutando
+- **La red de paridad dual-VM** pasa de 59 a 149 casos; y las VMs de V7 siguen ejecutando
   byte a byte los 59 `.mod` de V6 de la cápsula, con su stdlib.
 - **102 pruebas de C** de la VM en la red (el AOT, el depurador, el arranque, la memoria…), y
-  18 programas de `samples/errores/`, que tienen que fallar, fallan con el mensaje que toca
-  (49 comprobaciones).
+  19 programas de `samples/errores/`, que tienen que fallar, fallan con el mensaje que toca
+  (50 comprobaciones).
 - Los 399 programas de `samples/` compilan con el compilador de V7.
 
 ### Bugs de V6 corregidos
