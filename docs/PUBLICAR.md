@@ -30,7 +30,7 @@ decisión.
 
 ---
 
-## ✅ PRE-FLIGHT DE V7 — F1 (12 y 13-oct)
+## ✅ PRE-FLIGHT DE V7 — F1 (pasado el 12 y el 13-oct; V7 publicada el 13-oct)
 
 La tabla de V6, rellena al pasar el `F1` de V7 con el resultado MEDIDO de cada
 casilla. El plan del `F1` y su avance, placa a placa, en `FICHAS.md` (§`F1`).
@@ -342,7 +342,9 @@ abrió el fichero: se miró que «anunciara V5», y lo anunciaba. Por eso:
       Se relanza con `gh api -X POST repos/legio-e/BasicPlus/pages/builds`.
 - [ ] Abrir la URL y comprobar: portada, que **carga la captura**
       (`img/guicolordemo.png`), y que los volúmenes (`manual`, `referencia`,
-      `guia-ide`, `gui`, `bp-desde-dentro`, `creditos`) abren en ES y EN.
+      `guia-ide`, `gui`, `basedatos`, `creditos`) abren en ES y EN; y
+      `bp-desde-dentro`, que sólo está en español (la portada inglesa enlaza ése:
+      `/en/bp-desde-dentro.html` da 404 y no es un fallo).
 - [ ] ℹ️ `web/cheatsheet.html` **no** se publica automáticamente: vive fuera de
       `docs/` a propósito (para que no viaje en el ZIP). Si lo quieres en la web,
       hay que copiarlo o enlazarlo a mano.
@@ -358,6 +360,8 @@ abrió el fichero: se miró que «anunciara V5», y lo anunciaba. Por eso:
       ⚠️ **No es un copia-pega de `RELEASES.md`**: aquel es sólo español y va por
       temas, no por release. Esto se escribió mal en el checklist y se descubrió el
       22-ago comparando con lo que V4 publicó de verdad.
+      ℹ️ El enlace «English below ↓» de la primera línea no salta: GitHub no pone
+      anclas a los encabezados de una release (visto en v7.0; en v6.0, igual).
 - [ ] `gh release create v7.0 dist/BasicPlus-7.0-win.zip --repo legio-e/BasicPlus
       --title "BasicPlus v7.0" --notes-file dist/release-v7.0.md` — **el ZIP y nada
       más** (ver arriba: las imágenes van dentro).

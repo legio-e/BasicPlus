@@ -27,8 +27,8 @@
 
 ## Última sesión
 
-> **13-oct (tarde)** — **El paso 6 del `F1`, preparado: `PUBLICAR.md` para v7.0, el ZIP rehecho (`8f843444…`) y el
-> cuerpo de la release. Falta el OK de Eduardo para el tag, el push, la release y la web.**
+> **13-oct (tarde)** — **🚀 V7 PUBLICADA: tag `v7.0`, la release con el ZIP (`8f843444…`) y la web. Antes, el paso 6
+> del `F1`: `PUBLICAR.md` para v7.0, tres trampas que el `F1` no había mirado y el ZIP rehecho.**
 >
 > **Lo que dijo Eduardo:**
 > - La prueba final del ZIP de ayer (`8c54f18a…`): *«estoy probando el ZIP, todo OK»*.
@@ -51,12 +51,19 @@
 >   suites, el sabor del simulado, la carpeta libre del ZIP, los números de las portadas, comparar placa a placa).
 > - El cuerpo de la release, bilingüe, en `dist/release-v7.0.md` (fuera de git, como el de v6.0).
 >
-> **Lo siguiente**, con el OK de Eduardo: el tag `v7.0` sobre el commit de hoy, `git push origin main` y el tag, la
-> release con el ZIP (`gh release create`), y comprobar Pages y el sha256 del ZIP descargado. Después, el commit de
-> «V7 publicada».
+> **La publicación**, con el OK de Eduardo (*«Sí, publica»*):
+> - El tag anotado `v7.0` sobre `a73c554c`, y el push de `main` (todo V7, desde `84dce0d0`) y del tag.
+> - La release «BasicPlus v7.0», `Latest`, con el ZIP y nada más.
+> - El ZIP, bajado de la release: byte a byte el de `dist`.
+> - Pages, `built`, con las correcciones en la portada.
 >
-> **Riesgos:** ninguno nuevo. El ZIP que se publica no es byte a byte el que probó Eduardo; la diferencia está medida
-> y explicada (arriba).
+> El enlace «English below ↓» del cuerpo no salta (GitHub no ancla los encabezados de una release; v6.0, igual):
+> anotado en `PUBLICAR`. Después, este commit, «V7 publicada», con `CLAUDE.md` apuntando a V8, y su push.
+>
+> **Lo siguiente:** V8, sin abrir; Eduardo dirá cuándo y cómo. Abiertas y no graves, `#693`–`#696`.
+>
+> **Riesgos:** ninguno. El ZIP publicado no es byte a byte el que probó Eduardo, pero la diferencia está medida y
+> explicada (arriba).
 
 > **12-oct** — **Las pruebas finales de V7 (`F1`): los pasos 0 a 5, hechos. Las diez placas, con la imagen final y su
 > tanda; el IDE desde el ZIP, probado por Eduardo (y `#692`, arreglado). Queda publicar.**

@@ -153,8 +153,9 @@ Antes de bucear en el código, el doc correcto suele ahorrar el viaje:
 ## Convenciones de trabajo
 
 - **Idioma:** español (código, docs, commits, conversación).
-- **Versión actual:** **V7, en curso desde el 13-sep-2026** (V6 se publicó el 12-sep, tag
-  `v6.0`; su ZIP en `dist/` es el oráculo de «¿lo he roto yo hoy?»). El mapa de V7 está en
+- **Versión actual:** **V7 publicada el 13-oct-2026** (tag `v7.0`; su ZIP en `dist/` es el
+  oráculo de «¿lo he roto yo hoy?»). Lo siguiente es **V8**, todavía sin abrir: la red, el
+  Bluetooth y el bajo consumo, lo que las notas de v7.0 le dejan. El mapa de V7 está en
   `docs/V7_BACKLOG.md`; qué hay abierto, en `docs/FICHAS.md` §ABIERTAS.
 - **`docs/FICHAS.md` es la fuente única de verdad.** Decisión de Eduardo (17-ago):
   *«Estado y pendientes son ficheros de trabajo tuyos. Pero el que dice realmente

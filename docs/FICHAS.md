@@ -36,6 +36,26 @@
 
 ---
 
+## 🚀 V7 PUBLICADA — 13-oct-2026
+
+El plan de la recta final (H12 → las SUELTAS → `D1` → 🧊 → `F1`), hecho en su orden. **El congelado de V7 queda
+levantado** con la publicación; V8 está sin abrir.
+
+| qué | dónde |
+|---|---|
+| commit publicado | `a73c554c` (el tag) · el del traspaso, después |
+| etiqueta | `v7.0` (anotada, «BasicPlus v7.0»; sin lema, Eduardo) |
+| release | https://github.com/legio-e/BasicPlus/releases/tag/v7.0 |
+| artefacto **único** | `BasicPlus-7.0-win.zip` — 28.970.324 B, `sha256 8f843444…b93b` |
+| web | https://legio-e.github.io/BasicPlus/ y `/en/`, build `built` sobre `a73c554c` |
+| lo que va dentro | el compilador, las dos VMs, el IDE (`BpIde-7.0.jar`), el micro simulado **con LVGL y SQLite**, la stdlib (30 módulos MOD9), los **cinco packs** (`Stdlib`, `SQLite`, `Gui`, `GuiMini`, `DriverSpi`), las **ocho imágenes** de las diez placas, los samples y la documentación en los dos idiomas |
+
+**Verificado, no supuesto:** el ZIP se **descargó desde la propia release** y es, byte a byte, el de `dist` (el digest
+de GitHub, el mismo `sha256`); frente al que probó Eduardo (`8c54f18a…`) cambian sólo los tres ficheros de la ayuda
+corregidos y el sello de la hora del simulado (§`F1`, paso 6). Pages, `built`: las dos portadas con las correcciones,
+la captura, los volúmenes y los anexos. Las **diez placas** pasaron `tanda.py` con las imágenes del ZIP (tabla en
+`F1`), y el IDE del ZIP lo probó Eduardo (*«todo OK»*). Quedan abiertas, no graves, `#693`–`#696` (Eduardo, 12-oct).
+
 ## 🚀 V6 PUBLICADA — 12-sep-2026 · «orden en los micros»
 
 Los cinco pasos del plan de cierre (`C1` → `T1` → 🧊 → `D1` → `F1`), hechos en su orden.
@@ -2026,7 +2046,7 @@ parte de los threads está poco clara porque se están mezclando los Threads del
 sencillo, para explicarlo bien hay que entender la arquitectura y eso sería demasiado para unas notas. Así que lo
 dejamos así.»*
 
-#### 🧪 `F1` — LAS PRUEBAS FINALES DE V7 (abierto el 12-oct) · 🧊 CODE FREEZE V7 desde el mismo día
+#### ✅ `F1` — LAS PRUEBAS FINALES DE V7 (abierto el 12-oct · **CERRADO el 13-oct: V7 PUBLICADA**, tag `v7.0`) · 🧊 CODE FREEZE V7 del 12 al 13-oct
 
 Eduardo: *«¿cómo quieres hacer las pruebas finales?»*. El plan es el de V6 (su `F1`, 12-sep), más lo nuevo de V7: la
 pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
@@ -2201,6 +2221,17 @@ pantalla llega en packs. Eduardo: *«OK, hacemos 0, 1 y 2»*.
   release, bilingüe, en `dist/release-v7.0.md`, desde las notas. Ni las notas ni la release nombran `#693`–`#696`, las
   cuatro no graves (Eduardo: *«lo que queda no es grave»*).
 - **Lo que queda**: el tag `v7.0`, el push, la release y la web, con el OK de Eduardo.
+- **Paso 6, hecho (13-oct)**, con el OK de Eduardo (*«Sí, publica»*):
+  - el tag anotado `v7.0` («BasicPlus v7.0») sobre `a73c554c`;
+  - el push de `main` (`84dce0d0..a73c554c`: los commits de V7) y el del tag;
+  - la release, «BasicPlus v7.0», `Latest`, con el ZIP y nada más: 28.970.324 B, y el digest de GitHub,
+    `sha256:8f843444…`. Bajado de la release, es byte a byte el de `dist`;
+  - Pages, `built` sobre `a73c554c` en 37 s. Responden las dos portadas, ya con «verde en las diez», la captura y
+    los volúmenes en los dos idiomas. `bp-desde-dentro` sólo existe en español, y la portada inglesa enlaza ése.
+
+  Un detalle de la release: el enlace «English below ↓» no salta, porque GitHub no pone anclas a los encabezados de
+  una release (en v6.0, igual).
+- **El `F1`, cerrado: V7 publicada.**
 
 #### ✅ `#692` — en la P4, el Stop del IDE no para el programa: el IDE escribe la línea y su `\n` en dos veces, con el CH343 el `\n` llega tarde y la placa tira la línea (abierta el 12-oct, en el `F1` de V7, en las pruebas a mano de Eduardo · **CERRADA el mismo día**, el commit de `#692`; en placa, la P4, por Eduardo)
 
