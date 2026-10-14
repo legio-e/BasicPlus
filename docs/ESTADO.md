@@ -56,7 +56,11 @@
 >   NimBLE guarda ahí, tienen que ir con la configuración.
 > - Eduardo decidió el fichero: un JSON en `/sys`. El programa, en un pack que el usuario lanza desde el IDE. Y para
 >   más adelante, lanzarlo desde otro programa con sus *overlays* (`loadModule`/`unloadModule`, `V2_BACKLOG` §17).
->   Lo que ha cambiado desde V2 y los acerca, en `V8_IDEAS.md` §E1.
+>   Lo que ha cambiado desde V2 y los acerca, en `V8_IDEAS.md` §E1. Después: *«de momento no lo necesitamos»*.
+> - Cómo los reconoce LVGL: por el camino de la táctil. Una API de entrada genérica (no de Bluetooth: Eduardo,
+>   *«correcto»*) que el pack de la GUI busca al crear la pantalla; el ratón, puntero con cursor, y el teclado, con un
+>   grupo por defecto. Primero, el teclado US. Eduardo: *«de momento lo podemos dejar aquí. Muy contento que casi todo
+>   haya funcionado casi a la primera»*.
 >
 > **Lo siguiente:** el paso 3, cuando Eduardo diga; antes, decidir las preguntas de `V8_IDEAS.md` §E1.
 >

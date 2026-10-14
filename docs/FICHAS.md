@@ -7010,8 +7010,17 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
   - lo hace **un programa BasicPlus**; *«una vez configurado no hace falta volver a tocarlo hasta que el usuario
     quiera»*. Guarda en **un fichero JSON en `/sys`** (decidido) y se le da al usuario **en un pack**, que lanza desde
     el IDE cuando quiere;
-  - para más adelante, lanzarlo desde otro programa: los *overlays* de Eduardo (`loadModule`/`unloadModule`,
-    `V2_BACKLOG` §17), que el enlace por nombre de V7, los handles y los packs en sitio acercan.
+  - lanzarlo desde otro programa con los *overlays* de Eduardo (`loadModule`/`unloadModule`, `V2_BACKLOG` §17): de
+    momento no hace falta (Eduardo).
+- **Cómo entran en LVGL**: por el mismo camino que la táctil.
+  - Quien tenga ratón o teclado publica una API de entrada, genérica e independiente del Bluetooth (Eduardo:
+    *«correcto»*).
+  - El pack de la GUI la busca al crear la pantalla. Del ratón hace un puntero con cursor; del teclado, un teclado con
+    un grupo por defecto.
+  - Los programas no cambian.
+  - Primero, el teclado US estándar; las distribuciones particulares, después.
+- **14-oct, «de momento lo podemos dejar aquí»** (Eduardo: *«muy contento que casi todo haya funcionado casi a la
+  primera»*).
 
   ⚠️ Medido: la imagen fusionada con la que se actualiza el firmware borra la NVS, y con ella las claves de NimBLE.
   Las claves tienen que vivir con la configuración, fuera de la NVS. Todo, en `V8_IDEAS.md` §E1.

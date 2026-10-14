@@ -162,8 +162,9 @@ Desde V2 han cambiado cosas que lo acercan:
 - **Las condiciones las prepara el programa** (como en `Heap.compact`): por ejemplo, descargar sólo desde el hilo que
   lo cargó y sin hilos del overlay vivos.
 
-Es trabajo de sistema y de lenguaje, así que va para más adelante y en su propio análisis. Mientras tanto, el
-programa de configuración es un programa más, que se lanza desde el IDE.
+Es trabajo de sistema y de lenguaje, así que va para más adelante y en su propio análisis. **De momento no hace
+falta** (Eduardo, 14-oct: *«lo de los overlays de momento no lo necesitamos, ejecutamos el programa desde el IDE y con
+eso es suficiente»*): el programa de configuración es un programa más, que se lanza desde el IDE.
 
 ⚠️ **Una trampa, medida el 14-oct: la NVS no sobrevive a una actualización del firmware.** NimBLE guarda las claves en
 la NVS (`0x9000`), y la imagen fusionada con la que se actualiza (la que `INSTALAR_FIRMWARE` dice grabar en el 0) lleva
@@ -173,6 +174,54 @@ configuración, en nuestro almacenamiento** (el Entorno o el sistema de ficheros
 actualización no llega). NimBLE deja poner un almacén propio (`ble_hs_cfg.store_read_cb`, `store_write_cb`,
 `store_delete_cb`). Y como las claves son secretas, mejor en un fichero que el IDE no enseñe que en el Entorno, que sí
 lo enseña.
+
+### Cómo entran el ratón y el teclado en LVGL: una API de entrada, genérica (Eduardo, 14-oct)
+
+La pregunta de Eduardo: con el teclado y el ratón configurados, se arranca un programa con LVGL; ¿cómo los reconoce
+LVGL? **Por el mismo camino por el que hoy entra la pantalla táctil.**
+
+**Así entra hoy la táctil** (la P4 y la DK2):
+1. **La imagen publica una API** con `bios->publica`, bajo la marca `PANT` (`include/bpvm_pant.h`). Sus funciones
+   van por nombre: `init`, `size`, `flush`, `rotate` y, si hay táctil, `touch(&x, &y)`. Las opcionales son las que
+   un driver no publica, y añadir una no rompe a los drivers ya grabados.
+2. **El pack de la GUI la busca en su primer uso** (`bpstdlib/gui/nativo/src/pant_lvgl.c`). Si `touch` está
+   publicada, crea un dispositivo de entrada de LVGL de tipo puntero cuyo lector la llama.
+3. **El programa BasicPlus no hace nada**: crea su pantalla y los botones ya responden al dedo.
+
+**El ratón y el teclado, igual:**
+1. **Quien tenga ratón o teclado publica otra API**, con una marca nueva (por ejemplo `ENTR`, de «entrada»), por
+   nombre:
+   - `raton`: lo que se ha movido desde la última vez, los botones y la rueda;
+   - `teclado`: la siguiente tecla, pulsada o soltada, ya convertida en carácter o en tecla de LVGL.
+2. **El pack de la GUI, al crear la pantalla, busca también ésa.** Si está:
+   - **el ratón** es un segundo puntero: su lector suma los desplazamientos, los limita al panel y da el botón
+     izquierdo como «pulsado». Lleva cursor (`lv_indev_set_cursor`) con una flechita que trae el pack;
+   - **el teclado** es un dispositivo de tipo teclado con un **grupo por defecto** (`lv_group_set_default`). Así, cada
+     campo de texto o botón que cree después el programa entra solo en el grupo: Tab pasa al siguiente, el campo con
+     el foco recibe las letras, Enter pulsa el botón con el foco, y un clic de ratón en un campo también le da el
+     foco.
+3. **Los programas BasicPlus no cambian**: los de hoy funcionarían con ratón y teclado.
+
+**Genérica, independiente del Bluetooth** (Eduardo: *«tu planteamiento de hacerlo genérico, independiente del
+Bluetooth es correcto»*). La API habla de ratón y de teclado, no de quién los trae. Hoy sería el anfitrión Bluetooth
+de la imagen; mañana podría ser un teclado USB (la P4 y la S3 tienen USB *host*) con la misma API, y el pack no se
+enteraría. Una imagen que no la publique deja el pack como hoy, y un pack viejo con una imagen nueva, también.
+
+**La distribución del teclado** (Eduardo: *«Los teclados se pueden internacionalizar, igual que en el PC. Para no
+complicarnos, podemos empezar con un teclado US estándar y luego ya pasamos a teclados particulares»*):
+- **Primero, el teclado US estándar.**
+- Las particulares, después, con una tabla por distribución, elegida en la configuración (el JSON de `/sys`).
+- La conversión de la posición de la tecla a carácter la hace quien publica la API. Así el pack recibe caracteres y
+  no tiene que saber nada de distribuciones.
+
+**Lo demás que habrá que resolver:**
+- **La rueda.** LVGL 9.2 no la usa para desplazar: hay que hacerlo a mano, buscando el objeto que está bajo el cursor
+  y desplazándolo.
+- **Los hilos.** Los informes llegan en la tarea de NimBLE y LVGL los lee en el suyo, así que entre los dos hace falta
+  una cola con cerrojo.
+- **Primero en el PC**, como pide la cascada. El simulador ya registra el ratón del PC como puntero
+  (`gui_display_sdl.c`). Añadiéndole el teclado del PC (`lv_sdl_keyboard_create`) y el grupo por defecto, el
+  comportamiento del teclado en la GUI (foco, Tab, Enter) se prueba allí antes de tocar la placa.
 
 ### Lo que LVGL ya trae (9.2.2, la copia de `third_party/lvgl`)
 
@@ -198,15 +247,16 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
 1. **Dónde vive el anfitrión Bluetooth.** En el firmware, en C y común a la familia ESP32: la P4 llega a la radio por
    ESP-Hosted, y la S3, la C3, la C5 y la C6 tienen controlador propio. NimBLE trae su propia tarea. Hay que medir
    cuánta memoria cuesta: en la P4 sobra PSRAM, pero la C3 y la C6 van justas (`MEMORIA.md`).
-2. **La GUI.** Cuando el pack de la GUI está cargado, el firmware registraría en LVGL un puntero (el ratón, con su
-   cursor) y un teclado (con su grupo), donde hoy se registra la táctil.
+2. **La GUI. Hay camino** (14-oct; arriba, «Cómo entran el ratón y el teclado en LVGL»): una API de entrada genérica,
+   que el pack de la GUI busca como hoy busca la táctil. Eduardo, conforme.
 3. **El programa sin GUI.** ¿Un módulo de BasicPlus que dé las teclas y el ratón como eventos? El nombre, por decidir.
 4. **El emparejamiento es configuración de la placa, no del programa**, como el Entorno. **El camino lo dio Eduardo
    el 14-oct**: un programa BasicPlus de configuración, que guarda en un fichero o en el Entorno (arriba, «La
    configuración, un programa BasicPlus»), que guarda en **un fichero JSON en `/sys`** (decidido el mismo día) y se
    le da al usuario en un pack. Las claves tienen que salir de la NVS, porque una actualización del firmware la borra.
    Quedan por decidir el nombre del fichero y si las claves van en él.
-5. **La distribución del teclado**: una clave del Entorno, por ejemplo `teclado=es`.
+5. **La distribución del teclado**: primero, el US estándar; las particulares, después, elegidas en la configuración
+   (Eduardo, 14-oct).
 6. **Los parámetros de conexión**: rechazarlos siempre, como hoy, o aceptar los que no llevan latencia. Hay que
    volver a mirarlo con un firmware nuevo en la C6.
 7. **La C6 de la P4.** Para el Bluetooth basta la de fábrica. La WiFi de V8 necesitará el protocolo de control: habrá
