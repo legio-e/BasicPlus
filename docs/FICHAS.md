@@ -39,7 +39,7 @@
 ## 🚀 V7 PUBLICADA — 13-oct-2026
 
 El plan de la recta final (H12 → las SUELTAS → `D1` → 🧊 → `F1`), hecho en su orden. **El congelado de V7 queda
-levantado** con la publicación; V8 está sin abrir.
+levantado** con la publicación. V8 empezó el 14-oct, en modo experimentar (`V8_IDEAS.md`; el bloque V8, en §ABIERTAS).
 
 | qué | dónde |
 |---|---|
@@ -6877,6 +6877,11 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 
 ### ═══ V8 — LA WIFI, EL BLUETOOTH Y EL BAJO CONSUMO (decidido el 24-sep-2026) ═══
 
+> 🚀 **V8 EMPEZÓ EL 14-OCT-2026, en modo experimentar** (Eduardo, 13-oct: *«V8 es para probar cosas nuevas, para
+> experimentar, sin ponernos obligaciones. Probaremos cosas y lo que funcione lo subiremos al final y lo que no funcione
+> se puede aplazar para más adelante.»*). El diseño, en `V8_IDEAS.md`. Las fichas nuevas de V8 van aquí, debajo de la
+> lista de lo que ya era de V8.
+>
 > **Decisión de Eduardo (24-sep):** *«La V8 la dedicaremos a la WiFi y el Bluetooth principalmente. El modo de bajo consumo también lo movemos a V8, todo lo demás de V7 se mantiene.»*
 >
 > **Y el foco de después de V7** (Eduardo, 5-oct): *«cuando terminemos V7 es no tocar más la arquitectura, ampliaremos
@@ -6977,6 +6982,30 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
+
+#### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
+
+Propuesto por Eduardo el 13-oct: emparejar con la P4 su teclado y su ratón Bluetooth, chinos y sin documentación. Los
+dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
+- **Paso 1, hecho.** Un firmware de prueba del IDF, sin BasicPlus, en la P4 de Waveshare: la P4 habla con su ESP32-C6
+  por SDIO (`esp_hosted` 3.0.9, con NimBLE en la P4) y ve por Bluetooth LE el teclado y el ratón. La C6 lleva de
+  fábrica un ESP-Hosted viejo (versión 0.0.0) que no contesta al protocolo de control del anfitrión 3.x, pero su
+  canal HCI funciona: **no hace falta tocar la C6**.
+- **Paso 2, hecho.** El anfitrión HID de prueba conecta, empareja (Just Works, el vínculo en la NVS), se suscribe y
+  recibe los informes de los dos a la vez, sin perder ninguna tecla:
+  - el ratón, con botones, X e Y de 16 bits y la rueda;
+  - el teclado, con el informe estándar de 8 B.
+
+  Dos hallazgos:
+  - Los cambios de parámetros que piden los aparatos se rechazan: aceptar el del ratón colgó la conexión a los 40 s
+    (`0x222`).
+  - **La reconexión por la dirección guardada, idea de Eduardo, funciona**: al encender el aparato o reiniciar la
+    placa vuelven en ~1 s, sin modo de emparejar.
+- **Lo siguiente**: el paso 3, cómo lo vería BasicPlus (el ratón como puntero de LVGL con su cursor, el teclado en el
+  campo con el foco, eventos para el programa, el emparejamiento como configuración de la placa). Las preguntas
+  están en `V8_IDEAS.md` §E1.
+- **La P4 de Waveshare lleva todavía el firmware de prueba.** Volver a grabarle la imagen de v7.0 queda pendiente,
+  con el OK de Eduardo. El código de las pruebas está en `C:\tmp\v8bt`, fuera del repo.
 
 #### 🧬 `#490` — BAJO CONSUMO: el estudio preliminar → **V8** (abierta 10-sep, decidida a V7 el mismo día; **a V8 el 24-sep**, con la WiFi y el Bluetooth — Eduardo)
 

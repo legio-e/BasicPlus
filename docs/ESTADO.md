@@ -27,6 +27,34 @@
 
 ## Última sesión
 
+> **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
+> a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su
+> dirección guardada.**
+>
+> **Lo que dijo Eduardo:**
+> - *«Empezamos V8, vamos con el teclado y el ratón Bluetooth»*, en la P4.
+> - Sobre emparejar, de su experiencia: *«si utilizas la MAC address del dispositivo siempre funcionaba… las
+>   siguientes veces se puede conectar directamente siendo más rápido y limpio»*.
+> - Pasó el esquema de la C6 de la placa de Waveshare, que confirmó los pines del SDIO.
+> - Al acabar: *«apunta»* (`V8_IDEAS.md`).
+>
+> **Lo hecho:**
+> - Comprobado que el teclado y el ratón son Bluetooth LE.
+> - Bajado `esp_hosted` 3.0.9 del registro de Espressif, con su OK.
+> - Dos firmwares de prueba del IDF en `C:\tmp\v8bt`, grabados en la P4 con su OK (por lotes, sólo la aplicación):
+>   - el escaneo: el enlace SDIO con la C6 sube, y su firmware de fábrica es un ESP-Hosted viejo que no contesta al
+>     RPC, pero su HCI funciona;
+>   - el anfitrión HID: empareja, recibe los informes de los dos y reconecta por la dirección guardada.
+> - Un hallazgo por el camino: aceptar el cambio de parámetros que pide el ratón cuelga la conexión a los 40 s, y por
+>   eso se rechazan.
+> - El análisis del paso 3 (cómo lo vería BasicPlus, con lo que LVGL ya trae), en `V8_IDEAS.md` §E1.
+>
+> **Lo siguiente:** el paso 3, cuando Eduardo diga; antes, decidir las preguntas de `V8_IDEAS.md` §E1.
+>
+> **Riesgos:** **la P4 de Waveshare lleva el firmware de prueba**, no BasicPlus. Para volver: grabar
+> `dist/firmware/bpvm_esp32p4_merged.bin` en el 0, con el OK de Eduardo. El Entorno, el sistema de ficheros y los
+> packs no se tocaron. El código de las pruebas vive en `C:\tmp`, fuera del repo.
+
 > **13-oct (tarde)** — **🚀 V7 PUBLICADA: tag `v7.0`, la release con el ZIP (`8f843444…`) y la web. Antes, el paso 6
 > del `F1`: `PUBLICAR.md` para v7.0, tres trampas que el `F1` no había mirado y el ZIP rehecho.**
 >
