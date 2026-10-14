@@ -7021,6 +7021,12 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
   - Primero, el teclado US estándar; las distribuciones particulares, después.
 - **14-oct, «de momento lo podemos dejar aquí»** (Eduardo: *«muy contento que casi todo haya funcionado casi a la
   primera»*).
+- **Lo siguiente, cuando se retome** (Eduardo: *«podemos intentar hacer la aplicación BP de configuración. Necesitaremos
+  algunas funciones nuevas para trabajar con el Bluetooth, un módulo, etc.»*), analizado antes de programar:
+  - el módulo de BasicPlus: su nombre y sus funciones;
+  - cómo se comporta en el PC: un Bluetooth simulado con aparatos de mentira, como el I2C y el SPI tienen su versión
+    de PC;
+  - la parte de la imagen: el anfitrión, el JSON de `/sys` y el almacén de las claves.
 
   ⚠️ Medido: la imagen fusionada con la que se actualiza el firmware borra la NVS, y con ella las claves de NimBLE.
   Las claves tienen que vivir con la configuración, fuera de la NVS. Todo, en `V8_IDEAS.md` §E1.

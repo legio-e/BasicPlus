@@ -62,7 +62,13 @@
 >   grupo por defecto. Primero, el teclado US. Eduardo: *«de momento lo podemos dejar aquí. Muy contento que casi todo
 >   haya funcionado casi a la primera»*.
 >
-> **Lo siguiente:** el paso 3, cuando Eduardo diga; antes, decidir las preguntas de `V8_IDEAS.md` §E1.
+> **Lo siguiente** (Eduardo, al acabar): *«cuando volvamos, podemos intentar hacer la aplicación BP de configuración.
+> Necesitaremos algunas funciones nuevas para trabajar con el Bluetooth, un módulo, etc.»* Se analiza antes:
+> - el módulo y sus funciones;
+> - su versión de PC, un Bluetooth simulado, por la cascada;
+> - la parte de la imagen.
+>
+> La P4 se queda con el firmware de prueba (Eduardo: *«dejarla así»*).
 >
 > **Riesgos:** **la P4 de Waveshare lleva el firmware de prueba**, no BasicPlus. Para volver: grabar
 > `dist/firmware/bpvm_esp32p4_merged.bin` en el 0, con el OK de Eduardo. El Entorno, el sistema de ficheros y los
