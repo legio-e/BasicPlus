@@ -7007,8 +7007,11 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
   - una pantalla para activar o desactivar, con la lista de los conocidos y la opción de añadir; otra que escanea y
     añade el elegido;
   - se guarda *«muy poco, el nombre, la mac address y el tipo»*;
-  - lo hace **un programa BasicPlus**, que guarda en un fichero o en el Entorno; *«una vez configurado no hace falta
-    volver a tocarlo hasta que el usuario quiera»*.
+  - lo hace **un programa BasicPlus**; *«una vez configurado no hace falta volver a tocarlo hasta que el usuario
+    quiera»*. Guarda en **un fichero JSON en `/sys`** (decidido) y se le da al usuario **en un pack**, que lanza desde
+    el IDE cuando quiere;
+  - para más adelante, lanzarlo desde otro programa: los *overlays* de Eduardo (`loadModule`/`unloadModule`,
+    `V2_BACKLOG` §17), que el enlace por nombre de V7, los handles y los packs en sitio acercan.
 
   ⚠️ Medido: la imagen fusionada con la que se actualiza el firmware borra la NVS, y con ella las claves de NimBLE.
   Las claves tienen que vivir con la configuración, fuera de la NVS. Todo, en `V8_IDEAS.md` §E1.

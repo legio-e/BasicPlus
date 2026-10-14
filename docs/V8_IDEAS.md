@@ -75,10 +75,10 @@ Con dos firmwares de prueba del ESP-IDF, sin BasicPlus, en la P4 de Waveshare. E
      de emparejar.
    - **Hace falta:** un aparato vinculado ya no se anuncia con su nombre, sino a su anfitrión.
 8. **Se duermen y vuelven solos.** Tras unos 10–12 minutos sin usarse, cada aparato cierra la conexión. El ratón lo
-   hace con el motivo `0x13` (el otro extremo cerró); el teclado, con un `0xE1` que no es estándar, probablemente su
-   propio código al dormirse. Al moverlo o al pulsar una tecla vuelven por la dirección guardada en menos de un
-   segundo, y las primeras teclas llegan incluso antes de terminar la suscripción: el teclado recuerda que estábamos
-   suscritos.
+   hace con el motivo `0x13` (el otro extremo cerró); el teclado, con códigos que no son estándar (`0xE1`, `0x90`),
+   probablemente los suyos propios al dormirse. Al moverlo o al pulsar una tecla vuelven por la dirección guardada en
+   menos de un segundo, y las primeras teclas llegan incluso antes de terminar la suscripción: el teclado recuerda que
+   estábamos suscritos.
 
 ### El recorrido del usuario (Eduardo, 14-oct)
 
@@ -121,11 +121,49 @@ Así quedan repartidos los papeles:
   dirección y lleva lo que mandan al puntero y al teclado de LVGL (y quizá a eventos del programa). Funciona con
   cualquier programa, o sin ninguno, como el cable del IDE.
 
-**¿Fichero o Entorno?** Por decidir (Eduardo):
+**¿Fichero o Entorno? Un fichero JSON en `/sys`** (decidido por Eduardo el 14-oct: *«un fichero json en /sys me
+parece bien»*). Se valoró:
 - **El Entorno** es donde vive la configuración de la placa: la pantalla de la P4 pasó de `/sys/board.json` al
   Entorno. El firmware lo lee al arrancar y el IDE lo enseña y lo deja editar. Pero hoy un programa BasicPlus sólo
   puede leerlo (`Machine.getEnv`): escribirlo pediría un `Machine.setEnv`, nuevo.
-- **Un fichero** en `/sys`: BasicPlus ya escribe ficheros, y el firmware tendría que leerlo al arrancar.
+- **Un fichero** en `/sys`: BasicPlus ya escribe ficheros y JSON (`Json`). El firmware tendrá que leerlo al
+  arrancar. Sin ningún cambio en el sistema.
+
+El nombre del fichero y dónde van las claves (en él o en otro fichero de `/sys`) quedan por decidir.
+
+**El programa, en un pack** (Eduardo, 14-oct): *«se lo podemos dar al usuario en un pack y el usuario puede
+ejecutarlo siempre que quiera desde el IDE»*. Un pack ejecutable lleva su programa con `main`, todo lo que importa y
+sus recursos (el `.win` de cada pantalla). Hay que comprobar cómo se lanza desde el IDE un pack ejecutable que ya está
+grabado en la zona de packs.
+
+### Para más adelante: ejecutar un programa BasicPlus desde otro (Eduardo, 14-oct)
+
+Lo natural sería que una aplicación tuviera su opción «Configurar el Bluetooth», que lance el programa de
+configuración y, al terminar, vuelva. Eduardo: *«En teoría hoy no es posible, nuestro SO solamente soporta la ejecución
+de 1 programa BP. Sin embargo hace tiempo te comenté lo de los 'Overlays', con comandos nuevos 'LoadMod' y 'UnloadMod'
+que nos permitía hacer precisamente esto.»*
+
+La idea es suya, del 29-may: `V2_BACKLOG` §17, *«`loadModule` / `unloadModule` — overlays estilo MS-DOS»*. Una parte
+del programa es residente y el resto se carga y se descarga según se necesita. Lo que se analizó entonces:
+- **Cargar** es relativamente fácil: hacer en marcha lo que el cargador ya hace al arrancar.
+- **Descargar** es lo difícil, por dos cosas: recuperar la memoria del módulo, y que no quede nada vivo apuntándolo
+  (una función en la pila, un objeto de una clase suya, un hilo).
+- **Se recomendaba el modelo (A)**: un hueco fijo para el overlay, junto a lo residente, y un overlay no llama a
+  otro. Su ejemplo de uso era justo éste: *«pantalla de config, rutina de diagnóstico, asistente»*.
+
+Desde V2 han cambiado cosas que lo acercan:
+- **El enlace tardío** (V7, MOD9): los módulos se enlazan por nombre al cargar, y el cargador ya construye las tablas
+  de cada módulo. Cargar uno más con el programa en marcha es ese mismo trabajo, módulo a módulo.
+- **Los handles con generación** (V4): una referencia a algo que ya no existe falla en el acto en vez de corromper.
+- **Los packs en sitio** (XIP): un módulo de un pack grabado corre desde la flash sin copiarse a la RAM. Cargar un
+  overlay desde un pack casi no gasta RAM: sólo sus globales y sus objetos.
+- **«Al acabar, todo vuelve a como estaba»** (`#668`): un overlay que se descarga puede destruir sus objetos y soltar
+  sus recursos como lo hace hoy el final de un programa.
+- **Las condiciones las prepara el programa** (como en `Heap.compact`): por ejemplo, descargar sólo desde el hilo que
+  lo cargó y sin hilos del overlay vivos.
+
+Es trabajo de sistema y de lenguaje, así que va para más adelante y en su propio análisis. Mientras tanto, el
+programa de configuración es un programa más, que se lanza desde el IDE.
 
 ⚠️ **Una trampa, medida el 14-oct: la NVS no sobrevive a una actualización del firmware.** NimBLE guarda las claves en
 la NVS (`0x9000`), y la imagen fusionada con la que se actualiza (la que `INSTALAR_FIRMWARE` dice grabar en el 0) lleva
@@ -165,8 +203,9 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
 3. **El programa sin GUI.** ¿Un módulo de BasicPlus que dé las teclas y el ratón como eventos? El nombre, por decidir.
 4. **El emparejamiento es configuración de la placa, no del programa**, como el Entorno. **El camino lo dio Eduardo
    el 14-oct**: un programa BasicPlus de configuración, que guarda en un fichero o en el Entorno (arriba, «La
-   configuración, un programa BasicPlus»). Queda por decidir el fichero o el Entorno. Y las claves tienen que salir de
-   la NVS, porque una actualización del firmware la borra.
+   configuración, un programa BasicPlus»), que guarda en **un fichero JSON en `/sys`** (decidido el mismo día) y se
+   le da al usuario en un pack. Las claves tienen que salir de la NVS, porque una actualización del firmware la borra.
+   Quedan por decidir el nombre del fichero y si las claves van en él.
 5. **La distribución del teclado**: una clave del Entorno, por ejemplo `teclado=es`.
 6. **Los parámetros de conexión**: rechazarlos siempre, como hoy, o aceptar los que no llevan latencia. Hay que
    volver a mirarlo con un firmware nuevo en la C6.

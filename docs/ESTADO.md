@@ -54,6 +54,9 @@
 >   *«una vez configurado no hace falta volver a tocarlo»*.
 > - Medido de paso: la imagen fusionada con la que se actualiza el firmware borra la NVS. Las claves del vínculo, que
 >   NimBLE guarda ahí, tienen que ir con la configuración.
+> - Eduardo decidió el fichero: un JSON en `/sys`. El programa, en un pack que el usuario lanza desde el IDE. Y para
+>   más adelante, lanzarlo desde otro programa con sus *overlays* (`loadModule`/`unloadModule`, `V2_BACKLOG` §17).
+>   Lo que ha cambiado desde V2 y los acerca, en `V8_IDEAS.md` §E1.
 >
 > **Lo siguiente:** el paso 3, cuando Eduardo diga; antes, decidir las preguntas de `V8_IDEAS.md` §E1.
 >
