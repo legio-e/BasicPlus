@@ -74,6 +74,67 @@ Con dos firmwares de prueba del ESP-IDF, sin BasicPlus, en la P4 de Waveshare. E
    - **Resultado:** al encender el aparato o al reiniciar la placa, vuelven en ~1 s, cifrados con su clave y sin modo
      de emparejar.
    - **Hace falta:** un aparato vinculado ya no se anuncia con su nombre, sino a su anfitrión.
+8. **Se duermen y vuelven solos.** Tras unos 10–12 minutos sin usarse, cada aparato cierra la conexión. El ratón lo
+   hace con el motivo `0x13` (el otro extremo cerró); el teclado, con un `0xE1` que no es estándar, probablemente su
+   propio código al dormirse. Al moverlo o al pulsar una tecla vuelven por la dirección guardada en menos de un
+   segundo, y las primeras teclas llegan incluso antes de terminar la suscripción: el teclado recuerda que estábamos
+   suscritos.
+
+### El recorrido del usuario (Eduardo, 14-oct)
+
+Eduardo, poniéndose en el lugar del usuario: una opción del programa para configurar el Bluetooth.
+- **La primera pantalla:** activar o desactivar, la lista de los aparatos ya conocidos y la opción de añadir nuevos.
+- **La segunda pantalla:** el escaneo, con la lista de los encontrados. Se elige uno y se añade a la lista.
+
+**Qué se guarda**, según Eduardo: *«Muy poco, el nombre, la mac address y el tipo»*. Con un matiz para cada cosa:
+1. **El nombre**, para la lista.
+2. **La dirección con su tipo**, pública o aleatoria: 6 bytes y uno de tipo (el `ble_addr_t`). Sin el tipo no se
+   puede conectar.
+3. **El tipo de aparato** (teclado, ratón…), para el icono y para saber adónde va lo que manda. **En el escaneo no
+   siempre se sabe**: el ratón lo anuncia, pero el teclado no. El tipo seguro sale de su descriptor de informes, al
+   conectarlo. En la lista de encontrados va el nombre, y el tipo se apunta al añadir.
+4. **Y lo que no se ve: las claves del vínculo**, las que se acuerdan al emparejar. Un teclado o un ratón Bluetooth
+   exigen conexión cifrada: sin las claves habría que ponerlo en modo de emparejar cada vez. Las guarda la pila de
+   Bluetooth al emparejar. Al quitar un aparato de la lista hay que borrar también sus claves.
+
+Quizá también la distribución de un teclado (española, americana), aunque puede ser un ajuste general.
+
+El recorrido encaja con lo medido:
+- **Añadir:** escanear (los que están en modo de emparejar se anuncian con su nombre), elegir, conectar, emparejar y
+  guardar. Si algún aparato pidiera código, la pantalla lo enseña para teclearlo.
+- **Al arrancar**, si está activado, esperar a los guardados por su dirección.
+- **Quitar:** la entrada y sus claves.
+- **Desactivar:** no arrancar la radio, lo que además ahorra consumo.
+
+### La configuración, un programa BasicPlus (Eduardo, 14-oct)
+
+Eduardo: *«Podemos hacer un programa BP que haga todo eso. Al terminar se puede guardar en un fichero o en el
+environment. Una vez configurado no hace falta volver a tocarlo hasta que el usuario quiera.»*
+
+Así quedan repartidos los papeles:
+- **El programa BasicPlus de configuración**, con sus dos pantallas. Es un programa más: se ejecuta cuando el usuario
+  quiere cambiar algo.
+- **Un módulo BasicPlus para ese programa**, por diseñar: activar y desactivar, escanear (los encontrados, con nombre,
+  dirección e intensidad), añadir (conecta, empareja y devuelve nombre, dirección y tipo), quitar, y la lista de los
+  guardados. Y el aviso para el caso del código.
+- **El firmware.** Al arrancar lee la configuración y, si está activado, espera a los aparatos guardados por su
+  dirección y lleva lo que mandan al puntero y al teclado de LVGL (y quizá a eventos del programa). Funciona con
+  cualquier programa, o sin ninguno, como el cable del IDE.
+
+**¿Fichero o Entorno?** Por decidir (Eduardo):
+- **El Entorno** es donde vive la configuración de la placa: la pantalla de la P4 pasó de `/sys/board.json` al
+  Entorno. El firmware lo lee al arrancar y el IDE lo enseña y lo deja editar. Pero hoy un programa BasicPlus sólo
+  puede leerlo (`Machine.getEnv`): escribirlo pediría un `Machine.setEnv`, nuevo.
+- **Un fichero** en `/sys`: BasicPlus ya escribe ficheros, y el firmware tendría que leerlo al arrancar.
+
+⚠️ **Una trampa, medida el 14-oct: la NVS no sobrevive a una actualización del firmware.** NimBLE guarda las claves en
+la NVS (`0x9000`), y la imagen fusionada con la que se actualiza (la que `INSTALAR_FIRMWARE` dice grabar en el 0) lleva
+`FF` en esa zona: la de v7.0, comprobada. Cada actualización borraría las claves, y el usuario tendría que volver a
+emparejarlo todo. Para que «una vez configurado» sea verdad, **las claves tienen que vivir con el resto de la
+configuración, en nuestro almacenamiento** (el Entorno o el sistema de ficheros, más allá de la aplicación, donde una
+actualización no llega). NimBLE deja poner un almacén propio (`ble_hs_cfg.store_read_cb`, `store_write_cb`,
+`store_delete_cb`). Y como las claves son secretas, mejor en un fichero que el IDE no enseñe que en el Entorno, que sí
+lo enseña.
 
 ### Lo que LVGL ya trae (9.2.2, la copia de `third_party/lvgl`)
 
@@ -102,11 +163,10 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
 2. **La GUI.** Cuando el pack de la GUI está cargado, el firmware registraría en LVGL un puntero (el ratón, con su
    cursor) y un teclado (con su grupo), donde hoy se registra la táctil.
 3. **El programa sin GUI.** ¿Un módulo de BasicPlus que dé las teclas y el ratón como eventos? El nombre, por decidir.
-4. **El emparejamiento es configuración de la placa, no del programa**, como el Entorno.
-   - ¿Desde dónde se hace: desde el IDE (en la gestión de placa, como los packs), desde el Entorno o desde un
-     programa?
-   - ¿Dónde se guardan las direcciones vinculadas: en la NVS (donde NimBLE guarda las claves) o en nuestro sistema de
-     ficheros o Entorno?
+4. **El emparejamiento es configuración de la placa, no del programa**, como el Entorno. **El camino lo dio Eduardo
+   el 14-oct**: un programa BasicPlus de configuración, que guarda en un fichero o en el Entorno (arriba, «La
+   configuración, un programa BasicPlus»). Queda por decidir el fichero o el Entorno. Y las claves tienen que salir de
+   la NVS, porque una actualización del firmware la borra.
 5. **La distribución del teclado**: una clave del Entorno, por ejemplo `teclado=es`.
 6. **Los parámetros de conexión**: rechazarlos siempre, como hoy, o aceptar los que no llevan latencia. Hay que
    volver a mirarlo con un firmware nuevo en la C6.

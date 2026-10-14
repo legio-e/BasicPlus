@@ -48,6 +48,12 @@
 > - Un hallazgo por el camino: aceptar el cambio de parámetros que pide el ratón cuelga la conexión a los 40 s, y por
 >   eso se rechazan.
 > - El análisis del paso 3 (cómo lo vería BasicPlus, con lo que LVGL ya trae), en `V8_IDEAS.md` §E1.
+> - Por la tarde, los dos aparatos se durmieron (10–12 minutos sin uso) y volvieron solos al tocarlos.
+> - Eduardo, como usuario: dos pantallas, la de la lista con activar y añadir y la del escaneo; se guarda *«el
+>   nombre, la mac address y el tipo»*. Todo lo hace un programa BasicPlus que guarda en un fichero o en el Entorno, y
+>   *«una vez configurado no hace falta volver a tocarlo»*.
+> - Medido de paso: la imagen fusionada con la que se actualiza el firmware borra la NVS. Las claves del vínculo, que
+>   NimBLE guarda ahí, tienen que ir con la configuración.
 >
 > **Lo siguiente:** el paso 3, cuando Eduardo diga; antes, decidir las preguntas de `V8_IDEAS.md` §E1.
 >

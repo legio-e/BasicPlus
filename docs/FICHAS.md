@@ -7001,9 +7001,20 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
     (`0x222`).
   - **La reconexión por la dirección guardada, idea de Eduardo, funciona**: al encender el aparato o reiniciar la
     placa vuelven en ~1 s, sin modo de emparejar.
+- **Se duermen y vuelven solos**: tras 10–12 minutos sin uso, cada aparato cierra la conexión; al tocarlo, vuelve por
+  su dirección en menos de un segundo.
+- **El recorrido del usuario** (Eduardo, 14-oct):
+  - una pantalla para activar o desactivar, con la lista de los conocidos y la opción de añadir; otra que escanea y
+    añade el elegido;
+  - se guarda *«muy poco, el nombre, la mac address y el tipo»*;
+  - lo hace **un programa BasicPlus**, que guarda en un fichero o en el Entorno; *«una vez configurado no hace falta
+    volver a tocarlo hasta que el usuario quiera»*.
+
+  ⚠️ Medido: la imagen fusionada con la que se actualiza el firmware borra la NVS, y con ella las claves de NimBLE.
+  Las claves tienen que vivir con la configuración, fuera de la NVS. Todo, en `V8_IDEAS.md` §E1.
 - **Lo siguiente**: el paso 3, cómo lo vería BasicPlus (el ratón como puntero de LVGL con su cursor, el teclado en el
-  campo con el foco, eventos para el programa, el emparejamiento como configuración de la placa). Las preguntas
-  están en `V8_IDEAS.md` §E1.
+  campo con el foco, eventos para el programa, el programa de configuración y su módulo). Las preguntas que quedan,
+  en `V8_IDEAS.md` §E1.
 - **La P4 de Waveshare lleva todavía el firmware de prueba.** Volver a grabarle la imagen de v7.0 queda pendiente,
   con el OK de Eduardo. El código de las pruebas está en `C:\tmp\v8bt`, fuera del repo.
 
