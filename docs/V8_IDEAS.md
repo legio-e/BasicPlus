@@ -610,7 +610,7 @@ mi propuesta: manda lo de aquí.
       él el `n - 1`.
     - Lo que BP tiene y JC no, de momento: el paso en una variable. Sólo sale en tres samples de prueba (`ForStep`,
       `ContinueFor` y `errores/StepCero`). En el corpus hay 39 `for`: 21 numéricos y 18 `for … in`.
-    - ❓ El `for x in lista` de BP necesitará su forma; la de C# es `foreach (var x in lista)`.
+    - El `for x in lista` de BP es el `foreach` (16).
 12. **`v++` y `v--`** (17-oct). Eduardo: en C# están `v++` y `v--`; en BP, lo más cercano es `v += 1` y `v -= 1`.
     *«Si hace falta se puede añadir un opCode para cada uno y 2 funciones inline para BP: inc(v) y dec(v)»*.
 
@@ -645,6 +645,13 @@ mi propuesta: manda lo de aquí.
     - Los demás compuestos de C# (`*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`) no están en BP: de momento no, y
       el error lo dice (mi propuesta; Eduardo, conforme). Para tenerlos habría que añadirlos a BP.
     - Como en BP, la asignación es una sentencia: no va dentro de una expresión (`a = b = 0`, `if ((x = f()) > 0)`).
+16. **El `foreach`, el de C#** (17-oct): `foreach (var x in lista) stmt`, que es el `for x in lista do` de BP.
+    - ❓ **El tipo, siempre `var`** (mi propuesta). En BP la variable toma el tipo de los elementos, y el árbol no lo
+      guarda. Con un tipo escrito (`foreach (int x in lista)`), de momento, error: habría que guardarlo en el árbol y
+      comprobarlo.
+    - Recorre un array, como el de BP (`SemanticAnalyzer`: «se esperaba array en 'for in'»); el de C# recorre
+      cualquier colección.
+    - Sin llaves, es el `for … in` de una línea de BP; con llaves, el de varias, como en el `while`.
 
 ### Lo que choca entre BP y JC, para más adelante
 
