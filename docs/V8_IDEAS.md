@@ -658,6 +658,31 @@ mi propuesta: manda lo de aquí.
         convertiría cada elemento, como en C#. Para eso, el árbol tendrá que guardar el tipo, y BP necesitará una forma
         de escribirlo.
     - Sin llaves, es el `for … in` de una línea de BP; con llaves, el de varias, como en el `while`.
+17. **El `print`, distinto del de BP** (17-oct). Eduardo: *«Va con paréntesis y ',' , pero la coma no añade un
+    tabulador en el print final. El CR y LN no se añaden de forma automática, hay que indicarlos.»* Es decir,
+    `print(a, b, "\n");` imprime las piezas una tras otra, sin nada entre ellas y sin salto al final.
+
+    **El `print` de BP, medido el 17-oct** (una sonda en el scratchpad):
+    - la coma añade un espacio, no un tabulador: `print "a", "b"` da `a b`;
+    - el `;` no añade nada: `print "c"; "d"` da `cd`;
+    - el salto (`\n`) lo pone siempre, también con un `;` al final: `print "e";` da `e` y el salto. En BP no hay forma
+      de escribir en la consola sin saltar de línea (`IO.write` es para ficheros);
+    - una coma al final de la línea sigue el `print` en la línea siguiente.
+
+    ❓ **Lo que pide el `print` de JC:**
+    - **Un `print` sin salto en BP, y no es sólo del compilador.** La VM junta las piezas de un `print` y las saca
+      enteras con el salto (`PRINT_NL` → `bpvm_linea_fin`, `#600`), para que un `print` salga entero aunque haya
+      varios hilos. Sin el salto, las piezas se quedarían esperando al siguiente. Hace falta una instrucción que las
+      saque sin añadirlo: en las dos VMs, en el AOT y en las placas.
+    - **La ida y vuelta da otro árbol.** El `print a, b` de BP es en JC `print(a, " ", b, "\n");`, y de vuelta a BP,
+      `print a; " "; b; "\n";`. Imprime lo mismo, pero con otro árbol y otro `.mod`. Pasa con los 2.655 `print` del
+      corpus, porque todos llevan el salto automático. En el `print`, la comparación tendría que ser por lo que
+      imprime: la coma, un `" "`; el salto automático, un `"\n"`.
+
+    **Mi propuesta:** el `print` sin salto también para BP, porque también le sirve (un aviso antes de leer, el
+    progreso en una sola línea). Un `;` al final no salta de línea, como en el BASIC clásico (en el corpus no hay
+    ninguno), y una instrucción nueva en la VM saca la línea sin el salto. Así, el `print(a, b);` de JC es el
+    `print a; b;` de BP.
 
 ### Lo que choca entre BP y JC, para más adelante
 
