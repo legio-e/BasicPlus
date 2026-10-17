@@ -823,6 +823,16 @@ mi propuesta: manda lo de aquí.
     - En C# son atributos entre corchetes (`[Table("medidas")]`, `[Key]`), y en Java, `@Table(name = "medidas")`.
       Ninguno admite el `clave` suelto de BP.
     - La de BP no choca con nada en JC: delante de una declaración, esa llave no puede ser un bloque.
+28. **`throw`, como en C#** (Eduardo, 17-oct): `throw new RuntimeError("…");` es el `throw RuntimeError("…")` de BP
+    (`ThrowStmt`). El `throw;` de C#, sin nada, que relanza dentro de un `catch`, BP no lo tiene (`parseThrowStmt`
+    pide una expresión): de momento, error, y se escribe `throw e;`.
+29. **Las constantes, como en C#, también las locales** (Eduardo, 17-oct): `const int MAX = 10;`.
+    - **El tipo, obligatorio, como en C#.** En BP se puede omitir y lo deduce del valor (`const WARN := 2`): de las 100
+      constantes del corpus, 22 no lo llevan.
+    - El escritor de JC les pone el tipo que deduce el compilador (el árbol analizado, como para el `new`). De vuelta
+      a BP llevan el tipo: otro árbol, que la comparación tendrá que dar por igual.
+    - Medido el 17-oct: con el tipo escrito o sin él, el mismo `.mod`, byte a byte (de módulo y local; `integer`,
+      `float`, `string` y `long`).
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
