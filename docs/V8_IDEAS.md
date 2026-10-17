@@ -555,9 +555,9 @@ mi propuesta: manda lo de aquí.
    - `while (c) s`, sin llaves, es el `while` de una línea de BP; con llaves, el de varias líneas, como en el `if`.
    - `do { … } while (c);` es el `do … loop c` de BP, que también se repite mientras `c` se cumpla. El `do` de BP no
      tiene forma de una línea, así que el escritor de JC le pone siempre las llaves.
-   - ❓ **El `do … loop` de BP sin condición**, que se repite hasta un `break`, no existe en C#. En el corpus no hay
-     ninguno: los tres `do` que hay llevan condición. Mi recomendación: que JC no lo tenga, y que el traductor lo diga,
-     con su línea, si un programa de BP lo usa. En JC, el bucle sin fin es `while (true)`.
+   - **El `do … loop` de BP sin condición**, que se repite hasta un `break`, no existe en C#, y JC no lo tiene
+     (Eduardo, conforme). En el corpus no hay ninguno: los tres `do` que hay llevan condición. Si un programa de BP lo
+     usa, el traductor lo dice, con su línea. En JC, el bucle sin fin es `while (true)`.
    - **El `continue` dentro de un `do`:** en C# va a la condición, y en el C del AOT también; en el intérprete de BP
      vuelve arriba sin mirarla. Es un fallo de BP, `#699`. Cuando se arregle, el `do … while` de JC será el de C#.
 10. **`break`, `continue` y `return`, sin cambios, como en C#** (17-oct): `break;` · `continue;` · `return;` ·
@@ -574,7 +574,7 @@ mi propuesta: manda lo de aquí.
 
     El de C, en cambio, evalúa la condición y el incremento en cada vuelta, y pueden ser cualquier cosa.
 
-    ❓ **Mi propuesta:** que el `for` de JC sea el de BP con la ropa de C, sólo con estas formas.
+    **Decidido** (mi propuesta; Eduardo, conforme): el `for` de JC es el de BP con la ropa de C, sólo con estas formas.
 
     | JC | BP |
     |---|---|
@@ -586,9 +586,11 @@ mi propuesta: manda lo de aquí.
     - El paso es un número, y la condición va con él: `<=` si sube, `>=` si baja.
     - Lo demás es un error que lo dice: `i < n`, otra condición u otro incremento, o un paso en una variable. El mensaje:
       «el `for` de JC cuenta como el de BP; para lo demás, `while`».
+    - `i < n`, el más típico de C, de momento no: se escribe `i <= n - 1`. Admitirlo obligaría al parser a escribir
+      él el `n - 1`.
     - Lo que BP tiene y JC no, de momento: el paso en una variable. Sólo sale en tres samples de prueba (`ForStep`,
       `ContinueFor` y `errores/StepCero`). En el corpus hay 39 `for`: 21 numéricos y 18 `for … in`.
-    - El `for x in lista` de BP necesitará su forma; la de C# es `foreach (var x in lista)`.
+    - ❓ El `for x in lista` de BP necesitará su forma; la de C# es `foreach (var x in lista)`.
 
 ### Lo que choca entre BP y JC, para más adelante
 
