@@ -515,9 +515,20 @@ mi propuesta: manda lo de aquí.
    una sentencia puede ocupar varias líneas.
 5. **Las variables y las constantes, con el tipo delante**, como en Java y C# (17-oct): `int x = 5;` ·
    `const int MAX = 10;` · `owner Persona p = Persona("a");`.
-   - ❓ **Varios nombres con valor.** En BP, `var a, b: integer := 3` da 3 a las dos; en C#, `int a, b = 3;` sólo a
-     `b`. Mi propuesta: en JC, con varios nombres, sin valor (`int a, b;`); con valor, un nombre (`int a = 3;`). En el
-     corpus no hay ningún `var` de varios nombres con valor.
+   - **Varios nombres, cada uno con su valor, como en C#** (Eduardo, 17-oct): `int a = 1, b = 2;`. Ojo: en BP,
+     `var a, b: integer := 3` da 3 a las dos; en C#, `int a, b = 3;` sólo a `b`. JC es C#.
+
+     **Con el árbol de BP:** cada nombre con valor es su propia declaración (`VarDecl`), como los grupos de BP; sin
+     ningún valor, una sola con todos los nombres.
+
+     | JC | BP |
+     |---|---|
+     | `int a, b;` | `var a, b: integer` |
+     | `int a = 1, b = 2;` | `var a: integer := 1, b: integer := 2` |
+     | `int a, b = 3;` | `var a: integer, b: integer := 3` |
+
+     Lo que JC no puede escribir: el `var a, b: integer := 3` de BP, un valor para varios nombres. En el corpus no hay
+     ninguno; si sale, el traductor lo dice.
 6. **Los tipos básicos, los de C#, también los estrechos** (17-oct). Un nombre por tipo:
 
    | BP | JC |
@@ -610,7 +621,8 @@ mi propuesta: manda lo de aquí.
 13. **El `try`, el de BP con los bloques entre llaves** (17-oct). Eduardo: *«El try no cambia, todo igual que en BP
     solamente que el bloque va entre llaves.»* Varios `catch`, un `finally` opcional y el recurso, como en BP.
 
-    ❓ **La cabecera del `catch` y el recurso** (mi propuesta: el tipo delante, como en las variables):
+    **La cabecera del `catch` y el recurso**, con el tipo delante, como en las variables (mi propuesta; Eduardo,
+    conforme):
 
     | BP | JC |
     |---|---|
@@ -624,8 +636,8 @@ mi propuesta: manda lo de aquí.
     de JC dirá que no lo sabe escribir.
 15. **Las asignaciones, las de C#** (17-oct): `x = e;` · `x += e;` · `x -= e;`. El desempaquetado de BP,
     `{ n, s } := par()`, es en JC el de C#: `(n, s) = par();`, con `_` para descartar.
-    - ❓ Los demás compuestos de C# (`*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`) no están en BP. Mi propuesta: de
-      momento no, y el error lo dice; para tenerlos habría que añadirlos a BP.
+    - Los demás compuestos de C# (`*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`) no están en BP: de momento no, y
+      el error lo dice (mi propuesta; Eduardo, conforme). Para tenerlos habría que añadirlos a BP.
     - Como en BP, la asignación es una sentencia: no va dentro de una expresión (`a = b = 0`, `if ((x = f()) > 0)`).
 
 ### Lo que choca entre BP y JC, para más adelante
