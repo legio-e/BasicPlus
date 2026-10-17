@@ -85,8 +85,15 @@
 > - Salió que el análisis añade a las llamadas los valores por defecto: el escritor escribe ahora sólo los del
 >   programador. El frontend, 300 pruebas sin fallos.
 >
-> **Lo siguiente:** `#700` en el compilador de BP, que el compilador lea `.jc`, y la prueba por la salida en las dos
-> VMs.
+> **Y el lenguaje entero** (Eduardo: completar JC antes de generar código): las clases como en C#, el `switch` y
+> `parallel`, con cuatro decisiones suyas (`protected` explícito, `: base(…)`, `base`, y el `set` de las dos formas).
+> - **433 de los 440 `.bp` que compilan hacen la ida y vuelta.** Los 7 que no: dos pasos en una variable y cinco
+>   nombres `base`.
+> - El frontend, 301 pruebas sin fallos.
+> - Salió `#702`, de BP: un `raise` dentro de un `set` no compila.
+>
+> **Lo siguiente:** generar código desde JC: `#700`, que el compilador lea `.jc`, y la prueba por la salida en las
+> dos VMs.
 
 > **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
 > a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su

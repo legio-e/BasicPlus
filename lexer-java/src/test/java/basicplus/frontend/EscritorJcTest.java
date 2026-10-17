@@ -187,15 +187,69 @@ class EscritorJcTest {
     }
 
     @Test
-    @DisplayName("lo que la primera fase deja fuera lo dice, con su motivo")
+    @DisplayName("lo que JC no tiene lo dice, con su motivo")
     void loQueNoEscribe() throws IOException {
-        noSoportado("C1", "module C1\n  class K\n    var x: integer\n  end K\n" +
-                          "  function main()\n    print 1\n  end main\nend C1\n", "una clase");
-        noSoportado("Sw", conMain("Sw", "    var x: integer := 1\n    switch x\n      case 1\n        print 1\n    endsw\n"),
-                    "switch");
         noSoportado("Bucle", conMain("Bucle", "    do\n      break\n    loop\n"), "sin condición");
         noSoportado("Pa", conMain("Pa", "    var s: integer := 2\n    for i := 1 to 9 step s do print i\n"),
                     "paso no es un número");
         noSoportado("Re", conMain("Re", "    var int: integer := 1\n    print int\n"), "palabra reservada");
+        noSoportado("Ba", conMain("Ba", "    var base: integer := 1\n    print base\n"), "«base»");
+    }
+
+    @Test
+    @DisplayName("las clases, el switch y parallel: la forma de C# y la ida y vuelta (puntos 34 a 36)")
+    void clasesSwitchYParallel() throws IOException {
+        String bp =
+            "module Clases\n" +
+            "  public class Animal\n" +
+            "    var nombre: string\n" +
+            "    private var edad: integer\n" +
+            "    var Animal.cuantos: integer\n" +
+            "    public const Animal.MAX: integer := 10\n" +
+            "    event cambia(a: Animal)\n" +
+            "    public property Edad: integer\n      get\n        return this.edad\n      endget\n" +
+            "      set(v)\n        this.edad := v\n      endset\n    endprop\n" +
+            "    public property Nombre: string\n      get\n        return this.nombre\n      endget\n" +
+            "      set(value)\n        this.nombre := value\n      endset\n    endprop\n" +
+            "    public function Animal(n: string)\n      this.nombre := n\n      this.edad := 0\n" +
+            "      Animal.cuantos += 1\n    end Animal\n" +
+            "    public function Animal.crear(): Animal\n      return Animal(\"anon\")\n    end Animal.crear\n" +
+            "    public function hablar(): string\n      return \"...\"\n    end hablar\n" +
+            "    public function crece()\n      this.edad += 1\n      raise cambia(this)\n    end crece\n" +
+            "    public function ~Animal()\n      Animal.cuantos -= 1\n    end ~Animal\n" +
+            "  end Animal\n" +
+            "  public class Perro extends Animal\n" +
+            "    public function Perro(n: string)\n      super(n)\n    end Perro\n" +
+            "    public function Perro()\n      Perro(\"rex\")\n    end Perro\n" +
+            "    public function hablar(): string\n      return \"guau \" + super.hablar()\n    end hablar\n" +
+            "    public function event alCambiar(a: Animal)\n      print \"cambia\"\n    end alCambiar\n" +
+            "  end Perro\n" +
+            "  function main()\n" +
+            "    var owner p: Perro := Perro(\"toby\")\n" +
+            "    p.cambia := p::alCambiar\n" +
+            "    p.crece()\n" +
+            "    switch p.Edad\n      case 1, 2\n        print \"joven\"\n      default\n        print \"otro\"\n    endsw\n" +
+            "    parallel\n      case t1 := Thread(4096)\n        print \"hilo\"\n      default\n        print \"main\"\n" +
+            "    endpar\n" +
+            "  end main\n" +
+            "end Clases\n";
+        String jc = jc("Clases", bp);
+        assertTrue(jc.contains("public class Perro : Animal"), jc);
+        assertTrue(jc.contains("      protected string nombre;\n"), jc);     // lo que BP no marca, protegido
+        assertTrue(jc.contains("      protected static int cuantos;\n"), jc);
+        assertTrue(jc.contains("      public const int MAX = 10;\n"), jc);   // en C# la constante ya es de la clase
+        assertTrue(jc.contains("      event cambia(Animal a);\n"), jc);
+        assertTrue(jc.contains("         set(v)\n"), jc);                    // el set con nombre, como en BP
+        assertTrue(jc.contains("         set\n"), jc);                       // y el de C#, cuando se llama value
+        assertTrue(jc.contains("public function Perro(string n) : base(n)"), jc);
+        assertTrue(jc.contains("public function Perro() : this(\"rex\")"), jc);
+        assertTrue(jc.contains("return \"guau \" + base.hablar();"), jc);
+        assertTrue(jc.contains("public static function Animal crear()"), jc);
+        assertTrue(jc.contains("public function ~Animal()"), jc);
+        assertTrue(jc.contains("p.cambia = p::alCambiar;"), jc);
+        assertTrue(jc.contains("         case 1, 2:\n"), jc);
+        assertTrue(jc.contains("         case t1 = new Thread(4096):\n"), jc);
+        Path f = tmp.resolve("Clases.bp");
+        assertEquals("EQUIVALENTE", EscritorJc.comprobarJcFichero(f));
     }
 }

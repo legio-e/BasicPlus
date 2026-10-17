@@ -68,7 +68,7 @@ public final class EscritorJc {
      *  «Lo que choca»). Las demás palabras de JC ya lo son en BP, que no las deja usar como nombre. */
     private static final Set<String> RESERVADAS_SOLO_EN_JC = new HashSet<>(Arrays.asList(
             "int", "long", "float", "double", "bool", "string", "sbyte", "ushort",
-            "void", "new", "is", "static", "foreach"));
+            "void", "new", "is", "static", "foreach", "protected", "base"));
 
     /** Las conversiones a un tipo primitivo, que en BP son una llamada con el nombre del tipo (`integer(x)`, `byte(x)`).
      *  El analizador las reconoce por el nombre (numericCastTarget; las de los estrechos, el parser). */
@@ -84,6 +84,8 @@ public final class EscritorJc {
     private final SemanticInfo info;
     private final Map<Object, Integer> argsEscritos;
     private int nivel;
+    /** La clase que se está escribiendo, o null en el módulo. */
+    private String clase;
 
     private EscritorJc(SemanticInfo info, Map<Object, Integer> argsEscritos, int nivel) {
         this.info = info;
@@ -112,6 +114,7 @@ public final class EscritorJc {
         if (n instanceof CallExpr)      out.put(n, ((CallExpr) n).args.size());
         if (n instanceof RaiseStmt)     out.put(n, ((RaiseStmt) n).args.size());
         if (n instanceof BoundCallExpr) out.put(n, ((BoundCallExpr) n).args.size());
+        if (n instanceof SuperCallExpr) out.put(n, ((SuperCallExpr) n).args.size());
         for (Class<?> c = n.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
             for (java.lang.reflect.Field f : c.getDeclaredFields()) {
                 if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
@@ -126,9 +129,11 @@ public final class EscritorJc {
     }
 
     /** Los argumentos que escribió el programador. */
-    private List<IExpr> escritos(CallExpr c) {
-        Integer n = argsEscritos.get(c);
-        return (n == null || n >= c.args.size()) ? c.args : c.args.subList(0, n);
+    private List<IExpr> escritos(CallExpr c) { return escritos(c, c.args); }
+
+    private List<IExpr> escritos(Object llamada, List<IExpr> args) {
+        Integer n = argsEscritos.get(llamada);
+        return (n == null || n >= args.size()) ? args : args.subList(0, n);
     }
 
     // ============================================================
@@ -181,7 +186,7 @@ public final class EscritorJc {
 
     private static boolean deUnaLinea(ITopLevelDecl d) {
         if (((Node) d).annotation != null) return false;
-        return d instanceof ConstDecl || d instanceof VarDecl
+        return d instanceof ConstDecl || d instanceof VarDecl || d instanceof EventDef
             || (d instanceof PropertyDef && ((PropertyDef) d).isShortForm);
     }
 
@@ -197,26 +202,72 @@ public final class EscritorJc {
     // ============================================================
     // DECLARACIONES
     // ============================================================
+    /** Una declaración del módulo, o un miembro de la clase que se está escribiendo ({@link #clase}). */
     private void declaracion(ITopLevelDecl d, boolean enInterfaz) {
         Node n = (Node) d;
         if (n.annotation != null) linea(EscritorBp.anotacion(n.annotation));   // las de BP (punto 27)
-        if (d instanceof ConstDecl)        linea(constante((ConstDecl) d) + ";");
-        else if (d instanceof VarDecl)     linea(variable((VarDecl) d) + ";");
+        if (d instanceof ConstDecl)        linea(constante((ConstDecl) d, true) + ";");
+        else if (d instanceof VarDecl)     linea(variable((VarDecl) d, true) + ";");
         else if (d instanceof FuncDef)     funcion((FuncDef) d, enInterfaz);
-        else if (d instanceof PropertyDef) linea(propiedad((PropertyDef) d));
+        else if (d instanceof PropertyDef) propiedad((PropertyDef) d);
         else if (d instanceof EnumDef)     linea(enumerado((EnumDef) d));
-        else if (d instanceof ClassDef)    throw new NoSoportado("una clase (segunda fase)", d);
-        else if (d instanceof EventDef)    throw new NoSoportado("un evento (segunda fase, con las clases)", d);
+        else if (d instanceof ClassDef)    claseDef((ClassDef) d, enInterfaz);
+        else if (d instanceof EventDef)    linea(evento((EventDef) d));
         else throw new NoSoportado(d.getClass().getSimpleName(), d);
     }
 
-    private static String visibilidad(boolean isPublic, boolean isPrivate) {
-        return isPublic ? "public " : (isPrivate ? "private " : "");
+    /** En el módulo, `public`, `private` o nada. En una clase, lo que BP no marca es protegido (lo ven la clase y sus
+     *  hijas), y JC lo escribe: `protected` (punto 34). */
+    private String visibilidad(boolean isPublic, boolean isPrivate) {
+        if (isPublic) return "public ";
+        if (isPrivate) return "private ";
+        return clase != null ? "protected " : "";
     }
 
-    /** `const int MAX = 10`. El tipo, siempre, como en C#: si BP no lo escribe, el que deduce el compilador (punto 29). */
-    private String constante(ConstDecl c) {
-        if (c.name.classQualifier != null) throw new NoSoportado("una constante de clase (segunda fase)", c);
+    /** `static`, para lo que en BP lleva delante el nombre de su clase (punto 20); ese nombre es el de la clase en la
+     *  que está, y en JC no se escribe. */
+    private String estatico(DeclName n, Object donde) {
+        if (n.classQualifier == null) return "";
+        if (clase == null || !n.classQualifier.equals(clase))
+            throw new NoSoportado("un miembro con el nombre de otra clase delante (" + n.classQualifier + ")", donde);
+        return "static ";
+    }
+
+    /** `public class Perro : Animal { … }` (punto 34), con `root` delante si BP lo pone. */
+    private void claseDef(ClassDef c, boolean enInterfaz) {
+        if (clase != null) throw new NoSoportado("una clase dentro de otra", c);
+        StringBuilder h = new StringBuilder(c.isPublic ? "public " : "");
+        if (c.isRoot) h.append("root ");
+        h.append("class ").append(nombre(c.name, c));
+        if (c.baseClass != null) h.append(" : ").append(c.baseClass);
+        linea(h.toString());
+        linea("{");
+        nivel++;
+        clase = c.name;
+        for (int i = 0; i < c.members.size(); i++) {
+            ITopLevelDecl m = c.members.get(i);
+            if (i > 0 && !(deUnaLinea(c.members.get(i - 1)) && deUnaLinea(m))) blanco();
+            declaracion(m, enInterfaz);
+        }
+        clase = null;
+        nivel--;
+        linea("}");
+    }
+
+    /** `event cambia(Medida m);` y `raise cambia(this);` (punto 34). */
+    private String evento(EventDef e) {
+        return estatico(e.name, e) + "event " + nombre(e.name.name, e) + "(" + parametros(e.params) + ");";
+    }
+
+    /** `const int MAX = 10`. El tipo, siempre, como en C#: si BP no lo escribe, el que deduce el compilador (punto 29).
+     *  En una clase, BP le pone delante el nombre de la clase; en C# una constante ya es de la clase, y JC no lo
+     *  escribe (punto 34). {@code miembro}: del módulo o de la clase, y no de un cuerpo. */
+    private String constante(ConstDecl c, boolean miembro) {
+        boolean deClase = c.name.classQualifier != null;
+        if (deClase && !(miembro && clase != null && c.name.classQualifier.equals(clase)))
+            throw new NoSoportado("una constante con el nombre de otra clase delante (" + c.name.classQualifier + ")", c);
+        if (!deClase && miembro && clase != null)
+            throw new NoSoportado("una constante de clase sin el nombre de la clase delante", c);
         String t;
         if (c.type != null) {
             t = tipo(c.type);
@@ -226,14 +277,21 @@ public final class EscritorJc {
             if (bt == null) bt = info.exprTypes.get(c.value);
             t = tipoDeducido(bt, c);
         }
-        return visibilidad(c.isPublic, false) + "const " + t + " " + nombre(c.name.name, c) + " = " + expr(c.value);
+        return (miembro ? visibilidad(c.isPublic, false) : "") + "const " + t + " " + nombre(c.name.name, c) + " = "
+             + expr(c.value);
     }
 
     /** `int a, b`, `owner Persona p = …`. El valor de BP es de todos los nombres, y en JC se repite: `int a = 3, b = 3`
-     *  (punto 5). Un array de tamaño fijo, como en C: el tamaño detrás de cada nombre, `int nums[10]` (punto 33). */
-    private String variable(VarDecl v) {
+     *  (punto 5). Un array de tamaño fijo, como en C: el tamaño detrás de cada nombre, `int nums[10]` (punto 33).
+     *  {@code miembro}: del módulo o un campo de la clase, con su visibilidad; si no, una local. */
+    private String variable(VarDecl v, boolean miembro) {
         if (v.type == null) throw new NoSoportado("una variable sin tipo", v);
-        StringBuilder s = new StringBuilder(visibilidad(v.isPublic, v.isPrivate));
+        StringBuilder s = new StringBuilder(miembro ? visibilidad(v.isPublic, v.isPrivate) : "");
+        String estat = v.names.isEmpty() ? "" : estatico(v.names.get(0), v);
+        for (DeclName dn : v.names)
+            if (!estatico(dn, v).equals(estat)) throw new NoSoportado("un var con nombres de clase y de objeto", v);
+        if (!miembro && !estat.isEmpty()) throw new NoSoportado("una variable local con el nombre de una clase", v);
+        s.append(estat);
         if (v.isOwner) s.append("owner ");
         String tamano = "";
         TypeRef t = v.type;
@@ -245,7 +303,6 @@ public final class EscritorJc {
         String valor = v.init != null ? expr(v.init) : null;
         for (int i = 0; i < v.names.size(); i++) {
             DeclName dn = v.names.get(i);
-            if (dn.classQualifier != null) throw new NoSoportado("una variable de clase (segunda fase)", v);
             if (i > 0) s.append(", ");
             s.append(nombre(dn.name, v)).append(tamano);
             if (valor != null) s.append(" = ").append(valor);
@@ -253,28 +310,51 @@ public final class EscritorJc {
         return s.toString();
     }
 
-    /** `function int f(int a, int b = 1)` y su bloque; `void` si no devuelve nada (punto 20). Sin cuerpo (interfaz,
-     *  native de un pack), con `;`; si el cuerpo es una instrucción, `inline … ;` (punto 26). */
+    /**
+     * `function int f(int a, int b = 1)` y su bloque; `void` si no devuelve nada (punto 20). Sin cuerpo (interfaz,
+     * native de un pack), con `;`; si el cuerpo es una instrucción, `inline … ;` (punto 26). En una clase (punto 34):
+     * el constructor, sin tipo, con la primera sentencia de BP —`super(…)` o la delegación `Clase(…)`— como el
+     * `: base(…)` y el `: this(…)` de C#; el destructor, `function ~Clase()`; y `static` lo de la clase.
+     */
     private void funcion(FuncDef f, boolean enInterfaz) {
-        if (f.isDestructor) throw new NoSoportado("un destructor (segunda fase, con las clases)", f);
-        if (f.name.classQualifier != null) throw new NoSoportado("una función de clase, static (segunda fase)", f);
-        StringBuilder h = new StringBuilder(visibilidad(f.isPublic, f.isPrivate));
+        boolean ctor = clase != null && f.name.classQualifier == null && f.name.name.equals(clase) && !f.isDestructor;
+        StringBuilder h = new StringBuilder();
+        // El destructor de C# no lleva marca: sólo se escribe la que ponga BP.
+        if (f.isDestructor) h.append(f.isPublic ? "public " : (f.isPrivate ? "private " : ""));
+        else h.append(visibilidad(f.isPublic, f.isPrivate));
+        h.append(estatico(f.name, f));
         if (f.isFinal)  h.append("final ");
         if (f.isNative) h.append("native ");
         h.append("function ");
         if (f.isEventHandler) h.append("event ");
-        h.append(f.returnType != null ? tipo(f.returnType) : "void").append(' ');
-        h.append(nombre(f.name.name, f)).append('(').append(parametros(f.params)).append(')');
+        List<IStmt> body = f.body;
+        String inicial = "";
+        if (f.isDestructor || ctor) {
+            if (f.returnType != null) throw new NoSoportado("un constructor o un destructor con tipo", f);
+            h.append(f.isDestructor ? "~" + nombre(f.dtorEscrito, f) : nombre(f.name.name, f));
+            IExpr primera = (ctor && !body.isEmpty() && body.get(0) instanceof ExprStmt) ? ((ExprStmt) body.get(0)).expr : null;
+            if (primera instanceof SuperCallExpr) {
+                inicial = " : base(" + lista(escritos(primera, ((SuperCallExpr) primera).args)) + ")";
+                body = body.subList(1, body.size());
+            } else if (primera instanceof CallExpr && ((CallExpr) primera).callee instanceof IdentifierExpr
+                    && ((IdentifierExpr) ((CallExpr) primera).callee).name.equals(clase)) {
+                inicial = " : this(" + lista(escritos(primera, ((CallExpr) primera).args)) + ")";
+                body = body.subList(1, body.size());
+            }
+        } else {
+            h.append(f.returnType != null ? tipo(f.returnType) : "void").append(' ').append(nombre(f.name.name, f));
+        }
+        h.append('(').append(parametros(f.params)).append(')').append(inicial);
         if (enInterfaz || f.isPackExtern) {
             linea(h + ";");
             return;
         }
-        if (f.body.size() == 1 && f.body.get(0) instanceof InlineStmt) {
-            linea(h + " inline " + ((InlineStmt) f.body.get(0)).texto() + ";");
+        if (!ctor && !f.isDestructor && body.size() == 1 && body.get(0) instanceof InlineStmt) {
+            linea(h + " inline " + ((InlineStmt) body.get(0)).texto() + ";");
             return;
         }
         linea(h.toString());
-        bloque(f.body);
+        bloque(body);
     }
 
     private String parametros(List<Param> ps) {
@@ -287,17 +367,37 @@ public final class EscritorJc {
         return String.join(", ", out);
     }
 
-    /** La propiedad corta de BP es la automática de C#: `public int n { get; set; }`, y con valor, `… = 0;` (punto 32). */
-    private String propiedad(PropertyDef p) {
-        if (!p.isShortForm) throw new NoSoportado("una propiedad con get y set escritos (segunda fase, con las clases)", p);
-        if (p.name.classQualifier != null) throw new NoSoportado("una propiedad de clase (segunda fase)", p);
+    /**
+     * La propiedad corta de BP es la automática de C#: `public int n { get; set; }`, y con valor, `… = 0;` (punto 32).
+     * La larga, con su `get { … }` y su `set { … }` (punto 34): el `set` de C#, sin nombre, cuando BP llama `value` a su
+     * parámetro; si no, `set(v) { … }`, con el nombre de BP.
+     */
+    private void propiedad(PropertyDef p) {
         StringBuilder s = new StringBuilder(visibilidad(p.isPublic, p.isPrivate));
+        s.append(estatico(p.name, p));
         if (p.isFinal) s.append("final ");
         if (p.isSync)  s.append("sync ");
         if (p.isOwner) s.append("owner ");
-        s.append(tipo(p.type)).append(' ').append(nombre(p.name.name, p)).append(" { get; set; }");
-        if (p.init != null) s.append(" = ").append(expr(p.init)).append(';');
-        return s.toString();
+        s.append(tipo(p.type)).append(' ').append(nombre(p.name.name, p));
+        if (p.isShortForm) {
+            s.append(" { get; set; }");
+            if (p.init != null) s.append(" = ").append(expr(p.init)).append(';');
+            linea(s.toString());
+            return;
+        }
+        linea(s.toString());
+        linea("{");
+        nivel++;
+        if (p.getter != null) {
+            linea("get");
+            bloque(p.getter.body);
+        }
+        if (p.setter != null) {
+            linea("value".equals(p.setter.paramName) ? "set" : "set(" + nombre(p.setter.paramName, p) + ")");
+            bloque(p.setter.body);
+        }
+        nivel--;
+        linea(p.init != null ? "} = " + expr(p.init) + ";" : "}");
     }
 
     /** `public enum Color { Rojo, Verde = 5 }` (punto 25). */
@@ -371,8 +471,8 @@ public final class EscritorJc {
     // SENTENCIAS
     // ============================================================
     private void sentencia(IStmt s) {
-        if (s instanceof VarDecl)                 linea(variable((VarDecl) s) + ";");
-        else if (s instanceof ConstDecl)          linea(constante((ConstDecl) s) + ";");
+        if (s instanceof VarDecl)                 linea(variable((VarDecl) s, false) + ";");
+        else if (s instanceof ConstDecl)          linea(constante((ConstDecl) s, false) + ";");
         else if (s instanceof AssignStmt)         linea(asignacion((AssignStmt) s) + ";");
         else if (s instanceof DestructAssignStmt) linea(desempaquetado((DestructAssignStmt) s) + ";");
         else if (s instanceof ExprStmt)           linea(expr(((ExprStmt) s).expr) + ";");
@@ -386,9 +486,9 @@ public final class EscritorJc {
         else if (s instanceof PrintStmt)          linea(imprime((PrintStmt) s) + ";");
         else if (s instanceof BreakStmt)          linea("break;");
         else if (s instanceof ContinueStmt)       linea("continue;");
-        else if (s instanceof SwitchStmt)         throw new NoSoportado("switch (segunda fase)", s);
-        else if (s instanceof ParallelStmt)       throw new NoSoportado("parallel (segunda fase)", s);
-        else if (s instanceof RaiseStmt)          throw new NoSoportado("raise (segunda fase, con los eventos)", s);
+        else if (s instanceof SwitchStmt)         segun((SwitchStmt) s);
+        else if (s instanceof ParallelStmt)       paralelo((ParallelStmt) s);
+        else if (s instanceof RaiseStmt)          linea(dispara((RaiseStmt) s) + ";");
         else if (s instanceof InlineStmt)         throw new NoSoportado("un inline entre otras sentencias (punto 26)", s);
         else throw new NoSoportado(s.getClass().getSimpleName(), s);
     }
@@ -534,6 +634,52 @@ public final class EscritorJc {
         return r.value == null ? "return" : "return " + expr(r.value);
     }
 
+    /** El `switch` de C# con el significado de BP (punto 35): `case 1, 2:` y `default:`, sin caer de un caso al
+     *  siguiente y sin `break` que haga falta. */
+    private void segun(SwitchStmt s) {
+        linea("switch (" + expr(s.subject) + ")");
+        linea("{");
+        nivel++;
+        for (CaseClause c : s.cases) {
+            linea("case " + lista(c.values) + ":");
+            seccion(c.body);
+        }
+        if (s.defaultBody != null) {
+            linea("default:");
+            seccion(s.defaultBody);
+        }
+        nivel--;
+        linea("}");
+    }
+
+    /** `parallel { case t1 = new Thread(4096): … default: … }` (punto 36). */
+    private void paralelo(ParallelStmt p) {
+        linea("parallel");
+        linea("{");
+        nivel++;
+        for (ParallelBranch b : p.branches) {
+            linea("case " + nombre(b.varName, b) + " = new Thread(" + expr(b.stackSizeExpr) + "):");
+            seccion(b.body);
+        }
+        if (p.defaultBody != null) {
+            linea("default:");
+            seccion(p.defaultBody);
+        }
+        nivel--;
+        linea("}");
+    }
+
+    /** Las sentencias de un `case` o de un `default`, un nivel más adentro, sin llaves. */
+    private void seccion(List<IStmt> body) {
+        nivel++;
+        for (IStmt st : body) sentencia(st);
+        nivel--;
+    }
+
+    private String dispara(RaiseStmt r) {
+        return "raise " + nombre(r.event, r) + "(" + lista(escritos(r, r.args)) + ")";
+    }
+
     /**
      * El `print` de JC no pone nada entre las piezas ni salta solo (punto 17): la coma de BP, que pone un espacio, es
      * una pieza `" "`, y el salto que BP pone siempre, un `"\n"` al final. Un separador al final (`print a;`) no salta,
@@ -616,10 +762,19 @@ public final class EscritorJc {
             InstanceOfExpr i = (InstanceOfExpr) e;
             return expr(i.target, P_DESPL) + " is " + i.typeName;   // el `instanceof` de BP (punto 24)
         }
-        if (e instanceof ThisExpr || e instanceof SuperExpr || e instanceof FieldExpr || e instanceof SuperCallExpr)
-            throw new NoSoportado(e.getClass().getSimpleName() + " (segunda fase, con las clases)", e);
-        if (e instanceof MethodRefExpr || e instanceof BoundCallExpr)
-            throw new NoSoportado("obj::metodo (segunda fase)", e);
+        if (e instanceof ThisExpr)         return "this";
+        if (e instanceof FieldExpr)        return "field";
+        if (e instanceof SuperExpr)        return "base";   // el `super` de BP es el `base` de C# (punto 34)
+        if (e instanceof SuperCallExpr)
+            throw new NoSoportado("super(…) fuera de la primera sentencia de un constructor", e);
+        if (e instanceof MethodRefExpr) {
+            MethodRefExpr m = (MethodRefExpr) e;
+            return expr(m.target, P_PRIMARIO) + "::" + nombre(m.method, e);   // el `::` de Java (punto 34)
+        }
+        if (e instanceof BoundCallExpr) {
+            BoundCallExpr b = (BoundCallExpr) e;
+            return expr(b.target, P_PRIMARIO) + "::" + nombre(b.method, e) + "(" + lista(escritos(b, b.args)) + ")";
+        }
         throw new NoSoportado(e.getClass().getSimpleName(), e);
     }
 

@@ -863,6 +863,35 @@ mi propuesta: manda lo de aquí.
     | `var x, y: integer[3]` | `int x[3], y[3];` |
 
     El valor, con los corchetes de JC (los de BP), no con las llaves de C.
+34. **Las clases, como en C#** (Eduardo, 17-oct, tras el paso 3: *«antes de pasar a la generación de código quizás
+    deberíamos completar lo que nos falta de JC para soportar el lenguaje completo»*). Con las cuatro decisiones de
+    sus preguntas (las cuatro, mi recomendación):
+
+    | BP | JC |
+    |---|---|
+    | `public class Perro extends Animal` … `end Perro` | `public class Perro : Animal { … }` |
+    | `var nombre: string`, sin marca: protegido | `protected string nombre;` — JC escribe el `protected` de C# |
+    | `private var x: integer` | `private int x;` |
+    | `var Perro.cuantos: integer` | `protected static int cuantos;` |
+    | `public const Limits.MAX: integer := 100` | `public const int MAX = 100;` (en C# ya es de la clase) |
+    | el constructor, con `super(n)` o `Perro(n, 0)` de primera sentencia | `function Perro(string n) : base(n) { … }`, y `: this(n, 0)` |
+    | `function ~Perro()` | `function ~Perro() { … }` |
+    | `super.hablar()` | `base.hablar()`, el `base` de C# |
+    | `property Valor: double` con `get`/`set(v)` | `double Valor { get { … } set(v) { … } }`; con `set(value)`, el `set { … }` de C# |
+    | `event cambia(m: Medida)` · `raise cambia(this)` | `event cambia(Medida m);` · `raise cambia(this);` |
+    | `b.onClick := this::pulsado` · `Thread(a::suma(7))` | `b.onClick = this::pulsado;` · `new Thread(a::suma(7))` |
+    | `this`, `field`, `root class` | iguales |
+
+    - En el corpus, el `set` se llama `v` 28 veces de 33, y `value`, 2: por eso las dos formas.
+    - BP exige el `super(…)` y la delegación como primera sentencia del constructor; por eso son el `: base(…)` y
+      el `: this(…)` de C#, que van en el mismo sitio.
+    - `base` y `protected` son ahora palabras reservadas de JC. En el corpus, 5 ficheros llaman `base` a un parámetro
+      (`LocalsDbg`, `SaltoCrudo`, `SyncListDiag`, `synclisttest` y `sqlite/Orm.bp` de la stdlib): el traductor lo
+      dice, sin renombrar.
+35. **El `switch`, la forma de C# con el significado de BP** (mi propuesta; Eduardo no la discutió): `switch (x) {
+    case 1, 2: … default: … }`. No cae de un caso al siguiente y no hace falta `break`; si se escribe, sale del
+    `switch`, como en BP.
+36. **`parallel`, con la misma forma**: `parallel { case t1 = new Thread(4096): … default: … }`.
 
 ### La primera fase, en un ejemplo
 
@@ -1094,3 +1123,29 @@ stdlib), sin un DISTINTO.
   `.mod`, así que la comparación del `print` es por la salida.
 
 **Lo siguiente:** `#700` en el compilador de BP, que el compilador lea `.jc`, y la prueba por la salida.
+
+### El lenguaje entero: las clases, el `switch` y `parallel`, hechos el 17-oct
+
+Eduardo: completar JC antes de generar código. La sintaxis, en los puntos 34 a 36; el escritor y el parser, ampliados.
+
+**El barrido** (`--comprobar-jc`, los 473 `.bp`):
+
+| | samples | stdlib | `bpdevices` |
+|---|---|---|---|
+| EQUIVALENTE | 392 | 36 | 5 |
+| no soportados | 6 | 1 | 0 |
+| no compilan | 33 | 0 | 0 |
+
+- **433 de los 440 que compilan hacen la ida y vuelta.** Los 7 que no, por lo acordado: 2 `for` con el paso en una
+  variable (`ForStep` y `ContinueFor`, que lo prueban) y 5 con un nombre `base`.
+- La prueba de que mira también aquí: con el nombre del `set(v)` ignorado en el parser de JC, 8 DISTINTO, con su
+  línea.
+- Una prueba con casi todo lo de las clases (`EscritorJcTest.clasesSwitchYParallel`). El frontend, 301 pruebas sin
+  fallos.
+
+**Al escribir esa prueba salió un fallo de BP, `#702`:** un `raise` dentro del `set` de una propiedad no compila. El
+análisis lo da por bueno, y el emisor dice «Campo no encontrado en Animal: cambia$dest». Es de BP, no de JC, y no se
+toca (los cambios de BP, más adelante).
+
+**Lo siguiente:** generar código desde JC. Es decir: `#700` en el compilador de BP, que el compilador lea `.jc`, la
+prueba por la salida en las dos VMs, y que el análisis compruebe las marcas.

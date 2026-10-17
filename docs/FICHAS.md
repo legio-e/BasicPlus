@@ -6983,6 +6983,16 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
 
+#### 🔵 `#702` — un `raise` dentro del `set` de una propiedad no compila: el análisis lo da por bueno y el emisor dice «Campo no encontrado en …: <evento>$dest» (abierta el 17-oct, al probar las clases de JC, `#698`; preexistente)
+
+- **Medido** (17-oct, una sonda en el scratchpad): una clase con `event cambia(a: Animal)` y una propiedad cuyo
+  `set(v)` hace `raise cambia(this)`. El análisis pasa, y el emisor para con «error: Campo no encontrado en Animal:
+  cambia$dest». El mismo `raise` en un método compila y el evento llega.
+- **No es mudo:** no se compila mal nada, el programa no compila. En el corpus no hay ninguno (no compilaría).
+- **Sin mirar la causa todavía.** Parece que el emisor escribe los accesores de las propiedades antes de dar de
+  alta el campo del evento (`$dest`).
+- **De momento no se toca** (Eduardo: los cambios de BP, más adelante).
+
 #### 🔵 `#701` — un `if`, `while` o `for` de una línea no puede ser la última sentencia de un bloque de su misma clase: el parser toma el `endif`, `endwh` o `next` de la línea siguiente por suyo (abierta el 17-oct, al probar `EscritorJc`, `#698`; preexistente)
 
 - **Medido** (17-oct, tres sondas en el scratchpad):
@@ -7098,6 +7108,13 @@ en `V8_IDEAS.md` §E2:
   - `JcParserTest`, 5 pruebas, con la que tiene que fallar. El frontend, 300 sin fallos;
   - salió que el análisis añade a las llamadas los valores por defecto (H8.1): el escritor escribe ahora sólo los
     argumentos del programador.
+- **El lenguaje entero, hecho el 17-oct** (Eduardo: completar JC antes de generar código): las clases como en C#
+  (`: Base`, `protected`, `static`, `: base(…)` y `: this(…)`, `base.m()`, el `set` de C# o `set(v)`), el `switch` y
+  `parallel` (`V8_IDEAS` §E2, puntos 34 a 36).
+  - **433 de los 440 `.bp` que compilan hacen la ida y vuelta** (392 samples, 36 de la stdlib y los 5 de
+    `bpdevices`). Los 7 que no: 2 `for` con el paso en una variable y 5 con un nombre `base`, ahora reservado.
+  - Con un sabotaje del `set(v)` en el parser, 8 DISTINTO. El frontend, 301 pruebas sin fallos.
+  - Salió `#702`, de BP: un `raise` dentro de un `set` no compila.
 - **Lo siguiente:** `#700` en el compilador de BP; que el compilador lea `.jc`; la prueba por la salida en las dos
   VMs; y que el análisis compruebe las marcas.
 

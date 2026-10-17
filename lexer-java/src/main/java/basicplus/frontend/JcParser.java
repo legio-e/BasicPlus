@@ -52,6 +52,8 @@ final class JcParser {
     private final List<Tok> toks;
     private int pos = 0;
     private boolean enInterfaz = false;
+    /** La clase que se está leyendo, o null en el módulo. */
+    private String clase = null;
     private String packNativoMarca = null;
     private int packNativoVersion = 0;
 
@@ -212,13 +214,18 @@ final class JcParser {
         if (ann != null && defs.size() > antes) ((Node) defs.get(antes)).annotation = ann;
     }
 
+    /** Una declaración del módulo, o un miembro de la clase que se está leyendo ({@link #clase}). */
     private void declaracionSinAnotacion(List<ITopLevelDecl> defs) {
-        boolean isPublic = false, isPrivate = false, isFinal = false, isSync = false, isNative = false, isOwner = false;
+        boolean isPublic = false, isPrivate = false, isProtected = false, isFinal = false, isSync = false;
+        boolean isNative = false, isOwner = false, isStatic = false, isRoot = false;
         while (true) {
-            if (es("public") || es("private")) {
-                if (isPublic || isPrivate)
-                    throw error("'public' y 'private' son excluyentes, y van una vez");
-                if (avanza().texto.equals("public")) isPublic = true; else isPrivate = true;
+            if (es("public") || es("private") || es("protected")) {
+                if (isPublic || isPrivate || isProtected)
+                    throw error("'public', 'protected' y 'private' son excluyentes, y van una vez");
+                String v = avanza().texto;
+                if (v.equals("public")) isPublic = true;
+                else if (v.equals("private")) isPrivate = true;
+                else isProtected = true;   // lo que BP no marca en una clase (punto 34)
             } else if (acepta("final")) {
                 isFinal = true;
             } else if (acepta("sync")) {
@@ -227,21 +234,39 @@ final class JcParser {
                 isNative = true;
             } else if (acepta("owner")) {
                 isOwner = true;
-            } else if (es("static")) {
-                throw segundaFase("static, con las clases,");
+            } else if (acepta("static")) {
+                isStatic = true;
+            } else if (esNombre() && actual().texto.equals("root") && mira(1).es("class")) {
+                avanza();   // `root class`, como en BP: palabra contextual
+                isRoot = true;
             } else {
                 break;
             }
         }
-        if (es("class")) throw segundaFase("una clase");
-        if (es("event")) throw segundaFase("un evento, con las clases,");
+        if (clase == null && (isProtected || isStatic))
+            throw error((isStatic ? "'static'" : "'protected'") + " sólo va en un miembro de una clase");
+        if (es("class")) {
+            if (clase != null) throw error("una clase dentro de otra: BP no las tiene");
+            defs.add(claseDef(isPublic, isRoot));
+            return;
+        }
+        if (isRoot) throw error("'root' sólo va delante de 'class'");
+        String deClase = isStatic ? clase : null;   // el nombre de la clase delante, como en BP (punto 20)
+        if (es("event")) {
+            if (clase == null) throw error("un evento es de una clase");
+            if (isPublic) throw error("un evento no se marca 'public': suscribirse ya es público, y dispararlo es de la"
+                    + " clase y sus hijas");
+            defs.add(evento(deClase));
+            return;
+        }
         if (isNative && !es("function")) throw error("'native' sólo se aplica a 'function'");
         if (es("const")) {
-            defs.add(constante(isPublic));
+            if (isStatic) throw error("una constante no lleva 'static': ya es de la clase, como en C# (punto 34)");
+            defs.add(constante(isPublic, clase));   // en una clase, BP le pone delante el nombre de la clase
             return;
         }
         if (es("function")) {
-            defs.add(funcion(isPublic, isPrivate, isFinal, isNative));
+            defs.add(funcion(isPublic, isPrivate, isFinal, isNative, deClase));
             return;
         }
         if (es("enum")) {
@@ -253,14 +278,58 @@ final class JcParser {
         Tok n = actual();
         String nombre = nombre("el nombre de la variable o de la propiedad");
         if (es("{")) {
-            defs.add(propiedad(isPublic, isPrivate, isFinal, isSync, isOwner, tipo, nombre, n));
+            defs.add(propiedad(isPublic, isPrivate, isFinal, isSync, isOwner, tipo, nombre, n, deClase));
             return;
         }
         if (isSync) throw error("'sync' sólo se aplica a una propiedad");
-        for (VarDecl v : variables(isPublic, isOwner, tipo, n, nombre)) {
+        for (VarDecl v : variables(isPublic, isOwner, tipo, n, nombre, deClase)) {
             v.isPrivate = isPrivate;
             defs.add(v);
         }
+    }
+
+    /** `public class Perro : Animal { … }` (punto 34). */
+    private ClassDef claseDef(boolean isPublic, boolean isRoot) {
+        Tok tok = espera("class");
+        String name = nombre("el nombre de la clase");
+        String base = null;
+        if (acepta(":")) {
+            base = nombre("la clase base tras ':'");
+            if (es(".") && mira(1).tipo == Tipo.NOMBRE) {
+                avanza();
+                base = base + "." + avanza().texto;
+            }
+        }
+        espera("{", "'{' tras la cabecera de la clase");
+        List<ITopLevelDecl> members = new ArrayList<>();
+        clase = name;
+        while (!es("}")) {
+            if (esFin()) throw error("falta la '}' que cierra la clase " + name);
+            declaracion(members);
+        }
+        clase = null;
+        espera("}");
+        ClassDef cd = new ClassDef(isPublic, name, base, members, tok.linea, tok.columna);
+        cd.isRoot = isRoot;
+        return cd;
+    }
+
+    /** `event cambia(Medida m);` (punto 34). */
+    private EventDef evento(String deClase) {
+        Tok tok = espera("event");
+        Tok n = actual();
+        String nm = nombre("el nombre del evento");
+        espera("(", "'(': un evento declara su firma");
+        List<Param> ps = new ArrayList<>();
+        if (!es(")")) {
+            ps.add(parametro());
+            while (acepta(",")) ps.add(parametro());
+        }
+        espera(")");
+        espera(";");
+        if (ps.size() > Parser.MAX_EVENT_PARAMS)
+            throw error("un evento admite como mucho " + Parser.MAX_EVENT_PARAMS + " parámetros");
+        return new EventDef(new DeclName(deClase, nm, n.linea, n.columna), ps, tok.linea, tok.columna);
     }
 
     /** `@BD{ tabla = "x", clave }`: las de BP (punto 27). */
@@ -293,8 +362,9 @@ final class JcParser {
         return new Annotation(nombre, entradas, at.linea, at.columna);
     }
 
-    /** `const int MAX = 10;`, con el tipo siempre (punto 29). */
-    private ConstDecl constante(boolean isPublic) {
+    /** `const int MAX = 10;`, con el tipo siempre (punto 29). {@code deClase}: en una clase, su nombre, que BP pone
+     *  delante (punto 34); si no, null. */
+    private ConstDecl constante(boolean isPublic, String deClase) {
         Tok tok = espera("const");
         TypeRef tipo = tipo();
         Tok n = actual();
@@ -302,7 +372,7 @@ final class JcParser {
         espera("=", "'=' en la declaración de la constante");
         IExpr v = expresion();
         espera(";");
-        return new ConstDecl(isPublic, new DeclName(null, nm, n.linea, n.columna), tipo, v, tok.linea, tok.columna);
+        return new ConstDecl(isPublic, new DeclName(deClase, nm, n.linea, n.columna), tipo, v, tok.linea, tok.columna);
     }
 
     /**
@@ -310,7 +380,8 @@ final class JcParser {
      * valor, un VarDecl con todos los nombres, como el `var a, b: integer` de BP; con algún valor, uno por nombre, como
      * sus grupos.
      */
-    private List<VarDecl> variables(boolean isPublic, boolean isOwner, TypeRef tipo, Tok primero, String primerNombre) {
+    private List<VarDecl> variables(boolean isPublic, boolean isOwner, TypeRef tipo, Tok primero, String primerNombre,
+                                    String deClase) {
         List<Tok> posiciones = new ArrayList<>();
         List<String> nombres = new ArrayList<>();
         List<IExpr> tamanos = new ArrayList<>();
@@ -340,14 +411,14 @@ final class JcParser {
         if (!algunValor && mismosTamanos(tamanos)) {
             List<DeclName> ds = new ArrayList<>();
             for (int i = 0; i < nombres.size(); i++)
-                ds.add(new DeclName(null, nombres.get(i), posiciones.get(i).linea, posiciones.get(i).columna));
+                ds.add(new DeclName(deClase, nombres.get(i), posiciones.get(i).linea, posiciones.get(i).columna));
             out.add(new VarDecl(isPublic, isOwner, ds, conTamano(tipo, tamanos.get(0)), null,
                                 primero.linea, primero.columna));
             return out;
         }
         for (int i = 0; i < nombres.size(); i++) {
             List<DeclName> ds = new ArrayList<>();
-            ds.add(new DeclName(null, nombres.get(i), posiciones.get(i).linea, posiciones.get(i).columna));
+            ds.add(new DeclName(deClase, nombres.get(i), posiciones.get(i).linea, posiciones.get(i).columna));
             out.add(new VarDecl(isPublic, isOwner, ds, conTamano(tipo, tamanos.get(i)), valores.get(i),
                                 posiciones.get(i).linea, posiciones.get(i).columna));
         }
@@ -369,26 +440,46 @@ final class JcParser {
     }
 
     /** La propiedad corta de BP es la automática de C#: `public int n { get; set; }`, y con valor, `… = 0;` (punto
-     *  32). La forma larga va con las clases. */
+     *  32). La larga, `{ get { … } set { … } }` (punto 34): el `set` sin nombre es el de C#, cuyo parámetro es
+     *  `value`; `set(v) { … }` le da otro, como en BP. */
     private PropertyDef propiedad(boolean isPublic, boolean isPrivate, boolean isFinal, boolean isSync, boolean isOwner,
-                                  TypeRef tipo, String nombre, Tok n) {
+                                  TypeRef tipo, String nombre, Tok n, String deClase) {
         espera("{");
-        if (!(esNombre() && actual().texto.equals("get") && mira(1).es(";")))
-            throw segundaFase("una propiedad con get y set escritos, con las clases,");
-        avanza();
-        avanza();
-        if (!(esNombre() && actual().texto.equals("set") && mira(1).es(";")))
-            throw error("la propiedad de JC es { get; set; } (punto 32)");
-        avanza();
-        avanza();
+        DeclName dn = new DeclName(deClase, nombre, n.linea, n.columna);
+        GetterDef g = null;
+        SetterDef s = null;
+        boolean corta = esNombre() && actual().texto.equals("get") && mira(1).es(";");
+        if (corta) {
+            avanza();
+            avanza();
+            if (!(esNombre() && actual().texto.equals("set") && mira(1).es(";")))
+                throw error("la propiedad corta es { get; set; } (punto 32)");
+            avanza();
+            avanza();
+        } else {
+            if (esNombre() && actual().texto.equals("get")) {
+                Tok gt = avanza();
+                g = new GetterDef(bloque(), gt.linea, gt.columna);
+            }
+            if (esNombre() && actual().texto.equals("set")) {
+                Tok st = avanza();
+                String param = "value";
+                if (acepta("(")) {
+                    param = nombre("el nombre del parámetro del set");
+                    espera(")");
+                }
+                s = new SetterDef(param, bloque(), st.linea, st.columna);
+            }
+            if (g == null && s == null) throw error("una propiedad lleva get, set o los dos");
+        }
         espera("}");
         IExpr init = null;
         if (acepta("=")) {
             init = expresion();
             espera(";");
         }
-        PropertyDef p = new PropertyDef(isPublic, isFinal, isOwner, isSync, new DeclName(null, nombre, n.linea, n.columna),
-                                        tipo, init, null, null, true, n.linea, n.columna);
+        PropertyDef p = new PropertyDef(isPublic, isFinal, isOwner, isSync, dn, tipo, init, g, s, corta,
+                                        n.linea, n.columna);
         p.isPrivate = isPrivate;
         return p;
     }
@@ -417,18 +508,39 @@ final class JcParser {
     /**
      * `function int f(int a, int b = 1) { … }`; `void` si no devuelve nada (punto 20). Sin cuerpo, con `;`: la de un
      * `module interface` y la `native` externa de un pack. Con `inline …;`, la función de una instrucción (punto 26).
+     * En una clase (punto 34): el constructor, sin tipo y con el nombre de la clase, con `: base(…)` o `: this(…)`,
+     * que son la primera sentencia de BP; el destructor, `function ~Clase()`; y {@code deClase}, lo `static`.
      */
-    private FuncDef funcion(boolean isPublic, boolean isPrivate, boolean isFinal, boolean isNative) {
+    private FuncDef funcion(boolean isPublic, boolean isPrivate, boolean isFinal, boolean isNative, String deClase) {
         Tok tok = espera("function");
         boolean isEventHandler = acepta("event");
-        if (es("~")) throw segundaFase("el destructor, con las clases,");
-        if (esNombre() && mira(1).es("("))
-            throw error("falta el tipo de la función; si no devuelve nada, void (un constructor va con las clases, en la"
-                    + " segunda fase de JC)");
-        TypeRef ret = acepta("void") ? null : tipo();
-        Tok nt = actual();
-        String n = nombre("el nombre de la función");
-        DeclName name = new DeclName(null, n, nt.linea, nt.columna);
+        boolean isDestructor = false, ctor = false;
+        String dtorEscrito = null;
+        DeclName name;
+        TypeRef ret = null;
+        String n;
+        if (acepta("~")) {
+            if (clase == null) throw error("un destructor es de una clase");
+            Tok nt = actual();
+            dtorEscrito = nombre("el nombre de la clase tras '~' (el destructor se llama como su clase)");
+            n = "__dtor";   // su nombre interno, como en BP
+            name = new DeclName(null, n, nt.linea, nt.columna);
+            isDestructor = true;
+        } else if (esNombre() && mira(1).es("(")) {
+            if (clase == null || !actual().texto.equals(clase))
+                throw error("falta el tipo de la función; si no devuelve nada, void (un constructor, sin tipo, se llama"
+                        + " como su clase)");
+            Tok nt = avanza();
+            n = nt.texto;
+            name = new DeclName(null, n, nt.linea, nt.columna);
+            ctor = true;
+        } else {
+            ret = acepta("void") ? null : tipo();
+            Tok nt = actual();
+            n = nombre("el nombre de la función");
+            name = new DeclName(deClase, n, nt.linea, nt.columna);
+        }
+        if ((ctor || isDestructor) && deClase != null) throw error("un constructor o un destructor no lleva 'static'");
         espera("(", "'(' tras el nombre de la función");
         List<Param> ps = new ArrayList<>();
         if (!es(")")) {
@@ -436,8 +548,25 @@ final class JcParser {
             while (acepta(",")) ps.add(parametro());
         }
         espera(")");
+        // `: base(…)` y `: this(…)`: la primera sentencia del constructor de BP, `super(…)` o la delegación.
+        IStmt inicial = null;
+        if (acepta(":")) {
+            if (!ctor) throw error("':' tras los parámetros va sólo en un constructor: : base(…) o : this(…)");
+            Tok ini = actual();
+            if (acepta("base")) {
+                espera("(");
+                inicial = new ExprStmt(new SuperCallExpr(argumentos(), ini.linea, ini.columna), ini.linea, ini.columna);
+            } else if (acepta("this")) {
+                Tok lp = espera("(");
+                inicial = new ExprStmt(new CallExpr(new IdentifierExpr(clase, ini.linea, ini.columna), argumentos(),
+                                                    lp.linea, lp.columna), ini.linea, ini.columna);
+            } else {
+                throw error("tras ':' va base(…) o this(…)");
+            }
+        }
         if (enInterfaz) {
             // Como en BP: la función de una interfaz es sólo su firma.
+            if (inicial != null) throw error("un constructor de un module interface no lleva : base(…) ni : this(…)");
             espera(";", "';': una función de un module interface no lleva cuerpo");
             FuncDef fd = new FuncDef(isPublic, isFinal, false, false, name, ps, ret, new ArrayList<>(),
                                      tok.linea, tok.columna);
@@ -482,8 +611,14 @@ final class JcParser {
         } else {
             body = bloque();
         }
+        if (inicial != null) {
+            if (intrinseca) throw error("un constructor no es una función de una instrucción");
+            body.add(0, inicial);
+        }
         FuncDef fd = new FuncDef(isPublic, isFinal, intrinseca, isNative, name, ps, ret, body, tok.linea, tok.columna);
         fd.isEventHandler = isEventHandler;
+        fd.isDestructor = isDestructor;
+        fd.dtorEscrito = dtorEscrito;
         fd.isPrivate = isPrivate;
         return fd;
     }
@@ -577,7 +712,10 @@ final class JcParser {
         if (es("try"))      { out.add(intento()); return; }
         if (es("return"))   { out.add(devolver()); return; }
         if (es("print"))    { out.add(imprime()); return; }
-        if (es("const"))    { out.add(constante(false)); return; }
+        if (es("const"))    { out.add(constante(false, null)); return; }
+        if (es("switch"))   { out.add(segun()); return; }
+        if (es("parallel")) { out.add(paralelo()); return; }
+        if (es("raise"))    { out.add(dispara()); return; }
         if (acepta("throw")) {
             IExpr v = expresion();
             espera(";");
@@ -586,9 +724,6 @@ final class JcParser {
         }
         if (acepta("break"))    { espera(";"); out.add(new BreakStmt(t.linea, t.columna)); return; }
         if (acepta("continue")) { espera(";"); out.add(new ContinueStmt(t.linea, t.columna)); return; }
-        if (es("switch"))   throw segundaFase("switch");
-        if (es("parallel")) throw segundaFase("parallel");
-        if (es("raise"))    throw segundaFase("raise, con los eventos,");
         if (es("inline"))
             throw error("en JC, inline es el cuerpo entero de una función: function T f(…) inline …; (punto 26)");
         if (es("owner") || esDeclaracion()) {
@@ -596,7 +731,7 @@ final class JcParser {
             TypeRef tipo = tipo();
             Tok n = actual();
             String nm = nombre("el nombre de la variable");
-            out.addAll(variables(false, owner, tipo, n, nm));
+            out.addAll(variables(false, owner, tipo, n, nm, null));
             return;
         }
         if (es("(") && tuplaAdelante()) {
@@ -606,7 +741,7 @@ final class JcParser {
                 TypeRef tipo = tipo();
                 Tok n = actual();
                 String nm = nombre("el nombre de la variable");
-                out.addAll(variables(false, false, tipo, n, nm));
+                out.addAll(variables(false, false, tipo, n, nm, null));
                 return;
             }
             if (cierre > 0 && toks.get(cierre + 1).es("=")) { out.add(desempaquetado()); return; }
@@ -823,6 +958,80 @@ final class JcParser {
         IExpr v = expresion();
         espera(";");
         return new DestructAssignStmt(destinos, v, t.linea, t.columna);
+    }
+
+    /** El `switch` de C# con el significado de BP (punto 35): `case 1, 2:` sin caer al siguiente, y sin `break` que
+     *  haga falta. */
+    private SwitchStmt segun() {
+        Tok t = espera("switch");
+        espera("(");
+        IExpr sujeto = expresion();
+        espera(")");
+        espera("{");
+        List<CaseClause> casos = new ArrayList<>();
+        List<IStmt> def = null;
+        while (es("case")) {
+            Tok ct = avanza();
+            List<IExpr> vals = new ArrayList<>();
+            vals.add(expresion());
+            while (acepta(",")) vals.add(expresion());
+            espera(":", "':' tras los valores del case");
+            casos.add(new CaseClause(vals, seccion(), ct.linea, ct.columna));
+        }
+        if (acepta("default")) {
+            espera(":", "':' tras default");
+            def = seccion();
+        }
+        espera("}", "'}' que cierra el switch (el default va el último)");
+        return new SwitchStmt(sujeto, casos, def, t.linea, t.columna);
+    }
+
+    /** `parallel { case t1 = new Thread(4096): … default: … }` (punto 36). */
+    private ParallelStmt paralelo() {
+        Tok t = espera("parallel");
+        espera("{");
+        List<ParallelBranch> ramas = new ArrayList<>();
+        List<IStmt> def = null;
+        while (es("case")) {
+            Tok ct = avanza();
+            String var = nombre("el nombre del hilo tras 'case'");
+            espera("=");
+            espera("new", "'new Thread(tamaño de la pila)'");
+            if (!(esNombre() && actual().texto.equals("Thread")))
+                throw error("en un case de parallel va new Thread(tamaño de la pila)");
+            avanza();
+            espera("(");
+            IExpr pila = expresion();
+            espera(")");
+            espera(":", "':' tras new Thread(…)");
+            ramas.add(new ParallelBranch(var, pila, seccion(), ct.linea, ct.columna));
+        }
+        if (acepta("default")) {
+            espera(":", "':' tras default");
+            def = seccion();
+        }
+        espera("}", "'}' que cierra el parallel (el default va el último)");
+        return new ParallelStmt(ramas, def, t.linea, t.columna);
+    }
+
+    /** Las sentencias de un case o de un default: hasta el siguiente case, el default o la llave. */
+    private List<IStmt> seccion() {
+        List<IStmt> out = new ArrayList<>();
+        while (!es("case") && !es("default") && !es("}")) {
+            if (esFin()) throw error("falta la '}' que cierra el switch o el parallel");
+            sentencia(out);
+        }
+        return out;
+    }
+
+    /** `raise cambia(this);` (punto 34). */
+    private RaiseStmt dispara() {
+        Tok t = espera("raise");
+        String ev = nombre("el nombre del evento tras 'raise'");
+        espera("(", "'(' tras el nombre del evento (van aunque no lleve nada)");
+        List<IExpr> args = argumentos();
+        espera(";");
+        return new RaiseStmt(ev, args, t.linea, t.columna);
     }
 
     /** El `print` de JC: piezas sin nada entre ellas y sin salto (punto 17). Es el `print a; b;` de BP, con el `;` al
@@ -1048,7 +1257,15 @@ final class JcParser {
                 espera("]");
                 n = new IndexExpr(n, i, op.linea, op.columna);
             } else if (es("::")) {
-                throw segundaFase("obj::metodo");
+                // `obj::metodo`, y `obj::metodo(args)` (la llamada preparada): el `::` de Java (punto 34). No encadena
+                // más, como en BP.
+                Tok op = avanza();
+                String m = nombre("el nombre de un método tras '::'");
+                if (es("(")) {
+                    Tok lp = avanza();
+                    return new BoundCallExpr(n, m, argumentos(), lp.linea, lp.columna);
+                }
+                return new MethodRefExpr(n, m, op.linea, op.columna);
             } else {
                 return n;
             }
@@ -1117,7 +1334,15 @@ final class JcParser {
             c.conNew = true;
             return c;
         }
-        if (es("this") || es("super")) throw segundaFase(t.texto + ", con las clases,");
+        if (acepta("this"))  return new ThisExpr(t.linea, t.columna);
+        if (acepta("field")) return new FieldExpr(t.linea, t.columna);
+        if (es("base")) {
+            // `base.metodo()`: el `super` de BP (punto 34). El constructor de la base se llama con `: base(…)`.
+            if (!mira(1).es(".")) throw error("tras 'base' va '.': base.metodo(); el constructor de la base, con : base(…)");
+            avanza();
+            return new SuperExpr(t.linea, t.columna);
+        }
+        if (es("super")) throw error("en JC es 'base', como en C# (punto 34)");
         if (t.tipo == Tipo.RESERVADA && TIPOS.containsKey(t.texto))
             throw error("en JC, una conversión se escribe (" + t.texto + ") x (punto 23)");
         throw error("se esperaba una expresión, encontrado " + t);

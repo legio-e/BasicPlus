@@ -144,10 +144,13 @@ class JcParserTest {
         error(jcMain("      int x = 1;\n      x *= 2;\n"), "compuestos");
         error(jcMain("      print();\n"), "vacío");
         error(jcMain("      for (int i = 0; i < 3; i++) print(i);\n"), "<=");
-        error(jcMain("      switch (1) { }\n"), "segunda fase");
-        error("module M\n{\n   class K { }\n}\n", "segunda fase");
         error(jcMain("      int y = int(2.5);\n"), "(int) x");
         error(jcMain("      ++y;\n"), "detrás");
+        error("module M\n{\n   static int x;\n}\n", "clase");                            // static, sólo en una clase
+        error("module M\n{\n   class K\n   {\n      protected int x;\n      public function void f()\n"
+              + "      {\n         super.f();\n      }\n   }\n}\n", "base");                  // en JC es base
+        error("module M\n{\n   class K\n   {\n      public function void f() : base()\n      {\n      }\n   }\n}\n",
+              "constructor");                                                            // : base sólo en un constructor
     }
 
     private static void error(String jc, String motivo) {

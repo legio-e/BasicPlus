@@ -55,8 +55,8 @@ final class JcLexer {
     /** Las palabras reservadas de JC (puntos 1–33): las de la primera fase y las que quedan para la segunda. */
     static final Set<String> RESERVADAS = new HashSet<>(Arrays.asList(
             "module", "library", "interface", "implements", "extends", "import", "from",
-            "const", "function", "class", "enum", "public", "private", "final", "native", "sync", "owner",
-            "event", "static", "void", "var", "new", "is",
+            "const", "function", "class", "enum", "public", "private", "protected", "final", "native", "sync", "owner",
+            "event", "static", "void", "var", "new", "is", "base", "field",
             "if", "else", "while", "do", "for", "foreach", "in", "break", "continue", "return",
             "switch", "case", "default", "parallel", "try", "catch", "finally", "throw", "raise",
             "print", "inline", "this", "super", "true", "false", "null",
