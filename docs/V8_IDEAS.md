@@ -769,6 +769,13 @@ mi propuesta: manda lo de aquí.
     está (`SemanticAnalyzer`: «prefijo 'X.' no coincide con la clase»), así que `static` dice lo mismo: el parser de
     JC pone de prefijo el nombre de la clase, y el escritor de JC lo quita. Lo que queda para las clases: en C#, una
     constante de clase no lleva `static`, porque ya lo es.
+21. **Las clases, como en C#, en una segunda fase, como el `switch`** (Eduardo, 17-oct: *«las clases como en C# pero
+    lo podemos dejar para una segunda fase como el 'switch'»*). Con ellas van sus propiedades, sus eventos (en BP no
+    hay eventos de módulo), el constructor y el destructor, y `this`, `super` y `field`.
+
+    **Lo que cubre la primera fase**, medido el 17-oct: de los 473 `.bp` del corpus (samples, stdlib y `bpdevices`),
+    163 declaran clases y 8 usan `switch`; 168 tienen una cosa o la otra. Quedan **305 sin ninguna**, que el traductor
+    podrá llevar a JC y traer de vuelta. De la stdlib, 15 de 37.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
