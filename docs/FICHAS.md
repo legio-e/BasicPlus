@@ -6983,6 +6983,24 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
 
+#### 💡 `#698` — V8, idea: JC, BasicPlus con camisa de Java y C# (abierta el 17-oct; **el análisis del coste, hecho el mismo día**; la sintaxis, por decidir)
+
+Eduardo, 17-oct: *«es nuestro Basic Plus con una camisa diferente. Así que el AST es el mismo pero necesitamos un
+scanner y un parser nuevos»*. El nombre, JC. Primero un traductor BP → AST → JC, y luego JC → AST → BP. El análisis está
+en `V8_IDEAS.md` §E2:
+- **Lo nuevo:** el scanner y el parser de JC, y dos escritores del árbol, a JC y a BP. Hoy no hay nada que escriba BP
+  desde el árbol: `AstPrinter` sólo lo vuelca para depurar.
+- **El AST conserva la forma escrita**; el parser fabrica sólo en cuatro sitios, todos reconocibles.
+- **Los comentarios** los tira el lexer: hay que guardarlos para traducir.
+- **El `.mod` no depende del texto**, salvo los nombres de las clases de `parallel`, que llevan la línea
+  (`SemanticAnalyzer.java:2400`) y hay que numerar en orden.
+- **La red de seguridad:** el mismo programa en BP y en JC da el `.mod` idéntico byte a byte, en todo el corpus.
+- **El coste estimado:**
+  - el compilador, ~4.700–5.200 líneas nuevas, un 14–15 % más de frontend, y ~9–15 días; el grueso, el parser;
+  - el IDE, 1–2 días;
+  - la VM, nada.
+- **Lo siguiente:** decidir la sintaxis (la tabla de §E2, con sus ❓).
+
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 
 Propuesto por Eduardo el 13-oct: emparejar con la P4 su teclado y su ratón Bluetooth, chinos y sin documentación. Los

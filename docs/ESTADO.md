@@ -27,6 +27,27 @@
 
 ## Última sesión
 
+> **17-oct** — **Una idea de Eduardo, analizada: JC (`#698`), BasicPlus con camisa de Java y C#. El mismo AST, un
+> scanner y un parser nuevos, y un traductor en los dos sentidos. El coste, en `V8_IDEAS.md` §E2.**
+>
+> **Lo que dijo Eduardo:** el nombre, JC; primero un traductor BP → AST → JC, y luego JC → AST → BP; *«No necesitamos
+> nada más»*. Y el coste, centrado en el compilador: los cambios del IDE, pequeños, y los de la VM, casi nulos.
+>
+> **Lo hecho:** medido el frontend.
+> - El AST conserva la forma escrita.
+> - Los comentarios se pierden en el lexer.
+> - El `.mod` no depende del texto, salvo los nombres de las clases de `parallel`.
+> - ~10 sitios del compilador y ~13 del IDE suponen `.bp`.
+> - Sólo unos 8 mensajes del semántico citan sintaxis de BP.
+>
+> Con eso, en `V8_IDEAS` §E2:
+> - las piezas nuevas: el scanner y el parser de JC, y los escritores a JC y a BP;
+> - la red: el mismo `.mod` byte a byte en todo el corpus;
+> - una primera tabla de sintaxis con lo que hay que decidir;
+> - el coste: ~9–15 días el compilador, 1–2 el IDE y nada la VM.
+>
+> **Lo siguiente:** que Eduardo decida la sintaxis (los ❓ de la tabla). No se ha tocado código.
+
 > **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
 > a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su
 > dirección guardada.**

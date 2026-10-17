@@ -271,3 +271,139 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
   sirve.
 - **La C6 de la P4, actualizada a ESP-Hosted 3.x**: su versión, el protocolo de control y la puerta a la WiFi.
 - **La memoria**: cuánto ocupan NimBLE y ESP-Hosted.
+
+---
+
+## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
+
+### La idea
+
+Eduardo, 17-oct: *«Ya hablamos de incorporar un 2º lenguaje de sintaxis tipo Java o C#. Pero en realidad es nuestro
+Basic Plus con una camisa diferente. Así que el AST es el mismo pero necesitamos un scanner y un parser nuevos. Para
+empezar el nombre: JC (abreviación de Java y C#). Ahora desarrollamos un traductor de BP->AST->JC y luego de
+JC->AST->BP. No necesitamos nada más.»*
+
+Y sobre el coste: *«Yo me centraría en el coste de los cambios del compilador, los cambios del IDE deberían ser
+pequeños y los de la VM deberían ser casi nulos (al menos inicialmente).»*
+
+La idea venía del 9-oct, sin versión entonces: facilitar la entrada a quien viene de C, C# y Java. El argumento de
+Eduardo para el coste: con el mismo backend, dos lenguajes no cuestan el doble, porque el coste del proyecto está en lo
+embebido (el sistema y la VM), no en el frontend.
+
+### Las piezas: qué hay y qué es nuevo
+
+| pieza | estado | para qué |
+|---|---|---|
+| BP → AST (`Lexer`, `Parser`: 699 + 2.022 líneas) | existe | |
+| AST → `.mod` (el semántico y los emisores, el grueso de las 34.511 líneas del frontend) | existe | |
+| **AST → JC**: escribir JC desde el árbol | **nuevo** | el traductor BP → JC |
+| **JC → AST**: el scanner y el parser de JC | **nuevo** | el compilador de JC y el traductor JC → BP |
+| **AST → BP**: escribir BP desde el árbol | **nuevo** | el traductor JC → BP |
+
+El tercero no estaba en la cuenta de Eduardo: para ir de JC a BP hace falta escribir BP desde el árbol, y hoy no hay
+nada que lo haga. `AstPrinter` (407 líneas) vuelca el árbol para depurar, no escribe BP; pero recorre todos los nodos y
+sirve de esqueleto. Los dos escritores (a JC y a BP) comparten el recorrido y sólo cambia el «dialecto».
+
+### Lo medido el 17-oct
+
+1. **El AST conserva la forma escrita**; el parser no «desazucara». El operador compuesto (`AssignOpKind`), el `step`
+   del `for`, los paréntesis (`ParenExpr`), las propiedades, los eventos, el `parallel`, el `print` con sus separadores
+   y las anotaciones tienen su nodo. El parser fabrica algo sólo en cuatro sitios, y los cuatro se reconocen:
+   - los grupos de un `var` (`var i: integer, r: double`) salen en un `VarDecl` cada uno, y se escribirían en líneas
+     separadas, que es equivalente;
+   - el cuerpo de las `native` externas de un pack: llevan `isPackExtern` y se escribe sólo la firma;
+   - el `finally` de `try var`: la variable va en `recurso`, y se vuelve a escribir `try var` sin el `finally`;
+   - el `if` de una línea lleva su marca.
+2. **Los comentarios, el lexer los tira** (`//` y `/* */`). Para traducir hay que guardarlos con su posición (en los
+   dos lexers) y que los escritores los vuelvan a poner junto al nodo que les sigue. Es lo más delicado del traductor.
+   Las líneas en blanco, igual, por la posición.
+3. **Los nombres pasan tal cual.** BP no distingue mayúsculas en las palabras clave, pero sí en los nombres, como
+   Java y C#.
+4. **El `.mod` no depende del texto**: las líneas y la ruta del fuente van al `.dbg`. **Con una excepción**: las clases
+   que genera cada `parallel` se llaman `__Par_<línea>_<columna>_<i>` (`SemanticAnalyzer.java:2400`). Hay que
+   numerarlas en orden, como ya se hace con `__Thr<n>`. Se gana algo aparte: hoy, añadir un comentario encima de un
+   `parallel` cambia el `.mod`.
+5. **Los mensajes del semántico son casi todos neutros.** Sólo unos 8 citan sintaxis de BP (`'var owner'`, `'tipo[]'`,
+   `'endtry'`).
+6. **Los fuentes de los `import` se buscan como `.bp`** (`locateBpSource` y compañía: unos diez sitios en `Main` y
+   `BpBuild`). Si también se busca `.jc` y el parser se elige por la extensión, un proyecto puede mezclar módulos BP y
+   JC: todo acaba en el mismo AST.
+
+### La red de seguridad: el mismo `.mod`, byte a byte
+
+El traductor da la prueba más fuerte con lo que ya hay: los 399 samples, la stdlib y el corpus de paridad.
+1. Compilar el BP da un `.mod` (A); traducirlo a JC y compilar el JC da otro (B). **A y B, idénticos byte a byte.**
+2. **Puntos fijos**: BP → JC → BP tiene que dar el BP escrito desde su propio árbol, y JC → BP → JC igual.
+3. **Los errores de JC**, con sus pruebas propias.
+
+Si el `.mod` sale idéntico, las dos VMs no se enteran, y ya están probadas con ese `.mod`. Por eso **la VM no cambia**:
+el `.dbg` citará el `.jc` y nada más.
+
+### La sintaxis de JC, por decidir (Eduardo)
+
+Una primera tabla, con C# de base (tiene propiedades, eventos, `~Clase()`, `using`, tuplas y `foreach`, como BP) y lo
+que se decide marcado con ❓:
+
+| BP | JC (propuesta) |
+|---|---|
+| `module X` … `end X` | `module X { … }` |
+| `import Gui` · `import X from "ruta"` | `import Gui;` · `import X from "ruta";` |
+| `var x: integer := 5` | `int x = 5;` ❓ los nombres de los tipos (`int` o `integer`, `bool` o `boolean`) |
+| `var owner p: Persona := Persona("a")` | `owner Persona p = Persona("a");` ❓ ¿se admite o se exige `new`? |
+| `public function f(a: integer): string` … `end f` | `public string f(int a) { … }` |
+| `if c then` … `elseif` … `else` … `endif` | `if (c) { … } else if (c2) { … } else { … }` |
+| `while c do` … `endwh` | `while (c) { … }` |
+| `do` … `loop c` (se repite mientras `c`) | `do { … } while (c);` |
+| `do` … `loop` (sin condición: hasta un `break`) | ❓ necesita su forma: con `while (true)` el árbol ya no sería el mismo y el `.mod` cambiaría |
+| `for i := 1 to 10 step 2 do` … `next` | ❓ el `for` de C (sólo la forma que se traduce: `for (int i = 1; i <= 10; i += 2)`) o un rango |
+| `for x in lista do` … `next` | `foreach (var x in lista)` ❓ o el de Java, `for (T x : lista)` |
+| `switch x` / `case 1, 2` | `switch (x) { case 1, 2: … }` ❓ sin caer al siguiente ni `break` (BP no cae) |
+| `try` … `catch e: RuntimeError` … `finally` … `endtry` | `try { … } catch (RuntimeError e) { … } finally { … }` |
+| `try var r: T := expr` | `using (T r = expr) { … }` ❓ o el de Java, `try (T r = expr) { … }` |
+| `property Nombre: string` con `get`/`set` | `public string Nombre { get { … } set { … } }` |
+| eventos y `raise onClick(x)` | `event` y `raise onClick(x);` |
+| `function ~Persona()` | `~Persona() { … }` |
+| `native function f(…)` · `intrinsic` · `inline` | `native int f(…) { … }` (Java ya tiene `native`); `intrinsic` e `inline`, iguales |
+| `parallel` | `parallel { … }` |
+| `@BD{ tabla = "x" }` | `@BD(tabla = "x")`, como las anotaciones de Java |
+| `print a; b, c` | ❓ el `print` de BP, con sus separadores, no tiene equivalente en C |
+| `:=` · `and or not` · `mod` · `shl shr` · `xor` | `=` · `&& \|\| !` · `%` · `<< >>` · `^` |
+| `a ^ b` (potencia) | ❓ en C `^` es el XOR: la potencia necesita otra forma |
+| `Clase(x)` (conversión) | ❓ el `(Clase) x` de C, o el mismo `Clase(x)` |
+| `x: (integer, string)` · `var (a, b) := f()` | `(int, string) x` · `var (a, b) = f();`, como las tuplas de C# |
+| fin de sentencia: el salto de línea · bloques con `end` | `;` · llaves |
+
+### Lo que echarán de menos (y no es «sólo frontend»)
+
+Quien venga de Java o C# echará en falta los genéricos, las lambdas, las interfaces de clase, la interpolación de
+cadenas, la sobrecarga de operadores y los `static`. JC no los tendrá, porque es BP: añadirlos ya no sería sólo
+frontend. El parser de JC los reconocerá y lo dirá con nombre («JC no tiene genéricos…»), en vez de un error de
+sintaxis sin más.
+
+### El coste
+
+| pieza | dónde | tamaño (estimado) | trabajo (estimado) |
+|---|---|---|---|
+| La sintaxis de JC: la tabla, ejemplos escritos a mano y las decisiones ❓ | `V8_IDEAS` | — | 1–2 días, con Eduardo |
+| El scanner de JC | frontend | ~700 líneas (el de BP, 699) | 0,5–1 día |
+| **El parser de JC**, al mismo AST, con sus mensajes de error | frontend | ~2.000–2.500 (el de BP, 2.022) | 3–5 días |
+| Los dos escritores, AST → JC y AST → BP (un recorrido y dos dialectos), con los comentarios y las líneas en blanco | frontend | ~1.200 | 2–3 días |
+| La fontanería: el parser según la extensión (unos diez sitios), las órdenes de traducir, los nombres de `parallel` | frontend | ~200 | 0,5–1 día |
+| Las pruebas: el `.mod` idéntico en todo el corpus, los puntos fijos y los errores de JC | frontend | ~600 | 1–2 días |
+| Los ~8 mensajes del semántico que citan BP | frontend | — | 0,5 días, o más adelante |
+| **Compilador** | | **~4.700–5.200 líneas (un 14–15 % más de frontend)** | **~9–15 días** |
+| El IDE: `.jc` en unos 13 sitios, el coloreado (RSyntaxTextArea trae el de C# y el de Java; o uno propio como `BpTokenMaker`, de 204 líneas), el plegado por llaves (RSyntaxTextArea lo trae), «Traducir a JC / a BP» en el menú y el lenguaje al crear un proyecto | BpIde | ~400–500 | 1–2 días |
+| La VM | — | 0 | 0 |
+
+**Tres semanas como mucho, y el grueso es el parser de JC.** Sobre el proyecto entero —frontend, VMs, firmwares e
+IDE— es un aumento pequeño, lo que decía Eduardo: el coste está en lo embebido. Lo que no entra en la cuenta es la
+documentación de JC: una página con la tabla y ejemplos, que se pueden sacar del manual con el propio traductor.
+
+**El orden que propongo**, el de Eduardo:
+1. **La sintaxis**: la tabla y las decisiones ❓.
+2. **AST → JC**, lo más barato: pasa a JC los 399 samples y la stdlib, y así se ve JC sobre código real antes de
+   escribir el parser.
+3. **El parser de JC**, con la red del `.mod` idéntico desde el primer día: el corpus traducido es su banco de
+   pruebas.
+4. **AST → BP**, con los puntos fijos.
+5. **El IDE.**
