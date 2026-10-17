@@ -6983,28 +6983,29 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
 
-#### 💡 `#700` — BP: el `print` sin salto, con un `;` al final, y una instrucción nueva en la VM que saca la línea sin el salto (abierta el 17-oct, de JC, `#698`; decidido el mismo día; **una posible mejora, todavía no**, Eduardo)
+#### 💡 `#700` — BP: el `print` sin salto, con un `;` al final; basta con el compilador (abierta el 17-oct, de JC, `#698`; decidido el mismo día; **se hace en el compilador de BP**, Eduardo: el único cambio de BP que entra ahora)
 
-- **Todavía no** (Eduardo, 17-oct): *«De momento todos los cambios de BP los dejamos como posibles mejoras pero
-  prefiero no implementarlos todavía para no mezclar demasiados cambios.»* Mientras, un `print` de JC acaba con `"\n"`
-  (la propuesta, en `V8_IDEAS` §E2, «Los cambios de BP que salen de JC»).
 - **Por qué:** el `print` de JC no salta de línea solo (Eduardo: *«El CR y LN no se añaden de forma automática, hay
   que indicarlos»*). En BP no hay forma de escribir en la consola sin saltar: el `print` pone siempre el salto, también
-  con un `;` al final (medido el 17-oct, `V8_IDEAS` §E2, punto 17). También le sirve a BP: un aviso antes de leer, o
-  el progreso en una sola línea.
+  con un `;` al final (medido el 17-oct, `V8_IDEAS` §E2, punto 17).
 - **Lo decidido** (mi propuesta; Eduardo, conforme):
-  - en BP, un `;` al final del `print` no salta de línea, como en el BASIC clásico. En el corpus no hay ninguno, así
-    que ningún programa cambia; el árbol ya lo guarda (el último `PrintItem`, un `;` sin expresión);
-  - una instrucción nueva en la VM que saca la línea del hilo sin añadir el salto. Hoy las piezas esperan al
-    `PRINT_NL` (`bpvm_linea_fin`, `#600`);
+  - en BP, un `;` al final del `print` no salta de línea, como en el BASIC clásico. En el corpus no hay ninguno y el
+    manual no dice qué hace, así que nada cambia; el árbol ya lo guarda (el último `PrintItem`, un `;` sin expresión);
   - el `print(a, b);` de JC es el `print a; b;` de BP.
-- **Lo que toca, por la cascada (Java → C → placa):**
-  - el emisor;
-  - la instrucción, en `OPCODES.md`, en la VM-Java y en la VM-C;
-  - el AOT, o que una `native` lo rechace con nombre;
+- **Basta con el compilador** (Eduardo, 17-oct: *«esto mejor lo retocamos en el compilador de BP, pero nada más de
+  momento»*; los demás cambios de BP que salen de JC, todavía no).
+  - Las dos VMs ya guardan las piezas en la línea del hilo y, si el hilo acaba sin el salto, las sacan tal cual
+    (`bpvm_linea_vaciar` y `lineaVaciar`, `#600`).
+  - Un `print` que acaba en `;` deja ahí sus piezas, y salen con el siguiente salto o al acabar el hilo.
+  - Lo que no da: que un trozo salga en el momento. Para eso haría falta una instrucción nueva en la VM, más adelante,
+    si hace falta. Ésa era mi primera idea; con la VM como está, no hace falta.
+- **Lo que toca:**
+  - el emisor (`emitPrint`): sin el `PRINT_NL`, y sin el camino de `PRINT_STRING`, que lleva el salto;
+  - el AOT: la última pieza, sin salto (el ayudante ya distingue, `bpvm_aot_helpers.c:530`);
   - el manual;
-  - un sample en el corpus que lo compruebe en las dos VMs;
-  - y las imágenes de las placas, por lotes y con el OK de Eduardo.
+  - un sample en el corpus que lo compruebe en las dos VMs.
+
+  Ni la VM ni las imágenes de las placas cambian.
 
 #### 🔵 `#699` — `continue` dentro de un `do … loop c` vuelve arriba sin mirar la condición; el AOT, en C, sí la mira: el mismo bucle da distinto si la función es `native` (abierta el 17-oct, al decidir el `do … while` de JC, `#698`; preexistente)
 

@@ -670,20 +670,27 @@ mi propuesta: manda lo de aquí.
     - una coma al final de la línea sigue el `print` en la línea siguiente.
 
     **Lo que pide el `print` de JC:**
-    - **Un `print` sin salto en BP, y no es sólo del compilador.** La VM junta las piezas de un `print` y las saca
-      enteras con el salto (`PRINT_NL` → `bpvm_linea_fin`, `#600`), para que un `print` salga entero aunque haya
-      varios hilos. Sin el salto, las piezas se quedarían esperando al siguiente. Hace falta una instrucción que las
-      saque sin añadirlo: en las dos VMs, en el AOT y en las placas.
+    - **Un `print` sin salto en BP.** La VM junta las piezas de un `print` y las saca enteras con el salto
+      (`PRINT_NL` → `bpvm_linea_fin`, `#600`), para que un `print` salga entero aunque haya varios hilos. Sin el
+      salto, las piezas esperan al siguiente. Lo creí cosa de la VM, con una instrucción nueva; luego se vio que basta
+      con el compilador (abajo).
     - **La ida y vuelta da otro árbol.** El `print a, b` de BP es en JC `print(a, " ", b, "\n");`, y de vuelta a BP,
       `print a; " "; b; "\n";`. Imprime lo mismo, pero con otro árbol y otro `.mod`. Pasa con los 2.655 `print` del
       corpus, porque todos llevan el salto automático. En el `print`, la comparación tendría que ser por lo que
       imprime: la coma, un `" "`; el salto automático, un `"\n"`.
 
-    **Decidido** (mi propuesta; Eduardo, conforme): el `print` sin salto también para BP, porque también le sirve (un
-    aviso antes de leer, el progreso en una sola línea). Un `;` al final no salta de línea, como en el BASIC clásico (en
-    el corpus no hay ninguno), y una instrucción nueva en la VM saca la línea sin el salto. Así, el `print(a, b);` de
-    JC es el `print a; b;` de BP. En `FICHAS`, `#700`. Es un cambio de BP: de momento, una posible mejora (abajo, «Los
-    cambios de BP que salen de JC»).
+    **Decidido** (mi propuesta; Eduardo, conforme): el `print` sin salto también para BP. Un `;` al final no salta de
+    línea, como en el BASIC clásico (en el corpus no hay ninguno; el manual no dice qué hace). Así, el `print(a, b);`
+    de JC es el `print a; b;` de BP. En `FICHAS`, `#700`.
+
+    **Y basta con el compilador** (Eduardo, 17-oct: *«esto mejor lo retocamos en el compilador de BP, pero nada más de
+    momento»*). Es el único cambio de BP que entra ahora (abajo, «Los cambios de BP que salen de JC»).
+    - Las dos VMs ya guardan las piezas en la línea del hilo y, si el hilo acaba sin el salto, las sacan tal cual
+      (`bpvm_linea_vaciar` y `lineaVaciar`, `#600`).
+    - Un `print` que acaba en `;` deja sus piezas en la línea. Salen con el siguiente salto, o al acabar el hilo: los
+      bytes de la salida son los que tienen que ser.
+    - Lo que no da: que un trozo salga en el momento, sin esperar al resto de la línea (un aviso antes de leer por la
+      UART, un progreso con puntos). Para eso haría falta una instrucción nueva en la VM: más adelante, si hace falta.
 18. **La potencia, `**`** (Eduardo, 17-oct), y el `^` queda para el XOR, como en C#. Con el árbol de BP: `a ** b` es
     el `a ^ b` de BP, y `a ^ b` es el `a xor b`. La potencia, con su precedencia de BP, que es también la de Python:
     más fuerte que el menos (`-x ** 2` es `-(x ** 2)`) y asociativa por la derecha (`2 ** 3 ** 2` es `2 ** 9`).
@@ -738,21 +745,22 @@ mi propuesta: manda lo de aquí.
 
 Eduardo, 17-oct: *«De momento todos los cambios de BP los dejamos como posibles mejoras pero prefiero no
 implementarlos todavía para no mezclar demasiados cambios.»* La primera versión de JC es sólo frontend, sobre el BP de
-hoy. Lo que haría falta en BP, y lo que hace JC mientras:
+hoy, con una excepción: el `print` sin salto (`#700`), que se retoca en el compilador de BP. Lo que haría falta en BP,
+y lo que hace JC mientras:
 
 | el cambio en BP | sale de | mientras, en JC |
 |---|---|---|
 | `#699`, el `continue` de un `do … loop`: un fallo | 9 | el `continue` de su `do … while` es el de BP: vuelve arriba sin mirar la condición |
-| `#700`, el `print` sin salto (y su instrucción en la VM) | 17 | ❓ un `print` tiene que acabar con `"\n"`, que es el salto de BP |
+| `#700`, el `print` sin salto: **éste sí, en el compilador** (Eduardo) | 17 | el `print(a, b);` es el `print a; b;` de BP |
 | los caracteres, `'a'` | 19 | los lee el lexer de JC; en BP se escriben como su número |
 | las secuencias de escape de C# | 19 | las lee el lexer de JC; lo que BP no sabe escribir, el traductor lo dice |
 | que un literal guarde cómo se escribió | 19 | `0xFF` y `'a'` vuelven como `255` y `97` |
 | el `foreach` sobre listas | 16 | sólo arrays |
 | los demás compuestos (`*=`, `/=`…) | 15 | no están |
 
-**El `print`, mi propuesta para mientras:** el último argumento tiene que ser `"\n"`, y es el salto que BP pone
-siempre. Un `print` de JC sin él da un error que lo dice: «BP aún no imprime sin saltar de línea (`#700`)». Cuando se
-haga `#700`, el error desaparece y nada más cambia.
+**El `print`, la excepción.** Mi propuesta para mientras era que un `print` de JC acabara con su salto escrito, y un
+error si no. Eduardo: *«No, esto mejor lo retocamos en el compilador de BP, pero nada más de momento.»* Así que `#700`
+se hace en el compilador de BP, sin tocar la VM (punto 17), y los demás cambios, todavía no.
 
 ### Lo que choca entre BP y JC, para más adelante
 
