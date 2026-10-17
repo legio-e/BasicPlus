@@ -6983,6 +6983,23 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
 
+#### 🔵 `#701` — un `if`, `while` o `for` de una línea no puede ser la última sentencia de un bloque de su misma clase: el parser toma el `endif`, `endwh` o `next` de la línea siguiente por suyo (abierta el 17-oct, al probar `EscritorJc`, `#698`; preexistente)
+
+- **Medido** (17-oct, tres sondas en el scratchpad):
+  - `if a == 0 then` / `if a == 0 then print "si"` / `endif` da «el 'if' de una línea no lleva 'endif'»;
+  - lo mismo con un `while … do a += 1` antes de `endwh`, y además «se esperaba 'endwh'», porque se ha comido el de
+    fuera;
+  - y con un `for j := 1 to 2 do print …` antes de `next`.
+- **La causa:** en la forma de una línea, `parseIfStmt` (`Parser.java:1137`), `parseWhileStmt` (1269) y
+  `parseForStmt` (1328) miran si lo que sigue a la sentencia es su terminador. Es para dar un error claro a quien
+  escribe `if E then STMT endif` en una línea. Pero la sentencia ya ha consumido su salto de línea, así que lo que
+  miran es la línea siguiente: el terminador del bloque de fuera.
+- **No es mudo:** el programa no compila, y el error lo dice; nada se compila mal. En el corpus no hay ninguno (no
+  compilaría), pero un `for` de una línea como última sentencia de otro `for` es una forma normal de escribir.
+- **El arreglo, a decidir** (Eduardo: los cambios de BP, más adelante): el terminador cuenta como colgante sólo si
+  está en la misma línea que el final de la sentencia.
+- **Para JC importa en el paso 3:** de JC a BP saldría justo esa forma (`for (…) { for (…) x; }`), que BP no lee.
+
 #### 💡 `#700` — BP: el `print` sin salto, con un `;` al final; basta con el compilador (abierta el 17-oct, de JC, `#698`; decidido el mismo día; **se hace en el compilador de BP**, Eduardo: el único cambio de BP que entra ahora)
 
 - **Por qué:** el `print` de JC no salta de línea solo (Eduardo: *«El CR y LN no se añaden de forma automática, hay
@@ -7062,11 +7079,19 @@ en `V8_IDEAS.md` §E2:
   - Deja para una segunda fase las clases, el `switch` y `parallel`; cubre 302 de los 473 `.bp` del corpus.
   - Los cambios de BP que salen de JC son posibles mejoras, todavía no (`#699`, entre ellos). La excepción es `#700`,
     el `print` sin salto, que se retoca en el compilador de BP.
-- **Lo siguiente:**
-  - `EscritorJc` (AST → JC) sobre esos 302, con el árbol analizado: el `new`, las conversiones y el tipo de las
-    constantes salen del análisis, no del texto;
-  - luego el parser de JC, con la ida y vuelta del árbol (sin contar los paréntesis ni las marcas del `new` y de las
-    conversiones) y, al final, el `.mod`.
+- **Paso 2, AST → JC: hecho el 17-oct** (`V8_IDEAS` §E2, «Paso 2»):
+  - el código: `EscritorJc` (721 líneas), desde el árbol analizado (`Main.analizarParaTraducir`, los mismos pasos que
+    `compileFull` antes de emitir), y `--escribir-jc`, con un fichero o una carpeta;
+  - `EscritorJcTest`, 7 pruebas. La primera lee de `V8_IDEAS` el ejemplo escrito a mano y exige ese JC carácter a
+    carácter; con la sangría saboteada fallan ella y la del `if`. El frontend, 294 sin fallos;
+  - el barrido de los 473 `.bp`: **283 escritos** (268 samples y 15 de la stdlib); 157 no soportados, con su motivo
+    (148 por clases, 4 `switch`, 2 `parallel`, 2 `for` con el paso en una variable y una propiedad con `get` y
+    `set`); y 33 que no compilan (26 a propósito, en `errores/` y `holes/`, y 7 que piden el pack de SQLite, como con
+    el compilador);
+  - salió `#701`, del parser de BP.
+- **Lo siguiente:** el parser de JC (paso 3), con la ida y vuelta del árbol (sin contar los paréntesis ni las marcas
+  del `new` y de las conversiones) y, al final, el `.mod`. Antes, Eduardo: los arrays de tamaño fijo, que el escritor
+  pone como `int[10] nums;` (22 en el corpus; no estaba decidido).
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 

@@ -128,7 +128,8 @@ public final class EscritorBp {
         else throw new NoSoportado(d);
     }
 
-    private static String anotacion(Annotation a) {
+    /** También la usa EscritorJc: las anotaciones de JC son las de BP (V8_IDEAS §E2, punto 27). */
+    static String anotacion(Annotation a) {
         StringBuilder s = new StringBuilder("@").append(a.name).append("{");
         for (int i = 0; i < a.entries.size(); i++) {
             AnnEntry e = a.entries.get(i);

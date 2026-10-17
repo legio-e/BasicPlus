@@ -423,12 +423,14 @@ public final class Main {
         // V8 #698 (JC, paso 1) — escribir BP desde el árbol, y la ida y vuelta (EscritorBp).
         boolean escribirBp  = false;
         boolean comprobarBp = false;
+        boolean escribirJc  = false;   // V8 #698 (JC, paso 2) — AST → JC (EscritorJc), desde el árbol analizado
 
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
             if ("--tokens".equals(a))      showAst    = false;
             else if ("--escribir-bp".equals(a))  { escribirBp = true;  showAst = false; showTokens = false; }
             else if ("--comprobar-bp".equals(a)) { comprobarBp = true; showAst = false; showTokens = false; }
+            else if ("--escribir-jc".equals(a))  { escribirJc = true;  showAst = false; showTokens = false; }
             else if ("--prune-bpi".equals(a)) pruneBpi = true;
             else if ("--ast".equals(a))    showTokens = false;
             else if ("--quiet".equals(a)) { showAst = false; showTokens = false; }
@@ -516,6 +518,7 @@ public final class Main {
             System.err.println("     java -jar basicplus-frontend.jar --project <archivo.bpbuild>");
             System.err.println("     java -jar basicplus-frontend.jar <archivo.bp> --escribir-bp");
             System.err.println("     java -jar basicplus-frontend.jar <archivo.bp|carpeta> --comprobar-bp");
+            System.err.println("     java -jar basicplus-frontend.jar <archivo.bp|carpeta> --escribir-jc");
             System.exit(1);
             return;
         }
@@ -531,6 +534,17 @@ public final class Main {
         if (escribirBp || comprobarBp) {
             try {
                 System.exit(comprobarBp ? EscritorBp.comprobar(p) : EscritorBp.escribirFichero(p));
+            } catch (IOException ex) {
+                System.err.println("error de I/O: " + ex.getMessage());
+                System.exit(2);
+            }
+            return;
+        }
+
+        // V8 #698 (JC, paso 2) — el árbol analizado, escrito en JC: nada se emite.
+        if (escribirJc) {
+            try {
+                System.exit(EscritorJc.escribirJc(p));
             } catch (IOException ex) {
                 System.err.println("error de I/O: " + ex.getMessage());
                 System.exit(2);
@@ -589,6 +603,82 @@ public final class Main {
         SemanticInfo info = analyzer.analyze(parsed.module);
         printSemantics(info, parsed.module);
         ctx.totalErrors += countSemErrors(info);
+    }
+
+    // ============================================================
+    // V8 #698 (JC) — EL ÁRBOL ANALIZADO, PARA TRADUCIRLO
+    // ============================================================
+    /** Un fuente leído y analizado como para compilarlo, o el primer error. */
+    static final class Analizado {
+        Ast.ModuleNode modulo;
+        SemanticInfo info;
+        String error;
+    }
+
+    /**
+     * El árbol de {@code src} y su análisis semántico, hechos con los mismos pasos que {@link #compileFull} antes de
+     * emitir: las interfaces de los imports, los imports implícitos y el análisis. No emite nada. Lo que el compilador
+     * va contando por la salida se tira, porque por la salida va el JC; los ficheros que haga falta escribir (las
+     * interfaces de los imports que se compilan de su fuente) van a un temporal que se borra al acabar.
+     *
+     * <p>Lo usa el traductor a JC (`EscritorJc`): en BP crear, llamar y convertir se escriben igual, `X(…)`, y sólo el
+     * análisis sabe qué es cada uno; y el tipo de una constante que no lo escribe también sale de aquí (V8_IDEAS §E2,
+     * puntos 22, 23 y 29). Los imports que ponga el análisis (el de `Collections`, #450) se quitan después: el JC
+     * lleva los del fuente.
+     */
+    static Analizado analizarParaTraducir(Path src) {
+        Analizado r = new Analizado();
+        java.io.PrintStream out = System.out, err = System.err;
+        java.io.PrintStream mudo = new java.io.PrintStream(new java.io.ByteArrayOutputStream(), true);
+        Path tmp = null;
+        try {
+            System.setOut(mudo);
+            System.setErr(mudo);
+            Ctx ctx = new Ctx();
+            ctx.autodiscoverFromSource(src.toAbsolutePath());
+            ctx.verbose = false;
+            tmp = Files.createTempDirectory("bp-jc-");
+            ctx.outDir = tmp;
+            Parsed parsed = parseAndPrint(src, ctx, true);
+            if (parsed == null || parsed.module == null) { r.error = "el fuente no se lee"; return r; }
+            if (!parsed.lexer.getErrors().isEmpty())  { r.error = parsed.lexer.getErrors().get(0).toString(); return r; }
+            if (!parsed.parser.getErrors().isEmpty()) { r.error = parsed.parser.getErrors().get(0).toString(); return r; }
+            Ast.ModuleNode m = parsed.module;
+            List<Ast.ImportNode> delFuente = new ArrayList<>(m.imports);
+            for (Ast.ImportNode imp : delFuente) {
+                ensureInterfaceForImport(imp, src, ctx, 1);
+                if (imp.boundImpl != null) ensureInterfaceForBoundImpl(imp.boundImpl, imp.fromPath, m, src, ctx, 1);
+            }
+            SemanticAnalyzer analyzer = new SemanticAnalyzer();
+            injectImplicitCoreImport(m);
+            injectImplicitCollectionsImport(m);
+            loadImportsForAnalyzer(m, src, ctx, analyzer, 1);
+            if (ctx.totalErrors > 0) { r.error = "los imports no se cargan"; return r; }
+            SemanticInfo info = analyzer.analyze(m);
+            m.imports.clear();
+            m.imports.addAll(delFuente);
+            for (SemanticDiagnostic d : info.diagnostics)
+                if (d.kind == SemanticDiagnostic.Kind.ERROR) { r.error = d.toString(); return r; }
+            r.modulo = m;
+            r.info = info;
+            return r;
+        } catch (IOException | RuntimeException ex) {
+            r.error = "el análisis falló: " + ex;
+            return r;
+        } finally {
+            System.setOut(out);
+            System.setErr(err);
+            borrarTemporal(tmp);
+        }
+    }
+
+    private static void borrarTemporal(Path dir) {
+        if (dir == null) return;
+        try (java.util.stream.Stream<Path> w = Files.walk(dir)) {
+            w.sorted(java.util.Comparator.reverseOrder()).forEach(f -> { try { Files.deleteIfExists(f); } catch (IOException ignored) { } });
+        } catch (IOException ignored) {
+            // un temporal que no se borra no es un error del análisis
+        }
     }
 
     // ============================================================

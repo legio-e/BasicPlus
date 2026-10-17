@@ -68,7 +68,17 @@
 >   `var` de varios nombres con un valor, o una constante sin tipo, dan el mismo `.mod` que escritos uno a uno o con el
 >   tipo.
 >
-> **Lo siguiente:** `EscritorJc` (AST → JC) sobre esos 302, con el árbol analizado; luego el parser de JC.
+> **Por la noche, el paso 2: AST → JC** (Eduardo: *«OK, adelante»*).
+> - `EscritorJc` escribe JC desde el árbol analizado (`Main.analizarParaTraducir`), y `--escribir-jc`.
+> - **El ejemplo escrito a mano en `V8_IDEAS` sale igual, carácter a carácter**, y una prueba lo vigila. 7 pruebas
+>   nuevas; el frontend, 294 sin fallos.
+> - El barrido: 283 de los 473 `.bp` escritos. Los demás, por clases, `switch`, `parallel`, dos pasos en una
+>   variable y una propiedad larga, o porque no compilan (26 a propósito y 7 que piden el pack de SQLite).
+> - Al probarlo salió `#701`: el parser de BP no lee un `if`, `while` o `for` de una línea como última sentencia de
+>   un bloque de su clase. No se toca (Eduardo: los cambios de BP, más adelante).
+>
+> **Lo siguiente:** el paso 3, el parser de JC con la ida y vuelta del árbol. Antes, que Eduardo diga cómo van los
+> arrays de tamaño fijo (el escritor los pone como `int[10] nums;`).
 
 > **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
 > a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su

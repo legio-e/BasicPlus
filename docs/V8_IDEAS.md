@@ -994,3 +994,50 @@ se hace en el compilador de BP, sin tocar la VM (punto 17), y los demás cambios
   nombre de JC como `Next`, `Step` o `End` es en BP una palabra reservada, y un programa de JC que lo use no se puede
   escribir en BP tal cual. Al revés, `int` y `bool` son nombres válidos en BP que en JC no lo serán. Mi propuesta: que
   el traductor lo diga, con el nombre y la línea, sin renombrar nada por su cuenta.
+- **Un `if`, `while` o `for` de una línea al final de un bloque de su clase** (`#701`, un fallo del parser de BP): BP
+  no lo lee, porque toma el `endif`, `endwh` o `next` de la línea siguiente por suyo. De JC a BP saldría esa forma
+  (`for (…) { for (…) x; }`). Importa en el paso 3.
+
+### Paso 2, AST → JC: hecho el 17-oct
+
+Eduardo: *«OK, adelante.»* Con la sintaxis de la primera fase decidida, el escritor de JC.
+
+**Lo hecho:**
+- **`EscritorJc.java`** (721 líneas). Escribe JC desde el árbol ANALIZADO: es lo que sabe dónde va el `new`, qué
+  llamada es una conversión `(T) x` y qué tipo lleva una constante que en BP no lo escribe. Pone los paréntesis que
+  pide la precedencia de C# y deja los del programador. Lo que la primera fase deja fuera lo dice con su motivo y su
+  línea.
+- **`Main.analizarParaTraducir`**: el análisis con los mismos pasos que `compileFull` antes de emitir (las interfaces
+  de los imports, los implícitos y el análisis), sin emitir ni sacar ruido por la salida.
+- **`--escribir-jc`**, con un fichero (el JC por la salida) o con una carpeta (las cuentas).
+- **`EscritorJcTest`**, 7 pruebas:
+  - la primera lee de este documento el ejemplo de la primera fase y exige ese JC carácter a carácter, porque se
+    escribió a mano antes que el escritor. Con la sangría saboteada fallan ella y la del `if`;
+  - y en pequeño, la precedencia, crear, llamar y convertir, las formas del `for` y del `if`, el `print` y lo que no
+    se escribe.
+
+  El frontend, 294 pruebas sin fallos.
+
+**El barrido** (`--escribir-jc` sobre los 473 `.bp`):
+
+| | samples | stdlib | `bpdevices` |
+|---|---|---|---|
+| escritos | 268 | 15 | 0 |
+| no soportados | 130 | 22 | 5 |
+| no se analizan | 33 | 0 | 0 |
+
+- Los no soportados, por su motivo: 148 por clases, 4 `switch`, 2 `parallel`, 2 `for` con el paso en una variable
+  (`ForStep` y `ContinueFor`, que lo prueban) y una propiedad con `get` y `set` escritos.
+- Los que no se analizan: 26 están rotos a propósito (`errores/` y `holes/`), y 7 piden el pack de SQLite. Esos 7
+  tampoco compilan solos con el compilador: el análisis para traducir se comporta como él.
+
+**Lo que no está decidido y el escritor ha hecho a su manera:**
+- ❓ **Los arrays de tamaño fijo** (`var nums: integer[10]`), que salen como `int[10] nums;`: el tipo delante, con
+  su tamaño. Hay 22 en el corpus, en 4 ficheros. C# no tiene esa forma: su `int[] nums = new int[10];` es un array del
+  montón, y el de BP es otro (va en el marco o en el objeto, y no se reasigna).
+- Las líneas en blanco: juntas las declaraciones de una línea (constantes, variables y propiedades cortas), y
+  separado lo demás, como en el ejemplo.
+
+**Lo siguiente, el paso 3:** el parser de JC, con la ida y vuelta: el árbol de BP, escrito en JC y leído otra vez,
+tiene que ser el mismo (sin contar los paréntesis ni las marcas del `new` y de las conversiones); y al final, el
+`.mod`.
