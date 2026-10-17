@@ -669,7 +669,7 @@ mi propuesta: manda lo de aquí.
       de escribir en la consola sin saltar de línea (`IO.write` es para ficheros);
     - una coma al final de la línea sigue el `print` en la línea siguiente.
 
-    ❓ **Lo que pide el `print` de JC:**
+    **Lo que pide el `print` de JC:**
     - **Un `print` sin salto en BP, y no es sólo del compilador.** La VM junta las piezas de un `print` y las saca
       enteras con el salto (`PRINT_NL` → `bpvm_linea_fin`, `#600`), para que un `print` salga entero aunque haya
       varios hilos. Sin el salto, las piezas se quedarían esperando al siguiente. Hace falta una instrucción que las
@@ -679,10 +679,10 @@ mi propuesta: manda lo de aquí.
       corpus, porque todos llevan el salto automático. En el `print`, la comparación tendría que ser por lo que
       imprime: la coma, un `" "`; el salto automático, un `"\n"`.
 
-    **Mi propuesta:** el `print` sin salto también para BP, porque también le sirve (un aviso antes de leer, el
-    progreso en una sola línea). Un `;` al final no salta de línea, como en el BASIC clásico (en el corpus no hay
-    ninguno), y una instrucción nueva en la VM saca la línea sin el salto. Así, el `print(a, b);` de JC es el
-    `print a; b;` de BP.
+    **Decidido** (mi propuesta; Eduardo, conforme): el `print` sin salto también para BP, porque también le sirve (un
+    aviso antes de leer, el progreso en una sola línea). Un `;` al final no salta de línea, como en el BASIC clásico (en
+    el corpus no hay ninguno), y una instrucción nueva en la VM saca la línea sin el salto. Así, el `print(a, b);` de
+    JC es el `print a; b;` de BP. En `FICHAS`, `#700`.
 
 ### Lo que choca entre BP y JC, para más adelante
 

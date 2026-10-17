@@ -6983,6 +6983,26 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
 
+#### 💡 `#700` — BP: el `print` sin salto, con un `;` al final, y una instrucción nueva en la VM que saca la línea sin el salto (abierta el 17-oct, de JC, `#698`; **decidido el mismo día**, por hacer)
+
+- **Por qué:** el `print` de JC no salta de línea solo (Eduardo: *«El CR y LN no se añaden de forma automática, hay
+  que indicarlos»*). En BP no hay forma de escribir en la consola sin saltar: el `print` pone siempre el salto, también
+  con un `;` al final (medido el 17-oct, `V8_IDEAS` §E2, punto 17). También le sirve a BP: un aviso antes de leer, o
+  el progreso en una sola línea.
+- **Lo decidido** (mi propuesta; Eduardo, conforme):
+  - en BP, un `;` al final del `print` no salta de línea, como en el BASIC clásico. En el corpus no hay ninguno, así
+    que ningún programa cambia; el árbol ya lo guarda (el último `PrintItem`, un `;` sin expresión);
+  - una instrucción nueva en la VM que saca la línea del hilo sin añadir el salto. Hoy las piezas esperan al
+    `PRINT_NL` (`bpvm_linea_fin`, `#600`);
+  - el `print(a, b);` de JC es el `print a; b;` de BP.
+- **Lo que toca, por la cascada (Java → C → placa):**
+  - el emisor;
+  - la instrucción, en `OPCODES.md`, en la VM-Java y en la VM-C;
+  - el AOT, o que una `native` lo rechace con nombre;
+  - el manual;
+  - un sample en el corpus que lo compruebe en las dos VMs;
+  - y las imágenes de las placas, por lotes y con el OK de Eduardo.
+
 #### 🔵 `#699` — `continue` dentro de un `do … loop c` vuelve arriba sin mirar la condición; el AOT, en C, sí la mira: el mismo bucle da distinto si la función es `native` (abierta el 17-oct, al decidir el `do … while` de JC, `#698`; preexistente)
 
 - **Medido** (17-oct, una sonda en el scratchpad, las dos VMs iguales): `do` … `if k >= 3 then continue` … `loop k < 3`
