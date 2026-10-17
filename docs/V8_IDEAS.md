@@ -591,6 +591,18 @@ mi propuesta: manda lo de aquí.
     - Lo que BP tiene y JC no, de momento: el paso en una variable. Sólo sale en tres samples de prueba (`ForStep`,
       `ContinueFor` y `errores/StepCero`). En el corpus hay 39 `for`: 21 numéricos y 18 `for … in`.
     - ❓ El `for x in lista` de BP necesitará su forma; la de C# es `foreach (var x in lista)`.
+12. ❓ **`v++` y `v--`** (17-oct). Eduardo: en C# están `v++` y `v--`; en BP, lo más cercano es `v += 1` y `v -= 1`.
+    *«Si hace falta se puede añadir un opCode para cada uno y 2 funciones inline para BP: inc(v) y dec(v)»*.
+
+    **Mi propuesta:** en JC, `v++;` y `v--;` como sentencias, que son el `v += 1` y el `v -= 1` de BP: el mismo árbol,
+    sin nada nuevo en BP ni en la VM. Valen donde vale el `+=` de BP: una variable, un campo o un elemento de un array
+    (`a[i]++`).
+    - Dentro de una expresión (`x = v++`, `a[i++]`), no: en BP ninguna expresión cambia una variable, y haría falta un
+      nodo nuevo en el árbol. `++v`, tampoco: como sentencia es lo mismo que `v++`.
+    - El opcode sólo daría velocidad, y eso lo puede hacer el compilador sin tocar el lenguaje: emitir un `INC` para el
+      `v += 1`, en BP y en JC por igual. Antes habría que medir si compensa (el PC filtra las ideas de rendimiento).
+      Con eso, `inc(v)` y `dec(v)` no hacen falta en BP.
+    - En la cabecera del `for`, `i++` sigue siendo lo decidido: el `for` sin `step`.
 
 ### Lo que choca entre BP y JC, para más adelante
 
