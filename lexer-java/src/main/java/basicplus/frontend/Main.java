@@ -420,10 +420,15 @@ public final class Main {
         boolean showTokens = true;
         boolean showAst    = true;
         boolean pruneBpi   = false;   // borra los .bpi del build al terminar (opt-in)
+        // V8 #698 (JC, paso 1) — escribir BP desde el árbol, y la ida y vuelta (EscritorBp).
+        boolean escribirBp  = false;
+        boolean comprobarBp = false;
 
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
             if ("--tokens".equals(a))      showAst    = false;
+            else if ("--escribir-bp".equals(a))  { escribirBp = true;  showAst = false; showTokens = false; }
+            else if ("--comprobar-bp".equals(a)) { comprobarBp = true; showAst = false; showTokens = false; }
             else if ("--prune-bpi".equals(a)) pruneBpi = true;
             else if ("--ast".equals(a))    showTokens = false;
             else if ("--quiet".equals(a)) { showAst = false; showTokens = false; }
@@ -509,6 +514,8 @@ public final class Main {
         if (path == null) {
             System.err.println("Uso: java -jar basicplus-frontend.jar <archivo.bp> [--tokens|--ast|--quiet]");
             System.err.println("     java -jar basicplus-frontend.jar --project <archivo.bpbuild>");
+            System.err.println("     java -jar basicplus-frontend.jar <archivo.bp> --escribir-bp");
+            System.err.println("     java -jar basicplus-frontend.jar <archivo.bp|carpeta> --comprobar-bp");
             System.exit(1);
             return;
         }
@@ -517,6 +524,17 @@ public final class Main {
         if (!Files.exists(p)) {
             System.err.println("No se encuentra el archivo: " + p);
             System.exit(1);
+            return;
+        }
+
+        // V8 #698 — sólo leer y escribir: ni semántico ni emisión.
+        if (escribirBp || comprobarBp) {
+            try {
+                System.exit(comprobarBp ? EscritorBp.comprobar(p) : EscritorBp.escribirFichero(p));
+            } catch (IOException ex) {
+                System.err.println("error de I/O: " + ex.getMessage());
+                System.exit(2);
+            }
             return;
         }
 

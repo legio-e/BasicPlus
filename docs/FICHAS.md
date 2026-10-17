@@ -7004,7 +7004,16 @@ en `V8_IDEAS.md` §E2:
   mejor si se mantienen pero no hacen falta. Después AST → JC, con el mismo patrón, y por último JC → AST. Todo **por
   incrementos**, como se hizo el compilador de BP, con un barrido que cuenta los equivalentes, los no soportados y los
   distintos.
-- **Lo siguiente:** el primer incremento de `EscritorBp`.
+- **Paso 1, AST → BP: hecho el 17-oct, en un incremento** (`V8_IDEAS` §E2):
+  - el código: `EscritorBp` (625 líneas), `ComparaAst` (82), `--escribir-bp` y `--comprobar-bp` en `Main`, y
+    `EscritorBpTest` (6 pruebas, entre ellas la que tiene que fallar);
+  - el barrido: **469 de 469 equivalentes y estables** (samples, stdlib y `bpdevices`; 4 samples rotos a propósito no
+    se leen);
+  - las pruebas del frontend, 287 sin fallos;
+  - sin hacer, a propósito: los comentarios, y la prueba del `.mod` byte a byte, que pide numerar antes las clases de
+    `parallel`.
+- **Lo siguiente:** AST → JC, con el mismo patrón. Antes, la sintaxis de JC (la tabla de §E2, con sus ❓), que decide
+  Eduardo.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 

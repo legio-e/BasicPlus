@@ -46,7 +46,18 @@
 > - una primera tabla de sintaxis con lo que hay que decidir;
 > - el coste: ~9–15 días el compilador, 1–2 el IDE y nada la VM.
 >
-> **Lo siguiente:** que Eduardo decida la sintaxis (los ❓ de la tabla). No se ha tocado código.
+> **Por la tarde, el método** (Eduardo): primero AST → BP, comprobado contra el original; vale con que sea
+> equivalente. Luego AST → JC y JC → AST, por incrementos. Y un recordatorio: *«Esta versión 8 es diferente… sin
+> ninguna presión ni de tiempo ni de resultados.»*
+>
+> **Lo hecho:** **AST → BP, en un incremento**, porque el árbol es tan fiel que escribirlo todo costaba lo mismo que una
+> parte.
+> - `EscritorBp`, `ComparaAst`, `--escribir-bp` y `--comprobar-bp`.
+> - El barrido: **469 de 469 equivalentes y estables**.
+> - 6 pruebas nuevas, entre ellas la que demuestra que la comparación ve un `+` por un `-`. El frontend, 287 sin
+>   fallos.
+>
+> **Lo siguiente:** AST → JC. Antes, que Eduardo decida la sintaxis de JC (los ❓ de la tabla de §E2).
 
 > **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
 > a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su

@@ -444,3 +444,37 @@ Cómo se concreta el primer paso:
   Todo añadido: compilar BP no cambia.
 - **El primer incremento:** lo de los samples más sencillos (módulo, `import`, funciones, `var`/`const`, asignaciones,
   expresiones, llamadas, `print`, `if`, `while`, `for`, `return`). Después, lo que diga el barrido.
+
+### Paso 1, AST → BP: hecho el 17-oct, en un solo incremento
+
+Al leer el parser entero para el primer incremento se vio que el árbol está tan pegado a la sintaxis que escribirlo
+todo costaba casi lo mismo que una parte. Así que el primer incremento cubre el lenguaje entero, y lo que no supiera
+escribir lo habría dicho con nombre.
+
+**Lo hecho:**
+- **`EscritorBp.java`** (625 líneas): escribe BP desde el árbol. Reconoce los cuatro sitios donde fabrica el parser,
+  no escribe el `import Core` implícito y reproduce los literales con su tipo (`L`, `d`, real con punto).
+- **`ComparaAst.java`** (82): compara dos árboles campo a campo, por reflexión y sin las posiciones. Si son distintos,
+  dice la ruta del primer campo distinto y su línea en el original.
+- **En `Main`**, las dos opciones: `--escribir-bp` y `--comprobar-bp`. La segunda, con una carpeta, la recorre y da
+  las cuentas.
+- **`EscritorBpTest.java`**, 6 pruebas:
+  - la que **tiene que fallar**: un `+` por un `-` sale distinto, en su línea. Sin ella, el barrido verde podría ser
+    una comparación que dice siempre «iguales»;
+  - la que **no tiene que fallar**: las líneas en blanco y los comentarios no cuentan;
+  - y casi todo el lenguaje, los literales, el `import Core` implícito, la `native` externa de un pack y un `module
+    interface`.
+
+**El barrido** (`--comprobar-bp`): **469 de 469 equivalentes**, y estables (reescribir lo reescrito da el mismo
+texto), sin un solo distinto ni «no soportado».
+- `samples`: 427 de 431. Los otros 4 tienen el original roto a propósito (`errores/AnnMal`, `errores/BadSyntax` y dos
+  de `holes/`).
+- La stdlib, 37 de 37.
+- `bpdevices`, 5 de 5.
+
+Las pruebas del frontend, **287 sin un fallo**.
+
+**Lo que no se ha hecho, a propósito:**
+- **Los comentarios**: se pierden, y Eduardo dijo que no hacen falta.
+- **La prueba del `.mod`**: compilar el BP reescrito y comparar el `.mod` byte a byte. Es más fuerte que la del árbol,
+  pero antes hay que numerar en orden las clases de `parallel`, que es un cambio en el compilador de BP.
