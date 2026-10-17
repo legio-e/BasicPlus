@@ -683,6 +683,26 @@ mi propuesta: manda lo de aquí.
     aviso antes de leer, el progreso en una sola línea). Un `;` al final no salta de línea, como en el BASIC clásico (en
     el corpus no hay ninguno), y una instrucción nueva en la VM saca la línea sin el salto. Así, el `print(a, b);` de
     JC es el `print a; b;` de BP. En `FICHAS`, `#700`.
+18. **La potencia, `**`** (Eduardo, 17-oct), y el `^` queda para el XOR, como en C#. Con el árbol de BP: `a ** b` es
+    el `a ^ b` de BP, y `a ^ b` es el `a xor b`. La potencia, con su precedencia de BP, que es también la de Python:
+    más fuerte que el menos (`-x ** 2` es `-(x ** 2)`) y asociativa por la derecha (`2 ** 3 ** 2` es `2 ** 9`).
+
+    ❓ **La precedencia de los operadores.** La de BP no es la de C# en los de bits y en el `not`
+    (`Parser.java`, de `parseNot` a `parsePower`):
+
+    | expresión | en BP | en C# |
+    |---|---|---|
+    | `a << 1 + 2` | `(a << 1) + 2`: los desplazamientos van con `*` | `a << (1 + 2)` |
+    | `a & b == c` | `(a & b) == c`: el `&` va con `*` | `a & (b == c)` |
+    | `a \| b + c` | `(a \| b) + c`: el `\|` y el XOR van con `+` | `a \| (b + c)` |
+    | `!a == b` | `!(a == b)`: el `not` va por debajo de la comparación | `(!a) == b` |
+
+    Mi recomendación: la de C#, que es la que conoce quien viene de C# o de Java. El coste, en el traductor:
+    - cada escritor pone los paréntesis que pide la precedencia de su lenguaje;
+    - la comparación de árboles no cuenta los paréntesis. El emisor los atraviesa (`MivmEmitter`, `ParenExpr`), así
+      que no cambian el `.mod`.
+
+    La otra, la de BP (que es la de Go), no cuesta nada, pero sorprende justo en estos casos.
 
 ### Lo que choca entre BP y JC, para más adelante
 
