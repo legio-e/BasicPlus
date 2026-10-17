@@ -839,8 +839,8 @@ mi propuesta: manda lo de aquí.
     como en BP: `library "x";` delante, y `module X implements Y`, `module interface X extends Y`.
 31. **`parallel`, a la segunda fase** (Eduardo, 17-oct), con las clases y el `switch`. En el corpus hay 3. Hasta
     entonces, el escritor de JC dirá que no lo sabe escribir.
-32. ❓ **Las propiedades de módulo** (las de clase van con las clases). Las 9 del corpus son de la forma corta. Mi
-    propuesta, la propiedad automática de C#:
+32. **Las propiedades de módulo** (las de clase van con las clases). Las 9 del corpus son de la forma corta, y van
+    como la propiedad automática de C# (mi propuesta; Eduardo, conforme):
 
     | BP | JC |
     |---|---|
@@ -851,6 +851,119 @@ mi propuesta: manda lo de aquí.
     - Los modificadores de BP que C# no tiene (`sync`, `owner`, `final`) van delante, como palabras de JC.
     - La forma larga (`get … endget`, `set(v) … endset`) va con las clases. En C# el `set` no nombra su parámetro
       (es `value`), y eso habrá que decidirlo.
+
+### La primera fase, en un ejemplo
+
+Con esto, la sintaxis de la primera fase está entera (17-oct). El mismo programa en BP y en JC, escrito a mano con lo
+decidido; el JC es lo que tendrá que escribir el traductor:
+
+```
+module Ejemplo
+  import Collections
+
+  public const MAX: integer := 10
+  const PI := 3.5
+  var cuenta: integer := 0
+  public property nivel: integer := 1
+
+  public enum Color
+    Rojo
+    Verde := 5
+  end Color
+
+  function par(): (integer, string)
+    return (1, "uno")
+  end par
+
+  public function sumar(a: integer, b: integer := 1): integer
+    return a + b
+  end sumar
+
+  public function codigo(s: string, i: integer): integer
+    inline CALL_BUILTIN 48
+  end codigo
+
+  public function main()
+    var n: integer
+    var s: string
+    var l: List := List()
+    { n, s } := par()
+    if n > 0 and not (s == "") then print "si"
+    for i := 1 to MAX step 2 do
+      cuenta += i
+    next
+    for x in [1, 2, 3] do print x
+    do
+      n -= 1
+    loop n > 0
+    try
+      throw RuntimeError("fallo")
+    catch e: RuntimeError
+      print e.msg
+    endtry
+    print "cuenta: "; cuenta; " pi: "; PI
+  end main
+end Ejemplo
+```
+
+```
+module Ejemplo
+{
+   import Collections;
+
+   public const int MAX = 10;
+   const float PI = 3.5f;
+   int cuenta = 0;
+   public int nivel { get; set; } = 1;
+
+   public enum Color { Rojo, Verde = 5 }
+
+   function (int, string) par()
+   {
+      return (1, "uno");
+   }
+
+   public function int sumar(int a, int b = 1)
+   {
+      return a + b;
+   }
+
+   public function int codigo(string s, int i) inline CALL_BUILTIN 48;
+
+   public function void main()
+   {
+      int n;
+      string s;
+      List l = new List();
+      (n, s) = par();
+      if (n > 0 && !(s == "")) print("si", "\n");
+      for (int i = 1; i <= MAX; i += 2)
+      {
+         cuenta += i;
+      }
+      foreach (var x in [1, 2, 3]) print(x, "\n");
+      do
+      {
+         n -= 1;
+      } while (n > 0);
+      try
+      {
+         throw new RuntimeError("fallo");
+      }
+      catch (RuntimeError e)
+      {
+         print(e.msg, "\n");
+      }
+      print("cuenta: ", cuenta, " pi: ", PI, "\n");
+   }
+}
+```
+
+Lo que el ejemplo enseña de la traducción:
+- el `PI` sin tipo de BP sale en JC con el que se deduce (`float`), y su `3.5` con la `f`;
+- el salto que BP pone solo sale en JC escrito, `"\n"`;
+- y el `List()` que construye sale con su `new`. Las dos últimas cosas el escritor de JC las sabe por el árbol
+  analizado, no por el texto.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
