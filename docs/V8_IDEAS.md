@@ -687,8 +687,8 @@ mi propuesta: manda lo de aquí.
     el `a ^ b` de BP, y `a ^ b` es el `a xor b`. La potencia, con su precedencia de BP, que es también la de Python:
     más fuerte que el menos (`-x ** 2` es `-(x ** 2)`) y asociativa por la derecha (`2 ** 3 ** 2` es `2 ** 9`).
 
-    ❓ **La precedencia de los operadores.** La de BP no es la de C# en los de bits y en el `not`
-    (`Parser.java`, de `parseNot` a `parsePower`):
+    **La precedencia de los operadores, la de C#** (mi recomendación; Eduardo, conforme). La de BP no es la de C# en
+    los de bits y en el `not` (`Parser.java`, de `parseNot` a `parsePower`):
 
     | expresión | en BP | en C# |
     |---|---|---|
@@ -697,12 +697,31 @@ mi propuesta: manda lo de aquí.
     | `a \| b + c` | `(a \| b) + c`: el `\|` y el XOR van con `+` | `a \| (b + c)` |
     | `!a == b` | `!(a == b)`: el `not` va por debajo de la comparación | `(!a) == b` |
 
-    Mi recomendación: la de C#, que es la que conoce quien viene de C# o de Java. El coste, en el traductor:
+    La de C# es la que conoce quien viene de C# o de Java. El coste, en el traductor:
     - cada escritor pone los paréntesis que pide la precedencia de su lenguaje;
     - la comparación de árboles no cuenta los paréntesis. El emisor los atraviesa (`MivmEmitter`, `ParenExpr`), así
       que no cambian el `.mod`.
 
-    La otra, la de BP (que es la de Go), no cuesta nada, pero sorprende justo en estos casos.
+    La otra era la de BP (que es la de Go): no costaba nada, pero sorprendía justo en estos casos.
+19. **Las constantes literales, las de C#** (Eduardo, 17-oct). Las declaradas ya eran las de C# (punto 5:
+    `const int MAX = 10;`).
+    - **Con el árbol de BP**, el cambio está en los reales. En C#, `1.5` es `double` y `1.5f`, `float`; en BP, `1.5`
+      es `float` y `1.5d`, `double`. El traductor les cambia la letra, y el árbol es el mismo:
+
+      | JC | BP |
+      |---|---|
+      | `1.5f` | `1.5` (`float`) |
+      | `1.5` · `1.5d` | `1.5d` (`double`) |
+      | `10L` · `0xFF` · `0b1010` · `1_000_000` | los mismos |
+
+    - Como en C#, `float x = 1.5;` es un error, y en BP también lo es. Medido: `var x: float := 1.5d` da «valor de
+      tipo 'double' no asignable a variable de tipo 'float'». En las placas conviene el `float`, con su `f`: la
+      mayoría sólo tienen FPU de precisión simple, o ninguna.
+    - Lo que C# tiene y BP no: `'a'` (BP no tiene `char`), los sufijos `u` y `m` (BP no tiene tipos sin signo de 32 y
+      64 bits ni `decimal`), y las cadenas `@"…"` y `$"…"`. En JC, de momento, error.
+    - ❓ **Las secuencias de escape** de C# que BP no tiene (`é`, `\x41`, `\a`, `\'`…). BP sólo tiene
+      `\n \t \r \\ \" \0`. Mi propuesta: añadirlas también a BP, que es sólo el lexer. Si no, un texto de JC con un
+      carácter de control no se podría escribir en BP.
 
 ### Lo que choca entre BP y JC, para más adelante
 
