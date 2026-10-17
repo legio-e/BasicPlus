@@ -748,7 +748,7 @@ mi propuesta: manda lo de aquí.
 
     Los parámetros, con el tipo delante y el valor por defecto como en C#: `function int suma(int a, int b = 1) { … }`.
 
-    ❓ **Los casos de BP** (`FuncDef`), con mi propuesta:
+    **Los casos de BP** (`FuncDef`), con mi propuesta (Eduardo, conforme):
 
     | BP | JC |
     |---|---|
@@ -759,10 +759,16 @@ mi propuesta: manda lo de aquí.
     | `function event pulsado()` | `function event void pulsado() { … }` |
     | `function par(): (integer, string)` | `function (int, string) par() { … }` |
     | sin cuerpo: la `native` externa de un pack, la función de un `module interface` | con `;` en vez del bloque: `public native function int abrir(string n);` |
-    | `function Medida.crear()`, la de la clase | con las clases: como en BP (`function Medida Medida.crear()`) o con el `static` de C# |
+    | `function Medida.crear()`, la de la clase | `static function Medida crear() { … }`, el `static` de C# |
 
     Sin tipo, y con un nombre que no es el de la clase, el error lo dice: «falta el tipo; si no devuelve nada,
     `void`».
+
+    **`static`, como en C#** (Eduardo, 17-oct), para todo lo que en BP lleva delante el nombre de su clase: funciones,
+    variables, constantes y propiedades (`isStaticDecl`). En BP ese prefijo tiene que ser el de la clase en la que
+    está (`SemanticAnalyzer`: «prefijo 'X.' no coincide con la clase»), así que `static` dice lo mismo: el parser de
+    JC pone de prefijo el nombre de la clase, y el escritor de JC lo quita. Lo que queda para las clases: en C#, una
+    constante de clase no lleva `static`, porque ya lo es.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
