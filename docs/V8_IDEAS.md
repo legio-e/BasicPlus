@@ -478,3 +478,60 @@ Las pruebas del frontend, **287 sin un fallo**.
 - **Los comentarios**: se pierden, y Eduardo dijo que no hacen falta.
 - **La prueba del `.mod`**: compilar el BP reescrito y comparar el `.mod` byte a byte. Es más fuerte que la del árbol,
   pero antes hay que numerar en orden las clases de `parallel`, que es un cambio en el compilador de BP.
+
+### La sintaxis de JC, según la decide Eduardo
+
+Lo que va quedando decidido, en el orden en que lo decide. La tabla de arriba, «La sintaxis de JC, por decidir», era
+mi propuesta: manda lo de aquí.
+
+1. **Las palabras clave distinguen mayúsculas**, al revés que en BP (17-oct). Los nombres, como en BP: también las
+   distinguen.
+2. **La estructura general, la de BP** (17-oct):
+
+   ```
+   module id
+   {
+      def 1
+      def 2
+      ...
+      def n
+   }
+   ```
+
+   `def` es cada definición: constantes, variables, funciones, clases, enums… La llave, en su propia línea, como en el
+   ejemplo de Eduardo.
+3. **Los `import`, dentro del módulo, como en BP** (17-oct). Eduardo: *«De momento intentamos que sea lo más
+   parecido a BP para simplificar el trabajo, sin descartar que en el futuro hagamos pequeños cambios.»*
+
+   ```
+   module Blink
+   {
+      import Gpio;
+      ...
+   }
+   ```
+
+4. **Las sentencias y las declaraciones acaban en `;`**, como en Java y C# (17-oct). Los saltos de línea no cuentan:
+   una sentencia puede ocupar varias líneas.
+5. **Las variables y las constantes, con el tipo delante**, como en Java y C# (17-oct): `int x = 5;` ·
+   `const int MAX = 10;` · `owner Persona p = Persona("a");`.
+6. **Los tipos básicos, los de C#** (17-oct): `int long float double bool string byte`.
+   - ❓ **Los estrechos.** Al preguntarlo escribí que `word`, `int8` e `int16` no tienen equivalente en C# y que se
+     quedaban con su nombre de BP. No es así: C# los tiene, `ushort`, `sbyte` y `short`. Falta decidir cuáles se
+     usan. Mi recomendación: los de C#, un nombre por tipo (`short` ya es en BP otro nombre de `int16`).
+7. **El bloque** (17-oct): `blockstmt ::= '{' { stmt } '}'`.
+8. **El `if`, el de C, Java y C#** (17-oct):
+
+   ```
+   ifstmt ::= 'if' '(' condicion ')' stmt [ 'else' stmt ]
+   ```
+
+   Siempre admite el `else`. En JC no cambia nada que el `if` ocupe una línea o varias; en BP sí, porque el de una
+   línea no lo admite. Como en esos lenguajes, el `else` va con el `if` más cercano.
+
+   **Con el árbol de BP** (lo que harán el escritor y el parser de JC):
+   - `if (c) s`, sin `else` y sin llaves, es el `if` de una línea de BP (`isSingleLine`). Lo demás es la forma de
+     varias líneas: `if (c) x = 1; else x = 2;` vuelve a BP con su `endif`, y el árbol es el mismo.
+   - `else if` es el `elseif` de BP: un `else` seguido de un `if` entra en la cadena (`elseIfs`). El `if` que en BP va
+     dentro de un `else` sin ser un `elseif` se escribe en JC con llaves: `else { if (…) … }`.
+   - El escritor de JC pone las llaves siempre, salvo en el `if` de una línea.
