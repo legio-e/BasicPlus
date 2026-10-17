@@ -515,6 +515,9 @@ mi propuesta: manda lo de aquí.
    una sentencia puede ocupar varias líneas.
 5. **Las variables y las constantes, con el tipo delante**, como en Java y C# (17-oct): `int x = 5;` ·
    `const int MAX = 10;` · `owner Persona p = Persona("a");`.
+   - ❓ **Varios nombres con valor.** En BP, `var a, b: integer := 3` da 3 a las dos; en C#, `int a, b = 3;` sólo a
+     `b`. Mi propuesta: en JC, con varios nombres, sin valor (`int a, b;`); con valor, un nombre (`int a = 3;`). En el
+     corpus no hay ningún `var` de varios nombres con valor.
 6. **Los tipos básicos, los de C#, también los estrechos** (17-oct). Un nombre por tipo:
 
    | BP | JC |
@@ -591,10 +594,10 @@ mi propuesta: manda lo de aquí.
     - Lo que BP tiene y JC no, de momento: el paso en una variable. Sólo sale en tres samples de prueba (`ForStep`,
       `ContinueFor` y `errores/StepCero`). En el corpus hay 39 `for`: 21 numéricos y 18 `for … in`.
     - ❓ El `for x in lista` de BP necesitará su forma; la de C# es `foreach (var x in lista)`.
-12. ❓ **`v++` y `v--`** (17-oct). Eduardo: en C# están `v++` y `v--`; en BP, lo más cercano es `v += 1` y `v -= 1`.
+12. **`v++` y `v--`** (17-oct). Eduardo: en C# están `v++` y `v--`; en BP, lo más cercano es `v += 1` y `v -= 1`.
     *«Si hace falta se puede añadir un opCode para cada uno y 2 funciones inline para BP: inc(v) y dec(v)»*.
 
-    **Mi propuesta:** en JC, `v++;` y `v--;` como sentencias, que son el `v += 1` y el `v -= 1` de BP: el mismo árbol,
+    **Decidido** (mi propuesta; Eduardo, conforme): en JC, `v++;` y `v--;` como sentencias, que son el `v += 1` y el `v -= 1` de BP: el mismo árbol,
     sin nada nuevo en BP ni en la VM. Valen donde vale el `+=` de BP: una variable, un campo o un elemento de un array
     (`a[i]++`).
     - Dentro de una expresión (`x = v++`, `a[i++]`), no: en BP ninguna expresión cambia una variable, y haría falta un
@@ -604,11 +607,31 @@ mi propuesta: manda lo de aquí.
       Con eso, `inc(v)` y `dec(v)` no hacen falta en BP.
     - En la cabecera del `for`, `i++` sigue siendo lo decidido: el `for` sin `step`.
 
+13. **El `try`, el de BP con los bloques entre llaves** (17-oct). Eduardo: *«El try no cambia, todo igual que en BP
+    solamente que el bloque va entre llaves.»* Varios `catch`, un `finally` opcional y el recurso, como en BP.
+
+    ❓ **La cabecera del `catch` y el recurso** (mi propuesta: el tipo delante, como en las variables):
+
+    | BP | JC |
+    |---|---|
+    | `try` … `catch e: RuntimeError` … `finally` … `endtry` | `try { … } catch (RuntimeError e) { … } finally { … }` |
+    | `catch e`, sin tipo (el parser de BP le pone `Exception`, `#459`) | `catch (Exception e) { … }` |
+    | `catch`, sin variable (atrapa todo) | `catch { … }` |
+    | `try var r: T := e`, el recurso (siempre `owner`) | `try (T r = e) { … }`, como en Java |
+
+14. **El `switch`, pendiente: no entra en la primera versión de JC** (Eduardo, 17-oct: *«es un poco complejo»*). En el
+    corpus hay 20 `switch`, en 8 samples; ninguno en la stdlib ni en `bpdevices`. Hasta que tenga su forma, el escritor
+    de JC dirá que no lo sabe escribir.
+15. **Las asignaciones, las de C#** (17-oct): `x = e;` · `x += e;` · `x -= e;`. El desempaquetado de BP,
+    `{ n, s } := par()`, es en JC el de C#: `(n, s) = par();`, con `_` para descartar.
+    - ❓ Los demás compuestos de C# (`*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`) no están en BP. Mi propuesta: de
+      momento no, y el error lo dice; para tenerlos habría que añadirlos a BP.
+    - Como en BP, la asignación es una sentencia: no va dentro de una expresión (`a = b = 0`, `if ((x = f()) > 0)`).
+
 ### Lo que choca entre BP y JC, para más adelante
 
-- **El desempaquetado y el bloque.** En BP, una sentencia que empieza por `{` es el desempaquetado
-  (`{ n, s } := par()`); en JC, `{` abre un bloque. La forma de C# es `(n, s) = par();`. Se decide con las
-  asignaciones.
+- ~~**El desempaquetado y el bloque.**~~ En BP, una sentencia que empieza por `{` es el desempaquetado; en JC, `{` abre
+  un bloque. Resuelto con las asignaciones (15): en JC, `(n, s) = par();`.
 - **Los nombres que en el otro lenguaje son palabras reservadas.** Las de BP no distinguen mayúsculas, así que un
   nombre de JC como `Next`, `Step` o `End` es en BP una palabra reservada, y un programa de JC que lo use no se puede
   escribir en BP tal cual. Al revés, `int` y `bool` son nombres válidos en BP que en JC no lo serán. Mi propuesta: que
