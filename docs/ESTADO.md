@@ -57,7 +57,18 @@
 > - 6 pruebas nuevas, entre ellas la que demuestra que la comparación ve un `+` por un `-`. El frontend, 287 sin
 >   fallos.
 >
-> **Lo siguiente:** AST → JC. Antes, que Eduardo decida la sintaxis de JC (los ❓ de la tabla de §E2).
+> **Después, la sintaxis de JC, pieza a pieza:** Eduardo la dicta; yo apunto cómo casa con el árbol de BP y lo que
+> choca. Queda decidida la de la primera fase (`V8_IDEAS` §E2, puntos 1–32, con un ejemplo en BP y en JC). Para una
+> segunda fase deja las clases, el `switch` y `parallel`; la primera cubre 302 de los 473 `.bp` del corpus.
+> - **Al medir salieron dos cosas de BP.** `#699`: el `continue` de un `do … loop` vuelve arriba sin mirar la
+>   condición, y el AOT, en C, sí la mira. `#700`: en BP no hay `print` sin salto.
+> - **Los cambios de BP, todavía no** (Eduardo: posibles mejoras, para no mezclar), salvo el `print`, que se retoca en
+>   el compilador. Basta con eso: las VMs ya guardan las piezas y las sacan al acabar el hilo.
+> - **Medido de paso:** la coma del `print` de BP pone un espacio, no un tabulador, y el salto lo pone siempre. Un
+>   `var` de varios nombres con un valor, o una constante sin tipo, dan el mismo `.mod` que escritos uno a uno o con el
+>   tipo.
+>
+> **Lo siguiente:** `EscritorJc` (AST → JC) sobre esos 302, con el árbol analizado; luego el parser de JC.
 
 > **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
 > a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su

@@ -7028,7 +7028,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 - **De momento no se arregla** (Eduardo, 17-oct: los cambios de BP, como posibles mejoras, más adelante, para no
   mezclar demasiados cambios). Mientras, el `continue` del `do … while` de JC es el de BP.
 
-#### 💡 `#698` — V8, idea: JC, BasicPlus con camisa de Java y C# (abierta el 17-oct; **el análisis del coste, hecho el mismo día**; la sintaxis, por decidir)
+#### 💡 `#698` — V8, idea: JC, BasicPlus con camisa de Java y C# (abierta el 17-oct; **el mismo día, el análisis del coste, el paso 1 (AST → BP) y la sintaxis de la primera fase**)
 
 Eduardo, 17-oct: *«es nuestro Basic Plus con una camisa diferente. Así que el AST es el mismo pero necesitamos un
 scanner y un parser nuevos»*. El nombre, JC. Primero un traductor BP → AST → JC, y luego JC → AST → BP. El análisis está
@@ -7057,8 +7057,16 @@ en `V8_IDEAS.md` §E2:
   - las pruebas del frontend, 287 sin fallos;
   - sin hacer, a propósito: los comentarios, y la prueba del `.mod` byte a byte, que pide numerar antes las clases de
     `parallel`.
-- **Lo siguiente:** AST → JC, con el mismo patrón. Antes, la sintaxis de JC (la tabla de §E2, con sus ❓), que decide
-  Eduardo.
+- **La sintaxis de la primera fase, decidida el 17-oct** por Eduardo, pieza a pieza (`V8_IDEAS` §E2, «La sintaxis de
+  JC, según la decide Eduardo», puntos 1–32, y un ejemplo en BP y en JC).
+  - Deja para una segunda fase las clases, el `switch` y `parallel`; cubre 302 de los 473 `.bp` del corpus.
+  - Los cambios de BP que salen de JC son posibles mejoras, todavía no (`#699`, entre ellos). La excepción es `#700`,
+    el `print` sin salto, que se retoca en el compilador de BP.
+- **Lo siguiente:**
+  - `EscritorJc` (AST → JC) sobre esos 302, con el árbol analizado: el `new`, las conversiones y el tipo de las
+    constantes salen del análisis, no del texto;
+  - luego el parser de JC, con la ida y vuelta del árbol (sin contar los paréntesis ni las marcas del `new` y de las
+    conversiones) y, al final, el `.mod`.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 
