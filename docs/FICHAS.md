@@ -7089,9 +7089,9 @@ en `V8_IDEAS.md` §E2:
     `set`); y 33 que no compilan (26 a propósito, en `errores/` y `holes/`, y 7 que piden el pack de SQLite, como con
     el compilador);
   - salió `#701`, del parser de BP.
+  - y, tras el paso, los arrays de tamaño fijo, como en C (Eduardo): `int nums[10];`.
 - **Lo siguiente:** el parser de JC (paso 3), con la ida y vuelta del árbol (sin contar los paréntesis ni las marcas
-  del `new` y de las conversiones) y, al final, el `.mod`. Antes, Eduardo: los arrays de tamaño fijo, que el escritor
-  pone como `int[10] nums;` (22 en el corpus; no estaba decidido).
+  del `new` y de las conversiones) y, al final, el `.mod`.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 

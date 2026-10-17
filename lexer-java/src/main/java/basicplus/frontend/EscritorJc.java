@@ -193,18 +193,24 @@ public final class EscritorJc {
     }
 
     /** `int a, b`, `owner Persona p = …`. El valor de BP es de todos los nombres, y en JC se repite: `int a = 3, b = 3`
-     *  (punto 5). */
+     *  (punto 5). Un array de tamaño fijo, como en C: el tamaño detrás de cada nombre, `int nums[10]` (punto 33). */
     private String variable(VarDecl v) {
         if (v.type == null) throw new NoSoportado("una variable sin tipo", v);
         StringBuilder s = new StringBuilder(visibilidad(v.isPublic, v.isPrivate));
         if (v.isOwner) s.append("owner ");
-        s.append(tipo(v.type)).append(' ');
+        String tamano = "";
+        TypeRef t = v.type;
+        if (t instanceof ArrayTypeRef && ((ArrayTypeRef) t).size != null) {
+            tamano = "[" + expr(((ArrayTypeRef) t).size) + "]";
+            t = ((ArrayTypeRef) t).element;
+        }
+        s.append(tipo(t)).append(' ');
         String valor = v.init != null ? expr(v.init) : null;
         for (int i = 0; i < v.names.size(); i++) {
             DeclName dn = v.names.get(i);
             if (dn.classQualifier != null) throw new NoSoportado("una variable de clase (segunda fase)", v);
             if (i > 0) s.append(", ");
-            s.append(nombre(dn.name, v));
+            s.append(nombre(dn.name, v)).append(tamano);
             if (valor != null) s.append(" = ").append(valor);
         }
         return s.toString();
@@ -279,7 +285,9 @@ public final class EscritorJc {
         if (t instanceof SimpleTypeRef) return tipoSimple(((SimpleTypeRef) t).name);
         if (t instanceof ArrayTypeRef) {
             ArrayTypeRef a = (ArrayTypeRef) t;
-            return tipo(a.element) + "[" + (a.size != null ? expr(a.size) : "") + "]";
+            // El tamaño va detrás del nombre (variable): un tipo con tamaño en otro sitio no tiene forma en JC.
+            if (a.size != null) throw new NoSoportado("un array de tamaño fijo fuera de una declaración de variable", t);
+            return tipo(a.element) + "[]";
         }
         if (t instanceof TupleTypeRef) {
             List<String> es = new ArrayList<>();

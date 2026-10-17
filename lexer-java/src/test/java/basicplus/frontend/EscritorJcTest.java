@@ -132,6 +132,21 @@ class EscritorJcTest {
     }
 
     @Test
+    @DisplayName("los arrays de tamaño fijo, como en C: el tamaño detrás del nombre; el del montón, int[]")
+    void arraysFijos() throws IOException {
+        String jc = jc("Fijos", conMain("Fijos",
+            "    var nums: integer[10]\n" +
+            "    var b: byte[4] := [1, 2, 250]\n" +
+            "    var x, y: integer[3]\n" +
+            "    var din: integer[] := newIntArray(2)\n" +
+            "    print len(nums); len(b); len(x); len(y); len(din)\n"));
+        assertTrue(jc.contains("int nums[10];"), jc);
+        assertTrue(jc.contains("byte b[4] = [1, 2, 250];"), jc);
+        assertTrue(jc.contains("int x[3], y[3];"), jc);
+        assertTrue(jc.contains("int[] din = newIntArray(2);"), jc);
+    }
+
+    @Test
     @DisplayName("el for de BP con la ropa de C: las cuatro formas, y el límite con su precedencia")
     void formasDelFor() throws IOException {
         String jc = jc("Fo", conMain("Fo",

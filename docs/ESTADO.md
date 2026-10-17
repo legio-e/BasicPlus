@@ -77,8 +77,9 @@
 > - Al probarlo salió `#701`: el parser de BP no lee un `if`, `while` o `for` de una línea como última sentencia de
 >   un bloque de su clase. No se toca (Eduardo: los cambios de BP, más adelante).
 >
-> **Lo siguiente:** el paso 3, el parser de JC con la ida y vuelta del árbol. Antes, que Eduardo diga cómo van los
-> arrays de tamaño fijo (el escritor los pone como `int[10] nums;`).
+> - Los arrays de tamaño fijo, como en C (Eduardo preguntó cómo era allí): `int nums[10];`.
+>
+> **Lo siguiente:** el paso 3, el parser de JC con la ida y vuelta del árbol.
 
 > **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
 > a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su

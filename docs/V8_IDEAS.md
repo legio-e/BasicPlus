@@ -851,6 +851,18 @@ mi propuesta: manda lo de aquí.
     - Los modificadores de BP que C# no tiene (`sync`, `owner`, `final`) van delante, como palabras de JC.
     - La forma larga (`get … endget`, `set(v) … endset`) va con las clases. En C# el `set` no nombra su parámetro
       (es `value`), y eso habrá que decidirlo.
+33. **Los arrays de tamaño fijo, como en C** (Eduardo, 17-oct; decidido tras el paso 2): el tamaño detrás del nombre.
+    El de C es el mismo que el de BP: tamaño fijo, en el marco o dentro del objeto, y no se reasigna. El `new int[10]`
+    de C# y de Java es otro, una referencia a un array del montón, como el `integer[]` de BP.
+
+    | BP | JC |
+    |---|---|
+    | `var nums: integer[]` (en el montón) | `int[] nums;` |
+    | `var nums: integer[10]` (fijo) | `int nums[10];` |
+    | `var b: byte[4] := [1, 2, 250]` | `byte b[4] = [1, 2, 250];` |
+    | `var x, y: integer[3]` | `int x[3], y[3];` |
+
+    El valor, con los corchetes de JC (los de BP), no con las llaves de C.
 
 ### La primera fase, en un ejemplo
 
@@ -1032,9 +1044,8 @@ Eduardo: *«OK, adelante.»* Con la sintaxis de la primera fase decidida, el esc
   tampoco compilan solos con el compilador: el análisis para traducir se comporta como él.
 
 **Lo que no está decidido y el escritor ha hecho a su manera:**
-- ❓ **Los arrays de tamaño fijo** (`var nums: integer[10]`), que salen como `int[10] nums;`: el tipo delante, con
-  su tamaño. Hay 22 en el corpus, en 4 ficheros. C# no tiene esa forma: su `int[] nums = new int[10];` es un array del
-  montón, y el de BP es otro (va en el marco o en el objeto, y no se reasigna).
+- **Los arrays de tamaño fijo** (`var nums: integer[10]`), 22 en el corpus, en 4 ficheros. El escritor los puso
+  primero como `int[10] nums;`; Eduardo preguntó cómo era en C, y quedaron como en C: `int nums[10];` (punto 33).
 - Las líneas en blanco: juntas las declaraciones de una línea (constantes, variables y propiedades cortas), y
   separado lo demás, como en el ejemplo.
 
