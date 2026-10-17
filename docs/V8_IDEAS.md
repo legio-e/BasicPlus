@@ -786,7 +786,15 @@ mi propuesta: manda lo de aquí.
     - **De JC a BP**, `new X()` da el mismo nodo que el `X()` de BP. Para comprobar que el `new` va con una clase, y
       que no se crea un objeto sin él, el árbol tiene que recordar el `new`: una marca que la comparación no cuenta y
       que el análisis comprueba en JC. Es del compilador; BP no cambia.
-    - ❓ Las conversiones están por decidir: el `(int) x` de C#, o `int(x)`, como en BP. Les pasa lo mismo.
+23. **Las conversiones, como en C#** (Eduardo, 17-oct): `(int) d` es el `integer(d)` de BP, y `(Persona) o`, el
+    `Persona(o)` que convierte (`refCasts`). Igual con `(byte)`, `(short)`, `(float)`, `(double)`, `(long)` y
+    `(string) o`.
+    - **Un paréntesis o una conversión**, con la regla de C#: es una conversión si dentro hay un tipo del lenguaje
+      (`int`…), o si tras el `)` viene un nombre, un literal, un `(`, `!`, `~` o una palabra reservada. Así,
+      `(a) - b` es una resta; y para convertir `-x` a una clase, `(Persona)(-x)`, como en C#.
+    - **Como el `new`, el árbol recuerda la conversión**, con una marca que la comparación no cuenta. El análisis la
+      comprueba en JC: `(Persona) 5` es un error, mientras que en BP `Persona(5)` construiría.
+    - El escritor de JC, con el árbol analizado: si es una conversión, `(T) x`; si construye, `new T(x)`.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
