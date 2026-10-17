@@ -646,11 +646,17 @@ mi propuesta: manda lo de aquí.
       el error lo dice (mi propuesta; Eduardo, conforme). Para tenerlos habría que añadirlos a BP.
     - Como en BP, la asignación es una sentencia: no va dentro de una expresión (`a = b = 0`, `if ((x = f()) > 0)`).
 16. **El `foreach`, el de C#** (17-oct): `foreach (var x in lista) stmt`, que es el `for x in lista do` de BP.
-    - ❓ **El tipo, siempre `var`** (mi propuesta). En BP la variable toma el tipo de los elementos, y el árbol no lo
+    - **El tipo, de momento `var`** (mi propuesta). En BP la variable toma el tipo de los elementos, y el árbol no lo
       guarda. Con un tipo escrito (`foreach (int x in lista)`), de momento, error: habría que guardarlo en el árbol y
       comprobarlo.
-    - Recorre un array, como el de BP (`SemanticAnalyzer`: «se esperaba array en 'for in'»); el de C# recorre
-      cualquier colección.
+    - **De momento recorre un array**, como el de BP (`SemanticAnalyzer`: «se esperaba array en 'for in'»).
+    - **Las listas, más adelante.** Eduardo: *«Debería servir para arrays y para listas pero si quieres las listas lo
+      dejamos para más adelante.»*
+      - Será un cambio de BP, no sólo de JC: el `for … in` de BP también recorrería una `Core.List`, con su `length()`
+        y su `get(i)`. Es del compilador; la VM no cambia.
+      - Con las listas, el tipo escrito tendrá sentido. Una `List` guarda `Object`, y `foreach (Persona p in lista)`
+        convertiría cada elemento, como en C#. Para eso, el árbol tendrá que guardar el tipo, y BP necesitará una forma
+        de escribirlo.
     - Sin llaves, es el `for … in` de una línea de BP; con llaves, el de varias, como en el `while`.
 
 ### Lo que choca entre BP y JC, para más adelante
