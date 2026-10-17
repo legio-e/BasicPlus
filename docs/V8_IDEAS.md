@@ -527,8 +527,14 @@ mi propuesta: manda lo de aquí.
      | `int a = 1, b = 2;` | `var a: integer := 1, b: integer := 2` |
      | `int a, b = 3;` | `var a: integer, b: integer := 3` |
 
-     Lo que JC no puede escribir: el `var a, b: integer := 3` de BP, un valor para varios nombres. En el corpus no hay
-     ninguno; si sale, el traductor lo dice.
+     **El `var a, b: integer := 3` de BP**, un valor para varios nombres, se escribe en JC repitiendo el valor:
+     `int a = 3, b = 3;` (Eduardo; también valdría `int a = 3; int b = 3;`).
+     - Es exacto: BP evalúa el valor una vez por nombre, así que `var a, b: integer := f()` también llama dos veces a
+       `f`.
+     - Medido el 17-oct: las dos formas dan el mismo `.mod`, byte a byte, en una local, una global y un campo de una
+       clase.
+     - De vuelta a BP salen dos grupos (`var a: integer := 3, b: integer := 3`). La comparación de árboles tendrá que
+       contar como iguales un `var` de varios nombres con valor y uno por nombre con el mismo valor.
 6. **Los tipos básicos, los de C#, también los estrechos** (17-oct). Un nombre por tipo:
 
    | BP | JC |
