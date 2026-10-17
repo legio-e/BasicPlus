@@ -515,10 +515,19 @@ mi propuesta: manda lo de aquí.
    una sentencia puede ocupar varias líneas.
 5. **Las variables y las constantes, con el tipo delante**, como en Java y C# (17-oct): `int x = 5;` ·
    `const int MAX = 10;` · `owner Persona p = Persona("a");`.
-6. **Los tipos básicos, los de C#** (17-oct): `int long float double bool string byte`.
-   - ❓ **Los estrechos.** Al preguntarlo escribí que `word`, `int8` e `int16` no tienen equivalente en C# y que se
-     quedaban con su nombre de BP. No es así: C# los tiene, `ushort`, `sbyte` y `short`. Falta decidir cuáles se
-     usan. Mi recomendación: los de C#, un nombre por tipo (`short` ya es en BP otro nombre de `int16`).
+6. **Los tipos básicos, los de C#, también los estrechos** (17-oct). Un nombre por tipo:
+
+   | BP | JC |
+   |---|---|
+   | `integer` | `int` |
+   | `boolean` | `bool` |
+   | `long` · `float` · `double` · `string` · `byte` | los mismos |
+   | `int8` | `sbyte` |
+   | `word` | `ushort` |
+   | `int16` (o `short`) | `short` |
+
+   Al preguntarlo escribí que `word`, `int8` e `int16` no tenían equivalente en C# y se quedaban con su nombre de BP.
+   No era así: C# los tiene, y Eduardo elige también para ellos los de C#.
 7. **El bloque** (17-oct): `blockstmt ::= '{' { stmt } '}'`.
 8. **El `if`, el de C, Java y C#** (17-oct):
 
@@ -535,3 +544,13 @@ mi propuesta: manda lo de aquí.
    - `else if` es el `elseif` de BP: un `else` seguido de un `if` entra en la cadena (`elseIfs`). El `if` que en BP va
      dentro de un `else` sin ser un `elseif` se escribe en JC con llaves: `else { if (…) … }`.
    - El escritor de JC pone las llaves siempre, salvo en el `if` de una línea.
+
+### Lo que choca entre BP y JC, para más adelante
+
+- **El desempaquetado y el bloque.** En BP, una sentencia que empieza por `{` es el desempaquetado
+  (`{ n, s } := par()`); en JC, `{` abre un bloque. La forma de C# es `(n, s) = par();`. Se decide con las
+  asignaciones.
+- **Los nombres que en el otro lenguaje son palabras reservadas.** Las de BP no distinguen mayúsculas, así que un
+  nombre de JC como `Next`, `Step` o `End` es en BP una palabra reservada, y un programa de JC que lo use no se puede
+  escribir en BP tal cual. Al revés, `int` y `bool` son nombres válidos en BP que en JC no lo serán. Mi propuesta: que
+  el traductor lo diga, con el nombre y la línea, sin renombrar nada por su cuenta.
