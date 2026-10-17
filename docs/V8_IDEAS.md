@@ -799,6 +799,12 @@ mi propuesta: manda lo de aquí.
     (`InstanceOfExpr`), también con el nombre cualificado (`a is Mod.Perro`). Va con las comparaciones, en BP y en
     C#. Lo demás del `is` de C# (`a is Perro p`, `x is null`) BP no lo tiene: error, de momento; para `null`,
     `x == null`.
+25. **Los `enum`, como en C#** (Eduardo, 17-oct): `public enum Color { Rojo, Verde = 5, Azul }`, con una coma al
+    final si se quiere. Es el `enum … end` de BP, miembro a miembro (`EnumDef`).
+    - El valor, como en BP, un entero escrito y sin signo (`Parser.parseEnumValue`). Las expresiones que admite C#
+      (`-1`, `1 << 3`, `Rojo + 1`), de momento no, y el tipo de debajo (`enum Color : byte`), tampoco.
+    - JC es BP: un `enum` no se convierte a entero ni al revés (`#522`), aunque en C# sí: `(int) Color.Rojo` da
+      error.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
