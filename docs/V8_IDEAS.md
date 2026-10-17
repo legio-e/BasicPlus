@@ -795,6 +795,10 @@ mi propuesta: manda lo de aquí.
     - **Como el `new`, el árbol recuerda la conversión**, con una marca que la comparación no cuenta. El análisis la
       comprueba en JC: `(Persona) 5` es un error, mientras que en BP `Persona(5)` construiría.
     - El escritor de JC, con el árbol analizado: si es una conversión, `(T) x`; si construye, `new T(x)`.
+24. **La comprobación de tipo, `is`, como en C#** (Eduardo, 17-oct): `a is Perro` es el `a instanceof Perro` de BP
+    (`InstanceOfExpr`), también con el nombre cualificado (`a is Mod.Perro`). Va con las comparaciones, en BP y en
+    C#. Lo demás del `is` de C# (`a is Perro p`, `x is null`) BP no lo tiene: error, de momento; para `null`,
+    `x == null`.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
