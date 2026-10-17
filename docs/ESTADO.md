@@ -92,8 +92,14 @@
 > - El frontend, 301 pruebas sin fallos.
 > - Salió `#702`, de BP: un `raise` dentro de un `set` no compila.
 >
-> **Lo siguiente:** generar código desde JC: `#700`, que el compilador lea `.jc`, y la prueba por la salida en las
-> dos VMs.
+> **Lo siguiente** (Eduardo, al cerrar: *«Mañana terminamos lo que falta y añadimos al IDE lo que nos haga falta»*):
+> - generar código desde JC: `#700`, que el compilador lea `.jc`, la prueba por la salida en las dos VMs, y que el
+>   análisis compruebe las marcas del `new` y de las conversiones;
+> - el IDE: los `.jc` (abrir, compilar, colorear, plegar por llaves) y traducir de BP a JC y vuelta.
+>
+> **El coste, medido:** la estimación era de 9 a 15 días para el compilador (`V8_IDEAS` §E2, «El coste»). El
+> escritor, el parser, la comparación y el lenguaje entero han salido en un día. Lo que lo hizo posible es que el
+> árbol de BP es fiel a la sintaxis, y que la ida y vuelta sobre todo el corpus cazó cada fallo en el momento.
 
 > **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
 > a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su

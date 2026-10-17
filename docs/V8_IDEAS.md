@@ -401,6 +401,12 @@ documentación de JC: una página con la tabla y ejemplos, que se pueden sacar d
 
 **El orden que propuse** (el 17-oct por la mañana): la sintaxis, AST → JC, el parser de JC, AST → BP y el IDE.
 
+**Lo medido después** (17-oct, por la noche): AST → BP, la sintaxis entera con Eduardo, AST → JC, el parser de JC,
+la comparación y el lenguaje entero salieron en un día, frente a los 9–15 días de la tabla. Eduardo: *«al final
+parece que no era tan complicado como esperabas, o al menos hemos tardado mucho menos»*. Lo que lo hizo corto: el
+árbol de BP es fiel a la sintaxis, y la ida y vuelta sobre todo el corpus cazó cada fallo en el mismo momento. Queda
+generar código desde JC (`#700`, el compilador que lea `.jc`, la prueba por la salida) y el IDE.
+
 ### El método (Eduardo, 17-oct)
 
 Eduardo cambia el orden: *«Podemos empezar haciendo un traductor AST->BP. Como tenemos el original del BP podemos
