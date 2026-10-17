@@ -82,16 +82,53 @@ public final class EscritorJc {
 
     private final StringBuilder sb = new StringBuilder();
     private final SemanticInfo info;
+    private final Map<Object, Integer> argsEscritos;
     private int nivel;
 
-    private EscritorJc(SemanticInfo info, int nivel) { this.info = info; this.nivel = nivel; }
+    private EscritorJc(SemanticInfo info, Map<Object, Integer> argsEscritos, int nivel) {
+        this.info = info;
+        this.argsEscritos = argsEscritos;
+        this.nivel = nivel;
+    }
 
-    /** El JC de un módulo entero, desde su árbol analizado. Lanza {@link NoSoportado} si hay algo que JC todavía no
-     *  sabe escribir. */
-    public static String escribir(ModuleNode m, SemanticInfo info) {
-        EscritorJc e = new EscritorJc(info, 0);
+    /** El JC de un módulo entero, desde su árbol analizado. {@code argsEscritos}: cuántos argumentos escribió el
+     *  programador en cada llamada, contados antes del análisis ({@link #contarArgumentos}). Lanza {@link NoSoportado}
+     *  si hay algo que JC todavía no sabe escribir. */
+    public static String escribir(ModuleNode m, SemanticInfo info, Map<Object, Integer> argsEscritos) {
+        EscritorJc e = new EscritorJc(info, argsEscritos, 0);
         e.modulo(m);
         return e.sb.toString();
+    }
+
+    /** Apunta, antes del análisis, cuántos argumentos lleva cada llamada del árbol: el análisis añade al final los
+     *  valores por defecto que faltan (H8.1, `checkArgs`), y lo que se traduce es lo que escribió el programador. */
+    static void contarArgumentos(Object n, Map<Object, Integer> out) {
+        if (n == null) return;
+        if (n instanceof List) {
+            for (Object o : (List<?>) n) contarArgumentos(o, out);
+            return;
+        }
+        if (!n.getClass().getName().startsWith("basicplus.frontend.Ast$")) return;
+        if (n instanceof CallExpr)      out.put(n, ((CallExpr) n).args.size());
+        if (n instanceof RaiseStmt)     out.put(n, ((RaiseStmt) n).args.size());
+        if (n instanceof BoundCallExpr) out.put(n, ((BoundCallExpr) n).args.size());
+        for (Class<?> c = n.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            for (java.lang.reflect.Field f : c.getDeclaredFields()) {
+                if (java.lang.reflect.Modifier.isStatic(f.getModifiers()) || f.getType().isPrimitive()) continue;
+                f.setAccessible(true);
+                try {
+                    contarArgumentos(f.get(n), out);
+                } catch (IllegalAccessException ignored) {
+                    // un campo que no se lee no tiene llamadas que contar
+                }
+            }
+        }
+    }
+
+    /** Los argumentos que escribió el programador. */
+    private List<IExpr> escritos(CallExpr c) {
+        Integer n = argsEscritos.get(c);
+        return (n == null || n >= c.args.size()) ? c.args : c.args.subList(0, n);
     }
 
     // ============================================================
@@ -359,7 +396,7 @@ public final class EscritorJc {
     /** La sentencia de un `if`/`while`/`for` sin llaves, en la MISMA línea que su cabecera. Si ocupa más de una (un
      *  bloque que empieza ahí), las demás siguen debajo con su sangría. */
     private void enLinea(String cabecera, IStmt s) {
-        EscritorJc sub = new EscritorJc(info, nivel);
+        EscritorJc sub = new EscritorJc(info, argsEscritos, nivel);
         sub.sentencia(s);
         String[] ls = sub.sb.toString().split("\n", -1);
         linea(cabecera + " " + ls[0].trim());
@@ -588,7 +625,7 @@ public final class EscritorJc {
 
     /** `integer(x)` y la conversión de referencia de BP, `Persona(o)` (`refCasts`), son el `(T) x` de C# (punto 23). */
     private boolean esConversion(CallExpr c) {
-        if (c.args.size() != 1) return false;
+        if (escritos(c).size() != 1) return false;
         if (c.callee instanceof IdentifierExpr && CONVERSIONES_PRIMITIVAS.contains(((IdentifierExpr) c.callee).name))
             return true;
         return info.refCasts.contains(c);
@@ -602,7 +639,7 @@ public final class EscritorJc {
                     : expr(c.callee, P_PRIMARIO);
             return "(" + t + ") " + expr(c.args.get(0), P_UNARIO);
         }
-        String llamado = expr(c.callee, P_PRIMARIO) + "(" + lista(c.args) + ")";
+        String llamado = expr(c.callee, P_PRIMARIO) + "(" + lista(escritos(c)) + ")";
         return (info.exprSymbols.get(c.callee) instanceof Symbol.ClassSymbol) ? "new " + llamado : llamado;
     }
 
@@ -683,7 +720,7 @@ public final class EscritorJc {
             return r;
         }
         try {
-            r.jc = escribir(a.modulo, a.info);
+            r.jc = escribir(a.modulo, a.info, a.argsEscritos);
             r.clase = "ESCRITO";
         } catch (NoSoportado ns) {
             r.clase = "NO SOPORTADO";
@@ -694,6 +731,68 @@ public final class EscritorJc {
             r.detalle = "el escritor falló: " + ex;
         }
         return r;
+    }
+
+    // ============================================================
+    // LA IDA Y VUELTA: --comprobar-jc (paso 3)
+    // ============================================================
+
+    /**
+     * El árbol del original (recién leído, sin analizar), escrito en JC y leído con JcParser, tiene que ser el mismo,
+     * con lo que se acordó que no cuenta (ComparaAst.primeraDiferenciaJc). EQUIVALENTE | DISTINTO | JC ILEGIBLE (el
+     * escritor y el parser no casan) | NO SOPORTADO | NO SE ANALIZA | NO SE LEE | FALLO.
+     */
+    static String comprobarJcFichero(Path f) throws IOException {
+        String fuente = new String(Files.readAllBytes(f), java.nio.charset.StandardCharsets.UTF_8);
+        Lexer lx = new Lexer(fuente);
+        List<Token> ts = lx.tokenize();
+        if (!lx.getErrors().isEmpty()) return "NO SE LEE: " + lx.getErrors().get(0);
+        Parser ps = new Parser(ts);
+        ModuleNode a = ps.parseModule();
+        if (!ps.getErrors().isEmpty() || a == null)
+            return "NO SE LEE: " + (ps.getErrors().isEmpty() ? "el parser no devolvió módulo" : ps.getErrors().get(0));
+        Resultado r = traducir(f);
+        if (!"ESCRITO".equals(r.clase)) return r.clase + ": " + r.detalle;
+        ModuleNode b;
+        try {
+            b = JcParser.leer(r.jc);
+        } catch (JcLexer.Error ex) {
+            return "JC ILEGIBLE: " + ex.getMessage() + "  ←  " + lineaDe(r.jc, ex.linea);
+        } catch (RuntimeException ex) {
+            return "FALLO: el parser de JC falló: " + ex;
+        }
+        String d = ComparaAst.primeraDiferenciaJc(a, b);
+        return d == null ? "EQUIVALENTE" : "DISTINTO: " + d;
+    }
+
+    private static String lineaDe(String texto, int n) {
+        String[] ls = texto.split("\n", -1);
+        return (n >= 1 && n <= ls.length) ? ls[n - 1].trim() : "";
+    }
+
+    /** --comprobar-jc: la ida y vuelta de un fichero, o de todos los .bp de una carpeta, con las cuentas. */
+    static int comprobarJc(Path p) throws IOException {
+        PrintStream out = new PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.out), true, "UTF-8");
+        if (!Files.isDirectory(p)) {
+            String r = comprobarJcFichero(p);
+            out.println(p.getFileName() + ": " + r);
+            return r.startsWith("EQUIVALENTE") ? 0 : 1;
+        }
+        List<Path> fs;
+        try (Stream<Path> w = Files.walk(p)) {
+            fs = w.filter(x -> x.toString().endsWith(".bp")).sorted().collect(Collectors.toList());
+        }
+        Map<String, Integer> cuentas = new TreeMap<>();
+        for (Path f : fs) {
+            String r = comprobarJcFichero(f);
+            cuentas.merge(r.split(":")[0], 1, Integer::sum);
+            if (!r.startsWith("EQUIVALENTE") && !r.startsWith("NO SOPORTADO") && !r.startsWith("NO SE ANALIZA"))
+                out.println(p.relativize(f) + ": " + r);
+        }
+        out.println("---- " + fs.size() + " ficheros: " + cuentas);
+        int malos = cuentas.getOrDefault("DISTINTO", 0) + cuentas.getOrDefault("JC ILEGIBLE", 0)
+                  + cuentas.getOrDefault("FALLO", 0);
+        return malos == 0 ? 0 : 1;
     }
 
     /** --escribir-jc: el JC de un fichero, por la salida; con una carpeta, las cuentas de todos sus .bp. 0 = bien;

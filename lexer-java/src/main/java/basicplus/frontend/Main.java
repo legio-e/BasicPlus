@@ -424,6 +424,7 @@ public final class Main {
         boolean escribirBp  = false;
         boolean comprobarBp = false;
         boolean escribirJc  = false;   // V8 #698 (JC, paso 2) — AST → JC (EscritorJc), desde el árbol analizado
+        boolean comprobarJc = false;   // V8 #698 (JC, paso 3) — la ida y vuelta BP → JC → árbol
 
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
@@ -431,6 +432,7 @@ public final class Main {
             else if ("--escribir-bp".equals(a))  { escribirBp = true;  showAst = false; showTokens = false; }
             else if ("--comprobar-bp".equals(a)) { comprobarBp = true; showAst = false; showTokens = false; }
             else if ("--escribir-jc".equals(a))  { escribirJc = true;  showAst = false; showTokens = false; }
+            else if ("--comprobar-jc".equals(a)) { comprobarJc = true; showAst = false; showTokens = false; }
             else if ("--prune-bpi".equals(a)) pruneBpi = true;
             else if ("--ast".equals(a))    showTokens = false;
             else if ("--quiet".equals(a)) { showAst = false; showTokens = false; }
@@ -519,6 +521,7 @@ public final class Main {
             System.err.println("     java -jar basicplus-frontend.jar <archivo.bp> --escribir-bp");
             System.err.println("     java -jar basicplus-frontend.jar <archivo.bp|carpeta> --comprobar-bp");
             System.err.println("     java -jar basicplus-frontend.jar <archivo.bp|carpeta> --escribir-jc");
+            System.err.println("     java -jar basicplus-frontend.jar <archivo.bp|carpeta> --comprobar-jc");
             System.exit(1);
             return;
         }
@@ -542,9 +545,9 @@ public final class Main {
         }
 
         // V8 #698 (JC, paso 2) — el árbol analizado, escrito en JC: nada se emite.
-        if (escribirJc) {
+        if (escribirJc || comprobarJc) {
             try {
-                System.exit(EscritorJc.escribirJc(p));
+                System.exit(comprobarJc ? EscritorJc.comprobarJc(p) : EscritorJc.escribirJc(p));
             } catch (IOException ex) {
                 System.err.println("error de I/O: " + ex.getMessage());
                 System.exit(2);
@@ -613,6 +616,9 @@ public final class Main {
         Ast.ModuleNode modulo;
         SemanticInfo info;
         String error;
+        /** Cuántos argumentos escribió el programador en cada llamada: el análisis añade al final los valores por
+         *  defecto (H8.1, `checkArgs`), y el traductor no los escribe. */
+        final java.util.Map<Object, Integer> argsEscritos = new java.util.IdentityHashMap<>();
     }
 
     /**
@@ -644,6 +650,7 @@ public final class Main {
             if (!parsed.lexer.getErrors().isEmpty())  { r.error = parsed.lexer.getErrors().get(0).toString(); return r; }
             if (!parsed.parser.getErrors().isEmpty()) { r.error = parsed.parser.getErrors().get(0).toString(); return r; }
             Ast.ModuleNode m = parsed.module;
+            EscritorJc.contarArgumentos(m, r.argsEscritos);   // antes de que el análisis rellene los que faltan
             List<Ast.ImportNode> delFuente = new ArrayList<>(m.imports);
             for (Ast.ImportNode imp : delFuente) {
                 ensureInterfaceForImport(imp, src, ctx, 1);

@@ -7090,8 +7090,16 @@ en `V8_IDEAS.md` §E2:
     el compilador);
   - salió `#701`, del parser de BP.
   - y, tras el paso, los arrays de tamaño fijo, como en C (Eduardo): `int nums[10];`.
-- **Lo siguiente:** el parser de JC (paso 3), con la ida y vuelta del árbol (sin contar los paréntesis ni las marcas
-  del `new` y de las conversiones) y, al final, el `.mod`.
+- **Paso 3, JC → AST: hecho el 17-oct** (`V8_IDEAS` §E2, «Paso 3»):
+  - el código: `JcLexer` (288 líneas) y `JcParser` (1.125), al mismo árbol que el parser de BP; las marcas del `new`
+    y de la conversión en `CallExpr`; el modo JC de `ComparaAst`; y `--comprobar-jc`;
+  - **283 de 283 EQUIVALENTE** en la ida y vuelta (268 samples y 15 de la stdlib). Con `<<` y `>>` cambiados en el
+    parser, 7 DISTINTO: los que usan desplazamientos;
+  - `JcParserTest`, 5 pruebas, con la que tiene que fallar. El frontend, 300 sin fallos;
+  - salió que el análisis añade a las llamadas los valores por defecto (H8.1): el escritor escribe ahora sólo los
+    argumentos del programador.
+- **Lo siguiente:** `#700` en el compilador de BP; que el compilador lea `.jc`; la prueba por la salida en las dos
+  VMs; y que el análisis compruebe las marcas.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 

@@ -9,23 +9,45 @@
 // rellene nada (los nombres sintetizados, por ejemplo, siguen a null en los dos).
 // Por reflexión: así un nodo o un campo nuevo del AST entra solo en la
 // comparación, sin que haya que acordarse de añadirlo aquí.
+//
+// Paso 3 — la ida y vuelta por JC tiene su propio modo (primeraDiferenciaJc),
+// con lo que se acordó que no cuenta (V8_IDEAS §E2, puntos 5, 15, 17, 18, 22,
+// 23 y 29): los paréntesis, que cada lenguaje pone según su precedencia y el
+// emisor atraviesa; la mayúscula de un operador de BP (`MOD` y `mod`); un `var`
+// de varios nombres con un valor, que es uno por nombre (medido: el mismo
+// `.mod`); el tipo de una constante que BP no escribe; y el `print`, que se
+// compara por lo que imprime (la coma de BP es un " ", y su salto, un "\n").
+// Las marcas del `new` y de las conversiones (CallExpr) no cuentan nunca: no
+// son parte del programa.
 // ============================================================
 package basicplus.frontend;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.util.ArrayList;
 import java.util.List;
 
 final class ComparaAst {
 
-    private ComparaAst() {}
+    private final boolean jc;
+
+    private ComparaAst(boolean jc) { this.jc = jc; }
 
     /** null si son iguales; si no, la ruta del primer campo distinto y la línea del original. */
     static String primeraDiferencia(Object a, Object b) {
-        return comparar(a, b, "modulo", 0);
+        return new ComparaAst(false).comparar(a, b, "modulo", 0);
     }
 
-    private static String comparar(Object a, Object b, String ruta, int linea) {
+    /** La de la ida y vuelta por JC: lo mismo, sin lo que se acordó que no cuenta (arriba). */
+    static String primeraDiferenciaJc(Object a, Object b) {
+        return new ComparaAst(true).comparar(a, b, "modulo", 0);
+    }
+
+    private String comparar(Object a, Object b, String ruta, int linea) {
+        if (jc) {
+            while (a instanceof Ast.ParenExpr) a = ((Ast.ParenExpr) a).inner;
+            while (b instanceof Ast.ParenExpr) b = ((Ast.ParenExpr) b).inner;
+        }
         if (a == b) return null;
         if (a instanceof Ast.Node) linea = ((Ast.Node) a).line;
         if (a == null || b == null) return donde(ruta, linea) + ": " + corto(a) + " / " + corto(b);
@@ -33,6 +55,10 @@ final class ComparaAst {
             return donde(ruta, linea) + ": " + a.getClass().getSimpleName() + " / " + b.getClass().getSimpleName();
         if (a instanceof List) {
             List<?> la = (List<?>) a, lb = (List<?>) b;
+            if (jc) {
+                la = expandir(la);
+                lb = expandir(lb);
+            }
             if (la.size() != lb.size()) return donde(ruta, linea) + ": " + la.size() + " elementos / " + lb.size();
             for (int i = 0; i < la.size(); i++) {
                 String d = comparar(la.get(i), lb.get(i), ruta + "[" + i + "]", linea);
@@ -48,24 +74,74 @@ final class ComparaAst {
                 || a instanceof Enum) {
             return a.equals(b) ? null : donde(ruta, linea) + ": " + corto(a) + " / " + corto(b);
         }
+        if (jc && a instanceof Ast.PrintStmt)
+            return comparar(piezas((Ast.PrintStmt) a), piezas((Ast.PrintStmt) b), ruta + ".piezas", linea);
         // Un objeto del árbol: todos sus campos, también los heredados, menos las posiciones.
         for (Class<?> c = a.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
             for (Field f : c.getDeclaredFields()) {
                 if (Modifier.isStatic(f.getModifiers())) continue;
-                if (f.getName().equals("line") || f.getName().equals("column")) continue;
+                String n = f.getName();
+                if (n.equals("line") || n.equals("column")) continue;
+                if (n.equals("conNew") || n.equals("esConversion")) continue;   // las marcas de JC (CallExpr)
                 f.setAccessible(true);
                 Object va, vb;
                 try {
                     va = f.get(a);
                     vb = f.get(b);
                 } catch (IllegalAccessException ex) {
-                    return donde(ruta, linea) + ": no se puede leer el campo " + f.getName();
+                    return donde(ruta, linea) + ": no se puede leer el campo " + n;
                 }
-                String d = comparar(va, vb, ruta + "." + f.getName(), linea);
+                if (jc && a instanceof Ast.ConstDecl && n.equals("type") && (va == null || vb == null)) continue;
+                if (jc && a instanceof Ast.BinaryExpr && n.equals("op")) {
+                    if (!((String) va).equalsIgnoreCase((String) vb))
+                        return donde(ruta + ".op", linea) + ": " + corto(va) + " / " + corto(vb);
+                    continue;
+                }
+                String d = comparar(va, vb, ruta + "." + n, linea);
                 if (d != null) return d;
             }
         }
         return null;
+    }
+
+    /** Un `var` de varios nombres con un valor es uno por nombre: BP da el valor a cada uno (punto 5). */
+    private static List<?> expandir(List<?> l) {
+        boolean hay = false;
+        for (Object o : l) if (multiConValor(o)) { hay = true; break; }
+        if (!hay) return l;
+        List<Object> out = new ArrayList<>();
+        for (Object o : l) {
+            if (!multiConValor(o)) { out.add(o); continue; }
+            Ast.VarDecl v = (Ast.VarDecl) o;
+            for (int i = 0; i < v.names.size(); i++) {
+                List<Ast.DeclName> uno = new ArrayList<>();
+                uno.add(v.names.get(i));
+                Ast.VarDecl w = new Ast.VarDecl(v.isPublic, v.isOwner, uno, v.type, v.init, v.line, v.column);
+                w.isPrivate = v.isPrivate;
+                if (i == 0) w.annotation = v.annotation;
+                out.add(w);
+            }
+        }
+        return out;
+    }
+
+    private static boolean multiConValor(Object o) {
+        return o instanceof Ast.VarDecl && ((Ast.VarDecl) o).names.size() > 1 && ((Ast.VarDecl) o).init != null;
+    }
+
+    /** Lo que imprime un `print`, pieza a pieza: la coma de BP es un " ", y su salto, un "\n" al final, salvo con un
+     *  separador al final (punto 17). */
+    private static List<Object> piezas(Ast.PrintStmt p) {
+        List<Object> out = new ArrayList<>();
+        boolean salto = true;
+        for (int i = 0; i < p.items.size(); i++) {
+            Ast.PrintItem it = p.items.get(i);
+            if (i > 0 && it.leadingSep == Ast.PrintSep.COMMA) out.add(new Ast.StringLitExpr(" ", 0, 0));
+            if (it.expr != null) out.add(it.expr);
+            else if (i == p.items.size() - 1) salto = false;
+        }
+        if (salto) out.add(new Ast.StringLitExpr("\n", 0, 0));
+        return out;
     }
 
     private static String donde(String ruta, int linea) {

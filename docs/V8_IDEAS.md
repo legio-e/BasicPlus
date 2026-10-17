@@ -1052,3 +1052,45 @@ Eduardo: *«OK, adelante.»* Con la sintaxis de la primera fase decidida, el esc
 **Lo siguiente, el paso 3:** el parser de JC, con la ida y vuelta: el árbol de BP, escrito en JC y leído otra vez,
 tiene que ser el mismo (sin contar los paréntesis ni las marcas del `new` y de las conversiones); y al final, el
 `.mod`.
+
+### Paso 3, JC → AST: hecho el 17-oct
+
+Eduardo: *«Probemos el paso 3. En principio el escáner y el parser deberían ser similares a los de BP con las
+diferencias de cada lenguaje, pero puede servir de punto de partida.»* Así se hizo: el de BP, de modelo, y el árbol,
+el suyo, nodo a nodo.
+
+**Lo hecho:**
+- **`JcLexer.java`** (288 líneas): las palabras reservadas distinguen mayúsculas; los literales de C# (`1.5` double,
+  `1.5f` float, `'a'` un entero); los escapes de C#; y los comentarios `//` y `/* … */`.
+- **`JcParser.java`** (1.125 líneas): de JC al MISMO árbol que el parser de BP. Fabrica lo mismo que él en sus tres
+  sitios: el `import Core` implícito al final, el cuerpo que lanza de una `native` externa de un pack, y el
+  `ReleaseOwnerStmt` que cierra el `finally` de un recurso. Lo que la primera fase deja fuera es un error con su
+  motivo.
+- **Las marcas `conNew` y `esConversion`** en `CallExpr`: las pone el parser de JC; el de BP las deja a false.
+- **`ComparaAst`, el modo JC**: no cuenta lo acordado (los paréntesis, la mayúscula de `MOD`, el `var` de varios
+  nombres con valor, el tipo de una constante que BP no escribe, las marcas), y compara el `print` por lo que imprime.
+- **`--comprobar-jc`**: el árbol del original, recién leído, frente al que sale de escribirlo en JC y leerlo con
+  `JcParser`.
+
+**Dos cosas que salieron al hacerlo:**
+- **El análisis cambia el árbol**: añade a cada llamada, al final, los valores por defecto de los parámetros que
+  faltan (H8.1, `checkArgs`). El escritor de JC escribía también esos. Ahora se cuentan antes del análisis los
+  argumentos de cada llamada (`EscritorJc.contarArgumentos`) y se escriben sólo los del programador.
+- **BP admite variables locales de tipo tupla** (`var t: (string, integer) := pair()`, en `T3`), y no sólo tuplas
+  como tipo de retorno. El parser de JC las lee: `(string, int) t = pair();`.
+
+**El barrido** (`--comprobar-jc`): **283 de 283 EQUIVALENTE**, todos los que se escriben (268 samples y 15 de la
+stdlib), sin un DISTINTO.
+- La prueba de que mira: con `<<` y `>>` cambiados en el parser de JC, 7 DISTINTO, los 7 samples escritos que usan
+  desplazamientos, cada uno con su línea.
+- `JcParserTest`, 5 pruebas: la que tiene que fallar (un `-` por un `+`), la de lo que no cuenta, la ida y vuelta del
+  ejemplo, los nodos que fabrica el parser y los errores con nombre. El frontend, 300 pruebas sin fallos.
+
+**Lo que no está hecho:**
+- El análisis no comprueba todavía las marcas: que el `new` vaya con una clase, y la conversión, con una conversión.
+- El compilador no lee `.jc`: falta que elija el parser por la extensión.
+- La prueba por lo que imprime, compilando BP y JC y comparando la salida en las dos VMs, pide antes `#700`. Hoy el
+  `print` de JC compilado saltaría de línea dos veces, porque BP aún salta con el `;` al final. Y el `print` da otro
+  `.mod`, así que la comparación del `print` es por la salida.
+
+**Lo siguiente:** `#700` en el compilador de BP, que el compilador lea `.jc`, y la prueba por la salida.

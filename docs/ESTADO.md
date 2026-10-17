@@ -79,7 +79,14 @@
 >
 > - Los arrays de tamaño fijo, como en C (Eduardo preguntó cómo era allí): `int nums[10];`.
 >
-> **Lo siguiente:** el paso 3, el parser de JC con la ida y vuelta del árbol.
+> **Y el paso 3, JC → AST** (Eduardo: *«vamos súper rápido. Probemos el paso 3»*):
+> - `JcLexer` y `JcParser`, al mismo árbol que el parser de BP, y `--comprobar-jc`.
+> - **La ida y vuelta, 283 de 283 EQUIVALENTE.** Con un sabotaje en el parser (`<<` por `>>`), 7 DISTINTO.
+> - Salió que el análisis añade a las llamadas los valores por defecto: el escritor escribe ahora sólo los del
+>   programador. El frontend, 300 pruebas sin fallos.
+>
+> **Lo siguiente:** `#700` en el compilador de BP, que el compilador lea `.jc`, y la prueba por la salida en las dos
+> VMs.
 
 > **14-oct** — **V8 empieza, en modo experimentar. El primer experimento (`#697`): la P4 empareja por Bluetooth LE,
 > a través de su C6, el teclado y el ratón de Eduardo, recibe sus teclas y movimientos y los reconecta por su

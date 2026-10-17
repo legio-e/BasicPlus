@@ -940,6 +940,11 @@ public final class Ast {
     public static final class CallExpr extends Node implements IExpr {
         public final IExpr callee;
         public final List<IExpr> args;
+        /** V8 #698 (JC) — en BP crear, llamar y convertir se escriben igual, `X(…)`; en JC, `new X(…)` y `(X) x`. El
+         *  parser de JC lo marca aquí para que el análisis pueda comprobarlo; el de BP las deja a false. No son parte
+         *  del programa: la comparación de árboles no las cuenta (ComparaAst). */
+        public boolean conNew;
+        public boolean esConversion;
         public CallExpr(IExpr callee, List<IExpr> args, int line, int column) {
             super(line, column);
             this.callee = callee;
