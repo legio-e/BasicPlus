@@ -399,11 +399,48 @@ sintaxis sin más.
 IDE— es un aumento pequeño, lo que decía Eduardo: el coste está en lo embebido. Lo que no entra en la cuenta es la
 documentación de JC: una página con la tabla y ejemplos, que se pueden sacar del manual con el propio traductor.
 
-**El orden que propongo**, el de Eduardo:
-1. **La sintaxis**: la tabla y las decisiones ❓.
-2. **AST → JC**, lo más barato: pasa a JC los 399 samples y la stdlib, y así se ve JC sobre código real antes de
-   escribir el parser.
-3. **El parser de JC**, con la red del `.mod` idéntico desde el primer día: el corpus traducido es su banco de
-   pruebas.
-4. **AST → BP**, con los puntos fijos.
-5. **El IDE.**
+**El orden que propuse** (el 17-oct por la mañana): la sintaxis, AST → JC, el parser de JC, AST → BP y el IDE.
+
+### El método (Eduardo, 17-oct)
+
+Eduardo cambia el orden: *«Podemos empezar haciendo un traductor AST->BP. Como tenemos el original del BP podemos
+comparar y verificar si el generado es igual que el original.»* Y sobre qué es «igual»: *«no creo que necesitemos
+que sea idéntico, nos vale con que sea equivalente (en el equivalente no hace falta respetar todos los saltos de línea
+y los comentarios si se mantienen mejor pero si no lo podemos considerar también como válido)»*. Después, *«el AST
+-> JC debería seguir el mismo patrón. Y por último un JC -> AST»*. Y por partes: *«no hace falta traducir todo el
+lenguaje de golpe, se puede desarrollar de forma incremental tal como ya hicimos cuando programamos el compilador de
+BP»*.
+
+El orden queda así:
+1. **AST → BP**, comprobado contra el original.
+2. **AST → JC**, con el mismo patrón. Antes, la sintaxis de JC: la tabla, con sus ❓.
+3. **JC → AST.**
+4. **El IDE.**
+
+Cómo se concreta el primer paso:
+- **`EscritorBp`**, una clase nueva del compilador que escribe BP desde el árbol, con el formato de siempre (sangría y
+  un `end` por bloque). Al principio, sin comentarios. Su esqueleto, el recorrido de `AstPrinter`.
+- **«Equivalente», medido de dos formas:**
+  - **El árbol**, en cada incremento: el original da el árbol A, se escribe BP', y BP' da el árbol B. A y B, iguales
+    sin contar líneas ni columnas (se compara justo tras el parser, antes de que el semántico rellene nada). Si no lo
+    son, dice el primer nodo distinto y su línea en el original. Y escribir otra vez BP' tiene que dar BP': el escritor,
+    estable.
+  - **El `.mod`**, al final, como prueba definitiva: BP' compilado da el mismo `.mod` byte a byte. Antes hay que
+    numerar en orden las clases de `parallel`.
+- **Por incrementos:**
+  - Lo que el escritor aún no sabe escribir lo dice («no soportado: `ForStmt`»), nunca en silencio.
+  - Un barrido sobre los 399 samples y la stdlib da tres cuentas: **equivalentes**, **no soportados** (por tipo de
+    nodo, que dice qué toca después) y **distintos** (fallos del escritor).
+  - Cada incremento sube la primera; se acaba cuando están todos.
+- **Lo que ya se sabe que hay que cuidar:**
+  - el `import Core` implícito (`implicito`) no se escribe;
+  - los cuatro sitios donde el parser fabrica: los grupos de `var`, `isPackExtern`, el `finally` de `try var` y el `if`
+    de una línea.
+- **Dónde:**
+  - dos opciones del compilador, `--escribir-bp` (saca el BP reescrito) y `--comprobar-bp` (la ida y vuelta, con el
+    resultado);
+  - un script de barrido como `samples_sweep.py`.
+
+  Todo añadido: compilar BP no cambia.
+- **El primer incremento:** lo de los samples más sencillos (módulo, `import`, funciones, `var`/`const`, asignaciones,
+  expresiones, llamadas, `print`, `if`, `while`, `for`, `return`). Después, lo que diga el barrido.

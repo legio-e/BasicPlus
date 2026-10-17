@@ -6999,7 +6999,12 @@ en `V8_IDEAS.md` §E2:
   - el compilador, ~4.700–5.200 líneas nuevas, un 14–15 % más de frontend, y ~9–15 días; el grueso, el parser;
   - el IDE, 1–2 días;
   - la VM, nada.
-- **Lo siguiente:** decidir la sintaxis (la tabla de §E2, con sus ❓).
+- **El método** (Eduardo, 17-oct): primero **AST → BP**, comprobado contra el original. Vale con que sea
+  **equivalente**: el mismo árbol sin contar líneas, y al final el mismo `.mod`; los saltos de línea y los comentarios,
+  mejor si se mantienen pero no hacen falta. Después AST → JC, con el mismo patrón, y por último JC → AST. Todo **por
+  incrementos**, como se hizo el compilador de BP, con un barrido que cuenta los equivalentes, los no soportados y los
+  distintos.
+- **Lo siguiente:** el primer incremento de `EscritorBp`.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 
