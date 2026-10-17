@@ -776,6 +776,17 @@ mi propuesta: manda lo de aquí.
     **Lo que cubre la primera fase**, medido el 17-oct: de los 473 `.bp` del corpus (samples, stdlib y `bpdevices`),
     163 declaran clases y 8 usan `switch`; 168 tienen una cosa o la otra. Quedan **305 sin ninguna**, que el traductor
     podrá llevar a JC y traer de vuelta. De la stdlib, 15 de 37.
+22. **Los objetos, con `new`** (Eduardo, 17-oct): `List l = new List();`. Hace falta ya en la primera fase: aunque
+    no declare clases, un programa crea objetos de la stdlib.
+    - **En BP, crear, llamar y convertir se escriben igual**: `List()`, `f()`, `integer(x)`, `Persona(o)`. El árbol es
+      el mismo (`CallExpr`), y sólo el análisis semántico sabe qué es cada uno: si el nombre es una clase, construye;
+      con un único argumento `Object` o de un antepasado, convierte (`refCasts`, `#389` y L19).
+    - **De BP a JC**, el escritor necesita el análisis semántico para saber dónde va el `new`: traducirá un árbol
+      analizado, con sus imports, y no sólo leído.
+    - **De JC a BP**, `new X()` da el mismo nodo que el `X()` de BP. Para comprobar que el `new` va con una clase, y
+      que no se crea un objeto sin él, el árbol tiene que recordar el `new`: una marca que la comparación no cuenta y
+      que el análisis comprueba en JC. Es del compilador; BP no cambia.
+    - ❓ Las conversiones están por decidir: el `(int) x` de C#, o `int(x)`, como en BP. Les pasa lo mismo.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
