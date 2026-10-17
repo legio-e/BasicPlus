@@ -775,7 +775,8 @@ mi propuesta: manda lo de aquí.
 
     **Lo que cubre la primera fase**, medido el 17-oct: de los 473 `.bp` del corpus (samples, stdlib y `bpdevices`),
     163 declaran clases y 8 usan `switch`; 168 tienen una cosa o la otra. Quedan **305 sin ninguna**, que el traductor
-    podrá llevar a JC y traer de vuelta. De la stdlib, 15 de 37.
+    podrá llevar a JC y traer de vuelta. De la stdlib, 15 de 37. Con `parallel` también en la segunda fase (31),
+    quedan 302; de la stdlib, los mismos 15.
 22. **Los objetos, con `new`** (Eduardo, 17-oct): `List l = new List();`. Hace falta ya en la primera fase: aunque
     no declare clases, un programa crea objetos de la stdlib.
     - **En BP, crear, llamar y convertir se escriben igual**: `List()`, `f()`, `integer(x)`, `Persona(o)`. El árbol es
@@ -833,6 +834,23 @@ mi propuesta: manda lo de aquí.
       a BP llevan el tipo: otro árbol, que la comparación tendrá que dar por igual.
     - Medido el 17-oct: con el tipo escrito o sin él, el mismo `.mod`, byte a byte (de módulo y local; `integer`,
       `float`, `string` y `long`).
+30. **Los `import`, como en BP** (Eduardo, 17-oct; ya en el punto 3), con su `;`: `import Gpio;` ·
+    `import X from "ruta";` · `import v1 from pack "SQLI";` · `import a.b : Impl;`. La cabecera del módulo, también
+    como en BP: `library "x";` delante, y `module X implements Y`, `module interface X extends Y`.
+31. **`parallel`, a la segunda fase** (Eduardo, 17-oct), con las clases y el `switch`. En el corpus hay 3. Hasta
+    entonces, el escritor de JC dirá que no lo sabe escribir.
+32. ❓ **Las propiedades de módulo** (las de clase van con las clases). Las 9 del corpus son de la forma corta. Mi
+    propuesta, la propiedad automática de C#:
+
+    | BP | JC |
+    |---|---|
+    | `public property counter: integer` | `public int counter { get; set; }` |
+    | `public property abiertos: integer := 0` | `public int abiertos { get; set; } = 0;` |
+    | `public sync property tick: integer` | `public sync int tick { get; set; }` |
+
+    - Los modificadores de BP que C# no tiene (`sync`, `owner`, `final`) van delante, como palabras de JC.
+    - La forma larga (`get … endget`, `set(v) … endset`) va con las clases. En C# el `set` no nombra su parámetro
+      (es `value`), y eso habrá que decidirlo.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
