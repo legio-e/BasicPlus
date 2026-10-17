@@ -805,6 +805,18 @@ mi propuesta: manda lo de aquí.
       (`-1`, `1 << 3`, `Rojo + 1`), de momento no, y el tipo de debajo (`enum Color : byte`), tampoco.
     - JC es BP: un `enum` no se convierte a entero ni al revés (`#522`), aunque en C# sí: `(int) Color.Rojo` da
       error.
+26. **La función de una instrucción, `inline`** (Eduardo, 17-oct):
+
+    ```
+    'function' type id '(' args ')' 'inline' instrucción ';'
+    ```
+
+    `public function int charCodeAt(string s, int i) inline CALL_BUILTIN 48;` es la función de BP cuyo cuerpo es
+    `inline CALL_BUILTIN 48` (`InlineStmt`): el mnemónico de `OPCODES.md` y sus operandos enteros.
+    - Medido el 17-oct: en el corpus hay 509 funciones con `inline`, en 19 ficheros (casi todas en la stdlib), y en
+      todas es la única línea del cuerpo. Esta forma las cubre todas.
+    - Un `inline` en medio de otras sentencias, que BP admite, no tiene forma en JC: el traductor lo dice. En el
+      corpus no hay ninguno.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
