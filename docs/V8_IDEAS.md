@@ -717,11 +717,20 @@ mi propuesta: manda lo de aquí.
     - Como en C#, `float x = 1.5;` es un error, y en BP también lo es. Medido: `var x: float := 1.5d` da «valor de
       tipo 'double' no asignable a variable de tipo 'float'». En las placas conviene el `float`, con su `f`: la
       mayoría sólo tienen FPU de precisión simple, o ninguna.
-    - Lo que C# tiene y BP no: `'a'` (BP no tiene `char`), los sufijos `u` y `m` (BP no tiene tipos sin signo de 32 y
-      64 bits ni `decimal`), y las cadenas `@"…"` y `$"…"`. En JC, de momento, error.
-    - ❓ **Las secuencias de escape** de C# que BP no tiene (`é`, `\x41`, `\a`, `\'`…). BP sólo tiene
-      `\n \t \r \\ \" \0`. Mi propuesta: añadirlas también a BP, que es sólo el lexer. Si no, un texto de JC con un
-      carácter de control no se podría escribir en BP.
+    - **Los caracteres, `'a'` y `'@'`, son constantes enteras** (Eduardo, 17-oct: *«son (o deberían ser) integer en
+      BP. En JC los admitimos pero son constantes»*). Su valor es el código del carácter, el mismo que da `charCodeAt`,
+      que es el punto de código: `'a'` es 97, y `'é'`, 233. En C# serían un `char`; en JC, como en C, un entero.
+      - BP no los tiene hoy: un `'` es «carácter inesperado» (`Lexer`). Añadirlos es sólo el lexer, y a BP también le
+        sirven: en el corpus hay 10 comparaciones como `charCodeAt(s, 0) == 48`, que serían `== '0'`.
+      - ❓ **La forma escrita.** El árbol sólo guarda el valor (`IntLitExpr`), así que `'a'` volvería de la
+        traducción como `97`, igual que hoy `0xFF` vuelve como `255`. Mi propuesta: que el literal guarde cómo se
+        escribió (decimal, hexadecimal, binario o carácter), que los escritores lo respeten y que la comparación no
+        lo cuente. En el código de las placas, una máscara `0xFF00` que vuelve como `65280` se lee peor.
+    - Lo que C# tiene y BP no: los sufijos `u` y `m` (BP no tiene tipos sin signo de 32 y 64 bits ni `decimal`), y las
+      cadenas `@"…"` y `$"…"`. En JC, de momento, error.
+    - ❓ **Las secuencias de escape** de C# que BP no tiene (`\u00e9`, `\x41`, `\a`, `\'`…), en las cadenas y en los
+      caracteres. BP sólo tiene `\n \t \r \\ \" \0`. Mi propuesta: añadirlas también a BP, que es sólo el lexer. Si
+      no, un texto de JC con un carácter de control no se podría escribir en BP.
 
 ### Lo que choca entre BP y JC, para más adelante
 
