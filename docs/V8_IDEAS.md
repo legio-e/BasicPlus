@@ -740,6 +740,29 @@ mi propuesta: manda lo de aquí.
       caracteres. BP sólo tiene `\n \t \r \\ \" \0`. Las lee el lexer de JC. Añadirlas
       también a BP, que es sólo el lexer, es una posible mejora (abajo); mientras, si un texto de JC lleva un carácter
       que BP no sabe escribir, el traductor lo dice.
+20. **La función** (Eduardo, 17-oct):
+
+    ```
+    funcdecl ::= 'function' type id '(' args ')' blockstmt
+    ```
+
+    Los parámetros, con el tipo delante y el valor por defecto como en C#: `function int suma(int a, int b = 1) { … }`.
+
+    ❓ **Los casos de BP** (`FuncDef`), con mi propuesta:
+
+    | BP | JC |
+    |---|---|
+    | `function f()`, sin tipo | `function void f() { … }`, el `void` de C# |
+    | `function Medida(v: double := 0.0d)`, el constructor | `function Medida(double v = 0.0) { … }`: sin tipo, como en C# |
+    | `function ~Medida()`, el destructor | `function ~Medida() { … }` |
+    | `public final native function …` | igual: los modificadores, delante de `function` |
+    | `function event pulsado()` | `function event void pulsado() { … }` |
+    | `function par(): (integer, string)` | `function (int, string) par() { … }` |
+    | sin cuerpo: la `native` externa de un pack, la función de un `module interface` | con `;` en vez del bloque: `public native function int abrir(string n);` |
+    | `function Medida.crear()`, la de la clase | con las clases: como en BP (`function Medida Medida.crear()`) o con el `static` de C# |
+
+    Sin tipo, y con un nombre que no es el de la clase, el error lo dice: «falta el tipo; si no devuelve nada,
+    `void`».
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
