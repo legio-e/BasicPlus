@@ -544,6 +544,51 @@ mi propuesta: manda lo de aquí.
    - `else if` es el `elseif` de BP: un `else` seguido de un `if` entra en la cadena (`elseIfs`). El `if` que en BP va
      dentro de un `else` sin ser un `elseif` se escribe en JC con llaves: `else { if (…) … }`.
    - El escritor de JC pone las llaves siempre, salvo en el `if` de una línea.
+9. **El `while` y el `do … while`, los de C#** (17-oct):
+
+   ```
+   whilestmt   ::= 'while' '(' condicion ')' stmt
+   dowhilestmt ::= 'do' stmt 'while' '(' condicion ')' ';'
+   ```
+
+   **Con el árbol de BP:**
+   - `while (c) s`, sin llaves, es el `while` de una línea de BP; con llaves, el de varias líneas, como en el `if`.
+   - `do { … } while (c);` es el `do … loop c` de BP, que también se repite mientras `c` se cumpla. El `do` de BP no
+     tiene forma de una línea, así que el escritor de JC le pone siempre las llaves.
+   - ❓ **El `do … loop` de BP sin condición**, que se repite hasta un `break`, no existe en C#. En el corpus no hay
+     ninguno: los tres `do` que hay llevan condición. Mi recomendación: que JC no lo tenga, y que el traductor lo diga,
+     con su línea, si un programa de BP lo usa. En JC, el bucle sin fin es `while (true)`.
+   - **El `continue` dentro de un `do`:** en C# va a la condición, y en el C del AOT también; en el intérprete de BP
+     vuelve arriba sin mirarla. Es un fallo de BP, `#699`. Cuando se arregle, el `do … while` de JC será el de C#.
+10. **`break`, `continue` y `return`, sin cambios, como en C#** (17-oct): `break;` · `continue;` · `return;` ·
+    `return x;` · `return (a, b);`, la tupla como en C#.
+11. **El `for`, el de C, de momento con una asignación, una condición y un incremento** (17-oct):
+    `for (asignación; condición; incremento)`.
+
+    **El `for` de BP es un contador** (`emitFor`, `MivmEmitter.java:3609`):
+    - declara él su variable, siempre `integer`;
+    - el límite es inclusivo y se evalúa una vez, antes de empezar;
+    - el paso decide si sube o baja: si es una constante, al compilar; si es una expresión, se evalúa una vez y su signo
+      decide al ejecutar;
+    - y el `continue` va al paso (`#548`).
+
+    El de C, en cambio, evalúa la condición y el incremento en cada vuelta, y pueden ser cualquier cosa.
+
+    ❓ **Mi propuesta:** que el `for` de JC sea el de BP con la ropa de C, sólo con estas formas.
+
+    | JC | BP |
+    |---|---|
+    | `for (int i = a; i <= b; i++)` | `for i := a to b do` |
+    | `for (int i = a; i <= b; i += 2)` | `for i := a to b step 2 do` |
+    | `for (int i = a; i >= b; i--)` | `for i := a to b step -1 do` |
+    | `for (int i = a; i >= b; i -= 2)` | `for i := a to b step -2 do` |
+
+    - El paso es un número, y la condición va con él: `<=` si sube, `>=` si baja.
+    - Lo demás es un error que lo dice: `i < n`, otra condición u otro incremento, o un paso en una variable. El mensaje:
+      «el `for` de JC cuenta como el de BP; para lo demás, `while`».
+    - Lo que BP tiene y JC no, de momento: el paso en una variable. Sólo sale en tres samples de prueba (`ForStep`,
+      `ContinueFor` y `errores/StepCero`). En el corpus hay 39 `for`: 21 numéricos y 18 `for … in`.
+    - El `for x in lista` de BP necesitará su forma; la de C# es `foreach (var x in lista)`.
 
 ### Lo que choca entre BP y JC, para más adelante
 

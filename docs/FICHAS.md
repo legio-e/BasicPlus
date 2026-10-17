@@ -6983,6 +6983,25 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
 
+#### 🔵 `#699` — `continue` dentro de un `do … loop c` vuelve arriba sin mirar la condición; el AOT, en C, sí la mira: el mismo bucle da distinto si la función es `native` (abierta el 17-oct, al decidir el `do … while` de JC, `#698`; preexistente)
+
+- **Medido** (17-oct, una sonda en el scratchpad, las dos VMs iguales): `do` … `if k >= 3 then continue` … `loop k < 3`
+  no termina; con un tope de vueltas, -1. El mismo bucle con `while k < 3 do` sale con 3.
+- **La causa:** `emitDoLoop` (`MivmEmitter.java:3594`) apila `LoopLabels(top, end)`. El `continue` salta a `top`, el
+  principio del cuerpo, y no pasa por la condición, que está al final.
+- **El AOT** traduce el bucle a `do { … continue; … } while (k < 3);` (`AotCEmitter.java:1689`). En C, ese `continue`
+  va a la condición, así que la nativa saldría con 3. Lo dice la regla de C: la nativa no se ha ejecutado. Hacer
+  `native` una función le cambia el resultado.
+- **La regla de C, Java y C# es la del AOT**, y es la que pide el manual (§7.5, *«`continue` salta a la próxima
+  iteración»*): la vuelta siguiente de un `do` sólo existe si la condición se cumple.
+- **Por qué no salió antes:** el corpus tiene tres `do … loop`, y sólo uno con `continue` (`samples/ContinueFor.bp`,
+  `switchEnDo`). Ese `continue` llega en una vuelta en que la condición aún se cumple, y con eso las dos reglas dan lo
+  mismo. `#548` (24-sep) dio el `do … loop` por bueno; la vuelta que distingue las dos reglas no está en el corpus.
+- **El arreglo, a decidir (Eduardo).** El de `#548` para el `for`: el `continue` del `do` salta a una etiqueta nueva,
+  justo antes de la condición; sin condición, a la de arriba. Y en el corpus, un sample que distinga las dos reglas. El
+  `.mod` de `ContinueFor` cambiará sin que cambie su salida.
+- **Para JC importa:** su `do … while` es el de C#.
+
 #### 💡 `#698` — V8, idea: JC, BasicPlus con camisa de Java y C# (abierta el 17-oct; **el análisis del coste, hecho el mismo día**; la sintaxis, por decidir)
 
 Eduardo, 17-oct: *«es nuestro Basic Plus con una camisa diferente. Así que el AST es el mismo pero necesitamos un
