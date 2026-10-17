@@ -682,7 +682,8 @@ mi propuesta: manda lo de aquí.
     **Decidido** (mi propuesta; Eduardo, conforme): el `print` sin salto también para BP, porque también le sirve (un
     aviso antes de leer, el progreso en una sola línea). Un `;` al final no salta de línea, como en el BASIC clásico (en
     el corpus no hay ninguno), y una instrucción nueva en la VM saca la línea sin el salto. Así, el `print(a, b);` de
-    JC es el `print a; b;` de BP. En `FICHAS`, `#700`.
+    JC es el `print a; b;` de BP. En `FICHAS`, `#700`. Es un cambio de BP: de momento, una posible mejora (abajo, «Los
+    cambios de BP que salen de JC»).
 18. **La potencia, `**`** (Eduardo, 17-oct), y el `^` queda para el XOR, como en C#. Con el árbol de BP: `a ** b` es
     el `a ^ b` de BP, y `a ^ b` es el `a xor b`. La potencia, con su precedencia de BP, que es también la de Python:
     más fuerte que el menos (`-x ** 2` es `-(x ** 2)`) y asociativa por la derecha (`2 ** 3 ** 2` es `2 ** 9`).
@@ -722,15 +723,36 @@ mi propuesta: manda lo de aquí.
       que es el punto de código: `'a'` es 97, y `'é'`, 233. En C# serían un `char`; en JC, como en C, un entero.
       - BP no los tiene hoy: un `'` es «carácter inesperado» (`Lexer`). Añadirlos es sólo el lexer, y a BP también le
         sirven: en el corpus hay 10 comparaciones como `charCodeAt(s, 0) == 48`, que serían `== '0'`.
-      - ❓ **La forma escrita.** El árbol sólo guarda el valor (`IntLitExpr`), así que `'a'` volvería de la
-        traducción como `97`, igual que hoy `0xFF` vuelve como `255`. Mi propuesta: que el literal guarde cómo se
-        escribió (decimal, hexadecimal, binario o carácter), que los escritores lo respeten y que la comparación no
-        lo cuente. En el código de las placas, una máscara `0xFF00` que vuelve como `65280` se lee peor.
+      - **La forma escrita, una posible mejora** (abajo). El árbol sólo guarda el valor (`IntLitExpr`), así que `'a'`
+        vuelve de la traducción como `97`, igual que hoy `0xFF` vuelve como `255`. La mejora: que el literal guarde
+        cómo se escribió (decimal, hexadecimal, binario o carácter), que los escritores lo respeten y que la
+        comparación no lo cuente. En el código de las placas, una máscara `0xFF00` que vuelve como `65280` se lee peor.
     - Lo que C# tiene y BP no: los sufijos `u` y `m` (BP no tiene tipos sin signo de 32 y 64 bits ni `decimal`), y las
       cadenas `@"…"` y `$"…"`. En JC, de momento, error.
-    - ❓ **Las secuencias de escape** de C# que BP no tiene (`\u00e9`, `\x41`, `\a`, `\'`…), en las cadenas y en los
-      caracteres. BP sólo tiene `\n \t \r \\ \" \0`. Mi propuesta: añadirlas también a BP, que es sólo el lexer. Si
-      no, un texto de JC con un carácter de control no se podría escribir en BP.
+    - **Las secuencias de escape** de C# que BP no tiene (`\u00e9`, `\x41`, `\a`, `\'`…), en las cadenas y en los
+      caracteres. BP sólo tiene `\n \t \r \\ \" \0`. Las lee el lexer de JC. Añadirlas
+      también a BP, que es sólo el lexer, es una posible mejora (abajo); mientras, si un texto de JC lleva un carácter
+      que BP no sabe escribir, el traductor lo dice.
+
+### Los cambios de BP que salen de JC: posibles mejoras, todavía no
+
+Eduardo, 17-oct: *«De momento todos los cambios de BP los dejamos como posibles mejoras pero prefiero no
+implementarlos todavía para no mezclar demasiados cambios.»* La primera versión de JC es sólo frontend, sobre el BP de
+hoy. Lo que haría falta en BP, y lo que hace JC mientras:
+
+| el cambio en BP | sale de | mientras, en JC |
+|---|---|---|
+| `#699`, el `continue` de un `do … loop`: un fallo | 9 | el `continue` de su `do … while` es el de BP: vuelve arriba sin mirar la condición |
+| `#700`, el `print` sin salto (y su instrucción en la VM) | 17 | ❓ un `print` tiene que acabar con `"\n"`, que es el salto de BP |
+| los caracteres, `'a'` | 19 | los lee el lexer de JC; en BP se escriben como su número |
+| las secuencias de escape de C# | 19 | las lee el lexer de JC; lo que BP no sabe escribir, el traductor lo dice |
+| que un literal guarde cómo se escribió | 19 | `0xFF` y `'a'` vuelven como `255` y `97` |
+| el `foreach` sobre listas | 16 | sólo arrays |
+| los demás compuestos (`*=`, `/=`…) | 15 | no están |
+
+**El `print`, mi propuesta para mientras:** el último argumento tiene que ser `"\n"`, y es el salto que BP pone
+siempre. Un `print` de JC sin él da un error que lo dice: «BP aún no imprime sin saltar de línea (`#700`)». Cuando se
+haga `#700`, el error desaparece y nada más cambia.
 
 ### Lo que choca entre BP y JC, para más adelante
 

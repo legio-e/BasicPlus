@@ -6983,8 +6983,11 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
 
-#### 💡 `#700` — BP: el `print` sin salto, con un `;` al final, y una instrucción nueva en la VM que saca la línea sin el salto (abierta el 17-oct, de JC, `#698`; **decidido el mismo día**, por hacer)
+#### 💡 `#700` — BP: el `print` sin salto, con un `;` al final, y una instrucción nueva en la VM que saca la línea sin el salto (abierta el 17-oct, de JC, `#698`; decidido el mismo día; **una posible mejora, todavía no**, Eduardo)
 
+- **Todavía no** (Eduardo, 17-oct): *«De momento todos los cambios de BP los dejamos como posibles mejoras pero
+  prefiero no implementarlos todavía para no mezclar demasiados cambios.»* Mientras, un `print` de JC acaba con `"\n"`
+  (la propuesta, en `V8_IDEAS` §E2, «Los cambios de BP que salen de JC»).
 - **Por qué:** el `print` de JC no salta de línea solo (Eduardo: *«El CR y LN no se añaden de forma automática, hay
   que indicarlos»*). En BP no hay forma de escribir en la consola sin saltar: el `print` pone siempre el salto, también
   con un `;` al final (medido el 17-oct, `V8_IDEAS` §E2, punto 17). También le sirve a BP: un aviso antes de leer, o
@@ -7021,6 +7024,8 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
   justo antes de la condición; sin condición, a la de arriba. Y en el corpus, un sample que distinga las dos reglas. El
   `.mod` de `ContinueFor` cambiará sin que cambie su salida.
 - **Para JC importa:** su `do … while` es el de C#.
+- **De momento no se arregla** (Eduardo, 17-oct: los cambios de BP, como posibles mejoras, más adelante, para no
+  mezclar demasiados cambios). Mientras, el `continue` del `do … while` de JC es el de BP.
 
 #### 💡 `#698` — V8, idea: JC, BasicPlus con camisa de Java y C# (abierta el 17-oct; **el análisis del coste, hecho el mismo día**; la sintaxis, por decidir)
 
