@@ -817,6 +817,12 @@ mi propuesta: manda lo de aquí.
       todas es la única línea del cuerpo. Esta forma las cubre todas.
     - Un `inline` en medio de otras sentencias, que BP admite, no tiene forma en JC: el traductor lo dice. En el
       corpus no hay ninguno.
+27. **Las anotaciones, las de BP** (Eduardo, 17-oct: *«no recuerdo como eran en C#, pero si no las de BP ya están
+    bien»*): `@BD{ tabla = "medidas", clave }`, delante de la declaración, como en BP; el mismo árbol, sin traducir
+    nada.
+    - En C# son atributos entre corchetes (`[Table("medidas")]`, `[Key]`), y en Java, `@Table(name = "medidas")`.
+      Ninguno admite el `clave` suelto de BP.
+    - La de BP no choca con nada en JC: delante de una declaración, esa llave no puede ser un bloque.
 
 ### Los cambios de BP que salen de JC: posibles mejoras, todavía no
 
