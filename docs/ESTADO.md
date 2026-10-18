@@ -65,8 +65,10 @@
 > Medido sin la ventana: el jar del IDE lleva lo nuevo y una sonda tokeniza JC. El frontend, 311 pruebas sin fallos.
 >
 > **Para la siguiente sesión:**
-> - **Eduardo prueba el IDE con la ventana.** El jar es `BpIde/target/BpIde-7.0.jar`, del 18-oct (13:14), con el
->   frontend instalado en `~/.m2` a la misma hora. Si hay que rehacerlo, con el IDE cerrado;
+> - **el IDE, probado por Eduardo con la ventana** el mismo día: `JsonDemo` traducido a JC, guardado como
+>   `samplesJC/JsonDemo.jc` (en el repositorio) y ejecutado en la placa, con la salida del `.bp`. El jar es
+>   `BpIde/target/BpIde-7.0.jar`, del 18-oct (13:14), con el frontend instalado en `~/.m2` a la misma hora. Si hay
+>   que rehacerlo, con el IDE cerrado;
 > - **una trampa nueva:** al comparar `.mod` de dos compiladores distintos, `#704` puede dar un falso distinto en un
 >   programa con tuplas de otro módulo.
 

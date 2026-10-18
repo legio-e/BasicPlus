@@ -7222,10 +7222,12 @@ en `V8_IDEAS.md` §E2:
   - el depurador no necesitaba nada: los puntos de parada van por el nombre del fichero y la línea, y el `.dbg` dice
     el `.jc`;
   - medido sin la ventana: el jar del IDE lleva lo nuevo (mirado dentro), y una sonda tokeniza JC con el
-    `JcTokenMaker`. Probarlo con la ventana es cosa de Eduardo.
-- **Lo siguiente:** lo que salga al probar el IDE. Y lo que queda para más adelante: que un módulo importe a otro
-  escrito en `.jc`; `#704`; los comentarios en la traducción; la guía del IDE y el manual de JC, si JC sube al final
-  de V8.
+    `JcTokenMaker`;
+  - **y con la ventana, por Eduardo, el mismo día:** `JsonDemo` traducido a JC en el IDE, guardado como
+    `samplesJC/JsonDemo.jc` (ahora en el repositorio) y ejecutado en la placa (COM22), `exit 0`. Su salida es la del
+    `.bp`, las 30 líneas, también en las dos VMs del PC.
+- **Lo siguiente**, para más adelante: que un módulo importe a otro escrito en `.jc`; `#704`; los comentarios en la
+  traducción; la guía del IDE y el manual de JC, si JC sube al final de V8.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 

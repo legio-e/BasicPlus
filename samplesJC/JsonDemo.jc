@@ -1,0 +1,46 @@
+module JsonDemo
+{
+   import Json;
+
+   function void Main()
+   {
+      println("--- construcción ---");
+      Json.JsonObject root = new Json.JsonObject();
+      root.put("name", new Json.JsonString("Alice"));
+      root.put("age", new Json.JsonInt(30));
+      root.put("active", new Json.JsonBool(true));
+      root.put("score", new Json.JsonFloat(3.14f));
+      root.put("address", new Json.JsonNull());
+      Json.JsonArray likes = new Json.JsonArray();
+      likes.add(new Json.JsonString("java"));
+      likes.add(new Json.JsonString("basicplus"));
+      root.put("likes", likes);
+      println("  build OK");
+      println("--- writeJson (compacto) ---");
+      println(Json.writeJson(root));
+      println("--- writeJsonPretty ---");
+      println(Json.writeJsonPretty(root));
+      println("--- roundtrip ---");
+      string src = Json.writeJson(root);
+      Json.JsonValue v = Json.parseJson(src);
+      println("  re-serializado: " + Json.writeJson(v));
+      println("--- accesores ---");
+      Json.JsonObject o = v.asObject();
+      println("  name    = " + o.getString("name"));
+      println("  age     = " + intToString(o.getInt("age")));
+      println("  active  = " + boolToString(o.getBool("active")));
+      println("  score   = " + floatToString(o.getFloat("score")));
+      println("  likes0  = " + o.getArray("likes").at(0).asString());
+      println("  missing = " + o.getStringOr("nope", "(default)"));
+      println("  ageOr   = " + intToString(o.getIntOr("age", -1)));
+      println("--- escapes ---");
+      Json.JsonObject weird = new Json.JsonObject();
+      weird.put("quote", new Json.JsonString("She said \"hi\""));
+      weird.put("newline", new Json.JsonString("a\nb"));
+      weird.put("tab", new Json.JsonString("col1\tcol2"));
+      string rendered = Json.writeJson(weird);
+      println("  rendered:  " + rendered);
+      println("  roundtrip: " + Json.writeJson(Json.parseJson(rendered)));
+      println("--- fin ---");
+   }
+}
