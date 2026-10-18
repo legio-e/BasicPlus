@@ -85,10 +85,17 @@ class JcParserTest {
             "      int a = 3, b = 3;\n" +
             "      const int K = 2;\n" +
             "      int c = ((a % b)) + K;\n" +
-            "      print(a, \" \", b, c, \"\\n\");\n"));
+            "      println(a, \" \", b, c);\n"));
         assertNull(ComparaAst.primeraDiferenciaJc(a, b));
         // …y en el modo de BP, las mismas cosas sí cuentan.
         assertNotNull(ComparaAst.primeraDiferencia(a, b));
+        // #703: un "\n" escrito no es el salto. Imprime los mismos bytes, pero no cierra la línea del hilo.
+        Ast.ModuleNode c = JcParser.leer(jcMainPrivada(
+            "      int a = 3, b = 3;\n" +
+            "      const int K = 2;\n" +
+            "      int c = ((a % b)) + K;\n" +
+            "      print(a, \" \", b, c, \"\\n\");\n"));
+        assertNotNull(ComparaAst.primeraDiferenciaJc(a, c));
     }
 
     @Test
@@ -113,7 +120,9 @@ class JcParserTest {
             "      i++;\n" +
             "      print(i);\n" +
             "      for (int k = 9; k >= 1; k -= 2) print(k);\n" +
-            "      if (i > 0) i = 1; else if (i < 0) i = 2; else i = 3;\n"));
+            "      if (i > 0) i = 1; else if (i < 0) i = 2; else i = 3;\n" +
+            "      println(i, \"x\");\n" +
+            "      println();\n"));
         Ast.FuncDef f = (Ast.FuncDef) m.defs.get(0);
         Ast.CallExpr nuevo = (Ast.CallExpr) ((Ast.VarDecl) f.body.get(0)).init;
         assertTrue(nuevo.conNew && !nuevo.esConversion);
@@ -134,6 +143,10 @@ class JcParserTest {
         assertEquals(1, si.elseIfs.size());
         assertNotNull(si.else_);
         assertTrue(!si.isSingleLine, "con else no es el if de una línea de BP");
+        Ast.PrintStmt ln = (Ast.PrintStmt) f.body.get(6);
+        assertEquals(2, ln.items.size());
+        assertTrue(!ln.sinSalto(), "el println es el print de BP con su salto (#703)");
+        assertTrue(((Ast.PrintStmt) f.body.get(7)).items.isEmpty(), "println() es el print vacío de BP: sólo el salto");
         // El import Core implícito, al final, como el parser de BP.
         assertTrue(m.imports.get(m.imports.size() - 1).implicito);
         assertTrue(m.escritoEnJc, "el análisis comprueba el new y el (T) x de un módulo de JC");

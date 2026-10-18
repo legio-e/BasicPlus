@@ -697,6 +697,13 @@ mi propuesta: manda lo de aquí.
       bytes de la salida son los que tienen que ser.
     - Lo que no da: que un trozo salga en el momento, sin esperar al resto de la línea (un aviso antes de leer por la
       UART, un progreso con puntos). Para eso haría falta una instrucción nueva en la VM: más adelante, si hace falta.
+
+    **Y el `println`** (Eduardo, 18-oct, al salir `#703`): *«añadimos una función println(). La función internamente
+    llama a print pero añade un '\n' al final.»* `println(a, b);` es el `print a; b` de BP, con su salto: cierra la
+    línea del hilo, y la línea sale en su momento y entera. `println();` es sólo el salto, el `print` vacío de BP. Un
+    `"\n"` dentro de un `print` es un carácter más: no cierra la línea, y lo que haya en ella espera al siguiente
+    `println` o al final del hilo. El traductor escribe `println(…)` donde BP salta y `print(…)` donde no. `println`
+    es palabra reservada de JC, como `print`: se pierde ese nombre, que no usa ningún `.bp` del repositorio.
 18. **La potencia, `**`** (Eduardo, 17-oct), y el `^` queda para el XOR, como en C#. Con el árbol de BP: `a ** b` es
     el `a ^ b` de BP, y `a ^ b` es el `a xor b`. La potencia, con su precedencia de BP, que es también la de Python:
     más fuerte que el menos (`-x ** 2` es `-(x ** 2)`) y asociativa por la derecha (`2 ** 3 ** 2` es `2 ** 9`).
@@ -983,12 +990,12 @@ module Ejemplo
       string s;
       List l = new List();
       (n, s) = par();
-      if (n > 0 && !(s == "")) print("si", "\n");
+      if (n > 0 && !(s == "")) println("si");
       for (int i = 1; i <= MAX; i += 2)
       {
          cuenta += i;
       }
-      foreach (var x in [1, 2, 3]) print(x, "\n");
+      foreach (var x in [1, 2, 3]) println(x);
       do
       {
          n -= 1;
@@ -999,9 +1006,9 @@ module Ejemplo
       }
       catch (RuntimeError e)
       {
-         print(e.msg, "\n");
+         println(e.msg);
       }
-      print("cuenta: ", cuenta, " pi: ", PI, "\n");
+      println("cuenta: ", cuenta, " pi: ", PI);
    }
 }
 ```
@@ -1190,7 +1197,8 @@ código. El `.mod` no es el mismo, porque el `print` de JC es otro árbol. Da 13
 **Los 17 son `#703`:** en JC el salto es un trozo de cadena, `"\n"`, y la VM sólo cierra la línea del hilo con el salto
 del `print` de BP. Lo que imprime un programa JC sale al acabar el hilo: medido, un bucle que imprime cada 300 ms saca
 sus cinco líneas juntas al final. Con un prototipo en el emisor (el último `"\n"` literal es el salto), `check-jc` da
-147 PASS. Las tres maneras de arreglarlo y lo que cuesta cada una, en la ficha. La decisión, de Eduardo.
+147 PASS. Las tres maneras de arreglarlo y lo que cuesta cada una, en la ficha. Eduardo eligió otra: el `println`
+(punto 17), el `print` de BP con su salto. Con él, `check-jc` da 147 PASS, sin tocar la VM ni el emisor.
 
 **Las otras redes:**
 - el corpus BP, compilado otra vez: los mismos 441 `.mod`. Salió `#704`, que no es de JC: el orden de las clases de
@@ -1224,3 +1232,13 @@ sus cinco líneas juntas al final. Con un prototipo en el emisor (el último `"\
     escriben por el `stdout` crudo. Hace falta una entrada pública que devuelva el texto, o el error, sin salir;
   - por decidir con Eduardo: qué hace «traducir», si un buffer nuevo sin guardar o un fichero al lado. Y un proyecto
     con `X.bp` y `X.jc` a la vez no compila.
+
+**Hecho el 18-oct.** Eduardo: la traducción, en una pestaña nueva sin guardar.
+- Los `.jc` se abren, se guardan y salen en el árbol del proyecto. Al guardar sin extensión, el IDE pone la del
+  lenguaje del editor.
+- El coloreado (`JcTokenMaker`) y el plegado por llaves (`CurlyFoldParser`) van por la extensión del fichero.
+- Las órdenes de ejecutar y depurar compilan el `<main>.jc`; con los dos, lo dicen antes de tocar nada.
+- Edit → «Traducir a JC» y «Traducir a BP», con `Traductor`, la entrada pública del frontend.
+- El depurador, sin tocar.
+- Medido sin la ventana: lo nuevo está dentro del jar del IDE, y una sonda tokeniza JC con el `JcTokenMaker`. La prueba
+  con la ventana, de Eduardo.

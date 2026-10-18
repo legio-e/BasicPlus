@@ -65,7 +65,7 @@ final class JcLexer {
             "event", "static", "void", "var", "new", "is", "base", "field",
             "if", "else", "while", "do", "for", "foreach", "in", "break", "continue", "return",
             "switch", "case", "default", "parallel", "try", "catch", "finally", "throw", "raise",
-            "print", "inline", "this", "super", "true", "false", "null",
+            "print", "println", "inline", "this", "super", "true", "false", "null",
             "int", "long", "float", "double", "bool", "string", "byte", "sbyte", "short", "ushort"));
 
     /** Los signos de dos caracteres, que se miran antes que los de uno. */

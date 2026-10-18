@@ -6999,7 +6999,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
   la primera aparición en el árbol, o el del nombre. Cambia el `.mod` de los programas con tuplas de otro módulo, no
   lo que hacen.
 
-#### 🔵 `#703` — JC: el salto escrito, `"\n"`, no cierra la línea del hilo, y lo que imprime un programa JC sale cuando acaba el hilo (abierta el 18-oct, con la prueba por la salida de JC, `check-jc`, `#698`; en BP, lo mismo con un `print "x\n";`, `#700`; **la decisión, de Eduardo**)
+#### ✅ `#703` — JC: el salto escrito, `"\n"`, no cierra la línea del hilo, y lo que imprime un programa JC sale cuando acaba el hilo (abierta el 18-oct, con la prueba por la salida de JC, `check-jc`, `#698`; en BP, lo mismo con un `print "x\n";`, `#700` · **CERRADA el mismo día** con el `println` que decidió Eduardo, el commit de `#703`)
 
 - **Medido:**
   - un bucle que imprime y espera 300 ms, cinco veces: en BP llega una línea cada 300 ms, en las dos VMs; en JC
@@ -7022,6 +7022,23 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
   - **C, una instrucción nueva:** al final de un `print` sin salto, la VM saca lo que haya en la línea del hilo. Cada
     `print` sale entero y en su momento, también un `print "Nombre: ";`. Pide un código de operación nuevo en las dos
     VMs y en el AOT. Deshace lo de §14.5 del manual: una línea armada con varios `print` ya no sale junta.
+- **Lo decidido** (Eduardo, 18-oct): ninguna de las tres. *«añadimos una función println(). La función internamente
+  llama a print pero añade un '\n' al final.»* En el árbol no hace falta nada nuevo: `println(a, b);` es el `print a; b`
+  de BP, con su `PRINT_NL`, y `println();` es el `print` vacío. Ni la VM ni el emisor cambian.
+- **Hecho:**
+  - JC: `println`, palabra reservada como `print` (se pierde ese nombre, que no usa ningún `.bp` del repositorio). Un
+    `print()` vacío sigue siendo un error, que ahora apunta a `println()`;
+  - el traductor escribe `println(…)` donde BP salta y `print(…)` donde no (`print a;`, `#700`);
+  - `ComparaAst`: el salto ya no es una pieza `"\n"`. Un `"\n"` escrito en un `print` es un carácter más, que no
+    cierra la línea, y la comparación los distingue (una prueba lo vigila);
+  - `V8_IDEAS` §E2, el punto 17, con el `println`, y el ejemplo del documento, que una prueba lee carácter a carácter.
+- **Medido:**
+  - el bucle que imprime cada 300 ms, escrito con `println`: llega una línea cada 300 ms en las dos VMs, como en BP;
+  - `check-jc`: **147 PASS, 0 FAIL y 3 SKIP**, los 3 lo acordado;
+  - las idas y vueltas, igual (433 y 254 EQUIVALENTE); el corpus compilado desde JC, igual (426, y `SqlDemoSd`
+    junto a su hermano); el frontend, 311 pruebas sin fallos.
+- **Lo que queda, a la vista:** un `print("…\n")` de JC deja su línea esperando hasta el siguiente `println` o el
+  final del hilo. Es lo decidido, y está en el punto 17.
 
 #### 🔵 `#702` — un `raise` dentro del `set` de una propiedad no compila: el análisis lo da por bueno y el emisor dice «Campo no encontrado en …: <evento>$dest» (abierta el 17-oct, al probar las clases de JC, `#698`; preexistente)
 
@@ -7193,8 +7210,22 @@ en `V8_IDEAS.md` §E2:
     - `check-jc` en `compat.sh`: cada sample del corpus, también escrito en JC, compilado y ejecutado en las dos VMs.
       Da 130 PASS: los 17 que fallan son `#703`;
   - las pruebas: `CompilaJcTest` (5) y una más en `JcParserTest`; el frontend, 309 sin fallos.
-- **Lo siguiente:** `#703`, que decide Eduardo, y el IDE: abrir, colorear, plegar por llaves, compilar y depurar `.jc`,
-  y traducir BP ↔ JC. El mapa de lo que toca está en `V8_IDEAS` §E2.
+- **`#703`, cerrada el mismo día** con el `println` (Eduardo): `check-jc`, 147 PASS.
+- **El IDE, el 18-oct** (Eduardo: la traducción, en una pestaña nueva sin guardar):
+  - abre, guarda y lista en el proyecto los `.jc`. Al guardar sin extensión, pone la del lenguaje del editor;
+  - el coloreado de JC (`JcTokenMaker`: comentarios de bloque entre líneas, escapes, caracteres) y el plegado por
+    llaves (`CurlyFoldParser`), según la extensión del fichero;
+  - Depurar, Ejecutar en ventana y Depurar en la placa compilan el `<main>.jc` del proyecto. Con `.bp` y `.jc` a la
+    vez, el IDE lo dice antes de tocar nada. `ProjectDialog` y el AOT del proyecto aceptan `.jc`;
+  - Edit → «Traducir a JC» y «Traducir a BP», con `Traductor`, una entrada nueva del frontend que devuelve el texto
+    sin salir del proceso ni escribir por la salida (`TraductorTest`);
+  - el depurador no necesitaba nada: los puntos de parada van por el nombre del fichero y la línea, y el `.dbg` dice
+    el `.jc`;
+  - medido sin la ventana: el jar del IDE lleva lo nuevo (mirado dentro), y una sonda tokeniza JC con el
+    `JcTokenMaker`. Probarlo con la ventana es cosa de Eduardo.
+- **Lo siguiente:** lo que salga al probar el IDE. Y lo que queda para más adelante: que un módulo importe a otro
+  escrito en `.jc`; `#704`; los comentarios en la traducción; la guía del IDE y el manual de JC, si JC sube al final
+  de V8.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 

@@ -578,6 +578,19 @@ public final class EscritorBp {
         return r;
     }
 
+    /** V8 #698 — el BP de un fichero, para quien lo pide desde dentro (`Traductor.aBp`, el IDE): de un `.jc`, su
+     *  traducción; de un `.bp`, el mismo reescrito. El texto, o por qué no. */
+    static Traductor.Resultado traducir(Path p) throws IOException {
+        String fuente = new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
+        Leido l = Main.esJc(p) ? leerJc(fuente) : leer(fuente);
+        if (l.modulo == null) return new Traductor.Resultado(null, "el original no se lee: " + l.error);
+        try {
+            return new Traductor.Resultado(escribir(l.modulo), null);
+        } catch (NoSoportado ns) {
+            return new Traductor.Resultado(null, ns.getMessage());
+        }
+    }
+
     /** --escribir-bp: el BP reescrito, por la salida; de un `.jc`, su traducción a BP. 0 = bien; 2 = no soportado;
      *  3 = el original no se lee. */
     static int escribirFichero(Path p) throws IOException {

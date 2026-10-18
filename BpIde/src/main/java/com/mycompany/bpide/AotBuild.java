@@ -350,7 +350,7 @@ public final class AotBuild {
                 ? soloEstos
                 : listBpFiles(sourceDir);
         if (bps.isEmpty()) {
-            log.accept("[aot] no hay .bp bajo " + sourceDir);
+            log.accept("[aot] no hay .bp ni .jc bajo " + sourceDir);
             return res;
         }
 
@@ -806,14 +806,14 @@ public final class AotBuild {
         return System.getProperty("os.name", "").toLowerCase().contains("win");
     }
 
-    /** Lista recursiva de .bp bajo dir (vacía si dir no existe). */
+    /** Lista recursiva de los fuentes bajo dir, .bp y .jc (V8 #698); vacía si dir no existe. */
     private static List<Path> listBpFiles(Path dir) {
         List<Path> out = new ArrayList<>();
         if (dir == null || !Files.isDirectory(dir)) return out;
         try {
             Files.walk(dir)
                  .filter(Files::isRegularFile)
-                 .filter(p -> p.getFileName().toString().endsWith(".bp"))
+                 .filter(p -> p.getFileName().toString().endsWith(".bp") || p.getFileName().toString().endsWith(".jc"))
                  .forEach(out::add);
         } catch (IOException ignore) { /* devolvemos lo que haya */ }
         return out;

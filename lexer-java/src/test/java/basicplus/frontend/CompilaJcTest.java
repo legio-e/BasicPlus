@@ -47,9 +47,9 @@ class CompilaJcTest {
         "      Contador c = new Contador(10);",
         "      for (int i = 1; i <= 3; i++)",
         "      {",
-        "         print(\"vuelta \", i, \": \", c.siguiente(), \"\\n\");",   // la línea 22
+        "         println(\"vuelta \", i, \": \", c.siguiente());",   // la línea 22
         "      }",
-        "      print(\"fin\\n\");",                                       // la 24
+        "      println(\"fin\");",                                    // la 24
         "   }",
         "}", "");
 
@@ -183,7 +183,7 @@ class CompilaJcTest {
     void marcasQueCasan(@TempDir Path tmp) throws Exception {
         Object[] r = compila(tmp, "Marcas", "Marcas.jc", marcas(
             "Animal a = new Perro(\"toby\"); Perro p = (Perro) a; Perro q = new Perro();"
-            + " print(p.quien(), \" \", q.quien(), \" \", doble((int) 2.5), \"\\n\");"));
+            + " println(p.quien(), \" \", q.quien(), \" \", doble((int) 2.5));"));
         assertTrue((Boolean) r[0], (String) r[1]);
         assertEquals("toby rex 4\n", corre((Path) r[2], "Marcas"));
     }

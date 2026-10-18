@@ -710,7 +710,7 @@ final class JcParser {
         if (es("foreach"))  { out.add(paraCada()); return; }
         if (es("try"))      { out.add(intento()); return; }
         if (es("return"))   { out.add(devolver()); return; }
-        if (es("print"))    { out.add(imprime()); return; }
+        if (es("print") || es("println")) { out.add(imprime()); return; }
         if (es("const"))    { out.add(constante(false, null)); return; }
         if (es("switch"))   { out.add(segun()); return; }
         if (es("parallel")) { out.add(paralelo()); return; }
@@ -1034,17 +1034,22 @@ final class JcParser {
     }
 
     /** El `print` de JC: piezas sin nada entre ellas y sin salto (punto 17). Es el `print a; b;` de BP, con el `;` al
-     *  final (#700). */
+     *  final (#700). El `println` (Eduardo, 18-oct, #703), lo mismo con el salto al final: el `print a; b` de BP, que
+     *  cierra la línea del hilo y la saca en su momento; `println()`, sólo el salto. */
     private PrintStmt imprime() {
-        Tok t = espera("print");
+        boolean conSalto = es("println");
+        Tok t = avanza();
         espera("(");
-        if (es(")")) throw error("un print vacío no imprime nada; el salto de línea se escribe: print(\"\\n\");");
         List<PrintItem> items = new ArrayList<>();
-        items.add(new PrintItem(PrintSep.NONE, expresion()));
-        while (acepta(",")) items.add(new PrintItem(PrintSep.SEMICOLON, expresion()));
+        if (es(")")) {
+            if (!conSalto) throw error("un print vacío no imprime nada; el salto de línea es println();");
+        } else {
+            items.add(new PrintItem(PrintSep.NONE, expresion()));
+            while (acepta(",")) items.add(new PrintItem(PrintSep.SEMICOLON, expresion()));
+        }
         espera(")");
         espera(";");
-        items.add(new PrintItem(PrintSep.SEMICOLON, null));
+        if (!conSalto) items.add(new PrintItem(PrintSep.SEMICOLON, null));
         return new PrintStmt(items, t.linea, t.columna);
     }
 

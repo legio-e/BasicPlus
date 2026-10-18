@@ -323,6 +323,11 @@ public class FrmMain extends javax.swing.JFrame
         atmf.putMapping("text/bp", "com.mycompany.bpide.BpTokenMaker");
         // IDE-5 — folding por bloques de BP (function/class/if/while/try/...).
         FoldParserManager.get().addFoldParserMapping("text/bp", new BpFoldParser());
+        // V8 #698 — JC: su coloreado, y el plegado por llaves (el de RSTA para C y Java). El estilo de cada editor,
+        // por la extensión del fichero (estiloPara).
+        atmf.putMapping("text/jc", "com.mycompany.bpide.JcTokenMaker");
+        FoldParserManager.get().addFoldParserMapping("text/jc",
+                new org.fife.ui.rsyntaxtextarea.folding.CurlyFoldParser());
 
         // -- Editor inicial: tab "(sin abrir)" reciclable.
         //    El primer openFileInEditor() reusará este tab si su Path
@@ -493,6 +498,14 @@ public class FrmMain extends javax.swing.JFrame
         recentFilesMenu = new javax.swing.JMenu("Recent Files");
         jMenu1.insert(recentFilesMenu, 3);   // New, Load, Save, [Recent], sep, Exit
         rebuildRecentFilesMenu();
+
+        // -- Menú Edit: traducir entre BP y JC (V8 #698), a una pestaña nueva sin guardar. --
+        JMenuItem miAJc = new JMenuItem("Traducir a JC");
+        miAJc.addActionListener(e -> onTraducir(true));
+        jMenu2.add(miAJc);
+        JMenuItem miABp = new JMenuItem("Traducir a BP");
+        miABp.addActionListener(e -> onTraducir(false));
+        jMenu2.add(miABp);
 
         // -- Menú Project: New Project, Open Project, Close Project. --
         setupProjectMenu();
@@ -824,7 +837,7 @@ public class FrmMain extends javax.swing.JFrame
      *  extensión; lo que no esté en la lista se abre con la app del sistema. */
     private static boolean looksLikeTextFile(java.nio.file.Path p) {
         String n = p.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
-        return n.endsWith(".bp") || n.endsWith(".txt") || n.endsWith(".json")
+        return n.endsWith(".bp") || n.endsWith(".jc") || n.endsWith(".txt") || n.endsWith(".json")
             || n.endsWith(".csv") || n.endsWith(".md") || n.endsWith(".cfg")
             || n.endsWith(".xml") || n.endsWith(".html") || n.endsWith(".htm")
             || n.endsWith(".log") || n.endsWith(".ini") || n.endsWith(".bpi")
@@ -1286,6 +1299,7 @@ public class FrmMain extends javax.swing.JFrame
         javax.swing.tree.DefaultMutableTreeNode sources =
                 new javax.swing.tree.DefaultMutableTreeNode(new ProjectNode("Sources", null));
         addFilesUnder(sources, srcDir, ".bp");
+        addFilesUnder(sources, srcDir, ".jc");   // V8 #698
         root.add(sources);
 
         // Resources — H12 (#260): cualquier fichero, recursivo; el label
@@ -1355,9 +1369,10 @@ public class FrmMain extends javax.swing.JFrame
              .filter(p -> p.getFileName().toString().endsWith(ext))
              .sorted()
              .forEach(p -> {
-                 // Solo hacemos clickable los .bp (los .mod/.bpi se abren con disasm,
-                 // futura mejora).
-                 boolean openable = p.getFileName().toString().endsWith(".bp");
+                 // Solo hacemos clickable los fuentes, .bp y .jc (los .mod/.bpi se abren
+                 // con disasm, futura mejora).
+                 boolean openable = p.getFileName().toString().endsWith(".bp")
+                         || p.getFileName().toString().endsWith(".jc");
                  parent.add(new javax.swing.tree.DefaultMutableTreeNode(
                          new ProjectNode(p.getFileName().toString(),
                                  openable ? p : null)));
@@ -1384,6 +1399,89 @@ public class FrmMain extends javax.swing.JFrame
             if (ed == editorArea) updateCaretStatus();
         });
         return ed;
+    }
+
+    /** V8 #698 — el coloreado y el plegado del editor, por la extensión del fichero: JC (`.jc`) o BP (lo demás). */
+    private static String estiloPara(java.nio.file.Path f) {
+        return f != null && f.getFileName().toString().toLowerCase(java.util.Locale.ROOT).endsWith(".jc")
+                ? "text/jc" : "text/bp";
+    }
+
+    /** V8 #698 — el fuente del main del proyecto: `<sourceDir>/<main>.bp`, o el `.jc` si sólo está ése. La regla del
+     *  compilador (`Main.buildProject`); con los dos, {@link #mainDosVeces} lo dice antes. */
+    private java.nio.file.Path fuenteDelMain() {
+        java.nio.file.Path bp = java.nio.file.Paths.get(currentProject.sourceDir, currentProject.main + ".bp");
+        java.nio.file.Path jc = java.nio.file.Paths.get(currentProject.sourceDir, currentProject.main + ".jc");
+        return (!java.nio.file.Files.exists(bp) && java.nio.file.Files.exists(jc)) ? jc : bp;
+    }
+
+    /** V8 #698 — con el main en `.bp` y en `.jc` a la vez, el proyecto no adivina cuál: se dice, y no se compila
+     *  (como `Main.buildProject`). Va antes de tocar nada, al principio de cada orden. */
+    private boolean mainDosVeces() {
+        if (currentProject == null) return false;
+        java.nio.file.Path bp = java.nio.file.Paths.get(currentProject.sourceDir, currentProject.main + ".bp");
+        java.nio.file.Path jc = java.nio.file.Paths.get(currentProject.sourceDir, currentProject.main + ".jc");
+        if (!(java.nio.file.Files.exists(bp) && java.nio.file.Files.exists(jc))) return false;
+        JOptionPane.showMessageDialog(this,
+                "El main está dos veces, " + bp.getFileName() + " y " + jc.getFileName()
+                + ":\nel proyecto no sabe cuál compilar. Quita uno de los dos.",
+                "Proyecto", JOptionPane.WARNING_MESSAGE);
+        return true;
+    }
+
+    /** V8 #698 — Edit → Traducir a JC / a BP: guarda el fichero activo y abre su traducción en una pestaña nueva, sin
+     *  fichero (Eduardo, 18-oct). Lo que no se traduce lo dice la consola, con su motivo. Los comentarios no viajan:
+     *  el lexer de los dos lenguajes los tira. */
+    private void onTraducir(boolean aJc) {
+        if (editorArea.getText().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Editor vacío.", "Aviso", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        onSave();
+        if (currentFile == null) return;
+        final Path fuente = currentFile;
+        appendConsola("== traduciendo " + fuente.getFileName() + " a " + (aJc ? "JC" : "BP") + " ==\n");
+        new SwingWorker<basicplus.frontend.Traductor.Resultado, Void>() {
+            @Override
+            protected basicplus.frontend.Traductor.Resultado doInBackground() {
+                return aJc ? basicplus.frontend.Traductor.aJc(fuente) : basicplus.frontend.Traductor.aBp(fuente);
+            }
+
+            @Override
+            protected void done() {
+                basicplus.frontend.Traductor.Resultado r;
+                try {
+                    r = get();
+                } catch (Exception ex) {
+                    appendConsola("== la traducción falló: " + ex + " ==\n");
+                    return;
+                }
+                if (r.texto == null) {
+                    appendConsola("== no se traduce: " + r.error + " ==\n");
+                    return;
+                }
+                abrirTraduccion(r.texto, aJc, fuente);
+                appendConsola("== traducido, en una pestaña nueva sin guardar (los comentarios no viajan) ==\n");
+            }
+        }.execute();
+    }
+
+    /** La traducción, en una pestaña nueva sin fichero, con el coloreado de su lenguaje: al guardarla, la extensión
+     *  por defecto es la suya (onSave). */
+    private void abrirTraduccion(String texto, boolean aJc, Path fuente) {
+        RSyntaxTextArea ed = newEditorPane();
+        ed.setSyntaxEditingStyle(aJc ? "text/jc" : "text/bp");
+        ed.setText(texto);
+        ed.setCaretPosition(0);
+        JScrollPane sc = new RTextScrollPane(ed);
+        String nombre = fuente.getFileName().toString();
+        int punto = nombre.lastIndexOf('.');
+        String title = "(" + (punto > 0 ? nombre.substring(0, punto) : nombre) + (aJc ? ".jc" : ".bp") + ", sin guardar)";
+        jTabbedPane1.addTab(title, sc);
+        openFiles.put(sc, new OpenFile(ed, sc, null));
+        installTabCloseButton(sc, title);
+        jTabbedPane1.setSelectedComponent(sc);
+        refreshActiveTab();
     }
 
     /**
@@ -1514,6 +1612,7 @@ public class FrmMain extends javax.swing.JFrame
 
             if (recycle != null) {
                 recycle.file = file;
+                recycle.editor.setSyntaxEditingStyle(estiloPara(file));   // V8 #698: BP o JC
                 recycle.editor.setText(content);
                 recycle.editor.setCaretPosition(0);
                 setTabTitle(recycle.scroll, file.getFileName().toString());
@@ -1521,6 +1620,7 @@ public class FrmMain extends javax.swing.JFrame
             } else {
                 // 3) tab nuevo
                 RSyntaxTextArea ed = newEditorPane();
+                ed.setSyntaxEditingStyle(estiloPara(file));   // V8 #698: BP o JC
                 ed.setText(content);
                 ed.setCaretPosition(0);
                 JScrollPane sc = new RTextScrollPane(ed);
@@ -1935,6 +2035,7 @@ public class FrmMain extends javax.swing.JFrame
                     "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        if (mainDosVeces()) return;   // V8 #698
         onSave();
         if (currentFile == null) return;
 
@@ -1949,7 +2050,7 @@ public class FrmMain extends javax.swing.JFrame
         final Path bpFile;
         final Path outDir;
         if (currentProject != null) {
-            bpFile = java.nio.file.Paths.get(currentProject.sourceDir, currentProject.main + ".bp");
+            bpFile = fuenteDelMain();   // V8 #698: <main>.bp, o .jc
             outDir = java.nio.file.Paths.get(currentProject.outDir);
         } else {
             bpFile = currentFile;
@@ -2057,7 +2158,7 @@ public class FrmMain extends javax.swing.JFrame
      */
     private void onLoad() {
         JFileChooser fc = new JFileChooser();
-        fc.setFileFilter(new FileNameExtensionFilter("BasicPlus (*.bp)", "bp"));
+        fc.setFileFilter(new FileNameExtensionFilter("BasicPlus (*.bp, *.jc)", "bp", "jc"));   // V8 #698: o JC
         File initial = initialChooserDir();
         if (initial != null) fc.setCurrentDirectory(initial);
         if (fc.showOpenDialog(this) != JFileChooser.APPROVE_OPTION) return;
@@ -2178,15 +2279,19 @@ public class FrmMain extends javax.swing.JFrame
 
         if (of.file == null) {
             JFileChooser fc = new JFileChooser();
-            fc.setFileFilter(new FileNameExtensionFilter("BasicPlus (*.bp)", "bp"));
+            fc.setFileFilter(new FileNameExtensionFilter("BasicPlus (*.bp, *.jc)", "bp", "jc"));
             File initial = initialChooserDir();
             if (initial != null) fc.setCurrentDirectory(initial);
             if (fc.showSaveDialog(this) != JFileChooser.APPROVE_OPTION) return;
             File chosen = fc.getSelectedFile();
-            if (!chosen.getName().toLowerCase().endsWith(".bp")) {
-                chosen = new File(chosen.getAbsolutePath() + ".bp");
+            // V8 #698 — sin extensión, la del lenguaje del editor: una traducción a JC se guarda como .jc.
+            String nombre = chosen.getName().toLowerCase();
+            if (!nombre.endsWith(".bp") && !nombre.endsWith(".jc")) {
+                boolean esJc = "text/jc".equals(of.editor.getSyntaxEditingStyle());
+                chosen = new File(chosen.getAbsolutePath() + (esJc ? ".jc" : ".bp"));
             }
             of.file = chosen.toPath();
+            of.editor.setSyntaxEditingStyle(estiloPara(of.file));
             currentFile = of.file;
             rememberLastDir(chosen.getParentFile());
         }
@@ -2229,6 +2334,7 @@ public class FrmMain extends javax.swing.JFrame
                     "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        if (mainDosVeces()) return;   // V8 #698
         onSave();
         if (currentFile == null) return;
 
@@ -2238,7 +2344,7 @@ public class FrmMain extends javax.swing.JFrame
         final Path bpFile;
         final Path outDir;
         if (currentProject != null) {
-            bpFile = java.nio.file.Paths.get(currentProject.sourceDir, currentProject.main + ".bp");
+            bpFile = fuenteDelMain();   // V8 #698: <main>.bp, o .jc
             outDir = java.nio.file.Paths.get(currentProject.outDir);
         } else {
             bpFile = currentFile;
@@ -2366,6 +2472,7 @@ public class FrmMain extends javax.swing.JFrame
                     "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        if (mainDosVeces()) return;   // V8 #698
         onSave();
         if (currentFile == null) return;
 
@@ -2377,7 +2484,7 @@ public class FrmMain extends javax.swing.JFrame
         final Path bpFile;
         final Path outDir;
         if (currentProject != null) {
-            bpFile = java.nio.file.Paths.get(currentProject.sourceDir, currentProject.main + ".bp");
+            bpFile = fuenteDelMain();   // V8 #698: <main>.bp, o .jc
             outDir = java.nio.file.Paths.get(currentProject.outDir);
         } else {
             bpFile = currentFile;
@@ -2463,6 +2570,7 @@ public class FrmMain extends javax.swing.JFrame
                     "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        if (mainDosVeces()) return;   // V8 #698
         if (picoExplorer == null || !picoExplorer.isConnected()) {
             JOptionPane.showMessageDialog(this,
                     "Conecta primero la placa desde el panel inferior\n" +
@@ -2479,8 +2587,7 @@ public class FrmMain extends javax.swing.JFrame
         final Path bpFile;
         final Path outDir;
         if (currentProject != null) {
-            bpFile = java.nio.file.Paths.get(currentProject.sourceDir,
-                    currentProject.main + ".bp");
+            bpFile = fuenteDelMain();   // V8 #698: <main>.bp, o .jc
             outDir = java.nio.file.Paths.get(currentProject.outDir);
         } else {
             bpFile = currentFile;
@@ -2743,6 +2850,7 @@ public class FrmMain extends javax.swing.JFrame
                     "Aviso", JOptionPane.INFORMATION_MESSAGE);
             return;
         }
+        if (mainDosVeces()) return;   // V8 #698
         if (picoExplorer == null || !picoExplorer.isConnected()) {
             JOptionPane.showMessageDialog(this,
                     "Conecta primero la placa desde el panel inferior\n" +
@@ -2759,8 +2867,7 @@ public class FrmMain extends javax.swing.JFrame
         final Path bpFile;
         final Path outDir;
         if (currentProject != null) {
-            bpFile = java.nio.file.Paths.get(currentProject.sourceDir,
-                    currentProject.main + ".bp");
+            bpFile = fuenteDelMain();   // V8 #698: <main>.bp, o .jc
             outDir = java.nio.file.Paths.get(currentProject.outDir);
         } else {
             bpFile = currentFile;

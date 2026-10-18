@@ -68,7 +68,7 @@ public final class EscritorJc {
      *  «Lo que choca»). Las demás palabras de JC ya lo son en BP, que no las deja usar como nombre. */
     private static final Set<String> RESERVADAS_SOLO_EN_JC = new HashSet<>(Arrays.asList(
             "int", "long", "float", "double", "bool", "string", "sbyte", "ushort",
-            "void", "new", "is", "static", "foreach", "protected", "base"));
+            "void", "new", "is", "static", "foreach", "protected", "base", "println"));
 
     /** Las conversiones a un tipo primitivo, que en BP son una llamada con el nombre del tipo (`integer(x)`, `byte(x)`).
      *  El analizador las reconoce por el nombre (numericCastTarget; las de los estrechos, el parser). */
@@ -682,8 +682,8 @@ public final class EscritorJc {
 
     /**
      * El `print` de JC no pone nada entre las piezas ni salta solo (punto 17): la coma de BP, que pone un espacio, es
-     * una pieza `" "`, y el salto que BP pone siempre, un `"\n"` al final. Un separador al final (`print a;`) no salta,
-     * como quedó decidido para BP (#700); en el corpus no hay ninguno.
+     * una pieza `" "`. El salto que BP pone al final es el `println` (Eduardo, 18-oct, #703): la línea se cierra y sale
+     * en su momento, como en BP. Un separador al final (`print a;`, #700) es el `print`, que no salta.
      */
     private String imprime(PrintStmt p) {
         List<String> piezas = new ArrayList<>();
@@ -694,8 +694,7 @@ public final class EscritorJc {
             if (it.expr != null) piezas.add(expr(it.expr));
             else if (i == p.items.size() - 1) salto = false;
         }
-        if (salto) piezas.add("\"\\n\"");
-        return "print(" + String.join(", ", piezas) + ")";
+        return (salto ? "println(" : "print(") + String.join(", ", piezas) + ")";
     }
 
     // ============================================================

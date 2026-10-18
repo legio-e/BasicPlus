@@ -167,7 +167,7 @@ public final class ProjectDialog extends JDialog {
         fuentesList.setVisibleRowCount(6);
         p.add(new JScrollPane(fuentesList), BorderLayout.CENTER);
         JPanel btns = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
-        JButton anyadir = new JButton("Añadir .bp…");
+        JButton anyadir = new JButton("Añadir fuente…");   // .bp o .jc (V8 #698)
         JButton quitar  = new JButton("Quitar");
         anyadir.addActionListener(e -> onAnyadirFuente());
         quitar.addActionListener(e -> {
@@ -183,7 +183,7 @@ public final class ProjectDialog extends JDialog {
         javax.swing.JFileChooser fc = new javax.swing.JFileChooser(
                 proyecto.projectDir != null ? new java.io.File(proyecto.projectDir) : null);
         fc.setDialogTitle("Añadir fuente al proyecto");
-        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Fuentes BP (*.bp)", "bp"));
+        fc.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Fuentes BP y JC (*.bp, *.jc)", "bp", "jc"));
         if (fc.showOpenDialog(this) != javax.swing.JFileChooser.APPROVE_OPTION) return;
         java.io.File f = fc.getSelectedFile();
         /* Se guarda RELATIVA al proyecto si se puede: un .bpbuild con rutas

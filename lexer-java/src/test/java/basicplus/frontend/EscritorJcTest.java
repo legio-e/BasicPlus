@@ -155,11 +155,11 @@ class EscritorJcTest {
             "    for k := 3 to 1 step -1 do print k\n" +
             "    for m := 9 to 1 step -2 do print m\n" +
             "    for n := 0 to 7 shr 1 do print n\n"));
-        assertTrue(jc.contains("for (int i = 1; i <= 3; i++) print(i, \"\\n\");"), jc);
-        assertTrue(jc.contains("for (int j = 1; j <= 9; j += 2) print(j, \"\\n\");"), jc);
-        assertTrue(jc.contains("for (int k = 3; k >= 1; k--) print(k, \"\\n\");"), jc);
-        assertTrue(jc.contains("for (int m = 9; m >= 1; m -= 2) print(m, \"\\n\");"), jc);
-        assertTrue(jc.contains("for (int n = 0; n <= 7 >> 1; n++) print(n, \"\\n\");"), jc);
+        assertTrue(jc.contains("for (int i = 1; i <= 3; i++) println(i);"), jc);
+        assertTrue(jc.contains("for (int j = 1; j <= 9; j += 2) println(j);"), jc);
+        assertTrue(jc.contains("for (int k = 3; k >= 1; k--) println(k);"), jc);
+        assertTrue(jc.contains("for (int m = 9; m >= 1; m -= 2) println(m);"), jc);
+        assertTrue(jc.contains("for (int n = 0; n <= 7 >> 1; n++) println(n);"), jc);
     }
 
     @Test
@@ -172,18 +172,19 @@ class EscritorJcTest {
             "    if a > 0 then\n      print 1\n    elseif a < 0 then\n      print 2\n" +
             "    else\n      if a == 0 then print 3\n      print 4\n    endif\n"));
         String esperado =
-            "      if (a > 0)\n      {\n         print(1, \"\\n\");\n      }\n" +
-            "      else if (a < 0)\n      {\n         print(2, \"\\n\");\n      }\n" +
-            "      else\n      {\n         if (a == 0) print(3, \"\\n\");\n         print(4, \"\\n\");\n      }\n";
+            "      if (a > 0)\n      {\n         println(1);\n      }\n" +
+            "      else if (a < 0)\n      {\n         println(2);\n      }\n" +
+            "      else\n      {\n         if (a == 0) println(3);\n         println(4);\n      }\n";
         assertTrue(jc.contains(esperado), jc);
     }
 
     @Test
-    @DisplayName("el print: la coma de BP es un \" \", y el salto que BP pone solo, un \"\\n\"")
+    @DisplayName("el print: la coma de BP es un \" \", y el salto que BP pone solo, el println")
     void elPrint() throws IOException {
-        String jc = jc("Pr", conMain("Pr", "    var a: integer := 1\n    print a, a; \"x\"\n    print\n"));
-        assertTrue(jc.contains("print(a, \" \", a, \"x\", \"\\n\");"), jc);
-        assertTrue(jc.contains("print(\"\\n\");"), jc);
+        String jc = jc("Pr", conMain("Pr", "    var a: integer := 1\n    print a, a; \"x\"\n    print\n    print a;\n"));
+        assertTrue(jc.contains("println(a, \" \", a, \"x\");"), jc);
+        assertTrue(jc.contains("println();"), jc);
+        assertTrue(jc.contains("print(a);"), jc);   // con el `;` al final, sin salto (#700): el print de JC
     }
 
     @Test

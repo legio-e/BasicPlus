@@ -141,9 +141,13 @@ final class ComparaAst {
             if (it.expr != null) out.add(it.expr);
             else if (i == p.items.size() - 1) salto = false;
         }
-        if (salto) out.add(new Ast.StringLitExpr("\n", 0, 0));
+        if (salto) out.add(SALTO);
         return out;
     }
+
+    /** El salto del `print` de BP, el `println` de JC: no es una pieza `"\n"`. Los bytes son los mismos, pero sólo el
+     *  salto cierra la línea del hilo y la saca en su momento (V8 #703); un `"\n"` escrito espera con el resto. */
+    private static final String SALTO = "el salto del print";
 
     private static String donde(String ruta, int linea) {
         return ruta + (linea > 0 ? " (línea " + linea + " del original)" : "");

@@ -29,10 +29,11 @@
 
 > **18-oct** — **JC genera código: el compilador lee `.jc`, el análisis comprueba el `new` y el `(T) x`, y `compat.sh
 > check-jc` compila y ejecuta en JC el corpus de la paridad. Antes, `#700` en el compilador de BP. Salen dos fichas:
-> `#703`, la línea de JC que no se cierra con su `"\n"` (la decisión, de Eduardo), y `#704`, el orden de las tuplas
-> en el `.mod`, que es de BP.**
+> `#703`, la línea de JC que no se cierra con su `"\n"` (cerrada con el `println` que decidió Eduardo), y `#704`, el
+> orden de las tuplas en el `.mod`, que es de BP. Y el IDE abre, colorea, compila y traduce JC.**
 >
-> **Lo que dijo Eduardo:** *«continuamos JC»*.
+> **Lo que dijo Eduardo:** *«continuamos JC»*. Y al salir `#703`: *«añadimos una función println()»*; la traducción
+> del IDE, en una pestaña nueva sin guardar.
 >
 > **Lo hecho:**
 > - **`#700`** (`152fcd9b`): un `print` que acaba en `;` no salta de línea. Sólo el compilador.
@@ -51,19 +52,21 @@
 > **Lo que salió:**
 > - **`#703`**, medido con cronómetro: un programa JC que imprime en un bucle lo saca todo al acabar el hilo. Es la
 >   línea del hilo de `#600`, que sólo se cierra con el `PRINT_NL`. Un prototipo en el emisor lo arregla para el corpus
->   (147 PASS). Las tres maneras de arreglarlo están en la ficha; **la decisión, de Eduardo**.
+>   (147 PASS). Propuse tres maneras de arreglarlo; Eduardo eligió otra, el `println`: el `print` de BP con su
+>   salto. Sin tocar la VM ni el emisor, `check-jc` da 147 PASS (`#703`, cerrada).
 > - **`#704`**: el orden de las clases de tupla depende de los `hashCode` de identidad. `TupCrossTest` cambió de `.mod`
 >   sin cambiar de salida.
 > - Seis samples de `bpgenvm-c/samples` ya no compilan, ni en BP: `CastRt`, `GcDev`, `GcMisalign2`, `GuiClickMeas`,
 >   `OomHandles` y `tgrow`. Quedan propuestos como tarea aparte.
 > - El mapa de lo que toca en el IDE, en `V8_IDEAS` §E2.
 >
+> **El IDE**, con ese mapa: abre, guarda y lista los `.jc`; los colorea (`JcTokenMaker`) y los pliega por llaves;
+> compila y depura el `<main>.jc` de un proyecto; y traduce, en Edit, con `Traductor`, una entrada nueva del frontend.
+> Medido sin la ventana: el jar del IDE lleva lo nuevo y una sonda tokeniza JC. El frontend, 311 pruebas sin fallos.
+>
 > **Para la siguiente sesión:**
-> - el prototipo de `#703` (la opción A) no está en el árbol. Es corto (la ficha lo describe), y el parche quedó en el
->   scratchpad de esta sesión, `jc/prototipo_salto_literal.patch`;
-> - `check-jc` da 17 FAIL hasta que se arregle `#703`;
-> - el IDE lleva el frontend de `~/.m2`, del 11-oct. Para que entre JC: `mvn install` en `lexer-java` y `mvn package`
->   en `BpIde`, con el IDE cerrado;
+> - **Eduardo prueba el IDE con la ventana.** El jar es `BpIde/target/BpIde-7.0.jar`, del 18-oct (13:14), con el
+>   frontend instalado en `~/.m2` a la misma hora. Si hay que rehacerlo, con el IDE cerrado;
 > - **una trampa nueva:** al comparar `.mod` de dos compiladores distintos, `#704` puede dar un falso distinto en un
 >   programa con tuplas de otro módulo.
 
