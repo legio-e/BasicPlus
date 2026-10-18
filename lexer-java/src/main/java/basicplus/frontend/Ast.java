@@ -771,6 +771,12 @@ public final class Ast {
             super(line, column);
             this.items = items;
         }
+        /** V8 #700 — un separador al final (`print a; b;`) no salta de línea, como en el BASIC clásico. Sus piezas
+         *  esperan en la línea del hilo y salen con el siguiente salto, o al acabar el hilo (#600). Es el `print` de
+         *  JC, que no salta solo (#698). */
+        public boolean sinSalto() {
+            return !items.isEmpty() && items.get(items.size() - 1).expr == null;
+        }
     }
 
     public static final class BreakStmt extends Node implements IStmt {

@@ -4573,7 +4573,8 @@ public final class MivmEmitter {
                 w.emit(OpCode.PRINT_NONL);
             }
         }
-        w.emit(OpCode.PRINT_NL);
+        // V8 #700 — con un separador al final, sin salto: las piezas esperan en la línea del hilo (#600).
+        if (!s.sinSalto()) w.emit(OpCode.PRINT_NL);
     }
 
     /** V7/H7 #600 — ¿este valor lo imprime el bucle de emitPrint con PRINT_STR_NONL? (una cadena, un booleano

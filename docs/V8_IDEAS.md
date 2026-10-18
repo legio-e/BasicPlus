@@ -1022,7 +1022,7 @@ y lo que hace JC mientras:
 | el cambio en BP | sale de | mientras, en JC |
 |---|---|---|
 | `#699`, el `continue` de un `do … loop`: un fallo | 9 | el `continue` de su `do … while` es el de BP: vuelve arriba sin mirar la condición |
-| `#700`, el `print` sin salto: **éste sí, en el compilador** (Eduardo) | 17 | el `print(a, b);` es el `print a; b;` de BP |
+| `#700`, el `print` sin salto: **éste sí, en el compilador** (Eduardo); hecho el 18-oct | 17 | el `print(a, b);` es el `print a; b;` de BP |
 | los caracteres, `'a'` | 19 | los lee el lexer de JC; en BP se escriben como su número |
 | las secuencias de escape de C# | 19 | las lee el lexer de JC; lo que BP no sabe escribir, el traductor lo dice |
 | que un literal guarde cómo se escribió | 19 | `0xFF` y `'a'` vuelven como `255` y `97` |

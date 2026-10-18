@@ -294,6 +294,20 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <code>main</code> when there are no arguments; how to pass one (and give it a
   default value) is in <a href="#main">§10.2</a>.
 </p>
+<p>
+  <code>print</code> writes its pieces one after another: a <strong>comma</strong> puts a space
+  between two, and a <strong>semicolon</strong>, nothing. At the end it moves to a new line, unless
+  it ends with <code>;</code>: then it leaves the line open and the next <code>print</code> carries
+  on in it (V8). A <code>print</code> with nothing just moves to a new line.
+</p>
+<pre><code><span class="kw">print</span> <span class="str">"x ="</span>, x              <span class="comment">// x = 7</span>
+<span class="kw">print</span> <span class="str">"["</span>; x; <span class="str">"]"</span>           <span class="comment">// [7]</span>
+<span class="kw">print</span> <span class="str">"a"</span>;
+<span class="kw">print</span> <span class="str">"b"</span>                   <span class="comment">// ab</span></code></pre>
+<p>
+  The open line comes out whole with the next line break (<a href="#conc-print">§14.5</a>), so a
+  piece is not seen until then; if the thread ends first, it comes out as it is.
+</p>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
@@ -2140,6 +2154,11 @@ shared object</code></pre>
 <pre><code><span class="kw">print</span> <span class="str">"Result="</span>, r      <span class="comment">// comes out together: nothing slips in between "Result=" and r</span>
 <span class="kw">print</span> a
 <span class="kw">print</span> b               <span class="comment">// another thread's line may come out between a and b</span></code></pre>
+<p>
+  A line built from several <code>print</code>s ending in <code>;</code>
+  (<a href="#hello">§2</a>) also comes out whole: what they leave on the open line comes
+  out together, with the line break.
+</p>
 <p>
   For <strong>several lines</strong> to come out together, join them in a
   <code>StringBuilder</code> and print them with a single <code>print</code>:

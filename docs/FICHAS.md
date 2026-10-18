@@ -7010,7 +7010,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
   está en la misma línea que el final de la sentencia.
 - **Para JC importa en el paso 3:** de JC a BP saldría justo esa forma (`for (…) { for (…) x; }`), que BP no lee.
 
-#### 💡 `#700` — BP: el `print` sin salto, con un `;` al final; basta con el compilador (abierta el 17-oct, de JC, `#698`; decidido el mismo día; **se hace en el compilador de BP**, Eduardo: el único cambio de BP que entra ahora)
+#### ✅ `#700` — BP: el `print` sin salto, con un `;` al final; basta con el compilador (abierta el 17-oct, de JC, `#698`; decidido el mismo día; **se hace en el compilador de BP**, Eduardo: el único cambio de BP que entra ahora · **CERRADA el 18-oct**, el commit de `#700`)
 
 - **Por qué:** el `print` de JC no salta de línea solo (Eduardo: *«El CR y LN no se añaden de forma automática, hay
   que indicarlos»*). En BP no hay forma de escribir en la consola sin saltar: el `print` pone siempre el salto, también
@@ -7026,13 +7026,28 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
   - Un `print` que acaba en `;` deja ahí sus piezas, y salen con el siguiente salto o al acabar el hilo.
   - Lo que no da: que un trozo salga en el momento. Para eso haría falta una instrucción nueva en la VM, más adelante,
     si hace falta. Ésa era mi primera idea; con la VM como está, no hace falta.
-- **Lo que toca:**
-  - el emisor (`emitPrint`): sin el `PRINT_NL`, y sin el camino de `PRINT_STRING`, que lleva el salto;
-  - el AOT: la última pieza, sin salto (el ayudante ya distingue, `bpvm_aot_helpers.c:530`);
-  - el manual;
-  - un sample en el corpus que lo compruebe en las dos VMs.
-
-  Ni la VM ni las imágenes de las placas cambian.
+- **Hecho (18-oct)**, sólo en el compilador; ni la VM ni las imágenes de las placas cambian:
+  - el emisor (`emitPrint`) y el AOT, sin el salto cuando el último `PrintItem` es un separador sin expresión
+    (`PrintStmt.sinSalto()`). El camino de `PRINT_STRING` no hacía falta tocarlo: un `print` así tiene dos piezas como
+    poco;
+  - el manual, los dos: en §2, el `print` con sus separadores, que no estaba en ningún sitio; en §14.5, que una línea
+    armada con varios `print` acabados en `;` también sale entera.
+- **Medido:**
+  - el corpus, compilado antes y después (`samples`, `bpstdlib`, `bpdevices`): 441 de 441 con el `.mod` byte a byte
+    igual. No hay ningún `print` con `;` al final, tampoco en el manual;
+  - `PrintSinSalto` (`bpgenvm-c/samples`, en el corpus de `compat.sh`): la paridad, 150 PASS (los 149 y él), con un
+    hilo que acaba sin salto y una `native`;
+  - el AOT, en el PC, con una sonda sobre el arnés de `test-aotfloat`: la `native` del sample sale igual con el AOT y
+    sin él;
+  - `PrintSinSaltoTest` (frontend) mira la salida EXACTA contra la lista de la cabecera del sample. La paridad no lo
+    guarda: si el compilador volviera a poner el salto, las dos VMs coincidirían. Mira también lo que queda al acabar
+    el programa: sale sin salto. Con el salto de vuelta en el emisor, las dos pruebas fallan.
+- **Lo que queda, a la vista:**
+  - lo que queda al acabar el PROGRAMA sale tal cual y el aviso de fin de la VM se le pega detrás
+    («…=== FIN DE LA EJECUCION»), en las dos VMs igual. El filtro de `compat.sh` tira esa línea entera, así que ese
+    caso lo guarda la prueba del frontend (en la miVM), no el arnés;
+  - `input()` (sólo en el PC, `PENDIENTES`): desde la línea de comandos, un aviso con `;` antes de leer no sale hasta
+    el salto. En el IDE, `input()` abre su ventana.
 
 #### 🔵 `#699` — `continue` dentro de un `do … loop c` vuelve arriba sin mirar la condición; el AOT, en C, sí la mira: el mismo bucle da distinto si la función es `native` (abierta el 17-oct, al decidir el `do … while` de JC, `#698`; preexistente)
 

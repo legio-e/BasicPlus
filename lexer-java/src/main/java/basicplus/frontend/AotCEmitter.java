@@ -1647,7 +1647,8 @@ public final class AotCEmitter {
          * uso es depurar.
          *
          * El espaciado se copia del interprete: un espacio entre items separados
-         * por COMA (no por punto y coma), y un salto de linea al final. */
+         * por COMA (no por punto y coma), y un salto de linea al final, salvo
+         * con un separador al final (V8 #700). */
         if (s instanceof Ast.PrintStmt) {
             Ast.PrintStmt ps = (Ast.PrintStmt) s;
             /* V7/H7 #600 — como `emitPrint` (PRINT_STRING): un `print` de UNA sola cadena sale entero, el texto
@@ -1677,8 +1678,10 @@ public final class AotCEmitter {
                  * exactamente el orden de `emitPrint` en MivmEmitter. */
                 w.println(", 0);");
             }
-            indent();
-            w.println("vm->aot_helpers->print_nl(vm);");
+            if (!ps.sinSalto()) {   // V8 #700 — con un separador al final, sin salto, como en emitPrint
+                indent();
+                w.println("vm->aot_helpers->print_nl(vm);");
+            }
             return;
         }
 

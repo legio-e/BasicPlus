@@ -291,6 +291,20 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   vacía si no hay argumentos; cómo pasar uno (y darle un valor por defecto), en
   <a href="#main">§10.2</a>.
 </p>
+<p>
+  <code>print</code> escribe sus piezas una detrás de otra: la <strong>coma</strong> pone un
+  espacio entre dos, y el <strong>punto y coma</strong>, nada. Al final salta de línea, salvo si
+  acaba en <code>;</code>: entonces deja la línea abierta y el siguiente <code>print</code> sigue
+  en ella (V8). Un <code>print</code> sin nada sólo salta.
+</p>
+<pre><code><span class="kw">print</span> <span class="str">"x ="</span>, x              <span class="comment">// x = 7</span>
+<span class="kw">print</span> <span class="str">"["</span>; x; <span class="str">"]"</span>           <span class="comment">// [7]</span>
+<span class="kw">print</span> <span class="str">"a"</span>;
+<span class="kw">print</span> <span class="str">"b"</span>                   <span class="comment">// ab</span></code></pre>
+<p>
+  La línea abierta sale entera con el siguiente salto (<a href="#conc-print">§14.5</a>), así que
+  un trozo no se ve hasta entonces; si el hilo acaba antes, sale tal cual.
+</p>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
@@ -2149,6 +2163,11 @@ objeto compartido</code></pre>
 <pre><code><span class="kw">print</span> <span class="str">"Resultado="</span>, r      <span class="comment">// sale junta: nada se cuela entre "Resultado=" y r</span>
 <span class="kw">print</span> a
 <span class="kw">print</span> b                   <span class="comment">// entre a y b puede salir la línea de otro thread</span></code></pre>
+<p>
+  Una línea que se arma con varios <code>print</code> acabados en <code>;</code>
+  (<a href="#hello">§2</a>) también sale entera: lo que dejan en la línea abierta sale
+  junto, con el salto.
+</p>
 <p>
   Para que <strong>varias líneas</strong> salgan juntas, júntalas en un
   <code>StringBuilder</code> e imprímelas con un solo <code>print</code>:
