@@ -567,10 +567,23 @@ public final class EscritorBp {
         return r;
     }
 
-    /** --escribir-bp: el BP reescrito, por la salida. 0 = bien; 2 = no soportado; 3 = el original no se lee. */
+    /** V8 #698 — un `.jc`, por el parser de JC: al mismo árbol, así que lo que sale es la traducción JC → BP. */
+    private static Leido leerJc(String fuente) {
+        Leido r = new Leido();
+        try {
+            r.modulo = JcParser.leer(fuente);
+        } catch (JcLexer.Error e) {
+            r.error = e.getMessage();
+        }
+        return r;
+    }
+
+    /** --escribir-bp: el BP reescrito, por la salida; de un `.jc`, su traducción a BP. 0 = bien; 2 = no soportado;
+     *  3 = el original no se lee. */
     static int escribirFichero(Path p) throws IOException {
         PrintStream out = new PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.out), true, "UTF-8");
-        Leido l = leer(new String(Files.readAllBytes(p), StandardCharsets.UTF_8));
+        String fuente = new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
+        Leido l = Main.esJc(p) ? leerJc(fuente) : leer(fuente);
         if (l.modulo == null) { System.err.println("el original no se lee: " + l.error); return 3; }
         try {
             out.print(escribir(l.modulo));

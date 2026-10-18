@@ -3,7 +3,7 @@
 // V8 #698 (JC, paso 3) — el parser de JC: de los tokens de JcLexer, al MISMO
 // árbol que el parser de BP.
 //
-// La sintaxis es la que decidió Eduardo el 17-oct (V8_IDEAS §E2, puntos 1–33):
+// La sintaxis es la que decidió Eduardo el 17-oct (V8_IDEAS §E2, puntos 1–36):
 // la de C# donde no se dijo otra cosa, con lo de BP que C# no tiene. El árbol,
 // en cambio, es el de BP, nodo a nodo y campo a campo: lo que el parser de BP
 // fabrica, éste lo fabrica igual —el `import Core` implícito al final de los
@@ -18,8 +18,8 @@
 //     comparación no cuenta (puntos 22 y 23);
 //   - una declaración de varios nombres con algún valor da uno por nombre,
 //     como los grupos de BP (punto 5).
-// Lo que la primera fase deja fuera (las clases, el switch, parallel…) es un
-// error con su motivo. El primer error para el parser: no hay recuperación.
+// El primer error para el parser: no hay recuperación. El compilador lee un
+// `.jc` con este parser y sigue con el árbol como si viniera de un `.bp`.
 // ============================================================
 package basicplus.frontend;
 
@@ -113,11 +113,7 @@ final class JcParser {
 
     private JcLexer.Error error(String msg) {
         Tok t = actual();
-        return new JcLexer.Error(msg, t.linea, t.columna);
-    }
-
-    private JcLexer.Error segundaFase(String que) {
-        return error(que + " va en la segunda fase de JC");
+        return new JcLexer.Error(msg, t.linea, t.columna, false);
     }
 
     // ============================================================
@@ -166,6 +162,7 @@ final class JcParser {
                                        inicio.linea, inicio.columna);
         mn.packNativoMarca = packNativoMarca;
         mn.packNativoVersion = packNativoVersion;
+        mn.escritoEnJc = true;   // el análisis comprueba el `new` y el `(T) x` (puntos 22 y 23)
         return mn;
     }
 
@@ -581,8 +578,10 @@ final class JcParser {
             List<IExpr> argsAviso = new ArrayList<>();
             argsAviso.add(new StringLitExpr(n + ": falta el codigo nativo del pack '" + packNativoMarca + "' v"
                     + packNativoVersion + ". Este modulo no puede funcionar sin el.", tok.linea, tok.columna));
-            cuerpoAviso.add(new ThrowStmt(new CallExpr(new IdentifierExpr("RuntimeError", tok.linea, tok.columna),
-                    argsAviso, tok.linea, tok.columna), tok.linea, tok.columna));
+            CallExpr crea = new CallExpr(new IdentifierExpr("RuntimeError", tok.linea, tok.columna),
+                    argsAviso, tok.linea, tok.columna);
+            crea.conNew = true;   // en JC, crear un objeto lleva `new` (el análisis lo mira; la comparación, no)
+            cuerpoAviso.add(new ThrowStmt(crea, tok.linea, tok.columna));
             FuncDef ext = new FuncDef(isPublic, isFinal, false, true, name, ps, ret, cuerpoAviso, tok.linea, tok.columna);
             ext.isPackExtern = true;
             ext.isPrivate = isPrivate;

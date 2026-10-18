@@ -63,6 +63,14 @@
 #                           #600: con dos workers, la linea de un hilo se partia con
 #                           la de otro (EvDos). Desde #600 un `print` sale entero
 #                           (PrintEntero: tres hilos y Main imprimiendo a la vez).
+#
+# V8 #698 (18-oct) — JC, BP con la ropa de Java y C#, al mismo arbol:
+#
+#   ./compat.sh check-jc    Cada sample del corpus, ademas, escrito en JC
+#                           (--escribir-jc), compilado desde el .jc y ejecutado en
+#                           las dos VMs: el stdout y el codigo de salida, los de BP.
+#                           El .mod no (el `print` de JC es otro arbol). No entra en
+#                           check: JC es un experimento de V8.
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -80,6 +88,7 @@ PAR_SAVE=""      # dir donde guardar <s>.out (la salida de la VM-Java) como refe
 PAR_REF=""       # dir con <s>.out de referencia: un stdout distinto es FAIL (MOD8 != MOD9)
 PAR_C_ARGS=""    # opciones de la VM-C en la pasada ("--smp=2" en check-smp)
 PAR_J_ARGS=""    # opciones de miVM en la pasada ("--workers=2" en check-smp)
+PAR_JC=""        # V8 #698: no vacio -> cada sample, ademas, escrito en JC y ejecutado (check-jc)
 PAR_REF_QUE="la pasada MOD9"   # de donde sale $PAR_REF, para el mensaje de un FAIL
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -436,6 +445,48 @@ check_parity() {
         fi
       fi
       [ -n "$PAR_SAVE" ] && printf '%s\n' "$oj" > "$PAR_SAVE/$outname"
+      # V8 #698 (18-oct) — JC: el mismo programa escrito en JC (`--escribir-jc`), compilado desde el `.jc` y
+      # ejecutado en las dos VMs, imprime LO MISMO que el de BP y acaba con el mismo código. El `.mod` no es el
+      # mismo: el `print` de JC es otro árbol (`print a, b` se escribe `print(a, " ", b, "\n")`, #700), y por eso
+      # se compara la salida. Lo que el escritor no escribe —lo acordado: el paso de un `for` en una variable, el
+      # nombre `base`— es un SKIP con su motivo, a la vista. El `.jc` se compila en el mismo $WORK que el de BP:
+      # los módulos hermanos que importe ya están ahí, compilados desde su `.bp`.
+      if [ -n "$PAR_JC" ]; then
+        local jcd="$WORK/srcjc" jcf ojj ocj rcjj rccj
+        rm -rf "$jcd" "$WORK/pjc.bpbuild"; mkdir -p "$jcd"
+        jcf="$jcd/$rootname.jc"
+        java -jar "$V3_FE" "$bp" --escribir-jc --stdlibDir="$WORK" > "$jcf" 2> "$WORK/.jc.err"
+        case $? in
+          0) ;;
+          2) echo "  SKIP $s — JC: $(tr -d '\r' < "$WORK/.jc.err" | head -1 | cut -c1-120)"; skip=$((skip+1)); continue ;;
+          *) echo "  FAIL $s — JC: el escritor falla:"; tr -d '\r' < "$WORK/.jc.err" | head -3 | sed 's/^/       /'
+             fail=$((fail+1)); continue ;;
+        esac
+        if ! java -jar "$V3_FE" "$jcf" --compile "$WORK" --backend=mivm --stdlibDir="$WORK" $fmt > "$WORK/.jc.log" 2>&1; then
+          # El mismo 2o intento que el de BP: por proyecto (el main, `srcjc/<modulo>.jc`).
+          printf '{ "sourceDir": "srcjc", "outDir": ".", "main": "%s", "dependencies": ["%s"] }\n' \
+                 "$rootname" "$STDLIB" > "$WORK/pjc.bpbuild"
+          if ! ( cd "$WORK" && java -jar "$V3_FE" --project pjc.bpbuild --backend=mivm --stdlibDir="$WORK" $fmt ) >> "$WORK/.jc.log" 2>&1; then
+            echo "  FAIL $s — JC: el .jc no compila:"; grep -i 'error' "$WORK/.jc.log" | head -3 | sed 's/^/       /'
+            fail=$((fail+1)); continue
+          fi
+        fi
+        ojj="$(run_vm "$V3_JAVA" "$mod" $PAR_J_ARGS)"; ocj="$(run_vm "$V3_C" "$mod" $PAR_C_ARGS)"
+        rcjj="$(cat "$WORK/.rc.java" 2>/dev/null)"; rccj="$(cat "$WORK/.rc.c" 2>/dev/null)"
+        if [ -n "$ordena" ]; then
+          ojj="$(printf '%s\n' "$ojj" | LC_ALL=C sort)"; ocj="$(printf '%s\n' "$ocj" | LC_ALL=C sort)"
+        fi
+        if [ "$rcjj" != "$rcj" ] || [ "$rccj" != "$rcc" ]; then
+          echo "  FAIL $s — JC: el codigo de salida no es el de BP (VM-Java ${rcjj:-?} y no ${rcj:-?}, VM-C ${rccj:-?} y no ${rcc:-?})"
+          fail=$((fail+1)); continue
+        fi
+        if [ "$ojj" != "$oj" ] || [ "$ocj" != "$oj" ]; then
+          echo "  FAIL $s — JC: la salida no es la de BP"; fail=$((fail+1))
+          diff <(printf '%s\n' "$oj") <(printf '%s\n' "$ojj") 2>/dev/null | head -6 | sed 's/^/       /'
+          [ "$ojj" = "$ocj" ] || echo "       (y el de JC, VM-Java != VM-C)"
+          continue
+        fi
+      fi
       pass=$((pass+1))
     else
       echo "  FAIL $s — VM-Java != VM-C (paridad rota)"; fail=$((fail+1))
@@ -487,6 +538,18 @@ check_mod8() {   # $1 = "sin-referencia" cuando check ya hizo la pasada MOD9 gua
   check_parity; rc=$?
   STDLIB="$std_old"; PAR_FORMATO=""; PAR_REF=""
   echo "  mod8: $([ "$rc" -eq 0 ] && echo 'el corpus corre en MOD8 como en MOD9' || echo 'MOD8 en ROJO')"
+  return "$rc"
+}
+
+# ------------------------------------------------------------- JC (V8 #698)
+# Cada sample del corpus, ademas de en BP, escrito en JC (`--escribir-jc`), compilado desde el `.jc` y ejecutado
+# en las dos VMs: tiene que imprimir lo mismo que el de BP (ver check_parity). No entra en `check`: JC es un
+# experimento de V8, y lo que se sube al final se decide al final.
+check_jc() {
+  echo "-- JC: el corpus escrito en JC imprime lo mismo que en BP, en las dos VMs --"
+  local rc
+  PAR_JC=1; check_parity; rc=$?; PAR_JC=""
+  echo "  jc: $([ "$rc" -eq 0 ] && echo 'el corpus dice en JC lo mismo que en BP' || echo 'JC en ROJO')"
   return "$rc"
 }
 
@@ -1314,5 +1377,6 @@ case "${1:-}" in
   check-packs-abi) check_packs_abi ;;
   check-mods-embebidos) check_mods_embebidos ;;
   check-paridad) check_parity ;;   # V7/H9 (2-oct): sólo la paridad del corpus
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-estres|check-packs-abi|check-paridad}"; exit 2 ;;
+  check-jc)   check_jc ;;          # V8 #698 (18-oct): el corpus, también en JC
+  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-estres|check-packs-abi|check-paridad|check-jc}"; exit 2 ;;
 esac

@@ -3,7 +3,7 @@
 // V8 #698 (JC, paso 3) — el escáner de JC.
 //
 // JC es BP con la ropa de Java y C# (V8_IDEAS §E2). Éste es el escáner de su
-// sintaxis, la de la primera fase (puntos 1–33):
+// sintaxis (puntos 1–36):
 //   - las palabras reservadas DISTINGUEN mayúsculas (punto 1), al revés que en
 //     BP; los nombres, como en BP, también;
 //   - los saltos de línea no cuentan: las sentencias acaban en `;` (punto 4);
@@ -24,13 +24,19 @@ import java.util.Set;
 
 final class JcLexer {
 
-    /** Un error de JC, con su línea y su columna. */
+    /** Un error de JC, con su línea y su columna. `lexico` si lo da el escáner y no el parser: el compilador lo dice
+     *  como los de BP, «error léxico» o «error sintáctico» (V8 #698). */
     static final class Error extends RuntimeException {
+        final String mensaje;
         final int linea, columna;
-        Error(String mensaje, int linea, int columna) {
+        final boolean lexico;
+        Error(String mensaje, int linea, int columna) { this(mensaje, linea, columna, true); }
+        Error(String mensaje, int linea, int columna, boolean lexico) {
             super("[" + linea + ":" + columna + "] " + mensaje);
+            this.mensaje = mensaje;
             this.linea = linea;
             this.columna = columna;
+            this.lexico = lexico;
         }
     }
 
@@ -52,7 +58,7 @@ final class JcLexer {
         @Override public String toString() { return tipo == Tipo.FIN ? "el final" : "'" + texto + "'"; }
     }
 
-    /** Las palabras reservadas de JC (puntos 1–33): las de la primera fase y las que quedan para la segunda. */
+    /** Las palabras reservadas de JC (puntos 1–36). */
     static final Set<String> RESERVADAS = new HashSet<>(Arrays.asList(
             "module", "library", "interface", "implements", "extends", "import", "from",
             "const", "function", "class", "enum", "public", "private", "protected", "final", "native", "sync", "owner",

@@ -82,7 +82,8 @@ final class ComparaAst {
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 String n = f.getName();
                 if (n.equals("line") || n.equals("column")) continue;
-                if (n.equals("conNew") || n.equals("esConversion")) continue;   // las marcas de JC (CallExpr)
+                if (n.equals("conNew") || n.equals("esConversion") || n.equals("escritoEnJc"))
+                    continue;   // las marcas de JC (CallExpr, ModuleNode)
                 f.setAccessible(true);
                 Object va, vb;
                 try {

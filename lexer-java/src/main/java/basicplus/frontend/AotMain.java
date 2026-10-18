@@ -146,15 +146,24 @@ public final class AotMain {
             throws IOException, AotCEmitter.UnsupportedAotException, ParseFailedException, ImportsFaltanException {
         String source = new String(Files.readAllBytes(src), StandardCharsets.UTF_8);
 
-        // 1. Lex + 2. Parse.
-        Lexer lex = new Lexer(source);
-        List<Token> tokens = lex.tokenize();
-        Parser parser = new Parser(tokens);
-        Ast.ModuleNode module = parser.parseModule();
-        if (!parser.getErrors().isEmpty() || module == null) {
-            StringBuilder sb = new StringBuilder("Errores de parseo en " + src + ":");
-            for (ParserError e : parser.getErrors()) sb.append("\n  ").append(e);
-            throw new ParseFailedException(sb.toString());
+        // 1. Lex + 2. Parse. V8 #698: un `.jc`, por el parser de JC, al mismo árbol.
+        Ast.ModuleNode module;
+        if (Main.esJc(src)) {
+            try {
+                module = JcParser.leer(source);
+            } catch (JcLexer.Error e) {
+                throw new ParseFailedException("Errores de parseo en " + src + ":\n  " + e.getMessage());
+            }
+        } else {
+            Lexer lex = new Lexer(source);
+            List<Token> tokens = lex.tokenize();
+            Parser parser = new Parser(tokens);
+            module = parser.parseModule();
+            if (!parser.getErrors().isEmpty() || module == null) {
+                StringBuilder sb = new StringBuilder("Errores de parseo en " + src + ":");
+                for (ParserError e : parser.getErrors()) sb.append("\n  ").append(e);
+                throw new ParseFailedException(sb.toString());
+            }
         }
 
         // 2.5 Semántico + resolución de imports (igual que Main.compileFull): sin

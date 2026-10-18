@@ -282,8 +282,8 @@ public final class BpBuild {
                 if (!(e instanceof String) || ((String) e).isEmpty())
                     throw new IOException(file + ": 'sources' sólo admite rutas (strings)");
                 Path p = projectDirPath.resolve((String) e).toAbsolutePath().normalize();
-                if (!((String) e).endsWith(".bp"))
-                    throw new IOException(file + ": 'sources' son ficheros .bp; '" + e
+                if (!((String) e).endsWith(".bp") && !((String) e).endsWith(".jc"))   // V8 #698: o en JC
+                    throw new IOException(file + ": 'sources' son ficheros .bp o .jc; '" + e
                         + "' no lo es. (Las CARPETAS donde buscar imports son"
                         + " 'sourceDir' y 'dependencies'.)");
                 /* Que falte se dice AQUÍ. Si no, el build compila lo que sí

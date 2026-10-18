@@ -120,6 +120,9 @@ public final class Ast {
          *  van antes que las funciones, y el ModuleNode se construye al final. */
         public String packNativoMarca   = null;
         public int    packNativoVersion = 0;
+        /** V8 #698 — leído de un `.jc`. El análisis mira entonces que el `new` y el `(T) x` escritos casan con lo
+         *  que cada llamada es (las marcas `conNew` y `esConversion` de CallExpr); en BP, eso lo deduce de los tipos. */
+        public boolean escritoEnJc = false;
         public ModuleNode(String library, String name, List<ImportNode> imports, List<ITopLevelDecl> defs, int line, int column) {
             this(library, name, false, null, imports, defs, line, column);
         }

@@ -6983,6 +6983,46 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
 
+#### 🔵 `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente)
+
+- **Medido:** `samples/TupCrossTest.bp`, con tuplas que devuelve `TupLib`, da otro `.mod` con el compilador de hoy que
+  con el de ayer: las clases `__Tuple_bl` y `__Tuple_ii` salen en el otro orden. Mismo tamaño, los mismos bytes en otro
+  orden, y la misma salida en las dos VMs. Con cada jar el orden es fijo (seis compilados, el mismo): cambia con el
+  jar.
+- **La causa:** `MivmEmitter.collectTupleShapes` recorre `info.exprTypes`, un `IdentityHashMap`. El orden de sus
+  valores sale de los `hashCode` de identidad de los nodos, y ésos dependen de lo que la JVM haya hecho antes (otras
+  clases cargadas, otros objetos). Las tuplas que devuelve una función del módulo entran en orden; las demás (las de
+  otro módulo), en el que salga.
+- **Por qué importa:** el `.mod` no se reproduce de una versión del compilador a otra. Comparar `.mod` contra la dist
+  da un falso distinto, y el `.mod` idéntico de BP y JC (`#698`) no saldría aunque el árbol fuera el mismo.
+- **Lo que haría falta** (sin hacer; se apunta y se arregla después): un orden que no dependa de la memoria, como el de
+  la primera aparición en el árbol, o el del nombre. Cambia el `.mod` de los programas con tuplas de otro módulo, no
+  lo que hacen.
+
+#### 🔵 `#703` — JC: el salto escrito, `"\n"`, no cierra la línea del hilo, y lo que imprime un programa JC sale cuando acaba el hilo (abierta el 18-oct, con la prueba por la salida de JC, `check-jc`, `#698`; en BP, lo mismo con un `print "x\n";`, `#700`; **la decisión, de Eduardo**)
+
+- **Medido:**
+  - un bucle que imprime y espera 300 ms, cinco veces: en BP llega una línea cada 300 ms, en las dos VMs; en JC
+    llegan las cinco juntas al final, a los 1,6 s;
+  - `check-jc`: 130 PASS, 17 FAIL y 3 SKIP (los 3, lo acordado: dos `for` con el paso en una variable y el nombre
+    `base`). Los 17 son líneas que salen en otro orden: entre hilos (`EvFin`, `ThreadPrint`, `EvDos`, `PrintEntero`…)
+    o detrás de las trazas de los periféricos simulados, que se escriben directas (`PinMapa`, `BusBug`, `AdcDemo`…).
+- **La causa:** desde `#600`, las piezas de un `print` esperan en la línea del hilo y salen con el `PRINT_NL`, al
+  acabar el hilo o al llenar 1 KB. En JC el salto es un trozo de cadena, y el `print` no lleva `PRINT_NL` (`#700`): la
+  línea no se cierra.
+- **Un prototipo, sólo para medir** (no subido; el parche, en el scratchpad de la sesión): en el emisor, un `print` sin
+  salto cuyo último trozo es un literal acabado en `"\n"` cierra la línea con ese salto. Con él, el bucle va al ritmo
+  de BP en las dos VMs, y `check-jc` da **147 PASS, 0 FAIL, 3 SKIP**: los 17 eran esto y nada más.
+- **Las opciones, para Eduardo:**
+  - **A, el compilador:** lo del prototipo, en los dos emisores. Cubre lo que escribe el traductor y el
+    `print(…, "\n")` de siempre. No cubre un `print(s)` con una `s` que acabe en `"\n"`: ésa sigue esperando.
+  - **B, la VM:** cuando un trozo deja la línea del hilo acabada en `"\n"`, sale entera. Va en las dos VMs, en
+    `lineaPieza` y `bpvm_linea_pieza`, por donde pasa también el AOT. Vale para todo, también para una variable.
+    Cambia las imágenes de las placas, y un `print` con un trozo intermedio acabado en `"\n"` sale en dos veces.
+  - **C, una instrucción nueva:** al final de un `print` sin salto, la VM saca lo que haya en la línea del hilo. Cada
+    `print` sale entero y en su momento, también un `print "Nombre: ";`. Pide un código de operación nuevo en las dos
+    VMs y en el AOT. Deshace lo de §14.5 del manual: una línea armada con varios `print` ya no sale junta.
+
 #### 🔵 `#702` — un `raise` dentro del `set` de una propiedad no compila: el análisis lo da por bueno y el emisor dice «Campo no encontrado en …: <evento>$dest» (abierta el 17-oct, al probar las clases de JC, `#698`; preexistente)
 
 - **Medido** (17-oct, una sonda en el scratchpad): una clase con `event cambia(a: Animal)` y una propiedad cuyo
@@ -7130,8 +7170,31 @@ en `V8_IDEAS.md` §E2:
     `bpdevices`). Los 7 que no: 2 `for` con el paso en una variable y 5 con un nombre `base`, ahora reservado.
   - Con un sabotaje del `set(v)` en el parser, 8 DISTINTO. El frontend, 301 pruebas sin fallos.
   - Salió `#702`, de BP: un `raise` dentro de un `set` no compila.
-- **Lo siguiente:** `#700` en el compilador de BP; que el compilador lea `.jc`; la prueba por la salida en las dos
-  VMs; y que el análisis compruebe las marcas.
+- **Generar código desde JC, el 18-oct** (Eduardo: *«continuamos JC»*; `V8_IDEAS` §E2, «Generar código desde JC»):
+  - `#700`, el `print` sin salto, en el compilador de BP (`152fcd9b`);
+  - **el compilador lee `.jc`.** `parseAndPrint` elige el parser por la extensión, y los errores de JC salen como los
+    de BP, léxicos o sintácticos, con su línea y su columna. Lo demás también:
+    - un proyecto encuentra su main en `<main>.jc`, y con `.bp` y `.jc` a la vez lo dice;
+    - `sources` admite `.jc`, y el AOT lee `.jc`;
+    - `--escribir-bp` traduce un `.jc` a BP;
+    - el `.dbg` apunta al `.jc`, con sus líneas;
+  - **el análisis comprueba las marcas** (`revisaJc`): `new` en una construcción, `(T) x` en una conversión, nada en
+    una llamada. La delegación `: this(…)` va sin `new`, y un `new MiClase(…)` como primera sentencia de su constructor
+    es un error: BP lo tomaría por delegar (`#511`). Los mensajes dicen cómo se escribe en JC; los demás del análisis
+    siguen con los nombres de BP (`integer`, `boolean`);
+  - **las redes:**
+    - el corpus BP compilado otra vez: 441 de 441 `.mod` iguales. La única diferencia que salió es `#704`, que no es de
+      JC;
+    - el corpus compilado desde JC: todo lo que se escribe compila (426 directos, y `SqlDemoSd` junto a su hermano).
+      Salió un fallo del parser de JC, el cuerpo que fabrica para las `native` de un pack sin su `new`, y quedó
+      arreglado;
+    - la ida y vuelta de `bpgenvm-c/samples`, que faltaba: 254 EQUIVALENTE y 7 no soportados (6 `base` y 1 `int`).
+      Otros 6 no compilan ni en BP: los revisa una tarea aparte;
+    - `check-jc` en `compat.sh`: cada sample del corpus, también escrito en JC, compilado y ejecutado en las dos VMs.
+      Da 130 PASS: los 17 que fallan son `#703`;
+  - las pruebas: `CompilaJcTest` (5) y una más en `JcParserTest`; el frontend, 309 sin fallos.
+- **Lo siguiente:** `#703`, que decide Eduardo, y el IDE: abrir, colorear, plegar por llaves, compilar y depurar `.jc`,
+  y traducir BP ↔ JC. El mapa de lo que toca está en `V8_IDEAS` §E2.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 

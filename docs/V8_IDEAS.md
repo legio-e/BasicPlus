@@ -1155,3 +1155,72 @@ toca (los cambios de BP, más adelante).
 
 **Lo siguiente:** generar código desde JC. Es decir: `#700` en el compilador de BP, que el compilador lea `.jc`, la
 prueba por la salida en las dos VMs, y que el análisis compruebe las marcas.
+
+### Generar código desde JC: el 18-oct
+
+Eduardo, 18-oct: *«continuamos JC»*. Por este orden: `#700`, que el compilador lea `.jc`, la prueba por la salida y
+que el análisis compruebe las marcas.
+
+**`#700`, el `print` sin salto, en el compilador de BP** (`152fcd9b`). Sólo el emisor y el AOT. El corpus da los mismos
+`.mod` byte a byte, y `PrintSinSalto` lo prueba en las dos VMs.
+
+**El compilador lee `.jc`.** El árbol sale de `JcParser`, y lo demás es lo de un `.bp`:
+- `parseAndPrint` elige el parser por la extensión. Un error de JC sale como los de BP (`[l:c] error léxico: …` o
+  `error sintáctico: …`), y el build falla;
+- un proyecto encuentra su main en `<main>.jc` si no hay `<main>.bp`; con los dos, lo dice y no compila. `sources`
+  admite `.jc`;
+- el AOT (`AotMain`) lee `.jc`, y `--escribir-bp` traduce un `.jc` a BP;
+- el `.dbg` apunta al `.jc`, con sus líneas: el depurador no necesita nada.
+
+Lo que falta: que un módulo importe a otro escrito en `.jc`. Los imports buscan el `.bp` junto al importador.
+
+**El análisis comprueba las marcas** (`SemanticAnalyzer.revisaJc`). JC escribe lo que BP deduce de los tipos, y el
+análisis, que sabe qué es cada llamada, mira que lo escrito case, con la misma regla con la que lo escribe
+`EscritorJc`:
+- una construcción lleva `new`; una conversión se escribe `(T) x`; una llamada, ninguna de las dos;
+- la delegación en otro constructor (`#511`) es el `: this(…)` de la cabecera, sin `new`. Un `new MiClase(…)` como
+  primera sentencia de su constructor es un error, porque BP lo tomaría por delegar;
+- los mensajes dicen cómo se escribe en JC: «`'integer(x)' es una conversión: en JC se escribe '(int) x'`». Los demás
+  mensajes del análisis siguen con los nombres de BP.
+
+**La prueba por la salida, `compat.sh check-jc`.** Cada sample del corpus de la paridad, además, se escribe en JC, se
+compila desde el `.jc` y se ejecuta en las dos VMs: tiene que imprimir lo mismo que el de BP y acabar con el mismo
+código. El `.mod` no es el mismo, porque el `print` de JC es otro árbol. Da 130 PASS, 17 FAIL y 3 SKIP (lo acordado).
+
+**Los 17 son `#703`:** en JC el salto es un trozo de cadena, `"\n"`, y la VM sólo cierra la línea del hilo con el salto
+del `print` de BP. Lo que imprime un programa JC sale al acabar el hilo: medido, un bucle que imprime cada 300 ms saca
+sus cinco líneas juntas al final. Con un prototipo en el emisor (el último `"\n"` literal es el salto), `check-jc` da
+147 PASS. Las tres maneras de arreglarlo y lo que cuesta cada una, en la ficha. La decisión, de Eduardo.
+
+**Las otras redes:**
+- el corpus BP, compilado otra vez: los mismos 441 `.mod`. Salió `#704`, que no es de JC: el orden de las clases de
+  tupla depende de los `hashCode` de identidad de Java;
+- el corpus compilado desde JC: compila todo lo que se escribe. Salió que el cuerpo que fabrica el parser de JC para
+  las `native` de un pack no llevaba su `new`, y quedó arreglado;
+- la ida y vuelta de `bpgenvm-c/samples`, que faltaba: 254 EQUIVALENTE y 7 no soportados (6 con `base`, 1 con `int`).
+
+### El IDE para JC: lo que toca (el mapa del 18-oct)
+
+- **El compilador corre dentro del IDE** (llamadas directas a `basicplus.frontend.*`), y el IDE se construye contra el
+  jar del frontend que hay en `~/.m2`. Para que entre JC: `mvn install` en `lexer-java` y `mvn package` en `BpIde`,
+  con el IDE cerrado.
+- **Unos quince sitios dan por hecho `.bp`**, casi todos en `FrmMain`:
+  - el filtro de abrir y el de guardar; «Guardar como» añade `.bp`;
+  - el árbol del proyecto, y «Nuevo proyecto», que siempre hace BP;
+  - en modo proyecto, Depurar, Ejecutar en ventana y Depurar en la placa compilan `<main>.bp` a mano. Ejecutar y
+    Ejecutar en la placa ya van por `buildProject`, que encuentra el `.jc`;
+  - `ProjectDialog` («Añadir .bp…») y `AotBuild.listBpFiles`.
+- **El coloreado y el plegado:**
+  - hoy hay un solo estilo, `text/bp`, para todo editor: `BpTokenMaker` propio y `BpFoldParser`, que pliega por palabras
+    (`end`, `endif`…);
+  - para JC haría falta un `JcTokenMaker`, con la lista de palabras de `JcLexer`, `/* … */` entre líneas, `'c'` y los
+    escapes; el plegado, el `CurlyFoldParser` que trae RSyntaxTextArea; y el estilo, por la extensión del fichero.
+- **El depurador:** los puntos de parada van por el nombre del fichero y la línea, y el `.dbg` dice el `.jc`. Nada que
+  tocar.
+- **Los errores:** el IDE los lee con una expresión que ya casa con los de JC.
+- **Traducir:**
+  - no hay menú de herramientas, y el de Editar está vacío;
+  - hoy la traducción no se puede llamar desde el IDE: `--escribir-jc` y `--escribir-bp` acaban en `System.exit` y
+    escriben por el `stdout` crudo. Hace falta una entrada pública que devuelva el texto, o el error, sin salir;
+  - por decidir con Eduardo: qué hace «traducir», si un buffer nuevo sin guardar o un fichero al lado. Y un proyecto
+    con `X.bp` y `X.jc` a la vez no compila.

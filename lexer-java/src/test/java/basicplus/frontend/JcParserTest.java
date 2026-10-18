@@ -136,10 +136,23 @@ class JcParserTest {
         assertTrue(!si.isSingleLine, "con else no es el if de una línea de BP");
         // El import Core implícito, al final, como el parser de BP.
         assertTrue(m.imports.get(m.imports.size() - 1).implicito);
+        assertTrue(m.escritoEnJc, "el análisis comprueba el new y el (T) x de un módulo de JC");
     }
 
     @Test
-    @DisplayName("lo que la primera fase deja fuera, o JC no tiene, es un error con su motivo")
+    @DisplayName("el cuerpo que lanza de una native de pack, el de BP, crea su RuntimeError con new (el análisis lo mira)")
+    void nativeDePack() {
+        Ast.ModuleNode m = JcParser.leer(
+            "module M\n{\n   import v1 from pack \"SQLI\";\n   public native function int sql_open(string camino);\n}\n");
+        Ast.FuncDef f = (Ast.FuncDef) m.defs.get(0);
+        assertTrue(f.isPackExtern);
+        Ast.CallExpr crea = (Ast.CallExpr) ((Ast.ThrowStmt) f.body.get(0)).value;
+        assertEquals("RuntimeError", ((Ast.IdentifierExpr) crea.callee).name);
+        assertTrue(crea.conNew, "en JC, crear un objeto lleva new: sin la marca, el análisis lo daría por error");
+    }
+
+    @Test
+    @DisplayName("lo que JC no tiene, o no deja escribir así, es un error con su motivo")
     void erroresConNombre() {
         error(jcMain("      int x = 1;\n      x *= 2;\n"), "compuestos");
         error(jcMain("      print();\n"), "vacío");

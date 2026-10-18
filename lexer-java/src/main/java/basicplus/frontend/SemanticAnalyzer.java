@@ -124,6 +124,15 @@ public final class SemanticAnalyzer {
     private boolean seenSuperCallInCtor;
     private boolean isFirstStmtOfCtor;
 
+    /** V8 #698 — el módulo se leyó de un `.jc`: se comprueba que el `new` y el `(T) x` escritos casan con lo que
+     *  cada llamada es ({@link #revisaJc}). */
+    private boolean enJc = false;
+    /** V8 #698 — las llamadas `MiClase(…)` que delegan en otro constructor (#511); en JC, el `: this(…)`. */
+    private final Set<CallExpr> delegacionesCtor = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    /** Las conversiones primitivas de BP, `integer(x)`…: las mismas que escribe EscritorJc como `(T) x`. */
+    private static final Set<String> CONVERSIONES_PRIMITIVAS = new HashSet<>(java.util.Arrays.asList(
+            "integer", "long", "float", "double", "byte", "int8", "word", "int16"));
+
     /** Imports cargados desde .bpi antes de analizar, indexados por alias. */
     private final java.util.List<Symbol.ImportedNamespaceSymbol> preloadedImports = new java.util.ArrayList<>();
 
@@ -150,6 +159,7 @@ public final class SemanticAnalyzer {
     }
 
     public SemanticInfo analyze(ModuleNode mod) {
+        enJc = mod.escritoEnJc;
         declarePass(mod);
         injectImports(mod);
         resolveTypesPass(mod);
@@ -1626,6 +1636,10 @@ public final class SemanticAnalyzer {
 
         isFirstStmtOfCtor = fs.isConstructor;
         seenSuperCallInCtor = false;
+        if (enJc && fs.isConstructor && currentClass != null) {   // V8 #698: la delegación no lleva `new`
+            CallExpr d = llamadaAlPropioCtor(f.body, currentClass);
+            if (d != null) delegacionesCtor.add(d);
+        }
 
         analyzeBody(f.body, localScope);
         // #540 (V7/H1) — la asignación definida de las locales, sobre el cuerpo ya anotado.
@@ -2759,7 +2773,10 @@ public final class SemanticAnalyzer {
         else if (e instanceof IdentifierExpr) t = analyzeIdentifier((IdentifierExpr) e, scope);
         else if (e instanceof MemberAccessExpr) t = analyzeMemberAccess((MemberAccessExpr) e, scope);
         else if (e instanceof IndexExpr)     t = analyzeIndex((IndexExpr) e, scope);
-        else if (e instanceof CallExpr)      t = analyzeCall((CallExpr) e, scope);
+        else if (e instanceof CallExpr) {
+            t = analyzeCall((CallExpr) e, scope);
+            if (enJc) revisaJc((CallExpr) e, t);
+        }
         else if (e instanceof UnaryExpr)     t = analyzeUnary((UnaryExpr) e, scope);
         else if (e instanceof BinaryExpr)    t = analyzeBinary((BinaryExpr) e, scope);
         else if (e instanceof InstanceOfExpr) t = analyzeInstanceOf((InstanceOfExpr) e, scope);
@@ -3401,6 +3418,71 @@ public final class SemanticAnalyzer {
         if (target == null && ce.callee instanceof IdentifierExpr)
             err(ce.line, ce.column, "no se puede llamar a '" + ((IdentifierExpr) ce.callee).name + "'");
         return ErrorType.INSTANCE;
+    }
+
+    /** V8 #698 — JC escribe lo que BP deduce de los tipos: `new X(…)` en una construcción (punto 22) y `(T) x` en una
+     *  conversión (punto 23). El árbol es el mismo, la llamada `X(…)` de BP con las marcas `conNew` y `esConversion`,
+     *  y quien sabe qué es cada llamada es el análisis: aquí se mira que lo escrito casa con lo que es, con la misma
+     *  regla con la que EscritorJc lo escribe. La primera sentencia de un constructor que llama a su propia clase
+     *  delega en otro constructor (#511): en JC es el `: this(…)` de la cabecera, sin `new`. */
+    private void revisaJc(CallExpr ce, BpType t) {
+        if (t instanceof ErrorType) return;   // lo que fallaba ya está dicho
+        String n = nombreLlamado(ce.callee);   // como se escribió; el tipo, como se escribe en JC:
+        String tipo = nombreJc(n);
+        boolean conversion = ce.args.size() == 1 && (info.refCasts.contains(ce) || (ce.callee instanceof IdentifierExpr
+                && CONVERSIONES_PRIMITIVAS.contains(((IdentifierExpr) ce.callee).name)));
+        boolean construye = !conversion && info.exprSymbols.get(ce.callee) instanceof ClassSymbol;
+        if (delegacionesCtor.contains(ce)) {
+            if (ce.conNew)
+                err(ce.line, ce.column, "'new " + n + "(…)' como primera sentencia de su constructor delega en otro"
+                        + " constructor (#511): en JC se escribe ': this(…)', en la cabecera del constructor");
+            return;
+        }
+        if (conversion) {
+            if (ce.conNew)
+                err(ce.line, ce.column, "'new " + n + "(x)' es una conversión, no crea un objeto: en JC se escribe '("
+                        + tipo + ") x'");
+            else if (!ce.esConversion)
+                err(ce.line, ce.column, "'" + n + "(x)' es una conversión: en JC se escribe '(" + tipo + ") x'");
+        } else if (construye) {
+            if (ce.esConversion) {
+                BpType at = ce.args.isEmpty() ? null : info.exprTypes.get(ce.args.get(0));
+                err(ce.line, ce.column, "'(" + n + ") x' no es una conversión"
+                        + (at != null ? ": un '" + nombreJc(at.display()) + "' no se convierte en '" + n
+                                + "' (se baja desde Object o desde un antepasado)" : "")
+                        + "; para crear un objeto, 'new " + n + "(…)'");
+            } else if (!ce.conNew) {
+                err(ce.line, ce.column, "'" + n + "(…)' crea un objeto: en JC se escribe 'new " + n + "(…)'");
+            }
+        } else if (ce.conNew) {
+            err(ce.line, ce.column, "'new' crea un objeto de una clase, y '" + n + "' no es una clase");
+        } else if (ce.esConversion) {
+            err(ce.line, ce.column, "'(" + n + ") x' no es una conversión: '" + n + "' no es un tipo");
+        }
+    }
+
+    /** El nombre de un tipo primitivo como se escribe en JC (punto 6), para los mensajes de {@link #revisaJc}; lo
+     *  demás, tal cual. (Los otros mensajes del análisis dicen los nombres de BP.) */
+    private static String nombreJc(String tipo) {
+        switch (tipo) {
+            case "integer": return "int";
+            case "boolean": return "bool";
+            case "int8":    return "sbyte";
+            case "int16":   return "short";
+            case "word":    return "ushort";
+            default:        return tipo;
+        }
+    }
+
+    /** El nombre de lo que se llama, para los mensajes: `f`, `Lib.Clase`, `obj.metodo`. */
+    private static String nombreLlamado(IExpr callee) {
+        if (callee instanceof IdentifierExpr) return ((IdentifierExpr) callee).name;
+        if (callee instanceof MemberAccessExpr) {
+            MemberAccessExpr ma = (MemberAccessExpr) callee;
+            return nombreLlamado(ma.target) + "." + ma.member;
+        }
+        if (callee instanceof ThisExpr) return "this";
+        return "…";
     }
 
     private void checkArgs(int line, int col, List<ParamSymbol> ps, List<IExpr> args, Scope scope) {

@@ -321,6 +321,14 @@ public final class Main {
         } else {
             Path mainBp = Paths.get(proj.sourceDir, proj.main + ".bp")
                     .toAbsolutePath().normalize();
+            // V8 #698 — o en JC. Con los dos, no se adivina cuál: se dice.
+            Path mainJc = Paths.get(proj.sourceDir, proj.main + ".jc").toAbsolutePath().normalize();
+            if (Files.exists(mainBp) && Files.exists(mainJc)) {
+                System.err.println("el main está dos veces, " + mainBp.getFileName() + " y " + mainJc.getFileName()
+                        + ": el proyecto no sabe cuál compilar");
+                return false;
+            }
+            if (Files.exists(mainJc)) mainBp = mainJc;
             if (!Files.exists(mainBp)) {
                 System.err.println("no se encuentra el fichero del main: " + mainBp);
                 return false;
@@ -600,7 +608,7 @@ public final class Main {
         Version.banner();
         Parsed parsed = parseAndPrint(p, ctx, /*isRoot*/true);
         if (parsed == null || parsed.module == null) return;
-        if (!parsed.parser.getErrors().isEmpty()) return;
+        if (!parsed.parseErrors.isEmpty()) return;
 
         SemanticAnalyzer analyzer = new SemanticAnalyzer();
         SemanticInfo info = analyzer.analyze(parsed.module);
@@ -647,8 +655,8 @@ public final class Main {
             ctx.outDir = tmp;
             Parsed parsed = parseAndPrint(src, ctx, true);
             if (parsed == null || parsed.module == null) { r.error = "el fuente no se lee"; return r; }
-            if (!parsed.lexer.getErrors().isEmpty())  { r.error = parsed.lexer.getErrors().get(0).toString(); return r; }
-            if (!parsed.parser.getErrors().isEmpty()) { r.error = parsed.parser.getErrors().get(0).toString(); return r; }
+            if (!parsed.lexErrors.isEmpty())   { r.error = parsed.lexErrors.get(0).toString(); return r; }
+            if (!parsed.parseErrors.isEmpty()) { r.error = parsed.parseErrors.get(0).toString(); return r; }
             Ast.ModuleNode m = parsed.module;
             EscritorJc.contarArgumentos(m, r.argsEscritos);   // antes de que el análisis rellene los que faltan
             List<Ast.ImportNode> delFuente = new ArrayList<>(m.imports);
@@ -725,8 +733,8 @@ public final class Main {
 
             Parsed parsed = parseAndPrint(src, ctx, /*isRoot*/depth == 0);
             if (parsed == null) return false;
-            if (!parsed.lexer.getErrors().isEmpty() || !parsed.parser.getErrors().isEmpty()) {
-                ctx.totalErrors += parsed.lexer.getErrors().size() + parsed.parser.getErrors().size();
+            if (parsed.conErrores()) {
+                ctx.totalErrors += parsed.numErrores();
                 // N-parse-recover-semantic — el parser se recupera a nivel
                 // sentencia/función (synchronize / synchronizeToFunctionEnd),
                 // así que tras un error de parseo suele quedar un AST
@@ -1031,8 +1039,8 @@ public final class Main {
 
             Parsed parsed = parseAndPrint(src, ctx, /*isRoot*/depth == 0);
             if (parsed == null) return false;
-            if (!parsed.lexer.getErrors().isEmpty() || !parsed.parser.getErrors().isEmpty()) {
-                ctx.totalErrors += parsed.lexer.getErrors().size() + parsed.parser.getErrors().size();
+            if (parsed.conErrores()) {
+                ctx.totalErrors += parsed.numErrores();
                 indent(depth); System.err.println("interface abortada por errores de parseo en " + srcAbs.getFileName());
                 return false;
             }
@@ -1461,6 +1469,7 @@ public final class Main {
      * puede determinar el module.
      */
     private static String peekArtifactName(Path bpSrc, String ext) {
+        if (esJc(bpSrc)) return peekArtifactNameJc(bpSrc, ext);
         try {
             String lib = "";
             String mod = "";
@@ -1480,6 +1489,24 @@ public final class Main {
             if (mod.isEmpty()) return null;
             return lib.isEmpty() ? (mod + ext) : (lib + "." + mod + ext);
         } catch (IOException ex) {
+            return null;
+        }
+    }
+
+    /** V8 #698 — el mismo nombre desde un `.jc`, por sus tokens (`library "x.y";` y `module M`): por líneas, un
+     *  comentario de bloque que dijera `module` lo confundiría. */
+    private static String peekArtifactNameJc(Path src, String ext) {
+        try {
+            List<JcLexer.Tok> ts = JcLexer.leer(new String(Files.readAllBytes(src), StandardCharsets.UTF_8));
+            String lib = "";
+            for (int i = 0; i + 1 < ts.size(); i++) {
+                JcLexer.Tok t = ts.get(i), sig = ts.get(i + 1);
+                if (t.es("library") && sig.tipo == JcLexer.Tipo.CADENA) lib = (String) sig.valor;
+                else if (t.es("module") && sig.tipo == JcLexer.Tipo.NOMBRE)
+                    return lib.isEmpty() ? (sig.texto + ext) : (lib + "." + sig.texto + ext);
+            }
+            return null;
+        } catch (IOException | JcLexer.Error ex) {
             return null;
         }
     }
@@ -3542,10 +3569,36 @@ public final class Main {
     // ============================================================
     // LEX + PARSE + PRINTS
     // ============================================================
+    /** Lo que sale de leer un fuente: el árbol y sus errores. V8 #698: de un `.bp`, por el Lexer y el Parser de BP;
+     *  de un `.jc`, por JcParser, al mismo árbol (y como se para en el primer error, uno como mucho). */
     private static final class Parsed {
-        Lexer lexer;
-        Parser parser;
         Ast.ModuleNode module;
+        final List<LexerError> lexErrors = new ArrayList<>();
+        final List<ParserError> parseErrors = new ArrayList<>();
+        boolean conErrores() { return !lexErrors.isEmpty() || !parseErrors.isEmpty(); }
+        int numErrores() { return lexErrors.size() + parseErrors.size(); }
+    }
+
+    /** V8 #698 — un fuente de JC: BP con la ropa de Java y C#, al mismo árbol. */
+    static boolean esJc(Path src) {
+        Path f = src.getFileName();
+        return f != null && f.toString().endsWith(".jc");
+    }
+
+    /** JC: el árbol, o el primer error en la lista que le toca (el escáner da los léxicos; el parser, los demás). */
+    private static void leerJc(String source, Ctx ctx, boolean isRoot, Parsed r) {
+        try {
+            if (isRoot && ctx.showTokens) {
+                List<JcLexer.Tok> toks = JcLexer.leer(source);
+                System.out.printf("-- Tokens de JC (%d) --%n", toks.size());
+                for (JcLexer.Tok t : toks) System.out.printf("%5d:%-3d  %-9s  %s%n", t.linea, t.columna, t.tipo, t);
+                System.out.println();
+            }
+            r.module = JcParser.leer(source);
+        } catch (JcLexer.Error e) {
+            if (e.lexico) r.lexErrors.add(new LexerError(e.mensaje, e.linea, e.columna));
+            else          r.parseErrors.add(new ParserError(e.mensaje, e.linea, e.columna));
+        }
     }
 
     private static Parsed parseAndPrint(Path src, Ctx ctx, boolean isRoot) {
@@ -3562,23 +3615,32 @@ public final class Main {
         }
 
         Parsed r = new Parsed();
-        r.lexer = new Lexer(source);
-        List<Token> tokens = r.lexer.tokenize();
+        Parser parser = null;
+        if (esJc(src)) {
+            leerJc(source, ctx, isRoot, r);
+        } else {
+            Lexer lexer = new Lexer(source);
+            List<Token> tokens = lexer.tokenize();
 
-        if (isRoot && ctx.showTokens) {
-            System.out.printf("-- Tokens (%d) --%n", tokens.size());
-            System.out.printf("%-9s  %-12s  lexema  =>  valor%n", "line:col", "TYPE");
-            System.out.println(repeat('-', 70));
-            for (Token t : tokens) System.out.println(t);
-            System.out.println();
+            if (isRoot && ctx.showTokens) {
+                System.out.printf("-- Tokens (%d) --%n", tokens.size());
+                System.out.printf("%-9s  %-12s  lexema  =>  valor%n", "line:col", "TYPE");
+                System.out.println(repeat('-', 70));
+                for (Token t : tokens) System.out.println(t);
+                System.out.println();
+            }
+            r.lexErrors.addAll(lexer.getErrors());
+            parser = new Parser(tokens);
         }
-        if (!r.lexer.getErrors().isEmpty()) {
-            System.out.printf("-- Errores léxicos en %s (%d) --%n", src.getFileName(), r.lexer.getErrors().size());
-            for (LexerError e : r.lexer.getErrors()) System.out.println(e);
+        if (!r.lexErrors.isEmpty()) {
+            System.out.printf("-- Errores léxicos en %s (%d) --%n", src.getFileName(), r.lexErrors.size());
+            for (LexerError e : r.lexErrors) System.out.println(e);
         }
 
-        r.parser = new Parser(tokens);
-        r.module = r.parser.parseModule();
+        if (parser != null) {
+            r.module = parser.parseModule();
+            r.parseErrors.addAll(parser.getErrors());
+        }
         Barajar.aplicar(r.module);   // V7/H2 (#523, V1): --barajar / --relleno, si se pidieron
 
         if (isRoot && ctx.showAst) {
@@ -3588,9 +3650,9 @@ public final class Main {
                 System.out.println();
             }
         }
-        if (!r.parser.getErrors().isEmpty()) {
-            System.out.printf("-- Errores sintácticos en %s (%d) --%n", src.getFileName(), r.parser.getErrors().size());
-            for (ParserError e : r.parser.getErrors()) System.out.println(e);
+        if (!r.parseErrors.isEmpty()) {
+            System.out.printf("-- Errores sintácticos en %s (%d) --%n", src.getFileName(), r.parseErrors.size());
+            for (ParserError e : r.parseErrors) System.out.println(e);
         }
         return r;
     }
