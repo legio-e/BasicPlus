@@ -31,7 +31,8 @@
 > check-jc` compila y ejecuta en JC el corpus de la paridad. Antes, `#700` en el compilador de BP. Salen dos fichas:
 > `#703`, la línea de JC que no se cierra con su `"\n"` (cerrada con el `println` que decidió Eduardo), y `#704`, el
 > orden de las tuplas en el `.mod`, que es de BP. Y el IDE abre, colorea, compila y traduce JC. Al final, Eduardo da
-> JC por validado: es el H1 de V8, cerrado.**
+> JC por validado: es el H1 de V8, cerrado. El Bluetooth pasa a ser el H2, a medias y parado, y la WiFi, el H3, el
+> siguiente.**
 >
 > **Lo que dijo Eduardo:** *«continuamos JC»*. Y al salir `#703`: *«añadimos una función println()»*; la traducción
 > del IDE, en una pestaña nueva sin guardar. Y al final, tras probarlo en el IDE y en la placa: *«creo que podemos dar
@@ -40,7 +41,10 @@
 > queda: **H1 de V8, cerrado el 18-oct**, con sus diez apartados y sus commits en FICHAS (bloque V8, «🧩 H1»); los
 > hitos de V8, numerados con `H` como en V7. Y para el final de la versión (Eduardo): *«En la documentación final de la
 > V8 habrá que añadir la documentación de JC. En el IDE las 2 opciones de traducción nuevas también habrá que
-> añadirlas»*. Va en `D1` de V8, abierto ya en FICHAS para ir juntando lo que tiene que llevar.
+> añadirlas»*. Va en `D1` de V8, abierto ya en FICHAS para ir juntando lo que tiene que llevar. Y para cerrar la
+> sesión: *«Tenemos el BlueTooth a medias, de momento no lo tocamos (puede ser H2). Hay que probar el BlueTooth en la
+> Pico2 a ver que es lo que podemos hacer común y que difiere. Lo siguiente que podemos añadir es la Wifi (H3), pero lo
+> dejamos para una nueva sesión, de momento descanso.»*
 >
 > **Lo hecho:**
 > - **`#700`** (`152fcd9b`): un `print` que acaba en `;` no salta de línea. Sólo el compilador.
@@ -72,6 +76,11 @@
 > Medido sin la ventana: el jar del IDE lleva lo nuevo y una sonda tokeniza JC. El frontend, 311 pruebas sin fallos.
 >
 > **Para la siguiente sesión:**
+> - **lo siguiente es la WiFi, el H3** (Eduardo): la red en placa, el backend de `Net`, que hoy sólo tiene el del PC.
+>   Se empieza por el análisis, en `V8_IDEAS`, antes de programar;
+> - **el Bluetooth, el H2, queda parado** (`#697`). Cuando se retome, lo primero es probarlo en la Pico 2: qué parte es
+>   común con la P4 y qué difiere. Por confirmar con Eduardo qué placa: la radio de la RP2350 es el CYW43439 de la Pico
+>   2 W, y en el parque la Pico 2 no consta como W;
 > - **el IDE, probado por Eduardo con la ventana** el mismo día: `JsonDemo` traducido a JC, guardado como
 >   `samplesJC/JsonDemo.jc` (en el repositorio) y ejecutado en la placa, con la salida del `.bp`. El jar es
 >   `BpIde/target/BpIde-7.0.jar`, del 18-oct (13:14), con el frontend instalado en `~/.m2` a la misma hora. Si hay

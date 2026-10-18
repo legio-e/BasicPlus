@@ -6986,12 +6986,16 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > ### 🏁 LOS HITOS DE V8 — como en V7, con `H` y numerados
 >
 > Eduardo, 18-oct, al dar JC por validado: *«Por tener la documentación ordenada. Esto puede ser el H1 (hito 1) de V8,
-> con sus diferentes apartados. Y le damos el OK»*. V8 sigue en modo experimentar: un experimento que sale bien y
-> Eduardo valida pasa a ser un hito, con sus apartados, y los ajustes que salgan después se hacen dentro de V8.
+> con sus diferentes apartados. Y le damos el OK»*. Y ese mismo día, el H2 y el H3: *«Tenemos el BlueTooth a medias, de
+> momento no lo tocamos (puede ser H2). […] Lo siguiente que podemos añadir es la Wifi (H3)»*. V8 sigue en modo
+> experimentar; los hitos los nombra Eduardo, cada uno con sus apartados, y los ajustes que salgan después se hacen
+> dentro de V8.
 >
 > | hito | qué | estado |
 > |---|---|---|
 > | **H1** | **JC**: BasicPlus con la ropa de Java y C#. El mismo árbol, un escáner y un parser nuevos, la traducción en los dos sentidos, el compilador y el IDE (`#698`) | ✅ **CERRADO el 18-oct**, validado por Eduardo. Sus diez apartados, en «🧩 H1», abajo |
+> | **H2** | **el Bluetooth** (`#697`, el experimento E1): el teclado y el ratón por Bluetooth LE, hoy en la P4 | 🔶 **a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Los pasos 1 y 2, hechos el 14-oct en la P4. Lo siguiente, cuando se retome: probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere |
+> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC) | ⏭️ **el siguiente**, en una sesión nueva (Eduardo, 18-oct) |
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
@@ -7288,7 +7292,7 @@ en `V8_IDEAS.md` §E2:
 - **Lo siguiente**, para más adelante: que un módulo importe a otro escrito en `.jc`; `#704`; los comentarios en la
   traducción. Y su documentación, en la final de V8 (Eduardo, 18-oct): en `D1`, en el bloque V8.
 
-#### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
+#### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir · **es el H2 de V8**, Eduardo, 18-oct: a medias y parado)
 
 Propuesto por Eduardo el 13-oct: emparejar con la P4 su teclado y su ratón Bluetooth, chinos y sin documentación. Los
 dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
@@ -7334,6 +7338,11 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
   - la parte de la imagen: el anfitrión, el JSON de `/sys` y el almacén de las claves.
 
   ⚠️ Medido: la imagen fusionada con la que se actualiza el firmware borra la NVS, y con ella las claves de NimBLE.
+- **18-oct, el H2 de V8, parado** (Eduardo: *«Tenemos el BlueTooth a medias, de momento no lo tocamos (puede ser H2).
+  Hay que probar el BlueTooth en la Pico2 a ver que es lo que podemos hacer común y que difiere.»*). Cuando se
+  retome, antes del módulo de BasicPlus va la Pico 2: qué parte del anfitrión es común con la de la P4 y qué difiere.
+  Por confirmar con Eduardo qué placa: la radio de la familia RP2350 es el CYW43439 de la Pico 2 W, y en el parque la
+  Pico 2 no consta como W.
   Las claves tienen que vivir con la configuración, fuera de la NVS. Todo, en `V8_IDEAS.md` §E1.
 - **Lo siguiente**: el paso 3, cómo lo vería BasicPlus (el ratón como puntero de LVGL con su cursor, el teclado en el
   campo con el foco, eventos para el programa, el programa de configuración y su módulo). Las preguntas que quedan,

@@ -8,12 +8,16 @@
 > Probaremos cosas y lo que funcione lo subiremos al final y lo que no funcione se puede aplazar para más adelante.»*
 > El tema, decidido el 24-sep: la WiFi, el Bluetooth y el bajo consumo.
 >
-> **Los hitos** (Eduardo, 18-oct): un experimento que funciona y Eduardo valida pasa a ser un hito `H` numerado, como
-> en V7, con sus apartados en `FICHAS.md`. **H1 = JC** (E2, abajo), cerrado el 18-oct.
+> **Los hitos** (Eduardo, 18-oct): `H` numerados, como en V7, con sus apartados en `FICHAS.md`, y los nombra Eduardo.
+> **H1 = JC** (E2, abajo), cerrado el 18-oct. **H2 = el Bluetooth** (E1, abajo), a medias y parado. **H3 = la WiFi**, el
+> siguiente, en una sesión nueva.
 
 ---
 
 ## E1 · El teclado y el ratón Bluetooth en la P4 (`#697`)
+
+> 🔶 **Es el H2 de V8, a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Cuando se retome, lo
+> primero es probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere; luego, el módulo de BasicPlus.
 
 ### De dónde sale
 
