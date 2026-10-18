@@ -7019,8 +7019,28 @@ Agrupa, no duplica: el detalle de cada apartado está en su ficha (`#698`, `#700
 - **Los ajustes que pueden venir, dentro de V8** (Eduardo: *«más adelante en esta misma versión 8»*):
   - que un módulo importe a otro escrito en `.jc`;
   - los comentarios en la traducción;
-  - los nombres de JC en los mensajes del análisis;
-  - la guía del IDE y el manual de JC, si JC sube al final de V8.
+  - los nombres de JC en los mensajes del análisis.
+- **Y su documentación, en la final de V8** (Eduardo, 18-oct): la de JC y las dos opciones de traducción en la guía
+  del IDE. Están en `D1`, aquí abajo.
+
+#### 📚 `D1` — LA DOCUMENTACIÓN DE V8 (abierto el 18-oct, para el final de la versión, como el `D1` de V6 y el de V7)
+
+Lo que ya se sabe que tiene que llevar. Eduardo, 18-oct: *«En la documentación final de la V8 habrá que añadir la
+documentación de JC. En el IDE las 2 opciones de traducción nuevas también habrá que añadirlas.»*
+- **La documentación de JC (H1).** Es el lenguaje y cómo se usa, y la materia está en `V8_IDEAS` §E2:
+  - la sintaxis (los puntos 1 a 36, con el `println`), lo que choca con BP y lo que JC no tiene;
+  - el ejemplo en BP y en JC;
+  - cómo se compila un `.jc`, también en un proyecto;
+  - las opciones del compilador: `--escribir-jc`, `--escribir-bp` y `--comprobar-jc`;
+  - que los comentarios no viajan al traducir.
+
+  Si va en un volumen propio o dentro del manual, se decide entonces.
+- **La guía del IDE:**
+  - las dos opciones nuevas de Edit, «Traducir a JC» y «Traducir a BP», que abren la traducción en una pestaña nueva
+    sin guardar;
+  - los `.jc` en el IDE: abrirlos y guardarlos, el coloreado y el plegado por llaves, el main de un proyecto en
+    `.jc` y el aviso cuando están los dos.
+- En los dos idiomas, como el resto. Lo que vaya saliendo en V8 para la documentación final se añade aquí.
 
 #### 🔵 `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente)
 
@@ -7266,7 +7286,7 @@ en `V8_IDEAS.md` §E2:
     `samplesJC/JsonDemo.jc` (ahora en el repositorio) y ejecutado en la placa (COM22), `exit 0`. Su salida es la del
     `.bp`, las 30 líneas, también en las dos VMs del PC.
 - **Lo siguiente**, para más adelante: que un módulo importe a otro escrito en `.jc`; `#704`; los comentarios en la
-  traducción; la guía del IDE y el manual de JC, si JC sube al final de V8.
+  traducción. Y su documentación, en la final de V8 (Eduardo, 18-oct): en `D1`, en el bloque V8.
 
 #### 🧪 `#697` — V8, experimento 1: el teclado y el ratón Bluetooth en la P4 (abierta el 14-oct; **pasos 1 y 2, hechos el mismo día**; el diseño del paso 3, por decidir)
 

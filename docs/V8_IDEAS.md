@@ -281,7 +281,8 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
 
 > ✅ **Es el H1 de V8, cerrado el 18-oct** (Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta
 > misma versión 8 podemos hacer algún ajuste adicional»*). Sus diez apartados, con sus commits, en `FICHAS.md`, bloque
-> V8, «🧩 H1». Este cuaderno guarda el diseño y lo medido de cada paso.
+> V8, «🧩 H1». Este cuaderno guarda el diseño y lo medido de cada paso, y es la materia de la documentación de JC, que
+> va en la final de V8 con las dos opciones de traducción del IDE (Eduardo, 18-oct; `FICHAS`, `D1` de V8).
 
 ### La idea
 

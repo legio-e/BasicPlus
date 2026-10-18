@@ -38,7 +38,9 @@
 > este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional. Por tener la
 > documentación ordenada. Esto puede ser el H1 (hito 1) de V8, con sus diferentes apartados. Y le damos el OK»*. Así
 > queda: **H1 de V8, cerrado el 18-oct**, con sus diez apartados y sus commits en FICHAS (bloque V8, «🧩 H1»); los
-> hitos de V8, numerados con `H` como en V7.
+> hitos de V8, numerados con `H` como en V7. Y para el final de la versión (Eduardo): *«En la documentación final de la
+> V8 habrá que añadir la documentación de JC. En el IDE las 2 opciones de traducción nuevas también habrá que
+> añadirlas»*. Va en `D1` de V8, abierto ya en FICHAS para ir juntando lo que tiene que llevar.
 >
 > **Lo hecho:**
 > - **`#700`** (`152fcd9b`): un `print` que acaba en `;` no salta de línea. Sólo el compilador.
