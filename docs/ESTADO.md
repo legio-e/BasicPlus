@@ -30,10 +30,15 @@
 > **18-oct** — **JC genera código: el compilador lee `.jc`, el análisis comprueba el `new` y el `(T) x`, y `compat.sh
 > check-jc` compila y ejecuta en JC el corpus de la paridad. Antes, `#700` en el compilador de BP. Salen dos fichas:
 > `#703`, la línea de JC que no se cierra con su `"\n"` (cerrada con el `println` que decidió Eduardo), y `#704`, el
-> orden de las tuplas en el `.mod`, que es de BP. Y el IDE abre, colorea, compila y traduce JC.**
+> orden de las tuplas en el `.mod`, que es de BP. Y el IDE abre, colorea, compila y traduce JC. Al final, Eduardo da
+> JC por validado: es el H1 de V8, cerrado.**
 >
 > **Lo que dijo Eduardo:** *«continuamos JC»*. Y al salir `#703`: *«añadimos una función println()»*; la traducción
-> del IDE, en una pestaña nueva sin guardar.
+> del IDE, en una pestaña nueva sin guardar. Y al final, tras probarlo en el IDE y en la placa: *«creo que podemos dar
+> este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional. Por tener la
+> documentación ordenada. Esto puede ser el H1 (hito 1) de V8, con sus diferentes apartados. Y le damos el OK»*. Así
+> queda: **H1 de V8, cerrado el 18-oct**, con sus diez apartados y sus commits en FICHAS (bloque V8, «🧩 H1»); los
+> hitos de V8, numerados con `H` como en V7.
 >
 > **Lo hecho:**
 > - **`#700`** (`152fcd9b`): un `print` que acaba en `;` no salta de línea. Sólo el compilador.

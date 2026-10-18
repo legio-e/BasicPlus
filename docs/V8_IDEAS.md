@@ -7,6 +7,9 @@
 > **El modo de V8** (Eduardo, 13-oct): *«V8 es para probar cosas nuevas, para experimentar, sin ponernos obligaciones.
 > Probaremos cosas y lo que funcione lo subiremos al final y lo que no funcione se puede aplazar para más adelante.»*
 > El tema, decidido el 24-sep: la WiFi, el Bluetooth y el bajo consumo.
+>
+> **Los hitos** (Eduardo, 18-oct): un experimento que funciona y Eduardo valida pasa a ser un hito `H` numerado, como
+> en V7, con sus apartados en `FICHAS.md`. **H1 = JC** (E2, abajo), cerrado el 18-oct.
 
 ---
 
@@ -275,6 +278,10 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
 ---
 
 ## E2 · JC: BasicPlus con camisa de Java y C# (Eduardo, 17-oct)
+
+> ✅ **Es el H1 de V8, cerrado el 18-oct** (Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta
+> misma versión 8 podemos hacer algún ajuste adicional»*). Sus diez apartados, con sus commits, en `FICHAS.md`, bloque
+> V8, «🧩 H1». Este cuaderno guarda el diseño y lo medido de cada paso.
 
 ### La idea
 

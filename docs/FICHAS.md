@@ -6982,6 +6982,45 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >
 > No es aplazar: la regla de V7 —lo que se abre en V7 se cierra o se cancela en V7— sigue para todo lo demás.
 > Es el tema de la versión siguiente, y lo decide Eduardo.
+>
+> ### 🏁 LOS HITOS DE V8 — como en V7, con `H` y numerados
+>
+> Eduardo, 18-oct, al dar JC por validado: *«Por tener la documentación ordenada. Esto puede ser el H1 (hito 1) de V8,
+> con sus diferentes apartados. Y le damos el OK»*. V8 sigue en modo experimentar: un experimento que sale bien y
+> Eduardo valida pasa a ser un hito, con sus apartados, y los ajustes que salgan después se hacen dentro de V8.
+>
+> | hito | qué | estado |
+> |---|---|---|
+> | **H1** | **JC**: BasicPlus con la ropa de Java y C#. El mismo árbol, un escáner y un parser nuevos, la traducción en los dos sentidos, el compilador y el IDE (`#698`) | ✅ **CERRADO el 18-oct**, validado por Eduardo. Sus diez apartados, en «🧩 H1», abajo |
+
+#### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
+
+Agrupa, no duplica: el detalle de cada apartado está en su ficha (`#698`, `#700`, `#703`) y en `V8_IDEAS` §E2.
+
+| apartado | qué | commits |
+|---|---|---|
+| **H1.1** | el análisis del coste y el método: el mismo árbol; primero AST → BP, luego AST → JC y JC → AST, por incrementos; vale con «equivalente» | `644ddc51`, `d0edb939` |
+| **H1.2** | AST → BP: `EscritorBp`, `ComparaAst`, `--escribir-bp` y `--comprobar-bp`; 469 de 469 equivalentes | `7d44b83c` |
+| **H1.3** | la sintaxis de JC, decidida por Eduardo pieza a pieza: los puntos 1 a 36 de `V8_IDEAS` §E2, con un ejemplo en BP y en JC que una prueba lee carácter a carácter | de `04c5de8e` a `6762fa08` |
+| **H1.4** | AST → JC: `EscritorJc`, desde el árbol analizado, y `--escribir-jc`; y los arrays fijos como en C | `54f21187`, `ca36067b` |
+| **H1.5** | JC → AST: `JcLexer`, `JcParser` y `--comprobar-jc`; la ida y vuelta, 283 de 283 | `d2be167a` |
+| **H1.6** | el lenguaje entero: las clases como en C#, el `switch` y `parallel`. Hacen la ida y vuelta 433 de los 440 `.bp` que compilan; los 7 que no, por lo acordado | `b92b11b0` |
+| **H1.7** | `#700`, en BP: el `print` que acaba en `;` no salta de línea. Sólo el compilador | `152fcd9b` |
+| **H1.8** | generar código desde JC: el compilador lee `.jc` (proyectos, AOT, `--escribir-bp`), el análisis comprueba el `new` y el `(T) x`, y `compat.sh check-jc` | `9a7df7b6` |
+| **H1.9** | `#703`, el `println` (Eduardo): el salto de JC. `check-jc`, 147 PASS | `991ebdbd` |
+| **H1.10** | el IDE: abrir, colorear, plegar, compilar, depurar y traducir. Probado por Eduardo con la ventana y en la placa (`samplesJC/JsonDemo.jc`) | `991ebdbd`, `52044672` |
+
+- **Las redes que lo guardan:** en el frontend, `EscritorBpTest`, `EscritorJcTest`, `JcParserTest`, `CompilaJcTest`,
+  `PrintSinSaltoTest` y `TraductorTest`; `--comprobar-jc` sobre el corpus; y `compat.sh check-jc`, que no entra en
+  `check`.
+- **Salieron de H1 y siguen abiertas aparte**, porque son de BP y no de JC: `#699` (el `continue` de un `do … loop`),
+  `#701` (el `if` de una línea al final de un bloque), `#702` (un `raise` dentro de un `set`) y `#704` (el orden de las
+  tuplas en el `.mod`).
+- **Los ajustes que pueden venir, dentro de V8** (Eduardo: *«más adelante en esta misma versión 8»*):
+  - que un módulo importe a otro escrito en `.jc`;
+  - los comentarios en la traducción;
+  - los nombres de JC en los mensajes del análisis;
+  - la guía del IDE y el manual de JC, si JC sube al final de V8.
 
 #### 🔵 `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente)
 
@@ -7127,7 +7166,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 - **De momento no se arregla** (Eduardo, 17-oct: los cambios de BP, como posibles mejoras, más adelante, para no
   mezclar demasiados cambios). Mientras, el `continue` del `do … while` de JC es el de BP.
 
-#### 💡 `#698` — V8, idea: JC, BasicPlus con camisa de Java y C# (abierta el 17-oct; **el mismo día, el análisis del coste, el paso 1 (AST → BP) y la sintaxis de la primera fase**)
+#### ✅ `#698` — V8, idea: JC, BasicPlus con camisa de Java y C# (abierta el 17-oct; **el mismo día, el análisis del coste, el paso 1 (AST → BP) y la sintaxis de la primera fase** · **CERRADA el 18-oct: es el H1 de V8, validado por Eduardo**; los apartados, en «🧩 H1»)
 
 Eduardo, 17-oct: *«es nuestro Basic Plus con una camisa diferente. Así que el AST es el mismo pero necesitamos un
 scanner y un parser nuevos»*. El nombre, JC. Primero un traductor BP → AST → JC, y luego JC → AST → BP. El análisis está
