@@ -27,6 +27,46 @@
 
 ## Última sesión
 
+> **18-oct** — **JC genera código: el compilador lee `.jc`, el análisis comprueba el `new` y el `(T) x`, y `compat.sh
+> check-jc` compila y ejecuta en JC el corpus de la paridad. Antes, `#700` en el compilador de BP. Salen dos fichas:
+> `#703`, la línea de JC que no se cierra con su `"\n"` (la decisión, de Eduardo), y `#704`, el orden de las tuplas
+> en el `.mod`, que es de BP.**
+>
+> **Lo que dijo Eduardo:** *«continuamos JC»*.
+>
+> **Lo hecho:**
+> - **`#700`** (`152fcd9b`): un `print` que acaba en `;` no salta de línea. Sólo el compilador.
+>   - El corpus da los mismos 441 `.mod`.
+>   - `PrintSinSalto` entra en la paridad, también con dos workers, y la `native` pasa por el AOT en el PC con una
+>     sonda.
+>   - `PrintSinSaltoTest` mira la salida exacta, que la paridad no ve.
+>   - El manual, los dos: el `print` con sus separadores, que no estaba en ningún sitio.
+> - **Los pasos 2 y 4** (`9a7df7b6`): el compilador lee `.jc` (también los proyectos, el AOT y `--escribir-bp`); el
+>   análisis comprueba las marcas; y `check-jc`.
+> - **Las redes:**
+>   - el corpus BP, igual;
+>   - el corpus compilado desde JC: compila todo lo que se escribe;
+>   - la ida y vuelta de `bpgenvm-c/samples`, que ayer quedó fuera: 254 EQUIVALENTE.
+>
+> **Lo que salió:**
+> - **`#703`**, medido con cronómetro: un programa JC que imprime en un bucle lo saca todo al acabar el hilo. Es la
+>   línea del hilo de `#600`, que sólo se cierra con el `PRINT_NL`. Un prototipo en el emisor lo arregla para el corpus
+>   (147 PASS). Las tres maneras de arreglarlo están en la ficha; **la decisión, de Eduardo**.
+> - **`#704`**: el orden de las clases de tupla depende de los `hashCode` de identidad. `TupCrossTest` cambió de `.mod`
+>   sin cambiar de salida.
+> - Seis samples de `bpgenvm-c/samples` ya no compilan, ni en BP: `CastRt`, `GcDev`, `GcMisalign2`, `GuiClickMeas`,
+>   `OomHandles` y `tgrow`. Quedan propuestos como tarea aparte.
+> - El mapa de lo que toca en el IDE, en `V8_IDEAS` §E2.
+>
+> **Para la siguiente sesión:**
+> - el prototipo de `#703` (la opción A) no está en el árbol. Es corto (la ficha lo describe), y el parche quedó en el
+>   scratchpad de esta sesión, `jc/prototipo_salto_literal.patch`;
+> - `check-jc` da 17 FAIL hasta que se arregle `#703`;
+> - el IDE lleva el frontend de `~/.m2`, del 11-oct. Para que entre JC: `mvn install` en `lexer-java` y `mvn package`
+>   en `BpIde`, con el IDE cerrado;
+> - **una trampa nueva:** al comparar `.mod` de dos compiladores distintos, `#704` puede dar un falso distinto en un
+>   programa con tuplas de otro módulo.
+
 > **17-oct** — **Una idea de Eduardo, analizada: JC (`#698`), BasicPlus con camisa de Java y C#. El mismo AST, un
 > scanner y un parser nuevos, y un traductor en los dos sentidos. El coste, en `V8_IDEAS.md` §E2.**
 >
