@@ -6995,7 +6995,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > |---|---|---|
 > | **H1** | **JC**: BasicPlus con la ropa de Java y C#. El mismo árbol, un escáner y un parser nuevos, la traducción en los dos sentidos, el compilador y el IDE (`#698`) | ✅ **CERRADO el 18-oct**, validado por Eduardo. Sus diez apartados, en «🧩 H1», abajo |
 > | **H2** | **el Bluetooth** (`#697`, el experimento E1): el teclado y el ratón por Bluetooth LE, hoy en la P4 | 🔶 **a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Los pasos 1 y 2, hechos el 14-oct en la P4. Lo siguiente, cuando se retome: probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere |
-> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi. Y separar la conexión WiFi (el enlace) del resto del TCP/IP, *«así limitamos el alcance de cada cosa»* | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3. Decidido ese día: la P4 de Waveshare primero (la C3, la C5 y la C6, después); los ajustes, en un JSON en `/sys`; el Entorno, sólo para activar al arrancar, y sin decir nada la WiFi y el Bluetooth apagados; preconfigurada desde el IDE, y en la P4 con un programa interactivo. El TCP/IP parte de lo que se hizo con la Ethernet de la P4 Kit. **El paso 1, hecho el 19-oct** (`V8_IDEAS` §E3, «Paso 1»): la C6 de la P4, actualizada a ESP-Hosted 3.0.9 por el conector P1, con su flash de fábrica guardada; y un firmware de prueba en la P4, con el IDF 6.1, que enciende, busca, se conecta con la clave, tiene IP por DHCP, se desconecta y apaga, tres vueltas sin un fallo y con la SD a la vez en el mismo controlador. La red ocupa ~252 KB de flash y casi nada de la RAM interna de la P4. Salió `#706` (tras `esp_wifi_deinit` la WiFi no vuelve: se apaga con `esp_wifi_stop`). **Decidido ese día** (Eduardo): *«El controlador del SDMMC es del SO, no del BasicPlus. Si la wifi o el bluetooth están apagados el lector de SD debe estar encendido.»* Comprobado en la P4: el arranque crea el controlador, la SD funciona sin la C6, y `esp_hosted`, que ya no arranca solo, lo encuentra hecho; con el IDF 6.1 sin más (su `sdmmc_host_init()` devuelve el que haya; en el 6.0.1 creaba otro y fallaba, `#566`). **Y manda el ahorro de energía** (Eduardo, el mismo día): *«el estado normal tanto del wifi como el bluetooth es apagado, y se enciende cuando se necesita, y si hay 10 min de inactividad se apaga salvo que se indique lo contrario»*. Comprobado el apagado del todo (la WiFi desinicializada, el enlace con la C6 cerrado y la C6 en reset): encender 2,1 s, apagar 125 ms, la RAM de vuelta, y `#706` no aparece. Lo siguiente, el paso 2, con las decisiones que quedan (y el IDF 6.1 para la P4) |
+> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi. Y separar la conexión WiFi (el enlace) del resto del TCP/IP, *«así limitamos el alcance de cada cosa»* | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3. Decidido ese día: la P4 de Waveshare primero (la C3, la C5 y la C6, después); los ajustes, en un JSON en `/sys`; el Entorno, sólo para activar al arrancar, y sin decir nada la WiFi y el Bluetooth apagados; preconfigurada desde el IDE, y en la P4 con un programa interactivo. El TCP/IP parte de lo que se hizo con la Ethernet de la P4 Kit. **El paso 1, hecho el 19-oct** (`V8_IDEAS` §E3, «Paso 1»): la C6 de la P4, actualizada a ESP-Hosted 3.0.9 por el conector P1, con su flash de fábrica guardada; y un firmware de prueba en la P4, con el IDF 6.1, que enciende, busca, se conecta con la clave, tiene IP por DHCP, se desconecta y apaga, tres vueltas sin un fallo y con la SD a la vez en el mismo controlador. La red ocupa ~252 KB de flash y casi nada de la RAM interna de la P4. Salió `#706` (tras `esp_wifi_deinit` la WiFi no vuelve: se apaga con `esp_wifi_stop`). **Decidido ese día** (Eduardo): *«El controlador del SDMMC es del SO, no del BasicPlus. Si la wifi o el bluetooth están apagados el lector de SD debe estar encendido.»* Comprobado en la P4: el arranque crea el controlador, la SD funciona sin la C6, y `esp_hosted`, que ya no arranca solo, lo encuentra hecho; con el IDF 6.1 sin más (su `sdmmc_host_init()` devuelve el que haya; en el 6.0.1 creaba otro y fallaba, `#566`). **Y manda el ahorro de energía** (Eduardo, el mismo día): *«el estado normal tanto del wifi como el bluetooth es apagado, y se enciende cuando se necesita, y si hay 10 min de inactividad se apaga salvo que se indique lo contrario»*. Comprobado el apagado del todo (la WiFi desinicializada, el enlace con la C6 cerrado y la C6 en reset): encender 2,1 s, apagar 125 ms, la RAM de vuelta, y `#706` no aparece. **Y también decidido ese día:** el apagado se configura en el fichero de configuración, y con alimentación externa, si el sistema puede saberlo, no se apaga; y el IDF 6.1, para toda la familia ESP32 (`#707`). Lo siguiente, el paso 2, con las decisiones que quedan (entre ellas, qué cuenta como actividad) |
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
@@ -7045,6 +7045,29 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   - los `.jc` en el IDE: abrirlos y guardarlos, el coloreado y el plegado por llaves, el main de un proyecto en
     `.jc` y el aviso cuando están los dos.
 - En los dos idiomas, como el resto. Lo que vaya saliendo en V8 para la documentación final se añade aquí.
+
+#### 🔵 `#707` — la familia ESP32, al IDF 6.1 (decidida el 19-oct, Eduardo: *«Actualizamos al 6.1 para toda la familia ESP32»*; sale del H3)
+
+- **Por qué:** la WiFi de la P4 lo pide. El 6.1 trae dentro la WiFi remota (con el 6.0.1 había que bajar
+  `esp_wifi_remote`) y comparte el controlador SDMMC sin trucos: su `sdmmc_host_init()` devuelve el controlador que
+  haya, y el del 6.0.1 crea otro y falla (`#566`; `V8_IDEAS` §E3, «Paso 1»). Y toda la familia, para que haya una sola
+  versión del IDF.
+- **Lo que hay:**
+  - el 6.1, instalado por Eduardo el 19-oct con EIM en `C:\esp\v6.1`, con las herramientas y su Python en
+    `C:\Espressif\tools`;
+  - se carga con `C:\tmp\v8wifi\entorno_idf61.ps1`, sin el `eim select` del script de EIM, que cambiaría el IDF
+    elegido para los IDE. Al hacer esto, el script pasa al repositorio;
+  - las herramientas de compilar son las mismas del 6.0.1 (gcc `esp-15.2.0`, cmake 4.0.3);
+  - el 6.0.1 sigue en `C:\esp\v6.0.1`, y es el de los firmwares hasta que se haga esto;
+  - la prueba de la WiFi de la P4 ya se compila con el 6.1 y corre en la placa, con el cargador del 6.0.1.
+- **Lo que toca, por pasos:**
+  1. compilar las cinco (la S3, la C3, la C5, la C6 y la P4) con el 6.1, con su `sdkconfig` rehecho (el `.defaults`
+     no se aplica si ya hay `sdkconfig`), y compararlas con las del 6.0.1: el tamaño, la RAM libre, los avisos;
+  2. lo que cambia del IDF y nos toca: el SDMMC de la P4 (`blk_sdmmc_p4.c` suelta el controlador entero en sus
+     errores; tiene que soltar sólo su ranura) y lo que salga al compilar;
+  3. los packs sellados y las imágenes fusionadas (mirarlo con `nm` y con el `packRamBase` del INFO antes de grabar);
+  4. la tanda en las placas, con el OK de Eduardo para grabar, por lotes;
+  5. lo que dice «6.0.1» en los documentos (`PUBLICAR.md`, `INSTALAR_FIRMWARE.md` en los dos idiomas).
 
 #### 🔵 `#706` — `esp_hosted` 3.0.9, en la C6: tras desinicializar la WiFi (`esp_wifi_deinit`), no vuelve a iniciarse sin reiniciar la C6 (abierta el 19-oct, en el paso 1 del H3; es del componente de Espressif, no de BasicPlus)
 
@@ -7401,8 +7424,11 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
 > **19-oct, la primera regla, para las radios** (Eduardo, en el H3): *«Aquí lo que prima (o debería primar) es el
 > ahorro de energía. Así que el estado normal tanto del wifi como el bluetooth es apagado, y se enciende cuando se
 > necesita, y si hay 10 min de inactividad se apaga salvo que se indique lo contrario.»* En la P4, apagado del todo
-> es dejar la C6 en reset, comprobado ese día (`V8_IDEAS` §E3, «Paso 1»). Qué cuenta como actividad y dónde se dice
-> «no la apagues», en el paso 2 del H3.
+> es dejar la C6 en reset, comprobado ese día (`V8_IDEAS` §E3, «Paso 1»). Y el mismo día: *«El apagado es
+> configurable via fichero de configuración. Si el SO puede detectar si tenemos alimentación externa, entonces
+> solamente se apaga al cabo de un tiempo, con alimentación externa no hace falta que se apague.»* Qué cuenta como
+> actividad, y cómo sabe cada placa si va a pilas, queda para el paso 2 del H3; esto último es también de este
+> estudio.
 
 **La pregunta es de Eduardo, y el encuadre también**: *«cuando un micro no hace nada, porque no tiene
 nada que hacer, en un micro con alimentación da igual lo que haga, pero si fuese un micro que

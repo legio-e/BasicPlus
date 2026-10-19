@@ -30,7 +30,9 @@
 > **19-oct** — **La WiFi, el H3: el análisis, con las decisiones de Eduardo, y el paso 1, hecho en la P4. Su C6,
 > actualizada a ESP-Hosted 3.0.9 por el conector P1; y un firmware de prueba en la P4, con el IDF 6.1, que enciende,
 > busca, se conecta con la clave, tiene IP por DHCP, se desconecta y apaga, tres vueltas sin un fallo y con la SD a la
-> vez. Salen `#705` (`Net.tcpClose`, al mirar `Net`) y `#706` (`esp_hosted`: tras desinicializar, la WiFi no vuelve).**
+> vez. Salen `#705` (`Net.tcpClose`, al mirar `Net`) y `#706` (`esp_hosted`: tras desinicializar, la WiFi no vuelve).
+> Y tres decisiones de Eduardo: el controlador SDMMC es del sistema; manda el ahorro de energía (la WiFi y el
+> Bluetooth, apagados de normal); y toda la familia ESP32, al IDF 6.1 (`#707`).**
 >
 > **Lo que dijo Eduardo:**
 > - lo que quiere: *«Encender el wifi, Hacer una lista de redes wifi disponibles. Poder escoger una y conectarse.
@@ -49,6 +51,9 @@
 > - y después: *«Aquí lo que prima (o debería primar) es el ahorro de energía. Así que el estado normal tanto del wifi
 >   como el bluetooth es apagado, y se enciende cuando se necesita, y si hay 10 min de inactividad se apaga salvo que
 >   se indique lo contrario.»*
+> - y al final: *«Actualizamos al 6.1 para toda la familia ESP32. El apagado es configurable via fichero de
+>   configuración. Si el SO puede detectar si tenemos alimentación externa, entonces solamente se apaga al cabo de un
+>   tiempo, con alimentación externa no hace falta que se apague. Hacemos una pausa.»*
 >
 > **Lo hecho:**
 > - **El análisis**, en `V8_IDEAS` §E3 (`991f3fab`, `2c56ddfb`, `46c24b66`, `601fd1c4`, `032dc010`): lo que hay medido
@@ -86,9 +91,11 @@
 > - **el paso 2 del H3**, la conexión WiFi del sistema: antes, las decisiones que quedan en §E3 (la WiFi del sistema y
 >   la del programa, el módulo `Wifi`, el PC simulado, la IP en `Net`, cómo encuentra el IDE a la placa, el alcance) y
 >   las nuevas:
->   - el IDF 6.1 para la P4 (trae la WiFi remota y comparte el controlador sin trucos);
->   - qué cuenta como actividad para apagar a los 10 minutos, y dónde se dice «no la apagues»;
->   - cerrar `#706` porque el apagado del todo lo evita.
+>   - qué cuenta como actividad para apagar a los 10 minutos, y cómo sabe cada placa si va a pilas (el apagado se
+>     configura en el fichero, y con alimentación externa no se apaga: decidido);
+>   - cerrar `#706` porque el apagado del todo lo evita (lo propuse; falta que Eduardo lo confirme);
+> - **`#707`, la familia ESP32 al IDF 6.1** (decidido): las cinco compiladas y comparadas con el 6.0.1, el SDMMC de la
+>   P4, los packs y la tanda en las placas, con su OK. Antes o después del paso 2 del H3, lo dice Eduardo;
 >
 >   Y lo que trae el controlador del sistema: el driver de la SD de la P4 suelta sólo su ranura; hoy, en sus errores,
 >   suelta el controlador entero (`#566`);

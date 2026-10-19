@@ -1398,7 +1398,14 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
   que el estado normal tanto del wifi como el bluetooth es apagado, y se enciende cuando se necesita, y si hay 10 min
   de inactividad se apaga salvo que se indique lo contrario.»* En la P4, apagado del todo es la WiFi desinicializada,
   el enlace con la C6 cerrado y la C6 en reset; comprobado (abajo, «Paso 1»). Por concretar en el paso 2: qué cuenta
-  como actividad (un programa que la usa, una conexión abierta, el IDE conectado) y dónde se dice «no la apagues».
+  como actividad (un programa que la usa, una conexión abierta, el IDE conectado).
+- **El apagado por inactividad se configura en el fichero de configuración**, y depende de la alimentación (Eduardo,
+  el mismo día): *«El apagado es configurable via fichero de configuración. Si el SO puede detectar si tenemos
+  alimentación externa, entonces solamente se apaga al cabo de un tiempo, con alimentación externa no hace falta que
+  se apague.»* Es decir: a pilas, se apaga a los 10 minutos sin actividad; con alimentación externa, no. Cómo sabe
+  cada placa de dónde come está por ver: no todas pueden saberlo.
+- **El IDF 6.1, para toda la familia ESP32** (el mismo día): *«Actualizamos al 6.1 para toda la familia ESP32.»* La
+  S3, la C3, la C5, la C6 y la P4, con una sola versión del IDF. Es `#707`.
 - **La frontera:** *«la conexión wifi llegamos hasta que se establece la conexión, el resto es ya del TCP/IP»*.
 - **El TCP/IP no se empieza de cero:** *«la conexión TCP/IP ya estaba, la probamos en su día con el P4 Kit»*, por la
   Ethernet. Antes de diseñar esa parte, se repasa lo que se hizo entonces.
@@ -1659,6 +1666,7 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
 
 **Lo siguiente:** el paso 2, la conexión WiFi del sistema, con las decisiones que quedan (arriba, «Lo que hay que
 decidir») y las de este paso:
-- el IDF 6.1 para la P4;
-- qué cuenta como actividad para apagar a los 10 minutos, y dónde se dice que no se apague;
+- ~~el IDF 6.1 para la P4~~: **decidido**, para toda la familia ESP32 (`#707`);
+- qué cuenta como actividad para apagar a los 10 minutos; ~~dónde se dice que no se apague~~: **decidido**, en el
+  fichero de configuración, y con alimentación externa no se apaga;
 - cerrar `#706` porque el apagado del todo lo evita, o arreglar la C6.
