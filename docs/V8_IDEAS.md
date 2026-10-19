@@ -1381,6 +1381,39 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
 - **El TCP/IP no se empieza de cero:** *«la conexión TCP/IP ya estaba, la probamos en su día con el P4 Kit»*, por la
   Ethernet. Antes de diseñar esa parte, se repasa lo que se hizo entonces.
 
+### El TCP/IP que ya hubo: la Ethernet de la P4 Kit (V3, junio)
+
+Repasado el 19-oct (Eduardo: *«quizás convendría repasar lo que se hizo en su día»*), por la historia del repositorio:
+- **Lo que se hizo, del 22 al 30 de junio** (V3, la fase de la P4):
+  - la Ethernet de la P4 Kit (el EMAC interno y su PHY, el IP101), con IP fija, 192.168.2.2, y un cable cruzado al PC
+    (192.168.2.1) (`bdbf81ec`);
+  - un log por TCP: la P4 se conecta al PC, al 5555, y allí lo lee `pc_logserver.py`. Fue la red de seguridad para
+    poner en marcha el cable por UART;
+  - **el servidor del cable por TCP**, `wire_v1_tcp.c`, en el 3333, con el mismo REPL que el puerto serie
+    (`1b6b7f0a`, el diseño en `V3_IDEAS.md`).
+- **Lo que funcionó:** el IDE se conectaba con «VM Java (TCP v1)», escribiendo `192.168.2.2:3333`, y ejecutaba
+  programas: el «Hola mundo», el INFO y las demos de la GUI. **No se probó:** depurar por TCP (el depurador de las ESP
+  llegó en julio, ya por UART), el DHCP (por el cable cruzado no había quien diera IP), ni `Net` para los programas, que
+  nunca se conectó a lwIP.
+- **Por qué quedó apagado:** la P4 de Waveshare no tiene Ethernet, y con el cable por UART una sola imagen sirve a las
+  dos P4 (`82e7c659`, 30-jun); el log por la red hacía esperar 5 s en cada arranque (`65ef07b0`, agosto).
+- **Cómo está hoy:** fuera de la imagen por defecto. Las piezas del IDF siguen en el build y en el IDF 6.0.1 existe
+  todo lo que usa; se compiló por última vez el 1-oct, y no hay grabación por TCP desde el 30 de junio. La orden de
+  compilación que documenta, `idf.py -DBPVM_P4_WIRE=tcp build`, ya no funciona: se para en un `#error`.
+- **Lo que sirve tal cual para la WiFi:** `wire_v1_tcp.c` no depende del enlace (escucha en cualquier interfaz y usa
+  sólo sockets); la puesta en marcha de `esp_netif` y de los eventos, la IP fija, y el aviso de «enlace arriba», que es
+  justo lo que la WiFi le pasará al TCP/IP. Lo único de la Ethernet es el EMAC, su PHY y sus pines: el enlace.
+- **Lo que habría que arreglar para la WiFi:**
+  - con TCP, el arranque espera al enlace para siempre;
+  - un solo cliente, y si su conexión muere (la WiFi que se cae), el servidor no vuelve a aceptar al IDE hasta
+    reiniciar la placa;
+  - la dirección y los puertos, escritos en el código;
+  - cada imagen lleva el cable por UART o por TCP, nunca los dos; V8 lo quiere como otra vía, no en lugar del cable;
+  - no hay autenticación (el protocolo dice «un cliente a la vez, sin autenticar»);
+  - `wire_v1_tcp.c` vive en la carpeta de la P4, no en el común de las ESP;
+  - en el IDE, la placa por la red usa el backend de la VM Java: no sincroniza la hora, no da el log ni la memoria del
+    INFO, y la dirección se escribe a mano.
+
 ### Lo que hay que decidir (Eduardo)
 
 **De la conexión WiFi:**
@@ -1428,14 +1461,18 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
    endif
    ```
 
-   - En la placa, la guardada en el sistema (un `/sys/ip.json`, al lado de `wifi.json`) se aplica sola al arrancar.
+   - En la placa, la guardada en el sistema (en el JSON de `/sys`: en el mismo fichero o en el suyo, por concretar) se
+     aplica sola al arrancar.
+   - En la P4 Kit la IP era fija y estaba escrita en el código; el DHCP no se llegó a probar. Con la WiFi de casa, lo
+     normal será el DHCP.
    - En el PC el TCP/IP es el del sistema operativo, y un programa no puede cambiarlo. Lo que digan `ip()` y los demás
      en el PC está por decidir: la IP de verdad, o unos valores simulados que den lo mismo en las dos VMs.
-8. **Cómo encuentra el IDE a la placa.** Propuesta, por pasos: la placa dice su IP por el puerto serie (en el INFO) y
-   el IDE la recuerda; después, el anuncio por difusión UDP; mDNS sólo si hace falta.
-9. **Quién puede conectarse por la red.** Cualquiera de la red podría mandar programas a la placa. Propuesta: una clave
-   del IDE, que se guarda en la placa al configurarla por el puerto serie y que el IDE presenta al conectar; sin ella,
-   la placa no atiende. ¿O la red de casa se da por segura?
+8. **Cómo encuentra el IDE a la placa.** Con DHCP, la IP la da el router y puede cambiar. Propuesta, por pasos: la
+   placa dice su IP por el puerto serie (el INFO, que hoy no la lleva) y en su pantalla si la tiene, y el IDE la
+   recuerda; después, el anuncio por difusión UDP; mDNS sólo si hace falta.
+9. **Quién puede conectarse por la red.** Cualquiera de la red podría mandar programas a la placa; hoy el protocolo
+   no autentica. Propuesta: una clave del IDE, que se guarda en la placa al configurarla y que el IDE presenta al
+   conectar; sin ella, la placa no atiende. ¿O la red de casa se da por segura?
 
 **Y el alcance:** ¿un hito para cada parte, o las dos en el H3?
 
@@ -1448,8 +1485,15 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
 2. **La conexión WiFi.** Primero la del sistema: la fachada (`bpvm_wifi.h`, sólo el enlace), el backend del IDF (en la
    P4, por ESP-Hosted), el JSON de `/sys` y la clave del Entorno para activarla al arrancar. Luego la de los programas:
    el módulo `Wifi`, su versión simulada en las dos VMs, con la paridad, y el programa de configuración de la P4.
-3. **El TCP/IP**, desde lo que se hizo con la Ethernet de la P4 Kit (el repaso está en marcha): la IP dinámica o fija,
-   el IDE por la red, y `Net` sobre lwIP para los programas, con `#705` y el cierre de las conexiones al acabar.
+3. **El TCP/IP**, desde lo que se hizo con la Ethernet de la P4 Kit (arriba). Primero el del sistema:
+   - la IP dinámica o fija, desde el JSON de `/sys`;
+   - el cable por TCP **a la vez** que por UART;
+   - que el servidor vuelva a aceptar al IDE si la conexión muere, y que el arranque no espere al enlace;
+   - `wire_v1_tcp.c` al común de las ESP, para la C3, la C5 y la C6;
+   - en el IDE, la placa por la red como un backend de placa (la hora, el log, la memoria del INFO), no el de la VM
+     Java.
+
+   Luego el de los programas: `Net` sobre lwIP, con `#705` y el cierre de las conexiones al acabar el programa.
 4. **Las demás placas:** la C3, la C5 y la C6.
 
 **Fuera**, salvo que Eduardo diga otra cosa: el servidor para los programas (`listen`/`accept`), UDP, TLS, la web de
