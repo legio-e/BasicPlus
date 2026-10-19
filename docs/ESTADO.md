@@ -46,6 +46,9 @@
 >   escribió la clave de su red en el fichero de la prueba;
 > - tras la prueba: *«El controlador del SDMMC es del SO, no del BasicPlus. Si la wifi o el bluetooth están apagados
 >   el lector de SD debe estar encendido.»*
+> - y después: *«Aquí lo que prima (o debería primar) es el ahorro de energía. Así que el estado normal tanto del wifi
+>   como el bluetooth es apagado, y se enciende cuando se necesita, y si hay 10 min de inactividad se apaga salvo que
+>   se indique lo contrario.»*
 >
 > **Lo hecho:**
 > - **El análisis**, en `V8_IDEAS` §E3 (`991f3fab`, `2c56ddfb`, `46c24b66`, `601fd1c4`, `032dc010`): lo que hay medido
@@ -67,6 +70,13 @@
 >   - `esp_hosted` ya no arranca solo, y al abrir el enlace encuentra el controlador hecho con un envoltorio de
 >     `sdmmc_host_init`;
 >   - abrir el enlace cuesta ~34 KB de RAM interna, que con la WiFi y el Bluetooth apagados no se gastan.
+> - **El envoltorio sobra con el IDF 6.1**, y era un error mío pensar que hacía falta: lo de `#566` es del 6.0.1. En el
+>   6.1, `sdmmc_host_init()` devuelve el controlador que haya, y `sdmmc_host_deinit_slot()` lo borra sólo si no queda
+>   otra ranura. La quinta prueba, sin envoltorio y con la SD desmontada en la última vuelta (el IDF borra el
+>   controlador y lo vuelve a crear quien lo pide), sin un fallo.
+> - **El apagado del todo, por la regla de energía** (la cuarta y la quinta prueba): la WiFi desinicializada, el enlace
+>   cerrado y la C6 en reset. Encender, 2,1 s; apagar, 125 ms; la RAM, de vuelta en cada vuelta. La C6 arranca de cero
+>   cada vez, así que `#706` no aparece.
 > - **Dos errores míos, corregidos:**
 >   - la C6 de fábrica sí tenía WiFi (0.0.6, «WLAN over SDIO»); lo que no hablaba era el protocolo de control nuevo;
 >   - la P4 lleva desde el 14-oct el cargador y la tabla de particiones de la prueba del Bluetooth, no «sólo la
@@ -75,8 +85,13 @@
 > **Para la siguiente sesión:**
 > - **el paso 2 del H3**, la conexión WiFi del sistema: antes, las decisiones que quedan en §E3 (la WiFi del sistema y
 >   la del programa, el módulo `Wifi`, el PC simulado, la IP en `Net`, cómo encuentra el IDE a la placa, el alcance) y
->   la nueva: apagar con `esp_wifi_stop` o arreglar la C6 (`#706`). Y lo que trae el controlador del sistema: el driver
->   de la SD de la P4 inicia y suelta sólo su ranura; hoy, en sus errores, suelta el controlador entero (`#566`);
+>   las nuevas:
+>   - el IDF 6.1 para la P4 (trae la WiFi remota y comparte el controlador sin trucos);
+>   - qué cuenta como actividad para apagar a los 10 minutos, y dónde se dice «no la apagues»;
+>   - cerrar `#706` porque el apagado del todo lo evita.
+>
+>   Y lo que trae el controlador del sistema: el driver de la SD de la P4 suelta sólo su ranura; hoy, en sus errores,
+>   suelta el controlador entero (`#566`);
 > - **la P4 lleva la prueba de la WiFi**, con el cargador y la tabla de la prueba. Para volver a BasicPlus, la imagen
 >   fusionada entera, con el OK de Eduardo. La C6 se queda con la 3.0.9;
 > - **el IDF 6.1**, en `C:\esp\v6.1` (instalado con EIM). Se carga con `C:\tmp\v8wifi\entorno_idf61.ps1`, que no cambia

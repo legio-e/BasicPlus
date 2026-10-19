@@ -1394,6 +1394,11 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
 - **El controlador SDMMC es del sistema** (decidido después de la prueba del paso 1): *«El controlador del SDMMC es
   del SO, no del BasicPlus. Si la wifi o el bluetooth están apagados el lector de SD debe estar encendido.»* Lo crea
   el arranque, y la SD y la C6 usan cada una su ranura. Comprobado en la P4 el mismo día (abajo, «Paso 1»).
+- **Manda el ahorro de energía** (el mismo día): *«Aquí lo que prima (o debería primar) es el ahorro de energía. Así
+  que el estado normal tanto del wifi como el bluetooth es apagado, y se enciende cuando se necesita, y si hay 10 min
+  de inactividad se apaga salvo que se indique lo contrario.»* En la P4, apagado del todo es la WiFi desinicializada,
+  el enlace con la C6 cerrado y la C6 en reset; comprobado (abajo, «Paso 1»). Por concretar en el paso 2: qué cuenta
+  como actividad (un programa que la usa, una conexión abierta, el IDE conectado) y dónde se dice «no la apagues».
 - **La frontera:** *«la conexión wifi llegamos hasta que se establece la conexión, el resto es ya del TCP/IP»*.
 - **El TCP/IP no se empieza de cero:** *«la conexión TCP/IP ya estaba, la probamos en su día con el P4 Kit»*, por la
   Ethernet. Antes de diseñar esa parte, se repasa lo que se hizo entonces.
@@ -1591,9 +1596,9 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
     guarda una bandera de «ya iniciada» que su desinicialización no baja. Apagar con `esp_wifi_stop` apaga la radio y
     no tiene el problema. Para decidir: en BasicPlus, apagar = parar la radio; o arreglar esa línea en el firmware de
     la C6 que se le dé al usuario.
-  - **El controlador SDMMC, un solo dueño.** `esp_hosted` lo crea al conectar con la C6, y falla si ya existe. Al
-    soltarlo, sólo suelta su ranura. Hoy nuestro driver de la SD de la P4 (`blk_sdmmc_p4.c`) también lo crea. En las
-    dos primeras pruebas iba primero la C6 y la SD se montaba sin crearlo.
+  - **El controlador SDMMC, un solo dueño.** `esp_hosted` lo crea al conectar con la C6 y, si su `sdmmc_host_init()`
+    falla, no conecta. Al soltarlo, sólo suelta su ranura. Hoy nuestro driver de la SD de la P4 (`blk_sdmmc_p4.c`)
+    también lo crea. En las dos primeras pruebas iba primero la C6 y la SD se montaba sin crearlo.
 
     **Eduardo lo decidió ese mismo día:** el controlador es del sistema, y la SD funciona con la WiFi y el Bluetooth
     apagados. **La tercera prueba lo hace así**, y salen las tres vueltas sin un fallo:
@@ -1608,9 +1613,41 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
     ~34 KB de RAM interna** de la P4, y el mayor bloque libre baja 24 KB. Con la WiFi y el Bluetooth apagados no se
     gastan.
 
-    Para BasicPlus queda: el controlador lo crea el arranque, y el driver de la SD inicia y suelta sólo su ranura. Hoy,
-    en sus salidas de error, `blk_sdmmc_p4.c` suelta el controlador entero (`#566`), y eso cortaría el enlace con la
-    C6.
+    **El envoltorio sobra con el IDF 6.1** (la quinta prueba, sin él). El IDF cambió entre las dos versiones:
+    - en el **6.0.1**, el de BasicPlus, `sdmmc_host_init()` crea otro controlador en cada llamada, y el segundo falla
+      (lo que se midió en `#566`); y `sdmmc_host_deinit_slot()`, al soltar la última ranura, borra el controlador y
+      deja su asa colgando;
+    - en el **6.1**, `sdmmc_host_init()` devuelve el que haya («already created, returning existing handle»), y
+      `sdmmc_host_deinit_slot()` suelta la ranura y borra el controlador sólo si no queda otra, y lo anota.
+
+    Así que con el 6.1 la regla sale sola: **cada uno pide el controlador con `sdmmc_host_init()` y suelta sólo su
+    ranura; nadie suelta el controlador entero.** La quinta prueba lo pasa todo con los valores por defecto del IDF:
+    - la SD y `esp_hosted` reciben el controlador que hay;
+    - con la SD desmontada, al apagar la WiFi el IDF borra el controlador; `esp_hosted` lo vuelve a crear en la vuelta
+      siguiente, y la SD, al montarse otra vez;
+    - tres vueltas sin un fallo.
+
+    Queda una línea de error del IDF, sin daño: al cerrar el enlace con la SD montada, sale «host controller with slot
+    registered». Es su intento de borrar el controlador, que no se borra porque la SD lo usa.
+
+    Para BasicPlus queda:
+    - el controlador lo pide cada uno, y el driver de la SD inicia y suelta sólo su ranura. Hoy, en sus salidas de
+      error, `blk_sdmmc_p4.c` suelta el controlador entero (`#566`), y eso cortaría el enlace con la C6;
+    - **la WiFi de la P4 pide el IDF 6.1:** trae la WiFi remota dentro y comparte el controlador sin más. Con el 6.0.1
+      harían falta el componente `esp_wifi_remote` y un envoltorio que además vigilara cuándo borra el IDF el
+      controlador. Es una decisión de Eduardo: pasar el firmware de la P4 al 6.1, o todas las ESP.
+  - **Apagado del todo, por el ahorro de energía** (Eduardo, arriba, «Lo decidido»): la cuarta y la quinta prueba
+    encienden y apagan del todo en cada vuelta:
+    - encender: abrir el enlace con la C6, que arranca de cero, y arrancar la WiFi, en 2,1 s; el enlace solo, 1,9 s,
+      que son sobre todo los 1,5 s que espera `esp_hosted` a que la C6 arranque;
+    - apagar: parar y desinicializar la WiFi, cerrar el enlace (`esp_hosted_deinit`) y dejar la C6 en reset (su
+      `CHIP_PU`, el GPIO 54, a bajo), en 125 ms;
+    - la RAM interna vuelve a su sitio en cada vuelta: ~35 KB al encender, devueltos al apagar. Sólo se quedan 344 B
+      la primera vez, y no crecen.
+
+    Tres vueltas sin un fallo, en cada prueba. Como la C6 arranca de cero cada vez, **`#706` no aparece**: su bandera
+    está baja. Sólo saldría si la WiFi se desinicializa con la C6 encendida por el Bluetooth; ahí basta con parar la
+    radio.
   - **Un fallo del enlace con la C6 reinicia la P4** con un `abort()`. Lo hace `esp_hosted` por defecto
     (`TRANSPORT_RESTART_ON_FAILURE`). En la prueba se apagó y se escucha su evento; en BasicPlus tendrá que ir igual:
     que la WiFi se caiga no tumba la placa.
@@ -1621,4 +1658,7 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
   El Entorno y el sistema de ficheros deberían seguir donde estaban: ninguna prueba llega a esas direcciones.
 
 **Lo siguiente:** el paso 2, la conexión WiFi del sistema, con las decisiones que quedan (arriba, «Lo que hay que
-decidir»).
+decidir») y las de este paso:
+- el IDF 6.1 para la P4;
+- qué cuenta como actividad para apagar a los 10 minutos, y dónde se dice que no se apague;
+- cerrar `#706` porque el apagado del todo lo evita, o arreglar la C6.
