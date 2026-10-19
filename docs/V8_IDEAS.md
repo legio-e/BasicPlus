@@ -10,7 +10,8 @@
 >
 > **Los hitos** (Eduardo, 18-oct): `H` numerados, como en V7, con sus apartados en `FICHAS.md`, y los nombra Eduardo.
 > **H1 = JC** (E2, abajo), cerrado el 18-oct. **H2 = el Bluetooth** (E1, abajo), a medias y parado. **H3 = la WiFi**
-> (E3, abajo), en análisis desde el 19-oct.
+> (E3, abajo), en análisis desde el 19-oct. Y una idea sin hito todavía: **el sonido en la P4** (E4, abajo), WAV
+> primero.
 
 ---
 
@@ -1670,3 +1671,53 @@ decidir») y las de este paso:
 - qué cuenta como actividad para apagar a los 10 minutos; ~~dónde se dice que no se apague~~: **decidido**, en el
   fichero de configuración, y con alimentación externa no se apaga;
 - cerrar `#706` porque el apagado del todo lo evita, o arreglar la C6.
+
+---
+
+## E4 · El sonido en la P4: WAV primero, MP3 después (Eduardo, 19-oct; `#708`)
+
+Eduardo, al acabar la sesión de la WiFi: *«¿Cuánto costaría reproducir un .mp3 en el P4?»*. Y tras el análisis:
+*«La placa tiene una salida speaker y la placa venía con unos pequeños altavoces. Y sí, podemos empezar con .wav.»*
+
+**Lo que hay en la placa** (el esquema de Waveshare y su ejemplo `06_I2SCodec`):
+- el códec ES8311 (convierte el audio digital en señal para el altavoz, y la del micrófono en digital), el amplificador
+  NS4150B y la salida del altavoz, con unos altavoces pequeños que venían con la placa; y el ES7210, para los
+  micrófonos;
+- el ES8311 se configura por I2C, en el bus de la táctil (SDA GPIO 7, SCL GPIO 8). Ese bus ya está declarado como
+  compartido justo para esto (`#669`, Eduardo: *«hay placas donde ese I2c se utiliza también para controlar otros
+  dispositivos»*);
+- el I2S: MCLK GPIO 13, BCLK 12, WS 10, la salida al códec 9 y la entrada 11. El amplificador se enciende con el
+  GPIO 53. Por lo que se ve, la imagen de BasicPlus no usa ninguno; se confirma en la prueba;
+- el ejemplo de Waveshare reproduce PCM crudo (16 kHz) por ese camino, sin decodificar nada.
+
+**Lo que hay en BasicPlus:** nada de sonido. `Pwm.bp` habla de tonos con PWM, y los documentos de V3 y V7 sólo dicen
+que la placa trae el códec.
+
+**Lo que costaría** (estimado el 19-oct; se mide en la prueba):
+
+| | |
+|---|---|
+| flash | ~50 KB: el decodificador de MP3 (~30 KB), el I2S y el códec. Nada en una partición de 6 MB |
+| RAM | ~40 KB: el decodificador, sus búferes y los del I2S. Casi todo puede ir a la PSRAM |
+| CPU | menos del 10 % de un núcleo para un MP3 estéreo de 44,1 kHz: la P4 va a 360 MHz y tiene coma flotante |
+| la SD | un MP3 se lee a 16–40 KB/s; la SD da unos 2 MB/s |
+
+La mayor parte del trabajo es el camino del sonido: el códec, el I2S, una tarea que no deje de darle datos y el
+módulo de BasicPlus. El MP3 es un decodificador encima. Por eso WAV primero.
+
+**El decodificador del MP3: minimp3.** Es de dominio público, cabe en un solo fichero de C y compila en todas las
+placas y en el PC. El de Espressif (`esp_audio_codec`) va más optimizado, pero es una biblioteca cerrada y sólo
+funciona en sus chips. Las patentes del MP3 expiraron en 2017.
+
+**Por pasos:**
+1. **WAV, a mano en la P4, sin BasicPlus**, como el paso 1 de la WiFi: el ES8311 por I2C, el I2S, el amplificador y un
+   `.wav` leído de la SD, por el altavoz. Lo que cuesta, medido. Un día, más o menos.
+2. **El MP3, encima:** minimp3 entre la lectura y el I2S.
+3. **BasicPlus:** de 3 a 5 días, según lo que decida Eduardo:
+   - el módulo (`Audio.play`, `stop`, `volume`, `isPlaying`…) y los formatos;
+   - en la imagen o en un pack, como LVGL;
+   - qué hace en el PC: sonido de verdad (SDL en la VM-C; en miVM, `javax.sound` lee WAV, y el MP3 pediría un
+     decodificador) o simulado, con su rastro como los periféricos;
+   - el códec y los pines, en la configuración de la placa;
+   - por el ahorro de energía (§E3, «Lo decidido»), el amplificador y el códec apagados cuando no suena;
+   - el ES8311 en el bus de la táctil, por el árbitro de la HAL BP.

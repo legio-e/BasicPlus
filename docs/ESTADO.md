@@ -96,6 +96,9 @@
 >   - cerrar `#706` porque el apagado del todo lo evita (lo propuse; falta que Eduardo lo confirme);
 > - **`#707`, la familia ESP32 al IDF 6.1** (decidido): las cinco compiladas y comparadas con el 6.0.1, el SDMMC de la
 >   P4, los packs y la tanda en las placas, con su OK. Antes o después del paso 2 del H3, lo dice Eduardo;
+> - **una idea nueva, `#708`: el sonido en la P4** (Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»*; y tras
+>   el análisis, *«podemos empezar con .wav»*). La placa trae el códec, el amplificador y unos altavoces; el análisis,
+>   en `V8_IDEAS` §E4. El primer paso, un `.wav` de la SD por el altavoz con un firmware de prueba;
 >
 >   Y lo que trae el controlador del sistema: el driver de la SD de la P4 suelta sólo su ranura; hoy, en sus errores,
 >   suelta el controlador entero (`#566`);

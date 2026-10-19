@@ -7046,6 +7046,23 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     `.jc` y el aviso cuando están los dos.
 - En los dos idiomas, como el resto. Lo que vaya saliendo en V8 para la documentación final se añade aquí.
 
+#### 🧪 `#708` — V8, idea: el sonido en la P4, WAV primero y MP3 después (abierta el 19-oct, a pregunta de Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»*; sin hito todavía)
+
+- **Lo que dijo Eduardo**, tras el análisis: *«La placa tiene una salida speaker y la placa venía con unos pequeños
+  altavoces. Y sí, podemos empezar con .wav.»*
+- **El análisis**, en `V8_IDEAS` §E4:
+  - la placa trae el códec ES8311 (por I2C, en el bus compartido de la táctil), el amplificador NS4150B y la salida
+    del altavoz; el I2S en los GPIO 9 a 13, y el amplificador se enciende con el 53;
+  - en BasicPlus no hay nada de sonido;
+  - lo estimado: ~50 KB de flash, ~40 KB de RAM, menos del 10 % de un núcleo para un MP3;
+  - el decodificador, minimp3: de dominio público, en todas las placas y en el PC.
+- **Los pasos:**
+  1. un `.wav` de la SD por el altavoz, con un firmware de prueba sin BasicPlus (un día, más o menos; grabar la P4, con
+     el OK de Eduardo);
+  2. el MP3 encima;
+  3. BasicPlus, de 3 a 5 días según lo que se decida: el módulo, en la imagen o en un pack, qué hace en el PC, la
+     configuración de la placa, y el amplificador apagado cuando no suena (por el ahorro de energía).
+
 #### 🔵 `#707` — la familia ESP32, al IDF 6.1 (decidida el 19-oct, Eduardo: *«Actualizamos al 6.1 para toda la familia ESP32»*; sale del H3)
 
 - **Por qué:** la WiFi de la P4 lo pide. El 6.1 trae dentro la WiFi remota (con el 6.0.1 había que bajar
