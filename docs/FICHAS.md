@@ -6995,7 +6995,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > |---|---|---|
 > | **H1** | **JC**: BasicPlus con la ropa de Java y C#. El mismo árbol, un escáner y un parser nuevos, la traducción en los dos sentidos, el compilador y el IDE (`#698`) | ✅ **CERRADO el 18-oct**, validado por Eduardo. Sus diez apartados, en «🧩 H1», abajo |
 > | **H2** | **el Bluetooth** (`#697`, el experimento E1): el teclado y el ratón por Bluetooth LE, hoy en la P4 | 🔶 **a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Los pasos 1 y 2, hechos el 14-oct en la P4. Lo siguiente, cuando se retome: probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere |
-> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC) | ⏭️ **el siguiente**, en una sesión nueva (Eduardo, 18-oct) |
+> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3, con lo que hay que decidir |
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
@@ -7045,6 +7045,19 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   - los `.jc` en el IDE: abrirlos y guardarlos, el coloreado y el plegado por llaves, el main de un proyecto en
     `.jc` y el aviso cuando están los dos.
 - En los dos idiomas, como el resto. Lo que vaya saliendo en V8 para la documentación final se añade aquí.
+
+#### 🔵 `#705` — `Net.tcpClose` no deja su valor en la pila: dos llamadas sueltas cambian las variables locales de antes, en las dos VMs igual (abierta el 19-oct, al analizar la WiFi, H3; preexistente, de `#241`)
+
+- **Medido:** un `main` con `var a := 7`, `var b := 9` y dos `Net.tcpClose(0)` sueltos imprime `a = 32 b = 264`; con
+  uno solo, todavía 7 y 9. En miVM y en la VM-C, lo mismo, así que la paridad no lo ve.
+- **La causa**, del mapa del 19-oct: el compilador tira un valor de 4 B tras cada llamada sin resultado, y los builtins
+  que no devuelven nada empujan uno para eso. `TCP_CLOSE` no lo empuja en ninguna de las dos VMs (`builtins.c:1284-1288`,
+  `VirtualMachine.java:5090-5097`). Dentro de `Net.Tcp.close()` no se nota: lo que se tira cae en un temporal.
+- **Lo que haría falta:** que `TCP_CLOSE` empuje su 0 en las dos VMs, y una prueba con la llamada suelta. Y, ya que el
+  H3 toca `Net`, lo demás que salió en el mapa:
+  - que las dos VMs den los mismos números de conexión y el mismo tope (la VM-C, 16; miVM, sin límite);
+  - que el final del programa cierre las conexiones que queden (`#668`).
+- Se arregla con el trabajo de `Net` del H3, salvo que Eduardo lo pida antes.
 
 #### 🔵 `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente)
 
@@ -7341,8 +7354,9 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
 - **18-oct, el H2 de V8, parado** (Eduardo: *«Tenemos el BlueTooth a medias, de momento no lo tocamos (puede ser H2).
   Hay que probar el BlueTooth en la Pico2 a ver que es lo que podemos hacer común y que difiere.»*). Cuando se
   retome, antes del módulo de BasicPlus va la Pico 2: qué parte del anfitrión es común con la de la P4 y qué difiere.
-  Por confirmar con Eduardo qué placa: la radio de la familia RP2350 es el CYW43439 de la Pico 2 W, y en el parque la
-  Pico 2 no consta como W.
+  La radio de la familia RP2350 es el CYW43439 de la Pico 2 W, y según `H14_TEST_PLAN.md` (junio) la Pico 2 de
+  pruebas de Eduardo es una W: su LED cuelga del CYW43439 (corregido el 19-oct; el 18-oct puse aquí que no constaba).
+  Por confirmar con él.
   Las claves tienen que vivir con la configuración, fuera de la NVS. Todo, en `V8_IDEAS.md` §E1.
 - **Lo siguiente**: el paso 3, cómo lo vería BasicPlus (el ratón como puntero de LVGL con su cursor, el teclado en el
   campo con el foco, eventos para el programa, el programa de configuración y su módulo). Las preguntas que quedan,

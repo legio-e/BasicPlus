@@ -79,8 +79,8 @@
 > - **lo siguiente es la WiFi, el H3** (Eduardo): la red en placa, el backend de `Net`, que hoy sólo tiene el del PC.
 >   Se empieza por el análisis, en `V8_IDEAS`, antes de programar;
 > - **el Bluetooth, el H2, queda parado** (`#697`). Cuando se retome, lo primero es probarlo en la Pico 2: qué parte es
->   común con la P4 y qué difiere. Por confirmar con Eduardo qué placa: la radio de la RP2350 es el CYW43439 de la Pico
->   2 W, y en el parque la Pico 2 no consta como W;
+>   común con la P4 y qué difiere. La radio de la RP2350 es el CYW43439 de la Pico 2 W, y según `H14_TEST_PLAN.md`
+>   la Pico 2 de pruebas de Eduardo es una W (corregido el 19-oct: aquí ponía que no constaba). Por confirmar;
 > - **el IDE, probado por Eduardo con la ventana** el mismo día: `JsonDemo` traducido a JC, guardado como
 >   `samplesJC/JsonDemo.jc` (en el repositorio) y ejecutado en la placa, con la salida del `.bp`. El jar es
 >   `BpIde/target/BpIde-7.0.jar`, del 18-oct (13:14), con el frontend instalado en `~/.m2` a la misma hora. Si hay

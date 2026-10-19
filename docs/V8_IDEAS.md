@@ -9,8 +9,8 @@
 > El tema, decidido el 24-sep: la WiFi, el Bluetooth y el bajo consumo.
 >
 > **Los hitos** (Eduardo, 18-oct): `H` numerados, como en V7, con sus apartados en `FICHAS.md`, y los nombra Eduardo.
-> **H1 = JC** (E2, abajo), cerrado el 18-oct. **H2 = el Bluetooth** (E1, abajo), a medias y parado. **H3 = la WiFi**, el
-> siguiente, en una sesión nueva.
+> **H1 = JC** (E2, abajo), cerrado el 18-oct. **H2 = el Bluetooth** (E1, abajo), a medias y parado. **H3 = la WiFi**
+> (E3, abajo), en análisis desde el 19-oct.
 
 ---
 
@@ -1254,3 +1254,148 @@ sus cinco líneas juntas al final. Con un prototipo en el emisor (el último `"\
 - El depurador, sin tocar.
 - Medido sin la ventana: lo nuevo está dentro del jar del IDE, y una sonda tokeniza JC con el `JcTokenMaker`. La prueba
   con la ventana, de Eduardo.
+
+---
+
+## E3 · La WiFi (H3; Eduardo, 19-oct)
+
+> El análisis, antes de programar. Lo que hay salió de tres mapas de sólo lectura del 19-oct (`Net` en las dos VMs, el
+> firmware de cada familia y las convenciones de BP), con lo que dicen comprobado donde importa.
+
+### Lo que pide Eduardo
+
+Las funciones (19-oct): *«Encender el wifi, Hacer una lista de redes wifi disponibles. Poder escoger una y conectarse.
+Poder proporcionar la clave. Disponer de la conexión TCP/IP. Cerrar la conexión wifi. Apagar el wifi.»* Y además:
+- **al conectarse, dos maneras** (*«IP dinámica e IP Fija. Cada una con sus propias opciones»*):
+  - la dinámica (DHCP): el router da la IP, la máscara, la puerta de enlace y los DNS. Lo propio es el nombre con que la
+    placa se presenta en la red, y que el programa pueda leer lo que le han dado;
+  - la fija: la IP, la máscara, la puerta de enlace y los DNS, uno o dos. Sin DHCP no llegan DNS solos: si no se dan,
+    no se resuelven nombres;
+- **fuera, de momento:** la WiFi punto a punto (*«la conexión wifi se hace entre 2 dispositivos sin Access Point»*; el
+  ESP-IDF no tiene el modo ad hoc, IBSS) y ESP-NOW;
+- **el uso más inmediato:** *«conectar con el IDE a través de la wifi»*.
+
+### Lo que hay (medido el 19-oct)
+
+**`Net`, el cliente TCP** (`#241`, de V2):
+- `tcpConnect`, `tcpSend`, `tcpRecv` y `tcpClose` (los builtins 131 a 134) y la clase `Net.Tcp`. En el PC, en las dos
+  VMs: miVM con `java.net.Socket`, y la VM-C con la fachada `bpvm_net.h` y `net_host.c` (Winsock2 o POSIX, 16
+  conexiones). En las placas no hay quien la atienda: «Net: sin red en esta plataforma».
+- **Bloquea el intérprete entero**: mientras conecta o espera datos, se paran todos los hilos BP del run (en miVM, del
+  worker). Es lo que ya decía el bloque V8: los builtins que esperan tendrían que ceder el hilo BP, como `sleep`.
+- No hay: servidor (`listen`/`accept`), UDP, una consulta de DNS aparte, ni la IP propia.
+- **Lo que salió de paso, `#705`:** `tcpClose` no deja en la pila el valor que el compilador tira tras cada llamada
+  sin resultado. Dos `Net.tcpClose(0)` sueltos cambian las dos variables locales de antes, de 7 y 9 a 32 y 264, en las
+  dos VMs igual. Y además: los números de conexión no son los mismos en las dos VMs, la VM-C admite 16 y miVM sin
+  límite, y nadie cierra las conexiones al acabar el programa.
+
+**Las placas** (el ESP-IDF es el 6.0.1; la WiFi y lwIP están habilitados en su configuración, pero no se enlazan:
+nadie los pide):
+
+| placa | la radio | RAM libre en reposo | la partición de la aplicación |
+|---|---|---|---|
+| S3 | WiFi 2,4 GHz y BLE | holgada: la VM está en la PSRAM y quedan 297 KB internos | 1 MB, ~409 KB libres |
+| C3 | WiFi 2,4 GHz y BLE | **108 KB, el bloque mayor de 86 KB: la más justa** | 1 MB, ~409 KB libres |
+| C5 | WiFi 6 a 2,4 y 5 GHz, BLE | holgada: PSRAM, y 248 KB internos | 1 MB, ~345 KB libres |
+| C6 | WiFi 6 a 2,4 GHz, BLE | **80 KB**, con el bloque del pack de la GUI (136 KB) en la interna | 1,5 MB, **~877 KB libres** |
+| P4 | ninguna: va por su C6, con ESP-Hosted | holgada | 6 MB |
+| Pico 2 W | el CYW43439 | justa: sin PSRAM, y 24 KB de montón del FreeRTOS | — |
+| Metro, Nucleo, DK2 | ninguna | — | — |
+
+- **Lo que suele costar** (la cifra general del IDF, sin medir aquí): 50 a 70 KB de RAM interna y varios cientos de KB
+  de flash.
+  - En la S3, la C3 y la C5 probablemente no cabe en la partición de 1 MB. Agrandarla mueve el Entorno y el sistema de
+    ficheros, que se pierden, una vez.
+  - En la C3 no cabe sin recortar la VM o las opciones que dejan código de la WiFi en la IRAM. En la C6, sin el bloque
+    del pack de la GUI, o con uno menor.
+- **La NVS se borra en cada actualización**: la imagen fusionada pisa de 0x9000 a 0xFFFF. La calibración de la radio se
+  rehace sola; la red y su clave no pueden guardarse ahí.
+- **La P4**: la C6 de fábrica sólo hace Bluetooth (ESP-Hosted 0.0.0); para la WiFi hay que actualizarla a ESP-Hosted
+  3.x. Y la SD y la C6 se disputan el único controlador SDMMC del IDF 6: hace falta un dueño.
+- **La Pico 2 W**: según `H14_TEST_PLAN.md` (junio), la Pico 2 de pruebas de Eduardo es una W (su LED cuelga del
+  CYW43439). Por confirmar. El SDK trae el driver y lwIP, pero esos submódulos están vacíos en el repositorio.
+- **Lo que no hay en BP:** una capacidad «tiene WiFi» en `Machine`, ni una forma de que la plataforma avise a un
+  programa (los eventos sólo los dispara `raise`; la GUI lo resuelve con un hilo BP que pregunta).
+
+**Lo que ya existe y sirve:**
+- **El cable por TCP.** El IDE habla con la VM Java por TCP con el mismo protocolo (`BpvmClient.connectRemote`). Y la
+  P4 tiene un servidor del cable por TCP, `esp32p4/main/wire_v1_tcp.c`, para su Ethernet, que está apagado por defecto.
+- **`net_host.c`** es casi lo que hace falta encima de lwIP, que da la misma API de sockets.
+- **El diseño de mayo y junio** (`WIFI_TCP_REFLECTION.md` y `HECHO_V2.md` §H11, para la Pico 2 W):
+  - la red en `/sys/wifi.json` (`{ssid, password, country}`), escrita desde el IDE por el puerto serie;
+  - conectarse al arrancar sin bloquear la comunicación con el IDE;
+  - el mismo protocolo del cable por TCP, como otra vía, no en lugar del cable;
+  - el descubrimiento por difusión UDP primero, mDNS si hiciera falta;
+  - la hora por NTP;
+  - el orden: la WiFi al arrancar, `Net` sobre lwIP, y el cable por WiFi.
+
+### Dos capas
+
+1. **La WiFi del sistema.** El firmware se conecta al arrancar con lo guardado en la placa y atiende al IDE por TCP
+   con el mismo protocolo que por el cable. Es el uso inmediato, y no necesita ningún programa BP.
+2. **La WiFi de los programas.** Un módulo de BP con las funciones de la lista, y `Net` sobre lwIP.
+
+Las funciones de la lista sirven a las dos: el IDE configura la red de la placa con ellas, por el puerto serie, y un
+programa las tiene en su módulo.
+
+### Lo que hay que decidir (Eduardo)
+
+1. **Dónde guarda la placa su red.** Propuesta: `/sys/wifi.json`, con la red, la clave, la IP (dinámica, con su nombre,
+   o fija, con IP, máscara, puerta de enlace y DNS) y el país. No en la NVS, que se borra al actualizar; ni en el
+   Entorno, que el IDE enseña, y la clave es secreta: lo mismo que se decidió para el Bluetooth. La clave, en claro en
+   el fichero (mayo: aceptable en una red de casa).
+2. **Cómo se configura la primera vez.** Propuesta: desde el IDE, por el puerto serie, con un diálogo «WiFi de la
+   placa»: la placa busca las redes, se escoge una, se da la clave, se elige IP dinámica o fija, y la placa se conecta y
+   lo guarda. Son las funciones de la lista, hechas desde el IDE, con verbos nuevos del cable.
+3. **Cómo encuentra el IDE a la placa.** Propuesta, por pasos: la placa dice su IP por el puerto serie (en el INFO) y
+   el IDE la recuerda; después, el anuncio por difusión UDP; mDNS sólo si hace falta.
+4. **Quién puede conectarse por WiFi.** Cualquiera de la red podría mandar programas a la placa. Propuesta: una clave
+   del IDE, que se guarda en la placa al configurarla por el puerto serie y que el IDE presenta al conectar; sin ella,
+   la placa no atiende. ¿O la red de casa se da por segura?
+5. **La WiFi del sistema y la de un programa.** La placa tiene una radio. Propuesta:
+   - con una red guardada, la WiFi es del sistema: un programa la usa (`Net`, el estado, la IP), pero no la apaga ni
+     la cambia, y si lo intenta, una excepción lo dice;
+   - sin red guardada, es del programa: la enciende, se conecta y la apaga, y al acabar el programa se apaga sola
+     (`#668`).
+6. **El módulo de BP.** Un esbozo para hablarlo, con los nombres en el estilo de la stdlib:
+
+   ```
+   import Wifi
+   var radio: Wifi.Radio := Wifi.Radio()
+   radio.on()                                         // encender
+   var redes: Wifi.Network[] := radio.scan(5000)       // la lista: nombre, señal (dBm), canal, seguridad
+   radio.hostname := "sensor-cocina"                  // IP dinámica (la de siempre): el nombre en la red
+   // o IP fija: radio.setStaticIp("192.168.1.50", "255.255.255.0", "192.168.1.1", "192.168.1.1", "")
+   if radio.connect("MiRed", "la clave", 15000) then  // escoger una, con su clave
+     print "IP", radio.ip, "puerta", radio.gateway, "DNS", radio.dns
+     // … Net.Tcp, por la WiFi
+     radio.disconnect()                               // cerrar la conexión
+   endif
+   radio.off()                                        // apagar; y al destruirse, también
+   ```
+
+   - ¿Un módulo `Wifi` aparte, o dentro de `Net`?
+   - Buscar y conectar tardan segundos. Para no parar los demás hilos BP, el módulo arranca la operación, pregunta y
+     espera con `sleep`, como la GUI con `__guiRunOnce`: sin tocar la VM.
+   - Perder la red: de momento, preguntar (`isConnected()`); un evento, más adelante.
+7. **Qué hace en el PC.** Propuesta: una WiFi simulada, la misma en las dos VMs, con su rastro `[wifi] …` como los
+   periféricos simulados: unas redes de mentira fijas (una abierta y una con clave) y conectarse a ellas con su clave.
+   `Net` sigue yendo por la red de verdad del PC.
+8. **La placa de referencia.** Propuesta: **la C6**, porque es la única con sitio en su partición (877 KB libres: no se
+   mueven ni el Entorno ni el sistema de ficheros) y su RAM obliga a medir de verdad. O **la C5** (PSRAM y 5 GHz),
+   aceptando agrandar su partición. La P4 y la Pico 2 W, después.
+
+### Un orden posible, por pasos que se comprueban
+
+1. **Medir.** Un firmware de prueba en la placa de referencia, sin la VM, como el paso 1 del Bluetooth: encender,
+   buscar, conectarse con IP dinámica y con fija, abrir una conexión TCP, desconectar y apagar. Lo que cuesta de
+   verdad, en flash y en RAM.
+2. **La WiFi del sistema y el IDE por WiFi.** La fachada (`bpvm_wifi.h`), el backend del IDF, `/sys/wifi.json`,
+   conectarse al arrancar, el diálogo del IDE por el puerto serie, el cable por TCP (desde `wire_v1_tcp.c`) y el IDE
+   conectando por la IP.
+3. **La WiFi de los programas.** El módulo de BP, su versión simulada en las dos VMs (con la paridad) y `Net` sobre
+   lwIP, con el cierre de las conexiones al acabar el programa.
+4. **Las demás placas:** la C3 (la memoria), la S3, la C5, la P4 (su C6 actualizada y la SD) y la Pico 2 W.
+
+**Fuera del H3**, salvo que Eduardo diga otra cosa: el servidor para los programas (`listen`/`accept`), UDP, TLS, la
+web de configuración, la placa como punto de acceso y la hora por NTP (pequeña: lwIP la trae).
