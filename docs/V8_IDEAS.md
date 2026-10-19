@@ -1329,73 +1329,111 @@ nadie los pide):
   - la hora por NTP;
   - el orden: la WiFi al arrancar, `Net` sobre lwIP, y el cable por WiFi.
 
-### Dos capas
+### La conexión WiFi y el TCP/IP, separados (Eduardo, 19-oct)
 
-1. **La WiFi del sistema.** El firmware se conecta al arrancar con lo guardado en la placa y atiende al IDE por TCP
-   con el mismo protocolo que por el cable. Es el uso inmediato, y no necesita ningún programa BP.
-2. **La WiFi de los programas.** Un módulo de BP con las funciones de la lista, y `Net` sobre lwIP.
+Eduardo: *«el wifi es una capa de transporte del stack TCP/IP, creo que deberíamos separar lo que es la conexión wifi
+del resto de los protocolos TCP/IP. Así limitamos el alcance de cada cosa.»* Es también como lo parte el ESP-IDF: el
+driver de la WiFi (`esp_wifi`) por un lado, y la interfaz de red (`esp_netif`) con lwIP por el otro. Y ya estaba
+apuntado en V3 (`#145`): «desacoplar TCP/IP de WiFi».
 
-Las funciones de la lista sirven a las dos: el IDE configura la red de la placa con ellas, por el puerto serie, y un
-programa las tiene en su módulo.
+**La conexión WiFi: el enlace, y nada más.**
+- encender y apagar la radio;
+- buscar redes: el nombre, la señal, el canal y la seguridad;
+- conectarse a una con su clave, y desconectarse;
+- el estado del enlace (apagada, desconectada, conectando, conectada, o el fallo: la red no aparece, la clave no vale)
+  y la señal de la red a la que está conectada;
+- el país, que fija los canales que se pueden usar.
+
+**El TCP/IP: lo que va encima, sea cual sea el enlace.**
+- la configuración IP de la interfaz: dinámica (DHCP, con el nombre de la placa) o fija (IP, máscara, puerta de enlace
+  y DNS), y leer la que tiene;
+- resolver nombres (DNS);
+- TCP: el cliente, que ya existe (`Net.Tcp`), y lo que venga después;
+- el IDE por la red: el cable por TCP.
+
+**Entre las dos pasa una sola cosa:** el enlace avisa de que está arriba o abajo. Con el enlace arriba, el TCP/IP pide
+su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
+
+**Lo que da separarlas:**
+- el mismo TCP/IP sirve para otro enlace: la Ethernet de la P4, que ya está en su build (`esp_eth`), u otro un día;
+- en el PC, la WiFi es simulada y el TCP/IP es el del sistema operativo, cada uno con lo suyo y sin mezclarse;
+- el IDE por la red no depende de la WiFi, sino del TCP/IP: por la WiFi, o por la Ethernet de la P4;
+- cada parte se mide y se prueba por separado.
 
 ### Lo que hay que decidir (Eduardo)
 
-1. **Dónde guarda la placa su red.** Propuesta: `/sys/wifi.json`, con la red, la clave, la IP (dinámica, con su nombre,
-   o fija, con IP, máscara, puerta de enlace y DNS) y el país. No en la NVS, que se borra al actualizar; ni en el
-   Entorno, que el IDE enseña, y la clave es secreta: lo mismo que se decidió para el Bluetooth. La clave, en claro en
-   el fichero (mayo: aceptable en una red de casa).
-2. **Cómo se configura la primera vez.** Propuesta: desde el IDE, por el puerto serie, con un diálogo «WiFi de la
-   placa»: la placa busca las redes, se escoge una, se da la clave, se elige IP dinámica o fija, y la placa se conecta y
-   lo guarda. Son las funciones de la lista, hechas desde el IDE, con verbos nuevos del cable.
-3. **Cómo encuentra el IDE a la placa.** Propuesta, por pasos: la placa dice su IP por el puerto serie (en el INFO) y
-   el IDE la recuerda; después, el anuncio por difusión UDP; mDNS sólo si hace falta.
-4. **Quién puede conectarse por WiFi.** Cualquiera de la red podría mandar programas a la placa. Propuesta: una clave
-   del IDE, que se guarda en la placa al configurarla por el puerto serie y que el IDE presenta al conectar; sin ella,
-   la placa no atiende. ¿O la red de casa se da por segura?
-5. **La WiFi del sistema y la de un programa.** La placa tiene una radio. Propuesta:
-   - con una red guardada, la WiFi es del sistema: un programa la usa (`Net`, el estado, la IP), pero no la apaga ni
+**De la conexión WiFi:**
+1. **Dónde guarda la placa su red.** Propuesta: `/sys/wifi.json`, con la red, la clave y el país. No en la NVS, que se
+   borra al actualizar; ni en el Entorno, que el IDE enseña, y la clave es secreta: lo mismo que se decidió para el
+   Bluetooth. La clave, en claro en el fichero (mayo: aceptable en una red de casa).
+2. **Cómo se configura la primera vez.** Propuesta: desde el IDE, por el puerto serie, con un diálogo «Red de la
+   placa»: la placa busca las redes, se escoge una y se da la clave; y en el mismo diálogo, en su apartado, la IP
+   dinámica o fija. Cada parte se guarda en su fichero. Son las funciones de la lista, hechas desde el IDE, con verbos
+   nuevos del cable.
+3. **La conexión WiFi del sistema y la de un programa.** La placa tiene una radio. Propuesta:
+   - con una red guardada, la WiFi es del sistema: un programa la consulta (el estado, la señal), pero no la apaga ni
      la cambia, y si lo intenta, una excepción lo dice;
    - sin red guardada, es del programa: la enciende, se conecta y la apaga, y al acabar el programa se apaga sola
      (`#668`).
-6. **El módulo de BP.** Un esbozo para hablarlo, con los nombres en el estilo de la stdlib:
+4. **El módulo de BP de la WiFi.** Un esbozo para hablarlo, con los nombres en el estilo de la stdlib:
 
    ```
    import Wifi
    var radio: Wifi.Radio := Wifi.Radio()
    radio.on()                                         // encender
    var redes: Wifi.Network[] := radio.scan(5000)       // la lista: nombre, señal (dBm), canal, seguridad
-   radio.hostname := "sensor-cocina"                  // IP dinámica (la de siempre): el nombre en la red
-   // o IP fija: radio.setStaticIp("192.168.1.50", "255.255.255.0", "192.168.1.1", "192.168.1.1", "")
    if radio.connect("MiRed", "la clave", 15000) then  // escoger una, con su clave
-     print "IP", radio.ip, "puerta", radio.gateway, "DNS", radio.dns
-     // … Net.Tcp, por la WiFi
+     print "conectada a", radio.ssid, "con", radio.rssi, "dBm"
      radio.disconnect()                               // cerrar la conexión
    endif
    radio.off()                                        // apagar; y al destruirse, también
    ```
 
-   - ¿Un módulo `Wifi` aparte, o dentro de `Net`?
    - Buscar y conectar tardan segundos. Para no parar los demás hilos BP, el módulo arranca la operación, pregunta y
      espera con `sleep`, como la GUI con `__guiRunOnce`: sin tocar la VM.
    - Perder la red: de momento, preguntar (`isConnected()`); un evento, más adelante.
-7. **Qué hace en el PC.** Propuesta: una WiFi simulada, la misma en las dos VMs, con su rastro `[wifi] …` como los
+5. **Qué hace en el PC.** Propuesta: una WiFi simulada, la misma en las dos VMs, con su rastro `[wifi] …` como los
    periféricos simulados: unas redes de mentira fijas (una abierta y una con clave) y conectarse a ellas con su clave.
-   `Net` sigue yendo por la red de verdad del PC.
-8. **La placa de referencia.** Propuesta: **la C6**, porque es la única con sitio en su partición (877 KB libres: no se
+6. **La placa de referencia.** Propuesta: **la C6**, porque es la única con sitio en su partición (877 KB libres: no se
    mueven ni el Entorno ni el sistema de ficheros) y su RAM obliga a medir de verdad. O **la C5** (PSRAM y 5 GHz),
    aceptando agrandar su partición. La P4 y la Pico 2 W, después.
+
+**Del TCP/IP:**
+7. **La configuración IP**, en `Net`, que ya es el módulo del TCP/IP. Un esbozo:
+
+   ```
+   import Net
+   Net.setDhcp("sensor-cocina")                       // IP dinámica (la de siempre): el nombre en la red
+   // o IP fija: Net.setStaticIp("192.168.1.50", "255.255.255.0", "192.168.1.1", "192.168.1.1", "")
+   if Net.waitReady(10000) then                       // la red, lista cuando hay IP
+     print "IP", Net.ip(), "puerta", Net.gateway(), "DNS", Net.dns()
+     // … Net.Tcp, como hoy
+   endif
+   ```
+
+   - En la placa, la guardada en el sistema (un `/sys/ip.json`, al lado de `wifi.json`) se aplica sola al arrancar.
+   - En el PC el TCP/IP es el del sistema operativo, y un programa no puede cambiarlo. Lo que digan `ip()` y los demás
+     en el PC está por decidir: la IP de verdad, o unos valores simulados que den lo mismo en las dos VMs.
+8. **Cómo encuentra el IDE a la placa.** Propuesta, por pasos: la placa dice su IP por el puerto serie (en el INFO) y
+   el IDE la recuerda; después, el anuncio por difusión UDP; mDNS sólo si hace falta.
+9. **Quién puede conectarse por la red.** Cualquiera de la red podría mandar programas a la placa. Propuesta: una clave
+   del IDE, que se guarda en la placa al configurarla por el puerto serie y que el IDE presenta al conectar; sin ella,
+   la placa no atiende. ¿O la red de casa se da por segura?
+
+**Y el alcance:** ¿un hito para cada parte, o las dos en el H3?
 
 ### Un orden posible, por pasos que se comprueban
 
 1. **Medir.** Un firmware de prueba en la placa de referencia, sin la VM, como el paso 1 del Bluetooth: encender,
-   buscar, conectarse con IP dinámica y con fija, abrir una conexión TCP, desconectar y apagar. Lo que cuesta de
-   verdad, en flash y en RAM.
-2. **La WiFi del sistema y el IDE por WiFi.** La fachada (`bpvm_wifi.h`), el backend del IDF, `/sys/wifi.json`,
-   conectarse al arrancar, el diálogo del IDE por el puerto serie, el cable por TCP (desde `wire_v1_tcp.c`) y el IDE
-   conectando por la IP.
-3. **La WiFi de los programas.** El módulo de BP, su versión simulada en las dos VMs (con la paridad) y `Net` sobre
-   lwIP, con el cierre de las conexiones al acabar el programa.
+   buscar, conectarse, la IP dinámica y la fija, una conexión TCP, desconectar y apagar. Lo que cuesta de verdad, en
+   flash y en RAM, cada parte por su lado.
+2. **La conexión WiFi.** Primero la del sistema: la fachada (`bpvm_wifi.h`, sólo el enlace), el backend del IDF,
+   `/sys/wifi.json`, conectarse al arrancar y el diálogo del IDE. Luego la de los programas: el módulo `Wifi` y su
+   versión simulada en las dos VMs, con la paridad.
+3. **El TCP/IP.** Primero el del sistema: la configuración IP (`/sys/ip.json`) y el IDE por la red, con el cable por
+   TCP desde `wire_v1_tcp.c`. Luego el de los programas: la configuración desde `Net`, y `Net` sobre lwIP, con `#705`
+   y el cierre de las conexiones al acabar el programa.
 4. **Las demás placas:** la C3 (la memoria), la S3, la C5, la P4 (su C6 actualizada y la SD) y la Pico 2 W.
 
-**Fuera del H3**, salvo que Eduardo diga otra cosa: el servidor para los programas (`listen`/`accept`), UDP, TLS, la
-web de configuración, la placa como punto de acceso y la hora por NTP (pequeña: lwIP la trae).
+**Fuera**, salvo que Eduardo diga otra cosa: el servidor para los programas (`listen`/`accept`), UDP, TLS, la web de
+configuración, la placa como punto de acceso y la hora por NTP (pequeña: lwIP la trae).

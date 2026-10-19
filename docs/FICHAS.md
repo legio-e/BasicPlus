@@ -6995,7 +6995,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > |---|---|---|
 > | **H1** | **JC**: BasicPlus con la ropa de Java y C#. El mismo árbol, un escáner y un parser nuevos, la traducción en los dos sentidos, el compilador y el IDE (`#698`) | ✅ **CERRADO el 18-oct**, validado por Eduardo. Sus diez apartados, en «🧩 H1», abajo |
 > | **H2** | **el Bluetooth** (`#697`, el experimento E1): el teclado y el ratón por Bluetooth LE, hoy en la P4 | 🔶 **a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Los pasos 1 y 2, hechos el 14-oct en la P4. Lo siguiente, cuando se retome: probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere |
-> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3, con lo que hay que decidir |
+> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi. Y separar la conexión WiFi (el enlace) del resto del TCP/IP, *«así limitamos el alcance de cada cosa»* | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3, con lo que hay que decidir |
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
