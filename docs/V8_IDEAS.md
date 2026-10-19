@@ -1391,6 +1391,9 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
   - en la P4, que tiene pantalla, con un programa BP interactivo: buscar, escoger, teclear la clave y elegir la IP. Es
     la idea del programa de configuración del Bluetooth (§E1), y pide pronto el módulo `Wifi` y la configuración IP de
     `Net`.
+- **El controlador SDMMC es del sistema** (decidido después de la prueba del paso 1): *«El controlador del SDMMC es
+  del SO, no del BasicPlus. Si la wifi o el bluetooth están apagados el lector de SD debe estar encendido.»* Lo crea
+  el arranque, y la SD y la C6 usan cada una su ranura. Comprobado en la P4 el mismo día (abajo, «Paso 1»).
 - **La frontera:** *«la conexión wifi llegamos hasta que se establece la conexión, el resto es ya del TCP/IP»*.
 - **El TCP/IP no se empieza de cero:** *«la conexión TCP/IP ya estaba, la probamos en su día con el P4 Kit»*, por la
   Ethernet. Antes de diseñar esa parte, se repasa lo que se hizo entonces.
@@ -1577,8 +1580,8 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
     con ella encendida, conectada y apagada) dieron los mismos datos y los mismos tiempos: 256 KB escritos en
     ~150 ms y leídos en 124 ms, a 20 MHz y un bit.
   - **La RAM interna de la P4 casi no se mueve:** 0,3 KB menos con la WiFi encendida, 6,5 KB de pico, y vuelve a lo
-    de antes en cada vuelta. La PSRAM no cambia. El trabajo de la radio lo hace la C6. Falta medir aparte lo que
-    `esp_hosted` y lwIP reservan al arrancar; haría falta la misma prueba sin ellos.
+    de antes en cada vuelta. La PSRAM no cambia. El trabajo de la radio lo hace la C6. Lo que se reserva antes, medido
+    en la tercera prueba: ~34 KB al abrir el enlace con la C6 y ~4,6 KB la interfaz de red.
   - **La flash:** la parte de red (lwIP, la interfaz de red y el anfitrión de `esp_hosted` con su protocolo) ocupa unos
     252 KB y 5,4 KB de RAM fija. La app entera, 639 KB.
   - Tras desconectarse, el IDF guarda la IP 120 s y luego avisa de que se perdió (`LOST_IP`).
@@ -1589,9 +1592,25 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
     no tiene el problema. Para decidir: en BasicPlus, apagar = parar la radio; o arreglar esa línea en el firmware de
     la C6 que se le dé al usuario.
   - **El controlador SDMMC, un solo dueño.** `esp_hosted` lo crea al conectar con la C6, y falla si ya existe. Al
-    soltarlo, sólo suelta su ranura. Hoy nuestro driver de la SD de la P4 (`blk_sdmmc_p4.c`) también lo crea. En la
-    prueba va primero la C6 y la SD se monta sin crearlo. Cómo quedará en BasicPlus está por decidir: quién lo crea, y
-    qué pasa con la SD si la WiFi está apagada.
+    soltarlo, sólo suelta su ranura. Hoy nuestro driver de la SD de la P4 (`blk_sdmmc_p4.c`) también lo crea. En las
+    dos primeras pruebas iba primero la C6 y la SD se montaba sin crearlo.
+
+    **Eduardo lo decidió ese mismo día:** el controlador es del sistema, y la SD funciona con la WiFi y el Bluetooth
+    apagados. **La tercera prueba lo hace así**, y salen las tres vueltas sin un fallo:
+    1. El arranque crea el controlador.
+    2. La SD se monta y se prueba con la C6 sin arrancar.
+    3. Se abre el enlace con la C6. `esp_hosted` ya no arranca solo antes de `app_main`
+       (`ESP_HOSTED_AUTO_CALL_INIT_BEFORE_APP_MAIN=n`), y su `sdmmc_host_init()` encuentra el controlador hecho. Lo
+       hace un envoltorio del enlazador, `-Wl,--wrap=sdmmc_host_init`, sin tocar el código de `esp_hosted`; el ELF
+       confirma que su llamada va al envoltorio.
+
+    La SD, 14 de 14 iguales: antes de la C6, con ella y en cada fase de la WiFi. **Abrir el enlace con la C6 cuesta
+    ~34 KB de RAM interna** de la P4, y el mayor bloque libre baja 24 KB. Con la WiFi y el Bluetooth apagados no se
+    gastan.
+
+    Para BasicPlus queda: el controlador lo crea el arranque, y el driver de la SD inicia y suelta sólo su ranura. Hoy,
+    en sus salidas de error, `blk_sdmmc_p4.c` suelta el controlador entero (`#566`), y eso cortaría el enlace con la
+    C6.
   - **Un fallo del enlace con la C6 reinicia la P4** con un `abort()`. Lo hace `esp_hosted` por defecto
     (`TRANSPORT_RESTART_ON_FAILURE`). En la prueba se apagó y se escucha su evento; en BasicPlus tendrá que ir igual:
     que la WiFi se caiga no tumba la placa.
