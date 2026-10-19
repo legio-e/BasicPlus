@@ -6995,7 +6995,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > |---|---|---|
 > | **H1** | **JC**: BasicPlus con la ropa de Java y C#. El mismo árbol, un escáner y un parser nuevos, la traducción en los dos sentidos, el compilador y el IDE (`#698`) | ✅ **CERRADO el 18-oct**, validado por Eduardo. Sus diez apartados, en «🧩 H1», abajo |
 > | **H2** | **el Bluetooth** (`#697`, el experimento E1): el teclado y el ratón por Bluetooth LE, hoy en la P4 | 🔶 **a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Los pasos 1 y 2, hechos el 14-oct en la P4. Lo siguiente, cuando se retome: probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere |
-> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi. Y separar la conexión WiFi (el enlace) del resto del TCP/IP, *«así limitamos el alcance de cada cosa»* | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3. Decidido ese día: la P4 de Waveshare primero (la C3, la C5 y la C6, después); los ajustes, en un JSON en `/sys`; el Entorno, sólo para activar al arrancar, y sin decir nada la WiFi y el Bluetooth apagados; preconfigurada desde el IDE, y en la P4 con un programa interactivo. El TCP/IP parte de lo que se hizo con la Ethernet de la P4 Kit |
+> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi. Y separar la conexión WiFi (el enlace) del resto del TCP/IP, *«así limitamos el alcance de cada cosa»* | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3. Decidido ese día: la P4 de Waveshare primero (la C3, la C5 y la C6, después); los ajustes, en un JSON en `/sys`; el Entorno, sólo para activar al arrancar, y sin decir nada la WiFi y el Bluetooth apagados; preconfigurada desde el IDE, y en la P4 con un programa interactivo. El TCP/IP parte de lo que se hizo con la Ethernet de la P4 Kit. **El paso 1, en curso:** el 19-oct, la C6 de la P4, actualizada a ESP-Hosted 3.0.9 por el conector P1, con su flash de fábrica guardada; arranca, y la P4 negocia con ella el protocolo de control (`V8_IDEAS` §E3, «Paso 1»). Falta el firmware de prueba de la WiFi en la P4 |
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
@@ -7313,6 +7313,10 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
   por SDIO (`esp_hosted` 3.0.9, con NimBLE en la P4) y ve por Bluetooth LE el teclado y el ratón. La C6 lleva de
   fábrica un ESP-Hosted viejo (versión 0.0.0) que no contesta al protocolo de control del anfitrión 3.x, pero su
   canal HCI funciona: **no hace falta tocar la C6**.
+  - **19-oct:** el anfitrión la veía como 0.0.0; su propio log dice ESP-Hosted-MCU 0.0.6, con la WiFi y el Bluetooth
+    LE. Ese día se actualizó a ESP-Hosted 3.0.9 para la WiFi (el H3). La nueva no enciende sola el controlador
+    Bluetooth, así que **al retomar el H2, `p4_hid` necesita `bring_up_controller = true`** (es lo de por defecto:
+    basta quitar la línea que lo pone a `false`).
 - **Paso 2, hecho.** El anfitrión HID de prueba conecta, empareja (Just Works, el vínculo en la NVS), se suscribe y
   recibe los informes de los dos a la vez, sin perder ninguna tecla:
   - el ratón, con botones, X e Y de 16 bits y la rueda;

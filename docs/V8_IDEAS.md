@@ -53,11 +53,18 @@ Con dos firmwares de prueba del ESP-IDF, sin BasicPlus, en la P4 de Waveshare. E
 
    En la P4 corre NimBLE como anfitrión (`BT_CONTROLLER_DISABLED`), unido a la C6 por `esp_hosted` 3.0.9, del registro
    de Espressif: es la única versión que admite el IDF v6.
-2. **La C6 de fábrica lleva un ESP-Hosted viejo**: se presenta con versión 0.0.0, «BLE only» y «HCI over SDIO».
+2. **La C6 de fábrica lleva un ESP-Hosted viejo**: al anfitrión se le presenta con versión 0.0.0, «BLE only» y «HCI
+   over SDIO».
    - No contesta al protocolo de control (RPC V2) del anfitrión 3.x: ni a la versión ni a encender el controlador.
      El anfitrión avisa «major version mismatch — OTA coprocessor from host».
    - **Pero su controlador arranca encendido y el canal HCI funciona.** Con `bring_up_controller = false`, NimBLE se
      engancha y todo va. **Para el Bluetooth no hace falta tocar la C6.**
+   - Su propio log, leído el 19-oct por su UART0 (§E3), dice más: ESP-Hosted-MCU 0.0.6 (`network_adapter`,
+     `ng-v1.0.2`, IDF 5.4-dev), con **la WiFi** («WLAN over SDIO») y el Bluetooth LE por HCI («BLE only» es sin el
+     clásico). Tenía WiFi; lo que no habla es el protocolo de control del anfitrión 3.x.
+   - **El 19-oct se actualizó a ESP-Hosted 3.0.9** (§E3, «Paso 1»). La nueva no enciende el controlador sola: lo enciende
+     el anfitrión. Con ella, `p4_hid` necesita `bring_up_controller = true`, que es lo de por defecto: basta quitar esa
+     línea.
 3. **Los dos se emparejan en Just Works**, aunque la placa diga que puede enseñar un código: el teclado no pide el
    suyo. Quedan vinculados, con las claves en la NVS. Al anunciarse en modo de emparejar, el ratón dice que es HID
    (servicio y apariencia `0x03C2`) y el teclado no, así que se reconocen por el nombre.
@@ -270,6 +277,8 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
    volver a mirarlo con un firmware nuevo en la C6.
 7. **La C6 de la P4.** Para el Bluetooth basta la de fábrica. La WiFi de V8 necesitará el protocolo de control: habrá
    que actualizar la C6 a ESP-Hosted 3.x, por OTA desde la P4 o por su conector P1. Va en un experimento aparte.
+   **Hecho el 19-oct**, por el conector P1 (§E3, «Paso 1»); desde entonces el anfitrión tiene que encender el
+   controlador (punto 2 de arriba).
 8. **El kit P4 EV** lleva, presumiblemente, la misma C6. Falta probarlo.
 
 ### Lo que puede seguir (sin orden ni obligación)
@@ -279,6 +288,7 @@ programas con GUI ya se manejan con ratón en el PC. No registra ni el teclado n
 - **El mismo anfitrión en una ESP con Bluetooth propio** (la C5, que tiene pantalla), para ver si el código común
   sirve.
 - **La C6 de la P4, actualizada a ESP-Hosted 3.x**: su versión, el protocolo de control y la puerta a la WiFi.
+  **Hecho el 19-oct** (§E3, «Paso 1»).
 - **La memoria**: cuánto ocupan NimBLE y ESP-Hosted.
 
 ---
@@ -1312,8 +1322,11 @@ nadie los pide):
     del pack de la GUI, o con uno menor.
 - **La NVS se borra en cada actualización**: la imagen fusionada pisa de 0x9000 a 0xFFFF. La calibración de la radio se
   rehace sola; la red y su clave no pueden guardarse ahí.
-- **La P4**: la C6 de fábrica sólo hace Bluetooth (ESP-Hosted 0.0.0); para la WiFi hay que actualizarla a ESP-Hosted
-  3.x. Y la SD y la C6 se disputan el único controlador SDMMC del IDF 6: hace falta un dueño.
+- **La P4**: la C6 de fábrica lleva la WiFi (ESP-Hosted-MCU 0.0.6, «WLAN over SDIO»), pero no contestó al protocolo
+  de control del anfitrión 3.x (ni a la versión ni a encender el controlador, 14-oct), y la WiFi del anfitrión va por
+  ese protocolo: hay que actualizarla a ESP-Hosted 3.x. Y la SD y la C6 se disputan el único controlador SDMMC del
+  IDF 6: hace falta un dueño. (Corregido el 19-oct: puse aquí que la de fábrica sólo hacía Bluetooth; su log dice que
+  no. La actualización, hecha ese día: abajo, «Paso 1».)
 - **La Pico 2 W**: según `H14_TEST_PLAN.md` (junio), la Pico 2 de pruebas de Eduardo es una W (su LED cuelga del
   CYW43439). Por confirmar. El SDK trae el driver y lwIP, pero esos submódulos están vacíos en el repositorio.
 - **Lo que no hay en BP:** una capacidad «tiene WiFi» en `Machine`, ni una forma de que la plataforma avise a un
@@ -1366,7 +1379,8 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
 
 - **La placa: la P4 de Waveshare primero** (la de la C6 que ya conocemos del Bluetooth); la C3, la C5 y la C6,
   después. Para la P4, el primer paso técnico es que hable por WiFi a través de su C6: actualizarla a ESP-Hosted 3.x
-  (la de fábrica sólo hace Bluetooth) y resolver que la SD y la C6 comparten el controlador SDMMC.
+  (la de fábrica lleva la WiFi, pero no habla el protocolo de control del anfitrión 3.x; hecho el 19-oct) y resolver
+  que la SD y la C6 comparten el controlador SDMMC.
 - **Los ajustes de la conexión, en un fichero JSON en `/sys`.** Un programa BP puede escribirlo (el Entorno no: no hay
   `Machine.setEnv`), y el IDE no lo enseña como enseña el Entorno, que importa por la clave.
 - **El Entorno, sólo para activar al arrancar:** *«En el environment quizás únicamente si queremos activar/desactivar al
@@ -1483,7 +1497,7 @@ Repasado el 19-oct (Eduardo: *«quizás convendría repasar lo que se hizo en su
 1. **La WiFi de la P4, a mano.** Actualizar su C6 a ESP-Hosted 3.x, por OTA desde la P4 o por el conector P1, con el
    OK de Eduardo para grabarla. Y un firmware de prueba en la P4, sin la VM, como el paso 1 del Bluetooth: encender,
    buscar, conectarse, desconectar y apagar, con la SD montada a la vez por el controlador compartido. Lo que cuesta
-   de verdad, en flash y en RAM.
+   de verdad, en flash y en RAM. **En curso desde el 19-oct; la C6, actualizada** (abajo, «Paso 1»).
 2. **La conexión WiFi.** Primero la del sistema: la fachada (`bpvm_wifi.h`, sólo el enlace), el backend del IDF (en la
    P4, por ESP-Hosted), el JSON de `/sys` y la clave del Entorno para activarla al arrancar. Luego la de los programas:
    el módulo `Wifi`, su versión simulada en las dos VMs, con la paridad, y el programa de configuración de la P4.
@@ -1500,3 +1514,39 @@ Repasado el 19-oct (Eduardo: *«quizás convendría repasar lo que se hizo en su
 
 **Fuera**, salvo que Eduardo diga otra cosa: el servidor para los programas (`listen`/`accept`), UDP, TLS, la web de
 configuración, la placa como punto de acceso y la hora por NTP (pequeña: lwIP la trae).
+
+### Paso 1: la WiFi de la P4, a mano (desde el 19-oct)
+
+Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El código está fuera del repo, en
+`C:\tmp\v8wifi`.
+
+**La C6, actualizada a ESP-Hosted 3.0.9** (19-oct, con el OK de Eduardo: *«puedes actualizar el C6 de la P4»*).
+- **Por el conector P1:** la UART0 de la C6 va a un adaptador USB-serie (un FTDI FT232R, en COM18) y su IO9, a masa
+  con un puente. Con el RESET de la placa, la ROM de la C6 entra en el modo de grabación. Hicieron falta unos intentos
+  con el cableado: primero no llegaba nada por COM18, y luego arrancaba de la flash, hasta que el IO9 quedó a masa.
+- **La copia de fábrica, antes de tocar nada:** la flash entera, 4 MB, leída con su comprobación, en
+  `C:\tmp\v8wifi\c6_fabrica_4MB.bin` (SHA-256 `b47bbb8e…`). Lleva el cargador, la tabla de particiones (dos `ota` de
+  1,5 MB) y la app de fábrica en `ota_0`. Con ella la C6 puede volver a como venía.
+- **Lo grabado:** el ejemplo de coprocesador de `esp_hosted` 3.0.9 con la WiFi y el Bluetooth
+  (`eh_cp_bt_wifi_hosted_hci_mcu`). Se compiló con el IDF 6.0.1 en `C:\tmp\v8wifi\c6_cp`, con la misma copia de
+  `esp_hosted` que el anfitrión de la P4.
+  - El SDIO va en el modo STREAM, el mismo de la de fábrica. El de agregación pide parchear el IDF compartido, y el de
+    paquetes se para en un `#error`.
+  - La tabla de particiones es la del ejemplo para 4 MB: dos `ota` de 1792 KB, para poder actualizarla después desde
+    la P4. La app ocupa 1374 KB.
+  - Se borró la flash entera, para no dejar la NVS de la de fábrica, y después se comprobaron los cuatro trozos contra
+    el build.
+- **Arranca:** «ESP-Hosted Firmware version :: EH-3.0.9», con la WiFi y el Bluetooth LE por SDIO. El anfitrión de la
+  P4, que todavía es el `p4_hid` del Bluetooth, se entiende con ella: negocian el protocolo de control (RPC V2).
+- **Lo que cambia:**
+  - **El controlador Bluetooth ya no se enciende solo**, como en la de fábrica: lo enciende el anfitrión cuando lo pide.
+    La WiFi no la encendía sola ninguna de las dos. Encaja con lo decidido: sin decir nada, apagados. Para el H2,
+    `p4_hid` necesita `bring_up_controller = true` (§E1, punto 2).
+  - Las siguientes actualizaciones de la C6 pueden ir por OTA desde la P4: ya habla el protocolo y tiene las dos
+    particiones. Está sin probar.
+- **Para el usuario, apuntado:** cada P4 de Waveshare necesitará esta actualización de su C6 para la WiFi. Aquí se ha
+  hecho por el P1, con un adaptador USB-serie y un puente. No se ha probado si una C6 de fábrica acepta una OTA de un
+  anfitrión 3.x; con la copia de fábrica se puede probar. Cómo se le da al usuario, por decidir.
+
+**Lo siguiente:** el firmware de prueba en la P4, con el OK de Eduardo para grabarlo: encender, buscar, conectarse,
+desconectar y apagar, con la SD montada a la vez.
