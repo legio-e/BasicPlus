@@ -32,7 +32,8 @@
 > busca, se conecta con la clave, tiene IP por DHCP, se desconecta y apaga, tres vueltas sin un fallo y con la SD a la
 > vez. Salen `#705` (`Net.tcpClose`, al mirar `Net`) y `#706` (`esp_hosted`: tras desinicializar, la WiFi no vuelve).
 > Y tres decisiones de Eduardo: el controlador SDMMC es del sistema; manda el ahorro de energía (la WiFi y el
-> Bluetooth, apagados de normal); y toda la familia ESP32, al IDF 6.1 (`#707`).**
+> Bluetooth, apagados de normal); y toda la familia ESP32, al IDF 6.1 (`#707`). Y tras una pausa, el primer sonido de la
+> P4: un `.wav` de la SD por su altavoz (`#708`), con el volumen que eligió Eduardo, 85.**
 >
 > **Lo que dijo Eduardo:**
 > - lo que quiere: *«Encender el wifi, Hacer una lista de redes wifi disponibles. Poder escoger una y conectarse.
@@ -54,6 +55,10 @@
 > - y al final: *«Actualizamos al 6.1 para toda la familia ESP32. El apagado es configurable via fichero de
 >   configuración. Si el SO puede detectar si tenemos alimentación externa, entonces solamente se apaga al cabo de un
 >   tiempo, con alimentación externa no hace falta que se apague. Hacemos una pausa.»*
+> - en la pausa: *«¿cuánto costaría reproducir un .mp3 en el P4?»*; y tras el análisis, *«La placa tiene una salida
+>   speaker y la placa venía con unos pequeños altavoces. Y sí, podemos empezar con .wav»*. Al volver: *«Continuamos,
+>   probamos un .wav»*; y del volumen: *«A 70 diría que un poco bajo, a 85 sería un volumen 'normal' y a 100 podemos
+>   decir que está un poco alto. Yo lo dejaría a 85.»*
 >
 > **Lo hecho:**
 > - **El análisis**, en `V8_IDEAS` §E3 (`991f3fab`, `2c56ddfb`, `46c24b66`, `601fd1c4`, `032dc010`): lo que hay medido
@@ -64,6 +69,11 @@
 >   y verificada. Arranca como «EH-3.0.9».
 > - **La prueba de la P4**, en `C:\tmp\v8wifi\p4_wifi`, grabada sólo en la app con el OK de Eduardo. Los números y lo
 >   que sale para el diseño, en `V8_IDEAS` §E3, «Paso 1».
+> - **Tras la pausa, el sonido (`#708`, paso 1):** un `.wav` de la SD por el altavoz de la P4, con un firmware de prueba
+>   (`C:\tmp\v8sonido\p4_wav`, IDF 6.1 y `esp_codec_dev` del almacén local de EIM, sin bajar nada). Suena en tiempo
+>   real; leer la SD es el 4 % del tiempo y el audio ocupa ~7 KB de RAM. La primera vez, a volumen 60, se oyó bajo: el
+>   0–100 va de −50 a 0 dB y el canon venía grabado muy bajo. Con el canon normalizado y tres vueltas a 70, 85 y 100,
+>   Eduardo eligió el 85. El detalle, en `V8_IDEAS` §E4.
 >
 > **Lo que salió:**
 > - `#706`: en la C6, `esp_hosted` no baja su bandera de «ya iniciada» al desinicializar. La prueba apaga con
@@ -93,21 +103,22 @@
 >   las nuevas:
 >   - qué cuenta como actividad para apagar a los 10 minutos, y cómo sabe cada placa si va a pilas (el apagado se
 >     configura en el fichero, y con alimentación externa no se apaga: decidido);
->   - cerrar `#706` porque el apagado del todo lo evita (lo propuse; falta que Eduardo lo confirme);
-> - **`#707`, la familia ESP32 al IDF 6.1** (decidido): las cinco compiladas y comparadas con el 6.0.1, el SDMMC de la
->   P4, los packs y la tanda en las placas, con su OK. Antes o después del paso 2 del H3, lo dice Eduardo;
-> - **una idea nueva, `#708`: el sonido en la P4** (Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»*; y tras
->   el análisis, *«podemos empezar con .wav»*). La placa trae el códec, el amplificador y unos altavoces; el análisis,
->   en `V8_IDEAS` §E4. El primer paso, un `.wav` de la SD por el altavoz con un firmware de prueba;
+>   - cerrar `#706` porque el apagado del todo lo evita (lo propuse; falta que Eduardo lo confirme).
 >
 >   Y lo que trae el controlador del sistema: el driver de la SD de la P4 suelta sólo su ranura; hoy, en sus errores,
 >   suelta el controlador entero (`#566`);
-> - **la P4 lleva la prueba de la WiFi**, con el cargador y la tabla de la prueba. Para volver a BasicPlus, la imagen
->   fusionada entera, con el OK de Eduardo. La C6 se queda con la 3.0.9;
+> - **`#707`, la familia ESP32 al IDF 6.1** (decidido): las cinco compiladas y comparadas con el 6.0.1, el SDMMC de la
+>   P4, los packs y la tanda en las placas, con su OK. Antes o después del paso 2 del H3, lo dice Eduardo;
+> - **`#708`, el sonido en la P4**: el paso 1 está hecho (el `.wav`, a volumen 85). Lo siguiente, el MP3 encima o el
+>   módulo de BasicPlus, lo elige Eduardo;
+> - **la P4 lleva la prueba del sonido** (`C:\tmp\v8sonido\p4_wav`): en cada arranque toca tres vueltas por el altavoz.
+>   El cargador y la tabla de particiones siguen siendo los de las pruebas; para volver a BasicPlus, la imagen fusionada
+>   entera, con el OK de Eduardo. La C6 se queda con la 3.0.9. En la SD quedan `TONO.WAV`, `CANON.WAV` y `V8WIFI.TXT`,
+>   de las pruebas;
 > - **el IDF 6.1**, en `C:\esp\v6.1` (instalado con EIM). Se carga con `C:\tmp\v8wifi\entorno_idf61.ps1`, que no cambia
 >   el IDF elegido para los IDE. Los firmwares de BasicPlus siguen con el 6.0.1;
-> - **la clave de la WiFi de Eduardo** está en `C:\tmp\v8wifi\p4_wifi\main\red_privada.h`, fuera del repo, y en la
->   flash de la P4 mientras lleve la prueba. Que no entre en el repositorio;
+> - **la clave de la WiFi de Eduardo** está en `C:\tmp\v8wifi\p4_wifi\main\red_privada.h`, fuera del repo. Ya no está en
+>   la P4: la prueba del sonido, más grande, cubrió entera la de la WiFi. Que no entre en el repositorio;
 > - **el H2**: con la C6 nueva, `p4_hid` necesita `bring_up_controller = true`; la nueva no enciende sola el
 >   controlador Bluetooth.
 

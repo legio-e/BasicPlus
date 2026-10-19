@@ -1721,3 +1721,26 @@ funciona en sus chips. Las patentes del MP3 expiraron en 2017.
    - el códec y los pines, en la configuración de la placa;
    - por el ahorro de energía (§E3, «Lo decidido»), el amplificador y el códec apagados cuando no suena;
    - el ES8311 en el bus de la táctil, por el árbitro de la HAL BP.
+
+**Paso 1, hecho el 19-oct** (Eduardo: *«Continuamos, probamos un .wav»*). El firmware de prueba está en
+`C:\tmp\v8sonido\p4_wav`, compilado con el IDF 6.1 y `esp_codec_dev` 1.5.10 (Apache-2.0). Ese componente salió del
+almacén local que dejó EIM, sin bajar nada. En la P4 se grabó sólo la app.
+- **El programa** escribe en la SD dos `.wav`: un la de 440 Hz (2 s, 44,1 kHz, mono) y el canon del ejemplo del IDF
+  (10 s, 16 kHz, estéreo). Después los lee con su cabecera RIFF y los toca por el ES8311. El códec contesta en el I2C
+  (0x18) y el audio está listo en 17 ms.
+- **En tiempo real:** los 10 s de canon suenan en 9,99 s. Leer la SD es el 4 % del tiempo (428 ms de los 10 s), y el
+  resto la CPU espera al I2S. El audio ocupa ~7 KB de RAM interna, y no crece de una vuelta a otra.
+- **El amplificador sólo está encendido mientras suena:** `esp_codec_dev` lo enciende al abrir y lo apaga al cerrar,
+  como pide el ahorro de energía.
+- **El volumen.** La primera prueba, a 60, se oyó *«bastante bajo»*, por dos cosas:
+  - el 0–100 de `esp_codec_dev` va de −50 a 0 dB, más +3,6 dB porque el amplificador va a 5 V y el códec a 3,3 V; el
+    60 son −16,4 dB en el códec;
+  - el canon venía grabado muy bajo: su pico, al 19 % de la escala (−14,5 dBFS).
+
+  Con el canon normalizado (el pico a −3,6 dBFS) y tres vueltas a 70, 85 y 100, Eduardo: *«A 70 diría que un poco
+  bajo, a 85 sería un volumen 'normal' y a 100 podemos decir que está un poco alto. Yo lo dejaría a 85.»* **El volumen
+  por defecto, 85.**
+- Cada fichero deja una línea de error del IDF, sin daño: `esp_codec_dev` apaga el canal I2S antes de
+  reconfigurarlo aunque ya esté apagado.
+
+**Lo siguiente**, a elegir por Eduardo: el MP3 encima (minimp3), o el módulo de BasicPlus con sus decisiones.

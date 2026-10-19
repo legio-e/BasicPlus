@@ -7062,6 +7062,11 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   2. el MP3 encima;
   3. BasicPlus, de 3 a 5 días según lo que se decida: el módulo, en la imagen o en un pack, qué hace en el PC, la
      configuración de la placa, y el amplificador apagado cuando no suena (por el ahorro de energía).
+- **19-oct, el paso 1, hecho** (Eduardo: *«Continuamos, probamos un .wav»*). El firmware de prueba (IDF 6.1 y
+  `esp_codec_dev`, del almacén local de EIM) toca dos `.wav` de la SD por el altavoz, en tiempo real. Leer la SD es el
+  4 % del tiempo, y el audio ocupa ~7 KB de RAM interna. El amplificador sólo se enciende mientras suena. Se oye, y
+  Eduardo elige el volumen entre 70, 85 y 100: *«Yo lo dejaría a 85»*. El detalle, en `V8_IDEAS` §E4. Lo siguiente,
+  el MP3 o el módulo de BasicPlus, lo elige él.
 
 #### 🔵 `#707` — la familia ESP32, al IDF 6.1 (decidida el 19-oct, Eduardo: *«Actualizamos al 6.1 para toda la familia ESP32»*; sale del H3)
 
