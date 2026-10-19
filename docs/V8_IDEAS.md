@@ -10,8 +10,8 @@
 >
 > **Los hitos** (Eduardo, 18-oct): `H` numerados, como en V7, con sus apartados en `FICHAS.md`, y los nombra Eduardo.
 > **H1 = JC** (E2, abajo), cerrado el 18-oct. **H2 = el Bluetooth** (E1, abajo), a medias y parado. **H3 = la WiFi**
-> (E3, abajo), en análisis desde el 19-oct. Y una idea sin hito todavía: **el sonido en la P4** (E4, abajo), WAV
-> primero.
+> (E3, abajo), en análisis desde el 19-oct. **H4 = el sonido en la P4** (E4, abajo): el `.wav` suena desde el 19-oct;
+> parado.
 
 ---
 
@@ -1674,7 +1674,10 @@ decidir») y las de este paso:
 
 ---
 
-## E4 · El sonido en la P4: WAV primero, MP3 después (Eduardo, 19-oct; `#708`)
+## E4 · El sonido en la P4: WAV primero, MP3 después (H4; Eduardo, 19-oct; `#708`)
+
+> **Es el H4 de V8** (Eduardo, 19-oct, tras oírlo: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido
+> de momento.»*). Parado, con el paso 1 hecho.
 
 Eduardo, al acabar la sesión de la WiFi: *«¿Cuánto costaría reproducir un .mp3 en el P4?»*. Y tras el análisis:
 *«La placa tiene una salida speaker y la placa venía con unos pequeños altavoces. Y sí, podemos empezar con .wav.»*
