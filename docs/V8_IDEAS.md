@@ -18,6 +18,8 @@
 
 > 🔶 **Es el H2 de V8, a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Cuando se retome, lo
 > primero es probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere; luego, el módulo de BasicPlus.
+> Y una regla que salió con la WiFi (Eduardo, 19-oct): el Bluetooth, como la WiFi, **apagado al arrancar** salvo que el
+> Entorno lo active (*«Si no se dice nada, tanto el Bluetooth como el Wifi desactivados»*); §E3, «Lo decidido».
 
 ### De dónde sale
 
@@ -1360,21 +1362,37 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
 - el IDE por la red no depende de la WiFi, sino del TCP/IP: por la WiFi, o por la Ethernet de la P4;
 - cada parte se mide y se prueba por separado.
 
+### Lo decidido (Eduardo, 19-oct)
+
+- **La placa: la P4 de Waveshare primero** (la de la C6 que ya conocemos del Bluetooth); la C3, la C5 y la C6,
+  después. Para la P4, el primer paso técnico es que hable por WiFi a través de su C6: actualizarla a ESP-Hosted 3.x
+  (la de fábrica sólo hace Bluetooth) y resolver que la SD y la C6 comparten el controlador SDMMC.
+- **Los ajustes de la conexión, en un fichero JSON en `/sys`.** Un programa BP puede escribirlo (el Entorno no: no hay
+  `Machine.setEnv`), y el IDE no lo enseña como enseña el Entorno, que importa por la clave.
+- **El Entorno, sólo para activar al arrancar:** *«En el environment quizás únicamente si queremos activar/desactivar al
+  arrancar. Si no se dice nada, tanto el Bluetooth como el Wifi desactivados.»* Una clave para la WiFi y otra para el
+  Bluetooth, apagadas si no están.
+- **Cómo se configura:**
+  - en cualquier micro, preconfigurada: el fichero se escribe desde el IDE (*«En un micro la podemos pre-configurar»*);
+  - en la P4, que tiene pantalla, con un programa BP interactivo: buscar, escoger, teclear la clave y elegir la IP. Es
+    la idea del programa de configuración del Bluetooth (§E1), y pide pronto el módulo `Wifi` y la configuración IP de
+    `Net`.
+- **La frontera:** *«la conexión wifi llegamos hasta que se establece la conexión, el resto es ya del TCP/IP»*.
+- **El TCP/IP no se empieza de cero:** *«la conexión TCP/IP ya estaba, la probamos en su día con el P4 Kit»*, por la
+  Ethernet. Antes de diseñar esa parte, se repasa lo que se hizo entonces.
+
 ### Lo que hay que decidir (Eduardo)
 
 **De la conexión WiFi:**
-1. **Dónde guarda la placa su red.** Propuesta: `/sys/wifi.json`, con la red, la clave y el país. No en la NVS, que se
-   borra al actualizar; ni en el Entorno, que el IDE enseña, y la clave es secreta: lo mismo que se decidió para el
-   Bluetooth. La clave, en claro en el fichero (mayo: aceptable en una red de casa).
-2. **Cómo se configura la primera vez.** Propuesta: desde el IDE, por el puerto serie, con un diálogo «Red de la
-   placa»: la placa busca las redes, se escoge una y se da la clave; y en el mismo diálogo, en su apartado, la IP
-   dinámica o fija. Cada parte se guarda en su fichero. Son las funciones de la lista, hechas desde el IDE, con verbos
-   nuevos del cable.
-3. **La conexión WiFi del sistema y la de un programa.** La placa tiene una radio. Propuesta:
-   - con una red guardada, la WiFi es del sistema: un programa la consulta (el estado, la señal), pero no la apaga ni
-     la cambia, y si lo intenta, una excepción lo dice;
-   - sin red guardada, es del programa: la enciende, se conecta y la apaga, y al acabar el programa se apaga sola
-     (`#668`).
+1. ~~Dónde guarda la placa su red~~: **decidido**, un JSON en `/sys` (arriba). Lo que lleva: la red, la clave y el
+   país. Por concretar al diseñarlo: el nombre del fichero, si la IP de la interfaz va en él (un apartado `ip`) o en el
+   suyo, y los nombres de las dos claves del Entorno.
+2. ~~Cómo se configura la primera vez~~: **decidido** (arriba): preconfigurada desde el IDE, y en la P4 con un programa.
+3. **La conexión WiFi del sistema y la de un programa.** La placa tiene una radio. Propuesta, con lo decidido:
+   - con la WiFi activada en el Entorno, es del sistema: se conecta al arrancar con lo del fichero, y un programa la
+     consulta (el estado, la señal) pero no la apaga ni la cambia; si lo intenta, una excepción lo dice;
+   - sin activar (lo de siempre), es del programa: la enciende, se conecta y la apaga, y al acabar el programa se apaga
+     sola (`#668`). El programa de configuración de la P4 es uno de éstos.
 4. **El módulo de BP de la WiFi.** Un esbozo para hablarlo, con los nombres en el estilo de la stdlib:
 
    ```
@@ -1394,9 +1412,8 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
    - Perder la red: de momento, preguntar (`isConnected()`); un evento, más adelante.
 5. **Qué hace en el PC.** Propuesta: una WiFi simulada, la misma en las dos VMs, con su rastro `[wifi] …` como los
    periféricos simulados: unas redes de mentira fijas (una abierta y una con clave) y conectarse a ellas con su clave.
-6. **La placa de referencia.** Propuesta: **la C6**, porque es la única con sitio en su partición (877 KB libres: no se
-   mueven ni el Entorno ni el sistema de ficheros) y su RAM obliga a medir de verdad. O **la C5** (PSRAM y 5 GHz),
-   aceptando agrandar su partición. La P4 y la Pico 2 W, después.
+6. ~~La placa de referencia~~: **decidido**, la P4 de Waveshare (arriba). Lo que se midió de las demás sirve para
+   después: la C6 tiene sitio en su partición (877 KB libres); la C3 y la C5, no; y la C3 y la C6 van justas de RAM.
 
 **Del TCP/IP:**
 7. **La configuración IP**, en `Net`, que ya es el módulo del TCP/IP. Un esbozo:
@@ -1424,16 +1441,16 @@ su IP por DHCP o pone la fija, y la red está lista cuando tiene IP.
 
 ### Un orden posible, por pasos que se comprueban
 
-1. **Medir.** Un firmware de prueba en la placa de referencia, sin la VM, como el paso 1 del Bluetooth: encender,
-   buscar, conectarse, la IP dinámica y la fija, una conexión TCP, desconectar y apagar. Lo que cuesta de verdad, en
-   flash y en RAM, cada parte por su lado.
-2. **La conexión WiFi.** Primero la del sistema: la fachada (`bpvm_wifi.h`, sólo el enlace), el backend del IDF,
-   `/sys/wifi.json`, conectarse al arrancar y el diálogo del IDE. Luego la de los programas: el módulo `Wifi` y su
-   versión simulada en las dos VMs, con la paridad.
-3. **El TCP/IP.** Primero el del sistema: la configuración IP (`/sys/ip.json`) y el IDE por la red, con el cable por
-   TCP desde `wire_v1_tcp.c`. Luego el de los programas: la configuración desde `Net`, y `Net` sobre lwIP, con `#705`
-   y el cierre de las conexiones al acabar el programa.
-4. **Las demás placas:** la C3 (la memoria), la S3, la C5, la P4 (su C6 actualizada y la SD) y la Pico 2 W.
+1. **La WiFi de la P4, a mano.** Actualizar su C6 a ESP-Hosted 3.x, por OTA desde la P4 o por el conector P1, con el
+   OK de Eduardo para grabarla. Y un firmware de prueba en la P4, sin la VM, como el paso 1 del Bluetooth: encender,
+   buscar, conectarse, desconectar y apagar, con la SD montada a la vez por el controlador compartido. Lo que cuesta
+   de verdad, en flash y en RAM.
+2. **La conexión WiFi.** Primero la del sistema: la fachada (`bpvm_wifi.h`, sólo el enlace), el backend del IDF (en la
+   P4, por ESP-Hosted), el JSON de `/sys` y la clave del Entorno para activarla al arrancar. Luego la de los programas:
+   el módulo `Wifi`, su versión simulada en las dos VMs, con la paridad, y el programa de configuración de la P4.
+3. **El TCP/IP**, desde lo que se hizo con la Ethernet de la P4 Kit (el repaso está en marcha): la IP dinámica o fija,
+   el IDE por la red, y `Net` sobre lwIP para los programas, con `#705` y el cierre de las conexiones al acabar.
+4. **Las demás placas:** la C3, la C5 y la C6.
 
 **Fuera**, salvo que Eduardo diga otra cosa: el servidor para los programas (`listen`/`accept`), UDP, TLS, la web de
 configuración, la placa como punto de acceso y la hora por NTP (pequeña: lwIP la trae).
