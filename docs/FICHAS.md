@@ -7133,8 +7133,28 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
      (`tanda_v7.json`, 50 pruebas). **En las tres no cambia ninguna** respecto al F1: la C3, 38 idénticas, 7
      saltadas, 3 paradas, 1 «no peta» y 1 por aserciones; la C5 y la P4, 43 idénticas, 3 paradas, 2 «no peta» y 2 por
      aserciones. El aviso de `synclisttest` («memoria APRETADA») ya salía. La P4 volvió a BasicPlus con la imagen
-     entera, y su Entorno, su FS y sus packs seguían allí. Los informes, en `compat/informes/idf61_*`.
-  - **Falta:** la S3 y la C6, cuando estén conectadas. Y de paso salió `#709`, que no es del 6.1.
+     entera, y su Entorno, su FS y sus packs seguían allí. Después, **la S3 y la C6, igual: ninguna cambia** (la S3,
+     25 idénticas y 21 saltadas, como en el F1; la C6, 41 idénticas). La C6, que tiene el bloque de RAM de los packs
+     en la SRAM, lo conserva en `0x40828000`, y sus dos motores cargan. **Las cinco placas, 0 de 250 pruebas
+     cambian.** Los informes, en `compat/informes/idf61_*`.
+  9. **Una observación, la memoria de las placas con PSRAM.** El mínimo histórico de RAM interna
+     (`rtosHeapMinFreeBytes`, tras cada prueba de la tanda, la misma prueba con los dos IDF) baja con el 6.1:
+
+     | placa | PSRAM | el mínimo, tras cada prueba |
+     |---|---|---|
+     | C3 | no | −1,4 KB, igual en todas |
+     | C6 | no | +0,1 KB |
+     | S3 | sí | −34,0 KB, igual en todas |
+     | C5 | sí | −35,1 KB, igual en todas |
+     | P4 | sí | de −52,6 a −56,5 KB |
+
+     Ya está en la primera prueba y no crece: viene del arranque. La RAM libre al arrancar, tras reservar la VM, sólo
+     baja 2–3 KB (la S3, 274 723 → 272 787 B; la C5, 217 847 → 214 903). Es decir, lo que baja es un mínimo pasajero
+     del arranque, y sólo con PSRAM. El candidato, sin comprobar: el 6.1 marca los 32 KB de RAM interna que aparta
+     para DMA cuando hay PSRAM (`SPIRAM_MALLOC_RESERVE_INTERNAL`) también como memoria normal (`MALLOC_CAP_DEFAULT`),
+     y algo del arranque los usa (`esp_psram.c`, la reserva). Las pruebas dan lo mismo, y el peor margen sigue siendo
+     grande: la C5, 153 KB libres.
+  - Y de paso salió `#709`, que no es del 6.1.
 
 #### 🔵 `#706` — `esp_hosted` 3.0.9, en la C6: tras desinicializar la WiFi (`esp_wifi_deinit`), no vuelve a iniciarse sin reiniciar la C6 (abierta el 19-oct, en el paso 1 del H3; es del componente de Espressif, no de BasicPlus)
 
