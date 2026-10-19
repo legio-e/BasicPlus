@@ -182,9 +182,10 @@ vez**.
 - [ ] **Las 8 imágenes, del MISMO árbol**, y en una sola tanda:
   - RP2350: `ninja -C bpgenvm-c/pico/build` → `bpvm_pico.uf2` (Pico 2 y Metro:
     una imagen, la variante se detecta en la placa)
-  - ESP32: `idf.py build` en `bpgenvm-c/esp32` (la S3), `esp32c3`, `esp32c5`,
-    `esp32c6` y `esp32p4`. El ESP-IDF v6.0.1 está en `C:\esp\v6.0.1\esp-idf`
-    (en PowerShell, `& 'C:\esp\v6.0.1\esp-idf\export.ps1'` antes)
+  - ESP32: `idf build` en `bpgenvm-c/esp32` (la S3), `esp32c3`, `esp32c5`,
+    `esp32c6` y `esp32p4`, con el ESP-IDF 6.1, el mismo para todas (desde V8,
+    `#707`; instalado con EIM en `C:\esp\v6.1`). En PowerShell, antes,
+    `. bpgenvm-c\tools\entorno_idf.ps1`, que deja la orden `idf`
   - STM32 (las dos): CubeIDE headless —
     `stm32cubeidec --launcher.suppressErrors -nosplash -consoleLog -application
     org.eclipse.cdt.managedbuilder.core.headlessbuild -data <ws-temp>

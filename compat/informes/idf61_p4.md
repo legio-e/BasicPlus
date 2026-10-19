@@ -1,0 +1,338 @@
+# Tandas T1 — las placas conducidas
+
+## Tanda 2026-10-19 19:30:45
+
+- manifiesto: `bpgenvm-c\tools\tanda_v7.json` (50 pruebas listadas)
+- oraculo: jar `lexer-java\target\basicplus-frontend.jar` (2026-10-18 13:14:32) - exe `bpgenvm-c\build\bpgenvm-c.exe` (2026-10-13 17:19:10) - sabor `v2-gui1-lvgl0`
+- placas conectadas: 1 (esp32p4@COM15)
+
+### Oraculo por prueba (PC)
+
+| prueba | modulo | crc .mod | tamano | compilacion | host rc | ms host | lineas salida |
+|---|---|---|---|---|---|---|---|
+| MathRango | MathRango | f3a5cb9d | 1611 | ok | 0 | 9 | 29 |
+| ThrowSinAtrapar | ThrowSinAtrapar | 735903f3 | 295 | ok | 1 | 9 | 1 |
+| ThreadTrasMain | ThreadTrasMain | 15cc0889 | 532 | ok | 0 | 327 | 3 |
+| MachineId | MachineId | 8004edfc | 484 | ok | 0 | 10 | 3 |
+| Destructor | Destructor | e746e599 | 4510 | ok | 0 | 13 | 33 |
+| TimeDemo | TimeDemo | 3110e034 | 1504 | ok | 0 | 25 | 13 |
+| ArrayFijo | ArrayFijo | 00bb8451 | 2359 | ok | 0 | 10 | 11 |
+| MoveRango | MoveRango | 7e3d19a7 | 3670 | ok | 0 | 9 | 26 |
+| HiloUsa | HiloUsa | 6f9e917f | 2189 | ok | 0 | 12 | 8 |
+| GuiWinJson | GuiWinJson | 5f8ff7d5 | 2070 | ok | 0 | 77 | 17 |
+| GuiShot | GuiShot | e6444711 | 1344 | ok | 0 | 379 | 8 |
+| GuiArbolG2 | GuiArbolG2 | dee22fe8 | 5331 | ok | 0 | 62 | 39 |
+| GuiAnidadaGc | GuiAnidadaGc | 6865ab41 | 1121 | ok | 0 | 145 | 1 |
+| NatNew | NatNew | b29ec49f | 2087 | ok | 0 | 9 | 10 |
+| NatV7 | NatV7 | 059fc19f | 1557 | ok | 0 | 10 | 11 |
+| FloatNat | FloatNat | ea8800a0 | 4877 | ok | 0 | 10 | 40 |
+| NatCede | NatCede | a6b6cd87 | 1499 | ok | 0 | 93 | 7 |
+| NatExpropia | NatExpropia | 9e59cba5 | 905 | ok | 0 | 9 | 4 |
+| NatDosRuns | NatDosRuns | 7836f3a7 | 3016 | ok | 0 | 43 | 4 |
+| NatBuiltin | NatBuiltin | 59b04ec9 | 1592 | ok | 0 | 49 | 8 |
+| NatAnida | NatAnida | 41e5fd02 | 734 | ok | 0 | 12 | 3 |
+| NatPuente | NatPuente | 744c1ee7 | 1995 | ok | 0 | 12 | 9 |
+| NatTry | NatTry | ab1b73fd | 3280 | ok | 0 | 9 | 16 |
+| NatDirecta | NatDirecta | 3d1d78ee | 1018 | ok | 0 | 8 | 9 |
+| NatCoste | NatCoste | 234aaff5 | 772 | ok | 0 | 12 | 2 |
+| NatNombres | NatNombres | 54fe052b | 1444 | ok | 0 | 8 | 6 |
+| NatEstrecha | NatEstrecha | 51d06e90 | 1767 | ok | 0 | 9 | 23 |
+| DblNat | DblNat | bddd36bf | 1859 | ok | 0 | 31 | 4 |
+| KillLoop | KillLoop | 456e06ad | 233 | ok | - | - | - |
+| NatKill | NatKill | 71e2616e | 401 | ok | - | - | - |
+| NatRecurKill | NatRecurKill | 3ae72427 | 420 | ok | - | - | - |
+| CatCadena | CatCadena | 85063b5a | 3879 | ok | 0 | 9 | 24 |
+| CatCrono | CatCrono | 8d3cc0f5 | 886 | ok | 0 | 11 | 2 |
+| SbPiezas | SbPiezas | ac6879a6 | 1979 | ok | 0 | 8 | 12 |
+| SbCrono | SbCrono | a33dae64 | 819 | ok | 0 | 11 | 2 |
+| HeapInfo | HeapInfo | 443490ab | 1225 | ok | 0 | 9 | 10 |
+| HeapCompact | HeapCompact | 210ef9c3 | 3577 | ok | 0 | 21 | 17 |
+| HeapReposo | HeapReposo | 8dc76e48 | 2803 | ok | 0 | 73 | 8 |
+| DescarteAncho | DescarteAncho | f0e60888 | 1730 | ok | 0 | 22 | 5 |
+| TempRetiene | TempRetiene | 6ece6049 | 3177 | ok | 0 | 14 | 13 |
+| FinallyAnidado | FinallyAnidado | 998f3f08 | 1951 | ok | 0 | 10 | 5 |
+| RtcEnHora | RtcEnHora | 7001120e | 1301 | ok | 0 | 10 | 7 |
+| FicheroOCarpeta | FicheroOCarpeta | fc4f9456 | 792 | ok | 0 | 13 | 7 |
+| GcHondo | GcHondo | cd18fc7b | 1584 | ok | 0 | 12 | 4 |
+| OwnerHondo | OwnerHondo | 91f74fc6 | 3824 | ok | 0 | 17 | 7 |
+| EvReceptorMuerto | EvReceptorMuerto | 190344cf | 1404 | ok | 0 | 10 | 2 |
+| FicheroYaAbierto | FicheroYaAbierto | 3a02aac4 | 1259 | ok | 0 | 15 | 15 |
+| ImportHondo | ImportHondo | 7d9e336d | 399 | ok | 0 | 71 | 2 |
+| synclisttest | SyncListTest | c40fca88 | 3860 | ok | 0 | 28 | 11 |
+| PinesPantalla | PinesPantalla | 8c74d3a8 | 3169 | ok | 0 | 16 | 3 |
+
+### Placa esp32p4 - E8F60AE0B380
+
+- sello: boardName=`esp32p4` uniqueId=`E8F60AE0B380` serverName=`bpvm-esp32p4` serverBuild=`Oct 19 2026 19:29:07` imageCrc=`b0d55ce7` capacidades=["META", "FILES", "TERMINAL", "DEBUG", "PACKS"]
+- imagen: la COMPILADA en el PC: bpgenvm-c/esp32p4/build/bpvm_esp32p4.bin (19-10 19:29)
+- imagen: arch=243 variant=None cpuFreqHz=360000000 resetReason=power-on uptimeMs=51297 fs=356352/16777216 B vmHeapBytes=24637440
+- al conectar: nada corria (KILL: NO_SESSION)
+- transporte: serie COM15
+- pantalla: si (INFO screenW x screenH = 480x800)
+- inventario /lib+/app: 31 ficheros en /lib+/app, omitidos=0
+
+| prueba | veredicto | ms placa | ms host | detalle |
+|---|---|---|---|---|
+| MathRango | **IDENTICO** | 194 | 9 | EXITED OK exit=0; host rc=0 |
+| ThrowSinAtrapar | **IDENTICO** | 11 | 9 | EXITED RUNTIME_ERROR exit=1 (excepcion no atrapada: Core.RuntimeError: ALOAD: índice fuera de rango 99 (length=3)); host rc=1 |
+| ThreadTrasMain | **IDENTICO** | 320 | 327 | EXITED OK exit=0; host rc=0 |
+| MachineId | **NO-PETA** | 20 | 10 | EXITED OK exit=0 |
+| Destructor | **IDENTICO** | 233 | 13 | EXITED OK exit=0; host rc=0 |
+| TimeDemo | **IDENTICO** | 100 | 25 | EXITED OK exit=0; host rc=0 |
+| ArrayFijo | **IDENTICO** | 77 | 10 | EXITED OK exit=0; host rc=0 |
+| MoveRango | **IDENTICO** | 214 | 9 | EXITED OK exit=0; host rc=0 |
+| HiloUsa | **IDENTICO** | 58 | 12 | EXITED OK exit=0; host rc=0 |
+| GuiWinJson | **IDENTICO** | 715 | 62 | EXITED OK exit=0; host rc=0 |
+| GuiShot | **NO-PETA** | 642 | 383 | EXITED OK exit=0 |
+| GuiArbolG2 | **IDENTICO** | 562 | 65 | EXITED OK exit=0; host rc=0 |
+| GuiAnidadaGc | **IDENTICO** | 14317 | 151 | EXITED OK exit=0; host rc=0 |
+| NatNew | **IDENTICO** | 83 | 9 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMAFC_ILP32F) |
+| NatV7 | **IDENTICO** | 91 | 10 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMAFC_ILP32F) |
+| FloatNat | **IDENTICO** | 283 | 10 | EXITED OK exit=0; host rc=0; nativo 23/23 thunks (RV32IMAFC_ILP32F) |
+| NatCede | **IDENTICO** | 67 | 93 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMAFC_ILP32F) |
+| NatExpropia | **IDENTICO** | 29 | 9 | EXITED OK exit=0; host rc=0; nativo 1/1 thunks (RV32IMAFC_ILP32F) |
+| NatDosRuns | **IDENTICO** | 94 | 43 | EXITED OK exit=0; host rc=0; nativo 3/3 thunks (RV32IMAFC_ILP32F) |
+| NatBuiltin | **IDENTICO** | 59 | 49 | EXITED OK exit=0; host rc=0; nativo 6/6 thunks (RV32IMAFC_ILP32F) |
+| NatAnida | **IDENTICO** | 23 | 12 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMAFC_ILP32F) |
+| NatPuente | **IDENTICO** | 69 | 12 | EXITED OK exit=0; host rc=0; nativo 6/6 thunks (RV32IMAFC_ILP32F) |
+| NatTry | **IDENTICO** | 107 | 9 | EXITED OK exit=0; host rc=0; nativo 12/12 thunks (RV32IMAFC_ILP32F) |
+| NatDirecta | **IDENTICO** | 60 | 8 | EXITED OK exit=0; host rc=0; nativo 9/9 thunks (RV32IMAFC_ILP32F) |
+| NatCoste | **IDENTICO** | 1002 | 12 | EXITED OK exit=0; host rc=0; nativo 2/2 thunks (RV32IMAFC_ILP32F) |
+| NatNombres | **IDENTICO** | 38 | 8 | EXITED OK exit=0; host rc=0; nativo 4/4 thunks (RV32IMAFC_ILP32F) |
+| NatEstrecha | **IDENTICO** | 202 | 9 | EXITED OK exit=0; host rc=0; nativo 7/7 thunks (RV32IMAFC_ILP32F) |
+| DblNat | **IDENTICO** | 2102 | 31 | EXITED OK exit=0; host rc=0; nativo 3/3 thunks (RV32IMAFC_ILP32F) |
+| KillLoop | **PARADA** | 433 | - | KILL a los 500 ms; el EXITED, 28 ms despues: EXITED KILLED exit=130 (terminado por KILL) |
+| NatKill | **PARADA** | 431 | - | KILL a los 500 ms; el EXITED, 20 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (RV32IMAFC_ILP32F) |
+| NatRecurKill | **PARADA** | 447 | - | KILL a los 500 ms; el EXITED, 29 ms despues: EXITED KILLED exit=130 (terminado por KILL); nativo 1/1 thunks (RV32IMAFC_ILP32F) |
+| CatCadena | **IDENTICO** | 175 | 9 | EXITED OK exit=0; host rc=0 |
+| CatCrono | **IDENTICO** | 61 | 11 | EXITED OK exit=0; host rc=0 |
+| SbPiezas | **IDENTICO** | 98 | 8 | EXITED OK exit=0; host rc=0 |
+| SbCrono | **IDENTICO** | 81 | 11 | EXITED OK exit=0; host rc=0 |
+| HeapInfo | **IDENTICO** | 78 | 9 | EXITED OK exit=0; host rc=0 |
+| HeapCompact | **IDENTICO** | 235 | 21 | EXITED OK exit=0; host rc=0 |
+| HeapReposo | **IDENTICO** | 238 | 73 | EXITED OK exit=0; host rc=0 |
+| DescarteAncho | **IDENTICO** | 1099 | 22 | EXITED OK exit=0; host rc=0 |
+| TempRetiene | **IDENTICO** | 271 | 14 | EXITED OK exit=0; host rc=0 |
+| FinallyAnidado | **IDENTICO** | 31 | 10 | EXITED OK exit=0; host rc=0 |
+| RtcEnHora | **IDENTICO** | 67 | 10 | EXITED OK exit=0; host rc=0 |
+| FicheroOCarpeta | **IDENTICO** | 231 | 13 | EXITED OK exit=0; host rc=0 |
+| GcHondo | **IDENTICO** | 343 | 12 | EXITED OK exit=0; host rc=0 |
+| OwnerHondo | **IDENTICO** | 685 | 17 | EXITED OK exit=0; host rc=0 |
+| EvReceptorMuerto | **IDENTICO** | 16 | 10 | EXITED OK exit=0; host rc=0 |
+| FicheroYaAbierto | **IDENTICO** | 147 | 15 | EXITED OK exit=0; host rc=0 |
+| ImportHondo | **IDENTICO** | 16 | 71 | EXITED OK exit=0; host rc=0 |
+| synclisttest | **ASERCIONES** | 758 | 28 | 3 comprobaciones OK y ninguna mala (EXITED OK exit=0) |
+| PinesPantalla | **ASERCIONES** | 96 | 16 | 7 comprobaciones OK y ninguna mala (EXITED OK exit=0) |
+
+- tras MathRango: uptimeMs=52633 fsUsed=360448 vmHeapBytes=24637440 pila libre: run=13540 io=24504 tareaREPL=24504 heap del sistema, minimo libre=370192
+- tras ThrowSinAtrapar: uptimeMs=53262 fsUsed=360448 vmHeapBytes=24637440 pila libre: run=14220 io=24504 tareaREPL=24504 heap del sistema, minimo libre=370192
+- tras ThreadTrasMain: uptimeMs=54245 fsUsed=360448 vmHeapBytes=24637440 pila libre: run=13468 io=24504 tareaREPL=24504 heap del sistema, minimo libre=370016
+- tras MachineId: uptimeMs=55063 fsUsed=360448 vmHeapBytes=24637440 pila libre: run=13468 io=24504 tareaREPL=24504 heap del sistema, minimo libre=369880
+- tras Destructor: uptimeMs=56533 fsUsed=364544 vmHeapBytes=24637440 pila libre: run=12972 io=24504 tareaREPL=24504 heap del sistema, minimo libre=368392
+- tras TimeDemo: uptimeMs=58349 fsUsed=360448 vmHeapBytes=24637440 pila libre: run=12972 io=24504 tareaREPL=24504 heap del sistema, minimo libre=367380
+- tras ArrayFijo: uptimeMs=59311 fsUsed=360448 vmHeapBytes=24637440 pila libre: run=12972 io=24504 tareaREPL=24504 heap del sistema, minimo libre=367380
+- tras MoveRango: uptimeMs=60497 fsUsed=360448 vmHeapBytes=24637440 pila libre: run=12804 io=24504 tareaREPL=24504 heap del sistema, minimo libre=367380
+- tras HiloUsa: uptimeMs=61897 fsUsed=364544 vmHeapBytes=24637440 pila libre: run=12804 io=24504 tareaREPL=24504 heap del sistema, minimo libre=367380
+- tras GuiWinJson: uptimeMs=69492 fsUsed=364544 vmHeapBytes=24637440 pila libre: run=12524 io=24488 tareaREPL=24488 heap del sistema, minimo libre=360140
+- tras GuiShot: uptimeMs=77000 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11368 io=24488 tareaREPL=24488 heap del sistema, minimo libre=360036
+- artefacto GuiShot.shot de GuiShot: bajado a `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_E8F60AE0B380\GuiShot.shot` (8243 B, crc cde419d3) -> PNG `C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_E8F60AE0B380\GuiShot.png`; antes del RUN: no existia
+- tras GuiArbolG2: uptimeMs=86783 fsUsed=376832 vmHeapBytes=24637440 pila libre: run=11368 io=24488 tareaREPL=24488 heap del sistema, minimo libre=358120
+- tras GuiAnidadaGc: uptimeMs=108352 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11368 io=24488 tareaREPL=24488 heap del sistema, minimo libre=358120
+- tras NatNew: uptimeMs=110127 fsUsed=376832 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=358120
+- tras NatV7: uptimeMs=111609 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=358120
+- tras FloatNat: uptimeMs=113944 fsUsed=380928 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=358120
+- tras NatCede: uptimeMs=115315 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=358120
+- tras NatExpropia: uptimeMs=116530 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=358120
+- tras NatDosRuns: uptimeMs=118184 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatBuiltin: uptimeMs=119577 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=13208 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatAnida: uptimeMs=120734 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatPuente: uptimeMs=122437 fsUsed=376832 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatTry: uptimeMs=124809 fsUsed=380928 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatDirecta: uptimeMs=126257 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatCoste: uptimeMs=128667 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatNombres: uptimeMs=130076 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatEstrecha: uptimeMs=131628 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras DblNat: uptimeMs=135137 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras KillLoop: uptimeMs=136153 fsUsed=368640 vmHeapBytes=24637440 pila libre: run=13208 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatKill: uptimeMs=137494 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=13208 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras NatRecurKill: uptimeMs=138883 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras CatCadena: uptimeMs=140101 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras CatCrono: uptimeMs=141083 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras SbPiezas: uptimeMs=142014 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras SbCrono: uptimeMs=142938 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras HeapInfo: uptimeMs=143855 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras HeapCompact: uptimeMs=145823 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras HeapReposo: uptimeMs=147806 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras DescarteAncho: uptimeMs=149858 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras TempRetiene: uptimeMs=151293 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras FinallyAnidado: uptimeMs=152315 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras RtcEnHora: uptimeMs=154008 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras FicheroOCarpeta: uptimeMs=155708 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras GcHondo: uptimeMs=156799 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras OwnerHondo: uptimeMs=158746 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras EvReceptorMuerto: uptimeMs=159625 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras FicheroYaAbierto: uptimeMs=160915 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=12128 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras ImportHondo: uptimeMs=165956 fsUsed=421888 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras synclisttest: uptimeMs=170620 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- tras PinesPantalla: uptimeMs=173579 fsUsed=372736 vmHeapBytes=24637440 pila libre: run=11236 io=24488 tareaREPL=24488 heap del sistema, minimo libre=349896
+- ejecutadas (con EXITED) 50 de 50 listadas; no terminaron 0; saltadas 0; no llegaron a arrancar 0
+
+subido a /app:
+
+| remoto | origen | tamano | crc32 | resultado |
+|---|---|---|---|---|
+| /app/MathRango.mod | bpgenvm-c\build\tanda\MathRango\MathRango.mod | 1611 | f3a5cb9d | ok |
+| /app/ThrowSinAtrapar.mod | bpgenvm-c\build\tanda\ThrowSinAtrapar\ThrowSinAtrapar.mod | 295 | 735903f3 | ok |
+| /app/ThreadTrasMain.mod | bpgenvm-c\build\tanda\ThreadTrasMain\ThreadTrasMain.mod | 532 | 15cc0889 | ok |
+| /app/MachineId.mod | bpgenvm-c\build\tanda\MachineId\MachineId.mod | 484 | 8004edfc | ok |
+| /app/Destructor.mod | bpgenvm-c\build\tanda\Destructor\Destructor.mod | 4510 | e746e599 | ok (por trozos) |
+| /app/TimeDemo.mod | bpgenvm-c\build\tanda\TimeDemo\TimeDemo.mod | 1504 | 3110e034 | ok |
+| /app/ArrayFijo.mod | bpgenvm-c\build\tanda\ArrayFijo\ArrayFijo.mod | 2359 | 00bb8451 | ok |
+| /app/MoveRango.mod | bpgenvm-c\build\tanda\MoveRango\MoveRango.mod | 3670 | 7e3d19a7 | ok |
+| /app/HiloLib.mod | bpgenvm-c\build\tanda\HiloUsa\HiloLib.mod | 1074 | d43c0bb4 | ok |
+| /app/HiloUsa.mod | bpgenvm-c\build\tanda\HiloUsa\HiloUsa.mod | 2189 | 6f9e917f | ok |
+| /app/main.win | samples\formdemo\resources\main.win | 390 | 548edd67 | ok |
+| /app/GuiWinJson.mod | bpgenvm-c\build\tanda\GuiWinJson\GuiWinJson.mod | 2070 | 5f8ff7d5 | ok |
+| /app/GuiShot.mod | bpgenvm-c\build\tanda\GuiShot\GuiShot.mod | 1344 | e6444711 | ok |
+| /app/GuiArbolG2.mod | bpgenvm-c\build\tanda\GuiArbolG2\GuiArbolG2.mod | 5331 | dee22fe8 | ok (por trozos) |
+| /app/GuiAnidadaGc.mod | bpgenvm-c\build\tanda\GuiAnidadaGc\GuiAnidadaGc.mod | 1121 | 6865ab41 | ok |
+| /app/NatNew.mod | bpgenvm-c\build\tanda\NatNew\aot-RV32IMAFC_ILP32F\NatNew.mod | 4483 | e7a889c2 | ok (por trozos) |
+| /app/NatV7.mod | bpgenvm-c\build\tanda\NatV7\aot-RV32IMAFC_ILP32F\NatV7.mod | 2447 | 0d5a26b7 | ok |
+| /app/FloatNat.mod | bpgenvm-c\build\tanda\FloatNat\aot-RV32IMAFC_ILP32F\FloatNat.mod | 9332 | b4adc4a7 | ok (por trozos) |
+| /app/NatCede.mod | bpgenvm-c\build\tanda\NatCede\aot-RV32IMAFC_ILP32F\NatCede.mod | 2325 | 2fa52500 | ok |
+| /app/NatExpropia.mod | bpgenvm-c\build\tanda\NatExpropia\aot-RV32IMAFC_ILP32F\NatExpropia.mod | 1166 | 995fdaf8 | ok |
+| /app/NatDosRuns.mod | bpgenvm-c\build\tanda\NatDosRuns\aot-RV32IMAFC_ILP32F\NatDosRuns.mod | 3672 | c66ffde6 | ok |
+| /app/NatBuiltin.mod | bpgenvm-c\build\tanda\NatBuiltin\aot-RV32IMAFC_ILP32F\NatBuiltin.mod | 2790 | 218af35b | ok |
+| /app/NatAnida.mod | bpgenvm-c\build\tanda\NatAnida\aot-RV32IMAFC_ILP32F\NatAnida.mod | 1232 | 9278cef2 | ok |
+| /app/NatPuente.mod | bpgenvm-c\build\tanda\NatPuente\aot-RV32IMAFC_ILP32F\NatPuente.mod | 4200 | a3c59c9a | ok (por trozos) |
+| /app/NatTry.mod | bpgenvm-c\build\tanda\NatTry\aot-RV32IMAFC_ILP32F\NatTry.mod | 10124 | 3a50c7f7 | ok (por trozos) |
+| /app/NatDirecta.mod | bpgenvm-c\build\tanda\NatDirecta\aot-RV32IMAFC_ILP32F\NatDirecta.mod | 2599 | d8b1c7b8 | ok |
+| /app/NatCoste.mod | bpgenvm-c\build\tanda\NatCoste\aot-RV32IMAFC_ILP32F\NatCoste.mod | 1000 | e3d25eb2 | ok |
+| /app/NatNombres.mod | bpgenvm-c\build\tanda\NatNombres\aot-RV32IMAFC_ILP32F\NatNombres.mod | 2706 | e351727a | ok |
+| /app/NatEstrecha.mod | bpgenvm-c\build\tanda\NatEstrecha\aot-RV32IMAFC_ILP32F\NatEstrecha.mod | 3143 | abd93e7d | ok |
+| /app/DblNat.mod | bpgenvm-c\build\tanda\DblNat\aot-RV32IMAFC_ILP32F\DblNat.mod | 2768 | f5bec433 | ok |
+| /app/KillLoop.mod | bpgenvm-c\build\tanda\KillLoop\KillLoop.mod | 233 | 456e06ad | ok |
+| /app/NatKill.mod | bpgenvm-c\build\tanda\NatKill\aot-RV32IMAFC_ILP32F\NatKill.mod | 513 | 40da3da0 | ok |
+| /app/NatRecurKill.mod | bpgenvm-c\build\tanda\NatRecurKill\aot-RV32IMAFC_ILP32F\NatRecurKill.mod | 674 | 67f0908a | ok |
+| /app/CatCadena.mod | bpgenvm-c\build\tanda\CatCadena\CatCadena.mod | 3879 | 85063b5a | ok |
+| /app/CatCrono.mod | bpgenvm-c\build\tanda\CatCrono\CatCrono.mod | 886 | 8d3cc0f5 | ok |
+| /app/SbPiezas.mod | bpgenvm-c\build\tanda\SbPiezas\SbPiezas.mod | 1979 | ac6879a6 | ok |
+| /app/SbCrono.mod | bpgenvm-c\build\tanda\SbCrono\SbCrono.mod | 819 | a33dae64 | ok |
+| /app/HeapInfo.mod | bpgenvm-c\build\tanda\HeapInfo\HeapInfo.mod | 1225 | 443490ab | ok |
+| /app/HeapCompact.mod | bpgenvm-c\build\tanda\HeapCompact\HeapCompact.mod | 3577 | 210ef9c3 | ok |
+| /app/HeapReposo.mod | bpgenvm-c\build\tanda\HeapReposo\HeapReposo.mod | 2803 | 8dc76e48 | ok |
+| /app/DescarteAncho.mod | bpgenvm-c\build\tanda\DescarteAncho\DescarteAncho.mod | 1730 | f0e60888 | ok |
+| /app/TempRetiene.mod | bpgenvm-c\build\tanda\TempRetiene\TempRetiene.mod | 3177 | 6ece6049 | ok |
+| /app/FinallyAnidado.mod | bpgenvm-c\build\tanda\FinallyAnidado\FinallyAnidado.mod | 1951 | 998f3f08 | ok |
+| /app/RtcEnHora.mod | bpgenvm-c\build\tanda\RtcEnHora\RtcEnHora.mod | 1301 | 7001120e | ok |
+| /app/FicheroOCarpeta.mod | bpgenvm-c\build\tanda\FicheroOCarpeta\FicheroOCarpeta.mod | 792 | fc4f9456 | ok |
+| /app/GcHondo.mod | bpgenvm-c\build\tanda\GcHondo\GcHondo.mod | 1584 | cd18fc7b | ok |
+| /app/OwnerHondo.mod | bpgenvm-c\build\tanda\OwnerHondo\OwnerHondo.mod | 3824 | 91f74fc6 | ok |
+| /app/EvReceptorMuerto.mod | bpgenvm-c\build\tanda\EvReceptorMuerto\EvReceptorMuerto.mod | 1404 | 190344cf | ok |
+| /app/FicheroYaAbierto.mod | bpgenvm-c\build\tanda\FicheroYaAbierto\FicheroYaAbierto.mod | 1259 | 3a02aac4 | ok |
+| /app/Eslabon01.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon01.mod | 319 | 81ed50f1 | ok |
+| /app/Eslabon02.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon02.mod | 319 | cb175b12 | ok |
+| /app/Eslabon03.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon03.mod | 319 | 56fff7dc | ok |
+| /app/Eslabon04.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon04.mod | 319 | 0f5adafa | ok |
+| /app/Eslabon05.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon05.mod | 323 | 52962824 | ok |
+| /app/Eslabon06.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon06.mod | 323 | aefc071e | ok |
+| /app/Eslabon07.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon07.mod | 323 | 9dfc40dd | ok |
+| /app/Eslabon08.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon08.mod | 323 | a80e8cdb | ok |
+| /app/Eslabon09.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon09.mod | 323 | b639c171 | ok |
+| /app/Eslabon10.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon10.mod | 323 | 01e8c113 | ok |
+| /app/Eslabon11.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon11.mod | 323 | 953aedb5 | ok |
+| /app/Eslabon12.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon12.mod | 323 | bd618e08 | ok |
+| /app/Eslabon13.mod | bpgenvm-c\build\tanda\ImportHondo\Eslabon13.mod | 247 | d39afdb0 | ok |
+| /app/ImportHondo.mod | bpgenvm-c\build\tanda\ImportHondo\ImportHondo.mod | 399 | 7d9e336d | ok |
+| /app/SyncListTest.mod | bpgenvm-c\build\tanda\synclisttest\SyncListTest.mod | 3860 | c40fca88 | ok |
+| /app/PinesPantalla.mod | bpgenvm-c\build\tanda\PinesPantalla\PinesPantalla.mod | 3169 | 8c74d3a8 | ok |
+
+notas de dependencias:
+
+- dependencia Core: ya en /lib/Core.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Math: ya en /lib/Math.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Machine: ya en /lib/Machine.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Time: ya en /lib/Time.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Rtc: ya en /lib/Rtc.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia HiloLib: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Gui: ya en /lib/Gui.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Json: DESFASE de compilación —la placa tiene en /lib/Json.mod la versión 7 (>= la mínima 7), crc 620b3c39 != el de hoy dc348e4c: vale y NO se sube, pero la prueba corre con la suya; para probar la de hoy, regraba la imagen—
+- dependencia Collections: DESFASE de compilación —la placa tiene en /lib/Collections.mod la versión 7 (>= la mínima 7), crc 263868cb != el de hoy 738b2934: vale y NO se sube, pero la prueba corre con la suya; para probar la de hoy, regraba la imagen—
+- dependencia Str: DESFASE de compilación —la placa tiene en /lib/Str.mod la versión 7 (>= la mínima 7), crc 9765bb28 != el de hoy 4320a024: vale y NO se sube, pero la prueba corre con la suya; para probar la de hoy, regraba la imagen—
+- dependencia Heap: ya en /lib/Heap.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia IO: ya en /lib/IO.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia Eslabon01: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon02: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon03: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon04: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon05: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon06: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon07: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon08: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon09: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon10: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon11: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon12: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Eslabon13: no es de bpstdlib: modulo de la app, va a /app con el programa
+- dependencia Gpio: ya en /lib/Gpio.mod (crc igual; resuelto por nombre, como el RUN)
+- dependencia I2c: ya en /lib/I2c.mod (crc igual; resuelto por nombre, como el RUN)
+- limpieza: 0 fichero(s) de /app borrados y los artefactos (GuiShot.shot)
+
+### Matriz pruebas x placas
+
+| prueba | esp32p4@COM15 |
+|---|---|
+| MathRango | IDENTICO |
+| ThrowSinAtrapar | IDENTICO |
+| ThreadTrasMain | IDENTICO |
+| MachineId | NO-PETA |
+| Destructor | IDENTICO |
+| TimeDemo | IDENTICO |
+| ArrayFijo | IDENTICO |
+| MoveRango | IDENTICO |
+| HiloUsa | IDENTICO |
+| GuiWinJson | IDENTICO |
+| GuiShot | NO-PETA |
+| GuiArbolG2 | IDENTICO |
+| GuiAnidadaGc | IDENTICO |
+| NatNew | IDENTICO |
+| NatV7 | IDENTICO |
+| FloatNat | IDENTICO |
+| NatCede | IDENTICO |
+| NatExpropia | IDENTICO |
+| NatDosRuns | IDENTICO |
+| NatBuiltin | IDENTICO |
+| NatAnida | IDENTICO |
+| NatPuente | IDENTICO |
+| NatTry | IDENTICO |
+| NatDirecta | IDENTICO |
+| NatCoste | IDENTICO |
+| NatNombres | IDENTICO |
+| NatEstrecha | IDENTICO |
+| DblNat | IDENTICO |
+| KillLoop | PARADA |
+| NatKill | PARADA |
+| NatRecurKill | PARADA |
+| CatCadena | IDENTICO |
+| CatCrono | IDENTICO |
+| SbPiezas | IDENTICO |
+| SbCrono | IDENTICO |
+| HeapInfo | IDENTICO |
+| HeapCompact | IDENTICO |
+| HeapReposo | IDENTICO |
+| DescarteAncho | IDENTICO |
+| TempRetiene | IDENTICO |
+| FinallyAnidado | IDENTICO |
+| RtcEnHora | IDENTICO |
+| FicheroOCarpeta | IDENTICO |
+| GcHondo | IDENTICO |
+| OwnerHondo | IDENTICO |
+| EvReceptorMuerto | IDENTICO |
+| FicheroYaAbierto | IDENTICO |
+| ImportHondo | IDENTICO |
+| synclisttest | ASERCIONES |
+| PinesPantalla | ASERCIONES |
+
+MEMORIA APRETADA: synclisttest: NO ES VERDE: ninguna placa de la tanda que aprieta la ha corrido (sin PSRAM y <= 1 MB de SRAM: la Pico 2, la C6, la C3)  
+NECESITA OJOS: GuiShot en esp32p4@COM15: C:\lenguajes\pm\bpgenvm-c\build\tanda\GuiShot\esp32p4_E8F60AE0B380\GuiShot.png  
+

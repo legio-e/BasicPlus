@@ -7047,6 +7047,16 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     `.jc` y el aviso cuando están los dos.
 - En los dos idiomas, como el resto. Lo que vaya saliendo en V8 para la documentación final se añade aquí.
 
+#### 🔵 `#709` — el `resetReason` del `INFO` dice «unknown» tras un reinicio por USB: a la tabla de las ESP le faltan cinco motivos (abierta el 19-oct, al grabar la C3 con el IDF 6.1, `#707`; preexistente)
+
+- **Medido:** tras `idf flash`, que reinicia la C3 y la C5 por su USB, el `INFO` dice `"resetReason": "unknown"`.
+  Antes, tras encenderlas, decía «power-on».
+- **La causa:** `esp32/common/gpio_esp32.c:272-281` traduce diez motivos de `esp_reset_reason()`. Faltan
+  `ESP_RST_USB`, `ESP_RST_JTAG`, `ESP_RST_EFUSE`, `ESP_RST_PWR_GLITCH` y `ESP_RST_CPU_LOCKUP`. Los dos IDF, el 6.0.1 y
+  el 6.1, tienen los mismos quince motivos: no lo trae el 6.1.
+- **Lo que haría falta:** los cinco casos con su texto, para que «unknown» sólo salga cuando el IDF no lo sabe. Un
+  motivo que no se dice es un diagnóstico mudo.
+
 #### 🧪 `#708` — V8, el sonido en la P4, WAV primero y MP3 después (abierta el 19-oct, a pregunta de Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»* · **es el H4 de V8**, Eduardo, el mismo día: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido de momento»*)
 
 - **Lo que dijo Eduardo**, tras el análisis: *«La placa tiene una salida speaker y la placa venía con unos pequeños
@@ -7091,6 +7101,40 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   3. los packs sellados y las imágenes fusionadas (mirarlo con `nm` y con el `packRamBase` del INFO antes de grabar);
   4. la tanda en las placas, con el OK de Eduardo para grabar, por lotes;
   5. lo que dice «6.0.1» en los documentos (`PUBLICAR.md`, `INSTALAR_FIRMWARE.md` en los dos idiomas).
+- **19-oct, hecho casi todo** (Eduardo: *«lo que tenemos que revisar es que IDF 6.1 se puede aplicar en todo el código
+  sin problemas y corregir lo que haga falta. Es para no mezclar librerías»*):
+  1. **Las cinco compilan con el 6.1, sin errores y sin avisos nuevos.** Los cuatro avisos de `builtins.c` (en la S3 y
+     la C3) y el de `esp_lcd_touch_get_coordinates` (en la P4) ya salían con el 6.0.1: las mismas opciones, el mismo
+     compilador y el mismo componente.
+  2. **Las imágenes crecen poco**, y la RAM estática apenas cambia:
+
+     | placa | la app | la RAM estática |
+     |---|---|---|
+     | S3 | +7,0 KB (+1,1 %) | +1,5 KB |
+     | C3 | +3,9 KB (+0,6 %) | +0,9 KB |
+     | C5 | +9,2 KB (+1,3 %) | +2,4 KB |
+     | C6 | +7,3 KB (+1,0 %) | +1,4 KB |
+     | P4 | +15,6 KB (+1,9 %) | −5,1 KB |
+
+  3. **La configuración:** todo lo de cada `sdkconfig.defaults` está en la del 6.1. Cambian dos valores por defecto del
+     propio IDF:
+     - el perro de las interrupciones, de 300 a 800 ms en las placas con PSRAM (la S3, la C5 y la P4). En el 6.0.1 los
+       800 ms eran sólo para el ESP32 clásico con PSRAM. Propuesto aceptarlo;
+     - en la P4, las funciones de dormir del gestor de energía van a la IRAM.
+  4. **Los componentes de la P4, las mismas versiones**, sin bajar nada: sólo cambia el IDF.
+  5. **El único cambio de código:** `blk_sdmmc_p4.c` suelta sólo su ranura, porque el controlador es del sistema (el
+     H3). Lleva una guarda que no deja compilarlo con un IDF anterior al 6.1, donde volvería `#566`.
+  6. **Los packs:** en ninguna de las cinco se mueven las páginas de la app (el `nm` de los dos `.elf`). En las placas,
+     la C5 (`Gui`, `DriverSpi`) y la P4 (`Gui`, `SQLite`) cargan sus motores en las mismas direcciones, sin volver a
+     sellar.
+  7. **El entorno:** `bpgenvm-c/tools/entorno_idf.ps1`, con la orden `idf`; `PUBLICAR.md` e `INSTALAR_FIRMWARE.md`, al
+     día. Lo del 6.0.1 (los `.elf`, `.bin` y `sdkconfig` de la v7.0) queda guardado en `C:\tmp\idf601`.
+  8. **En las placas**, con el OK de Eduardo: la C3, la C5 y la P4, grabadas con el 6.1, pasan la tanda del F1 de V7
+     (`tanda_v7.json`, 50 pruebas). **En las tres no cambia ninguna** respecto al F1: la C3, 38 idénticas, 7
+     saltadas, 3 paradas, 1 «no peta» y 1 por aserciones; la C5 y la P4, 43 idénticas, 3 paradas, 2 «no peta» y 2 por
+     aserciones. El aviso de `synclisttest` («memoria APRETADA») ya salía. La P4 volvió a BasicPlus con la imagen
+     entera, y su Entorno, su FS y sus packs seguían allí. Los informes, en `compat/informes/idf61_*`.
+  - **Falta:** la S3 y la C6, cuando estén conectadas. Y de paso salió `#709`, que no es del 6.1.
 
 #### 🔵 `#706` — `esp_hosted` 3.0.9, en la C6: tras desinicializar la WiFi (`esp_wifi_deinit`), no vuelve a iniciarse sin reiniciar la C6 (abierta el 19-oct, en el paso 1 del H3; es del componente de Espressif, no de BasicPlus)
 
@@ -7437,6 +7481,8 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
     tabla de particiones de las pruebas (la `factory` de 1,5 MB del IDF; lo dice su arranque). Para volver a BasicPlus,
     la imagen fusionada entera. El Entorno y el sistema de ficheros deberían seguir en su sitio, porque ninguna prueba
     llega a esas direcciones. Desde el 19-oct, la app es la prueba de la WiFi del H3.
+  - **19-oct, por la noche: la P4 vuelve a llevar BasicPlus**, la imagen del IDF 6.1 entera (`#707`), y su Entorno,
+    su FS y sus packs seguían allí. Para retomar el H2, `p4_hid` se vuelve a grabar con el OK de Eduardo.
 - **19-oct, una regla que vale también para el Bluetooth** (Eduardo, en el H3): el estado normal de la WiFi y del
   Bluetooth es apagado; se encienden cuando hacen falta, y con 10 minutos sin actividad se apagan, salvo que se diga
   lo contrario (`V8_IDEAS` §E3). Para el teclado y el ratón habrá que ver qué cuenta como actividad: un aparato

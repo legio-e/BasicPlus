@@ -335,7 +335,7 @@ idf.py -p <puerto-del-bridge> flash      # flashea las piezas con sus offsets
 Para regenerar la imagen fusionada, los offsets exactos del build están en
 `build/flash_args` (`esptool merge-bin` con esa lista; en el P4 el
 bootloader va en 0x2000 y la flash a 40 MHz, no como en el S3). Las notas
-del port (ESP-IDF v6.0.1, revisión del silicio, PSRAM) están en
+del port (ESP-IDF 6.1, revisión del silicio, PSRAM) están en
 `bpgenvm-c/esp32p4/sdkconfig.defaults`.
 
 ---

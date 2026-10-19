@@ -73,7 +73,13 @@
 >   (`C:\tmp\v8sonido\p4_wav`, IDF 6.1 y `esp_codec_dev` del almacén local de EIM, sin bajar nada). Suena en tiempo
 >   real; leer la SD es el 4 % del tiempo y el audio ocupa ~7 KB de RAM. La primera vez, a volumen 60, se oyó bajo: el
 >   0–100 va de −50 a 0 dB y el canon venía grabado muy bajo. Con el canon normalizado y tres vueltas a 70, 85 y 100,
->   Eduardo eligió el 85. El detalle, en `V8_IDEAS` §E4.
+>   Eduardo eligió el 85. El detalle, en `V8_IDEAS` §E4. Después, el sonido pasó a ser el H4, parado.
+> - **Por la noche, `#707`: la familia ESP32, al IDF 6.1.**
+>   - Las cinco compilan sin errores ni avisos nuevos. Las imágenes crecen de un 0,6 % a un 1,9 %.
+>   - Ningún ajuste nuestro se pierde. Los packs no se mueven.
+>   - El único cambio de código es el de la SD de la P4: suelta sólo su ranura.
+>   - Grabadas la C3, la C5 y la P4: la tanda del F1 da lo mismo que con el 6.0.1. La P4 vuelve a ser BasicPlus.
+>   - El detalle, en `#707`.
 >
 > **Lo que salió:**
 > - `#706`: en la C6, `esp_hosted` no baja su bandera de «ya iniciada» al desinicializar. La prueba apaga con
@@ -107,14 +113,14 @@
 >
 >   Y lo que trae el controlador del sistema: el driver de la SD de la P4 suelta sólo su ranura; hoy, en sus errores,
 >   suelta el controlador entero (`#566`);
-> - **`#707`, la familia ESP32 al IDF 6.1** (decidido): las cinco compiladas y comparadas con el 6.0.1, el SDMMC de la
->   P4, los packs y la tanda en las placas, con su OK. Antes o después del paso 2 del H3, lo dice Eduardo;
+> - **`#707`, la familia ESP32 al IDF 6.1:** hecho casi todo. Faltan la S3 y la C6, que no estaban conectadas, con la
+>   misma receta: `idf flash`, la tanda del F1 y comparar los informes. Y que Eduardo diga si acepta el perro de las
+>   interrupciones a 800 ms en las placas con PSRAM. Desde hoy se compila con `bpgenvm-c\tools\entorno_idf.ps1`;
+> - **`#709`**, de paso: el `resetReason` dice «unknown» tras un reinicio por USB;
 > - **`#708`, el sonido en la P4**: el paso 1 está hecho (el `.wav`, a volumen 85). Lo siguiente, el MP3 encima o el
 >   módulo de BasicPlus, lo elige Eduardo;
-> - **la P4 lleva la prueba del sonido** (`C:\tmp\v8sonido\p4_wav`): en cada arranque toca tres vueltas por el altavoz.
->   El cargador y la tabla de particiones siguen siendo los de las pruebas; para volver a BasicPlus, la imagen fusionada
->   entera, con el OK de Eduardo. La C6 se queda con la 3.0.9. En la SD quedan `TONO.WAV`, `CANON.WAV` y `V8WIFI.TXT`,
->   de las pruebas;
+> - **la P4 vuelve a ser BasicPlus**, con la imagen del 6.1 entera (el cargador y la tabla de particiones incluidos).
+>   La C6 se queda con la 3.0.9. En la SD quedan `TONO.WAV`, `CANON.WAV` y `V8WIFI.TXT`, de las pruebas;
 > - **el IDF 6.1**, en `C:\esp\v6.1` (instalado con EIM). Se carga con `C:\tmp\v8wifi\entorno_idf61.ps1`, que no cambia
 >   el IDF elegido para los IDE. Los firmwares de BasicPlus siguen con el 6.0.1;
 > - **la clave de la WiFi de Eduardo** está en `C:\tmp\v8wifi\p4_wifi\main\red_privada.h`, fuera del repo. Ya no está en
