@@ -6995,7 +6995,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > |---|---|---|
 > | **H1** | **JC**: BasicPlus con la ropa de Java y C#. El mismo árbol, un escáner y un parser nuevos, la traducción en los dos sentidos, el compilador y el IDE (`#698`) | ✅ **CERRADO el 18-oct**, validado por Eduardo. Sus diez apartados, en «🧩 H1», abajo |
 > | **H2** | **el Bluetooth** (`#697`, el experimento E1): el teclado y el ratón por Bluetooth LE, hoy en la P4 | 🔶 **a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Los pasos 1 y 2, hechos el 14-oct en la P4. Lo siguiente, cuando se retome: probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere |
-> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi. Y separar la conexión WiFi (el enlace) del resto del TCP/IP, *«así limitamos el alcance de cada cosa»* | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3. Decidido ese día: la P4 de Waveshare primero (la C3, la C5 y la C6, después); los ajustes, en un JSON en `/sys`; el Entorno, sólo para activar al arrancar, y sin decir nada la WiFi y el Bluetooth apagados; preconfigurada desde el IDE, y en la P4 con un programa interactivo. El TCP/IP parte de lo que se hizo con la Ethernet de la P4 Kit. **El paso 1, en curso:** el 19-oct, la C6 de la P4, actualizada a ESP-Hosted 3.0.9 por el conector P1, con su flash de fábrica guardada; arranca, y la P4 negocia con ella el protocolo de control (`V8_IDEAS` §E3, «Paso 1»). Falta el firmware de prueba de la WiFi en la P4 |
+> | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi. Y separar la conexión WiFi (el enlace) del resto del TCP/IP, *«así limitamos el alcance de cada cosa»* | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3. Decidido ese día: la P4 de Waveshare primero (la C3, la C5 y la C6, después); los ajustes, en un JSON en `/sys`; el Entorno, sólo para activar al arrancar, y sin decir nada la WiFi y el Bluetooth apagados; preconfigurada desde el IDE, y en la P4 con un programa interactivo. El TCP/IP parte de lo que se hizo con la Ethernet de la P4 Kit. **El paso 1, hecho el 19-oct** (`V8_IDEAS` §E3, «Paso 1»): la C6 de la P4, actualizada a ESP-Hosted 3.0.9 por el conector P1, con su flash de fábrica guardada; y un firmware de prueba en la P4, con el IDF 6.1, que enciende, busca, se conecta con la clave, tiene IP por DHCP, se desconecta y apaga, tres vueltas sin un fallo y con la SD a la vez en el mismo controlador. La red ocupa ~252 KB de flash y casi nada de la RAM interna de la P4. Salió `#706` (tras `esp_wifi_deinit` la WiFi no vuelve: se apaga con `esp_wifi_stop`). Lo siguiente, el paso 2, con las decisiones que quedan |
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
@@ -7045,6 +7045,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   - los `.jc` en el IDE: abrirlos y guardarlos, el coloreado y el plegado por llaves, el main de un proyecto en
     `.jc` y el aviso cuando están los dos.
 - En los dos idiomas, como el resto. Lo que vaya saliendo en V8 para la documentación final se añade aquí.
+
+#### 🔵 `#706` — `esp_hosted` 3.0.9, en la C6: tras desinicializar la WiFi (`esp_wifi_deinit`), no vuelve a iniciarse sin reiniciar la C6 (abierta el 19-oct, en el paso 1 del H3; es del componente de Espressif, no de BasicPlus)
+
+- **Medido** (19-oct, la P4 con la prueba `C:\tmp\v8wifi\p4_wifi`): la primera vuelta, entera; en la segunda,
+  `esp_wifi_init` contesta que sí y el `esp_wifi_set_mode` que lo sigue da `ESP_ERR_WIFI_NOT_INIT`, igual en la
+  tercera. La consola de la C6 dice «WiFi already initialized with same parameters» y no inicializa.
+- **La causa:** en el firmware de la C6, `__wrap_esp_wifi_init` lleva la bandera `s_mcu_wifi_initialized` para no
+  inicializar dos veces, y `req_wifi_deinit`, el RPC del `esp_wifi_deinit`, desinicializa la WiFi sin bajarla
+  (`coprocessor/features/eh_cp_feat_rpc_ext_v2/src/eh_cp_feat_rpc_ext_v2_handler_req_wifi.c`, líneas 431-444 y
+  525-538, de la copia en `C:\tmp\v8bt\p4_hid\managed_components`).
+- **Rodeado en la prueba:** la WiFi se inicializa una vez; encender es `esp_wifi_start` y apagar, `esp_wifi_stop`, que
+  apaga la radio. Así, las tres vueltas sin un fallo (`V8_IDEAS` §E3, «Paso 1»).
+- **Lo que hay que decidir (Eduardo):** en BasicPlus, que apagar sea parar la radio; o arreglar esa línea en el
+  firmware de la C6 que se le dé al usuario, que de todas formas tendrá que actualizar la suya para la WiFi. Y, si él
+  quiere, contárselo a Espressif.
 
 #### 🔵 `#705` — `Net.tcpClose` no deja su valor en la pila: dos llamadas sueltas cambian las variables locales de antes, en las dos VMs igual (abierta el 19-oct, al analizar la WiFi, H3; preexistente, de `#241`)
 
@@ -7367,6 +7382,10 @@ dos son Bluetooth LE con HID sobre GATT. El detalle, en `V8_IDEAS.md` §E1.
   en `V8_IDEAS.md` §E1.
 - **La P4 de Waveshare lleva todavía el firmware de prueba.** Volver a grabarle la imagen de v7.0 queda pendiente,
   con el OK de Eduardo. El código de las pruebas está en `C:\tmp\v8bt`, fuera del repo.
+  - **Corregido el 19-oct:** no se grabó «sólo la aplicación». Desde el 14-oct la P4 lleva también el cargador y la
+    tabla de particiones de las pruebas (la `factory` de 1,5 MB del IDF; lo dice su arranque). Para volver a BasicPlus,
+    la imagen fusionada entera. El Entorno y el sistema de ficheros deberían seguir en su sitio, porque ninguna prueba
+    llega a esas direcciones. Desde el 19-oct, la app es la prueba de la WiFi del H3.
 
 #### 🧬 `#490` — BAJO CONSUMO: el estudio preliminar → **V8** (abierta 10-sep, decidida a V7 el mismo día; **a V8 el 24-sep**, con la WiFi y el Bluetooth — Eduardo)
 

@@ -1497,7 +1497,8 @@ Repasado el 19-oct (Eduardo: *«quizás convendría repasar lo que se hizo en su
 1. **La WiFi de la P4, a mano.** Actualizar su C6 a ESP-Hosted 3.x, por OTA desde la P4 o por el conector P1, con el
    OK de Eduardo para grabarla. Y un firmware de prueba en la P4, sin la VM, como el paso 1 del Bluetooth: encender,
    buscar, conectarse, desconectar y apagar, con la SD montada a la vez por el controlador compartido. Lo que cuesta
-   de verdad, en flash y en RAM. **En curso desde el 19-oct; la C6, actualizada** (abajo, «Paso 1»).
+   de verdad, en flash y en RAM. **Hecho el 19-oct** (abajo, «Paso 1»): las tres vueltas sin un fallo, con la SD a
+   la vez, apagando con `esp_wifi_stop` por `#706`.
 2. **La conexión WiFi.** Primero la del sistema: la fachada (`bpvm_wifi.h`, sólo el enlace), el backend del IDF (en la
    P4, por ESP-Hosted), el JSON de `/sys` y la clave del Entorno para activarla al arrancar. Luego la de los programas:
    el módulo `Wifi`, su versión simulada en las dos VMs, con la paridad, y el programa de configuración de la P4.
@@ -1548,5 +1549,57 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
   hecho por el P1, con un adaptador USB-serie y un puente. No se ha probado si una C6 de fábrica acepta una OTA de un
   anfitrión 3.x; con la copia de fábrica se puede probar. Cómo se le da al usuario, por decidir.
 
-**Lo siguiente:** el firmware de prueba en la P4, con el OK de Eduardo para grabarlo: encender, buscar, conectarse,
-desconectar y apagar, con la SD montada a la vez.
+**El firmware de prueba en la P4** (19-oct, con el OK de Eduardo para grabarlo: sólo la app, en `0x10000`).
+- **Con el IDF 6.1**, que Eduardo instaló ese día con el instalador de Espressif (EIM) junto al 6.0.1. El 6.0.1 sigue
+  siendo el de los firmwares de BasicPlus. El 6.1 trae dentro la WiFi remota de la P4 (`esp_wifi/remote`); con el
+  6.0.1 hacía falta bajar el componente `esp_wifi_remote`.
+  - El entorno se carga con un script propio con las variables del de EIM, sin su `eim select v6.1` final, que
+    cambiaría el IDF elegido para los IDE.
+  - Las herramientas del 6.1 son las mismas del 6.0.1 (gcc `esp-15.2.0`, cmake 4.0.3); lo nuevo es su Python.
+- **El programa**, en `C:\tmp\v8wifi\p4_wifi`:
+  - primero la C6 (`esp_hosted` 3.0.9, la misma copia que la C6), luego la SD;
+  - después, tres vueltas de encender, buscar, conectarse con la clave, esperar la IP, desconectarse y apagar;
+  - entre paso y paso escribe y relee 256 KB en la SD y anota la memoria libre;
+  - la red y su clave, en un fichero aparte del proyecto que escribió Eduardo; no se copia a ningún sitio.
+- **Lo medido, en las tres vueltas sin un fallo:**
+
+  | paso | tiempo |
+  |---|---|
+  | el enlace con la C6, con su reinicio por el GPIO 54 | 1,8 s |
+  | iniciar (una vez: `esp_wifi_init` y el modo) | 153 ms |
+  | encender (`esp_wifi_start`) | 81 ms la primera vez; 21 ms las siguientes |
+  | buscar | 5 o 6 redes en 2,5 s |
+  | conectarse y tener IP por DHCP (WPA2, canal 1, −59 a −67 dBm) | 3,7 a 3,9 s |
+  | desconectarse | 37 ms |
+  | apagar (`esp_wifi_stop`) | 4 ms |
+
+  - **La SD, en la otra ranura del mismo controlador**, montada en 42–81 ms. Sus 13 comprobaciones (antes de la WiFi,
+    con ella encendida, conectada y apagada) dieron los mismos datos y los mismos tiempos: 256 KB escritos en
+    ~150 ms y leídos en 124 ms, a 20 MHz y un bit.
+  - **La RAM interna de la P4 casi no se mueve:** 0,3 KB menos con la WiFi encendida, 6,5 KB de pico, y vuelve a lo
+    de antes en cada vuelta. La PSRAM no cambia. El trabajo de la radio lo hace la C6. Falta medir aparte lo que
+    `esp_hosted` y lwIP reservan al arrancar; haría falta la misma prueba sin ellos.
+  - **La flash:** la parte de red (lwIP, la interfaz de red y el anfitrión de `esp_hosted` con su protocolo) ocupa unos
+    252 KB y 5,4 KB de RAM fija. La app entera, 639 KB.
+  - Tras desconectarse, el IDF guarda la IP 120 s y luego avisa de que se perdió (`LOST_IP`).
+- **Lo que sale para el diseño:**
+  - ⚠️ **`esp_hosted` 3.0.9, en la C6, no deja volver a iniciar la WiFi tras desinicializarla** (`#706`). La primera
+    prueba apagaba con `esp_wifi_deinit`, y en la segunda vuelta todo contestaba `ESP_ERR_WIFI_NOT_INIT`. La C6
+    guarda una bandera de «ya iniciada» que su desinicialización no baja. Apagar con `esp_wifi_stop` apaga la radio y
+    no tiene el problema. Para decidir: en BasicPlus, apagar = parar la radio; o arreglar esa línea en el firmware de
+    la C6 que se le dé al usuario.
+  - **El controlador SDMMC, un solo dueño.** `esp_hosted` lo crea al conectar con la C6, y falla si ya existe. Al
+    soltarlo, sólo suelta su ranura. Hoy nuestro driver de la SD de la P4 (`blk_sdmmc_p4.c`) también lo crea. En la
+    prueba va primero la C6 y la SD se monta sin crearlo. Cómo quedará en BasicPlus está por decidir: quién lo crea, y
+    qué pasa con la SD si la WiFi está apagada.
+  - **Un fallo del enlace con la C6 reinicia la P4** con un `abort()`. Lo hace `esp_hosted` por defecto
+    (`TRANSPORT_RESTART_ON_FAILURE`). En la prueba se apagó y se escucha su evento; en BasicPlus tendrá que ir igual:
+    que la WiFi se caiga no tumba la placa.
+  - Al arrancar, `esp_hosted` sólo registra los manejadores de eventos de la WiFi: no enciende la radio. Encaja con
+    «sin decir nada, apagada».
+- **De paso, la P4:** desde el 14-oct lleva el cargador y la tabla de particiones de las pruebas del Bluetooth (la
+  `factory` de 1,5 MB del IDF), no los de BasicPlus. Para volver a BasicPlus hay que grabar la imagen fusionada entera.
+  El Entorno y el sistema de ficheros deberían seguir donde estaban: ninguna prueba llega a esas direcciones.
+
+**Lo siguiente:** el paso 2, la conexión WiFi del sistema, con las decisiones que quedan (arriba, «Lo que hay que
+decidir»).

@@ -27,6 +27,57 @@
 
 ## Última sesión
 
+> **19-oct** — **La WiFi, el H3: el análisis, con las decisiones de Eduardo, y el paso 1, hecho en la P4. Su C6,
+> actualizada a ESP-Hosted 3.0.9 por el conector P1; y un firmware de prueba en la P4, con el IDF 6.1, que enciende,
+> busca, se conecta con la clave, tiene IP por DHCP, se desconecta y apaga, tres vueltas sin un fallo y con la SD a la
+> vez. Salen `#705` (`Net.tcpClose`, al mirar `Net`) y `#706` (`esp_hosted`: tras desinicializar, la WiFi no vuelve).**
+>
+> **Lo que dijo Eduardo:**
+> - lo que quiere: *«Encender el wifi, Hacer una lista de redes wifi disponibles. Poder escoger una y conectarse.
+>   Poder proporcionar la clave. Disponer de la conexión TCP/IP. Cerrar la conexión wifi. Apagar el wifi.»* Con IP
+>   dinámica o fija, cada una con sus opciones; fuera, de momento, la WiFi punto a punto y ESP-NOW. Lo primero, el IDE
+>   por WiFi;
+> - *«deberíamos separar lo que es la conexión wifi del resto de los protocolos TCP/IP. Así limitamos el alcance de
+>   cada cosa»*; y el TCP/IP *«ya estaba, la probamos en su día con el P4 Kit»*;
+> - lo decidido: la P4 de Waveshare primero; los ajustes, en un JSON en `/sys`; el Entorno, sólo para activar al
+>   arrancar, y *«si no se dice nada, tanto el Bluetooth como el Wifi desactivados»*; preconfigurada desde el IDE, y en
+>   la P4 con un programa; la seguridad, de momento no: *«posteriormente hay que estudiar cómo hacerlo seguro»*;
+> - *«OK, puedes actualizar el C6 de la P4»*. Él conectó el adaptador al P1 y el puente de IO9, instaló el IDF 6.1 y
+>   escribió la clave de su red en el fichero de la prueba.
+>
+> **Lo hecho:**
+> - **El análisis**, en `V8_IDEAS` §E3 (`991f3fab`, `2c56ddfb`, `46c24b66`, `601fd1c4`, `032dc010`): lo que hay medido
+>   en las dos VMs y en cada placa; la WiFi y el TCP/IP, separados; el TCP/IP de la Ethernet de la P4 Kit (V3), repasado;
+>   las decisiones.
+> - **La C6 de la P4** (`32d1979b`): por el P1, con un FTDI en COM18. Antes, la copia de sus 4 MB de fábrica, en
+>   `C:\tmp\v8wifi\c6_fabrica_4MB.bin`. Grabada con el ejemplo de coprocesador de `esp_hosted` 3.0.9, borrando la flash
+>   y verificada. Arranca como «EH-3.0.9».
+> - **La prueba de la P4**, en `C:\tmp\v8wifi\p4_wifi`, grabada sólo en la app con el OK de Eduardo. Los números y lo
+>   que sale para el diseño, en `V8_IDEAS` §E3, «Paso 1».
+>
+> **Lo que salió:**
+> - `#706`: en la C6, `esp_hosted` no baja su bandera de «ya iniciada» al desinicializar. La prueba apaga con
+>   `esp_wifi_stop`.
+> - Para el diseño: el controlador SDMMC tiene que tener un solo dueño (`esp_hosted` lo crea y falla si ya existe; hoy
+>   nuestra SD también lo crea); y `esp_hosted`, por defecto, reinicia la P4 si el enlace con la C6 falla.
+> - **Dos errores míos, corregidos:**
+>   - la C6 de fábrica sí tenía WiFi (0.0.6, «WLAN over SDIO»); lo que no hablaba era el protocolo de control nuevo;
+>   - la P4 lleva desde el 14-oct el cargador y la tabla de particiones de la prueba del Bluetooth, no «sólo la
+>     aplicación» (`#697`).
+>
+> **Para la siguiente sesión:**
+> - **el paso 2 del H3**, la conexión WiFi del sistema: antes, las decisiones que quedan en §E3 (la WiFi del sistema y
+>   la del programa, el módulo `Wifi`, el PC simulado, la IP en `Net`, cómo encuentra el IDE a la placa, el alcance) y
+>   las nuevas: apagar con `esp_wifi_stop` o arreglar la C6 (`#706`), y el dueño del controlador SDMMC;
+> - **la P4 lleva la prueba de la WiFi**, con el cargador y la tabla de la prueba. Para volver a BasicPlus, la imagen
+>   fusionada entera, con el OK de Eduardo. La C6 se queda con la 3.0.9;
+> - **el IDF 6.1**, en `C:\esp\v6.1` (instalado con EIM). Se carga con `C:\tmp\v8wifi\entorno_idf61.ps1`, que no cambia
+>   el IDF elegido para los IDE. Los firmwares de BasicPlus siguen con el 6.0.1;
+> - **la clave de la WiFi de Eduardo** está en `C:\tmp\v8wifi\p4_wifi\main\red_privada.h`, fuera del repo, y en la
+>   flash de la P4 mientras lleve la prueba. Que no entre en el repositorio;
+> - **el H2**: con la C6 nueva, `p4_hid` necesita `bring_up_controller = true`; la nueva no enciende sola el
+>   controlador Bluetooth.
+
 > **18-oct** — **JC genera código: el compilador lee `.jc`, el análisis comprueba el `new` y el `(T) x`, y `compat.sh
 > check-jc` compila y ejecuta en JC el corpus de la paridad. Antes, `#700` en el compilador de BP. Salen dos fichas:
 > `#703`, la línea de JC que no se cierra con su `"\n"` (cerrada con el `println` que decidió Eduardo), y `#704`, el
