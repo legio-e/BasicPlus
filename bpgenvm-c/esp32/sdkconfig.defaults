@@ -99,3 +99,6 @@ CONFIG_UART_ISR_IN_IRAM=y
 # V7/H12 2b (5-oct): dos indices de notificacion por tarea; el 1, el de la condicion de la VM
 # (src/platform_freertos_cond.inc), que no se cruza con el 0 de los drivers.
 CONFIG_FREERTOS_TASK_NOTIFICATION_ARRAY_ENTRIES=2
+# #707 (19-oct): el perro de las interrupciones, a 800 ms (Eduardo: «Sí 800 ms»). Es lo que pone el IDF 6.1 con PSRAM
+# (el 6.0.1 ponía 300); escrito aquí para que no cambie solo con otro IDF.
+CONFIG_ESP_INT_WDT_TIMEOUT_MS=800

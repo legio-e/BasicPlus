@@ -7047,6 +7047,20 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     `.jc` y el aviso cuando están los dos.
 - En los dos idiomas, como el resto. Lo que vaya saliendo en V8 para la documentación final se añade aquí.
 
+#### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
+
+- **Medido** con la tanda del F1 (`rtosHeapMinFreeBytes` tras cada prueba; la misma prueba con los dos IDF; los
+  informes `compat/informes/f1_v7_*` e `idf61_*`): la S3, −34,0 KB; la C5, −35,1 KB; la P4, de −52,6 a −56,5 KB, igual
+  desde la primera prueba. Sin PSRAM, nada: la C3, −1,4 KB (su RAM estática); la C6, +0,1 KB.
+- **Lo que no es:** ni una fuga ni un gasto de los programas, porque no crece. La RAM libre al arrancar, tras reservar
+  la VM, sólo baja 2–3 KB (la S3, 274 723 → 272 787 B; la C5, 217 847 → 214 903). Lo que baja es el mínimo de algún
+  momento pasajero del arranque.
+- **El candidato, sin comprobar:** cuando hay PSRAM, el IDF aparta 32 KB de RAM interna para DMA
+  (`SPIRAM_MALLOC_RESERVE_INTERNAL`). En el 6.0.1 esa reserva no era memoria normal; en el 6.1 sí
+  (`MALLOC_CAP_DEFAULT`, en `esp_psram.c`), y algo del arranque la usaría.
+- **Lo que haría falta, si Eduardo quiere:** medir el mínimo en puntos del arranque, para saber quién lo hunde y si es
+  pasajero de verdad. Las pruebas dan lo mismo, y el peor margen es la C5, con 153 KB libres.
+
 #### 🔵 `#709` — el `resetReason` del `INFO` dice «unknown» tras un reinicio por USB: a la tabla de las ESP le faltan cinco motivos (abierta el 19-oct, al grabar la C3 con el IDF 6.1, `#707`; preexistente)
 
 - **Medido:** tras `idf flash`, que reinicia la C3 y la C5 por su USB, el `INFO` dice `"resetReason": "unknown"`.
@@ -7079,7 +7093,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   Eduardo elige el volumen entre 70, 85 y 100: *«Yo lo dejaría a 85»*. El detalle, en `V8_IDEAS` §E4. Lo siguiente,
   el MP3 o el módulo de BasicPlus, lo elige él.
 
-#### 🔵 `#707` — la familia ESP32, al IDF 6.1 (decidida el 19-oct, Eduardo: *«Actualizamos al 6.1 para toda la familia ESP32»*; sale del H3)
+#### ✅ `#707` — la familia ESP32, al IDF 6.1 (decidida el 19-oct, Eduardo: *«Actualizamos al 6.1 para toda la familia ESP32»*; sale del H3 · **CERRADA el 19-oct**, `fdc212cf`, `b3015a2b` y el commit del perro: las cinco placas, 0 de 250 pruebas cambian)
 
 - **Por qué:** la WiFi de la P4 lo pide. El 6.1 trae dentro la WiFi remota (con el 6.0.1 había que bajar
   `esp_wifi_remote`) y comparte el controlador SDMMC sin trucos: su `sdmmc_host_init()` devuelve el controlador que
@@ -7155,6 +7169,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
      y algo del arranque los usa (`esp_psram.c`, la reserva). Las pruebas dan lo mismo, y el peor margen sigue siendo
      grande: la C5, 153 KB libres.
   - Y de paso salió `#709`, que no es del 6.1.
+  10. **El perro de las interrupciones, decidido** (Eduardo: *«Sí 800 ms»*): los 800 ms del 6.1 en las placas con PSRAM,
+      escritos en los `sdkconfig.defaults` de la S3, la C5 y la P4 para que no cambien solos con otro IDF. Las
+      `sdkconfig` ya los tenían: no hay imagen nueva.
+  - **Cerrada.** La observación de la memoria (el punto 9) sigue en `#710`, abierta.
 
 #### 🔵 `#706` — `esp_hosted` 3.0.9, en la C6: tras desinicializar la WiFi (`esp_wifi_deinit`), no vuelve a iniciarse sin reiniciar la C6 (abierta el 19-oct, en el paso 1 del H3; es del componente de Espressif, no de BasicPlus)
 

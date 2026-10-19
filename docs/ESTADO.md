@@ -113,10 +113,10 @@
 >
 >   Y lo que trae el controlador del sistema: el driver de la SD de la P4 suelta sólo su ranura; hoy, en sus errores,
 >   suelta el controlador entero (`#566`);
-> - **`#707`, la familia ESP32 al IDF 6.1:** las cinco placas grabadas, y 0 de 250 pruebas cambian. Para cerrarla
->   falta que Eduardo diga dos cosas: si acepta el perro de las interrupciones a 800 ms en las placas con PSRAM, y si se
->   mide de dónde sale la bajada del mínimo de RAM interna en esas placas (−34 a −56 KB, sólo un pasajero del arranque).
->   Desde hoy se compila con `bpgenvm-c\tools\entorno_idf.ps1`;
+> - **`#707`, cerrada:** la familia ESP32, con el IDF 6.1. Las cinco placas grabadas, y 0 de 250 pruebas cambian. El perro
+>   de las interrupciones, a 800 ms (Eduardo: *«Sí 800 ms»*). Desde hoy se compila con `bpgenvm-c\tools\entorno_idf.ps1`;
+> - **`#710`, abierta:** con PSRAM, el mínimo histórico de RAM interna baja 34–56 KB desde el arranque, sin efecto en
+>   las pruebas. Eduardo dirá si se mide de dónde sale;
 > - **`#709`**, de paso: el `resetReason` dice «unknown» tras un reinicio por USB;
 > - **`#708`, el sonido en la P4**: el paso 1 está hecho (el `.wav`, a volumen 85). Lo siguiente, el MP3 encima o el
 >   módulo de BasicPlus, lo elige Eduardo;
