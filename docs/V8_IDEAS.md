@@ -1470,9 +1470,11 @@ Repasado el 19-oct (Eduardo: *«quizás convendría repasar lo que se hizo en su
 8. **Cómo encuentra el IDE a la placa.** Con DHCP, la IP la da el router y puede cambiar. Propuesta, por pasos: la
    placa dice su IP por el puerto serie (el INFO, que hoy no la lleva) y en su pantalla si la tiene, y el IDE la
    recuerda; después, el anuncio por difusión UDP; mDNS sólo si hace falta.
-9. **Quién puede conectarse por la red.** Cualquiera de la red podría mandar programas a la placa; hoy el protocolo
-   no autentica. Propuesta: una clave del IDE, que se guarda en la placa al configurarla y que el IDE presenta al
-   conectar; sin ella, la placa no atiende. ¿O la red de casa se da por segura?
+9. ~~Quién puede conectarse por la red~~: **decidido de momento** (Eduardo, 19-oct): *«¿Podemos aceptar conexiones
+   entrantes de cualquier ordenador? Eso es más un tema TCP/IP pero de momento sí. Posteriormente hay que estudiar
+   cómo hacerlo seguro.»* La placa atiende a cualquier ordenador de la red, sin clave, como el protocolo hoy. Queda
+   apuntado para más adelante: cualquiera de la red puede mandar y ejecutar programas en la placa, y lo que va por el
+   cable TCP viaja en claro. Una clave del IDE guardada en la placa sería un primer paso.
 
 **Y el alcance:** ¿un hito para cada parte, o las dos en el H3?
 
