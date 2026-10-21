@@ -2735,8 +2735,8 @@ mas rápidas. Ahora, si hay caracteres especiales queda alguna función que vaya
 - **`upper` y `lower`:** el código de antes, carácter a carácter. Lineal, pero no más rápido;
 - **las natives** (el código AOT): sólo la pasada única. Un bucle por índice en una native sigue siendo cuadrático;
 - **la VM-Java** (el PC): sin cursor, por decisión;
-- **lo que no depende de los acentos:** `==` en bytecode, concatenar en un bucle (n²), el `Map` al meter y el GC
-  (`#715`).
+- **lo que no depende de los acentos:** `==` en bytecode, concatenar en un bucle (n²) y el GC (`#715`). El `Map` al
+  meter era el cuarto: arreglado el mismo día (abajo, «El Map»).
 
 **Lo que lo arreglaría, por decidir:**
 - para dos cadenas a la vez, dos cursores por hilo;
@@ -2773,6 +2773,44 @@ referencias, y `List.backing()` es público. `insertAt` y `remove` pueden mover 
 bucle de BP:
 - sigue siendo O(n) por inserción, pero mover 2000 referencias son 16 KB de `memmove`;
 - y todo queda dentro de `Collections`: sin tocar Core, cuya interfaz sellan todos los módulos.
+
+**Hecho el mismo día** (la 1 de Eduardo, completa): `insertAt` añade al final y mueve el tramo `[ip, n)` un sitio a la
+derecha con `move` en las dos listas; `remove` mueve el tramo de detrás un sitio a la izquierda y quita la última
+entrada, que ha quedado repetida.
+- **La interfaz de `Collections` no cambia.** Un primer intento con un método privado nuevo (`removeAt`) la cambiaba
+  (`d96b9491` → `7145181c`): los métodos de una clase van en su interfaz aunque sean privados. Con MOD9 un programa
+  compilado contra la de antes cargaba igual (enlace tardío, sólo un aviso), pero con MOD8 se rechazaría. El código
+  quedó dentro de `remove`, y la interfaz es la de antes (`Stdlib.mod`, que la sella, sale idéntico).
+- **Verificado:**
+  - `bpgenvm-c/samples/MapDesplaza.bp`, nuevo y en el corpus: 3000 operaciones al azar (meter, actualizar, borrar,
+    buscar) sobre un `Map` numérico y otro de cadenas, contra un array de referencia. Cada 50 operaciones, el `Map`
+    entero en orden. Resultado: 51 222 comprobaciones, 0 malas, igual en las dos VMs y con la `Collections` de antes;
+  - con un sabotaje (un elemento de menos en el `move`), la prueba revienta: el `Map` sale desordenado.
+- **Medido en el PC** (`put` de N claves en desorden; en orden no cambia):
+
+| N | 250 | 500 | 1000 | 2000 | 4000 | 8000 |
+|---|---|---|---|---|---|---|
+| antes | 5 ms | 19 | 69 | 257 | 996 | 3934 |
+| con `move` | 2 | 4 | 9 | 18 | 40 | **100** |
+
+Meter en desorden cuesta ya lo mismo que en orden: lo que queda es buscar (log n comparaciones, cada una un
+`Str.compare` en BP). La 2 de Eduardo, el árbol, sólo ganaría en ese O(n) del `memmove`, que con miles de claves no
+pesa.
+
+**Medido en las placas** (`Collections` nueva subida a `/lib`; ninguna imagen la embebe). `put` de N claves en
+desorden, antes → ahora, y entre paréntesis en orden:
+
+| N | Pico 2 | Metro (PSRAM) | P4 |
+|---|---|---|---|
+| 250 | 1427 → 529 ms (542) | 1590 → 662 (612) | 1124 → 347 (346) |
+| 1000 | 17 710 → **2603** (2622) | 19 215 → 3641 (2896) | 14 796 → 1703 (1690) |
+| 2000 | no cabe en el heap | 72 900 → **9301** (6289) | 56 722 → **3725** (3664) |
+
+- En la Pico 2 y la P4, meter en desorden cuesta lo que en orden.
+- En la Metro se nota todavía el `memmove`: mueve dentro de la PSRAM (unos 3 s de 9,3 con 2000 claves).
+- Lo que queda, unos 2,6 ms por `put` con 1000 claves en la Pico 2, son las comparaciones: unas diez por `put`, cada una
+  un `Str.compare` en bytecode (unos 15 µs por byte) tras dos llamadas a métodos. Es el terreno de la forma 2 de
+  «Comparar por bytes», el `memcmp` en C.
 
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 

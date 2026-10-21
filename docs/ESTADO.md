@@ -140,6 +140,11 @@
 >   funciones más lentas en las RP2350, sin explicar.
 > - **el `Map`** (Eduardo: *«Yo empezaría por la 1»*, buscar de forma dicotómica): ya lo hace (`bsearch`). Lo
 >   cuadrático es desplazar al meter, elemento a elemento en BP: el 97 % del tiempo con 8000 claves en el PC.
+>   **Completada la 1:** `insertAt` y `remove` desplazan de una vez con `move` (un `memmove` en C), sin cambiar la
+>   interfaz de `Collections`. `MapDesplaza` en el corpus (51 222 comprobaciones, 0 malas) y la red VERDE, con la
+>   paridad en 154. 8000 claves en desorden en
+>   el PC: de 3934 a 100 ms, lo mismo que en orden. Subida a `/lib` de las tres placas (ninguna imagen la embebe).
+>   En placa: 1000 claves en la Pico 2, de 17,7 a 2,6 s; 2000 en la P4, de 56,7 a 3,7 s; en la Metro, de 72,9 a 9,3 s.
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
@@ -152,8 +157,12 @@
 > - **la C5 y la S3, sin el censo:** no estaban conectadas;
 > - **en la Pico 2, la Metro y la P4 quedan** `/app/StrCenso.mod` y `/app/GcHuecos.mod`, y los de esta tarde
 >   (`StrAcentos`, `CursorPlaca`, `JsonAcentosPlaca`). Las tres llevan la imagen del cursor;
-> - **del cursor, por decidir (Eduardo):** dos cursores por hilo (dos cadenas a la vez); y si las natives (el AOT) usan
->   también el del hilo: hoy cada llamada usa uno propio;
+> - **del cursor, por decidir (Eduardo):** dos cursores por hilo (dos cadenas a la vez); que recuerde también los
+>   literales (hoy cada llamada los mira enteros: 798 ms frente a 39 recorriendo 4000 caracteres en la Pico 2); y si
+>   las natives (el AOT) usan también el del hilo: hoy cada llamada usa uno propio;
+> - **comparar en C** (la forma 2 de «Comparar por bytes»): es lo que queda en el `Map` (unos 2,6 ms por `put` con 1000
+>   claves en la Pico 2, casi todo comparaciones en bytecode);
+> - **en `/lib` de la Pico 2, la Metro y la P4 están ya la `Str` y la `Collections` nuevas** (subidas con el wire);
 > - **la tanda del F1 en placa**, aplazada por Eduardo hasta acabar las mejoras;
 > - **sin explicar**, de los dos algoritmos: `intToString` y otras tres, más lentas sólo en las RP2350. Pide un test de
 >   desplazamiento;

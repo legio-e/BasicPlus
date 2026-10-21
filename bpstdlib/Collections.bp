@@ -262,17 +262,24 @@ module Collections
     end bsearch
 
     // Inserta (key,val) en el punto ip desplazando a la derecha. PRIVADO.
+    //
+    // V8/H5 (21-oct) — EL TRAMO SE DESPLAZA DE UNA VEZ. La lista se usa como un array ordenado con búsqueda
+    // dicotómica (bsearch: la 1 de Eduardo, «Utilizar la lista como si fuera un array»), y desplazar era lo que
+    // faltaba: elemento a elemento en BP, con cuatro llamadas a métodos por elemento —el 97 % del tiempo de un put con
+    // 8000 claves en desorden, en el PC—. Ahora `move` (un memmove en C, en las dos VMs) mueve el tramo de cada lista en
+    // UNA llamada. Sigue siendo O(n) por inserción, pero de bytes en C.
     function insertAt(ip: integer, key: Object, val: Object)
-      this.keyList.add(key)               // crece 1 (se sobreescribe luego)
+      var n: integer := this.keyList.length()
+      this.keyList.add(key)               // crece 1 (y el array, si hace falta)
       this.valList.add(val)
-      var i: integer := this.keyList.length() - 1
-      while i > ip do
-        this.keyList.set(i, this.keyList.get(i - 1))
-        this.valList.set(i, this.valList.get(i - 1))
-        i := i - 1
-      endwh
-      this.keyList.set(ip, key)
-      this.valList.set(ip, val)
+      if ip < n then
+        var ks: Object[] := this.keyList.backing()   // después de add: add puede cambiar el array
+        var vs: Object[] := this.valList.backing()
+        move(ks, ks, ip, ip + 1, n - ip)
+        move(vs, vs, ip, ip + 1, n - ip)
+        this.keyList.set(ip, key)
+        this.valList.set(ip, val)
+      endif
     end insertAt
 
     // Nº de entradas.
@@ -320,8 +327,19 @@ module Collections
       var idx: integer := this.bsearch(key)
       var existed: boolean := false
       if idx >= 0 then
-        this.keyList.remove(idx)
-        this.valList.remove(idx)
+        // V8/H5 (21-oct): el tramo de detrás sube de una vez (`move`, como en insertAt) y se quita la última entrada,
+        // que ha quedado repetida (List.remove del final no desplaza nada y vacía su casilla). Aquí y no en un método
+        // aparte: un método nuevo, aunque sea privado, cambia la interfaz de la clase, y los programas compilados
+        // contra la de antes la verían «compilada contra otra interfaz».
+        var n: integer := this.keyList.length()
+        if idx < n - 1 then
+          var ks: Object[] := this.keyList.backing()
+          var vs: Object[] := this.valList.backing()
+          move(ks, ks, idx + 1, idx, n - 1 - idx)
+          move(vs, vs, idx + 1, idx, n - 1 - idx)
+        endif
+        this.keyList.remove(n - 1)
+        this.valList.remove(n - 1)
         existed := true
       endif
       this.lock.unlock()

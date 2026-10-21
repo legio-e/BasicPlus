@@ -114,175 +114,182 @@ lines
 1552 258
 1560 261
 1576 0
-1579 266
-1594 267
-1609 268
-1623 269
-1633 270
-1661 271
-1689 272
-1697 274
-1714 275
-1734 0
-1737 280
-1749 281
-1761 282
-1773 283
-1786 0
-1789 288
-1801 289
-1813 290
-1822 291
-1844 293
-1864 295
-1879 0
-1882 300
-1894 301
-1906 302
-1911 303
-1920 304
-1940 306
-1952 307
-1968 0
-1971 311
-1983 312
-1997 313
-2009 314
-2022 0
-2025 319
-2037 320
-2049 321
-2052 322
-2061 323
-2075 324
-2089 325
-2097 327
-2109 328
-2122 0
-2125 340
-2145 0
-2148 343
-2154 344
-2172 0
-2175 348
-2200 0
-2203 351
-2209 352
-2232 0
-2235 356
-2258 0
-2261 359
-2267 360
+1579 272
+1591 273
+1606 274
+1621 275
+1631 276
+1644 277
+1657 278
+1679 279
+1701 280
+1718 281
+1743 0
+1746 287
+1758 288
+1770 289
+1782 290
+1795 0
+1798 295
+1810 296
+1822 297
+1831 298
+1853 300
+1873 302
+1888 0
+1891 307
+1903 308
+1915 309
+1920 310
+1929 311
+1949 313
+1961 314
+1977 0
+1980 318
+1992 319
+2006 320
+2018 321
+2031 0
+2034 326
+2046 327
+2058 328
+2061 329
+2070 334
+2082 335
+2094 336
+2107 337
+2120 338
+2144 339
+2173 341
+2189 342
+2205 343
+2213 345
+2225 346
+2238 0
+2241 358
+2261 0
+2264 361
+2270 362
 2288 0
-2291 364
-2314 0
-2317 367
-2323 368
-2344 0
-2347 375
-2360 376
-2367 377
-2403 380
-2423 0
-2426 383
-2451 0
-2454 386
-2460 387
-2483 0
-2486 391
-2504 392
-2522 0
-2525 395
-2548 0
-2551 398
-2557 399
-2578 0
-2581 403
-2599 404
-2619 0
-2622 407
-2647 0
-2650 410
-2656 411
-2679 0
-2682 415
-2700 416
-2718 0
-2721 419
-2744 0
-2747 422
-2753 423
-2774 0
-2777 427
-2795 428
-2815 0
-2818 431
-2843 0
-2846 434
-2852 435
-2875 0
-2878 439
-2896 440
-2914 0
-2917 443
-2940 0
-2943 446
-2949 447
-2970 0
-2973 459
-2985 460
-3000 461
-3012 462
-3028 0
-3031 466
-3043 467
-3058 468
-3070 469
+2291 366
+2316 0
+2319 369
+2325 370
+2348 0
+2351 374
+2374 0
+2377 377
+2383 378
+2404 0
+2407 382
+2430 0
+2433 385
+2439 386
+2460 0
+2463 393
+2476 394
+2483 395
+2519 398
+2539 0
+2542 401
+2567 0
+2570 404
+2576 405
+2599 0
+2602 409
+2620 410
+2638 0
+2641 413
+2664 0
+2667 416
+2673 417
+2694 0
+2697 421
+2715 422
+2735 0
+2738 425
+2763 0
+2766 428
+2772 429
+2795 0
+2798 433
+2816 434
+2834 0
+2837 437
+2860 0
+2863 440
+2869 441
+2890 0
+2893 445
+2911 446
+2931 0
+2934 449
+2959 0
+2962 452
+2968 453
+2991 0
+2994 457
+3012 458
+3030 0
+3033 461
+3056 0
+3059 464
+3065 465
 3086 0
-3089 228
-3098 229
-3107 230
-3137 231
-3149 0
-3179 0
-3193 0
-3214 0
-3234 0
-3253 0
-3273 0
+3089 477
+3101 478
+3116 479
+3128 480
+3144 0
+3147 484
+3159 485
+3174 486
+3186 487
+3202 0
+3205 228
+3214 229
+3223 230
+3253 231
+3265 0
 3295 0
-3316 0
-3338 0
-3358 0
-3377 0
-3397 0
-3418 0
-3440 0
-3462 0
-3483 0
-3505 0
-3525 0
-3544 0
-3564 0
-3584 0
-3603 0
-3623 0
-3643 0
-3662 0
-3682 0
-3704 0
-3725 0
-3747 0
-3764 0
-3786 0
-3807 0
-3829 0
-3849 0
-3868 0
-3888 0
-3891 483
+3309 0
+3330 0
+3350 0
+3369 0
+3389 0
+3411 0
+3432 0
+3454 0
+3474 0
+3493 0
+3513 0
+3534 0
+3556 0
+3578 0
+3599 0
+3621 0
+3641 0
+3660 0
+3680 0
+3700 0
+3719 0
+3739 0
+3759 0
+3778 0
+3798 0
+3820 0
+3841 0
+3863 0
+3880 0
+3902 0
 3923 0
-3926 488
+3945 0
+3965 0
+3984 0
+4004 0
+4007 501
+4039 0
+4042 506
 vars
 func Comparator.compare 40
 this -36 8 0 ?
@@ -404,239 +411,244 @@ this -40 8 0 ?
 ip -32 4 0 integer
 key -28 8 0 ref
 val -20 8 0 ref
-i 4 4 0 integer
-func Map.size 1734
+n 0 4 0 integer
+ks 8 8 0 ?
+vs 16 8 0 ?
+func Map.size 1743
 this -20 8 0 ?
 n 8 4 0 integer
-func Map.put 1786
+func Map.put 1795
 this -36 8 0 ?
 key -28 8 0 ref
 val -20 8 0 ref
 idx 4 4 0 integer
-func Map.get 1879
+func Map.get 1888
 this -28 8 0 ?
 key -20 8 0 ref
 idx 12 4 0 integer
 result 16 8 0 ?
-func Map.containsKey 1968
+func Map.containsKey 1977
 this -28 8 0 ?
 key -20 8 0 ref
 found 8 4 0 boolean
-func Map.remove 2022
+func Map.remove 2031
 this -28 8 0 ?
 key -20 8 0 ref
 idx 8 4 0 integer
 existed 12 4 0 boolean
-func Map.put$iLObject; 2122
+n 16 4 0 integer
+ks 20 8 0 ?
+vs 28 8 0 ?
+func Map.put$iLObject; 2238
 this -32 8 0 ?
 k -24 4 0 integer
 v -20 8 0 ref
-func Map.put$sLObject; 2145
+func Map.put$sLObject; 2261
 this -36 8 0 ?
 k -28 8 0 string
 v -20 8 0 ref
 o 0 8 0 ?
-func Map.get$i 2172
+func Map.get$i 2288
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.get$s 2200
+func Map.get$s 2316
 this -28 8 0 ?
 k -20 8 0 string
 o 8 8 0 ?
-func Map.containsKey$i 2232
+func Map.containsKey$i 2348
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.containsKey$s 2258
+func Map.containsKey$s 2374
 this -28 8 0 ?
 k -20 8 0 string
 o 4 8 0 ?
-func Map.remove$i 2288
+func Map.remove$i 2404
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.remove$s 2314
+func Map.remove$s 2430
 this -28 8 0 ?
 k -20 8 0 string
 o 4 8 0 ?
-func Map.getString 2344
+func Map.getString 2460
 this -28 8 0 ?
 k -20 8 0 ref
 o 8 8 0 ?
 e 16 8 0 ?
-func Map.getString$i 2423
+func Map.getString$i 2539
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.getString$s 2451
+func Map.getString$s 2567
 this -28 8 0 ?
 k -20 8 0 string
 o 8 8 0 ?
-func Map.getInteger 2483
+func Map.getInteger 2599
 this -28 8 0 ?
 k -20 8 0 ref
 c 4 8 0 ?
-func Map.getInteger$i 2522
+func Map.getInteger$i 2638
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.getInteger$s 2548
+func Map.getInteger$s 2664
 this -28 8 0 ?
 k -20 8 0 string
 o 4 8 0 ?
-func Map.getLong 2578
+func Map.getLong 2694
 this -28 8 0 ?
 k -20 8 0 ref
 c 8 8 0 ?
-func Map.getLong$i 2619
+func Map.getLong$i 2735
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.getLong$s 2647
+func Map.getLong$s 2763
 this -28 8 0 ?
 k -20 8 0 string
 o 8 8 0 ?
-func Map.getFloat 2679
+func Map.getFloat 2795
 this -28 8 0 ?
 k -20 8 0 ref
 c 4 8 0 ?
-func Map.getFloat$i 2718
+func Map.getFloat$i 2834
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.getFloat$s 2744
+func Map.getFloat$s 2860
 this -28 8 0 ?
 k -20 8 0 string
 o 4 8 0 ?
-func Map.getDouble 2774
+func Map.getDouble 2890
 this -28 8 0 ?
 k -20 8 0 ref
 c 8 8 0 ?
-func Map.getDouble$i 2815
+func Map.getDouble$i 2931
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.getDouble$s 2843
+func Map.getDouble$s 2959
 this -28 8 0 ?
 k -20 8 0 string
 o 8 8 0 ?
-func Map.getBoolean 2875
+func Map.getBoolean 2991
 this -28 8 0 ?
 k -20 8 0 ref
 c 4 8 0 ?
-func Map.getBoolean$i 2914
+func Map.getBoolean$i 3030
 this -24 8 0 ?
 k -16 4 0 integer
-func Map.getBoolean$s 2940
+func Map.getBoolean$s 3056
 this -28 8 0 ?
 k -20 8 0 string
 o 4 8 0 ?
-func Map.keyAt 2970
+func Map.keyAt 3086
 this -24 8 0 ?
 i -16 4 0 integer
 k 12 8 0 ?
-func Map.valueAt 3028
+func Map.valueAt 3144
 this -24 8 0 ?
 i -16 4 0 integer
 v 12 8 0 ?
-func Map.__init 3086
+func Map.__init 3202
 this -20 8 0 ?
-func __cls_init_Map() 3179
+func __cls_init_Map() 3295
 this -20 8 0 ?
-func __cls_m_Map#keyAt(i)LObject; 3193
+func __cls_m_Map#keyAt(i)LObject; 3309
 this -24 8 0 ?
 i -16 4 0 integer
-func __cls_m_Map#containsKey(LObject;)z 3214
+func __cls_m_Map#containsKey(LObject;)z 3330
 this -28 8 0 ?
 key -20 8 0 ref
-func __cls_m_Map#containsKey(i)z 3234
+func __cls_m_Map#containsKey(i)z 3350
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#containsKey(s)z 3253
+func __cls_m_Map#containsKey(s)z 3369
 this -28 8 0 ?
 k -20 8 0 string
-func __cls_m_Map#getDouble(LObject;)d 3273
+func __cls_m_Map#getDouble(LObject;)d 3389
 this -28 8 0 ?
 k -20 8 0 ref
-func __cls_m_Map#getDouble(i)d 3295
+func __cls_m_Map#getDouble(i)d 3411
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#getDouble(s)d 3316
+func __cls_m_Map#getDouble(s)d 3432
 this -28 8 0 ?
 k -20 8 0 string
-func __cls_m_Map#getInteger(LObject;)i 3338
+func __cls_m_Map#getInteger(LObject;)i 3454
 this -28 8 0 ?
 k -20 8 0 ref
-func __cls_m_Map#getInteger(i)i 3358
+func __cls_m_Map#getInteger(i)i 3474
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#getInteger(s)i 3377
+func __cls_m_Map#getInteger(s)i 3493
 this -28 8 0 ?
 k -20 8 0 string
-func __cls_m_Map#valueAt(i)LObject; 3397
+func __cls_m_Map#valueAt(i)LObject; 3513
 this -24 8 0 ?
 i -16 4 0 integer
-func __cls_m_Map#withComparator(LCollections/Comparator;)LCollections/Map; 3418
+func __cls_m_Map#withComparator(LCollections/Comparator;)LCollections/Map; 3534
 this -28 8 0 ?
 c -20 8 0 ref
-func __cls_m_Map#getString(LObject;)s 3440
+func __cls_m_Map#getString(LObject;)s 3556
 this -28 8 0 ?
 k -20 8 0 ref
-func __cls_m_Map#getString(i)s 3462
+func __cls_m_Map#getString(i)s 3578
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#getString(s)s 3483
+func __cls_m_Map#getString(s)s 3599
 this -28 8 0 ?
 k -20 8 0 string
-func __cls_m_Map#getFloat(LObject;)f 3505
+func __cls_m_Map#getFloat(LObject;)f 3621
 this -28 8 0 ?
 k -20 8 0 ref
-func __cls_m_Map#getFloat(i)f 3525
+func __cls_m_Map#getFloat(i)f 3641
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#getFloat(s)f 3544
+func __cls_m_Map#getFloat(s)f 3660
 this -28 8 0 ?
 k -20 8 0 string
-func __cls_m_Map#put(LObject;LObject;)V 3564
+func __cls_m_Map#put(LObject;LObject;)V 3680
 this -36 8 0 ?
 key -28 8 0 ref
 val -20 8 0 ref
-func __cls_m_Map#put(iLObject;)V 3584
+func __cls_m_Map#put(iLObject;)V 3700
 this -32 8 0 ?
 k -24 4 0 integer
 v -20 8 0 ref
-func __cls_m_Map#put(sLObject;)V 3603
+func __cls_m_Map#put(sLObject;)V 3719
 this -36 8 0 ?
 k -28 8 0 string
 v -20 8 0 ref
-func __cls_m_Map#remove(LObject;)z 3623
+func __cls_m_Map#remove(LObject;)z 3739
 this -28 8 0 ?
 key -20 8 0 ref
-func __cls_m_Map#remove(i)z 3643
+func __cls_m_Map#remove(i)z 3759
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#remove(s)z 3662
+func __cls_m_Map#remove(s)z 3778
 this -28 8 0 ?
 k -20 8 0 string
-func __cls_m_Map#getLong(LObject;)j 3682
+func __cls_m_Map#getLong(LObject;)j 3798
 this -28 8 0 ?
 k -20 8 0 ref
-func __cls_m_Map#getLong(i)j 3704
+func __cls_m_Map#getLong(i)j 3820
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#getLong(s)j 3725
+func __cls_m_Map#getLong(s)j 3841
 this -28 8 0 ?
 k -20 8 0 string
-func __cls_m_Map#size()i 3747
+func __cls_m_Map#size()i 3863
 this -20 8 0 ?
-func __cls_m_Map#get(LObject;)LObject; 3764
+func __cls_m_Map#get(LObject;)LObject; 3880
 this -28 8 0 ?
 key -20 8 0 ref
-func __cls_m_Map#get(i)LObject; 3786
+func __cls_m_Map#get(i)LObject; 3902
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#get(s)LObject; 3807
+func __cls_m_Map#get(s)LObject; 3923
 this -28 8 0 ?
 k -20 8 0 string
-func __cls_m_Map#getBoolean(LObject;)z 3829
+func __cls_m_Map#getBoolean(LObject;)z 3945
 this -28 8 0 ?
 k -20 8 0 ref
-func __cls_m_Map#getBoolean(i)z 3849
+func __cls_m_Map#getBoolean(i)z 3965
 this -24 8 0 ?
 k -16 4 0 integer
-func __cls_m_Map#getBoolean(s)z 3868
+func __cls_m_Map#getBoolean(s)z 3984
 this -28 8 0 ?
 k -20 8 0 string
