@@ -3227,6 +3227,19 @@ del tamaño suficiente.»*
 - **En programas de verdad** hay de decenas a 1100 huecos, y la astilla salta de 2 a 16 por reserva.
 - **El detalle y lo que se podría hacer:** en `#718` (FICHAS). Sólo análisis.
 
+**Una caché de los huecos más recientes (la idea de Eduardo, 21-oct; el detalle, en `#718`).** *«al final es donde mas
+se crean y se destruyen objetos. Podemos una pequeña cache de los huecos mas recientes y buscar primero en la cache […]
+16 entradas como mucho.»*
+- **Medido en programas de verdad, la intuición es buena:** el hueco que sirve está casi siempre entre los 16 más altos
+  (en cinco de seis casos, el 95–100 % de las reservas que salen de la lista). Hoy cada reserva recorre de 5 a 35
+  huecos, de 1 a 6 µs.
+- **Pero en nuestro heap los huecos nacen todos en el barrido,** así que «los más recientes» son los de dirección más
+  alta. Mirarlos primero es servir desde arriba: lo que había antes de `#355`, que se cambió a propósito (los objetos
+  se quedaban arriba, la cola no se liberaba nunca y el primer hueco por dirección fragmenta menos).
+- **La misma caché, por clases de tamaño** (16 entradas, cada una con el primer hueco de su clase), encuentra el MISMO
+  hueco que hoy, más deprisa: el sitio no cambia y `#355` se conserva. Quedan del 29 al 76 % de los pasos. El cuidado
+  está en mantenerla: cada cambio de la lista la toca.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

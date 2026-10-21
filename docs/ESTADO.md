@@ -175,7 +175,11 @@
 >     lista larga de huecos»*). Medida con `samples/benchmarks/HuecosReserva.bp` (nuevo) en el PC, la Metro con PSRAM y
 >     la Pico 2. Una reserva que no cabe en ningún hueco, o que dejaría una astilla de menos de 12 B, recorre la lista
 >     entera cada vez: con 4000 huecos, 2,8 ms en la Metro frente a 46 µs. En programas de verdad, de decenas a 1100
->     huecos. Sólo análisis; lo que se podría hacer, en la ficha.
+>     huecos. Sólo análisis; lo que se podría hacer, en la ficha;
+>   - **y la idea de Eduardo, una caché de los huecos más recientes** (16 entradas), analizada en `#718`. Medida en
+>     programas de verdad con contadores temporales en el PC (retirados): el hueco que sirve está casi siempre entre
+>     los 16 más altos, y hoy cada reserva recorre de 5 a 35. Pero mirar primero los más altos es servir desde arriba,
+>     lo que `#355` quitó; la misma caché por clases de tamaño encuentra el mismo hueco de hoy, más deprisa.
 > - **¿un CRC para descartar la igualdad?** (Eduardo: *«Igual con utilizar el comparador nos vale»*): sí, nos vale el
 >   comparador. Si son distintas, para en el primer byte distinto (y `==` ni mira los bytes si las longitudes no
 >   coinciden); un CRC pide recorrerlas enteras, no prueba la igualdad y no sirve para ordenar. Lo que pesa es que el

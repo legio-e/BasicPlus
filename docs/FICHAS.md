@@ -7116,6 +7116,60 @@ dos huecos vecinos):
    grande, en el corazón de la memoria. Y fuera del GC (soltar un `owner`) hay que fusionar con el vecino de delante
    sin la lista única que hoy lo encuentra.
 
+**La idea de Eduardo: una caché pequeña de los huecos más recientes (21-oct).** *«En un Heap con compactación los
+bloques mas grandes y mas antiguos quedan compactados todos al principio (sin huecos). En cambio al final, los strings
+y los objetos con los que se estan trabajando continuamente están hacia el final. […] Podemos una pequeña cache de los
+huecos mas recientes y buscar primero en la cache a la hora buscar u hueco libre. Una cache pequeña, no se 16 entradas
+como mucho.»*
+
+**Medido en programas de verdad** (la VM-C del PC con contadores temporales que sólo miran; retirados). «Pico 2» y
+«Metro» son el tamaño del heap:
+
+| programa (heap) | huecos recorridos por reserva | huecos en la lista, media | de las que salen de la lista, cabrían en uno de los 16 más altos | el atajo del mayor hueco ahorra | empezando en el primer hueco de su clase, quedan |
+|---|---|---|---|---|---|
+| `StrCursorBench` (Pico 2) | 34,6 | 111 | 99 % | 4 % de los pasos | 59 % |
+| `StrCenso` (Pico 2) | 6,7 | 13 | 95 % | 1 % | 76 % |
+| `AllocBench` (Pico 2) | 5,8 | 58 | 99 % | 0 % | 29 % |
+| `StrCursorBench` (Metro) | 7,7 | 245 | 100 % | 24 % | 63 % |
+| `StrCenso` (Metro) | 4,9 | 11 | 100 % | 0 % | 74 % |
+| `AllocBench` (Metro) | 7,1 | 150 | 36 % | 43 % | 54 % |
+
+- **La intuición se confirma:** casi siempre, el hueco que sirve está entre los últimos de la lista, los más cercanos al
+  final del heap.
+- **El coste de hoy, en programas de verdad, es moderado:** de 5 a 35 huecos por reserva, de 1 a 6 µs (0,18 µs por
+  hueco en la SRAM, 0,7 en la PSRAM). Es del 3 al 15 % de crear una cadena pequeña. Lo grave es la lista larga
+  (arriba).
+
+**Dos hechos de nuestro heap que cambian la idea:**
+1. **Los huecos no nacen uno a uno: nacen todos a la vez, en el barrido del GC.** Entre colecta y colecta no aparece
+   ninguno (salvo al soltar un `owner`). «Los más recientes» no lo son en el tiempo: son los últimos que encuentra el
+   barrido, los de dirección más alta.
+2. **Servir primero desde arriba es lo que había ANTES de `#355`, y se cambió a propósito** (propuesta de Eduardo del
+   2-ago; el porqué, en el comentario de `add_to_free_list`):
+   - la lista iba al revés, de mayor a menor dirección, y la reserva cogía siempre del hueco más alto;
+   - los objetos se quedaban pegados arriba, la cola del heap no quedaba libre nunca y `heap_next` no retrocedía
+     («recupera 0 B» en todos los logs de la placa);
+   - en orden de dirección, las reservas se empaquetan abajo y el hueco grande del final queda como último recurso.
+
+   Una caché de los huecos más altos, mirada primero, devolvería parte de aquello: lo que vive pasaría a quedarse
+   arriba. Es también lo que dicen los estudios de asignadores (Wilson y Johnstone, años 90): el primer hueco por
+   dirección fragmenta menos que servir primero el último soltado. Y en un heap pequeño como el de la Pico 2, la
+   fragmentación acaba en «No space in heap» con memoria libre. La VM-Java sí sirve primero el último hueco (su lista
+   es una pila): por eso las dos VMs colocan distinto.
+
+**La misma caché, ordenada por TAMAÑO en vez de por recencia, conserva `#355`:**
+- 16 entradas, una por clase de tamaño (hasta 16 B, 32, 64… hasta 512 KB). Cada entrada apunta al primer hueco de la
+  lista, en orden de dirección, que es al menos tan grande como su clase.
+- La reserva empieza a buscar en la entrada de su clase y no en la cabeza. Delante no hay ninguno que le valga, así que
+  encuentra EXACTAMENTE el mismo hueco que hoy: el sitio de los objetos no cambia, sólo el coste.
+- Medido arriba: quedan del 29 al 76 % de los pasos de hoy. Con el atajo del mayor hueco (que tampoco cambia el sitio),
+  algo menos.
+- **El cuidado:** cada cambio de la lista tiene que mantener la caché. El barrido la rellena; una reserva que gasta o
+  encoge un hueco la corrige (16 entradas que mirar); soltar un `owner` o compactar la vacía. Una entrada que apuntara
+  a un hueco que ya no existe acabaría en memoria corrupta.
+
+Sólo análisis. Por decidir (Eduardo).
+
 #### 🔵 `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5)
 
 Con `s = "hola"`, comprobado en el PC con las dos VMs:
