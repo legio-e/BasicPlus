@@ -2636,6 +2636,46 @@ y SQLite vivos. El `Map` de 500 claves no cabe en la Pico 2, con la imagen de an
 - **Propuesta, sin hacer:** dos cursores por hilo, las dos últimas cadenas; la más vieja deja su sitio. Con eso, los dos
   casos serían lineales. Cuesta 24 bytes más por hilo y una comparación más por llamada.
 
+### Comparar por bytes (análisis, 21-oct)
+
+Eduardo, al ver que dos cadenas a la vez siguen siendo n²: *«La comparación se puede hacer como si fuera byte a byte en
+vez de caracter a caracter?»*
+
+**Sí, y da exactamente lo mismo.** El UTF-8 está hecho así a propósito (RFC 3629): ordenar por bytes, de 0 a 255, da el
+mismo orden que por puntos de código. Y dos cadenas son iguales carácter a carácter si y sólo si lo son byte a byte.
+- Si difieren en el carácter i, comparten los bytes de los i anteriores. El primer byte distinto está dentro del
+  carácter i, y los bytes de cabecera y de continuación crecen con el punto de código.
+- Si una es prefijo de la otra en caracteres, también lo es en bytes.
+- `Str.compare` sólo devuelve -1, 0 o 1, así que por bytes devolvería los mismos valores, no sólo el mismo signo.
+- Las dos VMs dan hoy el punto de código en `charCodeAt` (la VM-Java, con `codePointAt`): `Str.compare` ordena por
+  punto de código en las dos.
+
+**Comprobado en las dos VMs.** Pares de cadenas casi iguales: una cambia un carácter, se corta o crece. Llevan
+caracteres de 1, 2, 3 y 4 bytes, también los de los bordes de cada longitud (U+007F/U+0080, U+07FF/U+0800, U+FFFD,
+U+FFFF/U+10000 y un emoji). Cada par se compara con `Str.compare` y con un bucle por bytes (`byteAt`), en los dos
+sentidos. Resultado: 6000 comparaciones, 0 distintas en la VM-C y 0 en la VM-Java, con los mismos recuentos en las
+dos (1059 pares con a < b y 837 iguales).
+
+**Dónde sirve:**
+- **`Str.compare`**, el comparador por defecto del `Map`. Hoy es L² con acentos: compara `charCodeAt(a, i)` con
+  `charCodeAt(b, i)`, y el cursor salta de una cadena a la otra. Por bytes, una pasada sin contar caracteres. Es el
+  caso principal de «dos cadenas a la vez».
+- **`Str.lastIndexOf`**: comparar por bytes y convertir a índice de carácter una sola vez al final, como ya hace
+  `indexOf`.
+- **`==`** ya compara bytes (un bucle de bytecode).
+
+**Lo que no puede ir por bytes:** lo que necesita el índice o el valor de un carácter (`charAt`, `substring` por
+índice, las mayúsculas fuera de ASCII).
+
+**Dos formas de hacerlo**, con el mismo resultado:
+1. En BP, en `Str.bp`, con el `byteAt` (`inline ALOAD_U8`) ya probado: sin tocar la VM, y la paridad sale por
+   construcción. Es la «stdlib por bytes» de «Lo cuadrático» (filas 1 y 3).
+2. En C, en la biblioteca de cadenas (un `memcmp`): más rápido con cadenas largas, pero es un builtin nuevo en las dos
+   VMs.
+
+El `Map` seguiría cuadrático al meter, por otra razón: desplaza la lista en BP (fila 3). Esto arregla la comparación,
+no eso. Por decidir (Eduardo).
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

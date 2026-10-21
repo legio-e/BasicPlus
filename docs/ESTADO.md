@@ -124,6 +124,10 @@
 > - **y la condición de Eduardo para `#715`** (*«La lista de huecos tiene que ser por dirección para así poder fusionar
 >   2 huecos adyacentes»*): ya lo es desde `#355`, y el arreglo propuesto (engancharlo a la cola durante el barrido) la
 >   conserva, con las mismas fusiones. Mirado en `heap.c`; anotado en `#715`, que sigue en análisis.
+> - **comparar por bytes** (Eduardo: *«La comparación se puede hacer como si fuera byte a byte en vez de caracter a
+>   caracter?»*): sí, y da lo mismo. El orden de los bytes del UTF-8 es el de los puntos de código, y `Str.compare` sólo
+>   devuelve -1/0/1. Comprobado en las dos VMs: 6000 comparaciones, 0 distintas. Quitaría el L² de comparar claves con
+>   acentos (el `Map`). Las dos formas, en BP con `byteAt` o en C, en §E5, «Comparar por bytes»; por decidir.
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
