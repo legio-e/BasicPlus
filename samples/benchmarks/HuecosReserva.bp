@@ -1,0 +1,114 @@
+// HuecosReserva.bp — lo que cuesta RESERVAR según la lista de huecos.
+//
+// ─── Por qué existe (V8/H5, 21-oct-2026) ─────────────────────────────────────
+//
+// Eduardo: «lo que si veo lento es en el caso de tener una lista larga de huecos, tener que buscar uno libre y cuanto
+// mas grande sea el bloque que necesitamos más dífil es encontrar uno del tamaño suficiente». La reserva recorre la
+// lista de huecos desde el principio (en orden de dirección) y se queda con el PRIMERO en el que cabe; si no cabe en
+// ninguno, la ha recorrido entera y toma del final del heap. Esto mide cuánto cuesta cada reserva con k huecos.
+//
+// ─── Cómo mide ───────────────────────────────────────────────────────────────
+//
+// 2k cadenas seguidas, todas vivas mientras se crean (así un GC en medio no deja huecos); luego se sueltan las pares y
+// un gc() deja k huecos de 40 B, cada uno entre dos cadenas vivas. Con eso, reservas cronometradas de tres tamaños:
+//   cabe:    32 B (un bloque de 40: el primer hueco le vale entero);
+//   mayor:   40 B (un bloque de 48: más grande que todos los huecos);
+//   astilla: 24 B (un bloque de 32: cabe, pero sobrarían 8 B, menos que el hueco mínimo de 12, y se salta).
+// VUELTAS x POR_VUELTA de cada, con un gc() antes de cada vuelta (fuera del cronómetro) para que dentro no colecte; las
+// colectas que caigan dentro se dicen. Con k = 0 (sin huecos), 500, 1000, 2000 y 4000; si no cabe, lo dice y sigue.
+//
+// Las cifras son de cada VM y cada placa: no es de paridad, y no está en el corpus.
+module HuecosReserva
+  import Core
+  import Machine
+  import Heap
+
+  const VUELTAS := 2
+  const POR_VUELTA := 300
+
+  var todos: string[] := null
+  var fuente: string := ""
+  var ultima: string := ""
+  var colectas: integer := 0
+
+  function hazCadena(m: integer): string
+    var sb: StringBuilder := StringBuilder()
+    var i: integer := 0
+    while i < m do
+      sb.appendChar(97 + (i mod 26))
+      i += 1
+    endwh
+    return sb.toString()
+  end hazCadena
+
+  // 2k cadenas: las pares de 32 B (las que se tiran) y las impares de 16 B (las que se quedan)
+  function siembra(k: integer)
+    todos := __newStrArray(2 * k)
+    var i: integer := 0
+    while i < k do
+      todos[2 * i] := substring(fuente, 0, 32)
+      todos[2 * i + 1] := substring(fuente, 0, 16)
+      i += 1
+    endwh
+    i := 0
+    while i < k do
+      todos[2 * i] := ""
+      i += 1
+    endwh
+    gc()
+  end siembra
+
+  // ms de VUELTAS x POR_VUELTA reservas de n bytes; las colectas que caen dentro, a `colectas`
+  function mide(n: integer): integer
+    var total: integer := 0
+    colectas := 0
+    var v: integer := 0
+    while v < VUELTAS do
+      gc()
+      var c0: integer := Heap.getCollections()
+      var t0: integer := Machine.uptimeMs()
+      var i: integer := 0
+      while i < POR_VUELTA do
+        ultima := substring(fuente, 0, n)
+        i += 1
+      endwh
+      total += Machine.uptimeMs() - t0
+      colectas += Heap.getCollections() - c0
+      v += 1
+    endwh
+    return total
+  end mide
+
+  function informa(k: integer, nombre: string, n: integer)
+    var ms: integer := mide(n)
+    var us: integer := (ms * 1000) / (VUELTAS * POR_VUELTA)
+    print "HUECOS k=" + k + " " + nombre + " (" + n + " B): " + us + " us por reserva (" + ms + " ms; colectas dentro: " + colectas + ")"
+  end informa
+
+  function corre(k: integer)
+    try
+      siembra(k)
+    catch e: RuntimeError
+      print "HUECOS k=" + k + " no cabe: " + e.msg
+      todos := null
+      gc()
+      return
+    endtry
+    print "HUECOS k=" + k + " huecos en la lista: " + Heap.getFreeBlocks()
+    informa(k, "cabe", 32)
+    informa(k, "mayor", 40)
+    informa(k, "astilla", 24)
+    todos := null
+    gc()
+  end corre
+
+  function Main()
+    fuente := hazCadena(64)
+    corre(0)
+    corre(500)
+    corre(1000)
+    corre(2000)
+    corre(4000)
+    print "fin de las reservas con huecos"
+  end Main
+end HuecosReserva

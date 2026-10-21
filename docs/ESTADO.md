@@ -170,7 +170,12 @@
 >   - y una pista para `#665`, sin comprobar: las secciones críticas de la imagen de dos núcleos;
 >   - **el cerrojo NO se toca** (Eduardo: *«No quiero meterme en lios con la memoria»*). Y su pregunta, por qué
 >     reservar más tarda más: reservar en sí no crece (2,8–5,3 µs en la SRAM); crecen poner a cero, el GC repartido y,
->     en la PSRAM, la caché que la puesta a cero vacía (§E5).
+>     en la PSRAM, la caché que la puesta a cero vacía (§E5);
+>   - **y la lista larga de huecos, `#718`** (Eduardo: *«estamos mezclando cosas […] lo que si veo lento es […] una
+>     lista larga de huecos»*). Medida con `samples/benchmarks/HuecosReserva.bp` (nuevo) en el PC, la Metro con PSRAM y
+>     la Pico 2. Una reserva que no cabe en ningún hueco, o que dejaría una astilla de menos de 12 B, recorre la lista
+>     entera cada vez: con 4000 huecos, 2,8 ms en la Metro frente a 46 µs. En programas de verdad, de decenas a 1100
+>     huecos. Sólo análisis; lo que se podría hacer, en la ficha.
 > - **¿un CRC para descartar la igualdad?** (Eduardo: *«Igual con utilizar el comparador nos vale»*): sí, nos vale el
 >   comparador. Si son distintas, para en el primer byte distinto (y `==` ni mira los bytes si las longitudes no
 >   coinciden); un CRC pide recorrerlas enteras, no prueba la igualdad y no sirve para ordenar. Lo que pesa es que el
@@ -191,6 +196,8 @@
 > - **crear en la PSRAM, por decidir (Eduardo)** (§E5, «Medido por dentro»): no poner a cero las cadenas que se llenan
 >   enteras, y el código caliente en la SRAM. El cerrojo de la VM, no (Eduardo). En la Metro queda
 >   `/app/CreaMide.mod`; sin la imagen de medida sólo da los totales;
+> - **`#718`, la lista de huecos al reservar** (sólo análisis): las tres formas de la ficha, por decidir (Eduardo). En
+>   la Metro y la Pico 2 queda `/app/HuecosReserva.mod`;
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
 >   «similar» frente a la libc, y dónde se prueba cada arquitectura (las placas o QEMU);
 > - **las decisiones del H5** (§E5): la regla del UTF-8 mal formado (`#711`), el agujero de `move` (`#714`), `<` y `>`

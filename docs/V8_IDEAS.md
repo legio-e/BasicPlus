@@ -3212,6 +3212,21 @@ la imagen de medida, en µs por reserva:
 De todo esto, lo único que el lenguaje no exige es poner a cero las cadenas que la VM llena enteras nada más reservarlas
 (la palanca 2).
 
+**El GC, aparte; y la lista larga de huecos (Eduardo, 21-oct).** *«Pero entonces estamos mezclando cosas. En el tiempo de
+reservar estamos metiendo tiempo del GC y eso es otra cosa. Ahora lo que si veo lento es en el caso de tener una lista
+larga de huecos, tener que buscar uno libre y cuanto mas grande sea el bloque que necesitamos más dífil es encontrar uno
+del tamaño suficiente.»*
+- **El GC es otra cosa, sí.** En la tabla de arriba va en su fila, y «reservar» no lo lleva: las reservas que colectaron
+  se apartaron. Pero las cifras de «reservar» que salieron antes desde BP (`PsramFases`) sí lo llevaban dentro.
+- **La lista larga, también sí, y medida** (`samples/benchmarks/HuecosReserva.bp`). La reserva recorre la lista desde la
+  cabeza y se queda con el primer hueco que le vale. Si no le vale ninguno, la recorre entera para nada y toma del final;
+  y la siguiente, otra vez. Con 4000 huecos, en la Metro con PSRAM: 46 µs la reserva que cabe y 2,8 ms la que no cabe
+  (0,7 µs por hueco, un fallo de caché cada uno). En la Pico 2, 0,18 µs por hueco.
+- **Y un caso que no se ve a simple vista, la astilla.** Un hueco que dejaría 4 u 8 B de sobra se salta. Así, una reserva
+  más PEQUEÑA que todos los huecos también puede recorrer la lista entera.
+- **En programas de verdad** hay de decenas a 1100 huecos, y la astilla salta de 2 a 16 por reserva.
+- **El detalle y lo que se podría hacer:** en `#718` (FICHAS). Sólo análisis.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
