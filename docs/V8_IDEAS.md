@@ -2216,6 +2216,64 @@ cadenas: para una copia pequeña cuesta más prepararlos que copiar.
 3. **La implementación:** `==` en C, el `StringBuilder`, crear sin poner a cero, los bucles de C.
 4. **La PSRAM:** el tamaño de las cachés, y la imagen de la Metro (`#665`).
 
+### Lo cuadrático: el censo y su alternativa lineal o logarítmica (Eduardo, 21-oct)
+
+Eduardo: *«A ver si podemos reducir el tiempo a una cuarta parte está muy bien. Pero antes de entrar en eso, me interesa
+mas mejorar el algoritmo si puede ser. Algoritmos cudráticos no deberian valer, al menos lineales o logarítmicos.»*
+
+**Lo que cuesta en programas de verdad.** Medido el 21-oct en la Pico 2 y la P4, sin grabar, con un programa que dobla
+el tamaño en cada paso:
+
+| | Pico 2 | P4 | al doblar |
+|---|---|---|---|
+| leer un JSON de 1, 2, 4 y 8 KB (`Json.parseJson`) | 0,5 / 1,5 / 4,8 / **16,7 s** | 0,24 / 0,64 / 2,0 / **6,8 s** | ×3,4–3,5 |
+| meter 250, 500, 1000 y 2000 claves en un `Map` | 1,5 s / sin memoria | 1,1 / 4,0 / 14,8 / **56 s** | ×3,6–3,8 |
+
+Doblar el tamaño casi cuadruplica el tiempo: las dos son cuadráticas. En la Pico 2, un JSON de 8 KB tarda 17 segundos,
+y la segunda vuelta del `Map` se quedó sin memoria (en su heap de 219 KB seguía vivo el último JSON). En la P4, 2000
+claves tardan casi un minuto.
+
+**El censo de lo cuadrático, o peor, en el camino de las cadenas:**
+
+| | dónde | hoy | por qué | la alternativa | queda en | qué toca |
+|---|---|---|---|---|---|---|
+| 1 | recorrer una cadena por índice (`charAt`, `charCodeAt`, `substring`, `strlen` en el bucle); y por dentro, el lector de `Json`, `Str.compare`, `Str.parse*` y `Orm.esc` | n² | cada llamada cuenta desde el principio | **a)** la stdlib, por BYTES donde lo que mira es ASCII (la estructura de JSON, los dígitos, los separadores); **b)** para los programas, recordar «es ASCII» (el índice es el byte) y, para lo demás, recorrer sin índice (un `for each` de caracteres, o decodificar una vez a `integer[]`) | n | a) la stdlib; b) la VM (la etiqueta) y el lenguaje |
+| 2 | `Json`: el lector (la fila 1) y las claves de `JsonObject`, en una lista que se recorre para buscar una | n² y k² | lo de la fila 1, y buscar una clave es recorrerlas todas | el lector por bytes; las claves, en una tabla hash, con el orden de inserción aparte | n y k | la stdlib |
+| 3 | `Map` con claves de cadena: meter desplaza todo lo que queda detrás (cuatro llamadas a métodos por entrada), y cada comparación es `Str.compare` | construir: n²; comparar: L² | una lista ordenada; `Str.compare` va por `charCodeAt` | comparar bytes (L); y como estructura, un árbol equilibrado (log n por operación, y conserva el orden) o una tabla hash (1, sin orden) | n log n, o n | la stdlib (`Collections`, `Str`); comparar, en la biblioteca de C |
+| 4 | buscar una subcadena (`indexOf`, `contains`, `split`, `replace`): la aguja, comparada en cada posición | n·m en el peor caso | búsqueda directa | Two-Way (n + m, sin memoria extra) si la aguja es larga; si es corta, el primer byte y comparar | n + m | la biblioteca de C |
+| 5 | `Str.lastIndexOf` | casi n²·m | `charCodeAt` en cada paso | buscar bytes desde el final | n + m | la stdlib o la biblioteca |
+| 6 | construir concatenando (`s := s + x` en un bucle) | n² | cada `+` copia todo lo anterior: el precio de la inmutabilidad | el `StringBuilder` (ya es n): que sea el camino recomendado, y que gane también con trozos pequeños (eso es implementación). Las «cuerdas» (*ropes*) lo arreglarían sin cambiar el programa, pero cambian la representación en las dos VMs y en el AOT | n | el idioma y la documentación |
+| 7 | el GC: rehacer la lista de huecos (`#715`) | k² | dar de alta desde la cabeza | darla de alta en la cola | k | la VM. Eduardo: de momento, no |
+| 8 | reservar: el primer hueco que cabe, recorriendo la lista | huecos, por reserva | una sola lista | listas por tamaños | 1 por reserva | la VM (la memoria) |
+
+Lineales y mejorables, sin ser cuadráticos: un `switch` de cadenas (y de enteros) prueba los casos uno a uno; con una
+tabla, sería uno o log. Y `==` ya es lineal.
+
+**Una pieza que lo abre todo sin tocar la VM: leer un byte de una cadena en O(1) desde BP.** `Core` ya aplica `ALEN`
+directamente a una cadena (`__bytesDe`). Una función `inline` con `ALOAD_U8` hace lo mismo para leer un byte:
+
+```
+function byteAt(s: string, i: integer): integer
+  inline ALOAD_U8
+end byteAt
+```
+
+**Comprobado el 21-oct en las dos VMs:**
+- vale con una cadena del heap y con un literal (`"año"`: 97 195 177 111);
+- fuera de rango da el mismo error en las dos (`ALOAD_U8: idx fuera de rango 4 (len=4)`);
+- recorrer 4000 bytes en la Pico 2: **37 ms con `byteAt`, frente a 1986 ms con `charCodeAt`**.
+
+Con ella, la stdlib recorre por bytes sin copiar. `toBytes` también serviría, con una copia al principio y luego O(1)
+por byte.
+
+**Un orden posible**, por lo que se gana y lo que cuesta:
+1. **La stdlib por bytes** (filas 1a, 2 y 5, y `Orm.esc`): arregla el JSON medido sin tocar la VM.
+2. **Las estructuras:** las claves de `JsonObject` y el `Map` (filas 2 y 3).
+3. **En la biblioteca de C:** comparar y buscar (filas 3 y 4).
+4. **Para los programas:** recorrer por índice (fila 1b): «es ASCII» y una forma del lenguaje. Las dos, por decidir.
+5. **El GC y la reserva** (filas 7 y 8): cuando Eduardo diga.
+6. **Concatenar** (fila 6): el idioma y la documentación.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

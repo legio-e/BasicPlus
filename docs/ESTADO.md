@@ -84,6 +84,11 @@
 >   podemos aprovechar algoritmos mas o menos estandard para bytes»*): sí, el UTF-8 está hecho para eso. Se busca de 4
 >   en 4 bytes con un truco en C que vale en todos los procesadores; la M33 lo hace con su DSP, y nuestras RISC-V no
 >   tienen Zbb (leído en sus builds). En §E5, «Los bytes».
+> - **y lo cuadrático** (Eduardo: *«antes de entrar en eso, me interesa mas mejorar el algoritmo […] Algoritmos
+>   cudráticos no deberian valer»*):
+>   - el censo de ocho filas, cada una con su alternativa lineal o logarítmica (§E5, «Lo cuadrático»);
+>   - medido en programas de verdad: un JSON de 8 KB, 16,7 s en la Pico 2; 2000 claves en un `Map`, 56 s en la P4;
+>   - comprobada la pieza que arregla la stdlib sin tocar la VM: leer un byte con un `inline ALOAD_U8`.
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
