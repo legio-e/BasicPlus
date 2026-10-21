@@ -128,6 +128,18 @@
 >   caracter?»*): sí, y da lo mismo. El orden de los bytes del UTF-8 es el de los puntos de código, y `Str.compare` sólo
 >   devuelve -1/0/1. Comprobado en las dos VMs: 6000 comparaciones, 0 distintas. Quitaría el L² de comparar claves con
 >   acentos (el `Map`). Las dos formas, en BP con `byteAt` o en C, en §E5, «Comparar por bytes»; por decidir.
+> - **y HECHA, en BP** (Eduardo: *«OK, la 1»*): `Str.compare` y `Str.lastIndexOf` por bytes, sin cambiar su
+>   interfaz. `StrPorBytes` en el corpus (7948 comprobaciones contra las de antes, 0 malas) y la red VERDE, con la
+>   paridad en 153. `Str.compare` de 4000 caracteres con acentos, ×5: de 7348 a 348 ms en la Pico 2. Una trampa cazada
+>   antes de entrar: compilar `Str.bp` suelto lo deja con la generación 0, y `Collections` (compilada contra la 7) no
+>   carga; se rehace con el proyecto de la stdlib. Subida a `/lib` de la Pico 2, la Metro y la P4 (ninguna imagen la
+>   lleva embebida).
+> - **lo que sigue lento** (Eduardo: *«si hay caracteres especiales queda alguna función que vaya como antes de
+>   lenta?»*; §E5): los literales largos por índice (798 ms frente a 39 en la Pico 2), dos cadenas a la vez en un
+>   programa, `upper`/`lower` con acentos (como antes, lineales), las natives y la VM-Java; y sin acentos, cuatro
+>   funciones más lentas en las RP2350, sin explicar.
+> - **el `Map`** (Eduardo: *«Yo empezaría por la 1»*, buscar de forma dicotómica): ya lo hace (`bsearch`). Lo
+>   cuadrático es desplazar al meter, elemento a elemento en BP: el 97 % del tiempo con 8000 claves en el PC.
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es

@@ -19,7 +19,9 @@
 //   var c: integer := Str.compare("abc", "abd")    // -1
 //
 // Convenciones:
-//   - índices y comparación por CODEPOINT (no byte) — coherente con H2.
+//   - índices por CODEPOINT (no byte) — coherente con H2. Comparar (compare,
+//     lastIndexOf) va por BYTES, y da lo mismo: en UTF-8 el orden de los bytes
+//     es el de los codepoints (V8/H5).
 //   - parse* (que devuelven tupla {err,valor}) NO están aquí: son H4.B,
 //     dependen de las tuplas.
 // ============================================================
@@ -119,14 +121,45 @@ module Str
   end fromCharCode
 
   // -------------------------------------------------------------
+  // V8/H5 (21-oct) — COMPARAR POR BYTES (Eduardo: «La comparación se puede
+  // hacer como si fuera byte a byte en vez de caracter a caracter?»). En
+  // UTF-8 dos cadenas son iguales carácter a carácter si y sólo si lo son
+  // byte a byte, y el orden de los bytes (0..255) es el de los codepoints:
+  // compare y lastIndexOf dan lo mismo que comparando caracteres, en una
+  // pasada y sin contarlos. Antes iban por charCodeAt de DOS cadenas a la
+  // vez, y con acentos eso era L² (V8_IDEAS §E5, «Comparar por bytes»).
+  // -------------------------------------------------------------
+
+  // un byte de la cadena, 0..255 (ALOAD_U8), sin contar caracteres
+  function byteAt(s: string, i: integer): integer
+    inline ALOAD_U8
+  end byteAt
+
+  // cuántos caracteres hay antes del byte `hasta`: los bytes que no son de
+  // continuación (10xxxxxx), como cuenta la VM
+  function caracteresAntes(s: string, hasta: integer): integer
+    var n: integer := 0
+    var i: integer := 0
+    while i < hasta do
+      var c: integer := byteAt(s, i)
+      if c < 128 or c >= 192 then
+        n := n + 1
+      endif
+      i := i + 1
+    endwh
+    return n
+  end caracteresAntes
+
+  // -------------------------------------------------------------
   // lastIndexOf: última aparición de sub en s (índice codepoint)
   // -------------------------------------------------------------
   // -1 si no aparece. sub vacío devuelve strlen(s) (convención Java).
+  // Busca por bytes y convierte a índice de carácter una vez, al final.
   public function lastIndexOf(s: string, sub: string): integer
-    var ls: integer := strlen(s)
-    var lsub: integer := strlen(sub)
+    var ls: integer := __bytesDe(s)
+    var lsub: integer := __bytesDe(sub)
     if lsub == 0 then
-      return ls
+      return strlen(s)
     endif
     if lsub > ls then
       return -1
@@ -136,13 +169,13 @@ module Str
       var k: integer := 0
       var ok: boolean := true
       while ok and k < lsub do
-        if charCodeAt(s, start + k) != charCodeAt(sub, k) then
+        if byteAt(s, start + k) != byteAt(sub, k) then
           ok := false
         endif
         k := k + 1
       endwh
       if ok then
-        return start
+        return caracteresAntes(s, start)
       endif
       start := start - 1
     endwh
@@ -152,18 +185,18 @@ module Str
   // -------------------------------------------------------------
   // compare: orden lexicográfico por codepoint. -1 / 0 / 1
   // -------------------------------------------------------------
-  // Es el comparador por defecto del Map (H4.A).
+  // Es el comparador por defecto del Map (H4.A). Por bytes: el mismo orden.
   public function compare(a: string, b: string): integer
-    var la: integer := strlen(a)
-    var lb: integer := strlen(b)
+    var la: integer := __bytesDe(a)
+    var lb: integer := __bytesDe(b)
     var n: integer := la
     if lb < n then
       n := lb
     endif
     var i: integer := 0
     while i < n do
-      var ca: integer := charCodeAt(a, i)
-      var cb: integer := charCodeAt(b, i)
+      var ca: integer := byteAt(a, i)
+      var cb: integer := byteAt(b, i)
       if ca < cb then
         return -1
       endif

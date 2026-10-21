@@ -11,7 +11,10 @@
 //   - substring(s, k, k+1) con strlen(s) en la condición del bucle (el trozo de una ñ también va por el lento);
 //   - buscar y cortar (indexOf + substring), cien veces;
 //   - dos cadenas a la vez (comparar carácter a carácter: el cursor salta de una a otra);
-//   - un programa de verdad: Json.parseJson con "ñandú" en cada objeto.
+//   - Str.compare de dos cadenas iguales salvo el final, cinco veces (por bytes desde el 21-oct: «Comparar por
+//     bytes», V8_IDEAS §E5);
+//   - un programa de verdad: Json.parseJson con "ñandú" en cada objeto;
+//   - un Map con claves con acentos ("cañón" + número): su comparador es Str.compare.
 // Las cadenas llevan una ñ cada diez caracteres. Sin argumento, los tamaños de una placa (500 a 4000 caracteres, un
 // JSON de 1 a 8 KB); con el argumento `pc`, ocho veces más (en la VM-C del PC, con --mem=8388608).
 //
@@ -20,6 +23,8 @@ module StrCursorBench
   import Core
   import Machine
   import Json
+  import Str
+  import Collections
 
   // m caracteres, una ñ cada diez
   function hazCadena(m: integer): string
@@ -106,7 +111,17 @@ module StrCursorBench
     endwh
     var msDos: integer := Machine.uptimeMs() - t0
 
-    print "CURSOR n=" + n + ": adelante " + msAdelante + " ms, atras " + msAtras + " ms, substring(k,k+1) con strlen " + msTrozos + " ms, buscar y cortar x100 " + msCortar + " ms, dos cadenas " + msDos + " ms (" + suma + " " + iguales + " " + trozo + ")"
+    var c: string := hazCadena(n) + "zz8"          // igual que s salvo el último carácter
+    t0 := Machine.uptimeMs()
+    k := 0
+    var signo: integer := 0
+    while k < 5 do
+      signo += Str.compare(s, c)
+      k += 1
+    endwh
+    var msComparar: integer := Machine.uptimeMs() - t0
+
+    print "CURSOR n=" + n + ": adelante " + msAdelante + " ms, atras " + msAtras + " ms, substring(k,k+1) con strlen " + msTrozos + " ms, buscar y cortar x100 " + msCortar + " ms, dos cadenas " + msDos + " ms, Str.compare x5 " + msComparar + " ms (" + suma + " " + iguales + " " + trozo + " " + signo + ")"
   end patrones
 
   function Main(escala: string := "placa")
@@ -127,6 +142,18 @@ module StrCursorBench
       var ms: integer := Machine.uptimeMs() - t0
       print "JSON con acentos " + intToString(__bytesDe(texto)) + " bytes: parseJson " + intToString(ms) + " ms"
       kb := kb * 2
+    endwh
+    var claves: integer := 100 * veces
+    while claves <= 200 * veces do
+      var m: Collections.Map := Collections.Map()
+      var t1: integer := Machine.uptimeMs()
+      var i: integer := 0
+      while i < claves do
+        m.put("cañón" + ((i * 7919) mod claves), Integer(i))
+        i += 1
+      endwh
+      print "MAP con acentos " + claves + " claves: put " + (Machine.uptimeMs() - t1) + " ms"
+      claves := claves * 2
     endwh
   end Main
 end StrCursorBench

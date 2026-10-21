@@ -2676,6 +2676,104 @@ dos (1059 pares con a < b y 837 iguales).
 El `Map` seguiría cuadrático al meter, por otra razón: desplaza la lista en BP (fila 3). Esto arregla la comparación,
 no eso. Por decidir (Eduardo).
 
+**Hecho el mismo día, la forma 1** (Eduardo: *«OK, la 1»*): `Str.compare` y `Str.lastIndexOf` van por bytes con un
+`byteAt` privado (`inline ALOAD_U8`). `lastIndexOf` convierte el byte encontrado a índice de carácter una vez, al final,
+contando los bytes que no son de continuación.
+- **La interfaz de `Str` no cambia:** las dos funciones nuevas son privadas, y un programa compilado contra la `Str` de
+  antes carga con la nueva, y al revés.
+- **Una trampa, cazada antes de entrar:** compilar `Str.bp` SUELTO lo deja con la generación 0, y `Collections`, que se
+  compiló contra la 7, ya no carga («'Str' (gen 0) es mas antiguo que el que 'Collections' necesita (gen 7)»). La
+  generación es la `version` del proyecto (`Stdlib.bpbuild`). Un módulo de la stdlib se rehace con el proyecto, y de
+  `out/` se copia el que cambió: los otros 29 salieron idénticos byte a byte.
+- **Ninguna imagen lleva `Str` embebida** (las tres familias embeben otros 16–17 módulos): no hay que rehacer
+  firmwares. En una placa, `Str` vive en `/lib`; se subió con el wire a la Pico 2, la Metro y la P4.
+
+**Verificado:**
+- **`bpgenvm-c/samples/StrPorBytes.bp`**, nuevo y en el corpus: las de antes, copiadas tal cual, contra las nuevas.
+  Usa pares casi iguales con caracteres de 1 a 4 bytes, agujas sacadas de la cadena y que no están, vacías y sin valor.
+  Resultado: 7948 comprobaciones, 0 malas, igual en las dos VMs.
+- **El sabotaje:** con los bytes leídos con signo, 430 malas. La prueba lo ve, y corre la `Str` nueva.
+- **`compat.sh check` VERDE:** paridad 153 (MOD9, MOD8 y dos workers), cápsula 59, pruebas de C 102/102, sombra
+  15/15, estrés, `packs-abi` y la stdlib embebida. `packs/Stdlib.pack`, regenerado: igual a `bpstdlib/*.mod`.
+
+**Medido** (`StrCursorBench`; `Str.compare` de dos cadenas con acentos iguales salvo el último carácter, cinco veces):
+
+| n caracteres | PC | Pico 2 | Metro (PSRAM) | P4 |
+|---|---|---|---|---|
+| 500 / 4000 (placas) | — | 160 / 7348 → 44 / **348 ms** | 195 / 8480 → 46 / **360** | 76 / 2750 → 36 / **285** |
+| 4000 / 32 000 (PC) | 41 / 2501 → 1 / **13 ms** | — | — | — |
+
+De cuadrática a lineal. En placa, una comparación por bytes en BP cuesta unos 15 µs por byte (el intérprete); un
+`memcmp` en C, la forma 2, iría mil veces más deprisa. El `Map` con claves con acentos apenas cambia (Pico 2, 200
+claves: 1088 → 1048 ms): con claves cortas pesa desplazar la lista, abajo.
+
+### Lo que sigue lento (21-oct, pregunta de Eduardo)
+
+Eduardo: *«De todas las operaciones de strings, entiendo que ahora en el caso no haber caracteres especiales todas van
+mas rápidas. Ahora, si hay caracteres especiales queda alguna función que vaya como antes de lenta?»*
+
+**Sin caracteres especiales, casi todas, no todas:**
+- **más rápidas:**
+  - `strlen`, `charAt`, `charCodeAt`, `substring`, `indexOf`, `upper` y `lower`, por el camino rápido;
+  - lo que copia, con `memcpy`: `substring`, `trim`, `split`, `replace`, `toBytes`/`fromBytes` y las rutas;
+- **igual que antes:**
+  - `==`, un bucle de bytecode que ya comparaba bytes;
+  - concatenar, ya en C desde `#554`;
+  - `contains`, `startsWith` y `endsWith` en la VM-C, que ya iban por bytes;
+  - el `StringBuilder`;
+- **más lentas, sin explicar, sólo en las RP2350:** `intToString`, `floatToString`, `parseFloat` y cadena + entero, un
+  25–50 % (hipótesis: el sitio del código en la caché del XIP; pide un test de desplazamiento);
+- **los literales:** no tienen etiqueta, y cada llamada los mira enteros para saber si son ASCII. Con uno corto no se
+  nota. Recorrer por índice uno largo sigue siendo cuadrático: con 4000 caracteres, **798 ms en la Pico 2, frente a 39**
+  con la misma cadena en el heap (en el PC no se ve: el compilador vectoriza ese bucle).
+
+**Con caracteres especiales, lo que queda como antes:**
+- **dos cadenas con acentos a la vez, por índice, en un programa:** el cursor salta de una a otra. Sigue cuadrático,
+  tres veces más deprisa (Pico 2: 4238 → 1461 ms). En la stdlib ya no queda ninguno: eran `Str.compare` y
+  `Str.lastIndexOf`;
+- **los literales largos**, con o sin acentos: 881 ms frente a 44 en la Pico 2;
+- **`upper` y `lower`:** el código de antes, carácter a carácter. Lineal, pero no más rápido;
+- **las natives** (el código AOT): sólo la pasada única. Un bucle por índice en una native sigue siendo cuadrático;
+- **la VM-Java** (el PC): sin cursor, por decisión;
+- **lo que no depende de los acentos:** `==` en bytecode, concatenar en un bucle (n²), el `Map` al meter y el GC
+  (`#715`).
+
+**Lo que lo arreglaría, por decidir:**
+- para dos cadenas a la vez, dos cursores por hilo;
+- para los literales, que el cursor recuerde también lo que vio de un literal (si es ASCII y cuántos caracteres
+  tiene), y así no mirarlo en cada llamada. Sin tocar el formato del `.mod`;
+- para las natives, el cursor del hilo.
+
+### El Map: la búsqueda dicotómica ya está; lo cuadrático es desplazar (21-oct)
+
+Eduardo: *«El Map no está optimizado para ser rápido. Se pensó en una lista ordenada como solución de compromiso. Aquí
+podemos hacer 2 cosas: 1 Utilizar la lista como si fuera un array y hacer una búsqueda dicotómica. 2 Sustituir la
+lista por un arbol binario. Yo empezaría por la 1 ya que es mas sencilla de implementar.»*
+
+**Lo que hace hoy** (`bpstdlib/Collections.bp`):
+- **buscar ya es la 1:** `bsearch` busca de forma dicotómica sobre la lista de claves usada como array, con `get(mid)`.
+  Lo usan `put`, `get`, `containsKey` y `remove`: log₂ n comparaciones;
+- **meter desplaza elemento a elemento en BP:** `insertAt` añade al final y baja cada elemento posterior con
+  `keyList.set(i, keyList.get(i - 1))` y lo mismo en `valList`, cuatro llamadas a métodos por elemento. Con las claves
+  en desorden, cada `put` desplaza de media la mitad de la lista: n²;
+- **borrar también desplaza:** `List.remove` (Core), con un bucle de bytecode.
+
+**Medido en el PC** (`put` de N claves de cinco cifras, en orden y en desorden; en orden, cada una va al final y no se
+desplaza nada):
+
+| N | 250 | 500 | 1000 | 2000 | 4000 | 8000 |
+|---|---|---|---|---|---|---|
+| en orden (buscar) | 2 ms | 4 | 9 | 20 | 48 | 91 |
+| en desorden (buscar y desplazar) | 5 | 19 | 69 | 275 | 997 | **3970** |
+
+Con 8000 claves, desplazar es el 97 % del tiempo.
+
+**Dentro de la 1, lo que falta es desplazar de una vez.** `move` (un `memmove` en C, en las dos VMs) acepta arrays de
+referencias, y `List.backing()` es público. `insertAt` y `remove` pueden mover el tramo con UNA llamada en vez de un
+bucle de BP:
+- sigue siendo O(n) por inserción, pero mover 2000 referencias son 16 KB de `memmove`;
+- y todo queda dentro de `Collections`: sin tocar Core, cuya interfaz sellan todos los módulos.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
