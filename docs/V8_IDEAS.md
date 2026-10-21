@@ -1905,6 +1905,16 @@ seguidos.
 Eduardo: *«de momento no intentamos mejorar»*. Para cuando toque, lo que pediría el algoritmo, sin probar: el barrido va
 en orden de dirección, así que el hueco nuevo va siempre al final. Engancharlo a la cola es un paso, no k.
 
+**La condición de Eduardo (21-oct, tarde):** *«La lista de huecos tiene que ser por dirección para así poder fusionar 2
+huecos adyacentes.»* Ya lo es desde `#355` (su propuesta del 2-ago): `add_to_free_list` la mantiene de menor a mayor
+dirección y fusiona el hueco nuevo con los dos vecinos. Y engancharlo a la cola la conserva tal cual:
+- el barrido junta él mismo los bloques muertos seguidos y da de alta cada tramo al llegar al siguiente bloque vivo.
+  Cada hueco va detrás de todos los anteriores y nunca toca al anterior: entre los dos hay un bloque vivo;
+- la compactación rehace la lista igual, en orden de dirección;
+- fuera del GC (soltar un `owner`, el sobrante de una reserva), el alta sigue buscando su sitio y fusionando.
+
+El detalle, en FICHAS, `#715`.
+
 ### El perfil por fases (21-oct, `samples/benchmarks/StrFases.bp`)
 
 Eduardo: *«Quizás faltaría un profile que nos diga cuanto tiempo está haciendo cada tarea. Mi intuición me dice que la
@@ -2249,6 +2259,10 @@ claves tardan casi un minuto.
 Lineales y mejorables, sin ser cuadráticos: un `switch` de cadenas (y de enteros) prueba los casos uno a uno; con una
 tabla, sería uno o log. Y `==` ya es lineal.
 
+**La fila 1, el mismo 21-oct por la tarde:** en la VM-C ya es n, sin tocar la stdlib. El texto ASCII va por el rápido
+(«Los dos algoritmos, hechos y medidos»), y el texto con acentos por el cursor («El lento con dos contadores, hecho y
+medido»). Queda n² recorrer DOS cadenas con acentos a la vez, como hace `Str.compare`.
+
 **Una pieza que lo abre todo sin tocar la VM: leer un byte de una cadena en O(1) desde BP.** `Core` ya aplica `ALEN`
 directamente a una cadena (`__bytesDe`). Una función `inline` con `ALOAD_U8` hace lo mismo para leer un byte:
 
@@ -2454,7 +2468,7 @@ desde la flash por la caché de 16 KB del XIP. La hipótesis, sin demostrar, es 
 ahora esas funciones y el intérprete se pisan en la caché (ya pasó con PrintBench: ±10 % de una imagen a otra). Lo
 probaría un test de desplazamiento: mover el código sin cambiar nada más.
 
-### El lento, con dos contadores: bytes y caracteres (propuesta, Eduardo 21-oct)
+### El lento, con dos contadores: bytes y caracteres (propuesta, Eduardo 21-oct; decidida y hecha ese día, abajo)
 
 Eduardo, antes de seguir con las placas: *«Deberíamos ver si podemos hacer mas mejoras. Por ejemplo, find o indexof.
 Por si solas si hay caracteres especiales iríamos por el método lento. Ahora si después se hace un substring o algo
@@ -2506,6 +2520,121 @@ similar podemos optimizar si trabajamos con punteros de C o con dos contadores d
 
 **Lo que daría, estimado y por medir:** recorrer 4000 caracteres con acentos, de 1992 ms a unos 40 (como el ASCII); un
 par «buscar y cortar» de 4000, de 2,2 a cerca de 1,4 ms.
+
+### El lento con dos contadores, hecho y medido (21-oct)
+
+**Lo que decidió Eduardo:** *«Yo haría el 1 y el 2. Y son optimizaciones que se pueden hacer muy bien en C porque se
+pueden utilizar punteros. Creo que en Java no hace falta.»* Los dos escalones, sólo en la VM-C; la VM-Java sigue
+contando desde el principio y hace de oráculo.
+
+**Lo hecho** (`bpgenvm-c/src/builtins.c`, las primitivas de `bpvm_prims.h`):
+- **Escalón 1, una pasada por llamada.** El carácter y el byte donde empieza avanzan juntos:
+  - `substring` camina hasta `desde` y de ahí sigue hasta `hasta`; si la cadena se acaba antes, eso es el recorte, y
+    ya no se cuenta entera para recortar;
+  - `charAt` y `charCodeAt` caminan hasta `i`; si se acaba antes, está fuera de rango;
+  - `strlen` cuenta una vez por cadena.
+- **Escalón 2, el cursor del hilo** (`bpvm_strcur_t`, en `struct bpvm_thread`): la última cadena del lento, un carácter
+  y el byte donde empieza y, si se contó, cuántos caracteres tiene.
+  - La llamada siguiente camina desde el punto conocido más cerca: el principio, el cursor (hacia delante o hacia
+    atrás) o el final, si se sabe cuántos caracteres hay.
+  - `indexOf` cuenta desde el cursor y lo deja en lo que encontró. Un `substring(s, 0, i)` justo después usa ese
+    cursor para `hasta`.
+- **Por qué no puede mentir:**
+  - la clave es la referencia ENTERA: el handle con su generación, o la dirección de un literal;
+  - guarda posiciones desde el principio de la cadena, no direcciones, así que la compactación no le afecta;
+  - `move` sube una época de la VM (`vm->str_epoca`) DESPUÉS de escribir, con RELEASE, y eso invalida todos los
+    cursores. El hilo la lee con ACQUIRE: con dos runs, quien ve la época nueva ve también los bytes nuevos.
+- **Lo que queda como estaba:**
+  - una cadena que EMPIEZA por un byte de continuación va por el lento de siempre, sin cursor: con `utf8_cp_count`
+    tiene un carácter menos que caminando (`#711`);
+  - las natives (el AOT) no tienen hilo del intérprete: cada llamada usa un cursor propio que sólo dura esa llamada
+    (sólo el escalón 1);
+  - lo que devuelve cada función, también lo que no casa entre las VMs (`#711`, `#717`).
+- Ni el formato del `.mod`, ni el compilador, ni la stdlib, ni la ABI del código nativo: sólo la imagen.
+
+**Verificado:**
+- **`bpgenvm-c/samples/StrCursor.bp`**, nuevo y en el corpus de la paridad: 9872 comprobaciones contra un oráculo
+  escrito en BP (decodifica el UTF-8 sobre los bytes con `byteAt`, sin pasar por el cursor) y contra la VM-Java.
+  - Patrones: hacia delante, hacia atrás, a saltos, al azar, fuera de rango, desde el final, dos cadenas a la vez,
+    buscar y cortar, tras un `move` que cambia dónde empiezan los caracteres, tras un `gc()`, con handles reciclados,
+    con literales y con dos hilos a la vez.
+  - Su salida es la misma en la VM-Java, en la VM-C con cursor y en la VM-C de antes.
+- **La prueba ve los fallos.** Con cuatro sabotajes, uno cada vez:
+  - sin subir la época en `move`: 3 malas;
+  - la clave sin la generación: 78 malas. La primera versión de la prueba no lo veía, porque no conseguía que la
+    cadena nueva ocupara el número de la muerta. La de ahora no reserva ni suelta nada entre una y otra;
+  - el paso atrás sin saltar los bytes de continuación: 4204 malas;
+  - el final con un carácter de menos: 457 malas en la primera sección, y la ejecución se rompe.
+- **UTF-8 mal formado**, comparado con la VM-C de antes y no con la VM-Java (`#711`): 11 cadenas, cada función en
+  todos los índices y todos los trozos, y 120 llamadas al azar mezcladas. Las 2388 líneas son iguales.
+  - Las cadenas: que empiezan por un byte de continuación, continuaciones sueltas, cortadas al final, una cabecera sin
+    continuación, bytes imposibles, caracteres de 4 bytes y otras.
+- **`StrDosCaminos`:** las mismas 158 líneas.
+- **`compat.sh check` VERDE:**
+  - paridad 152 PASS (con `StrCursor`), en MOD9, en MOD8 y con dos workers;
+  - la cápsula de V6, 59;
+  - las pruebas de C, 102/102 (entre ellas `test-aotstr`, las entradas del AOT);
+  - sombra, 15/15;
+  - el estrés y `packs-abi`.
+- **La pila:** el marco de `bpvm_call_builtin` no cambia (2128 B en ARM, con los flags del firmware). Las primitivas
+  crecen; la que más, `substring`, de 56 a 112 B, más 24 de la caminata. En la Pico 2, a la pila del run le quedan
+  12 296 B libres, 48 menos que con la imagen de antes.
+
+**Medido en el PC** (`samples/benchmarks/StrCursorBench.bp pc`, la VM-C de antes contra la de ahora; una `ñ` cada
+diez caracteres):
+
+| n caracteres | 4000 | 8000 | 16 000 | 32 000 |
+|---|---|---|---|---|
+| recorrer hacia delante (`charCodeAt`) | 6 → 0 ms | 26 → 0 | 108 → 1 | **413 → 1** |
+| recorrer hacia atrás | 8 → 0 | 28 → 1 | 108 → 1 | **418 → 2** |
+| `substring(s, k, k+1)` con `strlen(s)` en la condición | 12 → 1 | 49 → 2 | 194 → 7 | 761 → 27 |
+| buscar y cortar, ×100 | 2 → 1 | 2 → 2 | 5 → 3 | 9 → 6 |
+| dos cadenas a la vez | 13 → 8 | 52 → 31 | 201 → 124 | 805 → **497** |
+
+Y un programa de verdad, `Json.parseJson` con `"ñandú"` en cada objeto:
+
+| | 8 KB | 16 KB | 32 KB | 64 KB |
+|---|---|---|---|---|
+| antes | 54 ms | 247 | 1164 | 4258 |
+| con cursor | 6 | 34 | 354 | 971 |
+| antes, sin GC (`--nogc`) | 54 | 209 | 815 | 3299 |
+| con cursor, sin GC | 6 | 12 | 22 | **44** |
+
+Sin GC es lineal; lo que crece todavía con GC es la lista de huecos (`#715`). Un `Map` con claves con `ñ` no cambia:
+lo cuadrático es desplazar la lista al meter, en BP.
+
+**Medido en las placas** (antes, con la imagen de los dos algoritmos que llevaban; después, grabadas con la nueva). Con
+4000 caracteres, `StrAcentos` y los patrones de `StrCursorBench`:
+
+| | Pico 2 | Metro (PSRAM) | P4 |
+|---|---|---|---|
+| recorrer hacia delante | 1992 → **44 ms** | 2103 → **46** | 835 → **34** |
+| recorrer hacia atrás | 2133 → **45** | 2302 → **47** | 906 → **33** |
+| `substring(s, k, k+1)` con `strlen(s)` | 4417 → 385 | 4818 → 429 | 1826 → 149 |
+| buscar y cortar, ×100 | 222 → 76 | 235 → 83 | 95 → 39 |
+| dos cadenas a la vez | 4238 → 1461 | 5446 → 1891 | 1795 → 543 |
+
+Y el JSON con acentos (1, 2, 4 y 8 KB):
+
+| | Pico 2 | Metro (PSRAM) | P4 |
+|---|---|---|---|
+| antes | 0,5 / 1,5 / 4,7 / **16,1 s** | 0,6 / 1,7 / 5,3 / **19,7 s** | 0,2 / 0,6 / 1,9 / **6,6 s** |
+| con cursor | 0,3 / 0,6 / 1,3 / **2,7 s** | 0,3 / 0,6 / 1,2 / **2,6 s** | 0,1 / 0,3 / 0,5 / **1,1 s** |
+
+Lineal en las tres. Recorrer 4000 caracteres con acentos cuesta ya casi lo mismo que sin ellos (44 ms frente a 38 en la
+Pico 2). En buscar y cortar queda la búsqueda de bytes de `indexOf`: unos 186 ns por byte en la Pico 2, el terreno de la
+biblioteca de cadenas en C. En la P4, los packs aguantaron sin regrabar: misma página, `packRamBase` `0x48001000`, Gui
+y SQLite vivos. El `Map` de 500 claves no cabe en la Pico 2, con la imagen de antes ni con la nueva.
+
+**Lo que no arregla un cursor solo:**
+- **Dos cadenas a la vez.** Con un solo cursor, saltar de una a otra empieza cada vez desde el principio. Comparar dos
+  cadenas con acentos carácter a carácter sigue siendo n²: va ×3 más deprisa (la pasada única), pero doblar la cadena
+  sigue cuadruplicando el tiempo (en la Pico 2, 31, 106, 384 y 1461 ms).
+- **Una cadena con acentos tocada en medio.** En `substring(s, k, k+1)` con `strlen(s)` en la condición, el trozo de
+  una `ñ` se lleva el cursor (su `strlen`), y la vuelta siguiente vuelve a contar `s` entera. Por eso aún crece más
+  que lineal (en el PC 1, 2, 7 y 27 ms).
+- **Propuesta, sin hacer:** dos cursores por hilo, las dos últimas cadenas; la más vieja deja su sitio. Con eso, los dos
+  casos serían lineales. Cuesta 24 bytes más por hilo y una comparación más por llamada.
 
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 

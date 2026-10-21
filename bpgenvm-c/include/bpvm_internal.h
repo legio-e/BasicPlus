@@ -319,6 +319,21 @@ typedef enum {
     BPVM_THREAD_BLOCKED_PROMPT
 } bpvm_thread_status_t;
 
+/* V8/H5 (21-oct) — EL CURSOR DEL LENTO, con los DOS CONTADORES (Eduardo: «si después se hace un substring o algo
+ * similar podemos optimizar si trabajamos con punteros de C o con dos contadores de bytes y de caracteres»). Uno por
+ * hilo BP: la última cadena CON caracteres especiales que miró y dónde quedó —el carácter `ci` empieza en el byte
+ * `bo`— y, si se contó, cuántos caracteres tiene. Una cadena no cambia mientras existe (el invariante), así que lo
+ * contado sigue valiendo mientras sea LA MISMA: la referencia entera (el handle con su generación, o la dirección de
+ * un literal) y la misma época de la VM (`move` la sube). Guarda posiciones desde el principio de la cadena, no
+ * direcciones: la compactación no le afecta. Sólo la VM-C (Eduardo: «en Java no hace falta»). */
+typedef struct {
+    uint64_t ref;     /* la cadena (0 = ninguna) */
+    uint32_t epoca;   /* vm->str_epoca cuando se anotó */
+    uint32_t ci;      /* un carácter… */
+    uint32_t bo;      /* …y el byte donde empieza (nbytes: el final) */
+    int32_t  ncp;     /* cuántos caracteres tiene; -1 = no se sabe */
+} bpvm_strcur_t;
+
 /* NOTE: tagged como `struct bpvm_thread` para que el forward declarado
  * en bpvm.h (typedef struct bpvm_thread bpvm_thread_t;) cuadre — el
  * caller que sólo incluye bpvm.h ve el tipo opaco; los .c de la VM
@@ -429,6 +444,9 @@ struct bpvm_thread {
      * intérprete del run que lo suelta; lo borra el run 0 al elegirlo (scheduler.c, bajo vm_lock). Al final: lo de
      * arriba no se mueve. */
     int al_run0;
+    /* V8/H5 (21-oct) — el cursor del lento de las cadenas (bpvm_strcur_t, arriba). Lo usan sólo los builtins de este
+     * hilo: sin cerrojo. Al final: lo de arriba no se mueve. */
+    bpvm_strcur_t strcur;
 };
 
 /* F5 — entry del handlerStack. */
@@ -817,6 +835,10 @@ struct bpvm {
      * pendiente de destruir, la marca por clase y la fase del final. NULL hasta el primer objeto. Al final: el prefijo
      * del .mdn no se toca. */
     struct bpvm_destruir* destruir;
+    /* V8/H5 (21-oct) — LA ÉPOCA de las cadenas: la sube `move` cada vez que escribe en un array de bytes (que puede ser
+     * una cadena, #714). Un cursor del lento (bpvm_strcur_t) anotado en otra época ya no vale. Al final: el prefijo del
+     * .mdn no se toca. */
+    uint32_t str_epoca;
 };
 
 /* V7/H12, etapa 3.1, paso 6 — EL KILL CRUZA NÚCLEOS: lo pide `io` (o el poll, o el depurador) y lo mira el run, que con

@@ -20,19 +20,29 @@
 #include <stddef.h>
 #include "bpvm_internal.h"
 
+/* V8/H5 (21-oct) — las cuatro de las cadenas llevan el CURSOR del lento del hilo (`cur`, bpvm_strcur_t) y la
+ * referencia ENTERA de la cadena (`clave`: el handle con su generación, o la dirección de un literal), que es lo que
+ * lo identifica. Sin hilo (una native: cur NULL), cada llamada usa uno propio que sólo dura esa llamada. */
+
 /* `len(s)`: la longitud en codepoints (H2). */
-int32_t bpvm_prim_str_len(bpvm_t* vm, uint32_t s);
+int32_t bpvm_prim_str_len(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s);
 
 /* `charCodeAt(s, i)`: el codepoint i; 0 si s es null o i está fuera de rango. */
-int32_t bpvm_prim_char_code_at(bpvm_t* vm, uint32_t s, int32_t i);
+int32_t bpvm_prim_char_code_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i);
 
 /* `charAt(s, i)`: una cadena con el codepoint i ("" si s es null); fuera de rango, un error (BUG-7b). */
-int bpvm_prim_char_at(bpvm_t* vm, uint32_t s, int32_t i, bpref_t* out, char* err, size_t n);
+int bpvm_prim_char_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i,
+                      bpref_t* out, char* err, size_t n);
 
 /* `substring(s, desde, hasta)`: [desde, hasta) en codepoints, recortado como BP ("" si s es null). LEE el origen
  * DESPUÉS de reservar: quien la llama tiene que mantenerlo vivo para el GC (el builtin lo deja en la pila BP,
- * #350; la native lo tiene en sus variables de C). Por eso recibe el handle y lo vuelve a resolver. */
-int bpvm_prim_substring(bpvm_t* vm, bpref_t s, int32_t desde, int32_t hasta, bpref_t* out, char* err, size_t n);
+ * #350; la native lo tiene en sus variables de C). Por eso recibe el handle y lo vuelve a resolver (y es su clave). */
+int bpvm_prim_substring(bpvm_t* vm, bpvm_strcur_t* cur, bpref_t s, int32_t desde, int32_t hasta,
+                        bpref_t* out, char* err, size_t n);
+
+/* El carácter de `off` en la cadena (para indexOf): cuántos caracteres hay en [0, off), desde el cursor si sirve, y
+ * deja el cursor ahí. Lo mismo que utf8_cp_count(p, off). */
+int32_t bpvm_prim_str_cuenta_hasta(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, uint32_t off);
 
 /* `intToString(v)`. */
 int bpvm_prim_int_to_string(bpvm_t* vm, int32_t v, bpref_t* out, char* err, size_t n);

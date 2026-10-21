@@ -810,11 +810,13 @@ static uint32_t h_find_function(bpvm_t* vm, const char* qualified) {
 /* V7/H5 P2b (26-sep, la opción 3 de Eduardo) — los helpers tipados de la lista a mano ya no son COPIAS de sus
  * builtins: llaman a LA MISMA función (bpvm_prims.h). Conservan su velocidad (44 ms frente a 96 por el
  * despachador genérico, 5 millones de charCodeAt en el PC) y la paridad sale por construcción. */
+/* V8/H5 (21-oct) — sin el cursor del hilo (NULL): cada llamada, con uno propio que sólo dura la llamada (el lento, en
+ * una pasada). El cursor entre llamadas es del intérprete. */
 static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
-    return bpvm_prim_str_len(vm, ref ? A(vm, ref) : 0u);
+    return bpvm_prim_str_len(vm, NULL, 0u, ref ? A(vm, ref) : 0u);
 }
 static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    return bpvm_prim_char_code_at(vm, ref ? A(vm, ref) : 0u, idx);
+    return bpvm_prim_char_code_at(vm, NULL, 0u, ref ? A(vm, ref) : 0u, idx);
 }
 /* #569 (V7/H5, 26-sep) — lo MISMO que BUILTIN_CHAR_AT, que es lo que corre la native interpretada: un
  * índice fuera de rango es un RuntimeError atrapable (BUG-7b, paridad con miVM) y no una cadena vacía, y
@@ -824,7 +826,9 @@ static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
 static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
     {   /* P2b: la primitiva compartida */
         bpref_t h; char em[96];
-        if (bpvm_prim_char_at(vm, ref ? A(vm, ref) : 0u, idx, &h, em, sizeof em) != 0) { h_throw_runtime(vm, em); return 0; }
+        if (bpvm_prim_char_at(vm, NULL, 0u, ref ? A(vm, ref) : 0u, idx, &h, em, sizeof em) != 0) {
+            h_throw_runtime(vm, em); return 0;
+        }
         return (uint32_t) h.v;
     }
 }
@@ -850,7 +854,7 @@ static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
     {   /* P2b: la primitiva compartida (el origen lo tiene vivo la native, en sus variables de C) */
         bpref_t h; char em[64];
-        if (bpvm_prim_substring(vm, ref ? bpref_regen(vm, ref) : bpref_null(), from, to, &h, em, sizeof em) != 0) {
+        if (bpvm_prim_substring(vm, NULL, ref ? bpref_regen(vm, ref) : bpref_null(), from, to, &h, em, sizeof em) != 0) {
             h_throw_runtime(vm, em); return 0;
         }
         return (uint32_t) h.v;

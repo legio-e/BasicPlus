@@ -108,6 +108,22 @@
 > - **la longitud** (*«se guarda la longitud o el final lo marca el caracter \0?»*): se guarda en bytes, delante, y no
 >   hay `\0`. Uno dentro es un carácter más, comprobado en las dos VMs. La de caracteres no se guarda; cabría en los 21
 >   bits libres de la etiqueta (por decidir).
+> - **el lento con dos contadores, HECHO en la VM-C** (Eduardo: *«Antes de hacer mas pruebas en placa. Deberíamos ver
+>   si podemos hacer mas mejoras»*; luego *«Yo haría el 1 y el 2 […] Creo que en Java no hace falta»*; §E5, «El lento
+>   con dos contadores, hecho y medido»):
+>   - una pasada por llamada, con el carácter y su byte a la vez;
+>   - un cursor por hilo (`bpvm_strcur_t`) con la última cadena con acentos. Su clave es la referencia entera, con la
+>     generación, y `move` sube una época que los invalida todos;
+>   - la VM-Java, sin cursor, hace de oráculo;
+>   - verificado: `StrCursor` (nuevo, en el corpus) con 9872 comprobaciones y cuatro sabotajes que la prueba ve; el
+>     UTF-8 mal formado, igual que la VM-C de antes en 2388 líneas; la red VERDE, con la paridad en 152;
+>   - grabado en la Pico 2, la Metro y la P4 (en la P4 sólo la app; los packs aguantan): recorrer 4000 caracteres con
+>     acentos, de 1992 a 44 ms en la Pico 2; un JSON de 8 KB con acentos, de 16,1 a 2,7 s, y lineal. Lo mide
+>     `samples/benchmarks/StrCursorBench.bp`;
+>   - queda n² con dos cadenas a la vez: la propuesta, dos cursores por hilo, sin hacer.
+> - **y la condición de Eduardo para `#715`** (*«La lista de huecos tiene que ser por dirección para así poder fusionar
+>   2 huecos adyacentes»*): ya lo es desde `#355`, y el arreglo propuesto (engancharlo a la cola durante el barrido) la
+>   conserva, con las mismas fusiones. Mirado en `heap.c`; anotado en `#715`, que sigue en análisis.
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
@@ -118,7 +134,14 @@
 > - **`#712` corrompe la memoria en silencio** con un tamaño de array enorme. No es de cadenas; Eduardo dirá cuándo;
 > - **`#715`, sólo análisis** hasta que Eduardo diga;
 > - **la C5 y la S3, sin el censo:** no estaban conectadas;
-> - **en la Pico 2, la Metro y la P4 quedan** `/app/StrCenso.mod` y `/app/GcHuecos.mod`.
+> - **en la Pico 2, la Metro y la P4 quedan** `/app/StrCenso.mod` y `/app/GcHuecos.mod`, y los de esta tarde
+>   (`StrAcentos`, `CursorPlaca`, `JsonAcentosPlaca`). Las tres llevan la imagen del cursor;
+> - **del cursor, por decidir (Eduardo):** dos cursores por hilo (dos cadenas a la vez); y si las natives (el AOT) usan
+>   también el del hilo: hoy cada llamada usa uno propio;
+> - **la tanda del F1 en placa**, aplazada por Eduardo hasta acabar las mejoras;
+> - **sin explicar**, de los dos algoritmos: `intToString` y otras tres, más lentas sólo en las RP2350. Pide un test de
+>   desplazamiento;
+> - **la VM-Java del IDE es la vieja:** falta `mvn install` de miVM y rehacer el BpIde (con el IDE cerrado).
 
 > **19-oct** — **La WiFi, el H3: el análisis, con las decisiones de Eduardo, y el paso 1, hecho en la P4. Su C6,
 > actualizada a ESP-Hosted 3.0.9 por el conector P1; y un firmware de prueba en la P4, con el IDF 6.1, que enciende,

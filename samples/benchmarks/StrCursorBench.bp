@@ -1,0 +1,132 @@
+// StrCursorBench.bp — el lento de las cadenas, con y sin el cursor de la VM-C, en los patrones que importan.
+//
+// ─── Por qué existe (V8/H5, 21-oct-2026) ─────────────────────────────────────
+//
+// Una cadena con caracteres especiales va por el lento: los índices son caracteres y hay que contarlos. Eduardo: «Yo
+// haría el 1 y el 2. Y son optimizaciones que se pueden hacer muy bien en C porque se pueden utilizar punteros»: una
+// pasada por llamada con los dos contadores (bytes y caracteres) y un cursor por hilo que recuerda dónde quedó la
+// última cadena (V8_IDEAS §E5, «El lento con dos contadores, hecho y medido»). Esto mide los patrones, con la cadena
+// doblando de tamaño (si doblar cuadruplica, es cuadrático):
+//   - recorrer por índice hacia delante y hacia atrás (charCodeAt);
+//   - substring(s, k, k+1) con strlen(s) en la condición del bucle (el trozo de una ñ también va por el lento);
+//   - buscar y cortar (indexOf + substring), cien veces;
+//   - dos cadenas a la vez (comparar carácter a carácter: el cursor salta de una a otra);
+//   - un programa de verdad: Json.parseJson con "ñandú" en cada objeto.
+// Las cadenas llevan una ñ cada diez caracteres. Sin argumento, los tamaños de una placa (500 a 4000 caracteres, un
+// JSON de 1 a 8 KB); con el argumento `pc`, ocho veces más (en la VM-C del PC, con --mem=8388608).
+//
+// Las cifras cambian de una vez a otra: no es de paridad, y no está en el corpus.
+module StrCursorBench
+  import Core
+  import Machine
+  import Json
+
+  // m caracteres, una ñ cada diez
+  function hazCadena(m: integer): string
+    var sb: StringBuilder := StringBuilder()
+    var i: integer := 0
+    while i < m do
+      if i mod 10 == 0 then
+        sb.appendChar(241)
+      else
+        sb.appendChar(97 + (i mod 26))
+      endif
+      i += 1
+    endwh
+    return sb.toString()
+  end hazCadena
+
+  // un JSON de unos `bytes` bytes: [{"id":0,"nombre":"ñandú"},{"id":1,...}, ...]
+  function hazJson(bytes: integer): string
+    var sb: StringBuilder := StringBuilder()
+    sb.appendStr("[")
+    var i: integer := 0
+    var largo: integer := 1
+    while largo < bytes do
+      if i > 0 then
+        sb.appendStr(",")
+      endif
+      var trozo: string := "{\"id\":" + i + ",\"nombre\":\"ñandú\"}"
+      sb.appendStr(trozo)
+      largo := largo + __bytesDe(trozo) + 1
+      i += 1
+    endwh
+    sb.appendStr("]")
+    return sb.toString()
+  end hazJson
+
+  function patrones(n: integer)
+    var s: string := hazCadena(n) + "zz9"
+    var b: string := hazCadena(n)
+    var largo: integer := strlen(s)
+    var suma: integer := 0
+    var k: integer := 0
+
+    var t0: integer := Machine.uptimeMs()
+    while k < largo do
+      suma += charCodeAt(s, k)
+      k += 1
+    endwh
+    var msAdelante: integer := Machine.uptimeMs() - t0
+
+    t0 := Machine.uptimeMs()
+    k := largo - 1
+    while k >= 0 do
+      suma += charCodeAt(s, k)
+      k -= 1
+    endwh
+    var msAtras: integer := Machine.uptimeMs() - t0
+
+    t0 := Machine.uptimeMs()
+    k := 0
+    while k < strlen(s) do
+      suma += strlen(substring(s, k, k + 1))
+      k += 1
+    endwh
+    var msTrozos: integer := Machine.uptimeMs() - t0
+
+    t0 := Machine.uptimeMs()
+    var trozo: string := ""
+    k := 0
+    while k < 100 do
+      var i: integer := indexOf(s, "zz9")
+      trozo := substring(s, i, largo)
+      k += 1
+    endwh
+    var msCortar: integer := Machine.uptimeMs() - t0
+
+    t0 := Machine.uptimeMs()
+    k := 0
+    var iguales: integer := 0
+    while k < n do
+      if charCodeAt(s, k) == charCodeAt(b, k) then
+        iguales += 1
+      endif
+      k += 1
+    endwh
+    var msDos: integer := Machine.uptimeMs() - t0
+
+    print "CURSOR n=" + n + ": adelante " + msAdelante + " ms, atras " + msAtras + " ms, substring(k,k+1) con strlen " + msTrozos + " ms, buscar y cortar x100 " + msCortar + " ms, dos cadenas " + msDos + " ms (" + suma + " " + iguales + " " + trozo + ")"
+  end patrones
+
+  function Main(escala: string := "placa")
+    var veces: integer := 1
+    if escala == "pc" then
+      veces := 8
+    endif
+    var n: integer := 500 * veces
+    while n <= 4000 * veces do
+      patrones(n)
+      n := n * 2
+    endwh
+    var kb: integer := veces
+    while kb <= 8 * veces do
+      var texto: string := hazJson(kb * 1024)
+      var t0: integer := Machine.uptimeMs()
+      var v: Json.JsonValue := Json.parseJson(texto)
+      var ms: integer := Machine.uptimeMs() - t0
+      print "JSON con acentos " + intToString(__bytesDe(texto)) + " bytes: parseJson " + intToString(ms) + " ms"
+      kb := kb * 2
+    endwh
+  end Main
+end StrCursorBench

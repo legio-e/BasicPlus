@@ -926,14 +926,92 @@ static uint32_t move_elem(int tipo) {
  * Las usan los builtins de abajo, los opcodes NEWARRAY de interp.c y los helpers tipados del AOT
  * (bpvm_aot_helpers.c): UNA implementación, varias entradas. Ver bpvm_prims.h. */
 
-int32_t bpvm_prim_str_len(bpvm_t* vm, uint32_t s) {
+/* ═══ V8/H5 (21-oct) — EL LENTO CON DOS CONTADORES, bytes y caracteres (Eduardo: «si después se hace un substring o
+ * algo similar podemos optimizar si trabajamos con punteros de C o con dos contadores de bytes y de caracteres») ═══
+ *
+ * Una cadena con caracteres especiales va por el lento: los índices son caracteres y hay que contar. Hasta ahora cada
+ * llamada contaba DESDE EL PRINCIPIO, a veces tres veces (substring: la cadena entera para el recorte, y luego hasta
+ * `desde` y hasta `hasta`). Ahora:
+ *   1. dentro de cada llamada, UNA pasada con los dos contadores a la vez —el carácter y el byte donde empieza—:
+ *      substring camina hasta `desde`, y de ahí hasta `hasta`; charAt camina hasta `i`, y si la cadena se acaba
+ *      antes, está fuera de rango;
+ *   2. entre llamadas, el CURSOR del hilo (bpvm_strcur_t): la siguiente sobre la misma cadena sigue desde donde quedó,
+ *      hacia delante o hacia atrás. Recorrer una cadena por índice deja de ser n².
+ * Dónde empieza un carácter es lo de utf8_byte_offset —en el byte 0 y en todo byte que no es de continuación
+ * (10xxxxxx)—, hacia delante y hacia atrás: el resultado es el de antes. Una cadena que EMPIEZA por un byte de
+ * continuación (UTF-8 mal formado) cuenta con utf8_cp_count un carácter menos que con esa definición: para ella, el
+ * lento de siempre, sin cursor. Sin hilo (una native), un cursor propio que sólo dura la llamada.
+ * Por qué el cursor no puede mentir: la clave es la referencia entera —el handle con su generación, que distingue una
+ * cadena muerta de la que ocupa su sitio, o la dirección de un literal—; guarda posiciones desde el principio de la
+ * cadena, no direcciones, así que la compactación no le estorba; y una cadena no cambia mientras existe, salvo por
+ * `move`, que sube vm->str_epoca y los invalida todos. */
+
+#define BP_CONT(b) (((b) & 0xC0u) == 0x80u)
+#define BP_EMPIEZA_MAL(p, n) ((n) > 0u && BP_CONT((p)[0]))   /* el primer byte, de continuación: el lento de siempre */
+
+/* ¿Sirve el cursor para esta cadena? La misma referencia entera y la misma época (ningún `move` desde entonces). La
+ * época se lee con ACQUIRE, la mitad lectora de la publicación: si se ve la que subió un `move` (con RELEASE, después de
+ * escribir), se ven también los bytes que escribió —con dos runs, en otro núcleo—. */
+static int strcur_vale(const bpvm_t* vm, const bpvm_strcur_t* c, uint64_t clave) {
+    return clave != 0u && c->ref == clave && c->epoca == __atomic_load_n(&vm->str_epoca, __ATOMIC_ACQUIRE);
+}
+
+/* Que el cursor sea de esta cadena: si era de otra (o de otra época), lo de antes se olvida. */
+static void strcur_de(const bpvm_t* vm, bpvm_strcur_t* c, uint64_t clave) {
+    if (strcur_vale(vm, c, clave)) return;
+    c->ref = clave; c->epoca = __atomic_load_n(&vm->str_epoca, __ATOMIC_ACQUIRE);
+    c->ci = 0u; c->bo = 0u; c->ncp = -1;
+}
+
+/* Cuántos caracteres tiene (utf8_cp_count): se cuenta una vez por cadena. */
+static uint32_t strcur_ncp(const bpvm_t* vm, bpvm_strcur_t* c, uint64_t clave, const uint8_t* p, uint32_t n) {
+    strcur_de(vm, c, clave);
+    if (c->ncp < 0) c->ncp = (int32_t) utf8_cp_count(p, n);
+    return (uint32_t) c->ncp;
+}
+
+/* El byte donde empieza el carácter `i`, caminando desde el punto conocido más cerca —el principio, el cursor (hacia
+ * delante o hacia atrás) o, si se sabe cuántos caracteres tiene, el final (hacia atrás)—; el cursor queda ahí. Si la
+ * cadena se acaba antes, devuelve n, y entonces ya se sabe cuántos caracteres tiene. */
+static uint32_t strcur_byte_de(const bpvm_t* vm, bpvm_strcur_t* c, uint64_t clave, const uint8_t* p, uint32_t n,
+                               uint32_t i) {
+    uint32_t ci = 0u, bo = 0u, pasos = i;                                  /* desde el principio, i pasos */
+    uint32_t dcur;
+    strcur_de(vm, c, clave);
+    if (c->ncp >= 0 && i >= (uint32_t) c->ncp) return n;                   /* ya se sabe: no hay carácter i */
+    dcur = (i >= c->ci) ? i - c->ci : c->ci - i;
+    if (dcur < pasos) { ci = c->ci; bo = c->bo; pasos = dcur; }            /* más cerca el cursor */
+    if (c->ncp >= 0 && (uint32_t) c->ncp - i < pasos) { ci = (uint32_t) c->ncp; bo = n; }   /* o el final */
+    if (i >= ci) {
+        while (ci < i && bo < n) {
+            bo++;
+            while (bo < n && BP_CONT(p[bo])) bo++;
+            ci++;
+        }
+    } else {
+        while (ci > i) {
+            bo--;
+            while (bo > 0u && BP_CONT(p[bo])) bo--;
+            ci--;
+        }
+    }
+    c->ci = ci;
+    c->bo = bo;
+    if (bo >= n) { c->ncp = (int32_t) ci; return n; }                      /* se acabó: tiene ci caracteres */
+    return bo;
+}
+
+int32_t bpvm_prim_str_len(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s) {
+    bpvm_strcur_t propio = {0};
     if (s == 0u) return 0;
     uint32_t nbytes = bpvm_read_u32_be(vm->memory + s);
     if (bpvm_str_ascii(vm, s)) return (int32_t) nbytes;   /* V8/H5: el rápido, un carácter = un byte */
-    return (int32_t) utf8_cp_count(vm->memory + s + BPVM_ARR_DATA_OFF, nbytes);
+    if (cur == NULL) { cur = &propio; clave = s; }
+    return (int32_t) strcur_ncp(vm, cur, clave, vm->memory + s + BPVM_ARR_DATA_OFF, nbytes);   /* una vez por cadena */
 }
 
-int32_t bpvm_prim_char_code_at(bpvm_t* vm, uint32_t s, int32_t i) {
+int32_t bpvm_prim_char_code_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i) {
+    bpvm_strcur_t propio = {0};
     uint32_t nbytes, ncp, off, adv;
     const uint8_t* p;
     if (s == 0u) return 0;
@@ -941,13 +1019,22 @@ int32_t bpvm_prim_char_code_at(bpvm_t* vm, uint32_t s, int32_t i) {
     p = vm->memory + s + BPVM_ARR_DATA_OFF;
     if (bpvm_str_ascii(vm, s))   /* V8/H5: el rápido: el carácter i ES el byte i (fuera de rango, 0, como abajo) */
         return (i < 0 || (uint32_t) i >= nbytes) ? 0 : (int32_t) p[i];
-    ncp = utf8_cp_count(p, nbytes);
-    if (i < 0 || (uint32_t) i >= ncp) return 0;
-    off = utf8_byte_offset(p, nbytes, (uint32_t) i);
-    return (int32_t) utf8_decode(p + off, nbytes - off, &adv);   /* H2: codepoint en índice de codepoint */
+    if (i < 0) return 0;
+    if (BP_EMPIEZA_MAL(p, nbytes)) {   /* el lento de siempre */
+        ncp = utf8_cp_count(p, nbytes);
+        if ((uint32_t) i >= ncp) return 0;
+        off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+        return (int32_t) utf8_decode(p + off, nbytes - off, &adv);   /* H2: codepoint en índice de codepoint */
+    }
+    if (cur == NULL) { cur = &propio; clave = s; }
+    off = strcur_byte_de(vm, cur, clave, p, nbytes, (uint32_t) i);   /* V8/H5: desde el cursor, una pasada */
+    if (off >= nbytes) return 0;                                       /* fuera de rango */
+    return (int32_t) utf8_decode(p + off, nbytes - off, &adv);
 }
 
-int bpvm_prim_char_at(bpvm_t* vm, uint32_t s, int32_t i, bpref_t* out, char* err, size_t n) {
+int bpvm_prim_char_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i,
+                      bpref_t* out, char* err, size_t n) {
+    bpvm_strcur_t propio = {0};
     uint8_t enc[4];
     uint32_t enc_len = 0, o, k;
     /* #684 (11-oct) — un string SIN VALOR (una global o un campo sin inicializar: `s == 0`) es el vacío, como en
@@ -955,19 +1042,31 @@ int bpvm_prim_char_at(bpvm_t* vm, uint32_t s, int32_t i, bpref_t* out, char* err
      * comprobación y devolvía "" —el programa seguía en la VM-C y lanzaba en miVM—. */
     uint32_t nbytes = s ? bpvm_read_u32_be(vm->memory + s) : 0u;
     const uint8_t* p = s ? vm->memory + s + BPVM_ARR_DATA_OFF : vm->memory;
-    int rapido = bpvm_str_ascii(vm, s);   /* V8/H5: el rápido: el carácter i ES el byte i */
-    uint32_t ncp = rapido ? nbytes : (s ? utf8_cp_count(p, nbytes) : 0u);
     uint32_t off, adv;
-    if (i < 0 || (uint32_t) i >= ncp) {
-        /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
-        snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
-        return -1;
-    }
-    if (rapido) {
+    if (cur == NULL) { cur = &propio; clave = s; }
+    if (bpvm_str_ascii(vm, s)) {   /* V8/H5: el rápido: el carácter i ES el byte i */
+        if (i < 0 || (uint32_t) i >= nbytes) {
+            /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
+            snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) nbytes);
+            return -1;
+        }
         enc[0] = p[i];
         enc_len = 1;
-    } else {
+    } else if (BP_EMPIEZA_MAL(p, nbytes)) {   /* el lento de siempre */
+        uint32_t ncp = utf8_cp_count(p, nbytes);
+        if (i < 0 || (uint32_t) i >= ncp) {
+            snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
+            return -1;
+        }
         off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+        enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
+    } else {   /* V8/H5: el lento con los dos contadores, desde el cursor */
+        off = (i < 0) ? nbytes : strcur_byte_de(vm, cur, clave, p, nbytes, (uint32_t) i);
+        if (off >= nbytes) {
+            snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i,
+                     (int) strcur_ncp(vm, cur, clave, p, nbytes));
+            return -1;
+        }
         enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
     }
     *out = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, enc_len, enc_len); /* V7/H7 #593: la cabecera y el handle, al nacer */
@@ -978,19 +1077,67 @@ int bpvm_prim_char_at(bpvm_t* vm, uint32_t s, int32_t i, bpref_t* out, char* err
     return 0;
 }
 
-int bpvm_prim_substring(bpvm_t* vm, bpref_t s, int32_t desde, int32_t hasta, bpref_t* out, char* err, size_t n) {
+int32_t bpvm_prim_str_cuenta_hasta(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, uint32_t off) {
+    bpvm_strcur_t propio = {0};
+    const uint8_t* p = vm->memory + s + BPVM_ARR_DATA_OFF;
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + s);
+    uint32_t ci, dcur;
+    if (off == 0u) return 0;
+    if (BP_EMPIEZA_MAL(p, nbytes)) return (int32_t) utf8_cp_count(p, off);   /* el lento de siempre */
+    if (cur == NULL) { cur = &propio; clave = s; }
+    strcur_de(vm, cur, clave);
+    /* Contar los caracteres de [0, off) desde el punto conocido más cerca, en bytes: el principio, el cursor o el final. */
+    dcur = (cur->bo <= off) ? off - cur->bo : cur->bo - off;
+    if (cur->ncp >= 0 && nbytes - off < dcur && nbytes - off < off)
+        ci = (uint32_t) cur->ncp - utf8_cp_count(p + off, nbytes - off);           /* desde el final */
+    else if (dcur < off)
+        ci = (cur->bo <= off) ? cur->ci + utf8_cp_count(p + cur->bo, off - cur->bo)
+                              : cur->ci - utf8_cp_count(p + off, cur->bo - off);    /* desde el cursor */
+    else
+        ci = utf8_cp_count(p, off);                                                 /* desde el principio */
+    if (off < nbytes && !BP_CONT(p[off])) { cur->ci = ci; cur->bo = off; }   /* `off` empieza un carácter: ahí queda */
+    return (int32_t) ci;
+}
+
+int bpvm_prim_substring(bpvm_t* vm, bpvm_strcur_t* cur, bpref_t s, int32_t desde, int32_t hasta,
+                        bpref_t* out, char* err, size_t n) {
+    bpvm_strcur_t propio = {0};
     uint32_t a = bpref_deref(vm, s);
     uint32_t nbytes = a ? bpvm_read_u32_be(vm->memory + a) : 0u;
     const uint8_t* p = vm->memory + a + BPVM_ARR_DATA_OFF;
     int rapido = bpvm_str_ascii(vm, a);   /* V8/H5: el rápido: los índices SON los bytes */
-    uint32_t ncp = rapido ? nbytes : (a ? utf8_cp_count(p, nbytes) : 0u);   /* H2: índices en codepoints */
+    uint64_t clave = s.v;
     uint32_t boff, eoff, len, o;
+    if (cur == NULL) { cur = &propio; clave = a; }
     if (desde < 0) desde = 0;
     if (hasta < 0) hasta = 0;
-    if ((uint32_t) hasta > ncp) hasta = (int32_t) ncp;
-    if (desde > hasta) desde = hasta;
-    boff = rapido ? (uint32_t) desde : utf8_byte_offset(p, nbytes, (uint32_t) desde);
-    eoff = rapido ? (uint32_t) hasta : utf8_byte_offset(p, nbytes, (uint32_t) hasta);
+    if (rapido) {
+        if ((uint32_t) hasta > nbytes) hasta = (int32_t) nbytes;
+        if (desde > hasta) desde = hasta;
+        boff = (uint32_t) desde;
+        eoff = (uint32_t) hasta;
+    } else if (BP_EMPIEZA_MAL(p, nbytes)) {   /* el lento de siempre */
+        uint32_t ncp = utf8_cp_count(p, nbytes);   /* H2: índices en codepoints */
+        if ((uint32_t) hasta > ncp) hasta = (int32_t) ncp;
+        if (desde > hasta) desde = hasta;
+        boff = utf8_byte_offset(p, nbytes, (uint32_t) desde);
+        eoff = utf8_byte_offset(p, nbytes, (uint32_t) hasta);
+    } else if (desde > hasta) {   /* `desde` se recorta a `hasta` (recortado): vacía */
+        boff = eoff = 0u;
+    } else {   /* V8/H5: una pasada con los dos contadores: hasta `desde`, y de ahí hasta `hasta` (pasado el final, el final) */
+        uint32_t ci0, bo0, d0;
+        strcur_de(vm, cur, clave);
+        ci0 = cur->ci;   /* el cursor de antes de la llamada: para `hasta` puede estar más cerca que `desde` */
+        bo0 = cur->bo;   /* (un indexOf y luego substring(s, 0, i)) */
+        boff = strcur_byte_de(vm, cur, clave, p, nbytes, (uint32_t) desde);
+        if (boff >= nbytes) {
+            eoff = nbytes;
+        } else {
+            d0 = ((uint32_t) hasta >= ci0) ? (uint32_t) hasta - ci0 : ci0 - (uint32_t) hasta;
+            if (d0 < (uint32_t) (hasta - desde)) { cur->ci = ci0; cur->bo = bo0; }
+            eoff = strcur_byte_de(vm, cur, clave, p, nbytes, (uint32_t) hasta);
+        }
+    }
     len = eoff - boff;
     *out = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
     if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355, #430 */
@@ -1104,7 +1251,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_STRLEN: {
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
-        push_i32(vm, tc, bpvm_prim_str_len(vm, bpref_deref(vm, s)));   /* P2b: la primitiva compartida */
+        push_i32(vm, tc, bpvm_prim_str_len(vm, &tc->strcur, s.v, bpref_deref(vm, s)));   /* P2b: la primitiva compartida */
         return BPVM_OK;
     }
 
@@ -2391,7 +2538,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_CHAR_CODE_AT: {
         int32_t i   = pop_i32(vm, tc);
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
-        push_i32(vm, tc, bpvm_prim_char_code_at(vm, bpref_deref(vm, s), i));   /* P2b: la primitiva compartida */
+        push_i32(vm, tc, bpvm_prim_char_code_at(vm, &tc->strcur, s.v, bpref_deref(vm, s), i));   /* P2b: la primitiva compartida */
         return BPVM_OK;
     }
 
@@ -2404,7 +2551,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
         {   /* P2b: la primitiva compartida (con el helper string_char_at del AOT) */
             bpref_t h; char em[96];
-            if (bpvm_prim_char_at(vm, bpref_deref(vm, s), i, &h, em, sizeof em) != 0) return builtin_throw(vm, tc, em);
+            if (bpvm_prim_char_at(vm, &tc->strcur, s.v, bpref_deref(vm, s), i, &h, em, sizeof em) != 0)
+                return builtin_throw(vm, tc, em);
             bpref_push(vm, tc, h);
             return BPVM_OK;
         }
@@ -2426,7 +2574,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         {   /* P2b: la primitiva compartida (con el helper string_substring del AOT); el origen sigue en la pila
              * mientras reserva (#350) y sólo se saca después */
             bpref_t h; char em[64];
-            int r = bpvm_prim_substring(vm, s, start, end, &h, em, sizeof em);
+            int r = bpvm_prim_substring(vm, &tc->strcur, s, start, end, &h, em, sizeof em);
             tc->sp -= BPVM_REF_SIZE;
             if (r != 0) return builtin_throw(vm, tc, em);
             bpref_push(vm, tc, h);
@@ -2538,7 +2686,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         long off = bp_find_bytes(sp_, sn, qp_, qn, 0);
         int32_t res = (off < 0) ? -1
                     : bpvm_str_ascii(vm, bpref_deref(vm, s)) ? (int32_t) off   /* V8/H5: el rápido, el byte ES el índice */
-                    : (int32_t) utf8_cp_count(sp_, (uint32_t) off);
+                    : bpvm_prim_str_cuenta_hasta(vm, &tc->strcur, s.v, bpref_deref(vm, s), (uint32_t) off);
+                      /* V8/H5: el lento cuenta desde el cursor y lo deja en lo encontrado (el substring de después) */
         tc->sp -= 2 * BPVM_REF_SIZE;
         push_i32(vm, tc, res);
         return BPVM_OK;
@@ -3671,9 +3820,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 vm->memory + sd + 4u + (uint32_t) srcStart * esz,
                 (size_t) count * esz);
         /* V8/H5: `move` escribe en el destino, que puede ser una cadena (#714): su bit «todo ASCII» deja de estar
-         * garantizado. Se quita (va por el lento, que siempre acierta). */
-        if (dt == BPVM_TYPE_ARRAY_I8)
+         * garantizado. Se quita (va por el lento, que siempre acierta). Y lo que los cursores de los hilos sabían de
+         * ella tampoco vale: la época sube, DESPUÉS de escribir (RELEASE: quien vea la época nueva ve los bytes), y los
+         * invalida todos. */
+        if (dt == BPVM_TYPE_ARRAY_I8) {
             bpvm_write_u32_be(vm->memory + dh, bpvm_read_u32_be(vm->memory + dh) & ~BPVM_TAG_ASCII);
+            (void) __atomic_fetch_add(&vm->str_epoca, 1u, __ATOMIC_RELEASE);
+        }
         push_i32(vm, tc, 0);   /* void: el valor de relleno, como miVM */
         return BPVM_OK;
     }
