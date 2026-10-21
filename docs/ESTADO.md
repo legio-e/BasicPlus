@@ -154,6 +154,20 @@
 >   la caché (+16–22 %; en la P4, +89 % tras leer 128 KB). El bucle del intérprete son 15,4 KB, casi toda la caché.
 >   Propuesto, sin hacer: no poner a cero lo que se llena entero, el intérprete en la SRAM (`#665`), la caché de las
 >   ESP32 y `#715`.
+>   Después, las preguntas de Eduardo sobre una caché de código y otra de datos, el DMA, y buscar en la PSRAM o copiar
+>   antes, contestadas en §E5. Las tres quedan para más adelante (*«no lo tocaría de momento»*).
+> - **crear en la PSRAM, medido por dentro** (Eduardo: *«hay que medir primero […] no hay [que] limpiar la memoria. Lo
+>   que si es importante es que la entrada en la tabla de handlers esté correcta»*; §E5, «Medido por dentro»):
+>   - una imagen de medida de la Metro, con marcas en cada pieza de la reserva. El reloj es TIMER1 a 12 MHz: el M33 no
+>     trae contador de ciclos. Grabada, medida con `psram=1` y `psram=0`, y la Metro devuelta a su imagen y a su ENV.
+>     El código, fuera del árbol; el parche, en el scratchpad;
+>   - **en las cadenas pequeñas no manda la PSRAM, manda el cerrojo de la VM.** Con dos runs, cada reserva toma y suelta
+>     un mutex de FreeRTOS: 11,4 µs en caliente, 17 en la reserva. Una sección crítica de FreeRTOS con dos núcleos
+>     cuesta 3,7 µs, y un cerrojo atómico, 0,25. Con `vm.runs=1`, crear una cadena de 16 B baja de 50 a 24 µs, en la
+>     PSRAM y en la SRAM;
+>   - **en las grandes, la memoria:** poner a cero y copiar son el 86 % de crear 16 KB. No poner a cero quita un 28 %
+>     ahí y poco en las cadenas que caben en la caché;
+>   - y una pista para `#665`, sin comprobar: las secciones críticas de la imagen de dos núcleos.
 > - **¿un CRC para descartar la igualdad?** (Eduardo: *«Igual con utilizar el comparador nos vale»*): sí, nos vale el
 >   comparador. Si son distintas, para en el primer byte distinto (y `==` ni mira los bytes si las longitudes no
 >   coinciden); un CRC pide recorrerlas enteras, no prueba la igualdad y no sirve para ordenar. Lo que pesa es que el
@@ -171,6 +185,9 @@
 >   En placa: 1000 claves en la Pico 2, de 17,7 a 2,6 s; 2000 en la P4, de 56,7 a 3,7 s; en la Metro, de 72,9 a 9,3 s.
 >
 > **Para la siguiente sesión:**
+> - **crear en la PSRAM, por decidir (Eduardo)** (§E5, «Medido por dentro»): el cerrojo de la VM (un camino rápido
+>   atómico; es el SMP de V7 y pide su análisis), no poner a cero las cadenas que se llenan enteras, y el código
+>   caliente en la SRAM. En la Metro queda `/app/CreaMide.mod`; sin la imagen de medida sólo da los totales;
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
 >   «similar» frente a la libc, y dónde se prueba cada arquitectura (las placas o QEMU);
 > - **las decisiones del H5** (§E5): la regla del UTF-8 mal formado (`#711`), el agujero de `move` (`#714`), `<` y `>`

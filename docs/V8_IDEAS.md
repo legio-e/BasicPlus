@@ -3092,6 +3092,100 @@ dos transferencias: traerla y devolverla más tarde. Y el reparto cambia con el 
    de ciclos, en una imagen instrumentada de la Metro.
 4. Y lo que ya está en la lista: el GC (`#715`) y el código en la SRAM.
 
+**Medido por dentro (21-oct, una imagen de medida de la Metro).** Eduardo: *«Si, hay que medir primero. A ver, no hay
+limpiar la memoria. Lo que si es importante es que la entrada en la tabla de handlers esté correcta. Ahí si que hay que
+limpiar.»* Y: *«Los objetos se crean limpios, pero eso es especificación del lenguaje, no tiene nada que ver en el
+PSRAM.»*
+
+- **La medida:** marcas en la reserva (`heap_nuevo`, pieza a pieza) y en lo que llena la cadena (`substring`, `move`,
+  `STR_COPY`), en una imagen sólo para medir. No se queda en el repositorio: el parche está en el scratchpad de la sesión.
+- **El reloj:** TIMER1 a 12 MHz, porque el M33 de la RP2350 no trae el contador de ciclos (`DWT_CTRL.NOCYCCNT = 1` en el
+  pico-sdk). Los fallos de la caché del XIP salen de sus contadores (`CTR_ACC − CTR_HIT`).
+- **El programa** (`CreaMide`, tampoco en el repositorio): crea cadenas de 16 B, 256 B, 2 KB y 16 KB de tres formas,
+  `newByteArray(n)`, `substring(fuente, 0, n)` y `mitad + mitad`.
+- **Lo que pesan las marcas:** hasta ~12 µs en las operaciones pequeñas. Por eso los totales son de la imagen normal (la
+  del archivo de las 18:17) y de la medida sólo sale el reparto.
+
+**Lo que cuesta crear, con la imagen normal** (la Metro con `psram=1`, µs por operación). Con un run (`vm.runs=1`) no hay
+cerrojo: `vm->smp` queda a NULL.
+
+| | 2 runs (lo de hoy) | 1 run (sin cerrojo) |
+|---|---|---|
+| `substring` de 16 B | 50,2 | **24,3** |
+| `newByteArray(16)` | 37,2 | **18,6** |
+| `a + b` de 16 B | 73,7 | **43,9** |
+| `substring` de 256 B | 94,7 | 67,3 |
+| `substring` de 2 KB | 451 | 407 |
+| `substring` de 16 KB | 5 033 | 4 942 |
+| el bucle vacío, por vuelta | 6,8 | 6,2 |
+
+**Dónde se va** (la medida: `substring` con dos runs, µs por operación y, entre paréntesis, los fallos de la caché):
+
+| pieza | 16 B, PSRAM | 16 B, SRAM | 2 KB, PSRAM | 2 KB, SRAM | 16 KB, PSRAM |
+|---|---|---|---|---|---|
+| el cerrojo de la VM, tomar y soltar | 17,1 (9) | 16,1 (7) | 62 (58) | 17,5 (10) | 142 (134) |
+| poner a cero | 1,5 (1) | 0,7 (0) | 180 (281) | 8,7 (1) | 1 468 (2 404) |
+| copiar | 1,7 (1) | 1,0 (0) | 95 (118) | 9,5 (1) | 2 986 (3 928) |
+| resolver los handles | 6,0 (6) | 5,7 (6) | 19 (21) | 6,3 (6) | 59 (56) |
+| el asignador | 4,1 (5) | 2,6 (3) | 11 (12) | 3,0 (4) | 29 (41) |
+| el resto de la reserva: entrar, el GC, la tabla, la cabecera, el alta, el bit | 5,6 (3) | 4,4 (1) | 25 (23) | 4,7 (2) | 88 (101) |
+| el GC, repartido | 4,1 | 3,3 | 21 | 49 | 150 |
+| lo de fuera: el despacho del builtin, el bucle… | 14,4 | 13,0 | 69 | 15 | 244 |
+| **en total** (con las marcas) | 54,6 | 46,8 | 484 | 114 | 5 166 |
+
+(La SRAM de 16 KB no sale en la tabla: con 232 KB de heap colecta en una de cada dos reservas.)
+
+**Lo que dice:**
+1. **En las cadenas pequeñas no manda la PSRAM, manda el cerrojo de la VM.**
+   - Con dos runs (lo de V7 en la Pico 2 y la Metro), cada reserva toma y suelta un mutex de FreeRTOS: 17 µs dentro de
+     la reserva, un tercio de crear una cadena de 16 B. En la SRAM, lo mismo.
+   - Medido aparte, en caliente (mil seguidos, sin fallos de caché):
+
+     | | µs |
+     |---|---|
+     | tomar y soltar el mutex | 11,4 |
+     | un semáforo binario | 10,5 |
+     | una sección crítica de FreeRTOS, entrar y salir (el mutex hace unas tres) | 3,7 |
+     | `xTaskGetCurrentTaskHandle` | 0,8 |
+     | un cerrojo atómico (un CAS y un store) | 0,25 |
+
+   - Lo caro es la sección crítica de FreeRTOS con dos núcleos. El spinlock por software del pico-sdk (`LDAEXB`/`STREXB`)
+     no lo explica, y no se ha buscado más.
+   - Con un run, crear una cadena pequeña cuesta la mitad. Además, el resto del camino falla menos en la caché: 17 fallos
+     por operación en vez de 49, porque el código de FreeRTOS ya no echa al otro.
+   - En la Pico 2 no se ha medido, pero es la misma imagen y el mismo cerrojo. En las ESP32, el FreeRTOS es el del IDF:
+     sin medir.
+2. **En las grandes manda la memoria de la PSRAM.** Poner a cero y copiar son el 86 % de crear 16 KB. Cada fallo de la
+   caché cuesta 0,6–0,76 µs: con la caché llena de líneas escritas, traer una es devolver otra.
+3. **Los datos echan el código, y lo pagan las piezas que no tocan datos.** En 2 KB, el cerrojo pasa de 17 a 62 µs,
+   resolver los handles de 6 a 19 y lo de fuera de 15 a 69. Es lo del código en la SRAM (arriba, «¿Una caché de código y
+   otra de datos?»).
+4. **No poner a cero sólo quita la pasada entera cuando la cadena no cabe en la caché:** en 16 KB, 1,5 de 5,2 ms
+   (−28 %). En las que caben, la copia trae las líneas que antes traía poner a cero: en 2 KB se ahorraría un 10 %
+   (estimado); en 256 B o menos, casi nada.
+5. **El GC, repartido,** son 4–22 µs por cadena en la PSRAM (`#715`).
+6. **Y de paso:** con un run, el bucle vacío va un 9 % más rápido (6,2 frente a 6,8 µs por vuelta), y ese bucle no reserva
+   nada. Con un run no arranca la comm task: puede ser ella en el otro núcleo, que comparte la caché. Sin comprobar.
+
+**Las palancas, por lo medido:**
+1. **El cerrojo de la VM:** la mitad de crear una cadena pequeña, en la PSRAM y en la SRAM. Lo paga toda reserva, objetos
+   y arrays incluidos, no sólo las cadenas.
+   - La forma conocida: un camino rápido atómico (un CAS si está libre, ~0,25 µs) y el semáforo de FreeRTOS sólo para
+     esperar.
+   - Es el corazón del SMP de V7: el GC con el mundo parado espera con ese cerrojo y con sus condiciones. Antes, el
+     análisis.
+2. **No poner a cero las cadenas que se llenan enteras:** −28 % en 16 KB y poco en las pequeñas. La entrada de la tabla de
+   handles sigue completa (Eduardo).
+3. **El código caliente en la SRAM:** lo que los datos echan de la caché. En 2 KB son ~140 µs de 484 (las piezas que no
+   tocan datos, la PSRAM frente a la SRAM).
+4. **Escribir sin pasar por la caché:** por medir. Ataca las grandes.
+5. **El GC** (`#715`).
+
+**Y para `#665`** (la imagen de dos núcleos, más lenta: `fib(26)` +35 % en la Metro, y ese programa no reserva). En esa
+imagen, cada sección crítica de FreeRTOS cuesta 3,7 µs; en una de un núcleo, es enmascarar las interrupciones. Si el
+intérprete pasa por alguna en cada cuanto o en cada llamada, explicaría parte de lo que mide esa ficha. Es una pista, no
+está comprobada.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
