@@ -30,8 +30,9 @@
 > **21-oct** — **El H5, los strings: el análisis** (Eduardo: *«De momento solo analizamos»*). **Incluye el censo de
 > 36 operaciones, medido en el PC y en tres placas y ordenado de la más lenta a la más rápida; la PSRAM y su caché,
 > placa por placa; y el invariante de Eduardo con sus matices. También la norma de Eduardo: 1º analizar, 2º el
-> algoritmo, 3º la implementación. Salen `#711`–`#715`, entre ellas el GC cuadrático (`#715`: 3,6 s por recolección en
-> la P4 con 4000 cadenas vivas), que de momento sólo se analiza.**
+> algoritmo, 3º la implementación. Salen `#711`–`#716`, entre ellas el GC cuadrático (`#715`: 3,6 s por recolección en
+> la P4 con 4000 cadenas vivas), que de momento sólo se analiza. Y la pregunta de Eduardo por los algoritmos, contestada
+> con el código y los mapas de enlace de cada familia.**
 >
 > **Lo que dijo Eduardo:**
 > - *«¿qué hitos tenemos actualmente de v8?»*. La respuesta, de la tabla de FICHAS: H1–H4. De paso, corregida en
@@ -57,10 +58,20 @@
 > - **de paso, `#711`–`#714`,** comprobadas en las dos VMs del PC;
 > - **corregida una memoria mía:** la tabla de handles ya no sale del `malloc` de la plataforma. Desde `#451` vive en el
 >   bloque de la VM, y en las placas con PSRAM está en la PSRAM.
+> - **después, los algoritmos** (Eduardo: *«Son nuestros? Son estandard? Sirven para todos los casos […]? En los micros,
+>   se utilizan algoritmos de la HAL?»*; §E5, «Los algoritmos»):
+>   - casi todos son nuestros, uno por operación para todos los casos, y la libc pone las piezas;
+>   - la HAL no pone ninguno;
+>   - lo que cambia de una placa a otra es la libc: newlib, picolibc, la ROM de las ESP32, o newlib-nano, cuyo `memcpy`
+>     copia byte a byte en la STM32;
+>   - en placa, nuestro código va con `-Os`: en la Pico, por una línea del bring-up que tapa el `-O3`;
+>   - MicroPython eligió lo mismo (UTF-8, índice O(n)), pero guarda el hash y puede validar al crear;
+>   - de paso, `#716`: `parseInt`/`parseFloat` con texto que no es un número.
 >
 > **Para la siguiente sesión:**
 > - **las decisiones del H5** (§E5): la regla del UTF-8 mal formado (`#711`), el agujero de `move` (`#714`), `<` y `>`
->   entre strings (`#713`), qué algoritmo va primero, y si se recuerda «es ASCII»;
+>   entre strings (`#713`), qué algoritmo va primero, si se recuerda «es ASCII», `parseInt`/`parseFloat` (`#716`), y si
+>   se mide `-O2` frente a `-Os` en placa;
 > - **`#712` corrompe la memoria en silencio** con un tamaño de array enorme. No es de cadenas; Eduardo dirá cuándo;
 > - **`#715`, sólo análisis** hasta que Eduardo diga;
 > - **la C5 y la S3, sin el censo:** no estaban conectadas;

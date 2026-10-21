@@ -1992,6 +1992,90 @@ en la PSRAM.
 5. **Fuera, de momento:** las cadenas jóvenes en la SRAM y las viejas en la PSRAM (un GC generacional) cambia el modelo
    de memoria.
 
+### Los algoritmos: de quién son, y si cambian según el caso (Eduardo, 21-oct)
+
+Eduardo: *«Ahora, los algoritmos. Son nuestros? Son estandard? Sirven para todos los casos, o en unos casos se utilizan
+unos y en otros se utilizan otros? En los micros, se utilizan algoritmos de la HAL?»*
+
+**De quién es cada uno.** En la VM-C, casi todo es nuestro: el mismo C en todas las placas. La libc pone las piezas
+básicas (copiar, poner a cero, comparar bloques, convertir números). La VM-Java usa la biblioteca de Java 8.
+
+| operación | VM-C: el algoritmo | ¿de quién? | VM-Java |
+|---|---|---|---|
+| `strlen`, `charAt`, `charCodeAt`, `substring` | recorrer los bytes UTF-8 desde el principio | nuestro (`utf8_cp_count`, `utf8_byte_offset`) | decodificar la cadena entera a un `String` de Java y usar sus métodos |
+| `indexOf`, `contains`; el separador de `split`; `replace` | búsqueda directa: la aguja, comparada en cada posición | nuestro, con el `memcmp` de la libc | `indexOf`, búsqueda directa; `split` y `replace`, por las expresiones regulares de Java 8 |
+| `startsWith`, `endsWith` | `memcmp` | la libc | los de Java |
+| `==`, `!=`, los `case` | bucle de bytecode byte a byte, con atajos (null, la misma referencia, la longitud) | nuestro: lo genera el compilador | el mismo bytecode |
+| concatenar | una reserva y un `memmove` por trozo | nuestro, con la libc | `System.arraycopy` |
+| `upper`, `lower`, `trim` | bucles propios (las mayúsculas, sólo Latin-1) | nuestro | `trim` de Java; las mayúsculas, propias |
+| `intToString` | `snprintf` | la libc | `Integer.toString` |
+| `floatToString`, `doubleToString` | un formateador propio («GAP-4»), por la paridad | nuestro | el mismo, escrito en Java |
+| `parseInt`, `parseFloat` | `strtol`, `strtod` | la libc | `Long.parseLong`, `Double.parseDouble`: **no dan lo mismo** (`#716`) |
+| `StringBuilder`, `Str.compare`, `Map`, `Json` | escritos en BP | nuestros | los mismos |
+| reservar | el primer hueco que cabe en una lista ordenada por dirección; si no hay, al final | nuestro | el mismo, en Java |
+| el GC | marcar y barrer, sin compactar; la lista de huecos se rehace al barrer (`#715`) | nuestro | el mismo, en Java |
+
+**¿Sirven para todos los casos?** Los nuestros, sí: un algoritmo por operación, el mismo para 3 bytes que para 3 MB, y
+para ASCII que para lo demás. Las únicas elecciones por caso son los atajos de `==` y la concatenación de tres o más
+trozos de una vez.
+
+Las bibliotecas estándar sí eligen por caso por dentro: el `memcpy` de newlib copia por palabras si las direcciones van
+alineadas y byte a byte si no.
+
+Otros lenguajes eligen por caso justo donde a nosotros nos duele:
+- **cómo se guarda una cadena:**
+  - CPython guarda cada una con 1, 2 o 4 bytes por carácter, según el más ancho que tenga: el índice es directo;
+  - Java (desde la 9) la guarda en Latin-1 si cabe y en UTF-16 si no;
+  - Go y Rust la dejan en UTF-8 e indexan por bytes; los caracteres, con un iterador;
+- **buscar:** búsqueda directa para agujas cortas, y Two-Way o Boyer-Moore para las largas (la glibc);
+- **recordar:** Java y MicroPython guardan el hash en la cadena; MicroPython y Lua internan las cadenas cortas o los
+  nombres, y entonces comparar es mirar si son la misma;
+- **reservar:** casi todos los asignadores separan los huecos por tamaños; el nuestro tiene una sola lista.
+
+**MicroPython, el más cercano** (Eduardo los compara en sus Picos), tomó la misma decisión que nosotros: UTF-8 y el
+índice O(n), recorriendo desde el principio. Se discutió en python-dev en 2014, con Guido en contra porque mucho de
+Python va por índices. Pero hace tres cosas que nosotros no:
+- calcula el hash al crear la cadena y lo guarda;
+- puede validar el UTF-8 al crear la cadena (una opción de compilación, de 110 a 170 bytes de código): es lo que
+  propone `#711`;
+- interna los nombres y los literales (sus «qstr»).
+
+Fuentes de lo de MicroPython:
+- `py/unicode.c` y `py/objstrunicode.c`
+  ([unicode.c](https://toscode.mulanos.cn/mirrors/micropython/blob/master/py/unicode.c),
+  [objstrunicode.c](https://toscode.mulanos.cn/mirrors/micropython/blob/master/py/objstrunicode.c));
+- el parche de la validación
+  ([68c28174](https://git.flow3r.garden/card10/micropython/-/commit/68c28174d0e0ec3f6b1461aea3a0b6a1b84610bb));
+- la discusión de 2014 ([python-dev](https://www.python.org/pipermail/python-dev/2014-June/134819.html)).
+
+**En los micros, ¿algoritmos de la HAL? No.** Las HAL de los fabricantes (pico-sdk, ESP-IDF, la de ST) no traen
+algoritmos de cadenas, y nuestra HAL BP es de periféricos. Las cadenas y el GC son el mismo C en todas las placas
+(`bpgenvm-c/src`). Lo que cambia de una placa a otra es lo de debajo:
+
+| | compilador | optimización de nuestro código | libc | `memcpy` y `memset` |
+|---|---|---|---|---|
+| PC | gcc (MinGW) | `-O2` | la de MinGW | los de MinGW |
+| RP2350 (Pico 2, Metro) | arm-none-eabi gcc 15.2 | **`-Os`** (el pico-sdk, `-O3`) | newlib completa | los de newlib, por palabras (ensamblador) |
+| S3 | xtensa gcc 15.2 (IDF 6.1) | `-Os` | picolibc | los dos, de la ROM del chip |
+| C3, C5, C6, P4 | riscv32 gcc 15.2 (IDF 6.1) | `-Os` | picolibc | `memset` de la ROM; `memcpy` del IDF, en la RAM interna |
+| STM32 (DK2, Nucleo) | arm gcc 14.3 (CubeIDE) | `-Os` | newlib-nano | **byte a byte**: `memcpy`, `memset`, `memmove` y `memcmp` |
+
+Tres cosas que salen de aquí:
+- **Un mismo `memcpy` es código distinto en cada placa**: ensamblador por palabras (RP2350), la ROM (S3), C del IDF
+  (RISC-V), o un bucle de un byte (STM32, comprobado en su desensamblado: `ldrb`/`strb`). Copiar una cadena cuesta
+  distinto por eso, no por nuestro código.
+- **En todas las placas nuestro código va optimizado para TAMAÑO (`-Os`), y en el PC para velocidad (`-O2`).**
+  - En las ESP32 está decidido en sus `sdkconfig.defaults` («Optimizar a tamaño»).
+  - En la Pico es una línea del bring-up («Flags útiles para diagnóstico durante el bring-up») que tapa el `-O3` de
+    Release: comprobado en `build.ninja`, `interp.c` se compila con `-O3 … -Os` y gana el último.
+  - Cuánto cuesta en el intérprete, sin medir. Puede ser parte de por qué la P4, a 360 MHz, sólo gana un 10–30 % en
+    lo que es bytecode.
+- **Lo que viene de la libc hereda su comportamiento**, y el de C y el de Java no es el mismo. `parseInt` y
+  `parseFloat` lo enseñan (`#716`). Y `strtod` es además distinto en MinGW, en newlib y en picolibc (sin comprobar).
+
+Existen aceleradores (el DMA en todas, y las instrucciones vectoriales de la S3 y la P4), pero no se usan para
+cadenas: para una copia pequeña cuesta más prepararlos que copiar.
+
 ### Lo que se puede mejorar, por la norma de Eduardo (sin empezar nada)
 
 **2º, el algoritmo** (lo que cambia cómo crece el coste):
@@ -2029,6 +2113,8 @@ en la PSRAM.
 - **`#713`:** `<`, `>`, `<=` y `>=` entre strings compilan, pero descuadran la pila y dan basura.
 - **`#714`:** `move` escribe dentro de un string.
 - **`#715`:** el GC rehace la lista de huecos con coste cuadrático (arriba). Sólo análisis.
+- **`#716`:** `parseInt` y `parseFloat` no dan lo mismo en las dos VMs con un texto que no es un número limpio, y
+  ninguna hace lo que dice `BUILTINS.md` (un error atrapable).
 - **Menores, para el `D1`:**
   - `HEAP_LAYOUT.md` está desfasado en cuatro sitios: la tabla de tipos de §2.2, el bloque libre de §2.4, la
     concatenación de §6 y el barrido de §7;
@@ -2048,6 +2134,9 @@ en la PSRAM.
 4. **Qué algoritmo va primero**, de la tabla de arriba.
 5. **Recordar «es ASCII».** Toca la cabecera del heap en las dos VMs (usaría los bits libres de la etiqueta), y no llega
    a los literales.
+6. **`parseInt` y `parseFloat` con texto que no es un número** (`#716`): qué deben hacer en las dos VMs.
+7. **La optimización de nuestro código en placa** (`-Os` en todas): si se mide `-O2` frente a `-Os` en el intérprete.
+   Es implementación, el 3er escalón de la norma.
 
 ### Un orden posible (la norma: analizar, algoritmo, implementación)
 
