@@ -703,7 +703,11 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><td>Potencia</td><td><code>^</code> — <code>2 ^ 10</code> = 1024. <code>int^int</code> exacto (entero);
       <code>float^int</code> por cuadrados; <code>float^float</code> por exp·ln (float)</td></tr>
   <tr><td>Bit a bit (sólo integer)</td><td><code>&amp; | xor shl shr</code> (no hay NOT de bits: <code>x xor -1</code>; el <code>~</code> es del destructor, <a href="#destructor">§9.4b</a>)</td></tr>
-  <tr><td>Comparación</td><td><code>== != &lt; &lt;= &gt; &gt;=</code></td></tr>
+  <tr><td>Comparación</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>. Entre dos cadenas comparan el
+      <strong>texto</strong>: <code>==</code> y <code>!=</code>, el contenido; <code>&lt; &lt;= &gt; &gt;=</code>, el orden
+      alfabético por punto de código (el de los bytes de UTF-8: <code>"Z" &lt; "a"</code>, <code>"ab" &lt; "abc"</code>,
+      <code>"z" &lt; "ñ"</code>), como <code>Str.compare</code>. Una cadena sin valor ordena como <code>""</code>, pero
+      con <code>==</code> sólo es igual a otra sin valor</td></tr>
   <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
   <tr><td>Asignación</td><td><code>:= += -=</code></td></tr>
   <tr><td>Acceso</td><td><code>.</code> (member) <code>[]</code> (index) <code>()</code> (call)</td></tr>

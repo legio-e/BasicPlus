@@ -1662,6 +1662,13 @@ module Core
   function __uartRelease(bus: integer, tx: integer, rx: integer)   // Uart.releasePort
     inline CALL_BUILTIN 281
   end __uartRelease
+  // V8/H5 (21-oct) — comparar dos cadenas POR BYTES, en C (un memcmp): -1/0/1, y si una es prefijo de la otra, la más
+  // corta antes. En UTF-8 es el orden de los caracteres. null es "". Lo usan Str.compare (con su propio inline), los
+  // <, <=, >, >= entre cadenas (#713) y el contenido de == (el __strequals que escribe el compilador). Sin `public`: la
+  // interfaz de Core no cambia (V8_IDEAS §E5, «Comparar por bytes»).
+  function __strCompare(a: string, b: string): integer   // Str.compare; <, <=, >, >= y == entre cadenas
+    inline CALL_BUILTIN 282
+  end __strCompare
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

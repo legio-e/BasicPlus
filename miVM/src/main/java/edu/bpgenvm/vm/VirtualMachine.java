@@ -5503,6 +5503,24 @@ public class VirtualMachine {
                 pushTc(tc, s.contains(sub) ? 1 : 0);
                 break;
             }
+            case STR_COMPARE: {
+                // V8/H5 (21-oct) — COMPARAR DOS CADENAS POR BYTES (sin signo, 0..255): -1/0/1, y si una es prefijo de la
+                // otra, la más corta antes. En UTF-8 es el orden de los caracteres (V8_IDEAS §E5, «Comparar por bytes»).
+                // null es "", como en Str.compare. Siempre los BYTES, sin pasar por un String de Java (que cambiaría el
+                // UTF-8 mal formado, #711). Espejo del BUILTIN_STR_COMPARE de la VM-C (memcmp). Lo usan Str.compare, los
+                // <, <=, >, >= entre cadenas (#713) y el contenido de == (__strequals).
+                long bref = popTcRef(tc);
+                long aref = popTcRef(tc);
+                int na = strBytes(aref), nb = strBytes(bref);
+                int n = Math.min(na, nb), r = 0;
+                if (n > 0) {
+                    int pa = refDeref(aref) + 4, pb = refDeref(bref) + 4;
+                    for (int i = 0; i < n && r == 0; i++) r = (memory[pa + i] & 0xFF) - (memory[pb + i] & 0xFF);
+                }
+                if (r == 0) r = Integer.compare(na, nb);
+                pushTc(tc, Integer.signum(r));
+                break;
+            }
             case CHAR_AT: {
                 int i = popTc(tc);
                 long ref = popTcRef(tc);

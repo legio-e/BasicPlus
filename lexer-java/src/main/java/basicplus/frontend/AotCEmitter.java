@@ -2549,6 +2549,22 @@ public final class AotCEmitter {
                 if (neg) w.print(")");
                 return;
             }
+            /* V8/H5 (#713, 21-oct) — <, <=, >, >= entre cadenas comparan el TEXTO, como el intérprete: el MISMO builtin
+             * (__strCompare, un memcmp por bytes; null es "") por el despachador común (call_builtin, P2b.2), sin tocar la
+             * tabla de helpers ni la ABI del .mdn, y su -1/0/1 se compara con 0. Antes salía un `<` de C entre los dos
+             * handles. El semántico sólo deja pasar dos cadenas. */
+            if (stringOp && ("<".equals(b.op) || "<=".equals(b.op) || ">".equals(b.op) || ">=".equals(b.op))) {
+                int t = ++tempBuiltin;
+                String a = "__bpvm_a" + t, r = "__bpvm_r" + t;
+                w.print("(({ int64_t " + a + "[2]; " + a + "[0] = (int64_t) (uint32_t) (");
+                emitExpr(b.left);
+                w.print("); " + a + "[1] = (int64_t) (uint32_t) (");
+                emitExpr(b.right);
+                w.print("); int64_t " + r + " = vm->aot_helpers->call_builtin(vm, "
+                        + edu.bpgenvm.bytecode.Builtin.STR_COMPARE.id + ", \"rr\", " + a + ", 'i'); (int32_t) " + r
+                        + "; }) " + b.op + " 0)");
+                return;
+            }
             /* #381 — DIVISIÓN Y MÓDULO DE 64 BITS: por helper, no con `/`.
              *
              * Escribir `a / b` con dos int64_t hace que gcc emita una llamada a

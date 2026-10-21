@@ -552,6 +552,24 @@ vuelven al reset (#667)`, y lo mismo con los contadores, las tiras, las UART y l
 red calla. Las pruebas: `bpgenvm-c/samples/SueltaRecursos.bp` (la red de paridad) y `make test-suelta` (backends falsos
 que cuentan: con objetos lo sueltan sus destructores; sin objetos, la red).
 
+## 282 — `__strCompare(a: string, b: string)` → integer — comparar dos cadenas  *(V8/H5, `#713`, 21-oct)*
+
+Compara dos cadenas **por bytes**, sin signo (0..255), y devuelve -1, 0 o 1. Si una es prefijo de la otra, la más
+corta va antes. En UTF-8 ese es el orden de los caracteres (sus puntos de código): `V8_IDEAS` §E5, «Comparar por
+bytes». Una cadena **sin valor** cuenta como la vacía, como en `Str.compare`. Acepta las dos formas de una cadena (un
+handle del heap o un literal crudo). En la VM-C es un `memcmp`; en la VM-Java, el mismo bucle sobre los bytes, sin
+pasar por un `String` de Java (que cambiaría el UTF-8 mal formado, `#711`).
+
+No lo escribe nadie a mano. En `Core` va sin `public`, para no cambiar su interfaz. Lo usan:
+- `Str.compare`, con su propio `inline CALL_BUILTIN 282`;
+- `<`, `<=`, `>` y `>=` entre dos cadenas: el compilador compara su resultado con 0 (`#713`). En una native, el AOT llama
+  al mismo builtin por `call_builtin`, sin tocar la ABI;
+- el contenido de `==` y `!=`: el `__strequals` que escribe el compilador en cada módulo. Sus reglas no cambian: una
+  cadena sin valor sólo es igual a otra sin valor; con las dos con valor y la misma longitud, compara con este builtin.
+
+Antes, `==` comparaba byte a byte en bytecode (17 instrucciones por byte), y `<` entre cadenas descuadraba la pila. Las
+pruebas: `bpgenvm-c/samples/StrOrden.bp` (la red de paridad) y `make test-aotcompara` (el AOT contra el intérprete).
+
 ---
 
 ## Los que no tienen fila aquí  *(el mapa por rangos)*

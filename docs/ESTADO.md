@@ -134,6 +134,19 @@
 >   antes de entrar: compilar `Str.bp` suelto lo deja con la generación 0, y `Collections` (compilada contra la 7) no
 >   carga; se rehace con el proyecto de la stdlib. Subida a `/lib` de la Pico 2, la Metro y la P4 (ninguna imagen la
 >   lleva embebida).
+> - **comparar EN C** (Eduardo: *«Por supuesto, hazlo en C y a ver que tal»*; luego *«el built es suficiente»* y, a
+>   comparar de verdad `<`/`>` entre cadenas, *«Si»*): el builtin 282, `__strCompare` (un `memcmp`; en `Core` sin
+>   `public`, y su interfaz no cambia). Lo usan `Str.compare`, `<`/`<=`/`>`/`>=` entre cadenas (cierra `#713`, también
+>   en las natives, por `call_builtin`) y el contenido de `==` (el `__strequals` del compilador, con sus reglas).
+>   `StrOrden` en el corpus (18 636 comprobaciones, 0 malas) y `make test-aotcompara` (490, el AOT como el intérprete).
+>   Una trampa: el proyecto de la stdlib compila por fechas, y tras cambiar el compilador hay que rehacerlo desde cero
+>   (cambian Gui, IO, Json, Machine, Rtc y Str; IO, Machine y Rtc van embebidos: imágenes nuevas). **Lo que obliga:**
+>   lo compilado ahora llama al 282 en cada `==` de cadenas; una placa con imagen anterior no lo tiene. La red VERDE
+>   (paridad 155, pruebas de C 103/103); la Pico 2, la Metro y la P4, grabadas, con `StrOrden` igual que en el PC.
+>   Medido: `==` de 2 KB iguales, de 22,8 ms a 68 µs en la Pico 2; `Str.compare` de 4000 caracteres con acentos ×5, de
+>   348 a 1 ms; el `Map` de 2000 claves en desorden en la P4, de 3,7 a 1,5 s. Un aviso: en la Pico 2, `StrCursorBench`
+>   se quedó sin heap en su último `Map`; bisecado, no es este cambio (el banco va al límite de los 219 KB, y unos
+>   bytes al principio del heap cambian la fragmentación: `#715`). El jar del IDE, rehecho (estaba cerrado).
 > - **¿un CRC para descartar la igualdad?** (Eduardo: *«Igual con utilizar el comparador nos vale»*): sí, nos vale el
 >   comparador. Si son distintas, para en el primer byte distinto (y `==` ni mira los bytes si las longitudes no
 >   coinciden); un CRC pide recorrerlas enteras, no prueba la igualdad y no sirve para ordenar. Lo que pesa es que el
@@ -166,7 +179,10 @@
 >   las natives (el AOT) usan también el del hilo: hoy cada llamada usa uno propio;
 > - **comparar en C** (la forma 2 de «Comparar por bytes»): es lo que queda en el `Map` (unos 2,6 ms por `put` con 1000
 >   claves en la Pico 2, casi todo comparaciones en bytecode);
-> - **en `/lib` de la Pico 2, la Metro y la P4 están ya la `Str` y la `Collections` nuevas** (subidas con el wire);
+> - **en `/lib` de la Pico 2, la Metro y la P4 están ya la `Str`, la `Json`, la `Gui` y la `Collections` nuevas**
+>   (subidas con el wire), con la imagen del builtin 282;
+> - **las demás placas (S3, C3, C5, C6, Nucleo y DK2) necesitan imagen nueva** antes de recibir la stdlib o programas
+>   compilados hoy: llaman al builtin 282 en cada `==` de cadenas. Sus imágenes, sin compilar todavía;
 > - **la tanda del F1 en placa**, aplazada por Eduardo hasta acabar las mejoras;
 > - **sin explicar**, de los dos algoritmos: `intToString` y otras tres, más lentas sólo en las RP2350. Pide un test de
 >   desplazamiento;

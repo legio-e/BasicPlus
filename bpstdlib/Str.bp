@@ -128,12 +128,19 @@ module Str
   // compare y lastIndexOf dan lo mismo que comparando caracteres, en una
   // pasada y sin contarlos. Antes iban por charCodeAt de DOS cadenas a la
   // vez, y con acentos eso era L² (V8_IDEAS §E5, «Comparar por bytes»).
+  // compare, además, en C: el builtin __strCompare (un memcmp).
   // -------------------------------------------------------------
 
   // un byte de la cadena, 0..255 (ALOAD_U8), sin contar caracteres
   function byteAt(s: string, i: integer): integer
     inline ALOAD_U8
   end byteAt
+
+  // comparar por bytes EN C: el builtin __strCompare de Core (un memcmp en las dos VMs; Eduardo: «hazlo en C y a ver
+  // que tal»). -1/0/1, null es "". El mismo número que en Core: Core no lo hace público para no cambiar su interfaz.
+  function comparaBytes(a: string, b: string): integer
+    inline CALL_BUILTIN 282
+  end comparaBytes
 
   // cuántos caracteres hay antes del byte `hasta`: los bytes que no son de
   // continuación (10xxxxxx), como cuenta la VM
@@ -185,33 +192,9 @@ module Str
   // -------------------------------------------------------------
   // compare: orden lexicográfico por codepoint. -1 / 0 / 1
   // -------------------------------------------------------------
-  // Es el comparador por defecto del Map (H4.A). Por bytes: el mismo orden.
+  // Es el comparador por defecto del Map (H4.A). Por bytes, en C: el mismo orden.
   public function compare(a: string, b: string): integer
-    var la: integer := __bytesDe(a)
-    var lb: integer := __bytesDe(b)
-    var n: integer := la
-    if lb < n then
-      n := lb
-    endif
-    var i: integer := 0
-    while i < n do
-      var ca: integer := byteAt(a, i)
-      var cb: integer := byteAt(b, i)
-      if ca < cb then
-        return -1
-      endif
-      if ca > cb then
-        return 1
-      endif
-      i := i + 1
-    endwh
-    if la < lb then
-      return -1
-    endif
-    if la > lb then
-      return 1
-    endif
-    return 0
+    return comparaBytes(a, b)
   end compare
 
   // -------------------------------------------------------------

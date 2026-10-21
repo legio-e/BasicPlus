@@ -2828,6 +2828,86 @@ desorden, antes → ahora, y entre paréntesis en orden:
   un `Str.compare` en bytecode (unos 15 µs por byte) tras dos llamadas a métodos. Es el terreno de la forma 2 de
   «Comparar por bytes», el `memcmp` en C.
 
+### Comparar en C: el builtin 282, y `<`/`>` entre cadenas (21-oct)
+
+Eduardo: *«Por supuesto, hazlo en C y a ver que tal.»* Por el camino, tres preguntas suyas:
+- **¿Hay ya un opcode que compare cadenas?** No. `EQ`/`NEQ` comparan números o referencias. `==` entre cadenas es
+  `__strequals`, una función que el compilador escribe en bytecode en cada módulo; `Str.compare` era BP; en C sólo
+  estaban `startsWith`/`endsWith` (sí o no) y la igualdad del AOT.
+- **¿Y `<` y `>` para cadenas?** Compilaban, pero daban basura: `#713`. Eduardo: comparar el texto de verdad.
+- **¿Opcode o builtin?** Desde BP es igual: los dos se usan con una función `inline`. Un opcode cambia el juego de
+  instrucciones, y en el AOT pediría una función más en la tabla de helpers (sube la ABI del `.mdn`). Se ahorraría unos
+  3 µs por comparación en la Pico 2. Eduardo: *«el built es suficiente, no hay problema»*.
+
+**Lo hecho:**
+- **el builtin 282, `__strCompare(a, b)`:** un `memcmp` por bytes en la VM-C y el mismo bucle sobre los bytes en la
+  VM-Java (sin `String` de Java, que cambiaría el UTF-8 mal formado). Devuelve -1/0/1, y una cadena sin valor cuenta
+  como `""`. Va en `Core` sin `public`, como otros del sistema: la interfaz de Core no cambia (`Core.mod` y
+  `Stdlib.mod` salen idénticos);
+- **`Str.compare`** lo llama con su propio `inline CALL_BUILTIN 282`;
+- **`<`, `<=`, `>` y `>=` entre cadenas** comparan su resultado con 0 (`#713`, cerrada). En una native, el AOT llama al
+  mismo builtin por el despachador común (`call_builtin`), sin tocar la ABI;
+- **`==` y `!=`:** el `__strequals` del compilador conserva sus reglas (null sólo es igual a null; si las longitudes no
+  coinciden, distintas sin leer bytes) y compara el contenido con el builtin, en vez de su bucle de bytecode.
+
+**Una trampa del build:** el proyecto de la stdlib compila por fechas. Tras cambiar el COMPILADOR, `out/` daba por
+buenos los `.mod` de antes (salía distinto sólo `Str.mod`). Rehecho desde cero, cambian los seis que usan `==` entre
+cadenas: Gui, IO, Json, Machine, Rtc y Str. IO, Machine y Rtc van embebidos en las imágenes: hay que rehacerlas.
+
+**Lo que obliga:** todo lo compilado con el compilador nuevo que compare cadenas con `==` llama al builtin 282. Una
+placa con una imagen anterior no lo tiene, y fallaría al llegar ahí. Hay que grabar las imágenes antes de mandarles
+la stdlib o programas nuevos.
+
+**Verificado:**
+- **`bpgenvm-c/samples/StrOrden.bp`**, nuevo y en el corpus: los seis operadores contra una referencia carácter a
+  carácter (`charCodeAt`), sobre pares casi iguales con caracteres de 1 a 4 bytes, literales y del heap, vacías y sin
+  valor. Resultado: 18 636 comprobaciones, 0 malas, igual en las dos VMs. Incluye la línea de `#713` (`a < b: true`,
+  sin perder el texto de delante) y un `switch` de cadenas;
+- **`make test-aotcompara`**, nuevo y en la red: seis natives con los seis operadores, 490 comprobaciones. El AOT da lo
+  mismo que el intérprete, y los cuatro relacionales salen por el builtin 282.
+- **`compat.sh check` VERDE:** paridad 155 (MOD9, MOD8 y dos workers), cápsula 59, pruebas de C 103/103, sombra 15/15,
+  estrés, `packs-abi` y la stdlib embebida.
+- **En placa:** la Pico 2, la Metro y la P4, grabadas con la imagen nueva (en la P4 sólo la app: las páginas no
+  cambian, y Gui y SQLite siguen vivos). `StrOrden` da en las tres lo mismo que en el PC.
+
+**Medido.** `==` de dos cadenas iguales (el censo, `StrCenso`; antes, el de esta mañana):
+
+| | 16 B | 2048 B |
+|---|---|---|
+| Pico 2 | 201 → **28 µs** | 22 763 → **68 µs** |
+| Metro (PSRAM) | 234 → **31 µs** | 23 462 → **170 µs** |
+| P4 | 169 → **21 µs** | 19 370 → **31 µs** |
+| PC | 0,86 → **0,11 µs** | 91 → **0,16 µs** |
+
+Distintas en el primer byte o en la longitud, igual que antes (17–27 µs en la Pico 2): ahí nunca se entraba al bucle.
+
+`Str.compare` de dos cadenas de 4000 caracteres con acentos, cinco veces (`StrCursorBench`): carácter a carácter →
+por bytes en BP → en C:
+
+| Pico 2 | Metro | P4 |
+|---|---|---|
+| 7348 → 348 → **1 ms** | 8480 → 360 → **2 ms** | 2750 → 285 → **<1 ms** |
+
+Y el `Map`, `put` de claves en desorden (`MapOrden`): el original → con `move` → con la comparación en C:
+
+| | Pico 2, 1000 claves | Metro, 2000 | P4, 2000 |
+|---|---|---|---|
+| en desorden | 17 710 → 2603 → **1370 ms** | 72 900 → 9301 → **6348** | 56 722 → 3725 → **1511** |
+| en orden | 2622 → **1330** | 6289 → **2918** | 3664 → **1341** |
+
+- En la P4, 2000 claves en desorden van ya **37 veces** más deprisa que esta mañana.
+- En la Metro, lo que separa el desorden del orden es el `memmove` en la PSRAM.
+- Con claves con acentos (`StrCursorBench`, 200 claves): Metro 1111 → 292 ms, P4 778 → 114.
+
+**Un aviso de memoria que no es de este cambio.** En la Pico 2, `StrCursorBench` se quedó sin heap al llegar al `Map`
+de 200 claves, que esta tarde sí cabía. Bisecado en la placa:
+- con la `Json` recompilada (cuyo `__strequals` es 32 B más corto), falla; con la de antes, pasa;
+- en el PC, barriendo la memoria de la VM, fallan y pasan las DOS versiones alternándose (con 440 000 B, la nueva llega
+  y la vieja no; con 400 000, al revés).
+
+Es el banco, que con tamaños de placa va al límite de los 219 KB de la Pico 2: unos bytes de más o de menos al
+principio del heap cambian cómo queda fragmentado. Es terreno del GC (`#715`).
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

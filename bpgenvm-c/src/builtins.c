@@ -2711,6 +2711,25 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         return BPVM_OK;
     }
 
+    case BUILTIN_STR_COMPARE: {
+        /* V8/H5 (21-oct) — COMPARAR DOS CADENAS POR BYTES, en C (Eduardo: «hazlo en C y a ver que tal»). memcmp compara
+         * los bytes sin signo (0..255) y, si una es prefijo de la otra, la más corta va antes: -1/0/1. En UTF-8 ese es el
+         * orden de los caracteres (V8_IDEAS §E5, «Comparar por bytes»). null es "", como en Str.compare. Lo usan
+         * Str.compare, los <, <=, >, >= entre cadenas (#713) y el contenido de == (__strequals, que escribe el
+         * compilador). Las dos formas de una cadena —handle del heap o literal crudo— las resuelve bpref_arr_*. Espejo
+         * de STR_COMPARE de miVM. */
+        bpref_t b = peek_ref(vm, tc, 0);
+        bpref_t a = peek_ref(vm, tc, 1);
+        uint32_t na = bpref_is_null(a) ? 0 : bpref_arr_len(vm, a);
+        uint32_t nb = bpref_is_null(b) ? 0 : bpref_arr_len(vm, b);
+        uint32_t n = (na < nb) ? na : nb;
+        int r = (n > 0u) ? memcmp(bpref_arr_elem(vm, a, 0, 1), bpref_arr_elem(vm, b, 0, 1), n) : 0;
+        if (r == 0) r = (na < nb) ? -1 : (na > nb) ? 1 : 0;
+        tc->sp -= 2 * BPVM_REF_SIZE;
+        push_i32(vm, tc, (r < 0) ? -1 : (r > 0) ? 1 : 0);
+        return BPVM_OK;
+    }
+
     case BUILTIN_REPLACE: {
         /* replace(s, target, rep): literal, TODAS las ocurrencias.
          * Target vacío = el corner de Java: "ab" -> "-a-b-", o sea el

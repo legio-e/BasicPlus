@@ -5035,6 +5035,28 @@ public final class MivmEmitter {
             return;
         }
 
+        // V8/H5 (#713, 21-oct) — <, <=, >, >= entre cadenas comparan el TEXTO (Eduardo: «Si», comparar de verdad): el
+        // builtin __strCompare (un memcmp en C, en las dos VMs) da -1/0/1 por bytes —en UTF-8, el orden de los
+        // caracteres; null es ""— y se compara con 0. Antes caían en el LT/LE/GT/GE de enteros de abajo, que sacaba 4
+        // bytes de la pila donde cada referencia ocupa 8: basura en silencio, distinta en cada VM. El semántico sólo
+        // los deja pasar con DOS cadenas (o dos números).
+        if (stringOp && ("<".equals(b.op) || "<=".equals(b.op) || ">".equals(b.op) || ">=".equals(b.op))) {
+            emitExpr(b.left);
+            coerceToString(tl);
+            emitExpr(b.right);
+            coerceToString(tr);
+            w.emit(OpCode.CALL_BUILTIN);
+            w.emitShort((short) Builtin.STR_COMPARE.id);
+            emitInt(0);
+            switch (b.op) {
+                case "<":  w.emit(OpCode.LT); break;
+                case "<=": w.emit(OpCode.LE); break;
+                case ">":  w.emit(OpCode.GT); break;
+                default:   w.emit(OpCode.GE); break;
+            }
+            return;
+        }
+
         // -------- AND / OR con short-circuit --------
         // Los lógicos `and` y `or` evalúan en cortocircuito: si el LHS ya
         // determina el resultado, el RHS NO se evalúa. Esto importa
@@ -6767,7 +6789,7 @@ public final class MivmEmitter {
 
     /**
      * Helper {@code __strequals(a, b): integer}: compara contenido de dos
-     * strings BP (arrays i32 de code points). Devuelve 1 si son iguales o
+     * strings BP (UTF-8: arrays de bytes). Devuelve 1 si son iguales o
      * ambos null, 0 si difieren. Maneja correctamente referencias null y
      * la trivialidad ref-ref.
      *
@@ -6776,15 +6798,17 @@ public final class MivmEmitter {
      *   if (a == 0 || b == 0) return 0
      *   if (a == b) return 1   // misma referencia
      *   if (len(a) != len(b)) return 0
-     *   for i = 0..len(a)-1: if a[i] != b[i] return 0
-     *   return 1
+     *   return __strCompare(a, b) == 0
+     *
+     * V8/H5 (21-oct) — el contenido, en C: el builtin __strCompare (un memcmp, en las dos VMs) en vez del bucle de
+     * bytecode que comparaba byte a byte (17 instrucciones por byte; Eduardo: «hazlo en C»). Las reglas de `==` no
+     * cambian: null sólo es igual a null (el builtin trata null como "", por eso se mira antes).
      */
     private void emitStrequalsBody() throws IOException {
         w.addFunction("__strequals", false);
         declareParamRef("a");   // H1.8: string = ref, por el carril de ref (era un 8 a mano; #9 vivió aquí)
         declareParamRef("b");   // H1.8: idem
         w.declareLocal("la");
-        w.declareLocal("i");
 
         // Caso a == 0
         int aNotZero = w.newLabel();
@@ -6821,29 +6845,12 @@ public final class MivmEmitter {
         w.emitGetParam("b"); w.emit(OpCode.ALEN);
         w.emit(OpCode.EQ);
         w.emitJumpIfFalse(lenEqual);
-            // las longitudes son iguales → continuar al loop
-            // i = 0
-            emitInt(0); w.emitSetLocal("i");
-            int loopTop = w.newLabel();
-            int loopEnd = w.newLabel();
-            w.declareLabel(loopTop);
-            w.emitGetLocal("i"); w.emitGetLocal("la"); w.emit(OpCode.LT);
-            w.emitJumpIfFalse(loopEnd);
-                // a[i] vs b[i]
-                int charsEqual = w.newLabel();
-                w.emitGetParam("a"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_U8);
-                w.emitGetParam("b"); w.emitGetLocal("i"); w.emit(OpCode.ALOAD_U8);
-                w.emit(OpCode.EQ);
-                w.emitJumpIfFalse(charsEqual);
-                    // i++
-                    w.emitGetLocal("i"); emitInt(1); w.emit(OpCode.ADD); w.emitSetLocal("i");
-                    w.emitJump(loopTop);
-                w.declareLabel(charsEqual);
-                    // chars difieren → return 0
-                    emitInt(0); w.emitRet();
-            w.declareLabel(loopEnd);
-            // recorrido completo → todos iguales → return 1
-            emitInt(1); w.emitRet();
+            // las longitudes son iguales → el contenido, en C: __strCompare(a, b) == 0
+            w.emitGetParam("a"); w.emitGetParam("b");
+            w.emit(OpCode.CALL_BUILTIN);
+            w.emitShort((short) Builtin.STR_COMPARE.id);
+            emitInt(0); w.emit(OpCode.EQ);
+            w.emitRet();
         w.declareLabel(lenEqual);
         // longitudes distintas → return 0
         emitInt(0); w.emitRet();

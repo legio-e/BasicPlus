@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1031,6 +1031,30 @@ test-aotbuiltin: $(LIBOBJ)
 	 if ! cmp -s build/aotbuiltin.int build/aotbuiltin.aot; then diff build/aotbuiltin.int build/aotbuiltin.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 8 ]; then cat build/aotbuiltin.aot; echo "  ROJO: $$n de 8 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 8/8 con el AOT, igual que interpretado"
+
+# V8/H5 (#713, 21-oct) — <, <=, >, >=, == y != entre cadenas DENTRO de una native: los relacionales llaman al builtin
+# __strCompare (el 282, un memcmp) por el despachador común, call_builtin, sin tocar la ABI; == y !=, por string_eq. El
+# MISMO .mod con el AOT y sin él: la misma salida, 490 comprobaciones contra una referencia interpretada, ningún FALLO.
+test-aotcompara: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatCompara)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatCompara,build/aotcompara)
+	@c=build/aotcompara/aot_NatCompara.c; \
+	 n=$$(grep -c "bpvm_aot_register_by_name" $$c); \
+	 if [ "$$n" -ne 6 ]; then cat build/aotcompara/aot.log; echo "  ROJO: el AOT tradujo $$n de las 6 natives de NatCompara"; exit 1; fi; \
+	 r=$$(grep -o "call_builtin(vm, 282, " $$c | wc -l); \
+	 if [ "$$r" -ne 4 ]; then echo "  ROJO: los 4 relacionales tenian que llamar al builtin 282 (salen $$r)"; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_aotcompara.c build/aotcompara/aot_NatCompara.c $(LIBOBJ) \
+	  -o build/test_aotcompara.exe $(LDFLAGS)
+	@echo "--- <, <=, >, >=, == y != entre cadenas en una native (esperado: AOT == interpretado, 490/490, sin FALLO) ---"
+	@timeout 60 ./build/test_aotcompara.exe samples/NatCompara.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotcompara.aot; \
+	 timeout 60 ./build/test_aotcompara.exe samples/NatCompara.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotcompara.int; \
+	 n=$$(grep -c '^ok ' build/aotcompara.aot); \
+	 if grep -q '^FALLO' build/aotcompara.aot build/aotcompara.int; then grep -h '^FALLO' build/aotcompara.aot build/aotcompara.int | head; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotcompara.int build/aotcompara.aot; then diff build/aotcompara.int build/aotcompara.aot | head; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 490 ]; then tail -3 build/aotcompara.aot; echo "  ROJO: $$n de 490 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 490/490 con el AOT, igual que interpretado"
 
 # V7/H5 (P2b.3, 27-sep) — el .mdn v3: la marca DIRECTA (bit alto de thunk_offset) llega al registro de natives
 # y no se cuela en la dirección del thunk; un v2 las manda todas al ejecutor; un v4 se rechaza.

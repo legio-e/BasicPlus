@@ -287,7 +287,8 @@ enum {
     BUILTIN_PULSE_RELEASE                = 279,   /* __pulseRelease(counterId: integer, pin: integer) */
     BUILTIN_NP_RELEASE                   = 280,   /* __npRelease(pin: integer) */
     BUILTIN_UART_RELEASE                 = 281,   /* __uartRelease(bus: integer, tx: integer, rx: integer) */
-    BUILTIN__CUANTOS = 282
+    BUILTIN_STR_COMPARE                  = 282,   /* __strCompare(a: string, b: string): integer */
+    BUILTIN__CUANTOS = 283
 };
 
 #endif
