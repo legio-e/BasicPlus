@@ -3045,6 +3045,20 @@ pico-sdk):
 Lo más sencillo de probar ni siquiera es el DMA: es que `memcpy`/`memset` de bloques grandes de la PSRAM usen el alias
 sin caché, con el mantenimiento de la caché alrededor. Se mediría junto con la forma a).
 
+**¿Buscar en la PSRAM, o copiar primero a la SRAM y buscar allí? (Eduardo, 21-oct, un `indexOf` de más de 1–2 KB)**
+- **Hoy, buscar directamente.** Medido en la Metro (el censo de la mañana, con `psram=0` y `psram=1`): `indexOf` sin
+  encontrar en 2 KB, 370 µs con la VM en la SRAM y 391 en la PSRAM (+6 %). La búsqueda misma cuesta ~180 ns por byte
+  (`bp_find_bytes`: un `memcmp` en cada posición), más del doble de lo que añade traer el byte de la PSRAM (~70 ns,
+  medido con 16 KB en `PsramFases`).
+- **Copiar primero no puede ganar así:** para copiar hay que leer cada byte de la PSRAM igual que para buscar, y luego
+  la búsqueda cuesta lo mismo. Estimado para 16 KB: directo, ~4,1 ms; copiar (~1,3) y buscar en la SRAM (~2,9), ~4,2.
+- **Cambiaría con una búsqueda rápida** (la biblioteca de C: buscar el primer byte de 4 en 4, unos 10 ns por byte).
+  Entonces mandaría la memoria, y copiar primero sólo ganaría:
+  - si la copia lee la PSRAM más deprisa que la caché, por ejemplo el DMA en ráfaga. Está por medir;
+  - si se busca varias veces en la misma cadena: se copia una vez;
+  - y a su favor, copiar con el DMA sin caché no echaría al intérprete de la caché.
+- **Lo que gana ya, en la SRAM y en la PSRAM:** el algoritmo de búsqueda (de ~180 a unos 10–20 ns por byte).
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
