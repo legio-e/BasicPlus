@@ -147,6 +147,13 @@
 >   348 a 1 ms; el `Map` de 2000 claves en desorden en la P4, de 3,7 a 1,5 s. Un aviso: en la Pico 2, `StrCursorBench`
 >   se quedó sin heap en su último `Map`; bisecado, no es este cambio (el banco va al límite de los 219 KB, y unos
 >   bytes al principio del heap cambian la fragmentación: `#715`). El jar del IDE, rehecho (estaba cerrado).
+> - **la PSRAM, analizada por piezas** (Eduardo: *«Miremos la PSRAM. Como siempre empezamos analizando»*; §E5, «La
+>   PSRAM, medida por piezas»): `samples/benchmarks/PsramFases.bp` en la Pico 2, la P4 y la Metro con `psram=0` y
+>   `psram=1` (devuelta a `psram=1`). En la Metro manda la caché del XIP, de 16 KB y compartida con el código: escribir
+>   16 KB cuesta 33 veces lo de la SRAM, crear es poner a cero y copiar (dos pasadas), y los datos echan al intérprete de
+>   la caché (+16–22 %; en la P4, +89 % tras leer 128 KB). El bucle del intérprete son 15,4 KB, casi toda la caché.
+>   Propuesto, sin hacer: no poner a cero lo que se llena entero, el intérprete en la SRAM (`#665`), la caché de las
+>   ESP32 y `#715`.
 > - **¿un CRC para descartar la igualdad?** (Eduardo: *«Igual con utilizar el comparador nos vale»*): sí, nos vale el
 >   comparador. Si son distintas, para en el primer byte distinto (y `==` ni mira los bytes si las longitudes no
 >   coinciden); un CRC pide recorrerlas enteras, no prueba la igualdad y no sirve para ordenar. Lo que pesa es que el

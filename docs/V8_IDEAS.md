@@ -2908,6 +2908,87 @@ de 200 claves, que esta tarde sí cabía. Bisecado en la placa:
 Es el banco, que con tamaños de placa va al límite de los 219 KB de la Pico 2: unos bytes de más o de menos al
 principio del heap cambian cómo queda fragmentado. Es terreno del GC (`#715`).
 
+### La PSRAM, medida por piezas (análisis, 21-oct)
+
+Eduardo: *«Miremos la PSRAM. Como siempre empezamos analizando.»* El punto 2 de arriba dio la foto (leer +3–6 %, crear
+×1,5–4,4). Esto la parte en piezas, con tamaños que caben y que no caben en la caché, y mira una cosa más: si los datos
+echan al intérprete de una caché compartida.
+
+**Lo que dice el código:**
+- **Cada reserva pone a cero su contenido** (`heap_reservar`: `memset` del payload), aunque quien la pide lo vaya a
+  llenar entero acto seguido (una concatenación, `substring`, `fromBytes`, `charAt`…).
+- **El asignador:** el primer hueco que cabe en la lista de libres y, si no, el final del heap (el bump). En la Metro
+  el GC salta cada ~700 KB reservados, así que entre colecta y colecta la reserva va estrenando memoria que nunca ha
+  estado en la caché.
+- **Todo el código caliente de la RP2350 está en la flash** y se ejecuta por la caché del XIP: el bucle del intérprete
+  (`bpvm_interp_run_quantum`) son 15,4 KB y `bpvm_call_builtin` 22,9 KB, para una caché de 16 KB que en la Metro sirve
+  además la PSRAM. Sólo el arranque de la PSRAM y el cerrojo de la flash van a la RAM.
+- **En las ESP32 tampoco hay nada nuestro en la IRAM.** La S3 tiene la caché de instrucciones (16 KB) separada de la de
+  datos (32 KB); la P4, sus L1 separadas y una L2 de 128 KB compartida.
+- **La caché del XIP es de escritura diferida** («clean» escribe lo pendiente; `xip_cache.h`), y puede fijar líneas
+  (caché como SRAM).
+
+**Medido** (`samples/benchmarks/PsramFases.bp`, nuevo): cada pieza sola, como el perfil por fases. La Metro, con la
+misma imagen y `psram=0` (la VM en la SRAM, 233 KB de heap) y `psram=1` (en la PSRAM, 5,6 MB). Por operación:
+
+| | Pico 2 | Metro SRAM | Metro PSRAM | P4 |
+|---|---|---|---|---|
+| reservar 2 KB (poner a cero; con GC en las SRAM) | 152 µs | 87 µs | **346 µs** | 42 µs |
+| escribir 2 KB en memoria ya reservada | 20 µs | 20 µs | **65 µs** | 9 µs |
+| leer 2 × 2 KB (`==`) | 66 µs | 65 µs | **145 µs** | 31 µs |
+| crear 2 KB (reservar y escribir) | 182 µs | 117 µs | **494 µs** | 53 µs |
+| reservar 16 KB | 879 µs (GC en la mitad) | 448 µs (ídem) | **2378 µs** | 252 µs |
+| escribir 16 KB en memoria ya reservada | 102 µs | 102 µs | **3335 µs (×33)** | 34 µs |
+| leer 2 × 16 KB | 339 µs | 339 µs | **2673 µs (×8)** | 102 µs |
+| crear 16 KB | 1042 µs | 600 µs | **5203 µs** | 255 µs |
+| crear 64 KB | no cabe | no cabe | 22,9 ms | 1,7 ms |
+| interpretar (un bucle de bytecode fijo) | 807 µs | 807 µs | 828 µs (+2,6 %) | 661 µs |
+| `gc()` con poco vivo | 1,3 ms | 0,6 ms | **2,2 ms** | 2,5–3,1 ms |
+
+Y el bucle de bytecode, justo después de leer n bytes (lo que cuesta de más que solo):
+
+| n leídos | Pico 2 | Metro SRAM | Metro PSRAM | P4 |
+|---|---|---|---|---|
+| 2 × 2 KB | +43 µs (+5 %) | +43 µs | **+134 µs (+16 %)** | +0 |
+| 2 × 16 KB | +42 µs (+5 %) | +42 µs | **+184 µs (+22 %)** | +4 µs |
+| 2 × 64 KB | — | — | +159 µs | **+591 µs (+89 %)** |
+
+**Lo que dice, por orden de peso:**
+1. **En la Metro manda la caché del XIP, no la PSRAM en sí.** Con 16 KB, líneas de 8 B y el código dentro, en cuanto
+   una operación toca unos KB de datos ya va a la velocidad de la PSRAM: unos 0,1–0,2 µs por byte, de 15 a 30 veces lo
+   de la SRAM (6–10 ns por byte en la Pico 2). Escribir 2 KB en memoria ya usada cuesta el triple; 16 KB, 33 veces.
+2. **Escribir parece traer antes la línea.** Escribir 16 KB fuera de la caché cuesta lo que tres transferencias por
+   línea: leer el origen, leer la línea de destino y escribirla de vuelta más tarde. Con unas 0,48 µs cada una a 75 MHz
+   en QPI, salen ~2,9 ms; se midieron 3,3. Con dos transferencias saldrían ~2,0. Es una deducción de las cifras: la
+   hoja de datos de la RP2350 no está en el repositorio.
+   Por eso **crear es poner a cero y luego copiar: dos pasadas**, y en la PSRAM se pagan las dos enteras (crear 16 KB
+   = reservar 2,4 ms + escribir 3,3 ms).
+3. **Los datos echan al intérprete de la caché compartida.** En la Metro, tras leer unos KB, el bytecode va un 16–22 %
+   más lento hasta que vuelve a traer su código de la flash. En la P4 pasa lo mismo con su L2: tras leer 128 KB, +89 %.
+   Y en la Pico 2, sin PSRAM, el código del `memcmp` ya echa algo del intérprete (+5 %): el bucle del intérprete
+   (15,4 KB) casi llena la caché por sí solo.
+4. **La P4 va bien hasta unos 64 KB** (su L1 de datos, de 64 KB y líneas de 64 B); el problema empieza al salir de
+   ella.
+5. **El GC en la PSRAM** cuesta 3,6 veces lo de la SRAM en la Metro, y encima está su coste cuadrático (`#715`).
+
+**Lo que se podría hacer**, de más barato a más caro (sólo propuesto):
+1. **No poner a cero lo que se va a llenar entero** (implementación). Una reserva sin `memset` sólo para los builtins
+   que escriben todo el contenido antes de soltarlo: la concatenación, `substring`, `fromBytes`, `charAt`, `upper`…
+   - Quita una de las dos pasadas al crear: en la PSRAM, crear 16 KB pasaría de ~5,2 a ~3,3 ms; en la SRAM, algo menos.
+   - Es seguro porque un `byte[]` no lleva referencias que el GC tenga que seguir. `newByteArray` del programa
+     seguiría a cero: así lo promete el lenguaje.
+2. **El bucle del intérprete en la SRAM** en la RP2350 (`#665`): 15,4 KB fuera de la flash. Dejaría la caché del XIP
+   para los datos en la Metro y quitaría los fallos de código en las dos, Pico 2 incluida. Cuesta 15,4 KB de SRAM, que
+   en la Pico 2 salen del heap. Habría que medirlo en una imagen de prueba; puede que acelere todo el bytecode, no
+   sólo las cadenas.
+3. **La caché de las ESP32,** por configuración y midiendo antes: la L2 de la P4, de 128 a 256 KB, y la de datos de la
+   S3, de 32 a 64 KB con líneas de 64 B. Cada una cuesta esa SRAM interna.
+4. **El GC** (`#715`): la lista de huecos en orden de dirección, enganchando a la cola, con tu condición.
+5. **Fuera, de momento:** las cadenas jóvenes en la SRAM y las viejas en la PSRAM (un GC generacional). Cambia el modelo
+   de memoria.
+
+Y queda la mitad de `#665` que no está hecha: la imagen de UN núcleo con `psram=0`, para separar la imagen de la PSRAM.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

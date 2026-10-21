@@ -1,0 +1,194 @@
+// PsramFases.bp — lo que cuesta la MEMORIA de las cadenas: reservar, escribir, leer y crear, con la VM en la SRAM o en
+// la PSRAM; y si los datos echan al intérprete de una caché compartida.
+//
+// ─── Por qué existe (V8/H5, 21-oct-2026) ─────────────────────────────────────
+//
+// Eduardo: «Miremos la PSRAM. Como siempre empezamos analizando.» El censo de la mañana dijo que, en la Metro, leer una
+// cadena con la VM en la PSRAM cuesta un 3–6 % más y crearla de 1,5 a 4,4 veces más (V8_IDEAS §E5, punto 2). Esto parte
+// ese «crear» en sus piezas y las mide con tamaños crecientes, para separar lo que pasa dentro de la caché de lo que
+// pasa fuera:
+//   1. reservar n bytes (newByteArray: el asignador y poner a cero n bytes de memoria NUEVA);
+//   2. escribir n bytes en un array YA reservado (move: memoria que se reusa);
+//   3. leer n bytes (== de dos cadenas iguales y distintas: un memcmp que lee las dos);
+//   4. crear: reservar n y escribirlos (lo que hace cada cadena nueva);
+//   5. interpretar: un bucle de bytecode fijo, sin memoria;
+//   6. leer n bytes y en seguida interpretar el mismo bucle. En la Metro, la caché del XIP (16 KB) es la del código y
+//      la de la PSRAM: si leer echa al intérprete de la caché, 6 cuesta más que 3 + 5;
+//   7. gc().
+// En la Metro se corre con psram=1 y con psram=0: el mismo chip y la misma imagen, la VM en la PSRAM o en la SRAM.
+//
+// ─── Cómo mide ───────────────────────────────────────────────────────────────
+//
+// Como StrFases.bp: cada fase durante un tiempo fijo, descontando el bucle vacío de su posición en el switch, y las
+// colectas que caen dentro por cada mil operaciones. Un tamaño que no cabe en el heap se salta y se dice.
+//
+// Las cifras cambian de una vez a otra y de una placa a otra: no es de paridad, y no está en el corpus.
+module PsramFases
+  import Core
+  import Machine
+  import Heap
+
+  const MS_OBJETIVO := 150
+
+  var bytesUlt: byte[] := null
+  var sumidero: integer := 0
+  var n: integer := 0
+  var sA: string := ""
+  var sB: string := ""
+  var bsA: byte[] := null
+  var buf: byte[] := null
+
+  // m caracteres ASCII, a..z
+  function hazCadena(m: integer): string
+    var sb: StringBuilder := StringBuilder()
+    var i: integer := 0
+    while i < m do
+      sb.appendChar(97 + (i mod 26))
+      i += 1
+    endwh
+    return sb.toString()
+  end hazCadena
+
+  function prepara(m: integer)
+    n := m
+    sA := hazCadena(m)
+    sB := hazCadena(m)          // igual que sA, pero otra cadena: == tiene que leer las dos
+    bsA := toBytes(sA)
+    buf := newByteArray(m)
+  end prepara
+
+  // un bucle de bytecode fijo, sin tocar memoria del heap
+  function interpreta(): integer
+    var r: integer := 0
+    var k: integer := 0
+    while k < 100 do
+      r := r + (k mod 7)
+      k += 1
+    endwh
+    return r
+  end interpreta
+
+  function haz(op: integer): integer
+    var r: integer := 0
+    switch op
+      case 0
+        r := 0
+      case 1
+        bytesUlt := newByteArray(n)
+      case 2
+        move(bsA, buf, 0, 0, n)
+      case 3
+        if sA == sB then
+          r := 1
+        endif
+      case 4
+        bytesUlt := newByteArray(n)
+        move(bsA, bytesUlt, 0, 0, n)
+      case 5
+        r := interpreta()
+      case 6
+        if sA == sB then
+          r := 1
+        endif
+        r := r + interpreta()
+      case 7
+        gc()
+      case 99
+        r := 0
+    endsw
+    return r
+  end haz
+
+  function nombre(op: integer): string
+    var r: string := "?"
+    switch op
+      case 0
+        r := "vacío | el bucle, con el primer caso"
+      case 99
+        r := "vacío | el bucle, con el último caso"
+      case 1
+        r := "reservar | n bytes nuevos (el asignador y ponerlos a cero)"
+      case 2
+        r := "escribir | n bytes en un array ya reservado (move)"
+      case 3
+        r := "leer | n bytes de dos cadenas iguales (==, memcmp)"
+      case 4
+        r := "crear | reservar n y escribirlos"
+      case 5
+        r := "interpretar | un bucle de bytecode fijo"
+      case 6
+        r := "leer e interpretar | 3 y luego 5"
+      case 7
+        r := "destruir | gc()"
+    endsw
+    return r
+  end nombre
+
+  function posicion(op: integer): integer
+    if op <= 7 then
+      return op
+    endif
+    return 8
+  end posicion
+
+  var colectas: integer := 0
+
+  // nanosegundos por operación: `op` en tandas de 10, hasta pasar MS_OBJETIVO; deja en `colectas` las de por mil
+  function mide(op: integer): integer
+    var iters: integer := 0
+    var c0: integer := Heap.getCollections()
+    var t0: integer := Machine.uptimeMs()
+    var pasado: integer := 0
+    while pasado < MS_OBJETIVO do
+      var j: integer := 0
+      while j < 10 do
+        sumidero += haz(op)
+        j += 1
+      endwh
+      iters += 10
+      pasado := Machine.uptimeMs() - t0
+    endwh
+    colectas := ((Heap.getCollections() - c0) * 1000) / iters
+    if pasado < 2000 then
+      return (pasado * 1000000) / iters
+    endif
+    return ((pasado * 1000) / iters) * 1000
+  end mide
+
+  function vacio(base: integer, fin: integer, pos: integer): integer
+    return base + ((fin - base) * pos) / 8
+  end vacio
+
+  function corre(m: integer)
+    try
+      prepara(m)
+    catch e: RuntimeError
+      print "PSRAM n=" + m + " no cabe: " + e.msg
+      sA := ""
+      sB := ""
+      bsA := null
+      buf := null
+      gc()
+      return
+    endtry
+    gc()
+    var base: integer := mide(0)
+    var fin: integer := mide(99)
+    print "PSRAM n=" + m + " op=0 ns=" + base + " neto=0 gc1000=0 | " + nombre(0)
+    print "PSRAM n=" + m + " op=99 ns=" + fin + " neto=0 gc1000=0 | " + nombre(99)
+    var op: integer := 1
+    while op <= 7 do
+      var ns: integer := mide(op)
+      print "PSRAM n=" + m + " op=" + op + " ns=" + ns + " neto=" + (ns - vacio(base, fin, posicion(op))) + " gc1000=" + colectas + " | " + nombre(op)
+      op += 1
+    endwh
+  end corre
+
+  function Main()
+    corre(256)
+    corre(2048)
+    corre(16384)
+    corre(65536)
+    print "fin de las fases de la memoria"
+  end Main
+end PsramFases
