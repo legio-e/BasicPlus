@@ -842,8 +842,9 @@ static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
     uint32_t out = bpref_deref(vm, h);
     aa = a ? A(vm, a) : 0; ba = b ? A(vm, b) : 0;   /* re-deref tras el safepoint */
     uint8_t* mem = vm->memory;
-    for (uint32_t i = 0; i < la; i++) mem[out + 4 + i] = mem[aa + 4 + i];
-    for (uint32_t i = 0; i < lb; i++) mem[out + 4 + la + i] = mem[ba + 4 + i];
+    if (la > 0) memcpy(mem + out + 4, mem + aa + 4, la);        /* V8/H5: copias de bytes, de una vez */
+    if (lb > 0) memcpy(mem + out + 4 + la, mem + ba + 4, lb);
+    bpvm_str_nace(vm, out);   /* V8/H5: el bit «todo ASCII», por los bytes que lleva */
     return (uint32_t) h.v;
 }
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {

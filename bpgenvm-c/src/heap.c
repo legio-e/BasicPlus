@@ -1644,9 +1644,8 @@ static uint32_t heap_alloc_string(bpvm_t* vm, const char* s, size_t len, int par
     bpref_t h = heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) len, (uint32_t) len, para_error);   /* V7/H7 #593 */
     if (h.v == 0u) return 0;
     uint32_t ref = bpref_deref(vm, h);
-    for (size_t i = 0; i < len; i++) {
-        vm->memory[ref + 4 + i] = (uint8_t) s[i];
-    }
+    if (len > 0) memcpy(vm->memory + ref + 4, s, len);   /* V8/H5: una copia de bytes, de una vez */
+    bpvm_str_nace(vm, ref);   /* V8/H5: el bit «todo ASCII», por los bytes que lleva */
     return (uint32_t) h.v;   /* string: idx|TAG (gen=0); reuso de strings = paso 6 */
 }
 

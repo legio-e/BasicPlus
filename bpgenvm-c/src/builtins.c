@@ -928,7 +928,9 @@ static uint32_t move_elem(int tipo) {
 
 int32_t bpvm_prim_str_len(bpvm_t* vm, uint32_t s) {
     if (s == 0u) return 0;
-    return (int32_t) utf8_cp_count(vm->memory + s + BPVM_ARR_DATA_OFF, bpvm_read_u32_be(vm->memory + s));
+    uint32_t nbytes = bpvm_read_u32_be(vm->memory + s);
+    if (bpvm_str_ascii(vm, s)) return (int32_t) nbytes;   /* V8/H5: el rápido, un carácter = un byte */
+    return (int32_t) utf8_cp_count(vm->memory + s + BPVM_ARR_DATA_OFF, nbytes);
 }
 
 int32_t bpvm_prim_char_code_at(bpvm_t* vm, uint32_t s, int32_t i) {
@@ -937,6 +939,8 @@ int32_t bpvm_prim_char_code_at(bpvm_t* vm, uint32_t s, int32_t i) {
     if (s == 0u) return 0;
     nbytes = bpvm_read_u32_be(vm->memory + s);
     p = vm->memory + s + BPVM_ARR_DATA_OFF;
+    if (bpvm_str_ascii(vm, s))   /* V8/H5: el rápido: el carácter i ES el byte i (fuera de rango, 0, como abajo) */
+        return (i < 0 || (uint32_t) i >= nbytes) ? 0 : (int32_t) p[i];
     ncp = utf8_cp_count(p, nbytes);
     if (i < 0 || (uint32_t) i >= ncp) return 0;
     off = utf8_byte_offset(p, nbytes, (uint32_t) i);
@@ -951,19 +955,26 @@ int bpvm_prim_char_at(bpvm_t* vm, uint32_t s, int32_t i, bpref_t* out, char* err
      * comprobación y devolvía "" —el programa seguía en la VM-C y lanzaba en miVM—. */
     uint32_t nbytes = s ? bpvm_read_u32_be(vm->memory + s) : 0u;
     const uint8_t* p = s ? vm->memory + s + BPVM_ARR_DATA_OFF : vm->memory;
-    uint32_t ncp = s ? utf8_cp_count(p, nbytes) : 0u;
+    int rapido = bpvm_str_ascii(vm, s);   /* V8/H5: el rápido: el carácter i ES el byte i */
+    uint32_t ncp = rapido ? nbytes : (s ? utf8_cp_count(p, nbytes) : 0u);
     uint32_t off, adv;
     if (i < 0 || (uint32_t) i >= ncp) {
         /* BUG-7b — idx fuera de rango → RuntimeError atrapable (paridad VM-Java). */
         snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
         return -1;
     }
-    off = utf8_byte_offset(p, nbytes, (uint32_t) i);
-    enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
+    if (rapido) {
+        enc[0] = p[i];
+        enc_len = 1;
+    } else {
+        off = utf8_byte_offset(p, nbytes, (uint32_t) i);
+        enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
+    }
     *out = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, enc_len, enc_len); /* V7/H7 #593: la cabecera y el handle, al nacer */
     if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355, #430 */
     o = bpref_deref(vm, *out);
     for (k = 0; k < enc_len; k++) vm->memory[o + BPVM_ARR_DATA_OFF + k] = enc[k];
+    bpvm_str_nace(vm, o);   /* V8/H5: el bit, por el carácter que lleva */
     return 0;
 }
 
@@ -971,21 +982,25 @@ int bpvm_prim_substring(bpvm_t* vm, bpref_t s, int32_t desde, int32_t hasta, bpr
     uint32_t a = bpref_deref(vm, s);
     uint32_t nbytes = a ? bpvm_read_u32_be(vm->memory + a) : 0u;
     const uint8_t* p = vm->memory + a + BPVM_ARR_DATA_OFF;
-    uint32_t ncp = a ? utf8_cp_count(p, nbytes) : 0u;   /* H2: índices en codepoints */
-    uint32_t boff, eoff, len, o, k;
+    int rapido = bpvm_str_ascii(vm, a);   /* V8/H5: el rápido: los índices SON los bytes */
+    uint32_t ncp = rapido ? nbytes : (a ? utf8_cp_count(p, nbytes) : 0u);   /* H2: índices en codepoints */
+    uint32_t boff, eoff, len, o;
     if (desde < 0) desde = 0;
     if (hasta < 0) hasta = 0;
     if ((uint32_t) hasta > ncp) hasta = (int32_t) ncp;
     if (desde > hasta) desde = hasta;
-    boff = utf8_byte_offset(p, nbytes, (uint32_t) desde);
-    eoff = utf8_byte_offset(p, nbytes, (uint32_t) hasta);
+    boff = rapido ? (uint32_t) desde : utf8_byte_offset(p, nbytes, (uint32_t) desde);
+    eoff = rapido ? (uint32_t) hasta : utf8_byte_offset(p, nbytes, (uint32_t) hasta);
     len = eoff - boff;
     *out = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
     if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355, #430 */
     o = bpref_deref(vm, *out);
     a = bpref_deref(vm, s);   /* otra vez, tras la reserva: el origen lo mantiene vivo quien llama (#350) */
-    for (k = 0; k < len; k++)
-        vm->memory[o + BPVM_ARR_DATA_OFF + k] = vm->memory[a + BPVM_ARR_DATA_OFF + boff + k];
+    /* V8/H5: copiar es una copia de bytes en los dos caminos (Eduardo: «Copiar un string debería ser igual con caracteres
+     * especiales»); lo que el lento hace distinto es situarse (contar caracteres), arriba. */
+    if (len > 0u) memcpy(vm->memory + o + BPVM_ARR_DATA_OFF, vm->memory + a + BPVM_ARR_DATA_OFF + boff, len);
+    if (rapido) bpvm_str_fija_ascii(vm, o, 1);   /* un trozo de una cadena ASCII es ASCII */
+    else bpvm_str_nace(vm, o);                    /* uno de una cadena con especiales puede serlo: se mira */
     return 0;
 }
 
@@ -1968,6 +1983,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             bpref_t psh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) l, (uint32_t) l);   /* V7/H7 #593 */
             if (psh.v == 0u) { bpvm_scratch_give("LISTDIR"); tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, "listDir: sin memoria"); }
             memcpy(vm->memory + bpref_deref(vm, psh) + 4, acc.buf + off, l);
+            bpvm_str_nace(vm, bpref_deref(vm, psh));   /* V8/H5: el bit del nombre */
             bpref_store(vm, bpref_deref(vm, arrh) + BPVM_ARR_DATA_OFF + i * BPVM_REF_SIZE, psh);
             off += l + 1;
         }
@@ -2177,6 +2193,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         ficheros_abrir(vm);
         if (fallo) return builtin_throw(vm, tc, fallo);
+        bpvm_str_nace(vm, bpref_deref(vm, refh));   /* V8/H5: el bit de la línea, por sus bytes */
         bpref_push(vm, tc, refh);
         return BPVM_OK;
     }
@@ -2450,15 +2467,25 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t out = bpref_deref(vm, outh);
         {   /* la reserva ya esta comprobada arriba */
             const uint8_t* p = (n > 0) ? bpref_arr_elem(vm, s, 0, 1) : NULL;
-            uint32_t i = 0, o = 0;
-            while (i < n) {
-                uint32_t adv = 0;
-                uint32_t cp  = utf8_decode(p + i, n - i, &adv);
-                uint32_t m   = up ? latin1_upper_cp(cp) : latin1_lower_cp(cp);
-                uint8_t enc[4];
-                uint32_t el = utf8_encode(m, enc);
-                for (uint32_t k = 0; k < el && o < n; k++) vm->memory[out + 4 + o++] = enc[k];
-                i += (adv > 0) ? adv : 1;
+            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) {   /* V8/H5: el rápido: en ASCII sólo cambian a..z / A..Z */
+                for (uint32_t i = 0; i < n; i++) {
+                    uint8_t c = p[i];
+                    if (up ? (c >= 'a' && c <= 'z') : (c >= 'A' && c <= 'Z')) c = (uint8_t) (c ^ 0x20u);
+                    vm->memory[out + 4 + i] = c;
+                }
+                bpvm_str_fija_ascii(vm, out, 1);
+            } else {
+                uint32_t i = 0, o = 0;
+                while (i < n) {
+                    uint32_t adv = 0;
+                    uint32_t cp  = utf8_decode(p + i, n - i, &adv);
+                    uint32_t m   = up ? latin1_upper_cp(cp) : latin1_lower_cp(cp);
+                    uint8_t enc[4];
+                    uint32_t el = utf8_encode(m, enc);
+                    for (uint32_t k = 0; k < el && o < n; k++) vm->memory[out + 4 + o++] = enc[k];
+                    i += (adv > 0) ? adv : 1;
+                }
+                bpvm_str_nace(vm, out);   /* V8/H5: el bit, por lo que salió */
             }
             out = (uint32_t) outh.v;
         }
@@ -2489,8 +2516,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, "No space in heap");
         uint32_t out = bpref_deref(vm, outh);
         {   /* la reserva ya esta comprobada arriba */
-            for (uint32_t i = 0; i < len; i++)
-                vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, b + i, 1);
+            if (len > 0) memcpy(vm->memory + out + 4, bpref_arr_elem(vm, s, b, 1), len);   /* V8/H5: copia de bytes */
+            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) bpvm_str_fija_ascii(vm, out, 1);   /* V8/H5 */
+            else bpvm_str_nace(vm, out);
             out = (uint32_t) outh.v;
         }
         tc->sp -= BPVM_REF_SIZE;
@@ -2508,7 +2536,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         const uint8_t* sp_ = (sn > 0) ? bpref_arr_elem(vm, s, 0, 1) : (const uint8_t*) "";
         const uint8_t* qp_ = (qn > 0) ? bpref_arr_elem(vm, q, 0, 1) : (const uint8_t*) "";
         long off = bp_find_bytes(sp_, sn, qp_, qn, 0);
-        int32_t res = (off < 0) ? -1 : (int32_t) utf8_cp_count(sp_, (uint32_t) off);
+        int32_t res = (off < 0) ? -1
+                    : bpvm_str_ascii(vm, bpref_deref(vm, s)) ? (int32_t) off   /* V8/H5: el rápido, el byte ES el índice */
+                    : (int32_t) utf8_cp_count(sp_, (uint32_t) off);
         tc->sp -= 2 * BPVM_REF_SIZE;
         push_i32(vm, tc, res);
         return BPVM_OK;
@@ -2568,27 +2598,35 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             sb = (sn > 0) ? bpref_arr_elem(vm, s,  0, 1) : (const uint8_t*) "";
             tb = (tn > 0) ? bpref_arr_elem(vm, tg, 0, 1) : (const uint8_t*) "";
             const uint8_t* rb = (rn > 0) ? bpref_arr_elem(vm, rp, 0, 1) : (const uint8_t*) "";
+            /* V8/H5 (Eduardo: «Copiar un string debería ser igual con caracteres especiales, se puede hacer como una
+             * copia de bytes»): cada trozo, de una vez, con memcpy; el recorrido de la búsqueda es el de siempre. */
+            uint8_t* dst = vm->memory + out + 4;
             uint32_t o = 0, i = 0;
             if (tn == 0) {
-                for (uint32_t k = 0; k < rn; k++) vm->memory[out + 4 + o++] = rb[k];
+                if (rn > 0) { memcpy(dst + o, rb, rn); o += rn; }
                 while (i < sn) {
                     uint32_t adv = 0;
                     (void) utf8_decode(sb + i, sn - i, &adv);
                     if (adv == 0) adv = 1;
-                    for (uint32_t k = 0; k < adv; k++) vm->memory[out + 4 + o++] = sb[i + k];
-                    for (uint32_t k = 0; k < rn; k++) vm->memory[out + 4 + o++] = rb[k];
+                    memcpy(dst + o, sb + i, adv); o += adv;
+                    if (rn > 0) { memcpy(dst + o, rb, rn); o += rn; }
                     i += adv;
                 }
             } else {
-                while (i < sn) {
-                    if (i + tn <= sn && memcmp(sb + i, tb, tn) == 0) {
-                        for (uint32_t k = 0; k < rn; k++) vm->memory[out + 4 + o++] = rb[k];
+                uint32_t seg = 0;   /* dónde empieza el trozo sin coincidencias que aún no se ha copiado */
+                while (i + tn <= sn) {
+                    if (memcmp(sb + i, tb, tn) == 0) {
+                        if (i > seg) { memcpy(dst + o, sb + seg, i - seg); o += i - seg; }
+                        if (rn > 0) { memcpy(dst + o, rb, rn); o += rn; }
                         i += tn;
+                        seg = i;
                     } else {
-                        vm->memory[out + 4 + o++] = sb[i++];
+                        i++;
                     }
                 }
+                if (sn > seg) { memcpy(dst + o, sb + seg, sn - seg); o += sn - seg; }
             }
+            bpvm_str_nace(vm, out);   /* V8/H5: el bit, por lo que salió */
             out = (uint32_t) outh.v;
         }
         tc->sp -= 3 * BPVM_REF_SIZE;
@@ -2649,8 +2687,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             bpref_t psh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, plen, plen);   /* V7/H7 #593 */
             if (psh.v == 0u) { tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, "No space in heap"); }
             uint32_t ps = bpref_deref(vm, psh);
-            for (uint32_t k = 0; k < plen; k++)
-                vm->memory[ps + 4 + k] = *bpref_arr_elem(vm, s, b + k, 1);
+            if (plen > 0) memcpy(vm->memory + ps + 4, bpref_arr_elem(vm, s, b, 1), plen);   /* V8/H5: copia de bytes */
+            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) bpvm_str_fija_ascii(vm, ps, 1);   /* V8/H5: trozo de ASCII */
+            else bpvm_str_nace(vm, ps);
             bpref_store(vm, bpref_deref(vm, arrh) + BPVM_ARR_DATA_OFF + done * BPVM_REF_SIZE, psh);
             done++;
         }
@@ -2937,14 +2976,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         {   /* la reserva ya esta comprobada arriba */
             ap = (an > 0) ? bpref_arr_elem(vm, a, 0, 1) : (const uint8_t*) "";
             bp = (bn > 0) ? bpref_arr_elem(vm, b, 0, 1) : (const uint8_t*) "";
-            uint32_t o = 0;
-            if (an == 0)      { for (uint32_t i = 0; i < bn; i++) vm->memory[out+4+o++] = bp[i]; }
-            else if (bn == 0) { for (uint32_t i = 0; i < an; i++) vm->memory[out+4+o++] = ap[i]; }
+            /* V8/H5: los trozos, como copias de bytes */
+            uint8_t* dst = vm->memory + out + 4;
+            if (an == 0)      { if (bn > 0) memcpy(dst, bp, bn); }
+            else if (bn == 0) { memcpy(dst, ap, an); }
             else {
-                for (uint32_t i = 0; i < ae; i++) vm->memory[out+4+o++] = ap[i];
-                vm->memory[out+4+o++] = '/';
-                for (uint32_t i = bs; i < bn; i++) vm->memory[out+4+o++] = bp[i];
+                if (ae > 0) memcpy(dst, ap, ae);
+                dst[ae] = '/';
+                if (bn > bs) memcpy(dst + ae + 1, bp + bs, bn - bs);
             }
+            bpvm_str_nace(vm, out);   /* V8/H5: el bit de la ruta */
             out = (uint32_t) outh.v;
         }
         tc->sp -= 2 * BPVM_REF_SIZE;
@@ -2987,8 +3028,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, "No space in heap");
         uint32_t out = bpref_deref(vm, outh);
         {   /* la reserva ya esta comprobada arriba */
-            for (uint32_t i = 0; i < len; i++)
-                vm->memory[out + 4 + i] = *bpref_arr_elem(vm, s, b0 + i, 1);
+            if (len > 0) memcpy(vm->memory + out + 4, bpref_arr_elem(vm, s, b0, 1), len);   /* V8/H5: copia de bytes */
+            bpvm_str_nace(vm, out);   /* V8/H5: el bit de la extensión */
             out = (uint32_t) outh.v;
         }
         tc->sp -= BPVM_REF_SIZE;
@@ -3112,6 +3153,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             if (w + el > total) break;
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
+        bpvm_str_nace(vm, new_ref);   /* V8/H5: el bit, por los caracteres que salieron */
         tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado */
         bpref_push(vm, tc, newh);
         return BPVM_OK;
@@ -3138,7 +3180,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* Re-derivar TRAS la reserva: hoy el mark-sweep no mueve objetos, pero
          * depender de eso es una trampa para el día que compacte. */
         rd = bpref_is_null(bref) ? 0 : bpref_deref(vm, bref);
-        for (uint32_t i = 0; i < n; i++) vm->memory[out + 4 + i] = vm->memory[rd + 4 + i];
+        if (n > 0) memcpy(vm->memory + out + 4, vm->memory + rd + 4, n);   /* V8/H5: una copia de bytes, de una vez */
+        if (id == BUILTIN_FROM_BYTES) bpvm_str_nace(vm, out);   /* V8/H5: la cadena nace con su bit (un byte[], nunca) */
         tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado, ahora sí se saca */
         bpref_push(vm, tc, outh);   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;
@@ -3627,6 +3670,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         memmove(vm->memory + dd + 4u + (uint32_t) dstStart * esz,
                 vm->memory + sd + 4u + (uint32_t) srcStart * esz,
                 (size_t) count * esz);
+        /* V8/H5: `move` escribe en el destino, que puede ser una cadena (#714): su bit «todo ASCII» deja de estar
+         * garantizado. Se quita (va por el lento, que siempre acierta). */
+        if (dt == BPVM_TYPE_ARRAY_I8)
+            bpvm_write_u32_be(vm->memory + dh, bpvm_read_u32_be(vm->memory + dh) & ~BPVM_TAG_ASCII);
         push_i32(vm, tc, 0);   /* void: el valor de relleno, como miVM */
         return BPVM_OK;
     }
@@ -3666,6 +3713,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, em);
         }
         if (n > 0) memmove(vm->memory + dd + 4u + (uint32_t) pos, vm->memory + sd + 4u, (size_t) n);
+        {   /* V8/H5 — el bit del destino es el «Y» de los trozos: el que empieza en 0 lo pone, los demás lo pueden
+             * quitar (uno que empieza en 0 tras otros vacíos también lo pone: el «Y» con lo vacío es lo mismo). Un
+             * trozo del heap con su bit no se mira; uno sin él (un literal, un módulo viejo) se mira al copiarlo. */
+            int trozo = (n == 0)
+                     || (sd >= vm->heap_start + 4u && (bpvm_read_u32_be(vm->memory + sd - 4u) & BPVM_TAG_ASCII))
+                     || bpvm_bytes_ascii(vm->memory + sd + 4u, (uint32_t) n);
+            uint32_t t = bpvm_read_u32_be(vm->memory + dh);
+            int ascii = trozo && (pos == 0 || (t & BPVM_TAG_ASCII));
+            bpvm_write_u32_be(vm->memory + dh, ascii ? (t | BPVM_TAG_ASCII) : (t & ~BPVM_TAG_ASCII));
+        }
         push_i32(vm, tc, pos + n);
         return BPVM_OK;
     }

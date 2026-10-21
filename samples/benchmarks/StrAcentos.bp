@@ -1,0 +1,62 @@
+// StrAcentos.bp — lo que cuestan las cadenas CON caracteres especiales, que van por el algoritmo lento.
+//
+// ─── Por qué existe (V8/H5, 21-oct-2026) ─────────────────────────────────────
+//
+// Con los dos algoritmos (StrDosCaminos.bp), una cadena toda ASCII va por el rápido: un carácter es un byte. Una con
+// una sola `ñ` va por el lento, que cuenta caracteres desde el principio en cada llamada. Eduardo, al verlo: «si
+// después se hace un substring o algo similar podemos optimizar si trabajamos con punteros de C o con dos contadores
+// de bytes y de caracteres». Esto mide el lento en los dos patrones que eso toca, con la cadena doblando de tamaño:
+//   - RECORRER por índice (charCodeAt): si cada llamada cuenta desde el principio, doblar la cadena cuadruplica;
+//   - BUSCAR Y CORTAR: indexOf encuentra un byte y lo cuenta en caracteres; substring vuelve a contar desde el
+//     principio para encontrar ese mismo byte.
+// Las cadenas empiezan por `ñ` (no llevan el bit) y siguen con a..z.
+//
+// Las cifras cambian de una vez a otra: no es de paridad, y no está en el corpus.
+module StrAcentos
+  import Core
+  import Machine
+
+  // una ñ y m-1 letras: m caracteres, m+1 bytes
+  function hazCadena(m: integer): string
+    var sb: StringBuilder := StringBuilder()
+    sb.appendChar(241)
+    var i: integer := 1
+    while i < m do
+      sb.appendChar(97 + (i mod 26))
+      i += 1
+    endwh
+    return sb.toString()
+  end hazCadena
+
+  function Main()
+    var n: integer := 500
+    while n <= 4000 do
+      var s: string := hazCadena(n) + "zz9"
+      var largo: integer := strlen(s)
+
+      // recorrer por índice, una vez
+      var t0: integer := Machine.uptimeMs()
+      var suma: integer := 0
+      var k: integer := 0
+      while k < largo do
+        suma += charCodeAt(s, k)
+        k += 1
+      endwh
+      var msRecorrer: integer := Machine.uptimeMs() - t0
+
+      // buscar y cortar, cien veces: lo que hay desde "zz9" hasta el final
+      t0 := Machine.uptimeMs()
+      var trozo: string := ""
+      k := 0
+      while k < 100 do
+        var i: integer := indexOf(s, "zz9")
+        trozo := substring(s, i, largo)
+        k += 1
+      endwh
+      var msCortar: integer := Machine.uptimeMs() - t0
+
+      print "ACENTOS n=" + n + ": recorrer " + msRecorrer + " ms; buscar y cortar x100 " + msCortar + " ms (" + trozo + ", suma " + suma + ")"
+      n := n * 2
+    endwh
+  end Main
+end StrAcentos

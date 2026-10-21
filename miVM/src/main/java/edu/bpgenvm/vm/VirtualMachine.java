@@ -803,6 +803,13 @@ public class VirtualMachine {
     private static final int TAG_FREE_BIT  = 0x40000000;
     private static final int TAG_TYPE_MASK = 0x3F000000; // bits 24-29
     private static final int TAG_TYPE_SHIFT = 24;
+    // V8/H5 (21-oct) — «TODO ASCII»: el bit de los DOS ALGORITMOS de las cadenas (Eduardo: «Lo que necesitamos son 2
+    // algoritmos. Se mira si hay algún caracter especial. Si no hay se trabaja con el algoritmo rápido ( 1 char = 1byte ),
+    // si hay caracteres especiales se trabaja con el algoritmo lento»). Lo pone QUIEN CREA la cadena, por los bytes que
+    // escribe: una cadena no cambia, así que lo que se miró al crearla vale mientras exista. 0 = no se sabe, o no lo es:
+    // el lento, el de siempre. `move` lo quita del destino. La compactación lo conserva (sólo usa los bits 31 y 23).
+    // Espejo de BPVM_TAG_ASCII (VM-C). V8_IDEAS §E5, «Dos algoritmos».
+    private static final int TAG_ASCII_BIT = 0x00200000;
 
     // Tipos almacenables en heap
     private static final int TYPE_ARRAY_I8  = 0;
@@ -4871,12 +4878,83 @@ public class VirtualMachine {
         return new String(buf, java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    // ---- V8/H5 (21-oct): los DOS ALGORITMOS de las cadenas (ver TAG_ASCII_BIT) ----
+
+    /** ¿Todos estos bytes son ASCII (menores de 0x80)? Una pasada: el OR de todos, y mirar un bit al final. */
+    private static boolean bytesAscii(byte[] b, int off, int n) {
+        int acc = 0;
+        for (int i = off, fin = off + n; i < fin; i++) acc |= b[i];
+        return (acc & 0x80) == 0;   // un byte >= 0x80 es negativo en Java: también lleva el bit 7
+    }
+
+    /** Los BYTES de una cadena (null = ""). */
+    private int strBytes(long ref) {
+        return (ref == 0) ? 0 : readInt32(refDeref(ref));
+    }
+
+    /** ¿Va la cadena por el algoritmo RÁPIDO (1 carácter = 1 byte)? Una del heap, por su bit. Un literal no tiene
+     *  etiqueta: se mira entero (suele ser corto), como se miraría al crearlo. null es "": sí. */
+    private boolean strAscii(long ref) {
+        if (ref == 0) return true;
+        int a = refDeref(ref);
+        if (a - 4 >= heapStart) return (readInt32(a - 4) & TAG_ASCII_BIT) != 0;
+        return bytesAscii(memory, a + 4, readInt32(a));
+    }
+
+    /** Quien acaba de CREAR la cadena del heap `ref` le pone (o le quita) el bit, por los bytes que tiene de verdad. */
+    private void strFijaAscii(long ref, boolean ascii) {
+        int a = refDeref(ref);
+        if (a - 4 < heapStart) return;   // no es un bloque del heap
+        int tag = readInt32(a - 4);
+        writeInt32(a - 4, ascii ? (tag | TAG_ASCII_BIT) : (tag & ~TAG_ASCII_BIT));
+    }
+
+    /** El primer sitio, en BYTES, de la aguja en la cadena; -1 si no está; 0 con la aguja vacía (como String.indexOf).
+     *  Búsqueda directa: el primer byte, y comparar. En una cadena ASCII el byte es el índice del carácter, y una aguja
+     *  con bytes >= 0x80 no puede casar: el resultado es el de String.indexOf. */
+    private int buscaBytes(long sref, long qref) {
+        int sn = strBytes(sref), qn = strBytes(qref);
+        if (qn == 0) return 0;
+        if (qn > sn) return -1;
+        int s = refDeref(sref) + 4, q = refDeref(qref) + 4;
+        byte q0 = memory[q];
+        for (int i = 0, fin = sn - qn; i <= fin; i++) {
+            if (memory[s + i] != q0) continue;
+            int k = 1;
+            while (k < qn && memory[s + i + k] == memory[q + k]) k++;
+            if (k == qn) return i;
+        }
+        return -1;
+    }
+
+    /** ¿Están los bytes de `qref` en la cadena `sref` a partir del byte `off`? (startsWith y endsWith) */
+    private boolean bytesEn(long sref, int off, long qref) {
+        int sn = strBytes(sref), qn = strBytes(qref);
+        if (off < 0 || (long) off + qn > sn) return false;
+        if (qn == 0) return true;
+        int s = refDeref(sref) + 4 + off, q = refDeref(qref) + 4;
+        for (int k = 0; k < qn; k++) if (memory[s + k] != memory[q + k]) return false;
+        return true;
+    }
+
+    /** Una cadena nueva con estos bytes, y su bit. Los bytes se sacan ANTES de llamar: reservar puede colectar, y la
+     *  cadena de la que salen ya no está en la pila. */
+    private long allocVmStrBytes(byte[] src, int off, int n, boolean ascii) {
+        long h = heapNuevo(TYPE_ARRAY_I8, n, n);
+        if (n > 0) System.arraycopy(src, off, memory, refDeref(h) + 4, n);
+        strFijaAscii(h, ascii);
+        ThreadContext me = currentTcLocal.get();
+        if (me != null) me.allocAnchor = (int) h;   // como allocVmString: el GC la ve hasta que se apile
+        return h;
+    }
+
     /** Aloca un nuevo string en el heap (byte[] UTF-8) con el contenido de Java String. Devuelve user_ref. */
     private long allocVmString(String s) {
         byte[] utf8 = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         int len = utf8.length;
         long h = heapNuevo(TYPE_ARRAY_I8, len, len);   // V7/H7 #593: el handle 64b, con la cabecera entera
         System.arraycopy(utf8, 0, memory, refDeref(h) + 4, len);
+        strFijaAscii(h, bytesAscii(utf8, 0, len));   // V8/H5: el bit, por los bytes que lleva
         // B1 residual — el caller llama a allocVmString desde dispatchBuiltin
         // SIN vmLock, así que entre `return h` y el `pushTc(tc, h)` un GC
         // de otro worker podría liberar `h` (no hay raíz aún). Anclamos
@@ -4936,6 +5014,7 @@ public class VirtualMachine {
         switch (b) {
             case STRLEN: {
                 long ref = popTcRef(tc);   // H1.2a: string ref 8 bytes
+                if (strAscii(ref)) { pushTc(tc, strBytes(ref)); break; }   // V8/H5: el rápido, un carácter = un byte
                 String s = readVmString(ref);          // H2: longitud en codepoints
                 pushTc(tc, s.codePointCount(0, s.length()));
                 break;
@@ -5327,13 +5406,51 @@ public class VirtualMachine {
                 pushTcRef(tc, allocVmString(v != 0 ? "true" : "false"));
                 break;
             }
-            case UPPER: { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(latin1Case(s, true)));  break; }
-            case LOWER: { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(latin1Case(s, false))); break; }
-            case TRIM:  { String s = readVmString(popTcRef(tc)); pushTcRef(tc, allocVmString(s.trim()));        break; }
+            case UPPER:
+            case LOWER: {
+                long ref = popTcRef(tc);
+                boolean up = (b == Builtin.UPPER);
+                if (strAscii(ref)) {   // V8/H5: el rápido: en ASCII sólo cambian a..z / A..Z, byte a byte
+                    int n = strBytes(ref), a = (n == 0) ? 0 : refDeref(ref) + 4;
+                    byte[] t = java.util.Arrays.copyOfRange(memory, a, a + n);
+                    for (int i = 0; i < n; i++) {
+                        int c = t[i];
+                        if (up ? (c >= 'a' && c <= 'z') : (c >= 'A' && c <= 'Z')) t[i] = (byte) (up ? c - 32 : c + 32);
+                    }
+                    pushTcRef(tc, allocVmStrBytes(t, 0, n, true));
+                    break;
+                }
+                String s = readVmString(ref);
+                pushTcRef(tc, allocVmString(latin1Case(s, up)));
+                break;
+            }
+            case TRIM: {
+                long ref = popTcRef(tc);
+                if (strAscii(ref)) {   // V8/H5: el rápido: quitar los bytes <= 0x20 de los bordes (lo que hace String.trim)
+                    int n = strBytes(ref), a = (n == 0) ? 0 : refDeref(ref) + 4, i = 0, e = n;
+                    while (i < e && (memory[a + i] & 0xFF) <= 0x20) i++;
+                    while (e > i && (memory[a + e - 1] & 0xFF) <= 0x20) e--;
+                    byte[] t = java.util.Arrays.copyOfRange(memory, a + i, a + e);
+                    pushTcRef(tc, allocVmStrBytes(t, 0, t.length, true));
+                    break;
+                }
+                String s = readVmString(ref);
+                pushTcRef(tc, allocVmString(s.trim()));
+                break;
+            }
 
             case SUBSTRING: {
                 int end = popTc(tc); int start = popTc(tc);
-                String s = readVmString(popTcRef(tc));
+                long ref = popTcRef(tc);
+                if (strAscii(ref)) {   // V8/H5: el rápido: los índices SON los bytes (mismo recorte que abajo)
+                    int nb = strBytes(ref), a = (nb == 0) ? 0 : refDeref(ref) + 4;
+                    int from = Math.max(0, Math.min(nb, start));
+                    int to   = Math.max(from, Math.min(nb, end));
+                    byte[] t = java.util.Arrays.copyOfRange(memory, a + from, a + to);
+                    pushTcRef(tc, allocVmStrBytes(t, 0, t.length, true));
+                    break;
+                }
+                String s = readVmString(ref);
                 int n = s.codePointCount(0, s.length());   // H2: índices en codepoints
                 int from = Math.max(0, Math.min(n, start));
                 int to   = Math.max(from, Math.min(n, end));
@@ -5342,8 +5459,14 @@ public class VirtualMachine {
                 break;
             }
             case INDEX_OF: {
-                String target = readVmString(popTcRef(tc));
-                String s = readVmString(popTcRef(tc));
+                long tref = popTcRef(tc);
+                long sref = popTcRef(tc);
+                if (strAscii(sref)) {   // V8/H5: el rápido: buscar bytes; en una cadena ASCII el byte ES el índice
+                    pushTc(tc, buscaBytes(sref, tref));
+                    break;
+                }
+                String target = readVmString(tref);
+                String s = readVmString(sref);
                 int ci = s.indexOf(target);   // índice en char units (UTF-16)
                 // H2: devolver índice en codepoints para ser consistente con
                 // charAt/charCodeAt/substring (semántica de carácter).
@@ -5351,26 +5474,48 @@ public class VirtualMachine {
                 break;
             }
             case STARTS_WITH: {
-                String pre = readVmString(popTcRef(tc));
-                String s = readVmString(popTcRef(tc));
+                long pref = popTcRef(tc);
+                long sref = popTcRef(tc);
+                if (strAscii(sref)) { pushTc(tc, bytesEn(sref, 0, pref) ? 1 : 0); break; }   // V8/H5: el rápido
+                String pre = readVmString(pref);
+                String s = readVmString(sref);
                 pushTc(tc, s.startsWith(pre) ? 1 : 0);
                 break;
             }
             case ENDS_WITH: {
-                String suf = readVmString(popTcRef(tc));
-                String s = readVmString(popTcRef(tc));
+                long fref = popTcRef(tc);
+                long sref = popTcRef(tc);
+                if (strAscii(sref)) {   // V8/H5: el rápido
+                    pushTc(tc, bytesEn(sref, strBytes(sref) - strBytes(fref), fref) ? 1 : 0);
+                    break;
+                }
+                String suf = readVmString(fref);
+                String s = readVmString(sref);
                 pushTc(tc, s.endsWith(suf) ? 1 : 0);
                 break;
             }
             case CONTAINS: {
-                String sub = readVmString(popTcRef(tc));
-                String s = readVmString(popTcRef(tc));
+                long qref = popTcRef(tc);
+                long sref = popTcRef(tc);
+                if (strAscii(sref)) { pushTc(tc, buscaBytes(sref, qref) >= 0 ? 1 : 0); break; }   // V8/H5: el rápido
+                String sub = readVmString(qref);
+                String s = readVmString(sref);
                 pushTc(tc, s.contains(sub) ? 1 : 0);
                 break;
             }
             case CHAR_AT: {
                 int i = popTc(tc);
-                String s = readVmString(popTcRef(tc));
+                long ref = popTcRef(tc);
+                if (strAscii(ref)) {   // V8/H5: el rápido: el carácter i ES el byte i (mismo texto de error que abajo)
+                    int nb = strBytes(ref);
+                    if (i < 0 || i >= nb) {
+                        throwBpRuntimeError(tc, "charAt: idx fuera de rango " + i + " (len=" + nb + ")");
+                    }
+                    byte[] t = { memory[refDeref(ref) + 4 + i] };
+                    pushTcRef(tc, allocVmStrBytes(t, 0, 1, true));
+                    break;
+                }
+                String s = readVmString(ref);
                 int n = s.codePointCount(0, s.length());   // H2: índice en codepoints
                 if (i < 0 || i >= n) {
                     throwBpRuntimeError(tc, "charAt: idx fuera de rango " + i + " (len=" + n + ")");
@@ -5697,6 +5842,7 @@ public class VirtualMachine {
                 if (len > 0 && linea[len - 1] == '\r') len--;
                 long h = heapNuevo(TYPE_ARRAY_I8, len, len);   // V7/H7 #593
                 System.arraycopy(linea, 0, memory, refDeref(h) + 4, len);
+                strFijaAscii(h, bytesAscii(linea, 0, len));   // V8/H5: la línea nace con su bit
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) h;
                 pushTcRef(tc, h);
@@ -5853,7 +5999,14 @@ public class VirtualMachine {
             }
             case CHAR_CODE_AT: {
                 int idx = popTc(tc);
-                String s = readVmString(popTcRef(tc));      // #6 (censo V4): string ref = 8B; H2 índice en codepoints
+                long ref = popTcRef(tc);
+                if (strAscii(ref)) {   // V8/H5: el rápido: el carácter i ES el byte i (mismo texto de error que abajo)
+                    int nb = strBytes(ref);
+                    if (idx < 0 || idx >= nb) throwBpRuntimeError(tc, "charCodeAt: índice " + idx + " fuera de [0," + nb + ")");
+                    pushTc(tc, memory[refDeref(ref) + 4 + idx] & 0xFF);
+                    break;
+                }
+                String s = readVmString(ref);      // #6 (censo V4): string ref = 8B; H2 índice en codepoints
                 int n = s.codePointCount(0, s.length());
                 if (idx < 0 || idx >= n) throwBpRuntimeError(tc, "charCodeAt: índice " + idx + " fuera de [0," + n + ")");
                 pushTc(tc, s.codePointAt(s.offsetByCodePoints(0, idx)));
@@ -5869,6 +6022,8 @@ public class VirtualMachine {
                 int n = (rd == 0) ? 0 : readInt32(rd);
                 long outRef = heapNuevo(TYPE_ARRAY_I8, n, n);   // V4: handle 64b COMPLETO (no truncar); V7/H7 #593
                 if (n > 0) System.arraycopy(memory, rd + 4, memory, refDeref(outRef) + 4, n);
+                if (b == Builtin.FROM_BYTES)   // V8/H5: la cadena nace con su bit (un byte[] no lo lleva nunca)
+                    strFijaAscii(outRef, bytesAscii(memory, refDeref(outRef) + 4, n));
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG) que refDeref usa
                 pushTcRef(tc, outRef);
@@ -6110,6 +6265,9 @@ public class VirtualMachine {
                 int dstByte = dstRef + 4 + dstStart * elemSz;
                 int bytes   = count * elemSz;
                 System.arraycopy(memory, srcByte, memory, dstByte, bytes);
+                // V8/H5: `move` escribe en el destino, que puede ser una cadena (#714): su bit «todo ASCII» deja de
+                // estar garantizado. Se quita (va por el lento, que siempre acierta).
+                if (dstType == TYPE_ARRAY_I8) writeInt32(dstHeader, readInt32(dstHeader) & ~TAG_ASCII_BIT);
                 pushTc(tc, 0);   // dummy ret (void)
                 break;
             }
@@ -6144,6 +6302,15 @@ public class VirtualMachine {
                     throwBpRuntimeError(tc, "strCopy: fuera de rango (pos=" + pos + " bytes=" + n
                             + " dst=" + dstLen + ")");
                 if (n > 0) System.arraycopy(memory, srcRef + 4, memory, dstRef + 4 + pos, n);
+                // V8/H5 — el bit del destino es el «Y» de los trozos: el que empieza en 0 lo pone, los demás lo pueden
+                // quitar (uno que empieza en 0 tras otros vacíos también lo pone: el «Y» con lo vacío es lo mismo). Un
+                // trozo del heap con su bit no se mira; uno sin él (un literal, un módulo viejo) se mira al copiarlo.
+                boolean trozo = (n == 0)
+                        || ((srcRef - 4 >= heapStart) && (readInt32(srcRef - 4) & TAG_ASCII_BIT) != 0)
+                        || bytesAscii(memory, srcRef + 4, n);
+                int dt = readInt32(dstHeader);
+                boolean ascii = trozo && (pos == 0 || (dt & TAG_ASCII_BIT) != 0);
+                writeInt32(dstHeader, ascii ? (dt | TAG_ASCII_BIT) : (dt & ~TAG_ASCII_BIT));
                 pushTc(tc, pos + n);
                 break;
             }

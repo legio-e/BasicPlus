@@ -77,6 +77,13 @@ typedef struct { uint64_t v; } bpref_t;
  * de los reservados: un bloque ya muerto cuyos hijos owner están por soltar, que no cupo en la pila de trabajo y espera
  * al repaso. Fuera de ahí vale 0. Sólo la VM-C (en la VM-Java, la pila es de Java y no se llena). */
 #define BPVM_TAG_SOLTANDO   0x00400000u
+/* V8/H5 (21-oct) — «TODO ASCII»: el bit de los DOS ALGORITMOS de las cadenas (Eduardo: «Lo que necesitamos son 2
+ * algoritmos. Se mira si hay algún caracter especial. Si no hay se trabaja con el algoritmo rápido ( 1 char = 1byte ),
+ * si hay caracteres especiales se trabaja con el algoritmo lento»). Lo pone QUIEN CREA la cadena, por los bytes que
+ * escribe: una cadena no cambia, así que lo que se miró al crearla vale mientras exista. 0 = no se sabe, o no lo es: el
+ * lento, el de siempre. `move` lo quita del destino. La compactación lo conserva (sólo usa ENHEBRADO y CLAVADO). Espejo
+ * de TAG_ASCII_BIT (miVM). V8_IDEAS §E5, «Dos algoritmos». */
+#define BPVM_TAG_ASCII      0x00200000u
 
 /* Códigos de tipo de heap. */
 #define BPVM_TYPE_ARRAY_I8  0
@@ -1071,6 +1078,38 @@ static inline uint8_t* bpref_arr_elem(bpvm_t* vm, bpref_t arr, uint32_t idx, uin
  * (mismo +4 que arrays). El slot es de 4 bytes; el valor puede ser 4 u 8B. */
 static inline uint8_t* bpref_field(bpvm_t* vm, bpref_t obj, uint32_t slot) {
     return vm->memory + bpref_deref(vm, obj) + BPVM_ARR_DATA_OFF + slot * 4u;
+}
+
+/* ---- V8/H5 (21-oct): los DOS ALGORITMOS de las cadenas (ver BPVM_TAG_ASCII) ----
+ * `s` es la dirección de una cadena tal como la da bpref_deref: la de su palabra de longitud (0 = null = ""). Un bloque
+ * del heap lleva su etiqueta justo antes; un literal (por debajo de heap_start) no tiene etiqueta. */
+
+/* ¿Todos estos bytes son ASCII (menores de 0x80)? Una pasada: el OR de todos, y mirar un bit al final. */
+static inline int bpvm_bytes_ascii(const uint8_t* p, uint32_t n) {
+    uint8_t acc = 0;
+    for (uint32_t i = 0; i < n; i++) acc |= p[i];
+    return (acc & 0x80u) == 0;
+}
+
+/* ¿Va la cadena por el algoritmo RÁPIDO (un carácter = un byte)? Una del heap, por su bit. Un literal no tiene
+ * etiqueta: se mira entero (suele ser corto), como se miraría al crearlo. null es "": sí. */
+static inline int bpvm_str_ascii(const bpvm_t* vm, uint32_t s) {
+    if (s == 0u) return 1;
+    if (s >= vm->heap_start + 4u) return (bpvm_read_u32_be(vm->memory + s - 4u) & BPVM_TAG_ASCII) != 0u;
+    return bpvm_bytes_ascii(vm->memory + s + 4u, bpvm_read_u32_be(vm->memory + s));
+}
+
+/* Quien acaba de CREAR la cadena del heap `s` le pone (o le quita) el bit. */
+static inline void bpvm_str_fija_ascii(bpvm_t* vm, uint32_t s, int ascii) {
+    if (s < vm->heap_start + 4u) return;   /* no es un bloque del heap */
+    uint32_t tag = bpvm_read_u32_be(vm->memory + s - 4u);
+    bpvm_write_u32_be(vm->memory + s - 4u, ascii ? (tag | BPVM_TAG_ASCII) : (tag & ~BPVM_TAG_ASCII));
+}
+
+/* La cadena del heap `s` acaba de nacer con sus bytes ya escritos: su bit, por lo que lleva. */
+static inline void bpvm_str_nace(bpvm_t* vm, uint32_t s) {
+    if (s < vm->heap_start + 4u) return;
+    bpvm_str_fija_ascii(vm, s, bpvm_bytes_ascii(vm->memory + s + 4u, bpvm_read_u32_be(vm->memory + s)));
 }
 
 /* ---- H2 (V2): helpers UTF-8 sobre el payload de un string byte[] ----

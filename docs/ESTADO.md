@@ -93,6 +93,17 @@
 >   rápido si no hay caracteres especiales, el lento si los hay. Para que funcione, se mira una vez al crear la cadena
 >   (al copiar sus bytes, casi gratis) y se recuerda en un bit de la etiqueta. El texto con acentos sigue por el lento.
 >   En §E5, «Dos algoritmos», con lo que hay que decidir.
+> - **los dos algoritmos, HECHOS** (Eduardo: *«en todas las funciones podemos tener las 2 opciones […] se puede medir
+>   y verificar»*; y *«Copiar un string debería ser igual con caracteres especiales»*), en las dos VMs, verificados y
+>   grabados en la Pico 2, la Metro y la P4 (§E5, «Los dos algoritmos, hechos y medidos»):
+>   - `StrDosCaminos` sale igual en las dos VMs, y la paridad da 151 PASS;
+>   - recorrer 2 KB baja de 535 a 20 ms en la Pico 2;
+>   - un JSON de 8 KB, de 16,7 a 2,5 s, y lineal;
+>   - en la P4 los packs aguantan (`0x48001000`).
+>
+>   Sin explicar: en las RP2350, `intToString`, `parseFloat` y otras dos, un 25–50 % más lentas. Mi hipótesis, sin
+>   probar, es el sitio del código en la caché del XIP. Y `#717`, de paso: `charCodeAt` fuera de rango no da lo mismo
+>   en las dos VMs.
 > - **el bit, aprobado** (*«OK, me parece bien lo del bit»*);
 > - **la longitud** (*«se guarda la longitud o el final lo marca el caracter \0?»*): se guarda en bytes, delante, y no
 >   hay `\0`. Uno dentro es un carácter más, comprobado en las dos VMs. La de caracteres no se guarda; cabría en los 21

@@ -2373,6 +2373,140 @@ el caracter \0?»*).
 - **Donde la VM pasa una cadena a la libc** (un nombre de fichero, `parseInt`), la copia a un búfer de C con su `\0`.
   Ahí un `\0` de dentro sí cortaría: es la frontera con C, no la cadena.
 
+### Los dos algoritmos, hechos y medidos (21-oct)
+
+Eduardo: *«en todas las funciones podemos tener las 2 opciones, sin caracteres especiales métodos clásicos optimizados
+para arrays de bytes, con caracteres especiales, dejamos lo que tenemos actualmente. Y con ese cambio se puede medir y
+verificar a ver que tal funciona.»* Y a mitad: *«Copiar un string debería ser igual con caracteres especiales, se
+puede hacer como una copia de bytes.»*
+
+**Lo hecho, en las dos VMs** (primero la VM-Java, como manda la cascada):
+
+- **El bit** «todo ASCII» (`0x00200000`) en la etiqueta: `TAG_ASCII_BIT` en la VM-Java y `BPVM_TAG_ASCII` en la VM-C.
+  - **Lo pone quien crea la cadena**, por los bytes que escribe: `allocVmString` y `heap_alloc_string` (que cubren casi
+    todo), `fromBytes`, `readLine`, `substring`, `charAt`, `upper`, `lower`, `trim`, `replace`, los trozos de `split`,
+    `listDir`, las rutas y la concatenación del AOT.
+  - **Concatenar** (`__strCopy`) le pone el «Y» de los trozos.
+  - **Un `byte[]` nunca lo lleva.**
+  - **`move` lo quita del destino**, así que la marca no puede mentir (`#714` sigue abierta: `move` todavía escribe).
+  - **Un literal no tiene etiqueta:** se mira entero cuando hace falta (suele ser corto).
+- **El rápido**, si la cadena lleva el bit, en `strlen`, `charAt`, `charCodeAt`, `substring`, `indexOf`, `upper` y
+  `lower` (y en la VM-Java también `trim`, `startsWith`, `endsWith` y `contains`). Con caracteres especiales, el lento
+  de siempre, sin tocar: lo que hace hoy cada VM, también lo que no casa entre ellas (`#711`, `#717`).
+- **Copiar es una copia de bytes en los dos caminos** (la VM-C): `memcpy` en vez de los bucles byte a byte en
+  `substring`, `toBytes`/`fromBytes`, `trim`, `split`, `replace` (cada trozo de una vez), las rutas,
+  `heap_alloc_string` y la concatenación del AOT. En la VM-Java no: su lento pasa por un `String` de Java, que cambia el
+  UTF-8 mal formado, y cambiarlo es la decisión de `#711`.
+- **Lo que no cambia:** el formato del `.mod`, el compilador, la stdlib y la ABI del código nativo. Sólo la imagen.
+
+**Verificado:**
+- **`StrDosCaminos`** (nuevo, en el corpus de la paridad) pregunta cada función por los dos caminos sobre el mismo
+  contenido (el lento, con el bit quitado por `move`): 140 comparaciones, 0 distintas.
+  - Las 158 líneas de su salida son las mismas en la VM-Java nueva, en la VM-C nueva y en la VM-C de antes del cambio,
+    que iba siempre por el lento.
+  - `move` con una `ñ` dentro deja `strlen` en 3: el bit se fue.
+- **Las pruebas de la mañana** (el UTF-8 mal formado, sus orígenes, el `\0`, `move`) dan lo mismo que antes del cambio.
+- **`compat.sh check`** con las dos VMs nuevas: paridad 151 PASS, la cápsula de V6 59 PASS (los demás frentes, en
+  FICHAS).
+
+**Medido** (el censo y los programas de la mañana, con la imagen nueva en la Pico 2, la Metro y la P4), con 2048 bytes:
+
+| | Pico 2 | Metro (PSRAM) | P4 |
+|---|---|---|---|
+| recorrer con `charCodeAt` | 535 → **20 ms** | 556 → **20 ms** | 228 → **16 ms** |
+| recorrer con `charAt` | 581 → **89 ms** | 623 → **78 ms** | 240 → **29 ms** |
+| un `charCodeAt(s, 1024)` | 261 → **5,8 µs** | 276 → **5,6 µs** | 107 → **3,3 µs** |
+| `strlen` | 132 → **4,1 µs** | 139 → **4,0 µs** | 65 → **1,9 µs** |
+| `substring` (la mitad) | 606 → **131 µs** | 826 → **275 µs** | 203 → **31 µs** |
+| `trim` | 952 → **215 µs** | 1,5 ms → **518 µs** | 351 → **55 µs** |
+| `upper` | 1,1 ms → **432 µs** | 1,5 ms → **885 µs** | 356 → **164 µs** |
+| `toBytes` | 460 → **288 µs** | 800 → **551 µs** | 114 → **56 µs** |
+
+Y en programas de verdad:
+
+| | antes | ahora |
+|---|---|---|
+| leer un JSON de 8 KB, Pico 2 | 16,7 s | **2,5 s** |
+| leer un JSON de 8 KB, P4 | 6,8 s | **1,1 s** |
+| leer un JSON de 8 KB, Metro | — | 2,4 s |
+| leer un JSON de 1 / 2 / 4 / 8 KB, Pico 2 | 0,5 / 1,5 / 4,8 / 16,7 s (n²) | 0,3 / 0,6 / 1,2 / 2,5 s (n) |
+| recorrer 4000 caracteres, Pico 2 | 1986 ms | **38 ms** |
+
+**Lo que no cambia, como se esperaba:**
+- el `Map` (2000 claves, 56 s en la P4): su parte cuadrática es desplazar la lista al meter, en BP;
+- `==` (un bucle de bytecode);
+- concatenar en un bucle;
+- el `StringBuilder`;
+- el GC.
+
+`recorrer con charAt` baja menos que `charCodeAt` porque cada `charAt` crea una cadena: queda el coste de reservar.
+
+**Lo que no cuadra, sin explicar todavía:** en las RP2350 (no en la P4), unas pocas operaciones salen más lentas, y se
+repite igual en dos pasadas:
+- `intToString`: 45 → 68 µs;
+- `floatToString`: 44 → 56 µs;
+- `parseFloat`: 35 → 50 µs;
+- cadena + entero: 199 → 245 µs.
+
+El bucle vacío del censo es el mismo antes y ahora (23,3 y 23,6 µs), y `parseFloat` no pasa por nada de lo que se
+cambió. Lo que tienen en común es que llaman a funciones grandes de la libc (`snprintf`, `strtod`), que se ejecutan
+desde la flash por la caché de 16 KB del XIP. La hipótesis, sin demostrar, es que la imagen nueva movió el código y
+ahora esas funciones y el intérprete se pisan en la caché (ya pasó con PrintBench: ±10 % de una imagen a otra). Lo
+probaría un test de desplazamiento: mover el código sin cambiar nada más.
+
+### El lento, con dos contadores: bytes y caracteres (propuesta, Eduardo 21-oct)
+
+Eduardo, antes de seguir con las placas: *«Deberíamos ver si podemos hacer mas mejoras. Por ejemplo, find o indexof.
+Por si solas si hay caracteres especiales iríamos por el método lento. Ahora si después se hace un substring o algo
+similar podemos optimizar si trabajamos con punteros de C o con dos contadores de bytes y de caracteres.»*
+
+**Lo que cuesta hoy el lento**, medido en la Pico 2 con `samples/benchmarks/StrAcentos.bp` (cadenas que empiezan por
+`ñ`, así que van por el lento):
+
+| caracteres | 500 | 1000 | 2000 | 4000 |
+|---|---|---|---|---|
+| recorrer por índice (`charCodeAt`) | 36 ms | 134 ms | 509 ms | **1992 ms** (n²) |
+| buscar y cortar (`indexOf` + `substring`), ×100 | 32 ms | 59 ms | 117 ms | 222 ms |
+
+**Dónde se cuenta dos veces** (lo que el lento hace hoy en cada llamada):
+- `indexOf` encuentra un BYTE y lo convierte a carácter, contando desde el principio;
+- `substring(s, i, j)` vuelve a contar la cadena entera (para recortar el rango) y luego camina desde el principio
+  hasta `i`, y otra vez desde el principio hasta `j`: tres pasadas;
+- `charAt`/`charCodeAt(s, i)`: cuenta la cadena entera y luego camina hasta `i`: dos pasadas;
+- en un bucle, cada vuelta empieza otra vez desde el principio: n².
+
+**La propuesta, en dos escalones:**
+1. **Dentro de cada llamada (sin guardar nada):** una sola pasada con los dos contadores a la vez. `substring` camina
+   desde el principio hasta `i` (anota el byte) y sigue hasta `j` (anota el otro); si se acaba la cadena antes, eso es
+   el recorte. `charAt` camina hasta `i`, y si se acaba antes, está fuera de rango. Pasa de tres o dos pasadas a una, y
+   para un `i` cerca del principio casi nada. Los bucles siguen siendo n², más deprisa.
+2. **Entre llamadas: un cursor por hilo con los dos contadores.**
+   - **Qué guarda:** cada hilo recuerda la última cadena del lento (su handle, con la generación), el último carácter
+     que buscó, el byte donde empieza y, si se contó, cuántos caracteres tiene.
+   - **Cómo se usa:** la llamada siguiente sobre la misma cadena sigue desde ahí, hacia delante o hacia atrás (el UTF-8
+     se puede recorrer al revés).
+   - **Lo que da:**
+     - recorrer `charAt(s, i)` con `i` creciendo pasa a ser lineal también con acentos (cada vuelta, un carácter);
+     - `indexOf` deja el cursor en lo encontrado, y el `substring(s, i, …)` de después empieza ahí;
+     - `strlen` repetido sale directo.
+   - **Por qué es seguro:** lo da el invariante (una cadena no cambia mientras existe):
+     - la generación del handle distingue una cadena muerta de la que ocupa su sitio;
+     - la compactación no estorba, porque el cursor guarda posiciones desde el principio de la cadena y no
+       direcciones;
+     - `move` sube un contador de la VM (una «época») que invalida todos los cursores;
+     - cada hilo tiene el suyo, sin cerrojos.
+
+**Lo que hay que decidir:**
+- **los escalones:** el 1 solo, o el 1 y el 2. El 2 es estado escondido (un cursor), aunque nunca cambia un resultado,
+  sólo el tiempo;
+- **dónde:** en la VM-C, que es donde importa. La VM-Java decodifica a un `String` de Java y no cuenta, así que sin
+  cursor haría de oráculo: la paridad compara la VM-C con cursor contra la VM-Java sin él, con todos los patrones de
+  acceso (hacia delante, hacia atrás, al azar, dos cadenas a la vez, tras un `move`). La alternativa es ponerlo también
+  en la VM-Java, por simetría.
+
+**Lo que daría, estimado y por medir:** recorrer 4000 caracteres con acentos, de 1992 ms a unos 40 (como el ASCII); un
+par «buscar y cortar» de 4000, de 2,2 a cerca de 1,4 ms.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
