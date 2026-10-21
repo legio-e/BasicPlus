@@ -167,7 +167,10 @@
 >     PSRAM y en la SRAM;
 >   - **en las grandes, la memoria:** poner a cero y copiar son el 86 % de crear 16 KB. No poner a cero quita un 28 %
 >     ahí y poco en las cadenas que caben en la caché;
->   - y una pista para `#665`, sin comprobar: las secciones críticas de la imagen de dos núcleos.
+>   - y una pista para `#665`, sin comprobar: las secciones críticas de la imagen de dos núcleos;
+>   - **el cerrojo NO se toca** (Eduardo: *«No quiero meterme en lios con la memoria»*). Y su pregunta, por qué
+>     reservar más tarda más: reservar en sí no crece (2,8–5,3 µs en la SRAM); crecen poner a cero, el GC repartido y,
+>     en la PSRAM, la caché que la puesta a cero vacía (§E5).
 > - **¿un CRC para descartar la igualdad?** (Eduardo: *«Igual con utilizar el comparador nos vale»*): sí, nos vale el
 >   comparador. Si son distintas, para en el primer byte distinto (y `==` ni mira los bytes si las longitudes no
 >   coinciden); un CRC pide recorrerlas enteras, no prueba la igualdad y no sirve para ordenar. Lo que pesa es que el
@@ -185,9 +188,9 @@
 >   En placa: 1000 claves en la Pico 2, de 17,7 a 2,6 s; 2000 en la P4, de 56,7 a 3,7 s; en la Metro, de 72,9 a 9,3 s.
 >
 > **Para la siguiente sesión:**
-> - **crear en la PSRAM, por decidir (Eduardo)** (§E5, «Medido por dentro»): el cerrojo de la VM (un camino rápido
->   atómico; es el SMP de V7 y pide su análisis), no poner a cero las cadenas que se llenan enteras, y el código
->   caliente en la SRAM. En la Metro queda `/app/CreaMide.mod`; sin la imagen de medida sólo da los totales;
+> - **crear en la PSRAM, por decidir (Eduardo)** (§E5, «Medido por dentro»): no poner a cero las cadenas que se llenan
+>   enteras, y el código caliente en la SRAM. El cerrojo de la VM, no (Eduardo). En la Metro queda
+>   `/app/CreaMide.mod`; sin la imagen de medida sólo da los totales;
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
 >   «similar» frente a la libc, y dónde se prueba cada arquitectura (las placas o QEMU);
 > - **las decisiones del H5** (§E5): la regla del UTF-8 mal formado (`#711`), el agujero de `move` (`#714`), `<` y `>`

@@ -3168,8 +3168,9 @@ cerrojo: `vm->smp` queda a NULL.
    nada. Con un run no arranca la comm task: puede ser ella en el otro núcleo, que comparte la caché. Sin comprobar.
 
 **Las palancas, por lo medido:**
-1. **El cerrojo de la VM:** la mitad de crear una cadena pequeña, en la PSRAM y en la SRAM. Lo paga toda reserva, objetos
-   y arrays incluidos, no sólo las cadenas.
+1. **El cerrojo de la VM — NO SE TOCA** (Eduardo, 21-oct: *«No, no tocamos el cerrojo. No quiero meterme en lios con la
+   memoria»*). Lo que se midió: la mitad de crear una cadena pequeña, en la PSRAM y en la SRAM. Lo paga toda reserva,
+   objetos y arrays incluidos, no sólo las cadenas.
    - La forma conocida: un camino rápido atómico (un CAS si está libre, ~0,25 µs) y el semáforo de FreeRTOS sólo para
      esperar.
    - Es el corazón del SMP de V7: el GC con el mundo parado espera con ese cerrojo y con sus condiciones. Antes, el
@@ -3185,6 +3186,31 @@ cerrojo: `vm->smp` queda a NULL.
 imagen, cada sección crítica de FreeRTOS cuesta 3,7 µs; en una de un núcleo, es enmascarar las interrupciones. Si el
 intérprete pasa por alguna en cada cuanto o en cada llamada, explicaría parte de lo que mide esa ficha. Es una pista, no
 está comprobada.
+
+**¿Por qué reservar más tarda más? (Eduardo, 21-oct)** *«Lo que no entiendo es por que reservar mas memoria tarda mas
+que reservar menos, debería tardar lo mismo.»* Reservar, lo que es reservar, sí tarda lo mismo: buscar el hueco, escribir
+la cabecera y dar de alta el handle. Lo que crece con el tamaño es lo que va pegado a la reserva. `newByteArray(n)`, con
+la imagen de medida, en µs por reserva:
+
+| | 16 B | 256 B | 2 KB | 16 KB |
+|---|---|---|---|---|
+| reservar (el hueco, la cabecera y el handle), SRAM | 2,8 | 3,0 | 3,4 | 5,3 |
+| reservar, PSRAM | 5,0 | 7,2 | 19 | 72 |
+| poner a cero, SRAM | 0,7 | 1,6 | 8,8 | 72 |
+| poner a cero, PSRAM | 1,7 | 24 | 212 | 1 932 |
+| el GC repartido, PSRAM | 4,2 | 8,3 | 22 | 160 |
+
+1. **Poner a cero.** El lenguaje promete que un array nace limpio, y la VM escribe un cero en cada byte: es proporcional
+   al tamaño. En la SRAM, ~4,4 ns por byte. En la PSRAM, ~120 ns, porque cada línea de 8 B hay que traerla a la caché
+   antes de escribirla y devolverla después.
+2. **El GC.** Salta por volumen: cada ~700 KB reservados en la PSRAM (1/8 del heap) y cada ~29 KB en la SRAM de la Metro.
+   Reservando de 16 KB en 16 KB salta mil veces antes que de 16 B en 16 B, y a cada reserva le toca más.
+3. **En la PSRAM, la caché.** Poner a cero 16 KB pasa 16 KB de datos por la caché de 16 KB, que es también la del código.
+   Al acabar, el código y los datos del asignador (la lista de huecos, la tabla de handles) ya no están en ella, y la
+   propia reserva va más lenta: de 5 a 72 µs, con 62 fallos de caché. En la SRAM no pasa: de 2,8 a 5,3 µs.
+
+De todo esto, lo único que el lenguaje no exige es poner a cero las cadenas que la VM llena enteras nada más reservarlas
+(la palanca 2).
 
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
