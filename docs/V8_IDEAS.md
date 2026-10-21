@@ -2280,11 +2280,29 @@ Eduardo, ante el censo de lo cuadrático: *«No, seguimos con UTF-8. Lo que nece
 algún caracter especial. Si no hay se trabaja con el algoritmo rápido ( 1 char = 1byte ), si hay caracteres especiales
 se trabaja con el algoritmo lento.»*
 
-**Lo que decide si funciona: CUÁNDO se mira.**
-- **Si se mira en cada llamada**, mirar ya es recorrer la cadena. Recorrer 2048 caracteres seguiría costando
-  2048 × 2048, sólo que algo más deprisa.
-- **Si se mira UNA vez, al crear la cadena, y se recuerda,** cada llamada pregunta por una marca: O(1). Eso lo permite
-  el invariante de Eduardo: una cadena no cambia mientras existe, así que lo que se miró al crearla sigue valiendo.
+**Lo que decide si funciona: CUÁNDO se mira.** Mirar es lineal y rápido: una pasada con punteros (Eduardo: *«para
+buscar si una cadena tiene un caracter especial no puede ser n^2 tiene que ser lineal. En C con punteros es muy
+rápido»*). Por ejemplo:
+
+```c
+/* ¿todo ASCII? Una pasada. De 4 en 4 bytes es un OR por palabra y una máscara al final. */
+static int todo_ascii(const uint8_t* p, uint32_t n) {
+    const uint8_t* fin = p + n;
+    uint8_t acc = 0;
+    while (p < fin) acc |= *p++;
+    return (acc & 0x80u) == 0;
+}
+```
+
+Lo cuadrático no es mirar, es REPETIRLO:
+- **Si se mira dentro de cada `charCodeAt`,** cada llamada paga una pasada entera. Un bucle que recorre 2048 caracteres
+  hace 2048 pasadas de 2048 bytes: n². Hoy, en la Pico 2, contar 2 KB en C (`strlen`) cuesta 131 µs. Una pasada que
+  sólo mire bytes sería más corta, unas decenas de µs (estimado), pero repetida 2048 veces son decenas de ms, y con
+  8 KB, 16 veces más.
+- **Si se mira UNA vez, al crear la cadena, y se recuerda,** cada llamada pregunta por una marca: O(1), y el bucle es
+  lineal. Eso lo permite el invariante de Eduardo: una cadena no cambia mientras existe, así que lo que se miró al
+  crearla sigue valiendo. Y al crearla ya se copian sus bytes con punteros: mirar va en esa misma pasada
+  (`*d++ = c = *s++; acc |= c;`).
 
 **Dónde se recuerda:** un bit en la etiqueta del bloque, «todo ASCII». Los bits 21–0 están libres, el GC los respeta al
 marcar y al barrer, y la compactación usa el 31 y el 23.
