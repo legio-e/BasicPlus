@@ -1,0 +1,58 @@
+// GcHuecos.bp — lo que cuesta un gc() según los HUECOS que deja en el heap.
+//
+// ─── Por qué existe (V8/H5, 21-oct-2026) ─────────────────────────────────────
+//
+// En el censo de las cadenas (`StrCenso.bp`), `gc()` costaba 2 ms en la Pico 2 y 10 en la Metro con PSRAM y en la
+// P4. Mirando el porqué en `heap.c`: el barrido vacía la lista de libres y la rehace en orden de dirección, pero
+// cada hueco se da de alta con `add_to_free_list`, que busca su sitio recorriendo la lista DESDE EL PRINCIPIO. Con
+// k huecos son k²/2 pasos, y en la PSRAM cada paso puede ser un fallo de caché. Esto lo mide.
+//
+// ─── Cómo mide ───────────────────────────────────────────────────────────────
+//
+// k cadenas vivas, cada una entre dos que se tiran: tras el primer gc() quedan unos k huecos. Luego diez gc()
+// seguidos, cronometrados. Con k = 500, 1000, 2000 y 4000; si una no cabe en el heap, lo dice y sigue.
+// Si el coste fuera lineal, doblar k doblaría el tiempo; si es cuadrático, lo cuadruplica.
+//
+// Medido el 21-oct (los diez gc(), k = 1000 → 2000 → 4000): la Pico 2, 93 → 343 → 1232 ms; la Metro con la VM en
+// la PSRAM, 514 → 2972 → 12 710 ms; la P4, 610 → 2869 → 36 026 ms (3,6 s cada gc() con 4000). Sólo análisis
+// (Eduardo: «de momento no intentamos mejorar»): `V8_IDEAS` §E5. No es de paridad: las cifras son de cada VM.
+module GcHuecos
+  import Core
+  import Machine
+
+  var vivos: string[] := null
+
+  function prueba(k: integer)
+    vivos := __newStrArray(k)
+    var i: integer := 0
+    var basura: string := ""
+    while i < k do
+      basura := intToString(i) + "-basura-que-se-tira"
+      vivos[i] := intToString(i) + "-vivo"
+      i += 1
+    endwh
+    gc()                                  // el primero barre la basura: deja ~k huecos
+    var t0: integer := Machine.uptimeMs()
+    var r: integer := 0
+    while r < 10 do
+      gc()                                // los siguientes, con los k huecos ya en la lista
+      r += 1
+    endwh
+    var ms: integer := Machine.uptimeMs() - t0
+    print "GCHUECOS k=" + k + " diez gc(): " + ms + " ms"
+  end prueba
+
+  function Main()
+    var k: integer := 500
+    while k <= 4000 do
+      try
+        prueba(k)
+      catch e: RuntimeError
+        print "GCHUECOS k=" + k + " no cabe: " + e.msg
+      endtry
+      vivos := null
+      gc()
+      k := k * 2
+    endwh
+  end Main
+end GcHuecos

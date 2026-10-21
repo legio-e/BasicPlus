@@ -27,6 +27,45 @@
 
 ## Última sesión
 
+> **21-oct** — **El H5, los strings: el análisis** (Eduardo: *«De momento solo analizamos»*). **Incluye el censo de
+> 36 operaciones, medido en el PC y en tres placas y ordenado de la más lenta a la más rápida; la PSRAM y su caché,
+> placa por placa; y el invariante de Eduardo con sus matices. También la norma de Eduardo: 1º analizar, 2º el
+> algoritmo, 3º la implementación. Salen `#711`–`#715`, entre ellas el GC cuadrático (`#715`: 3,6 s por recolección en
+> la P4 con 4000 cadenas vivas), que de momento sólo se analiza.**
+>
+> **Lo que dijo Eduardo:**
+> - *«¿qué hitos tenemos actualmente de v8?»*. La respuesta, de la tabla de FICHAS: H1–H4. De paso, corregida en
+>   `V8_IDEAS` §E3 una nota que daba a la P4 con el firmware de prueba;
+> - el H5: *«tenemos pendiente de V7 optimizar los strings. Esto lo vamos agrupar en H5. Por un lado la optimización de
+>   la operación de strings. Y por otro la optimización de strings que están en PSRAM»*. Sus dos puntos:
+>   - el string como invariante, y los matices de su equivalencia con un `byte[]`;
+>   - si la PSRAM tiene caché y si se puede aprovechar;
+> - *«Necesitamos una lista de las operaciones sobre strings […] censar de más lentas a más rápidas, y optimizar las
+>   más lentas»*;
+> - *«Si necesitas hacer pruebas en placa tienes la Pico, la Metro y la P4 conectadas. Tienes permiso para grabar y
+>   probar lo que necesites»*;
+> - la norma: *«La norma debe ser: 1ª analizar, 2º mejorar algoritmo, 3º mejorar implementación. Lo del GC y la lista
+>   de huecos de momento solo analiza, de momento no intentamos mejorar»*. Me paró cuando iba a hacer un prototipo
+>   (en un worktree, fuera del árbol) para demostrar la causa del GC. Lo quité sin haber aplicado nada.
+>
+> **Lo hecho** (el detalle, en `V8_IDEAS` §E5):
+> - **el mapa:** tres lectores (la VM-C, la VM-Java, y la stdlib con el compilador), y a mano lo que pesaba (la tabla de
+>   handles, el barrido del GC, `move`);
+> - **el censo, `samples/benchmarks/StrCenso.bp`:** en las dos VMs del PC y en la Pico 2, la Metro y la P4, sin grabar
+>   nada. La Metro, con `psram=0` y con `psram=1`, y devuelta a `psram=1`;
+> - **`samples/benchmarks/GcHuecos.bp`,** el instrumento de `#715`;
+> - **de paso, `#711`–`#714`,** comprobadas en las dos VMs del PC;
+> - **corregida una memoria mía:** la tabla de handles ya no sale del `malloc` de la plataforma. Desde `#451` vive en el
+>   bloque de la VM, y en las placas con PSRAM está en la PSRAM.
+>
+> **Para la siguiente sesión:**
+> - **las decisiones del H5** (§E5): la regla del UTF-8 mal formado (`#711`), el agujero de `move` (`#714`), `<` y `>`
+>   entre strings (`#713`), qué algoritmo va primero, y si se recuerda «es ASCII»;
+> - **`#712` corrompe la memoria en silencio** con un tamaño de array enorme. No es de cadenas; Eduardo dirá cuándo;
+> - **`#715`, sólo análisis** hasta que Eduardo diga;
+> - **la C5 y la S3, sin el censo:** no estaban conectadas;
+> - **en la Pico 2, la Metro y la P4 quedan** `/app/StrCenso.mod` y `/app/GcHuecos.mod`.
+
 > **19-oct** — **La WiFi, el H3: el análisis, con las decisiones de Eduardo, y el paso 1, hecho en la P4. Su C6,
 > actualizada a ESP-Hosted 3.0.9 por el conector P1; y un firmware de prueba en la P4, con el IDF 6.1, que enciende,
 > busca, se conecta con la clave, tiene IP por DHCP, se desconecta y apaga, tres vueltas sin un fallo y con la SD a la

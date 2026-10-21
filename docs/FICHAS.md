@@ -6997,6 +6997,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > | **H2** | **el Bluetooth** (`#697`, el experimento E1): el teclado y el ratón por Bluetooth LE, hoy en la P4 | 🔶 **a medias y parado** (Eduardo, 18-oct: *«de momento no lo tocamos»*). Los pasos 1 y 2, hechos el 14-oct en la P4. Lo siguiente, cuando se retome: probarlo en la Pico 2, para ver qué se puede hacer común y qué difiere |
 > | **H3** | **la WiFi**: la red en placa, el backend de `Net` (hoy sólo tiene el del PC). Lo que pide Eduardo (19-oct): encender, la lista de redes, conectarse con su clave, IP dinámica o fija, TCP/IP, desconectar y apagar; y lo primero, el IDE por WiFi. Y separar la conexión WiFi (el enlace) del resto del TCP/IP, *«así limitamos el alcance de cada cosa»* | 🔬 **en análisis desde el 19-oct**: `V8_IDEAS` §E3. Decidido ese día: la P4 de Waveshare primero (la C3, la C5 y la C6, después); los ajustes, en un JSON en `/sys`; el Entorno, sólo para activar al arrancar, y sin decir nada la WiFi y el Bluetooth apagados; preconfigurada desde el IDE, y en la P4 con un programa interactivo. El TCP/IP parte de lo que se hizo con la Ethernet de la P4 Kit. **El paso 1, hecho el 19-oct** (`V8_IDEAS` §E3, «Paso 1»): la C6 de la P4, actualizada a ESP-Hosted 3.0.9 por el conector P1, con su flash de fábrica guardada; y un firmware de prueba en la P4, con el IDF 6.1, que enciende, busca, se conecta con la clave, tiene IP por DHCP, se desconecta y apaga, tres vueltas sin un fallo y con la SD a la vez en el mismo controlador. La red ocupa ~252 KB de flash y casi nada de la RAM interna de la P4. Salió `#706` (tras `esp_wifi_deinit` la WiFi no vuelve: se apaga con `esp_wifi_stop`). **Decidido ese día** (Eduardo): *«El controlador del SDMMC es del SO, no del BasicPlus. Si la wifi o el bluetooth están apagados el lector de SD debe estar encendido.»* Comprobado en la P4: el arranque crea el controlador, la SD funciona sin la C6, y `esp_hosted`, que ya no arranca solo, lo encuentra hecho; con el IDF 6.1 sin más (su `sdmmc_host_init()` devuelve el que haya; en el 6.0.1 creaba otro y fallaba, `#566`). **Y manda el ahorro de energía** (Eduardo, el mismo día): *«el estado normal tanto del wifi como el bluetooth es apagado, y se enciende cuando se necesita, y si hay 10 min de inactividad se apaga salvo que se indique lo contrario»*. Comprobado el apagado del todo (la WiFi desinicializada, el enlace con la C6 cerrado y la C6 en reset): encender 2,1 s, apagar 125 ms, la RAM de vuelta, y `#706` no aparece. **Y también decidido ese día:** el apagado se configura en el fichero de configuración, y con alimentación externa, si el sistema puede saberlo, no se apaga; y el IDF 6.1, para toda la familia ESP32 (`#707`). Lo siguiente, el paso 2, con las decisiones que quedan (entre ellas, qué cuenta como actividad) |
 > | **H4** | **el sonido** (`#708`, `V8_IDEAS` §E4): reproducir sonido en la P4, por su códec ES8311 y su amplificador; WAV primero y MP3 después | 🔶 **parado** (Eduardo, 19-oct: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido de momento»*). El paso 1, hecho el 19-oct: un `.wav` de la SD por el altavoz, en tiempo real, con el volumen por defecto en 85. Lo siguiente, cuando se retome: el MP3 o el módulo de BasicPlus |
+> | **H5** | **los strings** (`V8_IDEAS` §E5): sus operaciones, de la más lenta a la más rápida, y las que viven en la PSRAM. Viene de V7 (`#554`, `#665`). Eduardo, 21-oct: *«Por un lado la optimización de la operación de strings. Y por otro la optimización de strings que están en PSRAM»* | 🔬 **en análisis desde el 21-oct** (Eduardo: *«De momento solo analizamos»*; y la norma: *«1ª analizar, 2º mejorar algoritmo, 3º mejorar implementación»*). El censo, medido ese día en el PC y en la Pico 2, la Metro y la P4 (`samples/benchmarks/StrCenso.bp`): lo más lento son los patrones, recorrer por índice y construir concatenando, cuadráticos (535 y 382 ms con 2 KB en la Pico 2); detrás, el `StringBuilder` carácter a carácter y `==` (un bucle de bytecode). Con la PSRAM, leer cuesta un 3–6 % más y crear, de ×1,5 a ×4,4: la caché de la PSRAM sirve para leer, no para crear. Y el GC rehace la lista de huecos con coste cuadrático (`#715`: con 4000 cadenas vivas, 3,6 s por `gc()` en la P4), sólo análisis. Salieron `#711`–`#715`. Lo siguiente, las decisiones de §E5 |
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
@@ -7046,6 +7047,115 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   - los `.jc` en el IDE: abrirlos y guardarlos, el coloreado y el plegado por llaves, el main de un proyecto en
     `.jc` y el aviso cuando están los dos.
 - En los dos idiomas, como el resto. Lo que vaya saliendo en V8 para la documentación final se añade aquí.
+- **Del H5 (21-oct), lo que la documentación dice y ya no es** (`V8_IDEAS` §E5, «Hallazgos de paso»):
+  - `HEAP_LAYOUT.md`, en cuatro sitios: la tabla de tipos de §2.2 (los elementos de `ARRAY_REF` son de 8 B, y falta
+    `TYPE_ARRAY_I64`), el bloque libre de §2.4 (`[+4]` es el tamaño y `[+8]` el siguiente), la concatenación de §6 (ya
+    copia en C, con `__strCopy`) y el barrido de §7 (las referencias se siguen al marcar, no al barrer);
+  - la cabecera de `bpstdlib/Str.bp` dice que la VM-C no tiene `indexOf`, `upper`, `lower` ni `trim`, y los tiene;
+  - un comentario de `bpvm_handles.h` habla de memoria «<256KB (0x40000)» donde el bit es el 30 (1 GiB);
+  - y, sin comprobar: `heap_start` (el fin del último módulo + 64) podría no ir alineado a 4.
+
+#### 🔵 `#715` — el GC rehace la lista de huecos con coste CUADRÁTICO: con 4000 cadenas vivas, cada `gc()` tarda 3,6 s en la P4, 1,3 s en la Metro y 123 ms en la Pico 2 (abierta el 21-oct, en el censo del H5; **sólo análisis**, Eduardo: *«Lo del GC y la lista de huecos de momento solo analiza, de momento no intentamos mejorar»*)
+
+**Lo que se ve en el código.** `gc_sweep_phase` (`bpgenvm-c/src/heap.c`) vacía la lista de libres y recorre el heap
+en orden de dirección. Cada tramo libre lo da de alta `add_to_free_list`, que busca su sitio recorriendo la lista
+desde la cabeza. Con k huecos son k²/2 pasos, y en la PSRAM cada paso puede ser un fallo de caché. La VM-Java, sin
+mirar.
+
+**Medido el 21-oct** (`samples/benchmarks/GcHuecos.bp`: k cadenas vivas, cada una entre dos que se tiran; diez
+`gc()` seguidos):
+
+| k | Pico 2 | Metro, VM en PSRAM | P4 | VM-C del PC |
+|---|---|---|---|---|
+| 500 | 43 ms | 178 ms | 167 ms | — |
+| 1000 | 93 ms | 514 ms | 610 ms | 16 ms |
+| 2000 | 343 ms | 2972 ms | 2869 ms | 30 ms |
+| 4000 | 1232 ms | 12 710 ms | 36 026 ms | 242 ms |
+
+Doblar los huecos cuadruplica el tiempo; en la P4, de 2000 a 4000, crece ×12,6, porque la lista ya no cabe en la
+caché. Un programa que maneja muchas cadenas pequeñas (un JSON, una lista de nombres) se para segundos en cada
+recolección.
+
+**Lo que pediría el algoritmo, sin probar:** el barrido va en orden de dirección, así que el hueco nuevo va siempre al
+final. Engancharlo a la cola es un paso, no k.
+
+#### 🔵 `#714` — `move` escribe DENTRO de un string: el valor que no debía cambiar cambia, y lo ven todas sus referencias (abierta el 21-oct, en el análisis del H5)
+
+`move(src: any, dst: any, srcStart, dstStart, count)` es pública en `Core`. La VM sólo comprueba que los dos bloques
+sean del mismo tipo de heap, y un string y un `byte[]` lo son. Comprobado en las dos VMs:
+
+```
+var s: string := fromBytes(toBytes("hola"))
+var copia: string := s
+var xy: byte[] := toBytes("XY")
+move(xy, s, 0, 0, 2)
+print s        // XYla
+print copia    // XYla
+```
+
+- **Un literal no se puede escribir así**: no está en el heap, y `move` lo rechaza.
+- **Es el único camino público.** Las demás funciones de `Core` que reciben `any` no escriben en lo que reciben.
+- **Pesa en el H5** (`V8_IDEAS` §E5, punto 1): recordar algo de un string pide que no cambie.
+
+Por decidir: cómo se cierra. La VM no distingue un string de un `byte[]`; el compilador, sí.
+
+#### 🔵 `#713` — `<`, `>`, `<=` y `>=` entre dos strings compilan, pero no comparan el texto: descuadran la pila y dan basura en silencio, distinta en cada VM (abierta el 21-oct, en el análisis del H5)
+
+El análisis las acepta, y el emisor no tiene caso para cadenas: emite el `LT`/`LE`/`GT`/`GE` de enteros, que saca 4
+bytes de la pila cuando cada referencia ocupa 8. Comprobado con `a = "abc"` y `b = "abd"`:
+
+```
+print "a < b: " + boolToString(a < b)
+```
+
+- **La VM-C imprime** `g…abdtrue`, y **la VM-Java** `abctrue`: se pierde el texto de delante y se mezclan los
+  operandos.
+- **El programa sigue**, y una variable declarada antes conserva su valor.
+- **El AOT hace lo mismo:** un `<` de C entre dos handles.
+
+Por decidir: un error de compilación, o comparar de verdad, como `Str.compare`.
+
+#### 🔵 `#712` — un array ENORME desborda el cálculo de sus bytes: `newIntArray(2^30 + 1)` deja un bloque de 4 B que dice tener mil millones de elementos, y escribir en él pisa otros objetos, en las dos VMs (abierta el 21-oct, de paso en el análisis del H5; no es de cadenas)
+
+`bpvm_prim_nuevo_array` (`bpgenvm-c/src/builtins.c`) reserva `(uint32_t) size * ancho` bytes. Con 4 bytes por
+elemento, 4·(2^30 + 1) = 2^32 + 4, que en 32 bits son 4. La longitud se queda en 1 073 741 825, y los índices se
+comprueban contra ella. Comprobado en las dos VMs del PC (la VM-Java, con su heap de 512 KB):
+
+```
+var a: integer[] := newIntArray(1073741825)
+var otro: integer[] := newIntArray(4)
+otro[0] := 11
+a[3] := 77
+print otro[0]    // 77, en las dos VMs
+```
+
+Un tamaño que venga de un dato (el puerto serie, un fichero) corrompe la memoria en silencio.
+
+- **Lo que falta:** que la reserva compruebe que `tamaño × ancho` cabe, y si no, un error atrapable, como con un
+  tamaño negativo (`#570`).
+- **Censar por la primitiva** todas las reservas con un tamaño calculado: `newLongArray`, `__newRefArray`, los
+  `__grow*` y el AOT.
+
+#### 🔵 `#711` — con UTF-8 mal formado, las dos VMs no cuentan igual: `charCodeAt` y `substring`, entre otras, dan otra cosa en la VM-C que en la VM-Java (abierta el 21-oct, en el análisis del H5)
+
+- **La VM-C** decodifica a mano (`utf8_decode`): un byte que no empieza un carácter vale su número, y no mira si los
+  que siguen son de continuación.
+- **La VM-Java** pasa por un `String` de Java: cada secuencia mal formada es U+FFFD.
+
+Comprobado con los bytes `a FF b C3 c d`, convertidos con `fromBytes`:
+
+| | VM-C | VM-Java |
+|---|---|---|
+| `charCodeAt(s, 1)` | 255 | 65533 |
+| `charCodeAt(s, 3)` | 227 (junta `C3` con la `c`) | 65533 |
+| `substring(s, 2, 5)`, en bytes | 3 | 5 |
+
+- **Coinciden en este caso** `strlen`, `indexOf` y `contains`.
+- **Por dónde entra texto mal formado:** `fromBytes`, `readFile` (la VM-Java decodifica al leer), `File.readLine` y
+  `__charsToString`.
+
+Por decidir (Eduardo): la regla. La propuesta (`V8_IDEAS` §E5, punto 1): todo string es UTF-8 válido, y la conversión
+desde bytes sustituye lo mal formado por U+FFFD, como Java. Así las operaciones por bytes son exactas en las dos VMs.
 
 #### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
 

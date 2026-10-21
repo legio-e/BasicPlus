@@ -1,0 +1,398 @@
+// StrCenso.bp — el CENSO de las operaciones de cadena, de la más lenta a la más rápida.
+//
+// ─── Por qué existe (V8/H5, 21-oct-2026) ─────────────────────────────────────
+//
+// Eduardo, al abrir el H5: «Necesitamos una lista de las operaciones sobre strings […] Habría que censar de más
+// lentas a más rápidas, y optimizar las más lentas.» Lo que había (`CatCrono`, `stringbench`, `AllocBench`) mide
+// una o dos operaciones; esto las mide TODAS con la misma vara y con tres tamaños (16, 256 y 2048 bytes), para ver
+// cómo crece cada coste: si doblar la cadena dobla el tiempo, es lineal; si lo cuadruplica, cuadrático.
+//
+// ─── Cómo mide ───────────────────────────────────────────────────────────────
+//
+// Cada operación se repite durante un TIEMPO fijo (MS_OBJETIVO), no un número fijo de veces: así sirve igual en el
+// PC que en una placa cien veces más lenta. Las operaciones están en un switch, que compara caso a caso: llegar al
+// último cuesta más que al primero (medido: de 115 a 620 ns en la VM-C del PC). Por eso se mide el vacío en el
+// primer caso (op 0) y en el último (op 99), y a cada operación se le descuenta el vacío de SU posición.
+//
+// ─── Cómo se lee ─────────────────────────────────────────────────────────────
+//
+// Una línea por operación y tamaño: `CENSO n=<bytes> op=<número> ns=<lo medido> neto=<descontado el vacío> |
+// <grupo> | <operación>`, en nanosegundos por llamada. Los patrones (op 40-43) son una pasada entera por la cadena.
+// Las cifras cambian de una vez a otra y de una VM a otra: no es de paridad, y no está en el corpus.
+module StrCenso
+  import Core
+  import Machine
+
+  const MS_OBJETIVO := 150
+
+  // los resultados se guardan en globales: no cuesta y los mantiene vivos
+  var ultimo: string := ""
+  var partes: string[] := null
+  var bytesUlt: byte[] := null
+  var sumidero: integer := 0
+
+  // los datos de cada tamaño
+  var n: integer := 0
+  var s: string := ""
+  var igual: string := ""
+  var difPrimero: string := ""
+  var otraLong: string := ""
+  var mitad1: string := ""
+  var mitad2: string := ""
+  var cuarto: string := ""
+  var csv: string := ""
+  var conEsp: string := ""
+  var conFin: string := ""
+  var ultimoCaso: string := ""
+  var bs: byte[] := null
+
+  // m caracteres ASCII: el primero el que se diga, y luego a..z
+  function hazCadena(m: integer, primero: integer): string
+    var sb: StringBuilder := StringBuilder()
+    var i: integer := 0
+    while i < m do
+      if i == 0 then
+        sb.appendChar(primero)
+      else
+        sb.appendChar(97 + (i mod 26))
+      endif
+      i += 1
+    endwh
+    return sb.toString()
+  end hazCadena
+
+  // m caracteres con una coma cada ocho
+  function hazCsv(m: integer): string
+    var sb: StringBuilder := StringBuilder()
+    var i: integer := 0
+    while i < m do
+      if (i mod 8) == 7 then
+        sb.appendChar(44)
+      else
+        sb.appendChar(97 + (i mod 26))
+      endif
+      i += 1
+    endwh
+    return sb.toString()
+  end hazCsv
+
+  function prepara(m: integer)
+    n := m
+    s := hazCadena(m, 97)
+    igual := hazCadena(m, 97)
+    difPrimero := hazCadena(m, 66)
+    otraLong := hazCadena(m + 1, 97)
+    mitad1 := hazCadena(m / 2, 97)
+    mitad2 := hazCadena(m / 2, 97)
+    cuarto := hazCadena(m / 4, 97)
+    csv := hazCsv(m)
+    conEsp := "  " + s + "  "
+    conFin := s + "zz9"
+    ultimoCaso := fromBytes(toBytes("ocho"))
+    bs := toBytes(s)
+  end prepara
+
+  // UNA operación (o un patrón entero, de la 40 en adelante)
+  function haz(op: integer): integer
+    var r: integer := 0
+    var k: integer := 0
+    var fl: float := 0.0
+    var t: string := ""
+    var sb: StringBuilder := null
+    switch op
+      case 0
+        r := 0
+      // --- medir y acceder
+      case 1
+        r := strlen(s)
+      case 2
+        r := __bytesDe(s)
+      case 3
+        r := charCodeAt(s, n / 2)
+      case 4
+        ultimo := charAt(s, n / 2)
+      // --- comparar
+      case 5
+        if s == igual then
+          r := 1
+        endif
+      case 6
+        if s == difPrimero then
+          r := 1
+        endif
+      case 7
+        if s == otraLong then
+          r := 1
+        endif
+      case 8
+        switch ultimoCaso
+          case "uno"
+            r := 1
+          case "dos"
+            r := 2
+          case "tres"
+            r := 3
+          case "cuatro"
+            r := 4
+          case "cinco"
+            r := 5
+          case "seis"
+            r := 6
+          case "siete"
+            r := 7
+          case "ocho"
+            r := 8
+        endsw
+      // --- buscar
+      case 9
+        r := indexOf(s, "zz9")
+      case 10
+        r := indexOf(conFin, "zz9")
+      case 11
+        if contains(s, "zz9") then
+          r := 1
+        endif
+      case 12
+        if startsWith(s, "abcdefgh") then
+          r := 1
+        endif
+      case 13
+        if endsWith(s, "xyz") then
+          r := 1
+        endif
+      // --- crear
+      case 14
+        ultimo := "un literal"
+      case 15
+        ultimo := mitad1 + mitad2
+      case 16
+        ultimo := cuarto + cuarto + cuarto + cuarto
+      case 17
+        ultimo := mitad1 + n
+      case 18
+        ultimo := intToString(n * 1000 + 7)
+      case 19
+        ultimo := floatToString(3.14159)
+      case 20
+        ultimo := substring(s, n / 4, (3 * n) / 4)
+      case 21
+        ultimo := upper(s)
+      case 22
+        ultimo := trim(conEsp)
+      case 23
+        ultimo := replace(s, "a", "x")
+      case 24
+        partes := split(csv, ",")
+      case 25
+        ultimo := fromBytes(bs)
+      case 26
+        sb := StringBuilder()
+        k := 0
+        while k < n do
+          sb.appendChar(97)
+          k += 1
+        endwh
+        ultimo := sb.toString()
+      case 27
+        sb := StringBuilder()
+        k := 0
+        while k < 4 do
+          sb.appendStr(cuarto)
+          k += 1
+        endwh
+        ultimo := sb.toString()
+      // --- copiar y convertir
+      case 28
+        ultimo := s
+      case 29
+        bytesUlt := toBytes(s)
+      case 30
+        r := parseInt("123456")
+      case 31
+        fl := parseFloat("3.14159")
+      // --- destruir
+      case 32
+        gc()
+      // --- patrones: una pasada entera por la cadena
+      case 40
+        k := 0
+        while k < n do
+          r += charCodeAt(s, k)
+          k += 1
+        endwh
+      case 41
+        k := 0
+        while k < n do
+          ultimo := charAt(s, k)
+          k += 1
+        endwh
+      case 42
+        t := ""
+        k := 0
+        while k < n do
+          t := t + "x"
+          k += 1
+        endwh
+        ultimo := t
+      case 43
+        sb := StringBuilder()
+        k := 0
+        while k < n do
+          sb.appendStr("x")
+          k += 1
+        endwh
+        ultimo := sb.toString()
+      // --- el vacío del FINAL: el switch compara caso a caso, y llegar al último cuesta más que al primero
+      case 99
+        r := 0
+    endsw
+    return r
+  end haz
+
+  // la posición de cada operación en el switch (0..32, luego 40..43, y la 99 la última)
+  function posicion(op: integer): integer
+    if op <= 32 then
+      return op
+    endif
+    if op <= 43 then
+      return op - 7
+    endif
+    return 37
+  end posicion
+
+  // nanosegundos por operación: `op` en tandas de `lote`, hasta pasar MS_OBJETIVO
+  function mide(op: integer, lote: integer): integer
+    var iters: integer := 0
+    var t0: integer := Machine.uptimeMs()
+    var pasado: integer := 0
+    while pasado < MS_OBJETIVO do
+      var j: integer := 0
+      while j < lote do
+        sumidero += haz(op)
+        j += 1
+      endwh
+      iters += lote
+      pasado := Machine.uptimeMs() - t0
+    endwh
+    if pasado < 2000 then
+      return (pasado * 1000000) / iters
+    endif
+    return ((pasado * 1000) / iters) * 1000
+  end mide
+
+  // el grupo y el nombre de cada operación, para que la salida se lea sola
+  function nombre(op: integer): string
+    var r: string := "?"
+    switch op
+      case 0
+        r := "vacío | el bucle, con el primer caso"
+      case 99
+        r := "vacío | el bucle, con el último caso"
+      case 1
+        r := "medir | strlen(s)"
+      case 2
+        r := "medir | __bytesDe(s), los bytes"
+      case 3
+        r := "medir | charCodeAt(s, n/2)"
+      case 4
+        r := "medir | charAt(s, n/2)"
+      case 5
+        r := "comparar | s == t, iguales"
+      case 6
+        r := "comparar | s == t, distintas en el 1er byte"
+      case 7
+        r := "comparar | s == t, distinta longitud"
+      case 8
+        r := "comparar | switch de 8 casos, acierta el último"
+      case 9
+        r := "buscar | indexOf, no está"
+      case 10
+        r := "buscar | indexOf, al final"
+      case 11
+        r := "buscar | contains, no está"
+      case 12
+        r := "buscar | startsWith, 8 B"
+      case 13
+        r := "buscar | endsWith, 3 B"
+      case 14
+        r := "crear | un literal"
+      case 15
+        r := "crear | a + b, dos mitades"
+      case 16
+        r := "crear | a + b + c + d, cuatro cuartos"
+      case 17
+        r := "crear | cadena + entero"
+      case 18
+        r := "crear | intToString"
+      case 19
+        r := "crear | floatToString"
+      case 20
+        r := "crear | substring, la mitad central"
+      case 21
+        r := "crear | upper"
+      case 22
+        r := "crear | trim"
+      case 23
+        r := "crear | replace a por x"
+      case 24
+        r := "crear | split por comas, n/8 trozos"
+      case 25
+        r := "copiar | fromBytes"
+      case 26
+        r := "crear | StringBuilder, n appendChar + toString"
+      case 27
+        r := "crear | StringBuilder, 4 appendStr + toString"
+      case 28
+        r := "copiar | asignar, no copia"
+      case 29
+        r := "copiar | toBytes"
+      case 30
+        r := "convertir | parseInt"
+      case 31
+        r := "convertir | parseFloat"
+      case 32
+        r := "destruir | gc()"
+      case 40
+        r := "patrón | recorrer con charCodeAt"
+      case 41
+        r := "patrón | recorrer con charAt"
+      case 42
+        r := "patrón | construir con s := s + x"
+      case 43
+        r := "patrón | construir con appendStr(x)"
+    endsw
+    return r
+  end nombre
+
+  // lo que cuesta el bucle vacío si la operación está en la posición `pos` del switch
+  function vacio(base: integer, fin: integer, pos: integer): integer
+    return base + ((fin - base) * pos) / 37
+  end vacio
+
+  function corre(m: integer)
+    prepara(m)
+    var base: integer := mide(0, 10)
+    var fin: integer := mide(99, 10)
+    print "CENSO n=" + m + " op=0 ns=" + base + " neto=0 | " + nombre(0)
+    print "CENSO n=" + m + " op=99 ns=" + fin + " neto=0 | " + nombre(99)
+    var op: integer := 1
+    while op <= 32 do
+      var ns: integer := mide(op, 10)
+      print "CENSO n=" + m + " op=" + op + " ns=" + ns + " neto=" + (ns - vacio(base, fin, posicion(op))) + " | " + nombre(op)
+      op += 1
+    endwh
+    op := 40
+    while op <= 43 do
+      var ns2: integer := mide(op, 1)
+      print "CENSO n=" + m + " op=" + op + " ns=" + ns2 + " neto=" + (ns2 - vacio(base, fin, posicion(op))) + " | " + nombre(op)
+      op += 1
+    endwh
+  end corre
+
+  function Main()
+    corre(16)
+    corre(256)
+    corre(2048)
+    print "fin del censo"
+  end Main
+end StrCenso

@@ -11,7 +11,8 @@
 > **Los hitos** (Eduardo, 18-oct): `H` numerados, como en V7, con sus apartados en `FICHAS.md`, y los nombra Eduardo.
 > **H1 = JC** (E2, abajo), cerrado el 18-oct. **H2 = el Bluetooth** (E1, abajo), a medias y parado. **H3 = la WiFi**
 > (E3, abajo), en análisis desde el 19-oct. **H4 = el sonido en la P4** (E4, abajo): el `.wav` suena desde el 19-oct;
-> parado.
+> parado. **H5 = los strings** (E5, abajo): sus operaciones, de la más lenta a la más rápida, y las que viven en la
+> PSRAM; en análisis desde el 21-oct.
 
 ---
 
@@ -1661,9 +1662,9 @@ Como el Bluetooth (§E1), con firmwares de prueba del ESP-IDF, sin BasicPlus. El
     que la WiFi se caiga no tumba la placa.
   - Al arrancar, `esp_hosted` sólo registra los manejadores de eventos de la WiFi: no enciende la radio. Encaja con
     «sin decir nada, apagada».
-- **De paso, la P4:** desde el 14-oct lleva el cargador y la tabla de particiones de las pruebas del Bluetooth (la
-  `factory` de 1,5 MB del IDF), no los de BasicPlus. Para volver a BasicPlus hay que grabar la imagen fusionada entera.
-  El Entorno y el sistema de ficheros deberían seguir donde estaban: ninguna prueba llega a esas direcciones.
+- **De paso, la P4:** del 14 al 19-oct llevó el cargador y la tabla de particiones de las pruebas del Bluetooth (la
+  `factory` de 1,5 MB del IDF), no los de BasicPlus. **El 19-oct por la noche volvió a BasicPlus**: la imagen
+  fusionada entera, ya con el IDF 6.1 (`#707`), y con su Entorno, su sistema de ficheros y sus packs donde estaban.
 
 **Lo siguiente:** el paso 2, la conexión WiFi del sistema, con las decisiones que quedan (arriba, «Lo que hay que
 decidir») y las de este paso:
@@ -1747,3 +1748,313 @@ almacén local que dejó EIM, sin bajar nada. En la P4 se grabó sólo la app.
   reconfigurarlo aunque ya esté apagado.
 
 **Lo siguiente**, a elegir por Eduardo: el MP3 encima (minimp3), o el módulo de BasicPlus con sus decisiones.
+
+---
+
+## E5 · Los strings: el censo de sus operaciones, el invariante y la PSRAM (H5; Eduardo, 21-oct)
+
+> **Es el H5 de V8** (Eduardo, 21-oct): *«A ver tenemos pendiente de V7 optimizar los strings. Esto lo vamos agrupar
+> en H5. Por un lado la optimización de la operación de strings. Y por otro la optimización de strings que están en
+> PSRAM.»* **Sólo análisis, por ahora** (*«De momento solo analizamos»*). Y la norma, ese mismo día: *«La norma debe
+> ser: 1ª analizar, 2º mejorar algoritmo, 3º mejorar implementación.»* Del GC, en concreto: *«Lo del GC y la lista de
+> huecos de momento solo analiza, de momento no intentamos mejorar.»*
+
+**Lo que pide Eduardo:**
+1. *«El primer punto es que una vez creado un string es un invariante mientras exista. Así que la equivalencia entre
+   strings y array de bytes tiene matices.»*
+2. *«El segundo punto a analizar es si la PSRAM tiene caché y si la podemos aprovechar para trabajar con strings.»*
+3. *«Necesitamos una lista de las operaciones sobre strings, así de memoria: Operaciones de creación/destrucción,
+   búsqueda, copiado. Habría que censar de más lentas a más rápidas, y optimizar las más lentas.»*
+
+### De dónde viene
+
+- **`#554`** (V7, cerrada el 27-sep): concatenar en placa era unas 250 veces más lento que en el PC, porque
+  `__strconcat` copiaba byte a byte en bytecode. Desde entonces copia en C (`__strCopy`, el camino C de `V7_IDEAS`
+  §H7), y en la Metro `CatCrono` pasó de 2122 a 44 ms. Con `#587`, el `StringBuilder` va por piezas.
+- **`#665`** (pasada a V8): el 12-oct, en la Metro, concatenar iba ×2,1 más lento con la VM en la PSRAM. Eduardo
+  preguntó: *«¿cuál es la explicación de que el trabajo con los strings sea tan lento?»*. Quedaron tres cosas por
+  decidir:
+  - las líneas de diagnóstico del GC;
+  - concatenar en una sola operación nativa;
+  - la velocidad del intérprete en la RP2350.
+- En el bloque de V8 de FICHAS: «reservar sin el cerrojo de la VM» (con dos runs, las cadenas no escalan).
+
+### Cómo es un string hoy (leído el 21-oct en las dos VMs y en el compilador)
+
+- **Un string es un `byte[]` con texto UTF-8**: `[etiqueta][longitud en bytes][bytes]`. En la memoria no se
+  distinguen; que algo sea un string sólo lo sabe el compilador. Los índices (`strlen`, `charAt`, `charCodeAt`,
+  `substring`, `indexOf`) cuentan caracteres, no bytes.
+- **Un literal** vive en el bloque de datos de su módulo, `[longitud][bytes]`, **sin etiqueta**. Se copia a la RAM al
+  cargar, también con XIP, y se usa con una referencia directa, sin handle.
+- **No se recuerda nada**: ni cuántos caracteres tiene una cadena, ni si es toda ASCII, ni un hash.
+  - `strlen`, `charAt`, `charCodeAt` y `substring` cuentan la cadena ENTERA en cada llamada, para mirar el rango, y
+    luego caminan hasta el índice.
+  - La VM-Java hace lo mismo con otra maquinaria: cada builtin decodifica la cadena entera a un `String` de Java.
+- **Crear:** toda reserva pone el bloque a cero, y quien crea el string copia encima. Cada byte se escribe dos veces.
+- **Concatenar:** el compilador sintetiza en cada módulo `__strconcat` y `__strconcatN`, con una reserva y una copia en
+  C por operando. `"a" + "b"` no se junta al compilar, y `"" + n` reserva dos veces.
+- **Comparar:** `==`, `!=` y los `case` de un `switch` de cadenas llaman a `__strequals`.
+  - Es un bucle de BYTECODE: 17 instrucciones por byte, después de mirar `null`, la misma referencia y la longitud.
+  - El `switch` prueba los casos uno a uno.
+- **`StringBuilder.toString()`** reserva y copia dos veces: el `byte[]` (que ya nace a cero) y luego `fromBytes`.
+- **La stdlib recorre por índice.** Llaman a `charCodeAt` en cada carácter, así que son cuadráticos:
+  - el lector y el escritor de `Json` (en el lector, además, unas siete llamadas a métodos por carácter: contadas en
+    el código, sin medir);
+  - `Str.compare`, y con él todo `Map` con claves de cadena;
+  - `Str.lastIndexOf`, `Str.parse*` y `Orm.esc`.
+- **No hay hash en ninguna parte:** `Collections.Map` es una lista ordenada con búsqueda binaria, y `JsonObject` busca
+  sus claves una a una.
+
+### El censo, medido el 21-oct (`samples/benchmarks/StrCenso.bp`)
+
+**Cómo se midió:**
+- 36 operaciones, con cadenas ASCII de 16, 256 y 2048 bytes;
+- cada una se repite durante un tiempo fijo, y se le descuenta el bucle vacío;
+- en la VM-C y la VM-Java del PC, y en tres placas con su imagen de siempre, sin grabar nada: la Pico 2, la Metro (con
+  la VM en la SRAM, `psram=0`, y en la PSRAM, la de siempre) y la P4;
+- la Metro con la PSRAM, dos veces: difieren menos de un 1 %. Se quedó con `psram=1`, como estaba;
+- la C5 y la S3, sin medir: no estaban conectadas.
+
+Con 2048 bytes, de la más lenta a la más rápida (por la Pico 2):
+
+| grupo | operación | Pico 2 | Metro, VM en SRAM | Metro, VM en PSRAM | P4 | VM-C del PC |
+|---|---|---|---|---|---|---|
+| patrón | recorrer con `charAt` | 581 ms | 574 ms | 623 ms | 240 ms | 1,5 ms |
+| patrón | recorrer con `charCodeAt` | 535 ms | 533 ms | 556 ms | 228 ms | 1,5 ms |
+| patrón | construir con `s := s + x` | 382 ms | 310 ms | 637 ms | 123 ms | 0,7 ms |
+| patrón | construir con `appendStr(x)` | 162 ms | 161 ms | 190 ms | 130 ms | 0,6 ms |
+| crear | `StringBuilder`: n `appendChar` + `toString` | 63,6 ms | 63,3 ms | 67,0 ms | 48,8 ms | 232 µs |
+| comparar | `s == t`, iguales | 23,2 ms | 23,2 ms | 24,0 ms | 19,5 ms | 90 µs |
+| crear | `split` por comas (n/8 trozos) | 9,6 ms | 7,2 ms | 7,2 ms | 3,2 ms | 20 µs |
+| destruir | `gc()` | 2,4 ms | 2,0 ms | 10,4 ms | 10,1 ms | 253 µs |
+| crear | `StringBuilder`: 4 `appendStr` + `toString` | 1,4 ms | 1,2 ms | 2,0 ms | 724 µs | 3,3 µs |
+| crear | `replace` (a por x) | 1,2 ms | 1,2 ms | 1,6 ms | 488 µs | 11 µs |
+| crear | `upper` | 1,1 ms | 1,0 ms | 1,5 ms | 356 µs | 3,6 µs |
+| crear | `trim` | 952 µs | 881 µs | 1,5 ms | 351 µs | 1,5 µs |
+| crear | `substring` (la mitad central) | 606 µs | 580 µs | 826 µs | 203 µs | 1,7 µs |
+| buscar | `indexOf`, al final | 497 µs | 500 µs | 522 µs | 278 µs | 3,5 µs |
+| copiar | `toBytes` | 460 µs | 378 µs | 800 µs | 114 µs | 1,0 µs |
+| copiar | `fromBytes` | 450 µs | 377 µs | 1,1 ms | 114 µs | 0,9 µs |
+| buscar | `contains`, no está | 373 µs | 373 µs | 392 µs | 216 µs | 3,5 µs |
+| buscar | `indexOf`, no está | 370 µs | 370 µs | 391 µs | 205 µs | 3,4 µs |
+| medir | `charAt(s, n/2)` | 285 µs | 283 µs | 331 µs | 115 µs | 0,7 µs |
+| crear | `a + b + c + d` (cuatro cuartos) | 263 µs | 188 µs | 543 µs | 82 µs | 0,5 µs |
+| medir | `charCodeAt(s, n/2)` | 261 µs | 261 µs | 276 µs | 107 µs | 0,7 µs |
+| crear | `a + b` (dos mitades) | 243 µs | 171 µs | 755 µs | 103 µs | 0,5 µs |
+| comparar | `switch` de 8 casos (acierta el último) | 212 µs | 211 µs | 223 µs | 189 µs | 0,9 µs |
+| crear | cadena + entero | 199 µs | 164 µs | 445 µs | 80 µs | 0,3 µs |
+| medir | `strlen(s)` | 132 µs | 132 µs | 139 µs | 65 µs | 0,2 µs |
+| crear | `intToString` | 45,5 µs | 43,7 µs | 61,8 µs | 17,9 µs | 38 ns |
+| crear | `floatToString` | 43,8 µs | 40,2 µs | 46,6 µs | 18,1 µs | 14 ns |
+| convertir | `parseFloat` | 35,2 µs | 34,8 µs | 55,6 µs | 12,6 µs | 0,4 µs |
+| comparar | `s == t`, distintas en el 1er byte | 26,9 µs | 26,6 µs | 30,2 µs | 23,6 µs | 90 ns |
+| comparar | `s == t`, distinta longitud | 16,8 µs | 17,0 µs | 19,1 µs | 15,1 µs | 45 ns |
+| convertir | `parseInt` | 13,9 µs | 14,7 µs | 15,5 µs | 4,0 µs | ~0 |
+| buscar | `startsWith` (8 B) | 8,6 µs | 8,6 µs | 7,8 µs | 4,1 µs | ~0 |
+| buscar | `endsWith` (3 B) | 7,4 µs | 7,0 µs | 6,1 µs | 3,3 µs | ~0 |
+| medir | `__bytesDe(s)` (los bytes) | 1,9 µs | 1,8 µs | 1,5 µs | 1,1 µs | ~0 |
+| crear | un literal | 1,0 µs | 0,7 µs | 0,2 µs | 0,9 µs | ~0 |
+| copiar | asignar (no copia) | 0,9 µs | 1,6 µs | 1,5 µs | 0,9 µs | ~0 |
+
+**Lo que dice:**
+1. **Lo más lento no son operaciones sueltas, son patrones:** recorrer una cadena por índice y construirla
+   concatenando. Son cuadráticos. De 256 a 2048 bytes (×8), en la Pico 2:
+   - recorrer con `charCodeAt` crece ×50;
+   - construir con `+` crece ×20;
+   - lo lineal crece entre ×7 y ×9.
+2. **Detrás vienen tres operaciones:** el `StringBuilder` carácter a carácter (64 ms), `==` entre cadenas iguales
+   (23 ms: 11 µs por byte, el bucle de bytecode) y `split` (10 ms).
+3. **`gc()` cuesta 2 ms con la VM en la SRAM y 10 con la PSRAM.** Pesa sobre todo cuántos huecos hay en el heap (abajo,
+   «El GC y los huecos»).
+4. **Un solo `charCodeAt(s, 1024)` de una cadena de 2 KB cuesta 261 µs** en la Pico 2: cuenta 2048 bytes y luego
+   camina 1024.
+5. **Lo que no depende del tamaño cuesta entre 1 y 27 µs:** asignar, un literal, los bytes (`__bytesDe`),
+   `startsWith` y `endsWith`, `==` con distinta longitud.
+6. **Con 256 bytes, el `StringBuilder` pierde:** `appendStr("x")` 256 veces tarda 20,8 ms, y concatenar 18,7 ms. Cada
+   `append` son tres o cuatro llamadas a métodos BP, unos 80–110 µs por pieza en la RP2350.
+7. **El orden de las placas es casi el del PC.** Las dos VMs del PC ponen arriba las mismas cinco operaciones (sin
+   contar `gc()`, que en el PC inflan sus líneas de diagnóstico), en otro orden.
+8. **La P4 no gana igual en todo.** En lo que es C (copiar, buscar, contar) va de 2 a 4 veces más rápida que la
+   Pico 2. En lo que es bytecode y llamadas (`==`, el `switch`, los `append`), sólo un 10–30 %. Y su `gc()` es más
+   lento: 10 ms frente a 2,4.
+
+**De paso, el `switch` de ENTEROS también compara caso a caso.** Llegar al caso 37 del censo cuesta, sobre el primero,
+97 µs en la Pico 2 (2,6 µs por caso) y 78 µs en la P4.
+
+### El GC y los huecos: un coste cuadrático (`#715`, sólo análisis)
+
+**Lo que se ve en el código** (`gc_sweep_phase`, en `heap.c`):
+- cada recolección barre el heap y rehace la lista de huecos libres en orden de dirección;
+- pero cada hueco lo da de alta `add_to_free_list`, que busca su sitio recorriendo la lista desde el principio;
+- con k huecos son k²/2 pasos, y en la PSRAM cada paso puede ser un fallo de caché.
+
+**Medido** con `samples/benchmarks/GcHuecos.bp`: k cadenas vivas, cada una entre dos que se tiran, y luego diez `gc()`
+seguidos.
+
+| k | Pico 2 | Metro, VM en PSRAM | P4 | VM-C del PC |
+|---|---|---|---|---|
+| 500 | 43 ms | 178 ms | 167 ms | — |
+| 1000 | 93 ms | 514 ms | 610 ms | 16 ms |
+| 2000 | 343 ms | 2972 ms | 2869 ms | 30 ms |
+| 4000 | 1232 ms | 12 710 ms | **36 026 ms** | 242 ms |
+
+- **Doblar los huecos cuadruplica el tiempo.** En la P4, de 2000 a 4000, crece ×12,6: la lista ya no cabe en la caché.
+- **Con 4000 cadenas vivas, un `gc()` para la P4 3,6 s.** Probablemente es lo que más pesa en los programas reales que
+  manejan muchas cadenas pequeñas, como un JSON o una lista de nombres.
+
+Eduardo: *«de momento no intentamos mejorar»*. Para cuando toque, lo que pediría el algoritmo, sin probar: el barrido va
+en orden de dirección, así que el hueco nuevo va siempre al final. Engancharlo a la cola es un paso, no k.
+
+### Punto 1: el invariante, y los matices de «string = byte[]»
+
+**El mecanismo.** Un `byte[]` y un string son los mismos bytes con dos contratos distintos:
+- el `byte[]` es un búfer que se escribe;
+- el string es un valor que no cambia mientras existe (Eduardo).
+
+En la memoria no se distinguen: los distingue el compilador.
+
+**Lo que el invariante permite.** Lo que vale al crear un string vale mientras exista, así que se puede:
+- compartirlo sin copiar (ya se hace: asignar no copia);
+- **recordar lo que se calcula una vez**: si es todo ASCII, cuántos caracteres tiene, un hash. Hoy no se recuerda
+  nada. Con «es ASCII», el carácter `i` es el byte `i`, y `charAt`, `charCodeAt`, `substring` y `strlen` dejan de
+  contar;
+- comparar primero por referencia (ya lo hace `__strequals`);
+- no copiar los literales (ya se hace: el camino C de `#554`).
+
+**Los matices:**
+1. **De string a `byte[]`, siempre se copia** (`toBytes`): el `byte[]` se puede escribir, y el string no debe cambiar.
+2. **De `byte[]` a string también se copia** (`fromBytes`), porque quien tiene el `byte[]` puede seguir escribiéndolo.
+   - **Salvo si el `byte[]` muere ahí mismo.** `StringBuilder.toString()` llena un `byte[]` que no ve nadie más, y
+     luego lo vuelve a copiar.
+   - Bastaría un traspaso interno de `Core`, sin copia. Sólo para `Core`: fuera de `Core` no hay `any`.
+3. **Texto frente a bytes.** Un `byte[]` puede llevar cualquier byte; un string debería ser texto, UTF-8 bien formado.
+   - Hoy `fromBytes` acepta cualquier cosa, y con texto mal formado las dos VMs no dan lo mismo (`#711`).
+   - Si la conversión a string sustituyera lo mal formado por U+FFFD, como ya hace Java, todo string sería UTF-8
+     válido. Entonces las operaciones por bytes (`memcmp`, `memchr`) serían exactas en las dos VMs.
+4. **Hoy el invariante no se cumple del todo:**
+   - `move` (pública, de `Core`) escribe dentro de un string, y el cambio lo ven todas sus referencias (`#714`);
+   - dentro de `Core`, un `any` deja que un `byte[]` pase por string sin copiarse.
+
+   Para recordar algo de un string, como lo de arriba, el invariante tiene que ser de verdad.
+5. **Lo que se recuerde en la etiqueta no llega a los literales**, porque no la tienen. Seguirían como hoy; suelen ser
+   cortos.
+
+**El ejemplo.** Una cadena de 2048 caracteres ASCII, recorrida con `charCodeAt` en la Pico 2.
+- Hoy tarda 535 ms, porque cada llamada cuenta los 2048 bytes.
+- Con «es ASCII» recordado quedaría el bucle: unos 13 µs por carácter (lo que cuesta con 16 bytes), unos 27 ms en
+  total. Veinte veces menos, estimado y sin medir.
+
+### Punto 2: la PSRAM y su caché
+
+Sí: en todas las placas con PSRAM se llega a ella **a través de una caché**. La PSRAM no se lee directamente: está
+mapeada en la memoria del procesador, y cada acceso pasa por la caché. Cuando la caché no tiene la línea, la trae entera
+de la PSRAM; y la escribe de vuelta más tarde (escritura diferida).
+
+| placa | PSRAM | la VM en ella | la caché que la sirve | ¿la comparte con el código? |
+|---|---|---|---|---|
+| **Metro** (RP2350) | 8 MB, APS6404 en QPI a 75 MHz (150 MHz / 2; su tope son 109) | con `psram=1`, 5,5 MB | la del XIP: **16 KB**, 2 vías, **líneas de 8 B**, diferida | **sí**: el intérprete se ejecuta de la flash por esa misma caché |
+| **S3** | 8 MB, octal, a 80 MHz | 7,0 MB | la de datos: 32 KB, 8 vías, líneas de 32 B (se puede subir a 64 KB y 64 B) | no: el código va por su caché de instrucciones (16 KB) |
+| **C5** | 8 MB, quad, a 80 MHz | 6,5 MB | **una sola caché de 32 KB** para el código y los datos, líneas de 32 B | **sí** |
+| **P4** | 32 MB, hex, a 200 MHz | 23,5 MB | L1 de datos de 64 KB (2 vías, líneas de 64 B) y L2 de 128 KB (8 vías, 64 B; se puede subir a 256 o 512 KB) | en la L2 sí; en la L1, no |
+
+Sin PSRAM, las cadenas van en la SRAM, sin esta caché delante: la Pico 2, la C3, la C6, la Nucleo y la DK2.
+
+De dónde sale cada dato:
+- los `sdkconfig` de `esp32/`, `esp32c5/` y `esp32p4/`;
+- el `soc_caps.h` del IDF 6.1 (la C5 y la P4, con caché compartida para instrucciones y datos; la S3, no);
+- el `pico-sdk` (`xip_cache.h`: 16 KB y líneas de 8 B) y `pico/psram.c` (el reloj de la PSRAM de la Metro);
+- la hoja de datos de la P4, §4.1.3.3 (los tamaños de la L1);
+- los informes del IDF 6.1 (`compat/informes/idf61_*.json`: `psramBytes`, `vmHeapBytes`).
+
+**Lo que explica de lo medido.** Se compara la Metro consigo misma: el mismo chip, la misma imagen, la VM en la SRAM o
+en la PSRAM.
+- **Leer una cadena cuesta casi lo mismo:** `strlen`, `charCodeAt`, `indexOf` y `==`, entre un 3 y un 6 % más. La
+  cadena que se lee ya está en la caché.
+- **Crear cuesta de ×1,5 a ×4,4:** `a + b` de 2 KB pasa de 171 a 755 µs; `fromBytes`, ×2,9; construir concatenando,
+  ×2,1; `gc()`, ×5,2. El mecanismo:
+  - cada cadena nueva es memoria que no está en la caché: la reserva avanza por cientos de KB antes del siguiente GC
+    (con 5,5 MB de heap, cada ~700 KB);
+  - cada línea de 8 bytes de la cadena nueva pasa por la caché dos veces (se pone a cero y se copia encima) y acaba
+    escrita en la PSRAM (si la caché lee además la línea antes de escribirla, sin comprobar);
+  - y en la Metro esa caché de 16 KB es también la del código: lo que entra de la cadena echa al intérprete, que se
+    vuelve a leer de la flash.
+- **La P4, con la VM en la PSRAM**, va de 2 a 4 veces más rápida que la Pico 2 en lo que es C, y sólo un 10–30 % en
+  lo que es bytecode. No se puede comparar consigo misma en la SRAM: su VM siempre está en la PSRAM.
+
+**Cómo aprovecharla**, de más barato a más caro:
+1. **Crear menos** (algoritmo): el `StringBuilder` sin la segunda copia, recorrer sin crear (`charCodeAt` en vez de
+   `charAt`), y la lista de huecos del GC. Vale en todas las placas, y más con PSRAM.
+2. **No escribir dos veces** (implementación): reservar sin poner a cero lo que se va a llenar entero.
+3. **La imagen** (`#665`): en la Metro y la C5, sacar el bucle del intérprete de la caché compartida, a la SRAM.
+4. **El tamaño de la caché** (configuración), midiendo antes:
+   - la de datos de la S3, de 32 a 64 KB (32 KB menos de RAM interna);
+   - la L2 de la P4, de 128 a 256 KB (128 KB menos).
+5. **Fuera, de momento:** las cadenas jóvenes en la SRAM y las viejas en la PSRAM (un GC generacional) cambia el modelo
+   de memoria.
+
+### Lo que se puede mejorar, por la norma de Eduardo (sin empezar nada)
+
+**2º, el algoritmo** (lo que cambia cómo crece el coste):
+
+| | hoy | con el algoritmo | qué toca |
+|---|---|---|---|
+| recorrer por índice | n² | n | recordar «es ASCII» (la VM, las dos); o recorrer sin índice (el lenguaje: un `for each` de caracteres, o decodificar una vez); o por bytes, en la stdlib |
+| `Str.compare` (los `Map`) y `Str.lastIndexOf` | n² (y casi n³) | n | la stdlib: por bytes, o un builtin |
+| las claves de `JsonObject` | k² al construir | k log k, o k | la stdlib |
+| un `switch` de cadenas (y de enteros) | un caso tras otro | uno, o log | el compilador |
+| la lista de huecos del GC (`#715`) | k² | k | la VM, las dos. **Sólo análisis** |
+| construir concatenando | n² | n, con un `StringBuilder` | el idioma ya existe; que gane también con piezas pequeñas es implementación |
+
+**3º, la implementación** (lo mismo, más deprisa):
+- **`==` y los `case`, en C y no en bytecode.** Unas 100 veces menos por byte (estimado). Dos maneras:
+  - con un builtin nuevo, que pide imagen nueva, como `#554`;
+  - sin él: «misma longitud y `startsWith`», que en la VM-C ya es `memcmp`. Sólo es exacto en las dos VMs con `#711`
+    resuelto.
+- **El `StringBuilder`:** `toString` sin la segunda copia, y un `append` que no cueste tres llamadas a métodos (o
+  nativo).
+- **`charAt`, `charCodeAt` y `substring`:** mirar el rango caminando sólo hasta el índice. Pasa de 1,5 a 1 pasada, y
+  sigue siendo n².
+- **Los bucles de C:**
+  - crear sin poner a cero;
+  - `memcpy` y `memchr` en `split`, `replace`, `upper`, `trim`, `substring`, `toBytes` y `fromBytes`;
+  - `indexOf` con `memchr` para el primer byte.
+- **El GC:** formatear sus líneas de diagnóstico sólo con el log encendido.
+- **El AOT:** sus literales reservan en cada evaluación, y su `switch` de cadenas reserva en cada caso.
+
+### Hallazgos de paso (con ficha)
+
+- **`#711`:** con UTF-8 mal formado (de `fromBytes`), las dos VMs no dan lo mismo. Rompe la paridad.
+- **`#712`:** `newIntArray(2^30 + 1)` desborda el cálculo de sus bytes y deja un bloque de 4 B que dice tener mil
+  millones de elementos. Escribir en él pisa otros objetos, en las dos VMs. No es de cadenas.
+- **`#713`:** `<`, `>`, `<=` y `>=` entre strings compilan, pero descuadran la pila y dan basura.
+- **`#714`:** `move` escribe dentro de un string.
+- **`#715`:** el GC rehace la lista de huecos con coste cuadrático (arriba). Sólo análisis.
+- **Menores, para el `D1`:**
+  - `HEAP_LAYOUT.md` está desfasado en cuatro sitios: la tabla de tipos de §2.2, el bloque libre de §2.4, la
+    concatenación de §6 y el barrido de §7;
+  - la cabecera de `Str.bp` dice que la VM-C no tiene `indexOf`, `upper`, `lower` ni `trim`, y los tiene;
+  - un comentario de `bpvm_handles.h` habla de 256 KB donde el bit es de 1 GiB;
+  - sin comprobar: `heap_start` podría no ir alineado a 4.
+- **La tabla de handles vive en la PSRAM** en las placas que tienen la VM allí: desde `#451` (29-ago) está dentro del
+  bloque de la VM, entre el heap y las pilas. Se consulta en cada acceso a un objeto.
+
+### Lo que hay que decidir (Eduardo)
+
+1. **La regla del UTF-8 mal formado** (`#711`). Propuesta: todo string es UTF-8 válido; la conversión desde bytes
+   sustituye lo mal formado por U+FFFD, como Java. Es lo que deja exactas las operaciones por bytes.
+2. **El agujero de `move`** (`#714`): que no acepte un string como destino. Sin cerrarlo, no se puede recordar nada de
+   un string.
+3. **`<` y `>` entre strings** (`#713`): un error de compilación, o comparar de verdad, como `Str.compare`.
+4. **Qué algoritmo va primero**, de la tabla de arriba.
+5. **Recordar «es ASCII».** Toca la cabecera del heap en las dos VMs (usaría los bits libres de la etiqueta), y no llega
+   a los literales.
+
+### Un orden posible (la norma: analizar, algoritmo, implementación)
+
+1. **El análisis:** hecho. Este censo, con sus programas en `samples/benchmarks/` (`StrCenso` y `GcHuecos`) para medir
+   otra vez antes y después.
+2. **Los algoritmos, uno a uno**, con su medida en el PC (el PC filtra) y en la Pico 2, la Metro y la P4:
+   - primero lo de la stdlib, que no toca la VM;
+   - luego recorrer por índice y la lista del GC, que sí la tocan.
+3. **La implementación:** `==` en C, el `StringBuilder`, crear sin poner a cero, los bucles de C.
+4. **La PSRAM:** el tamaño de las cachés, y la imagen de la Metro (`#665`).
