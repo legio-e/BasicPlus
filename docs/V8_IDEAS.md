@@ -3059,6 +3059,39 @@ sin caché, con el mantenimiento de la caché alrededor. Se mediría junto con l
   - y a su favor, copiar con el DMA sin caché no echaría al intérprete de la caché.
 - **Lo que gana ya, en la SRAM y en la PSRAM:** el algoritmo de búsqueda (de ~180 a unos 10–20 ns por byte).
 
+Eduardo: *«Yo creo entonces que no lo tocaría de momento, lo podemos dejar para mas adelante. Lo que si hay que
+solucionar es lo que tarda en crear el string en el Heap de PSRAM, que entiendo es otro problema.»* La búsqueda, el DMA
+y el código en la SRAM, para más adelante.
+
+**Crear en la PSRAM, desglosado** (`PsramFases`, la Metro con `psram=0` y `psram=1`):
+
+| crear (reservar y escribir) | SRAM | PSRAM |
+|---|---|---|
+| 256 B | 49 µs | 117 µs (×2,4) |
+| 2 KB | 117 µs | 494 µs (×4,2) |
+| 16 KB | 0,6 ms | 5,2 ms (×8,7) |
+
+Es otro problema que la búsqueda: buscar sólo LEE, y crear ESCRIBE memoria NUEVA. Con una caché de 16 KB, la memoria
+nueva nunca está en ella: el bump avanza unos 700 KB entre colecta y colecta. Cada línea de 8 B que se escribe cuesta
+dos transferencias: traerla y devolverla más tarde. Y el reparto cambia con el tamaño:
+- **Una cadena GRANDE** (más que la caché) son unas cinco transferencias por línea. Poner a cero trae la línea y la
+  devuelve; para cuando llega la copia ya la ha echado, y la copia lee el origen, la vuelve a traer y la devuelve. Es lo
+  que dan las cuentas para 16 KB (~4,9 ms; se midieron 5,2).
+- **Una cadena PEQUEÑA** cabe: poner a cero trae sus líneas, la copia las encuentra, y se devuelven una vez. Son dos
+  transferencias por línea, más un coste fijo que en la PSRAM se dobla: reservar 256 B, 67 µs frente a 36. Ese coste es
+  el asignador, la cabecera, la lista de huecos y la tabla de handles, todo en la PSRAM. Cuánto es cada cosa no se ve
+  desde BP.
+
+**Las palancas, por lo que atacan:**
+1. **No poner a cero lo que se llena entero:** en una cadena grande quita dos de las cinco transferencias (~−40 %). En
+   una pequeña casi nada: la copia trae las líneas igual.
+2. **Escribir la cadena nueva sin pasar por la caché** (el alias sin caché): una transferencia por línea en vez de dos,
+   en todos los tamaños. Exige cuidar la coherencia: antes hay que limpiar e invalidar las líneas que la caché tenga de
+   ese rango. Por medir.
+3. **El coste fijo de las pequeñas:** saber primero cuánto es cada pieza. Hay que medirlo dentro, en C, con el contador
+   de ciclos, en una imagen instrumentada de la Metro.
+4. Y lo que ya está en la lista: el GC (`#715`) y el código en la SRAM.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
