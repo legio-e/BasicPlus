@@ -7149,7 +7149,7 @@ Por decidir: cómo se cierra. La VM no distingue un string de un `byte[]`; el co
 mentir: una `ñ` metida con `move` en una cadena ASCII se cuenta bien (`StrDosCaminos`). La ficha sigue abierta: `move`
 todavía escribe dentro de una cadena.
 
-#### ✅ `#713` — `<`, `>`, `<=` y `>=` entre dos strings compilan, pero no comparan el texto: descuadran la pila y dan basura en silencio, distinta en cada VM (abierta el 21-oct, en el análisis del H5; **CERRADA el mismo día**: comparan el texto, en C)
+#### ✅ `#713` — `<`, `>`, `<=` y `>=` entre dos strings compilan, pero no comparan el texto: descuadran la pila y dan basura en silencio, distinta en cada VM (abierta el 21-oct, en el análisis del H5; **CERRADA el mismo día**: comparan el texto, en C, `ed26faf8`)
 
 El análisis las acepta, y el emisor no tiene caso para cadenas: emite el `LT`/`LE`/`GT`/`GE` de enteros, que saca 4
 bytes de la pila cuando cada referencia ocupa 8. Comprobado con `a = "abc"` y `b = "abd"`:
