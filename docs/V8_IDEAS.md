@@ -2989,6 +2989,34 @@ Y el bucle de bytecode, justo después de leer n bytes (lo que cuesta de más qu
 
 Y queda la mitad de `#665` que no está hecha: la imagen de UN núcleo con `psram=0`, para separar la imagen de la PSRAM.
 
+**¿Una caché de código y otra de datos en la Metro? (Eduardo, 21-oct)** *«De momento nos centramos en la Metro. ¿Sería
+posible tener una cache de código y otra de datos? En la Metro creo que nos sobra RAM convencional así que se puede
+aprovechar para aumentar la cache.»*
+- **En el hardware, no.** La RP2350 tiene UNA caché del XIP, de 16 KB, para todo lo que llega por la QMI (el código de
+  la flash y los datos de la PSRAM). No se parte ni se agranda.
+- **Pero el efecto, sí, y con la RAM que sobra.** La «caché de código» puede ser la propia SRAM: el código caliente
+  copiado a la SRAM se ejecuta a toda velocidad sin pasar por la caché, y los 16 KB del XIP quedan sólo para los datos
+  de la PSRAM. Y en la Metro sobra: con `psram=1`, los ~357 KB de SRAM que en la Pico 2 son de la VM quedan para
+  `malloc` (`pico/main.c`, «En la Metro no se reserva NADA»), que apenas los usa.
+- **Qué código:** el bucle del intérprete (15,4 KB), el despachador de builtins (22,9 KB), el heap y el GC, y las
+  funciones de memoria de la libc (`memcpy`, `memset`, `memcmp`, `memmove`; 1,3 KB). Unos 45 KB. Todo el programa
+  (282 KB, el «copy_to_ram» del pico-sdk) no cabría en la Pico 2.
+- **La pega: la imagen es única para la Pico 2 y la Metro,** y dónde va cada función lo decide el enlazador, no la
+  placa. Tres formas:
+  - **a)** el código caliente en la SRAM en las dos placas (`__not_in_flash_func`, como ya hacen el cerrojo de la flash
+    y el arranque de la PSRAM). Es lo más sencillo. Cuesta unos 45 KB de la SRAM de la VM en la Pico 2 (su heap, de 219
+    a unos 175 KB), y probablemente también la acelera (ya se ve un +5 % de fallos de código sin PSRAM);
+  - **b)** sólo en la Metro: el código caliente enlazado en una zona de la SRAM que en la Pico 2 es de la VM. Al
+    arrancar, si hay PSRAM, se copia ahí y el intérprete se llama por un puntero. La Pico 2 conserva su heap, pero hay
+    trabajo de enlazador y dos copias del código caliente en la flash;
+  - **c)** una imagen propia para la Metro, con todo el código en la SRAM. Rompe la imagen única.
+- **La parte de los datos:** con el código fuera, los 16 KB del XIP son todos para la PSRAM. Una caché de datos más
+  grande hecha con SRAM no se puede montar sin que la VM lo sepa (el M33 no tiene MMU que intercepte los accesos). Sí se
+  podrían llevar a la SRAM datos calientes concretos que la VM alcanza por un puntero de C, como la tabla de handles.
+  Las pilas de BP no: se direccionan como desplazamientos dentro del bloque de la VM.
+- **Lo propuesto:** medir primero, con una imagen de prueba de la forma a), en la Metro y en la Pico 2 (`PsramFases`, el
+  censo y un banco de bytecode general). Si gana mucho, elegir entre a) y b).
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
