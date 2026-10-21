@@ -89,6 +89,10 @@
 >   - el censo de ocho filas, cada una con su alternativa lineal o logarítmica (§E5, «Lo cuadrático»);
 >   - medido en programas de verdad: un JSON de 8 KB, 16,7 s en la Pico 2; 2000 claves en un `Map`, 56 s en la P4;
 >   - comprobada la pieza que arregla la stdlib sin tocar la VM: leer un byte con un `inline ALOAD_U8`.
+> - **y la decisión de Eduardo, dos algoritmos** (*«seguimos con UTF-8. Lo que necesitamos son 2 algoritmos»*): el
+>   rápido si no hay caracteres especiales, el lento si los hay. Para que funcione, se mira una vez al crear la cadena
+>   (al copiar sus bytes, casi gratis) y se recuerda en un bit de la etiqueta. El texto con acentos sigue por el lento.
+>   En §E5, «Dos algoritmos», con lo que hay que decidir.
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es

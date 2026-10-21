@@ -2274,6 +2274,59 @@ por byte.
 5. **El GC y la reserva** (filas 7 y 8): cuando Eduardo diga.
 6. **Concatenar** (fila 6): el idioma y la documentación.
 
+### Dos algoritmos: el rápido para ASCII y el lento para lo demás (decidido por Eduardo, 21-oct)
+
+Eduardo, ante el censo de lo cuadrático: *«No, seguimos con UTF-8. Lo que necesitamos son 2 algoritmos. Se mira si hay
+algún caracter especial. Si no hay se trabaja con el algoritmo rápido ( 1 char = 1byte ), si hay caracteres especiales
+se trabaja con el algoritmo lento.»*
+
+**Lo que decide si funciona: CUÁNDO se mira.**
+- **Si se mira en cada llamada**, mirar ya es recorrer la cadena. Recorrer 2048 caracteres seguiría costando
+  2048 × 2048, sólo que algo más deprisa.
+- **Si se mira UNA vez, al crear la cadena, y se recuerda,** cada llamada pregunta por una marca: O(1). Eso lo permite
+  el invariante de Eduardo: una cadena no cambia mientras existe, así que lo que se miró al crearla sigue valiendo.
+
+**Dónde se recuerda:** un bit en la etiqueta del bloque, «todo ASCII». Los bits 21–0 están libres, el GC los respeta al
+marcar y al barrer, y la compactación usa el 31 y el 23.
+- **Un solo bit basta:** 1 es «todo ASCII, seguro» (el rápido); 0 es «no lo sé, o no lo es» (el lento).
+- **Por defecto, 0.** Cualquier camino que no lo ponga sólo va más despacio, nunca mal.
+- **Un `byte[]` nunca lo lleva:** su contenido cambia, y para ser string pasa por `fromBytes`, que copia y mira.
+
+**Cuándo se pone: al crear, mirando mientras se copia.** Casi toda cadena nace copiando o generando sus bytes, así que
+mirar si alguno vale 0x80 o más cuesta casi nada (de 4 en 4 bytes: un OR y una máscara por palabra).
+- `a + b`, `substring`, `fromBytes`, `toString` del `StringBuilder`, `upper`, `lower`, `trim`, `replace`, los trozos
+  de `split`, `readFile` y `readLine`: miran al copiar.
+- `intToString` y los demás números: siempre ASCII.
+- `__charsToString` (los `appendChar`): mira los códigos (menores de 128).
+
+**Lo que hace cada operación con los dos algoritmos:**
+
+| operación | rápido (todo ASCII) | lento (hay especiales) |
+|---|---|---|
+| `strlen` | los bytes: O(1) | contar: O(n) |
+| `charAt`, `charCodeAt`(i) | el byte `i`: O(1) | caminar hasta `i`: O(i) |
+| `substring` | los bytes [a, b): O(1) para situarse | caminar hasta a y b |
+| `indexOf` | el resultado ya es el índice | contar hasta lo encontrado |
+| `upper`, `lower` | de 4 en 4 | carácter a carácter |
+| buscar, comparar, `==` | por bytes | por bytes también: el UTF-8 lo permite |
+
+**Las consecuencias, para decidir:**
+1. **El texto con acentos va por el lento.** «canción» o «año» tienen caracteres especiales: un bucle por índice sobre
+   ellos sigue siendo n². Lo que lo resuelve sin tercer algoritmo:
+   - la stdlib (`Json`, `Str`, `Orm`) recorre por bytes (`byteAt`), haya acentos o no: lo que mira es ASCII;
+   - para los programas, una forma de recorrer sin índice (un `for each` de caracteres), que es lineal en los dos
+     casos.
+2. **Los literales no tienen etiqueta:** irían por el lento, que con lo cortos que suelen ser apenas se nota. El
+   compilador sabe si un literal es ASCII, pero no hay dónde decirlo sin cambiar el formato.
+3. **La marca tiene que ser verdad mientras exista la cadena:**
+   - `move` no puede escribir en un string (`#714`): que lo rechace, o que borre la marca;
+   - con `any`, dentro de `Core`, un `byte[]` no puede pasar por string sin copiarse.
+4. **Las dos VMs, igual.** La VM-Java pone el mismo bit en su etiqueta: el mismo algoritmo, y la paridad lo vigila.
+5. **El UTF-8 mal formado (`#711`)** es del lento, así que su regla sigue pendiente.
+
+**Lo que da, medido con la pieza equivalente** (`byteAt`, que es lo que haría el rápido): recorrer 4000 caracteres
+ASCII en la Pico 2, 37 ms frente a 1986. Unas 50 veces menos; y el bucle pasa de n² a n.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
