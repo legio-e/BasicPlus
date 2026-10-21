@@ -67,8 +67,14 @@
 >   - en placa, nuestro código va con `-Os`: en la Pico, por una línea del bring-up que tapa el `-O3`;
 >   - MicroPython eligió lo mismo (UTF-8, índice O(n)), pero guarda el hash y puede validar al crear;
 >   - de paso, `#716`: `parseInt`/`parseFloat` con texto que no es un número.
+> - **y la decisión de Eduardo:** *«deberíamos tener una librería en C para manejar nuestros strings»*: optimizada
+>   (algoritmo y codificación), verificada, hecha aparte e incorporada al acabar, y comparada con la libc. A su pregunta,
+>   una sola biblioteca sirve para ARM, RISC-V y la S3 (Xtensa): C portable que lee palabras alineadas, porque la S3 no
+>   tolera las desalineadas. La forma propuesta y lo que hay que decidir, en §E5, «La biblioteca de cadenas en C».
 >
 > **Para la siguiente sesión:**
+> - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
+>   «similar» frente a la libc, y dónde se prueba cada arquitectura (las placas o QEMU);
 > - **las decisiones del H5** (§E5): la regla del UTF-8 mal formado (`#711`), el agujero de `move` (`#714`), `<` y `>`
 >   entre strings (`#713`), qué algoritmo va primero, si se recuerda «es ASCII», `parseInt`/`parseFloat` (`#716`), y si
 >   se mide `-O2` frente a `-Os` en placa;

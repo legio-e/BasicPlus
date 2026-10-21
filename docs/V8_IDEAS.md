@@ -2147,3 +2147,84 @@ cadenas: para una copia pequeña cuesta más prepararlos que copiar.
    - luego recorrer por índice y la lista del GC, que sí la tocan.
 3. **La implementación:** `==` en C, el `StringBuilder`, crear sin poner a cero, los bucles de C.
 4. **La PSRAM:** el tamaño de las cachés, y la imagen de la Metro (`#665`).
+
+### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
+
+**Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
+debería estar optimizada a nivel de algoritmo y de codificación y verificada. Esto se puede hacer a parte de todo el
+resto del código y una vez esté terminada se puede incorporar al resto del proyecto. A nivel de rendimiento podemos
+comparar nuestro código con una librería C standar. Si son similares podemos dar a nuestra librería por válida, si es
+mucho peor habría que buscar soluciones.»*
+
+Recoge lo que es C de los pasos 2 y 3 de arriba. Siguen fuera de ella lo que es BP (`Json` y `Str` recorriendo por
+bytes, el `StringBuilder`) y el GC (`#715`).
+
+**Su pregunta:** *«ARM y RISC-V necesitan librerías diferentes o la misma librería puede servir para los dos?»*
+
+**La respuesta: la misma.** Una biblioteca en C portable sirve para ARM (la Pico 2, la Metro, las STM32), para RISC-V
+(la C3, la C5, la C6, la P4), para la S3 (que es Xtensa, una tercera arquitectura) y para el PC. Es lo que ya pasa con
+la VM: el mismo `bpgenvm-c/src` en todas. Funciona porque todos estos procesadores son de 32 bits y little-endian, GCC
+compila bien el mismo C para cada uno, y los algoritmos rápidos de cadenas (leer de 4 en 4 bytes y operar con enteros)
+sólo usan operaciones que tienen todos.
+
+Lo que SÍ cambia, y hay que respetar al escribirla:
+1. **Leer 4 bytes de una dirección no alineada.**
+   - La M33 de ARM lo hace, más despacio.
+   - Las RISC-V de Espressif lo llevan mal: su ROM trae un `memcpy` que va lento con datos desalineados, y el IDF lo
+     cambia por otro (`LIBC_OPTIMIZED_MISALIGNED_ACCESS`).
+   - La S3 (Xtensa) no lo tolera.
+
+   La biblioteca alinea primero y lee palabras enteras alineadas: vale para todas.
+2. **Las instrucciones especiales:** el SIMD de 32 bits de la M33 (su extensión DSP) y las vectoriales de la S3 y la P4;
+   la C3, la C5 y la C6 no tienen. No hacen falta. Si una medida enseña que alguna gana mucho, sería una variante
+   opcional, con la versión en C de respaldo y las mismas pruebas. Cada variante pide probarse en su hardware, así que
+   se empieza por una sola versión.
+3. **La libc de debajo** es distinta en cada familia (newlib, picolibc, la ROM, newlib-nano byte a byte). Para lo
+   caliente (copiar, comparar, buscar), la biblioteca puede llevar lo suyo y no depender de ella. Lo decide la medida.
+
+**Una forma posible, para hablarla:**
+- **La frontera: la biblioteca no reserva memoria.** Trabaja sobre bytes que le dan (un puntero y una longitud); quien
+  crea la cadena (la VM, el AOT) reserva y le pide que la llene. Así se prueba sola, sin la VM, y la usan igual el
+  intérprete y el AOT.
+- **Lo que tendría,** por el censo:
+  - el UTF-8: contar caracteres, el byte donde empieza el carácter `i`, decodificar, validar (con la regla de `#711`)
+    y «es todo ASCII»;
+  - buscar: hacia delante, hacia atrás (`lastIndexOf`) y contar apariciones (para `split` y `replace`);
+  - comparar: igualdad y orden (el orden de los bytes en UTF-8 es el de los caracteres; sirve para `Str.compare`, y
+    para `#713` si se decide comparar);
+  - transformar: mayúsculas y minúsculas, los bordes de `trim`, `replace` y `split` sobre un búfer;
+  - los números: leer enteros y reales con reglas propias (`#716`), y escribirlos (el formateador de `double` ya es
+    nuestro);
+  - copiar y rellenar, si la medida dice que la libc de alguna placa no basta (la STM32).
+- **Los algoritmos, por caso** (lo que Eduardo preguntaba antes):
+  - contar y saltar caracteres, de 4 en 4 bytes, con un atajo cuando los 4 son ASCII;
+  - buscar: una aguja de 1 byte, de 4 en 4; las cortas, el primer byte y comparar; las largas, Horspool o Two-Way (a
+    partir de qué longitud, medido);
+  - las mayúsculas, de 4 en 4 cuando son ASCII.
+- **La codificación:**
+  - lecturas alineadas, nunca más allá del final;
+  - sin depender del orden de los bytes salvo donde se diga (todas son little-endian: comprobado al compilar);
+  - y quizá compilada con `-O2` aunque el resto vaya con `-Os` (medido).
+- **La verificación:**
+  - **El oráculo:** cada función, contra una versión simple y evidente (los bucles de hoy).
+  - **Exhaustivo en lo corto:** todas las cadenas de hasta 3 bytes, 16,7 millones.
+  - **Los bordes:** longitudes de 0 a 64, con las 4 alineaciones.
+  - **El catálogo de UTF-8 mal formado:** el «UTF-8 decoder stress test» de Markus Kuhn, que es el de referencia.
+  - **Millones de pruebas al azar** contra el oráculo.
+  - **Primero en el PC, y luego en cada arquitectura.** QEMU no está instalado: sin él, en las placas (la Pico 2 para
+    ARM, la P4 o la C5 para RISC-V, la S3 para Xtensa), o descargándolo.
+- **La medida y el criterio de Eduardo:** cada función contra su pareja de la libc donde la hay (`memchr`, `memcmp`,
+  `memmem`, `memcpy`), en bytes por ciclo, en el PC y en cada arquitectura.
+  - En ARM, contra la newlib completa de la RP2350: la STM32 tiene la misma M33 y su newlib-nano copia byte a byte.
+  - Lo que no tiene pareja (contar UTF-8, las mayúsculas), contra lo que cuesta leer la memoria una vez (el ritmo de
+    `memchr`).
+  - «Similar», por fijar (¿±25 %?).
+- **Dónde vive:** aparte, en su carpeta (`bpgenvm-c/bpstr/`, por ejemplo), con su `Makefile`, sus pruebas y su banco.
+  Al acabar, se da de alta en los cinco builds y las primitivas de la VM la llaman. La VM-Java no la usa (es C), pero
+  tiene que dar lo mismo: lo vigila la paridad.
+
+**Lo que hay que decidir antes de empezar:**
+1. la regla del UTF-8 mal formado (`#711`), porque la biblioteca la fija;
+2. lo que entra (la lista de arriba) y lo que se deja para después;
+3. qué cuenta como «similar» frente a la libc;
+4. dónde se prueba en ARM, RISC-V y Xtensa: en las placas, o con QEMU (descargarlo).
