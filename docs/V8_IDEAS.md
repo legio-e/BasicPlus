@@ -1905,6 +1905,65 @@ seguidos.
 Eduardo: *«de momento no intentamos mejorar»*. Para cuando toque, lo que pediría el algoritmo, sin probar: el barrido va
 en orden de dirección, así que el hueco nuevo va siempre al final. Engancharlo a la cola es un paso, no k.
 
+### El perfil por fases (21-oct, `samples/benchmarks/StrFases.bp`)
+
+Eduardo: *«Quizás faltaría un profile que nos diga cuanto tiempo está haciendo cada tarea. Mi intuición me dice que la
+parte de localizar y copiar es bastante importante y tu me dices que la parte de crear […] también es costosa. Como
+método, optimizar cada parte por separado, al final si optimizas la creación, la búsqueda y la copia, estas optimizando
+la manipulación de bits si o si.»*
+
+Una operación de cadena es una suma de fases: llamar (el intérprete), reservar (con su puesta a cero y el GC que le
+toque), copiar y localizar (contar caracteres, buscar). Cada fase se midió SOLA, con el método del censo, contando las
+colectas que caen dentro. Al final se midieron tres operaciones enteras, para ver que la suma cuadra.
+
+Con 2048 bytes (con 256, en el mismo programa):
+
+| fase | Pico 2 | Metro, PSRAM | P4 | PC |
+|---|---|---|---|---|
+| llamar: una función BP con dos cadenas | 5,9 µs | 6,5 µs | 6,1 µs | 23 ns |
+| reservar 16 bytes (casi todo, el coste fijo) | 24 µs | 23 µs | 7,3 µs | 34 ns |
+| reservar 2048 bytes | 140 µs (71 GC cada 1000) | 407 µs (2 GC cada 1000) | 42 µs | 343 ns |
+| copiar 16 bytes (casi todo, la llamada al builtin) | 6,2 µs | 12 µs | 3,8 µs | 16 ns |
+| copiar 2048 bytes (`__strCopy`: `memmove`) | 18 µs | 59 µs | 7,2 µs | 22 ns |
+| localizar: contar 2048 bytes (`strlen`) | 131 µs | 147 µs | 64 µs | 180 ns |
+| localizar: buscar sin hallar en 2048 (`indexOf`) | 366 µs | 396 µs | 189 µs | 3,4 µs |
+| localizar: contar y saltar al último (`charCodeAt`) | 385 µs | 416 µs | 146 µs | 1,1 µs |
+| destruir: `gc()` | 1,3 ms | 3,8 ms | 3,0 ms | 247 µs |
+| entera: `a + b` (dos mitades) | 203 µs | 569 µs | 64 µs | 476 ns |
+| entera: `fromBytes` de 2048 | 333 µs | 679 µs | 102 µs | 987 ns |
+| entera: `substring` (la mitad central) | 596 µs | 786 µs | 200 µs | 1,7 µs |
+
+**La suma cuadra.** En la Pico 2, `a + b` es llamar (6) + reservar 2 KB (140) + dos copias de 1 KB (~24) + el resto del
+bytecode (~30): unos 200 µs, y se midieron 203.
+
+**Lo que dice, fase a fase:**
+1. **Crear (reservar) es lo más caro en todo lo que crea:** dos tercios de `a + b` en las tres placas. Pesan tres cosas
+   distintas:
+   - **un coste fijo alto:** reservar 16 bytes cuesta 24 µs en la RP2350 (unos 3600 ciclos) y 7 en la P4. Qué parte es
+     el cerrojo, la lista de huecos, el handle o la puesta a cero, no se ve desde BP;
+   - **con un heap pequeño, el GC:** en la Pico 2 (219 KB) hay una colecta cada 14 reservas de 2 KB, y se lleva unos
+     90 de los 140 µs;
+   - **con PSRAM, la memoria nueva:** en la Metro casi no hay GC (2 cada 1000), pero reservar 2 KB cuesta 407 µs.
+     Poner a cero memoria recién estrenada cuesta siete veces más que copiar en memoria que ya está en la caché
+     (59 µs). Es el punto 2 en números.
+2. **Localizar es lo más caro en lo que busca o cuenta.** Contar va a 64 ns por byte en la RP2350; buscar, a 179 (un
+   `memcmp` por posición). Leer la memoria podría ir unas diez veces más deprisa.
+3. **Copiar es barato si lo hace `memmove`:** 12 µs para 2 KB en la Pico 2. Pero los bucles propios byte a byte cuestan
+   unas quince veces más: es la diferencia entre `fromBytes` (333 µs) y reservar más copiar con `memmove` (unos
+   160 µs).
+4. **Llamar cuesta unos 6 µs por llamada BP** en las tres placas: la P4 no gana aquí (es bytecode).
+
+**Con 256 bytes** el reparto se mueve hacia lo fijo. En la Pico 2, `a + b` son 83 µs: reservar, 37 (de ellos 24 fijos);
+llamar y copiar, 14. Localizar sigue proporcional: 19 µs contar, 52 buscar.
+
+**El método de Eduardo, con esta línea de base:** optimizar por separado crear, localizar y copiar.
+- **Crear:** el coste fijo de la reserva, la puesta a cero y el GC (`#715`).
+- **Localizar:** contar y buscar leyendo palabras, y recordar «es ASCII».
+- **Copiar:** `memmove` (o lo nuestro, donde la libc copia byte a byte) en vez de los bucles.
+
+Para ver DENTRO del coste fijo de la reserva (el cerrojo, la lista, el handle, el cero), hace falta medir en C, con el
+contador de ciclos de cada procesador, en una imagen instrumentada: por decidir.
+
 ### Punto 1: el invariante, y los matices de «string = byte[]»
 
 **El mecanismo.** Un `byte[]` y un string son los mismos bytes con dos contratos distintos:
@@ -1931,6 +1990,13 @@ En la memoria no se distinguen: los distingue el compilador.
    - Hoy `fromBytes` acepta cualquier cosa, y con texto mal formado las dos VMs no dan lo mismo (`#711`).
    - Si la conversión a string sustituyera lo mal formado por U+FFFD, como ya hace Java, todo string sería UTF-8
      válido. Entonces las operaciones por bytes (`memcmp`, `memchr`) serían exactas en las dos VMs.
+   - **De dónde sale** (Eduardo: *«¿lo generamos nosotros o de dónde sale?»*): de las dos partes, medido con un
+     programa en las dos VMs (el detalle, en `#711`).
+     - **De fuera:** un fichero en otra codificación (un CSV de Windows en Latin-1: `caña` lleva la `ñ` en un byte,
+       `F1`), el puerto serie, la red, o `fromBytes` con bytes cualesquiera.
+     - **De nuestro propio código:** `appendChar` con medio par de sustitutos, o con un número fuera de Unicode. Y
+       por él, `Json`, que convierte cada `\uXXXX` con un `appendChar`: un emoji escrito en JSON como `😀`
+       (lo normal en las API web) sale en la VM-C partido en dos medios caracteres, y en la VM-Java, bien.
 4. **Hoy el invariante no se cumple del todo:**
    - `move` (pública, de `Core`) escribe dentro de un string, y el cambio lo ven todas sus referencias (`#714`);
    - dentro de `Core`, un `any` deja que un `byte[]` pase por string sin copiarse.
@@ -2137,6 +2203,8 @@ cadenas: para una copia pequeña cuesta más prepararlos que copiar.
 6. **`parseInt` y `parseFloat` con texto que no es un número** (`#716`): qué deben hacer en las dos VMs.
 7. **La optimización de nuestro código en placa** (`-Os` en todas): si se mide `-O2` frente a `-Os` en el intérprete.
    Es implementación, el 3er escalón de la norma.
+8. **Mirar dentro de la reserva** (24 µs fijos en la RP2350): medir en C, con el contador de ciclos, en una imagen
+   instrumentada (grabar y volver a la de siempre).
 
 ### Un orden posible (la norma: analizar, algoritmo, implementación)
 

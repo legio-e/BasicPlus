@@ -71,6 +71,15 @@
 >   (algoritmo y codificación), verificada, hecha aparte e incorporada al acabar, y comparada con la libc. A su pregunta,
 >   una sola biblioteca sirve para ARM, RISC-V y la S3 (Xtensa): C portable que lee palabras alineadas, porque la S3 no
 >   tolera las desalineadas. La forma propuesta y lo que hay que decidir, en §E5, «La biblioteca de cadenas en C».
+> - **el perfil por fases** (Eduardo: *«Quizás faltaría un profile que nos diga cuanto tiempo está haciendo cada
+>   tarea»*; `samples/benchmarks/StrFases.bp`, en el PC, la Pico 2, la Metro y la P4, sin grabar):
+>   - crear (reservar) es dos tercios de un `a + b`;
+>   - localizar va a 64–179 ns por byte en la RP2350;
+>   - copiar con `memmove` es barato, y los bucles propios, unas quince veces más caros.
+>
+>   Y la pregunta por `#711` (*«¿lo generamos nosotros o de dónde sale?»*): de fuera (ficheros en Latin-1, el puerto
+>   serie, `fromBytes`) y de dentro (`appendChar` con sustitutos o fuera de Unicode, y por él `Json` con `😀`,
+>   que en la VM-C sale roto y en la VM-Java bien). Medido en las dos VMs; el detalle, en `#711`.
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es

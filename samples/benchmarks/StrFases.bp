@@ -1,0 +1,192 @@
+// StrFases.bp — el PERFIL de las cadenas por FASES: cuánto se lleva cada parte de una operación.
+//
+// ─── Por qué existe (V8/H5, 21-oct-2026) ─────────────────────────────────────
+//
+// Eduardo, con el censo hecho (`StrCenso.bp`): «Quizás faltaría un profile que nos diga cuanto tiempo está haciendo
+// cada tarea. Mi intuición me dice que la parte de localizar y copiar es bastante importante y tu me dices que la parte
+// de crear […] también es costosa. Como método, optimizar cada parte por separado.» Una operación de cadena es una
+// suma de fases: llamar (el intérprete), RESERVAR (con su puesta a cero y el GC que le toque), COPIAR y LOCALIZAR
+// (contar caracteres, buscar). Aquí cada fase se mide SOLA, y al final tres operaciones enteras, para ver que la
+// suma cuadra: `a + b` = llamar + reservar n + copiar n/2 dos veces.
+//
+// ─── Cómo mide ───────────────────────────────────────────────────────────────
+//
+// Como `StrCenso.bp`: cada fase durante un tiempo fijo, descontando el bucle vacío de su posición en el switch. Y
+// cuenta las colectas que caen dentro (`Heap.getCollections`), por mil operaciones: así se ve qué parte de «reservar»
+// es el GC. La reserva de 16 bytes es casi todo coste fijo; la de n, el fijo más poner a cero n bytes. La copia de 16
+// es casi todo la llamada al builtin; la de n, eso más copiar n bytes.
+//
+// Las cifras cambian de una vez a otra y de una VM a otra: no es de paridad, y no está en el corpus.
+module StrFases
+  import Core
+  import Machine
+  import Heap
+
+  const MS_OBJETIVO := 150
+
+  var ultimo: string := ""
+  var bytesUlt: byte[] := null
+  var sumidero: integer := 0
+
+  var n: integer := 0
+  var s: string := ""
+  var s16: string := ""
+  var mitad1: string := ""
+  var mitad2: string := ""
+  var buf: byte[] := null
+  var bs: byte[] := null
+
+  // m caracteres ASCII, a..z
+  function hazCadena(m: integer): string
+    var sb: StringBuilder := StringBuilder()
+    var i: integer := 0
+    while i < m do
+      sb.appendChar(97 + (i mod 26))
+      i += 1
+    endwh
+    return sb.toString()
+  end hazCadena
+
+  function prepara(m: integer)
+    n := m
+    s := hazCadena(m)
+    s16 := hazCadena(16)
+    mitad1 := hazCadena(m / 2)
+    mitad2 := hazCadena(m / 2)
+    buf := newByteArray(m)
+    bs := toBytes(s)
+  end prepara
+
+  // una función BP con dos cadenas: lo que cuesta la llamada a un helper como __strconcat
+  function dos(a: string, b: string): string
+    return a
+  end dos
+
+  // UNA fase (o una operación entera, de la 10 en adelante)
+  function haz(op: integer): integer
+    var r: integer := 0
+    switch op
+      case 0
+        r := 0
+      case 1
+        ultimo := dos(mitad1, mitad2)
+      case 2
+        bytesUlt := newByteArray(16)
+      case 3
+        bytesUlt := newByteArray(n)
+      case 4
+        r := __strCopy(s16, buf, 0)
+      case 5
+        r := __strCopy(s, buf, 0)
+      case 6
+        r := strlen(s)
+      case 7
+        r := indexOf(s, "zz9")
+      case 8
+        r := charCodeAt(s, n - 1)
+      case 9
+        gc()
+      case 10
+        ultimo := mitad1 + mitad2
+      case 11
+        ultimo := fromBytes(bs)
+      case 12
+        ultimo := substring(s, n / 4, (3 * n) / 4)
+      case 99
+        r := 0
+    endsw
+    return r
+  end haz
+
+  function nombre(op: integer): string
+    var r: string := "?"
+    switch op
+      case 0
+        r := "vacío | el bucle, con el primer caso"
+      case 99
+        r := "vacío | el bucle, con el último caso"
+      case 1
+        r := "llamar | una función BP con dos cadenas"
+      case 2
+        r := "reservar | 16 bytes (casi todo, coste fijo)"
+      case 3
+        r := "reservar | n bytes (el fijo, poner a cero n y el GC que toque)"
+      case 4
+        r := "copiar | 16 bytes (casi todo, la llamada al builtin)"
+      case 5
+        r := "copiar | n bytes"
+      case 6
+        r := "localizar | contar n bytes (strlen)"
+      case 7
+        r := "localizar | buscar sin hallar en n bytes (indexOf)"
+      case 8
+        r := "localizar | contar y saltar al último carácter (charCodeAt)"
+      case 9
+        r := "destruir | gc()"
+      case 10
+        r := "entera | a + b (dos mitades)"
+      case 11
+        r := "entera | fromBytes de n bytes"
+      case 12
+        r := "entera | substring, la mitad central"
+    endsw
+    return r
+  end nombre
+
+  // la posición de cada fase en el switch (0..12, y la 99 la última)
+  function posicion(op: integer): integer
+    if op <= 12 then
+      return op
+    endif
+    return 13
+  end posicion
+
+  var colectas: integer := 0
+
+  // nanosegundos por operación: `op` en tandas de 10, hasta pasar MS_OBJETIVO; deja en `colectas` las de por mil
+  function mide(op: integer): integer
+    var iters: integer := 0
+    var c0: integer := Heap.getCollections()
+    var t0: integer := Machine.uptimeMs()
+    var pasado: integer := 0
+    while pasado < MS_OBJETIVO do
+      var j: integer := 0
+      while j < 10 do
+        sumidero += haz(op)
+        j += 1
+      endwh
+      iters += 10
+      pasado := Machine.uptimeMs() - t0
+    endwh
+    colectas := ((Heap.getCollections() - c0) * 1000) / iters
+    if pasado < 2000 then
+      return (pasado * 1000000) / iters
+    endif
+    return ((pasado * 1000) / iters) * 1000
+  end mide
+
+  function vacio(base: integer, fin: integer, pos: integer): integer
+    return base + ((fin - base) * pos) / 13
+  end vacio
+
+  function corre(m: integer)
+    prepara(m)
+    gc()
+    var base: integer := mide(0)
+    var fin: integer := mide(99)
+    print "FASES n=" + m + " op=0 ns=" + base + " neto=0 gc1000=0 | " + nombre(0)
+    print "FASES n=" + m + " op=99 ns=" + fin + " neto=0 gc1000=0 | " + nombre(99)
+    var op: integer := 1
+    while op <= 12 do
+      var ns: integer := mide(op)
+      print "FASES n=" + m + " op=" + op + " ns=" + ns + " neto=" + (ns - vacio(base, fin, posicion(op))) + " gc1000=" + colectas + " | " + nombre(op)
+      op += 1
+    endwh
+  end corre
+
+  function Main()
+    corre(256)
+    corre(2048)
+    print "fin de las fases"
+  end Main
+end StrFases
