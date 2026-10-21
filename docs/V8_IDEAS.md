@@ -2291,6 +2291,52 @@ Lo que SÍ cambia, y hay que respetar al escribirla:
   Al acabar, se da de alta en los cinco builds y las primitivas de la VM la llaman. La VM-Java no la usa (es C), pero
   tiene que dar lo mismo: lo vigila la paridad.
 
+**Los bytes: algoritmos estándar sobre UTF-8** (Eduardo, 21-oct: *«Recuerdo del ensamblador del x86 que se podía
+buscar un caracter en una cadena con una sola instrucción. En ARM o en RISC-V no habrá exactamente lo mismo pero si que
+con unas pocas líneas puede haber algo parecido. Lo que quiero decir es que aunque estemos con UTF-8 i podemos
+aprovechar algoritmos mas o menos estandard para bytes.»*)
+
+**Sí: el UTF-8 se diseñó para eso.**
+- **Un carácter ASCII nunca aparece dentro de otro:** todos los bytes de un carácter largo valen 0x80 o más. Así que
+  buscar `,`, `"`, `:` o el fin de línea es buscar un byte (`memchr`).
+- **Una aguja bien formada sólo casa en el principio de un carácter.** El UTF-8 se resincroniza solo, así que buscar
+  una subcadena es buscar bytes (`memmem`). `bp_find_bytes` ya se apoya en esto.
+- **Comparar bytes da el mismo orden que comparar caracteres** (`memcmp`).
+- **Contar caracteres es contar los bytes que no son de continuación** (los que no empiezan por `10`).
+
+Sólo hace falta decodificar para el valor de `charCodeAt`, las mayúsculas fuera de ASCII y validar. Y aun ahí hay atajo
+cuando los 4 bytes de una palabra son ASCII.
+
+**La instrucción del x86** (`REPNE SCASB`) existe, pero en los procesadores de hoy va despacio. Las bibliotecas rápidas
+del x86 usan en su lugar SIMD: comparan 16 o 32 bytes por paso.
+
+**Lo que tiene cada uno de los nuestros:**
+- **Todos (ARM, RISC-V, Xtensa), en C normal:** el truco clásico de 4 en 4. Se hace un XOR de la palabra con el byte
+  buscado repetido (`c × 0x01010101`), se resta `0x01010101` y se hace AND con la negación de la palabra y con
+  `0x80808080`. Da distinto de cero si algún byte casa. Son unas 5 instrucciones por cada 4 bytes, frente a 4 o 5 por
+  byte en un bucle simple, y valen en cualquier procesador de 32 bits.
+- **La M33 de ARM** (la Pico 2, la Metro, las STM32): su extensión DSP compara 4 bytes por pareja de instrucciones
+  (`UADD8` y `SEL`), y `CLZ` con `REV` dice cuál casó. Es lo que usa el `memchr` optimizado de ARM. El de la newlib de
+  la RP2350 parece ese: ocupa 148 bytes (sin comprobar su código). Hoy no lo usamos: `indexOf` llama a `memcmp` en cada
+  posición.
+- **Las RISC-V de Espressif:** la C3 es `rv32imc`, la C5 y la C6 `rv32imac`, y la P4 `rv32imafc` (leído en sus
+  builds). Ninguna tiene la extensión Zbb, que trae `orc.b`, una instrucción hecha justo para esto. Así que el truco en
+  C. La P4 tiene además un SIMD propio de 128 bits (16 bytes por instrucción), sólo en ensamblador suyo: una variante,
+  si algún día se mide que compensa.
+- **La S3 (Xtensa):** el truco en C, con lecturas alineadas.
+
+**Lo que daría, estimado y por medir en la biblioteca.** Hoy, en la RP2350, contar va a 64 ns por byte (unos 10
+ciclos) y buscar a 179. De 4 en 4 serían 1,5–2 ciclos por byte, 10–13 ns: unas 5 veces más rápido contar y unas 15
+buscar. El tope es la memoria: con la PSRAM de la Metro, lo que no está en la caché llega a unos 50 ns por byte.
+
+**Los algoritmos estándar** que se pueden aprovechar:
+- `memchr` de 4 en 4;
+- para buscar subcadenas, el primer byte y comparar si la aguja es corta, y Two-Way o Horspool si es larga;
+- las técnicas conocidas para contar y validar UTF-8 de palabra en palabra.
+
+Hay implementaciones públicas que se pueden leer o reutilizar, mirando su licencia: la de musl es MIT y la de newlib,
+BSD.
+
 **Lo que hay que decidir antes de empezar:**
 1. la regla del UTF-8 mal formado (`#711`), porque la biblioteca la fija;
 2. lo que entra (la lista de arriba) y lo que se deja para después;

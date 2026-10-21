@@ -80,6 +80,10 @@
 >   Y la pregunta por `#711` (*«¿lo generamos nosotros o de dónde sale?»*): de fuera (ficheros en Latin-1, el puerto
 >   serie, `fromBytes`) y de dentro (`appendChar` con sustitutos o fuera de Unicode, y por él `Json` con `😀`,
 >   que en la VM-C sale roto y en la VM-Java bien). Medido en las dos VMs; el detalle, en `#711`.
+> - **y la idea de Eduardo de aprovechar algoritmos de bytes estándar con UTF-8** (*«aunque estemos con UTF-8 […]
+>   podemos aprovechar algoritmos mas o menos estandard para bytes»*): sí, el UTF-8 está hecho para eso. Se busca de 4
+>   en 4 bytes con un truco en C que vale en todos los procesadores; la M33 lo hace con su DSP, y nuestras RISC-V no
+>   tienen Zbb (leído en sus builds). En §E5, «Los bytes».
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es
