@@ -93,6 +93,10 @@
 >   rápido si no hay caracteres especiales, el lento si los hay. Para que funcione, se mira una vez al crear la cadena
 >   (al copiar sus bytes, casi gratis) y se recuerda en un bit de la etiqueta. El texto con acentos sigue por el lento.
 >   En §E5, «Dos algoritmos», con lo que hay que decidir.
+> - **el bit, aprobado** (*«OK, me parece bien lo del bit»*);
+> - **la longitud** (*«se guarda la longitud o el final lo marca el caracter \0?»*): se guarda en bytes, delante, y no
+>   hay `\0`. Uno dentro es un carácter más, comprobado en las dos VMs. La de caracteres no se guarda; cabría en los 21
+>   bits libres de la etiqueta (por decidir).
 >
 > **Para la siguiente sesión:**
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es

@@ -2345,6 +2345,34 @@ mirar si alguno vale 0x80 o más cuesta casi nada (de 4 en 4 bytes: un OR y una 
 **Lo que da, medido con la pieza equivalente** (`byteAt`, que es lo que haría el rápido): recorrer 4000 caracteres
 ASCII en la Pico 2, 37 ms frente a 1986. Unas 50 veces menos; y el bucle pasa de n² a n.
 
+**El bit, aprobado** (Eduardo, 21-oct: *«OK, me parece bien lo del bit»*). Siguen por decidir los puntos de arriba
+(los acentos por el lento, los literales, `#714`, `#711`).
+
+**La longitud: se guarda, y no hay `\0`** (Eduardo: *«con el string también se guarda la longitud o el final lo marca
+el caracter \0?»*).
+- **Se guarda la longitud en BYTES**, en los 4 bytes de delante:
+  - una cadena del heap es `[etiqueta][longitud][bytes]`;
+  - un literal es `[longitud][bytes]`.
+
+  El final lo marca la longitud. No hay `\0` detrás (`heap_alloc_string` copia sus bytes justos). Un `\0` dentro es un
+  carácter más: comprobado el 21-oct en las dos VMs, `a\0b` tiene `strlen` 3 y se concatena y se compara bien.
+- **Lo que da frente al `\0` de C:**
+  - los bytes se saben sin recorrer (`__bytesDe`, O(1));
+  - una cadena puede llevar cualquier byte;
+  - concatenar y `substring` saben cuánto reservar antes de copiar.
+- **Lo que no se guarda: la longitud en CARACTERES**, que es lo que devuelve `strlen`, y hoy se cuenta en cada llamada.
+  - **Con el bit,** en una cadena ASCII los caracteres son los bytes: O(1).
+  - **Una opción más, por decidir:** en la misma etiqueta quedan, además del bit, 21 bits libres. Cabe la cuenta de
+    caracteres de cualquier cadena de hasta 2 097 151, contada al crearla en la misma pasada que el bit. Así `strlen` y
+    el rango de `charAt`/`charCodeAt`/`substring` serían O(1) también con acentos; sólo caminar hasta el carácter `i`
+    seguiría siendo O(i). Los literales, sin etiqueta, como hoy. A revisar al hacerlo: que ningún camino reescriba la
+    etiqueta entera y la borre.
+- **Un detalle para la biblioteca:** la longitud va en big-endian, como todo el formato del `.mod`. Leerla en estos
+  procesadores, que son little-endian, pide darle la vuelta a los bytes: en la M33, una instrucción (`REV`); en las
+  RISC-V sin Zbb, varias.
+- **Donde la VM pasa una cadena a la libc** (un nombre de fichero, `parseInt`), la copia a un búfer de C con su `\0`.
+  Ahí un `\0` de dentro sí cortaría: es la frontera con C, no la cadena.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
