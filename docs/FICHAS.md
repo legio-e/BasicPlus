@@ -7168,6 +7168,18 @@ como mucho.»*
   encoge un hueco la corrige (16 entradas que mirar); soltar un `owner` o compactar la vacía. Una entrada que apuntara
   a un hueco que ya no existe acabaría en memoria corrupta.
 
+**¿Se fusionan los huecos vecinos? (Eduardo, 21-oct)** *«cuando se crea un hueco porque el GC libera una entrada, ¿se
+está comprobando que los huecos de al lado están seguidos y se pueden fusionar?»* Sí, en las dos VMs, y entero
+(`gc_sweep_phase` y su espejo en la VM-Java):
+- el barrido vacía la lista y recorre el heap por dirección. Cada tramo seguido de bloques muertos Y de huecos viejos se
+  junta en UN hueco, que se da de alta al llegar al siguiente bloque vivo;
+- el tramo final, el que toca el final del heap, no es un hueco: vuelve al bump (`heap_next` retrocede);
+- fuera del GC (soltar un `owner`), `add_to_free_list` funde con los dos vecinos si están seguidos.
+
+Por eso, tras cada GC no hay dos huecos seguidos: entre dos huecos hay siempre un objeto vivo. Es lo que se vio en
+`HuecosReserva`: exactamente k huecos, uno por cadena muerta, cada uno entre dos vivas. Los que quedan no se pueden
+fundir más sin mover objetos; sólo los quitaría la compactación (`Heap.compact`, a petición).
+
 Sólo análisis. Por decidir (Eduardo).
 
 #### 🔵 `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5)
