@@ -134,6 +134,10 @@
 >   antes de entrar: compilar `Str.bp` suelto lo deja con la generación 0, y `Collections` (compilada contra la 7) no
 >   carga; se rehace con el proyecto de la stdlib. Subida a `/lib` de la Pico 2, la Metro y la P4 (ninguna imagen la
 >   lleva embebida).
+> - **¿un CRC para descartar la igualdad?** (Eduardo: *«Igual con utilizar el comparador nos vale»*): sí, nos vale el
+>   comparador. Si son distintas, para en el primer byte distinto (y `==` ni mira los bytes si las longitudes no
+>   coinciden); un CRC pide recorrerlas enteras, no prueba la igualdad y no sirve para ordenar. Lo que pesa es que el
+>   comparador va en bytecode; en C (`memcmp`), unas mil veces más deprisa. §E5.
 > - **lo que sigue lento** (Eduardo: *«si hay caracteres especiales queda alguna función que vaya como antes de
 >   lenta?»*; §E5): los literales largos por índice (798 ms frente a 39 en la Pico 2), dos cadenas a la vez en un
 >   programa, `upper`/`lower` con acentos (como antes, lineales), las natives y la VM-Java; y sin acentos, cuatro

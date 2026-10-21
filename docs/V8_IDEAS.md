@@ -2707,6 +2707,22 @@ De cuadrática a lineal. En placa, una comparación por bytes en BP cuesta unos 
 `memcmp` en C, la forma 2, iría mil veces más deprisa. El `Map` con claves con acentos apenas cambia (Pico 2, 200
 claves: 1088 → 1048 ms): con claves cortas pesa desplazar la lista, abajo.
 
+**¿Y un CRC para descartar la igualdad? (21-oct)** Eduardo: *«Podemos utilizar CRC para descartar la igualdad, o el
+comparador»*, y enseguida: *«el comparador sería igual o mas rápido? Igual con utilizar el comparador nos vale»*. Nos
+vale el comparador:
+- **si son distintas, el comparador para en el primer byte distinto**, que suele estar al principio. Y `==`
+  (`__strequals`) ni mira los bytes si las longitudes no coinciden;
+- **un CRC hay que calcularlo sobre TODOS los bytes** de cada cadena, más trabajo que comparar hasta la primera
+  diferencia. Sólo compensaría guardado (en la etiqueta quedan 21 bits libres), con cadenas de la misma longitud que
+  difieren al final y que se comparan muchas veces. Y calcularlo al crear encarecería crear, que ya es lo que más pesa;
+- **si son iguales, el CRC no ahorra nada**: dos CRC iguales no prueban la igualdad, y hay que comparar los bytes;
+- **para ordenar** (el `Map`) no sirve: el CRC no conserva el orden alfabético;
+- **donde un hash sí gana** es en una tabla hash, que no busca comparando sino por el hash. Es otra estructura, sin
+  orden.
+
+Lo que de verdad pesa es que el comparador corre en bytecode (unos 15 µs por byte en placa: `Str.compare` y el bucle de
+`==`). Compararlo en C, con un `memcmp`, iría unas mil veces más deprisa por byte: es la forma 2 de arriba.
+
 ### Lo que sigue lento (21-oct, pregunta de Eduardo)
 
 Eduardo: *«De todas las operaciones de strings, entiendo que ahora en el caso no haber caracteres especiales todas van
