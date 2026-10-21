@@ -197,6 +197,9 @@
 >   En placa: 1000 claves en la Pico 2, de 17,7 a 2,6 s; 2000 en la P4, de 56,7 a 3,7 s; en la Metro, de 72,9 a 9,3 s.
 >
 > **Para la siguiente sesión:**
+> - **el criterio de Eduardo para lo que sigue** (21-oct, al cerrar): *«Lo importante es que el heap está funcionando
+>   correctamente. Ahora se trata de optimizar tiempos pero lo primero es no estropear lo que ya funciona.»* Lo del heap
+>   (`#715`, `#718`, no poner a cero) se queda en análisis hasta que él diga;
 > - **crear en la PSRAM, por decidir (Eduardo)** (§E5, «Medido por dentro»): no poner a cero las cadenas que se llenan
 >   enteras, y el código caliente en la SRAM. El cerrojo de la VM, no (Eduardo). En la Metro queda
 >   `/app/CreaMide.mod`; sin la imagen de medida sólo da los totales;
@@ -211,12 +214,11 @@
 > - **`#715`, sólo análisis** hasta que Eduardo diga;
 > - **la C5 y la S3, sin el censo:** no estaban conectadas;
 > - **en la Pico 2, la Metro y la P4 quedan** `/app/StrCenso.mod` y `/app/GcHuecos.mod`, y los de esta tarde
->   (`StrAcentos`, `CursorPlaca`, `JsonAcentosPlaca`). Las tres llevan la imagen del cursor;
+>   (`StrAcentos`, `CursorPlaca`, `JsonAcentosPlaca`). Las tres llevan la imagen del builtin 282; la Metro, con
+>   `psram=1` y dos runs, como estaba;
 > - **del cursor, por decidir (Eduardo):** dos cursores por hilo (dos cadenas a la vez); que recuerde también los
 >   literales (hoy cada llamada los mira enteros: 798 ms frente a 39 recorriendo 4000 caracteres en la Pico 2); y si
 >   las natives (el AOT) usan también el del hilo: hoy cada llamada usa uno propio;
-> - **comparar en C** (la forma 2 de «Comparar por bytes»): es lo que queda en el `Map` (unos 2,6 ms por `put` con 1000
->   claves en la Pico 2, casi todo comparaciones en bytecode);
 > - **en `/lib` de la Pico 2, la Metro y la P4 están ya la `Str`, la `Json`, la `Gui` y la `Collections` nuevas**
 >   (subidas con el wire), con la imagen del builtin 282;
 > - **las demás placas (S3, C3, C5, C6, Nucleo y DK2) necesitan imagen nueva** antes de recibir la stdlib o programas
@@ -224,7 +226,7 @@
 > - **la tanda del F1 en placa**, aplazada por Eduardo hasta acabar las mejoras;
 > - **sin explicar**, de los dos algoritmos: `intToString` y otras tres, más lentas sólo en las RP2350. Pide un test de
 >   desplazamiento;
-> - **la VM-Java del IDE es la vieja:** falta `mvn install` de miVM y rehacer el BpIde (con el IDE cerrado).
+> - **la VM-Java del IDE, al día** (comprobado al cerrar): el jar del IDE (18:20) lleva la miVM con el builtin 282.
 
 > **19-oct** — **La WiFi, el H3: el análisis, con las decisiones de Eduardo, y el paso 1, hecho en la P4. Su C6,
 > actualizada a ESP-Hosted 3.0.9 por el conector P1; y un firmware de prueba en la P4, con el IDF 6.1, que enciende,
