@@ -3017,6 +3017,34 @@ aprovechar para aumentar la cache.»*
 - **Lo propuesto:** medir primero, con una imagen de prueba de la forma a), en la Metro y en la Pico 2 (`PsramFases`, el
   censo y un banco de bytecode general). Si gana mucho, elegir entre a) y b).
 
+**¿Y DMA entre la PSRAM y la RAM? (Eduardo, 21-oct)** Sí, el hardware lo permite (leído en las cabeceras del
+pico-sdk):
+- **el DMA de la RP2350** (16 canales) llega a la zona de la memoria externa, así que puede mover entre la PSRAM y la
+  SRAM, o dentro de la PSRAM;
+- **hay un alias sin caché y sin reserva de línea** de toda esa zona (`XIP_NOCACHE_NOALLOC`, desde `0x14000000`; la
+  PSRAM, en `0x15000000`). Por él, un acceso no pasa por los 16 KB de la caché ni echa nada de ella;
+- **y una cola de lectura en flujo** (`XIP_STREAM`, de 2 entradas) pensada para que el DMA lea en bloque.
+
+**Lo que daría,** sólo en las operaciones de bloque (copiar y poner a cero; comparar no, que el DMA sólo mueve):
+- **copiar y poner a cero cadenas grandes sin echar al intérprete de la caché** (el +16–22 % de arriba);
+- **quizá más deprisa:** una escritura sin caché no tiene que traer antes la línea, así que poner a cero se ahorraría
+  una de las tres transferencias. Está por medir;
+- **en paralelo,** en teoría: la CPU seguiría interpretando mientras el DMA trabaja. Pero la VM suele necesitar la
+  cadena en seguida; lo aprovechable sería, por ejemplo, poner a cero por delante la memoria nueva.
+
+**Las pegas:**
+- **la coherencia con la caché:** lo que el DMA (o la CPU por el alias sin caché) escribe no actualiza las líneas que la
+  caché tenga de esas direcciones. Antes hay que limpiar e invalidar el rango (`xip_cache_clean_range`,
+  `xip_cache_invalidate_range`); con líneas de 8 B, 16 KB son 2048 operaciones. Ahí es donde se esconden los fallos;
+- **el coste de arrancar cada transferencia:** sólo compensa por encima de algunos KB;
+- **la QMI es una:** mientras el DMA lee la PSRAM, la CPU que trae código de la flash espera. Con el código caliente en
+  la SRAM (la forma a), no;
+- **los canales se comparten** con los drivers: habría que reservar uno;
+- **lo de cada instrucción no cambia:** la pila, los campos y la tabla de handles siguen pasando por la caché.
+
+Lo más sencillo de probar ni siquiera es el DMA: es que `memcpy`/`memset` de bloques grandes de la PSRAM usen el alias
+sin caché, con el mantenimiento de la caché alrededor. Se mediría junto con la forma a).
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
