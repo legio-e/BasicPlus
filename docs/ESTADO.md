@@ -95,7 +95,9 @@
 >     podemos dar por bueno»*);
 >   - **`#711`, decidido el fondo** en cuatro vueltas con Eduardo (`V8_IDEAS` §E5, «`#711`»):
 >     - un string es un invariante y no se toca; para el texto que cambia, `StringBuilder`. Con eso `#714` queda
->       decidido en el qué (`move` no escribirá dentro de una cadena); falta el cómo;
+>       decidido: un bit de SOLO LECTURA en la etiqueta del bloque, con el que nacen todas las cadenas; `move` y los
+>       builtins que escriben en un array que reciben lo miran (Eduardo: *«lo que necesitamos un bit que indique que
+>       es de solo lectura, y todos los strings son de solo lectura»*). Por hacer;
 >     - lo que viene de una fuente de confianza (las constantes del compilador, las operaciones entre cadenas válidas,
 >       lo que da el sistema) no se mira al ejecutar, pero se prueba con tests;
 >     - leer de fuera son dos pasos, leer los bytes y descodificarlos. El error se ve al descodificar: excepción por
