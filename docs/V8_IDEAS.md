@@ -3531,6 +3531,58 @@ bit (sus cadenas van siempre por el algoritmo lento): con la misma pasada, lo po
 Después, por la norma: el algoritmo (una rutina de «validar y corregir», probada contra un oráculo en las dos VMs) y
 la implementación.
 
+**La segunda vuelta de Eduardo (22-oct):** *«Que un string es un invariante no se toca. Para trabajar con strings
+variables tenemos stringbuilder. Ahora, donde arreglar string mal formados? Si la fuente nos garantiza que el string
+está bien formado no hace falta verificar, es cierto pero es una relación de confianza, eso hay que verificarlo con
+algún test, por si acaso. OK, la lectura de fuentes externas: aquí estamos poniendo la lectura de un fichero o de un
+stream como si fuera un solo paso pero en realidad son 2, uno que lee los bytes y un segundo que transforma los bytes a
+caracteres según la codificación, y ahí es donde se puede detectar el problema. Bajo mi punto de vista debería
+producirse una excepción de codificación pero si ignoramos el error lo que hay que hacer es utilizar un caracter
+especial que señale el caracter erróneo.»*
+
+Queda decidido:
+- **el invariante no se toca;** para el texto que cambia, `StringBuilder`. `#714` (`move` dentro de una cadena) queda
+  decidido en el qué; falta el cómo;
+- **las fuentes de confianza no se verifican en marcha, pero su confianza se prueba con tests:** las constantes del
+  compilador, las operaciones que salen de cadenas válidas y lo que da el propio sistema;
+- **leer de fuera son dos pasos:** leer los bytes, y descodificarlos según la codificación. El error se ve al
+  descodificar: por defecto, una excepción de codificación; si se decide ignorar el error, cada trozo malo se cambia
+  por un carácter que lo señale (U+FFFD, «�»).
+
+**Lo que dice el código de esto** (22-oct):
+- **los dos pasos ya están en la API:** `File.read`, `readFileBytes`, `Uart.read` y `Net.recv` dan bytes, y `fromBytes`
+  es el descodificador (así lo dice `IO.bp` de `TextFile`: «`toBytes`/`fromBytes` son el codificador y el
+  descodificador»). Lo que hace los dos a la vez lo tendría que hacer con el mismo descodificador: `readFile`,
+  `TextFile.readLine` y `readStr`, `Net.recvStr`, y el texto de las natives y los packs que viene de fuera (SQLite);
+- **lo que da el propio sistema es de confianza, con su test:** los nombres de `listDir` (littlefs los escribe desde
+  cadenas de BP; FatFs da los de la SD en UTF-8), el ENV (lo escribe el IDE) y el texto de la GUI (LVGL trabaja en
+  UTF-8; nuestro búfer de 1 KB puede cortar un carácter: eso es un fallo nuestro, y se arregla cortando por caracteres);
+- **el `toString` de `StringBuilder` acaba en `fromBytes`** (BP no tiene otra forma de pasar de `byte[]` a cadena). Sus
+  trozos ya son cadenas válidas: si `fromBytes` valida, ahí validaría para nada. Le haría falta una conversión de
+  confianza propia, interna;
+- **`appendChar` con un punto de código que no es un carácter** (un sustituto, o uno por encima de 10FFFF): por la misma
+  regla, una excepción. Hoy la VM-C deja bytes malos y la VM-Java pone `?` o mata el hilo;
+- **un stream llega a trozos, y un trozo puede cortar un carácter por la mitad.** `Net.recvStr` descodifica cada trozo
+  que llega: con la regla, un texto bien formado partido entre dos paquetes daría una excepción falsa (o un «�» falso,
+  si se ignora el error). Hay que descodificar unidades completas (una línea, un mensaje) o con un descodificador que
+  guarde el trozo pendiente para el siguiente. `readLine` no tiene el problema: un `\n` nunca cae dentro de un carácter.
+  En el corpus, `FileCursor` lee 64 bytes y los pasa a texto: el mismo caso, si el fichero no es ASCII;
+- **`Uart.read` llena un `integer[]`:** un programa que arma el texto con un `appendChar` por byte trata cada byte como
+  un carácter (`ñ` sale `Ã±`). No es un error que se pueda ver: lo dirá el manual (los bytes, por el descodificador);
+- **cambia lo que hace hoy un programa:** leer un fichero en Latin-1 con `readFile` da hoy, sin avisar, bytes malos (en
+  la VM-C) o «�» (en la VM-Java); con la regla, una excepción en las dos. Si algún día hace falta leer Latin-1, el
+  descodificador es el sitio para una segunda codificación;
+- **en el corpus**, `fromBytes` recibe casi siempre texto válido (ida y vuelta con `toBytes`): no se rompe nada más.
+
+**Por decidir (Eduardo):**
+1. la excepción: un `RuntimeError` con su mensaje, como los demás builtins, o una clase propia (por ejemplo
+   `EncodingError`) que se pueda atrapar aparte (cambia la interfaz de `Core`, que con esto se rehace de todos modos);
+2. dónde se dice «ignora el error»: en el paso de descodificar (`fromBytes` con un segundo parámetro, por ejemplo), y
+   lo que hace los dos pasos a la vez, siempre con excepción. Quien quiera ignorar, hace los dos pasos;
+3. el stream: `Net.recvStr` guarda el trozo pendiente en la conexión, o se queda sólo `recv` y el programa descodifica
+   mensajes completos;
+4. cuántos «�» por trozo malo, al ignorar el error: el estándar de Unicode o lo que hace Java 8.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

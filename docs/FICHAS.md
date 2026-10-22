@@ -7375,6 +7375,10 @@ Por decidir: cómo se cierra. La VM no distingue un string de un `byte[]`; el co
 mentir: una `ñ` metida con `move` en una cadena ASCII se cuenta bien (`StrDosCaminos`). La ficha sigue abierta: `move`
 todavía escribe dentro de una cadena.
 
+**22-oct, decidido el qué** (Eduardo, al decidir `#711`): *«Que un string es un invariante no se toca. Para trabajar con
+strings variables tenemos stringbuilder.»* `move` no puede escribir dentro de una cadena. Falta el cómo (el compilador
+distingue un string de un `byte[]`; la VM, no).
+
 #### ✅ `#713` — `<`, `>`, `<=` y `>=` entre dos strings compilan, pero no comparan el texto: descuadran la pila y dan basura en silencio, distinta en cada VM (abierta el 21-oct, en el análisis del H5; **CERRADA el mismo día**: comparan el texto, en C, `ed26faf8`)
 
 El análisis las acepta, y el emisor no tiene caso para cadenas: emite el `LT`/`LE`/`GT`/`GE` de enteros, que saca 4
@@ -7479,6 +7483,22 @@ resumen, se puede modificar en el proceso de creación del string pero no despu�
   tres U+FFFD).
 
 Por decidir: la regla así, la sustitución (el estándar o Java 8), y `#714` a la vez.
+
+**La segunda vuelta de Eduardo (22-oct)**, que DECIDE lo de fondo (`V8_IDEAS` §E5, «La segunda vuelta de Eduardo»):
+*«Que un string es un invariante no se toca. Para trabajar con strings variables tenemos stringbuilder. […] Si la fuente
+nos garantiza que el string está bien formado no hace falta verificar, es cierto pero es una relación de confianza, eso
+hay que verificarlo con algún test, por si acaso. […] en realidad son 2, uno que lee los bytes y un segundo que
+transforma los bytes a caracteres según la codificación, y ahí es donde se puede detectar el problema. Bajo mi punto de
+vista debería producirse una excepción de codificación pero si ignoramos el error lo que hay que hacer es utilizar un
+caracter especial que señale el caracter erróneo.»*
+- las fuentes de confianza (las constantes, las operaciones entre cadenas válidas y lo que da el sistema), sin mirar en
+  marcha, y con tests que lo prueben;
+- lo de fuera, al descodificar (`fromBytes` y lo que lee y descodifica a la vez): excepción por defecto; si se ignora,
+  «�» (U+FFFD);
+- `appendChar` con algo que no es un carácter: excepción.
+
+Por decidir: la clase de la excepción, dónde se dice «ignora», el stream de `Net.recvStr` (un trozo puede cortar un
+carácter) y cuántos «�» por trozo malo.
 
 #### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
 
