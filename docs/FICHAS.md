@@ -7508,6 +7508,15 @@ llevan un número nuevo: los de hoy se quedan, con un argumento, para lo ya comp
 excepción) y el `toString` de `StringBuilder` no valida. Quedan: la clase de la excepción, el stream, cuántos «�» y el
 nombre del parámetro (`V8_IDEAS` §E5, «Decidido el punto 2»).
 
+**El stream, la idea de Eduardo** (22-oct): *«Los streams los podemos hacer siempre de bytes (creo que en Java son así).
+Pero luego se encapsulan en un Reader. […] el problema no es la lectura de los bytes, el problema es de codificación y
+ahí si le faltan bytes lo que toca sería esperar a que continue la lectura.»* Las fuentes dan bytes (el fichero, la
+red, el puerto serie, un `byte[]`); los descodificadores van encima de cualquiera (texto, y después objetos o
+imágenes). Al de texto, un carácter a medias le hace esperar más bytes; sólo al acabarse la fuente es un error.
+BasicPlus no tiene interfaces, pero una clase base con `read(buf)` virtual hace el papel. Lo que va byte a byte, en C
+(`V8_IDEAS` §E5, «El stream»). Por diseñar: los nombres, el objeto del puerto serie, el plazo y los atajos de hoy
+(`TextFile`, `Net.recvStr`).
+
 #### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
 
 - **Medido** con la tanda del F1 (`rtosHeapMinFreeBytes` tras cada prueba; la misma prueba con los dos IDF; los

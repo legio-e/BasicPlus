@@ -3612,6 +3612,36 @@ Quedan por decidir: la clase de la excepción (punto 1), el stream (3), cuántos
 (`ignorarError`, como lo escribió Eduardo, o `ignoreErrors`, como el resto de la API, que está en inglés; no se escribe
 en las llamadas).
 
+**El stream (punto 3), la idea de Eduardo (22-oct):** *«Los streams los podemos hacer siempre de bytes (creo que en Java
+son así). Pero luego se encapsulan en un Reader. Así que separamos la fuente de los bytes que puede ser de múltiples
+sitios, del resto que ya codifican a diferentes objetos (strings, object, bytes, imagen, etc). Entonces el problema no
+es la lectura de los bytes, el problema es de codificación y ahí si le faltan bytes lo que toca sería esperar a que
+continue la lectura.»*
+
+Es lo de Java (`InputStream` da bytes; `InputStreamReader` y `BufferedReader`, encima, los descodifican). Lo que pide en
+BasicPlus:
+- **las fuentes de bytes, por un lado:** el fichero, la conexión TCP, un puerto serie, un `byte[]` en memoria. Hoy
+  `IO.File` ya lee bytes (`read(buf)`); la conexión da `recv(max, timeoutMs)`, un `byte[]` nuevo cada vez; y `Uart` son
+  funciones con el número de bus, sin objeto, que llenan un `integer[]`;
+- **los descodificadores, por otro,** encima de cualquier fuente: el de texto (UTF-8) y, después, otros (objetos,
+  imágenes…). Al de texto, si le faltan bytes para acabar un carácter, los pide a la fuente: espera. Sólo al acabarse la
+  fuente (el fin del fichero, la conexión cerrada) un carácter a medias es un error: la excepción, o «�» con el
+  parámetro. Y si la fuente tiene plazo (el puerto serie, la red) y vence a mitad de un carácter, los bytes se quedan en
+  el descodificador para la lectura siguiente: no es un error;
+- **`fromBytes(b)` no espera:** el `byte[]` está entero, no hay más que leer. Un carácter cortado al final es un error;
+- **BasicPlus no tiene interfaces ni clases abstractas** (están en las ideas de la gramática), pero sus métodos son todos
+  virtuales: una clase base con `read(buf)`, que cada fuente sobrescribe, hace el mismo papel sin tocar el lenguaje;
+- **lo que hay hoy mezcla las dos cosas:** `TextFile` hereda de `File` y descodifica dentro; `Net.recvStr` descodifica
+  cada paquete por su cuenta (por eso parte caracteres). `TextFile` se puede quedar como está para los programas de hoy
+  (un `File` con un descodificador dentro);
+- **la velocidad:** lo que se hace byte a byte (buscar el `\n`, validar el UTF-8, cortar en el último carácter entero)
+  tiene que ir en C. Un descodificador en BP iría unas quince veces más lento en placa: por eso `readLine` ya es nativo
+  (`FileBench`, 21-sep). Un builtin que descodifique un trozo de un `byte[]` y diga cuántos bytes usó, dejando el
+  carácter incompleto: es una pieza natural de la biblioteca de cadenas en C (decidida el 21-oct, abajo).
+
+Por decidir, al diseñarlo: los nombres (los de Java, `InputStream` y `Reader`, u otros), el objeto del puerto serie, qué
+devuelve `readLine` cuando vence el plazo, y si `TextFile` y `Net.recvStr` se quedan como atajos.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
