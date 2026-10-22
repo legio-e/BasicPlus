@@ -48,6 +48,9 @@
 >   `==` de 2 KB −39 % y `a + b` −8 a −12 %; `StrOrden` y la escritura en la flash, bien. **La Metro lleva ya esta
 >   imagen; la Pico 2 y la P4, la de antes** (la de la Pico 2 cambia igual: es la misma imagen). Lo de FreeRTOS serían
 >   12,6 KB de RAM más.
+> - **Lo demás, a `#719`, para más adelante** (Eduardo: *«Lo que necesitamos es una división quirurgica, lo mas
+>   utilizado y crítico de la FreeRTOS y de la VM moverlo a RAM y el resto dejarlo en flash. Pero eso es muy
+>   complicado. Lo dejamos para mas adelante.»*).
 > - **En la Metro quedan** `/app/BytecodeMide.mod`, `/app/StrOrden.mod` y `/app/Escrito.mod` (la prueba de escritura),
 >   además de los de ayer.
 
@@ -224,9 +227,10 @@
 > - **el criterio de Eduardo para lo que sigue** (21-oct, al cerrar): *«Lo importante es que el heap está funcionando
 >   correctamente. Ahora se trata de optimizar tiempos pero lo primero es no estropear lo que ya funciona.»* Lo del heap
 >   (`#715`, `#718`, no poner a cero) se queda en análisis hasta que él diga;
-> - **crear en la PSRAM, por decidir (Eduardo)** (§E5, «Medido por dentro»): no poner a cero las cadenas que se llenan
->   enteras, y el código caliente en la SRAM. El cerrojo de la VM, no (Eduardo). En la Metro queda
->   `/app/CreaMide.mod`; sin la imagen de medida sólo da los totales;
+> - **crear en la PSRAM** (§E5, «Medido por dentro»): no poner a cero las cadenas que se llenan enteras, por decidir
+>   (Eduardo). El código caliente en la SRAM: `memcpy` y compañía, hechos el 22-oct (`1b39d324`); el resto, a `#719`,
+>   para más adelante. El cerrojo de la VM, no (Eduardo). En la Metro queda `/app/CreaMide.mod`; sin la imagen de
+>   medida sólo da los totales;
 > - **`#718`, la lista de huecos al reservar** (sólo análisis): las tres formas de la ficha, por decidir (Eduardo). En
 >   la Metro y la Pico 2 queda `/app/HuecosReserva.mod`;
 > - **la biblioteca de cadenas en C** (§E5): antes de empezar, la regla del UTF-8 (`#711`), lo que entra, qué es

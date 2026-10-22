@@ -3303,6 +3303,10 @@ las funciones memcpy/memset/memmove»*):
 - **lo de FreeRTOS** (la pregunta de Eduardo): son 12,6 KB de RAM. En la imagen B, 70 KB son de la VM y 12,6 del camino
   del cerrojo de FreeRTOS.
 
+**Lo demás, para más adelante (`#719`).** Eduardo: *«Lo que necesitamos es una división quirurgica, lo mas utilizado y
+crítico de la FreeRTOS y de la VM moverlo a RAM y el resto dejarlo en flash. Pero eso es muy complicado. Lo dejamos para
+mas adelante.»* Lo medido, y lo que pide hacerlo bien, en la ficha.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
