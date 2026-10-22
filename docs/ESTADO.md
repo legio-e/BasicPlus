@@ -27,6 +27,24 @@
 
 ## Última sesión
 
+> **22-oct** — **El H5: el código caliente en la SRAM, medido en la Metro** (Eduardo: *«El punto 1 solo para la
+> metro. Para la Pico ya veremos, 45K de RAM en la pico son muchos. De momento haces las pruebas en la metro.»*).
+> - **Hecho:** dos imágenes de prueba que sólo cambian el script de enlace (una copia fuera del repositorio), grabadas
+>   sólo en la Metro y retiradas después. La Metro tiene otra vez su imagen, con `psram=1` y dos runs, y el árbol está
+>   limpio.
+> - **Medido** con cinco bancos (`BytecodeMide` y `CreaMide`, fuera del repositorio; `PsramFases`, `StrCenso` y
+>   `HuecosReserva`):
+>   - con la VM caliente en la SRAM (70 KB), el censo de cadenas baja un 24 %;
+>   - con el cerrojo de FreeRTOS también (83 KB), un 30 %, el GC un 34 % y crear una cadena pequeña un 36–40 %;
+>   - el bytecode sin cadenas, de 0 a 6 %;
+>   - `StrOrden` da en las dos imágenes lo mismo que el PC.
+> - **De paso:** `memcpy`/`memset` debían ir ya en la RAM por el script del SDK y no van: su patrón no casa con nuestra
+>   newlib. Y una pista más para `#665`: FreeRTOS en la flash, ejecutado por el otro núcleo, parece competir por la caché.
+> - **Por decidir (Eduardo):** cómo hacerlo sólo en la Metro con la imagen única (§E5, «El código caliente en la SRAM»).
+>   Las formas: una imagen propia de la Metro, el código dos veces en la misma imagen, o la SRAM en las dos placas. Y dos
+>   más baratas por medir: sólo las funciones más calientes, o fijar líneas de la caché.
+> - **En la Metro quedan** `/app/BytecodeMide.mod` y `/app/StrOrden.mod`, además de los de ayer.
+
 > **21-oct** — **El H5, los strings: el análisis** (Eduardo: *«De momento solo analizamos»*). **Incluye el censo de
 > 36 operaciones, medido en el PC y en tres placas y ordenado de la más lenta a la más rápida; la PSRAM y su caché,
 > placa por placa; y el invariante de Eduardo con sus matices. También la norma de Eduardo: 1º analizar, 2º el

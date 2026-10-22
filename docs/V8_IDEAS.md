@@ -3240,6 +3240,56 @@ se crean y se destruyen objetos. Podemos una pequeña cache de los huecos mas re
   hueco que hoy, más deprisa: el sitio no cambia y `#355` se conserva. Quedan del 29 al 76 % de los pasos. El cuidado
   está en mantenerla: cada cambio de la lista la toca.
 
+**El código caliente en la SRAM, medido en la Metro (22-oct).** Eduardo: *«El punto 1 solo para la metro. Para la Pico
+ya veremos, 45K de RAM en la pico son muchos. De momento haces las pruebas en la metro.»*
+
+- **Cómo:** dos imágenes de prueba, sólo para medir, grabadas sólo en la Metro (`psram=1`, dos runs) y retiradas
+  después. Ninguna cambia el código: sólo cambia el script de enlace (una copia fuera del repositorio), que saca de la
+  flash ficheros enteros y los pone en `.data`, que se copia a la RAM al arrancar. Es lo que el SDK ya hace con la
+  coma flotante.
+  - **A**, la VM caliente: el intérprete, los builtins, el heap, los handles, el planificador y `memcpy`/`memset`/
+    `memmove`/`memcmp`. 57,6 KB de código, y 11,8 KB de constantes de esos ficheros (casi todo textos de error, que no
+    son calientes y podrían quedarse en la flash). 70 KB de RAM en total.
+  - **B**, la A y además el camino del cerrojo en FreeRTOS (`queue.c`, `tasks.c`, `list.c`, el port y
+    `platform_freertos.c`): 83 KB de RAM.
+- **Un hallazgo de paso:** `memcpy`, `memset`, `memmove` y `memcmp` YA debían ir en la RAM, por el script de enlace del
+  SDK, pero no van. Su patrón (`*libc.a:*lib_a-mem*.o`) no casa con la newlib de nuestro compilador, que los trae en
+  `libg.a(libc_a-mem*.o)`. Están en la flash desde siempre.
+- **Lo mismo que antes:** `StrOrden` (18 636 comprobaciones) da en las dos imágenes lo mismo que el PC.
+
+| | normal | A | B |
+|---|---|---|---|
+| el censo de cadenas, las 36 operaciones, n = 16 / 256 / 2048 | 100 % | −24 / −23 / −24 % | **−30 / −28 / −30 %** |
+| `substring` de 16 B | 50,4 µs | 32,1 (−36 %) | **30,4 (−40 %)** |
+| `a + b` de 16 B | 74,0 µs | 49,9 (−33 %) | 47,7 (−36 %) |
+| `substring` de 2 KB | 452 µs | 371 (−18 %) | 309 (−32 %) |
+| crear 16 KB (`PsramFases`) | 5 236 µs | 4 796 (−8 %) | 3 971 (−24 %) |
+| `gc()` con poco vivo | 2 161 µs | 1 786 (−17 %) | 1 436 (−34 %) |
+| reservar 32 B que caben (`HuecosReserva`) | 46 µs | 30 (−35 %) | 28 (−39 %) |
+| reservar sin caber, con 4000 huecos | 2 836 µs | 2 766 (−2 %) | 2 643 (−7 %) |
+| bytecode sin cadenas: `fib(22)` / métodos / un array | 462 / 362 / 293 ms | −1 / −6 / −5 % | 0 / −6 / −6 % |
+
+**Lo que dice:**
+1. **Las cadenas y el GC ganan un 25–40 %.** El bytecode solo apenas cambia: cuando corre solo, el bucle del
+   intérprete ya cabe en la caché. Lo que se pierde es cuando compite con más código (los builtins, la reserva,
+   FreeRTOS) y con los datos de la PSRAM, que es lo que hacen los programas de verdad.
+2. **FreeRTOS en la SRAM suma bastante más de lo que esperaba,** sobre todo en lo grande (crear 16 KB, de −8 a −24 %).
+   La explicación probable, sin comprobar: el otro núcleo (la tarea ociosa, el tic, la comm task) ejecuta FreeRTOS desde
+   la flash y compite por la misma caché del XIP. Es la misma pista de `#665`.
+3. **Lo que cuesta, en RAM:** de 70 a 83 KB (unos 12 menos si las constantes se quedan en la flash). En la Metro sobra:
+   con `psram=1` la SRAM está casi entera para `malloc`. En la Pico 2 saldría de su heap de 219 KB.
+
+**Cómo hacerlo sólo en la Metro, con la imagen única de la RP2350** (decisión de Eduardo del 6-jun):
+- **una imagen propia de la Metro:** es lo más sencillo, pero rompe la imagen única;
+- **la misma imagen con el código caliente dos veces,** una en la flash (para la Pico 2) y otra enlazada para la SRAM,
+  que se copia al arrancar sólo si hay PSRAM. Conserva la imagen única y la SRAM de la Pico 2, pero es delicada: esos
+  ficheros tienen variables `static` propias, y compilarlos dos veces las duplicaría. Antes habría que sacarlas;
+- **el código en la SRAM en las dos placas:** es lo más sencillo con una imagen, pero es lo que cuesta en la Pico 2;
+- **y dos cosas más baratas por medir:** mover sólo las funciones más calientes en vez de ficheros enteros (quizá 25–40
+  KB con casi toda la ganancia), y fijar líneas de la caché del XIP (sin gastar SRAM, sólo si hay PSRAM).
+
+Por decidir (Eduardo).
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
