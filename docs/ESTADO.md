@@ -90,6 +90,27 @@
 >   antes, y P no salta a ella (lo dice en el log).
 > - **En la Metro quedan** `/app/BytecodeMide.mod`, `/app/StrOrden.mod` y `/app/Escrito.mod` (la prueba de escritura),
 >   además de los de ayer.
+> - **Ya tarde:**
+>   - la imagen con P y M, `mem*` sólo en M y la comparación, **dadas por buenas** (Eduardo: *«OK, bueno esto lo
+>     podemos dar por bueno»*);
+>   - **`#711`, decidido el fondo** en cuatro vueltas con Eduardo (`V8_IDEAS` §E5, «`#711`»):
+>     - un string es un invariante y no se toca; para el texto que cambia, `StringBuilder`. Con eso `#714` queda
+>       decidido en el qué (`move` no escribirá dentro de una cadena); falta el cómo;
+>     - lo que viene de una fuente de confianza (las constantes del compilador, las operaciones entre cadenas válidas,
+>       lo que da el sistema) no se mira al ejecutar, pero se prueba con tests;
+>     - leer de fuera son dos pasos, leer los bytes y descodificarlos. El error se ve al descodificar: excepción por
+>       defecto, y «�» con un parámetro opcional (`ignorarError := false`, que BasicPlus ya admite);
+>     - los streams, siempre de bytes, con un Reader encima (como en Java) que espera los bytes que falten de un
+>       carácter. Sólo al acabarse la fuente es un error;
+>   - **por decidir de `#711`:** la clase de la excepción (propuesta: `EncodingError`, hija de `RuntimeError`), cuántos
+>     «�» por trozo malo (propuesta: el estándar de Unicode), el nombre del parámetro y el diseño de los streams (los
+>     nombres, el objeto del puerto serie, el plazo, y si `TextFile` y `Net.recvStr` se quedan como atajos). Lo
+>     propuesto: escribir el diseño completo en `V8_IDEAS` para que Eduardo lo revise antes de tocar código.
+> - **El plan de los próximos días** (Eduardo, al cerrar): *«De momento estos dias podemos ir solucionando temas
+>   pendientes. Mas adelante podemos retomar el Bluetooth y la Wifi.»* Lo pendiente, en FICHAS (bloque V8): las
+>   decisiones de `#711` y `#714`, `#712`, `#716` y `#717`; `#715` y `#718` en análisis; `#721` y `#722`; y las demás
+>   fichas abiertas de V8.
+> - **El árbol, limpio**, con todo en commits (sin push). Las placas, como quedaron tras la comparación.
 
 > **21-oct** — **El H5, los strings: el análisis** (Eduardo: *«De momento solo analizamos»*). **Incluye el censo de
 > 36 operaciones, medido en el PC y en tres placas y ordenado de la más lenta a la más rápida; la PSRAM y su caché,
