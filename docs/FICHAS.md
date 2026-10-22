@@ -7381,6 +7381,18 @@ todavía escribe dentro de una cadena.
 strings variables tenemos stringbuilder.»* `move` no puede escribir dentro de una cadena. Falta el cómo (el compilador
 distingue un string de un `byte[]`; la VM, no).
 
+**22-oct, noche** (Eduardo: *«El #714 es sencillo como savemos la longitud de origen y de destino es fácil verificar si
+cabe o no, si no cabe excepción»*). Que quepa ya se comprueba: desde V7 (`#535`), las dos VMs miran los rangos del origen
+y del destino y lanzan `move: rango fuera de dst (…)`, con el mismo texto. `#714` es el caso en que SÍ cabe: entonces
+`move` escribe dentro de la cadena (`hola` → `XYla`, en `s` y en su `copia`). Lo que falta es que el destino no pueda ser
+una cadena. Las formas:
+1. **el compilador** lo rechaza cuando ve que el destino es un `string`; pero una cadena puede ir en una variable `any`,
+   y ahí no la ve;
+2. **la VM**, con un bit «es una cadena» en la etiqueta del bloque, que se pone al nacer (donde hoy se pone el de «todo
+   ASCII»): `move` lo mira y lanza la excepción, en las dos VMs. Ve todos los casos.
+
+Propuesta: la 2 (y la 1, si se quiere el error al compilar). Por decidir (Eduardo).
+
 #### ✅ `#713` — `<`, `>`, `<=` y `>=` entre dos strings compilan, pero no comparan el texto: descuadran la pila y dan basura en silencio, distinta en cada VM (abierta el 21-oct, en el análisis del H5; **CERRADA el mismo día**: comparan el texto, en C, `ed26faf8`)
 
 El análisis las acepta, y el emisor no tiene caso para cadenas: emite el `LT`/`LE`/`GT`/`GE` de enteros, que saca 4
