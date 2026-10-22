@@ -14,7 +14,8 @@
  *           reserva (8K). SIN REGION NI SECCIONES → el UF2 no contiene bloques
  *           aqui → el flasheo BOOTSEL nunca borra estos sectores → el env
  *           SOBREVIVE al reflasheo del firmware. Offsets en flash_layout.h.
- *   ZONA 3  0x014000-0x1FFFFF (~1,9 MB)    el firmware real.
+ *   ZONA 3  0x014000-0x0FFFFF (944 KB)     el firmware real (P; V8/H5: hasta M, abajo).
+ *   M       0x100000-0x1FFFFF (1 MB)       V8/H5: el segundo firmware de la imagen (abajo).
  *   FS      0x200000-...                   littlefs (fs_lfs_pico.c).
  *
  * Redes: si la zona 1 o la 3 se desbordan, el LINKER falla con "region
@@ -22,13 +23,24 @@
  * ni el FS en silencio. board_mgr_pico.c verifica en runtime que los offsets
  * del env (flash_layout.h) caen dentro del hueco usando __bp_zone1_end /
  * __bp_zone3_start exportados abajo.
+ *
+ * ── V8/H5 (22-oct) — ES UNA PLANTILLA: DOS FIRMWARES EN LA MISMA IMAGEN ──────────────────────────────────────────────
+ *
+ * Eduardo: «Mantenemos la imagen única así que tenemos que hacer que con PSRAM se aproveche la RAM adicional pero en la
+ * Pico (el RP2350 sin PSRAM) sigue funcionando como antes.» El .uf2 lleva dos firmwares completos, hechos de los mismos
+ * fuentes, y CMake saca de aquí el script de cada uno (configure_file, las variables entre arrobas):
+ *   · P, el de siempre (el código en la flash), desde el principio: zona 1 y zona 3 hasta 0x10100000;
+ *   · M, el mismo con el código caliente de la VM y el cerrojo de FreeRTOS en la SRAM, en 0x10100000-0x101FFFFF: su
+ *     «zona 1» en 0x10100000 y su código detrás. La zona 2 (el ENV y el log) es la de P: M exporta los límites de P.
+ * Arranca P; si hay PSRAM, salta a M (main.c, pico_pasar_a_m). Medido en la Metro: V8_IDEAS §E5. Que la zona 3 de P
+ * acabe en 0x10100000 es otra red: si P crece hasta M, el enlace falla.
  */
 
 MEMORY
 {
-    FLASH_BOOT(rx) : ORIGIN = 0x10000000, LENGTH = 64k
+    FLASH_BOOT(rx) : ORIGIN = @BP_FLASH_BOOT@, LENGTH = 64k
     /* zona 2 (env kernel): 0x10010000-0x10013FFF — HUECO deliberado, sin region */
-    FLASH_MAIN(rx) : ORIGIN = 0x10014000, LENGTH = 0x1EC000  /* hasta 0x10200000 = FS */
+    FLASH_MAIN(rx) : ORIGIN = @BP_FLASH_MAIN@, LENGTH = @BP_FLASH_MAIN_LARGO@  /* P: hasta M (0x10100000); M: hasta el FS (0x10200000) */
     RAM(rwx) : ORIGIN =  0x20000000, LENGTH = 512k
     SCRATCH_X(rwx) : ORIGIN = 0x20080000, LENGTH = 4k
     SCRATCH_Y(rwx) : ORIGIN = 0x20081000, LENGTH = 4k
@@ -86,10 +98,18 @@ SECTIONS
     ASSERT(__boot2_end__ - __boot2_start__ <= 256,
         "ERROR: Pico second stage bootloader must be no more than 256 bytes in size")
 
+    /* V8/H5 (22-oct) — LA FIRMA de cada firmware, a 4 KB del principio de su zona 1: P lee la de M antes de saltar
+       (que la haya, que sea una M y que sea su pareja, de la misma configuración del build; main.c). */
+    .bp_firma ORIGIN(FLASH_BOOT) + 0x1000 : {
+        KEEP (*(.bp_firma))
+    } > FLASH_BOOT
+
     /* Limites de zona exportados a C (board_mgr_pico.c los usa para verificar
-       en runtime que los offsets del env de flash_layout.h caen en el hueco). */
-    __bp_zone1_end   = ORIGIN(FLASH_BOOT) + LENGTH(FLASH_BOOT);
-    __bp_zone3_start = ORIGIN(FLASH_MAIN);
+       en runtime que los offsets del env de flash_layout.h caen en el hueco). En M son los de P: la zona 2 es una. */
+    __bp_zone1_end   = @BP_ZONA1_FIN@;
+    __bp_zone3_start = @BP_ZONA3_INI@;
+    /* V8/H5 — donde empieza el código de ESTE firmware (su FLASH_MAIN): el CRC de la imagen se calcula desde aquí. */
+    __bp_imagen_ini  = ORIGIN(FLASH_MAIN);
 
     /* ZONA 3 — el firmware real. */
     .text : {
@@ -104,8 +124,9 @@ SECTIONS
          * Para que corran desde la RAM —sin pasar por la caché del XIP, que en la Metro es también la de la PSRAM—
          * se excluyen aquí con su nombre de ahora (en libg.a y en libc.a, según cuál enlace el compilador), y el
          * `*(.text*)` de `.data`, abajo, los recoge. Son 920 B de RAM. Medido en la Metro con PSRAM: `==` entre
-         * cadenas de 2 KB (memcmp), −39 %; concatenar, −8 a −12 %; el bytecode, igual (V8_IDEAS §E5). */
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o *libm.a:) .text*)
+         * cadenas de 2 KB (memcmp), −39 %; concatenar, −8 a −12 %; el bytecode, igual (V8_IDEAS §E5).
+         * V8/H5 (22-oct) — y en M, además, los ficheros del código caliente: la lista la pone CMake (en P, ninguna). */
+        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o *libm.a: @BP_EN_RAM@) .text*)
         *(.fini)
         /* Pull all c'tors into .text */
         *crtbegin.o(.ctors)
@@ -146,7 +167,7 @@ SECTIONS
     } > FLASH_MAIN
 
     .rodata : {
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o *libm.a:) .rodata*)
+        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o *libm.a: @BP_EN_RAM@) .rodata*)
         *(.srodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))

@@ -38,6 +38,14 @@ cmake --build .
 
 Salida: `build/bpvm_pico.uf2` (y `.elf` + `.bin`).
 
+V8/H5 (22-oct-2026): el `.uf2` lleva **dos firmwares** de los mismos fuentes. **P** (`bpvm_pico.elf`), el de
+siempre, al principio de la flash; **M** (`bpvm_pico_m.elf`), en `0x10100000`, con el código caliente de la VM y el
+cerrojo de FreeRTOS en la SRAM. Arranca P; si el ENV dice `psram=1` y la placa es una RP2350B (la Metro), pasa a M
+al empezar `main()` (cadenas −25/−30 %, el GC −35 %). En la Pico 2 se queda en P, como siempre. El INFO dice cuál
+corre (`imagen`), `imagen=P` en el ENV obliga a P sin regrabar, y si M no llega al REPL el perro reinicia la placa y
+P se queda. Detalle: `CMakeLists.txt` («Los firmwares»), `bp_memmap.ld`, `main.c` (`pico_pasar_a_m`) y
+`scripts/juntar_uf2.py`.
+
 ## Flash
 
 1. Aprieta **BOOTSEL** y conecta la Pico al USB → aparece como pendrive

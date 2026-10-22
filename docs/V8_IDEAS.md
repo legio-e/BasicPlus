@@ -3350,6 +3350,72 @@ Pico (el RP2350 sin PSRAM) sigue funcionando como antes.»*
   - comprobar en la Pico 2 que P va exactamente como hoy;
   - y el `.uf2` es casi el doble: grabarlo tarda el doble.
 
+**HECHO de verdad: la imagen con P y M (22-oct; Eduardo: *«si»*).**
+- **El build** (`pico/CMakeLists.txt`, «Los firmwares»): de los mismos fuentes, dos firmwares con la configuración de
+  siempre (una función de CMake para los dos):
+  - `bpvm_pico_p` es P. Sus ficheros se llaman como siempre (`bpvm_pico.elf`, `.elf.map`, `.dis`), y su zona 3 acaba
+    en `0x10100000`: si P crece hasta M, el enlace falla;
+  - `bpvm_pico_m` es M (`bpvm_pico_m.elf`): de `0x10100000` a las particiones, con la VM caliente y el cerrojo de
+    FreeRTOS en la SRAM (la imagen B);
+  - el script de enlace de cada uno sale de la plantilla `pico/bp_memmap.ld`;
+  - el objetivo `bpvm_pico` es LA IMAGEN, `bpvm_pico.uf2` con los dos. `ninja bpvm_pico` la sigue haciendo, como dicen
+    los documentos desde V4.
+- **Los junta `pico/scripts/juntar_uf2.py`,** y antes comprueba tres cosas:
+  - que sean PAREJA: un número de la configuración del build, en la firma de cada uno (`.bp_firma`, a 4 KB del
+    principio);
+  - que lo que sobrevive a un reinicio en la RAM (el log, las migas, la marca del fallo fatal, las marcas del arranque)
+    esté en el mismo sitio en los dos. Está antes de `.data`, así que sale igual, pero un cambio podría moverlo;
+  - que no se pisen.
+- **El salto** (`main.c`, `pico_pasar_a_m`), al empezar `main()`, si se cumple todo esto:
+  - `psram=1` y una RP2350B: la misma condición con que se activa la PSRAM;
+  - sin `imagen=P` en el ENV (la vuelta atrás sin grabar, como `vm.cores=1`);
+  - una M que sea su pareja, con una tabla de vectores que valga.
+
+  Antes de saltar, P arma el perro (15 s) y deja una marca en el `scratch[0]` del perro y la causa del reset en el
+  `scratch[1]`. M borra la marca al llegar al REPL. Si no llega, el perro reinicia la placa, y P, al ver la marca, se
+  queda esa vez; el reinicio siguiente lo vuelve a intentar.
+- **En M:**
+  - la causa del reset es la de P;
+  - el CRC de la imagen (`imageCrc`) es el de su código;
+  - el INFO dice `imagen` (`P` o `M`), y el log, «boot: imagen M …» o «boot: imagen P …; no paso a M: [el motivo]».
+- **`tools/tanda.py`** compara el CRC de la placa con el `.elf` del firmware que corre.
+- **Probado en la Metro:**
+  - arranca en M, con el CRC del M compilado en el PC;
+  - la causa sale bien: «power-on/run» tras grabar, y «reinicio pedido» tras un RESET (en la prueba decía «watchdog»);
+  - el log de RAM y las marcas del arranque sobreviven al paso por P;
+  - `SqlDemo`, `ParaleloPico` (dos runs), `HilosMuchos`, `StrOrden`, `JsonAcentosPlaca` y `MetroPsram`, bien;
+  - la red: con una copia del `.uf2` con la primera instrucción de M cambiada por un bucle, a los 15 s el perro
+    reinicia la placa y P se queda («M no llego al REPL la ultima vez»). Un RESET lo vuelve a intentar y vuelve a caer
+    en P, con el log de RAM entero;
+  - la pareja: un P nuevo con la M de otra compilación en la flash se queda en P, y el log dice las dos parejas.
+- **M frente a P, en la Metro, misma placa y misma imagen** (P con `imagen=P`):
+
+  | | P | M | |
+  |---|---:|---:|---:|
+  | el censo de cadenas, la suma de las 36 operaciones, n=16 / 256 / 2048 | 16,9 / 80,6 / 1011 ms | 11,7 / 60,8 / 739 ms | −31 / −25 / −27 % |
+  | `substring` / `a + b` de 16 B (µs) | 46,7 / 66,8 | 30,6 / 48,2 | −34 / −28 % |
+  | `a + b` de 2 KB / de 16 KB (µs) | 500 / 5248 | 328 / 4017 | −34 / −23 % |
+  | crear una cadena de 256 B / de 64 KB (µs) | 105 / 22 470 | 66 / 19 672 | −37 / −12 % |
+  | el GC (destruir, µs) | 2177 | 1455 | −33 % |
+  | reservar con huecos: la que cabe / la que recorre 4000 (µs) | 45 / 2821 | 26 / 2646 | −42 / −6 % |
+  | bytecode sin cadenas: `fib(22)` / métodos / arrays (ms) | 459 / 360 / 297 | 461 / 342 / 275 | 0 / −5 / −7 % |
+
+  Lo mismo que la imagen B. Y P, lo mismo que la imagen de esta mañana (±2 %).
+- **En la Pico 2:**
+  - se queda en P (no tiene `psram`), con el CRC de P;
+  - diez programas dan lo mismo que con su imagen del 21-oct, `MapOrden` y `JsonAcentosPlaca` incluidos (los dos se
+    quedan sin memoria en el mismo sitio);
+  - el heap de la VM, 928 B menos: 920 son de `mem*` en la RAM y 8 de la nota del salto.
+- **Y un hallazgo, de esta mañana y no de P/M: `mem*` en la RAM es un trueque en P (`#720`).** En la Pico 2 (con la
+  imagen del 21-oct, y partido con una imagen sin `mem*` en la RAM):
+  - crear mejora: `a + b` −10/−13 %, `cadena + entero` −15 %, `s := s + x` −12/−13 %;
+  - buscar empeora: `indexOf`/`contains` +12/+17 %, `replace` +10 %, `parseFloat` +10 %; «buscar y cortar» de
+    `StrAcentos`, de 75 a 85 ms;
+  - el censo entero, −4/−5 %. En la Metro con P, el mismo trueque; en M, todo mejora.
+  
+  La causa: cada llamada desde la flash a la SRAM pasa por un *veneer* (`ldr pc, [pc]`), y `indexOf` hace muchas
+  comparaciones cortas. Por decidir: dejar `mem*` en la RAM sólo en M, que es donde están también quienes las llaman.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

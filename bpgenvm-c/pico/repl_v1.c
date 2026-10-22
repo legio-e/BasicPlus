@@ -42,7 +42,7 @@
 #include "aot_registry.h"    /* H3 #160: bpvm_aot_clear */
 #include "pack_pico.h"       /* V5/H4: cargar los packs nativos en el primer Run */
 #include "crc32.h"           /* V7/H9: el sello de la imagen */
-#include "flash_layout.h"    /* V7/H9: __bp_zone3_start */
+#include "flash_layout.h"    /* V7/H9: __bp_zone3_start; V8/H5: __bp_imagen_ini */
 
 #include "pico/bootrom.h"    /* reset_usb_boot (BOOTSEL) */
 #include "pico/stdlib.h"     /* getchar_timeout_us (poll de KILL, #257) */
@@ -334,6 +334,13 @@ static int pico_repl_info_extra(char* buf, unsigned long buf_max, int off) {
     const board_desc_t* bd = board_desc();
     char variant[2]; variant[0] = bd->variant; variant[1] = '\0';
     X_S("variant", variant);
+    /* V8/H5 (22-oct) — qué firmware de la imagen corre: P, el código en la flash, o M, la VM caliente en la SRAM (con
+     * PSRAM). Van los dos en el mismo .uf2, y el imageCrc es el del que corre. */
+#if defined(BPVM_IMAGEN_M)
+    X_S("imagen", "M");
+#else
+    X_S("imagen", "P");
+#endif
 
     /* V5/H — LO QUE EL IDE NECESITA PARA PRE-ENLAZAR UN PACK NATIVO.
      * El pack se enlaza en base 0 y el IDE lo realoja en el PC antes de grabar,
@@ -635,13 +642,15 @@ static int  pico_repl_fs_count(void)  { return (int) fs_file_count(); }
 
 /* V7/H9 (2-oct) — el sello de la imagen: el CRC32 de la ZONA 3 de la flash (FLASH_MAIN: el código, las constantes y los
  * valores iniciales de los datos), de __bp_zone3_start a __flash_binary_end. La zona 1 (el arranque) cambia con ella, y
- * la 2 es el ENV, que cambia sola y no es la imagen. Una vez, la primera que se pide. */
+ * la 2 es el ENV, que cambia sola y no es la imagen. Una vez, la primera que se pide.
+ * V8/H5 (22-oct) — desde __bp_imagen_ini, el FLASH_MAIN del firmware que corre: en P es la zona 3 de siempre (el mismo
+ * CRC que antes); en M, su código, en 0x10110000. */
 extern char __flash_binary_end[];
 static uint32_t pico_image_crc(void) {
     static uint32_t s_crc = 0;
     static int s_hecho = 0;
     if (!s_hecho) {
-        const uint8_t* a = (const uint8_t*) __bp_zone3_start;
+        const uint8_t* a = (const uint8_t*) __bp_imagen_ini;
         s_crc = bpvm_crc32(a, (size_t) ((const uint8_t*) __flash_binary_end - a));
         s_hecho = 1;
     }

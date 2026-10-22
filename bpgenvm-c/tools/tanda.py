@@ -1083,6 +1083,7 @@ def sello_de(w, arranque=None):
         # hallazgo 8: lo que identifica la IMAGEN y el estado de la placa
         "arch": info.get("arch"),
         "variant": info.get("variant"),
+        "imagen": info.get("imagen"),                  # V8/H5: en la RP2350, el firmware que corre (P o M)
         "cpuFreqHz": info.get("cpuFreqHz"),
         "resetReason": info.get("resetReason"),
         "uptimeMs": info.get("uptimeMs"),
@@ -1335,15 +1336,19 @@ IMAGENES = {
     "stm32u5g9": ("stm32/Discovery_u5g9j/Discovery_u5g9j/Debug", "Discovery_u5g9j.elf", "stm32"),
     "stm32u575": ("stm32/Nucleo_u575b/Nucleo_u575b/Debug", "Nucleo_u575b.elf", "stm32"),
 }
+# V8/H5 (22-oct) — la imagen de la RP2350 lleva DOS firmwares, P y M (pico/CMakeLists.txt): el INFO dice cuál corre
+# (`imagen`), y el de M es otro .elf.
+IMAGEN_M = {"rp2350a": "bpvm_pico_m.elf", "rp2350b": "bpvm_pico_m.elf"}
 ARM_BIN = r"C:\Program Files (x86)\Arm\GNU Toolchain mingw-w64-i686-arm-none-eabi\bin"
 
 
-def crc_imagen_local(board):
-    """(crc, texto) de la imagen compilada en el PC para esta placa, o (None, por que no)."""
+def crc_imagen_local(board, imagen=None):
+    """(crc, texto) de la imagen compilada en el PC para esta placa (en la RP2350, la del firmware `imagen`: P o M),
+    o (None, por que no)."""
     e = IMAGENES.get(board)
     if not e:
         return None, "no se que imagen compila el PC para %s" % board
-    f = os.path.join(RAIZ, "bpgenvm-c", e[0], e[1])
+    f = os.path.join(RAIZ, "bpgenvm-c", e[0], IMAGEN_M[board] if imagen == "M" and board in IMAGEN_M else e[1])
     if not os.path.exists(f):
         return None, "no esta %s" % os.path.relpath(f, RAIZ)
     hora = time.strftime("%d-%m %H:%M", time.localtime(os.path.getmtime(f)))
@@ -1351,17 +1356,24 @@ def crc_imagen_local(board):
         if e[2] == "bin":
             data = open(f, "rb").read()
         else:
+            out = subprocess.run([os.path.join(ARM_BIN, "arm-none-eabi-nm.exe"), f],
+                                 capture_output=True, text=True).stdout
+            sims = {}
+            for l in out.splitlines():
+                if len(l.split()) == 3:
+                    sims.setdefault(l.split()[2], int(l.split()[0], 16))
+
             def nm(sim):
-                out = subprocess.run([os.path.join(ARM_BIN, "arm-none-eabi-nm.exe"), f],
-                                     capture_output=True, text=True).stdout
-                return next(int(l.split()[0], 16) for l in out.splitlines()
-                            if len(l.split()) == 3 and l.split()[2] == sim)
+                return sims[sim]
             d = tempfile.mkdtemp(prefix="tanda_img_")
             b = os.path.join(d, "img.bin")
             subprocess.run([os.path.join(ARM_BIN, "arm-none-eabi-objcopy.exe"), "-O", "binary", f, b], check=True)
             img = open(b, "rb").read()
             if e[2] == "zona3":
-                data = img[0x14000: nm("__flash_binary_end") - 0x10000000]
+                # V8/H5: desde el FLASH_MAIN del firmware (__bp_imagen_ini; en un .elf de antes, la zona 3 de siempre),
+                # y el .bin empieza donde empieza el firmware (P: 0x10000000; M: 0x10100000)
+                base = nm("__flash_binary_start")
+                data = img[sims.get("__bp_imagen_ini", base + 0x14000) - base: nm("__flash_binary_end") - base]
             else:
                 data = img[:(nm("_sidata") - 0x08000000) + (nm("_edata") - nm("_sdata"))]
     except Exception as ex:
@@ -2056,7 +2068,7 @@ def main():
             pl["aprieta"] = aprieta(sello)
             # V7/H9: ¿lleva la imagen que hay compilada en el PC?
             if sello.get("imageCrc"):
-                local, de = crc_imagen_local(sello["boardName"])
+                local, de = crc_imagen_local(sello["boardName"], sello.get("imagen"))
                 if local is None:
                     sello["imagen_local"] = "sin comparar: %s" % de
                 elif local == sello["imageCrc"]:

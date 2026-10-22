@@ -13,7 +13,9 @@
  *   0x011000-0x011FFF          env B (4K)           │ NUNCA se graba
  *   0x012000-0x012FFF          log persistente (4K) │ (log.c, mudado de 0x3FC000)
  *   0x013000-0x013FFF          reserva kernel (4K)  ┘ (modo-seguro, futuro)
- *   0x014000-0x1FFFFF  ZONA 3 firmware (region FLASH_MAIN)
+ *   0x014000-0x0FFFFF  ZONA 3 firmware (region FLASH_MAIN de P)
+ *   0x100000-0x1FFFFF  V8/H5 (22-oct): M, el segundo firmware de la imagen (la VM caliente en la SRAM; con PSRAM, P
+ *                      salta a él): su «zona 1» de 64K y su FLASH_MAIN. Su zona 2 es la de P (bp_memmap.ld).
  *   0x200000-...       PARTICIONES H9 (bpvm_part: contiguas desde BP_PART_BASE,
  *                      hoy FS littlefs + PACKS). El bp_ptable_t viejo (0x3FF000)
  *                      MURIO con la unificacion; su sector es espacio de particion.
@@ -43,8 +45,9 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-extern char __bp_zone1_end[];    /* fin de FLASH_BOOT  = XIP_BASE + 0x10000 */
-extern char __bp_zone3_start[];  /* inicio FLASH_MAIN  = XIP_BASE + 0x14000 */
+extern char __bp_zone1_end[];    /* fin de FLASH_BOOT  = XIP_BASE + 0x10000 (en M, el de P: la zona 2 es una) */
+extern char __bp_zone3_start[];  /* inicio FLASH_MAIN  = XIP_BASE + 0x14000 (ídem) */
+extern char __bp_imagen_ini[];   /* V8/H5: el FLASH_MAIN del firmware que corre (P: 0x10014000; M: 0x10110000) */
 #ifdef __cplusplus
 }
 #endif

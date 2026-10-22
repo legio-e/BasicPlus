@@ -1093,11 +1093,25 @@ static int pico_pico_set_cpu_freq_mhz_impl(int mhz) {
  *
  * watchdog_enable_caused_reboot() del SDK sí los separa: sólo es cierto cuando
  * disparó un watchdog ARMADO con watchdog_enable(), no cuando alguien pidió el
- * reinicio con watchdog_reboot(). El orden importa — el caso específico primero. */
+ * reinicio con watchdog_reboot(). El orden importa — el caso específico primero.
+ *
+ * V8/H5 (22-oct) — la causa como número, para que P se la pase a M al saltar (pico_pasar_a_m, abajo): M no la puede
+ * leer del perro, porque P lo arma antes del salto y `watchdog_enable` escribe la palabra que mira la primera pregunta.
+ * Mientras el salto está en curso (scratch[0] = SALTO_MAGIA, hasta que M llega al REPL), scratch[1] lleva la de P. */
+#define SALTO_MAGIA 0x5041534Du   /* "PASM": P pasó a M, y M aún no ha llegado al REPL */
+enum { CAUSA_ENCENDIDO = 0, CAUSA_PEDIDO = 1, CAUSA_PERRO = 2 };
+static uint32_t causa_reset_codigo(void) {
+    if (watchdog_enable_caused_reboot()) return CAUSA_PERRO;    /* disparó de verdad */
+    if (watchdog_caused_reboot())        return CAUSA_PEDIDO;   /* RESET del IDE */
+    return CAUSA_ENCENDIDO;
+}
 static const char* causa_reset_del_hardware(void) {
-    if (watchdog_enable_caused_reboot()) return "watchdog";        /* disparó de verdad */
-    if (watchdog_caused_reboot())        return "reinicio pedido"; /* RESET del IDE */
-    return "power-on/run";
+    static const char* const texto[3] = { "power-on/run", "reinicio pedido", "watchdog" };
+    uint32_t c = causa_reset_codigo();
+#if defined(BPVM_IMAGEN_M)
+    if (watchdog_hw->scratch[0] == SALTO_MAGIA && watchdog_hw->scratch[1] <= CAUSA_PERRO) c = watchdog_hw->scratch[1];
+#endif
+    return texto[c];
 }
 /* V7/H12, etapa 3.1 — la causa, UNA vez: la primera llamada es la del arranque (main, la línea «causa del reset»),
  * antes del perro guardián del arranque. `watchdog_enable_caused_reboot()` mira una palabra (scratch[4]) que escribe
@@ -1672,11 +1686,16 @@ static const bpvm_boot2_familia_t s_boot2 = {
 
 
 /* V7/H12, etapa 3.1 — el arranque llegó al REPL (la cintura, repl_v1.c): la marca y, con dos núcleos, el perro guardián
- * del arranque, apagado (lo armó main antes del planificador). */
+ * del arranque, apagado (lo armó main antes del planificador).
+ * V8/H5 (22-oct) — en M, además, el salto desde P, completo: el perro que armó P al saltar (con un núcleo, el único que
+ * hay), apagado, y la marca del salto, borrada. Desde aquí, si la placa se reinicia, P vuelve a pasar a M. */
 void pico_arranque_completo(void) {
     pico_marca_arranque(0x20);
-#if ( configNUMBER_OF_CORES > 1 )
+#if ( configNUMBER_OF_CORES > 1 ) || defined(BPVM_IMAGEN_M)
     watchdog_disable();
+#endif
+#if defined(BPVM_IMAGEN_M)
+    watchdog_hw->scratch[0] = 0u;
 #endif
 }
 
@@ -1901,6 +1920,91 @@ void vApplicationGetPassiveIdleTaskMemory(StaticTask_t **ppxTCB,
 /* #353 — sink de diagnóstico de la VM: al log persistente, no al wire. */
 static void diag_al_log(const char* linea) { log_printf("%s", linea); }
 
+/* ===================== V8/H5 (22-oct): los dos firmwares de la imagen, P y M =====================
+ * La imagen lleva dos firmwares completos, de los mismos fuentes (CMakeLists.txt, bp_memmap.ld): P, el de siempre, al
+ * principio de la flash, y M —el código caliente de la VM y el cerrojo de FreeRTOS en la SRAM— en BPVM_IMAGEN_M_BASE.
+ * Arranca P (el ROM sólo conoce ése) y, con PSRAM, pasa a M al empezar main(). Cada uno lleva su FIRMA en su zona 1 (la
+ * sección .bp_firma, a 4 KB del principio): P lee la de M antes de saltar. La PAREJA es un número de la configuración
+ * del build, el mismo en los dos: una M de otra compilación no se arranca.
+ * Lo que sobrevive a un reinicio en la RAM (el log, las migas, la marca del fallo fatal: `.uninitialized_data`) está en
+ * el mismo sitio en los dos —lo comprueba scripts/juntar_uf2.py al juntarlos—, y lo del salto va en los registros del
+ * perro que no usa el SDK (scratch[0] y [1]). */
+#if !defined(BPVM_PAREJA) || !defined(BPVM_IMAGEN_M_BASE)
+#error "BPVM_PAREJA y BPVM_IMAGEN_M_BASE los pone CMakeLists.txt (V8/H5: la imagen con P y M)"
+#endif
+#include "hardware/structs/m33.h"
+#define FIRMA_MAGIA   0x4D465042u   /* "BPFM" */
+#define FIRMA_DESPL   0x1000u       /* bp_memmap.ld: .bp_firma, en ORIGIN(FLASH_BOOT) + 0x1000 */
+#define IMAGEN_M_TAM  0x00100000u   /* M: de BPVM_IMAGEN_M_BASE a las particiones (0x10200000) */
+typedef struct { uint32_t magia, pareja, imagen, reservado; } pico_firma_t;
+#if defined(BPVM_IMAGEN_M)
+#define IMAGEN_LETRA 'M'
+#else
+#define IMAGEN_LETRA 'P'
+#endif
+__attribute__((section(".bp_firma"), used))
+static const pico_firma_t s_firma = { FIRMA_MAGIA, BPVM_PAREJA, (uint32_t) IMAGEN_LETRA, 0u };
+
+#if !defined(BPVM_IMAGEN_M) && !defined(BPVM_PICO_BRINGUP)
+/* Por qué P NO pasó a M habiendo PSRAM (NULL: no tocaba), para el log: un formato con hasta dos números, que se
+ * escribe al anotarlo (main). Sin búfer estático: en la Pico 2 la SRAM es de la VM. */
+static const char* s_salto_no = NULL;
+static uint32_t s_salto_dato[2];
+static void salto_no(const char* por_que, uint32_t a, uint32_t b) {
+    s_salto_no = por_que;
+    s_salto_dato[0] = a;
+    s_salto_dato[1] = b;
+}
+/* El salto, al empezar main(). Con PSRAM —`psram=1` y una RP2350B, la misma condición con que se activa—, sin
+ * `imagen=P` en el ENV (la vuelta atrás sin grabar), con una M que sea la pareja de este P, y si el salto de antes no se
+ * quedó a medias. El ENV se puede leer ya: la vista es por XIP, sin FS. Antes de saltar, el perro (15 s, como el del
+ * arranque): si M no llega al REPL, la placa se reinicia y P, al ver la marca, se queda (esa vez: el reinicio siguiente
+ * lo vuelve a intentar). Y las interrupciones, todas apagadas: M tiene que encontrar la placa como al encenderla (aquí
+ * aún no hay USB, ni planificador, ni segundo núcleo). */
+static void pico_pasar_a_m(void) {
+    if (watchdog_hw->scratch[0] == SALTO_MAGIA) {
+        watchdog_hw->scratch[0] = 0u;
+        if (watchdog_enable_caused_reboot()) {
+            salto_no("M no llego al REPL la ultima vez (el perro reinicio la placa)", 0u, 0u);
+            return;
+        }
+    }
+    if (!bpvm_env_get_bool(board_env(), "psram", 0) || board_desc_package_sel_hw()) return;   /* sin PSRAM: P */
+    char quiere[4];
+    if (bpvm_env_get_exacto(board_env(), "imagen", quiere, sizeof quiere) == 1 && (quiere[0] == 'P' || quiere[0] == 'p')) {
+        salto_no("el ENV dice imagen=P", 0u, 0u);
+        return;
+    }
+    const pico_firma_t* f = (const pico_firma_t*) (uintptr_t) (BPVM_IMAGEN_M_BASE + FIRMA_DESPL);
+    if (f->magia != FIRMA_MAGIA || f->imagen != (uint32_t) 'M') {
+        salto_no("no hay una M en 0x%08lx", BPVM_IMAGEN_M_BASE, 0u);
+        return;
+    }
+    if (f->pareja != BPVM_PAREJA) {
+        salto_no("la M de la flash es de otra compilacion (pareja %08lx; la de P, %08lx)", f->pareja, BPVM_PAREJA);
+        return;
+    }
+    const uint32_t* vt = (const uint32_t*) (uintptr_t) BPVM_IMAGEN_M_BASE;
+    uint32_t sp = vt[0], pc = vt[1] & ~1u;
+    if (sp < 0x20000000u || sp > 0x20082000u || pc < BPVM_IMAGEN_M_BASE || pc >= BPVM_IMAGEN_M_BASE + IMAGEN_M_TAM) {
+        salto_no("la tabla de vectores de M no vale (pila %08lx, reset %08lx)", sp, pc);
+        return;
+    }
+    watchdog_hw->scratch[1] = causa_reset_codigo();   /* ANTES de armar el perro: watchdog_enable cambia la respuesta */
+    watchdog_hw->scratch[0] = SALTO_MAGIA;
+    watchdog_enable(15000, true);
+    m33_hw->nvic_icer[0] = 0xFFFFFFFFu;
+    m33_hw->nvic_icer[1] = 0xFFFFFFFFu;
+    m33_hw->nvic_icpr[0] = 0xFFFFFFFFu;
+    m33_hw->nvic_icpr[1] = 0xFFFFFFFFu;
+    /* La flash queda como la dejó el arranque normal (la traducción del XIP, en la identidad), y M empieza en su crt0
+     * como si viniera del ROM: su tabla de vectores, su pila y su reset. */
+    m33_hw->vtor = BPVM_IMAGEN_M_BASE;
+    __asm volatile ("msr msp, %0\n\tbx %1" : : "r" (sp), "r" (pc | 1u) : "memory");
+    __builtin_unreachable();
+}
+#endif
+
 int main(void) {
 #if defined(BPVM_PICO_BRINGUP) && BPVM_PICO_BRINGUP == 1
     /* #292 — bring-up nivel 1: el mínimo absoluto. Sólo USB y un bucle.
@@ -1914,6 +2018,9 @@ int main(void) {
         sleep_ms(500);
     }
 #else
+#if !defined(BPVM_IMAGEN_M) && !defined(BPVM_PICO_BRINGUP)
+    pico_pasar_a_m();   /* V8/H5: con PSRAM, a M (si salta, no vuelve) */
+#endif
     led_init();
     stdio_init_all();
     /* CRÍTICO para el wire v1: el stdout del Pico SDK trae la traducción
@@ -1954,6 +2061,18 @@ int main(void) {
      * resetCause — aquí se leía watchdog_caused_reboot() a secas, y un RESET
      * pedido por el wire (watchdog_reboot) salía en el log como "WATCHDOG". */
     log_printf("boot: causa del reset = %s", pico_pico_reset_cause_impl());
+    /* V8/H5 — y qué firmware de la imagen es éste (y, si hay PSRAM y es P, por qué no pasó a M). */
+#if defined(BPVM_IMAGEN_M)
+    log_printf("boot: imagen M (la VM caliente en la SRAM), pasada por P");
+#elif !defined(BPVM_PICO_BRINGUP)
+    if (s_salto_no != NULL) {
+        char nota[112];
+        snprintf(nota, sizeof nota, s_salto_no, (unsigned long) s_salto_dato[0], (unsigned long) s_salto_dato[1]);
+        log_printf("boot: imagen P (el codigo en la flash); no paso a M: %s", nota);
+    } else {
+        log_printf("boot: imagen P (el codigo en la flash)");
+    }
+#endif
     /* V7/H12, etapa 3.1 — las marcas del arranque ANTERIOR (una por núcleo; ver s_arranque): dónde estaba cada núcleo
      * cuando se reinició. Después, las de éste, desde cero. */
     if (s_arranque[0] == ARRANQUE_MAGIA)

@@ -69,7 +69,7 @@ def clasifica(obj, familia):
     # 1) por ruta, cuando la ruta lo dice sin ambiguedad
     if "/bpgenvm-c/src/" in r or re.search(r"(^|/)src/[^/]+$", r):  return "comun"
     if familia == "stm32" and "/core/" in r:                        return "cubemx"
-    if familia == "pico" and re.search(r"bpvm_pico\.dir/[^/]+$", r):
+    if familia == "pico" and re.search(r"bpvm_pico(_p)?\.dir/[^/]+$", r):   # V8/H5: el objetivo de P es bpvm_pico_p
         # el fichero propio de la Pico gana sobre el homonimo del comun
         return NOMBRES.get(base) if base not in ("platform_freertos.c",) else "familia"
     # 2) por nombre contra el arbol

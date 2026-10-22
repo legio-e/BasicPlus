@@ -57,10 +57,25 @@
 >   - **la prueba, hecha en la Metro y retirada** (el parche, en el scratchpad). Pasar con el ROM (`rom_chain_image`)
 >     no funciona: arranca la imagen «enrollada» a `0x10000000`. El salto directo sí. En M va todo (ENV, log, FS,
 >     packs, SQLite, dos runs; `StrOrden` y `HilosMuchos`, igual que el PC), con el rendimiento de la imagen B;
->   - la red del perro funcionó sola cuando M no arrancaba;
->   - **la Metro, otra vez con su imagen normal** y el ENV de siempre. M se queda grabada en `0x10100000`, sin usarse.
->   - **Por hacer, con el OK de Eduardo:** el build de verdad (los dos enlaces y un `.uf2`), el disparo por `psram=1`
->     con su red, lo que falta en M (la causa del reset, el CRC, decir qué imagen corre) y probar P en la Pico 2.
+>   - la red del perro funcionó sola cuando M no arrancaba.
+> - **Y HECHO de verdad** (Eduardo: *«si»*), en `pico/` (CMake, la plantilla `bp_memmap.ld`, `main.c`, `repl_v1.c`,
+>   `flash_layout.h`, `scripts/juntar_uf2.py`), `tools/tanda.py` y `scripts/censo_reparto.py`:
+>   - **el build:** `ninja bpvm_pico` hace `bpvm_pico.uf2` con los dos firmwares: P (`bpvm_pico.elf`, como siempre) y M
+>     (`bpvm_pico_m.elf`). El script que los junta comprueba que sean pareja y que la RAM que sobrevive a un reinicio
+>     esté en el mismo sitio en los dos;
+>   - **el salto:** con `psram=1` en una RP2350B, salvo `imagen=P` en el ENV. Con el perro: si M no llega al REPL, P
+>     se queda esa vez. En M, la causa del reset es la de P y el CRC es el suyo; el INFO dice `imagen`;
+>   - **probado en la Metro:** todo en M, la causa bien, el log de RAM entero; frente a P, el censo de cadenas
+>     −25/−31 %, el GC −33 %; la red con una M colgada a propósito, y con una M de otra compilación;
+>   - **en la Pico 2:** se queda en P, y diez programas dan lo mismo que con su imagen del 21-oct;
+>   - **de paso, `#720`** (por decidir, Eduardo): `mem*` en la RAM (lo de esta mañana) es un trueque en P. En la Pico
+>     2, crear cadenas mejora un 10–15 % y buscar empeora un 10–17 % (`indexOf`, `contains`, `replace`, `parseFloat`):
+>     cada llamada desde la flash a la SRAM pasa por un *veneer*. Lo propuesto: `mem*` en la RAM sólo en M.
+> - **Las placas, al cerrar:** la Metro y la Pico 2, con la imagen del árbol (el CRC de cada una, comprobado con su
+>   `.elf`): la Metro corre M y la Pico 2, P. El ENV de la Metro, el de siempre (sin `imagen`). La P4, sin tocar hoy.
+> - **Riesgo a vigilar:** cada vez que CMake se reconfigura sale otra pareja, así que el CRC de la imagen cambia aunque
+>   el código no. Para grabar, siempre `bpvm_pico.uf2` entero; un `bpvm_pico_p.uf2` suelto deja en la flash la M de
+>   antes, y P no salta a ella (lo dice en el log).
 > - **En la Metro quedan** `/app/BytecodeMide.mod`, `/app/StrOrden.mod` y `/app/Escrito.mod` (la prueba de escritura),
 >   además de los de ayer.
 

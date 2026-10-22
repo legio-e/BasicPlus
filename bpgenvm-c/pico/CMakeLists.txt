@@ -11,7 +11,9 @@
 #   cmake -G "Ninja" ..
 #   cmake --build .
 #
-# Produce: build/bpvm_pico.uf2 — arrastrable a la Pico en modo BOOTSEL.
+# Produce: build/bpvm_pico.uf2 — arrastrable a la Pico en modo BOOTSEL. V8/H5: con DOS firmwares dentro, P y M (abajo,
+# «Los firmwares»); el .elf de P es build/bpvm_pico.elf, como siempre, y el de M, build/bpvm_pico_m.elf.
+# (`ninja bpvm_pico` hace la imagen entera, como siempre.)
 
 cmake_minimum_required(VERSION 3.13)
 
@@ -166,8 +168,19 @@ set(BPVM_C_SRC
     ${BPVM_PICO_PLATFORM}
 )
 
-# === Firmware executable ================================================
-add_executable(bpvm_pico
+# === Los firmwares: P y M, en una sola imagen ============================
+# V8/H5 (22-oct) — DOS FIRMWARES EN LA MISMA IMAGEN (Eduardo: «Mantenemos la imagen única así que tenemos que hacer
+# que con PSRAM se aproveche la RAM adicional pero en la Pico (el RP2350 sin PSRAM) sigue funcionando como antes»).
+# De los mismos fuentes salen dos firmwares completos:
+#   · bpvm_pico_p (P): el de siempre, con el código en la flash. Sus ficheros se llaman como siempre: bpvm_pico.elf,
+#                      .elf.map, .dis, .bin.
+#   · bpvm_pico_m (M): el mismo con el código caliente de la VM y el cerrojo de FreeRTOS en la SRAM (lo medido en la
+#                      Metro: V8_IDEAS §E5), guardado y enlazado en 0x10100000. Sus ficheros, bpvm_pico_m.*.
+# Y el objetivo bpvm_pico es LA IMAGEN: bpvm_pico.uf2, con los dos —la que se graba y la que se publica; `ninja
+# bpvm_pico` la sigue haciendo, como dicen los documentos desde V4—. bpvm_pico_p.uf2 y bpvm_pico_m.uf2 son pasos
+# intermedios. Arranca P; si el ENV dice psram=1 y la placa es una RP2350B, salta a M al empezar main() (main.c,
+# pico_pasar_a_m). La función de abajo es la configuración de siempre, la misma para los dos.
+set(BPVM_PICO_FUENTES
     main.c
     pico_mods.c     # V6/U4: la stdlib embebida, GENERADA por scripts/regen_mods.sh (15 mods + Hello). Sólo datos.
     # NOTA: drivers de dispositivo (PCA9554, BME280, SSD1306, ...) NO
@@ -195,12 +208,52 @@ add_executable(bpvm_pico
     ${BPVM_C_SRC}
 )
 
+# H2 #153 — número de cores. Inyecta configNUMBER_OF_CORES (FreeRTOSConfig.h lo lee) y,
+# con dos, enlaza pico_multicore para el flash lockout. Ver docs/SMP_ARCH.md runbook.
+# V7/H12 (6-oct) — por defecto, DOS: la imagen de V7 de la Pico 2 y la Metro (Eduardo: «En la
+# Pico y Metro, 2 nucleos y 2 runs»), validada en la etapa 3 de H12. Los runs por defecto
+# siguen a los núcleos (bpvm_boot2_repartir). La de un núcleo, la vuelta atrás grabando:
+#     cmake .. -DBPVM_PICO_NUM_CORES=1
+# (sin grabar: `vm.cores=1` y `vm.runs=1` en el ENV).
+if (NOT DEFINED BPVM_PICO_NUM_CORES)
+    set(BPVM_PICO_NUM_CORES 2)
+endif()
+message(STATUS "BPVM_PICO_NUM_CORES = ${BPVM_PICO_NUM_CORES}")
+
+# V7/H12, etapa 2a.2 — EL INTERRUPTOR de la imagen: la tarea `run` espera en LA COLA (1, por defecto) o el aviso
+# «trabajo», como en la etapa 1 (0: `cmake .. -DBPVM_RUN_EN_COLA=0`; va a la caché: para volver, -DBPVM_RUN_EN_COLA=1).
+# Aquí estaba BPVM_PICO_SMP_WORKERS, el opt-in al planificador de varios workers (H2), que ningún build definía:
+# desde la 2a.2 el planificador es uno, el de la cola, y el segundo run llega en la 2b.
+set(BPVM_RUN_EN_COLA 1 CACHE STRING "H12 2a.2: la tarea run espera en la cola (1) o el aviso trabajo de la etapa 1 (0)")
+message(STATUS "BPVM_RUN_EN_COLA = ${BPVM_RUN_EN_COLA}")
+
+# Las imágenes de diagnóstico (los bloques de dentro de la función los explican): lo dicen una vez, aquí.
+if (DEFINED BPVM_PICO_SMP_TRACE)
+    message(STATUS "BPVM_PICO_SMP_TRACE = ${BPVM_PICO_SMP_TRACE}")
+endif()
+if (DEFINED BPVM_PICO_BOOT_LED)
+    message(STATUS "BPVM_PICO_BOOT_LED = ${BPVM_PICO_BOOT_LED}")
+endif()
+if (DEFINED BPVM_PICO_BRINGUP)
+    message(STATUS "BPVM_PICO_BRINGUP = ${BPVM_PICO_BRINGUP}  (imagen de diagnóstico, NO de uso)")
+endif()
+
+# V8/H5 — el .uf2 de cada uno lo hace el bloque del final, con su nombre, y luego los junta: el del SDK se apaga.
+set(PICO_NO_UF2 1)
+
+# La configuración de un firmware: T, el objetivo; SALIDA, el nombre de sus ficheros (.elf, .map…); MEMMAP, su script
+# de enlace (sale de bp_memmap.ld, al final). El cuerpo es el de siempre, sin sangrar, con `${T}` donde decía `bpvm_pico`.
+function(bpvm_rp2350_firmware T SALIDA MEMMAP)
+add_executable(${T} ${BPVM_PICO_FUENTES})
+set_target_properties(${T} PROPERTIES OUTPUT_NAME ${SALIDA})   # antes de pico_add_extra_outputs, que lo lee
+
 # H7.4 — ensambla el programa PIO del WS2812 (NeoPixel) que trae la pico-sdk
 # (pico_status_led/ws2812.pio, BSD) con pioasm → genera ws2812.pio.h en el build,
-# que incluye neopixel.c. Así no escribimos el ensamblador PIO a mano.
-pico_generate_pio_header(bpvm_pico ${PICO_SDK_PATH}/src/rp2_common/pico_status_led/ws2812.pio)
+# que incluye neopixel.c. Así no escribimos el ensamblador PIO a mano. V8/H5: cada firmware, en su carpeta.
+pico_generate_pio_header(${T} ${PICO_SDK_PATH}/src/rp2_common/pico_status_led/ws2812.pio
+                         OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/${T})
 
-target_include_directories(bpvm_pico PRIVATE
+target_include_directories(${T} PRIVATE
     ${BPVM_C_ROOT}/include
     ${BPVM_C_ROOT}/src                          # aot_registry.h (H3)
     ${BPVM_C_ROOT}/third_party/littlefs         # H2-B2: lfs.h
@@ -211,7 +264,7 @@ target_include_directories(bpvm_pico PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}                   # FreeRTOSConfig.h + pico_mods.h
 )
 
-target_link_libraries(bpvm_pico PRIVATE
+target_link_libraries(${T} PRIVATE
     pico_stdlib
     hardware_gpio
     hardware_i2c         # I2c.* backend
@@ -231,18 +284,8 @@ target_link_libraries(bpvm_pico PRIVATE
     FreeRTOS-Kernel-Heap4
 )
 
-# H2 #153 — número de cores. Inyecta configNUMBER_OF_CORES (FreeRTOSConfig.h lo lee) y,
-# con dos, enlaza pico_multicore para el flash lockout. Ver docs/SMP_ARCH.md runbook.
-# V7/H12 (6-oct) — por defecto, DOS: la imagen de V7 de la Pico 2 y la Metro (Eduardo: «En la
-# Pico y Metro, 2 nucleos y 2 runs»), validada en la etapa 3 de H12. Los runs por defecto
-# siguen a los núcleos (bpvm_boot2_repartir). La de un núcleo, la vuelta atrás grabando:
-#     cmake .. -DBPVM_PICO_NUM_CORES=1
-# (sin grabar: `vm.cores=1` y `vm.runs=1` en el ENV).
-if (NOT DEFINED BPVM_PICO_NUM_CORES)
-    set(BPVM_PICO_NUM_CORES 2)
-endif()
-message(STATUS "BPVM_PICO_NUM_CORES = ${BPVM_PICO_NUM_CORES}")
-target_compile_definitions(bpvm_pico PRIVATE
+# H2 #153 — número de cores (lo decide el bloque de antes de la función).
+target_compile_definitions(${T} PRIVATE
     BPVM_PICO_NUM_CORES=${BPVM_PICO_NUM_CORES}
     LFS_NO_DEBUG
     LFS_NO_WARN
@@ -250,24 +293,25 @@ target_compile_definitions(bpvm_pico PRIVATE
     LFS_NO_MALLOC   # H2-B2: todos los buffers de littlefs son estaticos
 )
 if (BPVM_PICO_NUM_CORES GREATER 1)
-    target_link_libraries(bpvm_pico PRIVATE pico_multicore)
+    target_link_libraries(${T} PRIVATE pico_multicore)
 endif()
 
 # stdio: usar USB CDC, deshabilitar UART (libera GP0/GP1)
-pico_enable_stdio_usb(bpvm_pico  1)
-pico_enable_stdio_uart(bpvm_pico 0)
+pico_enable_stdio_usb(${T}  1)
+pico_enable_stdio_uart(${T} 0)
 
 # H9 — layout de flash en 3 ZONAS: linker script propio (FLASH_BOOT 64K fijos |
 # hueco del env 16K que el UF2 NO graba | FLASH_MAIN hasta el FS en 0x200000).
 # Si una zona se desborda, el link FALLA (region overflow) — el crecimiento de
 # la imagen grita en build. Ver bp_memmap.ld + flash_layout.h + docs/H9_KERNEL_CAPAS.md.
-pico_set_linker_script(bpvm_pico ${CMAKE_CURRENT_LIST_DIR}/bp_memmap.ld)
+# V8/H5 — el script de ESTE firmware, sacado de la plantilla bp_memmap.ld (al final).
+pico_set_linker_script(${T} ${MEMMAP})
 
-# Generar .uf2 + .elf + .bin
-pico_add_extra_outputs(bpvm_pico)
+# Generar .elf + .bin + .dis + .map (el .uf2, con su nombre, al final)
+pico_add_extra_outputs(${T})
 
 # Flags útiles para diagnóstico durante el bring-up:
-target_compile_options(bpvm_pico PRIVATE
+target_compile_options(${T} PRIVATE
     -Wall -Wextra
     -Wno-unused-parameter
     -Wno-unused-function
@@ -277,7 +321,7 @@ target_compile_options(bpvm_pico PRIVATE
 # stdio_usb: no esperar al DTR — el banner del REPL se repite 3× con
 # delays, así que el IDE recoge al menos uno de los 3 al conectarse.
 # Reducir el wait acelera el reset y elimina el "se queda 5 s parado".
-target_compile_definitions(bpvm_pico PRIVATE
+target_compile_definitions(${T} PRIVATE
     PICO_STDIO_USB_CONNECT_WAIT_TIMEOUT_MS=0
 )
 
@@ -288,7 +332,7 @@ target_compile_definitions(bpvm_pico PRIVATE
 # —4 trozos de 512 B— y la interrupción de TinyUSB la llena de fondo mientras el cable
 # duerme: el RP2350 no tiene DMA para el USB (no hay DREQ del USB), y esa interrupción hace
 # su papel. El USB no se desborda: con la FIFO llena, la Pico contesta NAK y el PC reintenta.
-target_compile_definitions(bpvm_pico PRIVATE
+target_compile_definitions(${T} PRIVATE
     CFG_TUD_CDC_RX_BUFSIZE=2048
 )
 
@@ -301,7 +345,7 @@ target_compile_definitions(bpvm_pico PRIVATE
 # de aquí es un OOM atrapable y el programa decide qué hacer.
 #   16384 slots = 128 KB las dos tablas ≈ 1/4 de la SRAM. Un programa que
 #   necesite más objetos VIVOS a la vez pide más de lo que esta placa da.
-target_compile_definitions(bpvm_pico PRIVATE
+target_compile_definitions(${T} PRIVATE
     BPVM_HANDLE_CAP_MAX=16384
     # #447 — el panic del SDK cuenta el MOTIVO por stdout, que aqui es el mismo
     # cable del wire: el IDE lo tira y el cuelgue parece mudo. Con esto el motivo
@@ -328,31 +372,24 @@ target_compile_definitions(bpvm_pico PRIVATE
     PICO_MALLOC_PANIC=0
 )
 
-# V7/H12, etapa 2a.2 — EL INTERRUPTOR de la imagen: la tarea `run` espera en LA COLA (1, por defecto) o el aviso
-# «trabajo», como en la etapa 1 (0: `cmake .. -DBPVM_RUN_EN_COLA=0`; va a la caché: para volver, -DBPVM_RUN_EN_COLA=1).
-# Aquí estaba BPVM_PICO_SMP_WORKERS, el opt-in al planificador de varios workers (H2), que ningún build definía:
-# desde la 2a.2 el planificador es uno, el de la cola, y el segundo run llega en la 2b.
-set(BPVM_RUN_EN_COLA 1 CACHE STRING "H12 2a.2: la tarea run espera en la cola (1) o el aviso trabajo de la etapa 1 (0)")
-message(STATUS "BPVM_RUN_EN_COLA = ${BPVM_RUN_EN_COLA}")
-target_compile_definitions(bpvm_pico PRIVATE BPVM_RUN_EN_COLA=${BPVM_RUN_EN_COLA})
+# V7/H12, etapa 2a.2 — EL INTERRUPTOR de la imagen (lo decide el bloque de antes de la función).
+target_compile_definitions(${T} PRIVATE BPVM_RUN_EN_COLA=${BPVM_RUN_EN_COLA})
 # V7/H12 (N1) — el contexto de las natives, uno por TAREA (el puntero por tarea de FreeRTOS: FreeRTOSConfig.h): con dos
 # runs, dos natives a la vez no se pisan el suyo. En las dos imágenes (con un núcleo, dos runs también se turnan).
-target_compile_definitions(bpvm_pico PRIVATE BPVM_AOT_POR_TAREA=1)
+target_compile_definitions(${T} PRIVATE BPVM_AOT_POR_TAREA=1)
 
 # H2 #153 — trazas a flash del comm task para depurar el cuelgue SMP.
 # Migas que sobreviven a un reset; se leen con el comando LOG.
 # Activar:  cmake .. -DBPVM_PICO_SMP_TRACE=1
 if (DEFINED BPVM_PICO_SMP_TRACE)
-    message(STATUS "BPVM_PICO_SMP_TRACE = ${BPVM_PICO_SMP_TRACE}")
-    target_compile_definitions(bpvm_pico PRIVATE BPVM_PICO_SMP_TRACE=1)
+    target_compile_definitions(${T} PRIVATE BPVM_PICO_SMP_TRACE=1)
 endif()
 
 # H2 #153 — indicador LED de boot para diagnosticar cuelgues de arranque
 # (sobre todo dual-core, cuando el USB ni enumera). LED ON antes del
 # scheduler, OFF al llegar al REPL. Activar: cmake .. -DBPVM_PICO_BOOT_LED=1
 if (DEFINED BPVM_PICO_BOOT_LED)
-    message(STATUS "BPVM_PICO_BOOT_LED = ${BPVM_PICO_BOOT_LED}")
-    target_compile_definitions(bpvm_pico PRIVATE BPVM_PICO_BOOT_LED=1)
+    target_compile_definitions(${T} PRIVATE BPVM_PICO_BOOT_LED=1)
 endif()
 
 # #292 — BRING-UP ESCALONADO. Para placas que no enumeran: el USB no puede
@@ -380,8 +417,7 @@ endif()
 #
 # Activar:  cmake .. -DBPVM_PICO_BRINGUP=1
 if (DEFINED BPVM_PICO_BRINGUP)
-    message(STATUS "BPVM_PICO_BRINGUP = ${BPVM_PICO_BRINGUP}  (imagen de diagnóstico, NO de uso)")
-    target_compile_definitions(bpvm_pico PRIVATE
+    target_compile_definitions(${T} PRIVATE
         BPVM_PICO_BRINGUP=${BPVM_PICO_BRINGUP}
         # El stdio_usb del SDK TIRA la salida al suelo si el host no assertó DTR
         # (stdio_usb_out_chars: `if (stdio_usb_connected())`, y eso es
@@ -393,3 +429,72 @@ if (DEFINED BPVM_PICO_BRINGUP)
         PICO_STDIO_USB_CONNECTION_WITHOUT_DTR=1
     )
 endif()
+endfunction()
+
+# === V8/H5 (22-oct): los dos firmwares y la imagen que los junta ===========
+# Dónde va M: a 1 MB del principio de la flash, la misma dirección para su enlace (abajo) y para el salto (main.c).
+set(BPVM_IMAGEN_M_BASE 0x10100000)
+
+# El script de enlace de cada uno, de la plantilla bp_memmap.ld (configure_file: las variables entre arrobas).
+# P: el de siempre, pero su zona 3 acaba donde empieza M: si P crece hasta allí, el enlace falla.
+set(BP_FLASH_BOOT        0x10000000)
+set(BP_FLASH_MAIN        0x10014000)
+set(BP_FLASH_MAIN_LARGO  0xEC000)                                     # hasta 0x10100000
+set(BP_ZONA1_FIN         "ORIGIN(FLASH_BOOT) + LENGTH(FLASH_BOOT)")
+set(BP_ZONA3_INI         "ORIGIN(FLASH_MAIN)")
+set(BP_EN_RAM            "")
+configure_file(${CMAKE_CURRENT_LIST_DIR}/bp_memmap.ld ${CMAKE_CURRENT_BINARY_DIR}/bp_memmap_p.ld @ONLY)
+# M: su «zona 1» en 0x10100000 y su código detrás, hasta las particiones (0x10200000); la zona 2 —el ENV y el log—
+# es la de P. Y a la SRAM (van a .data, que el arranque copia de la flash) los ficheros del código caliente: la VM y el
+# cerrojo de FreeRTOS. Es la «imagen B» medida en la Metro (V8_IDEAS §E5): el censo de cadenas −25/−29 %, el GC −35 %;
+# cuesta ~83 KB de la SRAM, que con la VM en la PSRAM sobra.
+set(BP_FLASH_BOOT        0x10100000)
+set(BP_FLASH_MAIN        0x10110000)
+set(BP_FLASH_MAIN_LARGO  0xF0000)                                     # hasta 0x10200000 (BP_PART_BASE)
+set(BP_ZONA1_FIN         0x10010000)
+set(BP_ZONA3_INI         0x10014000)
+set(BPVM_EN_RAM_M
+    */interp.c.obj */builtins.c.obj */heap.c.obj */bpvm_handles.c.obj */scheduler.c.obj    # la VM caliente
+    */queue.c.obj */tasks.c.obj */list.c.obj */port.c.obj */portasm.c.obj                  # el cerrojo de FreeRTOS
+    */platform_freertos.c.obj)
+string(JOIN " " BP_EN_RAM ${BPVM_EN_RAM_M})
+configure_file(${CMAKE_CURRENT_LIST_DIR}/bp_memmap.ld ${CMAKE_CURRENT_BINARY_DIR}/bp_memmap_m.ld @ONLY)
+
+# La PAREJA: un número de esta configuración del build, el mismo en los dos. P sólo salta a una M con el suyo: una M
+# de otra compilación que se hubiera quedado en la flash no se arranca. Sólo lo ve main.c (al reconfigurar, sólo se
+# recompila él).
+string(RANDOM LENGTH 8 ALPHABET 0123456789abcdef BPVM_PAREJA)
+set_source_files_properties(main.c PROPERTIES COMPILE_DEFINITIONS
+    "BPVM_PAREJA=0x${BPVM_PAREJA}u;BPVM_IMAGEN_M_BASE=${BPVM_IMAGEN_M_BASE}u")
+
+bpvm_rp2350_firmware(bpvm_pico_p bpvm_pico   ${CMAKE_CURRENT_BINARY_DIR}/bp_memmap_p.ld)
+bpvm_rp2350_firmware(bpvm_pico_m bpvm_pico_m ${CMAKE_CURRENT_BINARY_DIR}/bp_memmap_m.ld)
+target_compile_definitions(bpvm_pico_m PRIVATE BPVM_IMAGEN_M=1)
+
+# El .uf2 de cada uno (lo mismo que haría el SDK: bpvm_pico_p.uf2 y bpvm_pico_m.uf2), y LA IMAGEN: los dos juntos, en
+# bpvm_pico.uf2 (el objetivo bpvm_pico).
+pico_init_picotool()
+set(BP_UF2_ARGS --family ${PICO_PLATFORM})
+if (PICO_RP2350_A2_SUPPORTED)
+    list(APPEND BP_UF2_ARGS --abs-block)
+endif()
+foreach (objetivo bpvm_pico_p bpvm_pico_m)
+    add_custom_command(TARGET ${objetivo} POST_BUILD
+        COMMAND picotool uf2 convert --quiet $<TARGET_FILE:${objetivo}> ${CMAKE_CURRENT_BINARY_DIR}/${objetivo}.uf2 ${BP_UF2_ARGS}
+        BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/${objetivo}.uf2
+        COMMAND_EXPAND_LISTS
+        VERBATIM)
+endforeach()
+find_package(Python3 REQUIRED COMPONENTS Interpreter)
+# Antes de juntarlos, el script comprueba que sean pareja y que la RAM que sobrevive a un reinicio esté en el mismo
+# sitio en los dos (por eso los .elf).
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/bpvm_pico.uf2
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_LIST_DIR}/scripts/juntar_uf2.py
+            ${CMAKE_CURRENT_BINARY_DIR}/bpvm_pico.uf2
+            ${CMAKE_CURRENT_BINARY_DIR}/bpvm_pico_p.uf2
+            ${CMAKE_CURRENT_BINARY_DIR}/bpvm_pico_m.uf2
+            $<TARGET_FILE:bpvm_pico_p> $<TARGET_FILE:bpvm_pico_m>
+    DEPENDS bpvm_pico_p bpvm_pico_m ${CMAKE_CURRENT_LIST_DIR}/scripts/juntar_uf2.py
+    COMMENT "La imagen: P y M, juntos en bpvm_pico.uf2"
+    VERBATIM)
+add_custom_target(bpvm_pico ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/bpvm_pico.uf2)
