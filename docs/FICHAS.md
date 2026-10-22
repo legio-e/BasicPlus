@@ -7386,12 +7386,26 @@ cabe o no, si no cabe excepción»*). Que quepa ya se comprueba: desde V7 (`#535
 y del destino y lanzan `move: rango fuera de dst (…)`, con el mismo texto. `#714` es el caso en que SÍ cabe: entonces
 `move` escribe dentro de la cadena (`hola` → `XYla`, en `s` y en su `copia`). Lo que falta es que el destino no pueda ser
 una cadena. Las formas:
-1. **el compilador** lo rechaza cuando ve que el destino es un `string`; pero una cadena puede ir en una variable `any`,
-   y ahí no la ve;
+1. **el compilador** lo rechaza cuando ve que el destino es un `string`. (Corregido después: en un programa, una cadena
+   no puede ir en una variable `any` —sólo `Core` declara `any`— ni en un `Object`, así que el compilador sí vería todos
+   los casos del código de usuario);
 2. **la VM**, con un bit «es una cadena» en la etiqueta del bloque, que se pone al nacer (donde hoy se pone el de «todo
    ASCII»): `move` lo mira y lanza la excepción, en las dos VMs. Ve todos los casos.
 
-Propuesta: la 2 (y la 1, si se quiere el error al compilar). Por decidir (Eduardo).
+**DECIDIDO el cómo** (Eduardo, 22-oct): *«En realidad lo que necesitamos un bit que indique que es de solo lectura, y
+todos los strings son de solo lectura.»* Un bit de SOLO LECTURA en la etiqueta del bloque, más general que «es una
+cadena»; todas las cadenas nacen con él. Lo que pide:
+- **ponerlo en cada nacimiento de una cadena** (los sitios del censo de `#711`; hoy `readFile` ni siquiera pasa por
+  `bpvm_str_nace`), mejor en una sola función, y un test que intente escribir en una cadena de cada origen;
+- **mirarlo donde se escribe en un bloque que llega de fuera:** `move` (el destino) y los builtins que escriben en un
+  array que reciben. Las escrituras `b[i] := x` no lo necesitan: un programa no puede convertir una cadena en un
+  `byte[]`, así que siguen igual de rápidas;
+- **las constantes** no están en el heap: ya son de solo lectura (`move` las rechaza);
+- **simplifica:** hoy `move` quita el bit «todo ASCII» del destino e invalida los cursores (la época) porque podía
+  escribir en una cadena. Con las cadenas de solo lectura, eso sobra;
+- **sirve después para más:** una tabla constante, un objeto que se quiera congelar.
+
+Por hacer, por la norma (el algoritmo y la implementación), cuando Eduardo diga.
 
 #### ✅ `#713` — `<`, `>`, `<=` y `>=` entre dos strings compilan, pero no comparan el texto: descuadran la pila y dan basura en silencio, distinta en cada VM (abierta el 21-oct, en el análisis del H5; **CERRADA el mismo día**: comparan el texto, en C, `ed26faf8`)
 
