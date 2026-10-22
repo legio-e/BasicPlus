@@ -3307,6 +3307,49 @@ las funciones memcpy/memset/memmove»*):
 crítico de la FreeRTOS y de la VM moverlo a RAM y el resto dejarlo en flash. Pero eso es muy complicado. Lo dejamos para
 mas adelante.»* Lo medido, y lo que pide hacerlo bien, en la ficha.
 
+**Lo probado, sólo en la Metro, con la imagen única (22-oct).** Eduardo: *«Pero lo probado en la Metro lo podemos hacer
+en la Metro. Mantenemos la imagen única así que tenemos que hacer que con PSRAM se aproveche la RAM adicional pero en la
+Pico (el RP2350 sin PSRAM) sigue funcionando como antes.»*
+
+- **La dificultad:** el código se enlaza para una dirección. El que corre desde la SRAM no puede correr desde la flash,
+  así que el código caliente tiene que ir DOS veces en la imagen.
+- **Las dos formas:**
+  1. dos firmwares completos en el mismo `.uf2`: P, el de hoy (el código en la flash), y M, la imagen B (la VM caliente
+     y el cerrojo de FreeRTOS en la SRAM). Arranca P y, si el ENV dice `psram=1`, pasa a M;
+  2. un firmware con el código de la VM dos veces. Pide sacar antes todas sus variables `static`, que se duplicarían, y
+     FreeRTOS no podría entrar.
+
+  Eduardo: *«La opción 1 está bien. Y si, una prueba pequeña está bien.»*
+- **La prueba,** sólo en la Metro y retirada después (el parche, en el scratchpad de la sesión):
+  - P es la imagen de hoy con un bloque al principio de `main()`, antes del USB. Si el arranque viene de un RESET del
+    wire y el ENV tiene `prueba.m`, arma el perro (5 s), apaga las interrupciones y pasa a M;
+  - M es la imagen B enlazada y guardada en `0x10100000`, a 1 MB de la P. Sus límites de la zona 2 son los de P (el ENV
+    y el log son los mismos), y se presenta como `bpvm-pico-m`;
+  - las dos van en un solo `.uf2`.
+- **Pasar con el ROM (`rom_chain_image`) NO funcionó.** El ROM arranca la imagen «enrollada» a `0x10000000`: el SDK no
+  pone `ROLLING_WINDOW_DELTA` en su IMAGE_DEF, y M, enlazada en `0x10100000`, salta a otra parte. Ni con un IMAGE_DEF
+  propio con el delta llegó M a su primera instrucción del arranque del SDK (marcas en los registros del perro, que
+  sobreviven al reinicio). No se siguió por ahí.
+- **El salto directo SÍ funciona.** P pone la tabla de vectores y la pila de M y salta a su `crt0`; la flash queda como
+  la dejó el arranque normal, sin traducción. En M, todo bien:
+  - el HELLO, el INFO, el ENV, el log, el FS (escribir y leer) y los dos packs (la stdlib y SQLite);
+  - `StrOrden` y `HilosMuchos`, igual que el PC; `SqlDemo` (el pack nativo de SQLite), entero;
+  - el rendimiento, el de la imagen B: el censo de cadenas −25 a −29 %, `substring` de 16 B −39 % y el GC −35 a −38 %,
+    frente a la imagen de hoy;
+  - un RESET desde M vuelve a pasar por P y otra vez a M.
+- **La red funcionó:** cuando M no arrancaba (las pruebas con el ROM), el perro devolvió la placa a P sola, y P no
+  volvió a intentarlo. No hizo falta tocar la placa.
+- **Lo que falta para hacerlo de verdad:**
+  - el build: los dos enlaces y juntarlos en un `.uf2`. Los bloques de flash van en una sola serie, y el bloque del
+    erratum E10 (el de `0x10FFFF00`) es una descarga aparte, sin renumerar: si no, el ROM no da la grabación por
+    terminada;
+  - la región de P, hasta `0x10100000`, para que crecer sea un error de enlace y no pise a M;
+  - el disparo, por `psram=1`, con la red del perro (si M no llega, P no vuelve a intentarlo);
+  - en M: la causa del reset que tenía P (hoy dice «watchdog» por el perro de P), el CRC de la imagen sobre lo suyo, y
+    que el HELLO o el INFO digan qué imagen corre;
+  - comprobar en la Pico 2 que P va exactamente como hoy;
+  - y el `.uf2` es casi el doble: grabarlo tarda el doble.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

@@ -51,6 +51,16 @@
 > - **Lo demás, a `#719`, para más adelante** (Eduardo: *«Lo que necesitamos es una división quirurgica, lo mas
 >   utilizado y crítico de la FreeRTOS y de la VM moverlo a RAM y el resto dejarlo en flash. Pero eso es muy
 >   complicado. Lo dejamos para mas adelante.»*).
+> - **Y lo probado, sólo en la Metro, con la imagen única** (Eduardo: *«con PSRAM se aproveche la RAM adicional pero en
+>   la Pico […] sigue funcionando como antes»*; *«La opción 1 está bien. Y si, una prueba pequeña está bien.»*):
+>   - dos firmwares en el mismo `.uf2`: P, el de hoy, y M, la imagen B en `0x10100000`. Arranca P y pasa a M;
+>   - **la prueba, hecha en la Metro y retirada** (el parche, en el scratchpad). Pasar con el ROM (`rom_chain_image`)
+>     no funciona: arranca la imagen «enrollada» a `0x10000000`. El salto directo sí. En M va todo (ENV, log, FS,
+>     packs, SQLite, dos runs; `StrOrden` y `HilosMuchos`, igual que el PC), con el rendimiento de la imagen B;
+>   - la red del perro funcionó sola cuando M no arrancaba;
+>   - **la Metro, otra vez con su imagen normal** y el ENV de siempre. M se queda grabada en `0x10100000`, sin usarse.
+>   - **Por hacer, con el OK de Eduardo:** el build de verdad (los dos enlaces y un `.uf2`), el disparo por `psram=1`
+>     con su red, lo que falta en M (la causa del reset, el CRC, decir qué imagen corre) y probar P en la Pico 2.
 > - **En la Metro quedan** `/app/BytecodeMide.mod`, `/app/StrOrden.mod` y `/app/Escrito.mod` (la prueba de escritura),
 >   además de los de ayer.
 
