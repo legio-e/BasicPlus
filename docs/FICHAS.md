@@ -7500,6 +7500,14 @@ caracter especial que señale el caracter erróneo.»*
 Por decidir: la clase de la excepción, dónde se dice «ignora», el stream de `Net.recvStr` (un trozo puede cortar un
 carácter) y cuántos «�» por trozo malo.
 
+**Decidido dónde se dice «ignora»** (Eduardo, 22-oct): *«Quizás sería mejor fusionar los dos métodos en uno, con un
+parámetro opcional que indique el coportamiento algo como readstring(len:int, ignorarerror:boolean=false)»*. Un
+parámetro opcional al final (BasicPlus ya los tiene, H8.1), por defecto la excepción, en `fromBytes`, `readFile`,
+`TextFile.readLine` y `readStr`, y `Net.recvStr`. Los tres que son builtins (`fromBytes`, `readFile` y `__freadLine`)
+llevan un número nuevo: los de hoy se quedan, con un argumento, para lo ya compilado. `appendChar` no lo lleva (siempre
+excepción) y el `toString` de `StringBuilder` no valida. Quedan: la clase de la excepción, el stream, cuántos «�» y el
+nombre del parámetro (`V8_IDEAS` §E5, «Decidido el punto 2»).
+
 #### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
 
 - **Medido** con la tanda del F1 (`rtosHeapMinFreeBytes` tras cada prueba; la misma prueba con los dos IDF; los

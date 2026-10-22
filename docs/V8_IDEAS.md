@@ -3583,6 +3583,35 @@ Queda decidido:
    mensajes completos;
 4. cuántos «�» por trozo malo, al ignorar el error: el estándar de Unicode o lo que hace Java 8.
 
+**Decidido el punto 2 (Eduardo, 22-oct):** *«Creo que deberiamos tener 2 métodos de lectura, uno que produzca la
+excepción si el caracter no es válido y otro que no produzca la excepción y cambie el caracter. Quizás sería mejor
+fusionar los dos métodos en uno, con un parámetro opcional que indique el coportamiento algo como readstring(len:int,
+ignorarerror:boolean=false)»*. Un método, con un parámetro opcional al final; por defecto, la excepción.
+- **BasicPlus ya lo admite:** `nombre: tipo := literal`, al final de la lista (H8.1; en JC, `= literal`). El compilador
+  rellena en cada llamada el que falte.
+- **Lo que llevaría el parámetro:**
+
+  | hoy | con el parámetro |
+  |---|---|
+  | `fromBytes(b)`, el builtin 120 | `fromBytes(b, ignorarError := false)` |
+  | `readFile(path)`, el 38 | `readFile(path, ignorarError := false)` |
+  | `TextFile.readLine()`, por `__freadLine` | `readLine(ignorarError := false)` |
+  | `TextFile.readStr(n)`, en BP, acaba en `fromBytes` | `readStr(n, ignorarError := false)` |
+  | `Net.recvStr(max, timeoutMs)`, en BP, acaba en `fromBytes` | `recvStr(max, timeoutMs, ignorarError := false)` |
+
+- **Un número de builtin nuevo para cada uno de los tres builtins** (`fromBytes`, `readFile` y `__freadLine`; el último
+  hoy es el 282). Un builtin se declara en `Core` como `inline CALL_BUILTIN N`, pegado en cada llamada: un `.mod` ya
+  compilado mete UN argumento y llama al 120. Si el 120 sacara dos, desordenaría la pila sin avisar. Los números de
+  hoy se quedan, con un argumento, para lo ya compilado (y con la regla nueva: excepción).
+- **No llevan el parámetro:** `appendChar` con algo que no es un carácter es un fallo del programa, no un texto de fuera:
+  siempre excepción. Y el `toString` de `StringBuilder` no valida (sus trozos ya son válidos): una conversión interna.
+- **El parámetro no arregla el stream:** en `recvStr`, un carácter partido entre dos paquetes daría con `true` un «�»
+  falso, en medio de un texto bueno. Lo del trozo pendiente sigue haciendo falta.
+
+Quedan por decidir: la clase de la excepción (punto 1), el stream (3), cuántos «�» (4) y el nombre del parámetro
+(`ignorarError`, como lo escribió Eduardo, o `ignoreErrors`, como el resto de la API, que está en inglés; no se escribe
+en las llamadas).
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
