@@ -43,7 +43,13 @@
 > - **Por decidir (Eduardo):** cómo hacerlo sólo en la Metro con la imagen única (§E5, «El código caliente en la SRAM»).
 >   Las formas: una imagen propia de la Metro, el código dos veces en la misma imagen, o la SRAM en las dos placas. Y dos
 >   más baratas por medir: sólo las funciones más calientes, o fijar líneas de la caché.
-> - **En la Metro quedan** `/app/BytecodeMide.mod` y `/app/StrOrden.mod`, además de los de ayer.
+> - **HECHO después** (Eduardo: *«Empecemos por las funciones memcpy/memset/memmove»*): `memcpy`, `memset`, `memmove`,
+>   `memcmp` y `memchr`, en la RAM en la RP2350, arreglando el patrón de `pico/bp_memmap.ld`. Son 920 B. En la Metro,
+>   `==` de 2 KB −39 % y `a + b` −8 a −12 %; `StrOrden` y la escritura en la flash, bien. **La Metro lleva ya esta
+>   imagen; la Pico 2 y la P4, la de antes** (la de la Pico 2 cambia igual: es la misma imagen). Lo de FreeRTOS serían
+>   12,6 KB de RAM más.
+> - **En la Metro quedan** `/app/BytecodeMide.mod`, `/app/StrOrden.mod` y `/app/Escrito.mod` (la prueba de escritura),
+>   además de los de ayer.
 
 > **21-oct** — **El H5, los strings: el análisis** (Eduardo: *«De momento solo analizamos»*). **Incluye el censo de
 > 36 operaciones, medido en el PC y en tres placas y ordenado de la más lenta a la más rápida; la PSRAM y su caché,

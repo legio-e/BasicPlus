@@ -3290,6 +3290,19 @@ ya veremos, 45K de RAM en la pico son muchos. De momento haces las pruebas en la
 
 Por decidir (Eduardo).
 
+**HECHO, lo primero: `memcpy`, `memset`, `memmove`, `memcmp` y `memchr` a la RAM** (22-oct; Eduardo: *«Empecemos por
+las funciones memcpy/memset/memmove»*):
+- **el cambio:** el patrón del script de enlace (`pico/bp_memmap.ld`) casa ahora con nuestra newlib
+  (`libg.a:libc_a-mem*.o`, y `libc.a:` por si otro compilador enlaza ésa). Es lo que el SDK ya pretendía. Van también
+  `memcmp` y `memchr`, como en el patrón del SDK. Son 920 B de RAM, en las dos placas (es la imagen única);
+- **medido en la Metro con PSRAM,** la misma tanda: `==` entre cadenas de 2 KB (un `memcmp`), −39 %; `a + b`, −8 a
+  −12 %; escribir con `move`, −7 a −10 %; el censo de cadenas, −1 a −5 %; el bytecode, igual. Casi toda la ganancia de
+  la imagen A venía del intérprete, los builtins y el heap, no de estas funciones;
+- **comprobado:** `StrOrden` igual que el PC; y escribir en la flash (el FS, que es el caso para el que el SDK las quería
+  en la RAM): un fichero de 7 KB escrito y leído de vuelta, igual;
+- **lo de FreeRTOS** (la pregunta de Eduardo): son 12,6 KB de RAM. En la imagen B, 70 KB son de la VM y 12,6 del camino
+  del cerrojo de FreeRTOS.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

@@ -98,7 +98,14 @@ SECTIONS
          * FLASH ... we will include any thing excluded here in .data below by default */
         *(.init)
         *libgcc.a:cmse_nonsecure_call.o
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .text*)
+        /* V8/H5 (22-oct) — memcpy, memset, memmove, memcmp y memchr, a la RAM DE VERDAD. El patrón del SDK
+         * (`*libc.a:*lib_a-mem*.o`) es el de una newlib más vieja: la de nuestro compilador los trae en
+         * `libg.a(libc_a-memcpy.o)`…, ese patrón no casaba y se quedaban en la flash, como cualquier otra función.
+         * Para que corran desde la RAM —sin pasar por la caché del XIP, que en la Metro es también la de la PSRAM—
+         * se excluyen aquí con su nombre de ahora (en libg.a y en libc.a, según cuál enlace el compilador), y el
+         * `*(.text*)` de `.data`, abajo, los recoge. Son 920 B de RAM. Medido en la Metro con PSRAM: `==` entre
+         * cadenas de 2 KB (memcmp), −39 %; concatenar, −8 a −12 %; el bytecode, igual (V8_IDEAS §E5). */
+        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o *libm.a:) .text*)
         *(.fini)
         /* Pull all c'tors into .text */
         *crtbegin.o(.ctors)
@@ -139,7 +146,7 @@ SECTIONS
     } > FLASH_MAIN
 
     .rodata : {
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a:) .rodata*)
+        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o *libm.a:) .rodata*)
         *(.srodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))
