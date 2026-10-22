@@ -118,15 +118,15 @@ SECTIONS
          * FLASH ... we will include any thing excluded here in .data below by default */
         *(.init)
         *libgcc.a:cmse_nonsecure_call.o
-        /* V8/H5 (22-oct) — memcpy, memset, memmove, memcmp y memchr, a la RAM DE VERDAD. El patrón del SDK
-         * (`*libc.a:*lib_a-mem*.o`) es el de una newlib más vieja: la de nuestro compilador los trae en
-         * `libg.a(libc_a-memcpy.o)`…, ese patrón no casaba y se quedaban en la flash, como cualquier otra función.
-         * Para que corran desde la RAM —sin pasar por la caché del XIP, que en la Metro es también la de la PSRAM—
-         * se excluyen aquí con su nombre de ahora (en libg.a y en libc.a, según cuál enlace el compilador), y el
-         * `*(.text*)` de `.data`, abajo, los recoge. Son 920 B de RAM. Medido en la Metro con PSRAM: `==` entre
-         * cadenas de 2 KB (memcmp), −39 %; concatenar, −8 a −12 %; el bytecode, igual (V8_IDEAS §E5).
-         * V8/H5 (22-oct) — y en M, además, los ficheros del código caliente: la lista la pone CMake (en P, ninguna). */
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o *libm.a: @BP_EN_RAM@) .text*)
+        /* V8/H5 (22-oct) — LO QUE VA A LA RAM, por firmware: la lista la pone CMake (BP_EN_RAM; en P, ninguna; y
+         * nunca entre arrobas en un comentario: lleva barras y asteriscos, y lo cerraría).
+         * En M, los ficheros del código caliente y memcpy/memset/memmove/memcmp/memchr; lo que no se excluye aquí lo
+         * recoge el `*(.text*)` de `.data`, abajo. El patrón del SDK para mem* (`*libc.a:*lib_a-mem*.o`) es el de una
+         * newlib más vieja y no casa con la nuestra (`libg.a(libc_a-memcpy.o)`…): en P se quedan en la flash, como el
+         * 21-oct. En P la RAM los hacía un trueque (`#720`: crear cadenas −10/−15 %, pero indexOf, replace y
+         * parseFloat +10/+17 % en la Pico 2: cada llamada desde la flash pasa por un veneer); en M, quien los llama
+         * también está en la RAM. */
+        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a: @BP_EN_RAM@) .text*)
         *(.fini)
         /* Pull all c'tors into .text */
         *crtbegin.o(.ctors)
@@ -167,7 +167,7 @@ SECTIONS
     } > FLASH_MAIN
 
     .rodata : {
-        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o *libm.a: @BP_EN_RAM@) .rodata*)
+        *(EXCLUDE_FILE(*libgcc.a: *libc.a:*lib_a-mem*.o *libm.a: @BP_EN_RAM@) .rodata*)
         *(.srodata*)
         . = ALIGN(4);
         *(SORT_BY_ALIGNMENT(SORT_BY_NAME(.flashdata*)))

@@ -456,7 +456,10 @@ set(BP_ZONA3_INI         0x10014000)
 set(BPVM_EN_RAM_M
     */interp.c.obj */builtins.c.obj */heap.c.obj */bpvm_handles.c.obj */scheduler.c.obj    # la VM caliente
     */queue.c.obj */tasks.c.obj */list.c.obj */port.c.obj */portasm.c.obj                  # el cerrojo de FreeRTOS
-    */platform_freertos.c.obj)
+    */platform_freertos.c.obj
+    # memcpy, memset, memmove, memcmp y memchr de nuestra newlib (en libg.a, o en libc.a según el compilador): sólo en
+    # M, con quien los llama (#720, Eduardo: «SI, las mem* sólo en la Metro»; en P eran un trueque, por los veneers)
+    *libg.a:libc_a-mem*.o *libc.a:libc_a-mem*.o)
 string(JOIN " " BP_EN_RAM ${BPVM_EN_RAM_M})
 configure_file(${CMAKE_CURRENT_LIST_DIR}/bp_memmap.ld ${CMAKE_CURRENT_BINARY_DIR}/bp_memmap_m.ld @ONLY)
 

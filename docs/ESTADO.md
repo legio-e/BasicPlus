@@ -68,11 +68,23 @@
 >   - **probado en la Metro:** todo en M, la causa bien, el log de RAM entero; frente a P, el censo de cadenas
 >     −25/−31 %, el GC −33 %; la red con una M colgada a propósito, y con una M de otra compilación;
 >   - **en la Pico 2:** se queda en P, y diez programas dan lo mismo que con su imagen del 21-oct;
->   - **de paso, `#720`** (por decidir, Eduardo): `mem*` en la RAM (lo de esta mañana) es un trueque en P. En la Pico
->     2, crear cadenas mejora un 10–15 % y buscar empeora un 10–17 % (`indexOf`, `contains`, `replace`, `parseFloat`):
->     cada llamada desde la flash a la SRAM pasa por un *veneer*. Lo propuesto: `mem*` en la RAM sólo en M.
+>   - **de paso, `#720`:** `mem*` en la RAM (lo de esta mañana) era un trueque en P. En la Pico 2, crear cadenas
+>     mejoraba un 10–15 % y buscar empeoraba un 10–17 % (`indexOf`, `contains`, `replace`, `parseFloat`): cada llamada
+>     desde la flash a la SRAM pasa por un *veneer*.
+> - **Por la noche** (Eduardo: *«SI, las mem* sólo en la Metro. Me gustaría comparar la velocidad Pico vs Metro […]
+>   las pruebas dirán la verdad»*):
+>   - **`#720` cerrada:** `mem*` en la RAM sólo en M; P vuelve a lo del 21-oct (comprobado en la Pico 2);
+>   - **la Pico 2 frente a la Metro**, la misma imagen y nueve pruebas, y la Metro sin PSRAM de control (igual que la
+>     Pico 2, ±3 %). Con datos pequeños y en programas normales, la Metro con M va igual o más deprisa (crear 16 B
+>     −23/−27 %, el JSON de 8 KB −36 %, el `Map` de 1000 claves −25 %). Con datos medianos o grandes, no (crear 2 KB
+>     ×2,4, 16 KB ×7; leer o escribir 16 KB, ×6 y ×25), y cada recolección cuesta ×2,5. La tabla, en §E5, «`mem*`
+>     sólo en M, y la Pico 2 frente a la Metro»;
+>   - **dos fichas nuevas, por decidir o sin analizar:** `#721` (con `log=1` el GC tarda 2,2 veces más: la Pico 2
+>     lo tiene puesto, y para comparar se le quitó y se le volvió a poner) y `#722` (en la Pico 2, que `MapOrden`
+>     quepa con 2000 claves depende de lo ejecutado antes).
 > - **Las placas, al cerrar:** la Metro y la Pico 2, con la imagen del árbol (el CRC de cada una, comprobado con su
->   `.elf`): la Metro corre M y la Pico 2, P. El ENV de la Metro, el de siempre (sin `imagen`). La P4, sin tocar hoy.
+>   `.elf`): la Metro corre M y la Pico 2, P. Los ENV, los de siempre: la Metro con `psram=1` y sin `imagen`; la Pico 2
+>   con su `log=1`. La Pico 2 tiene además `/app/BytecodeMide.mod` y `/app/CreaMide.mod`. La P4, sin tocar hoy.
 > - **Riesgo a vigilar:** cada vez que CMake se reconfigura sale otra pareja, así que el CRC de la imagen cambia aunque
 >   el código no. Para grabar, siempre `bpvm_pico.uf2` entero; un `bpvm_pico_p.uf2` suelto deja en la flash la M de
 >   antes, y P no salta a ella (lo dice en el log).

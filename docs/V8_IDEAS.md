@@ -3416,6 +3416,61 @@ Pico (el RP2350 sin PSRAM) sigue funcionando como antes.»*
   La causa: cada llamada desde la flash a la SRAM pasa por un *veneer* (`ldr pc, [pc]`), y `indexOf` hace muchas
   comparaciones cortas. Por decidir: dejar `mem*` en la RAM sólo en M, que es donde están también quienes las llaman.
 
+**`mem*` sólo en M, y la Pico 2 frente a la Metro (22-oct, noche).** Eduardo: *«SI, las mem* sólo en la Metro. Me
+gustaría comparar la velocidad Pico vs Metro. Alguna mejoras se compensan con el hecho que la PSRAM va mas lenta, así
+seguirán dando velocidades similares o eso es lo que creo, pero las pruebas dirán la verdad.»*
+- **`mem*`, sólo en M** (`#720`, cerrada): salen de la parte común de la plantilla (`pico/bp_memmap.ld`) y van en la
+  lista de M (`pico/CMakeLists.txt`). P vuelve a lo del 21-oct: «buscar y cortar» de `StrAcentos`, 76 ms en la Pico 2
+  (85 con `mem*` en la RAM), y el heap de la VM, 219 016 B (8 menos que el 21-oct: la nota del salto). M no cambia.
+- **Cómo se midió:** la misma imagen en las dos placas, los mismos módulos y las dos a 150 MHz. Nueve pruebas: los
+  cinco bancos (`BytecodeMide`, `CreaMide`, `PsramFases`, `StrCenso` y `HuecosReserva`) y cuatro programas
+  (`StrAcentos`, `MapOrden`, `JsonAcentosPlaca` y `ParaleloPico`, con dos runs). Cuatro configuraciones:
+  - la **Pico 2**: P, con el heap en la SRAM (219 KB);
+  - la **Metro sin PSRAM** (`psram=0`): P, con el heap en la SRAM. Es el CONTROL: va igual que la Pico 2 (±3 %; el
+    bytecode, un 2–3 % más lento en la Metro). Las diferencias de abajo son de la PSRAM y de M, no de la placa;
+  - la **Metro con P y PSRAM** (`imagen=P`): como en V7;
+  - la **Metro con M**: la de hoy.
+- **Un cuidado:** la Pico 2 tenía `log=1` en el ENV, y eso hace el GC 2,2 veces más lento (`#721`). Para comparar
+  placas y no configuraciones, se midió sin él; luego se le volvió a poner.
+
+  | | Pico 2 | Metro, P y PSRAM (V7) | Metro, M | M frente a la Pico 2 |
+  |---|---:|---:|---:|---:|
+  | bytecode sin cadenas: métodos / arrays (ms) | 355 / 283 | 399 / 294 | 342 / 275 | −4 / −3 % |
+  | crear 16 B: `substring` / `a + b` (µs) | 40,1 / 65,6 | 47,0 / 74,1 | 30,7 / 48,2 | −23 / −27 % |
+  | crear 256 B: `substring` / `a + b` (µs) | 47,5 / 75,5 | 92,4 / 126,4 | 63,7 / 82,1 | +34 / +9 % |
+  | crear 2 KB / 16 KB: `a + b` (µs) | 139 / 579 | 539 / 5355 | 328 / 4008 | ×2,4 / ×6,9 |
+  | leer / escribir 16 KB (µs) | 339 / 103 | 2656 / 3335 | 2037 / 2610 | ×6 / ×25 |
+  | reservar, la que cabe (µs) | 36 | 45 | 26 | −28 % |
+  | una recolección (`destruir`, µs) | 579 | 2190 | 1464 | ×2,5 |
+  | el censo de cadenas, n=16 / 256 / 2048 (ms) | 7,8 / 65,8 / 689 | 17,2 / 83,6 / 1054 | 11,7 / 60,4 / 739 | +50 / −8 / +7 % |
+  | `Json.parseJson`, 8 KB (ms) | 2369 | 2469 | 1521 | −36 % |
+  | `Map`, 1000 claves desordenadas / 2000 en orden (ms) | 1400 / 2928 | 2165 / 3069 | 1049 / 1646 | −25 / −44 % |
+  | `Map`, 2000 claves desordenadas (ms) | 3105 | 6431 | 3396 | +9 % |
+  | `StrAcentos`, buscar y cortar (ms) | 76 | 85 | 72 | −5 % |
+  | dos runs a la vez: cálculo / cadenas (ms) | 1288 / 1643 | 1872 / 3181 | 1423 / 1522 | +10 / −7 % |
+
+- **Lo que dicen:**
+  - **la hipótesis de Eduardo se cumple con datos pequeños y en los programas de tamaño normal.** El bytecode va
+    igual; crear cadenas pequeñas y reservar, un 23–28 % más deprisa en M; el JSON de 8 KB y el `Map` de hasta 1000
+    claves, un 25–44 % más deprisa. Lo que gana M (el intérprete, los builtins y el cerrojo en la SRAM) pesa más que
+    lo que pierde la PSRAM;
+  - **no se cumple con datos medianos o grandes.** Desde unos 256 B, crear sale más caro en la Metro: ×2,4 con 2 KB,
+    ×7 con 16 KB. Y leer o escribir 16 KB de golpe, ×6 y ×25: la caché del XIP es de 16 KB, y fuera de ella la PSRAM es
+    mucho más lenta que la SRAM. El `Map` de 2000 claves desordenadas ya va un 9 % más lento;
+  - **el GC:** cada recolección cuesta 2,5 veces más en M (más heap y más lento), aunque hay menos. En el censo con 16 B,
+    casi todo lo que pierde M es `gc()` explícito (6,6 ms por llamada frente a 0,87 en la Pico 2);
+  - **antes de M** (la Metro con P y PSRAM, como en V7), la Metro iba más lenta que la Pico 2 en casi todo. M recupera
+    lo pequeño y lo normal;
+  - **lo que da la Metro a cambio es sitio:** el `Map` de 2000 claves desordenadas, el JSON de 16 KB y los 4000 huecos
+    de `HuecosReserva` no caben en la Pico 2.
+- **Dos hallazgos de paso, con ficha:**
+  - **`#721`:** con `log=1`, el GC tarda 2,2 veces más (en la Pico 2, `destruir` 1296 frente a 579 µs; crear 16 KB, 826
+    frente a 388). Cada recolección escribe dos o más líneas `[gc]`, que con el log encendido se formatean otra vez y se
+    añaden; con el log lleno, cada línea desplaza el búfer entero (por el código, sin medir qué parte pesa más);
+  - **`#722`:** en la Pico 2, que `MapOrden` quepa con 2000 claves depende de lo que se ejecutó antes. Tras un
+    reinicio, solo, no cabe (4 de 4, con y sin log); tras `HuecosReserva` y `StrAcentos`, cabe (2 de 2); en la tanda
+    entera, una vez sí y otra no. Va justo al límite. Sin analizar.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
