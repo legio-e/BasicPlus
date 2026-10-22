@@ -7465,6 +7465,21 @@ programa, en las dos VMs:
 Por decidir (Eduardo): la regla. La propuesta (`V8_IDEAS` §E5, punto 1): todo string es UTF-8 válido, y la conversión
 desde bytes sustituye lo mal formado por U+FFFD, como Java. Así las operaciones por bytes son exactas en las dos VMs.
 
+**La regla, de Eduardo (22-oct):** *«un string es un invariante, así que una vez formado no se puede cambiar. […] En
+resumen, se puede modificar en el proceso de creación del string pero no después.»* (Entera, con el análisis, en
+`V8_IDEAS` §E5, «`#711`: el UTF-8 mal formado se corrige al nacer».) Lo que dice el código:
+- **las constantes del programa** no se pueden corregir al cargarlas: el cargador copia la sección de datos sin saber
+  qué es cadena, y el programa las usa en su sitio. Pero nacen en el compilador, que las escribe con `getBytes(UTF_8)`
+  de Java: siempre bien formadas;
+- **la suma, `substring` y las demás que salen de otras cadenas** no necesitan nada: con entradas válidas, la salida es
+  válida;
+- **se corrige donde entran bytes de fuera** (`fromBytes`, `readFile`, `readLine`, `listDir`, `getEnv`, la GUI, las
+  natives y los packs) **y puntos de código** (`appendChar`, `__charsToString`): cada trozo mal formado, U+FFFD;
+- **Java 8** sustituye casi como el estándar de Unicode; sólo cambia un sustituto escrito en tres bytes (uno frente a
+  tres U+FFFD).
+
+Por decidir: la regla así, la sustitución (el estándar o Java 8), y `#714` a la vez.
+
 #### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
 
 - **Medido** con la tanda del F1 (`rtosHeapMinFreeBytes` tras cada prueba; la misma prueba con los dos IDF; los

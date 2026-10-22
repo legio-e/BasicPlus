@@ -3471,6 +3471,66 @@ seguirán dando velocidades similares o eso es lo que creo, pero las pruebas dir
     reinicio, solo, no cabe (4 de 4, con y sin log); tras `HuecosReserva` y `StrAcentos`, cabe (2 de 2); en la tanda
     entera, una vez sí y otra no. Va justo al límite. Sin analizar.
 
+### `#711`: el UTF-8 mal formado se corrige al nacer la cadena (la regla de Eduardo, 22-oct; análisis)
+
+Eduardo: *«un string es un invariante, así que una vez formado no se puede cambiar. ¿Donde se pueden hacer cambios?
+Bien en el proceso de copiar un contante del programa a la RAM del Heap ahí se puede corregir. Y el otro punto, cuando
+se genere un string como resultado de sumar 2 o de extraer de otro (un substring) se puede aprovechar para arreglar. En
+resumen, se puede modificar en el proceso de creación del string pero no después.»*
+
+**Dónde nace una cadena** (leído en la VM-C el 22-oct: los sitios que hoy le ponen el bit «todo ASCII», que son los
+mismos que la crean). Cuatro grupos:
+
+1. **Las constantes del programa.** No se copian al heap. El cargador copia la sección de datos del `.mod` a la RAM tal
+   cual, sin saber qué es cada cosa (`MOD_FORMAT.md` §5: «bytes opacos al loader»), y el programa usa cada literal en
+   su sitio (`LEA_GLOBAL`). Corregir ahí no se puede: el cargador no sabe cuáles son cadenas, y un U+FFFD ocupa 3
+   bytes donde el malo ocupaba 1, así que movería todo lo que va detrás. **Pero su creación es la del compilador:** las
+   escribe con `getBytes(UTF_8)` de Java (`ModWriter.addConstantString`; las natives, igual), que nunca da UTF-8 mal
+   formado (un sustituto suelto sale `?`). Nacen bien.
+2. **Las que salen de otras cadenas:** `a + b` (en el intérprete y en las natives), `substring`, `charAt`, `upper` y
+   `lower`, `trim`, `replace`, `split` y las de `Path`. Si lo que entra es válido, lo que sale también: el UTF-8 se
+   corta por caracteres y se junta sin romperse, y `substring` corta por caracteres. **Con entradas válidas no hace
+   falta mirar nada**, y siguen igual de rápidas. Mirar aquí sería una pasada más en cada suma, para nada.
+3. **Las que salen de bytes que no eran una cadena.** Por aquí entra el UTF-8 mal formado, y aquí va la corrección:
+   - `fromBytes` (de `byte[]` a cadena): por aquí pasan el puerto serie, la red y los ficheros binarios;
+   - `readFile` y `TextFile.readLine`;
+   - los nombres de `listDir`, `Machine.getEnv`, el texto de la GUI (`getText` y las celdas de la tabla), los
+     argumentos del RUN, las rutas de la app y la información de los packs;
+   - las que crean las natives y los packs, como SQLite (`h_string_from_cstr`, en los helpers del AOT);
+   - los números pasados a texto (`intToString`, `floatToString`…) también nacen aquí, pero son siempre ASCII.
+4. **Las que salen de un punto de código:** `appendChar` y `__charsToString`. Un punto de código que no es un carácter
+   (un sustituto, de D800 a DFFF, o uno por encima de 10FFFF) da hoy bytes mal formados en la VM-C; en la VM-Java, `?`
+   o el hilo muere. Y `Json` convierte cada `\uXXXX` con un `appendChar` sin juntar los pares (`😀`, el
+   emoji): eso se arregla en `Json`, juntándolos antes.
+
+**Cómo se corrige.** Cada trozo mal formado pasa a U+FFFD (`EF BF BD`), como hace Java. Medido con Java 8 (un programa
+en el scratchpad): un byte que no puede empezar un carácter, uno; una secuencia cortada, uno por todo el trozo (`E2 82`
+y una `x` → U+FFFD y la `x`). Java 8 sólo se aparta del estándar de Unicode (las «subpartes máximas») en un caso: un
+sustituto escrito en tres bytes (`ED A0 80`), donde Java pone uno y el estándar, tres. Hoy la VM-Java no corrige al
+crear (su `fromBytes` copia los bytes tal cual, como la VM-C): los interpreta después, con el decodificador de Java. Si
+las dos VMs corrigen al nacer, cada una con su rutina, las dos pueden seguir el estándar. Corregir puede alargar la
+cadena (de 1 byte a 3), así que hay que medir antes de reservar.
+
+**Lo que cuesta.** La mayoría de las cadenas son ASCII: la pasada que ya les pone el bit lo decide, y no hay nada más.
+Las otras, sólo en el grupo 3, una pasada para validar. El grupo 2, nada. De paso, `readFile` en la VM-C no pone hoy el
+bit (sus cadenas van siempre por el algoritmo lento): con la misma pasada, lo pondría.
+
+**Lo que trae la regla:**
+- **`#714` es su otra mitad:** `move` puede escribir dentro de una cadena ya formada, el «después» que la regla prohíbe.
+  Sin cerrarlo, un programa puede estropear una cadena válida;
+- **en la VM-Java cambian los mismos sitios:** `fromBytes` y `readLine`, que hoy copian tal cual; `readFile`, que hoy
+  pasa por el decodificador de Java; y `appendChar`;
+- **con todas las cadenas válidas, `#711` se cierra:** las dos VMs cuentan igual. Y el caso especial del cursor (las
+  cadenas que empiezan por un byte de continuación) se puede quitar.
+
+**Por decidir (Eduardo):**
+1. la regla, tal como queda: se corrige en los grupos 3 y 4; las constantes, el compilador; el grupo 2, nada;
+2. la sustitución: el estándar de Unicode, o exactamente lo que hace Java 8 (sólo cambia el sustituto en tres bytes);
+3. `#714` a la vez.
+
+Después, por la norma: el algoritmo (una rutina de «validar y corregir», probada contra un oráculo en las dos VMs) y
+la implementación.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
