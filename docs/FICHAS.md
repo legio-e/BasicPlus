@@ -7076,6 +7076,28 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   - un comentario de `bpvm_handles.h` habla de memoria «<256KB (0x40000)» donde el bit es el 30 (1 GiB);
   - y, sin comprobar: `heap_start` (el fin del último módulo + 64) podría no ir alineado a 4.
 
+#### 🔵 `#726` — la red (`compat.sh check`) va de una en una y tarda unos 45 minutos; con 20 núcleos se podría repartir (abierta el 23-oct; Eduardo: *«la red en paralelo es una mejora pero puede esperar»*)
+
+Eduardo: *«la red de pruebas no se podría hacer en paralelo para ahorrar tiempo?»*. Lo visto ese día:
+- **las tres pasadas del corpus** (MOD9, MOD8 y dos workers; unos 160 samples cada una) son la mayor parte, y cada
+  sample se compila y corre en lo suyo: lo más seguro de repartir;
+- **las 104 pruebas de C**, casi todas independientes, pero algunas comparten el directorio de compilación, los `.mod`
+  de prueba de `samples/`, el puerto de `test-net` y el simulador: por grupos;
+- **el estrés del heap y los hilos** dependen de los tiempos: al final y solos, o fallarían sin razón.
+
+Lo propuesto: medir primero cada frente (un tiempo por frente en `compat.sh`), repartir las pasadas del corpus, medir
+otra vez, y luego las pruebas de C. A ojo, de unos 45 minutos a 10-15; lo dirá la medida.
+
+#### 🔵 `#725` — `Json.parseJson` se para en el primer error: con un fichero con diez, se arreglan de uno en uno (abierta el 23-oct, una idea de Eduardo; por analizar)
+
+Eduardo, al decidir `#716`: *«A ver para ParseJson, lo ideal es que si encuentra un error continue parseando y devuelva
+varios errores al final. Lo digo porque si tienes un fichero Json y el parseador tiene 10 errores y los localiza 1 a 1
+se tarda un montón. Para devolver una excepción con varios errores en Java me cree una excepción a la que podías añadir
+una lista de excepciones como causa.»* Por analizar: cómo sigue el analizador tras un error (saltar hasta la `,` o el
+cierre del nivel en el que está), cuántos errores junta, y la excepción con la lista de causas (en `Core`, para
+cualquiera, o en `Json`). Y `#716` lo toca: con su regla, un entero de más de 32 bits en un JSON será un error (hasta
+ahora, un número equivocado sin avisar).
+
 #### 🔵 `#724` — el texto que trae un pack (SQLite) entra sin descodificar: `string_from_cstr` no mira el UTF-8, y el pegamento que escribe el compilador lo corta en 512 bytes, a veces a medio carácter y sin avisar (abierta el 23-oct, al hacer `#711`)
 
 Un pack devuelve texto de C (`sqlite3_column_text`, en `bpstdlib/sqlite/nativo/src/sqlite_shim.c`). El pegamento que
@@ -7485,7 +7507,7 @@ Lo prueban `bpgenvm-c/samples/StrOrden.bp` (en el corpus: 18 636 comprobaciones 
 carácter, la línea de arriba y un `switch` de cadenas) y `make test-aotcompara` (490 dentro de una native, el AOT igual
 que el intérprete). `V8_IDEAS` §E5, «Comparar en C».
 
-#### ✅ `#712` — un array ENORME desborda el cálculo de sus bytes: `newIntArray(2^30 + 1)` deja un bloque de 4 B que dice tener mil millones de elementos, y escribir en él pisa otros objetos, en las dos VMs (abierta el 21-oct, de paso en el análisis del H5; no es de cadenas; **CERRADA el 23-oct**: los bytes se multiplican en 64 bits, y lo que no cabe es «No space in heap»)
+#### ✅ `#712` — un array ENORME desborda el cálculo de sus bytes: `newIntArray(2^30 + 1)` deja un bloque de 4 B que dice tener mil millones de elementos, y escribir en él pisa otros objetos, en las dos VMs (abierta el 21-oct, de paso en el análisis del H5; no es de cadenas; **CERRADA el 23-oct**: los bytes se multiplican en 64 bits, y lo que no cabe es «No space in heap», `821a558e`)
 
 `bpvm_prim_nuevo_array` (`bpgenvm-c/src/builtins.c`) reserva `(uint32_t) size * ancho` bytes. Con 4 bytes por
 elemento, 4·(2^30 + 1) = 2^32 + 4, que en 32 bits son 4. La longitud se queda en 1 073 741 825, y los índices se
@@ -7802,7 +7824,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   desinicializa con la C6 encendida por el Bluetooth, y ahí basta con parar la radio. **Propuesta:** cerrarla por el
   diseño, sin tocar la C6.
 
-#### ✅ `#705` — `Net.tcpClose` no deja su valor en la pila: dos llamadas sueltas cambian las variables locales de antes, en las dos VMs igual (abierta el 19-oct, al analizar la WiFi, H3; preexistente, de `#241`; **CERRADA el 23-oct**: empuja su 0 en las dos VMs)
+#### ✅ `#705` — `Net.tcpClose` no deja su valor en la pila: dos llamadas sueltas cambian las variables locales de antes, en las dos VMs igual (abierta el 19-oct, al analizar la WiFi, H3; preexistente, de `#241`; **CERRADA el 23-oct**: empuja su 0 en las dos VMs, `821a558e`)
 
 - **Medido:** un `main` con `var a := 7`, `var b := 9` y dos `Net.tcpClose(0)` sueltos imprime `a = 32 b = 264`; con
   uno solo, todavía 7 y 9. En miVM y en la VM-C, lo mismo, así que la paridad no lo ve.
