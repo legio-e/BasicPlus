@@ -212,10 +212,10 @@ module Utf8Descodifica
     jsonBueno("\\uD83D\\uDE00", "\"\\uD83D\\uDE00\"", "F0 9F 98 80")
     jsonBueno("a\\u00F1b", "\"a\\u00F1b\"", "61 C3 B1 62")
     jsonBueno("\\uDBFF\\uDFFF", "\"x\\uDBFF\\uDFFFy\"", "78 F4 8F BF BF 79")
-    jsonMalo("un alto suelto", "\"\\uD83Dx\"", "JSON: sustituto UTF-16 sin su pareja en pos 1")
-    jsonMalo("un bajo suelto", "\"\\uDE00\"", "JSON: sustituto UTF-16 sin su pareja en pos 1")
-    jsonMalo("un alto y una letra", "\"ab\\uD83D\\u0041\"", "JSON: sustituto UTF-16 sin su pareja en pos 3")
-    jsonMalo("un alto al final", "\"\\uD83D\"", "JSON: sustituto UTF-16 sin su pareja en pos 1")
+    jsonMalo("un alto suelto", "\"\\uD83Dx\"", "JSON: línea 1, columna 2: sustituto UTF-16 sin su pareja")
+    jsonMalo("un bajo suelto", "\"\\uDE00\"", "JSON: línea 1, columna 2: sustituto UTF-16 sin su pareja")
+    jsonMalo("un alto y una letra", "\"ab\\uD83D\\u0041\"", "JSON: línea 1, columna 4: sustituto UTF-16 sin su pareja")
+    jsonMalo("un alto al final", "\"\\uD83D\"", "JSON: línea 1, columna 2: sustituto UTF-16 sin su pareja")
 
     // 10. las fuentes de confianza (sin mirar en marcha, con su test): lo que dan es UTF-8 válido
     var nombres: string[] := listDir(".")

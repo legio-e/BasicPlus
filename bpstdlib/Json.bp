@@ -23,7 +23,9 @@ module Json
   //   Json.readJsonFile(path)      → JsonValue   readFile + parseJson
   //   Json.writeJsonFile(path, v)  → void        toJson + writeFile
   //
-  // Errores → throw RuntimeError(msg) con posición incluida.
+  // Errores (V8 #725) → parseJson sigue tras cada error de sintaxis, como un compilador, y al acabar lanza
+  // AggregateError (hija de RuntimeError) con todos, diez como mucho: su msg los dice, uno por línea, con su
+  // «línea L, columna C»; su lista `errors`, cada uno un JsonError (con line y column).
   //
   // NOTA del autor: las funciones del parser recursivo (parseValue,
   // parseObject, parseArray, ...) están a nivel de módulo en lugar de
@@ -405,6 +407,39 @@ module Json
   end JsonObject
 
   // -------------------------------------------------------------------
+  // V8 #725 — LOS ERRORES, COMO UN COMPILADOR (Eduardo: «Despues de un error debe intentar recuperarse como un
+  // compilador. El número de errore, yo pondría un límite de 10 como máximo, si hay mas hasta que no arregle los primero
+  // el resto no se ven y aborta, lanzando la excepción»). parseJson apunta cada error de sintaxis con su línea y su
+  // columna, salta hasta la siguiente ',' o el cierre del array u objeto en el que está, y sigue; al acabar lanza
+  // AggregateError con todos. Al décimo, se para y lanza esos diez.
+  // -------------------------------------------------------------------
+
+  // Un error de sintaxis de JSON, con su sitio: la línea y la columna (desde 1, en caracteres).
+  public class JsonError extends RuntimeError
+    public property line: integer
+    public property column: integer
+
+    public function JsonError(m: string, line: integer, column: integer)
+      super(m)
+      this.line := line
+      this.column := column
+    end JsonError
+  end JsonError
+
+  // Una excepción con una LISTA de causas (Eduardo: «me cree una excepción a la que podías añadir una lista de
+  // excepciones como causa»). parseJson la lanza con todos sus errores, cada uno un JsonError; su msg los dice todos,
+  // uno por línea. Va aquí, con el analizador (Eduardo: «Si alguien la quiere utilizar puede importar la librería o
+  // copiar el código»). Hija de RuntimeError: quien ya atrapa RuntimeError la atrapa también.
+  public class AggregateError extends RuntimeError
+    public property errors: List
+
+    public function AggregateError(m: string, errors: List)
+      super(m)
+      this.errors := errors
+    end AggregateError
+  end AggregateError
+
+  // -------------------------------------------------------------------
   // Reader (simple state container; los helpers que necesitan recursión
   // mutua viven como funciones del módulo más abajo).
   // -------------------------------------------------------------------
@@ -413,12 +448,76 @@ module Json
     public property text: string
     public property pos:  integer
     public property len:  integer
+    var errores: List              // V8 #725: los JsonError apuntados, en orden
+    var textos: StringBuilder      // sus textos, uno por línea, para el msg de AggregateError
+    var ultLinea: integer          // el sitio del último apuntado: otro en el mismo sitio es la cascada del primero
+    var ultColumna: integer
 
     public function JsonReader(text: string)
       this.text := text
       this.pos  := 0
       this.len  := strlen(text)
+      this.errores := List()
+      this.textos := StringBuilder()
+      this.ultLinea := 0
+      this.ultColumna := 0
     end JsonReader
+
+    // V8 #725 — el error de sintaxis en la posición p (en caracteres): «línea L, columna C: texto».
+    public function nuevoError(p: integer, texto: string): JsonError
+      var linea: integer := 1
+      var ini: integer := 0          // donde empieza la línea de p
+      var i: integer := 0
+      while i < p and i < this.len do
+        if charCodeAt(this.text, i) == 10 then
+          linea := linea + 1
+          ini := i + 1
+        endif
+        i := i + 1
+      endwh
+      var col: integer := p - ini + 1
+      return JsonError("línea " + intToString(linea) + ", columna " + intToString(col) + ": " + texto, linea, col)
+    end nuevoError
+
+    // Lo lanza; lo atrapa el array u objeto que lo contiene (o parseJson), que lo apunta y se recupera.
+    public function error(p: integer, texto: string)
+      throw this.nuevoError(p, texto)
+    end error
+
+    // La excepción con todos los apuntados.
+    public function agregado(): AggregateError
+      var n: integer := this.errores.length()
+      if n == 1 then
+        return AggregateError("JSON: " + JsonError(this.errores.get(0)).msg, this.errores)
+      endif
+      var cabeza: string := "JSON: " + intToString(n) + " errores:"
+      if n >= 10 then
+        cabeza := "JSON: 10 errores, los primeros (puede haber más: se para en el décimo):"
+      endif
+      return AggregateError(cabeza + "\n" + this.textos.toString(), this.errores)
+    end agregado
+
+    // Apunta un error, salvo otro en el mismo sitio que el anterior (la cascada de uno solo). Al décimo, se para: lanza
+    // AggregateError, que no es un JsonError (no lo atrapa ningún array u objeto) y sale de parseJson tal cual.
+    public function apunta(e: JsonError)
+      if e.line == this.ultLinea and e.column == this.ultColumna then
+        return
+      endif
+      this.ultLinea := e.line
+      this.ultColumna := e.column
+      if this.errores.length() > 0 then
+        this.textos.appendStr("\n")
+      endif
+      this.textos.appendStr("  " + e.msg)
+      this.errores.add(e)
+      if this.errores.length() >= 10 then
+        throw this.agregado()
+      endif
+    end apunta
+
+    public function hayErrores(): boolean
+      return this.errores.length() > 0
+    end hayErrores
 
     public function peek(): integer
       if this.pos >= this.len then
@@ -433,11 +532,13 @@ module Json
       return c
     end advance
 
+    // V8 #725: si no es el esperado, el error es en él, y NO se consume (la recuperación sigue desde ahí; si no, el
+    // cierre que estaba en su sitio se perdía y salía otro error en cascada)
     public function expect(expected: integer)
-      var c: integer := this.advance()
-      if c != expected then
-        throw RuntimeError("JSON: esperaba código " + intToString(expected) + " pero llegó " + intToString(c) + " en pos " + intToString(this.pos - 1))
+      if this.peek() != expected then
+        this.error(this.pos, "se esperaba '" + caracterJson(expected) + "'")
       endif
+      this.pos := this.pos + 1
     end expect
 
     public function skipWs()
@@ -585,23 +686,121 @@ module Json
     if c >= 65 and c <= 70 then
       return c - 55
     endif
-    throw RuntimeError("JSON: dígito hexadecimal inválido " + intToString(c))
-    return 0
+    return -1   // V8 #725: no es un dígito; quien llama da el error (y antes salta hasta el final de la cadena)
   end parseHexDigitOn
 
+  // V8 #725 — los cuatro dígitos de un escape de JSON en u: su valor, o -1 si alguno no es hexadecimal.
+  public function hex4On(r: JsonReader): integer
+    var u: integer := 0
+    var k: integer := 0
+    while k < 4 do
+      var d: integer := parseHexDigitOn(r)
+      if d < 0 then
+        return -1
+      endif
+      u := u * 16 + d
+      k := k + 1
+    endwh
+    return u
+  end hex4On
+
+  // V8 #725 — desde dentro de una cadena, hasta después de su comilla de cierre (o el final del texto), saltando los
+  // escapes: tras un error en una cadena, la recuperación sigue desde fuera de ella.
+  public function saltaCadenaOn(r: JsonReader)
+    var fin: boolean := false
+    while r.pos < r.len and not fin do
+      var c: integer := charCodeAt(r.text, r.pos)
+      if c == 92 then
+        r.pos := r.pos + 2
+      else
+        r.pos := r.pos + 1
+        if c == 34 then
+          fin := true
+        endif
+      endif
+    endwh
+  end saltaCadenaOn
+
+  // V8 #725 — un error dentro de una cadena: salta hasta su final y lo lanza, en p.
+  public function cadenaMalaOn(r: JsonReader, p: integer, texto: string)
+    saltaCadenaOn(r)
+    r.error(p, texto)
+  end cadenaMalaOn
+
+  // V8 #725 — ¿puede empezar un valor de JSON con c? Una comilla, una llave o un corchete de apertura, un dígito, el
+  // signo menos, o la t, la f y la n de true, false y null.
+  public function empiezaValor(c: integer): boolean
+    return c == 34 or c == 123 or c == 91 or c == 45 or isDigitCode(c) or c == 116 or c == 102 or c == 110
+  end empiezaValor
+
+  // V8 #725 — un carácter, como texto (para los mensajes).
+  public function caracterJson(c: integer): string
+    var sb: StringBuilder := StringBuilder()
+    sb.appendChar(c)
+    return sb.toString()
+  end caracterJson
+
+  // V8 #725 — tras un error dentro de un array u objeto: hasta la siguiente ',' de este nivel o un cierre (de este nivel
+  // o de uno de fuera), sin contar lo que haya dentro de cadenas ni de arrays u objetos anidados. Devuelve el carácter
+  // en el que se paró (',' ']' '}'), sin consumirlo, o -1 al final del texto.
+  public function sincronizaOn(r: JsonReader): integer
+    var hondo: integer := 0
+    while r.pos < r.len do
+      var c: integer := charCodeAt(r.text, r.pos)
+      if c == 34 then
+        r.pos := r.pos + 1
+        saltaCadenaOn(r)
+      elseif c == 123 or c == 91 then
+        hondo := hondo + 1
+        r.pos := r.pos + 1
+      elseif c == 125 or c == 93 then
+        if hondo == 0 then
+          return c
+        endif
+        hondo := hondo - 1
+        r.pos := r.pos + 1
+      elseif c == 44 and hondo == 0 then
+        return c
+      else
+        r.pos := r.pos + 1
+      endif
+    endwh
+    return -1
+  end sincronizaOn
+
+  // V8 #725 — el final de la recuperación de un array (cierre ']') u objeto ('}'): si se paró en una ',', sigue con el
+  // elemento siguiente (false); en su cierre, lo consume y se acabó (true); en otro cierre (el de uno de fuera) o en el
+  // final del texto, éste se queda sin cerrar: lo apunta y se acabó (true).
+  public function cierraOn(r: JsonReader, cierre: integer): boolean
+    var s: integer := sincronizaOn(r)
+    if s == 44 then
+      r.pos := r.pos + 1
+      r.skipWs()
+      return false
+    endif
+    if s == cierre then
+      r.pos := r.pos + 1
+      return true
+    endif
+    r.apunta(r.nuevoError(r.pos, "se esperaba '" + caracterJson(cierre) + "'"))
+    return true
+  end cierraOn
+
   public function parseStringLitOn(r: JsonReader): string
+    var inicio: integer := r.pos        // V8 #725: la comilla de apertura (una cadena sin cerrar se dice ahí)
     r.expect(34)
     var sb: StringBuilder := StringBuilder()
     var done: boolean := false
     while not done do
       if r.pos >= r.len then
-        throw RuntimeError("JSON: string sin cerrar")
+        r.error(inicio, "cadena sin cerrar")
       endif
       var c: integer := charCodeAt(r.text, r.pos)
       r.pos := r.pos + 1
       if c == 34 then
         done := true
       elseif c == 92 then
+        var donde: integer := r.pos - 1   // la barra del escape
         var esc: integer := r.advance()
         if esc == 34 then
           sb.appendChar(34)
@@ -620,37 +819,29 @@ module Json
         elseif esc == 116 then
           sb.appendChar(9)
         elseif esc == 117 then
-          var u: integer := 0
-          var k: integer := 0
-          while k < 4 do
-            u := u * 16 + parseHexDigitOn(r)
-            k := k + 1
-          endwh
-          // V8/H5 (#711): un carácter por encima de FFFF va en JSON como DOS \u, un par de sustitutos (el alto,
-          // D800..DBFF, y el bajo, DC00..DFFF: RFC 8259 §7). Se juntan en uno. Uno suelto no es un carácter
-          // (appendChar daría EncodingError): es un error de JSON, con su posición, como los demás.
+          var u: integer := hex4On(r)
+          if u < 0 then
+            cadenaMalaOn(r, donde, "escape en u con un dígito que no es hexadecimal")
+          endif
+          // V8/H5 (#711): un carácter por encima de FFFF va en JSON como DOS escapes en u, un par de sustitutos (el
+          // alto, D800..DBFF, y el bajo, DC00..DFFF: RFC 8259 §7). Se juntan en uno. Uno suelto no es un carácter
+          // (appendChar daría EncodingError): es un error de JSON, con su sitio, como los demás.
           if u >= 55296 and u <= 57343 then              // D800..DFFF
-            var donde: integer := r.pos - 6               // la barra del \u
             var bajo: integer := -1
             if u <= 56319 and r.peek() == 92 then         // un alto (..DBFF) y detrás una barra
               r.advance()
               if r.advance() == 117 then                  // 'u'
-                bajo := 0
-                k := 0
-                while k < 4 do
-                  bajo := bajo * 16 + parseHexDigitOn(r)
-                  k := k + 1
-                endwh
+                bajo := hex4On(r)
               endif
             endif
             if bajo < 56320 or bajo > 57343 then          // DC00..DFFF
-              throw RuntimeError("JSON: sustituto UTF-16 sin su pareja en pos " + intToString(donde))
+              cadenaMalaOn(r, donde, "sustituto UTF-16 sin su pareja")
             endif
             u := 65536 + (u - 55296) * 1024 + (bajo - 56320)
           endif
           sb.appendChar(u)
         else
-          throw RuntimeError("JSON: secuencia de escape inválida en pos " + intToString(r.pos - 1))
+          cadenaMalaOn(r, donde, "escape no válido")
         endif
       else
         sb.appendChar(c)
@@ -663,11 +854,13 @@ module Json
     var startPos: integer := r.pos
     var isF: boolean := false
     var sawDigit: boolean := false
+    var cifras: integer := 0          // V8 #725: las de la parte entera (con 9 o menos, parseInt no puede fallar)
     if r.peek() == 45 then
       r.pos := r.pos + 1
     endif
     while r.pos < r.len and isDigitCode(charCodeAt(r.text, r.pos)) do
       sawDigit := true
+      cifras := cifras + 1
       r.pos := r.pos + 1
     endwh
     if r.peek() == 46 then
@@ -697,14 +890,34 @@ module Json
     // divergía entre VMs (miVM lanzaba, VM-C devolvía 0 mudo) → rompía la
     // paridad y aceptaba JSON inválido en placa. Falla limpio en AMBAS.
     if not sawDigit then
-      throw RuntimeError("JSON: se esperaba un valor en pos " + intToString(startPos))
+      r.error(startPos, "se esperaba un valor")
     endif
     var numStr: string := substring(r.text, startPos, r.pos)
-    if isF then
-      return JsonFloat(parseFloat(numStr))
+    if isF or cifras >= 10 then
+      return numeroJsonOn(r, numStr, startPos, isF)   // puede no valer: con su try
     endif
-    return JsonInt(parseInt(numStr))
+    return JsonInt(parseInt(numStr))                   // [-] y hasta 9 cifras: siempre cabe (sin try: es lo común)
   end parseNumberOn
+
+  // V8 #716/#725 — un número que parseInt o parseFloat pueden rechazar (un decimal, o un entero de 10 cifras o más): lo
+  // que rechacen (un exponente sin cifras, lo que no cabe) es un error de JSON más, con su sitio y su texto. Lo demás
+  // (sin memoria), tal cual.
+  public function numeroJsonOn(r: JsonReader, numStr: string, startPos: integer, isF: boolean): JsonValue
+    var v: JsonValue := JsonNull()
+    try
+      if isF then
+        v := JsonFloat(parseFloat(numStr))
+      else
+        v := JsonInt(parseInt(numStr))
+      endif
+    catch e: RuntimeError
+      if startsWith(e.msg, "parseInt: ") or startsWith(e.msg, "parseFloat: ") then
+        r.error(startPos, substring(e.msg, indexOf(e.msg, " ") + 1, strlen(e.msg)))
+      endif
+      throw e
+    endtry
+    return v
+  end numeroJsonOn
 
   public function parseArrayOn(r: JsonReader): JsonValue
     r.expect(91)
@@ -716,19 +929,28 @@ module Json
     endif
     var done: boolean := false
     while not done do
-      var v: JsonValue := parseValueOn(r)
-      arr.add(v)
-      r.skipWs()
-      var c: integer := r.peek()
-      if c == 44 then
-        r.pos := r.pos + 1
+      try
+        var v: JsonValue := parseValueOn(r)
+        arr.add(v)
         r.skipWs()
-      elseif c == 93 then
-        r.pos := r.pos + 1
-        done := true
-      else
-        throw RuntimeError("JSON: ',' o ']' esperado en pos " + intToString(r.pos))
-      endif
+        var c: integer := r.peek()
+        if c == 44 then
+          r.pos := r.pos + 1
+          r.skipWs()
+        elseif c == 93 then
+          r.pos := r.pos + 1
+          done := true
+        elseif empiezaValor(c) then
+          // V8 #725: falta la coma, y lo que viene es otro elemento: se apunta y se sigue con él, como un compilador
+          // (si no, saltar hasta la coma siguiente se llevaba ese elemento, con los errores que tuviera dentro)
+          r.apunta(r.nuevoError(r.pos, "se esperaba ',' o ']'"))
+        else
+          r.error(r.pos, "se esperaba ',' o ']'")
+        endif
+      catch e: JsonError
+        r.apunta(e)                   // V8 #725: se apunta y se sigue (al décimo, se para)
+        done := cierraOn(r, 93)
+      endtry
     endwh
     return arr
   end parseArrayOn
@@ -743,22 +965,36 @@ module Json
     endif
     var done: boolean := false
     while not done do
-      r.skipWs()
-      var key: string := parseStringLitOn(r)
-      r.skipWs()
-      r.expect(58)
-      var v: JsonValue := parseValueOn(r)
-      obj.put(key, v)
-      r.skipWs()
-      var c: integer := r.peek()
-      if c == 44 then
+      try
+        r.skipWs()
+        if r.peek() != 34 then
+          r.error(r.pos, "se esperaba una clave entre comillas")
+        endif
+        var key: string := parseStringLitOn(r)
+        r.skipWs()
+        if r.peek() != 58 then
+          r.error(r.pos, "se esperaba ':'")
+        endif
         r.pos := r.pos + 1
-      elseif c == 125 then
-        r.pos := r.pos + 1
-        done := true
-      else
-        throw RuntimeError("JSON: ',' o '}' esperado en pos " + intToString(r.pos))
-      endif
+        var v: JsonValue := parseValueOn(r)
+        obj.put(key, v)
+        r.skipWs()
+        var c: integer := r.peek()
+        if c == 44 then
+          r.pos := r.pos + 1
+        elseif c == 125 then
+          r.pos := r.pos + 1
+          done := true
+        elseif c == 34 then
+          // V8 #725: falta la coma, y lo que viene es otra clave: se apunta y se sigue con ella, como un compilador
+          r.apunta(r.nuevoError(r.pos, "se esperaba ',' o '}'"))
+        else
+          r.error(r.pos, "se esperaba ',' o '}'")
+        endif
+      catch e: JsonError
+        r.apunta(e)                   // V8 #725: se apunta y se sigue (al décimo, se para)
+        done := cierraOn(r, 125)
+      endtry
     endwh
     return obj
   end parseObjectOn
@@ -769,11 +1005,20 @@ module Json
 
   public function parseJson(text: string): JsonValue
     var r: JsonReader := JsonReader(text)
-    r.skipWs()
-    var v: JsonValue := parseValueOn(r)
-    r.skipWs()
-    if r.pos < r.len then
-      throw RuntimeError("JSON: contenido extra tras el valor raíz en pos " + intToString(r.pos))
+    var v: JsonValue := JsonNull()
+    try
+      r.skipWs()
+      v := parseValueOn(r)
+      r.skipWs()
+      if r.pos < r.len then
+        r.error(r.pos, "sobra texto tras el valor")
+      endif
+    catch e: JsonError
+      r.apunta(e)
+    endtry
+    // V8 #725: con algún error, todos de una vez (diez como mucho)
+    if r.hayErrores() then
+      throw r.agregado()
     endif
     return v
   end parseJson

@@ -86,7 +86,16 @@
 >     texto. `ParseNumero` (51 casos), en el corpus.
 > - **Dos ideas de Eduardo, a fichas:** `#725`, que `parseJson` siga tras un error y los devuelva todos (*«Para devolver
 >   una excepción con varios errores en Java me cree una excepción a la que podías añadir una lista de excepciones como
->   causa»*), por analizar; y `#726`, la red en paralelo (*«es una mejora pero puede esperar»*).
+>   causa»*); y `#726`, la red en paralelo (*«es una mejora pero puede esperar»*).
+> - **`#725`, hecha el mismo día** (Eduardo: *«Despues de un error debe intentar recuperarse como un compilador»*, un
+>   máximo de 10; la excepción, en `Json`): `JsonError` (con línea y columna) y `AggregateError` (con la lista); la
+>   recuperación por array u objeto, con la coma que falta y la cascada como un compilador; `JsonErrores` en el corpus.
+>   Medido: +3 % con JSON válido (+8 % con un `try` en cada número: sólo lo llevan los que pueden fallar).
+> - **La red de `#725`, con la hora en cada línea: 22:51 min**, no los 45 que yo decía (para `#726`). Por frentes: las
+>   tres pasadas del corpus, 3:34 + 3:35 + 3:42; las pruebas de C, 8:52 (`test-cola` 3:15 y `test-nat2runs` 1:21); la
+>   cápsula 0:59, el sim 1:19, el estrés 0:24 y lo demás, segundos. Todo verde salvo `test-tablasim`: **`#727`**, la
+>   prueba y no la VM —su caso 4 da un byte menos que la línea base y espera que algo se pierda; con el `Json.mod` nuevo,
+>   lo último que pide la carga es el array de registros, que crece ×1,5 (`#639`) y cabe todo—.
 > - **Dos trampas mías:**
 >   - cambié `compat.sh` con una pasada de la paridad en marcha. Bash lee el script según avanza, y al acabar tropezó
 >     con el texto desplazado (un error de sintaxis en la última línea). Las salidas ya estaban guardadas; la red,

@@ -7075,6 +7075,23 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   - la cabecera de `bpstdlib/Str.bp` dice que la VM-C no tiene `indexOf`, `upper`, `lower` ni `trim`, y los tiene;
   - un comentario de `bpvm_handles.h` habla de memoria «<256KB (0x40000)» donde el bit es el 30 (1 GiB);
   - y, sin comprobar: `heap_start` (el fin del último módulo + 64) podría no ir alineado a 4.
+- **`Json` (`#725`, 23-oct).** El manual no tiene la librería `Json`; cuando la tenga: `parseJson` sigue tras un
+  error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
+  `AggregateError`, con la lista. Los dos son `RuntimeError`.
+
+#### 🔵 `#727` — `test-tablasim` (`#639`), caso 4: con un byte menos que la línea base espera que algo no entre; pero si lo último que pide la carga es el array de registros, crece menos y cabe todo (abierta el 23-oct, al pasar la red de `#725`)
+
+Con el `Json.mod` de `#725`, el caso 4 dice «la carga sigue (OK, 0 sin registrar) y el programa corre», y la prueba lo
+da por malo: espera que algo se pierda. **La VM hace lo que dice `#639`; la que no acierta es la prueba.** Las cuentas,
+exactas: la carga pide 5 trozos de nombres de 2 048 B, el array de registros de 8 B al crecer (32, 64, 128, 256 y 512:
+7 936 B) y la lista de trozos (64 B): 18 240 B. Lo último que pide es el array, al pasar de 256 a 512 (4 096 B); con un
+byte menos el doble no cabe, crece ×1,5 (3 072 B) y caben los 284 símbolos. Con el `Json.mod` de antes (257 símbolos,
+12 096 B), lo último era un trozo de 2 KB, que no tiene «menos», y se perdían 64. La prueba depende de la forma de la
+stdlib, justo lo que su cabecera quería evitar (*«los límites salen de la línea base: la stdlib crece»*).
+
+Lo propuesto: el caso 4 busca el presupuesto con el que algo no entra —desde la línea base menos un byte, bajando de
+64 en 64— y comprueba lo de siempre: la carga sigue, y el programa corre o el enlace dice la causa. Unas pocas cargas
+más, de milisegundos. Sólo cambia la prueba.
 
 #### 🔵 `#726` — la red (`compat.sh check`) va de una en una y tarda unos 45 minutos; con 20 núcleos se podría repartir (abierta el 23-oct; Eduardo: *«la red en paralelo es una mejora pero puede esperar»*)
 
@@ -7088,7 +7105,7 @@ Eduardo: *«la red de pruebas no se podría hacer en paralelo para ahorrar tiemp
 Lo propuesto: medir primero cada frente (un tiempo por frente en `compat.sh`), repartir las pasadas del corpus, medir
 otra vez, y luego las pruebas de C. A ojo, de unos 45 minutos a 10-15; lo dirá la medida.
 
-#### 🔵 `#725` — `Json.parseJson` se para en el primer error: con un fichero con diez, se arreglan de uno en uno (abierta el 23-oct, una idea de Eduardo; por analizar)
+#### ✅ `#725` — `Json.parseJson` se para en el primer error: con un fichero con diez, se arreglan de uno en uno (abierta el 23-oct, una idea de Eduardo; **CERRADA el mismo día**: sigue tras cada error, como un compilador, y los da todos, diez como mucho)
 
 Eduardo, al decidir `#716`: *«A ver para ParseJson, lo ideal es que si encuentra un error continue parseando y devuelva
 varios errores al final. Lo digo porque si tienes un fichero Json y el parseador tiene 10 errores y los localiza 1 a 1
@@ -7097,6 +7114,34 @@ una lista de excepciones como causa.»* Por analizar: cómo sigue el analizador 
 cierre del nivel en el que está), cuántos errores junta, y la excepción con la lista de causas (en `Core`, para
 cualquiera, o en `Json`). Y `#716` lo toca: con su regla, un entero de más de 32 bits en un JSON será un error (hasta
 ahora, un número equivocado sin avisar).
+
+**Decidido** (Eduardo, 23-oct): *«Despues de un error debe intentar recuperarse como un compilador. El número de errore,
+yo pondría un límite de 10 como máximo, si hay mas hasta que no arregle los primero el resto no se ven y aborta,
+lanzando la excepción»*; *«La excepción con lista la puedes declarar donde se declara el parser de Json. Si alguien la
+quiere utilizar puede importar la librería o copiar el código»*; y *«Todo las demás decisiones de #725 está OK»* (cada
+error con su línea y su columna; un entero que no cabe, un error más de la lista).
+
+**HECHO el mismo día**, en `bpstdlib/Json.bp` (BP: lo mismo en las dos VMs):
+- **`JsonError extends RuntimeError`**, con `line` y `column`: «línea 5, columna 8: '99999999999' no cabe en un
+  integer»; y **`AggregateError extends RuntimeError`**, con su lista `errors`: su `msg` los dice todos, uno por línea
+  («JSON: 3 errores:» y debajo cada uno; con uno solo, «JSON: línea 1, columna 6: se esperaba ':'»). Quien ya atrapaba
+  `RuntimeError` la atrapa también;
+- **la recuperación**, en cada array u objeto: el error se apunta, y se salta hasta la siguiente `,` de su nivel o un
+  cierre, sin contar lo que haya dentro de cadenas ni de lo anidado (`sincronizaOn`). Un cierre que no es el suyo (el
+  de uno de fuera) o el final del texto lo dejan sin cerrar, y se apunta. Dos detalles de compilador: **si falta una
+  coma** y lo que viene empieza otro elemento, se apunta y se sigue con él (si no, el salto se llevaba ese elemento
+  con sus errores); y **la cascada**: un error en el mismo sitio que el anterior no se apunta. Un error dentro de una
+  cadena salta antes hasta su comilla de cierre. `expect` ya no consume el carácter que no era (si no, el cierre que
+  estaba en su sitio se perdía);
+- **el límite**: al décimo, se para y lanza esos diez, y lo dice («JSON: 10 errores, los primeros (puede haber más:
+  se para en el décimo)»);
+- **los números** (`#716`): lo que `parseInt` o `parseFloat` rechazan es un error más, con su sitio. Sólo los decimales
+  y los enteros de 10 cifras o más pasan por un `try`: un entero de JSON de hasta 9 cifras siempre cabe. Medido en el
+  PC, con 37 KB de JSON válido: +8 % con un `try` en cada número, +3 % así.
+
+Lo prueba `bpgenvm-c/samples/JsonErrores.bp` (en el corpus): 13 comprobaciones con los mensajes calculados a mano (uno,
+tres en una línea, varias líneas con una coma doble y un entero que no cabe, sin cerrar, las comas que faltan, dentro
+de las cadenas, lo que sobra, doce que se quedan en diez, la lista con su línea y columna, y como `RuntimeError`).
 
 #### 🔵 `#724` — el texto que trae un pack (SQLite) entra sin descodificar: `string_from_cstr` no mira el UTF-8, y el pegamento que escribe el compilador lo corta en 512 bytes, a veces a medio carácter y sin avisar (abierta el 23-oct, al hacer `#711`)
 
