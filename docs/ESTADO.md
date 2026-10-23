@@ -28,7 +28,9 @@
 ## Última sesión
 
 > **23-oct** — **El H5: `#714` hecha, las cadenas nacen de SOLO LECTURA** (Eduardo: *«Continuamos con #711 y #714»*;
-> *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.**
+> *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.** **Después, los
+> pendientes, cerrados por la cascada: `#711`, `#705`, `#712`, `#716`, `#717`, `#725`, `#727` y `#726` (la red, en tres
+> grupos a la vez: 11:37 en vez de 22:51).**
 > - **Primero, el algoritmo** de `#714` y del descodificador de `#711`, escrito en `V8_IDEAS` §E5 (`e38f1f57`).
 > - **`#714`, por la cascada** (Eduardo: *«OK, #714»*):
 >   - en las dos VMs, el bit 20 de la etiqueta (`SOLO_LECTURA`) se pone al nacer cada cadena, en una sola función por
@@ -116,7 +118,18 @@
 >   y un `/app/Json.mod` nuevo que tapa al `/lib/Json.mod` de antes (al mandarles la stdlib nueva, sobra). La P4, sin tocar.
 > - **Riesgo a vigilar:** lo compilado desde hoy llama a los builtins 283 (en cada suma de cadenas) y 284–286, la stdlib
 >   incluida. Una placa con la imagen de antes (la P4, las ESP32, la STM32) no los tiene: hay que grabarla antes de
->   mandarle la stdlib o programas nuevos.
+>   mandarle la stdlib o programas nuevos. Y la Metro y la Pico 2 llevan la imagen de `#711`: lo de la VM-C de `#712`,
+>   `#705`, `#716` y `#717` sólo está en el PC, y su `/app/Json.mod` es el de antes de `#725`.
+>
+> Al parar (Eduardo: *«OK, hacemos una pausa. Gran trabajo»*), todo con commit y sin nada corriendo. **Traspaso** —lo
+> siguiente, propuesto a Eduardo y sin su respuesta todavía—:
+> - **`#699`**, el más serio de lo abierto: el `continue` de un `do … loop c` no mira la condición y el AOT sí, así que
+>   hacer `native` una función le cambia el resultado. El arreglo, el de `#548` para el `for` (una etiqueta justo antes
+>   de la condición), con un sample que distinga las dos reglas; falta el OK de Eduardo. Después, `#701`, `#702` y
+>   `#704`: los cuatro, bugs de BP de antes, salidos con JC, y todo en el PC.
+> - **Las placas, en un lote:** la Metro y la Pico 2 con la imagen de hoy (y la stdlib nueva, quitando el
+>   `/app/Json.mod` que tapa al de `/lib`); la P4, las ESP32 y la STM32 con los builtins 283–286.
+> - **La red** es ya la de tres grupos: `compat.sh check`, unos 12 minutos; `check-serie`, la de antes, de una en una.
 
 > **22-oct** — **El H5: el código caliente en la SRAM, medido en la Metro** (Eduardo: *«El punto 1 solo para la
 > metro. Para la Pico ya veremos, 45K de RAM en la pico son muchos. De momento haces las pruebas en la metro.»*).
