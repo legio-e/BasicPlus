@@ -129,8 +129,8 @@ lines
 1586 0
 1603 0
 1624 0
-1678 0
-1778 0
+1681 0
+1784 0
 vars
 func File.leerLinea 35
 this -20 8 0 ?
@@ -277,7 +277,7 @@ la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 d 16 4 0 ?
-func __strconcat5 1678
+func __strconcat5 1681
 s0 -52 8 0 ?
 s1 -44 8 0 ?
 s2 -36 8 0 ?
@@ -285,7 +285,7 @@ s3 -28 8 0 ?
 s4 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strequals 1778
+func __strequals 1784
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

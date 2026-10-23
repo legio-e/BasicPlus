@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **282** (0–281). Cada builtin tiene:
+id—. Hoy son **284** (0–283). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -177,7 +177,7 @@ Convención general:
 
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
-| 55 | `move` | `(src, dst, srcStart, dstStart, count)` | `void` | Copia `count` elementos (1, 2, 4 u 8 B cada uno según el array: `byte[]`, `integer[]`, `long[]`/`double[]`, referencias). Soporta overlapping en el mismo array. RTErr si: src/dst null o no son arrays; tipos distintos (i8/i16/i32/i64/ref); count negativo; offset negativo; rangos fuera de length — en ese orden y con los mismos textos en las dos VMs (`#535`, V7: la VM-C no comprobaba nada y copiaba 4 B por elemento; miVM rechazaba `long[]`/`double[]`). Paridad: `samples/MoveRango.bp`. |
+| 55 | `move` | `(src, dst, srcStart, dstStart, count)` | `void` | Copia `count` elementos (1, 2, 4 u 8 B cada uno según el array: `byte[]`, `integer[]`, `long[]`/`double[]`, referencias). Soporta overlapping en el mismo array. RTErr si: src/dst null o no son arrays; dst de solo lectura (una cadena, `#714`, V8: `move: dst es de solo lectura`); tipos distintos (i8/i16/i32/i64/ref); count negativo; offset negativo; rangos fuera de length — en ese orden y con los mismos textos en las dos VMs (`#535`, V7: la VM-C no comprobaba nada y copiaba 4 B por elemento; miVM rechazaba `long[]`/`double[]`). Leer de una cadena (como `src`) sí se puede. Paridad: `samples/MoveRango.bp` y `bpgenvm-c/samples/MoveSoloLectura.bp`. |
 
 ## 56..63 — Math intrínsecos (vía `import Math`)
 
@@ -271,7 +271,7 @@ trabajo de **H10**.
 Lo de arriba es la historia de GAP-1 (junio). Desde entonces se portó casi todo — los
 float con el formateador canónico GAP-4 (L13) y los string por codepoint — y el FS del
 device es littlefs (V4/H2), así que «IO filesystem host-only» dejó de ser verdad. Medido
-contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 282 entradas; en V6, 240):
+contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 284 entradas; en V6, 240):
 
 | Clase | Builtins | En VM-C |
 |---|---|---|
@@ -569,6 +569,20 @@ No lo escribe nadie a mano. En `Core` va sin `public`, para no cambiar su interf
 
 Antes, `==` comparaba byte a byte en bytecode (17 instrucciones por byte), y `<` entre cadenas descuadraba la pila. Las
 pruebas: `bpgenvm-c/samples/StrOrden.bp` (la red de paridad) y `make test-aotcompara` (el AOT contra el intérprete).
+
+## 283 — `__strNace(b: byte[])` → string — la cadena nace en su sitio  *(V8/H5, `#714`, 23-oct)*
+
+Convierte en cadena el `byte[]` que recibe, **en su sitio y sin copiarlo**: le pone el bit de solo lectura
+(`HEAP_LAYOUT.md` §2.1) y devuelve la misma referencia. El bit ASCII no lo toca: ya lo dejó `__strCopy` al llenar el
+array. RTErr (sólo por un mal uso interno): `strNace: es null`, `strNace: no es ref a heap` y `strNace: no es un array de
+bytes`, con los mismos textos en las dos VMs.
+
+No lo escribe nadie a mano. En `Core` va sin `public`: un programa que guardara el `byte[]` podría seguir escribiéndole
+después (las escrituras `b[i] := x` no miran el bit). Lo usan los `__strconcat` y `__strconcatN` que escribe el
+compilador en cada módulo, al final, con el array que acaban de llenar. Un `.mod` anterior no lo lleva: sus sumas siguen
+sin marcar. (El `StringBuilder` no lo puede usar: una clase sólo ve lo público de su módulo; su `toString` sigue con
+`fromBytes`, que copia y marca.) La prueba: `bpgenvm-c/samples/MoveSoloLectura.bp` (la red de paridad), con una cadena
+de cada origen.
 
 ---
 

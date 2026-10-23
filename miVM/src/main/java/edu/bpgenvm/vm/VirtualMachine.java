@@ -810,6 +810,9 @@ public class VirtualMachine {
     // el lento, el de siempre. `move` lo quita del destino. La compactación lo conserva (sólo usa los bits 31 y 23).
     // Espejo de BPVM_TAG_ASCII (VM-C). V8_IDEAS §E5, «Dos algoritmos».
     private static final int TAG_ASCII_BIT = 0x00200000;
+    // V8/H5 (23-oct, #714) — SOLO LECTURA: lo pone el nacimiento de cada cadena (strNace y el builtin __strNace) y lo
+    // mira `move` en su destino. Espejo de BPVM_TAG_SOLO_LECTURA (VM-C). V8_IDEAS §E5, «#714 y #711: el algoritmo».
+    private static final int TAG_SOLO_LECTURA_BIT = 0x00100000;
 
     // Tipos almacenables en heap
     private static final int TYPE_ARRAY_I8  = 0;
@@ -4901,11 +4904,12 @@ public class VirtualMachine {
         return bytesAscii(memory, a + 4, readInt32(a));
     }
 
-    /** Quien acaba de CREAR la cadena del heap `ref` le pone (o le quita) el bit, por los bytes que tiene de verdad. */
-    private void strFijaAscii(long ref, boolean ascii) {
+    /** La cadena del heap `ref` acaba de NACER: su bit ASCII (por los bytes que tiene de verdad) y, desde #714, el de
+     *  SOLO LECTURA. Sólo para quien la acaba de crear: `move` y `__strCopy` tocan la etiqueta por su cuenta. */
+    private void strNace(long ref, boolean ascii) {
         int a = refDeref(ref);
         if (a - 4 < heapStart) return;   // no es un bloque del heap
-        int tag = readInt32(a - 4);
+        int tag = readInt32(a - 4) | TAG_SOLO_LECTURA_BIT;
         writeInt32(a - 4, ascii ? (tag | TAG_ASCII_BIT) : (tag & ~TAG_ASCII_BIT));
     }
 
@@ -4942,7 +4946,7 @@ public class VirtualMachine {
     private long allocVmStrBytes(byte[] src, int off, int n, boolean ascii) {
         long h = heapNuevo(TYPE_ARRAY_I8, n, n);
         if (n > 0) System.arraycopy(src, off, memory, refDeref(h) + 4, n);
-        strFijaAscii(h, ascii);
+        strNace(h, ascii);
         ThreadContext me = currentTcLocal.get();
         if (me != null) me.allocAnchor = (int) h;   // como allocVmString: el GC la ve hasta que se apile
         return h;
@@ -4954,7 +4958,7 @@ public class VirtualMachine {
         int len = utf8.length;
         long h = heapNuevo(TYPE_ARRAY_I8, len, len);   // V7/H7 #593: el handle 64b, con la cabecera entera
         System.arraycopy(utf8, 0, memory, refDeref(h) + 4, len);
-        strFijaAscii(h, bytesAscii(utf8, 0, len));   // V8/H5: el bit, por los bytes que lleva
+        strNace(h, bytesAscii(utf8, 0, len));   // V8/H5: el bit, por los bytes que lleva (y #714: de solo lectura)
         // B1 residual — el caller llama a allocVmString desde dispatchBuiltin
         // SIN vmLock, así que entre `return h` y el `pushTc(tc, h)` un GC
         // de otro worker podría liberar `h` (no hay raíz aún). Anclamos
@@ -5521,6 +5525,25 @@ public class VirtualMachine {
                 pushTc(tc, Integer.signum(r));
                 break;
             }
+            case STR_NACE: {
+                // V8/H5 (23-oct, #714) — LA CADENA NACE en el byte[] que se le da, en su sitio y sin copiar: el bloque
+                // queda de SOLO LECTURA. Lo usan el StringBuilder (toString) y los __strconcat que escribe el
+                // compilador, con un byte[] suyo que muere ahí (el bit ASCII ya lo dejó __strCopy). No es pública: un
+                // programa no la ve. Espejo del BUILTIN_STR_NACE de la VM-C, con los mismos textos.
+                long ref = popTcRef(tc);
+                if (ref == 0)
+                    throwBpRuntimeError(tc, "strNace: es null");
+                int a = refDeref(ref);
+                int cab = a - 4;
+                if (cab < heapStart || cab >= heapNext)
+                    throwBpRuntimeError(tc, "strNace: no es ref a heap");
+                int tag = readInt32(cab);
+                if ((tag & TAG_FREE_BIT) != 0 || ((tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) != TYPE_ARRAY_I8)
+                    throwBpRuntimeError(tc, "strNace: no es un array de bytes");
+                writeInt32(cab, tag | TAG_SOLO_LECTURA_BIT);
+                pushTcRef(tc, ref);
+                break;
+            }
             case CHAR_AT: {
                 int i = popTc(tc);
                 long ref = popTcRef(tc);
@@ -5860,7 +5883,7 @@ public class VirtualMachine {
                 if (len > 0 && linea[len - 1] == '\r') len--;
                 long h = heapNuevo(TYPE_ARRAY_I8, len, len);   // V7/H7 #593
                 System.arraycopy(linea, 0, memory, refDeref(h) + 4, len);
-                strFijaAscii(h, bytesAscii(linea, 0, len));   // V8/H5: la línea nace con su bit
+                strNace(h, bytesAscii(linea, 0, len));   // V8/H5: la línea nace con su bit (y #714: de solo lectura)
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) h;
                 pushTcRef(tc, h);
@@ -6041,7 +6064,7 @@ public class VirtualMachine {
                 long outRef = heapNuevo(TYPE_ARRAY_I8, n, n);   // V4: handle 64b COMPLETO (no truncar); V7/H7 #593
                 if (n > 0) System.arraycopy(memory, rd + 4, memory, refDeref(outRef) + 4, n);
                 if (b == Builtin.FROM_BYTES)   // V8/H5: la cadena nace con su bit (un byte[] no lo lleva nunca)
-                    strFijaAscii(outRef, bytesAscii(memory, refDeref(outRef) + 4, n));
+                    strNace(outRef, bytesAscii(memory, refDeref(outRef) + 4, n));
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG) que refDeref usa
                 pushTcRef(tc, outRef);
@@ -6262,6 +6285,10 @@ public class VirtualMachine {
                 if (dstType != TYPE_ARRAY_I8 && dstType != TYPE_ARRAY_I16 && dstType != TYPE_ARRAY_I32
                         && dstType != TYPE_ARRAY_I64 && dstType != TYPE_ARRAY_REF)
                     throwBpRuntimeError(tc, "move: dst no es un array (type=" + dstType + ")");
+                // V8/H5 (23-oct, #714) — una cadena es de SOLO LECTURA desde que nace (Eduardo: «Que un string es un
+                // invariante no se toca»): move no escribe en ella. Mismo texto que la VM-C.
+                if ((dstTag & TAG_SOLO_LECTURA_BIT) != 0)
+                    throwBpRuntimeError(tc, "move: dst es de solo lectura");
                 if (srcType != dstType)
                     throwBpRuntimeError(tc, "move: tipos de array distintos (src=" + srcType
                             + " dst=" + dstType + ")");

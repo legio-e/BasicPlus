@@ -127,8 +127,23 @@ Cada objeto en el heap ocupa `OBJ_HEADER_SIZE = 8 bytes` de cabecera
 bit 31  TAG_MARK_BIT      0x80000000   GC: objeto marcado vivo
 bit 30  TAG_FREE_BIT      0x40000000   bloque libre (tras GC)
 bit 29..24  TAG_TYPE      0x3F000000   tipo (6 bits, 0..63)
-bit 23..0   reservados                 (0 hoy; futuro: hash/size cache)
+bit 23  (CLAVADO)         0x00800000   sólo mientras se compacta (abajo)
+bit 22  (SOLTANDO)        0x00400000   sólo mientras se suelta un owner en la VM-C (abajo)
+bit 21  TAG_ASCII         0x00200000   una cadena «todo ASCII» (V8/H5, 21-oct)
+bit 20  TAG_SOLO_LECTURA  0x00100000   un bloque de solo lectura: todas las cadenas (V8/H5, #714, 23-oct)
+bit 19..0   reservados                 (0 hoy)
 ```
+
+**`TAG_ASCII` (bit 21)** — los dos algoritmos de las cadenas (`V8_IDEAS` §E5, «Dos algoritmos»): lo pone quien crea la
+cadena, por los bytes que escribe; 0 es «no se sabe, o no lo es», y va por el algoritmo lento, que siempre acierta.
+
+**`TAG_SOLO_LECTURA` (bit 20)** — una cadena es de solo lectura desde que nace (`#714`). Lo pone el nacimiento de cada
+cadena (`bpvm_str_nace` / `bpvm_str_nace_ascii` en la VM-C, `strNace` en miVM, y el builtin 283 `__strNace` que llaman
+los `__strconcat` del compilador) y lo mira `move` en su destino: `move: dst es de solo lectura`. Las escrituras
+`b[i] := x` no lo miran: un programa no puede llevar una cadena a un `byte[]`.
+
+Los dos bits los conserva la compactación, y una reserva nueva nace sin ellos: la etiqueta se escribe entera, sólo con
+el tipo. Un hueco reutilizado no hereda nada.
 
 Mientras dura `Heap.compact()` (§2.5), y sólo entonces, el bit 31 de una cabecera significa ENHEBRADO (la
 cabecera guarda un índice de la tabla de handles, no la etiqueta) y el bit 23, CLAVADO. Fuera de ahí valen 0.

@@ -1,10 +1,12 @@
 // StrDosCaminos.bp — V8/H5 (21-oct): los DOS ALGORITMOS de las cadenas dan lo mismo.
 //
-// Una cadena ASCII nace con el bit «todo ASCII» y va por el camino RÁPIDO (un carácter = un byte). La misma cadena con
-// el bit quitado va por el LENTO, el de siempre (contar el UTF-8). Aquí el bit se quita con `move`, que escribe dentro
-// —aunque sean los mismos bytes— y por eso lo quita. Cada función se pregunta por los dos caminos y las respuestas
-// tienen que ser IGUALES; al final, la cuenta. Y `move` con una `ñ` dentro: si el bit siguiera puesto, strlen diría 4.
-// Se comprueba ella misma, y va en el corpus de la paridad.
+// Una cadena ASCII nace con el bit «todo ASCII» y va por el camino RÁPIDO (un carácter = un byte). Con un carácter
+// especial va por el LENTO, el de siempre (contar el UTF-8). Cada función se pregunta por los dos caminos y las
+// respuestas tienen que ser IGUALES; al final, la cuenta. Se comprueba ella misma, y va en el corpus de la paridad.
+//
+// V8/H5 (23-oct, #714) — el camino lento ya no se fuerza con `move`: una cadena es de SOLO LECTURA desde que nace
+// (Eduardo: «Que un string es un invariante no se toca») y `move` la rechaza. Ahora la cadena lenta es la misma con una
+// `ñ` AL FINAL: sus caracteres siguen en los mismos sitios, y cada comparación cuenta con esa `ñ` de más.
 module StrDosCaminos
   import Core
 
@@ -21,52 +23,58 @@ module StrDosCaminos
     endif
   end igual
 
-  // la misma cadena, por el camino lento: `move` de sus propios bytes le quita el bit
+  // la misma cadena, por el camino lento: con una ñ al final ya no es ASCII (#714: move ya no le puede quitar el bit)
   function lenta(s: string): string
-    var t: string := fromBytes(toBytes(s))
-    if strlen(s) > 0 then
-      move(toBytes(s), t, 0, 0, __bytesDe(s))
-    endif
-    return t
+    return s + "ñ"
   end lenta
 
+  function minimo(a: integer, b: integer): integer
+    if a < b then
+      return a
+    endif
+    return b
+  end minimo
+
+  // l = r + "ñ": los caracteres de r en los mismos sitios, y la ñ en el n (n = strlen(r))
   function compara(etiqueta: string, base: string)
     var r: string := fromBytes(toBytes(base))
     var l: string := lenta(base)
+    var n: integer := strlen(r)
     print etiqueta + " [" + base + "]"
-    igual("strlen", intToString(strlen(r)), intToString(strlen(l)))
+    igual("strlen", intToString(n), intToString(strlen(l) - 1))
     var i: integer := 0
-    while i < strlen(r) do
+    while i < n do
       igual("charAt " + i, charAt(r, i), charAt(l, i))
       igual("charCodeAt " + i, intToString(charCodeAt(r, i)), intToString(charCodeAt(l, i)))
       i += 1
     endwh
-    igual("substring 1,3", substring(r, 1, 3), substring(l, 1, 3))
-    igual("substring -5,2", substring(r, -5, 2), substring(l, -5, 2))
-    igual("substring 2,99", substring(r, 2, 99), substring(l, 2, 99))
-    igual("substring 3,1", substring(r, 3, 1), substring(l, 3, 1))
+    // en la lenta, el final se corta en n: lo que la rápida recorta en su final
+    igual("substring 1,3", substring(r, 1, 3), substring(l, 1, minimo(3, n)))
+    igual("substring -5,2", substring(r, -5, 2), substring(l, -5, minimo(2, n)))
+    igual("substring 2,99", substring(r, 2, 99), substring(l, 2, minimo(99, n)))
+    igual("substring 3,1", substring(r, 3, 1), substring(l, 3, minimo(1, n)))
     igual("indexOf la", intToString(indexOf(r, "la")), intToString(indexOf(l, "la")))
     igual("indexOf vacía", intToString(indexOf(r, "")), intToString(indexOf(l, "")))
-    igual("indexOf ñ", intToString(indexOf(r, "ñ")), intToString(indexOf(l, "ñ")))
+    igual("indexOf ñ", intToString(n), intToString(indexOf(l, "ñ")))
     igual("indexOf larga", intToString(indexOf(r, base + "x")), intToString(indexOf(l, base + "x")))
     igual("contains o", boolToString(contains(r, "o")), boolToString(contains(l, "o")))
-    igual("contains ñ", boolToString(contains(r, "ñ")), boolToString(contains(l, "ñ")))
+    igual("contains ñ", "true", boolToString(contains(l, "ñ")))
     igual("startsWith h", boolToString(startsWith(r, "h")), boolToString(startsWith(l, "h")))
     igual("startsWith vacía", boolToString(startsWith(r, "")), boolToString(startsWith(l, "")))
-    igual("endsWith a", boolToString(endsWith(r, "a")), boolToString(endsWith(l, "a")))
-    igual("endsWith larga", boolToString(endsWith(r, "x" + base)), boolToString(endsWith(l, "x" + base)))
-    igual("upper", upper(r), upper(l))
-    igual("lower", lower(r), lower(l))
-    igual("trim", trim(r), trim(l))
-    igual("replace o", replace(r, "o", "0"), replace(l, "o", "0"))
-    igual("concat", r + "!" + l, l + "!" + r)
+    igual("endsWith a", boolToString(endsWith(r, "a")), boolToString(endsWith(l, "añ")))
+    igual("endsWith larga", boolToString(endsWith(r, "x" + base)), boolToString(endsWith(l, "x" + base + "ñ")))
+    igual("upper", upper(r) + "Ñ", upper(l))
+    igual("lower", lower(r) + "ñ", lower(l))
+    igual("replace o", replace(r, "o", "0") + "ñ", replace(l, "o", "0"))
+    igual("concat", r + "!" + r + "ñ", r + "!" + l)
     try
       print "  charAt 99: " + charAt(r, 99)
     catch e: RuntimeError
       try
         print "  charAt 99: " + charAt(l, 99)
       catch f: RuntimeError
-        igual("charAt 99, el error", e.msg, f.msg)
+        // el texto lleva la longitud, y la lenta tiene un carácter más (la ñ)
+        igual("charAt 99, el error", e.msg, replace(f.msg, "len=" + intToString(n + 1), "len=" + intToString(n)))
       endtry
     endtry
   end compara
@@ -80,6 +88,8 @@ module StrDosCaminos
     // con caracteres especiales: los dos van por el lento; lo de siempre
     var acento: string := fromBytes(toBytes("canción año"))
     print "especiales [" + acento + "]: strlen " + intToString(strlen(acento)) + ", charAt 5 " + charAt(acento, 5) + ", indexOf año " + intToString(indexOf(acento, "año")) + ", upper " + upper(acento)
+    // trim por el lento (en compara la ñ del final le quitaría el sitio a los blancos)
+    print "trim lento [" + trim(" \t " + acento + " \n") + "]"
 
     // concatenar: ASCII + ASCII, ASCII + especial, y un trozo especial cortado que vuelve a ser ASCII
     var mezcla: string := fromBytes(toBytes("abc")) + "ñ" + fromBytes(toBytes("de"))
@@ -87,10 +97,14 @@ module StrDosCaminos
     var cola: string := substring(mezcla, 4, 6)
     print "cola [" + cola + "]: strlen " + intToString(strlen(cola)) + ", charCodeAt 1 " + intToString(charCodeAt(cola, 1))
 
-    // `move` mete una ñ (2 bytes) en una cadena ASCII: el bit tiene que irse
+    // `move` ya no mete una ñ en una cadena (#714): es de solo lectura, y la cadena se queda como estaba
     var m: string := fromBytes(toBytes("abcd"))
-    move(toBytes("ñ"), m, 0, 0, 2)
-    print "move con ñ [" + m + "]: strlen " + intToString(strlen(m)) + " (3, no 4), charAt 0 " + charAt(m, 0)
+    try
+      move(toBytes("ñ"), m, 0, 0, 2)
+      print "move con ñ: ESCRIBIO [" + m + "]"
+    catch em: RuntimeError
+      print "move con ñ: " + em.msg + " [" + m + "]: strlen " + intToString(strlen(m)) + ", charAt 0 " + charAt(m, 0)
+    endtry
 
     // un 0 dentro: un carácter más, por el rápido
     var nb: byte[] := newByteArray(3)

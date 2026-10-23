@@ -292,7 +292,8 @@ public enum Builtin {
     PULSE_RELEASE("__pulseRelease"),   // [279] __pulseRelease(counterId: integer, pin: integer)
     NP_RELEASE("__npRelease"),   // [280] __npRelease(pin: integer)
     UART_RELEASE("__uartRelease"),   // [281] __uartRelease(bus: integer, tx: integer, rx: integer)
-    STR_COMPARE("__strCompare");   // [282] __strCompare(a: string, b: string): integer
+    STR_COMPARE("__strCompare"),   // [282] __strCompare(a: string, b: string): integer
+    STR_NACE("__strNace");   // [283] __strNace(b: byte[]): string
 
     public final String bpName;
     public final int id;

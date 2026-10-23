@@ -27,6 +27,36 @@
 
 ## Última sesión
 
+> **23-oct** — **El H5: `#714` hecha, las cadenas nacen de SOLO LECTURA** (Eduardo: *«Continuamos con #711 y #714»*;
+> *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.**
+> - **Primero, el algoritmo** de `#714` y del descodificador de `#711`, escrito en `V8_IDEAS` §E5 (`e38f1f57`).
+> - **`#714`, por la cascada** (Eduardo: *«OK, #714»*):
+>   - en las dos VMs, el bit 20 de la etiqueta (`SOLO_LECTURA`) se pone al nacer cada cadena, en una sola función por
+>     VM, y `move` lo mira. `readFile`, en la VM-C, ya nace por ahí. La suma se marca con un builtin interno nuevo, el
+>     283 (`__strNace`), al final de los ayudantes del compilador;
+>   - lo que no salió como estaba escrito: el `StringBuilder` no puede llamar a `__strNace` (una clase sólo ve lo público
+>     de su módulo), y se queda con `fromBytes`;
+>   - `MoveSoloLectura`, nueva y en el corpus. `StrDosCaminos`, adaptada: forzaba el camino lento con `move`;
+>   - regenerados la stdlib (17 `.mod`, 3 bytes más por ayudante), la embebida de las tres familias y
+>     `packs/Stdlib.pack`; el IDE, rehecho;
+>   - **la red, VERDE a la tercera.** La primera, con el host hecho con `LVGL=1`, se saltó la paridad y las pruebas de C:
+>     «7 frentes en ROJO» sin haber probado nada. La segunda cazó `StrDosCaminos`. La tercera, todo: paridad 156 en MOD9,
+>     MOD8 y dos workers, y pruebas de C 103/103;
+>   - **en placa:** la Metro (M) y la Pico 2 (P), grabadas con la imagen nueva. `MoveSoloLectura` y `StrDosCaminos`,
+>     igual que el PC.
+> - **Una trampa de la captura, no de la VM:** `python -I` no hace caso de `PYTHONIOENCODING`, y la salida redirigida
+>   de `wire_serie.py` sale en cp1252. Las líneas con acentos parecían distintas; con `-I -X utf8`, iguales.
+> - **La idea de Eduardo, los conjuntos** (*«añadir sets? De momento limitado a 31 elementos y representados por un
+>   uint32»*), sin empezar (`V8_IDEAS` §E6). Lo hablado:
+>   - un elemento es su máscara (una potencia de 2). `+` se escribe y se hace con `|`; `-` se escribe y se hace con `& ~`;
+>   - se declaran como el `enum`. Fuera de las llaves, el elemento lleva el nombre de su conjunto (*«1 ControlBits.bitOn»*);
+>   - por decidir: qué hace `ControlBits(registro)` con un bit no declarado, y cómo se imprime.
+> - **Las placas:** la Metro y la Pico 2, con la imagen del árbol (el CRC de cada una, comprobado con su `.elf`). Las dos
+>   tienen además `/app/MoveSoloLectura.mod` y `/app/StrDosCaminos.mod`. La P4, sin tocar.
+> - **Riesgo a vigilar:** lo compilado desde hoy llama al builtin 283 en cada suma de cadenas, la stdlib incluida. Una
+>   placa con la imagen de antes (la P4, las ESP32, la STM32) no lo tiene: hay que grabarla antes de mandarle la stdlib o
+>   programas nuevos.
+
 > **22-oct** — **El H5: el código caliente en la SRAM, medido en la Metro** (Eduardo: *«El punto 1 solo para la
 > metro. Para la Pico ya veremos, 45K de RAM en la pico son muchos. De momento haces las pruebas en la metro.»*).
 > - **Hecho:** dos imágenes de prueba que sólo cambian el script de enlace (una copia fuera del repositorio), grabadas

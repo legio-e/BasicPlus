@@ -84,6 +84,12 @@ typedef struct { uint64_t v; } bpref_t;
  * lento, el de siempre. `move` lo quita del destino. La compactación lo conserva (sólo usa ENHEBRADO y CLAVADO). Espejo
  * de TAG_ASCII_BIT (miVM). V8_IDEAS §E5, «Dos algoritmos». */
 #define BPVM_TAG_ASCII      0x00200000u
+/* V8/H5 (23-oct, #714) — SOLO LECTURA (Eduardo: «lo que necesitamos un bit que indique que es de solo lectura, y todos
+ * los strings son de solo lectura»). Lo pone el NACIMIENTO de cada cadena (bpvm_str_nace, bpvm_str_nace_ascii y el
+ * builtin __strNace de los __strconcat del compilador y del StringBuilder) y lo mira `move` en su destino: una cadena no
+ * cambia después de nacer. Como el ASCII, la compactación lo conserva y una reserva nueva nace sin él (la etiqueta se
+ * escribe entera, sólo con el tipo). Espejo de TAG_SOLO_LECTURA_BIT (miVM). V8_IDEAS §E5, «#714 y #711: el algoritmo». */
+#define BPVM_TAG_SOLO_LECTURA 0x00100000u
 
 /* Códigos de tipo de heap. */
 #define BPVM_TYPE_ARRAY_I8  0
@@ -1121,17 +1127,18 @@ static inline int bpvm_str_ascii(const bpvm_t* vm, uint32_t s) {
     return bpvm_bytes_ascii(vm->memory + s + 4u, bpvm_read_u32_be(vm->memory + s));
 }
 
-/* Quien acaba de CREAR la cadena del heap `s` le pone (o le quita) el bit. */
-static inline void bpvm_str_fija_ascii(bpvm_t* vm, uint32_t s, int ascii) {
+/* La cadena del heap `s` acaba de NACER, y quien la creó ya sabe si es ASCII: su bit ASCII, el que se diga, y (#714) el
+ * de SOLO LECTURA. Sólo para quien la acaba de crear: `move` y `__strCopy` tocan la etiqueta por su cuenta. */
+static inline void bpvm_str_nace_ascii(bpvm_t* vm, uint32_t s, int ascii) {
     if (s < vm->heap_start + 4u) return;   /* no es un bloque del heap */
-    uint32_t tag = bpvm_read_u32_be(vm->memory + s - 4u);
+    uint32_t tag = bpvm_read_u32_be(vm->memory + s - 4u) | BPVM_TAG_SOLO_LECTURA;
     bpvm_write_u32_be(vm->memory + s - 4u, ascii ? (tag | BPVM_TAG_ASCII) : (tag & ~BPVM_TAG_ASCII));
 }
 
-/* La cadena del heap `s` acaba de nacer con sus bytes ya escritos: su bit, por lo que lleva. */
+/* La cadena del heap `s` acaba de nacer con sus bytes ya escritos: su bit ASCII, por lo que lleva, y el de solo lectura. */
 static inline void bpvm_str_nace(bpvm_t* vm, uint32_t s) {
     if (s < vm->heap_start + 4u) return;
-    bpvm_str_fija_ascii(vm, s, bpvm_bytes_ascii(vm->memory + s + 4u, bpvm_read_u32_be(vm->memory + s)));
+    bpvm_str_nace_ascii(vm, s, bpvm_bytes_ascii(vm->memory + s + 4u, bpvm_read_u32_be(vm->memory + s)));
 }
 
 /* ---- H2 (V2): helpers UTF-8 sobre el payload de un string byte[] ----

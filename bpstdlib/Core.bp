@@ -1669,6 +1669,15 @@ module Core
   function __strCompare(a: string, b: string): integer   // Str.compare; <, <=, >, >= y == entre cadenas
     inline CALL_BUILTIN 282
   end __strCompare
+  // V8/H5 (23-oct, #714) — LA CADENA NACE en el byte[] que se le da, EN SU SITIO, sin copiar: el bloque queda de SOLO
+  // LECTURA (Eduardo: «lo que necesitamos un bit que indique que es de solo lectura, y todos los strings son de solo
+  // lectura») y desde ahí es una cadena. La usan los __strconcat que escribe el compilador, con el byte[] que acaban de
+  // llenar (llaman al builtin desde el bytecode). Sin `public`: un programa que guardara el byte[] podría seguir
+  // escribiéndole, y la interfaz de Core no cambia. (El StringBuilder no la puede llamar: una clase sólo ve lo público
+  // de su módulo. Sigue con fromBytes.) V8_IDEAS §E5, «#714 y #711: el algoritmo».
+  function __strNace(b: byte[]): string   // los __strconcat del compilador
+    inline CALL_BUILTIN 283
+  end __strNace
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

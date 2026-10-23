@@ -589,9 +589,9 @@ lines
 8501 0
 8504 835
 8522 0
-8576 0
-8640 0
-8758 0
+8579 0
+8646 0
+8767 0
 vars
 func JsonValue.isNull 35
 this -20 8 0 ?
@@ -1118,13 +1118,13 @@ la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 d 16 4 0 ?
-func __strconcat3 8576
+func __strconcat3 8579
 s0 -36 8 0 ?
 s1 -28 8 0 ?
 s2 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strconcat6 8640
+func __strconcat6 8646
 s0 -60 8 0 ?
 s1 -52 8 0 ?
 s2 -44 8 0 ?
@@ -1133,7 +1133,7 @@ s4 -28 8 0 ?
 s5 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strequals 8758
+func __strequals 8767
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

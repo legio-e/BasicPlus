@@ -1146,7 +1146,7 @@ int bpvm_prim_substring(bpvm_t* vm, bpvm_strcur_t* cur, bpref_t s, int32_t desde
     /* V8/H5: copiar es una copia de bytes en los dos caminos (Eduardo: «Copiar un string debería ser igual con caracteres
      * especiales»); lo que el lento hace distinto es situarse (contar caracteres), arriba. */
     if (len > 0u) memcpy(vm->memory + o + BPVM_ARR_DATA_OFF, vm->memory + a + BPVM_ARR_DATA_OFF + boff, len);
-    if (rapido) bpvm_str_fija_ascii(vm, o, 1);   /* un trozo de una cadena ASCII es ASCII */
+    if (rapido) bpvm_str_nace_ascii(vm, o, 1);   /* un trozo de una cadena ASCII es ASCII */
     else bpvm_str_nace(vm, o);                    /* uno de una cadena con especiales puede serlo: se mira */
     return 0;
 }
@@ -2063,6 +2063,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             }
         }
         cerrar_breves(vm, &ab, NULL);
+        /* V8/H5 (23-oct, #714) — readFile da una CADENA: nace (su bit ASCII y el de solo lectura), como las demás.
+         * readFileBytes da un byte[]: ése no. */
+        if (id == BUILTIN_READ_FILE) bpvm_str_nace(vm, bpref_deref(vm, refh));
         bpref_push(vm, tc, refh);
         return BPVM_OK;
     }
@@ -2621,7 +2624,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                     if (up ? (c >= 'a' && c <= 'z') : (c >= 'A' && c <= 'Z')) c = (uint8_t) (c ^ 0x20u);
                     vm->memory[out + 4 + i] = c;
                 }
-                bpvm_str_fija_ascii(vm, out, 1);
+                bpvm_str_nace_ascii(vm, out, 1);
             } else {
                 uint32_t i = 0, o = 0;
                 while (i < n) {
@@ -2665,7 +2668,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t out = bpref_deref(vm, outh);
         {   /* la reserva ya esta comprobada arriba */
             if (len > 0) memcpy(vm->memory + out + 4, bpref_arr_elem(vm, s, b, 1), len);   /* V8/H5: copia de bytes */
-            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) bpvm_str_fija_ascii(vm, out, 1);   /* V8/H5 */
+            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) bpvm_str_nace_ascii(vm, out, 1);   /* V8/H5 */
             else bpvm_str_nace(vm, out);
             out = (uint32_t) outh.v;
         }
@@ -2727,6 +2730,22 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (r == 0) r = (na < nb) ? -1 : (na > nb) ? 1 : 0;
         tc->sp -= 2 * BPVM_REF_SIZE;
         push_i32(vm, tc, (r < 0) ? -1 : (r > 0) ? 1 : 0);
+        return BPVM_OK;
+    }
+
+    case BUILTIN_STR_NACE: {
+        /* V8/H5 (23-oct, #714) — LA CADENA NACE en el byte[] que se le da, en su sitio y sin copiar: el bloque queda de
+         * SOLO LECTURA. Lo usan el StringBuilder (toString) y los __strconcat que escribe el compilador, con un byte[]
+         * suyo que muere ahí (el bit ASCII ya lo dejó __strCopy). No es pública: un programa no la ve. La referencia se
+         * queda en la pila: es el resultado. Espejo de STR_NACE de miVM, con los mismos textos. */
+        bpref_t r = peek_ref(vm, tc, 0);
+        if (bpref_is_null(r)) return builtin_throw(vm, tc, "strNace: es null");
+        uint32_t cab = bpref_deref(vm, r) - 4u;
+        if (cab < vm->heap_start || cab >= vm->heap_next) return builtin_throw(vm, tc, "strNace: no es ref a heap");
+        uint32_t tag = bpvm_read_u32_be(vm->memory + cab);
+        if ((tag & BPVM_TAG_FREE_BIT) || ((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT) != BPVM_TYPE_ARRAY_I8)
+            return builtin_throw(vm, tc, "strNace: no es un array de bytes");
+        bpvm_write_u32_be(vm->memory + cab, tag | BPVM_TAG_SOLO_LECTURA);
         return BPVM_OK;
     }
 
@@ -2856,7 +2875,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             if (psh.v == 0u) { tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, "No space in heap"); }
             uint32_t ps = bpref_deref(vm, psh);
             if (plen > 0) memcpy(vm->memory + ps + 4, bpref_arr_elem(vm, s, b, 1), plen);   /* V8/H5: copia de bytes */
-            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) bpvm_str_fija_ascii(vm, ps, 1);   /* V8/H5: trozo de ASCII */
+            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) bpvm_str_nace_ascii(vm, ps, 1);   /* V8/H5: trozo de ASCII */
             else bpvm_str_nace(vm, ps);
             bpref_store(vm, bpref_deref(vm, arrh) + BPVM_ARR_DATA_OFF + done * BPVM_REF_SIZE, psh);
             done++;
@@ -3810,6 +3829,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             snprintf(em, sizeof em, "move: dst no es un array (type=%d)", dt);
             return builtin_throw(vm, tc, em);
         }
+        /* V8/H5 (23-oct, #714) — una cadena es de SOLO LECTURA desde que nace (Eduardo: «Que un string es un invariante
+         * no se toca»): move no escribe en ella. Mismo texto que miVM. */
+        if (dtag & BPVM_TAG_SOLO_LECTURA) return builtin_throw(vm, tc, "move: dst es de solo lectura");
         if (st != dt) {
             snprintf(em, sizeof em, "move: tipos de array distintos (src=%d dst=%d)", st, dt);
             return builtin_throw(vm, tc, em);

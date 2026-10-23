@@ -1,0 +1,116 @@
+// MoveSoloLectura.bp — V8/H5 (23-oct, #714): UNA CADENA ES DE SOLO LECTURA DESDE QUE NACE.
+//
+// Eduardo: «Que un string es un invariante no se toca. Para trabajar con strings variables tenemos stringbuilder» y
+// «lo que necesitamos un bit que indique que es de solo lectura, y todos los strings son de solo lectura». `move`
+// escribía dentro de una cadena si cabía (sólo miraba los rangos, #535): la cambiaba, y con ella todas sus
+// referencias. Ahora la rechaza.
+//
+// Es también el test de la RELACIÓN DE CONFIANZA (Eduardo: «eso hay que verificarlo con algún test, por si acaso»):
+// una cadena de cada origen —cada sitio donde nace una— tiene que salir de solo lectura. Y `move` sigue escribiendo en
+// un byte[] y leyendo de una cadena, también tras compactar. Paridad: el mismo stdout en las dos VMs.
+module MoveSoloLectura
+  import IO
+  import Heap
+
+  var F: string := "ro714.txt"
+  var D: string := "ro714d"
+
+  // ¿Los bytes de `s` son los de `b`?
+  function igual(b: byte[], s: string): boolean
+    var t: byte[] := toBytes(s)
+    if len(t) != len(b) then
+      return false
+    endif
+    var i: integer := 0
+    while i < len(b) do
+      if t[i] != b[i] then
+        return false
+      endif
+      i := i + 1
+    endwh
+    return true
+  end igual
+
+  // move de "XY" sobre la cadena: tiene que fallar, y dejarla igual
+  function prueba(origen: string, s: string)
+    var antes: byte[] := toBytes(s)
+    var xy: byte[] := toBytes("XY")
+    try
+      move(xy, s, 0, 0, 2)
+      print origen + ": move ESCRIBIO en la cadena: " + s
+    catch e: Core.Exception
+      if igual(antes, s) then
+        print origen + ": " + e.msg + " (intacta)"
+      else
+        print origen + ": " + e.msg + " (CAMBIADA: " + s + ")"
+      endif
+    endtry
+  end prueba
+
+  function Main()
+    var a: string := "ho"
+    var b: string := "la"
+
+    // 1. una constante: no está en el heap (move ya la rechazaba)
+    prueba("constante", "hola")
+
+    // 2. los builtins que crean cadenas, y la suma
+    prueba("fromBytes", fromBytes(toBytes("hola")))
+    prueba("suma de dos", a + b)
+    prueba("suma de cinco", a + "-" + b + "-" + a)
+    prueba("suma con un numero", a + 12)
+    prueba("substring", substring(a + b + "!!", 0, 4))
+    prueba("substring de una constante", substring("holahola", 2, 6))
+    prueba("charAt", charAt("hola", 1))
+    prueba("upper", upper("hola"))
+    prueba("lower", lower("HOLA"))
+    prueba("trim", trim("  hola  "))
+    prueba("replace", replace("hola", "o", "0"))
+    prueba("split", split("ab,cd,ef", ",")[1])
+    prueba("intToString", intToString(1234))
+    prueba("floatToString", floatToString(1.5))
+    prueba("fromBytes con acentos", fromBytes(toBytes("añoñ")))
+    prueba("substring con acentos", substring("cañón y más", 1, 5))
+    prueba("upper con acentos", upper("año"))
+
+    // 3. el StringBuilder
+    var sb: StringBuilder := StringBuilder()
+    sb.appendStr("ho")
+    sb.appendChar(108)
+    sb.appendChar(97)
+    prueba("StringBuilder", sb.toString())
+
+    // 4. de un fichero
+    writeFile(F, "hola\nadios\n")
+    prueba("readFile", readFile(F))
+    var t: IO.TextFile := IO.TextFile(F, "r")
+    prueba("readLine", t.readLine())
+    t.close()
+
+    // 5. un nombre de listDir y una ruta de IO
+    IO.mkdir(D)
+    writeFile(IO.pathJoin(D, "uno.txt"), "1")
+    var l: string[] := listDir(D)
+    prueba("listDir", l[0])
+    prueba("pathJoin", IO.pathJoin(D, "uno.txt"))
+
+    // 6. tras compactar el heap, el bit se queda
+    var c: string := a + b
+    Heap.compact()
+    prueba("suma, tras compactar", c)
+
+    // 7. un byte[] se sigue escribiendo, y de una cadena se sigue leyendo
+    var buf: byte[] := toBytes("abcd")
+    move(toBytes("XY"), buf, 0, 0, 2)
+    print "byte[]: " + fromBytes(buf)
+    move(c, buf, 0, 2, 2)
+    print "de una cadena a un byte[]: " + fromBytes(buf)
+    Heap.compact()
+    move(toBytes("12"), buf, 0, 0, 2)
+    print "byte[] tras compactar: " + fromBytes(buf)
+
+    IO.removeFile(IO.pathJoin(D, "uno.txt"))
+    IO.rmdir(D)
+    IO.removeFile(F)
+  end Main
+end MoveSoloLectura

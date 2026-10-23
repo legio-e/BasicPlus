@@ -3713,6 +3713,29 @@ hilos BP, y eso depende de «los builtins que esperan, que cedan el hilo BP» (l
 son concretos; después el diseño de los streams, para revisarlo. Cada paso por la cascada: la VM-Java, la VM-C con la
 paridad, y las placas en un lote.
 
+**`#714` HECHO (23-oct; Eduardo: *«OK, #714»*).** Como estaba escrito, con un cambio:
+- **el bit 20**, puesto al nacer: en la VM-C, `bpvm_str_nace` y `bpvm_str_nace_ascii` (antes `bpvm_str_fija_ascii`:
+  sólo la usaban los nacimientos); en la VM-Java, `strNace` (antes `strFijaAscii`). Y `readFile` en la VM-C, que no
+  nacía. El censo de las dos VMs, completo: toda reserva de bytes que devuelve una cadena pasa por ahí;
+- **la suma:** el builtin 283 `__strNace` al final de los `__strconcat` y `__strconcatN` del compilador: 3 bytes por
+  ayudante (17 módulos de la stdlib cambian sólo en eso);
+- **el cambio:** el `StringBuilder` NO lo usa. Una clase sólo ve lo público de su módulo (la regla del lenguaje), y
+  `__strNace` no puede ser pública: un programa que guardara el `byte[]` le seguiría escribiendo. Su `toString` sigue
+  con `fromBytes`, que copia y marca. La copia de menos queda para otro día;
+- **`move`** lo mira tras ver que los dos son arrays: `move: dst es de solo lectura`, en las dos VMs;
+- **las pruebas:** `bpgenvm-c/samples/MoveSoloLectura.bp` (nueva, en el corpus): una constante y cadenas de 23 orígenes
+  del heap, intactas, y `move` sobre un `byte[]` y desde una cadena, también tras compactar. Con un sabotaje (el bit
+  quitado de `bpvm_str_nace` en la VM-C), las 18 que nacen por ahí dicen «ESCRIBIO» (las 5 sumas, marcadas por el 283,
+  no): la prueba lo ve. Un programa que llama a `__strNace` no compila;
+- **`StrDosCaminos`**, adaptada: forzaba el camino lento con `move` dentro de una cadena, justo lo que ya no se puede.
+  Ahora la cadena lenta es la misma con una `ñ` al final; 136 comparaciones, 0 distintas;
+- **la red VERDE,** con el host en su sabor (`make` y `make sim`; con `LVGL=1` se salta la paridad y las pruebas de C):
+  paridad 156 en MOD9, en MOD8 y con dos workers; cápsula V6, 59; pruebas de C, 103/103; sombra, 15/15;
+- **en placa:** la Metro (M) y la Pico 2 (P), con la imagen nueva (su CRC, el del `.elf`): `MoveSoloLectura` (27 líneas)
+  y `StrDosCaminos` (153), igual que el PC. Ojo al capturar: `python -I` no hace caso de `PYTHONIOENCODING`, y la
+  salida, redirigida, sale en cp1252 (las líneas con acentos «distintas»); con `-I -X utf8`, en UTF-8. Las ESP32, la
+  STM32 y la P4, en el próximo lote: lo compilado ahora llama al 283 en cada suma, y una imagen anterior no lo tiene.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
@@ -3839,3 +3862,79 @@ BSD.
 2. lo que entra (la lista de arriba) y lo que se deja para después;
 3. qué cuenta como «similar» frente a la libc;
 4. dónde se prueba en ARM, RISC-V y Xtensa: en las placas, o con QEMU (descargarlo).
+
+---
+
+## E6 · Los conjuntos, como en Pascal (la idea de Eduardo, 23-oct; sin empezar)
+
+Eduardo, 23-oct: *«Como idea, que te parece añadir sets? De momento limitado a 31 elementos y representados por un
+uint32. Los sets son similares a los de Pascal con operaciones de pertenencia, intersección, unión, etc. En principio es
+todo a nivel de compilador, a nivel de VM creo que con las operaciones lógicas y de manipulación de bits bastaría.»* Y,
+al contestarle: *«OK, terminamos el #714 primero»* (va después de los pendientes).
+
+Lo visto ese día, para el análisis:
+- **encaja en un micro:** las máscaras de bits están por todas partes (registros, pines, eventos, banderas), y hoy se
+  escriben a mano con enteros y `&`/`|`;
+- **la VM ya tiene lo que hace falta:** `&`, `|`, `xor`, `shl` y `shr`. Un conjunto es un entero, sin heap; cada
+  operación, una o dos instrucciones. Contar sus elementos (`card`) sería un builtin pequeño o una vuelta de bits;
+- **las palabras:** `in` ya es reservada (el `for … in`) y `set` también (las propiedades); `of` no, pero puede valer
+  sólo dentro de un tipo, tras `set`, sin reservarla;
+- **un ejemplo:** `var c: set of Color := [ROJO, AZUL]`; `VERDE in c`; `c + d` (unión), `c * d` (intersección), `c - d`
+  (diferencia), `c <= d` (subconjunto); `for x in c … next`;
+- **por decidir:** qué elementos (los `enum`, con valores de 0 a 31: un `enum` puede llevar valores explícitos, como
+  `AZUL := 10`, y el valor es el bit); 31 o 32 elementos (con 32 bits caben 32: el bit 31 sólo vuelve negativo el
+  entero, y las operaciones de conjunto no lo miran como número); cómo se imprime (un `enum` se imprime como su número:
+  los nombres no existen al ejecutar);
+- **lo que cuesta:** el compilador (el tipo, los literales, los operadores, `in` como expresión, el `for`); la interfaz
+  que va dentro del `.mod` (un conjunto en una firma pública); JC y sus dos traducciones; el AOT (en C es inmediato); el
+  depurador, el resaltado del IDE y la documentación.
+
+**La declaración, la idea de Eduardo (23-oct):** *«Como se declaran? Similar a los enun, como set ya está cogido
+podemos utilizar Set32 o algo parecido. Un ejemplo: Set32 controlBits = { bitOn, bitBlink, bitRed } . Una declaración de
+variable: var control: controlBits = { bitOn, bitRed }»*. Lo que se le propuso, en la forma de BasicPlus: `set` en vez
+de `Set32` (ya está reservada, así que no gasta ninguna: hoy sólo aparece dentro de una propiedad, `set(valor) …
+endset`), un elemento por línea como el `enum`, y `:=`:
+
+```
+public set ControlBits
+  bitOn
+  bitBlink
+  bitRed := 0b1000_0000
+end ControlBits
+
+var control: ControlBits := { bitOn, bitRed }
+```
+
+Las llaves están libres en las expresiones (una tupla se construye con paréntesis, `return (11, 12)`; las llaves sólo
+van a la izquierda, `{ a, b } := f()`). En JC: `set ControlBits { BitOn, BitBlink, BitRed = 0b1000_0000 }` y
+`ControlBits control = { BitOn, BitRed };`.
+
+**Y lo que precisó Eduardo (23-oct):** *«Los elementos de los sets son constantes de tipo integer así que si se pueden
+declarar de forma explícita pero tienen que coincidir con bits así que siempre han de ser potencias de 2: 1,2,4,8,16,
+etc […] En los conjuntos podemos tener 0 bits, 1 bits o n bits activados que es lo que señala que el set contiene uno o
+varios elementos. Añadir un elemento al conjunto se puede representar con una suma pero se realiza con un 'or' y quitar
+un elemento se puede representar con una resta pero se tiene que hacer con un 'and' del complemento.»* Con eso:
+- **el valor de un elemento es su MÁSCARA**, no el número del bit: una potencia de 2. Sin valor explícito, 1, 2, 4, 8…
+  (como el `enum`, doblando). Con valor, el compilador comprueba que sea potencia de 2 y que no se repita. BasicPlus ya
+  admite `0b1000_0000` y `0x80`. Así `integer(control)` es el valor del registro, sin desplazar nada;
+- **31 elementos:** de 2^0 a 2^30 (`0x4000_0000`), todos enteros positivos (2^31 sería el bit de signo);
+- **`+` se escribe, `|` se hace; `-` se escribe, `& ~` se hace.** Con una suma de verdad, añadir uno que ya está
+  arrastraría al bit siguiente (`bitOn + bitOn` daría `bitBlink`); con una resta, quitar uno que no está tomaría
+  prestado. La intersección `*` es `&`; `e in s`, `(s & e) != 0`; el subconjunto `a <= b`, `(a & ~b) == 0`; la igualdad
+  compara los enteros; el vacío `{}` es 0;
+- **un elemento ya es un conjunto de uno:** `control + bitBlink` es lo mismo que `control + { bitBlink }`, y un literal
+  `{ bitOn, bitRed }` lo calcula el compilador;
+- **el tipo los protege:** por valor son enteros, pero su tipo es el del conjunto (`ControlBits`): `control + 3`, o
+  mezclar dos conjuntos distintos, es un error de compilación. Con un entero, las conversiones explícitas
+  (`integer(control)`, `ControlBits(registro)`).
+
+**Decidido (Eduardo, 23-oct: *«1 ControlBits.bitOn»*):** fuera de las llaves, el elemento lleva el nombre de su
+conjunto, `ControlBits.bitOn in control`, como el `enum` (`Dia.MIERCOLES`). Dentro de las llaves, el nombre solo, como
+en su ejemplo: el conjunto ya se sabe por el tipo (`var control: ControlBits := { bitOn, bitRed }`).
+
+**Por decidir:** qué hace `ControlBits(registro)` con un bit no declarado (error, quitarlo o dejarlo). Ojo: un `enum` no
+se convierte desde un entero (`Dia(2)` es error de compilación), y un conjunto sí lo necesita, para leer un registro. Y
+si `print control` escribe los nombres (`{bitOn, bitRed}`, con los nombres guardados en el `.mod`) o el número, como el
+`enum`.
+
+Lo siguiente, cuando Eduardo diga: el análisis completo, con la sintaxis de BP y la de JC.

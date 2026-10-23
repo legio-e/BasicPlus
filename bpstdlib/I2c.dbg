@@ -170,8 +170,8 @@ lines
 2324 0
 2327 157
 2343 0
-2397 0
-2479 0
+2400 0
+2485 0
 vars
 func Op.getKind 35
 this -20 8 0 ?
@@ -372,14 +372,14 @@ la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 d 16 4 0 ?
-func __strconcat4 2397
+func __strconcat4 2400
 s0 -44 8 0 ?
 s1 -36 8 0 ?
 s2 -28 8 0 ?
 s3 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strconcat6 2479
+func __strconcat6 2485
 s0 -60 8 0 ?
 s1 -52 8 0 ?
 s2 -44 8 0 ?

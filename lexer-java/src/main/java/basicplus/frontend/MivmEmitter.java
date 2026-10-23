@@ -6706,7 +6706,16 @@ public final class MivmEmitter {
         emitStrCopy("b", false);    // d = strCopy(b, out, d)
 
         w.emitGetLocal("out");
+        emitStrNace();              // V8/H5 #714: el byte[] nace como cadena, de solo lectura
         w.emitLRet();   // H1.2a: devuelve un ref (8 bytes)
+    }
+
+    /** V8/H5 (23-oct, #714) — `__strNace(<ref de la pila>)`: el byte[] que el ayudante acaba de llenar NACE como cadena,
+     *  en su sitio y sin copiarlo: el bloque queda de SOLO LECTURA (`move` ya no escribe en él). Deja en la pila la
+     *  misma referencia. Un `.mod` de antes no lo lleva: sus sumas siguen sin marcar, como hasta hoy. */
+    private void emitStrNace() throws IOException {
+        w.emit(OpCode.CALL_BUILTIN);
+        w.emitShort((short) Builtin.STR_NACE.id);
     }
 
     /** #554 — `d = __strCopy(<param>, out, <0 o d>)`: los bytes del parámetro detrás de lo ya copiado. */
@@ -6784,6 +6793,7 @@ public final class MivmEmitter {
         w.emit(OpCode.NEWARRAY_I8); w.emitSetLocal("out");
         for (int k = 0; k < n; k++) emitStrCopy("s" + k, k == 0);
         w.emitGetLocal("out");
+        emitStrNace();   // V8/H5 #714
         w.emitLRet();
     }
 
