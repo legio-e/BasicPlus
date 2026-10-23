@@ -7328,7 +7328,7 @@ fundir más sin mover objetos; sólo los quitaría la compactación (`Heap.compa
 
 Sólo análisis. Por decidir (Eduardo).
 
-#### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`)
+#### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`, `dcb71627`)
 
 Con `s = "hola"`, comprobado en el PC con las dos VMs:
 - **la VM-C:** `charCodeAt(s, 9)` y `charCodeAt(s, -1)` devuelven 0 (`bpvm_prim_char_code_at`);
@@ -7345,7 +7345,7 @@ sin tocar la ABI). En la stdlib, los 19 `charCodeAt` miran el rango antes (con `
 `bpgenvm-c/samples/CharCodeAtFuera.bp` (en el corpus): por los dos caminos de las cadenas, con la vacía y con un
 literal; dentro de rango, como siempre.
 
-#### ✅ `#716` — `parseInt` y `parseFloat` con un texto que no es un número limpio: la VM-C devuelve lo que puede en silencio, y la VM-Java mata el hilo sin que el `try` de BP lo vea; ninguna lanza el error atrapable que dice `BUILTINS.md` (abierta el 21-oct, al mirar los algoritmos del H5; **CERRADA el 23-oct**: una regla, la misma en las dos VMs, y un error atrapable)
+#### ✅ `#716` — `parseInt` y `parseFloat` con un texto que no es un número limpio: la VM-C devuelve lo que puede en silencio, y la VM-Java mata el hilo sin que el `try` de BP lo vea; ninguna lanza el error atrapable que dice `BUILTINS.md` (abierta el 21-oct, al mirar los algoritmos del H5; **CERRADA el 23-oct**: una regla, la misma en las dos VMs, y un error atrapable, `dcb71627`)
 
 Las dos usan la biblioteca estándar de su lado, y heredan lo que hace cada una:
 - **la VM-C:** `strtol` y `strtod` de la libc, sin mirar si sobra texto;
