@@ -7485,7 +7485,7 @@ Lo prueban `bpgenvm-c/samples/StrOrden.bp` (en el corpus: 18 636 comprobaciones 
 carácter, la línea de arriba y un `switch` de cadenas) y `make test-aotcompara` (490 dentro de una native, el AOT igual
 que el intérprete). `V8_IDEAS` §E5, «Comparar en C».
 
-#### 🔵 `#712` — un array ENORME desborda el cálculo de sus bytes: `newIntArray(2^30 + 1)` deja un bloque de 4 B que dice tener mil millones de elementos, y escribir en él pisa otros objetos, en las dos VMs (abierta el 21-oct, de paso en el análisis del H5; no es de cadenas)
+#### ✅ `#712` — un array ENORME desborda el cálculo de sus bytes: `newIntArray(2^30 + 1)` deja un bloque de 4 B que dice tener mil millones de elementos, y escribir en él pisa otros objetos, en las dos VMs (abierta el 21-oct, de paso en el análisis del H5; no es de cadenas; **CERRADA el 23-oct**: los bytes se multiplican en 64 bits, y lo que no cabe es «No space in heap»)
 
 `bpvm_prim_nuevo_array` (`bpgenvm-c/src/builtins.c`) reserva `(uint32_t) size * ancho` bytes. Con 4 bytes por
 elemento, 4·(2^30 + 1) = 2^32 + 4, que en 32 bits son 4. La longitud se queda en 1 073 741 825, y los índices se
@@ -7505,6 +7505,28 @@ Un tamaño que venga de un dato (el puerto serie, un fichero) corrompe la memori
   tamaño negativo (`#570`).
 - **Censar por la primitiva** todas las reservas con un tamaño calculado: `newLongArray`, `__newRefArray`, los
   `__grow*` y el AOT.
+
+**HECHO el 23-oct** (Eduardo: *«OK, adelante cuando terminen las pruebas»*). El censo, por la primitiva (cada reserva
+del heap con un tamaño que sale de multiplicar):
+- **en la VM-C** pasan por `bpvm_prim_nuevo_array` los opcodes `NEWARRAY*`, `newIntArray`, `__newRefArray` y las
+  natives (`h_newarray`). Los dos `__grow*` reservaban por su cuenta: ahora también pasan por ella. Lo demás multiplica
+  tamaños acotados (los campos de una clase, los pines, las entradas de un directorio, los trozos de un `split`);
+- **en la VM-Java** no hay una primitiva de arrays: seis sitios multiplicaban en `int` (`NEWARRAY`, `NEWARRAY_I16`,
+  `NEWARRAY_I64`, `newIntArray`, `__growIntArray` y las referencias). Y peor de lo que decía la ficha: en `heapAlloc`,
+  sumar la cabecera a un tamaño cerca de 2^31 daba la vuelta y salía el bloque mínimo: `newByteArray(2^31 - 1)`
+  mataba el hilo con un error de Java (`fromIndex > toIndex`), y en la VM-C el programa se paraba sin decir nada.
+
+El arreglo:
+- **los bytes, en 64 bits**: en `bpvm_prim_nuevo_array`, y en la VM-Java `heapNuevo` recibe un `long`, con los seis
+  sitios multiplicando en `long`;
+- **lo que no cabe en la memoria de la VM entera es «No space in heap»** (atrapable, sin colectar: no cabría), en la
+  primitiva y, de nuevo, en la reserva única de cada VM (`heap_nuevo`, `heapNuevo`): así la cabecera y el redondeo que
+  se suman dentro nunca dan la vuelta. En la VM-Java, el camino de siempre sin sitio, sacado a `sinSitio` (con la
+  prefabricada de `#430`).
+
+Lo prueba `bpgenvm-c/samples/ArrayEnorme.bp` (en el corpus): `newIntArray`, `newLongArray`, `newDoubleArray`,
+`newObjArray`, `newByteArray(2^31 - 1)` y los dos `__grow*` con un tamaño que no cabe dan «No space in heap»; el vecino,
+intacto; el heap, recorrible. Con las VMs de antes, cuatro FALLO en las dos y luego los dos fallos de `newByteArray`.
 
 #### ✅ `#711` — con UTF-8 mal formado, las dos VMs no cuentan igual: `charCodeAt` y `substring`, entre otras, dan otra cosa en la VM-C que en la VM-Java (abierta el 21-oct, en el análisis del H5; **CERRADA el 23-oct**: lo de fuera se descodifica al nacer la cadena, con `EncodingError` o «�», y lo mal formado ya no entra, `5cffcc60`)
 
@@ -7780,7 +7802,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   desinicializa con la C6 encendida por el Bluetooth, y ahí basta con parar la radio. **Propuesta:** cerrarla por el
   diseño, sin tocar la C6.
 
-#### 🔵 `#705` — `Net.tcpClose` no deja su valor en la pila: dos llamadas sueltas cambian las variables locales de antes, en las dos VMs igual (abierta el 19-oct, al analizar la WiFi, H3; preexistente, de `#241`)
+#### ✅ `#705` — `Net.tcpClose` no deja su valor en la pila: dos llamadas sueltas cambian las variables locales de antes, en las dos VMs igual (abierta el 19-oct, al analizar la WiFi, H3; preexistente, de `#241`; **CERRADA el 23-oct**: empuja su 0 en las dos VMs)
 
 - **Medido:** un `main` con `var a := 7`, `var b := 9` y dos `Net.tcpClose(0)` sueltos imprime `a = 32 b = 264`; con
   uno solo, todavía 7 y 9. En miVM y en la VM-C, lo mismo, así que la paridad no lo ve.
@@ -7792,6 +7814,14 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   - que las dos VMs den los mismos números de conexión y el mismo tope (la VM-C, 16; miVM, sin límite);
   - que el final del programa cierre las conexiones que queden (`#668`).
 - Se arregla con el trabajo de `Net` del H3, salvo que Eduardo lo pida antes.
+
+**HECHO el 23-oct** (Eduardo, al ver los pendientes: *«OK, adelante cuando terminen las pruebas»*): `TCP_CLOSE` empuja
+su 0 en las dos VMs. **El censo:** de los 94 builtins sin resultado de `Core`, es el único que no lo empujaba (los demás
+que no empujan lanzan siempre: `Wdt` y `Neopixel` en la VM-Java, `__throwRte`); y los módulos que vuelven a declarar un
+builtin lo declaran con o sin resultado igual que `Core`. Lo prueba `bpgenvm-c/samples/TcpCloseSuelto.bp` (en el
+corpus): con dos enteros, antes `b = 0`; con una cadena, `""` (y en la VM-C, a veces, «referencia a objeto
+eliminado»), cada caso en su función porque lo que se pisa depende del marco. Lo demás de arriba (los números de
+conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
 
 #### 🔵 `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente)
 

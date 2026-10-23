@@ -1,0 +1,94 @@
+// ArrayEnorme.bp — V8 (23-oct, #712): UN ARRAY QUE NO CABE ES «No space in heap», NO UN BLOQUE DIMINUTO.
+//
+// Los bytes de un array se calculaban multiplicando en 32 bits: newIntArray(2^30 + 1) pedía 4·(2^30 + 1) = 2^32 + 4,
+// que en 32 bits son 4. Quedaba un bloque de 4 B que decía tener mil millones de elementos, y escribir en él pisaba
+// los objetos de al lado, en las dos VMs (en la VM-Java, además, sumar la cabecera a un tamaño cerca de 2^31 daba la
+// vuelta y salía el bloque mínimo). Ahora se multiplica en 64 bits, y lo que no cabe en la memoria de la VM es el
+// error de siempre, atrapable. Un tamaño que venga de un dato (el puerto serie, un fichero) ya no corrompe nada.
+// Cada constructor de arrays; y al final, el vecino intacto y el heap recorrible. Las líneas FALLO ponen la red en rojo.
+module ArrayEnorme
+  import Heap
+
+  var malas: integer := 0
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      print "ok " + que + ": " + obtenido
+    else
+      malas += 1
+      print "FALLO " + que + ": [" + obtenido + "], se esperaba [" + esperado + "]"
+    endif
+  end mira
+
+  function Main()
+    var vecino: integer[] := newIntArray(4)
+    vecino[0] := 11
+
+    try
+      var a: integer[] := newIntArray(1073741825)        // 4·(2^30 + 1): eran 4 B
+      a[3] := 77
+      mira("newIntArray(2^30 + 1)", "creado, len " + intToString(len(a)), "No space in heap")
+    catch e: RuntimeError
+      mira("newIntArray(2^30 + 1)", e.msg, "No space in heap")
+    endtry
+
+    try
+      var l: long[] := newLongArray(536870913)           // 8·(2^29 + 1): eran 8 B
+      l[3] := 77L
+      mira("newLongArray(2^29 + 1)", "creado, len " + intToString(len(l)), "No space in heap")
+    catch e: RuntimeError
+      mira("newLongArray(2^29 + 1)", e.msg, "No space in heap")
+    endtry
+
+    try
+      var d: double[] := newDoubleArray(536870913)
+      mira("newDoubleArray(2^29 + 1)", "creado, len " + intToString(len(d)), "No space in heap")
+    catch e: RuntimeError
+      mira("newDoubleArray(2^29 + 1)", e.msg, "No space in heap")
+    endtry
+
+    try
+      var o: Object[] := newObjArray(536870913)          // referencias de 8 B
+      mira("newObjArray(2^29 + 1)", "creado, len " + intToString(len(o)), "No space in heap")
+    catch e: RuntimeError
+      mira("newObjArray(2^29 + 1)", e.msg, "No space in heap")
+    endtry
+
+    try
+      var b: byte[] := newByteArray(2147483647)          // en la VM-Java, la cabecera daba la vuelta
+      mira("newByteArray(2^31 - 1)", "creado, len " + intToString(len(b)), "No space in heap")
+    catch e: RuntimeError
+      mira("newByteArray(2^31 - 1)", e.msg, "No space in heap")
+    endtry
+
+    try
+      var g: integer[] := __growIntArray(vecino, 1073741825)
+      mira("__growIntArray(a, 2^30 + 1)", "creado, len " + intToString(len(g)), "No space in heap")
+    catch e: RuntimeError
+      mira("__growIntArray(a, 2^30 + 1)", e.msg, "No space in heap")
+    endtry
+
+    try
+      var r: integer[] := __growRefArray(__newRefArray(2), 536870913)
+      mira("__growRefArray(a, 2^29 + 1)", "creado, len " + intToString(len(r)), "No space in heap")
+    catch e: RuntimeError
+      mira("__growRefArray(a, 2^29 + 1)", e.msg, "No space in heap")
+    endtry
+
+    // lo de al lado, intacto, y el heap entero recorrible
+    mira("el vecino", intToString(vecino[0]), "11")
+    try
+      Heap.compact()
+      mira("el heap", "recorrido entero", "recorrido entero")
+    catch e: RuntimeError
+      mira("el heap", e.msg, "recorrido entero")
+    endtry
+
+    // y lo que sí cabe, como siempre
+    var bien: integer[] := newIntArray(1000)
+    bien[999] := 5
+    mira("newIntArray(1000)", intToString(len(bien)) + " " + intToString(bien[999]), "1000 5")
+
+    print "ArrayEnorme: " + intToString(malas) + " mal"
+  end Main
+end ArrayEnorme

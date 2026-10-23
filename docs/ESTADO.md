@@ -69,6 +69,15 @@
 >   - **lo que queda, en dos fichas nuevas:** `#723` (los streams, por diseñar) y `#724` (el texto de los packs, como el
 >     de SQLite: entra sin descodificar, y el pegamento del AOT lo corta en 512 bytes sin avisar).
 >   - **la red VERDE:** paridad 158 (MOD9, MOD8 y dos workers), pruebas de C 104/104, y lo demás.
+> - **Y la lista de pendientes** (Eduardo: *«A ver la lista de pendientes»*), sacada de FICHAS y agrupada. Propuse
+>   empezar por las dos que corrompen memoria sin avisar; Eduardo: *«OK, adelante cuando terminen las pruebas»*:
+>   - **`#705`:** `tcpClose` empuja su 0 en las dos VMs. El censo de los 94 builtins sin resultado: era el único que no
+>     lo hacía. `TcpCloseSuelto`, en el corpus (lo que se pisa depende del marco: cada caso en su función);
+>   - **`#712`:** los bytes de un array, en 64 bits, y lo que no cabe en la memoria de la VM, «No space in heap», en la
+>     primitiva y en la reserva única de cada VM. Peor de lo que decía la ficha: en la VM-Java, `newByteArray(2^31 - 1)`
+>     mataba el hilo con un error de Java, y en la VM-C el programa se paraba sin decir nada. `ArrayEnorme`, en el
+>     corpus;
+>   - la red VERDE: paridad 160 (MOD9, MOD8 y dos workers), pruebas de C 104/104, y lo demás.
 > - **Dos trampas mías:**
 >   - cambié `compat.sh` con una pasada de la paridad en marcha. Bash lee el script según avanza, y al acabar tropezó
 >     con el texto desplazado (un error de sintaxis en la última línea). Las salidas ya estaban guardadas; la red,

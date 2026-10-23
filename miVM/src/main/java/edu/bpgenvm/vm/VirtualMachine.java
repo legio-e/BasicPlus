@@ -1822,11 +1822,46 @@ public class VirtualMachine {
      * contenido, con {@link #refDeref}. Sin sitio, la excepción de siempre (la lanza heapAlloc). Espejo de
      * bpvm_heap_nuevo (VM-C).
      */
-    long heapNuevo(int type, int cabecera, int payloadBytes) {
+    long heapNuevo(int type, int cabecera, long payloadBytes) {
+        // V8 #712 — lo que no cabe en la memoria de la VM entera, sin sitio y sin colectar. Los tamaños calculados llegan
+        // multiplicados en long (en int, newIntArray(2^30 + 1) pedía 4 B con una longitud de mil millones), y así la
+        // cabecera y el redondeo que se les suman en heapAlloc nunca dan la vuelta (newByteArray(2^31 - 1) acababa en el
+        // bloque mínimo). El espejo, heap_nuevo y bpvm_prim_nuevo_array (VM-C).
+        if (payloadBytes < 0 || payloadBytes > memory.length) sinSitio(currentTcLocal.get(), payloadBytes);
         synchronized (vmLock) {
-            int userRef = heapAlloc(payloadBytes, type);
+            int userRef = heapAlloc((int) payloadBytes, type);
             writeInt32(userRef, cabecera);
             return handleRegister(userRef);
+        }
+    }
+
+    /**
+     * Sin sitio para una reserva: el RuntimeError «No space in heap», atrapable (H1; nunca colgar ni matar la VM en
+     * silencio). throwBpRuntimeError construye el objeto (re-entra heapAlloc, reentrante bajo vmLock); la guarda
+     * throwingOom evita la recursión si NI la excepción cabe, y entonces va la prefabricada (#430) o, sin ella, el hilo
+     * muere (BpThreadFault). Lo llaman heapAlloc tras colectar y, V8 #712, heapNuevo con lo que no cabe en la memoria
+     * entera. No retorna.
+     */
+    private void sinSitio(ThreadContext me, long pide) {
+        synchronized (vmLock) {
+            if (throwingOom || me == null) {
+                // #430 — LA PREFABRICADA (idea de Eduardo): construida en el
+                // prólogo del run, cuando construir era gratis. Lanzarla no
+                // aloja NADA, así que el "ni para la excepción" deja de ser
+                // una muerte incatchable y pasa a ser un OOM que el programa
+                // puede atrapar — igual que en la VM-C (exceptions.c).
+                if (oomExc != 0 && me != null) {
+                    writeI64(memory, me.sp, oomExc);
+                    me.sp += 8;
+                    me.allocAnchor = (int) oomExc;
+                    throwingOom = false;
+                    throw new BpExceptionPending((int) oomExc);
+                }
+                throw new BpThreadFault("No space in heap (ni para la excepción): pido "
+                        + pide + " bytes; libre=" + (STACK_BASE - heapNext));
+            }
+            throwingOom = true;
+            throwBpRuntimeError(me, "No space in heap");   // lanza BpExceptionPending
         }
     }
 
@@ -1928,29 +1963,7 @@ public class VirtualMachine {
             if (gcDescarrilo) lanzaHeapDescarrilado(me);   // V7 #494: sin reintento
             addr = tryAllocateInner(totalSize);
             if (addr == -1) {
-                // H1 — OOM tras GC: RuntimeError BP ATRAPABLE (nunca colgar ni matar la VM
-                // en silencio). throwBpRuntimeError construye el objeto (re-entra heapAlloc,
-                // reentrante bajo vmLock); la guarda throwingOom evita recursión si NI la
-                // excepción cabe → fallback incatchable (BpThreadFault).
-                if (throwingOom || me == null) {
-                    // #430 — LA PREFABRICADA (idea de Eduardo): construida en el
-                    // prólogo del run, cuando construir era gratis. Lanzarla no
-                    // aloja NADA, así que el "ni para la excepción" deja de ser
-                    // una muerte incatchable y pasa a ser un OOM que el programa
-                    // puede atrapar — igual que en la VM-C (exceptions.c).
-                    if (oomExc != 0 && me != null) {
-                        writeI64(memory, me.sp, oomExc);
-                        me.sp += 8;
-                        me.allocAnchor = (int) oomExc;
-                        throwingOom = false;
-                        throw new BpExceptionPending((int) oomExc);
-                    }
-                    throw new BpThreadFault("No space in heap (ni para la excepción): pido "
-                            + totalSize + " bytes; libre=" + (STACK_BASE - heapNext));
-                }
-                throwingOom = true;
-                throwBpRuntimeError(me, "No space in heap");   // lanza BpExceptionPending
-                // (inalcanzable)
+                sinSitio(me, totalSize);   // H1 — OOM tras GC (no retorna)
             }
             int tag = (type << TAG_TYPE_SHIFT);
             writeInt32(addr, tag);
@@ -3623,7 +3636,7 @@ public class VirtualMachine {
                     if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
-                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I32, size, size * 4)); sp += REF_SIZE;   // V7/H7 #593
+                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I32, size, (long) size * 4)); sp += REF_SIZE;   // V7/H7 #593
                         tc.sp = sp;
                     }
                     break;
@@ -3643,7 +3656,7 @@ public class VirtualMachine {
                     if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY_I16: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
-                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I16, size, size * 2)); sp += REF_SIZE;   // V7/H7 #593
+                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I16, size, (long) size * 2)); sp += REF_SIZE;   // V7/H7 #593
                         tc.sp = sp;
                     }
                     break;
@@ -4215,7 +4228,7 @@ public class VirtualMachine {
                     if (size < 0) { tc.sp=sp; throwBpRuntimeError(tc, "NEWARRAY_I64: tamaño negativo (" + size + ")"); }
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     synchronized (vmLock) {
-                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I64, size, size * 8)); sp += REF_SIZE;   // V7/H7 #593
+                        refStore(mem, sp, heapNuevo(TYPE_ARRAY_I64, size, (long) size * 8)); sp += REF_SIZE;   // V7/H7 #593
                         tc.sp = sp;
                     }
                     break;
@@ -4992,7 +5005,7 @@ public class VirtualMachine {
 
     /** Aloca un array de refs (TYPE_ARRAY_REF) con n elementos, devolviendo el handle. Los slots quedan a 0. */
     private long allocVmRefArray(int n) {
-        long h = heapNuevo(TYPE_ARRAY_REF, n, n * 8);   // H1.2a (V4): ref plana = 8 bytes/elem; V7/H7 #593 (a cero ya)
+        long h = heapNuevo(TYPE_ARRAY_REF, n, (long) n * 8);   // H1.2a (V4): ref plana = 8 bytes/elem; V7/H7 #593 (a cero ya)
         // B1 residual — ver allocVmString. Mismo motivo: ancla GC para el
         // intervalo entre alocación y publicación al stack del programa.
         ThreadContext me = currentTcLocal.get();
@@ -5197,6 +5210,7 @@ public class VirtualMachine {
                 if (s != null) {
                     try { s.close(); } catch (java.io.IOException ignored) { }
                 }
+                pushTc(tc, 0);   // V8 #705: sin resultado → su 0, como los demás (el compilador lo tira tras la llamada)
                 break;
             }
 
@@ -6043,7 +6057,7 @@ public class VirtualMachine {
                 if (newCap < 0) throwBpRuntimeError(tc, "__growIntArray: capacidad negativa: " + newCap);
                 int od = (oldRef != 0) ? refDeref(oldRef) : 0;   // V4: dirección física fuente
                 int oldLen = (od != 0) ? readInt32(od) : 0;
-                long newH = heapNuevo(TYPE_ARRAY_I32, newCap, newCap * 4);   // V7/H7 #593 (el resto, a cero ya)
+                long newH = heapNuevo(TYPE_ARRAY_I32, newCap, (long) newCap * 4);   // V7/H7 #593 (el resto, a cero ya)
                 int newRef = refDeref(newH);   // addr físico
                 int copyLen = Math.min(oldLen, newCap);
                 for (int i = 0; i < copyLen; i++) {
@@ -6861,7 +6875,7 @@ public class VirtualMachine {
                     throwBpRuntimeError(tc, "newIntArray: tamaño negativo: " + size);
                     break;
                 }
-                pushTcRef(tc, heapNuevo(TYPE_ARRAY_I32, size, size * 4));   // H1.2a: ref 8 bytes; V7/H7 #593 (a cero ya)
+                pushTcRef(tc, heapNuevo(TYPE_ARRAY_I32, size, (long) size * 4));   // H1.2a: ref 8 bytes; V7/H7 #593 (a cero ya)
                 break;
             }
 

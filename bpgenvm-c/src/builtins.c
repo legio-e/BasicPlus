@@ -1217,7 +1217,12 @@ int bpvm_prim_int_to_string(bpvm_t* vm, int32_t v, bpref_t* out, char* err, size
 int bpvm_prim_nuevo_array(bpvm_t* vm, int32_t size, uint32_t ancho, int tipo, const char* pre, const char* post,
                           bpref_t* out, char* err, size_t n) {
     if (size < 0) { snprintf(err, n, "%s%d%s", pre, (int) size, post); return -1; }   /* #570 */
-    *out = bpvm_heap_nuevo(vm, tipo, (uint32_t) size, (uint32_t) size * ancho);   /* V7/H7 #593; el payload, a cero */
+    /* V8 #712: los bytes, en 64 bits. En 32, newIntArray(2^30 + 1) pedía 4·(2^30 + 1) = 2^32 + 4 → 4 B, con una longitud
+     * de mil millones, y escribir en él pisaba lo de al lado. Lo que no cabe en la memoria de la VM entera no tiene sitio
+     * (sin colectar: no cabría). */
+    uint64_t bytes = (uint64_t) (uint32_t) size * ancho;
+    if (bytes > (uint64_t) vm->memory_size) { snprintf(err, n, "No space in heap"); return -1; }
+    *out = bpvm_heap_nuevo(vm, tipo, (uint32_t) size, (uint32_t) bytes);   /* V7/H7 #593; el payload, a cero */
     if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* H1: OOM atrapable; #430 */
     return 0;
 }
@@ -1500,6 +1505,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_TCP_CLOSE: {
         int32_t h = pop_i32(vm, tc);
         bpvm_net_close((int) h);                 /* tolerante, sin backend = no-op */
+        push_i32(vm, tc, 0);   /* V8 #705: sin resultado → su 0, como los demás (el compilador lo tira tras la llamada) */
         return BPVM_OK;
     }
 
@@ -3319,10 +3325,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         uint32_t od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* V4: fuente handle→addr */
         uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
-        bpref_t newh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_REF, (uint32_t) new_cap, (uint32_t) new_cap * BPVM_REF_SIZE); /* V7/H7 #593: la cabecera y el handle, al nacer */
-        if (newh.v == 0u) {
+        /* V8 #712: por la primitiva única de los arrays, que multiplica en 64 bits (era new_cap * 8 en 32) */
+        bpref_t newh; char emr[64];
+        if (bpvm_prim_nuevo_array(vm, new_cap, BPVM_REF_SIZE, BPVM_TYPE_ARRAY_REF, "__growRefArray: capacidad negativa: ",
+                                  "", &newh, emr, sizeof emr) != 0) {
             tc->sp -= BPVM_REF_SIZE;
-            return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+            return builtin_throw(vm, tc, emr);   /* H1: OOM atrapable */
         }
         uint32_t new_ref = bpref_deref(vm, newh);
         od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* re-derivar tras la reserva */
@@ -3346,10 +3354,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         uint32_t od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* V4: fuente handle→addr */
         uint32_t old_len = (od == 0) ? 0 : bpvm_read_u32_be(vm->memory + od);
-        bpref_t newh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I32, (uint32_t) new_cap, (uint32_t) new_cap * 4); /* V7/H7 #593: la cabecera y el handle, al nacer */
-        if (newh.v == 0u) {
+        /* V8 #712: por la primitiva única de los arrays, que multiplica en 64 bits (era new_cap * 4 en 32) */
+        bpref_t newh; char emi[64];
+        if (bpvm_prim_nuevo_array(vm, new_cap, 4u, BPVM_TYPE_ARRAY_I32, "__growIntArray: capacidad negativa: ", "",
+                                  &newh, emi, sizeof emi) != 0) {
             tc->sp -= BPVM_REF_SIZE;
-            return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+            return builtin_throw(vm, tc, emi);   /* H1: OOM atrapable */
         }
         uint32_t new_ref = bpref_deref(vm, newh);
         od = bpref_is_null(oldr) ? 0 : bpref_deref(vm, oldr);   /* re-derivar tras la reserva */

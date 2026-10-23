@@ -1422,6 +1422,10 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
  * acabar éste la bajaba con el otro aún construyendo el suyo. Ahora lo dice cada reserva, y no hay nada compartido. */
 static bpref_t heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes, int para_error) {
     bpref_t h = bpref_null();
+    /* V8 #712 — lo que no cabe en la memoria de la VM entera, sin sitio y sin colectar; y así la cabecera y el redondeo
+     * que se le suman dentro nunca dan la vuelta a los 32 bits. (Los tamaños calculados se multiplican en 64 bits en
+     * quien llama: bpvm_prim_nuevo_array.) */
+    if ((uint64_t) payload_bytes > (uint64_t) vm->memory_size) return h;
     /* SÓLO PRUEBAS (V7/H12, test-nat2runs) — una reserva hecha DESDE UNA NATIVE tarda en llegar: espera activa, en µs, y
      * SIN el cerrojo (con él, el otro run ni podría empezar a colectar). Así el otro run tiene tiempo de parar el mundo,
      * y la reserva lo encuentra con lo que la native lleva a medias sólo en su pila de C: el caso de N3 (heap.c, 2f).

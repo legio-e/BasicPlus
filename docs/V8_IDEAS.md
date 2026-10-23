@@ -1300,8 +1300,9 @@ Poder proporcionar la clave. Disponer de la conexión TCP/IP. Cerrar la conexió
 - No hay: servidor (`listen`/`accept`), UDP, una consulta de DNS aparte, ni la IP propia.
 - **Lo que salió de paso, `#705`:** `tcpClose` no deja en la pila el valor que el compilador tira tras cada llamada
   sin resultado. Dos `Net.tcpClose(0)` sueltos cambian las dos variables locales de antes, de 7 y 9 a 32 y 264, en las
-  dos VMs igual. Y además: los números de conexión no son los mismos en las dos VMs, la VM-C admite 16 y miVM sin
-  límite, y nadie cierra las conexiones al acabar el programa.
+  dos VMs igual (**arreglado el 23-oct**: `tcpClose` empuja su 0 en las dos; `TcpCloseSuelto` en el corpus). Y además,
+  para el H3: los números de conexión no son los mismos en las dos VMs, la VM-C admite 16 y miVM sin límite, y nadie
+  cierra las conexiones al acabar el programa.
 
 **Las placas** (el ESP-IDF es el 6.0.1; la WiFi y lwIP están habilitados en su configuración, pero no se enlazan:
 nadie los pide):
@@ -1527,7 +1528,8 @@ Repasado el 19-oct (Eduardo: *«quizás convendría repasar lo que se hizo en su
    - en el IDE, la placa por la red como un backend de placa (la hora, el log, la memoria del INFO), no el de la VM
      Java.
 
-   Luego el de los programas: `Net` sobre lwIP, con `#705` y el cierre de las conexiones al acabar el programa.
+   Luego el de los programas: `Net` sobre lwIP, con el cierre de las conexiones al acabar el programa, y los mismos
+   números de conexión y el mismo tope en las dos VMs (lo que quedó de `#705`, arreglada el 23-oct).
 4. **Las demás placas:** la C3, la C5 y la C6.
 
 **Fuera**, salvo que Eduardo diga otra cosa: el servidor para los programas (`listen`/`accept`), UDP, TLS, la web de

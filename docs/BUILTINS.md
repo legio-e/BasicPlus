@@ -154,6 +154,10 @@ Convención general:
 | 44 | `__newRefArray` | `(cap: int)` | `T[]` | Aloca `TYPE_ARRAY_REF` con `cap` slots a 0. Bajo allocAnchor. |
 | 45 | `__growRefArray` | `(old: T[], newCap: int)` | `T[]` | Aloca nuevo + copia `min(oldLen, newCap)` refs. |
 | 46 | `__growIntArray` | `(old: int[], newCap: int)` | `int[]` | Idem para arrays i32. |
+
+Los que crean un array (estos, `newIntArray` y los opcodes `NEWARRAY*`) multiplican sus bytes en 64 bits, y lo que no cabe
+en la memoria de la VM entera es «No space in heap», atrapable (V8, `#712`: en 32 bits, `newIntArray(2^30 + 1)` daba un
+bloque de 4 B con una longitud de mil millones). En la VM-C pasan todos por `bpvm_prim_nuevo_array`.
 | 47 | `__charsToString` | `(chars: int[], len: int)` | `string` | Aloca string copiando `chars[0..len)`. Un código que no es un carácter (un sustituto, o fuera de 0..10FFFF), `EncodingError`: `appendChar: el código 55296 no es un carácter` (V8/H5, `#711`). |
 | 48 | `charCodeAt` | `(s: string, i: int)` | `int` | Codepoint del char `i` (sin alocar). |
 
