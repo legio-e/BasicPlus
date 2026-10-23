@@ -7506,7 +7506,7 @@ Un tamaño que venga de un dato (el puerto serie, un fichero) corrompe la memori
 - **Censar por la primitiva** todas las reservas con un tamaño calculado: `newLongArray`, `__newRefArray`, los
   `__grow*` y el AOT.
 
-#### ✅ `#711` — con UTF-8 mal formado, las dos VMs no cuentan igual: `charCodeAt` y `substring`, entre otras, dan otra cosa en la VM-C que en la VM-Java (abierta el 21-oct, en el análisis del H5; **CERRADA el 23-oct**: lo de fuera se descodifica al nacer la cadena, con `EncodingError` o «�», y lo mal formado ya no entra)
+#### ✅ `#711` — con UTF-8 mal formado, las dos VMs no cuentan igual: `charCodeAt` y `substring`, entre otras, dan otra cosa en la VM-C que en la VM-Java (abierta el 21-oct, en el análisis del H5; **CERRADA el 23-oct**: lo de fuera se descodifica al nacer la cadena, con `EncodingError` o «�», y lo mal formado ya no entra, `5cffcc60`)
 
 - **La VM-C** decodifica a mano (`utf8_decode`): un byte que no empieza un carácter vale su número, y no mira si los
   que siguen son de continuación.
@@ -7628,6 +7628,8 @@ caracteres; `StringBuilder.toString` validará sus piezas (una pasada más con a
 - **la GUI:** `read_bp_string` recorta por caracteres (`Utf8Gui`);
 - **las pruebas:** `Utf8Descodifica` (73 comprobaciones escritas a mano desde el estándar) y `Utf8Gui`, en el corpus.
   Cada prueba nueva, con su sabotaje visto. La salida de los 156 samples de antes, idéntica.
+- **en placa:** la Metro (M) y la Pico 2 (P), grabadas con la imagen nueva: `Utf8Descodifica` (73 comprobaciones,
+  0 malas), `MoveSoloLectura` y `StrDosCaminos`, igual que el PC.
 
 Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs). `V8_IDEAS` §E5, «`#711` HECHO».
 

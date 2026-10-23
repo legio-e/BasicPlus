@@ -75,8 +75,9 @@
 >     repetida entera;
 >   - el servidor de eco que lancé a mano (`test_net serve 25`) no sale si nadie se conecta, y se quedó con el puerto: el
 >     `test-net` de la red se colgó contra él, 27 minutos sin una línea. Matado, y `test-net` repetido solo, verde.
-> - **Las placas:** la Metro y la Pico 2, con la imagen del árbol (el CRC de cada una, comprobado con su `.elf`). Las dos
->   tienen además `/app/MoveSoloLectura.mod` y `/app/StrDosCaminos.mod`. La P4, sin tocar.
+> - **Las placas:** la Metro (M) y la Pico 2 (P), grabadas otra vez con la imagen de `#711` (el CRC de cada una, el de su
+>   `.elf`): `Utf8Descodifica`, `MoveSoloLectura` y `StrDosCaminos`, igual que el PC. Las dos tienen esos tres en `/app`,
+>   y un `/app/Json.mod` nuevo que tapa al `/lib/Json.mod` de antes (al mandarles la stdlib nueva, sobra). La P4, sin tocar.
 > - **Riesgo a vigilar:** lo compilado desde hoy llama a los builtins 283 (en cada suma de cadenas) y 284–286, la stdlib
 >   incluida. Una placa con la imagen de antes (la P4, las ESP32, la STM32) no los tiene: hay que grabarla antes de
 >   mandarle la stdlib o programas nuevos.

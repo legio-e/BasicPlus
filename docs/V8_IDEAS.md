@@ -3818,7 +3818,10 @@ Esperando el OK de Eduardo a las propuestas 1 y 2.
   (`PARIDAD_GUARDA=<dir> compat.sh check-paridad`, nuevo: la paridad sola no ve que las dos VMs cambien igual);
 - **la red VERDE:** paridad 158 en MOD9, en MOD8 y con dos workers; cápsula V6, 59; norma 9/9; sim 12/12; pruebas de
   C, 104/104 (con `test-utf8`; `test-net` se colgó contra un servidor de eco que dejé vivo a mano, y repetido solo,
-  pasa); sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
+  pasa); sombra 15/15; el estrés, `packs-abi` y la stdlib embebida;
+- **en placa:** la Metro (M) y la Pico 2 (P), grabadas con la imagen nueva (su CRC, el de su `.elf`): `Utf8Descodifica`
+  (73, 0 malas; con un `Json.mod` nuevo en `/app`, que tapa al viejo de `/lib`), `MoveSoloLectura` y `StrDosCaminos`,
+  igual que el PC. Las ESP32, la STM32 y la P4, en el próximo lote.
 
 Lo que queda fuera, cada cosa en su ficha: el texto de los packs (SQLite: `string_from_cstr` no descodifica, y el
 pegamento del AOT corta en 512 bytes, a veces a medio carácter, y sin avisar), y los streams (por diseñar). El caso
