@@ -7105,7 +7105,7 @@ Eduardo: *«la red de pruebas no se podría hacer en paralelo para ahorrar tiemp
 Lo propuesto: medir primero cada frente (un tiempo por frente en `compat.sh`), repartir las pasadas del corpus, medir
 otra vez, y luego las pruebas de C. A ojo, de unos 45 minutos a 10-15; lo dirá la medida.
 
-#### ✅ `#725` — `Json.parseJson` se para en el primer error: con un fichero con diez, se arreglan de uno en uno (abierta el 23-oct, una idea de Eduardo; **CERRADA el mismo día**: sigue tras cada error, como un compilador, y los da todos, diez como mucho)
+#### ✅ `#725` — `Json.parseJson` se para en el primer error: con un fichero con diez, se arreglan de uno en uno (abierta el 23-oct, una idea de Eduardo; **CERRADA el mismo día**: sigue tras cada error, como un compilador, y los da todos, diez como mucho, `6f9a7a77`)
 
 Eduardo, al decidir `#716`: *«A ver para ParseJson, lo ideal es que si encuentra un error continue parseando y devuelva
 varios errores al final. Lo digo porque si tienes un fichero Json y el parseador tiene 10 errores y los localiza 1 a 1
