@@ -50,7 +50,9 @@
 >   uint32»*), sin empezar (`V8_IDEAS` §E6). Lo hablado:
 >   - un elemento es su máscara (una potencia de 2). `+` se escribe y se hace con `|`; `-` se escribe y se hace con `& ~`;
 >   - se declaran como el `enum`. Fuera de las llaves, el elemento lleva el nombre de su conjunto (*«1 ControlBits.bitOn»*);
->   - por decidir: qué hace `ControlBits(registro)` con un bit no declarado, y cómo se imprime.
+>   - un conjunto tiene el tamaño de sus elementos (Eduardo: *«el conjunto de 4 elementos tiene un tamaño de 4»*), y un
+>     bit de fuera es una excepción. Sólo puede entrar al convertir un entero (`ControlBits(registro)`), y ahí se mira. Se
+>     le había propuesto dejarlo, por los registros; no. Se imprime el número, como el `enum`.
 > - **Las placas:** la Metro y la Pico 2, con la imagen del árbol (el CRC de cada una, comprobado con su `.elf`). Las dos
 >   tienen además `/app/MoveSoloLectura.mod` y `/app/StrDosCaminos.mod`. La P4, sin tocar.
 > - **Riesgo a vigilar:** lo compilado desde hoy llama al builtin 283 en cada suma de cadenas, la stdlib incluida. Una

@@ -7018,7 +7018,7 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 >
 > 📌 **El rumbo de los próximos días** (Eduardo, 22-oct): *«De momento estos dias podemos ir solucionando temas pendientes. Mas adelante podemos retomar el Bluetooth y la Wifi.»*
 >
-> 💡 **Una idea de Eduardo, para después de los pendientes** (23-oct): *«añadir sets? De momento limitado a 31 elementos y representados por un uint32. Los sets son similares a los de Pascal»*; y *«OK, terminamos el #714 primero»*. Lo visto ese día (casi todo en el compilador; la VM ya tiene las operaciones de bits; las palabras `in` y `set` ya están reservadas), en `V8_IDEAS` §E6. Sin empezar.
+> 💡 **Una idea de Eduardo, para después de los pendientes** (23-oct): *«añadir sets? De momento limitado a 31 elementos y representados por un uint32. Los sets son similares a los de Pascal»*; y *«OK, terminamos el #714 primero»*. Lo visto ese día (casi todo en el compilador; la VM ya tiene las operaciones de bits; las palabras `in` y `set` ya están reservadas), en `V8_IDEAS` §E6. Decidido ese día con Eduardo: un elemento es su máscara (una potencia de 2) y `+`/`-` se hacen con `|`/`& ~`; se declaran con `set`, como el `enum`; fuera de las llaves, `ControlBits.bitOn`; un conjunto tiene el tamaño de sus elementos, y un bit de fuera, al convertir un entero, es una excepción; se imprime el número. Sin empezar: falta el análisis completo, con la sintaxis de BP y la de JC.
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 

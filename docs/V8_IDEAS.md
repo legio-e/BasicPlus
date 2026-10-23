@@ -3932,9 +3932,27 @@ un elemento se puede representar con una resta pero se tiene que hacer con un 'a
 conjunto, `ControlBits.bitOn in control`, como el `enum` (`Dia.MIERCOLES`). Dentro de las llaves, el nombre solo, como
 en su ejemplo: el conjunto ya se sabe por el tipo (`var control: ControlBits := { bitOn, bitRed }`).
 
-**Por decidir:** qué hace `ControlBits(registro)` con un bit no declarado (error, quitarlo o dejarlo). Ojo: un `enum` no
-se convierte desde un entero (`Dia(2)` es error de compilación), y un conjunto sí lo necesita, para leer un registro. Y
-si `print control` escribe los nombres (`{bitOn, bitRed}`, con los nombres guardados en el `.mod`) o el número, como el
-`enum`.
+**Lo que quedaba: un bit no declarado al convertir un entero (`ControlBits(registro)`), y cómo se imprime.** Se le
+propuso dejar el bit (como Pascal y C#), para que un registro leído, cambiado y escrito de vuelta no perdiera sus bits
+reservados. **Decidido** (Eduardo, 23-oct): *«un conjunto tiene un tamaño. Lo representamos con un entero de 32 bits
+pero el conjunto de 4 elementos tiene un tamaño de 4. Bien, si en una operación intentamos añadir un bit de fuera de
+rango, lo correcto sería una excepción pero a mi si se ignora el bit fuera de rango y no se almacena también me vale.»*
+Con eso:
+- **el tamaño de un conjunto es el de sus elementos:** sus bits son los de sus elementos declarados, una máscara que
+  calcula el compilador (en `ControlBits`, `0x83`). Con valores explícitos puede tener huecos: `0x04` también está
+  fuera;
+- **un bit de fuera es una excepción** (lo correcto, según Eduardo; ignorarlo también le valía). Sólo puede entrar por
+  un sitio, la conversión desde un entero: las operaciones entre dos conjuntos del mismo tipo (`|`, `& ~`, `&`) no
+  pueden sacar un bit de fuera, y el tipo no deja sumarle un entero. Se mira ahí y sólo ahí, con un `&` y una
+  comparación; con una constante (`ControlBits(0x100)`), el error lo da el compilador;
+- **el entero y el conjunto son siempre lo mismo:** la igualdad compara los enteros, contar los elementos es contar los
+  bits a 1, y recorrerlo es recorrer esos bits;
+- **un registro con más bits** se enmascara a la vista, `ControlBits(registro & 0x83)`, y al escribirlo de vuelta se le
+  juntan los suyos: `registro := (registro & ~0x83) | integer(control)`. Por decidir en el análisis: cómo se nombra el
+  conjunto entero, para no escribir `0x83` a mano;
+- **un complemento**, si lo hay, dentro del tamaño (`0x83 & ~control`), nunca `~control`.
+
+**Y lo demás, con su «OK»:** se imprime el número, como el `enum` (en hexadecimal, `Str.toHex(integer(control))`); los
+nombres, si algún día se quieren, para los dos tipos a la vez. Y se declaran con `set`, que ya es reservada.
 
 Lo siguiente, cuando Eduardo diga: el análisis completo, con la sintaxis de BP y la de JC.
