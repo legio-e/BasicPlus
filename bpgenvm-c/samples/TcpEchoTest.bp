@@ -7,6 +7,8 @@
 //   conectado
 //   eco: hola eco
 //   eco: BasicPlus en red
+//   partida 1: [a]
+//   partida 2: [ñb]
 //   timeout-len: 0
 //   heap: recorrido entero
 //   tras-close: false
@@ -36,6 +38,19 @@ module TcpEchoTest
 
     c.sendStr("BasicPlus en red")
     print "eco:", c.recvStr(64, 2000)
+
+    // V8/H5 (#711): una ñ (C3 B1) partida entre dos paquetes no es un error: su primer byte se queda en la conexión
+    // y se junta con el paquete siguiente
+    var p1: byte[] := newByteArray(2)
+    p1[0] := byte(0x61)
+    p1[1] := byte(0xC3)
+    c.send(p1)
+    print "partida 1: [" + c.recvStr(64, 2000) + "]"
+    var p2: byte[] := newByteArray(2)
+    p2[0] := byte(0xB1)
+    p2[1] := byte(0x62)
+    c.send(p2)
+    print "partida 2: [" + c.recvStr(64, 2000) + "]"
 
     // El server solo responde a lo que recibe: sin tráfico, el recv
     // agota su timeout y devuelve un byte[] vacío.

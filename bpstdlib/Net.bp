@@ -56,9 +56,11 @@ module Net
   public class Tcp
 
     public property h: integer   // handle de la conexión; 0 = no conectada
+    private var pendiente: byte[]   // V8/H5 (#711): el principio de un carácter que no llegó entero (0 a 3 bytes)
 
     public function Tcp()
       this.h := 0
+      this.pendiente := newByteArray(0)
     end Tcp
 
     // Conecta. Devuelve true si la conexión quedó establecida.
@@ -86,9 +88,58 @@ module Net
       return tcpRecv(this.h, max, timeoutMs)
     end recv
 
-    // Azúcar: lee y decodifica como UTF-8 ("" = timeout).
+    // Azúcar: lee y decodifica como UTF-8 ("" = timeout). V8/H5 (#711): un carácter puede llegar partido entre dos
+    // paquetes; sus primeros bytes (tres como mucho) se quedan en la conexión y se juntan con el paquete siguiente, en
+    // vez de dar un error con un texto bueno (Eduardo, de los streams: «si le faltan bytes lo que toca sería esperar a
+    // que continue la lectura»). Si vence el plazo, "" y lo pendiente sigue esperando. Lo que no es UTF-8 válido,
+    // EncodingError; con ignorarError, «�». Va ANTES que recvStr(max, timeoutMs), que la llama.
+    public function recvStr(max: integer, timeoutMs: integer, ignorarError: boolean): string
+      var llega: byte[] := tcpRecv(this.h, max, timeoutMs)
+      var np: integer := len(this.pendiente)
+      var n: integer := np + len(llega)
+      var b: byte[] := llega
+      if np > 0 then
+        b := newByteArray(n)
+        move(this.pendiente, b, 0, 0, np)
+        move(llega, b, 0, np, len(llega))
+      endif
+      // un principio de carácter (C2..F4) entre los tres últimos bytes, con menos bytes detrás de los que pide: ahí
+      // se corta, y lo de detrás espera al paquete siguiente
+      var corte: integer := n
+      var i: integer := n - 1
+      var parar: boolean := false
+      while i >= 0 and i >= n - 3 and not parar do
+        var c: integer := b[i] & 255
+        if c >= 0xC0 then
+          var pide: integer := 0
+          if c >= 0xC2 and c <= 0xDF then
+            pide := 2
+          elseif c >= 0xE0 and c <= 0xEF then
+            pide := 3
+          elseif c >= 0xF0 and c <= 0xF4 then
+            pide := 4
+          endif
+          if pide > n - i then
+            corte := i
+          endif
+          parar := true
+        elseif c < 0x80 then
+          parar := true
+        endif
+        i := i - 1
+      endwh
+      this.pendiente := newByteArray(n - corte)
+      move(b, this.pendiente, corte, 0, n - corte)
+      var cuerpo: byte[] := b
+      if corte < n then
+        cuerpo := newByteArray(corte)
+        move(b, cuerpo, 0, 0, corte)
+      endif
+      return fromBytes(cuerpo, ignorarError)
+    end recvStr
+
     public function recvStr(max: integer, timeoutMs: integer): string
-      return fromBytes(tcpRecv(this.h, max, timeoutMs))
+      return this.recvStr(max, timeoutMs, false)
     end recvStr
 
     public function close()

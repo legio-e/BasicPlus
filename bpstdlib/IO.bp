@@ -171,6 +171,9 @@ module IO
   public function __freadLine(st: byte[]): string
     inline CALL_BUILTIN 249
   end __freadLine
+  public function __freadLineI(st: byte[], ignorarError: boolean): string   // V8/H5 (#711): con el indicador
+    inline CALL_BUILTIN 286
+  end __freadLineI
 
   // Un fichero abierto, en BYTES. Modos: "r" (existe; sólo lectura), "w" (crea o trunca),
   // "a" (crea si falta; el cursor al FINAL al abrir), "r+" (existe; lectura y escritura).
@@ -182,9 +185,10 @@ module IO
     private var abierto: boolean
     private var uno: byte[]          // el byte suelto de readByte/writeByte, sin reservar uno por llamada
 
-    // La siguiente línea, en nativo (para TextFile; ver allí el contrato).
-    function leerLinea(): string
-      return __freadLine(this.st)
+    // La siguiente línea, en nativo (para TextFile; ver allí el contrato). V8/H5 (#711): con el indicador de
+    // TextFile.readLine(ignorarError).
+    function leerLinea(ignorarError: boolean): string
+      return __freadLineI(this.st, ignorarError)
     end leerLinea
 
     // Los primeros n bytes de src, en un array nuevo (para la clase y sus hijas).
@@ -313,12 +317,20 @@ module IO
     // La siguiente línea, sin su terminador; tolera "\r\n"; "" al final (lo dice eof()). En
     // NATIVO: la versión en BP (trozos de 32 + skip) salía 15x más lenta que readFile+split en la
     // Pico (FileBench, 21-sep); ésta va a la par sin traer el fichero entero.
+    // V8/H5 (#711): si no es UTF-8 válido, EncodingError (y la línea queda leída: un bucle con try sigue
+    // con la siguiente); con readLine(true), cada trozo malo pasa a «�». Dos SOBRECARGAS, no un valor por
+    // defecto: la de siempre conserva su clave, y lo ya compilado sigue enlazando.
     public function readLine(): string
-      return this.leerLinea()
+      return this.leerLinea(false)
     end readLine
 
-    // n CARACTERES (no bytes), o los que queden.
-    public function readStr(n: integer): string
+    public function readLine(ignorarError: boolean): string
+      return this.leerLinea(ignorarError)
+    end readLine
+
+    // n CARACTERES (no bytes), o los que queden. V8/H5 (#711): como readLine, EncodingError o, con
+    // ignorarError, «�». Va ANTES que readStr(n), que la llama (los métodos se resuelven en orden).
+    public function readStr(n: integer, ignorarError: boolean): string
       var acc: byte[] := newByteArray(64)
       var cnt: integer := 0
       var chars: integer := 0
@@ -356,7 +368,11 @@ module IO
           endwh
         endif
       endwh
-      return fromBytes(this.primerosBytes(acc, cnt))
+      return fromBytes(this.primerosBytes(acc, cnt), ignorarError)
+    end readStr
+
+    public function readStr(n: integer): string
+      return this.readStr(n, false)
     end readStr
 
     // Sobrecarga NUEVA (la base no tiene write(string)): los bytes UTF-8 del texto.

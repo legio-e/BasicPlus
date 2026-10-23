@@ -208,6 +208,18 @@ module Core
     end RuntimeError
   end RuntimeError
 
+  // V8/H5 (23-oct, #711) — el texto de fuera que no es UTF-8 válido, al descodificarlo (fromBytes, readFile,
+  // TextFile.readLine…: «fromBytes: UTF-8 mal formado en el byte 5 (0xF1)»), y un appendChar con algo que no es un
+  // carácter. Eduardo: «debería producirse una excepción de codificación pero si ignoramos el error lo que hay que hacer
+  // es utilizar un caracter especial» (las sobrecargas con `ignorarError`). Hija de RuntimeError: quien ya atrapa
+  // RuntimeError la atrapa también. Sin campos propios (msg en el slot 0): las dos VMs la fabrican como a RuntimeError,
+  // buscándola por su nombre (con un Core de antes, sin ella, lanzan RuntimeError).
+  public class EncodingError extends RuntimeError
+    public function EncodingError(m: string)
+      super(m)
+    end EncodingError
+  end EncodingError
+
   // -------------------------------------------------------------
   // #446 — COMPARABLE Y LOS ENVOLTORIOS, traidos de Collections el 18-ago.
   //
@@ -1678,6 +1690,29 @@ module Core
   function __strNace(b: byte[]): string   // los __strconcat del compilador
     inline CALL_BUILTIN 283
   end __strNace
+  // V8/H5 (23-oct, #711) — DESCODIFICAR lo de fuera, ignorando el error si se pide (Eduardo: «un parámetro opcional que
+  // indique el comportamiento»). Sin él (fromBytes(b), readFile(path), TextFile.readLine()), los de siempre (120, 38 y
+  // 249) con la regla nueva: EncodingError si no es UTF-8 válido. Con `ignorarError` = true, cada trozo malo pasa a «�»
+  // (U+FFFD, por el estándar: una «subparte máxima», un «�»). Son SOBRECARGAS, no un valor por defecto: el valor por
+  // defecto lo pone quien llama, así que lo ya compilado llamaría a otra firma; con la sobrecarga, la de un argumento
+  // sigue siendo la de siempre (y en una clase, su clave de enlace). Se escribe igual: fromBytes(b) y fromBytes(b, true).
+  // La primera declaración de cada número es la canónica (su nombre, el del builtin: gen_builtins.py); la pública, un
+  // alias. V8_IDEAS §E5, «#711: el plan».
+  function __fromBytesI(b: byte[], ignorarError: boolean): string
+    inline CALL_BUILTIN 284
+  end __fromBytesI
+  public function fromBytes(b: byte[], ignorarError: boolean): string
+    inline CALL_BUILTIN 284
+  end fromBytes
+  function __readFileI(path: string, ignorarError: boolean): string
+    inline CALL_BUILTIN 285
+  end __readFileI
+  public function readFile(path: string, ignorarError: boolean): string
+    inline CALL_BUILTIN 285
+  end readFile
+  function __freadLineI(st: byte[], ignorarError: boolean): string   // IO.TextFile.readLine(ignorarError), en nativo
+    inline CALL_BUILTIN 286
+  end __freadLineI
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

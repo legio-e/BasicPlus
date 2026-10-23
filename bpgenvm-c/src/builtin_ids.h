@@ -289,7 +289,10 @@ enum {
     BUILTIN_UART_RELEASE                 = 281,   /* __uartRelease(bus: integer, tx: integer, rx: integer) */
     BUILTIN_STR_COMPARE                  = 282,   /* __strCompare(a: string, b: string): integer */
     BUILTIN_STR_NACE                     = 283,   /* __strNace(b: byte[]): string */
-    BUILTIN__CUANTOS = 284
+    BUILTIN_FROM_BYTES_I                 = 284,   /* __fromBytesI(b: byte[], ignorarError: boolean): string */
+    BUILTIN_READ_FILE_I                  = 285,   /* __readFileI(path: string, ignorarError: boolean): string */
+    BUILTIN_FREAD_LINE_I                 = 286,   /* __freadLineI(st: byte[], ignorarError: boolean): string */
+    BUILTIN__CUANTOS = 287
 };
 
 #endif

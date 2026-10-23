@@ -15,6 +15,7 @@
  *
  * Salida esperada del .mod (ver samples/TcpEchoTest.bp):
  *   conectado / eco: hola eco / eco: BasicPlus en red /
+ *   partida 1: [a] / partida 2: [ñb] (V8/H5 #711: una ñ partida entre dos paquetes) /
  *   timeout-len: 0 / tras-close: false / fin
  */
 #include "bpvm.h"
@@ -149,6 +150,8 @@ int main(int argc, char** argv) {
             && strstr(s_out, "conectado")          != NULL
             && strstr(s_out, "eco: hola eco")      != NULL
             && strstr(s_out, "eco: BasicPlus en red") != NULL
+            && strstr(s_out, "partida 1: [a]")     != NULL   /* V8/H5 #711: la ñ partida entre dos paquetes... */
+            && strstr(s_out, "partida 2: [ñb]")    != NULL   /* ...sale entera, sin error */
             && strstr(s_out, "timeout-len: 0")     != NULL
             && strstr(s_out, "heap: recorrido entero") != NULL   /* #597: lo recibido deja el heap recorrible */
             && strstr(s_out, "fin")                != NULL;

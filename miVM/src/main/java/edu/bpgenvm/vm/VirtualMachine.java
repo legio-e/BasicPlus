@@ -1037,6 +1037,13 @@ public class VirtualMachine {
     }
 
     public void throwBpRuntimeError(ThreadContext tc, String message) {
+        throwBpError(tc, "Core.RuntimeError", message);
+    }
+
+    /** V8/H5 (#711) — lanza una excepción de Core de la clase `clase` («Core.EncodingError»), fabricada como
+     *  RuntimeError: sin campos propios, el msg en el slot 0. Si el Core cargado no la tiene (uno de antes),
+     *  RuntimeError. El espejo, bpvm_throw_error_clase (exceptions.c). */
+    public void throwBpError(ThreadContext tc, String clase, String message) {
         ModuleManager mm = getModuleManager();
         if (mm == null) {
             throw new BpThreadFault(message);
@@ -1044,7 +1051,8 @@ public class VirtualMachine {
         // #248 — primero la clase ÚNICA de Core (jerarquía Object -> Exception
         // -> RuntimeError). Fallback: la copia per-módulo legado (mods viejos),
         // resuelta contra el cs del thread.
-        Integer classPtrBox = mm.resolveGlobal("Core.RuntimeError");
+        Integer classPtrBox = mm.resolveGlobal(clase);
+        if (classPtrBox == null && !"Core.RuntimeError".equals(clase)) classPtrBox = mm.resolveGlobal("Core.RuntimeError");
         if (classPtrBox == null) classPtrBox = mm.resolveExportInModule(tc.cs, "RuntimeError");
         if (classPtrBox == null) {
             // El módulo del thread actual no exportó RuntimeError (es un
@@ -4952,6 +4960,19 @@ public class VirtualMachine {
         return h;
     }
 
+    /** V8/H5 (#711) — una cadena nace de bytes que vienen de FUERA (un fichero, una línea): si son UTF-8 válido, tal
+     *  cual; si no, EncodingError («<que>: UTF-8 mal formado en el byte N (0xNN)»), o, con `ignorar`, cada trozo malo
+     *  cambiado por U+FFFD. Los bytes, en un array de Java (ya fuera del heap: reservar puede colectar). */
+    private long nacerDeFuera(ThreadContext tc, byte[] datos, boolean ignorar, String que) {
+        int n = datos.length;
+        int malo = Utf8.primerMalo(datos, 0, n);
+        if (malo < 0) return allocVmStrBytes(datos, 0, n, bytesAscii(datos, 0, n));
+        if (!ignorar) throwBpError(tc, "Core.EncodingError", Utf8.mensaje(que, malo, datos[malo] & 0xFF));
+        byte[] bien = new byte[Utf8.largoCorregido(datos, 0, n)];
+        Utf8.corrige(datos, 0, n, bien, 0);
+        return allocVmStrBytes(bien, 0, bien.length, false);   // lleva al menos un U+FFFD: no es ASCII
+    }
+
     /** Aloca un nuevo string en el heap (byte[] UTF-8) con el contenido de Java String. Devuelve user_ref. */
     private long allocVmString(String s) {
         byte[] utf8 = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
@@ -5686,7 +5707,9 @@ public class VirtualMachine {
                 break;
             }
 
-            case READ_FILE: {
+            case READ_FILE:
+            case READ_FILE_I: {   // V8/H5 (#711): readFile(path, ignorarError), el 285
+                boolean ignorar = (b == Builtin.READ_FILE_I) && popTc(tc) != 0;
                 String path = readVmString(popTcRef(tc));
                 byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
                 Breve ab = abreBreve(tc, "readFile", path, claveFichero(tc, path, data), 0);   // V7 #657: un open para leer, mientras dura
@@ -5699,7 +5722,10 @@ public class VirtualMachine {
                     cierraBreve(ab);
                 }
                 if (data != null) {
-                    pushTcRef(tc, allocVmString(new String(data, java.nio.charset.StandardCharsets.UTF_8)));
+                    // V8/H5 (#711) — se DESCODIFICA con la rutina del estándar (Utf8), no con la de Java (que cambiaba
+                    // cada trozo malo por «�» sin avisar, y en un caso distinto del estándar): EncodingError, o «�» con
+                    // ignorarError. Lo válido, tal cual.
+                    pushTcRef(tc, nacerDeFuera(tc, data, ignorar, "readFile('" + path + "')"));
                 } else {
                     // N-readfile-msg-skew — el mensaje era e.getMessage(): la ruta
                     // NORMALIZADA POR LA PLATAFORMA (en Windows, con barras
@@ -5858,7 +5884,9 @@ public class VirtualMachine {
                 pushTc(tc, (int) ((b == Builtin.FTELL) ? c.pos : c.size));
                 break;
             }
-            case FREAD_LINE: {   // TextFile.readLine en nativo (espejo de BUILTIN_FREAD_LINE)
+            case FREAD_LINE:
+            case FREAD_LINE_I: {   // TextFile.readLine en nativo (espejo de BUILTIN_FREAD_LINE); V8/H5 (#711): el 286, con el indicador
+                boolean ignorar = (b == Builtin.FREAD_LINE_I) && popTc(tc) != 0;
                 long sref = popTcRef(tc);
                 CursorBP c = cursorDe(tc, sref, "File.readLine()");
                 java.io.ByteArrayOutputStream bo = new java.io.ByteArrayOutputStream(64);
@@ -5881,12 +5909,10 @@ public class VirtualMachine {
                 byte[] linea = bo.toByteArray();
                 int len = linea.length;
                 if (len > 0 && linea[len - 1] == '\r') len--;
-                long h = heapNuevo(TYPE_ARRAY_I8, len, len);   // V7/H7 #593
-                System.arraycopy(linea, 0, memory, refDeref(h) + 4, len);
-                strNace(h, bytesAscii(linea, 0, len));   // V8/H5: la línea nace con su bit (y #714: de solo lectura)
-                ThreadContext me = currentTcLocal.get();
-                if (me != null) me.allocAnchor = (int) h;
-                pushTcRef(tc, h);
+                // V8/H5: la línea nace con su bit (y #714: de solo lectura). #711: DESCODIFICADA (EncodingError, o «�»
+                // con el indicador); si lanza, la línea queda leída, como en Java (un bucle con try sigue con la otra)
+                if (len < linea.length) linea = java.util.Arrays.copyOf(linea, len);
+                pushTcRef(tc, nacerDeFuera(tc, linea, ignorar, "File.readLine()"));
                 break;
             }
             case FFLUSH: {
@@ -6033,8 +6059,17 @@ public class VirtualMachine {
                 int cd = (charsRef != 0) ? refDeref(charsRef) : 0;   // V4: dirección física
                 int avail = (cd != 0) ? readInt32(cd) : 0;
                 if (len > avail) throwBpRuntimeError(tc, "__charsToString: longitud " + len + " > capacidad " + avail);
+                // V8/H5 (#711): un appendChar con algo que no es un carácter (un sustituto, o fuera de 0..10FFFF) es un
+                // fallo del programa: EncodingError, sin parámetro. Antes: «?» o el hilo muerto aquí, bytes malos en la VM-C
+                for (int i = 0; i < len; i++) {
+                    int cp = readInt32(cd + 4 + i * 4);
+                    if (!Utf8.esCaracter(cp)) throwBpError(tc, "Core.EncodingError", "appendChar: el código " + cp + " no es un carácter");
+                }
                 StringBuilder sb = new StringBuilder(len);
-                for (int i = 0; i < len; i++) sb.appendCodePoint(readInt32(cd + 4 + i * 4));
+                for (int i = 0; i < len; i++) {
+                    int cp = readInt32(cd + 4 + i * 4);
+                    sb.appendCodePoint(Utf8.esCaracter(cp) ? cp : 0xFFFD);   // #711: otro hilo lo cambió entre las dos pasadas
+                }
                 pushTcRef(tc, allocVmString(sb.toString()));   // H2: codifica UTF-8
                 break;
             }
@@ -6054,16 +6089,27 @@ public class VirtualMachine {
                 break;
             }
             case TO_BYTES:
-            case FROM_BYTES: {
+            case FROM_BYTES:
+            case FROM_BYTES_I: {   // V8/H5 (#711): fromBytes(b, ignorarError), el 284
                 // H2 (V2): string y byte[] comparten layout (TYPE_ARRAY_I8). La
                 // conversión es una copia defensiva (string inmutable / byte[]
                 // mutable): mismos bytes, objeto nuevo.
+                boolean ignorar = (b == Builtin.FROM_BYTES_I) && popTc(tc) != 0;
                 long ref = popTcRef(tc);   // #6 (censo V4): string/byte[] ref = 8B
                 int rd = (ref == 0) ? 0 : refDeref(ref);   // V4: dirección física fuente
                 int n = (rd == 0) ? 0 : readInt32(rd);
+                if (b != Builtin.TO_BYTES) {
+                    // V8/H5 (#711) — fromBytes es el DESCODIFICADOR: lo que no es UTF-8 válido, EncodingError, o «�»
+                    // con el indicador (nacerDeFuera, con los bytes sacados del heap antes de reservar)
+                    int malo = (n == 0) ? -1 : Utf8.primerMalo(memory, rd + 4, n);
+                    if (malo >= 0) {
+                        pushTcRef(tc, nacerDeFuera(tc, java.util.Arrays.copyOfRange(memory, rd + 4, rd + 4 + n), ignorar, "fromBytes"));
+                        break;
+                    }
+                }
                 long outRef = heapNuevo(TYPE_ARRAY_I8, n, n);   // V4: handle 64b COMPLETO (no truncar); V7/H7 #593
                 if (n > 0) System.arraycopy(memory, rd + 4, memory, refDeref(outRef) + 4, n);
-                if (b == Builtin.FROM_BYTES)   // V8/H5: la cadena nace con su bit (un byte[] no lo lleva nunca)
+                if (b != Builtin.TO_BYTES)   // V8/H5: la cadena nace con su bit (un byte[] no lo lleva nunca)
                     strNace(outRef, bytesAscii(memory, refDeref(outRef) + 4, n));
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG) que refDeref usa

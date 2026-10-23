@@ -626,6 +626,28 @@ module Json
             u := u * 16 + parseHexDigitOn(r)
             k := k + 1
           endwh
+          // V8/H5 (#711): un carácter por encima de FFFF va en JSON como DOS \u, un par de sustitutos (el alto,
+          // D800..DBFF, y el bajo, DC00..DFFF: RFC 8259 §7). Se juntan en uno. Uno suelto no es un carácter
+          // (appendChar daría EncodingError): es un error de JSON, con su posición, como los demás.
+          if u >= 55296 and u <= 57343 then              // D800..DFFF
+            var donde: integer := r.pos - 6               // la barra del \u
+            var bajo: integer := -1
+            if u <= 56319 and r.peek() == 92 then         // un alto (..DBFF) y detrás una barra
+              r.advance()
+              if r.advance() == 117 then                  // 'u'
+                bajo := 0
+                k := 0
+                while k < 4 do
+                  bajo := bajo * 16 + parseHexDigitOn(r)
+                  k := k + 1
+                endwh
+              endif
+            endif
+            if bajo < 56320 or bajo > 57343 then          // DC00..DFFF
+              throw RuntimeError("JSON: sustituto UTF-16 sin su pareja en pos " + intToString(donde))
+            endif
+            u := 65536 + (u - 55296) * 1024 + (bajo - 56320)
+          endif
           sb.appendChar(u)
         else
           throw RuntimeError("JSON: secuencia de escape inválida en pos " + intToString(r.pos - 1))

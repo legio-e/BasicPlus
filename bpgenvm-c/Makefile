@@ -1396,6 +1396,15 @@ test-sqlmem:
 	@echo "--- V5/H bloque de memoria de la BD (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_sqlmem.exe
 
+# V8/H5 (#711) — la rutina de validar y corregir UTF-8 (bpvm_internal.h) contra un ORÁCULO escrito
+# de otra forma (la tabla 3-7 del estándar, fila a fila): todas las secuencias de 1 a 3 bytes y un
+# millón al azar de 4 a 12, como Utf8Test de miVM. Host-only: sólo la cabecera.
+test-utf8:
+	@mkdir -p build
+	$(CC) $(CFLAGS) test/test_utf8.c -o build/test_utf8.exe
+	@echo "--- V8/H5 #711 UTF-8: la rutina contra la tabla del estandar (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_utf8.exe
+
 # V6/U6 — el planificador de memoria contra los numeros MEDIDOS de cada placa
 # (C3, S3, Metro con PSRAM, Pico sin ella). Host-only: solo <stddef.h>/<stdio.h>.
 test-mem:

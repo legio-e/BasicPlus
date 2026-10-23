@@ -1,0 +1,242 @@
+// Utf8Descodifica.bp — V8/H5 (23-oct, #711): LO QUE VIENE DE FUERA SE DESCODIFICA AL NACER LA CADENA.
+//
+// La regla de Eduardo (22-oct): «un string es un invariante»; leer de fuera son dos pasos, leer los bytes y
+// descodificarlos, y el error se ve al descodificar: por defecto, una excepción de codificación (EncodingError, hija de
+// RuntimeError); si se ignora el error (el segundo argumento, `true`), cada trozo malo pasa a «�» (U+FFFD, EF BF BD),
+// uno por «subparte máxima», como dice el estándar de Unicode (§3.9). Por cada entrada —fromBytes, readFile,
+// TextFile.readLine y readStr, appendChar y Json— lo que tiene que salir, escrito a mano a partir del estándar: una
+// línea FALLO pone la red en rojo aunque las dos VMs coincidan. Lo que se compara son los BYTES, en hexadecimal.
+module Utf8Descodifica
+  import IO
+  import Json
+
+  var F: string := "u711.txt"
+  var buenas: integer := 0
+  var malas: integer := 0
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      buenas += 1
+      print "ok " + que + ": " + obtenido
+    else
+      malas += 1
+      print "FALLO " + que + ": [" + obtenido + "], se esperaba [" + esperado + "]"
+    endif
+  end mira
+
+  function bytes(v: integer[]): byte[]
+    var b: byte[] := newByteArray(len(v))
+    var i: integer := 0
+    while i < len(v) do
+      b[i] := byte(v[i])
+      i += 1
+    endwh
+    return b
+  end bytes
+
+  function hex2(v: integer): string
+    var d: string := "0123456789ABCDEF"
+    return charAt(d, v / 16) + charAt(d, v mod 16)
+  end hex2
+
+  // los bytes de la cadena, en hexadecimal (un «�» se ve como EF BF BD)
+  function hex(s: string): string
+    var b: byte[] := toBytes(s)
+    var r: string := ""
+    var i: integer := 0
+    while i < len(b) do
+      if i > 0 then
+        r := r + " "
+      endif
+      r := r + hex2(b[i] & 255)
+      i += 1
+    endwh
+    return r
+  end hex
+
+  // fromBytes con y sin ignorar el error: lo que da cada uno
+  function desc(que: string, v: integer[], conError: string, ignorando: string)
+    try
+      var s: string := fromBytes(bytes(v))
+      mira(que + ", fromBytes(b)", "no lanzó: " + hex(s), conError)
+    catch e: EncodingError
+      mira(que + ", fromBytes(b)", e.msg, conError)
+    endtry
+    mira(que + ", fromBytes(b, true)", hex(fromBytes(bytes(v), true)), ignorando)
+  end desc
+
+  // lo válido, tal cual, por los dos caminos
+  function valida(que: string, v: integer[], esperado: string)
+    mira(que + ", fromBytes(b)", hex(fromBytes(bytes(v))), esperado)
+    mira(que + ", fromBytes(b, true)", hex(fromBytes(bytes(v), true)), esperado)
+  end valida
+
+  function appendMalo(cp: integer, esperado: string)
+    var sb: StringBuilder := StringBuilder()
+    sb.appendChar(97)
+    sb.appendChar(cp)
+    try
+      var s: string := sb.toString()
+      mira("appendChar(" + intToString(cp) + ")", "no lanzó: " + hex(s), esperado)
+    catch e: EncodingError
+      mira("appendChar(" + intToString(cp) + ")", e.msg, esperado)
+    endtry
+  end appendMalo
+
+  function appendBueno(cp: integer, esperado: string)
+    var sb: StringBuilder := StringBuilder()
+    sb.appendChar(cp)
+    mira("appendChar(" + intToString(cp) + ")", hex(sb.toString()), esperado)
+  end appendBueno
+
+  function jsonBueno(que: string, texto: string, esperado: string)
+    mira("Json " + que, hex(Json.parseJson(texto).asString()), esperado)
+  end jsonBueno
+
+  function jsonMalo(que: string, texto: string, esperado: string)
+    try
+      var v: Json.JsonValue := Json.parseJson(texto)
+      mira("Json " + que, "no lanzó: " + hex(v.asString()), esperado)
+    catch e: RuntimeError
+      mira("Json " + que, e.msg, esperado)
+    endtry
+  end jsonMalo
+
+  function Main()
+    // 1. fromBytes: lo válido, tal cual
+    valida("ASCII", [0x68, 0x6F, 0x6C, 0x61], "68 6F 6C 61")
+    valida("con acentos", [0x61, 0xC3, 0xB1, 0x6F, 0x20, 0xE2, 0x82, 0xAC], "61 C3 B1 6F 20 E2 82 AC")
+    valida("cuatro bytes", [0xF0, 0x9F, 0x98, 0x80], "F0 9F 98 80")
+    valida("el último", [0xF4, 0x8F, 0xBF, 0xBF], "F4 8F BF BF")
+    valida("vacía", newIntArray(0), "")
+    var emoji: string := fromBytes(bytes([0xF0, 0x9F, 0x98, 0x80]))
+    mira("cuatro bytes, strlen", intToString(strlen(emoji)), "1")
+    mira("cuatro bytes, charCodeAt", intToString(charCodeAt(emoji, 0)), "128512")
+
+    // 2. fromBytes: lo mal formado (el estándar: un «�» por trozo malo)
+    desc("Latin-1 'año'", [0x61, 0xF1, 0x6F], "fromBytes: UTF-8 mal formado en el byte 1 (0xF1)", "61 EF BF BD 6F")
+    desc("la tabla 3-8 del estándar", [0x61, 0xF1, 0x80, 0x80, 0xE1, 0x80, 0xC2, 0x62, 0x80, 0x63, 0x80, 0xBF, 0x64], "fromBytes: UTF-8 mal formado en el byte 1 (0xF1)", "61 EF BF BD EF BF BD EF BF BD 62 EF BF BD 63 EF BF BD EF BF BD 64")
+    desc("cortada al final", [0x61, 0xE2, 0x82], "fromBytes: UTF-8 mal formado en el byte 1 (0xE2)", "61 EF BF BD")
+    desc("cortada en medio", [0xE2, 0x82, 0x78], "fromBytes: UTF-8 mal formado en el byte 0 (0xE2)", "EF BF BD 78")
+    desc("un sustituto en tres bytes", [0xED, 0xA0, 0x80], "fromBytes: UTF-8 mal formado en el byte 0 (0xED)", "EF BF BD EF BF BD EF BF BD")
+    desc("sobrelarga de dos", [0xC0, 0xAF], "fromBytes: UTF-8 mal formado en el byte 0 (0xC0)", "EF BF BD EF BF BD")
+    desc("sobrelarga de tres", [0xE0, 0x80, 0xAF], "fromBytes: UTF-8 mal formado en el byte 0 (0xE0)", "EF BF BD EF BF BD EF BF BD")
+    desc("sobrelarga de cuatro", [0xF0, 0x80, 0x80, 0xAF], "fromBytes: UTF-8 mal formado en el byte 0 (0xF0)", "EF BF BD EF BF BD EF BF BD EF BF BD")
+    desc("pasa de 10FFFF", [0xF4, 0x90, 0x80, 0x80], "fromBytes: UTF-8 mal formado en el byte 0 (0xF4)", "EF BF BD EF BF BD EF BF BD EF BF BD")
+    desc("una continuación suelta", [0x41, 0x80, 0x42], "fromBytes: UTF-8 mal formado en el byte 1 (0x80)", "41 EF BF BD 42")
+    desc("FE y FF", [0xFE, 0xFF], "fromBytes: UTF-8 mal formado en el byte 0 (0xFE)", "EF BF BD EF BF BD")
+    desc("bien y luego mal", [0xC3, 0xB1, 0xC3], "fromBytes: UTF-8 mal formado en el byte 2 (0xC3)", "C3 B1 EF BF BD")
+
+    // 3. la excepción: es un EncodingError, y quien atrapa RuntimeError la atrapa también
+    try
+      var s: string := fromBytes(bytes([0x61, 0xF1]), false)
+      mira("fromBytes(b, false)", "no lanzó: " + hex(s), "EncodingError")
+    catch e: EncodingError
+      mira("fromBytes(b, false)", "EncodingError", "EncodingError")
+    catch e2: RuntimeError
+      mira("fromBytes(b, false)", "RuntimeError: " + e2.msg, "EncodingError")
+    endtry
+    try
+      var s: string := fromBytes(bytes([0xFF]))
+      mira("atrapada como RuntimeError", "no lanzó: " + hex(s), "fromBytes: UTF-8 mal formado en el byte 0 (0xFF)")
+    catch e: RuntimeError
+      mira("atrapada como RuntimeError", e.msg, "fromBytes: UTF-8 mal formado en el byte 0 (0xFF)")
+    endtry
+
+    // 4. una cadena con «�» es una cadena como las demás
+    var c: string := fromBytes(bytes([0x61, 0xF1, 0x6F]), true)
+    mira("con «�», strlen", intToString(strlen(c)), "3")
+    mira("con «�», charCodeAt 1", intToString(charCodeAt(c, 1)), "65533")
+    mira("con «�», substring 1,2", hex(substring(c, 1, 2)), "EF BF BD")
+    mira("con «�», indexOf o", intToString(indexOf(c, "o")), "2")
+    mira("con «�», suma", hex(c + "!"), "61 EF BF BD 6F 21")
+
+    // 5. readFile: el fichero entero
+    writeFileBytes(F, bytes([0x61, 0xF1, 0x6F, 0x0A, 0x62]))
+    try
+      var s: string := readFile(F)
+      mira("readFile(f)", "no lanzó: " + hex(s), "readFile('u711.txt'): UTF-8 mal formado en el byte 1 (0xF1)")
+    catch e: EncodingError
+      mira("readFile(f)", e.msg, "readFile('u711.txt'): UTF-8 mal formado en el byte 1 (0xF1)")
+    endtry
+    mira("readFile(f, true)", hex(readFile(F, true)), "61 EF BF BD 6F 0A 62")
+    writeFileBytes(F, toBytes("año\nb"))
+    mira("readFile(f) válido", hex(readFile(F)), "61 C3 B1 6F 0A 62")
+
+    // 6. TextFile.readLine: la línea mala lanza y queda leída; con true, «�»
+    writeFileBytes(F, bytes([0x62, 0x69, 0x65, 0x6E, 0x0A, 0x61, 0xF1, 0x6F, 0x0D, 0x0A, 0x6F, 0x74, 0x72, 0x61, 0x0A]))
+    var f: IO.TextFile := IO.TextFile(F, "r")
+    mira("readLine 1", f.readLine(), "bien")
+    try
+      var s: string := f.readLine()
+      mira("readLine 2", "no lanzó: " + hex(s), "File.readLine(): UTF-8 mal formado en el byte 1 (0xF1)")
+    catch e: EncodingError
+      mira("readLine 2", e.msg, "File.readLine(): UTF-8 mal formado en el byte 1 (0xF1)")
+    endtry
+    mira("readLine 3 (la mala quedó leída)", f.readLine(), "otra")
+    f.close()
+    var g: IO.TextFile := IO.TextFile(F, "r")
+    mira("readLine(true) 1", g.readLine(true), "bien")
+    mira("readLine(true) 2", hex(g.readLine(true)), "61 EF BF BD 6F")
+    mira("readLine(true) 3", g.readLine(true), "otra")
+    g.close()
+
+    // 7. TextFile.readStr: n caracteres, y acaba en fromBytes
+    writeFileBytes(F, bytes([0x61, 0xF1, 0x6F, 0x78]))
+    var h: IO.TextFile := IO.TextFile(F, "r")
+    try
+      var s: string := h.readStr(3)
+      mira("readStr(3)", "no lanzó: " + hex(s), "fromBytes: UTF-8 mal formado en el byte 1 (0xF1)")
+    catch e: EncodingError
+      mira("readStr(3)", e.msg, "fromBytes: UTF-8 mal formado en el byte 1 (0xF1)")
+    endtry
+    h.close()
+    var k: IO.TextFile := IO.TextFile(F, "r")
+    mira("readStr(3, true)", hex(k.readStr(3, true)), "61 EF BF BD 6F")
+    mira("readStr(1) después", k.readStr(1), "x")
+    k.close()
+    IO.removeFile(F)
+
+    // 8. appendChar: lo que no es un carácter es un fallo del programa (sin parámetro)
+    appendMalo(55296, "appendChar: el código 55296 no es un carácter")
+    appendMalo(57343, "appendChar: el código 57343 no es un carácter")
+    appendMalo(1114112, "appendChar: el código 1114112 no es un carácter")
+    appendMalo(-1, "appendChar: el código -1 no es un carácter")
+    appendBueno(0, "00")
+    appendBueno(55295, "ED 9F BF")
+    appendBueno(57344, "EE 80 80")
+    appendBueno(128512, "F0 9F 98 80")
+    appendBueno(1114111, "F4 8F BF BF")
+
+    // 9. Json: un carácter por encima de FFFF va como dos \u (un par de sustitutos), y se juntan
+    jsonBueno("\\uD83D\\uDE00", "\"\\uD83D\\uDE00\"", "F0 9F 98 80")
+    jsonBueno("a\\u00F1b", "\"a\\u00F1b\"", "61 C3 B1 62")
+    jsonBueno("\\uDBFF\\uDFFF", "\"x\\uDBFF\\uDFFFy\"", "78 F4 8F BF BF 79")
+    jsonMalo("un alto suelto", "\"\\uD83Dx\"", "JSON: sustituto UTF-16 sin su pareja en pos 1")
+    jsonMalo("un bajo suelto", "\"\\uDE00\"", "JSON: sustituto UTF-16 sin su pareja en pos 1")
+    jsonMalo("un alto y una letra", "\"ab\\uD83D\\u0041\"", "JSON: sustituto UTF-16 sin su pareja en pos 3")
+    jsonMalo("un alto al final", "\"\\uD83D\"", "JSON: sustituto UTF-16 sin su pareja en pos 1")
+
+    // 10. las fuentes de confianza (sin mirar en marcha, con su test): lo que dan es UTF-8 válido
+    var nombres: string[] := listDir(".")
+    var malos: integer := 0
+    var i: integer := 0
+    while i < len(nombres) do
+      try
+        var t: string := fromBytes(toBytes(nombres[i]))
+      catch e: EncodingError
+        malos += 1
+      endtry
+      i += 1
+    endwh
+    mira("listDir, nombres mal formados", intToString(malos), "0")
+    var p: string := IO.pathAbsolute("año.txt")
+    try
+      mira("pathAbsolute, válido", boolToString(fromBytes(toBytes(p)) == p), "true")
+    catch e: EncodingError
+      mira("pathAbsolute, válido", e.msg, "true")
+    endtry
+
+    print "Utf8Descodifica: " + intToString(buenas) + " bien, " + intToString(malas) + " mal"
+  end Main
+end Utf8Descodifica

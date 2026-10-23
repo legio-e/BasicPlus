@@ -53,11 +53,33 @@
 >   - un conjunto tiene el tamaño de sus elementos (Eduardo: *«el conjunto de 4 elementos tiene un tamaño de 4»*), y un
 >     bit de fuera es una excepción. Sólo puede entrar al convertir un entero (`ControlBits(registro)`), y ahí se mira. Se
 >     le había propuesto dejarlo, por los registros; no. Se imprime el número, como el `enum`.
+> - **Después, `#711`** (Eduardo: *«Seguimos con los pendientes, lo del conjunto son ideas. El siguiente es #711»*):
+>   - **el plan, comprobado en el código antes de tocarlo** (`380e97d6`). Salieron dos cosas que decidir. Un parámetro
+>     nuevo en un MÉTODO cambia su clave de enlace, y lo ya compilado dejaría de enlazar: con una sobrecarga, no. Y
+>     `recvStr` daría un error falso con un carácter partido entre dos paquetes. Eduardo: *«OK, 1 OK»*;
+>   - **hecho por la cascada:** la rutina del estándar en las dos VMs, cada una contra un oráculo (la tabla 3-7, todas
+>     las secuencias de 1 a 3 bytes), `EncodingError` en `Core`, y los builtins 284–286 con el indicador. Sobrecargas
+>     también en los builtins, no un valor por defecto: `gen_builtins.py` no deja renombrar el 120. En la stdlib, `IO`
+>     (`readLine` y `readStr`), `Net` (`recvStr` guarda el carácter a medias) y `Json` (los pares de `\u`). En la VM-C,
+>     `read_bp_string` recorta por caracteres (el búfer de 1 KB de la GUI partía una `ñ`);
+>   - **las pruebas:** `Utf8Descodifica` (73 comprobaciones escritas a mano desde el estándar) y `Utf8Gui`, nuevas en el
+>     corpus; `make test-utf8` y `Utf8Test`; `test-net` con una `ñ` partida. Cada una, con su sabotaje visto;
+>   - **nada más cambia:** la salida de los 156 samples del corpus, guardada antes y comparada después, idéntica (para
+>     eso, `PARIDAD_GUARDA=<dir>` en `compat.sh check-paridad`, nuevo);
+>   - **lo que queda, en dos fichas nuevas:** `#723` (los streams, por diseñar) y `#724` (el texto de los packs, como el
+>     de SQLite: entra sin descodificar, y el pegamento del AOT lo corta en 512 bytes sin avisar).
+>   - **la red VERDE:** paridad 158 (MOD9, MOD8 y dos workers), pruebas de C 104/104, y lo demás.
+> - **Dos trampas mías:**
+>   - cambié `compat.sh` con una pasada de la paridad en marcha. Bash lee el script según avanza, y al acabar tropezó
+>     con el texto desplazado (un error de sintaxis en la última línea). Las salidas ya estaban guardadas; la red,
+>     repetida entera;
+>   - el servidor de eco que lancé a mano (`test_net serve 25`) no sale si nadie se conecta, y se quedó con el puerto: el
+>     `test-net` de la red se colgó contra él, 27 minutos sin una línea. Matado, y `test-net` repetido solo, verde.
 > - **Las placas:** la Metro y la Pico 2, con la imagen del árbol (el CRC de cada una, comprobado con su `.elf`). Las dos
 >   tienen además `/app/MoveSoloLectura.mod` y `/app/StrDosCaminos.mod`. La P4, sin tocar.
-> - **Riesgo a vigilar:** lo compilado desde hoy llama al builtin 283 en cada suma de cadenas, la stdlib incluida. Una
->   placa con la imagen de antes (la P4, las ESP32, la STM32) no lo tiene: hay que grabarla antes de mandarle la stdlib o
->   programas nuevos.
+> - **Riesgo a vigilar:** lo compilado desde hoy llama a los builtins 283 (en cada suma de cadenas) y 284–286, la stdlib
+>   incluida. Una placa con la imagen de antes (la P4, las ESP32, la STM32) no los tiene: hay que grabarla antes de
+>   mandarle la stdlib o programas nuevos.
 
 > **22-oct** — **El H5: el código caliente en la SRAM, medido en la Metro** (Eduardo: *«El punto 1 solo para la
 > metro. Para la Pico ya veremos, 45K de RAM en la pico son muchos. De momento haces las pruebas en la metro.»*).

@@ -3787,6 +3787,43 @@ llama a los números de antes, que también siguen la regla.
 
 Esperando el OK de Eduardo a las propuestas 1 y 2.
 
+**`#711` HECHO (23-oct; Eduardo: *«OK, 1 OK»*).** Como estaba en el plan, con tres cosas más:
+- **la rutina,** la misma en las dos VMs: `edu.bpgenvm.vm.Utf8` en miVM y `utf8_paso`, `utf8_primer_malo`,
+  `utf8_largo_corregido` y `utf8_corrige` en `bpvm_internal.h` (junto a `utf8_encode`). El atajo ASCII primero; un trozo
+  malo, un «�». Cada una contra un oráculo escrito de otra forma (la tabla 3-7 del estándar, fila a fila): todas las
+  secuencias de 1 a 3 bytes (16,8 millones) y un millón al azar de 4 a 12 (`Utf8Test`, `make test-utf8`, menos de un
+  segundo). Con un sabotaje en cada una (dejar pasar los sustitutos; los sobrelargos de tres bytes), la prueba falla;
+- **`EncodingError extends RuntimeError`** en `Core`, buscada por su nombre en las dos VMs (`throwBpError`,
+  `bpvm_throw_error_clase`), y `RuntimeError` si el `Core` no la tiene. El texto: `fromBytes: UTF-8 mal formado en el
+  byte 1 (0xF1)`; con el byte, que dice qué era (un `0xF1` es una `ñ` de Latin-1);
+- **los builtins:** los de un argumento (`fromBytes` 120, `readFile` 38, `__freadLine` 249) con la regla nueva, y la
+  sobrecarga con el indicador (284, 285 y 286). Sobrecargas también en los builtins, no sólo en los métodos:
+  `gen_builtins.py` nombra un builtin por su primera declaración y no deja renombrar uno que existe, así que el 120 no
+  podía pasar a otro nombre para dejarle `fromBytes` al nuevo. Se escribe igual. `__charsToString` (47): un código que
+  no es un carácter, `EncodingError` («appendChar: el código 55296 no es un carácter»);
+- **`readLine` deja leída la línea mala,** como en Java: si no, un bucle con `try` que avisa y sigue repetiría la misma
+  línea sin fin;
+- **`IO`:** `readLine()` y `readLine(ignorarError)`, `readStr(n)` y `readStr(n, ignorarError)` (ésta antes: los
+  métodos se resuelven en orden). **`Net`:** `recvStr` con su sobrecarga y los bytes de un carácter a medias en la
+  conexión (`pendiente`); `make test-net` manda una `ñ` partida en dos envíos al eco y sale entera (`partida 2: [ñb]`),
+  igual en la VM-Java. **`Json`:** junta los pares `😀`; uno suelto, «JSON: sustituto UTF-16 sin su pareja
+  en pos N»;
+- **la GUI:** `read_bp_string` (18 sitios en la VM-C, entre ellos el búfer de 1 KB de `setText`) recorta por
+  caracteres. `Utf8Gui`, nuevo y en el corpus: 1022 `a` y una `ñ`; con el recorte de antes, la `ñ` salía partida
+  (sabotaje: «FALLO … en el byte 1022 (0xC3)»);
+- **las pruebas del corpus:** `Utf8Descodifica` (73 comprobaciones contra lo que dice el estándar, escrito a mano: cada
+  entrada con y sin el indicador, la tabla 3-8 del estándar, los sobrelargos, los sustitutos, `readFile`, `readLine`,
+  `readStr`, `appendChar`, `Json` y dos fuentes de confianza, `listDir` y `pathAbsolute`);
+- **nada más cambia:** la salida de los 156 samples del corpus, guardada antes y comparada después, idéntica
+  (`PARIDAD_GUARDA=<dir> compat.sh check-paridad`, nuevo: la paridad sola no ve que las dos VMs cambien igual);
+- **la red VERDE:** paridad 158 en MOD9, en MOD8 y con dos workers; cápsula V6, 59; norma 9/9; sim 12/12; pruebas de
+  C, 104/104 (con `test-utf8`; `test-net` se colgó contra un servidor de eco que dejé vivo a mano, y repetido solo,
+  pasa); sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
+
+Lo que queda fuera, cada cosa en su ficha: el texto de los packs (SQLite: `string_from_cstr` no descodifica, y el
+pegamento del AOT corta en 512 bytes, a veces a medio carácter, y sin avisar), y los streams (por diseñar). El caso
+especial del cursor (cadenas que empiezan por una continuación) se queda mientras quede una puerta.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

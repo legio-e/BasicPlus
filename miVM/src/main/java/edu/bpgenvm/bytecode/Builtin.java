@@ -293,7 +293,10 @@ public enum Builtin {
     NP_RELEASE("__npRelease"),   // [280] __npRelease(pin: integer)
     UART_RELEASE("__uartRelease"),   // [281] __uartRelease(bus: integer, tx: integer, rx: integer)
     STR_COMPARE("__strCompare"),   // [282] __strCompare(a: string, b: string): integer
-    STR_NACE("__strNace");   // [283] __strNace(b: byte[]): string
+    STR_NACE("__strNace"),   // [283] __strNace(b: byte[]): string
+    FROM_BYTES_I("__fromBytesI"),   // [284] __fromBytesI(b: byte[], ignorarError: boolean): string
+    READ_FILE_I("__readFileI"),   // [285] __readFileI(path: string, ignorarError: boolean): string
+    FREAD_LINE_I("__freadLineI");   // [286] __freadLineI(st: byte[], ignorarError: boolean): string
 
     public final String bpName;
     public final int id;
@@ -308,6 +311,8 @@ public enum Builtin {
         BY_NAME.put("__newStrArray", NEW_REF_ARRAY);   // alias en Core.bp
         BY_NAME.put("__growStrArray", GROW_REF_ARRAY);   // alias en Core.bp
         BY_NAME.put("__refToString", LONG_TO_STRING);   // alias en Core.bp
+        BY_NAME.put("fromBytes", FROM_BYTES_I);   // alias en Core.bp
+        BY_NAME.put("readFile", READ_FILE_I);   // alias en Core.bp
         BY_NAME.put("len", STRLEN);   // alias en Core.bp
     }
 

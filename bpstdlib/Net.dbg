@@ -7,36 +7,70 @@ lines
 35 0
 50 0
 64 0
-67 66
-86 67
+67 68
+86 69
 106 0
-109 71
+109 73
 129 0
-132 76
+132 78
 156 0
-159 81
+159 83
 186 0
-189 86
+189 88
 216 0
-219 91
-249 0
-252 95
-266 96
-278 97
-296 0
-299 103
-319 0
-322 61
-335 0
-365 0
-379 0
-402 0
-419 0
-442 0
-456 0
-476 0
-496 0
-510 0
+219 97
+236 98
+245 99
+254 100
+260 101
+269 102
+275 103
+293 104
+316 108
+320 109
+326 110
+329 111
+370 112
+384 113
+397 114
+400 115
+432 116
+472 118
+512 120
+520 122
+533 123
+542 125
+563 127
+571 129
+580 131
+592 132
+614 133
+620 134
+630 135
+636 136
+656 138
+677 0
+680 142
+705 0
+708 146
+722 147
+734 148
+752 0
+755 154
+775 0
+778 62
+788 63
+799 0
+829 0
+843 0
+868 0
+891 0
+908 0
+931 0
+945 0
+965 0
+985 0
+999 0
 vars
 func Tcp.getH 35
 this -20 8 0 ?
@@ -60,38 +94,58 @@ this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
 func Tcp.recvStr 216
+this -32 8 0 ?
+max -24 4 0 integer
+timeoutMs -20 4 0 integer
+ignorarError -16 4 0 boolean
+llega 8 8 0 ?
+np 16 4 0 integer
+n 20 4 0 integer
+b 24 8 0 ?
+corte 36 4 0 integer
+i 40 4 0 integer
+parar 44 4 0 boolean
+c 48 4 0 integer
+pide 52 4 0 integer
+cuerpo 56 8 0 ?
+func Tcp.recvStr$ii 677
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func Tcp.close 249
+func Tcp.close 705
 this -20 8 0 ?
-func Tcp.__dtor 296
+func Tcp.__dtor 752
 this -20 8 0 ?
-func Tcp.__init 319
+func Tcp.__init 775
 this -20 8 0 ?
-func __cls_init_Tcp() 365
+func __cls_init_Tcp() 829
 this -20 8 0 ?
-func __cls_m_Tcp#recvStr(ii)s 379
+func __cls_m_Tcp#recvStr(iiz)s 843
+this -32 8 0 ?
+max -24 4 0 integer
+timeoutMs -20 4 0 integer
+ignorarError -16 4 0 boolean
+func __cls_m_Tcp#recvStr(ii)s 868
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __cls_m_Tcp#isOpen()z 402
+func __cls_m_Tcp#isOpen()z 891
 this -20 8 0 ?
-func __cls_m_Tcp#recv(ii)[B 419
+func __cls_m_Tcp#recv(ii)[B 908
 this -28 8 0 ?
 max -20 4 0 integer
 timeoutMs -16 4 0 integer
-func __cls_m_Tcp#__dtor()V 442
+func __cls_m_Tcp#__dtor()V 931
 this -20 8 0 ?
-func __cls_m_Tcp#sendStr(s)i 456
+func __cls_m_Tcp#sendStr(s)i 945
 this -28 8 0 ?
 s -20 8 0 string
-func __cls_m_Tcp#send([B)i 476
+func __cls_m_Tcp#send([B)i 965
 this -28 8 0 ?
 data -20 8 0 ref
-func __cls_m_Tcp#close()V 496
+func __cls_m_Tcp#close()V 985
 this -20 8 0 ?
-func __cls_m_Tcp#connect(sii)z 510
+func __cls_m_Tcp#connect(sii)z 999
 this -36 8 0 ?
 host -28 8 0 string
 port -20 4 0 integer

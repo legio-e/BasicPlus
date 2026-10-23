@@ -416,6 +416,28 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   signo según el tipo). Asignar un literal fuera de rango es error de
   compilación con el rango exacto en el mensaje.
 </p>
+<p id="utf8">
+  <strong>Un <code>string</code> es siempre UTF-8 válido, y no cambia</strong> (V8). Lo que viene de fuera
+  —un fichero, una línea, un paquete de la red, un <code>byte[]</code>— se <em>descodifica</em> al convertirlo en
+  texto: <code>fromBytes(b)</code>, <code>readFile(ruta)</code>, <code>TextFile.readLine()</code> y
+  <code>readStr(n)</code>, <code>Net.Tcp.recvStr(…)</code>. Si los bytes no son UTF-8 válido (un fichero en Latin-1,
+  por ejemplo), lanzan <code>EncodingError</code>, hija de <code>RuntimeError</code>, con el sitio. Con un último
+  argumento <code>true</code> (<code>ignorarError</code>), en vez de la excepción, cada trozo malo pasa a «�»
+  (U+FFFD), como dice el estándar de Unicode:
+</p>
+<pre><code><span class="kw">var</span> t: <span class="type">string</span> := readFile(<span class="str">"latin1.txt"</span>, <span class="kw">true</span>)   <span class="comment">// "año" en Latin-1 (61 F1 6F): a�o</span>
+<span class="kw">try</span>
+  t := readFile(<span class="str">"latin1.txt"</span>)
+<span class="kw">catch</span> e: EncodingError
+  <span class="kw">print</span> e.msg      <span class="comment">// readFile('latin1.txt'): UTF-8 mal formado en el byte 1 (0xF1)</span>
+<span class="kw">endtry</span></code></pre>
+<p>
+  <code>readLine()</code> deja leída la línea mala: un bucle con <code>try</code> sigue con la siguiente.
+  <code>recvStr</code> espera el resto de un carácter que llega partido entre dos paquetes. Y
+  <code>appendChar</code> con algo que no es un carácter —un sustituto de UTF-16 (<code>0xD800</code> a
+  <code>0xDFFF</code>) o un número fuera de <code>0..0x10FFFF</code>— también lanza <code>EncodingError</code>, sin
+  argumento para ignorarlo: es un fallo del programa. Para el texto que cambia, <code>StringBuilder</code>.
+</p>
 <p>
   <strong>Una salvedad de <code>double</code> en el RP2350</strong> (Pico 2,
   Metro): los valores <em>subnormales</em> —los que están por debajo de
@@ -1921,6 +1943,10 @@ otra sin problema.</p>
       índice fuera de rango, fallos en funciones <code>native</code>...) se
       lanzan como <code>RuntimeError</code> y se cazan igual, da igual el módulo
       donde ocurran.</li>
+  <li>El texto de fuera que no es UTF-8 válido (<code>fromBytes</code>, <code>readFile</code>,
+      <code>readLine</code>…) lanza <code>EncodingError</code>, hija de <code>RuntimeError</code> (V8,
+      <a href="#utf8">§4.1</a>): quien ya atrapa <code>RuntimeError</code> la atrapa también, y
+      <code>catch e: EncodingError</code> delante la trata aparte.</li>
   <li><strong>Quedarse sin memoria también se atrapa.</strong> Si una
       reserva no cabe en el heap, la VM lanza un <code>RuntimeError</code>
       con el mensaje <code>No space in heap</code> en vez de morir: un

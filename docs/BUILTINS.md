@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **284** (0–283). Cada builtin tiene:
+id—. Hoy son **287** (0–286). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -133,7 +133,7 @@ Convención general:
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
 | 37 | `input` | `()` | `string` | **Sólo VM-Java**: con IDE abre su ventana; sin IDE lee una línea de stdin (sin newline final). En la VM-C (placas y micro simulado) lanza RTErr `builtin 37 no soportado en esta VM (subconjunto C)` — decidido, ver `PENDIENTES.md`. |
-| 38 | `readFile` | `(path: string)` | `string` | Lee fichero entero como UTF-8. RTErr si no existe / sandbox. |
+| 38 | `readFile` | `(path: string)` | `string` | Lee fichero entero como UTF-8. RTErr si no existe / sandbox. Si no es UTF-8 válido, `EncodingError` (`readFile('x'): UTF-8 mal formado en el byte 5 (0xF1)`; V8/H5, `#711`); con el 285, «�». |
 | 39 | `writeFile` | `(path, content: string)` | `void` | Sobreescribe. Crea el fichero si no existe. RTErr sandbox. |
 | 40 | `appendFile` | `(path, content: string)` | `void` | Append. RTErr sandbox. |
 | 41 | `fileExists` | `(path: string)` | `bool` | Sólo FICHEROS: una carpeta da `false` (V7/H10 #630, 2-oct, Eduardo; la VM-Java decía `true`, la VM-C `false`). Para una carpeta, `IO.dirExists`. RTErr sandbox. |
@@ -154,7 +154,7 @@ Convención general:
 | 44 | `__newRefArray` | `(cap: int)` | `T[]` | Aloca `TYPE_ARRAY_REF` con `cap` slots a 0. Bajo allocAnchor. |
 | 45 | `__growRefArray` | `(old: T[], newCap: int)` | `T[]` | Aloca nuevo + copia `min(oldLen, newCap)` refs. |
 | 46 | `__growIntArray` | `(old: int[], newCap: int)` | `int[]` | Idem para arrays i32. |
-| 47 | `__charsToString` | `(chars: int[], len: int)` | `string` | Aloca string copiando `chars[0..len)`. |
+| 47 | `__charsToString` | `(chars: int[], len: int)` | `string` | Aloca string copiando `chars[0..len)`. Un código que no es un carácter (un sustituto, o fuera de 0..10FFFF), `EncodingError`: `appendChar: el código 55296 no es un carácter` (V8/H5, `#711`). |
 | 48 | `charCodeAt` | `(s: string, i: int)` | `int` | Codepoint del char `i` (sin alocar). |
 
 ## 49..51 — Threading
@@ -223,7 +223,7 @@ Convención general:
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
 | 119 | `toBytes` | `(s: string)` | `byte[]` | Copia los bytes UTF-8 del string a un `byte[]` nuevo (copia defensiva: el string es inmutable). |
-| 120 | `fromBytes` | `(b: byte[])` | `string` | Copia los bytes de `b` a un string nuevo (interpretados como UTF-8). |
+| 120 | `fromBytes` | `(b: byte[])` | `string` | Copia los bytes de `b` a un string nuevo (interpretados como UTF-8). Es el DESCODIFICADOR: si no es UTF-8 válido, `EncodingError` (`fromBytes: UTF-8 mal formado en el byte 5 (0xF1)`; V8/H5, `#711`); con el 284, «�». |
 
 > `string` y `byte[]` comparten el layout `TYPE_ARRAY_I8`; la conversión es una
 > copia del payload con distinto tipo estático.
@@ -271,7 +271,7 @@ trabajo de **H10**.
 Lo de arriba es la historia de GAP-1 (junio). Desde entonces se portó casi todo — los
 float con el formateador canónico GAP-4 (L13) y los string por codepoint — y el FS del
 device es littlefs (V4/H2), así que «IO filesystem host-only» dejó de ser verdad. Medido
-contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 284 entradas; en V6, 240):
+contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 287 entradas; en V6, 240):
 
 | Clase | Builtins | En VM-C |
 |---|---|---|
@@ -371,7 +371,7 @@ error en las dos VMs.
 | 246 | `__ftell(st: byte[]): integer` | La posición del cursor. |
 | 247 | `__fsize(st: byte[]): integer` | El tamaño del fichero abierto. |
 | 248 | `__fflush(st: byte[])` | Lleva al medio lo escrito (vuelca la caché del motor). RTErr `File.flush(): error de escritura`. |
-| 249 | `__freadLine(st: byte[]): string` | `TextFile.readLine`, en nativo: la línea siguiente sin su `\n` (ni el `\r` de un `\r\n`), y el cursor tras ella; `""` al final (lo dice `eof()`). En BP salía 15× más lenta que `readFile` + `split` en la Pico (`FileBench`). |
+| 249 | `__freadLine(st: byte[]): string` | `TextFile.readLine`, en nativo: la línea siguiente sin su `\n` (ni el `\r` de un `\r\n`), y el cursor tras ella; `""` al final (lo dice `eof()`). En BP salía 15× más lenta que `readFile` + `split` en la Pico (`FileBench`). Si la línea no es UTF-8 válido, `EncodingError` (`File.readLine(): UTF-8 mal formado en el byte N (0xNN)`), y queda leída (V8/H5, `#711`); con el 286, «�». |
 
 En las placas, `IO.File` funciona igual en la flash (littlefs) y en la SD (`/sd`, FAT).
 
@@ -583,6 +583,27 @@ compilador en cada módulo, al final, con el array que acaban de llenar. Un `.mo
 sin marcar. (El `StringBuilder` no lo puede usar: una clase sólo ve lo público de su módulo; su `toString` sigue con
 `fromBytes`, que copia y marca.) La prueba: `bpgenvm-c/samples/MoveSoloLectura.bp` (la red de paridad), con una cadena
 de cada origen.
+
+## 284–286 — descodificar, ignorando el error si se pide  *(V8/H5, `#711`, 23-oct)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
+| 284 | `__fromBytesI` (alias público: `fromBytes`) | `(b: byte[], ignorarError: boolean): string` | `fromBytes(b, true)` |
+| 285 | `__readFileI` (alias público: `readFile`) | `(path: string, ignorarError: boolean): string` | `readFile(path, true)` |
+| 286 | `__freadLineI` (y en `IO`) | `(st: byte[], ignorarError: boolean): string` | `TextFile.readLine(true)` |
+
+La regla de Eduardo (22-oct): un string es un invariante; lo de fuera se DESCODIFICA al nacer la cadena. Con
+`ignorarError` = `false`, como los de un argumento (120, 38 y 249): `EncodingError` (hija de `RuntimeError`, en `Core`)
+con dónde, `<que>: UTF-8 mal formado en el byte N (0xNN)`. Con `true`, cada trozo malo pasa a U+FFFD («�», `EF BF BD`),
+uno por «subparte máxima», como dice el estándar de Unicode (§3.9): `61 F1 6F` → `a�o`; `ED A0 80` (un sustituto en tres
+bytes) → tres. La rutina, la misma en las dos VMs (`bpvm_internal.h` `utf8_paso`…, miVM `Utf8`), probada contra la tabla
+3-7 del estándar con todas las secuencias de 1 a 3 bytes (`make test-utf8`, `Utf8Test`).
+
+Son SOBRECARGAS de los de un argumento, no un valor por defecto: el valor por defecto lo pone quien llama, así que lo ya
+compilado llamaría a otra firma; con la sobrecarga, los de siempre siguen como estaban (y en una clase, su clave de
+enlace: `TextFile.readLine()` y `readStr(n)`, y `Net.Tcp.recvStr`, también son sobrecargas). Se escribe igual:
+`fromBytes(b)` y `fromBytes(b, true)`. La prueba: `bpgenvm-c/samples/Utf8Descodifica.bp` (la red de paridad), con lo
+que tiene que salir escrito a mano.
 
 ---
 

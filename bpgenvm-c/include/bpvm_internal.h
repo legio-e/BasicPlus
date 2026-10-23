@@ -1180,6 +1180,84 @@ static inline uint32_t utf8_encode(uint32_t cp, uint8_t* out) {
     out[2] = (uint8_t)(0x80u | ((cp >> 6) & 0x3Fu)); out[3] = (uint8_t)(0x80u | (cp & 0x3Fu)); return 4;
 }
 
+/* ---- V8/H5 (#711): VALIDAR Y CORREGIR UTF-8, por el estándar de Unicode (§3.9, «U+FFFD Substitution of Maximal
+ * Subparts»; el descodificador UTF-8 del WHATWG hace lo mismo) ----
+ * Lo que viene de fuera se DESCODIFICA al nacer la cadena (fromBytes, readFile, readLine): por defecto EncodingError;
+ * si se ignora el error, cada trozo malo pasa a U+FFFD (EF BF BD). Un trozo malo es una «subparte máxima»: el principio
+ * más largo de un carácter que se corta, o un byte que no puede empezar ninguno; fuera quedan los sobrelargos, los
+ * sustitutos (ED A0 80: tres) y lo que pasa de 10FFFF. El espejo, miVM edu.bpgenvm.vm.Utf8, con su oráculo (la tabla
+ * 3-7 del estándar, todas las secuencias de 1 a 3 bytes); aquí, test/test_utf8.c. */
+
+/* Un paso desde p[i] (i < n, p[i] NO ASCII): los bytes del carácter que empieza ahí (2 a 4) si es válido, o -k si los
+ * k bytes desde i son un trozo malo (k >= 1). */
+static inline int utf8_paso(const uint8_t* p, uint32_t i, uint32_t n) {
+    uint8_t c = p[i];
+    int necesita;
+    uint8_t lo = 0x80u, hi = 0xBFu;
+    if (c >= 0xC2u && c <= 0xDFu) {
+        necesita = 1;
+    } else if (c >= 0xE0u && c <= 0xEFu) {
+        necesita = 2;
+        if (c == 0xE0u) lo = 0xA0u;          /* sin sobrelargos de tres bytes */
+        else if (c == 0xEDu) hi = 0x9Fu;     /* sin sustitutos (D800..DFFF) */
+    } else if (c >= 0xF0u && c <= 0xF4u) {
+        necesita = 3;
+        if (c == 0xF0u) lo = 0x90u;          /* sin sobrelargos de cuatro bytes */
+        else if (c == 0xF4u) hi = 0x8Fu;     /* nada por encima de 10FFFF */
+    } else {
+        return -1;                            /* 80..C1 y F5..FF no empiezan ningún carácter */
+    }
+    for (int k = 1; k <= necesita; k++) {
+        if (i + (uint32_t) k >= n) return -k; /* cortado por el final: el trozo son los k que hay */
+        uint8_t d = p[i + (uint32_t) k];
+        if (d < lo || d > hi) return -k;      /* el byte k no sigue: el trozo son los k de antes, y él empieza otro */
+        lo = 0x80u;
+        hi = 0xBFu;
+    }
+    return necesita + 1;
+}
+/* Dónde empieza el primer trozo malo de p[0, n); -1 si todo es UTF-8 válido. */
+static inline int32_t utf8_primer_malo(const uint8_t* p, uint32_t n) {
+    uint32_t i = 0;
+    while (i < n) {
+        if (p[i] < 0x80u) { i++; continue; }   /* el atajo: un byte ASCII */
+        int s = utf8_paso(p, i, n);
+        if (s < 0) return (int32_t) i;
+        i += (uint32_t) s;
+    }
+    return -1;
+}
+/* Los bytes que salen al cambiar cada trozo malo por U+FFFD (tres bytes). */
+static inline uint32_t utf8_largo_corregido(const uint8_t* p, uint32_t n) {
+    uint32_t i = 0, largo = 0;
+    while (i < n) {
+        int s = (p[i] < 0x80u) ? 1 : utf8_paso(p, i, n);
+        if (s > 0) { largo += (uint32_t) s; i += (uint32_t) s; }
+        else { largo += 3u; i += (uint32_t) -s; }
+    }
+    return largo;
+}
+/* Escribe en out los bytes de p[0, n) con cada trozo malo cambiado por U+FFFD; devuelve cuántos (= el largo
+ * corregido). out no se solapa con p. */
+static inline uint32_t utf8_corrige(const uint8_t* p, uint32_t n, uint8_t* out) {
+    uint32_t i = 0, o = 0;
+    while (i < n) {
+        int s = (p[i] < 0x80u) ? 1 : utf8_paso(p, i, n);
+        if (s > 0) {
+            for (int k = 0; k < s; k++) out[o++] = p[i + (uint32_t) k];
+            i += (uint32_t) s;
+        } else {
+            out[o++] = 0xEFu; out[o++] = 0xBFu; out[o++] = 0xBDu;
+            i += (uint32_t) -s;
+        }
+    }
+    return o;
+}
+/* ¿Es cp un carácter? Un punto de código de Unicode (0..10FFFF) que no es un sustituto (D800..DFFF). */
+static inline int utf8_es_caracter(int32_t cp) {
+    return cp >= 0 && cp <= 0x10FFFF && (cp < 0xD800 || cp > 0xDFFF);
+}
+
 /* Acceso al memory[] por dirección absoluta. Sin bounds-check en
    release; F2+ añade variantes "checked" en debug. */
 static inline uint32_t bpvm_mem_read_u32(const bpvm_t* vm, uint32_t addr) {
@@ -1463,6 +1541,9 @@ void bpvm_eh_pop(bpvm_thread_t* tc);
  * no la exporta), devuelve 0 y el caller debe abortar el thread. */
 bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
                                   const char* msg);   /* V4: devuelve el handle 64b (gen); bpref_null() si no hay clase */
+/* V8/H5 (#711): lo mismo con otra clase de Core sin campos propios («Core.EncodingError»); RuntimeError si no está. */
+bpref_t bpvm_throw_error_clase(bpvm_t* vm, bpvm_thread_t* tc,
+                               const char* clase, const char* msg);
 
 /* Realiza el unwind del stack para encontrar un handler que matchee.
  * Si encuentra: ajusta tc->pc/sp/bp/cs y deja `ref` en el top. Si no,

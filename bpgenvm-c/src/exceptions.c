@@ -258,6 +258,14 @@ static bpref_t exc_heap_descarrilado(bpvm_t* vm) {
 
 bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
                                   const char* msg) {
+    return bpvm_throw_error_clase(vm, tc, "Core.RuntimeError", msg);
+}
+
+/* V8/H5 (#711) — lo mismo con otra clase de Core («Core.EncodingError»), fabricada como RuntimeError: sin campos
+ * propios, el msg en el slot 0. Si el Core cargado no la tiene (uno de antes), RuntimeError. El espejo, throwBpError
+ * de miVM. */
+bpref_t bpvm_throw_error_clase(bpvm_t* vm, bpvm_thread_t* tc,
+                               const char* clase, const char* msg) {
     {
         bpref_t d = exc_heap_descarrilado(vm);   /* V7 #494 */
         if (d.v != 0u) return d;
@@ -276,7 +284,8 @@ bpref_t bpvm_throw_runtime_error(bpvm_t* vm, bpvm_thread_t* tc,
     /* #248 — primero la clase ÚNICA de Core (Object -> Exception ->
      * RuntimeError). Los fallbacks de abajo cubren .mods legado con copia
      * per-módulo. */
-    class_ptr = bpvm_link_lookup(vm, "Core.RuntimeError");
+    class_ptr = bpvm_link_lookup(vm, clase);
+    if (!class_ptr && strcmp(clase, "Core.RuntimeError") != 0) class_ptr = bpvm_link_lookup(vm, "Core.RuntimeError");
     if (class_ptr) goto have_class;
     /* Probamos primero el módulo del cs actual. */
     for (int i = 0; i < vm->module_count; i++) {

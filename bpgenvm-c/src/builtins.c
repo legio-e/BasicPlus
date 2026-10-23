@@ -511,6 +511,11 @@ static size_t read_bp_string(const bpvm_t* vm, uint32_t ref, char* dst, size_t d
     for (uint32_t i = 0; i < nbytes && out + 1 < dst_size; i++) {
         dst[out++] = (char) vm->memory[base + i];
     }
+    /* V8/H5 (#711): si no cabe entera, se corta por CARACTERES, no en medio de uno (el siguiente byte, una continuación
+     * 10xxxxxx, decía que sí): lo recortado sigue siendo UTF-8 válido. Lo pedía la GUI: setText guarda el texto en un
+     * búfer de 1 KB, y getText lo devuelve como cadena, sin validar (una fuente de confianza). Utf8Gui lo prueba. */
+    if (out < nbytes)
+        while (out > 0 && (vm->memory[base + out] & 0xC0u) == 0x80u) out--;
     if (out < dst_size) dst[out] = '\0';
     return out;
 }
@@ -608,12 +613,61 @@ static const char* recurso_no_esta(const char* path) {
     return msg;
 }
 
+static bpvm_status_t builtin_throw_clase(bpvm_t* vm, bpvm_thread_t* tc, const char* clase, const char* msg);
+
 static bpvm_status_t builtin_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
+    return builtin_throw_clase(vm, tc, "Core.RuntimeError", msg);
+}
+
+/* V8/H5 (#711): un EncodingError (lo de fuera que no es UTF-8 válido, un appendChar que no es un carácter). */
+static bpvm_status_t builtin_throw_codif(bpvm_t* vm, bpvm_thread_t* tc, const char* msg) {
+    return builtin_throw_clase(vm, tc, "Core.EncodingError", msg);
+}
+
+/* V8/H5 (#711): el texto del error de descodificar, el mismo que miVM (Utf8.mensaje): «<que>: UTF-8 mal formado en el
+ * byte 5 (0xF1)». */
+static bpvm_status_t throw_utf8_malo(bpvm_t* vm, bpvm_thread_t* tc, const char* que, int32_t pos, uint8_t byte_malo) {
+    char em[640];
+    snprintf(em, sizeof em, "%s: UTF-8 mal formado en el byte %" PRId32 " (0x%02X)", que, pos, (unsigned) byte_malo);
+    return builtin_throw_codif(vm, tc, em);
+}
+
+/* V8/H5 (#711) — el bloque `blk` (un byte[] recién leído de FUERA: un fichero, una línea; no está en la pila) pasa a
+ * ser una cadena. Si es UTF-8 válido, nace tal cual, en su sitio; si no, EncodingError, o, con `ignorar`, nace otra con
+ * cada trozo malo cambiado por U+FFFD (más larga: se mide antes de reservar). Deja la cadena en la pila. El espejo,
+ * nacerDeFuera de miVM. */
+static bpvm_status_t nacer_de_fuera(bpvm_t* vm, bpvm_thread_t* tc, bpref_t blk, int ignorar, const char* que) {
+    uint32_t a = bpref_deref(vm, blk);
+    uint32_t n = bpvm_read_u32_be(vm->memory + a);
+    int32_t malo = utf8_primer_malo(vm->memory + a + 4u, n);
+    if (malo < 0) {
+        bpvm_str_nace(vm, a);
+        bpref_push(vm, tc, blk);
+        return BPVM_OK;
+    }
+    if (!ignorar) return throw_utf8_malo(vm, tc, que, malo, vm->memory[a + 4u + (uint32_t) malo]);
+    uint32_t m = utf8_largo_corregido(vm->memory + a + 4u, n);
+    bpref_push(vm, tc, blk);   /* en la pila: vivo mientras se reserva el otro */
+    bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, m, m);
+    if (outh.v == 0u) {
+        tc->sp -= BPVM_REF_SIZE;
+        return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
+    }
+    a = bpref_deref(vm, blk);   /* otra vez, tras la reserva */
+    uint32_t o = bpref_deref(vm, outh);
+    utf8_corrige(vm->memory + a + 4u, n, vm->memory + o + 4u);
+    bpvm_str_nace_ascii(vm, o, 0);   /* lleva al menos un U+FFFD: no es ASCII */
+    tc->sp -= BPVM_REF_SIZE;         /* el leído, fuera */
+    bpref_push(vm, tc, outh);
+    return BPVM_OK;
+}
+
+static bpvm_status_t builtin_throw_clase(bpvm_t* vm, bpvm_thread_t* tc, const char* clase, const char* msg) {
     /* V7 #659: los cinco primeros de ESTE RUN (era un `static`, de proceso), sin perder cuentas con dos runs. */
     int hablar = vm->avisos_throw < 5 && __atomic_fetch_add(&vm->avisos_throw, 1, __ATOMIC_RELAXED) < 5;
     if (hablar) bpvm_diag("[bpvm] throw: \"%s\"", msg ? msg : "");
 
-    bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+    bpref_t ref = bpvm_throw_error_clase(vm, tc, clase, msg);
     if (bpref_is_null(ref)) {
         if (hablar) bpvm_diag_urgente("[bpvm] throw: NO SE PUDO CONSTRUIR la excepcion "
                               "(sin memoria para el mensaje o el objeto, o sin "
@@ -2028,8 +2082,10 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * El path se lee a un buffer C; el contenido se escribe/lee directo desde
      * el heap (cualquier tamaño). */
     case BUILTIN_READ_FILE:
+    case BUILTIN_READ_FILE_I:         /* V8/H5 (#711): readFile(path, ignorarError), el 285 */
     case BUILTIN_READ_FILE_BYTES: {   /* #247: idéntico — los bytes ya son crudos en heap */
         const char* que = (id == BUILTIN_READ_FILE_BYTES) ? "readFileBytes" : "readFile";   /* #657: el que se llamó */
+        int ignorar = (id == BUILTIN_READ_FILE_I) ? (pop_i32(vm, tc) != 0) : 0;
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];
         if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
@@ -2064,8 +2120,12 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         cerrar_breves(vm, &ab, NULL);
         /* V8/H5 (23-oct, #714) — readFile da una CADENA: nace (su bit ASCII y el de solo lectura), como las demás.
-         * readFileBytes da un byte[]: ése no. */
-        if (id == BUILTIN_READ_FILE) bpvm_str_nace(vm, bpref_deref(vm, refh));
+         * readFileBytes da un byte[]: ése no. #711: y se DESCODIFICA (EncodingError, o «�» con el indicador). */
+        if (id != BUILTIN_READ_FILE_BYTES) {
+            char quien[BPVM_FS_PATH_MAX + 16];
+            snprintf(quien, sizeof quien, "%s('%s')", que, path);
+            return nacer_de_fuera(vm, tc, refh, ignorar, quien);
+        }
         bpref_push(vm, tc, refh);
         return BPVM_OK;
     }
@@ -2292,11 +2352,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, (int32_t) v);
         return BPVM_OK;
     }
-    case BUILTIN_FREAD_LINE: {
+    case BUILTIN_FREAD_LINE:
+    case BUILTIN_FREAD_LINE_I: {   /* V8/H5 (#711): el 286, con el indicador de readLine(ignorarError) */
         /* TextFile.readLine en nativo. Dos pasadas sobre el cursor del motor: (1) contar hasta el
          * '\n' (o el fin) leyendo por trozos; (2) volver, leer la línea DIRECTAMENTE en el string
          * y dejar el cursor tras el '\n'. Nada de BP por medio: en la Pico la versión BP costaba
          * 0,9 ms por línea (FileBench). El "\r" final se quita, como hacía la de BP. */
+        int ignorar = (id == BUILTIN_FREAD_LINE_I) ? (pop_i32(vm, tc) != 0) : 0;
         uint32_t sref = pop_ref(vm, tc);
         uint8_t* blk = fblk_de(vm, sref, NULL);
         /* V7/H12, 2b — en DOS tramos bajo el cerrojo de los File: contar la línea, y (tras reservar el string, que no
@@ -2343,9 +2405,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         ficheros_abrir(vm);
         if (fallo) return builtin_throw(vm, tc, fallo);
-        bpvm_str_nace(vm, bpref_deref(vm, refh));   /* V8/H5: el bit de la línea, por sus bytes */
-        bpref_push(vm, tc, refh);
-        return BPVM_OK;
+        /* V8/H5: el bit de la línea, por sus bytes. #711: DESCODIFICADA (EncodingError, o «�» con el indicador); si
+         * lanza, la línea queda leída, como en miVM (un bucle con try sigue con la siguiente). */
+        return nacer_de_fuera(vm, tc, refh, ignorar, "File.readLine()");
     }
     case BUILTIN_FFLUSH: {
         uint32_t sref = pop_ref(vm, tc);
@@ -3321,6 +3383,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t total = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
             uint32_t cp = bpvm_read_u32_be(bpref_arr_elem(vm, ca, i, 4));
+            /* V8/H5 (#711): un appendChar con algo que no es un carácter (un sustituto, o fuera de 0..10FFFF) es un
+             * fallo del programa: EncodingError, sin parámetro. Antes salían bytes malos. */
+            if (!utf8_es_caracter((int32_t) cp)) {
+                char em[96];
+                snprintf(em, sizeof em, "appendChar: el código %" PRId32 " no es un carácter", (int32_t) cp);
+                tc->sp -= BPVM_REF_SIZE; return builtin_throw_codif(vm, tc, em);
+            }
             uint8_t tmp[4]; total += utf8_encode(cp, tmp);
         }
         bpref_t newh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, total, total); /* V7/H7 #593: la cabecera y el handle, al nacer */
@@ -3332,6 +3401,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t w = 0;
         for (uint32_t i = 0; i < (uint32_t) len; i++) {
             uint32_t cp = bpvm_read_u32_be(bpref_arr_elem(vm, ca, i, 4));
+            if (!utf8_es_caracter((int32_t) cp)) cp = 0xFFFDu;   /* #711: otro hilo lo cambió entre las dos pasadas */
             uint8_t enc[4]; uint32_t el = utf8_encode(cp, enc);
             /* V7/H12, 2b (la revisión) — nunca más allá de lo reservado: con dos runs, otro hilo puede cambiar el array
              * entre las dos pasadas (un StringBuilder compartido sin Mutex) y la segunda medir más que la primera; con un
@@ -3347,7 +3417,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_TO_BYTES:
-    case BUILTIN_FROM_BYTES: {
+    case BUILTIN_FROM_BYTES:
+    case BUILTIN_FROM_BYTES_I: {   /* V8/H5 (#711): fromBytes(b, ignorarError), el 284 */
         /* H2 (V2): string y byte[] comparten layout (TYPE_ARRAY_I8). La
          * conversión es una copia defensiva (string inmutable / byte[]
          * mutable): mismos bytes, objeto nuevo. */
@@ -3355,10 +3426,26 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
          * Mismo contrato que substring (ver allí). Aquí NO está demostrado con
          * un repro —el que escribí no lo saca— pero la violación del contrato
          * es idéntica, así que se cierra igual. */
+        int ignorar = (id == BUILTIN_FROM_BYTES_I) ? (pop_i32(vm, tc) != 0) : 0;
         bpref_t bref = peek_ref(vm, tc, 0);
         uint32_t rd = bpref_is_null(bref) ? 0 : bpref_deref(vm, bref);
         uint32_t n = (rd == 0) ? 0 : bpvm_read_u32_be(vm->memory + rd);
-        bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, n, n); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        /* V8/H5 (#711) — fromBytes es el DESCODIFICADOR: lo que no es UTF-8 válido, EncodingError, o «�» con el
+         * indicador (y entonces sale más largo: se mide ANTES de reservar). toBytes copia sin mirar. */
+        int32_t malo = -1;
+        uint32_t m = n;
+        if (id != BUILTIN_TO_BYTES && n > 0) {
+            malo = utf8_primer_malo(vm->memory + rd + 4, n);
+            if (malo >= 0) {
+                if (!ignorar) {
+                    uint8_t bm = vm->memory[rd + 4 + (uint32_t) malo];
+                    tc->sp -= BPVM_REF_SIZE;   /* saca la fuente también al fallar */
+                    return throw_utf8_malo(vm, tc, "fromBytes", malo, bm);
+                }
+                m = utf8_largo_corregido(vm->memory + rd + 4, n);
+            }
+        }
+        bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, m, m); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (outh.v == 0u) {
             tc->sp -= BPVM_REF_SIZE;                 /* saca la fuente también al fallar */
             return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
@@ -3367,8 +3454,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* Re-derivar TRAS la reserva: hoy el mark-sweep no mueve objetos, pero
          * depender de eso es una trampa para el día que compacte. */
         rd = bpref_is_null(bref) ? 0 : bpref_deref(vm, bref);
-        if (n > 0) memcpy(vm->memory + out + 4, vm->memory + rd + 4, n);   /* V8/H5: una copia de bytes, de una vez */
-        if (id == BUILTIN_FROM_BYTES) bpvm_str_nace(vm, out);   /* V8/H5: la cadena nace con su bit (un byte[], nunca) */
+        if (malo < 0) {
+            if (n > 0) memcpy(vm->memory + out + 4, vm->memory + rd + 4, n);   /* V8/H5: una copia de bytes, de una vez */
+            if (id != BUILTIN_TO_BYTES) bpvm_str_nace(vm, out);   /* V8/H5: la cadena nace con su bit (un byte[], nunca) */
+        } else {
+            utf8_corrige(vm->memory + rd + 4, n, vm->memory + out + 4);   /* #711: con «�» */
+            bpvm_str_nace_ascii(vm, out, 0);
+        }
         tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado, ahora sí se saca */
         bpref_push(vm, tc, outh);   /* H1.2a: string ref result = 8 bytes */
         return BPVM_OK;

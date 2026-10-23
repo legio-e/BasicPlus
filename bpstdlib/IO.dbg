@@ -5,232 +5,243 @@ lines
 0 0
 24 0
 35 0
-38 187
-60 0
-63 192
-69 193
-72 194
-82 195
-94 196
-102 198
-118 0
-121 224
-141 0
-144 228
-163 0
-166 232
-183 0
-186 237
-197 238
-204 239
-223 0
-226 244
-246 0
-249 248
-269 0
-272 252
-302 0
-305 257
-321 0
-324 262
-350 0
-353 267
-377 268
-391 270
-410 0
-413 275
-441 0
-444 280
-450 281
-467 282
-477 283
-493 285
-518 0
-521 290
-543 0
-546 294
-557 295
-579 0
-582 300
-596 0
-599 202
-603 203
-618 204
-641 206
-664 208
-687 210
-695 212
-704 213
-730 215
-739 216
-746 217
-754 218
-767 219
-783 220
-793 0
-829 0
-849 0
-865 0
-885 0
-902 0
-918 0
-934 0
-953 0
-970 0
-987 0
-1001 0
-1015 0
-1036 0
-1053 0
-1067 0
-1084 0
-1101 0
-1104 317
-1124 0
-1127 322
-1136 323
-1139 324
-1142 325
-1151 326
-1154 327
-1162 328
-1174 329
-1183 330
-1191 332
-1194 333
-1218 334
-1226 335
-1242 336
-1265 337
-1281 338
-1289 340
-1296 341
-1307 343
-1319 344
-1327 345
-1330 346
-1340 347
-1352 348
-1360 350
-1371 352
-1380 353
-1386 354
-1398 359
-1426 0
-1429 364
-1447 0
-1450 368
-1472 0
-1475 310
-1494 0
-1530 0
+38 191
+62 0
+65 196
+71 197
+74 198
+84 199
+96 200
+104 202
+120 0
+123 228
+143 0
+146 232
+165 0
+168 236
+185 0
+188 241
+199 242
+206 243
+225 0
+228 248
+248 0
+251 252
+271 0
+274 256
+304 0
+307 261
+323 0
+326 266
+352 0
+355 271
+379 272
+393 274
+412 0
+415 279
+443 0
+446 284
+452 285
+469 286
+479 287
+495 289
+520 0
+523 294
+545 0
+548 298
+559 299
+581 0
+584 304
+598 0
+601 206
+605 207
+620 208
+643 210
+666 212
+689 214
+697 216
+706 217
+732 219
+741 220
+748 221
+756 222
+769 223
+785 224
+795 0
+831 0
+851 0
+867 0
+887 0
+904 0
+920 0
+936 0
+955 0
+972 0
+989 0
+1003 0
+1017 0
+1038 0
+1055 0
+1069 0
+1086 0
+1103 0
+1106 324
+1127 0
+1130 328
+1152 0
+1155 334
+1164 335
+1167 336
+1170 337
+1179 338
+1182 339
+1190 340
+1202 341
+1211 342
+1219 344
+1222 345
+1246 346
+1254 347
+1270 348
+1293 349
+1309 350
+1317 352
+1324 353
+1335 355
+1347 356
+1355 357
+1358 358
+1368 359
+1380 360
+1388 362
+1399 364
+1408 365
+1414 366
+1426 371
+1456 0
+1459 375
+1482 0
+1485 380
+1503 0
+1506 384
+1528 0
+1531 314
 1550 0
-1567 0
 1586 0
-1603 0
-1624 0
-1681 0
-1784 0
+1606 0
+1623 0
+1642 0
+1663 0
+1680 0
+1703 0
+1724 0
+1781 0
+1884 0
 vars
 func File.leerLinea 35
-this -20 8 0 ?
-func File.primerosBytes 60
+this -24 8 0 ?
+ignorarError -16 4 0 boolean
+func File.primerosBytes 62
 this -32 8 0 ?
 src -24 8 0 ref
 n -16 4 0 integer
 out 8 8 0 ?
 i 16 4 0 integer
-func File.__dtor 118
+func File.__dtor 120
 this -20 8 0 ?
-func File.path 141
+func File.path 143
 this -20 8 0 ?
-func File.isOpen 163
+func File.isOpen 165
 this -20 8 0 ?
-func File.close 183
+func File.close 185
 this -20 8 0 ?
-func File.size 223
+func File.size 225
 this -20 8 0 ?
-func File.tell 246
+func File.tell 248
 this -20 8 0 ?
-func File.eof 269
+func File.eof 271
 this -20 8 0 ?
-func File.seek 302
+func File.seek 304
 this -24 8 0 ?
 pos -16 4 0 integer
-func File.skip 321
+func File.skip 323
 this -24 8 0 ?
 delta -16 4 0 integer
-func File.readByte 350
+func File.readByte 352
 this -20 8 0 ?
-func File.read 410
+func File.read 412
 this -28 8 0 ?
 buf -20 8 0 ref
-func File.readBytes 441
+func File.readBytes 443
 this -24 8 0 ?
 n -16 4 0 integer
 b 8 8 0 ?
 k 16 4 0 integer
-func File.write 518
+func File.write 520
 this -28 8 0 ?
 data -20 8 0 ref
-func File.writeByte 543
+func File.writeByte 545
 this -24 8 0 ?
 v -16 4 0 integer
-func File.flush 579
+func File.flush 581
 this -20 8 0 ?
-func File.__init 596
+func File.__init 598
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
 m 0 4 0 integer
-func __cls_new_File(ss) 793
+func __cls_new_File(ss) 795
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_init_File(ss) 829
+func __cls_init_File(ss) 831
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_m_File#writeByte(i)V 849
+func __cls_m_File#writeByte(i)V 851
 this -24 8 0 ?
 v -16 4 0 integer
-func __cls_m_File#read([B)i 865
+func __cls_m_File#read([B)i 867
 this -28 8 0 ?
 buf -20 8 0 ref
-func __cls_m_File#tell()i 885
+func __cls_m_File#tell()i 887
 this -20 8 0 ?
-func __cls_m_File#skip(i)V 902
+func __cls_m_File#skip(i)V 904
 this -24 8 0 ?
 delta -16 4 0 integer
-func __cls_m_File#seek(i)V 918
+func __cls_m_File#seek(i)V 920
 this -24 8 0 ?
 pos -16 4 0 integer
-func __cls_m_File#path()s 934
+func __cls_m_File#path()s 936
 this -20 8 0 ?
-func __cls_m_File#isOpen()z 953
+func __cls_m_File#isOpen()z 955
 this -20 8 0 ?
-func __cls_m_File#size()i 970
+func __cls_m_File#size()i 972
 this -20 8 0 ?
-func __cls_m_File#flush()V 987
+func __cls_m_File#flush()V 989
 this -20 8 0 ?
-func __cls_m_File#__dtor()V 1001
+func __cls_m_File#__dtor()V 1003
 this -20 8 0 ?
-func __cls_m_File#readBytes(i)[B 1015
+func __cls_m_File#readBytes(i)[B 1017
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_File#readByte()i 1036
+func __cls_m_File#readByte()i 1038
 this -20 8 0 ?
-func __cls_m_File#close()V 1053
+func __cls_m_File#close()V 1055
 this -20 8 0 ?
-func __cls_m_File#eof()z 1067
+func __cls_m_File#eof()z 1069
 this -20 8 0 ?
-func __cls_m_File#write([B)V 1084
+func __cls_m_File#write([B)V 1086
 this -28 8 0 ?
 data -20 8 0 ref
-func TextFile.readLine 1101
+func TextFile.readLine 1103
 this -20 8 0 ?
-func TextFile.readStr 1124
+func TextFile.readLine$z 1127
 this -24 8 0 ?
-n -16 4 0 integer
+ignorarError -16 4 0 boolean
+func TextFile.readStr 1152
+this -28 8 0 ?
+n -20 4 0 integer
+ignorarError -16 4 0 boolean
 acc 8 8 0 ?
 cnt 16 4 0 integer
 chars 20 4 0 integer
@@ -242,42 +253,52 @@ b 44 4 0 integer
 empieza 48 4 0 boolean
 mayor 56 8 0 ?
 j 64 4 0 integer
-func TextFile.write$s 1426
-this -28 8 0 ?
-s -20 8 0 string
-func TextFile.writeLine 1447
-this -28 8 0 ?
-s -20 8 0 string
-func TextFile.__init 1472
-this -36 8 0 ?
-path -28 8 0 string
-mode -20 8 0 string
-func __cls_new_TextFile(ss) 1494
-path -28 8 0 string
-mode -20 8 0 string
-func __cls_init_TextFile(ss) 1530
-this -36 8 0 ?
-path -28 8 0 string
-mode -20 8 0 string
-func __cls_m_TextFile#writeLine(s)V 1550
-this -28 8 0 ?
-s -20 8 0 string
-func __cls_m_TextFile#readLine()s 1567
-this -20 8 0 ?
-func __cls_m_TextFile#write(s)V 1586
-this -28 8 0 ?
-s -20 8 0 string
-func __cls_m_TextFile#readStr(i)s 1603
+func TextFile.readStr$i 1456
 this -24 8 0 ?
 n -16 4 0 integer
-func __strconcat 1624
+func TextFile.write$s 1482
+this -28 8 0 ?
+s -20 8 0 string
+func TextFile.writeLine 1503
+this -28 8 0 ?
+s -20 8 0 string
+func TextFile.__init 1528
+this -36 8 0 ?
+path -28 8 0 string
+mode -20 8 0 string
+func __cls_new_TextFile(ss) 1550
+path -28 8 0 string
+mode -20 8 0 string
+func __cls_init_TextFile(ss) 1586
+this -36 8 0 ?
+path -28 8 0 string
+mode -20 8 0 string
+func __cls_m_TextFile#writeLine(s)V 1606
+this -28 8 0 ?
+s -20 8 0 string
+func __cls_m_TextFile#readLine()s 1623
+this -20 8 0 ?
+func __cls_m_TextFile#readLine(z)s 1642
+this -24 8 0 ?
+ignorarError -16 4 0 boolean
+func __cls_m_TextFile#write(s)V 1663
+this -28 8 0 ?
+s -20 8 0 string
+func __cls_m_TextFile#readStr(iz)s 1680
+this -28 8 0 ?
+n -20 4 0 integer
+ignorarError -16 4 0 boolean
+func __cls_m_TextFile#readStr(i)s 1703
+this -24 8 0 ?
+n -16 4 0 integer
+func __strconcat 1724
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 d 16 4 0 ?
-func __strconcat5 1681
+func __strconcat5 1781
 s0 -52 8 0 ?
 s1 -44 8 0 ?
 s2 -36 8 0 ?
@@ -285,7 +306,7 @@ s3 -28 8 0 ?
 s4 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strequals 1784
+func __strequals 1884
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
