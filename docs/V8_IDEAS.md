@@ -3736,6 +3736,57 @@ paridad, y las placas en un lote.
   salida, redirigida, sale en cp1252 (las líneas con acentos «distintas»); con `-I -X utf8`, en UTF-8. Las ESP32, la
   STM32 y la P4, en el próximo lote: lo compilado ahora llama al 283 en cada suma, y una imagen anterior no lo tiene.
 
+### `#711`: el plan, comprobado en el código (23-oct)
+
+Eduardo, 23-oct: *«Seguimos con los pendientes, lo del conjunto son ideas. El siguiente es #711»*. Se mantiene lo escrito
+arriba («`#711`, el descodificador»): la rutina por el estándar con el atajo ASCII, `EncodingError extends RuntimeError`,
+`ignorarError: boolean := false`, un número nuevo para cada builtin con el indicador (desde el 284: el 283 es
+`__strNace`), los de hoy con la regla nueva, `appendChar` y los tests. Al mirarlo en el código salieron seis cosas:
+
+1. **Un parámetro nuevo en un MÉTODO rompe lo ya compilado.** La clave de un método lleva su firma (`MOD_FORMAT.md`
+   §13.1, R4: `readLine()s`), y el valor por defecto lo pone quien llama (`checkArgs`). Con `readLine(ignorarError :=
+   false)` la clave pasa a ser `readLine(z)s`, y un `.mod` ya compilado que llama a `readLine()` deja de enlazar: «'App'
+   necesita 'IO.TextFile.readLine()s' … recompila» (E3; con nombre, no en silencio). Les pasa a `TextFile.readLine`,
+   `TextFile.readStr` y `Tcp.recvStr`. A los builtins no: `fromBytes` y `readFile` son `inline` (cada llamada lleva su
+   `CALL_BUILTIN`, no hay nada que enlazar), y el compilador rellena el valor por defecto también en una `inline`.
+   **Propuesta:** en los tres métodos, dos declaraciones con el mismo nombre (una sobrecarga), `readLine()` y
+   `readLine(ignorarError: boolean)`. Quien programa escribe lo mismo (`f.readLine()`, `f.readLine(true)`), y lo
+   compilado sigue enlazando. En los builtins, el parámetro opcional, como se decidió.
+2. **`recvStr` daría un error falso.** Descodifica cada paquete por su cuenta, y un carácter puede llegar partido entre
+   dos («El stream», arriba). Hoy pasa en silencio (bytes rotos en la VM-C, «�» en la VM-Java); con la regla sería una
+   excepción con un texto bueno. **Propuesta:** lo mínimo de la regla de Eduardo para los streams, sólo en `recvStr`:
+   los bytes de un carácter a medias al final (tres como mucho) se quedan en la conexión para la llamada siguiente. Si
+   vence el plazo, esperan; si el otro lado cierra, el error de siempre («Net.recv: conexión cerrada por el peer»). Lo
+   demás de los streams, por diseñar, como estaba.
+3. **`Json` se rompería con un emoji escrito con `\u`.** `"😀"` son un par de sustitutos, y hoy van en dos
+   `appendChar` (en la VM-C salen bytes malos). Con la regla, `EncodingError` con un JSON bueno. Hay que juntarlos en
+   `Json` (ya dicho en el grupo 4): el par es un carácter; uno suelto, un error de JSON con su posición, como los demás.
+4. **Las natives:** el AOT crea con `string_from_cstr` los literales de una native y otros textos del compilador (de
+   confianza). Validar ahí costaría en cada literal. El texto que un pack trae de fuera (el de SQLite) va aparte, en su
+   pack.
+5. **Las fuentes de confianza, con su test** (como se decidió): los nombres de `listDir`, el ENV, los argumentos del RUN,
+   las rutas, la información de los packs y el texto de la GUI. En la GUI hay un fallo nuestro conocido (el búfer de
+   1 KB puede cortar un carácter): se corta por caracteres. La prueba de cada una: `fromBytes(toBytes(s))` no lanza.
+6. **`StringBuilder.toString`** acaba en `fromBytes` (no puede llamar a `__strNace`, `#714`): validará sus piezas, que
+   ya son válidas. Con acentos, una pasada más, lineal.
+
+Lo que cambia para un programa de hoy: leer con `readFile` un fichero que no es UTF-8 daba bytes rotos en la VM-C y
+«�» en la VM-Java (su propio descodificador); ahora, `EncodingError` en las dos, o «�» con `true`. Lo ya compilado
+llama a los números de antes, que también siguen la regla.
+
+**Las piezas, por la cascada** (la VM-Java; la VM-C, con la paridad; las placas, en un lote):
+- **`Core`:** `EncodingError`; `fromBytes` y `readFile` con el parámetro (284 y 285); `__freadLine` con el indicador
+  (286).
+- **las dos VMs:** la rutina; los seis builtins (120, 38 y 249 con la regla; 284–286 con el indicador); `__charsToString`
+  (47) con algo que no es un carácter, `EncodingError`; la excepción buscada por su nombre, y `RuntimeError` si no está.
+- **la stdlib:** `IO` (`readLine` y `readStr`, con su sobrecarga), `Net` (`recvStr`: sobrecarga y bytes pendientes) y
+  `Json` (los pares).
+- **las pruebas:** la rutina contra un oráculo escrito aparte (el algoritmo del estándar, tal cual), exhaustiva de 1 a
+  3 bytes y al azar con 4; un sample del corpus con lo mal formado por cada entrada, con y sin el indicador; las fuentes
+  de confianza.
+
+Esperando el OK de Eduardo a las propuestas 1 y 2.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

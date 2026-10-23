@@ -7581,6 +7581,17 @@ el orden: `#714` y el descodificador primero. Esperando el OK de Eduardo.
 **23-oct:** `#714` hecha (las cadenas nacen de solo lectura). Los builtins nuevos del descodificador empezarán en el 284:
 el 283 es `__strNace`.
 
+**23-oct, el plan comprobado en el código** (Eduardo: *«El siguiente es #711»*; `V8_IDEAS` §E5, «`#711`: el plan»). Lo
+escrito se mantiene, y salieron seis cosas. Dos, por decidir:
+- un parámetro nuevo en un MÉTODO (`readLine`, `readStr`, `recvStr`) cambia su clave de enlace, y lo ya compilado deja
+  de enlazar (E3). Propuesta: una sobrecarga, que se escribe igual;
+- `recvStr` daría un error falso con un carácter partido entre dos paquetes. Propuesta: los bytes del carácter a medias
+  se quedan en la conexión para la llamada siguiente.
+
+Las otras cuatro: `Json` tiene que juntar los pares `😀`; los literales de las natives no se validan (son de
+confianza), y el texto de SQLite va en su pack; las fuentes de confianza llevan su test, y la GUI se corta por
+caracteres; `StringBuilder.toString` validará sus piezas (una pasada más con acentos).
+
 #### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
 
 - **Medido** con la tanda del F1 (`rtosHeapMinFreeBytes` tras cada prueba; la misma prueba con los dos IDF; los
