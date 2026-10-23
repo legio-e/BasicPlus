@@ -7099,7 +7099,7 @@ menos: se quedan 16 sin registrar y el programa corre. Y cuadra con las cuentas:
 gastados; ×1,5 (3 072 B) cabe hasta 1 024 B por debajo de la línea base, y ×1,25 (2 560 B) hasta 1 536 B; con 1 537,
 sólo lo justo, y lo que viene después ya no entra.
 
-#### 🔵 `#726` — la red (`compat.sh check`) va de una en una y tarda unos 45 minutos; con 20 núcleos se podría repartir (abierta el 23-oct; Eduardo: *«la red en paralelo es una mejora pero puede esperar»*)
+#### ✅ `#726` — la red (`compat.sh check`) va de una en una y tarda unos 45 minutos; con 20 núcleos se podría repartir (abierta el 23-oct; Eduardo: *«la red en paralelo es una mejora pero puede esperar»*; **CERRADA el mismo día**: en tres grupos a la vez, de 22:51 a 11:37)
 
 Eduardo: *«la red de pruebas no se podría hacer en paralelo para ahorrar tiempo?»*. Lo visto ese día:
 - **las tres pasadas del corpus** (MOD9, MOD8 y dos workers; unos 160 samples cada una) son la mayor parte, y cada
@@ -7110,6 +7110,35 @@ Eduardo: *«la red de pruebas no se podría hacer en paralelo para ahorrar tiemp
 
 Lo propuesto: medir primero cada frente (un tiempo por frente en `compat.sh`), repartir las pasadas del corpus, medir
 otra vez, y luego las pruebas de C. A ojo, de unos 45 minutos a 10-15; lo dirá la medida.
+
+**Medido** (la red de `#725`, de una en una, con la hora en cada línea): **22:51 min**, no los 45 que yo decía. Las tres
+pasadas del corpus, 3:34 + 3:35 + 3:42; las pruebas de C, 8:52 (`test-cola` sola, 3:15, y `test-nat2runs`, 1:21); la
+cápsula 0:59, el sim 1:19, el estrés 0:24 y lo demás, segundos.
+
+**Decidido** (Eduardo): *«Si podemos dividir por 3 y cada uno lleva 15 min, pasamos de 45 min a 15 min»*; y *«De
+momento con 3 grupos es suficiente, ganaríamos 30 min por prueba que es mucho mejor, nos permite seguir trabajando en
+paralelo con lo siguiente pendiente, sin tener que esperar a que terminen las pruebas»*.
+
+**HECHO el mismo día**, en `compat/compat.sh`: `check` corre tres grupos a la vez, cada uno en su propio `$WORK`:
+- **A, el corpus**: MOD9, MOD8 y dos workers, en ese orden (las dos últimas comparan su salida con la de MOD9 sample a
+  sample);
+- **B, las pruebas de C**, de una en una, como siempre (comparten `build/` y las fixtures de `samples/`);
+- **C, lo demás**: la cápsula V6, hacia delante, la norma, el sim y la sombra (que usa el sim: juntos y en ese orden),
+  packs-abi y la stdlib embebida.
+
+Antes, `make` en serie: los `.o` de la VM-C los usan el sim y las pruebas de C, y diez pruebas de C dependen del
+binario de la VM que el corpus está ejecutando. Después, el estrés, solo: mide hilos y el heap justo. Cada frente deja
+su salida en un fichero, y al final salen en el orden de siempre; mientras corren, una línea por frente acabado. Lo
+que comparten sin pisarse, mirado: los puertos (los smokes del sim, 5107–5131; la sombra, 5461; `test-net`, 47391;
+`test-listen`, uno libre) y los `.mod` de las fixtures en `samples/`, que el corpus no lee (un hermano de un sample,
+como `InvocaRanuraBase`, sale de su fuente: «es un resto fuera de outDir»). **`check-serie`** es la red de antes, de
+una en una: para comparar, o si se sospecha de los grupos.
+
+**Medido: 11:37 min, VERDE.** A, 11:12 (MOD9 3:44, MOD8 3:40, dos workers 3:48); B, 8:30; C, 2:49; y el estrés,
+0:24. La carga apenas frena: el corpus, un 3 %; las pruebas de C, nada. La salida de cada frente, la misma que de una
+en una (el `diff` contra la red de `#725`: sólo `test-tablasim`, arreglada en `#727`). Lo que marca el tiempo ahora es
+el corpus; si hiciera falta menos, el paso siguiente sería la pasada de dos workers en otro grupo, comparando con la de
+MOD9 al final: unos 2 minutos.
 
 #### ✅ `#725` — `Json.parseJson` se para en el primer error: con un fichero con diez, se arreglan de uno en uno (abierta el 23-oct, una idea de Eduardo; **CERRADA el mismo día**: sigue tras cada error, como un compilador, y los da todos, diez como mucho, `6f9a7a77`)
 

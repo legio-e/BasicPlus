@@ -99,6 +99,9 @@
 > - **`#727`, hecha** (Eduardo: *«OK, adelante»*): el caso 4 de `test-tablasim` busca el presupuesto con el que algo
 >   no entra, desde un byte menos y de 64 en 64 (con este Json, 1 537 B menos: 16 sin registrar, y el programa corre).
 >   Sólo cambia la prueba.
+> - **`#726`, hecha: la red en tres grupos a la vez, 11:37 en vez de 22:51** (Eduardo: *«De momento con 3 grupos es
+>   suficiente»*). A, el corpus (MOD9, MOD8 y dos workers); B, las pruebas de C; C, lo demás; `make` antes y el estrés,
+>   solo, después. La salida de cada frente, la misma que de una en una. `check-serie`, la de antes.
 > - **Dos trampas mías:**
 >   - cambié `compat.sh` con una pasada de la paridad en marcha. Bash lee el script según avanza, y al acabar tropezó
 >     con el texto desplazado (un error de sintaxis en la última línea). Las salidas ya estaban guardadas; la red,

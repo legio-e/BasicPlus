@@ -71,6 +71,14 @@
 #                           las dos VMs: el stdout y el codigo de salida, los de BP.
 #                           El .mod no (el `print` de JC es otro arbol). No entra en
 #                           check: JC es un experimento de V8.
+#
+# V8 #726 (23-oct) — LA RED EN TRES GRUPOS. Eduardo: «Si podemos dividir por 3 y cada uno lleva 15 min, pasamos de
+# 45 min a 15 min» y «De momento con 3 grupos es suficiente». Medida de una en una, eran 22:51 min:
+#
+#   ./compat.sh check         A la vez: el corpus (MOD9, MOD8 y dos workers), las pruebas de C, y lo demas; cada
+#                             grupo en su $WORK, con `make` antes y el estres, solo, despues (ver check()).
+#   ./compat.sh check-serie   La misma red de una en una, como hasta el 23-oct: para comparar, o si se sospecha
+#                             de los grupos.
 set -u
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -1304,7 +1312,7 @@ check_mods_embebidos() {
 # check_behaviour / check_opcodes / check_emit se conservan intactas arriba: son
 # el registro de lo que se verificaba contra V2 y siguen siendo reutilizables si
 # algun dia hay algo que comparar. Desde V4 NO se llaman (ver el aviso de abajo).
-check() {
+aviso_v2() {
   cat <<'EOF'
 == check: compatibilidad binaria con V2/V3 DESACTIVADA ==
 
@@ -1330,6 +1338,12 @@ Lo que SI seguimos garantizando, y es lo que verifica este check:
   - la bateria de tests (fuera de este arnes).
 
 EOF
+}
+
+# La red de UNA EN UNA (`check-serie`): la de siempre hasta el 23-oct. Desde V8 #726, `check` corre en tres grupos a
+# la vez (abajo); esta se queda para comparar, o si se sospecha de los grupos.
+check_serie() {
+  aviso_v2
   local fails=0
   # V7/H2 (#523 V5/V11) — la pasada principal (MOD9) guarda su stdout: es la
   # referencia del frente MOD8 de abajo (el mismo corpus, compilado como MOD8,
@@ -1361,10 +1375,87 @@ EOF
   [ "$fails" -eq 0 ]
 }
 
+# ------------------------------------------------------------- la red en tres grupos (V8 #726)
+# Eduardo, 23-oct: «Si podemos dividir por 3 y cada uno lleva 15 min, pasamos de 45 min a 15 min» y «De momento con 3
+# grupos es suficiente [...] nos permite seguir trabajando en paralelo con lo siguiente pendiente». La red de una en una,
+# medida ese día con la hora en cada línea: 22:51 min —las tres pasadas del corpus, 3:34 + 3:35 + 3:42; las pruebas de
+# C, 8:52; la cápsula, la norma, el sim, la sombra y lo demás, 2:44; el estrés, 0:24—. Aquí, tres grupos A LA VEZ, cada
+# uno en su propio $WORK (el `.rc.java` de run_vm y los .mod de la paridad son de su grupo):
+#   A  el corpus: MOD9, MOD8 y dos workers, en ese orden —las dos últimas comparan su stdout con el de MOD9 sample a
+#      sample, y por eso van detrás y en el mismo grupo—;
+#   B  las pruebas de C: comparten bpgenvm-c/build y las fixtures de bpgenvm-c/samples/, y siguen de una en una;
+#   C  lo demás: la cápsula V6, hacia delante, la norma, el sim y la sombra —que usa el sim que acaba de construir
+#      check_sim: juntos y en ese orden—, packs-abi y la stdlib embebida.
+# ANTES, en serie, `make`: los .o de la VM-C los usan el sim (C) y las pruebas de C (B) —si hubiera que compilarlos, a
+# la vez se pisarían—, y diez pruebas de C dependen del binario de la VM que el corpus (A) está ejecutando: tiene que
+# estar hecho antes. Con el host compilado con LVGL no se compila nada (cada frente lo dice, como siempre). DESPUÉS, el
+# estrés, SOLO: mide hilos y el heap justo con varios workers, y con los otros grupos corriendo podría fallar sin razón.
+# Lo que se comparte y no se pisa: los puertos (los smokes del sim, 5107-5131; la sombra, 5461; test-net, 47391;
+# test-listen, uno libre) y los .mod de las fixtures en samples/, que el corpus no lee —un hermano de un sample del
+# corpus («InvocaRanuraBase») el compilador lo toma de su fuente: «es un resto fuera de outDir»—.
+# Cada frente deja su salida en $LOGS/<n>-<frente>.log; mientras corren sale una línea por frente acabado, y al final
+# las salidas enteras, en el orden de siempre. `check-serie` es la red de antes, de una en una (y se queda).
+LOGS=""
+frente() {   # $1=grupo $2=fichero, sin extension $3=nombre para el progreso $4...=la funcion y sus argumentos
+  local g="$1" f="$2" nom="$3" t=$SECONDS rc; shift 3
+  "$@" > "$LOGS/$f.log" 2>&1; rc=$?
+  echo "$rc" > "$LOGS/$f.rc"
+  printf '  %s  %s  %-16s %s  %s\n' "$(date +%H:%M:%S)" "$g" "$nom" "$([ "$rc" -eq 0 ] && echo 'ok  ' || echo 'ROJO')" \
+         "$(mmss $(( SECONDS - t )))"
+}
+mmss() { printf '%d:%02d' $(( $1 / 60 )) $(( $1 % 60 )); }
+seg_de() { cat "$LOGS/$1.seg" 2>/dev/null || echo 0; }
+FRENTES="01-paridad 02-mod7 03-fwd 04-norma 05-sim 06-testc 07-sombra 08-mod8 09-smp 10-estres 11-packs-abi 12-embebidos"
+check() {
+  aviso_v2
+  local fails=0 f t0=$SECONDS pa pb pc
+  LOGS="$WORK/red"; mkdir -p "$LOGS" "$REF_PAR"
+  if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
+    :   # con LVGL no se compila nada: cada frente que lo necesita lo dice (⚠), como en check-serie
+  elif ! make -C "$ROOT/bpgenvm-c" >"$WORK/.make.log" 2>&1; then
+    echo "  ✗ la VM-C no compila (make), y sin ella la red no prueba nada:"
+    grep -iE "error" "$WORK/.make.log" | head -6 | sed 's/^/       /'
+    echo "== check: ROJO (la VM-C no compila) =="
+    return 1
+  fi
+  echo "-- la red en tres grupos a la vez (#726): A, el corpus; B, las pruebas de C; C, lo demas; y el estres, solo, al final --"
+  ( WORK="$WORK/gA"; mkdir -p "$WORK"
+    PAR_SAVE="$REF_PAR"; frente A 01-paridad "paridad MOD9" check_parity; PAR_SAVE=""
+    frente A 08-mod8 "MOD8" check_mod8 sin-referencia
+    frente A 09-smp "dos workers" check_smp sin-referencia
+    echo $(( SECONDS - t0 )) > "$LOGS/grupoA.seg" ) & pa=$!
+  ( WORK="$WORK/gB"; mkdir -p "$WORK"
+    frente B 06-testc "pruebas de C" check_testc
+    echo $(( SECONDS - t0 )) > "$LOGS/grupoB.seg" ) & pb=$!
+  ( WORK="$WORK/gC"; mkdir -p "$WORK"
+    frente C 02-mod7 "capsula V6" check_mod7
+    frente C 03-fwd "hacia delante" check_fwd
+    frente C 04-norma "norma" check_norma
+    frente C 05-sim "sim" check_sim
+    frente C 07-sombra "sombra" check_sombra
+    frente C 11-packs-abi "packs-abi" check_packs_abi
+    frente C 12-embebidos "stdlib embebida" check_mods_embebidos
+    echo $(( SECONDS - t0 )) > "$LOGS/grupoC.seg" ) & pc=$!
+  # Un Ctrl-C para los tres: en un script sin control de trabajos, lo que va con `&` no recibe el SIGINT.
+  trap 'kill $pa $pb $pc 2>/dev/null; rm -rf "$WORK"; exit 130' INT TERM
+  wait $pa $pb $pc
+  trap - INT TERM
+  frente - 10-estres "estres" check_estres
+  echo ""
+  for f in $FRENTES; do
+    if [ -f "$LOGS/$f.log" ]; then cat "$LOGS/$f.log"; else echo "  ✗ $f: NO ha corrido (su grupo acabo antes)"; fi
+    [ "$(cat "$LOGS/$f.rc" 2>/dev/null)" = 0 ] || fails=$((fails+1))
+  done
+  echo "  (en tres grupos a la vez: A, el corpus, $(mmss "$(seg_de grupoA)"); B, las pruebas de C, $(mmss "$(seg_de grupoB)"); C, lo demas, $(mmss "$(seg_de grupoC)"); y despues el estres, solo. En total, $(mmss $(( SECONDS - t0 ))))"
+  echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + estres del heap + packs-abi + stdlib embebida VERDE' || echo "$fails frente(s) en ROJO") =="
+  [ "$fails" -eq 0 ]
+}
+
 case "${1:-}" in
   gen)        gen ;;
   gen-v6)     gen_v6 ;;
-  check)      check ;;
+  check)      check ;;         # V8 #726: en tres grupos a la vez
+  check-serie) check_serie ;;  # la de antes, de una en una
   check-mod7) check_mod7 ;;
   check-fwd)  check_fwd ;;
   check-norma) check_norma ;;
@@ -1381,5 +1472,5 @@ case "${1:-}" in
                                 # de cada sample (el de la VM-Java) queda en <dir>: el antes y el después de un cambio, que
                                 # la paridad sola no ve (si las dos VMs cambian igual, sigue verde)
   check-jc)   check_jc ;;          # V8 #698 (18-oct): el corpus, también en JC
-  *) echo "uso: $0 {gen|gen-v6|check|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-estres|check-packs-abi|check-paridad|check-jc}"; exit 2 ;;
+  *) echo "uso: $0 {gen|gen-v6|check|check-serie|check-mod7|check-fwd|check-norma|check-sim|check-testc|check-sombra|check-mod8|check-smp|check-estres|check-packs-abi|check-paridad|check-jc}"; exit 2 ;;
 esac
