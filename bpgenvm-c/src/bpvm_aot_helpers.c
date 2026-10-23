@@ -816,7 +816,15 @@ static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
     return bpvm_prim_str_len(vm, NULL, 0u, ref ? A(vm, ref) : 0u);
 }
 static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    return bpvm_prim_char_code_at(vm, NULL, 0u, ref ? A(vm, ref) : 0u, idx);
+    uint32_t sa = ref ? A(vm, ref) : 0u;
+    int32_t c = bpvm_prim_char_code_at(vm, NULL, 0u, sa, idx);
+    if (c < 0) {   /* V8 #717: fuera de rango, el mismo error que BUILTIN_CHAR_CODE_AT (y que charAt); antes, 0 en silencio */
+        char em[96];
+        snprintf(em, sizeof em, "charCodeAt: idx fuera de rango %" PRId32 " (len=%d)", idx,
+                 (int) bpvm_prim_str_len(vm, NULL, 0u, sa));
+        h_throw_runtime(vm, em); return 0;
+    }
+    return c;
 }
 /* #569 (V7/H5, 26-sep) — lo MISMO que BUILTIN_CHAR_AT, que es lo que corre la native interpretada: un
  * índice fuera de rango es un RuntimeError atrapable (BUG-7b, paridad con miVM) y no una cadena vacía, y

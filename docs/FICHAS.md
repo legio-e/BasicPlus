@@ -7328,7 +7328,7 @@ fundir más sin mover objetos; sólo los quitaría la compactación (`Heap.compa
 
 Sólo análisis. Por decidir (Eduardo).
 
-#### 🔵 `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5)
+#### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`)
 
 Con `s = "hola"`, comprobado en el PC con las dos VMs:
 - **la VM-C:** `charCodeAt(s, 9)` y `charCodeAt(s, -1)` devuelven 0 (`bpvm_prim_char_code_at`);
@@ -7338,7 +7338,14 @@ Con `s = "hola"`, comprobado en el PC con las dos VMs:
 VM, para no mezclar ese cambio con esta decisión. Por decidir (Eduardo): qué hace. Lo coherente con `charAt` sería
 lanzar.
 
-#### 🔵 `#716` — `parseInt` y `parseFloat` con un texto que no es un número limpio: la VM-C devuelve lo que puede en silencio, y la VM-Java mata el hilo sin que el `try` de BP lo vea; ninguna lanza el error atrapable que dice `BUILTINS.md` (abierta el 21-oct, al mirar los algoritmos del H5)
+**Decidido y HECHO el 23-oct** (Eduardo: *«Me valen las propuestas»*): lanza en las dos VMs, con el texto de `charAt`,
+`charCodeAt: idx fuera de rango 9 (len=4)` (la VM-Java cambia el suyo). En la VM-C, la primitiva devuelve -1 fuera de
+rango (ningún carácter lo es), y lanzan quien la llama: el builtin y el ayudante de las natives (`h_string_char_code_at`,
+sin tocar la ABI). En la stdlib, los 19 `charCodeAt` miran el rango antes (con `and`, que corta). Lo prueba
+`bpgenvm-c/samples/CharCodeAtFuera.bp` (en el corpus): por los dos caminos de las cadenas, con la vacía y con un
+literal; dentro de rango, como siempre.
+
+#### ✅ `#716` — `parseInt` y `parseFloat` con un texto que no es un número limpio: la VM-C devuelve lo que puede en silencio, y la VM-Java mata el hilo sin que el `try` de BP lo vea; ninguna lanza el error atrapable que dice `BUILTINS.md` (abierta el 21-oct, al mirar los algoritmos del H5; **CERRADA el 23-oct**: una regla, la misma en las dos VMs, y un error atrapable)
 
 Las dos usan la biblioteca estándar de su lado, y heredan lo que hace cada una:
 - **la VM-C:** `strtol` y `strtod` de la libc, sin mirar si sobra texto;
@@ -7358,6 +7365,20 @@ Comprobado en el PC:
 `BUILTINS.md` dice «RTErr si no parsea». Por decidir (Eduardo): qué es un número válido, y que las dos VMs lo
 comprueben igual. Sin depender de `strtol`/`strtod`, cuyo comportamiento cambia además entre MinGW, newlib y
 picolibc.
+
+**Decidido y HECHO el 23-oct** (Eduardo: *«Me valen las propuestas»*). La regla, sobre los bytes de la cadena, con la
+misma rutina en las dos VMs (`Numeros` en miVM; `num_*` en `builtins.c`):
+- alrededor, espacios (los bytes de 0 a 32, como el `trim` de Java); dentro, nada; un dígito es 0-9 de ASCII;
+- `parseInt`: `[+-] dígitos`, y que quepa en 32 bits; si no, «no es un número entero» o «no cabe en un integer»;
+- `parseFloat`: `[+-] (dígitos [. dígitos] | . dígitos) [(e|E) [+-] dígitos]`, sin hexadecimal, `inf` ni `nan`; lo
+  válido lo convierte `strtod` (la VM-C) o `Double.parseDouble` (miVM), que con un decimal limpio dan lo mismo; lo que
+  pasa del máximo de un `float`, «no cabe en un float»;
+- el error, un `RuntimeError` atrapable con el texto que llegó (40 bytes como mucho, cortado por caracteres): «parseInt:
+  '12abc' no es un número entero».
+
+En la VM-C, el número ya no pasa por un búfer de 64 bytes: se mira entero en el heap (para `strtod`, una copia del ya
+validado). Lo prueba `bpgenvm-c/samples/ParseNumero.bp` (en el corpus): 51 casos con lo que tiene que salir, escrito a
+mano. Consecuencia, ya avisada: un entero de más de 32 bits en un JSON es ahora un error (`#725`).
 
 #### 🔵 `#715` — el GC rehace la lista de huecos con coste CUADRÁTICO: con 4000 cadenas vivas, cada `gc()` tarda 3,6 s en la P4, 1,3 s en la Metro y 123 ms en la Pico 2 (abierta el 21-oct, en el censo del H5; **sólo análisis**, Eduardo: *«Lo del GC y la lista de huecos de momento solo analiza, de momento no intentamos mejorar»*)
 
@@ -7575,7 +7596,7 @@ programa, en las dos VMs:
 | el mismo, con `TextFile.readLine` | `F1` tal cual | `F1` tal cual |
 | `appendChar(0xD800)`: medio par de sustitutos | `ED A0 80` (mal formado) | `?` |
 | un emoji como par, `appendChar(0xD83D)` + `appendChar(0xDE00)` | dos medios caracteres (`ED A0 BD ED B8 80`) | el emoji (`F0 9F 98 80`) |
-| lo mismo, por `Json.parseJson` con `😀` | dos medios caracteres | el emoji |
+| lo mismo, por `Json.parseJson` con `\uD83D\uDE00` | dos medios caracteres | el emoji |
 | `appendChar(0x110000)`: fuera de Unicode | `F4 90 80 80` (mal formado) | **el hilo muere** (la excepción de Java) |
 | `fromBytes` de bytes cortados a medio carácter | tal cual | (no llega: el hilo ya murió) |
 
@@ -7654,7 +7675,7 @@ escrito se mantiene, y salieron seis cosas. Dos, por decidir:
 - `recvStr` daría un error falso con un carácter partido entre dos paquetes. Propuesta: los bytes del carácter a medias
   se quedan en la conexión para la llamada siguiente.
 
-Las otras cuatro: `Json` tiene que juntar los pares `😀`; los literales de las natives no se validan (son de
+Las otras cuatro: `Json` tiene que juntar los pares `\uD83D\uDE00`; los literales de las natives no se validan (son de
 confianza), y el texto de SQLite va en su pack; las fuentes de confianza llevan su test, y la GUI se corta por
 caracteres; `StringBuilder.toString` validará sus piezas (una pasada más con acentos).
 

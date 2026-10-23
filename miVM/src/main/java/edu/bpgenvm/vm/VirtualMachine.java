@@ -5057,14 +5057,32 @@ public class VirtualMachine {
                 pushTc(tc, s.codePointCount(0, s.length()));
                 break;
             }
-            case PARSE_INT: {
-                String s = readVmString(popTcRef(tc));
-                pushTc(tc, (int) Long.parseLong(s.trim()));
+            case PARSE_INT: {   // V8 #716: la regla de Numeros, la misma que la VM-C (antes, Long.parseLong: la excepción de
+                                // Java mataba el hilo, y un número grande se quedaba con sus 32 bits de abajo)
+                long ref = popTcRef(tc);
+                int off = (ref == 0) ? 0 : refDeref(ref) + 4;
+                int n = (ref == 0) ? 0 : readInt32(refDeref(ref));
+                int ini = Numeros.ini(memory, off, n), fin = Numeros.fin(memory, ini, off, n);
+                int[] v = new int[1];
+                int r = (ini < fin) ? Numeros.entero(memory, ini, fin, v) : Numeros.NO_ES;
+                if (r != Numeros.VALE)
+                    throwBpRuntimeError(tc, "parseInt: " + Numeros.muestra(memory, off, n)
+                            + (r == Numeros.NO_ES ? " no es un número entero" : " no cabe en un integer"));
+                pushTc(tc, v[0]);
                 break;
             }
-            case PARSE_FLOAT: {
-                String s = readVmString(popTcRef(tc));
-                pushTc(tc, Float.floatToRawIntBits((float) Double.parseDouble(s.trim())));
+            case PARSE_FLOAT: {   // V8 #716: la regla de Numeros decide; lo válido, Double.parseDouble (con un decimal limpio,
+                                  // lo mismo que el strtod de la VM-C)
+                long ref = popTcRef(tc);
+                int off = (ref == 0) ? 0 : refDeref(ref) + 4;
+                int n = (ref == 0) ? 0 : readInt32(refDeref(ref));
+                int ini = Numeros.ini(memory, off, n), fin = Numeros.fin(memory, ini, off, n);
+                if (!Numeros.esDecimal(memory, ini, fin))
+                    throwBpRuntimeError(tc, "parseFloat: " + Numeros.muestra(memory, off, n) + " no es un número");
+                float f = (float) Double.parseDouble(new String(memory, ini, fin - ini, java.nio.charset.StandardCharsets.US_ASCII));
+                if (Float.isInfinite(f))
+                    throwBpRuntimeError(tc, "parseFloat: " + Numeros.muestra(memory, off, n) + " no cabe en un float");
+                pushTc(tc, Float.floatToRawIntBits(f));
                 break;
             }
             case EVAL: {
@@ -6092,13 +6110,13 @@ public class VirtualMachine {
                 long ref = popTcRef(tc);
                 if (strAscii(ref)) {   // V8/H5: el rápido: el carácter i ES el byte i (mismo texto de error que abajo)
                     int nb = strBytes(ref);
-                    if (idx < 0 || idx >= nb) throwBpRuntimeError(tc, "charCodeAt: índice " + idx + " fuera de [0," + nb + ")");
+                    if (idx < 0 || idx >= nb) throwBpRuntimeError(tc, "charCodeAt: idx fuera de rango " + idx + " (len=" + nb + ")");   // V8 #717: el texto de charAt, el mismo que la VM-C
                     pushTc(tc, memory[refDeref(ref) + 4 + idx] & 0xFF);
                     break;
                 }
                 String s = readVmString(ref);      // #6 (censo V4): string ref = 8B; H2 índice en codepoints
                 int n = s.codePointCount(0, s.length());
-                if (idx < 0 || idx >= n) throwBpRuntimeError(tc, "charCodeAt: índice " + idx + " fuera de [0," + n + ")");
+                if (idx < 0 || idx >= n) throwBpRuntimeError(tc, "charCodeAt: idx fuera de rango " + idx + " (len=" + n + ")");   // V8 #717
                 pushTc(tc, s.codePointAt(s.offsetByCodePoints(0, idx)));
                 break;
             }

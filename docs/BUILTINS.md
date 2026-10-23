@@ -41,8 +41,8 @@ Convención general:
 | id | bpName | Args | Return | Semántica |
 |---|---|---|---|---|
 | 0 | `strlen` | `(s: string)` | `int` | Length del array de chars. |
-| 1 | `parseInt` | `(s: string)` | `int` | Java `Integer.parseInt(s.trim())`. RTErr si no parsea. |
-| 2 | `parseFloat` | `(s: string)` | `float` | Java `Double.parseDouble`. |
+| 1 | `parseInt` | `(s: string)` | `int` | `[+-] dígitos` (ASCII), con espacios alrededor (los bytes de 0 a 32), y que quepa en 32 bits. Si no, RTErr: `parseInt: '12abc' no es un número entero`, `parseInt: '99999999999' no cabe en un integer` (V8, `#716`: la misma regla en las dos VMs; antes, `strtol` en la VM-C y `Long.parseLong` en miVM, que mataba el hilo). |
+| 2 | `parseFloat` | `(s: string)` | `float` | `[+-] (dígitos [. dígitos] \| . dígitos) [(e\|E) [+-] dígitos]`, con espacios alrededor; sin hexadecimal, `inf` ni `nan`. Lo válido lo convierte `strtod` / `Double.parseDouble` (iguales con un decimal limpio). Si no, RTErr: `parseFloat: '1e' no es un número`; lo que pasa del máximo de un `float`, `parseFloat: '1e39' no cabe en un float` (V8, `#716`). |
 | 3 | `intToString` | `(i: int)` | `string` | Decimal con signo. |
 | 4 | `floatToString` | `(f: float)` | `string` | Java `Float.toString`. |
 | 5 | `boolToString` | `(b: bool)` | `string` | `"true"`/`"false"`. |
@@ -159,7 +159,7 @@ Los que crean un array (estos, `newIntArray` y los opcodes `NEWARRAY*`) multipli
 en la memoria de la VM entera es «No space in heap», atrapable (V8, `#712`: en 32 bits, `newIntArray(2^30 + 1)` daba un
 bloque de 4 B con una longitud de mil millones). En la VM-C pasan todos por `bpvm_prim_nuevo_array`.
 | 47 | `__charsToString` | `(chars: int[], len: int)` | `string` | Aloca string copiando `chars[0..len)`. Un código que no es un carácter (un sustituto, o fuera de 0..10FFFF), `EncodingError`: `appendChar: el código 55296 no es un carácter` (V8/H5, `#711`). |
-| 48 | `charCodeAt` | `(s: string, i: int)` | `int` | Codepoint del char `i` (sin alocar). |
+| 48 | `charCodeAt` | `(s: string, i: int)` | `int` | Codepoint del char `i` (sin alocar). Fuera de rango, el RTErr de `charAt`: `charCodeAt: idx fuera de rango 9 (len=4)` (V8, `#717`; antes, la VM-C devolvía 0 en silencio). |
 
 ## 49..51 — Threading
 

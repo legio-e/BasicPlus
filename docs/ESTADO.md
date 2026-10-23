@@ -78,12 +78,24 @@
 >     mataba el hilo con un error de Java, y en la VM-C el programa se paraba sin decir nada. `ArrayEnorme`, en el
 >     corpus;
 >   - la red VERDE: paridad 160 (MOD9, MOD8 y dos workers), pruebas de C 104/104, y lo demás.
+> - **Después, `#716` y `#717`** (Eduardo: *«#716 y #717 a continuación»*; a las propuestas: *«Me valen las propuestas»*):
+>   - **`#717`:** `charCodeAt` fuera de rango lanza en las dos VMs, con el texto de `charAt` (también en las natives, sin
+>     tocar la ABI). `CharCodeAtFuera`, en el corpus;
+>   - **`#716`:** qué es un número, con la misma rutina en las dos VMs: espacios alrededor; `[+-] dígitos` para
+>     `parseInt` y, para `parseFloat`, con decimales y exponente; lo que no, o lo que no cabe, un `RuntimeError` con el
+>     texto. `ParseNumero` (51 casos), en el corpus.
+> - **Dos ideas de Eduardo, a fichas:** `#725`, que `parseJson` siga tras un error y los devuelva todos (*«Para devolver
+>   una excepción con varios errores en Java me cree una excepción a la que podías añadir una lista de excepciones como
+>   causa»*), por analizar; y `#726`, la red en paralelo (*«es una mejora pero puede esperar»*).
 > - **Dos trampas mías:**
 >   - cambié `compat.sh` con una pasada de la paridad en marcha. Bash lee el script según avanza, y al acabar tropezó
 >     con el texto desplazado (un error de sintaxis en la última línea). Las salidas ya estaban guardadas; la red,
 >     repetida entera;
 >   - el servidor de eco que lancé a mano (`test_net serve 25`) no sale si nadie se conecta, y se quedó con el puerto: el
->     `test-net` de la red se colgó contra él, 27 minutos sin una línea. Matado, y `test-net` repetido solo, verde.
+>     `test-net` de la red se colgó contra él, 27 minutos sin una línea. Matado, y `test-net` repetido solo, verde;
+>   - y las dos de siempre al escribir con barras: un heredoc metió 2 NULs en `builtins.c` (el `'\0'` de C), y la
+>     secuencia de escape de JSON de un par de sustitutos, escrita con Edit/Write, quedó como el emoji en FICHAS,
+>     V8_IDEAS, la memoria y dos mensajes de commit (los documentos, arreglados; los commits, como están).
 > - **Las placas:** la Metro (M) y la Pico 2 (P), grabadas otra vez con la imagen de `#711` (el CRC de cada una, el de su
 >   `.elf`): `Utf8Descodifica`, `MoveSoloLectura` y `StrDosCaminos`, igual que el PC. Las dos tienen esos tres en `/app`,
 >   y un `/app/Json.mod` nuevo que tapa al `/lib/Json.mod` de antes (al mandarles la stdlib nueva, sobra). La P4, sin tocar.
@@ -229,7 +241,7 @@
 >   - copiar con `memmove` es barato, y los bucles propios, unas quince veces más caros.
 >
 >   Y la pregunta por `#711` (*«¿lo generamos nosotros o de dónde sale?»*): de fuera (ficheros en Latin-1, el puerto
->   serie, `fromBytes`) y de dentro (`appendChar` con sustitutos o fuera de Unicode, y por él `Json` con `😀`,
+>   serie, `fromBytes`) y de dentro (`appendChar` con sustitutos o fuera de Unicode, y por él `Json` con `\uD83D\uDE00`,
 >   que en la VM-C sale roto y en la VM-Java bien). Medido en las dos VMs; el detalle, en `#711`.
 > - **y la idea de Eduardo de aprovechar algoritmos de bytes estándar con UTF-8** (*«aunque estemos con UTF-8 […]
 >   podemos aprovechar algoritmos mas o menos estandard para bytes»*): sí, el UTF-8 está hecho para eso. Se busca de 4

@@ -2007,7 +2007,7 @@ En la memoria no se distinguen: los distingue el compilador.
      - **De fuera:** un fichero en otra codificación (un CSV de Windows en Latin-1: `caña` lleva la `ñ` en un byte,
        `F1`), el puerto serie, la red, o `fromBytes` con bytes cualesquiera.
      - **De nuestro propio código:** `appendChar` con medio par de sustitutos, o con un número fuera de Unicode. Y
-       por él, `Json`, que convierte cada `\uXXXX` con un `appendChar`: un emoji escrito en JSON como `😀`
+       por él, `Json`, que convierte cada `\uXXXX` con un `appendChar`: un emoji escrito en JSON como `\uD83D\uDE00`
        (lo normal en las API web) sale en la VM-C partido en dos medios caracteres, y en la VM-Java, bien.
 4. **Hoy el invariante no se cumple del todo:**
    - `move` (pública, de `Core`) escribe dentro de un string, y el cambio lo ven todas sus referencias (`#714`);
@@ -3502,7 +3502,7 @@ mismos que la crean). Cuatro grupos:
    - los números pasados a texto (`intToString`, `floatToString`…) también nacen aquí, pero son siempre ASCII.
 4. **Las que salen de un punto de código:** `appendChar` y `__charsToString`. Un punto de código que no es un carácter
    (un sustituto, de D800 a DFFF, o uno por encima de 10FFFF) da hoy bytes mal formados en la VM-C; en la VM-Java, `?`
-   o el hilo muere. Y `Json` convierte cada `\uXXXX` con un `appendChar` sin juntar los pares (`😀`, el
+   o el hilo muere. Y `Json` convierte cada `\uXXXX` con un `appendChar` sin juntar los pares (`\uD83D\uDE00`, el
    emoji): eso se arregla en `Json`, juntándolos antes.
 
 **Cómo se corrige.** Cada trozo mal formado pasa a U+FFFD (`EF BF BD`), como hace Java. Medido con Java 8 (un programa
@@ -3760,7 +3760,7 @@ arriba («`#711`, el descodificador»): la rutina por el estándar con el atajo 
    los bytes de un carácter a medias al final (tres como mucho) se quedan en la conexión para la llamada siguiente. Si
    vence el plazo, esperan; si el otro lado cierra, el error de siempre («Net.recv: conexión cerrada por el peer»). Lo
    demás de los streams, por diseñar, como estaba.
-3. **`Json` se rompería con un emoji escrito con `\u`.** `"😀"` son un par de sustitutos, y hoy van en dos
+3. **`Json` se rompería con un emoji escrito con `\u`.** `"\uD83D\uDE00"` son un par de sustitutos, y hoy van en dos
    `appendChar` (en la VM-C salen bytes malos). Con la regla, `EncodingError` con un JSON bueno. Hay que juntarlos en
    `Json` (ya dicho en el grupo 4): el par es un carácter; uno suelto, un error de JSON con su posición, como los demás.
 4. **Las natives:** el AOT crea con `string_from_cstr` los literales de una native y otros textos del compilador (de
@@ -3808,7 +3808,7 @@ Esperando el OK de Eduardo a las propuestas 1 y 2.
 - **`IO`:** `readLine()` y `readLine(ignorarError)`, `readStr(n)` y `readStr(n, ignorarError)` (ésta antes: los
   métodos se resuelven en orden). **`Net`:** `recvStr` con su sobrecarga y los bytes de un carácter a medias en la
   conexión (`pendiente`); `make test-net` manda una `ñ` partida en dos envíos al eco y sale entera (`partida 2: [ñb]`),
-  igual en la VM-Java. **`Json`:** junta los pares `😀`; uno suelto, «JSON: sustituto UTF-16 sin su pareja
+  igual en la VM-Java. **`Json`:** junta los pares `\uD83D\uDE00`; uno suelto, «JSON: sustituto UTF-16 sin su pareja
   en pos N»;
 - **la GUI:** `read_bp_string` (18 sitios en la VM-C, entre ellos el búfer de 1 KB de `setText`) recorta por
   caracteres. `Utf8Gui`, nuevo y en el corpus: 1022 `a` y una `ñ`; con el recorte de antes, la `ñ` salía partida

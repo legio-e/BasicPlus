@@ -632,6 +632,80 @@ static bpvm_status_t throw_utf8_malo(bpvm_t* vm, bpvm_thread_t* tc, const char* 
     return builtin_throw_codif(vm, tc, em);
 }
 
+/* V8 #716 — QUÉ ES UN NÚMERO para parseInt y parseFloat, lo mismo en las dos VMs (Eduardo: «Me valen las propuestas»).
+ * Antes, strtol y strtod decidían, y leen lo que pueden y callan ("12abc" → 12, "abc" → 0, "0x1F" → 31 en parseFloat; un
+ * entero grande, el tope), y cambian entre MinGW, newlib y picolibc; miVM mataba el hilo. La regla, sobre los BYTES de
+ * la cadena (un dígito es 0-9 de ASCII):
+ *   - alrededor, espacios: los bytes de 0 a 32, como el trim de Java; dentro, nada;
+ *   - entero:  [+-] dígitos, y que quepa en 32 bits;
+ *   - decimal: [+-] (dígitos [. dígitos] | . dígitos) [(e|E) [+-] dígitos] (sin hexadecimal, inf ni nan), y que quepa
+ *     en un float.
+ * Lo que no, un RuntimeError atrapable con el texto que llegó (40 bytes como mucho, cortado por caracteres). El espejo,
+ * Numeros (miVM). Para convertir un decimal ya validado, strtod sigue sirviendo: con uno limpio, da lo mismo que
+ * Double.parseDouble. */
+enum { NUM_VALE = 0, NUM_NO_ES = 1, NUM_NO_CABE = 2 };
+
+static uint32_t num_ini(const uint8_t* p, uint32_t n) {
+    uint32_t i = 0;
+    while (i < n && p[i] <= 32u) i++;
+    return i;
+}
+static uint32_t num_fin(const uint8_t* p, uint32_t a, uint32_t n) {
+    uint32_t f = n;
+    while (f > a && p[f - 1] <= 32u) f--;
+    return f;
+}
+static int num_digito(uint8_t c) { return c >= '0' && c <= '9'; }
+
+/* El entero de p[a, b): NUM_VALE (con *v), NUM_NO_ES o NUM_NO_CABE. Mira todos los bytes antes de decir NUM_NO_CABE. */
+static int num_entero(const uint8_t* p, uint32_t a, uint32_t b, int32_t* v) {
+    uint32_t i = a;
+    int neg = 0, grande = 0;
+    uint64_t acc = 0;
+    if (i < b && (p[i] == '+' || p[i] == '-')) { neg = (p[i] == '-'); i++; }
+    if (i >= b) return NUM_NO_ES;
+    for (; i < b; i++) {
+        if (!num_digito(p[i])) return NUM_NO_ES;
+        if (!grande) {
+            acc = acc * 10u + (uint64_t) (p[i] - '0');
+            if (acc > 2147483648ull) grande = 1;
+        }
+    }
+    if (grande || (!neg && acc > 2147483647ull)) return NUM_NO_CABE;
+    *v = neg ? (int32_t) (0 - (int64_t) acc) : (int32_t) acc;
+    return NUM_VALE;
+}
+
+/* ¿Es p[a, b) un decimal? [+-] (dígitos [. dígitos] | . dígitos) [(e|E) [+-] dígitos]. */
+static int num_es_decimal(const uint8_t* p, uint32_t a, uint32_t b) {
+    uint32_t i = a, ent = 0, frac = 0, exp = 0;
+    if (i < b && (p[i] == '+' || p[i] == '-')) i++;
+    while (i < b && num_digito(p[i])) { i++; ent++; }
+    if (i < b && p[i] == '.') {
+        i++;
+        while (i < b && num_digito(p[i])) { i++; frac++; }
+    }
+    if (ent == 0 && frac == 0) return 0;
+    if (i < b && (p[i] == 'e' || p[i] == 'E')) {
+        i++;
+        if (i < b && (p[i] == '+' || p[i] == '-')) i++;
+        while (i < b && num_digito(p[i])) { i++; exp++; }
+        if (exp == 0) return 0;
+    }
+    return i == b;
+}
+
+/* El texto del error: «<que>: '<lo que llegó>' <qué le pasa>», con 40 bytes como mucho de lo que llegó, cortado por
+ * caracteres y con «...». */
+static bpvm_status_t num_throw(bpvm_t* vm, bpvm_thread_t* tc, const char* que, const uint8_t* p, uint32_t n,
+                               const char* falla) {
+    uint32_t k = (n <= 40u) ? n : 40u;
+    if (n > 40u) while (k > 0u && (p[k] & 0xC0u) == 0x80u) k--;
+    char em[160];
+    snprintf(em, sizeof em, "%s: '%.*s%s' %s", que, (int) k, (const char*) p, (n > 40u) ? "..." : "", falla);
+    return builtin_throw(vm, tc, em);
+}
+
 /* V8/H5 (#711) — el bloque `blk` (un byte[] recién leído de FUERA: un fichero, una línea; no está en la pila) pasa a
  * ser una cadena. Si es UTF-8 válido, nace tal cual, en su sitio; si no, EncodingError, o, con `ignorar`, nace otra con
  * cada trozo malo cambiado por U+FFFD (más larga: se mide antes de reservar). Deja la cadena en la pila. El espejo,
@@ -1064,25 +1138,26 @@ int32_t bpvm_prim_str_len(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32
     return (int32_t) strcur_ncp(vm, cur, clave, vm->memory + s + BPVM_ARR_DATA_OFF, nbytes);   /* una vez por cadena */
 }
 
+/* V8 #717: fuera de rango devuelve -1 (ningún carácter lo es), y quien llama lanza el error de charAt; antes, 0 en silencio. */
 int32_t bpvm_prim_char_code_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i) {
     bpvm_strcur_t propio = {0};
     uint32_t nbytes, ncp, off, adv;
     const uint8_t* p;
-    if (s == 0u) return 0;
+    if (s == 0u) return -1;   /* sin valor: la vacía */
     nbytes = bpvm_read_u32_be(vm->memory + s);
     p = vm->memory + s + BPVM_ARR_DATA_OFF;
-    if (bpvm_str_ascii(vm, s))   /* V8/H5: el rápido: el carácter i ES el byte i (fuera de rango, 0, como abajo) */
-        return (i < 0 || (uint32_t) i >= nbytes) ? 0 : (int32_t) p[i];
-    if (i < 0) return 0;
+    if (bpvm_str_ascii(vm, s))   /* V8/H5: el rápido: el carácter i ES el byte i (fuera de rango, -1, como abajo) */
+        return (i < 0 || (uint32_t) i >= nbytes) ? -1 : (int32_t) p[i];
+    if (i < 0) return -1;
     if (BP_EMPIEZA_MAL(p, nbytes)) {   /* el lento de siempre */
         ncp = utf8_cp_count(p, nbytes);
-        if ((uint32_t) i >= ncp) return 0;
+        if ((uint32_t) i >= ncp) return -1;
         off = utf8_byte_offset(p, nbytes, (uint32_t) i);
         return (int32_t) utf8_decode(p + off, nbytes - off, &adv);   /* H2: codepoint en índice de codepoint */
     }
     if (cur == NULL) { cur = &propio; clave = s; }
     off = strcur_byte_de(vm, cur, clave, p, nbytes, (uint32_t) i);   /* V8/H5: desde el cursor, una pasada */
-    if (off >= nbytes) return 0;                                       /* fuera de rango */
+    if (off >= nbytes) return -1;                                      /* fuera de rango */
     return (int32_t) utf8_decode(p + off, nbytes - off, &adv);
 }
 
@@ -2044,40 +2119,48 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 #endif /* BPVM_GUI */
 
-    case BUILTIN_PARSE_INT: {
-        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
-        char buf[64];
-        read_bp_string(vm, ref, buf, sizeof(buf));
-        /* trim simple */
-        char* p = buf; while (*p == ' ' || *p == '\t') p++;
-        char* end = p + strlen(p);
-        while (end > p && (end[-1] == ' ' || end[-1] == '\n' || end[-1] == '\r' || end[-1] == '\t')) {
-            *--end = '\0';
-        }
-        long v = strtol(p, NULL, 10);
-        push_i32(vm, tc, (int32_t) v);
+    case BUILTIN_PARSE_INT: {   /* V8 #716: la regla de num_entero, la misma que miVM (antes, strtol: "12abc" → 12) */
+        bpref_t sref = bpref_pop(vm, tc);   /* H1.2a: string ref = 8 bytes */
+        uint32_t sa = bpref_is_null(sref) ? 0u : bpref_deref(vm, sref);
+        uint32_t n = sa ? bpvm_read_u32_be(vm->memory + sa) : 0u;
+        const uint8_t* p = sa ? vm->memory + sa + BPVM_ARR_DATA_OFF : (const uint8_t*) "";
+        uint32_t a = num_ini(p, n), b = num_fin(p, a, n);
+        int32_t v = 0;
+        int r = (a < b) ? num_entero(p, a, b, &v) : NUM_NO_ES;
+        if (r != NUM_VALE)
+            return num_throw(vm, tc, "parseInt", p, n, r == NUM_NO_ES ? "no es un número entero" : "no cabe en un integer");
+        push_i32(vm, tc, v);
         return BPVM_OK;
     }
 
-    case BUILTIN_PARSE_FLOAT: {   /* string -> float (f32). Espejo de parseInt pero con
-                                   * strtod: (float)strtod == (float)Double.parseDouble
-                                   * (f32 correctamente redondeado) -> paridad con miVM. */
-        uint32_t ref = pop_ref(vm, tc);   /* H1.2a: string ref = 8 bytes */
-        char buf[64];
-        read_bp_string(vm, ref, buf, sizeof(buf));
-        /* trim simple (igual que parseInt) */
-        char* p = buf; while (*p == ' ' || *p == '\t') p++;
-        char* end = p + strlen(p);
-        while (end > p && (end[-1] == ' ' || end[-1] == '\n' || end[-1] == '\r' || end[-1] == '\t')) {
-            *--end = '\0';
+    case BUILTIN_PARSE_FLOAT: {   /* string -> float (f32). V8 #716: num_es_decimal decide; lo válido, strtod: con un
+                                   * decimal limpio, (float)strtod == (float)Double.parseDouble (f32 correctamente
+                                   * redondeado) -> paridad con miVM. */
+        bpref_t sref = bpref_pop(vm, tc);   /* H1.2a: string ref = 8 bytes */
+        uint32_t sa = bpref_is_null(sref) ? 0u : bpref_deref(vm, sref);
+        uint32_t n = sa ? bpvm_read_u32_be(vm->memory + sa) : 0u;
+        const uint8_t* p = sa ? vm->memory + sa + BPVM_ARR_DATA_OFF : (const uint8_t*) "";
+        uint32_t a = num_ini(p, n), b = num_fin(p, a, n);
+        if (!num_es_decimal(p, a, b)) return num_throw(vm, tc, "parseFloat", p, n, "no es un número");
+        /* strtod pide el número acabado en '\0': una copia (en la pila; uno de más de 63 caracteres, aparte) */
+        char corto[64];
+        char* t = corto;
+        uint32_t m = b - a;
+        if (m + 1u > sizeof corto) {
+            t = (char*) bpvm_malloc(m + 1u);
+            if (t == NULL) return builtin_throw(vm, tc, "No space in heap");
         }
+        memcpy(t, p + a, m);
+        t[m] = '\0';
         union { float f; int32_t i; } u;
         /* V7/H12, 2b (la revisión) — strtod, bajo el cerrojo de la VM: el de newlib reparte sus números grandes desde
          * una lista del estado global de la libc (Balloc), y en la Pico ese estado es UNO para todas las tareas (sin
          * configUSE_NEWLIB_REENTRANT): dos runs a la vez la corromperían. Con un run, nada. */
         bpvm_smp_lock(vm);
-        u.f = (float) strtod(p, NULL);
+        u.f = (float) strtod(t, NULL);
         bpvm_smp_unlock(vm);
+        if (t != corto) bpvm_free(t);
+        if (isinf(u.f)) return num_throw(vm, tc, "parseFloat", p, n, "no cabe en un float");
         push_i32(vm, tc, u.i);
         return BPVM_OK;
     }
@@ -2609,7 +2692,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_CHAR_CODE_AT: {
         int32_t i   = pop_i32(vm, tc);
         bpref_t s = bpref_pop(vm, tc);   /* string ref */
-        push_i32(vm, tc, bpvm_prim_char_code_at(vm, &tc->strcur, s.v, bpref_deref(vm, s), i));   /* P2b: la primitiva compartida */
+        uint32_t sa = bpref_is_null(s) ? 0u : bpref_deref(vm, s);
+        int32_t c = bpvm_prim_char_code_at(vm, &tc->strcur, s.v, sa, i);   /* P2b: la primitiva compartida */
+        if (c < 0) {   /* V8 #717: fuera de rango, el error de charAt (antes, 0 en silencio) */
+            char em[96];
+            snprintf(em, sizeof em, "charCodeAt: idx fuera de rango %" PRId32 " (len=%d)", i,
+                     (int) bpvm_prim_str_len(vm, &tc->strcur, s.v, sa));
+            return builtin_throw(vm, tc, em);
+        }
+        push_i32(vm, tc, c);
         return BPVM_OK;
     }
 

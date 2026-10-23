@@ -27,7 +27,8 @@
 /* `len(s)`: la longitud en codepoints (H2). */
 int32_t bpvm_prim_str_len(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s);
 
-/* `charCodeAt(s, i)`: el codepoint i; 0 si s es null o i está fuera de rango. */
+/* `charCodeAt(s, i)`: el codepoint i; -1 si i está fuera de rango (s null es la vacía), y quien llama lanza el error de
+ * charAt (V8 #717; antes, 0 en silencio). */
 int32_t bpvm_prim_char_code_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i);
 
 /* `charAt(s, i)`: una cadena con el codepoint i ("" si s es null); fuera de rango, un error (BUG-7b). */
