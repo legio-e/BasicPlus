@@ -7355,7 +7355,7 @@ huecos adyacentes.»* Ya lo es, y el arreglo de arriba la mantiene así (mirado 
 Sigue en análisis. **Relacionada, `#718`** (21-oct): la reserva también recorre esta lista, entera si no cabe en ningún
 hueco. Una lista por tamaño, cada una en orden de dirección y enganchada a la cola en el barrido, arreglaría las dos.
 
-#### ✅ `#714` — `move` escribe DENTRO de un string: el valor que no debía cambiar cambia, y lo ven todas sus referencias (abierta el 21-oct, en el análisis del H5; **CERRADA el 23-oct**: las cadenas nacen de solo lectura, y `move` no escribe en ellas)
+#### ✅ `#714` — `move` escribe DENTRO de un string: el valor que no debía cambiar cambia, y lo ven todas sus referencias (abierta el 21-oct, en el análisis del H5; **CERRADA el 23-oct**: las cadenas nacen de solo lectura, y `move` no escribe en ellas, `e9148258`)
 
 `move(src: any, dst: any, srcStart, dstStart, count)` es pública en `Core`. La VM sólo comprueba que los dos bloques
 sean del mismo tipo de heap, y un string y un `byte[]` lo son. Comprobado en las dos VMs:
