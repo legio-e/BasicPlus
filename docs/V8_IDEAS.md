@@ -3642,6 +3642,77 @@ BasicPlus:
 Por decidir, al diseñarlo: los nombres (los de Java, `InputStream` y `Reader`, u otros), el objeto del puerto serie, qué
 devuelve `readLine` cuando vence el plazo, y si `TextFile` y `Net.recvStr` se quedan como atajos.
 
+### `#714` y `#711`: el algoritmo (23-oct; lo decidido el 22, en concreto)
+
+Eduardo, 23-oct: *«Continuamos con #711 y #714»*. Lo leído en el código para escribirlo:
+- **la etiqueta** (la palabra de cabecera de cada bloque): el bit 31 es la marca del GC, el 30 «libre», del 29 al 24 el
+  tipo, el 23 y el 22 sólo existen mientras se compacta o se suelta un owner, y el 21 es «todo ASCII» (que
+  `HEAP_LAYOUT.md` §2.1 aún no cuenta). **Del 20 al 0, libres** en las dos VMs. Al reservar, la etiqueta se escribe
+  entera, sólo con el tipo: un hueco reutilizado no hereda nada. La compactación conserva la etiqueta;
+- **la suma de cadenas, en el bytecode,** no pasa por ningún nacimiento: los ayudantes `__strconcat` y `__strconcatN`
+  que el compilador genera en cada módulo reservan un `byte[]` con `NEWARRAY_I8`, copian las partes con `__strCopy` (que
+  ya calcula el bit ASCII) y lo devuelven como cadena;
+- **`StringBuilder.toString`** junta las partes con `__strCopy` en un `byte[]` suyo y acaba en `fromBytes`, que copia;
+- **`__strCopy` es pública**, con un `byte[]` de destino: también la usa un programa sobre sus propios arrays;
+- **la VM-C marca el nacimiento en `bpvm_str_nace`** (14 builtins, `heap_alloc_string` y las natives) y la VM-Java en
+  `strFijaAscii` (43 llamadas), que `move` también usa para BORRAR el bit;
+- **`readFile` en la VM-C no pasa por `bpvm_str_nace`**;
+- **la excepción de un builtin:** la VM-C busca la clase por su nombre (`Core.RuntimeError`, `bpvm_link_lookup`).
+
+**`#714`, el bit de solo lectura:**
+1. **El bit:** el 20, `0x00100000` (`BPVM_TAG_SOLO_LECTURA`; en la VM-Java, `TAG_SOLO_LECTURA_BIT`). En
+   `HEAP_LAYOUT.md` §2.1, junto con el 21.
+2. **Lo pone el nacimiento de cada cadena:**
+   - la función de nacer, que pone el bit ASCII por los bytes y, ahora, también el de solo lectura. En la VM-Java,
+     `strFijaAscii` se parte en dos: nacer (los dos bits) y tocar sólo el ASCII;
+   - `readFile` en la VM-C, que hoy no nace: pasa a nacer (y gana el bit ASCII, de paso);
+   - **la suma:** un builtin interno nuevo, `__strNace`, al final de los ayudantes que genera el compilador. Marca el
+     bloque en su sitio, sin copiar. Pide recompilar: los ayudantes van dentro de cada `.mod`. Un `.mod` de antes sigue
+     funcionando, con sus sumas sin marcar, como hoy;
+   - **`StringBuilder.toString`:** `__strNace(buf)` en vez de `fromBytes(buf)`. El `byte[]` es suyo y muere ahí: se
+     marca en su sitio, con una copia menos y sin validar (sus partes son válidas: `#711`, la confianza). `__strNace`
+     va sin `public`: un programa que guardara el `byte[]` podría seguir escribiéndole después;
+   - **`__strCopy` no lo pone:** es pública y su destino es un `byte[]` del programa.
+3. **Lo mira `move`**, en el destino: `move: dst es de solo lectura`, el mismo texto en las dos VMs. No lo miran las
+   escrituras `b[i] := x` ni los builtins que reciben un `byte[]`: un programa no puede llevar una cadena ahí (sólo
+   `Core` declara `any`, y una cadena no es un `Object`). Las constantes no están en el heap, y `move` ya las rechaza.
+4. **El test, la relación de confianza:** un programa del corpus que intenta `move` sobre cadenas de cada origen (una
+   constante, `fromBytes`, la suma, `substring`, `charAt`, `upper` y `lower`, `trim`, `replace`, `split`,
+   `intToString`, `StringBuilder.toString`, `readFile`, `readLine`, `listDir` y `Json`) y espera la excepción, con la
+   cadena intacta; y que sobre un `byte[]` sigue funcionando, también tras compactar. En las dos VMs, con la paridad.
+5. **Después, aparte:** quitar de `move` lo que hace hoy por si escribía en una cadena (borrar el bit ASCII del destino
+   y subir la época de los cursores).
+
+**`#711`, el descodificador:**
+1. **Una rutina, «validar y corregir», en las dos VMs**, por la tabla del estándar de Unicode (qué bytes puede llevar
+   cada posición de un carácter; fuera quedan los sobrelargos, los sustitutos y lo que pasa de 10FFFF):
+   - primero el atajo: si todos los bytes son ASCII (la pasada que ya hace el bit), vale;
+   - si no, valida desde el primer byte no ASCII. Si todo vale, nace igual que hoy;
+   - si hay un trozo malo y no se ignora el error: `EncodingError`, con dónde (`fromBytes: UTF-8 mal formado en el
+     byte 5`);
+   - si se ignora: cada trozo malo, un «�». El trozo es lo más largo que podía ser el principio de un carácter, o un
+     byte que no puede empezar ninguno. Se mide antes de reservar: 1 byte malo pasa a 3.
+2. **La API:** la tabla de «Decidido el punto 2», con `ignorarError: boolean := false`. Tres builtins nuevos (los
+   números del 283 en adelante): `fromBytes`, `readFile` y `__freadLine` con el indicador. Los de hoy se quedan, con
+   un argumento, para lo ya compilado, y con la regla nueva (la excepción).
+3. **`EncodingError extends RuntimeError`, en `Core`.** La VM la busca por su nombre, como hoy busca `RuntimeError`, y
+   si no está (un `Core` de antes) lanza `RuntimeError`. Quien ya atrapa `RuntimeError` la atrapa también.
+4. **`appendChar` y `__charsToString`** con algo que no es un carácter: `EncodingError`.
+5. **Los tests de la confianza:** la rutina contra un oráculo en Java (todas las secuencias de 1 a 4 bytes, y al
+   azar), en las dos VMs; el compilador con cadenas al azar, medios emojis incluidos; y las operaciones entre cadenas
+   válidas, en el corpus.
+
+**Los streams, por diseñar aparte** (con las preguntas de «El stream»): la clase base `InputStream` con `read(buf)` (los
+bytes leídos; 0 si vence el plazo; −1 al acabarse); las fuentes (`File`, que ya lee bytes, la conexión TCP, un objeto del
+puerto serie y un `byte[]` en memoria para las pruebas); `TextReader(fuente)` con `readLine` y `readStr`, que guarda los
+bytes pendientes; y en C, dos builtins sobre un trozo de `byte[]` (dónde acaba el último carácter entero, y
+descodificarlo con la misma rutina). Ojo con el plazo: con un solo run, una espera que bloquea para también los demás
+hilos BP, y eso depende de «los builtins que esperan, que cedan el hilo BP» (la lista de V8).
+
+**El orden propuesto:** primero `#714` (el bit) y el descodificador con su API y `EncodingError`, que están decididos y
+son concretos; después el diseño de los streams, para revisarlo. Cada paso por la cascada: la VM-Java, la VM-C con la
+paridad, y las placas en un lote.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

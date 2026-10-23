@@ -7407,6 +7407,12 @@ cadena»; todas las cadenas nacen con él. Lo que pide:
 
 Por hacer, por la norma (el algoritmo y la implementación), cuando Eduardo diga.
 
+**23-oct, el algoritmo escrito** (`V8_IDEAS` §E5, «`#714` y `#711`: el algoritmo»): el bit 20 (`0x00100000`), libre en
+las dos VMs; lo pone el nacimiento de cada cadena, también `readFile` (hoy no nace en la VM-C) y la suma (los ayudantes
+del compilador, con un builtin interno `__strNace` al final, que marca en su sitio); `StringBuilder.toString` se marca
+en su sitio (una copia menos); `__strCopy` no (es pública, con destino `byte[]`); lo mira `move`. El test intenta `move`
+sobre cadenas de cada origen. Esperando el OK de Eduardo para hacerlo.
+
 #### ✅ `#713` — `<`, `>`, `<=` y `>=` entre dos strings compilan, pero no comparan el texto: descuadran la pila y dan basura en silencio, distinta en cada VM (abierta el 21-oct, en el análisis del H5; **CERRADA el mismo día**: comparan el texto, en C, `ed26faf8`)
 
 El análisis las acepta, y el emisor no tiene caso para cadenas: emite el `LT`/`LE`/`GT`/`GE` de enteros, que saca 4
@@ -7544,6 +7550,12 @@ imágenes). Al de texto, un carácter a medias le hace esperar más bytes; sólo
 BasicPlus no tiene interfaces, pero una clase base con `read(buf)` virtual hace el papel. Lo que va byte a byte, en C
 (`V8_IDEAS` §E5, «El stream»). Por diseñar: los nombres, el objeto del puerto serie, el plazo y los atajos de hoy
 (`TextFile`, `Net.recvStr`).
+
+**23-oct, el algoritmo del descodificador escrito** (`V8_IDEAS` §E5, «`#714` y `#711`: el algoritmo»): una rutina en las
+dos VMs por la tabla del estándar (el atajo ASCII primero); `EncodingError extends RuntimeError` en `Core`, buscada por
+su nombre como hoy `RuntimeError`; tres builtins nuevos con el indicador (los de hoy se quedan para lo compilado);
+`appendChar` con algo que no es un carácter, `EncodingError`; los tests de la confianza. Los streams, aparte. Propuesto
+el orden: `#714` y el descodificador primero. Esperando el OK de Eduardo.
 
 #### 🔵 `#710` — con el IDF 6.1, en las placas con PSRAM, el mínimo histórico de RAM interna baja de 34 a 56 KB desde el arranque (abierta el 19-oct, al cerrar `#707`; sin efecto en las pruebas)
 
