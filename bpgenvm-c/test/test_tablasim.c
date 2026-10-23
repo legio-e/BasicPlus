@@ -13,9 +13,12 @@
  *      IGUAL —lo que en la C6 no cabía—;
  *   3. sin un solo hueco de 2 KB (tope 1 500): no cabe ningún trozo; la carga sigue, y el enlace, que los necesita, falla
  *      y dice la causa —«la tabla de simbolos se quedo sin memoria: N sin registrar»—, no «version vieja?»;
- *   4. se ACABA al cargar: lo que la línea base pidió al cargar, menos un byte (bpvm_alloc_prueba_presupuesto): lo último
- *      no entra; la carga sigue, y el programa corre si no usa lo que se quedó fuera —así corría GuiShot en la C6— o,
- *      si lo usa, el enlace dice la causa.
+ *   4. se ACABA al cargar: lo que la línea base pidió al cargar, menos lo justo para que algo no entre
+ *      (bpvm_alloc_prueba_presupuesto); la carga sigue, y el programa corre si no usa lo que se quedó fuera —así corría
+ *      GuiShot en la C6— o, si lo usa, el enlace dice la causa. #727 (23-oct): «lo justo» se busca, desde un byte
+ *      menos, bajando de 64 en 64. Con un byte menos no siempre se pierde algo: si lo último que pide la carga es el
+ *      array de registros, crece menos (×1,5, ×1,25, lo justo) y caben todos —con el Json.mod de #725, de 256 a 384
+ *      en vez de 512—.
  * Los límites salen de la línea base, no de números escritos aquí: la stdlib crece. Sin los trozos, la 2 falla (pide
  * un bloque de más de 3 000 B); sin la causa, la 3; si la carga fallara (como en fd03af31), la 3 y la 4.
  *
@@ -99,9 +102,15 @@ int main(int argc, char** argv) {
           && strstr(r.error, "la tabla de simbolos se quedo sin memoria") != NULL
           && strstr(r.error, "version vieja") == NULL, m);
 
-    r = prueba(mod, 0, b.gastado_carga - 1);
-    snprintf(m, sizeof m, "4, se acaba al cargar (presupuesto %ld B, uno menos que la linea base): la carga sigue (%s, "
-             "%d sin registrar) y el programa %s%s%s", b.gastado_carga - 1, bpvm_status_str(r.carga), r.perdidos,
+    long presupuesto = b.gastado_carga - 1;   /* #727: el primero con el que algo no entra, de 64 en 64 */
+    r = prueba(mod, 0, presupuesto);
+    while (r.carga == BPVM_OK && r.perdidos == 0 && presupuesto > 64) {
+        presupuesto -= 64;
+        r = prueba(mod, 0, presupuesto);
+    }
+    snprintf(m, sizeof m, "4, se acaba al cargar (presupuesto %ld B, %ld menos que la linea base: el primero, de 64 en "
+             "64, con el que algo no entra): la carga sigue (%s, %d sin registrar) y el programa %s%s%s", presupuesto,
+             b.gastado_carga - presupuesto, bpvm_status_str(r.carga), r.perdidos,
              r.corre == BPVM_OK ? "corre (no usa lo que se quedo fuera: como GuiShot en la C6)"
                                 : "no enlaza, y dice la causa: «",
              r.corre == BPVM_OK ? "" : r.error, r.corre == BPVM_OK ? "" : "»");

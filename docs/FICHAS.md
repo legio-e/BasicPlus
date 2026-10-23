@@ -7079,7 +7079,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#727` — `test-tablasim` (`#639`), caso 4: con un byte menos que la línea base espera que algo no entre; pero si lo último que pide la carga es el array de registros, crece menos y cabe todo (abierta el 23-oct, al pasar la red de `#725`)
+#### ✅ `#727` — `test-tablasim` (`#639`), caso 4: con un byte menos que la línea base espera que algo no entre; pero si lo último que pide la carga es el array de registros, crece menos y cabe todo (abierta el 23-oct, al pasar la red de `#725`; **CERRADA el mismo día**: el caso busca el presupuesto con el que algo no entra)
 
 Con el `Json.mod` de `#725`, el caso 4 dice «la carga sigue (OK, 0 sin registrar) y el programa corre», y la prueba lo
 da por malo: espera que algo se pierda. **La VM hace lo que dice `#639`; la que no acierta es la prueba.** Las cuentas,
@@ -7092,6 +7092,12 @@ stdlib, justo lo que su cabecera quería evitar (*«los límites salen de la lí
 Lo propuesto: el caso 4 busca el presupuesto con el que algo no entra —desde la línea base menos un byte, bajando de
 64 en 64— y comprueba lo de siempre: la carga sigue, y el programa corre o el enlace dice la causa. Unas pocas cargas
 más, de milisegundos. Sólo cambia la prueba.
+
+**HECHO el mismo día** (Eduardo: *«OK, adelante»*), en `bpgenvm-c/test/test_tablasim.c`: el caso 4 empieza en la
+línea base menos un byte y baja de 64 en 64 hasta que algo no entra. Con este `Json.mod`, el primero es 16 703 B, 1 537
+menos: se quedan 16 sin registrar y el programa corre. Y cuadra con las cuentas: la carga llega al array con 14 144 B
+gastados; ×1,5 (3 072 B) cabe hasta 1 024 B por debajo de la línea base, y ×1,25 (2 560 B) hasta 1 536 B; con 1 537,
+sólo lo justo, y lo que viene después ya no entra.
 
 #### 🔵 `#726` — la red (`compat.sh check`) va de una en una y tarda unos 45 minutos; con 20 núcleos se podría repartir (abierta el 23-oct; Eduardo: *«la red en paralelo es una mejora pero puede esperar»*)
 
