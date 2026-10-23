@@ -2122,7 +2122,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         /* V8/H5 (23-oct, #714) — readFile da una CADENA: nace (su bit ASCII y el de solo lectura), como las demás.
          * readFileBytes da un byte[]: ése no. #711: y se DESCODIFICA (EncodingError, o «�» con el indicador). */
         if (id != BUILTIN_READ_FILE_BYTES) {
-            char quien[BPVM_FS_PATH_MAX + 16];
+            char quien[BPVM_FS_PATH_MAX + 32];   /* «readFileBytes('…')»: el nombre, la ruta y sus comillas */
             snprintf(quien, sizeof quien, "%s('%s')", que, path);
             return nacer_de_fuera(vm, tc, refh, ignorar, quien);
         }
