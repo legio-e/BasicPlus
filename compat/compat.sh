@@ -76,7 +76,8 @@
 # 45 min a 15 min» y «De momento con 3 grupos es suficiente». Medida de una en una, eran 22:51 min:
 #
 #   ./compat.sh check         A la vez: el corpus (MOD9, MOD8 y dos workers), las pruebas de C, y lo demas; cada
-#                             grupo en su $WORK, con `make` antes y el estres, solo, despues (ver check()).
+#                             grupo en su $WORK, con `make` antes y, despues, solos, lo que cronometra: el sim,
+#                             la sombra y el estres (ver check()).
 #   ./compat.sh check-serie   La misma red de una en una, como hasta el 23-oct: para comparar, o si se sospecha
 #                             de los grupos.
 set -u
@@ -1384,12 +1385,14 @@ check_serie() {
 #   A  el corpus: MOD9, MOD8 y dos workers, en ese orden —las dos últimas comparan su stdout con el de MOD9 sample a
 #      sample, y por eso van detrás y en el mismo grupo—;
 #   B  las pruebas de C: comparten bpgenvm-c/build y las fixtures de bpgenvm-c/samples/, y siguen de una en una;
-#   C  lo demás: la cápsula V6, hacia delante, la norma, el sim y la sombra —que usa el sim que acaba de construir
-#      check_sim: juntos y en ese orden—, packs-abi y la stdlib embebida.
+#   C  lo demás: la cápsula V6, hacia delante, la norma, packs-abi y la stdlib embebida.
 # ANTES, en serie, `make`: los .o de la VM-C los usan el sim (C) y las pruebas de C (B) —si hubiera que compilarlos, a
 # la vez se pisarían—, y diez pruebas de C dependen del binario de la VM que el corpus (A) está ejecutando: tiene que
-# estar hecho antes. Con el host compilado con LVGL no se compila nada (cada frente lo dice, como siempre). DESPUÉS, el
-# estrés, SOLO: mide hilos y el heap justo con varios workers, y con los otros grupos corriendo podría fallar sin razón.
+# estar hecho antes. Con el host compilado con LVGL no se compila nada (cada frente lo dice, como siempre). DESPUÉS,
+# SOLOS, lo que cronometra, que con los otros grupos corriendo podría fallar sin razón: el sim —sus smokes miden
+# tiempos: el caso G de run_tarea_smoke compara 200 RUN de una manera y de otra, y el 24-oct, con la carga de los otros
+# grupos, no cuadró (1,38 s contra 0,52)—, la sombra, que usa el sim que acaba de construir check_sim, y el estrés, que
+# mide hilos y el heap justo con varios workers.
 # Lo que se comparte y no se pisa: los puertos (los smokes del sim, 5107-5131; la sombra, 5461; test-net, 47391;
 # test-listen, uno libre) y los .mod de las fixtures en samples/, que el corpus no lee —un hermano de un sample del
 # corpus («InvocaRanuraBase») el compilador lo toma de su fuente: «es un resto fuera de outDir»—.
@@ -1418,7 +1421,7 @@ check() {
     echo "== check: ROJO (la VM-C no compila) =="
     return 1
   fi
-  echo "-- la red en tres grupos a la vez (#726): A, el corpus; B, las pruebas de C; C, lo demas; y el estres, solo, al final --"
+  echo "-- la red en tres grupos a la vez (#726): A, el corpus; B, las pruebas de C; C, lo demas. Y al final, solos, el sim, la sombra y el estres --"
   ( WORK="$WORK/gA"; mkdir -p "$WORK"
     PAR_SAVE="$REF_PAR"; frente A 01-paridad "paridad MOD9" check_parity; PAR_SAVE=""
     frente A 08-mod8 "MOD8" check_mod8 sin-referencia
@@ -1431,8 +1434,6 @@ check() {
     frente C 02-mod7 "capsula V6" check_mod7
     frente C 03-fwd "hacia delante" check_fwd
     frente C 04-norma "norma" check_norma
-    frente C 05-sim "sim" check_sim
-    frente C 07-sombra "sombra" check_sombra
     frente C 11-packs-abi "packs-abi" check_packs_abi
     frente C 12-embebidos "stdlib embebida" check_mods_embebidos
     echo $(( SECONDS - t0 )) > "$LOGS/grupoC.seg" ) & pc=$!
@@ -1440,13 +1441,15 @@ check() {
   trap 'kill $pa $pb $pc 2>/dev/null; rm -rf "$WORK"; exit 130' INT TERM
   wait $pa $pb $pc
   trap - INT TERM
+  frente - 05-sim "sim" check_sim
+  frente - 07-sombra "sombra" check_sombra
   frente - 10-estres "estres" check_estres
   echo ""
   for f in $FRENTES; do
     if [ -f "$LOGS/$f.log" ]; then cat "$LOGS/$f.log"; else echo "  ✗ $f: NO ha corrido (su grupo acabo antes)"; fi
     [ "$(cat "$LOGS/$f.rc" 2>/dev/null)" = 0 ] || fails=$((fails+1))
   done
-  echo "  (en tres grupos a la vez: A, el corpus, $(mmss "$(seg_de grupoA)"); B, las pruebas de C, $(mmss "$(seg_de grupoB)"); C, lo demas, $(mmss "$(seg_de grupoC)"); y despues el estres, solo. En total, $(mmss $(( SECONDS - t0 ))))"
+  echo "  (en tres grupos a la vez: A, el corpus, $(mmss "$(seg_de grupoA)"); B, las pruebas de C, $(mmss "$(seg_de grupoB)"); C, lo demas, $(mmss "$(seg_de grupoC)"); y despues, solos, el sim, la sombra y el estres. En total, $(mmss $(( SECONDS - t0 ))))"
   echo "== check: $([ "$fails" -eq 0 ] && echo 'paridad dual-VM (MOD9) + capsula V6 + norma + sim + pruebas de C + sombra + MOD8 + dos workers + estres del heap + packs-abi + stdlib embebida VERDE' || echo "$fails frente(s) en ROJO") =="
   [ "$fails" -eq 0 ]
 }

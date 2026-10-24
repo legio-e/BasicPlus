@@ -7079,6 +7079,30 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#728` — idea de Eduardo: una interfaz del IDE para la IA —cargar un fuente, compilar, conectar a un dispositivo, ejecutar, depurar, cerrar— (abierta el 24-oct; **por analizar**)
+
+Eduardo, 24-oct: *«Como idea. Estoy pensando si te sería útil a Claude y a otras IAs dotarle al IDE de una interfaz
+accesible desde la IA. Que pueda efectuar operaciones como cerrar el IDE, cargar un source, compilar, conectar a un
+dispositivo, ejecutar, etc.»* Lo visto ese día:
+- **Para qué no hace falta:** compilar y correr el corpus, las dos VMs o las placas por el cable ya se hace por la línea
+  de comandos, y es mejor así: sin estado de ventanas, repetible y en la red.
+- **Para qué sí:** lo que hoy sólo se prueba a mano, el propio IDE:
+  - reproducir lo que ve Eduardo por el mismo camino: la configuración del IDE (el proyecto, `stdlibDir`, qué módulos
+    manda al dispositivo y cuáles da por instalados);
+  - el depurador entero: la mitad del host (rellenar `file` y `line` desde el `.dbg`, el `BP_HIT`, las variables) sólo
+    la ejecuta el IDE;
+  - el Run y las placas por el código del IDE: el puerto serie con DTR/RTS, subir la stdlib y los packs, el workdir;
+  - y pruebas del IDE en la red: abrir un `.bp`, compilarlo, ejecutarlo en el sim y leer la consola.
+- **Lo que pediría el diseño:** las mismas acciones que el menú, sin lógica nueva; las respuestas como datos (los errores
+  con fichero y línea, la consola con su código de salida, el estado del depurador), no capturas; sólo en local,
+  apagada por defecto, dentro del workspace y sin comandos arbitrarios; nunca tirar trabajo sin guardar; y una regla de
+  quién manda si el IDE lo usan Eduardo y la IA a la vez (o una segunda instancia). La forma estándar es MCP, que sirve
+  a Claude y a otras IAs; con el IDE en Java 8, quizá un protocolo de comandos propio y un adaptador MCP aparte.
+- **Por dónde empezar, si se hace:** compilar y ejecutar (PC, sim y placa) con la salida de la consola; después, el
+  depurador.
+
+Eduardo: *«OK»*. Apuntada; se retoma cuando él diga.
+
 #### ✅ `#727` — `test-tablasim` (`#639`), caso 4: con un byte menos que la línea base espera que algo no entre; pero si lo último que pide la carga es el array de registros, crece menos y cabe todo (abierta el 23-oct, al pasar la red de `#725`; **CERRADA el mismo día**: el caso busca el presupuesto con el que algo no entra, `8f1ca68b`)
 
 Con el `Json.mod` de `#725`, el caso 4 dice «la carga sigue (OK, 0 sin registrar) y el programa corre», y la prueba lo
@@ -7139,6 +7163,13 @@ una en una: para comparar, o si se sospecha de los grupos.
 en una (el `diff` contra la red de `#725`: sólo `test-tablasim`, arreglada en `#727`). Lo que marca el tiempo ahora es
 el corpus; si hiciera falta menos, el paso siguiente sería la pasada de dos workers en otro grupo, comparando con la de
 MOD9 al final: unos 2 minutos.
+
+**Corregido el 24-oct** (Eduardo: *«OK»*). En la red de `#699`, el sim salió ROJO en el grupo C, y solo, 12/12: el caso
+G de `run_tarea_smoke` cronometra 200 RUN con la tarea `run` y otros 200 con `--run-viejo` y exige `t_tarea <= 2 ×
+t_viejo + 0,3`; con la carga de los otros grupos, 1,38 s contra 0,52. Fue mío: lo que mide tiempos tenía que ir solo,
+y los smokes del sim cronometran (también `sim_smoke`, una espera que tiene que acabar entre 2,5 y 6 s). Ahora el sim y
+la sombra, que usa ese sim, van al final, solos, con el estrés. Las pruebas de C que miran el reloj (`test-aotkill`,
+`test-aotpesada`, `test-kill`) esperan cientos de milisegundos con topes de 2,5 a 5 s, y siguen en su grupo. Medido: 13:10 min, VERDE —el corpus 11:17, las pruebas de C 8:51, lo demás 1:20; y después, solos, el sim 1:21, la sombra 0:08 y el estrés 0:24—.
 
 #### ✅ `#725` — `Json.parseJson` se para en el primer error: con un fichero con diez, se arreglan de uno en uno (abierta el 23-oct, una idea de Eduardo; **CERRADA el mismo día**: sigue tras cada error, como un compilador, y los da todos, diez como mucho, `6f9a7a77`)
 
@@ -8069,7 +8100,7 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
   - `input()` (sólo en el PC, `PENDIENTES`): desde la línea de comandos, un aviso con `;` antes de leer no sale hasta
     el salto. En el IDE, `input()` abre su ventana.
 
-#### ✅ `#699` — `continue` dentro de un `do … loop c` vuelve arriba sin mirar la condición; el AOT, en C, sí la mira: el mismo bucle da distinto si la función es `native` (abierta el 17-oct, al decidir el `do … while` de JC, `#698`; preexistente; **CERRADA el 24-oct**: el `continue` va a la condición, como en C y en el AOT)
+#### ✅ `#699` — `continue` dentro de un `do … loop c` vuelve arriba sin mirar la condición; el AOT, en C, sí la mira: el mismo bucle da distinto si la función es `native` (abierta el 17-oct, al decidir el `do … while` de JC, `#698`; preexistente; **CERRADA el 24-oct**: el `continue` va a la condición, como en C y en el AOT, `00ec8956`)
 
 - **Medido** (17-oct, una sonda en el scratchpad, las dos VMs iguales): `do` … `if k >= 3 then continue` … `loop k < 3`
   no termina; con un tope de vueltas, -1. El mismo bucle con `while k < 3 do` sale con 3.

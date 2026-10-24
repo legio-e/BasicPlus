@@ -39,6 +39,9 @@
 >   `NatDoContinue` y `ContinueFor`, que imprime lo mismo. JC, igual que BP. El manual (§7.5), el frontend (311 pruebas)
 >   y BpIde, al día.
 > - **La red:** en tres grupos, 11:48, verde salvo el caso G de `run_tarea_smoke`, que cronometra y con la carga de los otros grupos no cuadra (1,38 s contra 0,52); el sim, pasado solo, 12/12. Es de `#726`: el sim y la sombra pasan al final, solos.
+> - **Y un fallo mío de `#726`, corregido:** el sim, en el grupo C, salió ROJO por una medida de tiempo con la carga de
+>   los otros grupos (el caso G de `run_tarea_smoke`: 1,38 s contra 0,52), y solo, 12/12. Ahora el sim y la sombra van
+>   al final, solos, con el estrés (Eduardo: *«OK»*). Medido: 13:10 min, VERDE —el corpus 11:17, las pruebas de C 8:51, lo demás 1:20; y después, solos, el sim 1:21, la sombra 0:08 y el estrés 0:24—.
 > - **Lo siguiente**, ya leído: `#701` (el terminador de un `if`, `while` o `for` de una línea, colgante sólo si está en
 >   su línea), `#702` y `#704`; y las placas, en un lote.
 
