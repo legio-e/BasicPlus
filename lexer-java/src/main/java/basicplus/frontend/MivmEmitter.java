@@ -1808,13 +1808,14 @@ public final class MivmEmitter {
                 }
             }
 
-            // Properties PRIMERO (backing field + getter + setter), antes de los
-            // métodos normales que pueden invocar getX/setX por su nombre.
+            // Properties PRIMERO, antes de los métodos normales que pueden invocar
+            // getX/setX por su nombre: aquí sus backing fields, y sus accesores
+            // (getter + setter) tras los campos de los eventos, abajo (#702).
             // L6: las static properties NO van aquí (no son fields/métodos de
             // instancia) — se emiten tras endClass como funciones cualificadas.
             for (ITopLevelDecl m : cd.members) {
                 if (m instanceof PropertyDef && !((PropertyDef) m).name.isStatic()) {
-                    emitPropertyDef(cls, (PropertyDef) m);
+                    declaraRespaldoDeProperty(cls, (PropertyDef) m);
                 }
             }
 
@@ -1837,6 +1838,17 @@ public final class MivmEmitter {
                         if (es instanceof Symbol.EventSymbol) w.declareEventMeta(claveEvento((Symbol.EventSymbol) es), ev + "$recv");
                         else errors.add("evento '" + ev + "' sin simbolo en " + cd.name);
                     }
+                }
+            }
+
+            // #702 (24-oct) — los ACCESORES de las properties, ya con los campos de los eventos
+            // declarados: un `set` que hace `raise` usa `<evento>$dest`, y emitidos antes (con su
+            // backing) no lo encontraba («Campo no encontrado en Animal: cambia$dest»). Ni los
+            // campos ni los métodos cambian de orden: los campos van en su lista y los métodos en
+            // la suya, y los accesores siguen antes que los métodos normales.
+            for (ITopLevelDecl m : cd.members) {
+                if (m instanceof PropertyDef && !((PropertyDef) m).name.isStatic()) {
+                    emitAccesoresDeProperty(cls, (PropertyDef) m);
                 }
             }
 
@@ -2479,7 +2491,11 @@ public final class MivmEmitter {
         } finally { scopeStack.pop(); }
     }
 
-    private void emitPropertyDef(ClassSymbol cls, PropertyDef pd) throws IOException {
+    /** #702 (24-oct) — una property de instancia se emite en DOS piezas: su backing field (aquí, con los demás
+     *  campos) y sus accesores ({@link #emitAccesoresDeProperty}, tras los campos de los eventos). Juntas, el cuerpo
+     *  de un `set` con `raise` se emitía antes de que existiera el campo del evento. Los eventos van detrás de las
+     *  properties en el layout (computeClassLayout, #299), así que el orden de los campos no se toca. */
+    private void declaraRespaldoDeProperty(ClassSymbol cls, PropertyDef pd) {
         PropertySymbol ps = (PropertySymbol) info.declSymbols.get(pd);
         if (ps != null && ps.isStatic) {
             // L6: las static properties se emiten en emitStaticPropertyAccessors
@@ -2495,8 +2511,16 @@ public final class MivmEmitter {
         w.declareField(pd.name.name, isRef, pd.isOwner, occupies8Bytes(propType));
         // V7/H2 (#523) — el backing es de la clase y de nadie más (se accede por los
         // accesores): viaja marcado privado. Los accesores, con su clave `getX()t`/`setX(t)V`.
-        boolean propOverride = mod9() && esOverrideProperty(cls, pd.name.name);
         if (mod9()) w.setFieldMeta(pd.name.name, claveCampo(pd.name.name, propType), true);
+    }
+
+    /** #702 — los accesores de una property de instancia (getter y setter), con su backing ya declarado
+     *  ({@link #declaraRespaldoDeProperty}) y también los campos de los eventos de la clase. */
+    private void emitAccesoresDeProperty(ClassSymbol cls, PropertyDef pd) throws IOException {
+        PropertySymbol ps = (PropertySymbol) info.declSymbols.get(pd);
+        if (ps != null && ps.isStatic) return;   // L6: van en emitStaticPropertyAccessors
+        BpType propType = (ps != null) ? ps.type : (pd.type != null ? typeRefToBpType(pd.type) : null);
+        boolean propOverride = mod9() && esOverrideProperty(cls, pd.name.name);
 
         // 2) Getter (custom o auto). Devuelve el tipo de la property.
         //    Si la property es sync, envolvemos cuerpo con lock/unlock contra

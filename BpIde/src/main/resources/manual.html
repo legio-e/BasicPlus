@@ -2292,6 +2292,9 @@ Admite <a href="#defaults">valores por defecto</a> como cualquier firma:</p>
     <span class="kw">raise</span> onClick(<span class="kw">this</span>, n)      <span class="comment">// dispara</span>
   <span class="kw">end</span> pulsa
 <span class="kw">end</span> Boton</code></pre>
+<p>El <code>raise</code> vale en cualquier código de la clase que emite, también en el
+<code>set</code> de una propiedad: es la forma de avisar cuando cambia un valor
+(<code>#702</code>, V8).</p>
 
 <h3 id="ev-escuchar">15.2 Escuchar: <code>function event</code> y <code>::</code></h3>
 <p>El que escucha declara un <strong>manejador</strong> con <code>function

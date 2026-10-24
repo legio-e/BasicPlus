@@ -8041,7 +8041,7 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
 - **Lo que queda, a la vista:** un `print("…\n")` de JC deja su línea esperando hasta el siguiente `println` o el
   final del hilo. Es lo decidido, y está en el punto 17.
 
-#### 🔵 `#702` — un `raise` dentro del `set` de una propiedad no compila: el análisis lo da por bueno y el emisor dice «Campo no encontrado en …: <evento>$dest» (abierta el 17-oct, al probar las clases de JC, `#698`; preexistente)
+#### ✅ `#702` — un `raise` dentro del `set` de una propiedad no compila: el análisis lo da por bueno y el emisor dice «Campo no encontrado en …: <evento>$dest» (abierta el 17-oct, al probar las clases de JC, `#698`; preexistente; **CERRADA el 24-oct**: los accesores de las propiedades, tras los campos de los eventos)
 
 - **Medido** (17-oct, una sonda en el scratchpad): una clase con `event cambia(a: Animal)` y una propiedad cuyo
   `set(v)` hace `raise cambia(this)`. El análisis pasa, y el emisor para con «error: Campo no encontrado en Animal:
@@ -8051,7 +8051,24 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
   alta el campo del evento (`$dest`).
 - **De momento no se toca** (Eduardo: los cambios de BP, más adelante).
 
-#### ✅ `#701` — un `if`, `while` o `for` de una línea no puede ser la última sentencia de un bloque de su misma clase: el parser toma el `endif`, `endwh` o `next` de la línea siguiente por suyo (abierta el 17-oct, al probar `EscritorJc`, `#698`; preexistente; **CERRADA el 24-oct**: el terminador sólo cuelga si está en su línea)
+**HECHO el 24-oct** (Eduardo, al arreglo propuesto: *«Si»*). Reproducido antes con el compilador de ese día, igual que
+el 17-oct. **La causa, mirada:** cada evento tiene dos campos ocultos en el objeto, `<evento>$recv` (quién lo recibe)
+y `<evento>$dest` (a qué método); el emisor construía la clase con los campos, después las propiedades ENTERAS —su
+backing y los cuerpos del `get` y del `set`— y sólo entonces los campos de los eventos. El cuerpo del `set` se emitía
+antes de que existiera el campo del evento. **El arreglo**, en `MivmEmitter`: la propiedad, en dos piezas
+(`declaraRespaldoDeProperty` y `emitAccesoresDeProperty`): los backings donde estaban, después los campos de los
+eventos, y después los accesores, que siguen antes que los métodos. Los campos van en su lista y los métodos en la
+suya, así que ni el layout (el que exige `#299`) ni el orden de los métodos cambian.
+- **`bpgenvm-c/samples/RaiseEnSet.bp`**, nuevo y en el corpus: el `set` que avisa con el objeto (el de la ficha), otro
+  que avisa con el valor nuevo y sólo si cambia, y el mismo `raise` en un método como control. Los eventos se encolan:
+  Main espera a que lleguen (con un tope) antes de mirar. El compilador de antes no lo compila (el error de la
+  ficha); el nuevo, 3 bien, en las dos VMs, con uno y con dos workers; y escrito en JC, lo mismo.
+- **Nada más cambia:** el corpus compilado con los dos compiladores, 5 176 `.mod` idénticos, 0 distintos; y la stdlib
+  entera, que está llena de clases con propiedades y eventos, 30 módulos idénticos: no se regenera ni se regraba nada.
+- **El `JvmEmitter`** no conoce los eventos: nada que arreglar ahí. **El manual** (§15.1): el `raise` vale también en
+  el `set` de una propiedad. El frontend (316 pruebas) y BpIde, rehechos.
+
+#### ✅ `#701` — un `if`, `while` o `for` de una línea no puede ser la última sentencia de un bloque de su misma clase: el parser toma el `endif`, `endwh` o `next` de la línea siguiente por suyo (abierta el 17-oct, al probar `EscritorJc`, `#698`; preexistente; **CERRADA el 24-oct**: el terminador sólo cuelga si está en su línea, `e384d8cc`)
 
 - **Medido** (17-oct, tres sondas en el scratchpad):
   - `if a == 0 then` / `if a == 0 then print "si"` / `endif` da «el 'if' de una línea no lleva 'endif'»;

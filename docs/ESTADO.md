@@ -49,7 +49,10 @@
 >   línea; el de la línea siguiente es del bloque de fuera. `UnaLineaAlFinal` (9 comprobaciones), nueva en el corpus; el
 >   error de mezclar las dos formas sigue (`samples/errores/UnaLineaConFin.bp` y `UnaLineaAlFinalTest`). El corpus,
 >   5 145 `.mod` idénticos. El manual (§7.1) explica ya la forma de una línea. La red: en la pestaña del Terminal, con el progreso: VERDE en 12:42 (paridad 165 en las tres pasadas; pruebas de C, 105/105).
-> - **Lo siguiente:** `#702` y `#704`; y las placas, en un lote.
+> - **`#702`, hecha** (Eduardo: *«Si»*): un `raise` dentro del `set` de una propiedad ya compila. El emisor emitía los
+>   accesores de las propiedades antes de declarar los campos de los eventos; ahora, después, sin mover los campos ni los
+>   métodos: el corpus, 5 176 `.mod` idénticos, y la stdlib, 30. `RaiseEnSet`, nueva en el corpus. La red: en la pestaña del Terminal, VERDE en 13:07 (paridad 166 en las tres pasadas; pruebas de C, 105/105).
+> - **Lo siguiente:** `#704`; y las placas, en un lote.
 
 > **23-oct** — **El H5: `#714` hecha, las cadenas nacen de SOLO LECTURA** (Eduardo: *«Continuamos con #711 y #714»*;
 > *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.** **Después, los

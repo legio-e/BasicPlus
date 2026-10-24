@@ -1,0 +1,101 @@
+// RaiseEnSet.bp — V8 (24-oct, #702): un `raise` dentro del `set` de una propiedad.
+//
+// El patrón de «avisar cuando cambia»: una clase con un evento y una propiedad cuyo `set` lo lanza. El análisis lo
+// daba por bueno y el emisor se paraba con «Campo no encontrado en Animal: cambia$dest»: construía la clase con las
+// propiedades enteras —su campo y los cuerpos del get y del set— antes de los campos de los eventos, y el `set` no
+// encontraba el del evento. Desde #702 los accesores van después; el orden de los campos y el de los métodos, el de
+// siempre. Los eventos se encolan (no llegan en el `raise`): Main espera a que lleguen antes de mirar. Lo que tiene que
+// salir, escrito a mano: una línea FALLO pone la red en rojo aunque las dos VMs coincidan.
+module RaiseEnSet
+
+  var malas: integer := 0
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      print "ok " + que + ": " + obtenido
+    else
+      malas += 1
+      print "FALLO " + que + ": [" + obtenido + "], se esperaba [" + esperado + "]"
+    endif
+  end mira
+
+  class Animal
+    var _nombre: string
+    var _edad: integer
+    event cambia(a: Animal)
+    event cumple(n: integer)
+    public function Animal()
+      this._nombre := ""
+      this._edad := 0
+    end Animal
+    // el de la ficha: el set avisa con el objeto
+    public property nombre: string
+      get
+        return this._nombre
+      endget
+      set(v)
+        this._nombre := v
+        raise cambia(this)
+      endset
+    endprop
+    // éste avisa con el valor nuevo, y sólo si cambia
+    public property edad: integer
+      get
+        return this._edad
+      endget
+      set(v)
+        if v != this._edad then
+          this._edad := v
+          raise cumple(v)
+        endif
+      endset
+    endprop
+    // y el mismo raise en un método, que ya compilaba
+    public function renombra(v: string)
+      this._nombre := v
+      raise cambia(this)
+    end renombra
+  end Animal
+
+  class Oyente
+    public property cambios: integer
+    public property edades: string
+    public function Oyente()
+      this.cambios := 0
+      this.edades := ""
+    end Oyente
+    function event visto(a: Animal)
+      this.cambios := this.cambios + 1
+    end visto
+    function event cumplido(n: integer)
+      this.edades := this.edades + intToString(n) + " "
+    end cumplido
+  end Oyente
+
+  // los eventos se encolan: se espera a que lleguen, con un tope por si no llegan nunca
+  function espera(o: Oyente, cambios: integer, edades: string)
+    var vueltas: integer := 0
+    while (o.cambios < cambios or o.edades != edades) and vueltas < 500 do
+      sleep(1)
+      vueltas += 1
+    endwh
+  end espera
+
+  function Main()
+    var a: Animal := Animal()
+    var o: Oyente := Oyente()
+    a.cambia := o::visto
+    a.cumple := o::cumplido
+    a.nombre := "Tobi"        // el set avisa
+    a.renombra("Rex")         // el método avisa (el control)
+    a.nombre := "Lola"        // el set avisa otra vez
+    a.edad := 3               // cumple(3)
+    a.edad := 3               // no cambia: no avisa
+    a.edad := 4               // cumple(4)
+    espera(o, 3, "3 4 ")
+    mira("los avisos de cambia, dos del set y uno del método", intToString(o.cambios), "3")
+    mira("los de cumple, en su orden (el 3 repetido no avisa)", o.edades, "3 4 ")
+    mira("lo que dicen las propiedades", a.nombre + " " + intToString(a.edad), "Lola 4")
+    print "RaiseEnSet: " + intToString(malas) + " mal"
+  end Main
+end RaiseEnSet

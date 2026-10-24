@@ -1182,9 +1182,9 @@ Eduardo: completar JC antes de generar código. La sintaxis, en los puntos 34 a 
 - Una prueba con casi todo lo de las clases (`EscritorJcTest.clasesSwitchYParallel`). El frontend, 301 pruebas sin
   fallos.
 
-**Al escribir esa prueba salió un fallo de BP, `#702`:** un `raise` dentro del `set` de una propiedad no compila. El
-análisis lo da por bueno, y el emisor dice «Campo no encontrado en Animal: cambia$dest». Es de BP, no de JC, y no se
-toca (los cambios de BP, más adelante).
+**Al escribir esa prueba salió un fallo de BP, `#702`:** un `raise` dentro del `set` de una propiedad no compilaba. El
+análisis lo daba por bueno, y el emisor decía «Campo no encontrado en Animal: cambia$dest». Era de BP, no de JC;
+arreglado el 24-oct, también para JC (el mismo emisor).
 
 **Lo siguiente:** generar código desde JC. Es decir: `#700` en el compilador de BP, que el compilador lea `.jc`, la
 prueba por la salida en las dos VMs, y que el análisis compruebe las marcas.
