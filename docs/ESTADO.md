@@ -69,6 +69,10 @@
 > - **Después**, `#724` (el texto de un pack, que se corta a 512 bytes sin avisar), `#709` y las del IDE (`#693`–`#696`).
 > - **La red** se lanza en una pestaña del Terminal de la app y se le abre el panel a Eduardo, que sigue el progreso:
 >   unos 13 minutos (la memoria «La red en tres grupos» dice cómo).
+> - **Los streams (`#723`):** el modelo de Eduardo, apuntado en `V8_IDEAS` §E8 —los canales con un `InputStream` y un
+>   `OutputStream` de bytes, con su buffer y su `flush()`; encima, `TextReader` y `TextWriter`, UTF-8; *«seguimos el
+>   sistema de Java, un poco mas sencillo»*—. Diez preguntas por decidir, cada una con su propuesta: decidirlas una a
+>   una, o antes las placas, lo que diga Eduardo.
 
 > **23-oct** — **El H5: `#714` hecha, las cadenas nacen de SOLO LECTURA** (Eduardo: *«Continuamos con #711 y #714»*;
 > *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.** **Después, los
