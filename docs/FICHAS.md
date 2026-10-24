@@ -7984,7 +7984,7 @@ corpus): con dos enteros, antes `b = 0`; con una cadena, `""` (y en la VM-C, a v
 eliminado»), cada caso en su función porque lo que se pisa depende del marco. Lo demás de arriba (los números de
 conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
 
-#### ✅ `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente; **CERRADA el 24-oct**: las formas que no son del módulo, por su nombre)
+#### ✅ `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente; **CERRADA el 24-oct**: las formas que no son del módulo, por su nombre, `f71ab0ad`)
 
 - **Medido:** `samples/TupCrossTest.bp`, con tuplas que devuelve `TupLib`, da otro `.mod` con el compilador de hoy que
   con el de ayer: las clases `__Tuple_bl` y `__Tuple_ii` salen en el otro orden. Mismo tamaño, los mismos bytes en otro

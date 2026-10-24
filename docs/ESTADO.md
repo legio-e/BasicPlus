@@ -28,7 +28,8 @@
 ## Última sesión
 
 > **24-oct** — **`#699`, hecha: el `continue` de un `do … loop c` va a la condición, como en C** (Eduardo: *«Continuamos
-> con los pendientes, #699»*).
+> con los pendientes, #699»*). **Y después, `#701`, `#702` y `#704`; la red, con su progreso y con lo que cronometra al
+> final (`#726`); dos ideas de Eduardo (`#728` y el progreso); y las tuplas, analizadas (`V8_IDEAS` §E7).**
 > - **El arreglo**, el propuesto en la ficha: en `MivmEmitter.emitDoLoop`, el `continue` salta a una etiqueta justo antes
 >   de la condición, como el del `for` de `#548`; sin condición, arriba, como siempre. El AOT, el `JvmEmitter` y la
 >   asignación definida ya lo hacían así; y con ello el `do … while` de JC es el de C#.
@@ -59,6 +60,15 @@
 >   que caen en la misma clase, siempre la misma). Peor de lo que decía la ficha: doce compilaciones en la misma JVM, once
 >   `.mod` distintos; con el arreglo, ninguno (`OrdenDeTuplasTest`). El corpus y la stdlib no cambian. La red: en la pestaña del Terminal, VERDE en 13:02 (paridad 166 en las tres pasadas; pruebas de C, 105/105).
 > - **Lo siguiente:** las placas, en un lote; después `#724`, `#709` y las del IDE (`#693`–`#696`).
+>
+> Al parar (Eduardo: *«OK, muy bien. Despues hacemos una pausa»*), todo con commit y sin nada corriendo. **Traspaso:**
+> - **Las placas, lo primero** (propuesto a Eduardo, sin su respuesta todavía): la Metro y la Pico 2 llevan la imagen de
+>   `#711`, sin lo de la VM-C de `#712`, `#705`, `#716` y `#717`, y su `/app/Json.mod` es el de antes de `#725` (se
+>   quita al mandarles la stdlib nueva); la P4, las ESP32 y la STM32, sin los builtins 283–286. Lo de hoy (`#699`,
+>   `#701`, `#702`, `#704`) es del compilador: no cambia ni la VM ni la stdlib.
+> - **Después**, `#724` (el texto de un pack, que se corta a 512 bytes sin avisar), `#709` y las del IDE (`#693`–`#696`).
+> - **La red** se lanza en una pestaña del Terminal de la app y se le abre el panel a Eduardo, que sigue el progreso:
+>   unos 13 minutos (la memoria «La red en tres grupos» dice cómo).
 
 > **23-oct** — **El H5: `#714` hecha, las cadenas nacen de SOLO LECTURA** (Eduardo: *«Continuamos con #711 y #714»*;
 > *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.** **Después, los
