@@ -7984,7 +7984,7 @@ corpus): con dos enteros, antes `b = 0`; con una cadena, `""` (y en la VM-C, a v
 eliminado»), cada caso en su función porque lo que se pisa depende del marco. Lo demás de arriba (los números de
 conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
 
-#### 🔵 `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente)
+#### ✅ `#704` — el orden de las clases de tupla en el `.mod` depende de los `hashCode` de identidad de Java: el mismo programa da otro `.mod` con otro compilador, sin que cambie nada de sus tuplas (abierta el 18-oct, al comparar el corpus antes y después del paso 2 de JC, `#698`; preexistente; **CERRADA el 24-oct**: las formas que no son del módulo, por su nombre)
 
 - **Medido:** `samples/TupCrossTest.bp`, con tuplas que devuelve `TupLib`, da otro `.mod` con el compilador de hoy que
   con el de ayer: las clases `__Tuple_bl` y `__Tuple_ii` salen en el otro orden. Mismo tamaño, los mismos bytes en otro
@@ -7999,6 +7999,26 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
 - **Lo que haría falta** (sin hacer; se apunta y se arregla después): un orden que no dependa de la memoria, como el de
   la primera aparición en el árbol, o el del nombre. Cambia el `.mod` de los programas con tuplas de otro módulo, no
   lo que hacen.
+
+**HECHO el 24-oct** (Eduardo: *«OK, arreglamos 704. Lo que tenemos de tuplas es bastante bueno así que lo mantenemos y
+arreglamos lo que sea necesario»*; antes, el análisis de las tuplas frente a C#, Java y Python: `V8_IDEAS` §E7), en
+`MivmEmitter.collectTupleShapes`:
+- **Medido antes, y peor de lo que decía la ficha:** un programa que usa tuplas de otros módulos, compilado doce veces
+  en la misma JVM —removiendo la memoria entre una y otra—, dio **once `.mod` distintos** del primero. No es sólo «con
+  cada jar»: dentro de una JVM cambia de una compilación a otra, y el IDE compila en la suya, muchas veces.
+- **Y no sólo el orden:** todas las referencias se codifican `r` (y los enteros estrechos, `i`), así que `(Perro,
+  integer)` y `(Gato, integer)` caen en la misma clase, `__Tuple_ri`, y con `put` la última que se miraba dejaba en sus
+  campos la clave de su tipo (MOD9). El layout es el mismo; los bytes, no.
+- **El arreglo:** las formas de las funciones del módulo, en el orden del fuente, y la primera manda (`putIfAbsent`); las
+  demás, ordenadas por su nombre y, de dos que caen en la misma clase, la de firma canónica menor (`firmaDeTupla`). Las
+  tuplas siguen como estaban: el mismo diseño y las mismas clases.
+- **`OrdenDeTuplasTest`**, nueva en las pruebas del frontend (317, 0 fallos): ese programa —las tuplas de `Str` y
+  `Time`, y dos de referencias que caen en `__Tuple_ri`—, doce veces en la misma JVM, tiene que dar el mismo `.mod` byte
+  a byte. Antes del arreglo, 11 de 12 distintos; con él, 0, en tres JVM.
+- **Nada más cambia:** el corpus compilado con los dos compiladores, 5 177 `.mod` idénticos, y la stdlib, 30: cada
+  compilación de la línea de comandos arranca su JVM, y con un mismo jar el orden salía siempre igual. `TupCrossTest`, el
+  de la ficha, igual con los dos (`__Tuple_bl` y `__Tuple_ii`, ya en el orden del nombre). Y BpIde, rehecho: es donde de
+  verdad cambiaba, de una compilación a otra.
 
 #### ✅ `#703` — JC: el salto escrito, `"\n"`, no cierra la línea del hilo, y lo que imprime un programa JC sale cuando acaba el hilo (abierta el 18-oct, con la prueba por la salida de JC, `check-jc`, `#698`; en BP, lo mismo con un `print "x\n";`, `#700` · **CERRADA el mismo día** con el `println` que decidió Eduardo, el commit de `#703`)
 
@@ -8041,7 +8061,7 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
 - **Lo que queda, a la vista:** un `print("…\n")` de JC deja su línea esperando hasta el siguiente `println` o el
   final del hilo. Es lo decidido, y está en el punto 17.
 
-#### ✅ `#702` — un `raise` dentro del `set` de una propiedad no compila: el análisis lo da por bueno y el emisor dice «Campo no encontrado en …: <evento>$dest» (abierta el 17-oct, al probar las clases de JC, `#698`; preexistente; **CERRADA el 24-oct**: los accesores de las propiedades, tras los campos de los eventos)
+#### ✅ `#702` — un `raise` dentro del `set` de una propiedad no compila: el análisis lo da por bueno y el emisor dice «Campo no encontrado en …: <evento>$dest» (abierta el 17-oct, al probar las clases de JC, `#698`; preexistente; **CERRADA el 24-oct**: los accesores de las propiedades, tras los campos de los eventos, `5e4c2af5`)
 
 - **Medido** (17-oct, una sonda en el scratchpad): una clase con `event cambia(a: Animal)` y una propiedad cuyo
   `set(v)` hace `raise cambia(this)`. El análisis pasa, y el emisor para con «error: Campo no encontrado en Animal:

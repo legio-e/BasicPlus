@@ -4049,3 +4049,44 @@ Con eso:
 nombres, si algún día se quieren, para los dos tipos a la vez. Y se declaran con `set`, que ya es reservada.
 
 Lo siguiente, cuando Eduardo diga: el análisis completo, con la sintaxis de BP y la de JC.
+
+## E7 · Las tuplas: lo que hay, cómo lo hace C# y lo que podría venir (Eduardo, 24-oct; la idea, sin empezar)
+
+Al arreglar `#704`, Eduardo: *«Analicemos un poco todo el tema de las tuplas. No se podemos verlas en otros lenguajes Java
+C# y Python a ver como lo hacen. En cierto modo en Java me recuerdan a las clases sin nombre»*; y después: *«Quizás lo que
+mas nos interesa es como lo hace C# ya que JC debería hacerlo similar»*.
+
+**Lo que hay** (24-oct):
+- una clase oculta por forma, `__Tuple_ii` (sus campos, `_0`, `_1`…; raíz: no hereda de `Object`), que escribe cada
+  módulo que la usa, igual en todos porque su disposición sale de la forma. La VM no sabe de tuplas: es un objeto más. El
+  tipo es estructural: dos `(integer, string)` son el mismo, vengan de donde vengan;
+- se crea sólo en `return (a, b)`; se lee sólo desempaquetando, `{ q, r } := f()`, sobre lvalues que ya existen; se
+  guarda en una variable y se pasa como parámetro; no se compara, no se imprime y no entra en una colección (no es
+  `Object`);
+- en JC: `(int, string)` como tipo, `return (a, b);`, `(string, int) t = par();` y `(q, r) = par();`. El `var (q, r) =
+  f();` de C# no (la tabla de §E2 lo daba por hecho, y no lo está);
+- en la stdlib, cinco funciones: `Str.parseInt` y compañía, con `(boolean, valor)`, y `Time.civilDesdeDias`.
+
+**Cómo lo hace C#:** `(int, string)` es `ValueTuple<int, string>`, una struct genérica de la biblioteca base, la misma
+para todos los ensamblados. El literal vale en cualquier sitio. Los nombres de los elementos, `(int cociente, int resto)`,
+sólo existen al compilar (en las firmas públicas viajan como metadato) y no cuentan para el tipo. Se lee `t.Item1` o
+`t.cociente`; `var (q, r) = f();` declara al desempaquetar; igualdad por valor, `ToString`, en colecciones y como clave.
+Y es un valor: asignar copia, y por eso deja cambiar un elemento. Su tipo anónimo, `new { Q = 3, R = 2 }`, es lo que más
+se parece a las clases ocultas de BP —una clase por forma—, pero no sale de su ensamblado; en Java, una clase anónima es
+una por sitio, no por forma; y en Python la tupla es un tipo del lenguaje.
+
+**Decidido** (Eduardo, 24-oct): *«Lo que tenemos de tuplas es bastante bueno así que lo mantenemos y arreglamos lo que sea
+necesario. Y si, en un futuro podemos extender su uso a otros sitios de lenguaje en vez de dejarlo sólo en el return de
+las funciones. Un sitio donde se me ocurre sería poderlas utilizar en la declaraciones de Map o de Diccionarios
+reemplazando a value.»*
+
+**Lo que podría venir**, de más barato a más caro (BP primero y JC detrás, cuando se decida):
+- el literal fuera del `return`, declarar al desempaquetar (en JC, `var (q, r) = f();`), leer un elemento sin
+  desempaquetar, la igualdad y el imprimir: sólo el compilador, porque la tupla sigue siendo la misma clase oculta;
+- los nombres de los elementos, como en C#: dentro del módulo, sólo el compilador; para que crucen de módulo, la
+  interfaz del `.mod` tiene que llevarlos;
+- **una tupla como el valor de un `Map` o de un diccionario** (la idea de Eduardo): hoy una tupla no entra en una
+  colección porque no es `Object`; haría falta que la clase oculta heredara de `Object`, que vive en `Core`, o que la
+  colección guardara lo que no lo es. Es lo más delicado, y lo que más uso abre;
+- y, se haga lo que se haga, **de sólo lectura** (mi recomendación): en C# la tupla se copia; en BP es un objeto que se
+  comparte, y si un elemento se pudiera cambiar, `t2 := t` y cambiar `t2` cambiaría también `t`.

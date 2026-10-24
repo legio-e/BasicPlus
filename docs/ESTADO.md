@@ -52,7 +52,13 @@
 > - **`#702`, hecha** (Eduardo: *«Si»*): un `raise` dentro del `set` de una propiedad ya compila. El emisor emitía los
 >   accesores de las propiedades antes de declarar los campos de los eventos; ahora, después, sin mover los campos ni los
 >   métodos: el corpus, 5 176 `.mod` idénticos, y la stdlib, 30. `RaiseEnSet`, nueva en el corpus. La red: en la pestaña del Terminal, VERDE en 13:07 (paridad 166 en las tres pasadas; pruebas de C, 105/105).
-> - **Lo siguiente:** `#704`; y las placas, en un lote.
+> - **Las tuplas, analizadas** (Eduardo: *«Analicemos un poco todo el tema de las tuplas»*, y *«lo que mas nos interesa
+>   es como lo hace C# ya que JC debería hacerlo similar»*): frente a C#, Java y Python, en `V8_IDEAS` §E7. Decidido: se
+>   quedan como están; y una idea suya para después, usarlas como el valor de un `Map` o de un diccionario.
+> - **`#704`, hecha**: las clases ocultas de las tuplas que no son del módulo, ordenadas por su nombre (y de dos formas
+>   que caen en la misma clase, siempre la misma). Peor de lo que decía la ficha: doce compilaciones en la misma JVM, once
+>   `.mod` distintos; con el arreglo, ninguno (`OrdenDeTuplasTest`). El corpus y la stdlib no cambian. La red: en la pestaña del Terminal, VERDE en 13:02 (paridad 166 en las tres pasadas; pruebas de C, 105/105).
+> - **Lo siguiente:** las placas, en un lote; después `#724`, `#709` y las del IDE (`#693`–`#696`).
 
 > **23-oct** — **El H5: `#714` hecha, las cadenas nacen de SOLO LECTURA** (Eduardo: *«Continuamos con #711 y #714»*;
 > *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.** **Después, los

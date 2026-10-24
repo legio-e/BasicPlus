@@ -6073,6 +6073,7 @@ public final class MivmEmitter {
      *  Sintetizar la clase en CUALQUIER módulo que la toque es seguro: es un
      *  contenedor transparente con layout determinista por su firma. */
     private void collectTupleShapes() {
+        // Las de las funciones del módulo, en el orden del fuente (#704: la primera manda).
         for (ITopLevelDecl d : moduleAst.defs) {
             if (d instanceof FuncDef) registerTupleIfAny((FuncDef) d);
             else if (d instanceof ClassDef) {
@@ -6080,17 +6081,44 @@ public final class MivmEmitter {
                     if (m instanceof FuncDef) registerTupleIfAny((FuncDef) m);
             }
         }
-        for (BpType t : info.exprTypes.values())
-            if (t instanceof BpType.TupleType)
-                tupleShapes.put(tupleClassName((BpType.TupleType) t), (BpType.TupleType) t);
+        // #704 (24-oct) — las demás (las tuplas que devuelve otro módulo, y las que sólo salen en una expresión), en el
+        // orden de su NOMBRE; y de dos formas que caen en la misma clase (todas las referencias son `r`), siempre la
+        // misma, la de firma menor. Antes salían del recorrido de `info.exprTypes`, un IdentityHashMap, en el orden de
+        // los hashCode de identidad de los nodos, y con `put` la última pisaba a las de arriba: el mismo programa daba
+        // otro .mod en otra JVM —el orden de las clases __Tuple_* y la clave de sus campos—, sin cambiar lo que hacía.
+        // Compilado doce veces en la misma JVM, once .mod distintos (OrdenDeTuplasTest).
+        java.util.TreeMap<String, BpType.TupleType> resto = new java.util.TreeMap<>();
+        for (BpType t : info.exprTypes.values()) {
+            if (!(t instanceof BpType.TupleType)) continue;
+            BpType.TupleType tt = (BpType.TupleType) t;
+            String nombre = tupleClassName(tt);
+            if (tupleShapes.containsKey(nombre)) continue;
+            BpType.TupleType ya = resto.get(nombre);
+            if (ya == null || firmaDeTupla(tt).compareTo(firmaDeTupla(ya)) < 0) resto.put(nombre, tt);
+        }
+        tupleShapes.putAll(resto);
     }
     private void registerTupleIfAny(FuncDef fn) {
         Symbol s = info.declSymbols.get(fn);
         if (s instanceof FunctionSymbol) {
             BpType rt = ((FunctionSymbol) s).returnType;
             if (rt instanceof BpType.TupleType)
-                tupleShapes.put(tupleClassName((BpType.TupleType) rt), (BpType.TupleType) rt);
+                tupleShapes.putIfAbsent(tupleClassName((BpType.TupleType) rt), (BpType.TupleType) rt);
         }
+    }
+    /** #704 — una firma de la forma que no depende de la memoria, para elegir siempre la misma entre dos que caen en la
+     *  misma clase oculta: la clave canónica de cada elemento (MOD9), o su nombre. */
+    private String firmaDeTupla(BpType.TupleType tt) {
+        StringBuilder sb = new StringBuilder();
+        for (BpType e : tt.elements) {
+            String k = e.display();
+            if (mod9()) {
+                try { k = Symbol.ClaveCanonica.tipo(e, moduloLocal()); }
+                catch (Symbol.ClaveCanonica.TipoSinResolver x) { /* queda su nombre */ }
+            }
+            sb.append(k).append(';');
+        }
+        return sb.toString();
     }
 
     /** Sintetiza una clase oculta por forma de tupla usada en el módulo. */
