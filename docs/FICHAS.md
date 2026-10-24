@@ -7171,6 +7171,13 @@ y los smokes del sim cronometran (también `sim_smoke`, una espera que tiene que
 la sombra, que usa ese sim, van al final, solos, con el estrés. Las pruebas de C que miran el reloj (`test-aotkill`,
 `test-aotpesada`, `test-kill`) esperan cientos de milisegundos con topes de 2,5 a 5 s, y siguen en su grupo. Medido: 13:10 min, VERDE —el corpus 11:17, las pruebas de C 8:51, lo demás 1:20; y después, solos, el sim 1:21, la sombra 0:08 y el estrés 0:24—.
 
+**Y el progreso, el mismo día** (Eduardo: *«cuando ejecutas el worker sería posible ver una barra de progreso o algo
+similar?»*; y a la propuesta, *«OK, hazlo»*): en los frentes largos —las pasadas del corpus y las pruebas de C, de 3
+a 9 minutos— sale una línea cada 20 casos con por dónde van, como la del frente acabado (`  17:02:10  A  paridad MOD9
+60/164  1:20`). Va por el descriptor 3, que `check` abre sobre su salida, y no al registro del frente: el informe del
+final sale como siempre; fuera de `check`, nada. Y la red, lanzada en una pestaña del Terminal de la app, para verla
+en vivo. Visto en la red de `#701`, en la pestaña: una línea cada 20 a 25 s en el corpus, y cada medio minuto o un minuto en las pruebas de C; verde en 12:42.
+
 #### ✅ `#725` — `Json.parseJson` se para en el primer error: con un fichero con diez, se arreglan de uno en uno (abierta el 23-oct, una idea de Eduardo; **CERRADA el mismo día**: sigue tras cada error, como un compilador, y los da todos, diez como mucho, `6f9a7a77`)
 
 Eduardo, al decidir `#716`: *«A ver para ParseJson, lo ideal es que si encuentra un error continue parseando y devuelva

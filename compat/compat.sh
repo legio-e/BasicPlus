@@ -309,9 +309,13 @@ check_parity() {
     echo "  ⚠ el host esta compilado CON LVGL: el arnes necesita 'make GUI=1 LVGL=0' (sabor gui1-lvgl0)"
     return 1
   fi
-  local pass=0 fail=0 skip=0 s bp mod oj oc fmt="" libres=0 smp_marca="" ordena="" ref_txt=""
+  local pass=0 fail=0 skip=0 s bp mod oj oc fmt="" libres=0 smp_marca="" ordena="" ref_txt="" hechos=0 total
+  total=$(echo $CORPUS | wc -w)
   [ -n "$PAR_FORMATO" ] && fmt="--formato=$PAR_FORMATO"
   for s in $CORPUS; do
+    # V8 #726 — por dónde va, cada 20 samples (sólo en `check`, la de tres grupos: ver progreso())
+    [ "$hechos" -gt 0 ] && [ $(( hechos % 20 )) -eq 0 ] && progreso "$hechos/$total"
+    hechos=$(( hechos + 1 ))
     bp="$(bp_path "$s")"
     if [ ! -f "$bp" ]; then
       echo "  SKIP $s (no existe $bp)"; skip=$((skip+1)); continue
@@ -966,7 +970,10 @@ check_testc() {
   # una native que espera al mundo dentro de sí y la línea del bucle aparcada; con sus tres sabotajes—.
   local lista="test-ejecutor test-aotdirecta test-mdnv3 test-aotgc test-aotnew test-aotswitch test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aottuplas test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotpesada test-aotbuiltin test-aotcompara test-aotdo test-aotfloat test-wirerecorte test-salida test-mods test-guilleno test-guipack test-sd-turnos test-debug test-debug-mt test-listen test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-iomt test-smphandles test-freelist test-packhelp test-mem test-utf8 test-part test-bmgr test-pack test-npack test-sqlmem test-boot2 test-env test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-bytenat test-xmodnat test-compressnat test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-fspos test-blk test-sdio test-listdir test-boot test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-nat2runs test-logmt test-reserva test-palabras test-frcond test-rand test-runguard test-sd-turnos-control test-suelta test-destruirpoca test-destruyefinal test-censo test-bus test-arbitro check-builtins"
   n=$(echo $lista | wc -w)
+  local hechos=0
   for t in $lista; do
+    [ "$hechos" -gt 0 ] && [ $(( hechos % 20 )) -eq 0 ] && progreso "$hechos/$n"   # V8 #726: por dónde va, cada 20
+    hechos=$(( hechos + 1 ))
     sal="$(timeout 300 make -C "$ROOT/bpgenvm-c" "$t" 2>&1)"; rc=$?
     ok="$(printf '%s\n' "$sal" | grep -E "$(senal_testc "$t")" | head -1)"
     if [ "$rc" -eq 0 ] && [ -n "$ok" ]; then
@@ -1398,9 +1405,19 @@ check_serie() {
 # corpus («InvocaRanuraBase») el compilador lo toma de su fuente: «es un resto fuera de outDir»—.
 # Cada frente deja su salida en $LOGS/<n>-<frente>.log; mientras corren sale una línea por frente acabado, y al final
 # las salidas enteras, en el orden de siempre. `check-serie` es la red de antes, de una en una (y se queda).
+# Y EL PROGRESO (24-oct; Eduardo: «cuando ejecutas el worker sería posible ver una barra de progreso o algo
+# similar?»): en los frentes largos —las pasadas del corpus y las pruebas de C, de 3 a 9 minutos—, una línea cada 20
+# casos con por dónde van, como la del frente acabado. Va por el descriptor 3, que `check` abre sobre su salida, y no al
+# registro del frente: el informe del final sale como siempre. Fuera de `check` (check-serie, check-paridad…), nada.
 LOGS=""
+PROG_G=""; PROG_NOM=""; PROG_T0=0
+progreso() {   # $1=lo hecho, «60/164»
+  [ -n "$PROG_G" ] || return 0
+  printf '  %s  %s  %-16s %-7s %s\n' "$(date +%H:%M:%S)" "$PROG_G" "$PROG_NOM" "$1" "$(mmss $(( SECONDS - PROG_T0 )))" >&3
+}
 frente() {   # $1=grupo $2=fichero, sin extension $3=nombre para el progreso $4...=la funcion y sus argumentos
   local g="$1" f="$2" nom="$3" t=$SECONDS rc; shift 3
+  PROG_G="$g"; PROG_NOM="$nom"; PROG_T0=$SECONDS
   "$@" > "$LOGS/$f.log" 2>&1; rc=$?
   echo "$rc" > "$LOGS/$f.rc"
   printf '  %s  %s  %-16s %s  %s\n' "$(date +%H:%M:%S)" "$g" "$nom" "$([ "$rc" -eq 0 ] && echo 'ok  ' || echo 'ROJO')" \
@@ -1411,6 +1428,7 @@ seg_de() { cat "$LOGS/$1.seg" 2>/dev/null || echo 0; }
 FRENTES="01-paridad 02-mod7 03-fwd 04-norma 05-sim 06-testc 07-sombra 08-mod8 09-smp 10-estres 11-packs-abi 12-embebidos"
 check() {
   aviso_v2
+  exec 3>&1   # el progreso (progreso()): a la salida de `check`, no al registro de cada frente
   local fails=0 f t0=$SECONDS pa pb pc
   LOGS="$WORK/red"; mkdir -p "$LOGS" "$REF_PAR"
   if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then
