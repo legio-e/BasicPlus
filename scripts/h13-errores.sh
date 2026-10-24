@@ -78,6 +78,9 @@ FinallySale|un 'finally' no puede salir con 'return'
 FinallySale|un 'finally' no puede salir con 'break'
 FinallySale|un 'finally' no puede salir con 'continue'
 FirmaLarga|caracteres (maximo 160)
+UnaLineaConFin|no lleva 'endif'
+UnaLineaConFin|no lleva 'endwh'
+UnaLineaConFin|no lleva 'next'
 "
 
 ok=0; mal=0

@@ -1,0 +1,12 @@
+// UnaLineaConFin.bp — ERROR A PROPÓSITO (#701): el `if`, `while` y `for` de UNA LÍNEA no llevan terminador.
+// Escribirlo en la misma línea (`if E then STMT endif`) es el error de mezclar las dos formas, y el compilador lo dice
+// con su nombre, en los tres. Desde #701, un terminador en la línea SIGUIENTE ya no cuenta: es el del bloque de fuera
+// (bpgenvm-c/samples/UnaLineaAlFinal.bp, en el corpus, lo compila).
+module UnaLineaConFin
+  function Main()
+    var a: integer := 0
+    if a == 0 then print "si" endif
+    while a < 3 do a += 1 endwh
+    for i := 1 to 2 do print i next
+  end Main
+end UnaLineaConFin

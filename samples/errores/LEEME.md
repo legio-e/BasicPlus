@@ -30,6 +30,7 @@ fallan por diseño.
 | `PropFieldTipo.bp` | dentro de un `get`/`set`, `field` tiene el tipo de su property: asignarle otro es un error, como a cualquier variable (#547) | `no se puede asignar 'string' a 'integer'` |
 | `FinallySale.bp` | un `finally` no puede salir con `return`, `break` ni `continue`: taparía la excepción que fuera en vuelo. Un `throw` dentro sí vale, y un `break` a un bucle de DENTRO del `finally`, también (#674) | `un 'finally' no puede salir con 'return'` · `… con 'break'` · `… con 'continue'` (y ninguno en `vale`) |
 | `FirmaLarga.bp` | la firma de una función —su nombre con los tipos de sus parámetros— tiene un tope de 160 caracteres, también en las funciones de módulo: aquí, tres parámetros de una clase de 63 dan 240 (#685) | `la firma 'demasiado(…' de 'demasiado' tiene 240 caracteres (maximo 160)` |
+| `UnaLineaConFin.bp` | el `if`, `while` y `for` de una línea no llevan terminador: escribirlo en su misma línea (`if E then STMT endif`) es mezclar las dos formas. Uno en la línea siguiente es del bloque de fuera, y vale (#701: `bpgenvm-c/samples/UnaLineaAlFinal.bp`, en el corpus) | `el 'if' de una línea no lleva 'endif'` · `'endwh'` · `'next'` |
 | `paralleltest_scope_violate.bp` | dentro de un `parallel`, un `case` no puede tocar una variable global | `no puede acceder a la variable global 'globalVar'; usa una const, una función o un objeto compartido` |
 
 Fíjate en que los mensajes **dicen qué hacer**, no sólo qué está mal: el de `parallel`

@@ -1133,8 +1133,9 @@ public final class Parser {
             // El 'if' de una línea NO lleva 'endif'. Si aparece colgando, es el
             // error típico de mezclar las dos formas (`if E then STMT endif`).
             // Diagnóstico claro + lo consumimos para no dejar un terminador
-            // huérfano que descarrile (o cuelgue) el parseo del resto.
-            if (check(TokenType.ENDIF)) {
+            // huérfano que descarrile (o cuelgue) el parseo del resto. Colgando
+            // = en SU línea (#701): el de la línea siguiente es del bloque de fuera.
+            if (cuelga(TokenType.ENDIF)) {
                 panicMode = false;          // que ESTE mensaje (el accionable) no quede suprimido
                 error("el 'if' de una línea no lleva 'endif' — quítalo, o usa la forma multilínea (salto de línea tras 'then' … 'endif')");
                 advance();                  // consume el 'endif' huérfano
@@ -1265,8 +1266,8 @@ public final class Parser {
             List<IStmt> body = new ArrayList<>();
             if (stmt != null) body.add(stmt);
             drainPendingVarDecls(body);     // var multi-grupo
-            // El 'while' de una línea NO lleva 'endwh' (mismo criterio que el 'if').
-            if (check(TokenType.ENDWH)) {
+            // El 'while' de una línea NO lleva 'endwh' (mismo criterio que el 'if', #701 incluido).
+            if (cuelga(TokenType.ENDWH)) {
                 panicMode = false;
                 error("el 'while' de una línea no lleva 'endwh' — quítalo, o usa la forma multilínea (salto de línea tras 'do' … 'endwh')");
                 advance();
@@ -1324,8 +1325,8 @@ public final class Parser {
             List<IStmt> body = new ArrayList<>();
             if (stmt != null) body.add(stmt);
             drainPendingVarDecls(body);     // var multi-grupo
-            // El 'for' de una línea NO lleva 'next' (mismo criterio que el 'if').
-            if (check(TokenType.NEXT)) {
+            // El 'for' de una línea NO lleva 'next' (mismo criterio que el 'if', #701 incluido).
+            if (cuelga(TokenType.NEXT)) {
                 panicMode = false;
                 error("el 'for' de una línea no lleva 'next' — quítalo, o usa la forma multilínea (salto de línea tras 'do' … 'next')");
                 advance();
@@ -1822,6 +1823,14 @@ public final class Parser {
     private boolean isAtEnd() { return current().type == TokenType.EOF; }
 
     private boolean check(TokenType t) { return current().type == t; }
+
+    /** #701 (24-oct) — el terminador de un bloque CUELGA de la sentencia de una línea (`if E then STMT endif`, el error
+     *  de mezclar las dos formas) sólo si está en SU línea. Si la sentencia ya se comió su salto de línea, el `endif`,
+     *  `endwh` o `next` que viene es de la línea siguiente: el del bloque de fuera, de su misma clase, y no se toca. Antes
+     *  se lo llevaba, y un `if`, `while` o `for` de una línea no podía ser la última sentencia de un bloque de su clase. */
+    private boolean cuelga(TokenType t) {
+        return check(t) && pos > 0 && tokens.get(pos - 1).type != TokenType.NEWLINE;
+    }
 
     private boolean match(TokenType t) {
         if (!check(t)) return false;

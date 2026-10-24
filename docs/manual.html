@@ -760,6 +760,13 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <span class="kw">else</span>
   <span class="kw">print</span> <span class="str">"senior"</span>
 <span class="kw">endif</span></code></pre>
+<p>
+  Con una sola sentencia, el <code>if</code> cabe en una línea: <code>if c then sentencia</code>, sin
+  <code>endif</code> (escribirlo detrás es un error, que el compilador nombra). Igual el
+  <code>while c do sentencia</code> y el <code>for … do sentencia</code>, sin <code>endwh</code> ni
+  <code>next</code>. Pueden ir en cualquier sitio de un bloque, también como la última sentencia de uno de su
+  misma clase (<code>#701</code>, V8).
+</p>
 
 <h3 id="while">7.2 <code>while / do</code></h3>
 <pre><code><span class="kw">while</span> i &lt; n <span class="kw">do</span>

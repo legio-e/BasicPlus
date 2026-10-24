@@ -8051,7 +8051,7 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
   alta el campo del evento (`$dest`).
 - **De momento no se toca** (Eduardo: los cambios de BP, más adelante).
 
-#### 🔵 `#701` — un `if`, `while` o `for` de una línea no puede ser la última sentencia de un bloque de su misma clase: el parser toma el `endif`, `endwh` o `next` de la línea siguiente por suyo (abierta el 17-oct, al probar `EscritorJc`, `#698`; preexistente)
+#### ✅ `#701` — un `if`, `while` o `for` de una línea no puede ser la última sentencia de un bloque de su misma clase: el parser toma el `endif`, `endwh` o `next` de la línea siguiente por suyo (abierta el 17-oct, al probar `EscritorJc`, `#698`; preexistente; **CERRADA el 24-oct**: el terminador sólo cuelga si está en su línea)
 
 - **Medido** (17-oct, tres sondas en el scratchpad):
   - `if a == 0 then` / `if a == 0 then print "si"` / `endif` da «el 'if' de una línea no lleva 'endif'»;
@@ -8067,6 +8067,21 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
 - **El arreglo, a decidir** (Eduardo: los cambios de BP, más adelante): el terminador cuenta como colgante sólo si
   está en la misma línea que el final de la sentencia.
 - **Para JC importa en el paso 3:** de JC a BP saldría justo esa forma (`for (…) { for (…) x; }`), que BP no lee.
+
+**HECHO el 24-oct**, con el arreglo propuesto (Eduardo: *«OK»*), en el parser: el terminador cuelga de la sentencia
+de una línea sólo si está en SU línea, es decir, si la sentencia no se ha comido aún su salto de línea
+(`Parser.cuelga`, en las tres formas). Si ya se lo comió, el `endif`, `endwh` o `next` que viene es del bloque de
+fuera, y no se toca. Medido antes con el compilador de ese día: las tres sondas de la ficha, igual que el 17-oct.
+- **`bpgenvm-c/samples/UnaLineaAlFinal.bp`**, nuevo y en el corpus: las tres formas al final de un bloque de su clase
+  (el `for` también con `next i`), dos `if` de una línea uno dentro de otro, y como control, la mezcla de clases y la
+  forma de una línea en medio de un bloque, que ya compilaban; nueve comprobaciones con lo que tiene que salir
+  escrito a mano. El compilador de antes no lo compila (los errores de la ficha); el nuevo, 9 bien, en las dos VMs.
+- **El error de mezclar las dos formas sigue**, con su nombre: `samples/errores/UnaLineaConFin.bp` (las tres, en su
+  línea), en `scripts/h13-errores.sh` (53 comprobaciones, 0 mal); y `UnaLineaAlFinalTest`, en las pruebas del
+  frontend (316, 0 fallos), que mira las formas buenas y las colgantes sólo con el parser.
+- **Nada más cambia:** el corpus compilado con los dos compiladores, 5 145 `.mod` idénticos, 0 distintos.
+- **El manual** (§7.1): la forma de una línea del `if`, el `while` y el `for`, que no estaba, y que puede ir en
+  cualquier sitio de un bloque. BpIde, rehecho.
 
 #### ✅ `#700` — BP: el `print` sin salto, con un `;` al final; basta con el compilador (abierta el 17-oct, de JC, `#698`; decidido el mismo día; **se hace en el compilador de BP**, Eduardo: el único cambio de BP que entra ahora · **CERRADA el 18-oct**, el commit de `#700`)
 

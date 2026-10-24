@@ -45,8 +45,11 @@
 > - **Dos ideas de Eduardo:** `#728`, una interfaz del IDE para la IA (apuntada, por analizar); y el progreso de la red,
 >   hecho (*«cuando ejecutas el worker sería posible ver una barra de progreso o algo similar?»*): en los frentes
 >   largos, una línea cada 20 casos, por el descriptor 3, y la red lanzada en una pestaña del Terminal de la app.
-> - **Lo siguiente**, ya leído: `#701` (el terminador de un `if`, `while` o `for` de una línea, colgante sólo si está en
->   su línea), `#702` y `#704`; y las placas, en un lote.
+> - **`#701`, hecha** (Eduardo: *«OK»*): el terminador de un `if`, `while` o `for` de una línea sólo cuelga si está en su
+>   línea; el de la línea siguiente es del bloque de fuera. `UnaLineaAlFinal` (9 comprobaciones), nueva en el corpus; el
+>   error de mezclar las dos formas sigue (`samples/errores/UnaLineaConFin.bp` y `UnaLineaAlFinalTest`). El corpus,
+>   5 145 `.mod` idénticos. El manual (§7.1) explica ya la forma de una línea. La red: en la pestaña del Terminal, con el progreso: VERDE en 12:42 (paridad 165 en las tres pasadas; pruebas de C, 105/105).
+> - **Lo siguiente:** `#702` y `#704`; y las placas, en un lote.
 
 > **23-oct** — **El H5: `#714` hecha, las cadenas nacen de SOLO LECTURA** (Eduardo: *«Continuamos con #711 y #714»*;
 > *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.** **Después, los

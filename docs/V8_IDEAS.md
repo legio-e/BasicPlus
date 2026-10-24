@@ -1074,9 +1074,9 @@ se hace en el compilador de BP, sin tocar la VM (punto 17), y los demás cambios
   nombre de JC como `Next`, `Step` o `End` es en BP una palabra reservada, y un programa de JC que lo use no se puede
   escribir en BP tal cual. Al revés, `int` y `bool` son nombres válidos en BP que en JC no lo serán. Mi propuesta: que
   el traductor lo diga, con el nombre y la línea, sin renombrar nada por su cuenta.
-- **Un `if`, `while` o `for` de una línea al final de un bloque de su clase** (`#701`, un fallo del parser de BP): BP
-  no lo lee, porque toma el `endif`, `endwh` o `next` de la línea siguiente por suyo. De JC a BP saldría esa forma
-  (`for (…) { for (…) x; }`). Importa en el paso 3.
+- **Un `if`, `while` o `for` de una línea al final de un bloque de su clase** (`#701`, un fallo del parser de BP,
+  arreglado el 24-oct): BP no lo leía, porque tomaba el `endif`, `endwh` o `next` de la línea siguiente por suyo. De
+  JC a BP sale esa forma (`for (…) { for (…) x; }`), y desde `#701` BP la lee.
 
 ### Paso 2, AST → JC: hecho el 17-oct
 
