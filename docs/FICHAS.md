@@ -7238,6 +7238,13 @@ de «`#714` y `#711`: el algoritmo»). Lo mínimo ya está en `Net.Tcp.recvStr` 
 esperan al paquete siguiente. Por diseñar: los nombres, el objeto del puerto serie, el plazo, y si `TextFile` y
 `recvStr` se quedan como atajos.
 
+**El modelo, de Eduardo (24-oct)**, en `V8_IDEAS` §E8: los canales (`File`, `Uart`, `Socket`…) tienen dentro un
+`InputStream` y un `OutputStream`, siempre de bytes, con un buffer de tamaño por defecto que el usuario puede fijar y
+un `flush()`; y encima, un `Reader` o un `Writer` que recibe el stream en su constructor: de momento, `TextReader` y
+`TextWriter`, UTF-8, y otras codificaciones en el futuro. *«Lo que aporta los streams es separar la lectur/escritura de
+la codificación […] En esto seguimos el sistema de Java, un poco mas sencillo.»* Los detalles, por decidir (diez
+preguntas, cada una con su propuesta, en §E8).
+
 #### 🔵 `#722` — en la Pico 2, que un programa quepa en memoria depende de lo que se ejecutó antes: `MapOrden` con 2000 claves, tras un reinicio, se queda sin memoria; después de otros programas, a veces cabe (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **sólo anotada**)
 
 **Lo visto** (la misma imagen, `MapOrden.mod`, que mete 250, 500, 1000 y 2000 claves en un `Map`):

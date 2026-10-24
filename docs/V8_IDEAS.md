@@ -4090,3 +4090,69 @@ reemplazando a value.»*
   colección guardara lo que no lo es. Es lo más delicado, y lo que más uso abre;
 - y, se haga lo que se haga, **de sólo lectura** (mi recomendación): en C# la tupla se copia; en BP es un objeto que se
   comparte, y si un elemento se pudiera cambiar, `t2 := t` y cambiar `t2` cambiaría también `t`.
+
+## E8 · Los streams: el modelo (Eduardo, 24-oct; `#723`, por decidir los detalles)
+
+Viene de la idea del 22-oct (§E5, «El stream»: los streams, siempre de bytes, y encima un Reader que espera el resto de
+un carácter). El 24-oct, Eduardo, el modelo entero:
+
+> *«File, Uart, Socket y otros son objetos. Dentro tenemos (o podemos tener) InputStream y OutputStream (como su nombre
+> indica, uno para leer y otro para escribir) siempre bytes (1 a 1 o en forma de arrays). Luego tenemos Reader y Writer
+> que son objetos y en el constructor le pasamos un Stream (un InputStream para el Reader y un OutputStream para el
+> writer). Pueden ser de diferentes tipos pero nosotros de momento soportamos texto, un TextReader y un TextWriter. Aquí
+> el reader y el writer efectua una codificación de byte -> UTF-8 y al revés, de UTF-8 a bytes. No descartamos que en el
+> futuro se puedan utilizar otras codificaciones.»*
+>
+> *«Una cosa mas, los Streams pueden tener un buffer con un tamaño por defecto y que el usuario puede fijar. De esta
+> forma podemos optimizar las operaciones de lectura y escritura. También un método flush() para vaciar el buffer. Lo que
+> aporta los streams es separar la lectur/escritura de la codificación. También hace mas homogeneo el acceso a todo tipo
+> de canales de comunicación y al mismo tiempo divide el trabajo simplificando la codificación de cada canal. En esto
+> seguimos el sistema de Java, un poco mas sencillo.»*
+
+En BP se escribiría así:
+
+```
+var r: IO.TextReader := IO.TextReader(conexion.input())    // bytes → texto (UTF-8)
+var linea: string := r.readLine()
+var w: IO.TextWriter := IO.TextWriter(conexion.output())   // texto → bytes
+w.writeLine("hola")
+w.flush()
+```
+
+**Lo que aporta** (Eduardo): separar la lectura y la escritura de la codificación; el mismo acceso a todos los canales;
+y que cada canal sólo tenga que mover bytes. Es el sistema de Java, más sencillo: el buffer va dentro del stream (en
+Java es otra clase, `BufferedInputStream`).
+
+**Cómo encaja con lo de hoy:** los tres canales ya tienen sus bytes, cada uno a su manera. `IO.File` tiene `readByte`,
+`read(buf)` y `write`, y el texto va en `TextFile`, que hereda de `File` en vez de ponerse encima. `Net.Tcp` tiene `recv`
+y `send` de bytes, y su `recvStr` guarda entre llamadas los bytes de un carácter partido (`#711`): lo que hará el
+`TextReader` para cualquier canal. `Uart.Port` lee y escribe con `integer[]`, no con `byte[]`: le falta un stream de
+bytes de verdad.
+
+**Por decidir**, con lo que propongo (Claude, 24-oct):
+1. **La forma de `InputStream` y `OutputStream`.** BP no tiene interfaces (`#460`): clases base cuyos métodos redefine
+   cada canal (la herencia ya cruza módulos). `read(): integer` (un byte, o -1 al final), `read(buf: byte[]): integer`
+   (cuántos), `write(b)`, `write(buf)`, `flush()` y `close()`.
+2. **Cómo salen del canal:** `f.input()` y `f.output()`, por getters. Un fichero abierto sólo para leer no tiene
+   `output()`.
+3. **El buffer** (Eduardo): un tamaño por defecto y el que fije el usuario. Al leer, el stream llena su buffer del canal
+   por bloques y `read` sirve de él; al escribir, lo vacía al llenarse, con `flush()` y al cerrar. Por decidir: el tamaño
+   por defecto (en la C3 y la C6 la RAM va justa: `docs/MEMORIA.md`) y dónde se fija (un parámetro al pedir el stream,
+   o una propiedad antes de la primera lectura).
+4. **La espera.** El socket y la UART esperan; el fichero no. El plazo, una propiedad del stream; y `read` distingue
+   «nada todavía» (0) de «se acabó» (-1).
+5. **El carácter partido:** el `TextReader` guarda los bytes que faltan hasta la lectura siguiente, con cualquier canal.
+   Sólo al acabarse el canal es un error (§E5).
+6. **El UTF-8 mal formado**, lo de `#711`: la excepción (`EncodingError`) por defecto, y una sobrecarga del constructor
+   para cambiar lo malo por «�» (sobrecarga y no valor por defecto: la clave de enlace).
+7. **Otras codificaciones:** el hueco queda; se decide cuando lleguen (un parámetro del constructor, o una clase por
+   codificación). De momento, sólo UTF-8.
+8. **Cerrar:** cerrar el reader o el writer cierra su stream, como en Java (el writer, con su `flush`), y el destructor
+   lo suelta (`#667`).
+9. **Lo que ya existe** (`TextFile`, `Tcp.recvStr`, `Uart.Port.read`) se queda como está, para los programas de hoy; los
+   streams, al lado, y más adelante lo de hoy se puede rehacer encima.
+10. **Dónde viven:** en `IO` (`InputStream`, `OutputStream`, `Reader`, `Writer`, `TextReader`, `TextWriter`); `Net` y
+    `Uart` importan `IO`.
+
+Y la velocidad (§E5): lo que se hace byte a byte —llenar el buffer, buscar el salto de línea, validar el UTF-8, cortar en
+el último carácter entero— va en C, con la rutina de `#711`, que ya está en las dos VMs.
