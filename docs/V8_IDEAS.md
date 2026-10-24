@@ -611,7 +611,7 @@ mi propuesta: manda lo de aquí.
      (Eduardo, conforme). En el corpus no hay ninguno: los tres `do` que hay llevan condición. Si un programa de BP lo
      usa, el traductor lo dice, con su línea. En JC, el bucle sin fin es `while (true)`.
    - **El `continue` dentro de un `do`:** en C# va a la condición, y en el C del AOT también; en el intérprete de BP
-     vuelve arriba sin mirarla. Es un fallo de BP, `#699`. Cuando se arregle, el `do … while` de JC será el de C#.
+     volvía arriba sin mirarla. Era un fallo de BP, `#699`, arreglado el 24-oct: el `do … while` de JC es ya el de C#.
 10. **`break`, `continue` y `return`, sin cambios, como en C#** (17-oct): `break;` · `continue;` · `return;` ·
     `return x;` · `return (a, b);`, la tupla como en C#.
 11. **El `for`, el de C, de momento con una asignación, una condición y un incremento** (17-oct):
@@ -1054,7 +1054,7 @@ y lo que hace JC mientras:
 
 | el cambio en BP | sale de | mientras, en JC |
 |---|---|---|
-| `#699`, el `continue` de un `do … loop`: un fallo | 9 | el `continue` de su `do … while` es el de BP: vuelve arriba sin mirar la condición |
+| `#699`, el `continue` de un `do … loop`: un fallo; **hecho el 24-oct** | 9 | desde entonces, el de C#: el `continue` de su `do … while` va a la condición |
 | `#700`, el `print` sin salto: **éste sí, en el compilador** (Eduardo); hecho el 18-oct | 17 | el `print(a, b);` es el `print a; b;` de BP |
 | los caracteres, `'a'` | 19 | los lee el lexer de JC; en BP se escriben como su número |
 | las secuencias de escape de C# | 19 | las lee el lexer de JC; lo que BP no sabe escribir, el traductor lo dice |

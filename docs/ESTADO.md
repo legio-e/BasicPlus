@@ -27,6 +27,21 @@
 
 ## Última sesión
 
+> **24-oct** — **`#699`, hecha: el `continue` de un `do … loop c` va a la condición, como en C** (Eduardo: *«Continuamos
+> con los pendientes, #699»*).
+> - **El arreglo**, el propuesto en la ficha: en `MivmEmitter.emitDoLoop`, el `continue` salta a una etiqueta justo antes
+>   de la condición, como el del `for` de `#548`; sin condición, arriba, como siempre. El AOT, el `JvmEmitter` y la
+>   asignación definida ya lo hacían así; y con ello el `do … while` de JC es el de C#.
+> - **Las pruebas:** `NatDoContinue` (cinco casos en `native`, con lo que tiene que salir escrito a mano), nueva en el
+>   corpus; y `make test-aotdo`, nueva en las pruebas de C (con el AOT y sin él). Con el compilador de antes, las dos VMs
+>   fallaban los cinco casos igual y el AOT los daba bien: la divergencia de la ficha, vista antes de arreglarla.
+> - **Nada más cambia:** el corpus compilado con los dos compiladores, 5 113 `.mod` idénticos; sólo los de
+>   `NatDoContinue` y `ContinueFor`, que imprime lo mismo. JC, igual que BP. El manual (§7.5), el frontend (311 pruebas)
+>   y BpIde, al día.
+> - **La red:** en tres grupos, 11:48, verde salvo el caso G de `run_tarea_smoke`, que cronometra y con la carga de los otros grupos no cuadra (1,38 s contra 0,52); el sim, pasado solo, 12/12. Es de `#726`: el sim y la sombra pasan al final, solos.
+> - **Lo siguiente**, ya leído: `#701` (el terminador de un `if`, `while` o `for` de una línea, colgante sólo si está en
+>   su línea), `#702` y `#704`; y las placas, en un lote.
+
 > **23-oct** — **El H5: `#714` hecha, las cadenas nacen de SOLO LECTURA** (Eduardo: *«Continuamos con #711 y #714»*;
 > *«OK, #714»*). **Y una idea suya para después de los pendientes: los conjuntos, como en Pascal.** **Después, los
 > pendientes, cerrados por la cascada: `#711`, `#705`, `#712`, `#716`, `#717`, `#725`, `#727` y `#726` (la red, en tres

@@ -100,7 +100,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1055,6 +1055,29 @@ test-aotcompara: $(LIBOBJ)
 	 if ! cmp -s build/aotcompara.int build/aotcompara.aot; then diff build/aotcompara.int build/aotcompara.aot | head; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 490 ]; then tail -3 build/aotcompara.aot; echo "  ROJO: $$n de 490 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 490/490 con el AOT, igual que interpretado"
+
+# V8 #699 (24-oct) — `continue` dentro de un `do … loop c` va a la CONDICIÓN, en el intérprete como en el C del AOT
+# (`do { … } while (c)`). Hasta #699 el intérprete volvía arriba sin mirarla: hacer `native` una función le cambiaba
+# el resultado. Las cinco natives de NatDoContinue (en el corpus corren interpretadas) con el AOT y sin él (--interp):
+# la misma salida, completa y sin ningún FALLO.
+test-aotdo: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatDoContinue)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatDoContinue,build/aotdo)
+	@c=build/aotdo/aot_NatDoContinue.c; \
+ n=$$(grep -c "bpvm_aot_register_by_name" $$c); \
+ if [ "$$n" -ne 5 ]; then cat build/aotdo/aot.log; echo "  ROJO: el AOT tradujo $$n de las 5 natives de NatDoContinue"; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_aotdo.c build/aotdo/aot_NatDoContinue.c $(LIBOBJ) \
+  -o build/test_aotdo.exe $(LDFLAGS)
+	@echo "--- #699 el continue de un do ... loop c va a la condicion, en una native y en el interprete (esperado: AOT == interpretado, 5/5, sin FALLO) ---"
+	@timeout 60 ./build/test_aotdo.exe samples/NatDoContinue.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotdo.aot; \
+ timeout 60 ./build/test_aotdo.exe samples/NatDoContinue.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotdo.int; \
+ n=$$(grep -c '^ok ' build/aotdo.aot); \
+ if grep -q '^FALLO' build/aotdo.aot build/aotdo.int; then grep -h '^FALLO' build/aotdo.aot build/aotdo.int | head; echo "  ROJO: FALLO"; exit 1; fi; \
+ if ! cmp -s build/aotdo.int build/aotdo.aot; then diff build/aotdo.int build/aotdo.aot | head; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+ if [ "$$n" -ne 5 ]; then tail -3 build/aotdo.aot; echo "  ROJO: $$n de 5 comprobaciones"; exit 1; fi; \
+ echo "[status=OK] 5/5 con el AOT, igual que interpretado"
 
 # V7/H5 (P2b.3, 27-sep) — el .mdn v3: la marca DIRECTA (bit alto de thunk_offset) llega al registro de natives
 # y no se cuela en la dirección del thunk; un v2 las manda todas al ejecutor; un v4 se rechaza.

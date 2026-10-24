@@ -8069,7 +8069,7 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
   - `input()` (sólo en el PC, `PENDIENTES`): desde la línea de comandos, un aviso con `;` antes de leer no sale hasta
     el salto. En el IDE, `input()` abre su ventana.
 
-#### 🔵 `#699` — `continue` dentro de un `do … loop c` vuelve arriba sin mirar la condición; el AOT, en C, sí la mira: el mismo bucle da distinto si la función es `native` (abierta el 17-oct, al decidir el `do … while` de JC, `#698`; preexistente)
+#### ✅ `#699` — `continue` dentro de un `do … loop c` vuelve arriba sin mirar la condición; el AOT, en C, sí la mira: el mismo bucle da distinto si la función es `native` (abierta el 17-oct, al decidir el `do … while` de JC, `#698`; preexistente; **CERRADA el 24-oct**: el `continue` va a la condición, como en C y en el AOT)
 
 - **Medido** (17-oct, una sonda en el scratchpad, las dos VMs iguales): `do` … `if k >= 3 then continue` … `loop k < 3`
   no termina; con un tope de vueltas, -1. El mismo bucle con `while k < 3 do` sale con 3.
@@ -8089,6 +8089,25 @@ conexión, el tope, cerrar al acabar) se queda para el H3 (`V8_IDEAS` §E3).
 - **Para JC importa:** su `do … while` es el de C#.
 - **De momento no se arregla** (Eduardo, 17-oct: los cambios de BP, como posibles mejoras, más adelante, para no
   mezclar demasiados cambios). Mientras, el `continue` del `do … while` de JC es el de BP.
+
+**HECHO el 24-oct**, con el arreglo propuesto (Eduardo: *«Continuamos con los pendientes, #699»*), en
+`MivmEmitter.emitDoLoop`: el `continue` salta a una etiqueta nueva, justo antes de la condición, como el del `for` de
+`#548`; sin condición, arriba, como siempre (su bytecode no cambia). Es lo que ya hacían el AOT, el `JvmEmitter` y la
+asignación definida; y con ello el `do … while` de JC es el de C#.
+- **`bpgenvm-c/samples/NatDoContinue.bp`**, nuevo y en el corpus: cinco casos, cada uno en una `native`, con lo que
+  tiene que salir escrito a mano: el de la ficha, la suma de los impares, dentro de un `switch`, dentro de un `try`
+  con su `finally` y dos `do` anidados. **Con el compilador de antes**, las dos VMs coincidían y fallaban los cinco,
+  con los valores de la regla vieja (-1, 36, 45, 44 y -1: los bucles que no acababan llevan un tope); con el nuevo,
+  los cinco bien.
+- **`make test-aotdo`**, nueva y en `check-testc`: las cinco con el AOT y sin él. Antes del arreglo, ROJO —el AOT, los
+  cinco bien; el intérprete, los cinco FALLO: la divergencia de la ficha—; ahora, 5/5 iguales.
+- **Nada más cambia:** el corpus compilado con los dos compiladores da 5 113 `.mod` idénticos byte a byte. Sólo cambian
+  el de `NatDoContinue` y el de `ContinueFor` (su `continue` dentro de un `switch` en un `do`), que imprime lo mismo
+  (7 ok). La stdlib no tiene ningún `do … loop`: no se regenera.
+- **JC:** `NatDoContinue` escrito en JC (`do { … } while (c);`), compilado y ejecutado: lo mismo que en BP, en las dos
+  VMs.
+- **El manual** (§7.5): la próxima iteración de un `for` empieza por su paso, y la de un `do … loop c` por su
+  condición. Y el frontend, con sus 311 pruebas, y BpIde, rehechos.
 
 #### ✅ `#698` — V8, idea: JC, BasicPlus con camisa de Java y C# (abierta el 17-oct; **el mismo día, el análisis del coste, el paso 1 (AST → BP) y la sintaxis de la primera fase** · **CERRADA el 18-oct: es el H1 de V8, validado por Eduardo**; los apartados, en «🧩 H1»)
 

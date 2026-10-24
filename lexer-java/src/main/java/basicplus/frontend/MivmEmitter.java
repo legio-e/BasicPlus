@@ -3590,12 +3590,19 @@ public final class MivmEmitter {
     private void emitDoLoop(DoLoopStmt s) throws IOException {
         int top = w.newLabel();
         int end = w.newLabel();
+        // #699 (24-oct) — `continue` salta a la CONDICIÓN, no a `top`: la vuelta siguiente de un `do` sólo existe si su
+        // condición se cumple. Es la regla de C, Java y C#, la del AOT (`do { … } while (c)`), la del JvmEmitter y la que
+        // cuenta la asignación definida. Con `top`, un `continue` en la vuelta en que la condición ya no se cumplía seguía
+        // dando vueltas, y el mismo bucle daba otra cosa si la función era `native`. Como el `for` de #548. Sin condición
+        // no hay nada que mirar: arriba, como siempre.
+        int sigue = (s.condition != null) ? w.newLabel() : top;
         w.declareLabel(top);
-        loopStack.push(new LoopLabels(top, end));
+        loopStack.push(new LoopLabels(sigue, end));
         try {
             for (IStmt st : s.body) emitStmt(st);
         } finally { loopStack.pop(); }
         if (s.condition != null) {
+            w.declareLabel(sigue);
             emitExpr(s.condition);
             // continúa mientras condition sea true → si falsa, sale; si verdadera, vuelve arriba
             w.emitJumpIfFalse(end);

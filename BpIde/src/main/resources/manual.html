@@ -839,7 +839,9 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <code>break</code> sale del <code>while</code>, <code>do</code>, <code>for</code> o
   <code>switch</code> más cercano; <code>continue</code> salta a la próxima iteración del bucle más
   cercano (un <code>switch</code> no es un bucle: un <code>continue</code> dentro de un
-  <code>case</code> sigue con el bucle que lo contiene).
+  <code>case</code> sigue con el bucle que lo contiene). La próxima iteración de un <code>for</code>
+  empieza por su paso, y la de un <code>do … loop c</code> por su condición: si <code>c</code> ya no
+  se cumple, el bucle acaba, como en C (<code>#699</code>, V8).
 </p>
 
 <h3 id="parallel">7.6 <code>parallel</code> / <code>endpar</code></h3>
