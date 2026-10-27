@@ -7229,7 +7229,7 @@ Lo prueba `bpgenvm-c/samples/JsonErrores.bp` (en el corpus): 13 comprobaciones c
 tres en una línea, varias líneas con una coma doble y un entero que no cabe, sin cerrar, las comas que faltan, dentro
 de las cadenas, lo que sobra, doce que se quedan en diez, la lista con su línea y columna, y como `RuntimeError`).
 
-#### ✅ `#724` — el texto que trae un pack (SQLite) entra sin descodificar: `string_from_cstr` no mira el UTF-8, y el pegamento que escribe el compilador lo corta en 512 bytes, a veces a medio carácter y sin avisar (abierta el 23-oct, al hacer `#711`; **CERRADA el 27-oct**: el puente lo copia entero y, si la native devuelve `string`, lo descodifica con `fromBytes`; con `byte[]`, los bytes tal cual; en SQLite, `getStr(i, ignorarError)`)
+#### ✅ `#724` — el texto que trae un pack (SQLite) entra sin descodificar: `string_from_cstr` no mira el UTF-8, y el pegamento que escribe el compilador lo corta en 512 bytes, a veces a medio carácter y sin avisar (abierta el 23-oct, al hacer `#711`; **CERRADA el 27-oct**: el puente lo copia entero y, si la native devuelve `string`, lo descodifica con `fromBytes`; con `byte[]`, los bytes tal cual; en SQLite, `getStr(i, ignorarError)`, `2d2b7a7a`)
 
 Un pack devuelve texto de C (`sqlite3_column_text`, en `bpstdlib/sqlite/nativo/src/sqlite_shim.c`). El pegamento que
 escribe `AotCEmitter` (`aot_SQLite.c`) lo cuenta hasta `BPVM_AOT_PACK_STR` (512) y se lo da a `H->string_from_cstr`,
