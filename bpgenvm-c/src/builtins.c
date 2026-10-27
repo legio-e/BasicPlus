@@ -29,6 +29,7 @@
 #include "bpvm_rtc.h"
 #include "bpvm_pack.h"   /* #414 — recorrer los packs grabados desde BP */
 #include "bpvm_fs.h"     /* V7/H3 (#491) — el cursor */
+#include "bpvm_sonido.h" /* V8/H4 (#708) — el sonido, lo común de la HAL BP */
 
 /* ═══════════════════════════════════════════════════════════════════════════
  * V7/H3 (#491) — EL CURSOR desde BP: las nueve primitivas de IO.File y el
@@ -2510,6 +2511,71 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, 0);
         return BPVM_OK;
     }
+    /* V8/H4 (27-oct, #708) — EL SONIDO (Sound.bp), siempre en paralelo al programa: lo común está en la HAL BP
+     * (bpvm_sonido.c), que toca en su propia tarea y da el error de una placa sin sonido con su motivo; aquí sólo se
+     * redactan los textos, los mismos que Sonido.java. La ruta se resuelve como readFile. */
+    case BUILTIN_SOUND_PLAY: {
+        uint32_t pref = pop_ref(vm, tc);
+        /* `em` hace dos cosas, una tras otra, para no agrandar el marco del switch (lo paga cada builtin): primero la
+         * ruta resuelta (bpvm_sonido_tocar la copia), y después el texto del error. El más largo, el del formato: 12 + la
+         * ruta (255) + 25 + det (127) + 67 + el NUL = 487. */
+        char path[BPVM_FS_PATH_MAX], det[128], em[BPVM_FS_PATH_MAX + 240];
+        if (read_bp_path(vm, pref, path, sizeof(path)) != 0)
+            return builtin_throw(vm, tc, "path demasiado largo");
+        switch (bpvm_sonido_tocar(bpvm_fs_resolve(path, em, sizeof(em)), det, sizeof(det))) {
+        case BPVM_SONIDO_OK:
+            push_i32(vm, tc, 0);   /* void: el valor que el compilador descarta tras la llamada */
+            return BPVM_OK;
+        case BPVM_SONIDO_SIN_PLACA:
+            snprintf(em, sizeof em, "Sound.play: %s", det);
+            break;
+        case BPVM_SONIDO_NO_ABRE:
+            snprintf(em, sizeof em, "Sound.play('%s'): no se pudo abrir", path);
+            break;
+        case BPVM_SONIDO_NO_ES_WAV:
+            snprintf(em, sizeof em, "Sound.play('%s'): no es un WAV", path);
+            break;
+        case BPVM_SONIDO_FORMATO:
+            snprintf(em, sizeof em, "Sound.play('%s'): formato no admitido (%s); se admite PCM de 8 o 16 bits, mono o "
+                     "estereo, de 8000 a 48000 Hz", path, det);
+            break;
+        default:
+            snprintf(em, sizeof em, "Sound.play: no se pudo crear la tarea del sonido");
+            break;
+        }
+        return builtin_throw(vm, tc, em);
+    }
+    case BUILTIN_SOUND_STOP:
+        bpvm_sonido_parar();
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    case BUILTIN_SOUND_IS_PLAYING:
+        push_i32(vm, tc, bpvm_sonido_sonando() ? 1 : 0);
+        return BPVM_OK;
+    case BUILTIN_SOUND_SET_VOLUME: {
+        int32_t v = pop_i32(vm, tc);
+        if (v < 0 || v > 100) {
+            char em[80];
+            snprintf(em, sizeof em, "Sound.setVolume: el volumen va de 0 a 100 (es %" PRId32 ")", v);
+            return builtin_throw(vm, tc, em);
+        }
+        bpvm_sonido_poner_volumen((int) v);
+        push_i32(vm, tc, 0);   /* void */
+        return BPVM_OK;
+    }
+    case BUILTIN_SOUND_GET_VOLUME:
+        push_i32(vm, tc, bpvm_sonido_volumen());
+        return BPVM_OK;
+    case BUILTIN_SOUND_IS_AVAILABLE:
+        push_i32(vm, tc, bpvm_sonido_hay() ? 1 : 0);
+        return BPVM_OK;
+    case BUILTIN_SOUND_GET_POSITION:   /* el progreso: bytes del sonido entregados, y los que tiene */
+        push_i32(vm, tc, bpvm_sonido_posicion());
+        return BPVM_OK;
+    case BUILTIN_SOUND_GET_LENGTH:
+        push_i32(vm, tc, bpvm_sonido_largo());
+        return BPVM_OK;
+
     case BUILTIN_FILE_EXISTS: {
         uint32_t pref = pop_ref(vm, tc);
         char path[BPVM_FS_PATH_MAX];

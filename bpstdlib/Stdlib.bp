@@ -48,6 +48,7 @@ module Stdlib
   import Pulse
   import Pwm
   import Rtc
+  import Sound            // V8/H4 (#708) — un .wav por el altavoz, en paralelo al programa
   import Spi
   import Uart
   import Wdt

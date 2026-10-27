@@ -198,6 +198,7 @@
     <li class="sub"><a href="#stdlib-net">14.15 Net</a></li>
     <li class="sub"><a href="#stdlib-gui">14.16 Gui — volumen aparte</a></li>
     <li class="sub"><a href="#stdlib-sd">14.17 Tarjeta SD</a></li>
+    <li class="sub"><a href="#stdlib-sound">14.18 Sound</a></li>
     <li class="group"><a href="#seguir">Por dónde seguir</a></li>
     <li class="group"><a href="#packs">15. Packs</a></li>
     <li class="sub"><a href="#packs-what">15.1 Qué es un pack, y qué no</a></li>
@@ -2625,6 +2626,52 @@ IO.<span class="fn">mkdir</span>(<span class="str">"/sd/registros"</span>)
 <p>
   <strong>Sacar la tarjeta con el programa escribiendo</strong> corrompe lo que estuviera
   a medias, igual que en un PC. No hay magia: cierra antes.
+</p>
+
+<h3 id="stdlib-sound">14.18 <code>Sound</code> (el sonido)</h3>
+<p>
+  Un <code>.wav</code> por el altavoz, <strong>siempre en paralelo</strong> al programa (<code>import Sound</code>):
+  <code>play</code> vuelve en seguida y el sonido sigue mientras el programa hace lo suyo —por ejemplo, un aviso—.
+  Uno a la vez: un <code>play</code> mientras suena otro corta el anterior. Lo toca una tarea propia, que lee el
+  fichero a trozos de unos 50&nbsp;ms; la ruta se resuelve como la de <code>readFile</code>.
+</p>
+<pre><code>import Sound
+Sound.play("/sd/aviso.wav")   // vuelve en seguida: suena mientras el programa sigue
+...
+var pct: integer := integer(long(Sound.getPosition()) * 100 / Sound.getLength())
+</code></pre>
+<table>
+  <tr><th>Miembro</th><th>Descripción</th></tr>
+  <tr><td><code>play(path)</code></td>
+      <td>Toca el WAV y vuelve. Lo que se sabe al llamar —el fichero no se puede abrir, no es un WAV, un formato
+          que no se admite, una placa sin sonido— es un <code>RuntimeError</code> en el momento; lo de después
+          (la SD falla a media canción) para el sonido y queda en el log.</td></tr>
+  <tr><td><code>stop()</code></td>
+      <td>Para lo que suene (si no suena nada, no hace nada).</td></tr>
+  <tr><td><code>isPlaying(): boolean</code></td>
+      <td><code>true</code> desde <code>play</code> hasta que acaba, o hasta <code>stop</code>.</td></tr>
+  <tr><td><code>setVolume(v)</code> / <code>getVolume(): integer</code></td>
+      <td>De 0 (nada) a 100, 85 por defecto; fuera de ese rango, un error. Vale también mientras suena. La
+          escala va de −50 a 0&nbsp;dB, medio dB por paso, y en el PC es 20&nbsp;dB más baja que en una placa, para
+          que el 85 suene parecido.</td></tr>
+  <tr><td><code>getPosition()</code> / <code>getLength(): integer</code></td>
+      <td>El progreso del último <code>play</code>, en bytes del sonido (sin la cabecera del WAV): la posición
+          avanza a trozos de unos 50&nbsp;ms y, al acabar, vale lo mismo que la longitud. El tanto por ciento, en
+          <code>long</code>: un WAV de más de 21&nbsp;MB por 100 ya no cabe en un <code>integer</code>.</td></tr>
+  <tr><td><code>isAvailable(): boolean</code></td>
+      <td>¿Tiene sonido esta placa? Lo contesta la capa común, sin tocar nada.</td></tr>
+</table>
+<p>
+  <strong>Los formatos:</strong> WAV PCM de 8 o 16 bits, mono o estéreo, de 8000 a 48000&nbsp;Hz, a la
+  frecuencia del fichero. Sin MP3.
+</p>
+<p>
+  <strong>Dónde suena.</strong> En el PC, por el audio del sistema (la VM-C, en Windows); con
+  <code>BPVM_SONIDO=mudo</code> en el entorno, en silencio y al mismo ritmo (las pruebas). En una placa, si su
+  familia trae la parte del sonido y su ENV la línea <code>audio</code> —la P4, con su códec ES8311: en curso en
+  V8—; si no, <code>play</code> da el error con el motivo e <code>isAvailable()</code> devuelve <code>false</code>.
+  El códec y el amplificador sólo se encienden mientras suena. Al acabar el programa, lo que suene se para, el
+  progreso vuelve a 0 y el volumen a 85.
 </p>
 
 <h2 id="seguir">Por dónde seguir</h2>

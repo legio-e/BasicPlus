@@ -35,6 +35,7 @@
 #include "bpvm_io.h"   /* V6/A1.1: el hilo io, tambien en el PC */
 #include "bpvm_fs.h"
 #include "bpvm_net.h"   /* H11 — registro del backend TCP del host */
+#include "bpvm_sonido.h"   /* V8/H4 (#708) — el sonido del PC */
 #include "bpvm_pack.h"  /* H3 — zona de packs simulada (--pack=) */
 #include "bpvm_entry.h" /* #344 — el RUN, escrito una vez */
 #include "bpvm_rtc.h"   /* V7/H10 #625 — el reloj de pared, el del PC */
@@ -351,6 +352,7 @@ static int main_real(int argc, char** argv) {
     if (basedir) bpvm_fs_set_basedir(basedir);   /* H19-F1: readFile/load relativos resuelven bajo la raíz */
     bpvm_fs_set_main_module_path(path);          /* H19: App.mainModulePath() = el .mod ejecutado */
     bpvm_net_register_host();  /* H11 — sockets TCP del SO (host) */
+    bpvm_sonido_register_host();   /* V8/H4 (#708) — el audio del sistema (o en silencio, con BPVM_SONIDO=mudo) */
 
     /* H3 — zona de packs simulada: la región RAM hace de flash interna del
      * micro; los --pack= quedan "grabados" en ella antes de arrancar la VM. */

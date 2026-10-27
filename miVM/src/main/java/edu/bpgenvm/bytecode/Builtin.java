@@ -296,7 +296,15 @@ public enum Builtin {
     STR_NACE("__strNace"),   // [283] __strNace(b: byte[]): string
     FROM_BYTES_I("__fromBytesI"),   // [284] __fromBytesI(b: byte[], ignorarError: boolean): string
     READ_FILE_I("__readFileI"),   // [285] __readFileI(path: string, ignorarError: boolean): string
-    FREAD_LINE_I("__freadLineI");   // [286] __freadLineI(st: byte[], ignorarError: boolean): string
+    FREAD_LINE_I("__freadLineI"),   // [286] __freadLineI(st: byte[], ignorarError: boolean): string
+    SOUND_PLAY("__soundPlay"),   // [287] __soundPlay(path: string)
+    SOUND_STOP("__soundStop"),   // [288] __soundStop()
+    SOUND_IS_PLAYING("__soundIsPlaying"),   // [289] __soundIsPlaying(): boolean
+    SOUND_SET_VOLUME("__soundSetVolume"),   // [290] __soundSetVolume(v: integer)
+    SOUND_GET_VOLUME("__soundGetVolume"),   // [291] __soundGetVolume(): integer
+    SOUND_IS_AVAILABLE("__soundIsAvailable"),   // [292] __soundIsAvailable(): boolean
+    SOUND_GET_POSITION("__soundGetPosition"),   // [293] __soundGetPosition(): integer
+    SOUND_GET_LENGTH("__soundGetLength");   // [294] __soundGetLength(): integer
 
     public final String bpName;
     public final int id;

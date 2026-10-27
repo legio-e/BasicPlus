@@ -18,6 +18,7 @@
 #include "bpvm_pulse.h"
 #include "bpvm_neopixel.h"
 #include "bpvm_uart.h"
+#include "bpvm_sonido.h"  /* V8/H4 (#708): y el sonido que siga sonando */
 #include "bpvm_bus.h"     /* V7/H6.c G4.a1: y los buses del programa se sueltan */
 #include "bpvm_spi.h"
 #include "bpvm_i2c.h"
@@ -1877,6 +1878,7 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_pulse_fin_de_run();
     bpvm_neopixel_fin_de_run();
     bpvm_uart_fin_de_run();
+    bpvm_sonido_fin_de_run();       /* V8/H4 (#708): lo que suene se para (la tarea suelta el camino) y el volumen, a 85 */
     bpvm_gpio_estado_reset();       /* V7/H4 (#479): los pines vuelven a libres para el siguiente RUN; V7 #667: y al reset */
     bpvm_adc_fin_de_run();          /* V7 #659: y el ADC del stub, a cero (la rampa, el aviso de «sin backend») */
     bpvm_bus_fin_de_run(cerrar_bus);   /* V7/H6.c G4.a1: y los buses que sólo usaba el programa, se cierran */

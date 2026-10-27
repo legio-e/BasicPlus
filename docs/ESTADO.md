@@ -27,6 +27,20 @@
 
 ## Última sesión
 
+> **27-oct (noche)** — **El H4, el sonido, retomado: el PC, hecho** (Eduardo: *«Vamos a dejar las pendientes por
+> ahora que es un poco aburrido. Me gustaría retomar lo del sonido […] la reproducción de sonidos debería ser siempre
+> en paralelo al resto»*).
+> - **Lo decidido** (§E4, «27-oct»): el módulo `Sound`, siempre en paralelo y uno a la vez; lo común en la HAL BP, que da
+>   el error de una placa sin sonido (*«tendría que ser la HAL BP la que indicara el error»*); WAV sin MP3; en el PC
+>   suena (*«Que en el PC suene, si»*); en la P4, en la imagen, con la línea `audio` y `esp_codec_dev` del registro.
+> - **Lo hecho en el PC:** `Sound` con ocho funciones (el progreso, `getPosition`/`getLength`, lo pidió Eduardo a
+>   media obra), `bpvm_sonido.c` en la HAL BP, winmm y `javax.sound`, el volumen del PC 20 dB por debajo del de la P4
+>   (elegido de oído: *«la 3»*) y la red en silencio. Un fallo mío, cazado al probar el camino de verdad: tres builtins
+>   sin valor no dejaban el 0 que el compilador descarta, y la pila se descuadraba; arreglado y vigilado.
+> - **Las pruebas:** `SonidoParalelo` (31, en el corpus), el camino de verdad a volumen 0 en las dos VMs, la pila del
+>   despachador medida (igual que antes) y la Pico, la P4 y la Nucleo compilan. La red, VERDE en 13:11: paridad 167 en MOD9, en MOD8 y con dos workers (ya con `SonidoParalelo`); cápsula V6, 59; norma 9/9; sim 12/12; pruebas de C, 107/107; sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
+> - **Lo siguiente:** la P4 —su cintura (el ES8311), la línea `audio` del ENV, grabarla y escucharlo—.
+
 > **27-oct (tarde, después)** — **El H5 (los strings), CERRADO** (Eduardo: *«Una cosa, de H5 que falta?»*; y luego,
 > *«Si, cierra H5 y lo que falte como pendiente»*), como el H5 de V7: lo que quedaba, en fichas sueltas.
 > - **Las que ya había**, abiertas: `#715` y `#718` (el GC y la lista de huecos, sólo análisis), `#719` (la división

@@ -3040,6 +3040,7 @@ public class VirtualMachine {
         ficherosFinDeRun();   // V7/H3 (#491)
         java.util.Arrays.fill(pinEstado, 0);   // V7/H4 (#479): los pines vuelven a libres
         busFinDeRun();                          // V7/H6.c G4.a1: y los buses del programa se sueltan
+        Sonido.finDeRun();                      // V8/H4 (#708): y lo que suene se para (el volumen, a 85)
         System.out.println("=== FIN DE LA EJECUCIÓN ===");
     }
 
@@ -5955,6 +5956,39 @@ public class VirtualMachine {
                 pushTc(tc, 0);
                 break;
             }
+            // V8/H4 (27-oct, #708) — EL SONIDO (Sound.bp), siempre en paralelo al programa: Sonido.java, el espejo de la
+            // HAL BP de la VM-C (bpvm_sonido.c), con los mismos textos. La ruta se resuelve como readFileBytes.
+            case SOUND_PLAY: {
+                String path = readVmString(popTcRef(tc));
+                byte[] data = packResource(path);   // #310 — el pack en ejecución va primero
+                try {
+                    if (data == null && esPackAjeno(path)) throw new java.io.IOException(path);   // #520 (a)
+                    if (data == null) data = java.nio.file.Files.readAllBytes(sandboxPath(tc, path));
+                } catch (java.io.IOException e) {
+                    data = null;
+                }
+                StringBuilder det = new StringBuilder();
+                int r = (data == null) ? Sonido.NO_ABRE : Sonido.tocar(data, path, det);
+                if (r == Sonido.NO_ABRE)   throwBpRuntimeError(tc, "Sound.play('" + path + "'): no se pudo abrir");
+                if (r == Sonido.NO_ES_WAV) throwBpRuntimeError(tc, "Sound.play('" + path + "'): no es un WAV");
+                if (r == Sonido.FORMATO)   throwBpRuntimeError(tc, "Sound.play('" + path + "'): formato no admitido (" + det
+                        + "); se admite PCM de 8 o 16 bits, mono o estereo, de 8000 a 48000 Hz");
+                pushTc(tc, 0);   // void: el valor que el compilador descarta tras la llamada
+                break;
+            }
+            case SOUND_STOP:         Sonido.parar(); pushTc(tc, 0); break;   // void
+            case SOUND_IS_PLAYING:   pushTc(tc, Sonido.sonando() ? 1 : 0); break;
+            case SOUND_SET_VOLUME: {
+                int v = popTc(tc);
+                if (v < 0 || v > 100) throwBpRuntimeError(tc, "Sound.setVolume: el volumen va de 0 a 100 (es " + v + ")");
+                Sonido.ponerVolumen(v);
+                pushTc(tc, 0);   // void
+                break;
+            }
+            case SOUND_GET_VOLUME:   pushTc(tc, Sonido.volumen()); break;
+            case SOUND_IS_AVAILABLE: pushTc(tc, Sonido.hay() ? 1 : 0); break;
+            case SOUND_GET_POSITION: pushTc(tc, Sonido.posicion()); break;   // el progreso: bytes del sonido entregados…
+            case SOUND_GET_LENGTH:   pushTc(tc, Sonido.largo()); break;      // …y los que tiene
             case FILE_EXISTS: {
                 // V7/H10 #630 (2-oct): SÓLO ficheros (Eduardo: «fileExists solo para ficheros»; para una carpeta,
                 // IO.dirExists). Era Files.exists, que dice que sí a una carpeta, y la VM-C —littlefs y el PC— decía que

@@ -68,6 +68,7 @@ idf_component_register(
         "../../src/bpvm_bios_fs.c"     # V5/H2: sus ranuras de ficheros (PORTABLE) — faltaba de alta
         "../../src/bpvm_bios_hal.c"    # V7/H6: sus ranuras de HARDWARE (PORTABLE: las fachadas de la VM)
         "../../src/bpvm_bus.c"         # V7/H6.c G4.a1: los buses SPI/I2C, compartidos (la HAL BP)
+        "../../src/bpvm_sonido.c"      # V8/H4 (#708): el sonido, lo común de la HAL BP
         "../../src/bpvm_npack.c"       # V5/I: escalera de validacion del pack nativo
         "../../src/bpvm_npack_carga.c"  # V7/H7 (Boot 2, fase 2): el cargador comun
         "../../src/bpvm_boot2.c"        # V7/H7 (Boot 2, fase 4): el arranque comun

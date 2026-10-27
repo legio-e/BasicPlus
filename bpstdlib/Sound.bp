@@ -1,0 +1,94 @@
+// ============================================================
+// Sound.bp — V8/H4 (27-oct, #708): EL SONIDO. Un .wav por el altavoz,
+// SIEMPRE EN PARALELO al programa.
+//
+// Eduardo: «la reproducción de sonidos debería ser siempre en paralelo al
+// resto. Por ejemplo se puede utilizar para dar un aviso pero el programa
+// debería seguir.»
+//
+//   import Sound
+//   Sound.play("/sd/aviso.wav")   // vuelve en seguida: suena mientras el programa sigue
+//   ...
+//   if Sound.isPlaying() then
+//     Sound.stop()
+//   endif
+//
+// UNO A LA VEZ: un play mientras suena otro corta el anterior (manda el aviso
+// más reciente).
+//
+// LOS ERRORES. Lo que se sabe al llamar a play —el fichero no se puede abrir, no
+// es un WAV, un formato que no se admite, una placa sin sonido— es una
+// excepción en el momento, como readFile. Lo que pase después (la SD falla a
+// media canción) para el sonido y queda en el log: no se puede lanzar dentro
+// del programa desde la tarea que toca.
+//
+// LA PLACA. Lo común —leer el WAV, la tarea, las órdenes— está en la HAL BP, y
+// debajo, la parte de cada familia si la tiene: en la P4, el códec ES8311 por
+// I2S, con su línea `audio` en el ENV; en el PC, el audio del sistema. En una
+// placa sin sonido, es la HAL BP la que lo dice (Eduardo: «Si la HAL del SO no
+// lo soporta tendría que ser la HAL BP la que indicara el error»), con el
+// motivo; isAvailable() le hace la misma pregunta sin tocar nada.
+//
+// LOS FORMATOS: WAV PCM de 8 o 16 bits, mono o estéreo, de 8000 a 48000 Hz,
+// a la frecuencia del fichero. Sin MP3.
+//
+// EL AHORRO DE ENERGÍA: el códec y el amplificador, encendidos sólo mientras
+// suena. Al acabar el programa, lo que suene se para y el volumen vuelve a 85.
+// ============================================================
+module Sound
+  import Core
+
+  // Toca el .wav de `path` y VUELVE EN SEGUIDA. Se resuelve como readFile.
+  public function play(path: string)
+    inline CALL_BUILTIN 287
+  end play
+
+  // Para lo que suene (si no suena nada, no hace nada).
+  public function stop()
+    inline CALL_BUILTIN 288
+  end stop
+
+  // true desde play hasta que acaba (o hasta stop).
+  public function isPlaying(): boolean
+    inline CALL_BUILTIN 289
+  end isPlaying
+
+  // De 0 (nada) a 100; 85 por defecto (Eduardo, 19-oct: «a 85 sería un volumen
+  // 'normal'»). Fuera de 0..100, un error. Vale también mientras suena. La
+  // misma escala en todas partes (de -50 a 0 dB, medio dB por paso), y en el PC
+  // 20 dB más baja que en la P4, para que el 85 suene parecido (Eduardo la
+  // eligió de oído el 27-oct: allí pasa por un altavoz pequeño, aquí por el
+  // audio del sistema).
+  public function setVolume(v: integer)
+    inline CALL_BUILTIN 290
+  end setVolume
+
+  public function getVolume(): integer
+    inline CALL_BUILTIN 291
+  end getVolume
+
+  // ¿Tiene sonido esta placa? Lo contesta la HAL BP, sin tocar nada.
+  public function isAvailable(): boolean
+    inline CALL_BUILTIN 292
+  end isAvailable
+
+  // EL PROGRESO (Eduardo, 27-oct: «Haría falta una función para consultar el
+  // progreso»), del último play: por dónde va la lectura y cuánto tiene, en
+  // bytes del SONIDO del fichero —sin la cabecera del WAV—, así que el tanto por
+  // ciento da justo de 0 a 100 (en long: un WAV de más de 21 MB por 100 ya no
+  // cabe en un integer):
+  //
+  //   var pct: integer := integer(long(Sound.getPosition()) * 100 / Sound.getLength())
+  //
+  // La posición avanza a trozos de unos 50 ms, a medida que la tarea se los da
+  // al altavoz; al acabar el fichero vale lo mismo que la longitud, y tras stop
+  // se queda donde paró. Sin ningún play, las dos valen 0.
+  public function getPosition(): integer
+    inline CALL_BUILTIN 293
+  end getPosition
+
+  public function getLength(): integer
+    inline CALL_BUILTIN 294
+  end getLength
+
+end Sound

@@ -1,0 +1,237 @@
+// SonidoParalelo.bp — V8/H4 (27-oct, #708): EL SONIDO, siempre en paralelo al programa.
+//
+// Eduardo: «la reproducción de sonidos debería ser siempre en paralelo al resto. Por ejemplo se puede utilizar para dar
+// un aviso pero el programa debería seguir.» Y el progreso: «Haría falta una función para consultar el progreso».
+//
+// Fabrica sus WAV (la cabecera escrita a mano: RIFF, WAVE, `fmt ` y `data`) y prueba en las dos VMs: que play vuelve
+// en seguida y suena mientras el programa sigue; que acaba solo, con la posición igual a la longitud; stop; un play que
+// corta al anterior; el progreso a medias; el volumen; los trozos que no son `fmt ` ni `data`, y el relleno de un trozo
+// impar; un fichero más corto que lo que dice su cabecera; y los errores, con sus textos. En la red corre en silencio
+// (BPVM_SONIDO=mudo: la misma tarea, al mismo ritmo); sin eso, en el PC suena. Lo que tiene que salir, escrito a mano:
+// una línea FALLO pone la red en rojo.
+module SonidoParalelo
+  import Core
+  import IO
+  import Sound
+
+  var buenas: integer := 0
+  var malas: integer := 0
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      buenas += 1
+      print "ok " + que + ": " + obtenido
+    else
+      malas += 1
+      print "FALLO " + que + ": [" + obtenido + "], se esperaba [" + esperado + "]"
+    endif
+  end mira
+
+  function siono(b: boolean): string
+    if b then
+      return "si"
+    endif
+    return "no"
+  end siono
+
+  // ── Los WAV, a mano ──
+
+  function pon16(b: byte[], o: integer, v: integer)
+    b[o] := byte(v mod 256)
+    b[o + 1] := byte((v / 256) mod 256)
+  end pon16
+
+  function pon32(b: byte[], o: integer, v: integer)
+    pon16(b, o, v mod 65536)
+    pon16(b, o + 2, v / 65536)
+  end pon32
+
+  function marca(b: byte[], o: integer, s: string)
+    var i: integer := 0
+    while i < 4 do
+      b[o + i] := byte(charCodeAt(s, i))
+      i += 1
+    endwh
+  end marca
+
+  // un WAV de 44 bytes de cabecera: `dice` es lo que pone su trozo `data`, `lleva` los bytes de sonido que de verdad
+  // trae (una onda cuadrada, por si alguien lo escucha)
+  function wav(formato: integer, canales: integer, hz: integer, bits: integer, dice: integer, lleva: integer): byte[]
+    var b: byte[] := newByteArray(44 + lleva)
+    var i: integer := 0
+    marca(b, 0, "RIFF")
+    pon32(b, 4, 36 + lleva)
+    marca(b, 8, "WAVE")
+    marca(b, 12, "fmt ")
+    pon32(b, 16, 16)
+    pon16(b, 20, formato)
+    pon16(b, 22, canales)
+    pon32(b, 24, hz)
+    pon32(b, 28, hz * canales * bits / 8)
+    pon16(b, 32, canales * bits / 8)
+    pon16(b, 34, bits)
+    marca(b, 36, "data")
+    pon32(b, 40, dice)
+    while i < lleva do
+      if (i / 40) mod 2 == 0 then
+        b[44 + i] := byte(64)
+      else
+        b[44 + i] := byte(192)
+      endif
+      i += 1
+    endwh
+    return b
+  end wav
+
+  // RIFF, WAVE, un trozo LIST de 3 bytes (impar: lleva un byte de relleno), `fmt ` y `data`
+  function conLista(): byte[]
+    var s: byte[] := wav(1, 1, 8000, 16, 800, 800)
+    var b: byte[] := newByteArray(44 + 12 + 800)
+    var i: integer := 0
+    marca(b, 0, "RIFF")
+    pon32(b, 4, 4 + 12 + 24 + 8 + 800)
+    marca(b, 8, "WAVE")
+    marca(b, 12, "LIST")
+    pon32(b, 16, 3)
+    b[20] := byte(1)
+    b[21] := byte(2)
+    b[22] := byte(3)
+    b[23] := byte(0)   // el relleno
+    while i < 24 + 8 + 800 do   // el `fmt ` y el `data` del otro, tal cual
+      b[24 + i] := s[12 + i]
+      i += 1
+    endwh
+    return b
+  end conLista
+
+  // espera a que acabe, como mucho `ms`
+  function espera(ms: integer): boolean
+    var t: integer := 0
+    while Sound.isPlaying() and t < ms do
+      sleep(10)
+      t += 10
+    endwh
+    return not Sound.isPlaying()
+  end espera
+
+  function error(que: string, path: string, esperado: string)
+    try
+      Sound.play(path)
+      Sound.stop()
+      mira(que, "no lanzó", esperado)
+    catch e: RuntimeError
+      mira(que, e.msg, esperado)
+    endtry
+  end error
+
+  function volumenMalo(v: integer)
+    try
+      Sound.setVolume(v)
+      mira("setVolume(" + intToString(v) + ")", "no lanzó", "")
+    catch e: RuntimeError
+      mira("setVolume(" + intToString(v) + ")", e.msg, "Sound.setVolume: el volumen va de 0 a 100 (es " + intToString(v) + ")")
+    endtry
+  end volumenMalo
+
+  function Main()
+    writeFileBytes("son16.wav", wav(1, 1, 8000, 16, 4000, 4000))      // 0,25 s
+    writeFileBytes("son8e.wav", wav(1, 2, 8000, 8, 1600, 1600))       // 0,1 s, estéreo de 8 bits
+    writeFileBytes("largo.wav", wav(1, 1, 8000, 16, 32000, 32000))    // 2 s
+    writeFileBytes("corto.wav", wav(1, 1, 8000, 16, 4000, 1000))      // dice 4000, trae 1000
+    writeFileBytes("lista.wav", conLista())
+    writeFileBytes("s24.wav", wav(1, 1, 8000, 24, 300, 300))
+    writeFileBytes("float.wav", wav(3, 1, 8000, 32, 400, 400))
+    writeFileBytes("tres.wav", wav(1, 3, 8000, 16, 600, 600))
+    writeFileBytes("hz96.wav", wav(1, 1, 96000, 16, 400, 400))
+    writeFileBytes("nowav.txt", toBytes("hola, no soy un WAV"))
+
+    // lo de la placa y el volumen por defecto
+    mira("isAvailable", siono(Sound.isAvailable()), "si")
+    mira("getVolume por defecto", intToString(Sound.getVolume()), "85")
+    mira("sin ningún play", intToString(Sound.getPosition()) + "/" + intToString(Sound.getLength()), "0/0")
+
+    // 1 — vuelve en seguida y suena mientras el programa sigue; acaba solo, con la posición igual a la longitud
+    Sound.play("son16.wav")
+    mira("1 play vuelve y suena", siono(Sound.isPlaying()), "si")
+    mira("1 la longitud", intToString(Sound.getLength()), "4000")
+    mira("1 acaba solo", siono(espera(3000)), "si")
+    mira("1 al acabar, la posición", intToString(Sound.getPosition()) + "/" + intToString(Sound.getLength()), "4000/4000")
+
+    // 2 — stop
+    Sound.play("largo.wav")
+    Sound.stop()
+    mira("2 stop", siono(Sound.isPlaying()), "no")
+    mira("2 tras stop, la posición no pasa de la longitud", siono(Sound.getPosition() <= Sound.getLength()), "si")
+
+    // 3 — el progreso a medias, de 0 a 100
+    Sound.play("largo.wav")
+    var t: integer := 0
+    while Sound.getPosition() == 0 and t < 2000 do
+      sleep(10)
+      t += 10
+    endwh
+    var pct: integer := integer(long(Sound.getPosition()) * 100 / Sound.getLength())
+    mira("3 a medias", siono(pct > 0 and pct < 100 and Sound.isPlaying()), "si")
+    Sound.stop()
+
+    // 4 — un play que corta al anterior: manda el nuevo
+    Sound.play("largo.wav")
+    Sound.play("son8e.wav")
+    mira("4 el nuevo suena", siono(Sound.isPlaying()), "si")
+    mira("4 el nuevo, su longitud", intToString(Sound.getLength()), "1600")
+    mira("4 acaba el nuevo", siono(espera(3000)), "si")
+    mira("4 al acabar, la posición", intToString(Sound.getPosition()), "1600")
+
+    // 5 — el volumen
+    Sound.setVolume(40)
+    mira("5 setVolume(40)", intToString(Sound.getVolume()), "40")
+    volumenMalo(101)
+    volumenMalo(-1)
+    mira("5 tras los errores, sigue", intToString(Sound.getVolume()), "40")
+
+    // 6 — un trozo LIST (impar, con relleno) antes del `fmt `; y un fichero más corto que lo que dice
+    Sound.play("lista.wav")
+    mira("6 con LIST, la longitud", intToString(Sound.getLength()), "800")
+    mira("6 con LIST, acaba", siono(espera(3000)), "si")
+    Sound.play("corto.wav")
+    mira("6 corto: lo que trae", intToString(Sound.getLength()), "1000")
+    mira("6 corto, acaba", siono(espera(3000)), "si")
+
+    // 7 — los errores
+    error("7 no existe", "noexiste.wav", "Sound.play('noexiste.wav'): no se pudo abrir")
+    error("7 no es un WAV", "nowav.txt", "Sound.play('nowav.txt'): no es un WAV")
+    error("7 24 bits", "s24.wav", "Sound.play('s24.wav'): formato no admitido (24 bits); se admite PCM de 8 o 16 bits, mono o estereo, de 8000 a 48000 Hz")
+    error("7 coma flotante", "float.wav", "Sound.play('float.wav'): formato no admitido (formato 3, no es PCM); se admite PCM de 8 o 16 bits, mono o estereo, de 8000 a 48000 Hz")
+    error("7 tres canales", "tres.wav", "Sound.play('tres.wav'): formato no admitido (3 canales); se admite PCM de 8 o 16 bits, mono o estereo, de 8000 a 48000 Hz")
+    error("7 96 kHz", "hz96.wav", "Sound.play('hz96.wav'): formato no admitido (96000 Hz); se admite PCM de 8 o 16 bits, mono o estereo, de 8000 a 48000 Hz")
+    mira("7 tras un error, no suena", siono(Sound.isPlaying()), "no")
+
+    // 8 — la pila. play, stop y setVolume no devuelven nada, pero dejan el 0 que el compilador descarta tras una llamada
+    // (como todos los builtins sin valor); sin él, cada llamada descuadraba la pila 4 bytes y una variable local salía
+    // con basura (pasó el 27-oct: un 260 donde se había puesto un 9, y un contador que no avanzaba).
+    Sound.play("son8e.wav")
+    Sound.setVolume(50)
+    Sound.stop()
+    var guarda: integer := 1234
+    mira("8 una variable tras play, setVolume y stop", intToString(guarda), "1234")
+    var k: integer := 0
+    while k < 3 do
+      Sound.stop()
+      Sound.setVolume(60)
+      k += 1
+    endwh
+    mira("8 un contador con stop y setVolume en el bucle", intToString(k), "3")
+
+    IO.removeFile("son16.wav")
+    IO.removeFile("son8e.wav")
+    IO.removeFile("largo.wav")
+    IO.removeFile("corto.wav")
+    IO.removeFile("lista.wav")
+    IO.removeFile("s24.wav")
+    IO.removeFile("float.wav")
+    IO.removeFile("tres.wav")
+    IO.removeFile("hz96.wav")
+    IO.removeFile("nowav.txt")
+    print "buenas " + intToString(buenas) + ", malas " + intToString(malas)
+  end Main
+end SonidoParalelo

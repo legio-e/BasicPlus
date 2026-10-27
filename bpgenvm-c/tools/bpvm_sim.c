@@ -60,6 +60,7 @@
 #include "bpvm_boot2.h"   /* V7/H7 (Boot 2, fase 4): las claves del reparto, las del arranque comun */
 #include "bpvm_fs.h"
 #include "bpvm_net.h"
+#include "bpvm_sonido.h"     /* V8/H4 (#708): el sonido del PC */
 #include "bpvm_pack.h"
 #include "bpvm_dbg_wire.h"   /* #326: banco de pruebas del depurador en el micro simulado */
 #include "bpvm_rtc.h"
@@ -1171,6 +1172,7 @@ int main(int argc, char** argv) {
     bpvm_machine_set_env(sim_env_get);
 
     bpvm_net_register_host();   /* sockets TCP del SO, como en la VM-C host */
+    bpvm_sonido_register_host();   /* V8/H4 (#708): el audio del PC, como en la VM-C host */
 
     /* H10 — el panel simulado. Se fija ANTES de que ningún programa cree el
      * screen; a partir de ahí Gui.Screen() reporta este tamaño y el layout se

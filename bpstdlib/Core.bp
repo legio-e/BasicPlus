@@ -1713,6 +1713,36 @@ module Core
   function __freadLineI(st: byte[], ignorarError: boolean): string   // IO.TextFile.readLine(ignorarError), en nativo
     inline CALL_BUILTIN 286
   end __freadLineI
+  // V8/H4 (27-oct, #708) — EL SONIDO, para el módulo Sound: un .wav, SIEMPRE EN PARALELO al programa (Eduardo: «la
+  // reproducción de sonidos debería ser siempre en paralelo al resto»). Lo común —leer el WAV, la tarea que lo toca, las
+  // órdenes— está en la HAL BP, que da el error de una placa sin sonido; debajo, la parte de cada familia. Sin `public`:
+  // la interfaz de Core no cambia; los públicos, en Sound.bp. V8_IDEAS §E4, «27-oct».
+  function __soundPlay(path: string)
+    inline CALL_BUILTIN 287
+  end __soundPlay
+  function __soundStop()
+    inline CALL_BUILTIN 288
+  end __soundStop
+  function __soundIsPlaying(): boolean
+    inline CALL_BUILTIN 289
+  end __soundIsPlaying
+  function __soundSetVolume(v: integer)
+    inline CALL_BUILTIN 290
+  end __soundSetVolume
+  function __soundGetVolume(): integer
+    inline CALL_BUILTIN 291
+  end __soundGetVolume
+  function __soundIsAvailable(): boolean
+    inline CALL_BUILTIN 292
+  end __soundIsAvailable
+  // El progreso (Eduardo: «Haría falta una función para consultar el progreso»): por dónde va y cuánto tiene, en bytes
+  // del sonido del fichero (sin la cabecera), los del último play.
+  function __soundGetPosition(): integer
+    inline CALL_BUILTIN 293
+  end __soundGetPosition
+  function __soundGetLength(): integer
+    inline CALL_BUILTIN 294
+  end __soundGetLength
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

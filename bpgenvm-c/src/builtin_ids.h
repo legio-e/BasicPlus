@@ -292,7 +292,15 @@ enum {
     BUILTIN_FROM_BYTES_I                 = 284,   /* __fromBytesI(b: byte[], ignorarError: boolean): string */
     BUILTIN_READ_FILE_I                  = 285,   /* __readFileI(path: string, ignorarError: boolean): string */
     BUILTIN_FREAD_LINE_I                 = 286,   /* __freadLineI(st: byte[], ignorarError: boolean): string */
-    BUILTIN__CUANTOS = 287
+    BUILTIN_SOUND_PLAY                   = 287,   /* __soundPlay(path: string) */
+    BUILTIN_SOUND_STOP                   = 288,   /* __soundStop() */
+    BUILTIN_SOUND_IS_PLAYING             = 289,   /* __soundIsPlaying(): boolean */
+    BUILTIN_SOUND_SET_VOLUME             = 290,   /* __soundSetVolume(v: integer) */
+    BUILTIN_SOUND_GET_VOLUME             = 291,   /* __soundGetVolume(): integer */
+    BUILTIN_SOUND_IS_AVAILABLE           = 292,   /* __soundIsAvailable(): boolean */
+    BUILTIN_SOUND_GET_POSITION           = 293,   /* __soundGetPosition(): integer */
+    BUILTIN_SOUND_GET_LENGTH             = 294,   /* __soundGetLength(): integer */
+    BUILTIN__CUANTOS = 295
 };
 
 #endif

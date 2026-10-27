@@ -1751,6 +1751,67 @@ almacén local que dejó EIM, sin bajar nada. En la P4 se grabó sólo la app.
 
 **Lo siguiente**, a elegir por Eduardo: el MP3 encima (minimp3), o el módulo de BasicPlus con sus decisiones.
 
+**27-oct: el módulo de BasicPlus, decidido** (Eduardo: *«Me gustaría retomar lo del sonido […] Lo que faltaría sería
+integrarlo con la VM. Yo creo que la reproducción de sonidos debería ser siempre en paralelo al resto. Por ejemplo se
+puede utilizar para dar un aviso pero el programa debería seguir. A parte de eso no creo que haga falta nada mas con
+respecto al sonido.»*). Así queda:
+- **El módulo `Sound`:** `play(ruta)`, `stop()`, `isPlaying()`, `setVolume(v)`/`getVolume()` e `isAvailable()`.
+  ```
+  Sound.play("/sd/aviso.wav")   // vuelve en seguida: suena mientras el programa sigue
+  ```
+- **Siempre en paralelo:** `play` abre el fichero, lee la cabecera del WAV y vuelve; lo toca una tarea propia, que lee
+  el fichero a trozos (el sistema de ficheros ya tiene su cerrojo para varias tareas) y se lo da al códec. La VM no
+  espera nunca. **Un sonido a la vez:** un `play` mientras suena otro corta el anterior.
+- **Los errores:** lo que se sabe al llamar (no existe, no es un WAV, un formato que no se admite) es una excepción en
+  el momento, como `readFile`; lo de después (la SD falla a media canción) para el sonido y queda en el log.
+- **La HAL BP da el error de una placa sin sonido** (Eduardo: *«Si tenemos una interfaz HAL BP común, cuando se
+  reproduce un sonido llama a la interfaz. Si la HAL del SO no lo soporta tendría que ser la HAL BP la que indicara el
+  error.»*): lo común (el WAV, la tarea, las órdenes) en la HAL BP, y debajo, la parte de cada familia si la tiene; si
+  no la hay, o el ENV no tiene la línea `audio`, o el códec no contesta, la HAL BP da el motivo, el mismo texto en
+  todas las placas (como `bpvm_sd_placa_sin_sd` con la SD). `isAvailable()` le hace la misma pregunta sin tocar nada.
+- **Los formatos:** WAV PCM de 16 bits (y de 8), mono o estéreo, a la frecuencia del fichero. El MP3, fuera.
+- **El ahorro de energía:** el códec y el amplificador, encendidos sólo mientras suena. **El volumen:** de 0 a 100, 85
+  por defecto.
+- **En la P4:** en la imagen, no en un pack; la línea `audio` del ENV dice el códec y los pines; el I2C del códec es el
+  del táctil, por el árbitro, como el táctil. `esp_codec_dev` 1.5.10 (sólo depende del IDF), declarada como los
+  componentes de la pantalla: del registro, con la versión fija (Eduardo: *«si tienes permiso»*).
+- **En el PC suena** (Eduardo: *«Que en el PC suene, si»*): la VM-C con el audio de Windows (winmm) y la VM-Java con
+  `javax.sound`, que vienen con el sistema. Las pruebas de la red, siempre en silencio.
+- **Por la cascada:** primero el PC (el módulo, las dos VMs, la tarea y las pruebas); después la P4 (el ES8311, la línea
+  `audio`, grabarla y escucharlo).
+
+**27-oct, el PC: HECHO** (Eduardo: *«OK, adelante»*):
+- **El módulo `Sound`** (`bpstdlib/Sound.bp`, en el `Stdlib.pack`): `play`, `stop`, `isPlaying`, `setVolume`/`getVolume`,
+  `isAvailable` y, a petición de Eduardo mientras se hacía (*«Haría falta una función para consultar el progreso»*),
+  **`getPosition` y `getLength`**: bytes del sonido del último `play`, sin la cabecera, así que el tanto por ciento da
+  justo de 0 a 100 (en `long`: un WAV de más de 21 MB por 100 no cabe en un `integer`). Los builtins 287–294, sin
+  `public` en `Core` (su interfaz no cambia: `Core.mod` sale idéntico y la stdlib embebida de las imágenes, también).
+- **Lo común, en la HAL BP** (`bpvm_sonido.c`): la cabecera del WAV (RIFF, `fmt `, `data`, los trozos que no son esos
+  y el relleno de los impares), la tarea —creada al primer `play`: en una placa sin sonido no nace— que lee a trozos
+  de unos 50 ms con `bpvm_fs_read_at` (por ruta y desplazamiento: no tiene el fichero abierto), la generación (uno a la
+  vez), el progreso y el fin de RUN (para, el progreso a 0, el volumen a 85). Una placa sin la parte del sonido da el
+  error con su motivo, el mismo texto en todas. En las seis listas de las placas (el STM32, solo).
+- **El PC suena** (`sonido_host.c`): winmm en la VM-C, cuatro búferes en cola; `javax.sound` en la VM-Java
+  (`Sonido.java`, el espejo: la misma cabecera, los mismos textos). Con `BPVM_SONIDO=mudo`, en silencio y al mismo
+  ritmo (contra el reloj, no a base de dormir trozos): **la red corre así** (`compat.sh` lo exporta).
+- **El volumen del PC, 20 dB por debajo del de la P4** (Eduardo: *«el volumen en el PC y en la P4 no se parecen. Si
+  reproduces un sonido en el PC al 85% vas a dejar sordo a más de uno»*): la misma escala de 0 a 100 (de -50 a 0 dB),
+  y la cintura del PC la desplaza. Elegido de oído, como el 85 de la P4: el canon a 85 con 40, 30 y 20 dB menos, dos
+  vueltas, y Eduardo: *«la 3»*.
+- **Un fallo mío, cazado al probar el camino de verdad:** `play`, `stop` y `setVolume` no dejaban el 0 que el
+  compilador descarta tras una llamada (todos los builtins sin valor lo dejan), así que cada llamada descuadraba la
+  pila 4 bytes: una variable local salía con basura (un 260 donde se puso un 9) y un contador no avanzaba. Arreglado en
+  las dos VMs, y la prueba lo vigila ahora (con el 0 quitado de `stop`, «FALLO 8 … [364], se esperaba [1234]»).
+- **La pila del despachador de builtins, medida** (`-fstack-usage` con la orden de la Pico): el `case` de `play` la
+  subía de 2128 a 2232 B —lo pagaría cada builtin—; con un solo búfer para la ruta resuelta y, después, el texto del
+  error, vuelve a 2128.
+- **Las pruebas:** `SonidoParalelo` en el corpus (31 comprobaciones escritas a mano: vuelve en seguida, acaba solo con
+  la posición igual a la longitud, `stop`, un `play` que corta al anterior, el progreso a medias, el volumen, un trozo
+  LIST, un fichero más corto que su cabecera, los errores con sus textos y la pila); el camino de verdad del PC (winmm y
+  `javax.sound`) a volumen 0, en las dos VMs; la Pico, la P4 y la Nucleo compilan con el fichero nuevo. La red, VERDE en 13:11: paridad 167 en MOD9, en MOD8 y con dos workers (ya con `SonidoParalelo`); cápsula V6, 59; norma 9/9; sim 12/12; pruebas de C, 107/107; sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
+- **Lo siguiente, la P4:** su cintura (el ES8311 por I2S con `esp_codec_dev` 1.5.10 del registro, el I2C del táctil por
+  el árbitro, el amplificador en el GPIO 53) y la línea `audio` del ENV; grabarla y escucharlo.
+
 ---
 
 ## E5 · Los strings: el censo de sus operaciones, el invariante y la PSRAM (H5; Eduardo, 21-oct)

@@ -609,6 +609,30 @@ enlace: `TextFile.readLine()` y `readStr(n)`, y `Net.Tcp.recvStr`, también son 
 `fromBytes(b)` y `fromBytes(b, true)`. La prueba: `bpgenvm-c/samples/Utf8Descodifica.bp` (la red de paridad), con lo
 que tiene que salir escrito a mano.
 
+## 287–294 — el sonido  *(V8/H4, `#708`, 27-oct)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
+| 287 | `__soundPlay` (y en `Sound`) | `(path: string)` | `Sound.play(path)` |
+| 288 | `__soundStop` | `()` | `Sound.stop()` |
+| 289 | `__soundIsPlaying` | `(): boolean` | `Sound.isPlaying()` |
+| 290 | `__soundSetVolume` | `(v: integer)` | `Sound.setVolume(v)` |
+| 291 | `__soundGetVolume` | `(): integer` | `Sound.getVolume()` |
+| 292 | `__soundIsAvailable` | `(): boolean` | `Sound.isAvailable()` |
+| 293 | `__soundGetPosition` | `(): integer` | `Sound.getPosition()` |
+| 294 | `__soundGetLength` | `(): integer` | `Sound.getLength()` |
+
+Un `.wav` SIEMPRE EN PARALELO al programa (Eduardo, 27-oct: «la reproducción de sonidos debería ser siempre en paralelo
+al resto»): `play` lee la cabecera y vuelve; lo toca una tarea propia, a trozos de unos 50 ms. Uno a la vez: un `play`
+con otro sonando lo corta. Lo común está en la HAL BP (`bpvm_sonido.c`), que da el error de una placa sin sonido con su
+motivo; debajo, la parte de cada familia (el PC: `sonido_host.c`, winmm o en silencio con `BPVM_SONIDO=mudo`). En la
+VM-Java, `Sonido.java` (`javax.sound`). Los textos de los errores, iguales en las dos: `Sound.play('<ruta>'): no se pudo
+abrir`, `… no es un WAV`, `… formato no admitido (<lo que trae>); se admite PCM de 8 o 16 bits, mono o estereo, de 8000
+a 48000 Hz`, `Sound.play: <el motivo de la placa>` y `Sound.setVolume: el volumen va de 0 a 100 (es <v>)`. El progreso
+(293 y 294), en bytes del sonido sin la cabecera. Los sin valor (287, 288 y 290) dejan el 0 que el compilador descarta
+tras una llamada, como todos. Las no públicas viven en `Core` sin `public` (su interfaz no cambia); las públicas, en
+`Sound`. La prueba: `bpgenvm-c/samples/SonidoParalelo.bp` (la red de paridad, en silencio).
+
 ---
 
 ## Los que no tienen fila aquí  *(el mapa por rangos)*
