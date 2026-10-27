@@ -50,8 +50,15 @@
 >   Queda pendiente para mas adelante hasta que encuentre una solución»*: el altavoz no entra en el conector de la
 >   C5). Lleva el mismo ES8311, sin MCLK y con el amplificador en el expansor CH32V003, que la pantalla escribe
 >   entero y no se puede leer: lo propuesto, el expansor con un solo dueño en la HAL BP (§E4, «27-oct, la C5»).
-> - **Lo siguiente:** el H4 espera a la C5 (al altavoz). En el próximo lote, el `Stdlib.pack` con `Sound` en las
->   demás placas.
+> - **Lo siguiente** (Eduardo, al cerrar la sesión: *«Lo dejamos aquí de momento. Cuando lo retomemos seguiremos con
+>   los pendientes»*): los pendientes de FICHAS (§ABIERTAS, bloque V8), en el orden que diga Eduardo: el IDE y el
+>   wire (`#693`–`#696`), `#709` (el `resetReason` tras un reinicio por USB), `#710` (la RAM interna con el IDF 6.1),
+>   `#723` (los streams, por decidir), `#728` (la interfaz del IDE para la IA), `#729` (la falsa alarma del ancla en
+>   la Metro) y los que dejó el H5 (`#715`, `#718`, `#721`, `#722`, `#730`–`#739`; `#719`, para más adelante). El H4
+>   espera a la C5 (al altavoz); el H2 y el H3, parados (el rumbo del 22-oct: primero los pendientes).
+> - **En el próximo lote de placas:** el `Stdlib.pack` con `Sound` y las imágenes con el sonido en las demás placas
+>   (la P4 ya los lleva), y el `SQLite.pack` de `#724` en la Metro y la P4. **El riesgo:** el `Stdlib.pack` nuevo
+>   va JUNTO con su imagen —una imagen de antes no tiene los builtins 287–294, y `Sound` fallaría al llamarlo—.
 
 > **27-oct (tarde, después)** — **El H5 (los strings), CERRADO** (Eduardo: *«Una cosa, de H5 que falta?»*; y luego,
 > *«Si, cierra H5 y lo que falte como pendiente»*), como el H5 de V7: lo que quedaba, en fichas sueltas.
