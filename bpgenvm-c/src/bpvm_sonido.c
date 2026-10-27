@@ -20,6 +20,7 @@
 #include "bpvm_sonido.h"
 #include "bpvm.h"
 #include "bpvm_alloc.h"
+#include "bpvm_env_linea.h"
 #include "bpvm_fs.h"
 #include "bpvm_platform.h"
 
@@ -88,6 +89,79 @@ void bpvm_sonido_sin_cintura(const char* motivo) {
 
 int bpvm_sonido_hay(void) { return s_cintura != NULL; }
 const char* bpvm_sonido_motivo(void) { return s_motivo; }
+
+/* ── La línea `audio` del ENV (bpvm_sonido.h): sólo texto, probada en el PC (make test-sonido) ──────────────────── */
+
+int bpvm_sonido_linea_parse(const char* valor, bpvm_sonido_linea_t* l, char* motivo, unsigned motivo_cap) {
+    static const struct { const char* clave; int campo; } tabla[] = {
+        { "i2c", 0 }, { "dir", 1 }, { "sda", 2 }, { "scl", 3 }, { "mclk", 4 }, { "bclk", 5 },
+        { "ws", 6 }, { "dout", 7 }, { "paalto", 8 }, { "pa", 9 }
+    };
+    const char* s = valor;
+    const char* falta;
+    unsigned k = 0;
+    if (motivo && motivo_cap) motivo[0] = '\0';
+    if (!l) return -1;
+    memset(l, 0, sizeof *l);
+    l->i2c = 0;
+    l->dir = 0x18;   /* la del ES8311 */
+    l->sda = l->scl = -1;
+    l->mclk = l->bclk = l->ws = l->dout = -1;
+    l->pa = -1;
+    l->pa_alto = 1;
+    if (!valor || !*valor) { bpvm_linea_di(motivo, motivo_cap, "la entrada 'audio' esta vacia", 0); return -1; }
+    while (*s == ' ' || *s == '\t') s++;
+    while (*s && *s != ',' && *s != ' ' && *s != ':' && k + 1 < sizeof l->codec) l->codec[k++] = *s++;
+    l->codec[k] = '\0';
+    if (k == 0 || *s == ':') {
+        bpvm_linea_di(motivo, motivo_cap, "a la entrada 'audio' le falta el codec, lo primero (es8311)", 0);
+        return -1;
+    }
+    while (*s) {
+        const char* v = 0;
+        int campo = -1, n = 0, digitos = 0, base = 10;
+        unsigned i;
+        while (*s == ' ' || *s == ',' || *s == '\t') s++;
+        if (!*s) break;
+        for (i = 0; i < sizeof tabla / sizeof tabla[0]; i++) {
+            v = bpvm_linea_tras_clave(s, tabla[i].clave);
+            if (v) { campo = tabla[i].campo; break; }
+        }
+        if (!v) {                        /* una clave desconocida: se salta entera */
+            while (*s && *s != ',') s++;
+            continue;
+        }
+        if (v[0] == '0' && (v[1] == 'x' || v[1] == 'X')) { base = 16; v += 2; }
+        for (;;) {
+            int d = (*v >= '0' && *v <= '9') ? *v - '0'
+                  : (base == 16 && *v >= 'a' && *v <= 'f') ? *v - 'a' + 10
+                  : (base == 16 && *v >= 'A' && *v <= 'F') ? *v - 'A' + 10 : -1;
+            if (d < 0) break;
+            n = n * base + d;
+            v++;
+            digitos++;
+        }
+        if (!digitos) { bpvm_linea_di(motivo, motivo_cap, "valor no numerico en 'audio', cerca de ", s); return -1; }
+        switch (campo) {
+        case 0: l->i2c  = n; break;
+        case 1: l->dir  = n; break;
+        case 2: l->sda  = n; break;
+        case 3: l->scl  = n; break;
+        case 4: l->mclk = n; break;
+        case 5: l->bclk = n; break;
+        case 6: l->ws   = n; break;
+        case 7: l->dout = n; break;
+        case 8: l->pa_alto = n ? 1 : 0; break;
+        case 9: l->pa   = n; break;
+        default: break;
+        }
+        s = v;
+    }
+    /* Como la `sd`: decir CUÁL falta. */
+    falta = (l->mclk < 0) ? "mclk" : (l->bclk < 0) ? "bclk" : (l->ws < 0) ? "ws" : (l->dout < 0) ? "dout" : 0;
+    if (falta) { bpvm_linea_di(motivo, motivo_cap, "a la entrada 'audio' le falta ", falta); return -1; }
+    return 0;
+}
 
 /* ── La cabecera del WAV ──────────────────────────────────────────────────────────────────────────────────────────── */
 

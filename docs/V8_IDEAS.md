@@ -1812,6 +1812,31 @@ respecto al sonido.»*). Así queda:
 - **Lo siguiente, la P4:** su cintura (el ES8311 por I2S con `esp_codec_dev` 1.5.10 del registro, el I2C del táctil por
   el árbitro, el amplificador en el GPIO 53) y la línea `audio` del ENV; grabarla y escucharlo.
 
+**27-oct (noche), la P4: HECHO** (Eduardo, tras oírla: *«Si se oye bien, mas fuerte que en el PC»*):
+- **La línea `audio` del ENV, la lee la HAL BP** (`bpvm_sonido_linea_parse`, para cualquier placa con códec):
+  `audio=es8311,i2c:0,mclk:13,bclk:12,ws:10,dout:9,pa:53` —el códec lo primero; etiquetas `clave:valor` en cualquier
+  orden, como la `sd`; `dir` (0x18), `pa`, `paalto`, y `sda`/`scl` si la placa no ha declarado el bus—. Con ella, el
+  tercer lector de líneas del ENV, los dos ayudantes que estaban duplicados en la `sd` de SPI y la de SDIO pasan a
+  `bpvm_env_linea.h` (lo pedía su propio comentario: «si aparece un tercer parseo, ése es el momento»).
+- **La cintura de la P4** (`esp32p4/main/sonido_p4.c`): el arranque del firmware de prueba del 19-oct. Al arrancar,
+  tras la pantalla: lee la línea, se engancha al I2C del táctil como el firmware (por el árbitro, el bus del IDF que
+  abrió la cintura), mira que el ES8311 conteste (0x18) y reserva sus pines, «del sonido» (`BPVM_PIN_SIS_SONIDO`: un
+  programa no los puede pedir). El I2S y el códec, en el primer `play`; el códec y el amplificador, encendidos sólo
+  mientras suena. Sin la línea, o si el códec no contesta, la HAL BP da el motivo. La imagen, +53 KB.
+- **En la placa:** el log, «sonido: ES8311 en el I2C 0 (0x18); I2S mclk 13, bclk 12, ws 10, dout 9; amplificador en
+  el GPIO 53»; el canon de la SD, en paralelo (`play` vuelve en 8 ms; el progreso, del 9 al 100 %, un 10 % por
+  segundo) y el tono de aviso detrás; Eduardo lo oye bien. `SonidoParalelo` en la P4, IDÉNTICO al PC (31/31). La P4
+  lleva ya el `Stdlib.pack` con `Sound`.
+- **Las pruebas:** `make test-sonido` (35, en la red): la línea `audio`, y la tarea con una cintura que apunta cada
+  muestra (las de 8 bits a 16 con signo, las de 16 tal cual, sin el medio marco del final) y cómo se cierra (drenando
+  al acabar; en seco al parar o al cambiar de sonido); `test-sdio` y `test-sd`, verdes tras sacar los ayudantes; la
+  Pico y la Nucleo compilan. La red, VERDE en 13:45: paridad 167 en MOD9, en MOD8 y con dos workers; cápsula V6, 59; norma 9/9; sim 12/12; pruebas de C, 108/108 (`test-sonido`, 35/35); sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
+- **Para el próximo lote:** el `Stdlib.pack` con `Sound` en todas las placas (en las que no tienen sonido,
+  `isAvailable()` da false y `play`, el motivo).
+- **Y la C5, en análisis** (Eduardo, al acabar: *«Me parece que C5 también soporta sonido»*): su placa de Waveshare
+  lleva el mismo ES8311 y el mismo NS4150B, sin MCLK (el códec saca el reloj del BCLK) y con el amplificador en el
+  bit 3 del expansor CH32V003, el que da el reset y la luz de la pantalla.
+
 ---
 
 ## E5 · Los strings: el censo de sus operaciones, el invariante y la PSRAM (H5; Eduardo, 21-oct)

@@ -76,6 +76,22 @@ const char* bpvm_sonido_motivo(void); /* por qué no lo tiene */
 /* El fin de RUN: lo que suene se para (y se espera a que la tarea suelte el camino) y el volumen vuelve a 85. */
 void bpvm_sonido_fin_de_run(void);
 
+/* LA LÍNEA `audio` DEL ENV, la de cualquier placa con códec (la lee la HAL BP, no cada familia):
+ *
+ *     audio=es8311,i2c:0,mclk:13,bclk:12,ws:10,dout:9,pa:53
+ *
+ * Lo primero, el códec. Detrás, etiquetas `clave:valor` en cualquier orden, como la `sd`: el bus I2C del códec (`i2c`,
+ * 0) y su dirección de 7 bits (`dir`, 0x18; en decimal o con 0x), los pines del I2S (`mclk`, `bclk`, `ws` y `dout`,
+ * obligatorios), el del amplificador (`pa`, ninguno) y si se enciende a 1 (`paalto`, 1); `sda` y `scl`, sólo si la
+ * placa no ha declarado ya ese bus. Las claves desconocidas se ignoran. 0, o -1 con el motivo. */
+typedef struct {
+    char codec[16];
+    int  i2c, dir, sda, scl;
+    int  mclk, bclk, ws, dout;
+    int  pa, pa_alto;
+} bpvm_sonido_linea_t;
+int bpvm_sonido_linea_parse(const char* valor, bpvm_sonido_linea_t* l, char* motivo, unsigned motivo_cap);
+
 /* El PC (sonido_host.c): el audio del sistema —en Windows, winmm—, o en silencio, al ritmo del sonido, con
  * BPVM_SONIDO=mudo en el entorno (las pruebas de la red). En una placa no hace nada. */
 void bpvm_sonido_register_host(void);

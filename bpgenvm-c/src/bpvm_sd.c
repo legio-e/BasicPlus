@@ -224,21 +224,10 @@ void bpvm_sd_cid_desglosar(const uint8_t cid[16], bpvm_sd_info_t* info)
  * La entrada `sd` del ENV — también pura, también probada en el PC
  * ───────────────────────────────────────────────────────────────────────── */
 
-/* Copia literales al buffer del llamante sin traerse `snprintf`: en el micro
- * eso arrastra la maquinaria de printf entera para un mensaje de diagnóstico. */
-static void di(char* dst, unsigned cap, const char* a, const char* b) {
-    if (!dst || cap == 0) return;
-    unsigned i = 0;
-    while (a && *a && i + 1 < cap) dst[i++] = *a++;
-    while (b && *b && i + 1 < cap) dst[i++] = *b++;
-    dst[i] = '\0';
-}
-
-/* ¿Empieza `s` por la clave `k` seguida de ':'? Devuelve el valor o NULL. */
-static const char* tras_clave(const char* s, const char* k) {
-    while (*k) { if (*s != *k) return 0; s++; k++; }
-    return (*s == ':') ? s + 1 : 0;
-}
+/* Los dos ayudantes (copiar el motivo sin traerse `snprintf`, que en el micro arrastra la maquinaria de printf entera
+ * para un mensaje; y leer una `clave:`), en bpvm_env_linea.h desde V8/H4: los comparten la `sd` de SPI, la de SDIO y
+ * la `audio` del sonido. */
+#include "bpvm_env_linea.h"
 
 int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
                         char* motivo, unsigned motivo_cap)
@@ -253,7 +242,7 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
     p->cd_activo_bajo = 1;
     p->khz = 0;                        /* #552: 0 = la de siempre */
 
-    if (!valor || !*valor) { di(motivo, motivo_cap, "la entrada 'sd' esta vacia", 0); return -1; }
+    if (!valor || !*valor) { bpvm_linea_di(motivo, motivo_cap, "la entrada 'sd' esta vacia", 0); return -1; }
 
     const char* s = valor;
     while (*s) {
@@ -266,7 +255,7 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
         const char* v = 0;
         int campo = -1;
         for (unsigned i = 0; i < sizeof tabla / sizeof tabla[0]; i++) {
-            v = tras_clave(s, tabla[i].clave);
+            v = bpvm_linea_tras_clave(s, tabla[i].clave);
             if (v) { campo = tabla[i].campo; break; }
         }
         if (!v) {                      /* clave desconocida: saltarla entera */
@@ -276,7 +265,7 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
         int n = 0, digitos = 0;
         while (*v >= '0' && *v <= '9') { n = n * 10 + (*v - '0'); v++; digitos++; }
         if (!digitos) {
-            di(motivo, motivo_cap, "valor no numerico en 'sd', cerca de ", s);
+            bpvm_linea_di(motivo, motivo_cap, "valor no numerico en 'sd', cerca de ", s);
             return -1;
         }
         switch (campo) {
@@ -296,7 +285,7 @@ int bpvm_sd_pines_parse(const char* valor, bpvm_sd_pines_t* p,
     /* Y el chivato que justifica las etiquetas: decir CUÁL falta. Sólo el CS es
      * de la tarjeta; sck/mosi/miso son del bus (V7/H6.c G4.a1) y, si no vienen,
      * son los del bus declarado — lo que falte ahí lo dice el arranque. */
-    if (p->cs < 0) { di(motivo, motivo_cap, "a la entrada 'sd' le falta ", "cs"); return -1; }
+    if (p->cs < 0) { bpvm_linea_di(motivo, motivo_cap, "a la entrada 'sd' le falta ", "cs"); return -1; }
     return 0;
 }
 
@@ -358,7 +347,7 @@ bpvm_sd_res_t bpvm_sd_init(const bpvm_sd_pines_t* p, int baud_rapido,
                        bp, s_motivo_bus, sizeof s_motivo_bus) != 0)
         return BPVM_SD_E_BUS;
     if (bp[2] < 0) {
-        di(s_motivo_bus, sizeof s_motivo_bus, "el bus SPI de la SD no tiene MISO: la tarjeta no podria contestar", 0);
+        bpvm_linea_di(s_motivo_bus, sizeof s_motivo_bus, "el bus SPI de la SD no tiene MISO: la tarjeta no podria contestar", 0);
         return BPVM_SD_E_BUS;
     }
 

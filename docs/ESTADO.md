@@ -39,7 +39,15 @@
 >   sin valor no dejaban el 0 que el compilador descarta, y la pila se descuadraba; arreglado y vigilado.
 > - **Las pruebas:** `SonidoParalelo` (31, en el corpus), el camino de verdad a volumen 0 en las dos VMs, la pila del
 >   despachador medida (igual que antes) y la Pico, la P4 y la Nucleo compilan. La red, VERDE en 13:11: paridad 167 en MOD9, en MOD8 y con dos workers (ya con `SonidoParalelo`); cápsula V6, 59; norma 9/9; sim 12/12; pruebas de C, 107/107; sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
-> - **Lo siguiente:** la P4 —su cintura (el ES8311), la línea `audio` del ENV, grabarla y escucharlo—.
+> - **Y la P4, hecha esa misma noche** (Eduardo, tras oírla: *«Si se oye bien, mas fuerte que en el PC»*): la línea
+>   `audio` del ENV, que lee la HAL BP (con ella, los dos ayudantes de las líneas del ENV, a `bpvm_env_linea.h`); la
+>   cintura del ES8311 (`sonido_p4.c`, `esp_codec_dev` 1.5.10 del registro) enganchada al I2C del táctil, y sus pines,
+>   del sistema. En la placa: el canon de la SD en paralelo, con su progreso, y el tono detrás; `SonidoParalelo`,
+>   IDÉNTICO al PC; la P4 lleva ya la imagen y el `Stdlib.pack` con `Sound` (y su línea `audio`). `test-sonido` (35)
+>   en la red. La red, VERDE en 13:45: paridad 167 en MOD9, en MOD8 y con dos workers; cápsula V6, 59; norma 9/9; sim 12/12; pruebas de C, 108/108 (`test-sonido`, 35/35); sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
+> - **Lo siguiente:** la C5 (Eduardo: *«Me parece que C5 también soporta sonido»*): lleva el mismo ES8311 y el
+>   mismo amplificador, sin MCLK y con el amplificador en el expansor CH32V003 que comparte con la pantalla; en
+>   análisis, y con ella, el cierre del H4. Y en el próximo lote, el `Stdlib.pack` con `Sound` en las demás placas.
 
 > **27-oct (tarde, después)** — **El H5 (los strings), CERRADO** (Eduardo: *«Una cosa, de H5 que falta?»*; y luego,
 > *«Si, cierra H5 y lo que falte como pendiente»*), como el H5 de V7: lo que quedaba, en fichas sueltas.

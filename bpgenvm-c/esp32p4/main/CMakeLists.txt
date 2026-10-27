@@ -25,6 +25,7 @@ idf_component_register(
         "aot_funcs_p4.c"                      # H4 AOT RISC-V (Hito 1): override fuerte de esp_aot_register (SOLO P4)
         "aot_Bench.c"                         # H4 AOT RISC-V (Hito 1): fib nativo (mismo .c portable que el Pico, toolchain RISC-V)
         "gui_display_dsi.c"                   # G3: display MIPI-DSI (panel EK79007 + backlight LEDC)
+        "sonido_p4.c"                         # V8/H4 (#708): el sonido, la cintura del ES8311 (esp_codec_dev)
         "../../esp32/common/repl_esp32.c"       # VM.3: dispatcher wire v1 REUTILIZADO (agnóstico del transporte)
         "../../src/json_min.c"                # V6/U1.1: parser JSON, ya en el comun
         "../../src/wire_v1_proto.c"                # V6/U2.1: los builders JSON del wire, ya en el comun
@@ -133,6 +134,7 @@ idf_component_register(
         esp_driver_spi   # H14: backend SPI del P4 (driver/spi_master.h)
         esp_adc          # H14: backend ADC del P4 (esp_adc oneshot)
         esp_driver_tsens # H14: sensor de temperatura interno (Pico.tempC)
+        esp_driver_i2s   # V8/H4 (#708): el I2S del códec ES8311
         esp_driver_pcnt  # H14: backend contador de pulsos (PCNT)
         esp_driver_rmt   # V7/H4: backend NeoPixel (WS2812) por RMT, en gpio_esp32.c
         esp_driver_sdmmc # V5/H6: sdmmc_host + sdmmc_cmd (la tarjeta por SDIO)

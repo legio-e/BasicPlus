@@ -333,11 +333,14 @@ static void p4_con_fs(void) {
 
 /* 2b — el hardware: GPIO/UART/SPI/I2C (el reúso del S3, H14) y la pantalla, como 'PANT',
  * para el LVGL del pack (V7/H6 G5.a). */
+void p4_sonido_registrar(void);   /* sonido_p4.c — V8/H4 (#708) */
+
 static void p4_hw(void) {
     esp32_hw_register();
 #if defined(BPVM_GUI_PACK)
     p4_pant_publicar();
 #endif
+    p4_sonido_registrar();   /* V8/H4 (#708): el ES8311, si el ENV lo declara; tras la pantalla (el I2C del táctil) */
 }
 
 /* 2b — el cable: el servidor TCP (:3333) o UART0 (el puente USB-UART). */

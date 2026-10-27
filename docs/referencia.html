@@ -2668,8 +2668,9 @@ var pct: integer := integer(long(Sound.getPosition()) * 100 / Sound.getLength())
 <p>
   <strong>Dónde suena.</strong> En el PC, por el audio del sistema (la VM-C, en Windows); con
   <code>BPVM_SONIDO=mudo</code> en el entorno, en silencio y al mismo ritmo (las pruebas). En una placa, si su
-  familia trae la parte del sonido y su ENV la línea <code>audio</code> —la P4, con su códec ES8311: en curso en
-  V8—; si no, <code>play</code> da el error con el motivo e <code>isAvailable()</code> devuelve <code>false</code>.
+  familia trae la parte del sonido y su ENV la línea <code>audio</code> (<a href="#env">apéndice A</a>) —la P4,
+  con su códec ES8311—; si no, <code>play</code> da el error con el motivo e <code>isAvailable()</code> devuelve
+  <code>false</code>.
   El códec y el amplificador sólo se encienden mientras suena. Al acabar el programa, lo que suene se para, el
   progreso vuelve a 0 y el volumen a 85.
 </p>
@@ -3652,6 +3653,8 @@ vars ...         <span class="comment">// nombre de variable → slot del frame 
   <tr><td><code>i2cN</code></td><td><code>sda:N,scl:N[,khz:N][,ms:N]</code>; <code>khz</code> 100</td><td>Igual, con la velocidad del bus. El I²C del táctil lo declara la imagen (P4: <code>i2c0</code>; DK2: <code>i2c2</code>), y una línea para él se rechaza</td><td>N: RP2350, S3 y P4 0–1 · C3, C5 y C6 0 · Nucleo 1–4 · DK2 1–5</td><td>al arrancar</td></tr>
   <tr><td><code>sd</code> (SPI)</td><td><code>cs:N</code>; <code>sck</code>, <code>mosi</code> y <code>miso</code> si el bus no está en <code>spiN</code>; <code>bus:N</code> (0), <code>cd:N</code>, <code>cdalto:1</code>, <code>khz:N</code> (25000)</td><td>El lector de tarjeta por SPI (<a href="#stdlib-sd">§14.17</a>)</td><td>RP2350 · C5 · C6</td><td>al arrancar</td></tr>
   <tr><td><code>sd</code> (SDIO)</td><td><code>clk:N,cmd:N,d0:N</code>, y <code>d1</code>, <code>d2</code> y <code>d3</code> las tres (4 bits) o ninguna (1 bit); <code>pwr:N</code>, <code>pwralto:1</code>, <code>slot:N</code> (0), <code>khz:N</code> (20000), <code>ldo:N</code> (4; 0 = sin LDO)</td><td>El lector de tarjeta por SDMMC (<a href="#stdlib-sd">§14.17</a>)</td><td>P4</td><td>al arrancar</td></tr>
+  <tr><td colspan="5"><strong>El sonido</strong></td></tr>
+  <tr><td><code>audio</code></td><td><code>&lt;códec&gt;,mclk:N,bclk:N,ws:N,dout:N</code>; y <code>i2c:N</code> (0), <code>dir:N</code> (0x18), <code>pa:P</code> (ninguno), <code>paalto:1</code> (1); <code>sda</code> y <code>scl</code>, si ese bus no lo declara ya la placa</td><td>El sonido de la placa (<code>Sound</code>, <a href="#stdlib-sound">§14.18</a>): el códec —de momento, <code>es8311</code>—, los pines de su I²S, su I²C y el amplificador, que sólo se enciende mientras suena. Sus pines pasan a ser del sistema. Sin la línea, la placa no tiene sonido y <code>Sound.play</code> lo dice. La P4 de Waveshare: <code>audio=es8311,i2c:0,mclk:13,bclk:12,ws:10,dout:9,pa:53</code></td><td>P4</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>El almacenamiento</strong></td></tr>
   <tr><td><code>part.fs.size</code></td><td>bytes, múltiplo del sector (4 KB; en las STM32, 8 KB)</td><td>El tamaño del sistema de archivos; los packs se llevan el resto de la zona. No se edita a mano: lo pone el asistente de particiones del IDE</td><td>todas, salvo la C5 y la P4 de Waveshare (32 MB: el sistema de archivos va arriba)</td><td>al arrancar</td></tr>
   <tr><td colspan="5"><strong>El diagnóstico</strong></td></tr>

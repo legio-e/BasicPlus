@@ -4,26 +4,14 @@
  * Sólo texto: ni SDK ni hardware, para que se pueda ejercer en el PC
  * (`make test-sdio`). El resto de la cintura vive en la familia.
  *
- * Los dos ayudantes de abajo son gemelos de los de `bpvm_sd.c`. Están
- * duplicados A PROPÓSITO: son ocho líneas, y compartirlos ataría este fichero
- * —que es la configuración de SDIO— al fichero del PROTOCOLO SPI, que es
- * justo la mezcla que H6 vino a deshacer. Si aparece un tercer parseo, ése es
- * el momento de sacarlos a un sitio común, no antes.
+ * Los dos ayudantes —copiar el motivo y leer una `clave:`— estuvieron
+ * duplicados aquí y en `bpvm_sd.c` a propósito (compartirlos ataba esta
+ * configuración al fichero del PROTOCOLO SPI), «hasta que aparezca un tercer
+ * parseo». Apareció en V8/H4: la línea `audio` del sonido. Ahora viven en
+ * `bpvm_env_linea.h`, que es sólo texto y no ata a nadie.
  */
 #include "bpvm_blk_sdmmc.h"
-
-static void di(char* dst, unsigned cap, const char* a, const char* b) {
-    if (!dst || cap == 0) return;
-    unsigned i = 0;
-    while (a && *a && i + 1 < cap) dst[i++] = *a++;
-    while (b && *b && i + 1 < cap) dst[i++] = *b++;
-    dst[i] = '\0';
-}
-
-static const char* tras_clave(const char* s, const char* k) {
-    while (*k) { if (*s != *k) return 0; s++; k++; }
-    return (*s == ':') ? s + 1 : 0;
-}
+#include "bpvm_env_linea.h"
 
 int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
                           char* motivo, unsigned motivo_cap)
@@ -49,7 +37,7 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
      * `ldo:0` lo desactiva. No es lo mismo que `pwr` — ver bpvm_blk_sdmmc.h. */
     p->ldo = 4;
 
-    if (!valor || !*valor) { di(motivo, motivo_cap, "la entrada 'sd' esta vacia", 0); return -1; }
+    if (!valor || !*valor) { bpvm_linea_di(motivo, motivo_cap, "la entrada 'sd' esta vacia", 0); return -1; }
 
     const char* s = valor;
     while (*s) {
@@ -67,7 +55,7 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
         const char* v = 0;
         int campo = -1;
         for (unsigned i = 0; i < sizeof tabla / sizeof tabla[0]; i++) {
-            v = tras_clave(s, tabla[i].clave);
+            v = bpvm_linea_tras_clave(s, tabla[i].clave);
             if (v) { campo = tabla[i].campo; break; }
         }
         if (!v) {                      /* clave desconocida: saltarla entera */
@@ -77,7 +65,7 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
         int n = 0, digitos = 0;
         while (*v >= '0' && *v <= '9') { n = n * 10 + (*v - '0'); v++; digitos++; }
         if (!digitos) {
-            di(motivo, motivo_cap, "valor no numerico en 'sd', cerca de ", s);
+            bpvm_linea_di(motivo, motivo_cap, "valor no numerico en 'sd', cerca de ", s);
             return -1;
         }
         switch (campo) {
@@ -102,7 +90,7 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
     if      (p->clk < 0) falta = "clk";
     else if (p->cmd < 0) falta = "cmd";
     else if (p->d0  < 0) falta = "d0";
-    if (falta) { di(motivo, motivo_cap, "a la entrada 'sd' le falta ", falta); return -1; }
+    if (falta) { bpvm_linea_di(motivo, motivo_cap, "a la entrada 'sd' le falta ", falta); return -1; }
 
     /* El ancho se DEDUCE, no se escribe. Pedir a la vez `d1..d3` y `ancho:4`
      * sería poder decir dos cosas distintas sobre lo mismo — y el día que no
@@ -113,7 +101,7 @@ int bpvm_sdio_pines_parse(const char* valor, bpvm_sdio_pines_t* p,
      * falla al leer un bloque, más tarde y en otro sitio. */
     p->ancho = (p->d1 >= 0 && p->d2 >= 0 && p->d3 >= 0) ? 4 : 1;
     if (p->ancho == 1 && (p->d1 >= 0 || p->d2 >= 0 || p->d3 >= 0)) {
-        di(motivo, motivo_cap,
+        bpvm_linea_di(motivo, motivo_cap,
            "en 'sd' hay lineas de datos a medias: pon d1, d2 y d3 (4 bits) o ninguna (1 bit)", 0);
         return -1;
     }

@@ -1132,6 +1132,16 @@ test-sqltexto: $(LIBOBJ) build/sql/sqlite3.o
    tail -20 ../sqldemo.out ../sqldemo.err; echo "  ROJO: SqlDemo ($$n lineas)"; exit 1; fi; \
  echo "[status=OK] SqlDemo: 25 lineas, sin fugas"
 
+# V8/H4 (#708, 27-oct) — LO COMÚN DEL SONIDO (bpvm_sonido.c), en el PC y sin que suene nada: la línea `audio` del ENV
+# y la tarea con una cintura que lo APUNTA todo —el formato, el volumen, cada muestra (las de 8 bits a 16 con signo)
+# y cómo se cierra (drenando al acabar; en seco al parar o al cambiar de sonido)—. Lo que tiene que salir, escrito a
+# mano en la prueba: ningún FALLO.
+test-sonido: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_sonido.c $(LIBOBJ) -o build/test_sonido.exe $(LDFLAGS)
+	@echo "--- V8/H4 #708 lo comun del sonido (esperado: [status=OK], sin FALLO) ---"
+	./build/test_sonido.exe
+
 # V7/H5 (P2b.3, 27-sep) — el .mdn v3: la marca DIRECTA (bit alto de thunk_offset) llega al registro de natives
 # y no se cuela en la dirección del thunk; un v2 las manda todas al ejecutor; un v4 se rechaza.
 test-mdnv3: $(LIBOBJ)
