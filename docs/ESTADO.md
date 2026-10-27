@@ -54,8 +54,15 @@
 >   los pendientes»*): los pendientes de FICHAS (§ABIERTAS, bloque V8), en el orden que diga Eduardo: el IDE y el
 >   wire (`#693`–`#696`), `#709` (el `resetReason` tras un reinicio por USB), `#710` (la RAM interna con el IDF 6.1),
 >   `#723` (los streams, por decidir), `#728` (la interfaz del IDE para la IA), `#729` (la falsa alarma del ancla en
->   la Metro) y los que dejó el H5 (`#715`, `#718`, `#721`, `#722`, `#730`–`#739`; `#719`, para más adelante). El H4
->   espera a la C5 (al altavoz); el H2 y el H3, parados (el rumbo del 22-oct: primero los pendientes).
+>   la Metro), `#740` (la RAM de las placas sin PSRAM: las pilas de los hilos BP, del heap) y los que dejó el H5
+>   (`#715`, `#718`, `#721`, `#722`, `#730`–`#739`; `#719`, para más adelante). El H4 espera a la C5 (al altavoz);
+>   el H2 y el H3, parados (el rumbo del 22-oct: primero los pendientes).
+> - **Y la RAM de las placas sin PSRAM, analizada** (Eduardo, al cerrar: *«cuanta memoria RAM consume y si hay
+>   posibilidades de reducir el consumo […] Solamente para los micros que no tengan PSRAM»*): `MEMORIA.md` §7 y
+>   `#740`. Las justas siguen siendo la C3 y la C6, y desde el 8-oct apenas ha cambiado (la C6, 1,6 KB más de
+>   imagen). Lo grande: las pilas de los hilos BP reservan 64 KB aunque no haya hilos; sacarlas del heap da 48 KB más
+>   de heap (Eduardo: *«Podemos ganar 48K de RAM y luego el consumo de RAM del Heap ya sería proporcional al número
+>   de hilos BP»*), en las dos VMs, empezando por el análisis de los 39 sitios que separan el heap de las pilas.
 > - **En el próximo lote de placas:** el `Stdlib.pack` con `Sound` y las imágenes con el sonido en las demás placas
 >   (la P4 ya los lleva), y el `SQLite.pack` de `#724` en la Metro y la P4. **El riesgo:** el `Stdlib.pack` nuevo
 >   va JUNTO con su imagen —una imagen de antes no tiene los builtins 287–294, y `Sound` fallaría al llamarlo—.

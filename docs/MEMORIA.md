@@ -11,6 +11,9 @@
 > nombres del cargador, un bloque por módulo), `#650` y `#623` (la stdlib, XIP del `Stdlib.pack`) y `#666`–`#668` (lo
 > que se suelta al acabar). Las tablas dan las dos medidas: la del 8-oct y, entre paréntesis, la del 7-oct. La C3,
 > por remedir.
+>
+> **El 27-oct**, sin placas conectadas: el `INFO` del lote de esa tarde y los `.elf` del día (§7). Lo que se puede
+> recortar —sobre todo, las pilas de los hilos BP, del heap: 48 KB más en la C3 y la C6—, en `#740`.
 
 ## 1. Dos memorias que no hay que confundir
 
@@ -148,3 +151,32 @@ símbolos (8 KB). `test-censo`, en la red, no deja pasar de 100 bloques cargado.
 Por cada serie, un `reset` (suelta todo) y sus programas en orden (`tools/consumo/` y los de la ronda de V7), uno por
 tanda; tras cada uno lee su línea `mem:` del log. Ni graba ni toca el ENV. Sólo las ESP (la línea es suya), con
 `log=1`. Y el margen del sistema —lo que el sistema gasta fuera de la VM—, con `tools/medir_margen.py`.
+
+## 7. El 27-oct: las placas sin PSRAM, remedidas por la imagen
+
+> Eduardo, 27-oct: *«Antes de cerrar la VM cuanta memoria RAM consume y si hay posibilidades de reducir el consumo. Ya lo miramos en su día pero no se si con los cambios que ha habido se puede hacer algo. Solamente para los micros que no tengan PSRAM, los que tienen PSRAM no hay problema.»* Sin placas conectadas: el `INFO` del lote de esa tarde
+> (`compat/informes/lote_v8_27oct.md`, las imágenes de ese día) y los `.elf` (`_heap_start` y los símbolos por
+> tamaño, con el `nm` de cada cadena). Lo que se puede hacer, en `#740`.
+
+| | C3 | C6 | Pico 2 |
+|---|---|---|---|
+| SRAM | 400 KB | 512 KB | 520 KB |
+| la imagen (código en IRAM, datos y búferes) | 126 KB | 135 KB | 123 KB (con los 24 KB del heap de FreeRTOS) |
+| el bloque de la VM | 112 KB | 125 KB | ~285 KB |
+| · el heap de BP | 48 KB | 61 KB | 214 KB |
+| · las pilas de los hilos | 64 KB | 64 KB | ~71 KB |
+| el bloque de los packs (la GUI) | — | 136 KB | — |
+| la RAM del sistema, mínimo libre en el lote | 79 KB | 72 KB (33 con la GUI) | 64 KB para malloc; FreeRTOS, 6,6 KB libres de 24 |
+
+La Nucleo (384 KB de heap de BP) y la DK2 (768) van holgadas: las justas siguen siendo la C3 y la C6.
+
+- **Lo que cambió desde el 7–8 de octubre: poco.** La imagen de la C6, +1,6 KB (`_heap_start`, de `0x408215d0` a
+  `0x40821c30`): su bloque de la VM baja de 127 a 125 KB —el heap, de 63 a 61— y la GUI tiene ~3 KB menos de holgura
+  en su peor momento (de 36 008 a 32 596 B libres). La C3, igual: 48 KB de heap. El sonido (V8/H4), ~0,4 KB.
+- **Adónde va la imagen** (la C6; la C3, casi igual): el código en IRAM, 43 KB (38 en la C3); unos 70 KB de búferes
+  estáticos nuestros —la pila de la tarea `run` (10 KB), el log (8 KB, en `.noinit`), el espejo del ENV (8 KB), el
+  búfer del PUT (8 KB), el de trabajo (`g_scratch`, 8 KB), el de ficheros (4 KB), los tres de líneas del wire
+  (6 KB), los tres `tiene` del enlace (4,2 KB) y otros menores—; y el resto, el IDF y FreeRTOS.
+- **Las pilas de los hilos BP se llevan, en la C3 y la C6, más que el heap:** el reparto da el 25 % del bloque, pero
+  nunca menos de 64 KB —el main, 16, y 24 hilos de 2 KB—, y se reservan aunque el programa no cree ningún hilo. Con
+  las pilas sacadas del heap (`#740`), el heap de la C3 pasaría de 48 a 96 KB y el de la C6, de 61 a 109.

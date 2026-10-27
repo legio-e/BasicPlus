@@ -7079,6 +7079,46 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#740` — la RAM de las placas sin PSRAM, la C3 y la C6 las justas: las pilas de los hilos BP, DEL HEAP —48 KB más de heap, y lo que gastan, proporcional a los hilos—, y los búferes estáticos que se pueden recortar (abierta el 27-oct, a pregunta de Eduardo al cerrar la sesión: *«Antes de cerrar la VM cuanta memoria RAM consume y si hay posibilidades de reducir el consumo. Ya lo miramos en su día pero no se si con los cambios que ha habido se puede hacer algo. Solamente para los micros que no tengan PSRAM, los que tienen PSRAM no hay problema.»*)
+
+- **Medido el 27-oct**, sin placas conectadas: el `INFO` del lote de esa tarde y los `.elf` del día. Las cifras, en
+  `MEMORIA.md` §7: la C3, 48 KB de heap de BP y 64 de pilas; la C6, 61 y 64 (y 136 de packs, con la GUI); la Pico 2,
+  214 y ~71; la Nucleo (384 KB de heap) y la DK2 (768), holgadas. Desde el 7–8 de octubre, poco: la imagen de la C6,
+  +1,6 KB (su heap, de 63 a 61 KB; la GUI, ~3 KB menos de holgura); la C3, igual; el sonido, ~0,4 KB.
+- **1. Las pilas de los hilos BP, del heap** (Eduardo: *«Los hilos BP no podrian tomar la RAM del heap? Lo digo porque 64K en el C3 y C6 que van muy justas de RAM es muchísimo. Y en muchos casos tendremos unos pocos Threads BP»*; y al apuntarlo: *«Si apuntalo. Podemos ganar 48K de RAM y luego el consumo de RAM del Heap ya sería proporcional al número de hilos BP. Con PSRAM se puede dejar como está o hacer lo mismo, con lo que en la práctica no habría límite en el número de hilos BP.»*):
+  - **hoy:** el bloque de la VM se parte al arrancar en el heap, la pila del main (16 KB) y una región para las de
+    los hilos —el 25 % del bloque, nunca menos de 64 KB: el main y 24 hilos de 2 KB—, reservada aunque el programa no
+    cree ningún hilo;
+  - **lo propuesto:** el bloque, heap + la pila del main. `Thread.start` pide su pila al heap, como un `new` (2 KB, o
+    la de `Thread(stackSize)`), y al acabar el hilo vuelve; si no cabe, el GC, y si sigue sin caber, el error de hoy
+    («no hay memoria para la pila del hilo»). En la C3, el heap de 48 a 96 KB; en la C6, de 61 a 109. Con PSRAM, como
+    está o lo mismo: en la práctica, sin límite de hilos;
+  - **las piezas ya están:** el GC recorre las pilas de los hilos como raíces, y sólo tendría que marcar el bloque de
+    cada hilo vivo (el barrido suelta lo que no lleva la marca, tenga handle o no); el compactador deja en su sitio
+    los bloques que no se pueden mover —una pila no se mueve: sus marcos guardan direcciones dentro de ella— y no
+    compacta con otro hilo vivo; y miVM tiene el mismo modelo (`allocStackRegion`, la lista de huecos);
+  - **lo que cambia:** el error de pila salta cuando el heap está lleno, como el de un objeto (hoy la región está
+    calcada en las dos VMs para que salte en el mismo hilo); una pila es un bloque fijo mientras vive su hilo
+    (cogerlas del final del espacio libre, para no partir el heap); con dos runs, la pila de un hilo acabado vuelve
+    en el GC siguiente, como un objeto; y la clave `stack=` del ENV pierde su sentido (retirarla, o que diga la
+    pila del main);
+  - **lo primero, el análisis:** los 39 sitios de 6 ficheros de C (`bpvm.c`, `bpvm_handles.c`, `heap.c`, `link.c`,
+    `loader.c`, `threading.c`) que comparan direcciones con el límite entre el heap y las pilas, y lo que el IDE dé
+    por hecho al leer la memoria. Unos dos días, en las dos VMs, con las pruebas de hilos, del muro de la pila y del
+    compactador.
+- **2. Lo barato (+6,8 KB en la C3 y la C6):** el log de las ESP sin PSRAM, de 8 a 4 KB, como la S3 y la Pico —los 8
+  KB se pensaron para la P4, y la C3 y la C6 los heredaron por el `#else` de `log_esp32.c`—; y los tres
+  `tiene[1400]` de `link.c` (el texto de un error del enlace), en uno. En la C6, la VM vuelve a sus 128 KB y el resto
+  queda para el sistema; en la C3 manda el bloque contiguo mayor: si crece, en la placa.
+- **3. Lo que pide análisis (hasta ~16 KB):** el espejo del ENV (8 KB: en la C3 y la C6 se podría leer mapeando la
+  partición, cosa que la C5 no puede) y los búferes del wire (el del PUT, el de trabajo y el de ficheros, 20 KB:
+  estáticos para que la placa conteste siempre al IDE aunque el programa se haya comido la RAM; quizá dos puedan ser
+  el mismo).
+- **4. Lo que ya se puede, por el ENV** (a `MEMORIA.md` §4 si no se hace lo 1): `stack=32`, 32 KB más de heap con el
+  main y 8 hilos; y en una C6 sin pantalla, `vmheap=` levanta el tope de 128 KB (hasta ~250 KB de VM).
+- **5. Lo que no se toca ahora:** el margen del sistema (103 KB en la C6) y el tope de la VM: ahí tendrá que vivir la
+  WiFi de V8 en la C3 y la C6, que pide decenas de KB de RAM interna.
+
 #### 🔵 `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **por mirar**)
 
 `BP_EMPIEZA_MAL` (`bpgenvm-c/src/builtins.c`): con `utf8_cp_count`, una cadena que empieza por un byte de
