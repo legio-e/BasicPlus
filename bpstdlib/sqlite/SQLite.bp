@@ -107,6 +107,8 @@ module SQLite
       return sql_col_count(this.h)
     end columnCount
 
+    // V8 (#724): el nombre llega descodificado por el puente: si no es UTF-8 válido (una base hecha por otro
+    // programa), EncodingError, como getStr(i).
     public function columnName(i: integer): string
       return sql_col_name(this.h, i)
     end columnName
@@ -133,8 +135,16 @@ module SQLite
       return b[0]
     end getDouble
 
+    // El texto de la columna i. V8 (#724): SQLite guarda los bytes que le den sin mirar si son UTF-8 («garbage in,
+    // garbage out»), así que lo que trae se DESCODIFICA aquí, como todo lo que viene de fuera (#711): si no es UTF-8
+    // válido —una base hecha por otro programa en Latin-1, un CAST de un blob a texto—, EncodingError; con
+    // ignorarError, cada trozo malo pasa a «�». Y entero: hasta #724 el puente lo cortaba en 512 bytes sin avisar.
     public function getStr(i: integer): string
-      return sql_get_str(this.h, i)
+      return fromBytes(sql_get_str(this.h, i))
+    end getStr
+
+    public function getStr(i: integer, ignorarError: boolean): string
+      return fromBytes(sql_get_str(this.h, i), ignorarError)
     end getStr
 
     // Suelta la consulta. NO cierra la base de datos — eso es `Db.close()`.
@@ -189,8 +199,11 @@ module SQLite
 
     // Lo que dijo el motor del último fallo. Sirve para el mensaje al usuario
     // cuando `connect` devuelve false.
+    //
+    // V8 (#724): con «�» en lo que no sea UTF-8 válido, nunca EncodingError. Es el texto de un error —puede llevar
+    // trozos del esquema de una base ajena— y no puede fallar al darlo: taparía el error de verdad.
     public function errorMessage(): string
-      return sql_errmsg(this.h)
+      return fromBytes(sql_errmsg(this.h), true)
     end errorMessage
 
     // ════════════════════════════════════════════════════════════════════════
@@ -216,7 +229,7 @@ module SQLite
     // `lastInsertId()`. Van aparte porque no siempre interesan.
     public function exec(sql: string)
       if sql_exec(this.h, sql) != 0 then
-        throw RuntimeError("SQLite: " + sql_errmsg(this.h))
+        throw RuntimeError("SQLite: " + this.errorMessage())
       endif
     end exec
 
@@ -271,13 +284,18 @@ module SQLite
       return v
     end execDouble
 
+    // V8 (#724): getStr puede lanzar EncodingError, y la consulta se suelta igual (finally). Si no, se quedaría
+    // abierta y la tabla, bloqueada: un DROP de después fallaría con «database table is locked».
     public function execStr(sql: string, siFalta: string := ""): string
       var q: Query := this.query(sql)
       var v: string := siFalta
-      if q.nextRow() then
-        v := q.getStr(0)
-      endif
-      q.release()
+      try
+        if q.nextRow() then
+          v := q.getStr(0)
+        endif
+      finally
+        q.release()
+      endtry
       return v
     end execStr
 
@@ -321,7 +339,7 @@ module SQLite
       var q: Query := Query()
       q.h := sql_prepare(this.h, sql)
       if q.h == 0 then
-        throw RuntimeError("SQLite: " + sql_errmsg(this.h))
+        throw RuntimeError("SQLite: " + this.errorMessage())
       endif
       return q
     end query
@@ -373,6 +391,12 @@ module SQLite
   //  🔴 FALTA `getBytes` (BLOBs). El puente aún no sabe pasar un `byte[]` como
   //  buffer, y prefiero no declarar un método que no puede funcionar: ver la
   //  tarea del blob. Cuando entre, se añade aquí y en `Query` sin tocar nada más.
+  //
+  //  EL TEXTO (V8, #724): el pack da `const char*` y el puente lo copia entero
+  //  (sin el corte de 512 bytes de antes). Una native que devuelve `string` lo
+  //  recibe ya descodificado (EncodingError si no es UTF-8 válido); una que
+  //  devuelve `byte[]`, los bytes tal cual, y lo descodifica quien la llama: así
+  //  `getStr` puede ignorar el error y `errorMessage` no falla nunca.
   // ============================================================
 
   public native function sql_open(camino: string, soloLectura: boolean): integer
@@ -381,7 +405,7 @@ module SQLite
   public native function sql_last_id(db: integer, destino: long[])
   public native function sql_changes(db: integer): integer
   public native function sql_close(db: integer)
-  public native function sql_errmsg(db: integer): string
+  public native function sql_errmsg(db: integer): byte[]
 
   public native function sql_fetch(st: integer): integer
   public native function sql_col_count(st: integer): integer
@@ -390,7 +414,7 @@ module SQLite
   public native function sql_get_int(st: integer, i: integer): integer
   public native function sql_get_long(st: integer, i: integer, destino: long[])
   public native function sql_get_double(st: integer, i: integer, destino: double[])
-  public native function sql_get_str(st: integer, i: integer): string
+  public native function sql_get_str(st: integer, i: integer): byte[]
   public native function sql_release(st: integer)
 
 end SQLite

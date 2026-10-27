@@ -27,6 +27,34 @@
 
 ## Última sesión
 
+> **27-oct (tarde)** — **`#724`, hecha: el texto que devuelve un pack llega entero y descodificado** (Eduardo: *«Si,
+> continuamos con los pendientes»*; a la propuesta, *«OK, sigue con la propuesta»*). Antes preguntó si a SQLite se le
+> puede decir que use UTF-8: ya lo usa, pero no lo comprueba —«garbage in, garbage out», su documentación—, así que un
+> texto malo entra por una base hecha por otro programa (Latin-1) o por un `CAST` de un blob.
+> - **El puente** (`AotCEmitter`): el texto del pack (`const char*`) va ENTERO a un `byte[]` nuevo —sin el corte de 512
+>   que perdía lo de más, a veces a medio carácter— y, si la native devuelve `string`, por `fromBytes` (la rutina de
+>   `#711`): `EncodingError` si no es UTF-8 válido. Nuevo: una native de pack puede devolver `byte[]`, los bytes tal
+>   cual. Lo hace una función de la cabecera, fuera del puente, y la native sigue siendo directa. El bucle sigue acotado
+>   (sin tope, gcc lo cambia por `strlen`), pero a 1 MB y sin cortar: sin NUL, un error con nombre (`pack_fallo`, motivo
+>   3: el único cambio de la VM). La ABI del `.mdn` no cambia.
+> - **SQLite**: `getStr(i)` estricto y `getStr(i, ignorarError)` nuevo, con «�»; `columnName`, estricto;
+>   `errorMessage` y los mensajes de `exec` y `query`, siempre con «�». Y un fallo que salió al probarlo: si `getStr`
+>   lanzaba dentro de `execStr`, la consulta se quedaba abierta y la tabla bloqueada; ahora se suelta en un `finally`.
+> - **Las pruebas**: `test-packtexto` (un pack de mentira, 14 comprobaciones escritas a mano; con el puente de antes
+>   fallan las cuatro de `string`) y `test-sqltexto` (SQLite de punta a punta con el puente de hoy: 9, y `SqlDemo`
+>   entero), las dos en la red; `TextoDePackTest` en el frontend (321 pruebas, todas bien). `SqlDemo` da lo mismo que
+>   con el puente viejo, y `DaoDemo`, bien.
+> - **La red, VERDE en 12:52**: paridad 166 en MOD9, en MOD8 y con dos workers; cápsula V6, 59; norma 9/9; sim 12/12;
+>   pruebas de C, 107/107; sombra 15/15; el estrés; `packs-abi` (6 `.mdn` en la ABI 9) y la stdlib embebida.
+> - **Los artefactos**: los `.mdn` de SQLite regenerados (ARM 3 276 B, RISC-V 4 176 B, ABI 9) y el `SQLite.pack`
+>   rehecho (las mismas entradas; también en `packs/`). **En placa, para el próximo lote**: el `SQLite.pack` nuevo en la
+>   Metro y la P4 (con `SqlTexto` y `SqlDemo`) y el texto del motivo 3 en las imágenes; hasta entonces, las placas
+>   siguen como hoy.
+> - **Lo siguiente:** `#709` y las del IDE (`#693`–`#696`), o las diez preguntas de los streams (`#723`, `V8_IDEAS` §E8).
+>   Y una pregunta para Eduardo: con `#724` se cierra la última puerta conocida por la que una cadena podía nacer rota;
+>   `V8_IDEAS` §E5 decía que, entonces, el caso especial del cursor (las cadenas que empiezan por un byte de
+>   continuación) se podría quitar.
+
 > **27-oct** — **El lote de placas: las nueve, grabadas y probadas** (Eduardo: *«Continuamos, teniamos pendiente
 > regrabar los micros»*; al lote: *«OK»*).
 > - **Las imágenes**, compiladas antes de tocar una placa: la Pico y la Metro (un `.uf2`), las cinco ESP32 con el IDF 6.1

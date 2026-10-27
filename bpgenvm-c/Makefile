@@ -1079,6 +1079,57 @@ test-aotdo: $(LIBOBJ)
  if [ "$$n" -ne 5 ]; then tail -3 build/aotdo.aot; echo "  ROJO: $$n de 5 comprobaciones"; exit 1; fi; \
  echo "[status=OK] 5/5 con el AOT, igual que interpretado"
 
+# V8 #724 (27-oct) — EL TEXTO QUE DEVUELVE UN PACK, por el puente que escribe el compilador, con un pack de mentira
+# ('PRUE', lo publica el test): entero —sin el corte de 512 de antes, que además partía una ñ—, descodificado si la
+# native devuelve `string` (EncodingError, como readFile), tal cual si devuelve `byte[]`, y sin NUL en 1 MB, un error
+# con nombre. Lo que tiene que salir lo escribe a mano el sample: 14 comprobaciones y ningún FALLO. Y las dos natives,
+# DIRECTAS: la copia y fromBytes van en una función aparte del puente.
+test-packtexto: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,PackTexto)
+	$(call stdlibdep,Core)
+	$(call aotmain,PackTexto,build/packtexto)
+	@c=build/packtexto/aot_PackTexto.c; \
+ for f in prb_texto prb_bytes; do grep -q "PackTexto\.$$f\", .*BPVM_AOT_DIRECTA" $$c || { echo "  ROJO: $$f (del pack) tenia que salir DIRECTA"; exit 1; }; done
+	$(CC) $(CFLAGS) -Isrc test/test_packtexto.c build/packtexto/aot_PackTexto.c $(LIBOBJ) \
+  -o build/test_packtexto.exe $(LDFLAGS)
+	@echo "--- #724 el texto que devuelve un pack: entero y descodificado (esperado: 14/14, sin FALLO) ---"
+	@timeout 120 ./build/test_packtexto.exe samples/PackTexto.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/packtexto.out; \
+ n=$$(grep -c '^ok ' build/packtexto.out); \
+ if grep -q '^FALLO' build/packtexto.out; then grep '^FALLO' build/packtexto.out | cut -c1-300; echo "  ROJO: FALLO"; exit 1; fi; \
+ if [ "$$n" -ne 14 ]; then cut -c1-300 build/packtexto.out; echo "  ROJO: $$n de 14 comprobaciones"; exit 1; fi; \
+ echo "[status=OK] 14/14"
+
+# V8 #724 (27-oct) — EL TEXTO DE SQLITE, de punta a punta en el PC: SqlTexto.bp → SQLite.bp → el puente que escribe
+# el compilador de HOY (AotMain en cada vuelta: test-sqldemo enlaza uno guardado) → el pack 'SQLI' → SQLite. Un texto
+# de 600 bytes, entero; uno en Latin-1 (un CAST de un blob), con EncodingError o «�»; el nombre de una columna, y el
+# mensaje de un error. Lo que tiene que salir lo escribe a mano el sample: 9 comprobaciones y ningún FALLO. Y SqlDemo,
+# el del 10-ago, con el mismo puente: status=OK, sus 25 líneas (las de la Metro) y ningún bloque sin liberar.
+SQLTEXTO = build/sqltexto
+test-sqltexto: $(LIBOBJ) build/sql/sqlite3.o
+	@rm -rf $(SQLTEXTO) && mkdir -p $(SQLTEXTO)
+	@cp ../bpstdlib/*.mod ../bpstdlib/sqlite/SQLite.bp samples/SqlTexto.bp ../samples/SqlDemo.bp $(SQLTEXTO)/
+	@cd $(SQLTEXTO) && for f in SQLite SqlTexto SqlDemo; do \
+   java -jar ../../../lexer-java/target/basicplus-frontend.jar $$f.bp --compile . --backend=mivm >> compila.log 2>&1; \
+   [ -f $$f.mod ] || { cat compila.log; echo "  ROJO: $$f no compila"; exit 1; }; \
+ done
+	@java -cp "../lexer-java/target/classes;../pack/target/classes;../miVM/target/classes" basicplus.frontend.AotMain \
+   $(SQLTEXTO)/SQLite.bp $(SQLTEXTO) > $(SQLTEXTO)/aot.log 2>&1 || { cat $(SQLTEXTO)/aot.log; exit 1; }
+	$(CC) $(CFLAGS) -Isrc -Ibuild/sql -I$(SQLSRC) test/test_sqldemo.c $(SQLTEXTO)/aot_SQLite.c \
+  $(SQLSRC)/sqlite_shim.c $(SQLSRC)/vfs_bp.c $(SQLSRC)/packglue.c \
+  build/sql/sqlite3.o $(LIBOBJ) -o build/sqltexto.exe $(LDFLAGS) $(SQLDEF)
+	@echo "--- #724 el texto de SQLite, de punta a punta (esperado: 9/9 sin FALLO, y SqlDemo entero) ---"
+	@cd $(SQLTEXTO) && timeout 120 ../sqltexto.exe SqlTexto.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > ../sqltexto.out; \
+ n=$$(grep -c '^ok ' ../sqltexto.out); \
+ if grep -q '^FALLO' ../sqltexto.out; then grep '^FALLO' ../sqltexto.out | cut -c1-300; echo "  ROJO: FALLO"; exit 1; fi; \
+ if [ "$$n" -ne 9 ]; then cut -c1-300 ../sqltexto.out; echo "  ROJO: $$n de 9 comprobaciones"; exit 1; fi; \
+ echo "[status=OK] 9/9"
+	@cd $(SQLTEXTO) && rm -f medidas.db && timeout 120 ../sqltexto.exe SqlDemo.mod > ../sqldemo.out 2> ../sqldemo.err; \
+ n=$$(wc -l < ../sqldemo.out); \
+ if ! grep -q '^\[status=OK\]' ../sqldemo.err || ! grep -q '(0 bloques sin liberar' ../sqldemo.err || [ "$$n" -ne 25 ]; then \
+   tail -20 ../sqldemo.out ../sqldemo.err; echo "  ROJO: SqlDemo ($$n lineas)"; exit 1; fi; \
+ echo "[status=OK] SqlDemo: 25 lineas, sin fugas"
+
 # V7/H5 (P2b.3, 27-sep) — el .mdn v3: la marca DIRECTA (bit alto de thunk_offset) llega al registro de natives
 # y no se cuela en la dirección del thunk; un v2 las manda todas al ejecutor; un v4 se rechaza.
 test-mdnv3: $(LIBOBJ)

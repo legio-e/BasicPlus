@@ -929,6 +929,10 @@ static void h_pack_fallo(bpvm_t* vm, uint32_t marca, uint32_t version,
         snprintf(buf, sizeof buf,
                  "pack '%.4s': el texto que se le pasa a '%s' no cabe en el puente"
                  " (%d bytes como mucho)", m, nombre, BPVM_AOT_PACK_STR);
+    } else if (motivo == 3) {   /* V8 #724 */
+        snprintf(buf, sizeof buf,
+                 "pack '%.4s': el texto que devuelve '%s' no acaba: no hay NUL en"
+                 " %d bytes (el tope del puente)", m, nombre, BPVM_AOT_PACK_TEXTO);
     } else {
         snprintf(buf, sizeof buf,
                  "pack '%.4s': no ofrece '%s'. O no esta grabado en esta placa, o"

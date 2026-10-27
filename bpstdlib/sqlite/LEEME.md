@@ -46,10 +46,10 @@ ORM) y `notas/p4/` (el proyecto), y eso costaba dos cosas concretas:
             │  java basicplus.frontend.NpackBuild <elf> \
             │       <arm-cortex-m33|riscv32-esp-p4> <salida.npk>
             ▼
-    nativo/sqlite.npk.ARMV8   464.127 B     ← el motor, con su tabla de relocs
+    nativo/sqlite.npk.ARMV8   464.399 B     ← el motor, con su tabla de relocs
     nativo/sqlite.npk.RISCV   618.168 B
-    nativo/SQLite.mdn.ARMV8     3.180 B     ← el puente AOT (lo emite el
-    nativo/SQLite.mdn.RISCV     4.054 B        compilador, pero necesita el
+    nativo/SQLite.mdn.ARMV8     3.276 B     ← el puente AOT (lo emite el
+    nativo/SQLite.mdn.RISCV     4.176 B        compilador, pero necesita el
                                                toolchain cruzado para enlazar)
             │  + SQLite.bp y Orm.bp compilados. Y NADA de la stdlib (V7 #623,
             │    8-oct): Core y Str los saca la placa del Stdlib.pack. Hasta
@@ -93,6 +93,11 @@ Comprueba la cabecera: bytes 4-8 del `.mdn` son versión y **ABI** (`struct '<HH
 quedaron en la 8, con SQLite sin natives en toda placa con imagen nueva— y ahora `compat.sh
 check` (el frente `packs-abi`, `compat/packs_abi.py`) se pone en ROJO si un `.mdn` versionado o
 una entrada `mdn` de un pack grabable (`packs/`, los `out/`) va en otra ABI que la de la VM.
+
+**El texto (V8, `#724`, 27-oct)**: el puente trae el texto de SQLite entero (antes lo cortaba en 512 bytes) y
+`getStr` lo descodifica —`EncodingError` si no es UTF-8 válido, o «�» con `getStr(i, true)`—: SQLite guarda los bytes
+que le den sin mirarlos. Los `.mdn` de arriba son los de ese día. En el PC lo prueba `make test-sqltexto` (bpgenvm-c),
+con el puente que escribe el compilador en cada vuelta, y está en la red.
 
 ## Cómo se comprueba que un cambio no rompió nada
 

@@ -127,6 +127,8 @@ public final class AotCEmitter {
     private int tryCounter = 0;
     /** V7 #578 — alguna native del módulo tiene un `try`: el C lleva el salto y las operaciones del límite. */
     private boolean usaTry = false;
+    /** V8 #724 — alguna native de un pack devuelve texto (`string` o `byte[]`): el C lleva la función que lo copia. */
+    private boolean usaTextoDePack = false;
     /** V7 #578 — el tipo de C que devuelve la función que se emite (el `return` de dentro de un `try` lo guarda). */
     private String cRetActual = "void";
 
@@ -766,6 +768,10 @@ public final class AotCEmitter {
         /* V7 #578 — ¿alguna native con un `try`? Entonces el C lleva su salto y sus operaciones (emitHeader). */
         usaTry = false;
         for (Ast.FuncDef f : nativeFuncs) if (f.body != null && contieneTry(f.body)) usaTry = true;
+        /* V8 #724 — ¿alguna native de un pack devuelve texto? Entonces el C lleva la función que lo copia (emitHeader). */
+        usaTextoDePack = false;
+        for (Ast.FuncDef f : nativeFuncs)
+            if (f.isPackExtern && (esString(f.returnType) || esBytes(f.returnType))) usaTextoDePack = true;
 
         // Header del archivo.
         emitHeader();
@@ -981,6 +987,41 @@ public final class AotCEmitter {
             w.println("    return (int32_t) vm->aot_helpers->call_builtin(vm, BPVM_NATIVA_EH_ES, \"rl\", a, 'i');");
             w.println("}");
         }
+        if (usaTextoDePack) {
+            /* V8 #724 — EL TEXTO QUE DEVUELVE UN PACK (`const char*`). Hasta #724 el puente lo contaba hasta 512 bytes y lo
+             * copiaba a una cadena tal cual: lo de más se perdía sin avisar —a veces a medio carácter— y lo que no era
+             * UTF-8 válido entraba roto. Ahora, la regla de #711 (Eduardo, 22-oct): los bytes por un lado y el
+             * descodificador por otro. Los bytes hasta el NUL van a un byte[] nuevo; si la native devuelve `string`, ese
+             * byte[] pasa por fromBytes —el builtin, por el despachador común—: EncodingError si no es UTF-8 válido, y si
+             * lo es, la cadena nace en su sitio, sin otra copia. Con `byte[]`, los bytes tal cual (el modo que ignora lo
+             * elige la librería: fromBytes(b, true)). El bucle sigue acotado —sin tope, gcc lo cambia por strlen, que un
+             * .mdn no puede llevar (MdnPack)—, pero el tope ya no corta: un texto sin NUL en BPVM_AOT_PACK_TEXTO bytes es
+             * un error con nombre (pack_fallo, motivo 3). Aquí y no en el puente, para que la native siga siendo directa
+             * (nativesDirectas mira el cuerpo): fromBytes no cede el hilo. Y sin un literal: el tipo de call_builtin, byte
+             * a byte en la pila, como el nombre del símbolo en el puente. Todo con helpers que ya había: la ABI del .mdn
+             * no cambia (Eduardo, 27-sep: el compilador antes que subirla). */
+            String m = "aot_" + moduleName;
+            w.println("/* V8 #724 — el texto que devuelve un pack: sus bytes hasta el NUL, a un byte[] nuevo; si la native devuelve");
+            w.println(" * una cadena, por fromBytes (EncodingError si no es UTF-8 válido). Sin cortar: sin NUL en BPVM_AOT_PACK_TEXTO");
+            w.println(" * bytes, pack_fallo (motivo 3). Fuera del puente, para que la native siga siendo directa (fromBytes no cede). */");
+            w.println("static uint32_t " + m + "__texto_de_pack(struct bpvm* vm, const char* r, uint32_t marca, uint32_t ver,");
+            w.println("                                         const char* nm, int32_t cadena) {");
+            w.println("    const struct aot_helpers_v2* H = vm->aot_helpers;");
+            w.println("    int32_t k = 0, i;");
+            w.println("    uint32_t b;");
+            w.println("    int64_t a[1];");
+            w.println("    char tp[2];");
+            w.println("    while (k < BPVM_AOT_PACK_TEXTO && r[k]) k++;   /* acotado: sin tope, gcc lo cambia por strlen */");
+            w.println("    if (k == BPVM_AOT_PACK_TEXTO) H->pack_fallo(vm, marca, ver, nm, 3);   /* no retorna */");
+            w.println("    b = (uint32_t) H->newarray_i8(vm, k);");
+            w.println("    for (i = 0; i < k; i++) H->array_store_i8(vm, b, i, (int32_t) (uint8_t) r[i]);");
+            w.println("    if (!cadena) return b;");
+            w.println("    tp[0] = 'r'; tp[1] = 0;");
+            w.println("    a[0] = (int64_t) b;");
+            w.println("    return (uint32_t) H->call_builtin(vm, " + edu.bpgenvm.bytecode.Builtin.FROM_BYTES.id
+                      + ", tp, a, 'r');   /* fromBytes */");
+            w.println("}");
+        }
         w.println();
         w.println("/* Forward decls de las funciones AOT de este módulo. */");
         for (Ast.FuncDef f : nativeFuncDefs.values()) {
@@ -1169,7 +1210,10 @@ public final class AotCEmitter {
             sig.append(cTypePack(f.params.get(i).type, sim));
         }
         if (n == 0) sig.append("void");
-        w.println("    typedef " + cTypePack(f.returnType, sim) + " (*fn_t)(" + sig + ");");
+        /* V8 #724 — un `byte[]` que DEVUELVE el pack es su texto, sin descodificar: el pack da `const char*`, como para
+         * `string`. (Como parámetro, un byte[] sigue sin cruzar: cTypePack lo dice.) */
+        String retPack = esBytes(f.returnType) ? "const char*" : cTypePack(f.returnType, sim);
+        w.println("    typedef " + retPack + " (*fn_t)(" + sig + ");");
         w.println("    fn_t fn;");
 
         /* Todas las DECLARACIONES juntas y antes de cualquier sentencia: el .c
@@ -1210,25 +1254,20 @@ public final class AotCEmitter {
             else                         args.append(cVar(f.params.get(i).name));
         }
         boolean devuelveCadena = esString(f.returnType);
+        boolean devuelveBytes  = esBytes(f.returnType);
         boolean hayCajas = false;
         for (int i = 0; i < n; i++) if (salida8(f.params.get(i).type) != null) hayCajas = true;
 
         if (f.returnType == null) {
             w.println("    fn(" + args + ");");
-        } else if (devuelveCadena) {
-            /* El pack devuelve `const char*`; BP quiere una cadena del heap. La
-             * longitud se cuenta a mano: `strlen` seria un simbolo externo, y en
-             * el .mdn eso es otra reloc que no resuelve nadie. */
-            w.println("    { const char* r = fn(" + args + "); int32_t k = 0;");
+        } else if (devuelveCadena || devuelveBytes) {
+            /* El pack devuelve `const char*`; BP quiere una cadena (o un byte[]) del heap. V8 #724: lo copia —y si es
+             * una cadena, la descodifica— la función de la cabecera (`__texto_de_pack`). El porqué, allí: el tope de
+             * 512 que había aquí cortaba sin avisar, y lo que no era UTF-8 entraba roto. */
+            w.println("    { const char* r = fn(" + args + ");");
             w.println("      if (r == 0) return 0;");
-            /* ACOTADO a proposito, y por dos motivos que coinciden:
-             *  1. gcc reconoce `while (r[k]) k++;` y lo sustituye por una
-             *     llamada a strlen -> simbolo externo -> reloc -> el .mdn no la
-             *     resuelve. MEDIDO: era el UNICO reloc que quedaba.
-             *  2. si el pack devuelve un buffer sin terminar, un bucle sin tope
-             *     se sale de la memoria. Con tope, se corta. */
-            w.println("      while (k < BPVM_AOT_PACK_STR && r[k]) k++;");
-            w.println("      return (int32_t) H->string_from_cstr(vm, r, k); }");
+            w.println("      return (int32_t) aot_" + moduleName + "__texto_de_pack(vm, r, " + marca + ", " + ver
+                      + ", nm, " + (devuelveCadena ? 1 : 0) + "); }");
         } else {
             w.println("    { " + cTypePack(f.returnType, sim) + " r = fn(" + args + ");");
         }
@@ -1244,7 +1283,7 @@ public final class AotCEmitter {
             w.println("    H->" + hp + "(vm, (uint32_t) " + cVar(f.params.get(i).name)
                       + ", 0, o" + i + ");   /* caja de salida */");
         }
-        if (f.returnType != null && !devuelveCadena) w.println("    return r; }");
+        if (f.returnType != null && !devuelveCadena && !devuelveBytes) w.println("    return r; }");
         else if (hayCajas && f.returnType == null)   { /* nada: no se abrio bloque */ }
         w.println("}");
         w.println();
@@ -1259,6 +1298,13 @@ public final class AotCEmitter {
     private boolean esString(Ast.TypeRef t) {
         return (t instanceof Ast.SimpleTypeRef)
             && "string".equals(((Ast.SimpleTypeRef) t).name);
+    }
+
+    /** V8 #724 — `byte[]`: lo que puede DEVOLVER una native de un pack para dar su texto sin descodificar. */
+    private boolean esBytes(Ast.TypeRef t) {
+        if (!(t instanceof Ast.ArrayTypeRef)) return false;
+        Ast.TypeRef e = ((Ast.ArrayTypeRef) t).element;
+        return (e instanceof Ast.SimpleTypeRef) && "byte".equals(((Ast.SimpleTypeRef) e).name);
     }
 
     /** `long[]` / `double[]` como CAJA DE SALIDA - el pack recibe un puntero. */
@@ -1302,13 +1348,15 @@ public final class AotCEmitter {
             throw new UnsupportedAotException(
                 Q + sim + Q + " usa el tipo " + Q + n + Q + ", que no puede cruzar a "
                 + "un pack. Un pack no conoce el GC de BP, asi que solo cruzan "
-                + "VALORES: integer, boolean, float, string, y long[]/double[] como "
-                + "caja de salida. Un objeto se reparte como HANDLE (un integer que "
+                + "VALORES: integer, boolean, float, string, long[]/double[] como "
+                + "caja de salida, y byte[] como lo que devuelve (un texto sin "
+                + "descodificar). Un objeto se reparte como HANDLE (un integer que "
                 + "el pack valida).");
         }
         throw new UnsupportedAotException(
             Q + sim + Q + ": ese tipo de array no cruza a un pack. Solo long[] y "
-            + "double[], y solo como caja de salida de un valor de 8 bytes.");
+            + "double[], como caja de salida de un valor de 8 bytes, y byte[] como "
+            + "lo que DEVUELVE la funcion (los bytes de un texto, sin descodificar).");
     }
 
     private boolean endsWithReturn(List<Ast.IStmt> body) {

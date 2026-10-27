@@ -277,6 +277,9 @@ struct aot_helpers_v2 {
      *              cuentan igual porque desde el thunk son indistinguibles; el
      *              mensaje enumera los tres para que el usuario sepa dónde mirar.
      *   motivo 2 → una cadena no cabe en el buffer del puente.
+     *   motivo 3 → (V8 #724) el texto que DEVUELVE el pack no acaba: sin NUL en
+     *              BPVM_AOT_PACK_TEXTO bytes. Una VM de antes de #724 lo contaría
+     *              como el 1: sigue siendo un error, no un corte.
      *
      * `marca` se imprime como los 4 caracteres que es ('SQLI'), no como número:
      * 0x53514C49 no le dice nada a nadie. */
@@ -609,6 +612,15 @@ static inline double  bpvm_aot_bits_f64(int64_t b) { union { double d; int64_t i
  * compilan por separado: el emisor lo estampa en el `.c` generado y la VM lo
  * nombra en el mensaje de error. Si se separan, el aviso mentiría. */
 #define BPVM_AOT_PACK_STR  512
+
+/* V8 #724 — y en la otra dirección: cuánto texto puede DEVOLVER un pack (su
+ * `const char*`, hasta el NUL), en BYTES. No sale de la pila —se copia directo al
+ * heap—, así que no es un búfer: es la red para un pack que devolviera un texto
+ * sin NUL. El bucle tiene que estar acotado igual (sin tope, gcc lo cambia por
+ * `strlen`, que un `.mdn` no puede llevar), pero el tope ya no corta: llegar a él
+ * sin el NUL es un error con nombre (motivo 3). Hasta #724 era BPVM_AOT_PACK_STR,
+ * y lo de más se perdía sin avisar. Compartido como el de arriba. */
+#define BPVM_AOT_PACK_TEXTO  1048576
 
 /* Tabla v2 instanciada en el runtime con los punteros a las funciones
  * reales. Compartida entre todas las VMs del proceso. Pasada a cada

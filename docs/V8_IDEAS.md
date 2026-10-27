@@ -3829,6 +3829,13 @@ Lo que queda fuera, cada cosa en su ficha: el texto de los packs (SQLite: `strin
 pegamento del AOT corta en 512 bytes, a veces a medio carácter, y sin avisar), y los streams (por diseñar). El caso
 especial del cursor (cadenas que empiezan por una continuación) se queda mientras quede una puerta.
 
+**`#724` HECHO (27-oct; Eduardo: *«OK, sigue con la propuesta»*).** El texto de un pack, con la misma regla: el puente
+lo copia ENTERO a un `byte[]` (sin el corte de 512; un tope de 1 MB que no corta, avisa) y, si la native devuelve
+`string`, lo pasa por `fromBytes`; una native de pack puede devolver ahora `byte[]`, los bytes tal cual, para que la
+librería elija el modo (SQLite: `getStr(i)` y `getStr(i, ignorarError)`). Todo en el compilador, con helpers que ya
+había: la ABI del `.mdn` no cambia. El detalle, en la ficha. Con ella se cierra la última puerta conocida por la que
+una cadena podía nacer rota; si eso basta para quitar el caso especial del cursor, está por mirar.
+
 ### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería

@@ -36,6 +36,14 @@ que el compilador se plante.
 > cruzan `integer`, `boolean`, `float`, `string`, los objetos como *handle*, y
 > `long[]`/`double[]` **sólo como caja de salida**. Y las **llamadas de vuelta
 > de `native` a BP** son otra cosa distinta — ver §3.
+>
+> **El texto, en las dos direcciones** (V8, `#724`): el que va AL pack cabe en
+> 512 bytes (`BPVM_AOT_PACK_STR`, un búfer en la pila; si no cabe, se dice). El
+> que VUELVE (`const char*`) llega entero —1 MB como mucho, `BPVM_AOT_PACK_TEXTO`;
+> sin NUL en ese tope, un error con nombre— y, si la native devuelve `string`,
+> descodificado (`EncodingError` si no es UTF-8 válido, como `readFile`). Una
+> native de pack puede devolver también `byte[]`: los bytes tal cual, para
+> descodificarlos después con `fromBytes(b)` o `fromBytes(b, true)`.
 
 ### 1. ~~`double`~~ — entró en V6/N1.2 (queda un resto)
 
