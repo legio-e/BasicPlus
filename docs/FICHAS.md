@@ -7079,6 +7079,19 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **sólo apuntada**)
+
+Al arrancar, `pico/main.c` comprueba el ancla: la busca barriendo la flash desde `XIP_BASE` (`bpvm_ancla_buscar`) y
+mira que sea la de su propia BIOS (`bios_pico_ancla()`). Desde el 22-oct el `.uf2` lleva las DOS imágenes de la RP2350
+(P, y M para la Metro con PSRAM): en la Metro corre M, y la búsqueda encuentra primero el ancla de P, que está antes en
+la flash. En la Pico 2 corre P, la primera, y la búsqueda da con la suya. **No es un fallo de los packs:** ningún pack
+busca el ancla; el cargador de motores le da a cada uno la BIOS de la imagen que corre, por puntero
+(`bpvm_npack_carga.c`: la entrada del motor recibe `f->bios`), y el `SQLite` de la Metro, con la imagen del 27-oct,
+corre bien (`SqlDemo`). Lo que miente es el aviso, y un aviso que da una falsa alarma enseña a no leerlo. **Lo que
+haría falta** (sin hacer): que la búsqueda del control empiece donde empieza la imagen que corre (la de M, en la
+Metro), o que el control sepa que hay dos imágenes y mire sólo la suya. El mismo control vive en
+`stm32/port/stm32_repl.c`, que sólo tiene una imagen.
+
 #### 🔵 `#728` — idea de Eduardo: una interfaz del IDE para la IA —cargar un fuente, compilar, conectar a un dispositivo, ejecutar, depurar, cerrar— (abierta el 24-oct; **por analizar**)
 
 Eduardo, 24-oct: *«Como idea. Estoy pensando si te sería útil a Claude y a otras IAs dotarle al IDE de una interfaz

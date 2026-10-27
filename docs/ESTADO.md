@@ -27,6 +27,34 @@
 
 ## Última sesión
 
+> **27-oct** — **El lote de placas: las nueve, grabadas y probadas** (Eduardo: *«Continuamos, teniamos pendiente
+> regrabar los micros»*; al lote: *«OK»*).
+> - **Las imágenes**, compiladas antes de tocar una placa: la Pico y la Metro (un `.uf2`), las cinco ESP32 con el IDF 6.1
+>   (P4, S3, C5, C6 y C3, sin errores) y las dos STM32 por la receta sin GUI de CubeIDE (la Nucleo, con cuatro avisos de
+>   funciones que su configuración no usa; la DK2, limpia). Lo nuevo: en la Pico y la Metro, la VM-C de `#712`, `#705`,
+>   `#716` y `#717` (su imagen era la de `#711`); en las demás, además, los builtins 283–286 (`#714` y `#711`) con la
+>   stdlib embebida que los usa.
+> - **Los packs sellados aguantan**, sin regrabar ninguno: antes de grabar, el `nm` de las ESP (el texto y el rodata en
+>   la misma página de 64 KB; el heap, quieto); y en cada placa, el `packRamBase` igual y sus motores cargando —`SQLite`
+>   en la Metro (`SqlDemo`, bien) y en la P4; `Gui` en la P4, la C5 y la DK2; `GuiMini` y `DriverSpi` en la C6—. Lo que
+>   llevan los de la GUI, el motor de LVGL en C, no ha cambiado desde el 12-oct (el módulo `Gui` va en el `Stdlib.pack`).
+> - **La stdlib:** el `Stdlib.pack` de hoy en las nueve (`packdel` del viejo donde lo había; la P4, la S3 y la C5 no lo
+>   tenían) y fuera las copias sueltas que lo tapaban: `/app/Json.mod` en la Metro y la Pico 2, y `Json`, `Gui`, `Str` y
+>   `Collections` en `/lib` (las subía la tanda cuando la placa no tenía el pack; con él, ya no). Con el pack, `/lib`
+>   queda vacío: es lo normal (Eduardo, 28-sep).
+> - **La tanda corta** (las 6 de siempre y las de V8 que tocan lo que cambia: `MoveSoloLectura`, `StrDosCaminos`,
+>   `Utf8Descodifica`, `ArrayEnorme`, `TcpCloseSuelto`, `ParseNumero`, `CharCodeAtFuera` y `JsonErrores`), probada antes
+>   contra el sim: **en las nueve, todo IDÉNTICO** al PC (11 o 12 cada una), `MachineId` y `GuiShot` «no peta» por su
+>   criterio, y la GUI saltada en las que no tienen pantalla. Las capturas de la DK2, la P4, la C6 y la C5, miradas: bien
+>   (en las de 240 px el deslizador queda encima de la casilla, que es cómo coloca el sample). El informe, punto de
+>   restauración: `compat/informes/lote_v8_27oct.md`.
+> - **Y una falsa alarma, a ficha:** `#729` —en la Metro, el control del ancla dice «DUPLICADA… un pack leería punteros
+>   de basura»; desde que el `.uf2` lleva las dos imágenes, la búsqueda encuentra primero la de P. Los packs no la buscan:
+>   el cargador les da la BIOS de la imagen que corre—. Y un detalle: la zona de packs de la Nucleo es pequeña (504 KB) y,
+>   con el `Stdlib` viejo marcado como borrado, le quedan 96 KB.
+> - **Lo siguiente:** `#724`, `#709` y las del IDE (`#693`–`#696`); o las diez preguntas de los streams (`#723`, `V8_IDEAS`
+>   §E8), lo que diga Eduardo.
+
 > **24-oct** — **`#699`, hecha: el `continue` de un `do … loop c` va a la condición, como en C** (Eduardo: *«Continuamos
 > con los pendientes, #699»*). **Y después, `#701`, `#702` y `#704`; la red, con su progreso y con lo que cronometra al
 > final (`#726`); dos ideas de Eduardo (`#728` y el progreso); y las tuplas, analizadas (`V8_IDEAS` §E7).**
