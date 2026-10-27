@@ -1760,6 +1760,10 @@ almacén local que dejó EIM, sin bajar nada. En la P4 se grabó sólo la app.
 > PSRAM.»* **Sólo análisis, por ahora** (*«De momento solo analizamos»*). Y la norma, ese mismo día: *«La norma debe
 > ser: 1ª analizar, 2º mejorar algoritmo, 3º mejorar implementación.»* Del GC, en concreto: *«Lo del GC y la lista de
 > huecos de momento solo analiza, de momento no intentamos mejorar.»*
+>
+> **El H5, CERRADO el 27-oct** (Eduardo: *«Si, cierra H5 y lo que falte como pendiente»*). Lo hecho, abajo y en la
+> fila del H5 de `FICHAS.md`; lo que quedaba, en fichas sueltas: `#715`, `#718`, `#719`, `#721`, `#722`, `#723` y
+> `#730`–`#739`.
 
 **Lo que pide Eduardo:**
 1. *«El primer punto es que una vez creado un string es un invariante mientras exista. Así que la equivalencia entre

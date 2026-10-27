@@ -27,6 +27,20 @@
 
 ## Última sesión
 
+> **27-oct (tarde, después)** — **El H5 (los strings), CERRADO** (Eduardo: *«Una cosa, de H5 que falta?»*; y luego,
+> *«Si, cierra H5 y lo que falte como pendiente»*), como el H5 de V7: lo que quedaba, en fichas sueltas.
+> - **Las que ya había**, abiertas: `#715` y `#718` (el GC y la lista de huecos, sólo análisis), `#719` (la división
+>   quirúrgica de la RP2350, para más adelante), `#721` (`log=1` y el GC, por decidir), `#722` (la Pico 2 y
+>   `MapOrden`, anotada) y `#723` (los streams, por diseñar).
+> - **Diez nuevas**, con lo que no tenía ficha (la fila del H5 y `V8_IDEAS` §E5): `#730` la biblioteca de cadenas en C
+>   (decidida el 21-oct; la forma, por decidir), `#731` dos cadenas con acentos a la vez (dos cursores), `#732` los
+>   literales largos por índice, `#733` el cursor en las natives, `#734` las cuatro funciones más lentas en las RP2350
+>   (sin explicar), `#735` la longitud en caracteres en la etiqueta (quedan 20 bits libres desde `#714`), `#736` crear
+>   sin poner a cero, `#737` la caché de las ESP32, `#738` la PSRAM sin pasar por la caché en la Metro y `#739` el
+>   caso especial del cursor (con `#724` ya no queda puerta conocida). La `#738` no estaba en la lista que se le dio a
+>   Eduardo: también era del H5 (por medir).
+> - **Lo siguiente:** `#709` y las del IDE (`#693`–`#696`), o las diez preguntas de los streams (`#723`).
+
 > **27-oct (tarde)** — **`#724`, hecha: el texto que devuelve un pack llega entero y descodificado** (Eduardo: *«Si,
 > continuamos con los pendientes»*; a la propuesta, *«OK, sigue con la propuesta»*). Antes preguntó si a SQLite se le
 > puede decir que use UTF-8: ya lo usa, pero no lo comprueba —«garbage in, garbage out», su documentación—, así que un
