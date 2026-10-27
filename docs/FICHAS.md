@@ -7118,6 +7118,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   main y 8 hilos; y en una C6 sin pantalla, `vmheap=` levanta el tope de 128 KB (hasta ~250 KB de VM).
 - **5. Lo que no se toca ahora:** el margen del sistema (103 KB en la C6) y el tope de la VM: ahí tendrá que vivir la
   WiFi de V8 en la C3 y la C6, que pide decenas de KB de RAM interna.
+- **Todo junto** (Eduardo: *«Si sumamos los 48K con los 16K de los otros ahorros que propusiste ganamos 64K que es
+  muchísimo sobre todo en la C3 pero que también beneficia a la C6 y la Pico2»*), por placa:
+  - **la C3**, de 48 KB de heap a 96 con las pilas en el heap, y a 112 (+64, más del doble) si los ahorros estáticos
+    dejan que su bloque llegue a los 128 KB de su objetivo —hoy se queda en 112: lo limita el bloque contiguo mayor;
+    se comprueba en la placa—;
+  - **la C6**, de 61 a 112 (+51): su bloque tiene el tope de 128 KB, así que de los ahorros estáticos sólo 3 KB van al
+    heap y el resto queda para el sistema —holgura para la GUI y, después, para la WiFi—;
+  - **la Pico 2**, de 214 a ~270 (+55, de las pilas: su región es el 25 % del bloque); los ahorros de las ESP no le
+    tocan (su log ya es de 4 KB, y lee el ENV de la flash sin copiarlo), y los comunes, ~3 KB más.
 
 #### 🔵 `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **por mirar**)
 
