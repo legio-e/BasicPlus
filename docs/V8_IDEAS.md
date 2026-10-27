@@ -1833,9 +1833,40 @@ respecto al sonido.»*). Así queda:
   Pico y la Nucleo compilan. La red, VERDE en 13:45: paridad 167 en MOD9, en MOD8 y con dos workers; cápsula V6, 59; norma 9/9; sim 12/12; pruebas de C, 108/108 (`test-sonido`, 35/35); sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
 - **Para el próximo lote:** el `Stdlib.pack` con `Sound` en todas las placas (en las que no tienen sonido,
   `isAvailable()` da false y `play`, el motivo).
-- **Y la C5, en análisis** (Eduardo, al acabar: *«Me parece que C5 también soporta sonido»*): su placa de Waveshare
-  lleva el mismo ES8311 y el mismo NS4150B, sin MCLK (el códec saca el reloj del BCLK) y con el amplificador en el
-  bit 3 del expansor CH32V003, el que da el reset y la luz de la pantalla.
+- **Y la C5:** la tercera parte del H4, parada hasta que haya un altavoz que entre en su conector (abajo, «27-oct,
+  la C5»).
+
+**27-oct, la C5: la tercera parte del H4, analizada y parada** (Eduardo: *«Me parece que C5 también soporta
+sonido»*; y tras el análisis: *«Si, haremos el sonido de la C5 como parte de H4 (digamos la tercera parte que falta). Ahora mismo el conector del altavoz es diferente del de la P4 así que no me entra por lo que no lo podemos probar. Queda pendiente para mas adelante hasta que encuentre una solución.»*):
+- **La placa** (la Waveshare ESP32-C5-Touch-LCD-2.8: su wiki, su ejemplo `07_audio` y su esquema): el mismo ES8311 y
+  el mismo NS4150B que la P4, un conector de altavoz MX1.25 de dos pines y un micrófono. El ES8311 está en el I2C 0
+  (los GPIO 0 y 1, en la 0x18), con el táctil, el expansor, el RTC, la IMU y el SHTC3: el árbitro ya lo cubre.
+- **Lo que cambia respecto a la P4:**
+  - **sin MCLK:** el códec saca el reloj del BCLK (`use_mclk = false` en el ejemplo de Waveshare); en la línea
+    `audio`, sin `mclk`;
+  - **el I2S:** el BCLK en el 24 y el WS en el 25; la salida al códec, el 26 o el 27 —la wiki pone `I2S_ASDOUT` en
+    el 26 e `I2S_DSDIN` en el 27; el código de Waveshare, la salida en el 26 («MCU to codec DAC»); el texto del
+    esquema no dice qué GPIO va a cada red—. Va en la línea del ENV: se decide en la placa, sin recompilar;
+  - **el amplificador no está en un GPIO:** es el bit 3 (EXIO3) del expansor CH32V003 (I2C 0x24), el mismo chip que
+    hace el reset del panel (EXIO1) y el del táctil (EXIO0), y la luz (su registro 0x05).
+- **El problema, el expansor:** su salida (el registro 0x03) se escribe entera, los 8 bits, y no se puede leer (el
+  0x04 es la entrada; los drivers de Waveshare y de ESPHome guardan una copia en memoria). Hoy la escribe sólo el
+  driver de la pantalla (el pack `DriverC5`), con su copia. Con otra copia en el sonido se pisarían: al tocar un
+  sonido, la pantalla y el táctil se quedarían en reset; al abrir la pantalla mientras suena, se apagaría el
+  amplificador con `isPlaying()` diciendo que suena —un fallo silencioso—.
+- **Lo propuesto** (a la pregunta *«¿Hacemos la C5 dentro del H4 antes de cerrarlo, con esta propuesta?»*, el «Si»
+  de arriba): **el expansor, con un solo dueño, la HAL BP**, como el árbitro del bus. Guarda los 8 bits y ofrece
+  «pon el bit N a 0 o a 1»; el sonido lo usa, y el pack de la pantalla también, en vez de escribir el expansor, por
+  una entrada nueva al final de la BIOS (la versión 9: los packs hechos con la 8 siguen valiendo con la imagen nueva,
+  y el `DriverC5` nuevo en una imagen vieja lo dice). La cintura de la P4 pasa a la familia (`esp32/common`, de
+  donde la C5 toma su código), con el `mclk` opcional y el amplificador por un GPIO o por el expansor. En la C5:
+  `audio=es8311,i2c:0,sda:0,scl:1,bclk:24,ws:25,dout:26,pa:exio3`. De paso, el EXIO6 y el EXIO7, que Waveshare
+  deja libres en el conector, se podrían ofrecer sin pisar la pantalla.
+- **El camino sin tocar la BIOS** —la imagen saca la pantalla y el táctil del reset al arrancar, y el pack deja de
+  escribir el expansor— no se propuso: un pack nuevo en una imagen vieja dejaría la pantalla negra sin decir por qué.
+- **Lo que cuesta:** un día, más o menos. La imagen de la C5 ocupa 702 KB de su partición de 1 MB (el 68 %), y el
+  sonido le suma unos 50 KB.
+- **Parada** hasta que Eduardo tenga un altavoz que entre en el conector de la C5.
 
 ---
 

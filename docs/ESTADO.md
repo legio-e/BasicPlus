@@ -45,9 +45,13 @@
 >   del sistema. En la placa: el canon de la SD en paralelo, con su progreso, y el tono detrás; `SonidoParalelo`,
 >   IDÉNTICO al PC; la P4 lleva ya la imagen y el `Stdlib.pack` con `Sound` (y su línea `audio`). `test-sonido` (35)
 >   en la red. La red, VERDE en 13:45: paridad 167 en MOD9, en MOD8 y con dos workers; cápsula V6, 59; norma 9/9; sim 12/12; pruebas de C, 108/108 (`test-sonido`, 35/35); sombra 15/15; el estrés, `packs-abi` y la stdlib embebida.
-> - **Lo siguiente:** la C5 (Eduardo: *«Me parece que C5 también soporta sonido»*): lleva el mismo ES8311 y el
->   mismo amplificador, sin MCLK y con el amplificador en el expansor CH32V003 que comparte con la pantalla; en
->   análisis, y con ella, el cierre del H4. Y en el próximo lote, el `Stdlib.pack` con `Sound` en las demás placas.
+> - **Y la C5, la tercera parte del H4, analizada y parada** (Eduardo: *«Me parece que C5 también soporta sonido»*;
+>   tras el análisis: *«Si, haremos el sonido de la C5 como parte de H4 (digamos la tercera parte que falta) […]
+>   Queda pendiente para mas adelante hasta que encuentre una solución»*: el altavoz no entra en el conector de la
+>   C5). Lleva el mismo ES8311, sin MCLK y con el amplificador en el expansor CH32V003, que la pantalla escribe
+>   entero y no se puede leer: lo propuesto, el expansor con un solo dueño en la HAL BP (§E4, «27-oct, la C5»).
+> - **Lo siguiente:** el H4 espera a la C5 (al altavoz). En el próximo lote, el `Stdlib.pack` con `Sound` en las
+>   demás placas.
 
 > **27-oct (tarde, después)** — **El H5 (los strings), CERRADO** (Eduardo: *«Una cosa, de H5 que falta?»*; y luego,
 > *«Si, cierra H5 y lo que falte como pendiente»*), como el H5 de V7: lo que quedaba, en fichas sueltas.
