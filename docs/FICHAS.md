@@ -7244,6 +7244,14 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   la Metro (M), el mismo bucle, 114 → 125 ms (+9,6 %). En el PC no se notaba. **Por decidir (Eduardo):** dejarla así, o
   algo más barato que guarde lo mismo —por ejemplo, que el compilador diga lo más que apila cada función y se mire una
   vez, en el `ENTER`, como el `max_stack` de la JVM—.
+- **Decidido el mismo día: se queda como está** (Eduardo: *«La pila solamente comprobar en los call. Si ya está así lo
+  dejamos como está, es mas importante la seguridad que la velocidad»*). No está sólo en las llamadas: en cada una está
+  el muro del `ENTER` (el marco y 256 B de margen) y, desde la b, el tope antes de cada instrucción. Sólo en las
+  llamadas sería seguro si al entrar se supiera lo más que apila la función, y hoy no se sabe: el margen cubre lo normal
+  (84 B como mucho en el corpus), pero no una expresión muy anidada (`PilaOperandos`, 804 B), que escribiría fuera de su
+  pila, en el heap. Lo que daría las dos cosas, para cuando interese: que el compilador calcule lo más que apila cada
+  función y ponga una comprobación al entrar sólo en las que pasen del margen —casi ninguna—, y quitar la de cada
+  instrucción.
 
 #### 🔵 `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **por mirar**)
 
@@ -7373,6 +7381,13 @@ la misma imagen que la Pico 2, con el heap en la PSRAM, que pasa por la misma ca
   censo, `floatToString` sube de 29,7 a 46 µs con la imagen de hoy, estable en tres pasadas, y en el bucle suelto no
   (+2 %). La hipótesis: en M, la PSRAM (el heap) y el código que sigue en la flash comparten la caché, y hoy el heap
   cambió de sitio (`#740`). Sin comprobar: lo dirían los contadores de una imagen de prueba de M.
+
+**Decidido el 29-oct** (Eduardo: *«No, es demasiada memoria. Quizás solo el intérprete que serían aprox. 20K. Pero donde
+me interesa mas es la Metro con PSRAM, si no ganamos nada lo dejamos como está»*): el código de P a la RAM, no. En la
+Metro con PSRAM el intérprete ya está en la SRAM (M, desde el 22-oct, con los builtins, la reserva y FreeRTOS): por ahí
+no queda nada que ganar, y **se queda como está**. Sólo el intérprete en la Pico 2 serían 21,6 KB del heap (un 10 %), con
+lo medido arriba (en un bucle, nada; en el censo, `parseFloat` −39 %, `floatToString` −21 %, el bytecode −5 %): apuntado
+por si interesa. Y lo de `floatToString` en la Metro, sin mirar (*«No hace falta»*).
 
 #### 🔵 `#733` — en una native, recorrer una cadena por índice sigue siendo cuadrático: sin hilo del intérprete, su cursor dura una llamada (abierta el 27-oct, al cerrar el H5; **propuesta, sin hacer**)
 
