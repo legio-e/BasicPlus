@@ -64,12 +64,23 @@
 >   quieto cualquier orden tenía 250 ms para contestarse; (3) la VM-Java contesta distinto el RUN de lo que no existe y
 >   el KILL sin programa (en `#694`, visto de paso); (4) la P4 por TCP usaba el -2 también para «el cliente se fue»;
 >   (5) el sim no lleva el anillo del log: lo que la placa apunta, sólo se ve en una placa.
+> - **Y al final, `#734`** (`aad814c9`; Eduardo: *«que tal investigar #734? Tienes la Pico y la metro conectadas»*;
+>   *«haz las 2 y también la 1»*): explicada y demostrada —en P todo corre por la caché del XIP, y lo que llama a la
+>   libc cuesta según dónde la deje el enlazador; un test de desplazamiento con imágenes de prueba en la Pico 2 (un
+>   relleno de 0 a 8 KB y los contadores de la caché en el log; con 8 KB vuelve a lo de 0)— e `intToString` con una
+>   rutina nuestra: −28 % en la Pico 2, −16 % en la Metro. Y a su pregunta, el intérprete en la RAM de P, medido (con
+>   los builtins, −28/−37 %, por 61 KB del heap de la Pico 2). La Pico 2 y la Metro llevan ya la imagen de hoy (con el
+>   `Stdlib.pack` del 27-oct; sólo cambia `Gui`, que no usan), y en su `/app`, `StrCenso` y los seis `X734*` de medida.
+> - **Lo que enseñó:** la b de `#740`, gratis en el PC, cuesta un 12–14 % del bytecode en la Pico 2; y en la Metro,
+>   `floatToString` sube de 29,7 a 46 µs en el censo con la imagen de hoy y en un bucle suelto no: sin explicar (la
+>   hipótesis, el heap en la PSRAM y el código de la flash en la misma caché).
 > - **Lo siguiente:** medirlo todo en las placas en el próximo lote (con el `Stdlib.pack` de `Sound` y el `Gui.mod`
->   de `#695`): la RAM de la C3 y la C6, el coste de la comprobación por instrucción en la Pico y en una ESP, lo que
+>   de `#695`): la RAM de la C3 y la C6, el coste de la comprobación por instrucción en una ESP, lo que
 >   gana `#736` en la Metro, los motivos de reinicio (`#709`), el ancla (`#729`) y la línea del log de `#693`. Con
 >   Eduardo, en el IDE: el Stop y un RUN rechazado (`#694`). Por decidir (Eduardo): la concatenación del bytecode de
->   `#736`, y la caché de huecos de `#718`. **El riesgo:** las imágenes de las placas, sin grabar —compiladas la Pico,
->   la C3 y la Nucleo—; hasta el lote, lo verificado es el PC.
+>   `#736`, la caché de huecos de `#718`, el código caliente de P en la RAM (`#719`, con lo medido en `#734`) y la b de
+>   `#740` en la Pico 2. **El riesgo:** las imágenes de las demás placas, sin grabar —compiladas la Pico, la C3 y la
+>   Nucleo—; la Pico 2 y la Metro, con la de hoy, sin la tanda corta del lote.
 
 > **27-oct (noche)** — **El H4, el sonido, retomado: el PC, hecho** (Eduardo: *«Vamos a dejar las pendientes por
 > ahora que es un poco aburrido. Me gustaría retomar lo del sonido […] la reproducción de sonidos debería ser siempre
