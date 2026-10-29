@@ -538,6 +538,10 @@ static int lt_mutex_desde_la_raiz(const lt_ctx_t* x, int ci, uint16_t* slot) {
     }
     return 0;
 }
+/* Su texto, para el error del enlace que lo cita: 8 x 160 + el texto. Static —el enlace no es reentrante— y UNO para
+ * los tres sitios que lo usan (V8 #740: eran tres de 1400 B, 4,2 KB de RAM fija en cada placa; un error del enlace sale
+ * por uno solo de ellos). */
+static char lt_tiene_txt[1400];
 /* « (tiene 'k()i')»: las otras claves con el mismo nombre en la cadena, ordenadas, sin repetir */
 static void lt_tiene(const lt_ctx_t* x, int ci, const char* clave, char sep, char* out, size_t cap) {
     out[0] = 0;
@@ -719,8 +723,8 @@ static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
                 uint16_t slot; int priv = 0, en = -1;
                 int hay = lt_buscar_metodo(x, ci, r->clave, &slot, &priv, &en);
                 if (!hay || (priv && x->reg[en].mod != mi)) {
-                    static char tiene[1400]; lt_tiene(x, ci, r->clave, '(', tiene, sizeof tiene);   /* 8 x 160 + el texto; static: el enlace no es reentrante */
-                    lt_error(x, "'%s' necesita '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, tiene, m->name);
+                    lt_tiene(x, ci, r->clave, '(', lt_tiene_txt, sizeof lt_tiene_txt);
+                    lt_error(x, "'%s' necesita '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, lt_tiene_txt, m->name);
                     return BPVM_ERR_RUNTIME;
                 }
                 valor = slot; break;
@@ -728,8 +732,8 @@ static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
             case BPVM_REF_CAMPO: {
                 uint16_t slot; int hay = (strcmp(r->clave, "__syncMutex:LMutex;") == 0) ? lt_mutex_desde_la_raiz(x, ci, &slot) : lt_buscar_campo(x, ci, r->clave, &slot);
                 if (!hay) {
-                    static char tiene[1400]; lt_tiene(x, ci, r->clave, ':', tiene, sizeof tiene);
-                    lt_error(x, "'%s' necesita el campo '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, tiene, m->name);
+                    lt_tiene(x, ci, r->clave, ':', lt_tiene_txt, sizeof lt_tiene_txt);
+                    lt_error(x, "'%s' necesita el campo '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, lt_tiene_txt, m->name);
                     return BPVM_ERR_RUNTIME;
                 }
                 valor = slot; break;
@@ -760,8 +764,8 @@ static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
                     }
                 }
                 if (!hallado) {
-                    static char tiene[1400]; lt_tiene(x, ci, r->clave, '(', tiene, sizeof tiene);
-                    lt_error(x, "'%s' necesita '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, tiene, m->name);
+                    lt_tiene(x, ci, r->clave, '(', lt_tiene_txt, sizeof lt_tiene_txt);
+                    lt_error(x, "'%s' necesita '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, lt_tiene_txt, m->name);
                     return BPVM_ERR_RUNTIME;
                 }
                 break;

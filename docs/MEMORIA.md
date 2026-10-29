@@ -184,3 +184,7 @@ La Nucleo (384 KB de heap de BP) y la DK2 (768) van holgadas: las justas siguen 
 - **Hecho en el código el 29-oct (`#740`):** la región de pilas es la pila del main, 16 KB, y la de cada hilo, un
   bloque del heap que pide al arrancar y barre el GC cuando acaba. Las cifras de la tabla, las del 27-oct: las nuevas,
   medidas en el lote (la línea `vm: memoria … -> heap … + pilas 16 KB` del log, y el `INFO`).
+- **Y lo barato (`#740`, 2), el mismo día:** el log de la C3 y la C6, de 8 a 4 KB, y los tres `tiene` del enlace en
+  uno. En el ELF: 6.896 B menos de RAM estática (`.noinit` −4.096, `.bss` −2.800); con los ~460 B del sonido, que
+  entró después, `_heap_start` baja 6.432 B en las dos. En la C6, su bloque de la VM puede volver a sus 128 KB (el
+  tope) y el resto queda para el sistema; en la C3, lo que dé su bloque contiguo mayor: en la placa.

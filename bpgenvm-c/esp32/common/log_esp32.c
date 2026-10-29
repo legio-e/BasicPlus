@@ -44,11 +44,14 @@
  * antes que la PSRAM), y el S3 va justo: con 8 KB el enlace se pasaba de
  * `dram0_0_seg` por 304 bytes. Se queda con 1 sector = 4 KB, que es lo mismo que
  * usa el Pico y da de sobra para un post-mortem. El P4 tiene RAM y PSRAM: 8 KB,
- * como el STM32. En ambos casos sobra sitio en bpenv (24 KB libres). */
-#if defined(CONFIG_IDF_TARGET_ESP32S3)
-#  define BP_LOG_SIZE        (1u * BP_ENV_SECTOR_SIZE)  /* 4 KB — S3, RAM justa */
+ * como el STM32. En ambos casos sobra sitio en bpenv (24 KB libres).
+ * V8 #740 (29-oct) — la C3 y la C6, sin PSRAM y con la RAM más justa del parque,
+ * heredaban los 8 KB de la P4 por el `#else`: con 4, como la S3 y la Pico. La C5
+ * (con PSRAM), como la P4. */
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32C6)
+#  define BP_LOG_SIZE        (1u * BP_ENV_SECTOR_SIZE)  /* 4 KB — S3, C3 y C6: RAM justa */
 #else
-#  define BP_LOG_SIZE        (2u * BP_ENV_SECTOR_SIZE)  /* 8 KB — P4, como el STM32 */
+#  define BP_LOG_SIZE        (2u * BP_ENV_SECTOR_SIZE)  /* 8 KB — P4 y C5, como el STM32 */
 #endif
 
 /* La región del log EN RAM (= imagen de flash: header + data). El núcleo escribe

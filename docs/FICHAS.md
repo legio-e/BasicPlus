@@ -7146,6 +7146,11 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     estrés, rojo por su calibración —el heap justo de `HeapEstres` en miVM era de 48 KB, y ahora tenía que llevar las
     cuatro pilas de 8 KB—: recalibrado al mismo apretón (miVM, 96 KB con `stackBase` 80; la VM-C, `--mem` 80 KB;
     medido con las VMs de antes y de después: 79 y 80 colectas en miVM, 1085 y 1089 en la VM-C), verde.
+- **29-oct, lo 2, hecho:** el log de la C3 y la C6, de 8 a 4 KB (`log_esp32.c`: con la S3; la C5, con PSRAM, como la
+  P4), y los tres `tiene[1400]` del enlace, uno (`lt_tiene_txt`, `link.c`; en todas las placas). Medido en el ELF de
+  las dos, compiladas con el IDF 6.1: `.noinit` −4.096 B y `.bss` −2.800 de esto (y +460 del sonido, que entró
+  después de las imágenes del 27-oct): `_heap_start` 6.432 B más abajo, 6,3 KB más de RAM interna libre en cada una.
+  Una cabecera de log vieja que no cabe en 4 KB se descarta (`size <= data_cap()`): el log empieza limpio.
 - **La zona roja (la b), medida:** en las 2.313 funciones del corpus, lo más que apila una por encima de sus locales
   son 84 B; la zona, 256. Para que la que se pase dé una excepción y no pise lo de al lado, lo propuesto: la VM mira
   el tope en cada instrucción —en el PC no se nota: compilada igual, la copia con la comprobación salía un 9–13 % más
