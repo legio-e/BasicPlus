@@ -7212,7 +7212,7 @@ Propuesto el 21-oct (`V8_IDEAS` §E5, «La PSRAM, medida por piezas»), midiendo
 y la caché de datos de la S3, de 32 a 64 KB con líneas de 64 B. Cada una cuesta esa SRAM interna. En la P4, los datos
 echan al intérprete de la caché: tras leer 128 KB, +89 %.
 
-#### 🔵 `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **propuesta, sin hacer**)
+#### 🔵 `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **hecha para los builtins el 29-oct; la concatenación, por decidir**)
 
 Medido en la Metro con PSRAM (`V8_IDEAS` §E5, «La PSRAM, medida por piezas» y «Medido por dentro»): crear 16 KB, 5,2
 ms, de los que poner a cero es 1,5 (−28 % sin ella); en las cadenas que caben en la caché, poco (un 10 % en 2 KB). La
@@ -7220,6 +7220,32 @@ propuesta: una reserva sin `memset` sólo para los builtins que escriben todo el
 concatenación, `substring`, `fromBytes`, `charAt`, `upper`…). Es seguro: un `byte[]` no lleva referencias que el GC
 siga. `newByteArray` del programa sigue a cero, como promete el lenguaje, y la entrada de la tabla de handles,
 completa (Eduardo). En las dos VMs.
+
+**29-oct, hecha para los builtins** (Eduardo, al preguntar por qué se pone a cero: *«Si las cadenas tienen una longitud,
+ponerla a 0 sería hacer length=0, y con eso debería de bastar»* —lo que se ponía a cero era el CONTENIDO, no la
+longitud—; y *«OK»*):
+- **la reserva sin ceros**, `bpvm_heap_nuevo_para_llenar` (VM-C) y `heapNuevoParaLlenar` (miVM), para un bloque que
+  quien lo pide llena ENTERO antes de soltarlo;
+- **dónde:** `heap_alloc_string` (sus 25 llamadas) y los 15 sitios de `builtins.c` que crean una cadena o traen un
+  `byte[]` de fuera —`charAt`, `substring`, `upper`/`lower`, `trim`, `replace`, `split`, las rutas, `fromBytes`/`toBytes`,
+  `appendChar`, `readFile`, `readLine`, `listDir`, `Net.recv` y la cadena corregida de `#711`—, revisados uno a uno; y
+  los cinco de miVM. Dos se pueden quedar cortos y ponen a cero lo que no escriben: `upper`/`lower` con especiales y
+  `appendChar` (con dos runs, otro hilo puede encoger el array entre sus dos pasadas). Siguen a cero el `NEWARRAY`, las
+  pilas de los hilos y todo lo demás;
+- **la prueba, el veneno** (SÓLO PRUEBAS: `-DBPVM_ENVENENA_SIN_CERO` en la VM-C, `-Dbpvm.envenenaSinCero=true` en
+  miVM): esos bloques nacen llenos de 0xA5, y un sitio que no los llenara entero sacaría basura a la vista. El corpus,
+  170/170, con la VM-C envenenada contra miVM normal, y al revés;
+- **medido en el PC** (`StrFases`, la VM de justo antes compilada igual): sin cambios que se salgan del ruido (2 KB:
+  `fromBytes` 9.117 → 9.081 ns, `substring` 4.404 → 4.376): allí poner a cero 2 KB son unos 50 ns y manda el GC. Lo que
+  gana se ve en la PSRAM de la Metro, en el lote;
+- **la red:** verde menos el sim, rojo por `stat_base_smoke`, que no era de esta ficha. Esa prueba pide que la mitad de
+  sus 300 STAT lleguen con el programa en marcha, y con 9 M de vueltas el programa duraba eso mismo: alternando los dos
+  sims, 152–161 el de antes y 147–158 el de ahora. Con 27 M, 300 de 300, y el frente del sim, 12/12. La Pico compila;
+- **lo que queda: la concatenación del bytecode** (`a + b`, la operación de cadenas más frecuente). El `__strconcat`
+  que escribe el compilador reserva con `NEWARRAY_I8`, que tiene que dar ceros porque es el `newByteArray` del lenguaje;
+  para que no los pague hace falta otra pieza —un builtin que reserve una cadena para llenar, o uno que haga la
+  concatenación entera—: toca el compilador y añade un builtin. **Por decidir (Eduardo)**, con la medida de la Metro
+  delante. La de las natives (`h_string_concat`) usa a propósito la misma reserva (`#573`): cambiarían juntas.
 
 #### 🔵 `#735` — la longitud en CARACTERES no se guarda: con acentos, `strlen` la cuenta en cada llamada (abierta el 27-oct, al cerrar el H5; **por decidir**)
 

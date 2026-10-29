@@ -1340,6 +1340,12 @@ bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payloa
  * si no cabe, puede gastar la reserva de emergencia. V7/H12, 2b (5-oct): lo dice la reserva, no una bandera de la VM
  * —con dos runs, la del otro run—. */
 bpref_t bpvm_heap_nuevo_error(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes);
+/* V8 #736 (29-oct) — lo mismo SIN poner a cero el contenido: para un bloque que quien lo pide LLENA ENTERO antes de
+ * soltarlo, o sea antes de que nadie pueda leerlo —una cadena que nace con sus bytes (heap_alloc_string, substring,
+ * charAt, upper, replace, fromBytes…), un byte[] que sale de un fichero o de la red—. Si se queda corto, tiene que poner
+ * él a cero lo que no escriba. Un `new` del programa (newByteArray, NEWARRAY) sigue a cero, como promete el lenguaje.
+ * Seguro para un byte[]: no lleva referencias que el GC siga. Espejo de heapNuevoParaLlenar (miVM). */
+bpref_t bpvm_heap_nuevo_para_llenar(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes);
 /* V8 #740 (29-oct) — y la otra: la PILA de un hilo, un byte[] de `bytes` SIN handle (nadie la nombra desde el
  * programa), por el mismo camino que un `new` —el GC proactivo y el de cuando no cabe—. CON el vm_lock ya tomado: lo
  * tiene bpvm_thread_spawn, que la cuelga de su hilo antes de soltarlo. Devuelve la dirección de su contenido —donde

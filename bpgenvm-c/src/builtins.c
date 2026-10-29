@@ -723,7 +723,7 @@ static bpvm_status_t nacer_de_fuera(bpvm_t* vm, bpvm_thread_t* tc, bpref_t blk, 
     if (!ignorar) return throw_utf8_malo(vm, tc, que, malo, vm->memory[a + 4u + (uint32_t) malo]);
     uint32_t m = utf8_largo_corregido(vm->memory + a + 4u, n);
     bpref_push(vm, tc, blk);   /* en la pila: vivo mientras se reserva el otro */
-    bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, m, m);
+    bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, m, m);
     if (outh.v == 0u) {
         tc->sp -= BPVM_REF_SIZE;
         return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
@@ -1199,7 +1199,7 @@ int bpvm_prim_char_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s
         }
         enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
     }
-    *out = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, enc_len, enc_len); /* V7/H7 #593: la cabecera y el handle, al nacer */
+    *out = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, enc_len, enc_len); /* V7/H7 #593: la cabecera y el handle, al nacer */
     if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355, #430 */
     o = bpref_deref(vm, *out);
     for (k = 0; k < enc_len; k++) vm->memory[o + BPVM_ARR_DATA_OFF + k] = enc[k];
@@ -1269,7 +1269,7 @@ int bpvm_prim_substring(bpvm_t* vm, bpvm_strcur_t* cur, bpref_t s, int32_t desde
         }
     }
     len = eoff - boff;
-    *out = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
+    *out = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
     if (out->v == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355, #430 */
     o = bpref_deref(vm, *out);
     a = bpref_deref(vm, s);   /* otra vez, tras la reserva: el origen lo mantiene vivo quien llama (#350) */
@@ -1571,7 +1571,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         }
         if (n < 0) { bpvm_free(buf); return builtin_throw(vm, tc, "Net.recv: error de red"); }
         /* n==0 (timeout) → byte[] vacío. */
-        bpref_t refh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) n, (uint32_t) n); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t refh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) n, (uint32_t) n); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (refh.v == 0u) { bpvm_free(buf); return builtin_throw(vm, tc, "Net.recv: sin memoria"); }
         if (n > 0) memcpy(vm->memory + bpref_deref(vm, refh) + 4, buf, (size_t) n);
         bpvm_free(buf);
@@ -2197,7 +2197,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             snprintf(em, sizeof(em), "%s('%s'): no se pudo abrir", que, path);
             return builtin_throw(vm, tc, em);
         }
-        bpref_t refh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, size, size); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t refh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, size, size); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (refh.v == 0u) { cerrar_breves(vm, &ab, NULL); return builtin_throw(vm, tc, "readFile: sin memoria"); }
         if (size > 0) {
             long n = bpvm_fs_read(rpath, vm->memory + bpref_deref(vm, refh) + 4, size);
@@ -2280,7 +2280,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         size_t off = 0;
         for (uint32_t i = 0; i < acc.n; i++) {
             size_t l = strlen((const char*) acc.buf + off);
-            bpref_t psh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) l, (uint32_t) l);   /* V7/H7 #593 */
+            bpref_t psh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) l, (uint32_t) l);   /* V7/H7 #593 */
             if (psh.v == 0u) { bpvm_scratch_give("LISTDIR"); tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, "listDir: sin memoria"); }
             memcpy(vm->memory + bpref_deref(vm, psh) + 4, acc.buf + off, l);
             bpvm_str_nace(vm, bpref_deref(vm, psh));   /* V8/H5: el bit del nombre */
@@ -2476,7 +2476,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         ficheros_abrir(vm);
         if (fallo) return builtin_throw(vm, tc, fallo);
         uint32_t len = (n > 0 && ult == '\r') ? n - 1 : n;
-        bpref_t refh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t refh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (refh.v == 0u) return builtin_throw(vm, tc, "File.readLine(): sin memoria");
         uint32_t ref = bpref_deref(vm, refh);
         ficheros_cerrar(vm);
@@ -2833,7 +2833,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         int up = (id == BUILTIN_UPPER);
         bpref_t s = peek_ref(vm, tc, 0);
         uint32_t n = bpref_is_null(s) ? 0 : bpref_arr_len(vm, s);
-        bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, n, n); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, n, n); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (outh.v == 0u)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
              * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
              * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
@@ -2861,6 +2861,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                     for (uint32_t k = 0; k < el && o < n; k++) vm->memory[out + 4 + o++] = enc[k];
                     i += (adv > 0) ? adv : 1;
                 }
+                if (o < n) memset(vm->memory + out + 4 + o, 0, n - o);   /* #736: lo no escrito, a cero, como antes */
                 bpvm_str_nace(vm, out);   /* V8/H5: el bit, por lo que salió */
             }
             out = (uint32_t) outh.v;
@@ -2883,7 +2884,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             while (e > b && p[e - 1] <= 0x20) e--;
         }
         uint32_t len = e - b;
-        bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (outh.v == 0u)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
              * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
              * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
@@ -2997,7 +2998,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             }
         }
         uint32_t outn = sn - hits * tn + hits * rn;
-        bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, outn, outn); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, outn, outn); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (outh.v == 0u)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
              * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
              * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
@@ -3096,7 +3097,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 else { e = (uint32_t) off; i = e + pn; }
             }
             uint32_t plen = e - b;
-            bpref_t psh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, plen, plen);   /* V7/H7 #593 */
+            bpref_t psh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, plen, plen);   /* V7/H7 #593 */
             if (psh.v == 0u) { tc->sp -= BPVM_REF_SIZE; return builtin_throw(vm, tc, "No space in heap"); }
             uint32_t ps = bpref_deref(vm, psh);
             if (plen > 0) memcpy(vm->memory + ps + 4, bpref_arr_elem(vm, s, b, 1), plen);   /* V8/H5: copia de bytes */
@@ -3377,7 +3378,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (an == 0)      out_n = bn;           /* a vacio -> b tal cual */
         else if (bn == 0) out_n = an;           /* b vacio -> a tal cual */
         else              out_n = ae + 1 + (bn - bs);
-        bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, out_n, out_n); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, out_n, out_n); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (outh.v == 0u)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
              * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
              * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
@@ -3431,7 +3432,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             }
         }
         uint32_t len = b1 - b0;
-        bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (outh.v == 0u)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
              * saltaba el bloque de abajo y se empujaba out=0 —una ref NULA— sin
              * decir nada: el programa comparaba una cadena vacia, no cuadraba, y
@@ -3559,7 +3560,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             }
             uint8_t tmp[4]; total += utf8_encode(cp, tmp);
         }
-        bpref_t newh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, total, total); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t newh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, total, total); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (newh.v == 0u) {
             tc->sp -= BPVM_REF_SIZE;
             return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */
@@ -3577,6 +3578,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             if (w + el > total) break;
             for (uint32_t k = 0; k < el; k++) vm->memory[new_ref + 4 + w++] = enc[k];
         }
+        if (w < total) memset(vm->memory + new_ref + 4 + w, 0, total - w);   /* #736: lo no escrito, a cero */
         bpvm_str_nace(vm, new_ref);   /* V8/H5: el bit, por los caracteres que salieron */
         tc->sp -= BPVM_REF_SIZE;   /* #350: ya copiado */
         bpref_push(vm, tc, newh);
@@ -3612,7 +3614,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                 m = utf8_largo_corregido(vm->memory + rd + 4, n);
             }
         }
-        bpref_t outh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, m, m); /* V7/H7 #593: la cabecera y el handle, al nacer */
+        bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, m, m); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (outh.v == 0u) {
             tc->sp -= BPVM_REF_SIZE;                 /* saca la fuente también al fallar */
             return builtin_throw(vm, tc, "No space in heap");   /* H1: OOM atrapable */

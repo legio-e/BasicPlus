@@ -30,6 +30,9 @@ STDLIB_PACK = os.path.normpath(os.path.join(ROOT, "..", "packs", "Stdlib.pack"))
 STDLIB_DIR  = os.path.normpath(os.path.join(ROOT, "..", "bpstdlib"))
 N_STAT = 300
 
+# Las vueltas (29-oct, con #736): con 9 M el programa duraba lo que ~150 STAT —el umbral mismo— y la prueba salía roja
+# una vez de cada pocas (152–161 antes de #736, 147–158 después). Con 27 M dura ~8 s y los 300 STAT, ~5: aguanta una VM
+# 1,6 veces más rápida sin perder ninguno, y 3 veces antes de bajar del umbral.
 CARPETA_BP = """module Carpeta
   import App
 
@@ -37,7 +40,7 @@ CARPETA_BP = """module Carpeta
     var primera: string := App.projectPath()
     var cambios: integer := 0
     var i: integer := 0
-    while i < 9000000 do
+    while i < 27000000 do
       if App.projectPath() != primera then
         cambios := cambios + 1
       endif

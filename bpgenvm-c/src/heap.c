@@ -1435,13 +1435,14 @@ static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
  * comprobaciones de build_gc_valid_map son exactas). Devuelve el handle —bpref_deref da la dirección, para llenar
  * el contenido— o nulo si no cabe, en el heap o en la tabla; quien llama lanza «No space in heap» y
  * bpvm_throw_runtime_error escoge la prefabricada que toque (#430, #494). Espejo de heapNuevo (miVM). */
-static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera, int para_error);
+static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera, int para_error,
+                              int a_cero);
 
 /* `para_error`: es para construir un error (#355), y sólo entonces, si no cabe, puede gastar la reserva de emergencia.
  * V7/H12, 2b (5-oct): era una bandera de la VM (`building_error`), puesta mientras se construía la excepción; con dos
  * runs la veía también el otro: una reserva cualquiera suya, con el heap lleno, se llevaba la reserva del error, y al
  * acabar éste la bajaba con el otro aún construyendo el suyo. Ahora lo dice cada reserva, y no hay nada compartido. */
-static bpref_t heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes, int para_error) {
+static bpref_t heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes, int para_error, int a_cero) {
     bpref_t h = bpref_null();
     /* V8 #712 — lo que no cabe en la memoria de la VM entera, sin sitio y sin colectar; y así la cabecera y el redondeo
      * que se le suman dentro nunca dan la vuelta a los 32 bits. (Los tamaños calculados se multiplican en 64 bits en
@@ -1461,18 +1462,24 @@ static bpref_t heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payl
         }
     }
     bpvm_smp_lock(vm);
-    uint32_t o = heap_reservar(vm, payload_bytes, type, cabecera, para_error);
+    uint32_t o = heap_reservar(vm, payload_bytes, type, cabecera, para_error, a_cero);
     if (o != 0u) h = bpvm_handle_register_bajo_cerrojo(vm, o);
     bpvm_smp_unlock(vm);
     return h;
 }
 
 bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes) {
-    return heap_nuevo(vm, type, cabecera, payload_bytes, 0);
+    return heap_nuevo(vm, type, cabecera, payload_bytes, 0, 1);
 }
 
 bpref_t bpvm_heap_nuevo_error(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes) {
-    return heap_nuevo(vm, type, cabecera, payload_bytes, 1);
+    return heap_nuevo(vm, type, cabecera, payload_bytes, 1, 1);
+}
+
+/* V8 #736 (29-oct) — la tercera (bpvm_internal.h): la de un bloque que quien lo pide LLENA ENTERO antes de soltarlo;
+ * sin la pasada a cero. */
+bpref_t bpvm_heap_nuevo_para_llenar(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes) {
+    return heap_nuevo(vm, type, cabecera, payload_bytes, 0, 0);
 }
 
 /* V8 #740 (29-oct) — la PILA de un hilo (bpvm_internal.h): el hueco de un byte[], con su cabecera entera y a cero, sin
@@ -1480,7 +1487,7 @@ bpref_t bpvm_heap_nuevo_error(bpvm_t* vm, int type, uint32_t cabecera, uint32_t 
  * el redondeo den la vuelta. Con el vm_lock tomado. */
 uint32_t bpvm_heap_reservar_pila(bpvm_t* vm, uint32_t bytes) {
     if ((uint64_t) bytes > (uint64_t) vm->memory_size) return 0u;
-    uint32_t user_ref = heap_reservar(vm, bytes, BPVM_TYPE_ARRAY_I8, bytes, 0);
+    uint32_t user_ref = heap_reservar(vm, bytes, BPVM_TYPE_ARRAY_I8, bytes, 0, 1);
     return (user_ref != 0u) ? user_ref + 4u : 0u;
 }
 
@@ -1538,7 +1545,8 @@ static int tabla_con_sitio(bpvm_t* vm) {
 /* El hueco: el GC proactivo, la presión de la tabla, la lista de libres, el bump y el OOM. Con el vm_lock tomado
  * (bpvm_heap_nuevo); sólo la llama él. Devuelve user_ref (= header_addr + 4), con la cabecera entera y el
  * contenido a cero, o 0 si no cabe. */
-static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera, int para_error) {
+static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint32_t cabecera, int para_error,
+                              int a_cero) {
     uint32_t total = align4(BPVM_OBJ_HEADER_SIZE + payload_bytes);
     if (total < BPVM_MIN_FREE_BLOCK) total = BPVM_MIN_FREE_BLOCK;
 
@@ -1663,10 +1671,20 @@ con_reserva: ;
     bpvm_write_u32_be(vm->memory + addr + 4, cabecera);
 
     uint32_t user_ref = addr + 4;
-    /* Zero-inicializar el resto del payload (importante al reusar free-list). */
-    if (payload_bytes > 0) {
+    /* Zero-inicializar el resto del payload (importante al reusar free-list). V8 #736 (29-oct): salvo el de un bloque
+     * que quien lo pide llena ENTERO antes de soltarlo (bpvm_heap_nuevo_para_llenar: una cadena que nace con sus
+     * bytes): ahí los ceros no los veía nadie, y en la PSRAM de la Metro eran un 28 % de crear una cadena grande. Un
+     * byte[] no lleva referencias que el GC siga, así que no ponerlo a cero es seguro. SÓLO PRUEBAS: con
+     * -DBPVM_ENVENENA_SIN_CERO, esos bloques nacen llenos de 0xA5: un sitio que no los llenara entero sacaría basura a
+     * la vista, y la paridad contra miVM lo cantaría. */
+    if (payload_bytes > 0 && a_cero) {
         memset(vm->memory + user_ref + 4, 0, payload_bytes);
     }
+#ifdef BPVM_ENVENENA_SIN_CERO
+    else if (payload_bytes > 0) {
+        memset(vm->memory + user_ref + 4, 0xA5, payload_bytes);
+    }
+#endif
     vm->heap_bloques++;   /* V7/H7 #593: un bloque más */
     return user_ref;
 }
@@ -1675,7 +1693,7 @@ con_reserva: ;
  * strings son TYPE_ARRAY_I8 con los bytes UTF-8 tal cual (1 byte/elem).
  * `len` = nº de bytes de `s`. */
 static uint32_t heap_alloc_string(bpvm_t* vm, const char* s, size_t len, int para_error) {
-    bpref_t h = heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) len, (uint32_t) len, para_error);   /* V7/H7 #593 */
+    bpref_t h = heap_nuevo(vm, BPVM_TYPE_ARRAY_I8, (uint32_t) len, (uint32_t) len, para_error, 0);   /* #593; #736 */
     if (h.v == 0u) return 0;
     uint32_t ref = bpref_deref(vm, h);
     if (len > 0) memcpy(vm->memory + ref + 4, s, len);   /* V8/H5: una copia de bytes, de una vez */

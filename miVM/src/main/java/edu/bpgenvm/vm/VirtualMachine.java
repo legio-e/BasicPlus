@@ -1805,13 +1805,24 @@ public class VirtualMachine {
      * bpvm_heap_nuevo (VM-C).
      */
     long heapNuevo(int type, int cabecera, long payloadBytes) {
+        return heapNuevo(type, cabecera, payloadBytes, true);
+    }
+
+    /** V8 #736 (29-oct) — lo mismo SIN poner a cero el contenido: para un bloque que quien lo pide LLENA ENTERO antes de
+     *  soltarlo —una cadena que nace con sus bytes, un byte[] que sale de un fichero o de la red—. Un `new` del programa
+     *  sigue a cero, como promete el lenguaje. Espejo de bpvm_heap_nuevo_para_llenar (VM-C). */
+    long heapNuevoParaLlenar(int type, int cabecera, long payloadBytes) {
+        return heapNuevo(type, cabecera, payloadBytes, false);
+    }
+
+    private long heapNuevo(int type, int cabecera, long payloadBytes, boolean aCero) {
         // V8 #712 — lo que no cabe en la memoria de la VM entera, sin sitio y sin colectar. Los tamaños calculados llegan
         // multiplicados en long (en int, newIntArray(2^30 + 1) pedía 4 B con una longitud de mil millones), y así la
         // cabecera y el redondeo que se les suman en heapAlloc nunca dan la vuelta (newByteArray(2^31 - 1) acababa en el
         // bloque mínimo). El espejo, heap_nuevo y bpvm_prim_nuevo_array (VM-C).
         if (payloadBytes < 0 || payloadBytes > memory.length) sinSitio(currentTcLocal.get(), payloadBytes);
         synchronized (vmLock) {
-            int userRef = heapAlloc((int) payloadBytes, type);
+            int userRef = heapAlloc((int) payloadBytes, type, false, aCero);
             writeInt32(userRef, cabecera);
             return handleRegister(userRef);
         }
@@ -1853,7 +1864,7 @@ public class VirtualMachine {
      * V7/H7 #593: sólo la llama {@link #heapNuevo}, que completa la cabecera y da de alta el handle.
      */
     private int heapAlloc(int payloadBytes, int type) {
-        return heapAlloc(payloadBytes, type, false);
+        return heapAlloc(payloadBytes, type, false, true);
     }
 
     /**
@@ -1867,14 +1878,27 @@ public class VirtualMachine {
         // Lo que no cabe en la VM entera, como en heapNuevo (#712), ni se intenta: ni colectar, ni que la cabecera y el
         // redondeo den la vuelta al int (Thread(2^31 - 1) pedía un bloque mínimo con un tope de 2 GB).
         if (bytes > memory.length) return -1;
-        int userRef = heapAlloc(bytes, TYPE_ARRAY_I8, true);
+        int userRef = heapAlloc(bytes, TYPE_ARRAY_I8, true, true);
         if (userRef < 0) return -1;
         writeInt32(userRef, bytes);   // la cabecera entera: su longitud (heapNuevo lo hace con la de un objeto)
         return userRef + 4;
     }
 
+    /** SÓLO PRUEBAS (V8 #736): con -Dbpvm.envenenaSinCero=true, el bloque que no va a cero nace lleno de 0xA5: un sitio
+     *  que no lo llenara entero sacaría basura a la vista (espejo de BPVM_ENVENENA_SIN_CERO). */
+    private static final boolean ENVENENA_SIN_CERO = Boolean.getBoolean("bpvm.envenenaSinCero");
+
+    /** El contenido de un bloque recién reservado (V8 #736): la palabra de la longitud, a cero siempre (la escribe
+     *  heapNuevo); el resto, a cero —lo de siempre, también al reusar un hueco— o, si quien lo pide lo llena entero,
+     *  sin tocar. */
+    private void rellena(int userRef, int payloadBytes, boolean aCero) {
+        writeInt32(userRef, 0);
+        if (aCero) java.util.Arrays.fill(memory, userRef + 4, userRef + 4 + payloadBytes, (byte) 0);
+        else if (ENVENENA_SIN_CERO) java.util.Arrays.fill(memory, userRef + 4, userRef + 4 + payloadBytes, (byte) 0xA5);
+    }
+
     /** {@code pila} (V8 #740): la reserva de {@link #heapReservaPila} —sin ancla, y sin sitio, -1 en vez de lanzar—. */
-    private int heapAlloc(int payloadBytes, int type, boolean pila) {
+    private int heapAlloc(int payloadBytes, int type, boolean pila, boolean aCero) {
         int totalSize = Math.max(MIN_FREE_BLOCK, alignTo4(OBJ_HEADER_SIZE + payloadBytes));
         synchronized (vmLock) {
             ThreadContext me = currentTcLocal.get();
@@ -1946,7 +1970,7 @@ public class VirtualMachine {
                 // NEWARRAY/newIntArray()/NEW_OBJECT sobre un bloque reciclado
                 // devuelven el contenido del objeto anterior (la VM-C hace
                 // memset SIEMPRE; aquí faltaba).
-                java.util.Arrays.fill(memory, userRef, userRef + 4 + payloadBytes, (byte) 0);
+                rellena(userRef, payloadBytes, aCero);   // V8 #736
                 // Ancla GC: el ref vuelve al caller que aún tiene que
                 // publicarlo (write a stack/field) sin lock. Si entre
                 // medias otro worker dispara GC, scanRegion ve este ancla
@@ -1974,7 +1998,7 @@ public class VirtualMachine {
             writeInt32(addr, tag);
             int userRef2 = addr + 4;
             // Mismo zero-init que la ruta sin GC (paridad VM-C).
-            java.util.Arrays.fill(memory, userRef2, userRef2 + 4 + payloadBytes, (byte) 0);
+            rellena(userRef2, payloadBytes, aCero);   // V8 #736
             if (me != null && !pila) me.allocAnchor = userRef2;
             throwingOom = false;   // H1: alocación con éxito → limpia la guarda
             heapBloques++;         // V7/H7 #593
@@ -4992,7 +5016,7 @@ public class VirtualMachine {
     /** Una cadena nueva con estos bytes, y su bit. Los bytes se sacan ANTES de llamar: reservar puede colectar, y la
      *  cadena de la que salen ya no está en la pila. */
     private long allocVmStrBytes(byte[] src, int off, int n, boolean ascii) {
-        long h = heapNuevo(TYPE_ARRAY_I8, n, n);
+        long h = heapNuevoParaLlenar(TYPE_ARRAY_I8, n, n);   // V8 #736: la copia la llena entera
         if (n > 0) System.arraycopy(src, off, memory, refDeref(h) + 4, n);
         strNace(h, ascii);
         ThreadContext me = currentTcLocal.get();
@@ -5017,7 +5041,7 @@ public class VirtualMachine {
     private long allocVmString(String s) {
         byte[] utf8 = s.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         int len = utf8.length;
-        long h = heapNuevo(TYPE_ARRAY_I8, len, len);   // V7/H7 #593: el handle 64b, con la cabecera entera
+        long h = heapNuevoParaLlenar(TYPE_ARRAY_I8, len, len);   // #593: el handle 64b; #736: la copia la llena entera
         System.arraycopy(utf8, 0, memory, refDeref(h) + 4, len);
         strNace(h, bytesAscii(utf8, 0, len));   // V8/H5: el bit, por los bytes que lleva (y #714: de solo lectura)
         // B1 residual — el caller llama a allocVmString desde dispatchBuiltin
@@ -5242,7 +5266,7 @@ public class VirtualMachine {
                     throwBpRuntimeError(tc, "Net.recv: error de red");
                     break;
                 }
-                long outRef = heapNuevo(TYPE_ARRAY_I8, n, n);   // V7/H7 #593
+                long outRef = heapNuevoParaLlenar(TYPE_ARRAY_I8, n, n);   // V7/H7 #593; #736: la copia lo llena
                 if (n > 0) System.arraycopy(buf, 0, memory, refDeref(outRef) + 4, n);
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG)
@@ -6041,7 +6065,7 @@ public class VirtualMachine {
                     cierraBreve(ab);
                 }
                 if (data == null) throwBpRuntimeError(tc, "readFileBytes('" + path + "'): no se pudo abrir");   // V7 #657: el texto de la VM-C
-                long outRef = heapNuevo(TYPE_ARRAY_I8, data.length, data.length);   // V7/H7 #593
+                long outRef = heapNuevoParaLlenar(TYPE_ARRAY_I8, data.length, data.length);   // #593; #736: la copia lo llena
                 System.arraycopy(data, 0, memory, refDeref(outRef) + 4, data.length);
                 ThreadContext me = currentTcLocal.get();
                 if (me != null) me.allocAnchor = (int) outRef;   // ancla GC = palabra baja (idx|TAG)
@@ -6199,7 +6223,7 @@ public class VirtualMachine {
                         break;
                     }
                 }
-                long outRef = heapNuevo(TYPE_ARRAY_I8, n, n);   // V4: handle 64b COMPLETO (no truncar); V7/H7 #593
+                long outRef = heapNuevoParaLlenar(TYPE_ARRAY_I8, n, n);   // V4: handle 64b COMPLETO; #593; #736: la copia lo llena
                 if (n > 0) System.arraycopy(memory, rd + 4, memory, refDeref(outRef) + 4, n);
                 if (b != Builtin.TO_BYTES)   // V8/H5: la cadena nace con su bit (un byte[] no lo lleva nunca)
                     strNace(outRef, bytesAscii(memory, refDeref(outRef) + 4, n));
