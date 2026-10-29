@@ -7678,6 +7678,29 @@ hueco (le faltan el tamaño y el siguiente) ni quedarse en el bloque (su tamaño
 arreglo del 15-jul). El coste no es memoria perdida, es recorrido: el hueco se queda para otra reserva que le encaje.
 Con listas por tamaño (la opción 3), saltarse los tamaños R+4 y R+8 de una reserva de R no cuesta nada.
 
+**💡 La idea de Eduardo del 29-oct: la caché la llena el GC** (*«un pequeño vector con huecos de diferentes tamaños y
+que al necesitar un bloque mire primero en el vector […] La novedad que propongo es que el GC, recolecte algunos huecos
+y los meta en esta caché para que no esté vacía y cuando se busque un bloque pueda ir mas rápido»*). Encaja con el
+hecho 1 de arriba: los huecos nacen en el barrido. **Por mirar despacio** (Eduardo: *«Haz un apunte como idea, y lo
+miramos despacio que esto lleva su tiempo […] lo miramos esta tarde tranquilamente»*). Cómo podría ser, sin decidir:
+- **el vector:** pequeño —por ejemplo 8 clases de tamaño × 4 huecos, 32 entradas, 128 B—; clases en múltiplos de 4,
+  exactas las pequeñas y por tramos las grandes;
+- **lo llena el barrido**, que recorre el heap por dirección: los primeros huecos de cada clase, a la caché; el resto,
+  a la lista, enganchados a la cola (el arreglo de `#715`). Los de dirección más baja conservan lo de `#355` (los
+  objetos, empaquetados abajo; el final del heap, libre);
+- **un hueco de la caché NO está en la lista:** la lista es de un sentido y sacar un hueco de en medio exige saber el
+  de delante, o sea recorrerla; con cada hueco en un solo sitio, coger uno de la caché es un paso;
+- **reservar:** primero la caché (su clase y, si no, las mayores), el hueco más bajo que encaje exacto o deje 12 B o
+  más; el sobrante, a la caché si su clase tiene sitio, si no a la lista; sin nada en la caché, la lista como hoy, y
+  después el final del heap;
+- **entre dos GC:** lo que suelta un `owner`, a la lista como hoy; compactar y el fin de un RUN vacían la caché. Lo
+  peor que le pasa a un hueco es quedarse fuera de los dos sitios hasta el GC siguiente; nunca dos dueños;
+- **lo que decide si vale la pena:** cuántas reservas acierta. Con 32 entradas y 100 huecos por GC, como mucho un
+  tercio de las que van a un hueco; si son pocas, una variante: que la reserva que recorre la lista vaya pasando a la
+  caché los huecos que se encuentra. **Lo primero, medirlo** con contadores en una copia (como para la pila, `#740`):
+  los aciertos con 16, 32 y 64 entradas, por programa, y el reparto real de tamaños, para elegir las clases. En las dos
+  VMs (miVM hoy sirve primero el último hueco soltado: su lista es una pila).
+
 Sólo análisis. Por decidir (Eduardo).
 
 #### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`, `dcb71627`)
