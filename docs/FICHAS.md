@@ -7286,6 +7286,11 @@ haría falta** (sin hacer): que la búsqueda del control empiece donde empieza l
 Metro), o que el control sepa que hay dos imágenes y mire sólo la suya. El mismo control vive en
 `stm32/port/stm32_repl.c`, que sólo tiene una imagen.
 
+**29-oct, hecho en el código** (Eduardo: *«Si»*): la búsqueda del control empieza en el principio del firmware que
+corre, `__flash_binary_start` (el `.flash_begin` de `bp_memmap.ld`: P, 0x10000000; M, 0x10100000), y no en `XIP_BASE`.
+Cada imagen mide 1 MB, lo que se barre: cada una ve sólo su ancla. La imagen, compilada. **Por ver en el lote:** que la
+Metro diga «ancla: en 0x1016…, y es LA misma», y la Pico 2, la suya.
+
 #### 🔵 `#728` — idea de Eduardo: una interfaz del IDE para la IA —cargar un fuente, compilar, conectar a un dispositivo, ejecutar, depurar, cerrar— (abierta el 24-oct; **por analizar**)
 
 Eduardo, 24-oct: *«Como idea. Estoy pensando si te sería útil a Claude y a otras IAs dotarle al IDE de una interfaz
@@ -8116,6 +8121,9 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   el 6.1, tienen los mismos quince motivos: no lo trae el 6.1.
 - **Lo que haría falta:** los cinco casos con su texto, para que «unknown» sólo salga cuando el IDF no lo sabe. Un
   motivo que no se dice es un diagnóstico mudo.
+- **29-oct, hecho en el código** (Eduardo: *«Si»*): los cinco, en `esp32_reset_cause` —«USB», «JTAG», «eFuse error»,
+  «power glitch» y «CPU lockup»—; la tabla, la de las cinco ESP (la P4 la comparte). La C3, compilada con el IDF 6.1.
+  **Por ver en el lote:** tras `idf flash`, el `INFO` de la C3 o la C5 dice «USB».
 
 #### 🧪 `#708` — V8, el sonido en la P4, WAV primero y MP3 después (abierta el 19-oct, a pregunta de Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»* · **es el H4 de V8**, Eduardo, el mismo día: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido de momento»*)
 

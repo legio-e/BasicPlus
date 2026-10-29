@@ -279,6 +279,14 @@ const char* esp32_reset_cause(void) {
         case ESP_RST_DEEPSLEEP: return "deep-sleep wake";
         case ESP_RST_BROWNOUT:  return "brown-out";
         case ESP_RST_SDIO:      return "SDIO";
+        /* V8 #709 (29-oct) — los cinco que faltaban de los quince del IDF (6.0.1 y 6.1): tras `idf flash`, que reinicia
+         * la C3 y la C5 por su USB, el INFO decía «unknown». Un motivo que no se dice es un diagnóstico mudo; «unknown»
+         * queda para cuando el IDF tampoco lo sabe. */
+        case ESP_RST_USB:        return "USB";
+        case ESP_RST_JTAG:       return "JTAG";
+        case ESP_RST_EFUSE:      return "eFuse error";
+        case ESP_RST_PWR_GLITCH: return "power glitch";
+        case ESP_RST_CPU_LOCKUP: return "CPU lockup";
         default:                return "unknown";
     }
 }

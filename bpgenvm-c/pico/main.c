@@ -59,6 +59,10 @@ const bpvm_ancla_t* bios_pico_ancla(void);
  * 1 MB; barrer más sería tiempo de arranque tirado. Si algún día la imagen
  * creciera por encima, el propio arranque lo diría: "ancla: NO SE ENCUENTRA". */
 #define ANCLA_BARRIDO_BYTES  (1u * 1024u * 1024u)
+/* V8 #729 (29-oct) — y DESDE DÓNDE: el principio de ESTE firmware (`.flash_begin`, bp_memmap.ld), no el de la flash.
+ * Desde el 22-oct el .uf2 de la RP2350 lleva dos (P en 0x10000000, M en 0x10100000, cada una de 1 MB): barriendo desde
+ * XIP_BASE, la M de la Metro encontraba antes el ancla de P y daba «DUPLICADA», una falsa alarma. */
+extern char __flash_binary_start[];
 #include "hardware/flash.h"   /* FLASH_SECTOR_SIZE */
 #include "bpvm_gpio.h"
 #include "bpvm_i2c.h"
@@ -1582,7 +1586,7 @@ static void pico_bios(void) {
          * deja la marca duplicada, se sabe ese día. */
         const bpvm_ancla_t* real = bios_pico_ancla();
         const bpvm_ancla_t* hallada =
-            bpvm_ancla_buscar((const void*) XIP_BASE, ANCLA_BARRIDO_BYTES);
+            bpvm_ancla_buscar((const void*) __flash_binary_start, ANCLA_BARRIDO_BYTES);   /* #729: desde la suya */
         if (hallada == real) {
             log_printf("ancla: en 0x%08lX (la busqueda la encuentra, y es LA misma)",
                        (unsigned long) (uintptr_t) real);
@@ -1590,7 +1594,7 @@ static void pico_bios(void) {
             log_printf("ancla: NO SE ENCUENTRA barriendo %u KB desde 0x%08lX "
                        "(esta en 0x%08lX) -> ningun pack podra hallar la BIOS",
                        (unsigned) (ANCLA_BARRIDO_BYTES / 1024),
-                       (unsigned long) XIP_BASE, (unsigned long) (uintptr_t) real);
+                       (unsigned long) (uintptr_t) __flash_binary_start, (unsigned long) (uintptr_t) real);
         } else {
             log_printf("ancla: DUPLICADA — la busqueda da 0x%08lX y la buena es "
                        "0x%08lX -> un pack leeria punteros de basura",
