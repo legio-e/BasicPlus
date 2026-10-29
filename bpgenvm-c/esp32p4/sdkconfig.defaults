@@ -111,3 +111,10 @@ CONFIG_FREERTOS_TASK_NOTIFICATION_ARRAY_ENTRIES=2
 # #707 (19-oct): el perro de las interrupciones, a 800 ms (Eduardo: «Sí 800 ms»). Es lo que pone el IDF 6.1 con PSRAM
 # (el 6.0.1 ponía 300); escrito aquí para que no cambie solo con otro IDF.
 CONFIG_ESP_INT_WDT_TIMEOUT_MS=800
+# V8 #737 (29-oct): LA L2 DE 256 KB (era la de 128, la del IDF). El código de la flash y los datos de la PSRAM comparten
+# la L2, y con mucho movimiento de datos echaban al intérprete: tras leer 2 × 64 KB, interpretar costaba un 97 % más.
+# Con 256 KB, un 1 %; y leer, crear y gc() con datos grandes, de un 35 a un 62 % más deprisa (medido en la P4 con
+# imágenes de prueba). Cuesta 128 KB de la RAM interna, que estaba sin usar (Eduardo: «La RAM libre de la P4 está sin
+# utilizar así que 128K más de caché nos salen gratis»). Como las de arriba: aquí Y en el sdkconfig, que ya existe y no
+# lo vuelve a sembrar.
+CONFIG_CACHE_L2_CACHE_256KB=y

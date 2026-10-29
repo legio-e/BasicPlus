@@ -73,14 +73,24 @@
 >   `Stdlib.pack` del 27-oct; sólo cambia `Gui`, que no usan), y en su `/app`, `StrCenso` y los seis `X734*` de medida.
 > - **Lo que enseñó:** la b de `#740`, gratis en el PC, cuesta un 12–14 % del bytecode en la Pico 2; y en la Metro,
 >   `floatToString` sube de 29,7 a 46 µs en el censo con la imagen de hoy y en un bucle suelto no: sin explicar (la
->   hipótesis, el heap en la PSRAM y el código de la flash en la misma caché).
+>   hipótesis, el heap en la PSRAM y el código de la flash en la misma caché). Decidido después (Eduardo): el código de
+>   P a la RAM, no (en la Metro con PSRAM ya lo está); la b, se queda (*«es mas importante la seguridad que la
+>   velocidad»*); `floatToString` en la Metro, sin mirar.
+> - **Y la P4** (`#737`; Eduardo: *«En P4 también ganar[íamos]»*, *«Si, midelo»*): tres imágenes de prueba de HEAD,
+>   grabadas y medidas, y la P4 devuelta a su imagen del 27-oct (comprobada byte a byte). La M entera no cabe en su RAM
+>   interna; el intérprete solo, a medias; **la L2 de 256 KB** quita el +97 % del intérprete echado de la caché tras
+>   mover 128 KB de datos (+1 %) y acelera leer, crear y `gc()` con datos grandes un 35–62 %. Decidido y hecho (*«128K
+>   mas de cache nos salen gratis»*): en `sdkconfig.defaults`. Y al devolver la imagen, `#741`: `Gui` y `SQLite` no
+>   cargan en la P4 desde el sonido del 27-oct (la imagen creció y la zona de packs se movió); regrabarlos, más
+>   adelante (*«Ahora no hace falta»*).
 > - **Lo siguiente:** medirlo todo en las placas en el próximo lote (con el `Stdlib.pack` de `Sound` y el `Gui.mod`
 >   de `#695`): la RAM de la C3 y la C6, el coste de la comprobación por instrucción en una ESP, lo que
->   gana `#736` en la Metro, los motivos de reinicio (`#709`), el ancla (`#729`) y la línea del log de `#693`. Con
+>   gana `#736` en la Metro, los motivos de reinicio (`#709`), el ancla (`#729`) y la línea del log de `#693`; la P4,
+>   con la L2 de 256 KB (`#737`) y `Gui` y `SQLite` regrabados (`#741`). Con
 >   Eduardo, en el IDE: el Stop y un RUN rechazado (`#694`). Por decidir (Eduardo): la concatenación del bytecode de
->   `#736`, la caché de huecos de `#718`, el código caliente de P en la RAM (`#719`, con lo medido en `#734`) y la b de
->   `#740` en la Pico 2. **El riesgo:** las imágenes de las demás placas, sin grabar —compiladas la Pico, la C3 y la
->   Nucleo—; la Pico 2 y la Metro, con la de hoy, sin la tanda corta del lote.
+>   `#736` y la caché de huecos de `#718` (la tarde). **El riesgo:** las imágenes de las demás placas, sin grabar
+>   —compiladas la Pico, la C3, la P4 y la Nucleo—; la Pico 2 y la Metro, con la de hoy, sin la tanda corta del lote;
+>   y la P4, sin GUI ni SQLite hasta regrabar sus packs.
 
 > **27-oct (noche)** — **El H4, el sonido, retomado: el PC, hecho** (Eduardo: *«Vamos a dejar las pendientes por
 > ahora que es un poco aburrido. Me gustaría retomar lo del sonido […] la reproducción de sonidos debería ser siempre

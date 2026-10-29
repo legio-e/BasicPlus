@@ -7283,7 +7283,7 @@ son 2048 operaciones), el coste de arrancar cada transferencia (sólo compensa p
 para la flash y la PSRAM, y un canal de DMA reservado. Lo más sencillo de probar primero: `memcpy`/`memset` de
 bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la caché alrededor.
 
-#### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **la de la P4, medida el 29-oct: por decidir**)
+#### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **la de la P4, de 256 KB desde el 29-oct —llega a la placa en el próximo lote—; la de la S3, por medir**)
 
 Propuesto el 21-oct (`V8_IDEAS` §E5, «La PSRAM, medida por piezas»), midiendo antes: la L2 de la P4, de 128 a 256 KB,
 y la caché de datos de la S3, de 32 a 64 KB con líneas de 64 B. Cada una cuesta esa SRAM interna. En la P4, los datos
@@ -7305,6 +7305,12 @@ censo y seis bucles de una operación:
 - **lo que cuesta:** 128 KB de RAM interna. Libres como mínimo, 372 KB antes (en 7,6 h encendida) y 239 KB con la L2
   (recién arrancada, con las pruebas);
 - **por decidir (Eduardo):** la L2 de 256 KB en la P4. La caché de datos de la S3, sin medir (no estaba conectada).
+
+**Decidido y hecho el mismo día** (Eduardo: *«Si. La RAM libre de la P4 está sin utilizar así que 128K mas de cache nos
+salen gratis»*): `CONFIG_CACHE_L2_CACHE_256KB=y` en `esp32p4/sdkconfig.defaults`, con el porqué; y en el `sdkconfig`
+local, que ya existe y los defaults no lo vuelven a sembrar. La imagen de la P4, compilada con ella: el código, en las
+mismas direcciones que la de la prueba L2 (el rodata, 1,8 KB más corto: las rutas de los ficheros), y en la misma página
+que la del 27-oct (la zona de packs no se mueve). A la placa, en el próximo lote, con los packs de `#741`.
 
 #### 🔵 `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **hecha para los builtins el 29-oct; la concatenación, por decidir**)
 
