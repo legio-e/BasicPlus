@@ -610,9 +610,31 @@ public final class BpvmClient implements AutoCloseable {
      *  vacio = no se manda el campo, y en la placa manda el valor por defecto
      *  que declare `Main(arg: string := ...)`. */
     public void runModule(String module, String arg) {
+        sendOneShot("RUN", camposRun(module, arg), null);
+    }
+
+    private static String camposRun(String module, String arg) {
         String campos = "\"path\":\"" + Json.escape(module) + "\"";
         if (arg != null && !arg.isEmpty()) campos += ",\"arg\":\"" + Json.escape(arg) + "\"";
-        sendOneShot("RUN", campos, null);
+        return campos;
+    }
+
+    /** V8 #694 (29-oct; Eduardo: «me parece bien que avise») — el RUN, ESPERANDO su respuesta. La placa manda el
+     *  RUN_REPLY al poner el programa en marcha, o un ERROR de antes de arrancar: NOT_FOUND «fichero no existe», BUSY
+     *  «ya hay una sesión RUN en curso», INVALID_PARAM. Por {@link #runModule} iba sin esperar: un RUN rechazado se tiraba
+     *  («silencioso por diseño», abajo) y quien lo había lanzado esperaba el EXITED una hora. Devuelve la sesión;
+     *  {@link WireError} si la placa lo rechaza, IOException si no contesta en el plazo. */
+    public long runModuleConRespuesta(String module, String arg, long timeoutMs) throws IOException {
+        Map<String, Object> r = sendRequest("RUN", camposRun(module, arg), null, timeoutMs);
+        return Json.getLong(r, "session", 0);
+    }
+
+    /** V8 #694 — el KILL, ESPERANDO su respuesta: KILL_REPLY (la placa lo para; el EXITED, «terminado por KILL», llega
+     *  después) o ERROR NO_SESSION (no había programa en marcha). Por sendCommand(STOP) iba sin esperar, y el IDE decía
+     *  «KILL enviado» sin saber si había llegado. {@link WireError} o IOException, como el RUN. */
+    public void killConRespuesta(long timeoutMs) throws IOException {
+        long sess = currentSession;
+        sendRequest("KILL", sess > 0 ? "\"session\":" + sess : null, null, timeoutMs);
     }
 
     /** PR-7c — Pide al server que se reinicie. El protocolo v1 manda que el

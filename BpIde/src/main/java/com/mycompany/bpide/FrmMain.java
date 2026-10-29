@@ -2931,7 +2931,13 @@ public class FrmMain extends javax.swing.JFrame
                         client.setOutputSink(FrmMain.this::appendConsola);
                         debug.attach(client);            // el listener (onDebugPaused) ya está puesto
                         client.requestPause();           // rompe en el 1er opcode → BP_HIT(cs)
-                        client.runModule(remoteMain);    // arranca; cada pausa pinta locales por nombre
+                        try {                            // arranca; cada pausa pinta locales por nombre
+                            client.runModuleConRespuesta(remoteMain, null, 10_000L);   // V8 #694: su RUN_REPLY
+                        } catch (java.io.IOException ex) {
+                            appendConsola("[debug] la placa no arranca el programa: " + ex.getMessage() + "\n");
+                            debug.detach();
+                            return;
+                        }
                         appendConsola("[debug] sesión activa. Breakpoints del editor → run-to-breakpoint;"
                                 + " si no hay, pausa en la entrada. Continue/Step en el menú Debug.\n");
                     }, collectProjectResources(), deviceAppPrefix());   // H12 (#260) + F2 (H19)
@@ -3151,7 +3157,9 @@ public class FrmMain extends javax.swing.JFrame
                     debug.attach(client);
                 }
                 try {
-                    client.runModule(mainModName);
+                    /* V8 #694 — su RUN_REPLY, o el ERROR de la VM (NOT_FOUND, BUSY…): rechazado, se dice abajo («[VM error]»)
+                     * en vez de esperar el fin del programa que no ha empezado. */
+                    client.runModuleConRespuesta(mainModName, null, 10_000L);
                     client.waitForExit();
                 } finally {
                     if (pauseInitially) { debug.detach(); this.deviceDbg = null; }
@@ -3181,8 +3189,22 @@ public class FrmMain extends javax.swing.JFrame
         BpvmClient c = activeRunClient;
         try {
             if (c != null) {
-                c.sendCommand(edu.bpgenvm.vm.debug.StepCommand.STOP);  // → KILL
-                consolaArea.append("[ide] Stop: KILL enviado a la VM local\n");
+                /* V8 #694 — el KILL espera su respuesta, en un hilo aparte (la ventana no se para), y dice lo que pasó.
+                 * Antes, «KILL enviado a la VM local» llegara o no. */
+                Thread t = new Thread(() -> {
+                    try {
+                        c.killConRespuesta(10_000L);
+                        appendConsola("[ide] Stop: la VM local para el programa\n");
+                    } catch (BpvmClient.WireError we) {
+                        appendConsola("NO_SESSION".equals(we.code)
+                                ? "[ide] Stop: no había ningún programa en marcha en la VM local\n"
+                                : "[ide] Stop: la VM local rechaza el KILL: " + we.getMessage() + "\n");
+                    } catch (java.io.IOException ioe) {
+                        appendConsola("[ide] Stop: la VM local no contesta al KILL: " + ioe.getMessage() + "\n");
+                    }
+                }, "ide-stop");
+                t.setDaemon(true);
+                t.start();
             } else if (picoExplorer != null) {
                 picoExplorer.killRunning();
             } else {

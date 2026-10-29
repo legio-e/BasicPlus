@@ -124,11 +124,12 @@ public abstract class AbstractBpvmBackend implements Backend {
 
     /** P-run-stop (#257) — manda KILL por el wire. El run() en curso (otro
      *  thread) desbloquea cuando el peer emite el EXITED con status KILLED.
-     *  Si no hay programa corriendo, el peer responde NO_SESSION (one-shot:
-     *  no esperamos la respuesta — aparecerá como diagnóstico). */
+     *  V8 #694: y ESPERA su respuesta —KILL_REPLY, o el ERROR NO_SESSION si no
+     *  había programa—; si no llega o es un ERROR, lo lanza, y quien llama lo
+     *  dice. Antes iba sin respuesta, y el IDE decía «KILL enviado» igual. */
     @Override public void kill() throws IOException {
         require();
-        client.sendCommand(edu.bpgenvm.vm.debug.StepCommand.STOP);
+        client.killConRespuesta(TIMEOUT_MS);
     }
 
     /** #256 — true mientras un run() de ESTE backend está en vuelo (su
@@ -220,8 +221,16 @@ public abstract class AbstractBpvmBackend implements Backend {
             // aquí lo ignoramos: el EXITED que sigue cerrará el future.
         });
 
-        client.runModule(path, arg);   /* V6/#412 */
         try {
+            /* V6/#412; V8 #694 — el RUN espera su RUN_REPLY (la placa lo manda al poner el programa en marcha): si la
+             * placa lo rechaza (NOT_FOUND, BUSY…) o no contesta, se dice aquí, en vez de esperar el EXITED una hora. */
+            try {
+                client.runModuleConRespuesta(path, arg, TIMEOUT_MS);
+            } catch (BpvmClient.WireError we) {
+                throw new IOException("la placa rechaza el RUN: " + we.getMessage(), we);
+            } catch (IOException ioe) {
+                throw new IOException("la placa no contesta al RUN: " + ioe.getMessage(), ioe);
+            }
             return done.get(RUN_TIMEOUT_MS, TimeUnit.MILLISECONDS);   // ← kill() desbloquea vía EXITED
         } catch (TimeoutException te) {
             throw new IOException("timeout esperando EXITED del programa");

@@ -932,11 +932,26 @@ public final class PicoExplorer extends JPanel {
                     SwingUtilities.invokeLater(this::onRefresh);
                 });
             }
-            b.kill();
-            emitLine("[Explorer] Stop: KILL enviado a la placa");
         } catch (Exception ex) {
             emitLine("[Explorer] Stop falló: " + ex.getMessage());
+            return;
         }
+        /* V8 #694 (29-oct; Eduardo: «me parece bien que avise») — el KILL espera su respuesta, así que va en un hilo
+         * aparte (la ventana no se para) y dice lo que pasó. Antes, «KILL enviado a la placa» llegara o no. */
+        Thread t = new Thread(() -> {
+            try {
+                b.kill();
+                emitLine("[Explorer] Stop: la placa para el programa");
+            } catch (BpvmClient.WireError we) {
+                emitLine("NO_SESSION".equals(we.code)
+                        ? "[Explorer] Stop: no había ningún programa en marcha en la placa"
+                        : "[Explorer] Stop: la placa rechaza el KILL: " + we.getMessage());
+            } catch (Exception ex) {
+                emitLine("[Explorer] Stop: la placa no contesta al KILL: " + ex.getMessage());
+            }
+        }, "explorer-stop");
+        t.setDaemon(true);
+        t.start();
     }
 
     public void uploadAndRun(File modFile) {

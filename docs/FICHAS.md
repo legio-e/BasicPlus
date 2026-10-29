@@ -2296,6 +2296,25 @@ por diseño»). Así, un KILL perdido decía «KILL enviado», y un RUN con la r
 el `EXITED` una hora. «Errores sí, silenciosos no»: el KILL debería esperar su `KILL_REPLY` (o el `NO_SESSION`) y decir qué
 pasó, y el RUN, su `RUN_REPLY` o su `ERROR`.
 
+**29-oct, decidida y hecha en el IDE** (Eduardo, a si el RUN tiene que avisar al poner el programa en marcha: no —la
+placa ya manda el `RUN_REPLY` entonces—, sólo cuando algo va mal: *«OK, me parece bien que avise»*):
+- `BpvmClient.runModuleConRespuesta` y `killConRespuesta`: esperan su respuesta (10 s), y un `ERROR` llega como
+  `WireError` con su código;
+- **el RUN** —el de la placa (`AbstractBpvmBackend.run`), el de la VM local y el de depurar en placa—: si la placa lo
+  rechaza (`NOT_FOUND` «fichero no existe», `BUSY`…) o no contesta, se dice, y no se espera el fin de un programa que
+  no ha empezado. Si va bien, nada nuevo: su salida en la consola;
+- **el KILL** —el `Stop` del explorador y el de la VM local—: en un hilo aparte (la ventana no se para), y dice «la
+  placa para el programa», «no había ningún programa en marcha» (`NO_SESSION`) o «la placa no contesta al KILL»;
+- el `RUN` y el `STOP` sin respuesta (`runModule`, `sendCommand`) siguen para los demás (los *smokes*, el depurador);
+- **probado con el cliente del IDE, sin la ventana** (un arnés; Eduardo, en sesión remota): contra el micro simulado,
+  que contesta como las placas, un KILL sin programa da `NO_SESSION`, un RUN de lo que no existe, `NOT_FOUND`, y el
+  bueno, su `RUN_REPLY`, y su KILL, `KILL_REPLY` (6/6); contra la VM-Java, el bueno y su KILL (3/3). **Por ver con
+  Eduardo, en el IDE:** el `Stop` y un RUN rechazado, en la consola;
+- **visto de paso, la VM-Java contesta distinto** (no lo toca esta ficha): hace una ejecución por proceso y contesta el
+  `RUN_REPLY` antes de cargar, así que un RUN de lo que no existe no da `NOT_FOUND`; el fallo llega en el `EXITED`
+  («load: falta el modulo…», `#431`). Y un KILL sin programa le da `KILL_REPLY`, no `NO_SESSION`. El IDE no lo nota:
+  a la VM local sólo le manda el KILL con un programa en marcha.
+
 #### 🔵 `#695` — al parar un programa de GUI, el destructor de `Gui.Button` lanza «referencia nula» y quedan objetos sin destruir (abierta el 12-oct, en el `F1`; Eduardo: *«tiene un problema pero se repone y todo sigue en marcha»*)
 
 En el log de la P4, al parar `GuiClickDemo` o `GuiColorDemo`: «el destructor de Gui.Button lanzó: referencia nula: llamada
