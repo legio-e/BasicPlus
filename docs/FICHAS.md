@@ -7668,6 +7668,16 @@ Por eso, tras cada GC no hay dos huecos seguidos: entre dos huecos hay siempre u
 `HuecosReserva`: exactamente k huecos, uno por cadena muerta, cada uno entre dos vivas. Los que quedan no se pueden
 fundir más sin mover objetos; sólo los quitaría la compactación (`Heap.compact`, a petición).
 
+**El tamaño de los bloques, decidido (Eduardo, 29-oct):** *«de momento trabajamos con múltiplos de 4, no hay
+problema»*. Es lo que hay en las dos VMs: la cabecera (8 B) más el contenido, redondeado a 4, y nunca menos de 12 —un
+`Object` vacío, 12; con su handle, en la VM-C, 20—. Pasar a 8 dejaría la mitad de tamaños distintos, pero el objeto
+más pequeño subiría de 12 a 16. **Y la astilla, aclarada** (Eduardo: *«si no puede haber objetos o arrays de menos de
+12 bytes entonces no puede haber astillas»*): no existe ningún bloque de menos de 12 B, y nunca se crea uno. Lo que
+esta ficha llama astilla es el hueco que la reserva SALTA porque le sobrarían 4 u 8 B: ese sobrante no puede ser un
+hueco (le faltan el tamaño y el siguiente) ni quedarse en el bloque (su tamaño se recalcula desde la cabecera: el
+arreglo del 15-jul). El coste no es memoria perdida, es recorrido: el hueco se queda para otra reserva que le encaje.
+Con listas por tamaño (la opción 3), saltarse los tamaños R+4 y R+8 de una reserva de R no cuesta nada.
+
 Sólo análisis. Por decidir (Eduardo).
 
 #### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`, `dcb71627`)
