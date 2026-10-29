@@ -61,6 +61,12 @@ typedef struct { uint64_t v; } bpref_t;
  * el ENTER siguiente. La misma en miVM (PILA_ZONA_ROJA): el desbordamiento salta en la misma instrucción en las dos. */
 #define BPVM_PILA_ZONA_ROJA 256u
 
+/* V8 #740 (29-oct, la b; Eduardo: «b) si una excepción»; «b) OK») — EL PASO: lo que el intérprete deja libre bajo el
+ * tope al mirarlo antes de cada instrucción. Una instrucción escribe como mucho 12 B por encima de sp (un CALL; un
+ * builtin, su resultado), y al lanzar se empuja la referencia de la excepción (8): con 32, ni la instrucción que pasa
+ * de la raya ni su excepción tocan lo que hay después del tope. La misma en miVM (PILA_PASO). */
+#define BPVM_PILA_PASO 32u
+
 /* Dirección inicial reservada (sentinela THREAD_EXIT en memory[0]). */
 #define BPVM_INITIAL_FREE_ADDR  0x0100
 

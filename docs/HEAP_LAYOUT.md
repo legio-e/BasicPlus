@@ -319,6 +319,17 @@ puede apilar después de su `ENTER` sin volver a mirar —los operandos, los arg
 los 12 B del `CALL`— hasta el `ENTER` siguiente. La misma cuenta en las dos VMs: la excepción sale en
 la misma instrucción. Antes nadie miraba, y un thread que recursaba pisaba la pila del de al lado.
 
+**Y antes de cada instrucción (V8 `#740`, la b; Eduardo: *«b) si una excepción»*).** La zona roja
+cubre a toda función real —en el corpus, ninguna apila más de 84 B—, pero nada impedía que una se
+pasara (una expresión muy anidada, una llamada con muchos argumentos), y entonces escribía más allá
+del tope: desde que las pilas de los threads son bloques del heap, en el bloque de al lado. Ahora el
+intérprete mira el tope antes de cada instrucción: si `sp > stackTop − PILA_PASO`, la misma
+`RuntimeError`, antes de ejecutarla. `PILA_PASO` (`BPVM_PILA_PASO`) = 32 B: lo más que escribe una
+instrucción por encima de `sp` (los 12 B de un `CALL`) más la referencia de la excepción que se
+empuja al lanzarla (8). Una comparación por instrucción; en el PC no se nota (medido). El puente de
+las natives (VM-C), que monta el marco de la llamada en C, mira el suyo antes de escribirlo.
+`PilaOperandos` lo prueba: 200 niveles de paréntesis, 804 B de operandos, en un thread de 700 B.
+
 ### 4.1 Layout de un frame de función
 
 Cada `CALL` reserva en la pila del thread:

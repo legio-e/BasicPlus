@@ -257,6 +257,14 @@ public class VirtualMachine {
     public static final int PILA_ZONA_ROJA = 256;
 
     /**
+     * V8 #740 (29-oct, la b; Eduardo: «b) si una excepción»; «b) OK») — EL PASO: lo que el intérprete deja libre bajo
+     * el tope al mirarlo antes de cada instrucción. Una instrucción escribe como mucho 12 B por encima de sp (un CALL; un
+     * builtin, su resultado), y al lanzar se empuja la referencia de la excepción (8): con 32, ni la instrucción que
+     * pasa de la raya ni su excepción tocan lo que hay después del tope. La misma en la VM-C (BPVM_PILA_PASO).
+     */
+    public static final int PILA_PASO = 32;
+
+    /**
      * Cola FIFO de threads en estado RUNNABLE listos para tomar la CPU.
      * Cada worker Java saca el primero de aquí cuando vuelve a buscar trabajo.
      * Toda mutación va bajo {@link #vmLock}.
@@ -3302,6 +3310,7 @@ public class VirtualMachine {
         // se mira ARRIBA del lazo y se cuenta después, así que un cuanto son exactamente `cuanto` opcodes.
         final int cuanto = quantumOps;
         int opsCuanto = 0;
+        final int pilaLim = tc.stackTop - PILA_PASO;   // V8 #740 (la b): el tope, antes de cada instrucción
         try {
         while (running && !tc.yieldRequested) {
             int currentPC = pc;
@@ -3363,6 +3372,18 @@ public class VirtualMachine {
             }
 
             try {
+            // V8 #740 (29-oct, la b) — EL TOPE, ANTES DE CADA INSTRUCCIÓN (Eduardo: «b) si una excepción»; «b) OK»). El
+            // muro del ENTER (#605) deja a cada función su zona roja, 256 B, para lo que apile hasta la llamada
+            // siguiente, y en el corpus ninguna pasa de 84 (medido); pero nada impedía que una pasara —una expresión
+            // muy anidada, una llamada con muchos argumentos—, y entonces escribía más allá del tope: en el bloque del
+            // heap de al lado, desde que las pilas de los hilos salen de él. Ahora, si lo que puede escribir la
+            // instrucción no cabe, la misma excepción que el muro, antes de ejecutarla. La misma cuenta, en el mismo
+            // punto, que la VM-C.
+            if (sp > pilaLim) {
+                tc.sp = sp;
+                throwBpRuntimeError(tc, "desbordamiento de pila (el hilo tiene "
+                        + (tc.stackTop - tc.stackBase) + " B)");
+            }
             switch (rawOp) {
                 case 0x00: // HALT  (sólo legal en el thread main)
                     if (tc.id != 0) {

@@ -45,9 +45,13 @@
 > - **Y lo barato, también** (`359df501`): el log de la C3 y la C6 a 4 KB y los tres `tiene[1400]` del enlace en uno;
 >   en su ELF, 6.896 B menos de RAM estática. La red, verde entera las dos veces (la primera, con el estrés
 >   recalibrado).
-> - **Lo siguiente:** la b) si Eduardo la aprueba, y medirlo todo en las placas en el próximo lote (con el
->   `Stdlib.pack` de `Sound`). **El riesgo:** las imágenes de las placas, sin rehacer —sólo la C3 y la C6, compiladas
->   para medir—; hasta el lote, lo verificado es el PC.
+> - **Y la b), aprobada y hecha** (Eduardo: *«b) OK»*): las dos VMs miran el tope antes de cada instrucción (32 B de
+>   paso: los 12 de un `CALL` y los 8 de la excepción), y el puente de las natives, antes de montar su marco.
+>   `PilaOperandos` al corpus (804 B de operandos en un hilo de 700 B), con su desplazamiento: sin la comprobación,
+>   el hilo escribe fuera de su pila sin decir nada. En el PC no cuesta (medido).
+> - **Lo siguiente:** medirlo todo en las placas en el próximo lote (con el `Stdlib.pack` de `Sound`): la RAM de la
+>   C3 y la C6, y el coste de la comprobación por instrucción en la Pico y en una ESP. **El riesgo:** las imágenes de
+>   las placas, sin rehacer —sólo la C3 y la C6, compiladas para medir—; hasta el lote, lo verificado es el PC.
 
 > **27-oct (noche)** — **El H4, el sonido, retomado: el PC, hecho** (Eduardo: *«Vamos a dejar las pendientes por
 > ahora que es un poco aburrido. Me gustaría retomar lo del sonido […] la reproducción de sonidos debería ser siempre

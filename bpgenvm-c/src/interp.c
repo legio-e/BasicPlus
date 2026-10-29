@@ -357,6 +357,21 @@ static int32_t bridge_run_bp_frame(bpvm_t* vm, bpvm_thread_t* tc,
     uint32_t bp = *cc->bp_p;
     uint32_t caller_cs = tc->cs;
 
+    /* V8 #740 (29-oct, la b) — el marco que monta el puente (los argumentos, hasta 32 de 8 B, y los 12 B del CALL) se
+     * escribe aquí, en C, sin pasar por la comprobación del intérprete: se mira antes, con el mismo paso. Si no cabe,
+     * la excepción de siempre, en la native que llamó; antes de apilar nada (ni el suelo de abajo). */
+    {
+        uint32_t marco = 12u;
+        for (int i = 0; i < nargs; i++) marco += ((ref_mask >> i) & 1u) ? 8u : 4u;
+        if ((uint64_t) sp + marco + BPVM_PILA_PASO > (uint64_t) tc->stack_top) {
+            char em[64];
+            snprintf(em, sizeof em, "desbordamiento de pila (el hilo tiene %u B)",
+                     (unsigned) (tc->stack_top - tc->stack_base));
+            vm->aot_helpers->throw_runtime(vm, em);
+            return 0;   /* inalcanzable */
+        }
+    }
+
     /* V7 #672 (9-oct) — EL SUELO DE LAS EXCEPCIONES. Una excepción que el código BP no atrapa no puede buscar
      * manejador por DEBAJO de la native: sus marcos de C siguen vivos. Lo hacía —el `catch` de fuera corría DENTRO de
      * este intérprete anidado, encima de la native, y al acabar el programa el puente decía «la función BP
@@ -797,6 +812,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
     tc->status = BPVM_THREAD_RUNNING;
     bpvm_status_t exit_status = BPVM_OK;
     int ops = 0;
+    const uint32_t pila_lim = tc->stack_top - BPVM_PILA_PASO;   /* V8 #740 (la b): el tope, antes de cada instrucción */
 
     /* V7/H5 P2b.1.c — un hilo suspendido DENTRO de una native no se interpreta: se REANUDA su native (y con
      * ella lo que haya en su ejecutor: el intérprete anidado del puente, otras natives; P2b.3). Si vuelve a
@@ -895,6 +911,23 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 if (act == BPVM_DBG_STOP) { exit_status = bpvm_kill_pedido(vm) ? BPVM_KILLED : BPVM_DBG_STOPPED; break; }
                 if (act == BPVM_DBG_STEP) tc->dbg_step = 1;
             }
+        }
+
+        /* V8 #740 (29-oct, la b) — EL TOPE, ANTES DE CADA INSTRUCCIÓN (Eduardo: «b) si una excepción»; «b) OK»). El
+         * muro del ENTER (#605) deja a cada función su zona roja, 256 B, para lo que apile hasta la llamada siguiente, y
+         * en el corpus ninguna pasa de 84 (medido); pero nada impedía que una pasara —una expresión muy anidada, una
+         * llamada con muchos argumentos—, y entonces escribía más allá del tope: en el bloque del heap de al lado, desde
+         * que las pilas de los hilos salen de él. Ahora, si lo que puede escribir la instrucción no cabe, la misma
+         * excepción que el muro, antes de escribir nada. Una comparación por instrucción: en el PC no se nota (medido,
+         * con una copia compilada igual). La misma cuenta, en el mismo punto, que miVM. */
+        if (sp > pila_lim) {
+            char em[64];
+            snprintf(em, sizeof em, "desbordamiento de pila (el hilo tiene %u B)",
+                     (unsigned) (tc->stack_top - tc->stack_base));
+            if (interp_throw_rt(vm, tc, &sp, &bp, &pc, &cs, &mem, em)) continue;   /* atrapada: sigue en su catch */
+            exit_status = BPVM_ERR_RUNTIME;
+            if (yielded) *yielded = 1;
+            goto done;
         }
 
         uint8_t op = mem[pc++];

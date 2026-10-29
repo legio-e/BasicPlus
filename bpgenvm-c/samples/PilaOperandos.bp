@@ -1,0 +1,58 @@
+// PilaOperandos.bp — V8 #740 (29-oct, la b): el tope de la pila, mirado en CADA instrucción (Eduardo: «b) si una
+// excepción»; «b) OK»). El muro del ENTER (#605, PilaMuro.bp) mira, al entrar en una función, sus locales y una zona
+// roja de 256 B para lo que apile hasta la llamada siguiente; en el corpus ninguna pasa de 84 B. Esta sí: `suma` es
+// una expresión de 200 niveles de paréntesis, y cada uno deja un operando pendiente (4 B) mientras se evalúa el de
+// dentro, 804 B por encima de sus locales. Antes, en una pila pequeña, el ENTER la dejaba pasar y los operandos se
+// escribían más allá del tope —el bloque del heap de al lado, desde que las pilas de los hilos salen de él—, sin
+// decir nada. Ahora, la misma excepción que el muro, atrapable, en las dos VMs:
+//   1. con 8 KB de pila, cabe: el resultado;
+//   2. con 700 B, el ENTER pasa (sus locales y la zona roja caben) y los operandos no: la excepción;
+//   3. el vecino de al lado, después, intacto.
+// (Generado por un script: la expresión, a mano, no se lee.)
+module PilaOperandos
+
+  class Hondo extends Thread
+    public property res: integer
+    public property texto: string
+    public function Hondo(pila: integer)
+      super(pila)
+      this.res := -1
+      this.texto := "sin excepción"
+    end Hondo
+    public function run()
+      try
+        this.res := suma(1)
+      catch e: RuntimeError
+        this.texto := e.msg
+      endtry
+    end run
+  end Hondo
+
+  // El vecino: un objeto que vive mientras el otro hilo apila; si los operandos se salieran de su pila, podrían
+  // caer encima de él.
+  class Vecino
+    public property a: integer
+    public property b: integer
+    public function Vecino()
+      this.a := 1234
+      this.b := 5678
+    end Vecino
+  end Vecino
+
+  public function suma(v: integer): integer
+    return v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v + (v))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))))
+  end suma
+
+  function Main()
+    var grande: Hondo := Hondo(8192)
+    grande.start()
+    grande.join()
+    print "1. con 8 KB de pila: ", grande.res, ", ", grande.texto
+    var vecino: Vecino := Vecino()
+    var chica: Hondo := Hondo(700)
+    chica.start()
+    chica.join()
+    print "2. con 700 B: ", chica.res, ", atrapada: ", chica.texto
+    print "3. el vecino: ", vecino.a, " y ", vecino.b
+  end Main
+end PilaOperandos

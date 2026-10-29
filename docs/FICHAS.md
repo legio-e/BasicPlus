@@ -7156,6 +7156,16 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   el tope en cada instrucción —en el PC no se nota: compilada igual, la copia con la comprobación salía un 9–13 % más
   rápida, por cómo coloca el código el compilador; en las placas, por medir— y el puente de las natives, el suyo; el
   muro del `ENTER`, como está. **Pendiente del OK de Eduardo.**
+- **29-oct, la b, hecha** (Eduardo: *«b) OK»*): las dos VMs miran el tope antes de cada instrucción —si `sp` pasa de
+  `stack_top − PASO`, la misma `RuntimeError` que el muro, «desbordamiento de pila (el hilo tiene N B)», antes de
+  ejecutarla—; `PASO` = 32 B (`BPVM_PILA_PASO`, `PILA_PASO`): lo más que escribe una instrucción por encima de `sp`
+  (12, un `CALL`; los builtins empujan un resultado) más la referencia de la excepción que se empuja al lanzar (8). El
+  puente de las natives (`bridge_run_bp_frame`) mira antes de montar su marco (hasta 32 argumentos de 8 B y los 12 del
+  `CALL`). La prueba: `PilaOperandos`, nuevo en el corpus —200 niveles de paréntesis, 804 B de operandos: con 8 KB de
+  pila, 201; con 700 B, el `ENTER` pasa y los operandos no: la excepción—; y su desplazamiento: sin la comprobación, el
+  hilo de 700 B «calcula» 201 sin decir nada, escribiendo fuera de su pila. El coste, medido otra vez con la VM de
+  justo antes compilada igual: fib(32) 270 ms contra 307, CompressBench 1.119 contra 1.255 (la comprobada, más rápida:
+  el compilador coloca distinto el bucle); en las placas, en el lote.
 
 #### 🔵 `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **por mirar**)
 
