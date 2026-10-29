@@ -7150,6 +7150,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#741` — en la P4, los packs `Gui` (LVGL) y `SQLite` no cargan desde la imagen del sonido del 27-oct: «realojado para OTRA dirección» (abierta el 29-oct, al medir `#737`; **por regrabar**)
+
+Visto al devolver a la P4 su imagen del 27-oct tras las pruebas de `#737` (comprobada byte a byte contra lo que llevaba
+antes: es la misma). El log: «pack: [0] 'Gui' (motor 'lvgl') NO se carga — realojado para OTRA direccion»; su sello dice
+la zona en `0x400C80F0`, y está en `0x400E80F0`; lo mismo `SQLite`. Y la GUI: «el pack de la GUI esta, pero su motor no
+cargo». La causa: el sonido (`d5f22cda`, 27-oct, 19:17) hizo crecer la imagen (+53 KB, dice su commit), su rodata acaba
+ahora en `0x400d2e1c`, y la zona, que se monta en la página siguiente, pasó de `0x400c8000` a `0x400e8000`. El lote de
+esa tarde (16:09) comprobó que los packs aguantaban, pero con la imagen de antes del sonido; y al grabar el sonido no
+se miró el `nm` (la regla: antes de grabar una imagen ESP). Lo que hace falta: regrabar `Gui` y `SQLite` en la P4 (desde
+el IDE o `wire_serie.py pack`). La imagen de HEAD acaba en la misma página (`0x400d361c`): no la vuelve a mover.
+
 #### 🔵 `#740` — la RAM de las placas sin PSRAM, la C3 y la C6 las justas: las pilas de los hilos BP, DEL HEAP —48 KB más de heap, y lo que gastan, proporcional a los hilos—, y los búferes estáticos que se pueden recortar (abierta el 27-oct, a pregunta de Eduardo al cerrar la sesión: *«Antes de cerrar la VM cuanta memoria RAM consume y si hay posibilidades de reducir el consumo. Ya lo miramos en su día pero no se si con los cambios que ha habido se puede hacer algo. Solamente para los micros que no tengan PSRAM, los que tienen PSRAM no hay problema.»*)
 
 - **Medido el 27-oct**, sin placas conectadas: el `INFO` del lote de esa tarde y los `.elf` del día. Las cifras, en
@@ -7272,11 +7283,28 @@ son 2048 operaciones), el coste de arrancar cada transferencia (sólo compensa p
 para la flash y la PSRAM, y un canal de DMA reservado. Lo más sencillo de probar primero: `memcpy`/`memset` de
 bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la caché alrededor.
 
-#### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **propuesta, por medir**)
+#### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **la de la P4, medida el 29-oct: por decidir**)
 
 Propuesto el 21-oct (`V8_IDEAS` §E5, «La PSRAM, medida por piezas»), midiendo antes: la L2 de la P4, de 128 a 256 KB,
 y la caché de datos de la S3, de 32 a 64 KB con líneas de 64 B. Cada una cuesta esa SRAM interna. En la P4, los datos
 echan al intérprete de la caché: tras leer 128 KB, +89 %.
+
+**29-oct, la P4 medida** (Eduardo, tras `#734`: *«En P4 también ganar[íamos]»*; *«Si, midelo»*; y su lectura: *«La SRAM
+es interna así que tiene que ser más rápida. La cache amortigua la lentitud de la Flash externa. Ahora en caso de mucho
+estrés con mucho movimiento de datos la cache podría fallar»*). Tres imágenes de prueba de HEAD, en copias que no se
+quedan en el repositorio: la de siempre; M1, el intérprete (`interp.c`, 27,6 KB) en la RAM interna con un fragmento de
+enlace del IDF (`noflash`) —la M entera de la Metro, con `builtins.c` (57,6 KB), no cabe: el enlazador se queda sin
+sitio para los `.noinit`—; y L2, la caché de 256 KB (el mismo código, en las mismas direcciones). Con `PsramFases`, el
+censo y seis bucles de una operación:
+- **con pocos datos, nada:** los bucles y el censo, igual en las tres (M1, un 3–5 % peor en `floatToString` y
+  `parseFloat`);
+- **con mucho movimiento de datos, la L2 de 256 KB:** tras leer 2 × 64 KB, interpretar cuesta +661 µs (+97 %) con la de
+  siempre, +425 µs (+62 %) con M1 y **+10 µs (+1 %)** con la L2. Y con la L2, leer 2 × 64 KB, 603 → 395 µs (−35 %);
+  crear 64 KB, 1876 → 939 µs (−50 %); y `gc()`, 5,2 → 2,0 ms (−62 %), también con datos pequeños. M1 se queda a medias
+  porque el bytecode del programa también está en la PSRAM: los datos lo echan de la caché igual;
+- **lo que cuesta:** 128 KB de RAM interna. Libres como mínimo, 372 KB antes (en 7,6 h encendida) y 239 KB con la L2
+  (recién arrancada, con las pruebas);
+- **por decidir (Eduardo):** la L2 de 256 KB en la P4. La caché de datos de la S3, sin medir (no estaba conectada).
 
 #### 🔵 `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **hecha para los builtins el 29-oct; la concatenación, por decidir**)
 
