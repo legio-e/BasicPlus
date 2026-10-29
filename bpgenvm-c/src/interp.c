@@ -197,7 +197,7 @@ static void emit_pieza_o_fin(bpvm_t* vm, bpvm_thread_t* tc, const char* buf, int
 
 static void emit_int(bpvm_t* vm, bpvm_thread_t* tc, int32_t v, int newline) {
     char buf[32];
-    int n = snprintf(buf, sizeof(buf), "%" PRId32, v);
+    int n = bpvm_format_i32(buf, v);   /* V8 #734: antes, snprintf */
     emit_pieza_o_fin(vm, tc, buf, n, newline);
 }
 
@@ -745,6 +745,20 @@ int bpvm_format_i64(char* out, int64_t v) {
     if (v < 0) { out[n++] = '-'; mag = (unsigned long long) (-(v + 1)) + 1ULL; }
     else       { mag = (unsigned long long) v; }
     n += u64_dec(out + n, mag, 0);
+    out[n] = '\0';
+    return n;
+}
+
+/* V8 #734 (29-oct) — un int32 a decimal, sin snprintf: en la RP2350, el de newlib arrastra vfprintf (8,8 KB) por la
+ * caché del XIP en cada llamada, y su coste dependía de dónde cayera en la flash. En 32 bits (el M33 divide por
+ * hardware; u64_dec, en 64, pasaría por la división de la libgcc). La magnitud, sin signo: así cabe -2^31. */
+int bpvm_format_i32(char* out, int32_t v) {
+    char tmp[10];
+    uint32_t mag = (v < 0) ? 0u - (uint32_t) v : (uint32_t) v;
+    int t = 0, n = 0;
+    do { tmp[t++] = (char) ('0' + (int) (mag % 10u)); mag /= 10u; } while (mag > 0u);
+    if (v < 0) out[n++] = '-';
+    while (t > 0) out[n++] = tmp[--t];
     out[n] = '\0';
     return n;
 }

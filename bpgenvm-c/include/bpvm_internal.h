@@ -1420,6 +1420,11 @@ int bpvm_format_double(char* out, double v);
  * BUILTIN_LONG_TO_STRING de builtins.c. Devuelve la longitud (sin '\0'). */
 int bpvm_format_i64(char* out, int64_t v);
 
+/* interp.c — V8 #734: un int32 a decimal con signo, sin snprintf (en la RP2350 arrastraba vfprintf por la caché del
+ * XIP). Lo usan intToString (y con él la suma con una cadena) y el print de un integer. `out`, 12 B como mínimo;
+ * devuelve la longitud (sin '\0'). Byte-idéntico a Integer.toString. */
+int bpvm_format_i32(char* out, int32_t v);
+
 /* builtins.c (F2) */
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id);
 /* V7/H12 — ¿es `id` un builtin de la GUI (los BUILTIN_GUI_*: entran en gui.c, y por él en LVGL)? Con varios runs sólo

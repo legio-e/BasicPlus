@@ -7237,6 +7237,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   hilo de 700 B «calcula» 201 sin decir nada, escribiendo fuera de su pila. El coste, medido otra vez con la VM de
   justo antes compilada igual: fib(32) 270 ms contra 307, CompressBench 1.119 contra 1.255 (la comprobada, más rápida:
   el compilador coloca distinto el bucle); en las placas, en el lote.
+- **29-oct (tarde), la b medida en placa** (de paso, con el arnés de `#734`): **en la Pico 2 cuesta un 12–14 % del
+  bytecode puro**. Una imagen de prueba igual pero sin la comprobación: el vacío del censo, 26,8 µs con ella y 23,9 sin
+  ella; el del último caso del `switch`, 138,9 y 121,8; y un bucle vacío de 20.000 vueltas, 126 y 114,5 ms, con los mismos
+  fallos de la caché del XIP: es coste de instrucciones, no de caché. La imagen del 27-oct, sin ella, da 23,7 y 123,0. En
+  la Metro (M), el mismo bucle, 114 → 125 ms (+9,6 %). En el PC no se notaba. **Por decidir (Eduardo):** dejarla así, o
+  algo más barato que guarde lo mismo —por ejemplo, que el compilador diga lo más que apila cada función y se mire una
+  vez, en el `ENTER`, como el `max_stack` de la JVM—.
 
 #### 🔵 `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **por mirar**)
 
@@ -7308,7 +7315,7 @@ el bit. Desde `#714` (el bit 20, solo lectura) quedan 20 (del 19 al 0, `HEAP_LAY
 O(1) también con acentos (caminar hasta el carácter `i` seguiría siendo O(i)). En las dos VMs. A revisar al hacerlo:
 que ningún camino reescriba la etiqueta entera y la borre.
 
-#### 🔵 `#734` — en las RP2350, `intToString`, `floatToString`, `parseFloat` y cadena + entero van un 25–50 % más lentas desde los dos algoritmos del H5, y no se sabe por qué (abierta el 27-oct, al cerrar el H5; **sin explicar**)
+#### 🔵 `#734` — en las RP2350, `intToString`, `floatToString`, `parseFloat` y cadena + entero van un 25–50 % más lentas desde los dos algoritmos del H5, y no se sabe por qué (abierta el 27-oct, al cerrar el H5; **explicada el 29-oct —la caché del XIP— e `intToString`, hecha; el resto, por decidir**)
 
 Visto el 21-oct, al grabar los dos algoritmos, sólo en las RP2350 (`V8_IDEAS` §E5, «Lo que sigue lento»). La
 hipótesis: el sitio del código en la caché del XIP. Pide un test de desplazamiento: mover el código sin cambiarlo y
@@ -7340,6 +7347,32 @@ comparar»*):
   el M33 divide por hardware; igual que `Integer.toString` por construcción), que arregla también cadena + entero;
   `floatToString` y `parseFloat`, con más cuidado, por la paridad del redondeo con Java; y lo general, el código caliente
   de P en la SRAM, es `#719` (congelada).
+
+**29-oct (tarde), demostrada, y `intToString`, hecha** (Eduardo: *«haz las 2 y también la 1. No hay prisa […] podemos
+dedicar el tiempo que haga falta a las pruebas»*; y por qué la ficha decía que la Metro iba más lenta: el 21-oct llevaba
+la misma imagen que la Pico 2, con el heap en la PSRAM, que pasa por la misma caché del XIP; M llegó el 22-oct):
+- **el test de desplazamiento**, en la Pico 2, con imágenes de prueba que no se quedan en el repositorio: el mismo código,
+  con un relleno de 0, 2, 4, 6 y 8 KB entre todo lo demás y la libc (`libg.a`), y los contadores de la caché del XIP
+  (`ctr_acc` − `ctr_hit`) en el log de cada RUN; seis programas, cada uno con una operación 20.000 veces. `parseFloat`
+  va de 478 a 570 ms, y sus fallos, de 52 a 213 mil; `intToString`, de 990 a 1048; `floatToString`, de 815 a 908 (copia
+  con el `memcpy` de la libc); y con 8 KB —una vía de la caché— vuelve exactamente a lo de 0 (213 mil fallos, frente a
+  213 mil). `parseInt` y el bucle vacío, que no tocan la libc, no se mueven;
+- **hecho: `intToString` con una rutina nuestra** (`bpvm_format_i32`, de 32 bits), y con ella la suma con una cadena y el
+  `print` de un integer, que también iban por `snprintf`. En la Pico 2, con dos rellenos: `intToString` de 1048 a 756 ms
+  y de 990 a 725 (−28 %), y sus fallos, de 550 a 222 mil; cadena + entero, −23 %. En el censo, la imagen de hoy frente a
+  la del 27-oct: la Pico 2, 54,0 → 38,8 µs; la Metro (M), 28,3 → 23,7. La miVM no cambia (`Integer.toString`).
+  `IntATexto`, al corpus: los bordes (0, ±1, cada cambio de cifra, ±2^31) y un barrido de mil, por los tres caminos,
+  igual que la VM-Java; con un sabotaje (el −1 sin su signo), la prueba lo ve en los tres;
+- **a pregunta de Eduardo, el intérprete en la RAM** (en P; en M ya lo está): con sólo `interp.c` en la SRAM (21 KB), en
+  un bucle de una operación casi nada (`intToString`, igual), y en el censo, que usa mucho más bytecode, `parseFloat`
+  −39 %, `floatToString` −21 %, `parseInt` −55 %; al heap de la VM de la Pico 2 le quita 21,6 KB (de 221.360 a 199.776
+  B). Con `interp.c` y `builtins.c` (59 KB): `intToString` −28 % en el bucle y −37 % en el censo, cadena + entero −33 %;
+  le quita 60,8 KB (−27 %). En el bucle, el grueso de los fallos no es del intérprete: es del despachador de los
+  builtins (24 KB) y de la libc. **Por decidir (Eduardo)**: es `#719`;
+- **lo que queda:** `floatToString` y `parseFloat` siguen en la lotería (`parseFloat`, por `strtod`). Y en la Metro, en el
+  censo, `floatToString` sube de 29,7 a 46 µs con la imagen de hoy, estable en tres pasadas, y en el bucle suelto no
+  (+2 %). La hipótesis: en M, la PSRAM (el heap) y el código que sigue en la flash comparten la caché, y hoy el heap
+  cambió de sitio (`#740`). Sin comprobar: lo dirían los contadores de una imagen de prueba de M.
 
 #### 🔵 `#733` — en una native, recorrer una cadena por índice sigue siendo cuadrático: sin hilo del intérprete, su cursor dura una llamada (abierta el 27-oct, al cerrar el H5; **propuesta, sin hacer**)
 

@@ -1283,7 +1283,7 @@ int bpvm_prim_substring(bpvm_t* vm, bpvm_strcur_t* cur, bpref_t s, int32_t desde
 
 int bpvm_prim_int_to_string(bpvm_t* vm, int32_t v, bpref_t* out, char* err, size_t n) {
     char buf[16];
-    int k = snprintf(buf, sizeof buf, "%" PRId32, v);
+    int k = bpvm_format_i32(buf, v);   /* V8 #734: antes, snprintf (vfprintf por la caché del XIP de la RP2350) */
     uint32_t r = bpvm_heap_alloc_string(vm, buf, (size_t) (k > 0 ? k : 0));
     if (r == 0u) { snprintf(err, n, "No space in heap"); return -1; }   /* #355 */
     *out = bpref_regen(vm, r);
