@@ -7314,6 +7314,33 @@ Visto el 21-oct, al grabar los dos algoritmos, sólo en las RP2350 (`V8_IDEAS` �
 hipótesis: el sitio del código en la caché del XIP. Pide un test de desplazamiento: mover el código sin cambiarlo y
 ver si la diferencia lo sigue. Sin mirar desde la imagen con P y M (22-oct).
 
+**29-oct, analizada** (Eduardo: *«que tal investigar #734? Tienes la Pico y la metro conectadas por si quieres
+comparar»*):
+- **medido hoy**, con las imágenes del lote del 27-oct (`StrCenso`, n=2048, el neto en µs): en la Pico 2 (P),
+  `intToString` 54,0, `floatToString` 50,3, `parseFloat` 56,2 y cadena + entero 208,5; en la Metro (M), 28,3, 29,7,
+  17,6 y 211,8. La Pico 2 daba el 21-oct, antes de los dos algoritmos, 45,5, 43,8, 35,2 y 199; después, 68, 56, 50 y
+  245; y el 22-oct, 74,5, 51,2, 52,1 y 258;
+- **lo que dicen los censos del 22-oct** (nueve imágenes en la Metro y cuatro en la Pico 2, en el scratchpad de la
+  sesión): con la misma compilación, P frente a M en la Metro, `intToString` 68 → 28, `floatToString` 61 → 30 y
+  `parseFloat` 63 → 18. Y entre compilaciones de P, sin tocar su camino, `intToString` va de 54 a 82;
+- **el mecanismo:** en P todo el código corre desde la flash, por la caché del XIP (16 KB, dos vías, líneas de 8 B). El
+  bucle del intérprete (`bpvm_interp_run_quantum`) mide 15.268 B, y el despachador de los builtins
+  (`bpvm_call_builtin`), 24.464. `intToString` pasa por `_vfprintf_r`, el `snprintf` de newlib, de 8.844 B; cadena +
+  entero también (el compilador convierte el entero con `INT_TO_STRING`). `parseFloat` pasa por `_strtod_l`, de
+  4.346 B, y toma el mutex de FreeRTOS, también en la flash. Lo caliente de cada vuelta no cabe: la conversión echa de
+  la caché líneas del intérprete y al volver se recargan. Cuántas chocan depende de en qué conjuntos de la caché caiga
+  cada función, o sea, de dónde las deje el enlazador: por eso cambia de una compilación a otra sin tocar el código. En
+  M, el intérprete y FreeRTOS están en la SRAM y la libc tiene la caché para ella sola. La división de 64 bits y la suma
+  de `double` ya van en la SRAM (las pone ahí el SDK);
+- **un indicio más:** `parseInt` dejó la libc en `#716` (`strtol` → `num_entero`, nuestro), y en la Pico 2 bajó de 12,8
+  a 4,5 µs; en M, de 5,5 a 3,2;
+- **lo que falta para darlo por demostrado:** el test de desplazamiento —el mismo código, movido con un relleno—, que
+  pide grabar imágenes de prueba en la Pico 2;
+- **lo que se podría hacer** (por decidir, Eduardo): `intToString` con una rutina nuestra, como `parseInt` (de 32 bits:
+  el M33 divide por hardware; igual que `Integer.toString` por construcción), que arregla también cadena + entero;
+  `floatToString` y `parseFloat`, con más cuidado, por la paridad del redondeo con Java; y lo general, el código caliente
+  de P en la SRAM, es `#719` (congelada).
+
 #### 🔵 `#733` — en una native, recorrer una cadena por índice sigue siendo cuadrático: sin hilo del intérprete, su cursor dura una llamada (abierta el 27-oct, al cerrar el H5; **propuesta, sin hacer**)
 
 Las natives (el código del AOT) no tienen el cursor del hilo: cada `charAt` o `substring` usa uno propio que sólo
