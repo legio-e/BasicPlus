@@ -625,6 +625,7 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       var m: Mutex := __guiCerrojoArbol()
       m.lock()
       try
+        if this.children == null then return   // #695: en su destructor, los hijos ya se fueron (childCount)
         var i: integer := 0
         var n: integer := this.children.length()
         while i < n do
@@ -639,10 +640,16 @@ import Core          // V6/G2: OwnerList extends Core.List — el import no es t
       endtry
     end unregister
 
+    // V8 #695 (29-oct) — EN SU DESTRUCTOR, UN CONTENEDOR YA NO TIENE HIJOS. Se destruyen antes que él (la regla del
+    // 11-sep: los hijos owner primero), cada uno dándose de baja de esta lista, y después la lista misma; la VM pone el
+    // campo a null antes de correr el destructor del contenedor (un handle muerto «no es null»). Aquí se leía la lista
+    // nula: el delete() del destructor —el de un Button, que es contenedor— lanzaba «referencia nula» antes de su
+    // super.delete(), y el botón se quedaba en la lista de su pantalla y su nodo en el modelo. Sin lista, cero hijos.
     public function childCount(): integer
       var m: Mutex := __guiCerrojoArbol()
       m.lock()
       try
+        if this.children == null then return 0
         return this.children.length()
       finally
         m.unlock()

@@ -2304,6 +2304,26 @@ a un método de un objeto null — se sigue con la limpieza» (una vez por botó
 es contenedor; al soltar su lista de hijos, el destructor del `Label` hijo llama a `unregister` sobre un padre cuya lista se
 está soltando. Reproducir en el PC (las dos VMs) antes de tocar nada.
 
+**29-oct, reproducida y arreglada en el PC** (Eduardo: *«OK»* al arreglo):
+- **reproducida** en las dos VMs, al acabar el programa (sin la ventana, `Gui.run()` vuelve enseguida): `GuiColorDemo`
+  da las 8 líneas, una por botón;
+- **la causa no era la de arriba.** Al destruir, los hijos `owner` van antes que el padre, y la VM pone a null en el
+  padre los campos de los que ya murieron (`bpvm_destruir_prepara`). Un `Button` es `Container`: en su destructor,
+  `children` ya es null, y su `delete()` —el de `Container`— empieza por `childCount()`, que hacía
+  `this.children.length()`. Lanzaba antes de `super.delete()`: el nodo del botón no se borraba del modelo y el botón no
+  se daba de baja de su pantalla. Los `Label` hijos sí se iban bien: mueren antes, con la lista viva. Y no era sólo al
+  acabar: un botón que muere por su `var owner` en mitad del programa se quedaba en la lista de la pantalla y en el
+  árbol;
+- **el arreglo, en `Gui.bp`** (la VM no cambia): sin lista, `Container.childCount()` da 0 y `unregister` no hace nada.
+  La stdlib, rehecha con su proyecto: sólo cambia `Gui.mod`; y el `Stdlib.pack`. `Gui` no va embebido en ninguna
+  familia: a las placas llega con el pack del próximo lote;
+- **la prueba:** `DestruyeBoton`, nuevo en el corpus —un botón con `var owner` que muere al volver de una función—:
+  antes, en las dos VMs, «fuera: 2» y el botón en el árbol; ahora, «fuera: 1» y sólo el `Label`. Y `GuiColorDemo`, sin
+  ninguna línea del destructor;
+- **por ver, en la P4 en el lote:** el «quedaron sin destruir 8 objeto(s)» de aquel día salió al PARAR el programa
+  con la GUI en marcha, y en el PC no sale. Seguramente la fase final cortada al parar, otra cosa; con el arreglo
+  puesto, se mira allí.
+
 #### 🔵 `#696` — el IDE del ZIP compila contra un `Core` distinto del de las placas: «compilado contra otra interfaz (b8813a81 != 3897795d); enlace tardío» (abierta el 12-oct, en el `F1`; Eduardo: no es grave)
 
 En la P4, cada programa que compila el IDE del ZIP: el `Core` del IDE no es el `/lib/Core.mod` que repone la imagen, y el

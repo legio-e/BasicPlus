@@ -49,8 +49,12 @@
 >   paso: los 12 de un `CALL` y los 8 de la excepción), y el puente de las natives, antes de montar su marco.
 >   `PilaOperandos` al corpus (804 B de operandos en un hilo de 700 B), con su desplazamiento: sin la comprobación,
 >   el hilo escribe fuera de su pila sin decir nada. En el PC no cuesta (medido).
-> - **Lo siguiente:** medirlo todo en las placas en el próximo lote (con el `Stdlib.pack` de `Sound`): la RAM de la
->   C3 y la C6, y el coste de la comprobación por instrucción en la Pico y en una ESP. **El riesgo:** las imágenes de
+> - **Y después, dos pendientes más:** la idea de Eduardo para los huecos (una caché que llena el GC), apuntada en
+>   `#718` para mirarla despacio por la tarde (los bloques, múltiplos de 4: decidido); y `#695`, arreglada en el PC —el
+>   destructor de un `Button` leía su lista de hijos ya nula y lanzaba antes de borrarse—, con `DestruyeBoton` al
+>   corpus; lo de la P4 («quedaron sin destruir 8»), a mirar allí.
+> - **Lo siguiente:** medirlo todo en las placas en el próximo lote (con el `Stdlib.pack` de `Sound` y el `Gui.mod`
+>   de `#695`): la RAM de la C3 y la C6, y el coste de la comprobación por instrucción en la Pico y en una ESP. **El riesgo:** las imágenes de
 >   las placas, sin rehacer —sólo la C3 y la C6, compiladas para medir—; hasta el lote, lo verificado es el PC.
 
 > **27-oct (noche)** — **El H4, el sonido, retomado: el PC, hecho** (Eduardo: *«Vamos a dejar las pendientes por
