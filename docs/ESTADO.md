@@ -53,9 +53,23 @@
 >   `#718` para mirarla despacio por la tarde (los bloques, múltiplos de 4: decidido); y `#695`, arreglada en el PC —el
 >   destructor de un `Button` leía su lista de hijos ya nula y lanzaba antes de borrarse—, con `DestruyeBoton` al
 >   corpus; lo de la P4 («quedaron sin destruir 8»), a mirar allí.
+> - **Y por la tarde, cuatro más** (Eduardo: *«OK. mas pendientes?»*): `#709` y `#729` (`684331a9`: los cinco motivos
+>   de reinicio que faltaban a las ESP; el control del ancla de la Metro miraba la imagen de al lado); `#736`
+>   (`a3fc2441`: una cadena que nace con sus bytes ya no se pone a cero antes; probado con un veneno, 0xA5 en esos
+>   bloques, el corpus en las dos direcciones); `#694` (`d5d522e9`: el IDE espera la respuesta del RUN y del KILL y dice
+>   qué pasó); y `#693` (`7b8571f9`: la línea a medias se dice a los 3 s, y el IDE la repite una vez sin decir nada).
+> - **Lo que enseñó:** (1) `stat_base_smoke` aprobaba por suerte: con 9 M de vueltas su programa duraba lo que ~150
+>   STAT, el umbral mismo (152–161 antes de `#736`, 147–158 después); a 27 M, 300 de 300; (2) la prueba de `#693`
+>   destapó un fallo de `#454`, de agosto: la espera del IDE contaba el silencio de antes de pedir, y tras 10 s de cable
+>   quieto cualquier orden tenía 250 ms para contestarse; (3) la VM-Java contesta distinto el RUN de lo que no existe y
+>   el KILL sin programa (en `#694`, visto de paso); (4) la P4 por TCP usaba el -2 también para «el cliente se fue»;
+>   (5) el sim no lleva el anillo del log: lo que la placa apunta, sólo se ve en una placa.
 > - **Lo siguiente:** medirlo todo en las placas en el próximo lote (con el `Stdlib.pack` de `Sound` y el `Gui.mod`
->   de `#695`): la RAM de la C3 y la C6, y el coste de la comprobación por instrucción en la Pico y en una ESP. **El riesgo:** las imágenes de
->   las placas, sin rehacer —sólo la C3 y la C6, compiladas para medir—; hasta el lote, lo verificado es el PC.
+>   de `#695`): la RAM de la C3 y la C6, el coste de la comprobación por instrucción en la Pico y en una ESP, lo que
+>   gana `#736` en la Metro, los motivos de reinicio (`#709`), el ancla (`#729`) y la línea del log de `#693`. Con
+>   Eduardo, en el IDE: el Stop y un RUN rechazado (`#694`). Por decidir (Eduardo): la concatenación del bytecode de
+>   `#736`, y la caché de huecos de `#718`. **El riesgo:** las imágenes de las placas, sin grabar —compiladas la Pico,
+>   la C3 y la Nucleo—; hasta el lote, lo verificado es el PC.
 
 > **27-oct (noche)** — **El H4, el sonido, retomado: el PC, hecho** (Eduardo: *«Vamos a dejar las pendientes por
 > ahora que es un poco aburrido. Me gustaría retomar lo del sonido […] la reproducción de sonidos debería ser siempre

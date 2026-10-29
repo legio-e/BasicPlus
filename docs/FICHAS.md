@@ -7350,7 +7350,7 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
 (¿±25 %?) y dónde vive (`bpgenvm-c/bpstr/`, por ejemplo). Parte de lo que haría ya está hecho de otra forma en el H5
 (los dos algoritmos, el cursor, comparar en C).
 
-#### 🔵 `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **sólo apuntada**)
+#### 🔵 `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; por ver en el lote**)
 
 Al arrancar, `pico/main.c` comprueba el ancla: la busca barriendo la flash desde `XIP_BASE` (`bpvm_ancla_buscar`) y
 mira que sea la de su propia BIOS (`bios_pico_ancla()`). Desde el 22-oct el `.uf2` lleva las DOS imágenes de la RP2350
