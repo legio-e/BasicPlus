@@ -50,7 +50,9 @@ typedef struct { uint64_t v; } bpref_t;
 /* Tamaño en bytes de una entrada de la ext-table (per-module). */
 #define BPVM_EXT_ENTRY_SIZE 4
 
-/* Stack del thread main; ver HEAP_LAYOUT.md §8 */
+/* Stack del thread main; ver HEAP_LAYOUT.md §8. V8 #740 (29-oct): lo que mide, por defecto, la región fija de pila
+ * —entera del main: las de los hilos salen del heap—; con `stack=` en el ENV, la del main es la que diga, y esto, su
+ * mínimo. */
 #define BPVM_MAIN_STACK_BYTES   (16 * 1024)
 #define BPVM_THREAD_STACK_BYTES (2 * 1024)   /* el de un Thread que no pide otro (Thread(0)); como miVM */
 
@@ -361,9 +363,9 @@ struct bpvm_thread {
      * frames ni en tc: se DERIVA del cs vigente cuando hace falta (OP_CALL). */
     uint32_t cb_cache_cs;
     uint32_t cb_cache_cb;
-    uint32_t stack_base;       /* dirección baja de su región de pila */
+    uint32_t stack_base;       /* dirección baja de su pila (V8 #740: la de un hilo, el contenido de su bloque del heap) */
     uint32_t stack_top;        /* dirección alta (excluida): la base + lo que el hilo PIDIÓ (#604) */
-    uint32_t stack_cap;        /* V7/H7 #604 — lo que mide su REGIÓN, que puede ser más (una reutilizada) */
+    uint32_t stack_cap;        /* lo que mide su pila: la del main, la región fija entera; la de un hilo, lo pedido */
     uint32_t pila_max;         /* V7/H7 #605 — el sp más alto visto en un ENTER, con los locales: cuánta pila usó */
     bpvm_thread_status_t status;
 
@@ -646,10 +648,6 @@ struct bpvm {
     uint32_t       sym_trozo_usado;   /* lo ocupado del último trozo */
     uint32_t       sym_pool_len;      /* los bytes de nombres, en total (para el diag) */
 
-    /* F4 — alocador de regiones de stack para nuevos threads BP. Cada
-     * Thread.start() reserva una región a partir de `next_thread_stack`. */
-    uint32_t       next_thread_stack;
-
     /* F4 — pool de mutexes BP. id 0 = no usado; ids ≥ 1 son válidos. */
     bpvm_bp_mutex_t* mutexes;
     int              mutex_count;
@@ -673,11 +671,8 @@ struct bpvm {
      * está, el hilo acabó. Todo, en threading.c. */
     bpvm_thread_t* hilo_main;     /* el del main (tid 0): entra en la cola al colgar el programa y sale con él */
     int32_t        sig_tid;
-    /* Las regiones de pila devueltas: una lista FIFO guardada DENTRO de ellas ([base] la siguiente, [base+4] su
-     * tope), con la política de miVM (freedStackRegions): la primera en la que quepa, recortada a lo pedido. 0:
-     * ninguna. */
-    uint32_t       pilas_libres;
-    uint32_t       pilas_libres_fin;
+    /* (V8 #740, 29-oct: aquí iban el alocador de regiones de pila y la lista de las devueltas; la pila de un hilo es
+     * ahora un bloque del heap —bpvm_heap_reservar_pila—, y su vida la lleva el GC.) */
     /* Para el latido (bpvm_repl.c), que lo lee DESDE OTRA TAREA y sin cerrojo: el último hilo elegido, sin punteros
      * (una struct se puede devolver mientras tanto). */
     volatile int32_t  latido_tid;
@@ -1339,6 +1334,11 @@ bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payloa
  * si no cabe, puede gastar la reserva de emergencia. V7/H12, 2b (5-oct): lo dice la reserva, no una bandera de la VM
  * —con dos runs, la del otro run—. */
 bpref_t bpvm_heap_nuevo_error(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes);
+/* V8 #740 (29-oct) — y la otra: la PILA de un hilo, un byte[] de `bytes` SIN handle (nadie la nombra desde el
+ * programa), por el mismo camino que un `new` —el GC proactivo y el de cuando no cabe—. CON el vm_lock ya tomado: lo
+ * tiene bpvm_thread_spawn, que la cuelga de su hilo antes de soltarlo. Devuelve la dirección de su contenido —donde
+ * empieza la pila— o 0 si ni colectando cabe. Su vida la lleva el GC (gc_mark_phase). Espejo de heapReservaPila. */
+uint32_t bpvm_heap_reservar_pila(bpvm_t* vm, uint32_t bytes);
 /* El tamaño total de un bloque según su cabecera (el que usan el recorrido y el barrido): para las pruebas (#593). */
 uint32_t bpvm_heap_bloque_tam(const bpvm_t* vm, uint32_t header_addr);
 
@@ -1518,9 +1518,12 @@ bpvm_thread_t* bpvm_hilos_elegir(bpvm_t* vm, int libre, int run);
 /* V7/H12 — ¿Hay un hilo listo que sólo puede elegir el run 0 (`al_run0`)? Para un run que no es el 0 y no encuentra
  * hilo: eso no es un interbloqueo, es trabajo del run 0. Bajo vm_lock. */
 int bpvm_hilos_esperan_al_run0(const bpvm_t* vm);
-/* Saca de la cola y devuelve (struct y pila) los hilos que acabaron DEL TODO. Lo llaman los planificadores en su
- * pasada de despertar, bajo vm_lock. Devuelve cuántos. */
+/* Saca de la cola y devuelve (su struct) los hilos que acabaron DEL TODO. Lo llaman los planificadores en su
+ * pasada de despertar, bajo vm_lock. Devuelve cuántos. (Su pila, V8 #740, la barre el GC.) */
 int  bpvm_hilos_recoger(bpvm_t* vm);
+/* V8 #740 — ¿acabó `h` DEL TODO (lo que bpvm_hilos_recoger saca de la cola)? Entonces ya no es raíz del GC y su pila,
+ * un bloque del heap, se barre como cualquiera. El main, nunca. */
+int  bpvm_hilo_acabado(const bpvm_t* vm, const bpvm_thread_t* h);
 /* La struct del main (bpvm_init; todavía fuera de la cola); 0 o -1 si no hay memoria. Meterla en la cola, al colgar el
  * programa —con el cerrojo de la cola cogido—: 0, o -1 si la cola es de otro programa. Y todas fuera, con la cola
  * vacía después (bpvm_destroy). */

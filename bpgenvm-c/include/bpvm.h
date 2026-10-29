@@ -98,21 +98,22 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base);
  * para una sola decisión — justo el patrón que lleva toda la semana costando
  * caro. Devuelve los bytes para stacks; el heap es el resto.
  *
- *   25% para stacks (Eduardo 28-jul)... pero acotado por los dos extremos:
- *   - SUELO 64 KB: por debajo, el stack principal (16 KB) + 2 KB por thread
- *     dejan tan pocos threads que es una regresión. En placas de 128 KB el 25%
- *     serían 32 KB = 8 threads, cuando hoy caben 24.
- *   - TECHO 512 KB (Eduardo 19-jul): con 8 MB de PSRAM un reparto proporcional
- *     dormiría megas en stacks que usan decenas de KB.
+ *   V8 #740 (29-oct): la PILA DEL MAIN, 16 KB (BPVM_MAIN_STACK_BYTES), y nada
+ *   más: la de cada hilo es un bloque del heap que pide al arrancar (Eduardo:
+ *   «el consumo de RAM del Heap ya sería proporcional al número de hilos BP»).
+ *   Antes era el 25 % del bloque, entre 64 y 512 KB, para el main y las pilas
+ *   de los hilos, se crearan o no: 64 KB en la C3 y la C6, más que su heap.
+ *   Lo mismo con PSRAM. Un bloque diminuto (< 32 KB): la mitad.
  *
- * Cómo queda: Pico 343 KB -> 85 KB · Metro 8 MB -> 512 KB (techo) ·
- * S3/STM32 128 KB -> 64 KB (suelo; IDÉNTICO a hoy, sin regresión). */
+ * Con `stack=` en el ENV (abajo), la región mide lo que diga, y es del main. */
 size_t bpvm_stack_region_bytes(size_t total_bytes);
 
 /* ENV `stack` — pisa el reparto de arriba con un tamaño de pilas en KB elegido
  * por el usuario; 0 (o no llamar) = la regla de siempre. La familia lo lee de su
  * env al arrancar y lo pasa aquí; el ajuste a lo que cabe lo hace el núcleo, que
- * es quien conoce el bloque. */
+ * es quien conoce el bloque. V8 #740: desde que las pilas de los hilos salen del
+ * heap, lo que pide es la pila del main (Eduardo, 29-oct: la clave se mantiene
+ * de momento; qué hacer con ella, más adelante). */
 void bpvm_set_stack_kb(unsigned long kb);
 
 /* #462 — opcodes por quantum (0 = por defecto, 1024). Lo alimenta la clave

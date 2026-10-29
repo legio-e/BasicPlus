@@ -20,13 +20,14 @@
   // Aumenta esto si tu programa alloca mucho.
   "memorySize": 524288,
 
-  // Offset donde termina el heap y empiezan los stacks (uno por thread BP).
-  // Default = memorySize / 2. Si pones `memorySize` y no `stackBase`, se
-  // deriva a la mitad. Validaciones automáticas:
+  // Offset donde termina el heap y empieza la pila del main, que llega hasta
+  // el final (V8 #740: la pila de cada thread BP es un bloque del heap).
+  // Default = memorySize - 16384 (los 16 KiB del main). Si pones `memorySize`
+  // y no `stackBase`, se deriva igual. Validaciones automáticas:
   //   - stackBase > 0
   //   - stackBase < memorySize
   //   - stackBase + MAIN_STACK_BYTES <= memorySize  (cabe al menos el main)
-  "stackBase": 262144,
+  "stackBase": 507904,
 
   // Directorio donde la VM busca los .mod stdlib (Json.mod, etc) cuando
   // un `import` no resuelve desde el cwd ni desde el fromPath del importer.

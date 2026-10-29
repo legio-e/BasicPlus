@@ -45,6 +45,10 @@
  * momento medido en 131368: margen de sobra. 128 deja 8 KB de holgura sobre el
  * bloque contiguo; si un día no cabe, el arranque baja de 4 en 4 KB y lo dice.
  *
+ * V8 #740 (29-oct): el reparto ya no es ése. La región de pilas es la del main,
+ * 16 KB, y la pila de cada hilo sale del heap al arrancarlo: bloque 128 KB ->
+ * pila del main 16 KB + heap 112 KB, y los hilos, los que quepan en el heap.
+ *
  * ⚠️ Lo que NO justifica este número: al medir vi «throw ... No space in heap»
  * con el bloque de 96 y lo leí como que el heap se agotaba. Era FALSO — es la
  * prefabricación del OOM (#430) en un módulo que no importa Core, un no-evento

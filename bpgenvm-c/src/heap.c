@@ -402,6 +402,20 @@ static void gui_mark_visit(void* ctx, uint32_t objptr) {
 }
 #endif
 
+/* V8 #740 — la marca de la pila de un hilo vivo (gc_mark_phase), por su cabecera: 8 B antes de su base. Si ahí no hay
+ * un bloque vivo, la pila de un hilo que aún corre se ha soltado o nunca fue del heap: no pasa, y si pasa, que se oiga.
+ * Espejo de gcLocked (miVM). */
+static void gc_marca_pila(bpvm_t* vm, const bpvm_thread_t* tc) {
+    uint32_t h = tc->stack_base - 8u;
+    uint32_t tag = is_valid_header(vm, h) ? bpvm_read_u32_be(vm->memory + h) : BPVM_TAG_FREE_BIT;
+    if (tag & BPVM_TAG_FREE_BIT) {
+        bpvm_diag_urgente("[gc] !! la pila del hilo t%d (%u) no es un bloque vivo del heap (#740)",
+                          (int) tc->id, (unsigned) tc->stack_base);
+        return;
+    }
+    if (!(tag & BPVM_TAG_MARK_BIT)) bpvm_write_u32_be(vm->memory + h, tag | BPVM_TAG_MARK_BIT);
+}
+
 static void gc_mark_phase(bpvm_t* vm) {
     /* Camino 1 (H-008): (re)construir el set de cabeceras reales ANTES de marcar,
      * para que el scan conservativo no tome enteros por punteros. */
@@ -414,6 +428,13 @@ static void gc_mark_phase(bpvm_t* vm) {
     /* 1. Stacks de threads (V7/H12, etapa 2: los de la cola, una vuelta). */
     for (const bpvm_thread_t* tc = bpvm_hilos_primero(vm); tc; tc = bpvm_hilos_siguiente(vm, tc)) {
         int t = tc->id;
+        /* V8 #740 — un hilo que acabó DEL TODO (el que bpvm_hilos_recoger saca de la cola) ya no es raíz: su pila es un
+         * bloque del heap que este barrido suelta, y escanearla en el GC siguiente sería leer lo de quien la reutilice.
+         * El mismo criterio que miVM, que no mira los TERMINATED. */
+        if (bpvm_hilo_acabado(vm, tc)) continue;
+        /* V8 #740 — y la PILA de los demás, que es un byte[] del heap SIN handle: nadie más la alcanza, así que la marca
+         * su hilo mientras viva (la del main es fija, fuera del heap). Sin hijos que escanear. */
+        if (tc != vm->hilo_main) gc_marca_pila(vm, tc);
         uint32_t lo = tc->stack_base;
         uint32_t hi = tc->sp;
         /* #355 — QUE SE VEA LO QUE SE ESCANEA. El marcado daba 44 bytes vivos con
@@ -1452,6 +1473,15 @@ bpref_t bpvm_heap_nuevo(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payloa
 
 bpref_t bpvm_heap_nuevo_error(bpvm_t* vm, int type, uint32_t cabecera, uint32_t payload_bytes) {
     return heap_nuevo(vm, type, cabecera, payload_bytes, 1);
+}
+
+/* V8 #740 (29-oct) — la PILA de un hilo (bpvm_internal.h): el hueco de un byte[], con su cabecera entera y a cero, sin
+ * handle. Lo que no cabe en la VM entera, como en heap_nuevo (#712), ni se intenta: ni colectar, ni que la cabecera y
+ * el redondeo den la vuelta. Con el vm_lock tomado. */
+uint32_t bpvm_heap_reservar_pila(bpvm_t* vm, uint32_t bytes) {
+    if ((uint64_t) bytes > (uint64_t) vm->memory_size) return 0u;
+    uint32_t user_ref = heap_reservar(vm, bytes, BPVM_TYPE_ARRAY_I8, bytes, 0);
+    return (user_ref != 0u) ? user_ref + 4u : 0u;
 }
 
 /* V7/H7 #610 — la puerta de la TABLA de handles, en su función porque se mira DOS veces en heap_reservar: antes de

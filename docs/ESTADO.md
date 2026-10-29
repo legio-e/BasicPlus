@@ -27,6 +27,25 @@
 
 ## Última sesión
 
+> **29-oct** — **`#740`: las pilas de los hilos BP, del heap, en las dos VMs** (Eduardo: *«Continuamos con los
+> pendientes»*; y al algoritmo: *«OK a), b) si una excepción, c) la mantenemos de momento, ya veremos mas adelante que
+> hacemos. d) OK, adelante.»*).
+> - **Lo hecho:** la pila de un hilo es un `byte[]` del heap sin handle, reservado bajo el cerrojo con el que nace el
+>   hilo; el GC la marca mientras el hilo no ha acabado del todo y la barre después; la región fija es la pila del main
+>   (16 KB) y `stack=` pide la del main; con PSRAM, igual. El detalle, en la ficha.
+> - **Lo que enseñó:** (1) el `BpVM.cfg` de la raíz fijaba `stackBase`: con la región entera para el main, miVM lanzada
+>   desde la raíz habría tenido otra pila que la VM-C —quitada la clave—; (2) una premisa mía, falsa: creí que
+>   `new Worker().start()` dejaba el Thread sin raíz durante la colecta de su pila, y el desplazamiento enseñó que no
+>   (lo sujeta el `this` de `Core.Thread.start()`): la lectura sin sacar se queda, como defensa, con el comentario
+>   corregido; (3) el desplazamiento de la marca sí muerde: sin ella, `HeapReposo` revienta con un use-after-free;
+>   (4) el estrés estaba calibrado para el reparto viejo (el heap justo de miVM, sin sitio para las pilas): recalibrado
+>   con las VMs de antes y de después.
+> - **La zona roja (la b):** medida (84 B lo más hondo en 2.313 funciones; la zona, 256) y propuesta —que la VM mire
+>   el tope en cada instrucción, más el puente de las natives—; espera el OK de Eduardo.
+> - **Lo siguiente:** lo barato de `#740` (el log de la C3 y la C6 a 4 KB, los tres `tiene[1400]` del enlace en uno),
+>   la b) si Eduardo la aprueba, y medirlo todo en las placas en el próximo lote (con el `Stdlib.pack` de `Sound`).
+>   **El riesgo:** las imágenes de las placas, sin rehacer; hasta el lote, lo verificado es el PC.
+
 > **27-oct (noche)** — **El H4, el sonido, retomado: el PC, hecho** (Eduardo: *«Vamos a dejar las pendientes por
 > ahora que es un poco aburrido. Me gustaría retomar lo del sonido […] la reproducción de sonidos debería ser siempre
 > en paralelo al resto»*).

@@ -267,52 +267,18 @@ static void cola_sacar(bpvm_thread_t* h) {
     h->next = h->back = NULL;
 }
 
-/* LAS REGIONES DE PILA, con la política de miVM (allocStackRegion/freeStackRegion), para que «no hay memoria para la
- * pila del hilo» salte en el mismo sitio en las dos VMs: primero la PRIMERA región devuelta en la que quepa —recortada
- * a lo pedido: el resto se pierde, como allí—; si no, una nueva por arriba. Las devueltas, en una lista FIFO guardada
- * DENTRO de ellas: [base] la siguiente y [base+4] su tope (big-endian, como toda la memoria de la VM). */
-static int pila_reservar(bpvm_t* vm, uint32_t tam, uint32_t* base_out, uint32_t* cap_out) {
-    uint32_t prev = 0;
-    for (uint32_t r = vm->pilas_libres; r != 0; ) {
-        uint32_t sig = bpvm_read_u32_be(vm->memory + r);
-        uint32_t top = bpvm_read_u32_be(vm->memory + r + 4);
-        if (top - r >= tam) {
-            if (prev == 0) vm->pilas_libres = sig;
-            else           bpvm_write_u32_be(vm->memory + prev, sig);
-            if (vm->pilas_libres_fin == r) vm->pilas_libres_fin = prev;
-            *base_out = r;
-            *cap_out  = tam;
-            return 0;
-        }
-        prev = r;
-        r = sig;
-    }
-    uint32_t region = (tam + 7u) & ~7u;                        /* la siguiente base, alineada */
-    if (region < tam || vm->next_thread_stack > vm->memory_size
-            || region > vm->memory_size - vm->next_thread_stack)
-        return -1;                                             /* no cabe su pila */
-    *base_out = vm->next_thread_stack;
-    *cap_out  = region;
-    vm->next_thread_stack += region;
-    return 0;
-}
-
-static void pila_devolver(bpvm_t* vm, uint32_t base, uint32_t cap) {
-    if (cap < 8u) return;                                      /* no cabe ni el nudo de la lista: se pierde */
-    bpvm_write_u32_be(vm->memory + base, 0u);
-    bpvm_write_u32_be(vm->memory + base + 4, base + cap);
-    if (vm->pilas_libres_fin != 0) bpvm_write_u32_be(vm->memory + vm->pilas_libres_fin, base);
-    else                           vm->pilas_libres = base;
-    vm->pilas_libres_fin = base;
-}
-
 /* ¿Puede salir de la cola? Si su hilo acabó DEL TODO: terminado, sin un worker encima (SMP), sin un ejecutor de
  * natives atado y sin eventos que saldar (#342: a un hilo muerto con eventos pendientes se le resucita para
  * atenderlos). El main, no: sus cifras son del final del RUN (cerrar_run). Los que esperan su `join` no lo impiden:
- * resuelven su handle, no lo encuentran y vuelven. */
+ * resuelven su handle, no lo encuentran y vuelven. V8 #740: es también lo que mira el GC —un hilo así ya no es raíz, y
+ * su pila, un bloque del heap, se barre como cualquiera (bpvm_hilo_acabado, heap.c)—. */
 static int puede_salir(const bpvm_t* vm, const bpvm_thread_t* h) {
     return h != vm->hilo_main && h->status == BPVM_THREAD_TERMINATED && h->sched_owner == -1
         && h->nativa == NULL && !bpvm_events_con_deuda(vm, h);
+}
+
+int bpvm_hilo_acabado(const bpvm_t* vm, const bpvm_thread_t* h) {
+    return puede_salir(vm, h);
 }
 
 /* #605 — ¿el más cerca de su tope, de los que no son el main? (la línea `pila:` del final del RUN, en bpvm.c) */
@@ -327,7 +293,7 @@ void bpvm_hilo_apuntar_pila(bpvm_t* vm, const bpvm_thread_t* h) {
 
 static void hilo_devolver(bpvm_t* vm, bpvm_thread_t* h) {
     bpvm_hilo_apuntar_pila(vm, h);
-    if (h != vm->hilo_main) pila_devolver(vm, h->stack_base, h->stack_cap);   /* la del main es fija */
+    /* (V8 #740: su pila no se devuelve aquí: es un bloque del heap, y la barre el GC; la del main es fija) */
     bpvm_free(h->eh_stack);
     bpvm_free(h->linea);
     bpvm_free(h);
@@ -350,9 +316,11 @@ int bpvm_hilos_crear_main(bpvm_t* vm, uint32_t stack_base) {
     bpvm_thread_t* m = (bpvm_thread_t*) bpvm_calloc(1, sizeof(bpvm_thread_t));
     if (m == NULL) return -1;
     m->id = 0;
+    /* V8 #740 — la región fija de pila, ENTERA: las de los hilos ya no viven aquí (salen del heap). Por defecto mide
+     * BPVM_MAIN_STACK_BYTES (bpvm_stack_region_bytes), lo mismo que miVM; la clave `stack=` del ENV la cambia. */
     m->stack_base = stack_base;
-    m->stack_top  = stack_base + BPVM_MAIN_STACK_BYTES;
-    m->stack_cap  = BPVM_MAIN_STACK_BYTES;
+    m->stack_top  = (uint32_t) vm->memory_size;
+    m->stack_cap  = m->stack_top - stack_base;
     m->sp = m->stack_base;
     m->bp = m->stack_base;
     m->status = BPVM_THREAD_RUNNABLE;
@@ -363,7 +331,6 @@ int bpvm_hilos_crear_main(bpvm_t* vm, uint32_t stack_base) {
     m->ev_post_mortem = -1;   /* #342: vivo; la deuda se calcula al morir */
     vm->hilo_main = m;        /* V7/H12, etapa 2a.2: a la cola entra al colgar el programa (bpvm_hilos_meter_main) */
     vm->sig_tid = 1;
-    vm->pilas_libres = vm->pilas_libres_fin = 0;
     vm->hilos_max = 0;
     return 0;
 }
@@ -434,26 +401,30 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
     uint32_t target_cs = 0;
     if (bpvm_vt_resolver(vm, class_ptr, 0u, &off, &target_cs) != 0) return -2;
 
-    /* H2 — crear un hilo toca la cola, `next_thread_stack` y las regiones devueltas: todo estado compartido. Bajo
-     * `vm_lock` en SMP; no-op con un worker. El marco inicial (thread_ref, sp/bp/cs/pc, RUNNABLE) también va dentro, y
-     * el hilo entra en la cola el ÚLTIMO, ya montado: el planificador no ve nunca uno a medio crear. */
+    /* H2 — crear un hilo toca la cola y el heap (su pila): todo estado compartido. Bajo `vm_lock` en SMP; no-op con un
+     * worker. El marco inicial (thread_ref, sp/bp/cs/pc, RUNNABLE) también va dentro, y el hilo entra en la cola el
+     * ÚLTIMO, ya montado: el planificador no ve nunca uno a medio crear. */
     bpvm_smp_lock(vm);
 
     /* V7/H7 #604 — la pila que PIDE el hilo: el campo 1 del Thread (Thread(stackSize)); 0 = la de siempre, como en
-     * miVM. Su tope es lo pedido aunque su región mida más: el muro de #605 salta en el mismo sitio en las dos VMs. */
+     * miVM. Su tope es lo pedido: el muro de #605 salta en el mismo sitio en las dos VMs. */
     int32_t  pedido = bpvm_read_i32_be(vm->memory + bpref_deref(vm, thread_ref) + 4 + 1 * 4);
     uint32_t tam    = (pedido > 0) ? (uint32_t) pedido : BPVM_THREAD_STACK_BYTES;
 
-    /* V7/H12, etapa 2 — su región (la primera devuelta en la que quepa, o una nueva: pila_reservar) y su struct, con
-     * malloc. Sin tope de hilos: el límite es la memoria. */
-    uint32_t stack_base = 0, cap = 0;
-    if (pila_reservar(vm, tam, &stack_base, &cap) != 0) {
+    /* V8 #740 (29-oct) — LA PILA, DEL HEAP (Eduardo: «Los hilos BP no podrian tomar la RAM del heap?»): un bloque como
+     * el de un `new`, sin handle, reservado BAJO el cerrojo —el que ya tiene cogido una reserva cualquiera: si colecta,
+     * gc_stw lo suelta mientras espera, como siempre—, y colgado de su hilo antes de soltarlo: sin eso, un GC de otro
+     * worker entre medias la barrería. El GC la marca mientras el hilo no acabe y la barre después (gc_mark_phase); el
+     * compactador la deja en su sitio, como a todo bloque sin handle. Reservar puede colectar: el Thread sigue en la pila
+     * de quien llama (BUILTIN_THREAD_START no lo saca hasta después). Su struct, con malloc; si no hay, la pila se queda
+     * sin dueño y la barre el GC siguiente. Sin tope de hilos: el límite es la memoria. */
+    uint32_t stack_base = bpvm_heap_reservar_pila(vm, tam);
+    if (stack_base == 0u) {
         bpvm_smp_unlock(vm);
         return -3;                                             /* no cabe su pila */
     }
     bpvm_thread_t* tc = (bpvm_thread_t*) bpvm_calloc(1, sizeof(bpvm_thread_t));
     if (tc == NULL) {
-        pila_devolver(vm, stack_base, cap);
         bpvm_smp_unlock(vm);
         return -1;                                             /* no hay memoria para su struct */
     }
@@ -479,7 +450,7 @@ int bpvm_thread_spawn(bpvm_t* vm, bpref_t thread_ref) {
     tc->id = tid;
     tc->stack_base = stack_base;
     tc->stack_top  = stack_base + tam;
-    tc->stack_cap  = cap;
+    tc->stack_cap  = tam;
     tc->blocked_on_mutex = -1;
     tc->blocked_on_join = -1;
     tc->wake_at_ms = 0;

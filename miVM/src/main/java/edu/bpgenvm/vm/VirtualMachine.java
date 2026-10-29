@@ -46,15 +46,16 @@ import java.util.Set;
 public class VirtualMachine {
     /** Tamaño total de `memory[]`. Configurable vía VmConfig. */
     public static final int DEFAULT_MEMORY_SIZE = 512 * 1024;
-    /** Offset donde empiezan los stacks. Configurable vía VmConfig. */
-    public static final int DEFAULT_STACK_BASE  = 256 * 1024;
+    /** Offset donde empieza la pila del main. Configurable vía VmConfig. V8 #740 (29-oct): la del main y nada más
+     *  —las de los hilos salen del heap—, así que por defecto el heap llega hasta los últimos 16 KB. */
+    public static final int DEFAULT_STACK_BASE  = DEFAULT_MEMORY_SIZE - VirtualMachine.MAIN_STACK_BYTES;
 
     private final byte[] memory;
 
     // Layout total:
     //   [0 .. heapStart)         data block (módulos cargados)
-    //   [heapStart .. STACK_BASE) heap
-    //   [STACK_BASE .. memory.length) regiones de stack (main + workers)
+    //   [heapStart .. STACK_BASE) heap (V8 #740: con las pilas de los hilos dentro, cada una un bloque)
+    //   [STACK_BASE .. memory.length) la pila del main
     //
     // STACK_BASE es instance-final ahora (antes static final). Permite
     // configurar el tamaño del heap vs. stacks por VM.
@@ -65,8 +66,8 @@ public class VirtualMachine {
     //
     // Cada Thread en BP tiene su propia copia de PC/SP/BP/CS y de la pila
     // de exception-handlers. El heap es compartido. El stack de cada
-    // ThreadContext vive en una sub-región del rango [STACK_BASE..memory.end]
-    // delimitada por (stackBase, stackTop).
+    // ThreadContext va de stackBase a stackTop: el del main, en [STACK_BASE..memory.end];
+    // el de un hilo, desde V8 #740, en un bloque del heap (heapReservaPila).
     //
     // Por ahora (Fase 1/2) sólo existe el thread 0 (main). El bucle del
     // intérprete carga los campos en variables locales al entrar y los
@@ -89,7 +90,7 @@ public class VirtualMachine {
 
     static final class ThreadContext {
         final int id;
-        final int stackBase;     // dirección más baja de su región de pila
+        final int stackBase;     // dirección más baja de su pila (V8 #740: la de un hilo, el contenido de su bloque)
         final int stackTop;      // dirección máxima (exclusiva)
         int pc, sp, bp, cs;
         boolean running = true;
@@ -241,7 +242,9 @@ public class VirtualMachine {
 
     /**
      * Stack del thread main: más grande que el de los workers porque suele
-     * acumular la mayor parte de la recursión del programa.
+     * acumular la mayor parte de la recursión del programa. V8 #740: es lo que mide, por defecto, la región fija de
+     * pila —[STACK_BASE..memory.length), entera del main—; con otro stackBase en la configuración, la del main es
+     * esa, y esto, su mínimo.
      */
     public static final int MAIN_STACK_BYTES = 16 * 1024;
 
@@ -254,37 +257,6 @@ public class VirtualMachine {
     public static final int PILA_ZONA_ROJA = 256;
 
     /**
-     * Alocador de regiones de stack: punto bajo de la próxima región libre
-     * dentro del rango [STACK_BASE..memory.length]. Crece hacia arriba.
-     * Cuando un Thread termina, su región se devuelve a `freedStackRegions`.
-     */
-    private int nextStackBase;   // se inicializa en el constructor (depende de STACK_BASE)
-    private final Deque<int[]> freedStackRegions = new ArrayDeque<>();   // {base, top}
-
-    private int[] allocStackRegion(int size) {
-        // Primero intenta reusar una región libre del mismo tamaño.
-        for (java.util.Iterator<int[]> it = freedStackRegions.iterator(); it.hasNext(); ) {
-            int[] r = it.next();
-            if (r[1] - r[0] >= size) {
-                it.remove();
-                return new int[]{r[0], r[0] + size};
-            }
-        }
-        // Asignación incremental.
-        int base = nextStackBase;
-        int top  = base + size;
-        if (top > memory.length) {
-            return null;   // V7/H7 #604: quien llama lo dice con una RuntimeError atrapable (era una de Java: tumbaba la VM)
-        }
-        nextStackBase = top;
-        return new int[]{base, top};
-    }
-
-    private void freeStackRegion(int base, int top) {
-        freedStackRegions.add(new int[]{base, top});
-    }
-
-    /**
      * Cola FIFO de threads en estado RUNNABLE listos para tomar la CPU.
      * Cada worker Java saca el primero de aquí cuando vuelve a buscar trabajo.
      * Toda mutación va bajo {@link #vmLock}.
@@ -295,7 +267,7 @@ public class VirtualMachine {
     // Sincronización multi-worker (Fase 4b)
     //
     // vmLock cubre todo el estado compartido entre los workers Java:
-    //   - runQueue, threads list, nextStackBase, freedStackRegions
+    //   - runQueue, threads list (las pilas de los hilos, V8 #740, son del HEAP: abajo)
     //   - ThreadContext.{status, waiters, wakeAtMs, joiningTid, yieldRequested}
     //   - currentThread / currentThreadId (sólo durante setup)
     //   - HEAP: heapNext, freeListHead, scan/sweep en gc()
@@ -525,13 +497,19 @@ public class VirtualMachine {
      * El thread arranca en estado RUNNABLE y queda añadido a la runQueue.
      * -1 si no cabe su pila (V7/H7 #604: quien llama lanza la RuntimeError).
      * Debe llamarse bajo vmLock (o desde setup mono-thread).
+     *
+     * V8 #740 (29-oct) — LA PILA, DEL HEAP (Eduardo: «Los hilos BP no podrian tomar la RAM del heap?»): un bloque como
+     * el de un `new`, sin handle —nadie la nombra desde el programa—, que el GC marca mientras el hilo no ha acabado y
+     * barre después; el compactador la deja en su sitio, como a todo bloque sin handle. La reserva puede colectar: el
+     * Thread que la pide sigue en la pila de quien llama (THREAD_START no lo saca hasta después). Espejo de
+     * bpvm_thread_spawn (VM-C).
      */
     int spawnThread(int stackSize) {
         if (stackSize <= 0) stackSize = DEFAULT_THREAD_STACK_BYTES;
-        int[] region = allocStackRegion(stackSize);
-        if (region == null) return -1;   // #604: no cabe la pila
+        int pila = heapReservaPila(stackSize);
+        if (pila < 0) return -1;   // #604: no cabe la pila
         int newId = threads.size();
-        ThreadContext nt = new ThreadContext(newId, region[0], region[1]);
+        ThreadContext nt = new ThreadContext(newId, pila, pila + stackSize);
         nt.setStatus(ThreadStatus.RUNNABLE, -1, "L492");
         threads.add(nt);
         runQueue.addLast(newId);
@@ -587,8 +565,8 @@ public class VirtualMachine {
     }
 
     /**
-     * Marca el ThreadContext recibido como TERMINATED, libera su región de
-     * stack (si no es main) y despierta a sus joiners. Debe llamarse bajo vmLock.
+     * Marca el ThreadContext recibido como TERMINATED y despierta a sus joiners (su pila, V8 #740, la barre el GC).
+     * Debe llamarse bajo vmLock.
      */
     /**
      * #342 — ¿este thread deja eventos SUYOS sin atender? Entonces todavía no
@@ -616,10 +594,7 @@ public class VirtualMachine {
     private void terminateThread(ThreadContext t) {
         lineaVaciar(t);   // V7/H7 #600: lo que dejara a mitad de un `print`, tal cual (como salía antes)
         if (reviveForPendingEvents(t)) return;   // #342 — aún debe eventos
-        t.setStatus(ThreadStatus.TERMINATED, -1, "L567");
-        if (t.id != 0) {
-            freeStackRegion(t.stackBase, t.stackTop);
-        }
+        t.setStatus(ThreadStatus.TERMINATED, -1, "L567");   // V8 #740: desde aquí el GC no marca su pila
         for (Integer wid : t.waiters) {
             ThreadContext w = threads.get(wid);
             if (w.getStatus() == ThreadStatus.BLOCKED_JOIN) {
@@ -1599,7 +1574,7 @@ public class VirtualMachine {
 
     /**
      * Variante con tamaño total y `stackBase` (donde termina el heap y
-     * empiezan los stacks). Llamada desde {@link edu.bpgenvm.Main} cuando
+     * empieza la pila del main, que llega hasta el final). Llamada desde {@link edu.bpgenvm.Main} cuando
      * hay un BpVM.cfg activo. Validaciones:
      *   memorySize &gt; 0
      *   stackBase  &gt; 0
@@ -1632,7 +1607,6 @@ public class VirtualMachine {
         this.lastGcHeapNext = stackBase;
         this.handleNext = 1;   // V4: la tabla de handles se reinicia con el heap
         this.handlePressure = false;   // #430: y su marca
-        this.nextStackBase = stackBase + MAIN_STACK_BYTES;
 
         // memory[0] = 0x70 (opcode THREAD_EXIT). Es la sentinela de salida
         // de los workers: cuando su run() hace RET, el saved PC apunta a 0
@@ -1649,9 +1623,9 @@ public class VirtualMachine {
         memory[2] = (byte) 0x6F;
         eventQueue.clear();
 
-        // Thread 0 (main): región fija de MAIN_STACK_BYTES. El resto del
-        // espacio queda libre para nuevos threads (alocados con allocStackRegion).
-        ThreadContext main = new ThreadContext(0, STACK_BASE, STACK_BASE + MAIN_STACK_BYTES);
+        // Thread 0 (main): la región fija, ENTERA (V8 #740: las pilas de los hilos ya no viven aquí, sino en el heap).
+        // Por defecto, MAIN_STACK_BYTES; como la VM-C, donde la región la dice la clave `stack=` del ENV.
+        ThreadContext main = new ThreadContext(0, STACK_BASE, memorySize);
         threads.add(main);
         currentThread = main;
         currentThread.setStatus(ThreadStatus.RUNNING, -1, "L1186");
@@ -1871,6 +1845,28 @@ public class VirtualMachine {
      * V7/H7 #593: sólo la llama {@link #heapNuevo}, que completa la cabecera y da de alta el handle.
      */
     private int heapAlloc(int payloadBytes, int type) {
+        return heapAlloc(payloadBytes, type, false);
+    }
+
+    /**
+     * V8 #740 (29-oct) — la PILA de un hilo: un byte[] de {@code bytes} SIN handle (nadie la nombra desde el programa),
+     * por el mismo camino que un `new` —el GC proactivo y el de cuando no cabe—. Devuelve la dirección de su contenido,
+     * que es donde empieza la pila, o -1 si ni colectando cabe: quien llama lanza «no hay memoria para la pila del
+     * hilo» (#604). La vida de la pila la lleva el GC: la marca mientras su hilo no ha acabado (gcLocked). Bajo vmLock
+     * (spawnThread). Espejo de bpvm_heap_reservar_pila (VM-C).
+     */
+    private int heapReservaPila(int bytes) {
+        // Lo que no cabe en la VM entera, como en heapNuevo (#712), ni se intenta: ni colectar, ni que la cabecera y el
+        // redondeo den la vuelta al int (Thread(2^31 - 1) pedía un bloque mínimo con un tope de 2 GB).
+        if (bytes > memory.length) return -1;
+        int userRef = heapAlloc(bytes, TYPE_ARRAY_I8, true);
+        if (userRef < 0) return -1;
+        writeInt32(userRef, bytes);   // la cabecera entera: su longitud (heapNuevo lo hace con la de un objeto)
+        return userRef + 4;
+    }
+
+    /** {@code pila} (V8 #740): la reserva de {@link #heapReservaPila} —sin ancla, y sin sitio, -1 en vez de lanzar—. */
+    private int heapAlloc(int payloadBytes, int type, boolean pila) {
         int totalSize = Math.max(MIN_FREE_BLOCK, alignTo4(OBJ_HEADER_SIZE + payloadBytes));
         synchronized (vmLock) {
             ThreadContext me = currentTcLocal.get();
@@ -1947,7 +1943,7 @@ public class VirtualMachine {
                 // publicarlo (write a stack/field) sin lock. Si entre
                 // medias otro worker dispara GC, scanRegion ve este ancla
                 // y marca el objeto como vivo.
-                if (me != null) me.allocAnchor = userRef;
+                if (me != null && !pila) me.allocAnchor = userRef;   // (una pila no: su hilo la sujeta)
                 throwingOom = false;   // H1: alocación con éxito → limpia la guarda
                 heapBloques++;         // V7/H7 #593
                 return userRef;
@@ -1963,6 +1959,7 @@ public class VirtualMachine {
             if (gcDescarrilo) lanzaHeapDescarrilado(me);   // V7 #494: sin reintento
             addr = tryAllocateInner(totalSize);
             if (addr == -1) {
+                if (pila) return -1;       // V8 #740: el texto de la pila lo pone quien la pidió (#604)
                 sinSitio(me, totalSize);   // H1 — OOM tras GC (no retorna)
             }
             int tag = (type << TAG_TYPE_SHIFT);
@@ -1970,7 +1967,7 @@ public class VirtualMachine {
             int userRef2 = addr + 4;
             // Mismo zero-init que la ruta sin GC (paridad VM-C).
             java.util.Arrays.fill(memory, userRef2, userRef2 + 4 + payloadBytes, (byte) 0);
-            if (me != null) me.allocAnchor = userRef2;
+            if (me != null && !pila) me.allocAnchor = userRef2;
             throwingOom = false;   // H1: alocación con éxito → limpia la guarda
             heapBloques++;         // V7/H7 #593
             return userRef2;
@@ -2279,6 +2276,14 @@ public class VirtualMachine {
         // así que aquí basta con leer t.sp para cada uno.
         for (ThreadContext t : threads) {
             if (t.getStatus() == ThreadStatus.TERMINATED) continue;
+            // V8 #740 — la PILA de un hilo es un bloque del heap sin handle: nadie más la alcanza, así que la marca su
+            // hilo mientras no acabe; cuando acaba, el barrido la suelta como a cualquier bloque (la del main es fija).
+            if (t.id != 0) {
+                int pilaHeader = t.stackBase - OBJ_HEADER_SIZE;
+                if (valid.contains(pilaHeader)) marcaUno(pilaHeader);
+                else System.err.println("[gc] !! la pila del hilo t" + t.id + " (" + t.stackBase
+                        + ") no es un bloque vivo del heap (#740)");   // no pasa; si pasa, que se oiga (gc_marca_pila)
+            }
             scanRegion(t.stackBase, t.sp, valid);
             // Ancla de heapAlloc: el objeto recién alocado pero todavía no
             // publicado al stack queda referenciado por t.allocAnchor.
@@ -6200,7 +6205,10 @@ public class VirtualMachine {
             case THREAD_START: {
                 // El argumento es una REF: 8 bytes. Con popTc (4B) se perdía la
                 // generación del handle Y la pila quedaba 4 bytes alta.
-                long threadRef = popTcRef(tc);
+                // V8 #740 — se LEE sin sacarla: la pila del hilo sale del heap y reservarla puede colectar, y en esa
+                // colecta el Thread tiene que seguir siendo raíz. Hoy lo es de todos modos —Core.Thread.start() lo tiene
+                // en su `this`—, pero el builtin no lo da por hecho. Sale tras crear el hilo. Como la VM-C.
+                long threadRef = readI64(memory, tc.sp - 8);
                 // V4 (tanda 2): threadRef es un HANDLE → refDeref para tocar memory[];
                 // el REF se conserva entero como `this` de run() (abajo, refStore(sb, threadRef)).
                 int ta        = refDeref(threadRef);
@@ -6213,8 +6221,10 @@ public class VirtualMachine {
                 // resuelve —con un Thread no pasa: Core.Thread tiene run()— no hay nada que
                 // deshacer. El mismo texto que la VM-C.
                 long runResuelto = resolverVirtual(memory, classPtr, 0);
-                if (runResuelto == -1L)
+                if (runResuelto == -1L) {
+                    tc.sp -= 8;   // V8 #740: la ref, fuera, como antes de lanzar
                     throwBpRuntimeError(tc, "Thread.start: run() no resoluble en la cadena de herencia");
+                }
                 // V7/H7 #604 — el límite, como la VM-C y con su mismo texto: sin sitio para su pila. Se decide bajo el
                 // cerrojo y se lanza FUERA (lanzar construye la excepción en el heap, y eso puede pedir un GC). V7/H12,
                 // etapa 2 (4-oct; Eduardo: «¿por qué tiene que haber un límite?») — sin tope de hilos vivos, en las dos
@@ -6260,6 +6270,7 @@ public class VirtualMachine {
                         vmLock.notifyAll();
                     }
                 }
+                tc.sp -= 8;   // V8 #740: la ref del Thread, fuera ya (si el hilo nació, la sujeta su propia pila)
                 if (errorHilo != null) throwBpRuntimeError(tc, errorHilo);
                 pushTc(tc, 0);   // dummy ret
                 break;
@@ -8258,8 +8269,7 @@ public class VirtualMachine {
                 for (ThreadContext t : threads) {
                     if (t.id == 0 || t.getStatus() == ThreadStatus.TERMINATED) continue;
                     t.ownerThread = null;
-                    t.setStatus(ThreadStatus.TERMINATED, -1, "668");
-                    freeStackRegion(t.stackBase, t.stackTop);
+                    t.setStatus(ThreadStatus.TERMINATED, -1, "668");   // V8 #740: su pila, para el GC
                     t.waiters.clear();
                 }
                 // Los mutex, todos libres y sin nadie esperando: sus dueños se han abandonado (soltarlos de uno en uno

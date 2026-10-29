@@ -34,15 +34,10 @@ heapStart  ━━━━━━━━━━━━━━━━━━━━━━━
         │  HEAP                        │
         │   (objetos, arrays, strings) │  ← crece hacia arriba con heapNext
         │   ┌─ free list intercalada   │
+        │   ┌─ la pila de cada thread  │  ← V8 #740: un byte[] sin handle (§4)
         │                              │
 STACK_BASE ━━━━━━━━━━━━━━━━━━━━━━━━━━━ │  ← dirección configurable (BpVM.cfg)
-        │                              │
-        │  STACKS                      │
-        │   thread 0 (main): 16 KiB    │  ← MAIN_STACK_BYTES
-        │   thread 1 (worker): 2 KiB   │  ← DEFAULT_THREAD_STACK_BYTES
-        │   thread 2: 2 KiB            │
-        │   ... freedStackRegions      │
-        │                              │
+        │  PILA DEL MAIN: 16 KiB       │  ← MAIN_STACK_BYTES: la región entera
 memorySize└──────────────────────────────┘  ← memory.length
 ```
 
@@ -69,12 +64,14 @@ memorySize└──────────────────────�
   `executeRootModule` justo antes de `vm.run()`).
 
 - **`STACK_BASE`**: configurable por `BpVM.cfg.stackBase` (default
-  `memorySize / 2`). Divide heap de stacks.
+  `memorySize - 16 KiB`; era `memorySize / 2` hasta V8 `#740`). Divide el heap de la pila del main; las de
+  los threads viven en el heap (§4).
 
 - **En la VM-C** el reparto es otro (desde `#451`, 11-sep): entre el techo del heap y las pilas vive
   la **tabla de handles** (`gen[]` y `addr[]`; baja desde las pilas y sólo sobre heap libre), y la
-  región de pilas la decide `bpvm_stack_region_bytes` (un 25 % del bloque de la VM, de 64 a 512 KB, o
-  `stack=N` del ENV), no `BpVM.cfg`. En miVM la tabla son arrays de Java, fuera de `memory[]`. Lo que
+  región de pilas —desde V8 `#740` (29-oct), la pila del main y nada más— la decide
+  `bpvm_stack_region_bytes` (16 KB, o `stack=N` del ENV; era un 25 % del bloque, de 64 a 512 KB, con las
+  pilas de los hilos dentro), no `BpVM.cfg`. En miVM la tabla son arrays de Java, fuera de `memory[]`. Lo que
   ve el programa es lo mismo en las dos (§4: el tope de cada pila). El dibujo de arriba es el de miVM; el
   tramo de la VM-C, del heap para abajo:
 
@@ -85,7 +82,7 @@ memorySize└──────────────────────�
           │  TABLA DE HANDLES             │
           │   gen[cap]  │  addr[cap]      │  ← crece HACIA ABAJO, con el mundo parado (#610)
   stack_base ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-          │  PILAS (main e hilos)         │  ← bpvm_stack_region_bytes / stack=N; cada una crece hacia arriba
+          │  PILA DEL MAIN                │  ← bpvm_stack_region_bytes / stack=N; las de los hilos, en el HEAP
   ```
 
 - **La tabla de la VM-C crece MOVIÉNDOSE** (`bpvm_handles_grow`: un `memmove` dentro del bloque; el `addr[]` nuevo
@@ -279,9 +276,15 @@ del heap; `MOD_FORMAT.md` §13.4) y ningún rango los contiene.
 
 ## 4. Stacks de los threads BP
 
-Cada thread BP tiene una **región** dentro del área de pilas. La región se asigna al crear el
-thread y, cuando el thread acaba del todo, **se reutiliza** para otro (en las dos VMs; la VM-C, desde
-`#604`, 29-sep: antes no reutilizaba nada y un programa sólo podía crear 32 hilos en su vida).
+La pila del **main** es la región fija del final de `memory[]` (§1). La de **cada thread** es, desde V8
+`#740` (29-oct), un **bloque del heap**: un `byte[]` sin handle —nadie la nombra desde el programa— que
+`Thread.start()` reserva por el mismo camino que un `new`, así que puede colectar (`heapReservaPila` en
+miVM, `bpvm_heap_reservar_pila` en la VM-C, bajo el cerrojo con el que se crea el hilo). El GC la marca
+mientras su thread no ha acabado del todo y la barre después, como a cualquier bloque (§7); el
+compactador la deja en su sitio, como a todo bloque sin handle. Antes era una región reservada al
+arrancar —el 25 % del bloque de la VM: 64 KB en la C3 y la C6, más que su heap—, se crearan threads o
+no. Ahora la RAM de las pilas es proporcional a los threads (Eduardo: *«el consumo de RAM del Heap ya
+sería proporcional al número de hilos BP»*), con PSRAM o sin ella.
 
 ```
 stackBase ━━━━━━━━━━━━━━━━━━━━━━━━━━━━  ↓ dirección baja
@@ -301,12 +304,13 @@ stackTop  ━━━━━━━━━━━━━━━━━━━━━━━�
 ```
 
 Tamaños:
-- **Thread main**: `MAIN_STACK_BYTES = 16 KiB`.
+- **Thread main**: la región fija entera, `MAIN_STACK_BYTES = 16 KiB` por defecto (`stack=N` en el ENV
+  de la VM-C, `stackBase` en el `BpVM.cfg` de miVM).
 - **Los demás**: lo que pide su constructor, `Thread(stackSize)` (campo 1 de `Core.Thread`); con 0,
-  `DEFAULT_THREAD_STACK_BYTES = 2 KiB`. El `stackTop` de un thread es SU tamaño pedido, aunque la
-  región que le toque (una reutilizada) mida más: así el tope es el mismo en las dos VMs.
-- **Hasta 32 threads vivos a la vez**, el main incluido (`BPVM_MAX_THREADS`; `MAX_HILOS_VIVOS` en
-  miVM). Uno más, o una pila que no cabe: `RuntimeError` en `start()`.
+  `DEFAULT_THREAD_STACK_BYTES = 2 KiB`. El `stackTop` de un thread es su base más lo pedido: el mismo
+  tope en las dos VMs.
+- **Sin tope de threads** (V7/H12): lo pone la memoria. Una pila que no cabe en el heap, ni colectando:
+  `RuntimeError` «Thread.start: no hay memoria para la pila del hilo (N B)» en `start()`.
 
 **El muro (`#605`, 29-sep).** Cada función empieza por `ENTER`, y ahí se mira el tope: si
 `sp + locales + ZONA_ROJA > stackTop`, `RuntimeError` «desbordamiento de pila (el hilo tiene N B)»,
@@ -428,7 +432,10 @@ opcodes `NEWARRAY_I8`/`ALOAD_U8`/`ASTORE_I8`.
 
 1. **Stack de cada thread**: escanea `[stackBase, sp)` palabra por
    palabra. Conservadoramente: cualquier i32 que caiga dentro del rango
-   del heap se trata como ref potencial.
+   del heap se trata como ref potencial. Sólo los threads que no han
+   acabado del todo (V8 `#740`): la pila de uno que acabó ya es basura.
+   Y de cada uno de ésos se marca **la pila misma**, que es un bloque
+   del heap sin handle y nadie más alcanza (la del main es fija).
 2. **`allocAnchor` de cada thread**: el ref recién alocado todavía no
    publicado al stack queda anclado aquí (cubierto en `B1 residual`).
 3. **Data block de cada módulo cargado**: tiene refs globales (e.g.
@@ -458,10 +465,10 @@ Para objetos `TYPE_OBJECT`, el sweep:
 | `TAG_FREE_BIT` | `0x40000000` | bit 30 del tag |
 | `TAG_TYPE_MASK` | `0x3F000000` | bits 24..29 |
 | `TAG_TYPE_SHIFT` | 24 | |
-| `MAIN_STACK_BYTES` | 16384 | tamaño del stack del thread main |
-| `DEFAULT_THREAD_STACK_BYTES` | 2048 | tamaño de stack por thread nuevo |
+| `MAIN_STACK_BYTES` | 16384 | tamaño del stack del thread main (la región fija, por defecto) |
+| `DEFAULT_THREAD_STACK_BYTES` | 2048 | tamaño de stack por thread nuevo (un bloque del heap, V8 `#740`) |
 | `DEFAULT_MEMORY_SIZE` | 524288 | bytes totales (default) |
-| `DEFAULT_STACK_BASE` | 262144 | `memorySize/2` |
+| `DEFAULT_STACK_BASE` | 507904 | `memorySize - MAIN_STACK_BYTES` (V8 `#740`; antes `memorySize/2`) |
 | `EXT_TABLE_ENTRY_SIZE` | 4 | bytes por entrada en la ext-table |
 | `INITIAL_FREE_ADDRESS` | `0x0100` | primer byte libre tras la sentinela |
 

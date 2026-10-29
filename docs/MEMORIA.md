@@ -13,7 +13,8 @@
 > por remedir.
 >
 > **El 27-oct**, sin placas conectadas: el `INFO` del lote de esa tarde y los `.elf` del día (§7). Lo que se puede
-> recortar —sobre todo, las pilas de los hilos BP, del heap: 48 KB más en la C3 y la C6—, en `#740`.
+> recortar —sobre todo, las pilas de los hilos BP, del heap: 48 KB más en la C3 y la C6—, en `#740`. **El 29-oct**, las
+> pilas, del heap, en el código (las dos VMs); medirlo en las placas, en el lote siguiente.
 
 ## 1. Dos memorias que no hay que confundir
 
@@ -180,3 +181,6 @@ La Nucleo (384 KB de heap de BP) y la DK2 (768) van holgadas: las justas siguen 
 - **Las pilas de los hilos BP se llevan, en la C3 y la C6, más que el heap:** el reparto da el 25 % del bloque, pero
   nunca menos de 64 KB —el main, 16, y 24 hilos de 2 KB—, y se reservan aunque el programa no cree ningún hilo. Con
   las pilas sacadas del heap (`#740`), el heap de la C3 pasaría de 48 a 96 KB y el de la C6, de 61 a 109.
+- **Hecho en el código el 29-oct (`#740`):** la región de pilas es la pila del main, 16 KB, y la de cada hilo, un
+  bloque del heap que pide al arrancar y barre el GC cuando acaba. Las cifras de la tabla, las del 27-oct: las nuevas,
+  medidas en el lote (la línea `vm: memoria … -> heap … + pilas 16 KB` del log, y el `INFO`).

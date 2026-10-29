@@ -106,9 +106,10 @@ static void anota_fecha_de_la_imagen(const bpvm_boot2_familia_t* f) {
 }
 
 void bpvm_boot2_claves(const bpvm_env_t* env) {
-    if (!env || !env->valid) return;   /* sin ENV, lo de siempre: el 25 % a pilas, 1024 opcodes */
+    if (!env || !env->valid) return;   /* sin ENV, lo de siempre: la pila del main (V8 #740), 1024 opcodes */
     /* `stack=N` (KB): el usuario reparte el bloque de la VM entre pilas y heap; la regla vive
-     * en bpvm_stack_region_bytes(). Antes de la memoria: la línea de la Pico ya lo cuenta. */
+     * en bpvm_stack_region_bytes() (V8 #740: la región es la pila del main; las de los hilos, del
+     * heap). Antes de la memoria: la línea de la Pico ya lo cuenta. */
     bpvm_set_stack_kb((unsigned long) bpvm_env_get_long(env, "stack", 0));
     bpvm_set_quantum_ops(bpvm_env_get_long(env, "quantum", 0));   /* #462 */
     bpvm_set_runs(bpvm_env_get_long(env, "vm.runs", 0));          /* V7/H12, 2b: los runs permanentes; antes de la cintura

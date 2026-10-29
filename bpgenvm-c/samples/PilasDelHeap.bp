@@ -1,0 +1,147 @@
+// PilasDelHeap.bp — V8 #740 (29-oct): la pila de un hilo BP sale del heap, como un `new` (Eduardo: «Los hilos BP no
+// podrian tomar la RAM del heap? Lo digo porque 64K en el C3 y C6 que van muy justas de RAM es muchísimo»). Antes, una
+// región fija reservada al arrancar, se crearan hilos o no. Lo que se comprueba, igual en las dos VMs:
+//   1. un hilo sin variable (`Eco(caja, n).start()`) cuya pila no cabe sin colectar: la colecta corre DENTRO de
+//      start(), con el hilo a medio crear (su Thread lo sujeta el `this` de start()), y el hilo tiene que correr igual;
+//   2. lo que gastan las pilas VUELVE al heap: tras unir los hilos y colectar, el heap libre es el de antes;
+//   3. una pila que no cabe en la VM entera: «no hay memoria para la pila del hilo», atrapable.
+// Lo que se imprime no depende de cuándo corre cada hilo ni de cuánto heap tiene cada VM.
+module PilasDelHeap
+  import Heap
+
+  // Lo que anotan los hilos sin variable: no se les puede hacer join, así que el main espera a que cuenten.
+  class Caja
+    var m: Mutex
+    var cuenta: integer
+    var ultimo: integer
+    public function Caja()
+      this.m := Mutex()
+      this.cuenta := 0
+      this.ultimo := 0
+    end Caja
+    public function anota(v: integer)
+      this.m.lock()
+      this.ultimo := v
+      this.cuenta := this.cuenta + 1
+      this.m.unlock()
+    end anota
+    public function vistos(): integer
+      this.m.lock()
+      var c: integer := this.cuenta
+      this.m.unlock()
+      return c
+    end vistos
+    public function valor(): integer
+      this.m.lock()
+      var v: integer := this.ultimo
+      this.m.unlock()
+      return v
+    end valor
+  end Caja
+
+  // Con una pila de 8 KB: más que el hueco que le deja el main (4 KB), así que reservarla obliga a colectar.
+  class Eco extends Thread
+    var caja: Caja
+    var n: integer
+    public function Eco(caja: Caja, n: integer)
+      super(8192)
+      this.caja := caja
+      this.n := n
+    end Eco
+    public function run()
+      this.caja.anota(this.n * 7)
+    end run
+  end Eco
+
+  class Suma extends Thread
+    var hasta: integer
+    var total: integer
+    public property sig: Suma     // la lista de los arrancados, para unirlos después
+    public function Suma(hasta: integer, sig: Suma)
+      super(0)
+      this.hasta := hasta
+      this.total := 0
+      this.sig := sig
+    end Suma
+    public function run()
+      for i := 1 to this.hasta do
+        this.total := this.total + i
+      next i
+    end run
+    public function resultado(): integer
+      return this.total
+    end resultado
+  end Suma
+
+  class Enorme extends Thread
+    public function Enorme()
+      super(1073741824)    // 1 GB: más que la memoria entera de cualquier VM
+    end Enorme
+    public function run()
+      print "FALLO: el hilo enorme no debería correr"
+    end run
+  end Enorme
+
+  function mira(nombre: string, cierto: boolean)
+    if cierto then
+      print "ok " + nombre
+    else
+      print "FALLO " + nombre
+    endif
+  end mira
+
+  function Main()
+    // 1. El hilo sin variable, con la colecta justo al pedir su pila. Compactado, el heap libre es un solo trozo; el
+    //    lastre se lo come casi entero y sobrevive a un gc() —que deja a cero la cuenta del GC proactivo—; suelto, ya
+    //    es basura, pero nada colecta hasta que la pila del Eco no cabe en los 4 KB que quedan.
+    var caja: Caja := Caja()
+    for ronda := 1 to 3 do
+      Heap.compact()
+      var lastre: byte[] := newByteArray(Heap.getLargestFree() - 4096)
+      lastre[0] := 1
+      gc()
+      lastre := null
+      var antes: integer := Heap.getCollections()
+      Eco(caja, ronda).start()
+      var colecto: boolean := Heap.getCollections() > antes
+      while caja.vistos() < ronda do
+        sleep(1)
+      endwh
+      mira("ronda " + ronda + ": una colecta dentro de start(), y el hilo sin variable corre", colecto and caja.valor() == ronda * 7)
+    next ronda
+
+    // 2. Lo que gastan las pilas vuelve al heap.
+    gc()
+    var libre: integer := Heap.getFree()
+    var hilos: Suma := null
+    for i := 0 to 19 do
+      hilos := Suma(i * 10, hilos)
+      hilos.start()
+    next i
+    var bien: boolean := true
+    var h: Suma := hilos
+    var k: integer := 19
+    while h != null do
+      h.join()
+      if h.resultado() != (k * 10) * (k * 10 + 1) / 2 then
+        bien := false
+      endif
+      h := h.sig
+      k := k - 1
+    endwh
+    hilos := null
+    gc()
+    var despues: integer := Heap.getFree()    // antes de imprimir nada: lo que imprime `mira` también es del heap
+    mira("20 hilos, sus sumas", bien)
+    mira("sus pilas, de vuelta en el heap", despues == libre)
+
+    // 3. Una pila que no cabe en la VM entera.
+    try
+      Enorme().start()
+      print "FALLO: el hilo enorme arrancó"
+    catch e: RuntimeError
+      print "atrapada: ", e.msg
+    endtry
+    print "fin"
+  end Main
+end PilasDelHeap

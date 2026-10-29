@@ -852,16 +852,15 @@ sd=clk:43,cmd:44,d0:39,pwr:45,pwralto:0               <span class="comment">// E
 </p>
 
 <p>
-  <code>stack</code> merece una línea aparte porque reparte un recurso escaso. La memoria
-  que el firmware da a la VM se parte en dos: las <em>pilas</em> de los hilos y el
-  <em>montón</em> donde viven los objetos. Por defecto van el 25&nbsp;% a pilas y el resto
-  al montón, y para casi todo está bien. Pero esa proporción es una apuesta sobre el
-  programa: uno con muchos hilos se queda sin pilas teniendo montón de sobra, y uno de un
-  solo hilo que mueve datos desperdicia ese 25&nbsp;%. <code>stack=100</code> pide 100 KB de
-  pilas; quitar la clave vuelve al reparto de siempre. Cada hilo consume la pila que pide
-  (<code>Thread(stackSize)</code>; 2 KB si no pide nada) y el principal 16, así que el
-  número sale de contar hilos. Si te pasas de lo que cabe, el firmware lo ajusta y
-  <strong>lo dice en el log</strong> — no se queda callado.
+  <code>stack</code> merece una línea aparte. La memoria que el firmware da a la VM es casi
+  toda <em>montón</em>, donde viven los objetos, y desde V8 también las <em>pilas</em> de
+  los hilos: cada hilo pide la suya al arrancar, como un <code>new</code>
+  (<code>Thread(stackSize)</code>; 2 KB si no pide nada), y la devuelve al acabar. Así la
+  RAM de las pilas es la de los hilos que haya, y el número de hilos sale de contar montón.
+  Fuera del montón sólo queda la pila del hilo principal, 16 KB: eso es lo que pide
+  <code>stack</code>. <code>stack=64</code> le da 64 KB a un programa que recursa mucho en
+  el principal; quitar la clave vuelve a los 16. Si te pasas de lo que cabe, el firmware lo
+  ajusta y <strong>lo dice en el log</strong> — no se queda callado.
 </p>
 
 <p>

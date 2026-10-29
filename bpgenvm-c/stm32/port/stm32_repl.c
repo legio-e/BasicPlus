@@ -88,7 +88,8 @@ typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
  * los 768 KB de RAM el estático total eran ~247 KB (128 de éstos) ⇒ ~520 KB
  * PARADOS, en la placa que tenía el heap MÁS PEQUEÑO del parque (64 KB, contra
  * 96 del S3 y 257 de la Pico). Con 512 KB la regla común (25 % pilas, suelo 64,
- * techo 512) reparte 384 de heap + 128 de pila.
+ * techo 512) reparte 384 de heap + 128 de pila. (V8 #740: la regla es ahora la
+ * pila del main, 16 KB; las de los hilos salen del heap: 496 de heap.)
  *
  * El presupuesto que lo justifica, para quien lo revise: 768 total − 512 aquí
  * − ~119 del resto del estático = ~137 KB libres, y el linker sólo exige 20

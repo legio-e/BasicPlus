@@ -176,7 +176,7 @@ int main(void) {
     bpvm_boot2_subir(&FAMILIA);
     CHECK(strcmp(pasos(), "memoria bios subir anadir hw sd identidad cintura cable repl") == 0,
           "virgen: el kernel y el REPL (y la fecha: el ENV se crea con ella)");
-    CHECK(bpvm_stack_region_bytes(MB) == 256u * 1024u, "sin ENV, el reparto de siempre (25 %)");
+    CHECK(bpvm_stack_region_bytes(MB) == 16u * 1024u, "sin ENV, la pila del main y nada mas (#740)");
     CHECK(bpvm_log_enabled() == 0, "sin ENV, el log de ejecucion apagado (#423)");
 
     printf("--- 5. ganchos NULL: lo que la familia no tiene, o hizo en su Boot 1 ---\n");
@@ -210,7 +210,7 @@ int main(void) {
     CHECK(bpvm_stack_region_bytes(MB) == 128u * 1024u, "stack= del ENV");
     bpvm_set_stack_kb(0);
     bpvm_boot2_claves(NULL);
-    CHECK(bpvm_stack_region_bytes(MB) == 256u * 1024u, "sin ENV no toca nada");
+    CHECK(bpvm_stack_region_bytes(MB) == 16u * 1024u, "sin ENV no toca nada (la del main, #740)");
 
     printf("--- 7. #626: la fecha de la imagen, UNA vez; y el ENV de Machine.getEnv ---\n");
     {

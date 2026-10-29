@@ -7127,6 +7127,30 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     heap y el resto queda para el sistema —holgura para la GUI y, después, para la WiFi—;
   - **la Pico 2**, de 214 a ~270 (+55, de las pilas: su región es el 25 % del bloque); los ahorros de las ESP no le
     tocan (su log ya es de 4 KB, y lee el ENV de la flash sin copiarlo), y los comunes, ~3 KB más.
+- **29-oct, lo 1, en el código de las dos VMs** (Eduardo, al proponerle el algoritmo: *«OK a), b) si una excepción,
+  c) la mantenemos de momento, ya veremos mas adelante que hacemos. d) OK, adelante.»*):
+  - **la región fija de pila, la del main**: 16 KB (`bpvm_stack_region_bytes`; en miVM, `stackBase` =
+    `memorySize − 16 KB`, y sin la clave en el `BpVM.cfg` de la raíz, que fijaba 256 KB y le habría dado al main de
+    miVM otra pila que al de la VM-C). **La de cada hilo, un `byte[]` del heap sin handle**, por el camino de un `new`
+    y bajo el cerrojo con el que se crea el hilo (`bpvm_heap_reservar_pila`, `heapReservaPila`): el GC la marca
+    mientras el hilo no ha acabado del todo (`bpvm_hilo_acabado`; en miVM, los que no son TERMINATED) y la barre
+    después; el compactador la deja en su sitio. Fuera el alocador de regiones (`next_thread_stack`, `pilas_libres`,
+    `allocStackRegion`). Si no cabe ni colectando, el error de siempre;
+  - **`stack=` (la c), la misma clave**: pide la pila del main. **Con PSRAM (la d), lo mismo**;
+  - `Thread.start` lee la referencia del Thread sin sacarla hasta crear el hilo: defensivo, porque hoy ya la sujeta el
+    `this` de `Core.Thread.start()` (lo comprobó el desplazamiento: sacándola antes, nada falla);
+  - **las pruebas:** `PilasDelHeap`, nuevo en el corpus (una colecta dentro de `start()`, las pilas que vuelven al heap
+    tras unir los hilos, la pila que no cabe); y el desplazamiento de la marca: sin ella, `HeapReposo` revienta en la
+    VM-C con un use-after-free (la pila de un hilo vivo, barrida y reutilizada por las cadenas de otro);
+  - **la red** (12:58): paridad 168/168 en las tres pasadas, pruebas de C 108/108, el sim 12/12, la sombra 15/15; y el
+    estrés, rojo por su calibración —el heap justo de `HeapEstres` en miVM era de 48 KB, y ahora tenía que llevar las
+    cuatro pilas de 8 KB—: recalibrado al mismo apretón (miVM, 96 KB con `stackBase` 80; la VM-C, `--mem` 80 KB;
+    medido con las VMs de antes y de después: 79 y 80 colectas en miVM, 1085 y 1089 en la VM-C), verde.
+- **La zona roja (la b), medida:** en las 2.313 funciones del corpus, lo más que apila una por encima de sus locales
+  son 84 B; la zona, 256. Para que la que se pase dé una excepción y no pise lo de al lado, lo propuesto: la VM mira
+  el tope en cada instrucción —en el PC no se nota: compilada igual, la copia con la comprobación salía un 9–13 % más
+  rápida, por cómo coloca el código el compilador; en las placas, por medir— y el puente de las natives, el suyo; el
+  muro del `ENTER`, como está. **Pendiente del OK de Eduardo.**
 
 #### 🔵 `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **por mirar**)
 

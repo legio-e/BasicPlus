@@ -360,11 +360,15 @@ uint32_t bpvm_alloc_censo(uint64_t mark, int max, bpvm_alloc_report_fn fn) {
  * 0 (o la clave ausente) = la regla de siempre, que es lo que estaba antes de
  * esto: nadie que no ponga la variable nota ningún cambio.
  *
- * POR QUE SE PUEDE QUERER TOCAR: el reparto por defecto es 25% pilas / 75% heap,
+ * POR QUE SE PUEDE QUERER TOCAR: el reparto por defecto era 25% pilas / 75% heap,
  * y esa proporción es una apuesta sobre el programa. Un programa con muchos
  * hilos se queda sin pilas teniendo heap de sobra; uno de un solo hilo que
  * mueve datos desperdicia el 25%. En la Pico 2 son 89 KB de los 358 del bloque,
  * y no había forma de moverlos sin recompilar.
+ *
+ * V8 #740 (29-oct): esa apuesta ya no existe —la región es la pila del main y las
+ * de los hilos salen del heap—, así que lo que pide la clave es la pila del main.
+ * Eduardo: «la mantenemos de momento, ya veremos mas adelante que hacemos».
  *
  * La regla sigue viviendo AQUI y en un solo sitio: el ENV la alimenta, no la
  * duplica. Las familias sólo leen la clave y la pasan (ver bpvm_set_stack_kb). */
@@ -452,9 +456,12 @@ size_t bpvm_stack_region_bytes(size_t total_bytes) {
         }
         return r;
     }
-    size_t r = total_bytes / 4u;                    /* 25% para stacks */
-    if (r < 64u * 1024u)  r = 64u * 1024u;          /* ...nunca menos (threads) */
-    if (r > 512u * 1024u) r = 512u * 1024u;         /* ...nunca más (PSRAM) */
+    /* V8 #740 (29-oct) — LA DEL MAIN, Y NADA MÁS (Eduardo: «Los hilos BP no podrian tomar la RAM del heap? […] 64K en
+     * el C3 y C6 que van muy justas de RAM es muchísimo»). Era el 25 % del bloque, entre 64 y 512 KB, para el main y
+     * las pilas de los hilos, se crearan o no; ahora cada hilo pide la suya al heap (bpvm_thread_spawn), y la RAM que
+     * gastan es proporcional a los hilos. Lo mismo con PSRAM (Eduardo: «en la práctica no habría límite en el número de
+     * hilos BP»). */
+    size_t r = (size_t) BPVM_MAIN_STACK_BYTES;
     if (r >= total_bytes) r = total_bytes / 2u;     /* bloque diminuto: mitad */
     return r;
 }
@@ -528,9 +535,8 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
         return NULL;
     }
 
-    /* F4: el alocador de stacks de threads BP empieza tras la región
-     * del main. Cada Thread.start() reserva BPVM_THREAD_STACK_BYTES. */
-    vm->next_thread_stack = vm->hilo_main->stack_top;
+    /* (V8 #740: aquí arrancaba el alocador de las pilas de los hilos, tras la del main; ahora cada Thread.start() pide la
+     * suya al heap: bpvm_thread_spawn.) */
 
     /* H3 #158 — apuntar a la tabla global de helpers para AOT. El
      * código AOT C-emitido la usa vía vm->aot_helpers->func(...). */

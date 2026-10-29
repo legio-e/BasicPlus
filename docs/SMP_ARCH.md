@@ -98,7 +98,7 @@ cualquier duda de semántica, la VM-Java es la spec.
 | Estado | Helpers que mutan |
 |---|---|
 | `threads[].status` | scheduler (pick), spawn, terminate, sleep, mutex_lock/unlock, join |
-| `thread_count`, `next_thread_stack` | thread_spawn |
+| `thread_count`, la pila del hilo nuevo (V8 `#740`: un bloque del heap, reservado bajo el mismo cerrojo) | thread_spawn |
 | `heap_next`, free-list | heap_alloc, gc |
 | `mutexes[]`, `mutex_count` | mutex_alloc, mutex_add_waiter, mutex_pop_waiter |
 | `symbol_count`, `symbols[]` | link_register_symbol (solo en load — no en run) |

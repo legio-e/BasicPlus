@@ -3720,8 +3720,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     }
 
     case BUILTIN_THREAD_START: {
-        bpref_t thread_ref = bpref_pop(vm, tc);   /* handle COMPLETO: el gen viaja hasta el `this` de run() */
+        /* handle COMPLETO: el gen viaja hasta el `this` de run(). V8 #740 — se LEE sin sacarlo: la pila del hilo sale
+         * del heap y reservarla puede colectar, y en esa colecta el Thread tiene que seguir siendo raíz. Hoy lo es de
+         * todos modos —Core.Thread.start() lo tiene en su `this`—, pero el builtin no lo da por hecho. Sale tras crear el
+         * hilo (si nació, lo sujeta su propia pila). Como miVM. */
+        bpref_t thread_ref = bpref_load(vm, tc->sp - BPVM_REF_SIZE);
         int new_tid = bpvm_thread_spawn(vm, thread_ref);
+        tc->sp -= BPVM_REF_SIZE;
         if (new_tid == -2)   /* #530: el mismo texto que miVM (no pasa con un Thread: Core.Thread tiene run()) */
             return builtin_throw(vm, tc, "Thread.start: run() no resoluble en la cadena de herencia");
         /* V7/H7 #604 — los límites, atrapables (antes, el programa moría con un error que no se atrapa): sin sitio para

@@ -9,13 +9,13 @@
 //
 //   {
 //     "memorySize": 524288,         // bytes totales del array memory
-//     "stackBase":  262144,         // offset donde empiezan los stacks
+//     "stackBase":  507904,         // offset donde empieza la pila del main
 //     "stdlibDir":  "C:/.../stdlib" // path absoluto al directorio de stdlib
 //   }
 //
 // Reglas de los valores por defecto (si el campo está ausente):
 //   - memorySize: 524288 (512 KiB)
-//   - stackBase:  memorySize / 2  (mitad para heap, mitad para stacks)
+//   - stackBase:  memorySize - 16 KiB  (la pila del main al final; V8 #740: las de los hilos, del heap)
 //   - stdlibDir:  null  (no se busca en stdlib; sólo cwd / fromPath)
 //
 // Parser ligero hand-rolled (JSON plano: objects, strings, numbers,
@@ -35,7 +35,10 @@ import java.util.Map;
 public final class VmConfig {
 
     public static final int DEFAULT_MEMORY_SIZE = 512 * 1024;
-    public static final int DEFAULT_STACK_BASE  = 256 * 1024;
+    /** V8 #740 — la pila del main (VirtualMachine.MAIN_STACK_BYTES): con las de los hilos en el heap, la región fija
+     *  de pila es sólo suya, y el heap llega hasta ella. */
+    private static final int PILA_MAIN = 16 * 1024;
+    public static final int DEFAULT_STACK_BASE  = DEFAULT_MEMORY_SIZE - PILA_MAIN;
     /** Nombre canónico del fichero de configuración por defecto. */
     public static final String DEFAULT_FILENAME = "BpVM.cfg";
 
@@ -74,9 +77,10 @@ public final class VmConfig {
         if (map.containsKey("devicesDir")) c.devicesDir = toString(map.get("devicesDir"),"devicesDir",file);
         if (map.containsKey("packsDir"))   c.packsDir   = toString(map.get("packsDir"),  "packsDir",  file);   // H5.b
 
-        // Si memorySize está pero stackBase no, derivar a mitad-mitad.
+        // Si memorySize está pero stackBase no, la pila del main al final y el resto para el heap (V8 #740: era
+        // mitad-mitad, cuando las pilas de los hilos vivían ahí).
         if (map.containsKey("memorySize") && !map.containsKey("stackBase")) {
-            c.stackBase = c.memorySize / 2;
+            c.stackBase = c.memorySize - PILA_MAIN;
         }
 
         // Los directorios RELATIVOS se resuelven contra el propio BpVM.cfg, no

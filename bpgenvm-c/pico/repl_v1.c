@@ -141,6 +141,11 @@ typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
  *   Metro (8 MB):   manda el tope, 512 KB → heap ~7,5 MB (IGUAL que antes:
  *                   el 25% serían 2 MB, así que el tope sigue mandando).
  *
+ *  (c) V8 #740 (29-oct) — las dos de arriba son historia: la región es la pila
+ *      del main, 16 KB, y la de cada hilo sale del heap al arrancarlo (Eduardo:
+ *      «el consumo de RAM del Heap ya sería proporcional al número de hilos
+ *      BP»). La Pico, ~55 KB más de heap; la Metro, 496 KB.
+ *
  * ÚNICO cálculo, y esto es lo importante: lo usan el RUN (bpvm_init), el INFO
  * (mostrar el reparto) y el arranque de main.c. Si se copiara en cada sitio,
  * el día que cambie la regla unos dirían una cosa y otros otra — que es
