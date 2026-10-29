@@ -138,7 +138,7 @@ int wire_v1_recv_line(int first_char_already_read, char *buf, size_t buf_max)
     for (;;) {
         int c = wire_read_byte(!from_poll);
         if (c == WIRE_DISCONNECTED) {
-            if (from_poll) return -2;     /* no re-aceptar durante un run */
+            if (from_poll) return 0;      /* no re-aceptar durante un run: nada (V8 #693: no -2, que es la línea estancada, y se dice) */
             n = 0; continue;              /* idle: el próximo wire_read_byte re-acepta */
         }
         if (c < 0) {                      /* timeout: reintenta */

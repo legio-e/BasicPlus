@@ -369,6 +369,7 @@ static int stm32_run_leer_linea(char* buf, size_t cap) {
     int c = stm32_wire_getchar();
     if (c < 0) return 0;
     int n = wire_v1_recv_line(c, buf, cap);
+    if (n == -2) bpvm_repl_linea_estancada();   /* V8 #693: se dice (y el RUN sigue: su 0) */
     return (n < 0) ? 0 : n;                     /* rota o estancada: se descarta */
 }
 static void stm32_run_led(int estado) {
@@ -442,7 +443,7 @@ static void autorun_boot(void) {
 
 static void dispatch(int first_char) {
     int len = wire_v1_recv_line(first_char, s_line, sizeof(s_line));
-    if (len == -2) return;   /* línea estancada: silencio; el IDE reintenta */
+    if (len == -2) { bpvm_repl_linea_estancada(); return; }   /* línea estancada: se dice (V8 #693); el IDE reintenta */
     if (len < 0)  { stm32_wire_send_fatal("PROTOCOL_ERROR", "line too long"); return; }
 
     json_obj_t obj;

@@ -1383,6 +1383,19 @@ void bpvm_repl_cliente_ido(void) {
     corta_las_transferencias("el cliente se fue");
 }
 
+/* V8 #693 (29-oct) — la línea que se estancó, DICHA (ver bpvm_repl.h): un ERROR sin id y una línea en el log. */
+void bpvm_repl_linea_estancada(void) {
+    char buf[160];
+    log_printf("wire: una linea se quedo %u ms a medias y se tira (el cliente la repite)",
+               (unsigned) WIRE_V1_ESTANCADA_MS);
+    int off = wire_v1_msg_begin_event(buf, sizeof buf, 0, "ERROR");
+    if (off >= 0) off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "code", BPVM_REPL_LINEA_ESTANCADA);
+    if (off >= 0) off = wire_v1_field_string(buf, sizeof buf, (size_t) off, "message",
+                                             "una línea llegó a medias y se tira: repítela");
+    if (off >= 0) off = wire_v1_msg_end(buf, sizeof buf, (size_t) off);
+    if (off >= 0) wire_v1_send_line(buf, (size_t) off);
+}
+
 int bpvm_repl_paso(void) {
     int queda = get_paso();
     queda |= ls_paso();

@@ -197,8 +197,11 @@ int wire_v1_recv_line(int first_char, char* buf, size_t max) {
         int c = stm32_wire_getchar();
         if (c < 0) {
             /* Anti-cuelgue: si la línea se estanca (byte perdido), abortar en
-             * vez de girar para siempre — el REPL sigue vivo, el IDE reintenta. */
-            if (HAL_GetTick() - last >= 300U) return -2;
+             * vez de girar para siempre — el REPL sigue vivo, el IDE reintenta.
+             * V8 #693: con el plazo del contrato (era 300 aquí, a mano), y sin
+             * nada recibido —un '\n' suelto— no hay línea a medias que avisar:
+             * una vacía, como en las demás familias. */
+            if (HAL_GetTick() - last >= WIRE_V1_ESTANCADA_MS) return n > 0 ? -2 : 0;
             continue;
         }
         last = HAL_GetTick();

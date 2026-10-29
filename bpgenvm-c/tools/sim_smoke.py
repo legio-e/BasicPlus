@@ -380,10 +380,15 @@ def main():
         r = w.call("PING")
         check(r.get("type") == "PONG", "#495: ... y el cable vuelve a estar en sincronía (PING → PONG)")
         w.s.sendall(b'{"type":"PI')                          # una línea que se queda a medias
-        time.sleep(0.6)                                      # > WIRE_V1_ESTANCADA_MS (300 ms)
+        t0 = time.time()
+        m = w._line()                                        # V8 #693: ya no en silencio, a los WIRE_V1_ESTANCADA_MS (3 s)
+        dt = time.time() - t0
+        check(m.get("type") == "ERROR" and m.get("code") == "LINE_TIMEOUT" and "id" not in m and 2.5 <= dt <= 6.0,
+              "#693: una línea a medias que se estanca se dice a los 3 s, con un ERROR sin id (%s %s, %.1f s)"
+              % (m.get("type"), m.get("code"), dt))
         r = w.call("PING")
         check(r.get("type") == "PONG",
-              "#495: una línea a medias que se estanca se tira, y la siguiente llega entera (como en las placas)")
+              "#495: ... se tira, y la siguiente llega entera (como en las placas)")
 
         # 5e. V7/H8 E1 — EL ROJO DEL ÁRBOL (Eduardo: «en rojo, módulos/packs dañados o con un formato no válido»): el LIST
         # examina la cabecera de cada .mod, .mdn y .pack con la regla de su cargador y marca con "mal" los que no

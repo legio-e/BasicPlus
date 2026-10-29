@@ -429,6 +429,7 @@ static int esp32_run_leer_linea(char* buf, size_t cap) {
     int c = wire_v1_try_getchar();
     if (c < 0) return 0;
     int n = wire_v1_recv_line(c, buf, cap);
+    if (n == -2) bpvm_repl_linea_estancada();   /* V8 #693: se dice (y el RUN sigue: su 0) */
     return (n < 0) ? 0 : n;                     /* rota: se descarta */
 }
 static void esp32_run_reiniciar(long id) { handle_reset(id, NULL); }
@@ -962,9 +963,9 @@ void repl_esp32_run(void) {
         } else {
             n = wire_v1_recv_line(-1, s_line_buf, sizeof(s_line_buf));
         }
-        /* V6/#473 — -2 no es -1: la linea se estanco (truncado/ruido). Descartar en
-         * SILENCIO y seguir; el IDE reintenta. */
-        if (n == -2) continue;
+        /* V6/#473 — -2 no es -1: la linea se estanco (truncado/ruido). Descartar y
+         * seguir; el IDE reintenta. V8 #693: y ya no en silencio. */
+        if (n == -2) { bpvm_repl_linea_estancada(); continue; }
         if (n < 0) { wire_v1_send_fatal("PROTOCOL_ERROR", "línea excede WIRE_V1_LINE_MAX"); continue; }
         if (n == 0) continue;
         if (s_line_buf[0] != '{') continue;   /* ignora ruido no-v1 */

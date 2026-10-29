@@ -938,6 +938,7 @@ Los `code` de `ERROR` replies son strings estables:
 | `PROTOCOL_ERROR` | Mensaje mal formado o secuencia inválida. |
 | `INTERNAL_ERROR` | Bug del servidor. Incluye `message` para diagnóstico. |
 | `ABORTED` | Una transferencia troceada (`GET`, `LIST`) cortada a medias: llegó un verbo que no convive con ella (§6.2). |
+| `LINE_TIMEOUT` | Una línea llegó a medias y se estancó 3 s: el servidor la tira y lo dice con este `ERROR`, **sin `id`** (§8.7). |
 
 ### 8.2 Mensajes desconocidos
 
@@ -978,6 +979,27 @@ de timeout: `FATAL` + cierre de conexión.
 Si el cliente no oye nada en >30 s y no hay nada en vuelo, debe
 enviar `PING`. Si no llega `PONG` en 5 s, considerar conexión muerta
 y reconectar.
+
+### 8.7 Línea a medias (V8, `#693`)
+
+Si una línea empieza a llegar y se estanca `WIRE_V1_ESTANCADA_MS` (3 s) sin
+un byte más ni su `\n`, el servidor la tira —sin plazo, el mensaje siguiente
+se le pegaría detrás y se perdería con ella— y lo dice:
+
+```json
+{"type":"ERROR","code":"LINE_TIMEOUT","message":"una línea llegó a medias y se tira: repítela"}
+```
+
+**Sin `id`**: lo que llegó no dice de qué orden era. Es la última que mandó
+el cliente (con otra detrás, la línea no se habría estancado), así que el
+cliente la repite una vez sin decir nada y, si tampoco, avisa. La placa lo
+apunta además en su log. Hasta V8 se tiraba en silencio, a los 300 ms.
+
+El IDE repite también, una vez, un `RUN` o un `KILL` que no contesta en
+5 s. En esa segunda vez, `BUSY` (al `RUN`) o `NO_SESSION` (al `KILL`) es que
+la primera llegó y sólo se perdió su respuesta. Un `RUN` sin respuesta cuyo
+programa ya manda su salida o su `EXITED` no se repite: llegó, y repetirlo
+lo ejecutaría dos veces.
 
 ---
 

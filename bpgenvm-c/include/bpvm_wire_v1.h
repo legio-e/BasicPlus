@@ -60,8 +60,15 @@ extern "C" {
  * no ha parado», que no se diagnostica nunca.
  *
  * Lo tenia SOLO el STM32, y su header lo llamaba «matiz de esta familia que el
- * contrato no exige». Lo exige: es del protocolo, no del cable. */
-#define WIRE_V1_ESTANCADA_MS 300u
+ * contrato no exige». Lo exige: es del protocolo, no del cable.
+ *
+ * V8 #693 (29-oct) — 3 s, como el bulk: con 300 ms, un puente USB-serie lento que
+ * entrega la linea a trozos la perderia siempre, aunque se pueda comunicar. Y la
+ * linea tirada ya no se calla: el lector llama a bpvm_repl_linea_estancada(), que
+ * lo dice al cliente (un ERROR sin id) y al log (Eduardo: «si un paquete falla se
+ * puede reintentar y el usuario ni se entera. Pero si la comunicación no es
+ * posible hay que avisar al usuario»). */
+#define WIRE_V1_ESTANCADA_MS 3000u
 
 /* V7/H8 #495 (1-oct) — CUÁNTO SE ESPERA A UN BULK QUE SE HA QUEDADO A MEDIAS. Lo mismo que la línea, con
  * más margen (un bulk es más largo y llega a ráfagas). Sin plazo, a un bulk al que le faltan bytes —un
@@ -77,7 +84,8 @@ extern "C" {
  *  @return longitud sin el '\n' y sin terminador;
  *          **-1** si excede `buf_max` (linea demasiado larga → hay que avisar);
  *          **-2** si la linea se estanca `WIRE_V1_ESTANCADA_MS` sin recibir un byte
- *          (→ descartar EN SILENCIO lo acumulado y seguir; el IDE reintenta).
+ *          (→ se descarta lo acumulado, el llamante lo dice con bpvm_repl_linea_estancada()
+ *          y sigue; el cliente la repite —V8 #693; antes, EN SILENCIO—).
  *  ⚠️ Los dos negativos NO son lo mismo: contestar «linea demasiado larga» a una
  *  linea estancada manda a mirar donde no esta el problema. */
 int  wire_v1_recv_line(int first_char_already_read, char* buf, size_t buf_max);

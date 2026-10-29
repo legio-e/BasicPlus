@@ -181,6 +181,19 @@ public final class BpvmClient implements AutoCloseable {
      *  componer KILL { session: N }. */
     private volatile long currentSession = 0;
 
+    /** V8 #693 (29-oct) — el `code` del ERROR SIN id con el que la placa dice que tiró una línea que le llegó a medias
+     *  (bpvm_repl_linea_estancada): la orden no se ejecutó, y se repite una vez sin decir nada (Eduardo: «si un paquete
+     *  falla se puede reintentar y el usuario ni se entera. Pero si la comunicación no es posible hay que avisar»). */
+    public static final String LINEA_ESTANCADA = "LINE_TIMEOUT";
+    /** V8 #693 — la espera de la PRIMERA vez del RUN y del KILL: la placa los contesta enseguida y una línea a medias la
+     *  dice a los 3 s (WIRE_V1_ESTANCADA_MS); 5 s de cable callado es que la orden o su respuesta se perdieron. */
+    private static final long PRIMERA_ESPERA_MS = 5000L;
+    /** V8 #693 — el id de la última línea que salió (writeFrame): la de un ERROR LINE_TIMEOUT, que no lleva id. */
+    private volatile long ultimoIdEscrito = 0;
+    /** V8 #693 — los OUTPUT y EXITED que llegan (sólo los cuenta el hilo lector): un RUN sin respuesta cuyo programa
+     *  ya los manda, llegó. */
+    private volatile long senalesDePrograma = 0;
+
     /** Executor single-thread donde se invocan los DebugListener. Es CRUCIAL
      *  que no corran en el reader thread: si lo hicieran y un listener
      *  invocase una query síncrona (sendRequest → future.get), el reader
@@ -536,8 +549,9 @@ public final class BpvmClient implements AutoCloseable {
     // ---- Comandos al VM (cliente → server) ----
 
     /** Escribe una línea JSON + opcionalmente bulk binario inmediatamente
-     *  detrás. Atómico para el peer (todo bajo writeLock). */
-    private void writeFrame(String jsonLine, byte[] bulkOrNull) throws IOException {
+     *  detrás. Atómico para el peer (todo bajo writeLock). `id`, el de la
+     *  línea: el último que sale lo recuerda #693. */
+    private void writeFrame(long id, String jsonLine, byte[] bulkOrNull) throws IOException {
         OutputStream w = this.outRaw;
         if (w == null) throw new IOException("BpvmClient cerrado o no conectado");
         synchronized (writeLock) {
@@ -547,6 +561,7 @@ public final class BpvmClient implements AutoCloseable {
             }
             w.flush();
             lastTxMillis = System.currentTimeMillis();   /* #495 */
+            ultimoIdEscrito = id;                        /* V8 #693 */
         }
     }
 
@@ -565,7 +580,7 @@ public final class BpvmClient implements AutoCloseable {
         }
         sb.append('}');
         try {
-            writeFrame(sb.toString(), bulkOrNull);
+            writeFrame(id, sb.toString(), bulkOrNull);
         } catch (IOException e) {
             diag("[BpvmClient] sendOneShot('" + type + "') falló: " + e.getMessage());
         }
@@ -623,18 +638,57 @@ public final class BpvmClient implements AutoCloseable {
      *  RUN_REPLY al poner el programa en marcha, o un ERROR de antes de arrancar: NOT_FOUND «fichero no existe», BUSY
      *  «ya hay una sesión RUN en curso», INVALID_PARAM. Por {@link #runModule} iba sin esperar: un RUN rechazado se tiraba
      *  («silencioso por diseño», abajo) y quien lo había lanzado esperaba el EXITED una hora. Devuelve la sesión;
-     *  {@link WireError} si la placa lo rechaza, IOException si no contesta en el plazo. */
+     *  {@link WireError} si la placa lo rechaza, IOException si no contesta en el plazo.
+     *
+     *  V8 #693 — si la primera vez no contesta (PRIMERA_ESPERA_MS) o la placa tiró la línea a medias, otra vez, sin
+     *  decir nada. En esa segunda vez, BUSY es que la primera llegó y sólo se perdió su respuesta. Y sin respuesta pero
+     *  con el programa dando señales (su salida, su EXITED), llegó: repetirlo lo ejecutaría dos veces. */
     public long runModuleConRespuesta(String module, String arg, long timeoutMs) throws IOException {
-        Map<String, Object> r = sendRequest("RUN", camposRun(module, arg), null, timeoutMs);
-        return Json.getLong(r, "session", 0);
+        long senales = senalesDePrograma;
+        boolean pudoLlegar;
+        try {
+            return Json.getLong(pideUnaVez("RUN", camposRun(module, arg), null,
+                                           Math.min(timeoutMs, PRIMERA_ESPERA_MS)), "session", 0);
+        } catch (WireError we) {
+            if (!LINEA_ESTANCADA.equals(we.code)) throw we;   // un rechazo de verdad: NOT_FOUND, BUSY…
+            pudoLlegar = false;
+        } catch (IOException sinRespuesta) {
+            if (senalesDePrograma != senales) return currentSession;
+            pudoLlegar = true;
+        }
+        try {
+            return Json.getLong(pideUnaVez("RUN", camposRun(module, arg), null, timeoutMs), "session", 0);
+        } catch (WireError we) {
+            if (pudoLlegar && "BUSY".equals(we.code)) return currentSession;
+            throw we;
+        }
     }
 
     /** V8 #694 — el KILL, ESPERANDO su respuesta: KILL_REPLY (la placa lo para; el EXITED, «terminado por KILL», llega
      *  después) o ERROR NO_SESSION (no había programa en marcha). Por sendCommand(STOP) iba sin esperar, y el IDE decía
-     *  «KILL enviado» sin saber si había llegado. {@link WireError} o IOException, como el RUN. */
+     *  «KILL enviado» sin saber si había llegado. {@link WireError} o IOException, como el RUN.
+     *
+     *  V8 #693 — y como el RUN, otra vez si la primera no contesta o se tiró a medias; en esa segunda vez, NO_SESSION es
+     *  que la primera lo paró y sólo se perdió su respuesta. */
     public void killConRespuesta(long timeoutMs) throws IOException {
         long sess = currentSession;
-        sendRequest("KILL", sess > 0 ? "\"session\":" + sess : null, null, timeoutMs);
+        String campos = sess > 0 ? "\"session\":" + sess : null;
+        boolean pudoLlegar;
+        try {
+            pideUnaVez("KILL", campos, null, Math.min(timeoutMs, PRIMERA_ESPERA_MS));
+            return;
+        } catch (WireError we) {
+            if (!LINEA_ESTANCADA.equals(we.code)) throw we;   // NO_SESSION de verdad: no había programa
+            pudoLlegar = false;
+        } catch (IOException sinRespuesta) {
+            pudoLlegar = true;
+        }
+        try {
+            pideUnaVez("KILL", campos, null, timeoutMs);
+        } catch (WireError we) {
+            if (pudoLlegar && "NO_SESSION".equals(we.code)) return;
+            throw we;
+        }
     }
 
     /** PR-7c — Pide al server que se reinicie. El protocolo v1 manda que el
@@ -698,22 +752,40 @@ public final class BpvmClient implements AutoCloseable {
      *  serializa como `"bulk":N` + N bytes raw tras el `\n`. */
     /** Espera la respuesta rindiendose solo tras `inactividadMs` SIN recibir un
      *  byte. Trocear la espera es lo unico que hace falta: el latido lo sella el
-     *  stream (ver conLatido). */
+     *  stream (ver conLatido).
+     *
+     *  V8 #693 — el silencio se cuenta desde que se ESPERA, no desde el último byte de antes: con el cable callado más
+     *  de `inactividadMs` antes de pedir (el IDE quieto un rato), la espera se rendía en la primera rodaja, y una
+     *  respuesta que tardara más de 250 ms se daba por perdida. Lo destapó la segunda vez de #693, que llega justo
+     *  tras una primera sin respuesta: tenía 250 ms. */
     private Map<String, Object> esperarPorActividad(CompletableFuture<Map<String, Object>> f,
                                                     long inactividadMs)
             throws InterruptedException, java.util.concurrent.ExecutionException, TimeoutException {
         final long RODAJA_MS = 250L;
+        final long desde = System.currentTimeMillis();
         for (;;) {
             try {
                 return f.get(RODAJA_MS, TimeUnit.MILLISECONDS);
             } catch (TimeoutException te) {
-                if (System.currentTimeMillis() - lastRxMillis > inactividadMs) throw te;
+                if (System.currentTimeMillis() - Math.max(lastRxMillis, desde) > inactividadMs) throw te;
                 /* siguen llegando bytes: el cable esta vivo, se sigue esperando */
             }
         }
     }
 
     private Map<String, Object> sendRequest(String type, String extraJson, byte[] bulkOrNull, long timeoutMs)
+            throws IOException {
+        try {
+            return pideUnaVez(type, extraJson, bulkOrNull, timeoutMs);
+        } catch (WireError we) {
+            if (!LINEA_ESTANCADA.equals(we.code)) throw we;
+            /* V8 #693 — la placa tiró su línea, que le llegó a medias: no se ejecutó, y se repite una vez sin decir
+             * nada. Si tampoco, el error llega a quien la pidió. */
+            return pideUnaVez(type, extraJson, bulkOrNull, timeoutMs);
+        }
+    }
+
+    private Map<String, Object> pideUnaVez(String type, String extraJson, byte[] bulkOrNull, long timeoutMs)
             throws IOException {
         return esperarPeticion(enviarPeticion(type, extraJson, bulkOrNull, 0), timeoutMs);
     }
@@ -819,7 +891,7 @@ public final class BpvmClient implements AutoCloseable {
         }
         sb.append('}');
         try {
-            writeFrame(sb.toString(), recorte > 0 && bulkOrNull != null
+            writeFrame(id, sb.toString(), recorte > 0 && bulkOrNull != null
                     ? java.util.Arrays.copyOf(bulkOrNull, Math.max(0, bulkOrNull.length - recorte)) : bulkOrNull);
         } catch (IOException e) {
             synchronized (pendingLock) { pendingRequests.remove(id); }
@@ -2035,7 +2107,21 @@ public final class BpvmClient implements AutoCloseable {
 
         // Sin id → es un evento asíncrono.
         switch (type) {
+            case "ERROR": {
+                /* V8 #693 — un ERROR SIN id: la placa tiró una línea que le llegó a medias (LINE_TIMEOUT) y no sabe de
+                 * qué orden era. Es la última que salió de aquí —con otra detrás, la línea no se habría estancado—: si
+                 * esa orden espera respuesta, se le da este ERROR y quien la pidió la repite; si no, queda dicho. */
+                String code = Json.getString(m, "code", "?");
+                CompletableFuture<Map<String, Object>> fut = null;
+                if (LINEA_ESTANCADA.equals(code)) {
+                    synchronized (pendingLock) { fut = pendingRequests.remove(ultimoIdEscrito); }
+                }
+                if (fut != null) fut.complete(m);
+                else diag("[BpvmClient] ERROR [" + code + "]: " + Json.getString(m, "message", ""));
+                break;
+            }
             case "OUTPUT": {
+                senalesDePrograma++;                        // V8 #693 (sólo escribe este hilo)
                 String data = Json.getString(m, "data", "");
                 Consumer<String> sink = outputSink;
                 if (sink != null) sink.accept(data);
@@ -2099,6 +2185,7 @@ public final class BpvmClient implements AutoCloseable {
                 break;
             }
             case "EXITED": {
+                senalesDePrograma++;                        // V8 #693 (sólo escribe este hilo)
                 // El firmware Pico envía {status, errorMessage} (wire v1
                 // canon); la VM Java envía {reason} (extensión histórica).
                 // Aceptamos ambos — preferencia: errorMessage → reason →

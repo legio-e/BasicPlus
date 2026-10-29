@@ -282,6 +282,13 @@ int bpvm_repl_atiende_en_run(const char* type, json_obj_t* obj);
 /** El BUSY de lo demás durante un RUN, el mismo texto en las cuatro familias y el simulado. */
 #define BPVM_REPL_OCUPADO_EN_RUN "ejecución en curso: sólo HELLO, KILL, RESET, STAT y GET/LIST troceados"
 
+/** V8 #693 (29-oct) — UNA LÍNEA QUE SE ESTANCÓ: lo que llama el lector de cada familia (el del REPL y el del RUN) cuando
+ *  `wire_v1_recv_line` da -2, y el simulado. Lo dice al cliente con un ERROR SIN id —lo que llegó no dice de qué orden
+ *  era: el cliente sabe que es la última que mandó, y la repite— y lo apunta en el log. Antes se tiraba EN SILENCIO, y
+ *  así se perdió el KILL de #692. No lee ni espera nada: el lector sigue como antes (el del RUN, con su 0). */
+#define BPVM_REPL_LINEA_ESTANCADA "LINE_TIMEOUT"
+void bpvm_repl_linea_estancada(void);
+
 /** V7/H10, el board_mgr común (3-oct; V7_IDEAS §H10) — STATE, ENV_*, PART_* y PACK_*, para la familia registrada con
  *  `bpvm_bmgr_familia` (bpvm_bmgr_wire.h). Era el `handle` de cada placa, el mismo código salvo la cintura. `scratch`
  *  es el búfer prestado del que salen el sector de trabajo y la respuesta; `bulk`, el de PACK_BURN_DATA, que la

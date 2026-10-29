@@ -2289,6 +2289,38 @@ Lo demás que salió aquí, en sus fichas (`#693`–`#696`). Eduardo: *«lo que 
 KILL de `#692`. Con `#692` el IDE ya no parte las líneas, pero otro cliente podría. Dos cosas a decidir: decirlo (el log, o
 un `ERROR` al cliente) y si 300 ms es el plazo (el del bulk son 3 s). Es firmware: las ocho imágenes.
 
+**El criterio de Eduardo (29-oct):** *«En una comunicación puede haber errores. Si es por paquetes, si un paquete falla se
+puede reintentar y el usuario ni se entera. Pero si la comunicación no es posible hay que avisar al usuario.»* Lo
+propuesto con él, **por el OK de Eduardo**: la placa contesta `ERROR` a una línea que llega a medias (sin `id`: no sabe
+de qué orden era) y lo apunta en el log, con el plazo a 3 s (con 300, un puente USB-serie lento fallaría siempre aunque
+se pueda comunicar); y el IDE repite una vez, sin decir nada, la orden que no contesta o recibe ese `ERROR`, y sólo si
+tampoco avisa (el aviso de `#694`). Lo que repetir tiene de delicado: si el primero llegó y sólo se perdió su respuesta,
+el segundo `RUN` contesta `BUSY` y el segundo `KILL`, `NO_SESSION`: en una repetición, eso es que el primero funcionó.
+
+**29-oct, hecha** (Eduardo: *«#693 OK»*):
+- **la placa:** el plazo, 3 s (`WIRE_V1_ESTANCADA_MS`), y la línea tirada se dice: `bpvm_repl_linea_estancada`, en el
+  común, manda `{"type":"ERROR","code":"LINE_TIMEOUT",…}` sin `id` y lo apunta en el log. Lo llaman los seis lectores
+  —el del REPL y el del RUN de la Pico, las ESP32 y la STM32— y el simulado. La STM32 tenía sus 300 ms escritos a mano,
+  y cortaba también sin nada recibido: ahora, el plazo común y, sin nada, una línea vacía, como las demás. Y la P4 por
+  TCP daba -2 también cuando el cliente se iba durante un RUN: ahora 0, que para el lector del RUN es lo mismo, y no
+  se dice como una línea estancada (sólo la imagen con `BPVM_P4_WIRE=tcp`; la de siempre va por la UART, sin compilar).
+  Lo que cuestan los 3 s: con una línea a medias durante un RUN, el lector del cable —la tarea `io`; si no arrancó, la
+  VM entre quantos— espera hasta 3 s (antes, 300 ms), y con él la salida del programa. Sólo pasa con un fallo del cable;
+- **el IDE** (`BpvmClient`): el `ERROR` sin `id` es de la última línea que salió (`writeFrame` recuerda su id). Si esa
+  orden espera respuesta, lo recibe ella, y `sendRequest` la repite una vez sin decir nada. El RUN y el KILL se repiten
+  además una vez si no contestan en 5 s; en esa segunda vez, `BUSY` y `NO_SESSION` son que la primera llegó. Un RUN sin
+  respuesta cuyo programa ya da señales (su salida, su `EXITED`) no se repite: lo ejecutaría dos veces;
+- **y de paso, la espera de `#454`:** contaba el silencio desde el último byte recibido, también el de antes de pedir.
+  Con el cable callado más de 10 s, cualquier orden tenía 250 ms para contestarse. Ahora se cuenta desde que se espera.
+  Lo destapó la prueba: la segunda vez de una orden sin respuesta llegaba con 250 ms;
+- **probado:** el simulado (`sim_smoke`: el `ERROR` a los 3,0 s, y la línea siguiente entera); el cliente contra un
+  servidor que falla a voluntad, 13 casos —tirada a medias, sin respuesta, `BUSY` y `NO_SESSION` de verdad y de
+  repetición, el RUN con señales que no se repite, el `ERROR` tras una orden sin respuesta, que no es de nadie— y las
+  veces que llega cada orden; `SubidaSmoke` (el trozo recortado, 13,1 s, como antes), `StatModuleSmoke`,
+  `BpvmBackendSmoke` y la prueba de `#694`. Compilan la Pico, la C3 y la Nucleo, con el aviso dentro. La red, VERDE en
+  14:12. **Por ver en placa, en el lote:** la línea del log (el simulado no lleva el anillo del log);
+- docs: `BPVM_WIRE_PROTOCOL.md`, §8.1 y §8.7.
+
 #### 🔵 `#694` — el IDE da por enviado lo que no sabe si llegó: «KILL enviado» sin esperar el `KILL_REPLY`, y un RUN que la placa rechaza se tira en silencio (abierta el 12-oct, de `#692`; Eduardo: no es grave)
 
 El KILL y el RUN van «sin respuesta» (`sendOneShot`), y las respuestas con `id` que no esperaba nadie se descartan («Silencioso

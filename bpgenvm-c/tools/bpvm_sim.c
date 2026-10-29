@@ -497,9 +497,9 @@ int wire_v1_recv_bulk(uint8_t* buf, size_t n, size_t buf_max) {
 }
 
 /* Lee una línea (hasta '\n', descarta '\r'). Devuelve len o -1 si el peer cierra.
- * V7/H8 #495 — y una línea a medias que se ESTANCA WIRE_V1_ESTANCADA_MS se tira en silencio y se sigue
- * esperando, como en las placas (bpvm_wire_v1.h): sin eso, la basura de una subida rota se queda a medias y
- * el mensaje siguiente —el HELLO del segundo intento del IDE— se le pega detrás y se pierde. */
+ * V7/H8 #495 — y una línea a medias que se ESTANCA WIRE_V1_ESTANCADA_MS se tira y se sigue esperando, como en
+ * las placas (bpvm_wire_v1.h): sin eso, la basura de una subida rota se queda a medias y el mensaje siguiente
+ * —el HELLO del segundo intento del IDE— se le pega detrás y se pierde. V8 #693: y ya no en silencio. */
 static int recv_line(sock_t c, char* buf, size_t cap) {
     size_t n = 0;
     for (;;) {
@@ -511,7 +511,7 @@ static int recv_line(sock_t c, char* buf, size_t cap) {
             tv.tv_sec  = (long) (WIRE_V1_ESTANCADA_MS / 1000u);
             tv.tv_usec = (long) ((WIRE_V1_ESTANCADA_MS % 1000u) * 1000u);
             int s = select((int) c + 1, &rd, NULL, NULL, &tv);
-            if (s == 0) { n = 0; continue; }            /* estancada: se tira */
+            if (s == 0) { n = 0; bpvm_repl_linea_estancada(); continue; }   /* estancada: se tira, y se dice */
             if (s < 0) return -1;
         }
         char ch; int r = recv(c, &ch, 1, 0);
