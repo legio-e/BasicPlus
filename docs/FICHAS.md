@@ -7765,7 +7765,7 @@ código caliente en la SRAM»), con ficheros ENTEROS en la SRAM y en la Metro co
 Relacionada con `#665`: con FreeRTOS en la SRAM, lo que mueve memoria de la PSRAM ganaba bastante más. Probablemente es
 el otro núcleo, que ejecuta FreeRTOS desde la flash y compite por la caché.
 
-#### 🔵 `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **sólo análisis**)
+#### 🔵 `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **sólo análisis**; el 30-oct, la caché medida y probada en una copia, y lo que hacen los demás: **una propuesta, listas por tamaño**)
 
 Eduardo (21-oct): *«lo que si veo lento es en el caso de tener una lista larga de huecos, tener que buscar uno libre y
 cuanto mas grande sea el bloque que necesitamos más dífil es encontrar uno del tamaño suficiente»*.
@@ -7947,6 +7947,112 @@ entradas). Nada se queda en el repositorio (el scratchpad de la sesión, `p718/`
   hueco que vale) encuentra el mismo hueco que hoy; el 21-oct, con otro recuento, dejaba del 29 al 76 % de los pasos.
 
 Por decidir (Eduardo): si se prueba la caché de verdad en una copia, para ver la fragmentación, y con cuántas entradas.
+
+**30-oct (tarde), el prototipo** (Eduardo: *«Haz la prueba»*). La caché de verdad en una copia de la VM-C (nada va al
+repositorio; `p718/proto.py`): la llena el barrido, un hueco de la caché no está en la lista, la reserva mira la caché
+(el de dirección más baja que valga), luego la lista, luego el final del heap; lo que sobra, a la caché si su clase
+tiene sitio; se vacía donde se vacía la lista (el arranque, la carga, el enlace, la compactación). Y «recordar el mayor
+hueco» (una cota que sube al dar de alta y se rehace exacta al recorrer la lista entera). Seis variantes, con los
+mismos ocho programas y los dos heaps:
+- **la simulación con la traza era optimista:** cuando la caché acertaba con OTRO hueco, no lo gastaba, y lo volvía a
+  contar. El prototipo da la verdad: sin más, en `MapDesplaza` (Metro) de 23,3 pasos a 22,2, no a 8. La causa: la caché
+  sólo se llena en los GC, y con el heap grande hay 3 GC para 38.000 reservas: se vacía enseguida;
+- **por eso, la variante que la ficha dejaba prevista:** la reserva que recorre la lista pasa a la caché los huecos que
+  no le valen, si su clase tiene sitio. Con ella (64 entradas), pasos por reserva, de hoy a con la caché:
+  `StrCursorBench` 38,1 → 9,5 (Pico 2) y 9,8 → 3,8 (Metro); `MapDesplaza` 22,1 → 12,2 (Pico 2) y 23,3 → 21,5 (Metro);
+  `StrCenso` 5,6 → 0,1 y 4,4 → 0,2; `AllocBench` 6,2 → 0. En µs de placa, de 1 a 5 menos por reserva: del 4 al 20 % de
+  crear una cadena pequeña;
+- **no fragmenta:** los mismos GC y las mismas reservas que no caben (salvo una de más en `StrCursorBench`, Pico 2, con
+  32 entradas), y el techo del heap como mucho un 1 % más alto. Todos los programas acaban bien, y la red con la de
+  64 que repone, verde (la paridad 171 de 171, lo mismo con dos workers, y el estrés);
+- **lo que ninguna caché arregla: muchos huecos pequeños y reservas pequeñas** (`MapDesplaza` con el heap de la Metro,
+  12 y 16 B): para una de 12 B no hay hueco menor que pasar a la caché, y la astilla hace saltar los de 16, 20 y 24. Eso
+  lo arreglarían las listas por tamaño (la opción 3, que arregla también `#715`);
+- **para una versión de verdad:** la caché guardaría la dirección Y el tamaño de cada hueco, en la SRAM (512 B con 64
+  entradas). El prototipo lee el tamaño en el heap, y en la Metro el heap está en la PSRAM: repasar 64 entradas así
+  costaría lo que la lista.
+
+**30-oct (noche), cómo lo resuelven los demás** (Eduardo: *«Necesitamos un buen algoritmo y ahora no lo tenemos.
+Habría que buscar en Internet como tienen resuelto la gestión de huecos.»*):
+- **FreeRTOS (`heap_4`) hace lo que nosotros:** una lista de huecos por dirección, el primero que vale y la fusión con
+  los vecinos al soltar; su coste crece con los huecos, como el nuestro
+  ([heap_4.c](https://www.github.com/FreeRTOS/FreeRTOS-Kernel/blob/main/portable/MemMang/heap_4.c)).
+- **ESP-IDF usa TLSF**, comprobado en el que tenemos instalado (`C:\esp\v6.1\esp-idf\components\heap\multi_heap.c`
+  llama a `tlsf_malloc`). TLSF ([Masmano y otros, 2008](https://www.cs.york.ac.uk/rts/publications/Masmano2008.html);
+  [una versión explicada](https://github.com/jserv/tlsf-bsd)): una lista por tramo de tamaño, en dos niveles, y un mapa
+  de bits de las listas con huecos; reservar es buscar el primer bit encendido, en tiempo constante. Fragmenta algo
+  menos que el «best fit». Para fundir al soltar, cada hueco guarda en su última palabra dónde empieza, y cada
+  cabecera, un bit «el de delante está libre»; 4 B por bloque y unos 3 KB de control.
+- **Zephyr (`sys_heap`):** listas por potencias de dos, y una búsqueda acotada (3 vueltas, por defecto) en la más
+  pequeña que podría valer: tiempo constante a cambio de algo de fragmentación
+  ([Memory Heaps](https://docs.zephyrproject.org/latest/kernel/memory_management/heap.html)).
+- **MicroPython, lo más parecido a nosotros (un GC en un micro):** sin listas; el heap, en bloques de 16 B, y una tabla
+  de 2 bits por bloque, que la reserva recorre desde el primer libre
+  ([memorymgt](https://docs.micropython.org/en/latest/develop/memorymgt.html) y `py/gc.c`). Lineal, sobre una tabla
+  pequeña.
+- **Los estudios** ([Wilson y otros, 1995](https://www.cs.hmc.edu/~oneill/gc-library/Wilson-Alloc-Survey-1995.pdf),
+  §3.4–3.6 y §3.11; [Johnstone y Wilson, 1998](https://sfkaplan.people.amherst.edu/courses/2016/fall/COSC-461/documents/Johnstone-Memory-fragmentation-problem.pdf)):
+  - la fragmentación la decide QUÉ hueco se elige (la política), no cómo se busca. Las mejores: el más pequeño que vale
+    («best fit») y el primero por dirección (la nuestra), que casi siempre eligen el mismo. Servir primero el último
+    soltado fragmenta más, y por dirección al revés es patológico: no reutiliza nada (lo de `#355`);
+  - las listas por tamaño son un «best fit» aunque se describan como «first fit»: cada lista sólo tiene huecos
+    parecidos;
+  - lo que se recomienda es dejar para el final el trozo sin estrenar (el «wilderness»), y esas dos políticas lo hacen
+    solas. Es nuestro bump, que ya está fuera de la lista;
+  - la caché delante de la lista (la de esta tarde) tiene nombre, «quick lists», y el estudio avisa: si lo de detrás es
+    una lista que se recorre, no escala. Es lo que vio el prototipo en `MapDesplaza` (Metro);
+  - Johnstone y Wilson concluyen que las buenas políticas ya existen, y que lo difícil es implementarlas deprisa.
+- **La otra vía, reservar siempre al final y compactar** ([Bacon y otros, EMSOFT 2004](https://websrv.cecs.uci.edu/~papers/emsoft0405/docs04/p125.pdf),
+  sin leer: el servidor no contesta). No deja huecos, pero mover en cada GC choca con las direcciones crudas de los
+  builtins y las natives de los otros hilos: por eso `Heap.compact` sólo corre con un hilo vivo.
+
+**Lo que quiere decir para nosotros:** la política que tenemos es de las buenas; lo que falla es el mecanismo, UNA
+lista que se recorre.
+
+**La propuesta: listas por tamaño, a la medida de nuestro heap.** Es TLSF sin la parte que cambia el bloque, y es la
+caché del 29-oct llevada hasta el final: TODOS los huecos en el vector, por tamaño, y lo llena el GC.
+- **Las listas:** una por cada tamaño exacto de 12 a 124 B (29; lo que más se reserva, 12, 16, 24, 32 y 72 B, encaja
+  exacto) y una por potencia de dos desde 128 B (19, hasta 64 MB). 48 cabezas y un mapa de 64 bits «esta lista tiene
+  huecos»: 200 B en la SRAM, y otros tantos mientras barre (las colas).
+- **El barrido las llena** de abajo arriba, enganchando cada hueco a la cola de la suya: cada lista queda en orden de
+  dirección, y rehacerlas es lineal (`#715`, arreglada de paso). La compactación, igual.
+- **Reservar R bytes:**
+  - menos de 128: si su lista tiene un hueco, la cabeza (el más bajo de ese tamaño), encaje exacto, en un paso. Si
+    no, el primer bit encendido por encima en el mapa, sin los de R+4 y R+8 (la astilla: dos bits apagados en una
+    máscara); la cabeza de esa lista, y lo que sobra, a la suya;
+  - 128 o más: en su lista, el primero que valga sin astilla; si no hay, la cabeza de la siguiente con bit, que vale
+    seguro;
+  - ningún bit: al final del heap, sin mirar nada (lo de «recordar el mayor hueco», gratis).
+- **Lo que sobra de un hueco, y lo que suelta un `owner`,** entran por delante en su lista, en un paso; el GC
+  siguiente vuelve a ordenar. El `owner` no se funde con sus vecinos hasta ese GC, que ya junta los tramos seguidos, y
+  antes de decir «No space» la reserva ya hace un GC (el reintento de `heap_reservar`): no se pierde nada. Con el GC
+  apagado (`--nogc`), dos `owner` vecinos se quedarían separados. Si toca el final del heap, vuelve al bump.
+- **El bloque no cambia:** el hueco sigue siendo [FREE][tamaño][siguiente], de 12 B como mínimo, y el recorrido del
+  heap, el mismo. Cambian el índice y quién lo mantiene.
+- **Lo que cambia la colocación:** del primer hueco por dirección que vale, al más pequeño que vale y, entre los de su
+  tamaño, el más bajo. Los estudios dicen que son igual de buenos; se mide como el prototipo de hoy.
+- **Lo esperable, por el mecanismo (por medir):** una reserva pequeña, un paso; la que no cabe en ninguno, o
+  dejaría una astilla, ninguno (`HuecosReserva` con 4000 huecos en la Metro, de 2835 y 3043 µs a lo de sin huecos, 46);
+  en la PSRAM sólo se toca el hueco que se coge, porque el mapa y las cabezas están en la SRAM.
+- **El tamaño del cambio:** `try_allocate_inner`, el alta en las listas (la del barrido y la del `owner`), las cuentas
+  del GC, las puestas a cero de `bpvm.c`, `link.c` y `loader.c`, y `test_freelist.c`. Las cabezas, al final de
+  `bpvm_t` o fuera: el `.mdn` depende de su forma.
+
+**Lo que no:**
+- **TLSF tal cual:** fundir al soltar le exige la última palabra de cada hueco, un bit más en cada cabecera y una
+  lista doble (el hueco mínimo crecería de 12 B). Cambia el bloque y el recorrido del heap, donde nació el bug del
+  15-jul. No nos hace falta: nuestros huecos nacen en el barrido, que ya funde.
+- **La caché sola** (el prototipo): del 4 al 20 % de una cadena pequeña, pero detrás sigue la lista: `MapDesplaza`
+  (Metro), de 23,3 pasos a 21,5.
+- **La tabla de bits de MicroPython:** bloques de 16 B (los objetos de 12 subirían a 16), y la búsqueda sigue siendo
+  lineal.
+- **Compactar siempre:** es otra VM (las direcciones crudas).
+
+**La VM-Java** sirve hoy el último hueco soltado (su lista es una pila): ya coloca distinto, y el invariante es la
+salida. Puede quedarse así, o hacer lo mismo después.
+
+Por decidir (Eduardo): el algoritmo; si el `owner` se funde al soltar o en el GC siguiente; y, antes del árbol, si se
+prueba en una copia como la caché (los mismos ocho programas y los dos heaps: pasos, GC, «No space» y techo).
 
 #### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`, `dcb71627`)
 
