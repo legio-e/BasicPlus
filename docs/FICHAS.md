@@ -7914,6 +7914,40 @@ miramos despacio que esto lleva su tiempo […] lo miramos esta tarde tranquilam
 
 Sólo análisis. Por decidir (Eduardo).
 
+**30-oct, medida** (Eduardo: *«Si, medimos a ver que sale»*). Una copia de la VM-C con una traza del asignador que sólo
+mira —cada reserva (tamaño, huecos mirados, el hueco elegido), la lista entera tras cada GC y los huecos de los
+`owner`—; ocho programas con el heap de la Pico 2 (256 KB) y el de la Metro con PSRAM (5,5 MB); y la traza, reproducida
+en Python con la caché al lado (8 clases: 12, 16, ≤24, ≤32, ≤64, ≤128, ≤512 y más; 4 u 8 huecos por clase, 32 o 64
+entradas). Nada se queda en el repositorio (el scratchpad de la sesión, `p718/`). Pasos por reserva, y su coste a 0,18
+µs por paso en la SRAM de la Pico 2 y 0,7 en la PSRAM de la Metro:
+
+| programa (heap) | hoy | caché de 32 | caché de 64 | aciertos con otro hueco que hoy (32/64) |
+|---|---|---|---|---|
+| `MapDesplaza` (Metro) | 23,3 (16,3 µs) | 11,8 (8,3 µs) | 7,8 (5,4 µs) | 48 % / 58 % |
+| `MapDesplaza` (Pico 2) | 22,1 (4,0 µs) | 4,2 (0,8 µs) | 1,6 (0,3 µs) | 60 % / 54 % |
+| `StrCursorBench` (Pico 2) | 38,1 (6,9 µs) | 10,0 (1,8 µs) | 6,3 (1,1 µs) | 39 % / 37 % |
+| `StrCursorBench` (Metro) | 9,8 (6,9 µs) | 7,5 (5,3 µs) | 7,4 (5,2 µs) | 37 % / 37 % |
+| `AllocBench` (Pico 2) | 6,2 (1,1 µs) | 0 | 0 | 51 % / 33 % |
+| `StrCenso` (Metro) | 4,9 (3,4 µs) | 1,6 (1,1 µs) | 0,4 (0,3 µs) | 3 % / 0 % |
+| `StrCenso` (Pico 2) | 5,2 (0,9 µs) | 0,8 (0,1 µs) | 0,2 (0 µs) | 13 % / 1 % |
+
+- **Donde la lista es larga, la caché quita casi todo el recorrido;** donde es corta (`StrOrden`, 0,4–1 paso) no hay
+  nada que quitar, y `JsonDemo`, `CompressBench` y `HilosMuchos` apenas usan la lista.
+- **Lo que no arregla: la reserva que no cabe en ningún hueco** recorre la lista entera y va al final del heap, y la
+  caché, que es un trozo de la lista, tampoco tiene ninguno. Ahí ayuda «recordar el mayor hueco» (la opción 1): en
+  `StrCursorBench` (Metro), de 7,5 pasos con la caché a 4,6 con las dos.
+- **Lo que hay que mirar antes de decidir: muchos aciertos usarían OTRO hueco que el de hoy** (del 37 al 60 % en
+  `MapDesplaza`, `StrCursorBench` y `AllocBench`): la caché da el de su clase y el de hoy es el primero por dirección,
+  a veces de una clase mayor. Coloca distinto, y lo de `#355` dice que colocar distinto puede fragmentar más… o menos
+  (el de su clase parte menos los huecos grandes). Esta medida sigue la colocación de hoy y no lo puede decir: sólo
+  una copia con la caché de verdad, contando los GC y los «No space» con el mismo programa.
+- **Los tamaños:** casi todo lo que se reserva mide 12, 16, 24 o 32 B; luego 72, 264 y 2056 (las cadenas de 2 KB y
+  las pilas de los hilos). Las clases de arriba encajan.
+- **La alternativa que no cambia el sitio:** el índice por tamaño de arriba (una entrada por clase que apunta al primer
+  hueco que vale) encuentra el mismo hueco que hoy; el 21-oct, con otro recuento, dejaba del 29 al 76 % de los pasos.
+
+Por decidir (Eduardo): si se prueba la caché de verdad en una copia, para ver la fragmentación, y con cuántas entradas.
+
 #### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`, `dcb71627`)
 
 Con `s = "hola"`, comprobado en el PC con las dos VMs:
