@@ -30,7 +30,7 @@
 > **30-oct** — **`#718`, los huecos al reservar: medida, probada en una copia, lo que hacen los demás, y las listas por
 > tamaño** (Eduardo: *«Si, medimos a ver que sale»*; *«Haz la prueba»*; *«Necesitamos un buen algoritmo y ahora no lo
 > tenemos. Habría que buscar en Internet como tienen resuelto la gestión de huecos.»*; *«prueba una copia a ver que tal
-> funciona»*). Nada de código en el árbol: todo en la ficha.
+> funciona»*; *«1 Si y 2 también»*). El código, al final del día, en el árbol SIN commit: falta una decisión.
 > - **La caché que llena el GC (la idea del 29-oct):** primero, una traza del asignador reproducida en Python; luego, la
 >   caché de verdad en una copia de la VM-C, con seis variantes, ocho programas y los heaps de la Pico 2 y la Metro.
 >   Con la variante que repone la caché al recorrer la lista, de 1 a 5 µs menos por reserva, sin fragmentar más, y la
@@ -55,8 +55,24 @@
 >   medida): sus GC cambian de una pasada a otra y no sirven para comparar colocaciones; (4) un rojo de la red con el
 >   prototipo no era suyo: `PrintSinSalto` con dos workers falla 1 de cada 40 en la VM-Java, que deja volver un `join`
 >   antes de sacar la línea a medias del hilo (`#742`, apuntada sin tocar).
-> - **Lo siguiente:** que Eduardo decida si se hace así (la propuesta revisada, `lstd`, en la ficha) y si antes se
->   miden los µs en la Pico 2 y la Metro. El lote de placas, como lo dejó el 29-oct.
+> - **Y ya de noche, `lstd` en el árbol y en placa** (Eduardo: *«1 Si y 2 también. La 2 hay que hacerla porque con
+>   cambios importantes hay que asegurarse»*): en el PC, verde (la red dos veces) y coloca igual que hoy (las líneas del
+>   GC, idénticas); compilan las seis familias. En la Metro, lo grande se cumple (la reserva que no cabe con 4000
+>   huecos, de 3571 a 30 µs; diez `gc()` con 4000 huecos, de 11,9 s a 0,64) y lo demás, igual. **En la Pico 2, no del
+>   todo:** con muchas reservas y pocos huecos, hasta un +29 %. El test de desplazamiento lo parte en dos: la lotería del
+>   sitio (los builtins se corren 852 B: a la imagen de hoy eso le cuesta un 2–7 %) y el propio asignador (+10 %: su
+>   camino, traído de la flash en cada reserva). Con ese camino en la SRAM también en P (720 B), la Pico 2 va más deprisa
+>   que hoy en todo (`AllocBench` −13 %, `MapDesplaza` −11 %).
+> - **Lo que enseñó:** (5) en P, lo que cuesta del código es cuántas líneas distintas recorre, no cuántas veces: hacer
+>   compacta la función apenas cambió nada; (6) un relleno sin referencias no mueve nada (`--gc-sections` lo tira): tiene
+>   que ser una función llamada, y aun así se mueve de 8 en 8 B; (7) mezclar stdout y stderr en una comparación hace
+>   diferencias falsas.
+> - **El estado:** el código de `#718`, **SIN commit** en el árbol de trabajo (`heap.c`, `bpvm_internal.h`, `bpvm.c`,
+>   `loader.c`, `link.c`, `Makefile`, `test_freelist.c`, `HEAP_LAYOUT.md`; copia del diff en el scratchpad de la sesión,
+>   `p718/arbol/lstd_compacta.diff`). Las placas, devueltas a la imagen de HEAD (la del 29-oct).
+> - **Lo siguiente:** que Eduardo elija (a) el asignador en la flash en P o (b) su camino en la SRAM de P (720 B; mi
+>   propuesta); con eso, el commit. Y si la lotería del sitio en P merece ficha propia. El lote de placas, como lo dejó
+>   el 29-oct; antes de grabar las ESP con `#718`, el `nm` (el rodata creció).
 
 > **29-oct** — **`#740`: las pilas de los hilos BP, del heap, en las dos VMs** (Eduardo: *«Continuamos con los
 > pendientes»*; y al algoritmo: *«OK a), b) si una excepción, c) la mantenemos de momento, ya veremos mas adelante que

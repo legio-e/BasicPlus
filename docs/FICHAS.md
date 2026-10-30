@@ -7781,7 +7781,7 @@ código caliente en la SRAM»), con ficheros ENTEROS en la SRAM y en la Metro co
 Relacionada con `#665`: con FreeRTOS en la SRAM, lo que mueve memoria de la PSRAM ganaba bastante más. Probablemente es
 el otro núcleo, que ejecuta FreeRTOS desde la flash y compite por la caché.
 
-#### 🔵 `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **sólo análisis**; el 30-oct, la caché medida y probada en una copia, lo que hacen los demás, y **las listas por tamaño probadas en una copia: eligiendo el hueco más bajo, colocan igual que hoy, sin recorrer**)
+#### 🔵 `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **sólo análisis**; el 30-oct, la caché medida y probada en una copia, lo que hacen los demás, y **las listas por tamaño probadas en una copia: eligiendo el hueco más bajo, colocan igual que hoy, sin recorrer**; esa noche, en el árbol SIN commit y medidas en placa: **por decidir, el camino de la reserva en la SRAM de P**)
 
 Eduardo (21-oct): *«lo que si veo lento es en el caso de tener una lista larga de huecos, tener que buscar uno libre y
 cuanto mas grande sea el bloque que necesitamos más dífil es encontrar uno del tamaño suficiente»*.
@@ -8121,6 +8121,52 @@ puede hacer de cola mientras barre (entonces sólo se engancha por detrás): bas
 
 Por decidir (Eduardo): si se hace así; y si antes se miden los µs en la Pico 2 y la Metro, con una imagen de prueba
 como en `#734`.
+
+**30-oct (noche), `lstd` en el árbol, y medido en placa** (Eduardo: *«1 Si y 2 también. La 2 hay que hacerla porque
+con cambios importantes hay que asegurarse. Tienes la Pico y la Metro conectadas.»*). **El código, SIN commit**, en el
+árbol de trabajo (y una copia del diff en el scratchpad, `p718/arbol/lstd_compacta.diff`), a la espera de lo de abajo:
+- **Lo que cambia:** `heap.c` («LOS HUECOS»): 48 listas en `bpvm_t` (`huecos_cab`, `huecos_dedo` y un mapa de dos
+  palabras, en el sitio de `free_list_head`); reservar, el hueco más bajo entre las listas que valen, con un camino
+  corto para 12–116 B y uno largo fuera de línea; dar de alta en su sitio desde el dedo; las guardas de siempre más la
+  marca FREE y la lista, con el aviso fuera de línea; `bpvm_huecos_vaciar` donde se vaciaba la lista. `test_freelist.c`,
+  reescrito (19 comprobaciones), y `HEAP_LAYOUT.md` §2.4.
+- **En el PC:** la red entera, verde dos veces (13:32 y 15:13); y frente a la VM de hoy, las líneas del GC —tras cada
+  barrido: lo vivo, lo liberado, dónde acaba el heap, los huecos, lo que suman y el mayor— IDÉNTICAS en los ocho
+  programas, `HuecosReserva` y cuatro `Fragmenta`, con los dos heaps (hasta 29.290 líneas): coloca igual. Compilan las
+  seis familias (la Pico, la C3, la C6, la S3, la P4 y las dos STM32).
+- **En placa** (la imagen de HEAD frente a la nueva, con los mismos programas; la Metro y las dos primeras filas de la
+  Pico 2, con la primera versión; el resto de la Pico 2, con la compacta y los contadores de la caché):
+
+  | | Metro con PSRAM (M) | Pico 2 (P) |
+  |---|---|---|
+  | `HuecosReserva`, la reserva que no cabe, con 4000 / 1000 huecos | 3571 → 30 µs | 206 → 33 µs |
+  | `GcHuecos`, diez `gc()` con 4000 huecos | 11.933 → 640 ms | 1218 → 195 ms |
+  | `AllocBench` (pocos huecos, muchas reservas) | 1884 → 1937 ms | 2862 → 3707 ms |
+  | `StrCursorBench` / `MapDesplaza` | −2 % / −1 % | +10 % / +13 % |
+
+- **La Pico 2, explicada** (el test de desplazamiento de `#734`, con los contadores de la caché del XIP): en P todo el
+  código corre desde la flash por una caché de 16 KB, y el intérprete echa de ella al asignador entre reserva y
+  reserva. Dos cosas, separadas con imágenes que sólo mueven el código (un relleno que nunca se ejecuta tras `heap.c`):
+  - **el sitio** (la lotería): los builtins, detrás de `heap.c`, se corren 852 B; a la imagen de HOY ese mismo
+    corrimiento le cuesta un 2–7 %;
+  - **el asignador**: con los builtins en su sitio de hoy, las listas siguen costando un +10 % en `AllocBench` (+2–6 %
+    en los otros): ~23 fallos de caché más por reserva (~14 µs), porque su camino recorre más código —sobre todo lo que
+    sobra de un hueco, que ahora va a otra lista en su sitio en vez de quedarse donde estaba—. La primera versión era
+    peor (`try_allocate_inner` de 632 B); la compacta (364 B) lo mejoró poco: el coste es el camino, no el tamaño.
+  - En la Metro no pasa: M ya tiene `heap.c` en la SRAM.
+- **Y con el camino de la reserva en la SRAM también en P** (`try_allocate_inner` y `add_to_free_list`: 720 B, medido
+  en una copia), la Pico 2 va MÁS deprisa que hoy en todo: `AllocBench` 2862 → 2487 ms (−13 %), `StrCursorBench`
+  −3 %, `MapDesplaza` −11 %, y los fallos de la caché, a la mitad. Cuesta 720 B del heap de la Pico 2 (de 221 KB).
+- **Visto de paso:** `HuecosReserva` en la Pico 2 se queda sin heap con k=4000, y su `catch` reserva el mensaje antes
+  de soltar nada: con la imagen de hoy muere sin atrapar, siempre; con las listas acaba bien, siempre (en el PC, las dos
+  igual con seis tamaños de heap). Es del programa, en el filo.
+- Las placas, devueltas a la imagen de HEAD (la del 29-oct, comprobado el arranque).
+
+Por decidir (Eduardo): **(a)** así, con el asignador en la flash en P (la Pico 2 pierde un ~10 % donde hay muchas
+reservas y pocos huecos, y gana mucho donde hay muchos huecos); o **(b)** con el camino de la reserva en la SRAM en P
+(720 B del heap de la Pico 2), que la deja más rápida que hoy en todo. Mi propuesta, la (b). Y aparte, la lotería del
+sitio en P (cualquier cambio delante de los builtins los mueve: lo de `#734`), que podría tener su ficha: fijar el sitio
+del código caliente.
 
 #### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`, `dcb71627`)
 
