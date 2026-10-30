@@ -8153,7 +8153,11 @@ con cambios importantes hay que asegurarse. Tienes la Pico y la Metro conectadas
     en los otros): ~23 fallos de caché más por reserva (~14 µs), porque su camino recorre más código —sobre todo lo que
     sobra de un hueco, que ahora va a otra lista en su sitio en vez de quedarse donde estaba—. La primera versión era
     peor (`try_allocate_inner` de 632 B); la compacta (364 B) lo mejoró poco: el coste es el camino, no el tamaño.
-  - En la Metro no pasa: M ya tiene `heap.c` en la SRAM.
+  - En la Metro no pasa: M ya tiene `heap.c` en la SRAM (y `bpvm_t`, con las cabezas y el mapa, sale del malloc de C,
+    también en la SRAM). Medida después también con la compacta (Eduardo: *«Y la Metro?»*): `AllocBench` 1884 →
+    1910 ms (+1 %), `StrCursorBench` −2 %, `MapDesplaza` −2 %, `StrCenso` igual; `HuecosReserva` sin huecos, igual
+    (26–28 µs); con 4000 huecos, de 3571–3751 a 30–36 µs; diez `gc()` con 4000 huecos, de 11.933 a 639 ms. Lo que dicen
+    los programas, igual. La Metro ya es la (b) de abajo.
 - **Y con el camino de la reserva en la SRAM también en P** (`try_allocate_inner` y `add_to_free_list`: 720 B, medido
   en una copia), la Pico 2 va MÁS deprisa que hoy en todo: `AllocBench` 2862 → 2487 ms (−13 %), `StrCursorBench`
   −3 %, `MapDesplaza` −11 %, y los fallos de la caché, a la mitad. Cuesta 720 B del heap de la Pico 2 (de 221 KB).
