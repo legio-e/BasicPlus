@@ -7150,6 +7150,22 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#742` — la VM-Java con dos workers: un `join` puede volver antes de que salga la línea a medias del hilo que acaba (`PrintSinSalto`, 1 de cada 40) (abierta el 30-oct, en la red del prototipo de `#718`; **sólo análisis**)
+
+En `compat.sh check-smp`, «FAIL PrintSinSalto — VM-Java != VM-C». No es del prototipo: repetido 200 veces con dos
+workers, las cuatro VM-C (la de hoy y tres del prototipo) dan siempre lo bueno; la VM-Java, 1 de cada 40,
+`el hilo deja su trozofin`: el salto que imprime `main` tras `t.join()` sale ANTES que el trozo sin salto que el hilo
+deja al acabar (`#700`, que sale «tal cual, al acabar el hilo»). La causa, leída en `VirtualMachine.java`:
+- la instrucción `THREAD_EXIT` marca el hilo TERMINATED ella misma, dentro del bucle (`case 0x70`);
+- lo que sale al acabar —`lineaVaciar`— y despertar a quien espera en el `join` lo hace después `terminateThread`,
+  desde el planificador;
+- con dos workers, si `main` llega al `join` entre las dos cosas, `blockTcJoin` ve TERMINATED y vuelve sin esperar.
+
+Con un worker no pasa (nadie corre entre las dos). Lo que se ve: muy de vez en cuando, en un programa con hilos que
+imprimen sin salto, la línea del hilo sale detrás de lo que imprime quien lo esperaba. Por decidir (Eduardo): el
+arreglo, probablemente que la instrucción no marque TERMINATED y lo haga `terminateThread` tras vaciar la línea (mirar
+antes qué más mira ese estado entre medias).
+
 #### 🔵 `#741` — en la P4, los packs `Gui` (LVGL) y `SQLite` no cargan desde la imagen del sonido del 27-oct: «realojado para OTRA dirección» (abierta el 29-oct, al medir `#737`; **por regrabar**)
 
 Visto al devolver a la P4 su imagen del 27-oct tras las pruebas de `#737` (comprobada byte a byte contra lo que llevaba
@@ -7765,7 +7781,7 @@ código caliente en la SRAM»), con ficheros ENTEROS en la SRAM y en la Metro co
 Relacionada con `#665`: con FreeRTOS en la SRAM, lo que mueve memoria de la PSRAM ganaba bastante más. Probablemente es
 el otro núcleo, que ejecuta FreeRTOS desde la flash y compite por la caché.
 
-#### 🔵 `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **sólo análisis**; el 30-oct, la caché medida y probada en una copia, y lo que hacen los demás: **una propuesta, listas por tamaño**)
+#### 🔵 `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **sólo análisis**; el 30-oct, la caché medida y probada en una copia, lo que hacen los demás, y **las listas por tamaño probadas en una copia: eligiendo el hueco más bajo, colocan igual que hoy, sin recorrer**)
 
 Eduardo (21-oct): *«lo que si veo lento es en el caso de tener una lista larga de huecos, tener que buscar uno libre y
 cuanto mas grande sea el bloque que necesitamos más dífil es encontrar uno del tamaño suficiente»*.
@@ -8053,6 +8069,58 @@ salida. Puede quedarse así, o hacer lo mismo después.
 
 Por decidir (Eduardo): el algoritmo; si el `owner` se funde al soltar o en el GC siguiente; y, antes del árbol, si se
 prueba en una copia como la caché (los mismos ocho programas y los dos heaps: pasos, GC, «No space» y techo).
+
+**30-oct (noche), las listas, probadas en una copia** (Eduardo: *«Al final no estabamos mal encaminados, nos han
+faltado un poco mas de inspiración y mas pruebas. Bien, prueba una copia a ver que tal funciona.»*). La VM-C con las 48
+listas y el mapa en vez de la lista única (nada en el árbol; `p718/proto_listas.py`). Se vigila sola: un nodo que no
+sea un hueco de su lista, dentro del heap usado, aborta. No abortó ni una vez. Seis variantes, los ocho programas más
+`HuecosReserva`, y una prueba nueva, con los heaps de la Pico 2 y la Metro:
+- **La prueba que faltaba, la fragmentación buscada a propósito** (`p718/frag`, `Fragmenta`): n cadenas vivas que se
+  recambian al azar 200.000 veces (la vieja, al GC), con semilla fija. n se elige para que lo vivo llene el 65 o el 80 %
+  del heap. Dos mezclas: la «pequeña» (casi todo de 12 a 36 B, como los programas) y la «ancha» (de 4 a 2047 B). Tres
+  semillas cada una. Cuenta los «No space» atrapados, los GC y el techo.
+- **El «best fit» de la propuesta fragmenta en nuestro heap** (`lst`, la lista más pequeña que vale): con la mezcla
+  pequeña, de 519 «No space» a 1124 en la Pico 2 al 65 %, de 2961 a 4018 al 80 %, y de 1304 a 1572 en la Metro al 80 %;
+  con la ancha, al revés (de 7670 a 4828). Los programas de verdad apenas lo notan (el techo, ±1,7 %), pero coloca
+  distinto, y la prueba lo destapa: es lo de `#355`, elegir por tamaño y no por dirección deja objetos arriba. Lo de los
+  estudios («igual de buenos»), en nuestro heap, no se cumple.
+- **La salida: elegir como hoy, con las listas** (`lsta`). Entre las listas que pueden valer, el hueco de dirección más
+  baja. Cada lista va en orden de dirección, así que su hueco más bajo es su cabeza, y basta comparar cabezas, que están
+  en la SRAM. Es el mismo hueco que daba la lista única: **coloca exactamente igual que hoy**. Mismos GC, «No space»,
+  techo y libre tras cada GC en los ocho programas deterministas y en las 24 pasadas de `Fragmenta`.
+- **Lo que cuesta es mantener cada lista en orden.** Lo que sobra de un hueco entra en su sitio por dirección, y a veces
+  cae en medio de una lista larga. Con un dedo por lista (`lstd`: el último dado de alta así, en la SRAM; al sacarlo de
+  la lista, pasa al de delante), de un 35 a un 63 % menos de esos pasos. Lo que sobra por delante sin más (`lstah`) es
+  más barato, pero fragmenta (de 519 a 844).
+- **Los pasos por reserva, de hoy a `lstd`** (buscar y dar de alta):
+
+  | programa | Pico 2 | Metro |
+  |---|---|---|
+  | `StrCursorBench` | 38,1 → 1,1 | 9,8 → 0,5 |
+  | `MapDesplaza` | 22,1 → 1,2 | 23,3 → 0,7 |
+  | `AllocBench` | 6,2 → 1,0 | 2,1 → 0,7 |
+  | `HuecosReserva` | 238 → 0,7 | 374 → 0,6 |
+  | `Fragmenta`, mezcla pequeña al 80 % | 87 → 4,8 | 797 → 33 |
+  | `Fragmenta`, mezcla ancha al 80 % | 53 → 7,7 | 985 → 37 |
+
+  A 0,18 µs por paso en la SRAM de la Pico 2 y 0,7 en la PSRAM de la Metro: `MapDesplaza` en la Metro, de 16,3 µs por
+  reserva a 0,5; `StrCursorBench` en la Pico 2, de 6,9 a 0,2. Por medir en placa.
+- **`#715`, arreglada de paso:** diez `gc()` con k huecos (`GcHuecos`, en el PC con el heap de la Metro), hoy 4, 15, 74
+  y 133 ms al doblar k de 500 a 4000; con las listas, 3, 3, 3 y 4.
+- **La red, verde con `lst`:** la paridad 171 de 171, lo mismo con dos workers, y el estrés. Con `lstd`, igual, salvo
+  un rojo de dos workers en `PrintSinSalto` que no es suyo: repetido 200 veces, las VM-C siempre bien; es la VM-Java,
+  1 de cada 40 (`#742`).
+- **Lo que queda:** con miles de huecos (`Fragmenta` en la Metro), dar de alta en su sitio aún cuesta de 20 a 30 pasos
+  por reserva (hoy, la búsqueda, de 700 a 985); el `owner` no se funde hasta el GC siguiente (con el GC apagado, dos
+  vecinos se quedarían separados); y los µs de verdad, en placa.
+
+**La propuesta, revisada: `lstd`.** Las 48 listas en orden de dirección y el mapa; reservar, el hueco más bajo entre
+las listas que valen; dar de alta, en su sitio, empezando por el dedo de su lista. En una versión de verdad, el dedo
+puede hacer de cola mientras barre (entonces sólo se engancha por detrás): bastan las cabezas, los dedos y el mapa, unos
+400 B de SRAM. El sitio de los objetos no cambia; cambia lo que cuesta encontrarlo.
+
+Por decidir (Eduardo): si se hace así; y si antes se miden los µs en la Pico 2 y la Metro, con una imagen de prueba
+como en `#734`.
 
 #### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`, `dcb71627`)
 

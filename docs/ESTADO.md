@@ -27,9 +27,10 @@
 
 ## Última sesión
 
-> **30-oct** — **`#718`, los huecos al reservar: medida, probada en una copia, y lo que hacen los demás** (Eduardo:
-> *«Si, medimos a ver que sale»*; *«Haz la prueba»*; *«Necesitamos un buen algoritmo y ahora no lo tenemos. Habría que
-> buscar en Internet como tienen resuelto la gestión de huecos.»*). Nada de código en el árbol: todo en la ficha.
+> **30-oct** — **`#718`, los huecos al reservar: medida, probada en una copia, lo que hacen los demás, y las listas por
+> tamaño** (Eduardo: *«Si, medimos a ver que sale»*; *«Haz la prueba»*; *«Necesitamos un buen algoritmo y ahora no lo
+> tenemos. Habría que buscar en Internet como tienen resuelto la gestión de huecos.»*; *«prueba una copia a ver que tal
+> funciona»*). Nada de código en el árbol: todo en la ficha.
 > - **La caché que llena el GC (la idea del 29-oct):** primero, una traza del asignador reproducida en Python; luego, la
 >   caché de verdad en una copia de la VM-C, con seis variantes, ocho programas y los heaps de la Pico 2 y la Metro.
 >   Con la variante que repone la caché al recorrer la lista, de 1 a 5 µs menos por reserva, sin fragmentar más, y la
@@ -41,8 +42,21 @@
 >   con un mapa de bits; los estudios (Wilson, Johnstone) dicen que nuestra política es de las buenas y que lo que falla
 >   es el mecanismo, la lista única. **La propuesta, en la ficha:** 48 listas por tamaño (exactas hasta 124 B) y un
 >   mapa de 64 bits en la SRAM, que llena el barrido; el bloque no cambia; arregla de paso `#715`.
-> - **Lo siguiente:** que Eduardo decida el algoritmo, si el `owner` se funde al soltar o en el GC siguiente, y si se
->   prueba en una copia antes del árbol. El lote de placas, como lo dejó el 29-oct.
+> - **Y por la noche, las listas en una copia** (Eduardo: *«prueba una copia a ver que tal funciona»*): funcionan —la
+>   red verde, y ni una vez un nodo malo en la vigilancia que lleva la copia—, pero **el «best fit» fragmenta** en una
+>   prueba escrita para buscarlo (`Fragmenta`: cadenas recambiadas al azar con el heap al 65 y al 80 %, tres semillas):
+>   con tamaños como los de los programas, hasta el doble de «No space». **Eligiendo como hoy, el hueco más bajo entre
+>   las listas** (sólo se comparan las cabezas, en la SRAM), coloca exactamente igual que hoy en todo, y los pasos por
+>   reserva bajan de 5–38 a ~1 (y de 238–374 a 0,6 en `HuecosReserva`); un dedo por lista abarata el alta en orden. Y
+>   `#715`, de paso: diez `gc()` con 4000 huecos, de 133 ms a 4 en el PC.
+> - **Lo que enseñó:** (1) una política «igual de buena» según los estudios puede no serlo en nuestro heap: lo destapó
+>   la prueba hecha para eso, no los programas; (2) para cambiar el coste sin cambiar la colocación, la prueba es que
+>   todo sale idéntico (GC, «No space», techo, libre tras cada GC); (3) `StrCenso` trabaja por tiempo (2 ms por
+>   medida): sus GC cambian de una pasada a otra y no sirven para comparar colocaciones; (4) un rojo de la red con el
+>   prototipo no era suyo: `PrintSinSalto` con dos workers falla 1 de cada 40 en la VM-Java, que deja volver un `join`
+>   antes de sacar la línea a medias del hilo (`#742`, apuntada sin tocar).
+> - **Lo siguiente:** que Eduardo decida si se hace así (la propuesta revisada, `lstd`, en la ficha) y si antes se
+>   miden los µs en la Pico 2 y la Metro. El lote de placas, como lo dejó el 29-oct.
 
 > **29-oct** — **`#740`: las pilas de los hilos BP, del heap, en las dos VMs** (Eduardo: *«Continuamos con los
 > pendientes»*; y al algoritmo: *«OK a), b) si una excepción, c) la mantenemos de momento, ya veremos mas adelante que
