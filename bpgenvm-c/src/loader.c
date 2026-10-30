@@ -598,7 +598,7 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
     vm->heap_start        = vm->next_free_address;
     vm->heap_next         = vm->heap_start;
     /* H3 (V2): init del GC con free-list + umbral, con el heap_start real. */
-    vm->free_list_head    = 0;
+    bpvm_huecos_vaciar(vm);   /* V8 #718: las listas de huecos, vacías */
     vm->last_gc_heap_next = vm->heap_next;
     vm->alloc_since_gc    = 0u;   /* #357 */
     vm->gc_bump_threshold = (vm->heap_top - vm->heap_start) / 8;

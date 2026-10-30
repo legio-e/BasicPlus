@@ -613,46 +613,115 @@ static void gc_mark_phase(bpvm_t* vm) {
     gc_repasa(vm);
 }
 
-/* #355 — ¿SE FUSIONAN DE VERDAD? (pregunta de Eduardo). Lo escribí, no lo probé.
- * OJO AL INTERPRETAR: durante el BARRIDO casi no debe haber fusiones — ese ya
- * junta los huecos seguidos en su propio recorrido, y los que da de alta están
- * separados por bloques VIVOS. Donde tiene que verse es en las liberaciones de
- * FUERA del GC (owner-free / OP_FREE_REF) y en el split del alocador. */
-static uint32_t g_fus_izq = 0, g_fus_der = 0, g_altas = 0;
+/* ═══════════════════════════════════════════════════════════════════════════
+ * V8 #718 (30-oct) — LOS HUECOS, EN LISTAS POR TAMAÑO.
+ *
+ * Hasta hoy los huecos iban en UNA lista, en orden de dirección: la reserva la recorría desde la cabeza y se quedaba
+ * con el primero que le valía. La POLÍTICA es buena y se queda (la de #355, abajo): el primero por dirección empaqueta
+ * los objetos abajo y deja libre el final, que vuelve al bump. Lo malo era el MECANISMO: con k huecos, una reserva que
+ * no cabía en ninguno daba k pasos, cada vez —en la PSRAM, un fallo de caché cada uno— (Eduardo: «lo que si veo lento
+ * es en el caso de tener una lista larga de huecos»); y el barrido rehacía la lista buscando el sitio de cada hueco
+ * desde la cabeza: cuadrático (#715).
+ *
+ * Ahora, 48 listas (vm->huecos_*): una por cada tamaño exacto de 12 a 124 B —lo que más se reserva— y una por potencia
+ * de dos desde 128 B. Cada una, en orden de dirección: su cabeza es su hueco más bajo. Un mapa de 64 bits dice cuáles
+ * tienen huecos. Reservar elige EL MISMO hueco que la lista única —el de dirección más baja entre los que valen—
+ * comparando sólo las cabezas de las listas que pueden valer, que están en la VM y no en el heap: no se recorre nada,
+ * y en la PSRAM sólo se toca el hueco elegido. Medido en una copia (FICHAS #718): coloca exactamente igual que antes
+ * —los mismos GC, «No space», techo y huecos— y los pasos por reserva bajan de 5–38 a ~1. El «best fit» (la lista más
+ * pequeña que vale), más simple, FRAGMENTABA: hasta el doble de «No space» con tamaños como los de los programas.
+ *
+ * Dar de alta un hueco lo pone en su sitio por dirección, recorriendo su lista desde el DEDO (el último dado de alta
+ * en ella) si está por debajo: el reparto sube por el heap y el siguiente suele caer detrás. Al barrer y al compactar
+ * las altas llegan por dirección y el dedo es la cola: un paso cada una. El dedo es siempre un hueco de su lista: el
+ * alta lo pone, sacar ese hueco lo pasa al de delante, vaciar lo pone a 0.
+ *
+ * Fuera del GC no se funde: lo que suelta un owner entra en su lista tal cual, y el barrido siguiente junta los huecos
+ * seguidos (lo hace con todo lo libre que encuentra). Antes de decir «No space» la reserva colecta y reintenta: no se
+ * pierde nada. Con el GC apagado, dos owners vecinos se quedarían separados.
+ *
+ * El bloque no cambia: un hueco es [FREE][tamaño@+4][siguiente@+8], de 12 B como mínimo.
+ *
+ * ── #355 · propuesta de Eduardo, 2-ago: POR QUÉ POR DIRECCIÓN ──────────────
+ *
+ * ANTES se insertaba en la CABEZA, y la lista acababa al revés, de mayor a menor dirección: servir el primero era servir
+ * SIEMPRE desde el hueco más alto —el gran bloque menguante pegado al techo, que es justo el que no hay que tocar—. Los
+ * objetos se quedaban pegados arriba, la cola del heap no quedaba libre nunca y `heap_next` NO RETROCEDÍA JAMÁS (el
+ * barrido sólo lo baja si el último tramo libre llega hasta él): el "recupera 0 B" de todos los logs de la placa,
+ * colecta tras colecta, con 48 bytes vivos. Por dirección, las reservas se empaquetan abajo y el final queda libre.
+ * Elegir por tamaño sin mirar la dirección (el «best fit» de arriba) devolvía parte de aquello.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static uint32_t g_altas = 0;   /* #355: huecos dados de alta (la línea del GC) */
 
-/* Añade un bloque libre [tag FREE][size@+4][next@+8] a la lista, ORDENADO POR
- * DIRECCIÓN y FUSIONANDO con los vecinos contiguos.
+/* La lista de un hueco de `t` B (múltiplo de 4, de 12 o más): de las exactas, la (t-12)/4; desde 128 B, la de su
+ * potencia de dos (la última, también lo que pase de 64 MB). */
+static inline BPVM_EN_LINEA uint32_t huecos_lista(uint32_t t) {
+    if (t < 128u) return (t - BPVM_MIN_FREE_BLOCK) >> 2;
+    uint32_t c = BPVM_HUECOS_EXACTAS + (31u - (uint32_t) __builtin_clz(t)) - 7u;
+    return c < BPVM_HUECOS_LISTAS ? c : BPVM_HUECOS_LISTAS - 1u;
+}
+
+/* El hueco más pequeño que puede haber en la lista c. */
+static uint32_t huecos_minimo(uint32_t c) {
+    return (c < BPVM_HUECOS_EXACTAS) ? BPVM_MIN_FREE_BLOCK + 4u * c : 1u << (c - BPVM_HUECOS_EXACTAS + 7u);
+}
+
+void bpvm_huecos_vaciar(bpvm_t* vm) {
+    memset(vm->huecos_cab, 0, sizeof vm->huecos_cab);
+    memset(vm->huecos_dedo, 0, sizeof vm->huecos_dedo);
+    vm->huecos_mapa[0] = vm->huecos_mapa[1] = 0u;
+}
+
+/* Un hueco de la lista c, mirado antes de fiarse de él (huecos_nodo: su tamaño, si es un hueco de esa lista dentro del
+ * heap; 0 si no). Si no lo es, la lista está rota: se dice, y se vacían TODAS (los huecos siguen marcados en el heap y
+ * el barrido siguiente los recupera).
  *
- * ── #355 · propuesta de Eduardo, 2-ago ──────────────────────────────────────
+ * #355 — DETRÁS DEL HEAP ESTÁ LA PILA (pregunta de Eduardo, y la respuesta era mala). El mapa es
  *
- * ANTES se insertaba en la CABEZA. Y el barrido recorre el heap de menor a mayor
- * dirección, así que la lista acababa ordenada AL REVÉS: de mayor a menor. Como
- * try_allocate_inner hace first-fit desde la cabeza, eso significaba servir
- * SIEMPRE desde el bloque más alto — el gran bloque menguante pegado al techo,
- * que es justo el que no hay que tocar.
+ *   [ módulos ][ HEAP →→→ ][ PILA del thread main ][ pilas del resto ]
+ *               heap_start  stack_base
  *
- * El daño real no era el desperdicio, era este:
+ * o sea que el heap acaba EXACTAMENTE donde empiezan los locales y los frames del programa. El camino de bump no puede
+ * cruzar (comprueba el techo). Una lista SÍ podía: su siguiente sale de una palabra LEÍDA DE LA MEMORIA (el `next` del
+ * hueco anterior). Con esa palabra corrompida —la misma que en la Pico valía 0xC30C0000— el recorrido se iba a la zona
+ * de pilas, se entregaba esa dirección como bloque libre, y quien la pidió escribía su objeto ENCIMA DE LA PILA:
+ * corrupción en un sitio donde el GC ni mira. Aquí se corta, y se dice por el canal urgente, que sobrevive a un cuelgue.
+ * V8 #718: y además, que sea un hueco (la marca FREE) y de esa lista (su tamaño).
  *
- *     if (pend_start != 0) vm->heap_next = pend_start;   // en gc_sweep_phase
- *
- * el bump SÓLO retrocede si el último hueco llega hasta heap_next. Sirviendo
- * desde arriba dejábamos objetos vivos pegados al techo en cada vuelta → la cola
- * nunca quedaba libre → `heap_next` NO RETROCEDÍA JAMÁS. De ahí el "recupera
- * 0 B" que salía en todos los logs de la placa, colecta tras colecta, con 48
- * bytes vivos.
- *
- * AHORA la lista va de menor a mayor. El first-fit coge de abajo, los objetos se
- * empaquetan en la parte baja, y el gran bloque queda al final como último
- * recurso — que es exactamente lo que hay que hacer para que la cola del heap
- * quede libre y el bump pueda volver atrás.
- *
- * La FUSIÓN viene de propina y hace falta igual: sin ella, dos huecos contiguos
- * liberados en momentos distintos (OP_FREE_REF, owner-free) se quedan como dos
- * entradas que ninguna petición mediana puede usar, aunque juntas sobren. El
- * barrido ya fusiona lo que encuentra seguido en UNA pasada; esto lo fusiona
- * también entre pasadas. Coste: recorrer la lista, que es corta por construcción
- * (una entrada por hueco, y fusionar las reduce). */
-static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
+ * Lo que lo dice va APARTE, fuera de línea (`cold`): el camino de la reserva (try_allocate_inner y add_to_free_list)
+ * va a la SRAM en la RP2350 (BPVM_EN_SRAM: en la imagen P todo lo demás corre desde la flash por la caché del XIP, y
+ * traer ese camino de la flash en cada reserva costaba ~0,6 µs por línea de 8 B; FICHAS #718), y lo que no pasa nunca
+ * no tiene que ocupar sitio en él. */
+static void __attribute__((noinline, cold)) huecos_rota(bpvm_t* vm, uint32_t a, uint32_t c) {
+    if (a < vm->heap_start || a + BPVM_MIN_FREE_BLOCK > vm->heap_top) {
+        bpvm_diag_urgente("[gc] !! LISTA DE LIBRES ROTA: el nodo %u (lista %u) cae fuera del heap [%u..%u). "
+                          "Detras del heap estan las PILAS: servir ese bloque habria escrito encima de los locales "
+                          "del programa. Se abandonan las listas y se reserva por bump.",
+                          (unsigned) a, (unsigned) c, (unsigned) vm->heap_start, (unsigned) vm->heap_top);
+    } else {
+        uint32_t tag = bpvm_read_u32_be(vm->memory + a), s = bpvm_read_u32_be(vm->memory + a + 4);
+        bpvm_diag_urgente("[gc] !! BLOQUE LIBRE IMPOSIBLE en %u (lista %u): etiqueta %08x, dice medir %u B y "
+                          "acabaria en %u (el heap acaba en %u). Se abandonan las listas: entregarlo pisaria lo que "
+                          "no es suyo.", (unsigned) a, (unsigned) c, (unsigned) tag, (unsigned) s,
+                          (unsigned) (a + s), (unsigned) vm->heap_top);
+    }
+    bpvm_huecos_vaciar(vm);
+}
+
+/* El tamaño del hueco `a` de la lista c, o 0 si no lo es (y entonces, huecos_rota). */
+static inline BPVM_EN_LINEA uint32_t huecos_nodo(bpvm_t* vm, uint32_t a, uint32_t c) {
+    if (a >= vm->heap_start && a + BPVM_MIN_FREE_BLOCK <= vm->heap_top) {
+        uint32_t tag = bpvm_read_u32_be(vm->memory + a), s = bpvm_read_u32_be(vm->memory + a + 4);
+        if ((tag & BPVM_TAG_FREE_BIT) && s >= BPVM_MIN_FREE_BLOCK && a + s <= vm->heap_top && huecos_lista(s) == c)
+            return s;
+    }
+    huecos_rota(vm, a, c);
+    return 0u;
+}
+
+/* Da de alta [addr, addr+size) como hueco, en su lista y en su sitio por dirección: desde el dedo si está por debajo,
+ * si no desde la cabeza. */
+static void BPVM_EN_SRAM add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {   /* #718: en la SRAM de la RP2350 */
     uint8_t* mem = vm->memory;
     /* #355 — ÚLTIMA PUERTA. Esta palabra de +4 es la ÚNICA que block_total_size()
      * devuelve tal cual, sin clamp ni recálculo (camino de bloque libre). Todo el
@@ -670,43 +739,35 @@ static void add_to_free_list(bpvm_t* vm, uint32_t addr, uint32_t size) {
     g_altas++;
     bpvm_write_u32_be(mem + addr,     BPVM_TAG_FREE_BIT);
     bpvm_write_u32_be(mem + addr + 4, size);
-
-    /* Busca el sitio: el primer nodo con dirección MAYOR que la nuestra. */
-    uint32_t prev = 0, cur = vm->free_list_head;
+    uint32_t c = huecos_lista(size);
+    uint32_t prev = 0u, cur = vm->huecos_cab[c], dedo = vm->huecos_dedo[c];
+    if (dedo != 0u && dedo < addr) { prev = dedo; cur = bpvm_read_u32_be(mem + dedo + 8); }
     while (cur != 0u && cur < addr) {
+        if (huecos_nodo(vm, cur, c) == 0u) { prev = 0u; cur = 0u; break; }   /* rota: vaciadas; éste, solo */
         prev = cur;
-        cur  = bpvm_read_u32_be(mem + cur + 8);
+        cur = bpvm_read_u32_be(mem + cur + 8);
     }
+    bpvm_write_u32_be(mem + addr + 8, cur);
+    if (prev != 0u) bpvm_write_u32_be(mem + prev + 8, addr); else vm->huecos_cab[c] = addr;
+    vm->huecos_dedo[c] = addr;
+    vm->huecos_mapa[c >> 5] |= 1u << (c & 31u);
+}
 
-    /* Fusión con el vecino de la IZQUIERDA si es contiguo: crece prev y ya está
-     * (no entra un nodo nuevo). Hay que releer su tamaño, que es el que manda. */
-    if (prev != 0u) {
-        uint32_t psize = bpvm_read_u32_be(mem + prev + 4);
-        if (prev + psize == addr) {
-            g_fus_izq++;
-            bpvm_write_u32_be(mem + prev + 4, psize + size);
-            addr = prev;                 /* el bloque fusionado es el de la izquierda */
-            size = psize + size;
-            /* y sigue siendo el mismo nodo de la lista: prev no cambia de sitio */
-        } else {
-            bpvm_write_u32_be(mem + prev + 8, addr);
-            bpvm_write_u32_be(mem + addr + 8, cur);
+/* Saca `cur` de la lista c (`prev`, el de delante; 0 si es la cabeza). */
+static inline BPVM_EN_LINEA void huecos_quita(bpvm_t* vm, uint32_t c, uint32_t prev, uint32_t cur) {
+    uint32_t next = bpvm_read_u32_be(vm->memory + cur + 8);
+    if (prev != 0u) bpvm_write_u32_be(vm->memory + prev + 8, next); else vm->huecos_cab[c] = next;
+    if (vm->huecos_dedo[c] == cur) vm->huecos_dedo[c] = prev;
+    if (vm->huecos_cab[c] == 0u) vm->huecos_mapa[c >> 5] &= ~(1u << (c & 31u));
+}
+
+/* Los huecos de todas las listas: cuántos, lo que suman y el mayor (la línea del GC y la información del heap). */
+static void huecos_cuenta(const bpvm_t* vm, uint32_t* n, uint32_t* suma, uint32_t* mayor) {
+    for (uint32_t c = 0u; c < BPVM_HUECOS_LISTAS; c++)
+        for (uint32_t a = vm->huecos_cab[c]; a != 0u && *n < 100000u; a = bpvm_read_u32_be(vm->memory + a + 8)) {
+            uint32_t sz = bpvm_read_u32_be(vm->memory + a + 4);
+            (*n)++; *suma += sz; if (sz > *mayor) *mayor = sz;
         }
-    } else {
-        bpvm_write_u32_be(mem + addr + 8, cur);
-        vm->free_list_head = addr;
-    }
-
-    /* Fusión con el vecino de la DERECHA si es contiguo: se traga `cur` y este
-     * desaparece de la lista. Se hace DESPUÉS de la izquierda a propósito, para
-     * que tres huecos seguidos acaben en uno solo en una sola llamada. */
-    if (cur != 0u && addr + size == cur) {
-        g_fus_der++;
-        uint32_t csize = bpvm_read_u32_be(mem + cur + 4);
-        uint32_t cnext = bpvm_read_u32_be(mem + cur + 8);
-        bpvm_write_u32_be(mem + addr + 4, size + csize);
-        bpvm_write_u32_be(mem + addr + 8, cnext);
-    }
 }
 
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo CONSISTENTE (espejo del
@@ -752,7 +813,7 @@ void bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr) {
     }
     uint32_t size = block_total_size(vm, header_addr);
     if (size != 0) {   /* defensivo: 0 = no sabemos el tamaño, no tocar */
-        add_to_free_list(vm, header_addr, size);
+        add_to_free_list(vm, header_addr, size);   /* #718: a su lista, sin fundirse (lo hace el barrido) */
         vm->heap_bloques--;   /* V7/H7 #593: un bloque menos */
     }
     bpvm_smp_unlock(vm);
@@ -906,7 +967,7 @@ static uint32_t g_alloc_astilla  = 0;   /* bloques descartados por sobrante no r
 
 static void gc_sweep_phase(bpvm_t* vm) {
     uint8_t* mem = vm->memory;
-    vm->free_list_head = 0;
+    bpvm_huecos_vaciar(vm);   /* #718: las rehace el barrido, por dirección: un paso cada hueco (#715) */
     uint32_t cur = vm->heap_start;
     uint32_t freed = 0, kept = 0;
     uint32_t quedan = 0;                      /* V7/H7 #593: los bloques que siguen vivos, la cuenta nueva */
@@ -968,7 +1029,7 @@ static void gc_sweep_phase(bpvm_t* vm) {
     bpvm_diag("[gc] vivo=%u liberado=%u heap=[%u..%u) freelist=%s",
               (unsigned) kept, (unsigned) freed,
               (unsigned) vm->heap_start, (unsigned) vm->heap_next,
-              vm->free_list_head ? "si" : "vacia");
+              (vm->huecos_mapa[0] | vm->huecos_mapa[1]) ? "si" : "vacia");
     /* #355 — LA PREGUNTA DE EDUARDO, CONTESTADA CON NUMEROS: "se está agotando
      * la memoria sin que esta se recicle". Con 48 bytes vivos, un recolector que
      * hiciera su trabajo daria vueltas indefinidamente; da ~200 mas. Si
@@ -982,19 +1043,12 @@ static void gc_sweep_phase(bpvm_t* vm) {
     bpvm_diag("[gc] reservas: de_lista=%u de_bump=%u astilla=%u",
               (unsigned) g_alloc_de_lista, (unsigned) g_alloc_de_bump,
               (unsigned) g_alloc_astilla);
-    {   /* #355 — la lista, contada: cuantos huecos quedan, el mayor, y si las
-         * fusiones estan pasando de verdad. Si la lista crece sin parar mientras
-         * fus_izq/fus_der se quedan a cero, la fusion NO funciona. */
-        uint32_t n = 0, mayor = 0, suma = 0, c = vm->free_list_head;
-        while (c != 0u && n < 100000u) {
-            uint32_t sz = bpvm_read_u32_be(vm->memory + c + 4);
-            n++; suma += sz; if (sz > mayor) mayor = sz;
-            c = bpvm_read_u32_be(vm->memory + c + 8);
-        }
-        bpvm_diag("[gc] libres: %u huecos, %u B en total, el mayor %u | altas=%u "
-                  "fusion_izq=%u fusion_der=%u",
-                  (unsigned) n, (unsigned) suma, (unsigned) mayor,
-                  (unsigned) g_altas, (unsigned) g_fus_izq, (unsigned) g_fus_der);
+    {   /* #355 — los huecos, contados: cuántos quedan, lo que suman y el mayor. V8 #718: los de las 48 listas;
+         * las fusiones de fuera del barrido ya no existen (lo que suelta un owner, lo funde el barrido siguiente). */
+        uint32_t n = 0, mayor = 0, suma = 0;
+        huecos_cuenta(vm, &n, &suma, &mayor);
+        bpvm_diag("[gc] libres: %u huecos, %u B en total, el mayor %u | altas=%u",
+                  (unsigned) n, (unsigned) suma, (unsigned) mayor, (unsigned) g_altas);
     }
 }
 
@@ -1053,13 +1107,12 @@ void bpvm_heap_cuentas(bpvm_t* vm, bpvm_heap_cuentas_t* out) {
     out->tamano = (techo > vm->heap_start) ? techo - vm->heap_start : 0u;
     out->libre = final;
     out->mayor_libre = final;
-    uint32_t c = vm->free_list_head;
-    while (c != 0u && out->huecos < 100000u) {
-        uint32_t sz = bpvm_read_u32_be(vm->memory + c + 4);
-        out->huecos++;
-        out->libre += sz;
-        if (sz > out->mayor_libre) out->mayor_libre = sz;
-        c = bpvm_read_u32_be(vm->memory + c + 8);
+    {   /* V8 #718: los huecos de las 48 listas */
+        uint32_t n = 0u, suma = 0u, mayor = 0u;
+        huecos_cuenta(vm, &n, &suma, &mayor);
+        out->huecos = n;
+        out->libre += suma;
+        if (mayor > out->mayor_libre) out->mayor_libre = mayor;
     }
     uint32_t repartidos = (vm->handles.next > 0u) ? vm->handles.next - 1u : 0u;   /* el slot 0 es el null */
     out->handles = (repartidos > vm->handles.free_top) ? repartidos - vm->handles.free_top : 0u;
@@ -1252,7 +1305,7 @@ static void compactar(bpvm_t* vm) {
         bpvm_write_u32_be(mem + h, BPVM_TAG_ENHEBRADO | idx);
     }
     /* 3. Deslizar. */
-    vm->free_list_head = 0u;   /* la rehacen los huecos que queden delante de un clavado */
+    bpvm_huecos_vaciar(vm);   /* las rehacen los huecos que queden delante de un clavado (#718: por dirección) */
     uint32_t dst = vm->heap_start, cur = vm->heap_start;
     uint32_t movidos = 0, clavados = 0, huecos = 0;
     while (cur < vm->heap_next) {
@@ -1310,95 +1363,112 @@ int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc) {
     return r;
 }
 
-/* H3: intenta asignar `total` bytes. Devuelve la dirección de la cabecera, o
- * 0 si no cabe (heap_start>0 → 0 nunca es una cabecera válida). 1) free-list
- * first-fit con split; 2) bump desde heap_next. */
-static uint32_t try_allocate_inner(bpvm_t* vm, uint32_t total) {
+/* V8 #718 — el hueco para `total` B: el de dirección más baja entre los que valen, EL MISMO que encontraba la lista
+ * única (#355). Un hueco vale si mide `total` justo o deja 12 B o más. Se miran las cabezas de las listas que pueden
+ * valer —la de su tamaño y las de encima, menos las de R+4 y R+8—, que están en la VM; del heap sólo se lee el hueco
+ * elegido, salvo en una lista por potencia de dos, donde caben tamaños distintos: en la suya, hasta el primero que
+ * valga; en una que empieza a menos de 12 B de `total`, hasta el primero sin astilla. Devuelve 0 si ninguno vale; si
+ * no, el hueco, y su lista, el de delante en ella y su tamaño.
+ *
+ * INVARIANTE DEL HEAP (por qué la astilla): un bloque ASIGNADO no guarda su tamaño en ningún sitio —block_total_size
+ * lo RECALCULA desde type/length—, así que el tamaño físico de un bloque tiene que coincidir SIEMPRE con ese
+ * recálculo, o el recorrido del heap (build_gc_valid_map / gc_sweep_phase) aterriza a mitad del siguiente y DESCARRILA
+ * en silencio. BUG (cazado 15-jul, repro `--mem=131072 samples/MemT4d_Count.bp`, petaba en el concat nº 193 igual en
+ * host que en la Pico): si el sobrante era < MIN_FREE_BLOCK (no representable como bloque libre) se REGALABA al bloque
+ * asignado → ocupaba block_size pero block_total_size decía `total` → recorrido corto → mapa de cabeceras truncado →
+ * is_heap_ref rechazaba objetos VIVOS → el barrido se los llevaba → USE-AFTER-FREE. Por eso un hueco que dejaría 4 u
+ * 8 B de sobra no vale: se queda para una petición que le encaje.
+ *
+ * Dos caminos (el corto va con try_allocate_inner a la SRAM de la RP2350; el largo, poco frecuente, se queda fuera):
+ * - EL CORTO, de 12 a 116 B —casi todas las reservas—: las listas de encima, salvo las de R+4 y R+8, valen enteras
+ *   (sus huecos dejan 12 B o más), así que basta la cabeza más baja: un bucle pequeño sobre las dos palabras del mapa;
+ * - EL LARGO, de 120 B en adelante, fuera de línea: en una lista por potencia de dos caben tamaños distintos (en la
+ *   suya, hasta el primero que valga; en una que empieza a menos de 12 B de `total`, hasta el primero sin astilla). */
+static inline BPVM_EN_LINEA uint32_t huecos_corta(const bpvm_t* vm, uint32_t total, uint32_t* lista) {
+    uint32_t c = (total - BPVM_MIN_FREE_BLOCK) >> 2;   /* de 0 a 26 */
+    uint32_t mejor = vm->huecos_cab[c], mc = c;          /* su tamaño justo: el más bajo */
+    for (uint32_t w = 0u; w < 2u; w++) {
+        uint32_t m = vm->huecos_mapa[w];
+        if (w == 0u) m &= 0xFFFFFFFFu << (c + 3u);      /* las de encima, sin R+4 ni R+8 */
+        while (m != 0u) {
+            uint32_t j = (w << 5) + (uint32_t) __builtin_ctz(m);
+            uint32_t h = vm->huecos_cab[j];
+            m &= m - 1u;
+            if (h != 0u && (mejor == 0u || h < mejor)) { mejor = h; mc = j; }
+        }
+    }
+    *lista = mc;
+    return mejor;
+}
+
+static uint32_t __attribute__((noinline)) huecos_larga(bpvm_t* vm, uint32_t total, uint32_t* lista,
+                                                       uint32_t* anterior, uint32_t* tam) {
     uint8_t* mem = vm->memory;
-    uint32_t prev = 0, cur = vm->free_list_head;
-    while (cur != 0) {
-        /* #355 — DETRÁS DEL HEAP ESTÁ LA PILA (pregunta de Eduardo, y la
-         * respuesta era mala). El mapa es
-         *
-         *   [ módulos ][ HEAP →→→ ][ PILA del thread main ][ pilas del resto ]
-         *               heap_start  stack_base
-         *
-         * o sea que el heap acaba EXACTAMENTE donde empiezan los locales y los
-         * frames del programa. El camino de bump ya no puede cruzar (comprueba
-         * el techo). Este SÍ podía: `cur` sale de una palabra LEÍDA DE LA
-         * MEMORIA (el `next` del bloque anterior) y no se validaba contra nada.
-         * Con esa palabra corrompida —la misma que en la Pico valía
-         * 0xC30C0000— el recorrido se va a la zona de pilas, `return cur`
-         * entrega esa dirección como bloque libre, y el que la pidió escribe su
-         * objeto ENCIMA DE LA PILA. Corrupción a un sitio donde el GC ni mira.
-         *
-         * Aquí se corta: un nodo de la lista tiene que estar dentro del heap
-         * USADO y medir algo representable que quepa. Si no, la lista está rota:
-         * se abandona el recorrido (mejor reservar por bump que servir basura) y
-         * se dice por el canal urgente, que es el que sobrevive a un cuelgue. */
-        if (cur < vm->heap_start || cur + BPVM_MIN_FREE_BLOCK > vm->heap_top) {
-            bpvm_diag_urgente("[gc] !! LISTA DE LIBRES ROTA: el nodo %u cae fuera del "
-                              "heap [%u..%u). Detras del heap estan las PILAS: servir "
-                              "ese bloque habria escrito encima de los locales del "
-                              "programa. Se abandona la lista y se reserva por bump.",
-                              (unsigned) cur, (unsigned) vm->heap_start,
-                              (unsigned) vm->heap_top);
-            vm->free_list_head = 0u;   /* la lista ya no significa nada */
-            break;
-        }
-        uint32_t block_size = bpvm_read_u32_be(mem + cur + 4);
-        uint32_t next = bpvm_read_u32_be(mem + cur + 8);
-        if (block_size < BPVM_MIN_FREE_BLOCK || cur + block_size > vm->heap_top) {
-            bpvm_diag_urgente("[gc] !! BLOQUE LIBRE IMPOSIBLE en %u: dice medir %u B y "
-                              "acabaria en %u, pasado el final del heap (%u). Se abandona "
-                              "la lista: entregarlo pisaria la pila del programa.",
-                              (unsigned) cur, (unsigned) block_size,
-                              (unsigned)(cur + block_size), (unsigned) vm->heap_top);
-            vm->free_list_head = 0u;
-            break;
-        }
-        if (block_size >= total) {
-            uint32_t remaining = block_size - total;
-            /* INVARIANTE DEL HEAP: un bloque ASIGNADO no guarda su tamaño en
-             * ningún sitio — block_total_size lo RECALCULA desde type/length.
-             * Luego el tamaño físico del bloque debe coincidir SIEMPRE con ese
-             * recálculo, o el recorrido (build_gc_valid_map / gc_sweep_phase)
-             * aterriza a mitad del siguiente y DESCARRILA en silencio.
-             *
-             * BUG (cazado 15-jul, repro `--mem=131072 samples/MemT4d_Count.bp`,
-             * petaba en el concat nº 193 igual en host que en la Pico): si el
-             * sobrante era < MIN_FREE_BLOCK (no representable como bloque libre)
-             * se REGALABA al bloque asignado → ocupaba block_size pero
-             * block_total_size decía `total` → recorrido corto → mapa de
-             * cabeceras truncado → is_heap_ref rechazaba objetos VIVOS → el
-             * barrido se los llevaba → USE-AFTER-FREE.
-             *
-             * FIX: solo aceptar el bloque si encaja EXACTO (remaining == 0) o si
-             * el resto es un bloque libre representable. Un sobrante-astilla se
-             * salta (se queda en la lista para una petición que le encaje). */
-            if (remaining == 0u || remaining >= BPVM_MIN_FREE_BLOCK) {
-                if (remaining >= BPVM_MIN_FREE_BLOCK) {
-                    /* Split: usar [cur, cur+total); dejar el resto libre. */
-                    uint32_t nf = cur + total;
-                    bpvm_write_u32_be(mem + nf,     BPVM_TAG_FREE_BIT);
-                    bpvm_write_u32_be(mem + nf + 4, remaining);
-                    bpvm_write_u32_be(mem + nf + 8, next);
-                    if (prev == 0) vm->free_list_head = nf;
-                    else bpvm_write_u32_be(mem + prev + 8, nf);
-                } else {
-                    /* Encaje exacto: usar el bloque entero; quitarlo de la lista. */
-                    if (prev == 0) vm->free_list_head = next;
-                    else bpvm_write_u32_be(mem + prev + 8, next);
-                }
-                g_alloc_de_lista++;   /* #355: servida reciclando */
-                vm->alloc_since_gc += total;   /* #357: el umbral cuenta VOLUMEN, no bump */
-                return cur;
+    uint32_t c = huecos_lista(total);
+    uint32_t mejor = 0u, mc = 0u, mprev = 0u, ms = 0u;   /* ms = 0: el elegido, aún sin leer */
+    uint64_t m = (((uint64_t) vm->huecos_mapa[1] << 32) | vm->huecos_mapa[0])
+                 & ~((((uint64_t) 2u) << c) - 1u);       /* las listas de encima */
+    if (c < BPVM_HUECOS_EXACTAS) {
+        if (vm->huecos_cab[c] != 0u) { mejor = vm->huecos_cab[c]; mc = c; }   /* su tamaño justo: el más bajo */
+        if (c + 1u < BPVM_HUECOS_EXACTAS) m &= ~((uint64_t) 1u << (c + 1u));   /* R+4 y R+8: la astilla */
+        if (c + 2u < BPVM_HUECOS_EXACTAS) m &= ~((uint64_t) 1u << (c + 2u));
+    } else {   /* 128 B o más: en su lista caben tamaños distintos; el primero que valga */
+        uint32_t prev = 0u, cur = vm->huecos_cab[c];
+        while (cur != 0u) {
+            uint32_t s = huecos_nodo(vm, cur, c);
+            if (s == 0u) return 0u;
+            if (s == total || (s > total && s - total >= BPVM_MIN_FREE_BLOCK)) {
+                mejor = cur; mc = c; mprev = prev; ms = s;
+                break;
             }
-            /* sobrante no representable → este bloque no sirve, seguir buscando */
-            g_alloc_astilla++;   /* #355: cabia, pero se descarta por la astilla */
+            if (s > total) g_alloc_astilla++;   /* #355: cabía, pero se descarta por la astilla */
+            prev = cur;
+            cur = bpvm_read_u32_be(mem + cur + 8);
         }
-        prev = cur;
-        cur = next;
+    }
+    while (m != 0u) {   /* las de encima: todos sus huecos son mayores; vale su cabeza si es más baja que el mejor */
+        uint32_t j = (uint32_t) __builtin_ctzll(m);
+        uint32_t cur = vm->huecos_cab[j];
+        m &= m - 1u;
+        if (cur == 0u || (mejor != 0u && cur > mejor)) continue;
+        if (huecos_minimo(j) - total >= BPVM_MIN_FREE_BLOCK) { mejor = cur; mc = j; mprev = 0u; ms = 0u; continue; }
+        uint32_t prev = 0u;   /* empieza a menos de 12 B de `total`: el primero sin astilla */
+        while (cur != 0u && (mejor == 0u || cur < mejor)) {
+            uint32_t s = huecos_nodo(vm, cur, j);
+            if (s == 0u) return 0u;
+            if (s - total >= BPVM_MIN_FREE_BLOCK) { mejor = cur; mc = j; mprev = prev; ms = s; break; }
+            g_alloc_astilla++;
+            prev = cur;
+            cur = bpvm_read_u32_be(mem + cur + 8);
+        }
+    }
+    if (mejor == 0u) return 0u;
+    if (ms == 0u && (ms = huecos_nodo(vm, mejor, mc)) == 0u) return 0u;   /* el elegido, mirado antes de entregarlo */
+    *lista = mc;
+    *anterior = mprev;
+    *tam = ms;
+    return mejor;
+}
+
+/* H3: intenta asignar `total` bytes. Devuelve la dirección de la cabecera, o 0 si no cabe (heap_start>0 → 0 nunca es
+ * una cabecera válida). 1) el hueco más bajo que vale, de las listas (#718), partido si sobra; 2) bump desde
+ * heap_next. */
+static uint32_t BPVM_EN_SRAM try_allocate_inner(bpvm_t* vm, uint32_t total) {   /* #718: en la SRAM de la RP2350 */
+    if ((vm->huecos_mapa[0] | vm->huecos_mapa[1]) != 0u) {   /* sin huecos, al final sin mirar nada */
+        uint32_t lista = 0u, anterior = 0u, tam = 0u, cur;
+        if (total <= 116u) {
+            cur = huecos_corta(vm, total, &lista);
+            if (cur != 0u && (tam = huecos_nodo(vm, cur, lista)) == 0u) cur = 0u;   /* mirado antes de entregarlo */
+        } else {
+            cur = huecos_larga(vm, total, &lista, &anterior, &tam);
+        }
+        if (cur != 0u) {
+            huecos_quita(vm, lista, anterior, cur);
+            if (tam > total) add_to_free_list(vm, cur + total, tam - total);   /* lo que sobra (12 B o más), a la suya */
+            g_alloc_de_lista++;   /* #355: servida reciclando */
+            vm->alloc_since_gc += total;   /* #357: el umbral cuenta VOLUMEN, no bump */
+            return cur;
+        }
     }
     /* 2) Bump.
      *

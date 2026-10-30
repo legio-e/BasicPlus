@@ -7781,7 +7781,7 @@ código caliente en la SRAM»), con ficheros ENTEROS en la SRAM y en la Metro co
 Relacionada con `#665`: con FreeRTOS en la SRAM, lo que mueve memoria de la PSRAM ganaba bastante más. Probablemente es
 el otro núcleo, que ejecuta FreeRTOS desde la flash y compite por la caché.
 
-#### 🔵 `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **sólo análisis**; el 30-oct, la caché medida y probada en una copia, lo que hacen los demás, y **las listas por tamaño probadas en una copia: eligiendo el hueco más bajo, colocan igual que hoy, sin recorrer**; esa noche, en el árbol SIN commit y medidas en placa: **por decidir, el camino de la reserva en la SRAM de P**)
+#### ✅ `#718` — reservar recorre la lista de huecos ENTERA cuando no cabe en ninguno: con k huecos, cada reserva más grande que todos, o que dejaría una astilla de menos de 12 B, da k pasos, cada vez (abierta el 21-oct, en el análisis del H5; **CERRADA el 30-oct**: los huecos, en 48 listas por tamaño que eligen el hueco más bajo —el mismo que la lista única, sin recorrerla—, con el camino de la reserva en la SRAM de la RP2350; el commit de `#718`)
 
 Eduardo (21-oct): *«lo que si veo lento es en el caso de tener una lista larga de huecos, tener que buscar uno libre y
 cuanto mas grande sea el bloque que necesitamos más dífil es encontrar uno del tamaño suficiente»*.
@@ -8172,6 +8172,27 @@ reservas y pocos huecos, y gana mucho donde hay muchos huecos); o **(b)** con el
 sitio en P (cualquier cambio delante de los builtins los mueve: lo de `#734`), que podría tener su ficha: fijar el sitio
 del código caliente.
 
+**30-oct (noche), HECHO: la (b)** (Eduardo: *«Y la Metro?»* —ya era la (b): M lleva `heap.c` en la SRAM—; *«OK,
+adelante la b) creo»*). `BPVM_EN_SRAM` (`bpvm_internal.h`): en la RP2350 (`PICO_RP2350`), `try_allocate_inner` y
+`add_to_free_list` van a `.time_critical`, que el script de enlace mete en `.data` (la SRAM), con sus ayudantes siempre
+en línea; el camino largo y los avisos se quedan en la flash; en las demás familias, nada. Cuesta en la Pico 2 744 B de
+`.data`, más los 388 B que crece `bpvm_t` en todas las placas (las cabezas, los dedos y el mapa): ~1,1 KB de su heap.
+Con la imagen final, que llevan ya las dos placas:
+
+| | Pico 2: hoy → final | Metro: hoy → final |
+|---|---|---|
+| `AllocBench` (muchas reservas, pocos huecos) | 2897 → 2455 ms (−15 %) | 1884 → 1904 (+1 %) |
+| `StrCursorBench` | 9285 → 9083 (−2 %) | 7215 → 7040 (−2 %) |
+| `MapDesplaza` | 19.246 → 17.222 (−11 %) | 12.941 → 12.701 (−2 %) |
+| `StrCenso` | igual | igual |
+| la reserva que no cabe, con muchos huecos | 118–2635 → 26–363 µs | 421–3751 → 28–35 µs |
+| diez `gc()` con 4000 huecos (`#715`) | 1218 → 194 ms | 11.933 → 638 ms |
+
+Lo que dicen los programas, sin los tiempos, igual; y `HuecosReserva`, que en la Pico 2 moría en el filo, acaba. La
+red entera, verde (tres veces con las listas: la primera versión, la compacta y la final); compilan las seis familias.
+Queda para el lote: la P4 (su `GcHuecos`, de 3,6 s por `gc()` con 4000 huecos), las ESP y las STM32, y antes de grabar
+una ESP, el `nm` (el rodata creció).
+
 #### ✅ `#717` — `charCodeAt` fuera de rango: la VM-C devuelve 0 en silencio, y la VM-Java lanza un error (abierta el 21-oct, al hacer los dos algoritmos del H5; **CERRADA el 23-oct**: lanza en las dos, con el texto de `charAt`, `dcb71627`)
 
 Con `s = "hola"`, comprobado en el PC con las dos VMs:
@@ -8224,7 +8245,7 @@ En la VM-C, el número ya no pasa por un búfer de 64 bytes: se mira entero en e
 validado). Lo prueba `bpgenvm-c/samples/ParseNumero.bp` (en el corpus): 51 casos con lo que tiene que salir, escrito a
 mano. Consecuencia, ya avisada: un entero de más de 32 bits en un JSON es ahora un error (`#725`).
 
-#### 🔵 `#715` — el GC rehace la lista de huecos con coste CUADRÁTICO: con 4000 cadenas vivas, cada `gc()` tarda 3,6 s en la P4, 1,3 s en la Metro y 123 ms en la Pico 2 (abierta el 21-oct, en el censo del H5; **sólo análisis**, Eduardo: *«Lo del GC y la lista de huecos de momento solo analiza, de momento no intentamos mejorar»*)
+#### ✅ `#715` — el GC rehace la lista de huecos con coste CUADRÁTICO: con 4000 cadenas vivas, cada `gc()` tarda 3,6 s en la P4, 1,3 s en la Metro y 123 ms en la Pico 2 (abierta el 21-oct, en el censo del H5; **sólo análisis**, Eduardo: *«Lo del GC y la lista de huecos de momento solo analiza, de momento no intentamos mejorar»*; **CERRADA el 30-oct** con `#718`: el barrido da de alta cada hueco por la cola de su lista, en un paso; el commit de `#718`)
 
 **Lo que se ve en el código.** `gc_sweep_phase` (`bpgenvm-c/src/heap.c`) vacía la lista de libres y recorre el heap
 en orden de dirección. Cada tramo libre lo da de alta `add_to_free_list`, que busca su sitio recorriendo la lista
@@ -8263,6 +8284,11 @@ huecos adyacentes.»* Ya lo es, y el arreglo de arriba la mantiene así (mirado 
 
 Sigue en análisis. **Relacionada, `#718`** (21-oct): la reserva también recorre esta lista, entera si no cabe en ningún
 hueco. Una lista por tamaño, cada una en orden de dirección y enganchada a la cola en el barrido, arreglaría las dos.
+
+**Arreglada el 30-oct con `#718`** (lo que preveía el párrafo de arriba): los huecos van en 48 listas por tamaño, y
+el barrido da de alta cada uno por la cola de la suya (el «dedo» de la lista hace de cola): un paso por hueco. Diez
+`gc()` con 4000 huecos (`GcHuecos`): la Metro, de 11.933 a 638 ms; la Pico 2, de 1218 a 194; el PC, de 133 a 4. La
+P4, en el lote. Lo que suelta un `owner` ya no se funde al soltarlo: lo funde el barrido siguiente (`#718`).
 
 #### ✅ `#714` — `move` escribe DENTRO de un string: el valor que no debía cambiar cambia, y lo ven todas sus referencias (abierta el 21-oct, en el análisis del H5; **CERRADA el 23-oct**: las cadenas nacen de solo lectura, y `move` no escribe en ellas, `e9148258`)
 

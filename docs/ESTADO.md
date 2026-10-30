@@ -30,7 +30,7 @@
 > **30-oct** — **`#718`, los huecos al reservar: medida, probada en una copia, lo que hacen los demás, y las listas por
 > tamaño** (Eduardo: *«Si, medimos a ver que sale»*; *«Haz la prueba»*; *«Necesitamos un buen algoritmo y ahora no lo
 > tenemos. Habría que buscar en Internet como tienen resuelto la gestión de huecos.»*; *«prueba una copia a ver que tal
-> funciona»*; *«1 Si y 2 también»*). El código, al final del día, en el árbol SIN commit: falta una decisión.
+> funciona»*; *«1 Si y 2 también»*; *«OK, adelante la b) creo»*). Hecho y cerrado, con `#715` de paso.
 > - **La caché que llena el GC (la idea del 29-oct):** primero, una traza del asignador reproducida en Python; luego, la
 >   caché de verdad en una copia de la VM-C, con seis variantes, ocho programas y los heaps de la Pico 2 y la Metro.
 >   Con la variante que repone la caché al recorrer la lista, de 1 a 5 µs menos por reserva, sin fragmentar más, y la
@@ -67,12 +67,15 @@
 >   compacta la función apenas cambió nada; (6) un relleno sin referencias no mueve nada (`--gc-sections` lo tira): tiene
 >   que ser una función llamada, y aun así se mueve de 8 en 8 B; (7) mezclar stdout y stderr en una comparación hace
 >   diferencias falsas.
-> - **El estado:** el código de `#718`, **SIN commit** en el árbol de trabajo (`heap.c`, `bpvm_internal.h`, `bpvm.c`,
->   `loader.c`, `link.c`, `Makefile`, `test_freelist.c`, `HEAP_LAYOUT.md`; copia del diff en el scratchpad de la sesión,
->   `p718/arbol/lstd_compacta.diff`). Las placas, devueltas a la imagen de HEAD (la del 29-oct).
-> - **Lo siguiente:** que Eduardo elija (a) el asignador en la flash en P o (b) su camino en la SRAM de P (720 B; mi
->   propuesta); con eso, el commit. Y si la lotería del sitio en P merece ficha propia. El lote de placas, como lo dejó
->   el 29-oct; antes de grabar las ESP con `#718`, el `nm` (el rodata creció).
+> - **Y hecho, la (b)** (Eduardo: *«Y la Metro?»* —ya lo era: M lleva `heap.c` en la SRAM—; *«OK, adelante la b)
+>   creo»*): el camino de la reserva, en la SRAM de la RP2350 (`BPVM_EN_SRAM`). Con la imagen final, la Pico 2 más
+>   deprisa que hoy en todo (`AllocBench` −15 %, `MapDesplaza` −11 %, `StrCursorBench` −2 %) y la Metro igual o mejor;
+>   con muchos huecos, de cientos o miles de µs por reserva a ~30. Cuesta ~1,1 KB del heap de la Pico 2. La red, verde
+>   tres veces; compilan las seis familias. `#718` y `#715`, cerradas.
+> - **Las placas:** la Pico 2 y la Metro llevan ya la imagen final de `#718` (sin la tanda corta del lote).
+> - **Lo siguiente:** el lote de placas, como lo dejó el 29-oct, más `#718` en las demás (la P4: su `GcHuecos`); antes
+>   de grabar una ESP, el `nm` (el rodata creció). Y, si Eduardo quiere, una ficha para la lotería del sitio en P (fijar
+>   el sitio del código caliente, lo de `#734`).
 
 > **29-oct** — **`#740`: las pilas de los hilos BP, del heap, en las dos VMs** (Eduardo: *«Continuamos con los
 > pendientes»*; y al algoritmo: *«OK a), b) si una excepción, c) la mantenemos de momento, ya veremos mas adelante que

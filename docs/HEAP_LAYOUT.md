@@ -170,19 +170,36 @@ Mínimo de bloque (incluso si el payload sería más pequeño):
 `MIN_FREE_BLOCK = 12` (8 header + 4 next-pointer). Garantiza que un
 bloque liberado quepa el puntero al siguiente en la free-list.
 
-### 2.4 Free list
+### 2.4 Los huecos (la lista de libres)
 
-Tras `sweep()` del GC, los bloques no marcados se enlazan en una lista
-con head `freeListHead`:
+Tras el barrido del GC, cada tramo seguido de bloques no marcados (y de huecos viejos) es UN hueco; el tramo que
+llega al final del heap no es un hueco: vuelve al bump (`heapNext` retrocede).
 
 ```
-header_libre:
-  [+0]  tag con TAG_FREE_BIT set, TAG_TYPE = type original
-  [+4]  next_user_ref (o 0 = fin de lista)
+hueco:
+  [+0]  tag = TAG_FREE_BIT
+  [+4]  su tamaño total (el único tamaño que se lee tal cual: el de un bloque vivo se recalcula)
+  [+8]  el siguiente hueco de su lista (0 = fin)
 ```
 
-`tryAllocateInner` busca en la free-list un bloque con `totalSize`
-suficiente antes de bumpear `heapNext`.
+De ahí el mínimo de 12 B. Un bloque vivo no guarda su tamaño: por eso un hueco que dejaría 4 u 8 B de sobra no vale
+para una reserva (la «astilla»: el sobrante no puede ser un hueco ni quedarse en el bloque).
+
+**La VM-C (V8 `#718`, 30-oct): 48 listas por tamaño.** Una por cada tamaño exacto de 12 a 124 B y una por potencia
+de dos desde 128 B (la última, también lo que pase de 64 MB); cada una en orden de dirección, y un mapa de 64 bits de
+las que tienen huecos (`huecos_cab`, `huecos_dedo`, `huecos_mapa` en `bpvm_t`; `heap.c`, «LOS HUECOS»).
+- **Reservar** coge el hueco de dirección más baja entre los que valen —el mismo que elegía la lista única, ordenada
+  por dirección desde `#355`—, comparando sólo las cabezas de las listas que pueden valer; lo que sobra (12 B o más)
+  va a la lista de su tamaño. Si no vale ninguno, el bump. Elegir por tamaño («best fit») se probó y fragmentaba más.
+- **Dar de alta** pone el hueco en su sitio por dirección, buscando desde el «dedo» de su lista (el último dado de
+  alta en ella). El barrido y la compactación dan de alta por dirección: un paso por hueco.
+- **Soltar un owner** no funde con los vecinos: el hueco va a su lista, y el barrido siguiente junta lo seguido.
+- **En la RP2350**, el camino de la reserva (`try_allocate_inner` y `add_to_free_list`, ~720 B) va a la SRAM
+  (`BPVM_EN_SRAM`): en la imagen P todo lo demás corre desde la flash por una caché de 16 KB, y traerlo de allí en cada
+  reserva costaba más que lo que ahorraban las listas (medido en la Pico 2: FICHAS `#718`).
+
+**miVM** lleva su propia lista: una pila, que sirve primero el último hueco soltado (tampoco funde al soltar: lo hace
+su barrido). Coloca distinto que la VM-C; el invariante es la salida, no la colocación.
 
 ### 2.5 Compactación (`Heap.compact()`, V7/H7 #595)
 

@@ -110,6 +110,11 @@ typedef struct { uint64_t v; } bpref_t;
 /* Header de objeto en heap. */
 #define BPVM_OBJ_HEADER_SIZE 8
 #define BPVM_MIN_FREE_BLOCK  12
+/* V8 #718 (30-oct) — los huecos, en LISTAS POR TAMAÑO (heap.c, «LOS HUECOS»): una por cada tamaño exacto de 12 a
+ * 124 B, y una por potencia de dos desde 128 B hasta 64 MB (la última, también lo que pase de ahí). Las 48 caben en
+ * un mapa de dos palabras de 32 bits. */
+#define BPVM_HUECOS_EXACTAS  29u
+#define BPVM_HUECOS_LISTAS   48u
 
 /* Offsets del class descriptor (MOD_FORMAT.md §8). */
 #define BPVM_CLS_OFF_NUM_FIELDS   0
@@ -570,8 +575,12 @@ struct bpvm {
      * del heap» pregunta por esto. */
     uint32_t heap_top;
     /* H3 (V2): GC con free-list + reuso + coalescing + retreat + disparo por
-     * umbral (espejo de la VM-Java). Bloque libre = [tag FREE][size@+4][next@+8]. */
-    uint32_t free_list_head;   /* 0 = lista vacía */
+     * umbral (espejo de la VM-Java). Bloque libre = [tag FREE][size@+4][next@+8].
+     * V8 #718 (30-oct): ya no es UNA lista, son 48 por tamaño, cada una en orden de dirección (heap.c, «LOS
+     * HUECOS»). Las pone a cero bpvm_huecos_vaciar. */
+    uint32_t huecos_cab[BPVM_HUECOS_LISTAS];    /* el hueco más bajo de cada lista; 0 = vacía */
+    uint32_t huecos_dedo[BPVM_HUECOS_LISTAS];   /* el último dado de alta en cada lista (al barrer, su cola); 0 = ninguno */
+    uint32_t huecos_mapa[2];                     /* bit c%32 de la palabra c/32: la lista c tiene huecos */
     uint32_t last_gc_heap_next;/* heap_next en el último GC (histórico; ya no dispara) */
     /* #357 — BYTES RESERVADOS desde el último GC, vengan de donde vengan (lista de
      * libres O bump). ESTE es el que dispara la colecta ahora.
@@ -917,6 +926,18 @@ typedef uint16_t __attribute__((__may_alias__)) bpvm_u16_a;
 #define BPVM_EN_LINEA __attribute__((__always_inline__))
 #else
 #define BPVM_EN_LINEA
+#endif
+/* V8 #718 (30-oct) — EN LA SRAM, en la RP2350: la función va a `.time_critical`, que el script de enlace mete en
+ * `.data` (el arranque la copia de la flash a la SRAM) en las dos imágenes, P y M. En P todo el código corre desde la
+ * flash por una caché de 16 KB, y el intérprete echa de ella lo demás entre operación y operación: lo que recorre cada
+ * reserva se volvía a traer de la flash cada vez (~0,6 µs por línea de 8 B). Medido en la Pico 2 con el camino de la
+ * reserva aquí (720 B): AllocBench −13 %, MapDesplaza −11 % (FICHAS #718; Eduardo: «adelante la b)»). Sólo para un
+ * camino corto y caliente: cada byte sale del heap de la Pico 2. En M los ficheros calientes ya van enteros a la SRAM
+ * (BPVM_EN_RAM_M); en las demás familias, nada. */
+#if defined(PICO_RP2350)
+#define BPVM_EN_SRAM __attribute__((section(".time_critical.bpvm")))
+#else
+#define BPVM_EN_SRAM
 #endif
 uint32_t bpvm_read_u32_be_bytes(const uint8_t* p);
 uint16_t bpvm_read_u16_be_bytes(const uint8_t* p);
@@ -1373,6 +1394,8 @@ int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc);
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
 void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);
+/* V8 #718 — las listas de huecos, vacías (el arranque, la carga, el enlace; el barrido y la compactación, por dentro). */
+void     bpvm_huecos_vaciar(bpvm_t* vm);
 /* #656 — soltar un owner: su handle muere y, en cascada, los de sus campos owner y los elementos de un array owner, y
  * sus bloques vuelven a la lista de libres (con dos runs, al siguiente GC). SIN recursión. La llama el FREE_REF y la
  * asignación a un campo owner (interp.c, bpvm_free_owned). */

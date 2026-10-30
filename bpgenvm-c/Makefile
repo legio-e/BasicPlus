@@ -2090,7 +2090,7 @@ test-mdnscan: $(LIBOBJ)
 test-freelist: $(LIBOBJ)
 	@mkdir -p build
 	$(CC) $(CFLAGS) -Isrc test/test_freelist.c $(LIBOBJ) -o build/test_freelist.exe $(LDFLAGS)
-	@echo "--- lista de libres: orden + fusion izq/der (esperado: solo 'ok', [status=OK]) ---"
+	@echo "--- huecos (#718): las listas por tamano, el mas bajo que vale, la astilla, el orden y el barrido (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_freelist.exe
 
 # #362 — la ZONA de packs sirve RECURSOS (fuentes, iconos), no solo modulos.

@@ -504,7 +504,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->heap_next  = vm->heap_start;
     vm->heap_bloques = 0;                     /* V7/H7 #593: el heap, vacío */
     /* H3 (V2): el loader fijará el umbral real con el heap_start tras cargar. */
-    vm->free_list_head    = 0;
+    bpvm_huecos_vaciar(vm);   /* V8 #718: las listas de huecos, vacías */
     vm->last_gc_heap_next = vm->heap_next;
     vm->alloc_since_gc    = 0u;   /* #357 */
     vm->gc_bump_threshold = 0;   /* off hasta entonces */
@@ -1543,7 +1543,7 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
     vm->heap_start        = vm->next_free_address;
     vm->heap_next         = vm->heap_start;
     vm->heap_bloques      = 0;   /* V7/H7 #593: el heap, vacío */
-    vm->free_list_head    = 0;
+    bpvm_huecos_vaciar(vm);   /* V8 #718: las listas de huecos, vacías */
     vm->last_gc_heap_next = vm->heap_next;
     vm->alloc_since_gc    = 0u;   /* #357 */
     vm->gc_bump_threshold = (vm->heap_top - vm->heap_start) / 8;
