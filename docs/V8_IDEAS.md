@@ -4605,7 +4605,7 @@ valor por defecto de un parámetro, un `null` con su tipo para elegir una sobrec
 Con `#755` hecha (el mismo día: `eol()`, y en el traductor `Environment.NewLine` es `eol()`), las dos coinciden:
 **275 funcionan** y **4 fallan** (`test-126`, `test-29`, `test-231` y `test-907`).
 
-## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`, sólo análisis)
+## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
 guardando la interfaz de las clases así que no deberia costar mucho incluirla en el compilador.»*; *«Tenemos pendiente
@@ -4875,8 +4875,10 @@ vengan de Java lo podrian hechar de menos,a nosotros nos sale casi gratis.»*):
   hace falta.
 - **`@override{}`, para redefinir un método del padre**: opcional («es mas claro y los que vengan de Java lo podrian
   hechar de menos»); si la lleva y no redefine nada, error (la errata de Java). Lo escrito sin ella sigue valiendo.
-- **Una anotación por declaración**, como hoy (el parser guarda una): un método que implementa una interfaz de su
-  cabecera y a la vez redefine el del padre lleva `@implement`, la obligatoria.
+- **Varias anotaciones por declaración**, como en Java (Eduardo: *«Si, varias notaciones»*; hoy el parser guarda una):
+  una property de una entidad del ORM que implementa una interfaz lleva `@BD{ pk }` y `@implement{ IConId }`, y un
+  método que implementa y redefine a la vez puede llevar `@implement` y `@override`. Un cambio pequeño en los dos
+  parsers, en los escritores BP ↔ JC y en quien las lee (la validación del ORM y su generador de DAO).
 - **En el módulo**: el bit «implementa» en la fila del método (el 2; hoy, el 0 es `override` y el 1, privado); al
   enlazar, E11 si la interfaz gana un método que la clase no tiene, y E12 si ninguna interfaz de la clase tiene ya el
   que la clase dice implementar. `@override` no llega al módulo: el bit `override` ya lo pone el compilador siempre.

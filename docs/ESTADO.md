@@ -27,7 +27,8 @@
 
 ## Última sesión
 
-> **31-oct (tarde, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto, hecho** (Eduardo: *«OK,
+> **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
+> tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,
 > adelante con H6»*; al algoritmo y sus cinco decisiones, *«OK a todos»*).
 > - **El algoritmo** (`V8_IDEAS` §E9): seis pasos sobre Roslyn (leer, recorrer el árbol entero, escribir el módulo,
 >   compilar con el de JC, ejecutar en las dos VMs y el veredicto); dos reglas de fondo (se reescribe sólo lo que JC
@@ -73,8 +74,24 @@
 >   interfaces estoy encantado. Y si, la herencia múltiple de tipos»*): sí, en BP y en JC, con métodos y properties.
 >   Yo había escrito «no es herencia múltiple», y Eduardo lo cazó: es la de tipo (la de Java), no la de estado ni la de
 >   código; corregido. `V2_BACKLOG` §5, marcado como reabierto.
-> - **Lo siguiente:** las decisiones 3 a 6 de `#756` y, con su OK, empezar; la biblioteca (las excepciones de .NET,
->   `ArrayList` como nuestra `List` —Eduardo: *«ArrayList no es nuestro List?»*—, la reflexión fuera) y `char`.
+> - **Y el resto, decidido: es el hito H7.3** (`FICHAS`, la fila de H7 y `#756`; las reglas, en `V8_IDEAS` §E10). La
+>   sintaxis (JC: `class C : B, I, J`; BP: `class C extends B implements I, J`, `interface … end`); `Thread` y sus
+>   hijas, sin interfaces; la versión 2 de `CLASES`, sólo en los módulos que las usan. Y la 5, que fue de Eduardo:
+>   el método que implementa lo dice, con una anotación propia (*«Prefiero separar impements de override»*):
+>   `@implement{ A, B }`, obligatoria, con una o varias de las interfaces de la clase; `@override{}`, opcional, para
+>   redefinir un método del padre; varias anotaciones por declaración (*«Si, varias notaciones»*); y en el módulo, el
+>   bit «implementa» de la fila del método, con E11 y E12 al enlazar. Nada programado.
+> - **Para mañana (1-nov; Eduardo: *«lo podemos dejar para mañana que llevamos bastantes horas»*): H7.3**, en el orden
+>   de §E10: el compilador y la VM-Java (los dos parsers, las anotaciones, el símbolo, los tipos, el emisor, `CLASES`
+>   v2, las tres instrucciones; samples buenos y de error), luego la VM-C con la paridad, el caso de dos módulos y los
+>   del enlace tardío (`mezcla.py`), el traductor (las interfaces dejan de ser clases base, y pone `@implement` y
+>   `@override`) y la red. Antes de nada, el código del cargador (`link.c` `lt_asegurar`, `EnlaceTardio.asegurar`) y
+>   de las anotaciones (`Parser.parseAnnotation`, `JcParser.anotacion`, `SemanticAnalyzer.validateAnnotations`).
+> - **Lo que acecha:** el próximo lote de placas pide imágenes y `Stdlib.pack` nuevos (la stdlib cambió con H7.2 y
+>   `#755`); un sample con interfaces, `// mod8: fuera` (sólo MOD9, como `Genericos`); y abiertas, sin tocar, `#757`
+>   (el AOT y las conversiones: código equivocado sin error) y `#758`. Después de H7.3, la biblioteca del traductor
+>   (las excepciones de .NET, `ArrayList` como nuestra `List` —Eduardo: *«ArrayList no es nuestro List?»*—, la
+>   reflexión fuera) y `char`.
 >
 > **31-oct (mediodía)** — **H7.2 (`#749`): los genéricos de lo que ya hay, y de paso `#748`** (Eduardo: *«nuestro List
 > es en realidad List<Object>»*; a las cuatro preguntas, *«1 los dos. 2 OK con la propuesta. 3 OK. 4 de momento no, mas
