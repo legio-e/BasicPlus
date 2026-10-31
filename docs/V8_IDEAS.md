@@ -4604,3 +4604,234 @@ valor por defecto de un parámetro, un `null` con su tipo para elegir una sobrec
 
 Con `#755` hecha (el mismo día: `eol()`, y en el traductor `Environment.NewLine` es `eol()`), las dos coinciden:
 **275 funcionan** y **4 fallan** (`test-126`, `test-29`, `test-231` y `test-907`).
+
+## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`, sólo análisis)
+
+Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
+guardando la interfaz de las clases así que no deberia costar mucho incluirla en el compilador.»*; *«Tenemos pendiente
+en análisis de la Interfaz en JC.»*; y *«Yo creo que una clase y una interfaz se guardan igual o casi igual. Con un id
+que indique que una es una clase y otro id que indique que es una interfaz debería valer»*. Aquí, el análisis y el
+algoritmo, para su OK. Nada programado.
+
+### Lo que ya estaba decidido, y lo que ha cambiado
+
+- **El 6-jun, descartadas** (`V2_BACKLOG.md` §5, Eduardo): *«No se harán interfaces de clase. El polimorfismo por
+  herencia simple (L2 v3) cubre el caso OO habitual»*; para un contrato, una clase concreta con el método esperado. El
+  30-ago se retiraron también las de módulo (`manual.html` §10.4: *«Ni para clases —que sería lo defendible— ni para
+  módulos»*; su código sigue, sin uso). Y en `#745` (31-oct): *«A priori, herencia múltiples y expresiones landa no
+  entrarían»*: el traductor hace de una interfaz sola la clase base, y lo demás es «fuera: interfaces (herencia
+  múltiple)».
+- **Lo que ha cambiado desde junio** (lo que pide revisarlo):
+  1. **JC** (H1, 18-oct): su razón de ser es el código de Java y de C#, y ahí las interfaces están en todas partes. La
+     herencia simple sigue cubriendo lo habitual de un programa de BP; lo de C#, no.
+  2. **MOD9** (`#523`, sep.): el módulo ya guarda cada clase con sus métodos **por clave** (`area()d`), y el cargador ya
+     construye las vtables buscando por clave. La tabla que pide una interfaz se construye igual: es lo que dice Eduardo.
+  3. **Lo medido**: 47 pruebas de Mono las piden, y a 13 no les falta nada más.
+- **No es herencia múltiple.** Una interfaz no trae campos ni código: ni diamante de campos, ni dos vtables, ni ajuste
+  de `this` (lo que `V2_BACKLOG.md` §6 desaconsejaba, con razón). Es el modelo de Java y de C#: un padre y las
+  interfaces que se quiera.
+
+### Qué sería una interfaz
+
+- Un tipo con **métodos sin cuerpo** y **properties**, que puede **heredar de varias interfaces**. Sin campos, sin
+  constructores, sin miembros estáticos, sin cuerpos por defecto (los de C# 8 y Java 8) y sin eventos.
+- Una clase tiene **un padre**, como hoy, y **las interfaces que quiera**.
+- **Implementarla** es tener, propio o heredado del padre, un método público con el mismo nombre y la misma firma
+  —parámetros y retorno: la clave de MOD9— por cada método de la interfaz y de las que hereda. Si falta uno, error de
+  compilación con su nombre. Una property pide sus dos accesores, `getX()t` y `setX(t)V` (en BP una property siempre
+  los tiene).
+- **Es un tipo, como una clase**: variables, parámetros, retornos, campos. Una clase que la implementa se le asigna sin
+  escribir nada, y ella se asigna a `Object`; al revés, `(I) x` en JC e `I(x)` en BP, comprobado al ejecutar como hoy
+  (si no, el RuntimeError que nombra el tipo); `x is I` y `x instanceof I`; `==` con cualquier referencia (la
+  identidad); y los métodos de `Object` (`toString()`…) sobre cualquier interfaz.
+
+En JC:
+
+```
+interface IForma
+{
+   function double area();
+}
+
+interface IPoligono : IForma
+{
+   function int lados();
+}
+
+class Cuadrado : Figura, IPoligono
+{
+   …
+   public function double area() { return this.lado * this.lado; }
+   public function int lados() { return 4; }
+}
+
+IForma f = new Cuadrado(2.0);
+println(f.area());
+if (f is IPoligono)
+{
+   println(((IPoligono) f).lados());
+}
+```
+
+y en BP:
+
+```
+interface Forma
+  function area(): double
+end Forma
+
+interface Poligono extends Forma
+  function lados(): integer
+end Poligono
+
+class Cuadrado extends Figura implements Poligono
+  …
+  public function area(): double
+    return this.lado * this.lado
+  end area
+  public function lados(): integer
+    return 4
+  end lados
+end Cuadrado
+
+var f: Forma := Cuadrado(2.0)
+print f.area()
+if f instanceof Poligono then
+  print Poligono(f).lados()
+endif
+```
+
+`interface`, `extends` e `implements` ya son palabras de los dos lenguajes (las de los módulos retirados): **ninguna
+palabra nueva**.
+
+### Cómo se guarda: como una clase, con su marca (lo que dice Eduardo)
+
+En la subtabla `CLASES` (4.5) de MOD9 una interfaz es **una fila más**, con un bit nuevo en sus `flags` (el bit 2,
+**interfaz**: el «id» de Eduardo; hoy se usan el 0, abierta, y el 1, pública). Lleva su nombre y sus métodos por clave,
+sin código (`codeOff` = −1); no lleva campos ni eventos, y en lugar del padre, las interfaces de las que hereda. Cada
+clase añade a su fila **las interfaces que declara** (`depIdx` y nombre, como su padre). La fila cambia de forma, así que
+la subtabla sube a su **versión 2** (lleva la suya, `ver:u16`), **sólo en los módulos que usan interfaces**: los demás
+siguen en la 1 y corren en el firmware de hoy. Uno con interfaces en un firmware anterior se rechaza al cargar,
+nombrándolo (`'App': subtabla CLASES de version 2 (esperada 1)`): ruidoso, nada en silencio. La sección `interface` del
+`.mod`, la que lee el compilador al importar, lleva dos directivas nuevas, `iface` e `implements`, que un lector
+anterior salta (§4.5).
+
+### Lo que no se guarda igual: la llamada
+
+Con una clase, un método tiene **la misma ranura** de vtable en todas sus hijas: una hija añade detrás, y lo que
+sobrescribe se queda en la ranura del padre. Por eso `obj.m()` lleva su ranura escrita (en MOD9, la que el cargador
+pone en la ext-table). Con una interfaz no: dos clases sin parentesco la implementan cada una en su sitio.
+
+```
+class Cuadrado : Figura, IForma   → area, en la ranura 4 (detrás de lo de Figura)
+class Circulo : IForma            → area, en la ranura 2
+IForma f = …;  f.area()           → ¿la 4 o la 2? Depende del objeto, no del tipo de f
+```
+
+La pieza nueva es **una tabla por clase y por interfaz** («`IForma.area` → 4» en `Cuadrado`, «→ 2» en `Circulo`), que
+el cargador construye **al cargar, buscando por clave**, como ya construye las vtables. Y tres instrucciones nuevas
+(hay sitio desde `0xBF`):
+- **llamar por una interfaz**: la clase del objeto, su tabla de esa interfaz (la busca en su lista, de una a tres
+  entradas lo normal), la ranura, y desde ahí **lo mismo que una llamada virtual** (`bpvm_vt_resolver` /
+  `resolverVirtual`, con su subida por los padres). Es lo que ya hace `INVOKE_SLOT` (`0xBE`, `#607`) con la ranura
+  calculada al ejecutar;
+- **`is` con una interfaz**: si está en la lista de la clase del objeto;
+- **convertir a una interfaz**: lo mismo, y si no está, el RuntimeError de siempre, que nombra el tipo.
+
+El `is` y la conversión a una clase siguen como hoy, por la cadena de padres.
+
+### El algoritmo del cargador (el mismo en las dos VMs; tras el paso 2 de `MOD_FORMAT.md` §13.4)
+
+- **2b. Las interfaces.** Registrarlas como las clases (si falta una, E1; si heredan en ciclo, E7) y, de cada una, su
+  lista **aplanada** de claves: las de las interfaces de las que hereda, en el orden en que las declara, y después las
+  suyas; una clave repetida, una vez. Su «descriptor» es un bloque en la arena, y su dirección, su identidad.
+- **2c. Cada clase, el padre antes que la hija.** Su lista de interfaces es **la del padre, tal cual** (la hija conserva
+  las ranuras de lo que sobrescribe, así que las tablas del padre le valen), más cada interfaz que declara **y las que
+  ésa hereda**, si no estaban ya. De cada una nueva, su tabla: por cada clave, `buscarClave` en la clase (propio o
+  heredado y no privado, la búsqueda de hoy) → la ranura. Si no está, **E11**, nuevo: `'App.Cuadrado' implementa
+  'Lib.IForma' y no tiene 'area()d': recompila 'App'`. La lista va detrás de la vtable del descriptor que construye el
+  cargador.
+- **3. Las refs.** La interfaz, por `CLASE` (la dirección de su bloque). Un método de una interfaz, por una ref nueva
+  (tipo 7), que el cargador resuelve **por clave** en la lista aplanada → su posición; la instrucción lleva las dos.
+  Nada horneado entre módulos: si `Lib` añade un método a `IForma`, `App` sigue enlazando sin recompilar (y si una
+  clase de `App` no lo tiene, E11). Y `SUBTIPO` (tipo 5) mira también las interfaces: «`S` sigue implementando `T`».
+
+Una clase con interfaces **siempre la construye el cargador** (es abierta). En MOD9 casi todas lo son ya —toda clase sin
+`extends` desciende de `Core.Object`, que es de otro módulo—; sólo cambia para las de `Core`, si un día implementan una.
+Así la VM sabe qué clases llevan lista (un detalle de la implementación: por ejemplo, las que construye el cargador
+viven en la arena; las horneadas no tendrían ninguna).
+
+### El compilador
+
+- **Los dos parsers**: `interface` dentro de un módulo; la cabecera de la clase, con su lista (JC: `class C : B, I, J`,
+  la clase primero, como en C#; BP: `class C extends B implements I, J`).
+- **El símbolo**: una interfaz es un `ClassSymbol` con su marca, sin campos y con sus interfaces padre.
+- **Los tipos**: asignar (una clase a la interfaz que implementa, una interfaz a la que hereda y a `Object`), `is`,
+  convertir, `==`; la comprobación de «implementa»; y las llamadas, resueltas contra la lista aplanada (las sobrecargas,
+  también entre las interfaces padre).
+- **El emisor**: las tres instrucciones, las refs, las filas de `CLASES` versión 2 y las directivas de la interfaz del
+  módulo; y en el `.dbg`, la interfaz como tipo de una variable.
+- **Los escritores BP ↔ JC** (`EscritorJc`, `EscritorBp`), el manual y la gramática; y el traductor, que deja de hacer
+  de la interfaz una clase base.
+
+### Lo demás
+
+- **El AOT**: una native que llama por una interfaz, o convierte a una, o pregunta `is`: rechazada con su mensaje (como
+  hoy `instanceof`). Hay que rechazarlo **a propósito**: el AOT ya llama a métodos virtuales por clave y, sin el
+  rechazo, buscaría la clave en la interfaz como si fuera la clase. Más adelante, la llamada podría ir por el puente,
+  como las virtuales.
+- **El depurador**: el wire no cambia (enseña la clase del objeto); el IDE, al enseñar una variable de tipo interfaz,
+  tiene que mirar la clase del objeto: a comprobar.
+- **La memoria en la placa**: por clase con interfaces, 4 bytes, más 8 por interfaz y 2 por cada método de ella; por
+  interfaz, unos 8 + 2·n. Diez clases con una o dos interfaces de cuatro métodos: unos 300 B de arena. El enlace, una
+  búsqueda por clave por cada método de cada interfaz de cada clase, como las vtables. Y la llamada, la de una virtual
+  más recorrer una lista corta.
+
+### Lo que da
+
+- **Mono**: de las 13 a las que sólo les faltan las interfaces, leídas una a una, entrarían 10 (`test-80`, `-134`,
+  `-137`, `-197`, `-245`, `-372`, `-421`, `-667`, `-855` y `test-partial-05`: varias interfaces, interfaces que heredan
+  de otras, properties en una interfaz, la implementación heredada del padre). `test-30` pide la implementación
+  explícita (`void IA.Draw()`: dos interfaces con el mismo método y dos cuerpos); `test-457`, dos explícitas con el
+  mismo nombre y distinta firma, que el traductor podría pasar como dos sobrecargas; y `test-746` junta una property y
+  un método con el mismo nombre. De las otras 34, a 16 les faltan además los genéricos y a 8 los métodos no virtuales
+  (`new`).
+- **En BP**: el polimorfismo sin una base común (un `Sensor` que implementan un `Bme280` y un `Dht22` que ya heredan de
+  otra clase), y el contrato con su tipo, en lugar de la clase-callback de junio.
+- **Más adelante, en la stdlib** (cada una, su decisión): `Comparable` para ordenar, `Iterable` para el `foreach` sobre
+  colecciones propias (lo piden 49 pruebas) y las interfaces genéricas, con los genéricos de H7.
+
+### Lo que no entraría en el primer paso
+
+La implementación explícita de C# (el traductor la sigue pasando como un método normal cuando no choca con otro, y
+rechazándola cuando choca), los cuerpos por defecto, los miembros estáticos, las interfaces genéricas y el `catch` de
+una interfaz (se atrapan clases que heredan de `Exception`).
+
+### Lo que hay que decidir (Eduardo)
+
+1. **¿Se reabre la decisión del 6-jun?** Y si se reabre, ¿en JC y en BP? Propuesta: en los dos; es el mismo
+   compilador, y una interfaz de un módulo JC tiene que poder implementarse desde uno BP.
+2. **El primer paso**: métodos, properties, herencia entre interfaces y la implementación heredada del padre; fuera, lo
+   del apartado anterior.
+3. **La sintaxis**: la de arriba.
+4. **`Thread` y sus hijas.** En BP un `Thread` no es un `Object` (es `root class`). Propuesta: que no puedan implementar
+   interfaces, para que el valor de una interfaz sea siempre un `Object` (y `toString()` tenga qué despachar).
+5. **Si una clase deja de tener un método de su interfaz** (otra versión de la librería): Java lo descubre al llamarlo
+   (`AbstractMethodError`); MOD9 lo diría **al enlazar**, nombrándolo (E11). Propuesta: al enlazar, como el resto de
+   §13.
+6. **La compatibilidad**: la versión 2 de `CLASES`, sólo en los módulos que usan interfaces (arriba).
+
+### El orden, si sale el OK
+
+El de siempre: el compilador y la VM-Java, con los samples buenos y los de error (no implementa, ciclo, conversión
+inválida); después, la VM-C, con la paridad, el caso de dos módulos (una interfaz en una librería) y los del enlace
+tardío en `mezcla.py` (la librería añade un método a la interfaz → E11; una clase deja de implementarla → E10); el
+traductor; la red; y la placa, en la próxima tanda.
+
+### Hallazgos de paso (con ficha)
+
+- `#757` — el AOT compila una conversión de referencia como si construyera un objeto: en una native,
+  `var p: Perro := Perro(a)` (con `a` un `Animal`) llama a la factoría de `Perro` con `a` como argumento si el
+  constructor pide un entero. Código equivocado sin un error; visto en el C que genera (una sonda, `CastNat`).
+- `#758` — una ranura que no se resuelve al llamar (un `.mod` corrupto o un fallo del cargador; tras un enlace bueno,
+  no pasa) para el programa en la VM-C y es un error atrapable en la VM-Java.

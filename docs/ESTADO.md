@@ -63,9 +63,14 @@
 >   de placas, las imágenes y el pack nuevos.** La red, VERDE (18:52; la paridad, 177) y `check-jc` (173 y los 4 SKIP);
 >   el IDE, rehecho. En el traductor, `Environment.NewLine` es `eol()`; Mono: **275 funcionan** y 4 fallan (`gen-check`
 >   y `gen-cast-test` ya coinciden).
-> - **Lo siguiente:** la biblioteca (las excepciones de .NET, `ArrayList` como nuestra `List` —Eduardo: *«ArrayList no
->   es nuestro List?»*—, la reflexión fuera) y `char`. Y, si Eduardo dice, las interfaces de verdad en JC (Eduardo:
->   *«quizás deberiamos añadir una interfaz a JC»*): sin analizar todavía.
+> - **Y las interfaces de clase, analizadas** (`#756`, `V8_IDEAS` §E10; Eduardo: *«quizás deberiamos añadir una
+>   interfaz a JC»*, *«una clase y una interfaz se guardan igual o casi igual. Con un id…»*): reabre lo descartado el
+>   6-jun. Se guardan como una clase, con un bit en `CLASES`; lo nuevo es la llamada: una tabla por clase y por interfaz
+>   que el cargador construye por clave, como las vtables, y tres instrucciones. Seis decisiones, para Eduardo. Nada
+>   programado. Salieron de paso `#757` (el AOT compila una conversión como una construcción: código equivocado sin
+>   error, visto en su C) y `#758` (una ranura sin resolver, distinta en cada VM).
+> - **Lo siguiente:** lo que decida Eduardo de `#756`; la biblioteca (las excepciones de .NET, `ArrayList` como nuestra
+>   `List` —Eduardo: *«ArrayList no es nuestro List?»*—, la reflexión fuera) y `char`.
 >
 > **31-oct (mediodía)** — **H7.2 (`#749`): los genéricos de lo que ya hay, y de paso `#748`** (Eduardo: *«nuestro List
 > es en realidad List<Object>»*; a las cuatro preguntas, *«1 los dos. 2 OK con la propuesta. 3 OK. 4 de momento no, mas
