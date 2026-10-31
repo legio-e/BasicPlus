@@ -7264,8 +7264,13 @@ terciario»*.
   **La VM, no:** son instrucciones que ya tiene (las operaciones y los saltos).
 - **Por decidir (Eduardo):**
   1. **cómo se escriben en BP.** Los compuestos, `*=`, `/=`, `mod=`, `&=`, `|=`, `xor=`, `shl=`, `shr=` (los de bits ya
-     estaban así en las ideas de V3, en la gramática). El ternario, `if c then a else b`, porque BP es de palabras
-     (`var signo := if x < 0 then -1 else 1`); o el mismo `c ? a : b` de JC;
+     estaban así en las ideas de V3, en la gramática): por confirmar. **El ternario, decidido: con forma de función**
+     (Eduardo, 31-oct: *«El ternario BP como una función inline (no se que nombre poner) T(exprLog, v1, v2)»*). El
+     nombre, por decidir; la propuesta, `iif(c, a, b)`, el de Visual Basic, FoxPro y SQL Server. Aunque se escriba como
+     una función, el compilador sólo calcula el valor que toca, como el `c ? a : b` de C# (el `IIf` de VB6 calculaba
+     los dos): `iif(p != null, p.nombre, "nadie")` no falla con `p` nulo. Lo despliega el compilador con saltos, como
+     resuelve `integer(x)`; no es una `inline` de una instrucción como `len`. En el árbol, la llamada de BP, con una
+     marca que la comparación no cuenta (como el `new X()` y el `(T) x` de JC); en JC se escribe `c ? a : b`;
   2. **el tipo de un compuesto.** Como en C#: se opera en el tipo de `x op e` y el resultado vuelve al de `x` (`int x = 3;
      x *= 1.5;` da 4). Hoy, `x += e` convierte primero `e` al tipo de `x`: con `*=`, daría 3. Propuesta: la regla de C#
      para todos, también para `+=` y `-=` (el corpus dirá si cambia algún `.mod`);
