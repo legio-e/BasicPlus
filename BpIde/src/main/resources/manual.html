@@ -182,6 +182,8 @@
     <li class="sub"><a href="#var-owner">5.3 var owner</a></li>
 
     <li class="group"><a href="#operadores">6. Operadores</a></li>
+    <li class="sub"><a href="#compuestos">6.1 Asignaciones compuestas</a></li>
+    <li class="sub"><a href="#iif">6.2 El ternario, iif</a></li>
     <li class="group"><a href="#control">7. Control de flujo</a></li>
     <li class="sub"><a href="#if">7.1 if / elseif</a></li>
     <li class="sub"><a href="#while">7.2 while / do</a></li>
@@ -731,7 +733,9 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
       <code>"z" &lt; "ñ"</code>), como <code>Str.compare</code>. Una cadena sin valor ordena como <code>""</code>, pero
       con <code>==</code> sólo es igual a otra sin valor</td></tr>
   <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
-  <tr><td>Asignación</td><td><code>:= += -=</code></td></tr>
+  <tr><td>Asignación</td><td><code>:= += -= *= /= mod= &amp;= |= xor= shl= shr=</code> (los compuestos, abajo)</td></tr>
+  <tr><td>Ternario</td><td><code>iif(condición, a, b)</code>: el valor de <code>a</code> si la condición se cumple, y si
+      no el de <code>b</code>; sólo se calcula el que toca (abajo)</td></tr>
   <tr><td>Acceso</td><td><code>.</code> (member) <code>[]</code> (index) <code>()</code> (call)</td></tr>
   <tr><td>Type test</td><td><code>x instanceof Foo</code></td></tr>
   <tr><td>String</td><td><code>+</code> concatena: convierte a texto los primitivos, los enums (su número) y
@@ -746,6 +750,41 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   La potencia es <strong>asociativa a la derecha</strong> (<code>2 ^ 2 ^ 3</code> =
   <code>2 ^ (2 ^ 3)</code> = 256) y liga más fuerte que el unario:
   <code>-x ^ 2</code> = <code>-(x ^ 2)</code>.
+</p>
+
+<h3 id="compuestos">6.1 Las asignaciones compuestas</h3>
+<p>
+  <code>x op= e</code> es <code>x := x op e</code>, con <code>x</code> calculado <strong>una vez</strong>
+  (<code>a[f()] += 5</code> llama a <code>f</code> una vez). Los de palabra se escriben pegados:
+  <code>x mod= 3</code>, <code>xor=</code>, <code>shl=</code>, <code>shr=</code>. Los tipos, como en C#: se opera en el
+  tipo de <code>x op e</code>; si el resultado no se guarda solo en el de <code>x</code>, vale sólo si <code>e</code> sí
+  se guardaría sola en <code>x</code> (o es un desplazamiento), y entonces el resultado se recorta al tamaño de
+  <code>x</code>, dando la vuelta. Lo demás es un error: no se pierde nada en silencio.
+</p>
+<pre><code><span class="kw">var</span> b: <span class="type">byte</span> := <span class="num">255</span>
+b += <span class="num">1</span>                    <span class="comment">// 0: un byte opera en integer y guarda su tamaño</span>
+<span class="kw">var</span> l: <span class="type">long</span> := <span class="num">1</span>
+l shl= <span class="num">40</span>                 <span class="comment">// 1099511627776</span>
+<span class="kw">var</span> s: <span class="type">string</span> := <span class="str">"n="</span>
+s += <span class="num">5</span>                    <span class="comment">// "n=5": '+' concatena</span>
+<span class="kw">var</span> i: <span class="type">integer</span> := <span class="num">3</span>
+i *= <span class="num">1.5</span>                  <span class="comment">// error: integer * float da float, que no se guarda solo en integer</span>
+i := <span class="type">integer</span>(i * <span class="num">1.5</span>)     <span class="comment">// 4: la conversión, escrita</span></code></pre>
+
+<h3 id="iif">6.2 El ternario, <code>iif</code></h3>
+<p>
+  <code>iif(condición, a, b)</code> es el valor de <code>a</code> si la condición se cumple, y si no el de
+  <code>b</code>. Tiene forma de función, pero <strong>sólo se calcula el que toca</strong>, como el
+  <code>c ? a : b</code> de C# (y así se escribe en JC): con <code>p</code> nulo, lo de abajo no falla, y un
+  <code>fib</code> recursivo con <code>iif</code> termina. Su tipo es el de las dos ramas: el mismo; o números, y gana
+  el más ancho; o <code>null</code> y una referencia; o una clase y su hija, y gana el padre.
+</p>
+<pre><code><span class="kw">var</span> nombre: <span class="type">string</span> := iif(p != <span class="kw">null</span>, p.nombre, <span class="str">"nadie"</span>)
+<span class="kw">return</span> iif(n &lt; <span class="num">2</span>, n, fib(n - <span class="num">1</span>) + fib(n - <span class="num">2</span>))</code></pre>
+<p>
+  Es un valor, no una sentencia (para elegir qué hacer, un <code>if</code>); un <code>var owner</code> local no puede
+  ser una rama (el ternario no mueve un owner: con un <code>if</code>, sí); y el nombre es del lenguaje: una función no
+  puede llamarse <code>iif</code>.
 </p>
 
 <!-- =========================================================== -->

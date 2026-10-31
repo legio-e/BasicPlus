@@ -68,11 +68,14 @@ final class JcLexer {
             "print", "println", "inline", "this", "super", "true", "false", "null",
             "int", "long", "float", "double", "bool", "string", "byte", "sbyte", "short", "ushort"));
 
+    /** Los signos de tres caracteres, que se miran antes que los de dos: los compuestos de los desplazamientos
+     *  (V8/H7.1 #747). */
+    private static final String[] SIGNOS_3 = { "<<=", ">>=" };
     /** Los signos de dos caracteres, que se miran antes que los de uno. */
     private static final String[] SIGNOS_2 = {
             "**", "<<", ">>", "<=", ">=", "==", "!=", "&&", "||", "++", "--", "+=", "-=", "::",
-            "*=", "/=", "%=", "&=", "|=", "^=" };   // estos seis, sólo para decir que JC no los tiene (punto 15)
-    private static final String SIGNOS_1 = "+-*/%&|^!~<>=(){}[],;:.@";
+            "*=", "/=", "%=", "&=", "|=", "^=" };   // los compuestos de C# (V8/H7.1 #747; antes del 31-oct, un error)
+    private static final String SIGNOS_1 = "+-*/%&|^!~<>=(){}[],;:.@?";   // `?`, el ternario (V8/H7.1 #747)
 
     private final String src;
     private int pos = 0, linea = 1, columna = 1;
@@ -118,6 +121,16 @@ final class JcLexer {
         if (ch == '\'') return caracter(l, c);
         if (ch == '@' && ver(1) == '"') throw error("JC no tiene las cadenas @\"…\" de C#, de momento");
         if (ch == '$' && ver(1) == '"') throw error("JC no tiene las cadenas $\"…\" de C# (la interpolación), de momento");
+        if (ch == '?' && (ver(1) == '?' || ver(1) == '.'))
+            throw error("JC no tiene el " + (ver(1) == '?' ? "??" : "?.") + " de C#, de momento (el ternario, c ? a : b, sí)");
+        for (String s : SIGNOS_3) {
+            if (src.startsWith(s, pos)) {
+                avanza();
+                avanza();
+                avanza();
+                return new Tok(Tipo.SIGNO, s, null, l, c);
+            }
+        }
         for (String s : SIGNOS_2) {
             if (src.startsWith(s, pos)) {
                 avanza();

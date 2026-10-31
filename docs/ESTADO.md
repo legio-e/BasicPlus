@@ -42,8 +42,18 @@
 >   hay (`List<Object>`, `Map` con llave `int` o `string`); después el traductor (H6) y por último las pruebas (H8).
 >   Las pruebas, copiadas en `C:\lenguajes\pruebas-csharp\mono\`, fuera del repositorio.
 > - **De paso, `#746`:** `a[f()] += 5` llama a `f()` dos veces, en las dos VMs (C# la llamaría una vez).
-> - **Lo siguiente:** las cuatro decisiones de `#747` (cómo se escriben en BP; el tipo de un compuesto; el destino una
->   vez; el ternario y `owner`), y luego implementar H7.1.
+> - **H7.1, HECHO** (`#747`, con las decisiones de Eduardo: `iif`, los compuestos de BP, *«Los tipos como en C#»*, `#746`
+>   se arregla, el ternario sin `owner`): los ocho compuestos y el ternario en JC (`c ? a : b`) y en BP (`iif(c, a, b)`);
+>   el análisis con la regla de C# (`x *= 1.5` con x integer, error; un ejemplo mío decía lo contrario, y C# no lo
+>   compila: comprobado con Roslyn); el emisor, el AOT y los escritores. De paso, en BP un byte que valía 255 guardaba
+>   256 tras `+= 1`: ahora da la vuelta, como C#.
+> - **Lo que lo prueba:** `Compuestos`, `Iif` y `NatCompuestos` en el corpus; `make test-aotcompuestos` (13/13);
+>   `CompuestoMal` e `IifMal` en los errores; los 657 programas que compilan y la stdlib, byte a byte iguales con el
+>   compilador nuevo; la red, VERDE (13:27); el IDE, rehecho.
+> - **Lo que enseñó:** `I32_TO_U8` y los suyos LANZAN (son los de `byte(x)`): para dar la vuelta, `BAND` y
+>   desplazamientos. Y comparar todos los `.mod` con el jar de antes lleva un minuto y dice que nada cambió.
+> - **Lo siguiente:** H7.2, los genéricos de lo que ya hay (de las 270 pruebas a las que sólo les faltan genéricos, 18
+>   usan sólo `List<T>` y `Dictionary`); y por decidir (Eduardo), dar la vuelta o lanzar en un estrecho que se sale.
 >
 > **31-oct** — **`#743`: el rendimiento de hoy frente a V7, en la Metro y en la P4** (Eduardo: *«Me gustaría poder
 > comparar el rendimiento actual con lo que teníamos […] Por lo menos poder comparar en la Metro y en la P4»*; *«de

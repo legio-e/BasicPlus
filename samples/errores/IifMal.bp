@@ -1,0 +1,29 @@
+// IifMal.bp — FALLA A PROPÓSITO (V8/H7.1 #747): el ternario, iif(condición, a, b). La condición es boolean; las dos
+// ramas dan el mismo tipo (o números, o null y una referencia, o una clase y su hija); un `var owner` local no puede
+// ser una rama (el ternario no mueve un owner: con un if, sí); es un valor, no una sentencia; y el nombre es del
+// lenguaje: una función no puede llamarse iif.
+module IifMal
+
+  class Cosa
+    public function Cosa()
+    end Cosa
+  end Cosa
+
+  function iif(a: integer): integer
+    return a
+  end iif
+
+  function f(): integer
+    return 1
+  end f
+
+  function main()
+    var x: integer := iif(1, 2, 3)
+    var y: integer := iif(x > 0, 1, "uno")
+    var z: integer := iif(x > 0, 1)
+    var owner c: Cosa := Cosa()
+    var d: Cosa := iif(x > 0, c, null)
+    iif(x > 0, f(), f())
+    print x, y, z
+  end main
+end IifMal

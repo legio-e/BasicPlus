@@ -395,6 +395,31 @@ public final class AotCEmitter {
     /** `destino op= valor` (`+=`, `-=`) sobre un `float` o un `double`: la operación
      *  del intérprete (MivmEmitter.emitCompoundOp) con el valor convertido al tipo del
      *  destino. `leer` emite el valor actual del destino. */
+    /** V8/H7.1 (#747) — ¿un compuesto de los nuevos (`*=`, `mod=`…)? Los de antes, `+=` y `-=`, siguen por su camino de
+     *  siempre: el C de los `.mdn` que ya hay no cambia. */
+    private static boolean esCompuestoNuevo(Ast.AssignOpKind op) {
+        return op != Ast.AssignOpKind.ASSIGN && op != Ast.AssignOpKind.PLUS_ASSIGN && op != Ast.AssignOpKind.MINUS_ASSIGN;
+    }
+
+    /** V8/H7.1 (#747) — el valor de `x op= v`: `x op v` por el camino de la expresión binaria (sus helpers son los del
+     *  intérprete: la división de long, la aritmética de double y la de float), y al tipo del destino. */
+    private void emitCompuestoComoBinaria(Ast.AssignStmt a, BpType destino) {
+        Ast.BinaryExpr b = new Ast.BinaryExpr(a.op.binario(), a.target, a.value, a.line, a.column);
+        BpType r = (semInfo != null) ? semInfo.compuestos.get(a) : null;
+        if (r == null) r = destino;
+        if (semInfo != null) semInfo.exprTypes.put(b, r);
+        if (destino == null || (r.isAssignableFrom(destino) && destino.isAssignableFrom(r))) {
+            emitExpr(b);
+            return;
+        }
+        String nombre = esEnteroT(destino) ? "integer" : esLongT(destino) ? "long"
+                      : esFloatT(destino) ? "float" : esDoubleT(destino) ? "double" : null;
+        if (nombre == null)
+            throw new UnsupportedAotException("AOT: '" + a.op.enBp() + "' recorta el resultado a '" + destino.display()
+                    + "' (line " + a.line + "): quita 'native'.");
+        emitConversionExplicita(nombre, b);
+    }
+
     private void emitCompuestoFlotante(Ast.AssignOpKind op, BpType tipo, Runnable leer, Ast.IExpr valor) {
         boolean mas = (op == Ast.AssignOpKind.PLUS_ASSIGN);
         if (esDoubleT(tipo)) w.print("vm->aot_helpers->" + (mas ? "dadd" : "dsub") + "(");
@@ -1552,7 +1577,12 @@ public final class AotCEmitter {
                 String tname = ((Ast.IdentifierExpr) a.target).name;
                 indent();
                 BpType tLocal = tipoDe(a.target);
-                if (localNames.contains(tname)
+                if (localNames.contains(tname) && esCompuestoNuevo(a.op)) {
+                    /* V8/H7.1 (#747) — `x *= v` y los demás: `x = x op v`, por el camino de la expresión binaria. */
+                    w.print(cVar(tname) + " = ");
+                    emitCompuestoComoBinaria(a, tLocal);
+                    w.println(";");
+                } else if (localNames.contains(tname)
                         && a.op != Ast.AssignOpKind.ASSIGN && (esFloatT(tLocal) || esDoubleT(tLocal))) {
                     /* #559 — `x += v` con x float/double: la operación del intérprete, no
                      * el `+=` de C (que sería libgcc sin FPU, y en double en toda placa). */
@@ -1582,7 +1612,13 @@ public final class AotCEmitter {
                     }
                     usesModuleGlobals = true;
                     String addr = "mem + (uint32_t)((int32_t)cs + (" + off + "))";
-                    if (moduleVarFloat.contains(tname)) {
+                    if (esCompuestoNuevo(a.op)) {
+                        /* V8/H7.1 (#747) — la global, leída y escrita con sus helpers; la operación, la de la binaria. */
+                        boolean f32 = moduleVarFloat.contains(tname);
+                        w.print("vm->aot_helpers->" + (f32 ? "write_f32_be(" : "write_i32_be(") + addr + ", ");
+                        emitCompuestoComoBinaria(a, f32 ? PrimitiveType.FLOAT : tLocal);
+                        w.println(");");
+                    } else if (moduleVarFloat.contains(tname)) {
                         /* #559 — una global `float` guarda el PATRÓN DE BITS: se lee y se
                          * escribe con los helpers de f32, como un parámetro del thunk. Con
                          * los de i32, C convertía el número (1.5 → 1) al escribir y el
@@ -1613,8 +1649,24 @@ public final class AotCEmitter {
                 Ast.IndexExpr ix = (Ast.IndexExpr) a.target;
                 BpType tArr = tipoDe(ix.target);
                 BpType tElem = (tArr instanceof ArrayType) ? ((ArrayType) tArr).element : null;
+                /* #746 — un compuesto calcula el array y el índice dos veces (store(a, i, load(a, i) op v)): con una
+                 * llamada dentro, el intérprete los calcula una vez; aquí, que no compile en silencio otra cosa. */
+                if (a.op != Ast.AssignOpKind.ASSIGN && semInfo != null
+                        && !(semInfo.esPuro(ix.target) && semInfo.esPuro(ix.index)))
+                    throw new UnsupportedAotException(
+                        "AOT: '" + a.op.enBp() + "' sobre un elemento cuyo array o índice lleva una llamada (line "
+                        + a.line + "): guárdalo antes en una variable, o quita 'native'.");
                 indent();
-                if (a.op == Ast.AssignOpKind.ASSIGN) {
+                if (esCompuestoNuevo(a.op)) {
+                    /* V8/H7.1 (#747) — a[i] *= v  →  store(a, i, load(a, i) * v), por el camino de la binaria. */
+                    w.print("vm->aot_helpers->" + arrStoreFn(ix.target) + "(vm, ");
+                    emitExpr(ix.target);
+                    w.print(", ");
+                    emitExpr(ix.index);
+                    w.print(", ");
+                    emitCompuestoComoBinaria(a, tElem);
+                    w.println(");");
+                } else if (a.op == Ast.AssignOpKind.ASSIGN) {
                     w.print("vm->aot_helpers->" + arrStoreFn(ix.target) + "(vm, ");
                     emitExpr(ix.target);
                     w.print(", ");
@@ -2728,6 +2780,21 @@ public final class AotCEmitter {
          * recolectarlo a medias: cada elemento que alocara seria una tirada de
          * dados. Esa era la verdadera razon por la que esto estaba pendiente. */
         if (e instanceof Ast.ArrayLitExpr) { emitArrayLit((Ast.ArrayLitExpr) e); return; }
+
+        /* V8/H7.1 (#747) — el ternario, `iif(c, a, b)`: el `?:` de C, que sólo calcula la rama que toca, como el
+         * intérprete; las dos, al tipo del ternario. */
+        if (e instanceof Ast.CallExpr && semInfo != null && semInfo.ternarios.contains(e)) {
+            Ast.CallExpr t = (Ast.CallExpr) e;
+            BpType r = tipoDe(t);
+            w.print("((");
+            emitExpr(t.args.get(0));
+            w.print(") ? (");
+            emitComo(t.args.get(1), r);
+            w.print(") : (");
+            emitComo(t.args.get(2), r);
+            w.print("))");
+            return;
+        }
 
         if (e instanceof Ast.CallExpr) {
             Ast.CallExpr c = (Ast.CallExpr) e;

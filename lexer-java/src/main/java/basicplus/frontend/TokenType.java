@@ -101,6 +101,14 @@ public enum TokenType {
     ASSIGN,         // :=
     PLUS_ASSIGN,    // +=
     MINUS_ASSIGN,   // -=
+    STAR_ASSIGN,    // *=    (V8/H7.1 #747: los compuestos)
+    SLASH_ASSIGN,   // /=
+    MOD_ASSIGN,     // mod=
+    AMP_ASSIGN,     // &=
+    BAR_ASSIGN,     // |=
+    XOR_ASSIGN,     // xor=
+    SHL_ASSIGN,     // shl=
+    SHR_ASSIGN,     // shr=
     EQ,             // ==
     NEQ,            // !=
     LT,             // <

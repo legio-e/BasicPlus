@@ -1,0 +1,18 @@
+// CompuestoMal.bp — FALLA A PROPÓSITO (V8/H7.1 #747): una asignación compuesta, `x op= e`, es `x := x op e` con la
+// regla de C#: si el resultado no se guarda solo en el tipo de x, sólo vale cuando `e` sí se guardaría sola en x (y
+// entonces el resultado se recorta al tamaño de x). Lo demás es un error, para no perder nada en silencio.
+module CompuestoMal
+
+  function main()
+    var i: integer := 3
+    i *= 1.5                 // integer * float da float, que no se guarda solo en integer
+    var s: string := "a"
+    s -= "b"                 // '-=' requiere números
+    var ok: boolean := true
+    ok &= false              // '&=' requiere integer o long
+    var b: byte := 1
+    var n: integer := 300
+    b += n                   // n es un integer que no es un literal: no se guarda solo en un byte
+    print i, s, ok, b
+  end main
+end CompuestoMal

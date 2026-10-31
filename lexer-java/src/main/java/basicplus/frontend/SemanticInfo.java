@@ -41,6 +41,35 @@ public final class SemanticInfo {
     public final java.util.Set<Ast.IExpr> refCasts =
             java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.IExpr, Boolean>());
 
+    /** V8/H7.1 (#747) — los `iif(c, a, b)` del módulo: el ternario, que el emisor despliega con saltos (sólo se
+     *  calcula la rama que toca). Lo decide el semántico, en UN sitio, como `refCasts`. */
+    public final java.util.Set<Ast.IExpr> ternarios =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.IExpr, Boolean>());
+
+    /** V8/H7.1 (#747) — de cada asignación compuesta (`x op= e`), el tipo en que se opera: el de `x op e`, como en C#.
+     *  Si no es el de `x`, el resultado se recorta al de `x` al guardarlo (`byte b; b += 1` opera en integer). */
+    public final Map<Ast.AssignStmt, BpType> compuestos = new IdentityHashMap<>();
+
+    /** #746 — ¿se puede calcular dos veces sin que se note? Una variable, un literal, `this`, el campo de algo así, el
+     *  elemento de un array así, o una operación entre ellos. Una llamada no, ni una propiedad (su getter es código).
+     *  Lo usan los dos emisores para el destino de un compuesto: si no es puro, se calcula una vez. */
+    public boolean esPuro(Ast.IExpr e) {
+        if (e instanceof Ast.ParenExpr) return esPuro(((Ast.ParenExpr) e).inner);
+        if (e instanceof Ast.IntLitExpr || e instanceof Ast.LongLitExpr || e instanceof Ast.FloatLitExpr
+                || e instanceof Ast.DoubleLitExpr || e instanceof Ast.StringLitExpr || e instanceof Ast.BoolLitExpr
+                || e instanceof Ast.NullLitExpr || e instanceof Ast.ThisExpr) return true;
+        if (e instanceof Ast.IdentifierExpr) {
+            Symbol s = exprSymbols.get(e);
+            return s instanceof Symbol.VarSymbol || s instanceof Symbol.ParamSymbol || s instanceof Symbol.ConstSymbol;
+        }
+        if (e instanceof Ast.MemberAccessExpr)
+            return exprSymbols.get(e) instanceof Symbol.VarSymbol && esPuro(((Ast.MemberAccessExpr) e).target);
+        if (e instanceof Ast.IndexExpr) return esPuro(((Ast.IndexExpr) e).target) && esPuro(((Ast.IndexExpr) e).index);
+        if (e instanceof Ast.UnaryExpr) return esPuro(((Ast.UnaryExpr) e).operand);
+        if (e instanceof Ast.BinaryExpr) return esPuro(((Ast.BinaryExpr) e).left) && esPuro(((Ast.BinaryExpr) e).right);
+        return false;
+    }
+
     /** #325 — cada `Thread(obj::metodo(args))` VÁLIDO del módulo, en orden de
      *  análisis. El emisor sintetiza una subclase de Thread por entrada, y las
      *  clases hay que emitirlas antes que el código que las construye. Se

@@ -81,6 +81,16 @@ FirmaLarga|caracteres (maximo 160)
 UnaLineaConFin|no lleva 'endif'
 UnaLineaConFin|no lleva 'endwh'
 UnaLineaConFin|no lleva 'next'
+CompuestoMal|que no se guarda solo en 'integer'
+CompuestoMal|'-=' requiere num
+CompuestoMal|'&=' requiere integer/long
+CompuestoMal|que no se guarda solo en 'byte'
+IifMal|es el ternario de BP
+IifMal|se esperaba boolean, encontrado 'integer'
+IifMal|las dos ramas tienen que dar el mismo tipo
+IifMal|se esperaban 3 argumentos, se pasaron 2
+IifMal|no mueve un owner
+IifMal|es un valor, no una sentencia
 "
 
 ok=0; mal=0

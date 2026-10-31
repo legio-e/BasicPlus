@@ -1,0 +1,158 @@
+// Compuestos.bp — V8/H7.1 (#747, 31-oct): las asignaciones compuestas, `*=`, `/=`, `mod=`, `&=`, `|=`, `xor=`, `shl=`
+// y `shr=` (y las de antes, `+=` y `-=`), con la regla de C# (Eduardo: «Los tipos como en C#»): `x op= e` es
+// `x := x op e`, en el tipo de `x op e`, y el resultado vuelve al tipo de `x` —un byte que vale 255, más 1, es 0; antes
+// del 31-oct guardaba 256—. Y `x` se calcula UNA vez (#746): `a[f()] += 5` llamaba a f() dos veces. Sobre locales,
+// globales, campos, propiedades (de objeto y de clase) y elementos de array; de integer, long, double, float, string y
+// los estrechos. Es de paridad (está en el corpus) y se escribe en JC (`*=`, `%=`, `^=`, `<<=`, `>>=`).
+module Compuestos
+
+  var llamadas: integer := 0
+  var g: integer := 10
+  var gb: byte := 250
+
+  class Caja
+    var n: integer
+    public property p: integer
+    public property Caja.total: integer
+
+    public function Caja()
+      this.n := 2
+      this.p := 3
+    end Caja
+
+    public function triplica()
+      this.n *= 3
+      this.n mod= 5
+    end triplica
+
+    public function valor(): integer
+      return this.n
+    end valor
+  end Caja
+
+  // cuentan sus llamadas: el destino de un compuesto se calcula una vez
+  function indice(): integer
+    llamadas += 1
+    return 1
+  end indice
+
+  function laCaja(c: Caja): Caja
+    llamadas += 1
+    return c
+  end laCaja
+
+  function main()
+    var i: integer := 7
+    i += 3
+    print "+=", i
+    i -= 4
+    print "-=", i
+    i *= 5
+    print "*=", i
+    i /= 4
+    print "/=", i
+    i mod= 4
+    print "mod=", i
+    i &= 6
+    print "&=", i
+    i |= 5
+    print "|=", i
+    i xor= 12
+    print "xor=", i
+    i shl= 3
+    print "shl=", i
+    i shr= 2
+    print "shr=", i
+
+    // los negativos, como en C#: la división trunca, el resto lleva el signo del dividendo, shr es aritmético
+    var m: integer := -7
+    m /= 2
+    var r: integer := -7
+    r mod= 2
+    var sh: integer := -16
+    sh shr= 2
+    print "negativos:", m, r, sh
+
+    var l: long := 1
+    l shl= 40
+    l += 5
+    l *= 3
+    l /= 7
+    l mod= 1000
+    l xor= 255
+    print "long:", l
+
+    var d: double := 10d
+    d *= 1.5d
+    d /= 4
+    d -= 0.25d
+    d mod= 2d
+    print "double:", d
+
+    var f: float := 2.5
+    f *= 4
+    f /= 8
+    f += 1
+    print "float:", f
+
+    var s: string := "n="
+    s += 5
+    s += "/"
+    s += true
+    s += 2.5
+    print s
+
+    // los estrechos operan en integer y guardan su tamaño
+    var b: byte := 255
+    b += 1
+    var b2: byte := 255
+    b2 *= 2
+    var i8: int8 := 127
+    i8 += 1
+    var w: word := 65535
+    w += 1
+    var s16: int16 := 32767
+    s16 += 1
+    gb += 10
+    print "estrechos:", b, b2, i8, w, s16, gb
+
+    // un desplazamiento con la cuenta en un long: opera en long y guarda el integer
+    var k: long := 2
+    var j: integer := 5
+    j shl= k
+    print "shl con long:", j
+
+    g *= 3
+    g mod= 7
+    print "global:", g
+
+    var c: Caja := Caja()
+    c.triplica()
+    c.p *= 4
+    c.p shl= 1
+    Caja.total := 5
+    Caja.total *= 6
+    print "caja:", c.valor(), c.p, Caja.total
+
+    var a: integer[3]
+    a[1] := 4
+    a[1] *= 5
+    var bb: byte[2]
+    bb[0] := 200
+    bb[0] += 100
+    var ld: long[] := newLongArray(2)
+    ld[0] := 3
+    ld[0] shl= 33
+    var dd: double[] := newDoubleArray(1)
+    dd[0] := 9d
+    dd[0] /= 4
+    print "arrays:", a[1], bb[0], ld[0], dd[0]
+
+    // #746: el array, el índice y el objeto, una sola vez
+    llamadas := 0
+    a[indice()] += 5
+    a[indice()] *= 2
+    laCaja(c).p += 1
+    print "una vez:", llamadas, a[1], c.p
+  end main
+end Compuestos

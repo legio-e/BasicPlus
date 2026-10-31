@@ -373,15 +373,36 @@ stmt ::= var_decl
 
 assign_stmt ::= primary assign_op expr ( ';' | NEWLINE ) ;
 
-assign_op   ::= ':=' | '+=' | '-=' ;
+assign_op   ::= ':=' | '+=' | '-=' | '*=' | '/=' | 'mod=' | '&=' | '|='
+              | 'xor=' | 'shl=' | 'shr=' ;
 
-(* Asignación compuesta:
-     x += y    es equivalente a   x := x + y
-     x -= y    es equivalente a   x := x - y
+(* Asignación compuesta (V8/H7.1, #747: de '*=' a 'shr=', el 31-oct):
+     x op= y   es   x := x op y,   con x calculado UNA vez
+               (a[f()] += 1 llama a f una vez)
+
+   Los de palabra van pegados: 'x mod= 3', 'xor=', 'shl=', 'shr='.
+
+   Los tipos, como en C#: se opera en el tipo de 'x op y'. Si el
+   resultado no se guarda solo en el de x, vale sólo si y se guardaría
+   sola en x (o es un desplazamiento), y el resultado se recorta al
+   tamaño de x dando la vuelta:
+       var b: byte := 255     b += 1     → 0
+       var i: integer := 3    i *= 1.5   → error: integer * float da float
 
    Como '+' está sobrecargado para concatenar strings, '+=' también
-   concatena cuando el operando izquierdo es string.
-   '-=' solo aplica a tipos numéricos (integer, float).               *)
+   concatena cuando el operando izquierdo es string (s += 5 → "…5").
+   Los demás piden números ('&=', '|=', 'xor=', 'shl=', 'shr=': integer
+   o long).                                                           *)
+
+(* EL TERNARIO (V8/H7.1, #747): iif(condición, a, b). Para el parser es
+   una call_expr; el compilador la despliega: el valor de a si la
+   condición se cumple, y si no el de b, calculando SÓLO el que toca:
+       var n: string := iif(p != null, p.nombre, "nadie")
+   Su tipo, el de las dos ramas: el mismo; o números (el más ancho); o
+   null y una referencia; o una clase y su hija (el padre). Es un valor,
+   no una sentencia; un 'var owner' local no puede ser una rama; y el
+   nombre es del lenguaje: una función no puede llamarse 'iif'.
+   En JC se escribe c ? a : b.                                        *)
 
 
 (* ========================= CONTROL DE FLUJO ========================= *)
@@ -740,7 +761,7 @@ NEWLINE     ::= '\n' | '\r\n' ;
    - Lambdas y funciones como valor:  var f := (x: integer) => x * 2
    - Genéricos:                       List<integer>, Map<K, V>
    - Interfaces / clases abstractas
-   - Asignaciones compuestas bitwise: &=, |=, xor=, shl=, shr=
+   - Asignaciones compuestas bitwise: &=, |=, xor=, shl=, shr=   (HECHO en V8, H7.1 #747)
    - Operador 'in' como expresión booleana fuera del 'for'
    - Rangos en switch:                case 1..5
 

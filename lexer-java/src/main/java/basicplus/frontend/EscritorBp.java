@@ -315,13 +315,7 @@ public final class EscritorBp {
     }
 
     private String asignacion(AssignStmt a) {
-        String op;
-        switch (a.op) {
-            case PLUS_ASSIGN:  op = " += "; break;
-            case MINUS_ASSIGN: op = " -= "; break;
-            default:           op = " := "; break;
-        }
-        return expr(a.target) + op + expr(a.value);
+        return expr(a.target) + " " + a.op.enBp() + " " + expr(a.value);   // `:=`, `+=`, `mod=`… (V8/H7.1 #747)
     }
 
     private String desempaquetado(DestructAssignStmt d) {

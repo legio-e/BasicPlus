@@ -93,7 +93,23 @@ public final class Ast {
     public interface IExpr         { }
 
     // ---- Enumeraciones auxiliares ----
-    public enum AssignOpKind { ASSIGN, PLUS_ASSIGN, MINUS_ASSIGN }
+    /** Las asignaciones. Las compuestas (V8/H7.1 #747: `*=` y los demás, en BP `mod=`, `xor=`, `shl=` y `shr=`) son
+     *  `x := x op e` con `x` calculado una vez; {@link #binario()} dice su operador de BP (el `op` de un BinaryExpr). */
+    public enum AssignOpKind {
+        ASSIGN(null), PLUS_ASSIGN("+"), MINUS_ASSIGN("-"),
+        MUL_ASSIGN("*"), DIV_ASSIGN("/"), MOD_ASSIGN("mod"), AND_ASSIGN("&"), OR_ASSIGN("|"),
+        XOR_ASSIGN("xor"), SHL_ASSIGN("shl"), SHR_ASSIGN("shr");
+        private final String binario;
+        AssignOpKind(String binario) { this.binario = binario; }
+        /** El operador de BP con el que opera el compuesto; null en `:=`. */
+        public String binario() { return binario; }
+        /** Cómo se escribe en BP: `:=`, `+=`, `mod=`… */
+        public String enBp() { return binario == null ? ":=" : binario + "="; }
+    }
+
+    /** V8/H7.1 (#747) — el ternario: `iif(c, a, b)` en BP, `c ? a : b` en JC. Tiene forma de llamada, pero sólo se
+     *  calcula el valor que toca (lo despliega el compilador, como `integer(x)`). */
+    public static final String TERNARIO = "iif";
     public enum PrintSep     { NONE, COMMA, SEMICOLON }
 
     // ============================================================
@@ -954,6 +970,8 @@ public final class Ast {
          *  del programa: la comparación de árboles no las cuenta (ComparaAst). */
         public boolean conNew;
         public boolean esConversion;
+        /** V8/H7.1 (#747) — `c ? a : b` en JC: el `iif(c, a, b)` de BP. Tampoco cuenta en la comparación. */
+        public boolean esTernario;
         public CallExpr(IExpr callee, List<IExpr> args, int line, int column) {
             super(line, column);
             this.callee = callee;

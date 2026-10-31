@@ -871,6 +871,10 @@ public final class SemanticAnalyzer {
         if (f.isPrivate && owner == null)
             err(f.line, f.column, "'private' solo es válido en miembros de clase;"
                     + " a nivel de módulo, lo que no es 'public' ya es privado del módulo");
+        // V8/H7.1 (#747) — `iif(c, a, b)` es el ternario: el nombre es del lenguaje, como el de una conversión.
+        if (owner == null && Ast.TERNARIO.equals(nombre))
+            err(f.line, f.column, "'" + Ast.TERNARIO + "' es el ternario de BP, iif(condición, a, b): una función no puede"
+                    + " llamarse así");
         FunctionSymbol sym = new FunctionSymbol(nombre, f.isDestructor || f.isPublic, f.isFinal, isStatic, owner, f);
         sym.isEventHandler = f.isEventHandler;   // H5.c — `function event`
         sym.isDestructor = f.isDestructor;       // V7/H1
@@ -1899,6 +1903,9 @@ public final class SemanticAnalyzer {
             analyzeExpr(es.expr, scope, null);
             if (!(es.expr instanceof CallExpr || es.expr instanceof SuperCallExpr))
                 err(es.line, es.column, "se esperaba una llamada como sentencia");
+            else if (es.expr instanceof CallExpr && esTernario((CallExpr) es.expr))
+                err(es.line, es.column, Ast.TERNARIO + "(…) es un valor, no una sentencia: para elegir qué hacer, un if"
+                        + " (como en C#)");   // V8/H7.1 (#747)
         }
     }
 
@@ -2306,21 +2313,33 @@ public final class SemanticAnalyzer {
                 err(a.line, a.column, "'" + ts.name + "' es un método, no un campo: no se puede asignar");
         }
 
-        if (a.op == AssignOpKind.PLUS_ASSIGN || a.op == AssignOpKind.MINUS_ASSIGN) {
+        if (a.op != AssignOpKind.ASSIGN) {
             // Anti-cascada (#232): si un operando ya es <error> (p.ej. el target
             // es un identificador no resuelto), el error real ya se reportó
             // aguas arriba. No emitimos un "incompatible" espurio — que además
-            // filtraría el tipo interno '<error>' al usuario. La rama ':=' de
-            // abajo ya está cubierta por ErrorType.isAssignableFrom; aquí el
-            // chequeo usa isNumeric() directo, así que la guarda es explícita.
+            // filtraría el tipo interno '<error>' al usuario.
+            //
+            // V8/H7.1 (#747) — la regla de C# (Eduardo, 31-oct: «Los tipos como en C#»): `x op= e` opera como
+            // `x op e`, con su tipo r. Si r se guarda solo en el de x, sin más (`l += 1`, `s += 5`, `d *= 2`). Si no,
+            // vale sólo si `e` se guardaría sola en x —o es un desplazamiento—, y entonces el resultado se recorta al
+            // tipo de x: es lo que pasa con los pequeños, que operan en integer (`b += 1` con b byte). `x *= 1.5` con
+            // x integer es un error, como en C#: no se pierde nada en silencio.
             if (!(lhsT instanceof ErrorType) && !(rhsT instanceof ErrorType)) {
-                boolean ok = (lhsT.isNumeric() && rhsT.isNumeric())
-                        || (a.op == AssignOpKind.PLUS_ASSIGN
-                            && lhsT instanceof PrimitiveType && ((PrimitiveType) lhsT).tag == PrimitiveType.Kind.STRING
-                            && rhsT instanceof PrimitiveType && ((PrimitiveType) rhsT).tag == PrimitiveType.Kind.STRING);
-                if (!ok) {
-                    String opStr = a.op == AssignOpKind.PLUS_ASSIGN ? "+=" : "-=";
-                    err(a.line, a.column, "operandos incompatibles para '" + opStr + "': '" + lhsT.display() + "' y '" + rhsT.display() + "'");
+                String op = a.op.binario();
+                String visto = a.op.enBp();
+                BpType r = tipoBinario(op, visto, lhsT, rhsT, a.line, a.column);
+                if (!(r instanceof ErrorType)) {
+                    boolean directo = lhsT.isAssignableFrom(r);
+                    boolean recortado = !directo && r.isNumeric() && lhsT.isNumeric()
+                            && (lhsT.isAssignableFrom(rhsT) || acceptsNarrowFromLiteral(lhsT, rhsT, a.value)
+                                || "shl".equals(op) || "shr".equals(op));
+                    if (directo || recortado)
+                        info.compuestos.put(a, r);
+                    else
+                        err(a.line, a.column, "'" + visto + "': '" + lhsT.display() + "' " + visto.substring(0, visto.length() - 1)
+                                + " '" + rhsT.display() + "' da '" + r.display() + "', que no se guarda solo en '"
+                                + lhsT.display() + "' (como en C#: escribe la conversión, x := " + lhsT.display() + "(x "
+                                + visto.substring(0, visto.length() - 1) + " …))");
                 }
             }
         } else {
@@ -2773,6 +2792,8 @@ public final class SemanticAnalyzer {
         else if (e instanceof IdentifierExpr) t = analyzeIdentifier((IdentifierExpr) e, scope);
         else if (e instanceof MemberAccessExpr) t = analyzeMemberAccess((MemberAccessExpr) e, scope);
         else if (e instanceof IndexExpr)     t = analyzeIndex((IndexExpr) e, scope);
+        else if (e instanceof CallExpr && esTernario((CallExpr) e))
+            t = analyzeTernario((CallExpr) e, scope, expected);   // V8/H7.1 (#747): iif(c, a, b), c ? a : b en JC
         else if (e instanceof CallExpr) {
             t = analyzeCall((CallExpr) e, scope);
             if (enJc) revisaJc((CallExpr) e, t);
@@ -3223,6 +3244,54 @@ public final class SemanticAnalyzer {
         info.boundCalls.add(bc);   // el emisor sintetiza una subclase por cada uno
     }
 
+    /** V8/H7.1 (#747) — ¿es `iif(…)`, el ternario? Por el nombre: es del lenguaje (una función no puede llamarse así). */
+    private static boolean esTernario(CallExpr ce) {
+        return ce.callee instanceof IdentifierExpr && Ast.TERNARIO.equals(((IdentifierExpr) ce.callee).name);
+    }
+
+    /**
+     * V8/H7.1 (#747) — el ternario, `iif(c, a, b)`: el valor de `a` si `c`, y si no el de `b`; sólo se calcula el que
+     * toca (lo despliega el emisor con saltos). Su tipo, el de las dos ramas: el mismo; o números, y gana el más ancho;
+     * o `null` y una referencia; o una clase y su hija, y gana el padre. Un `var owner` local no puede ser una rama
+     * (Eduardo, 31-oct: el ternario no es el origen de un movimiento; con un `if`, sí).
+     */
+    private BpType analyzeTernario(CallExpr ce, Scope scope, BpType esperado) {
+        if (ce.args.size() != 3) {
+            for (IExpr a : ce.args) analyzeExpr(a, scope, null);
+            err(ce.line, ce.column, Ast.TERNARIO + "(condición, a, b): se esperaban 3 argumentos, se pasaron " + ce.args.size());
+            return ErrorType.INSTANCE;
+        }
+        analyzeBoolCondition(ce.args.get(0), scope);
+        IExpr ea = ce.args.get(1), eb = ce.args.get(2);
+        BpType ta = analyzeExpr(ea, scope, esperado);
+        BpType tb = analyzeExpr(eb, scope, esperado);
+        for (IExpr rama : new IExpr[] { ea, eb })
+            if (esOwnerLocal(rama, scope))
+                err(ce.line, ce.column, "'" + ((IdentifierExpr) rama).name + "' es un `var owner` local: " + Ast.TERNARIO
+                        + " no mueve un owner (escríbelo con un if)");
+        if (ta instanceof ErrorType || tb instanceof ErrorType) return ErrorType.INSTANCE;
+        BpType r = tipoDeLasRamas(ta, tb);
+        if (r == null) {
+            err(ce.line, ce.column, Ast.TERNARIO + ": las dos ramas tienen que dar el mismo tipo (o números, o null y una"
+                    + " referencia, o una clase y su hija): '" + ta.display() + "' y '" + tb.display() + "'");
+            return ErrorType.INSTANCE;
+        }
+        info.ternarios.add(ce);
+        return r;
+    }
+
+    /** El tipo de un ternario con estas dos ramas, o null si no casan. */
+    private static BpType tipoDeLasRamas(BpType a, BpType b) {
+        if (a instanceof VoidType || b instanceof VoidType) return null;
+        if (a instanceof NullType && b instanceof NullType) return null;   // sin tipo
+        if (a.isNumeric() && b.isNumeric()) return promote(a, b);
+        if (a instanceof NullType) return b.isScalar() ? null : b;
+        if (b instanceof NullType) return a.isScalar() ? null : a;
+        if (a.isAssignableFrom(b)) return a;
+        if (b.isAssignableFrom(a)) return b;
+        return null;
+    }
+
     private BpType analyzeCall(CallExpr ce, Scope scope) {
         Symbol target = null;
         boolean rejectedByModuleVisibility = false;
@@ -3644,7 +3713,13 @@ public final class SemanticAnalyzer {
         // ya se reportó aguas arriba. No re-reportamos un "incompatible" espurio;
         // propagamos ErrorType en silencio.
         if (lt instanceof ErrorType || rt instanceof ErrorType) return ErrorType.INSTANCE;
-        switch (b.op) {
+        return tipoBinario(b.op, b.op, lt, rt, b.line, b.column);
+    }
+
+    /** El tipo de `l op r`, o ErrorType con su error dicho. Lo comparten la expresión binaria y la asignación compuesta
+     *  (V8/H7.1 #747: `x op= e` opera como `x op e`); {@code visto} es cómo se escribió el operador, para el mensaje. */
+    private BpType tipoBinario(String op, String visto, BpType lt, BpType rt, int line, int column) {
+        switch (op) {
             case "+":
                 if (isString(lt) || isString(rt)) {
                     // #522 — el otro operando tiene que TENER conversión a string: el emisor
@@ -3654,24 +3729,24 @@ public final class SemanticAnalyzer {
                     // string: heap roto en las dos VMs sin ningún diagnóstico.
                     BpType otro = isString(lt) ? rt : lt;
                     if (!convertibleAString(otro)) {
-                        err(b.line, b.column, "'+' incompatible: '" + lt.display() + "' y '" + rt.display()
+                        err(line, column, "'" + visto + "' incompatible: '" + lt.display() + "' y '" + rt.display()
                             + "' (no hay conversión a string)");
                         return ErrorType.INSTANCE;
                     }
                     return PrimitiveType.STRING;
                 }
                 if (lt.isNumeric() && rt.isNumeric()) return promote(lt, rt);
-                err(b.line, b.column, "'+' incompatible: '" + lt.display() + "' y '" + rt.display() + "'");
+                err(line, column, "'" + visto + "' incompatible: '" + lt.display() + "' y '" + rt.display() + "'");
                 return ErrorType.INSTANCE;
             case "-": case "*": case "/":
                 if (lt.isNumeric() && rt.isNumeric()) return promote(lt, rt);
-                err(b.line, b.column, "'" + b.op + "' requiere numéricos, encontrados '" + lt.display() + "' y '" + rt.display() + "'");
+                err(line, column, "'" + visto + "' requiere numéricos, encontrados '" + lt.display() + "' y '" + rt.display() + "'");
                 return ErrorType.INSTANCE;
             case "mod":
                 // L10/H1.2/H1.3 — mod opera en el tipo promovido (i32/i64/f32/f64;
                 // float/double usan fmod). Resultado = promote(lt, rt).
                 if (lt.isNumeric() && rt.isNumeric()) return promote(lt, rt);
-                err(b.line, b.column, "'mod' requiere numéricos");
+                err(line, column, "'" + visto + "' requiere numéricos");
                 return ErrorType.INSTANCE;
             case "^":
                 // H7 — potencia. base y exp ENTEROS (int/long) → resultado entero
@@ -3688,27 +3763,27 @@ public final class SemanticAnalyzer {
                          || (rt instanceof PrimitiveType && ((PrimitiveType) rt).tag == PrimitiveType.Kind.DOUBLE);
                     return anyDouble ? PrimitiveType.DOUBLE : PrimitiveType.FLOAT;
                 }
-                err(b.line, b.column, "'^' requiere numéricos, encontrados '" + lt.display() + "' y '" + rt.display() + "'");
+                err(line, column, "'" + visto + "' requiere numéricos, encontrados '" + lt.display() + "' y '" + rt.display() + "'");
                 return ErrorType.INSTANCE;
             case "&": case "|": case "xor": case "shl": case "shr":
                 // H1.2 — bitwise/shift en i64 si algún operando es long.
                 if ((isIntegerLike(lt) || isLong(lt)) && (isIntegerLike(rt) || isLong(rt)))
                     return (isLong(lt) || isLong(rt)) ? PrimitiveType.LONG : PrimitiveType.INTEGER;
-                err(b.line, b.column, "'" + b.op + "' requiere integer/long");
+                err(line, column, "'" + visto + "' requiere integer/long");
                 return ErrorType.INSTANCE;
             case "and": case "or":
                 if (PrimitiveType.BOOLEAN.isAssignableFrom(lt) && PrimitiveType.BOOLEAN.isAssignableFrom(rt))
                     return PrimitiveType.BOOLEAN;
-                err(b.line, b.column, "'" + b.op + "' requiere boolean");
+                err(line, column, "'" + visto + "' requiere boolean");
                 return ErrorType.INSTANCE;
             case "==": case "!=":
                 if (!comparableForEquality(lt, rt))
-                    err(b.line, b.column, "'" + b.op + "' incompatible: '" + lt.display() + "' vs '" + rt.display() + "'");
+                    err(line, column, "'" + visto + "' incompatible: '" + lt.display() + "' vs '" + rt.display() + "'");
                 return PrimitiveType.BOOLEAN;
             case "<": case ">": case "<=": case ">=":
                 if (lt.isNumeric() && rt.isNumeric()) return PrimitiveType.BOOLEAN;
                 if (isString(lt) && isString(rt)) return PrimitiveType.BOOLEAN;
-                err(b.line, b.column, "'" + b.op + "' requiere numéricos o strings");
+                err(line, column, "'" + visto + "' requiere numéricos o strings");
                 return ErrorType.INSTANCE;
         }
         return ErrorType.INSTANCE;

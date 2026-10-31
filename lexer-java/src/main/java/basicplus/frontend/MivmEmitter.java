@@ -3293,12 +3293,9 @@ public final class MivmEmitter {
                         emitMoveNullifySource(a.value);
                     }
                     return;
-                case PLUS_ASSIGN:
-                case MINUS_ASSIGN: {
+                default: {   // los compuestos
                     loadFromSymbol(sym, ((IdentifierExpr) target).name);
-                    emitExpr(a.value);
-                    coerceToTarget(a.value, tType);
-                    emitCompoundOp(a.op, tType);
+                    emitCompuesto(a, tType, true);
                     storeToSymbol(sym, ((IdentifierExpr) target).name);
                     return;
                 }
@@ -3314,17 +3311,29 @@ public final class MivmEmitter {
                     coerceToTarget(a.value, tType);
                     w.emit(astoreOpFor(ix.target));   // H1.1b — ancho del elemento
                     return;
-                case PLUS_ASSIGN:
-                case MINUS_ASSIGN: {
-                    // Asumimos target/index sin side-effects (lo habitual).
-                    emitExpr(ix.target);
-                    emitExpr(ix.index);
-                    emitExpr(ix.target);
-                    emitExpr(ix.index);
+                default: {   // los compuestos
+                    if (esPuro(ix.target) && esPuro(ix.index)) {
+                        // El array y el índice, dos veces: es lo que se hacía, y así el `.mod` de lo que ya había no cambia.
+                        emitExpr(ix.target);
+                        emitExpr(ix.index);
+                        emitExpr(ix.target);
+                        emitExpr(ix.index);
+                    } else {
+                        // #746 — con una llamada (o una propiedad) dentro, una sola vez, como en C#: `a[f()] += 5` llamaba
+                        // a f() dos veces. Se guardan en dos locales ocultos y se leen dos veces.
+                        declareLocalByType(TMP_COMPUESTO_REF, info.exprTypes.get(ix.target));
+                        declareLocalByType(TMP_COMPUESTO_IDX, info.exprTypes.get(ix.index));
+                        emitExpr(ix.target);
+                        w.emitSetLocal(TMP_COMPUESTO_REF);
+                        emitExpr(ix.index);
+                        w.emitSetLocal(TMP_COMPUESTO_IDX);
+                        w.emitGetLocal(TMP_COMPUESTO_REF);
+                        w.emitGetLocal(TMP_COMPUESTO_IDX);
+                        w.emitGetLocal(TMP_COMPUESTO_REF);
+                        w.emitGetLocal(TMP_COMPUESTO_IDX);
+                    }
                     w.emit(aloadOpFor(ix.target));    // H1.1b — ancho del elemento
-                    emitExpr(a.value);
-                    coerceToTarget(a.value, tType);
-                    emitCompoundOp(a.op, tType);
+                    emitCompuesto(a, tType, false);   // el ASTORE de un array estrecho ya recorta
                     w.emit(astoreOpFor(ix.target));   // H1.1b — ancho del elemento
                     return;
                 }
@@ -3343,12 +3352,9 @@ public final class MivmEmitter {
                         coerceToTarget(a.value, tType);
                         w.emitSetGlobal(backing);
                         return;
-                    case PLUS_ASSIGN:
-                    case MINUS_ASSIGN:
+                    default:   // los compuestos
                         w.emitGetGlobal(backing);
-                        emitExpr(a.value);
-                        coerceToTarget(a.value, tType);
-                        emitCompoundOp(a.op, tType);
+                        emitCompuesto(a, tType, true);
                         w.emitSetGlobal(backing);
                         return;
                 }
@@ -3366,17 +3372,14 @@ public final class MivmEmitter {
                     emitSetFieldAuto(cls.name, currentPropertyField);
                     if (fieldIsOwner) emitMoveNullifySource(a.value);
                     return;
-                case PLUS_ASSIGN:
-                case MINUS_ASSIGN:
+                default:   // los compuestos
                     // Compound assign sobre owner no aplica: el operando viene
                     // calculado, no es una transferencia. Pero igual emitSetFieldAuto
                     // libera el viejo correctamente.
                     w.emitGetParam("this");
                     w.emitGetParam("this");
                     w.emitGetField(cls.name, currentPropertyField);
-                    emitExpr(a.value);
-                    coerceToTarget(a.value, tType);
-                    emitCompoundOp(a.op, tType);
+                    emitCompuesto(a, tType, true);
                     emitSetFieldAuto(cls.name, currentPropertyField);
                     return;
             }
@@ -3403,17 +3406,14 @@ public final class MivmEmitter {
                             w.emitSetLocal("__discard");
                             return;
                         }
-                        case PLUS_ASSIGN:
-                        case MINUS_ASSIGN: {
+                        default: {   // los compuestos
                             // val_actual := getter(); val_nuevo := val_actual op rhs; setter(val_nuevo)
                             if (ps.isExternal) {
                                 w.emitCallExt(buildExternalAccessorName(ps, /*setter*/false), ps.externalFromPath);
                             } else {
                                 w.emitCall(moduleGetterName(ps.name));
                             }
-                            emitExpr(a.value);
-                            coerceToTarget(a.value, tType);
-                            emitCompoundOp(a.op, tType);
+                            emitCompuesto(a, tType, true);
                             if (ps.isExternal) {
                                 w.emitCallExt(buildExternalAccessorName(ps, /*setter*/true), ps.externalFromPath);
                             } else {
@@ -3437,13 +3437,10 @@ public final class MivmEmitter {
                             w.emitSetLocal("__discard");
                             return;
                         }
-                        case PLUS_ASSIGN:
-                        case MINUS_ASSIGN: {
+                        default: {   // los compuestos
                             // val := getter() op rhs; setter(val)
                             emitStaticGetter(ps);
-                            emitExpr(a.value);
-                            coerceToTarget(a.value, tType);
-                            emitCompoundOp(a.op, tType);
+                            emitCompuesto(a, tType, true);
                             emitStaticSetter(ps);
                             declareLocal("__discard");
                             w.emitSetLocal("__discard");
@@ -3469,14 +3466,10 @@ public final class MivmEmitter {
                         if (ps.isOwner) emitMoveNullifySource(a.value);
                         return;
                     }
-                    case PLUS_ASSIGN:
-                    case MINUS_ASSIGN: {
-                        emitExpr(ma.target);
-                        emitExpr(ma.target);
+                    default: {   // los compuestos
+                        emitReceptorDosVeces(ma.target);   // #746: una sola vez si lleva una llamada
                         emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
-                        emitExpr(a.value);
-                        coerceToTarget(a.value, tType);
-                        emitCompoundOp(a.op, tType);
+                        emitCompuesto(a, tType, true);
                         emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
@@ -3497,12 +3490,9 @@ public final class MivmEmitter {
                         coerceToTarget(a.value, tType);
                         w.emitSetGlobal(qname);
                         return;
-                    case PLUS_ASSIGN:
-                    case MINUS_ASSIGN:
+                    default:   // los compuestos
                         w.emitGetGlobal(qname);
-                        emitExpr(a.value);
-                        coerceToTarget(a.value, tType);
-                        emitCompoundOp(a.op, tType);
+                        emitCompuesto(a, tType, true);
                         w.emitSetGlobal(qname);
                         return;
                 }
@@ -3516,18 +3506,13 @@ public final class MivmEmitter {
                         emitSetFieldDe(v, receptorDe(ma.target, v.ownerClass));   // V7/H2: por ranura si la clase es externa
                         if (v.isOwner) emitMoveNullifySource(a.value);
                         return;
-                    case PLUS_ASSIGN:
-                    case MINUS_ASSIGN: {
-                        // Asumimos ma.target sin side-effects (es this.x o p.x):
+                    default: {   // los compuestos
                         //   push ref, push ref, GET_FIELD → ref, val
                         //   push value, op → ref, newval
                         //   SET_FIELD (pop newval, pop ref)
-                        emitExpr(ma.target);
-                        emitExpr(ma.target);
+                        emitReceptorDosVeces(ma.target);   // #746: una sola vez si lleva una llamada
                         emitGetFieldDe(v, receptorDe(ma.target, v.ownerClass));   // V7/H2
-                        emitExpr(a.value);
-                        coerceToTarget(a.value, tType);
-                        emitCompoundOp(a.op, tType);
+                        emitCompuesto(a, tType, true);
                         emitSetFieldDe(v, receptorDe(ma.target, v.ownerClass));
                         return;
                     }
@@ -3537,22 +3522,119 @@ public final class MivmEmitter {
         errors.add("asignación a target no soportado: " + target.getClass().getSimpleName());
     }
 
-    private void emitCompoundOp(AssignOpKind op, BpType tType) throws IOException {
-        boolean plus = (op == AssignOpKind.PLUS_ASSIGN);
-        if (tType instanceof PrimitiveType && ((PrimitiveType) tType).tag == PrimitiveType.Kind.FLOAT) {
-            w.emit(plus ? OpCode.FADD : OpCode.FSUB);
-        } else if (isDouble(tType)) {
-            // BUG-6 secuela: += / -= sobre double = aritmética de 8 bytes (DADD/DSUB).
-            w.emit(plus ? OpCode.DADD : OpCode.DSUB);
-        } else if (isLong(tType)) {
-            // BUG-6 secuela: += / -= sobre long = aritmética de 8 bytes (LADD/LSUB).
-            w.emit(plus ? OpCode.LADD : OpCode.LSUB);
-        } else if (tType instanceof PrimitiveType && ((PrimitiveType) tType).tag == PrimitiveType.Kind.STRING) {
-            if (!plus) { errors.add("operador -= no aplicable a string"); return; }
-            emitStringConcatCall();
-        } else {
-            w.emit(plus ? OpCode.ADD : OpCode.SUB);
+    /** #746 — los dos locales ocultos de un compuesto cuyo destino lleva una llamada (`a[f()] += 5`, `g().n += 1`). */
+    private static final String TMP_COMPUESTO_REF = "__cmp_ref";
+    private static final String TMP_COMPUESTO_IDX = "__cmp_idx";
+
+    /**
+     * V8/H7.1 (#747) — el resto de un compuesto `x op= e`, con el valor actual de `x` ya en la pila (de tipo {@code t}):
+     * se opera en el tipo que decidió el semántico, el de `x op e` (como en C#), y el resultado vuelve al de `x`. Cuando
+     * los dos coinciden —casi siempre—, sale lo mismo que antes. {@code recortar} es false si el almacén ya recorta (el
+     * ASTORE de un array estrecho).
+     */
+    private void emitCompuesto(AssignStmt a, BpType t, boolean recortar) throws IOException {
+        BpType r = info.compuestos.get(a);
+        if (r == null) r = t;
+        emitWiden(t, r);
+        emitExpr(a.value);
+        coerceToTarget(a.value, r);
+        emitOpCompuesto(a.op, r);
+        if (recortar || !esEstrecho(t)) emitRecorte(r, t);
+    }
+
+    /** La operación de un compuesto, en el tipo {@code r}; la misma tabla que la de la expresión binaria. */
+    private void emitOpCompuesto(AssignOpKind op, BpType r) throws IOException {
+        boolean d = isDouble(r), f = isFloat(r), l = isLong(r);
+        switch (op) {
+            case PLUS_ASSIGN:
+                if (r instanceof PrimitiveType && ((PrimitiveType) r).tag == PrimitiveType.Kind.STRING) {
+                    emitStringConcatCall();
+                    return;
+                }
+                w.emit(d ? OpCode.DADD : f ? OpCode.FADD : l ? OpCode.LADD : OpCode.ADD);
+                return;
+            case MINUS_ASSIGN: w.emit(d ? OpCode.DSUB : f ? OpCode.FSUB : l ? OpCode.LSUB : OpCode.SUB); return;
+            case MUL_ASSIGN:   w.emit(d ? OpCode.DMUL : f ? OpCode.FMUL : l ? OpCode.LMUL : OpCode.MUL); return;
+            case DIV_ASSIGN:   w.emit(d ? OpCode.DDIV : f ? OpCode.FDIV : l ? OpCode.LDIV : OpCode.DIV); return;
+            case MOD_ASSIGN:   w.emit(d ? OpCode.DMOD : f ? OpCode.FMOD : l ? OpCode.LMOD : OpCode.MOD); return;
+            case AND_ASSIGN:   w.emit(l ? OpCode.LBAND : OpCode.BAND); return;
+            case OR_ASSIGN:    w.emit(l ? OpCode.LBOR : OpCode.BOR); return;
+            case XOR_ASSIGN:   w.emit(l ? OpCode.LBXOR : OpCode.BXOR); return;
+            case SHL_ASSIGN:   w.emit(l ? OpCode.LSHL : OpCode.SHL); return;
+            case SHR_ASSIGN:   w.emit(l ? OpCode.LSHR_S : OpCode.SHR_S); return;
+            default:           errors.add("asignación compuesta no soportada: " + op);
         }
+    }
+
+    private static boolean esEstrecho(BpType t) {
+        if (!(t instanceof PrimitiveType)) return false;
+        switch (((PrimitiveType) t).tag) {
+            case UINT8: case INT8: case UINT16: case INT16: return true;
+            default: return false;
+        }
+    }
+
+    /** V8/H7.1 (#747) — el resultado de un compuesto, del tipo en que se operó al del destino. Es la conversión que hace
+     *  C# en un compuesto: `b += 1` con b byte opera en integer y guarda un byte (255 + 1 da 0; antes del 31-oct, 256);
+     *  `i shl= 2L` opera en long y guarda un integer. Nada si los tipos coinciden. */
+    private void emitRecorte(BpType r, BpType t) throws IOException {
+        if (!(r instanceof PrimitiveType) || !(t instanceof PrimitiveType)) return;
+        PrimitiveType pr = (PrimitiveType) r, pt = (PrimitiveType) t;
+        if (pr.tag == pt.tag) return;
+        switch (pt.tag) {
+            case INTEGER: emitNumericConversion(r, "integer"); return;
+            case LONG:    emitNumericConversion(r, "long");    return;
+            case FLOAT:   emitNumericConversion(r, "float");   return;
+            case DOUBLE:  emitNumericConversion(r, "double");  return;
+            case UINT8: case INT8: case UINT16: case INT16:
+                // A su tamaño, dando la vuelta como C# (255 + 1 es 0; en un int8, 127 + 1 es -128), que es lo que ya hace
+                // el ASTORE de un array estrecho y la aritmética de integer. No con I32_TO_U8 y los suyos: ésos son los de
+                // `byte(x)`, que lanzan si no cabe.
+                emitNumericConversion(r, "integer");   // a i32, si no lo era (de un long, los 32 bits bajos)
+                switch (pt.tag) {
+                    case UINT8:  emitInt(0xFF);   w.emit(OpCode.BAND); break;
+                    case UINT16: emitInt(0xFFFF); w.emit(OpCode.BAND); break;
+                    case INT8:   emitInt(24); w.emit(OpCode.SHL); emitInt(24); w.emit(OpCode.SHR_S); break;
+                    default:     emitInt(16); w.emit(OpCode.SHL); emitInt(16); w.emit(OpCode.SHR_S); break;
+                }
+                return;
+            default:
+        }
+    }
+
+    /** #746 — ¿se puede calcular dos veces sin que se note? (SemanticInfo.esPuro, la regla en un sitio.) */
+    private boolean esPuro(IExpr e) { return info.esPuro(e); }
+
+    /** El receptor de un compuesto sobre un campo o una propiedad, dos veces en la pila (uno para leer, otro para
+     *  guardar). Si lleva una llamada, se calcula una vez y se guarda en un local oculto (#746). */
+    private void emitReceptorDosVeces(IExpr receptor) throws IOException {
+        if (esPuro(receptor)) {
+            emitExpr(receptor);
+            emitExpr(receptor);
+            return;
+        }
+        declareLocalByType(TMP_COMPUESTO_REF, info.exprTypes.get(receptor));
+        emitExpr(receptor);
+        w.emitSetLocal(TMP_COMPUESTO_REF);
+        w.emitGetLocal(TMP_COMPUESTO_REF);
+        w.emitGetLocal(TMP_COMPUESTO_REF);
+    }
+
+    /** V8/H7.1 (#747) — `iif(c, a, b)`: la condición y un salto; sólo se calcula la rama que toca, y las dos dejan su
+     *  valor en el tipo del ternario (el más ancho de los números, la referencia del padre…). */
+    private void emitTernario(CallExpr ce) throws IOException {
+        BpType r = info.exprTypes.get(ce);
+        int sino = w.newLabel();
+        int fin = w.newLabel();
+        emitExpr(ce.args.get(0));
+        w.emitJumpIfFalse(sino);
+        emitExpr(ce.args.get(1));
+        coerceToTarget(ce.args.get(1), r);
+        w.emitJump(fin);
+        w.declareLabel(sino);
+        emitExpr(ce.args.get(2));
+        coerceToTarget(ce.args.get(2), r);
+        w.declareLabel(fin);
     }
 
     private void emitIf(IfStmt s) throws IOException {
@@ -5216,6 +5298,8 @@ public final class MivmEmitter {
     }
 
     private void emitCall(CallExpr c) throws IOException {
+        // V8/H7.1 (#747) — el ternario, `iif(c, a, b)`: no es una llamada; lo despliega emitTernario.
+        if (info.ternarios.contains(c)) { emitTernario(c); return; }
         // H1.3b (V2) — casts numéricos generales: integer()/long()/float()/double().
         // No son símbolos; se reconocen por nombre y emiten la conversión
         // type-directed según el tipo del argumento.

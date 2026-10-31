@@ -17,8 +17,8 @@
 // de varios nombres con un valor, que es uno por nombre (medido: el mismo
 // `.mod`); el tipo de una constante que BP no escribe; y el `print`, que se
 // compara por lo que imprime (la coma de BP es un " ", y su salto, un "\n").
-// Las marcas del `new` y de las conversiones (CallExpr) no cuentan nunca: no
-// son parte del programa.
+// Las marcas del `new`, de las conversiones y del ternario (CallExpr) no cuentan
+// nunca: no son parte del programa.
 // ============================================================
 package basicplus.frontend;
 
@@ -82,7 +82,7 @@ final class ComparaAst {
                 if (Modifier.isStatic(f.getModifiers())) continue;
                 String n = f.getName();
                 if (n.equals("line") || n.equals("column")) continue;
-                if (n.equals("conNew") || n.equals("esConversion") || n.equals("escritoEnJc"))
+                if (n.equals("conNew") || n.equals("esConversion") || n.equals("esTernario") || n.equals("escritoEnJc"))
                     continue;   // las marcas de JC (CallExpr, ModuleNode)
                 f.setAccessible(true);
                 Object va, vb;

@@ -1053,17 +1053,35 @@ final class JcParser {
         return new PrintStmt(items, t.linea, t.columna);
     }
 
-    /** Una asignación (`=`, `+=`, `-=`, y `v++` y `v--`, que son `+= 1` y `-= 1`: punto 12), o una llamada. */
+    /** La asignación de este signo, o null: `=`, `+=`, `-=` y los demás compuestos de C# (V8/H7.1 #747). */
+    private static AssignOpKind asignacionDe(Tok t) {
+        if (t.tipo != Tipo.SIGNO) return null;
+        switch (t.texto) {
+            case "=":   return AssignOpKind.ASSIGN;
+            case "+=":  return AssignOpKind.PLUS_ASSIGN;
+            case "-=":  return AssignOpKind.MINUS_ASSIGN;
+            case "*=":  return AssignOpKind.MUL_ASSIGN;
+            case "/=":  return AssignOpKind.DIV_ASSIGN;
+            case "%=":  return AssignOpKind.MOD_ASSIGN;
+            case "&=":  return AssignOpKind.AND_ASSIGN;
+            case "|=":  return AssignOpKind.OR_ASSIGN;
+            case "^=":  return AssignOpKind.XOR_ASSIGN;
+            case "<<=": return AssignOpKind.SHL_ASSIGN;
+            case ">>=": return AssignOpKind.SHR_ASSIGN;
+            default:    return null;
+        }
+    }
+
+    /** Una asignación (`=`, los compuestos, y `v++` y `v--`, que son `+= 1` y `-= 1`: punto 12), o una llamada. */
     private IStmt asignacionOLlamada() {
         Tok t = actual();
         if (es("++") || es("--")) throw error("en JC, ++ y -- van detrás: v++; (punto 12)");
         IExpr lhs = postfijo();
-        if (es("=") || es("+=") || es("-=")) {
-            String op = avanza().texto;
+        AssignOpKind k = asignacionDe(actual());
+        if (k != null) {
+            avanza();
             IExpr v = expresion();
             espera(";");
-            AssignOpKind k = op.equals("+=") ? AssignOpKind.PLUS_ASSIGN
-                           : op.equals("-=") ? AssignOpKind.MINUS_ASSIGN : AssignOpKind.ASSIGN;
             return new AssignStmt(lhs, k, v, t.linea, t.columna);
         }
         if (es("++") || es("--")) {
@@ -1076,15 +1094,29 @@ final class JcParser {
             espera(";");
             return new ExprStmt(lhs, t.linea, t.columna);
         }
-        if (es("*=") || es("/=") || es("%=") || es("&=") || es("|=") || es("^="))
-            throw error("JC no tiene los demás compuestos de C#: BP sólo tiene =, += y -= (punto 15)");
         throw error("se esperaba una asignación o una llamada como sentencia, encontrado " + actual());
     }
 
     // ============================================================
     // EXPRESIONES (la precedencia de C#, punto 18; el árbol, el de BP)
     // ============================================================
-    private IExpr expresion() { return o(); }
+    /** El ternario de C#, `c ? a : b` (V8/H7.1 #747): el `iif(c, a, b)` de BP, con la marca de cómo se escribió. Por
+     *  debajo de `||` y asociativo por la derecha, como en C#. */
+    private IExpr expresion() {
+        IExpr c = o();
+        if (!es("?")) return c;
+        Tok q = avanza();
+        IExpr si = expresion();
+        espera(":", "':' en el ternario: c ? a : b");
+        IExpr no = expresion();
+        List<IExpr> args = new ArrayList<>();
+        args.add(c);
+        args.add(si);
+        args.add(no);
+        CallExpr t = new CallExpr(new IdentifierExpr(Ast.TERNARIO, q.linea, q.columna), args, q.linea, q.columna);
+        t.esTernario = true;
+        return t;
+    }
 
     private IExpr o() {
         IExpr l = y();

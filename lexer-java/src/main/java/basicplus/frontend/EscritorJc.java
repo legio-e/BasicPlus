@@ -77,7 +77,7 @@ public final class EscritorJc {
 
     // La precedencia de C#, de la más floja a la más fuerte. La potencia, la de BP (y la de Python): más fuerte que el
     // menos, con la base primaria y el exponente unario (punto 18).
-    private static final int P_O = 1, P_Y = 2, P_OBIT = 3, P_XOR = 4, P_YBIT = 5, P_IGUAL = 6, P_REL = 7,
+    private static final int P_TERNARIO = 0, P_O = 1, P_Y = 2, P_OBIT = 3, P_XOR = 4, P_YBIT = 5, P_IGUAL = 6, P_REL = 7,
             P_DESPL = 8, P_SUMA = 9, P_MULT = 10, P_UNARIO = 11, P_POT = 12, P_PRIMARIO = 13;
 
     private final StringBuilder sb = new StringBuilder();
@@ -506,9 +506,18 @@ public final class EscritorJc {
     private String asignacion(AssignStmt a) {
         String op;
         switch (a.op) {
+            case ASSIGN:       op = " = "; break;
             case PLUS_ASSIGN:  op = " += "; break;
             case MINUS_ASSIGN: op = " -= "; break;
-            default:           op = " = "; break;
+            case MUL_ASSIGN:   op = " *= "; break;   // los demás compuestos, los de C# (V8/H7.1 #747)
+            case DIV_ASSIGN:   op = " /= "; break;
+            case MOD_ASSIGN:   op = " %= "; break;
+            case AND_ASSIGN:   op = " &= "; break;
+            case OR_ASSIGN:    op = " |= "; break;
+            case XOR_ASSIGN:   op = " ^= "; break;
+            case SHL_ASSIGN:   op = " <<= "; break;
+            case SHR_ASSIGN:   op = " >>= "; break;
+            default: throw new NoSoportado("la asignación «" + a.op + "»", a);
         }
         return expr(a.target) + op + expr(a.value);
     }
@@ -715,6 +724,7 @@ public final class EscritorJc {
     }
 
     private int precedencia(IExpr e) {
+        if (e instanceof CallExpr && esTernario((CallExpr) e)) return P_TERNARIO;
         if (e instanceof BinaryExpr)     return precedenciaBinaria(((BinaryExpr) e).op, e);
         if (e instanceof UnaryExpr)      return P_UNARIO;
         if (e instanceof InstanceOfExpr) return P_REL;
@@ -785,8 +795,21 @@ public final class EscritorJc {
         return info.refCasts.contains(c);
     }
 
-    /** Una conversión, `(T) x`; una construcción, `new T(…)` (el nombre es de una clase: punto 22); o una llamada. */
+    /** El `iif(c, a, b)` de BP es el ternario de C#, `c ? a : b` (V8/H7.1 #747): lo decide el análisis. */
+    private boolean esTernario(CallExpr c) {
+        return c.esTernario || info.ternarios.contains(c);
+    }
+
+    /** Una conversión, `(T) x`; una construcción, `new T(…)` (el nombre es de una clase: punto 22); un ternario; o una
+     *  llamada. */
     private String llamada(CallExpr c) {
+        if (esTernario(c)) {
+            // La condición, por encima del ternario (uno dentro, entre paréntesis); las ramas, como en C#: la de la
+            // derecha encadena sin paréntesis (`a ? x : b ? y : z`), y la del medio, si es otro ternario, los lleva.
+            IExpr si = c.args.get(1);
+            String medio = (si instanceof CallExpr && esTernario((CallExpr) si)) ? "(" + expr(si) + ")" : expr(si);
+            return expr(c.args.get(0), P_O) + " ? " + medio + " : " + expr(c.args.get(2));
+        }
         if (esConversion(c)) {
             String t = (c.callee instanceof IdentifierExpr)
                     ? tipoSimple(((IdentifierExpr) c.callee).name)

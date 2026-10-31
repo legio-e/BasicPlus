@@ -676,7 +676,17 @@ mi propuesta: manda lo de aquí.
     `{ n, s } := par()`, es en JC el de C#: `(n, s) = par();`, con `_` para descartar.
     - Los demás compuestos de C# (`*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`) no están en BP: de momento no, y
       el error lo dice (mi propuesta; Eduardo, conforme). Para tenerlos habría que añadirlos a BP.
+      **Hechos el 31-oct, en JC y en BP** (V8/H7.1, `#747`; Eduardo: *«los compuestos me valen»*). En BP: `*=`, `/=`,
+      `mod=`, `&=`, `|=`, `xor=`, `shl=` y `shr=`. Con la regla de C# (*«Los tipos como en C#»*): `x op= e` opera
+      como `x op e`, y si el resultado no se guarda solo en el tipo de `x`, vale sólo si `e` se guardaría sola en `x`
+      (y entonces se recorta al tamaño de `x`, dando la vuelta: un byte que vale 255, más 1, es 0). `x` se calcula una
+      vez (`#746`).
     - Como en BP, la asignación es una sentencia: no va dentro de una expresión (`a = b = 0`, `if ((x = f()) > 0)`).
+    - **El ternario, `c ? a : b`** (31-oct, V8/H7.1, `#747`): el `iif(c, a, b)` de BP (Eduardo: *«El ternario BP como
+      una función inline»*), con la precedencia de C# (debajo de `||`, asociativo por la derecha). Sólo se calcula la
+      rama que toca. Su tipo, el de las dos ramas: el mismo; o números, y gana el más ancho; o `null` y una referencia;
+      o una clase y su hija, y gana el padre. Un `var owner` local no puede ser una rama, y no es una sentencia.
+      `??` y `?.`, todavía no: el error lo dice.
 16. **El `foreach`, el de C#** (17-oct): `foreach (var x in lista) stmt`, que es el `for x in lista do` de BP.
     - **El tipo, de momento `var`** (mi propuesta). En BP la variable toma el tipo de los elementos, y el árbol no lo
       guarda. Con un tipo escrito (`foreach (int x in lista)`), de momento, error: habría que guardarlo en el árbol y
@@ -1060,7 +1070,7 @@ y lo que hace JC mientras:
 | las secuencias de escape de C# | 19 | las lee el lexer de JC; lo que BP no sabe escribir, el traductor lo dice |
 | que un literal guarde cómo se escribió | 19 | `0xFF` y `'a'` vuelven como `255` y `97` |
 | el `foreach` sobre listas | 16 | sólo arrays |
-| los demás compuestos (`*=`, `/=`…) | 15 | no están |
+| los demás compuestos (`*=`, `/=`…) | 15 | no estaban; **hechos el 31-oct** en JC y en BP (V8/H7.1, `#747`) |
 
 **El `print`, la excepción.** Mi propuesta para mientras era que un `print` de JC acabara con su salto escrito, y un
 error si no. Eduardo: *«No, esto mejor lo retocamos en el compilador de BP, pero nada más de momento.»* Así que `#700`

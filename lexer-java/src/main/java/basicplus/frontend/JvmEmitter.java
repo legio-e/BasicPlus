@@ -849,6 +849,13 @@ public final class JvmEmitter implements Opcodes {
             return;
         }
 
+        // V8/H7.1 (#747) — los demás compuestos (`*=`, `mod=`…) no los tiene este backend, abandonado: que lo diga, en
+        // vez de restar en silencio.
+        if (a.op != AssignOpKind.PLUS_ASSIGN && a.op != AssignOpKind.MINUS_ASSIGN) {
+            errors.add("[" + a.line + ":" + a.column + "] el backend jvm no tiene '" + a.op.enBp() + "' (usa --backend=mivm)");
+            return;
+        }
+
         // += / -=: cargar valor actual, sumar/restar, almacenar
         // (variante simplificada: re-emite el target dos veces)
         preparePutTarget(mv, a.target, ctx);
@@ -1872,6 +1879,10 @@ public final class JvmEmitter implements Opcodes {
     // Llamadas: estático / método de instancia / construcción / super
     // ============================================================
     private void emitCall(MethodVisitor mv, CallExpr ce, EmitContext ctx) {
+        if (info.ternarios.contains(ce)) {   // V8/H7.1 (#747)
+            errors.add("[" + ce.line + ":" + ce.column + "] el backend jvm no tiene el ternario iif(…) (usa --backend=mivm)");
+            return;
+        }
         // 1) Construcción NombreClase(args)
         if (ce.callee instanceof IdentifierExpr) {
             IdentifierExpr id = (IdentifierExpr) ce.callee;

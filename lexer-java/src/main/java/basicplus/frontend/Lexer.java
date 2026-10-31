@@ -303,6 +303,8 @@ public final class Lexer {
             TokenType.AND, TokenType.OR, TokenType.XOR, TokenType.MOD,
             TokenType.SHL, TokenType.SHR, TokenType.INSTANCEOF, TokenType.NOT,
             TokenType.ASSIGN, TokenType.PLUS_ASSIGN, TokenType.MINUS_ASSIGN,
+            TokenType.STAR_ASSIGN, TokenType.SLASH_ASSIGN, TokenType.MOD_ASSIGN, TokenType.AMP_ASSIGN,
+            TokenType.BAR_ASSIGN, TokenType.XOR_ASSIGN, TokenType.SHL_ASSIGN, TokenType.SHR_ASSIGN,
             TokenType.COMMA, TokenType.DOT);
 
     /** ¿La última línea acabó en un token continuador? (operador colgante, H7) */
@@ -407,6 +409,19 @@ public final class Lexer {
         String lexeme = source.substring(start, pos);
         TokenType kw = KEYWORDS.get(lexeme.toLowerCase());
         if (kw != null) {
+            // V8/H7.1 (#747) — los compuestos de los operadores de palabra, pegados: `x mod= 3`, `xor=`, `shl=`, `shr=`.
+            // Un `=` suelto tras ellos no tenía sentido (sólo vale en una anotación, cuya clave no puede ser una palabra
+            // reservada); `==` sigue siendo la comparación.
+            if (peek() == '=' && peek(1) != '=') {
+                TokenType compuesto = kw == TokenType.MOD ? TokenType.MOD_ASSIGN
+                                    : kw == TokenType.XOR ? TokenType.XOR_ASSIGN
+                                    : kw == TokenType.SHL ? TokenType.SHL_ASSIGN
+                                    : kw == TokenType.SHR ? TokenType.SHR_ASSIGN : null;
+                if (compuesto != null) {
+                    advance();
+                    return new Token(compuesto, lexeme + "=", null, startLine, startColumn);
+                }
+            }
             // Para keywords no guardamos valor: el tipo ya lo identifica.
             return new Token(kw, lexeme, null, startLine, startColumn);
         }
@@ -615,6 +630,11 @@ public final class Lexer {
         if (c == ':' && n == ':') return make2(TokenType.COLONCOLON,    "::", startLine, startColumn);
         if (c == '+' && n == '=') return make2(TokenType.PLUS_ASSIGN,   "+=", startLine, startColumn);
         if (c == '-' && n == '=') return make2(TokenType.MINUS_ASSIGN,  "-=", startLine, startColumn);
+        // V8/H7.1 (#747) — los compuestos de símbolo; los de palabra (`mod=`…), en scanIdentifierOrKeyword.
+        if (c == '*' && n == '=') return make2(TokenType.STAR_ASSIGN,   "*=", startLine, startColumn);
+        if (c == '/' && n == '=') return make2(TokenType.SLASH_ASSIGN,  "/=", startLine, startColumn);
+        if (c == '&' && n == '=') return make2(TokenType.AMP_ASSIGN,    "&=", startLine, startColumn);
+        if (c == '|' && n == '=') return make2(TokenType.BAR_ASSIGN,    "|=", startLine, startColumn);
         if (c == '=' && n == '=') return make2(TokenType.EQ,            "==", startLine, startColumn);
         if (c == '!' && n == '=') return make2(TokenType.NEQ,           "!=", startLine, startColumn);
         if (c == '<' && n == '=') return make2(TokenType.LE,            "<=", startLine, startColumn);

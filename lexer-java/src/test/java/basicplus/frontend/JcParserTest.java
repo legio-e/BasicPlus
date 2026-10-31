@@ -165,9 +165,46 @@ class JcParserTest {
     }
 
     @Test
+    @DisplayName("V8/H7.1 (#747): los compuestos de C# y el ternario, que es el iif(c, a, b) de BP, en los dos parsers")
+    void compuestosYTernario() {
+        Ast.ModuleNode m = JcParser.leer(jcMain(
+            "      int x = 1;\n" +
+            "      x *= 2; x /= 2; x %= 2; x &= 3; x |= 4; x ^= 5; x <<= 1; x >>= 1;\n" +
+            "      int y = x > 0 ? 1 : x < 0 ? -1 : 0;\n" +
+            "      bool b = x > 0 || x < -5 ? true : false;\n"));
+        Ast.FuncDef f = (Ast.FuncDef) m.defs.get(0);
+        Ast.AssignOpKind[] ops = { Ast.AssignOpKind.MUL_ASSIGN, Ast.AssignOpKind.DIV_ASSIGN, Ast.AssignOpKind.MOD_ASSIGN,
+                Ast.AssignOpKind.AND_ASSIGN, Ast.AssignOpKind.OR_ASSIGN, Ast.AssignOpKind.XOR_ASSIGN,
+                Ast.AssignOpKind.SHL_ASSIGN, Ast.AssignOpKind.SHR_ASSIGN };
+        for (int i = 0; i < ops.length; i++) assertEquals(ops[i], ((Ast.AssignStmt) f.body.get(1 + i)).op);
+        // El ternario, asociativo por la derecha: el de la derecha va dentro de la rama del «no».
+        Ast.CallExpr t = (Ast.CallExpr) ((Ast.VarDecl) f.body.get(9)).init;
+        assertTrue(t.esTernario);
+        assertEquals(Ast.TERNARIO, ((Ast.IdentifierExpr) t.callee).name);
+        assertTrue(((Ast.CallExpr) t.args.get(2)).esTernario);
+        // Por debajo de ||: la condición es todo el `x > 0 || x < -5`.
+        Ast.CallExpr t2 = (Ast.CallExpr) ((Ast.VarDecl) f.body.get(10)).init;
+        assertEquals("or", ((Ast.BinaryExpr) t2.args.get(0)).op);
+        // Y en BP, el mismo árbol: `x mod= 2`, `xor=`, `shl=`, `shr=` pegados, y el iif como una llamada.
+        Ast.ModuleNode a = bp(bpMain(
+            "    var x: integer := 1\n" +
+            "    x *= 2\n    x /= 2\n    x mod= 2\n    x &= 3\n    x |= 4\n    x xor= 5\n    x shl= 1\n    x shr= 1\n" +
+            "    var y: integer := iif(x > 0, 1, iif(x < 0, -1, 0))\n" +
+            "    var b: boolean := iif(x > 0 or x < -5, true, false)\n"));
+        Ast.ModuleNode j = JcParser.leer(jcMainPrivada(
+            "      int x = 1;\n" +
+            "      x *= 2; x /= 2; x %= 2; x &= 3; x |= 4; x ^= 5; x <<= 1; x >>= 1;\n" +
+            "      int y = x > 0 ? 1 : x < 0 ? -1 : 0;\n" +
+            "      bool b = x > 0 || x < -5 ? true : false;\n"));
+        assertNull(ComparaAst.primeraDiferenciaJc(a, j));
+    }
+
+    @Test
     @DisplayName("lo que JC no tiene, o no deja escribir así, es un error con su motivo")
     void erroresConNombre() {
-        error(jcMain("      int x = 1;\n      x *= 2;\n"), "compuestos");
+        error(jcMain("      string s = null;\n      string t = s ?? \"x\";\n"), "??");      // V8/H7.1 (#747)
+        error(jcMain("      string s = null;\n      int n = s?.Length;\n"), "?.");
+        error(jcMain("      int y = true ? 1;\n"), "ternario");
         error(jcMain("      print();\n"), "vacío");
         error(jcMain("      for (int i = 0; i < 3; i++) print(i);\n"), "<=");
         error(jcMain("      int y = int(2.5);\n"), "(int) x");

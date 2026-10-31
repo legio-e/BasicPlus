@@ -1080,19 +1080,32 @@ public final class Parser {
         return new DestructAssignStmt(targets, rhs, startTok.line, startTok.column);
     }
 
+    /** La asignación que empieza con este token, o null: `:=`, `+=`, `-=` y los compuestos de V8/H7.1 (#747). */
+    private static AssignOpKind asignacionDe(TokenType t) {
+        switch (t) {
+            case ASSIGN:       return AssignOpKind.ASSIGN;
+            case PLUS_ASSIGN:  return AssignOpKind.PLUS_ASSIGN;
+            case MINUS_ASSIGN: return AssignOpKind.MINUS_ASSIGN;
+            case STAR_ASSIGN:  return AssignOpKind.MUL_ASSIGN;
+            case SLASH_ASSIGN: return AssignOpKind.DIV_ASSIGN;
+            case MOD_ASSIGN:   return AssignOpKind.MOD_ASSIGN;
+            case AMP_ASSIGN:   return AssignOpKind.AND_ASSIGN;
+            case BAR_ASSIGN:   return AssignOpKind.OR_ASSIGN;
+            case XOR_ASSIGN:   return AssignOpKind.XOR_ASSIGN;
+            case SHL_ASSIGN:   return AssignOpKind.SHL_ASSIGN;
+            case SHR_ASSIGN:   return AssignOpKind.SHR_ASSIGN;
+            default:           return null;
+        }
+    }
+
     private IStmt parseAssignOrCallStmt() {
         Token startTok = current();
         IExpr lhs;
         try { lhs = parsePrimary(); }
         catch (RuntimeException ex) { synchronize(); return null; }
 
-        if (check(TokenType.ASSIGN) || check(TokenType.PLUS_ASSIGN) || check(TokenType.MINUS_ASSIGN)) {
-            AssignOpKind op;
-            switch (current().type) {
-                case PLUS_ASSIGN:  op = AssignOpKind.PLUS_ASSIGN; break;
-                case MINUS_ASSIGN: op = AssignOpKind.MINUS_ASSIGN; break;
-                default:           op = AssignOpKind.ASSIGN; break;
-            }
+        AssignOpKind op = asignacionDe(current().type);
+        if (op != null) {
             advance();
             IExpr rhs = parseExpr();
             consumeStmtTerminator("se esperaba ';' o salto de línea tras la asignación");

@@ -102,7 +102,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lwinmm     # V8/H4 (#708) — el audio de Windows (sonido_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1080,6 +1080,28 @@ test-aotdo: $(LIBOBJ)
  if ! cmp -s build/aotdo.int build/aotdo.aot; then diff build/aotdo.int build/aotdo.aot | head; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
  if [ "$$n" -ne 5 ]; then tail -3 build/aotdo.aot; echo "  ROJO: $$n de 5 comprobaciones"; exit 1; fi; \
  echo "[status=OK] 5/5 con el AOT, igual que interpretado"
+
+# V8/H7.1 (#747, 31-oct) — LOS COMPUESTOS NUEVOS Y EL TERNARIO EN UNA NATIVE: el AOT escribe `x op= v` como `x = x op v`
+# por el camino de la expresión binaria (los helpers de la división de long, de double y de float) y `iif` como el `?:`
+# de C, que sólo calcula la rama que toca. Las 10 natives de NatCompuestos, con el AOT y sin él: lo mismo, 13 de 13.
+test-aotcompuestos: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatCompuestos)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatCompuestos,build/aotcompuestos)
+	@c=build/aotcompuestos/aot_NatCompuestos.c; \
+ n=$$(grep -c "bpvm_aot_register_by_name" $$c); \
+ if [ "$$n" -ne 10 ]; then cat build/aotcompuestos/aot.log; echo "  ROJO: el AOT tradujo $$n de las 10 natives de NatCompuestos"; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_aotcompuestos.c build/aotcompuestos/aot_NatCompuestos.c $(LIBOBJ) \
+  -o build/test_aotcompuestos.exe $(LDFLAGS)
+	@echo "--- #747 los compuestos nuevos y el ternario en una native (esperado: AOT == interpretado, 13/13, sin FALLO) ---"
+	@timeout 60 ./build/test_aotcompuestos.exe samples/NatCompuestos.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotcompuestos.aot; \
+ timeout 60 ./build/test_aotcompuestos.exe samples/NatCompuestos.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotcompuestos.int; \
+ n=$$(grep -c '^ok ' build/aotcompuestos.aot); \
+ if grep -q '^FALLO' build/aotcompuestos.aot build/aotcompuestos.int; then grep -h '^FALLO' build/aotcompuestos.aot build/aotcompuestos.int | head; echo "  ROJO: FALLO"; exit 1; fi; \
+ if ! cmp -s build/aotcompuestos.int build/aotcompuestos.aot; then diff build/aotcompuestos.int build/aotcompuestos.aot | head; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+ if [ "$$n" -ne 13 ]; then tail -3 build/aotcompuestos.aot; echo "  ROJO: $$n de 13 comprobaciones"; exit 1; fi; \
+ echo "[status=OK] 13/13 con el AOT, igual que interpretado"
 
 # V8 #724 (27-oct) — EL TEXTO QUE DEVUELVE UN PACK, por el puente que escribe el compilador, con un pack de mentira
 # ('PRUE', lo publica el test): entero —sin el corte de 512 de antes, que además partía una ñ—, descodificado si la
