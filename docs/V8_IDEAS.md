@@ -4302,3 +4302,184 @@ bytes de verdad.
 
 Y la velocidad (§E5): lo que se hace byte a byte —llenar el buffer, buscar el salto de línea, validar el UTF-8, cortar en
 el último carácter entero— va en C, con la rutina de `#711`, que ya está en las dos VMs.
+
+## E9 · C# en JC: el traductor (H6; Eduardo, 31-oct; `#745`)
+
+Eduardo (31-oct): *«Un hito nuevo, traductor C# -> JC. Que indique si funciona, o si falla y porqué.»* Cómo encaja con
+H7 y H8, y las cifras de partida, en `FICHAS.md` («🧩 H6, H7 y H8» y `#745`). Aquí, el algoritmo, propuesto el 31-oct
+para el OK de Eduardo (*«OK, adelante con H6»*). Nada programado.
+
+### Lo que entra y lo que sale
+
+Entra una prueba de C# (un `.cs` con su `Main`). Sale uno de estos veredictos:
+- ✅ **funciona**, de dos clases: **se comprueba sola** (su `Main` devuelve un entero, y devuelve 0) o **sólo corre**
+  (su `Main` no devuelve nada, y acaba sin excepción). En las dos, las dos VMs con la misma salida y el mismo código de
+  salida. De las 404 candidatas de `#745`, 160 son de la primera clase y 244 de la segunda: en éstas, lo que se prueba es
+  que JC acepte el programa y lo ejecute;
+- ⛔ **no se traduce**: cada construcción que JC no tiene, con su línea y su mejora de H7 (o «fuera»). Todas, no sólo la
+  primera: es el censo de lo que pide cada prueba, medido traduciendo;
+- ❌ **falla**, y por qué: no compila en JC (el error del compilador: casi siempre, una regla del traductor que falta o
+  está mal); su `Main` devuelve otra cosa (cuál); salta una excepción (cuál); no acaba en el tiempo máximo; o las dos
+  VMs no coinciden;
+- y aparte, **no válida**: no compila en .NET 10, o pide otros ficheros (`#745`: quedan 2322 de 2742). No cuenta.
+
+### El algoritmo, en seis pasos
+
+1. **Leer, con Roslyn** (el del SDK de .NET 10 del PC, como el censo de `#745`): el árbol de la prueba y sus tipos. Si
+   no compila en .NET, «no válida».
+2. **Recorrer el árbol entero, una vez.** Cada nodo, una de las tres reglas de «🧩 H6, H7 y H8»: **se copia**, **se
+   reescribe** o **no se traduce**. Un nodo que el traductor no conoce es «no se traduce», con su nombre: nada se salta
+   en silencio.
+3. **Escribir un `.jc`**, un módulo con todo: `module CsTest6` para `test-6.cs`. Las clases anidadas y las de los
+   `namespace`, sacadas al módulo (`A.B` se llama `A_B`); si dos se llamaran igual, o si la de dentro usa lo privado de
+   la de fuera, «no se traduce». Y al final, el `main` de JC (el paso 6).
+4. **Compilar** con el compilador de JC (`basicplus-frontend.jar`).
+5. **Ejecutar en las dos VMs**, con un tiempo máximo (10 s, cambiable), y comparar la salida, byte a byte, y el código
+   de salida.
+6. **El veredicto**, de lo anterior. El `Main` de la prueba se queda como está, un método `static` de su clase, y el
+   traductor añade el `main` de JC, que lo llama:
+
+   ```
+   public function void main()
+   {
+      int r = X.Main();
+      if (r != 0)
+         throw new RuntimeError("Main devuelve " + r);
+   }
+   ```
+
+   Así, la traducción es un programa de JC normal: acaba con 0 si la prueba pasa y con 1 si no (`#481`), y el mensaje
+   dice por qué. Si el `Main` no devuelve nada, el `main` sólo lo llama. (La VM no da el valor del `main` como código de
+   salida: su tabla es fija, 0, 1, 2, 3, 4 y 130.)
+
+### Las dos reglas de fondo
+
+1. **Se reescribe sólo lo que JC escribe de otra forma.** Lo que JC decide distinto de C# a propósito no se tapa: «no se
+   traduce», con su porqué. Un `enum` se copia como `enum` de JC (sus valores, los que da Roslyn), y convertirlo a un
+   entero (`(int) Color.Rojo`), que JC no deja (`#522`), es «no se traduce» y una entrada de H7; no unas constantes
+   enteras escritas por el traductor. Así una prueba prueba JC, y no al traductor. (De las 404 candidatas, 40 declaran
+   un `enum` y 5 lo convierten.)
+2. **Una reescritura no cambia lo que se calcula ni su orden**: no evalúa dos veces una expresión que llame a algo, ni
+   cambia el orden en que se evalúan. Si hiciera falta, «no se traduce». Así, los argumentos con nombre se ponen en el
+   orden de los parámetros sólo si no llaman a nada; y `s.Substring(a, n)` es `substring(s, a, a + n)` sólo si `a` no
+   llama a nada.
+
+Lo que imprime sí puede diferir de .NET, y no se tapa: un `enum` sale con su número, un `bool` como `true`, un `double`
+con el formato de BP. En una prueba que se comprueba sola eso no cambia el veredicto, salvo que compare el texto; y
+entonces falla, con su motivo.
+
+### Las reglas, por construcción
+
+Los tipos que da Roslyn dicen dónde va cada reescritura: qué `+` une cadenas, qué es un carácter, qué nombre es un
+miembro de la clase, dónde hay una caja.
+
+| C# | JC | regla |
+|---|---|---|
+| las clases, la herencia, los métodos, las propiedades, `if`, `while`, `do`, `try`, `throw new`, `is`, `(T) x`, el ternario, los compuestos, `x++;` | lo mismo | se copia |
+| `switch`: `case 1: case 2:` y un `default` en medio | `case 1, 2:`, y el `default` al final (en C# un caso no cae en el siguiente, así que el orden no cambia nada) | se reescribe |
+| `using`, `namespace`, `virtual`, `override`, `sealed`, `readonly`, `internal`, los atributos | nada | se quita |
+| un miembro estático | `Clase.` delante, en cada uso | se reescribe |
+| un miembro de la propia clase sin `this.` (método, campo o propiedad) | con `this.` delante, siempre | se reescribe |
+| `public int x;` (un campo público) | `public int x { get; set; }` (BP no los deja) | se reescribe |
+| `Console.WriteLine(x)` · `Console.Write(x)` · `Console.WriteLine("{0}-{1}", a, b)` | `println(x)` · `print(x)` · `println(a, "-", b)` | se reescribe |
+| `char` | `int` (los caracteres de JC son enteros); en una cadena, `Str.fromCharCode(c)` | se reescribe |
+| `s[i]` · `s.Length` | `charCodeAt(s, i)` · `strlen(s)` | se reescribe |
+| `object o = 5;` · `(int) o` | `Object o = new Integer(5);` · `((Integer) o).value()` (las cajas de BP son a mano) | se reescribe |
+| `new int[n]` · `{ 1, 2 }` | `newIntArray(n)` · `[1, 2]` (para `string`, `float`, `bool` o una clase, BP no tiene con qué: «no se traduce», y una entrada de H7) | se reescribe |
+| `for (int i = 0; i < n; i++)`, con `n` fijo | `for (int i = 0; i <= n - 1; i++)` | se reescribe |
+| los demás `for` | `while`, con el incremento también delante de cada `continue` | se reescribe |
+| `var x = e;` | con su tipo | se reescribe |
+| `=> e`, el cuerpo de un método o de una propiedad | `{ return e; }` | se reescribe |
+| `abstract` (un método sin cuerpo) | el método lanza (nunca se llama: C# no deja crear la clase) | se reescribe |
+| una excepción de .NET (`ArgumentException`…) | una clase del módulo que hereda de `Exception` | se reescribe |
+| `throw;` | `throw e;`, con el nombre de su `catch` | se reescribe |
+| y lo demás de la lista de `#745`: las clases `partial`, `params`, los métodos de extensión, los inicializadores de objetos, `using`… | con la misma regla | se reescribe |
+| los genéricos (salvo `List<Object>` y el `Map`), `struct`, `ref`/`out`, los delegados, `as`, `??`, los indexadores, los operadores propios, `int[,]`, `++` dentro de una expresión… | — | no se traduce: le falta a JC (H7) |
+| las lambdas, la herencia múltiple, `yield`, LINQ, `async`, la reflexión, `uint`, `decimal`, `int?`, `goto`… | — | no se traduce: fuera |
+
+Un nombre de C# que en JC es palabra reservada (`print`, `function`, `module`, `field`…) se renombra con un `_` detrás,
+en todas partes, y el informe lo dice.
+
+**La biblioteca de .NET**, con una tabla: cada miembro que el traductor sabe pasar a la de BP (`Console.WriteLine`,
+`string.Length`, `ArrayList`, `StringBuilder`, `Math.Abs`…). Lo que no está en la tabla es «no se traduce», con su
+nombre: así el informe de un bloque de H8 dice qué de la biblioteca se pide más.
+
+### Un ejemplo: `test-6.cs`
+
+```csharp
+using System;
+
+class X {
+	public static int Main ()
+	{
+		Console.WriteLine ("From 0 to 9");
+		int i;
+		for (i = 0; i < 10; i++)
+			Console.WriteLine (i);
+		return 0;
+	}
+}
+```
+
+Lo que escribiría el traductor (escrito a mano con estas reglas; el compilador de JC lo compila):
+
+```
+module CsTest6
+{
+   class X
+   {
+      public static function int Main()
+      {
+         println("From 0 to 9");
+         int i;
+         i = 0;
+         while (i < 10)
+         {
+            println(i);
+            i++;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = X.Main();
+      if (r != 0)
+         throw new RuntimeError("Main devuelve " + r);
+   }
+}
+```
+
+El `for` usa una variable de fuera, y el de JC declara la suya: va como `while`.
+
+### Lo que no hace
+
+- **No ejecuta el original en .NET.** Sería ejecutar programas bajados, y no hace falta: las pruebas de Mono se
+  comprueban solas, y las que no devuelven nada son «sólo corre».
+- **No compara lo que imprime con .NET**, por lo mismo: compara las dos VMs.
+- **No arregla JC:** lo que falta va a H7, y lo que falla, a H8, con su motivo.
+
+### Dónde vive y cómo se usa
+
+- **El traductor, en `compat/csharp/`**: un programa de C# sobre el Roslyn del SDK instalado (sin bajar nada de NuGet),
+  y sus casos de prueba: programas pequeños de C#, escritos por nosotros, uno por regla, con el JC que tienen que dar.
+  Las pruebas de Mono, y lo que sale de ellas, fuera del repositorio (`C:\lenguajes\pruebas-csharp\`).
+- **Una prueba:** `cs2jc test-6.cs` escribe `CsTest6.jc`, lo compila, lo ejecuta y da el veredicto.
+- **Un bloque:** `cs2jc --lote carpeta` lo mismo con todas, y un informe: cuántas de cada veredicto; de las «no se
+  traduce», qué piden, contado; de las que fallan, por qué.
+- **Sólo se ejecuta lo que escribe el traductor:** las construcciones de sus reglas y la biblioteca de su tabla, sin
+  ficheros, red ni nada de fuera del programa (los `import` de JC los pone él).
+- **Por incrementos:** primero el esqueleto (leer, el módulo, el `main`, compilar, ejecutar y el veredicto) con lo que se
+  copia, `Console`, `static` y `this.`; después las demás reglas, una a una, cada una con su caso; por último el lote y
+  su informe. Las pruebas de Mono, en H8.
+
+### Por decidir (Eduardo)
+
+1. El algoritmo: los seis pasos, las dos reglas de fondo y la tabla.
+2. Dónde vive: `compat/csharp/` (el traductor y sus casos), y lo de Mono fuera.
+3. Las interfaces simples (`#745`): una interfaz que sólo implementan clases sin otra base, como una clase base cuyos
+   métodos lanzan, como un `abstract` (en las candidatas, 28 pruebas). La herencia múltiple de verdad sigue fuera. BP no
+   tiene interfaces (`#460`), y los streams de E8 ya van así.
+4. No ejecutar el original en .NET (arriba).
+5. El OK para ejecutar en las dos VMs del PC las traducciones de las pruebas de Mono.
