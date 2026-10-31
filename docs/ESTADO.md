@@ -31,13 +31,15 @@
 > para que soporte mas pruebas de C#. Empezar por añadir lo mas sencillo y ver cuantas mejoras pasarían»*).
 > - **El método:** las 2742 pruebas de `mcs/tests` de Mono, por Roslyn (el parser y el análisis de tipos del SDK de .NET
 >   10, que está instalado): qué construcciones usa cada una. Y 40 sondas JC, para saber qué tiene JC de verdad.
-> - **Lo que salió:** 396 candidatas sin tocar JC, sólo con un traductor; lo sencillo (los compuestos, `??`, `as`…), +21;
->   lo M (los operadores, `++` en expresiones, los indexadores, los métodos no virtuales, el ternario…), +141; y lo L,
+> - **Lo que salió:** 404 candidatas sin tocar JC, sólo con un traductor; lo sencillo (los compuestos, `??`, `as`…), +21;
+>   lo M (los operadores, los indexadores, los métodos no virtuales, `++` en expresiones, el ternario…), +133; y lo L,
 >   +597 (los genéricos, +309; `struct`, +109; los delegados sin lambdas, +108; `ref`/`out`, +71). Fuera, 1167 (las
 >   lambdas, 394; la reflexión, 318…).
 > - **De paso, `#744`:** `super.prop` va a la propiedad de la hija, en las dos VMs; `super.m()`, bien.
-> - **Lo siguiente:** las decisiones de `#745` (el traductor primero; lo S, empezando por los compuestos; las interfaces
->   simples como clases base).
+> - **Organizado en tres hitos** (Eduardo): H6, el traductor C# → JC, que dice si funciona o si falla y por qué; H7, las
+>   mejoras de JC; H8, las pruebas de Mono por temas (22) y por bloques; H7 y H8 en paralelo.
+> - **Lo siguiente:** el algoritmo del traductor (H6), y las decisiones de «🧩 H6, H7 y H8» (dónde viven las
+>   herramientas, guardar o bajar las pruebas, las interfaces simples).
 >
 > **31-oct** — **`#743`: el rendimiento de hoy frente a V7, en la Metro y en la P4** (Eduardo: *«Me gustaría poder
 > comparar el rendimiento actual con lo que teníamos […] Por lo menos poder comparar en la Metro y en la P4»*; *«de
