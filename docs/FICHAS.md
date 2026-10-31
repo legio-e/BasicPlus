@@ -7338,8 +7338,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   5. Tenemos un método declarado, si ese método está implementando un método de una interfaz debería indicarse.»*):
   que el método que implementa uno de una interfaz lo diga. Con una anotación, como en Java (*«En java utilizan una
   directiva, el equivalente nuestro es @(...)»*), **propia y aparte de la de redefinir** (*«Prefiero separar impements
-  de override porque no es exactamente lo mismo. Sería algo así @implement( intefaz1, intefaz 2)»*). Por concretar: las
-  llaves de las anotaciones de hoy (`@BD{ … }`) o paréntesis, y las reglas propuestas en §E10.
+  de override porque no es exactamente lo mismo. Sería algo así @implement( intefaz1, intefaz 2)»*). **Y decidida**
+  (*«1 llaves, 2 una o varias de las que implementa la clase, 3 obligatoria si, 4 se puede utilizar @override para
+  sobreescribir métodos de la clase padre aunque no es obligatorio pero es mas claro y los que vengan de Java lo
+  podrian hechar de menos,a nosotros nos sale casi gratis.»*): `@implement{ A, B }`, obligatoria, con una o varias de
+  las interfaces que implementa la clase; y `@override{}`, opcional, para redefinir un método del padre. Las reglas, en
+  §E10. **Las seis, decididas.**
 - **El análisis y el algoritmo**, en `V8_IDEAS` §E10: la interfaz, una fila más de `CLASES` con un bit (el «id» de
   Eduardo); una tabla por clase y por interfaz, que el cargador construye por clave, como las vtables; tres
   instrucciones (la llamada, `is` y la conversión); E11 si a una clase le falta un método de su interfaz; la versión 2

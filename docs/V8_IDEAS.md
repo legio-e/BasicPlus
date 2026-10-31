@@ -4860,21 +4860,28 @@ JC:  @implement{ IPoligono }
      public function double area() { … }
 ```
 
-Lo propuesto, para su OK:
-- **La forma**: la de las anotaciones de hoy, con llaves (`@BD{ tabla = "medidas" }`, la gramática de V5/H5); con
-  paréntesis cambiaría para las dos.
-- **Qué nombra**: las interfaces **de la cabecera de la clase** que tienen ese método (propio o heredado de otra
-  interfaz), todas y sólo ésas. `class C implements A, B`, con `X()` en las dos: `@implement{ A, B }`; `Cuadrado`, con
-  `area` en `Forma`, de la que hereda `Poligono`: `@implement{ Poligono }`. Así el compilador sabe siempre qué falta o
-  qué sobra, y lo dice.
+**Decidido** (Eduardo, 31-oct: *«1 llaves, 2 una o varias de las que implementa la clase, 3 obligatoria si, 4 se puede
+utilizar @override para sobreescribir métodos de la clase padre aunque no es obligatorio pero es mas claro y los que
+vengan de Java lo podrian hechar de menos,a nosotros nos sale casi gratis.»*):
+- **La forma**: la de las anotaciones de hoy, con llaves (`@BD{ tabla = "medidas" }`, la gramática de V5/H5).
+- **Qué nombra**: una o varias de las interfaces que implementa la clase (las de su cabecera, las que éstas heredan y
+  las de su padre), y cada una tiene que tener ese método. `class C implements A, B`, con `X()` en las dos:
+  `@implement{ A }`, `@implement{ B }` o `@implement{ A, B }`; en `Cuadrado`, `area` puede decir `Forma` o `Poligono`.
 - **Obligatoria** en un método declarado en la clase que implementa uno de una interfaz de su cabecera: si falta, error
-  (`'area' implementa 'Poligono.area': márcalo con @implement{ Poligono }`); y si nombra una interfaz que no lo tiene,
-  o que no está en la cabecera, también.
+  (`'area' implementa 'Poligono.area': márcalo con @implement{ … }`); y si nombra una interfaz que la clase no
+  implementa, o que no tiene ese método, también.
 - **Lo heredado no se marca**: en `class Y : X, A`, el `Add` lo pone `X`. Y una hija que sobrescribe un método que su
-  padre ya implementaba, sin repetir la interfaz en su cabecera, está redefiniendo: no lleva `@implement`.
-- **En el módulo**: el bit «implementa» en la fila del método (como el de `override`); al enlazar, E11 si la interfaz
-  gana un método que la clase no tiene, y E12 si pierde uno que la clase dice implementar.
-- **Redefinir** (`@override`), aparte: no la necesitan las interfaces; para más adelante, si se quiere.
+  padre ya implementaba, sin repetir la interfaz en su cabecera, está redefiniendo: `@implement` le vale, pero no le
+  hace falta.
+- **`@override{}`, para redefinir un método del padre**: opcional («es mas claro y los que vengan de Java lo podrian
+  hechar de menos»); si la lleva y no redefine nada, error (la errata de Java). Lo escrito sin ella sigue valiendo.
+- **Una anotación por declaración**, como hoy (el parser guarda una): un método que implementa una interfaz de su
+  cabecera y a la vez redefine el del padre lleva `@implement`, la obligatoria.
+- **En el módulo**: el bit «implementa» en la fila del método (el 2; hoy, el 0 es `override` y el 1, privado); al
+  enlazar, E11 si la interfaz gana un método que la clase no tiene, y E12 si ninguna interfaz de la clase tiene ya el
+  que la clase dice implementar. `@override` no llega al módulo: el bit `override` ya lo pone el compilador siempre.
+- **El traductor de C#**: `@implement{ … }` donde Roslyn dice qué implementa cada método, y `@override{}` donde C#
+  escribe `override`.
 
 ### El orden, si sale el OK
 
