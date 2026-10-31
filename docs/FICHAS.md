@@ -7174,6 +7174,12 @@ datos históricos de comprobaciones que hicimos, no podrías recuperarlos para i
 Por decidir (Eduardo), si sirve: V6 y V5 en la Metro, para ver dónde está el salto de V4 a V5; y V7 en el kit de la
 P4 (o V5 en la Waveshare), para la serie de la P4.
 
+**La lectura de Eduardo (31-oct):** *«era para tener una visión de como vamos evolucionando. Ganamos en algunas cosas y
+perdemos en otras en cuanto a rendimiento puro, pero vamos mejorando en seguridad así que el balance es positivo. Y no
+creo que hayas hecho pruebas aprovechando los 2 núcleos que también mejoraríamos.»* Cierto: los doce programas son de
+un hilo. Lo que faltaría, cuando se quiera: un programa de dos hilos que trabajen a la vez (`paralleltest`, el de la
+campaña de V4, o `ParaleloPico`) con un núcleo y con dos, en la herramienta.
+
 #### 🔵 `#742` — la VM-Java con dos workers: un `join` puede volver antes de que salga la línea a medias del hilo que acaba (`PrintSinSalto`, 1 de cada 40) (abierta el 30-oct, en la red del prototipo de `#718`; **sólo análisis**)
 
 En `compat.sh check-smp`, «FAIL PrintSinSalto — VM-Java != VM-C». No es del prototipo: repetido 200 veces con dos
