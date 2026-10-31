@@ -630,6 +630,11 @@ Minimalismo: cada feature nueva tiene que ganarse su sitio.
 > con el método esperado) o, si hiciera falta, **función-valor** (§8 Fase A).
 > Esto NO cambia §6 (seguimos SIN herencia múltiple, por su complejidad propia,
 > ya no "porque las interfaces lo cubren").
+>
+> **↪ REABIERTO el 31-oct-2026 (V8, `#756`):** Eduardo: *«si se pueden utilizar
+> interfaces estoy encantado. Y si, la herencia múltiple de tipos»*. Sí, en BP y
+> en JC; el análisis, en `V8_IDEAS.md` §E10, y el estado, en `FICHAS.md`. §6 sigue
+> igual: sin herencia múltiple de estado ni de código.
 
 **Qué**: interfaces Java-style sobre clases — `interface Drawable` con
 firmas de método (sin cuerpo); `class Circle implements Drawable,

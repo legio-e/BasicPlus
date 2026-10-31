@@ -4829,6 +4829,14 @@ una interfaz (se atrapan clases que heredan de `Exception`).
    §13.
 6. **La compatibilidad**: la versión 2 de `CLASES`, sólo en los módulos que usan interfaces (arriba).
 
+### Decidido (Eduardo, 31-oct)
+
+*«A ver que yo vengo de programar sobre todo en Java así que si se pueden utilizar interfaces estoy encantado. Y si, la
+herencia múltiple de tipos. En BP ( y JC ) no se puede exportar nada mas que métodos y propiedades así que para la
+interfaces casi no hay restricciones.»* La 1 y la 2: **las interfaces, sí, en BP y en JC**, con la herencia múltiple de
+tipos; y **métodos y properties**, que es lo que una clase exporta (desde otro módulo, quien usa un objeto sólo ve eso;
+los campos sólo los ve una clase hija, que es el objeto: `manual.html` §9.6). Por decidir, la 3 a la 6.
+
 ### El orden, si sale el OK
 
 El de siempre: el compilador y la VM-Java, con los samples buenos y los de error (no implementa, ciclo, conversión

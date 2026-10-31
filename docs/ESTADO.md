@@ -69,8 +69,12 @@
 >   que el cargador construye por clave, como las vtables, y tres instrucciones. Seis decisiones, para Eduardo. Nada
 >   programado. Salieron de paso `#757` (el AOT compila una conversión como una construcción: código equivocado sin
 >   error, visto en su C) y `#758` (una ranura sin resolver, distinta en cada VM).
-> - **Lo siguiente:** lo que decida Eduardo de `#756`; la biblioteca (las excepciones de .NET, `ArrayList` como nuestra
->   `List` —Eduardo: *«ArrayList no es nuestro List?»*—, la reflexión fuera) y `char`.
+> - **Y decididas las dos primeras** (Eduardo: *«yo vengo de programar sobre todo en Java así que si se pueden utilizar
+>   interfaces estoy encantado. Y si, la herencia múltiple de tipos»*): sí, en BP y en JC, con métodos y properties.
+>   Yo había escrito «no es herencia múltiple», y Eduardo lo cazó: es la de tipo (la de Java), no la de estado ni la de
+>   código; corregido. `V2_BACKLOG` §5, marcado como reabierto.
+> - **Lo siguiente:** las decisiones 3 a 6 de `#756` y, con su OK, empezar; la biblioteca (las excepciones de .NET,
+>   `ArrayList` como nuestra `List` —Eduardo: *«ArrayList no es nuestro List?»*—, la reflexión fuera) y `char`.
 >
 > **31-oct (mediodía)** — **H7.2 (`#749`): los genéricos de lo que ya hay, y de paso `#748`** (Eduardo: *«nuestro List
 > es en realidad List<Object>»*; a las cuatro preguntas, *«1 los dos. 2 OK con la propuesta. 3 OK. 4 de momento no, mas

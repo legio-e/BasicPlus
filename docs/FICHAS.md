@@ -7329,6 +7329,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **¿Es herencia múltiple?** (Eduardo: *«Y eso no es herencia múltiple (al menos como la entiende Java)?»*). De tipo, sí,
   como la llama Java; de estado (campos) y de código (cuerpos), no: una interfaz no trae ni lo uno ni lo otro. Encaja
   con *«herencia múltiples … no entrarían»* (`#745`) sólo si aquello era la de clases: es la primera decisión.
+- **Decidido** (Eduardo, 31-oct): *«A ver que yo vengo de programar sobre todo en Java así que si se pueden utilizar
+  interfaces estoy encantado. Y si, la herencia múltiple de tipos. En BP ( y JC ) no se puede exportar nada mas que
+  métodos y propiedades así que para la interfaces casi no hay restricciones.»* Las decisiones 1 y 2 de §E10: **sí, en
+  BP y en JC**, con la herencia múltiple de tipos (no la de estado ni la de código); y **métodos y properties**, lo
+  mismo que una clase exporta. Por decidir, la 3 a la 6 (la sintaxis, `Thread`, E11 al enlazar y la versión 2 de
+  `CLASES`).
 - **El análisis y el algoritmo**, en `V8_IDEAS` §E10: la interfaz, una fila más de `CLASES` con un bit (el «id» de
   Eduardo); una tabla por clase y por interfaz, que el cargador construye por clave, como las vtables; tres
   instrucciones (la llamada, `is` y la conversión); E11 si a una clase le falta un método de su interfaz; la versión 2
