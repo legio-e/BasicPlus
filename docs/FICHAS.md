@@ -7150,6 +7150,30 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### ✅ `#743` — comparar el rendimiento de hoy con el de una versión publicada, EN PLACA: la herramienta, y V7 frente a hoy en la Metro y la P4 (abierta y **CERRADA el 31-oct**; el commit de `#743`)
+
+Eduardo (31-oct): *«Me gustaría poder comparar el rendimiento actual con lo que teníamos, ya sea de la versión 7 o
+incluso anterior. Por lo menos poder comparar en la Metro y en la P4»*; *«de momento comparamos con la V7»*; *«Tenemos
+datos históricos de comprobaciones que hicimos, no podrías recuperarlos para incluirlos en la comparación?»*.
+- **La herramienta:** `bpgenvm-c/tools/rendimiento_versiones.py` (`mide PLACA PUERTO VERSION`, `compara PLACA V1 V2`).
+  Cada versión, entera y como se publicó: su compilador, su stdlib y su firmware, de su ZIP de `dist/`; «hoy», el
+  árbol. Los programas de `samples/benchmarks` que no han cambiado de texto (los siete clásicos desde V4; `Bench`,
+  `AllocBench`, `PrintBench` y `VivoLargo` desde V6; `BenchMem` desde V7), dos veces cada uno. Comprueba con el HELLO
+  que la imagen cambió al grabar. Lo de la placa (guardar el ENV, quitar el `Stdlib.pack` de hoy antes de una versión
+  vieja, y regrabarlo al volver), a mano: en su cabecera.
+- **V7 → hoy** (el informe: `compat/informes/rendimiento_v7_31oct.md`): en las dos placas, las cadenas, las reservas y
+  la salida, mejor (la Metro: `AllocBench` −38 %, `PrintBench` −50 %, `stringbench` −13 %; la P4, `stringbench` −5 %);
+  el cálculo puro, de un 2 a un 7 % más lento (`fib(28)` +4 % en las dos), probablemente la comprobación de la pila en
+  cada instrucción (`#740`, la b), que se quedó por seguridad.
+- **Lo de antes:** `fib(28)` interpretado en la Metro, la misma placa con el heap en la PSRAM: V4 7755 ms, V5 8819, V7
+  8735, hoy 9092 (+17 % desde V4, casi todo de V4 a V5). En la P4, las cifras viejas (4543 ms en V4, 4363 en V5) son
+  del kit, y hoy está la Waveshare (6621 en V7, 6859 hoy): no se pueden comparar sin medir en la misma placa.
+- **De paso:** `wire_serie.py pack` de un pack con motor no grababa con `python -X utf8` (la salida de Java en cp1252):
+  arreglado. Y la P4 queda con la imagen de HEAD y sus packs regrabados (`#741`).
+
+Por decidir (Eduardo), si sirve: V6 y V5 en la Metro, para ver dónde está el salto de V4 a V5; y V7 en el kit de la
+P4 (o V5 en la Waveshare), para la serie de la P4.
+
 #### 🔵 `#742` — la VM-Java con dos workers: un `join` puede volver antes de que salga la línea a medias del hilo que acaba (`PrintSinSalto`, 1 de cada 40) (abierta el 30-oct, en la red del prototipo de `#718`; **sólo análisis**)
 
 En `compat.sh check-smp`, «FAIL PrintSinSalto — VM-Java != VM-C». No es del prototipo: repetido 200 veces con dos
@@ -7166,7 +7190,7 @@ imprimen sin salto, la línea del hilo sale detrás de lo que imprime quien lo e
 arreglo, probablemente que la instrucción no marque TERMINATED y lo haga `terminateThread` tras vaciar la línea (mirar
 antes qué más mira ese estado entre medias).
 
-#### 🔵 `#741` — en la P4, los packs `Gui` (LVGL) y `SQLite` no cargan desde la imagen del sonido del 27-oct: «realojado para OTRA dirección» (abierta el 29-oct, al medir `#737`; **por regrabar**)
+#### ✅ `#741` — en la P4, los packs `Gui` (LVGL) y `SQLite` no cargan desde la imagen del sonido del 27-oct: «realojado para OTRA dirección» (abierta el 29-oct, al medir `#737`; **CERRADA el 31-oct**: con la imagen de HEAD, regrabados y sellados para su zona; los dos motores, rc=0)
 
 Visto al devolver a la P4 su imagen del 27-oct tras las pruebas de `#737` (comprobada byte a byte contra lo que llevaba
 antes: es la misma). El log: «pack: [0] 'Gui' (motor 'lvgl') NO se carga — realojado para OTRA direccion»; su sello dice
@@ -7176,6 +7200,12 @@ ahora en `0x400d2e1c`, y la zona, que se monta en la página siguiente, pasó de
 esa tarde (16:09) comprobó que los packs aguantaban, pero con la imagen de antes del sonido; y al grabar el sonido no
 se miró el `nm` (la regla: antes de grabar una imagen ESP). Lo que hace falta: regrabar `Gui` y `SQLite` en la P4 (desde
 el IDE o `wire_serie.py pack`). La imagen de HEAD acaba en la misma página (`0x400d361c`): no la vuelve a mover.
+
+**31-oct, regrabados** (al volver la P4 a HEAD tras medir V7, `#743`): con la imagen de HEAD (`_rodata_reserved_end`
+en `0x400d2f2c`, la misma página que la del 27-oct), `packdel` de los dos y `pack … riscv` de `packs/Gui.pack` y
+`packs/SQLite.pack`, sellados para su zona (`Gui` en `0x402BE0F0`, `SQLite` en `0x4036E0F0`). En el arranque: «'Gui'
+volvio, rc=0», «'SQLite' volvio, rc=0», «GUI: pack 'LVGL' resuelto». Antes hubo que arreglar `wire_serie.py pack`, que
+con un motor nativo no grababa si se lanzaba con `python -X utf8` (la salida de Java, en cp1252).
 
 #### 🔵 `#740` — la RAM de las placas sin PSRAM, la C3 y la C6 las justas: las pilas de los hilos BP, DEL HEAP —48 KB más de heap, y lo que gastan, proporcional a los hilos—, y los búferes estáticos que se pueden recortar (abierta el 27-oct, a pregunta de Eduardo al cerrar la sesión: *«Antes de cerrar la VM cuanta memoria RAM consume y si hay posibilidades de reducir el consumo. Ya lo miramos en su día pero no se si con los cambios que ha habido se puede hacer algo. Solamente para los micros que no tengan PSRAM, los que tienen PSRAM no hay problema.»*)
 

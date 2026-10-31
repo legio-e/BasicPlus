@@ -27,6 +27,26 @@
 
 ## Última sesión
 
+> **31-oct** — **`#743`: el rendimiento de hoy frente a V7, en la Metro y en la P4** (Eduardo: *«Me gustaría poder
+> comparar el rendimiento actual con lo que teníamos […] Por lo menos poder comparar en la Metro y en la P4»*; *«de
+> momento comparamos con la V7»*; *«Tenemos datos históricos […] no podrías recuperarlos»*).
+> - **La herramienta:** `bpgenvm-c/tools/rendimiento_versiones.py`: cada versión, con su compilador, su stdlib y su
+>   firmware del ZIP de `dist/`; doce programas de `samples/benchmarks` que no han cambiado de texto. El informe,
+>   `compat/informes/rendimiento_v7_31oct.md`.
+> - **Lo que salió:** las cadenas, las reservas y la salida, mejor (la Metro: `AllocBench` −38 %, `PrintBench` −50 %,
+>   `stringbench` −13 %); el cálculo puro, un 2–7 % más lento en las dos (probablemente `#740`, la b). Y de lo de
+>   antes, `fib(28)` en la Metro: V4 7755 ms → V5 8819 → V7 8735 → hoy 9092. Las cifras viejas de la P4 son del kit, y
+>   hoy está la Waveshare: no se comparan.
+> - **Lo que enseñó:** (1) `idf.py` lanzado desde Git Bash, por PowerShell, ve las variables de MSYS y no graba nada,
+>   en silencio: la primera «medida de hoy» de la P4 era otra vez V7 (lo cazó el HELLO; ahora la herramienta lo
+>   comprueba); (2) `wire_serie.py pack` con un motor, lanzado con `python -X utf8`, se rompía con la salida de Java
+>   (cp1252): arreglado; (3) hay dos P4 y no van igual (la flash de cada una): una serie histórica tiene que decir de
+>   qué placa es cada cifra.
+> - **Las placas:** la Metro, otra vez con la imagen de HEAD y el `Stdlib.pack` de `packs/`; la P4, ahora con la imagen
+>   de HEAD (`#718`, la L2 de 256 KB) y `Stdlib`, `Gui` y `SQLite` regrabados: los motores, rc=0 (`#741`, cerrada).
+> - **Lo siguiente:** si Eduardo quiere, V6 y V5 en la Metro (el salto de V4 a V5) y la serie de la P4 en una misma
+>   placa. El lote de placas, como lo dejó el 29-oct (la Metro y la P4 ya llevan HEAD).
+
 > **30-oct** — **`#718`, los huecos al reservar: medida, probada en una copia, lo que hacen los demás, y las listas por
 > tamaño** (Eduardo: *«Si, medimos a ver que sale»*; *«Haz la prueba»*; *«Necesitamos un buen algoritmo y ahora no lo
 > tenemos. Habría que buscar en Internet como tienen resuelto la gestión de huecos.»*; *«prueba una copia a ver que tal

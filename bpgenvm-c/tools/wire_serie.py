@@ -485,10 +485,13 @@ def cmd_pack(w, args):
         if jc.returncode != 0: print("javac PackTool:", jc.stderr[-400:]); return
     avisar_stdlib(w, open(args[0], "rb").read())       # V7 #623: la stdlib que no lleva, si la placa no la tiene
     tmpd = tempfile.mkdtemp(prefix="pack_")
+    # 31-oct: Java escribe en la codificación de la consola (cp1252) y este script corre con `-X utf8`: la raya «—»
+    # de su salida (0x97) rompía la lectura y el pack no se grababa. Que escriba en UTF-8, y leerlo sin romperse.
+    java = ["java", "-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8"]
     if arch:
         podado = os.path.join(tmpd, "podado.pack")
-        out = subprocess.run(["java", "-cp", cp + ";" + pt, "PackTool", "podar", args[0], arch, podado],
-                             capture_output=True, text=True)
+        out = subprocess.run(java + ["-cp", cp + ";" + pt, "PackTool", "podar", args[0], arch, podado],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace")
         print(out.stdout.strip()); 
         if out.returncode != 0: print(out.stderr[-400:]); return
         img = open(podado, "rb").read()
@@ -505,9 +508,9 @@ def cmd_pack(w, args):
         sellado = os.path.join(tmpd, "sellado.pack")
         # V7/H6.c G1: ramSize (lo que queda desde el tope) para que un motor que no
         # cabe se diga ANTES de grabar, no al cargar.
-        out = subprocess.run(["java", "-cp", cp + ";" + pt, "PackTool", "sellar", args[0], arch,
-                              str(flash), str(ram or 0), sellado, str(r.get("ramSize") or 0)],
-                             capture_output=True, text=True)
+        out = subprocess.run(java + ["-cp", cp + ";" + pt, "PackTool", "sellar", args[0], arch,
+                                     str(flash), str(ram or 0), sellado, str(r.get("ramSize") or 0)],
+                             capture_output=True, text=True, encoding="utf-8", errors="replace")
         print(out.stdout.strip())
         if out.returncode != 0: print(out.stderr[-400:]); return
         sell = open(sellado, "rb").read()
