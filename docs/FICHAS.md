@@ -7333,8 +7333,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   interfaces estoy encantado. Y si, la herencia múltiple de tipos. En BP ( y JC ) no se puede exportar nada mas que
   métodos y propiedades así que para la interfaces casi no hay restricciones.»* Las decisiones 1 y 2 de §E10: **sí, en
   BP y en JC**, con la herencia múltiple de tipos (no la de estado ni la de código); y **métodos y properties**, lo
-  mismo que una clase exporta. Por decidir, la 3 a la 6 (la sintaxis, `Thread`, E11 al enlazar y la versión 2 de
-  `CLASES`).
+  mismo que una clase exporta. Y después la 3, la 4 y la 6 (*«3 y 4 OK, 6 también OK»*): la sintaxis de §E10, `Thread`
+  y sus hijas sin interfaces, y la versión 2 de `CLASES` sólo en los módulos que las usan. **La 5, abierta** (*«Veamos
+  5. Tenemos un método declarado, si ese método está implementando un método de una interfaz debería indicarse.»*):
+  que el método que implementa uno de una interfaz lo diga.
 - **El análisis y el algoritmo**, en `V8_IDEAS` §E10: la interfaz, una fila más de `CLASES` con un bit (el «id» de
   Eduardo); una tabla por clase y por interfaz, que el cargador construye por clave, como las vtables; tres
   instrucciones (la llamada, `is` y la conversión); E11 si a una clase le falta un método de su interfaz; la versión 2

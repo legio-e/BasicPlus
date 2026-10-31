@@ -4835,7 +4835,10 @@ una interfaz (se atrapan clases que heredan de `Exception`).
 herencia múltiple de tipos. En BP ( y JC ) no se puede exportar nada mas que métodos y propiedades así que para la
 interfaces casi no hay restricciones.»* La 1 y la 2: **las interfaces, sí, en BP y en JC**, con la herencia múltiple de
 tipos; y **métodos y properties**, que es lo que una clase exporta (desde otro módulo, quien usa un objeto sólo ve eso;
-los campos sólo los ve una clase hija, que es el objeto: `manual.html` §9.6). Por decidir, la 3 a la 6.
+los campos sólo los ve una clase hija, que es el objeto: `manual.html` §9.6). Y después la 3, la 4 y la 6 (*«3 y 4 OK,
+6 también OK»*): la sintaxis de arriba; `Thread` y sus hijas, sin interfaces; y la versión 2 de `CLASES`, sólo en los
+módulos que las usan. **La 5, abierta** (*«Veamos 5. Tenemos un método declarado, si ese método está implementando un
+método de una interfaz debería indicarse.»*): que el método que implementa uno de una interfaz lo diga.
 
 ### El orden, si sale el OK
 
