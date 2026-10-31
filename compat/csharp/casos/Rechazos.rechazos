@@ -1,0 +1,18 @@
+# Lo que el traductor tiene que rechazar en Rechazos.cs, y por qué (una línea por rechazo, en orden).
+5: le falta a JC: struct (tipos por valor) — struct Punto { public int X; }
+7: el traductor todavía no: interfaces simples, como clases base — interface IForma { int Area(); }
+9: el traductor todavía no: enum — enum Color { Rojo, Verde }
+18: le falta a JC: métodos no virtuales (new) — public void Saluda() { }
+23: le falta a JC: genéricos — <T>
+25: le falta a JC: ref / out — ref int x
+30: le falta a JC: as — o as string
+31: fuera: sin signo y decimal — uint
+32: le falta a JC: delegados y eventos de C# (sin lambdas) — Func<int, int>
+32: fuera: lambdas y métodos anónimos — x => x + 1
+34: le falta a JC: ++, -- y = dentro de una expresión — i++
+35: el traductor todavía no: char (como entero) — char
+36: la biblioteca: System.String.Join — string.Join(",", "a", "b")
+39: le falta a JC: null en una cadena (en BP un string no es nulo) — null
+41: le falta a JC: errores de la VM con su tipo — NullReferenceException
+44: fuera: goto — goto fin;
+45: fuera: goto — fin: return 0;

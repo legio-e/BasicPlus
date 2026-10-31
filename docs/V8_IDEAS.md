@@ -4474,7 +4474,7 @@ El `for` usa una variable de fuera, y el de JC declara la suya: va como `while`.
   copia, `Console`, `static` y `this.`; después las demás reglas, una a una, cada una con su caso; por último el lote y
   su informe. Las pruebas de Mono, en H8.
 
-### Por decidir (Eduardo)
+### Decidido (Eduardo, 31-oct: *«OK a todos»*)
 
 1. El algoritmo: los seis pasos, las dos reglas de fondo y la tabla.
 2. Dónde vive: `compat/csharp/` (el traductor y sus casos), y lo de Mono fuera.
@@ -4482,4 +4482,59 @@ El `for` usa una variable de fuera, y el de JC declara la suya: va como `while`.
    métodos lanzan, como un `abstract` (en las candidatas, 28 pruebas). La herencia múltiple de verdad sigue fuera. BP no
    tiene interfaces (`#460`), y los streams de E8 ya van así.
 4. No ejecutar el original en .NET (arriba).
-5. El OK para ejecutar en las dos VMs del PC las traducciones de las pruebas de Mono.
+5. Ejecutar en las dos VMs del PC las traducciones de las pruebas de Mono: sí.
+
+### El esqueleto, hecho (31-oct)
+
+**Dónde y cómo.** `compat/csharp/cs2jc/`, un programa de C# para .NET 10 sobre el Roslyn del SDK instalado (lo busca
+por la versión del SDK: `$(NetCoreRoot)sdk\$(NETCoreSdkVersion)\Roslyn\bincore`; no baja nada). Se construye con
+`dotnet build compat/csharp/cs2jc -c Release`. Tres formas de usarlo:
+- `cs2jc prueba.cs`: el `.jc`, compilarlo, ejecutarlo en las dos VMs y el veredicto;
+- `cs2jc --lote carpeta` (o una lista): todas, en paralelo, con su informe y un `informe.jsonl`;
+- `cs2jc --casos`: los casos del traductor, `compat/csharp/casos/`. Cada `X.cs` tiene que dar su `X.jc`, y ese JC tiene
+  que funcionar; o, si es de rechazos, sus `X.rechazos`, línea a línea.
+
+La salida (el `.jc`, el `.mod` y la stdlib al lado, como en `compat.sh`) va por defecto a `%TEMP%\cs2jc`; la de las
+pruebas de Mono, a `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio.
+
+**Lo que traduce ya:** las clases, la herencia, los métodos (los virtuales, sin `virtual` ni `override`), los
+constructores con `: base(…)` y `: this(…)`, los destructores, las propiedades (las automáticas, y `{ get; }` como
+`{ get; set; }`), los campos (los públicos, como propiedades, también los `static`), las constantes, `static` con su
+clase delante, `this.` delante de lo de la propia clase, las clases anidadas y los `namespace` sacados al módulo, las
+`partial` juntas, `if`, `while`, `do`, el `for` de JC, el `foreach` sobre un array, `try` con `throw;`, las excepciones
+propias, el ternario, los compuestos, `~x` como `(x ^ -1)` y `Console.WriteLine` y `Write`, con su formato si es un
+literal y usa cada argumento una vez y en orden.
+
+**Las reglas que salieron al pasar Mono**, todas exactas:
+- la clase padre, delante de la hija: JC lo pide («padre local … no es una clase abierta declarada antes»), y a C# le da
+  igual el orden;
+- una clase que se llama como una de Core (`List`, `Thread`…) lleva un `_` detrás, como un nombre reservado: JC no
+  deja redeclararlas;
+- el valor por defecto de un parámetro, el que calcula C#: JC sólo admite un literal, y C# cualquier constante
+  (`int a = Diez * 2 + 1` es `int a = 21`);
+- `throw;` relanza la excepción que llegó aunque el `catch` haya cambiado su variable (`test-630`): entonces la que
+  llegó va en una variable del traductor, y la del programa es una local con su valor;
+- un bloque suelto, que JC no tiene, como `if (true) { … }`, con el mismo ámbito.
+
+**Un quinto motivo, nuevo:** «un fallo de JC», con su ficha. La traducción es buena y JC la haría mal: `#744`
+(`base.prop`), `#751` (construir una clase declarada más abajo) y `#753` (`super()` hacia `Object`). Antes salían como
+«❌ falla» con un mensaje que no decía la causa («desbordamiento de pila», o un error del emisor sin texto). Así,
+«❌ falla» queda para lo que hay que mirar. La regla se quita al cerrar su ficha.
+
+**Lo que JC no tiene y salió al compilar el JC** (el censo no lo veía): `&`, `|` y `^` entre `bool`; el «Color Color»
+de C#; `null` en una cadena; una constante que cabe, en un argumento o un `return` estrecho; y los `_` de un número como
+en C#. Con sus pruebas contadas, en `FICHAS.md`, «🧩 H6, H7 y H8», «Lo que salió al traducir».
+
+**Los casos:** `Esqueleto` y `Reescrituras` funcionan en las dos VMs (sus `Main` devuelven 0); `Rechazos` y `RechazosJc`
+dan sus rechazos, uno de cada motivo.
+
+**Las cifras** (el lote entero, unos 20 s con 10 hilos): de los 2742 ficheros de `mcs/tests`, 2322 válidos, los mismos
+que en el censo de `#745`. **172 funcionan** (47 se comprueban solas y 125 sólo corren). **2 fallan**, por diferencias
+de JC: `test-29` (las sobrecargas entre una clase y su base) y `test-231` (`#752`). **2148 no se traducen todavía.** Lo
+que más piden: los genéricos (824), los delegados (419), las interfaces simples (352), `struct` (249), las lambdas
+(186, fuera), `enum` (149), `int?` (119, fuera), las cajas (113), crear arrays (105), `Main` con argumentos (105) y
+`#751` (104).
+
+**Lo siguiente:** las reglas que faltan, por lo que rinden, cada una con su caso: las interfaces simples y `abstract`,
+`enum`, las cajas, los arrays, `Main` con argumentos, `params`, los demás `for`, el `switch`, los inicializadores,
+`char`, los métodos de extensión, `using`, los argumentos con nombre; y la biblioteca.

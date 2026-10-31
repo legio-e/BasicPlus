@@ -1,0 +1,93 @@
+module CsReescrituras
+{
+   class Padre
+   {
+      public function int Valor()
+      {
+         return 1;
+      }
+   }
+
+   class Hija : Padre
+   {
+      public function int Valor()
+      {
+         return base.Valor() + 1;
+      }
+   }
+
+   class List_
+   {
+      public int Cuantos { get; set; } = 3;
+   }
+
+   class MiError : Exception
+   {
+      public function MiError(string m) : base(m)
+      {
+      }
+   }
+
+   class Programa
+   {
+      private const int Diez = 10;
+      private static function int ConDefecto(int a = 21, bool b = false, double d = 0.25)
+      {
+         return a + (b ? 100 : 0) + (int) (d * 4);
+      }
+      private static function int Relanza()
+      {
+         try
+         {
+            try
+            {
+               throw new MiError("primera");
+            }
+            catch (MiError excepcion_cs1)
+            {
+               MiError e = excepcion_cs1;
+               e = new MiError("segunda");
+               throw excepcion_cs1;
+            }
+         }
+         catch (MiError e)
+         {
+            return e.msg == "primera" ? 0 : 1;
+         }
+      }
+      public static function int Main()
+      {
+         if (new Hija().Valor() != 2)
+         {
+            return 1;
+         }
+         if (new List_().Cuantos != 3)
+         {
+            return 2;
+         }
+         if (Programa.ConDefecto() != 22)
+         {
+            return 3;
+         }
+         if (Programa.ConDefecto(5, true) != 106)
+         {
+            return 4;
+         }
+         if (Programa.Relanza() != 0)
+         {
+            return 5;
+         }
+         println("bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

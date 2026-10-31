@@ -27,6 +27,26 @@
 
 ## Última sesión
 
+> **31-oct (tarde, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto, hecho** (Eduardo: *«OK,
+> adelante con H6»*; al algoritmo y sus cinco decisiones, *«OK a todos»*).
+> - **El algoritmo** (`V8_IDEAS` §E9): seis pasos sobre Roslyn (leer, recorrer el árbol entero, escribir el módulo,
+>   compilar con el de JC, ejecutar en las dos VMs y el veredicto); dos reglas de fondo (se reescribe sólo lo que JC
+>   escribe de otra forma; una reescritura no cambia lo que se calcula ni su orden). Decidido: el traductor en
+>   `compat/csharp/`, las interfaces simples como clases base, el original no se ejecuta en .NET, y las traducciones de
+>   Mono, sí, en las dos VMs del PC.
+> - **El esqueleto, hecho:** `compat/csharp/cs2jc` (una prueba, un lote o los casos), con lo que se copia, `Console`,
+>   `static` y `this.`; cuatro casos propios en `compat/csharp/casos/`, los cuatro bien. Al pasar Mono salieron reglas
+>   nuevas, exactas (la clase padre delante, los nombres de Core, el valor por defecto calculado, `throw;` cuando el
+>   catch cambia su variable) y un quinto motivo de rechazo, «un fallo de JC», con su ficha.
+> - **Mono, con el esqueleto:** de 2322 pruebas válidas, 172 funcionan (47 se comprueban solas), 2 fallan (diferencias de
+>   JC: `test-29` y `test-231`) y 2148 no se traducen todavía, con lo que piden contado. El lote entero, ~20 s.
+> - **Salieron** `#751` (no se construye una clase declarada más abajo: 104 pruebas la piden), `#752` (un método privado
+>   sobre `null` no lanza: corre con `this` nulo) y `#753` (`super()` hacia `Object` no compila, sin mensaje; Eduardo:
+>   *«base.metodo() debería ser válido»*); y cinco mejoras de H7 que el censo no veía (`FICHAS`, «Lo que salió al
+>   traducir»). Sólo análisis: nada de eso se ha tocado en el compilador.
+> - **Lo siguiente:** las demás reglas, una a una con su caso: las interfaces simples y `abstract`, `enum`, las cajas,
+>   los arrays, `Main` con argumentos, `params`, los demás `for`, el `switch`…
+>
 > **31-oct (mediodía)** — **H7.2 (`#749`): los genéricos de lo que ya hay, y de paso `#748`** (Eduardo: *«nuestro List
 > es en realidad List<Object>»*; a las cuatro preguntas, *«1 los dos. 2 OK con la propuesta. 3 OK. 4 de momento no, mas
 > adelante.»*).

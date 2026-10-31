@@ -215,3 +215,9 @@ packs/*.pack
 
 # residuo de ejecutar las herramientas python de bpgenvm-c/tools
 __pycache__/
+
+# V8/H6 - el traductor C# -> JC (compat/csharp/): lo que construye dotnet, y el
+# JC que sale de un caso cuando no casa con el esperado (para mirarlo)
+/compat/csharp/cs2jc/bin/
+/compat/csharp/cs2jc/obj/
+/compat/csharp/casos/*.nuevo

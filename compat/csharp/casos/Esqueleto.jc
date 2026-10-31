@@ -1,0 +1,217 @@
+module CsEsqueleto
+{
+   class Animal
+   {
+      public string Nombre { get; set; }
+      protected int patas = 4;
+      private static int cuantos = 0;
+      public static int Total
+      {
+         get
+         {
+            return Animal.cuantos;
+         }
+      }
+      public function Animal(string nombre)
+      {
+         this.Nombre = nombre;
+         Animal.cuantos++;
+      }
+      public function string Habla()
+      {
+         return "...";
+      }
+      public function int Patas()
+      {
+         return this.patas;
+      }
+      public function string toString()
+      {
+         return this.Nombre + "(" + this.Patas() + ")";
+      }
+   }
+
+   class Perro : Animal
+   {
+      public function Perro(string nombre) : base(nombre)
+      {
+      }
+      public function Perro() : this("sin nombre")
+      {
+      }
+      public function string Habla()
+      {
+         return "guau";
+      }
+   }
+
+   class Pajaro : Animal
+   {
+      public function Pajaro(string n) : base(n)
+      {
+         this.patas = 2;
+      }
+      public function string Habla()
+      {
+         return "pio";
+      }
+   }
+
+   class MiError : Exception
+   {
+      public function MiError() : base("Exception of type 'Casos.MiError' was thrown.") { }
+   }
+
+   class ConMensaje : Exception
+   {
+      public function ConMensaje(string m) : base(m)
+      {
+      }
+   }
+
+   class Cuentas
+   {
+      public const int Base = 10;
+      public static function int Doble(int x)
+      {
+         return x * 2;
+      }
+      public static function int Suma(int a, int b = 10)
+      {
+         return a + b;
+      }
+   }
+
+   class Programa
+   {
+      private static function int Comprueba(int dado, int esperado, int codigo)
+      {
+         if (dado != esperado)
+         {
+            println("FALLO ", codigo, ": ", dado, " en vez de ", esperado);
+            return codigo;
+         }
+         return 0;
+      }
+      public static function int Main()
+      {
+         Animal a = new Perro("Rex");
+         Animal b = new Pajaro("Piolin");
+         Animal c = new Perro();
+         println(a.Habla() + " " + b.Habla() + " " + c.Nombre);
+         println(a, " y ", b);
+         print("sin salto, ");
+         println();
+         int r = Programa.Comprueba(Animal.Total, 3, 1);
+         if (r != 0)
+         {
+            return r;
+         }
+         r = Programa.Comprueba(b.Patas(), 2, 2);
+         if (r != 0)
+         {
+            return r;
+         }
+         r = Programa.Comprueba(Cuentas.Doble(Cuentas.Suma(1)) + Cuentas.Base, 32, 3);
+         if (r != 0)
+         {
+            return r;
+         }
+         int n = 0;
+         for (int i = 1; i <= 10; i++)
+         {
+            n += i;
+         }
+         for (int i = 10; i >= 1; i -= 3)
+         {
+            n -= 1;
+         }
+         r = Programa.Comprueba(n, 51, 4);
+         if (r != 0)
+         {
+            return r;
+         }
+         int k = 0;
+         while (k < 5)
+         {
+            k++;
+         }
+         do
+         {
+            k += 10;
+         }
+         while (k < 30);
+         r = Programa.Comprueba(k, 35, 5);
+         if (r != 0)
+         {
+            return r;
+         }
+         if (true)
+         {
+            int dentro = 7;
+            k += dentro;
+         }
+         r = Programa.Comprueba(k, 42, 6);
+         if (r != 0)
+         {
+            return r;
+         }
+         string traza = "";
+         try
+         {
+            try
+            {
+               throw new MiError();
+            }
+            catch (MiError excepcion_cs1)
+            {
+               traza += "a";
+               throw excepcion_cs1;
+            }
+            finally
+            {
+               traza += "b";
+            }
+         }
+         catch (Exception e)
+         {
+            traza += "c:" + e.msg;
+         }
+         println(traza);
+         if (traza != "abc:Exception of type 'Casos.MiError' was thrown.")
+         {
+            return 7;
+         }
+         try
+         {
+            throw new ConMensaje("hola");
+         }
+         catch (ConMensaje e)
+         {
+            if (e.msg != "hola")
+            {
+               return 8;
+            }
+         }
+         int x = 6;
+         x *= 7;
+         x = x > 40 ? x - 1 : 0;
+         x = (x ^ -1) + 1;
+         r = Programa.Comprueba(x, -41, 9);
+         if (r != 0)
+         {
+            return r;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

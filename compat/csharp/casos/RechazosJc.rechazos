@@ -1,0 +1,11 @@
+# Lo que el traductor tiene que rechazar en RechazosJc.cs, y por qué (una línea por rechazo, en orden).
+17: un fallo de JC: #744, una propiedad por base va a la de la hija — base.P
+22: un fallo de JC: #751, construir (o is, o convertir a, o atrapar) una clase declarada más abajo — new Despues()
+27: un fallo de JC: #753, super() en una clase sin padre escrito (el suyo es Object) — : base()
+32: le falta a JC: una constante que cabe, en un argumento o un return estrecho (como en una asignación) — 1
+38: le falta a JC: & | ^ sobre bool (sin atajo) — a & b
+39: le falta a JC: & | ^ sobre bool (sin atajo) — c |= b
+41: le falta a JC: un nombre que es a la vez variable y tipo (el Color Color de C#) — Foo.X
+42: le falta a JC: una constante que cabe, en un argumento o un return estrecho (como en una asignación) — 3
+43: le falta a JC: null en una cadena (en BP un string no es nulo) — null
+44: le falta a JC: los _ de un número, como en C# (varios seguidos, o en el exponente) — 1__000
