@@ -38,8 +38,12 @@
 > - **De paso, `#744`:** `super.prop` va a la propiedad de la hija, en las dos VMs; `super.m()`, bien.
 > - **Organizado en tres hitos** (Eduardo): H6, el traductor C# → JC, que dice si funciona o si falla y por qué; H7, las
 >   mejoras de JC; H8, las pruebas de Mono por temas (22) y por bloques; H7 y H8 en paralelo.
-> - **Lo siguiente:** el algoritmo del traductor (H6), y las decisiones de «🧩 H6, H7 y H8» (dónde viven las
->   herramientas, guardar o bajar las pruebas, las interfaces simples).
+> - **El orden** (Eduardo): primero H7.1, los compuestos y el ternario (`#747`); luego H7.2, los genéricos de lo que ya
+>   hay (`List<Object>`, `Map` con llave `int` o `string`); después el traductor (H6) y por último las pruebas (H8).
+>   Las pruebas, copiadas en `C:\lenguajes\pruebas-csharp\mono\`, fuera del repositorio.
+> - **De paso, `#746`:** `a[f()] += 5` llama a `f()` dos veces, en las dos VMs (C# la llamaría una vez).
+> - **Lo siguiente:** las cuatro decisiones de `#747` (cómo se escriben en BP; el tipo de un compuesto; el destino una
+>   vez; el ternario y `owner`), y luego implementar H7.1.
 >
 > **31-oct** — **`#743`: el rendimiento de hoy frente a V7, en la Metro y en la P4** (Eduardo: *«Me gustaría poder
 > comparar el rendimiento actual con lo que teníamos […] Por lo menos poder comparar en la Metro y en la P4»*; *«de
