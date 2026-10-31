@@ -7326,6 +7326,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   casi igual. Con un id que indique que una es una clase y otro id que indique que es una interfaz debería valer»*.
 - **Reabre una decisión:** el 6-jun se descartaron (`V2_BACKLOG.md` §5). Lo que ha cambiado: JC, MOD9 (las clases, por
   clave) y lo medido (47 pruebas de Mono las piden; a 13, sólo eso).
+- **¿Es herencia múltiple?** (Eduardo: *«Y eso no es herencia múltiple (al menos como la entiende Java)?»*). De tipo, sí,
+  como la llama Java; de estado (campos) y de código (cuerpos), no: una interfaz no trae ni lo uno ni lo otro. Encaja
+  con *«herencia múltiples … no entrarían»* (`#745`) sólo si aquello era la de clases: es la primera decisión.
 - **El análisis y el algoritmo**, en `V8_IDEAS` §E10: la interfaz, una fila más de `CLASES` con un bit (el «id» de
   Eduardo); una tabla por clase y por interfaz, que el cargador construye por clave, como las vtables; tres
   instrucciones (la llamada, `is` y la conversión); E11 si a una clase le falta un método de su interfaz; la versión 2

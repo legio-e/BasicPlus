@@ -4627,9 +4627,15 @@ algoritmo, para su OK. Nada programado.
   2. **MOD9** (`#523`, sep.): el módulo ya guarda cada clase con sus métodos **por clave** (`area()d`), y el cargador ya
      construye las vtables buscando por clave. La tabla que pide una interfaz se construye igual: es lo que dice Eduardo.
   3. **Lo medido**: 47 pruebas de Mono las piden, y a 13 no les falta nada más.
-- **No es herencia múltiple.** Una interfaz no trae campos ni código: ni diamante de campos, ni dos vtables, ni ajuste
-  de `this` (lo que `V2_BACKLOG.md` §6 desaconsejaba, con razón). Es el modelo de Java y de C#: un padre y las
-  interfaces que se quiera.
+- **Es herencia múltiple de tipo, no de estado ni de código** (Eduardo, 31-oct: *«Pero es posible que una clase
+  implemente varias interfaces? Y eso no es herencia múltiple (al menos como la entiende Java)?»*; lo había escrito mal:
+  «no es herencia múltiple»). Java distingue tres: la de **estado** (heredar campos de dos clases: no la permite, una
+  clase extiende una sola), la de **código** (dos cuerpos para un mismo método: sólo desde Java 8, con los métodos
+  `default` de las interfaces) y la de **tipo** (ser a la vez de varios tipos: sí, con varias interfaces). Lo que se
+  propone es sólo la de tipo: una interfaz no trae campos ni cuerpos, así que no hay diamante de campos, ni dos
+  vtables, ni ajuste de `this` (lo que `V2_BACKLOG.md` §6 desaconsejaba, con razón), ni dos cuerpos entre los que
+  elegir. Es el modelo de Java y de C#: un padre y las interfaces que se quiera. Con lo que dijo Eduardo en `#745`
+  (*«herencia múltiples … no entrarían»*) sólo encaja si aquello era la de clases: es la primera decisión.
 
 ### Qué sería una interfaz
 
@@ -4809,8 +4815,10 @@ una interfaz (se atrapan clases que heredan de `Exception`).
 
 ### Lo que hay que decidir (Eduardo)
 
-1. **¿Se reabre la decisión del 6-jun?** Y si se reabre, ¿en JC y en BP? Propuesta: en los dos; es el mismo
-   compilador, y una interfaz de un módulo JC tiene que poder implementarse desde uno BP.
+1. **¿Se reabre la decisión del 6-jun?** Y con ella, la de `#745`: si aquella «herencia múltiple» era la de clases
+   (campos y código), las interfaces caben; si era cualquier tipo con varios supertipos, son justo lo que quedó fuera.
+   Y si se reabre, ¿en JC y en BP? Propuesta: en los dos; es el mismo compilador, y una interfaz de un módulo JC tiene
+   que poder implementarse desde uno BP.
 2. **El primer paso**: métodos, properties, herencia entre interfaces y la implementación heredada del padre; fuera, lo
    del apartado anterior.
 3. **La sintaxis**: la de arriba.
