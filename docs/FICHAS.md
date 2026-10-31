@@ -7336,7 +7336,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   mismo que una clase exporta. Y después la 3, la 4 y la 6 (*«3 y 4 OK, 6 también OK»*): la sintaxis de §E10, `Thread`
   y sus hijas sin interfaces, y la versión 2 de `CLASES` sólo en los módulos que las usan. **La 5, abierta** (*«Veamos
   5. Tenemos un método declarado, si ese método está implementando un método de una interfaz debería indicarse.»*):
-  que el método que implementa uno de una interfaz lo diga.
+  que el método que implementa uno de una interfaz lo diga. Con una anotación, como en Java (*«En java utilizan una
+  directiva, el equivalente nuestro es @(...)»*), **propia y aparte de la de redefinir** (*«Prefiero separar impements
+  de override porque no es exactamente lo mismo. Sería algo así @implement( intefaz1, intefaz 2)»*). Por concretar: las
+  llaves de las anotaciones de hoy (`@BD{ … }`) o paréntesis, y las reglas propuestas en §E10.
 - **El análisis y el algoritmo**, en `V8_IDEAS` §E10: la interfaz, una fila más de `CLASES` con un bit (el «id» de
   Eduardo); una tabla por clase y por interfaz, que el cargador construye por clave, como las vtables; tres
   instrucciones (la llamada, `is` y la conversión); E11 si a una clase le falta un método de su interfaz; la versión 2

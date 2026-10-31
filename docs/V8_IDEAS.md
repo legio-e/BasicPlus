@@ -4840,6 +4840,42 @@ los campos sólo los ve una clase hija, que es el objeto: `manual.html` §9.6). 
 módulos que las usan. **La 5, abierta** (*«Veamos 5. Tenemos un método declarado, si ese método está implementando un
 método de una interfaz debería indicarse.»*): que el método que implementa uno de una interfaz lo diga.
 
+### La 5: el método que implementa lo dice (Eduardo, 31-oct)
+
+Con una anotación, como el `@Override` de Java (*«En java utilizan una directiva, el equivalente nuestro es @(...)»*),
+pero **propia, aparte de la de redefinir** (*«Prefiero separar impements de override porque no es exactamente lo
+mismo. Sería algo así @implement( intefaz1, intefaz 2)»*). BP y JC ya tienen anotaciones (V5/H5, las del ORM): el parser
+las acepta delante de cualquier declaración y el semántico decide dónde valen; hoy, sólo `@BD`, y sobre una función se
+rechaza. `implement` no es palabra reservada (`implements` sí), así que vale de nombre sin tocar el lexer.
+
+```
+BP:  class Cuadrado extends Figura implements Poligono
+       @implement{ Poligono }
+       public function area(): double
+         return this.lado * this.lado
+       end area
+     end Cuadrado
+
+JC:  @implement{ IPoligono }
+     public function double area() { … }
+```
+
+Lo propuesto, para su OK:
+- **La forma**: la de las anotaciones de hoy, con llaves (`@BD{ tabla = "medidas" }`, la gramática de V5/H5); con
+  paréntesis cambiaría para las dos.
+- **Qué nombra**: las interfaces **de la cabecera de la clase** que tienen ese método (propio o heredado de otra
+  interfaz), todas y sólo ésas. `class C implements A, B`, con `X()` en las dos: `@implement{ A, B }`; `Cuadrado`, con
+  `area` en `Forma`, de la que hereda `Poligono`: `@implement{ Poligono }`. Así el compilador sabe siempre qué falta o
+  qué sobra, y lo dice.
+- **Obligatoria** en un método declarado en la clase que implementa uno de una interfaz de su cabecera: si falta, error
+  (`'area' implementa 'Poligono.area': márcalo con @implement{ Poligono }`); y si nombra una interfaz que no lo tiene,
+  o que no está en la cabecera, también.
+- **Lo heredado no se marca**: en `class Y : X, A`, el `Add` lo pone `X`. Y una hija que sobrescribe un método que su
+  padre ya implementaba, sin repetir la interfaz en su cabecera, está redefiniendo: no lleva `@implement`.
+- **En el módulo**: el bit «implementa» en la fila del método (como el de `override`); al enlazar, E11 si la interfaz
+  gana un método que la clase no tiene, y E12 si pierde uno que la clase dice implementar.
+- **Redefinir** (`@override`), aparte: no la necesitan las interfaces; para más adelante, si se quiere.
+
 ### El orden, si sale el OK
 
 El de siempre: el compilador y la VM-Java, con los samples buenos y los de error (no implementa, ciclo, conversión
