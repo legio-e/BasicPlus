@@ -7254,6 +7254,40 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### ✅ `#750` — la VM-Java, con el heap desalineado: barría la pila de cada hilo desfasada y el GC soltaba lo que seguía vivo («referencia a objeto eliminado (use-after-free)»); en MOD8, no en MOD9, y la VM-C, bien (abierta el 31-oct, en la red de H7.2; preexistente desde `#740`; **CERRADA el mismo día**, el commit de `#750`)
+
+- **Cómo salió:** en la red de H7.2, la pasada MOD8: `OwnerSmp` y `TablaHandles` acaban con 1 en la VM-Java y con 0 en
+  la VM-C. Lo único que había cambiado era el `Core.mod` de MOD8 (59 bytes más: dentro de Core, la rama de `#748` sí
+  se emite); los dos samples, el mismo `.mod`. Con el Core MOD8 del compilador de antes, verdes.
+- **La causa, probada por desplazamiento** (con el compilador de antes de H7.1, sin nada de `#748`: una función de
+  relleno en Core mueve el inicio del heap): la VM-Java pasa `OwnerSmp` con el heap en 4 sitios alineados a 4, y falla
+  en los 12 desalineados que probé (restos 1, 2 y 3). La VM-C pasa en los 16.
+- **El mecanismo:** el heap empieza en «el fin del último módulo + 64», sin alinear, en las dos VMs. En MOD9 cae alineado
+  a 64, porque detrás va la arena del enlace tardío (Core siempre tiene clases); en MOD8 no hay arena, y depende del
+  tamaño del último módulo, que es Core. Desde `#740` (29-oct), la pila de cada hilo, menos la del principal, es un
+  bloque del heap: alineada respecto al inicio del heap, no en absoluto. El GC de la VM-Java la barre con `scanRegion`,
+  que redondea el comienzo a un múltiplo ABSOLUTO de 4 (`(start + 3) & ~3`, desde la primera instantánea): con el heap
+  desalineado, lee cada palabra de la pila desfasada, no ve sus referencias, y el barrido suelta objetos vivos. La VM-C
+  la barre desde `stack_base` tal cual (`heap.c`), y por eso no le pasa. La pila del principal está en `STACK_BASE`,
+  alineada, y tampoco.
+- **El alcance:** sólo con hilos, sólo en la VM-Java y sólo con el heap desalineado: en MOD9, lo normal, no pasa; en MOD8
+  (`--formato=8`), según el tamaño de Core. Hasta H7.2 el Core MOD8 lo dejaba alineado, por suerte.
+- **El arreglo propuesto:** que la VM-Java barra la pila de un hilo desde `stackBase` tal cual, como la VM-C. Es una
+  línea, y sólo en la VM-Java. El barrido de los datos de los módulos puede seguir redondeando: la base de cada módulo va
+  alineada a 4. Aparte, para pensarlo: alinear el inicio del heap a 8 en las dos VMs.
+- **Lo decidido** (Eduardo, 31-oct): arreglarlo ya, y después los commits de H7.2 y de `#750`.
+- **Hecho:** `scanRegion` barre desde su comienzo tal cual, como la VM-C, en los dos sitios que la usan: las pilas de los
+  hilos y los datos de los módulos. En los datos no cambia nada: empiezan alineados (la base del módulo, alineada a 4,
+  más la tabla ext, de entradas de 4 bytes). Sólo la VM-Java; la VM-C ya lo hacía así. Los tres jars que llevan la VM
+  (la miVM, el compilador y el IDE), rehechos, y en los tres el `scanRegion` nuevo (mirado con `javap`).
+- **Lo que lo prueba** (la predicción, escrita antes de correrlo): `OwnerSmp` y `TablaHandles` en MOD8, con el Core de
+  H7.2 (el heap en 8675 y en 8431), rc=0 y la salida buena; y el desplazamiento de antes, otra vez con el compilador de
+  antes de H7.1, en 15 inicios del heap con los cuatro restos: rc=0 en las dos VMs, los 15. La red, VERDE (13:46, con
+  H7.2 en el árbol: en MOD8, 174 y el SKIP de `Genericos`).
+- **Lo que queda «casi»:** la red lo cubre por la pasada MOD8, mientras el Core MOD8 deje el heap desalineado, como
+  ahora: si Core cambia de tamaño y vuelve a caer alineado, deja de cubrirlo. Una prueba que lo fuerce —un relleno en
+  Core para cada resto, como el experimento— es posible; no la he hecho.
+
 #### 🔵 `#749` — H7.2: los genéricos de lo que ya hay, `List<Object>` y `Map` con llave `int` o `string` (abierta el 31-oct; **en análisis**)
 
 Eduardo (31-oct): *«2º genéricos que ya soportamos ( nuestro List es en realidad List<Object> ), de momento solamente

@@ -2267,11 +2267,13 @@ public class VirtualMachine {
         return true;
     }
 
-    /** Escanea conservativamente una región de 4 bytes en 4 bytes. */
+    /** Escanea conservativamente una región de 4 bytes en 4 bytes, desde {@code start} tal cual, como la VM-C.
+     *  V8 #750 — redondeaba el comienzo a un múltiplo absoluto de 4, y desde #740 la pila de un hilo es un bloque del
+     *  heap, alineada respecto al inicio del heap y no en absoluto: con el heap desalineado (MOD8, según el tamaño de
+     *  Core) se leía cada palabra desfasada, no se veían sus referencias y el barrido soltaba objetos vivos. Los datos de
+     *  un módulo empiezan alineados (la base del módulo más la tabla ext), así que ahí no cambia nada. */
     private void scanRegion(int start, int endExclusive, Set<Integer> valid) {
-        // Asegurar alineamiento a 4
-        int s = (start + 3) & ~3;
-        for (int p = s; p + 4 <= endExclusive; p += 4) {
+        for (int p = start; p + 4 <= endExclusive; p += 4) {
             int candidate = readInt32(p);
             int headerAddr = refDeref(candidate) - 4;   // V4: deref handle→addr (conservador)
             if (valid.contains(headerAddr)) {
