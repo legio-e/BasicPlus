@@ -7097,6 +7097,10 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > (un programa de dos hilos con un núcleo y con dos, Eduardo: *«que también mejoraríamos»*), y de paso `#665` (la
 > imagen de dos núcleos de la RP2350, más lenta que la de uno: en la Metro, `fib(26)` +35 %); y si sirve, V6 y V5 en la
 > Metro y la serie de la P4 en una sola placa.
+>
+> 🧪 **JC frente a las pruebas de C#** (Eduardo, 31-oct): *«lo que le falta a JC para que soporte mas pruebas de C#.
+> Empezar por añadir lo mas sencillo y ver cuantas mejoras pasarían»*. El análisis, con las pruebas de Mono: `#745`
+> (por decidir: el traductor y el orden). De paso, `#744` (`super.prop`).
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
@@ -7156,6 +7160,86 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **`Json` (`#725`, 23-oct).** El manual no tiene la librería `Json`; cuando la tenga: `parseJson` sigue tras un
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
+
+#### 🔵 `#745` — JC frente a las pruebas de C# de Mono: qué le falta a JC y cuántas pruebas desbloquea cada cosa (abierta el 31-oct; **sólo análisis**)
+
+Eduardo (31-oct): *«Hay un standard para C#. Hay algun paquete para verificar el compilador ( y el intérprete ) ? […]
+igual lo podíamos aprovechar para verificar el compilador JC»*; y después: *«Mira de momento lo que podemos mirar es lo
+que le falta a JC para que soporte mas pruebas de C#. Empezar por añadir lo mas sencillo y ver cuantas mejoras
+pasarían. Y si, podemos utilizar los ejemplos de Mono que nos dan mas coincidencias. A priori, herencia múltiples y
+expresiones landa no entrarían, expresiones como *= y genéricos se podrian añadir.»*
+- **La batería.** Oficial no hay: la norma (ECMA-334) no trae una de conformidad. Las públicas: los ejemplos anotados
+  de la propia norma (`dotnet/csharpstandard`, 550, CC-BY-4.0) y las pruebas del compilador de Mono (`mono/mono`,
+  `mcs/tests`: 2742 ficheros, MIT en general). Se usan las de Mono: cada una es un programa que se comprueba solo (su
+  `Main` devuelve 0) o que tiene que correr sin excepción.
+- **Cómo se midió.** Cada prueba, por el parser y el análisis de tipos de C# del SDK de .NET 10 instalado (Roslyn): qué
+  construcciones usa. Válidas, 2322 (tienen `Main`, compilan en .NET 10 y no piden otros ficheros): 799 de la familia
+  clásica `test-N`, 585 de `gtest-N` (los genéricos) y 938 de las demás. Lo que JC tiene de verdad, con 40 sondas:
+  programas JC mínimos, compilados y ejecutados en la VM-Java. Las herramientas, de momento fuera del repositorio (en
+  la carpeta temporal de la sesión).
+- **Lo que JC ya hace como C#** (las sondas): los métodos virtuales; el `switch` con cadenas y con enums, y el `break`
+  dentro de un `case` sale del `switch`; la aritmética entera, igual (la división y el resto con negativos, el
+  desbordamiento, los desplazamientos, `(int) 3.7`); `"a" + 5`; el `+=` de las cadenas y de las propiedades; `is` y
+  `(T) x`; las excepciones propias que heredan de `RuntimeError`, atrapables como `Exception`; las sobrecargas y los
+  parámetros por defecto; el constructor por defecto; y `Object` con sus cajas (`Integer`…).
+- **Lo que reescribiría un traductor C# → JC, sin tocar JC:** el `this.` delante de los métodos de la propia clase, y
+  `Clase.` delante de lo `static`; los campos públicos, como propiedades (BP no los deja); los `enum`, como enteros (BP
+  prohíbe convertirlos, a propósito); `new int[n]`, como `newIntArray(n)`; `s[i]`, como `charAt`; el `for` con `<`,
+  como `<= n - 1`, y los demás, como `while`; y quitar `using`, `namespace`, `virtual`, `override`… **Por decidir
+  (Eduardo): una interfaz que una clase implementa sin otra base no es herencia múltiple**, y el traductor puede hacerla
+  una clase base abstracta (180 pruebas usan interfaces así; la herencia múltiple de verdad —una clase con su base y una
+  interfaz, o con dos—, 79).
+- **Las cifras:**
+  - hoy, sólo con el traductor: **396 candidatas** (242 de `test-N`, 7 de `gtest-N` y 147 de las demás; 153 se
+    comprueban solas y las otras tienen que correr sin excepción). Candidata no es aprobada: lo dirá el traductor al
+    ejecutarlas;
+  - fuera, 1167: lo que Eduardo deja fuera (las lambdas y los métodos anónimos, 394; la herencia múltiple, 79) y lo que
+    la VM no tiene o no es del lenguaje (la reflexión, 318; `int?`, 140; sin signo y `decimal`, 117; los hilos de .NET,
+    105; `yield`, 103; LINQ, 96; async, 92…);
+  - las otras 1155, según lo que se añada a JC (S: el compilador, sin la VM; M: un nodo nuevo del árbol, sin la VM; L:
+    una pieza del sistema de tipos), de lo más sencillo a lo más caro:
+
+    | se añade | coste | pruebas más | en total |
+    |---|---|---|---|
+    | nada (sólo el traductor) | — | — | 396 |
+    | lo sencillo, todo junto: los compuestos (`*=`…), `??` y `?.`, `as`, el constructor estático, los formatos `{0:X}`, `foreach` sobre `List`, `int[][]` y `throw` como expresión | S | +21 | 417 |
+    | la sobrecarga de operadores | M | +30 | 447 |
+    | `++`, `--` y `=` dentro de una expresión | M | +24 | 471 |
+    | los indexadores `this[i]` | M | +27 | 498 |
+    | los métodos no virtuales (`new`) | M | +22 | 520 |
+    | el ternario `c ? a : b` | M | +19 | 539 |
+    | `int[,]` y el resto de lo M | M | +19 | 558 |
+    | **los genéricos** | L | **+309** (253 de `gtest-N`) | 867 |
+    | `struct` | L | +109 | 976 |
+    | los delegados y eventos de C#, sin lambdas | L | +108 | 1084 |
+    | `ref` / `out` | L | +71 | 1155 |
+- **La lectura.** Lo sencillo rinde poco en Mono (+21): se usa (los compuestos, en 22 pruebas; el ternario, en 75), pero
+  casi siempre junto a algo más grande. Para quien escribe JC viniendo de C#, en cambio, `*=`, el ternario y el `++`
+  dentro de una expresión son de todos los días. Lo que más rinde es el traductor (396 sin tocar JC), y es la
+  herramienta para ver cuántas pasan. Los genéricos son el salto grande, y piden además traducir `List<T>` y
+  `Dictionary<K,V>` a la `List` y el `Map` de BP. Los delegados son L porque en BP `obj::metodo` sólo vale para
+  suscribirse a un evento, a propósito (`Ast.MethodRefExpr`).
+- **De paso:** `#744` (`super.prop`), destapada por una sonda hecha a imagen de `test-170.cs`.
+- **Por decidir (Eduardo):** (1) el traductor C# → JC sobre Roslyn primero, como herramienta de desarrollo (fuera del
+  producto); (2) lo S en JC y en BP a la vez, empezando por los compuestos, que ya dijo que sí; (3) lo M, por lo que
+  rinde, cada cosa con su OK; (4) los genéricos, como hito propio; y lo de las interfaces simples.
+
+#### 🔵 `#744` — BP: leer o escribir una propiedad por `super` (`super.prop`) va a la de la hija, no a la del padre; `super.m()` sí va al padre (abierta el 31-oct, con `#745`; preexistente; **sólo análisis**)
+
+```
+class X: property prop (get: return this.v · set(value): this.v := value)
+class Y extends X: private var w := 1 · property prop (lo mismo, con this.w) ·
+  function a(): integer
+    super.prop := 10
+    return super.prop
+```
+`print y.a(); " "; y.prop` da `10 10` en las dos VMs: `super.prop` llamó al `set` y al `get` de `Y`. Con los del padre
+(lo de C#, `base.prop`, y lo que ya hace `super.m()`), saldría `10 1`. En la misma clase, `super.quien()` sí devuelve
+el de `X`. La norma está escrita (V7, el enlace tardío): *«`super.m()` es la única llamada no virtual de BP y significa
+“el `m` EFECTIVO del padre”»*; a la propiedad no le llega, y no se dice en ningún sitio. La destapó una sonda de `#745`
+hecha a imagen de `test-170.cs` de Mono (`if (base.prop != 0) return 3;`). Sin mirar el emisor: probablemente el `get`
+y el `set` de `super.prop` salen como los de cualquier propiedad, por la vtable. Por decidir (Eduardo): que
+`super.prop` vaya al padre, como `super.m()`.
 
 #### ✅ `#743` — comparar el rendimiento de hoy con el de una versión publicada, EN PLACA: la herramienta, y V7 frente a hoy en la Metro y la P4 (abierta y **CERRADA el 31-oct**; el commit de `#743`)
 
