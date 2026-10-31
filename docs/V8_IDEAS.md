@@ -862,7 +862,9 @@ mi propuesta: manda lo de aquí.
     - El valor, como en BP, un entero escrito y sin signo (`Parser.parseEnumValue`). Las expresiones que admite C#
       (`-1`, `1 << 3`, `Rojo + 1`), de momento no, y el tipo de debajo (`enum Color : byte`), tampoco.
     - JC es BP: un `enum` no se convierte a entero ni al revés (`#522`), aunque en C# sí: `(int) Color.Rojo` da
-      error.
+      error. **Desde el 31-oct, a entero sí** (`#754`; Eduardo: *«la conversión de Enum a entero ha de ser válida
+      siempre que se haga con la sintaxis correcta»*): `(int) Color.Rojo` y `(int) c`, como en C#, y `integer(c)` en
+      BP. De un entero a un enum, sigue sin valer.
 26. **La función de una instrucción, `inline`** (Eduardo, 17-oct):
 
     ```
@@ -4538,3 +4540,64 @@ que más piden: los genéricos (824), los delegados (419), las interfaces simple
 **Lo siguiente:** las reglas que faltan, por lo que rinden, cada una con su caso: las interfaces simples y `abstract`,
 `enum`, las cajas, los arrays, `Main` con argumentos, `params`, los demás `for`, el `switch`, los inicializadores,
 `char`, los métodos de extensión, `using`, los argumentos con nombre; y la biblioteca.
+
+### La primera tanda de reglas (31-oct)
+
+Eduardo: *«Ya aunque solo hubiésemos llegado hasta aquí ha sido útil porque hemos detectado bugs del compilador. A
+partir de aquí vamos ampliando poco a poco. Adelante con las reglas que faltan.»* Por tandas, cada regla con su caso.
+
+- **Las interfaces simples** (lo decidido): una interfaz es una clase cuyos miembros lanzan, y la clase que la
+  implementa sin otra base hereda de ella. Una interfaz que hereda de otra, una cadena de clases. La implementación
+  explícita (`int IForma.Area()`) es el método con su nombre, salvo que la clase tenga otro miembro que se llame igual.
+  `IDisposable` no cuenta: basta con su `Dispose`. Dos interfaces, o una y una clase, son herencia múltiple: fuera. Las
+  de .NET, por su nombre (las genéricas, de H7).
+- **`abstract`:** el método, o los accesores de la propiedad, lanzan («abstracto: Clase.metodo»). Nunca se llaman: C#
+  no deja crear ni la clase abstracta ni la interfaz.
+- **Los enums:** el de JC, con todos sus valores escritos. `==` y `!=`, tal cual; `(int) e`, tal cual (`#754`, hecha el
+  mismo día: Eduardo, *«la conversión de Enum a entero ha de ser válida siempre que se haga con la sintaxis correcta»*);
+  `a < b`, con `(int)` delante de los dos. Lo que da un enum desde un entero (`(Color) 2`, `a | b`, `c++`): fuera,
+  `#522`. Un enum como valor por defecto de un parámetro, no: JC sólo admite un literal (H7).
+- **`Main(string[] args)`:** se llama con un array vacío, `string[] argumentos = [];`, como cuando la prueba corre sola.
+- **La conversión hacia arriba** (`(I) y`, `(Animal) perro`): JC no la escribe (sólo baja), y se quita: el objeto es el
+  mismo y los métodos, virtuales. Salvo una cadena como `object`: en C#, `(object) s == (object) t` compara referencias.
+- **`==` entre referencias de dos tipos distintos** (una clase y su hija, `Object`, una interfaz): en BP, del mismo tipo
+  o con `null`. Le falta a JC (H7).
+
+El caso, `Interfaces`: corre en las dos VMs. **Mono:** 219 funcionan (55 se comprueban solas), 3 fallan y 2100 no se
+traducen todavía. Las tres que fallan son diferencias de JC: `test-126` (el `ToString()` por defecto: en C# el nombre de
+la clase, en BP `object@…`), `test-29` y `test-231` (`#752`).
+
+### Las tandas segunda a cuarta (31-oct)
+
+- **Las cajas** (en BP, a mano): `object o = 5;` es `Object o = new Integer(5);`, y `(int) o`, `((Integer) o).value()`;
+  `o is int`, `o is Integer`. Las de BP: `int`, `long`, `double`, `float` y `bool`; las demás (un `byte`, un enum, un
+  `char`), todavía no.
+- **Crear arrays:** con su tamaño, `new int[n]`, con las funciones de Core (`newIntArray`, `newByteArray`,
+  `newLongArray`, `newDoubleArray` y `newObjArray`); de otro tipo (`string`, una clase…), JC no tiene con qué (H7). Con
+  valores, `{ 1, 2 }`, `new[] { … }`: `[1, 2]`, el de JC, que toma el tipo de sus valores; un número de otro tipo, con su
+  conversión (`[(long) 1, (long) 2]`); una clase hija, o valores mezclados, JC no los escribe (H7). `a.Length` es
+  `len(a)`, y `s.Length`, `strlen(s)`.
+- **`params`:** el parámetro, un array; y la llamada con los argumentos sueltos, con el array escrito, `f([1, 2, 3])`.
+- **Los demás `for`:** como `while`, dentro de un `if (true)` que da a la variable el ámbito del `for`, y con los
+  incrementos también delante de cada `continue` suyo. Y `i < 10`, con un límite constante, el de JC: `i <= 9`.
+- **El `switch`:** el de JC (`case 1, 2:`, sin caer de un caso al siguiente, que C# tampoco hace), con el `default` al
+  final; el valor de un `case`, el que calcula C# (`case Tope + 2:` es `case 5:`).
+- **Un inicializador de objeto**, sólo en una declaración (`T x = new T() { A = 1 };` es `T x = new T();` y
+  `x.A = 1;`): en otro sitio, el valor nuevo se vería antes de tiempo.
+- **Los métodos de extensión:** la llamada estática que son, `x.Doble(a)` es `Ext.Doble(x, a)`.
+- **`using`:** `R r = …; try { … } finally { if (r != null) r.Dispose(); }`, lo que hace C#.
+- **`lock`:** el bloque (un programa de un hilo); **`unchecked`**, quitado; **`default`**, su valor, escrito; las
+  cadenas **`$"…"`**, como la suma (con un formato, `{x:F2}`, H7).
+- **Los argumentos con nombre:** en el orden de los parámetros; si así cambia el orden en que C# los calcula, sólo
+  cuando ninguno calcula nada; y uno que se salta, con su valor por defecto escrito.
+- **Y de paso:** varias constantes en una declaración, una por línea (JC no las junta); `(object) null` y
+  `(X[]) null`, `null` a secas, salvo como argumento de un método con sobrecargas, donde el tipo elige cuál y JC no lo
+  escribe (H7).
+
+Los casos, `CajasYArrays`, `BuclesYSwitch` y `Varios`, corren en las dos VMs (con los de antes, 8). **Mono: 273
+funcionan** (83 se comprueban solas, 190 sólo corren), **6 fallan** y 2043 no se traducen todavía. Las que fallan:
+`test-126`, `test-29` y `test-231`, como antes; `test-907`, que C# da por asignada una variable tras un `switch` sobre una
+constante (sabe qué caso corre) y JC no; y `gen-check` y `gen-cast-test`, que destaparon `#755`: en Windows, un `\n`
+dentro de lo que se imprime sale `LF` en la VM-Java y `CRLF` en la VM-C. Y tres carencias más de JC (H7): `null` como
+valor por defecto de un parámetro, un `null` con su tipo para elegir una sobrecarga, y un array de valores que sólo son
+`null`.

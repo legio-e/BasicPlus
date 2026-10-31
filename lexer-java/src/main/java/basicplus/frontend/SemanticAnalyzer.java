@@ -3421,9 +3421,13 @@ public final class SemanticAnalyzer {
                     BpType a = analyzeExpr(ce.args.get(i), scope, null);
                     if (i == 0) at = a;
                 }
+                // V8/H6 (#754) — un enum, también: su entero (Eduardo, 31-oct: «la conversión de Enum a entero ha de
+                // ser válida siempre que se haga con la sintaxis correcta. El compilador ya sabe el valor entero del enum
+                // así que es el compilador el que ha de hacer la conversión»). Al revés, de un entero a un enum, sigue
+                // sin valer (#522).
                 if (ce.args.size() != 1)
                     err(ce.line, ce.column, id.name + "(): se esperaba 1 argumento");
-                else if (at != null && !at.isNumeric() && !(at instanceof ErrorType))
+                else if (at != null && !at.isNumeric() && !(at instanceof EnumType) && !(at instanceof ErrorType))
                     err(ce.line, ce.column, id.name + "(): se esperaba un valor numérico, no '" + at.display() + "'");
                 return castT;
             }

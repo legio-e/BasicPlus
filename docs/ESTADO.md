@@ -44,8 +44,19 @@
 >   sobre `null` no lanza: corre con `this` nulo) y `#753` (`super()` hacia `Object` no compila, sin mensaje; Eduardo:
 >   *«base.metodo() debería ser válido»*); y cinco mejoras de H7 que el censo no veía (`FICHAS`, «Lo que salió al
 >   traducir»). Sólo análisis: nada de eso se ha tocado en el compilador.
-> - **Lo siguiente:** las demás reglas, una a una con su caso: las interfaces simples y `abstract`, `enum`, las cajas,
->   los arrays, `Main` con argumentos, `params`, los demás `for`, el `switch`…
+> - **Y la primera tanda de reglas** (Eduardo: *«ha sido útil porque hemos detectado bugs del compilador. A partir de
+>   aquí vamos ampliando poco a poco»*): las interfaces simples como clases base, `abstract`, los enums, `Main(args)` y
+>   la conversión hacia arriba. Mono: **219 funcionan**, 3 fallan (diferencias de JC). Con ella, **`#754`, hecha en el
+>   compilador** (Eduardo: *«la conversión de Enum a entero ha de ser válida siempre que se haga con la sintaxis
+>   correcta»*): `integer(c)` en BP y `(int) c` en JC; `EnumEntero` en el corpus. Y dos carencias más de JC para H7 (un
+>   enum como valor por defecto; `==` entre una clase y su hija).
+> - **Y las tandas segunda a cuarta:** las cajas, crear arrays, `params`, los demás `for`, el `switch`, los
+>   inicializadores de objetos, los métodos de extensión, `using`, `lock`, `default`, `$"…"` y los argumentos con nombre.
+>   Mono: **273 funcionan** (83 se comprueban solas), 6 fallan, todas explicadas. Salió **`#755`**: en Windows, un `\n`
+>   dentro de lo que se imprime sale `LF` en la VM-Java y `CRLF` en la VM-C (un fallo de la paridad que el corpus no ve;
+>   sólo análisis, lo decide Eduardo). La red, VERDE (17:56) con `#754`.
+> - **Lo siguiente:** la biblioteca (las excepciones de .NET, `ArrayList` como nuestra `List` —Eduardo: *«ArrayList no
+>   es nuestro List?»*—, la reflexión fuera) y `char`.
 >
 > **31-oct (mediodía)** — **H7.2 (`#749`): los genéricos de lo que ya hay, y de paso `#748`** (Eduardo: *«nuestro List
 > es en realidad List<Object>»*; a las cuatro preguntas, *«1 los dos. 2 OK con la propuesta. 3 OK. 4 de momento no, mas

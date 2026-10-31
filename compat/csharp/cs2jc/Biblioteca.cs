@@ -35,7 +35,7 @@ namespace Cs2Jc
                     }
                     break;
             }
-            return Rechaza(inv, Porque.Biblioteca(clave));
+            return Rechaza(inv, Porque.DeNet(clave));
         }
 
         string BibliotecaMiembro(MemberAccessExpressionSyntax ma, ISymbol s)
@@ -44,14 +44,17 @@ namespace Cs2Jc
             switch (clave)
             {
                 case "System.Exception.Message": return Expr(ma.Expression) + ".msg";
+                case "System.Array.Length": return "len(" + Expr(ma.Expression) + ")";
+                // en caracteres; C# cuenta unidades de UTF-16: lo mismo salvo los de fuera del plano básico
+                case "System.String.Length": return "strlen(" + Expr(ma.Expression) + ")";
             }
-            return Rechaza(ma, Porque.Biblioteca(clave));
+            return Rechaza(ma, Porque.DeNet(clave));
         }
 
         string BibliotecaNuevo(ObjectCreationExpressionSyntax oc, IMethodSymbol ctor, INamedTypeSymbol tipo)
         {
             if (EsExcepcionNet(tipo)) return "new Exception(" + ArgsExcepcion(oc.ArgumentList, tipo) + ")";
-            return Rechaza(oc, Porque.Biblioteca("new " + NombreCompleto(tipo)));
+            return Rechaza(oc, Porque.DeNet("new " + NombreCompleto(tipo)));
         }
 
         /// `Console.WriteLine` y `Console.Write`: `println(…)` y `print(…)`. Con un formato literal, troceado aquí:

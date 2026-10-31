@@ -1,0 +1,147 @@
+module CsBuclesYSwitch
+{
+   enum Fruta
+   {
+      Pera = 0,
+      Manzana = 1,
+      Uva = 2
+   }
+
+   class Programa
+   {
+      private const int Tope = 3;
+      private static function string Nombre(Fruta f)
+      {
+         switch (f)
+         {
+            case Fruta.Pera:
+               return "pera";
+            case Fruta.Uva:
+               return "uva";
+            default:
+               return "otra";
+         }
+      }
+      private static function int Codigo(string s)
+      {
+         int r = 0;
+         switch (s)
+         {
+            case "a", "b":
+               r = 1;
+               break;
+            case "c":
+               r = 2;
+               if (strlen(s) == 1)
+               {
+                  break;
+               }
+               r = 99;
+               break;
+            case "d":
+               if (true)
+               {
+                  r = 4;
+                  break;
+               }
+         }
+         return r;
+      }
+      public static function int Main()
+      {
+         int n = 0;
+         for (int i = 0; i <= 9; i++)
+         {
+            n += i;
+         }
+         if (n != 45)
+         {
+            return 1;
+         }
+         int pares = 0;
+         if (true)
+         {
+            int i = 0, j = 10;
+            while (i < j)
+            {
+               if (i == 4)
+               {
+                  i += 2;
+                  j--;
+                  continue;
+               }
+               pares++;
+               i += 2;
+               j--;
+            }
+         }
+         if (pares != 3)
+         {
+            return 2;
+         }
+         int k = 0;
+         if (true)
+         {
+            while (true)
+            {
+               k++;
+               if (k == 5)
+               {
+                  break;
+               }
+            }
+         }
+         if (k != 5)
+         {
+            return 3;
+         }
+         int m = 0;
+         if (true)
+         {
+            int i = 1;
+            while (i < Programa.Tope * 4)
+            {
+               m += i;
+               i *= 2;
+            }
+         }
+         if (m != 15)
+         {
+            return 4;
+         }
+         if (Programa.Nombre(Fruta.Pera) != "pera" || Programa.Nombre(Fruta.Manzana) != "otra" || Programa.Nombre(Fruta.Uva) != "uva")
+         {
+            return 5;
+         }
+         if (Programa.Codigo("b") != 1 || Programa.Codigo("c") != 2 || Programa.Codigo("d") != 4 || Programa.Codigo("z") != 0)
+         {
+            return 6;
+         }
+         int t = 0;
+         switch (k)
+         {
+            case 5:
+               t = 1;
+               break;
+            case 1:
+               t = 2;
+               break;
+         }
+         if (t != 1)
+         {
+            return 7;
+         }
+         println("bucles y switch, bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

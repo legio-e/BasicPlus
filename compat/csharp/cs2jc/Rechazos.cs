@@ -5,6 +5,7 @@
 //   - la biblioteca: un miembro de .NET que no está en la tabla (Biblioteca.cs);
 //   - un fallo de JC, con su ficha: la traducción es buena y JC la haría mal (se quita al cerrar la ficha).
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 
 namespace Cs2Jc
@@ -22,6 +23,43 @@ namespace Cs2Jc
         public static string Fuera(string que) => "fuera: " + que;
         public static string Pendiente(string regla) => "el traductor todavía no: " + regla;
         public static string Biblioteca(string miembro) => "la biblioteca: " + miembro;
+
+        /// Un miembro o un tipo de .NET que no está en la tabla: su motivo, como en el censo de #745 (clasifica.py): la
+        /// reflexión, los hilos, las fechas… quedan fuera; los genéricos y los delegados, de H7; lo demás, la biblioteca.
+        public static string DeNet(string nombre)
+        {
+            string t = nombre.StartsWith("tipo ") ? nombre.Substring(5)
+                     : nombre.StartsWith("new ") ? nombre.Substring(4)
+                     : nombre.StartsWith("hereda de ") ? nombre.Substring(10)
+                     : nombre.StartsWith("implementa ") ? nombre.Substring(11)
+                     : nombre.StartsWith("catch (") ? nombre.Substring(7).TrimEnd(')') : nombre;
+            bool Empieza(params string[] p) => p.Any(x => t.StartsWith(x));
+            if (Empieza("System.Reflection", "System.Type", "System.Activator", "System.Attribute", "System.RuntimeTypeHandle",
+                        "System.RuntimeFieldHandle", "System.RuntimeMethodHandle", "System.Object.GetType", "System.Enum.",
+                        "System.Enum", "System.AttributeUsage", "System.AttributeTargets", "System.ObsoleteAttribute",
+                        "System.Diagnostics.ConditionalAttribute", "System.FlagsAttribute", "System.CLSCompliant",
+                        "System.Runtime.CompilerServices", "System.TypedReference", "System.Diagnostics.FileVersionInfo",
+                        "System.Version"))
+                return Fuera(Reflexion);
+            if (Empieza("System.Runtime.InteropServices", "System.IntPtr", "System.UIntPtr", "System.Marshal")) return Fuera(Interop);
+            if (Empieza("System.Collections.Generic", "System.Func", "System.Action", "System.Predicate", "System.Comparison",
+                        "System.Nullable", "System.Lazy", "System.Tuple", "System.ValueTuple", "System.IEquatable", "System.IComparable<"))
+                return H7(Genericos);
+            if (Empieza("System.Delegate", "System.MulticastDelegate", "System.EventHandler", "System.AsyncCallback", "System.IAsyncResult"))
+                return H7(Delegados);
+            if (Empieza("System.Threading.Tasks", "System.Runtime.CompilerServices.TaskAwaiter")) return Fuera(Async);
+            if (Empieza("System.Threading", "System.AggregateException")) return Fuera("los hilos de .NET");
+            if (Empieza("System.DateTime", "System.TimeSpan", "System.DayOfWeek", "System.Diagnostics.Stopwatch")) return Fuera("las fechas y horas de .NET");
+            if (Empieza("System.UInt32", "System.UInt64", "System.Decimal")) return Fuera(SinSigno);
+            if (Empieza("Microsoft.CSharp.RuntimeBinder", "System.Dynamic")) return Fuera(Dynamic);
+            if (Empieza("System.Linq")) return Fuera(Linq);
+            if (Empieza("System.Collections.IEnumerable", "System.Collections.IEnumerator")) return H7(ForeachPropio);
+            if (Empieza("System.NullReferenceException", "System.IndexOutOfRangeException", "System.DivideByZeroException",
+                        "System.InvalidCastException", "System.OverflowException", "System.ArithmeticException",
+                        "System.StackOverflowException", "System.OutOfMemoryException", "System.ArrayTypeMismatchException"))
+                return H7(ErroresVm);
+            return Biblioteca(nombre);
+        }
         public static string Fallo(string ficha, string que) => "un fallo de JC: " + ficha + ", " + que;
 
         // Los fallos de JC que salen al traducir (FICHAS.md)
@@ -48,13 +86,19 @@ namespace Cs2Jc
         public const string IncEnExpresion = "++, -- y = dentro de una expresión";
         public const string ErroresVm = "errores de la VM con su tipo";
         public const string ForeachPropio = "foreach sobre colecciones propias";
-        public const string EnumEntero = "enum <-> int";
         // las que salieron al traducir (H6, 31-oct)
         public const string BoolBits = "& | ^ sobre bool (sin atajo)";
         public const string ColorColor = "un nombre que es a la vez variable y tipo (el Color Color de C#)";
         public const string NullCadena = "null en una cadena (en BP un string no es nulo)";
         public const string ConstanteEstrecha = "una constante que cabe, en un argumento o un return estrecho (como en una asignación)";
         public const string Guiones = "los _ de un número, como en C# (varios seguidos, o en el exponente)";
+        public const string EnumNegativo = "un enum con valores negativos (o que no caben en un int)";
+        public const string EnumPorDefecto = "un enum como valor por defecto de un parámetro (JC sólo admite un literal)";
+        public const string NullPorDefecto = "null como valor por defecto de un parámetro (JC sólo admite un literal)";
+        public const string NullConTipo = "un null con su tipo, (X) null, para elegir una sobrecarga";
+        public const string IgualdadRefs = "== y != entre referencias de dos tipos distintos (una clase y su hija, Object, una interfaz)";
+        public const string ArrayDeVarios = "un array de valores de otro tipo que el suyo (una clase hija, o mezclados)";
+        public const string ArrayConTamano = "crear un array de un tipo con su tamaño (Core: newIntArray, newByteArray, newLongArray, newDoubleArray y newObjArray)";
 
         // Lo que queda fuera
         public const string Lambdas = "lambdas y métodos anónimos";
@@ -71,6 +115,7 @@ namespace Cs2Jc
         public const string Anonimos = "tipos anónimos";
         public const string Interop = "interop y extern";
         public const string Dynamic = "dynamic";
+        public const string EnteroAEnum = "un entero que se convierte en un enum (JC no lo deja, a propósito: #522)";
 
         /// Los nodos que el traductor no traduce y de los que se sabe por qué (#745, clasifica.py).
         public static readonly Dictionary<SyntaxKind, string> PorNodo = new Dictionary<SyntaxKind, string>

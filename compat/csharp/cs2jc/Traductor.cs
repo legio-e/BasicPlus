@@ -98,6 +98,8 @@ namespace Cs2Jc
                 if (!puestos.Add(s)) return;
                 var b = s.BaseType?.OriginalDefinition;
                 if (b != null && tipos.Contains(b, SymbolEqualityComparer.Default)) Pon(b);
+                foreach (var i in s.Interfaces)          // la interfaz simple, que en JC es su clase base
+                    if (tipos.Contains(i.OriginalDefinition, SymbolEqualityComparer.Default)) Pon(i.OriginalDefinition);
                 ordenados.Add(s);
             }
             foreach (var s in tipos) Pon(s);
@@ -128,12 +130,37 @@ namespace Cs2Jc
             if (s.IsRecord) { Rechaza(donde, Porque.Pendiente("record")); return; }
             switch (s.TypeKind)
             {
-                case TypeKind.Class: EmiteClase(s); break;
+                case TypeKind.Class:
+                case TypeKind.Interface: EmiteClase(s); break;     // una interfaz simple es una clase base (#745)
                 case TypeKind.Struct: Rechaza(donde, Porque.H7(Porque.Struct)); break;
-                case TypeKind.Interface: Rechaza(donde, Porque.Pendiente("interfaces simples, como clases base")); break;
-                case TypeKind.Enum: Rechaza(donde, Porque.Pendiente("enum")); break;
+                case TypeKind.Enum: EmiteEnum(s); break;
                 default: Rechaza(donde, Porque.Pendiente("tipo " + s.TypeKind)); break;
             }
+        }
+
+        /// Un enum de C#, el de JC: los valores, los que calcula C#, todos escritos (JC sólo admite un número sin signo;
+        /// C#, cualquier constante). El tipo de debajo (`: byte`) no se escribe: sólo lo nota quien lo convierte, y
+        /// convertir un enum no se traduce (#522).
+        void EmiteEnum(INamedTypeSymbol s)
+        {
+            var donde = (EnumDeclarationSyntax) Declaracion(s);
+            Atributos(donde.AttributeLists);
+            var miembros = new List<string>();
+            foreach (var v in donde.Members)
+            {
+                var f = m.GetDeclaredSymbol(v);
+                // un `enum : ulong` puede pasarse de un long (test-40)
+                long valor = f.ConstantValue is ulong grande && grande > long.MaxValue ? -1 : Convert.ToInt64(f.ConstantValue);
+                if (valor < 0 || valor > int.MaxValue) Rechaza(v, Porque.H7(Porque.EnumNegativo));
+                miembros.Add(Ident(f.Name) + " = " + valor);
+            }
+            Linea((s.DeclaredAccessibility == Accessibility.Public ? "public " : "") + "enum " + NombreTipo(s));
+            Linea("{");
+            sangria++;
+            for (int i = 0; i < miembros.Count; i++) Linea(miembros[i] + (i < miembros.Count - 1 ? "," : ""));
+            sangria--;
+            Linea("}");
+            Linea("");
         }
 
         /// El `main` de JC: llama al `Main` de la prueba y, si devuelve otra cosa que 0, lanza «Main devuelve N»; así la
@@ -142,11 +169,12 @@ namespace Cs2Jc
         {
             if (main == null) return;
             var donde = main.DeclaringSyntaxReferences.First().GetSyntax();
-            if (main.Parameters.Length > 0) { Rechaza(donde, Porque.Pendiente("Main con argumentos")); return; }
-            string llamada = NombreTipo(main.ContainingType) + "." + Ident(main.Name) + "()";
+            // `Main(string[] args)`: sin argumentos, como cuando la prueba se ejecuta sola
+            string llamada = NombreTipo(main.ContainingType) + "." + Ident(main.Name) + "(" + (main.Parameters.Length == 1 ? "argumentos" : "") + ")";
             Linea("public function void main()");
             Linea("{");
             sangria++;
+            if (main.Parameters.Length == 1) Linea("string[] argumentos = [];");
             if (main.ReturnType.SpecialType == SpecialType.System_Int32)
             {
                 t.MainDevuelveEntero = true;
@@ -176,14 +204,22 @@ namespace Cs2Jc
             foreach (var p in partes) Atributos(p.AttributeLists);
             string base_ = null;
             var b = s.BaseType;
+            var lugarBase = donde.BaseList ?? (SyntaxNode) donde;
             if (b != null && b.SpecialType != SpecialType.System_Object)
             {
                 if (DelPrograma(b)) base_ = Tipo(b, donde);
                 else if (EsExcepcionNet(b)) base_ = "Exception";
-                else Rechaza(donde.BaseList ?? (SyntaxNode) donde, Porque.Biblioteca("hereda de " + NombreCompleto(b)));
+                else Rechaza(lugarBase, Porque.DeNet("hereda de " + NombreCompleto(b)));
             }
-            if (s.Interfaces.Length > 0)
-                Rechaza(donde.BaseList ?? (SyntaxNode) donde, Porque.Pendiente("interfaces simples, como clases base"));
+            // Las interfaces (#745, decidido por Eduardo): una del programa, en una clase sin otra base, es su clase base;
+            // dos, o una y una clase, son herencia múltiple. IDisposable no cuenta: basta con su Dispose.
+            var propias = s.Interfaces.Where(i => DelPrograma(i)).ToList();
+            foreach (var i in s.Interfaces.Where(i => !DelPrograma(i) && NombreCompleto(i) != "System.IDisposable"))
+                Rechaza(lugarBase, PorInterfazAjena(i));
+            if (propias.Count > 1 || (propias.Count == 1 && base_ != null))
+                Rechaza(lugarBase, Porque.Fuera(Porque.HerenciaMultiple));
+            else if (propias.Count == 1)
+                base_ = Tipo(propias[0], lugarBase);
 
             Linea((s.DeclaredAccessibility == Accessibility.Public ? "public " : "") + "class " + NombreTipo(s)
                   + (base_ != null ? " : " + base_ : ""));
@@ -240,8 +276,8 @@ namespace Cs2Jc
             string acceso = Acceso(primero.DeclaredAccessibility);
             if (primero.IsConst)
             {
-                Linea(acceso + " const " + tipo + " " + string.Join(", ", vars.Select(v => Ident(v.Identifier.ValueText)
-                      + " = " + Expr(v.Initializer.Value))) + ";");
+                foreach (var v in vars)                                        // JC: una constante por declaración
+                    Linea(acceso + " const " + tipo + " " + Ident(v.Identifier.ValueText) + " = " + Expr(v.Initializer.Value) + ";");
                 return;
             }
             string estatico = primero.IsStatic ? "static " : "";
@@ -264,24 +300,50 @@ namespace Cs2Jc
             if (s.IsExtern) { Rechaza(me, Porque.Fuera(Porque.Interop)); return; }
             if (s.IsAsync) { Rechaza(me, Porque.Fuera(Porque.Async)); return; }
             if (me.Modifiers.Any(SyntaxKind.UnsafeKeyword)) { Rechaza(me, Porque.Fuera(Porque.Unsafe)); return; }
-            if (s.ExplicitInterfaceImplementations.Length > 0) { Rechaza(me, Porque.Pendiente("interfaces simples, como clases base")); return; }
             if (s.IsPartialDefinition)
             {
                 // la definición sin cuerpo: se escribe la implementación; sin ella, C# quita las llamadas
                 if (s.PartialImplementationPart == null) Rechaza(me, Porque.Pendiente("métodos partial sin cuerpo"));
                 return;
             }
-            if (s.IsAbstract) { Rechaza(me, Porque.Pendiente("abstract")); return; }
             if (me.Modifiers.Any(SyntaxKind.NewKeyword) || Oculta(s)) { Rechaza(me, Porque.H7(Porque.NoVirtuales)); return; }
             bool esMain = main != null && (SymbolEqualityComparer.Default.Equals(s, main)
                                            || SymbolEqualityComparer.Default.Equals(s.PartialDefinitionPart, main)
                                            || SymbolEqualityComparer.Default.Equals(s, main.PartialImplementationPart));
-            string cabecera = (esMain ? "public" : Acceso(s.DeclaredAccessibility)) + (s.IsStatic ? " static" : "")
-                + " function " + Tipo(s.ReturnType, me.ReturnType) + " " + NombreMetodo(s)
+            // `int IForma.Area()`: la implementación explícita de la interfaz que en JC es la clase base, con su nombre
+            string nombre = NombreMetodo(s);
+            bool explicita = s.ExplicitInterfaceImplementations.Length > 0;
+            if (explicita)
+            {
+                nombre = Ident(s.ExplicitInterfaceImplementations[0].Name);
+                if (ChocaConOtro(s, s.ExplicitInterfaceImplementations[0].Name))
+                {
+                    Rechaza(me, Porque.Pendiente("una implementación explícita y otro miembro con su nombre"));
+                    return;
+                }
+            }
+            string cabecera = (esMain || explicita ? "public" : Acceso(s.DeclaredAccessibility)) + (s.IsStatic ? " static" : "")
+                + " function " + Tipo(s.ReturnType, me.ReturnType) + " " + nombre
                 + "(" + Parametros(me.ParameterList) + ")";
             Linea(cabecera);
+            if (s.IsAbstract) { Abstracto(nombre); return; }
             Cuerpo(me.Body, me.ExpressionBody, s.ReturnsVoid);
         }
+
+        /// El cuerpo de lo abstracto (un método `abstract`, o uno de una interfaz): lanza. Nunca se llama: C# no deja
+        /// crear ni la clase abstracta ni la interfaz, y una hija que se crea lo sobrescribe.
+        void Abstracto(string nombre)
+        {
+            Linea("{");
+            Linea("   throw new RuntimeError(" + Cadena("abstracto: " + NombreTipo(claseActual) + "." + nombre) + ");");
+            Linea("}");
+        }
+
+        /// ¿Tiene la clase otro miembro que se llame así (y que no sea una implementación explícita)?
+        bool ChocaConOtro(ISymbol s, string nombre) =>
+            claseActual.GetMembers(nombre).Any(o => !SymbolEqualityComparer.Default.Equals(o, s)
+                && !(o is IMethodSymbol om && om.ExplicitInterfaceImplementations.Length > 0)
+                && !(o is IPropertySymbol op && op.ExplicitInterfaceImplementations.Length > 0));
 
         void EmiteConstructor(ConstructorDeclarationSyntax c)
         {
@@ -319,11 +381,35 @@ namespace Cs2Jc
         void EmitePropiedad(PropertyDeclarationSyntax p)
         {
             var s = m.GetDeclaredSymbol(p);
-            if (s.ExplicitInterfaceImplementations.Length > 0) { Rechaza(p, Porque.Pendiente("interfaces simples, como clases base")); return; }
-            if (s.IsAbstract) { Rechaza(p, Porque.Pendiente("abstract")); return; }
             if (p.Modifiers.Any(SyntaxKind.NewKeyword) || OcultaPropiedad(s)) { Rechaza(p, Porque.H7(Porque.NoVirtuales)); return; }
-            string cabecera = Acceso(s.DeclaredAccessibility) + (s.IsStatic ? " static" : "") + " " + Tipo(s.Type, p.Type)
-                + " " + Ident(s.Name);
+            string nombre = Ident(s.Name);
+            bool explicita = s.ExplicitInterfaceImplementations.Length > 0;
+            if (explicita)
+            {
+                nombre = Ident(s.ExplicitInterfaceImplementations[0].Name);
+                if (ChocaConOtro(s, s.ExplicitInterfaceImplementations[0].Name))
+                {
+                    Rechaza(p, Porque.Pendiente("una implementación explícita y otro miembro con su nombre"));
+                    return;
+                }
+            }
+            string cabecera = (explicita ? "public" : Acceso(s.DeclaredAccessibility)) + (s.IsStatic ? " static" : "") + " "
+                + Tipo(s.Type, p.Type) + " " + nombre;
+            if (s.IsAbstract)
+            {
+                // una propiedad abstracta, o la de una interfaz: sus accesores lanzan
+                Linea(cabecera);
+                Linea("{");
+                sangria++;
+                foreach (var a in p.AccessorList.Accessors)
+                {
+                    Linea(a.IsKind(SyntaxKind.GetAccessorDeclaration) ? "get" : "set");
+                    Abstracto(nombre);
+                }
+                sangria--;
+                Linea("}");
+                return;
+            }
             if (p.ExpressionBody != null)
             {
                 Linea(cabecera);
@@ -367,8 +453,6 @@ namespace Cs2Jc
                 var ps = m.GetDeclaredSymbol(p);
                 if (ps == null) { partes.Add(Rechaza(p, Porque.Fuera(Porque.Interop))); continue; }     // __arglist
                 if (ps.RefKind != RefKind.None) Rechaza(p, Porque.H7(Porque.RefOut));
-                if (ps.IsParams) Rechaza(p, Porque.Pendiente("params"));
-                if (ps.IsThis) Rechaza(p, Porque.Pendiente("métodos de extensión"));
                 partes.Add(Tipo(ps.Type, p.Type) + " " + Ident(ps.Name) + (p.Default != null ? " = " + ValorPorDefecto(ps, p) : ""));
             }
             return string.Join(", ", partes);
@@ -459,18 +543,34 @@ namespace Cs2Jc
                 Rechaza(donde, Porque.Fallo("#751", Porque.ClaseDespues));
         }
 
+        /// Una interfaz de .NET: las genéricas, de H7; IEnumerable e IEnumerator, el foreach propio (H7); las demás, la
+        /// biblioteca.
+        static string PorInterfazAjena(INamedTypeSymbol i)
+        {
+            if (i.IsGenericType) return Porque.H7(Porque.Genericos);
+            string n = NombreCompleto(i);
+            if (n == "System.Collections.IEnumerable" || n == "System.Collections.IEnumerator") return Porque.H7(Porque.ForeachPropio);
+            return Porque.DeNet("implementa " + n);
+        }
+
         /// El valor por defecto de un parámetro: el que calcula C#, como literal (JC sólo admite un literal: «el valor
         /// por defecto del parámetro debe ser una constante literal»; C#, cualquier constante).
-        string ValorPorDefecto(IParameterSymbol ps, ParameterSyntax p)
+        string ValorPorDefecto(IParameterSymbol ps, ParameterSyntax p) => ConstanteDe(ps, p.Default);
+
+        /// El valor por defecto de un parámetro, como literal: el de su declaración, o el de uno que se salta una llamada
+        /// con argumentos con nombre.
+        string ConstanteDe(IParameterSymbol ps, SyntaxNode donde)
         {
-            if (!ps.HasExplicitDefaultValue) return Rechaza(p.Default, Porque.Pendiente("un valor por defecto sin valor"));
+            if (!ps.HasExplicitDefaultValue) return Rechaza(donde, Porque.Pendiente("un valor por defecto sin valor"));
             string porTipo = PorTipo(ps.Type);
-            if (porTipo != null) return Rechaza(p.Default, porTipo);
+            if (porTipo != null) return Rechaza(donde, porTipo);
             var v = ps.ExplicitDefaultValue;
+            // un enum (`Dia d = Dia.Martes`): JC sólo admite un literal, y un miembro de un enum no lo es
+            if (ps.Type.TypeKind == TypeKind.Enum) return Rechaza(donde, Porque.H7(Porque.EnumPorDefecto));
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             switch (v)
             {
-                case null: return EsCadena(ps.Type) ? Rechaza(p.Default, Porque.H7(Porque.NullCadena)) : "null";
+                case null: return Rechaza(donde, EsCadena(ps.Type) ? Porque.H7(Porque.NullCadena) : Porque.H7(Porque.NullPorDefecto));
                 case bool b: return b ? "true" : "false";
                 case string s: return Cadena(s);
                 case int i: return i == int.MinValue ? "(-2147483647 - 1)" : i.ToString(ci);
@@ -489,7 +589,7 @@ namespace Cs2Jc
                     return (r.Contains('.') || r.Contains('E') ? r : r + ".0") + "f";
                 }
             }
-            return Rechaza(p.Default, Porque.Pendiente("un valor por defecto " + v));
+            return Rechaza(donde, Porque.Pendiente("un valor por defecto " + v));
         }
 
         string NombreMetodo(IMethodSymbol s) => EsToString(s) ? "toString" : Ident(s.Name);

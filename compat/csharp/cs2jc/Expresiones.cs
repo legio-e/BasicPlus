@@ -1,6 +1,7 @@
 // Las expresiones y los tipos de C# en JC (V8/H6, docs/V8_IDEAS.md §E9). Los tipos de Roslyn dicen dónde va cada
 // reescritura: un miembro de la clase lleva `this.` o el nombre de su clase delante; una caja, que en BP es a mano, no
 // se tapa; lo que el traductor todavía no escribe (char, enum…) se rechaza por su tipo, antes de copiar nada.
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
@@ -15,10 +16,11 @@ namespace Cs2Jc
         string Expr(ExpressionSyntax e)
         {
             var conv = m.GetConversion(e);
-            if (conv.IsBoxing || conv.IsUnboxing) return Rechaza(e, Porque.Pendiente("las cajas (object)"));
+            if (conv.IsBoxing) return Caja(e, m.GetTypeInfo(e).Type, m.GetTypeInfo(e).ConvertedType);
+            if (conv.IsUnboxing) return Rechaza(e, Porque.Pendiente("sacar de una caja sin conversión"));
             if (conv.IsUserDefined) return Rechaza(e, Porque.H7(Porque.Operadores));
             if (conv.IsNullable) return Rechaza(e, Porque.Fuera(Porque.Nullable));
-            if (conv.IsEnumeration) return Rechaza(e, Porque.Pendiente("enum"));
+            if (conv.IsEnumeration) return Rechaza(e, Porque.Fuera(Porque.EnteroAEnum));      // `Color c = 0;`
             if (conv.IsMethodGroup) return Rechaza(e, Porque.H7(Porque.Delegados));
             // una constante que cabe en un byte, un short…: JC la acepta en una declaración o una asignación, no en un
             // argumento ni en un return
@@ -41,6 +43,117 @@ namespace Cs2Jc
         }
 
         static bool EsBool(ITypeSymbol t) => t != null && t.SpecialType == SpecialType.System_Boolean;
+
+        static bool EsEnum(ITypeSymbol t) => t != null && t.TypeKind == TypeKind.Enum;
+
+        /// La caja de BP de un valor (en BP las cajas son a mano: `Integer(5)`, y se sacan con `.value()`); null si no hay.
+        static string ClaseDeCaja(ITypeSymbol t)
+        {
+            switch (t?.SpecialType)
+            {
+                case SpecialType.System_Int32: return "Integer";
+                case SpecialType.System_Int64: return "Long";
+                case SpecialType.System_Double: return "Double";
+                case SpecialType.System_Single: return "Float";
+                case SpecialType.System_Boolean: return "Boolean";
+                default: return null;
+            }
+        }
+
+        /// `object o = 5;`: `Object o = new Integer(5);`. Sólo las de las cajas de BP, y sólo como `object`.
+        string Caja(ExpressionSyntax e, ITypeSymbol de, ITypeSymbol a)
+        {
+            string clase = ClaseDeCaja(de);
+            if (clase == null) return Rechaza(e, Porque.Pendiente("una caja de " + NombreCompleto(de)));
+            if (a == null || a.SpecialType != SpecialType.System_Object) return Rechaza(e, Porque.Pendiente("una caja como " + NombreCompleto(a)));
+            return "new " + clase + "(" + ExprBase(e) + ")";
+        }
+
+        static bool EsNumerico(ITypeSymbol t)
+        {
+            switch (t?.SpecialType)
+            {
+                case SpecialType.System_Int32:
+                case SpecialType.System_Int64:
+                case SpecialType.System_Int16:
+                case SpecialType.System_Byte:
+                case SpecialType.System_SByte:
+                case SpecialType.System_UInt16:
+                case SpecialType.System_Single:
+                case SpecialType.System_Double: return true;
+                default: return false;
+            }
+        }
+
+        /// `new int[n]`: las funciones de Core que crean un array con su tamaño; null si no hay para ese tipo.
+        static string CreadorDeArray(ITypeSymbol t)
+        {
+            switch (t?.SpecialType)
+            {
+                case SpecialType.System_Int32: return "newIntArray";
+                case SpecialType.System_Byte: return "newByteArray";
+                case SpecialType.System_Int64: return "newLongArray";
+                case SpecialType.System_Double: return "newDoubleArray";
+                case SpecialType.System_Object: return "newObjArray";
+                default: return null;
+            }
+        }
+
+        string CreaArray(ArrayCreationExpressionSyntax ac)
+        {
+            if (!(m.GetTypeInfo(ac).Type is IArrayTypeSymbol at)) return Rechaza(ac, Porque.Pendiente("un array sin resolver"));
+            string tipo = Tipo(at, ac);                                  // los de varias dimensiones, de H7
+            if (tipo == Hueco) return Hueco;
+            if (ac.Initializer != null) return ValoresDeArray(ac.Initializer.Expressions, at, ac);
+            string fn = CreadorDeArray(at.ElementType);
+            if (fn == null) return Rechaza(ac, Porque.H7(Porque.ArrayConTamano));
+            return fn + "(" + Expr(ac.Type.RankSpecifiers[0].Sizes[0]) + ")";
+        }
+
+        /// `{ 1, 2 }`: `[1, 2]`. Un array de valores de JC toma el tipo de sus valores: uno que no sea del tipo del array,
+        /// si es un número, con su conversión (`(long) 1`); si no (una clase hija, cosas mezcladas), JC no lo escribe.
+        string ValoresDeArray(IEnumerable<ExpressionSyntax> valores, IArrayTypeSymbol at, SyntaxNode donde)
+        {
+            string tipo = Tipo(at, donde);
+            if (tipo == Hueco) return Hueco;
+            var partes = new List<string>();
+            var lista = valores.ToList();
+            foreach (var x in lista)
+            {
+                var tx = m.GetTypeInfo(x).Type;
+                if (SymbolEqualityComparer.Default.Equals(tx, at.ElementType)) partes.Add(Expr(x));
+                else if (tx == null && !at.ElementType.IsValueType && !EsCadena(at.ElementType)) partes.Add(Expr(x));   // null
+                else if (EsNumerico(tx) && EsNumerico(at.ElementType)) partes.Add("(" + Tipo(at.ElementType, x) + ") " + Atomo(x));
+                else return Rechaza(donde, Porque.H7(Porque.ArrayDeVarios));
+            }
+            // un null vale si otro valor le da al array su tipo: `[null]` solo, en JC, no tiene ninguno
+            if (partes.Count > 0 && partes.All(x => x == "null")) return Rechaza(donde, Porque.H7(Porque.ArrayDeVarios));
+            return "[" + string.Join(", ", partes) + "]";
+        }
+
+        /// El tipo que ve JC: el de C#, salvo tras una conversión hacia arriba, que se quita (Conversion): el de dentro.
+        ITypeSymbol TipoEnJc(ExpressionSyntax e)
+        {
+            while (e is ParenthesizedExpressionSyntax p) e = p.Expression;
+            if (e is CastExpressionSyntax c)
+            {
+                var de = m.GetTypeInfo(c.Expression).Type;
+                var a = m.GetTypeInfo(c).Type;
+                if (de != null && a != null && !de.IsValueType && !a.IsValueType && m.ClassifyConversion(c.Expression, a).IsImplicit)
+                    return TipoEnJc(c.Expression);
+            }
+            return m.GetTypeInfo(e).Type;
+        }
+
+        /// Una expresión que va a llevar algo delante (`(int) e`): entre paréntesis si no es simple.
+        string Atomo(ExpressionSyntax e)
+        {
+            string x = Expr(e);
+            bool simple = e is IdentifierNameSyntax || e is MemberAccessExpressionSyntax || e is InvocationExpressionSyntax
+                          || e is ElementAccessExpressionSyntax || e is ParenthesizedExpressionSyntax || e is LiteralExpressionSyntax
+                          || e is ThisExpressionSyntax;
+            return simple ? x : "(" + x + ")";
+        }
 
         /// Una expresión por sí misma, sin la conversión de su sitio: la usan `print` y la suma de cadenas, donde C# mete
         /// un número en una caja para unirlo y JC lo une sin ella.
@@ -66,8 +179,71 @@ namespace Cs2Jc
                 case AssignmentExpressionSyntax a: return Rechaza(a, Porque.H7(Porque.IncEnExpresion));
                 case ElementAccessExpressionSyntax ea: return Elemento(ea);
                 case ThisExpressionSyntax _: return "this";
+                case ArrayCreationExpressionSyntax ac: return CreaArray(ac);
+                case ImplicitArrayCreationExpressionSyntax ia:
+                    return m.GetTypeInfo(ia).Type is IArrayTypeSymbol iat ? ValoresDeArray(ia.Initializer.Expressions, iat, ia) : RechazaNodo(ia);
+                case InitializerExpressionSyntax ie when ie.IsKind(SyntaxKind.ArrayInitializerExpression):
+                    return TipoDelInicializador(ie) is IArrayTypeSymbol iet ? ValoresDeArray(ie.Expressions, iet, ie) : RechazaNodo(ie);
+                case DefaultExpressionSyntax _: return PorDefecto(e);
+                case InterpolatedStringExpressionSyntax ise: return Interpolada(ise);
+                case CheckedExpressionSyntax ce when ce.IsKind(SyntaxKind.UncheckedExpression):
+                    return "(" + Expr(ce.Expression) + ")";                    // unchecked: lo de siempre, en C# y en BP
                 default: return RechazaNodo(e);
             }
+        }
+
+        /// `default(T)` y `default`: el valor que les da C#, escrito.
+        string PorDefecto(ExpressionSyntax e)
+        {
+            var t = m.GetTypeInfo(e).ConvertedType ?? m.GetTypeInfo(e).Type;
+            switch (t?.SpecialType)
+            {
+                case SpecialType.System_Int32:
+                case SpecialType.System_Int16:
+                case SpecialType.System_Byte:
+                case SpecialType.System_SByte:
+                case SpecialType.System_UInt16: return "0";
+                case SpecialType.System_Int64: return "0L";
+                case SpecialType.System_Double: return "0.0";
+                case SpecialType.System_Single: return "0.0f";
+                case SpecialType.System_Boolean: return "false";
+                case SpecialType.System_String: return Rechaza(e, Porque.H7(Porque.NullCadena));
+            }
+            if (t == null || t.IsValueType) return Rechaza(e, Porque.Pendiente("default de " + NombreCompleto(t)));
+            return "null";
+        }
+
+        /// `$"a{x}b"`: `("a" + x + "b")`, la suma de C#; un formato (`{x:F2}`) o un ancho (`{x,5}`), no (H7).
+        string Interpolada(InterpolatedStringExpressionSyntax ise)
+        {
+            var partes = new List<string>();
+            foreach (var c in ise.Contents)
+            {
+                if (c is InterpolatedStringTextSyntax txt) partes.Add(Cadena(txt.TextToken.ValueText));
+                else if (c is InterpolationSyntax it)
+                {
+                    if (it.AlignmentClause != null || it.FormatClause != null) return Rechaza(it, Porque.H7(Porque.Formatos));
+                    string x = ExprBase(it.Expression);                    // sin la caja de C#, como en la suma
+                    bool simple = it.Expression is IdentifierNameSyntax || it.Expression is MemberAccessExpressionSyntax
+                                  || it.Expression is InvocationExpressionSyntax || it.Expression is LiteralExpressionSyntax
+                                  || it.Expression is ElementAccessExpressionSyntax || it.Expression is ParenthesizedExpressionSyntax;
+                    partes.Add(simple ? x : "(" + x + ")");
+                }
+            }
+            if (partes.Count == 0) return "\"\"";
+            if (!(ise.Contents[0] is InterpolatedStringTextSyntax)) partes.Insert(0, "\"\"");   // que sea una suma de cadenas
+            return "(" + string.Join(" + ", partes) + ")";
+        }
+
+        /// El tipo de `{ 1, 2 }` en `int[] a = { 1, 2 };`: el de lo que se declara.
+        ITypeSymbol TipoDelInicializador(InitializerExpressionSyntax ie)
+        {
+            var ti = m.GetTypeInfo(ie);
+            if (ti.ConvertedType != null) return ti.ConvertedType;
+            if (ti.Type != null) return ti.Type;
+            if (ie.Parent is EqualsValueClauseSyntax ev && ev.Parent is VariableDeclaratorSyntax vd)
+                return (m.GetDeclaredSymbol(vd) as ILocalSymbol)?.Type ?? (m.GetDeclaredSymbol(vd) as IFieldSymbol)?.Type;
+            return null;
         }
 
         /// Una expresión como sentencia: una llamada, un `new`, una asignación o `x++` (`++x;` es `x++;`).
@@ -83,12 +259,16 @@ namespace Cs2Jc
                          || a.IsKind(SyntaxKind.ExclusiveOrAssignmentExpression)) && EsBool(m.GetTypeInfo(a.Left).Type))
                         return Rechaza(a, Porque.H7(Porque.BoolBits));
                     if (a.Left is TupleExpressionSyntax || a.Left is DeclarationExpressionSyntax) return Rechaza(a, Porque.Pendiente("desempaquetado"));
+                    if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) && EsEnum(m.GetTypeInfo(a.Left).Type))
+                        return Rechaza(a, Porque.Fuera(Porque.EnteroAEnum));       // `e |= f`: da un enum desde su entero
                     // `s += 5`, con `s` una cadena: sin la caja de C#, como en la suma
                     bool unir = a.IsKind(SyntaxKind.AddAssignmentExpression) && EsCadena(m.GetTypeInfo(a.Left).Type);
                     return Expr(a.Left) + " " + a.OperatorToken.Text + " " + (unir ? ExprBase(a.Right) : Expr(a.Right));
                 case PostfixUnaryExpressionSyntax p when p.IsKind(SyntaxKind.PostIncrementExpression) || p.IsKind(SyntaxKind.PostDecrementExpression):
+                    if (EsEnum(m.GetTypeInfo(p.Operand).Type)) return Rechaza(p, Porque.Fuera(Porque.EnteroAEnum));
                     return Expr(p.Operand) + p.OperatorToken.Text;
                 case PrefixUnaryExpressionSyntax p when p.IsKind(SyntaxKind.PreIncrementExpression) || p.IsKind(SyntaxKind.PreDecrementExpression):
+                    if (EsEnum(m.GetTypeInfo(p.Operand).Type)) return Rechaza(p, Porque.Fuera(Porque.EnteroAEnum));
                     return Expr(p.Operand) + p.OperatorToken.Text;
                 case InvocationExpressionSyntax _:
                 case ObjectCreationExpressionSyntax _:
@@ -111,7 +291,6 @@ namespace Cs2Jc
                 case SpecialType.System_IntPtr:
                 case SpecialType.System_UIntPtr: return Porque.Fuera(Porque.SinSigno);
             }
-            if (t.TypeKind == TypeKind.Enum) return Porque.Pendiente("enum");
             if (t.TypeKind == TypeKind.Dynamic) return Porque.Fuera(Porque.Dynamic);
             if (t.TypeKind == TypeKind.Pointer || t.TypeKind == TypeKind.FunctionPointer) return Porque.Fuera(Porque.Unsafe);
             if (t.TypeKind == TypeKind.Delegate) return Porque.H7(Porque.Delegados);
@@ -144,6 +323,7 @@ namespace Cs2Jc
                 case SyntaxKind.TrueLiteralExpression: return "true";
                 case SyntaxKind.FalseLiteralExpression: return "false";
                 case SyntaxKind.NullLiteralExpression: return "null";
+                case SyntaxKind.DefaultLiteralExpression: return PorDefecto(l);
                 default: return RechazaNodo(l);
             }
         }
@@ -167,11 +347,11 @@ namespace Cs2Jc
                 case IParameterSymbol _:
                     return Ident(s.Name);
                 case IFieldSymbol f:
-                    if (!DelPrograma(f)) return Rechaza(id, Porque.Biblioteca(NombreCompleto(f.ContainingType) + "." + f.Name));
+                    if (!DelPrograma(f)) return Rechaza(id, Porque.DeNet(NombreCompleto(f.ContainingType) + "." + f.Name));
                     CompruebaAcceso(f, id);
                     return (f.IsStatic || f.IsConst ? Receptor(f.ContainingType, id) : "this") + "." + Ident(f.Name);
                 case IPropertySymbol p:
-                    if (!DelPrograma(p)) return Rechaza(id, Porque.Biblioteca(NombreCompleto(p.ContainingType) + "." + p.Name));
+                    if (!DelPrograma(p)) return Rechaza(id, Porque.DeNet(NombreCompleto(p.ContainingType) + "." + p.Name));
                     CompruebaAcceso(p, id);
                     return (p.IsStatic ? Receptor(p.ContainingType, id) : "this") + "." + Ident(p.Name);
                 case INamedTypeSymbol nt:
@@ -218,8 +398,15 @@ namespace Cs2Jc
             if (ms.MethodKind == MethodKind.DelegateInvoke) return Rechaza(inv, Porque.H7(Porque.Delegados));
             if (ms.MethodKind == MethodKind.LocalFunction) return Rechaza(inv, Porque.Pendiente("funciones locales"));
             if (ms.IsGenericMethod) return Rechaza(inv, Porque.H7(Porque.Genericos));
-            if (ms.ReducedFrom != null || ms.IsExtensionMethod) return Rechaza(inv, Porque.Pendiente("métodos de extensión"));
             if (!DelPrograma(ms)) return BibliotecaLlamada(inv, ms);
+            if (ms.ReducedFrom != null)
+            {
+                // `x.Doble(a)`, un método de extensión: la llamada estática que es, `Ext.Doble(x, a)` (en el mismo orden)
+                if (!(inv.Expression is MemberAccessExpressionSyntax mx)) return Rechaza(inv, Porque.Pendiente("un método de extensión sin receptor"));
+                string resto = Argumentos(inv.ArgumentList, ms);
+                return Receptor(ms.ContainingType, inv) + "." + Ident(ms.Name) + "(" + Expr(mx.Expression)
+                       + (resto.Length > 0 ? ", " + resto : "") + ")";
+            }
             CompruebaAcceso(ms, inv);
             string args = Argumentos(inv.ArgumentList, ms);
             string nombre = NombreMetodo(ms);
@@ -240,12 +427,69 @@ namespace Cs2Jc
         {
             if (args == null) return "";
             foreach (var a in args.Arguments)
-            {
-                if (a.NameColon != null) return Rechaza(a, Porque.Pendiente("argumentos con nombre"));
                 if (!a.RefKindKeyword.IsKind(SyntaxKind.None)) return Rechaza(a, Porque.H7(Porque.RefOut));
+            if (args.Arguments.Any(a => a.NameColon != null)) return ConNombre(args, ms);
+            if (Expandido(ms, args))
+            {
+                // `f(1, 2, 3)` con `params int[]`: el array, escrito, `f([1, 2, 3])` (C# lo crea igual, en orden)
+                int fijos = ms.Parameters.Length - 1;
+                if (args.Arguments.Count < fijos) return Rechaza(args, Porque.Pendiente("params sin todos los fijos"));
+                var partes = args.Arguments.Take(fijos).Select(a => Expr(a.Expression)).ToList();
+                partes.Add(ValoresDeArray(args.Arguments.Skip(fijos).Select(a => a.Expression).ToList(),
+                                          (IArrayTypeSymbol) ms.Parameters.Last().Type, args));
+                return string.Join(", ", partes);
             }
-            if (Expandido(ms, args)) return Rechaza(args, Porque.Pendiente("params"));
             return string.Join(", ", args.Arguments.Select(a => Expr(a.Expression)));
+        }
+
+        /// `f(b: 2, a: 1)`: en el orden de los parámetros, `f(1, 2)`. C# los calcula en el orden escrito: si cambia, sólo
+        /// cuando ninguno calcula nada (la segunda regla de fondo). Uno que se salta, en medio, con su valor por defecto.
+        string ConNombre(BaseArgumentListSyntax args, IMethodSymbol ms)
+        {
+            if (ms == null) return Rechaza(args, Porque.Pendiente("argumentos con nombre sin resolver"));
+            var porParametro = new ExpressionSyntax[ms.Parameters.Length];
+            for (int i = 0; i < args.Arguments.Count; i++)
+            {
+                var a = args.Arguments[i];
+                int p = a.NameColon == null ? i
+                      : ms.Parameters.IndexOf(ms.Parameters.FirstOrDefault(x => x.Name == a.NameColon.Name.Identifier.ValueText));
+                if (p < 0 || p >= porParametro.Length || ms.Parameters[p].IsParams)
+                    return Rechaza(a, Porque.Pendiente("un argumento con nombre de params"));
+                porParametro[p] = a.Expression;
+            }
+            var escritos = args.Arguments.Select(a => a.Expression).ToList();
+            if (!escritos.SequenceEqual(porParametro.Where(x => x != null)) && !escritos.All(EsSimple))
+                return Rechaza(args, Porque.Pendiente("argumentos con nombre que cambian el orden de lo que se calcula"));
+            int ultimo = Array.FindLastIndex(porParametro, x => x != null);
+            var partes = new List<string>();
+            for (int p = 0; p <= ultimo; p++)
+                partes.Add(porParametro[p] != null ? Expr(porParametro[p]) : ConstanteDe(ms.Parameters[p], args));
+            return string.Join(", ", partes);
+        }
+
+        /// ¿Una expresión que no calcula nada, y que por eso puede ir antes o después? Un literal, una constante, una
+        /// local, un parámetro, un campo, `this`.
+        bool EsSimple(ExpressionSyntax e)
+        {
+            switch (e)
+            {
+                case LiteralExpressionSyntax _:
+                case ThisExpressionSyntax _: return true;
+                case ParenthesizedExpressionSyntax p: return EsSimple(p.Expression);
+                case PrefixUnaryExpressionSyntax u when u.IsKind(SyntaxKind.UnaryMinusExpression) || u.IsKind(SyntaxKind.LogicalNotExpression):
+                    return EsSimple(u.Operand);
+                case IdentifierNameSyntax id:
+                {
+                    var s = m.GetSymbolInfo(id).Symbol;
+                    return s is ILocalSymbol || s is IParameterSymbol || s is IFieldSymbol;
+                }
+                case MemberAccessExpressionSyntax ma:
+                {
+                    var s = m.GetSymbolInfo(ma).Symbol;
+                    return s is IFieldSymbol f && (f.IsStatic || f.IsConst || EsSimple(ma.Expression));
+                }
+                default: return m.GetConstantValue(e).HasValue;
+            }
         }
 
         /// ¿Una llamada a un método `params` con los argumentos sueltos (o ninguno), en vez del array?
@@ -258,12 +502,15 @@ namespace Cs2Jc
             return !SymbolEqualityComparer.Default.Equals(convertido, ms.Parameters.Last().Type);
         }
 
-        string Nuevo(ObjectCreationExpressionSyntax oc)
+        /// `new T(…)`, sin mirar su inicializador (`{ A = 1 }`): lo escribe la declaración, detrás (Sentencias.Declaracion).
+        string NuevoSinInicializador(ObjectCreationExpressionSyntax oc) => Nuevo(oc, true);
+
+        string Nuevo(ObjectCreationExpressionSyntax oc, bool sinInicializador = false)
         {
             var ctor = m.GetSymbolInfo(oc).Symbol as IMethodSymbol;
             var tipo = m.GetTypeInfo(oc).Type as INamedTypeSymbol;
             if (ctor == null || tipo == null) return Rechaza(oc, Porque.Pendiente("un new sin resolver"));
-            if (oc.Initializer != null) return Rechaza(oc.Initializer, Porque.Pendiente("inicializadores de objetos"));
+            if (oc.Initializer != null && !sinInicializador) return Rechaza(oc.Initializer, Porque.Pendiente("inicializadores de objetos, fuera de una declaración"));
             if (!DelPrograma(tipo)) return BibliotecaNuevo(oc, ctor, tipo);
             CompruebaAcceso(ctor, oc);
             CompruebaOrden(tipo, oc);
@@ -282,6 +529,10 @@ namespace Cs2Jc
                 case SyntaxKind.IsExpression:
                 {
                     var t = m.GetTypeInfo(b.Right).Type;
+                    // `o is int`: ¿lleva una caja de int? En BP, `o is Integer`
+                    var izq = m.GetTypeInfo(b.Left).Type;
+                    if (t != null && t.IsValueType && ClaseDeCaja(t) != null && izq != null && !izq.IsValueType)
+                        return Expr(b.Left) + " is " + ClaseDeCaja(t);
                     if (t == null || t.IsValueType || EsCadena(t)
                         || (!DelPrograma(t) && !EsExcepcionNet(t) && t.SpecialType != SpecialType.System_Object))
                         return Rechaza(b, Porque.Pendiente("is " + NombreCompleto(t)));
@@ -294,6 +545,27 @@ namespace Cs2Jc
                     if (EsBool(m.GetTypeInfo(b.Left).Type)) return Rechaza(b, Porque.H7(Porque.BoolBits));
                     break;
             }
+            // Un enum en JC: `==` y `!=` tal cual, y en una cadena, su número. Lo que en C# opera con su entero, con
+            // `(int)` delante (Eduardo, 31-oct: «(int)Enum.mivalor»): `a < b` es `(int) a < (int) b`, y `a - b`, dos enums,
+            // `(int) a - (int) b`. Lo que da un enum desde un entero (`a | b`, `a + 1`) no: #522.
+            bool enumIzq = EsEnum(m.GetTypeInfo(b.Left).Type), enumDer = EsEnum(m.GetTypeInfo(b.Right).Type);
+            if ((enumIzq || enumDer) && !b.IsKind(SyntaxKind.EqualsExpression) && !b.IsKind(SyntaxKind.NotEqualsExpression)
+                && !(b.IsKind(SyntaxKind.AddExpression) && EsCadena(m.GetTypeInfo(b).Type)))
+            {
+                if (EsEnum(m.GetTypeInfo(b).Type)) return Rechaza(b, Porque.Fuera(Porque.EnteroAEnum));
+                string izq = enumIzq ? "(int) " + Atomo(b.Left) : Expr(b.Left);
+                string der = enumDer ? "(int) " + Atomo(b.Right) : Expr(b.Right);
+                return izq + " " + b.OperatorToken.Text + " " + der;
+            }
+            // `==` entre referencias: en JC, del mismo tipo (o con null); C# deja comparar una clase con su hija, con Object…
+            if (b.IsKind(SyntaxKind.EqualsExpression) || b.IsKind(SyntaxKind.NotEqualsExpression))
+            {
+                var ti = TipoEnJc(b.Left);
+                var td = TipoEnJc(b.Right);
+                if (ti != null && td != null && !ti.IsValueType && !td.IsValueType && !EsCadena(ti) && !EsCadena(td)
+                    && !SymbolEqualityComparer.Default.Equals(ti, td))
+                    return Rechaza(b, Porque.H7(Porque.IgualdadRefs));
+            }
             // una cadena con lo que sea: C# mete lo que no es cadena en una caja para unirlo; JC lo une sin ella
             if (b.IsKind(SyntaxKind.AddExpression) && EsCadena(m.GetTypeInfo(b).Type))
                 return ExprBase(b.Left) + " + " + ExprBase(b.Right);
@@ -302,6 +574,7 @@ namespace Cs2Jc
 
         string Prefijo(PrefixUnaryExpressionSyntax pu)
         {
+            if (EsEnum(m.GetTypeInfo(pu.Operand).Type)) return Rechaza(pu, Porque.Fuera(Porque.EnteroAEnum));   // `~e`: otro enum
             switch (pu.Kind())
             {
                 case SyntaxKind.UnaryMinusExpression:
@@ -333,12 +606,43 @@ namespace Cs2Jc
             var de = m.GetTypeInfo(c.Expression).Type;
             var a = m.GetTypeInfo(c).Type;
             if (a == null) return Rechaza(c, Porque.Pendiente("una conversión sin resolver"));
-            if (EsCadena(a) && c.Expression is LiteralExpressionSyntax nulo && nulo.IsKind(SyntaxKind.NullLiteralExpression))
-                return Rechaza(c, Porque.H7(Porque.NullCadena));                // `(string) null`
+            if (c.Expression is LiteralExpressionSyntax nulo && nulo.IsKind(SyntaxKind.NullLiteralExpression))
+            {
+                // `(string) null`, de H7; `(object) null`, `(X[]) null`: null, que en JC no se convierte (ni hace falta)
+                if (EsCadena(a)) return Rechaza(c, Porque.H7(Porque.NullCadena));
+                // como argumento de un método con sobrecargas, el tipo del null elige cuál (`Foo((X[]) null)`): JC no lo
+                // escribe, y sin él la llamada es ambigua
+                if (c.Parent is ArgumentSyntax arg && arg.Parent?.Parent is ExpressionSyntax llamada
+                    && m.GetSymbolInfo(llamada).Symbol is IMethodSymbol ms
+                    && ms.ContainingType.GetMembers(ms.Name).OfType<IMethodSymbol>().Count(x => x.Parameters.Length == ms.Parameters.Length) > 1)
+                    return Rechaza(c, Porque.H7(Porque.NullConTipo));
+                if (!a.IsValueType) return "null";
+            }
+            if (EsEnum(a) && !SymbolEqualityComparer.Default.Equals(a, de)) return Rechaza(c, Porque.Fuera(Porque.EnteroAEnum));
+            // `(int) Color.Rojo`, `(long) c`: se copia (Eduardo, 31-oct: «es el compilador el que ha de hacer la
+            // conversión»); a un tipo estrecho, todavía no
+            if (EsEnum(de) && !SymbolEqualityComparer.Default.Equals(a, de) && EsEstrecho(a))
+                return Rechaza(c, Porque.Pendiente("un enum convertido a un tipo estrecho"));
+            // `(I) y`, `(Animal) perro`: subir no se escribe en JC (sólo se baja); el objeto es el mismo y los métodos,
+            // virtuales: se quita. Salvo una cadena como object: en C#, `(object) s == (object) t` compara referencias.
+            if (de != null && !de.IsValueType && !a.IsValueType && !SymbolEqualityComparer.Default.Equals(a, de)
+                && m.ClassifyConversion(c.Expression, a).IsImplicit)
+            {
+                if (EsCadena(de)) return Rechaza(c, Porque.Pendiente("una cadena como object (su referencia)"));
+                return Expr(c.Expression);
+            }
             if (de != null)
             {
-                if (de.IsValueType != a.IsValueType) return Rechaza(c, Porque.Pendiente("las cajas (object)"));
                 if (m.GetConversion(c).IsUserDefined) return Rechaza(c, Porque.H7(Porque.Operadores));
+                if (de.IsValueType && !a.IsValueType && !EsEnum(de)) return Caja(c.Expression, de, a);     // `(object) 5`
+                if (!de.IsValueType && a.IsValueType && !EsEnum(a))
+                {
+                    // `(int) o`: sacarlo de su caja, `((Integer) o).value()`; si no es un int, la conversión lanza, como en C#
+                    string clase = ClaseDeCaja(a);
+                    if (clase == null || de.SpecialType != SpecialType.System_Object)
+                        return Rechaza(c, Porque.Pendiente("sacar un " + NombreCompleto(a) + " de " + NombreCompleto(de)));
+                    return "((" + clase + ") " + Atomo(c.Expression) + ").value()";
+                }
             }
             CompruebaOrden(a, c);
             return "(" + Tipo(a, c.Type) + ") " + Expr(c.Expression);
@@ -354,7 +658,7 @@ namespace Cs2Jc
             }
             if (EsCadena(t)) return Rechaza(ea, Porque.Pendiente("s[i] (char)"));
             if (m.GetSymbolInfo(ea).Symbol is IPropertySymbol p && p.IsIndexer)
-                return Rechaza(ea, DelPrograma(p) ? Porque.H7(Porque.Indexadores) : Porque.Biblioteca(NombreCompleto(p.ContainingType) + "[i]"));
+                return Rechaza(ea, DelPrograma(p) ? Porque.H7(Porque.Indexadores) : Porque.DeNet(NombreCompleto(p.ContainingType) + "[i]"));
             return RechazaNodo(ea);
         }
 
@@ -420,14 +724,16 @@ namespace Cs2Jc
                 {
                     switch (nt.TypeKind)
                     {
-                        case TypeKind.Class: return NombreTipo(nt);
+                        case TypeKind.Class:
+                        case TypeKind.Interface:                       // una interfaz simple es una clase base
+                        case TypeKind.Enum: return NombreTipo(nt);
                         case TypeKind.Struct: return Rechaza(donde, Porque.H7(Porque.Struct));
-                        case TypeKind.Interface: return Rechaza(donde, Porque.Pendiente("interfaces simples, como clases base"));
                         default: return Rechaza(donde, Porque.Pendiente("tipo " + nt.TypeKind));
                     }
                 }
                 if (EsExcepcionNet(nt)) return "Exception";
-                return Rechaza(donde, Porque.Biblioteca("tipo " + NombreCompleto(nt)));
+                if (nt.TypeKind == TypeKind.Interface) return Rechaza(donde, PorInterfazAjena(nt));
+                return Rechaza(donde, Porque.DeNet("tipo " + NombreCompleto(nt)));
             }
             return Rechaza(donde, Porque.Pendiente("tipo " + NombreCompleto(ty)));
         }

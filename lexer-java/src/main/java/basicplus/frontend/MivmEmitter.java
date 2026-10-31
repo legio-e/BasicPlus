@@ -6557,7 +6557,8 @@ public final class MivmEmitter {
     /** H1.3b — emite la conversión numérica del valor ya en pila (de tipo srcT)
      *  al tipo destino del cast. Nada si ya coincide. */
     private void emitNumericConversion(BpType srcT, String target) throws IOException {
-        boolean sInt    = srcT instanceof PrimitiveType && ((PrimitiveType) srcT).isIntegerLike();
+        // V8/H6 (#754): un enum es su entero, un i32 en la pila, como un integer
+        boolean sInt    = (srcT instanceof PrimitiveType && ((PrimitiveType) srcT).isIntegerLike()) || srcT instanceof EnumType;
         boolean sLong   = isLong(srcT);
         boolean sFloat  = isFloat(srcT);
         boolean sDouble = isDouble(srcT);

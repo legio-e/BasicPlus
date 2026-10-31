@@ -1,0 +1,145 @@
+module CsVarios
+{
+   class Punto
+   {
+      public int X { get; set; }
+      public int Y { get; set; }
+   }
+
+   class Extensiones
+   {
+      public static function int Doble(int x)
+      {
+         return x * 2;
+      }
+      public static function string Saluda(Punto p, string quien)
+      {
+         return "hola " + quien + " en " + p.X;
+      }
+   }
+
+   class Recurso
+   {
+      public static int Cerrados { get; set; } = 0;
+      public function void Dispose()
+      {
+         Recurso.Cerrados++;
+      }
+   }
+
+   class Programa
+   {
+      public static function int Main()
+      {
+         Punto p = new Punto();
+         p.X = 3;
+         p.Y = 4;
+         if (p.X != 3 || p.Y != 4)
+         {
+            return 1;
+         }
+         if (Extensiones.Doble(5) != 10)
+         {
+            return 2;
+         }
+         if (Extensiones.Doble(6) != 12)
+         {
+            return 3;
+         }
+         if (Extensiones.Saluda(p, "ana") != "hola ana en 3")
+         {
+            return 4;
+         }
+         if (true)
+         {
+            Recurso r = new Recurso();
+            try
+            {
+               p.X = 7;
+            }
+            finally
+            {
+               if (r != null)
+               {
+                  r.Dispose();
+               }
+            }
+         }
+         if (Recurso.Cerrados != 1)
+         {
+            return 5;
+         }
+         try
+         {
+            if (true)
+            {
+               Recurso recurso_cs1 = new Recurso();
+               try
+               {
+                  throw new Exception("dentro");
+               }
+               finally
+               {
+                  if (recurso_cs1 != null)
+                  {
+                     recurso_cs1.Dispose();
+                  }
+               }
+            }
+         }
+         catch (Exception excepcion_cs2)
+         {
+         }
+         if (Recurso.Cerrados != 2)
+         {
+            return 6;
+         }
+         int dentro = 0;
+         if (true)
+         {
+            dentro = 1;
+         }
+         if (dentro != 1)
+         {
+            return 7;
+         }
+         int d = 0;
+         bool b = false;
+         if (d != 0 || b)
+         {
+            return 8;
+         }
+         Punto nada = null;
+         if (nada != null)
+         {
+            return 9;
+         }
+         string s = ("x=" + p.X + " y=" + p.Y);
+         if (s != "x=7 y=4")
+         {
+            return 10;
+         }
+         string t = ("" + (p.X + 1) + "!");
+         if (t != "8!")
+         {
+            return 11;
+         }
+         int grande = (2147483647 + d + 1);
+         if (grande != (-2147483647 - 1))
+         {
+            return 12;
+         }
+         println(s + " " + t);
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

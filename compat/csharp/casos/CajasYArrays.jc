@@ -1,0 +1,111 @@
+module CsCajasYArrays
+{
+   class Programa
+   {
+      private static function int Suma(int[] xs)
+      {
+         int s = 0;
+         foreach (var x in xs)
+         {
+            s += x;
+         }
+         return s;
+      }
+      private static function int Cuenta(string que, string[] cosas)
+      {
+         return len(cosas);
+      }
+      public static function int Main()
+      {
+         Object o = new Integer(5);
+         if (!(o is Integer))
+         {
+            return 1;
+         }
+         int n = ((Integer) o).value();
+         if (n != 5)
+         {
+            return 2;
+         }
+         Object l = new Long(7L);
+         if (((Long) l).value() != 7L)
+         {
+            return 3;
+         }
+         Object b = new Boolean(true);
+         if (!((Boolean) b).value())
+         {
+            return 4;
+         }
+         Object d = new Double(2.5);
+         if (((Double) d).value() != 2.5)
+         {
+            return 5;
+         }
+         println(o, " ", l, " ", d);
+         int[] a = newIntArray(4);
+         a[2] = 9;
+         if (len(a) != 4 || a[2] != 9 || a[0] != 0)
+         {
+            return 6;
+         }
+         long[] g = [(long) 1, (long) 2, (long) 3];
+         if (len(g) != 3 || g[2] != 3L)
+         {
+            return 7;
+         }
+         double[] r = [(double) 1, 2.5];
+         if (r[0] != 1.0 || r[1] != 2.5)
+         {
+            return 8;
+         }
+         string[] s = ["uno", "dos"];
+         if (s[1] != "dos" || len(s) != 2)
+         {
+            return 9;
+         }
+         int[] v = [10, 20, 30];
+         if (v[1] != 20)
+         {
+            return 10;
+         }
+         Object[] cajas = newObjArray(2);
+         cajas[0] = "texto";
+         cajas[1] = new Integer(3);
+         if (((Integer) cajas[1]).value() != 3)
+         {
+            return 11;
+         }
+         if (Programa.Suma([]) != 0)
+         {
+            return 12;
+         }
+         if (Programa.Suma([1, 2, 3]) != 6)
+         {
+            return 13;
+         }
+         if (Programa.Suma([4, 5]) != 9)
+         {
+            return 14;
+         }
+         if (Programa.Cuenta("x", ["a", "b"]) != 2)
+         {
+            return 15;
+         }
+         if (strlen("hola") != 4)
+         {
+            return 16;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

@@ -590,6 +590,12 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   Dia.VALOR)»—. Al imprimirlo, o en una cadena, sale su número: con <code>d</code> de arriba,
   <code>print "d=" + d</code> da <code>d=2</code>, como <code>print d</code> (V7).
 </p>
+<p>
+  Al revés, sí: un enum se convierte en su entero con la conversión numérica,
+  <code>integer(d)</code> (y <code>long(d)</code>, <code>float(d)</code> o <code>double(d)</code>), sea una
+  constante, una variable o un parámetro: con <code>d</code> de arriba, <code>integer(d) + 1</code> da
+  <code>3</code>, e <code>integer(Dia.SABADO)</code>, <code>10</code> (V8).
+</p>
 
 <h3 id="clases-tipo">4.4 Clases</h3>
 <p>

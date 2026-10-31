@@ -1,5 +1,6 @@
 // Las sentencias de C# en JC (V8/H6, docs/V8_IDEAS.md §E9). El cuerpo de un if, un while o un for, siempre entre
 // llaves; un bloque suelto, que JC no tiene, con su `if (true)` (el mismo ámbito).
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -55,7 +56,24 @@ namespace Cs2Jc
                 case ForEachStatementSyntax fe: Foreach(fe); break;
                 case ReturnStatementSyntax r: Linea(r.Expression == null ? "return;" : "return " + Expr(r.Expression) + ";"); break;
                 case BreakStatementSyntax _: Linea("break;"); break;
-                case ContinueStatementSyntax _: Linea("continue;"); break;
+                case ContinueStatementSyntax co:
+                    if (BucleDe(co) is ForStatementSyntax fw && forComoWhile.Contains(fw))
+                        foreach (var i in fw.Incrementors) Linea(ExprSentencia(i) + ";");
+                    Linea("continue;");
+                    break;
+                case SwitchStatementSyntax sw: Switch(sw); break;
+                case UsingStatementSyntax u: Using(u); break;
+                case LockStatementSyntax lo:
+                    // un programa de un hilo: el bloque; lo que se cierra, si no es simple, no se calcula: no se traduce
+                    if (!(lo.Expression is ThisExpressionSyntax || lo.Expression is IdentifierNameSyntax || lo.Expression is TypeOfExpressionSyntax))
+                        Rechaza(lo.Expression, Porque.Pendiente("lock sobre algo que hay que calcular"));
+                    Linea("if (true)");
+                    CuerpoDe(lo.Statement);
+                    break;
+                case CheckedStatementSyntax ch when ch.IsKind(SyntaxKind.UncheckedStatement):
+                    Linea("if (true)");                                      // unchecked: lo de siempre en C# y en BP
+                    Bloque(ch.Block);
+                    break;
                 case ThrowStatementSyntax th: Throw(th); break;
                 case TryStatementSyntax tr: Try(tr); break;
                 case EmptyStatementSyntax _: break;
@@ -66,13 +84,87 @@ namespace Cs2Jc
         void Local(LocalDeclarationStatementSyntax ld)
         {
             if (!ld.UsingKeyword.IsKind(SyntaxKind.None)) { Rechaza(ld, Porque.Pendiente("using")); return; }
-            var d = ld.Declaration;
+            Declaracion(ld.Declaration, ld.IsConst);
+        }
+
+        /// `T a = x, b;` (la de un `for` también): `var`, con su tipo.
+        void Declaracion(VariableDeclarationSyntax d, bool constante)
+        {
             if (d.Type is RefTypeSyntax) { Rechaza(d.Type, Porque.H7(Porque.RefOut)); return; }
             var primero = (ILocalSymbol) m.GetDeclaredSymbol(d.Variables[0]);
-            string tipo = Tipo(primero.Type, d.Type);      // `var`, con su tipo
+            string tipo = Tipo(primero.Type, d.Type);
+            // `T x = new T(…) { A = 1 };`: el objeto, y luego sus asignaciones, en orden (como C#). Sólo en una declaración,
+            // donde `x` no existía antes; en otro sitio, el nuevo valor se vería antes de tiempo
+            if (d.Variables.Count == 1 && d.Variables[0].Initializer?.Value is ObjectCreationExpressionSyntax oc
+                && oc.Initializer != null && oc.Initializer.IsKind(SyntaxKind.ObjectInitializerExpression))
+            {
+                string x = Ident(d.Variables[0].Identifier.ValueText);
+                Linea(tipo + " " + x + " = " + NuevoSinInicializador(oc) + ";");
+                foreach (var e in oc.Initializer.Expressions)
+                {
+                    if (e is AssignmentExpressionSyntax a && a.IsKind(SyntaxKind.SimpleAssignmentExpression)
+                        && a.Left is IdentifierNameSyntax miembro && !(a.Right is InitializerExpressionSyntax))
+                    {
+                        var s = m.GetSymbolInfo(miembro).Symbol;
+                        if (s == null || !DelPrograma(s)) { Rechaza(e, Porque.Pendiente("un inicializador de algo de la biblioteca")); continue; }
+                        Linea(x + "." + Ident(s.Name) + " = " + Expr(a.Right) + ";");
+                    }
+                    else Rechaza(e, Porque.Pendiente("un inicializador anidado, o de una colección"));
+                }
+                return;
+            }
             var partes = d.Variables.Select(v => Ident(v.Identifier.ValueText)
-                                                 + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : ""));
-            Linea((ld.IsConst ? "const " : "") + tipo + " " + string.Join(", ", partes) + ";");
+                                                 + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : "")).ToList();
+            if (constante)
+                foreach (var p in partes) Linea("const " + tipo + " " + p + ";");      // JC: una constante por declaración
+            else
+                Linea(tipo + " " + string.Join(", ", partes) + ";");
+        }
+
+        /// `using (R r = …) cuerpo`: `R r = …; try { cuerpo } finally { if (r != null) r.Dispose(); }`, lo que hace C#,
+        /// dentro de un `if (true)` que da a `r` su ámbito.
+        void Using(UsingStatementSyntax u)
+        {
+            string nombre;
+            Linea("if (true)");
+            Linea("{");
+            sangria++;
+            if (u.Declaration != null)
+            {
+                if (u.Declaration.Variables.Count != 1) { Rechaza(u, Porque.Pendiente("using con varias variables")); }
+                var v = (ILocalSymbol) m.GetDeclaredSymbol(u.Declaration.Variables[0]);
+                nombre = Ident(v.Name);
+                Declaracion(u.Declaration, false);
+                CompruebaDispose(v.Type, u);
+            }
+            else
+            {
+                var t = m.GetTypeInfo(u.Expression).Type;
+                nombre = "recurso_cs" + (++nombresNuevos);
+                Linea(Tipo(t, u.Expression) + " " + nombre + " = " + Expr(u.Expression) + ";");
+                CompruebaDispose(t, u);
+            }
+            Linea("try");
+            CuerpoDe(u.Statement);
+            Linea("finally");
+            Linea("{");
+            Linea("   if (" + nombre + " != null)");
+            Linea("   {");
+            Linea("      " + nombre + ".Dispose();");
+            Linea("   }");
+            Linea("}");
+            sangria--;
+            Linea("}");
+        }
+
+        /// Un `using` sólo con una clase del programa que tenga su `Dispose()`.
+        void CompruebaDispose(ITypeSymbol t, SyntaxNode donde)
+        {
+            if (t == null || !DelPrograma(t) || t.TypeKind != TypeKind.Class)
+                Rechaza(donde, Porque.Pendiente("using de algo que no es una clase del programa"));
+            else if (!t.GetMembers("Dispose").OfType<IMethodSymbol>().Any(x => x.Parameters.Length == 0)
+                     && !t.GetMembers().OfType<IMethodSymbol>().Any(x => x.ExplicitInterfaceImplementations.Any(i => i.Name == "Dispose")))
+                Rechaza(donde, Porque.Pendiente("using de una clase cuyo Dispose está en su padre"));
         }
 
         void If(IfStatementSyntax i)
@@ -97,12 +189,106 @@ namespace Cs2Jc
             }
         }
 
+        /// Los `for` que se escriben como `while`: sus `continue` llevan delante los incrementos.
+        readonly HashSet<ForStatementSyntax> forComoWhile = new HashSet<ForStatementSyntax>();
+
         void For(ForStatementSyntax f)
         {
             string cabecera = ForDeJc(f);
-            if (cabecera == null) { Rechaza(f, Porque.Pendiente("un for que no es el de JC")); return; }
-            Linea(cabecera);
-            CuerpoDe(f.Statement);
+            if (cabecera != null)
+            {
+                Linea(cabecera);
+                CuerpoDe(f.Statement);
+                return;
+            }
+            // Los demás, como `while`, dentro de un `if (true)` que da a la variable el ámbito del `for`; un `continue` del
+            // `for` hace antes sus incrementos, como en C#.
+            forComoWhile.Add(f);
+            Linea("if (true)");
+            Linea("{");
+            sangria++;
+            if (f.Declaration != null) Declaracion(f.Declaration, false);
+            foreach (var i in f.Initializers) Linea(ExprSentencia(i) + ";");
+            Linea("while (" + (f.Condition != null ? Expr(f.Condition) : "true") + ")");
+            Linea("{");
+            sangria++;
+            if (f.Statement is BlockSyntax b) foreach (var s in b.Statements) Sentencia(s);
+            else Sentencia(f.Statement);
+            foreach (var i in f.Incrementors) Linea(ExprSentencia(i) + ";");
+            sangria--;
+            Linea("}");
+            sangria--;
+            Linea("}");
+        }
+
+        /// El bucle al que salta un `continue` (el `switch` no lo para).
+        static SyntaxNode BucleDe(ContinueStatementSyntax c)
+        {
+            foreach (var a in c.Ancestors())
+                if (a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax || a is DoStatementSyntax)
+                    return a;
+            return null;
+        }
+
+        void Switch(SwitchStatementSyntax sw)
+        {
+            // el de JC: `case 1, 2:`, sin caer de un caso al siguiente (C# tampoco), y el `default` al final (en C# el
+            // orden no cambia nada, porque no se cae)
+            // Una local declarada en un case y usada en otro: en C# su ámbito es el switch entero; en JC, el case.
+            var deSeccion = new Dictionary<ISymbol, SwitchSectionSyntax>(SymbolEqualityComparer.Default);
+            foreach (var sec in sw.Sections)
+                foreach (var ld in sec.Statements.OfType<LocalDeclarationStatementSyntax>())
+                    foreach (var v in ld.Declaration.Variables)
+                        deSeccion[m.GetDeclaredSymbol(v)] = sec;
+            foreach (var sec in sw.Sections)
+                foreach (var id in sec.DescendantNodes().OfType<IdentifierNameSyntax>())
+                    if (m.GetSymbolInfo(id).Symbol is ILocalSymbol l && deSeccion.TryGetValue(l, out var suya) && suya != sec)
+                        Rechaza(id, Porque.Pendiente("una variable de un case usada en otro (en C#, su ámbito es el switch)"));
+            Linea("switch (" + Expr(sw.Expression) + ")");
+            Linea("{");
+            sangria++;
+            SwitchSectionSyntax porDefecto = null;
+            foreach (var sec in sw.Sections)
+            {
+                foreach (var l in sec.Labels.Where(l => !(l is CaseSwitchLabelSyntax) && !(l is DefaultSwitchLabelSyntax)))
+                    RechazaNodo(l);                                           // los patrones, de H7
+                if (sec.Labels.Any(l => l is DefaultSwitchLabelSyntax)) { porDefecto = sec; continue; }   // `case 1: default:` es default
+                Linea("case " + string.Join(", ", sec.Labels.OfType<CaseSwitchLabelSyntax>().Select(l => ValorDeCase(l.Value))) + ":");
+                SentenciasDeCase(sec);
+            }
+            if (porDefecto != null)
+            {
+                Linea("default:");
+                SentenciasDeCase(porDefecto);
+            }
+            sangria--;
+            Linea("}");
+        }
+
+        void SentenciasDeCase(SwitchSectionSyntax sec)
+        {
+            sangria++;
+            foreach (var s in sec.Statements) Sentencia(s);
+            sangria--;
+        }
+
+        /// El valor de un `case`: el de un enum, por su nombre; los demás, el que calcula C# (`case 1 + 2:` es `case 3:`).
+        string ValorDeCase(ExpressionSyntax e)
+        {
+            var t = m.GetTypeInfo(e).Type;
+            if (EsEnum(t)) return Expr(e);
+            var cv = m.GetConstantValue(e);
+            if (!cv.HasValue) return Rechaza(e, Porque.Pendiente("un case que no es constante"));
+            if (cv.Value == null) return Rechaza(e, EsCadena(m.GetTypeInfo(e).ConvertedType) ? Porque.H7(Porque.NullCadena) : Porque.Pendiente("case null"));
+            if (e is LiteralExpressionSyntax) return Expr(e);
+            switch (cv.Value)
+            {
+                case string s: return Cadena(s);
+                case bool bo: return bo ? "true" : "false";
+                case int i: return i == int.MinValue ? "(-2147483647 - 1)" : i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                case long l: return l.ToString(System.Globalization.CultureInfo.InvariantCulture) + "L";
+                default: return Expr(e);
+            }
         }
 
         /// La forma del `for` de JC (punto 11): `for (int i = a; i <= b; i++)`, `i >= b` con `i--`, o `i += n` /
@@ -143,11 +329,22 @@ namespace Cs2Jc
             }
             else return null;
             if (f.Statement.DescendantNodesAndSelf().Any(n => Asigna(n, nombre))) return null;
-            if (!(c.IsKind(SyntaxKind.LessThanOrEqualExpression) && dir == 1) && !(c.IsKind(SyntaxKind.GreaterThanOrEqualExpression) && dir == -1))
-                return null;
-            if (!LimiteFijo(c.Right, f.Statement)) return null;
-            return "for (int " + Ident(nombre) + " = " + Expr(v.Initializer.Value) + "; " + Ident(nombre) + " "
-                   + c.OperatorToken.Text + " " + Expr(c.Right) + "; " + Ident(nombre) + paso + ")";
+            string limite;
+            if ((c.IsKind(SyntaxKind.LessThanOrEqualExpression) && dir == 1) || (c.IsKind(SyntaxKind.GreaterThanOrEqualExpression) && dir == -1))
+            {
+                if (!LimiteFijo(c.Right, f.Statement)) return null;
+                limite = Ident(nombre) + " " + c.OperatorToken.Text + " " + Expr(c.Right);
+            }
+            else if ((c.IsKind(SyntaxKind.LessThanExpression) && dir == 1) || (c.IsKind(SyntaxKind.GreaterThanExpression) && dir == -1))
+            {
+                // `i < 10`, con un límite constante: `i <= 9` (calculado aquí, y sin pasarse del int)
+                var cv = m.GetConstantValue(c.Right);
+                if (!cv.HasValue || !(cv.Value is int lim) || (dir == 1 && lim == int.MinValue) || (dir == -1 && lim == int.MaxValue))
+                    return null;
+                limite = Ident(nombre) + (dir == 1 ? " <= " + (lim - 1) : " >= " + (lim + 1));
+            }
+            else return null;
+            return "for (int " + Ident(nombre) + " = " + Expr(v.Initializer.Value) + "; " + limite + "; " + Ident(nombre) + paso + ")";
         }
 
         /// ¿Se asigna `nombre` en este nodo?
@@ -293,7 +490,7 @@ namespace Cs2Jc
                 case "System.OutOfMemoryException":
                     return Rechaza(donde, Porque.H7(Porque.ErroresVm));
             }
-            return Rechaza(donde, Porque.Biblioteca("catch (" + NombreCompleto(t) + ")"));
+            return Rechaza(donde, Porque.DeNet("catch (" + NombreCompleto(t) + ")"));
         }
     }
 }

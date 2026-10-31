@@ -142,6 +142,9 @@ namespace Cs2Jc
             return lineas.FirstOrDefault(l => l.Contains("no atrapada")) ?? lineas.FirstOrDefault(l => !l.StartsWith("[bpvm")) ?? "(sin mensaje)";
         }
 
+        /// Una línea con lo que no se ve escrito: un `\r` al final la distingue de otra igual sin él.
+        static string Visible(string s) => s.Replace("\r", "\\r").Replace("\t", "\\t");
+
         static string PrimeraDiferencia(string a, string b)
         {
             var la = a.Split('\n');
@@ -149,7 +152,7 @@ namespace Cs2Jc
             for (int i = 0; i < Math.Max(la.Length, lb.Length); i++)
             {
                 string x = i < la.Length ? la[i] : "(nada)", y = i < lb.Length ? lb[i] : "(nada)";
-                if (x != y) return "línea " + (i + 1) + ": «" + x + "» en la VM-Java, «" + y + "» en la VM-C";
+                if (x != y) return "línea " + (i + 1) + ": «" + Visible(x) + "» en la VM-Java, «" + Visible(y) + "» en la VM-C";
             }
             return "(iguales)";
         }

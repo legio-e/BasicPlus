@@ -44,4 +44,8 @@ class Programa
         int z = 1__000;                                        // le falta a JC: los _ de C#
         return 0;
     }
+
+    static int Tono(Tonos t = Tonos.Alto) { return 0; }       // le falta a JC: un enum como valor por defecto
 }
+
+enum Tonos { Bajo, Alto }

@@ -9,3 +9,4 @@
 42: le falta a JC: una constante que cabe, en un argumento o un return estrecho (como en una asignación) — 3
 43: le falta a JC: null en una cadena (en BP un string no es nulo) — null
 44: le falta a JC: los _ de un número, como en C# (varios seguidos, o en el exponente) — 1__000
+48: le falta a JC: un enum como valor por defecto de un parámetro (JC sólo admite un literal) — = Tonos.Alto

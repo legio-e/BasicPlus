@@ -1,0 +1,158 @@
+module CsInterfaces
+{
+   class IForma
+   {
+      public function int Area()
+      {
+         throw new RuntimeError("abstracto: IForma.Area");
+      }
+      public string Nombre
+      {
+         get
+         {
+            throw new RuntimeError("abstracto: IForma.Nombre");
+         }
+      }
+   }
+
+   class IConLados : IForma
+   {
+      public function int Lados()
+      {
+         throw new RuntimeError("abstracto: IConLados.Lados");
+      }
+   }
+
+   class Cuadrado : IConLados
+   {
+      private int lado;
+      public function Cuadrado(int lado)
+      {
+         this.lado = lado;
+      }
+      public function int Area()
+      {
+         return this.lado * this.lado;
+      }
+      public string Nombre
+      {
+         get
+         {
+            return "cuadrado";
+         }
+      }
+      public function int Lados()
+      {
+         return 4;
+      }
+   }
+
+   class Animal
+   {
+      public function string Habla()
+      {
+         throw new RuntimeError("abstracto: Animal.Habla");
+      }
+      public int Patas
+      {
+         get
+         {
+            throw new RuntimeError("abstracto: Animal.Patas");
+         }
+      }
+      public function string Presenta()
+      {
+         return this.Habla() + " con " + this.Patas + " patas";
+      }
+   }
+
+   class Perro : Animal
+   {
+      public function string Habla()
+      {
+         return "guau";
+      }
+      public int Patas
+      {
+         get
+         {
+            return 4;
+         }
+      }
+   }
+
+   enum Dia
+   {
+      Lunes = 0,
+      Martes = 1,
+      Miercoles = 10,
+      Jueves = 11
+   }
+
+   class Programa
+   {
+      private static function int Numero(Dia d)
+      {
+         return (int) d;
+      }
+      public static function int Main(string[] args)
+      {
+         if (args == null)
+         {
+            return 1;
+         }
+         IForma f = new Cuadrado(3);
+         if (f.Area() != 9)
+         {
+            return 2;
+         }
+         if (f.Nombre != "cuadrado")
+         {
+            return 3;
+         }
+         IConLados c = new Cuadrado(2);
+         if (c.Lados() != 4)
+         {
+            return 4;
+         }
+         if (!(f is IConLados))
+         {
+            return 5;
+         }
+         Animal a = new Perro();
+         if (a.Presenta() != "guau con 4 patas")
+         {
+            return 6;
+         }
+         Dia d = Dia.Jueves;
+         if ((int) d != 11)
+         {
+            return 7;
+         }
+         if (Programa.Numero(Dia.Martes) != 1)
+         {
+            return 8;
+         }
+         if (d == Dia.Lunes || d != Dia.Jueves)
+         {
+            return 9;
+         }
+         if (!((int) Dia.Martes < (int) d))
+         {
+            return 10;
+         }
+         println("dia " + (int) d);
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      string[] argumentos = [];
+      int r = Programa.Main(argumentos);
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}
