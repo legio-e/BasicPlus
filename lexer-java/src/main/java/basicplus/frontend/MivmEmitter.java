@@ -3786,6 +3786,8 @@ public final class MivmEmitter {
             w.emitSetLocal(s.iteratorName);
             w.emitJump(top);
             w.declareLabel(end);
+        } else if (s.range instanceof ForInRange && info.forDeListas.contains(s)) {
+            emitForDeLista(s, (ForInRange) s.range);   // V8/H7.2 (#749)
         } else if (s.range instanceof ForInRange) {
             // Desugar: for n in iterable do BODY next n
             //   __arr := iterable
@@ -4731,7 +4733,103 @@ public final class MivmEmitter {
         w.emit(OpCode.LPUSH); w.emitLong(0L); // null = 8 bytes a cero
         w.emit(OpCode.LNEQ);                  // bool: handle != null
         w.emitJumpIfFalse(nullL);             // == null → "null"
+        int cadenaL = conRamaDeCadena(cls) ? w.newLabel() : -1;
+        if (cadenaL >= 0) emitSiNoEsObjeto(tmp, cadenaL, cls);   // #748: una cadena en un Object, a su rama
         w.emitGetLocal(tmp);                  // this = ref (8 bytes)
+        emitInvokeToString(cls);
+        w.emitJump(doneL);
+        if (cadenaL >= 0) emitLaCadena(tmp, cadenaL, doneL);
+        w.declareLabel(nullL);
+        w.emitLeaGlobal(internString("null"));
+        w.declareLabel(doneL);
+    }
+
+    /**
+     * V8/H7.2 (#749) — `for x in lista` sobre una List: la lista, una vez; su length(), una vez, como el límite de un
+     * for de BP; y en cada vuelta x := lista.get(i), un Object. Si el cuerpo acorta la lista, get(i) lanza su error de
+     * índice; lo que añade no se recorre. `continue` va al i += 1 (#548), como en el de los arrays.
+     */
+    private void emitForDeLista(ForStmt s, ForInRange r) throws IOException {
+        String sufijo = Integer.toHexString(System.identityHashCode(s));
+        String lista = "__forls_l_" + sufijo, idx = "__forls_i_" + sufijo, fin = "__forls_n_" + sufijo;
+        BpType lt = info.exprTypes.get(r.iterable);
+        ClassSymbol cls = ((ClassType) lt).cls;
+        FunctionSymbol fLength = (FunctionSymbol) cls.lookupInstance("length");
+        FunctionSymbol fGet = (FunctionSymbol) cls.lookupInstance("get");
+        declareLocalByType(lista, lt, null);
+        declareLocal(idx);
+        declareLocal(fin);
+        declareLocalRef(s.iteratorName);   // un Object: una ref de 8 bytes
+
+        emitExpr(r.iterable);
+        w.emitSetLocal(lista);
+        w.emitGetLocal(lista);
+        emitInvokeVirtualSmart(receptorDe(r.iterable, fLength.ownerClass), fLength.ownerClass, emitName(fLength),
+                claveDe(fLength), argSlotCount(fLength));
+        w.emitSetLocal(fin);
+        emitInt(0);
+        w.emitSetLocal(idx);
+
+        int top = w.newLabel();
+        int end = w.newLabel();
+        w.declareLabel(top);
+        w.emitGetLocal(idx);
+        w.emitGetLocal(fin);
+        w.emit(OpCode.LT);
+        w.emitJumpIfFalse(end);
+
+        w.emitGetLocal(lista);
+        w.emitGetLocal(idx);
+        emitInvokeVirtualSmart(receptorDe(r.iterable, fGet.ownerClass), fGet.ownerClass, emitName(fGet),
+                claveDe(fGet), argSlotCount(fGet));
+        w.emitSetLocal(s.iteratorName);
+
+        int sigue = w.newLabel();
+        loopStack.push(new LoopLabels(sigue, end));
+        try {
+            for (IStmt st : s.body) emitStmt(st);
+        } finally { loopStack.pop(); }
+
+        w.declareLabel(sigue);
+        w.emitGetLocal(idx);
+        emitInt(1);
+        w.emit(OpCode.ADD);
+        w.emitSetLocal(idx);
+        w.emitJump(top);
+        w.declareLabel(end);
+    }
+
+    /** V8/H7.2 (#748) — `o.toString()` escrito, con `o` un Object: como al imprimirlo, salvo con null, que lanza el error
+     *  de siempre («referencia nula: llamada a un método de un objeto null»): con null no hay nada que convertir. El
+     *  receptor, ya en la pila. */
+    private void emitToStringDeObject(ClassSymbol cls) throws IOException {
+        String tmp = "__o2s_" + (stringPoolCounter++);
+        declareLocalRef(tmp);
+        w.emitSetLocal(tmp);
+        int cadenaL = w.newLabel();
+        int doneL = w.newLabel();
+        int nuloL = w.newLabel();
+        emitSiNoEsObjeto(tmp, cadenaL, cls);
+        w.emitGetLocal(tmp);
+        emitInvokeToString(cls);
+        w.emitJump(doneL);
+        // No es un objeto: o una cadena, o null (INSTANCEOF da 0 con null).
+        w.declareLabel(cadenaL);
+        w.emitGetLocal(tmp);
+        w.emit(OpCode.LPUSH); w.emitLong(0L);
+        w.emit(OpCode.LNEQ);
+        w.emitJumpIfFalse(nuloL);
+        w.emitGetLocal(tmp);
+        w.emitCheckCastString(internString("string"));
+        w.emitJump(doneL);
+        w.declareLabel(nuloL);
+        w.emitGetLocal(tmp);
+        emitInvokeToString(cls);              // con null: el error de siempre
+        w.declareLabel(doneL);
+    }
+
+    /** El toString() del valor de la pila, por la clase estática; sin clase (`any`), la ranura 0 por contrato. */
+    private void emitInvokeToString(ClassSymbol cls) throws IOException {
         if (cls == null) {
             w.emitInvokeVirtualBySlot(0, 0);   // any/Object sin clase estática: toString es la ranura 0 por contrato (Core.bp)
         } else {
@@ -4739,10 +4837,36 @@ public final class MivmEmitter {
             ClassSymbol declarante = (ts instanceof FunctionSymbol && ((FunctionSymbol) ts).ownerClass != null) ? ((FunctionSymbol) ts).ownerClass : cls;
             emitInvokeVirtualSmart(cls, declarante, "toString", mod9() ? "toString()s" : "", 0);   // toString() → string ref
         }
+    }
+
+    /** #748 — ¿es la clase `Object` del lenguaje? Es la única en la que puede viajar una cadena (string→Object es
+     *  ensanchamiento, #389): en una clase cualquiera, no. */
+    private static boolean esObjetoDelLenguaje(ClassSymbol cls) {
+        return cls != null && "Object".equals(cls.name) && cls.esDelLenguaje();
+    }
+
+    /** #748 — ¿se emite la rama de la cadena? En MOD9, siempre (el INSTANCEOF va por la tabla de clases); en MOD8, sólo
+     *  dentro de Core: allí INSTANCEOF sólo nombra clases del propio módulo, y fuera de Core se emite lo de V7 (una cadena
+     *  en un Object no se imprime). */
+    private boolean conRamaDeCadena(ClassSymbol cls) {
+        return esObjetoDelLenguaje(cls) && (mod9() || !cls.isExternal);
+    }
+
+    /** #748 — salta a {@code siNo} si el valor de {@code tmp} no es un objeto ({@code obj}, la clase Object del lenguaje).
+     *  INSTANCEOF no lee a ciegas: con una cadena (o null) da 0. */
+    private void emitSiNoEsObjeto(String tmp, int siNo, ClassSymbol obj) throws IOException {
+        w.emitGetLocal(tmp);
+        if (porRef(obj)) w.emitInstanceOfRef(refClase(obj));
+        else w.emitInstanceOf(obj.name);
+        w.emitJumpIfFalse(siNo);
+    }
+
+    /** #748 — la rama de la cadena: su toString() es ella misma, como en C# y en Java. CHECKCAST lo comprueba. */
+    private void emitLaCadena(String tmp, int cadenaL, int doneL) throws IOException {
+        w.declareLabel(cadenaL);
+        w.emitGetLocal(tmp);
+        w.emitCheckCastString(internString("string"));
         w.emitJump(doneL);
-        w.declareLabel(nullL);
-        w.emitLeaGlobal(internString("null"));
-        w.declareLabel(doneL);
     }
 
     private void emitExprStmt(ExprStmt s) throws IOException {
@@ -5529,6 +5653,14 @@ public final class MivmEmitter {
                 } else {
                     w.emitCall(fs.ownerClass.name + "." + emitName(fs));   // H5.a-E3
                 }
+                return;
+            }
+            // V8/H7.2 (#748) — `o.toString()` con `o` un Object: puede llevar una cadena, cuyo toString() es ella misma.
+            BpType rt = info.exprTypes.get(ma.target);
+            if ("toString".equals(fs.name) && c.args.isEmpty() && rt instanceof ClassType
+                    && conRamaDeCadena(((ClassType) rt).cls)) {
+                emitExpr(ma.target);
+                emitToStringDeObject(((ClassType) rt).cls);
                 return;
             }
             // Despacho. push receiver, push args.

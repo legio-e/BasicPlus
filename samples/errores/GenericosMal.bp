@@ -1,0 +1,27 @@
+// GenericosMal.bp — FALLA A PROPÓSITO (V8/H7.2 #749): los genéricos de lo que ya hay son `List<Object>` y
+// `Collections.Map<integer, Object>` o `<string, Object>`; lo demás, de momento no. La llave de un Map tipado se
+// comprueba al compilar, y su fábrica tiene que casar con ella: `Collections.numericMap()` para la integer y
+// `Collections.Map()` para la string.
+module GenericosMal
+  import Collections
+
+  class Cosa
+    public function Cosa()
+    end Cosa
+  end Cosa
+
+  function main()
+    var a: List<integer> := List()
+    var b: Collections.Map<long, Object> := Collections.numericMap()
+    var c: Collections.Map<string, integer> := Collections.Map()
+    var d: Cosa<Object> := Cosa()
+    var e: Collections.Map<integer, Object> := Collections.Map()
+    var f: Collections.Map<string, Object> := Collections.numericMap()
+    var n: Collections.Map<integer, Object> := Collections.numericMap()
+    n.put("x", Integer(1))
+    print n.getString("y")
+    for x in 5 do
+      print x
+    next
+  end main
+end GenericosMal

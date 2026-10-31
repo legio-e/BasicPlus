@@ -27,6 +27,31 @@
 
 ## Última sesión
 
+> **31-oct (mediodía)** — **H7.2 (`#749`): los genéricos de lo que ya hay, y de paso `#748`** (Eduardo: *«nuestro List
+> es en realidad List<Object>»*; a las cuatro preguntas, *«1 los dos. 2 OK con la propuesta. 3 OK. 4 de momento no, mas
+> adelante.»*).
+> - **Hecho, en JC y en BP:** `List<Object>` y `Collections.Map<integer, Object>` o `<string, Object>`; la llave de un
+>   `Map` tipado y su fábrica, comprobadas al compilar (antes, una llave integer en un `Map()` fallaba al ejecutar); y
+>   `for x in lista` sobre una `List`, con la lista medida una vez. Los argumentos no llegan al bytecode.
+> - **`#748`, en el compilador:** una cadena guardada en un `Object` se imprime como texto (su `toString()` es ella misma,
+>   como en C#); un objeto, su `toString()` (por defecto, `object@…`). Yo había dicho que hacía falta la VM, y no:
+>   `INSTANCEOF` no lee a ciegas y `CHECKCAST string` ya existía.
+> - **Lo que cazó la red:** con `--formato=8`, `INSTANCEOF` no nombra una clase de otro módulo, y la stdlib no compilaba
+>   como MOD8 (rojos `MOD8` y `norma`). En MOD8 el compilador emite ahora lo de V7 (658 programas, byte a byte como
+>   antes de H7.1), y `Genericos` lleva `// mod8: fuera`, una marca nueva del arnés.
+> - **Y `#750`, que destapó el Core MOD8 nuevo** (Eduardo: arreglarlo ya): la VM-Java barría la pila de cada hilo desde
+>   un múltiplo absoluto de 4, y desde `#740` esa pila es un bloque del heap. Con el heap desalineado (en MOD8, ahora) no
+>   veía sus referencias y el GC soltaba objetos vivos: `OwnerSmp` y `TablaHandles`, «use-after-free», y la VM-C bien.
+>   Probado por desplazamiento, con el compilador de antes: fallaba en los 12 inicios desalineados que probé y pasaba en
+>   los 4 alineados; con el arreglo (una línea, como la VM-C), pasa en los 15 probados.
+> - **Lo que lo prueba:** `Genericos` en el corpus, `GenericosMal` (9 casos), `JcParserTest` (324); los `.mod` de los
+>   657 programas, los de antes salvo `MapTipado` (con la misma salida); check-jc, VERDE (171 y los 4 SKIP de siempre);
+>   la red, VERDE (13:46, con `#750`). El IDE, rehecho.
+> - **La stdlib cambia** (`List.getString` y `Map.getString` llaman a `o.toString()`): `Core` y `Collections`, el
+>   `Stdlib.pack` y la stdlib embebida de las tres imágenes; el comportamiento, el mismo. **En el próximo lote de
+>   placas, las imágenes y el pack nuevos.**
+> - **Lo siguiente:** H6, el traductor C# → JC; su algoritmo, con el OK de Eduardo.
+>
 > **31-oct (tarde)** — **`#745`: qué le falta a JC para las pruebas de C# de Mono** (Eduardo: *«lo que le falta a JC
 > para que soporte mas pruebas de C#. Empezar por añadir lo mas sencillo y ver cuantas mejoras pasarían»*).
 > - **El método:** las 2742 pruebas de `mcs/tests` de Mono, por Roslyn (el parser y el análisis de tipos del SDK de .NET
@@ -49,7 +74,7 @@
 >   256 tras `+= 1`: ahora da la vuelta, como C#.
 > - **Lo que lo prueba:** `Compuestos`, `Iif` y `NatCompuestos` en el corpus; `make test-aotcompuestos` (13/13);
 >   `CompuestoMal` e `IifMal` en los errores; los 657 programas que compilan y la stdlib, byte a byte iguales con el
->   compilador nuevo; la red, VERDE (13:27); el IDE, rehecho.
+>   compilador nuevo; la red, VERDE (11:35; aquí y en el commit ponía «13:27»: un error mío); el IDE, rehecho.
 > - **Lo que enseñó:** `I32_TO_U8` y los suyos LANZAN (son los de `byte(x)`): para dar la vuelta, `BAND` y
 >   desplazamientos. Y comparar todos los `.mod` con el jar de antes lleva un minuto y dice que nada cambió.
 > - **Lo siguiente:** H7.2, los genéricos de lo que ya hay (de las 270 pruebas a las que sólo les faltan genéricos, 18

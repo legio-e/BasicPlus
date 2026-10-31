@@ -613,6 +613,15 @@ public final class Parser {
                 } else {
                     baseType = new SimpleTypeRef(first, tok.line, tok.column);
                 }
+                // V8/H7.2 (#749) — los argumentos de tipo: `List<Object>`, `Collections.Map<integer, Object>`. Qué
+                // combinaciones valen lo dice el análisis.
+                if (match(TokenType.LT)) {
+                    List<TypeRef> args = new ArrayList<>();
+                    args.add(parseType());
+                    while (match(TokenType.COMMA)) args.add(parseType());
+                    consume(TokenType.GT, "se esperaba '>' al cerrar los argumentos de tipo");
+                    ((SimpleTypeRef) baseType).argumentos = args;
+                }
                 break;
             }
             default:

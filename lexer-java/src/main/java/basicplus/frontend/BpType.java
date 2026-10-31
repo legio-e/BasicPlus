@@ -179,9 +179,22 @@ public abstract class BpType {
     // ============================================================
     public static final class ClassType extends BpType {
         public final Symbol.ClassSymbol cls;
-        public ClassType(Symbol.ClassSymbol cls) { this.cls = cls; }
+        /** V8/H7.2 (#749) — los argumentos de tipo (`List<Object>`, `Collections.Map<integer, Object>`), o null. No
+         *  cuentan para la igualdad ni la asignación —es la misma clase, y el mismo bytecode—: sirven para comprobar la
+         *  llave de un Map al compilar. */
+        public final java.util.List<BpType> argumentos;
+        public ClassType(Symbol.ClassSymbol cls) { this(cls, null); }
+        public ClassType(Symbol.ClassSymbol cls, java.util.List<BpType> argumentos) {
+            this.cls = cls;
+            this.argumentos = argumentos;
+        }
 
-        @Override public String  display()     { return cls.name; }
+        @Override public String  display() {
+            if (argumentos == null) return cls.name;
+            StringBuilder s = new StringBuilder(cls.name).append('<');
+            for (int i = 0; i < argumentos.size(); i++) s.append(i > 0 ? ", " : "").append(argumentos.get(i).display());
+            return s.append('>').toString();
+        }
         @Override public boolean isReference() { return true; }
 
         @Override

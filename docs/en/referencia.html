@@ -2985,7 +2985,7 @@ imported exactly like one living in <code>/lib</code>.</p>
   <tr><td><code>--project &lt;file.bpbuild&gt;</code></td><td>Compiles the whole project (<a href="#cli-bpbuild">.bpbuild</a>); with <code>"out": "pack"</code>, it assembles the pack (§15.3).</td></tr>
   <tr><td><code>--dao</code></td><td>With <code>--project</code>: generates the entities' DAOs and stops (see <a href="basedatos.html">databases</a>).</td></tr>
   <tr><td><code>--stdlibDir=&lt;dir&gt;</code></td><td>The standard library to compile against (V7). It overrides the <code>stdlibDir</code> of the <a href="#cli-vmcfg">BpVM.cfg</a> the compiler finds by itself.</td></tr>
-  <tr><td><code>--formato=9|8</code></td><td>The <code>.mod</code> format (V7): <code>9</code>, V7's and the default; <code>8</code>, the previous one, as an emergency exit (§17.1).</td></tr>
+  <tr><td><code>--formato=9|8</code></td><td>The <code>.mod</code> format (V7): <code>9</code>, V7's and the default; <code>8</code>, the previous one, as an emergency exit (§17.1). What needs v9's class table is not in <code>8</code>: for instance, a string stored in an <code>Object</code> cannot be printed (V8).</td></tr>
   <tr><td><code>--backend=jvm|mivm</code></td><td>Backend (mivm is the default).</td></tr>
 </table>
 <p>

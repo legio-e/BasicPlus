@@ -148,7 +148,14 @@ base_type  ::= 'integer'
              | 'float'
              | 'string'
              | 'boolean'
-             | name ;
+             | name [ type_args ] ;
+
+(* V8/H7.2 (#749): los genéricos de lo que ya hay. Sólo valen List<Object> (y sus hijas,
+   SyncList y OwnerList) y Collections.Map<integer, Object> o <string, Object>: la llave del
+   Map se comprueba al compilar, y su fábrica casa con ella (numericMap() para la integer,
+   Map() para la string). Los argumentos no llegan al bytecode; sin ellos, el tipo sigue
+   valiendo. *)
+type_args  ::= '<' type { ',' type } '>' ;
 
 
 (* ========================= FUNCIONES ========================= *)
@@ -479,7 +486,11 @@ for_stmt ::= 'for' name for_range 'do'
 
    En la forma 'in', el tipo de 'x' se infiere del tipo de elemento del
    array. Modificar el array durante el recorrido es comportamiento
-   indefinido.                                                          *)
+   indefinido.
+
+   V8/H7.2 (#749): también sobre una List (y SyncList, OwnerList): 'x' es un
+   Object, y la lista se mide una vez, al entrar (lo que el cuerpo añade no
+   se recorre; si la acorta, get da su error de índice).                 *)
 
 for_range ::= ':=' expr 'to' expr [ 'step' expr ]
             | 'in' expr ;

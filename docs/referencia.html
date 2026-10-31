@@ -3042,7 +3042,7 @@ var pct: integer := integer(long(Sound.getPosition()) * 100 / Sound.getLength())
   <tr><td><code>--project &lt;fichero.bpbuild&gt;</code></td><td>Compila el proyecto entero (<a href="#cli-bpbuild">.bpbuild</a>); con <code>"out": "pack"</code>, monta el pack (§15.3).</td></tr>
   <tr><td><code>--dao</code></td><td>Con <code>--project</code>: genera los DAO de las entidades y para (ver <a href="basedatos.html">bases de datos</a>).</td></tr>
   <tr><td><code>--stdlibDir=&lt;dir&gt;</code></td><td>La biblioteca estándar contra la que se compila (V7). Manda sobre el <code>stdlibDir</code> del <a href="#cli-vmcfg">BpVM.cfg</a> que el compilador encuentra solo.</td></tr>
-  <tr><td><code>--formato=9|8</code></td><td>El formato del <code>.mod</code> (V7): <code>9</code>, el de V7 y el predeterminado; <code>8</code>, el anterior, como salida de emergencia (§17.1).</td></tr>
+  <tr><td><code>--formato=9|8</code></td><td>El formato del <code>.mod</code> (V7): <code>9</code>, el de V7 y el predeterminado; <code>8</code>, el anterior, como salida de emergencia (§17.1). Lo que necesita la tabla de clases de v9 no está en <code>8</code>: por ejemplo, una cadena guardada en un <code>Object</code> no se imprime (V8).</td></tr>
   <tr><td><code>--backend=jvm|mivm</code></td><td>Backend (mivm es el predeterminado).</td></tr>
 </table>
 <p>

@@ -91,6 +91,15 @@ IifMal|las dos ramas tienen que dar el mismo tipo
 IifMal|se esperaban 3 argumentos, se pasaron 2
 IifMal|no mueve un owner
 IifMal|es un valor, no una sentencia
+GenericosMal|una lista es List<Object>
+GenericosMal|la llave de un Map es integer o string, no 'long'
+GenericosMal|el valor de un Map es Object, no 'integer'
+GenericosMal|'Cosa' no es gen
+GenericosMal|una llave integer necesita Collections.numericMap()
+GenericosMal|una llave string necesita Collections.Map()
+GenericosMal|la llave de este Map es integer, no 'string' (put)
+GenericosMal|la llave de este Map es integer, no 'string' (getString)
+GenericosMal|se esperaba un array o una List en 'for in'
 "
 
 ok=0; mal=0

@@ -125,7 +125,11 @@ cada casilla (número, no «OK»):
   frontend. Una diferencia con MOD9, por si alguien lo usa (vista el 7-oct, con `#664`): en MOD8 la ranura por
   nombre (`Gui.__guiSlotOf`, la que usa `bindMember`) sale de los MARCADORES `Clase#metodo#slot`, que sólo exporta
   una clase `public` —en MOD9, de la tabla de la clase, sea cual sea—: con una clase no pública da -1 y el manejador
-  se ignora en silencio. Las ventanas de Forms son `public class`.
+  se ignora en silencio. Las ventanas de Forms son `public class`. Y otra (31-oct, `#748`): en MOD8, una cadena
+  guardada en un `Object` no se imprime («el receptor no es un objeto», lo de V7). Para saber si un `Object` es un
+  objeto o una cadena, el compilador emite `INSTANCEOF` de la clase `Object` de Core, y en MOD8 `INSTANCEOF` sólo
+  nombra clases del propio módulo (en MOD9 va por la tabla de clases). El frente MOD8 de la red salta `Genericos`, con
+  su marca `// mod8: fuera`.
 - ℹ️ `montar-zip.sh` ya habla MOD9 (`MOD_ACTUAL`, y los formatos viejos que se buscan dentro de los packs en
   `MOD_VIEJOS`): lo arregló el cierre de H2 (24-sep) — decía MOD7 y habría parado el paquete. Al subir de formato,
   las dos líneas.

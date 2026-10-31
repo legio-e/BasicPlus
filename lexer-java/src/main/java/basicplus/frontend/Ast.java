@@ -199,6 +199,10 @@ public final class Ast {
 
     public static final class SimpleTypeRef extends TypeRef {
         public final String name;   // 'integer' | 'float' | ... | nombre de clase/enum
+        /** V8/H7.2 (#749) — los argumentos de tipo, `List<Object>`, `Collections.Map<integer, Object>`; null si no los
+         *  lleva. De momento, sólo esos dos (lo comprueba el análisis), y no cambian el bytecode: son la List y el Map
+         *  de siempre, con la llave del Map comprobada al compilar. */
+        public List<TypeRef> argumentos;
         public SimpleTypeRef(String name, int line, int column) {
             super(line, column);
             this.name = name;
@@ -972,6 +976,11 @@ public final class Ast {
         public boolean esConversion;
         /** V8/H7.1 (#747) — `c ? a : b` en JC: el `iif(c, a, b)` de BP. Tampoco cuenta en la comparación. */
         public boolean esTernario;
+        /** V8/H7.2 (#749) — `new List<Object>()` o `new Collections.Map<int, Object>()` en JC: los argumentos de tipo
+         *  escritos, y {@link #claseNew} la clase escrita cuando la llamada de BP es otra (`Collections.numericMap()`
+         *  para un Map de llave entera). Tampoco cuentan en la comparación. */
+        public List<TypeRef> argumentosNew;
+        public String claseNew;
         public CallExpr(IExpr callee, List<IExpr> args, int line, int column) {
             super(line, column);
             this.callee = callee;

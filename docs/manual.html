@@ -175,6 +175,7 @@
     <li class="sub"><a href="#enums">4.3 Enums</a></li>
     <li class="sub"><a href="#clases-tipo">4.4 Clases</a></li>
     <li class="sub"><a href="#any">4.5 any</a></li>
+    <li class="sub"><a href="#genericos">4.6 Los genéricos de lo que ya hay</a></li>
 
     <li class="group"><a href="#declaraciones">5. Declaraciones</a></li>
     <li class="sub"><a href="#var">5.1 var</a></li>
@@ -624,6 +625,38 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   lanza en ejecución. Si la clase tiene un constructor que acepta ese argumento, gana el
   constructor.
 </p>
+<p>
+  Un <code>string</code> también cabe en un <code>Object</code> (y así, en una lista o en un
+  <code>Map</code>), y sigue siendo texto: al imprimirlo, al concatenarlo o al llamar a su
+  <code>toString()</code> da su contenido, como en C#. Un objeto da su <code>toString()</code>,
+  que, si su clase no lo sobrescribe, es su identificador (<code>object@…</code>) (V8, #748).
+</p>
+
+<h3 id="genericos">4.6 Los genéricos de lo que ya hay: <code>List&lt;Object&gt;</code> y <code>Map</code></h3>
+<p>
+  Una <code>List</code> guarda <code>Object</code>s, y un <code>Collections.Map</code> también, con
+  una llave <code>string</code> (el que da <code>Collections.Map()</code>) o <code>integer</code> (el
+  que da <code>Collections.numericMap()</code>). Su tipo se puede escribir con los argumentos,
+  como en C# o en Java, y entonces el compilador comprueba la llave de cada llamada al
+  <code>Map</code>, y que la fábrica case con ella (V8/H7.2, #749):
+</p>
+<pre><code><span class="kw">var</span> l: <span class="type">List</span>&lt;<span class="type">Object</span>&gt; := List()
+<span class="kw">var</span> porNombre: <span class="type">Collections.Map</span>&lt;<span class="type">string</span>, <span class="type">Object</span>&gt; := Collections.Map()
+<span class="kw">var</span> porId: <span class="type">Collections.Map</span>&lt;<span class="type">integer</span>, <span class="type">Object</span>&gt; := Collections.numericMap()
+porId.put(<span class="num">7</span>, Integer(<span class="num">70</span>))
+porId.put(<span class="str">"siete"</span>, Integer(<span class="num">70</span>))   <span class="comment">// error: la llave de este Map es integer, no 'string' (put)</span>
+<span class="kw">var</span> mal: <span class="type">Collections.Map</span>&lt;<span class="type">integer</span>, <span class="type">Object</span>&gt; := Collections.Map()
+                                    <span class="comment">// error: una llave integer necesita Collections.numericMap()</span></code></pre>
+<p>
+  Sin la comprobación, una llave integer en un <code>Map()</code> de llaves string no fallaba
+  hasta ejecutar. De momento son sólo éstos: el elemento de una lista y el valor de un
+  <code>Map</code> son <code>Object</code> (una <code>List&lt;Persona&gt;</code>, todavía no), y la
+  llave, <code>integer</code> o <code>string</code>. Los argumentos no llegan al bytecode: una
+  <code>List&lt;Object&gt;</code> es la <code>List</code> de siempre, y escribirla sin ellos sigue
+  valiendo. Una lista se recorre con <code>for x in</code> (<a href="#for">§7.3</a>). En JC,
+  <code>new Collections.Map&lt;int, Object&gt;()</code> crea el de llaves integer
+  (<code>Collections.numericMap()</code>).
+</p>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->
@@ -841,7 +874,21 @@ i := <span class="type">integer</span>(i * <span class="num">1.5</span>)     <sp
 <span class="kw">var</span> primos: <span class="type">integer</span>[] := [<span class="num">2</span>, <span class="num">3</span>, <span class="num">5</span>, <span class="num">7</span>, <span class="num">11</span>]
 <span class="kw">for</span> n <span class="kw">in</span> primos <span class="kw">do</span>
   total += n
-<span class="kw">next</span> n</code></pre>
+<span class="kw">next</span> n
+
+<span class="comment">// …y sobre una List: cada elemento, un Object</span>
+<span class="kw">var</span> l: <span class="type">List</span>&lt;<span class="type">Object</span>&gt; := List()
+l.add(<span class="str">"uno"</span>)
+l.add(<span class="num">2</span>)
+<span class="kw">for</span> x <span class="kw">in</span> l <span class="kw">do</span>
+  <span class="kw">print</span> x                <span class="comment">// uno, 2</span>
+<span class="kw">next</span> x</code></pre>
+<p>
+  Sobre una <code>List</code> (también <code>SyncList</code> y <code>OwnerList</code>), la variable es un
+  <code>Object</code>; la lista se mide <strong>una vez</strong>, al entrar, como el límite de un
+  <code>for</code> numérico: lo que el cuerpo añade no se recorre, y si la acorta, <code>get</code> da su
+  error de índice.
+</p>
 <p>
   El cuerpo se cierra con <code>next [nombre]</code> (no <code>endfor</code>);
   el nombre tras <code>next</code> es opcional y, si está, debe coincidir

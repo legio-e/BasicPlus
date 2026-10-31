@@ -46,6 +46,11 @@ public final class SemanticInfo {
     public final java.util.Set<Ast.IExpr> ternarios =
             java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.IExpr, Boolean>());
 
+    /** V8/H7.2 (#749) — los `for x in lista` sobre una List (no un array): el emisor los recorre con length() y get(i),
+     *  y x es un Object. */
+    public final java.util.Set<Ast.ForStmt> forDeListas =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.ForStmt, Boolean>());
+
     /** V8/H7.1 (#747) — de cada asignación compuesta (`x op= e`), el tipo en que se opera: el de `x op e`, como en C#.
      *  Si no es el de `x`, el resultado se recorta al de `x` al guardarlo (`byte b; b += 1` opera en integer). */
     public final Map<Ast.AssignStmt, BpType> compuestos = new IdentityHashMap<>();

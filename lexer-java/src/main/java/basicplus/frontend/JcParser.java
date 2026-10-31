@@ -655,6 +655,7 @@ final class JcParser {
                 n = n + "." + avanza().texto;
             }
             base = new SimpleTypeRef(n, t.linea, t.columna);
+            if (es("<")) ((SimpleTypeRef) base).argumentos = argumentosDeTipo();   // V8/H7.2 (#749)
         } else {
             throw error("se esperaba un tipo, encontrado " + t);
         }
@@ -666,14 +667,36 @@ final class JcParser {
         return base;
     }
 
+    /** V8/H7.2 (#749) — `<T, U>` tras el nombre de un tipo: los argumentos de tipo. Qué combinaciones valen lo dice el
+     *  análisis (de momento, `List<Object>` y `Collections.Map<int|string, Object>`). */
+    private List<TypeRef> argumentosDeTipo() {
+        espera("<");
+        List<TypeRef> args = new ArrayList<>();
+        args.add(tipo());
+        while (acepta(",")) args.add(tipo());
+        if (es(">>")) throw error("los genéricos anidados (`<…<…>>`) no los tiene JC, de momento");
+        espera(">", "'>' al cerrar los argumentos de tipo");
+        return args;
+    }
+
     /** ¿Empieza aquí una declaración de variables? Un tipo seguido de un nombre: `int x`, `List l`, `Mod.T x`,
-     *  `List[] xs`. */
+     *  `List[] xs`, y con argumentos de tipo, `List<Object> l` (V8/H7.2: se mira hasta su `>`). */
     private boolean esDeclaracion() {
         Tok t = actual();
         if (t.tipo == Tipo.RESERVADA) return TIPOS.containsKey(t.texto);
         if (t.tipo != Tipo.NOMBRE) return false;
         int k = 1;
         if (mira(1).es(".") && mira(2).tipo == Tipo.NOMBRE) k = 3;
+        if (mira(k).es("<")) {
+            int prof = 0;
+            for (int j = k; ; j++) {
+                Tok x = mira(j);
+                if (x.es("<")) prof++;
+                else if (x.es(">")) { if (--prof == 0) { k = j + 1; break; } }
+                else if (!(x.tipo == Tipo.NOMBRE || (x.tipo == Tipo.RESERVADA && TIPOS.containsKey(x.texto))
+                           || x.es(",") || x.es("."))) return false;
+            }
+        }
         if (mira(k).es("[") && mira(k + 1).es("]")) k += 2;
         return mira(k).tipo == Tipo.NOMBRE;
     }
@@ -1359,15 +1382,33 @@ final class JcParser {
         if (acepta("new")) {
             // `new X(…)` es la `X(…)` de BP que construye (punto 22).
             Tok n = actual();
-            IExpr callee = new IdentifierExpr(nombre("el nombre de la clase tras 'new'"), n.linea, n.columna);
+            String escrito = nombre("el nombre de la clase tras 'new'");
+            IExpr callee = new IdentifierExpr(escrito, n.linea, n.columna);
             if (es(".") && mira(1).tipo == Tipo.NOMBRE) {
                 avanza();
                 Tok m = avanza();
+                escrito = escrito + "." + m.texto;
                 callee = new MemberAccessExpr(callee, m.texto, m.linea, m.columna);
             }
+            // V8/H7.2 (#749) — `new List<Object>()`, `new Collections.Map<int, Object>()`: la construcción de BP, con
+            // los argumentos de tipo de marca. Un Map de llave entera se crea en BP con `Collections.numericMap()` (su
+            // comparador): eso es lo que queda en el árbol, y la marca dice cómo se escribió.
+            List<TypeRef> targs = es("<") ? argumentosDeTipo() : null;
             Tok lp = espera("(", "'(' tras el nombre de la clase");
-            CallExpr c = new CallExpr(callee, argumentos(), lp.linea, lp.columna);
-            c.conNew = true;
+            List<IExpr> args = argumentos();
+            boolean llaveEntera = targs != null && targs.size() == 2 && "Collections.Map".equals(escrito)
+                    && args.isEmpty() && targs.get(0) instanceof SimpleTypeRef
+                    && "integer".equals(((SimpleTypeRef) targs.get(0)).name);
+            CallExpr c;
+            if (llaveEntera) {
+                c = new CallExpr(new MemberAccessExpr(((MemberAccessExpr) callee).target, "numericMap", lp.linea,
+                                                      lp.columna), args, lp.linea, lp.columna);
+                c.claseNew = escrito;
+            } else {
+                c = new CallExpr(callee, args, lp.linea, lp.columna);
+                c.conNew = true;
+            }
+            c.argumentosNew = targs;
             return c;
         }
         if (acepta("this"))  return new ThisExpr(t.linea, t.columna);

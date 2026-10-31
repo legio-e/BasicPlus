@@ -259,7 +259,13 @@ public final class EscritorBp {
     // TIPOS
     // ============================================================
     private String tipo(TypeRef t) {
-        if (t instanceof SimpleTypeRef) return ((SimpleTypeRef) t).name;
+        if (t instanceof SimpleTypeRef) {
+            SimpleTypeRef st = (SimpleTypeRef) t;
+            if (st.argumentos == null) return st.name;
+            List<String> as = new ArrayList<>();   // V8/H7.2 (#749): `List<Object>`, `Collections.Map<integer, Object>`
+            for (TypeRef a : st.argumentos) as.add(tipo(a));
+            return st.name + "<" + String.join(", ", as) + ">";
+        }
         if (t instanceof ArrayTypeRef) {
             ArrayTypeRef a = (ArrayTypeRef) t;
             return tipo(a.element) + "[" + (a.size != null ? expr(a.size) : "") + "]";

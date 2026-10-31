@@ -406,6 +406,14 @@ cadenas, la sobrecarga de operadores y los `static`. JC no los tendrá, porque e
 frontend. El parser de JC los reconocerá y lo dirá con nombre («JC no tiene genéricos…»), en vez de un error de
 sintaxis sin más.
 
+**Los genéricos de lo que ya hay** (31-oct, V8/H7.2, `#749`; Eduardo: *«nuestro List es en realidad List<Object>»*):
+`List<Object>` y `Collections.Map<integer, Object>` o `<string, Object>`, en JC y en BP. Los argumentos no llegan al
+bytecode: son la `List` y el `Map` de siempre, con la llave del `Map` comprobada al compilar y su fábrica casada con
+ella (`numericMap()` para la integer, `Map()` para la string; en JC, `new Collections.Map<int, Object>()` es el
+`numericMap()`). Con ellos, el `foreach` sobre una `List` (el elemento, un `Object`), y `#748`: una cadena guardada en
+un `Object` se imprime como texto. Otros argumentos (`List<Persona>`), más adelante (Eduardo: *«de momento no, más
+adelante»*).
+
 ### El coste
 
 | pieza | dónde | tamaño (estimado) | trabajo (estimado) |
@@ -1069,7 +1077,7 @@ y lo que hace JC mientras:
 | los caracteres, `'a'` | 19 | los lee el lexer de JC; en BP se escriben como su número |
 | las secuencias de escape de C# | 19 | las lee el lexer de JC; lo que BP no sabe escribir, el traductor lo dice |
 | que un literal guarde cómo se escribió | 19 | `0xFF` y `'a'` vuelven como `255` y `97` |
-| el `foreach` sobre listas | 16 | sólo arrays |
+| el `foreach` sobre listas | 16 | sólo arrays; **hecho el 31-oct** en JC y en BP, sobre una `List` (V8/H7.2, `#749`) |
 | los demás compuestos (`*=`, `/=`…) | 15 | no estaban; **hechos el 31-oct** en JC y en BP (V8/H7.1, `#747`) |
 
 **El `print`, la excepción.** Mi propuesta para mientras era que un `print` de JC acabara con su salto escrito, y un

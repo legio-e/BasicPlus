@@ -419,7 +419,10 @@ public final class EscritorJc {
     // TIPOS (los de C#, punto 6)
     // ============================================================
     private String tipo(TypeRef t) {
-        if (t instanceof SimpleTypeRef) return tipoSimple(((SimpleTypeRef) t).name);
+        if (t instanceof SimpleTypeRef) {
+            SimpleTypeRef st = (SimpleTypeRef) t;
+            return tipoSimple(st.name) + (st.argumentos == null ? "" : argumentosDeTipo(st.argumentos));
+        }
         if (t instanceof ArrayTypeRef) {
             ArrayTypeRef a = (ArrayTypeRef) t;
             // El tamaño va detrás del nombre (variable): un tipo con tamaño en otro sitio no tiene forma en JC.
@@ -432,6 +435,13 @@ public final class EscritorJc {
             return "(" + String.join(", ", es) + ")";
         }
         throw new NoSoportado("el tipo " + t.getClass().getSimpleName(), t);
+    }
+
+    /** V8/H7.2 (#749) — `<Object>`, `<int, Object>`. */
+    private String argumentosDeTipo(List<TypeRef> args) {
+        List<String> as = new ArrayList<>();
+        for (TypeRef a : args) as.add(tipo(a));
+        return "<" + String.join(", ", as) + ">";
     }
 
     private static String tipoSimple(String n) {
@@ -816,7 +826,12 @@ public final class EscritorJc {
                     : expr(c.callee, P_PRIMARIO);
             return "(" + t + ") " + expr(c.args.get(0), P_UNARIO);
         }
-        String llamado = expr(c.callee, P_PRIMARIO) + "(" + lista(escritos(c)) + ")";
+        // V8/H7.2 (#749) — `new Collections.Map<int, Object>()`, escrito así en JC, es en BP `Collections.numericMap()`:
+        // la marca dice la clase y los argumentos de tipo escritos.
+        if (c.claseNew != null && c.argumentosNew != null)
+            return "new " + c.claseNew + argumentosDeTipo(c.argumentosNew) + "(" + lista(escritos(c)) + ")";
+        String targs = (c.argumentosNew != null) ? argumentosDeTipo(c.argumentosNew) : "";
+        String llamado = expr(c.callee, P_PRIMARIO) + targs + "(" + lista(escritos(c)) + ")";
         return (info.exprSymbols.get(c.callee) instanceof Symbol.ClassSymbol) ? "new " + llamado : llamado;
     }
 

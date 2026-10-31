@@ -200,6 +200,35 @@ class JcParserTest {
     }
 
     @Test
+    @DisplayName("V8/H7.2 (#749): List<Object> y Collections.Map<int, Object> en los dos parsers; el new de un Map de"
+            + " llave entera es el numericMap() de BP, con la marca de cómo se escribió")
+    void genericosDeLoQueYaHay() {
+        Ast.ModuleNode j = JcParser.leer(
+            "module M\n{\n   import Collections;\n   function void main()\n   {\n" +
+            "      List<Object> l = new List<Object>();\n" +
+            "      Collections.Map<int, Object> n = new Collections.Map<int, Object>();\n" +
+            "      Collections.Map<string, Object> m = new Collections.Map<string, Object>();\n" +
+            "      foreach (var x in l) println(x);\n" +
+            "   }\n}\n");
+        Ast.FuncDef f = (Ast.FuncDef) j.defs.get(0);
+        Ast.VarDecl vl = (Ast.VarDecl) f.body.get(0);
+        assertEquals("Object", ((Ast.SimpleTypeRef) ((Ast.SimpleTypeRef) vl.type).argumentos.get(0)).name);
+        Ast.CallExpr nl = (Ast.CallExpr) vl.init;
+        assertTrue(nl.conNew && nl.argumentosNew != null && nl.claseNew == null);
+        Ast.CallExpr nn = (Ast.CallExpr) ((Ast.VarDecl) f.body.get(1)).init;
+        assertEquals("numericMap", ((Ast.MemberAccessExpr) nn.callee).member);
+        assertTrue(!nn.conNew && "Collections.Map".equals(nn.claseNew));
+        Ast.ModuleNode b = bp(
+            "module M\n  import Collections\n  function main()\n" +
+            "    var l: List<Object> := List()\n" +
+            "    var n: Collections.Map<integer, Object> := Collections.numericMap()\n" +
+            "    var m: Collections.Map<string, Object> := Collections.Map()\n" +
+            "    for x in l do print x\n" +
+            "  end main\nend M\n");
+        assertNull(ComparaAst.primeraDiferenciaJc(b, j));
+    }
+
+    @Test
     @DisplayName("lo que JC no tiene, o no deja escribir así, es un error con su motivo")
     void erroresConNombre() {
         error(jcMain("      string s = null;\n      string t = s ?? \"x\";\n"), "??");      // V8/H7.1 (#747)

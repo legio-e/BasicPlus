@@ -1341,7 +1341,110 @@ public final class SemanticAnalyzer {
         }
     }
 
+    /** V8/H7.2 (#749) — ¿es la List de Core (o una hija: SyncList, OwnerList)? No una clase de usuario que se llame igual. */
+    private boolean esLista(ClassSymbol cls) {
+        for (ClassSymbol c = cls; c != null; c = c.baseClass)
+            if ("List".equals(c.name) && (c.isExternal ? CORE_MODULE.equals(c.externalModule) : esRaiz())) return true;
+        return false;
+    }
+
+    /** V8/H7.2 (#749) — ¿es el Map de Collections? */
+    private boolean esMapa(ClassSymbol cls) {
+        return cls != null && "Map".equals(cls.name)
+                && (cls.isExternal ? "Collections".equals(cls.externalModule) : module != null && "Collections".equals(module.name));
+    }
+
+    /**
+     * V8/H7.2 (#749) — los genéricos de lo que ya hay (Eduardo, 31-oct): `List<Object>` es la List de siempre, y
+     * `Collections.Map<integer, Object>` y `Collections.Map<string, Object>`, el Map de siempre con la llave dicha. La
+     * misma clase y el mismo bytecode; los argumentos sirven para comprobar la llave del Map al compilar. Lo demás
+     * (`List<integer>`, los genéricos propios), de momento no: es error, y se devuelve la clase sin argumentos para no
+     * encadenar errores.
+     */
+    private BpType resolveTipoGenerico(SimpleTypeRef st) {
+        BpType base = resolveNamedType(st);
+        if (base instanceof ErrorType) return base;
+        List<BpType> args = new ArrayList<>();
+        for (TypeRef a : st.argumentos) args.add(resolveType(a));
+        for (BpType a : args) if (a instanceof ErrorType) return base;
+        if (!(base instanceof ClassType)) {
+            err(st.line, st.column, "'" + st.name + "' no es una clase: no lleva argumentos de tipo");
+            return base;
+        }
+        ClassSymbol cls = ((ClassType) base).cls;
+        if (esLista(cls)) {
+            if (args.size() == 1 && esObjetoRaiz(args.get(0))) return new ClassType(cls, args);
+            err(st.line, st.column, "de momento, una lista es " + cls.name + "<Object>: con otro tipo, más adelante (los"
+                    + " genéricos de verdad)");
+            return base;
+        }
+        if (esMapa(cls)) {
+            if (args.size() != 2)
+                err(st.line, st.column, "un Map lleva dos argumentos de tipo, la llave y el valor: Map<integer, Object> o"
+                        + " Map<string, Object>");
+            else if (!(args.get(0) == PrimitiveType.INTEGER || isString(args.get(0))))
+                err(st.line, st.column, "la llave de un Map es integer o string, no '" + args.get(0).display() + "'");
+            else if (!esObjetoRaiz(args.get(1)))
+                err(st.line, st.column, "de momento, el valor de un Map es Object, no '" + args.get(1).display()
+                        + "': con otro tipo, más adelante (los genéricos de verdad)");
+            else
+                return new ClassType(cls, args);
+            return base;
+        }
+        err(st.line, st.column, "'" + cls.name + "' no es genérica: de momento, los genéricos son List<Object> y"
+                + " Collections.Map<integer|string, Object>");
+        return base;
+    }
+
+    /** V8/H7.2 (#749) — los métodos del Map que llevan la llave delante. */
+    private static final java.util.Set<String> METODOS_CON_LLAVE = new java.util.HashSet<>(java.util.Arrays.asList(
+            "put", "get", "containsKey", "remove", "getString", "getInteger", "getLong", "getFloat", "getDouble",
+            "getBoolean"));
+
+    /** V8/H7.2 (#749) — en un `Map<integer|string, Object>`, la llave de put/get/containsKey/remove/getX es la de su
+     *  tipo: si no, un error al compilar (en un Map de llaves string, una integer fallaba al ejecutar). */
+    private void revisaLlaveDeMap(CallExpr ce) {
+        if (!(ce.callee instanceof MemberAccessExpr) || ce.args.isEmpty()) return;
+        MemberAccessExpr ma = (MemberAccessExpr) ce.callee;
+        if (!METODOS_CON_LLAVE.contains(ma.member)) return;
+        BpType rt = info.exprTypes.get(ma.target);
+        if (!(rt instanceof ClassType) || ((ClassType) rt).argumentos == null || !esMapa(((ClassType) rt).cls)) return;
+        BpType llave = ((ClassType) rt).argumentos.get(0);
+        BpType at = info.exprTypes.get(ce.args.get(0));
+        if (at == null || at instanceof ErrorType) return;
+        boolean ok = (llave == PrimitiveType.INTEGER) ? (at instanceof PrimitiveType && ((PrimitiveType) at).isIntegerLike())
+                                                     : isString(at);
+        if (!ok)
+            err(ce.line, ce.column, "la llave de este Map es " + llave.display() + ", no '" + at.display() + "' ("
+                    + ma.member + ")");
+    }
+
+    /** V8/H7.2 (#749) — un Map se crea con la fábrica de su llave: `Collections.numericMap()` para la integer y
+     *  `Collections.Map()` (o `stringMap()`) para la string. Si el tipo declarado dice una y el valor es la otra, error:
+     *  el comparador no casaría con las llaves. Sólo se mira cuando el valor ES la llamada; si viene de otra función,
+     *  no se sabe. */
+    private void revisaMapNuevo(BpType destino, IExpr valor, int line, int column) {
+        if (!(destino instanceof ClassType) || ((ClassType) destino).argumentos == null) return;
+        ClassType ct = (ClassType) destino;
+        if (!esMapa(ct.cls) || !(valor instanceof CallExpr)) return;
+        Symbol s = info.exprSymbols.get(((CallExpr) valor).callee);
+        String fabrica = null;
+        if (s instanceof ClassSymbol && esMapa((ClassSymbol) s)) fabrica = "Map";
+        else if (s instanceof FunctionSymbol && ((FunctionSymbol) s).ownerClass == null
+                && ("numericMap".equals(s.name) || "stringMap".equals(s.name))) fabrica = s.name;
+        if (fabrica == null) return;
+        boolean llaveEntera = ct.argumentos.get(0) == PrimitiveType.INTEGER;
+        if (llaveEntera && !"numericMap".equals(fabrica))
+            err(line, column, "una llave integer necesita Collections.numericMap(): Collections." + fabrica
+                    + "() es de llaves string");
+        else if (!llaveEntera && "numericMap".equals(fabrica))
+            err(line, column, "una llave string necesita Collections.Map(): Collections.numericMap() es de llaves"
+                    + " numéricas");
+    }
+
     private BpType resolveType(TypeRef t) {
+        if (t instanceof SimpleTypeRef && ((SimpleTypeRef) t).argumentos != null)
+            return resolveTipoGenerico((SimpleTypeRef) t);   // V8/H7.2 (#749)
         if (t instanceof SimpleTypeRef) {
             SimpleTypeRef st = (SimpleTypeRef) t;
             switch (st.name) {
@@ -1572,6 +1675,7 @@ public final class SemanticAnalyzer {
                 && !acceptsNarrowFromLiteral(t, got, v.init))
             err(v.line, v.column, narrowAssignErrorMessage(t, got, v.init,
                     "valor de tipo '" + got.display() + "' no asignable a var de tipo '" + t.display() + "'"));
+        revisaMapNuevo(t, v.init, v.line, v.column);   // V8/H7.2 (#749)
         if (t != null && t.isScalar() && got instanceof NullType)
             err(v.line, v.column, "no se puede asignar 'null' a un tipo escalar '" + t.display() + "'");
         // L8 v2 — init de var a NIVEL MÓDULO: un literal escalar/string (con '-' opcional) se HORNEA en el
@@ -1967,6 +2071,7 @@ public final class SemanticAnalyzer {
                     && !acceptsNarrowFromLiteral(t, got, v.init))
                 err(v.line, v.column, narrowAssignErrorMessage(t, got, v.init,
                         "valor de tipo '" + got.display() + "' no asignable a variable de tipo '" + t.display() + "'"));
+            revisaMapNuevo(t, v.init, v.line, v.column);   // V8/H7.2 (#749)
             if (t.isScalar() && got instanceof NullType)
                 err(v.line, v.column, "no se puede asignar 'null' a un tipo escalar '" + t.display() + "'");
         }
@@ -2343,6 +2448,7 @@ public final class SemanticAnalyzer {
                 }
             }
         } else {
+            revisaMapNuevo(lhsT, a.value, a.line, a.column);   // V8/H7.2 (#749)
             if (rhsT instanceof NullType && lhsT.isScalar())
                 err(a.line, a.column, "no se puede asignar 'null' a un tipo escalar '" + lhsT.display() + "'");
             else if (!lhsT.isAssignableFrom(rhsT)
@@ -2577,8 +2683,14 @@ public final class SemanticAnalyzer {
             arrayFijoPermitido.add(inr.iterable);   // V7/H1 #19: recorrer un array fijo sí (es indexarlo)
             BpType collT = analyzeExpr(inr.iterable, scope, null);
             if (collT instanceof ArrayType) iterT = ((ArrayType) collT).element;
-            else {
-                err(f.line, f.column, "se esperaba array en 'for in', encontrado '" + collT.display() + "'");
+            else if (collT instanceof ClassType && esLista(((ClassType) collT).cls)) {
+                // V8/H7.2 (#749) — una List (List<Object>): x es cada elemento, un Object.
+                iterT = resolveNamedType(new SimpleTypeRef("Object", f.line, f.column));
+                info.forDeListas.add(f);
+            } else if (collT instanceof ErrorType) {
+                iterT = ErrorType.INSTANCE;
+            } else {
+                err(f.line, f.column, "se esperaba un array o una List en 'for in', encontrado '" + collT.display() + "'");
                 iterT = ErrorType.INSTANCE;
             }
         } else {
@@ -2797,6 +2909,7 @@ public final class SemanticAnalyzer {
         else if (e instanceof CallExpr) {
             t = analyzeCall((CallExpr) e, scope);
             if (enJc) revisaJc((CallExpr) e, t);
+            revisaLlaveDeMap((CallExpr) e);   // V8/H7.2 (#749)
         }
         else if (e instanceof UnaryExpr)     t = analyzeUnary((UnaryExpr) e, scope);
         else if (e instanceof BinaryExpr)    t = analyzeBinary((BinaryExpr) e, scope);
