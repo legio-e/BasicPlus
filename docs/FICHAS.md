@@ -7090,6 +7090,13 @@ vale es dejarlos como están: implementados, documentados y sin tocar.
 > 📌 **El rumbo de los próximos días** (Eduardo, 22-oct): *«De momento estos dias podemos ir solucionando temas pendientes. Mas adelante podemos retomar el Bluetooth y la Wifi.»*
 >
 > 💡 **Una idea de Eduardo, para después de los pendientes** (23-oct): *«añadir sets? De momento limitado a 31 elementos y representados por un uint32. Los sets son similares a los de Pascal»*; y *«OK, terminamos el #714 primero»*. Lo visto ese día (casi todo en el compilador; la VM ya tiene las operaciones de bits; las palabras `in` y `set` ya están reservadas), en `V8_IDEAS` §E6. Decidido ese día con Eduardo: un elemento es su máscara (una potencia de 2) y `+`/`-` se hacen con `|`/`& ~`; se declaran con `set`, como el `enum`; fuera de las llaves, `ControlBits.bitOn`; un conjunto tiene el tamaño de sus elementos, y un bit de fuera, al convertir un entero, es una excepción; se imprime el número. Sin empezar: falta el análisis completo, con la sintaxis de BP y la de JC.
+>
+> 🏁 **Para las pruebas finales de V8** (Eduardo, 31-oct): *«Al final de la versión V8, durante las pruebas finales
+> podemos aprovechar y hacer alguna prueba de rendimiento adicional.»* Lo que hay: `#743` (la herramienta,
+> `bpgenvm-c/tools/rendimiento_versiones.py`, y V7 frente a hoy en la Metro y la P4). Lo que faltaba: los dos núcleos
+> (un programa de dos hilos con un núcleo y con dos, Eduardo: *«que también mejoraríamos»*), y de paso `#665` (la
+> imagen de dos núcleos de la RP2350, más lenta que la de uno: en la Metro, `fib(26)` +35 %); y si sirve, V6 y V5 en la
+> Metro y la serie de la P4 en una sola placa.
 
 #### 🧩 H1 — JC, BasicPlus con la ropa de Java y C# (abierto el 17-oct como `#698` · ✅ **CERRADO el 18-oct**, validado por Eduardo: *«creo que podemos dar este tema por validado. Más adelante en esta misma versión 8 podemos hacer algún ajuste adicional»*)
 
@@ -7177,8 +7184,10 @@ P4 (o V5 en la Waveshare), para la serie de la P4.
 **La lectura de Eduardo (31-oct):** *«era para tener una visión de como vamos evolucionando. Ganamos en algunas cosas y
 perdemos en otras en cuanto a rendimiento puro, pero vamos mejorando en seguridad así que el balance es positivo. Y no
 creo que hayas hecho pruebas aprovechando los 2 núcleos que también mejoraríamos.»* Cierto: los doce programas son de
-un hilo. Lo que faltaría, cuando se quiera: un programa de dos hilos que trabajen a la vez (`paralleltest`, el de la
-campaña de V4, o `ParaleloPico`) con un núcleo y con dos, en la herramienta.
+un hilo. Lo que faltaría: un programa de dos hilos que trabajen a la vez (`paralleltest`, el de la campaña de V4, o
+`ParaleloPico`) con un núcleo y con dos, en la herramienta. **Cuándo** (Eduardo): *«Al final de la versión V8,
+durante las pruebas finales podemos aprovechar y hacer alguna prueba de rendimiento adicional»*: apuntado bajo la
+tabla de hitos de V8, con `#665`.
 
 #### 🔵 `#742` — la VM-Java con dos workers: un `join` puede volver antes de que salga la línea a medias del hilo que acaba (`PrintSinSalto`, 1 de cada 40) (abierta el 30-oct, en la red del prototipo de `#718`; **sólo análisis**)
 
