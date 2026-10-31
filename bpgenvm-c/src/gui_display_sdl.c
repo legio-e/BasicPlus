@@ -14,6 +14,7 @@
 #define SDL_MAIN_HANDLED
 #include <SDL2/SDL.h>
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
+#include "bpvm_out.h"     /* V8 #755: BPVM_EOL, el salto de la consola del PC */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -100,7 +101,7 @@ static void script_load(void) {
     const char* path = getenv("BPVM_GUI_SCRIPT");
     if (!path || !*path) return;
     FILE* f = fopen(path, "rb");
-    if (!f) { printf("[gui] guion: no se puede abrir %s\n", path); fflush(stdout); return; }
+    if (!f) { printf("[gui] guion: no se puede abrir %s" BPVM_EOL, path); fflush(stdout); return; }
     fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
     if (n <= 0) { fclose(f); return; }
     g_script_buf = (char*) bpvm_malloc((size_t) n + 1);
@@ -121,7 +122,7 @@ static void script_load(void) {
         while (L && (line[L-1] == '\r' || line[L-1] == ' ')) line[--L] = '\0';
         if (L && line[0] != '#') g_script[g_script_n++] = line;
     }
-    printf("[gui] guion %s: %d comandos\n", path, g_script_n);
+    printf("[gui] guion %s: %d comandos" BPVM_EOL, path, g_script_n);
     fflush(stdout);
 }
 
@@ -142,13 +143,13 @@ static void script_step(void) {
                                                 * LVGL lee el indev en cada
                                                 * lv_timer_handler, y press+release
                                                 * en la misma pasada se pierde. */
-        printf("[gui] guion: click %d,%d\n", x, y); fflush(stdout);
+        printf("[gui] guion: click %d,%d" BPVM_EOL, x, y); fflush(stdout);
     } else if (strcmp(line, "shot") == 0) {
         g_shot_requested = 1;
     } else if (strcmp(line, "quit") == 0) {
         g_window_closed = 1;
     } else {
-        printf("[gui] guion: comando no reconocido: '%s'\n", line); fflush(stdout);
+        printf("[gui] guion: comando no reconocido: '%s'" BPVM_EOL, line); fflush(stdout);
     }
 }
 
@@ -273,15 +274,15 @@ static int write_png24(const char* path, const uint8_t* px, int w, int h, int st
 /* Snapshot de la pantalla activa → PNG numerado en el cwd. Lo llama el pump. */
 static void bpvm_gui_take_screenshot(void) {
     lv_draw_buf_t* snap = lv_snapshot_take(lv_screen_active(), LV_COLOR_FORMAT_ARGB8888);
-    if (!snap) { printf("[gui] captura: lv_snapshot_take fallo\n"); fflush(stdout); return; }
+    if (!snap) { printf("[gui] captura: lv_snapshot_take fallo" BPVM_EOL); fflush(stdout); return; }
     static int n = 0;
     char path[64];
     snprintf(path, sizeof(path), "bp_shot_%04d.png", ++n);
     int rc = write_png24(path, snap->data, (int) snap->header.w, (int) snap->header.h,
                          (int) snap->header.stride);
-    if (rc == 0) printf("[gui] captura guardada: %s (%dx%d)\n", path,
+    if (rc == 0) printf("[gui] captura guardada: %s (%dx%d)" BPVM_EOL, path,
                         (int) snap->header.w, (int) snap->header.h);
-    else         printf("[gui] captura: error escribiendo %s\n", path);
+    else         printf("[gui] captura: error escribiendo %s" BPVM_EOL, path);
     fflush(stdout);
     lv_draw_buf_destroy(snap);
 }
@@ -321,11 +322,11 @@ static void disp_init_headless(int w, int h) {
     size_t bytes = (size_t) w * 10u * 4u;   /* ARGB8888, el formato por defecto */
     bpvm_free(buf);
     buf = (uint8_t*) bpvm_malloc(bytes);
-    if (!buf) { printf("[gui] headless: sin memoria para el buffer de dibujo\n"); return; }
+    if (!buf) { printf("[gui] headless: sin memoria para el buffer de dibujo" BPVM_EOL); return; }
     lv_display_set_flush_cb(d, headless_flush);
     lv_display_set_buffers(d, buf, NULL, (uint32_t) bytes, LV_DISPLAY_RENDER_MODE_PARTIAL);
     g_window_closed = 1;            /* no hay ventana que cerrar: "cerrada" desde el minuto 0 */
-    printf("[gui] sin pantalla (%dx%d fuera de pantalla)\n", w, h);
+    printf("[gui] sin pantalla (%dx%d fuera de pantalla)" BPVM_EOL, w, h);
     fflush(stdout);
 }
 
@@ -355,7 +356,7 @@ void bpvm_gui_disp_init(int w, int h) {
     SDL_Renderer* r = (SDL_Renderer*) lv_sdl_window_get_renderer(d);
     SDL_Window* win = r ? SDL_RenderGetWindow(r) : NULL;
     if (win) g_win_id = SDL_GetWindowID(win);
-    else { printf("[gui] aviso: sin windowID → los clics del guión no llegarán\n"); fflush(stdout); }
+    else { printf("[gui] aviso: sin windowID → los clics del guión no llegarán" BPVM_EOL); fflush(stdout); }
 }
 
 uint32_t bpvm_gui_disp_pump(void) {
@@ -376,7 +377,7 @@ uint32_t bpvm_gui_disp_pump(void) {
             g_shot_after_ms = atoi(e);
             if (g_shot_after_ms < 0) g_shot_after_ms = 0;
             g_shot_deadline = SDL_GetTicks() + (uint32_t) g_shot_after_ms;
-            printf("[gui] BPVM_GUI_SHOT_MS=%d → captura automática y cierre\n",
+            printf("[gui] BPVM_GUI_SHOT_MS=%d → captura automática y cierre" BPVM_EOL,
                    g_shot_after_ms);
             fflush(stdout);
         }
@@ -403,7 +404,7 @@ uint32_t bpvm_gui_disp_pump(void) {
         if (g_shot_env_read && getenv("BPVM_GUI_SHOT_MS")) g_window_closed = 1;
     }
     if (g_window_closed && g_exit_on_close && !g_headless) {
-        printf("[gui] ventana cerrada: el micro simulado termina (en el IDE, pulsa Arrancar para otro)\n");
+        printf("[gui] ventana cerrada: el micro simulado termina (en el IDE, pulsa Arrancar para otro)" BPVM_EOL);
         fflush(stdout);
         exit(0);
     }

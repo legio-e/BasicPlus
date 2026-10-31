@@ -106,13 +106,24 @@ void bpvm_linea_pieza(bpvm_t* vm, bpvm_thread_t* tc, const char* s, size_t len) 
     emit_text(vm, s, len);
 }
 
+/* V8 #755 — el salto que pone la VM al final de una línea (el porqué, en bpvm_out.h): `\n` salvo que quien la arranca
+ * fije otro (la consola del PC en Windows, `\r\n`). Uno para todo el proceso: una app por VM. */
+static const char* s_salto = "\n";
+static size_t s_salto_len = 1u;
+
+void bpvm_set_salto(const char* s) {
+    if (!s || !*s) return;
+    s_salto = s;
+    s_salto_len = strlen(s);
+}
+
 void bpvm_linea_fin(bpvm_t* vm, bpvm_thread_t* tc, const char* s, size_t len) {
     bpvm_trozo_t t[3];
     int n = 0;
     if (!vm) return;
     if (tc && tc->linea_len) { t[n].p = tc->linea; t[n].n = tc->linea_len; n++; }
     if (s && len)            { t[n].p = s;         t[n].n = len;           n++; }
-    t[n].p = "\n"; t[n].n = 1; n++;
+    t[n].p = s_salto; t[n].n = s_salto_len; n++;
     emit_textv(vm, t, n);
     if (tc) tc->linea_len = 0;
 }
@@ -138,9 +149,30 @@ static bpvm_t* s_out_vm = NULL;
 
 void bpvm_out_set_vm(bpvm_t* vm) { s_out_vm = vm; }
 
-static void out_texto(const char* s, size_t len) {
+static void out_texto_tal_cual(const char* s, size_t len) {
     if (s_out_vm) emit_text(s_out_vm, s, len);
     else          fwrite(s, 1, len, stdout);   /* fachada suelta en una herramienta */
+}
+
+/* Una traza la escribe la VM: sus `\n` son saltos de línea, y salen con el salto fijado (#755), como en la VM-Java,
+ * que las escribe con println. De UN empujón, como antes (#659): los trozos, en una sola escritura. */
+static void out_texto(const char* s, size_t len) {
+    if (!s_out_vm || (s_salto_len == 1u && s_salto[0] == '\n')) { out_texto_tal_cual(s, len); return; }
+    bpvm_trozo_t t[16];
+    int n = 0;
+    size_t ini = 0;
+    for (size_t i = 0; i < len; i++) {
+        if (s[i] != '\n') continue;
+        if (n + 2 > (int) (sizeof t / sizeof t[0])) { emit_textv(s_out_vm, t, n); n = 0; }   /* una traza de muchas líneas */
+        if (i > ini) { t[n].p = s + ini; t[n].n = i - ini; n++; }
+        t[n].p = s_salto; t[n].n = s_salto_len; n++;
+        ini = i + 1;
+    }
+    if (len > ini) {
+        if (n + 1 > (int) (sizeof t / sizeof t[0])) { emit_textv(s_out_vm, t, n); n = 0; }
+        t[n].p = s + ini; t[n].n = len - ini; n++;
+    }
+    if (n) emit_textv(s_out_vm, t, n);
 }
 
 void bpvm_out(const char* fmt, ...) {

@@ -11,6 +11,7 @@
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include "bpvm.h"       /* #338: la zona de rascar compartida */
 #include "bpvm_platform.h"
+#include "bpvm_out.h"   /* V8 #755: BPVM_EOL */
 #include <stdio.h>
 #include <inttypes.h>
 #include <string.h>
@@ -2575,6 +2576,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_SOUND_GET_LENGTH:
         push_i32(vm, tc, bpvm_sonido_largo());
         return BPVM_OK;
+
+    case BUILTIN_EOL: {   /* V8 #755 — el fin de línea de la plataforma: "\r\n" en Windows, "\n" aquí y en los micros */
+        uint32_t r = bpvm_heap_alloc_string(vm, BPVM_EOL, sizeof(BPVM_EOL) - 1u);
+        if (r == 0u) return builtin_throw(vm, tc, "No space in heap");
+        bpref_push(vm, tc, bpref_regen(vm, r));
+        return BPVM_OK;
+    }
 
     case BUILTIN_FILE_EXISTS: {
         uint32_t pref = pop_ref(vm, tc);

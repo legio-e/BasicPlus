@@ -1,0 +1,17 @@
+// Eol.bp — V8 #755 (31-oct): un "\n" dentro de lo que se imprime es LF, y un "\r", CR, siempre y en las dos VMs
+// (Eduardo: «\r es CR ( 13) y \n es LF (10) . Yo eso lo mantendría»); el salto que pone el `print` es el de la
+// plataforma, el que da eol(): "\r\n" en Windows, "\n" en Linux y en los micros (Eduardo: «la 2 está bien»: una
+// función, como el System.lineSeparator() de Java). Hasta hoy, en Windows, la VM-C cambiaba todo "\n" por "\r\n" (su
+// stdout, en modo texto) y la VM-Java no. Es de paridad: el stdout, byte a byte, también lo de dentro de una cadena. Lo
+// que vale eol() depende de dónde corre, y por eso no se imprime: se mira que sea uno de los dos.
+module Eol
+  public function main()
+    print "uno\ndos"
+    print "tres\r\ncuatro"
+    print "cinco\rseis"
+    var e: string := eol()
+    print iif(e == "\n" or e == "\r\n", "eol: bien", "FALLO eol: ni LF ni CR LF")
+    print "siete" + eol() + "ocho"
+    print "fin"
+  end main
+end Eol

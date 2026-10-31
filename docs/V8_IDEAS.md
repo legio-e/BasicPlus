@@ -4601,3 +4601,6 @@ constante (sabe qué caso corre) y JC no; y `gen-check` y `gen-cast-test`, que d
 dentro de lo que se imprime sale `LF` en la VM-Java y `CRLF` en la VM-C. Y tres carencias más de JC (H7): `null` como
 valor por defecto de un parámetro, un `null` con su tipo para elegir una sobrecarga, y un array de valores que sólo son
 `null`.
+
+Con `#755` hecha (el mismo día: `eol()`, y en el traductor `Environment.NewLine` es `eol()`), las dos coinciden:
+**275 funcionan** y **4 fallan** (`test-126`, `test-29`, `test-231` y `test-907`).

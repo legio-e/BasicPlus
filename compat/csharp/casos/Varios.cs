@@ -1,6 +1,6 @@
 // Caso del traductor C# -> JC (V8/H6): un inicializador de objeto en una declaración, los métodos de extensión,
-// `using` (con su Dispose, también si salta una excepción), `lock`, `default`, las cadenas `$"…"` y `unchecked`. Se
-// comprueba solo: Main devuelve 0.
+// `using` (con su Dispose, también si salta una excepción), `lock`, `default`, las cadenas `$"…"`, `unchecked` y
+// `Environment.NewLine`. Se comprueba solo: Main devuelve 0.
 using System;
 
 class Punto
@@ -68,7 +68,11 @@ class Programa
 
         int grande = unchecked(2147483647 + d + 1);
         if (grande != -2147483648) return 12;
-        Console.WriteLine(s + " " + t);
+
+        // el fin de línea de la plataforma (#755): "\r\n" en Windows, "\n" en Linux y en los micros
+        string fin = Environment.NewLine;
+        if (fin != "\n" && fin != "\r\n") return 13;
+        Console.Write(s + " " + t + Environment.NewLine);
         return 0;
     }
 }

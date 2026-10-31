@@ -1743,6 +1743,12 @@ module Core
   function __soundGetLength(): integer
     inline CALL_BUILTIN 294
   end __soundGetLength
+  // V8 #755 (31-oct) — el fin de línea de la plataforma: "\r\n" en Windows, "\n" en Linux y en los micros, como el
+  // System.lineSeparator() de Java (Eduardo: «la 2 está bien»). Es también el salto que pone el `print`. Un "\n" es
+  // siempre LF y un "\r", CR: nadie los cambia (Eduardo: «\r es CR ( 13) y \n es LF (10) . Yo eso lo mantendría»).
+  public function eol(): string
+    inline CALL_BUILTIN 295
+  end eol
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

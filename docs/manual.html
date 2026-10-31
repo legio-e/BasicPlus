@@ -308,6 +308,15 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   La línea abierta sale entera con el siguiente salto (<a href="#conc-print">§14.5</a>), así que
   un trozo no se ve hasta entonces; si el hilo acaba antes, sale tal cual.
 </p>
+<p>
+  El salto que pone el <code>print</code> es el fin de línea de la plataforma, el que da
+  <code>eol()</code>: <code>"\r\n"</code> en Windows, <code>"\n"</code> en Linux y en los micros
+  (como el <code>System.lineSeparator()</code> de Java). Lo que el programa escribe dentro de una
+  cadena sale tal cual: <code>"\n"</code> es siempre LF (10), y <code>"\r"</code>, CR (13), en las
+  dos VMs (V8).
+</p>
+<pre><code><span class="kw">print</span> <span class="str">"uno\ndos"</span>              <span class="comment">// en Windows: uno LF dos CR LF</span>
+<span class="kw">print</span> <span class="str">"a"</span> + eol() + <span class="str">"b"</span>        <span class="comment">// a, el salto de la plataforma, b</span></code></pre>
 
 <!-- =========================================================== -->
 <!-- =========================================================== -->

@@ -6041,6 +6041,8 @@ public class VirtualMachine {
             case SOUND_IS_AVAILABLE: pushTc(tc, Sonido.hay() ? 1 : 0); break;
             case SOUND_GET_POSITION: pushTc(tc, Sonido.posicion()); break;   // el progreso: bytes del sonido entregados…
             case SOUND_GET_LENGTH:   pushTc(tc, Sonido.largo()); break;      // …y los que tiene
+            // V8 #755 — el fin de línea de la plataforma, el de println (Eduardo: «la 2 está bien»): "\r\n" en Windows
+            case EOL: pushTcRef(tc, allocVmString(System.lineSeparator())); break;
             case FILE_EXISTS: {
                 // V7/H10 #630 (2-oct): SÓLO ficheros (Eduardo: «fileExists solo para ficheros»; para una carpeta,
                 // IO.dirExists). Era Files.exists, que dice que sí a una carpeta, y la VM-C —littlefs y el PC— decía que

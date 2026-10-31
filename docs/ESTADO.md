@@ -55,8 +55,17 @@
 >   Mono: **273 funcionan** (83 se comprueban solas), 6 fallan, todas explicadas. Salió **`#755`**: en Windows, un `\n`
 >   dentro de lo que se imprime sale `LF` en la VM-Java y `CRLF` en la VM-C (un fallo de la paridad que el corpus no ve;
 >   sólo análisis, lo decide Eduardo). La red, VERDE (17:56) con `#754`.
+> - **Y `#755`, hecha** (Eduardo: *«\r es CR ( 13) y \n es LF (10) . Yo eso lo mantendría . Ahora en los micros
+>   podemos seguir la convención de Linux»*; y para el fin de línea de la plataforma, de tres formas, *«la 2 está
+>   bien»*): **`eol()`**, el builtin 295 de Core, `"\r\n"` en Windows y `"\n"` en Linux y en los micros; el salto del
+>   `print`, ése; y en la consola del PC la VM-C escribe en binario (la C de Windows ya no cambia los `\n` del
+>   programa). `Eol` en el corpus. La stdlib, rehecha (los 31 módulos: la interfaz de Core crece): **en el próximo lote
+>   de placas, las imágenes y el pack nuevos.** La red, VERDE (18:52; la paridad, 177) y `check-jc` (173 y los 4 SKIP);
+>   el IDE, rehecho. En el traductor, `Environment.NewLine` es `eol()`; Mono: **275 funcionan** y 4 fallan (`gen-check`
+>   y `gen-cast-test` ya coinciden).
 > - **Lo siguiente:** la biblioteca (las excepciones de .NET, `ArrayList` como nuestra `List` —Eduardo: *«ArrayList no
->   es nuestro List?»*—, la reflexión fuera) y `char`.
+>   es nuestro List?»*—, la reflexión fuera) y `char`. Y, si Eduardo dice, las interfaces de verdad en JC (Eduardo:
+>   *«quizás deberiamos añadir una interfaz a JC»*): sin analizar todavía.
 >
 > **31-oct (mediodía)** — **H7.2 (`#749`): los genéricos de lo que ya hay, y de paso `#748`** (Eduardo: *«nuestro List
 > es en realidad List<Object>»*; a las cuatro preguntas, *«1 los dos. 2 OK con la propuesta. 3 OK. 4 de momento no, mas

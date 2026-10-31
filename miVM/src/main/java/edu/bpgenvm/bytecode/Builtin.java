@@ -304,7 +304,8 @@ public enum Builtin {
     SOUND_GET_VOLUME("__soundGetVolume"),   // [291] __soundGetVolume(): integer
     SOUND_IS_AVAILABLE("__soundIsAvailable"),   // [292] __soundIsAvailable(): boolean
     SOUND_GET_POSITION("__soundGetPosition"),   // [293] __soundGetPosition(): integer
-    SOUND_GET_LENGTH("__soundGetLength");   // [294] __soundGetLength(): integer
+    SOUND_GET_LENGTH("__soundGetLength"),   // [294] __soundGetLength(): integer
+    EOL("eol");   // [295] eol(): string
 
     public final String bpName;
     public final int id;

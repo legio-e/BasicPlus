@@ -91,6 +91,21 @@ void bpvm_linea_fin(struct bpvm* vm, struct bpvm_thread* tc, const char* s, size
 /** Lo que quedó a medias, tal cual y sin salto: un hilo que acaba a mitad de un `print`, el fin del RUN. */
 void bpvm_linea_vaciar(struct bpvm* vm, struct bpvm_thread* tc);
 
+/* ─── V8 #755 (31-oct) — EL FIN DE LÍNEA ───────────────────────────────────────────────────────────────────
+ * Eduardo: «\r es CR ( 13) y \n es LF (10) . Yo eso lo mantendría . Ahora en los micros podemos seguir la convención de
+ * Linux, utilizar \n»; y el de la plataforma, en una función (`eol()`, el builtin 295, como el System.lineSeparator() de
+ * Java). Un `\n` del programa es LF siempre: nadie lo cambia. El salto que pone la VM —el del `print`, y el de las
+ * trazas de las fachadas— es el que fija quien la arranca: por defecto `\n` (los micros, el wire); la consola del PC,
+ * BPVM_EOL, con su stdout en binario (si no, la C de Windows cambiaba TODOS los `\n` por `\r\n`, también los del
+ * programa: la VM-Java no, y la paridad se rompía en cuanto un programa imprimía un `\n` dentro de una cadena). */
+#if defined(_WIN32)
+#  define BPVM_EOL "\r\n"
+#else
+#  define BPVM_EOL "\n"
+#endif
+/** El salto que pone la VM al final de una línea (`\n` si no se fija; `s`, una cadena que dura). */
+void bpvm_set_salto(const char* s);
+
 #ifdef __cplusplus
 }
 #endif

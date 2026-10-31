@@ -129,7 +129,12 @@ module CsVarios
          {
             return 12;
          }
-         println(s + " " + t);
+         string fin = eol();
+         if (fin != "\n" && fin != "\r\n")
+         {
+            return 13;
+         }
+         print(s + " " + t + eol());
          return 0;
       }
    }

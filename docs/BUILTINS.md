@@ -633,6 +633,19 @@ a 48000 Hz`, `Sound.play: <el motivo de la placa>` y `Sound.setVolume: el volume
 tras una llamada, como todos. Las no públicas viven en `Core` sin `public` (su interfaz no cambia); las públicas, en
 `Sound`. La prueba: `bpgenvm-c/samples/SonidoParalelo.bp` (la red de paridad, en silencio).
 
+## 295 — el fin de línea  *(V8, `#755`, 31-oct)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
+| 295 | `eol` (en `Core`, pública) | `(): string` | `eol()` |
+
+El fin de línea de la plataforma: `"\r\n"` en Windows, `"\n"` en Linux y en los micros, como el `System.lineSeparator()`
+de Java (Eduardo, 31-oct: «la 2 está bien»). Es también el salto que pone el `print`. Un `"\n"` es siempre LF y un
+`"\r"`, CR: nadie los cambia. En la VM-Java, `System.lineSeparator()`; en la VM-C, `BPVM_EOL` (`bpvm_out.h`), y la
+consola del PC escribe en binario y cierra cada línea con él. Pública: la interfaz de `Core` cambia, como con `#711`
+(en MOD9 el enlace es por nombre: lo compilado antes sigue enlazando). La prueba: `bpgenvm-c/samples/Eol.bp` (la red
+de paridad: el stdout, byte a byte).
+
 ---
 
 ## Los que no tienen fila aquí  *(el mapa por rangos)*

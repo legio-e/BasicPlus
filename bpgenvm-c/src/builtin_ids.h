@@ -300,7 +300,8 @@ enum {
     BUILTIN_SOUND_IS_AVAILABLE           = 292,   /* __soundIsAvailable(): boolean */
     BUILTIN_SOUND_GET_POSITION           = 293,   /* __soundGetPosition(): integer */
     BUILTIN_SOUND_GET_LENGTH             = 294,   /* __soundGetLength(): integer */
-    BUILTIN__CUANTOS = 295
+    BUILTIN_EOL                          = 295,   /* eol(): string */
+    BUILTIN__CUANTOS = 296
 };
 
 #endif

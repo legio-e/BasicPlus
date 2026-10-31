@@ -46,6 +46,7 @@
 #endif
 #endif
 #include "bpvm_smp.h"   /* V7/H12: BPVM_SABOTAJE_GUI (SÓLO PRUEBAS) */
+#include "bpvm_out.h"   /* V8 #755: el fin de línea, BPVM_EOL */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,6 +55,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>    /* #648 --pila=: WaitForSingleObject */
 #include <process.h>    /* _beginthreadex */
+#include <io.h>         /* V8 #755: _setmode */
+#include <fcntl.h>      /* _O_BINARY */
 #else
 #include <pthread.h>
 #endif
@@ -109,7 +112,7 @@ static int packs_setup(uint8_t* region,
             fprintf(stderr, "--pack: %s no cabe en la region (%u B)\n", files[i], PACKS_REGION_SIZE);
             return -1;
         }
-        printf("[packs] + %s grabado en 0x%06X\n", files[i], (unsigned) off);
+        printf("[packs] + %s grabado en 0x%06X" BPVM_EOL, files[i], (unsigned) off);
     }
     for (int i = 0; i < n_dels; i++) {
         int32_t off = bpvm_pack_remove(region, PACKS_REGION_SIZE, dels[i]);
@@ -117,7 +120,7 @@ static int packs_setup(uint8_t* region,
             fprintf(stderr, "--pack-del: no hay ningun pack activo llamado '%s'\n", dels[i]);
             return -1;
         }
-        printf("[packs] - '%s' tombstone en 0x%06X\n", dels[i], (unsigned) off);
+        printf("[packs] - '%s' tombstone en 0x%06X" BPVM_EOL, dels[i], (unsigned) off);
     }
     /* LIST de la cadena resultante (lo que veria el micro en su flash). */
     bpvm_pack_info_t inf[PACKS_MAX_FILES];
@@ -125,14 +128,14 @@ static int packs_setup(uint8_t* region,
     int n = bpvm_pack_scan(region, PACKS_REGION_SIZE, inf, PACKS_MAX_FILES, 1, &end);
     int alive = 0;
     for (int i = 0; i < n && i < PACKS_MAX_FILES; i++) {
-        printf("[packs]   0x%06X  %-24s v'%s'  %7u B  %2u fich  %s%s\n",
+        printf("[packs]   0x%06X  %-24s v'%s'  %7u B  %2u fich  %s%s" BPVM_EOL,
                (unsigned) inf[i].off, inf[i].nombre, inf[i].vercont,
                (unsigned) inf[i].size_total, (unsigned) inf[i].n_entries,
                inf[i].alive ? "activo" : "borrado",
                inf[i].crc_ok ? "" : "  [CRC MAL]");
         if (inf[i].alive) alive++;
     }
-    printf("[packs] %d packs (%d activos), libre %u B\n",
+    printf("[packs] %d packs (%d activos), libre %u B" BPVM_EOL,
            n, alive, (end == BPVM_PACK_NO_SPACE) ? 0u : (unsigned) (PACKS_REGION_SIZE - end));
     return 0;
 }
@@ -154,6 +157,12 @@ static int main_real(int argc, char** argv) {
     /* stdout unbuffered para que un crash no se trague output. */
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
+#ifdef _WIN32
+    /* V8 #755 — la consola del PC: el stdout en binario, para que la C de Windows no cambie los `\n` del programa por
+     * `\r\n` (un `\n` es LF, siempre: Eduardo, 31-oct); el salto de cada línea lo pone la VM, el de la plataforma. */
+    _setmode(_fileno(stdout), _O_BINARY);
+#endif
+    bpvm_set_salto(BPVM_EOL);
 
     const char* path  = NULL;
     const char* run_arg = NULL;   /* V6/#412 — el argumento de ejecucion */
@@ -417,7 +426,7 @@ static int main_real(int argc, char** argv) {
 
     if (no_gc) {
         bpvm_set_gc_enabled(vm, 0);
-        printf("=== GC DESACTIVADO (--nogc): memoria de un solo uso ===\n");
+        printf("=== GC DESACTIVADO (--nogc): memoria de un solo uso ===" BPVM_EOL);
     }
 
     if (handle_cap >= 0) {
@@ -444,18 +453,18 @@ static int main_real(int argc, char** argv) {
         return 1;
     }
     if (smp_workers > 0) {
-        printf("=== INICIANDO EJECUCION DE LA VM-C (SMP, workers=%d) ===\n",
+        printf("=== INICIANDO EJECUCION DE LA VM-C (SMP, workers=%d) ===" BPVM_EOL,
                smp_workers);
         s = bpvm_run_smp(vm, smp_workers);
     } else {
-        printf("=== INICIANDO EJECUCION DE LA VM-C ===\n");
+        printf("=== INICIANDO EJECUCION DE LA VM-C ===" BPVM_EOL);
         s = bpvm_run(vm);
     }
     bpvm_io_stop(vm);   /* drena la cola ENTERA antes de seguir imprimiendo */
     fflush(stdout);
     {
         const char* le = bpvm_link_error(vm);   /* paso 4 — detalle de lib/símbolo no resuelto */
-        if (le[0]) printf("=== ERROR DE LINK: %s ===\n", le);
+        if (le[0]) printf("=== ERROR DE LINK: %s ===" BPVM_EOL, le);
         /* Detalle del RuntimeError no atrapado (en vez del status genérico). */
         const char* re = bpvm_runtime_error(vm);
         /* #481 - A STDERR, no a stdout. Esto no lo imprime el PROGRAMA: lo imprime
@@ -466,7 +475,7 @@ static int main_real(int argc, char** argv) {
          * detalle viaja en el `errorMessage` del EXITED. */
         if (s == BPVM_ERR_RUNTIME && re[0]) fprintf(stderr, "=== RuntimeError: %s ===\n", re);
     }
-    printf("=== FIN DE LA EJECUCION (status=%s) ===\n", bpvm_status_str(s));
+    printf("=== FIN DE LA EJECUCION (status=%s) ===" BPVM_EOL, bpvm_status_str(s));
 
     if (debug_trace) {
         fprintf(stderr, "[dbg] total hook hits: %ld\n", dbg_state.total_hits);

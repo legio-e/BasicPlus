@@ -47,6 +47,8 @@ namespace Cs2Jc
                 case "System.Array.Length": return "len(" + Expr(ma.Expression) + ")";
                 // en caracteres; C# cuenta unidades de UTF-16: lo mismo salvo los de fuera del plano básico
                 case "System.String.Length": return "strlen(" + Expr(ma.Expression) + ")";
+                // el fin de línea de la plataforma (#755): el eol() de Core
+                case "System.Environment.NewLine": return "eol()";
             }
             return Rechaza(ma, Porque.DeNet(clave));
         }
