@@ -50,6 +50,8 @@ namespace Cs2Jc
         readonly Stack<string> catchs = new Stack<string>();     // la excepción de cada catch abierto, para `throw;`
         int nombresNuevos;
         readonly Dictionary<ISymbol, string> nombresDeTipo = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
+        /// Los tipos de fuera (no anidados) que llevan su namespace delante, porque su nombre chocaría con otro.
+        readonly HashSet<ISymbol> conEspacio = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         readonly HashSet<string> renombrados = new HashSet<string>();
         readonly HashSet<string> imports = new HashSet<string>();
         /// El sitio de cada clase en el módulo, para `#751` (no se construye una clase declarada más abajo).
@@ -78,7 +80,20 @@ namespace Cs2Jc
             foreach (var d in raiz.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
                 if (m.GetDeclaredSymbol(d) is INamedTypeSymbol s && !tipos.Contains(s, SymbolEqualityComparer.Default))
                     tipos.Add(s);
-            // Los nombres: las anidadas, con el de su clase delante (A.B es A_B); dos que se llamen igual, no se traducen.
+            // Los nombres: las anidadas, con el de su clase delante (A.B es A_B); y dos que se llamarían igual, con el
+            // namespace delante (el escalón 1; Eduardo, 1-nov: «los nombres que chocan se antepone el namespace»): N1.X y
+            // N2.X son N1_X y N2_X, y sus anidadas, N1_X_B. Si aún chocan (C y C<T> en el mismo namespace), no se traducen.
+            var chocan = tipos.GroupBy(s => NombreTipo(s)).Where(g => g.Count() > 1).SelectMany(g => g).ToList();
+            if (chocan.Count > 0)
+            {
+                foreach (var s in chocan)
+                {
+                    var fuera = s.OriginalDefinition;
+                    while (fuera.ContainingType != null) fuera = fuera.ContainingType.OriginalDefinition;
+                    if (!fuera.ContainingNamespace.IsGlobalNamespace) conEspacio.Add(fuera);
+                }
+                nombresDeTipo.Clear();          // se recalculan, con el namespace delante de los que chocan
+            }
             var usados = new Dictionary<string, INamedTypeSymbol>();
             foreach (var s in tipos)
             {
@@ -613,7 +628,9 @@ namespace Cs2Jc
         {
             var o = s.OriginalDefinition;
             if (nombresDeTipo.TryGetValue(o, out var n)) return n;
-            n = (o.ContainingType != null ? NombreTipo(o.ContainingType) + "_" : "") + Ident(o.Name);
+            n = (o.ContainingType != null ? NombreTipo(o.ContainingType) + "_"
+                 : conEspacio.Contains(o) ? o.ContainingNamespace.ToDisplayString().Replace('.', '_') + "_" : "")
+                + Ident(o.Name);
             if (ClasesDeCore.Contains(n))
             {
                 t.Avisos.Add("renombrado: " + n + " → " + n + "_ (una clase de Core)");

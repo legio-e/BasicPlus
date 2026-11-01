@@ -1,0 +1,82 @@
+module CsNombres
+{
+   class X
+   {
+      public static function int Valor()
+      {
+         return 0;
+      }
+   }
+
+   class N1_X
+   {
+      public static function int Valor()
+      {
+         return 1;
+      }
+   }
+
+   public class N1_X_Dentro
+   {
+      public int V { get; set; } = 10;
+   }
+
+   class N2_Sub_X
+   {
+      public static function int Valor()
+      {
+         return 2;
+      }
+   }
+
+   public class N2_Sub_X_Dentro
+   {
+      public int V { get; set; } = 20;
+   }
+
+   class Sola
+   {
+      public static function int Valor()
+      {
+         return 3;
+      }
+   }
+
+   class Programa
+   {
+      public static function int Main()
+      {
+         if (X.Valor() != 0)
+         {
+            return 1;
+         }
+         if (N1_X.Valor() != 1)
+         {
+            return 2;
+         }
+         if (N2_Sub_X.Valor() != 2)
+         {
+            return 3;
+         }
+         if (Sola.Valor() != 3)
+         {
+            return 4;
+         }
+         if (new N1_X_Dentro().V + new N2_Sub_X_Dentro().V != 30)
+         {
+            return 5;
+         }
+         println("nombres bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

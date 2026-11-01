@@ -1,0 +1,80 @@
+module CsNumeros
+{
+   import CsSystem;
+
+   class Programa
+   {
+      public static function int Main()
+      {
+         if (2147483647 != 2147483647 || (-2147483647 - 1) + 1 != -2147483647)
+         {
+            return 1;
+         }
+         long l = (-9223372036854775807L - 1L);
+         if (l + 1 != -9223372036854775807L)
+         {
+            return 2;
+         }
+         if (((ushort) 65535) != 65535 || ((short) -32768) != -32768)
+         {
+            return 3;
+         }
+         if (3.141592653589793 < 3.14159 || 3.141592653589793 > 3.1416)
+         {
+            return 4;
+         }
+         double nan = (0.0 / 0.0);
+         if (!CsSystem.Double_IsNaN(nan) || CsSystem.Double_IsNaN(1.5))
+         {
+            return 5;
+         }
+         if (!((1.0 / 0.0) > 1.7976931348623157E+308) || !((-1.0 / 0.0) < (-1.7976931348623157E+308)))
+         {
+            return 6;
+         }
+         if (strlen("") != 0)
+         {
+            return 7;
+         }
+         if (CsSystem.Math_Abs(-5) != 5 || CsSystem.Math_Abs(-2.5) != 2.5 || CsSystem.Math_Max(3, 9) != 9 || CsSystem.Math_Min(-1L, 4L) != -1L)
+         {
+            return 8;
+         }
+         if (CsSystem.Math_Round(2.5) != 2.0 || CsSystem.Math_Round(3.5) != 4.0 || CsSystem.Math_Round(-2.5) != -2.0 || CsSystem.Math_Round(2.6) != 3.0)
+         {
+            return 9;
+         }
+         if (CsSystem.Math_Floor(-1.5) != -2.0 || CsSystem.Math_Ceiling(1.2) != 2.0)
+         {
+            return 10;
+         }
+         if (!CsSystem.Double_IsNaN(CsSystem.Math_Max(1.0, nan)))
+         {
+            return 11;
+         }
+         if (CsSystem.Int32_Parse("-42") != -42 || CsSystem.Int64_Parse("9000000000") != 9000000000L)
+         {
+            return 12;
+         }
+         try
+         {
+            CsSystem.Int32_Parse("4x");
+            return 13;
+         }
+         catch (CsSystem.FormatException excepcion_cs1)
+         {
+         }
+         println("numeros bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

@@ -347,6 +347,8 @@ namespace Cs2Jc
                 case IParameterSymbol _:
                     return Ident(s.Name);
                 case IFieldSymbol f:
+                    if (!DelPrograma(f) && m.GetConstantValue(id) is var cv && cv.HasValue)
+                        return LiteralDeConstante(cv.Value, id);      // `PI` con `using static System.Math`
                     if (!DelPrograma(f)) return Rechaza(id, Porque.DeNet(NombreCompleto(f.ContainingType) + "." + f.Name));
                     CompruebaAcceso(f, id);
                     return (f.IsStatic || f.IsConst ? Receptor(f.ContainingType, id) : "this") + "." + Ident(f.Name);

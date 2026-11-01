@@ -11,6 +11,9 @@
 // `catch` de una de ellas no lo atraparía (el traductor lo rechaza: «errores de la VM con su tipo», H7).
 module CsSystem
 {
+   import Math;
+   import Str;
+
    public class ApplicationException : Exception
    {
       public function ApplicationException() : base("Error in the application.") { }
@@ -65,5 +68,80 @@ module CsSystem
    {
       public function FormatException() : base("One of the identified items was in an invalid format.") { }
       public function FormatException(string message) : base(message) { }
+   }
+
+   // ------------------------------------------------------------------------------------------- Math y los números
+   // Los métodos estáticos de .NET, como funciones del módulo con el nombre de su tipo delante (`Math.Abs` es
+   // `Math_Abs`): una clase Math, Double o Int32 chocaría con lo de BP (el módulo Math, las cajas de Core). Las
+   // constantes (int.MaxValue, Math.PI, double.NaN…) no están: el traductor escribe su valor.
+
+   public function int Math_Abs(int x) { return x < 0 ? -x : x; }
+   public function long Math_Abs(long x) { return x < 0L ? -x : x; }
+   public function double Math_Abs(double x) { return x < 0.0 ? -x : x; }
+   public function float Math_Abs(float x) { return x < 0.0f ? -x : x; }
+
+   public function int Math_Max(int a, int b) { return a > b ? a : b; }
+   public function long Math_Max(long a, long b) { return a > b ? a : b; }
+   public function int Math_Min(int a, int b) { return a < b ? a : b; }
+   public function long Math_Min(long a, long b) { return a < b ? a : b; }
+   // con un NaN, NaN, como .NET
+   public function double Math_Max(double a, double b)
+   {
+      if (a != a || b != b) return 0.0 / 0.0;
+      return a > b ? a : b;
+   }
+   public function double Math_Min(double a, double b)
+   {
+      if (a != a || b != b) return 0.0 / 0.0;
+      return a < b ? a : b;
+   }
+
+   /// Math.Floor y Math.Ceiling de un double (mientras quepa en un long; NaN e infinito, tal cual).
+   public function double Math_Floor(double x)
+   {
+      if (x != x || x == 1.0 / 0.0 || x == -1.0 / 0.0) return x;
+      double t = (double) ((long) x);
+      return t > x ? t - 1.0 : t;
+   }
+   public function double Math_Ceiling(double x)
+   {
+      if (x != x || x == 1.0 / 0.0 || x == -1.0 / 0.0) return x;
+      double t = (double) ((long) x);
+      return t < x ? t + 1.0 : t;
+   }
+
+   /// Math.Round(double): al entero más cercano, y a medias al par, como .NET (MidpointRounding.ToEven): 2.5 es 2.
+   public function double Math_Round(double x)
+   {
+      double f = Math_Floor(x);
+      if (f != f || f == x) return f;
+      double r = x - f;
+      if (r > 0.5) return f + 1.0;
+      if (r < 0.5) return f;
+      return ((long) f) % 2L == 0L ? f : f + 1.0;
+   }
+
+   /// Math.Acos: el acos de BP, que es de float (la precisión de un float).
+   public function double Math_Acos(double x) { return (double) Math.acos((float) x); }
+
+   public function bool Double_IsNaN(double x) { return x != x; }
+   public function bool Single_IsNaN(float x) { return x != x; }
+
+   /// int.Parse y long.Parse: el número, o FormatException, como .NET (el desbordamiento no se mira: Str.parseLong).
+   public function int Int32_Parse(string s)
+   {
+      bool err = false;
+      int v = 0;
+      (err, v) = Str.parseInt(s);
+      if (err) throw new FormatException("The input string '" + s + "' was not in a correct format.");
+      return v;
+   }
+   public function long Int64_Parse(string s)
+   {
+      bool err = false;
+      long v = 0L;
+      (err, v) = Str.parseLong(s);
+      if (err) throw new FormatException("The input string '" + s + "' was not in a correct format.");
+      return v;
    }
 }

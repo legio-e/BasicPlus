@@ -81,9 +81,74 @@ namespace Cs2Jc
             return false;
         }
 
+        // ------------------------------------------------------------------------- las funciones y las constantes
+
+        /// Los métodos estáticos de .NET que tiene la librería, por su firma en C# (la sobrecarga que eligió C#, con sus
+        /// tipos): `Math.Abs(int)` es `CsSystem.Math_Abs`, una función del módulo con el nombre de su tipo delante.
+        static readonly HashSet<string> FuncionesDeCsSystem = new HashSet<string>
+        {
+            "System.Math.Abs(System.Int32)", "System.Math.Abs(System.Int64)", "System.Math.Abs(System.Double)",
+            "System.Math.Abs(System.Single)",
+            "System.Math.Max(System.Int32,System.Int32)", "System.Math.Max(System.Int64,System.Int64)",
+            "System.Math.Max(System.Double,System.Double)",
+            "System.Math.Min(System.Int32,System.Int32)", "System.Math.Min(System.Int64,System.Int64)",
+            "System.Math.Min(System.Double,System.Double)",
+            "System.Math.Floor(System.Double)", "System.Math.Ceiling(System.Double)", "System.Math.Round(System.Double)",
+            "System.Math.Acos(System.Double)",
+            "System.Double.IsNaN(System.Double)", "System.Single.IsNaN(System.Single)",
+            "System.Int32.Parse(System.String)", "System.Int64.Parse(System.String)",
+        };
+
+        static string Firma(IMethodSymbol ms) => NombreCompleto(ms.ContainingType) + "." + ms.Name + "("
+            + string.Join(",", ms.Parameters.Select(p => NombreCompleto(p.Type))) + ")";
+
+        /// Una constante de .NET (`int.MaxValue`, `Math.PI`, `double.NaN`…), escrita: Roslyn sabe su valor. Como un valor
+        /// por defecto, y además NaN y los infinitos, que en una expresión sí se escriben (`0.0 / 0.0`); un negativo,
+        /// entre paréntesis; un `char`, su código (en JC, un entero).
+        string LiteralDeConstante(object v, SyntaxNode donde)
+        {
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            string r;
+            switch (v)
+            {
+                case bool b: return b ? "true" : "false";
+                case string s: return Cadena(s);
+                case char c: return ((int) c).ToString(ci);
+                case int i: r = i == int.MinValue ? "-2147483647 - 1" : i.ToString(ci); break;
+                case long l: r = l == long.MinValue ? "-9223372036854775807L - 1L" : l.ToString(ci) + "L"; break;
+                // un tipo estrecho, con su tipo: en C# `ushort.MaxValue` es un ushort, y un 65535 a secas, en JC, un int
+                // (`return 65535;` en una función ushort no compila: test-701)
+                case short _: return "((short) " + System.Convert.ToString(v, ci) + ")";
+                case sbyte _: return "((sbyte) " + System.Convert.ToString(v, ci) + ")";
+                case byte _: return "((byte) " + System.Convert.ToString(v, ci) + ")";
+                case ushort _: return "((ushort) " + System.Convert.ToString(v, ci) + ")";
+                case double d:
+                    if (double.IsNaN(d)) return "(0.0 / 0.0)";
+                    if (double.IsInfinity(d)) return d > 0 ? "(1.0 / 0.0)" : "(-1.0 / 0.0)";
+                    r = d.ToString("R", ci);
+                    if (!r.Contains('.') && !r.Contains('E')) r += ".0";
+                    break;
+                case float f:
+                    if (float.IsNaN(f)) return "(0.0f / 0.0f)";
+                    if (float.IsInfinity(f)) return f > 0 ? "(1.0f / 0.0f)" : "(-1.0f / 0.0f)";
+                    r = f.ToString("R", ci);
+                    if (!r.Contains('.') && !r.Contains('E')) r += ".0";
+                    r += "f";
+                    break;
+                case uint _: case ulong _: case decimal _: return Rechaza(donde, Porque.Fuera(Porque.SinSigno));
+                default: return Rechaza(donde, Porque.Pendiente("una constante " + v));
+            }
+            return r.StartsWith("-") ? "(" + r + ")" : r;
+        }
+
         string BibliotecaLlamada(InvocationExpressionSyntax inv, IMethodSymbol ms)
         {
             string clave = NombreCompleto(ms.ContainingType) + "." + ms.Name;
+            if (ms.IsStatic && FuncionesDeCsSystem.Contains(Firma(ms)))
+            {
+                imports.Add("CsSystem");
+                return "CsSystem." + ms.ContainingType.Name + "_" + ms.Name + "(" + Argumentos(inv.ArgumentList, ms) + ")";
+            }
             switch (clave)
             {
                 case "System.Console.WriteLine": return Escribe(inv, ms, "println");
@@ -104,6 +169,9 @@ namespace Cs2Jc
         string BibliotecaMiembro(MemberAccessExpressionSyntax ma, ISymbol s)
         {
             string clave = NombreCompleto(s.ContainingType) + "." + s.Name;
+            var cv = m.GetConstantValue(ma);
+            if (cv.HasValue) return LiteralDeConstante(cv.Value, ma);
+            if (clave == "System.String.Empty") return "\"\"";
             // el mensaje de una excepción: el msg de la de BP (ArgumentException y sus hijas sobrescriben Message en .NET:
             // sale con su clase)
             if (s.Name == "Message" && ExcepcionJc(s.ContainingType) != null) return Expr(ma.Expression) + ".msg";

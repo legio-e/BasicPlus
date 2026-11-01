@@ -4666,6 +4666,18 @@ El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo 
   del traductor que salió con ellas: el valor por defecto de un método `partial` es el de su declaración sin cuerpo
   (`test-partial-25`; caso `Parciales`). **Mono: 299 funcionan** y 5 fallan: a las 4 de antes se suma `test-901`, la
   diferencia de JC de `test-907` (C# da por asignada una variable tras un `if (true)`; JC no).
+- **Los nombres que chocan.** Si dos tipos se llamarían igual, el de fuera de cada uno lleva su namespace delante, y
+  sus anidadas también: `N1.X` es `N1_X`, y `N2.Sub.X.Dentro`, `N2_Sub_X_Dentro`; uno del espacio global, como estaba.
+  Si aún chocan (`C` y `C<T>` en el mismo namespace), no se traducen. Caso `Nombres`. **Mono: 310** (+11, lo previsto).
+- **Las constantes y `Math`.** Una constante de .NET se escribe con su valor, que Roslyn sabe (`int.MaxValue`,
+  `long.MinValue`, `Math.PI`, `PI` con `using static`; `double.NaN` y los infinitos, `(0.0 / 0.0)` y `(1.0 / 0.0)`;
+  `string.Empty`, `""`); una de un tipo estrecho, con su tipo: `((ushort) 65535)` (a secas, un `int`, y `return 65535;`
+  en una función `ushort` no compila en JC: `test-701`). Y en `CsSystem`, los métodos estáticos como funciones del
+  módulo con el nombre de su tipo delante (`Math.Abs` es `CsSystem.Math_Abs`; una clase `Math` o `Double` chocaría con
+  el módulo `Math` y las cajas de Core): `Abs`, `Max`, `Min`, `Floor`, `Ceiling`, `Round` (a medias al par, como .NET),
+  `Acos` (el de BP, de `float`), `double.IsNaN`, `float.IsNaN`, e `int.Parse` y `long.Parse` con su `FormatException`
+  (sobre `Str.parseInt`, que devuelve `(err, valor)`). Caso `Numeros`. **Mono: 312** (+2: casi todas las que los
+  pedían chocan con otra cosa —los sin signo, que quedan fuera, `ToString`, `char`, las cadenas—).
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
