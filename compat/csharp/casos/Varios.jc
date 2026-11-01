@@ -1,5 +1,7 @@
 module CsVarios
 {
+   import CsSystem;
+
    class Punto
    {
       public int X { get; set; }
@@ -95,6 +97,10 @@ module CsVarios
             return 6;
          }
          int dentro = 0;
+         if (p == null)
+         {
+            throw new CsSystem.ArgumentNullException("obj");
+         }
          if (true)
          {
             dentro = 1;

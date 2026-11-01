@@ -711,6 +711,7 @@ namespace Cs2Jc
         void CompruebaAcceso(ISymbol s, SyntaxNode donde)
         {
             if (claseActual == null || s.ContainingType == null || !DelPrograma(s)) return;
+            if (abiertos.Contains(s.OriginalDefinition)) return;          // en JC, public: lo usa una anidada
             var dueno = s.ContainingType.OriginalDefinition;
             var aqui = claseActual.OriginalDefinition;
             switch (s.DeclaredAccessibility)

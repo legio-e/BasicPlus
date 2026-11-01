@@ -69,13 +69,7 @@ namespace Cs2Jc
                     break;
                 case SwitchStatementSyntax sw: Switch(sw); break;
                 case UsingStatementSyntax u: Using(u); break;
-                case LockStatementSyntax lo:
-                    // un programa de un hilo: el bloque; lo que se cierra, si no es simple, no se calcula: no se traduce
-                    if (!(lo.Expression is ThisExpressionSyntax || lo.Expression is IdentifierNameSyntax || lo.Expression is TypeOfExpressionSyntax))
-                        Rechaza(lo.Expression, Porque.Pendiente("lock sobre algo que hay que calcular"));
-                    Linea("if (true)");
-                    CuerpoDe(lo.Statement);
-                    break;
+                case LockStatementSyntax lo: Lock(lo); break;
                 case CheckedStatementSyntax ch when ch.IsKind(SyntaxKind.UncheckedStatement):
                     Linea("if (true)");                                      // unchecked: lo de siempre en C# y en BP
                     Bloque(ch.Block);
@@ -105,6 +99,41 @@ namespace Cs2Jc
                 return;
             }
             Declaracion(ld.Declaration, ld.IsConst);
+        }
+
+        /// `lock (x) cuerpo`: un programa de un hilo, el bloque; pero lo que se cierra se calcula una vez, antes (una
+        /// asignación, como sentencia; otra cosa, en una temporal), y si es null, ArgumentNullException, como C#
+        /// (Monitor.Enter): test-524 y test-899. Sin mirarlo, lo que no puede ser null: this, typeof, un new, una cadena.
+        void Lock(LockStatementSyntax lo)
+        {
+            var e = lo.Expression;
+            while (e is ParenthesizedExpressionSyntax p) e = p.Expression;
+            string objetivo = null;
+            if (e is ThisExpressionSyntax || e is TypeOfExpressionSyntax) { }
+            else if (e is AssignmentExpressionSyntax a && a.IsKind(SyntaxKind.SimpleAssignmentExpression))
+            {
+                Linea(ExprSentencia(a) + ";");
+                if (!(a.Right is ObjectCreationExpressionSyntax)) objetivo = Expr(a.Left);
+            }
+            else if (e is IdentifierNameSyntax) objetivo = Expr(e);
+            else
+            {
+                string tmp = "lock_s" + (++subidas);
+                Linea("Object " + tmp + " = " + Expr(e) + ";");
+                if (!(e is ObjectCreationExpressionSyntax)) objetivo = tmp;
+            }
+            if (objetivo != null && !EsCadena(m.GetTypeInfo(e).Type))
+            {
+                imports.Add("CsSystem");
+                Linea("if (" + objetivo + " == null)");
+                Linea("{");
+                sangria++;
+                Linea("throw new CsSystem.ArgumentNullException(\"obj\");");
+                sangria--;
+                Linea("}");
+            }
+            Linea("if (true)");
+            CuerpoDe(lo.Statement);
         }
 
         /// Un valor del tipo para una local declarada antes de tiempo: C# no deja leerla sin asignarla, así que nadie lo ve.

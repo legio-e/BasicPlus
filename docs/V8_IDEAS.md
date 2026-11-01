@@ -4702,6 +4702,13 @@ El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo 
   etiqueta de otro `case` no cuenta (la etiqueta lleva su valor). No dentro de un `if (true)`: JC no ve que se entra, y
   una variable que el `switch` asigna en todos sus casos le parecería sin valor (la diferencia de `test-901`). Caso
   `Ambitos`. **Mono: 325** (+5).
+- **Lo privado que usa una anidada, y `lock`.** Una clase anidada es en JC una clase aparte (`A_B`), que no vería lo
+  privado de `A`: lo que una anidada usa de la de fuera (privado, o protegido sin heredar) se escribe `public`; sólo
+  cambia quién lo ve, no lo que se calcula (una pasada antes de escribir nada). Y `lock (x)`, como C# (`Monitor.Enter`):
+  lo que se cierra se calcula una vez, antes —una asignación, como sentencia; otra cosa, en una temporal—, y si es
+  `null`, `ArgumentNullException("obj")`; sin mirarlo, lo que no puede serlo (`this`, `typeof`, un `new`, una cadena).
+  Casos `Accesos` (sus anidadas las construye una clase de detrás: que las construya la de fuera, declarada antes en JC,
+  es `#751`) y `Varios` (su `lock`, con el `null` mirado). **Mono: 329** (+4).
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

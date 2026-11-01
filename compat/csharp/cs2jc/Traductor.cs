@@ -52,6 +52,11 @@ namespace Cs2Jc
         readonly Dictionary<ISymbol, string> nombresDeTipo = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
         /// Los tipos de fuera (no anidados) que llevan su namespace delante, porque su nombre chocaría con otro.
         readonly HashSet<ISymbol> conEspacio = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        /// Lo privado o protegido que usa una clase anidada (Traduce): en JC, public.
+        readonly HashSet<ISymbol> abiertos = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+
+        /// La visibilidad de un miembro en JC: la suya, o public si lo usa una anidada (abiertos).
+        string AccesoDe(ISymbol s) => abiertos.Contains(s.OriginalDefinition) ? "public" : Acceso(s.DeclaredAccessibility);
         readonly HashSet<string> renombrados = new HashSet<string>();
         readonly HashSet<string> imports = new HashSet<string>();
         /// El sitio de cada clase en el módulo, para `#751` (no se construye una clase declarada más abajo).
@@ -93,6 +98,22 @@ namespace Cs2Jc
                     if (!fuera.ContainingNamespace.IsGlobalNamespace) conEspacio.Add(fuera);
                 }
                 nombresDeTipo.Clear();          // se recalculan, con el namespace delante de los que chocan
+            }
+            // Lo privado (o protegido) de una clase que usa otra anidada en ella: en JC las anidadas son clases aparte (A_B),
+            // y lo verían desde fuera; se escribe public (el escalón 1). Sólo cambia quién puede verlo, no lo que se calcula.
+            foreach (var nodo in raiz.DescendantNodes().Where(x => x is SimpleNameSyntax || x is ObjectCreationExpressionSyntax))
+            {
+                var s = m.GetSymbolInfo(nodo).Symbol;
+                if (s == null || s.ContainingType == null || s is INamedTypeSymbol || s is ILocalSymbol || s is IParameterSymbol
+                    || !DelPrograma(s)) continue;
+                var acc = s.DeclaredAccessibility;
+                if (acc != Accessibility.Private && acc != Accessibility.Protected && acc != Accessibility.ProtectedAndInternal) continue;
+                var tipoDelNodo = nodo.Ancestors().OfType<BaseTypeDeclarationSyntax>().FirstOrDefault();
+                if (!(tipoDelNodo != null && m.GetDeclaredSymbol(tipoDelNodo) is INamedTypeSymbol desde)) continue;
+                var dueno = s.ContainingType.OriginalDefinition;
+                if (SymbolEqualityComparer.Default.Equals(desde.OriginalDefinition, dueno)) continue;
+                if (acc != Accessibility.Private && Hereda(desde.OriginalDefinition, dueno)) continue;   // una hija lo ve en JC
+                abiertos.Add(s.OriginalDefinition);
             }
             var usados = new Dictionary<string, INamedTypeSymbol>();
             foreach (var s in tipos)
@@ -363,7 +384,7 @@ namespace Cs2Jc
             var vars = f.Declaration.Variables;
             var primero = (IFieldSymbol) m.GetDeclaredSymbol(vars[0]);
             string tipo = Tipo(primero.Type, f.Declaration.Type);
-            string acceso = Acceso(primero.DeclaredAccessibility);
+            string acceso = AccesoDe(primero);
             if (primero.IsConst)
             {
                 foreach (var v in vars)                                        // JC: una constante por declaración
@@ -413,7 +434,7 @@ namespace Cs2Jc
                 }
                 if (ChocaConOtraExplicita(s)) { Rechaza(me, Porque.H7(Porque.ExplicitaDoble)); return; }
             }
-            string cabecera = (esMain || explicita ? "public" : Acceso(s.DeclaredAccessibility)) + (s.IsStatic ? " static" : "")
+            string cabecera = (esMain || explicita ? "public" : AccesoDe(s)) + (s.IsStatic ? " static" : "")
                 + " function " + Tipo(s.ReturnType, me.ReturnType) + " " + nombre
                 + "(" + Parametros(me.ParameterList) + ")";
             if (!s.IsStatic) Anotaciones(s);
@@ -458,7 +479,7 @@ namespace Cs2Jc
         {
             var s = m.GetDeclaredSymbol(c);
             if (s.IsStatic) { Rechaza(c, Porque.H7(Porque.CtorEstatico)); return; }
-            string cabecera = Acceso(s.DeclaredAccessibility) + " function " + NombreTipo(claseActual)
+            string cabecera = AccesoDe(s) + " function " + NombreTipo(claseActual)
                 + "(" + Parametros(c.ParameterList) + ")";
             var ini = c.Initializer;
             var b = claseActual.BaseType;
@@ -505,7 +526,7 @@ namespace Cs2Jc
                 }
                 if (ChocaConOtraExplicita(s)) { Rechaza(p, Porque.H7(Porque.ExplicitaDoble)); return; }
             }
-            string cabecera = (explicita ? "public" : Acceso(s.DeclaredAccessibility)) + (s.IsStatic ? " static" : "") + " "
+            string cabecera = (explicita ? "public" : AccesoDe(s)) + (s.IsStatic ? " static" : "") + " "
                 + Tipo(s.Type, p.Type) + " " + nombre;
             if (!s.IsStatic) Anotaciones(s);
             if (s.IsAbstract)
