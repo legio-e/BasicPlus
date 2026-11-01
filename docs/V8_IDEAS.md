@@ -4709,6 +4709,11 @@ El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo 
   `null`, `ArgumentNullException("obj")`; sin mirarlo, lo que no puede serlo (`this`, `typeof`, un `new`, una cadena).
   Casos `Accesos` (sus anidadas las construye una clase de detrás: que las construya la de fuera, declarada antes en JC,
   es `#751`) y `Varios` (su `lock`, con el `null` mirado). **Mono: 329** (+4).
+- **Lo que queda, para cuando se retome** (además de lo de la lista del escalón): una propiedad de sólo lectura de
+  C# (`public virtual int Y { get; }`) asignada en su constructor escribe su campo, sin setter; el traductor la pasa
+  con `get; set;`, y si una hija la redefine, JC llama al setter de la hija, con su propio campo (`gtest-autoproperty-12`,
+  que destapó `#744`: falla con «Main devuelve 5»). La regla: rechazarla cuando una hija la redefine, o escribirla
+  de otra forma.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

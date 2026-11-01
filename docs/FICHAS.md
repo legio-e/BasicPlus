@@ -7786,7 +7786,7 @@ expresiones landa no entrarían, expresiones como *= y genéricos se podrian añ
   producto); (2) lo S en JC y en BP a la vez, empezando por los compuestos, que ya dijo que sí; (3) lo M, por lo que
   rinde, cada cosa con su OK; (4) los genéricos, como hito propio; y lo de las interfaces simples.
 
-#### 🔵 `#744` — BP: leer o escribir una propiedad por `super` (`super.prop`) va a la de la hija, no a la del padre; `super.m()` sí va al padre (abierta el 31-oct, con `#745`; preexistente; **sólo análisis**)
+#### ✅ `#744` — BP: leer o escribir una propiedad por `super` (`super.prop`) va a la de la hija, no a la del padre; `super.m()` sí va al padre (abierta el 31-oct, con `#745`; preexistente; **CERRADA el 1-nov**, el commit de `#744`)
 
 ```
 class X: property prop (get: return this.v · set(value): this.v := value)
@@ -7806,6 +7806,17 @@ y el `set` de `super.prop` salen como los de cualquier propiedad, por la vtable.
 **Lo que pesa, medido con el traductor de H6 (31-oct):** tres pruebas de Mono fallaban por esto, `test-70`, `test-170` y
 `gtest-autoproperty-12`; en las tres, el `get` de la hija lee `base.prop`, se llama a sí mismo y desborda la pila. El
 traductor lo dice como «un fallo de JC: #744»; al cerrarla, se quita esa regla.
+
+- **Hecha el 1-nov** (Eduardo: *«Si»*, a la propuesta): `super.prop` va al accesor del padre por el camino de
+  `super.m()` —la ref `SUPER` con la clave del accesor en MOD9; en MOD8, un `CALL` al de la clase que la declara—,
+  al leer, al escribir y en la compuesta (`emitLlamadaAccesor`, en los cinco sitios que llaman a un accesor). En
+  MOD8, a un padre de otro módulo no se puede (sus accesores no tienen envoltorio `__cls_m_`): un error del emisor
+  que lo dice, en vez de ir en silencio a la de la hija. `SuperProp` en el corpus (con el compilador de antes,
+  desbordamiento de pila); los mismos `.mod` en 667 de 708 fuentes (40 no compilan en ninguno; la otra, `SuperProp`)
+  y en la stdlib; la red, VERDE (13:28; la paridad, 181). En el traductor, fuera su regla: Mono, de 342 a **345**
+  (`test-70`, `test-170` y `test-294`; ninguna deja de funcionar). La tercera, `gtest-autoproperty-12`, falla ahora por otra cosa, del traductor:
+  una propiedad de sólo lectura de C#, virtual, asignada en su constructor —C# escribe su campo; en JC, con `get;
+  set;`, el setter es virtual y va al de la hija que la redefine— (apuntada en `V8_IDEAS` §E9, con el escalón 1).
 
 #### ✅ `#743` — comparar el rendimiento de hoy con el de una versión publicada, EN PLACA: la herramienta, y V7 frente a hoy en la Metro y la P4 (abierta y **CERRADA el 31-oct**; el commit de `#743`)
 

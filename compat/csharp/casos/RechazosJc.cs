@@ -14,7 +14,7 @@ class Padre
 
 class Hija : Padre
 {
-    public override int P { get { return base.P + 1; } }      // un fallo de JC: #744
+    public override int P { get { return base.P + 1; } }      // era #744 (cerrada el 1-nov): ya no se rechaza
 }
 
 class Antes

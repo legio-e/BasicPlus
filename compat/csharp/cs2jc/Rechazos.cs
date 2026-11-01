@@ -63,7 +63,6 @@ namespace Cs2Jc
         public static string Fallo(string ficha, string que) => "un fallo de JC: " + ficha + ", " + que;
 
         // Los fallos de JC que salen al traducir (FICHAS.md)
-        public const string SuperProp = "una propiedad por base va a la de la hija";
         public const string SuperObject = "super() en una clase sin padre escrito (el suyo es Object)";
 
         // Las mejoras de H7 (#745)

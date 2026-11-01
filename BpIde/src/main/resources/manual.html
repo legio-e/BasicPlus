@@ -1468,7 +1468,8 @@ end Base</code></pre>
 <span class="kw">end</span> Perro</code></pre>
 <p>
   Herencia simple. <code>super.metodo(args)</code> invoca explícitamente al
-  método del padre dentro de un override. La herencia funciona también
+  método del padre dentro de un override, y <code>super.prop</code> lee o escribe su property
+  (<a href="#props">§9.5</a>). La herencia funciona también
   <strong>cross-module</strong>: la clase base puede venir de otra librería
   importada (vtable, campos protegidos, estáticos y <code>super(...)</code> por
   firma incluidos: <a href="#visibilidad">§9.2.1</a> y <a href="#static">§9.6</a>).
@@ -1583,7 +1584,9 @@ end Base</code></pre>
   Una subclase puede <strong>redeclarar</strong> una property de su padre: es una
   redefinición —sus accesores son virtuales y la hija trae su propio campo de respaldo—, así
   que el código del padre que la lee ve la de la hija. Vale igual con un padre del mismo
-  módulo que de otro (<code>#529</code>, V7).
+  módulo que de otro (<code>#529</code>, V7). Desde la hija, <code>super.prop</code> lee y escribe
+  la del padre, como <code>super.m()</code> llama a su método (también <code>super.prop += 1</code>;
+  <code>#744</code>, V8).
 </p>
 
 <h4>Properties sync (thread-safe)</h4>

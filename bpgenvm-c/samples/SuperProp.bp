@@ -1,0 +1,44 @@
+// SuperProp.bp — #744 (1-nov): leer o escribir una property por `super` va al accesor del PADRE, como `super.m()` va a su
+// método (y como `base.prop` en C#). Hasta hoy iba por la vtable, como `this.prop`, y daba la de la hija: aquí, `15 1`
+// salía `15 15`, y un getter de la hija que leía `super.prop` se llamaba a sí mismo hasta desbordar la pila (test-70,
+// test-170 y gtest-autoproperty-12 de Mono). Escribir, la asignación compuesta y leer, con una hija que redefine la
+// property; en MOD9, por la ref SUPER (la clave del accesor), y en MOD8, por un CALL al del padre.
+module SuperProp
+
+  class X
+    var v: integer
+    public property prop: integer
+      get
+        return this.v
+      endget
+      set(valor)
+        this.v := valor
+      endset
+    endprop
+  end X
+
+  class Y extends X
+    var w: integer := 1
+    public property prop: integer
+      get
+        return this.w + super.prop * 100
+      endget
+      set(valor)
+        this.w := valor
+      endset
+    endprop
+    public function a(): integer
+      super.prop := 10
+      super.prop += 5
+      return super.prop
+    end a
+  end Y
+
+  function Main()
+    var y: Y := Y()
+    print "super.prop", y.a()
+    print "y.prop", y.prop
+    y.prop := 2
+    print "y.prop", y.prop
+  end Main
+end SuperProp

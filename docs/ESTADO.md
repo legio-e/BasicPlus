@@ -82,7 +82,12 @@
 >   mismos `.mod` en 666 fuentes y en la stdlib; la red, VERDE (12:56; paridad 180), `check-jc` (176), JUnit (61 y
 >   324); el IDE, rehecho. En el traductor, fuera su regla: Mono, **342**. Salieron `#759` (MOD8), `#760` (lo protegido
 >   por una hija, desde la clase de en medio) y `#761` (el ternario con una interfaz común), sólo análisis.
-> - **Lo siguiente:** `#744` (`super.prop`, al accesor del padre).
+> - **`#744`, hecha** (el commit de `#744`): `super.prop` va al accesor del padre, como `super.m()` (la ref `SUPER` en
+>   MOD9; un `CALL` en MOD8; a un padre de otro módulo en MOD8, un error que lo dice). `SuperProp` en el corpus; los
+>   mismos `.mod` en 667 fuentes y en la stdlib; la red, VERDE (13:28; paridad 181). Mono, **345** (`test-70`,
+>   `test-170`, `test-294`); `gtest-autoproperty-12` falla ahora por otra cosa del traductor (una propiedad de sólo
+>   lectura asignada en su constructor), apuntada en `V8_IDEAS` §E9.
+> - **Lo siguiente:** `#752` (un método privado sobre `null`), con la (a): la comprobación al principio del método.
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,

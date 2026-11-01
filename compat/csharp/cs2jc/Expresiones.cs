@@ -409,7 +409,6 @@ namespace Cs2Jc
             if (s.IsStatic || (s is IFieldSymbol f && f.IsConst)) return Receptor(s.ContainingType, ma) + "." + Ident(s.Name);
             if (ma.Expression is BaseExpressionSyntax)
             {
-                if (s is IPropertySymbol) return Rechaza(ma, Porque.Fallo("#744", Porque.SuperProp));
                 return "base." + Ident(s.Name);
             }
             return Expr(ma.Expression) + "." + Ident(s.Name);

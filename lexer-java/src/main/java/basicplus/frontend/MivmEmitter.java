@@ -3507,7 +3507,7 @@ public final class MivmEmitter {
                         coerceToTarget(a.value, tType);
                         // BUG-6: numArgs = slots (long/double = 2).
                         // V10 (EC-1): el receptor ESTÁTICO en la ref, como en los métodos.
-                        emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
+                        emitLlamadaAccesor(ma.target, ps, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
                         // El FREE del valor anterior lo hace el propio setter
@@ -3518,9 +3518,9 @@ public final class MivmEmitter {
                     }
                     default: {   // los compuestos
                         emitReceptorDosVeces(ma.target);   // #746: una sola vez si lleva una llamada
-                        emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
+                        emitLlamadaAccesor(ma.target, ps, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
                         emitCompuesto(a, tType, true);
-                        emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
+                        emitLlamadaAccesor(ma.target, ps, setter, claveSetter(ps.name, ps.type), occupies8Bytes(tType) ? 2 : 1);
                         declareLocal("__discard");
                         w.emitSetLocal("__discard");
                         return;
@@ -5752,6 +5752,29 @@ public final class MivmEmitter {
      * Para clases locales usa la lookup normal por nombre de método; para
      * clases importadas (.bpi v4 ClassSig) usa el slot precalculado del stub.
      */
+    /** #744 — el getter o el setter de una property de instancia, con el receptor ya en la pila: por la vtable; y con
+     *  `super.prop`, el del padre, directo, por el camino de `super.m()` (la ref SUPER en MOD9; si no, CALL al de la
+     *  clase que la declara). En MOD8, a un padre de otro módulo no se puede: sus accesores no tienen envoltorio
+     *  `__cls_m_` (sólo los métodos), y se dice. */
+    private void emitLlamadaAccesor(IExpr objetivo, PropertySymbol ps, String accesor, String clave, int nArgs) throws IOException {
+        if (!(objetivo instanceof SuperExpr)) {
+            emitInvokeVirtualSmart(receptorDe(objetivo, ps.ownerClass), ps.ownerClass, accesor, clave, nArgs);
+            return;
+        }
+        ClassSymbol padre = (claseActual() != null) ? claseActual().baseClass : null;
+        if (mod9() && padre != null && porRef(padre)) {
+            w.emitCallRef(w.requireRef(ModWriter.REF_SUPER, depRef(padre), claseRef(padre), clave));
+            return;
+        }
+        ClassSymbol duena = ps.ownerClass;
+        if (duena == null || duena.isExternal) {
+            errors.add("super." + ps.name + ": en MOD8, la property de un padre de otro módulo no se lee ni se escribe por"
+                    + " super (sus accesores no tienen envoltorio); en MOD9, sí");
+            return;
+        }
+        w.emitCall(duena.name + "." + accesor);
+    }
+
     /** V7/H2 (#523) — el despacho con la clave canónica: si el receptor (su clase
      *  ESTÁTICA, como javac) es de otro módulo o abierto, va por referencia; si no, por
      *  el camino de siempre sobre la clase que DECLARA el método. */
@@ -6202,7 +6225,7 @@ public final class MivmEmitter {
                 return;
             }
             emitExpr(ma.target);
-            emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
+            emitLlamadaAccesor(ma.target, ps, "get" + capitalize(ps.name), claveGetter(ps.name, ps.type), 0);
             return;
         }
         if (mSym instanceof ConstSymbol) {
@@ -6582,7 +6605,7 @@ public final class MivmEmitter {
                 } else {                                     // property de clase (instancia)
                     emitExpr(ma.target);
                     w.emitGetLocal(valLocal);
-                    emitInvokeVirtualSmart(receptorDe(ma.target, ps.ownerClass), ps.ownerClass, "set" + capitalize(ps.name), claveSetter(ps.name, ps.type), occupies8Bytes(vt) ? 2 : 1);
+                    emitLlamadaAccesor(ma.target, ps, "set" + capitalize(ps.name), claveSetter(ps.name, ps.type), occupies8Bytes(vt) ? 2 : 1);
                     declareLocal("__discard"); w.emitSetLocal("__discard");
                 }
                 return;

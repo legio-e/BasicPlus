@@ -1,5 +1,4 @@
 # Lo que el traductor tiene que rechazar en RechazosJc.cs, y por qué (una línea por rechazo, en orden).
-17: un fallo de JC: #744, una propiedad por base va a la de la hija — base.P
 27: un fallo de JC: #753, super() en una clase sin padre escrito (el suyo es Object) — : base()
 32: le falta a JC: una constante que cabe, en un argumento o un return estrecho (como en una asignación) — 1
 38: le falta a JC: & | ^ sobre bool (sin atajo) — a & b
