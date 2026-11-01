@@ -93,7 +93,13 @@
 >   el estrés (paridad 182, pruebas de C 110), un rojo probabilístico de antes: **`#762`**, sólo análisis
 >   (`HeapEstres` con el heap justo y varios workers, a veces sin heap: con 4 workers, 4 de 40 a 76 KB, 1 de 40 a 80 y
 >   0 a 84; con uno, nunca); suelto, verde. `check-jc` (178), JUnit (324); el IDE, rehecho. Mono, **346** (`test-231`).
-> - **Lo siguiente:** `#753` (`super()` hacia `Object`).
+> - **`#753`, hecha** (el commit de `#753`): hacia un padre sin constructor —`Object`, o una clase de usuario que no
+>   lo declara, que fallaba igual—, el `super()` escrito no hace nada, como el implícito; con argumentos, el error del
+>   análisis de siempre, ahora probado (`CtorMal`, el caso 7). El filtro del traductor guarda ya los errores del
+>   emisor. `SuperSinCtor` en el corpus; los mismos `.mod` en 670 fuentes y en la stdlib; la red, VERDE (15:00;
+>   paridad 183, pruebas de C 110, el estrés también); `check-jc` (179), JUnit (324); el IDE, rehecho. Mono, **347**
+>   (`test-debug-02`).
+> - **Lo siguiente:** `#757` (el AOT compila una conversión de referencia como si construyera).
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,

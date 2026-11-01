@@ -6115,14 +6115,21 @@ public final class MivmEmitter {
         Symbol anotado = info.exprSymbols.get(sc);
         FunctionSymbol parentCtor = (anotado instanceof FunctionSymbol) ? (FunctionSymbol) anotado
                                                                         : parent.findConstructor();
+        // #753 — un padre sin constructor (Object, o una clase sin constructor ni nada que inicializar): `super()` no
+        // llama a nada, como el implícito (emitImplicitSuperCall). Deja el relleno que deja toda llamada, y que la
+        // sentencia descarta (emitExprStmt). Con argumentos no llega aquí: lo para el análisis, con su línea.
+        if (parentCtor == null) {
+            if (!sc.args.isEmpty()) { errors.add("super(...): la clase base '" + parent.name + "' no tiene constructor"); return; }
+            emitInt(0);
+            return;
+        }
         w.emitGetParam("this");
         for (int i = 0; i < sc.args.size(); i++) {
             emitExpr(sc.args.get(i));
-            if (parentCtor != null && i < parentCtor.params.size()) {
+            if (i < parentCtor.params.size()) {
                 coerceToTarget(sc.args.get(i), parentCtor.params.get(i).type);
             }
         }
-        if (parentCtor == null) { errors.add("super(...): la clase base '" + parent.name + "' no tiene constructor"); return; }
         emitCallInitOf(parentCtor);
     }
 

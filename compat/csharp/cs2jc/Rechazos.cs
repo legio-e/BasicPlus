@@ -62,8 +62,7 @@ namespace Cs2Jc
         }
         public static string Fallo(string ficha, string que) => "un fallo de JC: " + ficha + ", " + que;
 
-        // Los fallos de JC que salen al traducir (FICHAS.md)
-        public const string SuperObject = "super() en una clase sin padre escrito (el suyo es Object)";
+        // Los fallos de JC que salen al traducir (FICHAS.md): hoy, ninguno (#751, #744 y #753, cerrados el 1-nov)
 
         // Las mejoras de H7 (#745)
         public const string Genericos = "genéricos";

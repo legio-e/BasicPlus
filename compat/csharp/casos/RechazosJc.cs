@@ -24,7 +24,7 @@ class Antes
 
 class Despues
 {
-    public Despues() : base() { }                              // un fallo de JC: #753
+    public Despues() : base() { }                              // era #753 (cerrada el 1-nov): ya no se rechaza
 }
 
 class Programa

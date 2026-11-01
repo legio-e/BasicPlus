@@ -1425,7 +1425,9 @@ end Base</code></pre>
       constructor del padre <em>exige</em> argumentos, la llamada explícita es obligatoria (error
       de compilación si falta). Si el padre no tiene constructor, no hay nada que llamar.</li>
   <li><strong><code>super(args)</code></strong> — el padre por ese constructor; debe ser la
-      primera sentencia.</li>
+      primera sentencia. Hacia un padre sin constructor —<code>Object</code>, el de toda clase sin
+      padre escrito, o una clase que no lo declara—, <code>super()</code> vale y no hace nada, como
+      el implícito; con argumentos, es un error de compilación.</li>
   <li><strong><code>NombreClase(args)</code></strong> — <em>delegación</em>: este mismo objeto
       se inicializa por esa otra sobrecarga del constructor (que a su vez hace su
       <code>super</code> y los inicializadores), y después sigue el cuerpo. Sólo como primera

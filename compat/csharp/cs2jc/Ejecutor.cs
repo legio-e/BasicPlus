@@ -62,10 +62,21 @@ namespace Cs2Jc
                                           "--compile", Trabajo, "--backend=mivm", "--stdlibDir=" + Trabajo }, Trabajo, 120);
             if (c.Rc != 0 || !File.Exists(mod))
             {
-                var errores = (c.Salida + "\n" + c.Error).Split('\n').Select(l => l.TrimEnd('\r'))
-                    .Where(l => l.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 && !l.StartsWith("compilación abortada")
-                                && !l.StartsWith("--"))           // «-- Diagnósticos semánticos (1 errores…) --» es una cabecera
-                    .Take(5).ToList();
+                // los errores del emisor van sangrados bajo su cabecera, «-- Errores del emisor mivm (N) --», y no dicen
+                // «error»: sin esto quedaba sólo el «NO compilado: … (1 errores del emisor…)», sin el porqué (#753)
+                var errores = new List<string>();
+                bool delEmisor = false;
+                foreach (var l in (c.Salida + "\n" + c.Error).Split('\n').Select(x => x.TrimEnd('\r')))
+                {
+                    if (l.StartsWith("-- Errores del emisor")) { delEmisor = true; continue; }
+                    if (delEmisor && l.StartsWith("  ")) { errores.Add("error del emisor: " + l.Trim()); continue; }
+                    delEmisor = false;
+                    if (l.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0 && !l.StartsWith("compilación abortada")
+                        && !l.StartsWith("NO compilado:")       // el resumen de los del emisor, que ya van arriba
+                        && !l.StartsWith("--"))                 // «-- Diagnósticos semánticos (1 errores…) --» es una cabecera
+                        errores.Add(l);
+                }
+                errores = errores.Take(5).ToList();
                 r.ErrorCompila = errores.Count > 0 ? string.Join("\n", errores) : "(rc " + c.Rc + ", sin mensaje de error)";
                 return r;
             }

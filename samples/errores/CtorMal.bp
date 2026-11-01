@@ -1,7 +1,8 @@
 // CtorMal.bp — #511/#515 (19-sep): lo que un constructor NO puede hacer. (1) delegar en si mismo;
 // (2) delegarse en ciclo; (3) delegar y ademas llamar a super(...) (que ya no seria la primera sentencia); (4) construir desde fuera una
 // clase con constructor private; (5) construir desde fuera una con constructor protegido (sin
-// modificador); (6) super() implicito a un constructor private del padre.
+// modificador); (6) super() implicito a un constructor private del padre; (7) super(...) con argumentos a un padre sin
+// constructor (sin ellos vale, y no hace nada: #753, 1-nov).
 module CtorMal
   import Core
   public class A
@@ -53,6 +54,16 @@ module CtorMal
     public function Derivada()
     end Derivada
   end Derivada
+  public class SinCtor
+    public function quien(): string
+      return "SinCtor"
+    end quien
+  end SinCtor
+  public class ConArgs extends SinCtor
+    public function ConArgs()
+      super(5)
+    end ConArgs
+  end ConArgs
   function main()
     var c: Cerrada := Cerrada()
     var f: Familiar := Familiar()

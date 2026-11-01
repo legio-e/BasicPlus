@@ -50,6 +50,7 @@ CtorMal|no puede llamar adem
 CtorMal|'Cerrada()' es private
 CtorMal|'Familiar()' es protegido
 CtorMal|'Base()' es private
+CtorMal|no define constructor; super() no puede llevar argumentos
 ClaseDelLenguaje|'Thread' es una clase del lenguaje
 ClaseDelLenguaje|'StringBuilder' es una clase del lenguaje
 ClaseDelLenguaje|'root class' s

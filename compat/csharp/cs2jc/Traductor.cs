@@ -481,9 +481,7 @@ namespace Cs2Jc
             var ini = c.Initializer;
             var b = claseActual.BaseType;
             // `: base()` hacia object: vale (Eduardo, 31-oct: «Todas las clases tienen un padre salvo Object así que
-            // base.metodo() debería ser válido»), y se copia; pero JC no lo compila (#753)
-            if (ini != null && ini.IsKind(SyntaxKind.BaseConstructorInitializer) && b?.SpecialType == SpecialType.System_Object)
-                Rechaza(ini, Porque.Fallo("#753", Porque.SuperObject));
+            // base.metodo() debería ser válido»), y se copia (hasta #753, cerrada el 1-nov, JC no lo compilaba)
             bool haciaLaBase = ini != null && ini.IsKind(SyntaxKind.BaseConstructorInitializer);
             if (ini != null)
             {
