@@ -7329,7 +7329,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   desciende de `C`, la clase de la referencia: al revés.
 - **Por decidir (Eduardo):** la regla de C# y Java en BP y en JC.
 
-#### 🔵 `#759` — en MOD8, un método de una clase declarada más abajo no se puede llamar desde arriba: «Clase no declarada: Abajo», sin línea; en MOD9, sí (abierta el 1-nov, al hacer `#751`; preexistente; sólo de MOD8; **sólo análisis**)
+#### ✅ `#759` — en MOD8, un método de una clase declarada más abajo no se puede llamar desde arriba: «Clase no declarada: Abajo», sin línea; en MOD9, sí (abierta el 1-nov, al hacer `#751`; preexistente; sólo de MOD8; **CERRADA el mismo día SIN HACERLA**: MOD8 se queda como está)
 
 - **Cómo salió:** el sample de `#751` en la pasada MOD8 de la red.
 - **Comprobado** (una sonda, `LlamaAbajo`: `Arriba.usa(b: Abajo)` llama a `b.valor()`): con el compilador de antes de
@@ -7338,6 +7338,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   en MOD9, por su clave (`INVOKE_VIRTUAL_REF`), que resuelve el cargador.
 - **Lo que haría falta:** aplazar también la ranura, como los descriptores de `#751`, o dar las ranuras de todas las
   clases antes de escribir código. MOD8 se queda como está (13-oct): por decidir si merece la pena.
+- **Cerrada sin hacerla el 1-nov** (Eduardo: *«Si, cierrala.»*): sólo le pasa a quien compile con `--formato=8`, la
+  salida de emergencia que el 13-oct se decidió dejar como está; en MOD9, el formato por defecto, funciona (el método va
+  por su clave, `INVOKE_VIRTUAL_REF`). En MOD8, la clase cuyo método se llama tiene que ir antes en el fichero:
+  cambiar el orden de las clases lo resuelve. Si algún día se quiere, lo que haría falta está arriba.
 
 #### ✅ `#758` — una ranura de vtable que no se resuelve al llamar: la VM-C para el programa (no atrapable) y la VM-Java lanza un error atrapable (abierta el 31-oct, al analizar `#756`; preexistente; **CERRADA el 1-nov**, el commit de `#758`)
 

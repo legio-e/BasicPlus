@@ -114,6 +114,8 @@
 > - **Las seis de los fallos del compilador, hechas** (`#751`, `#744`, `#752`, `#753`, `#757` y `#758`). Abiertas hoy,
 >   sólo análisis: `#759` (MOD8), `#760` y `#761` (JC) y `#762` (el estrés con varios workers). **Lo siguiente:** los
 >   demás pendientes de FICHAS; la próxima tanda de placas pide imágenes nuevas y el `Stdlib.pack`.
+> - **`#759`, cerrada sin hacerla** (Eduardo: *«Si, cierrala.»*): es sólo de MOD8 (`--formato=8`), que se queda como
+>   está desde el 13-oct; en MOD9 funciona. En MOD8, la clase cuyo método se llama va antes en el fichero.
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,
