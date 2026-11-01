@@ -7838,7 +7838,7 @@ en `0x400d2f2c`, la misma página que la del 27-oct), `packdel` de los dos y `pa
 volvio, rc=0», «'SQLite' volvio, rc=0», «GUI: pack 'LVGL' resuelto». Antes hubo que arreglar `wire_serie.py pack`, que
 con un motor nativo no grababa si se lanzaba con `python -X utf8` (la salida de Java, en cp1252).
 
-#### 🔵 `#740` — la RAM de las placas sin PSRAM, la C3 y la C6 las justas: las pilas de los hilos BP, DEL HEAP —48 KB más de heap, y lo que gastan, proporcional a los hilos—, y los búferes estáticos que se pueden recortar (abierta el 27-oct, a pregunta de Eduardo al cerrar la sesión: *«Antes de cerrar la VM cuanta memoria RAM consume y si hay posibilidades de reducir el consumo. Ya lo miramos en su día pero no se si con los cambios que ha habido se puede hacer algo. Solamente para los micros que no tengan PSRAM, los que tienen PSRAM no hay problema.»*)
+#### ✅ `#740` — la RAM de las placas sin PSRAM, la C3 y la C6 las justas: las pilas de los hilos BP, DEL HEAP —48 KB más de heap, y lo que gastan, proporcional a los hilos—, y los búferes estáticos que se pueden recortar (abierta el 27-oct, a pregunta de Eduardo al cerrar la sesión: *«Antes de cerrar la VM cuanta memoria RAM consume y si hay posibilidades de reducir el consumo. Ya lo miramos en su día pero no se si con los cambios que ha habido se puede hacer algo. Solamente para los micros que no tengan PSRAM, los que tienen PSRAM no hay problema.»*)
 
 - **Medido el 27-oct**, sin placas conectadas: el `INFO` del lote de esa tarde y los `.elf` del día. Las cifras, en
   `MEMORIA.md` §7: la C3, 48 KB de heap de BP y 64 de pilas; la C6, 61 y 64 (y 136 de packs, con la GUI); la Pico 2,
@@ -7940,6 +7940,9 @@ con un motor nativo no grababa si se lanzaba con `python -X utf8` (la salida de 
   pila, en el heap. Lo que daría las dos cosas, para cuando interese: que el compilador calcule lo más que apila cada
   función y ponga una comprobación al entrar sólo en las que pasen del margen —casi ninguna—, y quitar la de cada
   instrucción.
+- **CERRADA el 1-nov** (Eduardo: *«Cierra #740»*): lo pedido, hecho el 29-oct —las pilas de los hilos, del heap; el
+  log y los búferes del enlace, recortados; la zona roja, mirada en cada instrucción—, y decidido que se queda así. Lo
+  de calcular lo más que apila cada función, «para cuando interese»: sin ficha.
 
 #### 🔵 `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **por mirar**)
 
