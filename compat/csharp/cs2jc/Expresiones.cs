@@ -144,10 +144,19 @@ namespace Cs2Jc
             {
                 var de = m.GetTypeInfo(c.Expression).Type;
                 var a = m.GetTypeInfo(c).Type;
-                if (de != null && a != null && !de.IsValueType && !a.IsValueType && m.ClassifyConversion(c.Expression, a).IsImplicit)
+                if (de != null && a != null && !de.IsValueType && !a.IsValueType && m.ClassifyConversion(c.Expression, a).IsImplicit
+                    && !(RamaDeTernario(c) && a.TypeKind == TypeKind.Interface))   // #761: ésa se conserva (Conversion)
                     return TipoEnJc(c.Expression);
             }
             return m.GetTypeInfo(e).Type;
+        }
+
+        /// #761 — ¿es `e` (entre paréntesis o no) una de las dos ramas de un ternario `c ? a : b`?
+        static bool RamaDeTernario(ExpressionSyntax e)
+        {
+            SyntaxNode n = e;
+            while (n.Parent is ParenthesizedExpressionSyntax) n = n.Parent;
+            return n.Parent is ConditionalExpressionSyntax t && (t.WhenTrue == n || t.WhenFalse == n);
         }
 
         /// Una expresión que va a llevar algo delante (`(int) e`): entre paréntesis si no es simple.
@@ -662,6 +671,10 @@ namespace Cs2Jc
                 && m.ClassifyConversion(c.Expression, a).IsImplicit)
             {
                 if (EsCadena(de)) return Rechaza(c, Porque.Pendiente("una cadena como object (su referencia)"));
+                // #761 — en una rama del ternario, la conversión a una interfaz da su tipo (en C#, el ternario tiene el de
+                // la rama a la que se convierte la otra) y se conserva: JC la escribe, `(IA) x`. A una clase no se
+                // puede: en JC, `Animal(perro)` sería construirla.
+                if (RamaDeTernario(c) && a.TypeKind == TypeKind.Interface) return "(" + Tipo(a, c.Type) + ") " + Atomo(c.Expression);
                 return Expr(c.Expression);
             }
             if (de != null)

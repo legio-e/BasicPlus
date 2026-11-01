@@ -826,7 +826,9 @@ i := <span class="type">integer</span>(i * <span class="num">1.5</span>)     <sp
   <code>b</code>. Tiene forma de función, pero <strong>sólo se calcula el que toca</strong>, como el
   <code>c ? a : b</code> de C# (y así se escribe en JC): con <code>p</code> nulo, lo de abajo no falla, y un
   <code>fib</code> recursivo con <code>iif</code> termina. Su tipo es el de las dos ramas: el mismo; o números, y gana
-  el más ancho; o <code>null</code> y una referencia; o una clase y su hija, y gana el padre.
+  el más ancho; o <code>null</code> y una referencia; o una clase y su hija, y gana el padre; o una clase y una
+  interfaz suya, y gana la interfaz. Dos clases que sólo comparten una interfaz no tienen tipo común: se escribe la
+  conversión en una rama, <code>iif(c, B2(), IA(B1()))</code>, como en C# (<code>c ? new B2() : (IA) new B1()</code>).
 </p>
 <pre><code><span class="kw">var</span> nombre: <span class="type">string</span> := iif(p != <span class="kw">null</span>, p.nombre, <span class="str">"nadie"</span>)
 <span class="kw">return</span> iif(n &lt; <span class="num">2</span>, n, fib(n - <span class="num">1</span>) + fib(n - <span class="num">2</span>))</code></pre>

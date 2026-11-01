@@ -122,6 +122,11 @@
 >   que lo usa o de una hija suya, la regla de Java; sobre uno que es sólo del padre, por su getter. Medido antes: un
 >   sample mal escrito (`CamposHijo`, corregido) y `test-241` (una anidada, que el traductor abre). La red, VERDE
 >   (18:43; paridad 184); `check-jc` (180); Mono, 348.
+> - **`#761`, hecha** (el commit de `#761`): BP ya tipa el ternario como C# cuando una rama lleva la conversión
+>   (`iif(arg, B2(), IA(B1()))` es un `IA`); el traductor la quitaba. Ahora la conserva en una rama del ternario, si es
+>   a una interfaz. El caso `Ternario`; el manual, §6.2. Mono, **349** (`test-865`). Sin tocar el compilador.
+> - **Fin del día:** abiertas, 34 fichas con número (`#762`, del estrés, entre ellas, sólo análisis). **Lo siguiente:**
+>   los demás pendientes de FICHAS; la próxima tanda de placas pide imágenes nuevas y el `Stdlib.pack`.
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,

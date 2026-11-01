@@ -1,0 +1,61 @@
+module CsTernario
+{
+   interface IA
+   {
+      function int Valor();
+   }
+
+   class B1 : IA
+   {
+      @implement{ IA }
+      public function int Valor()
+      {
+         return 1;
+      }
+   }
+
+   class B2 : IA
+   {
+      @implement{ IA }
+      public function int Valor()
+      {
+         return 2;
+      }
+   }
+
+   class Programa
+   {
+      private static function IA Elige(bool arg)
+      {
+         IA r = arg ? new B2() : (IA) (new B1());
+         return r;
+      }
+      public static function int Main()
+      {
+         if (Programa.Elige(true).Valor() != 2)
+         {
+            return 1;
+         }
+         if (Programa.Elige(false).Valor() != 1)
+         {
+            return 2;
+         }
+         IA otra = !true ? (IA) (new B2()) : new B1();
+         if (otra.Valor() != 1)
+         {
+            return 3;
+         }
+         println("ternario bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}
