@@ -57,8 +57,21 @@
 >   implementación explícita de verdad, la E/S o la red de .NET…). Los genéricos, como hito propio con su análisis
 >   (en H7.2 ya son sólo de compilación, como en Java), más adelante.
 > - **Lo que acecha:** la placa, en la próxima tanda, con imágenes nuevas (H7.3 cambia la VM-C: `link.c` e `interp.c`;
->   la stdlib, no) y el `Stdlib.pack` de H7.2 y `#755`; abiertas, sin tocar, `#757` y `#758`. Lo siguiente, el
->   escalón 1, empezando por su análisis.
+>   la stdlib, no) y el `Stdlib.pack` de H7.2 y `#755`; abiertas, sin tocar, `#757` y `#758`.
+> - **Y el escalón 1, analizado, decidido y casi hecho** (`74a4d952`; Eduardo: *«podemos crear unas librerias CSharp
+>   para pasar las pruebas […] Lo mismo sirve para las excepciones. En JC, char es un entero.»*; *«los nombres que
+>   chocan se antepone el namespace»*). Las librerías CSharp en `compat/csharp/lib/` (`CsSystem.jc`), fuera de la stdlib
+>   y de las placas, que el traductor compila al empezar. Un commit por trabajo (`V8_IDEAS` §E9, «por trabajos»): las
+>   excepciones de .NET (`fde9e4eb`, 299), los nombres y las constantes con `Math` (`052770fe`, 312), las cadenas
+>   (`7cf0771f`, 316), `char` (`c3ece96d`, 320), los `partial` sin cuerpo y las locales de un `case` (`6fc8929d`, 325),
+>   lo privado de una anidada y `lock` (`40fffebc`): **Mono, de 290 a 329 que funcionan**. Fallan 6, todas con su
+>   porqué: las 4 de antes, `test-901` (la diferencia de JC de `test-907`: un `if (true)`) y `test-673` (UTF-16 frente
+>   a UTF-8 fuera del plano básico). Cada fallo nuevo que destapó un trabajo se miró antes de seguir: de los del
+>   traductor salieron arreglos (`test-partial-25`, `test-701`, `test-138`, `test-111`); de JC, su porqué.
+> - **Lo que queda del escalón 1** (unas 25, de +1 a +3): los constructores primarios, `using` con `IDisposable` (como
+>   interfaz en `CsSystem`), los argumentos con nombre, los inicializadores dentro de una expresión, y sueltas
+>   (`ArrayList`, `Hashtable`, `StringBuilder`, `Split`…); algunas no se pueden (`int.TryParse` con `out`, el `ToString`
+>   de un `double`, que BP escribe distinto). Después, el escalón 2 (`#751`), si lo decide Eduardo.
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,
