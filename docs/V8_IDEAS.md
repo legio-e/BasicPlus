@@ -4605,6 +4605,56 @@ valor por defecto de un parámetro, un `null` con su tipo para elegir una sobrec
 Con `#755` hecha (el mismo día: `eol()`, y en el traductor `Environment.NewLine` es `eol()`), las dos coinciden:
 **275 funcionan** y **4 fallan** (`test-126`, `test-29`, `test-231` y `test-907`).
 
+### Cuántas más se pueden ganar, por escalones (1-nov, tras H7.3)
+
+Eduardo: *«Y podemos aumentar el número de samples a probar? […] Me refiero a los que migramos de C#»*. Con el informe
+del lote (las 290 de después de H7.3), por escalones de coste; una prueba cuenta cuando todo lo que pide está hecho:
+
+| escalón | qué | dónde | pruebas más | en total |
+|---|---|---|---|---|
+| hoy | | | | 290 |
+| 1 | la biblioteca de .NET y lo que el traductor aún no escribe (`char`, inicializadores…) | el traductor | +83 | 373 |
+| 2 | `#751`: construir una clase declarada más abajo | el compilador (un fallo, también de BP) | +19 | 392 |
+| 3 | lo pequeño de JC: `as`, `??` y `?.`, los formatos, `null` por defecto… | el compilador (S) | +32 | 424 |
+| 4 | lo mediano: `++` en una expresión, `new`, indexadores, operadores, `int[,]` | el compilador (M) | +124 | 548 |
+| 5 | los genéricos propios | L | +470 | 1018 |
+| 6 | los delegados, sin lambdas | L | +169 | 1187 |
+| 7 | `struct` | L (la VM) | +146 | 1333 |
+| 8 | `ref` / `out` | L | +45 | 1378 |
+
+El techo: 871 de las 2028 que no se traducen piden algo que queda fuera (las lambdas, la reflexión, `int?`, `async`,
+`yield`, LINQ, `goto`…). Son candidatas, no aprobadas: cada una tiene que dar lo mismo en las dos VMs.
+
+### El escalón 1, analizado y decidido (1-nov)
+
+De sus 83 pruebas, **14 no se pueden llevar a BP**: la implementación explícita de verdad (una clase con `I.M()` y otro
+`M()` propio: es de JC, que tiene un método por firma; pasa a «le falta a JC»), la E/S, la red y `ComponentModel` de
+.NET, `IFormattable` (los formatos con cultura) y la caja de un sin signo. **Las otras 69**, en 24 trabajos; los que más
+dan: los nombres que chocan (+11), las excepciones de .NET (+10), `Math`, `NaN`, `MaxValue` y `Convert` (+5), `char`
+(+5), `String` y `Char` (+4), `Console.Out` (+3), los argumentos con nombre, los inicializadores dentro de una expresión
+y los métodos `partial` sin cuerpo (+3 cada uno), y dieciséis de +1 o +2.
+
+**Decidido** (Eduardo, 1-nov: *«podemos crear unas librerias CSharp para pasar las pruebas, que contengan las funciones
+que necesitan las pruebas. Pero esas librerías en principio a nosotros para trabajar con los micros no nos interesan ya
+que trabajaremos con las nuestras. Lo mismo sirve para las excepciones. En JC, char es un entero.»*; a la propuesta,
+*«OK. Si, los nombres que chocan se antepone el namespace.»*):
+- **Las librerías CSharp**, en `compat/csharp/lib/`, escritas en JC: en el repositorio, con el traductor (son parte de
+  la herramienta), y fuera de `bpstdlib`, de las imágenes y del `Stdlib.pack`. Llevan lo de .NET que piden las pruebas,
+  **con sus nombres de .NET** (`ArrayList.Add`, `Math.Acos`, `ArgumentException`…), hecho sobre lo de BP; un módulo por
+  espacio de nombres de .NET, con `Cs` delante para no chocar con los de BP: `CsSystem`, `CsCollections`, `CsText`. El
+  traductor cambia el tipo de .NET por el de la librería y pone el `import`; reescribe sólo lo que JC no escribe igual.
+  Las compila al empezar un lote, junto a la stdlib, en su carpeta de trabajo. Lo que no esté en ellas sigue saliendo
+  como «la biblioteca: X».
+- **Las excepciones**, en `CsSystem`, con la jerarquía de .NET; `System.Exception` es nuestra `Exception`, y
+  `System.SystemException`, nuestra `RuntimeError` —lo que lanza la VM—, así que un `catch (SystemException)` atrapa
+  también un `null` o un índice fuera, como en .NET; sus hijas heredan de `RuntimeError`.
+- **`char`, un entero**, con los literales de carácter que JC ya tiene (17-oct); `Str.fromCharCode` y `charCodeAt`
+  donde se ve como carácter (imprimir, concatenar, `s[i]`, `ToString()`).
+- **Los nombres que chocan**: el namespace delante (`N1_X`, `N2_X`), sólo cuando chocan.
+
+El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo demás. Cada trabajo, con su caso en
+`compat/csharp/casos/` y el lote.
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
