@@ -4678,6 +4678,13 @@ El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo 
   `Acos` (el de BP, de `float`), `double.IsNaN`, `float.IsNaN`, e `int.Parse` y `long.Parse` con su `FormatException`
   (sobre `Str.parseInt`, que devuelve `(err, valor)`). Caso `Numeros`. **Mono: 312** (+2: casi todas las que los
   pedían chocan con otra cosa —los sin signo, que quedan fuera, `ToString`, `char`, las cadenas—).
+- **Las cadenas.** Lo que Core ya tiene, directo, con el objeto delante (`s.StartsWith(p)` es `startsWith(s, p)`;
+  también `EndsWith`, `Contains`, `IndexOf`, `Replace`, `ToUpper`, `ToLower` y `Trim`); en `CsSystem`, `Substring`
+  (en .NET, el segundo es la longitud; el `substring` de Core pide el final) y `string.Join`. `string.Format`, la suma
+  de sus piezas (`("" + a + "-" + b)`, con el troceado del formato de `Console.WriteLine`); el `ToString` de un entero,
+  `("" + (n))`; el de un `bool`, `True` y `False`, como .NET; `Equals` de dos cadenas, `==`; `Console.Out.WriteLine`,
+  `println`; `new object()`, `new Object()`. De paso, `o == "x"` con `o` un `object` (identidad, en C#) se rechaza
+  como la `==` entre referencias de tipos distintos (H7): JC no la compila (`test-111`). Caso `Cadenas`. **Mono: 316**.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

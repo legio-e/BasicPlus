@@ -1,0 +1,80 @@
+module CsCadenas
+{
+   import CsSystem;
+
+   class Programa
+   {
+      public static function int Main()
+      {
+         int n = -42;
+         long grande = 9000000000L;
+         if (("" + (n)) != "-42" || ("" + (grande)) != "9000000000")
+         {
+            return 1;
+         }
+         bool si = true;
+         if ((si ? "True" : "False") != "True" || ((!si) ? "True" : "False") != "False")
+         {
+            return 2;
+         }
+         if (("" + (1) + (2)) != "12")
+         {
+            return 3;
+         }
+         if (("" + "x=" + (3) + ", y=" + "b" + " {z}") != "x=3, y=b {z}")
+         {
+            return 4;
+         }
+         if (CsSystem.String_Join(", ", ["a", "b", "c"]) != "a, b, c")
+         {
+            return 5;
+         }
+         string s = "  Hola mundo  ";
+         string t = trim(s);
+         if (t != "Hola mundo")
+         {
+            return 6;
+         }
+         if (!startsWith(t, "Hola") || !endsWith(t, "mundo") || !contains(t, "a m") || contains(t, "xyz"))
+         {
+            return 7;
+         }
+         if (indexOf(t, "mundo") != 5 || indexOf(t, "zz") != -1)
+         {
+            return 8;
+         }
+         if (replace(t, "mundo", "BP") != "Hola BP" || upper(t) != "HOLA MUNDO" || lower(t) != "hola mundo")
+         {
+            return 9;
+         }
+         if (CsSystem.String_Substring(t, 5) != "mundo" || CsSystem.String_Substring(t, 1, 3) != "ola")
+         {
+            return 10;
+         }
+         if (!(t == "Hola mundo") || !(t == "Hola mundo") || (t == "hola"))
+         {
+            return 11;
+         }
+         if (t != t)
+         {
+            return 12;
+         }
+         Object o = new Object();
+         if (o == null)
+         {
+            return 13;
+         }
+         println("cadenas bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

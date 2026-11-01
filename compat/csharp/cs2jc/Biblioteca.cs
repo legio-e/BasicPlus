@@ -97,6 +97,23 @@ namespace Cs2Jc
             "System.Math.Acos(System.Double)",
             "System.Double.IsNaN(System.Double)", "System.Single.IsNaN(System.Single)",
             "System.Int32.Parse(System.String)", "System.Int64.Parse(System.String)",
+            "System.String.Join(System.String,System.String[])",
+        };
+
+        /// Los métodos de instancia de .NET que se saben pasar, por su firma: la función de BP que los hace, con el objeto
+        /// delante (`s.StartsWith(p)` es `startsWith(s, p)`): las de Core, y las de CsSystem con su módulo delante.
+        static readonly Dictionary<string, string> MetodosNet = new Dictionary<string, string>
+        {
+            ["System.String.StartsWith(System.String)"] = "startsWith",
+            ["System.String.EndsWith(System.String)"] = "endsWith",
+            ["System.String.Contains(System.String)"] = "contains",
+            ["System.String.IndexOf(System.String)"] = "indexOf",
+            ["System.String.Replace(System.String,System.String)"] = "replace",
+            ["System.String.ToUpper()"] = "upper",
+            ["System.String.ToLower()"] = "lower",
+            ["System.String.Trim()"] = "trim",
+            ["System.String.Substring(System.Int32)"] = "CsSystem.String_Substring",
+            ["System.String.Substring(System.Int32,System.Int32)"] = "CsSystem.String_Substring",
         };
 
         static string Firma(IMethodSymbol ms) => NombreCompleto(ms.ContainingType) + "." + ms.Name + "("
@@ -149,10 +166,46 @@ namespace Cs2Jc
                 imports.Add("CsSystem");
                 return "CsSystem." + ms.ContainingType.Name + "_" + ms.Name + "(" + Argumentos(inv.ArgumentList, ms) + ")";
             }
+            var objeto = inv.Expression as MemberAccessExpressionSyntax;
+            // un método de instancia que se sabe pasar: la función de Core o de CsSystem, con el objeto delante
+            if (!ms.IsStatic && objeto != null && MetodosNet.TryGetValue(Firma(ms), out var fn))
+            {
+                if (fn.StartsWith("CsSystem.")) imports.Add("CsSystem");
+                string resto = Argumentos(inv.ArgumentList, ms);
+                return fn + "(" + Expr(objeto.Expression) + (resto.Length > 0 ? ", " + resto : "") + ")";
+            }
+            switch (Firma(ms))
+            {
+                // el ToString de un entero: el número, como lo escribe BP (y .NET: en decimal, con su signo)
+                case "System.Int32.ToString()": case "System.Int64.ToString()": case "System.Int16.ToString()":
+                case "System.Byte.ToString()": case "System.SByte.ToString()": case "System.UInt16.ToString()":
+                    if (objeto != null) return "(\"\" + (" + Expr(objeto.Expression) + "))";
+                    break;
+                // el de un bool: .NET escribe True y False
+                case "System.Boolean.ToString()":
+                    if (objeto != null) return "(" + Expr(objeto.Expression) + " ? \"True\" : \"False\")";
+                    break;
+                case "System.String.ToString()":
+                    if (objeto != null) return Expr(objeto.Expression);
+                    break;
+                case "System.String.Equals(System.String,System.String)":
+                    return "(" + string.Join(" == ", inv.ArgumentList.Arguments.Select(a => Expr(a.Expression))) + ")";
+                case "System.String.Equals(System.String)":
+                    if (objeto != null) return "(" + Expr(objeto.Expression) + " == " + Expr(inv.ArgumentList.Arguments[0].Expression) + ")";
+                    break;
+            }
             switch (clave)
             {
                 case "System.Console.WriteLine": return Escribe(inv, ms, "println");
                 case "System.Console.Write": return Escribe(inv, ms, "print");
+                case "System.String.Format": return Formatea(inv, ms);
+                // Console.Out.WriteLine(x): lo mismo que Console.WriteLine(x)
+                case "System.IO.TextWriter.WriteLine":
+                case "System.IO.TextWriter.Write":
+                    if (objeto != null && m.GetSymbolInfo(objeto.Expression).Symbol is IPropertySymbol salida
+                        && NombreCompleto(salida.ContainingType) + "." + salida.Name == "System.Console.Out")
+                        return Escribe(inv, ms, ms.Name == "WriteLine" ? "println" : "print");
+                    break;
                 case "System.Object.ToString":
                     // el de Object (la clase no lo sobrescribe): el toString de BP (sale `object@…`, no el nombre)
                     if (inv.ArgumentList.Arguments.Count == 0)
@@ -198,6 +251,10 @@ namespace Cs2Jc
                 if (!ConstructorDeCsSystem(ctor, tipo, oc)) return Hueco;
                 return "new " + ex + "(" + (oc.ArgumentList != null ? Argumentos(oc.ArgumentList, ctor) : "") + ")";
             }
+            // new object(): el Object de Core (comprobado en las dos VMs)
+            if (tipo.SpecialType == SpecialType.System_Object && (oc.ArgumentList == null || oc.ArgumentList.Arguments.Count == 0)
+                && oc.Initializer == null)
+                return "new Object()";
             return Rechaza(oc, Porque.DeNet("new " + NombreCompleto(tipo)));
         }
 
@@ -214,11 +271,33 @@ namespace Cs2Jc
                 if (ms.Parameters[0].Type is IArrayTypeSymbol) return Rechaza(inv, Porque.Pendiente("Console.Write de un char[]"));
                 return fn + "(" + ExprBase(args[0].Expression) + ")";     // sin la caja de WriteLine(object)
             }
+            var piezas = Piezas(args, ms, inv);
+            if (piezas == null) return Hueco;
+            if (piezas.Count == 0) piezas.Add("\"\"");
+            return fn + "(" + string.Join(", ", piezas) + ")";
+        }
+
+        /// `string.Format("{0}-{1}", a, b)`: la suma de sus piezas, `("" + a + "-" + b)`; con el `""` delante, la suma es
+        /// de cadenas aunque las primeras sean números (el escalón 1).
+        string Formatea(InvocationExpressionSyntax inv, IMethodSymbol ms)
+        {
+            var args = inv.ArgumentList.Arguments;
+            if (args.Any(a => a.NameColon != null)) return Rechaza(inv, Porque.Pendiente("argumentos con nombre"));
+            var piezas = Piezas(args, ms, inv);
+            if (piezas == null) return Hueco;
+            return "(\"\"" + string.Concat(piezas.Select(p => " + " + (p.StartsWith("\"") ? p : "(" + p + ")"))) + ")";
+        }
+
+        /// Un formato literal, troceado: `"{0}-{1}", a, b` son las piezas `a`, `"-"` y `b`. Sólo si usa cada argumento
+        /// una vez y en orden: C# los calcula todos, de izquierda a derecha, antes de formatear (la segunda regla de
+        /// fondo). Si no se puede, el rechazo, y null.
+        List<string> Piezas(SeparatedSyntaxList<ArgumentSyntax> args, IMethodSymbol ms, SyntaxNode donde)
+        {
             if (!(args[0].Expression is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)))
-                return Rechaza(args[0], Porque.H7(Porque.Formatos));
+            { Rechaza(args[0], Porque.H7(Porque.Formatos)); return null; }
             if (args.Count == 2 && ms.Parameters.Length == 2 && ms.Parameters[1].IsParams
                 && SymbolEqualityComparer.Default.Equals(m.GetTypeInfo(args[1].Expression).ConvertedType, ms.Parameters[1].Type))
-                return Rechaza(inv, Porque.Pendiente("un formato con sus argumentos en un array"));
+            { Rechaza(donde, Porque.Pendiente("un formato con sus argumentos en un array")); return null; }
             var piezas = new List<string>();
             var texto = new StringBuilder();
             string f = (string) lit.Token.Value;
@@ -228,23 +307,25 @@ namespace Cs2Jc
                 char c = f[i];
                 if (c == '{' && i + 1 < f.Length && f[i + 1] == '{') { texto.Append('{'); i++; continue; }
                 if (c == '}' && i + 1 < f.Length && f[i + 1] == '}') { texto.Append('}'); i++; continue; }
-                if (c == '}') return Rechaza(args[0], Porque.Pendiente("un formato mal formado"));
+                if (c == '}') { Rechaza(args[0], Porque.Pendiente("un formato mal formado")); return null; }
                 if (c != '{') { texto.Append(c); continue; }
                 int cierre = f.IndexOf('}', i);
-                if (cierre < 0) return Rechaza(args[0], Porque.Pendiente("un formato mal formado"));
+                if (cierre < 0) { Rechaza(args[0], Porque.Pendiente("un formato mal formado")); return null; }
                 string dentro = f.Substring(i + 1, cierre - i - 1);
-                if (dentro.Contains(':') || dentro.Contains(',')) return Rechaza(args[0], Porque.H7(Porque.Formatos));
-                if (!int.TryParse(dentro, out int n) || n + 1 >= args.Count) return Rechaza(args[0], Porque.Pendiente("un formato mal formado"));
-                if (n != siguiente) return Rechaza(args[0], Porque.Pendiente("un formato que no usa sus argumentos una vez y en orden"));
+                if (dentro.Contains(':') || dentro.Contains(',')) { Rechaza(args[0], Porque.H7(Porque.Formatos)); return null; }
+                if (!int.TryParse(dentro, out int n) || n + 1 >= args.Count)
+                { Rechaza(args[0], Porque.Pendiente("un formato mal formado")); return null; }
+                if (n != siguiente)
+                { Rechaza(args[0], Porque.Pendiente("un formato que no usa sus argumentos una vez y en orden")); return null; }
                 siguiente++;
                 if (texto.Length > 0) { piezas.Add(Cadena(texto.ToString())); texto.Clear(); }
                 piezas.Add(ExprBase(args[n + 1].Expression));
                 i = cierre;
             }
-            if (siguiente != args.Count - 1) return Rechaza(args[0], Porque.Pendiente("un formato que no usa sus argumentos una vez y en orden"));
+            if (siguiente != args.Count - 1)
+            { Rechaza(args[0], Porque.Pendiente("un formato que no usa sus argumentos una vez y en orden")); return null; }
             if (texto.Length > 0) piezas.Add(Cadena(texto.ToString()));
-            if (piezas.Count == 0) piezas.Add("\"\"");
-            return fn + "(" + string.Join(", ", piezas) + ")";
+            return piezas;
         }
     }
 }

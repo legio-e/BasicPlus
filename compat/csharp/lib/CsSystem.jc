@@ -127,6 +127,26 @@ module CsSystem
    public function bool Double_IsNaN(double x) { return x != x; }
    public function bool Single_IsNaN(float x) { return x != x; }
 
+   // ------------------------------------------------------------------------------------------- las cadenas
+   // Lo que Core ya tiene (StartsWith, EndsWith, Contains, IndexOf, Replace, ToUpper, ToLower, Trim) lo llama el
+   // traductor directamente; aquí, lo que no.
+
+   /// s.Substring(i) y s.Substring(i, n): en .NET, el segundo es la LONGITUD; el substring de Core pide el final.
+   public function string String_Substring(string s, int desde) { return substring(s, desde, strlen(s)); }
+   public function string String_Substring(string s, int desde, int largo) { return substring(s, desde, desde + largo); }
+
+   /// string.Join(sep, valores): los valores, con el separador entre cada dos.
+   public function string String_Join(string sep, string[] valores)
+   {
+      string r = "";
+      for (int i = 0; i <= len(valores) - 1; i++)
+      {
+         if (i > 0) r = r + sep;
+         r = r + valores[i];
+      }
+      return r;
+   }
+
    /// int.Parse y long.Parse: el número, o FormatException, como .NET (el desbordamiento no se mira: Str.parseLong).
    public function int Int32_Parse(string s)
    {

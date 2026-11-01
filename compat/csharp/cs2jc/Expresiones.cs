@@ -568,8 +568,11 @@ namespace Cs2Jc
                 var td = TipoEnJc(b.Right);
                 // H7.3 (#756): con una interfaz, JC compara con cualquier objeto (la identidad), como C#
                 bool conInterfaz = ti?.TypeKind == TypeKind.Interface || td?.TypeKind == TypeKind.Interface;
-                if (ti != null && td != null && !ti.IsValueType && !td.IsValueType && !EsCadena(ti) && !EsCadena(td)
-                    && !SymbolEqualityComparer.Default.Equals(ti, td) && !conInterfaz)
+                // una cadena con otra referencia (`o == "x"`, con o un object): en C#, la identidad; JC no las compara
+                // (test-111). Dos cadenas, el texto, en los dos.
+                bool unaCadena = EsCadena(ti) != EsCadena(td);
+                if (ti != null && td != null && !ti.IsValueType && !td.IsValueType
+                    && (unaCadena || (!EsCadena(ti) && !EsCadena(td) && !SymbolEqualityComparer.Default.Equals(ti, td) && !conInterfaz)))
                     return Rechaza(b, Porque.H7(Porque.IgualdadRefs));
             }
             // una cadena con lo que sea: C# mete lo que no es cadena en una caja para unirlo; JC lo une sin ella
