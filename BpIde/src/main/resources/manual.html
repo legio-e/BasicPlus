@@ -1395,6 +1395,19 @@ end Base</code></pre>
   no cómo se llama ni cuánto cuesta.
 </p>
 <p>
+  <strong>Sobre otro objeto, lo protegido se usa si el objeto es de la clase que lo usa o de una hija
+  suya</strong> (V8, <code>#760</code>; la regla de Java y C#). Desde <code>Perro</code>, el campo
+  <code>edad</code> de <code>Animal</code> se lee en <code>this</code>, en otro <code>Perro</code> o en un
+  <code>Cachorro</code>, que también es un perro; en un objeto que sólo es un <code>Animal</code> —podría
+  ser un <code>Gato</code>— no: se pide por una property pública suya.
+</p>
+<pre><code>class Perro extends Animal
+  function mayorQue(otro: Cachorro, a: Animal): boolean
+    return this.edad &gt; otro.edad    // vale: un Cachorro es un Perro
+    // a.edad                        // error: un Animal puede ser un Gato
+  end mayorQue
+end Perro</code></pre>
+<p>
   <code>private</code> sólo tiene sentido dentro de una clase: a nivel de módulo, lo
   que no es <code>public</code> ya es privado del módulo, y ahí no hay descendientes
   a quien proteger. Y <code>public private</code> no existe: son excluyentes.

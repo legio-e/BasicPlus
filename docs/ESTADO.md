@@ -116,6 +116,12 @@
 >   demás pendientes de FICHAS; la próxima tanda de placas pide imágenes nuevas y el `Stdlib.pack`.
 > - **`#759`, cerrada sin hacerla** (Eduardo: *«Si, cierrala.»*): es sólo de MOD8 (`--formato=8`), que se queda como
 >   está desde el 13-oct; en MOD9 funciona. En MOD8, la clase cuyo método se llama va antes en el fichero.
+> - **`#760`, hecha** (el commit de `#760`; Eduardo: *«Podemos intentar hacer 759, 760 y 761 y lo dejamos por hoy»*),
+>   analizada antes con Eduardo paso a paso (el objeto en el heap, su
+>   `this`, los campos por posición, y *«el campo c1 es un campo de B»*): lo protegido se usa sobre un objeto de la clase
+>   que lo usa o de una hija suya, la regla de Java; sobre uno que es sólo del padre, por su getter. Medido antes: un
+>   sample mal escrito (`CamposHijo`, corregido) y `test-241` (una anidada, que el traductor abre). La red, VERDE
+>   (18:43; paridad 184); `check-jc` (180); Mono, 348.
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,

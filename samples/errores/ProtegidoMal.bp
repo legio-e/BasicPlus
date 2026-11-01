@@ -1,0 +1,34 @@
+// ProtegidoMal.bp — NO COMPILA, a propósito (#760, V8, 1-nov): lo protegido es de la familia, y sobre otro objeto sólo
+// si es de la clase que lo usa o de una hija suya (la regla de Java y C#). Desde B (hija de A), sobre un objeto que es
+// sólo un A —podría ser un hermano de B—, no: el campo se lee por una property pública, y el método, si es public. Y
+// desde fuera de la familia, nada. Lo que sí vale, en bpgenvm-c/samples/ProtegidoHija.bp.
+module ProtegidoMal
+  class A
+    var campo: integer := 1
+    function metodo(): integer
+      return 3
+    end metodo
+  end A
+
+  class B extends A
+    // error: 'campo' sobre un A — sólo sobre un B o una hija suya
+    public function campoDelPadre(a: A): integer
+      return a.campo
+    end campoDelPadre
+    // error: 'metodo' sobre un A
+    public function metodoDelPadre(a: A): integer
+      return a.metodo()
+    end metodoDelPadre
+  end B
+
+  class X
+    // error: X no es de la familia de A
+    public function deFuera(a: A): integer
+      return a.campo
+    end deFuera
+  end X
+
+  function Main()
+    print "no compila"
+  end Main
+end ProtegidoMal

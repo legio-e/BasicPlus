@@ -19,7 +19,7 @@ module CamposHijo
       this.nombre := this.nombre + "+hijo"   // string (ref)
       this.otro := this                      // ref a la propia clase base
       raise onCambio(this.n)                 // evento HEREDADO de otro módulo (petaba el emisor)
-      return this.resumen() + " propio=" + this.propio + " otroNombre=" + this.otro.nombre
+      return this.resumen() + " propio=" + this.propio + " otroNombre=" + this.nombre   // #760: era this.otro.nombre
     end toca
     public function suma(): long
       return this.grande + this.n + this.propio

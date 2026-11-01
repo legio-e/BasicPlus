@@ -57,6 +57,15 @@ namespace Cs2Jc
 
         /// La visibilidad de un miembro en JC: la suya, o public si lo usa una anidada (abiertos).
         string AccesoDe(ISymbol s) => abiertos.Contains(s.OriginalDefinition) ? "public" : Acceso(s.DeclaredAccessibility);
+
+        /// #760 — en JC, lo protegido lo usa una hija sobre `this` o sobre un objeto de su clase o de una hija suya (la regla
+        /// de Java); sobre uno del padre, no. Lo que C# deja ahí es por ser una anidada (test-241), y se abre.
+        bool SobreUnoSuyo(SyntaxNode nombre, INamedTypeSymbol desde)
+        {
+            if (!(nombre.Parent is MemberAccessExpressionSyntax ma && ma.Name == nombre)) return true;   // sin receptor: this
+            if (ma.Expression is ThisExpressionSyntax || ma.Expression is BaseExpressionSyntax) return true;
+            return m.GetTypeInfo(ma.Expression).Type is INamedTypeSymbol t && Hereda(t.OriginalDefinition, desde.OriginalDefinition);
+        }
         readonly HashSet<string> renombrados = new HashSet<string>();
         readonly HashSet<string> imports = new HashSet<string>();
 
@@ -110,7 +119,8 @@ namespace Cs2Jc
                 if (!(tipoDelNodo != null && m.GetDeclaredSymbol(tipoDelNodo) is INamedTypeSymbol desde)) continue;
                 var dueno = s.ContainingType.OriginalDefinition;
                 if (SymbolEqualityComparer.Default.Equals(desde.OriginalDefinition, dueno)) continue;
-                if (acc != Accessibility.Private && Hereda(desde.OriginalDefinition, dueno)) continue;   // una hija lo ve en JC
+                if (acc != Accessibility.Private && Hereda(desde.OriginalDefinition, dueno) && SobreUnoSuyo(nodo, desde))
+                    continue;   // una hija lo ve en JC, sobre un objeto suyo (#760)
                 abiertos.Add(s.OriginalDefinition);
             }
             var usados = new Dictionary<string, INamedTypeSymbol>();

@@ -7323,11 +7323,37 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Por decidir (Eduardo):** que el ternario acepte dos ramas con una interfaz común (¿cuál, si comparten varias?), o
   que valga escribir la conversión a la interfaz en una rama (`IA(x)`, que ya existe) y la cuente, como C#.
 
-#### 🔵 `#760` — JC/BP: lo protegido, leído por una instancia de una hija desde la clase de en medio (`new C().f` en `B`, con `f` protegido de `A` y `C` hija de `B`), no compila: «'f' es protegido de 'C': lo ven esa clase y sus descendientes»; C# y Java lo dejan (abierta el 1-nov, al cerrar `#751`, que lo tapaba: `test-493` de Mono; **sólo análisis**)
+#### ✅ `#760` — JC/BP: lo protegido, leído por una instancia de una hija desde la clase de en medio (`new C().f` en `B`, con `f` protegido de `A` y `C` hija de `B`), no compila: «'f' es protegido de 'C': lo ven esa clase y sus descendientes»; C# y Java lo dejan (abierta el 1-nov, al cerrar `#751`, que lo tapaba: `test-493` de Mono; **CERRADA el mismo día**, el commit de `#760`)
 
 - **La regla de C# y de Java:** desde `B`, a lo protegido por una referencia de `B` o de una hija suya. BP mira si `B`
   desciende de `C`, la clase de la referencia: al revés.
 - **Por decidir (Eduardo):** la regla de C# y Java en BP y en JC.
+- **Analizada con Eduardo el 1-nov, antes de tocarla.** Él: *«Ni en BP ni en JC se puede leer un campo de otra clase
+  […] para acceder a un campo necesitamos que el CS sea el correcto»*. La premisa, comprobada: en `test-493`, `f` es una
+  property (se lee por su getter); y los campos de instancia van dentro del objeto y se leen por su posición —lo que va
+  por el CS son los estáticos y las constantes—, así que a `GET_FIELD` le da igual el objeto (`a.campo` desde otro
+  módulo lee bien, en las dos VMs): lo que limita es la regla. Eduardo: *«Un objeto vive en el Heap. Se pasa a los
+  métodos como referencia en el primer parámetro (es como el self de Python). Los métodos pueden localizar a los campos
+  por posición relativa»*; *«¿un hijo puede acceder a un campo de su padre? Si si es protected»*; y *«el campo c1 es un
+  campo de B, no necesita acceder a A para acceder a c1»*. De ahí la regla: desde `B`, lo protegido se usa sobre un
+  objeto que sea un `B` —`this`, otro `B` o un `C`, hija suya: en él, el campo es de `B`—; sobre un objeto que es sólo
+  un `A`, no: es el de otra clase, y se pide por su getter (la regla de Java y C#). Eduardo: *«OK»*, midiendo antes lo
+  que deja de compilar.
+- **Hecha el mismo día** (`checkVisibility`): se pregunta por la clase que DECLARA el miembro, como con `private`
+  (`#390`), y sobre un objeto, además, que sea de la clase que lo usa o de una hija suya (`super.m` cuenta como `this`;
+  `obj::m`, como `x.m`). Hasta hoy se preguntaba por la clase del objeto: no dejaba lo de una hija, ni a `A` su propio
+  campo en un `C`, y sí lo de un objeto del padre. Mensajes: «desde 'B' se usa sobre un 'B' o una hija suya, y este
+  objeto es un 'A', de otra clase» (y para un campo, «Léelo por una property pública suya»); desde fuera, el de
+  siempre, y para un campo, «(un campo no puede ser public)». **Lo medido antes de seguir:** en el corpus, un sample,
+  `CamposHijo` (`this.otro.nombre`, con `otro` el propio objeto visto como `Base`; Eduardo: *«this.otro.nombre está mal
+  escrito. debería ser this.nombre o base.nombre»*: corregido, imprime lo mismo); la stdlib, nada; Mono, `test-493`
+  entra y `test-241` salía —una anidada de C# que es además hija y usa lo protegido de otro objeto: C# se lo deja por
+  ser anidada—, y el traductor lo abre a public, como ya hacía con lo privado (`SobreUnoSuyo`; el caso `Accesos`).
+  `ProtegidoHija` en el corpus (en MOD9 y en MOD8; con el compilador de antes, 4 errores) y
+  `samples/errores/ProtegidoMal.bp` (`h13-errores`, 91 de 91); el manual, §9.2. Los mismos `.mod` en 671 de 714
+  fuentes (42 no compilan en ninguno; la otra, `ProtegidoHija`) y en los 31 de la stdlib, con el mismo pack. La red,
+  VERDE (18:43; la paridad, 184; MOD8, 181 y los 3 SKIP; las pruebas de C, 110/110); `check-jc`, VERDE (180 y los 4 SKIP de siempre); JUnit,
+  324; los casos del traductor, 17. Mono, de 347 a **348** (`test-493`; `test-241`, que salía, sigue dentro; ninguna deja de funcionar). El IDE, rehecho.
 
 #### ✅ `#759` — en MOD8, un método de una clase declarada más abajo no se puede llamar desde arriba: «Clase no declarada: Abajo», sin línea; en MOD9, sí (abierta el 1-nov, al hacer `#751`; preexistente; sólo de MOD8; **CERRADA el mismo día SIN HACERLA**: MOD8 se queda como está)
 

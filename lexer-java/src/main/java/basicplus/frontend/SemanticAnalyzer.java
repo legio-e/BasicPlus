@@ -3426,7 +3426,7 @@ public final class SemanticAnalyzer {
                 err(ma.line, ma.column, "'" + ct.cls.name + "' no tiene miembro de instancia '" + ma.member + "'");
                 return ErrorType.INSTANCE;
             }
-            checkVisibility(ma.line, ma.column, sub, ct.cls);
+            checkVisibility(ma.line, ma.column, sub, ct.cls, !(ma.target instanceof SuperExpr));   // #760: super.m, sobre this
             if (sub instanceof VarSymbol) exigirUsoDeArrayFijo(ma, (VarSymbol) sub, ma.line, ma.column);   // V7/H1 #19
             // V7/H1: ni `x.__dtor()` ni `super.__dtor()`. V7 #668: salvo en el módulo raíz —Core.__destruye es quien lo
             // llama cuando el lenguaje libera un objeto (su owner, el GC o el final del programa)—.
@@ -3520,7 +3520,7 @@ public final class SemanticAnalyzer {
         // Lanzar algo en un thread no da acceso a lo que no lo tendría escrito a
         // mano: `lookupInstance` también encuentra los privados, así que la
         // visibilidad se comprueba igual que en una llamada normal.
-        checkVisibility(bc.line, bc.column, fn, fn.ownerClass);
+        checkVisibility(bc.line, bc.column, fn, rc, !(bc.target instanceof SuperExpr));   // #760: como x.m, por el objeto
         checkArgs(bc.line, bc.column, fn.params, bc.args, scope);
         info.exprSymbols.put(bc, fn);
         info.boundCalls.add(bc);   // el emisor sintetiza una subclase por cada uno
@@ -4420,7 +4420,14 @@ public final class SemanticAnalyzer {
     // ============================================================
     // VISIBILIDAD
     // ============================================================
+    /** Un miembro estático, por el nombre de su clase (`A.m`): no hay objeto. */
     private void checkVisibility(int line, int col, Symbol sub, ClassSymbol owner) {
+        checkVisibility(line, col, sub, owner, false);
+    }
+
+    /** {@code sobreObjeto}: se usa sobre un objeto (`x.m`, `obj::m`) y {@code owner} es la clase de ese objeto (#760);
+     *  false si no hay objeto (lo estático) o si el objeto es `this` (`super.m`). */
+    private void checkVisibility(int line, int col, Symbol sub, ClassSymbol owner, boolean sobreObjeto) {
         // V8 H7.3 — lo de una interfaz es público por definición: es lo que exporta quien la implementa
         if (sub instanceof FunctionSymbol && ((FunctionSymbol) sub).ownerClass != null
                 && ((FunctionSymbol) sub).ownerClass.isInterface) return;
@@ -4462,14 +4469,30 @@ public final class SemanticAnalyzer {
             return;
         }
 
-        if (currentClass != null && owner != null
-                && (currentClass == owner || currentClass.isSubclassOf(owner)))
-            return;
-        if (!isPublic)
+        if (isPublic) return;
+        // #760 (Eduardo, 1-nov) — lo protegido es de la familia, y se pregunta por la clase que lo DECLARA, como con
+        // `private`: lo usan esa clase y sus descendientes. Y sobre un objeto (`x.m`), además, el objeto ha de ser de la
+        // clase que accede o de una hija suya: en un C, hija de B, el campo de A es un campo de B; en un objeto que es
+        // sólo un A, es el de otra clase, y se pide por su getter (la regla de Java). Hasta hoy se preguntaba por la
+        // clase del objeto —«¿B desciende de C?»—: no dejaba lo de una hija, y sí lo del padre.
+        ClassSymbol clase = (declarante != null) ? declarante : owner;
+        boolean deLaFamilia = currentClass != null && clase != null
+                && (currentClass == clase || currentClass.isSubclassOf(clase));
+        boolean sobreUnoSuyo = !sobreObjeto || owner == null
+                || owner == currentClass || owner.isSubclassOf(currentClass);
+        if (deLaFamilia && sobreUnoSuyo) return;
+        if (deLaFamilia)
+            err(line, col, "'" + sub.name + "' es protegido de '" + clase.name + "': desde '" + currentClass.name
+                    + "' se usa sobre un '" + currentClass.name + "' o una hija suya, y este objeto es un '"
+                    + owner.name + "', de otra clase. " + ((sub instanceof VarSymbol)
+                        ? "Léelo por una property pública suya."
+                        : "Hazlo 'public' si tiene que usarse sobre otros objetos."));
+        else
             err(line, col, "'" + sub.name + "' es protegido de '"
-                    + (owner != null ? owner.name : "?") + "': lo ven esa clase y sus"
-                    + " descendientes, no desde fuera. Hazlo 'public' si tiene que"
-                    + " usarse desde cualquier sitio.");
+                    + (clase != null ? clase.name : "?") + "': lo ven esa clase y sus"
+                    + " descendientes, no desde fuera. " + ((sub instanceof VarSymbol)
+                        ? "Léelo por una property pública suya (un campo no puede ser public)."
+                        : "Hazlo 'public' si tiene que usarse desde cualquier sitio."));
     }
 
     // ============================================================

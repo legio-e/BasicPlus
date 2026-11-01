@@ -14,6 +14,10 @@ module CsAccesos
       {
          return this.foo;
       }
+      public function int Prot()
+      {
+         return 7;
+      }
    }
 
    public class A_B
@@ -32,6 +36,19 @@ module CsAccesos
       }
    }
 
+   public class A_D : A
+   {
+      private A otro;
+      public function A_D(A a)
+      {
+         this.otro = a;
+      }
+      public function int LeeDelOtro()
+      {
+         return this.otro.Prot();
+      }
+   }
+
    class Programa
    {
       public static function int Main()
@@ -46,6 +63,10 @@ module CsAccesos
          if (a.Foo() != 4)
          {
             return 2;
+         }
+         if (new A_D(a).LeeDelOtro() != 7)
+         {
+            return 7;
          }
          try
          {

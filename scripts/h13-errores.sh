@@ -71,6 +71,10 @@ NativeCampo|en el metodo native 'Caja.doble'
 NativeCampo|lee el campo 'n'
 NativeConversion|en la funcion native 'patasDe'
 NativeConversion|convertir a 'Perro'
+ProtegidoMal|desde 'B' se usa sobre un 'B' o una hija suya, y este objeto es un 'A'
+ProtegidoMal|si tiene que usarse sobre otros objetos
+ProtegidoMal|'campo' es protegido de 'A': lo ven esa clase y sus descendientes, no desde fuera
+ProtegidoMal|un campo no puede ser public
 LocalSinValor|'total' se usa sin tener valor
 LocalSinValor|'nombre' se usa sin tener valor
 SwitchMal|switch sobre 'double': un real no se compara
