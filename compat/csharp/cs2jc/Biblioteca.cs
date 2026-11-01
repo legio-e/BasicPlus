@@ -98,6 +98,9 @@ namespace Cs2Jc
             "System.Double.IsNaN(System.Double)", "System.Single.IsNaN(System.Single)",
             "System.Int32.Parse(System.String)", "System.Int64.Parse(System.String)",
             "System.String.Join(System.String,System.String[])",
+            "System.Char.IsDigit(System.Char)", "System.Char.IsLetter(System.Char)", "System.Char.IsLetterOrDigit(System.Char)",
+            "System.Char.IsWhiteSpace(System.Char)", "System.Char.IsUpper(System.Char)", "System.Char.IsLower(System.Char)",
+            "System.Char.ToUpper(System.Char)", "System.Char.ToLower(System.Char)",
         };
 
         /// Los métodos de instancia de .NET que se saben pasar, por su firma: la función de BP que los hace, con el objeto
@@ -188,6 +191,13 @@ namespace Cs2Jc
                 case "System.String.ToString()":
                     if (objeto != null) return Expr(objeto.Expression);
                     break;
+                // el de un char: su carácter (en JC, el char es su código)
+                case "System.Char.ToString()":
+                    if (objeto != null) { imports.Add("Str"); return "Str.fromCharCode(" + Expr(objeto.Expression) + ")"; }
+                    break;
+                case "System.Char.ToString(System.Char)":
+                    imports.Add("Str");
+                    return "Str.fromCharCode(" + Expr(inv.ArgumentList.Arguments[0].Expression) + ")";
                 case "System.String.Equals(System.String,System.String)":
                     return "(" + string.Join(" == ", inv.ArgumentList.Arguments.Select(a => Expr(a.Expression))) + ")";
                 case "System.String.Equals(System.String)":
@@ -269,7 +279,7 @@ namespace Cs2Jc
             if (args.Count == 1)
             {
                 if (ms.Parameters[0].Type is IArrayTypeSymbol) return Rechaza(inv, Porque.Pendiente("Console.Write de un char[]"));
-                return fn + "(" + ExprBase(args[0].Expression) + ")";     // sin la caja de WriteLine(object)
+                return fn + "(" + Texto(args[0].Expression) + ")";        // sin la caja de WriteLine(object); un char, su carácter
             }
             var piezas = Piezas(args, ms, inv);
             if (piezas == null) return Hueco;
@@ -319,7 +329,7 @@ namespace Cs2Jc
                 { Rechaza(args[0], Porque.Pendiente("un formato que no usa sus argumentos una vez y en orden")); return null; }
                 siguiente++;
                 if (texto.Length > 0) { piezas.Add(Cadena(texto.ToString())); texto.Clear(); }
-                piezas.Add(ExprBase(args[n + 1].Expression));
+                piezas.Add(Texto(args[n + 1].Expression));
                 i = cierre;
             }
             if (siguiente != args.Count - 1)

@@ -32,7 +32,7 @@ class Programa
         Func<int, int> f = x => x + 1;                // fuera: lambdas
         int i = 0;
         int j = i++;                                  // le falta a JC: ++ dentro de una expresión
-        char c = 'a';                                 // el traductor todavía no: char
+        int[,] mm = new int[2, 2];                    // le falta a JC: int[,] (char ya se traduce: Caracteres)
         string t = string.Join(",", "a", "b");        // la biblioteca
         try
         {

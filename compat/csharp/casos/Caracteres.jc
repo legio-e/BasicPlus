@@ -1,0 +1,95 @@
+module CsCaracteres
+{
+   import CsSystem;
+   import Str;
+
+   class Programa
+   {
+      private static function int Siguiente(int c = 97)
+      {
+         return c + 1;
+      }
+      public static function int Main()
+      {
+         int a = 'A';
+         if (a + 1 != 66 || (int) a != 65)
+         {
+            return 1;
+         }
+         int b = (((int) (a + 1)) & 65535);
+         if (b != 'B')
+         {
+            return 2;
+         }
+         if ("x" + Str.fromCharCode(a) + Str.fromCharCode(b) != "xAB" || Str.fromCharCode(a) != "A" || Str.fromCharCode(b) != "B")
+         {
+            return 3;
+         }
+         if (("" + (Str.fromCharCode(a)) + "-" + (7)) != "A-7" || ("<" + Str.fromCharCode(b) + ">") != "<B>")
+         {
+            return 4;
+         }
+         string s = "hola";
+         if (charCodeAt(s, 0) != 'h' || charCodeAt(s, 3) - 'a' != 0)
+         {
+            return 5;
+         }
+         int n = 0;
+         if (true)
+         {
+            int i = 0;
+            while (i < strlen(s))
+            {
+               switch (charCodeAt(s, i))
+               {
+                  case 'o', 'a':
+                     n++;
+                     break;
+                  default:
+                     break;
+               }
+               i++;
+            }
+         }
+         if (n != 2)
+         {
+            return 6;
+         }
+         int grande = 65601;
+         if ((((int) grande) & 65535) != 'A')
+         {
+            return 7;
+         }
+         int[] letras = ['x', 'y'];
+         int[] vacio = newIntArray(3);
+         if (letras[1] != 'y' || vacio[0] != 0 || len(vacio) != 3)
+         {
+            return 8;
+         }
+         if (!CsSystem.Char_IsDigit('7') || CsSystem.Char_IsDigit('x') || !CsSystem.Char_IsLetter('q') || !CsSystem.Char_IsWhiteSpace(' '))
+         {
+            return 9;
+         }
+         if (CsSystem.Char_ToUpper('q') != 'Q' || CsSystem.Char_ToLower('Q') != 'q')
+         {
+            return 10;
+         }
+         if (Programa.Siguiente() != 'b' || Programa.Siguiente('y') != 'z')
+         {
+            return 11;
+         }
+         println(Str.fromCharCode(a));
+         println("caracteres bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

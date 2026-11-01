@@ -4685,6 +4685,16 @@ El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo 
   `("" + (n))`; el de un `bool`, `True` y `False`, como .NET; `Equals` de dos cadenas, `==`; `Console.Out.WriteLine`,
   `println`; `new object()`, `new Object()`. De paso, `o == "x"` con `o` un `object` (identidad, en C#) se rechaza
   como la `==` entre referencias de tipos distintos (H7): JC no la compila (`test-111`). Caso `Cadenas`. **Mono: 316**.
+- **`char`, un entero** (Eduardo: *«En JC, char es un entero»*): el tipo, `int`; el literal, el de carácter de JC
+  (`'a'`; una comilla, la barra o uno de control, su número); las cuentas, las de un número. Como texto, su carácter,
+  `Str.fromCharCode(c)`: al sumarlo a una cadena, en `Write`, en un formato, en `$"…"` y en `ToString()`. `s[i]`,
+  `charCodeAt(s, i)`; `(char) n`, los 16 bits de abajo (`& 65535`), y una constante, su valor; el `switch`, `default`,
+  `new char[n]` (`newIntArray`) y un valor por defecto, con su código. En `CsSystem`, `char.IsDigit`, `IsLetter`,
+  `IsLetterOrDigit`, `IsWhiteSpace`, `IsUpper`, `IsLower`, `ToUpper` y `ToLower`, de ASCII. De paso: el tamaño `long`
+  de un array, a `(int)`, como C# (`test-138`). Caso `Caracteres` (y en `Rechazos`, la línea de `char`, otro rechazo).
+  **Mono: 320**, y una que falla de más con su porqué, `test-673`: una cadena con un carácter de fuera del plano básico
+  (U+10041); en C#, `a[0]` es la mitad alta de su par de UTF-16 (0xD800), y en BP, que guarda UTF-8, el carácter
+  entero. Es la diferencia que ya decía `Length`: no se traduce sin cambiar lo que es una cadena de BP.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

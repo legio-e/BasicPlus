@@ -8,7 +8,7 @@
 32: le falta a JC: delegados y eventos de C# (sin lambdas) — Func<int, int>
 32: fuera: lambdas y métodos anónimos — x => x + 1
 34: le falta a JC: ++, -- y = dentro de una expresión — i++
-35: el traductor todavía no: char (como entero) — char
+35: le falta a JC: arrays de varias dimensiones — int[,]
 36: la biblioteca: System.String.Join — string.Join(",", "a", "b")
 39: le falta a JC: null en una cadena (en BP un string no es nulo) — null
 41: le falta a JC: errores de la VM con su tipo — NullReferenceException

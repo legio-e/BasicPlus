@@ -79,6 +79,7 @@ namespace Cs2Jc
                 case SpecialType.System_Byte:
                 case SpecialType.System_SByte:
                 case SpecialType.System_UInt16:
+                case SpecialType.System_Char:
                 case SpecialType.System_Single:
                 case SpecialType.System_Double: return true;
                 default: return false;
@@ -90,7 +91,8 @@ namespace Cs2Jc
         {
             switch (t?.SpecialType)
             {
-                case SpecialType.System_Int32: return "newIntArray";
+                case SpecialType.System_Int32:
+                case SpecialType.System_Char: return "newIntArray";        // un char es un entero
                 case SpecialType.System_Byte: return "newByteArray";
                 case SpecialType.System_Int64: return "newLongArray";
                 case SpecialType.System_Double: return "newDoubleArray";
@@ -107,7 +109,10 @@ namespace Cs2Jc
             if (ac.Initializer != null) return ValoresDeArray(ac.Initializer.Expressions, at, ac);
             string fn = CreadorDeArray(at.ElementType);
             if (fn == null) return Rechaza(ac, Porque.H7(Porque.ArrayConTamano));
-            return fn + "(" + Expr(ac.Type.RankSpecifiers[0].Sizes[0]) + ")";
+            // el tamaño, un entero: C# convierte uno long (`new char[len]`, test-138); el creador de Core pide un integer
+            var tam = ac.Type.RankSpecifiers[0].Sizes[0];
+            if (m.GetTypeInfo(tam).Type?.SpecialType == SpecialType.System_Int64) return fn + "((int) " + Atomo(tam) + ")";
+            return fn + "(" + Expr(tam) + ")";
         }
 
         /// `{ 1, 2 }`: `[1, 2]`. Un array de valores de JC toma el tipo de sus valores: uno que no sea del tipo del array,
@@ -153,6 +158,18 @@ namespace Cs2Jc
                           || e is ElementAccessExpressionSyntax || e is ParenthesizedExpressionSyntax || e is LiteralExpressionSyntax
                           || e is ThisExpressionSyntax;
             return simple ? x : "(" + x + ")";
+        }
+
+        /// Una expresión como texto (`print`, la suma de cadenas, un formato): la de por sí (ExprBase), y un `char`, que
+        /// en JC es su código, como su carácter: `Str.fromCharCode(c)`.
+        string Texto(ExpressionSyntax e)
+        {
+            if (m.GetTypeInfo(e).Type?.SpecialType == SpecialType.System_Char)
+            {
+                imports.Add("Str");
+                return "Str.fromCharCode(" + ExprBase(e) + ")";
+            }
+            return ExprBase(e);
         }
 
         /// Una expresión por sí misma, sin la conversión de su sitio: la usan `print` y la suma de cadenas, donde C# mete
@@ -202,7 +219,8 @@ namespace Cs2Jc
                 case SpecialType.System_Int16:
                 case SpecialType.System_Byte:
                 case SpecialType.System_SByte:
-                case SpecialType.System_UInt16: return "0";
+                case SpecialType.System_UInt16:
+                case SpecialType.System_Char: return "0";
                 case SpecialType.System_Int64: return "0L";
                 case SpecialType.System_Double: return "0.0";
                 case SpecialType.System_Single: return "0.0f";
@@ -223,7 +241,7 @@ namespace Cs2Jc
                 else if (c is InterpolationSyntax it)
                 {
                     if (it.AlignmentClause != null || it.FormatClause != null) return Rechaza(it, Porque.H7(Porque.Formatos));
-                    string x = ExprBase(it.Expression);                    // sin la caja de C#, como en la suma
+                    string x = Texto(it.Expression);                       // sin la caja de C#, como en la suma
                     bool simple = it.Expression is IdentifierNameSyntax || it.Expression is MemberAccessExpressionSyntax
                                   || it.Expression is InvocationExpressionSyntax || it.Expression is LiteralExpressionSyntax
                                   || it.Expression is ElementAccessExpressionSyntax || it.Expression is ParenthesizedExpressionSyntax;
@@ -284,7 +302,6 @@ namespace Cs2Jc
             if (t == null) return null;
             switch (t.SpecialType)
             {
-                case SpecialType.System_Char: return Porque.Pendiente("char (como entero)");
                 case SpecialType.System_UInt32:
                 case SpecialType.System_UInt64:
                 case SpecialType.System_Decimal:
@@ -320,6 +337,14 @@ namespace Cs2Jc
                     // escapes de C#, punto 19)
                     if (l.Token.Text.StartsWith("@") || l.Token.Text.StartsWith("\"\"\"")) return Cadena((string) l.Token.Value);
                     return l.Token.Text;
+                case SyntaxKind.CharacterLiteralExpression:
+                {
+                    // un carácter es un entero en JC, su código (17-oct; el escalón 1): `'a'` tal cual si se lee bien, y
+                    // si no (una comilla, la barra, uno de control, de fuera de ASCII), el número
+                    char ch = (char) l.Token.Value;
+                    if (ch >= 32 && ch < 127 && ch != '\'' && ch != '\\') return "'" + ch + "'";
+                    return ((int) ch).ToString(System.Globalization.CultureInfo.InvariantCulture);
+                }
                 case SyntaxKind.TrueLiteralExpression: return "true";
                 case SyntaxKind.FalseLiteralExpression: return "false";
                 case SyntaxKind.NullLiteralExpression: return "null";
@@ -577,7 +602,7 @@ namespace Cs2Jc
             }
             // una cadena con lo que sea: C# mete lo que no es cadena en una caja para unirlo; JC lo une sin ella
             if (b.IsKind(SyntaxKind.AddExpression) && EsCadena(m.GetTypeInfo(b).Type))
-                return ExprBase(b.Left) + " + " + ExprBase(b.Right);
+                return Texto(b.Left) + " + " + Texto(b.Right);
             return Expr(b.Left) + " " + b.OperatorToken.Text + " " + Expr(b.Right);
         }
 
@@ -654,6 +679,13 @@ namespace Cs2Jc
                 }
             }
             CompruebaOrden(a, c);
+            // `(char) n`: los 16 bits de abajo, como C#; una constante, su valor (`(char) 65` es 'A')
+            if (a.SpecialType == SpecialType.System_Char && de?.SpecialType != SpecialType.System_Char)
+            {
+                var cv = m.GetConstantValue(c);
+                if (cv.HasValue) return LiteralDeConstante(cv.Value, c);
+                return "(((int) " + Atomo(c.Expression) + ") & 65535)";
+            }
             return "(" + Tipo(a, c.Type) + ") " + Expr(c.Expression);
         }
 
@@ -665,7 +697,9 @@ namespace Cs2Jc
                 if (ea.ArgumentList.Arguments.Count != 1) return Rechaza(ea, Porque.H7(Porque.ArraysVarias));
                 return Expr(ea.Expression) + "[" + Expr(ea.ArgumentList.Arguments[0].Expression) + "]";
             }
-            if (EsCadena(t)) return Rechaza(ea, Porque.Pendiente("s[i] (char)"));
+            // `s[i]`: su carácter, que en JC es su código (el escalón 1)
+            if (EsCadena(t) && ea.ArgumentList.Arguments.Count == 1)
+                return "charCodeAt(" + Expr(ea.Expression) + ", " + Expr(ea.ArgumentList.Arguments[0].Expression) + ")";
             if (m.GetSymbolInfo(ea).Symbol is IPropertySymbol p && p.IsIndexer)
                 return Rechaza(ea, DelPrograma(p) ? Porque.H7(Porque.Indexadores) : Porque.DeNet(NombreCompleto(p.ContainingType) + "[i]"));
             return RechazaNodo(ea);
@@ -710,6 +744,7 @@ namespace Cs2Jc
                 case SpecialType.System_Byte: return "byte";
                 case SpecialType.System_SByte: return "sbyte";
                 case SpecialType.System_UInt16: return "ushort";
+                case SpecialType.System_Char: return "int";            // en JC, char es un entero (Eduardo, 1-nov)
                 case SpecialType.System_Single: return "float";
                 case SpecialType.System_Double: return "double";
                 case SpecialType.System_Boolean: return "bool";

@@ -703,6 +703,7 @@ namespace Cs2Jc
                 case null: return Rechaza(donde, EsCadena(ps.Type) ? Porque.H7(Porque.NullCadena) : Porque.H7(Porque.NullPorDefecto));
                 case bool b: return b ? "true" : "false";
                 case string s: return Cadena(s);
+                case char ch: return ((int) ch).ToString(ci);           // un char, su código: en JC es un entero
                 case int i: return i == int.MinValue ? "(-2147483647 - 1)" : i.ToString(ci);
                 case long l: return l == long.MinValue ? "(-9223372036854775807L - 1L)" : l.ToString(ci) + "L";
                 case short _: case sbyte _: case byte _: case ushort _: return System.Convert.ToString(v, ci);
