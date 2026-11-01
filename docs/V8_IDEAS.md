@@ -4655,6 +4655,18 @@ que trabajaremos con las nuestras. Lo mismo sirve para las excepciones. En JC, c
 El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo demás. Cada trabajo, con su caso en
 `compat/csharp/casos/` y el lote.
 
+### El escalón 1, por trabajos (1-nov)
+
+- **La librería y las excepciones.** `compat/csharp/lib/CsSystem.jc`: `ApplicationException`, `ArgumentException` (con
+  `ParamName`), `ArgumentNullException`, `ArgumentOutOfRangeException`, `InvalidOperationException`,
+  `NotImplementedException`, `NotSupportedException` y `FormatException`, con la jerarquía y los mensajes de .NET; las
+  que piden las pruebas. El traductor la compila al empezar (el `Ejecutor`, junto a la stdlib) y escribe
+  `import CsSystem;`; `SystemException` es `RuntimeError`, y una clase del programa que hereda de una de ellas sin
+  constructor llama sola al suyo sin argumentos (comprobado en las dos VMs). Su caso, `Excepciones`. De paso, un fallo
+  del traductor que salió con ellas: el valor por defecto de un método `partial` es el de su declaración sin cuerpo
+  (`test-partial-25`; caso `Parciales`). **Mono: 299 funcionan** y 5 fallan: a las 4 de antes se suma `test-901`, la
+  diferencia de JC de `test-907` (C# da por asignada una variable tras un `if (true)`; JC no).
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos

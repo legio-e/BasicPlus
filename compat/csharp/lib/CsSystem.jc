@@ -1,0 +1,69 @@
+// CsSystem.jc — lo de `System` de .NET que piden las pruebas de C# traducidas a JC (V8/H6, el escalón 1;
+// docs/V8_IDEAS.md §E9), con los nombres de .NET y hecho sobre lo de BP. Es de la herramienta, no del producto
+// (Eduardo, 1-nov: «esas librerías en principio a nosotros para trabajar con los micros no nos interesan ya que
+// trabajaremos con las nuestras»): no está en bpstdlib ni en las placas. El traductor la compila al empezar, junto a
+// la stdlib, y la pone en el `import` de lo que traduce.
+//
+// Las excepciones, con la jerarquía de .NET: `System.Exception` es la `Exception` de Core, y `System.SystemException`,
+// `RuntimeError` —lo que lanza la VM—, así que sus hijas heredan de `RuntimeError` y un `catch (SystemException)`
+// atrapa también un `null` o un índice fuera, como en .NET. Cada una, con el mensaje que pone .NET si se crea sin él.
+// Las que lanza la VM (NullReferenceException, IndexOutOfRangeException…) no están: la VM lanza `RuntimeError`, y un
+// `catch` de una de ellas no lo atraparía (el traductor lo rechaza: «errores de la VM con su tipo», H7).
+module CsSystem
+{
+   public class ApplicationException : Exception
+   {
+      public function ApplicationException() : base("Error in the application.") { }
+      public function ApplicationException(string message) : base(message) { }
+   }
+
+   public class ArgumentException : RuntimeError
+   {
+      public string ParamName { get; set; }
+      public function ArgumentException() : base("Value does not fall within the expected range.") { }
+      public function ArgumentException(string message) : base(message) { }
+      public function ArgumentException(string message, string paramName) : base(message + " (Parameter '" + paramName + "')")
+      {
+         this.ParamName = paramName;
+      }
+   }
+
+   public class ArgumentNullException : ArgumentException
+   {
+      public function ArgumentNullException() : base("Value cannot be null.") { }
+      public function ArgumentNullException(string paramName) : base("Value cannot be null.", paramName) { }
+      public function ArgumentNullException(string paramName, string message) : base(message, paramName) { }
+   }
+
+   public class ArgumentOutOfRangeException : ArgumentException
+   {
+      public function ArgumentOutOfRangeException() : base("Specified argument was out of the range of valid values.") { }
+      public function ArgumentOutOfRangeException(string paramName)
+         : base("Specified argument was out of the range of valid values.", paramName) { }
+      public function ArgumentOutOfRangeException(string paramName, string message) : base(message, paramName) { }
+   }
+
+   public class InvalidOperationException : RuntimeError
+   {
+      public function InvalidOperationException() : base("Operation is not valid due to the current state of the object.") { }
+      public function InvalidOperationException(string message) : base(message) { }
+   }
+
+   public class NotImplementedException : RuntimeError
+   {
+      public function NotImplementedException() : base("The method or operation is not implemented.") { }
+      public function NotImplementedException(string message) : base(message) { }
+   }
+
+   public class NotSupportedException : RuntimeError
+   {
+      public function NotSupportedException() : base("Specified method is not supported.") { }
+      public function NotSupportedException(string message) : base(message) { }
+   }
+
+   public class FormatException : RuntimeError
+   {
+      public function FormatException() : base("One of the identified items was in an invalid format.") { }
+      public function FormatException(string message) : base(message) { }
+   }
+}

@@ -536,7 +536,7 @@ namespace Cs2Jc
                     if (t != null && t.IsValueType && ClaseDeCaja(t) != null && izq != null && !izq.IsValueType)
                         return Expr(b.Left) + " is " + ClaseDeCaja(t);
                     if (t == null || t.IsValueType || EsCadena(t)
-                        || (!DelPrograma(t) && !EsExcepcionNet(t) && t.SpecialType != SpecialType.System_Object))
+                        || (!DelPrograma(t) && ExcepcionJc(t) == null && t.SpecialType != SpecialType.System_Object))
                         return Rechaza(b, Porque.Pendiente("is " + NombreCompleto(t)));
                     CompruebaOrden(t, b);
                     return Expr(b.Left) + " is " + Tipo(t, b.Right);
@@ -735,7 +735,7 @@ namespace Cs2Jc
                         default: return Rechaza(donde, Porque.Pendiente("tipo " + nt.TypeKind));
                     }
                 }
-                if (EsExcepcionNet(nt)) return "Exception";
+                if (ExcepcionJc(nt) is string ex) return ex;              // Exception, RuntimeError o la de CsSystem
                 if (nt.TypeKind == TypeKind.Interface) return Rechaza(donde, PorInterfazAjena(nt));
                 return Rechaza(donde, Porque.DeNet("tipo " + NombreCompleto(nt)));
             }

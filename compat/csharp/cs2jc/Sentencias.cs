@@ -467,11 +467,11 @@ namespace Cs2Jc
             b.DescendantNodes().OfType<ThrowStatementSyntax>().Any(th => th.Expression == null
                 && th.Ancestors().OfType<CatchClauseSyntax>().First().Block == b);
 
-        /// El tipo de un catch: Exception, una excepción del programa; las de la VM (NullReferenceException…), por su
-        /// tipo, no: la VM lanza RuntimeError.
+        /// El tipo de un catch: Exception, SystemException (el RuntimeError de BP), una de la librería CsSystem, una
+        /// excepción del programa; las de la VM (NullReferenceException…), por su tipo, no: la VM lanza RuntimeError.
         string TipoExcepcion(ITypeSymbol t, SyntaxNode donde)
         {
-            if (EsExcepcionNet(t)) return "Exception";
+            if (ExcepcionJc(t) is string ex) return ex;
             if (DelPrograma(t))
             {
                 CompruebaOrden(t, donde);

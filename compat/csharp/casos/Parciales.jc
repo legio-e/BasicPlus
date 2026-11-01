@@ -1,0 +1,35 @@
+module CsParciales
+{
+   class C
+   {
+      private static int visto;
+      private static function void Anota(int i = 8)
+      {
+         C.visto = i;
+      }
+      public static function int Main()
+      {
+         C.Anota();
+         if (C.visto != 8)
+         {
+            return 1;
+         }
+         C.Anota(3);
+         if (C.visto != 3)
+         {
+            return 2;
+         }
+         println("parciales bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = C.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

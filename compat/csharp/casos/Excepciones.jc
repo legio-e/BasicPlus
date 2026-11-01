@@ -1,0 +1,155 @@
+module CsExcepciones
+{
+   import CsSystem;
+
+   class MiError : CsSystem.ApplicationException
+   {
+   }
+
+   class ConDetalle : CsSystem.ArgumentException
+   {
+      public function ConDetalle(string m) : base(m, "detalle")
+      {
+      }
+   }
+
+   class Programa
+   {
+      private static function int Lanza(int que)
+      {
+         switch (que)
+         {
+            case 1:
+               throw new CsSystem.ApplicationException();
+            case 2:
+               throw new CsSystem.ArgumentNullException("x");
+            case 3:
+               throw new CsSystem.InvalidOperationException("estado");
+            case 4:
+               throw new MiError();
+            case 5:
+               throw new ConDetalle("malo");
+            case 6:
+               throw new CsSystem.NotSupportedException();
+            case 7:
+               throw new RuntimeError("System error.");
+         }
+         return 0;
+      }
+      public static function int Main()
+      {
+         try
+         {
+            Programa.Lanza(1);
+            return 1;
+         }
+         catch (CsSystem.ApplicationException e)
+         {
+            if (e.msg != "Error in the application.")
+            {
+               return 2;
+            }
+         }
+         try
+         {
+            Programa.Lanza(2);
+            return 3;
+         }
+         catch (CsSystem.ArgumentException e)
+         {
+            if (!(e is CsSystem.ArgumentNullException))
+            {
+               return 4;
+            }
+            if (e.ParamName != "x")
+            {
+               return 5;
+            }
+            if (e.msg != "Value cannot be null. (Parameter 'x')")
+            {
+               return 6;
+            }
+         }
+         try
+         {
+            Programa.Lanza(3);
+            return 7;
+         }
+         catch (RuntimeError e)
+         {
+            if (e.msg != "estado")
+            {
+               return 8;
+            }
+         }
+         try
+         {
+            Programa.Lanza(4);
+            return 9;
+         }
+         catch (Exception e)
+         {
+            if (!(e is MiError) || e.msg != "Error in the application.")
+            {
+               return 10;
+            }
+         }
+         try
+         {
+            Programa.Lanza(5);
+            return 11;
+         }
+         catch (CsSystem.ArgumentException e)
+         {
+            if (e.msg != "malo (Parameter 'detalle')")
+            {
+               return 12;
+            }
+         }
+         try
+         {
+            Programa.Lanza(6);
+            return 13;
+         }
+         catch (CsSystem.NotSupportedException e)
+         {
+            if (e.msg != "Specified method is not supported.")
+            {
+               return 14;
+            }
+         }
+         try
+         {
+            Programa.Lanza(7);
+            return 15;
+         }
+         catch (RuntimeError e)
+         {
+            if (e.msg != "System error.")
+            {
+               return 16;
+            }
+         }
+         try
+         {
+            Object o = null;
+            string s = o.toString();
+            return 17;
+         }
+         catch (RuntimeError excepcion_cs1)
+         {
+         }
+         println("excepciones bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

@@ -36,6 +36,21 @@ namespace Cs2Jc
             // la stdlib al lado: el compilador la lee de ahí (--stdlibDir) y las VMs la cargan junto al .mod
             foreach (var f in Directory.GetFiles(Path.Combine(raiz, "bpstdlib"), "*.mod"))
                 File.Copy(f, Path.Combine(Trabajo, Path.GetFileName(f)), true);
+            // y las librerías CSharp (compat/csharp/lib, el escalón 1: V8_IDEAS §E9), lo de .NET que piden las pruebas:
+            // compiladas aquí, como un módulo más; CsSystem primero, que las demás pueden usarla
+            string lib = Path.Combine(raiz, "compat", "csharp", "lib");
+            if (Directory.Exists(lib))
+                foreach (var f in Directory.GetFiles(lib, "*.jc").OrderBy(f => Path.GetFileName(f) == "CsSystem.jc" ? 0 : 1)
+                                                               .ThenBy(f => f, StringComparer.Ordinal))
+                {
+                    string mod = Path.Combine(Trabajo, Path.GetFileNameWithoutExtension(f) + ".mod");
+                    File.Delete(mod);
+                    var c = Corre("java", new[] { "-Dfile.encoding=UTF-8", "-jar", fe, f, "--compile", Trabajo, "--backend=mivm",
+                                                  "--stdlibDir=" + Trabajo }, Trabajo, 120);
+                    if (c.Rc != 0 || !File.Exists(mod))
+                        throw new InvalidOperationException("la librería " + Path.GetFileName(f) + " no compila (rc " + c.Rc + "):\n"
+                                                            + c.Salida + c.Error);
+                }
         }
 
         public Ejecucion Ejecuta(string modulo)

@@ -208,7 +208,7 @@ namespace Cs2Jc
             if (b != null && b.SpecialType != SpecialType.System_Object)
             {
                 if (DelPrograma(b)) base_ = Tipo(b, donde);
-                else if (EsExcepcionNet(b)) base_ = "Exception";
+                else if (ExcepcionJc(b) is string ex) base_ = ex;     // una excepción de .NET (CsSystem, el escalón 1)
                 else Rechaza(lugarBase, Porque.DeNet("hereda de " + NombreCompleto(b)));
             }
             // Las interfaces (H7.3, #756; antes, con #745, una sola y como clase base): las del programa, en la cabecera
@@ -227,10 +227,11 @@ namespace Cs2Jc
             foreach (var p in partes)
                 foreach (var miembro in p.Members)
                     EmiteMiembro(miembro);
-            // Una excepción sin constructor: el implícito de C# llama a Exception(), que en BP no existe (la de BP pide
-            // su mensaje); se escribe con el mensaje que pondría .NET.
-            if (EsExcepcionNet(b) && s.InstanceConstructors.All(c => c.IsImplicitlyDeclared))
-                Linea("public function " + NombreTipo(s) + "() : base(" + Cadena(MensajePorDefecto(s)) + ") { }");
+            // Una excepción sin constructor: el implícito de C# llama a Exception() o a SystemException(), que en BP no
+            // existen (la Exception y el RuntimeError de Core piden su mensaje); se escribe con el mensaje que pondría
+            // .NET. Las de la librería tienen el suyo sin argumentos, y lo llama el implícito de JC.
+            if (MensajeSinArgumentos(b, s) is string porDefecto && s.InstanceConstructors.All(c => c.IsImplicitlyDeclared))
+                Linea("public function " + NombreTipo(s) + "() : base(" + Cadena(porDefecto) + ") { }");
             sangria--;
             Linea("}");
             Linea("");
@@ -450,17 +451,19 @@ namespace Cs2Jc
             // base.metodo() debería ser válido»), y se copia; pero JC no lo compila (#753)
             if (ini != null && ini.IsKind(SyntaxKind.BaseConstructorInitializer) && b?.SpecialType == SpecialType.System_Object)
                 Rechaza(ini, Porque.Fallo("#753", Porque.SuperObject));
+            bool haciaLaBase = ini != null && ini.IsKind(SyntaxKind.BaseConstructorInitializer);
             if (ini != null)
             {
                 var objetivo = m.GetSymbolInfo(ini).Symbol as IMethodSymbol;
-                if (ini.IsKind(SyntaxKind.BaseConstructorInitializer) && EsExcepcionNet(b))
-                    cabecera += " : base(" + ArgsExcepcion(ini.ArgumentList, claseActual) + ")";
+                if (haciaLaBase && MensajeSinArgumentos(b, claseActual) is string porDefecto)
+                    cabecera += " : base(" + ArgsExcepcion(ini.ArgumentList, porDefecto) + ")";
+                else if (haciaLaBase && !DelPrograma(b) && ExcepcionJc(b) != null && !ConstructorDeCsSystem(objetivo, b, ini))
+                    return;
                 else
-                    cabecera += (ini.IsKind(SyntaxKind.BaseConstructorInitializer) ? " : base(" : " : this(")
-                        + Argumentos(ini.ArgumentList, objetivo) + ")";
+                    cabecera += (haciaLaBase ? " : base(" : " : this(") + Argumentos(ini.ArgumentList, objetivo) + ")";
             }
-            else if (EsExcepcionNet(b))
-                cabecera += " : base(" + Cadena(MensajePorDefecto(claseActual)) + ")";
+            else if (MensajeSinArgumentos(b, claseActual) is string porDefecto)
+                cabecera += " : base(" + Cadena(porDefecto) + ")";
             Linea(cabecera);
             Cuerpo(c.Body, c.ExpressionBody, true);
         }
@@ -548,7 +551,12 @@ namespace Cs2Jc
                 var ps = m.GetDeclaredSymbol(p);
                 if (ps == null) { partes.Add(Rechaza(p, Porque.Fuera(Porque.Interop))); continue; }     // __arglist
                 if (ps.RefKind != RefKind.None) Rechaza(p, Porque.H7(Porque.RefOut));
-                partes.Add(Tipo(ps.Type, p.Type) + " " + Ident(ps.Name) + (p.Default != null ? " = " + ValorPorDefecto(ps, p) : ""));
+                // de un método partial, el valor por defecto es el de su declaración sin cuerpo: la que lo define en C#
+                var definicion = (ps.ContainingSymbol as IMethodSymbol)?.PartialDefinitionPart;
+                var conValor = definicion != null ? definicion.Parameters[ps.Ordinal] : ps;
+                var pValor = conValor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as ParameterSyntax ?? p;
+                partes.Add(Tipo(ps.Type, p.Type) + " " + Ident(ps.Name)
+                           + (pValor.Default != null ? " = " + ValorPorDefecto(conValor, pValor) : ""));
             }
             return string.Join(", ", partes);
         }
@@ -740,8 +748,6 @@ namespace Cs2Jc
 
         bool DelPrograma(ISymbol s) => s != null && s.Locations.Any(l => l.IsInSource && l.SourceTree == arbol);
 
-        static bool EsExcepcionNet(ITypeSymbol t) => t != null && t.ToDisplayString() == "System.Exception";
-
         /// El mensaje que pone .NET a una excepción creada sin él: «Exception of type 'N.A+B' was thrown.»
         static string MensajePorDefecto(INamedTypeSymbol s) => "Exception of type '" + NombreNet(s) + "' was thrown.";
 
@@ -752,10 +758,11 @@ namespace Cs2Jc
             return ns == null || ns.IsGlobalNamespace ? s.Name : ns.ToDisplayString() + "." + s.Name;
         }
 
-        /// Los argumentos de `: base(…)` hacia System.Exception: sin ninguno, el mensaje de .NET; con uno, ése.
-        string ArgsExcepcion(ArgumentListSyntax args, INamedTypeSymbol clase)
+        /// Los argumentos hacia la Exception o el RuntimeError de BP (System.Exception y SystemException): sin ninguno, el
+        /// mensaje de .NET; con uno, ése.
+        string ArgsExcepcion(ArgumentListSyntax args, string porDefecto)
         {
-            if (args.Arguments.Count == 0) return Cadena(MensajePorDefecto(clase));
+            if (args == null || args.Arguments.Count == 0) return Cadena(porDefecto);
             if (args.Arguments.Count == 1) return Expr(args.Arguments[0].Expression);
             return Rechaza(args, Porque.Pendiente("una excepción con su causa (innerException)"));
         }
