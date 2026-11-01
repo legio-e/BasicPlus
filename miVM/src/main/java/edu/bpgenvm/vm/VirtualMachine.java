@@ -4748,10 +4748,13 @@ public class VirtualMachine {
                     // (resolverVirtual: la regla de las dos VMs).
                     long resuelto = resolverVirtual(mem, classPtr, vtSlot);
                     if (resuelto == -1L) {
-                        // No hay padre: el slot no es resoluble por la cadena.
-                        throwBpRuntimeError(tc, "INVOKE_VIRTUAL: slot "
-                                + vtSlot + " no resoluble en la cadena de herencia");
-                        break;
+                        // #758 — no hay padre: el slot no es resoluble por la cadena. Tras una carga buena no pasa
+                        // nunca (el cargador comprueba cada método que se llama); sólo con un .mod corrompido o un bug
+                        // nuestro. Es un seguro: un error de la VM que para el programa, como la VM-C, y con su texto.
+                        // Era un RuntimeError de BP, y un `try` del programa se lo tragaba y seguía (Eduardo, 1-nov:
+                        // «Se debe disparar un error, nada mas»).
+                        throw new RuntimeException("INVOKE_VIRTUAL slot " + vtSlot
+                                + " no resoluble en cadena de herencia");
                     }
                     int targetCS = (int) (resuelto >>> 32);
                     int targetPC = targetCS + (int) resuelto;

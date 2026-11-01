@@ -359,7 +359,8 @@ loop:
       goto found
   parentOff = readI32(desc + 8)
   if parentOff == 0:
-    throwBpRuntimeError("slot N no resoluble en cadena de herencia")
+    fallo de la VM: "INVOKE_VIRTUAL slot N no resoluble en cadena de herencia"
+    (para el programa, no se atrapa; en las dos VMs, #758 — tras una carga buena no pasa)
   curCS = getCSForDataAddr(desc)
   desc = curCS + parentOff
   goto loop

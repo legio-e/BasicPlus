@@ -104,9 +104,16 @@
 >   `refCasts` como el emisor de bytecode; `Perro(a)` se compilaba como una construcción, sin un error.
 >   `samples/errores/NativeConversion.bp`; `AOT_LIMITES.md`. Los mismos `.mod` en 671 fuentes y en la stdlib; la red,
 >   VERDE (15:34; paridad 183, pruebas de C 110); `check-jc` (179), JUnit (324); el IDE, rehecho.
-> - **`#758`, mirada otra vez y parada:** la premisa era la mitad (en la VM-C, `INVOKE_SLOT`, `INVOKE_IFAZ` y el
->   `call_method` del AOT lanzan atrapable; sólo `INVOKE_VIRTUAL` para), y la tabla de salidas dice 3 donde las dos VMs
->   dan 1. Tres preguntas para Eduardo, en su ficha.
+> - **`#758`, hecha** (el commit de `#758`; Eduardo: *«Si lo quieres poner como un mecanismo de seguridad por mi
+>   bien. Se debe disparar un error, nada mas.»*). Antes, sus dos preguntas: *«¿Esto no lo puede resolver el
+>   compilador?»* —sí, y el cargador lo comprueba todo al cargar— y *«¿Has intentado reproducirlo con la versión
+>   actual?»* —no lo había hecho: los cinco casos de V4 (siempre un fallo nuestro; en la ficha ponía «no se ha visto»,
+>   y estaba mal) hoy no llegan, y sólo se reproduce cambiando a mano un byte del `.mod`—. Hecho, un seguro y nada más:
+>   en la VM-Java, ese error para el programa como en la VM-C, con su texto, y ya no lo atrapa un `try`. La red, VERDE
+>   (17:17); `check-jc` (179), JUnit de la VM-Java (61); el compilador y el IDE, rehechos.
+> - **Las seis de los fallos del compilador, hechas** (`#751`, `#744`, `#752`, `#753`, `#757` y `#758`). Abiertas hoy,
+>   sólo análisis: `#759` (MOD8), `#760` y `#761` (JC) y `#762` (el estrés con varios workers). **Lo siguiente:** los
+>   demás pendientes de FICHAS; la próxima tanda de placas pide imágenes nuevas y el `Stdlib.pack`.
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,

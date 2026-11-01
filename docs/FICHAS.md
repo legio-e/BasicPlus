@@ -7339,7 +7339,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que haría falta:** aplazar también la ranura, como los descriptores de `#751`, o dar las ranuras de todas las
   clases antes de escribir código. MOD8 se queda como está (13-oct): por decidir si merece la pena.
 
-#### 🔵 `#758` — una ranura de vtable que no se resuelve al llamar: la VM-C para el programa (no atrapable) y la VM-Java lanza un error atrapable (abierta el 31-oct, al analizar `#756`; preexistente; **sólo análisis**)
+#### ✅ `#758` — una ranura de vtable que no se resuelve al llamar: la VM-C para el programa (no atrapable) y la VM-Java lanza un error atrapable (abierta el 31-oct, al analizar `#756`; preexistente; **CERRADA el 1-nov**, el commit de `#758`)
 
 - **Cómo salió:** leyendo cómo despachan las dos VMs (el análisis de `#756`, `V8_IDEAS` §E10).
 - **Comprobado en el código:** `OP_INVOKE_VIRTUAL` (`bpgenvm-c/src/interp.c`), si `bpvm_vt_resolver` no encuentra la
@@ -7347,7 +7347,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `case 0x55`): `throwBpRuntimeError(tc, "INVOKE_VIRTUAL: slot N no resoluble en la cadena de herencia")`, que el
   programa puede atrapar. Distintos mensajes, y uno atrapable y el otro no.
 - **Cuándo pasa:** tras un enlace bueno, nunca (el cargador verifica las refs y las clases que construye, §13.4); con un
-  `.mod` corrupto o un fallo del cargador, sí. Es un camino de error, y no se ha visto.
+  `.mod` corrupto o un fallo del cargador, sí. ~~Es un camino de error, y no se ha visto.~~ **Sí se vio, en V4, cinco
+  veces, y siempre por un fallo nuestro** (lo dije sin buscarlo; corregido el 1-nov): la stdlib de otra versión en el
+  `/lib` de la Pico (13-jun, `22bde026`), una librería que reordenaba sus métodos (14-jun, `91b078c1`: de ahí las
+  marcas de vtable de la ABI), el GC que soltaba lo vivo y la lista de libres pisando la clase (11-jul, `37829432`), y
+  dos pilas descuadradas por el compilador (16-jul, `#292c` y `#292d`, `0413b23e` y `e5d08e39`; el `ownertest` de
+  `V4_SAMPLES_ROJOS.md`). La comprobación fue la alarma que los destapó.
 - **Lo propuesto, sin hacer:** el mismo comportamiento en las dos, el de la VM-C (un fallo de la VM no lo debe atrapar el
   programa), con el mismo texto.
 - **Mirada otra vez el 1-nov, antes de tocarla: la premisa era la mitad.** La VM-C para (no atrapable, salida 1) en
@@ -7358,10 +7363,24 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   tabla que construye el cargador, como la de `INVOKE_VIRTUAL`) y en el `call_method` del AOT. Y la tabla común de
   salidas (`#481`, `bpvm_exit_code`) dice que lo que no es culpa del programa —«un bug nuestro o un .mod corrupto que
   pasó los chequeos»— es el 3, no el 1.
-- **Por decidir (Eduardo):** (1) `INVOKE_VIRTUAL` en la VM-Java, como la VM-C: no atrapable, el mismo texto, salida 1;
-  (2) si `INVOKE_IFAZ` y el `call_method` del AOT, la misma clase de fallo, van igual; (3) la salida, 1 como hoy o 3
-  como dice la tabla (y entonces también los otros fallos de VM del intérprete). Probarlo pide un `.mod` corrompido a
-  propósito: tras un enlace bueno no pasa nunca.
+- **Lo que preguntó Eduardo, y la respuesta** (1-nov): *«¿Esto no lo puede resolver el compilador?»* — Sí, y lo
+  resuelve: comprueba que el método existe para el tipo, toda hija hereda las posiciones del padre, y lo que no ve
+  (qué se cargará al lado) lo deja escrito en el `.mod` —la clave de cada método, en MOD9; el sello, en MOD8— y el
+  cargador de las dos VMs lo comprueba todo al cargar, antes de la primera instrucción. *«¿Lo has intentado
+  reproducir con la versión actual?»* — Ninguno de los caminos de V4 llega ya: `ownertest` y `ownerreassign` corren
+  bien; una librería que cambia después de compilar la app, en MOD9 enlaza si sólo cambia el orden y si le falta el
+  método no arranca («ERROR DE LINK: 'AppSkew.Cuadrado' redefine 'area()i' y 'LibA' ya no lo tiene: recompila»), y en
+  MOD8 la para el sello («no es la interfaz con la que se compiló»). **Sólo se reproduce cambiando a mano un byte del
+  `.mod`** (la posición de `f.area()`, de 3 a 200; el `.mod` no lleva suma de su contenido): la VM-Java la atrapaba en
+  un `try` del programa y seguía, con salida 0; la VM-C paraba, con 1.
+- **Hecha el 1-nov** (Eduardo: *«Si lo quieres poner como un mecanismo de seguridad por mi bien. Se debe disparar un
+  error, nada mas.»*): un seguro y nada más. En la VM-Java, `INVOKE_VIRTUAL` con una ranura que no se resuelve es un
+  error de la VM que para el programa, como en la VM-C y con su texto («INVOKE_VIRTUAL slot N no resoluble en cadena
+  de herencia»); ya no lo atrapa un `try`. Ni `INVOKE_IFAZ`, ni el AOT, ni la salida se tocan: atrapables y con 1, como
+  estaban. Con el `.mod` corrompido, las dos: salida 1, ese texto por stderr y el mismo stdout; con el bueno, como
+  siempre. `OPCODES.md`, al día. Sin prueba fija: la receta es la de arriba (un byte de la posición, a mano). JUnit de
+  la VM-Java, 61; la red, VERDE (17:17; la paridad, 183; MOD8, 180 y los 3 SKIP; las pruebas de C, 110/110);
+  `check-jc`, VERDE (179 y los 4 SKIP de siempre). El compilador y el IDE, rehechos (los dos llevan la VM-Java dentro).
 
 #### ✅ `#757` — el AOT compila una conversión de referencia como si construyera: en una native, `Perro(a)` (con `a` un `Animal`) llama a la factoría de `Perro` con `a` de argumento si el constructor pide un entero; código equivocado sin un error (abierta el 31-oct, al analizar `#756`; preexistente; **CERRADA el 1-nov**, el commit de `#757`)
 
