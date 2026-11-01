@@ -87,7 +87,13 @@
 >   mismos `.mod` en 667 fuentes y en la stdlib; la red, VERDE (13:28; paridad 181). Mono, **345** (`test-70`,
 >   `test-170`, `test-294`); `gtest-autoproperty-12` falla ahora por otra cosa del traductor (una propiedad de sólo
 >   lectura asignada en su constructor), apuntada en `V8_IDEAS` §E9.
-> - **Lo siguiente:** `#752` (un método privado sobre `null`), con la (a): la comprobación al principio del método.
+> - **`#752`, hecha** (el commit de `#752`): un método privado mira `this` al entrar (el `RuntimeError` de siempre,
+>   con el mismo texto), y lo mismo la native de un método privado con el AOT (`make test-aotprivado`, nueva, en la
+>   red). `NuloPrivado` en el corpus; los mismos `.mod` en 668 fuentes y en la stdlib, con su pack; la red, VERDE salvo
+>   el estrés (paridad 182, pruebas de C 110), un rojo probabilístico de antes: **`#762`**, sólo análisis
+>   (`HeapEstres` con el heap justo y varios workers, a veces sin heap: con 4 workers, 4 de 40 a 76 KB, 1 de 40 a 80 y
+>   0 a 84; con uno, nunca); suelto, verde. `check-jc` (178), JUnit (324); el IDE, rehecho. Mono, **346** (`test-231`).
+> - **Lo siguiente:** `#753` (`super()` hacia `Object`).
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,

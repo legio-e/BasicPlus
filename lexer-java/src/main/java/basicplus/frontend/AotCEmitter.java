@@ -90,6 +90,10 @@ public final class AotCEmitter {
      *  modulo entero —eso seria una regresion: hoy esos modulos emiten bien— sino
      *  que se cae solo, con su aviso. */
     private final java.util.Set<String> metodosAplanados = new java.util.HashSet<>();
+    /** #752 — los aplanados que van fuera de la vtable (los privados): se llaman con un CALL directo, que la VM
+     *  secuestra hacia la native, y nadie mira el receptor. Lo mira la native al entrar (emitFunction), como el
+     *  prólogo que MivmEmitter.emitThisNoNulo le pone al interpretado. */
+    private final java.util.Set<String> metodosSinVtable = new java.util.HashSet<>();
 
     /** #211 — nombre de la función AOT que se está emitiendo (para mensajes
      *  de aviso). Fijado al inicio de cada emitFunction. */
@@ -762,6 +766,7 @@ public final class AotCEmitter {
                         f.isNative, new Ast.DeclName(null, plano, f.line, f.column),
                         ps, f.returnType, f.body, f.line, f.column);
                 metodosAplanados.add(plano);
+                if (f.isPrivate && !f.isEventHandler && !f.isDestructor) metodosSinVtable.add(plano);   /* #752 */
                 nativeFuncs.add(fd);
                 nativeFuncNames.add(plano);
                 nativeFuncDefs.put(plano, fd);
@@ -1157,6 +1162,13 @@ public final class AotCEmitter {
          * args). El compilador C los elimina en -O2 igualmente. */
         for (Ast.Param p : f.params) {
             w.println("    (void) " + cVar(p.name) + ";");
+        }
+
+        /* #752 — un método privado sobre null: el mismo RuntimeError que da el interpretado (emitThisNoNulo). */
+        if (metodosSinVtable.contains(f.name.name)) {
+            byte[] msg = "referencia nula: llamada a un método de un objeto null".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            w.println("    if (" + cVar("this") + " == 0) vm->aot_helpers->throw_runtime(vm, \"" + cEscapeBytes(msg)
+                      + "\");   /* #752: longjmp, no vuelve */");
         }
 
         /* #580 (1) — LA ENTRADA de una native en un ciclo cuenta como una vuelta de un bucle (ver `recursivas`). */

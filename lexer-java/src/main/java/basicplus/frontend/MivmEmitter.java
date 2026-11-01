@@ -2367,11 +2367,28 @@ public final class MivmEmitter {
         declareParamsWidthAware(fs);
         beginFunctionScope(fs, null);
         scopeStack.peek().encadenarDtorDelPadre = fs.isDestructor;   // V7/H1: ~Hija() acaba llamando a ~Padre()
+        // #752 — un método fuera de la vtable (privado) se llama con un CALL directo, y nadie miraba el receptor: con
+        // `t.privado()` y t nulo, corría con `this` nulo. Ahora lo mira él al entrar —con los argumentos ya calculados,
+        // como INVOKE_VIRTUAL al llamar—, con el mismo RuntimeError y el mismo texto (Eduardo, 1-nov: la (a)).
+        if (!fs.esVirtual() && !fs.isDestructor) emitThisNoNulo();
         abrirGuardaDeOwners(fn.body);   // V7/H1
         try {
             for (IStmt s : fn.body) emitStmt(s);
             emitFunctionEnd();
         } finally { scopeStack.pop(); }
+    }
+
+    /** #752 — `this` nulo: el RuntimeError nativo de la VM (__throwRte, el builtin 128), con el texto de INVOKE_VIRTUAL. */
+    private void emitThisNoNulo() throws IOException {
+        int bien = w.newLabel();
+        w.emitGetParam("this");
+        emitInt(0); w.emit(OpCode.I32_TO_I64);    // null: una ref de 8 bytes a cero
+        w.emit(OpCode.LEQ);
+        w.emitJumpIfFalse(bien);
+        w.emitLeaGlobal(internString("referencia nula: llamada a un método de un objeto null"));
+        w.emit(OpCode.CALL_BUILTIN);
+        w.emitShort((short) Builtin.THROW_RTE.id);
+        w.declareLabel(bien);
     }
 
     private void emitConstructorFn(ClassSymbol cls, FuncDef fn, FunctionSymbol fs) throws IOException {

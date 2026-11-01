@@ -102,7 +102,7 @@ ifeq ($(OS),Windows_NT)
   LDFLAGS += -lwinmm     # V8/H4 (#708) — el audio de Windows (sonido_host.c)
 endif
 
-.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
+.PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
 
 # ---------------------------------------------------------------------------
 # $(call fixture,Mod1 Mod2 ...) — asegura que los .mod de una prueba SIRVEN.
@@ -1296,6 +1296,31 @@ test-aotnombres: $(LIBOBJ)
 	 if ! cmp -s build/aotnombres.int build/aotnombres.aot; then diff build/aotnombres.int build/aotnombres.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
 	 if [ "$$n" -ne 6 ]; then cat build/aotnombres.aot; echo "  ROJO: $$n de 6 comprobaciones"; exit 1; fi; \
 	 echo "[status=OK] 6/6 con el AOT, igual que interpretado; el puente a un pack compila"
+
+# V8 (#752, 1-nov) — UN MÉTODO PRIVADO NATIVE SOBRE NULL. Un privado va fuera de la vtable y se llama con un CALL
+# directo; el interpretado mira el receptor al entrar, pero con el AOT la VM secuestra ese CALL hacia la native y el
+# prólogo no corre: la native lo mira al entrar. AOT == interpretado, con los dos casos de null (uno que no toca `this`:
+# sin la comprobación devolvía su suma sin decir nada). Y se CUENTAN las natives traducidas y las que miran el receptor.
+test-aotprivado: $(LIBOBJ)
+	@mkdir -p build
+	$(call fixture,NatPrivado)
+	$(call stdlibdep,Core)
+	$(call aotmain,NatPrivado,build/aotprivado)
+	@n=$$(grep -c "bpvm_aot_register_by_name" build/aotprivado/aot_NatPrivado.c); \
+	 if [ "$$n" -ne 2 ]; then cat build/aotprivado/aot.log; echo "  ROJO: el AOT tradujo $$n de las 2 natives de NatPrivado"; exit 1; fi
+	@n=$$(grep -c "if (bp_this == 0) vm->aot_helpers->throw_runtime" build/aotprivado/aot_NatPrivado.c); \
+	 if [ "$$n" -ne 2 ]; then echo "  ROJO: $$n de las 2 natives miran el receptor al entrar"; exit 1; fi
+	$(CC) $(CFLAGS) -Isrc test/test_aotprivado.c build/aotprivado/aot_NatPrivado.c $(LIBOBJ) \
+	  -o build/test_aotprivado.exe $(LDFLAGS)
+	@echo "--- #752 un método privado native sobre null (esperado: AOT == interpretado, 4/4, los dos de null lanzan) ---"
+	@./build/test_aotprivado.exe samples/NatPrivado.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotprivado.aot; \
+	 ./build/test_aotprivado.exe samples/NatPrivado.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotprivado.int; \
+	 n=$$(grep -c '^ok ' build/aotprivado.aot); \
+	 if grep -q '^FALLO' build/aotprivado.aot build/aotprivado.int; then grep -h '^FALLO' build/aotprivado.aot build/aotprivado.int; echo "  ROJO: FALLO"; exit 1; fi; \
+	 if ! cmp -s build/aotprivado.int build/aotprivado.aot; then diff build/aotprivado.int build/aotprivado.aot; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
+	 if [ "$$n" -ne 4 ]; then cat build/aotprivado.aot; echo "  ROJO: $$n de 4 comprobaciones"; exit 1; fi; \
+	 if [ "$$(grep -c 'de null: lanza: referencia nula: llamada a un m' build/aotprivado.aot)" -ne 2 ]; then cat build/aotprivado.aot; echo "  ROJO: los dos de null no lanzan"; exit 1; fi; \
+	 echo "[status=OK] 4/4 con el AOT, igual que interpretado; los dos de null lanzan"
 
 # V7/H5 (#571, 26-sep) — ANIDAR natives: native → BP → native, y la de fuera lanza DESPUÉS. El límite
 # de fallos era un jmp_buf por worker que la interior dejaba apuntando a su marco muerto.

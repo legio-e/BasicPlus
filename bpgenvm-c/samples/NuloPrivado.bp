@@ -1,0 +1,40 @@
+// NuloPrivado.bp — #752 (1-nov): llamar a un método PRIVADO sobre un objeto null lanza, como uno público: «referencia
+// nula: llamada a un método de un objeto null». Hasta hoy el privado (fuera de la vtable: un CALL directo) corría con
+// `this` nulo, sin decir nada (test-231 de Mono). Ahora el método lo mira al entrar, con los argumentos ya calculados,
+// como INVOKE_VIRTUAL al llamar: el argumento con efecto se calcula antes del error, en los dos.
+module NuloPrivado
+
+  class T
+    private function privado(x: integer): integer
+      return x + 1
+    end privado
+    public function publico(x: integer): integer
+      return x + 2
+    end publico
+    public function prueba(otro: T): string
+      try
+        var r: integer := otro.privado(efecto("privado"))
+        return "no lanza: " + r
+      catch e: RuntimeError
+        return "lanza: " + e.msg
+      endtry
+    end prueba
+  end T
+
+  public function efecto(quien: string): integer
+    print "argumento de", quien
+    return 1
+  end efecto
+
+  function Main()
+    var t: T := T()
+    print t.prueba(null)
+    print t.prueba(T())
+    var nada: T := null
+    try
+      print nada.publico(efecto("publico"))
+    catch e: RuntimeError
+      print "lanza:", e.msg
+    endtry
+  end Main
+end NuloPrivado

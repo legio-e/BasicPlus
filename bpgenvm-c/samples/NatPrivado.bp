@@ -1,0 +1,40 @@
+// NatPrivado.bp — #752 (1-nov): un método PRIVADO native sobre null. El interpretado mira el receptor al entrar (el
+// prólogo que le pone MivmEmitter); con el AOT, el CALL directo lo secuestra la VM hacia la native y ese prólogo no
+// corre: lo mira la native al entrar, con el mismo RuntimeError. `make test-aotprivado` corre este .mod con el AOT y sin
+// él, exige la misma salida, completa, y CUENTA las natives traducidas (una que se cayera correría interpretada).
+module NatPrivado
+  import Core
+
+  public class Caja
+    public property n: integer
+    public function Caja(v: integer)
+      this.n := v
+    end Caja
+    // no toca `this`: sin la comprobación, con el receptor nulo devolvía a + b sin decir nada
+    private native function suma(a: integer, b: integer): integer
+      return a + b
+    end suma
+    // lee una property por el getter
+    private native function mas(k: integer): integer
+      return this.n + k
+    end mas
+    public function prueba(otra: Caja, que: string): string
+      try
+        if que == "suma" then
+          return "da " + otra.suma(2, 3)
+        endif
+        return "da " + otra.mas(10)
+      catch e: RuntimeError
+        return "lanza: " + e.msg
+      endtry
+    end prueba
+  end Caja
+
+  function Main()
+    var c: Caja := Caja(5)
+    print "ok suma: " + c.prueba(c, "suma")
+    print "ok mas: " + c.prueba(c, "mas")
+    print "ok suma de null: " + c.prueba(null, "suma")
+    print "ok mas de null: " + c.prueba(null, "mas")
+  end Main
+end NatPrivado
