@@ -189,7 +189,12 @@ método privado / `super` desde nativo · **campos** (leer o escribir `this.x`, 
 o heredado: «lee el campo 'x'…», «escribe en 'x'…»; una property se LEE, por su
 getter) · **métodos y properties estáticos** («privado/super/estático pendientes»,
 «property de modulo o estatica») · `instanceof` · eventos (`EventDef`, `RaiseStmt`) ·
-`ParallelStmt` · referencias a método. Cada una tiene su mensaje propio con la línea,
+`ParallelStmt` · referencias a método · **las interfaces** (V8/H7.3, `#756`): llamar a un
+método o leer una property por una interfaz («una llamada por una interfaz no se traduce en
+una native»), también un método de `Object` sobre ella, y convertir a una interfaz
+(`Forma(x)`): la ranura de un método de interfaz no es una —cada clase lo tiene en su
+sitio— y el puente no lleva la tabla de interfaces de la clase (`MOD_FORMAT.md` §13.9).
+Cada una tiene su mensaje propio con la línea,
 y es **el mismo error en una native de módulo que en un método `native` de una
 clase** («en el metodo native 'Caja.lee' (linea 7): …»). Ficha `#519` (V7, 24-sep,
 decidido por Eduardo: «error, como en módulo»): hasta entonces un método se

@@ -2107,6 +2107,77 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
 
+        /* V8 H7.3 (#756) — LA LLAMADA POR UNA INTERFAZ. ext[idxI] = el bloque de la interfaz; ext[idxM] = la posicion
+         * del metodo en ella. La ranura, de la tabla de esa interfaz en la clase del objeto (bpvm_ifaz_tabla); y desde
+         * ahi, INVOKE_VIRTUAL con sus mismos textos. Espejo de 0xBF en miVM. */
+        case OP_INVOKE_IFAZ_REF: {
+            uint32_t ifaz, pos;
+            BPVM_REF_LEE(ifaz);
+            BPVM_REF_LEE(pos);
+            uint8_t num_args = mem[pc++];
+            bpref_t this_obj = bpref_load(vm, sp - BPVM_REF_SIZE - (uint32_t) num_args * 4);
+            if (bpref_is_null(this_obj)) BPVM_RT_THROW("referencia nula: llamada a un método de un objeto null");
+            if (bpvm_ref_dead(vm, this_obj)) BPVM_RT_THROW("referencia a objeto eliminado (use-after-free)");
+            uint32_t class_ptr = class_ptr_of_ref_or0(vm, this_obj);
+            if (class_ptr == 0) BPVM_RT_THROW("el receptor no es un objeto (una cadena o un array no despachan metodos)");
+            uint32_t tabla = bpvm_ifaz_tabla(vm, bpvm_ifaz_lista(vm, class_ptr), ifaz);
+            if (tabla == 0) BPVM_RT_THROW("INVOKE_IFAZ: la clase del objeto no implementa la interfaz");   /* sólo un valor que no pasó por el compilador */
+            uint32_t vt_slot = bpvm_read_u16_be(mem + tabla + 2u * pos);
+            int32_t method_off = -1;
+            uint32_t target_cs = 0;
+            if (bpvm_vt_resolver(vm, class_ptr, vt_slot, &method_off, &target_cs) != 0)
+                BPVM_RT_THROW("INVOKE_IFAZ: la ranura %u no se resuelve en la cadena de herencia", (unsigned) vt_slot);
+            uint32_t target_pc = bpvm_cb_for_cs(vm, tc, target_cs) + (uint32_t) method_off;
+            bpvm_write_i32_be(mem + sp, (int32_t) pc); sp += 4;
+            bpvm_write_i32_be(mem + sp, (int32_t) bp); sp += 4;
+            bpvm_write_i32_be(mem + sp, (int32_t) cs); sp += 4;
+            bp = sp;
+            pc = target_pc;
+            cs = target_cs;
+            break;
+        }
+
+        /* V8 H7.3 — `x is I`: ¿la clase del objeto tiene esa interfaz en su lista? */
+        case OP_INSTANCEOF_IFAZ_REF: {
+            uint32_t ifaz;
+            BPVM_REF_LEE(ifaz);
+            sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
+            uint32_t cls = class_ptr_of_ref_or0(vm, obj);
+            int32_t result = (cls != 0 && bpvm_ifaz_tabla(vm, bpvm_ifaz_lista(vm, cls), ifaz) != 0) ? 1 : 0;
+            bpvm_write_i32_be(mem + sp, result); sp += 4;
+            break;
+        }
+
+        /* V8 H7.3 — `I(x)`: como CHECKCAST_REF, contra la lista de interfaces; el mismo mensaje, byte a byte. */
+        case OP_CHECKCAST_IFAZ_REF: {
+            uint32_t ifaz;
+            BPVM_REF_LEE(ifaz);
+            int16_t name_off = bpvm_read_i16_be(mem + pc); pc += 2;
+            bpref_t obj = bpref_load(vm, sp - BPVM_REF_SIZE);   /* peek */
+            int ok = 1;
+            if (!bpref_is_null(obj)) {
+                uint32_t cls = class_ptr_of_ref_or0(vm, obj);
+                ok = (cls != 0 && bpvm_ifaz_tabla(vm, bpvm_ifaz_lista(vm, cls), ifaz) != 0);
+            }
+            if (!ok) {
+                char msg[96];
+                uint32_t naddr = (uint32_t)((int32_t) cs + name_off);
+                uint32_t nlen  = (uint32_t) bpvm_read_i32_be(mem + naddr);
+                if (nlen > 40u) nlen = 40u;
+                snprintf(msg, sizeof msg, "conversion invalida: el valor no es un '%.*s'", (int) nlen, (const char*) (mem + naddr + 4));
+                tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;
+                bpref_t ref = bpvm_throw_runtime_error(vm, tc, msg);
+                if (!bpref_is_null(ref) && bpvm_eh_unwind(vm, tc, ref)) {
+                    pc = tc->pc; sp = tc->sp; bp = tc->bp; cs = tc->cs;
+                    mem = vm->memory; break;
+                }
+                exit_status = BPVM_ERR_RUNTIME;
+                if (yielded) *yielded = 1;
+                goto done;
+            }
+            break;
+        }
+
         case OP_INSTANCEOF: case OP_INSTANCEOF_REF: {
             uint32_t expected;
             if (op == OP_INSTANCEOF) { int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2; expected = (uint32_t)((int32_t) cs + cs_off); }

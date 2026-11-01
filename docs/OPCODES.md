@@ -1,11 +1,11 @@
 # Catálogo de opcodes de la VM BasicPlus
 
-Documento canónico de los opcodes del bytecode `.mod`: los **189** que
-define `bpgenvm-c/include/bpvm_opcodes.h` (V7). Los de `0x00..0x70` son los
+Documento canónico de los opcodes del bytecode `.mod`: los **192** que
+define `bpgenvm-c/include/bpvm_opcodes.h` (V8). Los de `0x00..0x70` son los
 de V1; los de `0x6F` y `0x71..0xB0` se añadieron después (long, double,
 potencia, `CHECKCAST`), los `0xB1..0xBB` son los `_REF` del enlace tardío
-(MOD9, V7/H2), `0xBC..0xBD`, `LEA_FIELD` y `LEA_FIELD_REF` (V7/H1), y `0xBE`,
-`INVOKE_SLOT` (V7/H7); están
+(MOD9, V7/H2), `0xBC..0xBD`, `LEA_FIELD` y `LEA_FIELD_REF` (V7/H1), `0xBE`,
+`INVOKE_SLOT` (V7/H7), y `0xBF..0xC1`, los de las interfaces (V8/H7.3); están
 en sus propias secciones al final de las tablas.
 Cada entrada incluye:
 - Byte (`code`), mnemonic.
@@ -400,10 +400,11 @@ acaba en algún descriptor sin parent (parentOff == 0).
 | IMM_U8 | 1 | LRET (paramsCount en slots), GET/SET_FIELD_LONG (slot) |
 | CAST_I16_I16 | 4 | CHECKCAST (clsOff i16, nameOff i16) |
 | CAST_I32_I16 | 6 | CHECKCAST_EXT (clsOff i32, nameOff i16) |
-| IDX_U16 | 2 | los `_REF` de un operando (GET/SET_FIELD*_REF, NEW_OBJECT_REF, INSTANCEOF_REF, PUSH_REF, LEA_FIELD_REF) |
+| IDX_U16 | 2 | los `_REF` de un operando (GET/SET_FIELD*_REF, NEW_OBJECT_REF, INSTANCEOF_REF, PUSH_REF, LEA_FIELD_REF, INSTANCEOF_IFAZ_REF) |
 | IMM_U8 | 1 | LEA_FIELD (slot), INVOKE_SLOT (numArgs) |
 | IDX_U16_NUMARGS_U8 | 3 | INVOKE_VIRTUAL_REF (idx u16, numArgs u8) |
-| IDX_U16_NAME_I16 | 4 | CHECKCAST_REF (idx u16, nameOff i16) |
+| IDX_U16_IDX_U16_NUMARGS_U8 | 5 | INVOKE_IFAZ_REF (idx u16 de la interfaz, idx u16 del método, numArgs u8) |
+| IDX_U16_NAME_I16 | 4 | CHECKCAST_REF y CHECKCAST_IFAZ_REF (idx u16, nameOff i16) |
 | TRY_HANDLER_I32_IDX_U16 | 6 | TRY_BEGIN_REF (handlerRel i32, idx u16) |
 
 Tamaño total de la instrucción = 1 (opcode) + tamaño del operando.
@@ -445,14 +446,39 @@ Sólo los emite `--formato=9`; una VM de V6 no los conoce (y rechaza el `MOD9` a
 
 ---
 
+## 0xBF..0xC1 — las interfaces (V8/H7.3 `#756`)
+
+Una clase hereda de UNA clase e implementa las interfaces que quiera: la ranura de un
+método de interfaz no es la misma en todas las clases que la implementan, así que no
+sirve `INVOKE_VIRTUAL`. Al enlazar, el cargador le da a cada clase con interfaces una
+lista (interfaz → tabla) y a cada tabla las ranuras de su vtable, en el orden de la
+lista aplanada de la interfaz (`MOD_FORMAT.md` §13.9). Los tres opcodes llevan
+`ext[idx]` de una ref `CLASE` contra la interfaz (su bloque en la arena); el método,
+una ref `IFAZ_MET` (su posición en la lista aplanada). Siempre van por ref, también
+contra una interfaz del propio módulo; sólo los emite `--formato=9`.
+
+| Code | Op | Operando | Stack effect | Semántica |
+|---|---|---|---|---|
+| 0xBF | `INVOKE_IFAZ_REF` | `u16` idx de la interfaz, `u16` idx del método, `u8` numArgs | `( this ...args -- )` | Busca en la lista de la clase del objeto la tabla de la interfaz `ext[idxI]`, lee su ranura `ext[idxM]` y llama como `INVOKE_VIRTUAL` con esa ranura. `null`, un objeto liberado o un valor que no es objeto, el error de siempre; si la clase no la tiene (sólo un valor que no pasó por el compilador), RuntimeError «INVOKE_IFAZ: la clase del objeto no implementa la interfaz». |
+| 0xC0 | `INSTANCEOF_IFAZ_REF` | `u16` idx | `( ref -- 1\|0 )` | `x is I`: 1 si la clase del objeto tiene la interfaz `ext[idx]` en su lista; `null` o un valor que no es objeto, 0. |
+| 0xC1 | `CHECKCAST_IFAZ_REF` | `u16` idx, `i16` nameOff | `( ref -- ref )` | `I(x)`: como `CHECKCAST_REF`, contra la lista de interfaces (`null` pasa; mira la cima sin sacarla). Si no la tiene, RuntimeError «conversion invalida: el valor no es un '…'», con el nombre del literal `nameOff`, byte a byte igual en las dos VMs. |
+
+Una variable de un tipo interfaz es una referencia como las demás: leerla, guardarla,
+compararla con `==` o pasarla no tiene opcode propio. Leer o escribir una property de
+una interfaz es llamar a su getter o a su setter con `INVOKE_IFAZ_REF`; y un método de
+`Object` sobre una interfaz (`f.toString()`), la llamada virtual de siempre.
+
+---
+
 ## Codes no asignados
 
 `0x4F .. 0x50` asignados (I32_TO_I16, I32_TO_U16). `0x6D .. 0x6E` libres
 (`0x6F` es `EVENT_RETURN`). `0x71 .. 0xB0` asignados en bloque (long, double,
 campos de 8 bytes, `NATIVE_RETURN`, `TRY_BEGIN_EXT`, potencia, `CHECKCAST`).
 `0xB1 .. 0xBB` los `_REF` del enlace tardío (MOD9); `0xBC .. 0xBD`,
-`LEA_FIELD` y `LEA_FIELD_REF` (V7/H1); `0xBE`, `INVOKE_SLOT` (V7/H7 `#607`). **`0xBF .. 0xFF` libres**
-(con `0x6D .. 0x6E`, 67 en total). Total asignado: 189 (miVM, 188: `0xAA`,
+`LEA_FIELD` y `LEA_FIELD_REF` (V7/H1); `0xBE`, `INVOKE_SLOT` (V7/H7 `#607`); `0xBF .. 0xC1`,
+las interfaces (V8/H7.3 `#756`). **`0xC2 .. 0xFF` libres**
+(con `0x6D .. 0x6E`, 64 en total). Total asignado: 192 (miVM, 191: `0xAA`,
 `NATIVE_RETURN`, es sólo de la VM-C).
 
 Si una implementación encuentra un opcode no listado, debe fallar con

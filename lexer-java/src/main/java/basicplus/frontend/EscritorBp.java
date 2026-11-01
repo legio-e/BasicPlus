@@ -57,12 +57,18 @@ public final class EscritorBp {
 
     private final StringBuilder sb = new StringBuilder();
     private int nivel;
+    /** V8 H7.3 — las interfaces que declara el módulo: con ellas se decide, en un árbol de JC, si el primero de
+     *  `class C : A, B` es el padre o una interfaz (sin el semántico no se sabe de las importadas: van de padre, y
+     *  si eran una interfaz, el compilador de BP lo dice). */
+    private final java.util.Set<String> interfacesLocales = new java.util.HashSet<>();
 
     private EscritorBp(int nivel) { this.nivel = nivel; }
 
     /** El BP de un módulo entero. Lanza {@link NoSoportado} si hay algo que todavía no sabe escribir. */
     public static String escribir(ModuleNode m) {
         EscritorBp e = new EscritorBp(0);
+        for (ITopLevelDecl d : m.defs)
+            if (d instanceof ClassDef && ((ClassDef) d).isInterface) e.interfacesLocales.add(((ClassDef) d).name);
         e.modulo(m);
         return e.sb.toString();
     }
@@ -117,7 +123,7 @@ public final class EscritorBp {
     // ============================================================
     private void declaracion(ITopLevelDecl d, boolean enInterfaz) {
         Node n = (Node) d;
-        if (n.annotation != null) linea(anotacion(n.annotation));
+        for (Annotation a : n.annotations) linea(anotacion(a));
         if (d instanceof ConstDecl)        linea(constante((ConstDecl) d));
         else if (d instanceof VarDecl)     linea(variable((VarDecl) d));
         else if (d instanceof FuncDef)     funcion((FuncDef) d, enInterfaz);
@@ -230,14 +236,24 @@ public final class EscritorBp {
     private void clase(ClassDef c, boolean enInterfaz) {
         StringBuilder h = new StringBuilder(c.isPublic ? "public " : "");
         if (c.isRoot) h.append("root ");
-        h.append("class ").append(c.name);
-        if (c.baseClass != null) h.append(" extends ").append(c.baseClass);
+        // V8 H7.3 (#756) — una interfaz: `interface Forma extends Base`; una clase: `class C extends B implements I, J`.
+        // En un árbol de JC, el primero de `: A, B` puede ser una interfaz: si lo es del módulo, va con las demás.
+        String base = c.baseClass;
+        List<String> interfaces = new ArrayList<>(c.interfaces);
+        if (c.primeroPuedeSerInterfaz && base != null && interfacesLocales.contains(base)) {
+            interfaces.add(0, base);
+            base = null;
+        }
+        h.append(c.isInterface ? "interface " : "class ").append(c.name);
+        if (base != null) h.append(" extends ").append(base);
+        if (!interfaces.isEmpty())
+            h.append(c.isInterface ? " extends " : " implements ").append(String.join(", ", interfaces));
         linea(h.toString());
         nivel++;
         for (int i = 0; i < c.members.size(); i++) {
             ITopLevelDecl m = c.members.get(i);
             if (i > 0 && !(m instanceof VarDecl && c.members.get(i - 1) instanceof VarDecl)) blanco();
-            declaracion(m, enInterfaz);
+            declaracion(m, enInterfaz || c.isInterface);   // en una interfaz, sólo la firma
         }
         nivel--;
         linea("end " + c.name);

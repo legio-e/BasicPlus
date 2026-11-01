@@ -1,26 +1,14 @@
 module CsInterfaces
 {
-   class IForma
+   interface IForma
    {
-      public function int Area()
-      {
-         throw new RuntimeError("abstracto: IForma.Area");
-      }
-      public string Nombre
-      {
-         get
-         {
-            throw new RuntimeError("abstracto: IForma.Nombre");
-         }
-      }
+      function int Area();
+      string Nombre { get; set; }
    }
 
-   class IConLados : IForma
+   interface IConLados : IForma
    {
-      public function int Lados()
-      {
-         throw new RuntimeError("abstracto: IConLados.Lados");
-      }
+      function int Lados();
    }
 
    class Cuadrado : IConLados
@@ -30,10 +18,12 @@ module CsInterfaces
       {
          this.lado = lado;
       }
+      @implement{ IForma }
       public function int Area()
       {
          return this.lado * this.lado;
       }
+      @implement{ IForma }
       public string Nombre
       {
          get
@@ -41,6 +31,7 @@ module CsInterfaces
             return "cuadrado";
          }
       }
+      @implement{ IConLados }
       public function int Lados()
       {
          return 4;
@@ -68,10 +59,12 @@ module CsInterfaces
 
    class Perro : Animal
    {
+      @override{}
       public function string Habla()
       {
          return "guau";
       }
+      @override{}
       public int Patas
       {
          get

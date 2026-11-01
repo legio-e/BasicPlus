@@ -602,6 +602,10 @@ public final class AotCEmitter {
         BpType t = (semInfo != null) ? semInfo.exprTypes.get(c) : null;
         if (!(t instanceof BpType.ClassType)) return null;
         Symbol.ClassSymbol cls = ((BpType.ClassType) t).cls;
+        // V8 H7.3 (#756) — `Forma(x)` es una conversión a una interfaz (una interfaz no se construye): no se traduce
+        if (cls.isInterface && cls.name.equals(calleeSimpleName(c.callee)))
+            throw new UnsupportedAotException("AOT: convertir a la interfaz '" + cls.name + "' (line " + c.line
+                    + ") no se traduce en una native; hazlo fuera de la native");
         return cls.name.equals(calleeSimpleName(c.callee)) ? cls : null;
     }
 
@@ -2983,6 +2987,11 @@ public final class AotCEmitter {
                         "AOT: property de modulo o estatica '" + ma.member + "' (line "
                         + ma.line + "): el puente v1 solo cubre properties de instancia.");
                 }
+                Symbol.ClassSymbol recvIfaz = claseEstaticaDe(ma.target, ps.ownerClass);
+                if (ps.ownerClass.isInterface || (recvIfaz != null && recvIfaz.isInterface))   // V8 H7.3 (#756)
+                    throw new UnsupportedAotException(
+                        "AOT: la property '" + ma.member + "' (line " + ma.line + ") por una interfaz no se traduce en"
+                        + " una native (cada clase la implementa en su ranura); hazlo fuera de la native");
                 String getter = "get" + Character.toUpperCase(ps.name.charAt(0))
                               + ps.name.substring(1);
                 String slotExpr;
@@ -3141,6 +3150,14 @@ public final class AotCEmitter {
      *  hace el paseo vtable (obj→class→vtable[slot]) según la clase REAL del
      *  receptor → polimorfismo correcto. v1: firmas i32 (params + retorno). */
     private void emitVirtualMethodCall(Symbol.FunctionSymbol fs, Ast.MemberAccessExpr ma, Ast.CallExpr c) {
+        // V8 H7.3 (#756) — por una interfaz, no: su ranura no es una (cada clase la implementa en su sitio) y el puente no
+        // tiene la tabla. Rechazado A PROPÓSITO: sin esto, la ranura por clave se buscaría en la interfaz como si fuera una
+        // clase. Llamar a un método de Object sobre una interfaz tampoco, por lo mismo (el receptor es la interfaz).
+        Symbol.ClassSymbol recvEstatico = claseEstaticaDe(ma.target, fs.ownerClass);
+        if ((fs.ownerClass != null && fs.ownerClass.isInterface) || (recvEstatico != null && recvEstatico.isInterface))
+            throw new UnsupportedAotException(
+                "AOT: '" + fs.name + "' (line " + c.line + "): una llamada por una interfaz no se traduce en una native"
+                + " (cada clase la implementa en su ranura); hazla fuera de la native");
         if (!isBridgeI32Type(fs.returnType)) {
             throw new UnsupportedAotException(
                 "AOT: método native→BP '" + fs.name + "' (line " + c.line + "): el puente v1 "

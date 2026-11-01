@@ -2568,6 +2568,10 @@ public final class Main {
                     stub.externalLibrary = implLibrary;
                     stub.externalModule  = implModule;
                     stub.externalFromPath = fromPath;
+                    // V8 H7.3 (#756) — una interfaz, y las interfaces de la cabecera (o de las que hereda), por su
+                    // nombre: el semántico las enlaza a los stubs de su análisis (enlazarInterfacesImportadas)
+                    stub.isInterface = cs.isInterface;
+                    stub.interfaceNames.addAll(cs.interfaces);
                     // L2 v3 — propaga layout binario para que subclasses
                     // cross-module puedan reservar slots/fields correctamente.
                     if (cs.binaryNumFields >= 0) {

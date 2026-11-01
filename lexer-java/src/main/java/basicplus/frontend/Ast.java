@@ -26,19 +26,26 @@ public final class Ast {
     public static abstract class Node {
         public final int line;
         public final int column;
-        /** V5/H5 — anotación que precede a esta declaración, o null.
+        /** V5/H5 — las anotaciones que preceden a esta declaración, en su orden; vacía si no lleva ninguna. Desde V8
+         *  H7.3 (`#756`), varias, como en Java (Eduardo: «Si, varias notaciones»): `@BD{ pk }` y `@implement{ I }`
+         *  sobre la misma property.
          *
-         *  Vive en `Node` (y no sólo en ClassDef/PropertyDef) a propósito: el
-         *  PARSER la acepta delante de cualquier declaración y es el SEMÁNTICO
+         *  Viven en `Node` (y no sólo en ClassDef/PropertyDef) a propósito: el
+         *  PARSER las acepta delante de cualquier declaración y es el SEMÁNTICO
          *  quien decide dónde es legal. Así un `@BD` en el sitio equivocado da
          *  un diagnóstico que explica el problema, en vez de un error de
          *  sintaxis que no dice nada.
          *
-         *  NO se persiste: no toca el .mod ni el .bpi. Es sólo para el
-         *  compilador y el generador de DAOs — todo lo que dice acaba siendo
-         *  código normal dentro del DAO generado, así que no tiene consumidor
-         *  en tiempo de ejecución. */
-        public Annotation annotation;
+         *  NO se persisten: no tocan el .mod ni el .bpi. Son para el compilador y
+         *  el generador de DAOs; `@implement` y `@override` (H7.3) las comprueba
+         *  el semántico, y lo que el `.mod` lleva de una implementación lo saca
+         *  él de los tipos, no de la anotación. */
+        public final List<Annotation> annotations = new ArrayList<>();
+        /** La anotación con ese nombre, o null. */
+        public Annotation anotacion(String nombre) {
+            for (Annotation a : annotations) if (a.name.equals(nombre)) return a;
+            return null;
+        }
         protected Node(int line, int column) {
             this.line = line;
             this.column = column;
@@ -539,6 +546,19 @@ public final class Ast {
          *  «'root' o algo similar para indicar que no desciende de nada»). Sólo la raíz (Core) puede
          *  escribirlo: `Object` y `Thread`. Sin `root` y sin `extends`, la base es Object. */
         public boolean isRoot = false;
+        /** V8 H7.3 (`#756`) — una INTERFAZ (`interface Forma … end Forma`; en JC, `interface IForma { … }`): se
+         *  guarda como una clase con su marca (Eduardo: «una clase y una interfaz se guardan igual o casi igual»).
+         *  Sus miembros, métodos sin cuerpo y properties en forma corta; `baseClass`, null; y `interfaces`, las
+         *  interfaces de las que hereda. */
+        public boolean isInterface = false;
+        /** V8 H7.3 — las interfaces que la clase implementa, como se escriben (`implements Forma, Lib.Medible`); en
+         *  una interfaz, las de las que hereda. Vacía si no hay. */
+        public final List<String> interfaces = new ArrayList<>();
+        /** V8 H7.3 — JC escribe el padre y las interfaces en la misma lista (`class C : A, B`), como C#, y el parser
+         *  no sabe si `A` es una clase o una interfaz: lo pone en {@link #baseClass} y lo marca aquí, y el semántico
+         *  lo pasa a las interfaces si lo es. En BP (`extends`/`implements`), false. Es una marca de JC: la
+         *  comparación de árboles no la cuenta (ComparaAst). */
+        public boolean primeroPuedeSerInterfaz = false;
         public final List<ITopLevelDecl> members;
         public ClassDef(boolean isPublic, String name, String baseClass, List<ITopLevelDecl> members,
                         int line, int column) {

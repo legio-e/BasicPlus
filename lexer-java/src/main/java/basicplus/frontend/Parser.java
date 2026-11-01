@@ -265,15 +265,16 @@ public final class Parser {
     // ============================================================
     // DEFINICIONES (top-level y miembros de clase)
     // ============================================================
-    /** V5/H5 — puerta única de las declaraciones, con la anotación opcional delante.
+    /** V5/H5 — puerta única de las declaraciones, con sus anotaciones delante (varias desde V8 H7.3, `#756`).
      *
-     *  La anotación se recoge aquí y se cuelga del nodo que salga, SEA EL QUE SEA.
+     *  Las anotaciones se recogen aquí y se cuelgan del nodo que salga, SEA EL QUE SEA.
      *  El parser no juzga dónde es legal: eso lo hace el semántico, que puede dar
      *  un mensaje que explique el problema en vez de un error de sintaxis mudo. */
     private ITopLevelDecl parseDefStmt() {
-        Ast.Annotation ann = check(TokenType.AT) ? parseAnnotation() : null;
+        List<Ast.Annotation> anns = new ArrayList<>();
+        while (check(TokenType.AT)) anns.add(parseAnnotation());
         ITopLevelDecl d = parseDefStmtBody();
-        if (ann != null && d instanceof Node) ((Node) d).annotation = ann;
+        if (!anns.isEmpty() && d instanceof Node) ((Node) d).annotations.addAll(anns);
         return d;
     }
 
@@ -459,10 +460,18 @@ public final class Parser {
             }
             case EVENT:    return parseEventDef(isPublic);
             case CLASS:    { ClassDef cd = parseClassDef(isPublic); if (cd != null) cd.isRoot = isRoot; return cd; }
+            case INTERFACE:
+                // V8 H7.3 (#756) — una interfaz de clase. Lo que no le va, aquí y con su nombre: `root`
+                // (no desciende de nada: no es una clase), `final`, `private` (no hay nada que sobrescribir
+                // ni que esconder: lo suyo es lo público de quien la implementa).
+                if (isRoot) error("'root' sólo va delante de 'class'");
+                if (isFinal || isPrivate) error("una interfaz no lleva '" + (isFinal ? "final" : "private")
+                        + "': sus métodos son públicos, y los escribe quien la implementa");
+                return parseInterfaceDef(isPublic);
             case ENUM:     return parseEnumDef(isPublic);
             default:
                 {
-                    String msg = "se esperaba const/var/function/property/event/class/enum,"
+                    String msg = "se esperaba const/var/function/property/event/class/interface/enum,"
                                + " encontrado '" + tok.lexeme + "'";
                     // BP no tiene `static`: un miembro de clase se CUALIFICA con
                     // su clase. Lo dice aquí porque es lo primero que escribe
@@ -928,8 +937,66 @@ public final class Parser {
                 baseClass = baseClass + "." + memberName;
             }
         }
+        // V8 H7.3 (#756) — `implements Forma, Lib.Medible`: las interfaces que implementa, detrás del padre.
+        List<String> interfaces = new ArrayList<>();
+        if (match(TokenType.IMPLEMENTS)) {
+            interfaces.add(parseNombreDeTipo("interfaz tras 'implements'"));
+            while (match(TokenType.COMMA)) interfaces.add(parseNombreDeTipo("interfaz tras ','"));
+        }
         consumeStmtTerminator("se esperaba salto de línea tras la cabecera de la clase");
 
+        List<ITopLevelDecl> members = parseMiembros();
+        consume(TokenType.END, "se esperaba 'end' al final de la clase");
+        if (check(TokenType.IDENTIFIER)) advance();
+        consumeStmtTerminator("se esperaba salto de línea tras 'end'");
+        ClassDef cd = new ClassDef(isPublic, name, baseClass, members, tok.line, tok.column);
+        cd.interfaces.addAll(interfaces);
+        return cd;
+    }
+
+    /** V8 H7.3 (#756) — `interface Forma extends Base, Lib.Otra … end Forma`: una interfaz de clase, como en Java. Se
+     *  lee como una clase, con `inInterface` puesto: una `function` es sólo su firma, sin cuerpo ni `end` (como en los
+     *  `module interface` de antes). Qué vale dentro —métodos y properties, nada más— lo dice el semántico. */
+    private ClassDef parseInterfaceDef(boolean isPublic) {
+        Token tok = current();
+        match(TokenType.INTERFACE);
+        String name = consumeIdentifier("nombre de la interfaz");
+        List<String> padres = new ArrayList<>();
+        if (match(TokenType.EXTENDS)) {
+            padres.add(parseNombreDeTipo("interfaz tras 'extends'"));
+            while (match(TokenType.COMMA)) padres.add(parseNombreDeTipo("interfaz tras ','"));
+        }
+        if (check(TokenType.IMPLEMENTS)) {
+            error("una interfaz no implementa otras: hereda de ellas, con 'extends'");
+            advance();
+        }
+        consumeStmtTerminator("se esperaba salto de línea tras la cabecera de la interfaz");
+        boolean antes = inInterface;
+        inInterface = true;
+        List<ITopLevelDecl> members;
+        try {
+            members = parseMiembros();
+        } finally {
+            inInterface = antes;
+        }
+        consume(TokenType.END, "se esperaba 'end' al final de la interfaz");
+        if (check(TokenType.IDENTIFIER)) advance();
+        consumeStmtTerminator("se esperaba salto de línea tras 'end'");
+        ClassDef cd = new ClassDef(isPublic, name, null, members, tok.line, tok.column);
+        cd.isInterface = true;
+        cd.interfaces.addAll(padres);
+        return cd;
+    }
+
+    /** V8 H7.3 — `Forma` o `Lib.Forma`: el nombre de una clase o de una interfaz, como el de `extends`. */
+    private String parseNombreDeTipo(String que) {
+        String n = consumeIdentifier(que);
+        if (match(TokenType.DOT)) n = n + "." + consumeIdentifier("nombre tras '" + n + ".'");
+        return n;
+    }
+
+    /** Los miembros de una clase o de una interfaz, hasta su `end` (que no consume). */
+    private List<ITopLevelDecl> parseMiembros() {
         List<ITopLevelDecl> members = new ArrayList<>();
         while (!isAtEnd() && !check(TokenType.END)) {
             skipNewlines();
@@ -953,10 +1020,7 @@ public final class Parser {
             if (pos == posBefore && !isAtEnd()) advance();
             skipNewlines();
         }
-        consume(TokenType.END, "se esperaba 'end' al final de la clase");
-        if (check(TokenType.IDENTIFIER)) advance();
-        consumeStmtTerminator("se esperaba salto de línea tras 'end'");
-        return new ClassDef(isPublic, name, baseClass, members, tok.line, tok.column);
+        return members;
     }
 
     // ============================================================

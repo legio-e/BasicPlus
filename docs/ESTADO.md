@@ -27,6 +27,39 @@
 
 ## Última sesión
 
+> **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
+> interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».
+> - **El compilador y la VM-Java:** los dos parsers (`interface … extends`, `implements`, varias anotaciones por
+>   declaración), el semántico (lo que lleva una interfaz, los ciclos, cada miembro con la clave de MOD9,
+>   `@implement{ … }` obligatoria y `@override{}` opcional), los escritores BP ↔ JC, `bpi 10` sólo con interfaces,
+>   `CLASES` v2, la ref `IFAZ_MET` y tres opcodes (`0xBF`–`0xC1`); al enlazar, la tabla de cada clase por clave, E11 y
+>   E12. En JC, `class C : A, B` no dice cuál es la base: lo decide el semántico.
+> - **La VM-C**, el mismo algoritmo y los mismos textos; `Interfaces` e `InterfacesUsa` (con `InterfacesLib`) en el
+>   corpus, `InterfacesMal` (doce errores), el bloque F de `mezcla.py`. **El traductor:** las interfaces de C#, ya como
+>   interfaces de JC, con `@implement` y `@override`; Mono, de 275 a **290 que funcionan** (las mismas 4 fallan).
+> - **Lo que cazó la red** (la primera, en ROJO): `test-tablasim` (`#639`). El registro del enlace de la VM-C, un bloque
+>   con una entrada por clase, había crecido con lo de las interfaces también en los programas sin ellas (de 72 a 108 B
+>   por clase en un micro de 32 bits), y con el heap troceado ya no cabía: con las 25 clases de la prueba, 4 400 B en el
+>   PC frente a un tope de 3 000. Arreglado: el registro como antes y una tabla aparte, sólo si algún módulo trae
+>   interfaces; medido con una copia instrumentada del enlace de antes y del de ahora: 2 800 B los dos. Y el arnés: en
+>   MOD8, la marca `// mod8: fuera` se mira antes de compilar (las interfaces no compilan en MOD8, y su SKIP decía «no
+>   compila» en vez de su razón).
+> - **Verificado:** el compilador nuevo y el de antes dan los mismos `.mod` en los 663 samples que compilan y en los 31
+>   de la stdlib; `h13-errores`, 84 de 84; `mezcla.py`, 203 de 203; los casos del traductor, 9 de 9; la red, VERDE
+>   (10:55; la paridad, 179); `check-jc`, VERDE (175 y los 4 SKIP de siempre); el IDE, rehecho.
+> - **La pregunta de Eduardo por las pruebas de Mono:** son 22 temas (no 20); H8 no ha empezado, pero el lote de H6 ya
+>   pasa todas, y las 290 son de 14 de los 22 temas. Y cuántas más se pueden ganar, medido con el informe del lote,
+>   por escalones de coste (una prueba cuenta cuando todo lo que pide está hecho): el traductor solo (su biblioteca y
+>   `char`), +83; `#751`, +19; lo pequeño de JC, +32; lo mediano, +124; los genéricos propios, +470; los delegados,
+>   +169; `struct`, +146; `ref`/`out`, +45 (unas 1378 de 2322). El techo: 871 de las que no se traducen piden algo que
+>   se dejó fuera (lambdas, reflexión, `int?`, `async`, `yield`…). **Decidido** (Eduardo: *«OK. Entonces vamos por el
+>   escalón 1 primero.»*): el traductor solo; de sus 83, unas 69 se pueden llevar a BP (las otras 14 piden la
+>   implementación explícita de verdad, la E/S o la red de .NET…). Los genéricos, como hito propio con su análisis
+>   (en H7.2 ya son sólo de compilación, como en Java), más adelante.
+> - **Lo que acecha:** la placa, en la próxima tanda, con imágenes nuevas (H7.3 cambia la VM-C: `link.c` e `interp.c`;
+>   la stdlib, no) y el `Stdlib.pack` de H7.2 y `#755`; abiertas, sin tocar, `#757` y `#758`. Lo siguiente, el
+>   escalón 1, empezando por su análisis.
+>
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,
 > adelante con H6»*; al algoritmo y sus cinco decisiones, *«OK a todos»*).

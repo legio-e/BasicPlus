@@ -96,13 +96,13 @@ namespace Cs2Jc
         public const string EnumPorDefecto = "un enum como valor por defecto de un parámetro (JC sólo admite un literal)";
         public const string NullPorDefecto = "null como valor por defecto de un parámetro (JC sólo admite un literal)";
         public const string NullConTipo = "un null con su tipo, (X) null, para elegir una sobrecarga";
-        public const string IgualdadRefs = "== y != entre referencias de dos tipos distintos (una clase y su hija, Object, una interfaz)";
+        public const string IgualdadRefs = "== y != entre referencias de dos tipos distintos (una clase y su hija, Object)";
+        public const string ExplicitaDoble = "la implementación explícita de verdad: dos interfaces con el mismo método, cada una con su cuerpo";
         public const string ArrayDeVarios = "un array de valores de otro tipo que el suyo (una clase hija, o mezclados)";
         public const string ArrayConTamano = "crear un array de un tipo con su tamaño (Core: newIntArray, newByteArray, newLongArray, newDoubleArray y newObjArray)";
 
         // Lo que queda fuera
         public const string Lambdas = "lambdas y métodos anónimos";
-        public const string HerenciaMultiple = "interfaces (herencia múltiple)";
         public const string Linq = "LINQ";
         public const string Yield = "iteradores (yield)";
         public const string Async = "async/await";

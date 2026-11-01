@@ -52,6 +52,8 @@ final class JcParser {
     private final List<Tok> toks;
     private int pos = 0;
     private boolean enInterfaz = false;
+    /** V8 H7.3 — dentro de una `interface` de clase: sus funciones son sólo la firma. */
+    private boolean enInterfazDeClase = false;
     /** La clase que se está leyendo, o null en el módulo. */
     private String clase = null;
     private String packNativoMarca = null;
@@ -203,12 +205,14 @@ final class JcParser {
     // ============================================================
     // DECLARACIONES
     // ============================================================
-    /** Una declaración del módulo, con su anotación delante si la lleva (punto 27): se cuelga de la primera. */
+    /** Una declaración del módulo, con sus anotaciones delante si las lleva (punto 27; varias desde H7.3, `#756`): se
+     *  cuelgan de la primera. */
     private void declaracion(List<ITopLevelDecl> defs) {
-        Annotation ann = es("@") ? anotacion() : null;
+        List<Annotation> anns = new ArrayList<>();
+        while (es("@")) anns.add(anotacion());
         int antes = defs.size();
         declaracionSinAnotacion(defs);
-        if (ann != null && defs.size() > antes) ((Node) defs.get(antes)).annotation = ann;
+        if (!anns.isEmpty() && defs.size() > antes) ((Node) defs.get(antes)).annotations.addAll(anns);
     }
 
     /** Una declaración del módulo, o un miembro de la clase que se está leyendo ({@link #clase}). */
@@ -248,6 +252,15 @@ final class JcParser {
             return;
         }
         if (isRoot) throw error("'root' sólo va delante de 'class'");
+        if (es("interface")) {
+            // V8 H7.3 (#756) — una interfaz de clase (la cabecera `module interface` es otra cosa: se lee antes)
+            if (clase != null) throw error("una interfaz dentro de una clase: BP no las tiene");
+            if (isPrivate || isProtected || isFinal || isSync || isNative || isOwner || isStatic)
+                throw error("una interfaz sólo lleva 'public' delante: sus métodos son públicos, y los escribe quien la"
+                        + " implementa");
+            defs.add(interfazDef(isPublic));
+            return;
+        }
         String deClase = isStatic ? clase : null;   // el nombre de la clase delante, como en BP (punto 20)
         if (es("event")) {
             if (clase == null) throw error("un evento es de una clase");
@@ -285,30 +298,73 @@ final class JcParser {
         }
     }
 
-    /** `public class Perro : Animal { … }` (punto 34). */
+    /** `public class Perro : Animal, IMascota { … }` (punto 34). Como en C#, el padre y las interfaces van en la misma
+     *  lista, el padre primero (V8 H7.3, `#756`): el parser no sabe si el primero es una clase o una interfaz, así que
+     *  lo pone de padre y lo marca (`primeroPuedeSerInterfaz`), y lo decide el semántico. */
     private ClassDef claseDef(boolean isPublic, boolean isRoot) {
         Tok tok = espera("class");
         String name = nombre("el nombre de la clase");
         String base = null;
+        List<String> interfaces = new ArrayList<>();
         if (acepta(":")) {
-            base = nombre("la clase base tras ':'");
-            if (es(".") && mira(1).tipo == Tipo.NOMBRE) {
-                avanza();
-                base = base + "." + avanza().texto;
-            }
+            base = nombreDeTipo("la clase base tras ':'");
+            while (acepta(",")) interfaces.add(nombreDeTipo("una interfaz tras ','"));
         }
         espera("{", "'{' tras la cabecera de la clase");
+        List<ITopLevelDecl> members = miembros(name, "la clase");
+        ClassDef cd = new ClassDef(isPublic, name, base, members, tok.linea, tok.columna);
+        cd.isRoot = isRoot;
+        cd.interfaces.addAll(interfaces);
+        cd.primeroPuedeSerInterfaz = base != null;
+        return cd;
+    }
+
+    /** V8 H7.3 (`#756`) — `public interface IForma : IBase { function double area(); string nombre { get; set; } }`:
+     *  una interfaz de clase, como la de BP. Sus funciones son sólo la firma, con `;`. */
+    private ClassDef interfazDef(boolean isPublic) {
+        Tok tok = espera("interface");
+        String name = nombre("el nombre de la interfaz");
+        List<String> padres = new ArrayList<>();
+        if (acepta(":")) {
+            padres.add(nombreDeTipo("una interfaz tras ':'"));
+            while (acepta(",")) padres.add(nombreDeTipo("una interfaz tras ','"));
+        }
+        espera("{", "'{' tras la cabecera de la interfaz");
+        boolean antes = enInterfazDeClase;
+        enInterfazDeClase = true;
+        List<ITopLevelDecl> members;
+        try {
+            members = miembros(name, "la interfaz");
+        } finally {
+            enInterfazDeClase = antes;
+        }
+        ClassDef cd = new ClassDef(isPublic, name, null, members, tok.linea, tok.columna);
+        cd.isInterface = true;
+        cd.interfaces.addAll(padres);
+        return cd;
+    }
+
+    /** `Forma` o `Lib.Forma`: el nombre de una clase o de una interfaz. */
+    private String nombreDeTipo(String que) {
+        String n = nombre(que);
+        if (es(".") && mira(1).tipo == Tipo.NOMBRE) {
+            avanza();
+            n = n + "." + avanza().texto;
+        }
+        return n;
+    }
+
+    /** Los miembros de una clase o de una interfaz, hasta su `}` (que consume). */
+    private List<ITopLevelDecl> miembros(String name, String que) {
         List<ITopLevelDecl> members = new ArrayList<>();
         clase = name;
         while (!es("}")) {
-            if (esFin()) throw error("falta la '}' que cierra la clase " + name);
+            if (esFin()) throw error("falta la '}' que cierra " + que + " " + name);
             declaracion(members);
         }
         clase = null;
         espera("}");
-        ClassDef cd = new ClassDef(isPublic, name, base, members, tok.linea, tok.columna);
-        cd.isRoot = isRoot;
-        return cd;
+        return members;
     }
 
     /** `event cambia(Medida m);` (punto 34). */
@@ -560,6 +616,15 @@ final class JcParser {
             } else {
                 throw error("tras ':' va base(…) o this(…)");
             }
+        }
+        if (enInterfazDeClase) {
+            // V8 H7.3 — la función de una interfaz de clase es sólo su firma, como en C#: `function double area();`
+            if (inicial != null) throw error("una interfaz no tiene constructor");
+            espera(";", "';': una función de una interfaz no lleva cuerpo");
+            FuncDef fd = new FuncDef(isPublic, isFinal, false, false, name, ps, ret, new ArrayList<>(),
+                                     tok.linea, tok.columna);
+            fd.isPrivate = isPrivate;
+            return fd;
         }
         if (enInterfaz) {
             // Como en BP: la función de una interfaz es sólo su firma.

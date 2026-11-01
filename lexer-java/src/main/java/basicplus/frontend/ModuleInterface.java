@@ -69,6 +69,10 @@ public final class ModuleInterface {
 
     /** Versión mínima del .bpi que sabemos leer (cuando se sube, lo bumpamos). */
     public static final int CURRENT_VERSION = 9;   // v9 (V7/H2, #523): SIN NÚMEROS — ni `layout`, ni `slot`, ni `recv`
+    /** V8 H7.3 (#756) — la 10: las interfaces (`iface … end iface`, `implements`). La escribe SÓLO un módulo que las usa
+     *  (los demás, la de siempre: su texto y su ifaceCrc no cambian), así que no es la «actual» de `CURRENT_VERSION` (que
+     *  decide si un .bpi guardado está anticuado); es la más nueva que este lector lee entera, sin saltar nada. */
+    public static final int VERSION_CON_INTERFACES = 10;
     /** La versión que ESCRIBE este build: 9 con `--formato=9` (enlace tardío: las ranuras son del cargador,
      *  la interfaz no publica ninguna); 8 en MOD8 (`field … slot n`, `event … recv n`, `layout`). */
     static int versionQueSeEscribe() { return Main.FORMATO == 9 ? 9 : 8; }
@@ -309,6 +313,12 @@ public final class ModuleInterface {
          *  ("asignarlo YA es público") — así que no hay flag de visibilidad;
          *  lo que faltaba era que la interfaz cumpliera esa promesa. */
         public List<EventSig> events = new ArrayList<>();
+
+        /** V8 H7.3 (#756) — una INTERFAZ (directiva `iface … end iface`): sólo sus `method` y `prop`. */
+        public boolean isInterface = false;
+        /** V8 H7.3 — las interfaces de la cabecera de una clase (`implements A,Lib.B`), o de las que hereda una interfaz
+         *  (`iface I public extends A,B`): locales al dueño sin cualificar, de otro módulo como `Mod.I` (como el padre). */
+        public List<String> interfaces = new ArrayList<>();
 
         public ClassSig(String name, boolean isPublic, String baseClassName,
                         List<ParamSig> ctorParams, List<PropSig> properties,
@@ -574,7 +584,7 @@ public final class ModuleInterface {
         // que v1/v2; no causa colisión porque el importador ve el parent
         // vía import del módulo dueño).
         String parent = null;
-        if (cls.baseClass != null) {
+        if (cls.baseClass != null && !cls.isInterface) {   // V8 H7.3: el Object de una interfaz no se publica
             Symbol.ClassSymbol p = cls.baseClass;
             if (p.isExternal) {
                 StringBuilder sb = new StringBuilder();
@@ -587,6 +597,18 @@ public final class ModuleInterface {
             }
         }
         ClassSig sig = new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
+        // V8 H7.3 (#756) — una interfaz, y las interfaces de la cabecera (o de las que hereda), nombradas como el padre
+        sig.isInterface = cls.isInterface;
+        for (Symbol.ClassSymbol i : cls.interfaces) {
+            if (i.isExternal) {
+                StringBuilder sb = new StringBuilder();
+                if (i.externalLibrary != null && !i.externalLibrary.isEmpty()) sb.append(i.externalLibrary).append('.');
+                sb.append(i.externalModule).append('.').append(i.name);
+                sig.interfaces.add(sb.toString());
+            } else {
+                sig.interfaces.add(i.name);
+            }
+        }
         sig.ctorOverloads = ctorOverloads;   // V7/H2 (#509)
         sig.ctorVis = (ctorHead != null) ? visDeCtor(ctorHead) : "public";   // #515
         sig.ctorOverloadsVis = ctorOverloadsVis;
@@ -1141,6 +1163,9 @@ public final class ModuleInterface {
      *  PrintWriter dado (fichero .bpi o buffer en memoria para el .mod). */
     public void writeTo(PrintWriter pw) {
             int ver = versionQueSeEscribe();
+            // V8 H7.3 (#756) — un módulo con interfaces escribe la 10 (sus directivas `iface` e `implements`); los demás,
+            // la de siempre, y su texto (y su ifaceCrc) no cambia
+            if (ver == 9) for (ClassSig c : classes) if (c.isInterface || !c.interfaces.isEmpty()) ver = VERSION_CON_INTERFACES;
             boolean conNumeros = ver < 9;   // bpi 9: la forma de una clase la decide el cargador; aquí no viaja ningún número
             pw.println("bpi " + ver);
             if (library != null && !library.isEmpty()) pw.println("library " + library);
@@ -1186,10 +1211,18 @@ public final class ModuleInterface {
 
             for (ClassSig c : classes) {
                 StringBuilder hdr = new StringBuilder();
-                hdr.append("class ").append(c.name).append(" public");
-                if (c.baseClassName != null && !c.baseClassName.isEmpty())
-                    hdr.append(" extends ").append(c.baseClassName);
+                if (c.isInterface) {
+                    // V8 H7.3 (#756) — `iface <n> public [extends A,B]` … `end iface`: sólo sus `method` y `prop`
+                    hdr.append("iface ").append(c.name).append(" public");
+                    if (!c.interfaces.isEmpty()) hdr.append(" extends ").append(String.join(",", c.interfaces));
+                } else {
+                    hdr.append("class ").append(c.name).append(" public");
+                    if (c.baseClassName != null && !c.baseClassName.isEmpty())
+                        hdr.append(" extends ").append(c.baseClassName);
+                }
                 pw.println(hdr.toString());
+                if (!c.isInterface && !c.interfaces.isEmpty())   // V8 H7.3: las interfaces de la cabecera
+                    pw.println("  implements " + String.join(",", c.interfaces));
                 // L2 v3 — layout binario: línea opcional `layout=nF/nM/fbm/obm`
                 // donde fbm y obm son hex (little-endian de ints). El reader
                 // viejo (v5) ignora líneas desconocidas, así que es backward
@@ -1291,7 +1324,7 @@ public final class ModuleInterface {
                     if (m.isFinal)  sb.append(" final");
                     pw.println(sb.toString());
                 }
-                pw.println("end class");
+                pw.println(c.isInterface ? "end iface" : "end class");
             }
     } // fin writeTo(PrintWriter)
 
@@ -1511,6 +1544,8 @@ public final class ModuleInterface {
             List<FieldSig> clsFields = new ArrayList<>();   // V7/H2 (bpi 8)
             List<FuncSig>  clsStaticMethods = new ArrayList<>();   // V7/H2 (#492-B)
             List<PropSig>  clsStaticProps   = new ArrayList<>();
+            boolean        clsEsInterfaz    = false;               // V8 H7.3 (#756): `iface … end iface`
+            List<String>   clsInterfaces    = new ArrayList<>();
             // N6 — si el .bpi es de una versión MÁS NUEVA que CURRENT_VERSION, lo
             // leemos best-effort (forward-compat): saltamos las directivas que este
             // compilador no conoce, en lugar de abortar. El formato .bpi es aditivo.
@@ -1533,7 +1568,7 @@ public final class ModuleInterface {
                             + "compilador soporta v" + MIN_SUPPORTED_VERSION + ".." + CURRENT_VERSION
                             + "). Regenéralo desde su fuente .bp.");
                     // N6 — versión más nueva: no abortamos; leemos best-effort.
-                    tolerant = ver > CURRENT_VERSION;
+                    tolerant = ver > VERSION_CON_INTERFACES;
                     sawHeader = true;
                     continue;
                 }
@@ -1559,9 +1594,12 @@ public final class ModuleInterface {
 
                 // Modo "dentro de class": parsea miembros hasta "end class".
                 if (clsName != null) {
-                    if ("end class".equals(trimmed)) {
+                    if (clsEsInterfaz ? "end iface".equals(trimmed) : "end class".equals(trimmed)) {
                         ClassSig cs = new ClassSig(clsName, true, clsParent,
                                 clsCtorParams, clsProps, clsMethods);
+                        cs.isInterface = clsEsInterfaz;   // V8 H7.3
+                        cs.interfaces = clsInterfaces;
+                        clsEsInterfaz = false; clsInterfaces = new ArrayList<>();
                         cs.binaryNumFields  = clsBinNumFields;
                         cs.binaryNumMethods = clsBinNumMethods;
                         cs.binaryFieldBitmap = clsBinFieldBitmap;
@@ -1610,6 +1648,11 @@ public final class ModuleInterface {
                     }
                     if (trimmed.startsWith("prop ")) {
                         clsProps.add(parseProp(file, lineNo, trimmed.substring("prop ".length())));
+                        continue;
+                    }
+                    if (trimmed.startsWith("implements ") && !clsEsInterfaz) {   // V8 H7.3 (bpi 10)
+                        for (String n : trimmed.substring("implements ".length()).split(","))
+                            if (!n.trim().isEmpty()) clsInterfaces.add(n.trim());
                         continue;
                     }
                     if (trimmed.startsWith("field ")) {   // V7/H2 (bpi 8)
@@ -1703,6 +1746,29 @@ public final class ModuleInterface {
                     clsCtorVis = "public"; clsCtorOverloadsVis = new ArrayList<>();   // #515
                     clsProps   = new ArrayList<>();
                     clsMethods = new ArrayList<>();
+                } else if (trimmed.startsWith("iface ")) {
+                    // V8 H7.3 (#756, bpi 10) — "Name public [extends A,B]": una interfaz, con sus `method` y `prop`
+                    String[] toks = trimmed.substring("iface ".length()).trim().split("\\s+");
+                    if (toks.length < 1 || toks[0].isEmpty()) throw new IOException(file + ":" + lineNo + ": iface sin nombre");
+                    clsName = toks[0];
+                    clsParent = null;
+                    clsEsInterfaz = true;
+                    clsInterfaces = new ArrayList<>();
+                    boolean sawPub = false;
+                    for (int i = 1; i < toks.length; i++) {
+                        if ("public".equals(toks[i])) { sawPub = true; }
+                        else if ("extends".equals(toks[i]) && i + 1 < toks.length) {
+                            for (String n : toks[++i].split(",")) if (!n.isEmpty()) clsInterfaces.add(n);
+                        } else {
+                            throw new IOException(file + ":" + lineNo + ": flag desconocido en iface '" + toks[i] + "'");
+                        }
+                    }
+                    if (!sawPub) throw new IOException(file + ":" + lineNo + ": iface sin 'public'");
+                    clsCtorParams = null;
+                    clsCtorOverloads = new ArrayList<>();
+                    clsCtorVis = "public"; clsCtorOverloadsVis = new ArrayList<>();
+                    clsProps   = new ArrayList<>();
+                    clsMethods = new ArrayList<>();
                 } else if (!tolerant) {
                     throw new IOException(file + ":" + lineNo + ": directiva no reconocida: '" + trimmed
                         + "'. ¿.bpi corrupto o de versión incompatible? Regenéralo desde su .bp.");
@@ -1716,7 +1782,8 @@ public final class ModuleInterface {
             if (inProgressEnum != null)
                 throw new IOException(file + ": enum '" + inProgressEnum.name + "' sin 'end enum'");
             if (clsName != null)
-                throw new IOException(file + ": class '" + clsName + "' sin 'end class'");
+                throw new IOException(file + ": " + (clsEsInterfaz ? "iface '" : "class '") + clsName + "' sin '"
+                        + (clsEsInterfaz ? "end iface" : "end class") + "'");
         }
         return iface;
     }

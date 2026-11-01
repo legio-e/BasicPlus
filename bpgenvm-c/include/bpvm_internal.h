@@ -212,6 +212,7 @@ typedef struct {
 #define BPVM_REF_EV_DEST 4
 #define BPVM_REF_SUBTIPO 5
 #define BPVM_REF_SUPER   6   /* V10/J-3: `super.m()` → direccion absoluta del m EFECTIVO del padre (por la cadena) */
+#define BPVM_REF_IFAZ_MET 7  /* V8 H7.3 (#756): un metodo de una INTERFAZ → su posicion en la lista aplanada */
 #define BPVM_DEP_RAIZ   (-1)
 #define BPVM_DEP_LOCAL  (-2)
 typedef struct {
@@ -838,6 +839,12 @@ struct bpvm {
      * de cada GC cuenta los suyos; si no cuadran, se ha saltado bloques o se ha inventado alguno: heap descarrilado
      * (#494). Espejo de heapBloques en miVM. Al final: el prefijo del .mdn no se toca. */
     uint32_t heap_bloques;
+    /* V8 H7.3 (#756) — LAS INTERFACES: la tabla que el enlace deja en la arena (lt_construir_interfaces), las clases que
+     * tienen alguna, ordenadas por descriptor, cada una con la dirección de su lista: {u32 n} + n × {u32 desc, u32 lista}.
+     * 0 si ninguna clase las tiene (lo normal: la arena queda como antes). La miran INVOKE_IFAZ_REF, INSTANCEOF_IFAZ_REF
+     * y CHECKCAST_IFAZ_REF. Espejo de tablaIfaz/nTablaIfaz de miVM. Al final: el prefijo del .mdn no se toca. */
+    uint32_t ifaz_tabla;
+    uint32_t ifaz_n;
     /* V7/H7 #608 (29-sep, Eduardo: la A) — un hilo que NO es el main murió con una excepción que nadie atrapó: ese hilo
      * se acabó y los demás siguieron, y al final el RUN dice que hubo un error (BPVM_ERR_RUNTIME, con el mensaje en
      * runtime_error), para que el IDE o un script no lo den por bueno. Lo pone a 0 cada RUN (preparar_run). */
@@ -1504,6 +1511,30 @@ static inline int bpvm_vt_resolver(const bpvm_t* vm, uint32_t desc, uint32_t slo
         if (parent_off == 0) return -1;
         desc = (uint32_t) ((int32_t) bpvm_get_cs_for_data_addr(vm, desc) + parent_off);
     }
+}
+/* V8 H7.3 (#756) — la lista de interfaces de la clase `class_ptr` (su dirección en la arena), o 0 si no tiene: búsqueda
+ * dicotómica en la tabla que deja el enlace (vm->ifaz_tabla: {u32 n} + n × {u32 desc, u32 lista}, ordenada por desc).
+ * Espejo de listaDeInterfaces (miVM). */
+static inline uint32_t bpvm_ifaz_lista(const bpvm_t* vm, uint32_t class_ptr) {
+    const uint8_t* t = vm->memory + vm->ifaz_tabla;
+    int32_t lo = 0, hi = (int32_t) vm->ifaz_n - 1;
+    while (lo <= hi) {
+        int32_t mid = (int32_t) (((uint32_t) lo + (uint32_t) hi) >> 1);
+        uint32_t d = bpvm_read_u32_be(t + 4u + 8u * (uint32_t) mid);
+        if (d == class_ptr) return bpvm_read_u32_be(t + 8u + 8u * (uint32_t) mid);
+        if (d < class_ptr) lo = mid + 1; else hi = mid - 1;
+    }
+    return 0;
+}
+/* V8 H7.3 — la tabla de ranuras de la interfaz `ifaz` (su bloque) en la lista de una clase —{u16 n, u16 0} + n × {u32
+ * bloque, u32 tabla}—, o 0 si la clase no la implementa. Espejo de tablaDeInterfaz (miVM). */
+static inline uint32_t bpvm_ifaz_tabla(const bpvm_t* vm, uint32_t lista, uint32_t ifaz) {
+    if (lista == 0) return 0;
+    const uint8_t* l = vm->memory + lista;
+    uint16_t n = bpvm_read_u16_be(l);
+    for (uint16_t i = 0; i < n; i++)
+        if (bpvm_read_u32_be(l + 4u + 8u * i) == ifaz) return bpvm_read_u32_be(l + 8u + 8u * i);
+    return 0;
 }
 /* V10 (16-sep, R2/R3/R6/R9) — la subtabla CLASES (4.5) recien retenida: filas dentro de la seccion, csOff dentro del
  * modulo, parentDepIdx en rango, ranuras coherentes. 0 si vale; si no, deja el motivo en vm->load_error y devuelve

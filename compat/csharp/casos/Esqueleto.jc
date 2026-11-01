@@ -39,6 +39,7 @@ module CsEsqueleto
       public function Perro() : this("sin nombre")
       {
       }
+      @override{}
       public function string Habla()
       {
          return "guau";
@@ -51,6 +52,7 @@ module CsEsqueleto
       {
          this.patas = 2;
       }
+      @override{}
       public function string Habla()
       {
          return "pio";

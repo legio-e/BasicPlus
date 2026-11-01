@@ -242,6 +242,11 @@ public abstract class BpType {
                 return true;
             if (!(source instanceof ClassType)) return false;
             Symbol.ClassSymbol cur = ((ClassType) source).cls;
+            // V8 H7.3 (#756) — a una interfaz, lo que la implementa: una clase que la implementa (ella o un padre,
+            // directamente o por una interfaz que hereda de ella), o una interfaz que es ella o hereda de ella. Al
+            // revés no: una interfaz no se asigna a una clase sin convertirla. Y a Object, sí: el padre de una
+            // interfaz es Object, y la subida de abajo lo encuentra.
+            if (cls.isInterface) return cur.implementa(cls);
             // #389 — TODA clase es un `Object`. Esa arista no está en `baseClass`:
             // vive en el EMISOR, que cuelga cada clase de la raíz al sintetizarla
             // (`MivmEmitter`: `w.addClass(cls, "Object")`). Aquí, una clase de

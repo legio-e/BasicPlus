@@ -4765,6 +4765,83 @@ public class VirtualMachine {
                     break;
                 }
 
+                case 0xBF: { // INVOKE_IFAZ_REF — V8 H7.3 (#756): la llamada por una interfaz. Espejo de interp.c.
+                    // ext[idxI] = el bloque de la interfaz; ext[idxM] = la posición del método en ella. La ranura, de la
+                    // tabla de esa interfaz en la clase del objeto; y desde ahí, INVOKE_VIRTUAL (sus mismos textos).
+                    int ext = moduleManager.getExternalTableAddressForCS(cs);
+                    int idxI = readI16(mem, pc) & 0xFFFF; pc += 2;
+                    int idxM = readI16(mem, pc) & 0xFFFF; pc += 2;
+                    int numArgs = mem[pc] & 0xFF; pc++;
+                    int ifaz = readI32(mem, ext + idxI * 4);
+                    int pos = readI32(mem, ext + idxM * 4);
+                    long thisRef = refLoad(mem, sp - REF_SIZE - numArgs * 4);
+                    if (thisRef == 0) {
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "referencia nula: llamada a un método de un objeto null");
+                        break;
+                    }
+                    requireAlive(tc, sp, thisRef);
+                    int classPtr = classPtrOfRefOr0(thisRef);
+                    if (classPtr == 0) {
+                        tc.sp = sp;
+                        throwBpRuntimeError(tc, "el receptor no es un objeto (una cadena o un array no despachan metodos)");
+                        break;
+                    }
+                    tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
+                    int tabla = tablaDeInterfaz(listaDeInterfaces(classPtr), ifaz);
+                    if (tabla == 0) {   // el compilador lo garantiza: sólo un valor que no pasó por él
+                        throwBpRuntimeError(tc, "INVOKE_IFAZ: la clase del objeto no implementa la interfaz");
+                        break;
+                    }
+                    int vtSlot = readInt16(tabla + 2 * pos);
+                    long resuelto = resolverVirtual(mem, classPtr, vtSlot);
+                    if (resuelto == -1L) {
+                        throwBpRuntimeError(tc, "INVOKE_IFAZ: la ranura " + vtSlot + " no se resuelve en la cadena de herencia");
+                        break;
+                    }
+                    int targetCS = (int) (resuelto >>> 32);
+                    int targetPC = targetCS + (int) resuelto;
+                    writeI32(mem, sp, pc); sp += 4;
+                    writeI32(mem, sp, bp); sp += 4;
+                    writeI32(mem, sp, cs); sp += 4;
+                    bp = sp;
+                    pc = targetPC;
+                    cs = targetCS;
+                    break;
+                }
+
+                case 0xC0: { // INSTANCEOF_IFAZ_REF — V8 H7.3: ¿la clase del objeto tiene esa interfaz en su lista?
+                    int idx = readI16(mem, pc) & 0xFFFF; pc += 2;
+                    int ifaz = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4);
+                    sp -= REF_SIZE; long ref = refLoad(mem, sp);
+                    int objClass = classPtrOfRefOr0(ref);
+                    boolean ok = (objClass != 0) && tablaDeInterfaz(listaDeInterfaces(objClass), ifaz) != 0;
+                    writeI32(mem, sp, ok ? 1 : 0); sp += 4;
+                    break;
+                }
+
+                case 0xC1: { // CHECKCAST_IFAZ_REF — V8 H7.3: como CHECKCAST_REF, contra la lista de interfaces
+                    int idx = readI16(mem, pc) & 0xFFFF; pc += 2;
+                    int ifaz = readI32(mem, moduleManager.getExternalTableAddressForCS(cs) + idx * 4);
+                    short nameOff = (short) readI16(mem, pc); pc += 2;
+                    long ref = refLoad(mem, sp - REF_SIZE);   // peek: no consume
+                    boolean ok = true;
+                    if (ref != 0) {
+                        int objClass = classPtrOfRefOr0(ref);
+                        ok = (objClass != 0) && tablaDeInterfaz(listaDeInterfaces(objClass), ifaz) != 0;
+                    }
+                    if (!ok) {
+                        int naddr = cs + nameOff;
+                        int nlen  = readInt32(naddr);
+                        if (nlen > 40) nlen = 40;
+                        String nombre = new String(mem, naddr + 4, nlen, java.nio.charset.StandardCharsets.UTF_8);
+                        // ⚠️ MISMO mensaje, byte a byte, que interp.c — paridad.
+                        tc.sp = sp; tc.bp = bp; tc.pc = pc; tc.cs = cs;
+                        throwBpRuntimeError(tc, "conversion invalida: el valor no es un '" + nombre + "'");
+                    }
+                    break;
+                }
+
                 case 0xBE: { // INVOKE_SLOT — V7/H7 #607 (30-sep): INVOKE_VIRTUAL con la RANURA en la pila (arriba)
                     // ( this ...args slot -- ): el setter que Forms resuelve por nombre al cargar (Gui.bindMember).
                     // Antes lo llamaba ANIDADO un builtin (__guiInvokeBySlot, invokeHandlerBySlot): un setter que
@@ -7765,6 +7842,33 @@ public class VirtualMachine {
         int type = (tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
         if (type != TYPE_OBJECT) return 0;
         return readInt32(headerAddr + 4);
+    }
+
+    /** V8 H7.3 (#756) — la tabla que el cargador deja en la arena (EnlaceTardio.construirInterfaces): las clases que
+     *  tienen interfaces, ordenadas por descriptor, cada una con la dirección de su lista. 0 si ninguna las tiene. */
+    private int tablaIfaz = 0, nTablaIfaz = 0;
+    void fijarTablaDeInterfaces(int addr, int n) { tablaIfaz = addr; nTablaIfaz = n; }
+
+    /** V8 H7.3 — la lista de interfaces de la clase `classPtr`, o 0 si no tiene: búsqueda dicotómica en la tabla.
+     *  Espejo de bpvm_ifaz_lista (interp.c). */
+    private int listaDeInterfaces(int classPtr) {
+        int lo = 0, hi = nTablaIfaz - 1;
+        while (lo <= hi) {
+            int mid = (lo + hi) >>> 1;
+            int d = readInt32(tablaIfaz + 4 + 8 * mid);
+            if (d == classPtr) return readInt32(tablaIfaz + 8 + 8 * mid);
+            if (Integer.compareUnsigned(d, classPtr) < 0) lo = mid + 1; else hi = mid - 1;
+        }
+        return 0;
+    }
+
+    /** V8 H7.3 — la tabla de ranuras de la interfaz `ifaz` (su bloque) en la lista de una clase, o 0 si la clase no la
+     *  implementa. Espejo de bpvm_ifaz_tabla (interp.c). */
+    private int tablaDeInterfaz(int lista, int ifaz) {
+        if (lista == 0) return 0;
+        int n = readInt16(lista);
+        for (int i = 0; i < n; i++) if (readInt32(lista + 4 + 8 * i) == ifaz) return readInt32(lista + 8 + 8 * i);
+        return 0;
     }
 
     /**

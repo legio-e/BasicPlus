@@ -100,12 +100,26 @@ module ::= 'module' name NEWLINE
        Si NO es el módulo principal, 'Main' es una función normal sin
        trato especial (puede existir o no).                            *)
 
-defs_stmt ::= [ 'public' ] ( const_decl
+defs_stmt ::= { annotation } [ 'public' ] ( const_decl
                             | var_decl
                             | property_def
                             | func_def
                             | class_def
+                            | interface_def
                             | enum_def ) ;
+
+(* V5/H5 — las anotaciones; varias por declaración desde V8/H7.3 (#756), cada una una vez.
+   Los saltos de línea dentro de las llaves y tras la '}' no cuentan: la declaración puede
+   ir en la misma línea o en la siguiente. Una entrada sin '=' es una bandera. El parser no
+   sabe cuáles existen ni dónde valen: lo dice el semántico. Las que hay:
+     @BD{ ... }          la clase o la property de una tabla (el ORM, V5);
+     @implement{ A, B }  OBLIGATORIA en un método o una property que la clase declara e
+                         implementa un miembro de una interfaz: una o varias de las
+                         interfaces de la clase, y cada una con ese miembro (V8/H7.3);
+     @override{}         OPCIONAL en lo que redefine un método o una property del padre
+                         (V8/H7.3); si no redefine nada, es error. *)
+annotation ::= '@' name '{' [ ann_entry { ',' ann_entry } ] '}' ;
+ann_entry  ::= name [ '=' literal ] ;
 
 (* REGLA SEMÁNTICA — visibilidad de las VARIABLES (estado real V2):
 
@@ -178,16 +192,33 @@ args        ::= expr { ',' expr } ;
 (* V7/H1: el destructor, `function ~Nombre()` (Nombre = el de la clase; sin parametros ni
    retorno; `end ~Nombre`); y `try var x: T := expr` declara un recurso owner que el bloque
    suelta al salir (azucar sobre `var owner` + finally). *)
-class_def ::= [ 'root' ] 'class' name [ 'extends' name ] NEWLINE
+class_def ::= [ 'root' ] 'class' name [ 'extends' type_name ]
+              [ 'implements' type_name { ',' type_name } ] NEWLINE
               { member }
               'end' [ name ] NEWLINE ;
+
+type_name ::= name [ '.' name ] ;      (* una clase o una interfaz, también de otro módulo: Lib.Forma *)
+
+(* V8/H7.3 (#756) — las interfaces de clase. Una clase hereda de UNA clase e implementa las
+   interfaces que quiera (la herencia múltiple de tipos); una interfaz hereda de varias, con
+   'extends'. Lleva sólo métodos de instancia (su firma, sin cuerpo ni 'end') y properties en
+   forma corta (nombre y tipo: get y set); todo es público. Sin campos, constantes, eventos,
+   constructores ni 'static'. Un Thread y sus hijas no implementan interfaces. Del formato 9
+   (el enlace tardío; MOD_FORMAT §13.9). *)
+interface_def ::= 'interface' name [ 'extends' type_name { ',' type_name } ] NEWLINE
+                  { iface_member }
+                  'end' [ name ] NEWLINE ;
+
+iface_member  ::= { annotation } [ 'public' ]
+                  ( 'function' name '(' [ params ] ')' [ ':' type ] NEWLINE
+                  | 'property' name ':' type NEWLINE ) ;
 
 (* 'root' (H1 P3, V7): la clase no desciende de nada. Palabra CONTEXTUAL (solo delante de
    'class'; 'root' sigue siendo un identificador valido en cualquier otro sitio) y solo
    admitida en el modulo raiz (Core): Object y Thread. Sin 'root' y sin 'extends', la base
    es Object. Y 'import Core' lo pone el parser en todo modulo que no lo escriba. *)
 
-member    ::= [ 'public' ] ( const_decl | var_decl | property_def | func_def ) ;
+member    ::= { annotation } [ 'public' ] ( const_decl | var_decl | property_def | func_def ) ;
 
 (* REGLA SEMÁNTICA — 'public' en CAMPOS de instancia (estado real V2):
 
@@ -702,7 +733,7 @@ NEWLINE     ::= '\n' | '\r\n' ;
      module, end, import
 
    Declaraciones:
-     const, var, function, class, extends, enum,
+     const, var, function, class, extends, interface, implements, enum,
      property, get, set, endprop, endget, endset
 
    Referencias a la instancia actual / clase base:
@@ -771,7 +802,7 @@ NEWLINE     ::= '\n' | '\r\n' ;
    - Type aliases:                    type Edad = integer
    - Lambdas y funciones como valor:  var f := (x: integer) => x * 2
    - Genéricos:                       List<integer>, Map<K, V>
-   - Interfaces / clases abstractas
+   - Clases abstractas                (las interfaces: HECHO en V8, H7.3 #756)
    - Asignaciones compuestas bitwise: &=, |=, xor=, shl=, shr=   (HECHO en V8, H7.1 #747)
    - Operador 'in' como expresión booleana fuera del 'for'
    - Rangos en switch:                case 1..5

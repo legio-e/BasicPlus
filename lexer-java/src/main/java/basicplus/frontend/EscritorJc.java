@@ -86,6 +86,8 @@ public final class EscritorJc {
     private int nivel;
     /** La clase que se está escribiendo, o null en el módulo. */
     private String clase;
+    /** V8 H7.3 — se escribe una interfaz: sus miembros, sin `protected` (son de quien la implementa) y sin cuerpo. */
+    private boolean enInterfazDeClase;
 
     private EscritorJc(SemanticInfo info, Map<Object, Integer> argsEscritos, int nivel) {
         this.info = info;
@@ -185,7 +187,7 @@ public final class EscritorJc {
     }
 
     private static boolean deUnaLinea(ITopLevelDecl d) {
-        if (((Node) d).annotation != null) return false;
+        if (!((Node) d).annotations.isEmpty()) return false;
         return d instanceof ConstDecl || d instanceof VarDecl || d instanceof EventDef
             || (d instanceof PropertyDef && ((PropertyDef) d).isShortForm);
     }
@@ -205,7 +207,7 @@ public final class EscritorJc {
     /** Una declaración del módulo, o un miembro de la clase que se está escribiendo ({@link #clase}). */
     private void declaracion(ITopLevelDecl d, boolean enInterfaz) {
         Node n = (Node) d;
-        if (n.annotation != null) linea(EscritorBp.anotacion(n.annotation));   // las de BP (punto 27)
+        for (Annotation a : n.annotations) linea(EscritorBp.anotacion(a));   // las de BP (punto 27)
         if (d instanceof ConstDecl)        linea(constante((ConstDecl) d, true) + ";");
         else if (d instanceof VarDecl)     linea(variable((VarDecl) d, true) + ";");
         else if (d instanceof FuncDef)     funcion((FuncDef) d, enInterfaz);
@@ -221,7 +223,7 @@ public final class EscritorJc {
     private String visibilidad(boolean isPublic, boolean isPrivate) {
         if (isPublic) return "public ";
         if (isPrivate) return "private ";
-        return clase != null ? "protected " : "";
+        return clase != null && !enInterfazDeClase ? "protected " : "";
     }
 
     /** `static`, para lo que en BP lleva delante el nombre de su clase (punto 20); ese nombre es el de la clase en la
@@ -233,22 +235,29 @@ public final class EscritorJc {
         return "static ";
     }
 
-    /** `public class Perro : Animal { … }` (punto 34), con `root` delante si BP lo pone. */
+    /** `public class Perro : Animal, IMascota { … }` (punto 34), con `root` delante si BP lo pone; y V8 H7.3 (`#756`),
+     *  `public interface IForma : IBase { … }`, con sus funciones sin cuerpo. Como en C#, el padre y las interfaces van
+     *  en la misma lista, el padre primero. */
     private void claseDef(ClassDef c, boolean enInterfaz) {
         if (clase != null) throw new NoSoportado("una clase dentro de otra", c);
         StringBuilder h = new StringBuilder(c.isPublic ? "public " : "");
         if (c.isRoot) h.append("root ");
-        h.append("class ").append(nombre(c.name, c));
-        if (c.baseClass != null) h.append(" : ").append(c.baseClass);
+        h.append(c.isInterface ? "interface " : "class ").append(nombre(c.name, c));
+        List<String> lista = new ArrayList<>();
+        if (c.baseClass != null) lista.add(c.baseClass);
+        lista.addAll(c.interfaces);
+        if (!lista.isEmpty()) h.append(" : ").append(String.join(", ", lista));
         linea(h.toString());
         linea("{");
         nivel++;
         clase = c.name;
+        enInterfazDeClase = c.isInterface;
         for (int i = 0; i < c.members.size(); i++) {
             ITopLevelDecl m = c.members.get(i);
             if (i > 0 && !(deUnaLinea(c.members.get(i - 1)) && deUnaLinea(m))) blanco();
-            declaracion(m, enInterfaz);
+            declaracion(m, enInterfaz || c.isInterface);
         }
+        enInterfazDeClase = false;
         clase = null;
         nivel--;
         linea("}");

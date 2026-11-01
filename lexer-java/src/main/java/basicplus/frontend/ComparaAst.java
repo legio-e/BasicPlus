@@ -83,8 +83,16 @@ final class ComparaAst {
                 String n = f.getName();
                 if (n.equals("line") || n.equals("column")) continue;
                 if (n.equals("conNew") || n.equals("esConversion") || n.equals("esTernario") || n.equals("escritoEnJc")
-                        || n.equals("argumentosNew") || n.equals("claseNew"))
-                    continue;   // las marcas de JC (CallExpr, ModuleNode)
+                        || n.equals("argumentosNew") || n.equals("claseNew") || n.equals("primeroPuedeSerInterfaz"))
+                    continue;   // las marcas de JC (CallExpr, ModuleNode, ClassDef)
+                // V8 H7.3 — JC escribe el padre y las interfaces en una lista (`class C : A, B`) y no sabe cuál es cuál:
+                // se compara la lista entera, el padre primero
+                if (jc && a instanceof Ast.ClassDef && n.equals("interfaces")) continue;
+                if (jc && a instanceof Ast.ClassDef && n.equals("baseClass")) {
+                    String d = comparar(supertipos((Ast.ClassDef) a), supertipos((Ast.ClassDef) b), ruta + ".supertipos", linea);
+                    if (d != null) return d;
+                    continue;
+                }
                 f.setAccessible(true);
                 Object va, vb;
                 try {
@@ -120,11 +128,19 @@ final class ComparaAst {
                 uno.add(v.names.get(i));
                 Ast.VarDecl w = new Ast.VarDecl(v.isPublic, v.isOwner, uno, v.type, v.init, v.line, v.column);
                 w.isPrivate = v.isPrivate;
-                if (i == 0) w.annotation = v.annotation;
+                if (i == 0) w.annotations.addAll(v.annotations);
                 out.add(w);
             }
         }
         return out;
+    }
+
+    /** El padre (si lo hay) y las interfaces de una clase, en una lista: lo que JC escribe tras `:`. */
+    private static List<String> supertipos(Ast.ClassDef c) {
+        List<String> l = new ArrayList<>();
+        if (c.baseClass != null) l.add(c.baseClass);
+        l.addAll(c.interfaces);
+        return l;
     }
 
     private static boolean multiConValor(Object o) {

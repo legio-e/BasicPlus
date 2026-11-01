@@ -100,6 +100,18 @@ GenericosMal|una llave string necesita Collections.Map()
 GenericosMal|la llave de este Map es integer, no 'string' (put)
 GenericosMal|la llave de este Map es integer, no 'string' (getString)
 GenericosMal|se esperaba un array o una List en 'for in'
+InterfacesMal|la interfaz 'ConCampo' no tiene campos
+InterfacesMal|ciclo de herencia entre interfaces en 'A'
+InterfacesMal|'SinArea' implementa 'Forma' y no tiene 'area(): double' (tiene 'area(): integer')
+InterfacesMal|implementa 'Forma.area' y tiene que ser public
+InterfacesMal|'area' implementa 'Forma.area': m
+InterfacesMal|'Otra' no es una interfaz de 'MalMarcada'
+InterfacesMal|lleva @override y no redefine nada
+InterfacesMal|'@implement' repetida
+InterfacesMal|'Forma' es una interfaz: no se extiende
+InterfacesMal|'MalMarcada' es una clase, no una interfaz
+InterfacesMal|'Hilo' desciende de Thread y un Thread no es un Object
+InterfacesMal|'Forma' es una interfaz: no se construye
 "
 
 ok=0; mal=0

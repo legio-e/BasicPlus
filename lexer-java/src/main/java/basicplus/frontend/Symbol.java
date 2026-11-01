@@ -57,8 +57,20 @@ public abstract class Symbol {
         public final boolean isPublic;
         public final Scope instanceMembers = new Scope("instance", null);
         public final Scope staticMembers   = new Scope("static",   null);
-        public final String baseClassName; // nombre crudo de 'extends X' (null si no hay)
+        /** Nombre crudo de 'extends X' (null si no hay). No es final desde V8 H7.3: en JC (`class C : A, B`) el
+         *  semántico lo quita si `A` resulta ser una interfaz. */
+        public String baseClassName;
         public ClassSymbol baseClass;      // resuelto en pase 2
+        /** V8 H7.3 (`#756`) — una INTERFAZ: se guarda como una clase con su marca (Eduardo: «una clase y una interfaz
+         *  se guardan igual o casi igual. Con un id…»). Su `baseClass` es Object (todo objeto lo es, y sus métodos
+         *  valen sobre una interfaz); sus miembros, métodos sin cuerpo y properties; sus {@link #interfaces}, las de
+         *  las que hereda. */
+        public boolean isInterface;
+        /** V8 H7.3 — las interfaces de la cabecera, como se escriben (`Forma`, `Lib.Medible`); en una interfaz, las de
+         *  las que hereda. */
+        public final java.util.List<String> interfaceNames = new java.util.ArrayList<>();
+        /** V8 H7.3 — las mismas, resueltas (pase 2). */
+        public final java.util.List<ClassSymbol> interfaces = new java.util.ArrayList<>();
         public FunctionSymbol constructor;
         public final Ast.ClassDef astNode;
 
@@ -110,17 +122,70 @@ public abstract class Symbol {
             this.baseClassName = baseClassName;
             this.astNode = ast;
             this.decl = ast;
+            if (ast != null) {
+                this.isInterface = ast.isInterface;
+                this.interfaceNames.addAll(ast.interfaces);
+            }
         }
 
-        /** Busca un miembro de instancia subiendo por la cadena de herencia. */
+        /** Busca un miembro de instancia subiendo por la cadena de herencia (V8 H7.3: en una interfaz, por las
+         *  interfaces de las que hereda, y después por Object). */
         public Symbol lookupInstance(String n) {
-            ClassSymbol c = this;
-            while (c != null) {
+            for (ClassSymbol c : dondeBuscar()) {
                 Symbol s = c.instanceMembers.tryLookup(n);
                 if (s != null) return s;
-                c = c.baseClass;
             }
             return null;
+        }
+
+        /** V8 H7.3 — dónde se buscan los miembros de instancia, en orden: en una clase, ella y sus padres; en una
+         *  interfaz, ella y las interfaces de las que hereda (en el orden en que las declara, en profundidad y sin
+         *  repetir), y después la cadena de su `baseClass` (Object). */
+        public java.util.List<ClassSymbol> dondeBuscar() {
+            java.util.List<ClassSymbol> out = new java.util.ArrayList<>();
+            if (isInterface) {
+                interfacesAplanadas(out);
+                for (ClassSymbol c = baseClass; c != null; c = c.baseClass) out.add(c);
+            } else {
+                for (ClassSymbol c = this; c != null; c = c.baseClass) out.add(c);
+            }
+            return out;
+        }
+
+        /** V8 H7.3 — una interfaz y todas aquellas de las que hereda, sin repetir: ella primero, y después cada
+         *  padre en el orden en que los declara, en profundidad. */
+        public void interfacesAplanadas(java.util.List<ClassSymbol> out) {
+            for (ClassSymbol c : out) if (mismaClase(c, this)) return;
+            out.add(this);
+            for (ClassSymbol p : interfaces) p.interfacesAplanadas(out);
+        }
+
+        /** V8 H7.3 — todas las interfaces que implementa una clase: las de su cabecera, las que éstas heredan y las
+         *  de sus padres (las del padre primero). En una interfaz, ella y las de las que hereda. */
+        public java.util.List<ClassSymbol> todasLasInterfaces() {
+            java.util.List<ClassSymbol> out = new java.util.ArrayList<>();
+            if (isInterface) { interfacesAplanadas(out); return out; }
+            java.util.List<ClassSymbol> cadena = new java.util.ArrayList<>();
+            for (ClassSymbol c = this; c != null; c = c.baseClass) cadena.add(0, c);
+            for (ClassSymbol c : cadena) for (ClassSymbol i : c.interfaces) i.interfacesAplanadas(out);
+            return out;
+        }
+
+        /** V8 H7.3 — ¿un valor de este tipo es una `iface`? Una clase, si la implementa ella o un padre (directamente
+         *  o por una interfaz que hereda de ella); una interfaz, si es ella o hereda de ella. */
+        public boolean implementa(ClassSymbol iface) {
+            for (ClassSymbol i : todasLasInterfaces()) if (mismaClase(i, iface)) return true;
+            return false;
+        }
+
+        /** V8 H7.3 — el mismo tipo: el mismo símbolo, o, de otro módulo, el mismo nombre en el mismo módulo (cada
+         *  `import` hace su propio símbolo de lo que importa, como con Object). */
+        public static boolean mismaClase(ClassSymbol a, ClassSymbol b) {
+            if (a == b) return true;
+            if (a == null || b == null || !a.name.equals(b.name)) return false;
+            if (a.isExternal && b.isExternal) return a.externalModule.equals(b.externalModule)
+                    && a.externalLibrary.equals(b.externalLibrary);
+            return a.esDelLenguaje() && b.esDelLenguaje();
         }
 
         /** Busca un miembro estático subiendo por la cadena de herencia. */

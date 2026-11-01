@@ -208,6 +208,7 @@
     <li class="sub"><a href="#props">9.5 Properties</a></li>
     <li class="sub"><a href="#static">9.6 Miembros estáticos / final</a></li>
     <li class="sub"><a href="#fields-owner">9.7 Fields owner</a></li>
+    <li class="sub"><a href="#interfaces-clase">9.8 Interfaces</a></li>
 
     <li class="group"><a href="#modulos">10. Módulos</a></li>
     <li class="sub"><a href="#raiz">10.0 El módulo raíz: Core</a></li>
@@ -342,10 +343,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 <table>
   <tr><th>Categoría</th><th>Tokens</th></tr>
   <tr><td>Estructura</td>
-      <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code>
-          (<code>interface</code> <code>implements</code>: reservadas, sin uso — <a href="#interfaces">§10.4</a>)</td></tr>
+      <td><code>module</code> <code>end</code> <code>import</code> <code>library</code> <code>from</code></td></tr>
   <tr><td>Declaraciones</td>
-      <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code> <code>enum</code>
+      <td><code>const</code> <code>var</code> <code>function</code> <code>native</code> <code>class</code> <code>extends</code>
+          <code>interface</code> <code>implements</code> (<a href="#interfaces-clase">§9.8</a>) <code>enum</code>
           <code>property</code> <code>get</code> <code>set</code> <code>endprop</code> <code>endget</code> <code>endset</code>
           <code>event</code> <code>raise</code> <code>inline</code> (<a href="#inline">§8.3b</a>)</td></tr>
   <tr><td>Visibilidad / mods</td>
@@ -1766,6 +1767,85 @@ Counter.bump()</code></pre>
   anterior se destruye antes de escribir el nuevo.
 </p>
 
+<h3 id="interfaces-clase">9.8 Interfaces</h3>
+<p>
+  Una clase hereda de <strong>una</strong> clase (<a href="#herencia">§9.4</a>) e <strong>implementa</strong>
+  las interfaces que quiera: es la herencia múltiple de <em>tipos</em>, no de código (V8, #756). Una interfaz
+  dice qué métodos y qué properties tiene un tipo, sin cuerpo, y puede heredar de varias.
+</p>
+<pre><code><span class="kw">public interface</span> Forma
+  <span class="kw">function</span> area(): <span class="type">double</span>
+  <span class="kw">function</span> nombre(): <span class="type">string</span>
+<span class="kw">end</span> Forma
+
+<span class="kw">public interface</span> Poligono <span class="kw">extends</span> Forma
+  <span class="kw">function</span> lados(): <span class="type">integer</span>
+<span class="kw">end</span> Poligono
+
+<span class="kw">public interface</span> Etiquetado
+  <span class="kw">property</span> etiqueta: <span class="type">string</span>
+<span class="kw">end</span> Etiquetado
+
+<span class="kw">public class</span> Cuadrado <span class="kw">extends</span> Figura <span class="kw">implements</span> Poligono, Etiquetado
+  <span class="kw">var</span> lado: <span class="type">double</span>
+  @implement{ Etiquetado }
+  <span class="kw">public property</span> etiqueta: <span class="type">string</span>
+  <span class="kw">public function</span> Cuadrado(l: <span class="type">double</span>)
+    <span class="kw">this</span>.lado := l
+  <span class="kw">end</span> Cuadrado
+  @implement{ Poligono }
+  <span class="kw">public function</span> area(): <span class="type">double</span>
+    <span class="kw">return this</span>.lado * <span class="kw">this</span>.lado
+  <span class="kw">end</span> area
+  @implement{ Poligono }
+  <span class="kw">public function</span> lados(): <span class="type">integer</span>
+    <span class="kw">return</span> <span class="num">4</span>
+  <span class="kw">end</span> lados
+<span class="kw">end</span> Cuadrado</code></pre>
+<p>
+  <code>nombre()</code> no está en <code>Cuadrado</code>: lo pone <code>Figura</code>, su padre, que no sabe nada
+  de <code>Forma</code>. Lo que cuenta es que la clase lo tenga, propio o heredado.
+</p>
+<pre><code><span class="kw">var</span> f: Forma := Cuadrado(<span class="num">2.0</span>)
+<span class="kw">print</span> f.nombre(), f.area()                  <span class="comment">// figura 4</span>
+<span class="kw">var</span> p: Poligono := Poligono(f)               <span class="comment">// la conversión: si no lo es, RuntimeError</span>
+<span class="kw">print</span> p.lados(), f <span class="kw">instanceof</span> Etiquetado   <span class="comment">// 4 true</span>
+<span class="kw">var</span> e: Etiquetado := Etiquetado(f)
+e.etiqueta := <span class="str">"cuadrado de 2"</span>              <span class="comment">// la property, por la interfaz</span></code></pre>
+<ul>
+  <li><strong>Lo que lleva una interfaz:</strong> métodos de instancia, sólo su firma, y properties en forma
+      corta (su nombre y su tipo: la clase tendrá su getter y su setter). No hace falta <code>public</code>: todo
+      lo de una interfaz es público. No lleva campos, constantes, eventos, constructores ni nada
+      <code>static</code>, ni <code>final</code>, <code>private</code>, <code>native</code> u <code>owner</code>:
+      lo que lleva es lo que una clase exporta.</li>
+  <li><strong>La clase cumple:</strong> tiene cada método de sus interfaces —y de las que éstas heredan— con el
+      mismo nombre, los mismos parámetros y el mismo retorno, y cada property con el mismo nombre y el mismo tipo,
+      todos <code>public</code>. Si le falta uno, es un error de compilación que dice cuál.</li>
+  <li><strong><code>@implement{ A, B }</code>, obligatoria</strong> en lo que la clase declara e implementa un
+      miembro de una interfaz: nombra una o varias de las interfaces que implementa la clase, y cada una tiene que
+      tener ese miembro (en el ejemplo, <code>area</code> es de <code>Forma</code>, y vale
+      <code>@implement{ Poligono }</code>, que la hereda). Lo heredado del padre no se marca.</li>
+  <li><strong><code>@override{}</code>, opcional</strong>, en lo que redefine un método o una property del padre:
+      no cambia nada, lo deja escrito; si no redefine nada, es un error. Una declaración puede llevar varias
+      anotaciones, cada una una vez (<code>@implement{ Forma }</code> y <code>@override{}</code>, por ejemplo).</li>
+  <li><strong>Usarlas:</strong> una interfaz es un tipo como una clase: variables, parámetros, arrays
+      (<code>Forma[]</code>), <code>instanceof</code>, la conversión <code>Forma(x)</code> y <code>==</code>. Una
+      hija hereda las interfaces de su padre y redefine sus métodos sin repetirlas. Una interfaz no se
+      construye.</li>
+  <li><strong>Entre módulos:</strong> una <code>public interface</code> se usa y se implementa desde otro módulo
+      (<code>class Rect implements Lib.Medible</code>), y la anotación lleva el nombre sin el módulo
+      (<code>@implement{ Medible }</code>). Si la librería cambia una interfaz sin recompilar a quien la usa, el
+      cargador lo dice al enlazar —a la clase le falta un miembro nuevo (E11), o implementa uno que la interfaz ya
+      no tiene (E12)— en vez de fallar al llamar.</li>
+  <li><strong>Límites:</strong> un <code>Thread</code> y sus hijas no implementan interfaces; las interfaces son
+      del formato 9, el de por defecto; y una función <code>native</code> no llama por una interfaz.</li>
+</ul>
+<p>
+  En JC se escriben como en C#: <code>interface Poligono : Forma { function int lados(); string Etiqueta { get; set; } }</code>
+  y <code>class Cuadrado : Figura, Poligono, Etiquetado</code> —el primer nombre puede ser la clase base o una
+  interfaz—, con las mismas anotaciones.
+</p>
+
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <h2 id="modulos">10. Módulos</h2>
@@ -1901,11 +1981,12 @@ Counter.bump()</code></pre>
 </ul>
 
 <h3 id="interfaces">10.4 <code>module interface</code> — <span class="kw">RETIRADO</span></h3>
-<p><strong>BasicPlus no tiene interfaces.</strong> Ni para clases —que sería lo
-defendible— ni para módulos. Las secciones que aquí describían
-<code>module interface</code>, <code>implements</code> y el binding
-<code>import Contrato:Impl</code> se retiran del lenguaje (decisión de Eduardo,
-30-ago-2026), junto con los ejemplos que las usaban.</p>
+<p><strong>Las interfaces de módulo no existen.</strong> Las secciones que aquí describían
+<code>module interface</code>, el <code>implements</code> de un módulo y el binding
+<code>import Contrato:Impl</code> se retiraron del lenguaje (decisión de Eduardo,
+30-ago-2026), junto con los ejemplos que las usaban. Las interfaces <strong>de clase</strong>, en
+cambio, existen desde V8 (<a href="#interfaces-clase">§9.8</a>; Eduardo, 31-oct-2026), y con ellas
+volvieron <code>interface</code> e <code>implements</code>.</p>
 <p>Lo que aquellas tres secciones perseguían —<em>evolucionar un módulo sin romper a
 quien lo usaba</em>— sigue siendo un objetivo, y la forma prevista es la
 <strong>herencia entre módulos</strong>: dejar el módulo original y añadir otro que
@@ -1913,10 +1994,10 @@ herede de él. Está <strong>en suspenso a propósito</strong>, porque para que 
 hace falta un control de versiones efectivo que hoy no existe. Se retomará entonces. Una parte
 ya está: desde V7, una librería puede <em>crecer</em> —añadir métodos, campos o properties— sin
 recompilar a quien la usa (<a href="#imports">§10.3</a>).</p>
-<p>Para componer funcionalidad hoy: <code>import</code> normal (§10.3) y
+<p>Para componer funcionalidad hoy: <code>import</code> normal (§10.3), la
 <strong>herencia entre clases</strong> (§9), que sí existe y se usa —la biblioteca
 estándar tiene 38 casos, de <code>SyncList extends Core.List</code> a
-<code>RuntimeError extends Exception</code>.</p>
+<code>RuntimeError extends Exception</code>—, y las interfaces de clase (§9.8).</p>
 
 <h3 id="encapsulacion">10.5 Encapsulación clase ↔ módulo</h3>
 <p>

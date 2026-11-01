@@ -1713,10 +1713,35 @@ public final class MivmEmitter {
     // CLASES
     // ============================================================
 
+    /** V8 H7.3 (#756) — una INTERFAZ: su fila de 4.5 (el bit 2), con la clave de cada método y de los dos accesores de
+     *  cada property, y las interfaces de las que hereda. Ni código, ni campos, ni descriptor: el cargador le hace su
+     *  bloque y casa sus claves con las de cada clase que la implementa. */
+    private void emitInterfazDef(ClassDef cd, ClassSymbol cls) {
+        if (!mod9()) {
+            errors.add("la interfaz '" + cd.name + "': las interfaces son del enlace tardío (MOD9), y este módulo se"
+                    + " compila en MOD8");
+            return;
+        }
+        w.addInterfaz(cd.name, cd.isPublic);
+        for (ClassSymbol p : cls.interfaces) w.addInterfazDe(claseRef(p), depRef(p));
+        for (ITopLevelDecl m : cd.members) {
+            Symbol s = info.declSymbols.get(m);
+            if (s instanceof FunctionSymbol) {
+                w.declareInterfazMetodo(claveDe((FunctionSymbol) s));
+            } else if (s instanceof PropertySymbol) {
+                PropertySymbol p = (PropertySymbol) s;
+                w.declareInterfazMetodo(claveGetter(p.name, p.type));
+                w.declareInterfazMetodo(claveSetter(p.name, p.type));
+            }
+        }
+        w.endClass();
+    }
+
     private void emitClassDef(ClassDef cd) {
         try {
             ClassSymbol cls = (ClassSymbol) info.declSymbols.get(cd);
             if (cls == null) { errors.add("falta ClassSymbol para " + cd.name); return; }
+            if (cls.isInterface) { emitInterfazDef(cd, cls); return; }
 
             // 1) Pre-declarar static vars como globals cualificados.
             //    (lo hacemos antes de la apertura de clase porque addClass exige no
@@ -1774,6 +1799,18 @@ public final class MivmEmitter {
                 else                 w.addClassAbierta(cd.name, cd.isPublic, base.name, ModWriter.DEP_LOCAL);
             } else {
                 w.addClass(cd.name, parentForModWriter, externalParent);
+            }
+            // V8 H7.3 (#756) — las interfaces de su cabecera (las que éstas heredan, y las del padre, las junta el
+            // cargador). Una clase con interfaces la construye siempre el cargador: en MOD9, toda clase de un módulo
+            // de usuario ya es abierta (desciende de Core.Object); una cerrada sólo puede ser de Core, o de MOD8.
+            if (!cls.interfaces.isEmpty()) {
+                if (!abierta9) {
+                    errors.add("la clase '" + cd.name + "' implementa interfaces y no la construye el cargador: "
+                            + (mod9() ? "una clase de Core con interfaces, todavía no" : "las interfaces son del enlace tardío (MOD9)"));
+                    w.endClass();   // cerrada sin miembros: que la siguiente clase no se encuentre esta abierta
+                    return;
+                }
+                for (ClassSymbol i : cls.interfaces) w.addInterfazDe(claseRef(i), depRef(i));
             }
 
             // ¿Esta clase declara su propio __syncMutex (porque tiene sync
@@ -1873,6 +1910,7 @@ public final class MivmEmitter {
                     if (mod9()) {   // V7/H2 (#523): la clave canónica ANTES de emitir cuerpos (los this.m() la piden)
                         String clave = claveDe(fs);
                         w.setMethodMeta(emitName(fs), clave, esOverride(cls, fs.name, clave), fs.isPrivate);
+                        if (info.implementanInterfaz.contains(fs)) w.setMethodImplementa(emitName(fs));   // V8 H7.3: el bit 2
                     }
                 }
             }
@@ -2529,8 +2567,10 @@ public final class MivmEmitter {
         //    fall-through al final del body no se duplica porque el return
         //    JUMPea por encima de él.
         String getterSimple = "get" + capitalize(pd.name.name);
+        boolean implementa = ps != null && info.implementanInterfaz.contains(ps);   // V8 H7.3: el bit «implementa», en los dos accesores
         w.addMethod(getterSimple);
         if (mod9()) w.setMethodMeta(getterSimple, claveGetter(pd.name.name, propType), propOverride, pd.isPrivate);
+        if (mod9() && implementa) w.setMethodImplementa(getterSimple);
         FunctionSymbol getterFs = new FunctionSymbol(getterSimple, pd.isPublic, false, false, cls, null);
         getterFs.returnType = propType;
         beginFunctionScope(getterFs, propType);
@@ -2555,6 +2595,7 @@ public final class MivmEmitter {
         String setterSimple = "set" + capitalize(pd.name.name);
         w.addMethod(setterSimple);
         if (mod9()) w.setMethodMeta(setterSimple, claveSetter(pd.name.name, propType), propOverride, pd.isPrivate);
+        if (mod9() && implementa) w.setMethodImplementa(setterSimple);
         // BUG-6: el valor de una property long/double ocupa 8 bytes en el param.
         declareParamByType("__val", propType);   // H1.8 (antes: ?8:4 aquí)
         FunctionSymbol setterFs = new FunctionSymbol(setterSimple, pd.isPublic, false, false, cls, null);
@@ -5453,6 +5494,12 @@ public final class MivmEmitter {
             if (t instanceof PrimitiveType
                     && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) {
                 w.emitCheckCastString(internString("string"));
+            } else if (t instanceof ClassType && ((ClassType) t).cls.isInterface) {
+                // V8 H7.3 (#756) — a una interfaz: la lista de interfaces de la clase del objeto; si no está, el
+                // RuntimeError que nombra la interfaz
+                Symbol.ClassSymbol iface = ((ClassType) t).cls;
+                if (!mod9()) { errors.add("convertir a la interfaz '" + iface.name + "' es del enlace tardío (MOD9)"); return; }
+                w.emitCheckCastInterfazRef(refClase(iface), internString(iface.name));
             } else if (t instanceof ClassType) {
                 Symbol.ClassSymbol cls = ((ClassType) t).cls;
                 if (!"Object".equals(cls.name)) {
@@ -5701,6 +5748,19 @@ public final class MivmEmitter {
      *  el camino de siempre sobre la clase que DECLARA el método. */
     private void emitInvokeVirtualSmart(ClassSymbol receptor, ClassSymbol declarante, String methodName,
                                         String clave, int nArgs) throws IOException {
+        // V8 H7.3 (#756) — un método que declara una interfaz: por la tabla de esa interfaz en la clase del objeto. La
+        // ref, contra la interfaz ESTÁTICA del receptor (como la de una clase, MOD_FORMAT §13.1): el cargador busca la
+        // clave en su lista aplanada, que lleva también las de las interfaces de las que hereda.
+        if (declarante != null && declarante.isInterface) {
+            ClassSymbol iface = (receptor != null && receptor.isInterface) ? receptor : declarante;
+            if (!mod9()) { errors.add("llamar por la interfaz '" + iface.name + "' es del enlace tardío (MOD9)"); return; }
+            int refM = w.requireRef(ModWriter.REF_IFAZ_MET, depRef(iface), claseRef(iface), clave);
+            w.emitInvokeInterfazRef(refClase(iface), refM, nArgs);
+            return;
+        }
+        // un método de Object sobre una interfaz (`f.toString()`): la llamada virtual de siempre, contra Object, que es
+        // el padre de toda interfaz
+        if (receptor != null && receptor.isInterface) receptor = declarante;
         if (porRef(receptor)) { w.emitInvokeVirtualRef(refMet(receptor, clave), nArgs); return; }
         if (porRef(declarante)) { w.emitInvokeVirtualRef(refMet(declarante, clave), nArgs); return; }
         emitInvokeVirtualSmart(declarante, methodName, nArgs);
@@ -5946,6 +6006,11 @@ public final class MivmEmitter {
             errors.add("instanceof con clase no resuelta: " + ie.typeName);
             // dejar un 0 en la pila para no descuadrar
             emitInt(0);
+            return;
+        }
+        if (((ClassSymbol) cls).isInterface) {   // V8 H7.3 (#756): ¿está en la lista de la clase del objeto?
+            if (!mod9()) { errors.add("'instanceof' una interfaz es del enlace tardío (MOD9)"); emitInt(0); return; }
+            w.emitInstanceOfInterfazRef(refClase((ClassSymbol) cls));
             return;
         }
         if (porRef((ClassSymbol) cls)) { w.emitInstanceOfRef(refClase((ClassSymbol) cls)); return; }   // V7/H2 (#523, D7)

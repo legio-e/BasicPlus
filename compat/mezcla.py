@@ -155,6 +155,115 @@ VARIANTES = {
                    lambda s: _sub(s, '  var n: integer\n', '  var n: integer\n  var f0: integer\n  var f1: integer\n  var f2: integer\n  var f3: integer\n  var f4: integer\n  var f5: integer\n  var f6: integer\n  var f7: integer\n  var f8: integer\n  var f9: integer\n  var f10: integer\n  var f11: integer\n  var f12: integer\n  var f13: integer\n  var f14: integer\n  var f15: integer\n  var f16: integer\n  var f17: integer\n  var f18: integer\n  var f19: integer\n  var f20: integer\n  var f21: integer\n  var f22: integer\n  var f23: integer\n  var f24: integer\n  var f25: integer\n  var f26: integer\n  var f27: integer\n  var f28: integer\n  var f29: integer\n  var f30: integer\n  var f31: integer\n  var f32: integer\n')),
 }
 
+# ------------------------------------------------------------------ V8 H7.3 (#756): las interfaces
+# Una libreria con dos interfaces (Medible hereda de Forma y lleva una property), una clase suya que implementa Forma y
+# una funcion que llama por ella; y una app que implementa Medible, llama por las dos y asigna la clase de la libreria a
+# una Forma (la ref SUBTIPO). La app, sellada contra v1; cada variante, con el criterio de MOD9: lo que no cambia una
+# clave usada corre (las posiciones las pone el cargador: reordenar, un padre nuevo, un metodo nuevo que la clase ya
+# tiene); lo que deja a la clase sin un metodo de su interfaz (E11), sin la interfaz de lo que dice implementar (E12),
+# sin la interfaz (E1), con una clase donde habia una interfaz, o la asuncion «Punto implementa Forma» rota, NO ENLAZA,
+# nombrandolo, en las dos VMs con el mismo texto.
+ILIB_V1 = """module ILib
+import Core
+public interface Forma
+  function area(): double
+  function nombre(): string
+end Forma
+public interface Medible extends Forma
+  property escala: integer
+end Medible
+public class Punto implements Forma
+  public function Punto()
+  end Punto
+  @implement{ Forma }
+  public function area(): double
+    return 0.0
+  end area
+  @implement{ Forma }
+  public function nombre(): string
+    return "punto"
+  end nombre
+end Punto
+public function describe(f: Forma): string
+  return f.nombre() + " " + f.area()
+end describe
+end ILib
+"""
+IVARIANTES = {
+  'igual':            ('la misma fuente', lambda s: s),
+  'ifaz_reorden':     ('los dos metodos de Forma, en el otro orden',
+                       lambda s: _sub(s, '  function area(): double\n  function nombre(): string\n', '  function nombre(): string\n  function area(): double\n')),
+  'ifaz_met_mas':     ('Forma gana perimetro(), que la clase de la app no tiene (E11)',
+                       lambda s: _sub(_sub(s, '  function nombre(): string\nend Forma', '  function nombre(): string\n  function perimetro(): double\nend Forma'),
+                                      '    return "punto"\n  end nombre\n', '    return "punto"\n  end nombre\n  @implement{ Forma }\n  public function perimetro(): double\n    return 0.0\n  end perimetro\n')),
+  'ifaz_met_mas_lo_tiene': ('Forma gana extra(), que la clase de la app ya tiene (publico)',
+                       lambda s: _sub(_sub(s, '  function nombre(): string\nend Forma', '  function nombre(): string\n  function extra(): integer\nend Forma'),
+                                      '    return "punto"\n  end nombre\n', '    return "punto"\n  end nombre\n  @implement{ Forma }\n  public function extra(): integer\n    return 0\n  end extra\n')),
+  'ifaz_padre_mas':   ('nombre() pasa a un padre nuevo de Forma (Nombrado): cambian las posiciones, no las claves',
+                       lambda s: _sub(s, 'public interface Forma\n  function area(): double\n  function nombre(): string\nend Forma\n',
+                                      'public interface Nombrado\n  function nombre(): string\nend Nombrado\npublic interface Forma extends Nombrado\n  function area(): double\nend Forma\n')),
+  'ifaz_prop_quitada': ('Medible pierde la property que la clase de la app dice implementar (E12)',
+                       lambda s: _sub(s, '  property escala: integer\n', '')),
+  'ifaz_quitada':     ('se quita la interfaz Medible, que la clase de la app implementa (E1)',
+                       lambda s: _sub(s, 'public interface Medible extends Forma\n  property escala: integer\nend Medible\n', '')),
+  'ifaz_es_clase':    ('Medible pasa de interfaz a clase',
+                       lambda s: _sub(s, 'public interface Medible extends Forma\n  property escala: integer\nend Medible\n',
+                                      'public class Medible\n  public property escala: integer\nend Medible\n')),
+  'deja_de_implementar': ('Punto deja de implementar Forma: la asuncion de la app (Punto en una Forma) ya no vale',
+                       lambda s: _sub(_sub(s, 'public class Punto implements Forma\n', 'public class Punto\n'), '  @implement{ Forma }\n', '', 2)),
+}
+IROMPE = {'ifaz_met_mas', 'ifaz_prop_quitada', 'ifaz_quitada', 'ifaz_es_clase', 'deja_de_implementar'}
+IUSA = """module IUsa
+import Core
+import ILib
+public class Rect implements ILib.Medible
+  var an: double
+  @implement{ Medible }
+  public property escala: integer
+  public function Rect(a: double)
+    this.an := a
+    this.escala := 1
+  end Rect
+  @implement{ Forma }
+  public function area(): double
+    return this.an * this.escala
+  end area
+  @implement{ Forma }
+  public function nombre(): string
+    return "rect"
+  end nombre
+  public function extra(): integer
+    return 5
+  end extra
+end Rect
+function main()
+  var r: Rect := Rect(2.0)
+  var f: ILib.Forma := r
+  print ILib.describe(f)
+  var m: ILib.Medible := r
+  m.escala := 3
+  print "escala", m.escala, f.area()
+  var p: ILib.Forma := ILib.Punto()
+  print ILib.describe(p), p instanceof ILib.Medible
+end main
+end IUsa
+"""
+IESPERADO = "rect 2\nescala 3 6\npunto 0 false"
+
+def ilib(work, variante, gen):
+    """La variante de ILib compilada (cache por dir), como lib()."""
+    d = os.path.join(work, 'ilib_%s_g%d' % (variante, gen))
+    if os.path.isdir(d): return d
+    os.makedirs(os.path.join(d, 'src'))
+    io.open(os.path.join(d, 'src', 'ILib.bp'), 'w', encoding='utf-8', newline='\n').write(IVARIANTES[variante][1](ILIB_V1))
+    io.open(os.path.join(d, 'p.bpbuild'), 'w', encoding='utf-8', newline='\n').write(
+        '{ "sourceDir": "src", "outDir": ".", "main": "ILib", "version": %d, "dependencies": [] }\n' % gen)
+    shutil.copy(CORE, d)
+    rc, out, err = sh(['java', '-jar', FE, '--project', 'p.bpbuild', '--backend=mivm', '--formato=9'], d)
+    if rc != 0 or not os.path.isfile(os.path.join(d, 'ILib.mod')):
+        raise SystemExit('la variante %s de ILib (gen %d) no compila:\n%s%s' % (variante, gen, out, err))
+    return d
+
 # ------------------------------------------------------------------ las apps
 USA = """module Usa
 import Core
@@ -583,7 +692,7 @@ def main():
         elif a.startswith('--formato='): FORMATO = int(a[10:])
         elif a.startswith('--vms='): VMS = a[6:]
         else: raise SystemExit('argumento desconocido: ' + a)
-    if solo not in (None, 'I', 'II', 'P', 'B', 'V'): raise SystemExit('--solo=' + solo + ': bloques I, II, P, B o V')
+    if solo not in (None, 'I', 'II', 'P', 'B', 'V', 'F'): raise SystemExit('--solo=' + solo + ': bloques I, II, P, B, V o F')
     for f in (FE, JVM, CVM, CORE):
         if not os.path.isfile(f): raise SystemExit('falta ' + f)
     work = work or tempfile.mkdtemp(prefix='mezcla_')
@@ -708,6 +817,15 @@ def main():
             cd = caso_dir(work, 'V_' + etq.replace(' ', '_'), libdir, [os.path.join(mods[0], 'Usa.mod'), os.path.join(mods[1], 'Ext.mod')])
             for nombre in ('Usa', 'Ext'):
                 fila('V', '%s %s' % (nombre, etq), cd, nombre, pred[nombre], esperado(nombre, 'igual'))
+
+    if solo in (None, 'F') and FORMATO == 9:
+        print('\n== BLOQUE F (V8 H7.3, #756): las interfaces — la app sellada contra ILib v1, contra cada variante (gen 8) ==')
+        iv1 = ilib(work, 'igual', 7)
+        iusa1 = app(work, 'IUsa', IUSA, iv1, 'iv1')
+        for v in IVARIANTES:
+            d = ilib(work, v, 8)
+            cd = caso_dir(work, 'F_' + v, d, [os.path.join(iusa1, 'IUsa.mod')])
+            fila('F', 'IUsa v1 contra ILib %s g8' % v, cd, 'IUsa', 'no enlaza' if v in IROMPE else 'corre', IESPERADO)
 
     # ---- resumen
     malos = [f for f in filas if f[4] != 'ok']

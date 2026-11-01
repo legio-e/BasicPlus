@@ -130,8 +130,8 @@ namespace Cs2Jc
             if (s.IsRecord) { Rechaza(donde, Porque.Pendiente("record")); return; }
             switch (s.TypeKind)
             {
-                case TypeKind.Class:
-                case TypeKind.Interface: EmiteClase(s); break;     // una interfaz simple es una clase base (#745)
+                case TypeKind.Class: EmiteClase(s); break;
+                case TypeKind.Interface: EmiteInterfaz(s); break;   // H7.3 (#756): la interfaz de JC
                 case TypeKind.Struct: Rechaza(donde, Porque.H7(Porque.Struct)); break;
                 case TypeKind.Enum: EmiteEnum(s); break;
                 default: Rechaza(donde, Porque.Pendiente("tipo " + s.TypeKind)); break;
@@ -211,18 +211,17 @@ namespace Cs2Jc
                 else if (EsExcepcionNet(b)) base_ = "Exception";
                 else Rechaza(lugarBase, Porque.DeNet("hereda de " + NombreCompleto(b)));
             }
-            // Las interfaces (#745, decidido por Eduardo): una del programa, en una clase sin otra base, es su clase base;
-            // dos, o una y una clase, son herencia múltiple. IDisposable no cuenta: basta con su Dispose.
-            var propias = s.Interfaces.Where(i => DelPrograma(i)).ToList();
+            // Las interfaces (H7.3, #756; antes, con #745, una sola y como clase base): las del programa, en la cabecera
+            // detrás del padre, como en C# (`class C : B, I, J`); las de .NET, la biblioteca. IDisposable no cuenta:
+            // basta con su Dispose.
+            var supertipos = new List<string>();
+            if (base_ != null) supertipos.Add(base_);
+            foreach (var i in s.Interfaces.Where(i => DelPrograma(i))) supertipos.Add(Tipo(i, lugarBase));
             foreach (var i in s.Interfaces.Where(i => !DelPrograma(i) && NombreCompleto(i) != "System.IDisposable"))
                 Rechaza(lugarBase, PorInterfazAjena(i));
-            if (propias.Count > 1 || (propias.Count == 1 && base_ != null))
-                Rechaza(lugarBase, Porque.Fuera(Porque.HerenciaMultiple));
-            else if (propias.Count == 1)
-                base_ = Tipo(propias[0], lugarBase);
 
             Linea((s.DeclaredAccessibility == Accessibility.Public ? "public " : "") + "class " + NombreTipo(s)
-                  + (base_ != null ? " : " + base_ : ""));
+                  + (supertipos.Count > 0 ? " : " + string.Join(", ", supertipos) : ""));
             Linea("{");
             sangria++;
             foreach (var p in partes)
@@ -236,6 +235,81 @@ namespace Cs2Jc
             Linea("}");
             Linea("");
             claseActual = null;
+        }
+
+        /// Una interfaz de C# (H7.3, `#756`): la de JC, `interface IForma : IBase { function double Area(); string Nombre
+        /// { get; set; } }`. Sus métodos, sólo la firma; sus propiedades, con los dos accesores (en JC una propiedad siempre
+        /// los tiene, y una de sólo lectura de C# nadie la escribe por la interfaz: la prueba compila en C#); de las que
+        /// hereda, las del programa. Lo demás —genérica, sus eventos e indexadores, un miembro con cuerpo (C# 8) o
+        /// estático, una de .NET de padre—, rechazado con su motivo.
+        void EmiteInterfaz(INamedTypeSymbol s)
+        {
+            claseActual = s;
+            var partes = s.DeclaringSyntaxReferences.Select(r => (TypeDeclarationSyntax) r.GetSyntax())
+                .OrderBy(p => p.SpanStart).ToList();
+            var donde = partes[0];
+            if (s.IsGenericType) { Rechaza(donde.TypeParameterList ?? (SyntaxNode) donde, Porque.H7(Porque.Genericos)); claseActual = null; return; }
+            foreach (var p in partes) Atributos(p.AttributeLists);
+            var lugar = donde.BaseList ?? (SyntaxNode) donde;
+            var padres = new List<string>();
+            foreach (var i in s.Interfaces)
+            {
+                if (DelPrograma(i)) padres.Add(Tipo(i, lugar));
+                else Rechaza(lugar, PorInterfazAjena(i));
+            }
+            Linea((s.DeclaredAccessibility == Accessibility.Public ? "public " : "") + "interface " + NombreTipo(s)
+                  + (padres.Count > 0 ? " : " + string.Join(", ", padres) : ""));
+            Linea("{");
+            sangria++;
+            foreach (var p in partes)
+                foreach (var miembro in p.Members)
+                    EmiteMiembroDeInterfaz(miembro);
+            sangria--;
+            Linea("}");
+            Linea("");
+            claseActual = null;
+        }
+
+        void EmiteMiembroDeInterfaz(MemberDeclarationSyntax d)
+        {
+            Atributos(d.AttributeLists);
+            switch (d)
+            {
+                case MethodDeclarationSyntax me:
+                {
+                    var s = m.GetDeclaredSymbol(me);
+                    if (me.TypeParameterList != null) { Rechaza(me.TypeParameterList, Porque.H7(Porque.Genericos)); return; }
+                    if (s.IsStatic || !s.IsAbstract) { Rechaza(me, Porque.Pendiente("un método de interfaz con cuerpo o estático (C# 8)")); return; }
+                    Linea("function " + Tipo(s.ReturnType, me.ReturnType) + " " + NombreMetodo(s) + "(" + Parametros(me.ParameterList) + ");");
+                    return;
+                }
+                case PropertyDeclarationSyntax p:
+                {
+                    var s = m.GetDeclaredSymbol(p);
+                    if (s.IsStatic || !s.IsAbstract) { Rechaza(p, Porque.Pendiente("una propiedad de interfaz con cuerpo o estática (C# 8)")); return; }
+                    Linea(Tipo(s.Type, p.Type) + " " + Ident(s.Name) + " { get; set; }");
+                    return;
+                }
+                default: RechazaNodo(d); return;
+            }
+        }
+
+        /// H7.3 (`#756`) — lo que JC pide delante de un método o una propiedad: `@implement{ A, B }`, con las interfaces del
+        /// programa que tienen un miembro que éste implementa (lo dice Roslyn; obligatoria en JC si una es de la cabecera,
+        /// y valida con cualquiera de las de la clase); y `@override{}` si redefine uno de una clase del programa
+        /// (opcional en JC, y así el compilador comprueba que de verdad redefine algo).
+        void Anotaciones(ISymbol s)
+        {
+            var ifaces = new List<string>();
+            foreach (var i in claseActual.AllInterfaces.Where(DelPrograma))
+                foreach (var mi in i.GetMembers().Where(x => x is IPropertySymbol || (x is IMethodSymbol xm && xm.MethodKind == MethodKind.Ordinary)))
+                {
+                    var impl = claseActual.FindImplementationForInterfaceMember(mi);
+                    if (SymbolEqualityComparer.Default.Equals(impl, s) && !ifaces.Contains(NombreTipo(i))) ifaces.Add(NombreTipo(i));
+                }
+            if (ifaces.Count > 0) Linea("@implement{ " + string.Join(", ", ifaces) + " }");
+            ISymbol redef = (s as IMethodSymbol)?.OverriddenMethod ?? (ISymbol) (s as IPropertySymbol)?.OverriddenProperty;
+            if (redef != null && DelPrograma(redef.ContainingType)) Linea("@override{}");
         }
 
         void EmiteMiembro(MemberDeclarationSyntax d)
@@ -321,10 +395,12 @@ namespace Cs2Jc
                     Rechaza(me, Porque.Pendiente("una implementación explícita y otro miembro con su nombre"));
                     return;
                 }
+                if (ChocaConOtraExplicita(s)) { Rechaza(me, Porque.H7(Porque.ExplicitaDoble)); return; }
             }
             string cabecera = (esMain || explicita ? "public" : Acceso(s.DeclaredAccessibility)) + (s.IsStatic ? " static" : "")
                 + " function " + Tipo(s.ReturnType, me.ReturnType) + " " + nombre
                 + "(" + Parametros(me.ParameterList) + ")";
+            if (!s.IsStatic) Anotaciones(s);
             Linea(cabecera);
             if (s.IsAbstract) { Abstracto(nombre); return; }
             Cuerpo(me.Body, me.ExpressionBody, s.ReturnsVoid);
@@ -338,6 +414,23 @@ namespace Cs2Jc
             Linea("   throw new RuntimeError(" + Cadena("abstracto: " + NombreTipo(claseActual) + "." + nombre) + ");");
             Linea("}");
         }
+
+        /// H7.3 — ¿otra implementación explícita de la clase se escribiría igual en JC: el mismo nombre y los mismos
+        /// parámetros (`void IA.Draw()` y `void IB.Draw()`)? Es la implementación explícita de verdad, dos cuerpos para un
+        /// mismo método, uno por interfaz: JC no la tiene. Con otra firma, son dos sobrecargas y valen (Mono test-457).
+        bool ChocaConOtraExplicita(ISymbol s)
+        {
+            string n = (s as IMethodSymbol)?.ExplicitInterfaceImplementations[0].Name ?? ((IPropertySymbol) s).ExplicitInterfaceImplementations[0].Name;
+            var ps = (s as IMethodSymbol)?.Parameters ?? ((IPropertySymbol) s).Parameters;
+            return claseActual.GetMembers().Any(o => !SymbolEqualityComparer.Default.Equals(o, s) && o.Kind == s.Kind
+                && ((o as IMethodSymbol)?.ExplicitInterfaceImplementations.FirstOrDefault()?.Name
+                    ?? (o as IPropertySymbol)?.ExplicitInterfaceImplementations.FirstOrDefault()?.Name) == n
+                && MismosParametros((o as IMethodSymbol)?.Parameters ?? ((IPropertySymbol) o).Parameters, ps));
+        }
+
+        static bool MismosParametros(System.Collections.Immutable.ImmutableArray<IParameterSymbol> a,
+                                     System.Collections.Immutable.ImmutableArray<IParameterSymbol> b) =>
+            a.Length == b.Length && a.Zip(b, (x, y) => SymbolEqualityComparer.Default.Equals(x.Type, y.Type)).All(v => v);
 
         /// ¿Tiene la clase otro miembro que se llame así (y que no sea una implementación explícita)?
         bool ChocaConOtro(ISymbol s, string nombre) =>
@@ -392,9 +485,11 @@ namespace Cs2Jc
                     Rechaza(p, Porque.Pendiente("una implementación explícita y otro miembro con su nombre"));
                     return;
                 }
+                if (ChocaConOtraExplicita(s)) { Rechaza(p, Porque.H7(Porque.ExplicitaDoble)); return; }
             }
             string cabecera = (explicita ? "public" : Acceso(s.DeclaredAccessibility)) + (s.IsStatic ? " static" : "") + " "
                 + Tipo(s.Type, p.Type) + " " + nombre;
+            if (!s.IsStatic) Anotaciones(s);
             if (s.IsAbstract)
             {
                 // una propiedad abstracta, o la de una interfaz: sus accesores lanzan
@@ -492,6 +587,15 @@ namespace Cs2Jc
         string Ident(string nombre)
         {
             if (nombre.StartsWith("@")) nombre = nombre.Substring(1);
+            // `__delegate`: en BP lo que empieza por `__` es del sistema; se renombra como una palabra reservada, con los
+            // guiones al final (`delegate__`)
+            if (nombre.StartsWith("__") && nombre.TrimStart('_').Length > 0)
+            {
+                string limpio = nombre.TrimStart('_');
+                string nuevo = limpio + new string('_', nombre.Length - limpio.Length);
+                if (renombrados.Add(nombre)) t.Avisos.Add("renombrado: " + nombre + " → " + nuevo + " (en BP, lo que empieza por __ es del sistema)");
+                nombre = nuevo;
+            }
             if (!ReservadasJc.Contains(nombre)) return nombre;
             if (renombrados.Add(nombre)) t.Avisos.Add("renombrado: " + nombre + " → " + nombre + "_ (palabra reservada de JC)");
             return nombre + "_";
@@ -537,6 +641,7 @@ namespace Cs2Jc
         void CompruebaOrden(ITypeSymbol t, SyntaxNode donde)
         {
             if (claseActual == null || !(t is INamedTypeSymbol nt) || !DelPrograma(nt)) return;
+            if (nt.TypeKind == TypeKind.Interface) return;   // H7.3: una interfaz va siempre por ref, sin descriptor (#751 no le toca)
             var o = nt.OriginalDefinition;
             if (SymbolEqualityComparer.Default.Equals(o, claseActual.OriginalDefinition)) return;
             if (orden.TryGetValue(o, out int i) && orden.TryGetValue(claseActual.OriginalDefinition, out int j) && i > j)

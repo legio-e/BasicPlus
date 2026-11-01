@@ -337,16 +337,18 @@ public final class DaoGen {
         for (ITopLevelDecl def : mod.defs) {
             if (!(def instanceof ClassDef)) continue;
             ClassDef cd = (ClassDef) def;
-            if (cd.annotation == null || !"BD".equals(cd.annotation.name)) continue;
+            Ast.Annotation bdClase = cd.anotacion("BD");   // V8 H7.3: puede haber otras al lado
+            if (bdClase == null) continue;
 
-            Ast.AnnEntry tabla = cd.annotation.get("tabla");
+            Ast.AnnEntry tabla = bdClase.get("tabla");
             if (tabla == null || !(tabla.value instanceof String)) continue;  // ya lo dijo el semántico
             Entidad ent = new Entidad(cd.name, (String) tabla.value);
 
             for (ITopLevelDecl m : cd.members) {
                 if (!(m instanceof PropertyDef)) continue;
                 PropertyDef p = (PropertyDef) m;
-                if (p.annotation == null || !"BD".equals(p.annotation.name)) continue;
+                Ast.Annotation bd = p.anotacion("BD");
+                if (bd == null) continue;
 
                 String tipo = nombreDeTipo(p.type);
                 if (tipo == null || mapeoLectura(tipo) == null) {
@@ -355,10 +357,10 @@ public final class DaoGen {
                             + "' y sólo se mapean long, integer, double, float, string y boolean");
                     continue;
                 }
-                Ast.AnnEntry col = p.annotation.get("columna");
+                Ast.AnnEntry col = bd.get("columna");
                 String columna = (col != null && col.value instanceof String)
                         ? (String) col.value : p.name.name;
-                ent.campos.add(new Campo(p.name.name, columna, tipo, p.annotation.get("pk") != null));
+                ent.campos.add(new Campo(p.name.name, columna, tipo, bd.get("pk") != null));
             }
 
             if (ent.campos.isEmpty()) {

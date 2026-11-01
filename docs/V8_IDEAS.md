@@ -4605,7 +4605,7 @@ valor por defecto de un parámetro, un `null` con su tipo para elegir una sobrec
 Con `#755` hecha (el mismo día: `eol()`, y en el traductor `Environment.NewLine` es `eol()`), las dos coinciden:
 **275 funcionan** y **4 fallan** (`test-126`, `test-29`, `test-231` y `test-907`).
 
-## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct)
+## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
 guardando la interfaz de las clases así que no deberia costar mucho incluirla en el compilador.»*; *«Tenemos pendiente
@@ -4891,6 +4891,51 @@ El de siempre: el compilador y la VM-Java, con los samples buenos y los de error
 inválida); después, la VM-C, con la paridad, el caso de dos módulos (una interfaz en una librería) y los del enlace
 tardío en `mezcla.py` (la librería añade un método a la interfaz → E11; una clase deja de implementarla → E10); el
 traductor; la red; y la placa, en la próxima tanda.
+
+### Hecho (1-nov), en ese orden
+
+- **El compilador.** Los dos parsers leen `interface … extends …` y `implements`, y varias anotaciones por declaración
+  (`Node.annotations`, una lista; `@BD` la lee igual). El semántico comprueba lo que lleva una interfaz (métodos sin
+  cuerpo y properties cortas; lo demás, un error que dice qué sobra), que no haya ciclos (`interface A extends B`, `B
+  extends A`), que la clase tenga cada miembro de sus interfaces —con la clave de MOD9, la misma que casará el
+  cargador—, y las dos anotaciones. Una interfaz desciende de `Object`, así que `f.toString()` vale. En JC, `class C :
+  A, B` no dice si `A` es la clase base o una interfaz: el parser lo marca y el semántico lo decide. Los escritores BP ↔
+  JC y la comparación de árboles, con todo eso; y la sección de interfaz del `.mod`, `bpi 10` (`iface … end iface`,
+  `implements`) sólo en los módulos con interfaces (los demás siguen en la 9).
+- **El módulo** (`MOD_FORMAT.md` §13): la interfaz es una fila de CLASES con el bit 2, y la v2 de la subtabla añade a
+  cada fila sus interfaces; el bit 2 de la fila del método es «implementa»; la ref `IFAZ_MET` (7) es la posición de una
+  clave en la lista aplanada de la interfaz. Tres opcodes, `0xBF`–`0xC1` (`INVOKE_IFAZ_REF`, `INSTANCEOF_IFAZ_REF` y
+  `CHECKCAST_IFAZ_REF`; `OPCODES.md`).
+- **Las dos VMs**, el mismo algoritmo: al enlazar, cada clase con interfaces tiene en la arena su lista (interfaz →
+  tabla) y cada tabla las ranuras de su vtable; una tabla aparte, ordenada, lleva de un descriptor a su lista, y se
+  busca por bisección (§13.9). La clase comparte las tablas de su padre. E11, E12 y las variantes de E1 (la interfaz
+  que ya no está, o que ahora es una clase), con el mismo texto en las dos.
+- **El traductor** (`compat/csharp/cs2jc`): las interfaces de C# salen como interfaces de JC —ya no como clases base—,
+  con `@implement{ … }` donde Roslyn dice qué implementa cada método y `@override{}` donde C# escribe `override`. Lo que
+  no tiene JC lo dice: dos implementaciones explícitas con la misma firma (`ExplicitaDoble`), `new` de una interfaz COM.
+- **Verificado:** el compilador nuevo y el de antes dan los mismos `.mod` en los 663 samples que compilan (los 39 que no
+  compilan, en los dos igual) y en los 31 de la stdlib: nada de lo que existía cambia. `Interfaces` e `InterfacesUsa`
+  (con su librería, `InterfacesLib`) en el corpus, con la paridad en las dos VMs y la vuelta por JC EQUIVALENTE;
+  `InterfacesMal`, doce errores en `h13-errores.sh` (84 de 84); `mezcla.py`, el bloque F (la librería cambia sus
+  interfaces sin recompilar el programa: E11, E12, E1 y `SUBTIPO`), 203 de 203; los casos del traductor, 9 de 9; y
+  Mono, de 275 a **290 que funcionan**, y las mismas 4 que fallan (de las 13 a las que sólo les faltaban las
+  interfaces, 12 funcionan).
+- **La red, la primera vez, en ROJO**, y con razón: `test-tablasim` (`#639`, el enlace con el heap troceado: ningún
+  bloque de más de 3000 B) decía «enlace tardío: sin memoria para construir las clases». El registro del enlace —una
+  entrada por clase de todos los módulos, en UN bloque— había crecido con lo de las interfaces, también en los programas
+  que no las usan: de 112 a 176 B por clase en el PC y de 72 a 108 en un micro de 32 bits (medido con el compilador de
+  ARM); con las 25 clases que carga la prueba (`Json` y lo suyo), de 2 800 a 4 400 B, medido con una copia
+  instrumentada del enlace de antes y del de ahora (ninguna otra reserva pasa de 3000 B). **Arreglado:** el registro,
+  como antes (2 800 B, lo mismo que antes de H7.3), y lo de
+  las interfaces en una tabla aparte (40 B por clase en el PC, 24 en el micro) que sólo se reserva si algún módulo trae
+  interfaces; las de cada fila no se guardan, se leen de la fila. Un programa sin interfaces no paga nada, como la v2
+  de `CLASES`. Y de paso, el arnés: en la pasada MOD8, la marca `// mod8: fuera` se mira antes de compilar, para que
+  `Interfaces` salga con su razón y no como «no compila». La segunda red, VERDE (la paridad, 179); y `check-jc`, 175
+  (los 4 SKIP de siempre).
+- **Lo que no está** (como en Java 1.4): los métodos con cuerpo en una interfaz, las implementaciones explícitas de
+  verdad (`I.M()` de C#: el traductor pasa una sola a un método normal, y dos con la misma firma no se traducen), las
+  interfaces genéricas y las clases abstractas. Una native no llama por una interfaz (`AOT_LIMITES.md` §6). Y la placa,
+  en la próxima tanda (H7.3 no cambia la stdlib).
 
 ### Hallazgos de paso (con ficha)
 

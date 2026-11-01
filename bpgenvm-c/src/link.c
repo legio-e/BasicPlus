@@ -312,9 +312,24 @@ typedef struct {
     uint32_t ranuras_off;         /* abierta: arena, u16[n_met] ranura efectiva de cada metodo propio */
 } lt_clase_t;
 
+/* V8 H7.3 (#756) — lo del enlace de las interfaces, en una tabla APARTE del registro (una entrada por clase, el mismo
+ * índice), que sólo se reserva si algún módulo trae la v2 de CLASES: un programa sin interfaces no paga ni un byte, y
+ * el registro sigue siendo un bloque del tamaño de antes (#639 lo mide con el heap troceado: ningún bloque de más de
+ * 3000 B). Las interfaces de cada FILA no se guardan: se leen de la fila, detrás de sus eventos (lt_ifz). Todo es del
+ * enlace (bpvm_calloc, se suelta al acabar): en la arena sólo queda lo que la VM mira al ejecutar. */
+typedef struct {
+    const uint8_t** apl;          /* una INTERFAZ: su lista aplanada de claves (las UTF de las filas) */
+    int16_t*  ifaces;             /* una CLASE: sus interfaces (indices en el registro), las del padre primero */
+    uint32_t* tablas;             /* y la tabla de ranuras de cada una, en la arena */
+    uint32_t  lista_abs;          /* su lista en la arena (0 = no tiene) */
+    uint16_t  n_apl, n_ifaces;
+    uint8_t   lista_hecha;
+} lt_ifx_t;
+
 typedef struct {
     bpvm_t*     vm;
     lt_clase_t* reg;
+    lt_ifx_t*   ifx;              /* V8 H7.3: NULL si ningún módulo trae interfaces */
     int         n;
     uint32_t    arena;            /* siguiente libre */
     uint32_t    arena_ini;
@@ -358,8 +373,9 @@ static void lt_error(lt_ctx_t* x, const char* fmt, ...) {
     x->fallo = 1;
 }
 
-/* Lee una fila de 4.5 en `c`; devuelve el puntero a la siguiente. */
-static const uint8_t* lt_leer_fila(const uint8_t* p, lt_clase_t* c) {
+/* Lee una fila de 4.5 en `c`; devuelve el puntero a la siguiente. `ver`, la de la subtabla: en la 2 (V8 H7.3, #756)
+ * cada fila acaba con sus interfaces. */
+static const uint8_t* lt_leer_fila(const uint8_t* p, lt_clase_t* c, uint16_t ver) {
     c->name = p; p = lt_utf_skip(p);
     c->flags = *p++;
     c->cs_off = bpvm_read_i32_be(p); p += 4;
@@ -375,8 +391,33 @@ static const uint8_t* lt_leer_fila(const uint8_t* p, lt_clase_t* c) {
     for (uint16_t i = 0; i < c->n_cam; i++) { p = lt_utf_skip(p); p += 2 + 1 + 1; }
     c->n_ev = lt_u16(p); p += 2; c->eventos = p;
     for (uint16_t i = 0; i < c->n_ev; i++) { p = lt_utf_skip(p); p += 2; }
+    if (ver >= 2) {   /* las interfaces de la fila: se saltan, y lt_ifz las lee cuando hacen falta */
+        uint16_t n_ifz = lt_u16(p); p += 2;
+        for (uint16_t i = 0; i < n_ifz; i++) { p += 2; p = lt_utf_skip(p); }
+    }
     c->padre = -1; c->estado = 0; c->desc_abs = 0;
     return p;
+}
+
+/* V8 H7.3 — las interfaces de la fila ci (las de la cabecera de una clase, o de las que hereda una interfaz): cuántas,
+ * y en `*p0` la primera entrada (depIdx i16, nombre UTF). Están detrás de los eventos, en la v2 de la subtabla; en la
+ * 1, ninguna. */
+static uint16_t lt_ifz(const lt_ctx_t* x, int ci, const uint8_t** p0) {
+    const lt_clase_t* c = &x->reg[ci];
+    *p0 = NULL;
+    if (lt_u16(x->vm->modules[c->mod].clases) < 2) return 0;
+    const uint8_t* p = c->eventos;
+    for (uint16_t i = 0; i < c->n_ev; i++) { p = lt_utf_skip(p); p += 2; }
+    *p0 = p + 2;
+    return lt_u16(p);
+}
+
+/* V8 H7.3 — la entrada `i` de las interfaces de la fila ci: su depIdx y su nombre (UTF). */
+static const uint8_t* lt_ifz_entrada(const lt_ctx_t* x, int ci, uint16_t i, int16_t* dep) {
+    const uint8_t* p; (void) lt_ifz(x, ci, &p);
+    for (uint16_t k = 0; k < i; k++) { p += 2; p = lt_utf_skip(p); }
+    *dep = (int16_t) lt_u16(p);
+    return p + 2;
 }
 
 /* ¿la clase `i` del registro es `[lib.]Mod.Cls`? */
@@ -413,29 +454,39 @@ static bpvm_status_t lt_registrar(lt_ctx_t* x) {
     for (int i = 0; i < vm->module_count; i++) {
         const bpvm_module_t* m = &vm->modules[i];
         if (!m->clases || m->clases_len < 4) continue;
-        if (lt_u16(m->clases) != 1) { lt_error(x, "'%s': subtabla CLASES de version %u desconocida", m->name, (unsigned) lt_u16(m->clases)); return BPVM_ERR_RUNTIME; }
+        uint16_t ver = lt_u16(m->clases);   /* V8 H7.3: la 2, con las interfaces */
+        if (ver != 1 && ver != 2) { lt_error(x, "'%s': subtabla CLASES de version %u desconocida", m->name, (unsigned) ver); return BPVM_ERR_RUNTIME; }
         total += lt_u16(m->clases + 2);
     }
     x->n = 0;
     if (total == 0) return BPVM_OK;
     x->reg = (lt_clase_t*) bpvm_calloc((size_t) total, sizeof(lt_clase_t));
     if (!x->reg) return BPVM_ERR_OOM;
+    int con_ifz = 0;   /* V8 H7.3: ¿algún módulo trae interfaces? */
     for (int i = 0; i < vm->module_count; i++) {
         const bpvm_module_t* m = &vm->modules[i];
         if (!m->clases || m->clases_len < 4) continue;
         uint16_t n = lt_u16(m->clases + 2);
+        uint16_t ver = lt_u16(m->clases);
+        if (ver >= 2) con_ifz = 1;
         const uint8_t* p = m->clases + 4;
         for (uint16_t k = 0; k < n; k++) {
             lt_clase_t* c = &x->reg[x->n++];
-            p = lt_leer_fila(p, c);
+            p = lt_leer_fila(p, c, ver);
             c->mod = (uint8_t) i;
-            if (!(c->flags & 1)) {
+            if (c->flags & 4) con_ifz = 1;
+            if (!(c->flags & 1) && !(c->flags & 4)) {   /* V8 H7.3: una interfaz no tiene descriptor (su csOff es 0) */
                 c->desc_abs = (uint32_t)((int32_t) m->code_start + c->cs_off);
                 bpvm_write_u16_be(vm->memory + c->desc_abs + BPVM_CLS_OFF_MODULO, (uint16_t) (i + 1));
                 c->nf = bpvm_read_u16_be(vm->memory + c->desc_abs + BPVM_CLS_OFF_NUM_FIELDS);
                 c->nm = bpvm_read_u16_be(vm->memory + c->desc_abs + BPVM_CLS_OFF_NUM_METHODS);
             }
         }
+    }
+    /* V8 H7.3 (#756) — la tabla de las interfaces, aparte y sólo si hace falta (lt_ifx_t) */
+    if (con_ifz) {
+        x->ifx = (lt_ifx_t*) bpvm_calloc((size_t) total, sizeof(lt_ifx_t));
+        if (!x->ifx) return BPVM_ERR_OOM;
     }
     return BPVM_OK;
 }
@@ -578,10 +629,13 @@ static void lt_tiene(const lt_ctx_t* x, int ci, const char* clave, char sep, cha
     if (l < cap) snprintf(out + l, cap - l, ")");
 }
 
+static bpvm_status_t lt_asegurar_interfaz(lt_ctx_t* x, int ci);
+
 /* 2. construccion memoizada padre -> hijo */
 static bpvm_status_t lt_asegurar(lt_ctx_t* x, int ci) {
     lt_clase_t* c = &x->reg[ci];
     bpvm_t* vm = x->vm;
+    if (c->flags & 4) return lt_asegurar_interfaz(x, ci);   /* V8 H7.3 (#756) */
     if (c->estado == 2) return BPVM_OK;
     if (c->estado == 1) { char q[256]; lt_nombre_cualificado(x, ci, q, sizeof q); lt_error(x, "ciclo de herencia en '%s'", q); return BPVM_ERR_RUNTIME; }
     c->estado = 1;
@@ -688,6 +742,262 @@ static bpvm_status_t lt_asegurar(lt_ctx_t* x, int ci) {
     return BPVM_OK;
 }
 
+/* ==========================================================================
+ * 2b. V8 H7.3 (#756) — LAS INTERFACES. El mismo algoritmo que EnlaceTardio.java (asegurarInterfaz, interfazDe,
+ * aplanarInterfaz, construirInterfaces, listaDe) y los mismos textos, byte a byte. Las listas aplanadas y los conjuntos
+ * de cada clase son del enlace (bpvm_calloc; se sueltan al acabar); en la arena queda lo que mira la VM: el bloque de
+ * cada interfaz (4 B), la lista de cada clase y sus tablas, y la tabla ordenada por descriptor (vm->ifaz_tabla).
+ * ========================================================================== */
+
+/* la interfaz `i` de la fila ci (de la cabecera de una clase, o de las que hereda una interfaz): su indice, o -2 con el
+ * error puesto (E1 si no esta; si es una clase, tambien, nombrandolo) */
+static int lt_interfaz_de(lt_ctx_t* x, int ci, uint16_t i, const char* verbo) {
+    const lt_clase_t* c = &x->reg[ci];
+    const bpvm_module_t* m = &x->vm->modules[c->mod];
+    int16_t dep; const uint8_t* nombre = lt_ifz_entrada(x, ci, i, &dep);
+    char cn[128]; lt_utf_copy(c->name, cn, sizeof cn);
+    char q[320];
+    if (dep == BPVM_DEP_LOCAL) { char canon[160], nm[128]; lt_canon(m, canon, sizeof canon); lt_utf_copy(nombre, nm, sizeof nm); snprintf(q, sizeof q, "%.150s.%.150s", canon, nm); }
+    else {
+        if (dep < 0 || dep >= m->dep_count) { lt_error(x, "'%s' declara '%s' con una interfaz fuera de su tabla de dependencias (dep%d): .mod corrupto", m->name, cn, (int) dep); return -2; }
+        lt_utf_copy(nombre, q, sizeof q);   /* ya cualificado por su dueno: [lib.]Mod.I */
+    }
+    char modi[160]; { const char* d = strrchr(q, '.'); size_t l = d ? (size_t)(d - q) : strlen(q); if (l >= sizeof modi) l = sizeof modi - 1; memcpy(modi, q, l); modi[l] = 0; }
+    int p = lt_buscar_clase(x, q);
+    if (p < 0) {
+        for (int k = 0; k < x->vm->module_count; k++) {
+            char canon[160]; lt_canon(&x->vm->modules[k], canon, sizeof canon);
+            if (strcmp(canon, modi) == 0 && !x->vm->modules[k].clases) {
+                lt_error(x, "'%s' es MOD%d y '%s' necesita su tabla de clases: recompila '%s'", x->vm->modules[k].name, lt_version(&x->vm->modules[k]), m->name, x->vm->modules[k].name);
+                return -2;
+            }
+        }
+        char quien[200]; lt_quien(x->vm, modi, quien, sizeof quien);
+        lt_error(x, "'%s.%s' %s la interfaz '%s' y %s no la tiene: recompila '%s'", m->name, cn, verbo, q, quien, m->name);
+        return -2;
+    }
+    if (!(x->reg[p].flags & 4)) {
+        char quien[200]; lt_quien(x->vm, modi, quien, sizeof quien);
+        lt_error(x, "'%s.%s' %s la interfaz '%s' y en %s es una clase: recompila '%s'", m->name, cn, verbo, q, quien, m->name);
+        return -2;
+    }
+    return p;
+}
+
+/* una INTERFAZ: su lista aplanada de claves —las de las que hereda, en el orden en que las declara, y despues las
+ * suyas; sin repetir— y su bloque en la arena (4 B: cuantas claves), cuya direccion es su identidad. Memoizada; las de
+ * las que hereda, primero; un ciclo es E7 (el texto de lt_asegurar). */
+static bpvm_status_t lt_asegurar_interfaz(lt_ctx_t* x, int ci) {
+    lt_clase_t* c = &x->reg[ci];
+    lt_ifx_t* cx = &x->ifx[ci];   /* hay interfaz, así que la tabla está (lt_registrar) */
+    if (c->estado == 2) return BPVM_OK;
+    if (c->estado == 1) { char q[256]; lt_nombre_cualificado(x, ci, q, sizeof q); lt_error(x, "ciclo de herencia en '%s'", q); return BPVM_ERR_RUNTIME; }
+    c->estado = 1;
+    const uint8_t* p0; uint16_t n_ifz = lt_ifz(x, ci, &p0);
+    uint32_t cap = c->n_met;
+    for (uint16_t i = 0; i < n_ifz; i++) {
+        int p = lt_interfaz_de(x, ci, i, "hereda de");
+        if (p < 0) return BPVM_ERR_RUNTIME;
+        bpvm_status_t st = lt_asegurar_interfaz(x, p); if (st != BPVM_OK) return st;
+        cap += x->ifx[p].n_apl;
+    }
+    cx->apl = (const uint8_t**) bpvm_calloc(cap ? cap : 1u, sizeof(const uint8_t*));
+    if (!cx->apl) return BPVM_ERR_OOM;
+    uint16_t n = 0;
+    for (uint16_t i = 0; i < n_ifz; i++) {
+        int p = lt_interfaz_de(x, ci, i, "hereda de");
+        const lt_ifx_t* px = &x->ifx[p];
+        for (uint16_t k = 0; k < px->n_apl; k++) {
+            int dup = 0; for (uint16_t d = 0; d < n; d++) if (lt_utf_eq(cx->apl[d], px->apl[k])) { dup = 1; break; }
+            if (!dup) cx->apl[n++] = px->apl[k];
+        }
+    }
+    const uint8_t* q = c->metodos;
+    for (uint16_t i = 0; i < c->n_met; i++) {
+        int dup = 0; for (uint16_t d = 0; d < n; d++) if (lt_utf_eq(cx->apl[d], q)) { dup = 1; break; }
+        if (!dup) cx->apl[n++] = q;
+        q = lt_utf_skip(q) + 2 + 4 + 1;
+    }
+    cx->n_apl = n;
+    uint32_t b = (x->arena + 3u) & ~3u;
+    if (b + 4u > x->vm->heap_top) return BPVM_ERR_OOM;
+    x->arena = b + 4u;
+    bpvm_write_u16_be(x->vm->memory + b, n);
+    bpvm_write_u16_be(x->vm->memory + b + 2, 0);
+    c->desc_abs = b;
+    c->estado = 2;
+    return BPVM_OK;
+}
+
+/* ¿esta la interfaz `f` en la lista `l` (n entradas)? */
+static int lt_ifaz_en(const int16_t* l, uint16_t n, int f) {
+    for (uint16_t i = 0; i < n; i++) if (l[i] == f) return 1;
+    return 0;
+}
+/* la interfaz f y todas aquellas de las que hereda, sin repetir, en `out` (ella primero, y despues cada padre en el
+ * orden en que los declara, en profundidad): el orden de aplanarInterfaz (miVM) y de interfacesAplanadas (compilador) */
+static int lt_aplanar(lt_ctx_t* x, int f, int16_t* out, uint16_t* n, uint16_t cap) {
+    if (lt_ifaz_en(out, *n, f)) return 0;
+    if (*n >= cap) { lt_error(x, "enlace tardio: demasiadas interfaces en una clase"); return -1; }
+    out[(*n)++] = (int16_t) f;
+    const uint8_t* p0; uint16_t n_ifz = lt_ifz(x, f, &p0);
+    for (uint16_t i = 0; i < n_ifz; i++) {
+        int p = lt_interfaz_de(x, f, i, "hereda de");
+        if (p < 0 || lt_aplanar(x, p, out, n, cap) < 0) return -1;
+    }
+    return 0;
+}
+
+/* la lista de interfaces de una clase: las del padre, tal cual (una hija conserva las ranuras de lo que sobrescribe,
+ * asi que sus tablas le valen), y las nuevas de su cabecera, cada una con su tabla: por cada clave de la interfaz, la
+ * ranura de la clase con esa clave (propia o heredada, no privada); si no la tiene, E11. Y lo que la clase dice
+ * implementar (el bit 2) tiene que estar en alguna: si no, E12. Memoizada, el padre primero. Espejo de listaDe. */
+static bpvm_status_t lt_lista_de(lt_ctx_t* x, int ci) {
+    lt_clase_t* c = &x->reg[ci];
+    lt_ifx_t* cx = &x->ifx[ci];
+    if (cx->lista_hecha) return BPVM_OK;
+    bpvm_status_t st = lt_asegurar(x, ci); if (st != BPVM_OK) return st;
+    const lt_ifx_t* PX = (c->padre >= 0) ? &x->ifx[c->padre] : NULL;
+    if (PX) { st = lt_lista_de(x, c->padre); if (st != BPVM_OK) return st; }
+    const uint8_t* p0; uint16_t n_ifz = lt_ifz(x, ci, &p0);
+    uint32_t cap = PX ? PX->n_ifaces : 0u;
+    /* cota: cada interfaz de la cabecera con todas las de las que hereda (el registro entero, como mucho) */
+    if (n_ifz) cap += (uint32_t) x->n;
+    if (cap > 0xFFFFu) cap = 0xFFFFu;
+    if (cap) {
+        cx->ifaces = (int16_t*) bpvm_calloc(cap, sizeof(int16_t));
+        cx->tablas = (uint32_t*) bpvm_calloc(cap, sizeof(uint32_t));
+        if (!cx->ifaces || !cx->tablas) return BPVM_ERR_OOM;
+    }
+    uint16_t n = 0, heredadas = 0;
+    if (PX) for (uint16_t j = 0; j < PX->n_ifaces; j++) { cx->ifaces[n] = PX->ifaces[j]; cx->tablas[n] = PX->tablas[j]; n++; }
+    heredadas = n;
+    for (uint16_t i = 0; i < n_ifz; i++) {
+        int f = lt_interfaz_de(x, ci, i, "implementa");
+        if (f < 0) return BPVM_ERR_RUNTIME;
+        st = lt_asegurar(x, f); if (st != BPVM_OK) return st;
+        if (lt_aplanar(x, f, cx->ifaces, &n, (uint16_t) cap) < 0) return BPVM_ERR_RUNTIME;
+    }
+    const bpvm_module_t* m = &x->vm->modules[c->mod];
+    char cn[128]; lt_utf_copy(c->name, cn, sizeof cn);
+    for (uint16_t j = heredadas; j < n; j++) {
+        const lt_ifx_t* fx = &x->ifx[cx->ifaces[j]];
+        uint32_t tam = (2u * fx->n_apl + 3u) & ~3u;
+        uint32_t t = (x->arena + 3u) & ~3u;
+        if (t + tam > x->vm->heap_top) return BPVM_ERR_OOM;
+        x->arena = t + tam;
+        for (uint16_t k = 0; k < fx->n_apl; k++) {
+            char clave[256]; lt_utf_copy(fx->apl[k], clave, sizeof clave);
+            uint16_t slot = 0; int priv = 0;
+            if (!lt_buscar_metodo(x, ci, clave, &slot, &priv, NULL) || priv) {   /* E11 */
+                char fq[256]; lt_nombre_cualificado(x, cx->ifaces[j], fq, sizeof fq);
+                lt_error(x, "'%s.%s' implementa '%s' y no tiene '%s': recompila '%s'", m->name, cn, fq, clave, m->name);
+                return BPVM_ERR_RUNTIME;
+            }
+            bpvm_write_u16_be(x->vm->memory + t + 2u * k, slot);
+        }
+        cx->tablas[j] = t;
+    }
+    const uint8_t* q = c->metodos;
+    for (uint16_t i = 0; i < c->n_met; i++) {
+        const uint8_t* r = lt_utf_skip(q);
+        if (r[2 + 4] & 4) {   /* E12: dice implementar uno de una interfaz suya */
+            int esta = 0;
+            for (uint16_t j = 0; j < n && !esta; j++) {
+                const lt_ifx_t* fx = &x->ifx[cx->ifaces[j]];
+                for (uint16_t k = 0; k < fx->n_apl; k++) if (lt_utf_eq(fx->apl[k], q)) { esta = 1; break; }
+            }
+            if (!esta) {
+                char clave[256]; lt_utf_copy(q, clave, sizeof clave);
+                lt_error(x, "'%s.%s' implementa '%s' y ninguna de sus interfaces lo tiene ya: recompila '%s'", m->name, cn, clave, m->name);
+                return BPVM_ERR_RUNTIME;
+            }
+        }
+        q = r + 2 + 4 + 1;
+    }
+    cx->n_ifaces = n;
+    cx->lista_hecha = 1;
+    if (n == 0) { cx->lista_abs = 0; return BPVM_OK; }
+    if (n == heredadas) { cx->lista_abs = PX->lista_abs; return BPVM_OK; }   /* ninguna nueva: la del padre, tal cual */
+    uint32_t tam = 4u + 8u * n;
+    uint32_t l = (x->arena + 3u) & ~3u;
+    if (l + tam > x->vm->heap_top) return BPVM_ERR_OOM;
+    x->arena = l + tam;
+    uint8_t* d = x->vm->memory + l;
+    bpvm_write_u16_be(d, n);
+    bpvm_write_u16_be(d + 2, 0);
+    for (uint16_t j = 0; j < n; j++) {
+        bpvm_write_u32_be(d + 4u + 8u * j, x->reg[cx->ifaces[j]].desc_abs);
+        bpvm_write_u32_be(d + 8u + 8u * j, cx->tablas[j]);
+    }
+    cx->lista_abs = l;
+    return BPVM_OK;
+}
+
+/* las listas de las clases, en el orden de los modulos y de sus filas (el del registro, el de miVM), y la tabla de las
+ * que tienen alguna, ordenada por descriptor. Si ninguna tiene interfaces, nada: la arena queda como estaba. */
+static bpvm_status_t lt_construir_interfaces(lt_ctx_t* x) {
+    bpvm_t* vm = x->vm;
+    vm->ifaz_tabla = 0; vm->ifaz_n = 0;   /* la de un RUN anterior no vale */
+    if (!x->ifx) return BPVM_OK;           /* ningún módulo trae interfaces */
+    for (int i = 0; i < x->n; i++) {
+        if (x->reg[i].flags & 4) continue;
+        bpvm_status_t st = lt_lista_de(x, i); if (st != BPVM_OK) return st;
+    }
+    uint32_t n = 0;
+    for (int i = 0; i < x->n; i++) if (!(x->reg[i].flags & 4) && x->ifx[i].lista_abs != 0) n++;
+    if (n == 0) return BPVM_OK;
+    uint32_t tam = 4u + 8u * n;
+    uint32_t t = (x->arena + 3u) & ~3u;
+    if (t + tam > vm->heap_top) return BPVM_ERR_OOM;
+    x->arena = t + tam;
+    uint8_t* d = vm->memory + t;
+    bpvm_write_u32_be(d, n);
+    uint32_t k = 0;
+    for (int i = 0; i < x->n; i++) {
+        const lt_clase_t* c = &x->reg[i];
+        if ((c->flags & 4) || x->ifx[i].lista_abs == 0) continue;
+        /* insercion ordenada por descriptor (sin signo, como Integer.compareUnsigned en miVM) */
+        uint32_t j = k;
+        while (j > 0 && bpvm_read_u32_be(d + 4u + 8u * (j - 1u)) > c->desc_abs) {
+            bpvm_write_u32_be(d + 4u + 8u * j, bpvm_read_u32_be(d + 4u + 8u * (j - 1u)));
+            bpvm_write_u32_be(d + 8u + 8u * j, bpvm_read_u32_be(d + 8u + 8u * (j - 1u)));
+            j--;
+        }
+        bpvm_write_u32_be(d + 4u + 8u * j, c->desc_abs);
+        bpvm_write_u32_be(d + 8u + 8u * j, x->ifx[i].lista_abs);
+        k++;
+    }
+    vm->ifaz_tabla = t; vm->ifaz_n = n;
+    return BPVM_OK;
+}
+
+/* « (tiene 'k()i')» entre las claves de la lista aplanada de una interfaz: las otras con el mismo nombre, ordenadas, 8
+ * como mucho (el citar de miVM) */
+static void lt_tiene_apl(const lt_ifx_t* fx, const char* clave, char* out, size_t cap) {
+    out[0] = 0;
+    const char* fin = strchr(clave, '('); if (!fin) return;
+    size_t nl = (size_t)(fin - clave);
+    const uint8_t* cand[64]; int nc = 0;
+    for (uint16_t i = 0; i < fx->n_apl; i++) {
+        const uint8_t* p = fx->apl[i];
+        uint16_t len = lt_u16(p);
+        if (len > nl && memcmp(p + 2, clave, nl) == 0 && p[2 + nl] == '(' && !lt_utf_eq_c(p, clave) && nc < 64) cand[nc++] = p;
+    }
+    if (nc == 0) return;
+    for (int i = 1; i < nc; i++) for (int j = i; j > 0; j--) {
+        char a[256], b[256]; lt_utf_copy(cand[j - 1], a, sizeof a); lt_utf_copy(cand[j], b, sizeof b);
+        if (strcmp(a, b) > 0) { const uint8_t* t = cand[j]; cand[j] = cand[j - 1]; cand[j - 1] = t; } else break;
+    }
+    if (nc > 8) nc = 8;
+    size_t l = (size_t) snprintf(out, cap, " (tiene ");
+    for (int i = 0; i < nc && l < cap; i++) {
+        char a[256]; lt_utf_copy(cand[i], a, sizeof a);
+        l += (size_t) snprintf(out + l, cap - l, "%s'%s'", i ? ", " : "", a);
+    }
+    if (l < cap) snprintf(out + l, cap - l, ")");
+}
+
 /* 3. las refs de un modulo -> ext[ext_count31 + i] */
 static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
     bpvm_t* vm = x->vm;
@@ -773,10 +1083,39 @@ static bpvm_status_t lt_resolver_refs(lt_ctx_t* x, int mi) {
             case BPVM_REF_SUBTIPO: {
                 char qs[320];
                 if (strchr(r->clave, '.')) snprintf(qs, sizeof qs, "%s", r->clave); else snprintf(qs, sizeof qs, "%s.%s", canon_m, r->clave);
+                /* V8 H7.3 (#756) — y si es una interfaz, entre las de la clase (o, si `q` es una interfaz, entre las de
+                 * las que hereda) */
+                int sup = lt_buscar_clase(x, qs);
+                if (sup >= 0 && (x->reg[sup].flags & 4)) {
+                    int ok = 0;
+                    if (x->reg[ci].flags & 4) {
+                        int16_t tmp[64]; uint16_t nt = 0;   /* 128 B de pila: el enlace corre en la tarea principal */
+                        if (lt_aplanar(x, ci, tmp, &nt, 64) < 0) return BPVM_ERR_RUNTIME;
+                        ok = lt_ifaz_en(tmp, nt, sup);
+                    } else {
+                        ok = lt_ifaz_en(x->ifx[ci].ifaces, x->ifx[ci].n_ifaces, sup);   /* hay interfaz: la tabla está */
+                    }
+                    if (!ok) { lt_error(x, "'%s' asume que '%s' implementa '%s' y %s ya no: recompila '%s'", m->name, q, qs, quien, m->name); return BPVM_ERR_RUNTIME; }
+                    valor = 1; break;
+                }
                 int ok = 0;
                 for (int a = ci; a >= 0; a = x->reg[a].padre) if (lt_es(x, a, qs)) { ok = 1; break; }
                 if (!ok) { lt_error(x, "'%s' asume que '%s' extiende '%s' y %s ya no: recompila '%s'", m->name, q, qs, quien, m->name); return BPVM_ERR_RUNTIME; }
                 valor = 1; break;
+            }
+            case BPVM_REF_IFAZ_MET: {
+                /* V8 H7.3 (#756) — un metodo de una interfaz: su posicion en la lista aplanada (la k de
+                 * INVOKE_IFAZ_REF). Si no esta, E3 con su texto. */
+                const lt_clase_t* f = &x->reg[ci];
+                const lt_ifx_t* fx = (f->flags & 4) ? &x->ifx[ci] : NULL;   /* hay interfaz: la tabla está */
+                int pos = -1;
+                if (fx) for (uint16_t k = 0; k < fx->n_apl; k++) if (lt_utf_eq_c(fx->apl[k], r->clave)) { pos = k; break; }
+                if (pos < 0) {
+                    if (fx) lt_tiene_apl(fx, r->clave, lt_tiene_txt, sizeof lt_tiene_txt); else lt_tiene_txt[0] = 0;
+                    lt_error(x, "'%s' necesita '%s.%s' y %s no lo tiene%s: recompila '%s'", m->name, q, r->clave, quien, lt_tiene_txt, m->name);
+                    return BPVM_ERR_RUNTIME;
+                }
+                valor = (uint32_t) pos; break;
             }
             default:
                 lt_error(x, "'%s' pide una referencia de tipo desconocido (%u): .mod corrupto", m->name, (unsigned) r->kind);
@@ -819,8 +1158,12 @@ static bpvm_status_t lt_verificar(lt_ctx_t* x) {
 static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm) {
     lt_ctx_t x; memset(&x, 0, sizeof x);
     x.vm = vm; x.arena = x.arena_ini = vm->next_free_address;
+    vm->ifaz_tabla = 0; vm->ifaz_n = 0;   /* V8 H7.3: la tabla de interfaces es del RUN */
     bpvm_status_t st = lt_registrar(&x);
     if (st == BPVM_OK) for (int i = 0; i < x.n && st == BPVM_OK; i++) st = lt_asegurar(&x, i);
+    /* V8 H7.3 (#756) — las interfaces de cada clase, con sus tablas, y la tabla ordenada que mira la VM (antes de las
+     * refs: un SUBTIPO contra una interfaz mira la lista de la clase). Mismo orden que miVM. */
+    if (st == BPVM_OK) st = lt_construir_interfaces(&x);
     if (st == BPVM_OK) for (int i = 0; i < vm->module_count && st == BPVM_OK; i++) st = lt_resolver_refs(&x, i);
     if (st == BPVM_OK) st = lt_verificar(&x);
     if (st == BPVM_OK && x.arena > x.arena_ini) {
@@ -833,7 +1176,16 @@ static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm) {
     if (x.construidas > 0 || x.refs > 0)
         bpvm_diag("[bpvm] enlace tardio: %d clases construidas, %d refs, %u bytes de arena",
                   x.construidas, x.refs, (unsigned) (x.arena - x.arena_ini));
+    if (x.ifx) {   /* V8 H7.3: lo de las interfaces, que es sólo del enlace */
+        for (int i = 0; i < x.n; i++) {
+            if (x.ifx[i].apl) bpvm_free((void*) x.ifx[i].apl);
+            if (x.ifx[i].ifaces) bpvm_free(x.ifx[i].ifaces);
+            if (x.ifx[i].tablas) bpvm_free(x.ifx[i].tablas);
+        }
+        bpvm_free(x.ifx);
+    }
     if (x.reg) bpvm_free(x.reg);
+    if (st != BPVM_OK) { vm->ifaz_tabla = 0; vm->ifaz_n = 0; }
     if (st != BPVM_OK && !x.fallo) snprintf(vm->link_error, sizeof(vm->link_error), "enlace tardio: sin memoria para construir las clases");
     return st;
 }
@@ -861,10 +1213,12 @@ static int lt_slot_por(const bpvm_t* vm, uint32_t class_ptr, const char* texto, 
         if (!m->clases || m->clases_len < 4) return -1;
         char canon[160]; lt_canon(m, canon, sizeof canon);
         uint16_t n = lt_u16(m->clases + 2);
+        uint16_t ver = lt_u16(m->clases);   /* V8 H7.3: en la 2 cada fila acaba con sus interfaces */
         const uint8_t* p = m->clases + 4;
         int hallada = 0;
         for (uint16_t k = 0; k < n && !hallada; k++) {
-            lt_clase_t c; p = lt_leer_fila(p, &c);
+            lt_clase_t c; p = lt_leer_fila(p, &c, ver);
+            if (c.flags & 4) continue;   /* una interfaz no es la clase de ningún objeto */
             uint32_t abs;
             if (!(c.flags & 1)) abs = (uint32_t)((int32_t) m->code_start + c.cs_off);
             else { char nm[128], q[320]; lt_utf_copy(c.name, nm, sizeof nm); snprintf(q, sizeof q, "%.120s.%.120s", canon, nm); abs = bpvm_link_lookup(vm, q); }
@@ -917,9 +1271,11 @@ int bpvm_link_nombre_de_clase(const bpvm_t* vm, uint32_t class_ptr, char* out, s
     if (!m->clases || m->clases_len < 4) return 0;
     char canon[160]; lt_canon(m, canon, sizeof canon);
     uint16_t n = lt_u16(m->clases + 2);
+    uint16_t ver = lt_u16(m->clases);   /* V8 H7.3 */
     const uint8_t* p = m->clases + 4;
     for (uint16_t k = 0; k < n; k++) {
-        lt_clase_t c; p = lt_leer_fila(p, &c);
+        lt_clase_t c; p = lt_leer_fila(p, &c, ver);
+        if (c.flags & 4) continue;   /* una interfaz no es la clase de ningún objeto */
         char nm[128]; lt_utf_copy(c.name, nm, sizeof nm);
         uint32_t abs;
         if (!(c.flags & 1)) abs = (uint32_t)((int32_t) m->code_start + c.cs_off);
@@ -950,7 +1306,8 @@ int bpvm_link_validar_clases(bpvm_t* vm, const bpvm_module_t* mod) {
     const uint8_t* p = mod->clases;
     const uint8_t* end = mod->clases + mod->clases_len;
     if (!p || mod->clases_len < 4) { motivo = "sin cabecera"; goto mal; }
-    if (lt_u16(p) != 1) { snprintf(vm->load_error, sizeof vm->load_error, "'%s': subtabla CLASES de version %u (esperada 1)", mod->name, (unsigned) lt_u16(p)); return BPVM_ERR_BAD_HEADER; }
+    uint16_t ver = lt_u16(p);   /* V8 H7.3 (#756): la 2 añade a cada fila sus interfaces (sólo en los módulos que las usan) */
+    if (ver != 1 && ver != 2) { snprintf(vm->load_error, sizeof vm->load_error, "'%s': subtabla CLASES de version %u (esperada 1 o 2)", mod->name, (unsigned) ver); return BPVM_ERR_BAD_HEADER; }
     uint16_t n = lt_u16(p + 2); p += 4;
     for (uint16_t k = 0; k < n; k++) {
         const uint8_t* q;
@@ -965,8 +1322,11 @@ int bpvm_link_validar_clases(bpvm_t* vm, const bpvm_module_t* mod) {
         LTV_NEED(8u * bw_own); p += 8u * bw_own;
         if (bw_own != (uint16_t)((nf_own + 31u) >> 5)) { motivo = "bitmap incoherente con nFieldsOwn"; goto mal; }
         if (pdep < -2 || pdep >= mod->dep_count) { motivo = "parentDepIdx fuera de la subtabla deps"; goto mal; }
+        /* V8 H7.3 — una interfaz: sin descriptor, sin campos, sin padre de clase; sólo en la versión 2 */
+        int interfaz = (flags & 4) != 0;
+        if (interfaz && (ver < 2 || (flags & 1) || nf_own != 0 || pdep != BPVM_DEP_RAIZ)) { motivo = "fila de interfaz incoherente"; goto mal; }
         uint32_t desc_nf = 0, desc_nm = 0;
-        if (!(flags & 1)) {
+        if (!(flags & 1) && !interfaz) {
             uint32_t abs = (uint32_t)((int32_t) mod->code_start + cs_off);
             if (abs < mod->data_start || abs + 12u > mod->data_start + mod->data_size) { motivo = "csOff fuera de la seccion de datos del modulo"; goto mal; }
             desc_nf = bpvm_read_u16_be(vm->memory + abs); desc_nm = bpvm_read_u16_be(vm->memory + abs + 2);
@@ -976,7 +1336,7 @@ int bpvm_link_validar_clases(bpvm_t* vm, const bpvm_module_t* mod) {
             if (!(q = ltv_utf(p, end, &motivo))) goto mal;
             p = q; LTV_NEED(2 + 4 + 1);
             uint16_t slot = lt_u16(p); p += 2 + 4 + 1;
-            if ((flags & 1) ? slot >= nm_own : slot >= desc_nm) { motivo = "ranura de metodo fuera de la clase"; goto mal; }
+            if ((flags & 1) || interfaz ? slot >= nm_own : slot >= desc_nm) { motivo = "ranura de metodo fuera de la clase"; goto mal; }
         }
         LTV_NEED(2); uint16_t n_cam = lt_u16(p); p += 2;
         for (uint16_t i = 0; i < n_cam; i++) {
@@ -992,6 +1352,16 @@ int bpvm_link_validar_clases(bpvm_t* vm, const bpvm_module_t* mod) {
             p = q; LTV_NEED(2);
             uint16_t recv = lt_u16(p); p += 2;
             if ((flags & 1) ? recv + 3u > nf_own : recv + 3u > desc_nf) { motivo = "ranura de evento fuera de la clase"; goto mal; }
+        }
+        if (interfaz && (n_cam != 0 || n_ev != 0)) { motivo = "una interfaz con campos o eventos"; goto mal; }
+        if (ver >= 2) {   /* V8 H7.3 — las interfaces de la fila: (depIdx i16, nombre UTF)* */
+            LTV_NEED(2); uint16_t n_if = lt_u16(p); p += 2;
+            for (uint16_t i = 0; i < n_if; i++) {
+                LTV_NEED(2); int16_t idep = (int16_t) lt_u16(p); p += 2;
+                if (idep != BPVM_DEP_LOCAL && (idep < 0 || idep >= mod->dep_count)) { motivo = "depIdx de una interfaz fuera de la subtabla deps"; goto mal; }
+                if (!(q = ltv_utf(p, end, &motivo))) goto mal;
+                p = q;
+            }
         }
     }
     return 0;

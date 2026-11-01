@@ -337,6 +337,10 @@ que el compilador aliasa no se re-publican). Dentro de `class <n> public [extend
 | `method <n>(<params>):<ret> [public] [final]` | método de instancia (todo menos lo `private`: lo protegido ocupa ranura y la hija lo ve, `#390`) |
 | `staticmethod <n>(<params>):<ret> [public] [final]` | método estático (V7/H2): sin ranura; `CALL_EXT` al alias `__cls_s_` |
 
+**Las interfaces de clase** (`bpi 10`, V8 H7.3): `iface <n> public [extends A,B]` … `end iface`, con sus `method` y
+`prop`; y en una clase, `implements A,B` (de otro módulo, cualificadas: `Lib.Forma`). Las escribe sólo un módulo que las
+usa: los demás siguen con su `bpi 9` y su `ifaceCrc` de siempre.
+
 `staticmethod`, `staticprop` y `ctor+` son directivas **nuevas** y no flags de
 `method`/`prop`/`ctor` a propósito: un lector anterior (`tolerant`, versión mayor
 que la suya) las **salta**. Un flag que el lector anterior ya conociera (`static`
@@ -638,6 +642,11 @@ cambios incompatibles se sube el número.
 
 ## 12. Cambios entre versiones
 
+- **v9 + las interfaces** (V8 H7.3, `#756`, 1-nov-2026): la subtabla `CLASES` en su **versión 2** (cada fila con sus
+  interfaces; el bit 2 de una clase es interfaz, y el de un método, implementa), la ref `IFAZ_MET` (7), los opcodes
+  `0xBF..0xC1`, E11 y E12, y la interfaz del módulo en `bpi 10` (`iface`, `implements`). **Sólo en los módulos que usan
+  interfaces**: todos los demás salen byte a byte como antes (medido: los 663 programas del repo y los 31 módulos de la
+  stdlib) y corren en los firmwares de V7. El MAGIC no cambia.
 - **v9** (actual: diseñado el 16-sep-2026, el formato del compilador desde el 17-sep, V7/H2 `#523`): **enlace tardío**.
   Subtabla `refs` (3.3) en `imports`, subtabla `CLASES` (4.5) en `exports` (y ya no
   hay 4.3/4.4), la interfaz sin números (`bpi 9`: sin `layout`, `slot`, `recv`),
@@ -716,6 +725,11 @@ ref_entry ::= kind:u8  depIdx:i16  clase:UTF  clave:UTF
 | 4 | `EV_DEST` | clase / `evento(tipos)` | ranura receptora + 2 (el `$dest` del handler, `PUSH_REF`) |
 | 5 | `SUBTIPO` | `S` / `T` | `1` si `T` sigue en la cadena efectiva de `S`; si no, E10. Ocupa una entrada de la ext-table aunque ningún opcode la lea: es la **asunción** `S <: T` que el consumidor hizo al compilar (una asignación, un `throw`, un ensanchado) |
 | 6 | `SUPER` | clase estática del padre / `nombre(tipos)ret` | dirección **absoluta** de código del método EFECTIVO del padre (la primera fila con esa clave subiendo desde el padre por la cadena real; un privado de otro módulo no cuenta). Es el operando de `CALL_EXT` para `super.m()`: la única llamada no virtual de BP (J-3, 16-sep) |
+| 7 | `IFAZ_MET` | interfaz estática del receptor / `nombre(tipos)ret` | V8 H7.3 (`#756`): la **posición** de la clave en la lista aplanada de la interfaz (§13.9). Es el 2.º operando de `INVOKE_IFAZ_REF`; el 1.º, la interfaz, va por una ref `CLASE` (que, contra una interfaz, da la dirección de su bloque) |
+
+Con las interfaces (V8 H7.3), `CLASE` contra una interfaz da su **bloque** (su identidad, §13.9), y `SUBTIPO` con
+una interfaz de supertipo mira las interfaces de la clase (o, si `S` es una interfaz, las de las que hereda): si ya no
+está, el texto es `'App' asume que 'Lib.Punto' implementa 'Lib.Forma' y 'Lib' (gen 8) ya no: recompila 'App'`.
 
 `depIdx` indexa la subtabla `deps` (§3); **`-2` = local** (`clase` va sin cualificar:
 una clase abierta del propio módulo). La ref `i` vive en la ext-table del módulo en
@@ -728,14 +742,29 @@ En v9 **no hay 4.3 ni 4.4** (los class fixups eran la forma v8 de parchear el
 `parent_offset`; ahora lo escribe el cargador al construir).
 
 ```
-clases    ::= ver:u16 (=1)  nClases:u16  clase*
+clases    ::= ver:u16 (=1 o 2)  nClases:u16  clase*
 clase     ::= name:UTF  flags:u8  csOff:i32  parentDepIdx:i16  parentName:UTF
               nFieldsOwn:u16  nMethodsOwn:u16  bwOwn:u16
               ownFieldBitmap[bwOwn]:i32  ownOwnerBitmap[bwOwn]:i32
               nMet:u16 (clave:UTF slot:u16 codeOff:i32 flags:u8)*
               nCam:u16 (clave:UTF slot:u16 ancho:u8 flags:u8)*
               nEv:u16  (clave:UTF recvSlot:u16)*
+              [ver 2]  nIf:u16 (depIdx:i16 nombre:UTF)*
 ```
+
+**La versión 2** (V8 H7.3, `#756`, 1-nov) es la de las **interfaces de clase**, y la escribe **sólo un módulo que
+las usa** (declara una, o una clase suya implementa alguna): los demás siguen escribiendo la 1, idénticos byte a byte,
+y corren en los firmwares de antes (decidido por Eduardo). Un módulo con la 2 en un firmware anterior se rechaza al
+cargar: `'App': subtabla CLASES de version 2 (esperada 1)`. En la 2, cada fila acaba con sus interfaces: las de la
+cabecera de una clase (`implements A, Lib.B`), o las de las que hereda una interfaz; `depIdx` es el de la subtabla
+deps, o `-2` (local: el nombre va sin cualificar).
+
+- **Una interfaz es una fila más**, con el **bit 2** de sus `flags` (el «id» de Eduardo: *«una clase y una interfaz se
+  guardan igual o casi igual»*): `csOff` = 0 (no tiene descriptor), `parentDepIdx` = -1, sin campos ni eventos, y sus
+  métodos con su clave, `slot` = su posición y `codeOff` = -1 (no tienen código). Una property suya son las claves de
+  sus dos accesores (`getX()t`, `setX(t)V`).
+- El **bit 2** de los `flags` de un **método**: **implementa** uno de una interfaz de la cabecera de su clase (lo que en
+  el fuente lleva `@implement{ … }`); si al enlazar ninguna interfaz de la clase tiene ya esa clave, E12.
 
 - `flags` de clase: bit 0 **abierta** (R1), bit 1 pública. `csOff`: offset del
   descriptor en la sección `data` del módulo (las cerradas lo traen hecho; en una
@@ -768,6 +797,11 @@ rechaza el `.mod` como corrupto antes de enlazar (`bpvm_link_validar_clases`).
    `P.nF`, vtable = `-1` en `[0, P.nM)` y `codeOff` en las propias y los overrides.
    Los privados: **gana la declaración más cercana** (una clave privada en el padre y
    pública en el hijo es pública para el hijo).
+2b. **Las interfaces** (V8 H7.3, `#756`; §13.9): el bloque y la lista aplanada de cada interfaz (al construirla en el
+   paso 2, que la memoiza como a una clase: las de las que hereda, primero; un ciclo es E7), y después, clase a clase
+   en el orden de los módulos y de sus filas, la **lista de interfaces** de cada clase con la **tabla** de cada una, y
+   la tabla de las clases que tienen alguna, ordenada por descriptor. Aquí salen E11 y E12. Si ninguna clase tiene
+   interfaces, este paso no escribe nada: la arena queda como antes.
 3. **Resolver las refs** 3.3 de cada módulo (§13.2) escribiendo la ext-table.
 4. **Verificar**: ninguna ref sin resolver; cada descriptor construido coherente.
 
@@ -793,9 +827,10 @@ sigue entera (§3.1).
 
 Cada uno es idéntico a su hermano sin `_REF` salvo en el operando: `idx u16` de la
 ext-table en vez del número horneado. Tabla completa en `OPCODES.md` §`0xB1..0xBB`.
-`super.m()` a un padre por ref es `CALL_EXT` con el índice de una ref `SUPER`.
+`super.m()` a un padre por ref es `CALL_EXT` con el índice de una ref `SUPER`. Y los de las
+interfaces (V8 H7.3), `0xBF..0xC1`, también por ref (§13.9).
 
-### 13.7 Los rechazos del enlace (E0–E10), byte-idénticos en las dos VMs
+### 13.7 Los rechazos del enlace (E0–E12), byte-idénticos en las dos VMs
 
 | | cuándo | texto |
 |---|---|---|
@@ -809,7 +844,13 @@ ext-table en vez del número horneado. Tabla completa en `OPCODES.md` §`0xB1..0
 | E7 | ciclo de herencia | `ciclo de herencia en 'App.Hija'` |
 | E8 | la verificación tras construir falla (una ranura sin dueño, dos claves iguales) | `la clase 'App.Hija' construida es inconsistente (ranura 7 sin dueno): .mod corrupto o bug del cargador` |
 | E9 | dueño MOD7/8 de un consumidor v9 | `'Lib' es MOD8 y 'App' necesita su tabla de clases: recompila 'Lib'` |
-| E10 | asunción de subtipo rota | `'App' asume que 'Lib.Derived' extiende 'Lib.Base' y 'Lib' (gen 8) ya no: recompila 'App'` |
+| E10 | asunción de subtipo rota | `'App' asume que 'Lib.Derived' extiende 'Lib.Base' y 'Lib' (gen 8) ya no: recompila 'App'` · con una interfaz (V8 H7.3): `'App' asume que 'Lib.Punto' implementa 'Lib.Forma' y …` |
+| E11 | V8 H7.3: la interfaz tiene un método que la clase no tiene (otra versión de la interfaz) | `'App.Rect' implementa 'Lib.Medible' y no tiene 'perimetro()d': recompila 'App'` |
+| E12 | V8 H7.3: la clase dice implementar (bit 2) algo que ya no tiene ninguna de sus interfaces | `'App.Rect' implementa 'getEscala()i' y ninguna de sus interfaces lo tiene ya: recompila 'App'` |
+
+Y con las interfaces, las dos formas de E1: `'App.Rect' implementa la interfaz 'Lib.Medible' y 'Lib' (gen 8) no la
+tiene: recompila 'App'` (o `hereda de la interfaz`, si es una interfaz la que la nombra) y `… y en 'Lib' (gen 8) es una
+clase: recompila 'App'`. Todas, byte a byte las mismas en las dos VMs (`compat/mezcla.py`, bloque F).
 
 Por el wire llegan en `EXITED` con `status: "LINK_ERROR"` y `errorMessage`
 (`BPVM_WIRE_PROTOCOL.md` §6.3); por el CLI, `=== ERROR DE LINK: … ===`.
@@ -830,3 +871,35 @@ antes de correr, las dos VMs; bloque B = la librería barajada con `--barajar`/
 compat.sh check-mod9` (el corpus entero y la stdlib en v9 con el `stdout` de v8),
 `EnlaceTardioFixturesTest` (miVM, vtables y bitmaps escritos de antemano) y
 `compat/v10_casos.py` (las reproducciones de la revisión adversarial).
+
+### 13.9 Las interfaces en la arena (V8 H7.3, `#756`, 1-nov)
+
+Lo que la VM mira al ejecutar lo escribe el cargador en la arena (detrás de los descriptores construidos), igual en las
+dos VMs (`EnlaceTardio.construirInterfaces` y `lt_construir_interfaces`), y **sólo si alguna clase tiene interfaces**:
+ni los descriptores ni la arena de un programa sin ellas cambian. Todo en big-endian y alineado a 4.
+
+```
+bloque de una interfaz   u16 n  u16 0                         4 B: su dirección es su identidad
+lista de una clase       u16 n  u16 0  n × { u32 bloque  u32 tabla }
+tabla (clase, interfaz)  u16 ranura[m]  (relleno a 4)         m = las claves de la lista aplanada de la interfaz
+tabla de clases          u32 n  n × { u32 descriptor  u32 lista }   ordenada por descriptor (sin signo)
+```
+
+- **La lista aplanada** de una interfaz: las claves de las interfaces de las que hereda, en el orden en que las
+  declara, y después las suyas; sin repetir. Es sólo del enlace (no va a la arena): de ella sale la posición de una
+  ref `IFAZ_MET` y el orden de las tablas.
+- **La lista de una clase**: las interfaces de su padre, tal cual —una hija conserva las ranuras de lo que sobrescribe,
+  así que las tablas del padre le valen, y si no añade ninguna, comparte la lista del padre—, y detrás las de su
+  cabecera, cada una con las de las que hereda (ella primero, en profundidad, sin repetir). Por cada interfaz nueva,
+  su tabla: por cada clave de la lista aplanada, la ranura de la clase con esa clave (propia o heredada, no privada);
+  si no la tiene, **E11**.
+- **La tabla de clases** (`vm->ifaz_tabla`/`ifaz_n` en la VM-C; `tablaIfaz`/`nTablaIfaz` en la VM-Java): las clases
+  con lista, para buscarla por descriptor con una búsqueda dicotómica.
+
+Las tres instrucciones (`OPCODES.md`, `0xBF..0xC1`): **`INVOKE_IFAZ_REF`** busca la lista de la clase del objeto, en
+ella la tabla de la interfaz, la ranura en la posición del método, y sigue como `INVOKE_VIRTUAL` (con su subida por los
+padres); **`INSTANCEOF_IFAZ_REF`** y **`CHECKCAST_IFAZ_REF`**, si la interfaz está en la lista (la conversión, con el
+`RuntimeError` de siempre, que nombra el tipo). Una clase con interfaces la construye siempre el cargador: en MOD9 toda
+clase de un módulo de usuario ya es abierta (desciende de `Core.Object`); una de `Core` con interfaces, todavía no (el
+compilador lo dice). La interfaz del módulo (§4.5) las publica en `bpi 10`, también sólo si las hay: `iface <n> public
+[extends A,B]` … `end iface` (con sus `method` y `prop`) y, dentro de una clase, `implements A,B`.

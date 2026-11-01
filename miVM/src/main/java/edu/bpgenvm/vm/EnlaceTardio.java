@@ -53,6 +53,16 @@ final class EnlaceTardio {
         java.util.Set<String> privados;
         Clase padre;                      // null = raíz
         boolean construyendo;             // guardia de ciclo
+        // V8 H7.3 (#756) — las interfaces
+        /** Una INTERFAZ: su lista APLANADA de claves —las de las interfaces de las que hereda, en el orden en que las
+         *  declara, y después las suyas; sin repetir—. La posición de una clave aquí es la k de INVOKE_IFAZ_REF. Su
+         *  `descAbs` es su bloque en la arena (4 bytes: cuántas claves), que es su identidad. */
+        List<String> aplanada;
+        /** Una CLASE: todas sus interfaces —las del padre, y detrás las de su cabecera con las que éstas heredan, sin
+         *  repetir—, la tabla de ranuras de cada una en la arena, y la dirección de su lista (0 = no tiene). */
+        List<Clase> ifaces;
+        List<Integer> tablas;
+        int listaAbs;
         Clase(ModuleManager.ModuleMetadata mod, TablasMod9.Clase c) { this.mod = mod; this.c = c; }
         String nombreCualificado() { return mod.exportPrefix + c.name; }
     }
@@ -76,7 +86,7 @@ final class EnlaceTardio {
             if (m.clases == null) continue;                    // MOD7/MOD8: sin 4.5
             for (TablasMod9.Clase c : m.clases) {
                 Clase k = new Clase(m, c);
-                if (!c.abierta) {
+                if (!c.abierta && !c.interfaz) {   // V8 H7.3: una interfaz no tiene descriptor (su csOff es 0)
                     k.descAbs = m.codeStart + c.csOff;
                     // el sello del dueño: +6 = índice del módulo + 1 (0 = sin sello → por rango)
                     vm.writeInt16(k.descAbs + CLS_MODULO, i + 1);
@@ -128,6 +138,7 @@ final class EnlaceTardio {
     /** Deja `k` con descriptor y tablas efectivas (cerrada: las lee; abierta: la construye). */
     void asegurar(Clase k) {
         if (k.metodos != null) return;                 // ya hecha
+        if (k.c.interfaz) { asegurarInterfaz(k); return; }   // V8 H7.3
         if (k.construyendo)
             throw new ModuleManager.LinkException("ciclo de herencia en '" + k.nombreCualificado() + "'");
         k.construyendo = true;
@@ -209,6 +220,150 @@ final class EnlaceTardio {
         return m.exportPrefix.substring(0, m.exportPrefix.length() - 1);
     }
 
+    // ------------------------------------------------------------------ 2b. V8 H7.3 (#756): las interfaces
+    /** Una INTERFAZ: su lista aplanada de claves y su bloque en la arena (4 bytes: cuántas claves), cuya dirección es
+     *  su identidad —lo que da una ref CLASE y lo que comparan las listas de las clases—. Memoizada; las de las que
+     *  hereda, primero. Un ciclo es E7. Espejo de lt_asegurar_interfaz (link.c). */
+    private void asegurarInterfaz(Clase k) {
+        if (k.construyendo)
+            throw new ModuleManager.LinkException("ciclo de herencia en '" + k.nombreCualificado() + "'");
+        k.construyendo = true;
+        List<String> claves = new ArrayList<>();
+        for (int i = 0; i < k.c.interfacesNombre.size(); i++) {
+            Clase p = interfazDe(k, i, "hereda de");
+            asegurar(p);
+            for (String c : p.aplanada) if (!claves.contains(c)) claves.add(c);
+        }
+        for (TablasMod9.Metodo mt : k.c.metodos) if (!claves.contains(mt.clave)) claves.add(mt.clave);
+        int b = arena; arena += 4; bytesArena += 4;
+        vm.reservarArena(arena);
+        vm.writeInt16(b, claves.size());
+        vm.writeInt16(b + 2, 0);
+        k.aplanada = claves;
+        k.descAbs = b;
+        // vacías: una interfaz no tiene ranuras (y así la memoización de asegurar la da por hecha)
+        k.metodos = new HashMap<>(); k.campos = new HashMap<>(); k.eventos = new HashMap<>(); k.privados = new java.util.HashSet<>();
+        k.construyendo = false;
+    }
+
+    /** La interfaz `i` de la fila de `k` —de la cabecera de una clase, o de las que hereda una interfaz—. Si no está, E1;
+     *  si es una clase (otra versión de su módulo la cambió), también, nombrándolo. */
+    private Clase interfazDe(Clase k, int i, String verbo) {
+        int dep = k.c.interfacesDep.get(i);
+        String nombre = k.c.interfacesNombre.get(i);
+        String q;
+        if (dep == TablasMod9.DEP_LOCAL) q = k.mod.exportPrefix + nombre;
+        else {
+            if (k.mod.depNames == null || dep < 0 || dep >= k.mod.depNames.size())
+                throw new ModuleManager.LinkException("'" + k.mod.name + "' declara '" + k.c.name + "' con una interfaz fuera de su tabla de dependencias (dep" + dep + "): .mod corrupto");
+            q = nombre;   // ya cualificado por su dueño: [lib.]Mod.I
+        }
+        String modI = q.contains(".") ? q.substring(0, q.lastIndexOf('.')) : q;
+        Clase p = registro.get(q);
+        if (p == null) {
+            ModuleManager.ModuleMetadata mp = mm.moduloPorNombreCanonico(modI);
+            if (mp != null && mp.clases == null)
+                throw new ModuleManager.LinkException("'" + mp.name + "' es MOD" + versionDe(mp.magic) + " y '" + k.mod.name + "' necesita su tabla de clases: recompila '" + mp.name + "'");
+            throw new ModuleManager.LinkException("'" + k.mod.name + "." + k.c.name + "' " + verbo + " la interfaz '" + q + "' y " + quien(modI) + " no la tiene: recompila '" + k.mod.name + "'");
+        }
+        if (!p.c.interfaz)
+            throw new ModuleManager.LinkException("'" + k.mod.name + "." + k.c.name + "' " + verbo + " la interfaz '" + q + "' y en " + quien(modI) + " es una clase: recompila '" + k.mod.name + "'");
+        return p;
+    }
+
+    /** Una interfaz y todas aquellas de las que hereda, sin repetir: ella primero, y después cada padre en el orden
+     *  en que los declara, en profundidad (el orden de ClassSymbol.interfacesAplanadas en el compilador). */
+    private List<Clase> aplanarInterfaz(Clase f) {
+        List<Clase> out = new ArrayList<>();
+        aplanar(f, out);
+        return out;
+    }
+    private void aplanar(Clase f, List<Clase> out) {
+        if (out.contains(f)) return;
+        out.add(f);
+        for (int i = 0; i < f.c.interfacesNombre.size(); i++) aplanar(interfazDe(f, i, "hereda de"), out);
+    }
+
+    /** Las listas de interfaces de las clases, en el orden de los módulos y de sus filas (el de la VM-C), y después la
+     *  tabla de las clases que tienen alguna, ordenada por descriptor: la que mira la VM al llamar por una interfaz,
+     *  al preguntar `is` o al convertir. Si ninguna clase tiene interfaces, nada: la arena queda como estaba. */
+    void construirInterfaces(List<ModuleManager.ModuleMetadata> modulos) {
+        vm.fijarTablaDeInterfaces(0, 0);   // la de un RUN anterior no vale
+        for (ModuleManager.ModuleMetadata m : modulos) {
+            if (m.clases == null) continue;
+            for (TablasMod9.Clase c : m.clases) if (!c.interfaz) listaDe(registro.get(m.exportPrefix + c.name));
+        }
+        List<int[]> filas = new ArrayList<>();
+        for (Clase k : registro.values()) if (!k.c.interfaz && k.listaAbs != 0) filas.add(new int[]{ k.descAbs, k.listaAbs });
+        if (filas.isEmpty()) return;
+        filas.sort((a, b) -> Integer.compareUnsigned(a[0], b[0]));
+        int t = arena; int tam = 4 + 8 * filas.size(); arena += tam; bytesArena += tam;
+        vm.reservarArena(arena);
+        vm.writeInt32(t, filas.size());
+        for (int i = 0; i < filas.size(); i++) {
+            vm.writeInt32(t + 4 + 8 * i, filas.get(i)[0]);
+            vm.writeInt32(t + 8 + 8 * i, filas.get(i)[1]);
+        }
+        vm.fijarTablaDeInterfaces(t, filas.size());
+    }
+
+    /** La lista de interfaces de una clase: las del padre, tal cual (una hija conserva las ranuras de lo que
+     *  sobrescribe, así que sus tablas le valen), y las nuevas de su cabecera, cada una con su tabla: por cada clave de
+     *  la interfaz, la ranura de la clase con esa clave (propia o heredada, no privada); si no la tiene, E11. Y lo que la
+     *  clase dice implementar (el bit 2) tiene que estar en alguna: si no, E12. Memoizada, el padre primero. */
+    private void listaDe(Clase k) {
+        if (k.ifaces != null) return;
+        asegurar(k);
+        List<Clase> ifaces = new ArrayList<>();
+        List<Integer> tablas = new ArrayList<>();
+        int listaPadre = 0;
+        if (k.padre != null) {
+            listaDe(k.padre);
+            ifaces.addAll(k.padre.ifaces);
+            tablas.addAll(k.padre.tablas);
+            listaPadre = k.padre.listaAbs;
+        }
+        int heredadas = ifaces.size();
+        for (int i = 0; i < k.c.interfacesNombre.size(); i++) {
+            Clase f = interfazDe(k, i, "implementa");
+            asegurar(f);
+            for (Clase g : aplanarInterfaz(f)) if (!ifaces.contains(g)) { ifaces.add(g); tablas.add(0); }
+        }
+        for (int j = heredadas; j < ifaces.size(); j++) {
+            Clase f = ifaces.get(j);
+            int t = arena; int tam = (2 * f.aplanada.size() + 3) & ~3; arena += tam; bytesArena += tam;
+            vm.reservarArena(arena);
+            for (int q = 0; q < f.aplanada.size(); q++) {
+                String clave = f.aplanada.get(q);
+                Integer s = k.privados.contains(clave) ? null : k.metodos.get(clave);
+                if (s == null)   // E11
+                    throw new ModuleManager.LinkException("'" + k.mod.name + "." + k.c.name + "' implementa '" + f.nombreCualificado() + "' y no tiene '" + clave + "': recompila '" + k.mod.name + "'");
+                vm.writeInt16(t + 2 * q, s);
+            }
+            tablas.set(j, t);
+        }
+        for (TablasMod9.Metodo mt : k.c.metodos) {
+            if (!mt.implementa) continue;
+            boolean esta = false;
+            for (Clase f : ifaces) if (f.aplanada.contains(mt.clave)) { esta = true; break; }
+            if (!esta)   // E12
+                throw new ModuleManager.LinkException("'" + k.mod.name + "." + k.c.name + "' implementa '" + mt.clave + "' y ninguna de sus interfaces lo tiene ya: recompila '" + k.mod.name + "'");
+        }
+        k.ifaces = ifaces;
+        k.tablas = tablas;
+        if (ifaces.isEmpty()) { k.listaAbs = 0; return; }
+        if (ifaces.size() == heredadas) { k.listaAbs = listaPadre; return; }   // ninguna nueva: la del padre, tal cual
+        int l = arena; int tam = 4 + 8 * ifaces.size(); arena += tam; bytesArena += tam;
+        vm.reservarArena(arena);
+        vm.writeInt16(l, ifaces.size());
+        vm.writeInt16(l + 2, 0);
+        for (int j = 0; j < ifaces.size(); j++) {
+            vm.writeInt32(l + 4 + 8 * j, ifaces.get(j).descAbs);
+            vm.writeInt32(l + 8 + 8 * j, tablas.get(j));
+        }
+        k.listaAbs = l;
+    }
+
     // ------------------------------------------------------------------ 0. E9 antes que nada
     // V4 de #523 (17-sep) — medido en mezcla.py: si el dueño es MOD7/8, el import 3.1 del constructor con
     // firma («no exporta 'Lib.__cls_new_Base(i)' ... version vieja?») caía ANTES de que ninguna ref llegara
@@ -285,8 +440,25 @@ final class EnlaceTardio {
             case TablasMod9.REF_SUBTIPO: {
                 // E10: la clase asumida como supertipo tiene que estar en la cadena efectiva
                 String qs = r.clave.contains(".") ? r.clave : m.exportPrefix + r.clave;
+                // V8 H7.3 (#756) — y si es una interfaz, entre las de la clase (o, si `q` es una interfaz, entre las de
+                // las que hereda)
+                Clase sup = registro.get(qs);
+                if (sup != null && sup.c.interfaz) {
+                    List<Clase> de = k.c.interfaz ? aplanarInterfaz(k) : k.ifaces;
+                    if (de != null && de.contains(sup)) return 1;
+                    throw new ModuleManager.LinkException("'" + m.name + "' asume que '" + q + "' implementa '" + qs + "' y " + duenoTxt + " ya no: recompila '" + m.name + "'");
+                }
                 for (Clase a = k; a != null; a = a.padre) if (a.nombreCualificado().equals(qs)) return 1;
                 throw new ModuleManager.LinkException("'" + m.name + "' asume que '" + q + "' extiende '" + qs + "' y " + duenoTxt + " ya no: recompila '" + m.name + "'");
+            }
+            case TablasMod9.REF_IFAZ_MET: {
+                // V8 H7.3 (#756) — un método de una interfaz: su posición en la lista aplanada (la k de INVOKE_IFAZ_REF).
+                // Si no está, E3 con su texto: el método usado ya no está en la interfaz.
+                int pos = k.c.interfaz ? k.aplanada.indexOf(r.clave) : -1;
+                if (pos < 0)
+                    throw new ModuleManager.LinkException("'" + m.name + "' necesita '" + q + "." + r.clave + "' y " + duenoTxt + " no lo tiene"
+                            + (k.c.interfaz ? citar(k.aplanada, r.clave, '(') : "") + ": recompila '" + m.name + "'");
+                return pos;
             }
             default:
                 throw new ModuleManager.LinkException("'" + m.name + "' pide una referencia de tipo desconocido (" + r.kind + "): .mod corrupto");

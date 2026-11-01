@@ -324,7 +324,13 @@ public enum OpCode {
     // V7/H7 #607 (30-sep) — el despacho virtual con la RANURA en la pila (arriba), no en el código: el setter que
     // Forms resuelve por nombre al cargar (Gui.bindMember). Antes lo llamaba ANIDADO un builtin (__guiInvokeBySlot,
     // el puente) y no podía ceder; así es una llamada normal en el hilo. numArgs, como en INVOKE_VIRTUAL.
-    INVOKE_SLOT          (0xBE, OperandKind.IMM_U8);               // ( this ...args slot -- ) numArgs u8
+    INVOKE_SLOT          (0xBE, OperandKind.IMM_U8),               // ( this ...args slot -- ) numArgs u8
+    // V8 H7.3 (#756) — las interfaces de clase. La llamada por una interfaz lleva dos refs: la interfaz (su bloque) y
+    // el método (su posición en ella); la ranura la da la tabla de esa interfaz en la clase del objeto, y desde ahí es
+    // la llamada virtual de siempre. `is` y la conversión a una interfaz miran la lista de la clase del objeto.
+    INVOKE_IFAZ_REF      (0xBF, OperandKind.IDX_U16_IDX_U16_NUMARGS_U8),   // ( this ...args -- ret )
+    INSTANCEOF_IFAZ_REF  (0xC0, OperandKind.IDX_U16),
+    CHECKCAST_IFAZ_REF   (0xC1, OperandKind.IDX_U16_NAME_I16);             // + name_off local del literal del mensaje
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;
@@ -365,7 +371,9 @@ public enum OpCode {
         // V7/H2 (#523) — idx u16 + name_off i16 local (CHECKCAST_REF)
         IDX_U16_NAME_I16 (4),
         // V7/H2 (#523) — i32 (handler offset) + idx u16 (TRY_BEGIN_REF)
-        TRY_HANDLER_I32_IDX_U16 (6);
+        TRY_HANDLER_I32_IDX_U16 (6),
+        // V8 H7.3 (#756) — idx u16 de la interfaz + idx u16 del método + numArgs u8 (INVOKE_IFAZ_REF)
+        IDX_U16_IDX_U16_NUMARGS_U8 (5);
 
         public final int bytes;
         OperandKind(int bytes) { this.bytes = bytes; }

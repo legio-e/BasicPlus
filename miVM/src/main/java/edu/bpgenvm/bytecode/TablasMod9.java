@@ -28,6 +28,8 @@ public final class TablasMod9 {
     private TablasMod9() {}
 
     public static final int REF_CLASE = 0, REF_MET = 1, REF_CAMPO = 2, REF_EV_RECV = 3, REF_EV_DEST = 4, REF_SUBTIPO = 5, REF_SUPER = 6;
+    /** V8 H7.3 (#756) — un método de una interfaz: (la interfaz, su clave) → su posición en la lista aplanada. */
+    public static final int REF_IFAZ_MET = 7;
     public static final int DEP_RAIZ = -1, DEP_LOCAL = -2;
 
     public static final class Ref {
@@ -37,6 +39,7 @@ public final class TablasMod9 {
             switch (kind) {
                 case REF_CLASE: return "CLASE"; case REF_MET: return "MET"; case REF_CAMPO: return "CAMPO";
                 case REF_EV_RECV: return "EV_RECV"; case REF_EV_DEST: return "EV_DEST"; case REF_SUBTIPO: return "SUBTIPO"; case REF_SUPER: return "SUPER";
+                case REF_IFAZ_MET: return "IFAZ_MET";
                 default: return "?" + kind;
             }
         }
@@ -47,7 +50,9 @@ public final class TablasMod9 {
     }
     public static final class Metodo {
         public final String clave; public final int slot; public final int codeOff; public final boolean override, privado;
-        Metodo(String clave, int slot, int codeOff, int flags) { this.clave = clave; this.slot = slot; this.codeOff = codeOff; this.override = (flags & 1) != 0; this.privado = (flags & 2) != 0; }
+        /** V8 H7.3 (#756) — el bit 2: implementa uno de una interfaz de su clase (E12 si ya no está). */
+        public final boolean implementa;
+        Metodo(String clave, int slot, int codeOff, int flags) { this.clave = clave; this.slot = slot; this.codeOff = codeOff; this.override = (flags & 1) != 0; this.privado = (flags & 2) != 0; this.implementa = (flags & 4) != 0; }
     }
     public static final class Campo {
         public final String clave; public final int slot; public final int ancho; public final boolean ref, owner, privado;
@@ -64,8 +69,15 @@ public final class TablasMod9 {
         public final List<Metodo> metodos = new ArrayList<>();
         public final List<Campo> campos = new ArrayList<>();
         public final List<Evento> eventos = new ArrayList<>();
+        /** V8 H7.3 (#756) — una INTERFAZ (el bit 2 de sus flags): sin descriptor ni código, sus métodos por clave. */
+        public final boolean interfaz;
+        /** V8 H7.3 — (versión 2 de la subtabla) las interfaces de la fila: las de la cabecera de una clase, o de las
+         *  que hereda una interfaz; su depIdx (DEP_LOCAL o el de la subtabla deps) y su nombre. */
+        public final List<Integer> interfacesDep = new ArrayList<>();
+        public final List<String> interfacesNombre = new ArrayList<>();
         Clase(String name, int flags, int csOff, int parentDepIdx, String parentName, int nF, int nM, int[] fb, int[] ob) {
             this.name = name; this.abierta = (flags & 1) != 0; this.publica = (flags & 2) != 0; this.csOff = csOff;
+            this.interfaz = (flags & 4) != 0;
             this.parentDepIdx = parentDepIdx; this.parentName = parentName; this.nFieldsOwn = nF; this.nMethodsOwn = nM;
             this.ownFieldBitmap = fb; this.ownOwnerBitmap = ob;
         }
@@ -109,7 +121,8 @@ public final class TablasMod9 {
         for (int i = 0; i < nd; i++) { in.readUTF(); in.readInt(); }
         if (in.available() < 4) return out;
         int ver = in.readUnsignedShort();
-        if (ver != 1) throw new IOException("subtabla CLASES: version " + ver + " desconocida (se esperaba 1)");
+        // V8 H7.3 (#756) — la versión 2 añade a cada fila sus interfaces; la llevan sólo los módulos que las usan
+        if (ver != 1 && ver != 2) throw new IOException("subtabla CLASES: version " + ver + " desconocida (se esperaba 1 o 2)");
         int nc = in.readUnsignedShort();
         for (int i = 0; i < nc; i++) {
             String name = in.readUTF(); int flags = in.readUnsignedByte(); int csOff = in.readInt();
@@ -125,6 +138,10 @@ public final class TablasMod9 {
             for (int k = 0; k < ncam; k++) c.campos.add(new Campo(in.readUTF(), in.readUnsignedShort(), in.readUnsignedByte(), in.readUnsignedByte()));
             int ne = in.readUnsignedShort();
             for (int k = 0; k < ne; k++) c.eventos.add(new Evento(in.readUTF(), in.readUnsignedShort()));
+            if (ver >= 2) {
+                int ni = in.readUnsignedShort();
+                for (int k = 0; k < ni; k++) { c.interfacesDep.add((int) in.readShort()); c.interfacesNombre.add(in.readUTF()); }
+            }
             out.add(c);
         }
         return out;

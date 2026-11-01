@@ -1,0 +1,145 @@
+module CsInterfacesVarias
+{
+   interface IR
+   {
+      function int Raiz();
+   }
+
+   interface IA : IR
+   {
+      function int A();
+   }
+
+   interface IB : IR
+   {
+      function int B();
+   }
+
+   interface IC : IA, IB
+   {
+      string Nombre { get; set; }
+   }
+
+   interface ISuma
+   {
+      function int Suma(int a, int b);
+   }
+
+   class Base
+   {
+      public function int Suma(int a, int b)
+      {
+         return a + b;
+      }
+   }
+
+   class Todo : Base, IC, ISuma
+   {
+      @implement{ IR }
+      public function int Raiz()
+      {
+         return 1;
+      }
+      @implement{ IA }
+      public function int A()
+      {
+         return 2;
+      }
+      @implement{ IB }
+      public function int B()
+      {
+         return 3;
+      }
+      @implement{ IC }
+      public string Nombre
+      {
+         get
+         {
+            return "todo";
+         }
+      }
+   }
+
+   class Figura : IA
+   {
+      @implement{ IR }
+      public function int Raiz()
+      {
+         return 10;
+      }
+      @implement{ IA }
+      public function int A()
+      {
+         throw new RuntimeError("abstracto: Figura.A");
+      }
+   }
+
+   class Cuadro : Figura
+   {
+      @override{}
+      public function int A()
+      {
+         return 20;
+      }
+   }
+
+   class Programa
+   {
+      private static function int Usa(IR r)
+      {
+         return r.Raiz();
+      }
+      public static function int Main()
+      {
+         Todo t = new Todo();
+         IC c = t;
+         if (c.Raiz() + c.A() + (c).B() != 6)
+         {
+            return 1;
+         }
+         if (c.Nombre != "todo")
+         {
+            return 2;
+         }
+         ISuma s = t;
+         if (s.Suma(2, 3) != 5)
+         {
+            return 3;
+         }
+         if (Programa.Usa(t) != 1 || Programa.Usa(new Cuadro()) != 10)
+         {
+            return 4;
+         }
+         IA a = new Cuadro();
+         if (a.A() != 20)
+         {
+            return 5;
+         }
+         Object o = t;
+         if (!(o is IB) || o is Figura || !(a is IR))
+         {
+            return 6;
+         }
+         IB b = (IB) o;
+         if (b.B() != 3)
+         {
+            return 7;
+         }
+         if (b != c || a == t)
+         {
+            return 8;
+         }
+         println("interfaces " + c.Nombre + " " + s.Suma(c.A(), b.B()));
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

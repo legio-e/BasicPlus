@@ -10,6 +10,7 @@ module CsReescrituras
 
    class Hija : Padre
    {
+      @override{}
       public function int Valor()
       {
          return base.Valor() + 1;

@@ -128,6 +128,7 @@ public class ModWriter {
         String clave;            // clave canónica `nombre(códigos)ret`
         boolean override;        // sobreescribe una del padre (el cargador la casa por clave)
         boolean privado;         // ocupa ranura pero no se sobreescribe ni se llama de fuera
+        boolean implementa;      // V8 H7.3 (#756): implementa uno de una interfaz de la clase (el bit 2; E12 si ya no está)
     }
     /** V7/H2 (#523, MOD9) — un evento propio: `nombre(códigos)` + la ranura de su `$recv`. */
     private static class EventInfo {
@@ -145,6 +146,12 @@ public class ModWriter {
         int parentDepIdx = -1;   // -1 raíz; -2 padre local (parent); >= 0 índice en la subtabla deps
         String parentQualified;  // nombre del padre tal como lo conoce el cargador (Mod.Cls o local)
         final List<EventInfo> events = new ArrayList<>();
+        // V8 H7.3 (#756, MOD9) — las interfaces. Una INTERFAZ es una fila de 4.5 con el bit 2: sus métodos por clave y
+        // sin código, sin campos ni descriptor. `interfaces`: las de la cabecera de una clase (en una interfaz, las
+        // de las que hereda), como las registra el cargador (local, sin cualificar; de otro módulo, `Mod.I`).
+        boolean interfaz;
+        final List<String> interfaces = new ArrayList<>();
+        final List<Integer> interfacesDep = new ArrayList<>();   // DEP_LOCAL, o el índice en la subtabla deps
         // L2 v3 — herencia cross-module. Si parent vive en otro módulo, el
         // ModWriter local no tiene su descriptor; se cargan placeholders (campos
         // dummy + slots vacíos) sólo para preservar el slot/field numbering y
@@ -962,7 +969,11 @@ public class ModWriter {
     /** V10/J-3 (16-sep, Eduardo): `super.m()` es la única llamada no virtual y significa «el `m` EFECTIVO del padre»
      *  (el suyo o el que herede) — dónde viva en esa versión lo sabe el cargador: la ref lleva (clase del padre,
      *  clave) y se resuelve a la DIRECCIÓN ABSOLUTA del método subiendo por la cadena desde el padre. */
-    REF_SUPER = 6;
+    REF_SUPER = 6,
+    /** V8 H7.3 (#756) — un método de una INTERFAZ: (la interfaz, la clave del método) → su posición en la lista
+     *  aplanada de la interfaz, que el cargador busca por clave. Es el segundo operando de INVOKE_IFAZ_REF; el primero,
+     *  la interfaz, va por una ref CLASE. */
+    REF_IFAZ_MET = 7;
     /** `depIdx` de una clase de ESTE módulo (una abierta que se pide por ref desde su propio módulo). */
     public static final int DEP_LOCAL = -2;
 
@@ -991,7 +1002,7 @@ public class ModWriter {
      */
     public int requireRef(int kind, int depIdx, String clase, String clave) {
         exigeFormato9("requireRef");
-        if (kind < REF_CLASE || kind > REF_SUPER) throw new IllegalArgumentException("kind de ref: " + kind);
+        if (kind < REF_CLASE || kind > REF_IFAZ_MET) throw new IllegalArgumentException("kind de ref: " + kind);
         if (depIdx < DEP_LOCAL || (depIdx >= 0 && depIdx >= depsVersion.size()))
             throw new RuntimeException("ref a '" + clase + "': depIdx " + depIdx + " fuera de la subtabla deps (" + depsVersion.size() + ")");
         if (clase == null || clase.isEmpty()) throw new RuntimeException("ref sin clase (kind " + kind + ", clave '" + clave + "')");
@@ -1076,6 +1087,31 @@ public class ModWriter {
         emitRefOperand(refIdx);
         codeOut.writeShort(nameOff.shortValue()); currentBytecodeSize += 2;
     }
+    /** V8 H7.3 (#756) — la llamada por una interfaz: `INVOKE_IFAZ_REF idxIface u16, idxMet u16, nargs u8`. La
+     *  interfaz va por una ref CLASE (su bloque) y el método por una REF_IFAZ_MET (su posición en ella). */
+    public void emitInvokeInterfazRef(int refIface, int refMet, int numArgs) throws IOException {
+        exigeFormato9("INVOKE_IFAZ_REF");
+        if (numArgs < 0 || numArgs > 255) throw new RuntimeException("INVOKE_IFAZ_REF: numArgs fuera de rango: " + numArgs);
+        codeOut.writeByte(OpCode.INVOKE_IFAZ_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIface);
+        emitRefOperand(refMet);
+        codeOut.writeByte(numArgs); currentBytecodeSize += 1;
+    }
+    /** V8 H7.3 — `x is I`: ¿está la interfaz (ref CLASE) en la lista de la clase del objeto? */
+    public void emitInstanceOfInterfazRef(int refIface) throws IOException {
+        exigeFormato9("INSTANCEOF_IFAZ_REF");
+        codeOut.writeByte(OpCode.INSTANCEOF_IFAZ_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIface);
+    }
+    /** V8 H7.3 — `I(x)`: como `is`, sin consumir, y si no, el RuntimeError que nombra el tipo (el literal local). */
+    public void emitCheckCastInterfazRef(int refIface, String nameSym) throws IOException {
+        exigeFormato9("CHECKCAST_IFAZ_REF");
+        Integer nameOff = dataSymbolOffset.get(nameSym);
+        if (nameOff == null) throw new RuntimeException("Literal '" + nameSym + "' no internado para CHECKCAST_IFAZ_REF");
+        codeOut.writeByte(OpCode.CHECKCAST_IFAZ_REF.code); currentBytecodeSize += 1;
+        emitRefOperand(refIface);
+        codeOut.writeShort(nameOff.shortValue()); currentBytecodeSize += 2;
+    }
     /** TRY_BEGIN por ref: handler i32 (relativo, como los demás TRY_BEGIN) + idx u16. Sin fixup lateral. */
     public void emitTryBeginRef(int handlerLabel, int refIdx) throws IOException {
         exigeFormato9("TRY_BEGIN_REF");
@@ -1126,6 +1162,61 @@ public class ModWriter {
         ordenDeClases.add(c);
         currentClass = c;
     }
+    /**
+     * V8 H7.3 (#756) — abre una INTERFAZ: una fila de 4.5 con el bit 2 (Eduardo: «una clase y una interfaz se guardan
+     * igual o casi igual. Con un id que indique que una es una clase y otro id que indique que es una interfaz debería
+     * valer»). Sin campos, sin código y sin descriptor: el cargador le hace un bloque, que es su identidad, y casa sus
+     * métodos por clave con los de cada clase que la implementa. Sus métodos, con {@link #declareInterfazMetodo}; de
+     * las que hereda, con {@link #addInterfazDe}; la cierra {@link #endClass}.
+     */
+    public void addInterfaz(String name, boolean publica) {
+        exigeFormato9("addInterfaz");
+        if (currentClass != null) throw new RuntimeException("addInterfaz dentro de otra clase: cierra primero con endClass()");
+        if (classes.containsKey(name)) throw new RuntimeException("Clase ya declarada: " + name);
+        ClassInfo c = new ClassInfo();
+        c.name = name; c.interfaz = true; c.publica = publica;
+        c.parent = null; c.parentDepIdx = -1; c.parentQualified = null;
+        classes.put(name, c);
+        ordenDeClases.add(c);
+        currentClass = c;
+        usaInterfaces = true;
+    }
+    /** Un método de la interfaz actual, por su clave (`area()d`; una property, sus dos accesores). Su ranura en la
+     *  fila es su posición: la de verdad la decide el cargador en cada clase. */
+    public void declareInterfazMetodo(String clave) {
+        exigirClaveCorta(clave, clave);
+        if (currentClass == null || !currentClass.interfaz) throw new RuntimeException("declareInterfazMetodo fuera de una interfaz");
+        for (MethodInfo m : currentClass.methods)
+            if (clave.equals(m.clave)) throw new RuntimeException("la interfaz '" + currentClass.name + "' declara dos veces '" + clave + "'");
+        MethodInfo m = new MethodInfo();
+        m.simpleName = clave; m.qualifiedName = null; m.clave = clave; m.slot = currentClass.methods.size();
+        currentClass.methods.add(m);
+    }
+    /** Una interfaz de la cabecera de la clase actual (en una interfaz, una de las que hereda): su nombre como lo
+     *  registra el cargador (local, sin cualificar; de otro módulo, `Mod.I`) y su `depIdx` ({@link #DEP_LOCAL} o el
+     *  de la subtabla deps). */
+    public void addInterfazDe(String nombre, int depIdx) {
+        exigeFormato9("addInterfazDe");
+        if (currentClass == null) throw new RuntimeException("addInterfazDe fuera de una clase");
+        if (depIdx != DEP_LOCAL && (depIdx < 0 || depIdx >= depsVersion.size()))
+            throw new RuntimeException("interfaz '" + nombre + "' de '" + currentClass.name + "': depIdx " + depIdx + " fuera de la subtabla deps");
+        currentClass.interfaces.add(nombre);
+        currentClass.interfacesDep.add(depIdx);
+        usaInterfaces = true;
+    }
+    /** El método `simpleName` (ya declarado) de la clase actual implementa uno de una interfaz suya: el bit 2 de su
+     *  fila, con el que el cargador dice E12 si la interfaz deja de tenerlo. */
+    public void setMethodImplementa(String simpleName) {
+        if (currentClass == null) throw new RuntimeException("setMethodImplementa fuera de una clase");
+        for (MethodInfo m : currentClass.methods) {
+            if (m.simpleName.equals(simpleName) && !m.heredado) { m.implementa = true; return; }
+        }
+        throw new RuntimeException("setMethodImplementa: metodo '" + simpleName + "' no declarado en " + currentClass.name);
+    }
+    /** V8 H7.3 — ¿hay en el módulo interfaces, o clases que las implementan? Entonces la subtabla 4.5 va en su versión 2
+     *  (cada fila acaba con su lista de interfaces); si no, en la 1, la de siempre: corre en los firmwares de antes. */
+    private boolean usaInterfaces = false;
+
     /** Marca la clase abierta (la actual) como pública en 4.5. Las cerradas ya se exportan por su descriptor. */
     public void setClassPublica(boolean publica) {
         if (currentClass == null) throw new RuntimeException("setClassPublica fuera de una clase");
@@ -1490,6 +1581,10 @@ public class ModWriter {
             throw new RuntimeException("endClass sin addClass previo");
         }
         ClassInfo c = currentClass;
+        if (c.interfaz) {   // V8 H7.3 — una interfaz no tiene descriptor ni código: sólo su fila de 4.5
+            currentClass = null;
+            return;
+        }
         if (c.abierta) {
             // V7/H2 (#523) — SIN descriptor: lo construye el cargador contra el padre
             // real. Sólo se comprueba que cada método propio tenga cuerpo y clave.
@@ -2520,14 +2615,19 @@ public class ModWriter {
         // Orden de declaración: `classes` es un HashMap → ordenamos por el offset de
         // registro del descriptor (cerradas) y, para las abiertas, por orden de alta.
         List<ClassInfo> orden = new ArrayList<>(ordenDeClases);
-        out.writeShort(1);
+        // V8 H7.3 (#756) — la versión 2 (cada fila acaba con sus interfaces), sólo si el módulo usa interfaces: un
+        // módulo sin ellas sale igual que antes y corre en los firmwares de antes (decidido por Eduardo, la 6 de §E10)
+        out.writeShort(usaInterfaces ? 2 : 1);
         out.writeShort(orden.size());
         for (ClassInfo c : orden) {
             out.writeUTF(c.name);
-            out.writeByte((c.abierta ? 1 : 0) | (c.publica ? 2 : 0));
-            Integer csOff = c.abierta ? null : dataSymbolOffset.get(c.name);
-            if (!c.abierta && csOff == null) throw new RuntimeException("clase cerrada '" + c.name + "' sin descriptor al escribir 4.5");
-            out.writeInt(c.abierta ? 0 : csOff);
+            out.writeByte((c.abierta ? 1 : 0) | (c.publica ? 2 : 0) | (c.interfaz ? 4 : 0));
+            boolean sinDescriptor = c.abierta || c.interfaz;
+            Integer csOff = sinDescriptor ? null : dataSymbolOffset.get(c.name);
+            if (!sinDescriptor && csOff == null) throw new RuntimeException("clase cerrada '" + c.name + "' sin descriptor al escribir 4.5");
+            if (!sinDescriptor && !c.interfaces.isEmpty())
+                throw new RuntimeException("clase cerrada '" + c.name + "' con interfaces: la tiene que construir el cargador (bug del emisor)");
+            out.writeInt(sinDescriptor ? 0 : csOff);
             out.writeShort(c.parentDepIdx);
             out.writeUTF(c.parentQualified == null ? "" : c.parentQualified);
             // propios
@@ -2560,12 +2660,12 @@ public class ModWriter {
             out.writeShort(metodos.size());
             for (MethodInfo m : metodos) {
                 if (m.clave == null) throw new RuntimeException("metodo '" + c.name + "." + m.simpleName + "' sin clave canonica en MOD9 (setMethodMeta)");
-                Integer rel = functionAddresses.get(m.qualifiedName);
+                Integer rel = c.interfaz ? Integer.valueOf(-1) : functionAddresses.get(m.qualifiedName);   // una interfaz no tiene código
                 if (rel == null) throw new RuntimeException("metodo sin cuerpo en 4.5: " + m.qualifiedName);
                 out.writeUTF(m.clave);
                 out.writeShort(m.slot);
                 out.writeInt(rel);
-                out.writeByte((m.override ? 1 : 0) | (m.privado ? 2 : 0));
+                out.writeByte((m.override ? 1 : 0) | (m.privado ? 2 : 0) | (m.implementa ? 4 : 0));
             }
             // campos propios con clave (los del usuario); los $recv/$dest van con su evento
             List<FieldInfo> conClave = new ArrayList<>();
@@ -2581,6 +2681,13 @@ public class ModWriter {
             for (EventInfo e : c.events) {
                 out.writeUTF(e.clave);
                 out.writeShort(e.recvSlot);      // idem
+            }
+            if (usaInterfaces) {                 // V8 H7.3 — versión 2: las interfaces de la fila
+                out.writeShort(c.interfaces.size());
+                for (int i = 0; i < c.interfaces.size(); i++) {
+                    out.writeShort(c.interfacesDep.get(i));
+                    out.writeUTF(c.interfaces.get(i));
+                }
             }
         }
     }

@@ -127,6 +127,9 @@ public final class SemanticAnalyzer {
     /** V8 #698 — el módulo se leyó de un `.jc`: se comprueba que el `new` y el `(T) x` escritos casan con lo que
      *  cada llamada es ({@link #revisaJc}). */
     private boolean enJc = false;
+    /** V8 H7.3 — el módulo con el que se calculan las claves de MOD9 (`area()d`) al comprobar una interfaz: las
+     *  mismas que casará el cargador. */
+    private String moduloDeLasClaves = null;
     /** V8 #698 — las llamadas `MiClase(…)` que delegan en otro constructor (#511); en JC, el `: this(…)`. */
     private final Set<CallExpr> delegacionesCtor = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     /** Las conversiones primitivas de BP, `integer(x)`…: las mismas que escribe EscritorJc como `(T) x`. */
@@ -160,6 +163,7 @@ public final class SemanticAnalyzer {
 
     public SemanticInfo analyze(ModuleNode mod) {
         enJc = mod.escritoEnJc;
+        moduloDeLasClaves = MivmEmitter.moduloLocalDe(mod);
         declarePass(mod);
         injectImports(mod);
         resolveTypesPass(mod);
@@ -229,6 +233,42 @@ public final class SemanticAnalyzer {
                 }
             }
         }
+        enlazarInterfacesImportadas();
+    }
+
+    /** V8 H7.3 (#756) — los stubs importados: una interfaz cuelga de Object (como una del módulo: sus métodos valen sobre
+     *  ella, y se asigna a Object), y las interfaces de cada stub, resueltas a los stubs de este análisis por su nombre
+     *  (`I`, del mismo módulo; `Mod.I`, de otro). Una de un módulo que éste no importa, un stub sin miembros: basta para
+     *  comparar tipos (ClassSymbol.mismaClase compara por módulo y nombre). */
+    private void enlazarInterfacesImportadas() {
+        Symbol obj = module.members.resolve("Object");
+        for (Symbol.ImportedNamespaceSymbol ns : preloadedImports) {
+            for (ClassSymbol c : ns.classes.values()) {
+                if (c.isInterface && c.baseClass == null && obj instanceof ClassSymbol) c.baseClass = (ClassSymbol) obj;
+                if (!c.interfaces.isEmpty() || c.interfaceNames.isEmpty()) continue;
+                for (String n : c.interfaceNames) {
+                    ClassSymbol i = stubDeInterfaz(ns, n);
+                    if (i != null) c.interfaces.add(i);
+                }
+            }
+        }
+    }
+
+    private ClassSymbol stubDeInterfaz(Symbol.ImportedNamespaceSymbol desde, String n) {
+        int dot = n.lastIndexOf('.');
+        if (dot < 0) return desde.classes.get(n);
+        String mod = n.substring(0, dot), simple = n.substring(dot + 1);
+        for (Symbol.ImportedNamespaceSymbol ns : preloadedImports) {
+            String canon = (ns.library == null || ns.library.isEmpty()) ? ns.moduleName : ns.library + "." + ns.moduleName;
+            if (canon.equals(mod) && ns.classes.get(simple) != null) return ns.classes.get(simple);
+        }
+        ClassSymbol s = new ClassSymbol(simple, true, null, null, 0, 0);
+        s.isExternal = true;
+        s.isInterface = true;
+        int d2 = mod.lastIndexOf('.');
+        s.externalModule = d2 < 0 ? mod : mod.substring(d2 + 1);
+        s.externalLibrary = d2 < 0 ? "" : mod.substring(0, d2);
+        return s;
     }
 
     // ============================================================
@@ -716,6 +756,44 @@ public final class SemanticAnalyzer {
         return false;
     }
 
+    /** V8 H7.3 (`#756`) — lo que cabe en una interfaz: métodos sin cuerpo y properties en forma corta, de instancia;
+     *  lo que una clase exporta (Eduardo: «no se puede exportar nada mas que métodos y propiedades así que para la
+     *  interfaces casi no hay restricciones»). Lo demás, un error que dice qué es lo que sobra. */
+    private boolean miembroDeInterfazValido(ITopLevelDecl m, ClassSymbol iface) {
+        Node n = (Node) m;
+        String quien = "la interfaz '" + iface.name + "'";
+        String motivo = null;
+        if (m instanceof FuncDef) {
+            FuncDef f = (FuncDef) m;
+            if (f.isDestructor || f.name.name.equals(iface.name))
+                motivo = quien + " no tiene constructor ni destructor: no se construye";
+            else if (f.name.isStatic())
+                motivo = quien + " no tiene métodos estáticos: son de una clase";
+            else if (f.isFinal || f.isPrivate || f.isNative || f.isEventHandler || f.isIntrinsic)
+                motivo = "un método de una interfaz es sólo su firma: sin 'final', 'private', 'native' ni 'event'";
+        } else if (m instanceof PropertyDef) {
+            PropertyDef p = (PropertyDef) m;
+            if (p.name.isStatic())
+                motivo = quien + " no tiene properties estáticas: son de una clase";
+            else if (!p.isShortForm || p.getter != null || p.setter != null || p.init != null)
+                motivo = "una property de una interfaz es sólo su nombre y su tipo: sin get, set ni valor";
+            else if (p.isFinal || p.isPrivate || p.isOwner || p.isSync)
+                motivo = "una property de una interfaz es sólo su nombre y su tipo: sin 'final', 'private', 'owner' ni"
+                        + " 'sync'";
+        } else if (m instanceof VarDecl) {
+            motivo = quien + " no tiene campos: sólo métodos y properties";
+        } else if (m instanceof ConstDecl) {
+            motivo = quien + " no tiene constantes: sólo métodos y properties";
+        } else if (m instanceof Ast.EventDef) {
+            motivo = quien + " no tiene eventos: sólo métodos y properties";
+        } else {
+            motivo = quien + ": sólo métodos y properties";
+        }
+        if (motivo == null) return true;
+        err(n.line, n.column, motivo);
+        return false;
+    }
+
     private void declareClass(ClassDef cd) {
         if (currentClass != null) {
             err(cd.line, cd.column, "no se permiten clases anidadas");
@@ -743,6 +821,7 @@ public final class SemanticAnalyzer {
                     err(n.line, n.column, "no se permiten clases ni enums dentro de una clase");
                     continue;
                 }
+                if (cls.isInterface && !miembroDeInterfazValido(m, cls)) continue;
                 Scope target = isStaticDecl(m) ? cls.staticMembers : cls.instanceMembers;
                 declareTopLevel(m, cls, target);
             }
@@ -973,11 +1052,90 @@ public final class SemanticAnalyzer {
         return null;
     }
 
+    /** V8 H7.3 (`#756`) — resuelve las interfaces de la cabecera de cada clase del módulo (y las de las que hereda
+     *  cada interfaz): que existan, que sean interfaces y no clases, que no se repitan; y que no hereden en ciclo. Una
+     *  clase que desciende de `Thread` no implementa interfaces: un `Thread` no es un `Object` (es `root class`), y el
+     *  valor de una interfaz lo es siempre (decidido por Eduardo, la 4 de V8_IDEAS §E10). */
+    private void resolverInterfaces() {
+        for (Symbol s : module.members.getSymbols()) {
+            if (!(s instanceof ClassSymbol)) continue;
+            ClassSymbol cls = (ClassSymbol) s;
+            if (cls.isExternal) continue;
+            cls.interfaces.clear();
+            boolean jc = cls.astNode != null && cls.astNode.primeroPuedeSerInterfaz;
+            for (String n : cls.interfaceNames) {
+                ClassSymbol i = resolveBaseClassName(n);
+                if (i == null) {
+                    int dot = n.indexOf('.');
+                    String alias = (dot > 0) ? n.substring(0, dot) : null;
+                    if (alias != null && !(module.members.resolve(alias) instanceof Symbol.ImportedNamespaceSymbol))
+                        err(cls.line, cls.column, "'" + cls.name + "' nombra la interfaz '" + n + "' y este modulo no"
+                                + " importa '" + alias + "': anade `import " + alias + "`");
+                    else
+                        err(cls.line, cls.column, "la interfaz '" + n + "' no existe");
+                    continue;
+                }
+                if (!i.isInterface) {
+                    if (cls.isInterface)
+                        err(cls.line, cls.column, "'" + n + "' es una clase: una interfaz sólo hereda de interfaces");
+                    else if (jc)
+                        err(cls.line, cls.column, "'" + n + "' es una clase: el padre va el primero tras ':', y sólo uno");
+                    else
+                        err(cls.line, cls.column, "'" + n + "' es una clase, no una interfaz: va en 'extends'");
+                    continue;
+                }
+                boolean repetida = false;
+                for (ClassSymbol j : cls.interfaces) if (ClassSymbol.mismaClase(i, j)) repetida = true;
+                if (repetida) {
+                    err(cls.line, cls.column, "'" + cls.name + "' nombra dos veces la interfaz '" + n + "'");
+                    continue;
+                }
+                cls.interfaces.add(i);
+            }
+            if (!cls.interfaces.isEmpty() && !cls.isInterface) {
+                for (ClassSymbol c = cls; c != null; c = c.baseClass) {
+                    if (c.esDelLenguaje() && "Thread".equals(c.name)) {
+                        err(cls.line, cls.column, "'" + cls.name + "' desciende de Thread y un Thread no es un Object:"
+                                + " no puede implementar interfaces (el valor de una interfaz siempre es un Object)");
+                        cls.interfaces.clear();
+                        break;
+                    }
+                }
+            }
+        }
+        // ciclos: una interfaz que, subiendo por sus padres, vuelve a sí misma
+        for (Symbol s : module.members.getSymbols()) {
+            if (!(s instanceof ClassSymbol) || !((ClassSymbol) s).isInterface || ((ClassSymbol) s).isExternal) continue;
+            ClassSymbol cls = (ClassSymbol) s;
+            if (heredaEnCiclo(cls, cls, new HashSet<>())) {
+                err(cls.line, cls.column, "ciclo de herencia entre interfaces en '" + cls.name + "'");
+                cls.interfaces.clear();
+            }
+        }
+    }
+
+    private static boolean heredaEnCiclo(ClassSymbol origen, ClassSymbol c, Set<ClassSymbol> vistos) {
+        if (!vistos.add(c)) return false;
+        for (ClassSymbol p : c.interfaces) {
+            if (p == origen || heredaEnCiclo(origen, p, vistos)) return true;
+        }
+        return false;
+    }
+
     private void resolveTypesPass(ModuleNode mod) {
         // 1) extends de cada clase
         for (Symbol s : module.members.getSymbols()) {
             if (s instanceof ClassSymbol) {
                 ClassSymbol cls = (ClassSymbol) s;
+                // V8 H7.3 (#756) — en JC, `class C : A, B` no dice si `A` es el padre o una interfaz: si es una
+                // interfaz, va con las demás, y el padre es Object
+                if (cls.astNode != null && cls.astNode.primeroPuedeSerInterfaz && cls.baseClassName != null) {
+                    ClassSymbol primero = resolveBaseClassName(cls.baseClassName);
+                    if (primero != null && primero.isInterface) {
+                        cls.interfaceNames.add(0, cls.baseClassName);
+                        cls.baseClassName = null;
+                    }
+                }
                 if (cls.isRoot && !esRaiz()) {
                     err(cls.line, cls.column, "'root class' sólo puede escribirse en el módulo raíz (Core): toda clase desciende de Object");
                     cls.isRoot = false;
@@ -996,7 +1154,13 @@ public final class SemanticAnalyzer {
                 }
                 if (cls.baseClassName != null) {
                     ClassSymbol base = resolveBaseClassName(cls.baseClassName);
-                    if (base != null) {
+                    if (base != null && base.isInterface) {
+                        // V8 H7.3 — una interfaz no es un padre: se implementa
+                        err(cls.line, cls.column, "'" + cls.baseClassName + "' es una interfaz: no se extiende, se"
+                                + " implementa (`class " + cls.name + " implements " + cls.baseClassName + "`)");
+                        Symbol obj = module.members.resolve("Object");   // y sigue como si no tuviera padre
+                        if (obj instanceof ClassSymbol) cls.baseClass = (ClassSymbol) obj;
+                    } else if (base != null) {
                         cls.baseClass = base;
                     } else {
                         // V6/#498 — el caso que de verdad se da: la clase viene de un modulo
@@ -1034,6 +1198,9 @@ public final class SemanticAnalyzer {
                 }
             }
         }
+
+        // 1.a) V8 H7.3 (#756) — las interfaces que implementa cada clase, y de las que hereda cada interfaz
+        resolverInterfaces();
 
         // 1.b) H5.c — un miembro NO puede llamarse igual que un evento heredado
         // (ni al revés). Ver validateEventShadowing: con la cadena de bases ya
@@ -1315,7 +1482,7 @@ public final class SemanticAnalyzer {
     private List<FunctionSymbol> collectInstanceCandidates(ClassSymbol cls, String name) {
         List<FunctionSymbol> out = new ArrayList<>();
         java.util.Set<String> seenSig = new java.util.HashSet<>();
-        for (ClassSymbol c = cls; c != null; c = c.baseClass) {
+        for (ClassSymbol c : cls.dondeBuscar()) {   // V8 H7.3: en una interfaz, también las de las que hereda
             Symbol s = c.instanceMembers.tryLookup(name);
             if (!(s instanceof FunctionSymbol)) continue;
             for (FunctionSymbol o = (FunctionSymbol) s; o != null; o = o.nextOverload) {
@@ -1579,7 +1746,9 @@ public final class SemanticAnalyzer {
                 ClassSymbol cls = (ClassSymbol) s;
                 // #248: stubs aliasados de Core — externos, sin AST ni cuerpos.
                 if (cls.isExternal || cls.astNode == null) continue;
+                if (cls.isInterface) continue;   // V8 H7.3: una interfaz no tiene cuerpos ni redefine nada
                 checkOverridesAndFinal(cls);
+                checkInterfaces(cls);
                 for (ITopLevelDecl m : cls.astNode.members)
                     bodyForDef(m, cls);
                 checkCiclosDeDelegacion(cls);   // #511
@@ -3519,13 +3688,32 @@ public final class SemanticAnalyzer {
             // constructor de `Object` entre varios podría quedar tapada; hoy no
             // existe ninguna, y forzarlo pediría resolver la sobrecarga antes de
             // saber si esto es una llamada.
+            // V8 H7.3 (#756) — una interfaz no se construye: `Forma(x)` (JC: `(IForma) x`) es siempre la
+            // conversión, desde cualquier objeto, y la comprueba la VM.
+            if (cls.isInterface) {
+                if (ce.args.size() == 1) {
+                    BpType at0 = analyzeExpr(ce.args.get(0), scope, null);
+                    if (at0 instanceof ClassType || at0 instanceof NullType || at0 instanceof ErrorType) {
+                        info.refCasts.add(ce);
+                        return new ClassType(cls);
+                    }
+                    err(ce.line, ce.column, "'" + at0.display() + "' no se convierte a la interfaz '" + cls.name
+                            + "': sólo un objeto");
+                    return ErrorType.INSTANCE;
+                }
+                err(ce.line, ce.column, "'" + cls.name + "' es una interfaz: no se construye");
+                for (IExpr a : ce.args) analyzeExpr(a, scope, null);
+                return ErrorType.INSTANCE;
+            }
             if (ce.args.size() == 1) {
                 BpType at0 = analyzeExpr(ce.args.get(0), scope, null);
                 // L19 (21-sep) — el cast baja también desde cualquier ANTEPASADO, no sólo desde
                 // Object: `Perro(a)` con `a: Animal`. Antes se tomaba por constructor («se
                 // esperaban 0, se pasaron 1») y había que pasar por Object. El emisor ya hacía
                 // CHECKCAST contra cualquier clase; sólo faltaba que el semántico lo aceptara.
-                if (esObjetoRaiz(at0) || esAntepasadoDe(at0, cls)) {
+                // V8 H7.3 — y desde una interfaz: `Cuadrado(f)` con `f: Forma`.
+                boolean desdeInterfaz = at0 instanceof ClassType && ((ClassType) at0).cls.isInterface;
+                if (esObjetoRaiz(at0) || esAntepasadoDe(at0, cls) || desdeInterfaz) {
                     FunctionSymbol c1 = cls.findConstructor();
                     boolean ctorLoAcepta = c1 != null && c1.params.size() == 1
                             && c1.params.get(0).type != null
@@ -3986,6 +4174,10 @@ public final class SemanticAnalyzer {
     private static boolean comparableForEquality(BpType a, BpType b) {
         if (a instanceof ErrorType || b instanceof ErrorType) return true;
         if (a.sameAs(b)) return true;
+        // V8 H7.3 — una interfaz, con cualquier objeto: la identidad (una clase que no la implementa puede tener hijas
+        // que sí, como en Java y C#)
+        if (a instanceof BpType.ClassType && b instanceof BpType.ClassType
+                && (((BpType.ClassType) a).cls.isInterface || ((BpType.ClassType) b).cls.isInterface)) return true;
         if (a instanceof NullType && b.isReference()) return true;
         if (b instanceof NullType && a.isReference()) return true;
         if (a.isNumeric() && b.isNumeric()) return true;
@@ -4005,6 +4197,171 @@ public final class SemanticAnalyzer {
         if (s instanceof EnumSymbol)     return new EnumType((EnumSymbol) s);
         return ErrorType.INSTANCE;
     }
+
+    // ============================================================
+    // V8 H7.3 (#756) — LAS INTERFACES QUE IMPLEMENTA UNA CLASE
+    // ============================================================
+    /**
+     * Que la clase tenga, propio o heredado, cada miembro de las interfaces de su cabecera (y de las que éstas
+     * heredan): un método de instancia público con el mismo nombre, los mismos parámetros y el mismo retorno —la clave
+     * de MOD9, la que casará el cargador—, o una property pública con el mismo nombre y el mismo tipo. Y las
+     * anotaciones (Eduardo, V8_IDEAS §E10, «La 5»): `@implement{ A, B }`, obligatoria en lo que la clase declara e
+     * implementa un miembro de una interfaz de su cabecera, con una o varias de las interfaces de la clase, y cada una
+     * con ese miembro; `@override{}`, opcional, sólo en lo que redefine uno del padre. Lo heredado no se marca.
+     */
+    private void checkInterfaces(ClassSymbol cls) {
+        List<ClassSymbol> deLaCabecera = new ArrayList<>();
+        for (ClassSymbol i : cls.interfaces) i.interfacesAplanadas(deLaCabecera);
+        // lo que la clase declara e implementa un miembro de una interfaz de su cabecera (→ @implement obligatoria)
+        java.util.Map<Symbol, List<ClassSymbol>> implementan = new java.util.IdentityHashMap<>();
+        for (ClassSymbol iface : deLaCabecera) {
+            for (Symbol m : iface.instanceMembers.getSymbols()) {
+                if (m instanceof FunctionSymbol) {
+                    for (FunctionSymbol f = (FunctionSymbol) m; f != null; f = f.nextOverload) {
+                        String k = claveMiembro(f);
+                        if (k == null) continue;
+                        FunctionSymbol impl = null, otro = null;
+                        for (FunctionSymbol g : collectInstanceCandidates(cls, f.name)) {
+                            if (g.isStatic || g.isConstructor || g.ownerClass == null || g.ownerClass.isInterface) continue;
+                            if (k.equals(claveMiembro(g))) { impl = g; break; }
+                            if (otro == null) otro = g;
+                        }
+                        if (impl == null) {
+                            err(cls.line, cls.column, "'" + cls.name + "' implementa '" + iface.name + "' y no tiene '"
+                                    + firmaCompleta(f) + "'" + (otro != null ? " (tiene '" + firmaCompleta(otro) + "')" : ""));
+                        } else if (!impl.isPublic) {
+                            err(lineaDe(impl, cls), columnaDe(impl, cls), "'" + impl.name + "' implementa '" + iface.name
+                                    + "." + f.name + "' y tiene que ser public: es lo que la interfaz exporta");
+                        } else if (impl.ownerClass == cls) {
+                            implementan.computeIfAbsent(impl, x -> new ArrayList<>()).add(iface);
+                        }
+                    }
+                } else if (m instanceof PropertySymbol) {
+                    PropertySymbol p = (PropertySymbol) m;
+                    Symbol q = cls.lookupInstance(p.name);
+                    PropertySymbol impl = (q instanceof PropertySymbol && !((PropertySymbol) q).isStatic) ? (PropertySymbol) q : null;
+                    String tp = claveTipo(p.type), tq = impl != null ? claveTipo(impl.type) : null;
+                    if (impl == null || tp == null || !tp.equals(tq)) {
+                        err(cls.line, cls.column, "'" + cls.name + "' implementa '" + iface.name + "' y no tiene la"
+                                + " property '" + p.name + ": " + (p.type != null ? p.type.display() : "?") + "'"
+                                + (impl != null && impl.type != null ? " (la suya es '" + impl.type.display() + "')" : ""));
+                    } else if (!impl.isPublic) {
+                        err(lineaDe(impl, cls), columnaDe(impl, cls), "la property '" + impl.name + "' implementa '"
+                                + iface.name + "." + p.name + "' y tiene que ser public: es lo que la interfaz exporta");
+                    } else if (impl.ownerClass == cls) {
+                        implementan.computeIfAbsent(impl, x -> new ArrayList<>()).add(iface);
+                    }
+                }
+            }
+        }
+        info.implementanInterfaz.addAll(implementan.keySet());
+        // las anotaciones de lo que la clase declara
+        List<ClassSymbol> todas = cls.todasLasInterfaces();
+        for (ITopLevelDecl d : cls.astNode.members) {
+            if (!(d instanceof FuncDef) && !(d instanceof PropertyDef)) continue;
+            Node n = (Node) d;
+            Symbol sym = info.declSymbols.get(d);
+            if (sym == null) continue;
+            Ast.Annotation impl = n.anotacion(ANN_IMPLEMENT);
+            Ast.Annotation ov = n.anotacion(ANN_OVERRIDE);
+            List<ClassSymbol> deQuien = implementan.get(sym);
+            if (deQuien != null && impl == null) {
+                List<String> nombres = new ArrayList<>();
+                for (ClassSymbol i : cls.interfaces) if (deQuien.stream().anyMatch(j -> i.implementa(j))) nombres.add(i.name);
+                err(n.line, n.column, "'" + sym.name + "' implementa '" + deQuien.get(0).name + "." + sym.name
+                        + "': márcalo con @implement{ " + String.join(", ", nombres) + " }");
+            }
+            if (impl != null) {
+                if (impl.entries.isEmpty())
+                    err(impl.line, impl.column, "@implement nombra las interfaces que implementa: @implement{ "
+                            + (cls.interfaces.isEmpty() ? "Interfaz" : cls.interfaces.get(0).name) + " }");
+                for (Ast.AnnEntry e : impl.entries) {
+                    if (e.value != null) {
+                        err(e.line, e.column, "@implement lleva nombres de interfaces, sin '='");
+                        continue;
+                    }
+                    ClassSymbol i = null;
+                    int cuantas = 0;
+                    for (ClassSymbol j : todas) if (j.name.equals(e.key)) { i = j; cuantas++; }
+                    if (i == null) {
+                        err(e.line, e.column, "'" + e.key + "' no es una interfaz de '" + cls.name + "'");
+                    } else if (cuantas > 1) {
+                        err(e.line, e.column, "'" + cls.name + "' implementa dos interfaces que se llaman '" + e.key
+                                + "': no se sabe cuál");
+                    } else if (!interfazTiene(i, sym)) {
+                        err(e.line, e.column, "'" + e.key + "' no tiene '" + (sym instanceof FunctionSymbol
+                                ? firmaCompleta((FunctionSymbol) sym) : "property " + sym.name) + "'");
+                    }
+                }
+            }
+            if (ov != null) {
+                if (!ov.entries.isEmpty()) err(ov.line, ov.column, "@override no lleva nada dentro: @override{}");
+                if (!redefineDelPadre(cls, sym))
+                    err(ov.line, ov.column, "'" + sym.name + "' lleva @override y no redefine nada de '"
+                            + (cls.baseClass != null ? cls.baseClass.name : "?") + "'");
+            }
+        }
+    }
+
+    /** ¿Tiene la interfaz (o una de las que hereda) ese miembro, con la misma clave? */
+    private boolean interfazTiene(ClassSymbol iface, Symbol sym) {
+        List<ClassSymbol> l = new ArrayList<>();
+        iface.interfacesAplanadas(l);
+        for (ClassSymbol i : l) {
+            Symbol m = i.instanceMembers.tryLookup(sym.name);
+            if (sym instanceof FunctionSymbol && m instanceof FunctionSymbol) {
+                String k = claveMiembro((FunctionSymbol) sym);
+                for (FunctionSymbol f = (FunctionSymbol) m; f != null; f = f.nextOverload)
+                    if (k != null && k.equals(claveMiembro(f))) return true;
+            } else if (sym instanceof PropertySymbol && m instanceof PropertySymbol) {
+                String a = claveTipo(((PropertySymbol) sym).type), b = claveTipo(((PropertySymbol) m).type);
+                if (a != null && a.equals(b)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** ¿Redefine `sym` (método o property de `cls`) uno no privado de algún padre, con la misma clave? */
+    private boolean redefineDelPadre(ClassSymbol cls, Symbol sym) {
+        for (ClassSymbol a = cls.baseClass; a != null; a = a.baseClass) {
+            Symbol m = a.instanceMembers.tryLookup(sym.name);
+            if (sym instanceof FunctionSymbol && m instanceof FunctionSymbol) {
+                String k = claveMiembro((FunctionSymbol) sym);
+                for (FunctionSymbol f = (FunctionSymbol) m; f != null; f = f.nextOverload)
+                    if (!f.isPrivate && !f.isStatic && k != null && k.equals(claveMiembro(f))) return true;
+            } else if (sym instanceof PropertySymbol && m instanceof PropertySymbol) {
+                if (!((PropertySymbol) m).isPrivate) return true;
+            }
+        }
+        return false;
+    }
+
+    /** La clave de MOD9 de un método (`area()d`), o null si un tipo no está resuelto (ya lo dijo otro error). */
+    private String claveMiembro(FunctionSymbol f) {
+        try { return Symbol.ClaveCanonica.metodo(f, moduloDeLasClaves); }
+        catch (Symbol.ClaveCanonica.TipoSinResolver e) { return null; }
+    }
+
+    private String claveTipo(BpType t) {
+        try { return Symbol.ClaveCanonica.tipo(t, moduloDeLasClaves); }
+        catch (Symbol.ClaveCanonica.TipoSinResolver e) { return null; }
+    }
+
+    /** `area(): double`, `mueve(dx: integer, dy: integer)`: la firma, para los mensajes. */
+    private static String firmaCompleta(FunctionSymbol f) {
+        StringBuilder sb = new StringBuilder(f.name).append('(');
+        for (int i = 0; i < f.params.size(); i++) {
+            ParamSymbol p = f.params.get(i);
+            if (i > 0) sb.append(", ");
+            sb.append(p.name).append(": ").append(p.type != null ? p.type.display() : "?");
+        }
+        sb.append(')');
+        if (f.returnType != null) sb.append(": ").append(f.returnType.display());
+        return sb.toString();
+    }
+
+    private static int lineaDe(Symbol s, ClassSymbol cls) { return s.line > 0 ? s.line : cls.line; }
+    private static int columnaDe(Symbol s, ClassSymbol cls) { return s.line > 0 ? s.column : cls.column; }
 
     // ============================================================
     // OVERRIDES Y FINAL
@@ -4064,6 +4421,11 @@ public final class SemanticAnalyzer {
     // VISIBILIDAD
     // ============================================================
     private void checkVisibility(int line, int col, Symbol sub, ClassSymbol owner) {
+        // V8 H7.3 — lo de una interfaz es público por definición: es lo que exporta quien la implementa
+        if (sub instanceof FunctionSymbol && ((FunctionSymbol) sub).ownerClass != null
+                && ((FunctionSymbol) sub).ownerClass.isInterface) return;
+        if (sub instanceof PropertySymbol && ((PropertySymbol) sub).ownerClass != null
+                && ((PropertySymbol) sub).ownerClass.isInterface) return;
         boolean isPublic;
         if      (sub instanceof FunctionSymbol) isPublic = ((FunctionSymbol) sub).isPublic;
         else if (sub instanceof VarSymbol)      isPublic = ((VarSymbol) sub).isPublic;
@@ -4251,65 +4613,98 @@ public final class SemanticAnalyzer {
      *  PK es lo que pone en cualquier esquema. */
     private static final Set<String> BD_CLAVES_PROP  = new HashSet<>(java.util.Arrays.asList("columna", "pk"));
 
+    /** V8 H7.3 (`#756`) — `@implement{ A, B }`: el método (o la property) implementa uno de esas interfaces; es
+     *  obligatoria en lo que implementa una interfaz de la cabecera de su clase. `@override{}`: redefine uno del padre;
+     *  opcional («es mas claro y los que vengan de Java lo podrian hechar de menos», Eduardo). Aquí sólo el sitio; lo
+     *  que dicen se comprueba con los tipos resueltos ({@link #checkInterfaces}). */
+    private static final String ANN_IMPLEMENT = "implement";
+    private static final String ANN_OVERRIDE = "override";
+
     private void validateAnnotations(ModuleNode mod) {
         for (ITopLevelDecl def : mod.defs) {
             if (def instanceof ClassDef) {
                 ClassDef cd = (ClassDef) def;
-                boolean esEntidad = cd.annotation != null;
-                if (esEntidad) validarBdEnClase(cd);
+                Ast.Annotation bdClase = null;
+                for (Ast.Annotation a : cd.annotations) {
+                    if (!nombreConocido(a) || !unaVez(cd, a)) continue;
+                    if (ANN_BD.equals(a.name)) bdClase = a;
+                    else err(a.line, a.column, "'@" + a.name + "' va sobre un método o una property de una clase, no"
+                            + " sobre la " + (cd.isInterface ? "interfaz" : "clase"));
+                }
+                boolean esEntidad = bdClase != null;
+                if (esEntidad) validarBdEnClase(cd, bdClase);
                 List<PropertyDef> pks = new ArrayList<>();
+                List<Ast.Annotation> pksAnn = new ArrayList<>();
                 for (ITopLevelDecl m : cd.members) {
                     if (!(m instanceof Node)) continue;
                     Node n = (Node) m;
-                    if (n.annotation == null) continue;
-                    if (!(m instanceof PropertyDef)) {
-                        rechazarAnotacion(n, "dentro de una clase, '@" + n.annotation.name
-                                + "' sólo puede ir sobre una `property`");
-                        continue;
+                    for (Ast.Annotation a : n.annotations) {
+                        if (!nombreConocido(a) || !unaVez(n, a)) continue;
+                        if (!ANN_BD.equals(a.name)) {
+                            if (!(m instanceof FuncDef) && !(m instanceof PropertyDef))
+                                err(a.line, a.column, "'@" + a.name + "' va sobre un método o una property");
+                            else if (cd.isInterface)
+                                err(a.line, a.column, "'@" + a.name + "' va en la clase que implementa, no en la interfaz");
+                            continue;
+                        }
+                        if (!(m instanceof PropertyDef)) {
+                            err(a.line, a.column, "dentro de una clase, '@" + a.name
+                                    + "' sólo puede ir sobre una `property`");
+                            continue;
+                        }
+                        PropertyDef p = (PropertyDef) m;
+                        validarBdEnProperty(p, a, cd, esEntidad);
+                        if (esEntidad && a.get("pk") != null) { pks.add(p); pksAnn.add(a); }
                     }
-                    PropertyDef p = (PropertyDef) m;
-                    validarBdEnProperty(p, cd, esEntidad);
-                    if (esEntidad && p.annotation.get("pk") != null) pks.add(p);
                 }
                 // Una entidad necesita saber cuál es su clave primaria: sin ella
                 // no hay `loadById`, ni `update`, ni `delete`. Y sólo UNA: las
                 // claves compuestas no están soportadas, y decirlo aquí es mejor
                 // que emitir un DAO que hace algo raro con la segunda.
                 if (esEntidad && pks.isEmpty()) {
-                    err(cd.annotation.line, cd.annotation.column, "la entidad '" + cd.name
+                    err(bdClase.line, bdClase.column, "la entidad '" + cd.name
                             + "' no dice cuál es su clave primaria: marca una property con `@BD{ pk }`");
                 } else if (pks.size() > 1) {
                     for (int i = 1; i < pks.size(); i++) {
-                        PropertyDef extra = pks.get(i);
-                        err(extra.annotation.line, extra.annotation.column, "'" + cd.name
+                        Ast.Annotation extra = pksAnn.get(i);
+                        err(extra.line, extra.column, "'" + cd.name
                                 + "' ya marcó '" + pks.get(0).name.name + "' como `pk`; las claves compuestas"
                                 + " todavía no están soportadas");
                     }
                 }
-            } else if (def instanceof Node && ((Node) def).annotation != null) {
-                rechazarAnotacion((Node) def, "'@" + ((Node) def).annotation.name
-                        + "' sólo puede ir sobre una `class` (la entidad) o sobre una `property` suya");
+            } else if (def instanceof Node) {
+                for (Ast.Annotation a : ((Node) def).annotations) {
+                    if (!nombreConocido(a)) continue;
+                    if (ANN_BD.equals(a.name))
+                        err(a.line, a.column, "'@" + a.name
+                                + "' sólo puede ir sobre una `class` (la entidad) o sobre una `property` suya");
+                    else
+                        err(a.line, a.column, "'@" + a.name + "' va sobre un método o una property de una clase");
+                }
             }
         }
     }
 
-    /** Nombre desconocido o sitio equivocado: un solo mensaje, con el porqué. */
-    private void rechazarAnotacion(Node n, String motivo) {
-        Ast.Annotation a = n.annotation;
-        err(a.line, a.column, motivo);
+    /** V8 H7.3 — cada anotación, una vez por declaración. */
+    private boolean unaVez(Node n, Ast.Annotation a) {
+        for (Ast.Annotation b : n.annotations) {
+            if (b == a) return true;
+            if (b.name.equals(a.name)) {
+                err(a.line, a.column, "'@" + a.name + "' repetida: una vez por declaración");
+                return false;
+            }
+        }
+        return true;
     }
 
     private boolean nombreConocido(Ast.Annotation a) {
-        if (ANN_BD.equals(a.name)) return true;
+        if (ANN_BD.equals(a.name) || ANN_IMPLEMENT.equals(a.name) || ANN_OVERRIDE.equals(a.name)) return true;
         err(a.line, a.column, "anotación desconocida '@" + a.name
-                + "'; la única que existe hoy es '@" + ANN_BD + "'");
+                + "'; las que existen son '@" + ANN_BD + "', '@" + ANN_IMPLEMENT + "' y '@" + ANN_OVERRIDE + "'");
         return false;
     }
 
-    private void validarBdEnClase(ClassDef cd) {
-        Ast.Annotation a = cd.annotation;
-        if (!nombreConocido(a)) return;
-
+    private void validarBdEnClase(ClassDef cd, Ast.Annotation a) {
         clavesConocidas(a, BD_CLAVES_CLASE, "una clase");
 
         Ast.AnnEntry tabla = a.get("tabla");
@@ -4323,10 +4718,7 @@ public final class SemanticAnalyzer {
         }
     }
 
-    private void validarBdEnProperty(PropertyDef p, ClassDef cd, boolean claseEsEntidad) {
-        Ast.Annotation a = p.annotation;
-        if (!nombreConocido(a)) return;
-
+    private void validarBdEnProperty(PropertyDef p, Ast.Annotation a, ClassDef cd, boolean claseEsEntidad) {
         // Una propiedad no puede mapear a una columna si su clase no es una
         // entidad: no hay tabla contra la que mapear.
         if (!claseEsEntidad) {

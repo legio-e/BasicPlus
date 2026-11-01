@@ -290,5 +290,12 @@
  * que Forms resuelve por nombre al cargar (Gui.bindMember). Antes lo llamaba ANIDADO un builtin
  * (__guiInvokeBySlot, el puente) y no podia ceder; asi es una llamada normal en el hilo. */
 #define OP_INVOKE_SLOT         0xBE   /* numArgs u8        : ( this ...args slot -- ) */
+/* 0xBF-0xC1 — V8 H7.3 (#756): LAS INTERFACES DE CLASE. La llamada por una interfaz lleva dos refs: la interfaz (su
+ * bloque en la arena, que es su identidad) y el metodo (su posicion en la lista aplanada de la interfaz); la ranura la
+ * da la tabla de esa interfaz en la clase del objeto (vm->ifaz_tabla), y desde ahi es INVOKE_VIRTUAL. `is` y la
+ * conversion a una interfaz miran la lista de la clase del objeto. Espejo de OpCode.java. */
+#define OP_INVOKE_IFAZ_REF     0xBF   /* idxI u16, idxM u16, numArgs u8 : ( this ...args -- ret ) */
+#define OP_INSTANCEOF_IFAZ_REF 0xC0   /* idx u16           : ( obj -- int ) */
+#define OP_CHECKCAST_IFAZ_REF  0xC1   /* idx u16, name_off i16 : ( obj -- obj ), si no, RuntimeError que nombra el tipo */
 
 #endif /* BPVM_OPCODES_H */

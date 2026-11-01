@@ -510,6 +510,8 @@ namespace Cs2Jc
             var ctor = m.GetSymbolInfo(oc).Symbol as IMethodSymbol;
             var tipo = m.GetTypeInfo(oc).Type as INamedTypeSymbol;
             if (ctor == null || tipo == null) return Rechaza(oc, Porque.Pendiente("un new sin resolver"));
+            // `new IFoo()`: una interfaz COM ([CoClass]); una interfaz no se construye
+            if (tipo.TypeKind == TypeKind.Interface) return Rechaza(oc, Porque.Fuera(Porque.Interop));
             if (oc.Initializer != null && !sinInicializador) return Rechaza(oc.Initializer, Porque.Pendiente("inicializadores de objetos, fuera de una declaración"));
             if (!DelPrograma(tipo)) return BibliotecaNuevo(oc, ctor, tipo);
             CompruebaAcceso(ctor, oc);
@@ -562,8 +564,10 @@ namespace Cs2Jc
             {
                 var ti = TipoEnJc(b.Left);
                 var td = TipoEnJc(b.Right);
+                // H7.3 (#756): con una interfaz, JC compara con cualquier objeto (la identidad), como C#
+                bool conInterfaz = ti?.TypeKind == TypeKind.Interface || td?.TypeKind == TypeKind.Interface;
                 if (ti != null && td != null && !ti.IsValueType && !td.IsValueType && !EsCadena(ti) && !EsCadena(td)
-                    && !SymbolEqualityComparer.Default.Equals(ti, td))
+                    && !SymbolEqualityComparer.Default.Equals(ti, td) && !conInterfaz)
                     return Rechaza(b, Porque.H7(Porque.IgualdadRefs));
             }
             // una cadena con lo que sea: C# mete lo que no es cadena en una caja para unirlo; JC lo une sin ella
@@ -725,7 +729,7 @@ namespace Cs2Jc
                     switch (nt.TypeKind)
                     {
                         case TypeKind.Class:
-                        case TypeKind.Interface:                       // una interfaz simple es una clase base
+                        case TypeKind.Interface:                       // H7.3 (#756): la interfaz de JC
                         case TypeKind.Enum: return NombreTipo(nt);
                         case TypeKind.Struct: return Rechaza(donde, Porque.H7(Porque.Struct));
                         default: return Rechaza(donde, Porque.Pendiente("tipo " + nt.TypeKind));

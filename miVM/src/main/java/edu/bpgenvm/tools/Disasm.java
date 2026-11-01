@@ -674,6 +674,14 @@ public class Disasm {
                 int idx = (int) (raw & 0xFFFF);
                 return String.format("handler=%+d (-> @%d), catch=ext[%d]  ; %s", rel, instAddr + rel, idx, nombreExt(idx, imports));
             }
+            /* V8 H7.3 (#756) — INVOKE_IFAZ_REF: la interfaz, el método y los argumentos. */
+            case IDX_U16_IDX_U16_NUMARGS_U8: {
+                int idxI = (int) ((raw >> 24) & 0xFFFF);
+                int idxM = (int) ((raw >> 8) & 0xFFFF);
+                int numArgs = (int) (raw & 0xFF);
+                return String.format("ext[%d] ext[%d] args=%d  ; %s %s", idxI, idxM, numArgs,
+                        nombreExt(idxI, imports), nombreExt(idxM, imports));
+            }
             default:
                 return "?";
         }

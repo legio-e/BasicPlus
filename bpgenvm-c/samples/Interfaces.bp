@@ -1,0 +1,120 @@
+// Interfaces.bp — V8 H7.3 (#756, 1-nov): las interfaces de clase (Eduardo: «si se pueden utilizar interfaces estoy
+// encantado. Y si, la herencia múltiple de tipos»). Una clase tiene un padre y las interfaces que quiera; una interfaz
+// hereda de varias; lleva métodos y properties. Aquí: la llamada por una interfaz, la implementación heredada del padre
+// (Figura.nombre, que no sabe nada de Forma), una property por la interfaz (leer y escribir), un método que implementa
+// dos a la vez, `instanceof`, la conversión (y la que falla, con el nombre de la interfaz), `==`, una hija que redefine
+// sin repetir la interfaz (hereda la tabla del padre) y un array de interfaces recorrido con `for`. `@implement` es
+// obligatoria en lo que implementa una interfaz de la cabecera; `@override`, opcional. Es de paridad (está en el corpus)
+// y se escribe en JC (`class Cuadrado : Figura, Poligono, Etiquetado`).
+// mod8: fuera — las interfaces son del enlace tardío (MOD9): la tabla de cada clase la construye el cargador por clave
+module Interfaces
+
+  public interface Forma
+    function area(): double
+    function nombre(): string
+  end Forma
+
+  public interface Poligono extends Forma
+    function lados(): integer
+  end Poligono
+
+  public interface Etiquetado
+    property etiqueta: string
+  end Etiquetado
+
+  public interface Nombrado
+    function nombre(): string
+  end Nombrado
+
+  public class Figura
+    public function describe(): string
+      return "una figura"
+    end describe
+    public function nombre(): string
+      return "figura"
+    end nombre
+  end Figura
+
+  public class Cuadrado extends Figura implements Poligono, Etiquetado
+    var lado: double
+    @implement{ Etiquetado }
+    public property etiqueta: string
+    public function Cuadrado(l: double)
+      this.lado := l
+      this.etiqueta := "C"
+    end Cuadrado
+    @implement{ Poligono }
+    public function area(): double
+      return this.lado * this.lado
+    end area
+    @implement{ Poligono }
+    public function lados(): integer
+      return 4
+    end lados
+  end Cuadrado
+
+  public class Circulo implements Forma, Nombrado
+    var radio: double
+    public function Circulo(r: double)
+      this.radio := r
+    end Circulo
+    @implement{ Forma }
+    public function area(): double
+      return 3.0 * this.radio * this.radio
+    end area
+    @implement{ Forma, Nombrado }
+    public function nombre(): string
+      return "circulo"
+    end nombre
+  end Circulo
+
+  public class CuadradoGrande extends Cuadrado
+    public function CuadradoGrande(l: double)
+      super(l)
+    end CuadradoGrande
+    @override{}
+    public function area(): double
+      return 100.0
+    end area
+  end CuadradoGrande
+
+  function total(fs: Forma[]): double
+    var t: double := 0.0
+    for f in fs do
+      t := t + f.area()
+    next
+    return t
+  end total
+
+  function Main()
+    var c: Cuadrado := Cuadrado(2.0)
+    var f: Forma := c
+    var g: Forma := Circulo(1.0)
+    print f.nombre(), f.area()
+    print g.nombre(), g.area()
+    var p: Poligono := c
+    print "lados", p.lados(), p.area()
+    var e: Etiquetado := c
+    print "etiqueta", e.etiqueta
+    e.etiqueta := "cuadrado de 2"
+    print "etiqueta", c.etiqueta
+    var n: Nombrado := Circulo(2.0)
+    print "nombrado", n.nombre(), n instanceof Forma
+    print "is", f instanceof Poligono, g instanceof Poligono, f instanceof Etiquetado
+    var o: Object := c
+    print "Object", o instanceof Forma, o.toString() == f.toString()
+    var p2: Poligono := Poligono(f)
+    print "conversion", p2.lados()
+    print "igual", f == p, f == g
+    var cg: Forma := CuadradoGrande(3.0)
+    print "grande", cg.area(), cg.nombre()
+    print "total", total([f, g, cg])
+    try
+      var mala: Poligono := Poligono(g)
+      print "no deberia", mala.lados()
+    catch ex: RuntimeError
+      print "error:", ex.msg
+    endtry
+    print "fin"
+  end Main
+end Interfaces

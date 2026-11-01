@@ -182,6 +182,17 @@ end L16
     (¿falta el import de su módulo?)`) y no ve lo que hereda. La excepción es `Core`,
     que se importa siempre (**L16**).
 
+- **L19 — las interfaces, como las de Java antes de Java 8** (V8/H7.3, `#756`; manual §9.8).
+  Una interfaz lleva métodos (sólo su firma) y properties; no lleva:
+  - **métodos con cuerpo** (los `default` de Java, o los de C# 8): todo lo pone la clase,
+    propio o heredado de su padre;
+  - **implementación explícita** (`void I.M()` de C#): una clase tiene un solo método con
+    cada firma, y si dos interfaces lo piden, ese método vale para las dos;
+  - **parámetros de tipo** (`Comparable<T>`), ni clases abstractas.
+  Y además: un `Thread` y sus hijas no implementan interfaces; las interfaces son del
+  formato 9 (el de por defecto); y una `native` no llama por una interfaz (rodeo: llamar
+  desde BP y pasarle a la native lo que haga falta).
+
 - **L7 — `owner`/`final` no aplican a property de módulo.** Por diseño: `owner`
   pide FREE_REF en cascada (solo campos de instancia); `final` aplica a herencia
   (los módulos no la tienen). Reabrible si surge caso de uso.

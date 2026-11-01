@@ -1,0 +1,77 @@
+// InterfacesMal.bp — V8 H7.3 (#756): lo que una interfaz no admite, y lo que una clase tiene que cumplir para
+// implementarla (V8_IDEAS §E10, lo decidido por Eduardo). Tiene que FALLAR, y con estos mensajes.
+module InterfacesMal
+
+  public interface Forma
+    function area(): double
+  end Forma
+
+  // 1. una interfaz sólo tiene métodos y properties
+  public interface ConCampo
+    var x: integer
+  end ConCampo
+
+  // 2. dos interfaces que heredan en ciclo
+  public interface A extends B
+  end A
+  public interface B extends A
+  end B
+
+  // 3. le falta el método: tiene otro con el mismo nombre y otro retorno
+  public class SinArea implements Forma
+    public function area(): integer
+      return 1
+    end area
+  end SinArea
+
+  // 4. lo implementa, pero no es public
+  public class Escondida implements Forma
+    @implement{ Forma }
+    function area(): double
+      return 1.0
+    end area
+  end Escondida
+
+  // 5. lo implementa sin decirlo (la anotación es obligatoria)
+  public class SinMarca implements Forma
+    public function area(): double
+      return 1.0
+    end area
+  end SinMarca
+
+  // 6. @implement que nombra algo que no es una interfaz suya, @override que no redefine nada, y una anotación dos veces
+  public class MalMarcada implements Forma
+    @implement{ Otra }
+    public function area(): double
+      return 2.0
+    end area
+    @override{}
+    public function nueva(): integer
+      return 3
+    end nueva
+  end MalMarcada
+
+  public class Repetida implements Forma
+    @implement{ Forma }
+    @implement{ Forma }
+    public function area(): double
+      return 2.0
+    end area
+  end Repetida
+
+  // 7. extiende una interfaz, implementa una clase
+  public class Revuelta extends Forma implements MalMarcada
+  end Revuelta
+
+  // 8. un Thread no es un Object: no implementa interfaces
+  public class Hilo extends Thread implements Forma
+    public function area(): double
+      return 0.0
+    end area
+  end Hilo
+
+  function Main()
+    var f: Forma := Forma()   // 9. una interfaz no se construye
+    print "no deberia llegar"
+  end Main
+end InterfacesMal

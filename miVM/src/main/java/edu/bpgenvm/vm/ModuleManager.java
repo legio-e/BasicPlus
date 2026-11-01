@@ -1111,6 +1111,9 @@ public class ModuleManager {
             if (m.clases == null) continue;
             for (edu.bpgenvm.bytecode.TablasMod9.Clase c : m.clases) enlaceTardio.asegurar(enlaceTardio.buscar(m.exportPrefix + c.name));
         }
+        // V8 H7.3 (#756) — las interfaces de cada clase, con sus tablas, y la tabla ordenada que mira la VM (antes de
+        // las refs: un SUBTIPO contra una interfaz mira la lista de la clase)
+        enlaceTardio.construirInterfaces(loadedModules);
         for (ModuleMetadata m : loadedModules) enlaceTardio.resolverRefs(m);
         enlaceTardio.verificar(loadedModules);
         if (enlaceTardio.arenaFin() > nextFreeAddress) nextFreeAddress = ((enlaceTardio.arenaFin() + 63) & ~63);

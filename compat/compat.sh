@@ -125,7 +125,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch BreakTry CampoFijo FirmaUsa \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha NatTuplas CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero PrintSinSalto OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles FormsSetter CedeCero DescarteAncho TempRetiene FinallyAnidado RtcPc RtcEnHora FicheroOCarpeta GuiOrdenHijos OwnerReasigna GuiArbolG2 GcHondo OwnerHondo EvReceptorMuerto InvocaRanura BusDosHilos FicheroYaAbierto DestruyeArbol DestruyeLanza DestruyeGc DestruyeFinal DestruyeTrasError SueltaRecursos OwnerHondoDtor bpgenvm-c/samples/importhondo/ImportHondo.bp StrDosCaminos StrCursor StrPorBytes MapDesplaza StrOrden MoveSoloLectura Utf8Descodifica Utf8Gui ArrayEnorme TcpCloseSuelto ParseNumero CharCodeAtFuera JsonErrores NatDoContinue UnaLineaAlFinal RaiseEnSet SonidoParalelo PilasDelHeap PilaOperandos DestruyeBoton IntATexto Compuestos Iif NatCompuestos Genericos EnumEntero Eol"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha NatTuplas CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero PrintSinSalto OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles FormsSetter CedeCero DescarteAncho TempRetiene FinallyAnidado RtcPc RtcEnHora FicheroOCarpeta GuiOrdenHijos OwnerReasigna GuiArbolG2 GcHondo OwnerHondo EvReceptorMuerto InvocaRanura BusDosHilos FicheroYaAbierto DestruyeArbol DestruyeLanza DestruyeGc DestruyeFinal DestruyeTrasError SueltaRecursos OwnerHondoDtor bpgenvm-c/samples/importhondo/ImportHondo.bp StrDosCaminos StrCursor StrPorBytes MapDesplaza StrOrden MoveSoloLectura Utf8Descodifica Utf8Gui ArrayEnorme TcpCloseSuelto ParseNumero CharCodeAtFuera JsonErrores NatDoContinue UnaLineaAlFinal RaiseEnSet SonidoParalelo PilasDelHeap PilaOperandos DestruyeBoton IntATexto Compuestos Iif NatCompuestos Genericos EnumEntero Eol Interfaces InterfacesUsa"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -323,6 +323,23 @@ check_parity() {
     if [ ! -f "$bp" ]; then
       echo "  SKIP $s (no existe $bp)"; skip=$((skip+1)); continue
     fi
+    # V8/H7.2 (#748, 31-oct) — un sample que usa lo que MOD8 no sabe expresar (lo que pide la tabla de clases de MOD9:
+    # el INSTANCEOF de una clase de otro modulo) lo DECLARA en su cabecera, `// mod8: fuera — <por que>`, y la pasada
+    # MOD8 lo deja fuera, a la vista: un SKIP que dice la razon. Igual que la de smp, una marca que no conoce es ROJO.
+    # V8/H7.3 (#756, 1-nov) — ANTES de compilar: lo de MOD9 puede no compilar en MOD8 (las interfaces no compilan), y su
+    # SKIP tiene que decir su razon, no «no compila».
+    if [ "$PAR_FORMATO" = "8" ]; then
+      local mod8_marca
+      mod8_marca="$(sed -nE 's|^//[[:space:]]*mod8:[[:space:]]*(.*)$|\1|p' "$bp" | head -1 | tr -d '\r')"
+      case "$mod8_marca" in
+        "") ;;
+        "fuera"|"fuera"[[:space:]]*)
+          echo "  SKIP $s — // mod8: $(printf '%s' "$mod8_marca" | cut -c1-110)"; skip=$((skip+1)); continue ;;
+        *)
+          echo "  FAIL $s — la marca '// mod8: $mod8_marca' no la conoce el arnes (es 'fuera')"
+          fail=$((fail+1)); continue ;;
+      esac
+    fi
     rm -rf "$WORK"/*.mod "$WORK/src" "$WORK/p.bpbuild"
     # V6/G2-4 — un sample puede necesitar un fichero al lado (GuiWinJson carga
     # el main.win REAL de formdemo). Lo declara el en su cabecera, con
@@ -403,21 +420,6 @@ check_parity() {
     # (con su por que) lo deja fuera de ESTA pasada, a la vista: un SKIP que dice la
     # razon. El arnes no adivina cuales son; y una marca que no conoce es ROJO: una
     # errata dejaria el sample comparado de otra manera que la que dice su cabecera.
-    # V8/H7.2 (#748, 31-oct) — un sample que usa lo que MOD8 no sabe expresar (lo que pide la tabla de clases de MOD9:
-    # el INSTANCEOF de una clase de otro modulo) lo DECLARA en su cabecera, `// mod8: fuera — <por que>`, y la pasada
-    # MOD8 lo deja fuera, a la vista: un SKIP que dice la razon. Igual que la de smp, una marca que no conoce es ROJO.
-    if [ "$PAR_FORMATO" = "8" ]; then
-      local mod8_marca
-      mod8_marca="$(sed -nE 's|^//[[:space:]]*mod8:[[:space:]]*(.*)$|\1|p' "$bp" | head -1 | tr -d '\r')"
-      case "$mod8_marca" in
-        "") ;;
-        "fuera"|"fuera"[[:space:]]*)
-          echo "  SKIP $s — // mod8: $(printf '%s' "$mod8_marca" | cut -c1-110)"; skip=$((skip+1)); continue ;;
-        *)
-          echo "  FAIL $s — la marca '// mod8: $mod8_marca' no la conoce el arnes (es 'fuera')"
-          fail=$((fail+1)); continue ;;
-      esac
-    fi
     smp_marca=""; ordena=""
     if [ -n "$PAR_C_ARGS$PAR_J_ARGS" ]; then
       smp_marca="$(sed -nE 's|^//[[:space:]]*smp:[[:space:]]*(.*)$|\1|p' "$bp" | head -1 | tr -d '\r')"
