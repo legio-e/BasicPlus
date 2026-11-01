@@ -606,10 +606,8 @@ public final class AotCEmitter {
         BpType t = (semInfo != null) ? semInfo.exprTypes.get(c) : null;
         if (!(t instanceof BpType.ClassType)) return null;
         Symbol.ClassSymbol cls = ((BpType.ClassType) t).cls;
-        // V8 H7.3 (#756) — `Forma(x)` es una conversión a una interfaz (una interfaz no se construye): no se traduce
-        if (cls.isInterface && cls.name.equals(calleeSimpleName(c.callee)))
-            throw new UnsupportedAotException("AOT: convertir a la interfaz '" + cls.name + "' (line " + c.line
-                    + ") no se traduce en una native; hazlo fuera de la native");
+        // Una conversión (`Perro(a)`, y la de una interfaz, `Forma(x)`, de H7.3) no llega aquí: la para emitExpr antes,
+        // por `refCasts` (#757)
         return cls.name.equals(calleeSimpleName(c.callee)) ? cls : null;
     }
 
@@ -2814,6 +2812,20 @@ public final class AotCEmitter {
 
         if (e instanceof Ast.CallExpr) {
             Ast.CallExpr c = (Ast.CallExpr) e;
+
+            /* #757 — una CONVERSIÓN de referencia (`Perro(a)`, `Lib.Perro(a)`, `Forma(x)`, `string(o)`) no se traduce:
+             * su comprobación (la de CHECKCAST: que el objeto sea de ese tipo, o lanza) vive en el intérprete. Quién es
+             * conversión lo decidió el semántico (`refCasts`), como para MivmEmitter; antes sólo se miraba el tipo, y
+             * `Perro(a)` salía como una construcción —la factoría de `Perro` con el handle de `a` de argumento, si su
+             * constructor pedía un entero—, sin un error. */
+            if (semInfo != null && semInfo.refCasts.contains(c)) {
+                BpType t = semInfo.exprTypes.get(c);
+                Symbol.ClassSymbol cls = (t instanceof BpType.ClassType) ? ((BpType.ClassType) t).cls : null;
+                String destino = (cls == null) ? "'" + (t != null ? t.display() : "?") + "'"
+                               : cls.isInterface ? "la interfaz '" + cls.name + "'" : "'" + cls.name + "'";
+                throw new UnsupportedAotException("AOT: convertir a " + destino + " (line " + c.line
+                        + ") no se traduce en una native; hazlo fuera de la native");
+            }
 
             if (c.callee instanceof Ast.MemberAccessExpr) {
                 Ast.MemberAccessExpr ma = (Ast.MemberAccessExpr) c.callee;

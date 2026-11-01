@@ -69,6 +69,8 @@ ArrayFijoMal|de clase tiene que ser
 ArrayFijoMal|'buf' es un array fijo: no es una referencia
 NativeCampo|en el metodo native 'Caja.doble'
 NativeCampo|lee el campo 'n'
+NativeConversion|en la funcion native 'patasDe'
+NativeConversion|convertir a 'Perro'
 LocalSinValor|'total' se usa sin tener valor
 LocalSinValor|'nombre' se usa sin tener valor
 SwitchMal|switch sobre 'double': un real no se compara

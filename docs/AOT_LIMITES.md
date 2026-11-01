@@ -193,7 +193,12 @@ getter) · **métodos y properties estáticos** («privado/super/estático pendi
 método o leer una property por una interfaz («una llamada por una interfaz no se traduce en
 una native»), también un método de `Object` sobre ella, y convertir a una interfaz
 (`Forma(x)`): la ranura de un método de interfaz no es una —cada clase lo tiene en su
-sitio— y el puente no lleva la tabla de interfaces de la clase (`MOD_FORMAT.md` §13.9).
+sitio— y el puente no lleva la tabla de interfaces de la clase (`MOD_FORMAT.md` §13.9) ·
+**la conversión de referencia** (V8, `#757`): `Perro(a)` con `a` un `Animal`, `string(o)`
+—y la de una interfaz, la de arriba—, «convertir a 'Perro' … no se traduce en una native»: su
+comprobación (que el objeto sea de ese tipo, o lanza) vive en el intérprete. Hasta el 1-nov,
+`Perro(a)` se tomaba por una construcción: la factoría de `Perro` con el handle de `a` de
+argumento si el constructor pedía un entero, sin un error (`samples/errores/NativeConversion.bp`).
 Cada una tiene su mensaje propio con la línea,
 y es **el mismo error en una native de módulo que en un método `native` de una
 clase** («en el metodo native 'Caja.lee' (linea 7): …»). Ficha `#519` (V7, 24-sep,
@@ -364,5 +369,6 @@ cada alocación convierte esa ventana de lotería en certeza.
 | una tupla con `float`, `long` o `double` | `DestructAssignStmt`, `TupleExpr` | el puente native→BP lleva valores de 4 bytes: desestructúrala en BP y pásale los campos a la native. Las demás formas, hechas (`#577`, 7-oct) |
 | `for … in` sobre colecciones | `ForInRange` | el `for` numérico sí |
 | `instanceof` | `InstanceOfExpr` | sin medir siquiera: el fragmento que tenía no producía el nodo |
+| la conversión de referencia (`Perro(a)`, `string(o)`, `Forma(x)`) | `CallExpr` en `refCasts` | su comprobación (la de `CHECKCAST`) vive en el intérprete: conviértelo fuera de la native y pásale el objeto ya convertido (`#757`) |
 | eventos, `parallel`, referencias a método, `enum` | varios | aquí no es emitir C: es decidir qué significan esas construcciones cuando el que corre es código nativo y no la VM |
 

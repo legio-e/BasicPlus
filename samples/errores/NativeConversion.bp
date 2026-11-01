@@ -1,0 +1,29 @@
+// NativeConversion.bp — NO COMPILA, a propósito (#757, V8, 1-nov): una conversión de referencia dentro de una `native`
+// (`Perro(a)`, con `a` un `Animal`) es un error: su comprobación —que el objeto sea de esa clase, o lanza— vive en el
+// intérprete. La salida: convertir fuera de la native y pasarle el objeto ya convertido, o quitar `native`.
+//
+// Antes de #757 esto compilaba sin decir nada: el AOT lo tomaba por una construcción y llamaba a la factoría de `Perro`
+// con el handle de `a` de argumento (su constructor pide un entero): un `Perro` nuevo, con el handle por patas.
+module NativeConversion
+  public class Animal
+    public property patas: integer
+    public function Animal(n: integer)
+      this.patas := n
+    end Animal
+  end Animal
+  public class Perro extends Animal
+    public function Perro(n: integer)
+      super(n)
+    end Perro
+  end Perro
+
+  // error: convertir a 'Perro' — la salida: convertir fuera y pasarle un Perro, o quitar `native`
+  native function patasDe(a: Animal): integer
+    var p: Perro := Perro(a)
+    return p.patas
+  end patasDe
+
+  function Main()
+    print patasDe(Perro(4))
+  end Main
+end NativeConversion

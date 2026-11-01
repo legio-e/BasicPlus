@@ -7350,8 +7350,20 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `.mod` corrupto o un fallo del cargador, sí. Es un camino de error, y no se ha visto.
 - **Lo propuesto, sin hacer:** el mismo comportamiento en las dos, el de la VM-C (un fallo de la VM no lo debe atrapar el
   programa), con el mismo texto.
+- **Mirada otra vez el 1-nov, antes de tocarla: la premisa era la mitad.** La VM-C para (no atrapable, salida 1) en
+  `INVOKE_VIRTUAL`, como en sus otros fallos de VM del intérprete —`HALT` fuera del main, `CALL_EXT` sin resolver—, cuyos
+  gemelos de la VM-Java lanzan una excepción de Java (no atrapable por el programa, y también salida 1). Pero una ranura
+  que no se resuelve es un `RuntimeError` atrapable, en las dos VMs y con el mismo texto, en `INVOKE_SLOT` (a
+  propósito: la ranura viene de datos del programa, de Forms), en `INVOKE_IFAZ` (H7.3, `#756`: la ranura sale de la
+  tabla que construye el cargador, como la de `INVOKE_VIRTUAL`) y en el `call_method` del AOT. Y la tabla común de
+  salidas (`#481`, `bpvm_exit_code`) dice que lo que no es culpa del programa —«un bug nuestro o un .mod corrupto que
+  pasó los chequeos»— es el 3, no el 1.
+- **Por decidir (Eduardo):** (1) `INVOKE_VIRTUAL` en la VM-Java, como la VM-C: no atrapable, el mismo texto, salida 1;
+  (2) si `INVOKE_IFAZ` y el `call_method` del AOT, la misma clase de fallo, van igual; (3) la salida, 1 como hoy o 3
+  como dice la tabla (y entonces también los otros fallos de VM del intérprete). Probarlo pide un `.mod` corrompido a
+  propósito: tras un enlace bueno no pasa nunca.
 
-#### 🔵 `#757` — el AOT compila una conversión de referencia como si construyera: en una native, `Perro(a)` (con `a` un `Animal`) llama a la factoría de `Perro` con `a` de argumento si el constructor pide un entero; código equivocado sin un error (abierta el 31-oct, al analizar `#756`; preexistente; **sólo análisis**)
+#### ✅ `#757` — el AOT compila una conversión de referencia como si construyera: en una native, `Perro(a)` (con `a` un `Animal`) llama a la factoría de `Perro` con `a` de argumento si el constructor pide un entero; código equivocado sin un error (abierta el 31-oct, al analizar `#756`; preexistente; **CERRADA el 1-nov**, el commit de `#757`)
 
 - **Cómo salió:** el mapa de `#756` (`V8_IDEAS` §E10): `AotCEmitter` no mira `refCasts`, el conjunto donde el semántico
   apunta que un `C(x)` es una conversión y no una construcción.
@@ -7364,6 +7376,18 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   bits, pasa.
 - **Lo propuesto, sin hacer:** que el AOT mire `refCasts` como el emisor de bytecode; y que la conversión, que hoy no
   tiene, se rechace con su mensaje (como `instanceof`, `AOT_LIMITES.md`), o se haga.
+- **Hecha el 1-nov** (Eduardo: *«Si»*, a la propuesta, con el rechazo): el AOT mira `refCasts` al principio de una
+  llamada (`emitExpr`), como el emisor de bytecode, y una conversión de referencia es un error con su línea: «AOT:
+  convertir a 'Perro' (line N) no se traduce en una native; hazlo fuera de la native». Vale para `Perro(a)`,
+  `Lib.Perro(a)`, `string(o)` (que ya se rechazaba, con el «llama a 'string', que no es…» genérico) y la de una
+  interfaz, `Forma(x)` (la de H7.3, que se miraba en `claseConstruida`: con su texto de siempre). Su comprobación, la
+  de `CHECKCAST`, vive en el intérprete. `Object(a)` no es BP: subir a `Object` es implícito, y el análisis lo rechaza.
+  `samples/errores/NativeConversion.bp` (con el compilador de antes, compila y escribe el `.mod`; `h13-errores.sh`, 87
+  de 87) y `AOT_LIMITES.md`, §6 y la tabla. Los mismos `.mod` en 671 de 712 fuentes (40 no compilan en ninguno; la
+  otra, `NativeConversion`, el sample de error nuevo) y en los 31 de la stdlib (su pack, igual salvo la fecha de la
+  cabecera): ningún sample tenía una conversión dentro de una native. La red, VERDE (15:34; la paridad, 183; MOD8, 180
+  y los 3 SKIP; las pruebas de C, 110/110); `check-jc`, 179 y los 4 SKIP; JUnit, 324. Mono, sin pasar: el traductor no
+  escribe `native`. El IDE, rehecho.
 
 #### ✅ `#756` — las interfaces de clase, en JC y en BP: una clase con un padre y varias interfaces, la llamada por una interfaz, `is` y la conversión (abierta el 31-oct, en H6; **decidida entera el mismo día**: es el hito **H7.3**; **CERRADA el 1-nov**, el commit de H7.3)
 
