@@ -64,7 +64,6 @@ namespace Cs2Jc
 
         // Los fallos de JC que salen al traducir (FICHAS.md)
         public const string SuperProp = "una propiedad por base va a la de la hija";
-        public const string ClaseDespues = "construir (o is, o convertir a, o atrapar) una clase declarada más abajo";
         public const string SuperObject = "super() en una clase sin padre escrito (el suyo es Object)";
 
         // Las mejoras de H7 (#745)

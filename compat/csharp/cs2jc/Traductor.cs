@@ -59,8 +59,6 @@ namespace Cs2Jc
         string AccesoDe(ISymbol s) => abiertos.Contains(s.OriginalDefinition) ? "public" : Acceso(s.DeclaredAccessibility);
         readonly HashSet<string> renombrados = new HashSet<string>();
         readonly HashSet<string> imports = new HashSet<string>();
-        /// El sitio de cada clase en el módulo, para `#751` (no se construye una clase declarada más abajo).
-        readonly Dictionary<ISymbol, int> orden = new Dictionary<ISymbol, int>(SymbolEqualityComparer.Default);
 
         public Traductor(CSharpCompilation comp, SyntaxTree arbol)
         {
@@ -139,7 +137,6 @@ namespace Cs2Jc
                 ordenados.Add(s);
             }
             foreach (var s in tipos) Pon(s);
-            for (int i = 0; i < ordenados.Count; i++) orden[ordenados[i]] = i;
 
             foreach (var s in ordenados) EmiteTipo(s);
             EmiteMain();
@@ -680,18 +677,6 @@ namespace Cs2Jc
             for (var c = claseActual; c != null; c = c.BaseType)
                 if (c.GetMembers(nombre).Any(s => s is IFieldSymbol || s is IPropertySymbol)) return true;
             return false;
-        }
-
-        /// `#751`: una clase no se construye, ni se pregunta con `is`, ni se convierte a ella, ni se atrapa, más arriba
-        /// de donde se declara en el módulo (el emisor revienta); la propia sí (#447).
-        void CompruebaOrden(ITypeSymbol t, SyntaxNode donde)
-        {
-            if (claseActual == null || !(t is INamedTypeSymbol nt) || !DelPrograma(nt)) return;
-            if (nt.TypeKind == TypeKind.Interface) return;   // H7.3: una interfaz va siempre por ref, sin descriptor (#751 no le toca)
-            var o = nt.OriginalDefinition;
-            if (SymbolEqualityComparer.Default.Equals(o, claseActual.OriginalDefinition)) return;
-            if (orden.TryGetValue(o, out int i) && orden.TryGetValue(claseActual.OriginalDefinition, out int j) && i > j)
-                Rechaza(donde, Porque.Fallo("#751", Porque.ClaseDespues));
         }
 
         /// Una interfaz de .NET: las genéricas, de H7; IEnumerable e IEnumerator, el foreach propio (H7); las demás, la

@@ -1,7 +1,8 @@
 // Caso del traductor C# -> JC (V8/H6, el escalón 1): lo privado que usa una clase anidada (en JC son clases aparte, A_B:
 // se escribe public; test-122 y test-190 de Mono), y lock como C#: lo que se cierra se calcula una vez, y si es null,
-// ArgumentNullException (test-524 y test-899). Las anidadas las construye Programa, declarada detrás: que las construya
-// la de fuera, declarada antes en JC, es #751. Se comprueba solo: Main devuelve 0.
+// ArgumentNullException (test-524 y test-899). Las anidadas las construye Programa, declarada detrás (cuando se escribió,
+// que las construyera la de fuera, declarada antes en JC, era #751, cerrada el 1-nov). Se comprueba solo: Main
+// devuelve 0.
 using System;
 
 class A

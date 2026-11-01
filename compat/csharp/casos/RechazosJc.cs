@@ -19,7 +19,7 @@ class Hija : Padre
 
 class Antes
 {
-    public Despues Crea() { return new Despues(); }           // un fallo de JC: #751
+    public Despues Crea() { return new Despues(); }           // era #751 (cerrada el 1-nov): ya no se rechaza
 }
 
 class Despues

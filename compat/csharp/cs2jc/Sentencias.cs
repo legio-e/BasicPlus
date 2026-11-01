@@ -562,7 +562,6 @@ namespace Cs2Jc
             if (ExcepcionJc(t) is string ex) return ex;
             if (DelPrograma(t))
             {
-                CompruebaOrden(t, donde);
                 return Tipo(t, donde);
             }
             switch (NombreCompleto(t))

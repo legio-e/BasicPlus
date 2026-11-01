@@ -72,6 +72,17 @@
 >   interfaz en `CsSystem`), los argumentos con nombre, los inicializadores dentro de una expresión, y sueltas
 >   (`ArrayList`, `Hashtable`, `StringBuilder`, `Split`…); algunas no se pueden (`int.TryParse` con `out`, el `ToString`
 >   de un `double`, que BP escribe distinto). Después, el escalón 2 (`#751`), si lo decide Eduardo.
+> - **Aparcado** (Eduardo: *«Lo dejamos aparcado de momento. Volvemos a los pendientes.»*; `32356dd1`). **Los
+>   pendientes, contados:** 40 fichas con número abiertas (y `D1`, la documentación de V8); tres, hechas sin cerrar:
+>   `#740` —**cerrada**, Eduardo: *«Cierra #740»*—, y `#693` y `#694`, por ver en placa y en el IDE. **Lo primero, los
+>   fallos del compilador** (Eduardo: *«Si»* a las seis propuestas, y a la (a) de `#752`), en este orden: `#751`,
+>   `#744`, `#752`, `#753`, `#757` y `#758`, cada uno con su red.
+> - **`#751`, hecha** (el commit de `#751`): el emisor avisa al escritor del `.mod` de todas las clases antes de
+>   escribir código, y una de más abajo se aplaza como la propia (`#447`) o va por ref. `ClaseAbajo` en el corpus; los
+>   mismos `.mod` en 666 fuentes y en la stdlib; la red, VERDE (12:56; paridad 180), `check-jc` (176), JUnit (61 y
+>   324); el IDE, rehecho. En el traductor, fuera su regla: Mono, **342**. Salieron `#759` (MOD8), `#760` (lo protegido
+>   por una hija, desde la clase de en medio) y `#761` (el ternario con una interfaz común), sólo análisis.
+> - **Lo siguiente:** `#744` (`super.prop`, al accesor del padre).
 >
 > **31-oct (tarde y noche, tras H7.2)** — **H6, el traductor C# → JC: el algoritmo, aprobado, y el esqueleto y cuatro
 > tandas de reglas, hechos; `#754` y `#755`, hechas; y H7.3, las interfaces, decidido para mañana** (Eduardo: *«OK,

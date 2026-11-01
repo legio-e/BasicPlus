@@ -639,6 +639,15 @@ public final class MivmEmitter {
             }
         }
 
+        // 0-bis) #751 — las clases del módulo, avisadas al escritor ANTES de escribir código, con si son abiertas: una
+        //    de más abajo todavía no está registrada cuando un método de arriba la construye (o pregunta `is`, la
+        //    convierte o la atrapa); así se aplaza como la propia (#447), o va por ref si es abierta.
+        for (ITopLevelDecl d : moduleAst.defs) {
+            if (!(d instanceof ClassDef) || ((ClassDef) d).isInterface) continue;
+            Symbol cs = info.declSymbols.get(d);
+            if (cs instanceof ClassSymbol) w.preveClase(((ClassDef) d).name, mod9() && esAbierta((ClassSymbol) cs));
+        }
+
         // 1) Strings literales — pase previo de scan para precargar el pool.
         //    (Opcional: declararlos lazy también funciona, pero hacerlo aquí
         //    los deja en data block antes que cualquier global de usuario.)

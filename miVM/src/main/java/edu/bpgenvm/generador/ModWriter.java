@@ -245,8 +245,26 @@ public class ModWriter {
     private short descriptorOAplazado(String className, int operandOff, String que) {
         Integer csOff = dataSymbolOffset.get(className);
         if (csOff != null) return csOff.shortValue();
-        if (classes.containsKey(className)) { pendingSelfCasts.add(new SelfCastFixup(operandOff, className)); return 0; }
+        // #751 — y si es una de más abajo (avisada por el emisor, preveClase), igual: su descriptor aún no está
+        if (classes.containsKey(className) || previstas.containsKey(className)) {
+            pendingSelfCasts.add(new SelfCastFixup(operandOff, className));
+            return 0;
+        }
         throw new RuntimeException("Clase '" + className + "' no declarada para " + que);
+    }
+
+    /** #751 — las clases locales del módulo, con si son abiertas (MOD9), que el emisor avisa ANTES de escribir código:
+     *  una de más abajo todavía no está en `classes` (se registra al emitirla), y lo que la pide por su descriptor
+     *  —NEW_OBJECT, INSTANCEOF, TRY_BEGIN, CHECKCAST— se aplaza como lo de la propia (#447), o va por ref si es
+     *  abierta (sin descriptor: lo construye el cargador). */
+    private final Map<String, Boolean> previstas = new HashMap<>();
+
+    public void preveClase(String name, boolean abierta) { previstas.put(name, abierta); }
+
+    /** ¿Va por ref? La abierta registrada (abiertaLocal), o una de más abajo avisada abierta. */
+    private boolean porRefLocal(String className) {
+        if (abiertaLocal(className) != null) return true;
+        return formato == 9 && !classes.containsKey(className) && Boolean.TRUE.equals(previstas.get(className));
     }
 
     public static class CallFixup {
@@ -1696,8 +1714,7 @@ public class ModWriter {
     // --- Emisores para objetos ---
 
     public void emitNewObject(String className) throws IOException {
-        ClassInfo ab = abiertaLocal(className);
-        if (ab != null) { emitNewObjectRef(requireRef(REF_CLASE, DEP_LOCAL, className, "")); return; }
+        if (porRefLocal(className)) { emitNewObjectRef(requireRef(REF_CLASE, DEP_LOCAL, className, "")); return; }   // #751
         short csOff = descriptorOAplazado(className, currentBytecodeSize + 1, "NEW_OBJECT");   // #507
         codeOut.writeByte(OpCode.NEW_OBJECT.code);
         codeOut.writeShort(csOff);
@@ -2168,7 +2185,7 @@ public class ModWriter {
      * Si expectedClassName == null o no resuelve, se emite 0 (catch genérico).
      */
     public void emitTryBegin(int handlerLabel, String expectedClassName) throws IOException {
-        if (expectedClassName != null && abiertaLocal(expectedClassName) != null) {
+        if (expectedClassName != null && porRefLocal(expectedClassName)) {   // #751
             emitTryBeginRef(handlerLabel, requireRef(REF_CLASE, DEP_LOCAL, expectedClassName, ""));
             return;
         }
@@ -2248,7 +2265,7 @@ public class ModWriter {
     }
 
     public void emitInstanceOf(String className) throws IOException {
-        if (abiertaLocal(className) != null) { emitInstanceOfRef(requireRef(REF_CLASE, DEP_LOCAL, className, "")); return; }
+        if (porRefLocal(className)) { emitInstanceOfRef(requireRef(REF_CLASE, DEP_LOCAL, className, "")); return; }   // #751
         short csOff = descriptorOAplazado(className, currentBytecodeSize + 1, "INSTANCEOF");   // #507
         codeOut.writeByte(OpCode.INSTANCEOF.code);
         codeOut.writeShort(csOff);
@@ -2258,7 +2275,7 @@ public class ModWriter {
     /** #389 — CHECKCAST a una CLASE: el cast `Cosa(o)` comprueba en ejecución.
      *  `nameSym` es el literal internado con el nombre (para el mensaje). */
     public void emitCheckCast(String className, String nameSym) throws IOException {
-        if (abiertaLocal(className) != null) { emitCheckCastRef(requireRef(REF_CLASE, DEP_LOCAL, className, ""), nameSym); return; }
+        if (porRefLocal(className)) { emitCheckCastRef(requireRef(REF_CLASE, DEP_LOCAL, className, ""), nameSym); return; }   // #751
         Integer clsOff = dataSymbolOffset.get(className);
         /* #447 — si la clase se esta emitiendo AHORA, su descriptor aun no
          * existe (se registra en endClass, porque su tamano depende del numero
@@ -2783,7 +2800,7 @@ public class ModWriter {
             Integer off = dataSymbolOffset.get(fx.className);
             if (off == null) {
                 throw new RuntimeException("Clase '" + fx.className
-                        + "' sigue sin descriptor al cerrar el modulo (CHECKCAST aplazado)");
+                        + "' sigue sin descriptor al cerrar el modulo (aplazado: NEW_OBJECT, INSTANCEOF, TRY_BEGIN o CHECKCAST)");
             }
             rawCode[fx.codeOff]     = (byte) ((off >> 8) & 0xFF);
             rawCode[fx.codeOff + 1] = (byte) ( off       & 0xFF);

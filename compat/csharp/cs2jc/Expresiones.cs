@@ -544,7 +544,6 @@ namespace Cs2Jc
             if (oc.Initializer != null && !sinInicializador) return Rechaza(oc.Initializer, Porque.Pendiente("inicializadores de objetos, fuera de una declaración"));
             if (!DelPrograma(tipo)) return BibliotecaNuevo(oc, ctor, tipo);
             CompruebaAcceso(ctor, oc);
-            CompruebaOrden(tipo, oc);
             return "new " + Tipo(tipo, oc.Type) + "(" + Argumentos(oc.ArgumentList, ctor) + ")";
         }
 
@@ -567,7 +566,6 @@ namespace Cs2Jc
                     if (t == null || t.IsValueType || EsCadena(t)
                         || (!DelPrograma(t) && ExcepcionJc(t) == null && t.SpecialType != SpecialType.System_Object))
                         return Rechaza(b, Porque.Pendiente("is " + NombreCompleto(t)));
-                    CompruebaOrden(t, b);
                     return Expr(b.Left) + " is " + Tipo(t, b.Right);
                 }
                 case SyntaxKind.BitwiseAndExpression:
@@ -680,7 +678,6 @@ namespace Cs2Jc
                     return "((" + clase + ") " + Atomo(c.Expression) + ").value()";
                 }
             }
-            CompruebaOrden(a, c);
             // `(char) n`: los 16 bits de abajo, como C#; una constante, su valor (`(char) 65` es 'A')
             if (a.SpecialType == SpecialType.System_Char && de?.SpecialType != SpecialType.System_Char)
             {
