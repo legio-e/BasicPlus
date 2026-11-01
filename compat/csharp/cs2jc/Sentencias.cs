@@ -41,6 +41,12 @@ namespace Cs2Jc
                     Bloque(b);
                     break;
                 case LocalDeclarationStatementSyntax ld: Local(ld); break;
+                // la llamada a un método partial sin cuerpo: C# la quita, con sus argumentos sin calcular (el escalón 1)
+                case ExpressionStatementSyntax es when es.Expression is InvocationExpressionSyntax llamada
+                                                       && m.GetSymbolInfo(llamada).Symbol is IMethodSymbol pm
+                                                       && pm.IsPartialDefinition && pm.PartialImplementationPart == null:
+                    Linea("// " + pm.Name + "(…): un método partial sin cuerpo; C# quita la llamada");
+                    break;
                 case ExpressionStatementSyntax es: Linea(ExprSentencia(es.Expression) + ";"); break;
                 case IfStatementSyntax i: If(i); break;
                 case WhileStatementSyntax w:
@@ -81,10 +87,42 @@ namespace Cs2Jc
             }
         }
 
+        /// Las locales de un case que se usan en otro (el escalón 1): declaradas antes del switch (Switch), así que su
+        /// declaración, en el case, es una asignación.
+        readonly HashSet<ISymbol> izadas = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        /// Su nombre en JC (`i_s1`), y cuántas van.
+        readonly Dictionary<ISymbol, string> renombradas = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
+        int subidas = 0;
+
         void Local(LocalDeclarationStatementSyntax ld)
         {
             if (!ld.UsingKeyword.IsKind(SyntaxKind.None)) { Rechaza(ld, Porque.Pendiente("using")); return; }
+            if (ld.Declaration.Variables.Any(v => izadas.Contains(m.GetDeclaredSymbol(v))))
+            {
+                if (ld.IsConst) return;                                       // ya está, con su valor, antes del switch
+                foreach (var v in ld.Declaration.Variables.Where(v => v.Initializer != null))
+                    Linea(renombradas[m.GetDeclaredSymbol(v)] + " = " + Expr(v.Initializer.Value) + ";");
+                return;
+            }
             Declaracion(ld.Declaration, ld.IsConst);
+        }
+
+        /// Un valor del tipo para una local declarada antes de tiempo: C# no deja leerla sin asignarla, así que nadie lo ve.
+        string ValorCualquiera(ITypeSymbol t, SyntaxNode donde)
+        {
+            switch (t.SpecialType)
+            {
+                case SpecialType.System_Int64: return "0L";
+                case SpecialType.System_Double: return "0.0";
+                case SpecialType.System_Single: return "0.0f";
+                case SpecialType.System_Boolean: return "false";
+                case SpecialType.System_String: return "\"\"";
+            }
+            if (EsNumerico(t)) return "0";
+            if (EsEnum(t) && t.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => f.IsConst) is IFieldSymbol primero)
+                return Tipo(t, donde) + "." + Ident(primero.Name);
+            if (!t.IsValueType) return "null";
+            return Rechaza(donde, Porque.Pendiente("una variable de un case usada en otro (en C#, su ámbito es el switch)"));
         }
 
         /// `T a = x, b;` (la de un `for` también): `var`, con su tipo.
@@ -240,10 +278,31 @@ namespace Cs2Jc
                 foreach (var ld in sec.Statements.OfType<LocalDeclarationStatementSyntax>())
                     foreach (var v in ld.Declaration.Variables)
                         deSeccion[m.GetDeclaredSymbol(v)] = sec;
+            // (el escalón 1) se declaran antes del switch, y en su case su declaración es una asignación; usada en la
+            // etiqueta de otro (`case x:`, x una constante), no cuenta: la etiqueta lleva su valor
+            var antes = new List<ILocalSymbol>();
             foreach (var sec in sw.Sections)
                 foreach (var id in sec.DescendantNodes().OfType<IdentifierNameSyntax>())
-                    if (m.GetSymbolInfo(id).Symbol is ILocalSymbol l && deSeccion.TryGetValue(l, out var suya) && suya != sec)
-                        Rechaza(id, Porque.Pendiente("una variable de un case usada en otro (en C#, su ámbito es el switch)"));
+                    if (m.GetSymbolInfo(id).Symbol is ILocalSymbol l && deSeccion.TryGetValue(l, out var suya) && suya != sec
+                        && !id.Ancestors().Any(x => x is CaseSwitchLabelSyntax) && !antes.Contains(l, SymbolEqualityComparer.Default))
+                        antes.Add(l);
+            // con un nombre propio (`i_s1`), para no chocar con otra del mismo nombre fuera del switch (en C#, otra puede
+            // reusarlo en un bloque hermano); no dentro de un `if (true)`: JC no ve que se entra, y una variable que el
+            // switch asigna en todos sus casos le parecería sin valor (la diferencia de test-901)
+            foreach (var l in antes)
+            {
+                var decl = l.DeclaringSyntaxReferences.First().GetSyntax();
+                string nuevo = Ident(l.Name) + "_s" + (++subidas);
+                renombradas[l] = nuevo;
+                if (l.IsConst) Linea("const " + Tipo(l.Type, decl) + " " + nuevo + " = " + LiteralDeConstante(l.ConstantValue, decl) + ";");
+                else Linea(Tipo(l.Type, decl) + " " + nuevo + " = " + ValorCualquiera(l.Type, decl) + ";");
+                izadas.Add(l);
+            }
+            SwitchDentro(sw);
+        }
+
+        void SwitchDentro(SwitchStatementSyntax sw)
+        {
             Linea("switch (" + Expr(sw.Expression) + ")");
             Linea("{");
             sangria++;

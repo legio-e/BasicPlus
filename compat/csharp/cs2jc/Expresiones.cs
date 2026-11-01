@@ -368,6 +368,8 @@ namespace Cs2Jc
             var s = m.GetSymbolInfo(id).Symbol;
             switch (s)
             {
+                case ILocalSymbol _ when renombradas.TryGetValue(s, out var nuevo):
+                    return nuevo;                                  // una local de un case subida antes del switch
                 case ILocalSymbol _:
                 case IParameterSymbol _:
                     return Ident(s.Name);

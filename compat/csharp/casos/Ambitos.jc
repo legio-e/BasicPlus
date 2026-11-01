@@ -1,0 +1,68 @@
+module CsAmbitos
+{
+   class Programa
+   {
+      private static int llamadas = 0;
+      private static function int Cuenta()
+      {
+         Programa.llamadas++;
+         return Programa.llamadas;
+      }
+      private static function int Elige(int v)
+      {
+         int a;
+         int i_s1 = 0;
+         switch (v)
+         {
+            case 0:
+               i_s1 = v + 1;
+               a = i_s1;
+               break;
+            default:
+               i_s1 = 5;
+               a = i_s1 * 2;
+               break;
+         }
+         return a;
+      }
+      private static function int Etiqueta(string s)
+      {
+         switch (s)
+         {
+            case "HI":
+               const string x = "Nice";
+               return 1;
+            case "Nice":
+               return 2;
+         }
+         return 3;
+      }
+      public static function int Main()
+      {
+         if (Programa.Elige(0) != 1 || Programa.Elige(7) != 10)
+         {
+            return 1;
+         }
+         if (Programa.Etiqueta("Nice") != 2 || Programa.Etiqueta("HI") != 1 || Programa.Etiqueta("otra") != 3)
+         {
+            return 2;
+         }
+         // Avisa(…): un método partial sin cuerpo; C# quita la llamada
+         if (Programa.llamadas != 0)
+         {
+            return 3;
+         }
+         println("ambitos bien");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

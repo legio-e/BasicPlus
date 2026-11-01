@@ -392,8 +392,8 @@ namespace Cs2Jc
             if (me.Modifiers.Any(SyntaxKind.UnsafeKeyword)) { Rechaza(me, Porque.Fuera(Porque.Unsafe)); return; }
             if (s.IsPartialDefinition)
             {
-                // la definición sin cuerpo: se escribe la implementación; sin ella, C# quita las llamadas
-                if (s.PartialImplementationPart == null) Rechaza(me, Porque.Pendiente("métodos partial sin cuerpo"));
+                // la definición sin cuerpo: se escribe la implementación; sin ella, nada, y C# quita las llamadas (en
+                // Sentencias, la de una sentencia; una que no lo es, C# no la deja: void)
                 return;
             }
             if (me.Modifiers.Any(SyntaxKind.NewKeyword) || Oculta(s)) { Rechaza(me, Porque.H7(Porque.NoVirtuales)); return; }
