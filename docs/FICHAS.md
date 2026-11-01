@@ -7374,7 +7374,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `.mod`** (la posición de `f.area()`, de 3 a 200; el `.mod` no lleva suma de su contenido): la VM-Java la atrapaba en
   un `try` del programa y seguía, con salida 0; la VM-C paraba, con 1.
 - **Hecha el 1-nov** (Eduardo: *«Si lo quieres poner como un mecanismo de seguridad por mi bien. Se debe disparar un
-  error, nada mas.»*): un seguro y nada más. En la VM-Java, `INVOKE_VIRTUAL` con una ranura que no se resuelve es un
+  error, nada mas.»*; y lo precisó: *«Un seguro es un error en realidad en este caso es asegurarse que el error se vea,
+  que ya lo hemos aplicado muchas veces en este proyecto.»*): que el error se vea, nada más. En la VM-Java, `INVOKE_VIRTUAL` con una ranura que no se resuelve es un
   error de la VM que para el programa, como en la VM-C y con su texto («INVOKE_VIRTUAL slot N no resoluble en cadena
   de herencia»); ya no lo atrapa un `try`. Ni `INVOKE_IFAZ`, ni el AOT, ni la salida se tocan: atrapables y con 1, como
   estaban. Con el `.mod` corrompido, las dos: salida 1, ese texto por stderr y el mismo stdout; con el bueno, como
