@@ -1,6 +1,7 @@
 // DestruyeTrasError.bp — V7 #668 (8-oct): el programa acaba con una excepción sin atrapar, y aun así se destruye lo
 // que queda vivo (Eduardo: «sea de la forma que sea»): el owner del main al salir por la excepción, y la global en la
 // fase del final. La salida, el orden; la excepción, por stderr, y el código de salida, el de un error.
+// salida: 1 — acaba con una excepción sin atrapar, a propósito (#668)
 module DestruyeTrasError
   public property global: Recurso := null
 

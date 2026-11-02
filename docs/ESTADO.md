@@ -51,6 +51,11 @@
 > - **De paso, abiertas `#765`–`#768`:** `StrCursor` se paraba en `conMove` desde `#714` (`#766`) y `FileCursor` tras
 >   `gc()` ya en V7 (`#767`), sin que la red lo viese: compara el código de salida entre las dos VMs, no con el que
 >   tiene que dar (`#765`); y un literal de más de 32 767 bytes no compila, con un error que no lo dice (`#768`).
+> - **`#766`, `#767` y `#765`, cerradas** (Eduardo: *«OK»*, al orden; en `#767`, *«a)»*): `StrCursor` y `FileCursor`
+>   corren enteros otra vez —el `move` dentro de una cadena es un error desde `#714`; un `File` muerto lo cierra su
+>   destructor, entre cuantos, desde `#668`— y la red pide el código de salida de la marca `// salida:`, o 0. Abiertas
+>   `#769` (`test-trazasbus`, rojo una vez y sin reproducir) y `#770` (`sleep(0)` no da el turno al destructor
+>   pendiente en la VM-C). La red y `check-jc`, VERDES.
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

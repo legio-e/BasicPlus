@@ -6,6 +6,7 @@
 // pero el PROGRAMA entero con un `throw` del programa; la VM-C acababa siempre el programa, aunque su propio aviso
 // dijera «el thread TERMINA aquí». Aquí, un hilo que divide por cero y otro que hace `throw`, los dos sin atrapar: el
 // main sigue y lo dice, igual en las dos VMs. La excepción del main sí acaba el programa (ThrowSinAtrapar).
+// salida: 1 — dos hilos mueren sin atrapar su excepción, y el programa sale con error, a propósito (#608)
 module HiloExc
 
   class Divide extends Thread

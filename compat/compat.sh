@@ -199,6 +199,9 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod [$3...=opciones de la VM, p. ej. --smp=2]
   esac
   # V8 #739 (2-nov) — y el aviso de una cadena que nace rota («MAL NACIDA»: no puede nacer ninguna; si nace, rojo).
   grep -E "HEAP INCONSISTENTE|MAL NACIDA" "$err" 2>/dev/null | head -2 | sed 's/^/!! stderr: /'
+  # V8 #765 (2-nov) — el mensaje de una excepcion sin atrapar (el de la VM-C), para el FAIL de un codigo de salida que
+  # no es el que el sample tiene que dar (check_parity).
+  case "$bin" in *.jar) ;; *) grep -o 'el mensaje que traia: .*' "$err" 2>/dev/null | tail -1 > "$WORK/.msg.c" ;; esac
   # V7/H7 #605 (29-sep) — la MEDIDA de la pila, si se pide: con PILA_LOG=<fichero>, cuanta uso cada programa en la
   # VM-C (la linea «[bpvm] pila:» del final del RUN) y si alguno desbordo, en las dos VMs. No toca lo que se compara.
   if [ -n "${PILA_LOG:-}" ]; then grep -E "\[bpvm\] pila:|desbordamiento de pila" "$err" 2>/dev/null | sed "s|^|$base: |" >> "$PILA_LOG"; fi
@@ -447,6 +450,17 @@ check_parity() {
     rcj="$(cat "$WORK/.rc.java" 2>/dev/null)"; rcc="$(cat "$WORK/.rc.c" 2>/dev/null)"
     if [ "$rcj" != "$rcc" ]; then
       echo "  FAIL $s — el codigo de salida no casa: VM-Java ${rcj:-?}, VM-C ${rcc:-?}"; fail=$((fail+1)); continue
+    fi
+    # V8 #765 (2-nov) — y el que TIENE que dar: 0, salvo que el sample diga otro en su cabecera, `// salida: <n> — <por
+    # que>` (ThrowSinAtrapar, HiloExc y DestruyeTrasError: una excepcion sin atrapar, a proposito). Hasta hoy solo se
+    # comparaban las dos VMs entre si, y un sample que se paraba con la misma excepcion en las dos salia VERDE:
+    # StrCursor desde #714 (#766) y FileCursor ya en V7 (#767), con sus ultimas secciones sin correr. El censo del
+    # 2-nov: 180 con 0, 3 con 1 a proposito y esos 2.
+    local rc_esperado
+    rc_esperado="$(sed -nE 's|^//[[:space:]]*salida:[[:space:]]*([0-9]+).*$|\1|p' "$bp" | head -1)"
+    if [ "$rcj" != "${rc_esperado:-0}" ]; then
+      echo "  FAIL $s — acaba con el codigo $rcj y tiene que dar ${rc_esperado:-0} (su marca // salida:, o 0 sin ella): $(cut -c1-110 "$WORK/.msg.c" 2>/dev/null)"
+      fail=$((fail+1)); continue
     fi
     if [ -n "$ordena" ]; then
       oj="$(printf '%s\n' "$oj" | LC_ALL=C sort)"; oc="$(printf '%s\n' "$oc" | LC_ALL=C sort)"

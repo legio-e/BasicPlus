@@ -7305,6 +7305,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   hilo, y la llamada a `Core.__destruyePendientes` no se mete hasta el cuanto siguiente; en la VM-Java, `sleep(0)` cede.
 - **Lo propuesto, sin hacer:** que las dos den el turno en el mismo sitio. Por decidir (Eduardo).
 
+#### 🔵 `#769` — la red: `test-trazasbus` salió una vez en rojo, «1 de 5 pasadas con dos runs, distintas» (las trazas del bus con dos runs, `#659`); sin reproducir (abierta el 2-nov, en la red de `#766`; **sólo análisis**)
+
+- **Cómo salió:** la red del 2-nov a las 12:51, en ROJO sólo por esto (lo demás, verde); el cambio de esa red sólo
+  tocaba un sample BP que la prueba no usa. La red de las 12:12, con la misma VM-C, la pasó.
+- **Medido** (2-nov): la misma comparación, 40 veces sola y 90 con tres a la vez (carga): 0 distintas de 130. Una
+  pasada con dos runs tarda unos 75 ms: el `timeout 60` no la corta.
+- **Lo que dice su ficha** (`#659`, 7-oct): sin el arreglo —cada traza en UNA escritura—, una pasada salía bien 1 de
+  cada 20; con él, 5 de 5. Una distinta de vez en cuando apunta a una traza partida que todavía se cuela, o a otra
+  cosa: la diferencia no quedó guardada. **Lo propuesto, sin hacer:** que la prueba guarde la pasada distinta (el
+  `diff`), para la próxima vez. Por decidir (Eduardo).
+
 #### 🔵 `#768` — un literal de más de 32 767 bytes no compila, y el error no dice eso: «Símbolo de datos no declarado (forward ref no permitida): __str_0» (abierta el 2-nov, al medir `#732`; **sólo análisis**)
 
 - **Medido** (2-nov, el compilador de hoy, un programa de prueba fuera del repo): dos literales de 32 000 bytes
@@ -7351,7 +7362,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   corre entero otra vez, en las dos VMs: 11 635 comprobaciones, sin una mala, y el código 0; `move`, 29. La época,
   como está: lo de quitarla, sin hacer.
 
-#### 🔵 `#765` — la red no ve un sample del corpus que se para con una excepción que dan las dos VMs igual: compara el código de salida entre ellas, no con el que tiene que dar (abierta el 2-nov, al probar `#731`; **sólo análisis**)
+#### ✅ `#765` — la red no ve un sample del corpus que se para con una excepción que dan las dos VMs igual: compara el código de salida entre ellas, no con el que tiene que dar (abierta el 2-nov, al probar `#731`; **CERRADA el mismo día**, el commit de `#765`)
 
 - **Cómo salió:** el caso nuevo de `#732` en `StrCursor` no se ejecutaba: el sample se paraba antes (`#766`), con el
   mismo error, la misma salida y el mismo código en las dos VMs. La paridad, verde.
@@ -7361,6 +7372,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo propuesto, sin hacer:** que la red pida el código 0, salvo que el sample diga otro en su cabecera
   (`// salida: 1 — <por qué>`), como las marcas `// smp:` y `// mod8:`. Uno distinto del suyo es rojo, con su mensaje.
   Por decidir (Eduardo).
+- **Cerrada el 2-nov** (Eduardo: *«OK»*, al orden propuesto: antes `#766` y `#767`, para no dejarla en rojo):
+  `compat.sh` pide el código de la marca `// salida: <n> — <por qué>` del sample, o 0 sin ella; uno distinto es FAIL
+  con el mensaje de la excepción (el de la VM-C: «el mensaje que traia»). La llevan los tres que acaban con 1 a
+  propósito: `ThrowSinAtrapar` (`#481`), `HiloExc` (`#608`) y `DestruyeTrasError` (`#668`). **Con su sabotaje:**
+  `FileCursor` sin su `sleep(1)` —`check-paridad`—, FAIL «acaba con el codigo 1 y tiene que dar 0 (su marca // salida:,
+  o 0 sin ella): el mensaje que traia: "File('cursor_test.bin', "w"): ya está abierto"», y los otros 184, bien.
+- La red, VERDE (16:48); `check-jc`, VERDE (9:25).
 
 #### ✅ `#764` — el argumento del RUN se corta a 127 bytes en la VM-C sin decirlo, y en la VM-Java no; el que llega por la línea de órdenes o por el wire, sin mirar si parte un carácter (abierta el 2-nov, al analizar `#739`; **CERRADA el mismo día**, el commit de `#764`)
 

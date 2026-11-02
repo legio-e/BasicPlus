@@ -13,8 +13,10 @@
 //     Ahora las dos salen con 1, de la tabla comun (bpvm_exit_code).
 //
 // Lo que este sample vigila es lo PRIMERO: que el stdout de un programa que
-// muere sea solo lo que el programa llego a imprimir. El codigo de salida no lo
-// mira el arnes; esta medido a mano y anotado en la ficha.
+// muere sea solo lo que el programa llego a imprimir. El codigo de salida lo mira
+// el arnes: desde V7/H9 que sea el mismo en las dos VMs, y desde V8 #765 que sea
+// el que dice la marca de abajo (sin ella, 0).
+// salida: 1 - una excepcion sin atrapar en el main, a proposito (#481)
 module ThrowSinAtrapar
   import Core
 
