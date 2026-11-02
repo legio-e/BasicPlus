@@ -27,6 +27,12 @@
 
 ## Última sesión
 
+> **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
+> de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
+> PC (`#739`, `#731`, `#732`, `#733`), tres por decidir (`#735`, `#736`, `#730`) y dos de placa (`#737`, `#738`)— y el
+> orden propuesto (Eduardo: *«Adelante»*).
+> - **`#734`, cerrada:** estaba explicada y decidida el 29-oct (lo demás, como está).
+>
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».
 > - **El compilador y la VM-Java:** los dos parsers (`interface … extends`, `implements`, varias anotaciones por

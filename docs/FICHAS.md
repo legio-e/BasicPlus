@@ -8213,7 +8213,7 @@ el bit. Desde `#714` (el bit 20, solo lectura) quedan 20 (del 19 al 0, `HEAP_LAY
 O(1) también con acentos (caminar hasta el carácter `i` seguiría siendo O(i)). En las dos VMs. A revisar al hacerlo:
 que ningún camino reescriba la etiqueta entera y la borre.
 
-#### 🔵 `#734` — en las RP2350, `intToString`, `floatToString`, `parseFloat` y cadena + entero van un 25–50 % más lentas desde los dos algoritmos del H5, y no se sabe por qué (abierta el 27-oct, al cerrar el H5; **explicada el 29-oct —la caché del XIP— e `intToString`, hecha; el resto, por decidir**)
+#### ✅ `#734` — en las RP2350, `intToString`, `floatToString`, `parseFloat` y cadena + entero van un 25–50 % más lentas desde los dos algoritmos del H5, y no se sabe por qué (abierta el 27-oct, al cerrar el H5; explicada el 29-oct —la caché del XIP— e `intToString`, hecha; **CERRADA el 2-nov**: lo demás se queda como está)
 
 Visto el 21-oct, al grabar los dos algoritmos, sólo en las RP2350 (`V8_IDEAS` §E5, «Lo que sigue lento»). La
 hipótesis: el sitio del código en la caché del XIP. Pide un test de desplazamiento: mover el código sin cambiarlo y
@@ -8278,6 +8278,12 @@ Metro con PSRAM el intérprete ya está en la SRAM (M, desde el 22-oct, con los 
 no queda nada que ganar, y **se queda como está**. Sólo el intérprete en la Pico 2 serían 21,6 KB del heap (un 10 %), con
 lo medido arriba (en un bucle, nada; en el censo, `parseFloat` −39 %, `floatToString` −21 %, el bytecode −5 %): apuntado
 por si interesa. Y lo de `floatToString` en la Metro, sin mirar (*«No hace falta»*).
+
+- **Cerrada el 2-nov** (Eduardo: *«Adelante»*, al empezar con los pendientes de las cadenas): explicada —la lotería de
+  la caché del XIP en P, demostrada con el test de desplazamiento—, `intToString` hecha con una rutina nuestra, y lo
+  demás, decidido el 29-oct: el código de P a la RAM, no; en la Metro ya está en la SRAM. `floatToString` y
+  `parseFloat` en P siguen en esa lotería: si algún día se quiere, una rutina nuestra para cada una (con la paridad del
+  redondeo con Java) o `#719` (congelada).
 
 #### 🔵 `#733` — en una native, recorrer una cadena por índice sigue siendo cuadrático: sin hilo del intérprete, su cursor dura una llamada (abierta el 27-oct, al cerrar el H5; **propuesta, sin hacer**)
 
