@@ -332,4 +332,7 @@ module CsSystem
    public function Integer Nullable_AShort(Long x) { return x == null ? null : new Integer((((int) (x.value() & 65535L)) ^ 32768) - 32768); }
    public function Integer Nullable_AUShort(Integer x) { return x == null ? null : new Integer(x.value() & 65535); }
    public function Integer Nullable_AUShort(Long x) { return x == null ? null : new Integer((int) (x.value() & 65535L)); }
+   /// A un uint? (un uint es un long, de 0 a 4294967295): sus 32 bits de abajo.
+   public function Long Nullable_AUInt(Integer x) { return x == null ? null : new Long(((long) x.value()) & 4294967295L); }
+   public function Long Nullable_AUInt(Long x) { return x == null ? null : new Long(x.value() & 4294967295L); }
 }

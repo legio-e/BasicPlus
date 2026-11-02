@@ -722,6 +722,7 @@ namespace Cs2Jc
                 case char ch: return ((int) ch).ToString(ci);           // un char, su código: en JC es un entero
                 case int i: return i == int.MinValue ? "(-2147483647 - 1)" : i.ToString(ci);
                 case long l: return l == long.MinValue ? "(-9223372036854775807L - 1L)" : l.ToString(ci) + "L";
+                case uint u: return u.ToString(ci) + "L";                    // un uint es un long (SinSigno.cs)
                 case short _: case sbyte _: case byte _: case ushort _: return System.Convert.ToString(v, ci);
                 case double d:
                 {

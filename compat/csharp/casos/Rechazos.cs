@@ -28,7 +28,7 @@ class Programa
     {
         object o = "hola";
         string s = o as string;                       // le falta a JC: as
-        uint u = 5;                                   // fuera: sin signo
+        ulong u = 5;                                  // fuera: ulong (el uint ya se traduce: SinSigno)
         Func<int, int> f = x => x + 1;                // fuera: lambdas
         int i = 0;
         int j = i++;                                  // le falta a JC: ++ dentro de una expresión

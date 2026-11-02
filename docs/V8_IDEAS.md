@@ -4391,6 +4391,7 @@ miembro de la clase, dónde hay una caja.
 | `Console.WriteLine(x)` · `Console.Write(x)` · `Console.WriteLine("{0}-{1}", a, b)` | `println(x)` · `print(x)` · `println(a, "-", b)` | se reescribe |
 | `char` | `int` (los caracteres de JC son enteros); en una cadena, `Str.fromCharCode(c)` | se reescribe |
 | `int?` y los demás `T?` (2-nov) | la caja de BP de su `T` (`Integer`, `Long`, `Float`, `Double`, `Boolean`), o `null`; sus operaciones, con las funciones `Nullable_*` de `CsSystem` | se reescribe |
+| `uint` (2-nov) | `long`, con su valor; `& 4294967295L` donde C# da la vuelta (`+`, `-`, `*`, `<<`, `~`), y la cuenta de un desplazamiento, con sus 5 bits | se reescribe |
 | `s[i]` · `s.Length` | `charCodeAt(s, i)` · `strlen(s)` | se reescribe |
 | `object o = 5;` · `(int) o` | `Object o = new Integer(5);` · `((Integer) o).value()` (las cajas de BP son a mano) | se reescribe |
 | `new int[n]` · `{ 1, 2 }` | `newIntArray(n)` · `[1, 2]` (para `string`, `float`, `bool` o una clase, BP no tiene con qué: «no se traduce», y una entrada de H7) | se reescribe |
@@ -4403,7 +4404,7 @@ miembro de la clase, dónde hay una caja.
 | `throw;` | `throw e;`, con el nombre de su `catch` | se reescribe |
 | y lo demás de la lista de `#745`: las clases `partial`, `params`, los métodos de extensión, los inicializadores de objetos, `using`… | con la misma regla | se reescribe |
 | los genéricos (salvo `List<Object>` y el `Map`), `struct`, `ref`/`out`, los delegados, `as`, `??`, los indexadores, los operadores propios, `int[,]`, `++` dentro de una expresión… | — | no se traduce: le falta a JC (H7) |
-| las lambdas, `yield`, LINQ, `async`, la reflexión, `uint`, `decimal`, `goto`… (ya no: la herencia múltiple al estilo Java, con H7.3, `#756`; ni `int?`, el 2-nov) | — | no se traduce: fuera |
+| las lambdas, `yield`, LINQ, `async`, la reflexión, `ulong`, `decimal`, `goto`… (ya no: la herencia múltiple al estilo Java, con H7.3, `#756`; ni `int?` ni `uint`, el 2-nov) | — | no se traduce: fuera |
 
 Un nombre de C# que en JC es palabra reservada (`print`, `function`, `module`, `field`…) se renombra con un `_` detrás,
 en todas partes, y el informe lo dice.
@@ -4721,7 +4722,7 @@ El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo 
   que destapó `#744`: falla con «Main devuelve 5»). La regla: rechazarla cuando una hija la redefine, o escribirla
   de otra forma.
 
-### Lo que puse «fuera» y no lo estaba: `int?` (2-nov)
+### Lo que puse «fuera» y no lo estaba: `int?` y `uint` (2-nov)
 
 **La pregunta** (Eduardo, 2-nov: *«Volvemos a la revisión de la compatibilidad entre C# y JC . Hay algo que no
 entiendo, ¿ por que tan pocos test migran de C# a JC ?»*), medida con el lote del 1-nov (349) y el censo del 31-oct:
@@ -4764,6 +4765,23 @@ Caso `Nullables`. **Mono: 367** (+18), sin perder ninguna; fallan las mismas 6. 
 informe: el enum que puede ser `null` (`E?`, 9 pruebas: sacar su valor es convertir un entero en un enum, `#522`); el
 `switch` sobre un `T?` (7: un `null` va al `default`, y el de JC no lo hace solo); un valor por defecto de un `T?` (3:
 en JC es un objeto, y JC sólo admite un literal); y el `T?` de un `struct` (H7).
+
+**`uint`, hecho** (`compat/csharp/cs2jc/SinSigno.cs`). Eduardo: *«No tenemos uint?»*: BP tiene sin signo sólo los
+estrechos, `byte` y `word` (`ushort` en JC), que el traductor ya pasaba; un `uint` cabe en un `long` (propuesto, y
+*«OK»*). Un `uint` es un `long` con su valor (0 … 4 294 967 295):
+- C# ya sube a `long` lo que mezcla un `uint` con un `int`; el traductor sólo pone la máscara `& 4294967295L` donde C#
+  da la vuelta (`+`, `-`, `*`, `<<` y `~` entre `uint`, y `++`, `--`, `+=`…), y `& 31` a la cuenta de un
+  desplazamiento (C# usa 5 bits en un tipo de 32; un `long`, 6); comparar, `/`, `%` y `>>` salen bien sin nada, porque
+  el valor nunca es negativo;
+- `(int) u`, los 32 bits de abajo (el `(int)` de JC ya trunca); `(uint) i`, los suyos; a un tipo estrecho, sus bits de
+  abajo (el cast de JC a uno estrecho mira el rango); una constante, su valor con `L`;
+- un índice, con `(int)`; un array, `newLongArray`; su caja, un `Long` (y `o is uint`, todavía no: no se distingue de
+  un `long`); un `switch`, con las etiquetas en `long`; `uint?`, en un `Long`, con sus comparaciones (sus cuentas,
+  todavía no: piden el recorte).
+
+Caso `SinSigno`; en el caso `Rechazos`, el `uint` que se rechazaba es ahora un `ulong`. **Mono: 376** (+9: las 7
+previstas, y `test-192` y `test-cls-19`), sin perder ninguna; fallan las mismas 6. `ulong`, `decimal`, `nint` y `nuint`
+siguen fuera (64 pruebas).
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

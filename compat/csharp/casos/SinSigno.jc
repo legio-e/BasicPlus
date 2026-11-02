@@ -1,0 +1,189 @@
+module CsSinSigno
+{
+   import CsSystem;
+
+   class Programa
+   {
+      private static function long Doble(long x)
+      {
+         return ((x * 2) & 4294967295L);
+      }
+      public static function int Main()
+      {
+         long a = 4294967295L;
+         a = ((a + 1) & 4294967295L);
+         if (a != 0)
+         {
+            return 1;
+         }
+         long b = 0;
+         b = ((b - 1) & 4294967295L);
+         if (b != 4294967295L)
+         {
+            return 2;
+         }
+         long c = 3000000000L;
+         long d = ((c + c) & 4294967295L);
+         if (d != 1705032704)
+         {
+            return 3;
+         }
+         long e = 100000;
+         if (((e * e) & 4294967295L) != 1410065408)
+         {
+            return 4;
+         }
+         if (Programa.Doble(c) != 1705032704)
+         {
+            return 5;
+         }
+         long g = 1;
+         g = ((g << 31) & 4294967295L);
+         if (g != 2147483648L)
+         {
+            return 6;
+         }
+         int n = 32;
+         long h = 1;
+         h = ((h << (n & 31)) & 4294967295L);
+         if (h != 1)
+         {
+            return 7;
+         }
+         long m = 4294967295L;
+         if ((m >> 28) != 15 || (m >> (n & 31)) != m)
+         {
+            return 8;
+         }
+         long z = 0;
+         if ((z ^ 4294967295L) != 4294967295L)
+         {
+            return 9;
+         }
+         if (m / 2 != 2147483647 || m % 10 != 5)
+         {
+            return 10;
+         }
+         int menos = -1;
+         if (m < menos || m == menos)
+         {
+            return 11;
+         }
+         long suma = m + menos;
+         if (suma != 4294967294L)
+         {
+            return 12;
+         }
+         int comoInt = (int) m;
+         if (comoInt != -1)
+         {
+            return 13;
+         }
+         long deInt = (((long) menos) & 4294967295L);
+         if (deInt != 4294967295L)
+         {
+            return 14;
+         }
+         long comoLong = m;
+         double comoDouble = m;
+         if (comoLong != 4294967295L || comoDouble != 4294967295.0)
+         {
+            return 15;
+         }
+         byte by = (byte) ((int) (m & 255L));
+         short sh = (short) ((((int) (m & 65535L)) ^ 32768) - 32768);
+         long setenta = 70000;
+         ushort us = (ushort) ((int) (setenta & 65535L));
+         if (by != 255 || sh != -1 || us != 4464)
+         {
+            return 16;
+         }
+         long cte = 2147483648L;
+         if (cte != 2147483648L)
+         {
+            return 17;
+         }
+         long s = 4294967295L;
+         s = ((s + 2) & 4294967295L);
+         if (s != 1)
+         {
+            return 18;
+         }
+         s = ((s - 2) & 4294967295L);
+         if (s != 4294967295L)
+         {
+            return 19;
+         }
+         s = ((s * 2) & 4294967295L);
+         if (s != 4294967294L)
+         {
+            return 20;
+         }
+         s = ((s << (33 & 31)) & 4294967295L);
+         if (s != 4294967292L)
+         {
+            return 21;
+         }
+         long[] varios = [(long) 1, (long) 2, 4294967295L];
+         long i = 1;
+         if (varios[(int) i] != 2 || varios[2] != 4294967295L)
+         {
+            return 22;
+         }
+         long[] vacio = newLongArray(3);
+         vacio[2] = 7;
+         if (vacio[2] != 7 || vacio[0] != 0)
+         {
+            return 23;
+         }
+         Object caja = new Long(m);
+         if (((Long) caja).value() != 4294967295L)
+         {
+            return 24;
+         }
+         switch (m)
+         {
+            case 4294967295L:
+               break;
+            default:
+               return 25;
+         }
+         Long nu = new Long(5);
+         Long nada = null;
+         if (!CsSystem.Nullable_Igual(nu, new Long(5)) || (nada != null) || CsSystem.Nullable_Mayor(nu, new Long(7)))
+         {
+            return 26;
+         }
+         long total = 0;
+         if (true)
+         {
+            long q = 0;
+            while (q < 4)
+            {
+               total = ((total + q) & 4294967295L);
+               q = ((q + 1) & 4294967295L);
+            }
+         }
+         if (total != 6)
+         {
+            return 27;
+         }
+         if (("" + (m)) != "4294967295")
+         {
+            return 28;
+         }
+         println("m = " + m);
+         println(m);
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

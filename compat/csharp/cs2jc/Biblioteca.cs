@@ -155,7 +155,8 @@ namespace Cs2Jc
                     if (!r.Contains('.') && !r.Contains('E')) r += ".0";
                     r += "f";
                     break;
-                case uint _: case ulong _: case decimal _: return Rechaza(donde, Porque.Fuera(Porque.SinSigno));
+                case uint u: return u.ToString(ci) + "L";                        // un uint es un long (SinSigno.cs)
+                case ulong _: case decimal _: return Rechaza(donde, Porque.Fuera(Porque.SinSigno));
                 default: return Rechaza(donde, Porque.Pendiente("una constante " + v));
             }
             return r.StartsWith("-") ? "(" + r + ")" : r;
@@ -183,6 +184,7 @@ namespace Cs2Jc
                 // el ToString de un entero: el número, como lo escribe BP (y .NET: en decimal, con su signo)
                 case "System.Int32.ToString()": case "System.Int64.ToString()": case "System.Int16.ToString()":
                 case "System.Byte.ToString()": case "System.SByte.ToString()": case "System.UInt16.ToString()":
+                case "System.UInt32.ToString()":
                     if (objeto != null) return "(\"\" + (" + Expr(objeto.Expression) + "))";
                     break;
                 // el de un bool: .NET escribe True y False

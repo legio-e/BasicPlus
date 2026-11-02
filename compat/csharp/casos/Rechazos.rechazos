@@ -4,7 +4,7 @@
 23: le falta a JC: genéricos — <T>
 25: le falta a JC: ref / out — ref int x
 30: le falta a JC: as — o as string
-31: fuera: sin signo y decimal — uint
+31: fuera: ulong, decimal, nint y nuint — ulong
 32: le falta a JC: delegados y eventos de C# (sin lambdas) — Func<int, int>
 32: fuera: lambdas y métodos anónimos — x => x + 1
 34: le falta a JC: ++, -- y = dentro de una expresión — i++

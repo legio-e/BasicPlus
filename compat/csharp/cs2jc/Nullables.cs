@@ -31,13 +31,18 @@ namespace Cs2Jc
                 case SpecialType.System_Byte:
                 case SpecialType.System_UInt16:
                 case SpecialType.System_Char: return "Integer";
-                case SpecialType.System_Int64: return "Long";
+                case SpecialType.System_Int64:
+                case SpecialType.System_UInt32: return "Long";             // un uint es un long (SinSigno.cs)
                 case SpecialType.System_Single: return "Float";
                 case SpecialType.System_Double: return "Double";
                 case SpecialType.System_Boolean: return "Boolean";
                 default: return null;
             }
         }
+
+        /// ¿Un uint?, cuyas cuentas (+, -, *, <<, >>, ~, ++) piden el recorte a 32 bits que las de su caja, un Long, no
+        /// hacen? Ésas, todavía no; comparar, /, %, &, | y ^ salen bien.
+        static bool EsUIntNullable(ITypeSymbol t) => EsUInt(DeNullable(t));
 
         /// Por qué no se traduce un T? que no tiene caja (PorTipo): el de su T, o el de lo que es.
         static string PorNullable(ITypeSymbol u)
@@ -86,10 +91,12 @@ namespace Cs2Jc
                 case SpecialType.System_Int16: fn = "Nullable_AShort"; break;
                 case SpecialType.System_UInt16:
                 case SpecialType.System_Char: fn = "Nullable_AUShort"; break;
+                case SpecialType.System_UInt32: fn = "Nullable_AUInt"; break;
                 default: return Rechaza(donde, Porque.Pendiente("de " + NombreCompleto(de) + " a " + NombreCompleto(a)));
             }
             if (fn == null) return x;
-            if ((cd == "Float" || cd == "Double") && (ca == "Integer" && v.SpecialType != SpecialType.System_Int32))
+            if ((cd == "Float" || cd == "Double")
+                && ((ca == "Integer" && v.SpecialType != SpecialType.System_Int32) || v.SpecialType == SpecialType.System_UInt32))
                 return Rechaza(donde, Porque.Pendiente("de " + NombreCompleto(de) + " a " + NombreCompleto(a)));
             imports.Add("CsSystem");
             return "CsSystem." + fn + "(" + x + ")";
@@ -204,6 +211,8 @@ namespace Cs2Jc
             if (caja == null) return Rechaza(b, PorTipo(bo.LeftOperand.Type) ?? Porque.Pendiente(b.OperatorToken.Text + " con un " + NombreCompleto(bo.LeftOperand.Type)));
             string fn = FuncionNullable(b.Kind(), caja);
             if (fn == null) return Rechaza(b, Porque.Pendiente(b.OperatorToken.Text + " con un " + NombreCompleto(bo.LeftOperand.Type)));
+            if (EsUIntNullable(bo.LeftOperand.Type) && (fn == "Suma" || fn == "Resta" || fn == "Mult" || fn == "Izq" || fn == "Der"))
+                return Rechaza(b, Porque.Pendiente("+, -, *, << y >> con un uint? (el recorte a 32 bits)"));
             if (EsNull(b.Left) || EsNull(b.Right)) return Rechaza(b, Porque.Pendiente("un null suelto en una operación con un T?"));
             imports.Add("CsSystem");
             return "CsSystem.Nullable_" + fn + "(" + Expr(b.Left) + ", " + Expr(b.Right) + ")";
@@ -243,7 +252,8 @@ namespace Cs2Jc
             {
                 case SyntaxKind.UnaryPlusExpression: return Expr(pu.Operand);
                 case SyntaxKind.UnaryMinusExpression: fn = caja != null && caja != "Boolean" ? "Menos" : null; break;
-                case SyntaxKind.BitwiseNotExpression: fn = caja == "Integer" || caja == "Long" ? "NoBits" : null; break;
+                case SyntaxKind.BitwiseNotExpression:
+                    fn = (caja == "Integer" || caja == "Long") && !EsUIntNullable(uo.Operand.Type) ? "NoBits" : null; break;
                 case SyntaxKind.LogicalNotExpression: fn = caja == "Boolean" ? "No" : null; break;
                 case SyntaxKind.PreIncrementExpression:
                 case SyntaxKind.PreDecrementExpression: return Rechaza(pu, Porque.H7(Porque.IncEnExpresion));
@@ -276,8 +286,8 @@ namespace Cs2Jc
             var tx = m.GetTypeInfo(a.Left).Type;
             string caja = CajaDeNullable(tx);
             if (caja == null) return Rechaza(a, PorTipo(tx) ?? Porque.Pendiente("un " + NombreCompleto(tx)));
-            if (caja == "Integer" && DeNullable(tx).SpecialType != SpecialType.System_Int32)
-                return Rechaza(a, Porque.Pendiente("una asignación compuesta de un T? estrecho"));
+            if ((caja == "Integer" && DeNullable(tx).SpecialType != SpecialType.System_Int32) || EsUIntNullable(tx))
+                return Rechaza(a, Porque.Pendiente("una asignación compuesta de un T? estrecho, o de un uint?"));
             if (!ObjetivoSimple(a.Left)) return Rechaza(a, Porque.Pendiente("una asignación compuesta de un T? a algo que calcula"));
             string fn = FuncionNullable(a.Kind(), caja);
             if (fn == null) return Rechaza(a, Porque.Pendiente(a.OperatorToken.Text + " con un " + NombreCompleto(tx)));
@@ -301,7 +311,7 @@ namespace Cs2Jc
             var tx = m.GetTypeInfo(operando).Type;
             string caja = CajaDeNullable(tx);
             if (caja == null) return Rechaza(donde, PorTipo(tx) ?? Porque.Pendiente("un " + NombreCompleto(tx)));
-            if (caja == "Boolean" || (caja == "Integer" && DeNullable(tx).SpecialType != SpecialType.System_Int32))
+            if (caja == "Boolean" || (caja == "Integer" && DeNullable(tx).SpecialType != SpecialType.System_Int32) || EsUIntNullable(tx))
                 return Rechaza(donde, Porque.Pendiente("++ o -- con un " + NombreCompleto(tx)));
             if (!ObjetivoSimple(operando)) return Rechaza(donde, Porque.Pendiente("++ o -- de un T? en algo que calcula"));
             imports.Add("CsSystem");
