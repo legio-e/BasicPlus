@@ -5,9 +5,10 @@
 // cuántos caracteres tiene— y la llamada siguiente sobre la misma cadena sigue desde ahí, hacia delante o hacia atrás.
 // La VM-Java cuenta siempre desde el principio: hace de oráculo en la paridad. Aquí se recorren cadenas con ñ, é (2
 // bytes), € y ✓ (3 bytes) con todos los patrones de acceso: hacia delante, hacia atrás, a saltos, al azar, fuera de
-// rango, desde el final, dos cadenas a la vez y tres (V8 #731: dos cursores por hilo), buscar y cortar, tras un `move`
-// que cambia dónde empiezan los caracteres, tras un gc(), con handles reciclados, con literales (#732: el cursor de un
-// literal recuerda si es todo ASCII) y con dos hilos a la vez. Cada respuesta se compara
+// rango, desde el final, dos cadenas a la vez y tres (V8 #731: dos cursores por hilo), buscar y cortar, con `move`
+// (#766: dentro de una cadena es un error desde #714; en un byte[], una cadena nueva), tras un gc(), con handles
+// reciclados, con literales (#732: el cursor de un literal recuerda si es todo ASCII) y con dos hilos a la vez. Cada
+// respuesta se compara
 // además con la de un oráculo escrito aquí, que decodifica el UTF-8 en BP sobre los bytes (byteAt: sin charAt ni el
 // cursor). Se comprueba ella misma, y va en el corpus de la paridad.
 module StrCursor
@@ -325,30 +326,48 @@ module StrCursor
     mira("buscar", "cerca del final", 0, indexOf(s, "-" + (cuantos - 2) + "€"), pos[cuantos - 2])
   end buscarYCortar
 
-  // `move` escribe dentro de una cadena: cambia dónde empiezan sus caracteres. Lo que el cursor sabía ya no vale.
+  // `move` y las cadenas (V8 #766): desde #714 una cadena es de solo lectura, y un `move` dentro de ella es un error; la
+  // cadena sigue como estaba, y su cursor también. Lo que `move` escribe es un byte[], y de él nace una cadena NUEVA
+  // (otra referencia, otro cursor), con sus caracteres en otro sitio. Y un `move` sube la época de la VM, que invalida
+  // los cursores de todas las cadenas: sólo cuesta tiempo.
   function conMove()
     var m: string := fromBytes(toBytes("ñabcdé"))
     var o: Oraculo := Oraculo(m)
     miraCad("move", "antes", 5, charAt(m, 5), o.trozo(5, 6))          // el cursor, en la é
-    move(toBytes("xy"), m, 0, 0, 2)                                     // "xyabcdé": un carácter más
-    o := Oraculo(m)
-    miraCad("move", "después", 5, charAt(m, 5), o.trozo(5, 6))        // la d, no la é
+    var error: string := "no lanzó"
+    try
+      move(toBytes("xy"), m, 0, 0, 2)
+    catch e: RuntimeError
+      error := e.msg
+    endtry
+    miraCad("move", "dentro de una cadena, un error", 0, error, "move: dst es de solo lectura")
+    miraCad("move", "la cadena, igual", 5, charAt(m, 5), o.trozo(5, 6))   // la é, todavía
     mira("move", "strlen", 0, strlen(m), o.n)
-    mira("move", "charCodeAt", 6, charCodeAt(m, 6), o.codigo(6))
-    mira("move", "charCodeAt", 4, charCodeAt(m, 4), o.codigo(4))       // el cursor, en la c
-    move(toBytes("ñ"), m, 0, 2, 2)                                      // "xyñcdé": dos bytes que son uno
-    o := Oraculo(m)
-    mira("move", "charCodeAt otra vez", 4, charCodeAt(m, 4), o.codigo(4))
-    mira("move", "strlen otra vez", 0, strlen(m), o.n)
-    miraCad("move", "substring", 2, substring(m, 2, 5), o.trozo(2, 5))
-    // un move en OTRA cadena también invalida el cursor (la época es de la VM): sólo cuesta tiempo
+    // lo que se escribe es un byte[]; de él, una cadena nueva
+    var b: byte[] := toBytes(m)
+    move(toBytes("xy"), b, 0, 0, 2)                                     // "xyabcdé": un carácter más
+    var m2: string := fromBytes(b)
+    var o2: Oraculo := Oraculo(m2)
+    miraCad("move", "la nueva", 5, charAt(m2, 5), o2.trozo(5, 6))      // la d, no la é
+    mira("move", "la nueva, strlen", 0, strlen(m2), o2.n)
+    mira("move", "la nueva, charCodeAt", 6, charCodeAt(m2, 6), o2.codigo(6))
+    mira("move", "la nueva, charCodeAt", 4, charCodeAt(m2, 4), o2.codigo(4))   // el cursor, en la c
+    mira("move", "la vieja, charCodeAt", 5, charCodeAt(m, 5), o.codigo(5))     // y la vieja, con su é
+    move(toBytes("ñ"), b, 0, 2, 2)                                      // "xyñcdé": dos bytes que son uno
+    var m3: string := fromBytes(b)
+    var o3: Oraculo := Oraculo(m3)
+    mira("move", "otra nueva, charCodeAt", 4, charCodeAt(m3, 4), o3.codigo(4))
+    mira("move", "otra nueva, strlen", 0, strlen(m3), o3.n)
+    miraCad("move", "otra nueva, substring", 2, substring(m3, 2, 5), o3.trozo(2, 5))
+    // un move en un byte[] cualquiera sube la época de la VM (invalida los cursores): sólo cuesta tiempo
     var s: string := hazCadena(60, 5)
     var os: Oraculo := Oraculo(s)
     mira("move", "otra cadena antes", 30, charCodeAt(s, 30), os.codigo(30))
-    var b: byte[] := newByteArray(4)
-    move(toBytes("abcd"), b, 0, 0, 4)
+    var bb: byte[] := newByteArray(4)
+    move(toBytes("abcd"), bb, 0, 0, 4)
     mira("move", "otra cadena después", 31, charCodeAt(s, 31), os.codigo(31))
-    adelante(m, o, "move")
+    adelante(m2, o2, "move, la nueva")
+    adelante(m, o, "move, la vieja")
   end conMove
 
   // gc(): la compactación puede mover la cadena; el cursor guarda posiciones, no direcciones

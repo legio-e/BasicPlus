@@ -7316,7 +7316,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo propuesto, sin hacer:** mirar si la regla cambió a propósito (entonces cambia el sample) o es un fallo (entonces
   el arreglo). Por decidir (Eduardo).
 
-#### 🔵 `#766` — `StrCursor` se para en `conMove` desde `#714`: escribe con `move` dentro de una cadena, que desde el 23-oct es de solo lectura («move: dst es de solo lectura»); sus seis últimas secciones no corren desde entonces (abierta el 2-nov, al probar `#731`; **sólo análisis**)
+#### ✅ `#766` — `StrCursor` se para en `conMove` desde `#714`: escribe con `move` dentro de una cadena, que desde el 23-oct es de solo lectura («move: dst es de solo lectura»); sus seis últimas secciones no corren desde entonces (abierta el 2-nov, al probar `#731`; **CERRADA el mismo día**, el commit de `#766`)
 
 - **Lo que pasa:** `conMove()` (21-oct) mira que el cursor no mienta después de un `move` que cambia dónde empiezan los
   caracteres de una cadena. Desde `#714` (23-oct) eso es un error, y sin atrapar: el sample acaba ahí, con el código 1
@@ -7326,6 +7326,12 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo propuesto, sin hacer:** que `conMove` mire lo que hoy tiene sentido: que un `move` dentro de una cadena es un
   error (con su texto), y que uno dentro de un `byte[]` (sube la época de la VM) no cambia lo que da el cursor. De
   paso: desde `#714` ninguna cadena cambia, así que la época sólo invalida cursores de más; quitarla, por decidir.
+- **Cerrada el 2-nov** (Eduardo: *«OK»*, al orden propuesto): `conMove` mira lo que hoy tiene sentido —un `move`
+  dentro de una cadena es un error, «move: dst es de solo lectura», y la cadena y su cursor siguen igual; lo que `move`
+  escribe es un `byte[]`, del que nace una cadena NUEVA (otra referencia, otro cursor), con sus caracteres en otro
+  sitio; y un `move` en un `byte[]` cualquiera (sube la época) no cambia lo que da el cursor de otra—. `StrCursor`
+  corre entero otra vez, en las dos VMs: 11 635 comprobaciones, sin una mala, y el código 0; `move`, 29. La época,
+  como está: lo de quitarla, sin hacer.
 
 #### 🔵 `#765` — la red no ve un sample del corpus que se para con una excepción que dan las dos VMs igual: compara el código de salida entre ellas, no con el que tiene que dar (abierta el 2-nov, al probar `#731`; **sólo análisis**)
 
