@@ -7296,6 +7296,48 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#768` — un literal de más de 32 767 bytes no compila, y el error no dice eso: «Símbolo de datos no declarado (forward ref no permitida): __str_0» (abierta el 2-nov, al medir `#732`; **sólo análisis**)
+
+- **Medido** (2-nov, el compilador de hoy, un programa de prueba fuera del repo): dos literales de 32 000 bytes
+  compilan; dos de 33 000, no; uno de 65 000, no; cuatro que suman 66 000 (20 000 × 3 + 6 000), sí. El tope es de cada
+  literal, no del total: parece un campo de 16 bits con signo. Sin mirar dónde.
+- **Lo propuesto, sin hacer:** que el error diga lo que pasa —el literal, su línea y el tope— o subir el tope. Es raro
+  (un literal así en un fuente), pero hoy el mensaje despista. Por decidir (Eduardo).
+
+#### 🔵 `#767` — `FileCursor` se para tras `gc()`: un `File` que murió sin `close()` sigue abierto («ya está abierto»), y el sample esperaba que el GC lo cerrase; pasa en las dos VMs, y ya en V7 publicada (abierta el 2-nov, en el censo de `#765`; **sólo análisis**)
+
+- **Lo que hace:** `sinCerrar()` abre `cursor_test.bin` para escribir y lo deja morir sin `close()`; después, `gc()` y
+  `IO.File(R, "w")`, con el comentario «si no lo hubiera cerrado: «ya está abierto»». Y eso es lo que sale:
+  `File('cursor_test.bin', "w"): ya está abierto`, sin atrapar. No llegan «tras el GC» ni «fin»: el código 1, en las
+  dos VMs. Con el compilador y la VM-Java de la V7 publicada (`dist/BasicPlus-7.0-win`), lo mismo.
+- **Desde cuándo:** el sample es del 21-sep (`#491`), cuando el GC cerraba lo inalcanzable entre la marca y el barrido
+  (`bpvm_files_gc`). Algo de V7 entre el 21-sep y el 13-oct lo cambió; sin mirar qué. La hipótesis: desde los
+  destructores de `#668`, un `File` se cierra al destruirlo, y eso ya no pasa dentro del `gc()`, sino después.
+- **Lo propuesto, sin hacer:** mirar si la regla cambió a propósito (entonces cambia el sample) o es un fallo (entonces
+  el arreglo). Por decidir (Eduardo).
+
+#### 🔵 `#766` — `StrCursor` se para en `conMove` desde `#714`: escribe con `move` dentro de una cadena, que desde el 23-oct es de solo lectura («move: dst es de solo lectura»); sus seis últimas secciones no corren desde entonces (abierta el 2-nov, al probar `#731`; **sólo análisis**)
+
+- **Lo que pasa:** `conMove()` (21-oct) mira que el cursor no mienta después de un `move` que cambia dónde empiezan los
+  caracteres de una cadena. Desde `#714` (23-oct) eso es un error, y sin atrapar: el sample acaba ahí, con el código 1
+  en las dos VMs. No corren `move`, `gc`, los handles reciclados, los literales, los bordes ni los dos hilos.
+- **Comprobado** (2-nov): una copia sin `conMove` corre entera en las dos VMs y en la VM-C de antes de `#731`, sin una
+  mala (11 606 comprobaciones), igual en las tres.
+- **Lo propuesto, sin hacer:** que `conMove` mire lo que hoy tiene sentido: que un `move` dentro de una cadena es un
+  error (con su texto), y que uno dentro de un `byte[]` (sube la época de la VM) no cambia lo que da el cursor. De
+  paso: desde `#714` ninguna cadena cambia, así que la época sólo invalida cursores de más; quitarla, por decidir.
+
+#### 🔵 `#765` — la red no ve un sample del corpus que se para con una excepción que dan las dos VMs igual: compara el código de salida entre ellas, no con el que tiene que dar (abierta el 2-nov, al probar `#731`; **sólo análisis**)
+
+- **Cómo salió:** el caso nuevo de `#732` en `StrCursor` no se ejecutaba: el sample se paraba antes (`#766`), con el
+  mismo error, la misma salida y el mismo código en las dos VMs. La paridad, verde.
+- **El censo** (2-nov, los 185 samples del corpus en la VM-C, compilados como la red): 180 acaban con 0 y 5 con 1. Tres
+  a propósito —`ThrowSinAtrapar`, `HiloExc` y `DestruyeTrasError`— y dos que no: `StrCursor` (`#766`, desde el
+  23-oct) y `FileCursor` (`#767`, ya en V7).
+- **Lo propuesto, sin hacer:** que la red pida el código 0, salvo que el sample diga otro en su cabecera
+  (`// salida: 1 — <por qué>`), como las marcas `// smp:` y `// mod8:`. Uno distinto del suyo es rojo, con su mensaje.
+  Por decidir (Eduardo).
+
 #### ✅ `#764` — el argumento del RUN se corta a 127 bytes en la VM-C sin decirlo, y en la VM-Java no; el que llega por la línea de órdenes o por el wire, sin mirar si parte un carácter (abierta el 2-nov, al analizar `#739`; **CERRADA el mismo día**, el commit de `#764`)
 
 - **Dónde:** `bpvm_set_run_arg` (`bpgenvm-c/src/bpvm.c`) guarda el argumento con `snprintf` en `run_arg[128]`: uno más
@@ -8378,13 +8420,21 @@ por si interesa. Y lo de `floatToString` en la Metro, sin mirar (*«No hace falt
   `parseFloat` en P siguen en esa lotería: si algún día se quiere, una rutina nuestra para cada una (con la paridad del
   redondeo con Java) o `#719` (congelada).
 
-#### 🔵 `#733` — en una native, recorrer una cadena por índice sigue siendo cuadrático: sin hilo del intérprete, su cursor dura una llamada (abierta el 27-oct, al cerrar el H5; **propuesta, sin hacer**)
+#### ✅ `#733` — en una native, recorrer una cadena por índice sigue siendo cuadrático: sin hilo del intérprete, su cursor dura una llamada (abierta el 27-oct, al cerrar el H5; **CERRADA el 2-nov**, el commit de `#731`, `#732` y `#733`)
 
 Las natives (el código del AOT) no tienen el cursor del hilo: cada `charAt` o `substring` usa uno propio que sólo
 dura esa llamada (sólo la pasada única). Un bucle por índice en una native sigue siendo n². La propuesta: que use el
 cursor del hilo que la llama (`V8_IDEAS` §E5, «Lo que sigue lento»).
 
-#### 🔵 `#732` — los literales largos, por índice, siguen siendo cuadráticos: no tienen etiqueta, y cada llamada los mira enteros (abierta el 27-oct, al cerrar el H5; **propuesta, sin hacer**)
+- **CERRADA el 2-nov** (Eduardo: *«OK, adelante»*), en el mismo cambio que `#731` y `#732`: las natives usan los
+  cursores del hilo que las llama (`h_cursores`, en `bpvm_aot_helpers.c`), el que lleva el contexto del AOT —el de las
+  excepciones, también en el ejecutor—; la clave, la referencia entera con su generación (`bpref_regen`), como la de
+  los builtins. **Medido en el PC** (una native que recorre por índice, fuera del repo, enlazada con los helpers de
+  antes y con los de ahora; de 4000 a 32 000 caracteres): de 5, 15, 62 y 245 ms (cuadrático) a 0, 0, 1 y 1, con las
+  mismas sumas. `test-aotstr` (17/17), `test-aotcede`, `test-aotkill` y `test-aotbuiltin`, bien. En las placas, en el
+  próximo lote.
+
+#### ✅ `#732` — los literales largos, por índice, siguen siendo cuadráticos: no tienen etiqueta, y cada llamada los mira enteros (abierta el 27-oct, al cerrar el H5; **CERRADA el 2-nov**, el commit de `#731`, `#732` y `#733`)
 
 Una cadena del heap lleva el bit «todo ASCII» en su etiqueta; un literal (en el `.mod`), no, así que `charAt`,
 `charCodeAt` o `substring` sobre un literal lo miran entero en cada llamada. Con uno corto no se nota; recorrer uno de
@@ -8393,13 +8443,32 @@ a 44). En el PC no se ve: el compilador vectoriza ese bucle. La propuesta: que e
 de un literal (si es ASCII y cuántos caracteres tiene), sin tocar el formato del `.mod` (`V8_IDEAS` §E5, «Lo que
 sigue lento»).
 
-#### 🔵 `#731` — recorrer por índice DOS cadenas con acentos a la vez sigue siendo cuadrático: el cursor del hilo es uno y salta de una a otra (abierta el 27-oct, al cerrar el H5; **propuesta, sin hacer**)
+- **CERRADA el 2-nov** (Eduardo: *«OK, adelante»*), en el mismo cambio que `#731`: el cursor de un literal apunta si
+  es todo ASCII la primera vez, y las siguientes llamadas lo leen de ahí (`strcur_ascii`, en las cinco funciones de
+  cadena); cuántos caracteres tiene ya lo recordaba. Sin tocar el `.mod`. En el PC apenas se ve (con 8000 caracteres,
+  de 2 ms a 0, y con acentos de 2 a 1); la medida de verdad es la de la Pico 2 (798 ms con 4000), en el próximo lote.
+  `StrCursor`, con un literal ASCII y tres cadenas a la vez: corre cuando se arregle `#766`; en una copia sin
+  `conMove`, sin una mala.
+
+#### ✅ `#731` — recorrer por índice DOS cadenas con acentos a la vez sigue siendo cuadrático: el cursor del hilo es uno y salta de una a otra (abierta el 27-oct, al cerrar el H5; **CERRADA el 2-nov**, el commit de `#731`, `#732` y `#733`)
 
 El cursor (`bpvm_strcur_t`, uno por hilo; `V8_IDEAS` §E5, «El lento con dos contadores») recuerda la última cadena
 con acentos; con dos a la vez, cada llamada lo cambia de cadena y se vuelve a contar desde el principio. Medido el
 21-oct en la Pico 2: de 4238 a 1461 ms, tres veces más deprisa que sin cursor, pero n². En la stdlib ya no queda
 ninguno (eran `Str.compare` y `Str.lastIndexOf`, ahora por bytes); en un programa, sí. La propuesta: dos cursores
 por hilo. Sólo la VM-C: la VM-Java no tiene cursor, por decisión.
+
+- **CERRADA el 2-nov** (Eduardo: *«OK, adelante»*), con `#732` y `#733` en el mismo cambio. DOS cursores por hilo
+  (`bpvm_strcur_t` es ya el par; cada uno, `bpvm_strcur_uno_t`): una cadena usa el que ya la tiene; una nueva, el que
+  lleva más tiempo sin usarse. Lo eligen las funciones de cadena, y sólo cuando cuentan: una cadena del heap toda ASCII
+  no gasta ninguno. Unos 30 bytes más por hilo, al final de su struct (lo de delante no se mueve; el C del AOT no la
+  toca). **Medido en el PC** (la VM-C, `StrCursorBench pc`, de 4000 a 32 000 caracteres): dos cadenas a la vez, de 9,
+  33, 126 y 492 ms (cuadrático) a 0, 1, 1 y 3 (lineal); `substring(k, k+1)` con `strlen` en la condición —el trozo
+  de una «ñ» se llevaba el único cursor—, de 0, 3, 8 y 31 a 1, 1, 2 y 4. Lo demás, igual, y los mismos resultados.
+  `StrCursor`, con tres cadenas a la vez (1504 comprobaciones, sin una mala); sus secciones de después de `conMove`,
+  en una copia sin ella (`#766`): 11 606, sin una mala, igual en las dos VMs y en la VM-C de antes.
+- La red, VERDE (15:22); `check-jc`, VERDE (8:43). En las placas, en el próximo lote: `StrCursorBench`, un literal largo y
+  una native.
 
 #### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct, sin empezar (abierta el 27-oct, al cerrar el H5; **la forma, por decidir**)
 

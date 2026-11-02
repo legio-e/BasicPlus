@@ -340,18 +340,28 @@ typedef enum {
 } bpvm_thread_status_t;
 
 /* V8/H5 (21-oct) — EL CURSOR DEL LENTO, con los DOS CONTADORES (Eduardo: «si después se hace un substring o algo
- * similar podemos optimizar si trabajamos con punteros de C o con dos contadores de bytes y de caracteres»). Uno por
- * hilo BP: la última cadena CON caracteres especiales que miró y dónde quedó —el carácter `ci` empieza en el byte
- * `bo`— y, si se contó, cuántos caracteres tiene. Una cadena no cambia mientras existe (el invariante), así que lo
- * contado sigue valiendo mientras sea LA MISMA: la referencia entera (el handle con su generación, o la dirección de
- * un literal) y la misma época de la VM (`move` la sube). Guarda posiciones desde el principio de la cadena, no
- * direcciones: la compactación no le afecta. Sólo la VM-C (Eduardo: «en Java no hace falta»). */
+ * similar podemos optimizar si trabajamos con punteros de C o con dos contadores de bytes y de caracteres»). Una
+ * cadena CON caracteres especiales que se miró y dónde quedó —el carácter `ci` empieza en el byte `bo`— y, si se
+ * contó, cuántos caracteres tiene. Una cadena no cambia mientras existe (el invariante), así que lo contado sigue
+ * valiendo mientras sea LA MISMA: la referencia entera (el handle con su generación, o la dirección de un literal) y la
+ * misma época de la VM (`move` la sube). Guarda posiciones desde el principio de la cadena, no direcciones: la
+ * compactación no le afecta. Sólo la VM-C (Eduardo: «en Java no hace falta»). */
 typedef struct {
     uint64_t ref;     /* la cadena (0 = ninguna) */
     uint32_t epoca;   /* vm->str_epoca cuando se anotó */
     uint32_t ci;      /* un carácter… */
     uint32_t bo;      /* …y el byte donde empieza (nbytes: el final) */
     int32_t  ncp;     /* cuántos caracteres tiene; -1 = no se sabe */
+    int8_t   ascii;   /* V8 #732: un LITERAL (sin etiqueta), si es todo ASCII: 1, 0, o -1 = no se ha mirado */
+} bpvm_strcur_uno_t;
+
+/* V8 #731 (2-nov) — DOS CURSORES por hilo: recorrer dos cadenas a la vez (comparar carácter a carácter) ya no hace
+ * saltar el único que había de una a otra, volviendo a contar desde el principio en cada llamada. Una cadena usa el que
+ * ya la tiene; una nueva, el que lleva más tiempo sin usarse. Las funciones de cadena reciben los dos y eligen ellas,
+ * sólo cuando de verdad cuentan: una cadena del heap toda ASCII no gasta ninguno. */
+typedef struct {
+    bpvm_strcur_uno_t c[2];
+    uint8_t ultimo;   /* el que se usó la última vez (0 o 1) */
 } bpvm_strcur_t;
 
 /* NOTE: tagged como `struct bpvm_thread` para que el forward declarado
@@ -464,8 +474,8 @@ struct bpvm_thread {
      * intérprete del run que lo suelta; lo borra el run 0 al elegirlo (scheduler.c, bajo vm_lock). Al final: lo de
      * arriba no se mueve. */
     int al_run0;
-    /* V8/H5 (21-oct) — el cursor del lento de las cadenas (bpvm_strcur_t, arriba). Lo usan sólo los builtins de este
-     * hilo: sin cerrojo. Al final: lo de arriba no se mueve. */
+    /* V8/H5 (21-oct) — los cursores del lento de las cadenas (bpvm_strcur_t, arriba: dos desde #731). Lo usan sólo los
+     * builtins de este hilo y, desde #733, las natives que llama: sin cerrojo. Al final: lo de arriba no se mueve. */
     bpvm_strcur_t strcur;
 };
 

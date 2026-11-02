@@ -20,9 +20,10 @@
 #include <stddef.h>
 #include "bpvm_internal.h"
 
-/* V8/H5 (21-oct) — las cuatro de las cadenas llevan el CURSOR del lento del hilo (`cur`, bpvm_strcur_t) y la
- * referencia ENTERA de la cadena (`clave`: el handle con su generación, o la dirección de un literal), que es lo que
- * lo identifica. Sin hilo (una native: cur NULL), cada llamada usa uno propio que sólo dura esa llamada. */
+/* V8/H5 (21-oct) — las de las cadenas llevan los CURSORES del lento del hilo (`cur`, bpvm_strcur_t: dos desde #731,
+ * y eligen ellas el de cada cadena) y la referencia ENTERA de la cadena (`clave`: el handle con su generación, o la
+ * dirección de un literal), que es lo que la identifica. Las natives pasan los del hilo que las llama (#733); sin hilo
+ * (cur NULL), cada llamada usa unos propios que sólo duran esa llamada. */
 
 /* `len(s)`: la longitud en codepoints (H2). */
 int32_t bpvm_prim_str_len(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s);

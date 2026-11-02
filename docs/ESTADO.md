@@ -45,6 +45,12 @@
 > - **`#764`, cerrada** (Eduardo: *«OK»*, al algoritmo): el argumento de ejecución, con un tope de 127 bytes en las dos
 >   VMs; uno que no cabe es un error donde entra —el compilador para el valor por defecto; la línea de órdenes y el `RUN`
 >   del wire para el que se da— en vez de cortarse. La red y `check-jc`, VERDES.
+> - **`#731`, `#732` y `#733`, cerradas** (Eduardo: *«OK, adelante»*): dos cursores por hilo, el de un literal recuerda
+>   si es ASCII, y las natives usan los del hilo que las llama. En el PC, con 32 000 caracteres, dos cadenas a la vez
+>   de 492 ms a 3, y una native de 245 a 1. La red y `check-jc`, VERDES. A las placas, con el próximo lote.
+> - **De paso, abiertas `#765`–`#768`:** `StrCursor` se paraba en `conMove` desde `#714` (`#766`) y `FileCursor` tras
+>   `gc()` ya en V7 (`#767`), sin que la red lo viese: compara el código de salida entre las dos VMs, no con el que
+>   tiene que dar (`#765`); y un literal de más de 32 767 bytes no compila, con un error que no lo dice (`#768`).
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

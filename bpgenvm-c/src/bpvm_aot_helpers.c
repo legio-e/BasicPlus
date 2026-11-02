@@ -810,18 +810,25 @@ static uint32_t h_find_function(bpvm_t* vm, const char* qualified) {
 /* V7/H5 P2b (26-sep, la opción 3 de Eduardo) — los helpers tipados de la lista a mano ya no son COPIAS de sus
  * builtins: llaman a LA MISMA función (bpvm_prims.h). Conservan su velocidad (44 ms frente a 96 por el
  * despachador genérico, 5 millones de charCodeAt en el PC) y la paridad sale por construcción. */
-/* V8/H5 (21-oct) — sin el cursor del hilo (NULL): cada llamada, con uno propio que sólo dura la llamada (el lento, en
- * una pasada). El cursor entre llamadas es del intérprete. */
+/* V8/H5 (21-oct) — el lento, en una pasada por llamada. V8 #733 (2-nov): y entre llamadas, LOS CURSORES DEL HILO que
+ * llama a la native, como los builtins —antes, unos propios que morían con la llamada: un bucle por índice en una native
+ * seguía siendo n²—. El hilo lo lleva el contexto del AOT (el de las excepciones); la native corre por él, que espera:
+ * nadie más los toca. La clave, la referencia entera, con su generación (bpref_regen): la de un handle reciclado no se
+ * confunde. Sin hilo, NULL: unos propios que sólo duran la llamada. */
+static bpvm_strcur_t* h_cursores(void) {
+    bpvm_thread_t* tc = bpvm_aot_callctx()->tc;
+    return (tc != NULL) ? &tc->strcur : NULL;
+}
 static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
-    return bpvm_prim_str_len(vm, NULL, 0u, ref ? A(vm, ref) : 0u);
+    return bpvm_prim_str_len(vm, h_cursores(), bpref_regen(vm, ref).v, ref ? A(vm, ref) : 0u);
 }
 static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
     uint32_t sa = ref ? A(vm, ref) : 0u;
-    int32_t c = bpvm_prim_char_code_at(vm, NULL, 0u, sa, idx);
+    int32_t c = bpvm_prim_char_code_at(vm, h_cursores(), bpref_regen(vm, ref).v, sa, idx);
     if (c < 0) {   /* V8 #717: fuera de rango, el mismo error que BUILTIN_CHAR_CODE_AT (y que charAt); antes, 0 en silencio */
         char em[96];
         snprintf(em, sizeof em, "charCodeAt: idx fuera de rango %" PRId32 " (len=%d)", idx,
-                 (int) bpvm_prim_str_len(vm, NULL, 0u, sa));
+                 (int) bpvm_prim_str_len(vm, h_cursores(), bpref_regen(vm, ref).v, sa));
         h_throw_runtime(vm, em); return 0;
     }
     return c;
@@ -834,7 +841,7 @@ static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
 static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
     {   /* P2b: la primitiva compartida */
         bpref_t h; char em[96];
-        if (bpvm_prim_char_at(vm, NULL, 0u, ref ? A(vm, ref) : 0u, idx, &h, em, sizeof em) != 0) {
+        if (bpvm_prim_char_at(vm, h_cursores(), bpref_regen(vm, ref).v, ref ? A(vm, ref) : 0u, idx, &h, em, sizeof em) != 0) {
             h_throw_runtime(vm, em); return 0;
         }
         return (uint32_t) h.v;
@@ -862,7 +869,8 @@ static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
     {   /* P2b: la primitiva compartida (el origen lo tiene vivo la native, en sus variables de C) */
         bpref_t h; char em[64];
-        if (bpvm_prim_substring(vm, NULL, ref ? bpref_regen(vm, ref) : bpref_null(), from, to, &h, em, sizeof em) != 0) {
+        if (bpvm_prim_substring(vm, h_cursores(), ref ? bpref_regen(vm, ref) : bpref_null(), from, to, &h, em,
+                                sizeof em) != 0) {
             h_throw_runtime(vm, em); return 0;
         }
         return (uint32_t) h.v;

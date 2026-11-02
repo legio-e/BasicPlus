@@ -2885,15 +2885,17 @@ mas rápidas. Ahora, si hay caracteres especiales queda alguna función que vaya
   25–50 % (hipótesis: el sitio del código en la caché del XIP; pide un test de desplazamiento);
 - **los literales:** no tienen etiqueta, y cada llamada los mira enteros para saber si son ASCII. Con uno corto no se
   nota. Recorrer por índice uno largo sigue siendo cuadrático: con 4000 caracteres, **798 ms en la Pico 2, frente a 39**
-  con la misma cadena en el heap (en el PC no se ve: el compilador vectoriza ese bucle).
+  con la misma cadena en el heap (en el PC no se ve: el compilador vectoriza ese bucle). **(2-nov, `#732`: el cursor
+  de un literal lo apunta.)**
 
 **Con caracteres especiales, lo que queda como antes:**
 - **dos cadenas con acentos a la vez, por índice, en un programa:** el cursor salta de una a otra. Sigue cuadrático,
   tres veces más deprisa (Pico 2: 4238 → 1461 ms). En la stdlib ya no queda ninguno: eran `Str.compare` y
-  `Str.lastIndexOf`;
+  `Str.lastIndexOf`. **(2-nov, `#731`: dos cursores por hilo; en el PC, con 32 000 caracteres, de 492 ms a 3.)**;
 - **los literales largos**, con o sin acentos: 881 ms frente a 44 en la Pico 2;
 - **`upper` y `lower`:** el código de antes, carácter a carácter. Lineal, pero no más rápido;
-- **las natives** (el código AOT): sólo la pasada única. Un bucle por índice en una native sigue siendo cuadrático;
+- **las natives** (el código AOT): sólo la pasada única. Un bucle por índice en una native sigue siendo cuadrático.
+  **(2-nov, `#733`: los cursores del hilo; en el PC, de 245 ms a 1.)**;
 - **la VM-Java** (el PC): sin cursor, por decisión;
 - **lo que no depende de los acentos:** `==` en bytecode, concatenar en un bucle (n²) y el GC (`#715`). El `Map` al
   meter era el cuarto: arreglado el mismo día (abajo, «El Map»).

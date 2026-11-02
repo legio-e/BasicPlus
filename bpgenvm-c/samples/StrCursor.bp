@@ -5,8 +5,9 @@
 // cuántos caracteres tiene— y la llamada siguiente sobre la misma cadena sigue desde ahí, hacia delante o hacia atrás.
 // La VM-Java cuenta siempre desde el principio: hace de oráculo en la paridad. Aquí se recorren cadenas con ñ, é (2
 // bytes), € y ✓ (3 bytes) con todos los patrones de acceso: hacia delante, hacia atrás, a saltos, al azar, fuera de
-// rango, desde el final, dos cadenas a la vez, buscar y cortar, tras un `move` que cambia dónde empiezan los
-// caracteres, tras un gc(), con handles reciclados, con literales y con dos hilos a la vez. Cada respuesta se compara
+// rango, desde el final, dos cadenas a la vez y tres (V8 #731: dos cursores por hilo), buscar y cortar, tras un `move`
+// que cambia dónde empiezan los caracteres, tras un gc(), con handles reciclados, con literales (#732: el cursor de un
+// literal recuerda si es todo ASCII) y con dos hilos a la vez. Cada respuesta se compara
 // además con la de un oráculo escrito aquí, que decodifica el UTF-8 en BP sobre los bytes (byteAt: sin charAt ni el
 // cursor). Se comprueba ella misma, y va en el corpus de la paridad.
 module StrCursor
@@ -249,6 +250,28 @@ module StrCursor
     endwh
   end dosALaVez
 
+  // tres cadenas a la vez (V8 #731): con dos cursores por hilo, la tercera se lleva el que lleva más sin usarse; y a
+  // ratos dos de ellas otra vez, al revés, para que el que se queda no sea siempre el mismo
+  function tresALaVez(a: string, oa: Oraculo, b: string, ob: Oraculo, c: string, oc: Oraculo, que: string)
+    var i: integer := 0
+    while i < oa.n or i < ob.n or i < oc.n do
+      if i < oa.n then
+        mira(que, "a", i, charCodeAt(a, i), oa.codigo(i))
+      endif
+      if i < ob.n then
+        mira(que, "b", i, charCodeAt(b, i), ob.codigo(i))
+      endif
+      if i < oc.n then
+        mira(que, "c", i, charCodeAt(c, i), oc.codigo(i))
+      endif
+      if i < oa.n and i < ob.n and i mod 3 == 0 then
+        mira(que, "b otra vez", i, charCodeAt(b, i), ob.codigo(i))
+        mira(que, "a otra vez", i, charCodeAt(a, i), oa.codigo(i))
+      endif
+      i += 1
+    endwh
+  end tresALaVez
+
   // buscar y cortar: trozos "ñandú-<k>€✓é;"; la aguja "-<k>€" está una sola vez y su carácter se sabe al construir
   function buscarYCortar()
     var cuantos: integer := 60
@@ -411,6 +434,11 @@ module StrCursor
     adelante(a, oa, "literal")
     atras(a, oa, "literal")
     dosALaVez(a, oa, b, ob, "literales")
+    // V8 #732: el cursor de un literal recuerda si es todo ASCII; con uno así, y tres a la vez (#731)
+    var d: string := "solo ASCII, sin acentos: el literal no lleva etiqueta y su cursor lo apunta la primera vez"
+    var od: Oraculo := Oraculo(d)
+    tresALaVez(a, oa, d, od, b, ob, "literales, tres")
+    adelante(d, od, "literal ASCII")
     alAzar(a, oa, "literal", 80, 9)
     trozosAlAzar(b, ob, "literal", 40, 10)
     mira("literal", "directo", 3, charCodeAt("añil€", 3), 108)
@@ -529,6 +557,13 @@ module StrCursor
     var ob: Oraculo := Oraculo(b)
     dosALaVez(s, o, b, ob, "dos")
     seccion("dos a la vez", h0, m0)
+
+    h0 := hechas
+    m0 := malas
+    var c: string := hazCadena(420, 5)
+    var oc: Oraculo := Oraculo(c)
+    tresALaVez(s, o, b, ob, c, oc, "tres")
+    seccion("tres a la vez", h0, m0)
 
     h0 := hechas
     m0 := malas
