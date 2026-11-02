@@ -97,7 +97,7 @@ namespace Cs2Jc
             "System.Math.Acos(System.Double)",
             "System.Double.IsNaN(System.Double)", "System.Single.IsNaN(System.Single)",
             "System.Int32.Parse(System.String)", "System.Int64.Parse(System.String)",
-            "System.String.Join(System.String,System.String[])",
+            "System.String.Join(System.String,System.String[])", "System.String.IsNullOrEmpty(System.String)",
             "System.Char.IsDigit(System.Char)", "System.Char.IsLetter(System.Char)", "System.Char.IsLetterOrDigit(System.Char)",
             "System.Char.IsWhiteSpace(System.Char)", "System.Char.IsUpper(System.Char)", "System.Char.IsLower(System.Char)",
             "System.Char.ToUpper(System.Char)", "System.Char.ToLower(System.Char)",

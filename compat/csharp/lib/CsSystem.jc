@@ -148,7 +148,10 @@ module CsSystem
    public function string String_Substring(string s, int desde) { return substring(s, desde, strlen(s)); }
    public function string String_Substring(string s, int desde, int largo) { return substring(s, desde, desde + largo); }
 
-   /// string.Join(sep, valores): los valores, con el separador entre cada dos.
+   /// string.IsNullOrEmpty(s) (#774: una variable string de JC puede valer null, y con él no se puede medir).
+   public function bool String_IsNullOrEmpty(string s) { return s == null || s == ""; }
+
+   /// string.Join(sep, valores): los valores, con el separador entre cada dos (un null, como "": se concatena).
    public function string String_Join(string sep, string[] valores)
    {
       string r = "";
@@ -168,7 +171,7 @@ module CsSystem
    public function string Format_Ancho(string s, int n)
    {
       int ancho = n < 0 ? -n : n;
-      string r = s;
+      string r = s == null ? "" : s;                     // #774: un null, como C#, se escribe ""
       while (strlen(r) < ancho)
       {
          if (n > 0) r = " " + r;

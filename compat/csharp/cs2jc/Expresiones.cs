@@ -190,6 +190,9 @@ namespace Cs2Jc
         /// en JC es su código, como su carácter: `Str.fromCharCode(c)`.
         string Texto(ExpressionSyntax e)
         {
+            // `"x" + null`, `(string) null + null`, `(object) null + "x"`: en C#, el null se une como "". En JC, el null
+            // escrito tal cual en una suma de cadenas es un error a propósito (#774), así que se escribe lo que C# dice
+            if (EsNullEscrito(e)) return "\"\"";
             if (EsNullable(m.GetTypeInfo(e).Type))
             {
                 // un T?: vacío si es null, como C#
@@ -204,6 +207,16 @@ namespace Cs2Jc
                 return "Str.fromCharCode(" + ExprBase(e) + ")";
             }
             return ExprBase(e);
+        }
+
+        /// ¿Es un null escrito? `null`, con casts o paréntesis delante (`(string) null`), o el `default` de una referencia.
+        bool EsNullEscrito(ExpressionSyntax e)
+        {
+            while (e is ParenthesizedExpressionSyntax || e is CastExpressionSyntax)
+                e = e is ParenthesizedExpressionSyntax p ? p.Expression : ((CastExpressionSyntax) e).Expression;
+            if (e.IsKind(SyntaxKind.NullLiteralExpression)) return true;
+            var t = m.GetTypeInfo(e).Type;
+            return (e is DefaultExpressionSyntax || e.IsKind(SyntaxKind.DefaultLiteralExpression)) && t != null && !t.IsValueType;
         }
 
         /// Una expresión por sí misma, sin la conversión de su sitio: la usan `print` y la suma de cadenas, donde C# mete
@@ -264,7 +277,7 @@ namespace Cs2Jc
                 case SpecialType.System_Double: return "0.0";
                 case SpecialType.System_Single: return "0.0f";
                 case SpecialType.System_Boolean: return "false";
-                case SpecialType.System_String: return Rechaza(e, Porque.H7(Porque.NullCadena));
+                case SpecialType.System_String: return "null";            // #774: una variable string de JC puede valer null
             }
             if (EsNullable(t)) return PorTipo(t) is string p ? Rechaza(e, p) : "null";
             if (t == null || t.IsValueType) return Rechaza(e, Porque.Pendiente("default de " + NombreCompleto(t)));
@@ -388,8 +401,6 @@ namespace Cs2Jc
                     if (GuionesQueJcNoLee(txt)) txt = txt.Replace("_", "");          // `1__000` es `1000` (H8, tema 1)
                     return txt.StartsWith(".") ? "0" + txt : txt;      // `.5`: el lexer de JC quiere la cifra delante
                 }
-                case SyntaxKind.NullLiteralExpression when EsCadena(m.GetTypeInfo(l).ConvertedType):
-                    return Rechaza(l, Porque.H7(Porque.NullCadena));
                 case SyntaxKind.StringLiteralExpression:
                     // `@"…"` y `"""…"""`, que JC no tiene, como una cadena normal; las demás, tal cual (JC lee los
                     // escapes de C#, punto 19)
@@ -747,8 +758,8 @@ namespace Cs2Jc
             if (a == null) return Rechaza(c, Porque.Pendiente("una conversión sin resolver"));
             if (c.Expression is LiteralExpressionSyntax nulo && nulo.IsKind(SyntaxKind.NullLiteralExpression))
             {
-                // `(string) null`, de H7; `(object) null`, `(X[]) null`: null, que en JC no se convierte (ni hace falta)
-                if (EsCadena(a)) return Rechaza(c, Porque.H7(Porque.NullCadena));
+                // `(string) null` (#774: una variable string de JC puede valer null), `(object) null`, `(X[]) null`: null,
+                // que en JC no se convierte (ni hace falta)
                 // como argumento de un método con sobrecargas, el tipo del null elige cuál (`Foo((X[]) null)`): JC no lo
                 // escribe, y sin él la llamada es ambigua
                 if (c.Parent is ArgumentSyntax arg && arg.Parent?.Parent is ExpressionSyntax llamada

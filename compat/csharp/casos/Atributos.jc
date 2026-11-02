@@ -2,7 +2,7 @@ module CsAtributos
 {
    class MarcaAttribute
    {
-      public string Nombre { get; set; }
+      public string Nombre { get; set; } = null;
       public function MarcaAttribute(string nombre)
       {
          this.Nombre = nombre;

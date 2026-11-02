@@ -36,7 +36,7 @@ class Programa
         string t = string.Join(",", "a", "b");        // la biblioteca
         try
         {
-            s = null;                                 // le falta a JC: null en una cadena
+            s = null;                                 // ya se traduce (#774): un string puede valer null
         }
         catch (NullReferenceException)                // le falta a JC: errores de la VM con su tipo
         {

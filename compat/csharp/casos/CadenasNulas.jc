@@ -1,0 +1,139 @@
+module CsCadenasNulas
+{
+   import CsSystem;
+
+   class Ficha
+   {
+      private string nombre = null;
+      public string Titulo { get; set; } = null;
+      public static string Global { get; set; } = null;
+      private string vacio = "";
+      public function bool NombreNulo()
+      {
+         return this.nombre == null;
+      }
+      public function bool VacioNoNulo()
+      {
+         return this.vacio != null && this.vacio == "";
+      }
+      public function void Pon(string n)
+      {
+         this.nombre = n;
+      }
+      public function string Nombre()
+      {
+         return this.nombre;
+      }
+   }
+
+   class Programa
+   {
+      private static function string Nada()
+      {
+         return null;
+      }
+      private static function int Cual(string s)
+      {
+         switch (s)
+         {
+            case "a":
+               return 1;
+            case "":
+               return 2;
+            default:
+               return 3;
+         }
+      }
+      public static function int Main()
+      {
+         Ficha f = new Ficha();
+         if (!f.NombreNulo())
+         {
+            return 1;
+         }
+         if (f.Titulo != null)
+         {
+            return 2;
+         }
+         if (Ficha.Global != null)
+         {
+            return 3;
+         }
+         if (!f.VacioNoNulo())
+         {
+            return 4;
+         }
+         string s = null;
+         if (s != null)
+         {
+            return 5;
+         }
+         if (s == "")
+         {
+            return 6;
+         }
+         string t = null;
+         if (t != null || s != t)
+         {
+            return 7;
+         }
+         string u = null;
+         if (u != null)
+         {
+            return 8;
+         }
+         if ("x" + s + "y" != "xy")
+         {
+            return 9;
+         }
+         if ("x" + "" + "" + "" != "x")
+         {
+            return 16;
+         }
+         if (Programa.Cual(s) != 3 || Programa.Cual("") != 2 || Programa.Cual("a") != 1)
+         {
+            return 10;
+         }
+         if (!CsSystem.String_IsNullOrEmpty(s) || !CsSystem.String_IsNullOrEmpty("") || CsSystem.String_IsNullOrEmpty("a"))
+         {
+            return 11;
+         }
+         f.Pon("pepe");
+         if (f.NombreNulo() || f.Nombre() != "pepe")
+         {
+            return 12;
+         }
+         f.Pon(Programa.Nada());
+         if (!f.NombreNulo())
+         {
+            return 13;
+         }
+         bool lanzo = false;
+         try
+         {
+            if (strlen(s) > 0)
+            {
+               return 14;
+            }
+         }
+         catch (Exception excepcion_cs1)
+         {
+            lanzo = true;
+         }
+         if (!lanzo)
+         {
+            return 15;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

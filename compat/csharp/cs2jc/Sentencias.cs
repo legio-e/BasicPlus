@@ -486,7 +486,8 @@ namespace Cs2Jc
             if (EsEnum(t)) return Expr(e);
             var cv = m.GetConstantValue(e);
             if (!cv.HasValue) return Rechaza(e, Porque.Pendiente("un case que no es constante"));
-            if (cv.Value == null) return Rechaza(e, EsCadena(m.GetTypeInfo(e).ConvertedType) ? Porque.H7(Porque.NullCadena) : Porque.Pendiente("case null"));
+            // `case null:` (en JC, un switch sobre un null va al default: #774) pediría partir el switch con un if delante
+            if (cv.Value == null) return Rechaza(e, Porque.Pendiente("case null"));
             // el de un switch sobre un uint (en JC, un long): su valor, como long
             var sw = e.Ancestors().OfType<SwitchStatementSyntax>().FirstOrDefault();
             if (sw != null && EsUInt(m.GetTypeInfo(sw.Expression).Type))

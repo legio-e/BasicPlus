@@ -101,9 +101,14 @@
 >   interfaces; la stdlib, idéntica) y abierta `#775`: la red no cuenta como fallo un caso que deja de compilar. La red
 >   otra vez: la paridad, 185 PASS y 0 SKIP; todo verde salvo el estrés con 4 workers, la conocida `#762` (suelto,
 >   verde); `check-jc`, 181 PASS, con los cuatro SKIP de siempre.
-> - **Lo siguiente** (Eduardo, a revisar el traductor de C#: *«OK si»*): los `null` de las cadenas en el traductor
->   —quitar sus cinco rechazos; escribir `= null` en los campos y propiedades `string` sin valor, que en C# nacen
->   `null` y en JC ahora `""`; y lo de `CsSystem` que en C# acepta un `null` sin lanzar—.
+> - **El traductor de C#, con los `null` de las cadenas** (Eduardo, a revisarlo: *«OK si»*): fuera sus rechazos del
+>   `null` en una cadena; el `= null` de C# en los campos y propiedades `string` sin valor (en JC nacerían `""`); un
+>   `null` escrito en una suma, `""`; y `string.IsNullOrEmpty`. El caso `CadenasNulas`; los 25 casos, bien. **Mono:
+>   441** (+7); falla una que funcionaba, `gtest-autoproperty-20`, y cuatro que destapó: abiertas `#776` (cuándo nace
+>   el `""` de un campo: hoy, tras el constructor del padre, y borra lo que éste le puso; y el `= null` del traductor),
+>   `#777` (una constante `string` con `null` para el emisor) y `#778` (dos huecos del traductor: el nombre de un enum
+>   en una cadena, y una variable que C# da por asignada tras un `switch` sobre una constante); y una nota en `#772`
+>   (`Foo(null)` con `Foo(string)` y `Foo(Object)`, ambigua desde `#774`). **Por decidir (Eduardo): `#776` y `#777`.**
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

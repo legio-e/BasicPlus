@@ -40,7 +40,7 @@ class Programa
         Foo Foo = null;
         int x = Foo.X;                                         // ya se traduce (H8): la clase, Foo_
         int y = Doble(3);                                      // ya se traduce (H8): ((short) 3)
-        string s = null;                                       // le falta a JC: null en una cadena
+        string s = null;                                       // ya se traduce (#774): un string puede valer null
         int z = 1__000;                                        // ya se traduce (H8): 1000
         return 0;
     }

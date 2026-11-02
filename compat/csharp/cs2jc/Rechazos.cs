@@ -89,7 +89,6 @@ namespace Cs2Jc
         // las que salieron al traducir (H6, 31-oct)
         public const string BoolBits = "& | ^ sobre bool (sin atajo)";
         public const string ColorColor = "un nombre que es a la vez variable y tipo (el Color Color de C#)";
-        public const string NullCadena = "null en una cadena (en BP un string no es nulo)";
         public const string ConstanteEstrecha = "una constante que cabe, en un argumento o un return estrecho (como en una asignación)";
         public const string Guiones = "los _ de un número, como en C# (varios seguidos, o en el exponente)";
         public const string EnumNegativo = "un enum con valores negativos (o que no caben en un int)";

@@ -1,5 +1,4 @@
 # Lo que el traductor tiene que rechazar en RechazosJc.cs, y por qué (una línea por rechazo, en orden).
 38: le falta a JC: & | ^ sobre bool (sin atajo) — a & b
 39: le falta a JC: & | ^ sobre bool (sin atajo) — c |= b
-43: le falta a JC: null en una cadena (en BP un string no es nulo) — null
 48: le falta a JC: un enum como valor por defecto de un parámetro (JC sólo admite un literal) — = Tonos.Alto

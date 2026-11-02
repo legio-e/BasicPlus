@@ -4924,6 +4924,17 @@ parámetro (el «Color Color»), con un `_` detrás y su aviso, como las palabra
 más, `test-346`, que tapaba el `as`: dos sobrecargas que encajan subiendo, «ambigua» en JC (`#772`). **El tema 1: 103
 de 141.**
 
+**Los `null` de las cadenas, de paso por todos los temas** (2-nov, tras `#774`; Eduardo, a revisar el traductor:
+*«OK si»*). JC ya los tiene (una variable `string` puede valer `null`), así que el traductor deja de rechazarlos:
+`string s = null`, `default(string)`, `(string) null` y `== null`, tal cual. Lo que difiere, a mano: un campo o una
+propiedad `string` sin valor nace `null` en C# y `""` en JC, así que el traductor escribe el `= null` de C#; un `null`
+escrito en una suma de cadenas (`"x" + null`), `""`, lo que vale en C# (en JC es un error a propósito); y
+`string.IsNullOrEmpty`, en `CsSystem`. Siguen fuera un parámetro con `= null` por defecto (JC pide un literal) y `case
+null`. El caso `CadenasNulas`. **Mono: 441** (+7: `test-506`, `test-772`, `test-79` y cuatro `test-xml`); falla una
+que funcionaba, `gtest-autoproperty-20` (el `= null` de la hija corre tras el constructor de la base, que ya le había
+dado valor: `#776`), y cuatro que no se traducían fallan ahora por otra cosa: `test-243` (`#777`), `test-163`
+(`#772`), `test-77` y `test-504` (`#778`).
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos

@@ -433,13 +433,20 @@ namespace Cs2Jc
             {
                 // BP no deja campos públicos («el estado sale por getters y setters»): cada uno, una propiedad.
                 foreach (var v in vars)
+                {
+                    string valor = v.Initializer != null ? " = " + Expr(v.Initializer.Value) : NullDeCSharp(primero.Type);
                     Linea("public " + estatico + tipo + " " + Ident(v.Identifier.ValueText) + " { get; set; }"
-                          + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) + ";" : ""));
+                          + (valor != "" ? valor + ";" : ""));
+                }
                 return;
             }
             Linea(acceso + " " + estatico + tipo + " " + string.Join(", ", vars.Select(v => Ident(v.Identifier.ValueText)
-                  + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : ""))) + ";");
+                  + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : NullDeCSharp(primero.Type)))) + ";");
         }
+
+        /// #774 — un campo o una propiedad `string` sin valor: en C# nace null, y en JC, "" (lo de módulo o de clase sin
+        /// valor). El traductor escribe el null de C#, para que `campo == null` siga dando true.
+        static string NullDeCSharp(ITypeSymbol t) => EsCadena(t) ? " = null" : "";
 
         void EmiteMetodo(MethodDeclarationSyntax me)
         {
@@ -594,7 +601,8 @@ namespace Cs2Jc
             if (acc.All(a => a.Body == null && a.ExpressionBody == null))
             {
                 // automática; `{ get; }` e `{ get; init; }` también: C# ya comprobó que nadie más la escribe
-                Linea(cabecera + " { get; set; }" + (p.Initializer != null ? " = " + Expr(p.Initializer.Value) + ";" : ""));
+                string valor = p.Initializer != null ? " = " + Expr(p.Initializer.Value) : NullDeCSharp(s.Type);
+                Linea(cabecera + " { get; set; }" + (valor != "" ? valor + ";" : ""));
                 return;
             }
             Linea(cabecera);
@@ -762,7 +770,7 @@ namespace Cs2Jc
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             switch (v)
             {
-                case null: return Rechaza(donde, EsCadena(ps.Type) ? Porque.H7(Porque.NullCadena) : Porque.H7(Porque.NullPorDefecto));
+                case null: return Rechaza(donde, Porque.H7(Porque.NullPorDefecto));   // también un string (#774: JC pide un literal)
                 case bool b: return b ? "true" : "false";
                 case string s: return Cadena(s);
                 case char ch: return ((int) ch).ToString(ci);           // un char, su código: en JC es un entero
