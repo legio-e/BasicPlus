@@ -119,7 +119,8 @@
 > - **Las ideas de Eduardo para las colecciones** (`V8_IDEAS` §E11, sin empezar): una lista ordenada que sólo pida
 >   `Comparable`, y *«Comparable debería ser una interfaz que pueda implementar cualquier clase»*; y `foreach` sobre
 >   cualquier contenedor que implemente `Collection`.
-> - **Para la próxima sesión:** por decidir, `#775` (los SKIP de la red), `#778` (dos huecos del traductor), `#779`
+> - **Para la próxima sesión** (Eduardo, al cerrar: *«Mañana hacemos mas o menos lo mismo. Intentamos hacer pendientes
+>   para que no se acumulen y si nos da tiempo avanzamos con las pruebas de Mono»*): primero los pendientes; por decidir, `#775` (los SKIP de la red), `#778` (dos huecos del traductor), `#779`
 >   (`test-cola` con carga), `#772` (la sobrecarga más específica) y las de antes (`#768`–`#771`, `#762`). En el
 >   traductor, `gtest-autoproperty-20` falla por el orden de C# (JC hace lo que Java, (c) de `#776`). **Ojo, al próximo
 >   lote de placas:** la VM (el `null` en las primitivas) y la stdlib (Core, IO, Collections, Gui, Json) cambiaron hoy;
