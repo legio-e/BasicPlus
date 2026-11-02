@@ -3,7 +3,8 @@
 // un fichero entero: la posición tras cada operación, escribir EN MEDIO sin tocar lo de alrededor,
 // el modo "a" (cursor al final al abrir), seek/skip fuera de rango como error, readLine con "\r\n"
 // y sin "\n" final, readStr en CARACTERES, las aperturas duplicadas, `var owner`/`try var` con
-// ~File(), y la red del GC (un File que muere sin close()).
+// ~File(), y la red del GC (un File que muere sin close(): desde V7 #668 lo cierra su destructor, que el GC
+// deja pendiente y corre entre cuantos —V8 #767—).
 module FileCursor
   import IO
 
@@ -152,7 +153,8 @@ module FileCursor
     conOwner()
     conTryVar()
     sinCerrar()
-    gc()                                              // el GC lo cierra (registro de abiertos)
+    gc()                                              // el GC lo deja pendiente de destruir (V7 #668: tiene ~File())
+    sleep(1)                                          // V8 #767: su destructor corre entre cuantos, y lo cierra
     var otra: IO.File := IO.File(R, "w")              // si no lo hubiera cerrado: «ya está abierto»
     print "tras el GC:", otra.isOpen()
     otra.close()

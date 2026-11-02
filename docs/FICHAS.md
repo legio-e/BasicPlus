@@ -7296,6 +7296,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#770` — `sleep(0)` no le da el turno a un destructor pendiente en la VM-C, y en la VM-Java sí: `gc()`, `sleep(0)` y abrir otra vez un `File` que murió sin cerrar va en la VM-Java y en la VM-C da «ya está abierto» (abierta el 2-nov, al analizar `#767`; **sólo análisis**)
+
+- **Medido** (2-nov, una copia de `FileCursor` fuera del repo, las dos VMs de hoy): con `sleep(0)` entre `gc()` y la
+  apertura, la VM-Java corre el destructor del `File` pendiente (`#668`) y acaba; la VM-C no, y se para con «ya está
+  abierto». Con `sleep(1)` o `sleep(20)`, las dos acaban.
+- **Sin mirar por qué.** La hipótesis: en la VM-C, `sleep(0)` vuelve sin pasar por el planificador cuando hay un solo
+  hilo, y la llamada a `Core.__destruyePendientes` no se mete hasta el cuanto siguiente; en la VM-Java, `sleep(0)` cede.
+- **Lo propuesto, sin hacer:** que las dos den el turno en el mismo sitio. Por decidir (Eduardo).
+
 #### 🔵 `#768` — un literal de más de 32 767 bytes no compila, y el error no dice eso: «Símbolo de datos no declarado (forward ref no permitida): __str_0» (abierta el 2-nov, al medir `#732`; **sólo análisis**)
 
 - **Medido** (2-nov, el compilador de hoy, un programa de prueba fuera del repo): dos literales de 32 000 bytes
@@ -7304,7 +7313,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo propuesto, sin hacer:** que el error diga lo que pasa —el literal, su línea y el tope— o subir el tope. Es raro
   (un literal así en un fuente), pero hoy el mensaje despista. Por decidir (Eduardo).
 
-#### 🔵 `#767` — `FileCursor` se para tras `gc()`: un `File` que murió sin `close()` sigue abierto («ya está abierto»), y el sample esperaba que el GC lo cerrase; pasa en las dos VMs, y ya en V7 publicada (abierta el 2-nov, en el censo de `#765`; **sólo análisis**)
+#### ✅ `#767` — `FileCursor` se para tras `gc()`: un `File` que murió sin `close()` sigue abierto («ya está abierto»), y el sample esperaba que el GC lo cerrase; pasa en las dos VMs, y ya en V7 publicada (abierta el 2-nov, en el censo de `#765`; **CERRADA el mismo día**, el commit de `#767`: lo viejo era el sample)
 
 - **Lo que hace:** `sinCerrar()` abre `cursor_test.bin` para escribir y lo deja morir sin `close()`; después, `gc()` y
   `IO.File(R, "w")`, con el comentario «si no lo hubiera cerrado: «ya está abierto»». Y eso es lo que sale:
@@ -7315,6 +7324,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   destructores de `#668`, un `File` se cierra al destruirlo, y eso ya no pasa dentro del `gc()`, sino después.
 - **Lo propuesto, sin hacer:** mirar si la regla cambió a propósito (entonces cambia el sample) o es un fallo (entonces
   el arreglo). Por decidir (Eduardo).
+- **Analizado el 2-nov:** la regla cambió a propósito, con los destructores de `#668` (V7, 8-oct). El GC no suelta un
+  objeto inalcanzable que tiene destructor: lo deja vivo, pendiente, y su destructor corre después, entre cuantos (la
+  llamada a `Core.__destruyePendientes` se mete en un hilo como un evento). `IO.File` tiene `~File()`, que cierra: el
+  paso del GC que cierra los ficheros inalcanzables (`bpvm_files_gc`, `ficherosGc`) ya no lo ve inalcanzable, y el
+  fichero sigue abierto hasta que corre su destructor. Las dos VMs, igual. Medido con una copia: con `sleep(1)` o
+  `sleep(20)` entre `gc()` y la apertura, las dos acaban bien; con `sleep(0)`, la VM-Java sí y la VM-C no (`#770`).
+- **CERRADA el mismo día** (Eduardo eligió la a: *«a)»* —la regla de `#668` se queda y cambia el sample—):
+  `FileCursor` espera con `sleep(1)` después de `gc()`, y su cabecera lo dice. Acaba otra vez con «tras el GC: true» y
+  «fin», el código 0, en las dos VMs. Lo de `sleep(0)`, en `#770`.
 
 #### ✅ `#766` — `StrCursor` se para en `conMove` desde `#714`: escribe con `move` dentro de una cadena, que desde el 23-oct es de solo lectura («move: dst es de solo lectura»); sus seis últimas secciones no corren desde entonces (abierta el 2-nov, al probar `#731`; **CERRADA el mismo día**, el commit de `#766`)
 
