@@ -1156,11 +1156,18 @@ static inline int bpvm_str_ascii(const bpvm_t* vm, uint32_t s) {
     return bpvm_bytes_ascii(vm->memory + s + 4u, bpvm_read_u32_be(vm->memory + s));
 }
 
+/* V8 #739 (2-nov) — una cadena que nace empezando por un byte de continuación: decirlo (bpvm_util.c). */
+void bpvm_str_mal_nacida(const uint8_t* p, uint32_t n);
+
 /* La cadena del heap `s` acaba de NACER, y quien la creó ya sabe si es ASCII: su bit ASCII, el que se diga, y (#714) el
- * de SOLO LECTURA. Sólo para quien la acaba de crear: `move` y `__strCopy` tocan la etiqueta por su cuenta. */
+ * de SOLO LECTURA. Sólo para quien la acaba de crear: `move` y `__strCopy` tocan la etiqueta por su cuenta.
+ * V8 #739 — y EL AVISO: una que empieza por un byte de continuación (10xxxxxx) no puede nacer, y el cursor de las
+ * cadenas (builtins.c) ya no tiene un caso para ella; si naciera, se dice aquí, donde nacen todas (y en __strNace). */
 static inline void bpvm_str_nace_ascii(bpvm_t* vm, uint32_t s, int ascii) {
     if (s < vm->heap_start + 4u) return;   /* no es un bloque del heap */
     uint32_t tag = bpvm_read_u32_be(vm->memory + s - 4u) | BPVM_TAG_SOLO_LECTURA;
+    if (bpvm_read_u32_be(vm->memory + s) > 0u && (vm->memory[s + 4u] & 0xC0u) == 0x80u)
+        bpvm_str_mal_nacida(vm->memory + s + 4u, bpvm_read_u32_be(vm->memory + s));
     bpvm_write_u32_be(vm->memory + s - 4u, ascii ? (tag | BPVM_TAG_ASCII) : (tag & ~BPVM_TAG_ASCII));
 }
 

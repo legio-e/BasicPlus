@@ -1068,16 +1068,17 @@ static uint32_t move_elem(int tipo) {
  *   2. entre llamadas, el CURSOR del hilo (bpvm_strcur_t): la siguiente sobre la misma cadena sigue desde donde quedó,
  *      hacia delante o hacia atrás. Recorrer una cadena por índice deja de ser n².
  * Dónde empieza un carácter es lo de utf8_byte_offset —en el byte 0 y en todo byte que no es de continuación
- * (10xxxxxx)—, hacia delante y hacia atrás: el resultado es el de antes. Una cadena que EMPIEZA por un byte de
- * continuación (UTF-8 mal formado) cuenta con utf8_cp_count un carácter menos que con esa definición: para ella, el
- * lento de siempre, sin cursor. Sin hilo (una native), un cursor propio que sólo dura la llamada.
+ * (10xxxxxx)—, hacia delante y hacia atrás: el resultado es el de antes. Una cadena que empezara por un byte de
+ * continuación (UTF-8 mal formado) contaría con utf8_cp_count un carácter menos que con esa definición. Tuvo un caso
+ * aparte, el lento de siempre, mientras quedaba una puerta por la que nacer; desde V8 #739 (2-nov) no lo tiene: no nace
+ * ninguna (#711, #714, #724, #763), y si naciera, lo diría su nacimiento (bpvm_str_nace_ascii). Con una así, el cursor
+ * no se sale de la cadena (test-malnacida). Sin hilo (una native), un cursor propio que sólo dura la llamada.
  * Por qué el cursor no puede mentir: la clave es la referencia entera —el handle con su generación, que distingue una
  * cadena muerta de la que ocupa su sitio, o la dirección de un literal—; guarda posiciones desde el principio de la
  * cadena, no direcciones, así que la compactación no le estorba; y una cadena no cambia mientras existe, salvo por
  * `move`, que sube vm->str_epoca y los invalida todos. */
 
 #define BP_CONT(b) (((b) & 0xC0u) == 0x80u)
-#define BP_EMPIEZA_MAL(p, n) ((n) > 0u && BP_CONT((p)[0]))   /* el primer byte, de continuación: el lento de siempre */
 
 /* ¿Sirve el cursor para esta cadena? La misma referencia entera y la misma época (ningún `move` desde entonces). La
  * época se lee con ACQUIRE, la mitad lectora de la publicación: si se ve la que subió un `move` (con RELEASE, después de
@@ -1143,7 +1144,7 @@ int32_t bpvm_prim_str_len(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32
 /* V8 #717: fuera de rango devuelve -1 (ningún carácter lo es), y quien llama lanza el error de charAt; antes, 0 en silencio. */
 int32_t bpvm_prim_char_code_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s, int32_t i) {
     bpvm_strcur_t propio = {0};
-    uint32_t nbytes, ncp, off, adv;
+    uint32_t nbytes, off, adv;
     const uint8_t* p;
     if (s == 0u) return -1;   /* sin valor: la vacía */
     nbytes = bpvm_read_u32_be(vm->memory + s);
@@ -1151,12 +1152,6 @@ int32_t bpvm_prim_char_code_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, u
     if (bpvm_str_ascii(vm, s))   /* V8/H5: el rápido: el carácter i ES el byte i (fuera de rango, -1, como abajo) */
         return (i < 0 || (uint32_t) i >= nbytes) ? -1 : (int32_t) p[i];
     if (i < 0) return -1;
-    if (BP_EMPIEZA_MAL(p, nbytes)) {   /* el lento de siempre */
-        ncp = utf8_cp_count(p, nbytes);
-        if ((uint32_t) i >= ncp) return -1;
-        off = utf8_byte_offset(p, nbytes, (uint32_t) i);
-        return (int32_t) utf8_decode(p + off, nbytes - off, &adv);   /* H2: codepoint en índice de codepoint */
-    }
     if (cur == NULL) { cur = &propio; clave = s; }
     off = strcur_byte_de(vm, cur, clave, p, nbytes, (uint32_t) i);   /* V8/H5: desde el cursor, una pasada */
     if (off >= nbytes) return -1;                                      /* fuera de rango */
@@ -1183,14 +1178,6 @@ int bpvm_prim_char_at(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clave, uint32_t s
         }
         enc[0] = p[i];
         enc_len = 1;
-    } else if (BP_EMPIEZA_MAL(p, nbytes)) {   /* el lento de siempre */
-        uint32_t ncp = utf8_cp_count(p, nbytes);
-        if (i < 0 || (uint32_t) i >= ncp) {
-            snprintf(err, n, "charAt: idx fuera de rango %" PRId32 " (len=%d)", i, (int) ncp);
-            return -1;
-        }
-        off = utf8_byte_offset(p, nbytes, (uint32_t) i);
-        enc_len = utf8_encode(utf8_decode(p + off, nbytes - off, &adv), enc);   /* antes de reservar */
     } else {   /* V8/H5: el lento con los dos contadores, desde el cursor */
         off = (i < 0) ? nbytes : strcur_byte_de(vm, cur, clave, p, nbytes, (uint32_t) i);
         if (off >= nbytes) {
@@ -1214,7 +1201,6 @@ int32_t bpvm_prim_str_cuenta_hasta(bpvm_t* vm, bpvm_strcur_t* cur, uint64_t clav
     uint32_t nbytes = bpvm_read_u32_be(vm->memory + s);
     uint32_t ci, dcur;
     if (off == 0u) return 0;
-    if (BP_EMPIEZA_MAL(p, nbytes)) return (int32_t) utf8_cp_count(p, off);   /* el lento de siempre */
     if (cur == NULL) { cur = &propio; clave = s; }
     strcur_de(vm, cur, clave);
     /* Contar los caracteres de [0, off) desde el punto conocido más cerca, en bytes: el principio, el cursor o el final. */
@@ -1247,12 +1233,6 @@ int bpvm_prim_substring(bpvm_t* vm, bpvm_strcur_t* cur, bpref_t s, int32_t desde
         if (desde > hasta) desde = hasta;
         boff = (uint32_t) desde;
         eoff = (uint32_t) hasta;
-    } else if (BP_EMPIEZA_MAL(p, nbytes)) {   /* el lento de siempre */
-        uint32_t ncp = utf8_cp_count(p, nbytes);   /* H2: índices en codepoints */
-        if ((uint32_t) hasta > ncp) hasta = (int32_t) ncp;
-        if (desde > hasta) desde = hasta;
-        boff = utf8_byte_offset(p, nbytes, (uint32_t) desde);
-        eoff = utf8_byte_offset(p, nbytes, (uint32_t) hasta);
     } else if (desde > hasta) {   /* `desde` se recorta a `hasta` (recortado): vacía */
         boff = eoff = 0u;
     } else {   /* V8/H5: una pasada con los dos contadores: hasta `desde`, y de ahí hasta `hasta` (pasado el final, el final) */
@@ -2979,6 +2959,9 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t tag = bpvm_read_u32_be(vm->memory + cab);
         if ((tag & BPVM_TAG_FREE_BIT) || ((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT) != BPVM_TYPE_ARRAY_I8)
             return builtin_throw(vm, tc, "strNace: no es un array de bytes");
+        /* V8 #739 — el aviso, como en bpvm_str_nace_ascii: una que empieza por un byte de continuación no puede nacer */
+        if (bpvm_read_u32_be(vm->memory + cab + 4u) > 0u && BP_CONT(vm->memory[cab + 8u]))
+            bpvm_str_mal_nacida(vm->memory + cab + 8u, bpvm_read_u32_be(vm->memory + cab + 4u));
         bpvm_write_u32_be(vm->memory + cab, tag | BPVM_TAG_SOLO_LECTURA);
         return BPVM_OK;
     }

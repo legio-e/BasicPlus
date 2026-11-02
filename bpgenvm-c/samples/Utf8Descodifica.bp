@@ -9,6 +9,8 @@
 module Utf8Descodifica
   import IO
   import Json
+  import Machine
+  import Packs
 
   var F: string := "u711.txt"
   var buenas: integer := 0
@@ -88,6 +90,17 @@ module Utf8Descodifica
     sb.appendChar(cp)
     mira("appendChar(" + intToString(cp) + ")", hex(sb.toString()), esperado)
   end appendBueno
+
+  // ¿es UTF-8 válido? Lo de una fuente de confianza: fromBytes(toBytes(s)) no lanza
+  function bienFormada(s: string): boolean
+    var r: boolean := true
+    try
+      var t: string := fromBytes(toBytes(s))
+    catch e: EncodingError
+      r := false
+    endtry
+    return r
+  end bienFormada
 
   function jsonBueno(que: string, texto: string, esperado: string)
     mira("Json " + que, hex(Json.parseJson(texto).asString()), esperado)
@@ -236,6 +249,28 @@ module Utf8Descodifica
     catch e: EncodingError
       mira("pathAbsolute, válido", e.msg, "true")
     endtry
+    // V8 #739 (2-nov): el ENV y los nombres de los packs. En el PC no hay ni lo uno ni lo otro (en las dos VMs, "" y
+    // ningún pack): esto mira lo de las placas. El argumento de ejecución y los nombres que no son ASCII, en Utf8Sistema.
+    mira("ENV, válido", boolToString(bienFormada(Machine.getEnv("imagen.fecha"))), "true")
+    var grabados: List := Packs.list()
+    var malosPack: integer := 0
+    var ip: integer := 0
+    while ip < grabados.length() do
+      var pack: string := grabados.getString(ip)
+      if not bienFormada(pack) then
+        malosPack += 1
+      endif
+      var dentro: List := Packs.listIn(pack, "")
+      var jf: integer := 0
+      while jf < dentro.length() do
+        if not bienFormada(dentro.getString(jf)) then
+          malosPack += 1
+        endif
+        jf += 1
+      endwh
+      ip += 1
+    endwh
+    mira("packs, nombres mal formados", intToString(malosPack), "0")
 
     print "Utf8Descodifica: " + intToString(buenas) + " bien, " + intToString(malas) + " mal"
   end Main

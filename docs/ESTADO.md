@@ -39,6 +39,9 @@
 >   (`bpgenvm-c/win/`), en el CLI y en el simulador; en la red, `Utf8Sistema`, con la marca nueva `// argumento:`. La
 >   red, VERDE. `#764`, decidido (Eduardo: *«error si no cabe, pero también se puede agrandar el tamaño si vemos que hay
 >   casos que realmente no cabe»*).
+> - **`#739`, cerrada:** el caso del cursor, quitado; en su lugar, el aviso donde nace toda cadena, en las dos VMs (sus
+>   primeros bytes, las tres primeras veces; en la red, rojo), con su prueba en cada una; y las fuentes de confianza
+>   que faltaban, con su test. La red y `check-jc`, VERDES. A las placas, con el próximo lote.
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

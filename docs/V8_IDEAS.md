@@ -2689,7 +2689,8 @@ contando desde el principio y hace de oráculo.
     cursores. El hilo la lee con ACQUIRE: con dos runs, quien ve la época nueva ve también los bytes nuevos.
 - **Lo que queda como estaba:**
   - una cadena que EMPIEZA por un byte de continuación va por el lento de siempre, sin cursor: con `utf8_cp_count`
-    tiene un carácter menos que caminando (`#711`);
+    tiene un carácter menos que caminando (`#711`). **Quitado el 2-nov (`#739`):** en su lugar, el aviso donde nace
+    toda cadena;
   - las natives (el AOT) no tienen hilo del intérprete: cada llamada usa un cursor propio que sólo dura esa llamada
     (sólo el escalón 1);
   - lo que devuelve cada función, también lo que no casa entre las VMs (`#711`, `#717`).
@@ -3968,7 +3969,9 @@ Esperando el OK de Eduardo a las propuestas 1 y 2.
 
 Lo que queda fuera, cada cosa en su ficha: el texto de los packs (SQLite: `string_from_cstr` no descodifica, y el
 pegamento del AOT corta en 512 bytes, a veces a medio carácter, y sin avisar), y los streams (por diseñar). El caso
-especial del cursor (cadenas que empiezan por una continuación) se queda mientras quede una puerta.
+especial del cursor (cadenas que empiezan por una continuación) se queda mientras quede una puerta. **(2-nov, `#739`:
+quitado. La última puerta conocida era la VM-C de PC en Windows, que recibía el argumento y los nombres de fichero en
+la página 1252 —`#763`, cerrada—; en su lugar, el aviso donde nace toda cadena.)**
 
 **`#724` HECHO (27-oct; Eduardo: *«OK, sigue con la propuesta»*).** El texto de un pack, con la misma regla: el puente
 lo copia ENTERO a un `byte[]` (sin el corte de 512; un tope de 1 MB que no corta, avisa) y, si la native devuelve

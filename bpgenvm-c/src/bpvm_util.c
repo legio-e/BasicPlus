@@ -214,6 +214,25 @@ void bpvm_ref_rota_report(uint32_t alta, uint32_t baja, uint32_t handle_next) {
               (unsigned long) alta, (unsigned long) baja, (unsigned long) handle_next);
 }
 
+/* V8 #739 (2-nov) — una cadena que NACE empezando por un byte de continuación (10xxxxxx): UTF-8 roto, que no puede
+ * nacer —lo de fuera se descodifica al nacer (#711), las fuentes de confianza tienen su test y lo que da el sistema
+ * en el PC llega en UTF-8 (#763)—. El cursor de las cadenas (builtins.c) ya no tiene un caso para ella: contaría un
+ * carácter más que la VM-Java. Si alguna vez nace, se dice —el aviso es que se vea, nada más (#758)— con sus primeros
+ * bytes, que dicen de dónde viene. Lo llaman bpvm_str_nace_ascii y __strNace. Por el canal normal y las tres primeras:
+ * lo que se busca es la puerta, no la cuenta. */
+void bpvm_str_mal_nacida(const uint8_t* p, uint32_t n) {
+    static unsigned dichas = 0;
+    char hex[12 * 3 + 1];
+    size_t k = 0;
+    uint32_t i;
+    if (dichas >= 3u) return;
+    dichas++;
+    hex[0] = '\0';
+    for (i = 0; i < n && i < 12u; i++) k += (size_t) snprintf(hex + k, sizeof hex - k, " %02X", (unsigned) p[i]);
+    bpvm_diag("[bpvm] cadena MAL NACIDA: empieza por un byte de continuación (UTF-8 roto), %lu B:%s%s; una puerta sin"
+              " descodificar (#739)", (unsigned long) n, hex, n > 12u ? " ..." : "");
+}
+
 /* V7/H12 (#660) — los caminos SIN ALINEAR de bpvm_read/write_u32/u16_be (bpvm_internal.h): byte a byte, como siempre.
  * Fuera de línea porque son los raros (los operandos del código); lo alineado, de una vez, va en línea. */
 uint32_t bpvm_read_u32_be_bytes(const uint8_t* p) {

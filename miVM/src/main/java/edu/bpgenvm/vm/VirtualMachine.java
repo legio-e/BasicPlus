@@ -5059,12 +5059,41 @@ public class VirtualMachine {
     }
 
     /** La cadena del heap `ref` acaba de NACER: su bit ASCII (por los bytes que tiene de verdad) y, desde #714, el de
-     *  SOLO LECTURA. Sólo para quien la acaba de crear: `move` y `__strCopy` tocan la etiqueta por su cuenta. */
+     *  SOLO LECTURA. Sólo para quien la acaba de crear: `move` y `__strCopy` tocan la etiqueta por su cuenta.
+     *  V8 #739 — y EL AVISO: una que empieza por un byte de continuación (10xxxxxx) no puede nacer; si naciera, se dice
+     *  aquí, donde nacen todas (y en __strNace). Espejo de bpvm_str_nace_ascii (VM-C). */
     private void strNace(long ref, boolean ascii) {
         int a = refDeref(ref);
         if (a - 4 < heapStart) return;   // no es un bloque del heap
+        if (readInt32(a) > 0 && (memory[a + 4] & 0xC0) == 0x80) strMalNacida(a);
         int tag = readInt32(a - 4) | TAG_SOLO_LECTURA_BIT;
         writeInt32(a - 4, ascii ? (tag | TAG_ASCII_BIT) : (tag & ~TAG_ASCII_BIT));
+    }
+
+    /** V8 #739 (2-nov) — cuántos avisos de cadena mal nacida van: se dicen las tres primeras. */
+    private int malNacidas = 0;
+
+    /** V8 #739 (2-nov) — una cadena que NACE empezando por un byte de continuación: UTF-8 roto, que no puede nacer —lo
+     *  de fuera se descodifica al nacer (#711), y las fuentes de confianza tienen su test—. Si alguna vez nace, se dice
+     *  —el aviso es que se vea, nada más (#758)— con sus primeros bytes y quién la creó: el primer marco de la pila de
+     *  Java que no es el nacimiento. Las tres primeras: lo que se busca es la puerta. Espejo de bpvm_str_mal_nacida
+     *  (VM-C), que no sabe quién. */
+    private void strMalNacida(int a) {
+        if (malNacidas >= 3) return;
+        malNacidas++;
+        int n = readInt32(a);
+        StringBuilder hex = new StringBuilder();
+        for (int i = 0; i < n && i < 12; i++) hex.append(String.format(" %02X", memory[a + 4 + i] & 0xFF));
+        String quien = "?";
+        for (StackTraceElement e : new Throwable().getStackTrace()) {
+            String m = e.getMethodName();
+            if (!m.equals("strMalNacida") && !m.equals("strNace") && !m.startsWith("allocVm") && !m.equals("nacerDeFuera")) {
+                quien = m + ", línea " + e.getLineNumber();
+                break;
+            }
+        }
+        System.err.println("[bpvm] cadena MAL NACIDA: empieza por un byte de continuación (UTF-8 roto), " + n + " B:" + hex
+                + (n > 12 ? " ..." : "") + "; una puerta sin descodificar (#739), en " + quien);
     }
 
     /** El primer sitio, en BYTES, de la aguja en la cadena; -1 si no está; 0 con la aguja vacía (como String.indexOf).
@@ -5726,6 +5755,8 @@ public class VirtualMachine {
                 int tag = readInt32(cab);
                 if ((tag & TAG_FREE_BIT) != 0 || ((tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT) != TYPE_ARRAY_I8)
                     throwBpRuntimeError(tc, "strNace: no es un array de bytes");
+                // V8 #739 — el aviso, como en strNace: una que empieza por un byte de continuación no puede nacer
+                if (readInt32(a) > 0 && (memory[a + 4] & 0xC0) == 0x80) strMalNacida(a);
                 writeInt32(cab, tag | TAG_SOLO_LECTURA_BIT);
                 pushTcRef(tc, ref);
                 break;

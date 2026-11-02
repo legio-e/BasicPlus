@@ -8176,7 +8176,7 @@ con un motor nativo no grababa si se lanzaba con `python -X utf8` (la salida de 
   log y los búferes del enlace, recortados; la zona roja, mirada en cada instrucción—, y decidido que se queda así. Lo
   de calcular lo más que apila cada función, «para cuando interese»: sin ficha.
 
-#### 🔵 `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **por mirar**)
+#### ✅ `#739` — el caso especial del cursor: una cadena que EMPIEZA por un byte de continuación va por el lento, sin cursor; con `#711`, `#714` y `#724` ya no queda ninguna puerta conocida por la que pueda nacer así (abierta el 27-oct, al cerrar el H5; **CERRADA el 2-nov**, el commit de `#739`: quitado, y el aviso donde nace toda cadena)
 
 `BP_EMPIEZA_MAL` (`bpgenvm-c/src/builtins.c`): con `utf8_cp_count`, una cadena que empieza por un byte de
 continuación (UTF-8 mal formado) cuenta un carácter menos que caminando, así que va por el lento de siempre, sin
@@ -8190,6 +8190,21 @@ con su test— y quitar el caso, o dejarlo como una comprobación que avise si a
   no la vi; probando con argumentos y nombres de fichero no ASCII, sí: la VM-C de PC, en Windows, recibe el argumento y
   los nombres de `listDir` en la página 1252, y `¿hola?` le llega como `BF 68 6F…`, `¡hola.txt` como `A1 68 6F…`
   (`#763`). De paso, el argumento se corta a 127 bytes sin decirlo (`#764`). Quitar el caso, después de cerrar `#763`.
+- **CERRADA el 2-nov**, con `#763` cerrada antes (la puerta), como estaba aprobado:
+  - **el caso, quitado** de las cuatro (`charCodeAt`, `charAt`, `substring` y el contar de `indexOf`, en
+    `builtins.c`): una cadena así, si existiera, iría por el cursor como las demás. Con ella, el cursor no se sale de
+    la cadena —lo que dé: una cadena rota no tiene un valor bueno—; lo prueba `test-malnacida`, que la fuerza a mano;
+  - **el aviso, donde nace toda cadena,** en las dos VMs: `bpvm_str_nace_ascii` y `__strNace` (VM-C), `strNace` y
+    `STR_NACE` (VM-Java). Si el primer byte es de continuación, el diagnóstico lo dice con sus primeros bytes —la
+    VM-Java, también quién la creó: el primer marco de su pila que no es el nacimiento—, las tres primeras veces, y el
+    programa sigue. Cuesta leer un byte por cadena creada. Lo prueban, forzándola a mano, `test-malnacida` (VM-C, en
+    las pruebas de C de la red) y `StrMalNacidaTest` (VM-Java); y en la red es rojo: el arnés rescata «MAL NACIDA» del
+    stderr de las dos VMs, como «HEAP INCONSISTENTE»;
+  - **las fuentes de confianza que faltaban, con su test:** el argumento del RUN, en `Utf8Sistema` (`#763`, con uno que
+    no es ASCII); el ENV (`imagen.fecha`) y los nombres de los packs y de lo que llevan, en `Utf8Descodifica` §10. En el
+    PC no hay ENV ni packs (las dos VMs: "" y ninguno): esas dos miran lo de las placas.
+- La red, VERDE (14:31); `check-jc`, VERDE (8:24); las pruebas de la VM-Java, 62 (una nueva). A las placas, con el próximo
+  lote.
 
 #### 🔵 `#738` — en la Metro, copiar y poner a cero las cadenas grandes sin pasar por la caché del XIP (el alias sin caché o el DMA) (abierta el 27-oct, al cerrar el H5; **por medir**)
 

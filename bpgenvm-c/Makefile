@@ -1549,6 +1549,14 @@ test-utf8:
 	@echo "--- V8/H5 #711 UTF-8: la rutina contra la tabla del estandar (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_utf8.exe
 
+# V8 #739 (2-nov) — una cadena que nace empezando por un byte de continuacion, forzada a mano (ningun programa la crea):
+# el aviso de su nacimiento, sus bytes, solo las tres primeras, y el cursor de las cadenas sin salirse de ella.
+test-malnacida: $(LIBOBJ)
+	@mkdir -p build
+	$(CC) $(CFLAGS) -Isrc test/test_malnacida.c $(LIBOBJ) -o build/test_malnacida.exe $(LDFLAGS)
+	@echo "--- #739: la cadena mal nacida, el aviso y el cursor (esperado: solo 'ok', [status=OK]) ---"
+	./build/test_malnacida.exe
+
 # V6/U6 — el planificador de memoria contra los numeros MEDIDOS de cada placa
 # (C3, S3, Metro con PSRAM, Pico sin ella). Host-only: solo <stddef.h>/<stdio.h>.
 test-mem:
