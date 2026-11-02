@@ -7,6 +7,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Cs2Jc
 {
@@ -19,7 +20,7 @@ namespace Cs2Jc
             if (conv.IsBoxing) return Caja(e, m.GetTypeInfo(e).Type, m.GetTypeInfo(e).ConvertedType);
             if (conv.IsUnboxing) return Rechaza(e, Porque.Pendiente("sacar de una caja sin conversión"));
             if (conv.IsUserDefined) return Rechaza(e, Porque.H7(Porque.Operadores));
-            if (conv.IsNullable) return Rechaza(e, Porque.Fuera(Porque.Nullable));
+            if (conv.IsNullable) return ConversionNullable(e, m.GetTypeInfo(e).Type, m.GetTypeInfo(e).ConvertedType);   // un T?
             if (conv.IsEnumeration) return Rechaza(e, Porque.Fuera(Porque.EnteroAEnum));      // `Color c = 0;`
             if (conv.IsMethodGroup) return Rechaza(e, Porque.H7(Porque.Delegados));
             // una constante que cabe en un byte, un short…: JC la acepta en una declaración o una asignación, no en un
@@ -63,6 +64,14 @@ namespace Cs2Jc
         /// `object o = 5;`: `Object o = new Integer(5);`. Sólo las de las cajas de BP, y sólo como `object`.
         string Caja(ExpressionSyntax e, ITypeSymbol de, ITypeSymbol a)
         {
+            if (EsNullable(de))
+            {
+                // un T? como object: la misma referencia (su caja ya es un Object), si es la de su T (la de un byte?, un
+                // Integer, no lo es)
+                if (ClaseDeCaja(DeNullable(de)) == null) return Rechaza(e, PorTipo(de) ?? Porque.Pendiente("una caja de " + NombreCompleto(de)));
+                if (a == null || a.SpecialType != SpecialType.System_Object) return Rechaza(e, Porque.Pendiente("una caja como " + NombreCompleto(a)));
+                return ExprBase(e);
+            }
             string clase = ClaseDeCaja(de);
             if (clase == null) return Rechaza(e, Porque.Pendiente("una caja de " + NombreCompleto(de)));
             if (a == null || a.SpecialType != SpecialType.System_Object) return Rechaza(e, Porque.Pendiente("una caja como " + NombreCompleto(a)));
@@ -128,6 +137,7 @@ namespace Cs2Jc
                 var tx = m.GetTypeInfo(x).Type;
                 if (SymbolEqualityComparer.Default.Equals(tx, at.ElementType)) partes.Add(Expr(x));
                 else if (tx == null && !at.ElementType.IsValueType && !EsCadena(at.ElementType)) partes.Add(Expr(x));   // null
+                else if (EsNullable(at.ElementType)) partes.Add(Expr(x));            // un T?: null, o el valor en su caja
                 else if (EsNumerico(tx) && EsNumerico(at.ElementType)) partes.Add("(" + Tipo(at.ElementType, x) + ") " + Atomo(x));
                 else return Rechaza(donde, Porque.H7(Porque.ArrayDeVarios));
             }
@@ -173,6 +183,14 @@ namespace Cs2Jc
         /// en JC es su código, como su carácter: `Str.fromCharCode(c)`.
         string Texto(ExpressionSyntax e)
         {
+            if (EsNullable(m.GetTypeInfo(e).Type))
+            {
+                // un T?: vacío si es null, como C#
+                string x = ExprBase(e);
+                if (x == Hueco) return Hueco;
+                imports.Add("CsSystem");
+                return "CsSystem.Nullable_Texto(" + x + ")";
+            }
             if (m.GetTypeInfo(e).Type?.SpecialType == SpecialType.System_Char)
             {
                 imports.Add("Str");
@@ -236,6 +254,7 @@ namespace Cs2Jc
                 case SpecialType.System_Boolean: return "false";
                 case SpecialType.System_String: return Rechaza(e, Porque.H7(Porque.NullCadena));
             }
+            if (EsNullable(t)) return PorTipo(t) is string p ? Rechaza(e, p) : "null";
             if (t == null || t.IsValueType) return Rechaza(e, Porque.Pendiente("default de " + NombreCompleto(t)));
             return "null";
         }
@@ -282,6 +301,7 @@ namespace Cs2Jc
                     if (a.IsKind(SyntaxKind.CoalesceAssignmentExpression)) return Rechaza(a, Porque.H7(Porque.NuloYPunto));
                     if (a.IsKind(SyntaxKind.UnsignedRightShiftAssignmentExpression)) return Rechaza(a, Porque.Pendiente(">>>="));
                     if (m.GetSymbolInfo(a.Left).Symbol is IEventSymbol) return Rechaza(a, Porque.H7(Porque.Delegados));
+                    if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) && EsNullable(m.GetTypeInfo(a.Left).Type)) return AsignaNullable(a);
                     if ((a.IsKind(SyntaxKind.AndAssignmentExpression) || a.IsKind(SyntaxKind.OrAssignmentExpression)
                          || a.IsKind(SyntaxKind.ExclusiveOrAssignmentExpression)) && EsBool(m.GetTypeInfo(a.Left).Type))
                         return Rechaza(a, Porque.H7(Porque.BoolBits));
@@ -293,9 +313,11 @@ namespace Cs2Jc
                     return Expr(a.Left) + " " + a.OperatorToken.Text + " " + (unir ? ExprBase(a.Right) : Expr(a.Right));
                 case PostfixUnaryExpressionSyntax p when p.IsKind(SyntaxKind.PostIncrementExpression) || p.IsKind(SyntaxKind.PostDecrementExpression):
                     if (EsEnum(m.GetTypeInfo(p.Operand).Type)) return Rechaza(p, Porque.Fuera(Porque.EnteroAEnum));
+                    if (EsNullable(m.GetTypeInfo(p.Operand).Type)) return IncNullable(p.Operand, p.IsKind(SyntaxKind.PostIncrementExpression), p);
                     return Expr(p.Operand) + p.OperatorToken.Text;
                 case PrefixUnaryExpressionSyntax p when p.IsKind(SyntaxKind.PreIncrementExpression) || p.IsKind(SyntaxKind.PreDecrementExpression):
                     if (EsEnum(m.GetTypeInfo(p.Operand).Type)) return Rechaza(p, Porque.Fuera(Porque.EnteroAEnum));
+                    if (EsNullable(m.GetTypeInfo(p.Operand).Type)) return IncNullable(p.Operand, p.IsKind(SyntaxKind.PreIncrementExpression), p);
                     return Expr(p.Operand) + p.OperatorToken.Text;
                 case InvocationExpressionSyntax _:
                 case ObjectCreationExpressionSyntax _:
@@ -320,7 +342,7 @@ namespace Cs2Jc
             if (t.TypeKind == TypeKind.Dynamic) return Porque.Fuera(Porque.Dynamic);
             if (t.TypeKind == TypeKind.Pointer || t.TypeKind == TypeKind.FunctionPointer) return Porque.Fuera(Porque.Unsafe);
             if (t.TypeKind == TypeKind.Delegate) return Porque.H7(Porque.Delegados);
-            if (t.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) return Porque.Fuera(Porque.Nullable);
+            if (DeNullable(t) is ITypeSymbol u) return CajaDeNullable(t) != null ? null : PorNullable(u);   // un T?: su caja
             if (t is IArrayTypeSymbol at) return PorTipo(at.ElementType);
             return null;
         }
@@ -546,6 +568,13 @@ namespace Cs2Jc
         {
             var ctor = m.GetSymbolInfo(oc).Symbol as IMethodSymbol;
             var tipo = m.GetTypeInfo(oc).Type as INamedTypeSymbol;
+            if (EsNullable(tipo))
+            {
+                // `new int?()` es null; `new int?(5)`, su caja
+                if (PorTipo(tipo) is string p) return Rechaza(oc, p);
+                if (oc.ArgumentList == null || oc.ArgumentList.Arguments.Count == 0) return "null";
+                return MeteEnCaja(oc.ArgumentList.Arguments[0].Expression, tipo);
+            }
             if (ctor == null || tipo == null) return Rechaza(oc, Porque.Pendiente("un new sin resolver"));
             // `new IFoo()`: una interfaz COM ([CoClass]); una interfaz no se construye
             if (tipo.TypeKind == TypeKind.Interface) return Rechaza(oc, Porque.Fuera(Porque.Interop));
@@ -557,6 +586,9 @@ namespace Cs2Jc
 
         string Binaria(BinaryExpressionSyntax b)
         {
+            // con un T?: sus funciones de CsSystem (Nullables.cs); `x ?? y`, el ternario
+            if (b.IsKind(SyntaxKind.CoalesceExpression) && EsNullable(m.GetTypeInfo(b.Left).Type)) return CoalesceNullable(b);
+            if (m.GetOperation(b) is IBinaryOperation bo && EsOperacionNullable(bo)) return BinariaNullable(b, bo);
             switch (b.Kind())
             {
                 case SyntaxKind.AsExpression:
@@ -569,6 +601,8 @@ namespace Cs2Jc
                     var t = m.GetTypeInfo(b.Right).Type;
                     // `o is int`: ¿lleva una caja de int? En BP, `o is Integer`
                     var izq = m.GetTypeInfo(b.Left).Type;
+                    // `x is int`, con `x` un int?: si tiene valor
+                    if (EsNullable(izq) && SymbolEqualityComparer.Default.Equals(DeNullable(izq), t)) return "(" + Expr(b.Left) + " != null)";
                     if (t != null && t.IsValueType && ClaseDeCaja(t) != null && izq != null && !izq.IsValueType)
                         return Expr(b.Left) + " is " + ClaseDeCaja(t);
                     if (t == null || t.IsValueType || EsCadena(t)
@@ -616,6 +650,7 @@ namespace Cs2Jc
 
         string Prefijo(PrefixUnaryExpressionSyntax pu)
         {
+            if (m.GetOperation(pu) is IUnaryOperation uo && (uo.IsLifted || EsNullable(uo.Operand.Type))) return PrefijoNullable(pu, uo);
             if (EsEnum(m.GetTypeInfo(pu.Operand).Type)) return Rechaza(pu, Porque.Fuera(Porque.EnteroAEnum));   // `~e`: otro enum
             switch (pu.Kind())
             {
@@ -660,6 +695,7 @@ namespace Cs2Jc
                     return Rechaza(c, Porque.H7(Porque.NullConTipo));
                 if (!a.IsValueType) return "null";
             }
+            if (EsNullable(a) || EsNullable(de)) return ConversionEscritaNullable(c, de, a);      // un T? (Nullables.cs)
             if (EsEnum(a) && !SymbolEqualityComparer.Default.Equals(a, de)) return Rechaza(c, Porque.Fuera(Porque.EnteroAEnum));
             // `(int) Color.Rojo`, `(long) c`: se copia (Eduardo, 31-oct: «es el compilador el que ha de hacer la
             // conversión»); a un tipo estrecho, todavía no
@@ -766,6 +802,7 @@ namespace Cs2Jc
             }
             string p = PorTipo(ty);
             if (p != null) return Rechaza(donde, p);
+            if (CajaDeNullable(ty) is string caja) return caja;                // un T?, su caja (Nullables.cs)
             if (ty is IArrayTypeSymbol at)
             {
                 if (at.Rank > 1) return Rechaza(donde, Porque.H7(Porque.ArraysVarias));

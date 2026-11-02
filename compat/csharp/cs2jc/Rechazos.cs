@@ -1,6 +1,9 @@
 // Lo que no se traduce, y por qué (V8/H6, docs/V8_IDEAS.md §E9). Cuatro motivos:
 //   - le falta a JC: una mejora de H7 (los nombres, los de #745, para que las cuentas casen con las de entonces);
-//   - fuera: lo que Eduardo deja fuera (las lambdas, la herencia múltiple) o lo que la VM no tiene;
+//   - fuera: lo que Eduardo deja fuera (las lambdas; un entero que se convierte en un enum, #522) y lo que se clasificó
+//     así en #745 (la reflexión, decimal…; por repasar, 2-nov). Ya no: la herencia múltiple al estilo Java —varias
+//     interfaces, la única que tiene C#— entró con H7.3 (#756); e int? (Eduardo, 2-nov: «int? es Integer (la clase)»),
+//     con las cajas de BP (Nullables.cs);
 //   - el traductor todavía no: una regla que falta (no es culpa de JC);
 //   - la biblioteca: un miembro de .NET que no está en la tabla (Biblioteca.cs);
 //   - un fallo de JC, con su ficha: la traducción es buena y JC la haría mal (se quita al cerrar la ficha).
@@ -105,7 +108,6 @@ namespace Cs2Jc
         public const string Async = "async/await";
         public const string Unsafe = "unsafe y punteros";
         public const string SinSigno = "sin signo y decimal";
-        public const string Nullable = "nullable (int?)";
         public const string Checked = "checked";
         public const string Goto = "goto";
         public const string Reflexion = "reflexión (typeof, GetType, atributos)";
@@ -160,7 +162,7 @@ namespace Cs2Jc
             [SyntaxKind.StackAllocArrayCreationExpression] = Fuera(Unsafe),
             [SyntaxKind.SizeOfExpression] = Fuera(Unsafe),
             [SyntaxKind.FunctionPointerType] = Fuera(Unsafe),
-            [SyntaxKind.NullableType] = Fuera(Nullable),
+            [SyntaxKind.NullableType] = Pendiente("un T? en este sitio"),
             [SyntaxKind.CheckedExpression] = Fuera(Checked),
             [SyntaxKind.CheckedStatement] = Fuera(Checked),
             [SyntaxKind.GotoStatement] = Fuera(Goto),

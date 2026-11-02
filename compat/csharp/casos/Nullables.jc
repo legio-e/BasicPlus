@@ -1,0 +1,188 @@
+module CsNullables
+{
+   import CsSystem;
+
+   class Contador
+   {
+      public Integer Cuenta { get; set; }
+   }
+
+   class Programa
+   {
+      private static function Integer Doble(Integer x)
+      {
+         return CsSystem.Nullable_Mult(x, new Integer(2));
+      }
+      public static function int Main()
+      {
+         Integer a = null;
+         Integer b = new Integer(5);
+         if (a != null || b == null)
+         {
+            return 1;
+         }
+         if ((a != null) || !(b != null))
+         {
+            return 2;
+         }
+         if (CsSystem.Nullable_Value(b) != 5 || CsSystem.Nullable_Value(b) != 5)
+         {
+            return 3;
+         }
+         if (CsSystem.Nullable_GetValueOrDefault(a) != 0 || CsSystem.Nullable_GetValueOrDefault(a, 7) != 7 || CsSystem.Nullable_GetValueOrDefault(b, 7) != 5)
+         {
+            return 4;
+         }
+         try
+         {
+            int z = CsSystem.Nullable_Value(a);
+            return 5;
+         }
+         catch (CsSystem.InvalidOperationException excepcion_cs1)
+         {
+         }
+         Integer c = CsSystem.Nullable_Suma(a, b);
+         if (c != null)
+         {
+            return 6;
+         }
+         c = CsSystem.Nullable_Suma(b, new Integer(1));
+         if (!CsSystem.Nullable_Igual(c, new Integer(6)))
+         {
+            return 7;
+         }
+         if (!CsSystem.Nullable_Igual(Programa.Doble(b), new Integer(10)) || Programa.Doble(null) != null)
+         {
+            return 8;
+         }
+         Integer r = CsSystem.Nullable_Resto(b, new Integer(3));
+         if (!CsSystem.Nullable_Igual(r, new Integer(2)))
+         {
+            return 9;
+         }
+         Integer neg = CsSystem.Nullable_Menos(b);
+         if (!CsSystem.Nullable_Igual(neg, new Integer(-5)))
+         {
+            return 10;
+         }
+         Integer otro = new Integer(5);
+         if (!CsSystem.Nullable_Igual(b, otro))
+         {
+            return 11;
+         }
+         Integer nada = null;
+         if (!CsSystem.Nullable_Igual(a, nada))
+         {
+            return 12;
+         }
+         if (CsSystem.Nullable_Menor(a, b) || CsSystem.Nullable_Mayor(a, b) || CsSystem.Nullable_MenorIgual(a, b) || CsSystem.Nullable_MayorIgual(a, b))
+         {
+            return 13;
+         }
+         if (!(CsSystem.Nullable_Mayor(b, new Integer(4))) || CsSystem.Nullable_Menor(b, new Integer(5)))
+         {
+            return 14;
+         }
+         int d = (a != null ? a.value() : 3);
+         if (d != 3)
+         {
+            return 15;
+         }
+         int e = (b != null ? b.value() : 3);
+         if (e != 5)
+         {
+            return 16;
+         }
+         Long l = CsSystem.Nullable_ALong(b);
+         Long m = CsSystem.Nullable_Mult(CsSystem.Nullable_ALong(b), new Long(2L));
+         if (!CsSystem.Nullable_Igual(l, new Long(5)) || !CsSystem.Nullable_Igual(m, new Long(10)))
+         {
+            return 17;
+         }
+         Double x = new Double(2.5);
+         Double y = CsSystem.Nullable_Mult(x, new Double(2));
+         if (!CsSystem.Nullable_Igual(y, new Double(5.0)))
+         {
+            return 18;
+         }
+         Integer grande = new Integer(300);
+         Integer bb = CsSystem.Nullable_AByte(grande);
+         if (!CsSystem.Nullable_Igual(bb, new Integer(44)))
+         {
+            return 19;
+         }
+         Contador k = new Contador();
+         k.Cuenta = CsSystem.Nullable_Inc(k.Cuenta);
+         if (k.Cuenta != null)
+         {
+            return 20;
+         }
+         k.Cuenta = new Integer(0);
+         k.Cuenta = CsSystem.Nullable_Inc(k.Cuenta);
+         k.Cuenta = CsSystem.Nullable_Suma(k.Cuenta, new Integer(10));
+         if (!CsSystem.Nullable_Igual(k.Cuenta, new Integer(11)))
+         {
+            return 21;
+         }
+         Boolean t = null;
+         t = CsSystem.Nullable_O(t, new Boolean(true));
+         if (!CsSystem.Nullable_Igual(t, new Boolean(true)))
+         {
+            return 22;
+         }
+         Boolean f = null;
+         Boolean fy = CsSystem.Nullable_Y(f, new Boolean(false));
+         if (!CsSystem.Nullable_Igual(fy, new Boolean(false)))
+         {
+            return 23;
+         }
+         Boolean fo = CsSystem.Nullable_O(f, new Boolean(false));
+         if (fo != null)
+         {
+            return 24;
+         }
+         Object caja = b;
+         if (((Integer) caja).value() != 5)
+         {
+            return 25;
+         }
+         Integer vuelta = ((Integer) caja);
+         if (!CsSystem.Nullable_Igual(vuelta, new Integer(5)))
+         {
+            return 26;
+         }
+         Object nula = a;
+         if (nula != null)
+         {
+            return 27;
+         }
+         if (CsSystem.Nullable_ToString(b) != "5" || CsSystem.Nullable_ToString(a) != "")
+         {
+            return 28;
+         }
+         println("a=[" + CsSystem.Nullable_Texto(a) + "] b=[" + CsSystem.Nullable_Texto(b) + "]");
+         println(CsSystem.Nullable_Texto(a));
+         println(CsSystem.Nullable_Texto(b));
+         Integer[] varios = [null, new Integer(3), new Integer(4)];
+         if (varios[0] != null || !CsSystem.Nullable_Igual(varios[2], new Integer(4)))
+         {
+            return 29;
+         }
+         int i = 7;
+         if (false)
+         {
+            return 30;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

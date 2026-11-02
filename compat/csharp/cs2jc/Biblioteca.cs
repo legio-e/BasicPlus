@@ -163,6 +163,7 @@ namespace Cs2Jc
 
         string BibliotecaLlamada(InvocationExpressionSyntax inv, IMethodSymbol ms)
         {
+            if (EsNullable(ms.ContainingType)) return LlamadaDeNullable(inv, ms);      // un T? (Nullables.cs)
             string clave = NombreCompleto(ms.ContainingType) + "." + ms.Name;
             if (ms.IsStatic && FuncionesDeCsSystem.Contains(Firma(ms)))
             {
@@ -231,6 +232,7 @@ namespace Cs2Jc
 
         string BibliotecaMiembro(MemberAccessExpressionSyntax ma, ISymbol s)
         {
+            if (EsNullable(s.ContainingType)) return MiembroDeNullable(ma, s);           // un T? (Nullables.cs)
             string clave = NombreCompleto(s.ContainingType) + "." + s.Name;
             var cv = m.GetConstantValue(ma);
             if (cv.HasValue) return LiteralDeConstante(cv.Value, ma);

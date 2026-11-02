@@ -4390,6 +4390,7 @@ miembro de la clase, dónde hay una caja.
 | `public int x;` (un campo público) | `public int x { get; set; }` (BP no los deja) | se reescribe |
 | `Console.WriteLine(x)` · `Console.Write(x)` · `Console.WriteLine("{0}-{1}", a, b)` | `println(x)` · `print(x)` · `println(a, "-", b)` | se reescribe |
 | `char` | `int` (los caracteres de JC son enteros); en una cadena, `Str.fromCharCode(c)` | se reescribe |
+| `int?` y los demás `T?` (2-nov) | la caja de BP de su `T` (`Integer`, `Long`, `Float`, `Double`, `Boolean`), o `null`; sus operaciones, con las funciones `Nullable_*` de `CsSystem` | se reescribe |
 | `s[i]` · `s.Length` | `charCodeAt(s, i)` · `strlen(s)` | se reescribe |
 | `object o = 5;` · `(int) o` | `Object o = new Integer(5);` · `((Integer) o).value()` (las cajas de BP son a mano) | se reescribe |
 | `new int[n]` · `{ 1, 2 }` | `newIntArray(n)` · `[1, 2]` (para `string`, `float`, `bool` o una clase, BP no tiene con qué: «no se traduce», y una entrada de H7) | se reescribe |
@@ -4402,7 +4403,7 @@ miembro de la clase, dónde hay una caja.
 | `throw;` | `throw e;`, con el nombre de su `catch` | se reescribe |
 | y lo demás de la lista de `#745`: las clases `partial`, `params`, los métodos de extensión, los inicializadores de objetos, `using`… | con la misma regla | se reescribe |
 | los genéricos (salvo `List<Object>` y el `Map`), `struct`, `ref`/`out`, los delegados, `as`, `??`, los indexadores, los operadores propios, `int[,]`, `++` dentro de una expresión… | — | no se traduce: le falta a JC (H7) |
-| las lambdas, la herencia múltiple, `yield`, LINQ, `async`, la reflexión, `uint`, `decimal`, `int?`, `goto`… | — | no se traduce: fuera |
+| las lambdas, `yield`, LINQ, `async`, la reflexión, `uint`, `decimal`, `goto`… (ya no: la herencia múltiple al estilo Java, con H7.3, `#756`; ni `int?`, el 2-nov) | — | no se traduce: fuera |
 
 Un nombre de C# que en JC es palabra reservada (`print`, `function`, `module`, `field`…) se renombra con un `_` detrás,
 en todas partes, y el informe lo dice.
@@ -4719,6 +4720,50 @@ El orden: la librería con las excepciones; los nombres; `Math` y `Convert`; lo 
   con `get; set;`, y si una hija la redefine, JC llama al setter de la hija, con su propio campo (`gtest-autoproperty-12`,
   que destapó `#744`: falla con «Main devuelve 5»). La regla: rechazarla cuando una hija la redefine, o escribirla
   de otra forma.
+
+### Lo que puse «fuera» y no lo estaba: `int?` (2-nov)
+
+**La pregunta** (Eduardo, 2-nov: *«Volvemos a la revisión de la compatibilidad entre C# y JC . Hay algo que no
+entiendo, ¿ por que tan pocos test migran de C# a JC ?»*), medida con el lote del 1-nov (349) y el censo del 31-oct:
+- **son las pruebas de un compilador**, no programas: cada una prueba una característica de C#, y las familias más
+  grandes, justo lo que JC no tiene (`gtest`, los genéricos: 585 válidas, 6 funcionan; `test-anon`, 172, y
+  `test-async`, 91: ninguna); en `test-N`, la de todo, funcionan 211 de 799 (26 %);
+- **todo o nada**: a 1309 de las 1967 que no se traducen les faltan dos cosas o más;
+- **lo de fuera**: 1106 piden algo que se dejó fuera (las lambdas, 394; la reflexión, 305; `int?`, 144…); con eso, el
+  techo era 1216 de 2322;
+- **lo que le falta a JC, tres piezas grandes**: los genéricos propios (+286), los delegados (+96) y `struct` (+74); el
+  traductor y su biblioteca solos, +33;
+- **el informe se queda corto**: el traductor no entra en lo que rechaza (deja un hueco), así que «a las que sólo les
+  falta eso» es optimista (`dtest-047`: para el traductor, sólo los genéricos; dentro, un evento con una lambda).
+  Cruzado con el censo, que mira el árbol entero: de las 384 de «sólo los genéricos», 260; y 234 que no parecían pedir
+  nada de fuera, sí. Las cifras de arriba ya llevan el cruce.
+
+**Lo que no estaba fuera.** Eduardo: *«int? es Integer (la clase)»*; y *«La herencia múltiple al estilo Java ahora
+entra al permitirse varias interfaces»* (H7.3, `#756`; C# no tiene otra). De lo que queda fuera, son decisión suya las
+lambdas y el entero que se convierte en un enum (`#522`); lo demás lo clasifiqué yo en `#745`, y se repasa (*«OK»*, a
+hacer `int?` y `uint` y repasar después la lista). `int?` lo había puesto entre «lo que la VM no tiene», y entró en la
+tabla de arriba con el OK a la tabla entera.
+
+**`int?`, hecho** (`compat/csharp/cs2jc/Nullables.cs`, y en `CsSystem` las funciones `Nullable_*`): un `T?` es la caja
+de BP de su `T` —`Integer` (también la de los enteros estrechos y el `char`), `Long`, `Float`, `Double`, `Boolean`—, o
+`null`. Lo que C# hace con ellos, con una función de `CsSystem` por operación y los operandos ya en su caja, así que
+cada uno se calcula una vez:
+- con un `null`, la aritmética da `null`, y `<`, `>`, `<=` y `>=`, `false`; `==` compara los valores, y dos `null` son
+  iguales; `x == null`, la referencia; algo que no puede ser `null` (un `int`, un enum), comparado con `null`, `false`,
+  como en C#;
+- `&` y `|` de `bool?`, con la lógica de tres valores de C# (`null & false` es `false`; `null | true`, `true`): lo pedía
+  `gtest-377`, y por eso no se quedó en «todavía no»;
+- `x.Value` y `(int) x`, el valor, o `InvalidOperationException` si es `null`, como .NET; `HasValue`,
+  `GetValueOrDefault`, `ToString` (vacío si es `null`); y al escribirlo, un `null` vacío;
+- `x ?? y`, el ternario (la derecha, sólo si hace falta; `x`, dos veces, así que sólo si no calcula nada); `x++` y
+  `x += y` como sentencia;
+- las conversiones entre ellos (`int?` a `long?`; `(byte?) x`, sus bits de abajo) y con `object` (un `int?` como
+  `object` es su misma `Integer`); `new int?()`, `default`; un `int?[]` con sus valores.
+
+Caso `Nullables`. **Mono: 367** (+18), sin perder ninguna; fallan las mismas 6. Lo que queda, con su motivo en el
+informe: el enum que puede ser `null` (`E?`, 9 pruebas: sacar su valor es convertir un entero en un enum, `#522`); el
+`switch` sobre un `T?` (7: un `null` va al `default`, y el de JC no lo hace solo); un valor por defecto de un `T?` (3:
+en JC es un objeto, y JC sólo admite un literal); y el `T?` de un `struct` (H7).
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

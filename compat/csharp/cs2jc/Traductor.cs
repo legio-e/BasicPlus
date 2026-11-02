@@ -709,6 +709,8 @@ namespace Cs2Jc
             string porTipo = PorTipo(ps.Type);
             if (porTipo != null) return Rechaza(donde, porTipo);
             var v = ps.ExplicitDefaultValue;
+            // un T? con valor (`int? x = 5`): en JC, un objeto, y JC sólo admite un literal (null, como siempre: H7)
+            if (EsNullable(ps.Type) && v != null) return Rechaza(donde, Porque.Pendiente("un valor por defecto de un T? (en JC, un objeto)"));
             // un enum (`Dia d = Dia.Martes`): JC sólo admite un literal, y un miembro de un enum no lo es
             if (ps.Type.TypeKind == TypeKind.Enum) return Rechaza(donde, Porque.H7(Porque.EnumPorDefecto));
             var ci = System.Globalization.CultureInfo.InvariantCulture;

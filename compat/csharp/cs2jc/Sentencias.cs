@@ -150,7 +150,7 @@ namespace Cs2Jc
             if (EsNumerico(t)) return "0";
             if (EsEnum(t) && t.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => f.IsConst) is IFieldSymbol primero)
                 return Tipo(t, donde) + "." + Ident(primero.Name);
-            if (!t.IsValueType) return "null";
+            if (!t.IsValueType || EsNullable(t)) return "null";
             return Rechaza(donde, Porque.Pendiente("una variable de un case usada en otro (en C#, su ámbito es el switch)"));
         }
 
@@ -299,6 +299,8 @@ namespace Cs2Jc
 
         void Switch(SwitchStatementSyntax sw)
         {
+            // sobre un T?, un null va al default: el switch de JC no lo hace solo
+            if (EsNullable(m.GetTypeInfo(sw.Expression).Type)) { Rechaza(sw.Expression, Porque.Pendiente("switch sobre un T?")); return; }
             // el de JC: `case 1, 2:`, sin caer de un caso al siguiente (C# tampoco), y el `default` al final (en C# el
             // orden no cambia nada, porque no se cae)
             // Una local declarada en un case y usada en otro: en C# su ámbito es el switch entero; en JC, el case.

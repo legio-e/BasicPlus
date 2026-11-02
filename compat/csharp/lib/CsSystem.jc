@@ -177,4 +177,159 @@ module CsSystem
       if (err) throw new FormatException("The input string '" + s + "' was not in a correct format.");
       return v;
    }
+
+   // ------------------------------------------------------------------------------------------- int? y los T?
+   // (2-nov; Eduardo: «int? es Integer (la clase)») Un T? de C# es la caja de BP de su T, o null: Integer (el int, los
+   // enteros estrechos y el char), Long, Float, Double y Boolean. Lo que C# hace con ellos (los operadores «elevados»),
+   // aquí, una función por operación: el traductor las llama con cada operando ya en su caja, y así cada uno se calcula
+   // una vez, como en C#. Con un null, la aritmética da null, y <, >, <= y >=, false; == compara los valores, y dos null
+   // son iguales; y un null se escribe vacío.
+
+   function void Nullable_SinValor() { throw new InvalidOperationException("Nullable object must have a value."); }
+
+   /// x.Value y (int) x: el valor, o InvalidOperationException si es null, como .NET.
+   public function int Nullable_Value(Integer x) { if (x == null) Nullable_SinValor(); return x.value(); }
+   public function long Nullable_Value(Long x) { if (x == null) Nullable_SinValor(); return x.value(); }
+   public function float Nullable_Value(Float x) { if (x == null) Nullable_SinValor(); return x.value(); }
+   public function double Nullable_Value(Double x) { if (x == null) Nullable_SinValor(); return x.value(); }
+   public function bool Nullable_Value(Boolean x) { if (x == null) Nullable_SinValor(); return x.value(); }
+
+   /// x.GetValueOrDefault() y x.GetValueOrDefault(d).
+   public function int Nullable_GetValueOrDefault(Integer x) { return x == null ? 0 : x.value(); }
+   public function long Nullable_GetValueOrDefault(Long x) { return x == null ? 0L : x.value(); }
+   public function float Nullable_GetValueOrDefault(Float x) { return x == null ? 0.0f : x.value(); }
+   public function double Nullable_GetValueOrDefault(Double x) { return x == null ? 0.0 : x.value(); }
+   public function bool Nullable_GetValueOrDefault(Boolean x) { return x == null ? false : x.value(); }
+   public function int Nullable_GetValueOrDefault(Integer x, int d) { return x == null ? d : x.value(); }
+   public function long Nullable_GetValueOrDefault(Long x, long d) { return x == null ? d : x.value(); }
+   public function float Nullable_GetValueOrDefault(Float x, float d) { return x == null ? d : x.value(); }
+   public function double Nullable_GetValueOrDefault(Double x, double d) { return x == null ? d : x.value(); }
+   public function bool Nullable_GetValueOrDefault(Boolean x, bool d) { return x == null ? d : x.value(); }
+
+   /// x.ToString(): vacío si es null; un número, en decimal, y un bool, True o False, como .NET.
+   public function string Nullable_ToString(Integer x) { return x == null ? "" : "" + x.value(); }
+   public function string Nullable_ToString(Long x) { return x == null ? "" : "" + x.value(); }
+   public function string Nullable_ToString(Boolean x) { return x == null ? "" : (x.value() ? "True" : "False"); }
+
+   /// Un T? escrito (Console.WriteLine, la suma de cadenas): vacío si es null; si no, como se escribe su valor.
+   public function string Nullable_Texto(Integer x) { return x == null ? "" : "" + x.value(); }
+   public function string Nullable_Texto(Long x) { return x == null ? "" : "" + x.value(); }
+   public function string Nullable_Texto(Float x) { return x == null ? "" : "" + x.value(); }
+   public function string Nullable_Texto(Double x) { return x == null ? "" : "" + x.value(); }
+   public function string Nullable_Texto(Boolean x) { return x == null ? "" : "" + x.value(); }
+
+   /// == (!= es su contrario): dos null, iguales; uno solo, distintos; si no, los valores.
+   public function bool Nullable_Igual(Integer a, Integer b) { if (a == null || b == null) return a == null && b == null; return a.value() == b.value(); }
+   public function bool Nullable_Igual(Long a, Long b) { if (a == null || b == null) return a == null && b == null; return a.value() == b.value(); }
+   public function bool Nullable_Igual(Float a, Float b) { if (a == null || b == null) return a == null && b == null; return a.value() == b.value(); }
+   public function bool Nullable_Igual(Double a, Double b) { if (a == null || b == null) return a == null && b == null; return a.value() == b.value(); }
+   public function bool Nullable_Igual(Boolean a, Boolean b) { if (a == null || b == null) return a == null && b == null; return a.value() == b.value(); }
+
+   /// <, >, <= y >=: false si alguno es null.
+   public function bool Nullable_Menor(Integer a, Integer b) { return a != null && b != null && a.value() < b.value(); }
+   public function bool Nullable_Menor(Long a, Long b) { return a != null && b != null && a.value() < b.value(); }
+   public function bool Nullable_Menor(Float a, Float b) { return a != null && b != null && a.value() < b.value(); }
+   public function bool Nullable_Menor(Double a, Double b) { return a != null && b != null && a.value() < b.value(); }
+   public function bool Nullable_Mayor(Integer a, Integer b) { return a != null && b != null && a.value() > b.value(); }
+   public function bool Nullable_Mayor(Long a, Long b) { return a != null && b != null && a.value() > b.value(); }
+   public function bool Nullable_Mayor(Float a, Float b) { return a != null && b != null && a.value() > b.value(); }
+   public function bool Nullable_Mayor(Double a, Double b) { return a != null && b != null && a.value() > b.value(); }
+   public function bool Nullable_MenorIgual(Integer a, Integer b) { return a != null && b != null && a.value() <= b.value(); }
+   public function bool Nullable_MenorIgual(Long a, Long b) { return a != null && b != null && a.value() <= b.value(); }
+   public function bool Nullable_MenorIgual(Float a, Float b) { return a != null && b != null && a.value() <= b.value(); }
+   public function bool Nullable_MenorIgual(Double a, Double b) { return a != null && b != null && a.value() <= b.value(); }
+   public function bool Nullable_MayorIgual(Integer a, Integer b) { return a != null && b != null && a.value() >= b.value(); }
+   public function bool Nullable_MayorIgual(Long a, Long b) { return a != null && b != null && a.value() >= b.value(); }
+   public function bool Nullable_MayorIgual(Float a, Float b) { return a != null && b != null && a.value() >= b.value(); }
+   public function bool Nullable_MayorIgual(Double a, Double b) { return a != null && b != null && a.value() >= b.value(); }
+
+   /// + - * / %: null si alguno es null.
+   public function Integer Nullable_Suma(Integer a, Integer b) { return a == null || b == null ? null : new Integer(a.value() + b.value()); }
+   public function Long Nullable_Suma(Long a, Long b) { return a == null || b == null ? null : new Long(a.value() + b.value()); }
+   public function Float Nullable_Suma(Float a, Float b) { return a == null || b == null ? null : new Float(a.value() + b.value()); }
+   public function Double Nullable_Suma(Double a, Double b) { return a == null || b == null ? null : new Double(a.value() + b.value()); }
+   public function Integer Nullable_Resta(Integer a, Integer b) { return a == null || b == null ? null : new Integer(a.value() - b.value()); }
+   public function Long Nullable_Resta(Long a, Long b) { return a == null || b == null ? null : new Long(a.value() - b.value()); }
+   public function Float Nullable_Resta(Float a, Float b) { return a == null || b == null ? null : new Float(a.value() - b.value()); }
+   public function Double Nullable_Resta(Double a, Double b) { return a == null || b == null ? null : new Double(a.value() - b.value()); }
+   public function Integer Nullable_Mult(Integer a, Integer b) { return a == null || b == null ? null : new Integer(a.value() * b.value()); }
+   public function Long Nullable_Mult(Long a, Long b) { return a == null || b == null ? null : new Long(a.value() * b.value()); }
+   public function Float Nullable_Mult(Float a, Float b) { return a == null || b == null ? null : new Float(a.value() * b.value()); }
+   public function Double Nullable_Mult(Double a, Double b) { return a == null || b == null ? null : new Double(a.value() * b.value()); }
+   public function Integer Nullable_Div(Integer a, Integer b) { return a == null || b == null ? null : new Integer(a.value() / b.value()); }
+   public function Long Nullable_Div(Long a, Long b) { return a == null || b == null ? null : new Long(a.value() / b.value()); }
+   public function Float Nullable_Div(Float a, Float b) { return a == null || b == null ? null : new Float(a.value() / b.value()); }
+   public function Double Nullable_Div(Double a, Double b) { return a == null || b == null ? null : new Double(a.value() / b.value()); }
+   public function Integer Nullable_Resto(Integer a, Integer b) { return a == null || b == null ? null : new Integer(a.value() % b.value()); }
+   public function Long Nullable_Resto(Long a, Long b) { return a == null || b == null ? null : new Long(a.value() % b.value()); }
+
+   /// & | ^ << >> de enteros: null si alguno es null; la cuenta de un desplazamiento, como C# (& 31 en un int, & 63 en
+   /// un long).
+   public function Integer Nullable_Y(Integer a, Integer b) { return a == null || b == null ? null : new Integer(a.value() & b.value()); }
+   public function Long Nullable_Y(Long a, Long b) { return a == null || b == null ? null : new Long(a.value() & b.value()); }
+   public function Integer Nullable_O(Integer a, Integer b) { return a == null || b == null ? null : new Integer(a.value() | b.value()); }
+   public function Long Nullable_O(Long a, Long b) { return a == null || b == null ? null : new Long(a.value() | b.value()); }
+   public function Integer Nullable_OEx(Integer a, Integer b) { return a == null || b == null ? null : new Integer(a.value() ^ b.value()); }
+   public function Long Nullable_OEx(Long a, Long b) { return a == null || b == null ? null : new Long(a.value() ^ b.value()); }
+   public function Integer Nullable_Izq(Integer a, Integer n) { return a == null || n == null ? null : new Integer(a.value() << (n.value() & 31)); }
+   public function Long Nullable_Izq(Long a, Integer n) { return a == null || n == null ? null : new Long(a.value() << (n.value() & 63)); }
+   public function Integer Nullable_Der(Integer a, Integer n) { return a == null || n == null ? null : new Integer(a.value() >> (n.value() & 31)); }
+   public function Long Nullable_Der(Long a, Integer n) { return a == null || n == null ? null : new Long(a.value() >> (n.value() & 63)); }
+
+   /// & | ^ de bool?, con la lógica de tres valores de C#: null & false es false, y null | true, true.
+   public function Boolean Nullable_Y(Boolean a, Boolean b)
+   {
+      if ((a != null && !a.value()) || (b != null && !b.value())) return new Boolean(false);
+      if (a == null || b == null) return null;
+      return new Boolean(true);
+   }
+   public function Boolean Nullable_O(Boolean a, Boolean b)
+   {
+      if ((a != null && a.value()) || (b != null && b.value())) return new Boolean(true);
+      if (a == null || b == null) return null;
+      return new Boolean(false);
+   }
+   public function Boolean Nullable_OEx(Boolean a, Boolean b) { return a == null || b == null ? null : new Boolean(a.value() != b.value()); }
+
+   /// -x, ~x y !x: null si es null.
+   public function Integer Nullable_Menos(Integer x) { return x == null ? null : new Integer(-x.value()); }
+   public function Long Nullable_Menos(Long x) { return x == null ? null : new Long(-x.value()); }
+   public function Float Nullable_Menos(Float x) { return x == null ? null : new Float(-x.value()); }
+   public function Double Nullable_Menos(Double x) { return x == null ? null : new Double(-x.value()); }
+   public function Integer Nullable_NoBits(Integer x) { return x == null ? null : new Integer(x.value() ^ -1); }
+   public function Long Nullable_NoBits(Long x) { return x == null ? null : new Long(x.value() ^ -1L); }
+   public function Boolean Nullable_No(Boolean x) { return x == null ? null : new Boolean(!x.value()); }
+
+   /// x++ y x--: null sigue null.
+   public function Integer Nullable_Inc(Integer x) { return x == null ? null : new Integer(x.value() + 1); }
+   public function Long Nullable_Inc(Long x) { return x == null ? null : new Long(x.value() + 1L); }
+   public function Float Nullable_Inc(Float x) { return x == null ? null : new Float(x.value() + 1.0f); }
+   public function Double Nullable_Inc(Double x) { return x == null ? null : new Double(x.value() + 1.0); }
+   public function Integer Nullable_Dec(Integer x) { return x == null ? null : new Integer(x.value() - 1); }
+   public function Long Nullable_Dec(Long x) { return x == null ? null : new Long(x.value() - 1L); }
+   public function Float Nullable_Dec(Float x) { return x == null ? null : new Float(x.value() - 1.0f); }
+   public function Double Nullable_Dec(Double x) { return x == null ? null : new Double(x.value() - 1.0); }
+
+   /// De una caja a otra (int? a long?, long? a int?…): null sigue null; el valor, con la conversión de C# (a un
+   /// entero, truncando; a uno estrecho, sus bits de abajo, como sin `checked`). El char? va como el ushort?.
+   public function Long Nullable_ALong(Integer x) { return x == null ? null : new Long((long) x.value()); }
+   public function Long Nullable_ALong(Float x) { return x == null ? null : new Long((long) x.value()); }
+   public function Long Nullable_ALong(Double x) { return x == null ? null : new Long((long) x.value()); }
+   public function Float Nullable_AFloat(Integer x) { return x == null ? null : new Float((float) x.value()); }
+   public function Float Nullable_AFloat(Long x) { return x == null ? null : new Float((float) x.value()); }
+   public function Float Nullable_AFloat(Double x) { return x == null ? null : new Float((float) x.value()); }
+   public function Double Nullable_ADouble(Integer x) { return x == null ? null : new Double((double) x.value()); }
+   public function Double Nullable_ADouble(Long x) { return x == null ? null : new Double((double) x.value()); }
+   public function Double Nullable_ADouble(Float x) { return x == null ? null : new Double((double) x.value()); }
+   public function Integer Nullable_AInteger(Long x) { return x == null ? null : new Integer((int) x.value()); }
+   public function Integer Nullable_AInteger(Float x) { return x == null ? null : new Integer((int) x.value()); }
+   public function Integer Nullable_AInteger(Double x) { return x == null ? null : new Integer((int) x.value()); }
+   public function Integer Nullable_AByte(Integer x) { return x == null ? null : new Integer(x.value() & 255); }
+   public function Integer Nullable_AByte(Long x) { return x == null ? null : new Integer((int) (x.value() & 255L)); }
+   public function Integer Nullable_ASByte(Integer x) { return x == null ? null : new Integer(((x.value() & 255) ^ 128) - 128); }
+   public function Integer Nullable_ASByte(Long x) { return x == null ? null : new Integer((((int) (x.value() & 255L)) ^ 128) - 128); }
+   public function Integer Nullable_AShort(Integer x) { return x == null ? null : new Integer(((x.value() & 65535) ^ 32768) - 32768); }
+   public function Integer Nullable_AShort(Long x) { return x == null ? null : new Integer((((int) (x.value() & 65535L)) ^ 32768) - 32768); }
+   public function Integer Nullable_AUShort(Integer x) { return x == null ? null : new Integer(x.value() & 65535); }
+   public function Integer Nullable_AUShort(Long x) { return x == null ? null : new Integer((int) (x.value() & 65535L)); }
 }
