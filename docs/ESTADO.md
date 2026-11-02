@@ -42,6 +42,9 @@
 > - **`#739`, cerrada:** el caso del cursor, quitado; en su lugar, el aviso donde nace toda cadena, en las dos VMs (sus
 >   primeros bytes, las tres primeras veces; en la red, rojo), con su prueba en cada una; y las fuentes de confianza
 >   que faltaban, con su test. La red y `check-jc`, VERDES. A las placas, con el próximo lote.
+> - **`#764`, cerrada** (Eduardo: *«OK»*, al algoritmo): el argumento de ejecución, con un tope de 127 bytes en las dos
+>   VMs; uno que no cabe es un error donde entra —el compilador para el valor por defecto; la línea de órdenes y el `RUN`
+>   del wire para el que se da— en vez de cortarse. La red y `check-jc`, VERDES.
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

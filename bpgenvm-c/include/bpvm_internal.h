@@ -792,8 +792,9 @@ struct bpvm {
      * reconocer en el CHECKCAST. Con esto, SIEMPRE es del heap.
      *
      * Fijo y sin malloc, como load_error. Va AL FINAL: el prefijo congelado del
-     * .mdn (memory, aot_helpers) esta arriba y no se toca. */
-    char run_arg[128];
+     * .mdn (memory, aot_helpers) esta arriba y no se toca. V8 #764: su tamaño es
+     * el tope del argumento (BPVM_RUN_ARG_MAX, bpvm.h) y el terminador: 128 B. */
+    char run_arg[BPVM_RUN_ARG_MAX + 1u];
 
     /* #486 - LOS DOS DISPATCHERS DEL GUI, RESUELTOS UNA VEZ.
      *

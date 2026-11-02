@@ -727,6 +727,13 @@ def main():
         # 9. errores limpios
         r = w.call("RUN", path="/app/NoExiste.mod")
         check(r.get("code") == "NOT_FOUND", "RUN de un módulo que no está → NOT_FOUND")
+        # V8 #764 — un argumento que no cabe (más de 127 bytes) es un error antes que nada; con 127, cabe y el RUN sigue
+        r = w.call("RUN", path="/app/NoExiste.mod", arg="x" * 128)
+        check(r.get("code") == "INVALID_PARAM"
+              and "el argumento no cabe: 128 bytes (el tope es 127)" in (r.get("message") or ""),
+              "#764: RUN con un argumento de 128 bytes → INVALID_PARAM, con su texto")
+        r = w.call("RUN", path="/app/NoExiste.mod", arg="x" * 127)
+        check(r.get("code") == "NOT_FOUND", "#764: con 127 bytes cabe (y sigue: el módulo no está → NOT_FOUND)")
         r = w.call("GET", path="/nope")
         check(r.get("code") == "NOT_FOUND", "GET inexistente → NOT_FOUND")
 

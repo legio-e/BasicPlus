@@ -1855,10 +1855,13 @@ uint32_t bpvm_thread_cs(const bpvm_thread_t* tc) { return tc ? tc->cs : 0; }
 /* V6/#412 — el argumento de ejecucion. Lo fija quien lanza el programa (el
  * CLI o el verbo RUN del wire) ANTES de bpvm_run; lo lee el builtin __runArg.
  * NULL o "" = no se dio ninguno y manda el valor por defecto del fuente. */
-void bpvm_set_run_arg(bpvm_t* vm, const char* arg) {
-    if (!vm) return;
-    if (!arg) { vm->run_arg[0] = 0; return; }
-    snprintf(vm->run_arg, sizeof vm->run_arg, "%s", arg);
+int bpvm_set_run_arg(bpvm_t* vm, const char* arg) {
+    if (!vm) return -1;
+    vm->run_arg[0] = 0;
+    if (!arg) return 0;
+    if (strlen(arg) > BPVM_RUN_ARG_MAX) return -1;   /* V8 #764: no se corta; lo dice quien lo recibió */
+    memcpy(vm->run_arg, arg, strlen(arg) + 1u);
+    return 0;
 }
 
 /* V7/H6.c G4.a1 — lo que el fin de RUN cierra en la cintura: los buses que sólo

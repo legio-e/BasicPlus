@@ -173,7 +173,18 @@ public class Main {
                     // EJECUCION del programa. Antes se rechazaba, asi que la
                     // receta de paridad (compilar + correr en las dos + diff) no
                     // podia ni ejercitar la feature.
-                    if (file != null && runArgCli == null) { runArgCli = a; continue; }
+                    if (file != null && runArgCli == null) {
+                        // V8 #764 (2-nov) — uno que no cabe es un error, sin ejecutar nada: no se corta (el tope, el de
+                        // las dos VMs; el mismo texto que la VM-C).
+                        String noCabe = VirtualMachine.argumentoNoCabe(a);
+                        if (noCabe != null) {
+                            System.err.println(noCabe);
+                            System.exit(2);
+                            return;
+                        }
+                        runArgCli = a;
+                        continue;
+                    }
                     if (file != null) {
                         System.err.println("Sólo se admite un fichero por invocación: ya tengo '"
                                 + file + "', ahora '" + a + "'");

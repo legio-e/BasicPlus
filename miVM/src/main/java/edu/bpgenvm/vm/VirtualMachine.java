@@ -34,6 +34,7 @@ package edu.bpgenvm.vm;
  * @author eortiz
  */
 import edu.bpgenvm.bytecode.Builtin;
+import edu.bpgenvm.bytecode.ModFormat;
 import edu.bpgenvm.bytecode.OpCode;
 import edu.bpgenvm.gui.GuiBackend;
 import java.util.ArrayDeque;
@@ -2756,8 +2757,21 @@ public class VirtualMachine {
      *  declare `Main`. */
     private String runArg = null;
 
-    /** V6/#412 — fija el argumento de ejecucion. Antes de `run()`. */
-    public void setRunArg(String arg) { this.runArg = arg; }
+    /** V6/#412 — fija el argumento de ejecucion. Antes de `run()`. V8 #764: uno que no cabe (más de
+     *  {@link ModFormat#RUN_ARG_MAX} bytes de UTF-8) no se guarda: IllegalArgumentException con el texto de
+     *  {@link #argumentoNoCabe}, que quien lo recibió dice (el CLI, antes de crear la VM). */
+    public void setRunArg(String arg) {
+        String no = (arg == null) ? null : argumentoNoCabe(arg);
+        if (no != null) throw new IllegalArgumentException(no);
+        this.runArg = arg;
+    }
+
+    /** V8 #764 (2-nov) — el texto del error si el argumento de ejecución no cabe; null si cabe. El mismo que la VM-C
+     *  (su CLI y el verbo RUN del wire): «el argumento no cabe: 130 bytes (el tope es 127)». */
+    public static String argumentoNoCabe(String arg) {
+        int n = arg.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        return (n > ModFormat.RUN_ARG_MAX) ? "el argumento no cabe: " + n + " bytes (el tope es " + ModFormat.RUN_ARG_MAX + ")" : null;
+    }
     private static final int ARR_DATA_OFF = 4;   // offset user_ref → 1er elemento
 
     /** Lee una referencia de memory[at]. V4/paso4: HANDLE de 64b = [gen:32 | idx|TAG:32].
@@ -5268,6 +5282,11 @@ public class VirtualMachine {
              * de cadena que #389 tuvo que reconocer en el CHECKCAST. */
             case RUN_ARG: {
                 long defRef = popTcRef(tc);
+                // V8 #764 — el defecto de un .mod de antes de que el compilador lo mirase: si no cabe, el error de la
+                // VM-C, con su texto (allí se cortaba sin decirlo, y aquí pasaba entero).
+                if ((runArg == null || runArg.isEmpty()) && strBytes(defRef) > ModFormat.RUN_ARG_MAX)
+                    throwBpRuntimeError(tc, "el valor por defecto del argumento no cabe: " + strBytes(defRef)
+                            + " bytes (el tope es " + ModFormat.RUN_ARG_MAX + ")");
                 String v = (runArg != null && !runArg.isEmpty())
                          ? runArg
                          : readVmString(defRef);

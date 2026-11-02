@@ -1386,13 +1386,21 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
      * #389 tuvo que reconocer en el CHECKCAST. */
     case BUILTIN_RUN_ARG: {
         uint32_t ref = pop_ref(vm, tc);          /* el defecto que dice el fuente */
-        char buf[128];
+        char buf[BPVM_RUN_ARG_MAX + 1u];
         size_t n;
         if (vm->run_arg[0] != '\0') {
-            n = strlen(vm->run_arg);
-            if (n > sizeof(buf) - 1) n = sizeof(buf) - 1;
+            n = strlen(vm->run_arg);             /* cabe: bpvm_set_run_arg no guarda uno más largo (#764) */
             memcpy(buf, vm->run_arg, n);
         } else {
+            /* V8 #764 — el defecto de un .mod de antes de que el compilador lo mirase: si no cabe, un error con el texto
+             * de la VM-Java, en vez de cortarlo (read_bp_string cortaría por caracteres, y sin decirlo). */
+            uint32_t nd = (ref == 0u) ? 0u : bpref_arr_len(vm, bpref_from_addr(ref));
+            if (nd > BPVM_RUN_ARG_MAX) {
+                char m[96];
+                snprintf(m, sizeof m, "el valor por defecto del argumento no cabe: %u bytes (el tope es %u)",
+                         (unsigned) nd, (unsigned) BPVM_RUN_ARG_MAX);
+                return builtin_throw(vm, tc, m);
+            }
             n = read_bp_string(vm, ref, buf, sizeof(buf));
         }
         uint32_t out = bpvm_heap_alloc_string(vm, buf, n);

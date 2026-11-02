@@ -119,6 +119,7 @@ InterfacesMal|'Forma' es una interfaz: no se extiende
 InterfacesMal|'MalMarcada' es una clase, no una interfaz
 InterfacesMal|'Hilo' desciende de Thread y un Thread no es un Object
 InterfacesMal|'Forma' es una interfaz: no se construye
+ArgLargo|no cabe: 130 bytes (el tope del argumento es 127)
 "
 
 ok=0; mal=0
@@ -147,6 +148,26 @@ while IFS='|' read -r nombre esperado; do
 done <<EOF
 $CASOS
 EOF
+
+# V8 #764 (2-nov) — el ARGUMENTO DE EJECUCION que no cabe (más de 127 bytes de UTF-8) es un error en la línea de
+# órdenes de las DOS VMs: el mismo texto y el código 2, sin ejecutar nada. Antes la VM-C lo cortaba sin decirlo.
+VMJ="$RAIZ/miVM/target/bpgenvm-1.0.jar"
+VMC="$RAIZ/bpgenvm-c/build/bpgenvm-c"; [ -f "$VMC.exe" ] && VMC="$VMC.exe"
+largo="$(printf '%0128d' 0 | tr 0 x)"   # 128 bytes
+esperado="el argumento no cabe: 128 bytes (el tope es 127)"
+rm -rf "$WORK"; mkdir -p "$WORK"
+java -jar "$FE" "$RAIZ/samples/ArgDemo.bp" --compile "$WORK" --backend=mivm >/dev/null 2>&1
+for vm in VM-Java VM-C; do
+    if [ "$vm" = VM-Java ]; then salida="$(cd "$WORK" && java -jar "$VMJ" ArgDemo.mod "$largo" 2>&1)"; rc=$?
+    else                         salida="$(cd "$WORK" && "$VMC" ArgDemo.mod "$largo" 2>&1)"; rc=$?; fi
+    if [ "$rc" -eq 2 ] && printf '%s' "$salida" | grep -qF "$esperado"; then
+        printf '  OK       %-28s %s\n' "argumento largo, $vm" "$esperado"; ok=$((ok+1))
+    else
+        printf '  CAMBIO   %-28s codigo %s; falta: %s\n' "argumento largo, $vm" "$rc" "$esperado"
+        printf '           lo que dice ahora: %s\n' "$(printf '%s' "$salida" | head -1 | cut -c1-72)"
+        mal=$((mal+1))
+    fi
+done
 
 printf '\n  %d comprobaciones OK  ·  %d mal\n\n' "$ok" "$mal"
 [ "$mal" -eq 0 ]

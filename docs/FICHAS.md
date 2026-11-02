@@ -7296,7 +7296,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#764` — el argumento del RUN se corta a 127 bytes en la VM-C sin decirlo, y en la VM-Java no; el que llega por la línea de órdenes o por el wire, sin mirar si parte un carácter (abierta el 2-nov, al analizar `#739`; **sólo análisis**)
+#### ✅ `#764` — el argumento del RUN se corta a 127 bytes en la VM-C sin decirlo, y en la VM-Java no; el que llega por la línea de órdenes o por el wire, sin mirar si parte un carácter (abierta el 2-nov, al analizar `#739`; **CERRADA el mismo día**, el commit de `#764`)
 
 - **Dónde:** `bpvm_set_run_arg` (`bpgenvm-c/src/bpvm.c`) guarda el argumento con `snprintf` en `run_arg[128]`: uno más
   largo se corta en el byte 127, aunque parta un carácter (la cadena nace rota por el final). El valor por defecto del
@@ -7308,6 +7308,22 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   mismo tope en las dos VMs, o un tope mayor; y el valor por defecto, que lo mire el compilador. Por decidir (Eduardo).
 - **Decidido el 2-nov** (Eduardo: *«error si no cabe, pero también se puede agrandar el tamaño si vemos que hay casos
   que realmente no cabe»*): un error, con el mismo tope en las dos VMs; el tope, más grande si salen casos de verdad.
+- **Cerrada el 2-nov** (Eduardo, al algoritmo: *«OK»*). El tope, 127 bytes de UTF-8 en las dos VMs
+  (`ModFormat.RUN_ARG_MAX` en miVM y en el compilador, `BPVM_RUN_ARG_MAX` en la VM-C: el `run_arg[128]` de siempre).
+  Uno que no cabe es un error en el sitio por donde entra, y no se corta:
+  - **el valor por defecto, en el compilador** (`SemanticAnalyzer`, donde mira la firma de `Main`), en la línea del
+    literal: «el valor por defecto de 'arg' no cabe: 130 bytes (el tope del argumento es 127)»
+    (`samples/errores/ArgLargo.bp`);
+  - **el que se da al ejecutar:** en la línea de órdenes de las dos VMs, código 2 sin ejecutar nada; en el `RUN` del
+    wire (el IDE, el simulador y las placas), `INVALID_PARAM` antes que nada. El texto, el mismo: «el argumento no
+    cabe: 128 bytes (el tope es 127)». `bpvm_set_run_arg` ya no corta: dice si cabe;
+  - **un `.mod` de antes** con un valor por defecto largo: al leerlo (`__runArg`), un `RuntimeError` con el mismo
+    texto en las dos VMs. Probado con el compilador de antes: las dos, el mismo error y código 1;
+  - **las pruebas:** `h13-errores.sh`, 94 (el sample de error, y la línea de órdenes de las dos VMs con 128 bytes);
+    `sim_smoke.py`, el `RUN` con 128 bytes (`INVALID_PARAM`) y con 127 (cabe). El manual, §10.2, el tope;
+  - **el compilador nuevo, los mismos `.mod`:** de 716 fuentes, 673 iguales con el de antes, 42 que no compilan en
+    ninguno y `ArgLargo.bp` (la regla nueva); la stdlib, sus 31 `.mod` y el `Stdlib.pack`, idénticos.
+- La red, VERDE (15:02); `check-jc`, VERDE (8:33); las pruebas de la VM-Java, 62, y las del compilador, 324.
 
 #### ✅ `#763` — la VM-C de PC, en Windows, no habla UTF-8: el argumento del RUN, los nombres que da `listDir` y los de los ficheros que crea van en la página de códigos del sistema (la 1252); una cadena nace rota, y puede empezar por un byte de continuación (abierta el 2-nov, al analizar `#739`; **CERRADA el mismo día**, el commit de `#763`)
 

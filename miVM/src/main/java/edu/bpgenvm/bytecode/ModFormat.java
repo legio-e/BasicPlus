@@ -156,6 +156,12 @@ public final class ModFormat {
     /** Ancho de referencia (bytes) que garantiza el formato v6. */
     public static final int ABI_REF_SIZE_V6 = 8;
 
+    /** V8 #764 (2-nov) — el tope del ARGUMENTO DE EJECUCIÓN (#412: {@code Main(arg: string := …)}), en bytes de UTF-8:
+     *  lo que cabe en el {@code run_arg} de la VM-C (128 B, con su terminador). Lo miran el compilador (el valor por
+     *  defecto) y las dos VMs (el que se da al ejecutar, y el defecto de un .mod de antes): uno que no cabe es un error,
+     *  no se corta. Se agranda si salen casos de verdad que no caben (Eduardo). Espejo de BPVM_RUN_ARG_MAX (bpvm.h). */
+    public static final int RUN_ARG_MAX = 127;
+
     /** True si un .mod con este magic tiene un ABI que esta VM puede EJECUTAR.
      *
      *  <p>v6 Y v7. Y que v6 siga valiendo NO es una concesión: el gate de `#284`

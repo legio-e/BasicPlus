@@ -263,8 +263,13 @@ void bpvm_set_output(bpvm_t* vm, bpvm_output_cb cb, void* user);
  * (el CLI, o el verbo RUN del wire) antes de `bpvm_run`, y lo recoge el
  * builtin `__runArg` que el compilador emite en `__startup`. NULL o "" = no se
  * dio ninguno, y manda el valor por defecto que declare `Main(arg: string := ...)`.
- * La cadena se COPIA: el llamante no tiene que conservarla. */
-void bpvm_set_run_arg(bpvm_t* vm, const char* arg);
+ * La cadena se COPIA: el llamante no tiene que conservarla.
+ * V8 #764 (2-nov) — el TOPE, en bytes de UTF-8, el mismo en las dos VMs (ModFormat.RUN_ARG_MAX de miVM): uno más
+ * largo no se guarda (devuelve -1; 0 si cabe), y quien lo recibe lo dice con un error, «el argumento no cabe: N bytes
+ * (el tope es 127)» —antes se cortaba sin decirlo, a veces a medio carácter—. Se agranda si salen casos de verdad que
+ * no caben (Eduardo). */
+#define BPVM_RUN_ARG_MAX 127u
+int bpvm_set_run_arg(bpvm_t* vm, const char* arg);
 
 /* #355 — enciende/apaga el RECOLECTOR de basura de esta VM. Apagado, no corre
  * por ninguna de las tres puertas: ni el umbral proactivo, ni el intento tras

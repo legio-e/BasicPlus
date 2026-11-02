@@ -1938,6 +1938,10 @@ e.etiqueta := <span class="str">"cuadrado de 2"</span>              <span class=
       como cualquier <a href="#defaults">parámetro con default</a>) o la cadena vacía si
       no lo hay. El <em>autorun</em> de la placa no pasa argumento a propósito: el
       defecto del fuente es la configuración de despliegue.</li>
+  <li><strong>El tope:</strong> el argumento cabe en <strong>127 bytes</strong> de UTF-8 (127 letras sin
+      acento; una «ñ» o una «é» ocupan dos). Uno más largo es un error, no se corta: el valor por
+      defecto lo rechaza el compilador, en su línea, y el que se pasa al ejecutar, la VM o la placa,
+      sin ejecutar nada (<code>el argumento no cabe: 130 bytes (el tope es 127)</code>).</li>
   <li>Forma legacy: <code>function Main()</code> sin parámetros (sigue
       aceptada).</li>
 </ul>

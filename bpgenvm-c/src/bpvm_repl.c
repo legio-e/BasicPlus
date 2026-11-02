@@ -2194,6 +2194,15 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
         if (id >= 0) wire_v1_send_error(id, "INVALID_PARAM", "falta 'path'");
         return;
     }
+    /* V8 #764 (2-nov) — un argumento que no cabe es un error, antes de nada: no se corta (el tope, el de las dos VMs). */
+    if (arg && strlen(arg) > BPVM_RUN_ARG_MAX) {
+        char m[96];
+        snprintf(m, sizeof m, "el argumento no cabe: %u bytes (el tope es %u)", (unsigned) strlen(arg),
+                 (unsigned) BPVM_RUN_ARG_MAX);
+        if (id >= 0) wire_v1_send_error(id, "INVALID_PARAM", m);
+        else         log_printf("autorun: %s", m);
+        return;
+    }
     /* La ruta, COPIADA: en las placas apunta dentro del búfer de línea del REPL, y ése es el que lee `io` durante el
      * RUN (`linea` de la cintura): un HELLO a mitad de programa la pisaría antes del log del final. */
     char ruta[BPVM_FS_PATH_MAX];

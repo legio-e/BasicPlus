@@ -1,0 +1,8 @@
+// ArgLargo.bp — V8 #764 (2-nov): el valor por defecto del argumento de ejecución tiene que caber en él: el tope de
+// las dos VMs, 127 bytes de UTF-8. Éste lleva 65 «ñ», 130 bytes. Antes la VM-C lo cortaba sin decirlo (a 126: 63
+// «ñ») y la VM-Java no; ahora es un error del compilador, en la línea del literal.
+module ArgLargo
+  public function Main(arg: string := "ñññññññññññññññññññññññññññññññññññññññññññññññññññññññññññññññññ")
+    print "arg = [", arg, "]"
+  end Main
+end ArgLargo

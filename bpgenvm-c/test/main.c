@@ -270,7 +270,16 @@ static int main_real(int argc, char** argv) {
          * programa: `bpgenvm-c X.mod "loquesea"`. Antes se rechazaba, asi que la
          * receta de paridad del proyecto (compilar + correr en las dos + diff) no
          * podia ni ejercitar la feature. */
-        else if (!run_arg)                     { run_arg = a; }
+        else if (!run_arg) {
+            /* V8 #764 (2-nov) — uno que no cabe es un error, sin ejecutar nada: no se corta (el tope, el de las dos
+             * VMs; el mismo texto que miVM). */
+            if (strlen(a) > BPVM_RUN_ARG_MAX) {
+                fprintf(stderr, "el argumento no cabe: %u bytes (el tope es %u)\n", (unsigned) strlen(a),
+                        (unsigned) BPVM_RUN_ARG_MAX);
+                return 2;
+            }
+            run_arg = a;
+        }
         else {
             fprintf(stderr, "Sólo se admite un .mod por invocación.\n");
             return 2;

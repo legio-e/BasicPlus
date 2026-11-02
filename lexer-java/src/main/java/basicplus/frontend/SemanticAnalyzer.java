@@ -4800,6 +4800,16 @@ public final class SemanticAnalyzer {
                     "'" + m.name + "' sólo admite un parámetro de tipo 'string' (recibido '"
                         + (pt == null ? "<null>" : pt.display()) + "')");
             }
+            // V8 #764 (2-nov) — su valor por defecto tiene que caber en el argumento de ejecución: el tope de las dos VMs
+            // (ModFormat.RUN_ARG_MAX, en bytes de UTF-8). Antes la VM-C lo cortaba sin decirlo, y la VM-Java no.
+            ParamSymbol p0 = m.params.get(0);
+            if (p0.defaultExpr instanceof StringLitExpr) {
+                int n = ((StringLitExpr) p0.defaultExpr).value.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+                if (n > edu.bpgenvm.bytecode.ModFormat.RUN_ARG_MAX)
+                    err(((StringLitExpr) p0.defaultExpr).line, ((StringLitExpr) p0.defaultExpr).column,
+                        "el valor por defecto de '" + p0.name + "' no cabe: " + n + " bytes (el tope del argumento es "
+                            + edu.bpgenvm.bytecode.ModFormat.RUN_ARG_MAX + ")");
+            }
         }
         if (m.returnType != null && !(m.returnType instanceof VoidType))
             err(m.line, m.column, "'" + m.name + "' no puede declarar tipo de retorno");
