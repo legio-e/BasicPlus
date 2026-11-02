@@ -7296,6 +7296,18 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#773` — un string sin valor (un campo, una global) vale `""` al escribirlo, concatenarlo y medirlo, pero `== ""` da `false` (y `==` con otro sin valor, `true`): en las dos VMs (abierta el 2-nov, al mirar los `null` de las cadenas de C#; **sólo análisis**)
+
+- **Cómo sale** (2-nov, una sonda en JC fuera del repo; las dos VMs, iguales): un campo `string campo;` sin valor,
+  leído por un método. Se escribe vacío, `strlen` da 0, `"a" + v + "b"` es `"ab"`, `upper(v)` es `""` y
+  `contains(v, "")`, `true`; pero `v == ""` es `false` (y `v != ""`, `true`), y `v == otroSinValor`, `true`. `v + ""`
+  ya es un `""` de verdad (`== ""`, `true`).
+- **Lo que dice la documentación:** un string sin valor (una global o un campo: los objetos nacen a cero) «vale `""`»
+  para el print, la concatenación y `len` (`#512`), y `#684` hizo que `charAt` lo tratara como `""`. La comparación se
+  quedó fuera.
+- **Lo propuesto, sin hacer:** que `==` y `!=` traten el sin valor como `""`, en las dos VMs (y en el AOT), y censar
+  las demás primitivas de cadena con ese caso, como en `#684`. Por decidir (Eduardo).
+
 #### 🔵 `#772` — JC/BP: con dos sobrecargas que encajan subiendo (`f(Object)` y `f(Animal)`, con un `Perro`), la llamada es «ambigua», y Java elige la más específica; y el «usa un cast» del mensaje no se puede escribir, porque JC no deja subir con un cast (abierta el 2-nov, en H8 con `test-346`; **sólo análisis**)
 
 - **Cómo sale** (2-nov, una sonda en JC fuera del repo): una clase con `Mete(Object o)` y `Mete(Animal a)`;
