@@ -256,7 +256,7 @@ namespace Cs2Jc
                     fn = (caja == "Integer" || caja == "Long") && !EsUIntNullable(uo.Operand.Type) ? "NoBits" : null; break;
                 case SyntaxKind.LogicalNotExpression: fn = caja == "Boolean" ? "No" : null; break;
                 case SyntaxKind.PreIncrementExpression:
-                case SyntaxKind.PreDecrementExpression: return Rechaza(pu, Porque.H7(Porque.IncEnExpresion));
+                case SyntaxKind.PreDecrementExpression: return Sacado(pu);
             }
             if (fn == null) return Rechaza(pu, Porque.Pendiente(pu.OperatorToken.Text + " con un " + NombreCompleto(uo.Operand.Type)));
             imports.Add("CsSystem");

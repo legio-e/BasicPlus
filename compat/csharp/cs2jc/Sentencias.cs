@@ -40,7 +40,7 @@ namespace Cs2Jc
                     Linea("if (true)");
                     Bloque(b);
                     break;
-                case LocalDeclarationStatementSyntax ld: Local(ld); break;
+                case LocalDeclarationStatementSyntax ld: EmiteConSacar(ld, true, () => Local(ld)); break;
                 // la llamada a un método partial sin cuerpo: C# la quita, con sus argumentos sin calcular (el escalón 1)
                 case ExpressionStatementSyntax es when es.Expression is InvocationExpressionSyntax llamada
                                                        && m.GetSymbolInfo(llamada).Symbol is IMethodSymbol pm
@@ -53,20 +53,15 @@ namespace Cs2Jc
                                                        && CondicionalSinDefinir(cm, llamada) is string simbolos:
                     Linea("// " + cm.Name + "(…): [Conditional(" + simbolos + ")], sin definir; C# quita la llamada");
                     break;
-                case ExpressionStatementSyntax es: Linea(ExprSentencia(es.Expression) + ";"); break;
+                case ExpressionStatementSyntax es: EmiteConSacar(es, true, () => Linea(ExprSentencia(es.Expression) + ";")); break;
                 case IfStatementSyntax i: If(i); break;
-                case WhileStatementSyntax w:
-                    Linea("while (" + Expr(w.Condition) + ")");
-                    CuerpoDe(w.Statement);
-                    break;
-                case DoStatementSyntax d:
-                    Linea("do");
-                    CuerpoDe(d.Statement);
-                    Linea("while (" + Expr(d.Condition) + ");");
-                    break;
+                case WhileStatementSyntax w: While(w); break;
+                case DoStatementSyntax d: Do(d); break;
                 case ForStatementSyntax f: For(f); break;
                 case ForEachStatementSyntax fe: Foreach(fe); break;
-                case ReturnStatementSyntax r: Linea(r.Expression == null ? "return;" : "return " + Expr(r.Expression) + ";"); break;
+                case ReturnStatementSyntax r:
+                    EmiteConSacar(r, false, () => Linea(r.Expression == null ? "return;" : "return " + Expr(r.Expression) + ";"));
+                    break;
                 case BreakStatementSyntax _: Linea("break;"); break;
                 case ContinueStatementSyntax co:
                     if (BucleDe(co) is ForStatementSyntax fw && forComoWhile.Contains(fw))
@@ -243,14 +238,35 @@ namespace Cs2Jc
 
         void If(IfStatementSyntax i)
         {
-            Linea("if (" + Expr(i.Condition) + ")");
+            var (cond, antes) = Condicion(i.Condition);
+            foreach (var l in antes) Linea(l);
+            IfDesde(i, cond);
+        }
+
+        /// `if (cond) cuerpo`, y su cadena de else if. Lo que saca la condición de un else if va delante de ella, y un
+        /// else if no tiene «delante»: la cadena sigue dentro de un `else { …; if … }`.
+        void IfDesde(IfStatementSyntax i, string cond)
+        {
+            Linea("if (" + cond + ")");
             CuerpoDe(i.Statement);
             var e = i.Else;
             while (e != null)
             {
                 if (e.Statement is IfStatementSyntax ei)
                 {
-                    Linea("else if (" + Expr(ei.Condition) + ")");
+                    var (c2, antes2) = Condicion(ei.Condition);
+                    if (antes2.Count > 0)
+                    {
+                        Linea("else");
+                        Linea("{");
+                        sangria++;
+                        foreach (var l in antes2) Linea(l);
+                        IfDesde(ei, c2);
+                        sangria--;
+                        Linea("}");
+                        return;
+                    }
+                    Linea("else if (" + c2 + ")");
                     CuerpoDe(ei.Statement);
                     e = ei.Else;
                 }
@@ -261,6 +277,83 @@ namespace Cs2Jc
                     e = null;
                 }
             }
+        }
+
+        /// `while (cond) cuerpo`. Si la condición saca algo: `while (true) { …; if (!(cond)) { break; } cuerpo }`, así lo
+        /// sacado se hace en cada vuelta, también en la última, como en C#; un `continue` vuelve arriba, a la condición.
+        void While(WhileStatementSyntax w)
+        {
+            var (cond, antes) = Condicion(w.Condition);
+            if (antes.Count == 0)
+            {
+                Linea("while (" + cond + ")");
+                CuerpoDe(w.Statement);
+                return;
+            }
+            Linea("while (true)");
+            Linea("{");
+            sangria++;
+            foreach (var l in antes) Linea(l);
+            Sal(cond);
+            if (w.Statement is BlockSyntax b) foreach (var s in b.Statements) Sentencia(s);
+            else Sentencia(w.Statement);
+            sangria--;
+            Linea("}");
+        }
+
+        /// `do cuerpo while (cond);`. Si la condición saca algo: `do { cuerpo; …; if (!(cond)) { break; } } while (true);`.
+        /// Con un `continue` del cuerpo, que en C# va a la condición (y en esa forma se la saltaría): `bool primera = true;
+        /// while (true) { if (!primera) { …; if (!(cond)) { break; } } primera = false; cuerpo }`.
+        void Do(DoStatementSyntax d)
+        {
+            var (cond, antes) = Condicion(d.Condition);
+            if (antes.Count == 0)
+            {
+                Linea("do");
+                CuerpoDe(d.Statement);
+                Linea("while (" + cond + ");");
+                return;
+            }
+            if (d.Statement.DescendantNodesAndSelf().OfType<ContinueStatementSyntax>().Any(c => BucleDe(c) == d))
+            {
+                string primera = "primera_s" + (++sacados);
+                Linea("bool " + primera + " = true;");
+                Linea("while (true)");
+                Linea("{");
+                sangria++;
+                Linea("if (!" + primera + ")");
+                Linea("{");
+                sangria++;
+                foreach (var l in antes) Linea(l);
+                Sal(cond);
+                sangria--;
+                Linea("}");
+                Linea(primera + " = false;");
+                if (d.Statement is BlockSyntax cb) foreach (var s in cb.Statements) Sentencia(s);
+                else Sentencia(d.Statement);
+                sangria--;
+                Linea("}");
+                return;
+            }
+            Linea("do");
+            Linea("{");
+            sangria++;
+            if (d.Statement is BlockSyntax b) foreach (var s in b.Statements) Sentencia(s);
+            else Sentencia(d.Statement);
+            foreach (var l in antes) Linea(l);
+            Sal(cond);
+            sangria--;
+            Linea("}");
+            Linea("while (true);");
+        }
+
+        /// La salida de un bucle cuya condición sacó algo: `if (!(cond)) { break; }`.
+        void Sal(string cond)
+        {
+            Linea("if (!(" + cond + "))");
+            Linea("{");
+            Linea("   break;");
+            Linea("}");
         }
 
         /// Los `for` que se escriben como `while`: sus `continue` llevan delante los incrementos.
@@ -276,23 +369,38 @@ namespace Cs2Jc
                 return;
             }
             // Los demás, como `while`, dentro de un `if (true)` que da a la variable el ámbito del `for`; un `continue` del
-            // `for` hace antes sus incrementos, como en C#.
+            // `for` hace antes sus incrementos, como en C#. Sin variable que declarar (`for (i = 0; …)`), sin el `if (true)`:
+            // no hace falta, y JC no ve que se entra, así que tras él no daría `i` por asignada (test-25, H8).
             forComoWhile.Add(f);
-            Linea("if (true)");
-            Linea("{");
-            sangria++;
+            bool ambito = f.Declaration != null;
+            if (ambito)
+            {
+                Linea("if (true)");
+                Linea("{");
+                sangria++;
+            }
             if (f.Declaration != null) Declaracion(f.Declaration, false);
             foreach (var i in f.Initializers) Linea(ExprSentencia(i) + ";");
-            Linea("while (" + (f.Condition != null ? Expr(f.Condition) : "true") + ")");
+            // la condición: si saca algo, dentro del bucle (While), y un `continue` del for hace antes sus incrementos
+            var (cond, antes) = f.Condition != null ? Condicion(f.Condition) : ("true", new List<string>());
+            Linea("while (" + (antes.Count == 0 ? cond : "true") + ")");
             Linea("{");
             sangria++;
+            if (antes.Count > 0)
+            {
+                foreach (var l in antes) Linea(l);
+                Sal(cond);
+            }
             if (f.Statement is BlockSyntax b) foreach (var s in b.Statements) Sentencia(s);
             else Sentencia(f.Statement);
             foreach (var i in f.Incrementors) Linea(ExprSentencia(i) + ";");
             sangria--;
             Linea("}");
-            sangria--;
-            Linea("}");
+            if (ambito)
+            {
+                sangria--;
+                Linea("}");
+            }
         }
 
         /// El bucle al que salta un `continue` (el `switch` no lo para).
@@ -341,7 +449,9 @@ namespace Cs2Jc
 
         void SwitchDentro(SwitchStatementSyntax sw)
         {
-            Linea("switch (" + Expr(sw.Expression) + ")");
+            var (que, antes) = Condicion(sw.Expression);
+            foreach (var l in antes) Linea(l);
+            Linea("switch (" + que + ")");
             Linea("{");
             sangria++;
             SwitchSectionSyntax porDefecto = null;
@@ -488,7 +598,9 @@ namespace Cs2Jc
                     Rechaza(fe.Type, Porque.Pendiente("foreach con otro tipo que el de los elementos"));
                     return;
                 }
-                Linea("foreach (var " + Ident(variable.Name) + " in " + Expr(fe.Expression) + ")");
+                var (coleccion, antes) = Condicion(fe.Expression);
+                foreach (var l in antes) Linea(l);
+                Linea("foreach (var " + Ident(variable.Name) + " in " + coleccion + ")");
                 CuerpoDe(fe.Statement);
                 return;
             }
@@ -506,7 +618,7 @@ namespace Cs2Jc
                 Linea("throw " + catchs.Peek() + ";");
                 return;
             }
-            Linea("throw " + Expr(th.Expression) + ";");
+            EmiteConSacar(th, false, () => Linea("throw " + Expr(th.Expression) + ";"));
         }
 
         void Try(TryStatementSyntax tr)

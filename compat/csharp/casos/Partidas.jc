@@ -1,0 +1,231 @@
+module CsPartidas
+{
+   import CsSystem;
+
+   class Cuenta
+   {
+      private int n;
+      private static int veces;
+      public function int Siguiente()
+      {
+         int valor_s1 = this.n;
+         this.n++;
+         return valor_s1;
+      }
+      public function int Otra()
+      {
+         this.n++;
+         return this.n;
+      }
+      public static function int Vez()
+      {
+         int valor_s2 = Cuenta.veces;
+         Cuenta.veces++;
+         return valor_s2;
+      }
+   }
+
+   class Programa
+   {
+      private static function Object Lee(int i)
+      {
+         return i > 0 ? new Object() : null;
+      }
+      private static function int Doble(int x)
+      {
+         return x * 2;
+      }
+      public static function int Main()
+      {
+         int i = 5;
+         int j = i;
+         i++;
+         if (j != 5 || i != 6)
+         {
+            return 1;
+         }
+         i++;
+         int k = i;
+         if (k != 7 || i != 7)
+         {
+            return 2;
+         }
+         int d = Programa.Doble(i);
+         i++;
+         if (d != 14 || i != 8)
+         {
+            return 3;
+         }
+         Object o;
+         o = Programa.Lee(1);
+         if ((o) == null)
+         {
+            return 4;
+         }
+         int a, b;
+         b = 3;
+         a = b;
+         if (a != 3 || b != 3)
+         {
+            return 5;
+         }
+         b += 2;
+         int c = b;
+         if (c != 5 || b != 5)
+         {
+            return 6;
+         }
+         int n = 3, vueltas = 0;
+         while (true)
+         {
+            int valor_s3 = n;
+            n--;
+            if (!(valor_s3 > 0))
+            {
+               break;
+            }
+            vueltas++;
+         }
+         if (vueltas != 3 || n != -1)
+         {
+            return 7;
+         }
+         int m = 2, hechas = 0;
+         do
+         {
+            hechas++;
+            int valor_s4 = m;
+            m--;
+            if (!(valor_s4 > 0))
+            {
+               break;
+            }
+         }
+         while (true);
+         if (hechas != 3 || m != -1)
+         {
+            return 8;
+         }
+         int total = 0;
+         if (true)
+         {
+            int q = 0;
+            while (true)
+            {
+               int valor_s5 = q;
+               q++;
+               if (!(valor_s5 < 3))
+               {
+                  break;
+               }
+               total += q;
+            }
+         }
+         if (total != 6)
+         {
+            return 9;
+         }
+         int p = 5, contadas = 0;
+         bool primera_s6 = true;
+         while (true)
+         {
+            if (!primera_s6)
+            {
+               p--;
+               if (!(p > 0))
+               {
+                  break;
+               }
+            }
+            primera_s6 = false;
+            if (p == 3)
+            {
+               continue;
+            }
+            contadas++;
+         }
+         if (contadas != 4 || p != 0)
+         {
+            return 19;
+         }
+         Cuenta cuenta = new Cuenta();
+         if (cuenta.Siguiente() != 0 || cuenta.Otra() != 2)
+         {
+            return 10;
+         }
+         if (Cuenta.Vez() != 0 || Cuenta.Vez() != 1)
+         {
+            return 11;
+         }
+         int[] arr = [10, 20];
+         int v = arr[1];
+         arr[1]++;
+         if (v != 20 || arr[1] != 21)
+         {
+            return 12;
+         }
+         int r = 0, s = 3;
+         if (s > 9)
+         {
+            return 13;
+         }
+         else
+         {
+            int valor_s7 = s;
+            s--;
+            r = valor_s7;
+            if ((r) == 3)
+            {
+               if (s != 2)
+               {
+                  return 14;
+               }
+            }
+            else
+            {
+               return 15;
+            }
+         }
+         int sw = 1, salida = 0;
+         int valor_s8 = sw;
+         sw++;
+         switch (valor_s8)
+         {
+            case 1:
+               salida = 10;
+               break;
+            default:
+               salida = 20;
+               break;
+         }
+         if (salida != 10 || sw != 2)
+         {
+            return 16;
+         }
+         Integer nul = new Integer(4);
+         Integer viejo = nul;
+         nul = CsSystem.Nullable_Inc(nul);
+         if (!CsSystem.Nullable_Igual(viejo, new Integer(4)) || !CsSystem.Nullable_Igual(nul, new Integer(5)))
+         {
+            return 17;
+         }
+         long u = 4294967295L;
+         long previo = u;
+         u = ((u + 1) & 4294967295L);
+         if (previo != 4294967295L || u != 0)
+         {
+            return 18;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

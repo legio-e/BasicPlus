@@ -4873,7 +4873,7 @@ prueba, con dos scripts de la carpeta temporal (`temas_hoy.py`, `tema1.py`).
 | # | ajuste | dónde | da | hecho |
 |---|---|---|---|---|
 | 1 | los atributos: una clase de atributo, una clase más; `[Conditional]`, quitar sus llamadas | el traductor | +9 | 2-nov: **95** |
-| 2 | `++` partido, los niveles 1 a 4 (arriba) | el traductor | +2 | |
+| 2 | `++` partido, los niveles 1 a 4 (arriba) | el traductor | +2 | 2-nov: **97** |
 | 3 | los formatos `{0:X}` y `{0,5}` | `CsSystem` | +2 | |
 | 4 | lo pequeño de JC: `as`, una constante estrecha en un argumento, el «Color Color», `1__000` | el compilador | +4 | |
 | 5 | el tipo exacto, `o.GetType() == typeof(X)` | el traductor | hasta +4 | |
@@ -4890,6 +4890,20 @@ los atributos (`GetCustomAttributes`…) sigue siendo reflexión. De paso, un fa
 `test-272`: los accesores de una propiedad, con el `get` delante (JC lo pide así; C# deja `{ set {…} get {…} }`). Caso
 `Atributos`. **Mono: 404** (+28: 9 del tema 1 y 19 de otros temas), sin perder ninguna; fallan las mismas 6. **El tema 1:
 95 de 141.**
+
+**2. `++` partido, hecho** (Eduardo: *«OK, adelante»*; `compat/csharp/cs2jc/Sacar.cs`). El `++`, el `--` o el `=` de
+dentro de una expresión sale a su sentencia: `++x` y `x = e`, delante, y en su sitio `x`; `x++`, detrás si la
+sentencia lo deja (una declaración, una asignación, una llamada), o delante con una temporal (`int valor_s1 = x; x++;`)
+en un `return`, un `throw`, la condición de un `if`, un `switch` o un `foreach`. En un else if, la cadena sigue en un
+`else { …; if … }`; en la condición de un bucle, `while (true) { …; if (!(cond)) { break; } cuerpo }`, y en un `do`
+con `continue`, una variable que se salta la condición sólo la primera vuelta (el `continue` de C# va a la condición).
+Una propiedad, sólo `P = e`, por una temporal. Lo que no cumple las condiciones de arriba sigue «le falta a JC». De
+paso, un `for` sin variable que declarar se escribe sin el `if (true)` (no hace falta, y JC no veía tras él la variable
+asignada: `test-25`). Caso `Partidas` (y en `Rechazos`, el `++` que se rechaza es ahora uno que se vuelve a leer).
+**Mono: 414** (+10), sin perder ninguna; fallan las mismas 6. **El tema 1: 97 de 141.** De las 16 a las que de JC sólo
+les faltaba esto, entran 9 (y `test-25`): 5 piden además otra cosa que antes quedaba tapada (los inicializadores fuera
+de una declaración, 3; un `foreach` propio; `IDisposable`) y una es `stack[sp++] = cc` (el índice cambia dentro del
+destino).
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

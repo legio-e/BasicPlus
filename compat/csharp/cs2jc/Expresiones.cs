@@ -224,11 +224,11 @@ namespace Cs2Jc
                 case PrefixUnaryExpressionSyntax pu: return Prefijo(pu);
                 case PostfixUnaryExpressionSyntax po:
                     if (po.IsKind(SyntaxKind.SuppressNullableWarningExpression)) return Expr(po.Operand);
-                    return Rechaza(po, Porque.H7(Porque.IncEnExpresion));
+                    return Sacado(po);                                     // partido en dos, si se puede (Sacar.cs)
                 case ParenthesizedExpressionSyntax p: return "(" + Expr(p.Expression) + ")";
                 case CastExpressionSyntax c: return Conversion(c);
                 case ConditionalExpressionSyntax c: return Expr(c.Condition) + " ? " + Expr(c.WhenTrue) + " : " + Expr(c.WhenFalse);
-                case AssignmentExpressionSyntax a: return Rechaza(a, Porque.H7(Porque.IncEnExpresion));
+                case AssignmentExpressionSyntax a: return Sacado(a);              // partido en dos, si se puede (Sacar.cs)
                 case ElementAccessExpressionSyntax ea: return Elemento(ea);
                 case ThisExpressionSyntax _: return "this";
                 case ArrayCreationExpressionSyntax ac: return CreaArray(ac);
@@ -692,7 +692,7 @@ namespace Cs2Jc
                     return "(" + Expr(pu.Operand) + " ^ -1)";
                 case SyntaxKind.PreIncrementExpression:
                 case SyntaxKind.PreDecrementExpression:
-                    return Rechaza(pu, Porque.H7(Porque.IncEnExpresion));
+                    return Sacado(pu);                                     // partido en dos, si se puede (Sacar.cs)
                 default:
                     return RechazaNodo(pu);
             }

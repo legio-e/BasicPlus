@@ -80,15 +80,12 @@ module CsBuclesYSwitch
             return 2;
          }
          int k = 0;
-         if (true)
+         while (true)
          {
-            while (true)
+            k++;
+            if (k == 5)
             {
-               k++;
-               if (k == 5)
-               {
-                  break;
-               }
+               break;
             }
          }
          if (k != 5)

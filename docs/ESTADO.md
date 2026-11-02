@@ -76,7 +76,9 @@
 > - **H8, empezado: tema a tema** (Eduardo: *«empezar por el tema 1 y hacer pequeños ajustes hasta ver donde podemos
 >   llegar»*). El tema 1, seis ajustes por lo que dan; el primero, los atributos (*«OK, adelante»*): una clase de
 >   atributo, una clase más, y `[Conditional]`, sus llamadas quitadas. El tema 1, de 86 a **95**; Mono, **404**. De paso,
->   los accesores de una propiedad, con el `get` delante (`test-272`). Lo siguiente del tema 1: `++` partido.
+>   los accesores de una propiedad, con el `get` delante (`test-272`). El segundo, `++` partido (*«OK, adelante»*): el
+>   tema 1, **97**; Mono, **414**; y de paso, un `for` sin variable, sin el `if (true)` (`test-25`). Lo siguiente del
+>   tema 1: los formatos (`{0:X}`, `{0,5}`).
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».
