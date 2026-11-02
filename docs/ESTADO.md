@@ -78,7 +78,9 @@
 >   atributo, una clase más, y `[Conditional]`, sus llamadas quitadas. El tema 1, de 86 a **95**; Mono, **404**. De paso,
 >   los accesores de una propiedad, con el `get` delante (`test-272`). El segundo, `++` partido (*«OK, adelante»*): el
 >   tema 1, **97**; Mono, **414**; y de paso, un `for` sin variable, sin el `if (true)` (`test-25`). Lo siguiente del
->   tema 1: los formatos (`{0:X}`, `{0,5}`).
+>   tema 1: los formatos (`{0:X}`, `{0,5}`). Hechos (*«OK, adelante»*): el ancho, el hexadecimal y `0.00`, en `CsSystem`;
+>   el tema 1, **99**; Mono, **419**. Lo siguiente: lo pequeño de JC (`as`, una constante estrecha en un argumento, el
+>   «Color Color», `1__000`), que toca el lenguaje: la forma, de Eduardo.
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

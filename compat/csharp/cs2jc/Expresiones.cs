@@ -277,7 +277,19 @@ namespace Cs2Jc
                 if (c is InterpolatedStringTextSyntax txt) partes.Add(Cadena(txt.TextToken.ValueText));
                 else if (c is InterpolationSyntax it)
                 {
-                    if (it.AlignmentClause != null || it.FormatClause != null) return Rechaza(it, Porque.H7(Porque.Formatos));
+                    if (it.AlignmentClause != null || it.FormatClause != null)
+                    {
+                        // `{x,5}` y `{x:X}` (H8, tema 1): con su ancho y su formato (PiezaConFormato); el ancho, una constante
+                        int? ancho = null;
+                        if (it.AlignmentClause != null)
+                        {
+                            var cv = m.GetConstantValue(it.AlignmentClause.Value);
+                            if (!(cv.HasValue && cv.Value is int a)) return Rechaza(it, Porque.H7(Porque.Formatos));
+                            ancho = a;
+                        }
+                        partes.Add("(" + PiezaConFormato(it.Expression, ancho, it.FormatClause?.FormatStringToken.ValueText, it) + ")");
+                        continue;
+                    }
                     string x = Texto(it.Expression);                       // sin la caja de C#, como en la suma
                     bool simple = it.Expression is IdentifierNameSyntax || it.Expression is MemberAccessExpressionSyntax
                                   || it.Expression is InvocationExpressionSyntax || it.Expression is LiteralExpressionSyntax

@@ -160,6 +160,65 @@ module CsSystem
       return r;
    }
 
+   // ------------------------------------------------------------------------------------------- los formatos
+   // (H8, tema 1; 2-nov) Los de `{x,N}` y `{x:F}` que el traductor sabe pasar: el ancho, el hexadecimal (`x`, `X8`) y un
+   // formato a medida de ceros y un punto (`0.00`). Los demás (N, F2, D5, las fechas…), todavía no.
+
+   /// `{x,N}`: el texto, con espacios hasta N caracteres; N > 0, a la derecha (los espacios delante); N < 0, a la izquierda.
+   public function string Format_Ancho(string s, int n)
+   {
+      int ancho = n < 0 ? -n : n;
+      string r = s;
+      while (strlen(r) < ancho)
+      {
+         if (n > 0) r = " " + r;
+         else r = r + " ";
+      }
+      return r;
+   }
+
+   /// `{x:x}` y `{x:X8}`: en hexadecimal, en minúsculas o mayúsculas, con ceros delante hasta `cifras`. Un negativo, en
+   /// complemento a dos: 8 cifras un int, 16 un long, como .NET.
+   public function string Format_Hex(int x, bool mayusculas, int cifras)
+   {
+      return Format_Hex(((long) x) & 4294967295L, mayusculas, cifras);
+   }
+   public function string Format_Hex(long x, bool mayusculas, int cifras)
+   {
+      string digitos = mayusculas ? "0123456789ABCDEF" : "0123456789abcdef";
+      string r = "";
+      long v = x;
+      do
+      {
+         int d = (int) (v & 15L);
+         r = substring(digitos, d, d + 1) + r;
+         v = (v >> 4) & 1152921504606846975L;          // >> sin signo: los 4 bits de arriba, a cero
+      }
+      while (v != 0L);
+      while (strlen(r) < cifras) r = "0" + r;
+      return r;
+   }
+
+   /// `{x:0.00}`: con `decimales` cifras tras el punto y al menos `enteras` delante, redondeando a medias hacia fuera
+   /// del cero, como .NET al formatear.
+   public function string Format_Decimales(double x, int enteras, int decimales)
+   {
+      bool negativo = x < 0.0;
+      double a = negativo ? -x : x;
+      long escala = 1L;
+      for (int i = 1; i <= decimales; i++) escala = escala * 10L;
+      long r = (long) (a * ((double) escala) + 0.5);
+      string s = "" + (r / escala);
+      while (strlen(s) < enteras) s = "0" + s;
+      if (decimales > 0)
+      {
+         string f = "" + (r % escala);
+         while (strlen(f) < decimales) f = "0" + f;
+         s = s + "." + f;
+      }
+      return negativo && r != 0L ? "-" + s : s;
+   }
+
    /// int.Parse y long.Parse: el número, o FormatException, como .NET (el desbordamiento no se mira: Str.parseLong).
    public function int Int32_Parse(string s)
    {

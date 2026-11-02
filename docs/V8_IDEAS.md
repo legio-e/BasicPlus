@@ -4874,7 +4874,7 @@ prueba, con dos scripts de la carpeta temporal (`temas_hoy.py`, `tema1.py`).
 |---|---|---|---|---|
 | 1 | los atributos: una clase de atributo, una clase más; `[Conditional]`, quitar sus llamadas | el traductor | +9 | 2-nov: **95** |
 | 2 | `++` partido, los niveles 1 a 4 (arriba) | el traductor | +2 | 2-nov: **97** |
-| 3 | los formatos `{0:X}` y `{0,5}` | `CsSystem` | +2 | |
+| 3 | los formatos `{0:X}` y `{0,5}` | `CsSystem` | +2 | 2-nov: **99** |
 | 4 | lo pequeño de JC: `as`, una constante estrecha en un argumento, el «Color Color», `1__000` | el compilador | +4 | |
 | 5 | el tipo exacto, `o.GetType() == typeof(X)` | el traductor | hasta +4 | |
 | 6 | la E/S de .NET y lo demás de la biblioteca | `CsSystem` | +3 a +5 | |
@@ -4904,6 +4904,16 @@ asignada: `test-25`). Caso `Partidas` (y en `Rechazos`, el `++` que se rechaza e
 les faltaba esto, entran 9 (y `test-25`): 5 piden además otra cosa que antes quedaba tapada (los inicializadores fuera
 de una declaración, 3; un `foreach` propio; `IDisposable`) y una es `stack[sp++] = cc` (el índice cambia dentro del
 destino).
+
+**3. Los formatos, hecho** (Eduardo: *«OK, adelante»*). Medido antes: 14 pruebas los piden, y sólo a 5 no les falta
+nada más, cada una con uno distinto (el ancho, 2; `x`, 1; `0.00`, 1; un formato en una cadena, 1). En `CsSystem`,
+`Format_Ancho` (`{x,N}`: espacios delante si N > 0, detrás si N < 0), `Format_Hex` (`x` y `X` con sus cifras; un
+negativo, en complemento a dos: 8 cifras un int, 16 un long, como .NET; uno estrecho con signo, con sus bits) y
+`Format_Decimales` (un formato a medida de ceros y un punto, redondeando a medias hacia fuera del cero). En el
+traductor, en `$"…"` y en `Console.WriteLine`/`string.Format`, con la expresión sin su caja; en una cadena, un bool o
+un char, que no tienen formatos, ninguno (.NET lo ignora); los demás (`N`, `F2`, `D5`, las fechas…), todavía «le falta
+a JC: formatos». Caso `Formatos`. **Mono: 419** (+5: las 5), sin perder ninguna; fallan las mismas 6. **El tema 1: 99
+de 141.**
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

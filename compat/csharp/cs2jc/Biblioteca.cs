@@ -326,20 +326,86 @@ namespace Cs2Jc
                 int cierre = f.IndexOf('}', i);
                 if (cierre < 0) { Rechaza(args[0], Porque.Pendiente("un formato mal formado")); return null; }
                 string dentro = f.Substring(i + 1, cierre - i - 1);
-                if (dentro.Contains(':') || dentro.Contains(',')) { Rechaza(args[0], Porque.H7(Porque.Formatos)); return null; }
-                if (!int.TryParse(dentro, out int n) || n + 1 >= args.Count)
+                // `{n,ancho:formato}` (H8, tema 1): el ancho y el formato, si los lleva (PiezaConFormato)
+                string formato = null;
+                int? ancho = null;
+                int dosPuntos = dentro.IndexOf(':');
+                if (dosPuntos >= 0) { formato = dentro.Substring(dosPuntos + 1); dentro = dentro.Substring(0, dosPuntos); }
+                int coma = dentro.IndexOf(',');
+                if (coma >= 0)
+                {
+                    if (!int.TryParse(dentro.Substring(coma + 1).Trim(), out int a)) { Rechaza(args[0], Porque.Pendiente("un formato mal formado")); return null; }
+                    ancho = a;
+                    dentro = dentro.Substring(0, coma);
+                }
+                if (!int.TryParse(dentro.Trim(), out int n) || n + 1 >= args.Count)
                 { Rechaza(args[0], Porque.Pendiente("un formato mal formado")); return null; }
                 if (n != siguiente)
                 { Rechaza(args[0], Porque.Pendiente("un formato que no usa sus argumentos una vez y en orden")); return null; }
                 siguiente++;
                 if (texto.Length > 0) { piezas.Add(Cadena(texto.ToString())); texto.Clear(); }
-                piezas.Add(Texto(args[n + 1].Expression));
+                piezas.Add(ancho != null || formato != null ? PiezaConFormato(args[n + 1].Expression, ancho, formato, args[0])
+                                                             : Texto(args[n + 1].Expression));
                 i = cierre;
             }
             if (siguiente != args.Count - 1)
             { Rechaza(args[0], Porque.Pendiente("un formato que no usa sus argumentos una vez y en orden")); return null; }
             if (texto.Length > 0) piezas.Add(Cadena(texto.ToString()));
             return piezas;
+        }
+
+        /// Una pieza con su ancho (`{x,N}`) o su formato (`{x:F}`) (H8, tema 1; 2-nov): su texto, con la función de
+        /// CsSystem alrededor. Los formatos que se saben: `x` y `X` con sus cifras (`X8`), de un entero; uno a medida de
+        /// ceros y un punto (`0.00`), de un número; y en una cadena, un bool o un char, que no tienen formatos, ninguno
+        /// (.NET lo ignora). Los demás, «le falta a JC: formatos».
+        string PiezaConFormato(ExpressionSyntax e, int? ancho, string formato, SyntaxNode donde)
+        {
+            var t = m.GetTypeInfo(e).Type;
+            string texto;
+            bool cadena;
+            System.Text.RegularExpressions.Match mm;
+            if (string.IsNullOrEmpty(formato) || EsCadena(t) || EsBool(t) || t?.SpecialType == SpecialType.System_Char)
+            {
+                texto = Texto(e);
+                cadena = EsCadena(t) || t?.SpecialType == SpecialType.System_Char || EsNullable(t);
+            }
+            else if ((mm = System.Text.RegularExpressions.Regex.Match(formato, @"^([xX])(\d{0,2})$")).Success && ValorParaHex(e, t) is string valor)
+            {
+                imports.Add("CsSystem");
+                texto = "CsSystem.Format_Hex(" + valor + ", " + (mm.Groups[1].Value == "X" ? "true" : "false") + ", "
+                        + (mm.Groups[2].Value.Length > 0 ? mm.Groups[2].Value : "0") + ")";
+                cadena = true;
+            }
+            else if ((mm = System.Text.RegularExpressions.Regex.Match(formato, @"^(0+)(\.(0+))?$")).Success && EsNumerico(t)
+                     && t.SpecialType != SpecialType.System_Char)
+            {
+                imports.Add("CsSystem");
+                texto = "CsSystem.Format_Decimales((double) (" + ExprBase(e) + "), " + mm.Groups[1].Length + ", " + mm.Groups[3].Length + ")";
+                cadena = true;
+            }
+            else return Rechaza(donde, Porque.H7(Porque.Formatos));
+            if (texto == Hueco) return Hueco;
+            if (ancho == null) return texto;
+            imports.Add("CsSystem");
+            return "CsSystem.Format_Ancho(" + (cadena ? texto : "(\"\" + (" + texto + "))") + ", " + ancho + ")";
+        }
+
+        /// El valor de un entero para el hexadecimal: tal cual un int, un long o un uint (en JC, un long); uno estrecho con
+        /// signo, con sus bits (en .NET, `(short) -1` es `ffff`); null si no es un entero. Sin la conversión de su sitio
+        /// (ExprBase): en `string.Format` va como object, y aquí no hace falta su caja.
+        string ValorParaHex(ExpressionSyntax e, ITypeSymbol t)
+        {
+            switch (t?.SpecialType)
+            {
+                case SpecialType.System_Int32:
+                case SpecialType.System_Int64:
+                case SpecialType.System_UInt32:
+                case SpecialType.System_Byte:
+                case SpecialType.System_UInt16: return ExprBase(e);
+                case SpecialType.System_SByte: return "((" + ExprBase(e) + ") & 255)";
+                case SpecialType.System_Int16: return "((" + ExprBase(e) + ") & 65535)";
+                default: return null;
+            }
         }
     }
 }

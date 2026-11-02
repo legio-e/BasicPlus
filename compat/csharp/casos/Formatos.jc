@@ -1,0 +1,63 @@
+module CsFormatos
+{
+   import CsSystem;
+
+   class Programa
+   {
+      public static function int Main()
+      {
+         int n = 255;
+         if (("" + (CsSystem.Format_Hex(n, false, 0))) != "ff" || ("" + (CsSystem.Format_Hex(n, true, 4))) != "00FF")
+         {
+            return 1;
+         }
+         int menos = -1;
+         if (("" + (CsSystem.Format_Hex(menos, false, 0))) != "ffffffff")
+         {
+            return 2;
+         }
+         long grande = -2;
+         if (("" + (CsSystem.Format_Hex(grande, true, 0))) != "FFFFFFFFFFFFFFFE")
+         {
+            return 3;
+         }
+         short corto = -1;
+         if (("" + (CsSystem.Format_Hex(((corto) & 65535), false, 0))) != "ffff")
+         {
+            return 4;
+         }
+         if (("" + (CsSystem.Format_Decimales((double) (1), 1, 2))) != "1.00" || ("" + (CsSystem.Format_Decimales((double) (2.6), 1, 0))) != "3" || ("" + (CsSystem.Format_Decimales((double) (-1.234), 1, 1))) != "-1.2" || ("" + (CsSystem.Format_Decimales((double) (3.14159), 2, 3))) != "03.142")
+         {
+            return 5;
+         }
+         string s = "hola";
+         if (("[" + (CsSystem.Format_Ancho(s, 6)) + "]") != "[  hola]" || ("[" + (CsSystem.Format_Ancho(s, -6)) + "]") != "[hola  ]")
+         {
+            return 6;
+         }
+         if (("[" + (CsSystem.Format_Ancho(("" + (n)), 5)) + "]") != "[  255]" || ("[" + (CsSystem.Format_Ancho(CsSystem.Format_Hex(n, false, 0), -5)) + "]") != "[ff   ]")
+         {
+            return 7;
+         }
+         if (("" + (s)) != "hola")
+         {
+            return 8;
+         }
+         if (("" + (CsSystem.Format_Ancho(("" + (7)), 4)) + "|" + (CsSystem.Format_Hex(10, false, 2))) != "   7|0a")
+         {
+            return 9;
+         }
+         println(CsSystem.Format_Ancho("ab", -6), "|", CsSystem.Format_Ancho(("" + (12)), 6), "|");
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}
