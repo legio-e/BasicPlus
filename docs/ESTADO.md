@@ -32,6 +32,9 @@
 > PC (`#739`, `#731`, `#732`, `#733`), tres por decidir (`#735`, `#736`, `#730`) y dos de placa (`#737`, `#738`)— y el
 > orden propuesto (Eduardo: *«Adelante»*).
 > - **`#734`, cerrada:** estaba explicada y decidida el 29-oct (lo demás, como está).
+> - **`#739`, analizada:** sí queda una puerta, en la VM-C de PC en Windows: el argumento y los nombres de `listDir`
+>   llegan en la página 1252 (`¿hola?` como `BF 68 6F…`). Abiertas `#763` (Windows no habla UTF-8 en la VM-C) y `#764`
+>   (el argumento, cortado a 127 bytes sin decirlo).
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

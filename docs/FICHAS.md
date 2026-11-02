@@ -7296,6 +7296,42 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#764` — el argumento del RUN se corta a 127 bytes en la VM-C sin decirlo, y en la VM-Java no; el que llega por la línea de órdenes o por el wire, sin mirar si parte un carácter (abierta el 2-nov, al analizar `#739`; **sólo análisis**)
+
+- **Dónde:** `bpvm_set_run_arg` (`bpgenvm-c/src/bpvm.c`) guarda el argumento con `snprintf` en `run_arg[128]`: uno más
+  largo se corta en el byte 127, aunque parta un carácter (la cadena nace rota por el final). El valor por defecto del
+  fuente lo copia `__runArg` con `read_bp_string` a un búfer de 128, que corta por caracteres (`#711`): sale válido,
+  pero más corto. La VM-Java no corta nada.
+- **Medido** (2-nov, las dos VMs de hoy, un programa de prueba fuera del repo): `Main(arg: string := "ñ…")` con 65 «ñ»
+  (130 bytes): la VM-Java da 130 bytes y 65 caracteres; la VM-C, 126 y 63, sin aviso.
+- **Lo propuesto, sin hacer:** que no se corte en silencio («errores sí, silenciosos no»): un error si no cabe, con el
+  mismo tope en las dos VMs, o un tope mayor; y el valor por defecto, que lo mire el compilador. Por decidir (Eduardo).
+
+#### 🔵 `#763` — la VM-C de PC, en Windows, no habla UTF-8: el argumento del RUN, los nombres que da `listDir` y los de los ficheros que crea van en la página de códigos del sistema (la 1252); una cadena nace rota, y puede empezar por un byte de continuación (abierta el 2-nov, al analizar `#739`; **sólo análisis**)
+
+- **Cómo salió:** buscando las puertas de `#739` (las fuentes de confianza que faltaban por probar). En Windows, el C
+  estándar que usa la VM-C (`main`, `fopen`, `opendir`/`readdir`) va por las funciones «A» de Windows, que hablan la
+  página de códigos del sistema —aquí la 1252—, no UTF-8. La VM-Java da y recibe UTF-8.
+- **Medido** (2-nov, las dos VMs de hoy, programas de prueba fuera del repo):
+  - **el argumento:** `¿hola?` llega a la VM-C como `BF 68 6F 6C 61 3F` —empieza por un byte de continuación: el caso
+    de `#739`— y a la VM-Java como `C2 BF 68 6F 6C 61 3F` (strlen, 5 y 6); `€uro`, como `80 75 72 6F`; `año`, como
+    `61 F1 6F`, UTF-8 roto;
+  - **`listDir`:** `¡hola.txt` llega como `A1 68 6F 6C 61 2E 74 78 74` (empieza por continuación) y `año.txt` como
+    `61 F1 6F 2E 74 78 74`; en la VM-Java, los dos bien;
+  - **un fichero que se crea:** `writeFile("ñ_c.txt", …)` lo deja en el disco como `Ã±_c.txt` (los dos bytes de la «ñ»
+    en UTF-8, leídos en la 1252). La VM-C lo encuentra, porque usa el mismo nombre mal; fuera de ella es otro nombre.
+- **Por qué no lo veía la red:** sus argumentos y sus nombres de fichero son ASCII; `Utf8Descodifica` (§10) lista una
+  carpeta sin nombres especiales.
+- **En las placas, no:** el argumento llega por el wire, en UTF-8, y LittleFS y FatFs guardan los nombres tal como se
+  los dan. El simulador del IDE (H10) sí: es la VM-C de PC.
+- **De paso:** la VM-Java, por la línea de órdenes en Windows, tampoco recibe lo que no está en la 1252 (Java 8 lee los
+  argumentos en la página del sistema): `ő😀` le llega como `out`, y a la VM-C como `o??`.
+- **Lo propuesto, sin hacer:** que la VM-C de PC declare en su manifiesto que su página de códigos es UTF-8
+  (`activeCodePage`, desde Windows 10 1903): las funciones «A» hablan entonces UTF-8, y `main`, `fopen` y `opendir`
+  dan y reciben UTF-8 sin cambiar el código. Es un fichero de texto que se mete en el `.exe` al enlazar (`windres`, que
+  está). Lo mismo para el simulador del IDE. Y en la red, una prueba con un argumento y unos nombres de fichero que no
+  son ASCII. Por decidir (Eduardo).
+
 #### 🔵 `#762` — la red: el estrés del heap (`HeapEstres` en la VM-C con el heap justo, 80 KB) se queda a veces sin heap con varios workers: «No space in heap» en un hilo (abierta el 1-nov, en la red de `#752`; preexistente; **sólo análisis**)
 
 - **Cómo salió:** la red de `#752` (1-nov, 14:10), en ROJO sólo por esto: `HeapEstres VM-C --smp=2`, «excepcion no
@@ -8128,6 +8164,12 @@ cursor. Estaba para las cadenas rotas, y `V8_IDEAS` §E5 lo decía: *se queda mi
 (lo de fuera se descodifica al nacer), `#714` (`move` no escribe en una cadena) y `#724` (el texto de los packs), no
 queda ninguna conocida. Lo que haría falta: comprobar que ningún camino crea una cadena así —las fuentes de confianza,
 con su test— y quitar el caso, o dejarlo como una comprobación que avise si alguna vez se da.
+
+- **2-nov, analizada** (Eduardo: *«Me parece bien, adelante»*, a quitar el caso, poner el aviso donde nace toda cadena
+  y probar las tres fuentes de confianza que faltaban): **sí queda una puerta**, y conocida desde hoy. Leyendo el código
+  no la vi; probando con argumentos y nombres de fichero no ASCII, sí: la VM-C de PC, en Windows, recibe el argumento y
+  los nombres de `listDir` en la página 1252, y `¿hola?` le llega como `BF 68 6F…`, `¡hola.txt` como `A1 68 6F…`
+  (`#763`). De paso, el argumento se corta a 127 bytes sin decirlo (`#764`). Quitar el caso, después de cerrar `#763`.
 
 #### 🔵 `#738` — en la Metro, copiar y poner a cero las cadenas grandes sin pasar por la caché del XIP (el alias sin caché o el DMA) (abierta el 27-oct, al cerrar el H5; **por medir**)
 
