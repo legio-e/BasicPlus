@@ -7296,6 +7296,31 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#774` — `null` en una variable `string`: la variable puede no referenciar ninguna cadena, y una cadena nunca es `null`; las de módulo y de clase sin valor, `""` (Eduardo, 2-nov; abierta el 2-nov; **decidido, con el análisis; el algoritmo, por aprobar**)
+
+- **La decisión** (Eduardo, 2-nov): *«una cadena no puede ser null, eso se mantiene. Ahora una variable de tipo
+  string si que debería poder no referenciar a ningun string así que var a:string=null; debería ser válido. Y
+  var a:string; debería ser indeterminado, sería una variable local no inicializada. Ahora si a fuese una variable de
+  módulo o de clase entonces var a:string; estaría inicializada a:string:=""»*. Cambia en parte la del 11-oct (`null`
+  en un string, error de compilación, `#684`): el `null` se escribe en la variable, no en la cadena.
+- **Con una variable a `null`** (Eduardo: *«OK, de las expresiones me gusta mas como lo hace c#»*): concatenarla y
+  escribirla, como C#, como `""`; `==` y `!=`, `null` sólo es igual a `null` (`null == ""`, `false`); lo que pide una
+  cadena (`strlen`, `upper`, `charAt`, `substring`, `contains`, los ficheros, la red, la GUI…), un error, «referencia
+  nula», como con un objeto `null` (Java y C# coinciden); una clave de un `Map`, error.
+- **Por decidir:** un `switch` sobre un `null` (C#: al `default`; Java: error); `"x" + null` con el `null` escrito tal
+  cual (hoy error a propósito, `#522`); el texto del error.
+- **Dónde cambia** (analizado el 2-nov):
+  - **el compilador** (BP y JC, el mismo árbol): aceptar `null` en una variable `string` (`SemanticAnalyzer`: la
+    declaración local, la de módulo y la asignación, donde el `string` cuenta como escalar; los argumentos y el
+    `return`; `==` y `!=`; el ternario); y un campo, una property o una variable de módulo `string` sin valor, con
+    `""` (hoy, el handle 0: «sin valor»). Una local sin valor, como hoy (`#540`);
+  - **las dos VMs y el AOT:** las primitivas de cadena con un `null`, el error (hoy lo tratan como `""`: en la VM-Java,
+    `readVmString(0)`; en la VM-C, 31 comprobaciones del handle 0 en `builtins.c`), salvo concatenar, escribir y `==`;
+  - **la stdlib y los samples:** 227 `string` de módulo o de clase sin valor inicial (11 en la stdlib); los que se
+    comparan con `""` ya se ponen a `""` en su constructor (`Orm.bp`, `PilaMuro.bp`): nada cambia. `StrNulo` (corpus)
+    prueba el «sin valor» de `#512`: se reescribe con lo nuevo. Y se cierra `#773`;
+  - **el traductor de C#** (H8): los `null` de las cadenas (56 pruebas; 16 sólo piden eso).
+
 #### 🔵 `#773` — un string sin valor (un campo, una global) vale `""` al escribirlo, concatenarlo y medirlo, pero `== ""` da `false` (y `==` con otro sin valor, `true`): en las dos VMs (abierta el 2-nov, al mirar los `null` de las cadenas de C#; **sólo análisis**)
 
 - **Cómo sale** (2-nov, una sonda en JC fuera del repo; las dos VMs, iguales): un campo `string campo;` sin valor,
