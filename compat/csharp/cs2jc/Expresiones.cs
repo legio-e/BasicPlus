@@ -467,6 +467,8 @@ namespace Cs2Jc
                 return Rechaza(inv, Porque.Pendiente("una llamada sin resolver"));
             }
             if (ms.MethodKind == MethodKind.DelegateInvoke) return Rechaza(inv, Porque.H7(Porque.Delegados));
+            // la de un [Conditional] sin definir, como sentencia, la quita Sentencias; en otro sitio (un for), todavía no
+            if (CondicionalSinDefinir(ms, inv) != null) return Rechaza(inv, Porque.Pendiente("una llamada que C# quita ([Conditional]) en este sitio"));
             if (ms.MethodKind == MethodKind.LocalFunction) return Rechaza(inv, Porque.Pendiente("funciones locales"));
             if (ms.IsGenericMethod) return Rechaza(inv, Porque.H7(Porque.Genericos));
             if (!DelPrograma(ms)) return BibliotecaLlamada(inv, ms);

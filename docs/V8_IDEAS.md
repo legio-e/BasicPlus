@@ -4860,6 +4860,37 @@ Lo que queda: lo que se vuelve a leer en la misma sentencia (`a[i] = i++`; 9 pru
 parámetros `ref`/`out` y los indexadores (14), y el valor de un campo (`static int a = b = 5;`: no hay sentencia donde
 ponerlo). Por decidir (Eduardo).
 
+### H8, tema a tema (Eduardo, 2-nov)
+
+Eduardo: *«Yo creo que deberíamos seguir un método. Mi propuesta, empezar por el tema 1 y hacer pequeños ajustes hasta
+ver donde podemos llegar. Despues repetir con el tema 2 y así.»* Los temas, en el orden de la tabla de FICHAS («🧩 H6,
+H7 y H8»); cada ajuste, con su algoritmo y el OK, su caso en `compat/csharp/casos` y el lote; lo que toca JC (el
+lenguaje), con su forma decidida por Eduardo. La cuenta de cada tema con el lote de cada día, y lo que le falta a cada
+prueba, con dos scripts de la carpeta temporal (`temas_hoy.py`, `tema1.py`).
+
+**El tema 1, «expresiones y lo demás»** (141 válidas; 86 funcionaban). Los ajustes, por lo que da cada uno en él:
+
+| # | ajuste | dónde | da | hecho |
+|---|---|---|---|---|
+| 1 | los atributos: una clase de atributo, una clase más; `[Conditional]`, quitar sus llamadas | el traductor | +9 | 2-nov: **95** |
+| 2 | `++` partido, los niveles 1 a 4 (arriba) | el traductor | +2 | |
+| 3 | los formatos `{0:X}` y `{0,5}` | `CsSystem` | +2 | |
+| 4 | lo pequeño de JC: `as`, una constante estrecha en un argumento, el «Color Color», `1__000` | el compilador | +4 | |
+| 5 | el tipo exacto, `o.GetType() == typeof(X)` | el traductor | hasta +4 | |
+| 6 | la E/S de .NET y lo demás de la biblioteca | `CsSystem` | +3 a +5 | |
+
+Fuera, salvo que Eduardo decida otra cosa: `null` en una cadena, `FormattableString`, `IPAddress`, y las 20 que piden
+algo de fuera de verdad (`goto`, `decimal`, interop, `dynamic`…).
+
+**1. Los atributos, hecho** (Eduardo: *«OK, adelante»*). Una clase que hereda de `System.Attribute` es una clase más,
+sin padre (sus usos, `[X(…)]`, el traductor ya los quitaba); y un método `[Conditional("S")]` se escribe, y sus
+llamadas, si `S` no está definido en el fichero (`#define`, `#undef`), se quitan como en C#, sin calcular sus
+argumentos, con un comentario (como las de un `partial` sin cuerpo); en otro sitio que una sentencia, todavía no. Leer
+los atributos (`GetCustomAttributes`…) sigue siendo reflexión. De paso, un fallo del traductor que salió con
+`test-272`: los accesores de una propiedad, con el `get` delante (JC lo pide así; C# deja `{ set {…} get {…} }`). Caso
+`Atributos`. **Mono: 404** (+28: 9 del tema 1 y 19 de otros temas), sin perder ninguna; fallan las mismas 6. **El tema 1:
+95 de 141.**
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos

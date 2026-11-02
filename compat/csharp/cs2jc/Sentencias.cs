@@ -47,6 +47,12 @@ namespace Cs2Jc
                                                        && pm.IsPartialDefinition && pm.PartialImplementationPart == null:
                     Linea("// " + pm.Name + "(…): un método partial sin cuerpo; C# quita la llamada");
                     break;
+                // la de un método [Conditional("S")] sin S definido: lo mismo (H8, tema 1)
+                case ExpressionStatementSyntax es when es.Expression is InvocationExpressionSyntax llamada
+                                                       && m.GetSymbolInfo(llamada).Symbol is IMethodSymbol cm
+                                                       && CondicionalSinDefinir(cm, llamada) is string simbolos:
+                    Linea("// " + cm.Name + "(…): [Conditional(" + simbolos + ")], sin definir; C# quita la llamada");
+                    break;
                 case ExpressionStatementSyntax es: Linea(ExprSentencia(es.Expression) + ";"); break;
                 case IfStatementSyntax i: If(i); break;
                 case WhileStatementSyntax w:

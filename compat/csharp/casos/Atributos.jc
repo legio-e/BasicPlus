@@ -1,0 +1,78 @@
+module CsAtributos
+{
+   class MarcaAttribute
+   {
+      public string Nombre { get; set; }
+      public function MarcaAttribute(string nombre)
+      {
+         this.Nombre = nombre;
+      }
+      public int Peso { get; set; }
+      private int orden;
+      public int Orden
+      {
+         get
+         {
+            return this.orden;
+         }
+         set
+         {
+            this.orden = value * 2;
+         }
+      }
+   }
+
+   class Programa
+   {
+      private static int llamadas = 0;
+      private static int calculos = 0;
+      private static function int Efecto()
+      {
+         Programa.calculos++;
+         return Programa.calculos;
+      }
+      private static function void Depura(int x)
+      {
+         Programa.llamadas += 100;
+      }
+      private static function void Traza(int x)
+      {
+         Programa.llamadas += x;
+      }
+      private static function void DepuraCorto()
+      {
+         // Depura(…): [Conditional("SIN_DEFINIR")], sin definir; C# quita la llamada
+      }
+      public static function int Main()
+      {
+         // Depura(…): [Conditional("SIN_DEFINIR")], sin definir; C# quita la llamada
+         // DepuraCorto(…): [Conditional("SIN_DEFINIR")], sin definir; C# quita la llamada
+         if (Programa.calculos != 0 || Programa.llamadas != 0)
+         {
+            return 1;
+         }
+         Programa.Traza(Programa.Efecto());
+         if (Programa.calculos != 1 || Programa.llamadas != 1)
+         {
+            return 2;
+         }
+         MarcaAttribute m = new MarcaAttribute("a mano");
+         m.Peso = 3;
+         m.Orden = 5;
+         if (m.Nombre != "a mano" || m.Peso != 3 || m.Orden != 10)
+         {
+            return 3;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

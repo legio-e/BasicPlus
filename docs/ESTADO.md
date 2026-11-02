@@ -70,6 +70,13 @@
 >   (*«No tenemos uint?»*), **376**; ninguna se cae, y fallan las mismas 6. La herencia múltiple al estilo Java ya entró
 >   con H7.3 (Eduardo lo corrigió: yo la había dado por fuera). El repaso de lo demás que puse fuera, con sus cuentas,
 >   en `V8_IDEAS` §E9: por decidir (los atributos, hasta 39; el tipo exacto, unas 18; los tipos anónimos, 7; `ulong`, 8).
+> - **Analizado, por decidir** (`V8_IDEAS` §E9): los eventos de C# frente a los de JC —dos mecanismos distintos: en JC,
+>   `raise` encola y hay un suscriptor; lo que encajaría, los delegados como objetos— y `++` dentro de una expresión,
+>   partida en dos (cuatro niveles; 54 pruebas). Abierta `#771` (comparar un evento con `null` llega al emisor).
+> - **H8, empezado: tema a tema** (Eduardo: *«empezar por el tema 1 y hacer pequeños ajustes hasta ver donde podemos
+>   llegar»*). El tema 1, seis ajustes por lo que dan; el primero, los atributos (*«OK, adelante»*): una clase de
+>   atributo, una clase más, y `[Conditional]`, sus llamadas quitadas. El tema 1, de 86 a **95**; Mono, **404**. De paso,
+>   los accesores de una propiedad, con el `get` delante (`test-272`). Lo siguiente del tema 1: `++` partido.
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

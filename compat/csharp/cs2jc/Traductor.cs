@@ -252,6 +252,8 @@ namespace Cs2Jc
             {
                 if (DelPrograma(b)) base_ = Tipo(b, donde);
                 else if (ExcepcionJc(b) is string ex) base_ = ex;     // una excepción de .NET (CsSystem, el escalón 1)
+                // una clase de atributo (H8, tema 1; 2-nov): en BP, una clase más, sin padre; sus usos, [X(…)], se quitan
+                else if (NombreCompleto(b) == "System.Attribute") { }
                 else Rechaza(lugarBase, Porque.DeNet("hereda de " + NombreCompleto(b)));
             }
             // Las interfaces (H7.3, #756; antes, con #745, una sola y como clase base): las del programa, en la cabecera
@@ -372,15 +374,34 @@ namespace Cs2Jc
             }
         }
 
-        /// Los atributos se quitan; `[Conditional]` no, porque quita las llamadas al método.
+        /// Los atributos se quitan. `[Conditional("S")]` también, y lo que hace, quitar las llamadas al método si `S` no está
+        /// definido, lo hace el traductor en cada llamada (CondicionalSinDefinir). Leerlos (GetCustomAttributes…) es la
+        /// reflexión, que sigue fuera.
         void Atributos(SyntaxList<AttributeListSyntax> listas)
         {
-            foreach (var a in listas.SelectMany(l => l.Attributes))
+        }
+
+        /// H8, tema 1 (2-nov) — los símbolos del `[Conditional("S")]` de un método (o del que sobrescribe), entre comillas,
+        /// si C# quita sus llamadas: ninguno está definido en el fichero (`#define`, `#undef`) donde se llama. null si el
+        /// método no tiene o si alguno está definido.
+        string CondicionalSinDefinir(IMethodSymbol ms, SyntaxNode donde)
+        {
+            var simbolos = new List<string>();
+            for (var x = ms?.OriginalDefinition; x != null; x = x.OverriddenMethod?.OriginalDefinition)
+                foreach (var a in x.GetAttributes())
+                    if (a.AttributeClass?.ToDisplayString() == "System.Diagnostics.ConditionalAttribute"
+                        && a.ConstructorArguments.Length == 1 && a.ConstructorArguments[0].Value is string s)
+                        simbolos.Add(s);
+            if (simbolos.Count == 0) return null;
+            var definidos = new HashSet<string>(arbol.Options.PreprocessorSymbolNames);
+            foreach (var d in arbol.GetRoot().DescendantTrivia().Where(t => t.IsDirective).Select(t => t.GetStructure()).OfType<DirectiveTriviaSyntax>())
             {
-                var tipo = m.GetTypeInfo(a).Type ?? (m.GetSymbolInfo(a).Symbol as IMethodSymbol)?.ContainingType;
-                if (tipo != null && tipo.ToDisplayString() == "System.Diagnostics.ConditionalAttribute")
-                    Rechaza(a, Porque.Fuera(Porque.Reflexion));
+                if (d.SpanStart > donde.SpanStart) break;
+                if (!d.IsActive) continue;
+                if (d is DefineDirectiveTriviaSyntax df) definidos.Add(df.Name.ValueText);
+                else if (d is UndefDirectiveTriviaSyntax ud) definidos.Remove(ud.Name.ValueText);
             }
+            return simbolos.Any(definidos.Contains) ? null : string.Join(", ", simbolos.Select(Cadena));
         }
 
         void EmiteCampo(FieldDeclarationSyntax f)
@@ -540,7 +561,7 @@ namespace Cs2Jc
                 Linea(cabecera);
                 Linea("{");
                 sangria++;
-                foreach (var a in p.AccessorList.Accessors)
+                foreach (var a in GetPrimero(p.AccessorList.Accessors))
                 {
                     Linea(a.IsKind(SyntaxKind.GetAccessorDeclaration) ? "get" : "set");
                     Abstracto(nombre);
@@ -560,7 +581,7 @@ namespace Cs2Jc
                 Linea("}");
                 return;
             }
-            var acc = p.AccessorList.Accessors;
+            var acc = GetPrimero(p.AccessorList.Accessors);
             if (acc.All(a => a.Body == null && a.ExpressionBody == null))
             {
                 // automática; `{ get; }` e `{ get; init; }` también: C# ya comprobó que nadie más la escribe
@@ -583,6 +604,11 @@ namespace Cs2Jc
             sangria--;
             Linea("}");
         }
+
+        /// Los accesores de una propiedad, con el `get` delante: JC lo quiere así, y C# deja `{ set {…} get {…} }`
+        /// (test-272); el orden no cambia lo que hace cada uno.
+        static List<AccessorDeclarationSyntax> GetPrimero(SyntaxList<AccessorDeclarationSyntax> acc) =>
+            acc.OrderBy(a => a.IsKind(SyntaxKind.GetAccessorDeclaration) ? 0 : 1).ToList();
 
         string Parametros(ParameterListSyntax pl)
         {
@@ -610,7 +636,10 @@ namespace Cs2Jc
             sangria++;
             if (flecha != null)
             {
-                if (sinValor) Linea(ExprSentencia(flecha.Expression) + ";");
+                if (sinValor && flecha.Expression is InvocationExpressionSyntax llamada
+                    && CondicionalSinDefinir(m.GetSymbolInfo(llamada).Symbol as IMethodSymbol, llamada) is string sc)
+                    Linea("// " + ((IMethodSymbol) m.GetSymbolInfo(llamada).Symbol).Name + "(…): [Conditional(" + sc + ")], sin definir; C# quita la llamada");
+                else if (sinValor) Linea(ExprSentencia(flecha.Expression) + ";");
                 else Linea("return " + Expr(flecha.Expression) + ";");
             }
             sangria--;
