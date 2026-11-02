@@ -164,6 +164,7 @@ public final class SemanticAnalyzer {
     public SemanticInfo analyze(ModuleNode mod) {
         enJc = mod.escritoEnJc;
         moduloDeLasClaves = MivmEmitter.moduloLocalDe(mod);
+        cadenasNacenVacias(mod);
         declarePass(mod);
         injectImports(mod);
         resolveTypesPass(mod);
@@ -175,12 +176,54 @@ public final class SemanticAnalyzer {
     }
 
     /**
+     * V8 #774 (Eduardo, 2-nov: «si a fuese una variable de módulo o de clase entonces var a:string; estaría inicializada
+     * a:string:=""») — una variable de módulo, un campo o una property corta de tipo `string` sin valor nace `""`: se le
+     * pone aquí, antes de nada, el inicializador `""`, y lo demás (el emisor, el AOT, el escritor BP ↔ JC) la ve como si
+     * el programa lo hubiera escrito. Hasta ahora nacía «sin valor» (la referencia nula, que casi todo leía como "" salvo
+     * `==`: #773). Una LOCAL sin valor no: sigue indeterminada (#540). Una property con su get o su set lleva su propio
+     * almacén, y un array fijo nace a cero.
+     */
+    private static void cadenasNacenVacias(ModuleNode mod) {
+        for (ITopLevelDecl d : mod.defs) {
+            if (d instanceof VarDecl) cadenaVacia((VarDecl) d);
+            else if (d instanceof PropertyDef) cadenaVacia((PropertyDef) d);
+            else if (d instanceof ClassDef)
+                for (ITopLevelDecl m : ((ClassDef) d).members) {
+                    if (m instanceof VarDecl) cadenaVacia((VarDecl) m);
+                    else if (m instanceof PropertyDef) cadenaVacia((PropertyDef) m);
+                }
+        }
+    }
+
+    private static boolean esTipoCadena(TypeRef t) {
+        return t instanceof SimpleTypeRef && "string".equals(((SimpleTypeRef) t).name) && ((SimpleTypeRef) t).argumentos == null;
+    }
+
+    private static void cadenaVacia(VarDecl vd) {
+        if (vd.init == null && !vd.isOwner && esTipoCadena(vd.type)) vd.init = vacia(vd);
+    }
+
+    private static void cadenaVacia(PropertyDef pd) {
+        if (pd.init == null && !pd.isOwner && pd.getter == null && pd.setter == null && esTipoCadena(pd.type)) pd.init = vacia(pd);
+    }
+
+    private static StringLitExpr vacia(Node donde) {
+        StringLitExpr e = new StringLitExpr("", donde.line, donde.column);
+        e.implicito = true;
+        return e;
+    }
+
+    /**
      * Modo "interface-only": parsea + analiza solamente los pases que dependen
      * de declaraciones (no de bodies). Suficiente para extraer la firma
      * pública del módulo y emitir un .bpi sin necesidad de tener resueltos
      * los imports. No corre bodyPass ni valida entry points.
      */
     public SemanticInfo analyzeInterface(ModuleNode mod) {
+        // V8 #774 — también aquí: el "" de un campo string sin valor puede darle a su clase un constructor sintético
+        // (sintetizarCtores, en resolveTypesPass), y eso es interfaz. Sin esto, la pasada de interfaz no lo veía y la
+        // emisión sí («la interfaz de 'Gui' cambió entre la pasada de interfaz y la emisión»: Gui.Component).
+        cadenasNacenVacias(mod);
         declarePass(mod);
         // H6.a — SÍ inyectamos los imports precargados (registerImport). Aunque
         // en modo interfaz no se procesan bodies, las FIRMAS públicas pueden
@@ -1845,7 +1888,7 @@ public final class SemanticAnalyzer {
             err(v.line, v.column, narrowAssignErrorMessage(t, got, v.init,
                     "valor de tipo '" + got.display() + "' no asignable a var de tipo '" + t.display() + "'"));
         revisaMapNuevo(t, v.init, v.line, v.column);   // V8/H7.2 (#749)
-        if (t != null && t.isScalar() && got instanceof NullType)
+        if (t != null && t.isScalar() && !isString(t) && got instanceof NullType)   // #774: una variable string, sí
             err(v.line, v.column, "no se puede asignar 'null' a un tipo escalar '" + t.display() + "'");
         // L8 v2 — init de var a NIVEL MÓDULO: un literal escalar/string (con '-' opcional) se HORNEA en el
         // data block del .mod (string: ref asignada por __init). #590 (V7, 27-sep, Eduardo) — cualquier otra
@@ -2241,7 +2284,7 @@ public final class SemanticAnalyzer {
                 err(v.line, v.column, narrowAssignErrorMessage(t, got, v.init,
                         "valor de tipo '" + got.display() + "' no asignable a variable de tipo '" + t.display() + "'"));
             revisaMapNuevo(t, v.init, v.line, v.column);   // V8/H7.2 (#749)
-            if (t.isScalar() && got instanceof NullType)
+            if (t.isScalar() && !isString(t) && got instanceof NullType)       // #774: una variable string, sí
                 err(v.line, v.column, "no se puede asignar 'null' a un tipo escalar '" + t.display() + "'");
         }
     }
@@ -2618,7 +2661,7 @@ public final class SemanticAnalyzer {
             }
         } else {
             revisaMapNuevo(lhsT, a.value, a.line, a.column);   // V8/H7.2 (#749)
-            if (rhsT instanceof NullType && lhsT.isScalar())
+            if (rhsT instanceof NullType && lhsT.isScalar() && !isString(lhsT))   // #774: una variable string, sí
                 err(a.line, a.column, "no se puede asignar 'null' a un tipo escalar '" + lhsT.display() + "'");
             else if (!lhsT.isAssignableFrom(rhsT)
                     && !acceptsNarrowFromLiteral(lhsT, rhsT, a.value))
@@ -3567,8 +3610,8 @@ public final class SemanticAnalyzer {
         if (a instanceof VoidType || b instanceof VoidType) return null;
         if (a instanceof NullType && b instanceof NullType) return null;   // sin tipo
         if (a.isNumeric() && b.isNumeric()) return promote(a, b);
-        if (a instanceof NullType) return b.isScalar() ? null : b;
-        if (b instanceof NullType) return a.isScalar() ? null : a;
+        if (a instanceof NullType) return b.isScalar() && !isString(b) ? null : b;   // #774: `c ? "a" : null`, un string
+        if (b instanceof NullType) return a.isScalar() && !isString(a) ? null : a;
         if (a.isAssignableFrom(b)) return a;
         if (b.isAssignableFrom(a)) return b;
         return null;
@@ -4180,6 +4223,8 @@ public final class SemanticAnalyzer {
                 && (((BpType.ClassType) a).cls.isInterface || ((BpType.ClassType) b).cls.isInterface)) return true;
         if (a instanceof NullType && b.isReference()) return true;
         if (b instanceof NullType && a.isReference()) return true;
+        // #774 — una variable string, con null: ¿no referencia ninguna cadena? (__strequals: null sólo es igual a null)
+        if ((a instanceof NullType && isString(b)) || (b instanceof NullType && isString(a))) return true;
         if (a.isNumeric() && b.isNumeric()) return true;
         return false;
     }

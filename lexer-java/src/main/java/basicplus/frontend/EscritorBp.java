@@ -172,7 +172,7 @@ public final class EscritorBp {
             s.append(nombre(v.names.get(i)));
         }
         s.append(": ").append(tipo(v.type));
-        if (v.init != null) s.append(" := ").append(expr(v.init));
+        if (v.init != null && !Ast.implicito(v.init)) s.append(" := ").append(expr(v.init));   // #774: el "" implícito, no
         return s.toString();
     }
 
@@ -215,7 +215,7 @@ public final class EscritorBp {
         h.append("property ");
         if (p.isOwner) h.append("owner ");
         h.append(nombre(p.name)).append(": ").append(tipo(p.type));
-        if (p.init != null) h.append(" := ").append(expr(p.init));
+        if (p.init != null && !Ast.implicito(p.init)) h.append(" := ").append(expr(p.init));   // #774: el "" implícito, no
         linea(h.toString());
         if (p.isShortForm) return;
         nivel++;

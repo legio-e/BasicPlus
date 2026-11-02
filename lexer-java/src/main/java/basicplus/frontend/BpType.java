@@ -112,6 +112,8 @@ public abstract class BpType {
         public boolean isAssignableFrom(BpType source) {
             if (source instanceof ErrorType) return true;
             if (sameAs(source)) return true;
+            // V8 #774 — una variable string puede no referenciar ninguna cadena: null (la cadena, nunca es null)
+            if (tag == Kind.STRING && source instanceof NullType) return true;
             // Promoción integer -> float
             if (tag == Kind.FLOAT && source instanceof PrimitiveType
                     && ((PrimitiveType) source).tag == Kind.INTEGER)

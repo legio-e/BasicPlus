@@ -309,7 +309,7 @@ public final class EscritorJc {
             t = ((ArrayTypeRef) t).element;
         }
         s.append(tipo(t)).append(' ');
-        String valor = v.init != null ? expr(v.init) : null;
+        String valor = v.init != null && !Ast.implicito(v.init) ? expr(v.init) : null;   // #774: el "" implícito, no
         for (int i = 0; i < v.names.size(); i++) {
             DeclName dn = v.names.get(i);
             if (i > 0) s.append(", ");
@@ -390,7 +390,7 @@ public final class EscritorJc {
         s.append(tipo(p.type)).append(' ').append(nombre(p.name.name, p));
         if (p.isShortForm) {
             s.append(" { get; set; }");
-            if (p.init != null) s.append(" = ").append(expr(p.init)).append(';');
+            if (p.init != null && !Ast.implicito(p.init)) s.append(" = ").append(expr(p.init)).append(';');
             linea(s.toString());
             return;
         }
@@ -406,7 +406,7 @@ public final class EscritorJc {
             bloque(p.setter.body);
         }
         nivel--;
-        linea(p.init != null ? "} = " + expr(p.init) + ";" : "}");
+        linea(p.init != null && !Ast.implicito(p.init) ? "} = " + expr(p.init) + ";" : "}");
     }
 
     /** `public enum Color { Rojo, Verde = 5 }` (punto 25). */

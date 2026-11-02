@@ -318,7 +318,7 @@ public final class Ast {
         public final boolean isOwner;        // `var owner x: T := ...`
         public final List<DeclName> names;   // soporta 'var x, y, z: integer'
         public final TypeRef type;
-        public final IExpr init;             // null si no hay inicializador
+        public IExpr init;                   // null si no hay inicializador (V8 #774: una cadena de módulo o de clase sin él, "")
         public VarDecl(boolean isPublic, boolean isOwner, List<DeclName> names, TypeRef type, IExpr init, int line, int column) {
             super(line, column);
             this.isPublic = isPublic;
@@ -517,7 +517,7 @@ public final class Ast {
         public final boolean isSync;         // `public sync property foo: T` — getter/setter envuelven con un Mutex compartido por instancia.
         public final DeclName name;
         public final TypeRef type;
-        public final IExpr init;             // null si no hay inicializador
+        public IExpr init;                   // null si no hay inicializador (V8 #774: una cadena de módulo o de clase sin él, "")
         public final GetterDef getter;       // null en forma corta o si se omite
         public final SetterDef setter;       // null en forma corta o si se omite
         public final boolean isShortForm;    // true => get/set implícitos
@@ -910,7 +910,15 @@ public final class Ast {
 
     public static final class StringLitExpr extends Node implements IExpr {
         public final String value;
+        /** V8 #774 — el `""` que el compilador pone a una cadena de módulo o de clase sin valor: no lo escribió el
+         *  programa, así que los escritores BP ↔ JC no lo escriben (lo vuelve a poner el compilador al otro lado). */
+        public boolean implicito;
         public StringLitExpr(String value, int line, int column) { super(line, column); this.value = value; }
+    }
+
+    /** V8 #774 — ¿es éste un valor inicial que puso el compilador (el `""` de una cadena sin valor)? */
+    public static boolean implicito(IExpr e) {
+        return e instanceof StringLitExpr && ((StringLitExpr) e).implicito;
     }
 
     public static final class BoolLitExpr extends Node implements IExpr {
