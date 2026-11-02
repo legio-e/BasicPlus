@@ -35,6 +35,10 @@
 > - **`#739`, analizada:** sí queda una puerta, en la VM-C de PC en Windows: el argumento y los nombres de `listDir`
 >   llegan en la página 1252 (`¿hola?` como `BF 68 6F…`). Abiertas `#763` (Windows no habla UTF-8 en la VM-C) y `#764`
 >   (el argumento, cortado a 127 bytes sin decirlo).
+> - **`#763`, cerrada** (Eduardo: *«#763 adelante»*): el manifiesto de la VM-C de PC, con su página de códigos en UTF-8
+>   (`bpgenvm-c/win/`), en el CLI y en el simulador; en la red, `Utf8Sistema`, con la marca nueva `// argumento:`. La
+>   red, VERDE. `#764`, decidido (Eduardo: *«error si no cabe, pero también se puede agrandar el tamaño si vemos que hay
+>   casos que realmente no cabe»*).
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

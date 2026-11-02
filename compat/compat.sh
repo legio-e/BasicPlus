@@ -102,6 +102,7 @@ PAR_C_ARGS=""    # opciones de la VM-C en la pasada ("--smp=2" en check-smp)
 PAR_J_ARGS=""    # opciones de miVM en la pasada ("--workers=2" en check-smp)
 PAR_JC=""        # V8 #698: no vacio -> cada sample, ademas, escrito en JC y ejecutado (check-jc)
 PAR_REF_QUE="la pasada MOD9"   # de donde sale $PAR_REF, para el mensaje de un FAIL
+RUN_ARG=""       # V8 #763: el argumento de ejecucion del sample en curso (su marca `// argumento:`), a las dos VMs
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
 
@@ -125,7 +126,7 @@ C_OPC="$ROOT/bpgenvm-c/include/bpvm_opcodes.h"
 CORPUS="hello arith strings concat charat counter MethodCall trycatch BreakTry CampoFijo FirmaUsa \
         bytetest longtest longarr doubletest powtest casttest utf8test idxtest \
         convtest strops OverloadTest OverloadMethod OverloadCtor SlotPropPriv SlotThreadSub \
-        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha NatTuplas CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero PrintSinSalto OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles FormsSetter CedeCero DescarteAncho TempRetiene FinallyAnidado RtcPc RtcEnHora FicheroOCarpeta GuiOrdenHijos OwnerReasigna GuiArbolG2 GcHondo OwnerHondo EvReceptorMuerto InvocaRanura BusDosHilos FicheroYaAbierto DestruyeArbol DestruyeLanza DestruyeGc DestruyeFinal DestruyeTrasError SueltaRecursos OwnerHondoDtor bpgenvm-c/samples/importhondo/ImportHondo.bp StrDosCaminos StrCursor StrPorBytes MapDesplaza StrOrden MoveSoloLectura Utf8Descodifica Utf8Gui ArrayEnorme TcpCloseSuelto ParseNumero CharCodeAtFuera JsonErrores NatDoContinue UnaLineaAlFinal RaiseEnSet SonidoParalelo PilasDelHeap PilaOperandos DestruyeBoton IntATexto Compuestos Iif NatCompuestos Genericos EnumEntero Eol Interfaces InterfacesUsa ClaseAbajo SuperProp NuloPrivado SuperSinCtor ProtegidoHija"
+        samples/LocalArrTest.bp samples/StrOps348.bp samples/MathOps348.bp samples/PathOps348.bp samples/EvFin.bp samples/ThreadTrasMain.bp samples/ExcDosCatch.bp samples/NullRecv.bp samples/ThreadPrint.bp EnumFirma samples/EnumCadena.bp samples/SyncHijo.bp SyncUsa HomUsa samples/PropRedecl.bp samples/FinallySolo.bp samples/SelfNew.bp samples/ForStep.bp samples/CtorInit.bp VisUsa samples/SyncSinCtor.bp samples/CastBaja.bp samples/MapTipado.bp samples/Destructor.bp samples/TimeDemo.bp samples/ArrayFijo.bp samples/FileCursor.bp samples/PathLargo.bp samples/Caps.bp samples/PinMapa.bp         SciPar ArrLitAncho ObjArray CastExt ListaBp ListaHer CastSelf OwnerBp SuperExt samples/BusBug.bp samples/AdcDemo.bp samples/ArgDemo.bp samples/MathRango.bp samples/mathtest.bp samples/NeoCatch.bp samples/WdtCatch.bp samples/StubParidad.bp samples/BusCompartido.bp samples/IoPrompt.bp samples/IoPathAbs.bp samples/ThrowSinAtrapar.bp samples/MachineHost.bp samples/MachineAlias.bp samples/MachineId.bp samples/GuiParidad.bp samples/GuiParidad2.bp GuiChurn OwnerCascada GuiArbol samples/GuiWinJson.bp samples/GuiShot.bp CamposHijo StrNulo EstaticosHijo CtorHijo LibMarcaUsa samples/diamondtest.bp samples/frompathtest.bp samples/fromtest.bp samples/libimport.bp samples/BusCount.bp samples/SpiDevice.bp samples/MoveRango.bp HiloUsa samples/SwitchTipos.bp samples/PropField.bp samples/ContinueFor.bp samples/NpShowTope.bp samples/FloatNat.bp samples/ArrayNegativo.bp NatArr NatEstrecha NatTuplas CatCadena SbPiezas GlobalesIni samples/ModInit.bp EvDos HeapInfo HeapCompact HeapReposo HeapCompactEv PrintEntero PrintSinSalto OwnerSmp HilosMuchos PilaMuro HiloExc TablaHandles FormsSetter CedeCero DescarteAncho TempRetiene FinallyAnidado RtcPc RtcEnHora FicheroOCarpeta GuiOrdenHijos OwnerReasigna GuiArbolG2 GcHondo OwnerHondo EvReceptorMuerto InvocaRanura BusDosHilos FicheroYaAbierto DestruyeArbol DestruyeLanza DestruyeGc DestruyeFinal DestruyeTrasError SueltaRecursos OwnerHondoDtor bpgenvm-c/samples/importhondo/ImportHondo.bp StrDosCaminos StrCursor StrPorBytes MapDesplaza StrOrden MoveSoloLectura Utf8Descodifica Utf8Gui Utf8Sistema ArrayEnorme TcpCloseSuelto ParseNumero CharCodeAtFuera JsonErrores NatDoContinue UnaLineaAlFinal RaiseEnSet SonidoParalelo PilasDelHeap PilaOperandos DestruyeBoton IntATexto Compuestos Iif NatCompuestos Genericos EnumEntero Eol Interfaces InterfacesUsa ClaseAbajo SuperProp NuloPrivado SuperSinCtor ProtegidoHija"
 
 # Un item del CORPUS es (a) un nombre suelto -> $SAMPLES/<n>.bp, o (b) una RUTA
 # relativa a la raiz del repo (lleva '/') -> tal cual. La (b) existe para que los
@@ -167,7 +168,7 @@ filt() {
 # Si un caso se come el timeout, la salida sale cortada y el diff lo canta.
 VM_TIMEOUT="${VM_TIMEOUT:-25}"
 
-run_vm() {  # $1=bin(.jar|.exe) $2=mod [$3...=opciones de la VM, p. ej. --smp=2]
+run_vm() {  # $1=bin(.jar|.exe) $2=mod [$3...=opciones de la VM, p. ej. --smp=2]; detras del .mod, $RUN_ARG si lo hay
   # Se ejecuta DESDE el dir del .mod para que ambas VMs resuelvan las deps
   # (p.ej. Core.mod, dep implicita de try/catch en V3 desde #248) junto al
   # modulo raiz. La VM-C ya resuelve relativo al .mod; el CLI de la VM-Java
@@ -190,10 +191,10 @@ run_vm() {  # $1=bin(.jar|.exe) $2=mod [$3...=opciones de la VM, p. ej. --smp=2]
   # (cada llamada borra SÓLO el suyo: la paridad llama dos veces seguidas, Java y C, y lee los dos después)
   case "$bin" in
     *.jar) rm -f "$WORK/.rc.java"
-           ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$bin" "$@" "$base" 2>"$err" | filt
+           ( cd "$dir" && timeout "$VM_TIMEOUT" java -Djava.awt.headless=true -jar "$bin" "$@" "$base" ${RUN_ARG:+"$RUN_ARG"} 2>"$err" | filt
              echo "${PIPESTATUS[0]}" > "$WORK/.rc.java" ) ;;
     *)     rm -f "$WORK/.rc.c"
-           ( cd "$dir" && timeout "$VM_TIMEOUT" "$bin" "$@" "$base" 2>"$err" | filt
+           ( cd "$dir" && timeout "$VM_TIMEOUT" "$bin" "$@" "$base" ${RUN_ARG:+"$RUN_ARG"} 2>"$err" | filt
              echo "${PIPESTATUS[0]}" > "$WORK/.rc.c" ) ;;
   esac
   grep -E "HEAP INCONSISTENTE" "$err" 2>/dev/null | head -2 | sed 's/^/!! stderr: /'
@@ -348,6 +349,10 @@ check_parity() {
     sed -nE 's|^//[[:space:]]*recurso:[[:space:]]*([^[:space:]]+).*|\1|p' "$bp" | while read -r rec; do
       cp "$ROOT/$rec" "$WORK/" 2>/dev/null || echo "  (aviso) $s: recurso '$rec' no encontrado"
     done
+    # V8 #763 (2-nov) — un sample que necesita un ARGUMENTO DE EJECUCION (#412: el segundo posicional de las dos VMs,
+    # `X.mod "loquesea"`) lo declara igual, `// argumento: <texto>`, y el arnes se lo da a las dos (run_vm). Sin la
+    # marca, ninguno: manda el valor por defecto del fuente. Lo usa Utf8Sistema, con un argumento que no es ASCII.
+    RUN_ARG="$(sed -nE 's|^//[[:space:]]*argumento:[[:space:]]*(.*)$|\1|p' "$bp" | head -1 | tr -d '\r')"
     # La stdlib FRESCA va al outDir ANTES de compilar, y no es un detalle: el
     # resolutor de imports mira outDir PRIMERO y el directorio del fuente
     # despues. Sin esto, un sample de bpgenvm-c/samples/ resolvia `Core` contra
@@ -526,6 +531,7 @@ check_parity() {
       diff <(printf '%s\n' "$oj") <(printf '%s\n' "$oc") 2>/dev/null | head -6 | sed 's/^/       /'
     fi
   done
+  RUN_ARG=""   # #763: el del ultimo sample no se queda para lo que venga detras
   echo "  paridad: $pass PASS, $fail FAIL, $skip SKIP"
   [ "$libres" -gt 0 ] && echo "  ($libres con '// smp: orden libre': sus lineas, comparadas ordenadas)"
   # CERO ejecutados no es verde. Se vio el 25-ago: un fallo del arnes convirtio

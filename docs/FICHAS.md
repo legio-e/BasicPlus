@@ -7306,8 +7306,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   (130 bytes): la VM-Java da 130 bytes y 65 caracteres; la VM-C, 126 y 63, sin aviso.
 - **Lo propuesto, sin hacer:** que no se corte en silencio («errores sí, silenciosos no»): un error si no cabe, con el
   mismo tope en las dos VMs, o un tope mayor; y el valor por defecto, que lo mire el compilador. Por decidir (Eduardo).
+- **Decidido el 2-nov** (Eduardo: *«error si no cabe, pero también se puede agrandar el tamaño si vemos que hay casos
+  que realmente no cabe»*): un error, con el mismo tope en las dos VMs; el tope, más grande si salen casos de verdad.
 
-#### 🔵 `#763` — la VM-C de PC, en Windows, no habla UTF-8: el argumento del RUN, los nombres que da `listDir` y los de los ficheros que crea van en la página de códigos del sistema (la 1252); una cadena nace rota, y puede empezar por un byte de continuación (abierta el 2-nov, al analizar `#739`; **sólo análisis**)
+#### ✅ `#763` — la VM-C de PC, en Windows, no habla UTF-8: el argumento del RUN, los nombres que da `listDir` y los de los ficheros que crea van en la página de códigos del sistema (la 1252); una cadena nace rota, y puede empezar por un byte de continuación (abierta el 2-nov, al analizar `#739`; **CERRADA el mismo día**, el commit de `#763`)
 
 - **Cómo salió:** buscando las puertas de `#739` (las fuentes de confianza que faltaban por probar). En Windows, el C
   estándar que usa la VM-C (`main`, `fopen`, `opendir`/`readdir`) va por las funciones «A» de Windows, que hablan la
@@ -7331,6 +7333,24 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   dan y reciben UTF-8 sin cambiar el código. Es un fichero de texto que se mete en el `.exe` al enlazar (`windres`, que
   está). Lo mismo para el simulador del IDE. Y en la red, una prueba con un argumento y unos nombres de fichero que no
   son ASCII. Por decidir (Eduardo).
+- **Cerrada el 2-nov** (Eduardo: *«#763 adelante»*), como estaba propuesto:
+  - **probado antes, fuera del repo:** un programa de C de diez líneas, con la cadena de la VM-C (GCC 16.1 de
+    w64devkit), con y sin el manifiesto: la página, 1252 y 65001; el argumento `¿hola?`, `BF 68…` y `C2 BF 68…`;
+    `fopen("¡hola.txt")`, no y sí; y lo que crea, `Ã±_prueba.txt` y `ñ_prueba.txt` en el disco;
+  - **el manifiesto:** `bpgenvm-c/win/utf8.manifest` (`activeCodePage`, UTF-8), metido en el `.exe` por `windres`
+    (`win/utf8.rc`, un recurso `RT_MANIFEST`); el `Makefile` (`WIN_RES`) lo enlaza en los dos que corren programas, el
+    CLI y el simulador —el del ZIP sale de `make LVGL=1 sim`, así que también—; los tests de C, no (sus nombres son
+    ASCII). Con él, las tres pruebas de arriba dan en la VM-C lo mismo que en la VM-Java, y el código no cambia;
+  - **la red:** `Utf8Sistema` (corpus), con un argumento (`«año€»`) y un fichero creado fuera del programa
+    (`¡año€.txt`, en `bpgenvm-c/samples/utf8sistema/`) que no son ASCII: los bytes, `strlen` y la validez del argumento,
+    y el fichero por su nombre (`fileExists`, `readFile`) y en `listDir`. Para darle el argumento, una marca nueva del
+    arnés, `// argumento: <texto>`, que `run_vm` pasa detrás del `.mod` a las dos VMs; el fichero, por la de siempre,
+    `// recurso:`. En una placa, que no da argumento, manda el valor por defecto, que es el mismo texto. Con una VM-C
+    enlazada sin el manifiesto, el sample da `FALLO`: el argumento, `AB 61 F1 6F 80 BB` (strlen 3), y el fichero, «no
+    existe»;
+  - **lo que queda igual:** la VM-Java por la línea de órdenes en Windows (lo de fuera de la 1252 no le llega; «De
+    paso», arriba): por eso el argumento de la red es de la 1252.
+- La red, VERDE (14:33). El `bpvm-sim.exe` del IDE (`bpgenvm-c/build/`), rehecho con el manifiesto.
 
 #### 🔵 `#762` — la red: el estrés del heap (`HeapEstres` en la VM-C con el heap justo, 80 KB) se queda a veces sin heap con varios workers: «No space in heap» en un hilo (abierta el 1-nov, en la red de `#752`; preexistente; **sólo análisis**)
 

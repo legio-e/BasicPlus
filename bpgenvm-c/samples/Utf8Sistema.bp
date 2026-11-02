@@ -1,0 +1,89 @@
+// Utf8Sistema.bp — V8 #763 (2-nov): LO QUE DA EL SISTEMA LLEGA EN UTF-8 —el argumento de ejecución y los nombres de
+// fichero—, también en la VM-C de PC en Windows, donde el C estándar (main, fopen, opendir) hablaba la página de
+// códigos del sistema, la 1252: «¿hola?» llegaba como BF 68 6F…, y un fichero ¡hola.txt, como A1 68 6F… —UTF-8 roto,
+// que empieza por un byte de continuación (#739)—. El arreglo, el manifiesto de la VM-C (bpgenvm-c/win/utf8.manifest).
+// Lo que tiene que salir, escrito a mano: una línea FALLO pone la red en rojo aunque las dos VMs coincidan.
+//
+// El argumento lo da la red, por la marca de abajo; en una placa, que no lo da, manda el valor por defecto, que es el
+// mismo texto: la salida, la misma. El fichero lo copia la red al lado del programa, por su marca: lo creó otro, y así
+// se ve si el nombre del disco y el de la VM son el mismo.
+// argumento: «año€»
+// recurso: bpgenvm-c/samples/utf8sistema/¡año€.txt
+module Utf8Sistema
+  var buenas: integer := 0
+  var malas: integer := 0
+
+  function mira(que: string, obtenido: string, esperado: string)
+    if obtenido == esperado then
+      buenas += 1
+      print "ok " + que + ": " + obtenido
+    else
+      malas += 1
+      print "FALLO " + que + ": [" + obtenido + "], se esperaba [" + esperado + "]"
+    endif
+  end mira
+
+  function hex2(v: integer): string
+    var d: string := "0123456789ABCDEF"
+    return charAt(d, v / 16) + charAt(d, v mod 16)
+  end hex2
+
+  // los bytes de la cadena, en hexadecimal
+  function hex(s: string): string
+    var b: byte[] := toBytes(s)
+    var r: string := ""
+    var i: integer := 0
+    while i < len(b) do
+      if i > 0 then
+        r := r + " "
+      endif
+      r := r + hex2(b[i] & 255)
+      i += 1
+    endwh
+    return r
+  end hex
+
+  // ¿es UTF-8 válido? Lo de #711 para una fuente de confianza: fromBytes(toBytes(s)) no lanza
+  function valida(s: string): string
+    var r: string := "sí"
+    try
+      var t: string := fromBytes(toBytes(s))
+    catch e: EncodingError
+      r := "no: " + e.msg
+    endtry
+    return r
+  end valida
+
+  public function Main(arg: string := "«año€»")
+    // 1. el argumento de ejecución: sus bytes, sus caracteres, el primero, y que es UTF-8 válido
+    mira("argumento, bytes", hex(arg), "C2 AB 61 C3 B1 6F E2 82 AC C2 BB")
+    mira("argumento, strlen", intToString(strlen(arg)), "6")
+    mira("argumento, charCodeAt 0", intToString(charCodeAt(arg, 0)), "171")
+    mira("argumento, válido", valida(arg), "sí")
+
+    // 2. un fichero que no creó el programa, por su nombre
+    var nombre: string := "¡año€.txt"
+    mira("fileExists", boolToString(fileExists(nombre)), "true")
+    mira("readFile", readFile(nombre), "hola, #763")
+
+    // 3. listDir lo da con los mismos bytes, y todo lo que da es UTF-8 válido
+    var nombres: string[] := listDir(".")
+    var visto: string := "no"
+    var malos: integer := 0
+    var i: integer := 0
+    while i < len(nombres) do
+      if nombres[i] == nombre then
+        visto := "sí"
+      endif
+      if valida(nombres[i]) != "sí" then
+        malos += 1
+        print "  mal formado: " + hex(nombres[i])
+      endif
+      i += 1
+    endwh
+    mira("listDir, lo ve", visto, "sí")
+    mira("listDir, nombres mal formados", intToString(malos), "0")
+
+    print "Utf8Sistema: " + intToString(buenas) + " bien, " + intToString(malas) + " mal"
+  end Main
+end Utf8Sistema

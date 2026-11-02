@@ -100,6 +100,11 @@ ifeq ($(OS),Windows_NT)
   BIN := $(BIN).exe
   LDFLAGS += -lws2_32    # H11 — Winsock2 (net_host.c)
   LDFLAGS += -lwinmm     # V8/H4 (#708) — el audio de Windows (sonido_host.c)
+  # V8 #763 (2-nov) — el MANIFIESTO de los .exe que corren programas, el CLI y el simulador (`sim`): su página de
+  # códigos, UTF-8 (win/utf8.manifest). Sin él, el argumento, los nombres de `listDir` y los de lo que se crea iban en
+  # la del sistema, la 1252. Los tests no lo llevan: sus nombres son ASCII.
+  WIN_RES = build/win/utf8.res.o
+  OBJ    += $(WIN_RES)
 endif
 
 .PHONY: all clean smoke medir-llamada test-ejecutor test-aotdirecta test-mdnv3 test-aotswitch test-aottuplas test-aotstr test-aotarr test-aotanida test-aotpuente test-aottryvm test-aottry test-aotnombres test-aotprivado test-aotestrecha test-aotglobales test-aotcede test-aotexpropia test-aotkill test-aotbuiltin test-aotcompara test-aotdo test-aotcompuestos test-aotfloat test-wirerecorte test-salida test-sd-turnos test-sd-turnos-control test-mdnreceta test-callbp test-xmodule test-throwmsg test-throwuser test-method test-debug test-debug-mt test-listen test-bytenat test-xmodnat test-compressnat test-compressbench test-kill test-dbgkill test-tablasim test-flash test-heapdescarrilado test-compactsmp test-smpfallo test-oqentero test-net test-smphandles test-oom test-excmsggc test-lfs test-lfsfile test-lfsfault test-fslfs test-fscursor test-fsvfs test-fslfsmt test-iomt test-fspos test-blk test-sdio test-listdir test-env test-part test-boot test-boot2 test-bmgr test-pack test-crc test-fsfallo test-gchole test-gchondo test-ownerhondo test-coresiempre test-anidadalarga test-trazasbus test-runtrasrun test-importhondo test-hilos test-cola test-logmt test-reserva test-palabras test-frcond test-rand test-freelist test-runguard sim sim-smoke test-listtrunc boardsim boardsim-smoke gui-smoke gui-imgdecode check-builtins
@@ -205,6 +210,12 @@ all: $(BIN)
 $(BIN): $(OBJ)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(OBJ) -o $@ $(LDFLAGS)
+
+ifeq ($(OS),Windows_NT)
+$(WIN_RES): win/utf8.rc win/utf8.manifest
+	@mkdir -p $(dir $@)
+	windres -I win win/utf8.rc -O coff -o $@
+endif
 
 # H4.2 — con LVGL=1 el binario necesita la lib de LVGL (compilada una vez, flags
 # relajados) y SDL2.dll junto al exe. El `find` va en la receta (shell Unix), no
@@ -2216,9 +2227,9 @@ SIM_OUT ?= build/bpvm-sim.exe
 # comun de la SD, el contrato de bloque y FAT, los mismos que el firmware de una placa con ranura.
 SIM_SD_SRC = src/bpvm_sd_placa.c src/bpvm_blk.c src/fs_fat.c third_party/fatfs/ff.c third_party/fatfs/ffunicode.c
 
-sim: $(LIBOBJ) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,) $(if $(filter 1,$(SQLITE)),build/sql/sqlite3.o build/sql/aot_SQLite.c,)
+sim: $(LIBOBJ) $(WIN_RES) $(if $(filter 1,$(LVGL)),build/liblvgl.a build/SDL2.dll,) $(if $(filter 1,$(SQLITE)),build/sql/sqlite3.o build/sql/aot_SQLite.c,)
 	@mkdir -p build
-	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc -Ithird_party/fatfs tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_boot2.c src/bpvm_listdir.c $(SIM_SD_SRC) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) -o $(SIM_OUT) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_FLAGS),) -Ipico -Isrc -Ithird_party/fatfs tools/bpvm_sim.c src/json_min.c src/wire_v1_proto.c src/bpvm_repl.c src/bpvm_boot2.c src/bpvm_listdir.c $(SIM_SD_SRC) $(if $(filter 1,$(SQLITE)),$(SIM_SQL_SRC),) $(LIBOBJ) $(WIN_RES) -o $(SIM_OUT) $(LDFLAGS)
 	@echo "sim listo: $(SIM_OUT) [--port=N] [--mem=N] [--psram=N] [--flash=N] [--fs=IMG] [--sd=IMG]"
 
 # Los ingredientes de SQLITE=1, si no estan ya (los comparte con test-sqldemo).
