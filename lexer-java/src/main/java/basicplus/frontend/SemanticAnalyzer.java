@@ -187,7 +187,7 @@ public final class SemanticAnalyzer {
         for (ITopLevelDecl d : mod.defs) {
             if (d instanceof VarDecl) cadenaVacia((VarDecl) d);
             else if (d instanceof PropertyDef) cadenaVacia((PropertyDef) d);
-            else if (d instanceof ClassDef)
+            else if (d instanceof ClassDef && !((ClassDef) d).isInterface)   // una interfaz no guarda nada: sus property, sin valor
                 for (ITopLevelDecl m : ((ClassDef) d).members) {
                     if (m instanceof VarDecl) cadenaVacia((VarDecl) m);
                     else if (m instanceof PropertyDef) cadenaVacia((PropertyDef) m);

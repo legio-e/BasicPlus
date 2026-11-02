@@ -7309,6 +7309,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#775` — la red da por buena la paridad con un caso del corpus que ha dejado de compilar: lo cuenta como SKIP («no compila con el frontend actual»), y sólo un FAIL la pone en rojo; así se coló una regresión de `#774` (abierta el 2-nov; **sólo análisis**)
+
+- **Cómo salió** (2-nov, la red de `#774`): `#774` le ponía el `""` implícito también a la property `string` de una
+  interfaz, y `Interfaces` (corpus, H7.3) dejó de compilar («una property de una interfaz es sólo su nombre y su tipo:
+  sin get, set ni valor»). La red dijo «paridad: 184 PASS, 0 FAIL, 1 SKIP» y siguió VERDE; `check-jc`, lo mismo (un
+  SKIP más entre los cuatro de siempre). Lo di por bueno sin mirar que ese SKIP era nuevo, y así entró en los commits
+  de `#774`; lo cazó después el traductor de C# (dos de sus casos de interfaces no compilaban en JC). Arreglado en el
+  commit siguiente.
+- **Por qué** (`compat.sh`, `check_parity`): un sample que no compila ni suelto ni por proyecto es SKIP, y el veredicto
+  es `[ "$fail" -eq 0 ]`. El comentario de al lado ya lo sabía («un SKIP no es un PASS»), pero sólo vigila que haya al
+  menos un PASS (lo del 25-ago, cuando un fallo del arnés convirtió los 38 en SKIP).
+- **Lo propuesto, sin hacer:** que los SKIP que se esperan estén en una lista, cada uno con su porqué (hoy, los de JC:
+  `ForStep` y `ContinueFor`, un `for` con paso que no es un número; `GlobalesIni` y `StrDosCaminos`, el nombre `base`),
+  y que cualquier otro SKIP sea un FAIL, en la paridad y en `check-jc`. Por decidir (Eduardo).
+
 #### ✅ `#774` — `null` en una variable `string`: la variable puede no referenciar ninguna cadena, y una cadena nunca es `null`; las de módulo y de clase sin valor, `""` (Eduardo, 2-nov; abierta el 2-nov; **CERRADA el mismo día**, los tres commits de `#774`: el compilador; las VMs y el AOT; la stdlib, los samples y la documentación)
 
 - **La decisión** (Eduardo, 2-nov): *«una cadena no puede ser null, eso se mantiene. Ahora una variable de tipo
@@ -7373,6 +7388,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que queda fuera:** la frontera de un pack. El puente que escribe el AOT para una `native` externa
   (`string_to_cstr`) le pasa a C un `null` como `""`; cambiarlo es regenerar los puentes de los packs. Sin tocar: por
   decidir (Eduardo). Y el traductor de C# (H8), lo siguiente.
+- **Lo que se coló** (2-nov, ya con los tres commits): el `""` implícito se ponía también en la property `string` de
+  una interfaz, que no guarda nada, y `Interfaces` (corpus) dejó de compilar. La red lo contó como SKIP y salió VERDE
+  (`#775`); lo cazó el traductor de C#. Arreglado en el commit siguiente: `cadenasNacenVacias` se salta las
+  interfaces. La stdlib, idéntica (no tiene ninguna con una property `string`); la red y `check-jc`, otra vez.
 
 #### ✅ `#773` — un string sin valor (un campo, una global) vale `""` al escribirlo, concatenarlo y medirlo, pero `== ""` da `false` (y `==` con otro sin valor, `true`): en las dos VMs (abierta el 2-nov, al mirar los `null` de las cadenas de C#; **CERRADA el mismo día con `#774`**: lo sin valor ya nace `""`)
 
@@ -7591,6 +7610,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   la fragmentación; si no, el apretón. El reactivo: `bpgenvm-c --mem=77824 --smp=4 HeapEstres.mod`, 4 de cada 40.
 - **Lo propuesto, sin hacer:** según lo que salga, recalibrar el apretón para varios workers (la prueba es de que el GC
   no pierde nada, no de cuánto cabe) o mirar la fragmentación. Por decidir (Eduardo).
+- **Otra vez el 2-nov** (la red del arreglo de `#774`, 22:40): `HeapEstres VM-C --smp=4`, «No space in heap» en un
+  hilo, con 1499 creados; lo demás, verde. `check-estres` suelto, después, verde. El cambio de esa red no toca nada de
+  lo que hace `HeapEstres` (una clase sin interfaces).
 
 #### ✅ `#761` — JC/BP: el ternario con dos ramas que sólo comparten una interfaz (`arg ? new B2() : (IA) new B1()`) no compila: «iif: las dos ramas tienen que dar el mismo tipo…»; C# lo tipa por la conversión de una rama (abierta el 1-nov, al cerrar `#751`, que lo tapaba: `test-865` de Mono; **CERRADA el mismo día**, el commit de `#761`: era del traductor)
 

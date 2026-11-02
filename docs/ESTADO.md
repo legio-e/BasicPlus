@@ -95,6 +95,12 @@
 >   mide un nombre sin valor, ahora se para; Eduardo: *«hemos roto una regla así que eso aparece reflejado»*: su `.out`,
 >   al día) y `NatCompara` (la rareza de `#773`). Con eso, la red y `check-jc`, VERDES (la paridad, 184 PASS; la
 >   cápsula, 59; las pruebas de C, 111/111; JC, 180). Queda fuera la frontera de un pack (un `null` llega a C como `""`).
+> - **Lo que se coló en `#774`, y su arreglo:** ese VERDE llevaba un SKIP nuevo que no miré (la paridad, «184 PASS,
+>   1 SKIP»: `Interfaces` ya no compilaba, porque el `""` implícito se ponía también en la property `string` de una
+>   interfaz), y entró en los tres commits. Lo cazó el traductor de C#. Arreglado (`cadenasNacenVacias` se salta las
+>   interfaces; la stdlib, idéntica) y abierta `#775`: la red no cuenta como fallo un caso que deja de compilar. La red
+>   otra vez: la paridad, 185 PASS y 0 SKIP; todo verde salvo el estrés con 4 workers, la conocida `#762` (suelto,
+>   verde); `check-jc`, 181 PASS, con los cuatro SKIP de siempre.
 > - **Lo siguiente** (Eduardo, a revisar el traductor de C#: *«OK si»*): los `null` de las cadenas en el traductor
 >   —quitar sus cinco rechazos; escribir `= null` en los campos y propiedades `string` sin valor, que en C# nacen
 >   `null` y en JC ahora `""`; y lo de `CsSystem` que en C# acepta un `null` sin lanzar—.
