@@ -2256,6 +2256,7 @@ public final class MivmEmitter {
             try {
                 if (conMutex) emitSyncMutexInit(cls.name);
                 emitInitDeCamposFijos(cls);   // V7/H1 #19
+                if (cd != null) emitNacimientoCadenas(cls, cd);   // V8 #776: antes del super()
                 if (c.implicitSuper && c.implicitSuperCtor != null) {
                     w.emitGetParam("this");
                     for (ParamSymbol p : c.params) w.emitGetParam(p.name);
@@ -2431,6 +2432,7 @@ public final class MivmEmitter {
                 emitSyncMutexInit(cls.name);
             }
             emitInitDeCamposFijos(cls);   // V7/H1 #19
+            if (cd != null) emitNacimientoCadenas(cls, cd);   // V8 #776: antes del super()
             // Auto-super (modelo Java): si el usuario no escribió super(), el
             // compilador inyecta aquí la llamada al constructor del padre SIN
             // argumentos (lo marcó el semántico). Va antes del cuerpo → el padre
@@ -2452,12 +2454,29 @@ public final class MivmEmitter {
     }
 
     /** #511 — `this.<campo> := valor` por cada campo/property de instancia con `:= valor`, en
-     *  orden de declaración. Un array de tamaño fijo como campo no se inicializa aquí. */
+     *  orden de declaración. Un array de tamaño fijo como campo no se inicializa aquí, ni el `""` implícito
+     *  de un string sin valor (#776: emitNacimientoCadenas, antes del super()). */
     private void emitInicializadores(ClassSymbol cls, ClassDef cd) throws IOException {
+        emitInicializadores(cls, cd, false);
+    }
+
+    /**
+     * V8 #776 (Eduardo, 2-nov: «primero se hacen las inicializaciones implícitas y despues el constructor», como en
+     * Java) — el `""` de un campo o una property `string` sin valor (#774) es su valor de NACIMIENTO, como el `null` de
+     * Java: se pone al principio del constructor, ANTES del `super()`, con lo demás de nacimiento (la cabecera de un
+     * array fijo, el mutex de un `sync`). Así, lo que el constructor del padre le dé (por un método virtual de la hija)
+     * no lo borra después. Los inicializadores escritos, tras el `super()`, como en Java (emitInicializadores).
+     */
+    private void emitNacimientoCadenas(ClassSymbol cls, ClassDef cd) throws IOException {
+        emitInicializadores(cls, cd, true);
+    }
+
+    private void emitInicializadores(ClassSymbol cls, ClassDef cd, boolean implicitos) throws IOException {
         for (ITopLevelDecl m : cd.members) {
             if (m instanceof VarDecl) {
                 VarDecl vd = (VarDecl) m;
                 if (vd.init == null || vd.names.isEmpty() || vd.names.get(0).isStatic()) continue;
+                if (Ast.implicito(vd.init) != implicitos) continue;
                 Symbol s0 = info.declSymbols.get(vd);
                 if (s0 instanceof VarSymbol && ((VarSymbol) s0).fixedArraySize >= 0) continue;
                 BpType t = (s0 instanceof VarSymbol) ? ((VarSymbol) s0).type : null;
@@ -2470,6 +2489,7 @@ public final class MivmEmitter {
             } else if (m instanceof PropertyDef) {
                 PropertyDef pd = (PropertyDef) m;
                 if (pd.init == null || pd.name.isStatic()) continue;
+                if (Ast.implicito(pd.init) != implicitos) continue;
                 Symbol s0 = info.declSymbols.get(pd);
                 BpType t = (s0 instanceof PropertySymbol) ? ((PropertySymbol) s0).type : null;
                 w.emitGetParam("this");

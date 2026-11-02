@@ -3,7 +3,8 @@
 // nace null en C# y "" en JC, así que el traductor le escribe el null de C#. Lo demás, igual en los dos: concatenar un
 // null, como ""; == sólo igual a null; un switch sobre él, al default; string.IsNullOrEmpty; y medirlo lanza (en C#,
 // NullReferenceException; en JC, «referencia nula»). Y un null escrito en una suma de cadenas, que JC no deja a
-// propósito: el traductor escribe "", lo que vale en C#. Se comprueba solo: Main devuelve 0.
+// propósito: el traductor escribe "", lo que vale en C#. Y una constante que vale null, que en JC no puede serlo (#777:
+// una constante es un valor), como una variable. Se comprueba solo: Main devuelve 0.
 using System;
 
 class Ficha
@@ -12,6 +13,7 @@ class Ficha
     public string Titulo { get; set; }               // también
     public static string Global;                     // también (en JC, una propiedad estática)
     string vacio = "";
+    public const string Nulo = null;                 // en JC una constante no puede ser null: una variable estática
     public bool NombreNulo() { return nombre == null; }
     public bool VacioNoNulo() { return vacio != null && vacio == ""; }
     public void Pon(string n) { nombre = n; }
@@ -48,6 +50,8 @@ class Programa
         if (u != null) return 8;
         if ("x" + s + "y" != "xy") return 9;
         if ("x" + null + (string) null + (object) null != "x") return 16;   // el null escrito, en JC, ""
+        const string local = null;                                          // en JC, una variable (#777)
+        if (local != null || Ficha.Nulo != null) return 17;
         if (Cual(s) != 3 || Cual("") != 2 || Cual("a") != 1) return 10;
         if (!string.IsNullOrEmpty(s) || !string.IsNullOrEmpty("") || string.IsNullOrEmpty("a")) return 11;
         f.Pon("pepe");

@@ -8,6 +8,7 @@ module CsCadenasNulas
       public string Titulo { get; set; } = null;
       public static string Global { get; set; } = null;
       private string vacio = "";
+      public static string Nulo { get; set; } = null;
       public function bool NombreNulo()
       {
          return this.nombre == null;
@@ -89,6 +90,11 @@ module CsCadenasNulas
          if ("x" + "" + "" + "" != "x")
          {
             return 16;
+         }
+         string local = null;
+         if (local != null || Ficha.Nulo != null)
+         {
+            return 17;
          }
          if (Programa.Cual(s) != 3 || Programa.Cual("") != 2 || Programa.Cual("a") != 1)
          {

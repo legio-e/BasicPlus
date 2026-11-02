@@ -109,6 +109,21 @@
 >   `#777` (una constante `string` con `null` para el emisor) y `#778` (dos huecos del traductor: el nombre de un enum
 >   en una cadena, y una variable que C# da por asignada tras un `switch` sobre una constante); y una nota en `#772`
 >   (`Foo(null)` con `Foo(string)` y `Foo(Object)`, ambigua desde `#774`). **Por decidir (Eduardo): `#776` y `#777`.**
+> - **`#776` y `#777`, cerradas** (Eduardo: *«primero se hacen las inicializaciones implícitas y despues el
+>   constructor»*, medido en Java con el mismo programa; y *«una constante solamente puede ser un string real […] A mi me
+>   recuerda a int e int?»*): el `""` implícito de un campo `string` se pone antes del `super()`, como el `null` de
+>   Java (`CadenaNace`, en el corpus: lo que el padre le dé por un método virtual ya no se borra); una constante `null`,
+>   un error (`samples/errores/ConstanteNula.bp`, `CadenaNulaTest`), y el traductor escribe la de C# como variable. La
+>   stdlib: `Gui` y `Json`. La red, verde salvo `test-cola`, que sola pasa: abierta `#779`. `check-jc`: 182 PASS, con
+>   los cuatro SKIP de siempre. Mono: **442** (`test-243`, con su constante `null` como variable).
+> - **Las ideas de Eduardo para las colecciones** (`V8_IDEAS` §E11, sin empezar): una lista ordenada que sólo pida
+>   `Comparable`, y *«Comparable debería ser una interfaz que pueda implementar cualquier clase»*; y `foreach` sobre
+>   cualquier contenedor que implemente `Collection`.
+> - **Para la próxima sesión:** por decidir, `#775` (los SKIP de la red), `#778` (dos huecos del traductor), `#779`
+>   (`test-cola` con carga), `#772` (la sobrecarga más específica) y las de antes (`#768`–`#771`, `#762`). En el
+>   traductor, `gtest-autoproperty-20` falla por el orden de C# (JC hace lo que Java, (c) de `#776`). **Ojo, al próximo
+>   lote de placas:** la VM (el `null` en las primitivas) y la stdlib (Core, IO, Collections, Gui, Json) cambiaron hoy;
+>   las imágenes van con la stdlib nueva.
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

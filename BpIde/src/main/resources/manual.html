@@ -702,7 +702,10 @@ porId.put(<span class="str">"siete"</span>, Integer(<span class="num">70</span>)
 </p>
 <p>
   Un <code>string</code> global, un campo o una property <code>string</code> sin valor —que nadie ha
-  asignado— vale <code>""</code>, como si se hubiera escrito <code>:= ""</code>: se imprime y se concatena
+  asignado— vale <code>""</code> desde que nace, como el <code>null</code> de Java: un campo lo tiene antes de que
+  corra ningún constructor, así que lo que le dé el constructor del padre (por un método de la hija) no se pierde; un
+  <code>:= ""</code> escrito, en cambio, corre tras el <code>super()</code>, como todo inicializador (<code>#776</code>).
+  Se imprime y se concatena
   como <code>""</code>, <code>len</code> da 0, <code>== ""</code> da <code>true</code> y <code>charAt(s, 0)</code> lanza
   el mismo <code>RuntimeError</code> que con <code>""</code> («charAt: idx fuera de rango 0 (len=0)»), igual en las
   dos VMs. Un array global o un
@@ -764,6 +767,12 @@ porId.put(<span class="str">"siete"</span>, Integer(<span class="num">70</span>)
   valor calculado o de tipo no-primitivo usa una <code>var</code> asignada en
   la función inicializadora del módulo. No es asignable en ningún ámbito y no
   existen const arrays (<a href="#arrays">§4.2.1</a>).
+</p>
+<p>
+  Una <code>const</code> <code>string</code> es una cadena de verdad: <strong>no puede ser <code>null</code></strong>
+  (<code>const NADA: string := null</code> es un error de compilación). Una constante es un valor, no una variable: no
+  referencia nada, así que tampoco puede «no referenciar ninguna cadena», como un <code>integer</code> no puede ser
+  <code>null</code>. Una <em>variable</em> <code>string</code>, sí (<a href="#string-null">§5.1</a>; <code>#777</code>, V8).
 </p>
 
 <h3 id="var-owner">5.3 <code>var owner</code></h3>
@@ -1359,7 +1368,9 @@ mismo caso.</p>
   <code>:= valor</code>: <code>var n: integer := 5</code>, <code>var s: string := "hola"</code>,
   <code>public property etiqueta: string := "sin nombre"</code>. Se ejecutan <em>una</em> vez por
   objeto, en orden de declaración, dentro del constructor justo después del <code>super(...)</code>
-  (escrito o implícito) y antes de su cuerpo — como en Java. Una clase con inicializadores y sin
+  (escrito o implícito) y antes de su cuerpo — como en Java. El <code>""</code> de un <code>string</code> sin
+  valor no es un inicializador: es su valor de nacimiento, y ya está antes del <code>super(...)</code>, como el
+  <code>null</code> de Java (<a href="#var">§5.1</a>). Una clase con inicializadores y sin
   constructor recibe uno que los ejecuta: sin argumentos o, si su padre tiene constructor, uno
   por cada sobrecarga del padre, con sus mismos parámetros, que se los pasa con
   <code>super(...)</code> —así se sigue construyendo igual: <code>Tarea(4096)</code> con

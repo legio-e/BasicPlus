@@ -1810,11 +1810,25 @@ public final class SemanticAnalyzer {
         } finally { currentClass = save; }
     }
 
+    /**
+     * V8 #777 (Eduardo, 2-nov: «una constante solamente puede ser un string real, al no ser una variable no contiene
+     * referencias y como no contiene referencias no puede ser nulo. A mi me recuerda a int e int?») — el `null` de #774
+     * es de las variables: una constante es un valor. Antes llegaba al emisor, que escribe una constante como un literal
+     * del bloque de datos y paraba con un error interno («Símbolo de datos no declarado»).
+     */
+    private boolean constanteNula(ConstDecl c, BpType valor) {
+        if (!(valor instanceof NullType)) return false;
+        err(c.line, c.column, "la constante '" + c.name.name + "' no puede ser null: una constante es un valor, no "
+                + "una variable, y no referencia nada (una variable sí puede valer null)");
+        return true;
+    }
+
     private void analyzeConstInit(ConstDecl c) {
         Symbol s = info.declSymbols.get(c);
         if (!(s instanceof ConstSymbol)) return;
         ConstSymbol cs = (ConstSymbol) s;
         BpType t = analyzeExpr(c.value, null, cs.type);
+        boolean nula = constanteNula(c, t);
         if (cs.type == null) cs.type = t;
         else if (!cs.type.isAssignableFrom(t)
                 && !acceptsNarrowFromLiteral(cs.type, t, c.value))
@@ -1842,7 +1856,7 @@ public final class SemanticAnalyzer {
         // de clase no-literal petaba el emisor. Ahora da diagnóstico limpio. (Una
         // `static const` se deja a su propio camino: su acceso ya falla antes con
         // "no tiene miembro estático".)
-        if (cs.literalValue == null && (cs.ownerClass == null || !c.name.isStatic())) {
+        if (!nula && cs.literalValue == null && (cs.ownerClass == null || !c.name.isStatic())) {   // un null ya lo dijo #777
             String donde = (cs.ownerClass == null)
                     ? "usa una var asignada en la función inicializadora del módulo"
                     : "usa un campo (var) asignado en el constructor de la clase";
@@ -2312,6 +2326,7 @@ public final class SemanticAnalyzer {
             err(c.line, c.column, "no se puede declarar const estática en un cuerpo de función");
         BpType declared = (c.type == null) ? null : resolveType(c.type);
         BpType got = analyzeExpr(c.value, scope, declared);
+        constanteNula(c, got);
         BpType t = (declared != null) ? declared : got;
         ConstSymbol sym = new ConstSymbol(c.name.name, false, false, null, c.line, c.column);
         sym.type = t;

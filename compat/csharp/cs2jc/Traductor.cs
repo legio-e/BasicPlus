@@ -422,13 +422,16 @@ namespace Cs2Jc
             var primero = (IFieldSymbol) m.GetDeclaredSymbol(vars[0]);
             string tipo = Tipo(primero.Type, f.Declaration.Type);
             string acceso = AccesoDe(primero);
-            if (primero.IsConst)
+            // #777: una constante de C# que vale null (`const string X = null`, test-243): en JC una constante es un valor
+            // y no puede serlo; se escribe como lo que hace, una variable estática que nadie cambia
+            bool constNula = primero.IsConst && primero.HasConstantValue && primero.ConstantValue == null;
+            if (primero.IsConst && !constNula)
             {
                 foreach (var v in vars)                                        // JC: una constante por declaración
                     Linea(acceso + " const " + tipo + " " + Ident(v.Identifier.ValueText) + " = " + Expr(v.Initializer.Value) + ";");
                 return;
             }
-            string estatico = primero.IsStatic ? "static " : "";
+            string estatico = (primero.IsStatic || constNula) ? "static " : "";
             if (acceso == "public")
             {
                 // BP no deja campos públicos («el estado sale por getters y setters»): cada uno, una propiedad.

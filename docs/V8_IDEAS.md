@@ -4933,7 +4933,8 @@ escrito en una suma de cadenas (`"x" + null`), `""`, lo que vale en C# (en JC es
 null`. El caso `CadenasNulas`. **Mono: 441** (+7: `test-506`, `test-772`, `test-79` y cuatro `test-xml`); falla una
 que funcionaba, `gtest-autoproperty-20` (el `= null` de la hija corre tras el constructor de la base, que ya le había
 dado valor: `#776`), y cuatro que no se traducían fallan ahora por otra cosa: `test-243` (`#777`), `test-163`
-(`#772`), `test-77` y `test-504` (`#778`).
+(`#772`), `test-77` y `test-504` (`#778`). Con `#777` (una constante no puede ser `null`; el traductor escribe la de C#
+como una variable), `test-243` funciona: **Mono: 442**.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
@@ -5274,3 +5275,24 @@ traductor; la red; y la placa, en la próxima tanda.
   constructor pide un entero. Código equivocado sin un error; visto en el C que genera (una sonda, `CastNat`).
 - `#758` — una ranura que no se resuelve al llamar (un `.mod` corrupto o un fallo del cargador; tras un enlace bueno,
   no pasa) para el programa en la VM-C y es un error atrapable en la VM-Java.
+
+## E11 · Las colecciones, con interfaces: `Comparable` y `Collection` (las ideas de Eduardo, 2-nov; sin empezar)
+
+> Eduardo, 2-nov (noche), ya con las interfaces de clase (H7.3, `#756`): *«Ideas: Una lista ordenada necesita que los
+> objetos implementen comparable, nada mas. foreach debería admitir cualquier contenedor que implemente collection.»*
+> Apuntadas para analizarlas cuando toque; nada hecho.
+
+- **Una lista ordenada pide `Comparable`, y nada más.** Hoy `Comparable` es una CLASE de Core (`#446`, 18-ago: la base
+  de los envoltorios `Integer`, `Long`, `Double`…, con `compareTo(other: Object): integer`, que devuelve 0 si no se
+  sobrescribe), y el `Map` de `Collections` ordena sus claves con un objeto aparte, un `Comparator`
+  (`StringComparator` por defecto, `NaturalComparator` para las que son `Comparable`). Con las interfaces, `Comparable`
+  podría ser una interfaz, y una lista ordenada (o el `Map`) sólo pediría que sus elementos la implementen, como en
+  Java (`Comparable<T>`) y en C# (`IComparable`). Eduardo, el mismo día: *«Comparable debería ser una interfaz que
+  pueda implementar cualquier clase.»* El rumbo, decidido; lo que cambia (los envoltorios, que hoy heredan de la
+  clase; el `NaturalComparator`, que la convierte; lo ya compilado contra la clase), por analizar.
+- **`foreach` sobre cualquier contenedor que implemente `Collection`.** Hoy `for x in` recorre un array o una `List`, y
+  nada más («se esperaba un array o una List en 'for in'»). Con una interfaz (en Java, `Iterable` y su `iterator()`;
+  en C#, `IEnumerable` y su `GetEnumerator()`), una clase del programa también se podría recorrer. En el lote de Mono,
+  «foreach sobre colecciones propias» lo piden 48 pruebas (2 sólo eso).
+- **Por analizar:** lo que pide cada una al lenguaje (el `for … in` con una interfaz; si `Comparable` pasa de clase a
+  interfaz, lo que cambia para los envoltorios y para lo ya compilado), a la stdlib (`List`, `Map`) y a las dos VMs.

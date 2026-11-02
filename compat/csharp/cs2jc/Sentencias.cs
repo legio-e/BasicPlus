@@ -184,6 +184,10 @@ namespace Cs2Jc
             }
             var partes = d.Variables.Select(v => Ident(v.Identifier.ValueText)
                                                  + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : "")).ToList();
+            // #777: una constante de C# que vale null (`const string x = null`): en JC una constante es un valor y no
+            // puede serlo; se escribe como lo que hace, una variable que nadie cambia
+            if (constante && d.Variables.Any(v => m.GetDeclaredSymbol(v) is ILocalSymbol ls && ls.HasConstantValue && ls.ConstantValue == null))
+                constante = false;
             if (constante)
                 foreach (var p in partes) Linea("const " + tipo + " " + p + ";");      // JC: una constante por declaración
             else

@@ -1,0 +1,18 @@
+// ConstanteNula.bp — V8 #777 (2-nov): una constante no puede ser null. Una constante es un valor, no una variable: no
+// referencia nada, y por eso no puede «no referenciar ninguna cadena». Eduardo: «una constante solamente puede ser un
+// string real, al no ser una variable no contiene referencias y como no contiene referencias no puede ser nulo. A mi me
+// recuerda a int e int?». Una VARIABLE string sí puede valer null (#774). Tres errores: NADA, ETIQUETA y LOCAL.
+module ConstanteNula
+  const VACIA: string := ""
+  const NADA: string := null
+
+  public class Caja
+    const Caja.ETIQUETA: string := null
+  end Caja
+
+  function Main()
+    var v: string := null
+    const LOCAL: string := null
+    print VACIA + v
+  end Main
+end ConstanteNula
