@@ -819,11 +819,15 @@ static bpvm_strcur_t* h_cursores(void) {
     bpvm_thread_t* tc = bpvm_aot_callctx()->tc;
     return (tc != NULL) ? &tc->strcur : NULL;
 }
+/* V8 #774 — un string null, «referencia nula», como el builtin al que sustituye cada uno: estos cuatro no pasan por
+ * bpvm_call_builtin, que lo mira para los demás (builtin_cadenas.h). El mismo texto: el nombre del builtin. */
 static int32_t h_string_length(bpvm_t* vm, uint32_t ref) {
-    return bpvm_prim_str_len(vm, h_cursores(), bpref_regen(vm, ref).v, ref ? A(vm, ref) : 0u);
+    if (ref == 0u) { h_throw_runtime(vm, "referencia nula: strlen de un string null"); return 0; }
+    return bpvm_prim_str_len(vm, h_cursores(), bpref_regen(vm, ref).v, A(vm, ref));
 }
 static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
-    uint32_t sa = ref ? A(vm, ref) : 0u;
+    if (ref == 0u) { h_throw_runtime(vm, "referencia nula: charCodeAt de un string null"); return 0; }
+    uint32_t sa = A(vm, ref);
     int32_t c = bpvm_prim_char_code_at(vm, h_cursores(), bpref_regen(vm, ref).v, sa, idx);
     if (c < 0) {   /* V8 #717: fuera de rango, el mismo error que BUILTIN_CHAR_CODE_AT (y que charAt); antes, 0 en silencio */
         char em[96];
@@ -839,9 +843,10 @@ static int32_t h_string_char_code_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
  * `charAt("abc", 7)` daba "" con el AOT y el error interpretado. Lo cazó el análisis de P2b, que quiere
  * justo eso: que el AOT llame al MISMO código que el intérprete en vez de a una copia. */
 static uint32_t h_string_char_at(bpvm_t* vm, uint32_t ref, int32_t idx) {
+    if (ref == 0u) { h_throw_runtime(vm, "referencia nula: charAt de un string null"); return 0; }   /* #774 */
     {   /* P2b: la primitiva compartida */
         bpref_t h; char em[96];
-        if (bpvm_prim_char_at(vm, h_cursores(), bpref_regen(vm, ref).v, ref ? A(vm, ref) : 0u, idx, &h, em, sizeof em) != 0) {
+        if (bpvm_prim_char_at(vm, h_cursores(), bpref_regen(vm, ref).v, A(vm, ref), idx, &h, em, sizeof em) != 0) {
             h_throw_runtime(vm, em); return 0;
         }
         return (uint32_t) h.v;
@@ -867,9 +872,10 @@ static uint32_t h_string_concat(bpvm_t* vm, uint32_t a, uint32_t b) {
     return (uint32_t) h.v;
 }
 static uint32_t h_string_substring(bpvm_t* vm, uint32_t ref, int32_t from, int32_t to) {
+    if (ref == 0u) { h_throw_runtime(vm, "referencia nula: substring de un string null"); return 0; }   /* #774 */
     {   /* P2b: la primitiva compartida (el origen lo tiene vivo la native, en sus variables de C) */
         bpref_t h; char em[64];
-        if (bpvm_prim_substring(vm, h_cursores(), ref ? bpref_regen(vm, ref) : bpref_null(), from, to, &h, em,
+        if (bpvm_prim_substring(vm, h_cursores(), bpref_regen(vm, ref), from, to, &h, em,
                                 sizeof em) != 0) {
             h_throw_runtime(vm, em); return 0;
         }

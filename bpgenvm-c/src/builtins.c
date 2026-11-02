@@ -235,6 +235,7 @@ void bpvm_files_fin_de_run(bpvm_t* vm) {
  * del mismo fichero. Lo que sigue son las NOTAS que acompañaban a los números (se conservan; el
  * número de cada una está en la cabecera, con su firma BP). */
 #include "builtin_ids.h"
+#include "builtin_cadenas.h"   /* V8 #774: dónde están los parámetros string de cada builtin (también generado) */
 #include "bpvm_prims.h"   /* V7/H5 P2b: las primitivas compartidas con el AOT */
 #include "bpvm_opcodes.h" /* #573: bpvm_prim_texto_indice nombra el opcode */
 
@@ -1372,6 +1373,15 @@ int bpvm_builtin_de_la_gui(int id) {
     }
 }
 
+/* V8 #774 — el error de un string null en un builtin, fuera del camino caliente: el búfer del mensaje sólo está en la pila
+ * mientras se lanza, y el marco de bpvm_call_builtin no cambia (la lección de #534: un búfer en el switch lo pagan todos
+ * los hilos). */
+static bpvm_status_t __attribute__((noinline, cold)) cadena_nula(bpvm_t* vm, bpvm_thread_t* tc, const char* nombre) {
+    char em[96];
+    snprintf(em, sizeof em, "referencia nula: %s de un string null", nombre);
+    return builtin_throw(vm, tc, em);
+}
+
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     /* V7/H12 — un builtin de la GUI FUERA del run 0 no debe pasar: el intérprete hace viajar al hilo (OP_CALL_BUILTIN).
      * Se cuenta —el fin del programa lo dice, y test-cola 18 lo mira— y, llamado desde una native (que no puede viajar:
@@ -1381,6 +1391,17 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (tc->builtin_de_nativa)
             return builtin_throw(vm, tc, "GUI: un builtin de la GUI desde una native, fuera del run 0 "
                                          "(con dos runs, todavia no)");
+    }
+    /* V8 #774 — UN STRING null DONDE LA PRIMITIVA PIDE UNA CADENA: «referencia nula», como un objeto null (Eduardo: «una
+     * cadena no puede ser null»; la variable sí). Dónde están sus parámetros string en la pila lo genera gen_builtins.py
+     * de las firmas de Core.bp (builtin_cadenas.h); miVM mira lo mismo (Builtin.cadenas). Los que tratan el null como ""
+     * (concatenar, BUILTIN_STR_COPY; el aviso de un destructor) no tienen ninguno; escribir es un opcode. Llamado desde
+     * una native, lo mismo: call_builtin le ha puesto los argumentos en la pila. */
+    if ((unsigned) id < (unsigned) BUILTIN__CUANTOS && bpvm_builtin_cadena_de[id] != 0u) {
+        const bpvm_builtin_cadenas_t* c = &bpvm_builtin_cadenas[bpvm_builtin_cadena_de[id]];
+        int k;
+        for (k = 0; k < 3 && c->off[k] != 0u; k++)
+            if (bpref_is_null(bpref_load(vm, tc->sp - c->off[k]))) return cadena_nula(vm, tc, c->nombre);
     }
     switch (id) {
 

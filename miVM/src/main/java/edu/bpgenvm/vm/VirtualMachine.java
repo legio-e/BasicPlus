@@ -5225,6 +5225,13 @@ public class VirtualMachine {
     }
 
     private void dispatchBuiltin(Builtin b, ThreadContext tc) {
+        // V8 #774 — UN STRING null DONDE LA PRIMITIVA PIDE UNA CADENA: «referencia nula», como un objeto null (Eduardo: «una
+        // cadena no puede ser null»; la variable sí). Dónde están sus parámetros string en la pila lo genera
+        // gen_builtins.py de las firmas de Core.bp (Builtin.cadenas); la VM-C mira lo mismo (builtin_cadenas.h). Los que
+        // tratan el null como "" (concatenar, __strCopy; el aviso de un destructor) no tienen ninguno; escribir es un opcode.
+        for (int off : b.cadenas)
+            if (refLoad(memory, tc.sp - off) == 0)
+                throwBpRuntimeError(tc, "referencia nula: " + b.nombreDeError() + " de un string null");
         switch (b) {
             case STRLEN: {
                 long ref = popTcRef(tc);   // H1.2a: string ref 8 bytes

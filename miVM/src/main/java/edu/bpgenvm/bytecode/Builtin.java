@@ -10,22 +10,22 @@ import java.util.HashMap;
 import java.util.Map;
 
 public enum Builtin {
-    STRLEN("strlen"),   // [0] strlen(s: string): integer
-    PARSE_INT("parseInt"),   // [1] parseInt(s: string): integer
-    PARSE_FLOAT("parseFloat"),   // [2] parseFloat(s: string): float
+    STRLEN("strlen", 8),   // [0] strlen(s: string): integer
+    PARSE_INT("parseInt", 8),   // [1] parseInt(s: string): integer
+    PARSE_FLOAT("parseFloat", 8),   // [2] parseFloat(s: string): float
     INT_TO_STRING("intToString"),   // [3] intToString(n: integer): string
     FLOAT_TO_STRING("floatToString"),   // [4] floatToString(x: float): string
     BOOL_TO_STRING("boolToString"),   // [5] boolToString(b: boolean): string
-    UPPER("upper"),   // [6] upper(s: string): string
-    LOWER("lower"),   // [7] lower(s: string): string
-    TRIM("trim"),   // [8] trim(s: string): string
-    SUBSTRING("substring"),   // [9] substring(s: string, start: integer, hasta: integer): string
-    INDEX_OF("indexOf"),   // [10] indexOf(s: string, target: string): integer
-    STARTS_WITH("startsWith"),   // [11] startsWith(s: string, prefix: string): boolean
-    ENDS_WITH("endsWith"),   // [12] endsWith(s: string, suffix: string): boolean
-    CONTAINS("contains"),   // [13] contains(s: string, sub: string): boolean
-    CHAR_AT("charAt"),   // [14] charAt(s: string, i: integer): string
-    REPLACE("replace"),   // [15] replace(s: string, target: string, replacement: string): string
+    UPPER("upper", 8),   // [6] upper(s: string): string
+    LOWER("lower", 8),   // [7] lower(s: string): string
+    TRIM("trim", 8),   // [8] trim(s: string): string
+    SUBSTRING("substring", 16),   // [9] substring(s: string, start: integer, hasta: integer): string
+    INDEX_OF("indexOf", 16, 8),   // [10] indexOf(s: string, target: string): integer
+    STARTS_WITH("startsWith", 16, 8),   // [11] startsWith(s: string, prefix: string): boolean
+    ENDS_WITH("endsWith", 16, 8),   // [12] endsWith(s: string, suffix: string): boolean
+    CONTAINS("contains", 16, 8),   // [13] contains(s: string, sub: string): boolean
+    CHAR_AT("charAt", 12),   // [14] charAt(s: string, i: integer): string
+    REPLACE("replace", 24, 16, 8),   // [15] replace(s: string, target: string, replacement: string): string
     ABS("abs"),   // [16] abs(x: integer): integer
     MIN("min"),   // [17] min(a: integer, b: integer): integer
     MAX("max"),   // [18] max(a: integer, b: integer): integer
@@ -46,19 +46,19 @@ public enum Builtin {
     ROUND("round"),   // [33] round(x: float): integer
     NOW("now"),   // [34] now(): integer
     SLEEP("sleep"),   // [35] sleep(ms: integer)
-    SPLIT("split"),   // [36] split(s: string, sep: string): string[]
+    SPLIT("split", 16, 8),   // [36] split(s: string, sep: string): string[]
     INPUT("input"),   // [37] input(): string
-    READ_FILE("readFile"),   // [38] readFile(path: string): string
-    WRITE_FILE("writeFile"),   // [39] writeFile(path: string, content: string)
-    APPEND_FILE("appendFile"),   // [40] appendFile(path: string, content: string)
-    FILE_EXISTS("fileExists"),   // [41] fileExists(path: string): boolean
-    LIST_DIR("listDir"),   // [42] listDir(path: string): string[]
+    READ_FILE("readFile", 8),   // [38] readFile(path: string): string
+    WRITE_FILE("writeFile", 16, 8),   // [39] writeFile(path: string, content: string)
+    APPEND_FILE("appendFile", 16, 8),   // [40] appendFile(path: string, content: string)
+    FILE_EXISTS("fileExists", 8),   // [41] fileExists(path: string): boolean
+    LIST_DIR("listDir", 8),   // [42] listDir(path: string): string[]
     GC("gc"),   // [43] gc()
     NEW_REF_ARRAY("__newRefArray"),   // [44] __newRefArray(cap: integer): integer[]
     GROW_REF_ARRAY("__growRefArray"),   // [45] __growRefArray(old: integer[], newCap: integer): integer[]
     GROW_INT_ARRAY("__growIntArray"),   // [46] __growIntArray(old: integer[], newCap: integer): integer[]
     CHARS_TO_STRING("__charsToString"),   // [47] __charsToString(chars: integer[], len: integer): string
-    CHAR_CODE_AT("charCodeAt"),   // [48] charCodeAt(s: string, i: integer): integer
+    CHAR_CODE_AT("charCodeAt", 12),   // [48] charCodeAt(s: string, i: integer): integer
     THREAD_START("__threadStart"),   // [49] __threadStart(t: any)
     THREAD_JOIN("__threadJoin"),   // [50] __threadJoin(t: any)
     YIELD("yield"),   // [51] yield()
@@ -74,20 +74,20 @@ public enum Builtin {
     ATAN2("__atan2"),   // [61] __atan2(y: float, x: float): float
     FACTORIAL_I("__factorial_i"),   // [62] __factorial_i(n: integer): integer
     GAMMA_F("__gamma_f"),   // [63] __gamma_f(x: float): float
-    PATH_JOIN("__pathJoin"),   // [64] __pathJoin(a: string, b: string): string
-    PATH_PARENT("__pathParent"),   // [65] __pathParent(p: string): string
-    PATH_BASENAME("__pathBasename"),   // [66] __pathBasename(p: string): string
-    PATH_EXTENSION("__pathExtension"),   // [67] __pathExtension(p: string): string
-    PATH_ABSOLUTE("__pathAbsolute"),   // [68] __pathAbsolute(p: string): string
-    MKDIR("__mkdir"),   // [69] __mkdir(p: string)
-    RMDIR("__rmdir"),   // [70] __rmdir(p: string)
-    REMOVE_FILE("__removeFile"),   // [71] __removeFile(p: string)
-    RENAME("__rename"),   // [72] __rename(src: string, dst: string)
-    COPY_FILE("__copyFile"),   // [73] __copyFile(src: string, dst: string)
-    FILE_SIZE("__fileSize"),   // [74] __fileSize(p: string): integer
-    IS_DIRECTORY("__isDirectory"),   // [75] __isDirectory(p: string): boolean
-    LAST_MODIFIED("__lastModified"),   // [76] __lastModified(p: string): integer
-    PROMPT("__prompt"),   // [77] __prompt(spec: string): string
+    PATH_JOIN("__pathJoin", 16, 8),   // [64] __pathJoin(a: string, b: string): string
+    PATH_PARENT("__pathParent", 8),   // [65] __pathParent(p: string): string
+    PATH_BASENAME("__pathBasename", 8),   // [66] __pathBasename(p: string): string
+    PATH_EXTENSION("__pathExtension", 8),   // [67] __pathExtension(p: string): string
+    PATH_ABSOLUTE("__pathAbsolute", 8),   // [68] __pathAbsolute(p: string): string
+    MKDIR("__mkdir", 8),   // [69] __mkdir(p: string)
+    RMDIR("__rmdir", 8),   // [70] __rmdir(p: string)
+    REMOVE_FILE("__removeFile", 8),   // [71] __removeFile(p: string)
+    RENAME("__rename", 16, 8),   // [72] __rename(src: string, dst: string)
+    COPY_FILE("__copyFile", 16, 8),   // [73] __copyFile(src: string, dst: string)
+    FILE_SIZE("__fileSize", 8),   // [74] __fileSize(p: string): integer
+    IS_DIRECTORY("__isDirectory", 8),   // [75] __isDirectory(p: string): boolean
+    LAST_MODIFIED("__lastModified", 8),   // [76] __lastModified(p: string): integer
+    PROMPT("__prompt", 8),   // [77] __prompt(spec: string): string
     GPIO_INIT("__gpioInit"),   // [78] __gpioInit(pin: integer, mode: integer)
     GPIO_WRITE("__gpioWrite"),   // [79] __gpioWrite(pin: integer, value: integer)
     GPIO_READ("__gpioRead"),   // [80] __gpioRead(pin: integer): integer
@@ -129,19 +129,19 @@ public enum Builtin {
     WDT_ENABLE("__wdtEnable"),   // [116] __wdtEnable(timeoutMs: integer)
     WDT_FEED("__wdtFeed"),   // [117] __wdtFeed()
     WDT_DISABLE("__wdtDisable"),   // [118] __wdtDisable()
-    TO_BYTES("toBytes"),   // [119] toBytes(s: string): byte[]
+    TO_BYTES("toBytes", 8),   // [119] toBytes(s: string): byte[]
     FROM_BYTES("fromBytes"),   // [120] fromBytes(b: byte[]): string
     HEAP_FRAG("heapFrag"),   // [121] heapFrag(): string
     HEAP_MAP("heapMap"),   // [122] heapMap(cols: integer): string
     MACHINE_GPIO_COUNT("__machineGpioCount"),   // [123] __machineGpioCount(): integer
     NP_INIT("__npInit"),   // [124] __npInit(pin: integer)
     NP_SHOW("__npShow"),   // [125] __npShow(pin: integer, grb: integer[], count: integer)
-    READ_FILE_BYTES("readFileBytes"),   // [126] readFileBytes(path: string): byte[]
-    WRITE_FILE_BYTES("writeFileBytes"),   // [127] writeFileBytes(path: string, data: byte[])
-    THROW_RTE("__throwRte"),   // [128] __throwRte(msg: string)
+    READ_FILE_BYTES("readFileBytes", 8),   // [126] readFileBytes(path: string): byte[]
+    WRITE_FILE_BYTES("writeFileBytes", 16),   // [127] writeFileBytes(path: string, data: byte[])
+    THROW_RTE("__throwRte", 8),   // [128] __throwRte(msg: string)
     LONG_TO_STRING("__longToString"),   // [129] __longToString(v: long): string
     DOUBLE_TO_STRING("__doubleToString"),   // [130] __doubleToString(v: double): string
-    TCP_CONNECT("__tcpConnect"),   // [131] __tcpConnect(host: string, port: integer, timeoutMs: integer): integer
+    TCP_CONNECT("__tcpConnect", 16),   // [131] __tcpConnect(host: string, port: integer, timeoutMs: integer): integer
     TCP_SEND("__tcpSend"),   // [132] __tcpSend(h: integer, data: byte[]): integer
     TCP_RECV("__tcpRecv"),   // [133] __tcpRecv(h: integer, max: integer, timeoutMs: integer): byte[]
     TCP_CLOSE("__tcpClose"),   // [134] __tcpClose(h: integer)
@@ -149,7 +149,7 @@ public enum Builtin {
     GUI_CREATE_OBJ("__guiCreateObj"),   // [136] __guiCreateObj(parent: integer): integer
     GUI_CREATE_LABEL("__guiCreateLabel"),   // [137] __guiCreateLabel(parent: integer): integer
     GUI_CREATE_BUTTON("__guiCreateButton"),   // [138] __guiCreateButton(parent: integer): integer
-    GUI_SET_TEXT("__guiSetText"),   // [139] __guiSetText(handle: integer, t: string)
+    GUI_SET_TEXT("__guiSetText", 8),   // [139] __guiSetText(handle: integer, t: string)
     GUI_SET_WIDTH("__guiSetWidth"),   // [140] __guiSetWidth(handle: integer, w: integer)
     GUI_SET_HEIGHT("__guiSetHeight"),   // [141] __guiSetHeight(handle: integer, h: integer)
     GUI_ALIGN("__guiAlign"),   // [142] __guiAlign(handle: integer, a: integer, dx: integer, dy: integer)
@@ -185,22 +185,22 @@ public enum Builtin {
     GUI_CREATE_SPINBOX("__guiCreateSpinbox"),   // [172] __guiCreateSpinbox(parent: integer): integer
     GUI_CREATE_LED("__guiCreateLed"),   // [173] __guiCreateLed(parent: integer): integer
     GUI_CREATE_DROPDOWN("__guiCreateDropdown"),   // [174] __guiCreateDropdown(parent: integer): integer
-    GUI_SET_OPTIONS("__guiSetOptions"),   // [175] __guiSetOptions(handle: integer, opts: string)
+    GUI_SET_OPTIONS("__guiSetOptions", 8),   // [175] __guiSetOptions(handle: integer, opts: string)
     GUI_CREATE_TEXTAREA("__guiCreateTextarea"),   // [176] __guiCreateTextarea(parent: integer): integer
     GUI_GET_TEXT("__guiGetText"),   // [177] __guiGetText(handle: integer): string
     GUI_CREATE_LIST("__guiCreateList"),   // [178] __guiCreateList(parent: integer): integer
     GUI_CREATE_KEYBOARD("__guiCreateKeyboard"),   // [179] __guiCreateKeyboard(parent: integer): integer
     GUI_KEYBOARD_SET_TEXTAREA("__guiKeyboardSetTextarea"),   // [180] __guiKeyboardSetTextarea(handle: integer, ta: integer)
     GUI_CREATE_MSGBOX("__guiCreateMsgbox"),   // [181] __guiCreateMsgbox(parent: integer): integer
-    GUI_SET_BUTTONS("__guiSetButtons"),   // [182] __guiSetButtons(handle: integer, labels: string)
+    GUI_SET_BUTTONS("__guiSetButtons", 8),   // [182] __guiSetButtons(handle: integer, labels: string)
     GUI_CREATE_TABVIEW("__guiCreateTabview"),   // [183] __guiCreateTabview(parent: integer): integer
-    GUI_TABVIEW_ADD_TAB("__guiTabviewAddTab"),   // [184] __guiTabviewAddTab(handle: integer, name: string): integer
+    GUI_TABVIEW_ADD_TAB("__guiTabviewAddTab", 8),   // [184] __guiTabviewAddTab(handle: integer, name: string): integer
     GUI_CREATE_TABLE("__guiCreateTable"),   // [185] __guiCreateTable(parent: integer): integer
     GUI_TABLE_SET_GRID("__guiTableSetGrid"),   // [186] __guiTableSetGrid(handle: integer, rows: integer, cols: integer)
-    GUI_TABLE_SET_CELL("__guiTableSetCell"),   // [187] __guiTableSetCell(handle: integer, row: integer, col: integer, text: string)
+    GUI_TABLE_SET_CELL("__guiTableSetCell", 8),   // [187] __guiTableSetCell(handle: integer, row: integer, col: integer, text: string)
     GUI_TABLE_GET_CELL("__guiTableGetCell"),   // [188] __guiTableGetCell(handle: integer, row: integer, col: integer): string
     GUI_IMAGE_NEW("__guiImageNew"),   // [189] __guiImageNew(): integer
-    GUI_IMAGE_LOAD_FILE("__guiImageLoadFile"),   // [190] __guiImageLoadFile(handle: integer, path: string): integer
+    GUI_IMAGE_LOAD_FILE("__guiImageLoadFile", 8),   // [190] __guiImageLoadFile(handle: integer, path: string): integer
     GUI_IMAGE_WIDTH("__guiImageWidth"),   // [191] __guiImageWidth(handle: integer): integer
     GUI_IMAGE_HEIGHT("__guiImageHeight"),   // [192] __guiImageHeight(handle: integer): integer
     GUI_CREATE_IMAGE_VIEW("__guiCreateImageView"),   // [193] __guiCreateImageView(parent: integer): integer
@@ -210,17 +210,17 @@ public enum Builtin {
     GUI_GET_FONT_SIZE("__guiGetFontSize"),   // [197] __guiGetFontSize(handle: integer): integer
     GUI_TEXTAREA_SET_READONLY("__guiTextareaSetReadonly"),   // [198] __guiTextareaSetReadonly(handle: integer, ro: integer)
     GUI_TEXTAREA_GET_READONLY("__guiTextareaGetReadonly"),   // [199] __guiTextareaGetReadonly(handle: integer): integer
-    EVAL("eval"),   // [200] eval(expr: string): float
+    EVAL("eval", 8),   // [200] eval(expr: string): float
     MACHINE_RESET_CAUSE("__machineResetCause"),   // [201] __machineResetCause(): string
     MACHINE_SET_MARK("__machineSetMark"),   // [202] __machineSetMark(code: integer)
     MACHINE_MARK_COUNT("__machineMarkCount"),   // [203] __machineMarkCount(): integer
     MACHINE_MARK_AT("__machineMarkAt"),   // [204] __machineMarkAt(i: integer): integer
     MACHINE_BOOT_COUNT("__machineBootCount"),   // [205] __machineBootCount(): integer
-    GUI_INVOKE_BY_NAME("__guiInvokeByName"),   // [206] __guiInvokeByName(host: Object, name: string, sender: Object)
+    GUI_INVOKE_BY_NAME("__guiInvokeByName", 16),   // [206] __guiInvokeByName(host: Object, name: string, sender: Object)
     GUI_INVOKE_BY_SLOT("__guiInvokeBySlot"),   // [207] __guiInvokeBySlot(win: Object, slot: integer, sender: Object)
     MACHINE_ADC_CHANNELS("__machineAdcChannels"),   // [208] __machineAdcChannels(): integer
     MACHINE_PWM_SLICES("__machinePwmSlices"),   // [209] __machinePwmSlices(): integer
-    GUI_LOAD_FONT("__guiLoadFont"),   // [210] __guiLoadFont(path: string): integer
+    GUI_LOAD_FONT("__guiLoadFont", 8),   // [210] __guiLoadFont(path: string): integer
     APP_MAIN_MODULE("__appMainModule"),   // [211] __appMainModule(): string
     APP_MAIN_MODULE_PATH("__appMainModulePath"),   // [212] __appMainModulePath(): string
     APP_PROJECT_PATH("__appProjectPath"),   // [213] __appProjectPath(): string
@@ -233,7 +233,7 @@ public enum Builtin {
     GUI_CHART_SET_TYPE("__guiChartSetType"),   // [220] __guiChartSetType(handle: integer, t: integer)
     EVENT_RAISE("__eventRaise"),   // [221] __eventRaise(recv: any, dest: any, nargs: integer, masks: integer)
     GUI_RUN_ONCE("__guiRunOnce"),   // [222] __guiRunOnce(): integer
-    GUI_SLOT_OF("__guiSlotOf"),   // [223] __guiSlotOf(obj: Object, name: string): integer
+    GUI_SLOT_OF("__guiSlotOf", 8),   // [223] __guiSlotOf(obj: Object, name: string): integer
     PACK_NEXT("__packNext"),   // [224] __packNext(cur: integer): integer
     PACK_INFO("__packInfo"),   // [225] __packInfo(cur: integer): string
     PACK_ENTRY_NEXT("__packEntryNext"),   // [226] __packEntryNext(pack: integer, cur: integer): integer
@@ -242,16 +242,16 @@ public enum Builtin {
     WRAP_F("__wrap_f"),   // [229] __wrap_f(x: float, lo: float, hi: float): float
     HYPOT_F("__hypot_f"),   // [230] __hypot_f(x: float, y: float): float
     REMAP_F("__remap_f"),   // [231] __remap_f(x: float, inLo: float, inHi: float, outLo: float, outHi: float): float
-    RUN_ARG("__runArg"),   // [232] __runArg(defecto: string): string
+    RUN_ARG("__runArg", 8),   // [232] __runArg(defecto: string): string
     MACHINE_MICRO("__machineMicro"),   // [233] __machineMicro(): string
     GUI_GET_ALIGN("__guiGetAlign"),   // [234] __guiGetAlign(handle: integer): integer
     GUI_GET_ALIGN_DX("__guiGetAlignDx"),   // [235] __guiGetAlignDx(handle: integer): integer
     GUI_GET_ALIGN_DY("__guiGetAlignDy"),   // [236] __guiGetAlignDy(handle: integer): integer
     GUI_GET_AUTH_WIDTH("__guiGetAuthWidth"),   // [237] __guiGetAuthWidth(handle: integer): integer
     GUI_GET_AUTH_HEIGHT("__guiGetAuthHeight"),   // [238] __guiGetAuthHeight(handle: integer): integer
-    GUI_SHOT("__guiShot"),   // [239] __guiShot(path: string): integer
-    FSTATE_SIZE("__fstateSize"),   // [240] __fstateSize(path: string): integer
-    FOPEN("__fopen"),   // [241] __fopen(st: byte[], path: string, mode: integer)
+    GUI_SHOT("__guiShot", 8),   // [239] __guiShot(path: string): integer
+    FSTATE_SIZE("__fstateSize", 8),   // [240] __fstateSize(path: string): integer
+    FOPEN("__fopen", 12),   // [241] __fopen(st: byte[], path: string, mode: integer)
     FCLOSE("__fclose"),   // [242] __fclose(st: byte[])
     FREAD("__fread"),   // [243] __fread(st: byte[], dst: byte[], off: integer, n: integer): integer
     FWRITE("__fwrite"),   // [244] __fwrite(st: byte[], src: byte[], off: integer, n: integer)
@@ -281,7 +281,7 @@ public enum Builtin {
     HEAP_HANDLES("__heapHandles"),   // [268] __heapHandles(): integer
     HEAP_COLLECTIONS("__heapCollections"),   // [269] __heapCollections(): integer
     HEAP_COMPACT("__heapCompact"),   // [270] __heapCompact()
-    MACHINE_GET_ENV("__machineGetEnv"),   // [271] __machineGetEnv(key: string): string
+    MACHINE_GET_ENV("__machineGetEnv", 8),   // [271] __machineGetEnv(key: string): string
     LIBERA_SI_SIN_DESTRUCTORES("__liberaSiSinDestructores"),   // [272] __liberaSiSinDestructores(x: any): boolean
     ORDEN_DESTRUCCION("__ordenDestruccion"),   // [273] __ordenDestruccion(x: any): any[]
     PREPARA_DESTRUCTOR("__preparaDestructor"),   // [274] __preparaDestructor(x: any): integer
@@ -292,12 +292,12 @@ public enum Builtin {
     PULSE_RELEASE("__pulseRelease"),   // [279] __pulseRelease(counterId: integer, pin: integer)
     NP_RELEASE("__npRelease"),   // [280] __npRelease(pin: integer)
     UART_RELEASE("__uartRelease"),   // [281] __uartRelease(bus: integer, tx: integer, rx: integer)
-    STR_COMPARE("__strCompare"),   // [282] __strCompare(a: string, b: string): integer
+    STR_COMPARE("__strCompare", 16, 8),   // [282] __strCompare(a: string, b: string): integer
     STR_NACE("__strNace"),   // [283] __strNace(b: byte[]): string
     FROM_BYTES_I("__fromBytesI"),   // [284] __fromBytesI(b: byte[], ignorarError: boolean): string
-    READ_FILE_I("__readFileI"),   // [285] __readFileI(path: string, ignorarError: boolean): string
+    READ_FILE_I("__readFileI", 12),   // [285] __readFileI(path: string, ignorarError: boolean): string
     FREAD_LINE_I("__freadLineI"),   // [286] __freadLineI(st: byte[], ignorarError: boolean): string
-    SOUND_PLAY("__soundPlay"),   // [287] __soundPlay(path: string)
+    SOUND_PLAY("__soundPlay", 8),   // [287] __soundPlay(path: string)
     SOUND_STOP("__soundStop"),   // [288] __soundStop()
     SOUND_IS_PLAYING("__soundIsPlaying"),   // [289] __soundIsPlaying(): boolean
     SOUND_SET_VOLUME("__soundSetVolume"),   // [290] __soundSetVolume(v: integer)
@@ -309,8 +309,22 @@ public enum Builtin {
 
     public final String bpName;
     public final int id;
+    /** #774 — dónde está cada parámetro string al llamarlo (bytes bajo sp): un null ahí es «referencia nula».
+     *  Los que tratan el null como "" (concatenar, escribir), sin ninguno. */
+    public final int[] cadenas;
 
-    Builtin(String bpName) { this.bpName = bpName; this.id = ordinal(); }
+    Builtin(String bpName, int... cadenas) { this.bpName = bpName; this.id = ordinal(); this.cadenas = cadenas; }
+
+    /** #774 — el nombre del mensaje «referencia nula: <nombre> de un string null»: el BP, sin los __, salvo los que
+     *  despistan (NOMBRE_DE_ERROR en el generador; el mismo texto que builtin_cadenas.h). */
+    public String nombreDeError() {
+        switch (this) {
+            case FOPEN: return "File";
+            case FSTATE_SIZE: return "File";
+            case READ_FILE_I: return "readFile";
+            default: return bpName.startsWith("__") ? bpName.substring(2) : bpName;
+        }
+    }
 
     private static final Map<String, Builtin> BY_NAME = new HashMap<>();
     static {

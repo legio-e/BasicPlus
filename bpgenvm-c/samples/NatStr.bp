@@ -6,11 +6,15 @@
 // MISMA función (bpvm_prims.h); lo que esta prueba vigila ahora son las ENTRADAS: que cada helper le
 // pase a la primitiva lo mismo que su builtin y lance igual. `make test-aotstr` corre el MISMO .mod con
 // el AOT y sin él, con GC en cada alocación, y exige la misma salida, 17 comprobaciones y ningún FALLO.
+//
+// V8 #774 (2-nov) — un string null en charAt, charCodeAt, len y substring es «referencia nula: <primitiva> de
+// un string null», con el AOT como interpretado (antes, los cuatro lo leían como ""). Y un campo string sin
+// valor ya nace "": el null de la Caja se escribe.
 module NatStr
   import Core
 
   public class Caja
-    var etiqueta: string
+    var etiqueta: string := null
     public function Caja()
     end Caja
     public function nula(): string
