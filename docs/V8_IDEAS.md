@@ -4783,6 +4783,31 @@ Caso `SinSigno`; en el caso `Rechazos`, el `uint` que se rechazaba es ahora un `
 previstas, y `test-192` y `test-cls-19`), sin perder ninguna; fallan las mismas 6. `ulong`, `decimal`, `nint` y `nuint`
 siguen fuera (64 pruebas).
 
+### El repaso de lo demás que puse «fuera» (2-nov; por decidir)
+
+Con la pregunta de `int?` —*¿lo tiene BP con otro nombre?*—, lo que clasifiqué yo en `#745` (las lambdas y el entero a
+enum, `#522`, son decisión de Eduardo). Las cuentas, con el lote de las 376 cruzado con el censo: cuántas pruebas lo
+piden; en cuántas es lo único de fuera (subirían al techo si entrase); y de ésas, cuántas no piden nada a JC.
+
+| lo de fuera | lo piden | lo único | y nada de JC | ¿lo tiene BP? |
+|---|---|---|---|---|
+| la reflexión | 304 | 195 | 92 | en parte: una clase de atributo es una clase (39 sólo declaran o usan atributos; `[Conditional]` quita las llamadas, como un `partial` sin cuerpo); y «¿es exactamente de esta clase?» (`o.GetType() == typeof(X)`) se escribe con `is`, porque el traductor conoce todas las clases (unas 18). `Type`, `GetMethod`, `GetCustomAttributes`, no: BP no guarda el nombre de la clase |
+| `ulong`, `decimal`, `nint`, `nuint` | 64 | 35 | 16 | `ulong`: los mismos 64 bits en un `long`, con funciones para comparar, dividir, `>>` y escribir (8); `decimal` y `nint`, no |
+| `goto` | 33 | 21 | 17 | no (15 van a una etiqueta; `goto case`, 2) |
+| los tipos anónimos | 21 | 9 | 7 | sí: una clase que escribe el traductor (sus propiedades, `Equals` y `ToString`) |
+| las fechas de .NET | 19 | 7 | 3 | poco: `now()`, en milisegundos |
+| `checked` | 15 | 5 | 1 | se podría (la cuenta en `long`, y mirar si cabe), para una |
+| interop, `extern`, `unsafe` | 39 | 17 | 7 | no |
+| `dynamic` | 67 | 48 | 11 | no: BP es de tipos estáticos |
+| `yield` | 103 | 72 | 0 | no, y todas piden además genéricos |
+| LINQ | 96 | 20 | 1 | pide lambdas |
+| `async` | 93 | 0 | 0 | pide `Task` y hilos |
+| los hilos de .NET | 105 | 2 | 0 | BP tiene hilos (`Thread`, `Mutex`), pero el de .NET se crea con un delegado: esperan a los delegados |
+
+De Eduardo, como dato: las lambdas, 394 / 238 / 0; el entero a enum, 55 / 21 / 13. **Lo propuesto, por lo que da:** los
+atributos (hasta 39), «¿es exactamente de esta clase?» (unas 18), los tipos anónimos (7) y `ulong` (8). Por decidir
+(Eduardo).
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos

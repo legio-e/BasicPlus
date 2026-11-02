@@ -62,6 +62,14 @@
 >   (`StrCursorBench`, un literal largo y una native). Por decidir también, `#769` y `#770`. **Ojo en ese lote:**
 >   `tanda.py` no lee la marca `// recurso:` —los recursos van en su manifiesto—; si entra `Utf8Sistema`, su fichero
 >   (`bpgenvm-c/samples/utf8sistema/¡año€.txt`) va en los `recursos` de su prueba.
+> - **C# en JC, retomado** (Eduardo: *«Volvemos a la revisión de la compatibilidad entre C# y JC . Hay algo que no
+>   entiendo, ¿ por que tan pocos test migran de C# a JC ?»*): son las pruebas de un compilador, una pasa o no entera,
+>   1106 piden algo de lo de fuera, y a JC le faltan tres piezas grandes (los genéricos propios, los delegados,
+>   `struct`); y el informe del lote es optimista: el traductor no entra en lo que rechaza. Lo de «fuera» que no lo
+>   estaba: `int?` (*«int? es Integer (la clase)»*), con las cajas de BP, **367**; y `uint`, como un `long`
+>   (*«No tenemos uint?»*), **376**; ninguna se cae, y fallan las mismas 6. La herencia múltiple al estilo Java ya entró
+>   con H7.3 (Eduardo lo corrigió: yo la había dado por fuera). El repaso de lo demás que puse fuera, con sus cuentas,
+>   en `V8_IDEAS` §E9: por decidir (los atributos, hasta 39; el tipo exacto, unas 18; los tipos anónimos, 7; `ulong`, 8).
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».
