@@ -1060,14 +1060,14 @@ test-aotcompara: $(LIBOBJ)
 	 if [ "$$r" -ne 4 ]; then echo "  ROJO: los 4 relacionales tenian que llamar al builtin 282 (salen $$r)"; exit 1; fi
 	$(CC) $(CFLAGS) -Isrc test/test_aotcompara.c build/aotcompara/aot_NatCompara.c $(LIBOBJ) \
 	  -o build/test_aotcompara.exe $(LDFLAGS)
-	@echo "--- <, <=, >, >=, == y != entre cadenas en una native (esperado: AOT == interpretado, 490/490, sin FALLO) ---"
+	@echo "--- <, <=, >, >=, == y != entre cadenas en una native (esperado: AOT == interpretado, 494/494, sin FALLO) ---"
 	@timeout 60 ./build/test_aotcompara.exe samples/NatCompara.mod 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotcompara.aot; \
 	 timeout 60 ./build/test_aotcompara.exe samples/NatCompara.mod --interp 2>/dev/null | grep -a -E '^(ok|FALLO) ' > build/aotcompara.int; \
 	 n=$$(grep -c '^ok ' build/aotcompara.aot); \
 	 if grep -q '^FALLO' build/aotcompara.aot build/aotcompara.int; then grep -h '^FALLO' build/aotcompara.aot build/aotcompara.int | head; echo "  ROJO: FALLO"; exit 1; fi; \
 	 if ! cmp -s build/aotcompara.int build/aotcompara.aot; then diff build/aotcompara.int build/aotcompara.aot | head; echo "  ROJO: el AOT no da lo que el interprete"; exit 1; fi; \
-	 if [ "$$n" -ne 490 ]; then tail -3 build/aotcompara.aot; echo "  ROJO: $$n de 490 comprobaciones"; exit 1; fi; \
-	 echo "[status=OK] 490/490 con el AOT, igual que interpretado"
+	 if [ "$$n" -ne 494 ]; then tail -3 build/aotcompara.aot; echo "  ROJO: $$n de 494 comprobaciones"; exit 1; fi; \
+	 echo "[status=OK] 494/494 con el AOT, igual que interpretado"
 
 # V8 #699 (24-oct) — `continue` dentro de un `do … loop c` va a la CONDICIÓN, en el intérprete como en el C del AOT
 # (`do { … } while (c)`). Hasta #699 el intérprete volvía arriba sin mirarla: hacer `native` una función le cambiaba

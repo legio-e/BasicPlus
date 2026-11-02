@@ -1,6 +1,7 @@
 // NatCompara.bp — V8/H5 (#713, 21-oct): <, <=, >, >=, == y != entre cadenas DENTRO de una native.
 //
-// En el intérprete, los relacionales entre cadenas llaman al builtin __strCompare (un memcmp por bytes; null es "").
+// En el intérprete, los relacionales entre cadenas llaman al builtin __strCompare (un memcmp por bytes; un null,
+// «referencia nula», #774).
 // En una native, el AOT llama al MISMO builtin por el despachador común (call_builtin), sin tocar la tabla de helpers
 // ni la ABI; == y != siguen por el helper string_eq. Hasta hoy el AOT escribía un `<` de C entre los dos handles.
 // `make test-aotcompara` corre este .mod con el AOT y sin él (--interp) y exige la misma salida, completa y sin FALLO;
@@ -34,7 +35,7 @@ module NatCompara
     return a != b
   end distinta
 
-  // la referencia, interpretada: carácter a carácter, null como ""
+  // la referencia, interpretada: carácter a carácter (con cadenas; un null, «referencia nula»)
   function compareRef(a: string, b: string): integer
     var la: integer := strlen(a)
     var lb: integer := strlen(b)
@@ -90,10 +91,23 @@ module NatCompara
       endwh
       p += 1
     endwh
-    // sin valor: para ordenar es "", y == sólo la da igual a otra sin valor
+    // sin valor: desde #774 (V8, 2-nov) una global string sin valor nace "" —el compilador le pone el inicializador—,
+    // para ordenar y para == (antes, == sólo la daba igual a otra sin valor: #773)
     mira("< nada", k, menor(nada, "a"), true)
     mira(">= nada", k, mayorIgual(nada, ""), true)
-    mira("== nada", k, igual(nada, ""), false)
+    mira("== nada", k, igual(nada, ""), true)
     mira("== nada nada", k, igual(nada, nada), true)
+    // #774: una variable string a null. == y != no lanzan (null sólo es igual a null); ordenar pide una cadena, y desde
+    // una native el error del builtin sale por call_builtin como cualquier excepción
+    var nulo: string := null
+    mira("== nulo", k, igual(nulo, ""), false)
+    mira("== nulo nulo", k, igual(nulo, nulo), true)
+    mira("!= nulo", k, distinta(nulo, "a"), true)
+    try
+      mira("< nulo", k, menor(nulo, "a"), false)
+      print "FALLO < nulo: sin error"
+    catch e: RuntimeError
+      print "ok < nulo: " + e.msg
+    endtry
   end Main
 end NatCompara

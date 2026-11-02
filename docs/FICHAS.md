@@ -2587,6 +2587,8 @@ así compila y vale `""` (print, concatenación y `len`, `#512`). Así que
 ÚNICA primitiva de cadena de la VM-C con ese salto; `substring` sin valor ya daba `""` en las dos. `StrNulo`, que está
 en la paridad, lleva los dos casos: el string sin valor y `""`. Con la VM-C de antes salían «charAt sin valor=[]» y «NO
 deberia llegar aqui»; con la nueva, las dos VMs dan lo mismo.
+**2-nov (`#774`, V8):** la global sin valor ya nace `""` (el índice fuera de rango, como aquí), y un `string` admite
+`:= null`: `charAt` de un `null` es «referencia nula: charAt de un string null», en las dos VMs y en el AOT.
 
 #### ✅ `#685` — la VM-C corta a 127 caracteres los nombres exportados (`loader.c:458` y `:485`) y el compilador no pone tope a las funciones de módulo: una firma de 142, llamada desde otro módulo, corre en miVM y NO enlaza en la VM-C —paridad rota— (abierta el 10-oct, del verificador 2 del `D1` · **CERRADA el 11-oct**, el commit de `#681`–`#687`)
 
@@ -4608,6 +4610,11 @@ Silencioso en la VM-C (imprime algo y sigue) y ruidoso a destiempo en miVM: salt
 Oráculo en el corpus: `bpgenvm-c/samples/StrNulo.bp` (campo y local nulos concatenados e impresos, `len` = 0, índice
 sobre un array nulo → excepción atrapable en las dos). Paridad 61/61. Si Eduardo prefiere que un nulo sea error en
 vez de vacío, se cambia en las dos VMs a la vez con ese mismo oráculo.
+
+**2-nov (`#774`, V8): la regla de las cadenas cambió**, como decía arriba que podía pasar, con el mismo oráculo
+(`StrNulo`, reescrito): un campo, una property o una variable de módulo `string` sin valor nace `""` (el compilador le
+pone el inicializador), y una variable `string` puede valer `null` escrito. Con un `null`, concatenar y escribir siguen
+como `""`, pero `len` y las demás primitivas que piden una cadena dan «referencia nula». Lo de los arrays, como estaba.
 
 #### ✅ `#508` — `private` se PIERDE en el parser para `var` y `property`: una subclase lee un campo privado, y el error desde fuera lo llama «protegido» (abierta 14-sep, de la matriz de `#492`; H1 — y precondición de B · **CERRADA el 14-sep**, `4a6ea0f4`)
 
@@ -7292,11 +7299,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   get; set; } }`, `class C : B, I, J` (el primer nombre, la base o una interfaz), `@implement{ I }` obligatoria y
   `@override{}` opcional, y varias anotaciones por declaración. El manual de BP ya las tiene: §9.8 (y §10.4 corregido:
   lo retirado son las interfaces de módulo).
+- **`#774` (2-nov).** En la documentación de JC, `string s = null;`: una cadena nunca es `null`, pero una variable
+  `string` puede no referenciar ninguna, como en C#; un campo, una property o una variable de módulo sin valor nace
+  `""`, y una local, indeterminada. Con un `null`: concatenar y escribir, como `""`; `==`, sólo igual a `null`; un
+  `switch`, al `default`; y lo que pide una cadena (`strlen`, `upper`, `<`, los ficheros…), «referencia nula: `upper`
+  de un string null», y una clave de un `Map`, también. El manual de BP ya lo tiene: §5.1 («Una cadena nunca es
+  `null`; una variable `string`, sí puede serlo»).
 - **`Json` (`#725`, 23-oct).** El manual no tiene la librería `Json`; cuando la tenga: `parseJson` sigue tras un
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#774` — `null` en una variable `string`: la variable puede no referenciar ninguna cadena, y una cadena nunca es `null`; las de módulo y de clase sin valor, `""` (Eduardo, 2-nov; abierta el 2-nov; **decidido, con el análisis; el algoritmo, por aprobar**)
+#### ✅ `#774` — `null` en una variable `string`: la variable puede no referenciar ninguna cadena, y una cadena nunca es `null`; las de módulo y de clase sin valor, `""` (Eduardo, 2-nov; abierta el 2-nov; **CERRADA el mismo día**, los tres commits de `#774`: el compilador; las VMs y el AOT; la stdlib, los samples y la documentación)
 
 - **La decisión** (Eduardo, 2-nov): *«una cadena no puede ser null, eso se mantiene. Ahora una variable de tipo
   string si que debería poder no referenciar a ningun string así que var a:string=null; debería ser válido. Y
@@ -7308,7 +7321,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   cadena (`strlen`, `upper`, `charAt`, `substring`, `contains`, los ficheros, la red, la GUI…), un error, «referencia
   nula», como con un objeto `null` (Java y C# coinciden); una clave de un `Map`, error.
 - **Por decidir:** un `switch` sobre un `null` (C#: al `default`; Java: error); `"x" + null` con el `null` escrito tal
-  cual (hoy error a propósito, `#522`); el texto del error.
+  cual (hoy error a propósito, `#522`); el texto del error. **Decidido** (Eduardo: *«OK, adelante»*, a lo propuesto):
+  el `switch`, al `default`, como C#; `"x" + null` escrito tal cual, error de compilación como hasta ahora; el texto,
+  «referencia nula: `upper` de un string null».
 - **Dónde cambia** (analizado el 2-nov):
   - **el compilador** (BP y JC, el mismo árbol): aceptar `null` en una variable `string` (`SemanticAnalyzer`: la
     declaración local, la de módulo y la asignación, donde el `string` cuenta como escalar; los argumentos y el
@@ -7320,8 +7335,46 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     comparan con `""` ya se ponen a `""` en su constructor (`Orm.bp`, `PilaMuro.bp`): nada cambia. `StrNulo` (corpus)
     prueba el «sin valor» de `#512`: se reescribe con lo nuevo. Y se cierra `#773`;
   - **el traductor de C#** (H8): los `null` de las cadenas (56 pruebas; 16 sólo piden eso).
+- **Hecho** (2-nov, con su *«OK, adelante»*), en tres commits:
+  - **el compilador:** el `null` en una variable `string` en todos esos sitios (`BpType`: un `string` acepta el `null`;
+    `==` sigue con el `__strequals` de siempre, que ya decía «`null` sólo es igual a `null`»); y el `""` de lo que no
+    tiene valor (`cadenasNacenVacias`, en el semántico, antes de nada), marcado como implícito para que los escritores
+    BP ↔ JC no lo escriban. También en la pasada de interfaz: el `""` le puede dar a una clase sin constructor uno
+    sintético, y eso es interfaz (`Gui.Component`; sin ello, el proyecto de la stdlib paraba con «la interfaz de 'Gui'
+    cambió entre la pasada de interfaz y la emisión»). Sus hijas lo llaman por el `super()` implícito de siempre;
+  - **las dos VMs y el AOT:** un `null` en un parámetro `string` de un builtin, «referencia nula: `<nombre>` de un
+    string null», antes de entrar. No se escribe en cada builtin: `gen_builtins.py` saca de la firma de `Core.bp`
+    dónde está cada `string` en la pila y lo genera (`Builtin.cadenas`, `builtin_cadenas.h`), y `dispatchBuiltin` y
+    `bpvm_call_builtin` lo miran en la entrada. Fuera, a propósito, `__strCopy` (concatenar) y `__avisaDestructor`
+    (escribe el mensaje de un destructor que lanzó). El nombre, el BP sin los `__`, salvo `File` y `readFile`. Los
+    cuatro atajos del AOT (`strlen`, `charAt`, `charCodeAt`, `substring`), a mano; `check-builtins` mira ahora que lo
+    generado esté al día. La pila de `bpvm_call_builtin`, igual (2128 B con los flags de la Pico, `-fstack-usage`): el
+    error, en una función fría de 112 B;
+  - **la stdlib:** el `Map`, una clave `null` es un error en `put`, `get`, `containsKey` y `remove`, antes del `lock`
+    (hasta hoy, con el `Map` vacío entraba y la operación siguiente fallaba al compararla). Cambian Collections, Core,
+    Gui, IO, Json y Stdlib; la interfaz de Gui también (el constructor de `Component`): lo que la importa se
+    recompila. Lo embebido de las tres familias y `packs/Stdlib.pack`, regenerados;
+  - **los samples:** `StrNulo`, reescrito con la regla nueva; `NatStr` escribe su `null` (su campo ya nace `""`), y
+    `make test-aotstr` da 17/17, el AOT igual que interpretado y que la VM-Java. `NatCompara` (`test-aotcompara`)
+    llevaba escrita la rareza de `#773` (`nada == ""`, `false`): con la regla nueva, `true`; y cuatro comprobaciones más
+    con un `null` escrito (`==` y `!=` no lanzan; `<`, «referencia nula», que sale de la native por `call_builtin`):
+    494/494, el AOT igual que interpretado y que la VM-Java.
+- **La cápsula V6** (lo que compiló V6, en las VMs de hoy): cambia un caso de 59, `GuiWinJson`. Su `Gui` de V6 tenía
+  `Component.name` sin valor (`null`, en V6 «vale `""`») y su `toJson` lo mide: ahora se para al empezar, «referencia
+  nula: strlen de un string null» (por el stderr), y no escribe nada. Eduardo (2-nov): *«Hemos cambiado de criterio
+  con respecto a los strings null así que si, puede haber diferencias con los compilados antiguos (unos pocos nada
+  mas), y en este caso es correcto. Cada uno está haciendo lo suyo correctamente según sus normas pero hemos roto una
+  regla así que eso aparece reflejado»*. Su `.out`, al día (vacío; su `.mod`, sin tocar; java == c), como los de
+  `#600`; la cápsula, 59 PASS.
+- **Medido** (2-nov, una sonda fuera del repo, las dos VMs iguales): `strlen`, `len`, `upper`, `substring`, `charAt`,
+  `contains` (el 2.º), `replace` (el 3.º), `split`, `parseInt`, `<`, `Str.compare`, `readFile` e `IO.File`, el error con
+  su nombre; las cuatro del `Map`, el suyo, y el `Map` sigue usable; `"x" + a + "y"`, `"xy"`; `print a`, vacío; `a ==
+  null`, `true`, `a == ""`, `false`; el `switch`, al `default`; `Exception(a)`, su `msg` se escribe `""` y `== null`.
+- **Lo que queda fuera:** la frontera de un pack. El puente que escribe el AOT para una `native` externa
+  (`string_to_cstr`) le pasa a C un `null` como `""`; cambiarlo es regenerar los puentes de los packs. Sin tocar: por
+  decidir (Eduardo). Y el traductor de C# (H8), lo siguiente.
 
-#### 🔵 `#773` — un string sin valor (un campo, una global) vale `""` al escribirlo, concatenarlo y medirlo, pero `== ""` da `false` (y `==` con otro sin valor, `true`): en las dos VMs (abierta el 2-nov, al mirar los `null` de las cadenas de C#; **sólo análisis**)
+#### ✅ `#773` — un string sin valor (un campo, una global) vale `""` al escribirlo, concatenarlo y medirlo, pero `== ""` da `false` (y `==` con otro sin valor, `true`): en las dos VMs (abierta el 2-nov, al mirar los `null` de las cadenas de C#; **CERRADA el mismo día con `#774`**: lo sin valor ya nace `""`)
 
 - **Cómo sale** (2-nov, una sonda en JC fuera del repo; las dos VMs, iguales): un campo `string campo;` sin valor,
   leído por un método. Se escribe vacío, `strlen` da 0, `"a" + v + "b"` es `"ab"`, `upper(v)` es `""` y
@@ -7332,6 +7385,9 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   quedó fuera.
 - **Lo propuesto, sin hacer:** que `==` y `!=` traten el sin valor como `""`, en las dos VMs (y en el AOT), y censar
   las demás primitivas de cadena con ese caso, como en `#684`. Por decidir (Eduardo).
+- **CERRADA con `#774`** (2-nov), por otro camino: Eduardo decidió que un campo, una property o una variable de módulo
+  `string` sin valor nazca `""` —el compilador le pone el inicializador—, así que ya no hay un «sin valor» que mirar:
+  `v == ""` da `true`. Y una variable `string` a `null` (que ahora se escribe) sólo es igual a `null`.
 
 #### 🔵 `#772` — JC/BP: con dos sobrecargas que encajan subiendo (`f(Object)` y `f(Animal)`, con un `Perro`), la llamada es «ambigua», y Java elige la más específica; y el «usa un cast» del mensaje no se puede escribir, porque JC no deja subir con un cast (abierta el 2-nov, en H8 con `test-346`; **sólo análisis**)
 

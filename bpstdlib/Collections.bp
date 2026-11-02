@@ -291,7 +291,15 @@ module Collections
     end size
 
     // Inserta o actualiza.
+    //
+    // V8 #774 (2-nov) — UNA CLAVE null, UN ERROR, en put, get, containsKey y remove (Eduardo: «una clave de un Map,
+    // error»; Java y C# coinciden). Antes del lock: lanzar con él tomado dejaría el Map cerrado. Hasta hoy, con el Map
+    // vacío entraba (bsearch no compara nada) y la operación siguiente fallaba al compararla. Escrito en cada uno, y no
+    // en un método: uno nuevo cambia la interfaz de la clase (ver remove).
     public function put(key: Object, val: Object)
+      if key == null then
+        throw RuntimeError("referencia nula: Map.put con una clave null")
+      endif
       this.lock.lock()
       var idx: integer := this.bsearch(key)
       if idx >= 0 then
@@ -304,6 +312,9 @@ module Collections
 
     // Devuelve el valor, o null si la clave no existe.
     public function get(key: Object): Object
+      if key == null then   // #774 (ver put)
+        throw RuntimeError("referencia nula: Map.get con una clave null")
+      endif
       this.lock.lock()
       var idx: integer := this.bsearch(key)
       var result: Object := null
@@ -315,6 +326,9 @@ module Collections
     end get
 
     public function containsKey(key: Object): boolean
+      if key == null then   // #774 (ver put)
+        throw RuntimeError("referencia nula: Map.containsKey con una clave null")
+      endif
       this.lock.lock()
       var found: boolean := this.bsearch(key) >= 0
       this.lock.unlock()
@@ -323,6 +337,9 @@ module Collections
 
     // Borra la clave. Devuelve true si existía.
     public function remove(key: Object): boolean
+      if key == null then   // #774 (ver put)
+        throw RuntimeError("referencia nula: Map.remove con una clave null")
+      endif
       this.lock.lock()
       var idx: integer := this.bsearch(key)
       var existed: boolean := false

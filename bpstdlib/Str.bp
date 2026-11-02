@@ -137,7 +137,8 @@ module Str
   end byteAt
 
   // comparar por bytes EN C: el builtin __strCompare de Core (un memcmp en las dos VMs; Eduardo: «hazlo en C y a ver
-  // que tal»). -1/0/1, null es "". El mismo número que en Core: Core no lo hace público para no cambiar su interfaz.
+  // que tal»). -1/0/1; un null, «referencia nula» (#774). El mismo número que en Core: Core no lo hace público para no
+  // cambiar su interfaz.
   function comparaBytes(a: string, b: string): integer
     inline CALL_BUILTIN 282
   end comparaBytes

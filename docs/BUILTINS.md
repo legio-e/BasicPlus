@@ -316,6 +316,18 @@ contra `builtins.c` (el `enum Builtin` de la VM-Java tiene 287 entradas; en V6, 
      helper `allocVm*` que ya lo hace).
    - Setear `tc.allocAnchor = ref` antes de soltar el lock para evitar
      que un GC concurrente libere el ref antes del push al stack BP.
+7. **Un `string` null** (`#774`, V8): una cadena nunca es `null`, pero una variable `string` sí puede no referenciar
+   ninguna. Si un parámetro `string` de un builtin llega a `null`, el builtin no llega a entrar: las dos VMs lanzan
+   antes «referencia nula: `<nombre>` de un string null» (un `RuntimeError` atrapable, como un objeto `null`). No se
+   escribe en cada builtin: `scripts/gen_builtins.py` saca de la firma de `Core.bp` dónde está cada parámetro `string`
+   en la pila (bytes bajo `sp`: un `integer`, un `float` o un `boolean`, 4; un `long`, un `double` o una referencia,
+   8) y lo genera en `Builtin.cadenas` (miVM) y en `bpgenvm-c/src/builtin_cadenas.h` (VM-C), que miran
+   `dispatchBuiltin` y `bpvm_call_builtin`; así un builtin nuevo con un `string` lo trae puesto. El nombre del mensaje
+   es el BP sin los `__` (o el de `NOMBRE_DE_ERROR`: `File`, `readFile`). Fuera, los que tratan el `null` como `""` a
+   propósito (`NULL_ES_VACIA`): `__strCopy` (concatenar) y `__avisaDestructor` (escribe un mensaje). Los cuatro atajos
+   del AOT que no pasan por el despacho (`string_length`, `string_char_at`, `string_char_code_at`,
+   `string_substring`) lo miran a mano, con el mismo texto. `make check-builtins` (en la red) avisa si lo generado no
+   está al día.
 
 ---
 
@@ -427,9 +439,10 @@ mano: la usan los helpers `__strconcat(a, b)` y `__strconcatN(s0 … sN-1)` que 
 byte en bytecode: ~10 ms por concatenación de una cadena de 2 KB en placa.
 
 `src` es una cadena en cualquiera de sus **dos** formas: un handle del heap o la referencia cruda de un literal del
-bloque de datos (`LEA_GLOBAL`) —de cualquier módulo, compilado antes o después—. Una cadena **sin valor** (una global
-o un campo `string` sin inicializar, cuya referencia es 0) cuenta como la cadena vacía (`#512`). Por eso es un builtin
-propio de las cadenas y no `move`, que rechaza lo que no tiene cabecera de heap.
+bloque de datos (`LEA_GLOBAL`) —de cualquier módulo, compilado antes o después—. Una variable `string` a `null` se
+concatena como la cadena vacía (`#512`; desde `#774`, V8, el `null` se escribe —una global o un campo sin valor ya
+nacen `""`— y éste es de los dos builtins que no lo comprueban: regla 7). Por eso es un builtin propio de las cadenas y
+no `move`, que rechaza lo que no tiene cabecera de heap.
 `dst` tiene que ser un array de bytes del heap. Errores (con el mismo texto en las dos VMs): `strCopy: dst es null`,
 `dst no es ref a heap`, `dst apunta a bloque libre`, `dst no es un array de bytes (type=N)`, `fuera de rango (pos=…
 bytes=… dst=…)` — ninguno sale del helper, que reserva justo lo que copia.
@@ -560,7 +573,8 @@ que cuentan: con objetos lo sueltan sus destructores; sin objetos, la red).
 
 Compara dos cadenas **por bytes**, sin signo (0..255), y devuelve -1, 0 o 1. Si una es prefijo de la otra, la más
 corta va antes. En UTF-8 ese es el orden de los caracteres (sus puntos de código): `V8_IDEAS` §E5, «Comparar por
-bytes». Una cadena **sin valor** cuenta como la vacía, como en `Str.compare`. Acepta las dos formas de una cadena (un
+bytes». Un `null`, «referencia nula: strCompare de un string null» (`#774`, V8; antes contaba como la vacía), y lo
+mismo `Str.compare` y `<` entre cadenas. Acepta las dos formas de una cadena (un
 handle del heap o un literal crudo). En la VM-C es un `memcmp`; en la VM-Java, el mismo bucle sobre los bytes, sin
 pasar por un `String` de Java (que cambiaría el UTF-8 mal formado, `#711`).
 
@@ -568,8 +582,9 @@ No lo escribe nadie a mano. En `Core` va sin `public`, para no cambiar su interf
 - `Str.compare`, con su propio `inline CALL_BUILTIN 282`;
 - `<`, `<=`, `>` y `>=` entre dos cadenas: el compilador compara su resultado con 0 (`#713`). En una native, el AOT llama
   al mismo builtin por `call_builtin`, sin tocar la ABI;
-- el contenido de `==` y `!=`: el `__strequals` que escribe el compilador en cada módulo. Sus reglas no cambian: una
-  cadena sin valor sólo es igual a otra sin valor; con las dos con valor y la misma longitud, compara con este builtin.
+- el contenido de `==` y `!=`: el `__strequals` que escribe el compilador en cada módulo. Sus reglas no cambian: `null`
+  sólo es igual a `null` (lo mira antes de llamar a este builtin); con las dos con valor y la misma longitud, compara con
+  este builtin.
 
 Antes, `==` comparaba byte a byte en bytecode (17 instrucciones por byte), y `<` entre cadenas descuadraba la pila. Las
 pruebas: `bpgenvm-c/samples/StrOrden.bp` (la red de paridad) y `make test-aotcompara` (el AOT contra el intérprete).

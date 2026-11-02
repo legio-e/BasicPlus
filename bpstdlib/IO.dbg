@@ -53,90 +53,90 @@ lines
 581 0
 584 304
 598 0
-601 206
-605 207
-620 208
-643 210
-666 212
-689 214
-697 216
-706 217
-732 219
-741 220
-748 221
-756 222
-769 223
-785 224
-795 0
-831 0
-851 0
-867 0
-887 0
-904 0
-920 0
-936 0
-955 0
-972 0
-989 0
-1003 0
-1017 0
-1038 0
-1055 0
-1069 0
-1086 0
-1103 0
-1106 324
-1127 0
-1130 328
-1152 0
-1155 334
-1164 335
-1167 336
-1170 337
-1179 338
-1182 339
-1190 340
-1202 341
-1211 342
-1219 344
-1222 345
-1246 346
-1254 347
-1270 348
-1293 349
-1309 350
-1317 352
-1324 353
-1335 355
-1347 356
-1355 357
-1358 358
-1368 359
-1380 360
-1388 362
-1399 364
-1408 365
-1414 366
-1426 371
-1456 0
-1459 375
-1482 0
-1485 380
-1503 0
-1506 384
-1528 0
-1531 314
-1550 0
-1586 0
-1606 0
-1623 0
-1642 0
-1663 0
-1680 0
-1703 0
-1724 0
-1781 0
-1884 0
+609 206
+613 207
+628 208
+651 210
+674 212
+697 214
+705 216
+714 217
+740 219
+749 220
+756 221
+764 222
+777 223
+793 224
+803 0
+839 0
+859 0
+875 0
+895 0
+912 0
+928 0
+944 0
+963 0
+980 0
+997 0
+1011 0
+1025 0
+1046 0
+1063 0
+1077 0
+1094 0
+1111 0
+1114 324
+1135 0
+1138 328
+1160 0
+1163 334
+1172 335
+1175 336
+1178 337
+1187 338
+1190 339
+1198 340
+1210 341
+1219 342
+1227 344
+1230 345
+1254 346
+1262 347
+1278 348
+1301 349
+1317 350
+1325 352
+1332 353
+1343 355
+1355 356
+1363 357
+1366 358
+1376 359
+1388 360
+1396 362
+1407 364
+1416 365
+1422 366
+1434 371
+1464 0
+1467 375
+1490 0
+1493 380
+1511 0
+1514 384
+1536 0
+1539 314
+1558 0
+1594 0
+1614 0
+1631 0
+1650 0
+1671 0
+1688 0
+1711 0
+1732 0
+1789 0
+1892 0
 vars
 func File.leerLinea 35
 this -24 8 0 ?
@@ -190,55 +190,55 @@ this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
 m 0 4 0 integer
-func __cls_new_File(ss) 795
+func __cls_new_File(ss) 803
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_init_File(ss) 831
+func __cls_init_File(ss) 839
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_m_File#writeByte(i)V 851
+func __cls_m_File#writeByte(i)V 859
 this -24 8 0 ?
 v -16 4 0 integer
-func __cls_m_File#read([B)i 867
+func __cls_m_File#read([B)i 875
 this -28 8 0 ?
 buf -20 8 0 ref
-func __cls_m_File#tell()i 887
+func __cls_m_File#tell()i 895
 this -20 8 0 ?
-func __cls_m_File#skip(i)V 904
+func __cls_m_File#skip(i)V 912
 this -24 8 0 ?
 delta -16 4 0 integer
-func __cls_m_File#seek(i)V 920
+func __cls_m_File#seek(i)V 928
 this -24 8 0 ?
 pos -16 4 0 integer
-func __cls_m_File#path()s 936
+func __cls_m_File#path()s 944
 this -20 8 0 ?
-func __cls_m_File#isOpen()z 955
+func __cls_m_File#isOpen()z 963
 this -20 8 0 ?
-func __cls_m_File#size()i 972
+func __cls_m_File#size()i 980
 this -20 8 0 ?
-func __cls_m_File#flush()V 989
+func __cls_m_File#flush()V 997
 this -20 8 0 ?
-func __cls_m_File#__dtor()V 1003
+func __cls_m_File#__dtor()V 1011
 this -20 8 0 ?
-func __cls_m_File#readBytes(i)[B 1017
+func __cls_m_File#readBytes(i)[B 1025
 this -24 8 0 ?
 n -16 4 0 integer
-func __cls_m_File#readByte()i 1038
+func __cls_m_File#readByte()i 1046
 this -20 8 0 ?
-func __cls_m_File#close()V 1055
+func __cls_m_File#close()V 1063
 this -20 8 0 ?
-func __cls_m_File#eof()z 1069
+func __cls_m_File#eof()z 1077
 this -20 8 0 ?
-func __cls_m_File#write([B)V 1086
+func __cls_m_File#write([B)V 1094
 this -28 8 0 ?
 data -20 8 0 ref
-func TextFile.readLine 1103
+func TextFile.readLine 1111
 this -20 8 0 ?
-func TextFile.readLine$z 1127
+func TextFile.readLine$z 1135
 this -24 8 0 ?
 ignorarError -16 4 0 boolean
-func TextFile.readStr 1152
+func TextFile.readStr 1160
 this -28 8 0 ?
 n -20 4 0 integer
 ignorarError -16 4 0 boolean
@@ -253,52 +253,52 @@ b 44 4 0 integer
 empieza 48 4 0 boolean
 mayor 56 8 0 ?
 j 64 4 0 integer
-func TextFile.readStr$i 1456
+func TextFile.readStr$i 1464
 this -24 8 0 ?
 n -16 4 0 integer
-func TextFile.write$s 1482
+func TextFile.write$s 1490
 this -28 8 0 ?
 s -20 8 0 string
-func TextFile.writeLine 1503
+func TextFile.writeLine 1511
 this -28 8 0 ?
 s -20 8 0 string
-func TextFile.__init 1528
+func TextFile.__init 1536
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_new_TextFile(ss) 1550
+func __cls_new_TextFile(ss) 1558
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_init_TextFile(ss) 1586
+func __cls_init_TextFile(ss) 1594
 this -36 8 0 ?
 path -28 8 0 string
 mode -20 8 0 string
-func __cls_m_TextFile#writeLine(s)V 1606
+func __cls_m_TextFile#writeLine(s)V 1614
 this -28 8 0 ?
 s -20 8 0 string
-func __cls_m_TextFile#readLine()s 1623
+func __cls_m_TextFile#readLine()s 1631
 this -20 8 0 ?
-func __cls_m_TextFile#readLine(z)s 1642
+func __cls_m_TextFile#readLine(z)s 1650
 this -24 8 0 ?
 ignorarError -16 4 0 boolean
-func __cls_m_TextFile#write(s)V 1663
+func __cls_m_TextFile#write(s)V 1671
 this -28 8 0 ?
 s -20 8 0 string
-func __cls_m_TextFile#readStr(iz)s 1680
+func __cls_m_TextFile#readStr(iz)s 1688
 this -28 8 0 ?
 n -20 4 0 integer
 ignorarError -16 4 0 boolean
-func __cls_m_TextFile#readStr(i)s 1703
+func __cls_m_TextFile#readStr(i)s 1711
 this -24 8 0 ?
 n -16 4 0 integer
-func __strconcat 1724
+func __strconcat 1732
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?
 lb 4 4 0 ?
 out 8 8 0 ?
 d 16 4 0 ?
-func __strconcat5 1781
+func __strconcat5 1789
 s0 -52 8 0 ?
 s1 -44 8 0 ?
 s2 -36 8 0 ?
@@ -306,7 +306,7 @@ s3 -28 8 0 ?
 s4 -20 8 0 ?
 out 0 8 0 ?
 d 8 4 0 ?
-func __strequals 1884
+func __strequals 1892
 a -28 8 0 ?
 b -20 8 0 ?
 la 0 4 0 ?

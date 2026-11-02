@@ -1,17 +1,1 @@
-J1: {"type":"Panel","width":480,"height":320,"children":[{"type":"Label","text":"Demo de Forms — Camino A","align":"TOP_MID","y":12},{"type":"Button","text":"Saludar","align":"CENTER","clic":"onSaludar"},{"type":"Checkbox","text":"Activar","align":"BOTTOM_MID","y":-20,"change":"onActivar"}]}
--- arbol tras cargar main.win --
-screen [480x320 align=0 +0,0]
-  panel [480x320 align=0 +0,0]
-    panel [480x320 align=0 +0,0]
-      label "Demo de Forms — Camino A" [-1x-1 align=1 +0,12]
-      button [-1x-1 align=4 +0,0]
-        label "Saludar" [-1x-1 align=0 +0,0]
-      checkbox "Activar" [-1x-1 align=7 +0,-20 val=0]
 
-WIN: {"type":"Window","width":480,"height":320,"children":[{"type":"Panel","width":480,"height":320,"children":[{"type":"Label","text":"Demo de Forms — Camino A","align":"TOP_MID","y":12},{"type":"Button","text":"Saludar","align":"CENTER","clic":"onSaludar"},{"type":"Checkbox","text":"Activar","align":"BOTTOM_MID","y":-20,"change":"onActivar"}]}]}
-J2 == J1: true
-arbol igual: true
-hijos del panel: 3
-hijos del boton (la etiqueta): 1
-boton en JSON: {"type":"Button","text":"Saludar","align":"CENTER","clic":"onSaludar"}
-FIN

@@ -701,14 +701,36 @@ porId.put(<span class="str">"siete"</span>, Integer(<span class="num">70</span>)
   el mismo nombre que el módulo), que ya las encuentra puestas.
 </p>
 <p>
-  Un <code>string</code> global o un campo <code>string</code> sin valor —que nadie ha asignado—
-  vale <code>""</code>: se imprime y se concatena como <code>""</code>, <code>len</code> da 0 y
-  <code>charAt(s, 0)</code> lanza el mismo <code>RuntimeError</code> que con <code>""</code>
-  («charAt: idx fuera de rango 0 (len=0)»), igual en las dos VMs. (Un <code>string</code> es un
-  escalar: no admite <code>null</code>; asignárselo es error de compilación.) Un array global o un
+  Un <code>string</code> global, un campo o una property <code>string</code> sin valor —que nadie ha
+  asignado— vale <code>""</code>, como si se hubiera escrito <code>:= ""</code>: se imprime y se concatena
+  como <code>""</code>, <code>len</code> da 0, <code>== ""</code> da <code>true</code> y <code>charAt(s, 0)</code> lanza
+  el mismo <code>RuntimeError</code> que con <code>""</code> («charAt: idx fuera de rango 0 (len=0)»), igual en las
+  dos VMs. Un array global o un
   campo array sin valor sí es <code>null</code>: <code>len</code> da 0 y un <code>for</code> sobre él no da ninguna
   vuelta, pero indexarlo lanza un <code>RuntimeError</code> (índice fuera de rango), igual en las
   dos VMs; y <code>print</code> no enseña su contenido (de uno sin valor imprime 0).
+</p>
+<p id="string-null">
+  <strong>Una cadena nunca es <code>null</code>; una variable <code>string</code>, sí puede serlo</strong> (<code>#774</code>,
+  V8): <code>var s: string := null</code> es una variable que no referencia ninguna cadena, y lo mismo un
+  parámetro, un campo o lo que devuelve una función. Con ella, como en C#:
+</p>
+<ul>
+  <li>concatenarla y escribirla, como <code>""</code>: <code>"x" + s + "y"</code> es <code>"xy"</code>, y
+      <code>print s</code> escribe una línea vacía;</li>
+  <li><code>==</code> y <code>!=</code>: <code>null</code> sólo es igual a <code>null</code> (<code>s == null</code>,
+      <code>true</code>; <code>s == ""</code>, <code>false</code>);</li>
+  <li>un <code>switch</code> sobre ella va al <code>default</code>;</li>
+  <li>lo que pide una cadena —<code>len</code>, <code>upper</code>, <code>charAt</code>, <code>substring</code>,
+      <code>contains</code>, <code>&lt;</code> y los demás de orden, <code>Str.compare</code>, los ficheros, la red, la
+      GUI…— lanza un <code>RuntimeError</code> atrapable, «referencia nula: <code>len</code> de un string null» (con
+      el nombre de la primitiva), como un objeto <code>null</code>; y una clave <code>null</code> en un <code>Map</code>,
+      «referencia nula: Map.put con una clave null».</li>
+</ul>
+<p>
+  Una <em>local</em> <code>string</code> sin valor no vale <code>null</code> ni <code>""</code>: es indeterminada, y leerla
+  antes de darle valor es un error de compilación (abajo). Y el literal <code>null</code> escrito tal cual en una
+  concatenación (<code>"x" + null</code>) sigue siendo un error de compilación.
 </p>
 <p>
   <strong>Una variable local se inicializa antes de leerla.</strong> Una <code>var</code> de módulo sin
@@ -779,8 +801,9 @@ porId.put(<span class="str">"siete"</span>, Integer(<span class="num">70</span>)
   <tr><td>Comparación</td><td><code>== != &lt; &lt;= &gt; &gt;=</code>. Entre dos cadenas comparan el
       <strong>texto</strong>: <code>==</code> y <code>!=</code>, el contenido; <code>&lt; &lt;= &gt; &gt;=</code>, el orden
       alfabético por punto de código (el de los bytes de UTF-8: <code>"Z" &lt; "a"</code>, <code>"ab" &lt; "abc"</code>,
-      <code>"z" &lt; "ñ"</code>), como <code>Str.compare</code>. Una cadena sin valor ordena como <code>""</code>, pero
-      con <code>==</code> sólo es igual a otra sin valor</td></tr>
+      <code>"z" &lt; "ñ"</code>), como <code>Str.compare</code>. Con una variable <code>string</code> a <code>null</code>,
+      <code>==</code> sólo es igual a otra <code>null</code>, y el orden lanza «referencia nula»
+      (<a href="#string-null">§ la variable null</a>)</td></tr>
   <tr><td>Lógicos</td><td><code>and or not</code></td></tr>
   <tr><td>Asignación</td><td><code>:= += -= *= /= mod= &amp;= |= xor= shl= shr=</code> (los compuestos, abajo)</td></tr>
   <tr><td>Ternario</td><td><code>iif(condición, a, b)</code>: el valor de <code>a</code> si la condición se cumple, y si

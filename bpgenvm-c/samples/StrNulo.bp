@@ -6,6 +6,12 @@
 // inicializar —los objetos nacen a cero—, que es lo que este sample sigue comprobando.
 // miVM moría aquí con «No space in heap» (leía memory[0] como longitud) y la VM-C
 // imprimía vacío: paridad rota desde siempre, cazada por el oráculo de #492.
+//
+// V8 #774 (2-nov) — CAMBIA LA REGLA (Eduardo: «una cadena no puede ser null, eso se mantiene. Ahora una variable de
+// tipo string si que debería poder no referenciar a ningun string»): un campo, una property o una variable de módulo
+// string sin valor nace "" (y `== ""` da true: #773); el null se escribe (`:= null`), y una variable lo puede tener.
+// Con él, como en C#: concatenar y escribir, como ""; `==`, null sólo es igual a null; lo que pide una cadena (len,
+// charAt…), «referencia nula: <primitiva> de un string null», atrapable. Un array sin valor sigue siendo nulo (#512).
 module StrNulo
   import Core
 
@@ -17,9 +23,9 @@ module StrNulo
     public function describe(): string
       return "[" + this.etiqueta + "]"
     end describe
-    public function nula(): string
+    public function etiquetaDe(): string
       return this.etiqueta
-    end nula
+    end etiquetaDe
     public function datosLen(): integer
       return len(this.datos)
     end datosLen
@@ -28,12 +34,18 @@ module StrNulo
     end primero
   end Caja
 
+  var nombre: string
+
+  function nula(): string
+    return null
+  end nula
+
   public function main()
     var c: Caja := Caja()
-    var s: string := c.nula()
+    var v: string := c.etiquetaDe()
     print c.describe()
-    print "s=" + s + "|len=" + len(s)
-    print "concat de dos nulos=" + (s + s) + "|"
+    print "campo sin valor: [" + v + "] len=" + len(v) + " == vacia: " + (v == "") + " == null: " + (v == null)
+    print "global sin valor: [" + nombre + "] == vacia: " + (nombre == "")
     print "datos len=" + c.datosLen()
     try
       print c.primero()
@@ -41,21 +53,34 @@ module StrNulo
     catch e: Exception
       print "indice sobre nulo: excepcion atrapada"
     endtry
-    // #684 (11-oct): charAt de un string sin valor es charAt de "": el índice, fuera de rango —
-    // la VM-C se saltaba la comprobación y devolvía "" (el programa seguía), miVM lanzaba.
+    var s: string := nula()
+    print "s=" + s + "|"
+    print "concat de dos nulos=" + (s + s) + "|"
+    print s
+    print "null == null: " + (s == nula()) + "  null == vacia: " + (s == "") + "  null != vacia: " + (s != "")
     try
-      print "charAt sin valor=[" + charAt(s, 0) + "]"
+      print "len=" + len(s)
       print "NO deberia llegar aqui"
     catch e: RuntimeError
-      print "charAt sin valor: " + e.msg
+      print "len de null: " + e.msg
+    endtry
+    // #684 (11-oct): charAt de un string sin valor era charAt de "". Desde #774, el sin valor ya es "" (el índice,
+    // fuera de rango), y el null, «referencia nula».
+    try
+      print "charAt=[" + charAt(s, 0) + "]"
+      print "NO deberia llegar aqui"
+    catch e: RuntimeError
+      print "charAt de null: " + e.msg
     endtry
     try
-      print "charAt vacio=[" + charAt("", 0) + "]"
+      print "charAt vacio=[" + charAt(v, 0) + "]"
     catch e: RuntimeError
       print "charAt vacio: " + e.msg
     endtry
     s := "ya"
     print "s=" + s
+    s := null
+    print "s otra vez null: " + (s == null)
   end main
 
 end StrNulo

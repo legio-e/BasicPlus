@@ -84,6 +84,20 @@
 >   Java, y el traductor escribe lo que quiere decir C#): el tema 1, **103**; Mono, **435**. Falla una más, `test-346`,
 >   que tapaba el `as`: abierta `#772` (dos sobrecargas que encajan subiendo, «ambigua» en JC; Java elige la más
 >   específica, y el cast que sugiere el mensaje no se puede escribir).
+> - **Los `null` de las cadenas: `#773` y `#774`, cerradas** (Eduardo: *«una cadena no puede ser null, eso se mantiene.
+>   Ahora una variable de tipo string si que debería poder no referenciar a ningun string»*; de las expresiones, *«como
+>   lo hace c#»*; *«OK, adelante»*), en tres commits: el compilador; las VMs y el AOT; la stdlib, los samples y la
+>   documentación. Una variable `string` puede valer `null`, y lo de módulo o de clase sin valor nace `""`. Con un
+>   `null`: concatenar y escribir, como `""`; `==`, sólo igual a `null`; el `switch`, al `default`; y lo que pide una
+>   cadena, «referencia nula: `upper` de un string null» (dónde mirar lo genera `gen_builtins.py` de las firmas de
+>   `Core.bp`; las dos VMs, y el AOT, igual); una clave de un `Map`, también. La pila de `bpvm_call_builtin`, igual.
+>   La red cazó dos cosas, las dos la regla vieja escrita en una prueba: la cápsula V6 (`GuiWinJson`, cuya `Gui` de V6
+>   mide un nombre sin valor, ahora se para; Eduardo: *«hemos roto una regla así que eso aparece reflejado»*: su `.out`,
+>   al día) y `NatCompara` (la rareza de `#773`). Con eso, la red y `check-jc`, VERDES (la paridad, 184 PASS; la
+>   cápsula, 59; las pruebas de C, 111/111; JC, 180). Queda fuera la frontera de un pack (un `null` llega a C como `""`).
+> - **Lo siguiente** (Eduardo, a revisar el traductor de C#: *«OK si»*): los `null` de las cadenas en el traductor
+>   —quitar sus cinco rechazos; escribir `= null` en los campos y propiedades `string` sin valor, que en C# nacen
+>   `null` y en JC ahora `""`; y lo de `CsSystem` que en C# acepta un `null` sin lanzar—.
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».
