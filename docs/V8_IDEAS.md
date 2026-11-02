@@ -4838,6 +4838,28 @@ varios a la vez, una lista; y un evento de C#, un campo de ese tipo: `+=` añade
 uno allí mismo. Las lambdas siguen fuera. Lo que da: 53 pruebas no piden nada de fuera y de JC sólo los delegados (20
 con eventos), y más detrás de los genéricos. Por decidir (Eduardo).
 
+### `++`, `--` y `=` dentro de una expresión: partirla en dos (2-nov; por decidir)
+
+Eduardo: *«A ver v++ si lo queremos pasar a JC tendríamos que partir la expresión en 2. Con un poco de trabajo se
+podría hacer.»* JC (y BP) no deja que una expresión cambie una variable; el traductor puede sacar el cambio a una
+sentencia propia —detrás, o delante con una temporal— y dejar en su sitio el valor. Es exacto (la segunda regla de
+fondo: no cambia lo que se calcula ni su orden) cuando nada más de la misma sentencia lee lo que cambia y, si es un
+campo, una propiedad o un elemento, ninguna otra llamada de la sentencia podría verlo; bajo `&&`, `||` o `?:`, que
+sólo calculan a veces, no.
+
+| nivel | qué | en C# → en JC |
+|---|---|---|
+| 1 | una variable local, en una sentencia | `int j = i++;` → `int j = i; i++;` · `return i++;` → `int t = i; i++; return t;` · `if ((x = Lee()) != null)` → `x = Lee(); if (x != null)` |
+| 2 | una asignación encadenada | `a = b = 0;` → `b = 0; a = b;` (con una propiedad, por una temporal) |
+| 3 | una variable, en la condición de un bucle | `while (n-- > 0) {…}` → `while (true) { int t = n; n--; if (!(t > 0)) break; … }` |
+| 4 | un campo, una propiedad o un elemento, sin otras llamadas | `return this.cuenta++;` → `int t = this.cuenta; this.cuenta++; return t;` |
+
+**Medido** (Roslyn, 2-nov; el lote de las 376): 79 pruebas lo piden, en 206 sitios; por su sitio más difícil, con los
+niveles 1 a 4 quedan **54** (17 + 17 + 3 + 17). De las 16 a las que de JC sólo les falta esto (y nada de fuera), las 16.
+Lo que queda: lo que se vuelve a leer en la misma sentencia (`a[i] = i++`; 9 pruebas), bajo `&&`, `||` o `?:` (1), los
+parámetros `ref`/`out` y los indexadores (14), y el valor de un campo (`static int a = b = 5;`: no hay sentencia donde
+ponerlo). Por decidir (Eduardo).
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
