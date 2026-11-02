@@ -7296,6 +7296,17 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#771` — comparar un evento con `null` (`onClick != null`, en su clase) pasa el semántico, y el emisor lo para con un mensaje interno: «símbolo no soportado en load: EventSymbol» (abierta el 2-nov, al mirar los eventos de C# en JC; **sólo análisis**)
+
+- **Cómo sale** (2-nov, una sonda en JC fuera del repo, con el compilador de hoy): en una clase con
+  `event onClick(Boton b, int veces);`, `public function bool tiene() { return onClick != null; }`. El semántico, sin
+  diagnósticos; el emisor: «-- Errores del emisor mivm (1) -- símbolo no soportado en load: EventSymbol», y no escribe
+  el `.mod`. En BP (el mismo árbol), sin probar.
+- **Lo que debería pasar:** un error del semántico que diga lo que pasa, en su línea —un evento no es un valor: se
+  suscribe asignándole `obj::metodo` y se dispara con `raise`—, como el de `::` fuera de una suscripción; o, si se
+  quiere poder preguntar si tiene suscriptor, que funcione. **Lo propuesto, sin hacer:** el error en el semántico. Por
+  decidir (Eduardo).
+
 #### 🔵 `#770` — `sleep(0)` no le da el turno a un destructor pendiente en la VM-C, y en la VM-Java sí: `gc()`, `sleep(0)` y abrir otra vez un `File` que murió sin cerrar va en la VM-Java y en la VM-C da «ya está abierto» (abierta el 2-nov, al analizar `#767`; **sólo análisis**)
 
 - **Medido** (2-nov, una copia de `FileCursor` fuera del repo, las dos VMs de hoy): con `sleep(0)` entre `gc()` y la

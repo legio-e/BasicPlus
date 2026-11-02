@@ -4808,6 +4808,36 @@ De Eduardo, como dato: las lambdas, 394 / 238 / 0; el entero a enum, 55 / 21 / 1
 atributos (hasta 39), «¿es exactamente de esta clase?» (unas 18), los tipos anónimos (7) y `ulong` (8). Por decidir
 (Eduardo).
 
+### Los eventos de C# frente a los de JC (2-nov; por decidir)
+
+Eduardo: *«Una cosa, eventos y delegados. Eventos ya tenemos, ¿que problemas tenemos con la traducción de eventos C# a
+eventos JC?»*
+
+**Son dos mecanismos distintos con el mismo nombre.** En C#, un evento es un campo de un tipo delegado —una lista de
+métodos—: dispararlo LLAMA a cada suscriptor allí mismo, en orden, antes de seguir; `+=` añade y `-=` quita; se
+suscribe cualquier método (static, privado, una lambda), y el delegado puede devolver un valor. En BP y JC (§15 del
+manual), un evento es un AVISO, hecho para la GUI: `raise` lo encola y sigue, y el manejador corre después, entre
+cuantos. Tiene UN suscriptor (suscribirse es asignar, `b.onClick = p::pulsado`, y otro lo sustituye), que es el método
+de un objeto (no uno static), marcado `function event` o público, con 4 parámetros como mucho y sin valor de vuelta; y
+no se le puede preguntar si tiene suscriptor (`#771`).
+
+**Probado** (una sonda en JC, fuera del repo, en las dos VMs, iguales): justo tras el `raise`, el manejador no ha corrido
+(en C#, sí); corre tras un `sleep(1)`; y una segunda suscripción sustituye a la primera.
+
+**Lo que hacen las pruebas** (Roslyn, sobre las 2322 válidas): de las 539 que no se traducen y piden «delegados y
+eventos», sólo 82 declaran eventos; las otras 457 usan delegados sin eventos —en una variable, un parámetro,
+`new D(m)`, llamándolos—, y a eso un evento de JC no llega. De las 82: 29 con lambdas (fuera), 29 con el `EventHandler`
+de .NET, 23 con delegados como valor, 21 con su `add`/`remove`, 20 virtuales o abstractos, 16 en una interfaz, 12 que
+devuelven un valor, 12 con un manejador static, 11 eventos static…; suscriben el método de un objeto, 3; y sólo 6 tienen
+la forma de un evento de JC, y ésas ni se suscriben ni se disparan: sólo lo declaran.
+
+**Lo que encajaría** (propuesto, sin hacer): los delegados como objetos, como Java antes de las lambdas, con lo que JC ya
+tiene (las interfaces de H7.3). Un tipo delegado, una interfaz con su `Invoke`; un método usado como valor (`obj.M`,
+`new D(obj.M)`, uno static), una clase pequeña que escribe el traductor, que guarda el objeto y llama a su método;
+varios a la vez, una lista; y un evento de C#, un campo de ese tipo: `+=` añade, `-=` quita, y dispararlo llama a cada
+uno allí mismo. Las lambdas siguen fuera. Lo que da: 53 pruebas no piden nada de fuera y de JC sólo los delegados (20
+con eventos), y más detrás de los genéricos. Por decidir (Eduardo).
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
