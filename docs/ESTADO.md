@@ -80,7 +80,10 @@
 >   tema 1, **97**; Mono, **414**; y de paso, un `for` sin variable, sin el `if (true)` (`test-25`). Lo siguiente del
 >   tema 1: los formatos (`{0:X}`, `{0,5}`). Hechos (*«OK, adelante»*): el ancho, el hexadecimal y `0.00`, en `CsSystem`;
 >   el tema 1, **99**; Mono, **419**. Lo siguiente: lo pequeño de JC (`as`, una constante estrecha en un argumento, el
->   «Color Color», `1__000`), que toca el lenguaje: la forma, de Eduardo.
+>   «Color Color», `1__000`), que toca el lenguaje: la forma, de Eduardo. Hecho en el traductor (*«si»*: JC hace lo que
+>   Java, y el traductor escribe lo que quiere decir C#): el tema 1, **103**; Mono, **435**. Falla una más, `test-346`,
+>   que tapaba el `as`: abierta `#772` (dos sobrecargas que encajan subiendo, «ambigua» en JC; Java elige la más
+>   específica, y el cast que sugiere el mensaje no se puede escribir).
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».

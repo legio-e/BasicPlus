@@ -1,0 +1,98 @@
+module CsPequenos
+{
+   import CsSystem;
+
+   enum Color_
+   {
+      Rojo = 0,
+      Verde = 1
+   }
+
+   class Animal
+   {
+      public function string Nombre()
+      {
+         return "animal";
+      }
+   }
+
+   class Perro : Animal
+   {
+      @override{}
+      public function string Nombre()
+      {
+         return "perro";
+      }
+   }
+
+   class Pintor
+   {
+      public Color_ Color { get; set; }
+      public function bool EsRojo()
+      {
+         return this.Color == Color_.Rojo;
+      }
+   }
+
+   class Programa
+   {
+      private static function int Cuenta(byte b)
+      {
+         return b * 2;
+      }
+      private static function short Corto()
+      {
+         return ((short) 7);
+      }
+      public static function int Main()
+      {
+         Object o = new Perro();
+         Perro p = (o is Perro ? (Perro) o : null);
+         if (p == null || p.Nombre() != "perro")
+         {
+            return 1;
+         }
+         Object nada = new Object();
+         if ((nada is Animal ? (Animal) nada : null) != null)
+         {
+            return 2;
+         }
+         Animal a = p;
+         if (a.Nombre() != "perro")
+         {
+            return 3;
+         }
+         Object caja = new Integer(5);
+         Integer ent = (caja is Integer ? (Integer) caja : null);
+         if (!CsSystem.Nullable_Igual(ent, new Integer(5)))
+         {
+            return 4;
+         }
+         if (Programa.Cuenta(((byte) 5)) != 10 || Programa.Corto() != 7)
+         {
+            return 5;
+         }
+         Pintor pintor = new Pintor();
+         pintor.Color = Color_.Rojo;
+         if (!pintor.EsRojo())
+         {
+            return 6;
+         }
+         int mil = 1000;
+         if (mil != 1000)
+         {
+            return 7;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Programa.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

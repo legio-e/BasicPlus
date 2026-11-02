@@ -88,6 +88,15 @@ namespace Cs2Jc
             foreach (var u in raiz.DescendantNodes().OfType<ExternAliasDirectiveSyntax>())
                 Rechaza(u, Porque.Fuera(Porque.Interop));
 
+            // El «Color Color» de C# (H8, tema 1): un tipo que se llama como una variable, un campo, una propiedad o un
+            // parámetro del programa lleva un `_` detrás (NombreTipo); en JC, como en Java, la variable taparía al tipo.
+            foreach (var n in raiz.DescendantNodes())
+            {
+                if (n is VariableDeclaratorSyntax v) nombresDeValor.Add(v.Identifier.ValueText);
+                else if (n is PropertyDeclarationSyntax p) nombresDeValor.Add(p.Identifier.ValueText);
+                else if (n is ParameterSyntax ps) nombresDeValor.Add(ps.Identifier.ValueText);
+            }
+
             var tipos = new List<INamedTypeSymbol>();
             foreach (var d in raiz.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
                 if (m.GetDeclaredSymbol(d) is INamedTypeSymbol s && !tipos.Contains(s, SymbolEqualityComparer.Default))
@@ -691,9 +700,17 @@ namespace Cs2Jc
                 t.Avisos.Add("renombrado: " + n + " → " + n + "_ (una clase de Core)");
                 n += "_";
             }
+            else if (nombresDeValor.Contains(n))
+            {
+                t.Avisos.Add("renombrado: " + n + " → " + n + "_ (un tipo que se llama como una variable: el «Color Color» de C#)");
+                n += "_";
+            }
             nombresDeTipo[o] = n;
             return n;
         }
+
+        /// Los nombres de las variables, los campos, las propiedades y los parámetros del programa (el «Color Color»).
+        readonly HashSet<string> nombresDeValor = new HashSet<string>();
 
         /// El nombre de una clase delante de un miembro estático (`Foo.x`). Si a la vista hay una variable, un campo o
         /// una propiedad que se llama igual (el «Color Color» de C#: `Foo Foo; … Foo.x`), JC la toma por ella.

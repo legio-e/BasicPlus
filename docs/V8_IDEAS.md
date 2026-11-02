@@ -4875,7 +4875,7 @@ prueba, con dos scripts de la carpeta temporal (`temas_hoy.py`, `tema1.py`).
 | 1 | los atributos: una clase de atributo, una clase más; `[Conditional]`, quitar sus llamadas | el traductor | +9 | 2-nov: **95** |
 | 2 | `++` partido, los niveles 1 a 4 (arriba) | el traductor | +2 | 2-nov: **97** |
 | 3 | los formatos `{0:X}` y `{0,5}` | `CsSystem` | +2 | 2-nov: **99** |
-| 4 | lo pequeño de JC: `as`, una constante estrecha en un argumento, el «Color Color», `1__000` | el compilador | +4 | |
+| 4 | lo pequeño de JC: `as`, una constante estrecha en un argumento, el «Color Color», `1__000` | el traductor (JC, como Java) | +4 | 2-nov: **103** |
 | 5 | el tipo exacto, `o.GetType() == typeof(X)` | el traductor | hasta +4 | |
 | 6 | la E/S de .NET y lo demás de la biblioteca | `CsSystem` | +3 a +5 | |
 
@@ -4913,6 +4913,15 @@ negativo, en complemento a dos: 8 cifras un int, 16 un long, como .NET; uno estr
 traductor, en `$"…"` y en `Console.WriteLine`/`string.Format`, con la expresión sin su caja; en una cadena, un bool o
 un char, que no tienen formatos, ninguno (.NET lo ignora); los demás (`N`, `F2`, `D5`, las fechas…), todavía «le falta
 a JC: formatos». Caso `Formatos`. **Mono: 419** (+5: las 5), sin perder ninguna; fallan las mismas 6. **El tema 1: 99
+de 141.**
+
+**4. Lo pequeño de JC, hecho en el traductor** (Eduardo: *«si»*, a hacerlo ahí y no en el lenguaje). En los cuatro, JC
+hace lo que Java, y el traductor escribe lo que quiere decir C#: `x as T`, `(x is T ? (T) x : null)` (subir, el mismo
+objeto; un `T?` de una caja, la caja; `x`, sin calcular nada); una constante estrecha en un argumento o un `return`,
+con su conversión escrita, `((byte) 5)`; un tipo que se llama como una variable, un campo, una propiedad o un
+parámetro (el «Color Color»), con un `_` detrás y su aviso, como las palabras reservadas; y `1__000`, `1000`. Caso
+`Pequenos` (y `RechazosJc`, al día: esas cuatro ya no se rechazan). **Mono: 435** (+16), sin perder ninguna; falla una
+más, `test-346`, que tapaba el `as`: dos sobrecargas que encajan subiendo, «ambigua» en JC (`#772`). **El tema 1: 103
 de 141.**
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)

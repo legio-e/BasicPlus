@@ -23,11 +23,14 @@ namespace Cs2Jc
             if (conv.IsNullable) return ConversionNullable(e, m.GetTypeInfo(e).Type, m.GetTypeInfo(e).ConvertedType);   // un T?
             if (conv.IsEnumeration) return Rechaza(e, Porque.Fuera(Porque.EnteroAEnum));      // `Color c = 0;`
             if (conv.IsMethodGroup) return Rechaza(e, Porque.H7(Porque.Delegados));
-            // una constante que cabe en un byte, un short…: JC la acepta en una declaración o una asignación, no en un
-            // argumento ni en un return
+            // una constante que cabe en un byte, un short…: JC (como Java) la acepta en una declaración o una asignación,
+            // no en un argumento ni en un return; ahí, con su conversión escrita, `((byte) 5)` (H8, tema 1)
             if (conv.IsConstantExpression && EsEstrecho(m.GetTypeInfo(e).ConvertedType)
                 && (e.Parent is ArgumentSyntax || e.Parent is ReturnStatementSyntax || e.Parent is ArrowExpressionClauseSyntax))
-                return Rechaza(e, Porque.H7(Porque.ConstanteEstrecha));
+            {
+                string v = ExprBase(e);
+                return v == Hueco ? Hueco : "((" + Tipo(m.GetTypeInfo(e).ConvertedType, e) + ") " + v + ")";
+            }
             return ExprBase(e);
         }
 
@@ -382,7 +385,7 @@ namespace Cs2Jc
                     if (v is uint u) return u.ToString(System.Globalization.CultureInfo.InvariantCulture) + "L";   // un uint es un long
                     if (v is ulong || v is decimal) return Rechaza(l, Porque.Fuera(Porque.SinSigno));
                     string txt = l.Token.Text;
-                    if (GuionesQueJcNoLee(txt)) return Rechaza(l, Porque.H7(Porque.Guiones));
+                    if (GuionesQueJcNoLee(txt)) txt = txt.Replace("_", "");          // `1__000` es `1000` (H8, tema 1)
                     return txt.StartsWith(".") ? "0" + txt : txt;      // `.5`: el lexer de JC quiere la cifra delante
                 }
                 case SyntaxKind.NullLiteralExpression when EsCadena(m.GetTypeInfo(l).ConvertedType):
@@ -617,7 +620,7 @@ namespace Cs2Jc
             if (m.GetOperation(b) is IBinaryOperation bo && EsOperacionNullable(bo)) return BinariaNullable(b, bo);
             switch (b.Kind())
             {
-                case SyntaxKind.AsExpression:
+                case SyntaxKind.AsExpression: return Como(b);
                 case SyntaxKind.CoalesceExpression:
                     return RechazaNodo(b);
                 case SyntaxKind.UnsignedRightShiftExpression:
@@ -676,6 +679,33 @@ namespace Cs2Jc
             // lo que da un uint: recortado a sus 32 bits donde C# da la vuelta (SinSigno.cs)
             if (EsUInt(m.GetTypeInfo(b).Type) && BinariaUInt(b) is string u) return u;
             return Expr(b.Left) + " " + b.OperatorToken.Text + " " + Expr(b.Right);
+        }
+
+        /// `x as T` (H8, tema 1; JC, como Java, no tiene `as`): `(x is T ? (T) x : null)`; si `x` ya es un T (subir), `x`.
+        /// `x` va dos veces, así que tiene que no calcular nada. Un T? de una caja de BP: `(x is Integer ? (Integer) x :
+        /// null)`. Una cadena (en BP no es un objeto) o un tipo de .NET, todavía no.
+        string Como(BinaryExpressionSyntax b)
+        {
+            var t = m.GetTypeInfo(b.Right).Type;
+            var de = m.GetTypeInfo(b.Left).Type;
+            if (t == null || de == null || de.IsValueType || EsCadena(t) || EsCadena(de) || !EsSimple(b.Left))
+                return Rechaza(b, Porque.H7(Porque.As));
+            string tipo;
+            if (EsNullable(t))
+            {
+                if (ClaseDeCaja(DeNullable(t)) == null || EsUInt(DeNullable(t))) return Rechaza(b, Porque.H7(Porque.As));
+                tipo = CajaDeNullable(t);
+            }
+            else if (t.SpecialType == SpecialType.System_Object || (t is INamedTypeSymbol nt && (DelPrograma(nt) || ExcepcionJc(nt) != null)))
+            {
+                // subir: el mismo objeto (o null), como la conversión hacia arriba, que JC no escribe
+                if (m.ClassifyConversion(b.Left, t).IsImplicit) return Expr(b.Left);
+                tipo = Tipo(t, b.Right);
+            }
+            else return Rechaza(b, Porque.H7(Porque.As));
+            if (tipo == Hueco) return Hueco;
+            string x = Atomo(b.Left);
+            return "(" + x + " is " + tipo + " ? (" + tipo + ") " + x + " : null)";
         }
 
         string Prefijo(PrefixUnaryExpressionSyntax pu)

@@ -29,7 +29,7 @@ class Despues
 
 class Programa
 {
-    static sbyte Uno() { return 1; }                           // le falta a JC: una constante en un return estrecho
+    static sbyte Uno() { return 1; }                           // ya se traduce (H8): ((sbyte) 1)
     static int Doble(short s) { return s * 2; }
 
     static int Main()
@@ -38,10 +38,10 @@ class Programa
         bool c = a & b;                                        // le falta a JC: & sobre bool
         c |= b;                                                // le falta a JC: |= sobre bool
         Foo Foo = null;
-        int x = Foo.X;                                         // le falta a JC: el Color Color
-        int y = Doble(3);                                      // le falta a JC: una constante en un argumento estrecho
+        int x = Foo.X;                                         // ya se traduce (H8): la clase, Foo_
+        int y = Doble(3);                                      // ya se traduce (H8): ((short) 3)
         string s = null;                                       // le falta a JC: null en una cadena
-        int z = 1__000;                                        // le falta a JC: los _ de C#
+        int z = 1__000;                                        // ya se traduce (H8): 1000
         return 0;
     }
 
