@@ -56,6 +56,12 @@
 >   destructor, entre cuantos, desde `#668`— y la red pide el código de salida de la marca `// salida:`, o 0. Abiertas
 >   `#769` (`test-trazasbus`, rojo una vez y sin reproducir) y `#770` (`sleep(0)` no da el turno al destructor
 >   pendiente en la VM-C). La red y `check-jc`, VERDES.
+> - **Queda, de las cadenas:** `#735` (la longitud en caracteres, guardada; por decidir), `#730` (la biblioteca de
+>   cadenas en C; la forma, por decidir) y `#768` (cuando toque); con el próximo lote de placas, `#736` (la
+>   concatenación, a decidir con la medida de la Metro delante), `#737`, `#738`, `#739` y la medida de `#731`–`#733`
+>   (`StrCursorBench`, un literal largo y una native). Por decidir también, `#769` y `#770`. **Ojo en ese lote:**
+>   `tanda.py` no lee la marca `// recurso:` —los recursos van en su manifiesto—; si entra `Utf8Sistema`, su fichero
+>   (`bpgenvm-c/samples/utf8sistema/¡año€.txt`) va en los `recursos` de su prueba.
 >
 > **1-nov** — **H7.3, las interfaces de clase en JC y en BP (`#756`), hecho** (Eduardo: *«Continuamos con la
 > interfaces»*), en el orden de `V8_IDEAS` §E10; lo hecho y lo medido, en §E10, «Hecho (1-nov)».
