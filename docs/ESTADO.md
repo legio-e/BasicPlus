@@ -148,6 +148,15 @@
 >   `.elf` de la imagen que llevan la C3, la C5 y la C6 (la del lote de esta mañana), así que el `nm` de sus packs
 >   sellados ya no se puede hacer contra él: mirar `packRamBase` antes y después de grabar, y pedir en el mismo OK el
 >   regrabado de sus packs nativos (lo de `regrabar-packs-sellados`).
+> - **`#730`, el paso 2, hecho** (*«OK, probamos en la Pico 2 y en la Metro»*): las pruebas y el banco en la P4, la S3,
+>   la Pico 2 y la Metro, con una imagen de prueba que al arrancar los pasa (`bpstr/placa.c`; el gancho del arranque
+>   común sólo existe con `BPSTR_PRUEBA_PLACA`). VERDE en las cuatro, 12 911 571 comprobaciones. Frente a hoy, gana en
+>   todo; frente a la libc, en la P4 y la S3 dentro o por delante en todo, y en la RP2350 gana newlib en `memcpy` y en
+>   `memmem` con una aguja larga (salta mirando parejas). Lo que costó en la RP2350: el perro del arranque de 15 s la
+>   reiniciaba en mitad de la prueba (ahora `placa.c` lo apaga), una prueba en una tarea suya reventaba (Eduardo tuvo que
+>   pulsar BOOTSEL en las dos) y el USB de la SDK tira la salida sin DTR. Las cuatro, devueltas a su imagen (la Metro,
+>   con `SqlDemo` bien). De paso: la STM32 lleva newlib-nano, de un byte por vuelta. Por decidir (Eduardo), dos cosas
+>   antes del paso 3, en `#730`.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

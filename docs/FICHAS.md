@@ -9043,7 +9043,7 @@ por hilo. Sólo la VM-C: la VM-Java no tiene cursor, por decisión.
   dos cadenas a la vez, 82 ms (el 21-oct, 1461); adelante y atrás, 51; `substring(k, k+1)` con `strlen`, 237; buscar
   y cortar ×100, 81; `parseJson` de 8 KB con acentos, 2706 ms; un `Map` de 200 claves con acentos, 279.
 
-#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct, sin empezar (abierta el 27-oct, al cerrar el H5; **la forma, por decidir**)
+#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **en curso: el paso 1, en el PC, y el 2, en las placas, hechos el 3-nov; antes del 3, dos cosas por decidir**)
 
 Eduardo, 21-oct: *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería debería
 estar optimizada a nivel de algoritmo y de codificación y verificada.»* Hecha aparte e incorporada al acabar, y
@@ -9085,6 +9085,19 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
 - **El paso 2, con la Pico 2 (ARM), la P4 (RISC-V) y la S3 (Xtensa)** (Eduardo, 3-nov: *«yo conectaría también la P4.
   Así podemos probar con ARM, RISC-V y Extensa»*), en vez de la C6 y la Nucleo. La STM32, por su libc (copia byte a
   byte), cuando se conecte.
+- **3-nov, el paso 2 hecho, en la Pico 2, la Metro, la P4 y la S3** (Eduardo: *«OK, probamos en la Pico 2 y en la
+  Metro»*; `V8_IDEAS` §E5, «`#730`, el paso 2»; el arnés, `bpstr/placa.c`, `f9f7e1c1` y `ab7db260`): una imagen de prueba
+  por familia, fuera del repositorio, y las cuatro devueltas a la suya. **Las pruebas, VERDE en las cuatro** (12 911 571
+  comprobaciones cada una). **El banco:** frente a hoy, bpstr gana en todo y en las tres arquitecturas, de ×1,1
+  (validar con acentos) a ×23 (una aguja larga; con 16 KB, ×38). Frente a la libc (el ±25 %), en la P4 y la S3 dentro o
+  por delante en las seis medidas con pareja (picolibc es lenta en lo básico); en la RP2350, en cuatro: newlib gana en
+  `memcpy` (ensamblador de ARM, +53 %) y en `memmem` con una aguja larga (×2,9: salta mirando parejas de bytes, no un
+  byte). En la PSRAM de las ESP, lo mismo que en la RAM interna (16 KB caben en la caché). **Visto de paso:** la STM32
+  lleva newlib-nano, con `memcpy`, `memset`, `memchr` y `memcmp` de un byte por vuelta (el mapa de la Nucleo).
+  **Por decidir (Eduardo), antes del paso 3:** copiar y rellenar —la libc en la RP2350 y las ESP; las nuestras, en la
+  STM32, medidas cuando se conecte—; y una aguja larga —(a) el `memmem` de newlib en la RP2350, o (b) la idea de las
+  parejas en nuestro Two-Way, que conserva su garantía y ganaría en las tres; propuesta, (b)—. Y una mejora pequeña,
+  corregir como validar más `memcpy` (de un 17 a un 28 % menos, según la suma de lo medido).
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 

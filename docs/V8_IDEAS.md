@@ -4244,6 +4244,74 @@ Helium), ni las RISC-V de Espressif (sin la extensión V), ni la S3 para GCC—:
 Para el PC, si hace falta, la biblioteca puede usar allí la libc y los bucles sencillos (lo que le va mejor a cada
 familia, como estaba previsto: «lo decide la medida»).
 
+### `#730`, el paso 2: en las placas (3-nov)
+
+Una imagen de prueba por familia, fuera del repositorio, que al arrancar pasa las pruebas en su versión corta y el banco
+(`bpstr/placa.c`; el arnés y lo que costó, en el `LEEME` de `bpstr`). En la Pico 2 y la Metro (ARM, RP2350), la P4
+(RISC-V) y la S3 (Xtensa); Eduardo: *«yo conectaría también la P4. Así podemos probar con ARM, RISC-V y Extensa»*.
+
+**Las pruebas, VERDE en las cuatro:** 12 911 571 comprobaciones cada una (el exhaustivo hasta 2 bytes y una de cada
+4099 de 3, buscar, Two-Way, comparar, copiar y rellenar, 3000 al azar y el catálogo de Kuhn; sin los bordes, que piden
+páginas protegidas). En la Pico 2, medio minuto.
+
+**El banco, con 2 KB**, en ns por byte. Entre paréntesis, lo que se aparta del tiempo de la libc de la familia (con −,
+bpstr tarda menos) y lo que gana frente al bucle de hoy (×):
+
+| | Pico 2 / Metro (ARM, newlib) | P4 (RISC-V, picolibc) | S3 (Xtensa, picolibc) |
+|---|---|---|---|
+| `es_ascii` | 7,3 (×4,6) | 2,3 (×4,8) | 5,7 (×7,8) |
+| contar caracteres | 15,4 (×3,5) | 6,4 (×3,0) | 12,9 (×2,9) |
+| avanzar / retroceder | 32 / 30 (×2,8 / ×3,0) | 13 / 13 (×2,5 / ×2,1) | 28 / 30 (×3,7 / ×3,4) |
+| validar (`#711`) | 57 (×1,4) | 25 (×1,1) | 63 (×1,2) |
+| buscar un byte (`memchr`) | 16,1 (−26 %; ×3,7) | 6,3 (−55 %; ×2,6) | 11,9 (−73 %; ×4,2) |
+| buscar 3 B (`memmem`) | 37 (−10 %; ×1,6) | 14 (−19 %; ×1,3) | 34 (−42 %; ×1,5) |
+| buscar 32 B, Two-Way (`memmem`) | 13,6 (**+188 %**; ×19) | 5,9 (−66 %; ×16) | 14,0 (−76 %; ×23) |
+| comparar (`memcmp`) | 11,1 (−40 %) | 3,9 (−21 %) | 8,8 (−49 %) |
+| mayúsculas, ASCII / con acentos | ×2,8 / ×1,7 | ×2,3 / ×1,6 | ×1,5 / ×1,7 |
+| copiar (`memcpy`) | 6,1 (**+53 %**) | 2,0 (+12 %) | 4,2 (+2 %) |
+| rellenar (`memset`) | 3,6 (−10 %) | 1,1 (−2 %) | 2,2 (+2 %) |
+
+Lo que dice:
+- **frente a hoy, bpstr gana en todas,** en las tres arquitecturas: de ×1,1 (validar, con un acento cada diez letras,
+  que rompe a menudo el paso de 4 en 4) a ×23 (buscar una aguja larga; con 16 KB, hasta ×38);
+- **frente a su pareja de la libc** (`memchr`, `memmem`, `memcmp`, `memcpy` y `memset`: seis medidas; el criterio,
+  ±25 %): en la P4 y la S3, dentro o por delante en las seis —su libc, picolibc, es lenta en lo básico: su `memmem`,
+  por ejemplo, tarda lo mismo con una aguja de 3 B que con una de 32, la cuenta del bucle sencillo—. En la RP2350, en
+  cuatro; en dos gana newlib: `memcpy` (la suya, en ensamblador de ARM, un 53 % más deprisa) y `memmem` con una aguja
+  larga (2,9 veces; abajo, por qué);
+- **lo que no tiene pareja, frente al ritmo de leer la memoria una vez** (un `memchr` que no encuentra): `es_ascii` y
+  contar, por delante; validar, por detrás (de 1,4 veces aquel tiempo en la S3 a 2,6 en la RP2350), por los acentos;
+- **la Metro da lo mismo que la Pico 2** (el mismo chip, al mismo reloj; los datos del banco, en la SRAM): a menos de
+  un 2 %, salvo Two-Way, un 5 % más lento (14,3; +200 %), que no es la placa sino la aguja: sale del texto en la
+  posición `maxn/3`, y la Metro midió con 16 KB y la Pico 2 con 8 (con la de la Pico 2 se salta de media un 5 % más).
+  En la S3 y la P4, con los datos en la PSRAM, lo mismo que en la RAM interna, también con 16 KB: caben en la caché.
+
+**Por qué gana el `memmem` de newlib** (de Arm, 2018, licencia BSD-3; la cadena de ARM lleva newlib 4.5): para saltar,
+el nuestro (el Two-Way de musl) mira UN byte, el que queda bajo el final de la aguja, y si está en la aguja sólo puede
+saltar hasta alinearlo con su última aparición. El de newlib mira una PAREJA (los dos últimos bytes, mezclados en una
+tabla de 256 entradas de un byte), y su bucle de saltar no hace nada más. El texto del banco tiene 28 símbolos (las
+letras, el espacio y la coma); la aguja de la Metro, `orivkjwnf go, ltnsnrqmelfodywgh@`, 21 de ellos, pero sólo 31 de
+las 784 parejas. Por ejemplo, si bajo el final de la aguja quedan `ae`: la `e` está en la aguja (en la posición 22), y
+el nuestro salta 9; la pareja `ae` no está, y el de newlib salta 31. De media, con esa aguja y ese texto, el nuestro
+salta 17,6 bytes y el de newlib 29,2 (contado sobre los mismos datos): ×1,7 menos pasos; lo demás, hasta el ×2,9, es
+lo que cuesta cada paso, y el suyo es más corto. Lo usa con agujas de 3 a 256 bytes, y
+Two-Way por encima: con las menores, su peor caso no tiene la garantía de Two-Way (lo acota que la aguja no pase
+de 256).
+
+**Por decidir (Eduardo), antes del paso 3:**
+- **copiar y rellenar:** la VM ya usa `memcpy` y `memset`, y en la RP2350 y las ESP la libc va bien (en la RP2350, la
+  `memcpy` de newlib gana a la nuestra; en las ESP, a la par): allí, propuesta, la VM sigue con las de la libc. La STM32
+  es otra cosa: lleva newlib-nano (`--specs=nano.specs`), cuyas `memcpy`, `memset`, `memchr` y `memcmp` son de un byte
+  por vuelta (de 16 a 32 bytes de código cada una, en el mapa de la Nucleo). Allí es donde `bpstr_copia` y
+  `bpstr_rellena` tienen sentido, y se mide cuando se conecte;
+- **una aguja larga:** (a) usar en la RP2350 el `memmem` de newlib (dos códigos según la familia, y con agujas de hasta
+  256 B, sin la garantía de Two-Way), o (b) llevar a nuestro Two-Way la idea de las parejas: sólo cambia cómo salta (la
+  tabla, por parejas y no por bytes, y un bucle de saltar tan corto como el suyo; una colisión de la tabla sólo acorta
+  el salto) y conserva su garantía, y lo ganaría en las tres familias. Propuesta: (b), con las pruebas de hoy y medido como hoy (en el PC, además, contra una copia del `memmem` de
+  newlib, que es C portable);
+- **y de paso, corregir:** sin nada malo tarda más que validar y copiar por separado (en la RP2350, 85 ns/B frente a
+  57 + 4). Hecho así —validar, y el tramo bueno con `memcpy`—, de un 17 a un 28 % menos, según la suma de lo medido.
+
 ---
 
 ## E6 · Los conjuntos, como en Pascal (la idea de Eduardo, 23-oct; sin empezar)
