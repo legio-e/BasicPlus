@@ -199,7 +199,13 @@
 >   - las que esperan a repetirse (`#779`, `#769`, `#762`);
 >   - las ideas y lo decidido para más adelante (`#728`, `#723`, `#745`, `#710`, `#706`, `#781`, `#782`);
 >   - `#735` (aparcada), `#719` (congelada) y las de antes de V8 (`#451`, `#460`, `#488`, `#582`, `#584`, `#615`,
->     `#663`, `#665`).
+>     `#663`, `#665`);
+> - al repasar la lista con Eduardo al final del día (*«A ver la lista de pendientes»*), tres que pueden estar
+>   desfasadas, para comprobar antes de cerrarlas o corregirlas en FICHAS:
+>   - `#460`: «BasicPlus no tiene interfaces» (30-ago), pero las de clase entraron con H7.3 el 1-nov; quizá sólo siga
+>     en pie lo de los módulos;
+>   - `A4`: el inventario de los dos núcleos, «fuera del plan», pero los dos núcleos se hicieron en el H12 de V7;
+>   - `#451(histórico)`: es el encabezado de un diagnóstico antiguo que conserva el 🔵.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
