@@ -8891,6 +8891,13 @@ carácter) y los números (`#716`); verificada contra un oráculo (exhaustiva ha
 Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir antes: la forma, qué es «similar»
 (¿±25 %?) y dónde vive (`bpgenvm-c/bpstr/`, por ejemplo). Parte de lo que haría ya está hecho de otra forma en el H5
 (los dos algoritmos, el cursor, comparar en C).
+- **3-nov, la pregunta de Eduardo** (*«#730 no es la misma para todos los micros?»*): sí, una sola, el mismo C portable
+  para todas las familias y el PC (32 bits, little-endian; alinea primero y lee palabras enteras; sin instrucciones
+  especiales). Lo que cambia por familia es la vara de medir: la libc que cada una trae (newlib, picolibc, la ROM…).
+- **Decidido** (Eduardo, 3-nov: *«OK, adelante ( 1,2 y 3 si)»*): (1) la forma de `V8_IDEAS` §E5 —no reserva memoria,
+  trabaja sobre un puntero y una longitud, verificada contra un oráculo—; (2) «similar» es no apartarse más de un ±25 %
+  de la libc de cada familia, medida en una placa de cada (RP2350, RISC-V de Espressif, S3, STM32) y en el PC; (3) vive
+  en `bpgenvm-c/bpstr/`. Lo siguiente: el diseño concreto (qué funciones, sus pruebas y la medida), para el OK.
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 
