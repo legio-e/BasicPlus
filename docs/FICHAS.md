@@ -7311,6 +7311,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#784` — la frecuencia que dicen las ESP es un número escrito a mano: la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160 (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **sólo análisis**)
+
+- **Cómo sale:** el `INFO` de la S3 dice `"cpuFreqHz": 240000000`, y su `sdkconfig` efectivo,
+  `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160` (el valor del IDF: nadie lo ha cambiado nunca).
+- **Por qué:** dos números escritos a mano en `esp32/common`, lo común de la S3, la C3, la C5 y la C6:
+  - `repl_esp32.c`, la identidad por defecto (la de la S3): `cpu_freq_hz = 240000000L`, que es el `INFO` de la S3. Las
+    otras tres ponen la suya en su `cX_board_id.c` (160, 240 y 160: ésas, bien);
+  - `gpio_esp32.c`, `esp32_cpu_freq_hz_impl()`: `return 240000000;` para las cuatro, que es `Machine.cpuFreqHz()`. Dice
+    240 en la S3, la C3 y la C6, que van a 160. La P4 escribe 360 a mano en los dos sitios (es lo que corre);
+  - y `Machine.MAX_CPU_MHZ()` sí sale del IDF (`CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ`, en la tabla de capacidades): en la
+    S3, 160. En la misma placa, `MAX_CPU_MHZ()` dice 160 y `cpuFreqHz()`, 240.
+- **Lo que haría falta:** preguntárselo al chip (`esp_clk_cpu_freq()` del IDF) en los dos sitios, en vez de escribirlo.
+  Va con cambiar la frecuencia en marcha (Eduardo, el mismo día: con una clave del ENV, o con una función como en la
+  Pico), que la haría variable.
+
 #### ✅ `#783` — el traductor de C#: una llamada con argumentos con nombre se escribe por posición, y la sobrecarga que elige JC puede no ser la de C#; con `#772`, `test-named-06` deja de compilar (abierta el 3-nov, en el lote de Mono de `#772`; **CERRADA el mismo día**, el commit de `#783`)
 
 - **Cómo sale:** `d.Foo(x: 1, y: 2)` en C#, con `Foo(int x, long y, string a = "a")`, `Foo(int x, long y, params

@@ -118,6 +118,10 @@
 >   −25/−28 %, nada peor; cuestan 48 KB de la RAM interna (el mínimo libre, de 202 a 159 KB; la VM vive en la PSRAM). En
 >   `esp32/sdkconfig.defaults`, y en la S3 la imagen medida. De paso: la S3 va a 160 MHz, el valor del IDF (puede ir a
 >   240; sin decidir). Y la S31 (Eduardo): la espera a primeros de diciembre; su imagen, desde la de la C5 o la de la P4.
+> - **La frecuencia de las ESP** (Eduardo: *«La velocidad la podriamos seleccionar con una variable del Environment?»*;
+>   *«O si no con una función como en la Pico»*): en análisis. Y al mirarlo, **abierta `#784`** (sólo análisis): la S3
+>   dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; `cpuFreqHz()` dice 240 también en la C3 y la C6.
+>   Números escritos a mano en `esp32/common`.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
