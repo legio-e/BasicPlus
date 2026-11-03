@@ -297,6 +297,7 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .autorun      = repl_esp32_autorun,
     .repl         = repl_esp32_run,
     .nucleos      = configNUMBER_OF_CORES,   /* V7/H12: la S3, dos (y dos runs); la C3, la C5 y la C6, uno */
+    .cpu_desde_env = 1,                      /* V8 #784: `cpu.mhz` del ENV, al arrancar */
 };
 
 void app_main(void)

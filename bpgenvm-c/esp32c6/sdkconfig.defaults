@@ -97,3 +97,9 @@ CONFIG_FREERTOS_USE_TIMERS=n
 # V7/H12 2b (5-oct): dos indices de notificacion por tarea; el 1, el de la condicion de la VM
 # (src/platform_freertos_cond.inc), que no se cruza con el 0 de los drivers.
 CONFIG_FREERTOS_TASK_NOTIFICATION_ARRAY_ENTRIES=2
+# V8 #784 (3-nov): LA GESTIÓN DE ENERGÍA DEL IDF, ENCENDIDA, para cambiar la frecuencia de la CPU en marcha
+# (Machine.setCpuFreqMHz y la clave `cpu.mhz` del ENV; Eduardo: «La velocidad la podriamos seleccionar con una variable
+# del Environment?», «O si no con una función como en la Pico»; y «ok» al diseño). La VM la pide con la mínima igual a
+# la máxima: sin pedir nada, la CPU va a la de la imagen, como antes. Cuesta unos KB de código, y los drivers piden y
+# sueltan un permiso en cada operación. Como las demás: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar.
+CONFIG_PM_ENABLE=y

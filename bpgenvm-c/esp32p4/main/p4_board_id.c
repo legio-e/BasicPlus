@@ -61,18 +61,16 @@ static float p4_pico_temp_c(void) {
     if (temperature_sensor_get_celsius(s_p4_tsens, &t) != ESP_OK) return 0.0f;
     return t;
 }
-static int   p4_pico_cpu_freq_hz(void)     { return 360000000; }   /* 360 MHz por defecto */
 static int   p4_pico_uptime_ms(void)       { return (int) (esp_timer_get_time() / 1000); }
-static int   p4_pico_set_cpu_freq(int mhz) { (void) mhz; return 0; } /* runtime no soportado */
 
 static const bpvm_machine_backend_t s_p4_pico_backend = {
     .uniqueId      = p4_pico_unique_id,
     .microName     = p4_pico_micro_name,
     .boardName     = p4_pico_board_name,
     .tempC         = p4_pico_temp_c,
-    .cpuFreqHz     = p4_pico_cpu_freq_hz,
+    .cpuFreqHz     = esp32_cpu_freq_hz,       /* V8 #784: la de verdad (hw_esp32.h) */
     .uptimeMs      = p4_pico_uptime_ms,
-    .setCpuFreqMHz = p4_pico_set_cpu_freq,
+    .setCpuFreqMHz = esp32_set_cpu_freq_mhz,   /* V8 #784: el silicio de la P4 sólo da 360 */
     .resetCause    = esp32_reset_cause,       /* paso 4 cierre — compartido con el S3 */
 };
 
@@ -80,7 +78,6 @@ void p4_install_board_id(void) {
     static const repl_board_id_t p4 = {
         "esp32p4",        /* board_name   (INFO.boardName)        */
         "bpvm-esp32p4",   /* server_name  (HELLO.serverName)      */
-        360000000L,       /* cpu_freq_hz  (360 MHz por defecto; hasta 400) */
         55,               /* gpio_count   (GPIO0..54)             */
         0,                /* pio_count    (el P4 no tiene PIO)    */
         14,               /* pwm_slices   (8 LEDC + 6 MCPWM)       */

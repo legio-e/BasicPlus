@@ -34,7 +34,6 @@
 static const repl_board_id_t C3_ID = {
     .board_name   = "ESP32-C3",
     .server_name  = "bpvm-esp32c3",
-    .cpu_freq_hz  = 160000000L,
     .gpio_count   = 22,          /* GPIO0..21 */
     .pio_count    = 0,           /* no hay PIO: eso es del RP2350 */
     .pwm_slices   = 6,           /* LEDC: 6 canales */

@@ -179,7 +179,6 @@ typedef char bp_chk_put_buf[(V1_PUT_BUF_SIZE >= 8u*1024u &&
 static const repl_board_id_t s_default_board = {
     "esp32s3",        /* board_name   */
     "bpvm-esp32",     /* server_name  */
-    240000000L,       /* cpu_freq_hz  */
     45,               /* gpio_count   */
     0,                /* pio_count    */
     8,                /* pwm_slices   */
@@ -609,7 +608,7 @@ static void esp32_repl_info(bpvm_repl_info_t* o) {
     o->board_name    = micro;
     o->reset_reason  = bpvm_machine_reset_cause();
     o->arch          = (unsigned) bpvm_mdn_host_arch();
-    o->cpu_hz        = (unsigned long) bid->cpu_freq_hz;
+    o->cpu_hz        = (unsigned long) bpvm_machine_cpu_freq_hz();   /* V8 #784: la de verdad, la de Machine.cpuFreqHz() */
     o->uptime_ms     = (unsigned long) (esp_timer_get_time() / 1000LL);
     o->temp_milli_c  = 0;            /* sensor interno, para mas adelante */
     o->gpio_count    = bid->gpio_count;

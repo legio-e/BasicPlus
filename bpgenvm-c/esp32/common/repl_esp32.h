@@ -53,7 +53,7 @@ void repl_esp32_cintura(void);
 typedef struct {
     const char *board_name;    /* INFO.boardName    */
     const char *server_name;   /* HELLO.serverName  */
-    long cpu_freq_hz;
+    /* (V8 #784: la frecuencia ya no va aquí, escrita a mano: el INFO se la pregunta al chip) */
     long gpio_count;
     long pio_count;
     long pwm_slices;

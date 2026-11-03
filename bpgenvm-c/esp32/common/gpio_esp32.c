@@ -24,6 +24,8 @@
 #include "bpvm_log.h"               /* V7/H3 (#552): un dispositivo SPI que el IDF rechaza, al log */
 
 #include "esp_attr.h"               /* V7/H4: __NOINIT_ATTR para las migas */
+#include "esp_pm.h"                 /* V8 #784: cambiar la frecuencia de la CPU */
+#include "esp_private/esp_clk.h"    /* V8 #784: esp_clk_cpu_freq, la que lleva de verdad */
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "driver/spi_master.h"
@@ -102,7 +104,7 @@ static const bpvm_gpio_backend_t s_esp32_gpio_backend = {
  * ESP32-S3 a los builtins Pico.* desde BP (boardName/uniqueId/cpuFreqHz/
  * gpioCount...). Sin esto, Pico.gpioCount() caia al stub host (30 GPIO,
  * board "host") aunque el INFO del wire ya diera los valores reales.
- * ESP32-S3 (DevKitC, WROOM-1): 45 GPIO utiles (0-21, 26-48), 240 MHz. */
+ * ESP32-S3 (DevKitC, WROOM-1): 45 GPIO utiles (0-21, 26-48). La frecuencia, la del chip (#784). */
 static void esp32_unique_id_impl(char* buf, size_t len) {
     uint8_t mac[6] = {0};
     esp_efuse_mac_get_default(mac);   /* MAC base de fabrica (efuse) */
@@ -143,17 +145,46 @@ static float esp32_temp_c_impl(void) {
     return 0.0f;   /* sensor interno no cableado en el MVP (igual que STM32) */
 }
 
-static int esp32_cpu_freq_hz_impl(void) {
-    return 240000000;   /* 240 MHz nominal del ESP32-S3 (sdkconfig.defaults) */
+/* V8 #784 (3-nov) — LA FRECUENCIA, LA DE VERDAD, Y CAMBIARLA. Hasta hoy, un 240 escrito a mano para las cuatro de este
+ * fichero: la S3, la C3 y la C6 iban a 160 y lo decían mal. Ahora se le pregunta al chip.
+ * Cambiarla, con la gestión de energía del IDF (CONFIG_PM_ENABLE, en los defaults de las cinco) y la mínima igual a la
+ * máxima: la CPU se queda fija en la pedida, y sin pedir nada va a la de la imagen. Los buses van con un reloj de
+ * 80 MHz que no cambia entre 80 y el máximo, así que no hay que volver a configurarlos (en la Pico sí); por debajo de
+ * 80 cambiaría, y por eso el mínimo es 80. Lo usan también la P4 (p4_board_id.c), cuyo silicio sólo da 360, y la
+ * clave `cpu.mhz` del ENV (bpvm_boot2.c). */
+#if CONFIG_IDF_TARGET_ESP32S3 || CONFIG_IDF_TARGET_ESP32C5
+static const int s_cpu_mhz[] = {80, 160, 240};
+#elif CONFIG_IDF_TARGET_ESP32C6
+static const int s_cpu_mhz[] = {80, 120, 160};
+#elif CONFIG_IDF_TARGET_ESP32C3
+static const int s_cpu_mhz[] = {80, 160};
+#else
+static const int s_cpu_mhz[] = {CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ};   /* la P4: la de la imagen, y nada más */
+#endif
+#define N_CPU_MHZ ((int) (sizeof s_cpu_mhz / sizeof s_cpu_mhz[0]))
+
+int esp32_cpu_freq_hz(void) {
+    return (int) esp_clk_cpu_freq();
+}
+
+int esp32_set_cpu_freq_mhz(int mhz) {
+    int i;
+    for (i = 0; i < N_CPU_MHZ && s_cpu_mhz[i] != mhz; i++) ;
+    if (i == N_CPU_MHZ) return 0;                          /* este chip no la da */
+    if (esp32_cpu_freq_hz() == mhz * 1000000) return 1;    /* ya va a esa */
+#if CONFIG_PM_ENABLE
+    {
+        esp_pm_config_t pm = { .max_freq_mhz = mhz, .min_freq_mhz = mhz, .light_sleep_enable = false };
+        if (esp_pm_configure(&pm) != ESP_OK) return 0;
+        return esp32_cpu_freq_hz() == mhz * 1000000;       /* esp_pm_configure la cambia en el acto */
+    }
+#else
+    return 0;                                              /* sin la gestión de energía, no se puede */
+#endif
 }
 
 static int esp32_uptime_ms_impl(void) {
     return (int) (esp_timer_get_time() / 1000);   /* us -> ms */
-}
-
-static int esp32_set_cpu_freq_mhz_impl(int mhz) {
-    (void) mhz;
-    return 0;   /* cambiar el reloj en runtime no soportado */
 }
 
 /* ══════════ V7/H4 — LA TABLA DE CAPACIDADES de la familia ESP32, CALCULADA ══════════
@@ -246,9 +277,9 @@ static void esp32_caps_init(void) {
     s_caps.micro = CHIP_MICRO;
     s_caps.paquete = "";                                    /* el IDF no dice el encapsulado; la flash y la PSRAM se miden */
     s_caps.fabricante = "Espressif";
-    s_caps.cpu_hz_max = (uint32_t) CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ * 1000000u;
-    s_caps.cpu_hz_min = s_caps.cpu_hz_max;                  /* no se ajusta en marcha: min = max = el que corre */
-    s_caps.cpu_ajustable = 0;
+    s_caps.cpu_hz_max = (uint32_t) s_cpu_mhz[N_CPU_MHZ - 1] * 1000000u;   /* V8 #784: lo que da el chip */
+    s_caps.cpu_hz_min = (uint32_t) s_cpu_mhz[0] * 1000000u;
+    s_caps.cpu_ajustable = (N_CPU_MHZ > 1) ? 1 : 0;
     s_caps.uart = s_caps_uart; s_caps.n_uart = (uint8_t) nu;
     s_caps.i2c = s_caps_i2c;   s_caps.n_i2c = (uint8_t) ni;
     s_caps.spi = s_caps_spi;   s_caps.n_spi = (uint8_t) ns;
@@ -296,9 +327,9 @@ static const bpvm_machine_backend_t s_esp32_pico_backend = {
     .microName     = esp32_micro_name_impl,
     .boardName     = esp32_board_name_impl,
     .tempC         = esp32_temp_c_impl,
-    .cpuFreqHz     = esp32_cpu_freq_hz_impl,
+    .cpuFreqHz     = esp32_cpu_freq_hz,
     .uptimeMs      = esp32_uptime_ms_impl,
-    .setCpuFreqMHz = esp32_set_cpu_freq_mhz_impl,
+    .setCpuFreqMHz = esp32_set_cpu_freq_mhz,
     .resetCause    = esp32_reset_cause,        /* paso 4 cierre */
 };
 

@@ -140,6 +140,14 @@
 >   de 22,4 a 14,9 s), el censo −27/−32 %, lo que espera a la PSRAM −18/−24 %. Confirma el fallo: iba a 160 y el `INFO`
 >   decía 240. La placa, devuelta a su imagen de hoy. El diseño de la función y de la clave `cpu.mhz` (sólo las ESP;
 >   en la RP2350 cambiar el reloj no recalcula los divisores de la PSRAM ni de la flash), en `#784`, para el OK.
+> - **`#784`, hecha** (*«ok»*): la gestión de energía del IDF en las cinco ESP; `Machine.setCpuFreqMHz` con los valores
+>   de cada chip (la P4, 360); `cpuFreqHz()` y el `INFO`, la de verdad; la clave `cpu.mhz`, en el arranque común
+>   (`test_boot2`, seis casos). Probada en la S3 (80, 160 y 240; el reloj exacto; la clave, con sus errores en el log) y
+>   en la P4 (sus packs cargan con la imagen nueva). La C3, la C5 y la C6, compiladas. Por decidir (Eduardo): con qué
+>   arranca la S3 sin la clave, 160 o 240. **Ojo, para el próximo lote:** al compilarlas se pisó en su `build/` el
+>   `.elf` de la imagen que llevan la C3, la C5 y la C6 (la del lote de esta mañana), así que el `nm` de sus packs
+>   sellados ya no se puede hacer contra él: mirar `packRamBase` antes y después de grabar, y pedir en el mismo OK el
+>   regrabado de sus packs nativos (lo de `regrabar-packs-sellados`).
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

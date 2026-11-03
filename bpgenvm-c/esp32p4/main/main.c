@@ -372,6 +372,7 @@ static const bpvm_boot2_familia_t s_boot2 = {
     .autorun      = repl_esp32_autorun,
     .repl         = repl_esp32_run,
     .nucleos      = configNUMBER_OF_CORES,   /* V7/H12: dos, y dos runs */
+    .cpu_desde_env = 1,                      /* V8 #784: `cpu.mhz` del ENV (su silicio sólo da 360) */
 };
 
 /* ---- La tarea del cable: la VM corre AQUÍ (stack holgado). Una para los dos transportes.

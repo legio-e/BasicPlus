@@ -7311,7 +7311,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **analizada; para la tarde del 3-nov**)
+#### 🔵 `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **hecha el 3-nov, probada en la S3 y la P4; por decidir, con qué frecuencia arranca la S3 sin la clave**)
 
 - **Cómo sale:** el `INFO` de la S3 dice `"cpuFreqHz": 240000000`, y su `sdkconfig` efectivo,
   `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160` (el valor del IDF: nadie lo ha cambiado nunca).
@@ -7359,6 +7359,23 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     del sistema no recalcula los divisores de la QMI —el de la PSRAM de la Metro lo calcula `psram_set_timing` una vez,
     para 109 MHz como mucho, y el de la flash lo pone el arranque—: subir el reloj los pasaría de su máximo;
   - **por decidir (Eduardo):** con qué arranca la S3 sin la clave, 160 (hoy) o 240.
+- **3-nov, hecha** (Eduardo: *«ok»* al diseño):
+  - **la gestión de energía del IDF,** `CONFIG_PM_ENABLE=y` en las cinco imágenes ESP (sus `sdkconfig.defaults`, con el
+    porqué, y su `sdkconfig` local). La imagen de la S3, 5,4 KB más;
+  - **`esp32/common/gpio_esp32.c`:** `esp32_cpu_freq_hz` (`esp_clk_cpu_freq`, la de verdad) y `esp32_set_cpu_freq_mhz`
+    (`esp_pm_configure` con la mínima igual a la máxima, y los valores de cada chip); la tabla de capacidades, la más
+    alta del chip y 80, ajustable (la P4, 360 y 360, no). Las usan también la P4 (`p4_board_id.c`) y el `INFO`
+    (`repl_esp32.c`): fuera el número escrito a mano de las cinco identidades;
+  - **la clave:** `cpu_desde_env` en la familia del arranque común (`bpvm_boot2`; las ESP, 1), después del hardware y
+    antes de los buses. `test_boot2`, seis casos nuevos, con una HAL de mentira; con la llamada quitada, cuatro en rojo;
+  - **en la S3:** el `INFO` dice 160. `Machine.setCpuFreqMHz(80)`: a 80, y un bucle fijo tarda el doble; 240, dos
+    tercios; 200 y 100, `false` y no cambia; 300, 240 (al rango, como en la Pico); y `sleep(500)` dura 500 ms a todas.
+    El cable, bien a 80. La clave: `cpu.mhz=240`, arranca a 240 y el log lo dice; `abc` y `200`, el log dice por qué y
+    se queda en 160; sin ella, 160;
+  - **en la P4:** el `INFO` dice 360; con la imagen nueva sus packs cargan sin regrabarlos (`SQLite` y `LVGL`, rc=0: la
+    misma `packRamBase`, el texto y el rodata en las mismas páginas); `MIN_CPU_MHZ()` y `MAX_CPU_MHZ()`, 360;
+  - **la C3, la C5 y la C6:** compiladas, sin conectar: a la placa en el próximo lote;
+  - **docs:** `referencia.html` (la clave, en el apéndice A; `setCpuFreqMHz`, `cpuFreqHz` y `MAX_CPU_MHZ`).
 
 #### ✅ `#783` — el traductor de C#: una llamada con argumentos con nombre se escribe por posición, y la sobrecarga que elige JC puede no ser la de C#; con `#772`, `test-named-06` deja de compilar (abierta el 3-nov, en el lote de Mono de `#772`; **CERRADA el mismo día**, el commit de `#783`)
 

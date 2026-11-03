@@ -9,7 +9,7 @@
  *
  * ─── Los datos, del silicio (datasheet ESP32-C5; por confirmar en placa) ─────
  *
- * ESP32-C5: un núcleo RISC-V (RV32IMAC) a 160 MHz + un núcleo LP a 20 MHz,
+ * ESP32-C5: un núcleo RISC-V (RV32IMAC) a 240 MHz + un núcleo LP a 20 MHz,
  * **31 GPIOs** (GPIO0..30; el QFN40 expone 30), **sin PIO**, **6 canales LEDC**
  * de PWM, **7 canales de ADC** (ADC1 sobre GPIO0..6), **512 KB de SRAM HP**
  * (+16 KB LP) y **sin PSRAM**. La flash es embebida (4 MB en este devkit, lo dijo
@@ -24,7 +24,6 @@
 static const repl_board_id_t C5_ID = {
     .board_name   = "ESP32-C5",
     .server_name  = "bpvm-esp32c5",
-    .cpu_freq_hz  = 240000000L,
     .gpio_count   = 29,          /* GPIO0..28 (hoja del chip) */
     .pio_count    = 0,           /* no hay PIO: eso es del RP2350 */
     .pwm_slices   = 6,           /* LEDC: 6 canales */

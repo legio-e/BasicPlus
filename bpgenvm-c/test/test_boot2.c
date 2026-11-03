@@ -88,6 +88,11 @@ static void f_cable(void)     { apunta("cable"); }
 static void f_autorun(void)   { apunta("autorun"); }
 static void f_repl(void)      { apunta("repl"); }
 
+/* V8 #784 — una HAL de la frecuencia de mentira, la de una S3: 80, 160 o 240 MHz; empieza en 160 */
+static int g_hal_mhz = 160;
+static int hal_cpu_hz(void)    { return g_hal_mhz * 1000000; }
+static int hal_cpu_mhz(int m)  { if (m != 80 && m != 160 && m != 240) return 0; g_hal_mhz = m; return 1; }
+
 static const bpvm_boot2_familia_t FAMILIA = {
     f_env, f_env_anadir, f_memoria, f_bios, f_subir, f_mapear, f_stdlib, f_con_fs, f_hw, f_sd,
     f_identidad, f_cintura, f_cable, f_autorun, f_repl
@@ -305,6 +310,66 @@ int main(void) {
         bpvm_boot2_repartir(&FAMILIA);   /* la de mentira no dice sus nucleos */
         CHECK(bpvm_runs() == 1, "una familia que no dice sus nucleos: uno, lo de siempre");
         bpvm_set_cores(2);
+    }
+
+    printf("--- 9. V8 #784: cpu.mhz del ENV, en la familia que lo dice ---\n");
+    {
+        static const char* CPU240 = "cpu.mhz=240\n";
+        static const char* CPUABC = "cpu.mhz=abc\n";
+        static const char* CPU200 = "cpu.mhz=200\n";
+        static const bpvm_machine_backend_t SOLO_80_160_240 = {   /* una HAL de mentira: la de una S3 */
+            .cpuFreqHz = hal_cpu_hz, .setCpuFreqMHz = hal_cpu_mhz };
+        bpvm_env_t ec = g_env;
+        bpvm_boot2_familia_t con = FAMILIA;
+        con.cpu_desde_env = 1;
+
+        ec.payload = (const uint8_t*) CPU240;
+        ec.payload_len = (uint16_t) strlen(CPU240);
+        bpvm_machine_set_cpu_freq_mhz(150);   /* la del host simulado, de partida */
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_env_ptr = &ec;
+        bpvm_boot2_subir(&FAMILIA);
+        CHECK(bpvm_machine_cpu_freq_hz() == 150000000 && !en_log("cpu:"),
+              "una familia que no lo dice (la RP2350, de momento): ni la mira");
+
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_env_ptr = &ec;
+        bpvm_boot2_subir(&con);
+        CHECK(bpvm_machine_cpu_freq_hz() == 240000000 && en_log("cpu: 240 MHz (cpu.mhz del ENV)"),
+              "cpu.mhz=240: a 240, y se dice");
+
+        ec.payload = (const uint8_t*) CPUABC;
+        ec.payload_len = (uint16_t) strlen(CPUABC);
+        bpvm_machine_set_cpu_freq_mhz(150);
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_env_ptr = &ec;
+        bpvm_boot2_subir(&con);
+        CHECK(bpvm_machine_cpu_freq_hz() == 150000000
+              && en_log("cpu: cpu.mhz=abc no es un número de MHz: se queda en 150 MHz"),
+              "cpu.mhz=abc: no es un numero; se queda la de la imagen, y se dice");
+
+        bpvm_machine_set_backend(&SOLO_80_160_240);
+        ec.payload = (const uint8_t*) CPU200;
+        ec.payload_len = (uint16_t) strlen(CPU200);
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_env_ptr = &ec;
+        bpvm_boot2_subir(&con);
+        CHECK(bpvm_machine_cpu_freq_hz() == 160000000
+              && en_log("cpu: cpu.mhz=200 no lo da esta placa: se queda en 160 MHz"),
+              "cpu.mhz=200 en una que no lo da: se queda la de la imagen, y se dice");
+
+        ec.payload = (const uint8_t*) CPU240;
+        ec.payload_len = (uint16_t) strlen(CPU240);
+        caso(BPVM_BOOT_APP, 0, "", 1);
+        g_env_ptr = &ec;
+        bpvm_boot2_subir(&con);
+        CHECK(bpvm_machine_cpu_freq_hz() == 240000000, "y cpu.mhz=240 en la misma: a 240, con su HAL");
+        bpvm_machine_set_backend(NULL);
+
+        caso(BPVM_BOOT_APP, 0, "", 1);   /* el ENV de siempre, sin la clave */
+        bpvm_machine_set_cpu_freq_mhz(150);
+        bpvm_boot2_subir(&con);
+        CHECK(bpvm_machine_cpu_freq_hz() == 150000000 && !en_log("cpu:"), "sin la clave: la de la imagen, sin decir nada");
     }
 
     printf(g_fail == 0 ? "[status=OK]\n" : "[status=FAIL: %d]\n", g_fail);

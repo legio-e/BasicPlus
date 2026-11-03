@@ -60,6 +60,12 @@ typedef struct {
      * run»). `vm.runs` del ENV manda sobre él. 0: la familia no lo dice, y va con uno. Al final, para que una familia
      * escrita por posición (la de la prueba) siga valiendo. */
     int nucleos;
+
+    /* V8 #784 — 1: esta familia pone al arrancar la frecuencia de la CPU de la clave `cpu.mhz` del ENV, después del
+     * hardware y antes de los buses, con el mismo setter que Machine.setCpuFreqMHz (bpvm_machine_set_cpu_freq_mhz: la
+     * HAL de la familia, que sabe qué valores da su chip). 0: no la mira —la RP2350, de momento: cambiar su reloj no
+     * recalcula los divisores de la PSRAM ni de la flash—. Al final, como `nucleos`. */
+    int cpu_desde_env;
 } bpvm_boot2_familia_t;
 
 /* Las claves del ENV que REPARTEN (`stack=`, `quantum=`): se leen en el arranque y hace

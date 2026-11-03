@@ -30,6 +30,7 @@
 #include "bpvm_sd_placa.h"   /* la SD de la placa: el registro común */
 
 #include <stdio.h>
+#include <stdlib.h>          /* strtol: cpu.mhz (#784) */
 #include <string.h>
 
 /* La familia de este arranque: los buses leen el ENV por una función sin contexto. */
@@ -48,6 +49,30 @@ static int env_exacto(const char* clave, char* buf, size_t cap) {
 }
 
 static void linea_al_log(const char* l) { log_printf("%s", l); }
+
+/* V8 #784 — `cpu.mhz=N`: la frecuencia de la CPU, al arrancar, con el setter de Machine.setCpuFreqMHz (la HAL de la
+ * familia sabe qué valores da su chip). Un valor que no es un número de MHz, o que la placa no da, se dice y se queda
+ * la de la imagen: no se arranca a una frecuencia que nadie pidió, y tampoco en silencio. */
+static void frecuencia_del_env(void) {
+    char v[16], *fin;
+    long mhz;
+    int r = env_exacto("cpu.mhz", v, sizeof v);
+    if (r == -1) return;                                   /* sin la clave: la de la imagen */
+    if (r < 0) {
+        log_printf("cpu: cpu.mhz no cabe en %u bytes: se queda en %d MHz", (unsigned) sizeof v,
+                   bpvm_machine_cpu_freq_hz() / 1000000);
+        return;
+    }
+    mhz = strtol(v, &fin, 10);
+    if (fin == v || *fin != '\0' || mhz <= 0 || mhz > 100000) {
+        log_printf("cpu: cpu.mhz=%s no es un número de MHz: se queda en %d MHz", v, bpvm_machine_cpu_freq_hz() / 1000000);
+        return;
+    }
+    if (bpvm_machine_set_cpu_freq_mhz((int) mhz))
+        log_printf("cpu: %ld MHz (cpu.mhz del ENV)", mhz);
+    else
+        log_printf("cpu: cpu.mhz=%ld no lo da esta placa: se queda en %d MHz", mhz, bpvm_machine_cpu_freq_hz() / 1000000);
+}
 
 /* La familia de este arranque, y con ella el ENV de Machine.getEnv (#626): el programa lee el mismo ENV que el
  * arranque, por la misma regla (entero o nada). */
@@ -163,6 +188,7 @@ void bpvm_boot2_subir(const bpvm_boot2_familia_t* f) {
      * hardware dice qué buses existen. Se llama siempre —sin ENV también—: arranca el
      * árbitro con un solo hilo vivo. */
     if (f->hw) f->hw();
+    if (f->cpu_desde_env) frecuencia_del_env();   /* V8 #784: antes de los buses, que la pueden usar */
     (void) bpvm_bus_desde_env(env_exacto);
 
     /* La SD: se REGISTRA siempre (SD_INFO contesta aunque no haya FS) y se MONTA con el FS,
