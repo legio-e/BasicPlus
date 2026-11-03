@@ -26,6 +26,14 @@ lo que dicen va, línea a línea, a `/app/bpstr.txt` (se baja con `wire_serie.py
 que estar antes en `/app/UTF-8-test.txt`. Los números se escriben con enteros: el `printf` de una placa puede no tener
 `%f` ni `%llu` (las ESP del IDF 6.1 llevan picolibc).
 
+Lo que se aprendió al pasarlas (3-nov):
+- **corren en la tarea del arranque, antes del REPL.** En una tarea suya, en la Pico reventaban antes de la primera
+  línea (el FS desde una tarea que no es la de la VM);
+- **en la RP2350, el perro guardián del arranque** (15 s, armado antes del planificador con dos núcleos y apagado al
+  llegar al REPL) reiniciaba la placa en mitad de la prueba, una y otra vez: `placa.c` lo apaga al empezar;
+- **cada línea va también a la salida estándar,** que en la Pico es el USB serie y se ve en directo aunque el REPL no
+  esté; pero la SDK la tira si el ordenador no ha levantado DTR: el lector tiene que abrir el puerto con DTR.
+
 ## Cómo es
 
 - **No reserva memoria y no conoce la VM:** todo sobre un puntero y una longitud. Quien crea la cadena reserva y le

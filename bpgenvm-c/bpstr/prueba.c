@@ -30,6 +30,7 @@
 #ifdef BPSTR_PLACA
 void bpstr_banco_linea(const char* s);                               /* placa.c */
 long bpstr_placa_lee(const char* ruta, uint8_t* dst, uint32_t cap);   /* placa.c: un fichero del FS de la placa */
+uint64_t bpstr_banco_ns(void);                                         /* placa.c: el reloj */
 int  bpstr_prueba_main(int larga, const char* ruta_kuhn);
 #define BUF_N       24576u   /* cabe el catálogo de Kuhn (22 781 bytes) */
 #define SAL_N       8192u
@@ -67,6 +68,22 @@ static void di(const char* fmt, ...) {
     fflush(stdout);
 #endif
 }
+
+/* En una placa, por dónde va y cuánto lleva: una línea por paso largo (en el PC, nada). */
+#ifdef BPSTR_PLACA
+static uint64_t t_inicio;
+static void progreso(const char* fmt, ...) {
+    char l[200];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(l, sizeof l, fmt, ap);
+    va_end(ap);
+    di("  ... %s (%lu ms)", l, (unsigned long) ((bpstr_banco_ns() - t_inicio) / 1000000u));
+}
+#define PROGRESO(...) progreso(__VA_ARGS__)
+#else
+#define PROGRESO(...) ((void) 0)
+#endif
 
 #ifndef BPSTR_AGUJA_CORTA   /* el de bpstr.c: el Makefile pasa el mismo a los dos */
 #define BPSTR_AGUJA_CORTA 16u
@@ -193,6 +210,7 @@ static void exhaustivo_corto(void) {
             for (uint32_t i = 0; i < n; i++) p[i] = (uint8_t) (v >> (8 * i));
             una_cadena(p, n, 1);
         }
+        PROGRESO("exhaustivo: hechas las de %u bytes", (unsigned) n);
     }
     grupo(PASO_3 == 1u ? "exhaustivo: todas las cadenas de 0 a 3 bytes"
                        : "exhaustivo: hasta 2 bytes; de 3, una de cada 4099", c0, f0);
@@ -220,6 +238,7 @@ static void exhaustivo_buscar(const uint8_t* alfa, uint32_t na, uint32_t max_p, 
                 }
             }
         }
+        PROGRESO("%s: hechos los pajares de %u bytes", nombre, (unsigned) n);
     }
     grupo(nombre, c0, f0);
 }
@@ -294,6 +313,7 @@ static uint32_t cadena_azar(uint8_t* p, uint32_t max) {
 static void al_azar(uint32_t veces) {
     unsigned long long c0 = comprobaciones, f0 = fallos;
     for (uint32_t t = 0; t < veces; t++) {
+        if (t > 0 && t % 500u == 0) PROGRESO("al azar: %u de %u", (unsigned) t, (unsigned) veces);
         uint8_t* p = buf + 16 + (azar() & 3u);
         uint32_t n = cadena_azar(p, AZAR_MAX);
         una_cadena(p, n, 0);
@@ -452,6 +472,7 @@ static void kuhn(const char* ruta) {
         una_cadena(buf + 16 + a, b - a, b - a <= 8);
         una_busqueda(buf + 16, n, buf + 16 + a, b - a);
         lineas++;
+        if (lineas % 50u == 0) PROGRESO("Kuhn: %u lineas", (unsigned) lineas);
         a = b + 1;
     }
     {
@@ -487,6 +508,9 @@ int bpstr_prueba_main(int larga, const char* ruta_kuhn) {
     static const uint8_t alfa2[2] = {'a', 'b'};
     char nombre[80];
     comprobaciones = fallos = 0;
+#ifdef BPSTR_PLACA
+    t_inicio = bpstr_banco_ns();
+#endif
     di("bpstr: las pruebas (agujas cortas hasta %lu bytes)", (unsigned long) (BPSTR_AGUJA_CORTA));
     exhaustivo_corto();
     snprintf(nombre, sizeof nombre, "buscar: pajares de 0-%u y agujas de 0-%u (a b 80 C3)", BUSCA4_P, BUSCA4_Q);

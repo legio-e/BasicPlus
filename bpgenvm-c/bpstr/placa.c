@@ -14,11 +14,22 @@
 #include "bpvm_log.h"
 #include "bpvm_platform.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #if defined(ESP_PLATFORM)
 #include "sdkconfig.h"
 #include "esp_heap_caps.h"
+#endif
+
+/* La RP2350 de dos núcleos arma un perro guardián de 15 s antes del planificador, y lo apaga al llegar el arranque al
+ * REPL (pico_arranque_completo). La prueba corre antes del REPL y tarda más: sin apagarlo, la placa se reinicia en
+ * mitad y vuelve a empezar (visto el 3-nov en la Pico 2: cada 15 s). */
+#if defined(__has_include)
+#  if __has_include("hardware/watchdog.h")
+#    include "hardware/watchdog.h"
+#    define BPSTR_PERRO_PICO 1
+#  endif
 #endif
 
 int bpstr_prueba_main(int larga, const char* ruta_kuhn);   /* prueba.c */
@@ -28,7 +39,11 @@ void bpstr_en_placa(void);
 #define SALIDA "/app/bpstr.txt"
 #define KUHN   "/app/UTF-8-test.txt"
 
+/* Cada línea, al fichero y, además, a la salida estándar: en la Pico es el USB serie, que se atiende aunque el REPL
+ * todavía no esté, así que se puede ver en directo cómo va (en las ESP, su consola). */
 void bpstr_banco_linea(const char* s) {
+    printf("[bpstr] %s\n", s);
+    fflush(stdout);
     (void) bpvm_fs_write(SALIDA, (const uint8_t*) s, (uint32_t) strlen(s), 1);
     (void) bpvm_fs_write(SALIDA, (const uint8_t*) "\n", 1u, 1);
 }
@@ -46,8 +61,14 @@ void* bpstr_placa_psram(size_t n) {
 #endif
 }
 
+/* Aquí mismo, en la tarea del arranque (la de la VM), antes del REPL. Probado (3-nov) en una tarea suya: en la Pico
+ * reventó antes de escribir la primera línea —el FS, o el log, desde una tarea que no es la de la VM—. */
 void bpstr_en_placa(void) {
     int r;
+#ifdef BPSTR_PERRO_PICO
+    watchdog_disable();
+    log_printf("bpstr: el perro del arranque, apagado (la prueba pasa de sus 15 s)");
+#endif
     (void) bpvm_fs_remove(SALIDA);
     log_printf("bpstr: las pruebas y el banco, a %s", SALIDA);
     r = bpstr_prueba_main(0, KUHN);
