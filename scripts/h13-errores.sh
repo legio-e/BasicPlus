@@ -137,6 +137,9 @@ AnnMal|(la entidad) o sobre una
 SobrecargaAmbigua|encajan f(Perro, Object) y f(Object, Perro), y ninguna es
 SobrecargaAmbigua|encajan h(Perro, Object) y h(Animal, Animal), y ninguna es
 SobrecargaAmbigua|pasa el argumento en una variable del tipo de su par
+EnumNombreMal|Enum.getName(): se esperaba el valor de un enum, no 'integer'
+EnumNombreMal|Enum.getName(): se esperaba 1 argumento, el valor de un enum
+EnumNombreNativa|no se traduce en una native; pide el nombre fuera de la native
 "
 
 ok=0; mal=0

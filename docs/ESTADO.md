@@ -102,6 +102,13 @@
 >   con el tipo de su parámetro (`d.Foo((long) 2, 1)`), y JC elige la de C#. Mono, 443 (eran 442 el 2-nov).
 > - **`#778`**, Eduardo sobre el enum en una cadena: el nombre, con una función que el compilador genere (sabe los
 >   nombres, también los de otro módulo, por su interfaz). El análisis, por hacer.
+> - **`#778`, el primero, hecho** (Eduardo: *«algo como Enum.getName(miEnum.enun4)»*; *«si»*): `Enum.getName(c)`, que
+>   resuelve el compilador escribiendo en el módulo la función valor -> nombre de cada enum; ni la VM ni Core cambian
+>   (Core cambiaría su interfaz sellada y las placas pedirían la stdlib otra vez). El traductor la usa para un enum en
+>   una cadena: `test-77` funciona, Mono 444. El segundo (`test-504`), por decidir.
+> - **`#778`, cerrada** (el segundo; Eduardo, con el ejemplo delante: *«el traductor puede asignarle un valor por defecto
+>   ( un null ). En Java ese código no compilaría»*): una local que C# declara sin valor, con el de su tipo. Mono, 447
+>   (`test-504`, `test-901` y `test-907`).
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

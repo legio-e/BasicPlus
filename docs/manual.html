@@ -606,6 +606,13 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   constante, una variable o un parámetro: con <code>d</code> de arriba, <code>integer(d) + 1</code> da
   <code>3</code>, e <code>integer(Dia.SABADO)</code>, <code>10</code> (V8).
 </p>
+<p>
+  <strong>Su nombre</strong>, con <code>Enum.getName(d)</code>: con <code>d</code> de arriba, <code>MIERCOLES</code>; y
+  <code>Enum.getName(Dia.SABADO)</code>, <code>SABADO</code>. Vale con los enums del módulo y con los de otro (sus
+  nombres viajan en su interfaz). Lo resuelve el compilador: escribe en el módulo, una vez por enum, la función que va
+  del valor al nombre; no hace falta importar nada (V8, <code>#778</code>). En una cadena, un enum sigue siendo su
+  número: <code>"d=" + d</code> da <code>d=2</code>, y <code>"d=" + Enum.getName(d)</code>, <code>d=MIERCOLES</code>.
+</p>
 
 <h3 id="clases-tipo">4.4 Clases</h3>
 <p>

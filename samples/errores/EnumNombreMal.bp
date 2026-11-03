@@ -1,0 +1,16 @@
+// EnumNombreMal.bp — V8 #778 (3-nov): `Enum.getName(c)` da el nombre del valor de un enum, y sólo eso: con algo que no
+// es un enum, o sin argumento, es un error en su línea. (En una función `native`, el error es otro: EnumNombreNativa.)
+module EnumNombreMal
+  import Core
+
+  enum Color
+    ROJO
+    VERDE
+  end Color
+
+  function Main()
+    print Enum.getName(5)
+    print Enum.getName()
+    print Enum.getName(Color.ROJO)
+  end Main
+end EnumNombreMal

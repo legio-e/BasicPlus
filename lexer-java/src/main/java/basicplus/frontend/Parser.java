@@ -1882,6 +1882,18 @@ public final class Parser {
                 return new CallExpr(new IdentifierExpr(castName, tok.line, tok.column),
                         args, lp.line, lp.column);
             }
+            // V8 #778 — `Enum.getName(c)`: BP no distingue mayúsculas en sus palabras reservadas, y `Enum` es `enum`. En
+            // una expresión, la palabra seguida de un punto es el nombre `Enum`, el de la función que da el nombre del
+            // valor de un enum (la resuelve el semántico); una declaración `enum X` nunca lleva el punto detrás. En JC,
+            // `Enum` ya es un nombre: sus palabras reservadas sí distinguen mayúsculas.
+            case ENUM:
+                if (pos + 1 < tokens.size() && tokens.get(pos + 1).type == TokenType.DOT) {
+                    advance();
+                    return new IdentifierExpr("Enum", tok.line, tok.column);
+                }
+                error("se esperaba una expresión, encontrado '" + tok.lexeme + "'");
+                advance();
+                return new NullLitExpr(tok.line, tok.column);
             default:
                 error("se esperaba una expresión, encontrado '" + tok.lexeme + "'");
                 advance();

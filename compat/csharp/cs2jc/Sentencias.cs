@@ -156,6 +156,15 @@ namespace Cs2Jc
             return Rechaza(donde, Porque.Pendiente("una variable de un case usada en otro (en C#, su ámbito es el switch)"));
         }
 
+        /// #778 — ` = <el valor de su tipo>` para una local que C# declara sin valor (ValorCualquiera: null, 0, false, ""…), o
+        /// nada si el tipo no tiene uno que se pueda escribir (entonces queda como en C#, y si JC la ve sin valor, lo dice).
+        string SinValor(ITypeSymbol t, SyntaxNode donde)
+        {
+            bool tiene = EsNumerico(t) || t.SpecialType == SpecialType.System_Boolean || EsCadena(t) || EsNullable(t)
+                         || !t.IsValueType || (EsEnum(t) && t.GetMembers().OfType<IFieldSymbol>().Any(f => f.IsConst));
+            return tiene ? " = " + ValorCualquiera(t, donde) : "";
+        }
+
         /// `T a = x, b;` (la de un `for` también): `var`, con su tipo.
         void Declaracion(VariableDeclarationSyntax d, bool constante)
         {
@@ -182,8 +191,13 @@ namespace Cs2Jc
                 }
                 return;
             }
+            // #778 (Eduardo, 3-nov: «el traductor puede asignarle un valor por defecto ( un null ). En Java ese código no
+            // compilaría por utilizar una variable sin asignar») — una local que C# declara sin valor, con el de su tipo. C#
+            // no deja leerla sin asignarla, y lo comprueba con más detalle que JC (un `switch` sobre una constante,
+            // test-504): ese valor nadie lo lee. JC, como Java, pide que tenga uno en todos los caminos (#540).
             var partes = d.Variables.Select(v => Ident(v.Identifier.ValueText)
-                                                 + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : "")).ToList();
+                                                 + (v.Initializer != null ? " = " + Expr(v.Initializer.Value)
+                                                    : SinValor(((ILocalSymbol) m.GetDeclaredSymbol(v)).Type, v))).ToList();
             // #777: una constante de C# que vale null (`const string x = null`): en JC una constante es un valor y no
             // puede serlo; se escribe como lo que hace, una variable que nadie cambia
             if (constante && d.Variables.Any(v => m.GetDeclaredSymbol(v) is ILocalSymbol ls && ls.HasConstantValue && ls.ConstantValue == null))

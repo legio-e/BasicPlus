@@ -1,0 +1,13 @@
+// EnumNombreLib.bp — V8 #778 (3-nov): la librería de EnumNombre, con un enum público. Sus nombres y sus valores viajan
+// en la interfaz del módulo (#522: en el orden en que se declaran), y con ellos el compilador de quien lo importa
+// escribe el nombre de cada valor. No es de paridad por sí sola: la usa EnumNombre, que sí está en el corpus.
+module EnumNombreLib
+  import Core
+
+  public enum Estado
+    PARADO
+    ANDANDO := 3
+    CORRIENDO
+  end Estado
+
+end EnumNombreLib

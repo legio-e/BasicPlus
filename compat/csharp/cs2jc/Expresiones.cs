@@ -206,6 +206,16 @@ namespace Cs2Jc
                 imports.Add("Str");
                 return "Str.fromCharCode(" + ExprBase(e) + ")";
             }
+            // #778 (Eduardo, 3-nov: «Para los Enum una función nueva, algo como Enum.getName(miEnum.enun4)») — un enum en
+            // una cadena, su nombre, como en C# (`X.A + "a"` es "Aa"; en JC, sin más, su número): `Enum.getName(x)`, que el
+            // compilador de JC resuelve con los nombres del enum. Uno [Flags] da en C# «A, B» con dos a la vez: no se traduce.
+            var tipo = m.GetTypeInfo(e).Type;
+            if (EsEnum(tipo))
+            {
+                if (tipo.GetAttributes().Any(a => a.AttributeClass?.Name == "FlagsAttribute"))
+                    return Rechaza(e, Porque.Pendiente("el nombre de un enum [Flags] en una cadena"));
+                return "Enum.getName(" + ExprBase(e) + ")";
+            }
             return ExprBase(e);
         }
 
@@ -670,7 +680,7 @@ namespace Cs2Jc
                     if (EsBool(m.GetTypeInfo(b.Left).Type)) return Rechaza(b, Porque.H7(Porque.BoolBits));
                     break;
             }
-            // Un enum en JC: `==` y `!=` tal cual, y en una cadena, su número. Lo que en C# opera con su entero, con
+            // Un enum en JC: `==` y `!=` tal cual, y en una cadena, su nombre (`Texto`: `Enum.getName`, #778). Lo que en C# opera con su entero, con
             // `(int)` delante (Eduardo, 31-oct: «(int)Enum.mivalor»): `a < b` es `(int) a < (int) b`, y `a - b`, dos enums,
             // `(int) a - (int) b`. Lo que da un enum desde un entero (`a | b`, `a + 1`) no: #522.
             bool enumIzq = EsEnum(m.GetTypeInfo(b.Left).Type), enumDer = EsEnum(m.GetTypeInfo(b.Right).Type);

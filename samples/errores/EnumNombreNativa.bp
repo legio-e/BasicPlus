@@ -1,0 +1,19 @@
+// EnumNombreNativa.bp — V8 #778 (3-nov): `Enum.getName(c)` en una función `native` no se traduce a C (la función
+// valor -> nombre la escribe el compilador en bytecode): es un error, con su línea y qué hacer —pedir el nombre fuera de
+// la native y pasárselo—, en vez del genérico de las llamadas a métodos que el AOT no traduce.
+module EnumNombreNativa
+  import Core
+
+  enum Color
+    ROJO
+    VERDE
+  end Color
+
+  native function nombre(c: Color): string
+    return Enum.getName(c)
+  end nombre
+
+  function Main()
+    print nombre(Color.VERDE)
+  end Main
+end EnumNombreNativa

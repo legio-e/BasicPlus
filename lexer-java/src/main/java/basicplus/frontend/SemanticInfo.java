@@ -96,6 +96,10 @@ public final class SemanticInfo {
 
     /** V8 #771 — `ev == null` y `ev != null` con un evento, dentro de su clase: «¿tiene suscriptor?». El emisor lee el
      *  campo del receptor del evento y lo compara con null. El evento, en exprSymbols (el lado que no es el null). */
+    /** V8 #778 — las llamadas `Enum.getName(c)`, con el enum del argumento: el emisor escribe la función valor -> nombre
+     *  de ese enum (una por enum y módulo) y la llama. */
+    public final java.util.Map<Ast.CallExpr, BpType.EnumType> nombresDeEnum = new java.util.HashMap<>();
+
     public final java.util.Set<Ast.BinaryExpr> eventosNulos =
             java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.BinaryExpr, Boolean>());
 

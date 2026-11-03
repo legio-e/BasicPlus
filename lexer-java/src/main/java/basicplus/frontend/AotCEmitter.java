@@ -2826,6 +2826,11 @@ public final class AotCEmitter {
                 throw new UnsupportedAotException("AOT: convertir a " + destino + " (line " + c.line
                         + ") no se traduce en una native; hazlo fuera de la native");
             }
+            /* V8 #778 — `Enum.getName(c)`: su función valor -> nombre la escribe el emisor en bytecode; en una native, no
+             * se traduce (todavía): que lo diga, en vez del genérico de las llamadas a métodos. */
+            if (semInfo != null && semInfo.nombresDeEnum.containsKey(c))
+                throw new UnsupportedAotException("AOT: Enum.getName (line " + c.line
+                        + ") no se traduce en una native; pide el nombre fuera de la native y pásaselo");
 
             if (c.callee instanceof Ast.MemberAccessExpr) {
                 Ast.MemberAccessExpr ma = (Ast.MemberAccessExpr) c.callee;

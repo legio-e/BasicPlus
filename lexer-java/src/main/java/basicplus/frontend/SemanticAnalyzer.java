@@ -3634,6 +3634,33 @@ public final class SemanticAnalyzer {
         return null;
     }
 
+    /** V8 #778 (Eduardo, 3-nov: «Para los Enum una función nueva, algo como Enum.getName(miEnum.enun4) o similar»; y
+     *  antes: «en tiempo de compilación debería poderse») — `Enum.getName(c)`: el nombre del valor de un enum. Lo
+     *  resuelve el compilador, que sabe los nombres de cada enum: el de este módulo, por su declaración; el de otro, por
+     *  su interfaz (sus nombres y valores, en el orden en que se declararon, #522). El emisor escribe en el módulo, una
+     *  vez por enum, la función valor -> nombre, y la llama: ni la VM ni Core cambian (declarar `Enum` en Core cambiaría
+     *  su interfaz, y todo programa la lleva sellada). `Enum` no es un símbolo de nadie: si el programa declara uno con
+     *  ese nombre, gana el suyo (null aquí). null si la llamada no es ésta. */
+    private BpType nombreDeEnum(CallExpr ce, MemberAccessExpr ma, Scope scope) {
+        if (!(ma.target instanceof IdentifierExpr) || !"getName".equals(ma.member)) return null;
+        String quien = ((IdentifierExpr) ma.target).name;
+        if (!"Enum".equals(quien)) return null;
+        if (module.members.resolve(quien) != null || (scope != null && scope.resolve(quien) != null)) return null;
+        if (ce.args.size() != 1) {
+            for (IExpr a : ce.args) analyzeExpr(a, scope, null);
+            err(ce.line, ce.column, "Enum.getName(): se esperaba 1 argumento, el valor de un enum");
+            return ErrorType.INSTANCE;
+        }
+        BpType at = analyzeExpr(ce.args.get(0), scope, null);
+        if (at instanceof ErrorType) return ErrorType.INSTANCE;
+        if (!(at instanceof EnumType)) {
+            err(ce.line, ce.column, "Enum.getName(): se esperaba el valor de un enum, no '" + at.display() + "'");
+            return ErrorType.INSTANCE;
+        }
+        info.nombresDeEnum.put(ce, (EnumType) at);
+        return PrimitiveType.STRING;
+    }
+
     private BpType analyzeCall(CallExpr ce, Scope scope) {
         Symbol target = null;
         boolean rejectedByModuleVisibility = false;
@@ -3705,6 +3732,8 @@ public final class SemanticAnalyzer {
             }
         } else if (ce.callee instanceof MemberAccessExpr) {
             MemberAccessExpr ma = (MemberAccessExpr) ce.callee;
+            BpType nombre = nombreDeEnum(ce, ma, scope);   // V8 #778: Enum.getName(c)
+            if (nombre != null) return nombre;
             analyzeExpr(ma, scope, null);
             target = info.exprSymbols.get(ma);
         }

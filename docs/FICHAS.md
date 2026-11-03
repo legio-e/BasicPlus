@@ -7384,7 +7384,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   (Eduardo: *«OK»*): `check-testc` enseña primero las líneas de veredicto de la prueba (las que empiezan por `FAIL `) y
   después, hasta 8, lo demás. Abierta hasta que se repita: entonces se verá qué sabotaje fue.
 
-#### 🔵 `#778` — el traductor de C#: dos huecos que tapaba el rechazo del `null` de las cadenas —un enum en una cadena (C#, su nombre; JC, su número) se traduce sin decirlo, y una variable que C# ve con valor tras un `switch` sobre una constante y JC, como Java, no— (abierta el 2-nov, en el lote de `#774`; **sólo análisis**)
+#### ✅ `#778` — el traductor de C#: dos huecos que tapaba el rechazo del `null` de las cadenas —un enum en una cadena (C#, su nombre; JC, su número) se traduce sin decirlo, y una variable que C# ve con valor tras un `switch` sobre una constante y JC, como Java, no— (abierta el 2-nov, en el lote de `#774`; **CERRADA el 3-nov**, el commit de `#778`: `Enum.getName`, y la local sin valor con el de su tipo)
 
 - **`test-77`:** `X.A + "a"` es `"Aa"` en C# y `"1a"` en JC (un enum en una cadena es su número a propósito, `#522`, y
   BP no tiene su nombre). El traductor lo escribe tal cual y la prueba falla («Main devuelve 5»): una traducción que
@@ -7398,6 +7398,29 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   crear una especie de función para obtener el nombre a partir del valor. No se si se puede hacer en runtime, en tiempo
   de compilación debería poderse.»* Es decir, la segunda salida, y en el lenguaje: el compilador conoce cada enum con
   sus nombres y valores (también el de otro módulo, por su interfaz). El análisis, por hacer.
+- **Decidido** (Eduardo, 3-nov: *«Para los Enum una función nueva, algo como Enum.getName(miEnum.enun4) o similar»*; y a
+  la propuesta, *«si»*). **Hecho:**
+  - **El compilador:** `Enum.getName(c)` da el nombre del valor de un enum. El semántico la reconoce si `Enum` no es un
+    símbolo del programa (`nombreDeEnum`); el emisor escribe en el módulo, una vez por enum, la función valor -> nombre
+    (`__nombreDe_…`, con el módulo del enum si es importado: dos con el mismo nombre no chocan) con los nombres que
+    conoce —de la declaración o de la interfaz—, y la llama. Un valor que no fuera del enum (en BP no se da, `#522`), su
+    número en texto, como C#. Ni la VM ni Core cambian: declarar `Enum` en Core cambiaría su interfaz, que todo programa
+    lleva sellada, y las placas rechazarían lo compilado después hasta llevarles la stdlib otra vez. En BP, `Enum` es la
+    palabra `enum` (sus reservadas no distinguen mayúsculas): el parser la acepta en una expresión seguida de un punto;
+    en JC ya es un nombre. En una `native`, un error claro (el AOT no la traduce). En una cadena, un enum sigue siendo su
+    número (`#522`).
+  - **El traductor:** un enum en una cadena (la suma, la interpolada, lo que se imprime), `Enum.getName(x)`; uno
+    `[Flags]` (C# da «A, B»), no se traduce.
+  - **Probado:** `EnumNombre` en el corpus (un enum del módulo, uno de `EnumNombreLib` y dos con el mismo nombre; la
+    misma salida en las dos VMs); `samples/errores/EnumNombreMal.bp` y `EnumNombreNativa.bp`, con sus casos en
+    `h13-errores.sh` (114, OK); los 721 fuentes del repo, los mismos `.mod`; el frontend, 337 pruebas en verde; el
+    manual, §4.3. Mono: `test-77` pasa a funcionar, 444.
+- **El segundo, `test-504`** (Eduardo, 3-nov, con el ejemplo delante: *«OK, si, el traductor puede asignarle un valor
+  por defecto ( un null ). En Java ese código no compilaría por utilizar una variable sin asignar.»*). **Hecho**
+  (`cs2jc`, `Sentencias.Declaracion`): una local que C# declara sin valor, con el de su tipo (`ValorCualquiera`, el
+  que ya usaban las locales de un `switch`: `null`, `0`, `false`, `""`…): C# no deja leerla sin asignarla, así que
+  ese valor nadie lo lee. Un tipo sin valor que escribir (un `struct`), como estaba. **Probado:** `test-504`
+  (`Object obj = null;`), `test-901` y `test-907`, que fallaban por lo mismo, funcionan: Mono, 447, ninguna de menos.
 
 #### ✅ `#777` — una constante `string` con `null` (`const string X = null;`) pasa el semántico desde `#774` y el emisor se para con un error interno: «Símbolo de datos no declarado (forward ref no permitida): X.Address» (abierta el 2-nov, con `test-243` de Mono; **CERRADA el mismo día**, el commit de `#776` y `#777`)
 

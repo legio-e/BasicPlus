@@ -5545,6 +5545,8 @@ public final class MivmEmitter {
     private void emitCall(CallExpr c) throws IOException {
         // V8/H7.1 (#747) — el ternario, `iif(c, a, b)`: no es una llamada; lo despliega emitTernario.
         if (info.ternarios.contains(c)) { emitTernario(c); return; }
+        // V8 #778 — `Enum.getName(c)`: el entero del enum y la función valor -> nombre de ese enum (escrita al final)
+        if (info.nombresDeEnum.containsKey(c)) { emitNombreDeEnum(c); return; }
         // H1.3b (V2) — casts numéricos generales: integer()/long()/float()/double().
         // No son símbolos; se reconocen por nombre y emiten la conversión
         // type-directed según el tipo del argumento.
@@ -7129,6 +7131,41 @@ public final class MivmEmitter {
         if (emittedHelpers.contains("__strequals")) {
             emitStrequalsBody();
         }
+        for (java.util.Map.Entry<String, Symbol.EnumSymbol> e : nombresDeEnumPedidos.entrySet())
+            emitNombreDeEnumBody(e.getKey(), e.getValue());   // V8 #778
+    }
+
+    /** V8 #778 — las funciones valor -> nombre que pide este módulo, por nombre de la función. */
+    private final java.util.LinkedHashMap<String, Symbol.EnumSymbol> nombresDeEnumPedidos = new java.util.LinkedHashMap<>();
+
+    /** V8 #778 — `Enum.getName(c)`: `c` (su entero) y la llamada a `__nombreDe_<enum>`, que se escribe al final. Su
+     *  nombre lleva el módulo del enum si es importado: dos enums con el mismo nombre no chocan. */
+    private void emitNombreDeEnum(CallExpr c) throws IOException {
+        Symbol.EnumSymbol en = info.nombresDeEnum.get(c).en;
+        String dueno = en.externalModule.isEmpty() ? "" : (en.externalLibrary.isEmpty() ? "" : en.externalLibrary + "_") + en.externalModule + "_";
+        String fn = "__nombreDe_" + (dueno + en.name).replace('.', '_');
+        nombresDeEnumPedidos.putIfAbsent(fn, en);
+        emitExpr(c.args.get(0));
+        w.emitCall(fn);
+    }
+
+    /** V8 #778 — la función valor -> nombre de un enum: cada valor, su nombre (un literal); y uno que no fuera del
+     *  enum —en BP no se da: de un entero no se pasa a un enum, #522—, su número en texto, como en C#. */
+    private void emitNombreDeEnumBody(String fn, Symbol.EnumSymbol en) throws IOException {
+        w.addFunction(fn, false);
+        w.declareParam("v");
+        for (java.util.Map.Entry<String, Long> m : en.values.entrySet()) {
+            int otro = w.newLabel();
+            w.emitGetParam("v"); emitInt(m.getValue().intValue()); w.emit(OpCode.EQ);
+            w.emitJumpIfFalse(otro);
+            w.emitLeaGlobal(internString(m.getKey()));
+            w.emitLRet();
+            w.declareLabel(otro);
+        }
+        w.emitGetParam("v");
+        w.emit(OpCode.CALL_BUILTIN);
+        w.emitShort((short) Builtin.INT_TO_STRING.id);
+        w.emitLRet();
     }
 
     private void emitStrconcatBody() throws IOException {
