@@ -4198,6 +4198,52 @@ las pruebas y el banco, y lo deja en el log.
 - (c) descargar el fichero de Kuhn;
 - (d) ¿`-O2` para la biblioteca aunque el resto vaya con `-Os`? Lo diría la medida del paso 2.
 
+**Decidido** (Eduardo, 3-nov: *«OK a) b) y c) yo diría que si también. Y d) también»*): la lista, con los números
+fuera; Two-Way; el fichero de Kuhn, descargado (`third_party/utf8-kuhn/`, CC BY 4.0); y `-O2`.
+
+**Y las natives** (Eduardo: *«en AOC cuando utilizas strings, lo haces a través de opCodes? Supongo que ahí también
+ganaríamos»*). No van por opcodes: una native es C y llama a C. Las más usadas (`len`, `charCodeAt`, `charAt`,
+`substring`, la concatenación, `==`, `intToString`) tienen su helper tipado, que llama a la misma primitiva que el
+intérprete (`bpvm_prims.h`: una implementación, dos entradas). Las demás (`indexOf`, `contains`, `upper`, `replace`,
+`split`…) van por el despachador genérico: los argumentos a la pila del hilo y el mismo builtin del intérprete. Así que lo
+que gane la biblioteca lo ganan las natives a la vez, sin tocar el AOT, y en proporción más: sin el intérprete alrededor,
+casi todo el tiempo de un `indexOf` en un bucle es la búsqueda misma. (La S3 no tiene natives: el AOT de Xtensa, `#488`,
+está fuera del plan.)
+
+### `#730`, el paso 1: la biblioteca en el PC (3-nov)
+
+En `bpgenvm-c/bpstr/` (su `LEEME.md` dice qué es cada fichero): `bpstr.h` y `bpstr.c`, la biblioteca; `oraculo.h`,
+los bucles de la VM de antes copiados tal cual; `prueba.c`; `banco.c`; y su `Makefile`.
+
+**Las pruebas, en verde:** 1 761 millones de comprobaciones contra el oráculo en cada una de las tres formas de buscar
+(el tope de hoy, todo por Two-Way, todo por la aguja corta), 21 s cada una en el PC. Y para saber que la prueba ve los
+fallos, veinte sabotajes, uno a uno, en una copia: 17 salen en rojo y 2 revientan contra la página protegida (leer más
+allá del final; escribir más allá de la salida). El que queda en verde no cambia el resultado: `retrocede` no baja del
+byte 0, y contar ese byte de más o de menos no mueve dónde se para. Y la prueba larga (`make prueba-larga`): el
+validador de `#711` con las 4 300 millones de cadenas de 4 bytes, 17 180 millones de comprobaciones, en verde.
+
+**El banco en el PC** (64 bits, GCC 16 con `-O2`), en ns por byte con 2 KB:
+
+| Función | bpstr | hoy | libc del PC |
+|---|---|---|---|
+| `avanza` hasta el final | 0,21 | 0,69 (×3,3) | — |
+| `retrocede` hasta el principio | 0,18 | 0,48 (×2,7) | — |
+| `primer_malo` (validar) | 0,43 | 1,21 (×2,8) | — |
+| `busca_byte` (no está) | 0,10 | 0,36 (×3,6) | 0,022 (`memchr`) |
+| `busca`, aguja de 3 B | 0,21 | 0,42 (×2,0) | — |
+| `busca`, aguja de 32 B (Two-Way) | 0,16 | 0,56 (×3,4) | — |
+| `mayusculas` (ASCII) | 0,19 | 0,38 (×2,0) | — |
+| `es_ascii` | 0,054 | 0,010 (×0,2) | — |
+| `cuenta` (con acentos) | 0,14 | 0,09 (×0,7) | — |
+| `compara` (iguales) | 0,051 | — | 0,024 (`memcmp`) |
+| `copia` | 0,019 | — | 0,009 (`memcpy`) |
+
+Lo que pierde, en el PC, tiene una causa: **SSE**. GCC vectoriza solo los bucles más sencillos (`es_ascii` y `cuenta`
+de hoy, 16 bytes por instrucción), y la libc del PC es de 16 en 16. En las placas no hay nada de eso —ni la M33 (sin
+Helium), ni las RISC-V de Espressif (sin la extensión V), ni la S3 para GCC—: la medida que decide es la del paso 2.
+Para el PC, si hace falta, la biblioteca puede usar allí la libc y los bucles sencillos (lo que le va mejor a cada
+familia, como estaba previsto: «lo decide la medida»).
+
 ---
 
 ## E6 · Los conjuntos, como en Pascal (la idea de Eduardo, 23-oct; sin empezar)

@@ -1,0 +1,433 @@
+/*
+ * prueba.c — las pruebas de bpstr (V8 #730): cada función, contra los bucles de la VM de antes (el ORÁCULO: copiados
+ * tal cual de include/bpvm_internal.h y src/builtins.c, con su nombre de entonces).
+ *
+ *   1. exhaustivo: todas las cadenas de 0 a 3 bytes (16,8 millones), en las cuatro alineaciones por turno;
+ *   2. buscar: con un alfabeto pequeño (a, b, 0x80, 0xC3), todos los pajares hasta 7 bytes con todas las agujas hasta
+ *      4; con el binario (a, b), hasta 12 y 8. Compilada con BPSTR_AGUJA_CORTA=1 todo va por Two-Way, y con uno muy
+ *      grande, todo por la corta: el Makefile pasa las tres;
+ *   3. comparar, copiar y rellenar: todas las parejas cortas, con las 16 combinaciones de alineación;
+ *   4. los bordes: de 0 a 64 bytes con la cadena pegada al final de una página protegida (y una al principio de otra):
+ *      leer un byte de más revienta la prueba (en el PC; en una placa no hay páginas);
+ *   5. al azar, con una semilla fija: casi todo ASCII, con caracteres largos y trozos malos;
+ *   6. el catálogo de UTF-8 de Markus Kuhn (third_party/utf8-kuhn), entero y línea a línea;
+ *   7. con "larga": además, el validador de #711 con TODAS las cadenas de 4 bytes (4 300 millones).
+ *
+ *   prueba [larga] [ruta del catálogo de Kuhn]
+ */
+#include "bpstr.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#ifndef BPSTR_AGUJA_CORTA   /* el de bpstr.c: el Makefile pasa el mismo a los dos */
+#define BPSTR_AGUJA_CORTA 16u
+#endif
+
+/* El oráculo, los bucles de la VM de antes: oraculo.h (el mismo que usa el banco). */
+#include "oraculo.h"
+
+/* ═══════════════════════════════ LOS FALLOS ═════════════════════════════ */
+
+static unsigned long long comprobaciones = 0, fallos = 0;
+
+static void muestra(const char* que, const uint8_t* p, uint32_t n, const char* detalle) {
+    if (fallos <= 12) {
+        printf("FALLO %s (%s) con %u bytes:", que, detalle, (unsigned) n);
+        for (uint32_t i = 0; i < n && i < 40; i++) printf(" %02X", p[i]);
+        printf("%s\n", n > 40 ? " ..." : "");
+    }
+}
+#define IGUAL(que, a, b, p, n) do { comprobaciones++; \
+        if ((long long) (a) != (long long) (b)) { char d_[96]; fallos++; \
+            snprintf(d_, sizeof d_, "%lld en vez de %lld", (long long) (a), (long long) (b)); muestra(que, p, n, d_); } \
+    } while (0)
+
+/* ═══════════════════════════════ UNA CADENA, TODO ═══════════════════════ */
+
+static uint8_t sal_a[70000], sal_b[70000];   /* las salidas (corregir, mayúsculas): la de bpstr y la del oráculo */
+
+/* Todas las funciones de UTF-8 y de transformar con la cadena p[0, n). Con `todo`, avanzar y retroceder con todos los
+ * puntos de partida y todos los pasos; sin él, unos cuantos. */
+static void una_cadena(const uint8_t* p, uint32_t n, int todo) {
+    uint32_t a1, b1, a2, b2, h1, h2, o1, o2;
+    IGUAL("es_ascii", bpstr_es_ascii(p, n), bpvm_bytes_ascii(p, n), p, n);
+    IGUAL("cuenta", bpstr_cuenta(p, n), utf8_cp_count(p, n), p, n);
+    IGUAL("primer_malo", bpstr_primer_malo(p, n), utf8_primer_malo(p, n), p, n);
+    o1 = bpstr_largo_corregido(p, n);
+    IGUAL("largo_corregido", o1, utf8_largo_corregido(p, n), p, n);
+    if (o1 < sizeof sal_a) {
+        o1 = bpstr_corrige(p, n, sal_a);
+        o2 = utf8_corrige(p, n, sal_b);
+        IGUAL("corrige (largo)", o1, o2, p, n);
+        IGUAL("corrige (bytes)", memcmp(sal_a, sal_b, o1 < o2 ? o1 : o2), 0, p, n);
+    }
+    if (n < sizeof sal_a) {
+        for (int up = 0; up <= 1; up++) {
+            memset(sal_a, 0xAA, n + 4); memset(sal_b, 0xAA, n + 4);
+            o1 = up ? bpstr_mayusculas(p, n, sal_a) : bpstr_minusculas(p, n, sal_a);
+            o2 = ref_cambia(p, n, sal_b, up);
+            IGUAL(up ? "mayusculas (largo)" : "minusculas (largo)", o1, o2, p, n);
+            IGUAL(up ? "mayusculas (bytes)" : "minusculas (bytes)", memcmp(sal_a, sal_b, n + 4), 0, p, n);
+        }
+    }
+    bpstr_recorta(p, n, &a1, &b1);
+    ref_recorta(p, n, &a2, &b2);
+    IGUAL("recorta (a)", a1, a2, p, n);
+    IGUAL("recorta (b)", b1, b2, p, n);
+    if (todo) {
+        for (uint32_t bo = 0; bo <= n + 1; bo++)
+            for (uint32_t k = 0; k <= n + 2; k++) {
+                IGUAL("avanza", bpstr_avanza(p, n, bo, k, &h1), ref_avanza(p, n, bo, k, &h2), p, n);
+                IGUAL("avanza (pasos)", h1, h2, p, n);
+                if (bo <= n) IGUAL("retrocede", bpstr_retrocede(p, bo, k), ref_retrocede(p, bo, k), p, n);
+            }
+    } else {
+        static uint32_t semilla = 12345u;
+        for (int t = 0; t < 6; t++) {
+            uint32_t bo, k;
+            semilla = semilla * 1103515245u + 12345u;
+            bo = n ? (semilla >> 8) % (n + 1) : 0;
+            k = (semilla >> 3) % (n + 3);
+            IGUAL("avanza", bpstr_avanza(p, n, bo, k, &h1), ref_avanza(p, n, bo, k, &h2), p, n);
+            IGUAL("avanza (pasos)", h1, h2, p, n);
+            IGUAL("retrocede", bpstr_retrocede(p, bo, k), ref_retrocede(p, bo, k), p, n);
+        }
+    }
+}
+
+/* Buscar q en p: hacia delante desde varios sitios, hacia atrás hasta varios, y las apariciones. */
+static void una_busqueda(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn) {
+    uint32_t desdes[5] = {0, 1, 3, n / 2, n + 1};
+    for (int d = 0; d < 5; d++) {
+        IGUAL("busca", bpstr_busca(p, n, q, qn, desdes[d]), bp_find_bytes(p, n, q, qn, desdes[d]), p, n);
+        IGUAL("busca_atras", bpstr_busca_atras(p, n, q, qn, desdes[d]), ref_busca_atras(p, n, q, qn, desdes[d]), p, n);
+    }
+    IGUAL("cuenta_apariciones", bpstr_cuenta_apariciones(p, n, q, qn), ref_apariciones(p, n, q, qn), p, n);
+    if (qn == 1) {
+        long r = bp_find_bytes(p, n, q, 1, 0);
+        IGUAL("busca_byte", bpstr_busca_byte(p, n, q[0]), r, p, n);
+    }
+}
+
+/* ═══════════════════════════════ LAS PRUEBAS ════════════════════════════ */
+
+static uint8_t buf[80000], buf2[80000];
+
+static void grupo(const char* nombre, unsigned long long antes_c, unsigned long long antes_f) {
+    printf("%s %-46s %12llu comprobaciones%s\n", fallos == antes_f ? "ok  " : "MAL ", nombre,
+           comprobaciones - antes_c, fallos == antes_f ? "" : " (con fallos)");
+    fflush(stdout);
+}
+
+static void exhaustivo_corto(void) {
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    uint32_t indice = 0;
+    for (uint32_t n = 0; n <= 3; n++) {
+        uint32_t total = 1u << (8 * n);
+        for (uint32_t v = 0; v < total; v++, indice++) {
+            uint8_t* p = buf + 16 + (indice & 3u);   /* las cuatro alineaciones, por turno */
+            for (uint32_t i = 0; i < n; i++) p[i] = (uint8_t) (v >> (8 * i));
+            una_cadena(p, n, 1);
+        }
+    }
+    grupo("exhaustivo: todas las cadenas de 0 a 3 bytes", c0, f0);
+}
+
+static uint32_t llena_de(uint8_t* p, uint32_t v, uint32_t n, const uint8_t* alfa, uint32_t na) {
+    for (uint32_t i = 0; i < n; i++) { p[i] = alfa[v % na]; v /= na; }
+    return n;
+}
+
+static void exhaustivo_buscar(const uint8_t* alfa, uint32_t na, uint32_t max_p, uint32_t max_q, const char* nombre) {
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    uint32_t vuelta = 0;
+    for (uint32_t n = 0; n <= max_p; n++) {
+        uint32_t tp = 1; for (uint32_t i = 0; i < n; i++) tp *= na;
+        for (uint32_t vp = 0; vp < tp; vp++) {
+            uint8_t* p = buf + 16 + (vuelta++ & 3u);
+            llena_de(p, vp, n, alfa, na);
+            for (uint32_t qn = 0; qn <= max_q; qn++) {
+                uint32_t tq = 1; for (uint32_t i = 0; i < qn; i++) tq *= na;
+                for (uint32_t vq = 0; vq < tq; vq++) {
+                    uint8_t* q = buf2 + 16 + ((vq + vuelta) & 3u);
+                    llena_de(q, vq, qn, alfa, na);
+                    una_busqueda(p, n, q, qn);
+                }
+            }
+        }
+    }
+    grupo(nombre, c0, f0);
+}
+
+static void exhaustivo_comparar_copiar(void) {
+    static const uint8_t alfa[4] = {'a', 'b', 0x80, 0xC3};
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    for (uint32_t na = 0; na <= 4; na++)
+        for (uint32_t va = 0; va < (1u << (2 * na)); va++)
+            for (uint32_t nb = 0; nb <= 4; nb++)
+                for (uint32_t vb = 0; vb < (1u << (2 * nb)); vb++)
+                    for (uint32_t al = 0; al < 16; al++) {
+                        uint8_t* a = buf + 16 + (al & 3u);
+                        uint8_t* b = buf2 + 16 + (al >> 2);
+                        llena_de(a, va, na, alfa, 4);
+                        llena_de(b, vb, nb, alfa, 4);
+                        IGUAL("compara", bpstr_compara(a, na, b, nb), ref_compara(a, na, b, nb), a, na);
+                        IGUAL("igual", bpstr_igual(a, na, b, nb), ref_compara(a, na, b, nb) == 0, a, na);
+                    }
+    /* copiar y rellenar: de 0 a 64 bytes, las 16 alineaciones, y que no toquen nada fuera */
+    for (uint32_t n = 0; n <= 64; n++)
+        for (uint32_t al = 0; al < 16; al++) {
+            uint8_t* d = buf + 32 + (al & 3u);
+            uint8_t* s = buf2 + 32 + (al >> 2);
+            for (uint32_t i = 0; i < 100; i++) { buf[i] = 0x5A; buf2[i] = (uint8_t) (i * 7u + 1u); }
+            bpstr_copia(d, s, n);
+            IGUAL("copia (bytes)", memcmp(d, s, n), 0, s, n);
+            IGUAL("copia (antes)", d[-1], 0x5A, s, n);
+            IGUAL("copia (despues)", d[n], 0x5A, s, n);
+            bpstr_rellena(d, 0xC3, n);
+            for (uint32_t i = 0; i < n; i++) IGUAL("rellena (bytes)", d[i], 0xC3, s, n);
+            IGUAL("rellena (antes)", d[-1], 0x5A, s, n);
+            IGUAL("rellena (despues)", d[n], 0x5A, s, n);
+        }
+    grupo("comparar, copiar y rellenar: parejas cortas, 16 alineaciones", c0, f0);
+}
+
+/* ── al azar ── */
+static uint32_t azar_estado = 0x2545F491u;
+static uint32_t azar(void) {   /* xorshift32: la misma serie en todas partes */
+    uint32_t x = azar_estado;
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    return azar_estado = x;
+}
+/* Una cadena «de verdad»: casi todo ASCII (letras, comas, espacios), con caracteres de 2, 3 y 4 bytes y, a veces, un
+ * byte suelto cualquiera (un trozo malo). */
+static uint32_t cadena_azar(uint8_t* p, uint32_t max) {
+    uint32_t n = 0, largo = azar() % 8u == 0 ? azar() % max : azar() % (max < 200u ? max : 200u);
+    int malos = (azar() % 4u) == 0;
+    while (n < largo) {
+        uint32_t r = azar() % 100u;
+        if (r < 70u || n + 4u > largo) {
+            static const char letras[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 ,.:;\"\n\t";
+            p[n++] = (uint8_t) letras[azar() % (sizeof letras - 1u)];
+        } else if (r < 82u) {
+            uint32_t cp = 0x80u + azar() % (0x800u - 0x80u);
+            n += bpstr_codifica(cp, p + n);
+        } else if (r < 92u) {
+            uint32_t cp = 0x800u + azar() % (0x10000u - 0x800u);
+            if (cp >= 0xD800u && cp <= 0xDFFFu) cp = 0x20ACu;   /* sin sustitutos (salvo los malos de abajo) */
+            n += bpstr_codifica(cp, p + n);
+        } else if (r < 97u || !malos) {
+            uint32_t cp = 0x10000u + azar() % (0x110000u - 0x10000u);
+            n += bpstr_codifica(cp, p + n);
+        } else {
+            p[n++] = (uint8_t) azar();                         /* cualquier byte */
+        }
+    }
+    return n;
+}
+
+static void al_azar(uint32_t veces) {
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    for (uint32_t t = 0; t < veces; t++) {
+        uint8_t* p = buf + 16 + (azar() & 3u);
+        uint32_t n = cadena_azar(p, 4000u);
+        una_cadena(p, n, 0);
+        /* buscar: un trozo de la cadena (corto o largo: Two-Way) o algo al azar */
+        for (int b = 0; b < 3; b++) {
+            uint8_t* q = buf2 + 16 + (azar() & 3u);
+            uint32_t qn;
+            if (n > 0 && (azar() & 1u)) {
+                uint32_t desde = azar() % n, largo = 1u + azar() % (azar() % 4u == 0 ? 80u : 20u);
+                if (desde + largo > n) largo = n - desde;
+                memcpy(q, p + desde, largo);
+                qn = largo;
+                if (azar() % 3u == 0 && qn > 0) q[azar() % qn] ^= (uint8_t) (1u << (azar() % 8u));   /* casi */
+            } else {
+                qn = cadena_azar(q, 40u);
+            }
+            una_busqueda(p, n, q, qn);
+        }
+        /* comparar con una copia, con algo cambiado o más corta */
+        {
+            uint8_t* q = buf2 + 16 + (azar() & 3u);
+            uint32_t qn = n;
+            memcpy(q, p, n);
+            if (n > 0 && (azar() & 1u)) q[azar() % n] ^= (uint8_t) (1u + azar() % 255u);
+            if (n > 0 && azar() % 4u == 0) qn = azar() % n;
+            IGUAL("compara", bpstr_compara(p, n, q, qn), ref_compara(p, n, q, qn), p, n);
+            IGUAL("igual", bpstr_igual(p, n, q, qn), ref_compara(p, n, q, qn) == 0, p, n);
+        }
+    }
+    {
+        char nombre[64];
+        snprintf(nombre, sizeof nombre, "al azar: %u cadenas de hasta 4000 bytes", (unsigned) veces);
+        grupo(nombre, c0, f0);
+    }
+}
+
+/* Una aguja larga y periódica, el caso difícil de Two-Way: «abaabaab…» en un pajar casi igual. */
+static void dos_caminos_dificil(void) {
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    for (uint32_t per = 1; per <= 9; per++)
+        for (uint32_t qn = 17; qn <= 70; qn += 3) {
+            uint8_t* q = buf2 + 16;
+            uint8_t* p = buf + 16;
+            uint32_t n = 2000u;
+            for (uint32_t i = 0; i < qn; i++) q[i] = (uint8_t) ('a' + ((i % per) == per - 1u));
+            for (uint32_t i = 0; i < n; i++) p[i] = (uint8_t) ('a' + ((i % per) == per - 1u));
+            p[n - 5u] ^= 1u;                                  /* que no case justo al final */
+            una_busqueda(p, n, q, qn);
+            p[1000] ^= 3u;
+            una_busqueda(p, n, q, qn);
+        }
+    grupo("buscar: agujas largas y periodicas (Two-Way)", c0, f0);
+}
+
+/* ── los bordes, contra una página protegida (sólo en el PC) ── */
+#if defined(_WIN32)
+#include <windows.h>
+static uint8_t* pagina_protegida(uint32_t* tam) {
+    SYSTEM_INFO si;
+    DWORD viejo;
+    uint8_t* b;
+    GetSystemInfo(&si);
+    *tam = (uint32_t) si.dwPageSize;
+    b = (uint8_t*) VirtualAlloc(NULL, 3u * *tam, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+    if (!b) return NULL;
+    VirtualProtect(b, *tam, PAGE_NOACCESS, &viejo);
+    VirtualProtect(b + 2u * *tam, *tam, PAGE_NOACCESS, &viejo);
+    return b + *tam;   /* la del medio: antes y después, nada */
+}
+#elif defined(__unix__) || defined(__APPLE__)
+#include <sys/mman.h>
+#include <unistd.h>
+static uint8_t* pagina_protegida(uint32_t* tam) {
+    uint8_t* b;
+    *tam = (uint32_t) sysconf(_SC_PAGESIZE);
+    b = (uint8_t*) mmap(NULL, 3u * *tam, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (b == MAP_FAILED) return NULL;
+    mprotect(b, *tam, PROT_NONE);
+    mprotect(b + 2u * *tam, *tam, PROT_NONE);
+    return b + *tam;
+}
+#else
+static uint8_t* pagina_protegida(uint32_t* tam) { *tam = 0; return NULL; }
+#endif
+
+static void bordes(void) {
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    uint32_t pg = 0, pg2 = 0;
+    uint8_t* pag = pagina_protegida(&pg);
+    uint8_t* pag2 = pagina_protegida(&pg2);   /* para las salidas */
+    if (!pag || !pag2) { printf("--   los bordes: sin páginas protegidas aquí, se saltan\n"); return; }
+    for (int forma = 0; forma < 3; forma++)
+        for (uint32_t n = 0; n <= 64; n++)
+            for (uint32_t t = 0; t < 40; t++) {
+                uint8_t* fin = pag + pg;          /* la cadena acaba justo donde empieza la página protegida */
+                uint8_t* p = fin - n;
+                uint8_t* ini = pag;               /* y otra que empieza justo después de la de antes */
+                uint32_t q0 = 0, qn;
+                uint8_t tmp[80];
+                if (forma == 0) for (uint32_t i = 0; i < n; i++) tmp[i] = (uint8_t) ("hola, que tal "[(i + t) % 14]);
+                else if (forma == 1) { uint32_t m = 0; while (m < n) { uint32_t cp = 0xE1u + (azar() % 40u); m += bpstr_codifica(m + 2u <= n ? cp : 'x', tmp + m); } }
+                else for (uint32_t i = 0; i < n; i++) tmp[i] = (uint8_t) azar();
+                memcpy(p, tmp, n);
+                memcpy(ini, tmp, n);
+                una_cadena(p, n, n <= 12);
+                una_cadena(ini, n, 0);
+                /* buscar el final (lo último que se lee) y algo que no está */
+                if (n > 0) {
+                    q0 = azar() % n;
+                    qn = n - q0;
+                    una_busqueda(p, n, p + q0, qn);
+                    una_busqueda(ini, n, p + q0, qn);
+                }
+                una_busqueda(p, n, (const uint8_t*) "zzzzzzzzzzzzzzzzzzzzzz", n < 22 ? n : 22);
+                IGUAL("compara (bordes)", bpstr_compara(p, n, ini, n), 0, p, n);
+                /* las salidas, también pegadas al final */
+                {
+                    uint32_t largo = bpstr_largo_corregido(p, n);
+                    uint8_t* sal = pag2 + pg2 - largo;
+                    IGUAL("corrige (bordes)", bpstr_corrige(p, n, sal), utf8_corrige(p, n, sal_b), p, n);
+                    sal = pag2 + pg2 - n;
+                    bpstr_mayusculas(p, n, sal);
+                    bpstr_copia(sal, p, n);
+                    bpstr_rellena(sal, 0x20, n);
+                }
+            }
+    grupo("los bordes: 0 a 64 bytes contra paginas protegidas", c0, f0);
+}
+
+/* ── el catálogo de Kuhn ── */
+static void kuhn(const char* ruta) {
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    FILE* f = fopen(ruta, "rb");
+    uint32_t n, a, lineas = 0;
+    if (!f) { printf("MAL  el catalogo de Kuhn: no se abre %s\n", ruta); fallos++; return; }
+    n = (uint32_t) fread(buf + 16, 1, sizeof buf - 32, f);
+    fclose(f);
+    una_cadena(buf + 16, n, 0);
+    for (uint32_t al = 1; al < 4; al++) {   /* entero, en las otras tres alineaciones */
+        memmove(buf + 16 + al, buf + 16 + al - 1, n);
+        una_cadena(buf + 16 + al, n, 0);
+    }
+    memmove(buf + 16, buf + 19, n);
+    for (a = 0; a < n; ) {                  /* línea a línea */
+        uint32_t b = a;
+        while (b < n && buf[16 + b] != '\n') b++;
+        una_cadena(buf + 16 + a, b - a, b - a <= 8);
+        una_busqueda(buf + 16, n, buf + 16 + a, b - a);
+        lineas++;
+        a = b + 1;
+    }
+    {
+        char nombre[80];
+        snprintf(nombre, sizeof nombre, "el catalogo de Kuhn: %u bytes, %u lineas", (unsigned) n, (unsigned) lineas);
+        grupo(nombre, c0, f0);
+    }
+}
+
+/* ── el validador con todas las cadenas de 4 bytes ── */
+static void exhaustivo_largo(void) {
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    uint8_t* p = buf + 16;
+    uint32_t v = 0;
+    do {
+        uint32_t o1, o2;
+        p[0] = (uint8_t) v; p[1] = (uint8_t) (v >> 8); p[2] = (uint8_t) (v >> 16); p[3] = (uint8_t) (v >> 24);
+        IGUAL("primer_malo (4)", bpstr_primer_malo(p, 4), utf8_primer_malo(p, 4), p, 4);
+        IGUAL("largo_corregido (4)", bpstr_largo_corregido(p, 4), utf8_largo_corregido(p, 4), p, 4);
+        o1 = bpstr_corrige(p, 4, sal_a);
+        o2 = utf8_corrige(p, 4, sal_b);
+        IGUAL("corrige (4)", o1, o2, p, 4);
+        if (memcmp(sal_a, sal_b, o1) != 0) IGUAL("corrige (4, bytes)", 1, 0, p, 4);
+        IGUAL("cuenta (4)", bpstr_cuenta(p, 4), utf8_cp_count(p, 4), p, 4);
+        if ((v & 0x0FFFFFFFu) == 0x0FFFFFFFu) { printf("     ... %u/16\n", (unsigned) (v >> 28) + 1u); fflush(stdout); }
+    } while (++v != 0u);
+    grupo("exhaustivo: el validador con TODAS las de 4 bytes", c0, f0);
+}
+
+int main(int argc, char** argv) {
+    static const uint8_t alfa4[4] = {'a', 'b', 0x80, 0xC3};
+    static const uint8_t alfa2[2] = {'a', 'b'};
+    int larga = 0;
+    const char* ruta_kuhn = "../third_party/utf8-kuhn/UTF-8-test.txt";
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "larga") == 0) larga = 1;
+        else ruta_kuhn = argv[i];
+    }
+    printf("bpstr: las pruebas (agujas cortas hasta %lu bytes)\n", (unsigned long) (BPSTR_AGUJA_CORTA));
+    exhaustivo_corto();
+    exhaustivo_buscar(alfa4, 4, 7, 4, "buscar: pajares de 0-7 y agujas de 0-4 (a b 80 C3)");
+    exhaustivo_buscar(alfa2, 2, 12, 8, "buscar: pajares de 0-12 y agujas de 0-8 (a b)");
+    dos_caminos_dificil();
+    exhaustivo_comparar_copiar();
+    bordes();
+    al_azar(200000u);
+    kuhn(ruta_kuhn);
+    if (larga) exhaustivo_largo();
+    printf("%s: %llu comprobaciones, %llu fallos\n", fallos ? "ROJO" : "VERDE", comprobaciones, fallos);
+    return fallos ? 1 : 0;
+}

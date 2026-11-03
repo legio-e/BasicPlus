@@ -9031,6 +9031,17 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
   hasta 4), los bordes junto a una página protegida, millones al azar y el catálogo de Kuhn. La medida: contra la libc
   y contra hoy, en el PC, la Pico 2, la C6, la S3 y la Nucleo. Por decidir: la lista, Two-Way, descargar el fichero de
   Kuhn y `-O2`.
+- **Decidido** (Eduardo, 3-nov: *«OK a) b) y c) yo diría que si también. Y d) también»*): la lista con los números
+  fuera, Two-Way, el fichero de Kuhn (`third_party/utf8-kuhn/`, CC BY 4.0) y `-O2`. Y su pregunta, si en las natives
+  las cadenas van por opcodes: no, llaman al mismo C que el intérprete (los helpers tipados y el despachador genérico),
+  así que ganan a la vez (`V8_IDEAS` §E5).
+- **3-nov, el paso 1 hecho, en el PC** (`bpgenvm-c/bpstr/`, `V8_IDEAS` §E5, «`#730`, el paso 1»): la biblioteca, el
+  oráculo (los bucles de antes, copiados tal cual), las pruebas y el banco. Las pruebas, VERDE: 1 761 millones de
+  comprobaciones en cada una de las tres formas de buscar; de veinte sabotajes, 17 en rojo, 2 revientan contra la
+  página protegida y el otro no cambia el resultado; y la larga (el validador de `#711` con todas las cadenas de 4
+  bytes: 17 180 millones de comprobaciones), también en verde. El banco en el PC: frente a hoy, avanzar y
+  retroceder ×2,7–3,3, validar ×2,8, buscar ×2–3,6, mayúsculas ×2; pierde en `es_ascii` y contar (GCC vectoriza los
+  bucles de hoy con SSE) y frente a la libc del PC (SSE). Lo que decide, en las placas: el paso 2.
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 

@@ -4,7 +4,7 @@ Dos categorías, según sean núcleo o backend opcional:
 
 - **In-tree (committeadas)** — núcleo **no-opcional** que va a host **y a los 3 firmwares**.
   Build hermético y reproducible **sin fetch**; versión clavada en git. Hoy: **`littlefs/`**
-  y **`fatfs/`**.
+  y **`fatfs/`**; y, sin ser código, **`utf8-kuhn/`**, los datos de una prueba.
 - **Descargadas localmente (gitignored, ver `.gitignore`)** — backend **GUI opcional**
   (render real LVGL + SDL2) de la variante "con GUI" de la VM-C en host; la variante
   "sin GUI" / `GUI=0` no las necesita. Hoy: **`lvgl/`**, **`SDL2/`**.
@@ -50,6 +50,15 @@ Dos categorías, según sean núcleo o backend opcional:
   Y después **comparar** el `ffconf.h` nuevo del paquete con el nuestro antes de tirarlo:
   una versión nueva puede traer opciones que no existían, y con el suyo borrado no habría
   quien lo cuente.
+
+- **`utf8-kuhn/`** — *UTF-8 decoder capability and stress test* de Markus Kuhn (2015-08-28), **licencia CC BY 4.0**:
+  el catálogo de referencia del UTF-8 mal formado. No es código: lo leen las pruebas de la biblioteca de cadenas
+  (`../bpstr/`, V8 `#730`), entero y línea a línea. Va marcado como binario en `.gitattributes` (sus bytes malos son a
+  propósito). Descargado el 3-nov-2026: 22 781 bytes, SHA-256
+  `b51cfe9a8d2689c90b10a13a3624092d546e0837c6ff835b6e5d713c5749c8c6`.
+  ```sh
+  curl -fsSL -o bpgenvm-c/third_party/utf8-kuhn/UTF-8-test.txt https://www.cl.cam.ac.uk/~mgk25/ucs/examples/UTF-8-test.txt
+  ```
 
 ## Descargadas localmente (GUI, NO versionadas)
 

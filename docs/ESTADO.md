@@ -124,6 +124,11 @@
 >   Números escritos a mano en `esp32/common`. Analizado y apuntado en `#784` (*«Apúntalo y lo hacemos a la tarde»*): la
 >   función ya existe (`Machine.setCpuFreqMHz`; en las ESP contesta `false`), y las dos irían sobre la gestión de energía
 >   del IDF; el plan, medir la S3 a 240, la función, la clave `cpu.mhz` y el valor sin clave.
+> - **`#730`, el diseño** (`V8_IDEAS` §E5; Eduardo: *«OK a) b) y c) yo diría que si también. Y d) también»*) **y el
+>   paso 1, hecho en el PC** (`bpgenvm-c/bpstr/`): la biblioteca, el oráculo, las pruebas (VERDE, 1 761 millones de
+>   comprobaciones en cada forma de buscar, y la larga, 17 180 millones; de veinte sabotajes, la prueba ve todos los que
+>   cambian algo) y el banco. En el PC, frente a hoy, ×2–3,6 en avanzar, validar, buscar y mayúsculas; pierde donde el PC
+>   usa SSE (`es_ascii`, contar, la libc). El paso 2, en las placas. El fichero de Kuhn, en `third_party/utf8-kuhn/`.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
