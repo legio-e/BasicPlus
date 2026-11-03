@@ -4109,6 +4109,95 @@ BSD.
 3. qué cuenta como «similar» frente a la libc;
 4. dónde se prueba en ARM, RISC-V y Xtensa: en las placas, o con QEMU (descargarlo).
 
+### `#730`: el diseño concreto (3-nov, para el OK de Eduardo)
+
+Lo decidido el 3-nov (*«OK, adelante ( 1,2 y 3 si)»*): la forma de arriba; «similar», no apartarse más de un ±25 % de
+la libc de cada familia; y vive en `bpgenvm-c/bpstr/`. Falta lo concreto: qué funciones, sus pruebas y la medida.
+
+**Dónde está hoy el C de las cadenas:** en `include/bpvm_internal.h` (los de UTF-8, en línea) y en `src/builtins.c`
+(los builtins), en bucles de un byte por paso. Lo que cuestan, medido en la S3 el 3-nov (`StrCenso`, 2 KB, con la caché
+nueva de `#737`):
+- **buscar:** `indexOf` o `contains` sin encontrar, 630 µs, unos 50 ciclos por byte: `bp_find_bytes` llama a `memcmp`
+  en cada posición. `replace`, 2,3 ms; `split`, 5,9 ms (buscar y crear los trozos);
+- **`fromBytes`**, 630 µs: validar con la regla de `#711`, copiar y mirar si es ASCII, tres pasadas de byte en byte;
+- **`upper`**, 370 µs; **`s == t`** con dos iguales, 100 µs (el `memcmp` de la libc de la S3);
+- y al nacer CADA cadena, una pasada entera para su bit ASCII (`bpvm_bytes_ascii`).
+
+Lo más lento del censo —los patrones, construir con `s + x` o con el `StringBuilder`— son bucles de BP y la reserva: la
+biblioteca no lo toca.
+
+**Las funciones.** Todas sobre un puntero y una longitud: no reservan memoria y no conocen la VM.
+
+| Grupo | Función | Lo que sustituye hoy | Cómo |
+|---|---|---|---|
+| UTF-8 | `bpstr_es_ascii(p, n)` | `bpvm_bytes_ascii`, al nacer cada cadena | el OR de palabras de 4 bytes |
+| | `bpstr_cuenta(p, n)` | `utf8_cp_count` (11 sitios: `strlen`, el cursor, `indexOf`, `replace`…) | n menos los bytes de continuación, de 4 en 4 |
+| | `bpstr_avanza`, `bpstr_retrocede` | los pasos del cursor (`strcur_byte_de`) y `utf8_byte_offset` | de 4 en 4 mientras quepan en lo que falta |
+| | `bpstr_primer_malo`, `bpstr_largo_corregido`, `bpstr_corrige` | los de `#711` (`fromBytes`, `readFile`, `readLine`) | el atajo ASCII de 4 en 4; lo demás, la regla de `#711` tal cual |
+| | `bpstr_decodifica`, `bpstr_codifica` | `utf8_decode`, `utf8_encode` | igual: son de un carácter |
+| Buscar | `bpstr_busca_byte(p, n, c)` | — | el truco de 4 en 4 (lo de `memchr`) |
+| | `bpstr_busca(p, n, q, qn, desde)` | `bp_find_bytes` (`indexOf`, `contains`, `split`, `replace`) | aguja de 1 byte: la de arriba; corta: su primer byte de 4 en 4 y comparar; larga: Two-Way, lineal siempre (nada cuadrático). El corte entre corta y larga, medido |
+| | `bpstr_busca_atras` | `Str.lastIndexOf` (en BP, por bytes) | lo mismo, hacia atrás |
+| | `bpstr_cuenta_apariciones` | la primera pasada de `replace` | con `bpstr_busca` |
+| Comparar | `bpstr_compara(a, na, b, nb)`, `bpstr_igual` | `memcmp` (`Str.compare`, `<`, `==`) | de 4 en 4, si la libc de alguna familia va peor |
+| Transformar | `bpstr_mayusculas`, `bpstr_minusculas` | `upper`, `lower` | lo ASCII de 4 en 4; lo demás, Latin-1 como hoy |
+| | `bpstr_recorta(p, n, &a, &b)` | `trim` | igual: sólo mira los bordes |
+| Copiar | `bpstr_copia`, `bpstr_rellena` | `memcpy`, `memset` | sólo si la libc de una familia no basta (la de la STM32 copia byte a byte) |
+
+**Fuera, de momento: los números** (`parseInt`, `parseFloat`, `intToString`, `floatToString`). Ya son nuestros (`#716`,
+`#734`) y en el censo cuestan poco (7–34 µs). Si se quieren dentro por tenerlo todo junto, se mueven tal cual.
+
+**El truco de 4 en 4, con un ejemplo.** «año» son los bytes `61 C3 B1 6F`: tres caracteres, porque `B1` (`10110001`) es
+de continuación. Hoy se miran los cuatro, uno a uno, con una comparación y un salto por byte. De 4 en 4 se lee la
+palabra entera y se marcan sus bytes de continuación con dos máscaras (el bit 7 encendido y el 6 apagado): sale uno,
+así que son 4 − 1 = 3 caracteres, en unas ocho operaciones para los cuatro bytes. Buscar una coma es parecido: con un
+XOR contra `2C 2C 2C 2C`, el byte que casa queda a cero, y otra máscara dice si en la palabra hay alguno a cero.
+
+**La codificación:**
+- C99, con `uint8_t` siempre: el `char` tiene signo en unas arquitecturas y en otras no;
+- lecturas de 4 bytes alineadas, nunca más allá del final: la cabeza y la cola, byte a byte;
+- little-endian, comprobado al compilar; sin `malloc` y sin instrucciones especiales.
+
+**Las pruebas** (`bpstr/prueba.c`; en el PC, `make prueba`):
+1. **el oráculo:** los bucles de hoy, copiados tal cual;
+2. **exhaustivo:** todas las cadenas de 0 a 3 bytes (16,8 millones) en cada función de UTF-8 y de transformar; y el
+   validador, además, todas las de 4 bytes (4 300 millones, unos minutos en el PC);
+3. **buscar:** con un alfabeto pequeño (`a`, `b`, `80`, `C3`), todos los pajares de hasta 8 bytes con todas las agujas de
+   hasta 4;
+4. **los bordes:** las longitudes de 0 a 64 en las cuatro alineaciones, con la cadena pegada al final de una página
+   protegida: leer un byte de más revienta la prueba;
+5. **al azar:** millones, con una semilla fija (la misma serie en el PC y en las placas): casi todo ASCII, con algún
+   carácter largo y algún trozo malo;
+6. **el catálogo de Markus Kuhn**, el de referencia del UTF-8 mal formado (un fichero de texto que habría que descargar).
+
+En las placas, las mismas pruebas, más cortas: exhaustivo hasta 2 bytes, los bordes y 100 000 al azar.
+
+**La medida** (`bpstr/banco.c`):
+- **qué:** cada función contra su pareja de la libc (`memchr`, `memcmp`, `memmem` donde la hay, `memcpy`, `memset`) y
+  contra el bucle de hoy, en ns por byte;
+- **con qué tamaños:** 16, 256, 2048 y 16 384 bytes;
+- **dónde:** en el PC y en una placa de cada familia (la Pico 2, la C6, la S3 y la Nucleo). En la S3 también con los
+  datos en la PSRAM, que es donde viven allí las cadenas;
+- **el criterio:** ±25 % de la pareja de la libc. Lo que no tiene pareja, más deprisa que hoy y cerca del ritmo de
+  `memchr` (leer la memoria una vez).
+
+En las placas, una imagen de prueba de cada familia (como las de la caché, fuera del repositorio) que al arrancar pasa
+las pruebas y el banco, y lo deja en el log.
+
+**Los pasos:**
+1. **en el PC:** la biblioteca, sus pruebas y su banco, en `bpgenvm-c/bpstr/` con su `Makefile`;
+2. **en las cuatro placas:** las pruebas y la tabla del banco. Lo que no llegue al ±25 %, otra vuelta;
+3. **incorporarla:** la VM llama a la biblioteca en vez de a sus bucles (sólo `builtins.c` y `bpvm_internal.h`); de
+   alta en los cinco builds; la red, que vigila que no cambie nada de lo que se ve (la VM-Java no la usa); y el censo
+   antes y después, en el PC y en las placas;
+4. **cerrar:** FICHAS y ESTADO.
+
+**Por decidir (Eduardo):**
+- (a) la lista: ¿entra todo lo de la tabla, y los números fuera?;
+- (b) Two-Way para las agujas largas: lineal siempre, unas 150 líneas, con el de musl (licencia MIT) de referencia;
+- (c) descargar el fichero de Kuhn;
+- (d) ¿`-O2` para la biblioteca aunque el resto vaya con `-Os`? Lo diría la medida del paso 2.
+
 ---
 
 ## E6 · Los conjuntos, como en Pascal (la idea de Eduardo, 23-oct; sin empezar)

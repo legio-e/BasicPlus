@@ -9022,6 +9022,15 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
   trabaja sobre un puntero y una longitud, verificada contra un oráculo—; (2) «similar» es no apartarse más de un ±25 %
   de la libc de cada familia, medida en una placa de cada (RP2350, RISC-V de Espressif, S3, STM32) y en el PC; (3) vive
   en `bpgenvm-c/bpstr/`. Lo siguiente: el diseño concreto (qué funciones, sus pruebas y la medida), para el OK.
+- **3-nov, el diseño concreto, para el OK** (`V8_IDEAS` §E5, «`#730`: el diseño concreto»): unas veinte funciones sobre un
+  puntero y una longitud —el UTF-8 (es ASCII, contar, avanzar y retroceder, validar y corregir), buscar (un byte, una
+  aguja corta o larga —Two-Way, lineal siempre—, hacia atrás, contar apariciones), comparar, mayúsculas y minúsculas,
+  `trim`, y copiar y rellenar si la libc de alguna familia no basta—; los números, fuera de momento. Lo que sustituyen
+  está en `bpvm_internal.h` y `builtins.c`, de un byte por paso: hoy, en la S3, `indexOf` sin encontrar en 2 KB, 630
+  µs (unos 50 ciclos por byte). Las pruebas: el oráculo (los bucles de hoy), exhaustivo hasta 3 bytes (el validador,
+  hasta 4), los bordes junto a una página protegida, millones al azar y el catálogo de Kuhn. La medida: contra la libc
+  y contra hoy, en el PC, la Pico 2, la C6, la S3 y la Nucleo. Por decidir: la lista, Two-Way, descargar el fichero de
+  Kuhn y `-O2`.
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 
