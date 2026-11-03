@@ -5,19 +5,27 @@
  * tiene pareja, más deprisa que hoy y cerca del ritmo de leer la memoria una vez (memchr de un byte que no está).
  *
  * Cada medida: las vueltas que hagan falta para unos 20 ms, la mejor de tres. En el PC, el reloj de Windows o el de
- * POSIX; en una placa (BPSTR_BANCO_PLACA), los dos de su imagen de prueba: bpstr_banco_ns y bpstr_banco_linea.
+ * POSIX; en una placa (BPSTR_PLACA: una imagen de prueba de la VM, con placa.c), los de placa.c: el reloj, la salida
+ * (/app/bpstr.txt) y la PSRAM. En una placa los datos van, primero, en la RAM interna, del tamaño que quepa (hasta
+ * 16 KB), y si hay PSRAM, otra vuelta con ellos allí, que es donde viven las cadenas de la VM. Se entra por
+ * bpstr_banco_main.
  */
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE   /* memmem, donde la libc lo tiene */
+#endif
 #include "bpstr.h"
 #include "oraculo.h"
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
-#if defined(BPSTR_BANCO_PLACA)
-uint64_t bpstr_banco_ns(void);
-void bpstr_banco_linea(const char* s);
+#if defined(BPSTR_PLACA)
+uint64_t bpstr_banco_ns(void);           /* placa.c */
+void bpstr_banco_linea(const char* s);   /* placa.c */
+void* bpstr_placa_psram(size_t n);       /* placa.c: NULL si la placa no tiene */
+int bpstr_banco_main(void);
 #define CON_MEMMEM 1
 #elif defined(_WIN32)
 #include <windows.h>
@@ -50,7 +58,8 @@ static void di(const char* fmt, ...) {
 }
 
 #define MAXN 16384u
-static uint8_t texto[MAXN + 64], acentos[MAXN + 64], otra[MAXN + 64], salida[3u * MAXN + 64];
+static uint8_t *texto, *acentos, *otra, *salida;   /* MAXN + 64 los tres primeros; la salida, 3 MAXN + 64 */
+static uint32_t maxn = MAXN;                       /* el tamaño más grande que se mide: el que cupo */
 static const uint8_t* aguja_corta = (const uint8_t*) "ab@";
 static uint8_t aguja_larga[32];
 static volatile uint32_t sumidero;
@@ -117,35 +126,84 @@ static double mide(fn_t f, uint32_t n) {
     return mejor;
 }
 
+/* Un número con tres decimales, con enteros: el printf de una placa puede no tener %f (las ESP llevan picolibc). */
+static void con3(char* b, size_t cap, double v) {
+    unsigned long m = (unsigned long) (v * 1000.0 + 0.5);
+    snprintf(b, cap, "%3lu.%03lu", m / 1000ul, m % 1000ul);
+}
+
 static void fila(const char* que, fn_t f, fn_t libc, fn_t hoy) {
     static const uint32_t tam[4] = {16u, 256u, 2048u, 16384u};
     for (int i = 0; i < 4; i++) {
         uint32_t n = tam[i];
+        if (n > maxn) break;
         double b = mide(f, n), l = libc ? mide(libc, n) : 0.0, h = hoy ? mide(hoy, n) : 0.0;
-        char cl[40] = "", ch[40] = "";
-        if (libc) snprintf(cl, sizeof cl, "%7.3f  %+5.0f %%", l, 100.0 * (b - l) / l);
-        if (hoy) snprintf(ch, sizeof ch, "%7.3f  x%5.1f", h, h / b);
-        di("%-26s %6u  %7.3f   %-16s   %-16s", que, (unsigned) n, b, cl, ch);
+        char cb[16], cl[40] = "", ch[40] = "", x[16];
+        con3(cb, sizeof cb, b);
+        if (libc) {
+            double p = 100.0 * (b - l) / l;
+            con3(x, sizeof x, l);
+            snprintf(cl, sizeof cl, "%7s  %+5ld %%", x, (long) (p < 0 ? p - 0.5 : p + 0.5));
+        }
+        if (hoy) {
+            unsigned long r = (unsigned long) (h / b * 10.0 + 0.5);
+            con3(x, sizeof x, h);
+            snprintf(ch, sizeof ch, "%7s  x%3lu.%lu", x, r / 10ul, r % 10ul);
+        }
+        di("%-26s %6u  %7s   %-16s   %-16s", que, (unsigned) n, cb, cl, ch);
     }
 }
 
-int main(void) {
-    uint32_t i, n;
-    uint32_t semilla = 0x2545F491u;
-    /* el texto: palabras de letras con espacios y comas; con acentos, una de cada diez letras es una de dos bytes */
-    for (i = 0; i < MAXN + 64; i++) {
+/* Los datos, en la memoria que se le da: el texto (palabras con espacios y comas) y, con acentos, una de cada diez
+ * letras de dos bytes. */
+static void prepara(void) {
+    uint32_t i, n, semilla = 0x2545F491u;
+    for (i = 0; i < maxn + 64; i++) {
         semilla ^= semilla << 13; semilla ^= semilla >> 17; semilla ^= semilla << 5;
         texto[i] = (uint8_t) ((semilla % 7u == 0) ? ' ' : (semilla % 23u == 0) ? ',' : 'a' + (semilla >> 8) % 26u);
     }
-    for (i = 0, n = 0; n < MAXN + 60; i++) {
+    for (i = 0, n = 0; n < maxn + 60; i++) {
         semilla ^= semilla << 13; semilla ^= semilla >> 17; semilla ^= semilla << 5;
         if (semilla % 10u == 0) n += bpstr_codifica(0xE1u + (semilla >> 8) % 26u, acentos + n);   /* á, é, ñ… */
-        else acentos[n++] = texto[i % MAXN];
+        else acentos[n++] = texto[i % maxn];
     }
-    memcpy(otra, texto, sizeof otra);
-    memcpy(aguja_larga, texto + 5000, 31);
+    memcpy(otra, texto, maxn + 64);
+    memcpy(aguja_larga, texto + maxn / 3u, 31);
     aguja_larga[31] = '@';                             /* casi un trozo del texto: no está */
+}
 
+static void tabla(void);
+
+int bpstr_banco_main(void) {
+    uint8_t* bloque = NULL;
+    /* la RAM interna: lo que quepa, de 16 KB para abajo (en el PC, siempre los 16) */
+    for (maxn = MAXN; maxn >= 2048u; maxn /= 2u) {
+        bloque = (uint8_t*) malloc(6u * maxn + 4u * 64u);
+        if (bloque) break;
+    }
+    if (!bloque) { di("bpstr, el banco: no hay ni 12 KB de RAM"); return 1; }
+    texto = bloque; acentos = texto + maxn + 64; otra = acentos + maxn + 64; salida = otra + maxn + 64;
+    prepara();
+    di("bpstr, el banco, con los datos en la RAM interna (hasta %u bytes)", (unsigned) maxn);
+    tabla();
+    free(bloque);
+#if defined(BPSTR_PLACA)
+    /* y en la PSRAM, si la hay */
+    maxn = MAXN;
+    bloque = (uint8_t*) bpstr_placa_psram(6u * maxn + 4u * 64u);
+    if (bloque) {
+        texto = bloque; acentos = texto + maxn + 64; otra = acentos + maxn + 64; salida = otra + maxn + 64;
+        prepara();
+        di("bpstr, el banco, con los datos en la PSRAM (hasta %u bytes)", (unsigned) maxn);
+        tabla();
+        free(bloque);
+    }
+#endif
+    di("fin del banco");
+    return 0;
+}
+
+static void tabla(void) {
     di("bpstr, el banco (ns por byte; libc: la pareja de la libc y lo que se aparta; hoy: el bucle de antes y lo que");
     di("gana bpstr). Punteros de %u bits.", (unsigned) (8u * sizeof(void*)));
     di("%-26s %6s  %7s   %-16s   %-16s", "funcion", "bytes", "bpstr", "libc", "hoy");
@@ -168,6 +226,8 @@ int main(void) {
     fila("mayusculas (con acentos)", f_mayus_ac, NULL, h_mayus_ac);
     fila("copia", f_copia, l_copia, NULL);
     fila("rellena", f_rellena, l_rellena, NULL);
-    di("fin del banco");
-    return 0;
 }
+
+#ifndef BPSTR_PLACA
+int main(void) { return bpstr_banco_main(); }
+#endif

@@ -211,6 +211,12 @@ void bpvm_boot2_subir(const bpvm_boot2_familia_t* f) {
         log_printf("autorun: no se mira — la placa no llegó sana (estado %d%s)",
                    (int) st->state, st->degraded ? ", degradada" : "");
 
+#ifdef BPSTR_PRUEBA_PLACA
+    /* V8 #730 (el paso 2): en una IMAGEN DE PRUEBA de la biblioteca de cadenas, sus pruebas y su banco (bpstr/placa.c),
+     * con el FS montado y antes del autorun; lo que dicen, en /app/bpstr.txt. En las imágenes de siempre no existe. */
+    if (con_fs) { void bpstr_en_placa(void); bpstr_en_placa(); }
+#endif
+
     /* La historia del arranque, a la flash ANTES del autorun: si la app se cuelga o se va
      * la corriente, el arranque está. Y #423: a partir de aquí el log lo manda el ENV
      * (`log=0|1`, apagado por defecto); lo de arriba se registra siempre. */

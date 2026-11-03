@@ -12,7 +12,19 @@ decidido, en `docs/V8_IDEAS.md` §E5, «`#730`: el diseño concreto»; el estado
 | `oraculo.h` | los bucles de la VM de antes, copiados tal cual: lo que bpstr tiene que dar, byte a byte |
 | `prueba.c` | las pruebas, contra el oráculo |
 | `banco.c` | lo que tarda cada función, frente a la libc y frente al bucle de antes |
+| `placa.c` | las pruebas y el banco en una placa: lo que los une a una imagen de prueba de la VM (abajo) |
 | `Makefile` | `make prueba`, `make prueba-larga` y `make banco`, en el PC |
+
+## En una placa (el paso 2)
+
+Con `BPSTR_PLACA`, `prueba.c` y `banco.c` se compilan para una placa: las pruebas, más cortas (la RAM y el tiempo no
+dan para las del PC: de las cadenas de 3 bytes, una de cada 4099; pajares y agujas más pequeños; 3000 al azar; sin
+los bordes, que piden páginas protegidas), y el banco, con los búferes que quepan (en las ESP con PSRAM, otra vuelta con
+los datos allí). Una **imagen de prueba** (no se queda en el repositorio) lleva además `bpstr.c` y `placa.c`, y
+`BPSTR_PRUEBA_PLACA`: entonces el arranque común (`src/bpvm_boot2.c`) llama a `bpstr_en_placa` con el FS montado, y
+lo que dicen va, línea a línea, a `/app/bpstr.txt` (se baja con `wire_serie.py PUERTO get`). El catálogo de Kuhn tiene
+que estar antes en `/app/UTF-8-test.txt`. Los números se escriben con enteros: el `printf` de una placa puede no tener
+`%f` ni `%llu` (las ESP del IDF 6.1 llevan picolibc).
 
 ## Cómo es
 

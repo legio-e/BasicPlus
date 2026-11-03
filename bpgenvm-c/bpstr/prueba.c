@@ -14,12 +14,59 @@
  *   7. con "larga": además, el validador de #711 con TODAS las cadenas de 4 bytes (4 300 millones).
  *
  *   prueba [larga] [ruta del catálogo de Kuhn]
+ *
+ * En una placa (BPSTR_PLACA: una imagen de prueba de la VM, con placa.c): las mismas, más cortas —la RAM y el tiempo
+ * no dan para las del PC—: de las cadenas de 3 bytes, una de cada 4099; los pajares y las agujas, más pequeños; 3000 al
+ * azar de hasta 1500 bytes; sin los bordes (no hay páginas protegidas); el catálogo de Kuhn, del FS de la placa; y lo
+ * que dicen, línea a línea, a placa.c (/app/bpstr.txt). Se entra por bpstr_prueba_main.
  */
 #include "bpstr.h"
 
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef BPSTR_PLACA
+void bpstr_banco_linea(const char* s);                               /* placa.c */
+long bpstr_placa_lee(const char* ruta, uint8_t* dst, uint32_t cap);   /* placa.c: un fichero del FS de la placa */
+int  bpstr_prueba_main(int larga, const char* ruta_kuhn);
+#define BUF_N       24576u   /* cabe el catálogo de Kuhn (22 781 bytes) */
+#define SAL_N       8192u
+#define AZAR_VECES  3000u
+#define AZAR_MAX    1500u
+#define PASO_3      4099u    /* de las cadenas de 3 bytes, una de cada tantas */
+#define BUSCA4_P    5u
+#define BUSCA4_Q    3u
+#define BUSCA2_P    10u
+#define BUSCA2_Q    6u
+#else
+#define BUF_N       80000u
+#define SAL_N       70000u
+#define AZAR_VECES  200000u
+#define AZAR_MAX    4000u
+#define PASO_3      1u
+#define BUSCA4_P    7u
+#define BUSCA4_Q    4u
+#define BUSCA2_P    12u
+#define BUSCA2_Q    8u
+#endif
+
+/* Una línea de lo que dice la prueba: en el PC, a la salida; en una placa, a placa.c. */
+static void di(const char* fmt, ...) {
+    char l[300];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(l, sizeof l, fmt, ap);
+    va_end(ap);
+#ifdef BPSTR_PLACA
+    bpstr_banco_linea(l);
+#else
+    fputs(l, stdout);
+    fputc('\n', stdout);
+    fflush(stdout);
+#endif
+}
 
 #ifndef BPSTR_AGUJA_CORTA   /* el de bpstr.c: el Makefile pasa el mismo a los dos */
 #define BPSTR_AGUJA_CORTA 16u
@@ -32,21 +79,36 @@
 
 static unsigned long long comprobaciones = 0, fallos = 0;
 
+/* Un entero en decimal, sin %lld ni %llu: el printf de una placa puede no tenerlos (las ESP llevan picolibc). */
+static const char* dec(long long v, char* b) {
+    char t[24];
+    int k = 0, j = 0;
+    unsigned long long u = v < 0 ? 0ull - (unsigned long long) v : (unsigned long long) v;
+    do { t[k++] = (char) ('0' + (int) (u % 10u)); u /= 10u; } while (u);
+    if (v < 0) b[j++] = '-';
+    while (k) b[j++] = t[--k];
+    b[j] = '\0';
+    return b;
+}
+
 static void muestra(const char* que, const uint8_t* p, uint32_t n, const char* detalle) {
     if (fallos <= 12) {
-        printf("FALLO %s (%s) con %u bytes:", que, detalle, (unsigned) n);
-        for (uint32_t i = 0; i < n && i < 40; i++) printf(" %02X", p[i]);
-        printf("%s\n", n > 40 ? " ..." : "");
+        char bytes[130];
+        uint32_t k = 0;
+        for (uint32_t i = 0; i < n && i < 40; i++) k += (uint32_t) snprintf(bytes + k, sizeof bytes - k, " %02X", p[i]);
+        di("FALLO %s (%s) con %u bytes:%s%s", que, detalle, (unsigned) n, k ? bytes : "", n > 40 ? " ..." : "");
     }
 }
 #define IGUAL(que, a, b, p, n) do { comprobaciones++; \
         if ((long long) (a) != (long long) (b)) { char d_[96]; fallos++; \
-            snprintf(d_, sizeof d_, "%lld en vez de %lld", (long long) (a), (long long) (b)); muestra(que, p, n, d_); } \
+            char da_[24], db_[24]; \
+            snprintf(d_, sizeof d_, "%s en vez de %s", dec((long long) (a), da_), dec((long long) (b), db_)); \
+            muestra(que, p, n, d_); } \
     } while (0)
 
 /* ═══════════════════════════════ UNA CADENA, TODO ═══════════════════════ */
 
-static uint8_t sal_a[70000], sal_b[70000];   /* las salidas (corregir, mayúsculas): la de bpstr y la del oráculo */
+static uint8_t sal_a[SAL_N], sal_b[SAL_N];   /* las salidas (corregir, mayúsculas): la de bpstr y la del oráculo */
 
 /* Todas las funciones de UTF-8 y de transformar con la cadena p[0, n). Con `todo`, avanzar y retroceder con todos los
  * puntos de partida y todos los pasos; sin él, unos cuantos. */
@@ -113,26 +175,27 @@ static void una_busqueda(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_
 
 /* ═══════════════════════════════ LAS PRUEBAS ════════════════════════════ */
 
-static uint8_t buf[80000], buf2[80000];
+static uint8_t buf[BUF_N], buf2[BUF_N];
 
 static void grupo(const char* nombre, unsigned long long antes_c, unsigned long long antes_f) {
-    printf("%s %-46s %12llu comprobaciones%s\n", fallos == antes_f ? "ok  " : "MAL ", nombre,
-           comprobaciones - antes_c, fallos == antes_f ? "" : " (con fallos)");
-    fflush(stdout);
+    char c_[24];
+    di("%s %-46s %12s comprobaciones%s", fallos == antes_f ? "ok  " : "MAL ", nombre,
+       dec((long long) (comprobaciones - antes_c), c_), fallos == antes_f ? "" : " (con fallos)");
 }
 
 static void exhaustivo_corto(void) {
     unsigned long long c0 = comprobaciones, f0 = fallos;
     uint32_t indice = 0;
     for (uint32_t n = 0; n <= 3; n++) {
-        uint32_t total = 1u << (8 * n);
-        for (uint32_t v = 0; v < total; v++, indice++) {
+        uint32_t total = 1u << (8 * n), paso = (n == 3) ? PASO_3 : 1u;
+        for (uint32_t v = 0; v < total; v += paso, indice++) {
             uint8_t* p = buf + 16 + (indice & 3u);   /* las cuatro alineaciones, por turno */
             for (uint32_t i = 0; i < n; i++) p[i] = (uint8_t) (v >> (8 * i));
             una_cadena(p, n, 1);
         }
     }
-    grupo("exhaustivo: todas las cadenas de 0 a 3 bytes", c0, f0);
+    grupo(PASO_3 == 1u ? "exhaustivo: todas las cadenas de 0 a 3 bytes"
+                       : "exhaustivo: hasta 2 bytes; de 3, una de cada 4099", c0, f0);
 }
 
 static uint32_t llena_de(uint8_t* p, uint32_t v, uint32_t n, const uint8_t* alfa, uint32_t na) {
@@ -232,7 +295,7 @@ static void al_azar(uint32_t veces) {
     unsigned long long c0 = comprobaciones, f0 = fallos;
     for (uint32_t t = 0; t < veces; t++) {
         uint8_t* p = buf + 16 + (azar() & 3u);
-        uint32_t n = cadena_azar(p, 4000u);
+        uint32_t n = cadena_azar(p, AZAR_MAX);
         una_cadena(p, n, 0);
         /* buscar: un trozo de la cadena (corto o largo: Two-Way) o algo al azar */
         for (int b = 0; b < 3; b++) {
@@ -262,7 +325,8 @@ static void al_azar(uint32_t veces) {
     }
     {
         char nombre[64];
-        snprintf(nombre, sizeof nombre, "al azar: %u cadenas de hasta 4000 bytes", (unsigned) veces);
+        snprintf(nombre, sizeof nombre, "al azar: %u cadenas de hasta %u bytes", (unsigned) veces,
+                 (unsigned) AZAR_MAX);
         grupo(nombre, c0, f0);
     }
 }
@@ -286,7 +350,9 @@ static void dos_caminos_dificil(void) {
 }
 
 /* ── los bordes, contra una página protegida (sólo en el PC) ── */
-#if defined(_WIN32)
+#if defined(BPSTR_PLACA)
+static uint8_t* pagina_protegida(uint32_t* tam) { *tam = 0; return NULL; }   /* en una placa no hay páginas */
+#elif defined(_WIN32)
 #include <windows.h>
 static uint8_t* pagina_protegida(uint32_t* tam) {
     SYSTEM_INFO si;
@@ -321,7 +387,7 @@ static void bordes(void) {
     uint32_t pg = 0, pg2 = 0;
     uint8_t* pag = pagina_protegida(&pg);
     uint8_t* pag2 = pagina_protegida(&pg2);   /* para las salidas */
-    if (!pag || !pag2) { printf("--   los bordes: sin páginas protegidas aquí, se saltan\n"); return; }
+    if (!pag || !pag2) { di("--   los bordes: sin paginas protegidas aqui, se saltan"); return; }
     for (int forma = 0; forma < 3; forma++)
         for (uint32_t n = 0; n <= 64; n++)
             for (uint32_t t = 0; t < 40; t++) {
@@ -363,11 +429,17 @@ static void bordes(void) {
 /* ── el catálogo de Kuhn ── */
 static void kuhn(const char* ruta) {
     unsigned long long c0 = comprobaciones, f0 = fallos;
-    FILE* f = fopen(ruta, "rb");
     uint32_t n, a, lineas = 0;
-    if (!f) { printf("MAL  el catalogo de Kuhn: no se abre %s\n", ruta); fallos++; return; }
+#ifdef BPSTR_PLACA
+    long leidos = bpstr_placa_lee(ruta, buf + 16, sizeof buf - 32);
+    if (leidos < 0) { di("MAL  el catalogo de Kuhn: no se lee %s", ruta); fallos++; return; }
+    n = (uint32_t) leidos;
+#else
+    FILE* f = fopen(ruta, "rb");
+    if (!f) { di("MAL  el catalogo de Kuhn: no se abre %s", ruta); fallos++; return; }
     n = (uint32_t) fread(buf + 16, 1, sizeof buf - 32, f);
     fclose(f);
+#endif
     una_cadena(buf + 16, n, 0);
     for (uint32_t al = 1; al < 4; al++) {   /* entero, en las otras tres alineaciones */
         memmove(buf + 16 + al, buf + 16 + al - 1, n);
@@ -404,30 +476,45 @@ static void exhaustivo_largo(void) {
         IGUAL("corrige (4)", o1, o2, p, 4);
         if (memcmp(sal_a, sal_b, o1) != 0) IGUAL("corrige (4, bytes)", 1, 0, p, 4);
         IGUAL("cuenta (4)", bpstr_cuenta(p, 4), utf8_cp_count(p, 4), p, 4);
-        if ((v & 0x0FFFFFFFu) == 0x0FFFFFFFu) { printf("     ... %u/16\n", (unsigned) (v >> 28) + 1u); fflush(stdout); }
+        if ((v & 0x0FFFFFFFu) == 0x0FFFFFFFu) di("     ... %u/16", (unsigned) (v >> 28) + 1u);
     } while (++v != 0u);
     grupo("exhaustivo: el validador con TODAS las de 4 bytes", c0, f0);
 }
 
-int main(int argc, char** argv) {
+/* Todas, en orden; devuelve 0 si salen en verde. Con `larga`, también el validador con las de 4 bytes. */
+int bpstr_prueba_main(int larga, const char* ruta_kuhn) {
     static const uint8_t alfa4[4] = {'a', 'b', 0x80, 0xC3};
     static const uint8_t alfa2[2] = {'a', 'b'};
+    char nombre[80];
+    comprobaciones = fallos = 0;
+    di("bpstr: las pruebas (agujas cortas hasta %lu bytes)", (unsigned long) (BPSTR_AGUJA_CORTA));
+    exhaustivo_corto();
+    snprintf(nombre, sizeof nombre, "buscar: pajares de 0-%u y agujas de 0-%u (a b 80 C3)", BUSCA4_P, BUSCA4_Q);
+    exhaustivo_buscar(alfa4, 4, BUSCA4_P, BUSCA4_Q, nombre);
+    snprintf(nombre, sizeof nombre, "buscar: pajares de 0-%u y agujas de 0-%u (a b)", BUSCA2_P, BUSCA2_Q);
+    exhaustivo_buscar(alfa2, 2, BUSCA2_P, BUSCA2_Q, nombre);
+    dos_caminos_dificil();
+    exhaustivo_comparar_copiar();
+    bordes();
+    al_azar(AZAR_VECES);
+    kuhn(ruta_kuhn);
+    if (larga) exhaustivo_largo();
+    {
+        char c_[24], f_[24];
+        di("%s: %s comprobaciones, %s fallos", fallos ? "ROJO" : "VERDE", dec((long long) comprobaciones, c_),
+           dec((long long) fallos, f_));
+    }
+    return fallos ? 1 : 0;
+}
+
+#ifndef BPSTR_PLACA
+int main(int argc, char** argv) {
     int larga = 0;
     const char* ruta_kuhn = "../third_party/utf8-kuhn/UTF-8-test.txt";
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "larga") == 0) larga = 1;
         else ruta_kuhn = argv[i];
     }
-    printf("bpstr: las pruebas (agujas cortas hasta %lu bytes)\n", (unsigned long) (BPSTR_AGUJA_CORTA));
-    exhaustivo_corto();
-    exhaustivo_buscar(alfa4, 4, 7, 4, "buscar: pajares de 0-7 y agujas de 0-4 (a b 80 C3)");
-    exhaustivo_buscar(alfa2, 2, 12, 8, "buscar: pajares de 0-12 y agujas de 0-8 (a b)");
-    dos_caminos_dificil();
-    exhaustivo_comparar_copiar();
-    bordes();
-    al_azar(200000u);
-    kuhn(ruta_kuhn);
-    if (larga) exhaustivo_largo();
-    printf("%s: %llu comprobaciones, %llu fallos\n", fallos ? "ROJO" : "VERDE", comprobaciones, fallos);
-    return fallos ? 1 : 0;
+    return bpstr_prueba_main(larga, ruta_kuhn);
 }
+#endif
