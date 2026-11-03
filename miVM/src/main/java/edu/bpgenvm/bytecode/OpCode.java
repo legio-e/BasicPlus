@@ -394,4 +394,20 @@ public enum OpCode {
         }
         return op;
     }
+
+    /** V8 #768 (Eduardo, 3-nov: «si utilizas un word pasamos a 64K») — el desplazamiento de un DATO del módulo (una
+     *  global, un literal, una constante, el descriptor de una clase) en los 16 bits de su operando: GET/SET/LEA_GLOBAL
+     *  y sus variantes, NEW_OBJECT, INSTANCEOF, TRY_BEGIN y los CHECKCAST. El bloque de datos vive DEBAJO del código,
+     *  así que el desplazamiento es siempre negativo y el word se lee menos 65 536: de -65 535 a -1. Antes, con signo
+     *  (de -32 768 a -1, el tope de 32 KB): lo de entonces se lee igual, y un .mod viejo no cambia. El 0 se queda en 0:
+     *  es el centinela de CHECKCAST (una cadena) y de TRY_BEGIN (cualquier excepción), y ningún dato vive ahí. La
+     *  VM-C, igual: bpvm_read_csoff_be. Los locales y los saltos siguen con signo. */
+    public static int desplazamientoDeDato(int word) {
+        word &= 0xFFFF;
+        return word == 0 ? 0 : word - 0x10000;
+    }
+
+    /** V8 #768 — lo más que ocupa el bloque de datos de un módulo: 65 532 bytes. El dato más bajo, a -65 532 (los
+     *  datos van de 4 en 4); a -65 536, su word sería el 0 del centinela. */
+    public static final int DATOS_MAX = 65532;
 }

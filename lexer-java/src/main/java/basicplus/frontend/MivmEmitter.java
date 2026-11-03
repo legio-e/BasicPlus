@@ -581,6 +581,19 @@ public final class MivmEmitter {
     }
 
     public void emitTo(Path outputDir) throws IOException {
+        try {
+            emitModuloEn(outputDir);
+        } catch (ModWriter.DatosLlenos e) {
+            // V8 #768 (3-nov) — el módulo no cabe en sus 64 KB de datos: un error, el que lo dice (con el dato que ya no
+            // cabe), y sin artefacto, como cualquier error del emisor (#521): se borra el .mod rancio y su .dbg.
+            errors.add(e.getMessage());
+            String modName = w.getCanonicalFilename();
+            Files.deleteIfExists(outputDir.resolve(modName));
+            Files.deleteIfExists(outputDir.resolve(modName.substring(0, modName.length() - 4) + ".dbg"));
+        }
+    }
+
+    private void emitModuloEn(Path outputDir) throws IOException {
         if (PRUEBA_ERROR_DE_EMISOR) errors.add("[prueba] error del emisor forzado (EmisorConErroresTest)");
         w.setFormato(formato);   // V7/H2 (#523): 8 o 9
         formatoActual = formato; moduloLocalActual = moduloLocal();
@@ -1342,6 +1355,8 @@ public final class MivmEmitter {
                     break;
                 }
             }
+        } catch (ModWriter.DatosLlenos e) {
+            throw e;   // V8 #768: el módulo no cabe; lo dice emitTo
         } catch (Exception e) {
             errors.add("array fijo de módulo '" + vs.name + "': " + e.getMessage());
         }
@@ -7062,6 +7077,7 @@ public final class MivmEmitter {
         if (existing != null) return existing;
         String name = "__str_" + (stringPoolCounter++);
         try { w.addConstantString(name, value); }
+        catch (ModWriter.DatosLlenos e) { throw e; }   // V8 #768: el módulo no cabe; lo dice emitTo, y no se sigue
         catch (Exception e) { errors.add("intern string: " + e.getMessage()); }
         stringPool.put(value, name);
         return name;

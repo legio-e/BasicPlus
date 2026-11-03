@@ -28,6 +28,12 @@ Convenciones:
   Aplica a `JUMP`, `JUMP_IF_FALSE` y sus variantes compactas
   (`JUMP8/16`, `JUMP_IF_FALSE8/16`).
 - **csOff**: relativo al `cs` (= codeStart) del módulo actual.
+- **doff** (V8, #768, 3-nov): el desplazamiento de un DATO del módulo (una global, un literal, una constante, el
+  descriptor de una clase), relativo al `cs`, en 16 bits. El bloque de datos vive debajo del código, así que es
+  siempre negativo, y el word `w` se lee `w - 65536` (de -65 535 a -1); `w == 0` es 0, el centinela de `CHECKCAST`
+  (una cadena) y de `TRY_BEGIN` (cualquier excepción). Hasta 64 KB de datos por módulo (65 532 bytes; el compilador
+  lo dice si un módulo no cabe). Antes era un `i16` con signo (32 KB): lo de entonces se lee igual. En la VM-Java,
+  `OpCode.desplazamientoDeDato`; en la VM-C, `bpvm_read_csoff_be`. Los locales (`soff`) y los saltos, con signo.
 - Stack effect notación: `( a b -- c )` significa pop b, pop a, push c.
 - "tc.X" = campos del ThreadContext (ver `HEAP_LAYOUT.md` §5).
 
@@ -45,8 +51,8 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | 0x01 | `PUSH` | `i32` value | `( -- v )` | Empuja `value` al stack. |
 | 0x02 | `ADD` | — | `( a b -- a+b )` | Suma entera (i32 wrap). |
 | 0x03 | `PRINT` | — | `( v -- )` | Imprime int + newline al OutputSink. |
-| 0x04 | `GET_GLOBAL` | `i16` soff | `( -- v )` | Push `mem[cs + soff]` como i32 (lectura de 4 bytes BE). |
-| 0x05 | `SET_GLOBAL` | `i16` soff | `( v -- )` | Escribe i32 `v` en `mem[cs + soff]`. |
+| 0x04 | `GET_GLOBAL` | `u16` doff | `( -- v )` | Push `mem[cs + doff]` como i32 (lectura de 4 bytes BE). |
+| 0x05 | `SET_GLOBAL` | `u16` doff | `( v -- )` | Escribe i32 `v` en `mem[cs + doff]`. |
 | 0x06 | `CALL_EXT` | `u16` idx | `( -- )` | Llama a la función importada en índice `idx` de la ext-table del módulo. Equivalente a `CALL` con target = `mem[extTableAddress + idx*4]`. Frame guarda saved pc/bp/cs como en CALL. |
 | 0x07 | `CALL` | `i32` relAddr | `( -- )` | Llama a función dentro del mismo módulo. `relAddr` es relativo al `cs` (= offset CS-relative del entry-point). Push saved pc, bp, cs; bp ← sp; pc ← cs + relAddr. |
 | 0x08 | `RET` | `u8` paramsCount | `( retVal -- )` | Pop `retVal` del top del stack del callee. Restaura cs/bp/pc de los slots guardados (`[bp-12]`, `[bp-8]`, `[bp-4]`). Sp ← `bp - 12 - paramsCount*4`. Push `retVal` al nuevo sp. (El callee debe asegurar que `retVal` está en el top antes del RET; típicamente con un `PUSH 0` o `GET_LOCAL +slot` que contenga el return value.) |
@@ -74,7 +80,7 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 | 0x19 | `GE`  | — | `( a b -- (a>=b)?1:0 )` | |
 | 0x1A | `LE`  | — | `( a b -- (a<=b)?1:0 )` | |
 | 0x1B | `NEQ` | — | `( a b -- (a!=b)?1:0 )` | |
-| 0x1C | `LEA_GLOBAL` | `i16` soff | `( -- addr )` | Push `cs + soff` (dirección absoluta del global). |
+| 0x1C | `LEA_GLOBAL` | `u16` doff | `( -- addr )` | Push `cs + doff` (dirección absoluta del global). |
 | 0x1D | `NEWARRAY` | — | `( size -- ref )` | Aloca `TYPE_ARRAY_I32` con `size` elementos i32. Length escrito en `ref+0`, payload zeroed. RuntimeError si `size < 0`. Bajo `synchronized(vmLock)` desde heapAlloc hasta el push. |
 | 0x1E | `ALOAD` | — | `( ref idx -- v )` | i32 lookup: `v = mem[ref + 4 + idx*4]`. RuntimeError out-of-range. |
 | 0x1F | `ASTORE` | — | `( ref idx v -- )` | i32 store: `mem[ref + 4 + idx*4] = v`. RuntimeError out-of-range. |
@@ -125,12 +131,12 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 
 | Code | Op | Operando | Stack effect | Semántica |
 |---|---|---|---|---|
-| 0x40 | `GET_GLOBAL_I8`  | `i16` soff | `( -- v )` | Lee `mem[cs+soff]` como i8 sign-extended. |
-| 0x41 | `GET_GLOBAL_U8`  | `i16` soff | `( -- v )` | Zero-extend. |
-| 0x42 | `GET_GLOBAL_I16` | `i16` soff | `( -- v )` | 2 bytes BE sign-extended. |
-| 0x43 | `GET_GLOBAL_U16` | `i16` soff | `( -- v )` | Zero-extend. |
-| 0x44 | `SET_GLOBAL_I8`  | `i16` soff | `( v -- )` | `mem[cs+soff] = v & 0xFF`. |
-| 0x45 | `SET_GLOBAL_I16` | `i16` soff | `( v -- )` | 2 bytes BE. |
+| 0x40 | `GET_GLOBAL_I8`  | `u16` doff | `( -- v )` | Lee `mem[cs+doff]` como i8 sign-extended. |
+| 0x41 | `GET_GLOBAL_U8`  | `u16` doff | `( -- v )` | Zero-extend. |
+| 0x42 | `GET_GLOBAL_I16` | `u16` doff | `( -- v )` | 2 bytes BE sign-extended. |
+| 0x43 | `GET_GLOBAL_U16` | `u16` doff | `( -- v )` | Zero-extend. |
+| 0x44 | `SET_GLOBAL_I8`  | `u16` doff | `( v -- )` | `mem[cs+doff] = v & 0xFF`. |
+| 0x45 | `SET_GLOBAL_I16` | `u16` doff | `( v -- )` | 2 bytes BE. |
 | 0x46 | `BAND` | — | `( a b -- a&b )` | Bitwise AND. |
 | 0x47 | `BOR`  | — | `( a b -- a\|b )` | Bitwise OR. |
 | 0x48 | `BXOR` | — | `( a b -- a^b )` | Bitwise XOR. |
@@ -148,7 +154,7 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 |---|---|---|---|---|
 | 0x50 | `I32_TO_U16` | — | `( v -- v16u )` | 0..65535. |
 | 0x51 | `GC_COLLECT` | — | `( -- )` | Dispara GC manual. Imprime stats al output. |
-| 0x52 | `NEW_OBJECT` | `i16` csOff | `( -- ref )` | `classPtr = cs + csOff`. Lee `num_fields` del descriptor. `ref = heapAlloc(num_fields*4, TYPE_OBJECT)`. Escribe `class_ptr` en `ref+0`. Zero-init el resto. Push `ref`. Bajo vmLock. |
+| 0x52 | `NEW_OBJECT` | `u16` csOff (doff) | `( -- ref )` | `classPtr = cs + csOff`. Lee `num_fields` del descriptor. `ref = heapAlloc(num_fields*4, TYPE_OBJECT)`. Escribe `class_ptr` en `ref+0`. Zero-init el resto. Push `ref`. Bajo vmLock. |
 | 0x53 | `GET_FIELD` | `u8` slot | `( ref -- v )` | `v = mem[ref + 4 + slot*4]`. |
 | 0x54 | `SET_FIELD` | `u8` slot | `( ref v -- )` | `mem[ref + 4 + slot*4] = v`. |
 | 0x55 | `INVOKE_VIRTUAL` | `u8` slot, `u8` numArgs | `( ...args this -- )` | Despacho virtual. `this = peek(sp - 4 - numArgs*4)`. RuntimeError si `this == 0`. Lee `classPtr = mem[this]`. Busca `methodOff` en `vt[slot]` del descriptor; si es -1 o `slot >= num_methods`, sube por `parent_offset` y reintenta (L2 v3 fall-back). `targetCS = getCSForDataAddr(desc)`. Push saved pc/bp/cs y salta. |
@@ -166,11 +172,11 @@ propio byte + tamaño del operando), salvo que el opcode altere el flujo
 > mitad de una línea (una excepción al calcular una pieza) la deja salir tal cual, sin salto.
 
 | 0x5A | `CALL_BUILTIN` | `u16` id | `( args -- result )` | Despacha al builtin con id `id` (ver `BUILTINS.md`). Cada builtin define su stack effect específico. |
-| 0x5B | `TRY_BEGIN` | `i32` handlerRel, `i16` clsOff | `( -- )` | Push entry al `handlerStack`: `{ handlerPc = pc + handlerRel, savedSp, savedBp, savedCs, expectedClass = (clsOff==0 ? 0 : cs+clsOff) }`. Si `clsOff == 0`, catch atrapa cualquier ref/excepción. |
+| 0x5B | `TRY_BEGIN` | `i32` handlerRel, `u16` clsOff (doff) | `( -- )` | Push entry al `handlerStack`: `{ handlerPc = pc + handlerRel, savedSp, savedBp, savedCs, expectedClass = (clsOff==0 ? 0 : cs+clsOff) }`. Si `clsOff == 0`, catch atrapa cualquier ref/excepción. |
 | 0xAB | `TRY_BEGIN_EXT` | `i32` handlerRel, `i32` clsOff | `( -- )` | BUG-2 — igual que `TRY_BEGIN` pero `clsOff` es **i32**, alcanzando el descriptor de una clase de excepción de OTRO módulo (catch cross-module). El `clsOff` lo PARCHA el linker (`ehClassFixups`, MOD_FORMAT §4.4) por nombre cualificado. **Aditivo**: `TRY_BEGIN` (i16) no cambia → `.mod` existentes válidos. |
 | 0x5C | `TRY_END` | — | `( -- )` | Pop top del `handlerStack`. Cierre normal del try (sin excepción). |
 | 0x5D | `THROW` | — | `( ref -- )` | Pop `ref`. Si `ref == 0` → RuntimeError "throw null". Busca un handler en `handlerStack` cuya `expectedClass` matchee (= 0 o `isDescendantOf(class(ref), expected)`). Si encuentra: restaura sp/bp/cs/pc desde la entry, pop la pila a esa entry, push `ref` al sp restaurado (el catch lo recibe en local 0). Si no encuentra: BpThreadFault con stack trace BP. |
-| 0x5E | `INSTANCEOF` | `i16` csOff | `( ref -- 1|0 )` | `expected = cs + csOff`. Si `ref == 0` → push 0. Sino, sube por `parent_offset` desde `mem[ref]` (con `getCSForDataAddr` para cross-module) y push 1 si encuentra `expected`. |
+| 0x5E | `INSTANCEOF` | `u16` csOff (doff) | `( ref -- 1|0 )` | `expected = cs + csOff`. Si `ref == 0` → push 0. Sino, sube por `parent_offset` desde `mem[ref]` (con `getCSForDataAddr` para cross-module) y push 1 si encuentra `expected`. |
 | 0x5F | `FREE_REF` | — | `( ref -- )` | Liberación determinista. Si `ref` es objeto `TYPE_OBJECT`, recorre los `owner_bitmap` bits del descriptor y libera los fields owners recursivamente, luego marca el bloque como TAG_FREE y lo añade al freeListHead. NOP si `ref == 0` o tipo no liberable. Desde V7 (`#668`, liberar es destruir) el compilador lo emite sólo para un owner cuyo tipo no puede tener destructor (un string, un número, un array de ellos); el que puede tenerlo muere por `Core.__destruye`, que corre los destructores, hijos primero (`BUILTINS.md` §272–277). La semántica del opcode no cambia. |
 
 ## 0x60..0x70 — owner field + compactos + threading
@@ -228,8 +234,8 @@ lanzan `RuntimeError` atrapable («División por cero» / «Módulo por cero»).
 | 0x88 | `I64_TO_I32` | — | `( L -- i )` | Truncado a los 32 bits bajos. |
 | 0x89 | `GET_LOCAL_L` | `i16` soff | `( -- L )` | Push de 8 bytes en `mem[bp + soff]`. |
 | 0x8A | `SET_LOCAL_L` | `i16` soff | `( L -- )` | |
-| 0x8B | `GET_GLOBAL_L` | `i16` soff | `( -- L )` | Push de 8 bytes en `mem[cs + soff]`. |
-| 0x8C | `SET_GLOBAL_L` | `i16` soff | `( L -- )` | |
+| 0x8B | `GET_GLOBAL_L` | `u16` doff | `( -- L )` | Push de 8 bytes en `mem[cs + doff]`. |
+| 0x8C | `SET_GLOBAL_L` | `u16` doff | `( L -- )` | |
 | 0x8D | `NEWARRAY_I64` | — | `( size -- ref )` | Array de `size` elementos de 8 bytes (tipo `ARRAY_I64`), a cero. `size < 0` es fatal; sin heap o sin handle → RuntimeError «No space in heap» (OOM atrapable, H1). Safepoint de GC. |
 | 0x8E | `ALOAD_I64` | — | `( ref idx -- L )` | Índice fuera de rango o ref liberado → RuntimeError. |
 | 0x8F | `ASTORE_I64` | — | `( ref idx L -- )` | Ídem. |
@@ -277,8 +283,8 @@ Las comparaciones dejan `i32`. No hay excepción por división entre cero
 | 0xAC | `IPOW` | — | `( base e -- base^e )` | Potencia entera por cuadrados (i32 wrap). `e < 0` → RuntimeError «exponente negativo en potencia entera». |
 | 0xAD | `LPOW` | — | `( base e -- base^e )` | Igual en i64. |
 | 0xAE | `DPOW` | — | `( base e -- base^e )` | `bpvm_dpow`: si `e` es entero y `\|e\| <= 1024`, por cuadrados (y `1/r` si negativo); si no, `exp(e*log(base))`. Una sola copia, compartida con el AOT; byte-idéntica a miVM. |
-| 0xAF | `CHECKCAST` | `i16` clsOff, `i16` nameOff | `( ref -- ref )` | El estrechamiento dinámico de `Object` (#389): mira el top **sin sacarlo**. `null` pasa siempre. `clsOff == 0` significa «cadena» (`string(o)`); si no, sube por la cadena de padres desde el descriptor del objeto hasta `cs + clsOff`. Si no encaja → RuntimeError «conversion invalida: el valor no es un 'Nombre'» (el nombre está en `cs + nameOff`, longitud + bytes). |
-| 0xB0 | `CHECKCAST_EXT` | `i32` clsOff, `i16` nameOff | `( ref -- ref )` | Variante cross-module de `CHECKCAST` (#444): el `clsOff` lo parcha el linker por nombre cualificado (misma maquinaria que `TRY_BEGIN_EXT`, tabla lateral en XIP). Aquí `clsOff == 0` NO es el centinela de cadena. Mismo mensaje de error, byte a byte. |
+| 0xAF | `CHECKCAST` | `u16` clsOff, `u16` nameOff (doff) | `( ref -- ref )` | El estrechamiento dinámico de `Object` (#389): mira el top **sin sacarlo**. `null` pasa siempre. `clsOff == 0` significa «cadena» (`string(o)`); si no, sube por la cadena de padres desde el descriptor del objeto hasta `cs + clsOff`. Si no encaja → RuntimeError «conversion invalida: el valor no es un 'Nombre'» (el nombre está en `cs + nameOff`, longitud + bytes). |
+| 0xB0 | `CHECKCAST_EXT` | `i32` clsOff, `u16` nameOff (doff) | `( ref -- ref )` | Variante cross-module de `CHECKCAST` (#444): el `clsOff` lo parcha el linker por nombre cualificado (misma maquinaria que `TRY_BEGIN_EXT`, tabla lateral en XIP). Aquí `clsOff == 0` NO es el centinela de cadena. Mismo mensaje de error, byte a byte. |
 
 ---
 
@@ -435,7 +441,7 @@ Sólo los emite `--formato=9`; una VM de V6 no los conoce (y rechaza el `MOD9` a
 | 0xB6 | `SET_FIELD_OWNER_REF` | `u16` idx | `( ref v -- )` | `SET_FIELD_OWNER` con `slot = ext[idx]`. |
 | 0xB7 | `NEW_OBJECT_REF` | `u16` idx | `( -- ref )` | `NEW_OBJECT` con `classPtr = ext[idx]` (ref `CLASE`: dirección **absoluta** del descriptor, construido o no). |
 | 0xB8 | `INSTANCEOF_REF` | `u16` idx | `( ref -- 1\|0 )` | `INSTANCEOF` con `expected = ext[idx]`. |
-| 0xB9 | `CHECKCAST_REF` | `u16` idx, `i16` nameOff | `( ref -- ref )` | `CHECKCAST` con `expected = ext[idx]`; `nameOff` es el literal local del mensaje. |
+| 0xB9 | `CHECKCAST_REF` | `u16` idx, `u16` nameOff (doff) | `( ref -- ref )` | `CHECKCAST` con `expected = ext[idx]`; `nameOff` es el literal local del mensaje. |
 | 0xBA | `TRY_BEGIN_REF` | `i32` handlerRel, `u16` idx | `( -- )` | `TRY_BEGIN` con `expectedClass = ext[idx]` (el `catch` de una excepción de otro módulo). |
 | 0xBB | `PUSH_REF` | `u16` idx | `( -- i32 )` | Empuja `ext[idx]` tal cual (la ranura del `$dest` de un handler: ref `EV_DEST`). |
 | 0xBD | `LEA_FIELD_REF` | `u16` idx | `( obj -- addr )` | Como `LEA_FIELD` con `slot = ext[idx]` (clase abierta, MOD9: la ranura la pone el cargador por clave, como `GET_FIELD_REF`). |
@@ -462,7 +468,7 @@ contra una interfaz del propio módulo; sólo los emite `--formato=9`.
 |---|---|---|---|---|
 | 0xBF | `INVOKE_IFAZ_REF` | `u16` idx de la interfaz, `u16` idx del método, `u8` numArgs | `( this ...args -- )` | Busca en la lista de la clase del objeto la tabla de la interfaz `ext[idxI]`, lee su ranura `ext[idxM]` y llama como `INVOKE_VIRTUAL` con esa ranura. `null`, un objeto liberado o un valor que no es objeto, el error de siempre; si la clase no la tiene (sólo un valor que no pasó por el compilador), RuntimeError «INVOKE_IFAZ: la clase del objeto no implementa la interfaz». |
 | 0xC0 | `INSTANCEOF_IFAZ_REF` | `u16` idx | `( ref -- 1\|0 )` | `x is I`: 1 si la clase del objeto tiene la interfaz `ext[idx]` en su lista; `null` o un valor que no es objeto, 0. |
-| 0xC1 | `CHECKCAST_IFAZ_REF` | `u16` idx, `i16` nameOff | `( ref -- ref )` | `I(x)`: como `CHECKCAST_REF`, contra la lista de interfaces (`null` pasa; mira la cima sin sacarla). Si no la tiene, RuntimeError «conversion invalida: el valor no es un '…'», con el nombre del literal `nameOff`, byte a byte igual en las dos VMs. |
+| 0xC1 | `CHECKCAST_IFAZ_REF` | `u16` idx, `u16` nameOff (doff) | `( ref -- ref )` | `I(x)`: como `CHECKCAST_REF`, contra la lista de interfaces (`null` pasa; mira la cima sin sacarla). Si no la tiene, RuntimeError «conversion invalida: el valor no es un '…'», con el nombre del literal `nameOff`, byte a byte igual en las dos VMs. |
 
 Una variable de un tipo interfaz es una referencia como las demás: leerla, guardarla,
 compararla con `==` o pasarla no tiene opcode propio. Leer o escribir una property de

@@ -530,6 +530,11 @@ Convenciones clave:
   CALL/RET) trabajan con offsets relativos a CS.
 - Los offsets a símbolos del data block son **negativos** desde CS
   (`dataStart - codeStart < 0`).
+- **Hasta 64 KB de datos por módulo** (V8, `#768`, 3-nov): las instrucciones que leen un dato (las globales,
+  `NEW_OBJECT`, `INSTANCEOF`, `TRY_BEGIN`, los `CHECKCAST`) llevan su offset en 16 bits, un `doff`: el word `w` se lee
+  `w - 65536`, y `w == 0` es 0, su centinela (`OPCODES.md`, convenciones). El bloque llega así a 65 532 bytes; uno
+  mayor no compila, y el compilador lo dice («el módulo 'X' no cabe: …», con el dato que ya no cabe). Hasta el 3-nov,
+  un `i16` con signo: 32 KB. Un `.mod` de entonces se lee igual (sus offsets, de -32 768 a -1, son el mismo word).
 - La ext-table es per-module; cada import resuelto ocupa 4 bytes con
   la dirección absoluta. `CALL_EXT idx` lee `mem[extTableAddress +
   idx*4]` para obtener la dirección destino.

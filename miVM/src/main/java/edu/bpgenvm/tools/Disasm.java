@@ -575,20 +575,19 @@ public class Disasm {
                 return String.format("%+d  ; [%s%+d]", v, base, v);
             }
             case SOFF_I16: {
-                short v = (short) raw;
+                /* V8 #768 — un local, con signo; un dato del módulo (las globales, también las estrechas y las
+                 * largas, y el descriptor de NEW_OBJECT/INSTANCEOF), un word menos 65 536 (OpCode.desplazamientoDeDato). */
+                int v;
                 String base;
                 switch (op) {
-                    case GET_GLOBAL: case SET_GLOBAL: case LEA_GLOBAL:
-                        base = "CS";
-                        break;
-                    case GET_LOCAL: case SET_LOCAL: case LEA_LOCAL:
-                        base = "BP";
+                    case GET_LOCAL: case SET_LOCAL: case LEA_LOCAL: case GET_LOCAL_L: case SET_LOCAL_L:
+                        base = "BP"; v = (short) raw;
                         break;
                     case NEW_OBJECT: case INSTANCEOF:
-                        base = "class@CS";
+                        base = "class@CS"; v = OpCode.desplazamientoDeDato((int) raw);
                         break;
                     default:
-                        base = "?";
+                        base = "CS"; v = OpCode.desplazamientoDeDato((int) raw);
                 }
                 return String.format("%+d  ; [%s%+d]", v, base, v);
             }
@@ -641,7 +640,7 @@ public class Disasm {
             case TRY_HANDLER_I32_I16: {
                 /* TRY_BEGIN — handler offset (i32 rel. al TRY_BEGIN) | cs_off (i16, 0=any). */
                 int rel    = (int)  ((raw >> 16) & 0xFFFFFFFFL);
-                int csOff  = (short)( raw        & 0xFFFF);
+                int csOff  = OpCode.desplazamientoDeDato((int) (raw & 0xFFFF));   // V8 #768
                 int absHnd = instAddr + rel;
                 String catchPart = (csOff == 0) ? "any"
                         : String.format("class@CS%+d", csOff);
@@ -666,7 +665,7 @@ public class Disasm {
             }
             case IDX_U16_NAME_I16: {
                 int idx = (int) ((raw >> 16) & 0xFFFF);
-                int nameOff = (short) (raw & 0xFFFF);
+                int nameOff = OpCode.desplazamientoDeDato((int) (raw & 0xFFFF));   // V8 #768
                 return String.format("ext[%d] name@CS%+d  ; %s", idx, nameOff, nombreExt(idx, imports));
             }
             case TRY_HANDLER_I32_IDX_U16: {

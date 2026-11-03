@@ -979,6 +979,16 @@ static inline BPVM_EN_LINEA uint16_t bpvm_read_u16_be(const uint8_t* p) {
 static inline BPVM_EN_LINEA int16_t bpvm_read_i16_be(const uint8_t* p) {
     return (int16_t) bpvm_read_u16_be(p);
 }
+/* V8 #768 (Eduardo, 3-nov: «si utilizas un word pasamos a 64K») — el operando de 16 bits de un DATO del módulo
+ * (una global, un literal, una constante, el descriptor de una clase), relativo al CS: el bloque de datos vive
+ * DEBAJO del código, así que es siempre negativo, y el word se lee menos 65 536 (de -65 535 a -1; antes, con signo,
+ * de -32 768 a -1: lo de entonces se lee igual). El 0 se queda en 0: el centinela de CHECKCAST (una cadena) y de
+ * TRY_BEGIN (cualquier excepción). La VM-Java, igual: OpCode.desplazamientoDeDato. Los locales y los saltos, con
+ * signo (bpvm_read_i16_be). */
+static inline BPVM_EN_LINEA int32_t bpvm_read_csoff_be(const uint8_t* p) {
+    uint16_t w = bpvm_read_u16_be(p);
+    return w == 0u ? 0 : (int32_t) w - 65536;
+}
 static inline BPVM_EN_LINEA void bpvm_write_u32_be(uint8_t* p, uint32_t v) {
 #ifndef BPVM_PALABRA_SIN_COMPROBAR
     if (__builtin_expect((((uintptr_t) p) & 3u) != 0u, 0)) { bpvm_write_u32_be_bytes(p, v); return; }

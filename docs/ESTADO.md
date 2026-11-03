@@ -41,8 +41,8 @@
 >   `EventoNuloTest`; el manual, §15.2. La red, VERDE (187); `check-jc`, 185 y 2 SKIP.
 > - **`#768`, analizada otra vez:** el tope no es de cada literal sino del bloque de datos del módulo (32 KB; la medida
 >   del 2-nov engañaba, un literal repetido se guarda una vez). Eduardo: *«si utilizas un word pasamos a 64K»*, y los
->   literales grandes, *resources* que se cargan al heap (`V8_IDEAS` §E12). El censo: 19 instrucciones llevan ese
->   desplazamiento; el plan, por aprobar.
+>   literales grandes, *resources* que se cargan al heap (`V8_IDEAS` §E12). El censo: 18 instrucciones llevan ese
+>   desplazamiento (19 operandos); el plan, por aprobar.
 > - **`#770`, cerrada** (Eduardo: *«770 como VM-Java»*): en la VM-C, `sleep(0)` cede como `yield()` (antes volvía en
 >   el acto); `SleepCede` en el corpus. La red, VERDE (188, y el estrés con `CedeCero`); `check-jc`, 186 y 2 SKIP.
 > - **`#742`, cerrada** (Eduardo: *«742 OK»*): en la VM-Java, `THREAD_EXIT` ya no marca el hilo TERMINATED; lo hace
@@ -54,6 +54,13 @@
 >   pasada distinta. La red de los tres, VERDE (188; MOD8, 185 y sus 3 SKIP; dos workers, 188; las de C, 111).
 > - **Abierta `#780`** (sólo análisis): tres ejemplos de `samples/errores` sin caso en `h13-errores.sh` (`EventoValor`,
 >   `ConstanteNula`, `AnnMal`), y `AnnMal` falla también por sus constructores de una línea.
+> - **`#768`, cerrada** (Eduardo: *«si utilizas un word pasamos a 64K»*; *«768 OK»*): el bloque de datos de un módulo,
+>   hasta 64 KB, sin tocar el formato ni la ABI: el mismo operando de 16 bits se lee como un word menos 65 536 (el 0,
+>   centinela), en las dos VMs; y si no cabe, un error claro, uno. Los 676 `.mod` del repo y la stdlib, iguales byte a
+>   byte con el compilador nuevo; `DatosGrandes` (33 000 bytes de literal) en el corpus; dos pruebas unitarias.
+>   Eduardo, al verlo: el tope es del generador de código, no del módulo (sólo cuentan los datos; el código no lo
+>   tiene). Abiertas, decididas: `#781` (un prefijo `WIDE`, como el de la JVM, para quitar el tope; *«a) si pero se
+>   puede hacer mas adelante»*) y `#782` (los recursos, lo grande fuera del módulo; *«b) también pero sin fecha»*).
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

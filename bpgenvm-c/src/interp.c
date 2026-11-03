@@ -1167,12 +1167,12 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             sp += 8; break;
         }
         case OP_GET_GLOBAL: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             int32_t v = bpvm_read_i32_be(mem + (uint32_t)((int32_t)cs + soff));
             bpvm_write_i32_be(mem + sp, v); sp += 4; break;
         }
         case OP_SET_GLOBAL: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
             bpvm_write_i32_be(mem + (uint32_t)((int32_t)cs + soff), v);
             break;
@@ -1200,35 +1200,35 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
          * trunca a los bytes bajos. Big-endian también dentro del dato, como todo
          * aquí. */
         case OP_GET_GLOBAL_I8: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             int8_t v = (int8_t) mem[(uint32_t)((int32_t)cs + soff)];
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4; break;
         }
         case OP_GET_GLOBAL_U8: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             uint8_t v = mem[(uint32_t)((int32_t)cs + soff)];
             bpvm_write_i32_be(mem + sp, (int32_t) v); sp += 4; break;
         }
         case OP_GET_GLOBAL_I16: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             uint32_t addr = (uint32_t)((int32_t)cs + soff);
             int32_t raw = ((int32_t) mem[addr] << 8) | (int32_t) mem[addr + 1];
             bpvm_write_i32_be(mem + sp, (int32_t)(int16_t) raw); sp += 4; break;
         }
         case OP_GET_GLOBAL_U16: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             uint32_t addr = (uint32_t)((int32_t)cs + soff);
             int32_t raw = ((int32_t) mem[addr] << 8) | (int32_t) mem[addr + 1];
             bpvm_write_i32_be(mem + sp, raw); sp += 4; break;
         }
         case OP_SET_GLOBAL_I8: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
             mem[(uint32_t)((int32_t)cs + soff)] = (uint8_t)(v & 0xFF);
             break;
         }
         case OP_SET_GLOBAL_I16: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             sp -= 4; int32_t v = bpvm_read_i32_be(mem + sp);
             uint32_t addr = (uint32_t)((int32_t)cs + soff);
             mem[addr]     = (uint8_t)((v >> 8) & 0xFF);
@@ -1236,7 +1236,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
         case OP_LEA_GLOBAL: {   /* H1.2a: dirección de global (string-const/array fijo) = ref 8 bytes */
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));
             sp += 8; break;
         }
@@ -1632,12 +1632,12 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             bpvm_write_i64_be(mem + (uint32_t)((int32_t) bp + soff), v); break;
         }
         case OP_GET_GLOBAL_L: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             int64_t v = bpvm_read_i64_be(mem + (uint32_t)((int32_t) cs + soff));
             bpvm_write_i64_be(mem + sp, v); sp += 8; break;
         }
         case OP_SET_GLOBAL_L: {
-            int16_t soff = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             sp -= 8; int64_t v = bpvm_read_i64_be(mem + sp);
             bpvm_write_i64_be(mem + (uint32_t)((int32_t) cs + soff), v); break;
         }
@@ -1976,7 +1976,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         }
         case OP_NEW_OBJECT: case OP_NEW_OBJECT_REF: {
             uint32_t class_ptr;
-            if (op == OP_NEW_OBJECT) { int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2; class_ptr = (uint32_t)((int32_t) cs + cs_off); }
+            if (op == OP_NEW_OBJECT) { int32_t cs_off = bpvm_read_csoff_be(mem + pc); pc += 2; class_ptr = (uint32_t)((int32_t) cs + cs_off); }
             else BPVM_REF_LEE(class_ptr);
             uint16_t num_fields = bpvm_read_u16_be(mem + class_ptr
                                                     + BPVM_CLS_OFF_NUM_FIELDS);
@@ -2152,7 +2152,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
         case OP_CHECKCAST_IFAZ_REF: {
             uint32_t ifaz;
             BPVM_REF_LEE(ifaz);
-            int16_t name_off = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t name_off = bpvm_read_csoff_be(mem + pc); pc += 2;
             bpref_t obj = bpref_load(vm, sp - BPVM_REF_SIZE);   /* peek */
             int ok = 1;
             if (!bpref_is_null(obj)) {
@@ -2180,7 +2180,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
 
         case OP_INSTANCEOF: case OP_INSTANCEOF_REF: {
             uint32_t expected;
-            if (op == OP_INSTANCEOF) { int16_t cs_off = bpvm_read_i16_be(mem + pc); pc += 2; expected = (uint32_t)((int32_t) cs + cs_off); }
+            if (op == OP_INSTANCEOF) { int32_t cs_off = bpvm_read_csoff_be(mem + pc); pc += 2; expected = (uint32_t)((int32_t) cs + cs_off); }
             else BPVM_REF_LEE(expected);
             sp -= BPVM_REF_SIZE; bpref_t obj = bpref_load(vm, sp);
             int32_t result = 0;
@@ -2205,8 +2205,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
          * opcode). Mira SIN CONSUMIR: si pasa, el valor sigue su camino con el
          * tipo nuevo; si no, RuntimeError atrapable que NOMBRA el tipo. */
         case OP_CHECKCAST: {
-            int16_t cls_off  = bpvm_read_i16_be(mem + pc); pc += 2;
-            int16_t name_off = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t cls_off  = bpvm_read_csoff_be(mem + pc); pc += 2;
+            int32_t name_off = bpvm_read_csoff_be(mem + pc); pc += 2;
             bpref_t obj = bpref_load(vm, sp - BPVM_REF_SIZE);   /* peek */
             int ok = 1;
             if (!bpref_is_null(obj)) {
@@ -2276,7 +2276,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                 }
                 expected_abs = (uint32_t)((int32_t) cs + cls_off);
             }
-            int16_t name_off = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t name_off = bpvm_read_csoff_be(mem + pc); pc += 2;
             bpref_t obj = bpref_load(vm, sp - BPVM_REF_SIZE);   /* peek */
             int ok = 1;
             if (!bpref_is_null(obj)) {
@@ -2399,7 +2399,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
              * Misma convención que JUMP. */
             uint32_t instr_addr = pc - 1;
             int32_t handler_rel = bpvm_read_i32_be(mem + pc); pc += 4;
-            int16_t cls_off     = bpvm_read_i16_be(mem + pc); pc += 2;
+            int32_t cls_off     = bpvm_read_csoff_be(mem + pc); pc += 2;
             int32_t handler_pc  = (int32_t) instr_addr + handler_rel;
             int32_t expected_cls = (cls_off == 0) ? 0
                                    : (int32_t)((int32_t) cs + cls_off);

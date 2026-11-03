@@ -7311,6 +7311,25 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#782` — los recursos: lo grande (un texto, una tabla) fuera del bloque de datos del módulo, cargado al heap cuando se usa (abierta el 3-nov, tras `#768`; **decidido, sin fecha**)
+
+- **La idea** (Eduardo, 3-nov, en `#768`): *«Los literales grandes deberian ser resources, que se cargan al heap.»*
+  Está en `V8_IDEAS` §E12. En una placa, un módulo se carga en la memoria de la VM, delante del heap: lo grande que
+  vive en su bloque de datos ocupa RAM aunque no se use.
+- **Decidido** (Eduardo, 3-nov: *«b) también pero sin fecha para hacerlo»*). Sin diseñar.
+
+#### 🔵 `#781` — quitar el tope de los datos de un módulo: un prefijo `WIDE`, como el de la JVM, para los datos que no llegan con el operando de 16 bits (abierta el 3-nov, tras `#768`; **decidido, para más adelante**)
+
+- **Por qué** (Eduardo, 3-nov: *«A mi me da la impresión que la restricción de 64K es una limitación del compilador,
+  probablemente del generador de código»*): lo es. Las instrucciones que tocan un dato del módulo llevan su posición
+  en 16 bits (3 bytes por acceso a una global en vez de 5); desde `#768`, hasta 64 KB. El fichero no (`dataSize`,
+  32 bits), las VMs tampoco, y el código no tiene tope de 64 KB (`CALL`, `JUMP` y `JUMP_IF_FALSE`, en 32 bits).
+- **Lo propuesto:** una instrucción nueva, `WIDE`, delante de una de datos, que hace de 32 bits su operando. Hoy, una
+  global a -40 012 es `04 63 B4`; una a -100 000 sería `WIDE 04 FF FE 79 60`. El compilador sólo la pondría cuando el
+  dato no llega: lo de hoy, igual byte a byte; sólo un módulo con más de 64 KB de datos pediría una VM que la conozca.
+  El opcode, en las dos VMs, el desensamblador y el compilador (el `ModWriter` ya sabe la posición al emitir).
+- **Decidido** (Eduardo, 3-nov: *«a) si pero se puede hacer mas adelante»*).
+
 #### 🔵 `#780` — `samples/errores`: tres ejemplos sin caso en `h13-errores.sh` (nadie vigila su mensaje), y `AnnMal` falla por algo que no es lo suyo (abierta el 3-nov, al añadir el de `#768`; **sólo análisis**)
 
 - **Sin caso:** `EventoValor` (`#771`, 3-nov) y `ConstanteNula` (`#777`, 2-nov) están en el `LEEME` con su mensaje,
@@ -7585,7 +7604,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   que con dos runs se come una traza): «FAIL … la primera, en build/trazasbus.diff» y la traza que faltaba. Abierta
   hasta que se repita.
 
-#### 🔵 `#768` — un literal de más de 32 767 bytes no compila, y el error no dice eso: «Símbolo de datos no declarado (forward ref no permitida): __str_0» (abierta el 2-nov, al medir `#732`; **sólo análisis**)
+#### ✅ `#768` — un literal de más de 32 767 bytes no compila, y el error no dice eso: «Símbolo de datos no declarado (forward ref no permitida): __str_0» (abierta el 2-nov, al medir `#732`; **CERRADA el 3-nov**, el commit de `#768`: el bloque de datos, hasta 64 KB, y un error claro si no cabe)
 
 - **Medido** (2-nov, el compilador de hoy, un programa de prueba fuera del repo): dos literales de 32 000 bytes
   compilan; dos de 33 000, no; uno de 65 000, no; cuatro que suman 66 000 (20 000 × 3 + 6 000), sí. El tope es de cada
@@ -7604,6 +7623,26 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   constantes) pasan de 32 KB, 40 012 bytes; el literal de la línea N es el que ya no cabe»; (b) subir el tope:
   desplazamientos de 32 bits en esas instrucciones, en las dos VMs y en el formato (Eduardo prefiere no subir la ABI);
   (c) que un literal grande no viva en el bloque de datos (otra sección, o nacer en el heap al cargar). Por decidir.
+- **Decidido** (Eduardo, 3-nov): *«si utilizas un word pasamos a 64K . Los literales grandes deberian ser resources,
+  que se cargan al heap.»* (los recursos, una idea aparte: `V8_IDEAS` §E12); y al plan, *«768 OK»*.
+- **Hecho:** el desplazamiento de un dato, en el mismo operando de 16 bits, se lee como un word menos 65 536 (de
+  -65 535 a -1; el 0 se queda en 0, el centinela de `CHECKCAST` y `TRY_BEGIN`): `OpCode.desplazamientoDeDato` en la
+  VM-Java (y el desensamblador) y `bpvm_read_csoff_be` en la VM-C, en las 18 instrucciones que lo llevan (19
+  operandos: `CHECKCAST` lleva dos): las globales de cada tamaño y las largas, `LEA_GLOBAL`, `NEW_OBJECT`, `INSTANCEOF`,
+  `TRY_BEGIN` y los cuatro `CHECKCAST`. Los locales y los saltos, con signo, como estaban. **Ni el formato ni la ABI cambian:** lo de antes
+  (de -32 768 a -1) es el mismo word, y el compilador lo escribe igual. El tope del bloque, 65 532 bytes; uno mayor es
+  UN error, `ModWriter.DatosLlenos`, que el emisor dice tal cual y sin artefacto: «el módulo 'X' no cabe: sus datos
+  (…) pasan de 64 KB, el tope (65532 bytes); ya ocupan N y el literal "…" (M bytes) no cabe. Parte el módulo en dos,
+  o lee lo grande de un fichero.» `OPCODES.md` (el `doff`), `MOD_FORMAT.md` y el manual (§10, el tope de un módulo).
+- **Probado:** el compilador de antes y el nuevo, sobre los 721 fuentes del repo: 676 `.mod` iguales byte a byte y 45
+  que no compilan con ninguno; la stdlib como proyecto, sus 31 `.mod` y el `.pack`, iguales (los `.dbg`, sólo la ruta
+  de la copia). `DatosGrandes` en el corpus: un literal de 33 000 bytes el primero, y todo lo demás por debajo de
+  -32 768 (mirado en el desensamblado; en MOD9 las clases van por ref, y en MOD8 `NEW_OBJECT`, `INSTANCEOF`,
+  `TRY_BEGIN` y `CHECKCAST`, por su descriptor); con el compilador de antes, los dos errores de esta ficha; con el
+  nuevo, la misma salida en las dos VMs, en MOD9 y en MOD8. `DatosDe64KTest` (miVM: la regla, el centinela y el tope)
+  y `ModuloNoCabeTest` (el frontend: dos literales de 40 000 bytes dan un error, el claro, y ni `.mod` ni `.dbg`; uno
+  de 33 000 compila). El de error no va a `samples/errores`: pasar de 64 KB pide más de 64 KB de fuente. A las placas,
+  con el próximo lote (`interp.c` es de todas).
 
 #### ✅ `#767` — `FileCursor` se para tras `gc()`: un `File` que murió sin `close()` sigue abierto («ya está abierto»), y el sample esperaba que el GC lo cerrase; pasa en las dos VMs, y ya en V7 publicada (abierta el 2-nov, en el censo de `#765`; **CERRADA el mismo día**, el commit de `#767`: lo viejo era el sample)
 

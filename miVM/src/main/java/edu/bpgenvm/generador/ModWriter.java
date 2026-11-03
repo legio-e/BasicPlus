@@ -555,7 +555,20 @@ public class ModWriter {
         exportAliases.put(alias, targetFunction);
     }
 
+    /** V8 #768 (3-nov) — el bloque de datos del módulo no cabe en sus 64 KB (OpCode.DATOS_MAX). Un error del programa,
+     *  no del compilador: el emisor lo dice tal cual, UNO, y no sigue (antes salía «data block excede 32 KB» con el
+     *  prefijo de quien lo pidió, y detrás, en cascada, «Símbolo de datos no declarado», que despistaba). */
+    public static final class DatosLlenos extends RuntimeException {
+        DatosLlenos(String mensaje) { super(mensaje); }
+    }
+
     private int registerSymbol(String name, byte[] bytes) {
+        return registerSymbol(name, bytes, null);
+    }
+
+    /** `que`: cómo nombrar el dato en el error de {@link DatosLlenos} (un literal, el descriptor de una clase); null,
+     *  por su nombre. */
+    private int registerSymbol(String name, byte[] bytes, String que) {
         requireUnique(name);
         int size = bytes.length;
         // GC-2 (v3.0.1): cada símbolo ocupa un slot de tamaño múltiplo de 4 para que
@@ -566,9 +579,13 @@ public class ModWriter {
         // a su inicio); los (slot-size) bytes sobrantes quedan al alto, a cero.
         int slot = (size + 3) & ~3;
         int csOffset = currentNegativeOffset - slot;
-        if (csOffset < Short.MIN_VALUE) {
-            throw new RuntimeException("Offset CS fuera de rango short al declarar '"
-                    + name + "': " + csOffset + " (data block excede 32 KB)");
+        // V8 #768 — el tope, 64 KB: el desplazamiento va en un word sin signo (OpCode.desplazamientoDeDato). Lo escriben
+        // igual que antes, sus 16 bits bajos (.shortValue(), (short), los fixups de #447).
+        if (csOffset < -OpCode.DATOS_MAX) {
+            throw new DatosLlenos("el módulo '" + currentModuleName + "' no cabe: sus datos (los literales, las"
+                    + " globales y las constantes) pasan de 64 KB, el tope (" + OpCode.DATOS_MAX + " bytes); ya ocupan "
+                    + (-currentNegativeOffset) + " y " + (que != null ? que : "'" + name + "' (" + size + " bytes)")
+                    + " no cabe. Parte el módulo en dos, o lee lo grande de un fichero.");
         }
         symbolBytes.add(bytes);
         dataSymbolOffset.put(name, csOffset);
@@ -662,7 +679,13 @@ public class ModWriter {
         byte[] b = new byte[4 + utf8.length];
         writeIntInBuf(b, 0, utf8.length);
         System.arraycopy(utf8, 0, b, 4, utf8.length);
-        return registerSymbol(name, b);
+        return registerSymbol(name, b, "el literal " + principioDe(value) + " (" + utf8.length + " bytes)");
+    }
+
+    /** V8 #768 — el principio de un literal, para nombrarlo en un error: sus 24 primeros caracteres, entre comillas. */
+    private static String principioDe(String s) {
+        String p = s.codePointCount(0, s.length()) > 24 ? s.substring(0, s.offsetByCodePoints(0, 24)) + "…" : s;
+        return "\"" + p.replace("\r", "\\r").replace("\n", "\\n").replace("\t", "\\t") + "\"";
     }
 
     public int addConstantFloat(String name, float value) {
@@ -1684,7 +1707,7 @@ public class ModWriter {
             writeIntInBuf(desc, vtBase + m.slot * 4, relAddr);
         }
 
-        registerSymbol(c.name, desc);
+        registerSymbol(c.name, desc, "el descriptor de la clase '" + c.name + "' (" + desc.length + " bytes)");
         // Guardamos el layout binario (numFields/numMethods + bitmaps) por
         // si el frontend lo necesita para emitir el ClassSig al .bpi.
         // Se consulta vía getClassLayout(name) después de endClass.
