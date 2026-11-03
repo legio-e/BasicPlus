@@ -73,8 +73,18 @@
 >     su primera tanda corrió sin pack y salió del informe; con el pack, la misma tabla.
 >   - `#709`, cerrada: tras `idf flash`, la C3, la C5 y la C6 dicen «USB». `#737`: la L2 de 256 KB, ya en la P4.
 >   - Por medir en placa (la Pico 2 y la Metro, desconectadas ya): `StrCursorBench` (`#731`–`#733`), `MapOrden` tras un
->     reinicio (`#722`), el ancla de la Metro (`#729`) y la concatenación (`#736`). Un dato: `StrCursor`, 5,4 s en la
->     Metro (54 ms en el PC; `#738`).
+>     reinicio (`#722`), el ancla de la Metro (`#729`) y la concatenación (`#736`).
+> - **Las medidas en placa** (con la Pico 2 y la Metro otra vez):
+>   - `#729`, cerrada: el arranque de la Metro, «ancla: … y es LA misma», sin la falsa alarma.
+>   - `#731` y `#732`, en la Pico 2: todo lineal; dos cadenas a la vez con 4000 caracteres, 82 ms (el 21-oct, 1461); el
+>     literal de 4000 por índice, 48 ms (era 798), lo mismo que en el heap. `#733` (la native), sin medir.
+>   - `#722`: `MapOrden` mete las 2000 claves tras un reinicio, 2 de 2, y tras `HuecosReserva`: no se reproduce. De paso,
+>     el `catch` de `HuecosReserva` imprime antes de soltar la memoria y, con el heap lleno, vuelve a fallar (del
+>     programa). Por decidir (Eduardo): cerrarla.
+>   - `#736`, en la Metro (`StrFases`, 2 KB): `a + b`, 341 µs (era 569), y reservar, 309 de ellos (era 407); copiar, 19.
+>     Reservar sigue siendo el 90 % de la concatenación. Por decidir (Eduardo).
+>   - De `StrCursor` en la tanda, nada que decir de la Metro: tarda lo mismo en todas (de 4,2 s en la P4 a 13,9 en la
+>     S3; en el PC, 50 ms).
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

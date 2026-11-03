@@ -8653,6 +8653,8 @@ antes la línea). Las pegas: la coherencia con la caché (limpiar e invalidar el
 son 2048 operaciones), el coste de arrancar cada transferencia (sólo compensa por encima de algunos KB), una sola QMI
 para la flash y la PSRAM, y un canal de DMA reservado. Lo más sencillo de probar primero: `memcpy`/`memset` de
 bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la caché alrededor.
+- **Un dato del 3-nov** (la imagen del lote; `StrFases` en la Metro, con PSRAM, 2 KB): reservar, 309 µs, frente a 19
+  copiar en memoria ya reservada (`#736`): lo que cuesta es la memoria recién estrenada, la de esta ficha.
 
 #### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **la de la P4, de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la de la S3, por medir**)
 
@@ -8719,6 +8721,10 @@ longitud—; y *«OK»*):
   para que no los pague hace falta otra pieza —un builtin que reserve una cadena para llenar, o uno que haga la
   concatenación entera—: toca el compilador y añade un builtin. **Por decidir (Eduardo)**, con la medida de la Metro
   delante. La de las natives (`h_string_concat`) usa a propósito la misma reserva (`#573`): cambiarían juntas.
+- **Medido el 3-nov en la Metro** (`StrFases`, la imagen del lote; con PSRAM), por operación, con 2 KB: `a + b`, 341 µs
+  (el 21-oct, 569); de ellos, reservar 2 KB (poner a cero y el GC que toque: 2 colectas cada 1000) es 309 (407), y
+  copiar 2 KB, 19 (59). `fromBytes`, 495 (679); `substring`, la mitad central, 168 (786). Con 256 bytes, `a + b`, 75;
+  reservar, 48. Reservar sigue siendo el 90 % de la concatenación en la Metro. Por decidir (Eduardo).
 
 #### 🔵 `#735` — la longitud en CARACTERES no se guarda: con acentos, `strlen` la cuenta en cada llamada (abierta el 27-oct, al cerrar el H5; **por decidir**)
 
@@ -8815,6 +8821,7 @@ cursor del hilo que la llama (`V8_IDEAS` §E5, «Lo que sigue lento»).
   antes y con los de ahora; de 4000 a 32 000 caracteres): de 5, 15, 62 y 245 ms (cuadrático) a 0, 0, 1 y 1, con las
   mismas sumas. `test-aotstr` (17/17), `test-aotcede`, `test-aotkill` y `test-aotbuiltin`, bien. En las placas, en el
   próximo lote.
+- **En placa, sin medir:** la native se mide con su `.mdn` de cada placa (el AOT de su receta); no entró en el lote.
 
 #### ✅ `#732` — los literales largos, por índice, siguen siendo cuadráticos: no tienen etiqueta, y cada llamada los mira enteros (abierta el 27-oct, al cerrar el H5; **CERRADA el 2-nov**, el commit de `#731`, `#732` y `#733`)
 
@@ -8831,6 +8838,8 @@ sigue lento»).
   de 2 ms a 0, y con acentos de 2 a 1); la medida de verdad es la de la Pico 2 (798 ms con 4000), en el próximo lote.
   `StrCursor`, con un literal ASCII y tres cadenas a la vez: corre cuando se arregle `#766`; en una copia sin
   `conMove`, sin una mala.
+- **En la Pico 2, el 3-nov** (el lote): recorrer por índice el literal de 4000 caracteres, 48 ms (era 798), lo mismo
+  que la cadena en el heap (47); con acentos, 52 (era 881) frente a 51.
 
 #### ✅ `#731` — recorrer por índice DOS cadenas con acentos a la vez sigue siendo cuadrático: el cursor del hilo es uno y salta de una a otra (abierta el 27-oct, al cerrar el H5; **CERRADA el 2-nov**, el commit de `#731`, `#732` y `#733`)
 
@@ -8851,6 +8860,9 @@ por hilo. Sólo la VM-C: la VM-Java no tiene cursor, por decisión.
   en una copia sin ella (`#766`): 11 606, sin una mala, igual en las dos VMs y en la VM-C de antes.
 - La red, VERDE (15:22); `check-jc`, VERDE (8:43). En las placas, en el próximo lote: `StrCursorBench`, un literal largo y
   una native.
+- **En la Pico 2, el 3-nov** (el lote; `StrCursorBench`): todo lineal —al doblar n, el doble—. Con 4000 caracteres:
+  dos cadenas a la vez, 82 ms (el 21-oct, 1461); adelante y atrás, 51; `substring(k, k+1)` con `strlen`, 237; buscar
+  y cortar ×100, 81; `parseJson` de 8 KB con acentos, 2706 ms; un `Map` de 200 claves con acentos, 279.
 
 #### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct, sin empezar (abierta el 27-oct, al cerrar el H5; **la forma, por decidir**)
 
@@ -8865,7 +8877,7 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
 (¿±25 %?) y dónde vive (`bpgenvm-c/bpstr/`, por ejemplo). Parte de lo que haría ya está hecho de otra forma en el H5
 (los dos algoritmos, el cursor, comparar en C).
 
-#### 🔵 `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; por ver en el lote**)
+#### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 
 Al arrancar, `pico/main.c` comprueba el ancla: la busca barriendo la flash desde `XIP_BASE` (`bpvm_ancla_buscar`) y
 mira que sea la de su propia BIOS (`bios_pico_ancla()`). Desde el 22-oct el `.uf2` lleva las DOS imágenes de la RP2350
@@ -8882,6 +8894,8 @@ Metro), o que el control sepa que hay dos imágenes y mire sólo la suya. El mis
 corre, `__flash_binary_start` (el `.flash_begin` de `bp_memmap.ld`: P, 0x10000000; M, 0x10100000), y no en `XIP_BASE`.
 Cada imagen mide 1 MB, lo que se barre: cada una ve sólo su ancla. La imagen, compilada. **Por ver en el lote:** que la
 Metro diga «ancla: en 0x1016…, y es LA misma», y la Pico 2, la suya.
+- **Visto en el lote del 3-nov:** con la imagen de hoy, el arranque de la Metro dice «ancla: en 0x10167F3C (la
+  busqueda la encuentra, y es LA misma)», sin la falsa alarma.
 
 #### 🔵 `#728` — idea de Eduardo: una interfaz del IDE para la IA —cargar un fuente, compilar, conectar a un dispositivo, ejecutar, depurar, cerrar— (abierta el 24-oct; **por analizar**)
 
@@ -9093,6 +9107,16 @@ crece con `realloc`, que necesita la vieja y la nueva a la vez) o los módulos c
 **La receta para la próxima vez:** apuntar, al empezar cada RUN, el tamaño de la tabla de handles y lo libre del bloque
 de la VM (el INFO no lo dice), y correr `MapOrden` tras un reinicio y tras `HuecosReserva`. Si lo que cambia es la
 tabla, es ella.
+- **Medido el 3-nov** (la imagen del lote; `MapOrden` y `HuecosReserva`, compilados con el compilador de hoy): tras
+  un reinicio, `MapOrden` mete las 2000 claves, 2 de 2 (en orden, 2839 ms; desordenadas, 3200); y después de
+  `HuecosReserva`, también. **No se reproduce.** Desde el 22-oct cambiaron el heap y sus listas (`#715`, `#718`) y
+  las pilas de los hilos (`#740`); cuál lo arregló, sin mirar.
+- **De paso, `HuecosReserva` en la Pico 2:** con k = 4000 no cabe (lo esperado: «si no cabe, lo dice y sigue»), pero
+  su `catch` imprime antes de soltar las cadenas, y con el heap lleno el mensaje vuelve a fallar fuera del `try`
+  («No space in heap» sin atrapar; el log de la VM lo dice: el manejador se ha quedado sin memoria). Es del
+  programa, no de la VM.
+- **Lo propuesto, sin hacer:** cerrarla (no se reproduce), y en `HuecosReserva`, soltar antes de imprimir. Por
+  decidir (Eduardo).
 
 #### 🔵 `#721` — con `log=1` en el ENV, el GC tarda 2,2 veces más: cada recolección escribe sus líneas `[gc]` en el log (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **por decidir**, Eduardo)
 
