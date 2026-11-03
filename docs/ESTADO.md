@@ -85,6 +85,11 @@
 >     Reservar sigue siendo el 90 % de la concatenación. Por decidir (Eduardo).
 >   - De `StrCursor` en la tanda, nada que decir de la Metro: tarda lo mismo en todas (de 4,2 s en la P4 a 13,9 en la
 >     S3; en el PC, 50 ms).
+> - **La lista de pendientes, revisada** (Eduardo: *«OK, adelante»*): 26 abiertas. Cerradas `#722` (no se reproduce; y
+>   `HuecosReserva` suelta la memoria antes de decir «no cabe»), `#780` (los 30 de `samples/errores`, con caso en
+>   `h13-errores.sh` y fila en el `LEEME`; `AnnMal`, sólo con lo suyo) y `#736` (*«OK 736»*: la concatenación, como
+>   está; quitarle la puesta a cero ahorraría la segunda pasada, la barata, y lo grande es `#738`). Por decidir, `#735`
+>   (con `#730`, propuesto) y la forma de `#730`.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

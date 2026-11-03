@@ -8661,7 +8661,8 @@ son 2048 operaciones), el coste de arrancar cada transferencia (sólo compensa p
 para la flash y la PSRAM, y un canal de DMA reservado. Lo más sencillo de probar primero: `memcpy`/`memset` de
 bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la caché alrededor.
 - **Un dato del 3-nov** (la imagen del lote; `StrFases` en la Metro, con PSRAM, 2 KB): reservar, 309 µs, frente a 19
-  copiar en memoria ya reservada (`#736`): lo que cuesta es la memoria recién estrenada, la de esta ficha.
+  copiar en memoria ya reservada (`#736`): lo que cuesta es la memoria recién estrenada, la de esta ficha. Por eso
+  `#736` dejó la concatenación como está (3-nov): quitarle la puesta a cero sólo ahorraría la segunda pasada, la barata.
 
 #### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **la de la P4, de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la de la S3, por medir**)
 
@@ -8694,7 +8695,7 @@ que la del 27-oct (la zona de packs no se mueve). A la placa, en el próximo lot
 - **En la placa, el 3-nov (el lote):** la P4, con su imagen de hoy (`CONFIG_CACHE_L2_CACHE_256KB=y` en su `sdkconfig`
   efectivo), la zona de packs donde estaba (`0x400e8000`), y `Gui` y `SQLite`, rc=0; su tanda, IDÉNTICA al PC.
 
-#### 🔵 `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **hecha para los builtins el 29-oct; la concatenación, por decidir**)
+#### 🔵 `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **hecha para los builtins el 29-oct; CERRADA el 3-nov**: la concatenación, como está)
 
 Medido en la Metro con PSRAM (`V8_IDEAS` §E5, «La PSRAM, medida por piezas» y «Medido por dentro»): crear 16 KB, 5,2
 ms, de los que poner a cero es 1,5 (−28 % sin ella); en las cadenas que caben en la caché, poco (un 10 % en 2 KB). La
@@ -8732,6 +8733,13 @@ longitud—; y *«OK»*):
   (el 21-oct, 569); de ellos, reservar 2 KB (poner a cero y el GC que toque: 2 colectas cada 1000) es 309 (407), y
   copiar 2 KB, 19 (59). `fromBytes`, 495 (679); `substring`, la mitad central, 168 (786). Con 256 bytes, `a + b`, 75;
   reservar, 48. Reservar sigue siendo el 90 % de la concatenación en la Metro. Por decidir (Eduardo).
+- **Lo que ganaría la concatenación sin ceros, por el mecanismo:** en la PSRAM lo caro es tocar por primera vez la
+  memoria recién estrenada, no pasar dos veces. Hoy esa primera vez la paga la puesta a cero; sin ella la pagaría la
+  copia, y se ahorraría la segunda pasada, la barata (`PsramFases`: escribir 2 KB en memoria ya reservada, 65 µs de los
+  494 de crear 2 KB): un 10 % con 2 KB, un 28 % con 16 KB (no caben en la caché); en el PC y en las placas sin PSRAM,
+  nada medible (manda el GC). Para eso, un builtin nuevo y el compilador.
+- **Decidido** (Eduardo, 3-nov: *«OK 736»*, a «dejarla así»): la concatenación, como está. Lo grande está en la
+  memoria recién estrenada de la PSRAM, `#738`.
 
 #### 🔵 `#735` — la longitud en CARACTERES no se guarda: con acentos, `strlen` la cuenta en cada llamada (abierta el 27-oct, al cerrar el H5; **por decidir**)
 
