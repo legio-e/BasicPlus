@@ -36,11 +36,11 @@ module StrDosCaminos
   end minimo
 
   // l = r + "ñ": los caracteres de r en los mismos sitios, y la ñ en el n (n = strlen(r))
-  function compara(etiqueta: string, base: string)
-    var r: string := fromBytes(toBytes(base))
-    var l: string := lenta(base)
+  function compara(etiqueta: string, cs_base: string)
+    var r: string := fromBytes(toBytes(cs_base))
+    var l: string := lenta(cs_base)
     var n: integer := strlen(r)
-    print etiqueta + " [" + base + "]"
+    print etiqueta + " [" + cs_base + "]"
     igual("strlen", intToString(n), intToString(strlen(l) - 1))
     var i: integer := 0
     while i < n do
@@ -56,13 +56,13 @@ module StrDosCaminos
     igual("indexOf la", intToString(indexOf(r, "la")), intToString(indexOf(l, "la")))
     igual("indexOf vacía", intToString(indexOf(r, "")), intToString(indexOf(l, "")))
     igual("indexOf ñ", intToString(n), intToString(indexOf(l, "ñ")))
-    igual("indexOf larga", intToString(indexOf(r, base + "x")), intToString(indexOf(l, base + "x")))
+    igual("indexOf larga", intToString(indexOf(r, cs_base + "x")), intToString(indexOf(l, cs_base + "x")))
     igual("contains o", boolToString(contains(r, "o")), boolToString(contains(l, "o")))
     igual("contains ñ", "true", boolToString(contains(l, "ñ")))
     igual("startsWith h", boolToString(startsWith(r, "h")), boolToString(startsWith(l, "h")))
     igual("startsWith vacía", boolToString(startsWith(r, "")), boolToString(startsWith(l, "")))
     igual("endsWith a", boolToString(endsWith(r, "a")), boolToString(endsWith(l, "añ")))
-    igual("endsWith larga", boolToString(endsWith(r, "x" + base)), boolToString(endsWith(l, "x" + base + "ñ")))
+    igual("endsWith larga", boolToString(endsWith(r, "x" + cs_base)), boolToString(endsWith(l, "x" + cs_base + "ñ")))
     igual("upper", upper(r) + "Ñ", upper(l))
     igual("lower", lower(r) + "ñ", lower(l))
     igual("replace o", replace(r, "o", "0") + "ñ", replace(l, "o", "0"))

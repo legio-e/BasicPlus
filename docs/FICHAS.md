@@ -7381,7 +7381,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   y `Json` (el `""` cambia de sitio; las interfaces, iguales), y `packs/Stdlib.pack`. El manual, §5.1 y los
   inicializadores.
 
-#### 🔵 `#775` — la red da por buena la paridad con un caso del corpus que ha dejado de compilar: lo cuenta como SKIP («no compila con el frontend actual»), y sólo un FAIL la pone en rojo; así se coló una regresión de `#774` (abierta el 2-nov; **sólo análisis**)
+#### ✅ `#775` — la red da por buena la paridad con un caso del corpus que ha dejado de compilar: lo cuenta como SKIP («no compila con el frontend actual»), y sólo un FAIL la pone en rojo; así se coló una regresión de `#774` (abierta el 2-nov; **CERRADA el 3-nov**, el commit de `#775`)
 
 - **Cómo salió** (2-nov, la red de `#774`): `#774` le ponía el `""` implícito también a la property `string` de una
   interfaz, y `Interfaces` (corpus, H7.3) dejó de compilar («una property de una interfaz es sólo su nombre y su tipo:
@@ -7395,6 +7395,19 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo propuesto, sin hacer:** que los SKIP que se esperan estén en una lista, cada uno con su porqué (hoy, los de JC:
   `ForStep` y `ContinueFor`, un `for` con paso que no es un número; `GlobalesIni` y `StrDosCaminos`, el nombre `base`),
   y que cualquier otro SKIP sea un FAIL, en la paridad y en `check-jc`. Por decidir (Eduardo).
+- **Decidido** (Eduardo, 3-nov: *«OK, renombra base ( yo utilizaría un prefijo "cs_" o algo similar porque raiz también
+  podría estar cogido )»*), con la forma que ya tenía MOD8 en vez de una lista aparte: el SKIP lo declara el sample.
+- **Hecho:**
+  - en todas las pasadas de la paridad, un sample del corpus que no está, no compila o no da su `.mod` es un FAIL (el de
+    no compila, con sus primeros errores); los que fallan a propósito viven en `samples/errores`, fuera del corpus;
+  - en `check-jc`, lo que el escritor no escribe por lo acordado lo declara el sample, `// jc: fuera — <por qué>`,
+    como `// mod8: fuera`; sin la marca, FAIL, y una marca que no conoce, también. Llevan la marca `ForStep` y
+    `ContinueFor` (el paso del `for` en una variable, el punto 11 de H1);
+  - `GlobalesIni` y `StrDosCaminos` no prueban el nombre `base`: su variable pasa a `cs_base` (el texto `"base="` que
+    escribe `GlobalesIni`, igual) y corren también en JC;
+  - probado con tres sabotajes en un corpus reducido (una copia temporal del arnés): un `for` con el paso en una
+    variable y sin la marca, una marca `// jc: dentro` y un sample que no compila: los tres, FAIL, cada uno con lo
+    suyo; los demás, como deben (los dos marcados, SKIP con su razón; los renombrados, PASS en JC).
 
 #### ✅ `#774` — `null` en una variable `string`: la variable puede no referenciar ninguna cadena, y una cadena nunca es `null`; las de módulo y de clase sin valor, `""` (Eduardo, 2-nov; abierta el 2-nov; **CERRADA el mismo día**, los tres commits de `#774`: el compilador; las VMs y el AOT; la stdlib, los samples y la documentación)
 

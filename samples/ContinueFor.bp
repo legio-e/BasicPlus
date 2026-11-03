@@ -5,6 +5,7 @@
 // traducía a un `while`—; nadie lo pisaba: en el árbol había 2 `continue`, ninguno en un `for`.
 // Cada bucle lleva un tope de vueltas: si el `continue` vuelve a no avanzar, sale un FALLO y no un cuelgue.
 // Se comprueba a sí mismo: una línea que empieza por FALLO es rojo en compat.sh.
+// jc: fuera — el paso del `for` en una variable: JC no lo tiene (H1, el punto 11: su `for` escribe `<=` o `>=` por el signo del paso)
 module ContinueFor
 
   var fallos: integer

@@ -27,6 +27,15 @@
 
 ## Última sesión
 
+> **3-nov** — **los pendientes** (Eduardo: *«Continuamos con los pendientes, me da igual el orden»*): 28 abiertos,
+> en cinco grupos (diez con el análisis hecho y sólo por decidir; cuatro del IDE y el wire; cinco de las cadenas; seis
+> para el lote de placas; tres ideas largas).
+> - **`#775`, cerrada** (Eduardo: *«OK, renombra base»*, con `cs_`): un sample del corpus que no compila es FAIL en
+>   todas las pasadas, y un SKIP sólo lo declara el sample (`// mod8:`, `// smp:`, `// jc: fuera`); `ForStep` y
+>   `ContinueFor`, marcados; `GlobalesIni` y `StrDosCaminos`, con `cs_base`, corren también en JC. La red, VERDE (186
+>   PASS, 0 SKIP); `check-jc`, 184 PASS y 2 SKIP. De paso, edité `compat.sh` con la red corriendo (sólo comentarios):
+>   al acabar, bash leyó el final desplazado («syntax error» tras el veredicto). No se hace.
+>
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
 > PC (`#739`, `#731`, `#732`, `#733`), tres por decidir (`#735`, `#736`, `#730`) y dos de placa (`#737`, `#738`)— y el

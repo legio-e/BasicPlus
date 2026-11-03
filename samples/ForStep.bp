@@ -3,6 +3,7 @@
 // emisor lo rechazaba «for step solo soporta literal int por ahora»), y una EXPRESIÓN: se
 // evalúa una vez y la dirección (hacia arriba si step >= 0, hacia abajo si no) se decide en
 // ejecución. `step 0` escrito es error de compilación.
+// jc: fuera — el paso del `for` en una variable: JC no lo tiene (H1, el punto 11: su `for` escribe `<=` o `>=` por el signo del paso)
 module ForStep
   import Core
   function cuenta(desde: integer, hasta: integer, paso: integer): string

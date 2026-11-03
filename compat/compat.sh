@@ -70,7 +70,12 @@
 #                           (--escribir-jc), compilado desde el .jc y ejecutado en
 #                           las dos VMs: el stdout y el codigo de salida, los de BP.
 #                           El .mod no (el `print` de JC es otro arbol). No entra en
-#                           check: JC es un experimento de V8.
+#                           check: JC es un experimento de V8. Lo que el escritor no
+#                           escribe por lo acordado lo declara el sample, con
+#                           `// jc: fuera — por que` (#775); sin la marca, FAIL.
+#
+# V8 #775 (3-nov) — EN NINGUNA PASADA UN SAMPLE DEL CORPUS QUE NO COMPILA ES UN SKIP: es un FAIL, con su error. Un
+# SKIP es sólo lo que el sample declara en su cabecera (`// mod8: fuera`, `// smp: fuera`, `// jc: fuera`), a la vista.
 #
 # V8 #726 (23-oct) — LA RED EN TRES GRUPOS. Eduardo: «Si podemos dividir por 3 y cada uno lleva 15 min, pasamos de
 # 45 min a 15 min» y «De momento con 3 grupos es suficiente». Medida de una en una, eran 22:51 min:
@@ -325,8 +330,12 @@ check_parity() {
     [ "$hechos" -gt 0 ] && [ $(( hechos % 20 )) -eq 0 ] && progreso "$hechos/$total"
     hechos=$(( hechos + 1 ))
     bp="$(bp_path "$s")"
+    # V8 #775 (3-nov) — UN SAMPLE DEL CORPUS QUE NO ESTA, NO COMPILA O NO DA SU .mod ES UN FAIL, no un SKIP: el 2-nov
+    # una regresion del compilador (Interfaces dejo de compilar) salio como «1 SKIP» y la red, VERDE. Los que fallan a
+    # proposito viven en samples/errores, fuera del corpus. Un SKIP es sólo lo que el sample declara en su cabecera, con
+    # su porque: `// mod8: fuera`, `// smp: fuera`, `// jc: fuera`.
     if [ ! -f "$bp" ]; then
-      echo "  SKIP $s (no existe $bp)"; skip=$((skip+1)); continue
+      echo "  FAIL $s (no existe $bp)"; fail=$((fail+1)); continue
     fi
     # V8/H7.2 (#748, 31-oct) — un sample que usa lo que MOD8 no sabe expresar (lo que pide la tabla de clases de MOD9:
     # el INSTANCEOF de una clase de otro modulo) lo DECLARA en su cabecera, `// mod8: fuera — <por que>`, y la pasada
@@ -384,14 +393,15 @@ check_parity() {
       local mname
       mname="$(sed -nE 's/^[[:space:]]*module[[:space:]]+([A-Za-z_][A-Za-z0-9_]*).*/\1/p' "$bp" | head -1)"
       if [ -z "$mname" ]; then
-        echo "  SKIP $s (no compila y no se le ve el 'module')"; skip=$((skip+1)); continue
+        echo "  FAIL $s (no compila y no se le ve el 'module')"; fail=$((fail+1)); continue   # #775
       fi
       mkdir -p "$WORK/src"; cp "$bp" "$WORK/src/"
       printf '{ "sourceDir": "src", "outDir": ".", "main": "%s", "dependencies": ["%s"] }\n' \
              "$mname" "$STDLIB" > "$WORK/p.bpbuild"
-      if ! ( cd "$WORK" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm --stdlibDir="$WORK" $fmt ) >/dev/null 2>&1; then
-        echo "  SKIP $s (no compila con el frontend actual, ni suelto ni por proyecto)"
-        skip=$((skip+1)); continue
+      if ! ( cd "$WORK" && java -jar "$V3_FE" --project p.bpbuild --backend=mivm --stdlibDir="$WORK" $fmt ) > "$WORK/.compila.log" 2>&1; then
+        echo "  FAIL $s (no compila con el frontend actual, ni suelto ni por proyecto):"   # #775
+        grep -a -iE "error" "$WORK/.compila.log" | grep -v "^--" | head -3 | tr -d '\r' | cut -c1-150 | sed 's/^/       /'
+        fail=$((fail+1)); continue
       fi
       # Las deps de stdlib se resuelven en EJECUCION junto al .mod (es lo que
       # hace el dispositivo, que las tiene instaladas), asi que van al lado.
@@ -411,7 +421,7 @@ check_parity() {
     mod="$WORK/$rootname.mod"
     [ -n "$rootlib" ] && mod="$WORK/$rootlib.$rootname.mod"
     if [ -z "$rootname" ] || [ ! -f "$mod" ]; then
-      echo "  SKIP $s (no se encontro $rootname.mod tras compilar)"; skip=$((skip+1)); continue
+      echo "  FAIL $s (no se encontro $rootname.mod tras compilar)"; fail=$((fail+1)); continue   # #775
     fi
     [ -f "$WORK/Core.mod" ] || cp "$STDLIB/Core.mod" "$WORK/" 2>/dev/null
     # V7/H2 (#523 V5) — el ARTEFACTO, no el log: el .mod raiz tiene que llevar el
@@ -502,16 +512,30 @@ check_parity() {
       # ejecutado en las dos VMs, imprime LO MISMO que el de BP y acaba con el mismo código. El `.mod` no es el
       # mismo: el `print` de JC es otro árbol (`print a, b` se escribe `print(a, " ", b, "\n")`, #700), y por eso
       # se compara la salida. Lo que el escritor no escribe —lo acordado: el paso de un `for` en una variable, el
-      # nombre `base`— es un SKIP con su motivo, a la vista. El `.jc` se compila en el mismo $WORK que el de BP:
+      # nombre `base`— es un SKIP sólo si el sample lo declara (#775, abajo). El `.jc` se compila en el mismo $WORK que el de BP:
       # los módulos hermanos que importe ya están ahí, compilados desde su `.bp`.
       if [ -n "$PAR_JC" ]; then
-        local jcd="$WORK/srcjc" jcf ojj ocj rcjj rccj
+        local jcd="$WORK/srcjc" jcf ojj ocj rcjj rccj jc_marca
+        # V8 #775 (3-nov) — lo que el escritor no escribe, por lo acordado (el paso de un `for` en una variable), lo
+        # DECLARA el sample en su cabecera, `// jc: fuera — <por que>`, como el de MOD8: un SKIP a la vista. Sin la
+        # marca, que el escritor no lo escriba es un FAIL (un sample nuevo que tropieza no se queda fuera callado); y
+        # una marca que no conoce, tambien.
+        jc_marca="$(sed -nE 's|^//[[:space:]]*jc:[[:space:]]*(.*)$|\1|p' "$bp" | head -1 | tr -d '\r')"
+        case "$jc_marca" in
+          "") ;;
+          "fuera"|"fuera"[[:space:]]*)
+            echo "  SKIP $s — // jc: $(printf '%s' "$jc_marca" | cut -c1-110)"; skip=$((skip+1)); continue ;;
+          *)
+            echo "  FAIL $s — la marca '// jc: $jc_marca' no la conoce el arnes (es 'fuera')"
+            fail=$((fail+1)); continue ;;
+        esac
         rm -rf "$jcd" "$WORK/pjc.bpbuild"; mkdir -p "$jcd"
         jcf="$jcd/$rootname.jc"
         java -jar "$V3_FE" "$bp" --escribir-jc --stdlibDir="$WORK" > "$jcf" 2> "$WORK/.jc.err"
         case $? in
           0) ;;
-          2) echo "  SKIP $s — JC: $(tr -d '\r' < "$WORK/.jc.err" | head -1 | cut -c1-120)"; skip=$((skip+1)); continue ;;
+          2) echo "  FAIL $s — JC: el escritor no lo escribe y el sample no lo declara (// jc: fuera — <por que>): $(tr -d '\r' < "$WORK/.jc.err" | head -1 | cut -c1-110)"
+             fail=$((fail+1)); continue ;;
           *) echo "  FAIL $s — JC: el escritor falla:"; tr -d '\r' < "$WORK/.jc.err" | head -3 | sed 's/^/       /'
              fail=$((fail+1)); continue ;;
         esac

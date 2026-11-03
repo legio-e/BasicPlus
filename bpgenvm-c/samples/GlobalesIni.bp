@@ -43,8 +43,8 @@ module GlobalesIni
   var suelta: string := "var"
 
   // lo demás: calculado al cargar el módulo, en orden
-  var base: integer := strlen("abcd")
-  var dobleBase: integer := base * 2
+  var cs_base: integer := strlen("abcd")
+  var dobleBase: integer := cs_base * 2
   public property tabla: integer[] := [10, 20, 30]
   var bytes: byte[] := newByteArray(3)
   public property laCaja: Caja := Caja(7)
@@ -54,7 +54,7 @@ module GlobalesIni
 
   // la función inicializadora del módulo ya los encuentra puestos
   function GlobalesIni()
-    visto := "base=" + base + " caja=" + laCaja.valor()
+    visto := "base=" + cs_base + " caja=" + laCaja.valor()
   end GlobalesIni
 
   function mira(nombre: string, obtenido: string, esperado: string)
@@ -78,7 +78,7 @@ module GlobalesIni
     mira("sync", "" + contador, "3")
     mira("sin valor", "" + sinValor, "")
     mira("la var de al lado", suelta, "var")
-    mira("una llamada", "" + base, "4")
+    mira("una llamada", "" + cs_base, "4")
     mira("otra global, en orden", "" + dobleBase, "8")
     mira("un array literal", "" + len(tabla) + ":" + tabla[0] + "," + tabla[1] + "," + tabla[2], "3:10,20,30")
     tabla[1] := 21
