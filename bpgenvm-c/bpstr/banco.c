@@ -245,7 +245,7 @@ static void tabla(void) {
 int32_t bpstr_camino_corta(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn);
 int32_t bpstr_camino_parejas(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn);
 int32_t bpstr_camino_dos(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn);
-static uint8_t camino_q[300];
+static uint8_t camino_q[600];
 static uint32_t camino_qn;
 static void k_corta(uint32_t n)   { sumidero = (uint32_t) bpstr_camino_corta(texto, n, camino_q, camino_qn); }
 static void k_parejas(uint32_t n) { sumidero = (uint32_t) bpstr_camino_parejas(texto, n, camino_q, camino_qn); }
@@ -256,14 +256,14 @@ static void k_libc(uint32_t n)    { sumidero = (uint32_t) (uintptr_t) memmem(tex
 #endif
 
 static void caminos(void) {
-    static const uint32_t largos[13] = {2u, 3u, 4u, 6u, 8u, 12u, 16u, 24u, 32u, 64u, 128u, 256u, 300u};
+    static const uint32_t largos[15] = {2u, 3u, 4u, 5u, 6u, 8u, 12u, 16u, 24u, 32u, 64u, 128u, 256u, 300u, 600u};
     static const uint8_t primeros[3] = {' ', 'e', '@'};
     uint32_t tams[2] = {2048u, maxn}, nt = (maxn > 2048u) ? 2u : 1u;
     di("bpstr, buscar camino a camino (ns por byte; la aguja no esta: empieza por el byte de la columna y acaba en @)");
     di("%-9s %6s %5s  %8s %8s %8s %8s %8s", "empieza", "bytes", "aguja", "corta", "parejas", "dos", "mezcla", "libc");
     for (uint32_t t = 0; t < nt; t++)
         for (uint32_t k = 0; k < 3u; k++)
-            for (uint32_t l = 0; l < 13u; l++) {
+            for (uint32_t l = 0; l < 15u; l++) {
                 const uint32_t n = tams[t], qn = largos[l];
                 char c[5][16];
                 camino_q[0] = primeros[k];

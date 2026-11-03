@@ -163,6 +163,21 @@
 >   once sabotajes pillados, y las cuatro devueltas a su imagen (los packs de la Metro y la P4, bien). Nunca peor en
 >   copiar y en las agujas de 24 a 256 bytes; con las de 2 a 16, gana un camino u otro según el texto. Propuesto (para
 >   el OK): que la corta pare barato y el tope por la medida.
+> - **`#730`, los puntos 1, 2 y 3** (*«OK 1,2 y 3»*). Tres vueltas más por las cuatro placas:
+>   - la corta, que para barato: con el espacio, el doble de deprisa;
+>   - `busca_byte`, de un 13 a un 16 % más deprisa;
+>   - el Two-Way de newlib en lugar del de musl, que gana en las tres;
+>   - los topes, por arquitectura.
+>
+>   Nunca peor en la P4 y la S3 con las agujas de hasta 256 bytes. En las ARM quedan seis casos de 2 a 4 bytes (hasta
+>   ×1,23), y en las ESP, por encima de 256, el bucle sencillo de picolibc (cuadrático en su peor caso). Lo que costó:
+>   - los bucles, a la medida de cada compilador. En la M33, con un índice GCC guarda un registro en la pila en cada
+>     vuelta; en la S3, sin las vueltas contadas antes no usa el `loop` del Xtensa;
+>   - un error mío al elegir los topes, que se quedaba con el primer reparto cuando el peor caso era el mismo: rehecho
+>     sin las agujas de más de 256.
+>
+>   VERDE en todo, y las cuatro, devueltas a su imagen. Y la pregunta de Eduardo de copiar y buscar en toda la VM: abierta
+>   `#785` (la STM32, las rápidas para todo el firmware), y lo demás, para el paso 3.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

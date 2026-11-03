@@ -7311,6 +7311,25 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#785` — la STM32 copia, rellena, busca y compara la memoria de un byte por vuelta, en todo el firmware: lleva newlib-nano (`--specs=nano.specs`), y sus `memcpy`, `memset`, `memchr` y `memcmp` son las pequeñas (abierta el 3-nov, al medir `#730`; **decidido, para cuando se conecte la STM32**)
+
+Visto en el mapa de la Nucleo (`Nucleo_u575b.map`): `memcpy-stub.o` (26 bytes de código), `memset` (16), `memchr` (28)
+y `memcmp` (32), de `libc_nano.a`. Con ese tamaño sólo cabe un bucle de un byte por vuelta. Lo pagan la VM (178 `memcpy`,
+67 `memset` y 30 `memcmp` en `src/`: el heap, el GC, los arrays, los búferes), el HAL, LVGL y littlefs. En la RP2350,
+que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP, la del IDF.
+- **Decidido** (Eduardo, 3-nov: *«la copia de memoria y la búsqueda se utilizan en todos lados no solamente con los
+  strings. Si hay una función optimizada, está se aplica para todo o solamente para los strings?»*; y *«OK a 1, 2 y
+  3»*):
+  1. en la STM32, las rápidas para todo el firmware. El enlazador toma una `memcpy` nuestra (la de Arm, la de
+     `bpstr`) y unas `memset`, `memchr` y `memcmp` rápidas antes que las de nano; así lo gana todo, también lo que no
+     es nuestro. Se mide en la STM32 cuando se conecte, antes y después;
+  2. en la P4, la S3 y la RP2350, las de la libc no se cambian para todo el firmware. El IDF pone su `memcpy` y su
+     `memcmp` en RAM interna (o usa las de la ROM) porque se llaman con la caché de la flash apagada (en una
+     interrupción, mientras se escribe la flash). Las nuestras vivirían en la flash, y la placa caería justo al
+     escribir en ella. En la RP2350 pasa lo mismo cuando el XIP está apagado;
+  3. dentro de la VM, en el paso 3 de `#730`, las de `bpstr` donde se vea que importa (el heap y el GC: poner a cero
+     al crear, copiar al compactar), con el censo de antes y después.
+
 #### ✅ `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **CERRADA el 3-nov**, `53003a72`: hecha y probada en la S3 y la P4; la S3, a 160 sin la clave)
 
 - **Cómo sale:** el `INFO` de la S3 dice `"cpuFreqHz": 240000000`, y su `sdkconfig` efectivo,
@@ -9043,7 +9062,7 @@ por hilo. Sólo la VM-C: la VM-Java no tiene cursor, por decisión.
   dos cadenas a la vez, 82 ms (el 21-oct, 1461); adelante y atrás, 51; `substring(k, k+1)` con `strlen`, 237; buscar
   y cortar ×100, 81; `parseJson` de 8 KB con acentos, 2706 ms; un `Map` de 200 claves con acentos, 279.
 
-#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **en curso: el paso 1 (el PC), el 2 (las placas) y la mezcla con lo de Arm, hechos el 3-nov; por decidir, cómo cumplir «nunca peor» con las agujas cortas**)
+#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **en curso: el paso 1 (el PC), el 2 (las placas), la mezcla con lo de Arm y sus puntos 1, 2 y 3, hechos el 3-nov; lo siguiente, el paso 3: meterla en la VM**)
 
 Eduardo, 21-oct: *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería debería
 estar optimizada a nivel de algoritmo y de codificación y verificada.»* Hecha aparte e incorporada al acabar, y
@@ -9113,6 +9132,29 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
   sin volver a llamar a `busca_byte` en cada parada), el tope elegido por la medida en cada familia con el peor caso lo
   más pequeño posible, y el Two-Way de newlib por encima de 256 si gana en las tres. **Para el paso 3:** musl y newlib,
   en los créditos (`docs/creditos.html` y `docs/en/creditos.html`), cuando bpstr entre en la VM.
+- **3-nov, los puntos 1, 2 y 3 hechos** (Eduardo: *«OK 1,2 y 3»*; `V8_IDEAS` §E5, «`#730`, los puntos 1, 2 y 3»):
+  1. **la corta para barato:** mira las paradas en las mismas palabras, sin volver a empezar. Con una aguja de 3
+     bytes que empieza por el espacio, de 103 a 48 ns/B en la Pico 2, de 38 a 19 en la P4 y de 96 a 49 en la S3. Los
+     bucles de pasar de largo (también el de `busca_byte`, de un 13 a un 16 % más deprisa que en el paso 2), con la
+     forma que mejor traduce cada compilador;
+  3. **el Two-Way de newlib** gana al de musl en las tres (con 300 bytes, 34 frente a 46 en la Pico 2): se queda, y el
+     de musl sale;
+  2. **los topes, por arquitectura** (`bpstr.h`). La corta hasta 3 y Two-Way hasta 6 en las ARM; hasta 4 y 12 en la
+     P4; la corta hasta 12 en la S3; hasta 6 en el PC.
+
+  **Nunca peor:**
+  - en la P4 y la S3, con las agujas de hasta 256 bytes y frente a lo de antes en todo;
+  - en las ARM quedan seis casos de 2 a 4 bytes, de ×1,11 a ×1,23, donde gana un camino u otro según el texto;
+  - en las ESP, con más de 256 bytes, gana con este texto el bucle sencillo de picolibc, que es cuadrático en su peor
+    caso (Two-Way, por la garantía).
+
+  VERDE en el PC y en las cuatro placas, cada una con sus topes; de los dieciséis sabotajes nuevos, quince en rojo o
+  reventando, y el otro, una guarda que no hacía falta y que quité. Las cuatro, devueltas a su imagen. **Y su
+  pregunta** (*«la copia de memoria y la búsqueda se utilizan en todos lados no solamente con los strings…»*; *«OK a 1,
+  2 y 3»*): en la STM32, las rápidas para todo el firmware (`#785`, abierta); en la P4, la S3 y la RP2350, las de la
+  libc no se cambian para todo; y dentro de la VM, en el paso 3, las de `bpstr` en el heap y el GC si el censo dice que
+  se nota. **Para el paso 3, los créditos:** ya no hay nada de musl; newlib (lo de Arm, BSD-3, y el Two-Way de Eric
+  Blake).
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 

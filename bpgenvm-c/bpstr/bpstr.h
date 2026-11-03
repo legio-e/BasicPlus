@@ -97,9 +97,41 @@ static inline uint32_t bpstr_codifica(uint32_t cp, uint8_t* out) {
 int32_t bpstr_busca_byte(const uint8_t* p, uint32_t n, uint8_t c);
 
 /* La primera aparición de q (qn bytes) en p que empiece en desde o después; -1 si no hay. Una aguja vacía casa en
- * desde (en n si desde pasa de n), como en Java. Nunca cuadrático: hasta 256 bytes, la aguja va por un camino lineal
- * porque no pasa de su tope (por parejas, el memmem de Arm, si tiene de 3 en adelante); más larga, por Two-Way, lineal
- * siempre. (Antes, bp_find_bytes: indexOf, contains, split, replace.) */
+ * desde (en n si desde pasa de n), como en Java. Nunca cuadrático. Por lo larga que es la aguja, cuatro caminos:
+ *   - hasta BPSTR_AGUJA_CORTA, la CORTA: su primer byte de 4 en 4, y comparar el resto;
+ *   - hasta BPSTR_AGUJA_DOS, Two-Way (el de newlib);
+ *   - hasta BPSTR_AGUJA_PAREJAS (256 como mucho), por PAREJAS (el memmem de Arm);
+ *   - por encima, Two-Way otra vez.
+ * La corta y las parejas son lineales porque la aguja no pasa de su tope (en el peor caso, qn comparaciones por
+ * posición); Two-Way, siempre. (Antes, bp_find_bytes: indexOf, contains, split, replace.)
+ *
+ * Los topes, por la medida en cada arquitectura (#730, 3-nov), con el criterio de Eduardo: el peor caso frente a lo de
+ * antes y a la libc, lo más pequeño posible. Qué camino gana con una aguja corta depende de lo frecuente que sea su
+ * primer byte en el texto: con uno que no está, la corta; con el espacio, Two-Way. Las pruebas los cambian al compilar,
+ * para probar cada camino con agujas pequeñas. */
+#ifndef BPSTR_AGUJA_CORTA
+#  if defined(__XTENSA__)
+#    define BPSTR_AGUJA_CORTA 12u   /* la S3: su libc es tan lenta que la corta no pierde con ninguna */
+#  elif defined(__riscv)
+#    define BPSTR_AGUJA_CORTA 4u    /* la P4 */
+#  elif defined(__arm__)
+#    define BPSTR_AGUJA_CORTA 3u    /* la RP2350 (y la STM32, sin medir) */
+#  else
+#    define BPSTR_AGUJA_CORTA 6u    /* el PC: allí, sin libc con la que compararse */
+#  endif
+#endif
+#ifndef BPSTR_AGUJA_DOS
+#  if defined(__riscv)
+#    define BPSTR_AGUJA_DOS 12u
+#  elif defined(__arm__)
+#    define BPSTR_AGUJA_DOS 6u
+#  else
+#    define BPSTR_AGUJA_DOS BPSTR_AGUJA_CORTA   /* la S3 y el PC: ninguna por Two-Way en medio */
+#  endif
+#endif
+#ifndef BPSTR_AGUJA_PAREJAS
+#define BPSTR_AGUJA_PAREJAS 256u
+#endif
 int32_t bpstr_busca(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn, uint32_t desde);
 
 /* La última aparición de q que empiece en hasta o antes; -1 si no hay. La aguja vacía casa en hasta (en n si pasa de

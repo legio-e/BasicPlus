@@ -8,7 +8,7 @@ decidido, en `docs/V8_IDEAS.md` §E5, «`#730`: el diseño concreto»; el estado
 
 | Fichero | Qué |
 |---|---|
-| `bpstr.h`, `bpstr.c` | la biblioteca: el UTF-8, buscar, comparar, mayúsculas y minúsculas, `trim`, copiar y rellenar. Dentro, con sus avisos de licencia, código adaptado de musl (Two-Way, MIT) y de newlib, escrito por Arm (buscar por parejas y la `memcpy` de Cortex-M, BSD-3) |
+| `bpstr.h`, `bpstr.c` | la biblioteca: el UTF-8, buscar, comparar, mayúsculas y minúsculas, `trim`, copiar y rellenar. Dentro, con sus avisos de licencia, código adaptado de newlib: el de Arm (buscar por parejas y la `memcpy` de Cortex-M, BSD-3) y el Two-Way de Eric Blake (con permiso libre, conservando su aviso) |
 | `oraculo.h` | los bucles de la VM de antes, copiados tal cual: lo que bpstr tiene que dar, byte a byte |
 | `prueba.c` | las pruebas, contra el oráculo |
 | `banco.c` | lo que tarda cada función, frente a la libc y frente al bucle de antes |
@@ -51,24 +51,31 @@ Lo que se aprendió al pasarlas (3-nov):
   - **copiar** (su `memcpy` de Cortex-M), en ensamblador dentro del C y sólo en las ARM de Thumb-2. Comparada con la de
     la `libg.a` de la cadena de ARM, es la misma byte a byte (236 bytes). En las demás, la `memcpy` de su libc, *inline*
     en `bpstr.h`.
-- **Buscar nunca es cuadrático,** con tres caminos según el largo de la aguja:
-  - la **corta**, hasta 16 bytes (el tope, por decidir con la medida): su primer byte, de 4 en 4, y comparar el resto;
-  - por **parejas** (el de Arm), hasta 256;
-  - **Two-Way** (adaptado del `memmem` de musl), por encima.
+- **Buscar nunca es cuadrático,** con cuatro caminos según el largo de la aguja:
+  - la **corta**: su primer byte, de 8 en 8, y donde está, el segundo y el resto, sin volver a empezar la búsqueda;
+  - **Two-Way** (el de newlib), en un tramo intermedio en la P4 y las ARM;
+  - por **parejas** (el `memmem` de Arm), hasta 256;
+  - **Two-Way** otra vez, por encima.
 
-  Los dos primeros son lineales porque la aguja no pasa de su tope; Two-Way, siempre.
+  La corta y las parejas son lineales porque la aguja no pasa de su tope; Two-Way, siempre. Los topes, por
+  arquitectura, en `bpstr.h`, elegidos por la medida (3-nov) con el criterio de Eduardo: el peor caso frente a lo de
+  antes y a la libc, lo más pequeño posible. Las ARM: la corta hasta 3 bytes y Two-Way hasta 6. La P4: 4 y 12. La S3:
+  la corta hasta 12, sin Two-Way en medio. El PC: la corta hasta 6.
+- **Los bucles de pasar de largo,** con la forma que cada compilador traduce mejor, y comprobado mirando lo que genera:
+  un puntero (en la M33, con el índice, GCC guarda un registro en la pila en cada vuelta) y las vueltas contadas antes
+  (en la S3, así usa el `loop` del Xtensa, que repite el bucle sin comparar ni saltar).
 - **Se compila con `-O2`** (decidido por Eduardo el 3-nov) y con `-fno-tree-loop-distribute-patterns`, para que GCC
   no cambie el bucle de rellenar por una llamada a `memset`.
 
 ## Las pruebas
 
-`make prueba` las pasa cuatro veces: con los topes de hoy, todo por Two-Way, todo por la corta y todo por parejas (así
-cada camino se prueba con agujas pequeñas). Cada vez:
+`make prueba` las pasa cuatro veces: con los topes de la arquitectura, todo por Two-Way, todo por la corta y todo por
+parejas (así cada camino se prueba con agujas pequeñas). Cada vez:
 
 1. exhaustivo: todas las cadenas de 0 a 3 bytes, en las cuatro alineaciones por turno;
 2. buscar:
    - todos los pajares y agujas pequeños de dos alfabetos (`a b 80 C3` y `a b`);
-   - agujas largas periódicas;
+   - agujas largas periódicas, también con un periodo de más de 255 bytes;
    - agujas de 3 a 300 bytes (la frontera de 256, byte a byte) en tres alfabetos. Uno hace chocar las parejas en la
      tabla: dos bytes que se llevan 32, como la `a` y la `A`, se mezclan igual delante del mismo byte;
 3. comparar: todas las parejas cortas; copiar y rellenar, de 0 a 300 bytes; las dos, en las 16 combinaciones de
@@ -79,9 +86,13 @@ cada camino se prueba con agujas pequeñas). Cada vez:
 
 `make prueba-larga` añade el validador de `#711` con todas las cadenas de 4 bytes (4 300 millones).
 
-Para saber que ven los fallos: veinte sabotajes en el paso 1 y once en el camino por parejas (3-nov). Las once se
-pillan: ocho salen en rojo, dos revientan al leer fuera y una se queda dando vueltas (la tabla de saltos sin poner a
-cero: con basura, un salto mayor que la aguja la hace retroceder).
+Para saber que ven los fallos, sabotajes, uno a uno y en copias fuera del repositorio:
+- veinte en el paso 1;
+- once en el camino por parejas (3-nov), todos pillados: ocho salen en rojo, dos revientan al leer fuera y uno se
+  queda dando vueltas (la tabla de saltos sin poner a cero: con basura, un salto mayor que la aguja la hace retroceder);
+- ocho en la corta y en `busca_byte`, todos pillados (siete en rojo y uno revienta);
+- ocho en el Two-Way de newlib, siete en rojo. El que sale en verde es quitar una guarda que no hace falta (`bpstr.c`
+  dice por qué).
 
 ## El catálogo de Kuhn
 

@@ -4372,6 +4372,79 @@ una función entera fuera de toda función).
 Del todo «nunca peor», en teoría, sólo se llega con una regla que mire el texto: que la corta cuente sus paradas y, si
 para demasiado, siga por parejas. Es un mecanismo con estado escondido, y no lo propongo salvo que lo quieras.
 
+### `#730`, los puntos 1, 2 y 3 (3-nov, noche)
+
+Eduardo: *«OK 1,2 y 3»*. Medido en tres vueltas más por las cuatro placas, y lo que queda, en `bpstr/`.
+
+**1. La corta para barato.** Busca el primer byte de 8 en 8, como `busca_byte`. Cuando alguno de los 8 lo es:
+- saca de las mismas dos palabras cuáles son, con una máscara exacta;
+- los mira en orden con cuatro preguntas fijas por palabra, el segundo byte de la aguja primero;
+- y sigue sin volver a empezar la búsqueda.
+
+El bucle de pasar de largo va aparte y con la forma que mejor traduce cada compilador (lo comprobé mirando lo que
+genera), y `busca_byte` lleva la misma:
+- con un puntero, porque con el índice GCC guarda un registro en la pila en cada vuelta en la M33;
+- con las vueltas contadas antes, porque así en la S3 usa el `loop` del Xtensa, que repite el bucle sin comparar ni
+  saltar. En una vuelta intermedia, sin él, `busca_byte` iba en la S3 un 13 % más lenta que en el paso 2.
+
+En ns por byte con 2 KB y una aguja de 3 bytes, antes y ahora:
+
+| la aguja empieza por | Pico 2 | P4 | S3 |
+|---|---|---|---|
+| un espacio | 103 → 48 | 38 → 19 | 96 → 49 |
+| una letra | 38 → 25 | 14,5 → 10,4 | 33 → 23 |
+| un byte que no está | 16,3 → 13,8 | 6,4 → 5,7 | 12,1 → 10,6 |
+| (y `busca_byte`) | 16,1 → 13,5 | 6,3 → 5,3 | 11,9 → 10,4 |
+
+**3. El Two-Way de newlib.** Gana al de musl en las tres arquitecturas y con todos los largos. Con 300 bytes: 34
+frente a 46 en la Pico 2, 15 frente a 21 en la P4, 37 frente a 52 en la S3. Con 600, de un 25 a un 28 % menos en las
+tres. Se queda el de newlib, y el de musl sale de la biblioteca. Al adaptarlo, su tabla de saltos queda en bytes, como
+la que teníamos. El atajo de la aguja periódica sigue valiendo con los saltos recortados a 255; el porqué está en
+`bpstr.c`, y una prueba con agujas de periodo de más de 255 bytes lo comprueba.
+
+**2. Los topes, por arquitectura** (`bpstr.h`). Se eligen con tu criterio: el reparto que deja el peor caso, frente a
+lo mejor de antes y la libc, lo más pequeño posible; y, a igualdad, la mejor media. Hay cuatro tramos según el largo de
+la aguja: la corta, Two-Way, parejas hasta 256 y Two-Way por encima.
+
+| | la corta hasta | Two-Way hasta | parejas, hasta |
+|---|---|---|---|
+| Pico 2 y Metro (y la STM32, sin medir) | 3 | 6 | 256 |
+| P4 | 4 | 12 | 256 |
+| S3 | 12 | (ninguno en medio) | 256 |
+| el PC | 6 | (ninguno en medio) | 256 |
+
+Qué camino gana con una aguja corta depende de lo frecuente que sea su primer byte en el texto:
+- con uno que no está, la corta;
+- con el espacio, Two-Way;
+- en la S3, su libc es tan lenta que la corta no pierde con ninguna de hasta 12 bytes.
+
+**Cómo queda «nunca peor»**, la mezcla frente a lo mejor de antes y la libc:
+
+| | hasta 256 bytes | más de 256 | frente a antes |
+|---|---|---|---|
+| P4 | nunca peor (como mucho ×0,91) | hasta ×2,3, frente al bucle sencillo de picolibc | nunca peor: gana de ×1,10 a ×15 (mediana, ×2,5) |
+| S3 | nunca peor (como mucho ×0,87) | hasta ×1,7, ídem | nunca peor: de ×1,14 a ×12 (×1,9) |
+| Pico 2 | ×1,12–1,23, en seis casos de 2 a 4 bytes | nunca peor (×0,88–0,91 de newlib) | de ×0,82 a ×22 (×2,7) |
+| Metro | ×1,11–1,15, en seis casos de 2 a 4 bytes (y ×1,03 en tres de 128) | nunca peor | de ×0,87 a ×20 (×2,8) |
+
+Lo que queda, con su porqué:
+- **las agujas de 2 a 4 bytes en las ARM.**
+  - Con 2 y 3 bytes que empiezan por un espacio, la corta tarda 45–48 ns/B, y la `memmem` de newlib 40–42, con su bucle
+    de dos bytes. Pero ese bucle tarda lo mismo con cualquier texto, y con un primer byte que no está la corta va a 13,8:
+    ninguno de los dos gana siempre.
+  - Con 4 bytes que empiezan por un byte que no está, Two-Way tarda 19,9 y la corta de antes 16,3 (×1,23). Con el
+    espacio es al revés: la corta, 48; Two-Way, 20.
+- **las agujas de más de 256 bytes en las ESP.** Con este texto, el bucle sencillo de picolibc (el primer byte, y el
+  resto) va más deprisa que Two-Way. Pero su peor caso es cuadrático. Por ejemplo, con una aguja de 600 bytes
+  `aaa…ab` en un texto de `a`, compara unos 600 bytes en cada posición, y Two-Way unos pocos. Como Arm, que sólo usa sus
+  parejas hasta 256 por esa garantía, me quedo con Two-Way.
+
+**Las pruebas:** VERDE en el PC (las cuatro formas de buscar, y también con los topes de cada familia) y en las cuatro
+placas, cada una con los suyos (13 630 906 comprobaciones). Los sabotajes:
+- ocho en la corta y en `busca_byte`, todos pillados;
+- ocho en el Two-Way de newlib, siete en rojo. El que sale en verde es quitar una guarda que, razonado, no hacía falta;
+  la quité.
+
 ---
 
 ## E6 · Los conjuntos, como en Pascal (la idea de Eduardo, 23-oct; sin empezar)

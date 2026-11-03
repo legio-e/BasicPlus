@@ -1,7 +1,7 @@
 # bpstr — la biblioteca de cadenas de BasicPlus (V8 #730): sus pruebas y su banco, en el PC.
 #
-#   make prueba         las pruebas, en las cuatro formas de buscar: con los topes de hoy (la corta hasta 16 bytes, por
-#                       parejas hasta 256), todo por Two-Way, todo por la corta y todo por parejas (un minuto o dos)
+#   make prueba         las pruebas, en las cuatro formas de buscar: con los topes de la arquitectura (bpstr.h), todo
+#                       por Two-Way, todo por la corta y todo por parejas (un minuto o dos)
 #   make prueba-larga   y además el validador de #711 con todas las cadenas de 4 bytes (unos minutos)
 #   make banco          lo que tarda cada función, frente a la libc y frente a los bucles de antes
 #
@@ -33,7 +33,7 @@ $(B)/prueba_corta$(EXE): bpstr.c bpstr.h oraculo.h prueba.c | $(B)
 	$(CC) $(CFLAGS) -DBPSTR_AGUJA_CORTA=0xFFFFFFFFu bpstr.c prueba.c -o $@
 
 $(B)/prueba_parejas$(EXE): bpstr.c bpstr.h oraculo.h prueba.c | $(B)
-	$(CC) $(CFLAGS) -DBPSTR_AGUJA_CORTA=2u bpstr.c prueba.c -o $@
+	$(CC) $(CFLAGS) -DBPSTR_AGUJA_CORTA=2u -DBPSTR_AGUJA_DOS=2u bpstr.c prueba.c -o $@
 
 $(B)/banco$(EXE): bpstr.c bpstr.h oraculo.h banco.c | $(B)
 	$(CC) $(CFLAGS) -DBPSTR_CAMINOS bpstr.c banco.c -o $@

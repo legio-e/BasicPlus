@@ -6,8 +6,8 @@
  *   2. buscar: con un alfabeto pequeño (a, b, 0x80, 0xC3), todos los pajares hasta 7 bytes con todas las agujas hasta
  *      4; con el binario (a, b), hasta 12 y 8; agujas largas y periódicas; y las de 3 a 300 bytes en tres alfabetos (la
  *      frontera de 256, byte a byte). Compilada con BPSTR_AGUJA_CORTA=1 y BPSTR_AGUJA_PAREJAS=0, todo va por Two-Way;
- *      con un tope de la corta muy grande, todo por la corta; y con 2, de 3 a 256 bytes por parejas: el Makefile pasa
- *      las cuatro;
+ *      con un tope de la corta muy grande, todo por la corta; y con la corta y Two-Way hasta 2, de 3 a 256 bytes por
+ *      parejas: el Makefile pasa las cuatro, y la de siempre con los topes de la arquitectura;
  *   3. comparar, copiar y rellenar: todas las parejas cortas, con las 16 combinaciones de alineación;
  *   4. los bordes: de 0 a 64 bytes con la cadena pegada al final de una página protegida (y una al principio de otra):
  *      leer un byte de más revienta la prueba (en el PC; en una placa no hay páginas);
@@ -45,6 +45,7 @@ int  bpstr_prueba_main(int larga, const char* ruta_kuhn);
 #define BUSCA2_Q    6u
 #define PAJAR_AGUJAS 700u
 #define PASO_AGUJAS 13u      /* de las agujas de 40 a 300, una de cada tantas (las de 248 a 259, todas) */
+#define VUELTAS_PERIODO 6u   /* agujas de periodo de más de 255 bytes */
 #else
 #define BUF_N       80000u
 #define SAL_N       70000u
@@ -57,6 +58,7 @@ int  bpstr_prueba_main(int larga, const char* ruta_kuhn);
 #define BUSCA2_Q    8u
 #define PAJAR_AGUJAS 1200u
 #define PASO_AGUJAS 7u
+#define VUELTAS_PERIODO 300u
 #endif
 
 /* Una línea de lo que dice la prueba: en el PC, a la salida; en una placa, a placa.c. */
@@ -91,12 +93,7 @@ static void progreso(const char* fmt, ...) {
 #define PROGRESO(...) ((void) 0)
 #endif
 
-#ifndef BPSTR_AGUJA_CORTA   /* los de bpstr.c: el Makefile pasa los mismos a los dos */
-#define BPSTR_AGUJA_CORTA 16u
-#endif
-#ifndef BPSTR_AGUJA_PAREJAS
-#define BPSTR_AGUJA_PAREJAS 256u
-#endif
+/* Los topes de buscar (BPSTR_AGUJA_CORTA, _DOS y _PAREJAS), los de bpstr.h: el Makefile pasa los mismos a los dos. */
 
 /* El oráculo, los bucles de la VM de antes: oraculo.h (el mismo que usa el banco). */
 #include "oraculo.h"
@@ -361,11 +358,12 @@ static void al_azar(uint32_t veces) {
     }
 }
 
-/* Una aguja larga y periódica, el caso difícil de Two-Way: «abaabaab…» en un pajar casi igual. */
+/* Una aguja larga y periódica, el caso difícil de Two-Way: «abaabaab…» en un pajar casi igual. También de más de 256
+ * bytes: el byte cambiado no está en la aguja, y su salto (la aguja entera) no cabe en la tabla de bytes. */
 static void dos_caminos_dificil(void) {
     unsigned long long c0 = comprobaciones, f0 = fallos;
     for (uint32_t per = 1; per <= 9; per++)
-        for (uint32_t qn = 17; qn <= 70; qn += 3) {
+        for (uint32_t qn = 17; qn <= 300; qn += (qn < 70u) ? 3u : (qn < 250u) ? 60u : 7u) {
             uint8_t* q = buf2 + 16;
             uint8_t* p = buf + 16;
             uint32_t n = 2000u;
@@ -376,6 +374,20 @@ static void dos_caminos_dificil(void) {
             p[1000] ^= 3u;
             una_busqueda(p, n, q, qn);
         }
+    /* Y con un PERIODO de más de 255 bytes (#730: el Two-Way de newlib, con la tabla de bytes): un trozo B al azar, la
+     * aguja B B… de hasta casi tres veces B, y el pajar, B una y otra vez con algunos bytes cambiados. Un byte que sólo
+     * está al principio de B tiene un salto que no cabe en la tabla, y es ahí donde el atajo de la periódica pide el
+     * salto exacto. */
+    for (uint32_t t = 0; t < VUELTAS_PERIODO; t++) {
+        const uint32_t per = 256u + azar() % 60u, qn = per + 1u + azar() % (per + 100u), n = 2000u;
+        uint8_t* q = buf2 + 16;
+        uint8_t* p = buf + 16;
+        for (uint32_t i = 0; i < per; i++) q[i] = (uint8_t) (azar() % 200u);
+        for (uint32_t i = per; i < qn; i++) q[i] = q[i - per];
+        for (uint32_t i = 0; i < n; i++) p[i] = q[i % per];
+        for (uint32_t k = 0; k < 1u + azar() % 4u; k++) p[azar() % n] = (uint8_t) azar();
+        una_busqueda(p, n, q, qn);
+    }
     grupo("buscar: agujas largas y periodicas", c0, f0);
 }
 
@@ -572,8 +584,8 @@ int bpstr_prueba_main(int larga, const char* ruta_kuhn) {
 #ifdef BPSTR_PLACA
     t_inicio = bpstr_banco_ns();
 #endif
-    di("bpstr: las pruebas (agujas cortas hasta %lu bytes; por parejas, de 3 a %lu)", (unsigned long) (BPSTR_AGUJA_CORTA),
-       (unsigned long) (BPSTR_AGUJA_PAREJAS));
+    di("bpstr: las pruebas (la corta hasta %lu bytes, Two-Way hasta %lu, por parejas hasta %lu y Two-Way por encima)",
+       (unsigned long) (BPSTR_AGUJA_CORTA), (unsigned long) (BPSTR_AGUJA_DOS), (unsigned long) (BPSTR_AGUJA_PAREJAS));
     exhaustivo_corto();
     snprintf(nombre, sizeof nombre, "buscar: pajares de 0-%u y agujas de 0-%u (a b 80 C3)", BUSCA4_P, BUSCA4_Q);
     exhaustivo_buscar(alfa4, 4, BUSCA4_P, BUSCA4_Q, nombre);

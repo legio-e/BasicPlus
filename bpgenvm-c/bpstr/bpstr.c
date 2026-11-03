@@ -218,50 +218,87 @@ uint32_t bpstr_corrige(const uint8_t* p, uint32_t n, uint8_t* out) {
 
 int32_t bpstr_busca_byte(const uint8_t* p, uint32_t n, uint8_t c) {
     uint32_t i = 0;
+    const uint32_t cc = (uint32_t) c * UNOS;            /* c en los cuatro bytes: el XOR deja a cero el que casa */
     while (i < n && !alineado(p + i)) { if (p[i] == c) return (int32_t) i; i++; }
-    if (n - i >= 4u) {
-        uint32_t cc = (uint32_t) c * UNOS;             /* c en los cuatro bytes: el XOR deja a cero el que casa */
-        while (n - i >= 8u) {
-            if (ceros(lee(p + i) ^ cc) | ceros(lee(p + i + 4u) ^ cc)) break;
-            i += 8u;
-        }
-        if (n - i >= 4u && !ceros(lee(p + i) ^ cc)) i += 4u;
+    if (n - i >= 8u) {                                  /* de 8 en 8, con un puntero y las vueltas contadas antes: así */
+        const uint8_t* s = p + i;                       /* GCC no guarda un registro en la pila en cada vuelta (la M33) */
+        uint32_t vueltas = (n - i) >> 3;                /* y usa el bucle del hardware (el «loop» del Xtensa de la S3) */
+        for (; vueltas; vueltas--, s += 8u)
+            if ((ceros(lee(s) ^ cc) | ceros(lee(s + 4u) ^ cc)) != 0u) break;
+        i = (uint32_t) (s - p);
     }
+    if (n - i >= 4u && !ceros(lee(p + i) ^ cc)) i += 4u;
     for (; i < n; i++) if (p[i] == c) return (int32_t) i;   /* dentro de la palabra que casa, o la cola */
     return -1;
 }
 
-/* Los tres caminos de buscar, por lo larga que es la aguja. Hasta AGUJA_CORTA, la CORTA: se busca su primer byte de 4 en
- * 4 y se compara el resto. Hasta AGUJA_PAREJAS (y desde 3 bytes), por PAREJAS, el de Arm. Más larga, Two-Way. Los dos
- * primeros, lineales porque la aguja no pasa de su tope (en el peor caso, qn comparaciones por posición); Two-Way, lineal
- * siempre. Los topes, por medir. Las pruebas los cambian al compilar para probar cada camino con agujas pequeñas: todo
- * por Two-Way (1 y 0), todo por la corta (uno muy grande) y todo por parejas (2 y 256). */
-#ifndef BPSTR_AGUJA_CORTA
-#define BPSTR_AGUJA_CORTA 16u
-#endif
-#ifndef BPSTR_AGUJA_PAREJAS
-#define BPSTR_AGUJA_PAREJAS 256u
-#endif
+/* Los cuatro caminos de buscar, por lo larga que es la aguja, y sus topes por arquitectura: en bpstr.h, con
+ * bpstr_busca. Las pruebas los cambian al compilar para probar cada camino con agujas pequeñas: todo por Two-Way (la
+ * corta hasta 1 y las parejas hasta 0), todo por la corta (uno muy grande) y todo por parejas (la corta y Two-Way
+ * hasta 2). */
 #define AGUJA_CORTA   ((uint32_t) (BPSTR_AGUJA_CORTA))
+#define AGUJA_DOS     ((uint32_t) (BPSTR_AGUJA_DOS))
 #define AGUJA_PAREJAS ((uint32_t) (BPSTR_AGUJA_PAREJAS))
 #if BPSTR_AGUJA_PAREJAS > 256
 #error "bpstr: la tabla de las parejas es de bytes: la aguja, de 256 como mucho"
 #endif
 
+/* El bit 7 de los bytes de w que valen cero, EXACTO: para saber CUÁLES (ceros() vale para saber SI, y puede dar falsos
+ * tras el primero). Sin acarreos de un byte a otro: (b & 7F) + 7F no pasa de FE. */
+static inline uint32_t ceros_exactos(uint32_t w) { return ~(((w & 0x7F7F7F7Fu) + 0x7F7F7F7Fu) | w | 0x7F7F7F7Fu); }
+
+/* ¿Sigue la aguja en s, sabiendo ya que s[0] y s[1] son los suyos? (qn >= 2.) */
+static inline int sigue(const uint8_t* s, const uint8_t* q, uint32_t qn) {
+    uint32_t k = 2u;
+    while (k < qn && s[k] == q[k]) k++;
+    return k >= qn;
+}
+
+/* ¿Empieza la aguja en p[j], si p[j] ya es su primer byte? El segundo, aquí mismo: casi siempre falla ahí. */
+#define CASA_EN(j) (p[(j) + 1u] == q1 && sigue(p + (j), q, qn))
+
+/* La CORTA: el primer byte de la aguja, de 8 en 8 como bpstr_busca_byte; y cuando alguno de los 8 lo es, se miran aquí,
+ * en orden, sin volver a empezar la búsqueda. Medido (#730, 3-nov): cada parada volvía a llamar a bpstr_busca_byte
+ * desde una dirección sin alinear, y con un primer byte frecuente, como el espacio, la corta iba seis veces más despacio.
+ * El bucle de pasar de largo va aparte y sin nada más, como el de bpstr_busca_byte (con lo de las paradas dentro, en la
+ * S3 iba un 25 % más lento); y en una palabra con paradas, cuatro preguntas fijas, sin calcular de qué byte es cada una
+ * (en la M33, GCC cambia esa cuenta por siete instrucciones). */
 static int32_t busca_corta(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn, uint32_t desde) {
     const uint32_t ultimo = n - qn;                     /* la última posición donde cabe la aguja */
+    const uint8_t c = q[0], q1 = q[1];                  /* qn >= 2: la de un byte va por bpstr_busca_byte */
+    const uint32_t cc = (uint32_t) c * UNOS;            /* c en los cuatro bytes: el XOR deja a cero el que casa */
     uint32_t i = desde;
-    while (i <= ultimo) {
-        int32_t r = bpstr_busca_byte(p + i, ultimo - i + 1u, q[0]);
-        uint32_t k;
-        if (r < 0) return -1;
-        i += (uint32_t) r;
-        for (k = 1u; k < qn && p[i + k] == q[k]; k++) ;
-        if (k == qn) return (int32_t) i;
+    while (i <= ultimo && !alineado(p + i)) {           /* hasta alinear, byte a byte */
+        if (p[i] == c && CASA_EN(i)) return (int32_t) i;
         i++;
     }
+    if (ultimo >= 7u) {
+        const uint32_t fin = ultimo - 7u;               /* el último i con sus 8 principios dentro */
+        while (i <= fin) {
+            uint32_t a, b, vueltas = ((fin - i) >> 3) + 1u;
+            const uint8_t* s = p + i;                   /* lo que no tiene c, de 8 en 8: como en bpstr_busca_byte */
+            for (; vueltas; vueltas--, s += 8u)
+                if ((ceros(lee(s) ^ cc) | ceros(lee(s + 4u) ^ cc)) != 0u) break;
+            i = (uint32_t) (s - p);
+            if (vueltas == 0u) break;                   /* ninguno de los que quedan empieza por c */
+            a = ceros_exactos(lee(p + i) ^ cc);         /* cuáles empiezan por c: los de la primera palabra… */
+            b = ceros_exactos(lee(p + i + 4u) ^ cc);    /* …y los de la segunda */
+            if ((a & 0x00000080u) && CASA_EN(i))      return (int32_t) i;
+            if ((a & 0x00008000u) && CASA_EN(i + 1u)) return (int32_t) (i + 1u);
+            if ((a & 0x00800000u) && CASA_EN(i + 2u)) return (int32_t) (i + 2u);
+            if ((a & 0x80000000u) && CASA_EN(i + 3u)) return (int32_t) (i + 3u);
+            if ((b & 0x00000080u) && CASA_EN(i + 4u)) return (int32_t) (i + 4u);
+            if ((b & 0x00008000u) && CASA_EN(i + 5u)) return (int32_t) (i + 5u);
+            if ((b & 0x00800000u) && CASA_EN(i + 6u)) return (int32_t) (i + 6u);
+            if ((b & 0x80000000u) && CASA_EN(i + 7u)) return (int32_t) (i + 7u);
+            i += 8u;
+        }
+    }
+    for (; i <= ultimo; i++)                            /* la cola */
+        if (p[i] == c && CASA_EN(i)) return (int32_t) i;
     return -1;
 }
+#undef CASA_EN
 
 /*
  * PAREJAS: el memmem de newlib, escrito por Arm, para las agujas de 3 a 256 bytes. Es Horspool, pero el salto no lo da
@@ -270,7 +307,8 @@ static int32_t busca_corta(const uint8_t* p, uint32_t n, const uint8_t* q, uint3
  * las parejas posibles una aguja tiene pocas. El bucle de saltar sólo sale cuando la pareja es la del final; entonces
  * se compara la aguja (si es larga, primero 4 bytes de un sitio que se mueve cada vez que no sirve para descartar: un
  * filtro que aprende dónde suele fallar). El último byte no se compara: la mezcla, con el penúltimo igual, lo fija.
- * Medido en la RP2350 (#730, el paso 2): con una aguja de 32 bytes, 2,9 veces más deprisa que nuestro Two-Way.
+ * Medido en la RP2350 (#730, el paso 2): con una aguja de 32 bytes, 2,9 veces más deprisa que el Two-Way que teníamos
+ * (el de musl).
  *
  * Adaptado de newlib (newlib/libc/string/memmem.c), con su licencia:
  *   Copyright (c) 2018 Arm Ltd.  All rights reserved.
@@ -319,102 +357,102 @@ static int32_t busca_parejas(const uint8_t* h, uint32_t hn, const uint8_t* q, ui
 }
 
 /*
- * TWO-WAY (Crochemore y Perrin, 1991): buscar una aguja larga en tiempo LINEAL siempre, sin memoria aparte. La aguja
- * se parte en dos por su «factorización crítica» (el sufijo máximo, con las dos órdenes de los bytes); en cada ventana
- * se compara la mitad derecha de izquierda a derecha y, si casa, la izquierda de derecha a izquierda, y lo que se salta
- * al fallar no deja atrás ninguna aparición. Con una aguja periódica se recuerda lo ya comparado (mem). Antes de
- * comparar se mira el último byte de la ventana: si no está en la aguja se salta entera, y si está, hasta alinearlo
- * con su última aparición en ella (lo de Horspool, que no cambia lo de arriba: sólo salta antes).
+ * TWO-WAY (Crochemore y Perrin, 1991): buscar en tiempo LINEAL siempre, sin memoria aparte. La aguja se parte en dos por
+ * su «factorización crítica» (el sufijo máximo, con las dos órdenes de los bytes); en cada ventana se compara la mitad
+ * derecha de izquierda a derecha y, si casa, la izquierda de derecha a izquierda, y lo que se salta al fallar no deja
+ * atrás ninguna aparición. Con una aguja periódica se recuerda lo ya comparado (la memoria). Antes de comparar se mira
+ * el último byte de la ventana, con una tabla de saltos como la de Horspool.
  *
- * Adaptado de musl (src/string/memmem.c, twoway_memmem), con su licencia:
- *   Copyright © 2005-2020 Rich Felker, et al.
- *   Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
- *   documentation files (the "Software"), to deal in the Software without restriction, including without limitation
- *   the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to
- *   permit persons to whom the Software is furnished to do so, subject to the following conditions:
- *   The above copyright notice and this permission notice shall be included in all copies or substantial portions of
- *   the Software.
- *   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO
- *   THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- *   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
- *   CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
- *   IN THE SOFTWARE.
- * Lo nuestro: posiciones de 32 bits; y la tabla de saltos, de bytes (256 B de pila en vez de 1 KB): un salto de más de
- * 255 se queda en 255. Saltar menos nunca se deja una aparición atrás.
+ * Es el de newlib (newlib/libc/string/str-two-way.h, two_way_long_needle). Medido contra el que teníamos, el de musl
+ * (#730, 3-nov), gana en las tres arquitecturas: con 300 y 600 bytes, por ejemplo, 34 frente a 46 ns/B en la Pico 2 y
+ * 15 frente a 21 en la P4. Su tabla guarda también los bytes que no están (la aguja entera), sin un conjunto aparte, y
+ * la aguja periódica y la que no lo es van por bucles separados (el segundo, sin memoria). Con su aviso:
+ *   Byte-wise substring search, using the Two-Way algorithm.
+ *   Copyright (C) 2008, 2010 Eric Blake
+ *   Permission to use, copy, modify, and distribute this software is freely granted, provided that this notice is
+ *   preserved.
+ * Lo nuestro: posiciones de 32 bits, y la tabla de saltos, de bytes (256 B de pila en vez de 1 KB): un salto de más de
+ * 255 se queda en 255, y saltar menos nunca se deja una aparición atrás. El atajo de la periódica (con memoria, un salto
+ * menor que el periodo se cambia por la aguja menos un periodo) sigue valiendo con la tabla recortada: en esa rama la
+ * aguja entera es periódica, así que cada byte que está en ella aparece en su último periodo y su salto de verdad es
+ * menor que el periodo, como en newlib; y uno recortado que no está en la aguja podría saltarla entera, así que la
+ * aguja menos un periodo también vale (probado el 3-nov: con agujas de periodo de más de 255 bytes, una guarda que no
+ * tomaba el atajo con un salto recortado no cambia nada).
  */
+static uint32_t factorizacion_critica(const uint8_t* q, uint32_t l, uint32_t* periodo) {
+    uint32_t ms = UINT32_MAX, msr = UINT32_MAX, j = 0, k = 1, p = 1;   /* UINT32_MAX: -1, como el SIZE_MAX de allí */
+    uint8_t a, b;
+    while (j + k < l) {                                 /* el sufijo máximo, con un orden… */
+        a = q[j + k];
+        b = q[(uint32_t) (ms + k)];
+        if (a < b)       { j += k; k = 1; p = j - ms; }
+        else if (a == b) { if (k != p) k++; else { j += p; k = 1; } }
+        else             { ms = j++; k = p = 1; }
+    }
+    *periodo = p;
+    j = 0; k = p = 1;
+    while (j + k < l) {                                 /* …y con el contrario */
+        a = q[j + k];
+        b = q[(uint32_t) (msr + k)];
+        if (b < a)       { j += k; k = 1; p = j - msr; }
+        else if (a == b) { if (k != p) k++; else { j += p; k = 1; } }
+        else             { msr = j++; k = p = 1; }
+    }
+    if (msr + 1u < ms + 1u) return ms + 1u;             /* el más largo; el principio de la mitad derecha */
+    *periodo = p;
+    return msr + 1u;
+}
+
 static int32_t dos_caminos(const uint8_t* h, uint32_t hn, const uint8_t* q, uint32_t l) {
-    uint32_t i, ip, jp, k, per, ms, per0, mem, mem0, pos;
-    uint32_t esta[8] = {0, 0, 0, 0, 0, 0, 0, 0};       /* qué bytes están en la aguja */
+    uint32_t i, j = 0, s, periodo, sufijo;
     uint8_t salto[256];
-    memset(salto, 0, sizeof salto);
-    for (i = 0; i < l; i++) {                           /* la última aparición de cada byte manda */
+    sufijo = factorizacion_critica(q, l, &periodo);
+    memset(salto, (int) (l > 255u ? 255u : l), sizeof salto);   /* lo que no está en la aguja: la aguja entera */
+    for (i = 0; i < l; i++) {                           /* lo que está: hasta su última aparición; el último, 0 */
         uint32_t d = l - i - 1u;
-        esta[q[i] >> 5] |= 1u << (q[i] & 31u);
         salto[q[i]] = (uint8_t) (d > 255u ? 255u : d);
     }
-    /* el sufijo máximo, con un orden… */
-    ip = (uint32_t) -1; jp = 0; k = per = 1;
-    while (jp + k < l) {
-        if (q[ip + k] == q[jp + k]) {
-            if (k == per) { jp += per; k = 1; } else k++;
-        } else if (q[ip + k] > q[jp + k]) {
-            jp += k; k = 1; per = jp - ip;
-        } else {
-            ip = jp++; k = per = 1;
-        }
-    }
-    ms = ip;
-    per0 = per;
-    /* …y con el contrario; se queda el más largo */
-    ip = (uint32_t) -1; jp = 0; k = per = 1;
-    while (jp + k < l) {
-        if (q[ip + k] == q[jp + k]) {
-            if (k == per) { jp += per; k = 1; } else k++;
-        } else if (q[ip + k] < q[jp + k]) {
-            jp += k; k = 1; per = jp - ip;
-        } else {
-            ip = jp++; k = per = 1;
-        }
-    }
-    if (ip + 1u > ms + 1u) ms = ip;
-    else per = per0;
-    /* ¿es periódica? */
-    if (memcmp(q, q + per, ms + 1u) != 0) {
-        mem0 = 0;
-        per = ((ms > l - ms - 1u) ? ms : l - ms - 1u) + 1u;
-    } else {
-        mem0 = l - per;
-    }
-    mem = 0;
-    pos = 0;                                            /* el principio de la ventana en h */
-    for (;;) {
-        uint8_t c;
-        if (hn - pos < l) return -1;                    /* lo que queda no cabe */
-        c = h[pos + l - 1u];
-        if (esta[c >> 5] & (1u << (c & 31u))) {
-            k = salto[c];
-            if (k) {
-                if (k < mem) k = mem;
-                pos += k;
-                mem = 0;
+    if (memcmp(q, q + periodo, sufijo) == 0) {          /* la aguja entera es periódica: con memoria */
+        uint32_t memoria = 0;
+        while (j <= hn - l) {
+            s = salto[h[j + l - 1u]];                   /* el último byte primero */
+            if (s > 0u) {
+                if (memoria && s < periodo) s = l - periodo;
+                memoria = 0;
+                j += s;
                 continue;
             }
-        } else {
-            pos += l;
-            mem = 0;
-            continue;
+            i = sufijo > memoria ? sufijo : memoria;    /* la mitad derecha (el último ya casa) */
+            while (i < l - 1u && q[i] == h[i + j]) i++;
+            if (l - 1u <= i) {
+                i = sufijo - 1u;                        /* la izquierda */
+                while (memoria < i + 1u && q[i] == h[i + j]) i--;
+                if (i + 1u < memoria + 1u) return (int32_t) j;
+                j += periodo;
+                memoria = l - periodo;
+            } else {
+                j += i - sufijo + 1u;
+                memoria = 0;
+            }
         }
-        for (k = (ms + 1u > mem) ? ms + 1u : mem; k < l && q[k] == h[pos + k]; k++) ;   /* la mitad derecha */
-        if (k < l) {
-            pos += k - ms;
-            mem = 0;
-            continue;
+    } else {                                            /* las dos mitades, distintas: sin memoria */
+        periodo = (sufijo > l - sufijo ? sufijo : l - sufijo) + 1u;
+        while (j <= hn - l) {
+            s = salto[h[j + l - 1u]];
+            if (s > 0u) { j += s; continue; }
+            i = sufijo;
+            while (i < l - 1u && q[i] == h[i + j]) i++;
+            if (l - 1u <= i) {
+                i = sufijo - 1u;
+                while (i != UINT32_MAX && q[i] == h[i + j]) i--;
+                if (i == UINT32_MAX) return (int32_t) j;
+                j += periodo;
+            } else {
+                j += i - sufijo + 1u;
+            }
         }
-        for (k = ms + 1u; k > mem && q[k - 1u] == h[pos + k - 1u]; k--) ;              /* la izquierda */
-        if (k <= mem) return (int32_t) pos;
-        pos += per;
-        mem = mem0;
     }
+    return -1;
 }
 
 int32_t bpstr_busca(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn, uint32_t desde) {
@@ -426,7 +464,7 @@ int32_t bpstr_busca(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn,
         return r < 0 ? -1 : (int32_t) desde + r;
     }
     if (qn <= AGUJA_CORTA) return busca_corta(p, n, q, qn, desde);
-    if (qn >= 3u && qn <= AGUJA_PAREJAS) r = busca_parejas(p + desde, n - desde, q, qn);
+    if (qn > AGUJA_DOS && qn >= 3u && qn <= AGUJA_PAREJAS) r = busca_parejas(p + desde, n - desde, q, qn);
     else r = dos_caminos(p + desde, n - desde, q, qn);
     return r < 0 ? -1 : (int32_t) desde + r;
 }
