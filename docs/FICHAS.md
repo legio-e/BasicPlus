@@ -9042,6 +9042,9 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
   bytes: 17 180 millones de comprobaciones), también en verde. El banco en el PC: frente a hoy, avanzar y
   retroceder ×2,7–3,3, validar ×2,8, buscar ×2–3,6, mayúsculas ×2; pierde en `es_ascii` y contar (GCC vectoriza los
   bucles de hoy con SSE) y frente a la libc del PC (SSE). Lo que decide, en las placas: el paso 2.
+- **El paso 2, con la Pico 2 (ARM), la P4 (RISC-V) y la S3 (Xtensa)** (Eduardo, 3-nov: *«yo conectaría también la P4.
+  Así podemos probar con ARM, RISC-V y Extensa»*), en vez de la C6 y la Nucleo. La STM32, por su libc (copia byte a
+  byte), cuando se conecte.
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 

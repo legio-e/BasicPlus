@@ -129,6 +129,13 @@
 >   comprobaciones en cada forma de buscar, y la larga, 17 180 millones; de veinte sabotajes, la prueba ve todos los que
 >   cambian algo) y el banco. En el PC, frente a hoy, ×2–3,6 en avanzar, validar, buscar y mayúsculas; pierde donde el PC
 >   usa SSE (`es_ascii`, contar, la libc). El paso 2, en las placas. El fichero de Kuhn, en `third_party/utf8-kuhn/`.
+> - **Para la tarde** (Eduardo: *«Hacemos un descanso. Ahora mismo tenemos la Pico y la S3, pero yo conectaría también
+>   la P4. Así podemos probar con ARM, RISC-V y Extensa»*): con la Pico 2 (ARM), la P4 (RISC-V) y la S3 (Xtensa),
+>   1. `#784`: medir la S3 a 240 MHz (una imagen de prueba, como la de la caché), y la función y la clave `cpu.mhz`;
+>   2. `#730`, el paso 2: una imagen de prueba por familia que al arrancar pase las pruebas (más cortas: la RAM no da
+>      para las del PC) y el banco, y lo deje en el log;
+>   3. `#738`, el experimento de la Metro, si da tiempo (y si se conecta).
+>   La STM32 tiene la misma M33 que la Pico 2; estaba en la lista por su libc, que copia byte a byte: cuando se conecte.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
