@@ -3267,6 +3267,24 @@ public final class MivmEmitter {
         else                          w.emitSetField(cls, ev.destField());
     }
 
+    /**
+     * V8 #771 — `ev == null` / `ev != null`: «¿tiene suscriptor?». El receptor del evento (el campo que la suscripción
+     * escribe y `:= null` borra) comparado con null, como dos referencias de 8 bytes. Sin cambios en las VMs.
+     */
+    private void emitEventoNulo(BinaryExpr b) throws IOException {
+        IExpr lado = (b.right instanceof Ast.NullLitExpr) ? b.left : b.right;
+        Symbol.EventSymbol ev = (Symbol.EventSymbol) info.exprSymbols.get(lado);
+        emitEventOwner((lado instanceof MemberAccessExpr) ? ((MemberAccessExpr) lado).target : null);
+        emitGetRecv(ev, ev.ownerClass.name);
+        emitInt(0); w.emit(OpCode.I32_TO_I64);                 // null: una referencia de 8 bytes a cero
+        w.emit("==".equals(b.op) ? OpCode.LEQ : OpCode.LNEQ);
+    }
+    private void emitGetRecv(Symbol.EventSymbol ev, String cls) throws IOException {
+        if (mod9() && ev.ownerClass != null && ev.ownerClass.isExternal) { w.emitGetFieldRef(refEvento(ev.ownerClass, claveEvento(ev), false), true); return; }
+        if (ev.externalRecvSlot >= 0) w.emitGetFieldBySlot(ev.externalRecvSlot, true);
+        else                          w.emitGetField(cls, ev.recvField());
+    }
+
     /** Empuja el objeto dueño del evento (o `this` si la forma era a pelo). */
     private void emitEventOwner(IExpr owner) throws IOException {
         if (owner != null) emitExpr(owner);
@@ -5315,6 +5333,7 @@ public final class MivmEmitter {
     }
 
     private void emitBinary(BinaryExpr b) throws IOException {
+        if (info.eventosNulos.contains(b)) { emitEventoNulo(b); return; }   // V8 #771
         BpType tl = info.exprTypes.get(b.left);
         BpType tr = info.exprTypes.get(b.right);
         BpType tb = info.exprTypes.get(b);

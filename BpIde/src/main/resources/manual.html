@@ -2557,6 +2557,16 @@ método suyo</strong>:</p>
 <span class="kw">var</span> b: Boton := Boton(<span class="num">7</span>)
 <span class="kw">var</span> p: Panel := Panel(<span class="str">"principal"</span>)
 b.onClick := p::pulsado          <span class="comment">// suscribe el metodo de ESE objeto</span></code></pre>
+<p id="ev-suscriptor"><strong>¿Tiene suscriptor?</strong> Dentro de la clase del evento (o de una hija), como el
+<code>raise</code>, <code>onClick != null</code> dice si alguien se ha suscrito, y <code>onClick == null</code>, que
+no: <code>b.onClick := null</code> lo desuscribe. Es la forma de C# (<code>if (Click != null)</code>). Un evento no es
+un valor: fuera de eso —guardarlo en una variable, escribirlo, compararlo con otra cosa, o con <code>null</code> desde
+fuera de su clase— es un error de compilación (<code>#771</code>, V8).</p>
+<pre><code><span class="kw">public function</span> pulsa(veces: <span class="type">integer</span>)
+  <span class="kw">if</span> onClick != <span class="kw">null</span> <span class="kw">then</span>
+    <span class="kw">raise</span> onClick(<span class="kw">this</span>, veces)
+  <span class="kw">endif</span>
+<span class="kw">end</span> pulsa</code></pre>
 
 <h3 id="ev-cuando">15.3 Lo importante: <code>raise</code> NO llama al manejador</h3>
 <p class="warn">Esto es lo que hay que tener claro para no llevarse sorpresas:

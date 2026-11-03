@@ -1,0 +1,23 @@
+// EventoValor.bp — V8 #771 (3-nov): un evento NO es un valor. Se suscribe (`b.onClick := o::metodo`), se desuscribe
+// (`:= null`), se dispara con `raise` y, dentro de su clase o de una hija, `onClick != null` dice si tiene suscriptor
+// (bpgenvm-c/samples/EventoNulo.bp, en el corpus). Lo demás, un error en su línea: guardarlo en una variable,
+// escribirlo, compararlo con otra cosa que null, y compararlo con null desde fuera de su clase. Cuatro errores.
+module EventoValor
+  import Core
+
+  public class Boton
+    event onClick(veces: integer)
+    public function Boton()
+    end Boton
+    public function mal()
+      var x: integer := onClick
+      print onClick
+      print onClick == 5
+    end mal
+  end Boton
+
+  public function main()
+    var b: Boton := Boton()
+    print b.onClick != null
+  end main
+end EventoValor

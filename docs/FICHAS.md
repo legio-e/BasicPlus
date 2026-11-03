@@ -7299,6 +7299,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   get; set; } }`, `class C : B, I, J` (el primer nombre, la base o una interfaz), `@implement{ I }` obligatoria y
   `@override{}` opcional, y varias anotaciones por declaración. El manual de BP ya las tiene: §9.8 (y §10.4 corregido:
   lo retirado son las interfaces de módulo).
+- **`#771` (3-nov).** En la documentación de JC, `if (onClick != null) raise onClick(this, 1);`: dentro de la clase del
+  evento, si tiene suscriptor, como en C#. El manual de BP ya lo tiene: §15.2.
 - **`#774` (2-nov).** En la documentación de JC, `string s = null;`: una cadena nunca es `null`, pero una variable
   `string` puede no referenciar ninguna, como en C#; un campo, una property o una variable de módulo sin valor nace
   `""`, y una local, indeterminada. Con un `null`: concatenar y escribir, como `""`; `==`, sólo igual a `null`; un
@@ -7514,7 +7516,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   encajaba en un `string` y la llamada iba a la de `Object` sin dudar: una llamada así que compilaba en BP o en JC ahora
   es ambigua (en el corpus y la stdlib no hay ninguna: la red, verde). Con la regla de Java, la de `string`.
 
-#### 🔵 `#771` — comparar un evento con `null` (`onClick != null`, en su clase) pasa el semántico, y el emisor lo para con un mensaje interno: «símbolo no soportado en load: EventSymbol» (abierta el 2-nov, al mirar los eventos de C# en JC; **sólo análisis**)
+#### ✅ `#771` — comparar un evento con `null` (`onClick != null`, en su clase) pasa el semántico, y el emisor lo para con un mensaje interno: «símbolo no soportado en load: EventSymbol» (abierta el 2-nov, al mirar los eventos de C# en JC; **CERRADA el 3-nov**, el commit de `#771`)
 
 - **Cómo sale** (2-nov, una sonda en JC fuera del repo, con el compilador de hoy): en una clase con
   `event onClick(Boton b, int veces);`, `public function bool tiene() { return onClick != null; }`. El semántico, sin
@@ -7524,6 +7526,15 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   suscribe asignándole `obj::metodo` y se dispara con `raise`—, como el de `::` fuera de una suscripción; o, si se
   quiere poder preguntar si tiene suscriptor, que funcione. **Lo propuesto, sin hacer:** el error en el semántico. Por
   decidir (Eduardo).
+- **Decidido** (Eduardo, 3-nov: *«b) si»*): que funcione, como en C# (`if (Click != null)`), y lo demás, un error.
+- **Hecho:** `ev == null` y `ev != null` («¿tiene suscriptor?»), con el evento a pelo o como `this.ev` / `obj.ev`, y
+  sólo dentro de su clase o de una hija, como `raise` (fuera: «compararlo con null sólo vale dentro de su clase»). El
+  semántico lo reconoce antes de analizar los dos lados (`comparacionDeEvento`) y lo anota; el emisor lee el campo del
+  receptor del evento (el que la suscripción escribe y `:= null` borra) y lo compara con null, como dos referencias de
+  8 bytes: sin cambios en las VMs. Cualquier otro uso de un evento como valor, un error en su línea («'onClick' es un
+  evento, no un valor: …»). `bpgenvm-c/samples/EventoNulo.bp` en el corpus (sin suscribir, suscrito, el `raise` que
+  llega, desuscrito y una hija), `samples/errores/EventoValor.bp` (cuatro errores) y `EventoNuloTest`. La stdlib,
+  idéntica. El manual, §15.2.
 
 #### 🔵 `#770` — `sleep(0)` no le da el turno a un destructor pendiente en la VM-C, y en la VM-Java sí: `gc()`, `sleep(0)` y abrir otra vez un `File` que murió sin cerrar va en la VM-Java y en la VM-C da «ya está abierto» (abierta el 2-nov, al analizar `#767`; **sólo análisis**)
 
@@ -7552,6 +7563,18 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   literal, no del total: parece un campo de 16 bits con signo. Sin mirar dónde.
 - **Lo propuesto, sin hacer:** que el error diga lo que pasa —el literal, su línea y el tope— o subir el tope. Es raro
   (un literal así en un fuente), pero hoy el mensaje despista. Por decidir (Eduardo).
+- **Corregido el 3-nov, mirando el código y midiendo otra vez: el tope NO es de cada literal, es del bloque de datos
+  del módulo entero (32 KB)**. Cada dato del módulo (sus literales distintos, sus globales, sus constantes) vive a un
+  desplazamiento negativo del principio del código, que se acumula, y las instrucciones que lo leen (`LEA_GLOBAL`,
+  `GET_GLOBAL`…) lo llevan en 16 bits con signo (`ModWriter.registerSymbol`: «data block excede 32 KB»). La medida del
+  2-nov engañaba: el compilador guarda una sola copia de un literal repetido, y los de entonces eran iguales. Ahora:
+  dos IGUALES de 20 000 bytes compilan (una copia); dos DISTINTOS de 20 000 (40 000), no. Y el mensaje: el de verdad
+  sí sale, «intern string: Offset CS fuera de rango short al declarar '__str_1': -40012 (data block excede 32 KB)»,
+  pero sin la línea ni el porqué, y detrás el de «no declarado», que despista.
+- **Las salidas:** (a) un error claro y uno solo: «el módulo 'X' no cabe: sus datos (los literales, las globales y las
+  constantes) pasan de 32 KB, 40 012 bytes; el literal de la línea N es el que ya no cabe»; (b) subir el tope:
+  desplazamientos de 32 bits en esas instrucciones, en las dos VMs y en el formato (Eduardo prefiere no subir la ABI);
+  (c) que un literal grande no viva en el bloque de datos (otra sección, o nacer en el heap al cargar). Por decidir.
 
 #### ✅ `#767` — `FileCursor` se para tras `gc()`: un `File` que murió sin `close()` sigue abierto («ya está abierto»), y el sample esperaba que el GC lo cerrase; pasa en las dos VMs, y ya en V7 publicada (abierta el 2-nov, en el censo de `#765`; **CERRADA el mismo día**, el commit de `#767`: lo viejo era el sample)
 

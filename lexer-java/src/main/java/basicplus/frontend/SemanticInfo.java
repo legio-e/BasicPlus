@@ -94,6 +94,11 @@ public final class SemanticInfo {
      *  el handler discrimina por (sender, kind) y el sender ya dice la clase. */
     public final Map<Ast.Node, Integer> eventKinds = new IdentityHashMap<>();
 
+    /** V8 #771 — `ev == null` y `ev != null` con un evento, dentro de su clase: «¿tiene suscriptor?». El emisor lee el
+     *  campo del receptor del evento y lo compara con null. El evento, en exprSymbols (el lado que no es el null). */
+    public final java.util.Set<Ast.BinaryExpr> eventosNulos =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.BinaryExpr, Boolean>());
+
     /** Símbolo declarado por un nodo de declaración. */
     public final Map<Ast.Node, Symbol> declSymbols = new IdentityHashMap<>();
 

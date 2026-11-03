@@ -3357,6 +3357,7 @@ public final class SemanticAnalyzer {
             return ErrorType.INSTANCE;
         }
         info.exprSymbols.put(id, sym);
+        if (sym instanceof Symbol.EventSymbol) return eventoComoValor(id, (Symbol.EventSymbol) sym);   // V8 #771
         if (sym instanceof VarSymbol) exigirUsoDeArrayFijo(id, (VarSymbol) sym, id.line, id.column);   // V7/H1 #19
         return typeOfSymbol(sym);
     }
@@ -3491,6 +3492,7 @@ public final class SemanticAnalyzer {
             if (Symbol.FunctionSymbol.DTOR.equals(ma.member) && !esRaiz())
                 err(ma.line, ma.column, "el destructor lo llama el lenguaje (al liberar el objeto), no se llama desde el código");
             info.exprSymbols.put(ma, sub);
+            if (sub instanceof Symbol.EventSymbol) return eventoComoValor(ma, (Symbol.EventSymbol) sub);   // V8 #771
             // H5.a-E3 — la sobrecarga de métodos se resuelve sobre la clase del
             // RECEPTOR (ve las suyas y las heredadas); lookupInstance devuelve una
             // sola, así que anotamos la clase para que analyzeCall pueda juntar
@@ -4070,6 +4072,8 @@ public final class SemanticAnalyzer {
     }
 
     private BpType analyzeBinary(BinaryExpr b, Scope scope) {
+        BpType ev = comparacionDeEvento(b, scope);   // V8 #771: `ev != null`, ¿tiene suscriptor?
+        if (ev != null) return ev;
         BpType lt = analyzeExpr(b.left,  scope, null);
         BpType rt = analyzeExpr(b.right, scope, null);
         // Anti-cascada (poisoning): si un operando ya es <error>, el error real
@@ -4077,6 +4081,43 @@ public final class SemanticAnalyzer {
         // propagamos ErrorType en silencio.
         if (lt instanceof ErrorType || rt instanceof ErrorType) return ErrorType.INSTANCE;
         return tipoBinario(b.op, b.op, lt, rt, b.line, b.column);
+    }
+
+    /**
+     * V8 #771 (Eduardo, 3-nov: «b) si») — `ev == null` y `ev != null` con un evento: «¿tiene suscriptor?», como en C#
+     * (`if (Click != null)`). Sólo eso, y sólo dentro de su clase o de una hija, como `raise`: fuera, un evento sólo se
+     * suscribe. El emisor lee el campo del receptor (la suscripción lo escribe; `:= null` lo borra). Cualquier otro uso
+     * de un evento como valor es un error (analyzeIdentifier, analyzeMemberAccess). null si no es esa forma.
+     */
+    private BpType comparacionDeEvento(BinaryExpr b, Scope scope) {
+        if (!"==".equals(b.op) && !"!=".equals(b.op)) return null;
+        IExpr lado = (b.right instanceof Ast.NullLitExpr) ? b.left : (b.left instanceof Ast.NullLitExpr) ? b.right : null;
+        if (lado == null) return null;
+        // un nombre a pelo que antes es una local o un parámetro no es el evento (el orden de analyzeIdentifier)
+        if (lado instanceof IdentifierExpr && scope != null && scope.resolve(((IdentifierExpr) lado).name) != null) return null;
+        // `obj.ev`, con `obj` un nombre o `this`: resolveEventTarget lo analiza, y si no era un evento el análisis normal
+        // lo hace otra vez; con algo más (una llamada…) un error suyo saldría dos veces
+        if (lado instanceof MemberAccessExpr) {
+            IExpr obj = ((MemberAccessExpr) lado).target;
+            if (!(obj instanceof IdentifierExpr) && !(obj instanceof Ast.ThisExpr)) return null;
+        } else if (!(lado instanceof IdentifierExpr)) return null;
+        Symbol.EventSymbol ev = resolveEventTarget(lado, scope);
+        if (ev == null) return null;
+        boolean suya = false;
+        for (ClassSymbol c = currentClass; c != null && !suya; c = c.baseClass) suya = (c == ev.ownerClass);
+        if (!suya)
+            err(b.line, b.column, "'" + ev.name + "' es un evento: compararlo con null («¿tiene suscriptor?») sólo vale"
+                    + " dentro de su clase, como 'raise'; fuera, un evento sólo se suscribe");
+        info.eventosNulos.add(b);
+        return PrimitiveType.BOOLEAN;
+    }
+
+    /** V8 #771 — un evento usado como valor (fuera de una suscripción, un `raise` o la comparación con null). */
+    private BpType eventoComoValor(IExpr e, Symbol.EventSymbol ev) {
+        err(((Ast.Node) e).line, ((Ast.Node) e).column, "'" + ev.name + "' es un evento, no un valor: se suscribe con '"
+                + ev.name + " := obj::metodo', se desuscribe con ':= null', se dispara con 'raise' y, dentro de su"
+                + " clase, '" + ev.name + " != null' dice si tiene suscriptor");
+        return ErrorType.INSTANCE;
     }
 
     /** El tipo de `l op r`, o ErrorType con su error dicho. Lo comparten la expresión binaria y la asignación compuesta

@@ -5296,3 +5296,17 @@ traductor; la red; y la placa, en la próxima tanda.
   «foreach sobre colecciones propias» lo piden 48 pruebas (2 sólo eso).
 - **Por analizar:** lo que pide cada una al lenguaje (el `for … in` con una interfaz; si `Comparable` pasa de clase a
   interfaz, lo que cambia para los envoltorios y para lo ya compilado), a la stdlib (`List`, `Map`) y a las dos VMs.
+
+## E12 · Los literales grandes, como *resources* que se cargan al heap (la idea de Eduardo, 3-nov; sin empezar)
+
+> Eduardo, 3-nov, con `#768` (el bloque de datos de un módulo, de 32 a 64 KB con el desplazamiento como un *word*):
+> *«Los literales grandes deberían ser resources, que se cargan al heap.»*
+
+- **Por qué:** el bloque de datos de un `.mod` (sus literales distintos, sus globales, sus constantes) está en la
+  memoria del programa desde que se carga, y tiene un tope (64 KB desde `#768`). Un texto grande —una página web para
+  el servidor de la WiFi, un JSON, una tabla— no necesita estar ahí: puede ser un fichero aparte que el programa carga
+  en el heap cuando lo usa, y que se libera cuando ya no.
+- **Lo que ya hay parecido:** la marca `// recurso:` de los samples (un fichero que va con el programa, para el arnés),
+  y `readFile` (que lo lee al heap). Lo que faltaría: que el compilador o el IDE lleven el *resource* con la aplicación
+  (al workdir del micro, como los módulos de la app) y una forma de nombrarlo desde el código.
+- **Por analizar** cuando toque: cómo se declara, cómo viaja con la app al micro y cómo se lee.

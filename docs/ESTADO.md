@@ -35,6 +35,14 @@
 >   `ContinueFor`, marcados; `GlobalesIni` y `StrDosCaminos`, con `cs_base`, corren también en JC. La red, VERDE (186
 >   PASS, 0 SKIP); `check-jc`, 184 PASS y 2 SKIP. De paso, edité `compat.sh` con la red corriendo (sólo comentarios):
 >   al acabar, bash leyó el final desplazado («syntax error» tras el veredicto). No se hace.
+> - **`#771`, cerrada** (Eduardo: *«b) si»*): `ev != null` y `ev == null` («¿tiene suscriptor?») dentro de la clase del
+>   evento o de una hija, como en C#; cualquier otro uso de un evento como valor, un error en su línea. Sólo el
+>   semántico y el emisor (lee el campo del receptor); `EventoNulo` en el corpus, `samples/errores/EventoValor.bp`,
+>   `EventoNuloTest`; el manual, §15.2. La red, VERDE (187); `check-jc`, 185 y 2 SKIP.
+> - **`#768`, analizada otra vez:** el tope no es de cada literal sino del bloque de datos del módulo (32 KB; la medida
+>   del 2-nov engañaba, un literal repetido se guarda una vez). Eduardo: *«si utilizas un word pasamos a 64K»*, y los
+>   literales grandes, *resources* que se cargan al heap (`V8_IDEAS` §E12). El censo: 19 instrucciones llevan ese
+>   desplazamiento; el plan, por aprobar.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
