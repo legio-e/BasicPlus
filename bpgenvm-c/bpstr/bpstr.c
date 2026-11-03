@@ -231,14 +231,22 @@ int32_t bpstr_busca_byte(const uint8_t* p, uint32_t n, uint8_t c) {
     return -1;
 }
 
-/* Hasta aquí, una aguja es CORTA: se busca su primer byte de 4 en 4 y se compara el resto (en el peor caso, qn
- * comparaciones por posición: lineal, porque qn no pasa de este tope). Más larga, Two-Way. El tope, por medir. Las
- * pruebas lo cambian al compilar (1: todo por Two-Way; muy grande: todo por la corta) para probar los dos caminos con
- * agujas pequeñas. */
+/* Los tres caminos de buscar, por lo larga que es la aguja. Hasta AGUJA_CORTA, la CORTA: se busca su primer byte de 4 en
+ * 4 y se compara el resto. Hasta AGUJA_PAREJAS (y desde 3 bytes), por PAREJAS, el de Arm. Más larga, Two-Way. Los dos
+ * primeros, lineales porque la aguja no pasa de su tope (en el peor caso, qn comparaciones por posición); Two-Way, lineal
+ * siempre. Los topes, por medir. Las pruebas los cambian al compilar para probar cada camino con agujas pequeñas: todo
+ * por Two-Way (1 y 0), todo por la corta (uno muy grande) y todo por parejas (2 y 256). */
 #ifndef BPSTR_AGUJA_CORTA
 #define BPSTR_AGUJA_CORTA 16u
 #endif
-#define AGUJA_CORTA ((uint32_t) (BPSTR_AGUJA_CORTA))
+#ifndef BPSTR_AGUJA_PAREJAS
+#define BPSTR_AGUJA_PAREJAS 256u
+#endif
+#define AGUJA_CORTA   ((uint32_t) (BPSTR_AGUJA_CORTA))
+#define AGUJA_PAREJAS ((uint32_t) (BPSTR_AGUJA_PAREJAS))
+#if BPSTR_AGUJA_PAREJAS > 256
+#error "bpstr: la tabla de las parejas es de bytes: la aguja, de 256 como mucho"
+#endif
 
 static int32_t busca_corta(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn, uint32_t desde) {
     const uint32_t ultimo = n - qn;                     /* la última posición donde cabe la aguja */
@@ -251,6 +259,61 @@ static int32_t busca_corta(const uint8_t* p, uint32_t n, const uint8_t* q, uint3
         for (k = 1u; k < qn && p[i + k] == q[k]; k++) ;
         if (k == qn) return (int32_t) i;
         i++;
+    }
+    return -1;
+}
+
+/*
+ * PAREJAS: el memmem de newlib, escrito por Arm, para las agujas de 3 a 256 bytes. Es Horspool, pero el salto no lo da
+ * UN byte sino la PAREJA que queda bajo el final de la aguja: los dos bytes, mezclados en una tabla de 256 saltos de un
+ * byte (la última aparición de cada mezcla en la aguja). Una pareja que no está en la aguja salta la aguja entera, y de
+ * las parejas posibles una aguja tiene pocas. El bucle de saltar sólo sale cuando la pareja es la del final; entonces
+ * se compara la aguja (si es larga, primero 4 bytes de un sitio que se mueve cada vez que no sirve para descartar: un
+ * filtro que aprende dónde suele fallar). El último byte no se compara: la mezcla, con el penúltimo igual, lo fija.
+ * Medido en la RP2350 (#730, el paso 2): con una aguja de 32 bytes, 2,9 veces más deprisa que nuestro Two-Way.
+ *
+ * Adaptado de newlib (newlib/libc/string/memmem.c), con su licencia:
+ *   Copyright (c) 2018 Arm Ltd.  All rights reserved.
+ *   SPDX-License-Identifier: BSD-3-Clause
+ *   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+ *   following conditions are met:
+ *   1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
+ *      following disclaimer in the documentation and/or other materials provided with the distribution.
+ *   3. The name of the company may not be used to endorse or promote products derived from this software without
+ *      specific prior written permission.
+ *   THIS SOFTWARE IS PROVIDED BY ARM LTD ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ *   THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL ARM
+ *   LTD BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ *   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ *   HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ *   OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * Lo nuestro: posiciones de 32 bits en vez de punteros; comparar con bpstr_igual (la memcmp de la STM32 es de un byte
+ * por vuelta); y el filtro, de 4 bytes en todas partes (allí, sizeof (long): en el PC de 64 bits serían 8).
+ */
+#define PAREJA(p) ((uint32_t) ((uint32_t) (p)[0] - ((uint32_t) (p)[-1] << 3)) & 255u)   /* p[-1] y p[0], mezclados */
+
+static int32_t busca_parejas(const uint8_t* h, uint32_t hn, const uint8_t* q, uint32_t qn) {
+    uint8_t salto[256];
+    const uint32_t m1 = qn - 1u, ultimo = hn - qn;      /* qn de 3 a 256, y hn >= qn: lo mira bpstr_busca */
+    uint32_t j = 0, t, i, salto1, filtro = 0;
+    memset(salto, 0, sizeof salto);
+    for (i = 1; i < m1; i++) salto[PAREJA(q + i)] = (uint8_t) i;
+    salto1 = m1 - salto[PAREJA(q + m1)];                /* tras fallar con el final casado: la aparición de antes */
+    salto[PAREJA(q + m1)] = (uint8_t) m1;
+    while (j <= ultimo) {                               /* j: el principio de la ventana */
+        do {                                            /* saltar las parejas que no están en la aguja */
+            j += m1;                                    /* j: el último byte de la ventana */
+            t = salto[PAREJA(h + j)];
+        } while (j <= ultimo && t == 0u);
+        j -= t;
+        if (t < m1) continue;                           /* está, pero no al final: alinearla y otra vez */
+        if (m1 <= 15u || bpstr_igual(h + j + filtro, 4u, q + filtro, 4u)) {
+            if (bpstr_igual(h + j, m1, q, m1)) return (int32_t) j;
+            filtro = (filtro >= 4u ? filtro : m1) - 4u;   /* el filtro no la descartó: probar en otro sitio */
+        }
+        j += salto1;
     }
     return -1;
 }
@@ -363,9 +426,24 @@ int32_t bpstr_busca(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn,
         return r < 0 ? -1 : (int32_t) desde + r;
     }
     if (qn <= AGUJA_CORTA) return busca_corta(p, n, q, qn, desde);
-    r = dos_caminos(p + desde, n - desde, q, qn);
+    if (qn >= 3u && qn <= AGUJA_PAREJAS) r = busca_parejas(p + desde, n - desde, q, qn);
+    else r = dos_caminos(p + desde, n - desde, q, qn);
     return r < 0 ? -1 : (int32_t) desde + r;
 }
+
+#ifdef BPSTR_CAMINOS
+/* Sólo para el banco (banco.c, BPSTR_CAMINOS): cada camino de buscar por separado, desde el principio, para elegir los
+ * topes por la medida. -1 si el camino no vale para esa aguja. */
+int32_t bpstr_camino_corta(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn) {
+    return (qn == 0u || qn > n) ? -1 : busca_corta(p, n, q, qn, 0u);
+}
+int32_t bpstr_camino_parejas(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn) {
+    return (qn < 3u || qn > 256u || qn > n) ? -1 : busca_parejas(p, n, q, qn);
+}
+int32_t bpstr_camino_dos(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn) {
+    return (qn == 0u || qn > n) ? -1 : dos_caminos(p, n, q, qn);
+}
+#endif
 
 int32_t bpstr_busca_atras(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn, uint32_t hasta) {
     uint32_t i;
@@ -479,24 +557,136 @@ void bpstr_recorta(const uint8_t* p, uint32_t n, uint32_t* a, uint32_t* b) {
     *b = y;
 }
 
-/* ═══════════════════════════════ COPIAR ══════════════════════════════ */
+/* ═══════════════════════════════ COPIAR ══════════════════════════════
+ * Copiar es de lo que mejor hace cada familia, que no es lo nuestro (#730, el paso 2): en la RP2350, la memcpy de
+ * newlib, escrita por Arm, iba un 53 % más deprisa que nuestro bucle de 4 en 4; en la P4 y la S3, la de su libc, un 12 y
+ * un 2 %. En las ARM de Thumb-2 (la M33 de la RP2350 y de la STM32U5), la de Arm, copiada aquí: así va igual en la
+ * STM32, cuya libc (newlib-nano) la trae de un byte por vuelta. En las demás, la memcpy de su libc, en bpstr.h. */
 
-void bpstr_copia(uint8_t* dst, const uint8_t* src, uint32_t n) {
-    uint32_t i = 0;
-    if ((((uintptr_t) dst ^ (uintptr_t) src) & 3u) == 0u) {   /* con la misma alineación, de 4 en 4 */
-        while (i < n && !alineado(dst + i)) { dst[i] = src[i]; i++; }
-        while (n - i >= 16u) {
-            uint32_t w0 = lee(src + i), w1 = lee(src + i + 4u), w2 = lee(src + i + 8u), w3 = lee(src + i + 12u);
-            escribe(dst + i, w0);
-            escribe(dst + i + 4u, w1);
-            escribe(dst + i + 8u, w2);
-            escribe(dst + i + 12u, w3);
-            i += 16u;
-        }
-        while (n - i >= 4u) { escribe(dst + i, lee(src + i)); i += 4u; }
-    }
-    for (; i < n; i++) dst[i] = src[i];
-}
+#ifdef BPSTR_COPIA_DE_ARM   /* bpstr.h: Thumb-2, little-endian y con acceso no alineado */
+/*
+ * La memcpy de Arm para Cortex-M (newlib/libc/machine/arm/memcpy-armv7m.S), en ensamblador dentro del C, con los #if
+ * de su fuente resueltos para nuestro caso: Thumb-2 de ARMv7-M/ARMv8-M, little-endian, con acceso no alineado (lo
+ * tienen la M33 de la RP2350 y la de la STM32U5), sin PAC (la M33 no lo tiene: su prólogo no guarda nada y su epílogo
+ * es bx lr) y con sus tamaños de bloque (64 y 16 bytes). Lo que hace: con las dos direcciones alineadas, bloques de 64
+ * bytes (16 palabras seguidas por vuelta), luego de 16, luego palabras y la cola; si no, alinea el destino y copia
+ * igual, leyendo el origen sin alinear (lo hace el hardware); y con menos de 8 bytes, byte a byte. Lo nuestro: el
+ * nombre, las etiquetas y su propia sección.
+ *   Copyright (c) 2013 ARM Ltd
+ *   All rights reserved.
+ *   Redistribution and use in source and binary forms, with or without modification, are permitted provided that the
+ *   following conditions are met:
+ *   1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following
+ *      disclaimer.
+ *   2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the
+ *      following disclaimer in the documentation and/or other materials provided with the distribution.
+ *   3. The name of the company may not be used to endorse or promote products derived from this software without
+ *      specific prior written permission.
+ *   THIS SOFTWARE IS PROVIDED BY ARM LTD ``AS IS'' AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ *   THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL ARM
+ *   LTD BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+ *   LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ *   HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+ *   OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+__asm__(
+    "    .pushsection .text.bpstr_copia,\"ax\",%progbits\n"
+    "    .syntax  unified\n"
+    "    .thumb\n"
+    "    .align   2\n"
+    "    .global  bpstr_copia\n"
+    "    .thumb_func\n"
+    "    .type    bpstr_copia, %function\n"
+    "bpstr_copia:\n"                              /* r0: el destino; r1: el origen; r2: cuántos */
+    "    mov      ip, r0\n"
+    "    orr      r3, r1, r0\n"
+    "    ands     r3, r3, #3\n"
+    "    bne      .Lbpc_desalineado\n"
+    ".Lbpc_bloque:\n"                             /* los bloques de 64 bytes */
+    "    subs     r2, #64\n"
+    "    blo      .Lbpc_medio\n"
+    "    .align   2\n"
+    ".Lbpc_bloque_vuelta:\n"
+    "    .irp     d, 0,4,8,12,16,20,24,28,32,36,40,44,48,52,56,60\n"
+    "    ldr      r3, [r1, #\\d]\n"
+    "    str      r3, [r0, #\\d]\n"
+    "    .endr\n"
+    "    adds     r0, #64\n"
+    "    adds     r1, #64\n"
+    "    subs     r2, #64\n"
+    "    bhs      .Lbpc_bloque_vuelta\n"
+    ".Lbpc_medio:\n"                              /* los de 16 */
+    "    adds     r2, #48\n"
+    "    blo      .Lbpc_palabras\n"
+    "    .align   2\n"
+    ".Lbpc_medio_vuelta:\n"
+    "    .irp     d, 0,4,8,12\n"
+    "    ldr      r3, [r1, #\\d]\n"
+    "    str      r3, [r0, #\\d]\n"
+    "    .endr\n"
+    "    adds     r0, #16\n"
+    "    adds     r1, #16\n"
+    "    subs     r2, #16\n"
+    "    bhs      .Lbpc_medio_vuelta\n"
+    ".Lbpc_palabras:\n"                           /* palabra a palabra */
+    "    adds     r2, #12\n"
+    "    blo      .Lbpc_menos_de_4\n"
+    "    .align   2\n"
+    ".Lbpc_palabras_vuelta:\n"
+    "    ldr      r3, [r1], #4\n"
+    "    str      r3, [r0], #4\n"
+    "    subs     r2, #4\n"
+    "    bhs      .Lbpc_palabras_vuelta\n"
+    ".Lbpc_menos_de_4:\n"                         /* la cola: un byte si hace falta y media palabra si hace falta */
+    "    adds     r2, #4\n"
+    "    beq      .Lbpc_hecho\n"
+    "    lsls     r2, r2, #31\n"
+    "    itt      ne\n"
+    "    ldrbne   r3, [r1], #1\n"
+    "    strbne   r3, [r0], #1\n"
+    "    bcc      .Lbpc_hecho\n"
+    "    ldrh     r3, [r1]\n"
+    "    strh     r3, [r0]\n"
+    ".Lbpc_hecho:\n"
+    "    mov      r0, ip\n"
+    "    bx       lr\n"
+    "    .align   2\n"
+    ".Lbpc_desalineado:\n"                        /* sin alinear: con menos de 8, byte a byte */
+    "    cmp      r2, #8\n"
+    "    blo      .Lbpc_bytes\n"
+    "    lsls     r3, r1, #30\n"                  /* el origen, alineado: a los bloques (escribe sin alinear) */
+    "    beq      .Lbpc_bloque\n"
+    "    ands     r3, r0, #3\n"                   /* el destino, alineado: a los bloques (lee sin alinear) */
+    "    beq      .Lbpc_bloque\n"
+    "    rsb      r3, r3, #4\n"                   /* alinear el destino: un byte, media palabra o las dos cosas */
+    "    subs     r2, r3\n"
+    "    lsls     r3, r3, #31\n"
+    "    itt      ne\n"
+    "    ldrbne   r3, [r1], #1\n"
+    "    strbne   r3, [r0], #1\n"
+    "    bcc      .Lbpc_bloque\n"
+    "    ldrh     r3, [r1], #2\n"
+    "    strh     r3, [r0], #2\n"
+    "    b        .Lbpc_bloque\n"
+    ".Lbpc_bytes:\n"
+    "    subs     r2, #4\n"
+    "    blo      .Lbpc_menos_de_4\n"
+    ".Lbpc_bytes_vuelta:\n"
+    "    subs     r2, #1\n"
+    "    ldrb     r3, [r1], #1\n"
+    "    strb     r3, [r0], #1\n"
+    "    bhs      .Lbpc_bytes_vuelta\n"
+    "    ldrb     r3, [r1]\n"
+    "    strb     r3, [r0]\n"
+    "    ldrb     r3, [r1, #1]\n"
+    "    strb     r3, [r0, #1]\n"
+    "    ldrb     r3, [r1, #2]\n"
+    "    strb     r3, [r0, #2]\n"
+    "    mov      r0, ip\n"
+    "    bx       lr\n"
+    "    .size    bpstr_copia, .-bpstr_copia\n"
+    "    .popsection\n");
+#endif
 
 void bpstr_rellena(uint8_t* dst, uint8_t c, uint32_t n) {
     uint32_t i = 0, w = (uint32_t) c * UNOS;

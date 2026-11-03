@@ -9043,7 +9043,7 @@ por hilo. Sólo la VM-C: la VM-Java no tiene cursor, por decisión.
   dos cadenas a la vez, 82 ms (el 21-oct, 1461); adelante y atrás, 51; `substring(k, k+1)` con `strlen`, 237; buscar
   y cortar ×100, 81; `parseJson` de 8 KB con acentos, 2706 ms; un `Map` de 200 claves con acentos, 279.
 
-#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **en curso: el paso 1, en el PC, y el 2, en las placas, hechos el 3-nov; antes del 3, dos cosas por decidir**)
+#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **en curso: el paso 1 (el PC), el 2 (las placas) y la mezcla con lo de Arm, hechos el 3-nov; por decidir, cómo cumplir «nunca peor» con las agujas cortas**)
 
 Eduardo, 21-oct: *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería debería
 estar optimizada a nivel de algoritmo y de codificación y verificada.»* Hecha aparte e incorporada al acabar, y
@@ -9098,6 +9098,21 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
   STM32, medidas cuando se conecte—; y una aguja larga —(a) el `memmem` de newlib en la RP2350, o (b) la idea de las
   parejas en nuestro Two-Way, que conserva su garantía y ganaría en las tres; propuesta, (b)—. Y una mejora pequeña,
   corregir como validar más `memcpy` (de un 17 a un 28 % menos, según la suma de lo medido).
+- **Decidido** (Eduardo, 3-nov): *«lo que hay que hacer es un mix, mezclar nuestras librerías y las de ARM. En nuestras
+  librerías, copiamos las funciones de ARM que sean mejores»*, y *«debería dar resultados mejores o iguales pero nunca
+  peores, al menos en teoría»*.
+- **3-nov, la mezcla hecha** (`V8_IDEAS` §E5, «`#730`, la mezcla»; `bpgenvm-c/bpstr/`): buscar por parejas, el `memmem`
+  de newlib (Arm, BSD-3), de 3 a 256 bytes en las tres arquitecturas; y copiar con la `memcpy` de Arm para Cortex-M, en
+  ensamblador dentro del C en las ARM de Thumb-2 (la misma de la `libg.a`, byte a byte) y con la de la libc en las
+  demás. Las pruebas, VERDE en el PC (cuatro formas de buscar) y en las cuatro placas (13 628 658 comprobaciones
+  cada una); once sabotajes de las parejas, pillados. **Nunca peor, cumplido:** copiar (lo mismo que newlib) y buscar de
+  24 a 256 bytes (de 0,89 a 1,01 de newlib; de 0,19 a 0,51 de picolibc). **Todavía no:** las agujas de 2 a 16 bytes,
+  donde gana un camino u otro según el texto (con 3 bytes en la Pico 2: si empieza por un espacio, la corta 103 ns/B
+  y las parejas 32; si empieza por un byte que no está, la corta 16 y las parejas 32); y las de más de 256, donde el
+  Two-Way de newlib va un 20 % más deprisa. **Por decidir (Eduardo):** que la corta pare barato (el mismo algoritmo,
+  sin volver a llamar a `busca_byte` en cada parada), el tope elegido por la medida en cada familia con el peor caso lo
+  más pequeño posible, y el Two-Way de newlib por encima de 256 si gana en las tres. **Para el paso 3:** musl y newlib,
+  en los créditos (`docs/creditos.html` y `docs/en/creditos.html`), cuando bpstr entre en la VM.
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 

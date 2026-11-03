@@ -4312,6 +4312,66 @@ de 256).
 - **y de paso, corregir:** sin nada malo tarda más que validar y copiar por separado (en la RP2350, 85 ns/B frente a
   57 + 4). Hecho así —validar, y el tramo bueno con `memcpy`—, de un 17 a un 28 % menos, según la suma de lo medido.
 
+### `#730`, la mezcla: lo de Arm que gana, dentro de bpstr (3-nov, tarde)
+
+Eduardo, al ver el paso 2: *«lo que hay que hacer es un mix, mezclar nuestras librerías y las de ARM. En nuestras
+librerías, copiamos las funciones de ARM que sean mejores»*; *«La librería mix debería dar resultados mejores o
+iguales pero nunca peores, al menos en teoría»*; y *«Puedes insertar ensamblador en C?»* (sí: GCC lo deja, también
+una función entera fuera de toda función).
+
+**Hecho** (`bpstr/`, su `LEEME`):
+- **buscar por parejas:** el `memmem` de newlib (Arm, 2018, BSD-3), para las agujas de 3 a 256 bytes, igual en las tres
+  arquitecturas; Two-Way, por encima.
+- **copiar:** la `memcpy` de Arm para Cortex-M, en ensamblador dentro del C, sólo en las ARM de Thumb-2. Comparada con
+  la de la `libg.a` de la cadena de ARM, es la misma byte a byte (las direcciones, la codificación, los saltos; 236
+  bytes). En las demás, la `memcpy` de su libc, *inline*.
+- **las pruebas:**
+  - una cuarta forma de compilarlas, con todo por parejas;
+  - agujas de 3 a 300 bytes en tres alfabetos, uno de ellos para que las parejas choquen en la tabla;
+  - copiar y rellenar, hasta 300 bytes.
+
+  VERDE en el PC (1 761 722 528 comprobaciones en cada forma) y en las cuatro placas (13 628 658 cada una). Once
+  sabotajes del camino por parejas, todos pillados.
+
+**«Nunca peor»: dónde se cumple** (ns por byte con 2 KB; en la RP2350, la libc es la newlib de Arm):
+- **copiar:** en la RP2350, lo mismo que newlib (0 %; un 34 % menos que nuestro bucle de antes); en las ESP, por
+  construcción, su `memcpy`.
+- **buscar con 24 a 256 bytes:** las parejas tardan de 0,89 a 1,01 veces lo que la `memmem` de newlib en la RP2350, y
+  de 0,19 a 0,51 veces lo que la de picolibc en la P4 y la S3. Nuestra copia va algo más deprisa que la de newlib con
+  las agujas cortas (con 3 bytes, 32 frente a 42).
+
+**Dónde no, todavía:**
+- **las agujas cortas, de 2 a 16 bytes:** qué camino gana depende del texto, no sólo del largo. Por ejemplo, en la
+  Pico 2, con una aguja de 3 bytes que no está:
+
+  | la aguja empieza por | la corta | parejas | newlib |
+  |---|---|---|---|
+  | un espacio (uno de cada siete bytes del texto) | 103 | 32 | 42 |
+  | un byte que no está en el texto | 16 | 32 | 42 |
+
+  Los dos caminos fallan por motivos distintos:
+  - la corta se para en cada aparición del primer byte y vuelve a buscarlo de 4 en 4 desde una dirección sin alinear:
+    unos 100 ciclos por parada;
+  - con una aguja de 3 bytes, las parejas no saltan más de 2.
+
+  Con el tope de hoy (la corta hasta 16), la mezcla sale hasta 15 veces peor que newlib (con el espacio y 16 bytes, en
+  la RP2350). Con las parejas desde 3 bytes, también sale peor en algún caso:
+  - 2,5 veces en la RP2350 (2 bytes que empiezan por el espacio: la corta, frente al bucle de dos bytes de newlib);
+  - 2,6 en la P4 y 4,6 en la S3 (3 bytes que empiezan por un byte que no está: las parejas, frente a la corta).
+- **las agujas de más de 256 bytes:** el Two-Way de newlib (otro, el de gnulib) va un 20 % más deprisa que el nuestro
+  en la RP2350; en la P4, con este texto, hasta el bucle sencillo de picolibc nos gana, de un 11 a un 45 %.
+
+**Lo que propongo (por decidir, Eduardo):**
+1. **que la corta pare barato:** que mire las apariciones dentro de la palabra de 4 bytes que ya tiene, sin volver a
+   llamar a `busca_byte`. Es el mismo algoritmo. La cuenta, sin medir: de unos 100 ciclos por parada a unos 15, y con
+   el espacio, en la RP2350, de 103 ns/B a unos 30, cerca de las parejas (32);
+2. **elegir el tope por la medida, en cada familia,** con tu criterio: el que deje el peor caso lo más pequeño posible. Lo
+   que quede de peor (en el cruce de los dos caminos pierde siempre uno, por poco), dicho con su número;
+3. **por encima de 256 bytes,** copiar el Two-Way de newlib si gana en las tres arquitecturas.
+
+Del todo «nunca peor», en teoría, sólo se llega con una regla que mire el texto: que la corta cuente sus paradas y, si
+para demasiado, siga por parejas. Es un mecanismo con estado escondido, y no lo propongo salvo que lo quieras.
+
 ---
 
 ## E6 · Los conjuntos, como en Pascal (la idea de Eduardo, 23-oct; sin empezar)

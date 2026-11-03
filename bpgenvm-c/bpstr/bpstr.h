@@ -22,6 +22,7 @@
 #define BPSTR_H
 
 #include <stdint.h>
+#include <string.h>   /* memcpy: bpstr_copia, fuera de las ARM */
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,8 +97,9 @@ static inline uint32_t bpstr_codifica(uint32_t cp, uint8_t* out) {
 int32_t bpstr_busca_byte(const uint8_t* p, uint32_t n, uint8_t c);
 
 /* La primera aparición de q (qn bytes) en p que empiece en desde o después; -1 si no hay. Una aguja vacía casa en
- * desde (en n si desde pasa de n), como en Java. Nunca cuadrático: una aguja larga va por Two-Way, lineal siempre.
- * (Antes, bp_find_bytes: indexOf, contains, split, replace.) */
+ * desde (en n si desde pasa de n), como en Java. Nunca cuadrático: hasta 256 bytes, la aguja va por un camino lineal
+ * porque no pasa de su tope (por parejas, el memmem de Arm, si tiene de 3 en adelante); más larga, por Two-Way, lineal
+ * siempre. (Antes, bp_find_bytes: indexOf, contains, split, replace.) */
 int32_t bpstr_busca(const uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn, uint32_t desde);
 
 /* La última aparición de q que empiece en hasta o antes; -1 si no hay. La aguja vacía casa en hasta (en n si pasa de
@@ -127,9 +129,17 @@ uint32_t bpstr_minusculas(const uint8_t* p, uint32_t n, uint8_t* out);
 void bpstr_recorta(const uint8_t* p, uint32_t n, uint32_t* a, uint32_t* b);
 
 /* ═══════════════════════════════ COPIAR ══════════════════════════════
- * Como memcpy (sin solaparse) y memset: para la familia cuya libc no baste (la de la STM32 copia byte a byte). */
+ * Como memcpy (sin solaparse) y memset. Copiar, lo mejor de cada familia: en las ARM de Thumb-2, la memcpy de Arm,
+ * copiada en bpstr.c (así también en la STM32, cuya libc copia byte a byte); en las demás, la memcpy de su libc, aquí
+ * mismo, sin una llamada de más (en la S3, con 16 bytes, esa llamada costaba un 23 %). Rellenar, la nuestra. */
 
+#if defined(__ARM_ARCH_ISA_THUMB) && __ARM_ARCH_ISA_THUMB == 2 && !defined(__ARM_ARCH_ISA_ARM) && \
+    defined(__ARM_FEATURE_UNALIGNED) && !defined(__ARM_BIG_ENDIAN)
+#define BPSTR_COPIA_DE_ARM 1
 void bpstr_copia(uint8_t* dst, const uint8_t* src, uint32_t n);
+#else
+static inline void bpstr_copia(uint8_t* dst, const uint8_t* src, uint32_t n) { if (n) memcpy(dst, src, n); }
+#endif
 void bpstr_rellena(uint8_t* dst, uint8_t c, uint32_t n);
 
 #ifdef __cplusplus

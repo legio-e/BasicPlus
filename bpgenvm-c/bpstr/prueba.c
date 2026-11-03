@@ -4,8 +4,10 @@
  *
  *   1. exhaustivo: todas las cadenas de 0 a 3 bytes (16,8 millones), en las cuatro alineaciones por turno;
  *   2. buscar: con un alfabeto pequeño (a, b, 0x80, 0xC3), todos los pajares hasta 7 bytes con todas las agujas hasta
- *      4; con el binario (a, b), hasta 12 y 8. Compilada con BPSTR_AGUJA_CORTA=1 todo va por Two-Way, y con uno muy
- *      grande, todo por la corta: el Makefile pasa las tres;
+ *      4; con el binario (a, b), hasta 12 y 8; agujas largas y periódicas; y las de 3 a 300 bytes en tres alfabetos (la
+ *      frontera de 256, byte a byte). Compilada con BPSTR_AGUJA_CORTA=1 y BPSTR_AGUJA_PAREJAS=0, todo va por Two-Way;
+ *      con un tope de la corta muy grande, todo por la corta; y con 2, de 3 a 256 bytes por parejas: el Makefile pasa
+ *      las cuatro;
  *   3. comparar, copiar y rellenar: todas las parejas cortas, con las 16 combinaciones de alineación;
  *   4. los bordes: de 0 a 64 bytes con la cadena pegada al final de una página protegida (y una al principio de otra):
  *      leer un byte de más revienta la prueba (en el PC; en una placa no hay páginas);
@@ -41,6 +43,8 @@ int  bpstr_prueba_main(int larga, const char* ruta_kuhn);
 #define BUSCA4_Q    3u
 #define BUSCA2_P    10u
 #define BUSCA2_Q    6u
+#define PAJAR_AGUJAS 700u
+#define PASO_AGUJAS 13u      /* de las agujas de 40 a 300, una de cada tantas (las de 248 a 259, todas) */
 #else
 #define BUF_N       80000u
 #define SAL_N       70000u
@@ -51,6 +55,8 @@ int  bpstr_prueba_main(int larga, const char* ruta_kuhn);
 #define BUSCA4_Q    4u
 #define BUSCA2_P    12u
 #define BUSCA2_Q    8u
+#define PAJAR_AGUJAS 1200u
+#define PASO_AGUJAS 7u
 #endif
 
 /* Una línea de lo que dice la prueba: en el PC, a la salida; en una placa, a placa.c. */
@@ -85,8 +91,11 @@ static void progreso(const char* fmt, ...) {
 #define PROGRESO(...) ((void) 0)
 #endif
 
-#ifndef BPSTR_AGUJA_CORTA   /* el de bpstr.c: el Makefile pasa el mismo a los dos */
+#ifndef BPSTR_AGUJA_CORTA   /* los de bpstr.c: el Makefile pasa los mismos a los dos */
 #define BPSTR_AGUJA_CORTA 16u
+#endif
+#ifndef BPSTR_AGUJA_PAREJAS
+#define BPSTR_AGUJA_PAREJAS 256u
 #endif
 
 /* El oráculo, los bucles de la VM de antes: oraculo.h (el mismo que usa el banco). */
@@ -258,12 +267,13 @@ static void exhaustivo_comparar_copiar(void) {
                         IGUAL("compara", bpstr_compara(a, na, b, nb), ref_compara(a, na, b, nb), a, na);
                         IGUAL("igual", bpstr_igual(a, na, b, nb), ref_compara(a, na, b, nb) == 0, a, na);
                     }
-    /* copiar y rellenar: de 0 a 64 bytes, las 16 alineaciones, y que no toquen nada fuera */
-    for (uint32_t n = 0; n <= 64; n++)
+    /* copiar y rellenar: de 0 a 300 bytes (en las ARM, la copia de Arm va por bloques de 64 y de 16), las 16
+     * alineaciones, y que no toquen nada fuera */
+    for (uint32_t n = 0; n <= 300; n++)
         for (uint32_t al = 0; al < 16; al++) {
             uint8_t* d = buf + 32 + (al & 3u);
             uint8_t* s = buf2 + 32 + (al >> 2);
-            for (uint32_t i = 0; i < 100; i++) { buf[i] = 0x5A; buf2[i] = (uint8_t) (i * 7u + 1u); }
+            for (uint32_t i = 0; i < n + 40u; i++) { buf[i] = 0x5A; buf2[i] = (uint8_t) (i * 7u + 1u); }
             bpstr_copia(d, s, n);
             IGUAL("copia (bytes)", memcmp(d, s, n), 0, s, n);
             IGUAL("copia (antes)", d[-1], 0x5A, s, n);
@@ -273,7 +283,7 @@ static void exhaustivo_comparar_copiar(void) {
             IGUAL("rellena (antes)", d[-1], 0x5A, s, n);
             IGUAL("rellena (despues)", d[n], 0x5A, s, n);
         }
-    grupo("comparar, copiar y rellenar: parejas cortas, 16 alineaciones", c0, f0);
+    grupo("comparar (cortas), copiar y rellenar (0-300): 16 alineaciones", c0, f0);
 }
 
 /* ── al azar ── */
@@ -366,7 +376,58 @@ static void dos_caminos_dificil(void) {
             p[1000] ^= 3u;
             una_busqueda(p, n, q, qn);
         }
-    grupo("buscar: agujas largas y periodicas (Two-Way)", c0, f0);
+    grupo("buscar: agujas largas y periodicas", c0, f0);
+}
+
+/* La aguja en p desde pos (o lo más cerca del final que quepa): tal cual, o con un byte cambiado por otro del alfabeto
+ * —el primero, el último, el penúltimo o uno cualquiera—, que es lo que más trabajo da: casa casi todo. */
+static void mete(uint8_t* p, uint32_t n, const uint8_t* q, uint32_t qn, uint32_t pos, uint32_t cambia,
+                 const uint8_t* alfa, uint32_t na) {
+    uint32_t donde;
+    uint8_t viejo;
+    if (qn > n) return;
+    if (pos > n - qn) pos = n - qn;
+    memcpy(p + pos, q, qn);
+    if (cambia == 0u) return;
+    donde = (cambia == 1u) ? 0u : (cambia == 2u) ? qn - 1u : (cambia == 3u) ? qn - 2u : azar() % qn;
+    viejo = p[pos + donde];
+    do p[pos + donde] = alfa[azar() % na]; while (p[pos + donde] == viejo);
+}
+
+/* Las agujas de 3 a 300 bytes: por parejas (hasta 256) y por Two-Way (más), y la frontera, byte a byte. Tres alfabetos:
+ * el binario (a, b), que casa a menudo el final y hace trabajar al filtro; uno cuyas parejas chocan en la tabla (00 01
+ * 08 20: la mezcla de 01 08 es la de 00 00, y dos parejas cuyo primer byte se lleva 32, 00 y 20, con el mismo segundo,
+ * se mezclan igual); y letras con el espacio, minúsculas y mayúsculas (la a y la A también se llevan 32). En cada
+ * pajar, la aguja casi (dos veces) y, según la vuelta, tal cual en cualquier sitio, justo al final, o el pajar hecho de
+ * la aguja una y otra vez. */
+static void agujas_largas(void) {
+    static const uint8_t binario[2] = {'a', 'b'};
+    static const uint8_t choques[4] = {0x00, 0x01, 0x08, 0x20};
+    static const uint8_t letras[8] = {'e', 'a', 'o', 's', 'E', 'A', ' ', 'l'};
+    static const uint8_t* const alfas[3] = {binario, choques, letras};
+    static const uint32_t nas[3] = {2u, 4u, 8u};
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    const uint32_t n = PAJAR_AGUJAS;
+    for (uint32_t k = 0; k < 3; k++) {
+        const uint8_t* a = alfas[k];
+        const uint32_t na = nas[k];
+        for (uint32_t qn = 3; qn <= 300u; qn += (qn < 40u || (qn >= 248u && qn < 260u)) ? 1u : PASO_AGUJAS) {
+            uint8_t* p = buf + 16 + (qn & 3u);
+            uint8_t* q = buf2 + 16 + ((qn >> 2) & 3u);
+            for (uint32_t i = 0; i < qn; i++) q[i] = a[azar() % na];
+            for (uint32_t v = 0; v < 4u; v++) {
+                if (v < 3u) for (uint32_t i = 0; i < n; i++) p[i] = a[azar() % na];
+                else        for (uint32_t i = 0; i < n; i++) p[i] = q[i % qn];
+                mete(p, n, q, qn, azar() % n, 1u + azar() % 4u, a, na);
+                mete(p, n, q, qn, azar() % n, 1u + azar() % 4u, a, na);
+                if (v == 1u) mete(p, n, q, qn, azar() % n, 0u, a, na);
+                if (v == 2u) mete(p, n, q, qn, n - qn, 0u, a, na);
+                una_busqueda(p, n, q, qn);
+            }
+        }
+        PROGRESO("agujas de 3 a 300: hecho el alfabeto %u de 3", (unsigned) k + 1u);
+    }
+    grupo("buscar: agujas de 3 a 300 bytes, tres alfabetos", c0, f0);
 }
 
 /* ── los bordes, contra una página protegida (sólo en el PC) ── */
@@ -511,13 +572,15 @@ int bpstr_prueba_main(int larga, const char* ruta_kuhn) {
 #ifdef BPSTR_PLACA
     t_inicio = bpstr_banco_ns();
 #endif
-    di("bpstr: las pruebas (agujas cortas hasta %lu bytes)", (unsigned long) (BPSTR_AGUJA_CORTA));
+    di("bpstr: las pruebas (agujas cortas hasta %lu bytes; por parejas, de 3 a %lu)", (unsigned long) (BPSTR_AGUJA_CORTA),
+       (unsigned long) (BPSTR_AGUJA_PAREJAS));
     exhaustivo_corto();
     snprintf(nombre, sizeof nombre, "buscar: pajares de 0-%u y agujas de 0-%u (a b 80 C3)", BUSCA4_P, BUSCA4_Q);
     exhaustivo_buscar(alfa4, 4, BUSCA4_P, BUSCA4_Q, nombre);
     snprintf(nombre, sizeof nombre, "buscar: pajares de 0-%u y agujas de 0-%u (a b)", BUSCA2_P, BUSCA2_Q);
     exhaustivo_buscar(alfa2, 2, BUSCA2_P, BUSCA2_Q, nombre);
     dos_caminos_dificil();
+    agujas_largas();
     exhaustivo_comparar_copiar();
     bordes();
     al_azar(AZAR_VECES);

@@ -157,6 +157,12 @@
 >   pulsar BOOTSEL en las dos) y el USB de la SDK tira la salida sin DTR. Las cuatro, devueltas a su imagen (la Metro,
 >   con `SqlDemo` bien). De paso: la STM32 lleva newlib-nano, de un byte por vuelta. Por decidir (Eduardo), dos cosas
 >   antes del paso 3, en `#730`.
+> - **`#730`, la mezcla** (*«lo que hay que hacer es un mix… copiamos las funciones de ARM que sean mejores»*; *«nunca
+>   peores, al menos en teoría»*): en bpstr, buscar por parejas (el `memmem` de Arm, de 3 a 256 bytes) y la `memcpy` de
+>   Arm en ensamblador dentro del C (en las ARM; la misma de newlib byte a byte). VERDE en el PC y en las cuatro placas,
+>   once sabotajes pillados, y las cuatro devueltas a su imagen (los packs de la Metro y la P4, bien). Nunca peor en
+>   copiar y en las agujas de 24 a 256 bytes; con las de 2 a 16, gana un camino u otro según el texto. Propuesto (para
+>   el OK): que la corta pare barato y el tope por la medida.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
