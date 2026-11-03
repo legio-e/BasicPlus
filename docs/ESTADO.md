@@ -61,6 +61,20 @@
 >   Eduardo, al verlo: el tope es del generador de código, no del módulo (sólo cuentan los datos; el código no lo
 >   tiene). Abiertas, decididas: `#781` (un prefijo `WIDE`, como el de la JVM, para quitar el tope; *«a) si pero se
 >   puede hacer mas adelante»*) y `#782` (los recursos, lo grande fuera del módulo; *«b) también pero sin fecha»*).
+> - **El lote de placas** (Eduardo: *«si cuando termine hacemos la ronda de placas»*): las nueve, grabadas con la
+>   imagen de hoy y el `Stdlib.pack` nuevo (32 ficheros: con `Sound`), y fuera las copias sueltas de la stdlib; la tanda
+>   del lote (15: las seis de la prueba de fuego y lo de V8 desde el 27-oct), IDÉNTICA al PC en todas (las de GUI,
+>   SALTADAS donde no hay pantalla; las capturas, bien). Informe: `compat/informes/lote_v8_3nov.md`.
+>   - Los packs nativos: aguantan en la Metro (`SQLite`), la P4 (`Gui`, `SQLite`), la DK2 (`Gui`) y la C5 (`Gui`,
+>     `DriverSpi`); en la C6 no —su bloque de RAM bajó 8 KB: su heap creció 52 KB con `#740`—, y en la Nucleo el pack
+>     nuevo no cabía (las lápidas). Las dos zonas, formateadas (Eduardo: *«si»*) y sus packs, grabados otra vez.
+>   - Los heaps, con `#740`: la C3, de 48 a 96 KB; la C6, de 61 a 112; la Nucleo, de 384 a 496; la DK2, de 768 a 1008.
+>   - En la Metro, borrar el pack viejo la reinició (tenía el motor de `SQLite` cargado, `#671`) y el nuevo no llegó:
+>     su primera tanda corrió sin pack y salió del informe; con el pack, la misma tabla.
+>   - `#709`, cerrada: tras `idf flash`, la C3, la C5 y la C6 dicen «USB». `#737`: la L2 de 256 KB, ya en la P4.
+>   - Por medir en placa (la Pico 2 y la Metro, desconectadas ya): `StrCursorBench` (`#731`–`#733`), `MapOrden` tras un
+>     reinicio (`#722`), el ancla de la Metro (`#729`) y la concatenación (`#736`). Un dato: `StrCursor`, 5,4 s en la
+>     Metro (54 ms en el PC; `#738`).
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

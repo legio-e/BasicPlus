@@ -7587,7 +7587,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   negativo) ceden como `yield()`: el hilo queda listo y acaba su cuanto. `bpgenvm-c/samples/SleepCede.bp` en el corpus
   (el caso de arriba: con la VM-C de antes, «ya está abierto»; con la nueva, como la VM-Java). `CedeCero`, que cede con
   `sleep(0)` en cuatro hilos, y el estrés, que lo corre con 4 workers, lo prueban también. A las placas, con el
-  próximo lote (`builtins.c` es de todas).
+  próximo lote (`builtins.c` es de todas). **En placa, el 3-nov (el lote):** `SleepCede` y `CedeCero`, IDÉNTICOS al PC
+  en las nueve.
 
 #### 🔵 `#769` — la red: `test-trazasbus` salió una vez en rojo, «1 de 5 pasadas con dos runs, distintas» (las trazas del bus con dos runs, `#659`); sin reproducir (abierta el 2-nov, en la red de `#766`; **sólo análisis**)
 
@@ -7642,7 +7643,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   nuevo, la misma salida en las dos VMs, en MOD9 y en MOD8. `DatosDe64KTest` (miVM: la regla, el centinela y el tope)
   y `ModuloNoCabeTest` (el frontend: dos literales de 40 000 bytes dan un error, el claro, y ni `.mod` ni `.dbg`; uno
   de 33 000 compila). El de error no va a `samples/errores`: pasar de 64 KB pide más de 64 KB de fuente. A las placas,
-  con el próximo lote (`interp.c` es de todas).
+  con el próximo lote (`interp.c` es de todas). **En placa, el 3-nov (el lote):** `DatosGrandes`, IDÉNTICO al PC en las
+  nueve (también en la C3, con sus 96 KB de heap).
 
 #### ✅ `#767` — `FileCursor` se para tras `gc()`: un `File` que murió sin `close()` sigue abierto («ya está abierto»), y el sample esperaba que el GC lo cerrase; pasa en las dos VMs, y ya en V7 publicada (abierta el 2-nov, en el censo de `#765`; **CERRADA el mismo día**, el commit de `#767`: lo viejo era el sample)
 
@@ -8018,7 +8020,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     (`=== INICIANDO…`, `[packs]…`) y los `[gui]` de la ventana, con él. La VM-Java no cambia: ya era así.
   - La stdlib, rehecha: los 31 módulos (todos sellan la interfaz de Core, que crece, como con `#711`; en MOD9 el enlace
     es por nombre), el `Stdlib.pack` y la stdlib embebida de las tres familias. **En el próximo lote de placas, las
-    imágenes y el pack nuevos.**
+    imágenes y el pack nuevos.** Hecho en el lote del 3-nov: las nueve, con su imagen y el `Stdlib.pack` nuevos.
 - **Lo que lo prueba:** `Eol` en el corpus (un `\n`, un `\r\n` y un `\r` dentro de cadenas, y `eol()`): las dos VMs, el
   mismo stdout byte a byte (`uno\ndos\r\n`, `cinco\rseis\r\n`…; antes, la VM-C con `uno\r\ndos\r\n`). Las dos pruebas
   de Mono que lo destaparon, `gen-check` y `gen-cast-test`, dan ya la misma salida en las dos VMs (196 y 565 líneas):
@@ -8237,7 +8239,7 @@ imprime bien. Con `#749` importa: una `List<Object>` con cadenas, recorrida e im
 - **La stdlib cambia:** `List.getString` (Core) y `Map.getString` (Collections) llaman a `o.toString()`: sus `.mod`, el
   `Stdlib.pack` y la stdlib embebida de las tres imágenes, nuevos (`regen_*_mods.sh`; `check_mods_embebidos.py`, OK); el
   comportamiento, el mismo (los dos atrapaban el error). **En el próximo lote de placas**, las imágenes y el
-  `Stdlib.pack` nuevos. Y una limpieza posible: el `try`/`catch` de `List.getString` ya no hace falta (en Core, `Object`
+  `Stdlib.pack` nuevos (hecho el 3-nov, en las nueve). Y una limpieza posible: el `try`/`catch` de `List.getString` ya no hace falta (en Core, `Object`
   es local, y la rama de la cadena se emite también en MOD8); el de `Map.getString`, sí, mientras exista MOD8.
 
 #### ✅ `#747` — H7.1: los compuestos (`*=`, `/=`, `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`) y el ternario, en JC y en BP (abierta y **CERRADA el 31-oct**; el commit de `#747`)
@@ -8640,7 +8642,7 @@ con su test— y quitar el caso, o dejarlo como una comprobación que avise si a
     no es ASCII); el ENV (`imagen.fecha`) y los nombres de los packs y de lo que llevan, en `Utf8Descodifica` §10. En el
     PC no hay ENV ni packs (las dos VMs: "" y ninguno): esas dos miran lo de las placas.
 - La red, VERDE (14:31); `check-jc`, VERDE (8:24); las pruebas de la VM-Java, 62 (una nueva). A las placas, con el próximo
-  lote.
+  lote (llegó el 3-nov, a las nueve).
 
 #### 🔵 `#738` — en la Metro, copiar y poner a cero las cadenas grandes sin pasar por la caché del XIP (el alias sin caché o el DMA) (abierta el 27-oct, al cerrar el H5; **por medir**)
 
@@ -8652,7 +8654,7 @@ son 2048 operaciones), el coste de arrancar cada transferencia (sólo compensa p
 para la flash y la PSRAM, y un canal de DMA reservado. Lo más sencillo de probar primero: `memcpy`/`memset` de
 bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la caché alrededor.
 
-#### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **la de la P4, de 256 KB desde el 29-oct —llega a la placa en el próximo lote—; la de la S3, por medir**)
+#### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **la de la P4, de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la de la S3, por medir**)
 
 Propuesto el 21-oct (`V8_IDEAS` §E5, «La PSRAM, medida por piezas»), midiendo antes: la L2 de la P4, de 128 a 256 KB,
 y la caché de datos de la S3, de 32 a 64 KB con líneas de 64 B. Cada una cuesta esa SRAM interna. En la P4, los datos
@@ -8680,6 +8682,8 @@ salen gratis»*): `CONFIG_CACHE_L2_CACHE_256KB=y` en `esp32p4/sdkconfig.defaults
 local, que ya existe y los defaults no lo vuelven a sembrar. La imagen de la P4, compilada con ella: el código, en las
 mismas direcciones que la de la prueba L2 (el rodata, 1,8 KB más corto: las rutas de los ficheros), y en la misma página
 que la del 27-oct (la zona de packs no se mueve). A la placa, en el próximo lote, con los packs de `#741`.
+- **En la placa, el 3-nov (el lote):** la P4, con su imagen de hoy (`CONFIG_CACHE_L2_CACHE_256KB=y` en su `sdkconfig`
+  efectivo), la zona de packs donde estaba (`0x400e8000`), y `Gui` y `SQLite`, rc=0; su tanda, IDÉNTICA al PC.
 
 #### 🔵 `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **hecha para los builtins el 29-oct; la concatenación, por decidir**)
 
@@ -9968,7 +9972,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
 - **Lo que haría falta, si Eduardo quiere:** medir el mínimo en puntos del arranque, para saber quién lo hunde y si es
   pasajero de verdad. Las pruebas dan lo mismo, y el peor margen es la C5, con 153 KB libres.
 
-#### 🔵 `#709` — el `resetReason` del `INFO` dice «unknown» tras un reinicio por USB: a la tabla de las ESP le faltan cinco motivos (abierta el 19-oct, al grabar la C3 con el IDF 6.1, `#707`; preexistente)
+#### ✅ `#709` — el `resetReason` del `INFO` dice «unknown» tras un reinicio por USB: a la tabla de las ESP le faltan cinco motivos (abierta el 19-oct, al grabar la C3 con el IDF 6.1, `#707`; preexistente; **CERRADA el 3-nov**, en el lote de placas)
 
 - **Medido:** tras `idf flash`, que reinicia la C3 y la C5 por su USB, el `INFO` dice `"resetReason": "unknown"`.
   Antes, tras encenderlas, decía «power-on».
@@ -9980,6 +9984,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
 - **29-oct, hecho en el código** (Eduardo: *«Si»*): los cinco, en `esp32_reset_cause` —«USB», «JTAG», «eFuse error»,
   «power glitch» y «CPU lockup»—; la tabla, la de las cinco ESP (la P4 la comparte). La C3, compilada con el IDF 6.1.
   **Por ver en el lote:** tras `idf flash`, el `INFO` de la C3 o la C5 dice «USB».
+- **Visto en el lote del 3-nov:** tras `idf flash`, el `INFO` de la C3, la C5 y la C6 dice `"resetReason": "USB"`.
 
 #### 🧪 `#708` — V8, el sonido en la P4, WAV primero y MP3 después (abierta el 19-oct, a pregunta de Eduardo: *«¿cuánto costaría reproducir un .mp3 en el P4?»* · **es el H4 de V8**, Eduardo, el mismo día: *«El sonido lo ponemos como hito 4. Podemos dejar aquí lo del sonido de momento»*)
 
@@ -10015,7 +10020,8 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
 - **27-oct (noche), la P4, hecha** (Eduardo, tras oírla: *«Si se oye bien, mas fuerte que en el PC»*): la línea
   `audio` del ENV, que lee la HAL BP; la cintura del ES8311 (`sonido_p4.c`, con `esp_codec_dev` 1.5.10 del registro)
   enganchada al I2C del táctil por el árbitro, y sus pines, del sistema. En la placa, el canon de la SD en paralelo y
-  el tono detrás; `SonidoParalelo`, IDÉNTICO al PC. Para el próximo lote, el `Stdlib.pack` con `Sound` en todas.
+  el tono detrás; `SonidoParalelo`, IDÉNTICO al PC. Para el próximo lote, el `Stdlib.pack` con `Sound` en todas (hecho
+  el 3-nov: el pack nuevo, de 32 ficheros, en las nueve).
 - **27-oct, la C5, la tercera parte del H4, parada** (Eduardo: *«Me parece que C5 también soporta sonido»*; y tras
   el análisis: *«Si, haremos el sonido de la C5 como parte de H4 (digamos la tercera parte que falta). Ahora mismo el conector del altavoz es diferente del de la P4 así que no me entra por lo que no lo podemos probar. Queda pendiente para mas adelante hasta que encuentre una solución.»*). La placa lleva el mismo ES8311 y el mismo amplificador, sin MCLK y con el amplificador
   en el bit 3 del expansor CH32V003, que la pantalla escribe entero y no se puede leer. Lo propuesto: el expansor con
