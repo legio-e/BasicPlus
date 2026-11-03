@@ -7311,7 +7311,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **hecha el 3-nov, probada en la S3 y la P4; por decidir, con qué frecuencia arranca la S3 sin la clave**)
+#### ✅ `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **CERRADA el 3-nov**, `53003a72`: hecha y probada en la S3 y la P4; la S3, a 160 sin la clave)
 
 - **Cómo sale:** el `INFO` de la S3 dice `"cpuFreqHz": 240000000`, y su `sdkconfig` efectivo,
   `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160` (el valor del IDF: nadie lo ha cambiado nunca).
@@ -7376,6 +7376,8 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     misma `packRamBase`, el texto y el rodata en las mismas páginas); `MIN_CPU_MHZ()` y `MAX_CPU_MHZ()`, 360;
   - **la C3, la C5 y la C6:** compiladas, sin conectar: a la placa en el próximo lote;
   - **docs:** `referencia.html` (la clave, en el apéndice A; `setCpuFreqMHz`, `cpuFreqHz` y `MAX_CPU_MHZ`).
+- **Decidido** (Eduardo, 3-nov: *«lo dejamos a 160»*): sin la clave, la S3 arranca a 160 MHz, el valor del IDF, escrito
+  explícito en `esp32/sdkconfig.defaults` para que la decisión se vea. A 240, con `cpu.mhz` o `Machine.setCpuFreqMHz`.
 
 #### ✅ `#783` — el traductor de C#: una llamada con argumentos con nombre se escribe por posición, y la sobrecarga que elige JC puede no ser la de C#; con `#772`, `test-named-06` deja de compilar (abierta el 3-nov, en el lote de Mono de `#772`; **CERRADA el mismo día**, el commit de `#783`)
 

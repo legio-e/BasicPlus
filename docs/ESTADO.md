@@ -143,8 +143,8 @@
 > - **`#784`, hecha** (*«ok»*): la gestión de energía del IDF en las cinco ESP; `Machine.setCpuFreqMHz` con los valores
 >   de cada chip (la P4, 360); `cpuFreqHz()` y el `INFO`, la de verdad; la clave `cpu.mhz`, en el arranque común
 >   (`test_boot2`, seis casos). Probada en la S3 (80, 160 y 240; el reloj exacto; la clave, con sus errores en el log) y
->   en la P4 (sus packs cargan con la imagen nueva). La C3, la C5 y la C6, compiladas. Por decidir (Eduardo): con qué
->   arranca la S3 sin la clave, 160 o 240. **Ojo, para el próximo lote:** al compilarlas se pisó en su `build/` el
+>   en la P4 (sus packs cargan con la imagen nueva). La C3, la C5 y la C6, compiladas. **Cerrada** (Eduardo: *«lo
+>   dejamos a 160»*): sin la clave, la S3 arranca a 160, escrito explícito en sus defaults. **Ojo, para el próximo lote:** al compilarlas se pisó en su `build/` el
 >   `.elf` de la imagen que llevan la C3, la C5 y la C6 (la del lote de esta mañana), así que el `nm` de sus packs
 >   sellados ya no se puede hacer contra él: mirar `packRamBase` antes y después de grabar, y pedir en el mismo OK el
 >   regrabado de sus packs nativos (lo de `regrabar-packs-sellados`).

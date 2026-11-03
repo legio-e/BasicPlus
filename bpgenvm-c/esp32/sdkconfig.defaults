@@ -118,3 +118,8 @@ CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 # la máxima: sin pedir nada, la CPU va a la de la imagen, como antes. Cuesta unos KB de código, y los drivers piden y
 # sueltan un permiso en cada operación. Como las demás: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar.
 CONFIG_PM_ENABLE=y
+# V8 #784 (3-nov): LA S3 ARRANCA A 160 MHz (Eduardo: «lo dejamos a 160»). Es el valor del IDF; escrito explícito para
+# que la decisión se vea (como CONFIG_FREERTOS_UNICORE=n, arriba). A 240, lo que es cálculo va un 33 % más deprisa
+# (medido: fib(28) de 22,4 a 14,9 s) y gasta más; cada placa lo sube sin regrabar con `cpu.mhz=240` en el ENV, y un
+# programa, con Machine.setCpuFreqMHz.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y
