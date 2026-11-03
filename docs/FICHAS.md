@@ -8804,7 +8804,7 @@ longitud—; y *«OK»*):
 - **Decidido** (Eduardo, 3-nov: *«OK 736»*, a «dejarla así»): la concatenación, como está. Lo grande está en la
   memoria recién estrenada de la PSRAM, `#738`.
 
-#### 🔵 `#735` — la longitud en CARACTERES no se guarda: con acentos, `strlen` la cuenta en cada llamada (abierta el 27-oct, al cerrar el H5; **por decidir**)
+#### 🧊 `#735` — la longitud en CARACTERES no se guarda: con acentos, `strlen` la cuenta en cada llamada (abierta el 27-oct, al cerrar el H5; **aparcada el 3-nov**: de momento no)
 
 Se guarda la longitud en bytes. Con el bit «todo ASCII», en una cadena ASCII los caracteres son los bytes y `strlen`
 es O(1); con acentos, se cuenta (lineal; el cursor la recuerda mientras no cambie de cadena). La opción (`V8_IDEAS`
@@ -8813,6 +8813,9 @@ el bit. Desde `#714` (el bit 20, solo lectura) quedan 20 (del 19 al 0, `HEAP_LAY
 1 048 575 caracteres; las más largas, como hoy. Así `strlen` y el rango de `charAt`/`charCodeAt`/`substring` serían
 O(1) también con acentos (caminar hasta el carácter `i` seguiría siendo O(i)). En las dos VMs. A revisar al hacerlo:
 que ningún camino reescriba la etiqueta entera y la borre.
+- **Decidido** (Eduardo, 3-nov: *«735 de momento no la hacemos. No es un bug, es una optimación y por lo que dices no se
+  gana mucho así que de momento no.»*): con el cursor, los patrones medidos ya son lineales (`StrCursorBench` en la
+  Pico 2, el lote del 3-nov); sólo ganaría con muchas cadenas con acentos medidas una vez cada una. Aparcada.
 
 #### ✅ `#734` — en las RP2350, `intToString`, `floatToString`, `parseFloat` y cadena + entero van un 25–50 % más lentas desde los dos algoritmos del H5, y no se sabe por qué (abierta el 27-oct, al cerrar el H5; explicada el 29-oct —la caché del XIP— e `intToString`, hecha; **CERRADA el 2-nov**: lo demás se queda como está)
 
@@ -9205,7 +9208,7 @@ tabla, es ella.
 - **Decidido** (Eduardo, 3-nov: *«OK, adelante»*). **Hecho:** cerrada; y `HuecosReserva` suelta las cadenas y colecta
   antes de decir «no cabe». En la Pico 2: «HUECOS k=4000 no cabe: No space in heap» y acaba bien (`EXITED OK`).
 
-#### 🔵 `#721` — con `log=1` en el ENV, el GC tarda 2,2 veces más: cada recolección escribe sus líneas `[gc]` en el log (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **por decidir**, Eduardo)
+#### ✅ `#721` — con `log=1` en el ENV, el GC tarda 2,2 veces más: cada recolección escribe sus líneas `[gc]` en el log (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **CERRADA el 3-nov, desestimada**: con `log=1`, lo normal)
 
 **Lo medido** en la Pico 2, la misma imagen con y sin `log=1` (los bancos de `V8_IDEAS` §E5, «`mem*` sólo en M, y la
 Pico 2 frente a la Metro»):
@@ -9224,6 +9227,9 @@ añade. Y con el log de RAM lleno (4 KB), cada línea nueva desplaza el búfer e
 1. dejarlo: `log=1` es para diagnosticar, y el log por defecto está apagado;
 2. las líneas de cada recolección, sólo con una traza pedida;
 3. un log circular, que no desplace el búfer al llenarse.
+
+**Decidido** (Eduardo, 3-nov: *«#721 ya está bien. Con log=1 es normal que las cosas vayan mas lentas, yo la
+desestimaría.»*): la 1, dejarlo. `log=1` es para diagnosticar y el log por defecto está apagado.
 
 #### ✅ `#720` — `memcpy`/`memcmp`/`memchr` en la RAM (`1b39d324`) es un TRUEQUE en P, el firmware con el código en la flash: crear cadenas mejora, pero `indexOf`, `contains`, `replace` y `parseFloat` empeoran un 10–17 % (abierta el 22-oct, al probar la imagen con P y M en la Pico 2; **CERRADA el mismo día**: `mem*` en la RAM sólo en M, Eduardo: *«SI, las mem* sólo en la Metro»*)
 

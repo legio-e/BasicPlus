@@ -109,6 +109,8 @@
 > - **`#778`, cerrada** (el segundo; Eduardo, con el ejemplo delante: *«el traductor puede asignarle un valor por defecto
 >   ( un null ). En Java ese código no compilaría»*): una local que C# declara sin valor, con el de su tipo. Mono, 447
 >   (`test-504`, `test-901` y `test-907`).
+> - **`#735`, aparcada** (*«No es un bug, es una optimación y por lo que dices no se gana mucho así que de momento no»*)
+>   y **`#721`, desestimada** (*«Con log=1 es normal que las cosas vayan mas lentas»*).
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
