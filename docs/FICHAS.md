@@ -7338,6 +7338,27 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   - **el plan, para la tarde:** (1) medir la S3 a 240 con una imagen de prueba, como la caché; (2) la función en las
     ESP, con este fallo arreglado; (3) la clave del ENV; (4) Eduardo decide con qué arranca la S3 sin la clave: 160 (gasta
     menos) o 240 (como las demás ESP, a su máximo).
+- **3-nov, tarde: la S3 a 240 MHz, medida** (Eduardo: *«Continuamos con #784»*). Una imagen de prueba de HEAD que sólo
+  cambia `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240` (con las cachés de `#737`), con los programas de la caché, frente a la de
+  hoy: todo lo que es cálculo, **−33,3 %**, justo 160/240 —`fib(28)` de 22,4 a 14,9 s, `SortBench`, `IntBench`,
+  `FloatBench`, `AllocBench`, los seis bucles y el intérprete de `PsramFases`—; el censo de cadenas, −27/−32 %; lo que
+  espera a la PSRAM, menos (leer 64 KB −18 %, crear 64 KB −24 %). **Confirma el fallo:** la S3 iba a 160, y el `INFO`
+  decía 240. La RAM, igual. La placa, devuelta a su imagen de hoy (a 160). Lo que gasta de más, sin medir (no hay con qué).
+- **El diseño, para el OK:**
+  - **la gestión de energía del IDF, encendida** (`CONFIG_PM_ENABLE=y`) en las cinco imágenes ESP, con la mínima igual a
+    la máxima: hasta que alguien la pida, la frecuencia no cambia. Cuesta unos KB de código, y los drivers piden y
+    sueltan un permiso en cada operación;
+  - **la función:** `Machine.setCpuFreqMHz(mhz)` en las ESP, con `esp_pm_configure`. Los valores, los de cada chip desde
+    80: la S3 y la C5, 80/160/240; la C3, 80/160; la C6, 80/120/160. La P4 se queda en 360: es lo único que el IDF da a
+    su silicio (los 400, al v3; los 40, sólo para las pruebas del fabricante). Devuelve `true` o `false`, como en la Pico; `MAX_CPU_MHZ()` y `MIN_CPU_MHZ()`, los del
+    chip;
+  - **`Machine.cpuFreqHz()` y el `INFO`, la de verdad** (`esp_clk_cpu_freq()`): este fallo;
+  - **la clave `cpu.mhz`:** al arrancar, después del hardware y antes de los buses, con lo mismo que la función. Un
+    valor que la placa no da, dicho en el log, y se queda la de la imagen;
+  - **sólo en las ESP, de momento.** Visto de paso, sin probar: en la RP2350 la función existe, pero cambiar el reloj
+    del sistema no recalcula los divisores de la QMI —el de la PSRAM de la Metro lo calcula `psram_set_timing` una vez,
+    para 109 MHz como mucho, y el de la flash lo pone el arranque—: subir el reloj los pasaría de su máximo;
+  - **por decidir (Eduardo):** con qué arranca la S3 sin la clave, 160 (hoy) o 240.
 
 #### ✅ `#783` — el traductor de C#: una llamada con argumentos con nombre se escribe por posición, y la sobrecarga que elige JC puede no ser la de C#; con `#772`, `test-named-06` deja de compilar (abierta el 3-nov, en el lote de Mono de `#772`; **CERRADA el mismo día**, el commit de `#783`)
 

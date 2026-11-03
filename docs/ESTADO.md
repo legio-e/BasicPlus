@@ -136,6 +136,10 @@
 >      para las del PC) y el banco, y lo deje en el log;
 >   3. `#738`, el experimento de la Metro, si da tiempo (y si se conecta).
 >   La STM32 tiene la misma M33 que la Pico 2; estaba en la lista por su libc, que copia byte a byte: cuando se conecte.
+> - **`#784`, la S3 a 240 MHz, medida** (*«Continuamos con #784»*): todo lo que es cálculo, −33,3 % (160/240; `fib(28)`
+>   de 22,4 a 14,9 s), el censo −27/−32 %, lo que espera a la PSRAM −18/−24 %. Confirma el fallo: iba a 160 y el `INFO`
+>   decía 240. La placa, devuelta a su imagen de hoy. El diseño de la función y de la clave `cpu.mhz` (sólo las ESP;
+>   en la RP2350 cambiar el reloj no recalcula los divisores de la PSRAM ni de la flash), en `#784`, para el OK.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
