@@ -184,7 +184,22 @@
 >   placas: buscar con 2 KB, de cinco a nueve veces más deprisa; `replace`, de dos a casi siete. Lo que sale peor es casi
 >   siempre lo que bpstr no toca: el código cambia de sitio. En la Pico 2 es la lotería del XIP de `#734` (`strlen`
 >   ×2,05), comprobada con otra imagen; en la P4 y la S3, menos. `startsWith`/`endsWith` siguen con la `memcmp`. Las
->   cuatro placas, con la imagen del paso 3. Por decidir (Eduardo): cerrar `#730`, y la Pico 2.
+>   cuatro placas, con la imagen del paso 3.
+> - **`#730`, cerrada** (*«cierra #730»*). La lotería de la Pico 2, sin decisión nueva: lo de `#734` (y `#719`, congelada).
+>   Lo que queda de bpstr, en `#785` (la STM32: su `-O2` y sus `mem*`).
+>
+> **Para la próxima sesión:**
+> - las cuatro placas conectadas hoy (la Pico 2, la Metro, la P4 y la S3) llevan la imagen del paso 3 de `#730`, la del
+>   repositorio (`cdbda834`); la C3, la C5, la C6, la Nucleo y la DK2, la del lote de esta mañana;
+> - en el próximo lote, mirar `packRamBase` antes y después en la C3, la C5 y la C6: sus `.elf` del `build/` ya no son
+>   los de la imagen que llevan;
+> - abiertas en FICHAS, para elegir:
+>   - `#785` (la STM32, cuando se conecte) y `#738` (el experimento de la Metro);
+>   - las del IDE y el wire (`#693`–`#696`);
+>   - las que esperan a repetirse (`#779`, `#769`, `#762`);
+>   - las ideas y lo decidido para más adelante (`#728`, `#723`, `#745`, `#710`, `#706`, `#781`, `#782`);
+>   - `#735` (aparcada), `#719` (congelada) y las de antes de V8 (`#451`, `#460`, `#488`, `#582`, `#584`, `#615`,
+>     `#663`, `#665`).
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

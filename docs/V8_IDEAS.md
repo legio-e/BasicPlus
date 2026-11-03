@@ -3982,7 +3982,7 @@ librería elija el modo (SQLite: `getStr(i)` y `getStr(i, ignorarError)`). Todo 
 había: la ABI del `.mdn` no cambia. El detalle, en la ficha. Con ella se cierra la última puerta conocida por la que
 una cadena podía nacer rota; si eso basta para quitar el caso especial del cursor, está por mirar.
 
-### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; la forma, por decidir)
+### La biblioteca de cadenas en C (decidida por Eduardo, 21-oct; hecha y dentro de la VM el 3-nov: `#730`, cerrada)
 
 **Lo que decidió Eduardo:** *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería
 debería estar optimizada a nivel de algoritmo y de codificación y verificada. Esto se puede hacer a parte de todo el

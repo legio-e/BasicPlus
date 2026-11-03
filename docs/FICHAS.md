@@ -7330,7 +7330,9 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   3. dentro de la VM, en el paso 3 de `#730`, las de `bpstr` donde se vea que importa (el heap y el GC: poner a cero
      al crear, copiar al compactar), con el censo de antes y después.
 - **3-nov, con el paso 3 de `#730`:** la STM32 compila `src/bpstr_vm.c` con el `-Os` de su proyecto. El `-O2` de bpstr
-  (decidido por Eduardo) pide una opción por fichero en el `.cproject` de las dos placas: con esto, al medirla.
+  (decidido por Eduardo) pide una opción por fichero en el `.cproject` de las dos placas: con esto, al medirla. El
+  punto 3 (las de bpstr en el heap y el GC), sin hacer en ese paso: el censo no apunta allí (`gc()`, igual antes y
+  después), y la VM sigue con la `memcpy` y la `memset` de cada libc; si se mide que se nota, aquí.
 
 #### ✅ `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **CERRADA el 3-nov**, `53003a72`: hecha y probada en la S3 y la P4; la S3, a 160 sin la clave)
 
@@ -9064,7 +9066,7 @@ por hilo. Sólo la VM-C: la VM-Java no tiene cursor, por decisión.
   dos cadenas a la vez, 82 ms (el 21-oct, 1461); adelante y atrás, 51; `substring(k, k+1)` con `strlen`, 237; buscar
   y cortar ×100, 81; `parseJson` de 8 KB con acentos, 2706 ms; un `Map` de 200 claves con acentos, 279.
 
-#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **en curso: los pasos 1, 2 y 3 —bpstr ya dentro de la VM—, hechos el 3-nov; por decidir, cerrarla**)
+#### ✅ `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **CERRADA el 3-nov**, `cdbda834`: bpstr, con lo de Arm que gana, verificada y dentro de la VM)
 
 Eduardo, 21-oct: *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería debería
 estar optimizada a nivel de algoritmo y de codificación y verificada.»* Hecha aparte e incorporada al acabar, y
@@ -9180,6 +9182,9 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
     - en la Metro, un caso.
   - **Por decidir (Eduardo):** cerrar `#730`, y si la lotería de la Pico 2 se queda como decidió en `#734`.
   - En la STM32, bpstr va de momento con el `-Os` del proyecto: se mide con `#785`.
+- **CERRADA el 3-nov** (Eduardo: *«cierra #730»*). La lotería de la Pico 2, sin una decisión nueva: sigue lo de `#734`
+  (lo demás se queda como está), y lo de fondo, `#719` (congelada). Lo que queda de bpstr, en `#785`: la STM32, con su
+  `-O2` y sus `mem*`. Las cuatro placas, con la imagen del paso 3.
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 
