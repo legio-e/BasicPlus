@@ -121,7 +121,9 @@
 > - **La frecuencia de las ESP** (Eduardo: *«La velocidad la podriamos seleccionar con una variable del Environment?»*;
 >   *«O si no con una función como en la Pico»*): en análisis. Y al mirarlo, **abierta `#784`** (sólo análisis): la S3
 >   dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; `cpuFreqHz()` dice 240 también en la C3 y la C6.
->   Números escritos a mano en `esp32/common`.
+>   Números escritos a mano en `esp32/common`. Analizado y apuntado en `#784` (*«Apúntalo y lo hacemos a la tarde»*): la
+>   función ya existe (`Machine.setCpuFreqMHz`; en las ESP contesta `false`), y las dos irían sobre la gestión de energía
+>   del IDF; el plan, medir la S3 a 240, la función, la clave `cpu.mhz` y el valor sin clave.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

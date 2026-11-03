@@ -7311,7 +7311,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#784` — la frecuencia que dicen las ESP es un número escrito a mano: la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160 (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **sólo análisis**)
+#### 🔵 `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **analizada; para la tarde del 3-nov**)
 
 - **Cómo sale:** el `INFO` de la S3 dice `"cpuFreqHz": 240000000`, y su `sdkconfig` efectivo,
   `CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ=160` (el valor del IDF: nadie lo ha cambiado nunca).
@@ -7325,6 +7325,19 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo que haría falta:** preguntárselo al chip (`esp_clk_cpu_freq()` del IDF) en los dos sitios, en vez de escribirlo.
   Va con cambiar la frecuencia en marcha (Eduardo, el mismo día: con una clave del ENV, o con una función como en la
   Pico), que la haría variable.
+- **Y cambiarla en marcha** (Eduardo: *«La velocidad la podriamos seleccionar con una variable del Environment?»*; *«O
+  si no con una función como en la Pico»*; y *«Apúntalo y lo hacemos a la tarde»*). Las dos, sobre lo mismo:
+  - **la función ya existe:** `Machine.setCpuFreqMHz(mhz)` (el builtin 111; también `Pico.setCpuFreqMHz`), con
+    `MAX_CPU_MHZ()` y `MIN_CPU_MHZ()` de la tabla de capacidades. En la Pico cambia el reloj; en las ESP, la parte de C
+    contesta siempre `false` (`esp32_set_cpu_freq_mhz_impl`, `p4_pico_set_cpu_freq`): no está hecho;
+  - **en las ESP, con la gestión de energía del IDF** (`CONFIG_PM_ENABLE`, hoy apagada; `esp_pm_configure` con la
+    mínima igual a la máxima, para que se quede fija). Los buses (UART, SPI, I2C) van con un reloj de 80 MHz que no
+    cambia entre 80 y 240: no hace falta el aviso de la Pico (llamarla antes de configurarlos); por debajo de 80, sí, así
+    que el mínimo, 80. Por chip: la S3 y la C5, 80/160/240; la C3, 80/160; la C6, 80/120/160; la P4, 360 (como está);
+  - **la clave del ENV** (`cpu.mhz`): lo mismo, al arrancar, antes de la VM; la función la cambia después;
+  - **el plan, para la tarde:** (1) medir la S3 a 240 con una imagen de prueba, como la caché; (2) la función en las
+    ESP, con este fallo arreglado; (3) la clave del ENV; (4) Eduardo decide con qué arranca la S3 sin la clave: 160 (gasta
+    menos) o 240 (como las demás ESP, a su máximo).
 
 #### ✅ `#783` — el traductor de C#: una llamada con argumentos con nombre se escribe por posición, y la sobrecarga que elige JC puede no ser la de C#; con `#772`, `test-named-06` deja de compilar (abierta el 3-nov, en el lote de Mono de `#772`; **CERRADA el mismo día**, el commit de `#783`)
 
