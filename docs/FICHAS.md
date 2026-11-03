@@ -7311,6 +7311,18 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#780` — `samples/errores`: tres ejemplos sin caso en `h13-errores.sh` (nadie vigila su mensaje), y `AnnMal` falla por algo que no es lo suyo (abierta el 3-nov, al añadir el de `#768`; **sólo análisis**)
+
+- **Sin caso:** `EventoValor` (`#771`, 3-nov) y `ConstanteNula` (`#777`, 2-nov) están en el `LEEME` con su mensaje,
+  pero no en la lista de `scripts/h13-errores.sh`: si el mensaje cambia o el ejemplo empieza a compilar, nadie se
+  entera (el script no está en la red; se corre a mano). Y `AnnMal` (V5/H5, las anotaciones `@BD`), ni en el `LEEME`
+  ni en el script.
+- **`AnnMal`, además:** sus constructores de una línea (`public function Uno() end Uno`) son hoy un error sintáctico
+  («se esperaba salto de línea tras la cabecera de la función», tres): falla, como debe, pero también por eso, y lo que
+  enseña (las anotaciones mal puestas) queda detrás. Sin mirar desde cuándo.
+- **Lo propuesto, sin hacer:** los casos de `EventoValor` y `ConstanteNula` en el script (los de `#768` entran con
+  él); `AnnMal`, con sus constructores en tres líneas, en el `LEEME` y en el script. Por decidir (Eduardo).
+
 #### 🔵 `#779` — la red: `test-cola` salió una vez en rojo («salida 2») con la máquina cargada; sola, en verde, con sus diecisiete sabotajes rojos (abierta el 2-nov, en la red de `#776` y `#777`; **sólo análisis**)
 
 - **Cómo salió:** la red de las 23:16 (2-nov), en ROJO sólo por esto, en el grupo de las pruebas de C; lo demás, verde.
@@ -8409,7 +8421,7 @@ un hilo. Lo que faltaría: un programa de dos hilos que trabajen a la vez (`para
 durante las pruebas finales podemos aprovechar y hacer alguna prueba de rendimiento adicional»*: apuntado bajo la
 tabla de hitos de V8, con `#665`.
 
-#### 🔵 `#742` — la VM-Java con dos workers: un `join` puede volver antes de que salga la línea a medias del hilo que acaba (`PrintSinSalto`, 1 de cada 40) (abierta el 30-oct, en la red del prototipo de `#718`; **sólo análisis**)
+#### ✅ `#742` — la VM-Java con dos workers: un `join` puede volver antes de que salga la línea a medias del hilo que acaba (`PrintSinSalto`, 1 de cada 40) (abierta el 30-oct, en la red del prototipo de `#718`; **CERRADA el 3-nov**, el commit de `#742`)
 
 En `compat.sh check-smp`, «FAIL PrintSinSalto — VM-Java != VM-C». No es del prototipo: repetido 200 veces con dos
 workers, las cuatro VM-C (la de hoy y tres del prototipo) dan siempre lo bueno; la VM-Java, 1 de cada 40,
@@ -8424,6 +8436,19 @@ Con un worker no pasa (nadie corre entre las dos). Lo que se ve: muy de vez en c
 imprimen sin salto, la línea del hilo sale detrás de lo que imprime quien lo esperaba. Por decidir (Eduardo): el
 arreglo, probablemente que la instrucción no marque TERMINATED y lo haga `terminateThread` tras vaciar la línea (mirar
 antes qué más mira ese estado entre medias).
+
+- **Mirado el 3-nov, qué mira ese estado entre medias:** nada que lo necesite. `terminateThread` ya marca TERMINATED
+  él mismo, con el cerrojo, en el orden de la VM-C: saca la línea a medias, mira si aún debe eventos (`#342`: entonces
+  no muere), lo marca y despierta a los del `join`. Las llamadas anidadas (`correAnidado`: un evento, una native que
+  llama a BP) miran la señal de salida (`THREAD_EXIT`), no el estado, y al volver ponen el de antes.
+- **Decidido** (Eduardo, 3-nov: *«742 OK»*). **Hecho:** `THREAD_EXIT` (`case 0x70`) ya no marca TERMINATED; sólo
+  para el bucle con su señal, y el planificador lo remata con `terminateThread`.
+- **Probado con un desplazamiento** (las pruebas, fuera del repo): hoy la máquina no da la carrera —200 vueltas con
+  la VM-Java de antes, 0 distintas—, así que un 0 con la nueva no probaba nada. Con una copia de cada VM con 30 ms de
+  espera entre la salida del bucle y `terminateThread` (sólo con una propiedad de Java) y una copia del sample con un
+  `sleep(10)` entre `t.start()` y `t.join()` —`main` llega al `join` con el hilo ya acabado—: la de antes, 30 de 30
+  mal (la línea vacía antes del trozo del hilo, lo del 30-oct); la nueva, 0 de 30. Y sin la espera, 200 vueltas con
+  la nueva, 0 distintas.
 
 #### ✅ `#741` — en la P4, los packs `Gui` (LVGL) y `SQLite` no cargan desde la imagen del sonido del 27-oct: «realojado para OTRA dirección» (abierta el 29-oct, al medir `#737`; **CERRADA el 31-oct**: con la imagen de HEAD, regrabados y sellados para su zona; los dos motores, rc=0)
 

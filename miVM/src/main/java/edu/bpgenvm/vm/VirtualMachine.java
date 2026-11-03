@@ -3452,9 +3452,13 @@ public class VirtualMachine {
                     // Termina sólo el thread actual; la VM sigue corriendo
                     // mientras quede al menos un thread vivo. Marca para
                     // que el outer scheduler haga terminate + switch.
+                    // V8 #742 (Eduardo, 3-nov: «742 OK») — SIN marcarlo TERMINATED aquí: lo marca terminateThread, con el
+                    // cerrojo, DESPUÉS de sacar su línea a medias y antes de despertar a quien espera en su join (el orden
+                    // de la VM-C). Marcado aquí, sin cerrojo, con dos workers `main` podía llegar al join en medio, verlo
+                    // terminado y seguir antes de que saliera la línea (PrintSinSalto, 1 de cada 40). Las llamadas
+                    // anidadas (correAnidado) miran la señal de salida, no el estado.
                     running = false;
                     exitSignal = ExitSignal.THREAD_EXIT;
-                    tc.setStatus(ThreadStatus.TERMINATED, -1, "L2516");
                     break;
 
                 case 0x01: { // PUSH
@@ -8828,7 +8832,7 @@ public class VirtualMachine {
             tc.bp = savedBp;
             tc.cs = savedCs;
             tc.pc = savedPc;
-            tc.setStatus(savedStatus, -1, "L6110"); // el centinela THREAD_EXIT lo puso TERMINATED
+            tc.setStatus(savedStatus, -1, "L6110"); // el de antes de la llamada (el centinela THREAD_EXIT ya no lo toca: #742)
             tc.yieldRequested = savedYield;
         }
     }

@@ -45,6 +45,15 @@
 >   desplazamiento; el plan, por aprobar.
 > - **`#770`, cerrada** (Eduardo: *«770 como VM-Java»*): en la VM-C, `sleep(0)` cede como `yield()` (antes volvía en
 >   el acto); `SleepCede` en el corpus. La red, VERDE (188, y el estrés con `CedeCero`); `check-jc`, 186 y 2 SKIP.
+> - **`#742`, cerrada** (Eduardo: *«742 OK»*): en la VM-Java, `THREAD_EXIT` ya no marca el hilo TERMINATED; lo hace
+>   `terminateThread`, tras sacar su línea a medias. Hoy la máquina no daba la carrera (0 de 200 con la VM de antes):
+>   probado con un desplazamiento, la ventana ensanchada en copias de las dos VMs y `main` llegando tarde al `join` —la
+>   de antes, 30 de 30 mal; la nueva, 0 de 30—.
+> - **`#779` y `#769`, hechas y abiertas hasta que se repitan** (Eduardo: *«OK»*): `check-testc` enseña primero el
+>   veredicto de una prueba roja (los sabotajes rojos de `test-cola` lo tapaban), y `test-trazasbus` guarda la primera
+>   pasada distinta. La red de los tres, VERDE (188; MOD8, 185 y sus 3 SKIP; dos workers, 188; las de C, 111).
+> - **Abierta `#780`** (sólo análisis): tres ejemplos de `samples/errores` sin caso en `h13-errores.sh` (`EventoValor`,
+>   `ConstanteNula`, `AnnMal`), y `AnnMal` falla también por sus constructores de una línea.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
