@@ -43,6 +43,8 @@
 >   del 2-nov engañaba, un literal repetido se guarda una vez). Eduardo: *«si utilizas un word pasamos a 64K»*, y los
 >   literales grandes, *resources* que se cargan al heap (`V8_IDEAS` §E12). El censo: 19 instrucciones llevan ese
 >   desplazamiento; el plan, por aprobar.
+> - **`#770`, cerrada** (Eduardo: *«770 como VM-Java»*): en la VM-C, `sleep(0)` cede como `yield()` (antes volvía en
+>   el acto); `SleepCede` en el corpus. La red, VERDE (188, y el estrés con `CedeCero`); `check-jc`, 186 y 2 SKIP.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

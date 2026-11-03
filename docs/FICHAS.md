@@ -7321,6 +7321,11 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   en 2 de cada 20 vueltas («18 de 20 bien»). Con otra carga podría no salir rojo ninguna, y la prueba falla porque el
   sabotaje no se ha visto. **Lo propuesto, sin hacer:** que la prueba diga cuál de sus sabotajes no salió rojo (y con
   cuántas vueltas), y medir el 13 con más vueltas. Por decidir (Eduardo).
+- **Mirado el 3-nov: el que callaba era el arnés.** Cada sabotaje de `test-cola` tiene su FAIL («el sabotaje del … no
+  se caza»), pero `check-testc` enseñaba las 8 PRIMERAS líneas con «FAIL» o «Error», y los sabotajes que salen rojos,
+  como deben, llevan «FAIL» en su línea: llenaban las 8 y la del veredicto, al final, quedaba cortada. **Hecho**
+  (Eduardo: *«OK»*): `check-testc` enseña primero las líneas de veredicto de la prueba (las que empiezan por `FAIL `) y
+  después, hasta 8, lo demás. Abierta hasta que se repita: entonces se verá qué sabotaje fue.
 
 #### 🔵 `#778` — el traductor de C#: dos huecos que tapaba el rechazo del `null` de las cadenas —un enum en una cadena (C#, su nombre; JC, su número) se traduce sin decirlo, y una variable que C# ve con valor tras un `switch` sobre una constante y JC, como Java, no— (abierta el 2-nov, en el lote de `#774`; **sólo análisis**)
 
@@ -7536,7 +7541,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   llega, desuscrito y una hija), `samples/errores/EventoValor.bp` (cuatro errores) y `EventoNuloTest`. La stdlib,
   idéntica. El manual, §15.2.
 
-#### 🔵 `#770` — `sleep(0)` no le da el turno a un destructor pendiente en la VM-C, y en la VM-Java sí: `gc()`, `sleep(0)` y abrir otra vez un `File` que murió sin cerrar va en la VM-Java y en la VM-C da «ya está abierto» (abierta el 2-nov, al analizar `#767`; **sólo análisis**)
+#### ✅ `#770` — `sleep(0)` no le da el turno a un destructor pendiente en la VM-C, y en la VM-Java sí: `gc()`, `sleep(0)` y abrir otra vez un `File` que murió sin cerrar va en la VM-Java y en la VM-C da «ya está abierto» (abierta el 2-nov, al analizar `#767`; **CERRADA el 3-nov**, el commit de `#770`)
 
 - **Medido** (2-nov, una copia de `FileCursor` fuera del repo, las dos VMs de hoy): con `sleep(0)` entre `gc()` y la
   apertura, la VM-Java corre el destructor del `File` pendiente (`#668`) y acaba; la VM-C no, y se para con «ya está
@@ -7544,6 +7549,14 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Sin mirar por qué.** La hipótesis: en la VM-C, `sleep(0)` vuelve sin pasar por el planificador cuando hay un solo
   hilo, y la llamada a `Core.__destruyePendientes` no se mete hasta el cuanto siguiente; en la VM-Java, `sleep(0)` cede.
 - **Lo propuesto, sin hacer:** que las dos den el turno en el mismo sitio. Por decidir (Eduardo).
+- **Mirado el 3-nov:** la hipótesis era buena. La VM-Java bloquea el hilo y cede el turno con cualquier `sleep`, también
+  `sleep(0)`; la VM-C, con 0 o menos, volvía en el acto (`builtins.c`, `BUILTIN_SLEEP` y `BUILTIN_SLEEP_SEC`) y el hilo
+  seguía en su cuanto: lo que espera entre cuantos (el destructor pendiente, un evento) no entraba.
+- **Decidido** (Eduardo, 3-nov: *«770 como VM-Java»*). **Hecho:** en la VM-C, `sleep(0)` y `sleepSec(0)` (y uno
+  negativo) ceden como `yield()`: el hilo queda listo y acaba su cuanto. `bpgenvm-c/samples/SleepCede.bp` en el corpus
+  (el caso de arriba: con la VM-C de antes, «ya está abierto»; con la nueva, como la VM-Java). `CedeCero`, que cede con
+  `sleep(0)` en cuatro hilos, y el estrés, que lo corre con 4 workers, lo prueban también. A las placas, con el
+  próximo lote (`builtins.c` es de todas).
 
 #### 🔵 `#769` — la red: `test-trazasbus` salió una vez en rojo, «1 de 5 pasadas con dos runs, distintas» (las trazas del bus con dos runs, `#659`); sin reproducir (abierta el 2-nov, en la red de `#766`; **sólo análisis**)
 
@@ -7555,6 +7568,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   cada 20; con él, 5 de 5. Una distinta de vez en cuando apunta a una traza partida que todavía se cuela, o a otra
   cosa: la diferencia no quedó guardada. **Lo propuesto, sin hacer:** que la prueba guarde la pasada distinta (el
   `diff`), para la próxima vez. Por decidir (Eduardo).
+- **Hecho el 3-nov** (Eduardo: *«OK»*): `test-trazasbus` guarda la diferencia de la primera pasada distinta en
+  `build/trazasbus.diff` y enseña sus 12 primeras líneas en el FAIL. Probado con un sabotaje (un envoltorio de la VM-C
+  que con dos runs se come una traza): «FAIL … la primera, en build/trazasbus.diff» y la traza que faltaba. Abierta
+  hasta que se repita.
 
 #### 🔵 `#768` — un literal de más de 32 767 bytes no compila, y el error no dice eso: «Símbolo de datos no declarado (forward ref no permitida): __str_0» (abierta el 2-nov, al medir `#732`; **sólo análisis**)
 

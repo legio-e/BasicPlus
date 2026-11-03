@@ -1,0 +1,30 @@
+// SleepCede.bp — V8 #770 (3-nov): `sleep(0)` CEDE el turno, como `yield()`, en las dos VMs (Eduardo: «770 como
+// VM-Java»). Un `File` muere sin `close()`; `gc()` lo deja pendiente de destruir (V7 #668: tiene `~File()`), y su
+// destructor corre entre cuantos. Con `sleep(0)` el hilo acaba su cuanto, el destructor corre y cierra el fichero, y
+// abrirlo otra vez va. Antes, la VM-C volvía de `sleep(0)` sin ceder y daba «ya está abierto»; la VM-Java, no.
+// (FileCursor hace lo mismo con `sleep(1)`.)
+module SleepCede
+  import IO
+
+  const R: string := "sleepcede_test.bin"
+
+  function sinCerrar()
+    var f: IO.File := IO.File(R, "w")                 // muere sin close()
+    f.write(toBytes("123"))
+  end sinCerrar
+
+  public function main()
+    sinCerrar()
+    gc()                                              // pendiente de destruir
+    sleep(0)                                          // cede: su destructor corre y lo cierra
+    try
+      var otra: IO.File := IO.File(R, "w")
+      print "tras sleep(0): " + otra.isOpen()
+      otra.close()
+    catch e: RuntimeError
+      print "tras sleep(0): " + e.msg
+    endtry
+    IO.removeFile(R)
+    print "fin"
+  end main
+end SleepCede

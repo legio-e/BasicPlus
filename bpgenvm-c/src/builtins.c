@@ -3689,7 +3689,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_SLEEP: {
         int32_t ms = pop_i32(vm, tc);
-        if (ms <= 0) { push_i32(vm, tc, 0); return BPVM_OK; }
+        /* V8 #770 (Eduardo, 3-nov: «770 como VM-Java») — sleep(0), y uno negativo, CEDEN el turno como yield(): el hilo
+         * acaba su cuanto y lo que espera entre cuantos (un destructor pendiente, un evento) entra. Antes volvía en el acto
+         * y seguía, y la VM-Java (la de referencia) sí cedía: `gc()`, `sleep(0)` y reabrir un File que murió sin cerrar iba
+         * en la VM-Java y aquí daba «ya está abierto». */
+        if (ms <= 0) { tc->status = BPVM_THREAD_RUNNABLE; push_i32(vm, tc, 0); return BPVM_OK; }
         tc->wake_at_ms = bpvm_platform_now_ms() + ms;
         tc->status = BPVM_THREAD_BLOCKED_SLEEP;
         push_i32(vm, tc, 0);   /* void */
@@ -3699,7 +3703,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_SLEEP_SEC: {
         /* Misma semántica que SLEEP pero la entrada está en segundos. */
         int32_t s = pop_i32(vm, tc);
-        if (s <= 0) { push_i32(vm, tc, 0); return BPVM_OK; }
+        if (s <= 0) { tc->status = BPVM_THREAD_RUNNABLE; push_i32(vm, tc, 0); return BPVM_OK; }   /* #770: cede, como sleep(0) */
         int64_t ms = (int64_t) s * 1000LL;
         tc->wake_at_ms = bpvm_platform_now_ms() + ms;
         tc->status = BPVM_THREAD_BLOCKED_SLEEP;
