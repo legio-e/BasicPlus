@@ -1903,6 +1903,12 @@ e.etiqueta := <span class="str">"cuadrado de 2"</span>              <span class=
 <!-- =========================================================== -->
 <!-- =========================================================== -->
 <h2 id="modulos">10. Módulos</h2>
+<p>
+  <strong>El tope de un módulo.</strong> Los datos de un módulo —sus variables de módulo, sus literales (cada uno
+  distinto, una vez), sus constantes y lo que describe cada clase— caben en <strong>64 KB</strong> (hasta V8, en 32).
+  Un módulo que no cabe es un error de compilación que dice cuánto ocupa ya y qué es lo que no cabe; para algo más
+  grande, se parte en dos módulos (cada uno lleva los suyos) o se lee de un fichero.
+</p>
 <h3 id="raiz">10.0 El módulo raíz: <code>Core</code></h3>
 <p>
   <code>Core</code> es el módulo del sistema (la unidad <code>System</code> de Turbo Pascal), escrito en
