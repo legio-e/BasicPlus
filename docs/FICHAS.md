@@ -9093,7 +9093,7 @@ un `flush()`; y encima, un `Reader` o un `Writer` que recibe el stream en su con
 la codificación […] En esto seguimos el sistema de Java, un poco mas sencillo.»* Los detalles, por decidir (diez
 preguntas, cada una con su propuesta, en §E8).
 
-#### 🔵 `#722` — en la Pico 2, que un programa quepa en memoria depende de lo que se ejecutó antes: `MapOrden` con 2000 claves, tras un reinicio, se queda sin memoria; después de otros programas, a veces cabe (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **sólo anotada**)
+#### 🔵 `#722` — en la Pico 2, que un programa quepa en memoria depende de lo que se ejecutó antes: `MapOrden` con 2000 claves, tras un reinicio, se queda sin memoria; después de otros programas, a veces cabe (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **CERRADA el 3-nov**: no se reproduce con la imagen del lote)
 
 **Lo visto** (la misma imagen, `MapOrden.mod`, que mete 250, 500, 1000 y 2000 claves en un `Map`):
 - **tras un reinicio, solo:** `No space in heap` al ir a por las 2000, 4 de 4 (dos con `log=1` y dos sin él);
@@ -9117,6 +9117,8 @@ tabla, es ella.
   programa, no de la VM.
 - **Lo propuesto, sin hacer:** cerrarla (no se reproduce), y en `HuecosReserva`, soltar antes de imprimir. Por
   decidir (Eduardo).
+- **Decidido** (Eduardo, 3-nov: *«OK, adelante»*). **Hecho:** cerrada; y `HuecosReserva` suelta las cadenas y colecta
+  antes de decir «no cabe». En la Pico 2: «HUECOS k=4000 no cabe: No space in heap» y acaba bien (`EXITED OK`).
 
 #### 🔵 `#721` — con `log=1` en el ENV, el GC tarda 2,2 veces más: cada recolección escribe sus líneas `[gc]` en el log (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **por decidir**, Eduardo)
 

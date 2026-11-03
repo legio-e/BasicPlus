@@ -89,9 +89,11 @@ module HuecosReserva
     try
       siembra(k)
     catch e: RuntimeError
-      print "HUECOS k=" + k + " no cabe: " + e.msg
+      // V8 #722 (3-nov): primero se suelta y después se dice. Con el heap lleno, el mensaje no cabía: en la Pico 2,
+      // con k = 4000, el «no cabe» acababa en otro «No space in heap», éste fuera del try.
       todos := null
       gc()
+      print "HUECOS k=" + k + " no cabe: " + e.msg
       return
     endtry
     print "HUECOS k=" + k + " huecos en la lista: " + Heap.getFreeBlocks()
