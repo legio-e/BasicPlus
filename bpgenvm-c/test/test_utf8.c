@@ -1,5 +1,6 @@
-/* test_utf8.c — V8/H5 (#711): la rutina de VALIDAR Y CORREGIR UTF-8 (bpvm_internal.h: utf8_paso, utf8_primer_malo,
- * utf8_largo_corregido, utf8_corrige, utf8_es_caracter) contra un ORÁCULO escrito de otra forma: la tabla 3-7 del
+/* test_utf8.c — V8/H5 (#711): la rutina de VALIDAR Y CORREGIR UTF-8 (bpvm_internal.h: utf8_primer_malo,
+ * utf8_largo_corregido, utf8_corrige, utf8_es_caracter; desde V8 #730 las tres primeras llaman a bpstr, bpstr/bpstr.c,
+ * que también se pasa sus propias pruebas contra la rutina de antes) contra un ORÁCULO escrito de otra forma: la tabla 3-7 del
  * estándar de Unicode («Well-Formed UTF-8 Byte Sequences»), fila a fila, en vez de la máquina de estados de la rutina.
  * Un trozo malo es la «subparte máxima» (§3.9): el principio más largo de una fila que casa, o un byte si no casa
  * ninguna; cada uno pasa a U+FFFD (EF BF BD).

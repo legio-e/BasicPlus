@@ -4445,6 +4445,58 @@ placas, cada una con los suyos (13 630 906 comprobaciones). Los sabotajes:
 - ocho en el Two-Way de newlib, siete en rojo. El que sale en verde es quitar una guarda que, razonado, no hacía falta;
   la quité.
 
+### `#730`, el paso 3: bpstr dentro de la VM (3-nov, noche)
+
+Eduardo: *«ok, paso 3»*.
+
+**Cómo entra** (el detalle, en el `LEEME` de bpstr):
+- la VM la compila por `src/bpstr_vm.c`, una línea que incluye `../bpstr/bpstr.c`. La STM32 la recoge sola, por su
+  carpeta enlazada `src`; la dan de alta, con `-O2`, el `Makefile` del host, la Pico y las cinco ESP. En la imagen M de
+  la Metro va en la SRAM, con el resto de la VM caliente;
+- las funciones de cadenas de `bpvm_internal.h` (`utf8_cp_count`, `utf8_primer_malo`…) siguen con su nombre y la
+  llaman: el intérprete, `heap.c` y los helpers del AOT ganan a la vez. Sus declaraciones van en ese `.h` sin incluir
+  `bpstr.h`, porque las natives del AOT lo incluyen y una instalación no trae `bpstr/`;
+- en `builtins.c`, lo que tenía su propio bucle: buscar (y `replace`, que ya no compara en cada posición), el cursor de
+  las cadenas, `upper` y `lower`, `trim` y comparar. `startsWith` y `endsWith` se quedan con la `memcmp`: con trozos de
+  3 u 8 bytes, `bpstr_igual` iba de un 5 a un 29 % peor (medido en el censo);
+- los créditos (`docs/creditos.html`, también en inglés): newlib, con los avisos enteros que pide la BSD-3 de Arm para
+  el binario.
+
+**Las pruebas:**
+- la red, VERDE, dos veces (la segunda, tras volver a la `memcmp`): la paridad 191 de 191, con dos workers 191, MOD8
+  188 y sus tres SKIP de siempre, las de C 111 de 111;
+- `test_utf8` prueba ahora bpstr contra la tabla del estándar de Unicode;
+- compilan las siete familias y las dos STM32;
+- en las placas, los packs aguantan. En la P4, el `nm` dice que la app crece 4,7 KB y no cambia de página; en las
+  cuatro, el mismo `packRamBase`; `SqlDemo` corre en la Metro y en la P4, y la Gui de la P4 pinta.
+
+**El censo de cadenas (`StrCenso`)**, antes y después, en las cuatro placas. Lo de después, dos vueltas, y entre ellas
+el ruido es pequeño (mediana, del 0,6 al 1,9 %). Con 2 KB, la mejor de las dos entre la de antes:
+
+| | Pico 2 | Metro | P4 | S3 |
+|---|---|---|---|---|
+| `indexOf` / `contains`, no está | ×0,19 / ×0,18 | ×0,17 | ×0,13 | ×0,11 |
+| `replace` | ×0,43 | ×0,48 | ×0,26 | ×0,15 |
+| `upper` | ×0,64 | ×0,72 | ×0,61 | ×0,47 |
+| `fromBytes` | ×0,66 | ×0,64 | ×1,24 | ×0,42 |
+| `==`, iguales | ×0,74 | ×0,76 | ×0,93 | ×0,81 |
+| `strlen` (no toca bpstr) | **×2,05** | ×0,98 | ×0,93 | ×1,06 |
+| `intToString` (no la toca) | **×1,78** | ×0,97 | ×1,05 | ×1,00 |
+| `toBytes` (no la toca) | ×0,94 | ×1,00 | **×1,50** | ×0,98 |
+
+**Lo que sale peor es, casi todo, lo que bpstr no toca:** una imagen nueva cambia de sitio el código de lo demás.
+- **En la Pico 2 (la imagen P, todo desde la flash por la caché del XIP), es la lotería de `#734`.** Salen 38 casos
+  peores, de `strlen` (×2,05) a `parseFloat` (×1,11). Lo comprobé con otra imagen, la misma con bpstr en la SRAM, que
+  deja la flash casi como estaba: los tiempos se reparten otra vez, de otra manera. `parseFloat`, que no cambia ni una
+  instrucción, pasa a ×0,67; `intToString` sigue a ×1,6. En la Metro, con lo caliente en la SRAM (la imagen M), lo que
+  no toca bpstr se queda en ×1,00. Lo de fondo es `#719` (congelada): lo caliente de P, a la SRAM.
+- **En la P4 y la S3, algo menos, por la caché de la flash y de la PSRAM:** `toBytes` (una `memcpy`) ×1,50 en la P4;
+  `startsWith` y `endsWith` con 16 bytes, que vuelven a ser la `memcmp` de antes, ×1,13–1,18; en la S3, `parseFloat` y
+  `gc()`, ×1,09–1,18. Lo de bpstr que sale peor es `fromBytes` con 2 KB en la P4 (×1,24); en las otras tres gana
+  (×0,42–0,66).
+- **En la Metro, uno:** `StringBuilder` con 4 `appendStr` y 256 bytes, ×1,46, cuando con 16 y con 2048 bytes da igual
+  o mejor. Su heap está en la PSRAM, que comparte la caché del XIP.
+
 ---
 
 ## E6 · Los conjuntos, como en Pascal (la idea de Eduardo, 23-oct; sin empezar)

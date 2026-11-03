@@ -15,6 +15,27 @@ decidido, en `docs/V8_IDEAS.md` §E5, «`#730`: el diseño concreto»; el estado
 | `placa.c` | las pruebas y el banco en una placa: lo que los une a una imagen de prueba de la VM (abajo) |
 | `Makefile` | `make prueba`, `make prueba-larga` y `make banco`, en el PC |
 
+## En la VM (el paso 3)
+
+La VM la compila por `src/bpstr_vm.c`, una línea que incluye `../bpstr/bpstr.c`:
+- así la llevan también los builds que recogen `src/` entera sin listarla (la STM32, por su carpeta enlazada);
+- las demás listas nombran ese fichero, con `-O2` y `-fno-tree-loop-distribute-patterns`: el `Makefile` del host,
+  `pico/CMakeLists.txt` (en la imagen M de la Metro, además, en la SRAM con el resto de la VM caliente) y las cinco ESP.
+  La STM32, de momento, con su `-Os` (`#785`).
+
+Lo que la usa:
+- **las funciones de cadenas de `include/bpvm_internal.h`**: `bpvm_bytes_ascii`, `utf8_cp_count`, `utf8_byte_offset`,
+  `utf8_primer_malo`, `utf8_largo_corregido` y `utf8_corrige`. Siguen con su nombre y la llaman, así que todo lo que
+  las usa gana a la vez: el intérprete, `heap.c` y los helpers del AOT. Sus declaraciones van en ese `.h` sin incluir
+  `bpstr.h`, porque las natives del AOT lo incluyen y se compilan sin `bpstr/` (en una instalación, sólo con `include/`
+  y `src/`). `builtins.c` incluye los dos, así que si se apartaran no compilaría;
+- **los builtins de `src/builtins.c`**: buscar (`indexOf`, `contains`, `split`, `replace`), el cursor de las cadenas,
+  `upper` y `lower`, `trim`, comparar, `startsWith` y `endsWith`. `replace` ya no compara en cada posición: va de
+  aparición en aparición.
+
+Copiar y rellenar siguen con la `memcpy` y la `memset` de cada libc. En la STM32, la de un byte por vuelta se cambia
+para todo el firmware en `#785`.
+
 ## En una placa (el paso 2)
 
 Con `BPSTR_PLACA`, `prueba.c` y `banco.c` se compilan para una placa: las pruebas, más cortas (la RAM y el tiempo no

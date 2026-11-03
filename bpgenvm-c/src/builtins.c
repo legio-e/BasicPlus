@@ -7,6 +7,8 @@
  */
 
 #include "bpvm_internal.h"
+#include "../bpstr/bpstr.h"   /* V8 #730: la biblioteca de cadenas (con bpvm_internal.h: si sus declaraciones se
+                                * apartaran de las de allí, esto no compilaría) */
 #include "bpvm_io.h"   /* V6/A1: con io, el wire no se mira desde el builtin del GUI */
 #include "bpvm_alloc.h"   /* #339: reservas del nucleo con guardian */
 #include "bpvm.h"       /* #338: la zona de rascar compartida */
@@ -428,19 +430,10 @@ static bpref_t peek_ref(bpvm_t* vm, bpvm_thread_t* tc, int depth) {
  *
  * Lo que NO hace, a propósito: 'ß' (U+00DF) se queda como está — su mayúscula
  * Unicode es "SS", dos caracteres, y eso rompería la propiedad de la longitud.
- * Java sí lo convierte; es la divergencia que se aceptó al elegir Latin-1. */
-static uint32_t latin1_upper_cp(uint32_t c) {
-    if (c >= 'a' && c <= 'z')            return c - 32;
-    if (c >= 0x00E0 && c <= 0x00FE && c != 0x00F7) return c - 32;  /* ÷ no es letra */
-    if (c == 0x00FF)                     return 0x0178;            /* ÿ → Ÿ */
-    return c;
-}
-static uint32_t latin1_lower_cp(uint32_t c) {
-    if (c >= 'A' && c <= 'Z')            return c + 32;
-    if (c >= 0x00C0 && c <= 0x00DE && c != 0x00D7) return c + 32;  /* × no es letra */
-    if (c == 0x0178)                     return 0x00FF;            /* Ÿ → ÿ */
-    return c;
-}
+ * Java sí lo convierte; es la divergencia que se aceptó al elegir Latin-1.
+ *
+ * Desde V8 #730, en bpstr (bpstr_mayusculas, bpstr_minusculas: latin1_sube y
+ * latin1_baja, las de aquí, y lo que es ASCII de 4 en 4). */
 
 /* #348 tanda 2 — bits de un float BP (f32) y vuelta. El stack de BP guarda los
  * floats como sus bits en un i32, igual que miVM (Float.intBitsToFloat). */
@@ -491,12 +484,7 @@ static double lanczos_gamma(double x) {
  * caracteres, y sin decodificar nada. Aguja vacía → casa en `from` (como Java). */
 static long bp_find_bytes(const uint8_t* p, uint32_t n,
                           const uint8_t* q, uint32_t qn, uint32_t from) {
-    if (qn == 0) return (long) (from <= n ? from : n);
-    if (qn > n) return -1;
-    for (uint32_t i = from; i + qn <= n; i++) {
-        if (memcmp(p + i, q, qn) == 0) return (long) i;
-    }
-    return -1;
+    return (long) bpstr_busca(p, n, q, qn, from);   /* V8 #730: antes, memcmp en cada posición (cuadrático) */
 }
 
 /* Lee un string BP (TYPE_ARRAY_I32 con codepoints) a un buffer C UTF-8.
@@ -1131,18 +1119,13 @@ static uint32_t strcur_byte_de(const bpvm_t* vm, bpvm_strcur_t* cs, uint64_t cla
     dcur = (i >= c->ci) ? i - c->ci : c->ci - i;
     if (dcur < pasos) { ci = c->ci; bo = c->bo; pasos = dcur; }            /* más cerca el cursor */
     if (c->ncp >= 0 && (uint32_t) c->ncp - i < pasos) { ci = (uint32_t) c->ncp; bo = n; }   /* o el final */
-    if (i >= ci) {
-        while (ci < i && bo < n) {
-            bo++;
-            while (bo < n && BP_CONT(p[bo])) bo++;
-            ci++;
-        }
+    if (i >= ci) {                                   /* V8 #730: los pasos, de bpstr, de 4 en 4 */
+        uint32_t hechos;
+        bo = bpstr_avanza(p, n, bo, i - ci, &hechos);
+        ci += hechos;
     } else {
-        while (ci > i) {
-            bo--;
-            while (bo > 0u && BP_CONT(p[bo])) bo--;
-            ci--;
-        }
+        bo = bpstr_retrocede(p, bo, ci - i);
+        ci = i;
     }
     c->ci = ci;
     c->bo = bo;
@@ -2864,7 +2847,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
 
     case BUILTIN_UPPER:
     case BUILTIN_LOWER: {
-        /* Latin-1 (ver latin1_upper_cp): la longitud en BYTES no cambia, así
+        /* Latin-1 (ver el comentario de #348, arriba): la longitud en BYTES no cambia, así
          * que el resultado se aloca del tamaño exacto del origen. */
         int up = (id == BUILTIN_UPPER);
         bpref_t s = peek_ref(vm, tc, 0);
@@ -2878,28 +2861,15 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
             return builtin_throw(vm, tc, "No space in heap");
         uint32_t out = bpref_deref(vm, outh);
         {   /* la reserva ya esta comprobada arriba */
+            /* V8 #730: bpstr, que hace los dos caminos de antes —lo que es ASCII, sólo a..z / A..Z, ahora de 4 en 4; lo
+             * demás, descodificar, Latin-1 y volver a escribir— y dice cuántos bytes escribió (menos que n sólo con
+             * bytes que no son UTF-8: el resto, a cero, #736) */
             const uint8_t* p = (n > 0) ? bpref_arr_elem(vm, s, 0, 1) : NULL;
-            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) {   /* V8/H5: el rápido: en ASCII sólo cambian a..z / A..Z */
-                for (uint32_t i = 0; i < n; i++) {
-                    uint8_t c = p[i];
-                    if (up ? (c >= 'a' && c <= 'z') : (c >= 'A' && c <= 'Z')) c = (uint8_t) (c ^ 0x20u);
-                    vm->memory[out + 4 + i] = c;
-                }
-                bpvm_str_nace_ascii(vm, out, 1);
-            } else {
-                uint32_t i = 0, o = 0;
-                while (i < n) {
-                    uint32_t adv = 0;
-                    uint32_t cp  = utf8_decode(p + i, n - i, &adv);
-                    uint32_t m   = up ? latin1_upper_cp(cp) : latin1_lower_cp(cp);
-                    uint8_t enc[4];
-                    uint32_t el = utf8_encode(m, enc);
-                    for (uint32_t k = 0; k < el && o < n; k++) vm->memory[out + 4 + o++] = enc[k];
-                    i += (adv > 0) ? adv : 1;
-                }
-                if (o < n) memset(vm->memory + out + 4 + o, 0, n - o);   /* #736: lo no escrito, a cero, como antes */
-                bpvm_str_nace(vm, out);   /* V8/H5: el bit, por lo que salió */
-            }
+            uint8_t* dst = vm->memory + out + 4;
+            uint32_t o = (n == 0) ? 0 : up ? bpstr_mayusculas(p, n, dst) : bpstr_minusculas(p, n, dst);
+            if (o < n) memset(dst + o, 0, n - o);
+            if (bpvm_str_ascii(vm, bpref_deref(vm, s))) bpvm_str_nace_ascii(vm, out, 1);   /* V8/H5: sigue siendo ASCII */
+            else bpvm_str_nace(vm, out);   /* V8/H5: el bit, por lo que salió */
             out = (uint32_t) outh.v;
         }
         tc->sp -= BPVM_REF_SIZE;
@@ -2914,11 +2884,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         bpref_t s = peek_ref(vm, tc, 0);
         uint32_t n = bpref_is_null(s) ? 0 : bpref_arr_len(vm, s);
         uint32_t b = 0, e = n;
-        if (n > 0) {
-            const uint8_t* p = bpref_arr_elem(vm, s, 0, 1);
-            while (b < e && p[b] <= 0x20) b++;
-            while (e > b && p[e - 1] <= 0x20) e--;
-        }
+        if (n > 0) bpstr_recorta(bpref_arr_elem(vm, s, 0, 1), n, &b, &e);   /* V8 #730 */
         uint32_t len = e - b;
         bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, len, len); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (outh.v == 0u)   /* #355 (2a pasada del censo): la reserva fallo. Antes se
@@ -2968,6 +2934,8 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         const uint8_t* sp_ = (sn > 0) ? bpref_arr_elem(vm, s, 0, 1) : (const uint8_t*) "";
         const uint8_t* qp_ = (qn > 0) ? bpref_arr_elem(vm, q, 0, 1) : (const uint8_t*) "";
         int r;
+        /* V8 #730: startsWith y endsWith, con memcmp: comparan trozos cortos, y medido en el censo (3-nov), bpstr_igual
+         * —dos llamadas más y, con un sufijo desalineado, la memcmp de todos modos— iba un 5-29 % peor */
         if (id == BUILTIN_STARTS_WITH)      r = (qn <= sn) && memcmp(sp_, qp_, qn) == 0;
         else if (id == BUILTIN_ENDS_WITH)   r = (qn <= sn) && memcmp(sp_ + (sn - qn), qp_, qn) == 0;
         else                                r = bp_find_bytes(sp_, sn, qp_, qn, 0) >= 0;
@@ -2987,11 +2955,11 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         bpref_t a = peek_ref(vm, tc, 1);
         uint32_t na = bpref_is_null(a) ? 0 : bpref_arr_len(vm, a);
         uint32_t nb = bpref_is_null(b) ? 0 : bpref_arr_len(vm, b);
-        uint32_t n = (na < nb) ? na : nb;
-        int r = (n > 0u) ? memcmp(bpref_arr_elem(vm, a, 0, 1), bpref_arr_elem(vm, b, 0, 1), n) : 0;
-        if (r == 0) r = (na < nb) ? -1 : (na > nb) ? 1 : 0;
+        const uint8_t* pa = (na > 0u) ? bpref_arr_elem(vm, a, 0, 1) : (const uint8_t*) "";
+        const uint8_t* pb = (nb > 0u) ? bpref_arr_elem(vm, b, 0, 1) : (const uint8_t*) "";
+        int r = bpstr_compara(pa, na, pb, nb);   /* V8 #730: -1, 0 o 1, lo de antes (memcmp y las longitudes) */
         tc->sp -= 2 * BPVM_REF_SIZE;
-        push_i32(vm, tc, (r < 0) ? -1 : (r > 0) ? 1 : 0);
+        push_i32(vm, tc, r);
         return BPVM_OK;
     }
 
@@ -3032,9 +3000,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         if (tn == 0) {
             hits = utf8_cp_count(sb, sn) + 1;          /* una por frontera + la final */
         } else {
-            for (uint32_t i = 0; i + tn <= sn; ) {
-                if (memcmp(sb + i, tb, tn) == 0) { hits++; i += tn; } else i++;
-            }
+            hits = bpstr_cuenta_apariciones(sb, sn, tb, tn);   /* V8 #730: sin solaparse, de izquierda a derecha */
         }
         uint32_t outn = sn - hits * tn + hits * rn;
         bpref_t outh = bpvm_heap_nuevo_para_llenar(vm, BPVM_TYPE_ARRAY_I8, outn, outn); /* V7/H7 #593: la cabecera y el handle, al nacer */
@@ -3065,16 +3031,16 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
                     i += adv;
                 }
             } else {
+                /* V8 #730: de aparición en aparición, con bpstr_busca (antes, memcmp en cada posición): las mismas, y
+                 * en el mismo orden, que contó la primera pasada */
                 uint32_t seg = 0;   /* dónde empieza el trozo sin coincidencias que aún no se ha copiado */
-                while (i + tn <= sn) {
-                    if (memcmp(sb + i, tb, tn) == 0) {
-                        if (i > seg) { memcpy(dst + o, sb + seg, i - seg); o += i - seg; }
-                        if (rn > 0) { memcpy(dst + o, rb, rn); o += rn; }
-                        i += tn;
-                        seg = i;
-                    } else {
-                        i++;
-                    }
+                int32_t r;
+                while (i + tn <= sn && (r = bpstr_busca(sb, sn, tb, tn, i)) >= 0) {
+                    i = (uint32_t) r;
+                    if (i > seg) { memcpy(dst + o, sb + seg, i - seg); o += i - seg; }
+                    if (rn > 0) { memcpy(dst + o, rb, rn); o += rn; }
+                    i += tn;
+                    seg = i;
                 }
                 if (sn > seg) { memcpy(dst + o, sb + seg, sn - seg); o += sn - seg; }
             }
@@ -3106,12 +3072,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         uint32_t nparts;
         if (sn == 0)      nparts = 1;                        /* "" -> [""] siempre */
         else if (pn == 0) nparts = utf8_cp_count(sb, sn) + 1;/* "abc" -> a,b,c,"" */
-        else {
-            nparts = 1;
-            for (uint32_t i = 0; i + pn <= sn; ) {
-                if (memcmp(sb + i, pb, pn) == 0) { nparts++; i += pn; } else i++;
-            }
-        }
+        else nparts = 1u + bpstr_cuenta_apariciones(sb, sn, pb, pn);   /* V8 #730: antes, memcmp en cada posición */
 
         bpref_t arrh = bpvm_heap_nuevo(vm, BPVM_TYPE_ARRAY_REF, nparts, nparts * BPVM_REF_SIZE); /* V7/H7 #593: la cabecera y el handle, al nacer */
         if (arrh.v == 0u) return builtin_throw(vm, tc, "No space in heap");

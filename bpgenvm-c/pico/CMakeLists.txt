@@ -85,6 +85,7 @@ set(BPVM_C_SRC
     ${BPVM_C_ROOT}/src/interp.c
     ${BPVM_C_ROOT}/src/heap.c
     ${BPVM_C_ROOT}/src/builtins.c
+    ${BPVM_C_ROOT}/src/bpstr_vm.c            # V8 #730: la biblioteca de cadenas (bpstr/)
     ${BPVM_C_ROOT}/src/fs_facade.c           # #247: facade file I/O (readFile/writeFile/appendFile/fileExists)
     ${BPVM_C_ROOT}/src/fs_lfs.c              # H2-B2: backend littlefs de la fachada (portable)
     ${BPVM_C_ROOT}/third_party/littlefs/lfs.c        # H2: motor littlefs v2.11.3 (in-tree)
@@ -456,6 +457,7 @@ set(BP_ZONA1_FIN         0x10010000)
 set(BP_ZONA3_INI         0x10014000)
 set(BPVM_EN_RAM_M
     */interp.c.obj */builtins.c.obj */heap.c.obj */bpvm_handles.c.obj */scheduler.c.obj    # la VM caliente
+    */bpstr_vm.c.obj    # V8 #730: lo de las cadenas, que antes estaba dentro de builtins.c y de su RAM
     */queue.c.obj */tasks.c.obj */list.c.obj */port.c.obj */portasm.c.obj                  # el cerrojo de FreeRTOS
     */platform_freertos.c.obj
     # memcpy, memset, memmove, memcmp y memchr de nuestra newlib (en libg.a, o en libc.a según el compilador): sólo en
@@ -470,6 +472,11 @@ configure_file(${CMAKE_CURRENT_LIST_DIR}/bp_memmap.ld ${CMAKE_CURRENT_BINARY_DIR
 string(RANDOM LENGTH 8 ALPHABET 0123456789abcdef BPVM_PAREJA)
 set_source_files_properties(main.c PROPERTIES COMPILE_DEFINITIONS
     "BPVM_PAREJA=0x${BPVM_PAREJA}u;BPVM_IMAGEN_M_BASE=${BPVM_IMAGEN_M_BASE}u")
+
+# V8 #730: la biblioteca de cadenas (bpgenvm-c/bpstr/, por src/bpstr_vm.c), con -O2 (decidido por Eduardo el 3-nov) y
+# sin que GCC cambie su bucle de rellenar por una llamada a memset.
+set_source_files_properties(${BPVM_C_ROOT}/src/bpstr_vm.c PROPERTIES COMPILE_OPTIONS
+    "-O2;-fno-tree-loop-distribute-patterns")
 
 bpvm_rp2350_firmware(bpvm_pico_p bpvm_pico   ${CMAKE_CURRENT_BINARY_DIR}/bp_memmap_p.ld)
 bpvm_rp2350_firmware(bpvm_pico_m bpvm_pico_m ${CMAKE_CURRENT_BINARY_DIR}/bp_memmap_m.ld)

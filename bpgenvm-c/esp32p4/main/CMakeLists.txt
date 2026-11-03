@@ -51,6 +51,7 @@ idf_component_register(
         "../../src/interp.c"
         "../../src/heap.c"
         "../../src/builtins.c"
+        "../../src/bpstr_vm.c"        # V8 #730: la biblioteca de cadenas (bpstr/)
         "../../src/gui_pack.c"                # V7/H6 G5.a: la GUI por el PACK (trampolines; sin gui.c ni LVGL), como la C5 y la C6
         "../../src/fs_facade.c"
         "../../src/fs_lfs.c"                  # H2-B3: backend littlefs de la fachada (portable)
@@ -150,3 +151,8 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 if(BPVM_P4_WIRE STREQUAL "tcp")
     target_compile_definitions(${COMPONENT_LIB} PRIVATE BPVM_P4_WIRE_TCP=1)
 endif()
+
+# V8 #730: la biblioteca de cadenas (bpgenvm-c/bpstr/, por src/bpstr_vm.c), con -O2 (decidido por Eduardo el
+# 3-nov; el resto, con lo del proyecto) y sin que GCC cambie su bucle de rellenar por una llamada a memset.
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/../../src/bpstr_vm.c"
+    PROPERTIES COMPILE_OPTIONS "-O2;-fno-tree-loop-distribute-patterns")

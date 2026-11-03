@@ -49,6 +49,7 @@ idf_component_register(
         "../../src/interp.c"
         "../../src/heap.c"
         "../../src/builtins.c"
+        "../../src/bpstr_vm.c"        # V8 #730: la biblioteca de cadenas (bpstr/)
         "../../src/gui_pack.c"                # V7/H6.b: la GUI por el PACK (trampolines generados de bpvm_gui.h; sin gui.c ni LVGL)
         "../../src/fs_facade.c"        # #247: facade file I/O (backend ESP32 = fs_lfs_esp32.c)
         "../../src/fs_lfs.c"                       # H2-B3: backend littlefs de la fachada (portable)
@@ -144,3 +145,8 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE
 
 # #473 (lote D, 264; 3-oct): aquí se relajaba -Wformat-truncation para fs_lfs_esp32.c, por el snprintf
 # del BFS de fs_list; fs_list se fue al común (#461) y el fichero ya no tiene ninguno.
+
+# V8 #730: la biblioteca de cadenas (bpgenvm-c/bpstr/, por src/bpstr_vm.c), con -O2 (decidido por Eduardo el
+# 3-nov; el resto, con lo del proyecto) y sin que GCC cambie su bucle de rellenar por una llamada a memset.
+set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/../../src/bpstr_vm.c"
+    PROPERTIES COMPILE_OPTIONS "-O2;-fno-tree-loop-distribute-patterns")

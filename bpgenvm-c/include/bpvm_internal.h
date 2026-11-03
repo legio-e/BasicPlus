@@ -1158,15 +1158,25 @@ static inline uint8_t* bpref_field(bpvm_t* vm, bpref_t obj, uint32_t slot) {
     return vm->memory + bpref_deref(vm, obj) + BPVM_ARR_DATA_OFF + slot * 4u;
 }
 
+/* ---- V8 #730 (3-nov): LA BIBLIOTECA DE CADENAS (bpgenvm-c/bpstr/, compilada en la VM por src/bpstr_vm.c) ----
+ * Las funciones de cadenas de abajo la llaman: el mismo resultado que sus bucles de antes, byte a byte (lo comprueban
+ * sus pruebas contra esos bucles, copiados en bpstr/oraculo.h), y más deprisa (bpstr/LEEME.md). Sus declaraciones van
+ * aquí, sin incluir su bpstr.h: este fichero lo incluyen también las natives del AOT, que se compilan con include/ y
+ * src/ (en una instalación, sin bpstr/) y no las usan. builtins.c incluye las dos: si se apartaran, no compilaría. */
+int      bpstr_es_ascii(const uint8_t* p, uint32_t n);
+uint32_t bpstr_cuenta(const uint8_t* p, uint32_t n);
+uint32_t bpstr_avanza(const uint8_t* p, uint32_t n, uint32_t bo, uint32_t k, uint32_t* hechos);
+int32_t  bpstr_primer_malo(const uint8_t* p, uint32_t n);
+uint32_t bpstr_largo_corregido(const uint8_t* p, uint32_t n);
+uint32_t bpstr_corrige(const uint8_t* p, uint32_t n, uint8_t* out);
+
 /* ---- V8/H5 (21-oct): los DOS ALGORITMOS de las cadenas (ver BPVM_TAG_ASCII) ----
  * `s` es la dirección de una cadena tal como la da bpref_deref: la de su palabra de longitud (0 = null = ""). Un bloque
  * del heap lleva su etiqueta justo antes; un literal (por debajo de heap_start) no tiene etiqueta. */
 
-/* ¿Todos estos bytes son ASCII (menores de 0x80)? Una pasada: el OR de todos, y mirar un bit al final. */
+/* ¿Todos estos bytes son ASCII (menores de 0x80)? (bpstr: de 4 en 4.) */
 static inline int bpvm_bytes_ascii(const uint8_t* p, uint32_t n) {
-    uint8_t acc = 0;
-    for (uint32_t i = 0; i < n; i++) acc |= p[i];
-    return (acc & 0x80u) == 0;
+    return bpstr_es_ascii(p, n);
 }
 
 /* ¿Va la cadena por el algoritmo RÁPIDO (un carácter = un byte)? Una del heap, por su bit. Un literal no tiene
@@ -1201,22 +1211,14 @@ static inline void bpvm_str_nace(bpvm_t* vm, uint32_t s) {
 /* ---- H2 (V2): helpers UTF-8 sobre el payload de un string byte[] ----
  * Fuente UNICA para el intérprete (builtins.c) y el AOT (bpvm_aot_helpers.c):
  * deben coincidir byte a byte para la paridad bytecode <-> native. */
+/* Cuántos codepoints: los bytes que no son de continuación (10xxxxxx). (bpstr: de 4 en 4.) */
 static inline uint32_t utf8_cp_count(const uint8_t* p, uint32_t nbytes) {
-    uint32_t count = 0;
-    for (uint32_t i = 0; i < nbytes; i++)
-        if ((p[i] & 0xC0u) != 0x80u) count++;
-    return count;
+    return bpstr_cuenta(p, nbytes);
 }
 /* Offset en bytes donde empieza el codepoint nº cp_index (0-based);
- * nbytes si cp_index >= nº de codepoints. */
+ * nbytes si cp_index >= nº de codepoints. (bpstr: cp_index pasos desde el byte 0.) */
 static inline uint32_t utf8_byte_offset(const uint8_t* p, uint32_t nbytes, uint32_t cp_index) {
-    uint32_t i = 0, cp = 0;
-    while (i < nbytes && cp < cp_index) {
-        i++;
-        while (i < nbytes && (p[i] & 0xC0u) == 0x80u) i++;
-        cp++;
-    }
-    return i;
+    return bpstr_avanza(p, nbytes, 0u, cp_index, NULL);
 }
 /* Decodifica el codepoint que empieza en p[0]; *adv = bytes consumidos. */
 static inline uint32_t utf8_decode(const uint8_t* p, uint32_t nbytes, uint32_t* adv) {
@@ -1243,72 +1245,21 @@ static inline uint32_t utf8_encode(uint32_t cp, uint8_t* out) {
  * si se ignora el error, cada trozo malo pasa a U+FFFD (EF BF BD). Un trozo malo es una «subparte máxima»: el principio
  * más largo de un carácter que se corta, o un byte que no puede empezar ninguno; fuera quedan los sobrelargos, los
  * sustitutos (ED A0 80: tres) y lo que pasa de 10FFFF. El espejo, miVM edu.bpgenvm.vm.Utf8, con su oráculo (la tabla
- * 3-7 del estándar, todas las secuencias de 1 a 3 bytes); aquí, test/test_utf8.c. */
+ * 3-7 del estándar, todas las secuencias de 1 a 3 bytes); aquí, test/test_utf8.c. Desde V8 #730, en bpstr (bpstr.c:
+ * paso, bpstr_primer_malo…), que salta de 4 en 4 lo que es ASCII: lo de antes, copiado tal cual, en bpstr/oraculo.h. */
 
-/* Un paso desde p[i] (i < n, p[i] NO ASCII): los bytes del carácter que empieza ahí (2 a 4) si es válido, o -k si los
- * k bytes desde i son un trozo malo (k >= 1). */
-static inline int utf8_paso(const uint8_t* p, uint32_t i, uint32_t n) {
-    uint8_t c = p[i];
-    int necesita;
-    uint8_t lo = 0x80u, hi = 0xBFu;
-    if (c >= 0xC2u && c <= 0xDFu) {
-        necesita = 1;
-    } else if (c >= 0xE0u && c <= 0xEFu) {
-        necesita = 2;
-        if (c == 0xE0u) lo = 0xA0u;          /* sin sobrelargos de tres bytes */
-        else if (c == 0xEDu) hi = 0x9Fu;     /* sin sustitutos (D800..DFFF) */
-    } else if (c >= 0xF0u && c <= 0xF4u) {
-        necesita = 3;
-        if (c == 0xF0u) lo = 0x90u;          /* sin sobrelargos de cuatro bytes */
-        else if (c == 0xF4u) hi = 0x8Fu;     /* nada por encima de 10FFFF */
-    } else {
-        return -1;                            /* 80..C1 y F5..FF no empiezan ningún carácter */
-    }
-    for (int k = 1; k <= necesita; k++) {
-        if (i + (uint32_t) k >= n) return -k; /* cortado por el final: el trozo son los k que hay */
-        uint8_t d = p[i + (uint32_t) k];
-        if (d < lo || d > hi) return -k;      /* el byte k no sigue: el trozo son los k de antes, y él empieza otro */
-        lo = 0x80u;
-        hi = 0xBFu;
-    }
-    return necesita + 1;
-}
 /* Dónde empieza el primer trozo malo de p[0, n); -1 si todo es UTF-8 válido. */
 static inline int32_t utf8_primer_malo(const uint8_t* p, uint32_t n) {
-    uint32_t i = 0;
-    while (i < n) {
-        if (p[i] < 0x80u) { i++; continue; }   /* el atajo: un byte ASCII */
-        int s = utf8_paso(p, i, n);
-        if (s < 0) return (int32_t) i;
-        i += (uint32_t) s;
-    }
-    return -1;
+    return bpstr_primer_malo(p, n);
 }
 /* Los bytes que salen al cambiar cada trozo malo por U+FFFD (tres bytes). */
 static inline uint32_t utf8_largo_corregido(const uint8_t* p, uint32_t n) {
-    uint32_t i = 0, largo = 0;
-    while (i < n) {
-        int s = (p[i] < 0x80u) ? 1 : utf8_paso(p, i, n);
-        if (s > 0) { largo += (uint32_t) s; i += (uint32_t) s; }
-        else { largo += 3u; i += (uint32_t) -s; }
-    }
-    return largo;
+    return bpstr_largo_corregido(p, n);
 }
 /* Escribe en out los bytes de p[0, n) con cada trozo malo cambiado por U+FFFD; devuelve cuántos (= el largo
  * corregido). out no se solapa con p. */
 static inline uint32_t utf8_corrige(const uint8_t* p, uint32_t n, uint8_t* out) {
-    uint32_t i = 0, o = 0;
-    while (i < n) {
-        int s = (p[i] < 0x80u) ? 1 : utf8_paso(p, i, n);
-        if (s > 0) {
-            for (int k = 0; k < s; k++) out[o++] = p[i + (uint32_t) k];
-            i += (uint32_t) s;
-        } else {
-            out[o++] = 0xEFu; out[o++] = 0xBFu; out[o++] = 0xBDu;
-            i += (uint32_t) -s;
-        }
-    }
-    return o;
+    return bpstr_corrige(p, n, out);
 }
 /* ¿Es cp un carácter? Un punto de código de Unicode (0..10FFFF) que no es un sustituto (D800..DFFF). */
 static inline int utf8_es_caracter(int32_t cp) {

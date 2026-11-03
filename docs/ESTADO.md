@@ -178,6 +178,13 @@
 >
 >   VERDE en todo, y las cuatro, devueltas a su imagen. Y la pregunta de Eduardo de copiar y buscar en toda la VM: abierta
 >   `#785` (la STM32, las rápidas para todo el firmware), y lo demás, para el paso 3.
+> - **`#730`, el paso 3: bpstr dentro de la VM** (*«ok, paso 3»*): por `src/bpstr_vm.c`; las funciones de cadenas de
+>   `bpvm_internal.h` la llaman; en `builtins.c`, buscar, `replace`, el cursor, `upper`/`lower`, `trim` y comparar.
+>   La red, VERDE dos veces; compilan las siete familias y las dos STM32; los packs aguantan. El censo en las cuatro
+>   placas: buscar con 2 KB, de cinco a nueve veces más deprisa; `replace`, de dos a casi siete. Lo que sale peor es casi
+>   siempre lo que bpstr no toca: el código cambia de sitio. En la Pico 2 es la lotería del XIP de `#734` (`strlen`
+>   ×2,05), comprobada con otra imagen; en la P4 y la S3, menos. `startsWith`/`endsWith` siguen con la `memcmp`. Las
+>   cuatro placas, con la imagen del paso 3. Por decidir (Eduardo): cerrar `#730`, y la Pico 2.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el

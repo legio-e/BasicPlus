@@ -7329,6 +7329,8 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
      escribir en ella. En la RP2350 pasa lo mismo cuando el XIP está apagado;
   3. dentro de la VM, en el paso 3 de `#730`, las de `bpstr` donde se vea que importa (el heap y el GC: poner a cero
      al crear, copiar al compactar), con el censo de antes y después.
+- **3-nov, con el paso 3 de `#730`:** la STM32 compila `src/bpstr_vm.c` con el `-Os` de su proyecto. El `-O2` de bpstr
+  (decidido por Eduardo) pide una opción por fichero en el `.cproject` de las dos placas: con esto, al medirla.
 
 #### ✅ `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **CERRADA el 3-nov**, `53003a72`: hecha y probada en la S3 y la P4; la S3, a 160 sin la clave)
 
@@ -9062,7 +9064,7 @@ por hilo. Sólo la VM-C: la VM-Java no tiene cursor, por decisión.
   dos cadenas a la vez, 82 ms (el 21-oct, 1461); adelante y atrás, 51; `substring(k, k+1)` con `strlen`, 237; buscar
   y cortar ×100, 81; `parseJson` de 8 KB con acentos, 2706 ms; un `Map` de 200 claves con acentos, 279.
 
-#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **en curso: el paso 1 (el PC), el 2 (las placas), la mezcla con lo de Arm y sus puntos 1, 2 y 3, hechos el 3-nov; lo siguiente, el paso 3: meterla en la VM**)
+#### 🔵 `#730` — la biblioteca de cadenas en C: decidida por Eduardo el 21-oct (abierta el 27-oct, al cerrar el H5; **en curso: los pasos 1, 2 y 3 —bpstr ya dentro de la VM—, hechos el 3-nov; por decidir, cerrarla**)
 
 Eduardo, 21-oct: *«Creo que deberíamos tener una librería en C para manejar nuestros strings. La librería debería
 estar optimizada a nivel de algoritmo y de codificación y verificada.»* Hecha aparte e incorporada al acabar, y
@@ -9155,6 +9157,29 @@ Kuhn y millones al azar) y medida contra la libc de cada familia. Por decidir an
   libc no se cambian para todo; y dentro de la VM, en el paso 3, las de `bpstr` en el heap y el GC si el censo dice que
   se nota. **Para el paso 3, los créditos:** ya no hay nada de musl; newlib (lo de Arm, BSD-3, y el Two-Way de Eric
   Blake).
+- **3-nov, el paso 3 hecho: bpstr dentro de la VM** (Eduardo: *«ok, paso 3»*; `V8_IDEAS` §E5, «`#730`, el paso 3»).
+  - **Cómo entra:**
+    - por `src/bpstr_vm.c`, que la STM32 recoge sola y que dan de alta, con `-O2`, el host, la Pico (en la M de la
+      Metro, en la SRAM) y las cinco ESP;
+    - las funciones de cadenas de `bpvm_internal.h` la llaman, con su nombre de siempre;
+    - en `builtins.c`, buscar, `replace` (de aparición en aparición), el cursor, `upper`/`lower`, `trim` y comparar.
+      `startsWith`/`endsWith`, con la `memcmp` (medido: con trozos cortos, `bpstr_igual` iba peor);
+    - los créditos, con los avisos de newlib.
+  - **Las pruebas:** la red, VERDE dos veces; `test_utf8`, ahora contra bpstr; las siete familias y las dos STM32
+    compilan; los packs de la P4 y la Metro aguantan.
+  - **El censo (`StrCenso`), antes y después, en las cuatro placas:** lo que toca bpstr, con 2 KB:
+    - `indexOf` ×0,11–0,19;
+    - `replace` ×0,15–0,48;
+    - `upper` ×0,47–0,72;
+    - `fromBytes` ×0,42–0,66 (en la P4, ×1,24).
+
+    Lo que sale peor es casi siempre lo que no la toca, por el sitio del código en la imagen nueva:
+    - en la Pico 2, la lotería del XIP de `#734` (`strlen` ×2,05, `intToString` ×1,78). Comprobado con una imagen con
+      bpstr en la SRAM, que reparte otra vez; lo de fondo es `#719`;
+    - en la P4 y la S3, menos (`toBytes` ×1,50 en la P4);
+    - en la Metro, un caso.
+  - **Por decidir (Eduardo):** cerrar `#730`, y si la lotería de la Pico 2 se queda como decidió en `#734`.
+  - En la STM32, bpstr va de momento con el `-Os` del proyecto: se mide con `#785`.
 
 #### ✅ `#729` — en la Metro, el control del ancla da una falsa alarma: «ancla: DUPLICADA — la búsqueda da 0x1007EB70 y la buena es 0x1016637C -> un pack leería punteros de basura» (abierta el 27-oct, al grabar el lote; no es un fallo de los packs; **hecha en el código el 29-oct, `684331a9`; CERRADA el 3-nov**, vista en el lote de placas)
 

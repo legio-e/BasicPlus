@@ -77,6 +77,19 @@
     <td class="lic">BSD-3-Clause</td>
   </tr>
   <tr>
+    <td><a href="https://sourceware.org/newlib/">newlib</a><br>
+        <span style="color:var(--fg-muted);font-size:0.9em">Arm Ltd. y Eric Blake</span></td>
+    <td>Tres piezas de la <strong>biblioteca de cadenas</strong> de la VM
+        (<code>bpgenvm-c/bpstr</code>), adaptadas de su código: buscar un texto
+        dentro de otro mirando <em>parejas</em> de bytes (el <code>memmem</code>
+        de Arm, 2018), el algoritmo <em>Two-Way</em> para las agujas largas (Eric
+        Blake, 2008) y la copia de memoria de los Cortex-M (la
+        <code>memcpy</code> de Arm, 2013, en ensamblador). Las tres se eligieron
+        midiéndolas contra las nuestras en las placas: ganaban. Sus avisos de
+        licencia van, enteros, en <code>bpstr/bpstr.c</code>.</td>
+    <td class="lic">BSD-3-Clause (Arm) y permisiva (Eric Blake)</td>
+  </tr>
+  <tr>
     <td><a href="https://www.freertos.org/">FreeRTOS</a></td>
     <td>El <strong>sistema operativo en tiempo real</strong> (RTOS) sobre el que
         se sostiene la VM en placa. No es sólo el planificador: de él salen las
@@ -208,6 +221,38 @@
     <code>bpgenvm-c/third_party/README.md</code>. BasicPlus se publica bajo
     licencia <strong>MIT</strong>.
   </p>
+  <p>
+    El código de newlib que va dentro de cada firmware (en la biblioteca de
+    cadenas) pide que su aviso viaje con el binario. Aquí está, tal cual:
+  </p>
+  <pre style="white-space:pre-wrap;font-size:0.85em">Copyright (c) 2018 Arm Ltd. All rights reserved.
+Copyright (c) 2013 ARM Ltd. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+1. Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+3. The name of the company may not be used to endorse or promote products
+   derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY ARM LTD ``AS IS'' AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+EVENT SHALL ARM LTD BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+Byte-wise substring search, using the Two-Way algorithm.
+Copyright (C) 2008, 2010 Eric Blake
+Permission to use, copy, modify, and distribute this software is freely
+granted, provided that this notice is preserved.</pre>
 </div>
 
 <h2>Y una mención aparte</h2>

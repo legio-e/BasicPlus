@@ -38,7 +38,7 @@ CFLAGS  += -MMD -MP
 # ⚠️ src/bpvm_repl.c NO va aqui A PROPOSITO (V6/U3): es capa-WIRE, no core de
 # VM — llama al cable (wire_v1_send_*) que el CLI de host no tiene. Su sitio
 # son los CUATRO firmwares (+ el simulador cuando migre). Ver bpvm_repl.h.
-SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/builtins.c \
+SRC     = src/bpvm.c src/bpvm_util.c src/loader.c src/interp.c src/heap.c src/builtins.c src/bpstr_vm.c \
           src/link.c src/scheduler.c src/threading.c src/exceptions.c src/events.c src/destruir.c \
           src/platform_pthread.c src/gpio.c src/i2c.c src/spi.c src/uart.c \
           src/pulse.c src/pwm.c src/bpvm_machine.c src/bpvm_neopixel.c src/rtc.c src/adc.c src/wdt.c \
@@ -265,6 +265,10 @@ $(FLAVOR_STAMP):
 build/%.o: %.c $(FLAVOR_STAMP)
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c $< -o $@
+
+# V8 #730 — la biblioteca de cadenas (bpstr/, por src/bpstr_vm.c): -O2, como el resto en el host, y que GCC no cambie su
+# bucle de rellenar por una llamada a memset. Sus dependencias, bpstr/bpstr.c y bpstr.h, las apunta -MMD.
+build/src/bpstr_vm.o: CFLAGS += -O2 -fno-tree-loop-distribute-patterns
 
 clean:
 	rm -rf build
@@ -1542,10 +1546,10 @@ test-sqlmem:
 
 # V8/H5 (#711) — la rutina de validar y corregir UTF-8 (bpvm_internal.h) contra un ORÁCULO escrito
 # de otra forma (la tabla 3-7 del estándar, fila a fila): todas las secuencias de 1 a 3 bytes y un
-# millón al azar de 4 a 12, como Utf8Test de miVM. Host-only: sólo la cabecera.
+# millón al azar de 4 a 12, como Utf8Test de miVM. Host-only: la cabecera y, desde V8 #730, bpstr, que es quien lo hace.
 test-utf8:
 	@mkdir -p build
-	$(CC) $(CFLAGS) test/test_utf8.c -o build/test_utf8.exe
+	$(CC) $(CFLAGS) test/test_utf8.c src/bpstr_vm.c -o build/test_utf8.exe
 	@echo "--- V8/H5 #711 UTF-8: la rutina contra la tabla del estandar (esperado: solo 'ok', [status=OK]) ---"
 	./build/test_utf8.exe
 
