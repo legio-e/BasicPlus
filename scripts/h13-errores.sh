@@ -120,6 +120,20 @@ InterfacesMal|'MalMarcada' es una clase, no una interfaz
 InterfacesMal|'Hilo' desciende de Thread y un Thread no es un Object
 InterfacesMal|'Forma' es una interfaz: no se construye
 ArgLargo|no cabe: 130 bytes (el tope del argumento es 127)
+EventoValor|'onClick' es un evento, no un valor
+EventoValor|compararlo con null
+ConstanteNula|la constante 'NADA' no puede ser null
+ConstanteNula|la constante 'ETIQUETA' no puede ser null
+ConstanteNula|la constante 'LOCAL' no puede ser null
+AnnMal|'@XY'; las que existen son '@BD', '@implement' y '@override'
+AnnMal|'@BD' sobre la clase 'Dos' tiene que decir a
+AnnMal|la entidad 'Dos' no dice
+AnnMal|'@BD' sobre una clase no conoce la clave 'esquema'; hoy admite: tabla
+AnnMal|'tabla' tiene que ser una cadena
+AnnMal|'@BD' sobre 'id' no tiene sentido: su clase 'Cuatro'
+AnnMal|'@BD' sobre una property no conoce la clave 'clave'; hoy admite: columna, pk
+AnnMal|'columna' no puede estar
+AnnMal|(la entidad) o sobre una
 "
 
 ok=0; mal=0

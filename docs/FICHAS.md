@@ -7330,7 +7330,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   El opcode, en las dos VMs, el desensamblador y el compilador (el `ModWriter` ya sabe la posición al emitir).
 - **Decidido** (Eduardo, 3-nov: *«a) si pero se puede hacer mas adelante»*).
 
-#### 🔵 `#780` — `samples/errores`: tres ejemplos sin caso en `h13-errores.sh` (nadie vigila su mensaje), y `AnnMal` falla por algo que no es lo suyo (abierta el 3-nov, al añadir el de `#768`; **sólo análisis**)
+#### ✅ `#780` — `samples/errores`: tres ejemplos sin caso en `h13-errores.sh` (nadie vigila su mensaje), y `AnnMal` falla por algo que no es lo suyo (abierta el 3-nov, al añadir el de `#768`; **CERRADA el mismo día**, el commit de `#780`)
 
 - **Sin caso:** `EventoValor` (`#771`, 3-nov) y `ConstanteNula` (`#777`, 2-nov) están en el `LEEME` con su mensaje,
   pero no en la lista de `scripts/h13-errores.sh`: si el mensaje cambia o el ejemplo empieza a compilar, nadie se
@@ -7341,6 +7341,13 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   enseña (las anotaciones mal puestas) queda detrás. Sin mirar desde cuándo.
 - **Lo propuesto, sin hacer:** los casos de `EventoValor` y `ConstanteNula` en el script (los de `#768` entran con
   él); `AnnMal`, con sus constructores en tres líneas, en el `LEEME` y en el script. Por decidir (Eduardo).
+- **Decidido** (Eduardo, 3-nov: *«OK, adelante»*). **Hecho:** en `h13-errores.sh`, los casos de `EventoValor` (dos),
+  `ConstanteNula` (tres) y `AnnMal` (nueve: uno por regla); `AnnMal`, con sus tres constructores en tres líneas —ya
+  sólo da sus once errores de las anotaciones— y con su fila en el `LEEME`. De paso, la misma omisión en cuatro más:
+  `ArrayFijoMal`, `ClaseDelLenguaje`, `DestructorMal` y `PrefijoSistema` tenían caso y no fila; ya la tienen (las 30,
+  con caso y con fila), y el `LEEME` ya no dice que el script «compila los cinco». El script: 108 comprobaciones, OK.
+  (El de `#768` no entró: un ejemplo de más de 64 KB de datos pide más de 64 KB de fuente; lo prueba
+  `ModuloNoCabeTest`.)
 
 #### 🔵 `#779` — la red: `test-cola` salió una vez en rojo («salida 2») con la máquina cargada; sola, en verde, con sus diecisiete sabotajes rojos (abierta el 2-nov, en la red de `#776` y `#777`; **sólo análisis**)
 

@@ -41,13 +41,18 @@ fallan por diseño.
 | `ConstanteNula.bp` | una **constante** no puede ser `null`: es un valor, no una variable, y no referencia nada; una **variable** `string` sí puede valer `null` (V8, #777 y #774) | `la constante 'NADA' no puede ser null: una constante es un valor, no una variable…` (y `ETIQUETA`, de clase, y `LOCAL`, en una función) |
 | `ArgLargo.bp` | el **valor por defecto del argumento de ejecución** (`Main(arg: string := …)`) tiene que caber en él: el tope de las dos VMs, 127 bytes de UTF-8. Antes la VM-C lo cortaba sin decirlo y la VM-Java no. Y el que se da al ejecutar, lo mismo: la línea de órdenes de las dos VMs y el `RUN` del wire lo rechazan con su texto (#764) | `el valor por defecto de 'arg' no cabe: 130 bytes (el tope del argumento es 127)` · y al ejecutar, `el argumento no cabe: 128 bytes (el tope es 127)` |
 | `IifMal.bp` | el ternario, `iif(condición, a, b)`: la condición es boolean; las dos ramas dan el mismo tipo (o números, o `null` y una referencia, o una clase y su hija); un `var owner` local no es una rama (el ternario no mueve un owner); es un valor, no una sentencia; y el nombre es del lenguaje (V8/H7.1, #747) | `'iif' es el ternario de BP` · `se esperaba boolean` · `las dos ramas tienen que dar el mismo tipo` · `se esperaban 3 argumentos` · `iif no mueve un owner` · `es un valor, no una sentencia` |
+| `ArrayFijoMal.bp` | un **array fijo** `tipo[N]` no es una referencia (V7/H1, #19): a nivel de módulo no existe; como campo de clase, `private`; no se asigna, no se pasa, no se devuelve ni se guarda en un campo: sólo se indexa y se mide con `len()` | `… puede ser una variable local o un campo…` · `… de clase tiene que ser…` · `'buf' es un array fijo: no es una referencia…` |
+| `ClaseDelLenguaje.bp` | las **cuatro clases del lenguaje** (`Object`, `Thread`, `Mutex`, `StringBuilder`) son de Core: redeclararlas es un error con su línea (antes, una copia a medias ganaba en silencio); y `root class` fuera de Core, también (V7, N9) | `'Thread' es una clase del lenguaje…` · `'StringBuilder' es una clase del lenguaje…` · `'root class' sólo…` |
+| `DestructorMal.bp` | lo que el **destructor** y `var owner` no admiten (V7/H1): el destructor se llama como su clase y no lleva parámetros; un owner local no se devuelve ni se guarda en un campo; y el destructor no se llama desde el código: lo llama el lenguaje | `se llama como su clase: '~Caja'` · `el destructor no lleva parámetros` · `no puede escapar: se destruye…` · `no puede escapar a un campo` · `el destructor lo llama el lenguaje` |
+| `PrefijoSistema.bp` | el prefijo **`__`** es del sistema (V7, M4): fuera de Core, un identificador de usuario que empieza por `__` es un error con su línea, salvo una intrínseca (cuerpo `inline`) o una función pública | `'__contador' empieza por…` (y `__dentro`, `__privada`, `__a`, `__tmp`) |
+| `AnnMal.bp` | las **anotaciones** (V5/H5, `@BD{…}`): sólo las que existen (`@BD`, `@implement`, `@override`), y en su sitio —una clase entidad o una property suya—; cada una con sus claves (la clase, `tabla`; la property, `columna` y `pk`), la tabla como cadena, la columna no vacía y una clave primaria en cada entidad | `anotación desconocida '@XY'…` · `'@BD' sobre la clase 'Dos' tiene que decir a qué tabla…` · `la entidad 'Dos' no dice cuál es su clave primaria…` · y seis más |
 
 Fíjate en que los mensajes **dicen qué hacer**, no sólo qué está mal: el de `parallel`
 sugiere las tres salidas válidas. Eso es deliberado.
 
 ## Se verifica solo
 
-`scripts/h13-errores.sh` compila los cinco y exige que **cada uno falle con el mensaje
+`scripts/h13-errores.sh` compila todos (eran cinco el 3-ago; hoy, los de la tabla) y exige que **cada uno falle con el mensaje
 esperado**. Falla la comprobación en los dos sentidos: si alguno empieza a compilar
 (regla que se perdió) o si el mensaje cambia (diagnóstico que empeoró sin querer).
 

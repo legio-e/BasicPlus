@@ -3,19 +3,22 @@ module AnnMal
   // 1. anotación desconocida
   @XY{ algo }
   public class Uno
-    public function Uno() end Uno
+    public function Uno()
+    end Uno
   end Uno
 
   // 2. clase entidad SIN tabla
   @BD{}
   public class Dos
-    public function Dos() end Dos
+    public function Dos()
+    end Dos
   end Dos
 
   // 3. tabla que no es cadena  +  4. clave desconocida
   @BD{ tabla = 42, esquema = "x" }
   public class Tres
-    public function Tres() end Tres
+    public function Tres()
+    end Tres
   end Tres
 
   // 5. property anotada en clase que NO es entidad
