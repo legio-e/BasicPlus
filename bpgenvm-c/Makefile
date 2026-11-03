@@ -1807,16 +1807,23 @@ test-trazasbus: $(BIN)
 	$(call fixture,BusDosHilos)
 	$(call stdlibdep,Core Spi I2c Uart Gpio Machine)
 	@echo "--- #659 las trazas de bus, enteras con dos runs (esperado: cinco pasadas con dos runs, ordenadas, iguales a la de un run) ---"
-	@ref=$$(cd samples && timeout 60 ../$(BIN) BusDosHilos.mod 2>/dev/null | grep -E '^\[(spi|i2c|uart)\]' | sort); \
+	@# V8 #769 (3-nov): la primera pasada distinta, guardada (build/trazasbus.diff) y su principio en el FAIL: una vez
+	@# salió en rojo y no se supo qué traza era la distinta.
+	@mkdir -p build; rm -f build/trazasbus.diff; \
+	 ref=$$(cd samples && timeout 60 ../$(BIN) BusDosHilos.mod 2>/dev/null | grep -E '^\[(spi|i2c|uart)\]' | sort); \
 	 n=$$(printf '%s\n' "$$ref" | grep -c ''); malas=0; \
 	 for i in 1 2 3 4 5; do \
 	   o=$$(cd samples && timeout 60 ../$(BIN) --smp=2 BusDosHilos.mod 2>/dev/null | grep -E '^\[(spi|i2c|uart)\]' | sort); \
-	   [ "$$o" = "$$ref" ] || malas=$$((malas+1)); \
+	   if [ "$$o" != "$$ref" ]; then malas=$$((malas+1)); \
+	     if [ ! -f build/trazasbus.diff ]; then printf '%s\n' "$$ref" > build/trazasbus.ref; \
+	       printf '%s\n' "$$o" > build/trazasbus.dist; diff build/trazasbus.ref build/trazasbus.dist > build/trazasbus.diff; fi; \
+	   fi; \
 	 done; \
 	 if [ $$n -ge 300 ] && [ $$malas -eq 0 ]; then \
 	   echo "  $$n trazas, enteras en las cinco pasadas con dos runs"; echo "PASS test-trazasbus"; \
 	 else \
-	   echo "FAIL test-trazasbus ($$n trazas con un run; $$malas de 5 pasadas con dos runs, distintas)"; exit 1; \
+	   echo "FAIL test-trazasbus ($$n trazas con un run; $$malas de 5 pasadas con dos runs, distintas; la primera, en build/trazasbus.diff)"; \
+	   if [ -f build/trazasbus.diff ]; then head -12 build/trazasbus.diff | sed 's/^/  /'; fi; exit 1; \
 	 fi
 
 # #659 (7-oct) — UN RUN TRAS OTRO EMPIEZA DE CERO: en una placa o en el micro simulado un proceso corre un RUN tras otro,
