@@ -102,3 +102,13 @@ CONFIG_FREERTOS_TASK_NOTIFICATION_ARRAY_ENTRIES=2
 # #707 (19-oct): el perro de las interrupciones, a 800 ms (Eduardo: «Sí 800 ms»). Es lo que pone el IDF 6.1 con PSRAM
 # (el 6.0.1 ponía 300); escrito aquí para que no cambie solo con otro IDF.
 CONFIG_ESP_INT_WDT_TIMEOUT_MS=800
+# V8 #737 (3-nov): LA CACHÉ, AL MÁXIMO (eran los valores del IDF): la de instrucciones, de 16 a 32 KB; la de datos, de
+# 32 a 64 KB, con líneas de 64 B (eran de 32). La de instrucciones es la que más da: el intérprete solo ya cabía en 16 KB
+# (fib, igual), pero con los builtins, el asignador y el GC no; con 32 KB, las cadenas un 18–27 % más deprisa
+# (StrCenso), y `cadena + entero` y AllocBench, un 18–19 %. La de datos: gc() un 25–28 %, y los datos grandes (leer 64
+# KB, −28 %; crear, −19 %). Medido en la S3 con cinco imágenes de prueba. Cuesta 48 KB de la RAM interna, que estaba sin
+# usar: la VM vive en la PSRAM (el mínimo libre, de 202 a 159 KB; Eduardo: «yo lo haría si o si, nos sobra memoria»).
+# Como las de arriba: aquí Y en el sdkconfig, que ya existe y no lo vuelve a sembrar.
+CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
+CONFIG_ESP32S3_DATA_CACHE_64KB=y
+CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y

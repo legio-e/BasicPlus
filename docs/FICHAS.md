@@ -144,7 +144,7 @@ el PC sin placa, como en el host.
 > | **hitos** | **13** | `H1`–`H13`, uno por tema — ver la tabla de abajo (`L1` pasa a ser `H1`; `A4` vuelve como `H12`; `H13`, la memoria de la C3 y la C6, lo añade Eduardo el 3-oct) |
 > | **restos de fichas CERRADAS de V6** — cuelgan de su ficha, sin número propio | **28** | `#379` `#456` `#466` `#467` `#469` `#471` `#473` `#476` `#477` `#480` `#481` `#484` ~~`#485`~~ `#494` `#502` · `A1.5` `E1` `G2` `N1` ~~`P1.C3`~~ `T1` ~~`U1.2`~~ ~~`U3.25`~~ `U6.3` `U6.5` `U6.6` `U6.9` `#460` |
 > | **sueltos sin ficha** — ideas de los cuadernos, huecos vistos de paso, limpieza | **~40** | en `V7_BACKLOG.md`, cada uno con su puntero al párrafo que manda |
-> | **fuera del plan de versiones** (decidido) | **7** | `#488` (AOT Xtensa), la red en placa (V8; desde el 24-sep, V8 = WiFi y Bluetooth, y el bajo consumo), Linux/Raspberry Pi, el brillo de la GUI, «faltan módulos» sin reproducción, el P4X (sin fecha) y la S31 (hasta que haya placa; Eduardo, 2-oct, al vaciar H10). `A4` sale de aquí: es `H12` |
+> | **fuera del plan de versiones** (decidido) | **7** | `#488` (AOT Xtensa), la red en placa (V8; desde el 24-sep, V8 = WiFi y Bluetooth, y el bajo consumo), Linux/Raspberry Pi, el brillo de la GUI, «faltan módulos» sin reproducción, el P4X (sin fecha) y la S31 (hasta que haya placa; Eduardo, 2-oct, al vaciar H10; el 3-nov, la espera a primeros de diciembre: RISC-V con 16 MB de PSRAM, WiFi y Bluetooth —y con eso natives, LVGL y SQLite, como la P4—, y su imagen, a partir de la de la C5 o la de la P4). `A4` sale de aquí: es `H12` |
 >
 > ### 🏁 LOS HITOS DE V7 — decisión de Eduardo (13-sep): *«cada grupo corresponde a un hito propio; prefiero que empiecen por H y numerados, así es más fácil hacer el seguimiento»*
 >
@@ -7584,7 +7584,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `string` sin valor nazca `""` —el compilador le pone el inicializador—, así que ya no hay un «sin valor» que mirar:
   `v == ""` da `true`. Y una variable `string` a `null` (que ahora se escribe) sólo es igual a `null`.
 
-#### 🔵 `#772` — JC/BP: con dos sobrecargas que encajan subiendo (`f(Object)` y `f(Animal)`, con un `Perro`), la llamada es «ambigua», y Java elige la más específica; y el «usa un cast» del mensaje no se puede escribir, porque JC no deja subir con un cast (abierta el 2-nov, en H8 con `test-346`; **CERRADA el 3-nov**, el commit de `#772`: la más específica, como en Java)
+#### ✅ `#772` — JC/BP: con dos sobrecargas que encajan subiendo (`f(Object)` y `f(Animal)`, con un `Perro`), la llamada es «ambigua», y Java elige la más específica; y el «usa un cast» del mensaje no se puede escribir, porque JC no deja subir con un cast (abierta el 2-nov, en H8 con `test-346`; **CERRADA el 3-nov**, el commit de `#772`: la más específica, como en Java)
 
 - **Cómo sale** (2-nov, una sonda en JC fuera del repo): una clase con `Mete(Object o)` y `Mete(Animal a)`;
   `c.Mete(new Perro())` da «llamada ambigua a 'Mete' con (Perro): varias sobrecargas encajan por igual (usa un cast)».
@@ -8727,7 +8727,7 @@ bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la 
   copiar en memoria ya reservada (`#736`): lo que cuesta es la memoria recién estrenada, la de esta ficha. Por eso
   `#736` dejó la concatenación como está (3-nov): quitarle la puesta a cero sólo ahorraría la segunda pasada, la barata.
 
-#### 🔵 `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y la de datos de la S3 (abierta el 27-oct, al cerrar el H5; **la de la P4, de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la de la S3, por medir**)
+#### ✅ `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y las de la S3 (abierta el 27-oct, al cerrar el H5; **CERRADA el 3-nov**: la P4, con la L2 de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la S3, con las dos al máximo —instrucciones 32 KB, datos 64 KB con líneas de 64 B—, medida y en la placa el 3-nov)
 
 Propuesto el 21-oct (`V8_IDEAS` §E5, «La PSRAM, medida por piezas»), midiendo antes: la L2 de la P4, de 128 a 256 KB,
 y la caché de datos de la S3, de 32 a 64 KB con líneas de 64 B. Cada una cuesta esa SRAM interna. En la P4, los datos
@@ -8758,7 +8758,37 @@ que la del 27-oct (la zona de packs no se mueve). A la placa, en el próximo lot
 - **En la placa, el 3-nov (el lote):** la P4, con su imagen de hoy (`CONFIG_CACHE_L2_CACHE_256KB=y` en su `sdkconfig`
   efectivo), la zona de packs donde estaba (`0x400e8000`), y `Gui` y `SQLite`, rc=0; su tanda, IDÉNTICA al PC.
 
-#### 🔵 `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **hecha para los builtins el 29-oct; CERRADA el 3-nov**: la concatenación, como está)
+**3-nov, la S3 medida** (Eduardo, tras preguntar si su caché funciona como la de la P4 y si le sobra SRAM: *«Si, mídelo.
+Pero yo lo haría si o si, nos sobra memoria. La medición serviría sobre todo para ver donde hay que aumentar la caché y
+para comparar la situación actual de la imagen con la cache aumentada»*). La S3 no tiene L2: una caché de instrucciones
+(16 KB, la del IDF) y una de datos (32 KB, líneas de 32 B), las dos sacadas de la SRAM interna. La de datos sirve la
+PSRAM —donde vive la VM, con el bytecode del programa— y el bytecode de los packs, que se lee en su sitio de la flash.
+Cinco imágenes de prueba de HEAD (sólo cambia el `sdkconfig`), grabadas en la S3 y medidas con lo de la P4 —los seis
+bucles de una operación, `PsramFases` y el censo— y seis de `samples/benchmarks`:
+- **la de datos de 64 KB** (líneas de 32 B): `gc()` −20/−26 %, leer 16 KB −16 %, crear 64 KB −11 %; lo demás, igual.
+  Con líneas de 64 B, además los datos grandes y seguidos (leer 64 KB −26 %, crear −18 %), y `FloatBench` +1 %;
+- **la de instrucciones de 32 KB**, la que más da: el intérprete solo ya cabía en 16 KB (`fib(28)`, `SortBench`,
+  `IntBench`: −0,2/−0,5 %), pero con los builtins, el asignador y el GC no. El censo de cadenas, −15/−26 %; `cadena +
+  entero`, −18 %; `AllocBench`, −18 %;
+- **las dos, con líneas de 64 B** (la elegida), suman: el censo −18/−27 %, `cadena + entero` −19 %, `AllocBench` −19 %,
+  `gc()` −25/−28 %, leer 64 KB −28 %, crear 64 KB −19 %; el intérprete puro, −0,2 %; nada peor (lo de `FloatBench`
+  desaparece). La misma imagen medida dos veces: los bucles y los benchmarks, ±0,2 %; `gc()`, ±8 %; el censo, ±4 % (una
+  operación suelta cambia hasta ×2 entre imágenes, según caiga una recolección dentro o no: `fromBytes`, `split`);
+- **lo que cuesta:** 48 KB de la RAM interna —los 16 de la de instrucciones salen del bloque mayor, que pasa de 168 a
+  152 KB; los 32 de la de datos, de otro—. Libre tras un RUN, de 242 a 194 KB; el mínimo desde el arranque, de 202 a 159
+  KB. Con PSRAM, la VM no la usa. En una S3 sin PSRAM (no hay ninguna en el parque), la VM iría a la RAM interna, y su
+  techo, el bloque mayor: de 160 KB (el objetivo) a unos 152.
+
+**Decidido y hecho el mismo día** (Eduardo: *«yo lo haría si o si, nos sobra memoria»*): las dos al máximo, con líneas de
+64 B —`CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y`, `CONFIG_ESP32S3_DATA_CACHE_64KB=y` y
+`CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y`—, en `esp32/sdkconfig.defaults` con el porqué, y en el `sdkconfig` local. La
+imagen compilada con los defaults nuevos es la medida, byte a byte, y es la que lleva la S3: `Core` sigue cargando del
+`Stdlib.pack` y `/lib`, vacío; sin packs nativos en la S3, nada que regrabar. Las imágenes de prueba, como en la P4, fuera
+del repositorio. De paso: la S3 va a 160 MHz,
+el valor del IDF; las demás ESP, a su máximo (la C5 a 240, la P4 a 360; la C3 y la C6, a 160, su tope). La S3 puede ir a
+240: sin decidir (gasta más).
+
+#### ✅ `#736` — crear una cadena es poner a cero y luego copiar: dos pasadas, y la primera sobra cuando la VM la llena entera (abierta el 27-oct, al cerrar el H5; **hecha para los builtins el 29-oct; CERRADA el 3-nov**: la concatenación, como está)
 
 Medido en la Metro con PSRAM (`V8_IDEAS` §E5, «La PSRAM, medida por piezas» y «Medido por dentro»): crear 16 KB, 5,2
 ms, de los que poner a cero es 1,5 (−28 % sin ella); en las cadenas que caben en la caché, poco (un 10 % en 2 KB). La
@@ -9181,7 +9211,7 @@ un `flush()`; y encima, un `Reader` o un `Writer` que recibe el stream en su con
 la codificación […] En esto seguimos el sistema de Java, un poco mas sencillo.»* Los detalles, por decidir (diez
 preguntas, cada una con su propuesta, en §E8).
 
-#### 🔵 `#722` — en la Pico 2, que un programa quepa en memoria depende de lo que se ejecutó antes: `MapOrden` con 2000 claves, tras un reinicio, se queda sin memoria; después de otros programas, a veces cabe (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **CERRADA el 3-nov**: no se reproduce con la imagen del lote)
+#### ✅ `#722` — en la Pico 2, que un programa quepa en memoria depende de lo que se ejecutó antes: `MapOrden` con 2000 claves, tras un reinicio, se queda sin memoria; después de otros programas, a veces cabe (abierta el 22-oct, al comparar la Pico 2 con la Metro en el H5; **CERRADA el 3-nov**: no se reproduce con la imagen del lote)
 
 **Lo visto** (la misma imagen, `MapOrden.mod`, que mete 250, 500, 1000 y 2000 claves en un `Map`):
 - **tras un reinicio, solo:** `No space in heap` al ir a por las 2000, 4 de 4 (dos con `log=1` y dos sin él);

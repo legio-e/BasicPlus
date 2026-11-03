@@ -111,6 +111,13 @@
 >   (`test-504`, `test-901` y `test-907`).
 > - **`#735`, aparcada** (*«No es un bug, es una optimación y por lo que dices no se gana mucho así que de momento no»*)
 >   y **`#721`, desestimada** (*«Con log=1 es normal que las cosas vayan mas lentas»*).
+> - **`#737`, cerrada: la caché de la S3** (Eduardo: *«Si, mídelo. Pero yo lo haría si o si, nos sobra memoria»*):
+>   cinco imágenes de prueba, grabadas y medidas en la S3. La de instrucciones de 32 KB es la que da (el censo de cadenas
+>   −15/−26 %, `AllocBench` −18 %; el intérprete solo ya cabía en 16 KB); la de datos de 64 KB, `gc()` −20/−26 %, y con
+>   líneas de 64 B, los datos grandes (leer 64 KB, −26 %). Las dos, con líneas de 64 B: el censo −18/−27 %, `gc()`
+>   −25/−28 %, nada peor; cuestan 48 KB de la RAM interna (el mínimo libre, de 202 a 159 KB; la VM vive en la PSRAM). En
+>   `esp32/sdkconfig.defaults`, y en la S3 la imagen medida. De paso: la S3 va a 160 MHz, el valor del IDF (puede ir a
+>   240; sin decidir). Y la S31 (Eduardo): la espera a primeros de diciembre; su imagen, desde la de la C5 o la de la P4.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
