@@ -1,0 +1,43 @@
+// SobrecargaAmbigua.bp — V8 #772 (3-nov): de las sobrecargas que encajan, el compilador elige la MÁS ESPECÍFICA, la
+// que se puede pasar a todas las demás, como en Java (y como el orden de los catch: de lo más específico a lo más
+// genérico). Si ninguna lo es, la llamada es ambigua, y el error nombra las que compiten y cómo elegir una: pasar el
+// argumento en una variable del tipo de su parámetro (en BP no se escribe un cast hacia arriba).
+//   - f(p, p): f(Perro, Object) y f(Object, Perro); cada una gana en un argumento y pierde en el otro.
+//   - h(p, p): h(Perro, Object) y h(Animal, Animal); la primera sube menos en total (hasta el 3-nov ganaba por eso),
+//     pero ninguna se puede pasar a la otra: ambigua, como en Java y en C#.
+module SobrecargaAmbigua
+  import Core
+
+  class Animal
+    public function Animal()
+    end Animal
+  end Animal
+
+  class Perro extends Animal
+    public function Perro()
+      super()
+    end Perro
+  end Perro
+
+  function f(a: Perro, b: Object): string
+    return "f(Perro, Object)"
+  end f
+
+  function f(a: Object, b: Perro): string
+    return "f(Object, Perro)"
+  end f
+
+  function h(a: Perro, b: Object): string
+    return "h(Perro, Object)"
+  end h
+
+  function h(a: Animal, b: Animal): string
+    return "h(Animal, Animal)"
+  end h
+
+  function Main()
+    var p: Perro := Perro()
+    print f(p, p)
+    print h(p, p)
+  end Main
+end SobrecargaAmbigua

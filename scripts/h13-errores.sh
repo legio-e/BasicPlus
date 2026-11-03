@@ -134,6 +134,9 @@ AnnMal|'@BD' sobre 'id' no tiene sentido: su clase 'Cuatro'
 AnnMal|'@BD' sobre una property no conoce la clave 'clave'; hoy admite: columna, pk
 AnnMal|'columna' no puede estar
 AnnMal|(la entidad) o sobre una
+SobrecargaAmbigua|encajan f(Perro, Object) y f(Object, Perro), y ninguna es
+SobrecargaAmbigua|encajan h(Perro, Object) y h(Animal, Animal), y ninguna es
+SobrecargaAmbigua|pasa el argumento en una variable del tipo de su par
 "
 
 ok=0; mal=0

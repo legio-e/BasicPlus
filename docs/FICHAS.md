@@ -7311,6 +7311,20 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#783` — el traductor de C#: una llamada con argumentos con nombre se escribe por posición, y la sobrecarga que elige JC puede no ser la de C#; con `#772`, `test-named-06` deja de compilar (abierta el 3-nov, en el lote de Mono de `#772`; **sólo análisis**)
+
+- **Cómo sale:** `d.Foo(x: 1, y: 2)` en C#, con `Foo(int x, long y, string a = "a")`, `Foo(int x, long y, params
+  string[] args)` y `Foo(long y, int x)`. C# elige la tercera: por los nombres, las dos primeras y ella tienen las mismas
+  conversiones, y desempata la que no rellena valores por defecto. El traductor ya resuelve los nombres y escribe la
+  llamada por posición para la que elegiría C#: `d.Foo(2, 1)`. Pero con dos literales enteros, `Foo(int, long, string)`
+  y `Foo(long, int)` no son comparables (cada una gana en un argumento): hasta `#772` empataban a puntos y ganaba la
+  tercera por rellenar menos defaults (por casualidad, la de C#); con la regla de Java, ambigua. C# también lo diría de
+  una llamada por posición.
+- **No es un fallo de JC:** la traducción daba por buena una regla de JC que ya no es la suya.
+- **Lo propuesto, sin hacer:** que el traductor, cuando reordene por los nombres, escriba cada argumento con el tipo del
+  parámetro que eligió C# donde no lo tenga ya: `d.Foo((long) 2, 1)`. Probado a mano (fuera del repo): compila en JC, y
+  la prueba acaba con 0 (la de `Foo(long y, int x)`). Por decidir (Eduardo).
+
 #### 🔵 `#782` — los recursos: lo grande (un texto, una tabla) fuera del bloque de datos del módulo, cargado al heap cuando se usa (abierta el 3-nov, tras `#768`; **decidido, sin fecha**)
 
 - **La idea** (Eduardo, 3-nov, en `#768`): *«Los literales grandes deberian ser resources, que se cargan al heap.»*
@@ -7375,6 +7389,10 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   qué `case` entra y la da por asignada; JC (`#540`), como Java, no mira la constante: «la variable local 'obj' se usa
   sin tener valor». No es un fallo de JC. **Lo propuesto:** que el traductor le dé un valor inicial (como
   `ValorCualquiera`) a una local que C# da por asignada y que se declara sin él. Por decidir (Eduardo).
+- **3-nov, Eduardo, sobre `test-77`:** *«a ver los nombres de los enum si se guardan están en la interface. Habría que
+  crear una especie de función para obtener el nombre a partir del valor. No se si se puede hacer en runtime, en tiempo
+  de compilación debería poderse.»* Es decir, la segunda salida, y en el lenguaje: el compilador conoce cada enum con
+  sus nombres y valores (también el de otro módulo, por su interfaz). El análisis, por hacer.
 
 #### ✅ `#777` — una constante `string` con `null` (`const string X = null;`) pasa el semántico desde `#774` y el emisor se para con un error interno: «Símbolo de datos no declarado (forward ref no permitida): X.Address» (abierta el 2-nov, con `test-243` de Mono; **CERRADA el mismo día**, el commit de `#776` y `#777`)
 
@@ -7538,7 +7556,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   `string` sin valor nazca `""` —el compilador le pone el inicializador—, así que ya no hay un «sin valor» que mirar:
   `v == ""` da `true`. Y una variable `string` a `null` (que ahora se escribe) sólo es igual a `null`.
 
-#### 🔵 `#772` — JC/BP: con dos sobrecargas que encajan subiendo (`f(Object)` y `f(Animal)`, con un `Perro`), la llamada es «ambigua», y Java elige la más específica; y el «usa un cast» del mensaje no se puede escribir, porque JC no deja subir con un cast (abierta el 2-nov, en H8 con `test-346`; **sólo análisis**)
+#### 🔵 `#772` — JC/BP: con dos sobrecargas que encajan subiendo (`f(Object)` y `f(Animal)`, con un `Perro`), la llamada es «ambigua», y Java elige la más específica; y el «usa un cast» del mensaje no se puede escribir, porque JC no deja subir con un cast (abierta el 2-nov, en H8 con `test-346`; **CERRADA el 3-nov**, el commit de `#772`: la más específica, como en Java)
 
 - **Cómo sale** (2-nov, una sonda en JC fuera del repo): una clase con `Mete(Object o)` y `Mete(Animal a)`;
   `c.Mete(new Perro())` da «llamada ambigua a 'Mete' con (Perro): varias sobrecargas encajan por igual (usa un cast)».
@@ -7558,6 +7576,23 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   eligen la de `string`, la más específica; JC, «llamada ambigua a 'Foo' con (null)». Antes de `#774` el `null` no
   encajaba en un `string` y la llamada iba a la de `Object` sin dudar: una llamada así que compilaba en BP o en JC ahora
   es ambigua (en el corpus y la stdlib no hay ninguna: la red, verde). Con la regla de Java, la de `string`.
+- **Decidido** (Eduardo, 3-nov: *«OK, como en Java»*; y antes, con un ejemplo: *«Si haces un try ... catch, las
+  excepciones hay que ponerlas de mas específicas a mas genéricas, porque si pones la mas genérica al principio, en la
+  otras nunca entra. Aquí pasa lo mismo. Es el compilador el que tiene que ordenar los posibles cast, la VM como siempre
+  no necesita pensar, solamente hace lo que le dice el compilador.»*). También en el caso raro: `h(Perro, Object)` y
+  `h(Animal, Animal)` con `(Perro, Perro)`, que hasta hoy ganaba la primera por puntos, es ambigua, como en Java y C#.
+- **Hecho** (`SemanticAnalyzer.resolveOverloadArgs`, por donde pasan las funciones, los métodos, los constructores y
+  `super(...)`): de las que encajan, la que es más específica que todas las demás —cada parámetro suyo se puede pasar
+  al de la otra, en las posiciones que da la llamada—; con los mismos tipos, la que rellena menos valores por defecto
+  (14-sep); y si no hay una, ambigua, con las que compiten y cómo elegir: «… encajan f(Perro, Object) y f(Object,
+  Perro), y ninguna es más específica que las otras; para elegir una, pasa el argumento en una variable del tipo de su
+  parámetro». Ya no sugiere un cast que no se puede escribir. La VM no cambia: la llamada sale ya elegida.
+- **Probado:** `SobrecargaEspecifica` en el corpus (seis llamadas que eran ambiguas, por los cuatro caminos; la misma
+  salida en las dos VMs); `samples/errores/SobrecargaAmbigua.bp` (f y el caso raro), con sus casos en `h13-errores.sh`
+  (111, OK); `SobrecargaEspecificaTest` (4); y nada de lo que había cambia: con el compilador de antes y el nuevo, los
+  721 fuentes dan los mismos `.mod` (676 iguales y 45 que no compilan con ninguno) y la stdlib, el mismo contenido. El
+  manual, §8.4 (y su ejemplo de los valores por defecto, desfasado desde el 14-sep: `h(1)` no es un error, elige
+  `h(a)`). En Mono: `test-163` pasa a funcionar; `test-named-06` deja de compilar (`#783`, el traductor).
 
 #### ✅ `#771` — comparar un evento con `null` (`onClick != null`, en su clase) pasa el semántico, y el emisor lo para con un mensaje interno: «símbolo no soportado en load: EventSymbol» (abierta el 2-nov, al mirar los eventos de C# en JC; **CERRADA el 3-nov**, el commit de `#771`)
 

@@ -1285,6 +1285,34 @@ desde V7 también las sobrecargas de los <strong>constructores</strong>
 elige por firma) y las de los <strong>métodos estáticos</strong>
 (<a href="#static">§9.6</a>).</p>
 
+<h4>Cuál elige: la más específica</h4>
+<p>Si encajan varias, gana la <strong>más específica</strong>: la que se podría pasar a todas las demás, como en Java.
+Es el mismo orden que el de los <code>catch</code> (<a href="#excepciones">§11</a>): <code>catch e: Animal</code> va
+antes que <code>catch e: Object</code>, porque un <code>Animal</code> también es un <code>Object</code>. Aquí lo ordena
+el compilador y la llamada sale ya elegida: la máquina virtual no decide nada (V8, <code>#772</code>).</p>
+<pre><code><span class="kw">function</span> <span class="fn">mete</span>(o: Object): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">mete</span>(a: Animal): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">foo</span>(s: <span class="type">string</span>): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">foo</span>(o: Object): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">g</span>(x: <span class="type">integer</span>): <span class="type">string</span> ...
+<span class="kw">function</span> <span class="fn">g</span>(x: <span class="type">long</span>): <span class="type">string</span> ...
+
+<span class="kw">var</span> p: Perro := Perro()      <span class="comment">// Perro extends Animal</span>
+<span class="kw">print</span> mete(p)                <span class="comment">// mete(Animal): un Animal se puede pasar donde va un Object</span>
+<span class="kw">print</span> foo(<span class="kw">null</span>)              <span class="comment">// foo(string): un string, donde va un Object</span>
+<span class="kw">var</span> b: <span class="type">byte</span> := <span class="num">5</span>
+<span class="kw">print</span> g(b)                   <span class="comment">// g(integer): un integer, donde va un long</span>
+<span class="kw">var</span> o: Object := p
+<span class="kw">print</span> mete(o)                <span class="comment">// mete(Object): para elegir otra, una variable del tipo de su parámetro</span></code></pre>
+<p>Si ninguna es más específica que las otras, la llamada es <strong>ambigua</strong>, y el compilador dice cuáles
+compiten. Pasa aunque una «suba» menos en total: <code>h(Perro, Object)</code> y <code>h(Animal, Animal)</code> con
+<code>(Perro, Perro)</code> también es ambigua, como en Java y en C#.</p>
+<pre><code><span class="kw">function</span> <span class="fn">f</span>(a: Perro, b: Object) ...
+<span class="kw">function</span> <span class="fn">f</span>(a: Object, b: Perro) ...
+
+f(p, p)</code></pre>
+<pre><code>error semántico: llamada ambigua a 'f' con (Perro, Perro): encajan f(Perro, Object) y f(Object, Perro), y ninguna es más específica que las otras; para elegir una, pasa el argumento en una variable del tipo de su parámetro</code></pre>
+
 <h4>Lo que distingue una sobrecarga de otra</h4>
 <p>Sólo <strong>la lista de parámetros</strong> (número y tipos). <strong>El tipo
 de retorno NO cuenta</strong>: dos funciones que sólo se diferencien en lo que
@@ -1314,14 +1342,14 @@ la de <code>(integer)</code> se hereda intacta.</p>
 
 <h4>Cuidado al mezclarla con valores por defecto</h4>
 <p>Una sobrecarga y un <a href="#defaults">parámetro con valor por defecto</a>
-pueden acabar aceptando la <strong>misma llamada</strong>. El compilador no
-adivina: lo rechaza.</p>
+pueden acabar aceptando la <strong>misma llamada</strong>. Con los mismos tipos en
+lo que la llamada da, gana la que <strong>rellena menos valores por defecto</strong>:
+<code>h(1)</code> es la de un parámetro.</p>
 <pre><code><span class="kw">function</span> <span class="fn">h</span>(a: <span class="type">integer</span>): <span class="type">integer</span> ...
 <span class="kw">function</span> <span class="fn">h</span>(a: <span class="type">integer</span>, b: <span class="type">integer</span> := <span class="num">0</span>): <span class="type">integer</span> ...
 
-h(<span class="num">1</span>)    <span class="comment">// las dos encajan</span></code></pre>
-<pre><code>error semántico: llamada ambigua a 'h' con (integer): varias sobrecargas encajan por igual (usa un cast)</code></pre>
-<p>La salida limpia suele ser quedarse con una de las dos formas: <strong>o</strong>
+h(<span class="num">1</span>)    <span class="comment">// las dos encajan: h(a), la otra tendría que rellenar b</span></code></pre>
+<p>Aun así, la salida limpia suele ser quedarse con una de las dos formas: <strong>o</strong>
 sobrecargas, <strong>o</strong> un valor por defecto, pero no las dos cubriendo el
 mismo caso.</p>
 

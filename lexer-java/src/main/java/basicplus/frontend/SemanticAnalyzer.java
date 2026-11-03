@@ -3974,34 +3974,80 @@ public final class SemanticAnalyzer {
         List<BpType> at = new ArrayList<>();
         for (IExpr a : args) at.add(analyzeExpr(a, scope, null));
 
-        FunctionSymbol best = null;
-        int bestCost = Integer.MAX_VALUE;
-        int bestDefaults = Integer.MAX_VALUE;   // 14-sep: a igual coste, la que rellena MENOS defaults
-        boolean ambiguous = false;
-        for (FunctionSymbol c : cands) {
-            int cost = overloadMatchCost(c, at);
-            if (cost < 0) continue;
-            int defaults = c.params.size() - at.size();   // params omitidos que hay que rellenar
-            if (cost < bestCost || (cost == bestCost && defaults < bestDefaults)) {
-                bestCost = cost; bestDefaults = defaults; best = c; ambiguous = false;
-            } else if (cost == bestCost && defaults == bestDefaults) {
-                ambiguous = true;
-            }
-        }
-        if (best == null) {
+        List<FunctionSymbol> encajan = new ArrayList<>();
+        for (FunctionSymbol c : cands) if (overloadMatchCost(c, at) >= 0) encajan.add(c);
+        if (encajan.isEmpty()) {
             err(line, column, "ninguna sobrecarga de '" + name
                     + "' acepta los argumentos " + argTypeList(at));
             return null;
         }
-        if (ambiguous) {
-            err(line, column, "llamada ambigua a '" + name + "' con "
-                    + argTypeList(at) + ": varias sobrecargas encajan por igual (usa un cast)");
+        // V8 #772 (Eduardo, 3-nov: «como en Java»; y su ejemplo: «Si haces un try ... catch, las excepciones hay que
+        // ponerlas de mas específicas a mas genéricas […] Es el compilador el que tiene que ordenar los posibles cast,
+        // la VM como siempre no necesita pensar») — de las que encajan, la MÁS ESPECÍFICA: la que se puede pasar a todas
+        // las demás, como `catch (Animal)` va antes que `catch (Object)`. Antes ganaba la de menos «puntos» de encaje
+        // (0 el tipo exacto, 1 subiendo), y subir a `Animal` o a `Object` costaba lo mismo: `Mete(Object)` y
+        // `Mete(Animal)` con un `Perro` era «ambigua». Las que tienen los mismos tipos en lo que la llamada da (difieren
+        // en los valores por defecto), la que rellena MENOS (14-sep). La VM no cambia: la llamada sale ya elegida.
+        List<FunctionSymbol> maximas = new ArrayList<>();
+        for (FunctionSymbol c : encajan) {
+            boolean aTodas = true;
+            for (FunctionSymbol d : encajan)
+                if (d != c && !masEspecifica(c, d, at.size())) { aTodas = false; break; }
+            if (aTodas) maximas.add(c);
+        }
+        FunctionSymbol best = null;
+        boolean empate = false;
+        int menosDefaults = Integer.MAX_VALUE;
+        for (FunctionSymbol c : maximas) {
+            int defaults = c.params.size() - at.size();   // params omitidos que hay que rellenar
+            if (defaults < menosDefaults) { menosDefaults = defaults; best = c; empate = false; }
+            else if (defaults == menosDefaults) empate = true;
+        }
+        if (best == null || empate) {
+            // Las que compiten: las que ninguna otra supera (más específica que ella y no al revés).
+            List<String> compiten = new ArrayList<>();
+            for (FunctionSymbol c : encajan) {
+                boolean superada = false;
+                for (FunctionSymbol d : encajan)
+                    if (d != c && masEspecifica(d, c, at.size()) && !masEspecifica(c, d, at.size())) { superada = true; break; }
+                if (!superada) compiten.add(firmaDe(name, c));
+            }
+            err(line, column, "llamada ambigua a '" + name + "' con " + argTypeList(at) + ": encajan "
+                    + String.join(" y ", compiten) + ", y ninguna es más específica que las otras; para elegir una, pasa"
+                    + " el argumento en una variable del tipo de su parámetro");
             return null;
         }
         // Rellena los defaults omitidos del elegido (clon del literal), como checkArgs.
         for (int i = args.size(); i < best.params.size(); i++)
             args.add(cloneConstExpr(best.params.get(i).defaultExpr, line, column));
         return best;
+    }
+
+    /** V8 #772 — ¿se puede pasar un `desde` donde va un `hacia`? Para ordenar las sobrecargas, de lo más específico a lo
+     *  más genérico. Un parámetro sin tipo (null) lo acepta todo: el más genérico. */
+    private static boolean pasaA(BpType desde, BpType hacia) {
+        if (hacia == null) return true;
+        if (desde == null) return false;
+        return hacia.sameAs(desde) || hacia.isAssignableFrom(desde);
+    }
+
+    /** V8 #772 — ¿es `a` al menos tan específica como `b` en las `n` posiciones que da la llamada? Lo es si cada
+     *  parámetro suyo se puede pasar al de `b` (un `Animal` donde va un `Object`, un `integer` donde va un `long`). */
+    private static boolean masEspecifica(FunctionSymbol a, FunctionSymbol b, int n) {
+        for (int i = 0; i < n; i++)
+            if (!pasaA(a.params.get(i).type, b.params.get(i).type)) return false;
+        return true;
+    }
+
+    /** V8 #772 — `f(Perro, Object)`: la firma de una sobrecarga, para el mensaje de la llamada ambigua. */
+    private static String firmaDe(String name, FunctionSymbol c) {
+        StringBuilder sb = new StringBuilder(name).append('(');
+        for (int i = 0; i < c.params.size(); i++) {
+            if (i > 0) sb.append(", ");
+            BpType t = c.params.get(i).type;
+            sb.append(t == null ? "?" : t.display());
+        }
+        return sb.append(')').toString();
     }
 
     /** Coste de encaje de una sobrecarga con los tipos de argumento dados, o -1

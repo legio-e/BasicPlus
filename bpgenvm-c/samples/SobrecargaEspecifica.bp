@@ -1,0 +1,102 @@
+// SobrecargaEspecifica.bp — V8 #772 (3-nov): de las sobrecargas que encajan, la MÁS ESPECÍFICA, como en Java (Eduardo:
+// «como en Java»; y su ejemplo: «Si haces un try ... catch, las excepciones hay que ponerlas de mas específicas a mas
+// genéricas […] Es el compilador el que tiene que ordenar los posibles cast, la VM como siempre no necesita pensar»).
+// La más específica es la que se puede pasar a todas las demás: `mete(Animal)` antes que `mete(Object)`, como
+// `catch e: Animal` antes que `catch e: Object`. Hasta el 3-nov ganaba la de menos «puntos» (0 el tipo exacto, 1
+// subiendo) y subir a `Animal` o a `Object` costaba lo mismo: las tres primeras llamadas eran «llamada ambigua». Aquí,
+// por los cuatro caminos que eligen sobrecarga: una función, un método, un constructor y `super(...)`. Lo que tiene que
+// salir:
+//   mete(Animal)
+//   foo(string)
+//   g(integer)
+//   mete(Object)
+//   g(long)
+//   pon(Animal)
+//   Jaula(Animal)
+//   Jaula(Animal)
+//   fin
+module SobrecargaEspecifica
+
+  import Core   // V6: los tipos de Core se importan
+
+  class Animal
+    public function Animal()
+    end Animal
+  end Animal
+
+  class Perro extends Animal
+    public function Perro()
+      super()
+    end Perro
+  end Perro
+
+  class Caja
+    public function Caja()
+    end Caja
+    public function pon(o: Object): string
+      return "pon(Object)"
+    end pon
+    public function pon(a: Animal): string
+      return "pon(Animal)"
+    end pon
+  end Caja
+
+  class Jaula
+    var que: string
+    public function Jaula(o: Object)
+      this.que := "Jaula(Object)"
+    end Jaula
+    public function Jaula(a: Animal)
+      this.que := "Jaula(Animal)"
+    end Jaula
+    public function cual(): string
+      return this.que
+    end cual
+  end Jaula
+
+  class JaulaGrande extends Jaula
+    public function JaulaGrande(p: Perro)
+      super(p)
+    end JaulaGrande
+  end JaulaGrande
+
+  function mete(o: Object): string
+    return "mete(Object)"
+  end mete
+
+  function mete(a: Animal): string
+    return "mete(Animal)"
+  end mete
+
+  function foo(s: string): string
+    return "foo(string)"
+  end foo
+
+  function foo(o: Object): string
+    return "foo(Object)"
+  end foo
+
+  function g(x: integer): string
+    return "g(integer)"
+  end g
+
+  function g(x: long): string
+    return "g(long)"
+  end g
+
+  function Main()
+    var p: Perro := Perro()
+    print mete(p)                    // un Animal se puede pasar donde va un Object
+    print foo(null)                  // un string, donde va un Object
+    var b: byte := 5
+    print g(b)                       // un integer, donde va un long
+    var o: Object := p
+    print mete(o)                    // para elegir otra: una variable del tipo de su parámetro
+    print g(5L)
+    print Caja().pon(p)
+    print Jaula(p).cual()
+    print JaulaGrande(p).cual()
+    print "fin"
+  end Main
+
+end SobrecargaEspecifica

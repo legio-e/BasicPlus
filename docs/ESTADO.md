@@ -90,6 +90,16 @@
 >   `h13-errores.sh` y fila en el `LEEME`; `AnnMal`, sólo con lo suyo) y `#736` (*«OK 736»*: la concatenación, como
 >   está; quitarle la puesta a cero ahorraría la segunda pasada, la barata, y lo grande es `#738`). Por decidir, `#735`
 >   (con `#730`, propuesto) y la forma de `#730`.
+> - **`#730`, la forma decidida** (*«OK, adelante ( 1,2 y 3 si)»*): la de `V8_IDEAS` §E5, una sola para todas las
+>   familias (*«#730 no es la misma para todos los micros?»*: sí; lo que cambia es la libc con la que se compara), ±25 %
+>   y `bpgenvm-c/bpstr/`. Lo siguiente, el diseño concreto para el OK.
+> - **`#772`, cerrada** (Eduardo: *«OK, como en Java»*, con el ejemplo de los `catch`: *«Es el compilador el que tiene
+>   que ordenar los posibles cast, la VM como siempre no necesita pensar»*): de las sobrecargas que encajan, la más
+>   específica; la VM no cambia. `SobrecargaEspecifica` en el corpus, `SobrecargaAmbigua` en `samples/errores`,
+>   `SobrecargaEspecificaTest`; los 721 fuentes y la stdlib, iguales; el manual, §8.4. En Mono, `test-163` funciona y
+>   `test-named-06` deja de compilar: el traductor escribe por posición una llamada con nombres (`#783`, abierta).
+> - **`#778`**, Eduardo sobre el enum en una cadena: el nombre, con una función que el compilador genere (sabe los
+>   nombres, también los de otro módulo, por su interfaz). El análisis, por hacer.
 >
 > **2-nov** — **los pendientes de las cadenas** (Eduardo: *«Continuamos. Quizás podríamos empezar con los 10 pendientes
 > de strings»*): las diez fichas que dejó el H5 (`#730`–`#739`), clasificadas —una por cerrar, cuatro de la VM en el
