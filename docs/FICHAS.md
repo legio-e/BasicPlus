@@ -7311,7 +7311,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#783` — el traductor de C#: una llamada con argumentos con nombre se escribe por posición, y la sobrecarga que elige JC puede no ser la de C#; con `#772`, `test-named-06` deja de compilar (abierta el 3-nov, en el lote de Mono de `#772`; **sólo análisis**)
+#### ✅ `#783` — el traductor de C#: una llamada con argumentos con nombre se escribe por posición, y la sobrecarga que elige JC puede no ser la de C#; con `#772`, `test-named-06` deja de compilar (abierta el 3-nov, en el lote de Mono de `#772`; **CERRADA el mismo día**, el commit de `#783`)
 
 - **Cómo sale:** `d.Foo(x: 1, y: 2)` en C#, con `Foo(int x, long y, string a = "a")`, `Foo(int x, long y, params
   string[] args)` y `Foo(long y, int x)`. C# elige la tercera: por los nombres, las dos primeras y ella tienen las mismas
@@ -7324,6 +7324,11 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **Lo propuesto, sin hacer:** que el traductor, cuando reordene por los nombres, escriba cada argumento con el tipo del
   parámetro que eligió C# donde no lo tenga ya: `d.Foo((long) 2, 1)`. Probado a mano (fuera del repo): compila en JC, y
   la prueba acaba con 0 (la de `Foo(long y, int x)`). Por decidir (Eduardo).
+- **Decidido** (Eduardo, 3-nov: *«783 OK»*). **Hecho** (`cs2jc`, `Expresiones.cs`): en una llamada con nombres
+  (`ConNombre`), cada argumento numérico cuyo tipo no es el de su parámetro se escribe con él (`ArgumentoDe`), el mismo
+  patrón que los valores de un array. Sólo ahí: es donde el traductor ya sabe qué sobrecarga eligió C# por los nombres.
+- **Probado:** `test-named-06` se traduce como `d.Foo((long) 2, 1)` y funciona; el lote de Mono, 443 que funcionan
+  (frente al de `#772`, vuelve `test-named-06`; frente al del 2-nov, `test-163` de más y ninguna de menos).
 
 #### 🔵 `#782` — los recursos: lo grande (un texto, una tabla) fuera del bloque de datos del módulo, cargado al heap cuando se usa (abierta el 3-nov, tras `#768`; **decidido, sin fecha**)
 

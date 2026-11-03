@@ -562,8 +562,20 @@ namespace Cs2Jc
             int ultimo = Array.FindLastIndex(porParametro, x => x != null);
             var partes = new List<string>();
             for (int p = 0; p <= ultimo; p++)
-                partes.Add(porParametro[p] != null ? Expr(porParametro[p]) : ConstanteDe(ms.Parameters[p], args));
+                partes.Add(porParametro[p] != null ? ArgumentoDe(porParametro[p], ms.Parameters[p]) : ConstanteDe(ms.Parameters[p], args));
             return string.Join(", ", partes);
+        }
+
+        /// V8 #783 (Eduardo, 3-nov: «783 OK») — un argumento de una llamada con nombres, con el tipo de su parámetro
+        /// cuando es otro número. C# elige la sobrecarga por los nombres; JC, por los tipos de lo que se le pasa en cada
+        /// posición, la más específica (#772). Por posición, `d.Foo(2, 1)` con `Foo(int x, long y, string a = "a")` y
+        /// `Foo(long y, int x)` es ambigua (cada una gana en un argumento); con el tipo, `d.Foo((long) 2, 1)`, es la de C#.
+        string ArgumentoDe(ExpressionSyntax e, IParameterSymbol p)
+        {
+            var te = m.GetTypeInfo(e).Type;
+            if (te != null && !SymbolEqualityComparer.Default.Equals(te, p.Type) && EsNumerico(te) && EsNumerico(p.Type))
+                return "(" + Tipo(p.Type, e) + ") " + Atomo(e);
+            return Expr(e);
         }
 
         /// ¿Una expresión que no calcula nada, y que por eso puede ir antes o después? Un literal, una constante, una

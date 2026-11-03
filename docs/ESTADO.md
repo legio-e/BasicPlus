@@ -98,6 +98,8 @@
 >   específica; la VM no cambia. `SobrecargaEspecifica` en el corpus, `SobrecargaAmbigua` en `samples/errores`,
 >   `SobrecargaEspecificaTest`; los 721 fuentes y la stdlib, iguales; el manual, §8.4. En Mono, `test-163` funciona y
 >   `test-named-06` deja de compilar: el traductor escribe por posición una llamada con nombres (`#783`, abierta).
+> - **`#783`, cerrada** (Eduardo: *«783 OK»*): en una llamada con nombres, el traductor escribe cada argumento numérico
+>   con el tipo de su parámetro (`d.Foo((long) 2, 1)`), y JC elige la de C#. Mono, 443 (eran 442 el 2-nov).
 > - **`#778`**, Eduardo sobre el enum en una cadena: el nombre, con una función que el compilador genere (sabe los
 >   nombres, también los de otro módulo, por su interfaz). El análisis, por hacer.
 >
