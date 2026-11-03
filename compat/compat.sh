@@ -1051,7 +1051,11 @@ check_testc() {
       echo "  ok  $t: $(printf '%s' "$ok" | cut -c1-90)"
     else
       echo "  ✗ $t (salida $rc):"
-      printf '%s\n' "$sal" | grep -E "ROJO|FAIL|FALLOS|[Ee]rror|skip|✗|^  - |^  \| " | grep -v "warning" | head -8 | sed 's/^/       /'
+      # V8 #779 (3-nov): primero el veredicto de la prueba (las líneas que empiezan por «FAIL ») y después, hasta 8,
+      # lo demás. Los sabotajes que salen rojos, como deben, llevan «FAIL» en su línea: llenaban las 8 de antes y el
+      # veredicto, al final, quedaba cortado (test-cola, el 2-nov: rojo, sin decir qué sabotaje).
+      printf '%s\n' "$sal" | grep -E "^FAIL " | head -4 | sed 's/^/       /'
+      printf '%s\n' "$sal" | grep -vE "^FAIL " | grep -E "ROJO|FAIL|FALLOS|[Ee]rror|skip|✗|^  - |^  \| " | grep -v "warning" | head -8 | sed 's/^/       /'
       fails=$((fails+1))
     fi
   done
