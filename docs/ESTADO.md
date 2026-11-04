@@ -46,7 +46,9 @@
 > - **`#696`, cerrada** (*«#696 cierralo»*): el ZIP publicado está bien, un solo `Core` en todo.
 > - **`#738`, medido en la Metro** (*«#738 OK al plan de pruebas»*): atravesando memoria fría, poner a cero por el alias sin
 >   caché, de 111 a 37 ns por byte, y copiar, de 231 a 121, sin errores de coherencia; el DMA no da más. Con el bloque ya
->   en la caché, el alias pierde. El tope, por medir con programas de verdad: propuesto, para el OK.
+>   en la caché, el alias pierde. Con programas de verdad (*«OK a la prueba en la Metro»*, una imagen de prueba con el
+>   alias en la VM): `substring`, `trim` y `toBytes` con 2 KB, ×0,42–0,48; la concatenación, ×1,12–1,19. Propuestas dos
+>   reglas, para el OK, en la ficha. La Metro, devuelta a su imagen y sin la clave `t738`.
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 >

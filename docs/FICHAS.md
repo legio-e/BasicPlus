@@ -8907,6 +8907,32 @@ bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la 
   - **Qué régimen tiene un programa:** el `reservar` de 2 KB de `StrFases` son 150 ns por byte, el de la memoria fría
     con líneas sucias; el bump avanza cientos de KB entre colectas. Pero un objeto pequeño se usa en seguida, y ahí
     conviene que esté en la caché. El tope, por medir con programas de verdad.
+- **4-nov, con programas de verdad** (Eduardo: *«OK a la prueba en la Metro»*): una imagen de prueba con el alias dentro
+  de la VM, para poner a cero al reservar y para todo `memcpy` a la PSRAM, de un tope para arriba (una clave del ENV), y
+  dos vueltas por tope. Es una medida, no un diseño: no se pasó ninguna prueba de corrección con el alias puesto. Frente
+  a apagado, y `fib` y `AllocBench`, iguales:
+
+  | | 2 KB, apagado | con el alias |
+  |---|---|---|
+  | reservar | 314 µs | 122 µs |
+  | `substring` | 205 µs | ×0,48 |
+  | `trim` | 316 µs | ×0,42 |
+  | `toBytes` | 330 µs | ×0,44 |
+  | `fromBytes` | 533 µs | ×0,81 |
+  | `a + b` | 588 µs | **×1,16** |
+  | `a + b + c + d` | 360 µs | **×1,19** |
+  | construir con `s := s + x` | 432 ms | **×1,12–1,16** |
+
+  - **Por qué pierde la concatenación:** el `__strconcat` del compilador reserva con ceros, copia con `__strCopy` y mira
+    el bit de ASCII leyendo lo copiado. Por la caché, poner a cero deja las líneas dentro y lo demás las encuentra; por el
+    alias, copiar y leer van a memoria que no está. Lo que gana es lo que reserva sin ceros y no relee en seguida.
+  - **Poner a cero y escribir** (`PsramFases`, «crear»): con 2 KB pierde (345 a 408 µs); con 16 KB, −10 %; con 64 KB, −26 %.
+    Reservar solo, siempre ×0,33–0,39. Por debajo de lo que cabe en la caché, dejar las líneas dentro compensa.
+  - **Con el tope de 256 B**, `gc()` de `StrFases` va un 18 % peor (las dos vueltas): algún `memcpy` de la VM que no es de
+    cadenas. Un gancho para todo `memcpy` no vale: hay que elegir los sitios. Con 4 KB, nada cambia hasta ese tamaño.
+  - **Propuesto, por decidir (Eduardo):** dos reglas, sólo en la RP2350 y con la VM en la PSRAM. Copiar por el alias en
+    los bloques que se reservan sin ceros (`bpvm_heap_nuevo_para_llenar`), de 256 B para arriba; y poner a cero por el
+    alias de 16 KB para arriba. La concatenación se queda como está.
 
 #### ✅ `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y las de la S3 (abierta el 27-oct, al cerrar el H5; **CERRADA el 3-nov**: la P4, con la L2 de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la S3, con las dos al máximo —instrucciones 32 KB, datos 64 KB con líneas de 64 B—, medida y en la placa el 3-nov)
 
