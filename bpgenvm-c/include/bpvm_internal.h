@@ -1403,6 +1403,7 @@ void     bpvm_heap_gc(bpvm_t* vm);
 void     bpvm_destruir_al_nacer(bpvm_t* vm, bpref_t h, uint32_t class_ptr);    /* NEW_OBJECT: con destructor, al registro */
 void     bpvm_destruir_en_el_gc(bpvm_t* vm, void (*marca)(bpvm_t*, uint32_t)); /* el marcado: pendientes y resucitados */
 void     bpvm_destruir_inyecta(bpvm_t* vm, bpvm_thread_t* tc);                 /* entre cuantos, tras los eventos */
+int      bpvm_destruir_abierta_por_kill(const bpvm_t* vm);                      /* V8 #695: el KILL pegajoso no la corta */
 int      bpvm_destruir_en_fase_final(const bpvm_t* vm);                         /* la fase del final: sin eventos */
 void     bpvm_destruir_vigila(bpvm_t* vm);                                      /* el tope de la fase del final */
 int      bpvm_destruir_fase_final(bpvm_t* vm);   /* antes de acabar (cerrojo cogido): 1 = hay una ronda montada */

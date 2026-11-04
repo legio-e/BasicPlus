@@ -1770,6 +1770,10 @@ void bpvm_set_poll(bpvm_t* vm, bpvm_poll_cb_t cb, void* user) {
 
 void bpvm_request_kill(bpvm_t* vm) {
     if (!vm) return;
+    /* V8 #695 — el poll «pegajoso» pide el KILL en cada vuelta (con `io`, cada 5 ms). La fase del final lo limpia para que
+     * corran los destructores: repetido aquí, los cortaba a los pocos milisegundos. El que la abrió ya está apuntado
+     * (d->matado manda en el resultado), y a la fase la vigila su tope. */
+    if (bpvm_destruir_abierta_por_kill(vm)) return;
     int antes = bpvm_kill_pedido(vm);
     bpvm_kill_marcar(vm, 1);
     /* V7/H12, etapa 2a.2 — EL KILL DESPIERTA: un run que duerme en la cola (todos los hilos durmiendo, o esperando un

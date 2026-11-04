@@ -299,7 +299,8 @@ static void correr_programa(bpvm_cola_t* q, bpvm_t* vm, int id, int varios) {
         /* P-run-stop (#257) — SIN `io`, el cable lo mira el planificador entre cuantos. Con `io` es suyo y un KILL llega
          * como kill_requested (A3: dos hilos no atienden el mismo transporte; `test-kill`, fases 4-6). */
         /* V7 #668 — en la fase del final, no: ese KILL es «pegajoso» (lo pide en cada vuelta) y cortaría la
-         * destrucción nada más empezar. La corta su tope (destruir.c); un KILL por `io`, sí. */
+         * destrucción nada más empezar. La corta su tope (destruir.c); un KILL por `io`, sí, si no es el que la abrió
+         * (bpvm_request_kill, #695). */
         if (vm->io == NULL && vm->poll_cb != NULL && !bpvm_destruir_en_fase_final(vm)
                 && vm->poll_cb(vm, vm->poll_user) != 0)
             bpvm_request_kill(vm);

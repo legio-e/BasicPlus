@@ -473,14 +473,14 @@ test-net: $(LIBOBJ)
 KILL_BIN = build/test_kill.exe
 test-kill: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,KillLoop KillSleep KillDestruye)
+	$(call fixture,KillLoop KillSleep KillDestruye KillDestruyeLento)
 	@if [ ! -f samples/KillLoop.mod ] || [ ! -f samples/KillSleep.mod ]; then \
 	  echo "(skip test-kill: no hay samples/KillLoop.mod / KillSleep.mod y no se han"; \
 	  echo " podido generar — ¿está construido ../lexer-java/target/basicplus-frontend.jar?)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_kill.c \
 	    $(LIBOBJ) -o $(KILL_BIN) $(LDFLAGS); \
-	  echo "--- KILL cooperativo (esperado: 10x PASS —la 9 y la 10, el programa matado que se destruye: #668— y la linea OK) ---"; \
+	  echo "--- KILL cooperativo (esperado: 12x PASS —de la 9 a la 12, el programa matado que se destruye: #668, #695— y la linea OK) ---"; \
 	  (cd samples && ../$(KILL_BIN) KillLoop.mod KillSleep.mod KillDestruye.mod) || exit 1; \
 	  echo "--- y el sabotaje del KILL que despierta (V7/H12 2a.2: sin el aviso a la cola, el programa dormido no se para; esperado: ROJO) ---"; \
 	  if (cd samples && timeout 15 ../$(KILL_BIN) KillLoop.mod KillSleep.mod --sabotaje-despertar); then \

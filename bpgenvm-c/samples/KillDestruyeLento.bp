@@ -1,0 +1,30 @@
+// KillDestruyeLento.bp — V8 #695 (4-nov): un programa MATADO se destruye entero aunque los destructores tarden. Diez
+// objetos, y cada destructor duerme 20 ms. En una placa el KILL se repite cada 5 ms (el poll del cable es «pegajoso»), y
+// la fase del final no se corta por eso: antes salían los primeros y poco más. Lo corre test-kill (fases 11 y 12).
+module KillDestruyeLento
+  public class Recurso
+    public property nombre: string
+    public function Recurso(n: string)
+      this.nombre := n
+    end Recurso
+    public function ~Recurso()
+      sleep(20)
+      print "~" + this.nombre
+    end ~Recurso
+  end Recurso
+
+  var recursos: Object[] := null
+
+  function main()
+    recursos := newObjArray(10)
+    var i: integer := 0
+    while i < 10 do
+      recursos[i] := Recurso("r" + intToString(i))
+      i := i + 1
+    endwh
+    print "arrancado"
+    while true do
+      sleep(10)
+    endwh
+  end main
+end KillDestruyeLento

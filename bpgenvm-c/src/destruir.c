@@ -532,6 +532,11 @@ int bpvm_destruir_en_fase_final(const bpvm_t* vm) {
     return vm->destruir != NULL && vm->destruir->fase == 1;
 }
 
+/* V8 #695 — ¿La fase del final la abrió un KILL? Entonces el que se pida ahora es ese mismo, repetido. */
+int bpvm_destruir_abierta_por_kill(const bpvm_t* vm) {
+    return bpvm_destruir_en_fase_final(vm) && vm->destruir->matado;
+}
+
 static uint32_t cuenta_vivos(const bpvm_t* vm, const struct bpvm_destruir* d, uint64_t* uno) {
     uint32_t n = 0;
     *uno = 0u;
