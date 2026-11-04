@@ -1,0 +1,143 @@
+// BucleConNombre.bp — V8/H8 (4-nov; Eduardo: «si tenemos varios loops anidados poder hacer un break a un loop concreto. No se
+// poder poner 'do' 'miLoop' ... break miLoop ... Loop»): un `do` lleva un nombre, y `break` y `continue` pueden nombrar a uno de los
+// abiertos. Sin etiquetas ni `goto`: el nombre sólo se ve dentro de su bucle. Cierra los `try` de por medio y corre sus `finally`, y
+// `continue` va a la condición, como el de siempre. Tiene que salir:
+//   5
+//   3 30
+//   ace
+//   xyxyxz
+//   3
+//   1
+//   2
+//   7
+//   fin
+module BucleConNombre
+
+  import Core   // V6: los tipos de Core se importan
+
+  function primero(v: integer[]): integer
+    var r: integer := -1
+    do busca
+      for i := 0 to 2 do
+        if v[i] > 0 then
+          r := v[i]
+          break busca
+        endif
+      next i
+    loop false
+    return r
+  end primero
+
+  function Main()
+    // salir de dos bucles de golpe
+    var n: integer := 0
+    do fuera
+      for i := 1 to 3 do
+        for j := 1 to 3 do
+          n += 1
+          if i == 2 and j == 2 then
+            break fuera
+          endif
+        next j
+      next i
+      print "no llega"
+    loop false
+    print n
+
+    // volver a la condición del bucle de fuera
+    var vueltas: integer := 0
+    var total: integer := 0
+    do otra
+      vueltas += 1
+      var k: integer := 0
+      while k < 5 do
+        k += 1
+        if k == 2 then
+          continue otra
+        endif
+        total += 10
+      endwh
+      total += 1000
+    loop vueltas < 3
+    print vueltas, total
+
+    // salir de un switch y de dos try: sus finally corren, del de dentro al de fuera
+    var orden: string := ""
+    var uno: integer := 1
+    do sale
+      try
+        do
+          try
+            switch uno
+              case 1
+                orden := orden + "a"
+                break sale
+            endsw
+            orden := orden + "b"
+          finally
+            orden := orden + "c"
+          endtry
+        loop false
+        orden := orden + "d"
+      finally
+        orden := orden + "e"
+      endtry
+      orden := orden + "f"
+    loop false
+    print orden
+
+    // continue desde un try, y un catch que sigue en pie después
+    var traza: string := ""
+    var v: integer := 0
+    do repite
+      v += 1
+      try
+        traza := traza + "x"
+        if v < 3 then
+          try
+            traza := traza + "y"
+            continue repite
+          catch e: Exception
+            traza := traza + "!"
+          endtry
+        endif
+        traza := traza + "z"
+      catch e: Exception
+        traza := traza + "?"
+      endtry
+    loop v < 3
+    print traza
+
+    // sin condición de verdad: sólo sale por su break
+    var c: integer := 0
+    do siempre
+      c += 1
+      if c == 3 then
+        break siempre
+      endif
+    loop true
+    print c
+
+    // una variable y un bucle se pueden llamar igual: el nombre del bucle sólo vale tras do, break y continue
+    var fuera: integer := 1
+    do fuera
+      break fuera
+    loop false
+    print fuera
+
+    print primero([0, 2, 3])
+
+    // la asignación definida ve el salto: `d` tiene valor por los dos caminos
+    var d: integer
+    do asigna
+      for i := 1 to 2 do
+        d := 7
+        break asigna
+      next i
+      d := 9
+    loop false
+    print d
+    print "fin"
+  end Main
+
+end BucleConNombre

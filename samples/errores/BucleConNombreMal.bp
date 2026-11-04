@@ -1,0 +1,38 @@
+// BucleConNombreMal.bp — `break` y `continue` a un bucle con nombre (V8/H8): tiene que ser un `do` con ese nombre, abierto; dos
+// abiertos no se pueden llamar igual; y como sin nombre, no se sale de un `finally`.
+module BucleConNombreMal
+
+  import Core
+
+  function Main()
+    do a
+      break b                 // no hay ningún `do b`
+      do a                    // ya hay uno abierto
+        continue c            // tampoco
+      loop false
+    loop false
+
+    for i := 1 to 2 do
+      break a                 // el `do a` ya se cerró
+    next i
+
+    do d
+      try
+        print 1
+      finally
+        break d               // saldría del finally
+      endtry
+    loop false
+
+    do e
+      try
+        print 2
+      finally
+        do f
+          break f             // éste vale: se queda dentro del finally
+        loop false
+      endtry
+    loop false
+  end Main
+
+end BucleConNombreMal

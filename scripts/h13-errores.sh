@@ -134,6 +134,11 @@ AnnMal|'@BD' sobre 'id' no tiene sentido: su clase 'Cuatro'
 AnnMal|'@BD' sobre una property no conoce la clave 'clave'; hoy admite: columna, pk
 AnnMal|'columna' no puede estar
 AnnMal|(la entidad) o sobre una
+BucleConNombreMal|'break b': no hay ning
+BucleConNombreMal|ya hay un bucle 'a' abierto
+BucleConNombreMal|'continue c': no hay ning
+BucleConNombreMal|'break a': no hay ning
+BucleConNombreMal|un 'finally' no puede salir con 'break'
 ConstCalculada|una const requiere un valor literal
 BoolBitsMal|'&' requiere integer/long, o dos boolean
 BoolBitsMal|'|' requiere integer/long, o dos boolean

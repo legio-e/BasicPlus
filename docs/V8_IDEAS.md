@@ -5417,7 +5417,7 @@ escribe con el valor que calcula Roslyn; la que no tiene literal (`NaN`, `int.Mi
 Caso `Constantes`. Lo segundo, en el compilador, `#789`: una const de clase sin literal dice lo que dice la de módulo. **Mono:
 495** (+6, con `test-144`), sin perder ninguna; fallan las mismas 6. **El tema 2: 82.**
 
-### `break` a un bucle con nombre, para el `goto` (4-nov; analizado, por decidir)
+### `break` a un bucle con nombre, para el `goto` (4-nov; decidido y hecho en el compilador)
 
 Eduardo: *«No vamos a ñadir labels ni goto. Pero se puede reemplazar por do ... loop y break. Lo que igual necesitamos es si
 tenemos varios loops anidados poder hacer un break a un loop concreto. No se poder poner 'do' 'miLoop' ... break miLoop ...
@@ -5429,7 +5429,7 @@ abiertos. Sin palabras nuevas, sin etiquetas y sin `goto`: el nombre sólo se ve
 ```
 do miLoop                          // BP
   for i := 1 to 3 do
-    if i = 2 then
+    if i == 2 then
       break miLoop                 // sale de los dos
     endif
   next i
@@ -5484,8 +5484,20 @@ salir de dos bucles pide una variable bandera.
 dentro de un `case` (`test-193`, `test-854`, `test-873`) y `goto case` (`test-872`, `test-876`): el `switch` entero es el bloque, y
 elegir el `case` es dar valor a `pc`.
 
-**Por decidir (Eduardo):** `continue` con nombre (hace falta para ir hacia atrás); sólo `do`, o también `while` y `for` con la
-misma regla (el traductor se apaña con `do`; quien programa querrá los tres); y la forma en JC.
+**Una regla o dos** (hablado con Eduardo: *«tendría que ser un loop false y para ir hacia atrás necesitamos algo mas complicado. Y si
+tenemos los dos gotos necesitamos 2 bucles»*). Para lo sencillo, su forma es la clara: hacia delante, `do fin … break fin … loop false`;
+hacia atrás, `do ini … continue ini … break ini … loop`. Pero cuando se cruzan (`test-515`: el bloque de `goto a` va del principio a
+`a`, el bucle de `goto b` de `b` al final, y ninguno contiene al otro) `goto a` tendría que entrar por la mitad de un bucle, y `break`
+sólo sale. De las 19: 7 sólo hacia delante, 1 sólo hacia atrás, 5 se cruzan y 6 dentro de un `switch`. La variable sirve para las 19,
+así que el traductor usa ésa, una sola regla (*«OK»*); y `do … loop false` con `break` queda para quien escribe BP a mano.
+
+**Hecho en el compilador** (4-nov): `do miLoop`, `break miLoop` y `continue miLoop`, en BP y en JC (`do miLoop { … } while (c);`), sólo en
+`do`, lo que recomendé y no se corrigió: `while` y `for`, si hacen falta, con la misma regla. Sin palabras nuevas. El nombre tiene que ser de
+un `do` abierto, dos abiertos no se llaman igual, y una rama de `parallel` no ve los de fuera. No se sale de un `finally` (`#674`), y
+un `continue` va a la condición, como el de siempre. En el emisor, `loopStack` busca por el nombre; en el AOT, dos etiquetas de C y un
+`goto`, tras cerrar los `try` de encima; la asignación definida sigue el salto al bucle que toca. La VM y el `.mod` no cambian. Sample
+`BucleConNombre`, `BucleConNombreMal`, `BucleConNombreTest`, y en `NatSwitch`, ejecutado en una `native` (`make test-aotswitch`, 16/16,
+también `&` entre `boolean`). El manual, §7.5, y la gramática.
 
 ### El tipo de un objeto (ajuste 8; hecho el 4-nov, `compat/csharp/cs2jc/Tipos.cs`)
 

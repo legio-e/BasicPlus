@@ -804,10 +804,12 @@ public final class JvmEmitter implements Opcodes {
         else if (s instanceof ReturnStmt)   emitReturn(mv, (ReturnStmt) s, ctx);
         else if (s instanceof PrintStmt)    emitPrint(mv, (PrintStmt) s, ctx);
         else if (s instanceof BreakStmt) {
+            if (((BreakStmt) s).nombre != null) { errors.add("break con nombre: no en el backend jvm"); return; }
             if (ctx.loopStack.isEmpty()) { errors.add("break fuera de bucle"); return; }
             mv.visitJumpInsn(GOTO, ctx.loopStack.peek().breakTarget);
         }
         else if (s instanceof ContinueStmt) {
+            if (((ContinueStmt) s).nombre != null) { errors.add("continue con nombre: no en el backend jvm"); return; }
             if (ctx.loopStack.isEmpty()) { errors.add("continue fuera de bucle"); return; }
             mv.visitJumpInsn(GOTO, ctx.loopStack.peek().continueTarget);
         }

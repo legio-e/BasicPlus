@@ -707,10 +707,12 @@ public final class Ast {
     public static final class DoLoopStmt extends Node implements IStmt {
         public final List<IStmt> body;
         public final IExpr condition;       // null => bucle infinito
-        public DoLoopStmt(List<IStmt> body, IExpr condition, int line, int column) {
+        public final String nombre;         // V8/H8: `do miLoop`, al que van `break miLoop` y `continue miLoop`; null si no lleva
+        public DoLoopStmt(List<IStmt> body, IExpr condition, String nombre, int line, int column) {
             super(line, column);
             this.body = body;
             this.condition = condition;
+            this.nombre = nombre;
         }
     }
 
@@ -823,11 +825,13 @@ public final class Ast {
     }
 
     public static final class BreakStmt extends Node implements IStmt {
-        public BreakStmt(int line, int column) { super(line, column); }
+        public final String nombre;         // V8/H8: `break miLoop`; null, el bucle o el switch más cercano
+        public BreakStmt(String nombre, int line, int column) { super(line, column); this.nombre = nombre; }
     }
 
     public static final class ContinueStmt extends Node implements IStmt {
-        public ContinueStmt(int line, int column) { super(line, column); }
+        public final String nombre;         // V8/H8: `continue miLoop`; null, el bucle más cercano
+        public ContinueStmt(String nombre, int line, int column) { super(line, column); this.nombre = nombre; }
     }
 
     /** H1 (20-sep) — `inline <MNEMÓNICO> [operandos]`: una línea de bytecode escrita en el

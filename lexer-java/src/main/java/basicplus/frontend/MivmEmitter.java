@@ -519,6 +519,8 @@ public final class MivmEmitter {
          *  `continue` es del bucle de fuera: su profundidad, la de aquél. */
         final int trysBreak;
         final int trysContinue;
+        /** V8/H8 — el nombre de un `do miLoop`, al que va `break miLoop`; null en los demás. */
+        String nombre;
         LoopLabels(int cont, int brk) { this(cont, brk, ocultasDeSentencia.size(), tryStack.size()); }
         LoopLabels(int cont, int brk, int profContinue, int trysContinue) {
             this.continueLabel = cont; this.breakLabel = brk;
@@ -2855,8 +2857,8 @@ public final class MivmEmitter {
         else if (s instanceof ExprStmt)     emitExprStmt((ExprStmt) s);
         else if (s instanceof VarDecl)      emitLocalVarDecl((VarDecl) s);
         else if (s instanceof ConstDecl)    emitLocalConstDecl((ConstDecl) s);
-        else if (s instanceof BreakStmt)    emitBreak();
-        else if (s instanceof ContinueStmt) emitContinue();
+        else if (s instanceof BreakStmt)    emitBreak(((BreakStmt) s).nombre);
+        else if (s instanceof ContinueStmt) emitContinue(((ContinueStmt) s).nombre);
         else if (s instanceof ThrowStmt)    emitThrowStmt((ThrowStmt) s);
         else if (s instanceof TryStmt)      { if (((TryStmt) s).recurso != null) emitLocalVarDecl(((TryStmt) s).recurso); emitTryStmt((TryStmt) s); }
         else if (s instanceof Ast.ReleaseOwnerStmt) emitReleaseOwner(((Ast.ReleaseOwnerStmt) s).name);
@@ -3823,7 +3825,9 @@ public final class MivmEmitter {
         // no hay nada que mirar: arriba, como siempre.
         int sigue = (s.condition != null) ? w.newLabel() : top;
         w.declareLabel(top);
-        loopStack.push(new LoopLabels(sigue, end));
+        LoopLabels bucle = new LoopLabels(sigue, end);
+        bucle.nombre = s.nombre;
+        loopStack.push(bucle);
         try {
             for (IStmt st : s.body) emitStmt(st);
         } finally { loopStack.pop(); }
@@ -5207,18 +5211,28 @@ public final class MivmEmitter {
         w.emitThrow();
     }
 
-    private void emitBreak() throws IOException {
-        if (loopStack.isEmpty()) { errors.add("break fuera de bucle"); return; }
-        cierraTrysHasta(loopStack.peek().trysBreak);   // V7 #673
-        limpiaHasta(loopStack.peek().profBreak);   // V7/H9 #621
-        w.emitJump(loopStack.peek().breakLabel);
+    private void emitBreak(String nombre) throws IOException {
+        LoopLabels b = bucleDe(nombre);
+        if (b == null) { errors.add("break fuera de bucle"); return; }
+        cierraTrysHasta(b.trysBreak);   // V7 #673
+        limpiaHasta(b.profBreak);   // V7/H9 #621
+        w.emitJump(b.breakLabel);
     }
 
-    private void emitContinue() throws IOException {
-        if (loopStack.isEmpty()) { errors.add("continue fuera de bucle"); return; }
-        cierraTrysHasta(loopStack.peek().trysContinue);   // V7 #673
-        limpiaHasta(loopStack.peek().profContinue);   // V7/H9 #621
-        w.emitJump(loopStack.peek().continueLabel);
+    private void emitContinue(String nombre) throws IOException {
+        LoopLabels b = bucleDe(nombre);
+        if (b == null) { errors.add("continue fuera de bucle"); return; }
+        cierraTrysHasta(b.trysContinue);   // V7 #673
+        limpiaHasta(b.profContinue);   // V7/H9 #621
+        w.emitJump(b.continueLabel);
+    }
+
+    /** El bucle al que va un salto: el de arriba, o V8/H8, el de ese nombre (cada uno guarda cuántos `try` y cuántas
+     *  sentencias había abiertas al entrar: el salto cierra las de encima, sea el que sea). */
+    private LoopLabels bucleDe(String nombre) {
+        if (nombre == null) return loopStack.peek();
+        for (LoopLabels b : loopStack) if (nombre.equals(b.nombre)) return b;
+        return null;
     }
 
     /** V7 #673 (9-oct) — un salto que sale de los `try` abiertos por encima de {@code prof} (`break`, `continue`)

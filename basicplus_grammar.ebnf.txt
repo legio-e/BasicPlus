@@ -404,8 +404,8 @@ stmt ::= var_decl
        | return_stmt
        | throw_stmt
        | print_stmt
-       | 'break'    NEWLINE
-       | 'continue' NEWLINE
+       | 'break'    [ name ] NEWLINE     (* V8: con nombre, a un 'do' con nombre abierto *)
+       | 'continue' [ name ] NEWLINE
        | call_expr  NEWLINE
        | NEWLINE ;
 
@@ -492,7 +492,7 @@ while_stmt ::= 'while' expr 'do'
            ...
          loop x > 0                                                    *)
 
-do_loop_stmt ::= 'do' NEWLINE
+do_loop_stmt ::= 'do' [ name ] NEWLINE      (* V8: el nombre del bucle, para 'break' y 'continue' *)
                  body
                  'loop' [ expr ] NEWLINE ;
 

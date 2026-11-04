@@ -71,6 +71,7 @@ final class AsignacionDefinida {
 
     private static final class Salida {
         final boolean esBucle;
+        String nombre;      // V8/H8: el de un `do miLoop`
         Estado alSalir;     // cruce de los break
         Estado alSeguir;    // cruce de los continue (sólo bucles)
         Salida(boolean esBucle) { this.esBucle = esBucle; }
@@ -152,6 +153,7 @@ final class AsignacionDefinida {
         } else if (s instanceof DoLoopStmt) {
             DoLoopStmt d = (DoLoopStmt) s;
             Salida sal = new Salida(true);
+            sal.nombre = d.nombre;
             salidas.push(sal);
             Estado fin;
             try { fin = desde(d.body, e); } finally { salidas.pop(); }
@@ -201,12 +203,14 @@ final class AsignacionDefinida {
             lee(((ThrowStmt) s).value, e);
             e.vivo = false;
         } else if (s instanceof BreakStmt) {
-            Salida sal = salidas.peek();
+            String n = ((BreakStmt) s).nombre;
+            Salida sal = n == null ? salidas.peek() : salidaDe(n);
             if (sal != null) sal.alSalir = Estado.cruce(sal.alSalir, e.copia());
             e.vivo = false;
         } else if (s instanceof ContinueStmt) {
-            for (Salida sal : salidas) {               // el bucle más interior (un switch no es destino)
-                if (sal.esBucle) { sal.alSeguir = Estado.cruce(sal.alSeguir, e.copia()); break; }
+            String n = ((ContinueStmt) s).nombre;
+            for (Salida sal : salidas) {               // el bucle más interior (un switch no es destino), o el de ese nombre
+                if (n == null ? sal.esBucle : n.equals(sal.nombre)) { sal.alSeguir = Estado.cruce(sal.alSeguir, e.copia()); break; }
             }
             e.vivo = false;
         } else if (s instanceof PrintStmt) {
@@ -225,6 +229,11 @@ final class AsignacionDefinida {
         salidas.push(sal);
         try { desde(cuerpo, base); } finally { salidas.pop(); }
         return sal;
+    }
+
+    private Salida salidaDe(String nombre) {
+        for (Salida s : salidas) if (nombre.equals(s.nombre)) return s;
+        return null;
     }
 
     private static Estado noAlcanzado() { Estado e = new Estado(); e.vivo = false; return e; }

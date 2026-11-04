@@ -1122,13 +1122,15 @@ public final class Parser {
             case PARALLEL: return parseParallelStmt();
             case BREAK: {
                 Token tok = current(); advance();
+                String nombre = nombreDeBucle();
                 consumeStmtTerminator("se esperaba salto de línea tras 'break'");
-                return new BreakStmt(tok.line, tok.column);
+                return new BreakStmt(nombre, tok.line, tok.column);
             }
             case CONTINUE: {
                 Token tok = current(); advance();
+                String nombre = nombreDeBucle();
                 consumeStmtTerminator("se esperaba salto de línea tras 'continue'");
-                return new ContinueStmt(tok.line, tok.column);
+                return new ContinueStmt(nombre, tok.line, tok.column);
             }
             default:
                 return parseAssignOrCallStmt();
@@ -1373,6 +1375,7 @@ public final class Parser {
     private DoLoopStmt parseDoLoopStmt() {
         Token tok = current();
         match(TokenType.DO);
+        String nombre = nombreDeBucle();
         consumeStmtTerminator("se esperaba salto de línea tras 'do'");
         List<IStmt> body = parseBody(TokenType.LOOP);
         consume(TokenType.LOOP, "se esperaba 'loop'");
@@ -1380,7 +1383,15 @@ public final class Parser {
         if (!check(TokenType.NEWLINE) && !check(TokenType.SEMICOLON) && !isAtEnd())
             cond = parseExpr();
         consumeStmtTerminator("se esperaba salto de línea tras 'loop'");
-        return new DoLoopStmt(body, cond, tok.line, tok.column);
+        return new DoLoopStmt(body, cond, nombre, tok.line, tok.column);
+    }
+
+    /** V8/H8 — el nombre de un bucle, tras `do`, `break` o `continue`, si lo lleva; si no, null. */
+    private String nombreDeBucle() {
+        if (!check(TokenType.IDENTIFIER)) return null;
+        String n = current().lexeme;
+        advance();
+        return n;
     }
 
     // ---------- FOR ----------

@@ -809,8 +809,12 @@ final class JcParser {
             out.add(new ThrowStmt(v, t.linea, t.columna));
             return;
         }
-        if (acepta("break"))    { espera(";"); out.add(new BreakStmt(t.linea, t.columna)); return; }
-        if (acepta("continue")) { espera(";"); out.add(new ContinueStmt(t.linea, t.columna)); return; }
+        if (acepta("break") || acepta("continue")) {
+            String n = esNombre() ? nombre("el nombre del bucle") : null;   // V8/H8: `break miLoop;`
+            espera(";");
+            out.add(t.texto.equals("break") ? new BreakStmt(n, t.linea, t.columna) : new ContinueStmt(n, t.linea, t.columna));
+            return;
+        }
         if (es("inline"))
             throw error("en JC, inline es el cuerpo entero de una función: function T f(…) inline …; (punto 26)");
         if (es("owner") || esDeclaracion()) {
@@ -888,13 +892,14 @@ final class JcParser {
     /** `do { … } while (c);` es el `do … loop c` de BP (punto 9). */
     private DoLoopStmt hacer() {
         Tok t = espera("do");
+        String n = esNombre() ? nombre("el nombre del bucle") : null;   // V8/H8: `do miLoop { … } while (c);`
         List<IStmt> body = cuerpo();
         espera("while", "'while' tras el cuerpo del do");
         espera("(");
         IExpr c = expresion();
         espera(")");
         espera(";");
-        return new DoLoopStmt(body, c, t.linea, t.columna);
+        return new DoLoopStmt(body, c, n, t.linea, t.columna);
     }
 
     /** El `for` de BP con la ropa de C (punto 11): `int i = a; i <= b; i++` si sube, `i >= b` y `i--` si baja; el

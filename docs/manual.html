@@ -987,6 +987,20 @@ l.add(<span class="num">2</span>)
 
 <h3 id="breakcont">7.5 <code>break</code> / <code>continue</code></h3>
 <p>
+  Un <code>do</code> puede llevar un nombre, y <code>break</code> y <code>continue</code> pueden nombrar a uno de los que están
+  abiertos, para salir de varios bucles de golpe o seguir por el de fuera. No son etiquetas ni hay <code>goto</code>: el nombre sólo
+  se ve dentro de su bucle, y dos abiertos no se pueden llamar igual. Cierra los <code>try</code> de por medio y corre sus
+  <code>finally</code>; de un <code>finally</code> no se sale. En JC, <code>do fuera { … } while (c);</code> y <code>break fuera;</code>.
+  Con <code>do … loop false</code>, el bucle es un bloque del que se sale con <code>break</code>: da una sola vuelta.
+</p>
+<pre><code><span class="kw">do</span> fuera
+  <span class="kw">for</span> i := <span class="num">1</span> <span class="kw">to</span> <span class="num">3</span> <span class="kw">do</span>
+    <span class="kw">if</span> tabla[i] == buscado <span class="kw">then</span>
+      <span class="kw">break</span> fuera              <span class="comment">// sale del for y del do</span>
+    <span class="kw">endif</span>
+  <span class="kw">next</span> i
+<span class="kw">loop</span> <span class="kw">false</span></code></pre>
+<p>
   <code>break</code> sale del <code>while</code>, <code>do</code>, <code>for</code> o
   <code>switch</code> más cercano; <code>continue</code> salta a la próxima iteración del bucle más
   cercano (un <code>switch</code> no es un bucle: un <code>continue</code> dentro de un

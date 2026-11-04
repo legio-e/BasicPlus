@@ -237,7 +237,8 @@ public final class AstPrinter {
         }
         if (node instanceof DoLoopStmt) {
             DoLoopStmt dl = (DoLoopStmt) node;
-            sb.append(ind).append("DoLoopStmt").append(dl.condition == null ? " [infinite]" : "").append("\n");
+            sb.append(ind).append("DoLoopStmt").append(dl.condition == null ? " [infinite]" : "")
+              .append(dl.nombre != null ? " " + dl.nombre : "").append("\n");
             sb.append(ind).append("  body:\n");
             for (IStmt st : dl.body) write(st, sb, depth + 2);
             if (dl.condition != null) {

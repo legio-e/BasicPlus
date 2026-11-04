@@ -503,8 +503,8 @@ public final class EscritorJc {
         else if (s instanceof ReturnStmt)         linea(devolver((ReturnStmt) s) + ";");
         else if (s instanceof ThrowStmt)          linea("throw " + expr(((ThrowStmt) s).value) + ";");
         else if (s instanceof PrintStmt)          linea(imprime((PrintStmt) s) + ";");
-        else if (s instanceof BreakStmt)          linea("break;");
-        else if (s instanceof ContinueStmt)       linea("continue;");
+        else if (s instanceof BreakStmt)          linea(conNombre("break", ((BreakStmt) s).nombre) + ";");
+        else if (s instanceof ContinueStmt)       linea(conNombre("continue", ((ContinueStmt) s).nombre) + ";");
         else if (s instanceof SwitchStmt)         segun((SwitchStmt) s);
         else if (s instanceof ParallelStmt)       paralelo((ParallelStmt) s);
         else if (s instanceof RaiseStmt)          linea(dispara((RaiseStmt) s) + ";");
@@ -580,9 +580,11 @@ public final class EscritorJc {
     }
 
     /** `do { … } while (c);` es el `do … loop c` de BP. El de BP sin condición no tiene forma en JC (punto 9). */
+    private static String conNombre(String palabra, String nombre) { return nombre != null ? palabra + " " + nombre : palabra; }
+
     private void hacer(DoLoopStmt d) {
         if (d.condition == null) throw new NoSoportado("un do … loop sin condición (punto 9)", d);
-        linea("do");
+        linea(conNombre("do", d.nombre));
         linea("{");
         nivel++;
         for (IStmt s : d.body) sentencia(s);

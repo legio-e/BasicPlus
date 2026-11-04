@@ -321,8 +321,8 @@ public final class EscritorBp {
         else if (s instanceof RaiseStmt)       linea(dispara((RaiseStmt) s));
         else if (s instanceof PrintStmt)       linea(imprime((PrintStmt) s));
         else if (s instanceof InlineStmt)      linea("inline " + ((InlineStmt) s).texto());
-        else if (s instanceof BreakStmt)       linea("break");
-        else if (s instanceof ContinueStmt)    linea("continue");
+        else if (s instanceof BreakStmt)       linea(conNombre("break", ((BreakStmt) s).nombre));
+        else if (s instanceof ContinueStmt)    linea(conNombre("continue", ((ContinueStmt) s).nombre));
         else throw new NoSoportado(s);
     }
 
@@ -375,8 +375,10 @@ public final class EscritorBp {
         linea("endwh");
     }
 
+    private static String conNombre(String palabra, String nombre) { return nombre != null ? palabra + " " + nombre : palabra; }
+
     private void hacer(DoLoopStmt d) {
-        linea("do");
+        linea(conNombre("do", d.nombre));
         cuerpo(d.body);
         linea(d.condition != null ? "loop " + expr(d.condition) : "loop");
     }

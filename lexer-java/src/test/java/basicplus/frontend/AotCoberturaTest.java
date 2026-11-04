@@ -49,6 +49,8 @@ class AotCoberturaTest {
         CASOS.put("PrintStmt",     "print \"hola\"\n      return a");
         CASOS.put("SwitchStmt",    "switch a\n        case 1\n          return 10\n      endsw\n      return 0");
         CASOS.put("BreakStmt",     "while true do\n        break\n      endwh\n      return a");
+        // V8/H8 — `do miLoop`: en C, dos etiquetas y un `goto`, tras cerrar los `try` de encima
+        CASOS.put("DoConNombre",   "var t: integer := 0\n      do fuera\n        for i := 1 to 3 do\n          t += i\n          try\n            if t > 3 then\n              break fuera\n            endif\n            continue fuera\n          catch e: Exception\n            t := 0\n          endtry\n        next i\n      loop t < 9\n      return t");
         CASOS.put("ContinueStmt",  "var t: integer := 0\n      while t < 3 do\n        t += 1\n        continue\n      endwh\n      return t");
         CASOS.put("TryStmt",       "try\n        return 1\n      catch e: Exception\n        return 2\n      endtry");
         // `throw "vaya"` NO es BP: #248 solo deja lanzar instancias de Exception.
@@ -107,7 +109,7 @@ class AotCoberturaTest {
         "TryStmt",
         "TupleExpr",
         "ArrayLitExpr", "AssignStmt", "BinaryExpr", "BoolBits", "BoolLitExpr", "BreakStmt",
-        "CallExpr", "MemberAccessExpr", "NewObjectExpr", "ContinueStmt",
+        "CallExpr", "MemberAccessExpr", "NewObjectExpr", "ContinueStmt", "DoConNombre",
         "DoLoopStmt", "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr",
         "IfStmt", "IndexExpr", "IntLitExpr", "LongLitExpr", "NullLitExpr",
         "ParenExpr", "PrintStmt", "ReturnStmt", "StringLitExpr", "SwitchStmt",

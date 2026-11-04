@@ -127,6 +127,19 @@ public final class AotCEmitter {
     /** V7 #578/#673 — por bucle (y por switch), cuántos `try` había abiertos al entrar: {para `break`, para `continue`}
      *  (en un switch, `continue` es del bucle de fuera). */
     private final java.util.ArrayDeque<int[]> trysDeBucle = new java.util.ArrayDeque<>();
+    /** V8/H8 — los `do` con nombre abiertos, de dentro afuera: {nombre, su número, los `try` abiertos al entrar}. */
+    private final java.util.ArrayDeque<Object[]> doConNombre = new java.util.ArrayDeque<>();
+    private int doConNombreN;
+
+    private void saltoConNombre(String nombre, String etiqueta) {
+        for (Object[] d : doConNombre)
+            if (nombre.equals(d[0])) {
+                cierraTrys((Integer) d[2]);
+                indent(); w.println("goto " + etiqueta + d[1] + ";");
+                return;
+            }
+        throw new UnsupportedAotException("AOT: no hay un bucle '" + nombre + "' abierto");
+    }
     /** V7 #578 — para nombres únicos en una función (`__bpvm_tN`, `__bpvm_eN`, `__bpvm_retN`). */
     private int tryCounter = 0;
     /** V7 #578 — alguna native del módulo tiene un `try`: el C lleva el salto y las operaciones del límite. */
@@ -1124,7 +1137,7 @@ public final class AotCEmitter {
         String fname = "aot_" + moduleName + "_" + cId(f.name.name);
         String cRet  = cType(f.returnType);
         cRetActual = cRet;                                           /* V7 #578 */
-        trysAbiertos.clear(); trysDeBucle.clear(); tryCounter = 0;   /* V7 #578 */
+        trysAbiertos.clear(); trysDeBucle.clear(); doConNombre.clear(); tryCounter = 0;   /* V7 #578 */
         w.print("static " + cRet + " " + fname + "(struct bpvm* vm");
         for (Ast.Param p : f.params) {
             w.print(", " + cType(p.type) + " " + cVar(p.name));
@@ -1805,10 +1818,15 @@ public final class AotCEmitter {
          * se emite `while (1)`, que es lo que hace el interprete. */
         if (s instanceof Ast.DoLoopStmt) {
             Ast.DoLoopStmt dl = (Ast.DoLoopStmt) s;
+            /* V8/H8 — `do miLoop`: C no tiene `break` con nombre; dos etiquetas, y `break miLoop` y `continue miLoop` son un
+             * `goto`, tras cerrar los `try` de encima. `continue` va a la condición, como el de C. */
+            int n = dl.nombre != null ? ++doConNombreN : 0;
+            if (dl.nombre != null) doConNombre.push(new Object[] { dl.nombre, n, trysAbiertos.size() });
             indent();
             w.println("do {");
             indentLevel++;
             emitCuerpoDeBucle(dl.body);
+            if (dl.nombre != null) { indent(); w.println("bpvm_sigue_" + n + ": __attribute__((unused)) ;"); }
             indentLevel--;
             indent();
             if (dl.condition == null) {
@@ -1818,6 +1836,10 @@ public final class AotCEmitter {
                 emitExpr(dl.condition);
                 w.println(");");
             }
+            if (dl.nombre != null) {
+                doConNombre.pop();
+                indent(); w.println("bpvm_fin_" + n + ": __attribute__((unused)) ;");
+            }
             return;
         }
         if (s instanceof Ast.ForStmt) {
@@ -1825,11 +1847,13 @@ public final class AotCEmitter {
             return;
         }
         if (s instanceof Ast.BreakStmt) {
+            if (((Ast.BreakStmt) s).nombre != null) { saltoConNombre(((Ast.BreakStmt) s).nombre, "bpvm_fin_"); return; }
             if (!trysDeBucle.isEmpty()) cierraTrys(trysDeBucle.peek()[0]);   /* V7 #578/#673: los `try` de encima */
             indent(); w.println("break;");
             return;
         }
         if (s instanceof Ast.ContinueStmt) {
+            if (((Ast.ContinueStmt) s).nombre != null) { saltoConNombre(((Ast.ContinueStmt) s).nombre, "bpvm_sigue_"); return; }
             if (!trysDeBucle.isEmpty()) cierraTrys(trysDeBucle.peek()[1]);   /* V7 #578/#673 */
             indent(); w.println("continue;");
             return;

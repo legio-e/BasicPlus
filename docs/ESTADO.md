@@ -38,8 +38,10 @@
 > - **El 8, hablado, salió mejor que lo propuesto:** yo quería un `Type` con una tabla; Eduardo: *«El compilador ya conoce el tipo
 >   entonces»*, *«El 'instanceof' no puede sustituir la expresion?»*, y el caso de dos `Object`: *«tendría que ser la VM»*. No hay `Type` al
 >   ejecutar: lo que se sabe lo escribe el traductor (`is`, un `true`, el nombre), y lo demás, `__className`, de H9.
-> - **Sin decidir:** el `goto` (`V8_IDEAS`, «`break` a un bucle con nombre»: analizado; pide `continue` con nombre, y si `while` y `for`
->   también); y del 9 (tipos anónimos) y el 11 (`ulong`), Eduardo no ha dicho nada.
+> - **El `goto`, sin etiquetas** (Eduardo: *«No vamos a ñadir labels ni goto. Pero se puede reemplazar por do ... loop y break»*): en el
+>   lenguaje, `do miLoop`, `break miLoop` y `continue miLoop`, en BP y en JC, sólo el compilador. Sus dos formas, hacia delante y
+>   hacia atrás, no valen cuando se cruzan, y la variable sirve para todas: una sola regla en el traductor (*«OK»*).
+> - **Sin decidir:** del 9 (tipos anónimos) y el 11 (`ulong`), Eduardo no ha dicho nada; y si `while` y `for` llevan nombre.
 >
 > **4-nov** — **los pendientes** (Eduardo: *«Continuamos con las pendientes»*), con la Metro, la Nucleo, la S3 y la P4
 > conectadas.

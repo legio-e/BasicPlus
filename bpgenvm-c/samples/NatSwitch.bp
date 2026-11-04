@@ -6,7 +6,9 @@
 //   - `break` sale del switch y `continue` sigue siendo del bucle; un `var` nada más empezar un case
 //     (en C, cada case va entre llaves);
 //   - #548: `continue` en un `for` avanza (el AOT lo traducía a un `while` con el paso al final, y el
-//     `continue` de C saltaba a la condición sin avanzar: bucle infinito).
+//     `continue` de C saltaba a la condición sin avanzar: bucle infinito);
+//   - V8/H8: `break` y `continue` a un `do` con nombre, un goto en C, con los `try` de por medio; y `&`, `|` y
+//     `xor` entre dos boolean.
 // Las native llevan su bytecode: interpretado corre igual. `make test-aotswitch` lo corre de las dos
 // maneras (con el AOT, con GC en cada alocación) y exige la MISMA salida, sin ningún FALLO.
 module NatSwitch
@@ -104,6 +106,51 @@ module NatSwitch
     return total
   end sumaFor
 
+  native function aFuera(n: integer): integer
+    var t: integer := 0
+    do fuera
+      for i := 1 to 5 do
+        t += 1
+        if i == 2 then
+          continue fuera
+        endif
+        for j := 1 to 5 do
+          if t >= n then
+            break fuera
+          endif
+          t += 10
+        next j
+      next i
+    loop t < 100
+    return t
+  end aFuera
+
+  native function conTry(n: integer): integer
+    var t: integer := 0
+    do fuera
+      try
+        t += 1
+        if t < n then
+          continue fuera
+        endif
+        break fuera
+      finally
+        t += 100
+      endtry
+    loop t < 1000
+    return t
+  end conTry
+
+  native function bits(a: integer): integer
+    var b: boolean := (a > 0) & (a < 9)
+    b |= a == 20
+    b xor= a == 5
+    if b then
+      return 1
+    endif
+    return 0
+  end bits
+
   function mira(que: string, obtenido: integer, esperado: integer)
     if obtenido == esperado then
       print "ok    " + que + " = " + obtenido
@@ -124,5 +171,10 @@ module NatSwitch
     mira("vueltas(6)", vueltas(6), 422)
     mira("conString(5)", conString(5), 12)
     mira("sumaFor(9)", sumaFor(9), 25)
+    mira("aFuera(5)", aFuera(5), 11)
+    mira("aFuera(50)", aFuera(50), 53)
+    mira("conTry(3)", conTry(3), 202)
+    mira("bits(5)", bits(5), 0)
+    mira("bits(20)", bits(20), 1)
   end Main
 end NatSwitch
