@@ -49,6 +49,13 @@
 >   en la caché, el alias pierde. Con programas de verdad (*«OK a la prueba en la Metro»*, una imagen de prueba con el
 >   alias en la VM): `substring`, `trim` y `toBytes` con 2 KB, ×0,42–0,48; la concatenación, ×1,12–1,19. Propuestas dos
 >   reglas, para el OK, en la ficha. La Metro, devuelta a su imagen y sin la clave `t738`.
+> - **`#738`, congelada** (*«No corre prisa»*), y **los strings, terminados por ahora** (*«De momento los strings lo daría por
+>   terminado»*).
+> - **`#582`, la etapa 1** (*«#582 Adelante»*; `8c72bb95`): un error sin atrapar dice dónde, también en una placa. La cadena de
+>   llamadas en el `stackTrace` del EXITED, y el IDE y la tanda la traducen con el `.dbg`. Las dos VMs, byte a byte; de paso, la
+>   VM-Java ya la da también con los errores de la VM. La red, VERDE, con `traza_smoke`. Por ver en placa y en el IDE.
+> - **Abierta `#786`** (idea de Eduardo): `loadModule`/`unloadModule` y un programa genérico que lance otro y atrape sus errores.
+>   Con un lanzador, las cargas van en pila, y descargar se simplifica.
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 >

@@ -4124,7 +4124,7 @@ quítale `native`». El manual (§8.3, «Depurar», en las dos lenguas) y `AOT_L
 manual ya no da las tuplas por no soportadas dentro de una native (lo están desde `#577`, salvo con campos `float`,
 `long` o `double`). El frontend, 281 de 281. **Por probar a mano en el IDE** (Eduardo): F9 dentro de una native.
 
-#### 🧊 `#582` — la LÍNEA de un error dentro de una native: el fallo sale sin origen (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT · **decidida B y a V8** el 9-oct: Eduardo, *«B, lo pasamos a V8 salvo que veas que no es demasiado costoso»*; medido, día y medio)
+#### 🔵 `#582` — la LÍNEA de un error dentro de una native: el fallo sale sin origen (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT · **decidida B y a V8** el 9-oct: Eduardo, *«B, lo pasamos a V8 salvo que veas que no es demasiado costoso»*; medido, día y medio · **la etapa 1, el bytecode, hecha el 4-nov**, `8c72bb95`; la 2, las natives, por decidir)
 
 *«…cómo se puede localizar en qué línea ocurrió»* (Eduardo, 21-ago; `V7_IDEAS` §«Los cabos sueltos del AOT»). Un
 `RuntimeError` desde una native dice QUÉ pasó —con el texto del intérprete— pero no DÓNDE: la estructura del fallo
@@ -4149,6 +4149,19 @@ cambia el código (comprobarlo: el `.mdn` con y sin `-g`, idéntico byte a byte)
 cero (Prueba.bp:23)». Coste en la placa, prácticamente cero. **El coste del trabajo, medido: día y medio** —la placa y
 el EXITED (el común: `exceptions.c`, `bpvm_repl.c`), el cable documentado, el IDE, la tanda (un lector del `.dbg` en
 Python), el AOT y las pruebas—: en la recta final, con `#578` y `#592` dentro, **a V8**.
+**4-nov, la etapa 1, hecha** (Eduardo: *«#582 Adelante»*; `8c72bb95`): el bytecode.
+- **La placa:** un error sin atrapar deja su cadena de llamadas en el `stackTrace` del EXITED, «Prueba+50 Prueba+72 Core+1200»,
+  de dentro afuera y con 8 marcos como mucho (`compone_traza`, `exceptions.c`). Cada posición es la instrucción siguiente a la
+  que falló o llamó; la línea, la del `.dbg` para esa posición menos uno. Con varios hilos, la del error que quedó fijado.
+- **Lo que no decía esta ficha:** la VM-Java sólo daba la traza con un `throw` del programa; con un error de la VM, nada. Ahora
+  las dos, en los dos casos y byte a byte (`anotaTraza`). Como servidor, en sus dos EXITED (el de `ExceptionEvent`, además).
+- **Quien la traduce:** `TrazaError` en el IDE (en la consola, «en X.bp:5» y «llamado desde…»; los `.dbg`, de la carpeta de
+  salida y de la stdlib) y `tools/traza_dbg.py` en la tanda. El cable, `BPVM_WIRE_PROTOCOL.md`; el manual, §11.
+- **Probado:** `tools/traza_smoke.py`, en la red, contra líneas marcadas en el fuente: un error de la VM entre dos módulos, un
+  `throw`, más de ocho llamadas, un error en un hilo, uno atrapado, un KILL, las dos VMs y el sim byte a byte, y un error
+  dentro de `Collections`, que en el sim corre desde el pack y en el PC desde su `.mod`. La red, VERDE. Compilan la RP2350,
+  la Nucleo y la P4. **Por ver:** en una placa de verdad, y en la consola del IDE (`TrazaError`, probada sin la ventana).
+- **La etapa 2, por decidir:** dentro de una native, hoy la línea es la de quien la llamó.
 
 #### ✅ `#581` — P2b.3.d en las ESP: la S3, la C3, la C5 y la C6 siguen con la ABI 8 —rechazan todo `.mdn` nuevo y corren interpretado— (abierta 27-sep, al cerrar H5; SUELTA: el resto de la sesión de placas de P2b.3 · **CERRADA el 7-oct**, el commit de `#581`)
 
@@ -7335,6 +7348,24 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **por analizar**)
+
+- **La idea** (Eduardo, 4-nov): *«Si lo tuviésemos implementado podríamos hacer una programa genérico al que le podemos
+  pasar como argumento el módulo/pack a ejecutar y el se encargaría que ejecutarlo. Y si lo hiciémos dentro de un bloque
+  try ... catch exception atraparíamos cualquier error. Lo único que veo un poco delicado sería liberar los módulos que
+  ya no se usan pero tampoco debería ser demasiado problema.»*
+- **De dónde viene:** los overlays, `V2_BACKLOG` §17 (29-may), y lo que ha cambiado desde entonces, `V8_IDEAS` §E1 (14-oct:
+  *«de momento no lo necesitamos»*). No había ficha. No hay código: ningún builtin carga un módulo con el programa en marcha.
+- **Lo que aporta el lanzador:** las cargas van en PILA. Lo último cargado es lo primero que se descarga, así que el código
+  vuelve de una vez y sin huecos, y no hace falta el hueco fijo que §17 recomendaba (su modelo A).
+- **Lo primero que se ve, sin analizar a fondo:**
+  - el `try … catch` vale porque el módulo cargado corre en el hilo del lanzador; no atrapa lo que falle en un hilo que
+    arranque el programa cargado, ni un KILL;
+  - antes de descargar, nada vivo del módulo: hilos, objetos de sus clases (lo vivo se ve con una colecta), manejadores
+    de la GUI, eventos. Si queda algo, un error con nombre; la destrucción de `#668` limpia casi todo eso;
+  - lo que falta: llamar a su `Main` por nombre, correr sus inicializadores, el tope de 16 módulos (`BPVM_MAX_MODULES`), y
+    qué hacer con los `.mdn`; el argumento para el programa ya existe (`__runArg`, `#412`). En las dos VMs.
+
 #### ✅ `#785` — la STM32 copia, rellena, busca y compara la memoria de un byte por vuelta, en todo el firmware: lleva newlib-nano (`--specs=nano.specs`), y sus `memcpy`, `memset`, `memchr` y `memcmp` son las pequeñas (abierta el 3-nov, al medir `#730` · **CERRADA el 4-nov**, `571bf24a`, medida en la Nucleo; la DK2, compilada, se graba en el próximo lote)
 
 Visto en el mapa de la Nucleo (`Nucleo_u575b.map`): `memcpy-stub.o` (26 bytes de código), `memset` (16), `memchr` (28)
@@ -8875,7 +8906,7 @@ con su test— y quitar el caso, o dejarlo como una comprobación que avise si a
 - La red, VERDE (14:31); `check-jc`, VERDE (8:24); las pruebas de la VM-Java, 62 (una nueva). A las placas, con el próximo
   lote (llegó el 3-nov, a las nueve).
 
-#### 🔵 `#738` — en la Metro, copiar y poner a cero las cadenas grandes sin pasar por la caché del XIP (el alias sin caché o el DMA) (abierta el 27-oct, al cerrar el H5; **por medir**)
+#### 🧊 `#738` — en la Metro, copiar y poner a cero las cadenas grandes sin pasar por la caché del XIP (el alias sin caché o el DMA) (abierta el 27-oct, al cerrar el H5 · **medida y congelada el 4-nov**, Eduardo: *«No corre prisa y de momento no corremos riesgos que ya estamos haciendo muchos cambios en los strings. Prefiero ver como van una temporada y si hace falta lo volvemos a mejorar»*)
 
 La RP2350 tiene un alias de la memoria externa sin caché (`XIP_NOCACHE_NOALLOC`) y un DMA que llega a la PSRAM
 (`V8_IDEAS` §E5, «¿Y DMA entre la PSRAM y la RAM?»). Daría, en las operaciones de bloque: copiar y poner a cero sin
@@ -8930,9 +8961,13 @@ bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la 
     Reservar solo, siempre ×0,33–0,39. Por debajo de lo que cabe en la caché, dejar las líneas dentro compensa.
   - **Con el tope de 256 B**, `gc()` de `StrFases` va un 18 % peor (las dos vueltas): algún `memcpy` de la VM que no es de
     cadenas. Un gancho para todo `memcpy` no vale: hay que elegir los sitios. Con 4 KB, nada cambia hasta ese tamaño.
-  - **Propuesto, por decidir (Eduardo):** dos reglas, sólo en la RP2350 y con la VM en la PSRAM. Copiar por el alias en
-    los bloques que se reservan sin ceros (`bpvm_heap_nuevo_para_llenar`), de 256 B para arriba; y poner a cero por el
-    alias de 16 KB para arriba. La concatenación se queda como está.
+  - **Lo propuesto, si se retoma:** dos reglas, sólo en la RP2350 y con la VM en la PSRAM. Copiar por el alias en los
+    bloques que se reservan sin ceros (`bpvm_heap_nuevo_para_llenar`), de 256 B para arriba; y poner a cero por el alias
+    de 16 KB para arriba. La concatenación se queda como está. Antes, la tanda y una prueba de coherencia con el alias
+    puesto: la medida no pasó ninguna.
+  - **Congelada, y los strings, terminados por ahora** (Eduardo, 4-nov): *«¿Por que miramos los strings en V8? Porque en
+    V7 vimos que eran lentos. Yo creo que todos los cambios hemos mejorado bastante. De momento los strings lo daría por
+    terminado.»*
 
 #### ✅ `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y las de la S3 (abierta el 27-oct, al cerrar el H5; **CERRADA el 3-nov**: la P4, con la L2 de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la S3, con las dos al máximo —instrucciones 32 KB, datos 64 KB con líneas de 64 B—, medida y en la placa el 3-nov)
 
