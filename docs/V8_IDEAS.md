@@ -6203,6 +6203,9 @@ dieciséis, los dieciséis bien en las tres):
 
 Fuera de un overlay, un literal cuesta lo mismo que leer una variable. Dentro, lo que cuesta crear una cadena.
 
+La Nucleo pasó esos dieciséis con el `Overlays.mod` suelto, porque su zona no daba para el pack nuevo. Con la zona formateada y
+el pack grabado, otra vez los dieciséis, sin nada suelto y con `Overlays` cargado XIP desde el pack.
+
 **Una falsa alarma del GC, y era del diseño.** Al añadir la regla de los hilos, `tryExe` creció una local, todo se movió unos
 bytes y el caso 2 empezó a fallar en el sim: *«Overlay.unload: sigue vivo un objeto de OvComun.Caja»*, de un objeto que nadie
 alcanzaba. Quien lo marcaba era una palabra del bloque de datos de `Core`: un desplazamiento de una vtable que valía justo

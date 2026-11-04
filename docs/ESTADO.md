@@ -79,6 +79,10 @@
 > - **H9.5, otra vez, con todo:** la Metro, la P4 y la Nucleo, grabadas con la imagen de `35297826`, y el `Stdlib.pack` nuevo en la
 >   Metro y la P4. Los dieciséis casos, con la salida del PC, en las tres. Las placas, sin lo que subí para las pruebas. **Un
 >   tropiezo mío:** al quitar `log=1` de la Nucleo no miré que ya lo tenía; repuesto. Mirar el ENV antes de tocarlo.
+> - **El `Stdlib.pack` de la Nucleo** (Eduardo: *«Si»*): el nuevo no cabía (216 KB, y le quedaban 88 de su zona, con el viejo
+>   como lápida), y la zona sólo tenía ése. `PACK_FORMAT` y el pack: 288 KB libres. Antes, lo que podía taparlo: formatear pone
+>   en `/lib` los 17 módulos que la imagen lleva embebidos, y grabar sólo quita los que el pack sirve con los mismos bytes.
+>   Eran los 17, y `/lib` quedó vacío. Los dieciséis casos otra vez, sin nada suelto, con `Overlays` cargado XIP desde el pack.
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 > - **Otro:** la primera medida de `#786` salió redondeada a 0,2 s por leer el cable con `w.lines`, que espera ese plazo. Se
@@ -86,8 +90,6 @@
 >
 > **Para la próxima sesión:**
 > - con Eduardo delante, en el IDE: `#694` (`Stop` con y sin programa, un RUN rechazado) y la traza de `#582` en la consola;
-> - **el `Stdlib.pack` de la Nucleo:** el nuevo no cabe (216 KB, y le quedan 88 de su zona, con el viejo como lápida). Hace falta
->   formatear la zona, que sólo tiene ése, y grabarlo. Hasta entonces lleva el de `761e9c00`: sin la regla de los hilos;
 > - `#745` y `#710` siguen abiertas (Eduardo, 4-nov: *«La 3 no»*);
 > - la Metro, la P4 y la Nucleo llevan la imagen de `35297826`. La S3, la del paso 3 de `#730`
 >   (`cdbda834`); la DK2, la C3, la C5 y la C6, la del lote del 3-nov, por la mañana. En el próximo lote, todas, y `#785` en
