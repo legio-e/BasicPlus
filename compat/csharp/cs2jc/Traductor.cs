@@ -184,10 +184,30 @@ namespace Cs2Jc
             {
                 case TypeKind.Class: EmiteClase(s); break;
                 case TypeKind.Interface: EmiteInterfaz(s); break;   // H7.3 (#756): la interfaz de JC
-                case TypeKind.Struct: Rechaza(donde, Porque.H7(Porque.Struct)); break;
+                case TypeKind.Struct:
+                    if (EsStructSinEstado(s)) EmiteClase(s);
+                    else Rechaza(donde, Porque.H7(Porque.Struct));
+                    break;
                 case TypeKind.Enum: EmiteEnum(s); break;
                 default: Rechaza(donde, Porque.Pendiente("tipo " + s.TypeKind)); break;
             }
+        }
+
+        /// H8, tema 2 — un `struct` sin estado: sin campos de instancia, ni propiedades automáticas o eventos, que los
+        /// llevan. Se escribe como una clase: sin estado, copiarlo no se nota, y un objeto vale tanto como otro. Lo que sí
+        /// hay que escribir es su valor por defecto, que en C# existe y en una clase sería null.
+        bool EsStructSinEstado(ITypeSymbol t)
+        {
+            if (!(t is INamedTypeSymbol s) || s.TypeKind != TypeKind.Struct || !DelPrograma(s) || s.IsGenericType || s.IsRecord) return false;
+            foreach (var x in s.GetMembers())
+            {
+                if (x.IsStatic) continue;
+                if (x is IFieldSymbol || x is IEventSymbol) return false;
+                if (x is IPropertySymbol && x.DeclaringSyntaxReferences.Select(r => r.GetSyntax()).OfType<PropertyDeclarationSyntax>()
+                        .Any(d => d.AccessorList != null && d.AccessorList.Accessors.All(a => a.Body == null && a.ExpressionBody == null)))
+                    return false;
+            }
+            return true;
         }
 
         /// Un enum de C#, el de JC: los valores, los que calcula C#, todos escritos (JC sólo admite un número sin signo;
@@ -257,7 +277,7 @@ namespace Cs2Jc
             string base_ = null;
             var b = s.BaseType;
             var lugarBase = donde.BaseList ?? (SyntaxNode) donde;
-            if (b != null && b.SpecialType != SpecialType.System_Object)
+            if (b != null && b.SpecialType != SpecialType.System_Object && b.SpecialType != SpecialType.System_ValueType)
             {
                 if (DelPrograma(b)) base_ = Tipo(b, donde);
                 else if (ExcepcionJc(b) is string ex) base_ = ex;     // una excepción de .NET (CsSystem, el escalón 1)
@@ -287,6 +307,10 @@ namespace Cs2Jc
             // .NET. Las de la librería tienen el suyo sin argumentos, y lo llama el implícito de JC.
             if (MensajeSinArgumentos(b, s) is string porDefecto && s.InstanceConstructors.All(c => c.IsImplicitlyDeclared))
                 Linea("public function " + NombreTipo(s) + "() : base(" + Cadena(porDefecto) + ") { }");
+            // un struct siempre se puede crear sin argumentos; una clase de JC con un constructor, no: se escribe
+            if (s.TypeKind == TypeKind.Struct && s.InstanceConstructors.Any(c => !c.IsImplicitlyDeclared)
+                && s.InstanceConstructors.Any(c => c.IsImplicitlyDeclared && c.Parameters.Length == 0))
+                Linea("public function " + NombreTipo(s) + "() { }");
             sangria--;
             Linea("}");
             Linea("");
@@ -440,19 +464,21 @@ namespace Cs2Jc
                 // BP no deja campos públicos («el estado sale por getters y setters»): cada uno, una propiedad.
                 foreach (var v in vars)
                 {
-                    string valor = v.Initializer != null ? " = " + Expr(v.Initializer.Value) : NullDeCSharp(primero.Type);
+                    string valor = v.Initializer != null ? " = " + Expr(v.Initializer.Value) : NaceDeCSharp(primero.Type, v);
                     Linea("public " + estatico + tipo + " " + Ident(v.Identifier.ValueText) + " { get; set; }"
                           + (valor != "" ? valor + ";" : ""));
                 }
                 return;
             }
             Linea(acceso + " " + estatico + tipo + " " + string.Join(", ", vars.Select(v => Ident(v.Identifier.ValueText)
-                  + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : NullDeCSharp(primero.Type)))) + ";");
+                  + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : NaceDeCSharp(primero.Type, v)))) + ";");
         }
 
-        /// #774 — un campo o una propiedad `string` sin valor: en C# nace null, y en JC, "" (lo de módulo o de clase sin
-        /// valor). El traductor escribe el null de C#, para que `campo == null` siga dando true.
-        static string NullDeCSharp(ITypeSymbol t) => EsCadena(t) ? " = null" : "";
+        /// Un campo o una propiedad sin valor, con lo que le da C# si en JC nacería con otra cosa: un `string`, null (#774;
+        /// en JC, "", lo de módulo o de clase sin valor), para que `campo == null` siga dando true; un struct sin estado,
+        /// un objeto (en JC, null).
+        string NaceDeCSharp(ITypeSymbol t, SyntaxNode donde) =>
+            EsCadena(t) ? " = null" : EsStructSinEstado(t) ? " = new " + Tipo(t, donde) + "()" : "";
 
         void EmiteMetodo(MethodDeclarationSyntax me)
         {
@@ -607,7 +633,7 @@ namespace Cs2Jc
             if (acc.All(a => a.Body == null && a.ExpressionBody == null))
             {
                 // automática; `{ get; }` e `{ get; init; }` también: C# ya comprobó que nadie más la escribe
-                string valor = p.Initializer != null ? " = " + Expr(p.Initializer.Value) : NullDeCSharp(s.Type);
+                string valor = p.Initializer != null ? " = " + Expr(p.Initializer.Value) : NaceDeCSharp(s.Type, p);
                 Linea(cabecera + " { get; set; }" + (valor != "" ? valor + ";" : ""));
                 return;
             }

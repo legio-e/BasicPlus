@@ -76,6 +76,7 @@ namespace Cs2Jc
                 if (a == null || a.SpecialType != SpecialType.System_Object) return Rechaza(e, Porque.Pendiente("una caja como " + NombreCompleto(a)));
                 return ExprBase(e);
             }
+            if (EsStructSinEstado(de)) return ExprBase(e);         // en JC, ya es un objeto
             string clase = ClaseDeCaja(de);
             if (clase == null) return Rechaza(e, Porque.Pendiente("una caja de " + NombreCompleto(de)));
             if (a == null || a.SpecialType != SpecialType.System_Object) return Rechaza(e, Porque.Pendiente("una caja como " + NombreCompleto(a)));
@@ -290,6 +291,7 @@ namespace Cs2Jc
                 case SpecialType.System_String: return "null";            // #774: una variable string de JC puede valer null
             }
             if (EsNullable(t)) return PorTipo(t) is string p ? Rechaza(e, p) : "null";
+            if (EsStructSinEstado(t)) return "new " + Tipo(t, e) + "()";
             if (t == null || t.IsValueType) return Rechaza(e, Porque.Pendiente("default de " + NombreCompleto(t)));
             return "null";
         }
@@ -669,6 +671,7 @@ namespace Cs2Jc
                     if (EsUInt(t)) return Rechaza(b, Porque.Pendiente("is uint (en una caja, un uint es un Long, como un long)"));
                     if (t != null && t.IsValueType && ClaseDeCaja(t) != null && izq != null && !izq.IsValueType)
                         return Expr(b.Left) + " is " + ClaseDeCaja(t);
+                    if (EsStructSinEstado(t)) return Expr(b.Left) + " is " + Tipo(t, b.Right);
                     if (t == null || t.IsValueType || EsCadena(t)
                         || (!DelPrograma(t) && ExcepcionJc(t) == null && !EsDeCsSystem(t) && t.SpecialType != SpecialType.System_Object))
                         return Rechaza(b, Porque.Pendiente("is " + NombreCompleto(t)));
@@ -820,6 +823,7 @@ namespace Cs2Jc
             {
                 if (m.GetConversion(c).IsUserDefined) return Rechaza(c, Porque.H7(Porque.Operadores));
                 if (de.IsValueType && !a.IsValueType && !EsEnum(de)) return Caja(c.Expression, de, a);     // `(object) 5`
+                if (!de.IsValueType && EsStructSinEstado(a)) return "(" + Tipo(a, c.Type) + ") " + Atomo(c.Expression);
                 if (!de.IsValueType && a.IsValueType && !EsEnum(a))
                 {
                     // `(int) o`: sacarlo de su caja, `((Integer) o).value()`; si no es un int, la conversión lanza, como en C#
@@ -927,7 +931,7 @@ namespace Cs2Jc
                         case TypeKind.Class:
                         case TypeKind.Interface:                       // H7.3 (#756): la interfaz de JC
                         case TypeKind.Enum: return NombreTipo(nt);
-                        case TypeKind.Struct: return Rechaza(donde, Porque.H7(Porque.Struct));
+                        case TypeKind.Struct: return EsStructSinEstado(nt) ? NombreTipo(nt) : Rechaza(donde, Porque.H7(Porque.Struct));
                         default: return Rechaza(donde, Porque.Pendiente("tipo " + nt.TypeKind));
                     }
                 }

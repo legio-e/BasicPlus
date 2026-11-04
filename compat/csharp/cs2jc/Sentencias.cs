@@ -53,6 +53,11 @@ namespace Cs2Jc
                                                        && CondicionalSinDefinir(cm, llamada) is string simbolos:
                     Linea("// " + cm.Name + "(…): [Conditional(" + simbolos + ")], sin definir; C# quita la llamada");
                     break;
+                // `this = x;`: sólo en un struct, y uno sin estado (H8, tema 2) no tiene nada que copiar; si `x` calcula algo, se calcula
+                case ExpressionStatementSyntax es when es.Expression is AssignmentExpressionSyntax ta && ta.Left is ThisExpressionSyntax:
+                    if (EsSimple(ta.Right)) Linea("// this = …: un struct sin estado no tiene nada que copiar");
+                    else EmiteConSacar(es, true, () => Linea(ExprSentencia(ta.Right) + ";"));
+                    break;
                 case ExpressionStatementSyntax es: EmiteConSacar(es, true, () => Linea(ExprSentencia(es.Expression) + ";")); break;
                 case IfStatementSyntax i: If(i); break;
                 case WhileStatementSyntax w: While(w); break;
@@ -153,6 +158,7 @@ namespace Cs2Jc
             if (EsEnum(t) && t.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => f.IsConst) is IFieldSymbol primero)
                 return Tipo(t, donde) + "." + Ident(primero.Name);
             if (!t.IsValueType || EsNullable(t)) return "null";
+            if (EsStructSinEstado(t)) return "new " + Tipo(t, donde) + "()";
             return Rechaza(donde, Porque.Pendiente("una variable de un case usada en otro (en C#, su ámbito es el switch)"));
         }
 
@@ -161,7 +167,8 @@ namespace Cs2Jc
         string SinValor(ITypeSymbol t, SyntaxNode donde)
         {
             bool tiene = EsNumerico(t) || t.SpecialType == SpecialType.System_Boolean || EsCadena(t) || EsNullable(t)
-                         || !t.IsValueType || (EsEnum(t) && t.GetMembers().OfType<IFieldSymbol>().Any(f => f.IsConst));
+                         || !t.IsValueType || EsStructSinEstado(t)
+                         || (EsEnum(t) && t.GetMembers().OfType<IFieldSymbol>().Any(f => f.IsConst));
             return tiene ? " = " + ValorCualquiera(t, donde) : "";
         }
 

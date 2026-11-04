@@ -1,0 +1,150 @@
+module CsStructs
+{
+   interface IHabla
+   {
+      function string Di();
+   }
+
+   class Solo
+   {
+      public static int Cuenta { get; set; } = 5;
+      public const int Fijo = 7;
+      public static function int Dame()
+      {
+         return Solo.Cuenta + Solo.Fijo;
+      }
+   }
+
+   class ConMetodos : IHabla
+   {
+      public function int Doble(int x)
+      {
+         return x * 2;
+      }
+      @implement{ IHabla }
+      public function string Di()
+      {
+         return "hola";
+      }
+      public int Siempre
+      {
+         get
+         {
+            return 3;
+         }
+      }
+   }
+
+   class ConConstructor
+   {
+      public static int Hechos { get; set; } = 0;
+      public function ConConstructor(int a) : this()
+      {
+         ConConstructor.Hechos += a;
+      }
+      public function ConConstructor() { }
+   }
+
+   class Compartido
+   {
+      private static Compartido uno = new Compartido();
+      public static int Pedidos { get; set; } = 0;
+      private static function Compartido Pide()
+      {
+         Compartido.Pedidos++;
+         return Compartido.uno;
+      }
+      public function Compartido(int a)
+      {
+         // this = …: un struct sin estado no tiene nada que copiar
+      }
+      public function Compartido(string s)
+      {
+         Compartido.Pide();
+      }
+      public function Compartido() { }
+   }
+
+   class Prueba
+   {
+      private static ConMetodos campo = new ConMetodos();
+      private ConMetodos otro = new ConMetodos();
+      public ConMetodos Propiedad { get; set; } = new ConMetodos();
+      private static function ConMetodos Copia(ConMetodos c)
+      {
+         return c;
+      }
+      private function int Usa()
+      {
+         return this.otro.Doble(2) + this.Propiedad.Doble(3);
+      }
+      public static function int Main()
+      {
+         if (Solo.Dame() != 12)
+         {
+            return 1;
+         }
+         ConMetodos a = new ConMetodos();
+         ConMetodos b = a;
+         if (b.Doble(4) != 8 || b.Siempre != 3)
+         {
+            return 2;
+         }
+         ConMetodos sinValor = new ConMetodos();
+         sinValor = new ConMetodos();
+         if (sinValor.Doble(1) != 2)
+         {
+            return 3;
+         }
+         if (Prueba.campo.Doble(5) != 10)
+         {
+            return 4;
+         }
+         if (new Prueba().Usa() != 10)
+         {
+            return 5;
+         }
+         if (Prueba.Copia(a).Di() != "hola")
+         {
+            return 6;
+         }
+         Object o = a;
+         if (!(o is ConMetodos))
+         {
+            return 7;
+         }
+         ConMetodos c = (ConMetodos) o;
+         if (c.Doble(6) != 12)
+         {
+            return 8;
+         }
+         IHabla h = a;
+         if (h.Di() != "hola")
+         {
+            return 9;
+         }
+         ConConstructor x = new ConConstructor(2);
+         ConConstructor y = new ConConstructor();
+         if (ConConstructor.Hechos != 2)
+         {
+            return 10;
+         }
+         Compartido p = new Compartido(1);
+         Compartido q = new Compartido("x");
+         if (Compartido.Pedidos != 1)
+         {
+            return 11;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

@@ -5337,7 +5337,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | # | ajuste | dónde | tema 1 | tema 2 | hecho |
 |---|---|---|---|---|---|
 | 1 | `IDisposable`, una interfaz de verdad | `CsSystem` y el traductor | | +2 | 4-nov: Mono **450** |
-| 2 | un `struct` sin campos de instancia, una clase | el traductor | | +2 | |
+| 2 | un `struct` sin campos de instancia, una clase | el traductor | | +2 | 4-nov: Mono **468** |
 | 3 | lo suelto de la biblioteca (`d.ToString()`, `"x" is String`, `sizeof(int)`, `StringWriter`, `StreamWriter.Null`, `String.Concat`) | `CsSystem` y el traductor | +5 | | |
 | 4 | `??` con referencias | el traductor | | +1 | |
 | 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | |
@@ -5355,6 +5355,15 @@ del programa hereda de ella, una variable puede ser de su tipo, y `is`, `as`, un
 `using` vale con cualquier tipo (antes, sólo con una clase del programa con su `Dispose`, no heredado); con varias
 variables, una dentro de otra, como dice C#. Caso `Recursos`. **Mono: 450** (+3: `test-713`, `test-727` y `test-53`), sin
 perder ninguna; fallan las mismas 6. **El tema 2: 75.**
+
+**2. Un `struct` sin estado, hecho.** Sin campos de instancia (ni propiedades automáticas o eventos, que los llevan), un
+`struct` se escribe como una clase: sin estado, que se copie al asignarlo no se nota, y un objeto vale tanto como otro. Lo que
+hay que escribir es su valor por defecto, que en C# existe y en una clase sería `null`: una local sin valor, un campo o una
+propiedad nacen con `new S()`, y `default(S)` es `new S()`. Meterlo en una caja no hace nada (ya es un objeto), y sacarlo
+es una conversión; si declara constructores, se escribe además uno sin argumentos, que en C# siempre está; y `this = x`, que
+sólo existe en un `struct`, no tiene nada que copiar: se calcula `x`, si calcula algo. El que tiene campos sigue sin
+traducirse (`S?`, también). Caso `Structs`. **Mono: 468** (+18), sin perder ninguna; fallan las mismas 6. **El tema 2: 76**
+(`test-static-using-07` pide además `String.Concat`, en el ajuste 3).
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
