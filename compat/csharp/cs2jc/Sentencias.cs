@@ -97,6 +97,13 @@ namespace Cs2Jc
         void Local(LocalDeclarationStatementSyntax ld)
         {
             if (!ld.UsingKeyword.IsKind(SyntaxKind.None)) { Rechaza(ld, Porque.Pendiente("using")); return; }
+            // una local sin valor que nadie usa no hace nada (H8, tema 1): no se escribe, sea del tipo que sea
+            // (`System.Net.IPAddress[] x;`, test-55)
+            if (ld.Declaration.Variables.All(v => v.Initializer == null && SinUsar(v, ld)))
+            {
+                Linea("// " + string.Join(", ", ld.Declaration.Variables.Select(v => v.Identifier.ValueText)) + ": una local sin valor que nadie usa");
+                return;
+            }
             if (ld.Declaration.Variables.Any(v => izadas.Contains(m.GetDeclaredSymbol(v))))
             {
                 if (ld.IsConst) return;                                       // ya está, con su valor, antes del switch
@@ -105,6 +112,15 @@ namespace Cs2Jc
                 return;
             }
             Declaracion(ld.Declaration, ld.IsConst);
+        }
+
+        /// ¿No aparece la local `v` en ningún sitio del miembro donde se declara?
+        bool SinUsar(VariableDeclaratorSyntax v, SyntaxNode donde)
+        {
+            var s = m.GetDeclaredSymbol(v);
+            var cuerpo = donde.Ancestors().OfType<MemberDeclarationSyntax>().First();
+            return !cuerpo.DescendantNodes().OfType<IdentifierNameSyntax>()
+                .Any(id => id.Identifier.ValueText == v.Identifier.ValueText && SymbolEqualityComparer.Default.Equals(m.GetSymbolInfo(id).Symbol, s));
         }
 
         /// `lock (x) cuerpo`: un programa de un hilo, el bloque; pero lo que se cierra se calcula una vez, antes (una

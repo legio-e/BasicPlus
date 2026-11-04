@@ -469,14 +469,26 @@ namespace Cs2Jc
                 // BP no deja campos públicos («el estado sale por getters y setters»): cada uno, una propiedad.
                 foreach (var v in vars)
                 {
-                    string valor = v.Initializer != null ? " = " + Expr(v.Initializer.Value) : NaceDeCSharp(primero.Type, v);
+                    string valor = v.Initializer != null ? " = " + Expr(ValorDeCampo(v)) : NaceDeCSharp(primero.Type, v);
                     Linea("public " + estatico + tipo + " " + Ident(v.Identifier.ValueText) + " { get; set; }"
                           + (valor != "" ? valor + ";" : ""));
                 }
                 return;
             }
             Linea(acceso + " " + estatico + tipo + " " + string.Join(", ", vars.Select(v => Ident(v.Identifier.ValueText)
-                  + (v.Initializer != null ? " = " + Expr(v.Initializer.Value) : NaceDeCSharp(primero.Type, v)))) + ";");
+                  + (v.Initializer != null ? " = " + Expr(ValorDeCampo(v)) : NaceDeCSharp(primero.Type, v)))) + ";");
+        }
+
+        /// El valor de un campo. `static bool x = x = F();` (H8, tema 2; test-422) se da a sí mismo el valor que va a tener:
+        /// lo de la derecha, sin asignar nada dentro (en el valor de un campo no hay sentencia donde sacarlo).
+        ExpressionSyntax ValorDeCampo(VariableDeclaratorSyntax v)
+        {
+            var campo = m.GetDeclaredSymbol(v);
+            var e = v.Initializer.Value;
+            while (e is AssignmentExpressionSyntax a && a.IsKind(SyntaxKind.SimpleAssignmentExpression)
+                   && SymbolEqualityComparer.Default.Equals(m.GetSymbolInfo(a.Left).Symbol, campo))
+                e = a.Right;
+            return e;
         }
 
         /// Un campo o una propiedad sin valor, con lo que le da C# si en JC nacería con otra cosa: un `string`, null (#774;

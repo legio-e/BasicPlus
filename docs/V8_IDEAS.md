@@ -5342,7 +5342,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | 4 | `??` con referencias | el traductor | | +1 | 4-nov: Mono **476** |
 | 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | 4-nov: Mono **485** |
 | 6 | un constructor estático sin llamadas dentro | el traductor | | +1 | 4-nov: Mono **487** |
-| 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | |
+| 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | 4-nov: Mono **489** |
 | 8 | un `Type` mínimo: el traductor escribe una tabla con las clases del programa | por hablar | +2 | +9 | |
 | 9 | los tipos anónimos | sin decidir | +2 | +2 | |
 | 10 | `goto`, con `break` a un bucle con nombre | por analizar | +4 | | |
@@ -5397,6 +5397,11 @@ implícito. Se escribe detrás de todo, porque en C# corre detrás de los valore
 campo privado que la llama. Vacío, nada. Si hace otra cosa, se notaría cuándo corre, y sigue sin traducirse. Caso `Estaticos` (y
 `Rechazos`, uno que llama a algo). **Mono: 487** (+2: `test-debug-03` y `gtest-autoproperty-18`), sin perder ninguna; fallan las
 mismas 6. **El tema 2: 80.**
+
+**7. Dos sueltas, hecho.** Una local sin valor que nadie usa no hace nada, y no se escribe, sea del tipo que sea
+(`System.Net.IPAddress[] x;`, `test-55`). Y un campo que se da a sí mismo el valor, `static bool x = x = F();` (`test-422`),
+con lo de la derecha: en el valor de un campo no hay sentencia a la que sacar la asignación. Caso `Sueltas`. **Mono: 489** (+2),
+sin perder ninguna; fallan las mismas 6. **El tema 1: 112; el tema 2: 81**, lo previsto para los siete.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
