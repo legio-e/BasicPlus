@@ -5699,7 +5699,7 @@ traductor; la red; y la placa, en la próxima tanda.
   (al workdir del micro, como los módulos de la app) y una forma de nombrarlo desde el código.
 - **Por analizar** cuando toque: cómo se declara, cómo viaja con la app al micro y cómo se lee.
 
-## E13 · Lanzar un programa desde otro: cargar módulos en marcha, o un relevo (Eduardo, 4-nov; `#786`; decidida la A, con la clase `Overlay`; el algoritmo, por aprobar: al final de esta sección)
+## E13 · Lanzar un programa desde otro: cargar módulos en marcha, o un relevo (Eduardo, 4-nov; `#786`; decidida la A, con la clase `Overlay`; es el hito H9, hecho en el PC: al final de esta sección)
 
 > Eduardo, 4-nov: *«Si lo tuviésemos implementado podríamos hacer una programa genérico al que le podemos pasar como
 > argumento el módulo/pack a ejecutar y el se encargaría que ejecutarlo. Y si lo hiciémos dentro de un bloque try ...
@@ -6041,8 +6041,9 @@ porque no se mueve ningún objeto. Y los pasos:
 
 **Lo que se deja para después, a sabiendas:**
 
-- **Un hilo que el programa deje vivo** impide descargar: el error lo dice, pero el lanzador no puede matarlo. En un
-  programa normal, esos hilos mueren al acabar `Main`.
+- **Un hilo que el programa deje vivo** impide descargar: el error lo dice, pero el lanzador no puede matarlo, sólo
+  esperar. Un programa normal sigue hasta que acaban todos sus hilos (`#346`); `tryExe`, de momento, vuelve al acabar su
+  `Main`.
 - **Un error en un hilo suyo** no llega a `tryExe`, y el programa entero acabará con código 1 (`hilo_sin_atrapar`). Se
   puede recoger en `tryExe`.
 - **Una global de un módulo que se queda** con un literal del que se va no se detecta: las globales no llevan bitmap, y
@@ -6150,14 +6151,36 @@ y el caso de `Log.ruta`. `unload` sólo busca objetos de las clases que se van.
 - **las natives de B:** su código tiene los literales en crudo. En la etapa 1, un overlay no carga sus `.mdn` y corre
   interpretado, que es lo que ya hace un módulo sin ellos.
 
-**Lo que no cubre:** los arrays del bloque de datos de B (`var t: integer[4]` de módulo, un `const` de bytes) también son
-direcciones, y no se pueden copiar, porque se escribe en ellos. Si M1 se queda con uno en un campo, `unload` lo ve; en una
-global, no. Es raro, y se apunta.
+**Lo que no cubre:** escribí aquí que los arrays del bloque de datos de B también son direcciones. Al programarlo se vio
+que un programa BP no puede tener ninguno: `tipo[N]` sólo vale en una local o en un campo, una `const` sólo es un valor
+simple o una cadena, y `var t: integer[] := [1, 2, 3]` nace en el heap. Así que las cadenas son lo único de un bloque de
+datos que un programa puede pasar a otro módulo, y con `LEA_STR` no queda ninguna en crudo. `unload` sigue mirando las
+referencias crudas de los campos: un `.mod` compilado antes de `LEA_STR` las tendría.
 
-### Lo que hay que decidir sobre el algoritmo (Eduardo)
+### Lo que había que decidir sobre el algoritmo
 
 1. **¿OK al algoritmo?** Sobre todo a las condiciones de `load` (desde `Main`, sin hilos, sin ficheros abiertos) y a una
    sola carga a la vez.
 2. **El nombre del módulo:** la clase `Overlay` en un módulo nuevo `Overlays`, como `Collections.Map`. En `Core` la
    pagarían todos los programas.
 3. **Los literales de un overlay, en el heap** (arriba), en lugar de la tabla de las globales.
+
+**Decidido** (Eduardo, 4-nov): *«1, 2 y 3 Si. Crea un hito nuevo lo vamos haciendo. Añade los apartados y las etapas que
+consideres necesarios. Necesitaremos un par de programas de ejemplo ( A y B )»*. Es el hito H9, en `FICHAS`.
+
+### Hecho en el PC (4-nov)
+
+El algoritmo de arriba, sin cambios de fondo, en las dos VMs; el ejemplo, en `samples/overlay`, con A, B y M1 a M4 como en
+el ejemplo de Eduardo. Lo que salió al programarlo:
+
+- **Las intrínsecas de `Overlays` son públicas:** una clase sólo alcanza lo público de su módulo. Empiezan por `__`.
+- **`tryExe` atrapa también sus propios errores:** un argumento de más de 127 bytes vuelve como `false`, con su texto, no
+  como una excepción.
+- **Un módulo sin `Main` se carga y no hace nada,** como cuando se ejecuta solo: el compilador siempre emite `__startup`.
+- **`Core.mod` no cambia:** las primitivas nuevas no son públicas y su cuerpo va en línea.
+- **La carpeta del programa principal,** la que se mira primero en `load`, la guarda la VM-C al cargar (`raiz_dir`): el CLI
+  del PC no tiene `basedir`, y Java ya la tenía (`rootModuleDir`).
+
+`overlay_smoke`, en la red: quince casos en las dos VMs y el sim, byte a byte, y seis sabotajes (`BPVM_SABOTAJE_OVERLAY`) que
+tienen que cambiar la salida. La marca por clase de los destructores no tiene sabotaje: hacen falta dos clases en la misma
+dirección, y una clase abierta va a la arena, detrás del código, así que no se puede forzar desde un programa.

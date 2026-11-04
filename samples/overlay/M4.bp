@@ -1,0 +1,26 @@
+// M4 — sólo lo usa el programa B: se carga con él y se descarga con él.
+module M4
+  import Core
+
+  public class ErrorDeSensor extends Exception
+    public function ErrorDeSensor(m: string)
+      super(m)
+    end ErrorDeSensor
+  end ErrorDeSensor
+
+  public class Sensor
+    public property nombre: string
+
+    public function Sensor(nombre: string)
+      this.nombre := nombre
+    end Sensor
+
+    public function lee(): integer
+      return 21
+    end lee
+
+    public function ~Sensor()
+      print "M4: destruyo el sensor '" + this.nombre + "'"
+    end ~Sensor
+  end Sensor
+end M4

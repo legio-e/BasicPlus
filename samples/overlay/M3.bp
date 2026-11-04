@@ -1,0 +1,20 @@
+// M3 — sólo lo usa el programa A: sus objetos se mueven cuando A carga a B, y tienen que seguir igual.
+module M3
+  import Core
+
+  public class Punto
+    public property x: integer
+    public property y: integer
+    public property nombre: string
+
+    public function Punto(x: integer, y: integer, nombre: string)
+      this.x := x
+      this.y := y
+      this.nombre := nombre
+    end Punto
+
+    public function toString(): string
+      return this.nombre + " (" + intToString(this.x) + ", " + intToString(this.y) + ")"
+    end toString
+  end Punto
+end M3

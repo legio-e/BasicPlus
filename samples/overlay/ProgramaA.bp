@@ -1,0 +1,43 @@
+// El programa A carga el programa B con un Overlay, lo ejecuta y lo descarga, dos veces: una acaba bien y otra falla.
+//
+// A usa M1, M2 y M3. B usa M1, que ya está cargado y no se vuelve a cargar, y M4, que se carga con él y se va con él.
+// Hay que compilar los dos programas; este ejemplo los busca en la misma carpeta.
+module ProgramaA
+  import Core
+  import Heap
+  import Overlays
+  import M1
+  import M2
+  import M3
+
+  function Main()
+    var p: M3.Punto := M3.Punto(M2.suma(1, 2), M2.suma(3, 4), "un punto de A")
+    M1.setNombre("el nombre que puso A")
+    print "A: " + p.toString()
+
+    var ov: Overlays.Overlay := Overlays.Overlay()
+
+    print "A: primera vez"
+    ov.load("ProgramaB.mod")
+    if ov.tryExe("hola") then
+      print "A: B acabó bien"
+    else
+      print "A: B falló: " + ov.getError()
+    endif
+    ov.unload()
+    print "A: M1 se llama '" + M1.getNombre() + "', y B ya no está"
+
+    print "A: segunda vez"
+    ov.load("ProgramaB.mod")
+    if ov.tryExe("falla") then
+      print "A: B acabó bien"
+    else
+      print "A: B falló: " + ov.getError()
+      print "A: la clase del error es " + ov.getErrorClass()
+    endif
+    ov.unload()
+
+    print "A: " + p.toString()
+    print "A: M1 ha recibido " + intToString(M1.getLlamadas()) + " llamadas"
+  end Main
+end ProgramaA

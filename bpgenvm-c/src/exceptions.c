@@ -49,7 +49,7 @@ static int fija_runtime_error(bpvm_t* vm, const char* fmt, ...) {
  * nada a quien no falla. Un centinela (el principio de un hilo o de un evento) no cae en ningún módulo: ahí acaba.
  * Espejo de anotaTraza (miVM). */
 #define TRAZA_MARCOS 8
-static void compone_traza(bpvm_t* vm, const bpvm_thread_t* tc, char* out, size_t cap) {
+static void compone_traza_hasta(bpvm_t* vm, const bpvm_thread_t* tc, uint32_t fondo, char* out, size_t cap) {
     uint32_t pc = tc->pc, bp = tc->bp;
     size_t o = 0;
     out[0] = '\0';
@@ -59,10 +59,21 @@ static void compone_traza(bpvm_t* vm, const bpvm_thread_t* tc, char* out, size_t
         int k = snprintf(out + o, cap - o, "%s%s+%" PRIu32, marco ? " " : "", m->name, pc - m->cb);
         if (k < 0 || (size_t) k >= cap - o) { out[o] = '\0'; break; }   /* el que no cabe entero, fuera */
         o += (size_t) k;
-        if (bp <= tc->stack_base) break;
+        if (bp <= fondo) break;
         pc = bpvm_read_u32_be(vm->memory + bp - 12u);
         bp = bpvm_read_u32_be(vm->memory + bp - 8u);
     }
+}
+static void compone_traza(bpvm_t* vm, const bpvm_thread_t* tc, char* out, size_t cap) {
+    compone_traza_hasta(vm, tc, tc->stack_base, out, cap);
+}
+
+/* V8 H9 (#786) — una excepción sale del programa cargado: dónde, antes de que el unwind se lleve los marcos. Hasta el
+ * marco de su __startup: lo de abajo es del que lo lanzó. Espejo de sale (miVM). */
+void bpvm_overlay_sale(bpvm_t* vm, const bpvm_thread_t* tc) {
+    bpvm_overlay_t* o = vm->overlay;
+    compone_traza_hasta(vm, tc, o->bp, o->traza, sizeof o->traza);
+    o->bp = 0u;
 }
 
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,
@@ -154,6 +165,8 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
                    || (thrown_class != 0
                        && is_descendant_of(vm, thrown_class, (uint32_t) e.expected_class));
         if (matches) {
+            if (vm->overlay != NULL && vm->overlay->bp != 0u && (uint32_t) e.saved_bp < vm->overlay->bp)
+                bpvm_overlay_sale(vm, tc);   /* V8 H9 (#786) */
             tc->sp = (uint32_t) e.saved_sp;
             tc->bp = (uint32_t) e.saved_bp;
             tc->cs = (uint32_t) e.saved_cs;

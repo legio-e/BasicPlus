@@ -1,0 +1,19 @@
+// El programa B. Es un programa normal: se puede ejecutar solo, o lo puede cargar otro con un Overlay.
+// Usa M1, que si lo carga el programa A ya estará cargado, y M4, que se carga y se descarga con él.
+module ProgramaB
+  import Core
+  import M1
+  import M4
+
+  function Main(arg: string := "solo")
+    print "B: mi argumento es '" + arg + "'"
+    print "B: M1 se llama '" + M1.getNombre() + "'"
+    M1.setNombre("el nombre que puso B")
+    var s: M4.Sensor := M4.Sensor("sonda")
+    print "B: el sensor '" + s.nombre + "' lee " + intToString(s.lee())
+    if arg == "falla" then
+      throw M4.ErrorDeSensor("la sonda no responde")
+    endif
+    print "B: acabo bien"
+  end Main
+end ProgramaB

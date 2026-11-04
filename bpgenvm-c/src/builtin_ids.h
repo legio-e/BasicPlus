@@ -301,7 +301,13 @@ enum {
     BUILTIN_SOUND_GET_POSITION           = 293,   /* __soundGetPosition(): integer */
     BUILTIN_SOUND_GET_LENGTH             = 294,   /* __soundGetLength(): integer */
     BUILTIN_EOL                          = 295,   /* eol(): string */
-    BUILTIN__CUANTOS = 296
+    BUILTIN_OVERLAY_LOAD                 = 296,   /* __overlayLoad(ruta: string) */
+    BUILTIN_OVERLAY_EXE                  = 297,   /* __overlayExe(arg: string) */
+    BUILTIN_OVERLAY_CLOSE                = 298,   /* __overlayClose() */
+    BUILTIN_OVERLAY_FREE                 = 299,   /* __overlayFree() */
+    BUILTIN_OVERLAY_TRACE                = 300,   /* __overlayTrace(): string */
+    BUILTIN_CLASS_NAME                   = 301,   /* __className(o: any): string */
+    BUILTIN__CUANTOS = 302
 };
 
 #endif

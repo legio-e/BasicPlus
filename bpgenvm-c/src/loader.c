@@ -630,8 +630,11 @@ static bpvm_status_t load_buffer_impl(bpvm_t* vm, const uint8_t* data,
      *
      * TOLERANTE a proposito: si un blob no carga, se dice y se sigue. El AOT es
      * una ACELERACION — sin el, el modulo corre interpretado y correcto. Lo que
-     * no puede pasar es que un nativo malo impida ejecutar. */
-    if (native_size > 0) {
+     * no puede pasar es que un nativo malo impida ejecutar.
+     *
+     * V8 H9 (#786) — EN UN OVERLAY, NO: el código nativo lleva sus literales en crudo, y LEA_STR no pasa por ahí. Sin él
+     * corre interpretado, que es lo que hace la VM-Java siempre. */
+    if (native_size > 0 && !(vm->overlay != NULL && vm->overlay->cargando)) {
         /* ⚠️ EL .mod NO SIEMPRE ESTA EN RAM. El cursor tiene DOS fuentes (ver su
          * comentario arriba): `base` cuando el blob esta en RAM o en flash (host,
          * XIP, embebido en la imagen) y `rd` cuando se lee POR TROZOS — que es lo

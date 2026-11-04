@@ -496,6 +496,7 @@ public class ModuleManager {
         String name;
         String library;          // "" si el .mod no declara library
         int magic, gen, ifaceCrc;   // V7/H2 (MOD8): lo que dice su cabecera (0/0 en MOD6/MOD7)
+        int mainOffset;             // V8 H9 (#786): dónde está su __startup, para un overlay
         // V7/H2 (#523, MOD9) — el enlace tardío
         String exportPrefix;                          // "[lib.]Mod."
         java.util.List<String> depNames;              // 3.2: nombre canónico de cada dependencia, por índice
@@ -1046,6 +1047,7 @@ public class ModuleManager {
             meta.name = moduleName;
             meta.library = library;
             meta.magic = magic1; meta.gen = gen; meta.ifaceCrc = ifaceCrc;   // V7/H2
+            meta.mainOffset = mainOffset;                                    // V8 H9 (#786)
             meta.exportPrefix = exportPrefix;                                // V7/H2 (#523)
             meta.depNames = depNames; meta.refs = refs; meta.extCount31 = extCount;
             if (v9) meta.clases = edu.bpgenvm.bytecode.TablasMod9.leerClases(expBuf);
@@ -1085,13 +1087,27 @@ public class ModuleManager {
         // ("[bpvm] enlace: …"): cuantas busquedas por nombre y cuanto duran. Aqui
         // la tabla es un HashMap (0 strcmp lineales); en C es un barrido.
         final long t0 = System.nanoTime();
+        enlaceTardio = new EnlaceTardio(this, vm, nextFreeAddress);
+        int busquedas = enlaza(loadedModules, pendingLinks, 0);
+        vm.setPC(mainAbsoluteAddress);
+        vm.setCS(getModuleBaseFromPC(mainAbsoluteAddress));
+        System.err.printf("[miVM] tabla de simbolos: %d simbolos%n", globalSymbolTable.size());
+        System.err.printf("[miVM] enlace: %d modulos, %d busquedas, 0 strcmp, %d us%n",
+                loadedModules.size(), busquedas, (int) ((System.nanoTime() - t0) / 1000L));
+        if (enlaceTardio.clasesConstruidas > 0 || enlaceTardio.refsResueltas > 0)
+            System.err.printf("[miVM] enlace tardio: %d clases construidas, %d refs, %d bytes de arena%n",
+                    enlaceTardio.clasesConstruidas, enlaceTardio.refsResueltas, enlaceTardio.bytesArena);
+    }
+
+    /** Enlaza `mods`, con sus `tareas`: todos los módulos al arrancar y, en un overlay (V8 H9, #786), los que acaban de
+     *  entrar, contra lo que ya había. `primero`: el índice del primero de `mods` entre los cargados. Las búsquedas. */
+    private int enlaza(List<ModuleMetadata> mods, List<LinkTask> tareas, int primero) {
         int busquedas = 0;
         // V7/H2 (#523, V4) — E9 antes que los imports 3.1: un consumidor MOD9 cuyo dueño es MOD7/8
         // se rechaza nombrando al dueño («recompila 'Lib'»), no por el primer símbolo con firma que
         // la 3.1 no encuentre. Misma secuencia en la VM-C (bpvm_link_all).
-        enlaceTardio = new EnlaceTardio(this, vm, nextFreeAddress);
-        enlaceTardio.exigirDuenosConClases(loadedModules);
-        for (LinkTask task : pendingLinks) {
+        enlaceTardio.exigirDuenosConClases(mods);
+        for (LinkTask task : tareas) {
             for (int i = 0; i < task.requiredImports.length; i++) {
                 String symbolNeeded = task.requiredImports[i];
                 busquedas++;
@@ -1106,18 +1122,18 @@ public class ModuleManager {
         // las abiertas contra su padre real, resolver las refs a la ext-table, verificar.
         // La arena de los descriptores construidos empieza donde acabó el último módulo y
         // el heap arranca detrás (setHeapStart lee nextFreeAddress después de linkAll).
-        enlaceTardio.registrar(loadedModules);
-        for (ModuleMetadata m : loadedModules) {
+        enlaceTardio.registrar(mods, primero);
+        for (ModuleMetadata m : mods) {
             if (m.clases == null) continue;
             for (edu.bpgenvm.bytecode.TablasMod9.Clase c : m.clases) enlaceTardio.asegurar(enlaceTardio.buscar(m.exportPrefix + c.name));
         }
         // V8 H7.3 (#756) — las interfaces de cada clase, con sus tablas, y la tabla ordenada que mira la VM (antes de
-        // las refs: un SUBTIPO contra una interfaz mira la lista de la clase)
+        // las refs: un SUBTIPO contra una interfaz mira la lista de la clase). Siempre con todas: la tabla es una.
         enlaceTardio.construirInterfaces(loadedModules);
-        for (ModuleMetadata m : loadedModules) enlaceTardio.resolverRefs(m);
-        enlaceTardio.verificar(loadedModules);
+        for (ModuleMetadata m : mods) enlaceTardio.resolverRefs(m);
+        enlaceTardio.verificar(mods);
         if (enlaceTardio.arenaFin() > nextFreeAddress) nextFreeAddress = ((enlaceTardio.arenaFin() + 63) & ~63);
-        for (LinkTask task : pendingLinks) {
+        for (LinkTask task : tareas) {
             // L2 v3 — parcha parentOff de clases con padre cross-module. El
             // descriptor del child quedó con parentOff=0 al emitir; aquí
             // resolvemos el parent vía globalSymbolTable y escribimos el offset
@@ -1147,18 +1163,124 @@ public class ModuleManager {
                 vm.writeInt32(task.moduleCodeStart + fx.codeOff, clsOff);
             }
         }
-        vm.setPC(mainAbsoluteAddress);
-        vm.setCS(getModuleBaseFromPC(mainAbsoluteAddress));
-        System.err.printf("[miVM] tabla de simbolos: %d simbolos%n", globalSymbolTable.size());
-        System.err.printf("[miVM] enlace: %d modulos, %d busquedas, 0 strcmp, %d us%n",
-                loadedModules.size(), busquedas, (int) ((System.nanoTime() - t0) / 1000L));
-        if (enlaceTardio.clasesConstruidas > 0 || enlaceTardio.refsResueltas > 0)
-            System.err.printf("[miVM] enlace tardio: %d clases construidas, %d refs, %d bytes de arena%n",
-                    enlaceTardio.clasesConstruidas, enlaceTardio.refsResueltas, enlaceTardio.bytesArena);
+        return busquedas;
     }
 
     /** V7/H2 (#523) — el enlazador tardío del último linkAll (la reflexión de Forms le pregunta). */
     private EnlaceTardio enlaceTardio;
+
+    // ====================================================================
+    // V8 H9 (#786) — LOS OVERLAYS: cargar un programa con el programa en marcha, y descargarlo (V8_IDEAS §E13). La VM ha
+    // apartado los objetos hasta arriba, así que aquí se carga como al arrancar: detrás del último módulo. Lo ya cargado
+    // no se vuelve a cargar: la cola del descubrimiento sigue llena desde el arranque, y un import de algo que ya está
+    // sólo pasa la norma. Una carga a la vez, y lo que entró se va entero: descargar es volver a como estaba.
+    // ====================================================================
+
+    /** Cómo estaba todo antes de cargar: a dónde se vuelve al descargar, o si la carga falla. */
+    private static final class Overlay {
+        int modulos, tareas, libre, tablaIfaz, nTablaIfaz;
+        Map<String, Integer> simbolos;
+        List<String> cola;
+        String raiz, packPath, packNombre;
+        Map<String, basicplus.pack.PackEntry> packIndice;
+        boolean cerrado;   // la descarga empezó: sus globales ya no son raíces
+    }
+    private Overlay overlay = null;
+
+    /** El código del primer módulo del overlay: todos los suyos están de ahí en adelante. */
+    int overlayCs() { return loadedModules.get(overlay.modulos).codeStart; }
+    /** La entrada del programa cargado: su `__startup`. */
+    int overlayEntrada() {
+        ModuleMetadata m = loadedModules.get(overlay.modulos);
+        return m.codeStart + m.mainOffset;
+    }
+    int nextFree() { return nextFreeAddress; }
+    void cierraOverlay() { if (overlay != null) overlay.cerrado = true; }
+
+    /** Carga `ruta` y lo que le falte, y lo enlaza contra lo que hay. null si ha ido bien; si no, el motivo, con todo
+     *  como estaba. */
+    String cargaOverlay(String ruta) {
+        Overlay o = new Overlay();
+        o.modulos = loadedModules.size();
+        o.tareas = pendingLinks.size();
+        o.libre = nextFreeAddress;
+        o.tablaIfaz = vm.tablaDeInterfaces();
+        o.nTablaIfaz = vm.entradasDeInterfaces();
+        o.simbolos = new HashMap<>(globalSymbolTable);
+        o.cola = new ArrayList<>(discoveryQueue.keySet());
+        o.raiz = rootModuleDir;
+        o.packPath = runPackPath;
+        o.packNombre = runPackName;
+        o.packIndice = new HashMap<>(runPackIndex);
+        try {
+            String fichero = resuelveOverlay(ruta);
+            java.io.File f = new java.io.File(fichero).getAbsoluteFile();
+            String nombre = f.getName();
+            if (nombre.endsWith(".pack")) nombre = openRunPack(fichero);
+            else if (nombre.endsWith(".mod")) nombre = nombre.substring(0, nombre.length() - 4);
+            if (discoveryQueue.containsKey(nombre)) throw new IOException("ya hay un modulo '" + nombre + "' cargado");
+            rootModuleDir = f.getParent();
+            discoverDependencies(fichero.endsWith(".pack") ? nombre + ".mod" : fichero, nombre, true);
+            List<Map.Entry<String, ModSource>> cola = new ArrayList<>(discoveryQueue.entrySet());
+            for (Map.Entry<String, ModSource> e : cola.subList(o.cola.size(), cola.size()))
+                loadModuleToMemory(e.getValue(), e.getKey());
+            enlaza(new ArrayList<>(loadedModules.subList(o.modulos, loadedModules.size())),
+                   new ArrayList<>(pendingLinks.subList(o.tareas, pendingLinks.size())), o.modulos, nextFreeAddress);
+            overlay = o;
+            return null;
+        } catch (IOException | RuntimeException e) {   // el enlace, la norma, un .mod malo o que no quepa
+            deshazOverlay(o);
+            String motivo = String.valueOf(e.getMessage());
+            int ruta0 = motivo.indexOf(" (buscado como ");   // la ruta es de cada VM: el texto, el mismo que la VM-C
+            return ruta0 < 0 ? motivo : motivo.substring(0, ruta0);
+        }
+    }
+
+    private int enlaza(List<ModuleMetadata> mods, List<LinkTask> tareas, int primero, int arena) {
+        enlaceTardio.sigueEn(arena);
+        return enlaza(mods, tareas, primero);
+    }
+
+    /** Fuera del todo: los módulos que entraron, sus símbolos y sus clases. La memoria la devuelve la VM. */
+    void descargaOverlay() {
+        deshazOverlay(overlay);
+        overlay = null;
+    }
+
+    private void deshazOverlay(Overlay o) {
+        List<ModuleMetadata> fuera = new ArrayList<>(loadedModules.subList(o.modulos, loadedModules.size()));
+        enlaceTardio.olvida(fuera);
+        loadedModules.subList(o.modulos, loadedModules.size()).clear();
+        pendingLinks.subList(o.tareas, pendingLinks.size()).clear();
+        globalSymbolTable.clear();
+        globalSymbolTable.putAll(o.simbolos);
+        discoveryQueue.keySet().retainAll(o.cola);
+        nextFreeAddress = o.libre;
+        rootModuleDir = o.raiz;
+        runPackPath = o.packPath;
+        runPackName = o.packNombre;
+        runPackIndex.clear();
+        runPackIndex.putAll(o.packIndice);
+        vm.fijarTablaDeInterfaces(o.tablaIfaz, o.nTablaIfaz);
+    }
+
+    /** Dónde está el programa: la misma búsqueda que la VM-C (bpvm_entry_resolve): la carpeta del programa principal,
+     *  tal cual, el workdir y /lib. */
+    private String resuelveOverlay(String ruta) throws IOException {
+        java.io.File dada = new java.io.File(ruta);
+        if (!dada.isAbsolute() && rootModuleDir != null) {
+            java.io.File junto = new java.io.File(rootModuleDir, ruta);
+            if (junto.isFile()) return junto.getPath();
+        }
+        if (dada.isFile()) return ruta;
+        if (workdir != null) {
+            java.nio.file.Path w = resolveInWorkdirOrNull(ruta);
+            if (w != null && java.nio.file.Files.isRegularFile(w)) return w.toString();
+        }
+        java.io.File lib = enStdlib(dada.getName());
+        if (lib != null) return lib.getPath();
+        throw new IOException("no encuentro '" + ruta + "' (buscado en el proyecto, tal cual, en /app, /lib y en la zona de packs)");
+    }
 
     /** El módulo cargado cuyo nombre canónico (`[lib.]Mod`) es éste, o null. */
     ModuleMetadata moduloPorNombreCanonico(String canon) {
@@ -1526,7 +1648,9 @@ public class ModuleManager {
      */
     public List<int[]> getDataRegions() {
         List<int[]> result = new ArrayList<>();
-        for (ModuleMetadata meta : loadedModules) {
+        // V8 H9 (#786) — un overlay que se está descargando ya no es raíz: lo que sólo alcanzan sus globales, se va
+        int hasta = (overlay != null && overlay.cerrado) ? overlay.modulos : loadedModules.size();
+        for (ModuleMetadata meta : loadedModules.subList(0, hasta)) {
             int dataSize = meta.codeStart - meta.dataStart;
             if (dataSize > 0) {
                 result.add(new int[]{meta.dataStart, dataSize});

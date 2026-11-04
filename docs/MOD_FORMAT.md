@@ -469,8 +469,10 @@ y las dos nos han pasado:
   `[u32 cp_count][i32 codepoint]×N`; ahora son bytes UTF-8 (≈4× más compacto
   para ASCII). Es solo un cambio de **codificación del contenido** del símbolo
   (dato), no de la estructura del contenedor. El layout coincide con un heap
-  string `TYPE_ARRAY_I8` (sin el tag), así que `LEA_GLOBAL` empuja la dirección
-  y el string se usa in-situ.
+  string `TYPE_ARRAY_I8` (sin el tag), así que `LEA_STR` empuja la dirección
+  y el string se usa in-situ (V8/H9: `LEA_STR` es `LEA_GLOBAL` para un literal; en un
+  módulo cargado por un overlay, crea el string en el heap: `OPCODES.md`). Un `.mod` de
+  antes lleva `LEA_GLOBAL`, y vale igual.
 
 **Alineación a 4 (v3.0.1).** Cada símbolo ocupa su tamaño **natural**, y no todos
 son múltiplo de 4: `integer`/`float`/`long`/`double` y los arrays numéricos sí lo

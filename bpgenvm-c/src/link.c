@@ -335,6 +335,7 @@ typedef struct {
     uint32_t    arena_ini;
     int         construidas, refs;
     int         fallo;            /* 1 = link_error puesto */
+    int         repaso;           /* V8 H9 (#786): rehaciendo lo de siempre, sobre su arena: los símbolos ya están */
 } lt_ctx_t;
 
 static uint16_t lt_u16(const uint8_t* p) { return bpvm_read_u16_be(p); }
@@ -730,7 +731,7 @@ static bpvm_status_t lt_asegurar(lt_ctx_t* x, int ci) {
     c->desc_abs = desc; c->nf = (uint16_t) nf; c->nm = (uint16_t) nm;
     x->construidas++;
     /* el data-symbol, para quien la pida por nombre (nietos, refs CLASE, la reflexion) */
-    {
+    if (!x->repaso) {
         char canon[160], nm2[128], qual[320];
         lt_canon(m, canon, sizeof canon); lt_utf_copy(c->name, nm2, sizeof nm2);
         snprintf(qual, sizeof qual, "%s.%s", canon, nm2);
@@ -935,17 +936,18 @@ static bpvm_status_t lt_lista_de(lt_ctx_t* x, int ci) {
 }
 
 /* las listas de las clases, en el orden de los modulos y de sus filas (el del registro, el de miVM), y la tabla de las
- * que tienen alguna, ordenada por descriptor. Si ninguna tiene interfaces, nada: la arena queda como estaba. */
-static bpvm_status_t lt_construir_interfaces(lt_ctx_t* x) {
+ * que tienen alguna, ordenada por descriptor. Si ninguna tiene interfaces, nada: la arena queda como estaba. `hasta`: las
+ * filas que entran (V8 H9, #786: al rehacer lo de siempre para un overlay, sólo las suyas). */
+static bpvm_status_t lt_construir_interfaces(lt_ctx_t* x, int hasta) {
     bpvm_t* vm = x->vm;
     vm->ifaz_tabla = 0; vm->ifaz_n = 0;   /* la de un RUN anterior no vale */
     if (!x->ifx) return BPVM_OK;           /* ningún módulo trae interfaces */
-    for (int i = 0; i < x->n; i++) {
+    for (int i = 0; i < hasta; i++) {
         if (x->reg[i].flags & 4) continue;
         bpvm_status_t st = lt_lista_de(x, i); if (st != BPVM_OK) return st;
     }
     uint32_t n = 0;
-    for (int i = 0; i < x->n; i++) if (!(x->reg[i].flags & 4) && x->ifx[i].lista_abs != 0) n++;
+    for (int i = 0; i < hasta; i++) if (!(x->reg[i].flags & 4) && x->ifx[i].lista_abs != 0) n++;
     if (n == 0) return BPVM_OK;
     uint32_t tam = 4u + 8u * n;
     uint32_t t = (x->arena + 3u) & ~3u;
@@ -954,7 +956,7 @@ static bpvm_status_t lt_construir_interfaces(lt_ctx_t* x) {
     uint8_t* d = vm->memory + t;
     bpvm_write_u32_be(d, n);
     uint32_t k = 0;
-    for (int i = 0; i < x->n; i++) {
+    for (int i = 0; i < hasta; i++) {
         const lt_clase_t* c = &x->reg[i];
         if ((c->flags & 4) || x->ifx[i].lista_abs == 0) continue;
         /* insercion ordenada por descriptor (sin signo, como Integer.compareUnsigned en miVM) */
@@ -1155,17 +1157,38 @@ static bpvm_status_t lt_verificar(lt_ctx_t* x) {
     return BPVM_OK;
 }
 
-static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm) {
+/* V8 H9 (#786) — `desde`: el primer módulo que aún no está enlazado. Al arrancar, 0. En un overlay, sus clases cuelgan de
+ * las de siempre, y lo que dejó el enlace de éstas no se guarda: el registro son unos 80 B por clase, y al arrancar es del
+ * enlace y se suelta. Así que se REHACE: el enlace es determinista, y las filas de siempre van delante, de modo que
+ * recorrerlas otra vez sobre su arena escribe lo mismo en el mismo sitio. Se comprueba que acaba donde acabó. Las clases
+ * nuevas van a una arena nueva, detrás de los módulos nuevos, y la tabla de interfaces se hace nueva, con todas: la vieja
+ * se queda para cuando el overlay se vaya. miVM lo tiene más fácil: su registro sigue vivo, y sólo añade. */
+static bpvm_status_t bpvm_enlace_tardio(bpvm_t* vm, int desde) {
     lt_ctx_t x; memset(&x, 0, sizeof x);
-    x.vm = vm; x.arena = x.arena_ini = vm->next_free_address;
+    x.vm = vm; x.arena = x.arena_ini = desde ? vm->enlace_ini : vm->next_free_address;
+    x.repaso = desde != 0;
     vm->ifaz_tabla = 0; vm->ifaz_n = 0;   /* V8 H7.3: la tabla de interfaces es del RUN */
     bpvm_status_t st = lt_registrar(&x);
-    if (st == BPVM_OK) for (int i = 0; i < x.n && st == BPVM_OK; i++) st = lt_asegurar(&x, i);
+    int viejas = 0;                       /* las filas de lo que ya estaba enlazado */
+    while (viejas < x.n && x.reg[viejas].mod < desde) viejas++;
+    if (st == BPVM_OK) for (int i = 0; i < viejas && st == BPVM_OK; i++) st = lt_asegurar(&x, i);
+    if (st == BPVM_OK && desde) {
+        st = lt_construir_interfaces(&x, viejas);
+        if (st == BPVM_OK && (x.arena != vm->enlace_fin || bpvm_sabotaje_overlay == 7)) {
+            lt_error(&x, "enlace tardio: rehacer lo cargado no acaba donde acabo (%u, y era %u): bug del cargador",
+                     (unsigned) x.arena, (unsigned) vm->enlace_fin);
+            st = BPVM_ERR_RUNTIME;
+        }
+        x.repaso = 0;
+        x.arena = x.arena_ini = vm->next_free_address;
+    }
+    if (st == BPVM_OK) for (int i = viejas; i < x.n && st == BPVM_OK; i++) st = lt_asegurar(&x, i);
     /* V8 H7.3 (#756) — las interfaces de cada clase, con sus tablas, y la tabla ordenada que mira la VM (antes de las
      * refs: un SUBTIPO contra una interfaz mira la lista de la clase). Mismo orden que miVM. */
-    if (st == BPVM_OK) st = lt_construir_interfaces(&x);
-    if (st == BPVM_OK) for (int i = 0; i < vm->module_count && st == BPVM_OK; i++) st = lt_resolver_refs(&x, i);
+    if (st == BPVM_OK) st = lt_construir_interfaces(&x, x.n);
+    if (st == BPVM_OK) for (int i = desde; i < vm->module_count && st == BPVM_OK; i++) st = lt_resolver_refs(&x, i);
     if (st == BPVM_OK) st = lt_verificar(&x);
+    if (st == BPVM_OK && !desde) { vm->enlace_ini = x.arena_ini; vm->enlace_fin = x.arena; }
     if (st == BPVM_OK && x.arena > x.arena_ini) {
         /* la arena es del RUN: el heap empieza detras (mismo gesto que el final de la carga) */
         uint32_t nf = (x.arena + 63u) & ~63u;
@@ -1398,14 +1421,17 @@ static bpvm_status_t lt_exigir_duenos_con_clases(bpvm_t* vm) {
 
 /* ---- linkAll: resuelve imports y aplica class fixups ---- */
 
-bpvm_status_t bpvm_link_all(bpvm_t* vm) {
+bpvm_status_t bpvm_link_all(bpvm_t* vm) { return bpvm_link_desde(vm, 0); }
+
+/* V8 H9 (#786) — `desde`: el primer módulo sin enlazar. Lo de antes ya lo está, y un módulo nuevo enlaza contra ello. */
+bpvm_status_t bpvm_link_desde(bpvm_t* vm, int desde) {
     int64_t t0 = bpvm_platform_now_us();
     s_link_busquedas = 0; s_link_strcmp = 0;
     {
         bpvm_status_t st = lt_exigir_duenos_con_clases(vm);
         if (st != BPVM_OK) { bpvm_diag_urgente("[bpvm-c link] %s", vm->link_error); return BPVM_ERR_RUNTIME; }
     }
-    for (int i = 0; i < vm->module_count; i++) {
+    for (int i = desde; i < vm->module_count; i++) {
         bpvm_module_t* m = &vm->modules[i];
 
         /* Resolver imports: m->imports[k] → ext_table_addr + k*4. */
@@ -1468,7 +1494,7 @@ bpvm_status_t bpvm_link_all(bpvm_t* vm) {
      * ext-table, verificacion. Despues de los imports de TODOS los modulos (el mismo
      * orden que miVM: el primer error que se ve es el mismo en las dos VMs). */
     {
-        bpvm_status_t st = bpvm_enlace_tardio(vm);
+        bpvm_status_t st = bpvm_enlace_tardio(vm, desde);
         if (st != BPVM_OK) { bpvm_diag_urgente("[bpvm-c link] %s", vm->link_error); return BPVM_ERR_RUNTIME; }
     }
     /* #449 — que la tabla DIGA lo que ocupa, igual que la de handles. Sale del

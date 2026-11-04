@@ -316,6 +316,11 @@ static int main_real(int argc, char** argv) {
         bpvm_la_cola.sabotaje_gui = 1;
         fprintf(stderr, "[BPVM_SABOTAJE_GUI] la GUI, sin viajar al run 0 (SOLO PRUEBAS)\n");
     }
+    /* SÓLO PRUEBAS (V8 H9, #786): BPVM_SABOTAJE_OVERLAY=N, cada N rompe una pieza de los overlays (overlay_smoke). */
+    if (getenv("BPVM_SABOTAJE_OVERLAY")) {
+        extern int bpvm_sabotaje_overlay;
+        bpvm_sabotaje_overlay = atoi(getenv("BPVM_SABOTAJE_OVERLAY"));
+    }
 
     /* V6/U6.1 — EL MISMO REPARTO QUE LAS PLACAS, TAMBIÉN SIN `--stack`.
      *

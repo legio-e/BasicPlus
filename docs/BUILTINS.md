@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **287** (0–286). Cada builtin tiene:
+id—. Hoy son **302** (0–301). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -660,6 +660,25 @@ de Java (Eduardo, 31-oct: «la 2 está bien»). Es también el salto que pone el
 consola del PC escribe en binario y cierra cada línea con él. Pública: la interfaz de `Core` cambia, como con `#711`
 (en MOD9 el enlace es por nombre: lo compilado antes sigue enlazando). La prueba: `bpgenvm-c/samples/Eol.bp` (la red
 de paridad: el stdout, byte a byte).
+
+## 296–301 — los overlays  *(V8, H9, `#786`, 4-nov)*
+
+| id | nombre | firma | uso |
+|---|---|---|---|
+| 296 | `__overlayLoad` | `(ruta: string)` | `Overlay.load(ruta)` |
+| 297 | `__overlayExe` | `(arg: string)` | `Overlay.tryExe(arg)` |
+| 298 | `__overlayClose` | `()` | `Overlay.unload()`, lo primero |
+| 299 | `__overlayFree` | `()` | `Overlay.unload()`, lo último |
+| 300 | `__overlayTrace` | `(): string` | `Overlay.getTrace()` |
+| 301 | `__className` | `(o: any): string` | `Overlay.getErrorClass()` |
+
+Un programa carga a otro, lo ejecuta y lo descarga (`Overlays.bp`; `V8_IDEAS` §E13). `__overlayLoad` comprueba las
+condiciones, colecta, compacta, aparta los objetos hasta arriba, carga y enlaza lo nuevo, y devuelve los objetos detrás.
+`__overlayExe` abre un marco como el de `CALL_EXT` y salta al `__startup` del programa: su `HALT` vuelve, porque ahí `bp` no
+es el fondo de la pila, y deja el 0 de un builtin sin valor. `__overlayClose` saca sus globales de las raíces;
+`__overlayFree` recorre el heap y, si no queda nada suyo, lo suelta. Los textos, iguales en las dos VMs. Sin `public` en
+`Core`, y públicas en `Overlays`, porque una clase sólo alcanza lo público de su módulo. La prueba:
+`bpgenvm-c/tools/overlay_smoke.py`.
 
 ---
 

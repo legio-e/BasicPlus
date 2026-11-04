@@ -1,0 +1,161 @@
+// ============================================================
+// Overlays.bp — V8/H9 (#786): un programa que carga a otro, lo ejecuta y lo descarga.
+//
+// La idea es de Eduardo: como los overlays del MS-DOS, pero con un programa entero. Un programa A carga un programa B
+// con los módulos que le falten, ejecuta su Main y, cuando acaba, lo descarga. Lo que A ya tenía cargado no se vuelve
+// a cargar: si los dos usan M1, hay un solo M1, y B lo ve como lo dejó A.
+//
+//   import Overlays
+//
+//   function Main()
+//     var ov: Overlays.Overlay := Overlays.Overlay()
+//     ov.load("/app/Demo.mod")            // un .mod o un pack
+//     if ov.tryExe("su argumento") then
+//       print "acabó bien"
+//     else
+//       print "falló: " + ov.getError()
+//     endif
+//     ov.unload()
+//   end Main
+//
+// load: los objetos del programa se mueven para hacerle sitio al módulo, así que se carga en condiciones controladas,
+// como Heap.compact: SÓLO DESDE Main (llamando a load directamente), SIN OTROS HILOS VIVOS, SIN FICHEROS ABIERTOS y con
+// una sola carga a la vez. Si no, o si no se puede cargar, RuntimeError, y el programa sigue como estaba.
+//
+// tryExe: el programa cargado corre en el hilo de quien llama. Devuelve true si su Main acaba bien; si no, false, y el
+// error se queda aquí, en texto: getError, getErrorClass y getTrace. La excepción no sale, porque su clase puede ser
+// del programa que se va a descargar.
+//
+// unload: corre los destructores de lo que el programa dejó y devuelve la memoria. Si queda algo suyo vivo —un objeto
+// de una clase suya guardado en un módulo que se queda—, RuntimeError con su nombre, y el programa cargado se queda en
+// la memoria, cerrado: ya no se puede ejecutar, y se puede volver a intentar la descarga.
+//
+// Dentro de un programa cargado, los literales de cadena son strings del heap: lo que deje en un módulo que se queda
+// sigue vivo cuando el programa se va. Todo esto, en V8_IDEAS §E13.
+// ============================================================
+module Overlays
+  import Core
+
+  public function __overlayLoad(ruta: string)
+    inline CALL_BUILTIN 296
+  end __overlayLoad
+  public function __overlayExe(arg: string)
+    inline CALL_BUILTIN 297
+  end __overlayExe
+  public function __overlayClose()
+    inline CALL_BUILTIN 298
+  end __overlayClose
+  public function __overlayFree()
+    inline CALL_BUILTIN 299
+  end __overlayFree
+  public function __overlayTrace(): string
+    inline CALL_BUILTIN 300
+  end __overlayTrace
+  public function __className(o: Object): string
+    inline CALL_BUILTIN 301
+  end __className
+  public function __heapHandles(): integer
+    inline CALL_BUILTIN 268
+  end __heapHandles
+
+  public class Overlay
+    // Las rondas de destructores de unload: lo que un destructor suelta puede tener el suyo. Las mismas que al acabar
+    // un programa.
+    const Overlay.RONDAS: integer := 8
+
+    var cargado: boolean     // este objeto tiene un programa cargado
+    var corriendo: boolean   // está dentro de tryExe
+    var cerrado: boolean     // la descarga empezó: ya no se puede ejecutar
+    var error: string
+    var claseError: string
+    var traza: string
+
+    public function Overlay()
+      this.cargado := false
+      this.corriendo := false
+      this.cerrado := false
+      this.limpiaError()
+    end Overlay
+
+    function limpiaError()
+      this.error := ""
+      this.claseError := ""
+      this.traza := ""
+    end limpiaError
+
+    // Carga un programa, un .mod o un pack, con lo que le falte. Sólo desde Main: ver la cabecera.
+    public function load(ruta: string)
+      __overlayLoad(ruta)
+      this.cargado := true
+      this.cerrado := false
+      this.limpiaError()
+    end load
+
+    // Ejecuta el Main del programa cargado con ese argumento: "" es el valor por defecto de su parámetro.
+    public function tryExe(arg: string): boolean
+      if not this.cargado then
+        throw RuntimeError("Overlay.tryExe: no hay nada cargado")
+      endif
+      if this.cerrado then
+        throw RuntimeError("Overlay.tryExe: la descarga ya ha empezado")
+      endif
+      if this.corriendo then
+        throw RuntimeError("Overlay.tryExe: ya esta corriendo")
+      endif
+      this.limpiaError()
+      this.corriendo := true
+      var bien: boolean := false
+      try
+        __overlayExe(arg)
+        bien := true
+      catch e: Exception
+        this.error := e.msg
+        this.claseError := __className(e)
+        this.traza := __overlayTrace()
+      endtry
+      this.corriendo := false
+      return bien
+    end tryExe
+
+    // Descarga el programa: destructores, comprobar que no quede nada suyo y devolver la memoria.
+    public function unload()
+      if not this.cargado then
+        throw RuntimeError("Overlay.unload: no hay nada cargado")
+      endif
+      if this.corriendo then
+        throw RuntimeError("Overlay.unload: esta corriendo")
+      endif
+      __overlayClose()
+      this.cerrado := true
+      var antes: integer := -1
+      var rondas: integer := 0
+      while (rondas < Overlay.RONDAS) and (__heapHandles() != antes) do
+        antes := __heapHandles()
+        gc()
+        __destruyePendientes()
+        rondas := rondas + 1
+      endwh
+      __overlayFree()
+      this.cargado := false
+    end unload
+
+    public function isLoaded(): boolean
+      return this.cargado
+    end isLoaded
+
+    // El mensaje del error con el que acabó el último tryExe; "" si acabó bien.
+    public function getError(): string
+      return this.error
+    end getError
+
+    // El nombre de su clase, con su módulo: M4.ErrorDeSensor.
+    public function getErrorClass(): string
+      return this.claseError
+    end getErrorClass
+
+    // Dónde: la cadena de llamadas, de dentro afuera, en posiciones («Demo+50 Demo+72»), como la del EXITED (#582).
+    public function getTrace(): string
+      return this.traza
+    end getTrace
+  end Overlay
+end Overlays

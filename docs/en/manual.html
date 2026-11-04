@@ -214,6 +214,7 @@
     <li class="sub"><a href="#interfaces">10.4 module interface (withdrawn)</a></li>
     <li class="sub"><a href="#encapsulacion">10.5 Class↔module encapsulation</a></li>
     <li class="sub"><a href="#dospasadas">10.6 Two passes and cycles between modules</a></li>
+    <li class="sub"><a href="#overlays">10.7 Overlays: a program that loads another</a></li>
 
     <li class="group"><a href="#excepciones">11. Exceptions</a></li>
     <li class="group"><a href="#owner">12. Owner semantics</a></li>
@@ -1864,6 +1865,56 @@ that does not match what you wrote, check for a cycle between definitions.</p>
 </ul>
 <p>Remember the limit applies only to <em>types that cross the module boundary</em>.
 Within one module, two classes may refer to each other with no problem.</p>
+
+<h3 id="overlays">10.7 Overlays: a program that loads another</h3>
+<p>A program can load another one with the modules it is missing, run its <code>Main</code>
+and, when it ends, unload it. That is the class <code>Overlay</code>, in the module
+<code>Overlays</code>:</p>
+<pre><code>import Overlays
+
+function Main()
+  var ov: Overlays.Overlay := Overlays.Overlay()
+  ov.load("/app/Demo.mod")            // a .mod or a pack
+  if ov.tryExe("its argument") then
+    print "it ended well"
+  else
+    print "it failed: " + ov.getError()
+  endif
+  ov.unload()
+end Main</code></pre>
+<p>What is already loaded is not loaded again. If both programs use the module
+<code>M1</code>, there is a single <code>M1</code>: the loaded program sees it as the one
+that loaded it left it, with its globals, and what it changes stays. What came in with it
+goes away with it.</p>
+<ul>
+  <li><code>load(path)</code> loads a <code>.mod</code> or a pack. It looks for it like a
+      program: next to the main program, as given, in <code>/app</code>, in
+      <code>/lib</code> and in the pack zone. The objects of the program move to make room
+      for it, so it loads under controlled conditions, like <code>Heap.compact()</code>:
+      <strong>only from <code>Main</code></strong> (calling <code>load</code> directly),
+      <strong>with no other live threads</strong>, <strong>with no open files</strong> and
+      with <strong>one load at a time</strong>. If they are not met, or if it cannot be
+      loaded, <code>RuntimeError</code>, and the program goes on as it was.</li>
+  <li><code>tryExe(arg)</code> runs the loaded program on the caller's thread, and comes back
+      when its <code>Main</code> ends: <code>true</code> if it ended well;
+      <code>false</code> if not, and the error is read with <code>getError()</code> (the
+      message), <code>getErrorClass()</code> (the class, with its module) and
+      <code>getTrace()</code> (the chain of calls, in positions). The exception does not come
+      out: its class may belong to the program about to be unloaded. <code>arg</code> is the
+      argument of its <code>Main</code>, and <code>""</code>, its default value. An error in
+      a thread of the loaded program does not reach <code>tryExe</code>.</li>
+  <li><code>unload()</code> runs the destructors of what the program left and gives the
+      memory back. If something of it is still alive, like an object of one of its classes
+      kept in a module that stays, <code>RuntimeError</code> with its name (<em>sigue vivo un
+      objeto de Demo.Cosa</em>): the program stays in memory, closed, and it can be tried
+      again once that is released. It does not unload with other live threads either.</li>
+</ul>
+<p>Inside a loaded program, a string literal is a heap string: what it leaves in a module
+that stays is still alive when the program goes. It costs an allocation each time a literal
+is evaluated, and only there. Its <code>native</code> functions run interpreted. They do not
+nest: inside a loaded program, <code>load</code> and <code>Heap.compact()</code> refuse,
+because its <code>Main</code> is not the one at the bottom of the stack. A complete example,
+in <code>samples/overlay</code>.</p>
 
 <!-- =========================================================== -->
 

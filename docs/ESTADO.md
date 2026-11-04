@@ -59,7 +59,10 @@
 >   programa genérico que lance otro y atrape sus errores. En `V8_IDEAS` §E13: cargar en marcha (A) o un relevo entre
 >   programas, cada uno en una VM limpia (B). Medido cuánto tarda en arrancar y acabar un programa en cuatro placas.
 >   **Decidida la A** (*«1) La A. Si hay problemas lo vamos resolviendo poco a poco»*), con una clase `Overlay` y los
->   métodos `load`, `tryExe` y `unload`. El algoritmo, escrito en §E13 y por aprobar; sin código todavía.
+>   métodos `load`, `tryExe` y `unload`. El algoritmo y los literales en el heap, aprobados (*«1, 2 y 3 Si»*).
+> - **H9, los overlays, hecho en el PC:** `LEA_STR` (`7bf3d972`), el módulo `Overlays`, y `load`, `tryExe` y `unload` en las
+>   dos VMs, con la misma salida byte a byte, también con dos workers. Los ejemplos A y B, en `samples/overlay`, y
+>   `overlay_smoke` en la red (quince casos y seis sabotajes). El manual y los catálogos, escritos. Faltan las placas (H9.5).
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 > - **Otro:** la primera medida de `#786` salió redondeada a 0,2 s por leer el cable con `w.lines`, que espera ese plazo. Se
@@ -67,7 +70,8 @@
 >
 > **Para la próxima sesión:**
 > - con Eduardo delante, en el IDE: `#694` (`Stop` con y sin programa, un RUN rechazado) y la traza de `#582` en la consola;
-> - el OK al algoritmo de `#786` (`V8_IDEAS` §E13) y el nombre del módulo; y contestar si se cierran `#745` y `#710`;
+> - H9.5, las placas: el OK para grabar la Metro, la P4 y la Nucleo con los overlays, y la stdlib nueva en cada una;
+> - contestar si se cierran `#745` y `#710`;
 > - la Metro y la P4 llevan la imagen de `8c72bb95`; la Nucleo, la de `571bf24a`; la S3, la del paso 3 de `#730`
 >   (`cdbda834`); la DK2, la C3, la C5 y la C6, la del lote del 3-nov, por la mañana. En el próximo lote, todas, y `#785` en
 >   la DK2;

@@ -92,6 +92,21 @@ memorySize└──────────────────────�
   cerrojo mientras espera. El alta del handle no crece la tabla con otros workers en marcha. En miVM crecer hace
   arrays nuevos y deja intactos los viejos.
 
+- **Un overlay** (V8 H9, `#786`; `Overlays.bp`) mueve la frontera entre los módulos y el heap con el programa en
+  marcha. Un módulo va siempre detrás del último, y un literal se reconoce por estar por debajo de `heap_start`, así que
+  lo que se mueve son los objetos: se compacta (§2.5), todo lo vivo sube hasta el techo del heap, se carga como al
+  arrancar, y los objetos vuelven detrás de lo cargado, con `heap_start` más arriba. Al descargar no se mueve nada:
+  `heap_start` vuelve a bajar y lo que ocupaba el programa es un bloque libre, el primero del heap. En la VM-C, de
+  `heap_start` viejo al nuevo hay un múltiplo de 4, para que el recorrido siga cayendo en las cabeceras.
+
+  ```
+  antes       [ módulos ][ objetos ············ libre ············ ]
+  apartar     [ módulos ][ ············ libre ············ objetos ]
+  cargar      [ módulos ][ Demo, Json ][ ····· libre ····· objetos ]
+  devolver    [ módulos ][ Demo, Json ][ objetos ····· libre ····· ]
+  descargar   [ módulos ][ hueco libre ][ objetos ···· libre ····· ]
+  ```
+
 ---
 
 ## 2. Header de objeto en heap

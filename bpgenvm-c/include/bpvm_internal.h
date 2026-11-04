@@ -512,6 +512,41 @@ struct aot_helpers_v2;
 /* V7/H7 #595 — los textos de Heap.compact() cuando no se cumplen sus condiciones; los MISMOS en miVM. */
 #define BPVM_MSG_COMPACT_MAIN  "Heap.compact: sólo se puede llamar desde Main"
 #define BPVM_MSG_COMPACT_HILOS "Heap.compact: no se puede compactar con otros hilos vivos"
+/* V8 H9 (#786) — los textos de los overlays; los MISMOS en miVM. */
+#define BPVM_MSG_OVERLAY_MAIN        "Overlay.load: sólo se puede llamar desde Main"
+#define BPVM_MSG_OVERLAY_HILOS       "Overlay.load: no se puede cargar con otros hilos vivos"
+#define BPVM_MSG_OVERLAY_FICHEROS    "Overlay.load: hay ficheros abiertos"
+#define BPVM_MSG_OVERLAY_YA          "Overlay.load: ya hay un overlay cargado"
+#define BPVM_MSG_OVERLAY_GC          "Overlay.load: con el GC apagado no se puede"
+#define BPVM_MSG_OVERLAY_FIJO        "Overlay.load: hay un bloque del heap que no se puede mover"
+#define BPVM_MSG_OVERLAY_NO_CABE     "no cabe en la memoria"
+#define BPVM_MSG_OVERLAY_EXE_HILO    "Overlay.tryExe: sólo en el hilo principal"
+#define BPVM_MSG_OVERLAY_EXE_NADA    "Overlay.tryExe: no hay nada cargado"
+#define BPVM_MSG_OVERLAY_SUELTA_HILOS "Overlay.unload: no se puede descargar con otros hilos vivos"
+
+/* V8 H9 (#786) — EL OVERLAY CARGADO, uno a la vez (Overlays.bp, V8_IDEAS §E13). Cómo estaba todo antes de cargar, que es
+ * a donde se vuelve al descargar o si la carga falla, y lo que hace falta mientras está. Sale del malloc de la plataforma
+ * sólo si un programa carga uno. Espejo de la clase Overlay de ModuleManager (miVM). */
+typedef struct bpvm_overlay {
+    int      modulos, simbolos, sym_ntrozos;   /* cuántos había */
+    uint32_t sym_pool_len, sym_trozo_usado;
+    uint32_t libre;                  /* next_free_address */
+    uint32_t heap_antes;             /* heap_start: hasta ahí baja al descargar */
+    uint32_t xip_lo, xip_hi;
+    uint32_t ifaz_tabla, ifaz_n;
+    int             run_pack_on;
+    bpvm_pack_src_t run_pack_src;
+    bpvm_pack_fs_t  run_pack_st;
+    char            run_pack_only[BPVM_PACK_NAME_LEN + 1];
+    /* el heap apartado, mientras se carga */
+    uint32_t arriba, largo, techo, bloques, reserva;
+    uint8_t  cargando;               /* dentro de load: sus .mdn no se cargan (corre interpretado) */
+    uint8_t  cerrado;                /* la descarga empezó: sus globales ya no son raíces */
+    /* el programa cargado */
+    uint32_t entrada;                /* su __startup */
+    uint32_t bp;                     /* el bp de ese __startup mientras corre; 0, si no corre */
+    char     traza[192];             /* la cadena de llamadas del error que salió de él */
+} bpvm_overlay_t;
 
 struct bpvm {
     /* ══ PREFIJO CONGELADO ══════════════════════════════════════════════════
@@ -875,6 +910,15 @@ struct bpvm {
      * una cadena, #714). Un cursor del lento (bpvm_strcur_t) anotado en otra época ya no vale. Al final: el prefijo del
      * .mdn no se toca. */
     uint32_t str_epoca;
+    /* V8 H9 (#786) — EL OVERLAY: `overlay_cs` es el CS de su primer módulo (todos los suyos, y sólo ellos, están de ahí
+     * en adelante; sin overlay, el mayor, y LEA_STR no llega); `overlay`, el resto; `enlace_ini` y `enlace_fin`, dónde
+     * empezó y acabó la arena del enlace tardío del arranque, que un overlay rehace sin moverla (link.c); y `raiz_dir`,
+     * la carpeta del programa principal, donde se busca lo que un programa carga. Al final: el prefijo del .mdn no se
+     * toca. */
+    uint32_t overlay_cs;
+    bpvm_overlay_t* overlay;
+    uint32_t enlace_ini, enlace_fin;
+    char*    raiz_dir;
 };
 
 /* V7/H12, etapa 3.1, paso 6 — EL KILL CRUZA NÚCLEOS: lo pide `io` (o el poll, o el depurador) y lo mira el run, que con
@@ -1379,6 +1423,30 @@ void bpvm_heap_cuentas(bpvm_t* vm, bpvm_heap_cuentas_t* out);
  * descarriló (#494): no se compacta, y queda armada la prefabricada, que lanza bpvm_throw_runtime_error; 2 = hay
  * otro hilo vivo: ni colecta ni compacta. */
 int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc);
+/* V8 H9 (#786) — LOS OVERLAYS (bpvm.c y heap.c). bpvm_overlay_cargar: las condiciones, apartar el heap, cargar, enlazar y
+ * devolverlo; 0 si ha cargado; si no, deja lo que hay que lanzar en `fallo`, y todo como estaba. Las dos de la descarga,
+ * lo mismo. bpvm_overlay_apartar deja el mundo parado, y bpvm_overlay_devolver lo suelta. Lo que falta del lado de la
+ * VM para `tryExe`, en builtins.c. */
+int  bpvm_overlay_cargar(bpvm_t* vm, const bpvm_thread_t* tc, const char* ruta, char* fallo, size_t cap);
+int  bpvm_overlay_cerrar(bpvm_t* vm, const bpvm_thread_t* tc, char* fallo, size_t cap);
+int  bpvm_overlay_soltar(bpvm_t* vm, const bpvm_thread_t* tc, char* fallo, size_t cap);
+int  bpvm_overlay_apartar(bpvm_t* vm, const bpvm_thread_t* tc, bpvm_overlay_t* o, char* fallo, size_t cap);
+void bpvm_overlay_devolver(bpvm_t* vm, bpvm_overlay_t* o, uint32_t nuevo);
+int  bpvm_overlay_otros_hilos(bpvm_t* vm, const bpvm_thread_t* tc);
+int  bpvm_overlay_lo_que_queda(bpvm_t* vm, const bpvm_overlay_t* o, char* fallo, size_t cap);
+void bpvm_overlay_heap_suelta(bpvm_t* vm, const bpvm_overlay_t* o);
+/* LEA_STR en un módulo de un overlay: un string nuevo del heap con el literal de `dir`, en la pila de `tc`. 0 sin sitio. */
+int  bpvm_literal_al_heap(bpvm_t* vm, bpvm_thread_t* tc, uint32_t dir);
+/* Enlaza los módulos desde `desde`, contra lo que ya había (link.c). */
+bpvm_status_t bpvm_link_desde(bpvm_t* vm, int desde);
+/* La marca por clase de los destructores va por dirección: al descargar, fuera (destruir.c). */
+void bpvm_destruir_olvida_clases(bpvm_t* vm);
+/* Una excepción sale de un overlay: la cadena de llamadas, antes de que el unwind se lleve los marcos (exceptions.c). */
+void bpvm_overlay_sale(bpvm_t* vm, const bpvm_thread_t* tc);
+/* SÓLO PRUEBAS: rompe una pieza, para ver que overlay_smoke lo caza. 1, un literal no va al heap; 2, los handles no siguen
+ * a los objetos; 3, la tabla de interfaces no vuelve; 5, sus globales siguen siendo raíces; 6, los símbolos no se van;
+ * 7, rehacer el enlace no acaba donde acabó. */
+extern int bpvm_sabotaje_overlay;
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */
 void     bpvm_heap_free_block(bpvm_t* vm, uint32_t header_addr);

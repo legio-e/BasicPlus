@@ -595,7 +595,9 @@ static void gc_mark_phase(bpvm_t* vm) {
      *    [data_start, code_start) (crecen hacia atrás desde CS). Un global que
      *    apunte a heap es una RAÍZ; sin escanearlo se recolecta en vivo (UAF).
      *    Conservador, como las pilas. Espejo del getDataRegions de la VM-Java. */
-    for (int i = 0; i < vm->module_count; i++) {
+    /* V8 H9 (#786) — un overlay que se está descargando ya no es raíz: lo que sólo alcanzan sus globales, se va. */
+    int con_datos = (vm->overlay != NULL && vm->overlay->cerrado) ? vm->overlay->modulos : vm->module_count;
+    for (int i = 0; i < con_datos; i++) {
         const bpvm_module_t* m = &vm->modules[i];
         uint32_t lo = m->data_start;
         uint32_t hi = m->data_start + m->data_size;
@@ -1364,6 +1366,140 @@ int bpvm_heap_compactar(bpvm_t* vm, const bpvm_thread_t* tc) {
     stw_seguir(vm);
     bpvm_smp_unlock(vm);
     return r;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * V8 H9 (#786) — LOS OVERLAYS: lo que toca al heap (Overlays.bp, V8_IDEAS §E13). Espejo de overlayCargaLocked,
+ * overlayLoQueQuedaLocked y overlaySueltaLocked (miVM).
+ *
+ * Un módulo va siempre detrás del último y el heap detrás de los módulos, y un literal se reconoce por estar por debajo
+ * de heap_start. Así que para cargar con el programa en marcha, lo que se mueve son los objetos: se compacta, se aparta
+ * todo hasta arriba, se carga como al arrancar —el cargador ve un heap vacío— y los objetos vuelven detrás de lo cargado.
+ * Al descargar no se mueve nada: heap_start baja, y lo que ocupaba el programa es un bloque libre más.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+#define OVERLAY_MARGEN 1024u   /* lo que queda libre detrás de lo cargado, como poco: la reserva de emergencia (#355) */
+
+/* Mueve el trozo de objetos [desde, desde + largo) a `hasta`. Sin huecos ni clavados dentro. */
+static void mueve_objetos(bpvm_t* vm, uint32_t desde, uint32_t hasta, uint32_t largo) {
+    memmove(vm->memory + hasta, vm->memory + desde, largo);
+    if (bpvm_sabotaje_overlay == 2) return;
+    for (uint32_t idx = 1u; idx < vm->handles.next; idx++) {
+        uint32_t a = vm->handles.addr[idx];
+        if (a == 0u) continue;                                        /* slot libre */
+        uint32_t h = a - 4u;
+        if (h >= desde && h < desde + largo) vm->handles.addr[idx] = a - desde + hasta;
+    }
+}
+
+/* ¿Algún otro hilo vivo? Como en Heap.compact: un TERMINATED que aún debe eventos cuenta como vivo. Con el cerrojo. */
+int bpvm_overlay_otros_hilos(bpvm_t* vm, const bpvm_thread_t* tc) {
+    for (const bpvm_thread_t* o = bpvm_hilos_primero(vm); o; o = bpvm_hilos_siguiente(vm, o))
+        if (o != tc && (o->status != BPVM_THREAD_TERMINATED || bpvm_events_con_deuda(vm, o))) return 1;
+    return 0;
+}
+
+int bpvm_overlay_apartar(bpvm_t* vm, const bpvm_thread_t* tc, bpvm_overlay_t* o, char* fallo, size_t cap) {
+    const char* msg = NULL;
+    bpvm_smp_lock(vm);
+    if (vm->smp && vm->smp->stop_the_world) stw_esperar_al_otro(vm);
+    stw_parar(vm);
+    if (bpvm_overlay_otros_hilos(vm, tc))  msg = BPVM_MSG_OVERLAY_HILOS;
+    else if (vm->files_head != 0u)         msg = BPVM_MSG_OVERLAY_FICHEROS;
+    else if (vm->gc_suspended)             msg = BPVM_MSG_OVERLAY_GC;
+    else {
+        bpvm_gc_cuerpo(vm);
+        if (vm->gc_descarrilo) { bpvm_aot_callctx()->reserva_descarrilada = 1; msg = BPVM_MSG_HEAP_DESCARRILADO; }   /* #494 */
+        else {
+            compactar(vm);
+            if ((vm->huecos_mapa[0] | vm->huecos_mapa[1]) != 0u) msg = BPVM_MSG_OVERLAY_FIJO;   /* un hueco delante de algo fijo */
+        }
+    }
+    if (msg != NULL) {
+        stw_seguir(vm);
+        bpvm_smp_unlock(vm);
+        snprintf(fallo, cap, "%s", msg);
+        return 1;
+    }
+    o->largo   = vm->heap_next - vm->heap_start;
+    o->arriba  = (vm->heap_top - o->largo) & ~7u;
+    o->techo   = vm->heap_top;
+    o->bloques = vm->heap_bloques;
+    o->reserva = vm->heap_reserve;
+    mueve_objetos(vm, vm->heap_start, o->arriba, o->largo);
+    vm->heap_top = (o->arriba > OVERLAY_MARGEN) ? o->arriba - OVERLAY_MARGEN : 0u;   /* el cargador no pisa lo apartado */
+    return 0;   /* el mundo, parado: lo suelta bpvm_overlay_devolver */
+}
+
+void bpvm_overlay_devolver(bpvm_t* vm, bpvm_overlay_t* o, uint32_t nuevo) {
+    mueve_objetos(vm, o->arriba, nuevo, o->largo);
+    vm->heap_top          = o->techo;
+    vm->heap_start        = nuevo;
+    vm->heap_next         = nuevo + o->largo;
+    vm->heap_bloques      = o->bloques;
+    vm->heap_reserve      = o->reserva;
+    bpvm_huecos_vaciar(vm);
+    vm->last_gc_heap_next = vm->heap_next;
+    vm->alloc_since_gc    = 0u;
+    vm->gc_bump_threshold = (vm->heap_top - vm->heap_start) / 8u;
+    if (vm->gc_bump_threshold < 4096u) vm->gc_bump_threshold = 4096u;
+    stw_seguir(vm);
+    bpvm_smp_unlock(vm);
+}
+
+/* Recorre el heap: ni un objeto de una clase que se va, ni una referencia cruda a su zona (un array del bloque de datos;
+ * las cadenas ya son del heap, LEA_STR). Los bitmaps dicen qué campos son referencias: es exacto. 0 si no queda nada. */
+int bpvm_overlay_lo_que_queda(bpvm_t* vm, const bpvm_overlay_t* o, char* fallo, size_t cap) {
+    uint8_t* mem = vm->memory;
+    uint32_t lo = o->heap_antes, hi = vm->heap_start;
+    uint32_t cur = vm->heap_start;
+    while (cur < vm->heap_next) {
+        uint32_t total = block_total_size(vm, cur);
+        if (total == 0u || total > vm->heap_top - vm->heap_start) break;
+        uint32_t tag = bpvm_read_u32_be(mem + cur);
+        if (!(tag & BPVM_TAG_FREE_BIT)) {
+            int type = (int) ((tag & BPVM_TAG_TYPE_MASK) >> BPVM_TAG_TYPE_SHIFT);
+            if (type == BPVM_TYPE_OBJECT) {
+                uint32_t cls = bpvm_read_u32_be(mem + cur + 4u);
+                char nombre[160];
+                if (cls >= lo && cls < hi) {
+                    if (!bpvm_link_nombre_de_clase(vm, cls, nombre, sizeof nombre)) snprintf(nombre, sizeof nombre, "?");
+                    snprintf(fallo, cap, "Overlay.unload: sigue vivo un objeto de %s", nombre);
+                    return 1;
+                }
+                uint32_t nf = bpvm_read_u16_be(mem + cls + BPVM_CLS_OFF_NUM_FIELDS);
+                for (uint32_t i = 0; i < nf; i++) {
+                    uint32_t word = bpvm_read_u32_be(mem + cls + BPVM_CLS_OFF_FIELD_BITMAP + (i / 32u) * 4u);
+                    if (!(word & (1u << (i & 31u)))) continue;
+                    uint32_t r = (uint32_t) bpvm_read_i64_be(mem + cur + BPVM_OBJ_HEADER_SIZE + i * 4u);
+                    if (!(r & BPVM_HANDLE_TAG) && r >= lo && r < hi) {
+                        if (!bpvm_link_nombre_de_clase(vm, cls, nombre, sizeof nombre)) snprintf(nombre, sizeof nombre, "?");
+                        snprintf(fallo, cap, "Overlay.unload: un objeto de %s apunta a un dato del programa cargado", nombre);
+                        return 1;
+                    }
+                }
+            } else if (type == BPVM_TYPE_ARRAY_REF) {
+                uint32_t n = bpvm_read_u32_be(mem + cur + 4u);
+                for (uint32_t i = 0; i < n; i++) {
+                    uint32_t r = (uint32_t) bpvm_read_i64_be(mem + cur + BPVM_OBJ_HEADER_SIZE + i * 8u);
+                    if (!(r & BPVM_HANDLE_TAG) && r >= lo && r < hi) {
+                        snprintf(fallo, cap, "Overlay.unload: un array apunta a un dato del programa cargado");
+                        return 1;
+                    }
+                }
+            }
+        }
+        cur += total;
+    }
+    return 0;
+}
+
+/* Lo que ocupaba el programa, un bloque libre más. */
+void bpvm_overlay_heap_suelta(bpvm_t* vm, const bpvm_overlay_t* o) {
+    uint32_t hi = vm->heap_start;
+    vm->heap_start = o->heap_antes;
+    add_to_free_list(vm, o->heap_antes, hi - o->heap_antes);
+    vm->gc_bump_threshold = (vm->heap_top - vm->heap_start) / 8u;
+    if (vm->gc_bump_threshold < 4096u) vm->gc_bump_threshold = 4096u;
 }
 
 /* V8 #718 — el hueco para `total` B: el de dirección más baja entre los que valen, EL MISMO que encontraba la lista

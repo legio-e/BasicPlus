@@ -509,6 +509,7 @@ bpvm_t* bpvm_init(uint8_t* memory, size_t memory_size, size_t stack_base) {
     vm->alloc_since_gc    = 0u;   /* #357 */
     vm->gc_bump_threshold = 0;   /* off hasta entonces */
     vm->heap_reserve = 0;        /* #355: se arma al fijar el heap real, no aquí */
+    vm->overlay_cs = 0xFFFFFFFFu;   /* V8 H9 (#786): sin overlay, LEA_STR no llega */
     vm->main_absolute_address = 0;
     /* V4 — tabla de handles (lazy; V6/U5: en su módulo, bpvm_handles.c) + GC
      * suspendido durante la migración. */
@@ -1482,6 +1483,11 @@ bpvm_status_t bpvm_load_entry(bpvm_t* vm, const char* path, bpvm_entry_t* e) {
                  path);
         return BPVM_ERR_IO;
     }
+    if (vm->module_count == 0 && vm->raiz_dir == NULL) {   /* V8 H9 (#786): lo que un programa carga, primero a su lado */
+        char dir[256];
+        path_dirname(e->resolved, dir, sizeof dir);
+        vm->raiz_dir = bpvm_strdup(dir);
+    }
     /* [V7/H2, #493] UN MÓDULO DE LA ZONA (`pack:<P>/X.mod`, lo devuelva el
      * resolvedor o lo dé el usuario tal cual): se ejecuta XIP desde ahí, y sus
      * dependencias se buscan PRIMERO en su propio pack (el orden de Eduardo:
@@ -1565,6 +1571,164 @@ uint8_t* bpvm_arena_reserve(bpvm_t* vm, uint32_t n, uint32_t align) {
     vm->heap_reserve = 1024u;
     if ((vm->heap_top - vm->heap_start) < 16u * 1024u) vm->heap_reserve = 0u;
     return vm->memory + base;
+}
+
+/* Lo que un módulo cargado tiene fuera del bloque de la VM. */
+static void modulo_suelta(bpvm_module_t* m) {
+    bpvm_free(m->imports);     /* V7 #651: sus nombres viven en m->nombres */
+    bpvm_free(m->dep_names);   /* V7/H2 (MOD8) */
+    bpvm_free(m->dep_gen);
+    bpvm_free(m->dep_crc);
+    bpvm_free(m->dep_flags);
+    bpvm_free(m->dep_avisado);
+    bpvm_free(m->class_fixups);
+    bpvm_free(m->eh_class_fixups);
+    bpvm_free(m->refs);        /* V7/H2 (#523) — V10 (R4/J-2): la subtabla refs se quedaba viva → «FUGA» en todo RUN MOD9 */
+    bpvm_free(m->nombres);     /* V7 #651: los nombres de imports, dep_names y refs, en un bloque */
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * V8 H9 (#786) — LOS OVERLAYS: un programa que carga a otro, lo ejecuta y lo descarga (Overlays.bp, V8_IDEAS §E13). Espejo
+ * de cargaOverlay y descargaOverlay (ModuleManager, miVM). Lo del heap, en heap.c; lo del enlace, en link.c.
+ *
+ * Una carga a la vez, y lo que entró se va entero: descargar es volver a como estaba. Lo ya cargado no se vuelve a
+ * cargar (discover_deps lo ve en vm->modules, y sólo pasa la norma).
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+int bpvm_sabotaje_overlay = 0;   /* SÓLO PRUEBAS: bpvm_internal.h */
+
+/* Vuelve todo a como estaba, salvo la memoria del heap, que devuelve quien llama. */
+static void overlay_deshaz(bpvm_t* vm, const bpvm_overlay_t* o) {
+    for (int i = o->modulos; i < vm->module_count; i++) modulo_suelta(&vm->modules[i]);
+    vm->module_count = o->modulos;
+    if (bpvm_sabotaje_overlay != 6) {
+        vm->symbol_count = o->simbolos;
+        while (vm->sym_ntrozos > o->sym_ntrozos) bpvm_free(vm->sym_trozos[--vm->sym_ntrozos]);
+        vm->sym_pool_len    = o->sym_pool_len;
+        vm->sym_trozo_usado = o->sym_trozo_usado;
+    }
+    vm->next_free_address = o->libre;
+    vm->xip_lo = o->xip_lo;
+    vm->xip_hi = o->xip_hi;
+    if (bpvm_sabotaje_overlay != 3) {
+        vm->ifaz_tabla = o->ifaz_tabla;
+        vm->ifaz_n     = o->ifaz_n;
+    }
+    vm->run_pack_on  = o->run_pack_on;
+    vm->run_pack_src = o->run_pack_src;
+    vm->run_pack_st  = o->run_pack_st;
+    memcpy(vm->run_pack_only, o->run_pack_only, sizeof vm->run_pack_only);
+    if (vm->run_pack_on) bpvm_fs_set_overlay(pack_res_stat, pack_res_read, vm);
+    else                 bpvm_fs_set_overlay(NULL, NULL, NULL);
+    vm->link_error[0] = '\0';
+    vm->load_error[0] = '\0';
+    vm->gui_disp_click = vm->gui_disp_change = 0;   /* #486: se resuelven una vez, y lo que hay ha cambiado */
+}
+
+int bpvm_overlay_cargar(bpvm_t* vm, const bpvm_thread_t* tc, const char* ruta, char* fallo, size_t cap) {
+    if (vm->overlay != NULL) { snprintf(fallo, cap, "%s", BPVM_MSG_OVERLAY_YA); return 1; }
+    bpvm_overlay_t* o = (bpvm_overlay_t*) bpvm_calloc(1, sizeof *o);
+    if (o == NULL) { snprintf(fallo, cap, "Overlay.load: %s", BPVM_MSG_OVERLAY_NO_CABE); return 1; }
+    o->modulos = vm->module_count;
+    o->simbolos = vm->symbol_count;
+    o->sym_ntrozos = vm->sym_ntrozos;
+    o->sym_pool_len = vm->sym_pool_len;
+    o->sym_trozo_usado = vm->sym_trozo_usado;
+    o->libre = vm->next_free_address;
+    o->heap_antes = vm->heap_start;
+    o->xip_lo = vm->xip_lo;
+    o->xip_hi = vm->xip_hi;
+    o->ifaz_tabla = vm->ifaz_tabla;
+    o->ifaz_n = vm->ifaz_n;
+    o->run_pack_on = vm->run_pack_on;
+    o->run_pack_src = vm->run_pack_src;
+    o->run_pack_st = vm->run_pack_st;
+    memcpy(o->run_pack_only, vm->run_pack_only, sizeof o->run_pack_only);
+    if (bpvm_overlay_apartar(vm, tc, o, fallo, cap) != 0) { bpvm_free(o); return 1; }
+    /* Con el heap apartado y el mundo parado, como al arrancar. */
+    o->cargando = 1;
+    vm->overlay = o;
+    char real[BPVM_FS_PATH_MAX];
+    uint32_t tam = 0;
+    const char* dada = ruta;   /* la carpeta del programa principal, lo primero: la misma búsqueda que miVM */
+    if (vm->raiz_dir != NULL && ruta[0] != '/' && bpvm_entry_resolve_en(vm->raiz_dir, ruta, real, sizeof real, &tam) == 0)
+        dada = real;
+    bpvm_entry_t e;
+    memset(&e, 0, sizeof e);
+    bpvm_status_t s = bpvm_load_entry(vm, dada, &e);
+    char motivo[sizeof e.fallo + 64];
+    motivo[0] = '\0';
+    if (s == BPVM_OK) {
+        const bpvm_module_t* m = &vm->modules[o->modulos];
+        for (int i = 0; i < o->modulos; i++)
+            if (strcmp(vm->modules[i].name, m->name) == 0 && strcmp(vm->modules[i].library, m->library) == 0) {
+                snprintf(motivo, sizeof motivo, "ya hay un modulo '%s' cargado", m->name);
+                s = BPVM_ERR_RUNTIME;
+            }
+        if (s == BPVM_OK && m->main_offset < 0) {
+            snprintf(motivo, sizeof motivo, "'%s' no tiene punto de entrada", m->name);
+            s = BPVM_ERR_RUNTIME;
+        }
+    }
+    if (s == BPVM_OK) s = bpvm_link_desde(vm, o->modulos);
+    if (s != BPVM_OK) {
+        if (motivo[0])            { /* ya está */ }
+        else if (s == BPVM_ERR_OOM) snprintf(motivo, sizeof motivo, "%s", BPVM_MSG_OVERLAY_NO_CABE);
+        else if (e.missing[0])    snprintf(motivo, sizeof motivo, "falta el modulo '%s'", e.missing);
+        else if (e.fallo[0])      snprintf(motivo, sizeof motivo, "%s", e.fallo);
+        else if (vm->link_error[0]) snprintf(motivo, sizeof motivo, "%.300s", vm->link_error);
+        else                      snprintf(motivo, sizeof motivo, "%s", bpvm_status_str(s));
+        overlay_deshaz(vm, o);
+        vm->overlay = NULL;
+        bpvm_overlay_devolver(vm, o, o->heap_antes);
+        bpvm_free(o);
+        snprintf(fallo, cap, "Overlay.load: %s", motivo);
+        return 1;
+    }
+    o->cargando = 0;
+    /* Los bloques del heap van de 4 en 4 desde heap_start, y al descargar el hueco se pone delante: de `heap_antes` a
+     * donde empiecen los objetos, un múltiplo de 4. */
+    uint32_t nuevo = vm->next_free_address + ((o->heap_antes - vm->next_free_address) & 3u);
+    vm->next_free_address = nuevo;
+    const bpvm_module_t* m = &vm->modules[o->modulos];
+    o->entrada = m->cb + (uint32_t) m->main_offset;
+    vm->overlay_cs = m->code_start;
+    vm->gui_disp_click = vm->gui_disp_change = 0;
+    bpvm_overlay_devolver(vm, o, nuevo);
+    return 0;
+}
+
+/* Overlay.unload, lo primero: sus globales dejan de ser raíces. Lo que sólo ellas alcanzan se va en las colectas que
+ * vienen, con sus destructores, y el código del programa sigue en memoria para correrlos. */
+int bpvm_overlay_cerrar(bpvm_t* vm, const bpvm_thread_t* tc, char* fallo, size_t cap) {
+    bpvm_smp_lock(vm);
+    int otros = bpvm_overlay_otros_hilos(vm, tc);
+    if (!otros && vm->overlay != NULL && bpvm_sabotaje_overlay != 5) vm->overlay->cerrado = 1;
+    bpvm_smp_unlock(vm);
+    if (otros) snprintf(fallo, cap, "%s", BPVM_MSG_OVERLAY_SUELTA_HILOS);
+    return otros;
+}
+
+/* Overlay.unload, lo último: que no quede nada que apunte a lo que se va, y soltarlo. */
+int bpvm_overlay_soltar(bpvm_t* vm, const bpvm_thread_t* tc, char* fallo, size_t cap) {
+    bpvm_overlay_t* o = vm->overlay;
+    bpvm_smp_lock(vm);
+    int r = 0;
+    if (bpvm_overlay_otros_hilos(vm, tc)) { snprintf(fallo, cap, "%s", BPVM_MSG_OVERLAY_SUELTA_HILOS); r = 1; }
+    else r = bpvm_overlay_lo_que_queda(vm, o, fallo, cap);
+    if (r == 0) {
+        overlay_deshaz(vm, o);
+        bpvm_overlay_heap_suelta(vm, o);
+        vm->overlay = NULL;
+        vm->overlay_cs = 0xFFFFFFFFu;
+        /* Lo que guarda direcciones: otra carga en la misma dirección heredaría datos de ésta. */
+        vm->str_epoca++;
+        for (bpvm_thread_t* h = bpvm_hilos_primero(vm); h; h = bpvm_hilos_siguiente(vm, h)) h->cb_cache_cs = 0u;
+        bpvm_destruir_olvida_clases(vm);
+        bpvm_free(o);
+    }
+    bpvm_smp_unlock(vm);
+    return r;
 }
 
 bpvm_status_t bpvm_load_mod_stream(bpvm_t* vm, bpvm_read_at_fn rd, void* user,
@@ -1909,19 +2073,9 @@ void bpvm_destroy(bpvm_t* vm) {
     bpvm_handles_destroy(vm);          /* V4/paso 4c: la free-list (la tabla se va con el bloque) */
     bpvm_destruir_liberar(vm);         /* V7 #668: el registro, la cola y la marca por clase */
     /* Liberar módulos cargados. */
-    for (int i = 0; i < vm->module_count; i++) {
-        bpvm_module_t* m = &vm->modules[i];
-        bpvm_free(m->imports);     /* V7 #651: sus nombres viven en m->nombres */
-        bpvm_free(m->dep_names);   /* V7/H2 (MOD8) */
-        bpvm_free(m->dep_gen);
-        bpvm_free(m->dep_crc);
-        bpvm_free(m->dep_flags);
-        bpvm_free(m->dep_avisado);
-        bpvm_free(m->class_fixups);
-        bpvm_free(m->eh_class_fixups);
-        bpvm_free(m->refs);        /* V7/H2 (#523) — V10 (R4/J-2): la subtabla refs se quedaba viva → «FUGA» en todo RUN MOD9 */
-        bpvm_free(m->nombres);     /* V7 #651: los nombres de imports, dep_names y refs, en un bloque */
-    }
+    for (int i = 0; i < vm->module_count; i++) modulo_suelta(&vm->modules[i]);
+    bpvm_free(vm->overlay);            /* V8 H9 (#786): si el programa acabó con uno cargado */
+    bpvm_free(vm->raiz_dir);
     /* Liberar los hilos —sus structs, sus EH stacks y la línea de su `print` (#600): toda la cola (H12)— y los
      * mutex waiters. */
     bpvm_hilos_liberar(vm);

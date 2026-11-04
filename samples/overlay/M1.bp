@@ -1,0 +1,20 @@
+// M1 — el módulo que comparten el programa A y el programa B. Lo carga A y B lo reutiliza: hay un solo M1, con sus globales.
+module M1
+  import Core
+
+  var nombre: string := "sin nombre"
+  var llamadas: integer := 0
+
+  public function setNombre(n: string)
+    nombre := n
+    llamadas := llamadas + 1
+  end setNombre
+
+  public function getNombre(): string
+    return nombre
+  end getNombre
+
+  public function getLlamadas(): integer
+    return llamadas
+  end getLlamadas
+end M1

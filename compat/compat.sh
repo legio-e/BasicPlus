@@ -941,7 +941,9 @@ check_sim() {
   # run_tarea_smoke: V7/H12, etapas 0 y 1 (4-oct) —la tarea `run`: mil RUN seguidos, la salida tardía, el KILL barriendo
   # el final del programa, la ventana ensanchada, el sabotaje que tiene que cazar y el interruptor (`--run-viejo`)—.
   # traza_smoke: V8 #582 (4-nov) —dónde falló un programa: el stackTrace del EXITED, con sus líneas, y lo mismo en las dos VMs—.
-  local smokes="sim_smoke boardsim_smoke io_smoke list_trunc_smoke sd_smoke reset_smoke env_smoke sim_dbg_smoke run_smoke run_tarea_smoke stat_base_smoke traza_smoke" total   # reset_smoke: V7/H8 (28-sep); env_smoke: #626
+  # overlay_smoke: V8 H9 (#786, 4-nov) —un programa que carga a otro, lo ejecuta y lo descarga, en las dos VMs y el sim, y
+  # cada pieza rota a propósito—.
+  local smokes="sim_smoke boardsim_smoke io_smoke list_trunc_smoke sd_smoke reset_smoke env_smoke sim_dbg_smoke run_smoke run_tarea_smoke stat_base_smoke traza_smoke overlay_smoke" total   # reset_smoke: V7/H8 (28-sep); env_smoke: #626
   total=$(( $(echo $smokes | wc -w) + 1 ))
   bash "$HERE/stdlib_pack.sh" || fails=$((fails+1))
   if ls "$ROOT"/bpgenvm-c/build/.flavor-*lvgl1 >/dev/null 2>&1; then

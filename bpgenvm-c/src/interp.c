@@ -981,6 +981,17 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
 
         case OP_HALT:
             /* HALT: termina el thread y la VM si es el main. */
+            /* V8 H9 (#786) — el HALT de un __startup al que LLAMARON (Overlay.tryExe): vuelve como un RET, con el valor
+             * del builtin. El de un programa que arrancó tiene el bp en el fondo de la pila. */
+            if (tc->id == 0 && bp != tc->stack_base) {
+                pc = bpvm_read_u32_be(mem + bp - 12);
+                cs = bpvm_read_u32_be(mem + bp - 4);
+                sp = bp - 12;
+                bp = bpvm_read_u32_be(mem + bp - 8);
+                bpvm_write_i32_be(mem + sp, 0); sp += 4;   /* void → dummy */
+                if (vm->overlay != NULL) vm->overlay->bp = 0u;
+                break;
+            }
             if (tc->id != 0) {
                 bpvm_diag_urgente("[bpvm-c] HALT en thread no-main (tid=%" PRId32 ")", tc->id);
                 exit_status = BPVM_ERR_RUNTIME;
@@ -1236,12 +1247,24 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             break;
         }
         case OP_LEA_STR:        /* V8 H9.1 (#786): un literal de cadena; fuera de un overlay, lo mismo que LEA_GLOBAL */
+        case OP_LEA_STR_S8: {
+            int32_t soff;
+            if (op == OP_LEA_STR) { soff = bpvm_read_csoff_be(mem + pc); pc += 2; }
+            else                  { soff = (int8_t) mem[pc++]; }
+            if (cs >= vm->overlay_cs && bpvm_sabotaje_overlay != 1) {   /* en un módulo de un overlay, un string del heap: sobrevive a la descarga */
+                tc->sp = sp; tc->bp = bp; tc->pc = pc; tc->cs = cs;   /* SAFEPOINT GC */
+                if (!bpvm_literal_al_heap(vm, tc, (uint32_t)((int32_t)cs + soff))) BPVM_RT_THROW("No space in heap");
+                sp = tc->sp;
+                break;
+            }
+            bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));
+            sp += 8; break;
+        }
         case OP_LEA_GLOBAL: {   /* H1.2a: dirección de global (string-const/array fijo) = ref 8 bytes */
             int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));
             sp += 8; break;
         }
-        case OP_LEA_STR_S8:
         case OP_LEA_GLOBAL_S8: {
             int8_t soff = (int8_t) mem[pc++];
             bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));

@@ -78,9 +78,16 @@ final class EnlaceTardio {
         this.mm = mm; this.vm = vm; this.arena = arenaInicio;
     }
     int arenaFin() { return arena; }
+    /** V8 H9 (#786) — las clases de un overlay van a una arena nueva, detrás de sus módulos. */
+    void sigueEn(int arenaInicio) { arena = arenaInicio; }
+    /** V8 H9 (#786) — fuera las clases de estos módulos: el overlay se ha descargado, o no llegó a enlazar. */
+    void olvida(List<ModuleManager.ModuleMetadata> modulos) {
+        registro.values().removeIf(k -> modulos.contains(k.mod));
+    }
 
     // ------------------------------------------------------------------ 1. registro
-    void registrar(List<ModuleManager.ModuleMetadata> modulos) {
+    /** `primero`: el índice del primer módulo de la lista entre los cargados (el sello lo lleva). */
+    void registrar(List<ModuleManager.ModuleMetadata> modulos, int primero) {
         for (int i = 0; i < modulos.size(); i++) {
             ModuleManager.ModuleMetadata m = modulos.get(i);
             if (m.clases == null) continue;                    // MOD7/MOD8: sin 4.5
@@ -89,7 +96,7 @@ final class EnlaceTardio {
                 if (!c.abierta && !c.interfaz) {   // V8 H7.3: una interfaz no tiene descriptor (su csOff es 0)
                     k.descAbs = m.codeStart + c.csOff;
                     // el sello del dueño: +6 = índice del módulo + 1 (0 = sin sello → por rango)
-                    vm.writeInt16(k.descAbs + CLS_MODULO, i + 1);
+                    vm.writeInt16(k.descAbs + CLS_MODULO, primero + i + 1);
                     k.nF = vm.readInt16(k.descAbs + CLS_NUM_FIELDS);
                     k.nM = vm.readInt16(k.descAbs + CLS_NUM_METHODS);
                 }

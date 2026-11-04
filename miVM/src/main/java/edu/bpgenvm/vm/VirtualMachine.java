@@ -1135,6 +1135,14 @@ public class VirtualMachine {
     private static final int TRAZA_MARCOS = 8;
 
     private void anotaTraza(int pcActual, int bpStart, int stackBase) {
+        String traza = componeTraza(pcActual, bpStart, stackBase);
+        synchronized (vmLock) {
+            if (trazaError.isEmpty()) trazaError = traza;
+        }
+    }
+
+    /** La cadena de llamadas desde (pcActual, bpStart), hasta el marco con bp `fondo`. */
+    private String componeTraza(int pcActual, int bpStart, int fondo) {
         StringBuilder sb = new StringBuilder();
         int curPc = pcActual, curBp = bpStart;
         for (int marco = 0; marco < TRAZA_MARCOS && moduleManager != null; marco++) {
@@ -1142,13 +1150,11 @@ public class VirtualMachine {
             if (uno == null) break;                      // un centinela: el principio de un hilo o de un evento
             if (marco > 0) sb.append(' ');
             sb.append(uno);
-            if (curBp <= stackBase) break;
+            if (curBp <= fondo) break;
             curPc = readInt32(curBp - 12);
             curBp = readInt32(curBp - 8);
         }
-        synchronized (vmLock) {
-            if (trazaError.isEmpty()) trazaError = sb.toString();
-        }
+        return sb.toString();
     }
     /** V7/H7 #612 — el RUN acabó por un fallo de la VM (un Error de Java en un worker), no del programa: la salida
      *  3 de la tabla común (#481), como la VM-C con un opcode o un PC imposibles. */
@@ -1745,6 +1751,8 @@ public class VirtualMachine {
     }
 
     public void injectMemory(int targetAddress, byte[] data) {
+        if (limiteDeCarga != 0 && targetAddress + data.length > limiteDeCarga)   // V8 H9 (#786): no pisar lo apartado
+            throw new RuntimeException(MSG_OVERLAY_NO_CABE);
         if (targetAddress + data.length > memory.length) {
             throw new RuntimeException("Error: El módulo excede el tamaño máximo de la memoria de la VM.");
         }
@@ -2635,6 +2643,204 @@ public class VirtualMachine {
     }
 
     // ====================================================================
+    // V8 H9 (#786) — LOS OVERLAYS: un programa que carga a otro, lo ejecuta y lo descarga (Overlays.bp, V8_IDEAS §E13).
+    // Espejo de bpvm_overlay_* (la VM-C): el mismo algoritmo y los mismos textos.
+    //
+    // Un módulo va siempre detrás del último y el heap detrás de los módulos, y un literal se reconoce por estar por
+    // debajo de heapStart. Así que para cargar con el programa en marcha, lo que se mueve son los objetos: se compacta,
+    // se aparta todo hasta arriba, se carga como al arrancar, y los objetos vuelven detrás de lo cargado. Al descargar
+    // no se mueve nada: heapStart baja, y lo que ocupaba el programa es un bloque libre más.
+    // ====================================================================
+
+    public static final String MSG_OVERLAY_MAIN     = "Overlay.load: sólo se puede llamar desde Main";
+    public static final String MSG_OVERLAY_HILOS    = "Overlay.load: no se puede cargar con otros hilos vivos";
+    public static final String MSG_OVERLAY_FICHEROS = "Overlay.load: hay ficheros abiertos";
+    public static final String MSG_OVERLAY_YA       = "Overlay.load: ya hay un overlay cargado";
+    public static final String MSG_OVERLAY_GC       = "Overlay.load: con el GC apagado no se puede";
+    public static final String MSG_OVERLAY_FIJO     = "Overlay.load: hay un bloque del heap que no se puede mover";
+    public static final String MSG_OVERLAY_NO_CABE  = "no cabe en la memoria";
+    public static final String MSG_OVERLAY_EXE_HILO = "Overlay.tryExe: sólo en el hilo principal";
+    public static final String MSG_OVERLAY_EXE_NADA = "Overlay.tryExe: no hay nada cargado";
+    public static final String MSG_OVERLAY_SUELTA_HILOS = "Overlay.unload: no se puede descargar con otros hilos vivos";
+
+    /** Lo que se deja libre detrás de lo cargado, como poco: la reserva de emergencia del heap (#355). */
+    private static final int OVERLAY_MARGEN = 1024;
+    /** El código del primer módulo del overlay: todos los suyos, y sólo ellos, están de ahí en adelante. Sin overlay,
+     *  el mayor entero, y LEA_STR no llega. */
+    private int overlayCs = Integer.MAX_VALUE;
+    private int overlayEntrada;      // el __startup del programa cargado
+    private int overlayHeapAntes;    // heapStart antes de cargar: hasta ahí baja al descargar
+    private int overlayBp;           // el bp del __startup mientras corre; 0, si no corre
+    private String overlayTraza = "";
+    /** Hasta dónde puede escribir el cargador: con el heap apartado, hasta lo apartado. 0, sin límite. */
+    private int limiteDeCarga = 0;
+
+    /** Una excepción sale del programa cargado: dónde, antes de que el unwind se lleve los marcos. */
+    private void sale(int pc, int bp) {
+        overlayTraza = componeTraza(pc, bp, overlayBp);
+        overlayBp = 0;
+    }
+
+    /** ¿Algún otro hilo vivo? Como en Heap.compact. */
+    private boolean otrosHilosVivos(ThreadContext tc) {
+        for (ThreadContext t : threads)
+            if (t != tc && t.getStatus() != ThreadStatus.TERMINATED) return true;
+        return false;
+    }
+
+    /** Mueve el trozo de objetos [desde, desde + len) a `hasta`. Sin huecos ni clavados dentro. */
+    private void mueveObjetos(int desde, int hasta, int len) {
+        System.arraycopy(memory, desde, memory, hasta, len);
+        int d = hasta - desde;
+        for (int idx = 1; idx < handleNext; idx++) {
+            int a = handleAddr[idx];
+            if (a == 0) continue;                               // slot libre
+            int h = a - 4;
+            if (h >= desde && h < desde + len) handleAddr[idx] = a + d;
+        }
+    }
+
+    /** Overlay.load(ruta): las condiciones, en el MISMO orden y con los MISMOS textos que la VM-C. */
+    private void overlayLoad(ThreadContext tc, String ruta) {
+        // 1) DESDE Main, por el método Overlay.load: el marco de abajo es el que abrió el CALL de __startup. Es lo que
+        //    pide Heap.compact: los objetos se van a mover, y por debajo no puede quedar una dirección cruda.
+        int bpMain = tc.bp > tc.stackBase ? readInt32(tc.bp - 8) : 0;
+        boolean desdeMain = tc.id == 0
+                && bpMain > tc.stackBase
+                && readInt32(bpMain - 8) == tc.stackBase
+                && Integer.compareUnsigned(readInt32(tc.bp - 12), ZONA_CENTINELAS) >= 0
+                && Integer.compareUnsigned(readInt32(bpMain - 12), ZONA_CENTINELAS) >= 0;
+        if (!desdeMain) throwBpRuntimeError(tc, MSG_OVERLAY_MAIN);
+        String fallo;
+        synchronized (vmLock) {
+            if (overlayCs != Integer.MAX_VALUE) fallo = MSG_OVERLAY_YA;
+            else if (otrosHilosVivos(tc)) fallo = MSG_OVERLAY_HILOS;
+            else if (!ficherosAbiertos.isEmpty()) fallo = MSG_OVERLAY_FICHEROS;
+            else if (gcSuspended) fallo = MSG_OVERLAY_GC;
+            else {
+                gcSafepoint(tc.id, true);
+                if (gcDescarrilo) lanzaHeapDescarrilado(tc);   // #494: sin recorrido fiable no se mueve nada
+                fallo = overlayCargaLocked(ruta);
+            }
+        }
+        if (fallo != null) throwBpRuntimeError(tc, fallo);
+    }
+
+    /** Apartar, cargar, devolver. Precondición: vmLock, nadie más vivo y el heap recién compactado. */
+    private String overlayCargaLocked(String ruta) {
+        if (freeListHead != 0) return MSG_OVERLAY_FIJO;   // la compactación dejó un hueco delante de algo fijo
+        int ini = heapStart, len = heapNext - heapStart;
+        int arriba = STACK_BASE - len;
+        mueveObjetos(ini, arriba, len);
+        limiteDeCarga = arriba - OVERLAY_MARGEN;
+        String motivo = moduleManager.cargaOverlay(ruta);
+        limiteDeCarga = 0;
+        int nuevo = (motivo == null) ? moduleManager.nextFree() : ini;
+        mueveObjetos(arriba, nuevo, len);
+        heapStart = nuevo;
+        heapNext = nuevo + len;
+        lastGcHeapNext = heapNext;
+        gcBumpThreshold = Math.max(4096, (STACK_BASE - nuevo) / 8);
+        guiDispatchPc = -2;   // se resuelve una vez por RUN, y lo que hay ha cambiado
+        if (motivo != null) return "Overlay.load: " + motivo;
+        overlayCs = moduleManager.overlayCs();
+        overlayEntrada = moduleManager.overlayEntrada();
+        overlayHeapAntes = ini;
+        return null;
+    }
+
+    /** Overlay.tryExe: abre un marco como el de CALL_EXT y salta al __startup del programa cargado. Vuelve por su HALT,
+     *  o por el catch de tryExe. */
+    private void overlayExe(ThreadContext tc, String arg) {
+        if (tc.id != 0) throwBpRuntimeError(tc, MSG_OVERLAY_EXE_HILO);
+        if (overlayCs == Integer.MAX_VALUE) throwBpRuntimeError(tc, MSG_OVERLAY_EXE_NADA);
+        int n = arg.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+        if (n > ModFormat.RUN_ARG_MAX)
+            throwBpRuntimeError(tc, "el argumento no cabe: " + n + " bytes (el tope es " + ModFormat.RUN_ARG_MAX + ")");
+        runArg = arg;
+        overlayTraza = "";
+        int sp = tc.sp;
+        writeInt32(sp, tc.pc); sp += 4;
+        writeInt32(sp, tc.bp); sp += 4;
+        writeInt32(sp, tc.cs); sp += 4;
+        tc.sp = sp;
+        tc.bp = sp;
+        tc.pc = overlayEntrada;
+        tc.cs = overlayCs;
+        overlayBp = sp;
+    }
+
+    /** Overlay.unload, lo primero: sus globales dejan de ser raíces. Lo que sólo ellas alcanzan se va en las colectas
+     *  que vienen, con sus destructores, y el código del programa sigue en memoria para correrlos. */
+    private void overlayClose(ThreadContext tc) {
+        boolean otros;
+        synchronized (vmLock) {
+            otros = otrosHilosVivos(tc);
+            if (!otros) moduleManager.cierraOverlay();
+        }
+        if (otros) throwBpRuntimeError(tc, MSG_OVERLAY_SUELTA_HILOS);
+    }
+
+    /** Overlay.unload, lo último: que no quede nada que apunte a lo que se va, y soltarlo. */
+    private void overlayFree(ThreadContext tc) {
+        String fallo;
+        synchronized (vmLock) {
+            fallo = otrosHilosVivos(tc) ? MSG_OVERLAY_SUELTA_HILOS : overlayLoQueQuedaLocked();
+            if (fallo == null) overlaySueltaLocked();
+        }
+        if (fallo != null) throwBpRuntimeError(tc, fallo);
+    }
+
+    /** Recorre el heap: ni un objeto de una clase que se va, ni una referencia cruda a su zona (un array del bloque de
+     *  datos; las cadenas ya son del heap, LEA_STR). Los bitmaps dicen qué campos son referencias: es exacto. */
+    private String overlayLoQueQuedaLocked() {
+        int lo = overlayHeapAntes, hi = heapStart;
+        int addr = heapStart;
+        while (addr < heapNext) {
+            int size = objectTotalSize(addr);
+            int tag = readInt32(addr);
+            if ((tag & TAG_FREE_BIT) == 0) {
+                int type = (tag & TAG_TYPE_MASK) >>> TAG_TYPE_SHIFT;
+                if (type == TYPE_OBJECT) {
+                    int cls = readInt32(addr + 4);
+                    if (cls >= lo && cls < hi)
+                        return "Overlay.unload: sigue vivo un objeto de " + moduleManager.nombreDeClase(cls);
+                    int numFields = readInt16(cls + CLS_OFF_NUM_FIELDS) & 0xFFFF;
+                    int bitmapBase = cls + CLS_OFF_BITMAP_BASE;
+                    for (int i = 0; i < numFields; i++) {
+                        if (((readInt32(bitmapBase + (i >>> 5) * 4) >> (i & 31)) & 1) == 0) continue;
+                        int r = (int) readI64(memory, addr + OBJ_HEADER_SIZE + i * 4);
+                        if ((r & HANDLE_TAG) == 0 && r >= lo && r < hi)
+                            return "Overlay.unload: un objeto de " + moduleManager.nombreDeClase(cls)
+                                    + " apunta a un dato del programa cargado";
+                    }
+                } else if (type == TYPE_ARRAY_REF) {
+                    int n = readInt32(addr + 4);
+                    for (int i = 0; i < n; i++) {
+                        int r = (int) readI64(memory, addr + OBJ_HEADER_SIZE + i * 8);
+                        if ((r & HANDLE_TAG) == 0 && r >= lo && r < hi)
+                            return "Overlay.unload: un array apunta a un dato del programa cargado";
+                    }
+                }
+            }
+            addr += size;
+        }
+        return null;
+    }
+
+    private void overlaySueltaLocked() {
+        moduleManager.descargaOverlay();
+        int lo = overlayHeapAntes, tam = heapStart - lo;
+        heapStart = lo;
+        addToFreeList(lo, tam);
+        gcBumpThreshold = Math.max(4096, (STACK_BASE - lo) / 8);
+        overlayCs = Integer.MAX_VALUE;
+        overlayBp = 0;
+        guiDispatchPc = -2;
+        tipoDestructorPorClase.clear();   // por dirección: otro programa puede poner otra clase en la misma
+    }
+
+    // ====================================================================
     // H3: herramientas de medición del heap (SOLO VM-Java). El GC es
     // implementación de VM y el .mod/bytecode es idéntico → lo medido aquí
     // transfiere conceptualmente; no se duplican en la VM C.
@@ -3462,6 +3668,17 @@ public class VirtualMachine {
                                 + tc.id + " en PC " + currentPC + "); "
                                 + "los workers deben terminar con RET de su run()");
                     }
+                    // V8 H9 (#786) — el HALT de un __startup al que LLAMARON (Overlay.tryExe): vuelve como un RET, con el
+                    // valor del builtin. El de un programa que arrancó tiene el bp en el fondo de la pila.
+                    if (bp != tc.stackBase) {
+                        pc = readI32(mem, bp - 12);
+                        cs = readI32(mem, bp - 4);
+                        sp = bp - 12;
+                        bp = readI32(mem, bp - 8);
+                        writeI32(mem, sp, 0); sp += 4;   // void → dummy
+                        overlayBp = 0;
+                        break;
+                    }
                     running = false;
                     exitSignal = ExitSignal.HALT;
                     break;
@@ -3720,7 +3937,17 @@ public class VirtualMachine {
                     break;
                 }
 
-                case 0xC2:   // LEA_STR — V8 H9.1 (#786): un literal de cadena; fuera de un overlay, lo mismo que LEA_GLOBAL
+                case 0xC2: { // LEA_STR — V8 H9.1 (#786): un literal de cadena; fuera de un overlay, lo mismo que LEA_GLOBAL
+                    int off = leeDato(mem, pc); pc += 2;
+                    if (cs >= overlayCs) {   // en un módulo de un overlay, un string del heap: sobrevive a la descarga
+                        tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
+                        long lit = allocVmString(readVmString(((long) (cs + off)) & 0xFFFFFFFFL));
+                        writeI64(mem, sp, lit); sp += 8;
+                    } else {
+                        writeI64(mem, sp, ((long)(cs + off)) & 0xFFFFFFFFL); sp += 8;
+                    }
+                    break;
+                }
                 case 0x1C: { // LEA_GLOBAL — H1.2a: dirección de global = ref 8 bytes
                     int off = leeDato(mem, pc); pc += 2;
                     writeI64(mem, sp, ((long)(cs + off)) & 0xFFFFFFFFL); sp += 8;
@@ -4504,7 +4731,7 @@ public class VirtualMachine {
                     // del while exterior se hace cargo del unwind.
                     tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
                     dispatchBuiltin(Builtin.byId(id), tc);
-                    sp = tc.sp;
+                    sp = tc.sp; pc = tc.pc; bp = tc.bp; cs = tc.cs;   // V8 H9 (#786): __overlayExe abre un marco y salta
                     // tc.yieldRequested lo levantan los builtins yield/sleep/join;
                     // el while exterior lo observa y abandona el bucle.
                     break;
@@ -4565,6 +4792,7 @@ public class VirtualMachine {
                         ehSavedCs       = prev[3];
                         ehExpectedClass = prev[4];
                         if (matches) {
+                            if (overlayBp != 0 && savedBp < overlayBp) sale(pc, bp);   // V8 H9 (#786)
                             sp = savedSp;
                             bp = savedBp;
                             cs = savedCs;
@@ -4753,7 +4981,17 @@ public class VirtualMachine {
                     mem[a] = (byte)(v >> 24); mem[a+1] = (byte)(v >> 16); mem[a+2] = (byte)(v >> 8); mem[a+3] = (byte)v;
                     break;
                 }
-                case 0xC3:   // LEA_STR_S8
+                case 0xC3: { // LEA_STR_S8
+                    int off = mem[pc]; pc++;
+                    if (cs >= overlayCs) {
+                        tc.pc=pc; tc.sp=sp; tc.bp=bp; tc.cs=cs;
+                        long lit = allocVmString(readVmString(((long) (cs + off)) & 0xFFFFFFFFL));
+                        writeI64(mem, sp, lit); sp += 8;
+                    } else {
+                        writeI64(mem, sp, ((long)(cs + off)) & 0xFFFFFFFFL); sp += 8;
+                    }
+                    break;
+                }
                 case 0x6C: { // LEA_GLOBAL_S8 — H1.2a: dirección de global = ref 8 bytes
                     int off = mem[pc]; pc++;
                     int v = cs + off;
@@ -4963,6 +5201,7 @@ public class VirtualMachine {
                     ehHandlerPc = prev[0]; ehSavedSp = prev[1]; ehSavedBp = prev[2];
                     ehSavedCs = prev[3]; ehExpectedClass = prev[4];
                     if (matches) {
+                        if (overlayBp != 0 && savedBp < overlayBp) sale(pc, bp);   // V8 H9 (#786)
                         sp = savedSp; bp = savedBp; cs = savedCs; pc = handlerPc;
                         writeI64(mem, sp, v); sp += 8;   // V4: excepción ref = handle 64b completo (gen preservada)
                         handled = true;
@@ -7707,6 +7946,31 @@ public class VirtualMachine {
                 heapCompact(tc);
                 pushTc(tc, 0);   // void → dummy
                 break;
+            // V8 H9 (#786) — los overlays (Overlays.bp)
+            case OVERLAY_LOAD:
+                overlayLoad(tc, readVmString(popTcRef(tc)));
+                pushTc(tc, 0);   // void → dummy
+                break;
+            case OVERLAY_EXE:    // salta al __startup del programa cargado: el dummy lo apila su HALT
+                overlayExe(tc, readVmString(popTcRef(tc)));
+                break;
+            case OVERLAY_CLOSE:
+                overlayClose(tc);
+                pushTc(tc, 0);   // void → dummy
+                break;
+            case OVERLAY_FREE:
+                overlayFree(tc);
+                pushTc(tc, 0);   // void → dummy
+                break;
+            case OVERLAY_TRACE:
+                pushTcRef(tc, allocVmString(overlayTraza));
+                break;
+            case CLASS_NAME: {
+                int cp = classPtrOfRefOr0(popTcRef(tc));
+                String nombre = (cp != 0 && moduleManager != null) ? moduleManager.nombreDeClase(cp) : null;
+                pushTcRef(tc, allocVmString(nombre != null ? nombre : "?"));
+                break;
+            }
             case MACHINE_GPIO_COUNT: {
                 /* host: perfil RP2350A (30 GPIO). En el device el firmware
                  * lo resuelve desde board_desc (variante / board.json). */
@@ -7946,6 +8210,8 @@ public class VirtualMachine {
      *  tienen interfaces, ordenadas por descriptor, cada una con la dirección de su lista. 0 si ninguna las tiene. */
     private int tablaIfaz = 0, nTablaIfaz = 0;
     void fijarTablaDeInterfaces(int addr, int n) { tablaIfaz = addr; nTablaIfaz = n; }
+    int tablaDeInterfaces() { return tablaIfaz; }        // V8 H9 (#786): un overlay hace la suya, y al irse vuelve ésta
+    int entradasDeInterfaces() { return nTablaIfaz; }
 
     /** V8 H7.3 — la lista de interfaces de la clase `classPtr`, o 0 si no tiene: búsqueda dicotómica en la tabla.
      *  Espejo de bpvm_ifaz_lista (interp.c). */
@@ -8987,6 +9253,7 @@ public class VirtualMachine {
     }
     /** V7/H2 (#523) — la arena de los descriptores construidos tiene que caber en memoria. */
     public void reservarArena(int hasta) {
+        if (limiteDeCarga != 0 && hasta > limiteDeCarga) throw new RuntimeException(MSG_OVERLAY_NO_CABE);   // V8 H9 (#786)
         if (hasta > memory.length) throw new RuntimeException("sin memoria para los descriptores del enlace tardio (" + hasta + " > " + memory.length + ")");
     }
 

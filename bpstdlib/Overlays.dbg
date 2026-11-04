@@ -1,0 +1,114 @@
+dbg 3
+module Overlays
+source C:\lenguajes\pm\bpstdlib\Overlays.bp
+lines
+0 0
+24 0
+35 0
+38 81
+46 82
+54 83
+65 0
+68 88
+76 89
+83 90
+90 91
+102 0
+105 96
+117 97
+128 99
+139 100
+150 102
+161 103
+173 105
+182 106
+189 107
+192 108
+199 109
+207 110
+219 112
+232 113
+244 114
+258 116
+265 117
+278 0
+281 122
+293 123
+305 125
+316 126
+328 128
+333 129
+340 130
+344 131
+347 132
+377 133
+382 134
+387 135
+392 136
+400 138
+405 139
+415 0
+418 143
+435 0
+438 148
+457 0
+460 153
+479 0
+482 158
+501 0
+528 74
+535 75
+542 76
+549 77
+561 0
+591 0
+605 0
+625 0
+642 0
+661 0
+678 0
+692 0
+711 0
+vars
+func Overlay.limpiaError 35
+this -20 8 0 ?
+func Overlay.load 65
+this -28 8 0 ?
+ruta -20 8 0 string
+func Overlay.tryExe 102
+this -28 8 0 ?
+arg -20 8 0 string
+bien 8 4 0 boolean
+e 12 8 0 ?
+func Overlay.unload 278
+this -20 8 0 ?
+antes 4 4 0 integer
+rondas 8 4 0 integer
+func Overlay.isLoaded 415
+this -20 8 0 ?
+func Overlay.getError 435
+this -20 8 0 ?
+func Overlay.getErrorClass 457
+this -20 8 0 ?
+func Overlay.getTrace 479
+this -20 8 0 ?
+func Overlay.__init 501
+this -20 8 0 ?
+func __cls_init_Overlay() 591
+this -20 8 0 ?
+func __cls_m_Overlay#tryExe(s)z 605
+this -28 8 0 ?
+arg -20 8 0 string
+func __cls_m_Overlay#isLoaded()z 625
+this -20 8 0 ?
+func __cls_m_Overlay#getError()s 642
+this -20 8 0 ?
+func __cls_m_Overlay#load(s)V 661
+this -28 8 0 ?
+ruta -20 8 0 string
+func __cls_m_Overlay#unload()V 678
+this -20 8 0 ?
+func __cls_m_Overlay#getTrace()s 692
+this -20 8 0 ?
+func __cls_m_Overlay#getErrorClass()s 711
+this -20 8 0 ?

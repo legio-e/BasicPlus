@@ -1,0 +1,8 @@
+// M2 — sólo lo usa el programa A.
+module M2
+  import Core
+
+  public function suma(a: integer, b: integer): integer
+    return a + b
+  end suma
+end M2

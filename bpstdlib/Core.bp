@@ -1750,6 +1750,25 @@ module Core
   public function eol(): string
     inline CALL_BUILTIN 295
   end eol
+  // V8/H9 (#786) — los overlays (Overlays.bp): cargar otro programa, ejecutar su Main y descargarlo. Sólo la tabla.
+  function __overlayLoad(ruta: string)   // Overlay.load
+    inline CALL_BUILTIN 296
+  end __overlayLoad
+  function __overlayExe(arg: string)     // Overlay.tryExe: vuelve cuando acaba el Main del programa cargado
+    inline CALL_BUILTIN 297
+  end __overlayExe
+  function __overlayClose()              // Overlay.unload, lo primero: sus globales dejan de ser raíces
+    inline CALL_BUILTIN 298
+  end __overlayClose
+  function __overlayFree()               // Overlay.unload, lo último: comprueba que no quede nada suyo, y lo suelta
+    inline CALL_BUILTIN 299
+  end __overlayFree
+  function __overlayTrace(): string      // la cadena de llamadas del error que salió del programa cargado
+    inline CALL_BUILTIN 300
+  end __overlayTrace
+  function __className(o: any): string   // el nombre cualificado de la clase de un objeto
+    inline CALL_BUILTIN 301
+  end __className
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

@@ -642,6 +642,16 @@ int bpvm_destruir_fase_final(bpvm_t* vm) {
     return 1;
 }
 
+/* V8 H9 (#786) — la marca por clase va por dirección: al descargar un overlay, otro programa puede poner otra clase en la
+ * misma. Se vuelve a calcular cuando haga falta. */
+void bpvm_destruir_olvida_clases(bpvm_t* vm) {
+    struct bpvm_destruir* d = vm->destruir;
+    if (d == NULL) return;
+    bpvm_free(d->marcas);
+    d->marcas = NULL;
+    d->marcas_cap = d->marcas_n = 0u;
+}
+
 void bpvm_destruir_liberar(bpvm_t* vm) {
     struct bpvm_destruir* d = vm->destruir;
     if (d == NULL) return;

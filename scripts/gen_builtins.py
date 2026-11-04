@@ -43,6 +43,8 @@ NOMBRE_DE_ERROR = {
     "__fstateSize": "File",       # IO.File(path, mode), antes de abrir
     "__fopen": "File",
     "__readFileI": "readFile",    # readFile(path, ignorarError)
+    "__overlayLoad": "Overlay.load",
+    "__overlayExe": "Overlay.tryExe",
 }
 TAM_4 = ("integer", "float", "boolean", "byte", "short")   # en la pila, 4 bytes
 TAM_8 = ("long", "double")                                  # 8; una referencia (string, any, Object, un array), 8

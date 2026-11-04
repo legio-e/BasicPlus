@@ -1365,6 +1365,95 @@ static bpvm_status_t __attribute__((noinline, cold)) cadena_nula(bpvm_t* vm, bpv
     return builtin_throw(vm, tc, em);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+ * V8 H9 (#786) — LOS OVERLAYS: lo que les toca a los builtins (Overlays.bp, V8_IDEAS §E13). Espejo de overlayLoad y
+ * overlayExe (miVM): las condiciones en el MISMO orden y con los MISMOS textos.
+ * ═══════════════════════════════════════════════════════════════════════════ */
+static bpvm_status_t __attribute__((noinline)) overlay_load(bpvm_t* vm, bpvm_thread_t* tc) {
+    uint32_t ref = pop_ref(vm, tc);
+    /* 1. DESDE Main, por el método Overlay.load: el marco de abajo es el que abrió el CALL de __startup. Es lo que pide
+     *    Heap.compact: los objetos se van a mover, y por debajo no puede quedar una dirección cruda. Ninguna native a
+     *    medias: una native no abre marco BP. */
+    uint32_t tbp = tc->bp;
+    uint32_t bp_main = (tbp > tc->stack_base) ? bpvm_read_u32_be(vm->memory + tbp - 8u) : 0u;
+    int desde_main = (tc == vm->hilo_main)
+        && bp_main > tc->stack_base
+        && bpvm_read_u32_be(vm->memory + bp_main - 8u) == tc->stack_base
+        && bpvm_read_u32_be(vm->memory + tbp - 12u) >= BPVM_INITIAL_FREE_ADDR
+        && bpvm_read_u32_be(vm->memory + bp_main - 12u) >= BPVM_INITIAL_FREE_ADDR
+        && tc->nativa == NULL && !tc->builtin_de_nativa && bpvm_aot_callctx()->tc == NULL;
+    if (!desde_main) return builtin_throw(vm, tc, BPVM_MSG_OVERLAY_MAIN);
+    char ruta[BPVM_FS_PATH_MAX];
+    read_bp_string(vm, ref, ruta, sizeof ruta);
+    char fallo[320];
+    if (bpvm_overlay_cargar(vm, tc, ruta, fallo, sizeof fallo) != 0) return builtin_throw(vm, tc, fallo);
+    push_i32(vm, tc, 0);   /* void → push dummy */
+    return BPVM_OK;
+}
+
+/* Abre un marco como el de CALL_EXT y salta al __startup del programa cargado. Vuelve por su HALT, con el valor de este
+ * builtin, o por el catch de Overlay.tryExe. */
+static bpvm_status_t __attribute__((noinline)) overlay_exe(bpvm_t* vm, bpvm_thread_t* tc) {
+    uint32_t ref = pop_ref(vm, tc);
+    if (tc != vm->hilo_main) return builtin_throw(vm, tc, BPVM_MSG_OVERLAY_EXE_HILO);
+    bpvm_overlay_t* o = vm->overlay;
+    if (o == NULL) return builtin_throw(vm, tc, BPVM_MSG_OVERLAY_EXE_NADA);
+    uint32_t n = (ref == 0u) ? 0u : bpref_arr_len(vm, bpref_from_addr(ref));
+    if (n > BPVM_RUN_ARG_MAX) {
+        char m[96];
+        snprintf(m, sizeof m, "el argumento no cabe: %u bytes (el tope es %u)", (unsigned) n, (unsigned) BPVM_RUN_ARG_MAX);
+        return builtin_throw(vm, tc, m);
+    }
+    (void) read_bp_string(vm, ref, vm->run_arg, sizeof vm->run_arg);   /* lo lee __runArg */
+    o->traza[0] = '\0';
+    uint32_t sp = tc->sp;
+    bpvm_write_i32_be(vm->memory + sp, (int32_t) tc->pc); sp += 4;
+    bpvm_write_i32_be(vm->memory + sp, (int32_t) tc->bp); sp += 4;
+    bpvm_write_i32_be(vm->memory + sp, (int32_t) tc->cs); sp += 4;
+    tc->sp = sp;
+    tc->bp = sp;
+    tc->pc = o->entrada;
+    tc->cs = vm->overlay_cs;
+    o->bp = sp;
+    return BPVM_OK;
+}
+
+static bpvm_status_t __attribute__((noinline)) overlay_cierra(bpvm_t* vm, bpvm_thread_t* tc, int soltar) {
+    char fallo[320];
+    if ((soltar ? bpvm_overlay_soltar(vm, tc, fallo, sizeof fallo) : bpvm_overlay_cerrar(vm, tc, fallo, sizeof fallo)) != 0)
+        return builtin_throw(vm, tc, fallo);
+    push_i32(vm, tc, 0);   /* void → push dummy */
+    return BPVM_OK;
+}
+
+static bpvm_status_t __attribute__((noinline)) overlay_traza(bpvm_t* vm, bpvm_thread_t* tc) {
+    const char* t = (vm->overlay != NULL) ? vm->overlay->traza : "";
+    uint32_t out = bpvm_heap_alloc_string(vm, t, strlen(t));
+    if (out == 0) return builtin_throw(vm, tc, "No space in heap");
+    push_ref(vm, tc, out);
+    return BPVM_OK;
+}
+
+static bpvm_status_t __attribute__((noinline)) clase_de(bpvm_t* vm, bpvm_thread_t* tc) {
+    uint32_t ref = pop_ref(vm, tc);
+    char nombre[160];
+    bpvm_destruir_nombre(vm, bpref_regen(vm, ref), nombre, sizeof nombre);
+    uint32_t out = bpvm_heap_alloc_string(vm, nombre, strlen(nombre));
+    if (out == 0) return builtin_throw(vm, tc, "No space in heap");
+    push_ref(vm, tc, out);
+    return BPVM_OK;
+}
+
+/* LEA_STR en un módulo de un overlay: un string nuevo del heap con los bytes del literal. Su memoria se va al descargar;
+ * el string, no. 0 si no hay sitio. */
+int bpvm_literal_al_heap(bpvm_t* vm, bpvm_thread_t* tc, uint32_t dir) {
+    uint32_t n = bpvm_read_u32_be(vm->memory + dir);
+    uint32_t out = bpvm_heap_alloc_string(vm, (const char*) (vm->memory + dir + 4u), n);
+    if (out == 0) return 0;
+    push_ref(vm, tc, out);
+    return 1;
+}
+
 bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     /* V7/H12 — un builtin de la GUI FUERA del run 0 no debe pasar: el intérprete hace viajar al hilo (OP_CALL_BUILTIN).
      * Se cuenta —el fin del programa lo dice, y test-cola 18 lo mira— y, llamado desde una native (que no puede viajar:
@@ -4812,6 +4901,13 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
         push_i32(vm, tc, 0);   /* void → push dummy */
         return BPVM_OK;
     }
+    /* V8 H9 (#786) — los overlays (Overlays.bp): fuera del switch, que sus búferes no agranden el marco de todos. */
+    case BUILTIN_OVERLAY_LOAD:  return overlay_load(vm, tc);
+    case BUILTIN_OVERLAY_EXE:   return overlay_exe(vm, tc);
+    case BUILTIN_OVERLAY_CLOSE: return overlay_cierra(vm, tc, 0);
+    case BUILTIN_OVERLAY_FREE:  return overlay_cierra(vm, tc, 1);
+    case BUILTIN_OVERLAY_TRACE: return overlay_traza(vm, tc);
+    case BUILTIN_CLASS_NAME:    return clase_de(vm, tc);
     case BUILTIN_MACHINE_ADC_CHANNELS: {
         push_i32(vm, tc, (int32_t) bpvm_machine_adc_channels());
         return BPVM_OK;

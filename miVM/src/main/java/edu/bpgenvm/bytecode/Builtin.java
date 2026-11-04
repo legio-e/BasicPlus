@@ -305,7 +305,13 @@ public enum Builtin {
     SOUND_IS_AVAILABLE("__soundIsAvailable"),   // [292] __soundIsAvailable(): boolean
     SOUND_GET_POSITION("__soundGetPosition"),   // [293] __soundGetPosition(): integer
     SOUND_GET_LENGTH("__soundGetLength"),   // [294] __soundGetLength(): integer
-    EOL("eol");   // [295] eol(): string
+    EOL("eol"),   // [295] eol(): string
+    OVERLAY_LOAD("__overlayLoad", 8),   // [296] __overlayLoad(ruta: string)
+    OVERLAY_EXE("__overlayExe", 8),   // [297] __overlayExe(arg: string)
+    OVERLAY_CLOSE("__overlayClose"),   // [298] __overlayClose()
+    OVERLAY_FREE("__overlayFree"),   // [299] __overlayFree()
+    OVERLAY_TRACE("__overlayTrace"),   // [300] __overlayTrace(): string
+    CLASS_NAME("__className");   // [301] __className(o: any): string
 
     public final String bpName;
     public final int id;
@@ -321,6 +327,8 @@ public enum Builtin {
         switch (this) {
             case FOPEN: return "File";
             case FSTATE_SIZE: return "File";
+            case OVERLAY_EXE: return "Overlay.tryExe";
+            case OVERLAY_LOAD: return "Overlay.load";
             case READ_FILE_I: return "readFile";
             default: return bpName.startsWith("__") ? bpName.substring(2) : bpName;
         }
