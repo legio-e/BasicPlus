@@ -78,6 +78,41 @@ module CsSystem
       function void Dispose();
    }
 
+   // ------------------------------------------------------------------------------------------- el tipo de un objeto
+   // `x.GetType()` lo resuelve casi siempre el traductor (cs2jc/Tipos.cs): no hay un `Type`. Aquí, lo que se pide al ejecutar.
+
+   /// El nombre de la clase de un objeto, el que sabe la VM (`Modulo.Clase`): el builtin de `__className`.
+   public function string Type_Clase(Object o) inline CALL_BUILTIN 301;
+
+   /// `x.GetType()` lanza si `x` es null.
+   public function bool Type_Hay(Object o)
+   {
+      if (o == null) throw new RuntimeError("Object reference not set to an instance of an object.");
+      return true;
+   }
+
+   public function bool Type_Hay(string s)
+   {
+      if (s == null) throw new RuntimeError("Object reference not set to an instance of an object.");
+      return true;
+   }
+
+   /// `a.GetType() == b.GetType()`, cuando sólo se sabe al ejecutar.
+   public function bool Type_Misma(Object a, Object b)
+   {
+      Type_Hay(a);
+      Type_Hay(b);
+      return Type_Clase(a) == Type_Clase(b);
+   }
+
+   /// `Name`, de un `FullName`: lo que hay detrás del último `.` o `+`.
+   public function string Type_Name(string entero)
+   {
+      int i = strlen(entero) - 1;
+      while (i >= 0 && charCodeAt(entero, i) != '.' && charCodeAt(entero, i) != '+') i--;
+      return substring(entero, i + 1, strlen(entero));
+   }
+
    // ------------------------------------------------------------------------------------------- System.IO
    // Lo poco que piden las pruebas (H8, tema 1): escribir en un `TextWriter`. Éste no escribe en ningún sitio, como
    // `TextWriter.Null` y `StreamWriter.Null`; `StringWriter` se queda lo que le escriben.

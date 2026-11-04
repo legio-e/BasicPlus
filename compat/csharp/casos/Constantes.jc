@@ -30,6 +30,13 @@ module CsConstantes
          {
             return 1;
          }
+         byte b1 = ((byte) 48);
+         byte b2 = ((byte) 3);
+         sbyte b3 = ((sbyte) (-3));
+         if (b1 != 48 || b2 != 3 || b3 != -3)
+         {
+            return 5;
+         }
          if (Prueba.B || !Prueba.C || !Prueba.D)
          {
             return 2;

@@ -27,6 +27,20 @@
 
 ## Última sesión
 
+> **4-nov (noche)** — **H8, los temas 1 y 2** (Eduardo: *«me gustaría probar el primer y segundo grupo a ver cuantas pasan, y de
+> las que no pasan a ver si podemos hacer algo para que pasen algunas mas»*). Con el compilador de hoy, el lote seguía en 447: el tema
+> 1, 106 de 141; el tema 2, 73 de 123; ninguna falla. Leídas una a una las 85 que no pasan, doce propuestas (`V8_IDEAS` §E9, «Los
+> temas 1 y 2, otra vez»), y Eduardo: *«1) al 7) si, el 8 lo hablamos, el 12 si»*. Hechos, un commit cada uno, con su caso y su lote:
+> `IDisposable` (450), un `struct` sin estado como clase (468: dio mucho más de lo previsto), lo suelto de la biblioteca (475), `??`
+> con referencias (476; los 12 que dije contaban `?.`), las explícitas que chocan (485: lleva otro nombre el miembro de la interfaz,
+> al revés de lo propuesto), el constructor estático que sólo da valores (487), dos sueltas (489), `&`, `|` y `^` entre `bool` en JC y
+> en BP (495, con la red; de paso `#789`), y el tipo de un objeto (**516**). **El tema 1, 113; el tema 2, 90**; fallan las 6 de siempre.
+> - **El 8, hablado, salió mejor que lo propuesto:** yo quería un `Type` con una tabla; Eduardo: *«El compilador ya conoce el tipo
+>   entonces»*, *«El 'instanceof' no puede sustituir la expresion?»*, y el caso de dos `Object`: *«tendría que ser la VM»*. No hay `Type` al
+>   ejecutar: lo que se sabe lo escribe el traductor (`is`, un `true`, el nombre), y lo demás, `__className`, de H9.
+> - **Sin decidir:** el `goto` (`V8_IDEAS`, «`break` a un bucle con nombre»: analizado; pide `continue` con nombre, y si `while` y `for`
+>   también); y del 9 (tipos anónimos) y el 11 (`ulong`), Eduardo no ha dicho nada.
+>
 > **4-nov** — **los pendientes** (Eduardo: *«Continuamos con las pendientes»*), con la Metro, la Nucleo, la S3 y la P4
 > conectadas.
 > - **La lista de ayer estaba mal en parte:** copié los títulos de FICHAS, y `#693`–`#695` estaban hechas desde el 29-oct;

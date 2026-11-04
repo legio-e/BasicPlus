@@ -142,6 +142,7 @@ namespace Cs2Jc
             while (usados.ContainsKey(modulo)) modulo += "M";
             t.Modulo = modulo;
             BuscaChoques(tipos);                 // las implementaciones explícitas que chocan (Explicitas.cs)
+            tiposDelPrograma = tipos;            // el tipo de un objeto (Tipos.cs)
 
             // JC quiere la clase padre declarada antes que la hija («padre local … no es una clase abierta declarada
             // antes»); a C# le da igual el orden: cada clase, detrás de su base (y si no, en el orden de C#).
@@ -161,6 +162,7 @@ namespace Cs2Jc
             foreach (var s in ordenados) EmiteTipo(s);
             EmiteMain();
             if (main == null) Rechaza(raiz, Porque.Pendiente("no hay Main"));
+            if (usaTipoDe) EmiteTipoDe();
 
             if (t.Rechazos.Count == 0)
             {

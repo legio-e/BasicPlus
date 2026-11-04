@@ -1,3 +1,4 @@
 # Lo que el traductor tiene que rechazar en RechazosJc.cs, y por qué (una línea por rechazo, en orden).
 40: le falta a JC: ?? y ?. (con referencias) — Nombre() ?? "x"
-49: le falta a JC: un enum como valor por defecto de un parámetro (JC sólo admite un literal) — = Tonos.Alto
+41: el traductor todavía no: comparar tipos con algo en una caja que comparte con otro tipo (un uint va en un Long, como un long) — c1.GetType() == c2.GetType()
+50: le falta a JC: un enum como valor por defecto de un parámetro (JC sólo admite un literal) — = Tonos.Alto

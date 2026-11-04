@@ -38,6 +38,7 @@ class Programa
         bool c = a & b;                                        // ya se traduce (H8): JC tiene & entre bool, como Java
         c |= b;                                                // ya se traduce (H8)
         string u = Une(Nombre(), Nombre() ?? "x");             // ?? que calcula, detrás de otra llamada: no se puede adelantar
+        object c1 = 5u, c2 = 5L; bool m = c1.GetType() == c2.GetType();    // un uint va en un Long: el tipo se pierde
         Foo Foo = null;
         int x = Foo.X;                                         // ya se traduce (H8): la clase, Foo_
         int y = Doble(3);                                      // ya se traduce (H8): ((short) 3)

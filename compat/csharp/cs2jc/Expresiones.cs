@@ -23,13 +23,18 @@ namespace Cs2Jc
             if (conv.IsNullable) return ConversionNullable(e, m.GetTypeInfo(e).Type, m.GetTypeInfo(e).ConvertedType);   // un T?
             if (conv.IsEnumeration) return Rechaza(e, Porque.Fuera(Porque.EnteroAEnum));      // `Color c = 0;`
             if (conv.IsMethodGroup) return Rechaza(e, Porque.H7(Porque.Delegados));
-            // una constante que cabe en un byte, un short…: JC (como Java) la acepta en una declaración o una asignación,
-            // no en un argumento ni en un return; ahí, con su conversión escrita, `((byte) 5)` (H8, tema 1)
-            if (conv.IsConstantExpression && EsEstrecho(m.GetTypeInfo(e).ConvertedType)
-                && (e.Parent is ArgumentSyntax || e.Parent is ReturnStatementSyntax || e.Parent is ArrowExpressionClauseSyntax))
+            // una constante que cabe en un byte, un short…: JC (como Java) la acepta escrita tal cual en una declaración o una
+            // asignación, no en un argumento ni en un return; ahí, con su conversión escrita, `((byte) 5)` (H8, tema 1). Una
+            // cuenta (`byte b = (int) 0x30;`, test-129), con su valor, en cualquier sitio
+            if (conv.IsConstantExpression && EsEstrecho(m.GetTypeInfo(e).ConvertedType))
             {
-                string v = ExprBase(e);
-                return v == Hueco ? Hueco : "((" + Tipo(m.GetTypeInfo(e).ConvertedType, e) + ") " + v + ")";
+                bool literal = e is LiteralExpressionSyntax
+                               || (e is PrefixUnaryExpressionSyntax pu && pu.IsKind(SyntaxKind.UnaryMinusExpression) && pu.Operand is LiteralExpressionSyntax);
+                if (!literal || e.Parent is ArgumentSyntax || e.Parent is ReturnStatementSyntax || e.Parent is ArrowExpressionClauseSyntax)
+                {
+                    string v = literal ? ExprBase(e) : LiteralDeConstante(m.GetConstantValue(e).Value, e);
+                    return v == Hueco ? Hueco : "((" + Tipo(m.GetTypeInfo(e).ConvertedType, e) + ") " + v + ")";
+                }
             }
             return ExprBase(e);
         }
@@ -194,6 +199,7 @@ namespace Cs2Jc
             // `"x" + null`, `(string) null + null`, `(object) null + "x"`: en C#, el null se une como "". En JC, el null
             // escrito tal cual en una suma de cadenas es un error a propósito (#774), así que se escribe lo que C# dice
             if (EsNullEscrito(e)) return "\"\"";
+            if (ExprDeTipo(e) is TipoDe tipoDe) return NombreDeTipo(tipoDe, true, e);      // un tipo, su nombre (Tipos.cs)
             if (EsNullable(m.GetTypeInfo(e).Type))
             {
                 // un T?: vacío si es null, como C#
@@ -656,6 +662,10 @@ namespace Cs2Jc
 
         string Binaria(BinaryExpressionSyntax b)
         {
+            // `x.GetType() == typeof(T)`: lo resuelve el traductor, o la VM (Tipos.cs)
+            if ((b.IsKind(SyntaxKind.EqualsExpression) || b.IsKind(SyntaxKind.NotEqualsExpression))
+                && ExprDeTipo(b.Left) is TipoDe tipoIzq && ExprDeTipo(b.Right) is TipoDe tipoDer)
+                return ComparaTipos(b, tipoIzq, tipoDer);
             // con un T?: sus funciones de CsSystem (Nullables.cs); `x ?? y`, el ternario
             if (b.IsKind(SyntaxKind.CoalesceExpression) && EsNullable(m.GetTypeInfo(b.Left).Type)) return CoalesceNullable(b);
             if (m.GetOperation(b) is IBinaryOperation bo && EsOperacionNullable(bo)) return BinariaNullable(b, bo);

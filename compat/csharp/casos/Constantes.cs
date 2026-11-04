@@ -27,6 +27,11 @@ class Prueba
         const int L = X + 1;
         if (X != 3 || Y != 6 || Negativa != -3 || L != 4 || Publica != 4)
             return 1;
+        byte b1 = (int) 0x30;
+        byte b2 = 1 + 2;
+        sbyte b3 = -X;
+        if (b1 != 48 || b2 != 3 || b3 != -3)
+            return 5;
         if (B || !C || !D)
             return 2;
         if (S != "ab" || Doble != 3.0 || Pequena != 5 || Letra != 97 || Largo != 1099511627776L)

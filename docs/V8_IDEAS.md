@@ -5343,7 +5343,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | 4-nov: Mono **485** |
 | 6 | un constructor estático sin llamadas dentro | el traductor | | +1 | 4-nov: Mono **487** |
 | 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | 4-nov: Mono **489** |
-| 8 | un `Type` mínimo: el traductor escribe una tabla con las clases del programa | por hablar | +2 | +9 | |
+| 8 | el tipo de un objeto, sin `Type` al ejecutar (propuesto: una tabla con las clases; hablado: lo escribe el traductor) | el traductor | +1 | +8 | 4-nov: Mono **516** |
 | 9 | los tipos anónimos | sin decidir | +2 | +2 | |
 | 10 | `goto`, con `break` a un bucle con nombre | analizado abajo: por decidir | +4 | | |
 | 11 | `ulong`, como el `uint` | sin decidir | +2 | +1 | |
@@ -5487,14 +5487,37 @@ elegir el `case` es dar valor a `pc`.
 **Por decidir (Eduardo):** `continue` con nombre (hace falta para ir hacia atrás); sólo `do`, o también `while` y `for` con la
 misma regla (el traductor se apaña con `do`; quien programa querrá los tres); y la forma en JC.
 
-### El `Type` mínimo (ajuste 8; por hablar)
+### El tipo de un objeto (ajuste 8; hecho el 4-nov, `compat/csharp/cs2jc/Tipos.cs`)
 
-Lo que escribí el 2-nov, «BP no guarda el nombre de la clase», ya no es cierto: desde H9 hay `__className(o)` (el builtin 301, en
-las dos VMs y en las placas), que da `Modulo.Clase`, para el nombre de la clase de una excepción en `Overlay.tryExe`. Y `Core.bp`
-lleva desde V5 dos comentarios pidiendo un `className()`. Lo que piden las 22 pruebas: comparar (`o.GetType() == typeof(X)`), `.Name`,
-`.FullName`, `.IsAbstract`, `.IsSealed` e imprimirlo. Dos caminos: (a) sólo en el traductor, una tabla con las clases del programa
-y una cadena de `is`, sin tocar nada más; (b) un `className(o)` público, útil por sí mismo, y el `Type` de `CsSystem` encima
-(los nombres de .NET los sigue poniendo el traductor: `X+A`, `N.A`).
+Propuse un `Type` mínimo, una clase de `CsSystem` con una tabla de las clases del programa. Eduardo, al hablarlo: *«El compilador
+ya conoce el tipo entonces, no se puede comparar si un type el igual ?»*; *«El 'instanceof' no puede sustituir la expresion?»*; y de
+dos `Object` con un `Integer` y un `Float` dentro: *«eso no lo puede resolver el compilador, tendría que ser la VM»*. Es mejor: **no hay
+un `Type` al ejecutar.** El traductor ve el programa entero, y lo que sabe lo escribe él; lo que sólo se sabe al ejecutar, lo pregunta
+a la VM.
+
+| en C# | en JC |
+|---|---|
+| `i.GetType() != typeof(int)`, un valor, una cadena | `false`: su tipo no puede ser otro |
+| `v.GetType() == typeof(X)`, `X` sin hijas | `v is X` |
+| `v.GetType() == typeof(A)`, con una hija `B` | `(v is A && !(v is B))`: `is` también dice sí con una hija, y `GetType`, no |
+| `o.GetType() == typeof(int)`, un `object` | `o is Integer` |
+| `a.GetType() == b.GetType()`, dos que dependen de lo que llevan dentro | `CsSystem.Type_Misma(a, b)`: el nombre de la clase, que sabe la VM (`__className`, el builtin 301, de H9) |
+| `typeof(X).IsAbstract`, `.IsSealed`, `.IsClass`… | lo que dice su declaración |
+| `.Name`, `.FullName`, imprimirlo, con el tipo sabido | el nombre, como texto, con el de .NET (`X+A`, `N.A`, `System.Int32`) |
+| lo mismo, cuando depende | `Cs_TipoDe(x)`: una función que escribe el traductor, una cadena de `is` de las hijas a los padres, y las cajas |
+
+`GetType` lanza si el objeto es `null`: `CsSystem.Type_Hay(x)` delante, salvo que no pueda serlo. Lo que calcula, una vez, en una
+temporal (`Sacar.cs`). **El límite** (hablado con Eduardo): una caja no guarda todos los tipos de C#: un `uint` va en un `Long`, como un
+`long`, y el tipo se pierde; eso no lo sabe nadie. Si el programa compara tipos de `Object` y mete uno de ésos en una caja, no se
+traduce, y lo dice: mejor eso que una respuesta equivocada. Lo que escribí el 2-nov, «BP no guarda el nombre de la clase», ya no es
+cierto desde H9. Sigue sin traducirse un `Type` en una variable (`Type t = x.GetType();`) o en un array.
+
+De paso: una local con un `typeof` que nadie usa no se escribe, como la que no tiene valor; y una constante que cabe en un tipo
+estrecho y es una cuenta (`byte b = (int) 0x30;`, `test-129`), con su valor: JC sólo la acepta escrita tal cual.
+
+Casos `Tipos` y `Constantes` (y `RechazosJc`, la caja compartida). **Mono: 516** (+21), sin perder ninguna; fallan las mismas 6.
+**El tema 1: 113; el tema 2: 90.** De las 22 de la propuesta, entran 20 (y `test-733`); quedan `test-296` y `test-528`, las que
+guardan el tipo en una variable.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

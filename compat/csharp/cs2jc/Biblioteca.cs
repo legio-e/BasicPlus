@@ -205,6 +205,9 @@ namespace Cs2Jc
                 return "CsSystem." + ms.ContainingType.Name + "_" + ms.Name + "(" + Argumentos(inv.ArgumentList, ms) + ")";
             }
             var objeto = inv.Expression as MemberAccessExpressionSyntax;
+            // `x.GetType().ToString()`: su nombre (Tipos.cs)
+            if (ms.Name == "ToString" && inv.ArgumentList.Arguments.Count == 0 && objeto != null && ExprDeTipo(objeto.Expression) is TipoDe td)
+                return NombreDeTipo(td, true, inv);
             // un método de instancia que se sabe pasar: la función de Core o de CsSystem, con el objeto delante
             if (!ms.IsStatic && objeto != null && MetodosNet.TryGetValue(Firma(ms), out var fn))
             {
@@ -291,6 +294,7 @@ namespace Cs2Jc
         string BibliotecaMiembro(MemberAccessExpressionSyntax ma, ISymbol s)
         {
             if (EsNullable(s.ContainingType)) return MiembroDeNullable(ma, s);           // un T? (Nullables.cs)
+            if (ExprDeTipo(ma.Expression) is TipoDe td) return MiembroDeTipo(ma, td, s);  // `typeof(T).Name` (Tipos.cs)
             string clave = NombreCompleto(s.ContainingType) + "." + s.Name;
             var cv = m.GetConstantValue(ma);
             if (cv.HasValue) return LiteralDeConstante(cv.Value, ma);

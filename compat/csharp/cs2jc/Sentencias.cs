@@ -98,8 +98,8 @@ namespace Cs2Jc
         {
             if (!ld.UsingKeyword.IsKind(SyntaxKind.None)) { Rechaza(ld, Porque.Pendiente("using")); return; }
             // una local sin valor que nadie usa no hace nada (H8, tema 1): no se escribe, sea del tipo que sea
-            // (`System.Net.IPAddress[] x;`, test-55)
-            if (ld.Declaration.Variables.All(v => v.Initializer == null && SinUsar(v, ld)))
+            // (`System.Net.IPAddress[] x;`, test-55); con un `typeof`, que no calcula nada, tampoco (test-static-using-10)
+            if (ld.Declaration.Variables.All(v => (v.Initializer == null || v.Initializer.Value is TypeOfExpressionSyntax) && SinUsar(v, ld)))
             {
                 Linea("// " + string.Join(", ", ld.Declaration.Variables.Select(v => v.Identifier.ValueText)) + ": una local sin valor que nadie usa");
                 return;

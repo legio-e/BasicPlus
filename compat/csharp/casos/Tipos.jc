@@ -1,0 +1,294 @@
+module CsTipos
+{
+   import CsSystem;
+
+   class Padre
+   {
+      public function string Quien()
+      {
+         return CsSystem.Type_Name(Cs_TipoDe(this));
+      }
+      public function string Entero()
+      {
+         return Cs_TipoDe(this);
+      }
+   }
+
+   class Hija : Padre
+   {
+   }
+
+   class Nieta : Hija
+   {
+   }
+
+   class Sola
+   {
+   }
+
+   class Abstracta
+   {
+   }
+
+   class Sellada
+   {
+   }
+
+   class Estatica
+   {
+   }
+
+   interface IQ
+   {
+   }
+
+   class ConInterfaz : IQ
+   {
+   }
+
+   class Vacio
+   {
+   }
+
+   enum Color
+   {
+      Rojo = 0
+   }
+
+   class Dentro
+   {
+   }
+
+   public class Dentro_Mas
+   {
+   }
+
+   class Prueba
+   {
+      private static int llamadas = 0;
+      private static function Sola Dame()
+      {
+         Prueba.llamadas++;
+         return new Sola();
+      }
+      private static function Object Cuenta()
+      {
+         Prueba.llamadas++;
+         return new Hija();
+      }
+      public static function int Main()
+      {
+         int i = 5;
+         if (false || false)
+         {
+            return 1;
+         }
+         string s = "a";
+         if (!(CsSystem.Type_Hay(s) && true))
+         {
+            return 2;
+         }
+         Sola sola = new Sola();
+         if (!(CsSystem.Type_Hay(sola) && true) || (CsSystem.Type_Hay(sola) && false))
+         {
+            return 3;
+         }
+         if (false || false)
+         {
+            return 4;
+         }
+         if (false)
+         {
+            return 5;
+         }
+         Padre p = new Hija();
+         if ((CsSystem.Type_Hay(p) && p is Padre && !(p is Hija)) || !(CsSystem.Type_Hay(p) && p is Hija && !(p is Nieta)))
+         {
+            return 6;
+         }
+         Padre n = new Nieta();
+         if ((CsSystem.Type_Hay(n) && n is Hija && !(n is Nieta)) || !(CsSystem.Type_Hay(n) && n is Nieta))
+         {
+            return 7;
+         }
+         IQ q = new ConInterfaz();
+         if (!(CsSystem.Type_Hay(q) && q is ConInterfaz) || (CsSystem.Type_Hay(q) && false))
+         {
+            return 8;
+         }
+         Object a = new Integer(5);
+         Object b = new Float(1.5f);
+         Object c = new Integer(7);
+         Object o = new Hija();
+         if (CsSystem.Type_Misma(a, b) || !CsSystem.Type_Misma(a, c))
+         {
+            return 9;
+         }
+         if (!CsSystem.Type_Misma(o, p) || CsSystem.Type_Misma(o, n))
+         {
+            return 10;
+         }
+         if (!(CsSystem.Type_Hay(a) && a is Integer) || !(CsSystem.Type_Hay(b) && b is Float) || (CsSystem.Type_Hay(a) && a is Long))
+         {
+            return 11;
+         }
+         if (!(CsSystem.Type_Hay(o) && o is Hija && !(o is Nieta)) || (CsSystem.Type_Hay(o) && o is Padre && !(o is Hija)))
+         {
+            return 12;
+         }
+         if ("Sola" != "Sola" || "Sola" != "Sola")
+         {
+            return 13;
+         }
+         if ("N.Dentro+Mas" != "N.Dentro+Mas" || "Mas" != "Mas")
+         {
+            return 14;
+         }
+         if ("System.Int32" != "System.Int32" || "String" != "String" || "System.Int32[]" != "System.Int32[]")
+         {
+            return 15;
+         }
+         if ("System.Int32" != "System.Int32" || (CsSystem.Type_Hay(sola) ? "Sola" : "") != "Sola")
+         {
+            return 16;
+         }
+         if (CsSystem.Type_Name(Cs_TipoDe(p)) != "Hija" || p.Quien() != "Hija" || new Padre().Quien() != "Padre" || n.Entero() != "Nieta")
+         {
+            return 17;
+         }
+         if (Cs_TipoDe(a) != "System.Int32" || CsSystem.Type_Name(Cs_TipoDe(o)) != "Hija")
+         {
+            return 18;
+         }
+         if ("es " + "Sola" != "es Sola" || "es " + Cs_TipoDe(p) != "es Hija")
+         {
+            return 19;
+         }
+         println(Cs_TipoDe(o));
+         println("Vacio");
+         if (!true || false || !true || false)
+         {
+            return 20;
+         }
+         if (!true || !true || !true || !true)
+         {
+            return 21;
+         }
+         if (!true || !true || !true)
+         {
+            return 22;
+         }
+         Sola nadie = null;
+         try
+         {
+            if ((CsSystem.Type_Hay(nadie) && true))
+            {
+               return 23;
+            }
+            return 24;
+         }
+         catch (Exception excepcion_cs1)
+         {
+         }
+         Padre nadie2 = null;
+         try
+         {
+            if (CsSystem.Type_Name(Cs_TipoDe(nadie2)) == "x")
+            {
+               return 25;
+            }
+            return 26;
+         }
+         catch (Exception excepcion_cs2)
+         {
+         }
+         if (!(CsSystem.Type_Hay(Prueba.Dame()) && true) || Prueba.llamadas != 1)
+         {
+            return 27;
+         }
+         Object valor_s1 = Prueba.Cuenta();
+         bool es = (CsSystem.Type_Hay(valor_s1) && valor_s1 is Hija && !(valor_s1 is Nieta));
+         if (!es || Prueba.llamadas != 2)
+         {
+            return 28;
+         }
+         // t: una local sin valor que nadie usa
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+
+   public function string Cs_TipoDe(Object o)
+   {
+      CsSystem.Type_Hay(o);
+      if (o is Nieta)
+      {
+         return "Nieta";
+      }
+      if (o is Hija)
+      {
+         return "Hija";
+      }
+      if (o is Vacio)
+      {
+         return "Vacio";
+      }
+      if (o is Padre)
+      {
+         return "Padre";
+      }
+      if (o is Sola)
+      {
+         return "Sola";
+      }
+      if (o is Sellada)
+      {
+         return "Sellada";
+      }
+      if (o is ConInterfaz)
+      {
+         return "ConInterfaz";
+      }
+      if (o is Dentro)
+      {
+         return "N.Dentro";
+      }
+      if (o is Dentro_Mas)
+      {
+         return "N.Dentro+Mas";
+      }
+      if (o is Prueba)
+      {
+         return "Prueba";
+      }
+      if (o is Integer)
+      {
+         return "System.Int32";
+      }
+      if (o is Long)
+      {
+         return "System.Int64";
+      }
+      if (o is Double)
+      {
+         return "System.Double";
+      }
+      if (o is Float)
+      {
+         return "System.Single";
+      }
+      if (o is Boolean)
+      {
+         return "System.Boolean";
+      }
+      return "System.Object";
+   }
+}
