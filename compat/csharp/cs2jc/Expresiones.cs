@@ -364,6 +364,13 @@ namespace Cs2Jc
                         return x + " = (" + x + " != null ? " + x + " : " + Expr(a.Right) + ")";
                     }
                     if (a.IsKind(SyntaxKind.UnsignedRightShiftAssignmentExpression)) return Rechaza(a, Porque.Pendiente(">>>="));
+                    if (CampoDe(a.Left) is string campo)
+                    {
+                        // `Y = e`, su campo; `Y += e` lee por su `get`, como C#, y escribe el campo
+                        if (a.IsKind(SyntaxKind.SimpleAssignmentExpression)) return campo + " = " + Expr(a.Right);
+                        string op = a.OperatorToken.Text.Substring(0, a.OperatorToken.Text.Length - 1);
+                        return campo + " = " + Expr(a.Left) + " " + op + " " + Atomo(a.Right);
+                    }
                     if (m.GetSymbolInfo(a.Left).Symbol is IEventSymbol) return Rechaza(a, Porque.H7(Porque.Delegados));
                     if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) && EsNullable(m.GetTypeInfo(a.Left).Type)) return AsignaNullable(a);
                     if (EsUInt(m.GetTypeInfo(a.Left).Type) && AsignaUInt(a) is string au) return au;    // `u += y`, recortado
@@ -377,11 +384,13 @@ namespace Cs2Jc
                     if (EsEnum(m.GetTypeInfo(p.Operand).Type)) return Rechaza(p, Porque.Fuera(Porque.EnteroAEnum));
                     if (EsNullable(m.GetTypeInfo(p.Operand).Type)) return IncNullable(p.Operand, p.IsKind(SyntaxKind.PostIncrementExpression), p);
                     if (EsUInt(m.GetTypeInfo(p.Operand).Type)) return IncUInt(p.Operand, p.IsKind(SyntaxKind.PostIncrementExpression), p);
+                    if (CampoDe(p.Operand) is string campoPost) return campoPost + " = " + Expr(p.Operand) + (p.IsKind(SyntaxKind.PostIncrementExpression) ? " + 1" : " - 1");
                     return Expr(p.Operand) + p.OperatorToken.Text;
                 case PrefixUnaryExpressionSyntax p when p.IsKind(SyntaxKind.PreIncrementExpression) || p.IsKind(SyntaxKind.PreDecrementExpression):
                     if (EsEnum(m.GetTypeInfo(p.Operand).Type)) return Rechaza(p, Porque.Fuera(Porque.EnteroAEnum));
                     if (EsNullable(m.GetTypeInfo(p.Operand).Type)) return IncNullable(p.Operand, p.IsKind(SyntaxKind.PreIncrementExpression), p);
                     if (EsUInt(m.GetTypeInfo(p.Operand).Type)) return IncUInt(p.Operand, p.IsKind(SyntaxKind.PreIncrementExpression), p);
+                    if (CampoDe(p.Operand) is string campoPre) return campoPre + " = " + Expr(p.Operand) + (p.IsKind(SyntaxKind.PreIncrementExpression) ? " + 1" : " - 1");
                     return Expr(p.Operand) + p.OperatorToken.Text;
                 case InvocationExpressionSyntax _:
                 case ObjectCreationExpressionSyntax _:

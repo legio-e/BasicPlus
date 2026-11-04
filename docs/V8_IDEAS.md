@@ -5548,9 +5548,9 @@ por lo que da cada una; Eduardo: *«1,2 y 4 OK»*.
 | # | ajuste | dónde | tema 3 | hecho |
 |---|---|---|---|---|
 | 1 | ocultar un miembro (`new`): el de la hija lleva otro nombre en JC | el traductor | +7 | 4-nov: Mono **558** |
-| 2 | una propiedad de sólo lectura asignada en su constructor: escribe su campo | el traductor | +1 | |
+| 2 | una propiedad de sólo lectura asignada en su constructor: escribe su campo | el traductor | +1 | 4-nov: Mono **560** |
 | 3 | un array de objetos de una clase con su tamaño (`new Derived[0]`) | por decidir: toca JC | +1 | |
-| 4 | `Console.Error` | `CsSystem` | +1 | |
+| 4 | `Console.Error` | `CsSystem` | +1 | 4-nov: Mono **560** |
 
 **1. Ocultar un miembro, hecho** (`Explicitas.cs`). En JC todo método es virtual, y lo que se llama igual en una hija sobrescribe. El
 que oculta (con `new`, o sin él, con el aviso de C#) lleva otro nombre, `Hija_M`: métodos, propiedades, campos, constantes. Qué miembro usa
@@ -5559,6 +5559,18 @@ hereda su nombre, y lo que implementa una interfaz, le reenvía (el miembro de l
 con padres del programa: ocultar algo de .NET sigue sin traducirse. De paso, dos propiedades que sólo se diferencian en la primera
 letra (`p` y `P`, `test-56`): en JC, las dos, `getP`; la segunda, con otro nombre. Y `test-502`: un método `get_Value` no oculta el
 accesor de una propiedad. Caso `Ocultos`. **Mono: 558** (+23), sin perder ninguna; fallan las mismas 6. **El tema 3: 52.**
+
+**2. La propiedad de sólo lectura, hecho.** En C#, dar valor en el constructor a `public virtual int Y { get; }` escribe su campo, sin pasar
+por nadie, y leerla va por su `get`, que es virtual. En JC, con `{ get; set; }`, iría al setter y una hija que la redefine se lo
+llevaba. Las que redefine una hija se escriben con su campo a la vista (`Y_campo`): `Y = e` lo escribe, y `Y++` y `Y += e` leen por el
+`get` y escriben el campo. Caso `SoloLectura`. `gtest-autoproperty-12` deja de fallar.
+
+**4. `Console.Error`, hecho.** BP no tiene salida de error: lo que se escribe se calcula y no va a ningún sitio; en C# tampoco va al `stdout`,
+que es lo que se compara. **Mono: 560** (+2); fallan 5. **El tema 3: 54.**
+
+**3. Un array de una clase con su tamaño, por decidir.** Probado en JC: `newObjArray(n)` da un `Object[]` y no se asigna a un `A[]`, y `(A[]) x`
+no se puede escribir. Hoy sólo se crea uno con sus valores, `[new A(), new A()]`. Hace falta algo en el lenguaje: en JC, `new A[n]`,
+como en Java y C#; y su forma en BP, porque el árbol es el mismo. 24 pruebas lo piden, a 3 no les falta nada más.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

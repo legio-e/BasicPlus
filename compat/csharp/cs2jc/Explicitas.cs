@@ -7,6 +7,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Cs2Jc
 {
@@ -61,6 +62,25 @@ namespace Cs2Jc
             }
         }
 
+        /// Las propiedades automáticas de sólo lectura (`public virtual int Y { get; }`) que redefine una hija. En C#, darles valor en
+        /// el constructor escribe su campo, sin pasar por nadie; en JC, con `{ get; set; }`, iría al setter, que es virtual, y una
+        /// hija que redefine la propiedad se lo llevaría (gtest-autoproperty-12). Se escriben con su campo a la vista (`Y_campo`).
+        readonly HashSet<ISymbol> conCampo = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+
+        void BuscaSoloLectura(IEnumerable<INamedTypeSymbol> tipos)
+        {
+            foreach (var c in tipos)
+                foreach (var p in c.GetMembers().OfType<IPropertySymbol>())
+                    if (p.OverriddenProperty is IPropertySymbol padre && DelPrograma(padre) && padre.SetMethod == null && !padre.IsAbstract
+                        && padre.DeclaringSyntaxReferences.Select(r => r.GetSyntax()).OfType<PropertyDeclarationSyntax>()
+                                .Any(d => d.AccessorList != null && d.AccessorList.Accessors.All(a => a.Body == null && a.ExpressionBody == null)))
+                        conCampo.Add(padre.OriginalDefinition);
+        }
+
+        /// Si `e` es una de ésas, su campo, para escribirlo; si no, null. Leerla sí va por su `get`, como en C#.
+        string CampoDe(ExpressionSyntax e) =>
+            m.GetSymbolInfo(e).Symbol is IPropertySymbol p && conCampo.Contains(p.OriginalDefinition) ? "this." + NombreDe(p) + "_campo" : null;
+
         /// ¿Es en JC una propiedad, con su `getX`? Las de C#, y los campos públicos («el estado sale por getters y setters»).
         bool EsPropiedadEnJc(ISymbol x) =>
             !x.IsImplicitlyDeclared && ((x is IPropertySymbol p && !p.IsIndexer) || (x is IFieldSymbol f && !f.IsConst && AccesoDe(f) == "public"));
@@ -94,6 +114,7 @@ namespace Cs2Jc
         void BuscaChoques(IEnumerable<INamedTypeSymbol> tipos)
         {
             BuscaOcultos(tipos);
+            BuscaSoloLectura(tipos);
             foreach (var s in tipos.Where(t => t.TypeKind == TypeKind.Class || t.TypeKind == TypeKind.Struct))
             {
                 var miembros = new List<ISymbol>();

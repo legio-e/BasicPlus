@@ -36,6 +36,7 @@ class Prueba
         // no escribe en ningún sitio, pero lo que se le pasa se calcula
         StreamWriter.Null.WriteLine (Cuenta ());
         TextWriter.Null.Write (5);
+        Console.Error.WriteLine ("no va al stdout");
         if (llamadas != 1)
             return 6;
 

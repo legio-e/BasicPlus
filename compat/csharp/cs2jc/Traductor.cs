@@ -683,7 +683,19 @@ namespace Cs2Jc
             }
             string cabecera = (explicita ? "public" : AccesoDe(s)) + (s.IsStatic ? " static" : "") + " "
                 + Tipo(s.Type, p.Type) + " " + nombre;
+            // de sólo lectura y con una hija que la redefine: su campo, a la vista (Explicitas.cs)
+            bool campo = conCampo.Contains(s.OriginalDefinition);
+            if (campo)
+                Linea("private " + Tipo(s.Type, p.Type) + " " + nombre + "_campo" + (p.Initializer != null ? " = " + Expr(p.Initializer.Value) : NaceDeCSharp(s.Type, p)) + ";");
             if (!s.IsStatic) Anotaciones(s);
+            if (campo)
+            {
+                Linea(cabecera);
+                Linea("{");
+                Linea("   get { return this." + nombre + "_campo; }");
+                Linea("}");
+                return;
+            }
             if (s.IsAbstract)
             {
                 // una propiedad abstracta, o la de una interfaz: sus accesores lanzan

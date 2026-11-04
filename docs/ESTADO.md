@@ -42,7 +42,11 @@
 >   lenguaje, `do miLoop`, `break miLoop` y `continue miLoop`, en BP y en JC, sólo el compilador, con su red. Sus dos formas, hacia
 >   delante y hacia atrás, no valen cuando se cruzan, y la variable sirve para todas: una sola regla en el traductor (*«OK»*).
 >   **Mono, 535**: las 19 que sólo pedían `goto`; el tema 1, 117.
-> - **Sin decidir:** del 9 (tipos anónimos) y el 11 (`ulong`), Eduardo no ha dicho nada; y si `while` y `for` llevan nombre.
+> - **El tema 3**, «propiedades» (Eduardo: *«Mientras puedes mirar las pruebas de Mono que pasan del grupo 3»*; *«1,2 y 4 OK»*): de 44 a **54** de
+>   83, con ocultar un miembro (`new`: el de la hija lleva otro nombre; +23 en Mono), la propiedad de sólo lectura que redefine una hija
+>   y `Console.Error`. **Mono, 560**; fallan 5. `gtest-autoproperty-20` sigue fallando: es la diferencia de `#776`, decidida.
+> - **Sin decidir:** del 9 (tipos anónimos) y el 11 (`ulong`), Eduardo no ha dicho nada; si `while` y `for` llevan nombre; y `new A[n]`
+>   (un array de una clase con su tamaño: JC no tiene cómo; 24 pruebas lo piden).
 >
 > **4-nov** — **los pendientes** (Eduardo: *«Continuamos con las pendientes»*), con la Metro, la Nucleo, la S3 y la P4
 > conectadas.

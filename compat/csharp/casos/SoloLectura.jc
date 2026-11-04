@@ -1,0 +1,79 @@
+module CsSoloLectura
+{
+   class A
+   {
+      public int X { get; set; }
+      private int Y_campo;
+      public int Y
+      {
+         get { return this.Y_campo; }
+      }
+      private string Z_campo = "z";
+      public string Z
+      {
+         get { return this.Z_campo; }
+      }
+      public function A()
+      {
+         this.X = 4;
+         this.X++;
+         this.Y_campo = 2;
+         this.Y_campo = this.Y + 1;
+         this.Y_campo = this.Y + 2;
+         this.Y_campo = this.Y - 1;
+      }
+   }
+
+   class B : A
+   {
+      public int veces { get; set; }
+      @override{}
+      public int Y
+      {
+         get
+         {
+            this.veces++;
+            return base.Y;
+         }
+      }
+      @override{}
+      public string Z
+      {
+         get
+         {
+            return base.Z + "!";
+         }
+      }
+   }
+
+   class Prueba
+   {
+      public static function int Main()
+      {
+         A a = new A();
+         if (a.X != 5 || a.Y != 4 || a.Z != "z")
+         {
+            return 1;
+         }
+         B b = new B();
+         if (b.veces != 3)
+         {
+            return 2;
+         }
+         if (b.Y != 4 || b.veces != 4 || b.X != 5 || b.Z != "z!")
+         {
+            return 3;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

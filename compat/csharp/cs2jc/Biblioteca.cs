@@ -299,7 +299,8 @@ namespace Cs2Jc
             var cv = m.GetConstantValue(ma);
             if (cv.HasValue) return LiteralDeConstante(cv.Value, ma);
             if (clave == "System.String.Empty") return "\"\"";
-            if (clave == "System.IO.StreamWriter.Null" || clave == "System.IO.TextWriter.Null")
+            // BP no tiene salida de error: lo que se escribe se calcula y no va a ningún sitio; en C# tampoco va al stdout
+            if (clave == "System.IO.StreamWriter.Null" || clave == "System.IO.TextWriter.Null" || clave == "System.Console.Error")
             {
                 imports.Add("CsSystem");
                 return "CsSystem.TextWriter.Null";
