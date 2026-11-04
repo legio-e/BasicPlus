@@ -15,7 +15,7 @@ namespace Cs2Jc
             Linea("{");
             sangria++;
             if (primera != null) Linea(primera);
-            foreach (var s in b.Statements) Sentencia(s);
+            Sentencias(b);
             sangria--;
             Linea("}");
         }
@@ -67,12 +67,10 @@ namespace Cs2Jc
                 case ReturnStatementSyntax r:
                     EmiteConSacar(r, false, () => Linea(r.Expression == null ? "return;" : "return " + Expr(r.Expression) + ";"));
                     break;
-                case BreakStatementSyntax _: Linea("break;"); break;
-                case ContinueStatementSyntax co:
-                    if (BucleDe(co) is ForStatementSyntax fw && forComoWhile.Contains(fw))
-                        foreach (var i in fw.Incrementors) Linea(ExprSentencia(i) + ";");
-                    Linea("continue;");
-                    break;
+                case BreakStatementSyntax br: SaltoDeBucle(true, DestinoDe(br)); break;
+                case ContinueStatementSyntax co: SaltoDeBucle(false, BucleDe(co)); break;
+                case GotoStatementSyntax g: Goto(g); break;
+                case LabeledStatementSyntax ls: Sentencia(ls.Statement); break;          // la etiqueta, en Saltos.cs
                 case SwitchStatementSyntax sw: Switch(sw); break;
                 case UsingStatementSyntax u: Using(u); break;
                 case LockStatementSyntax lo: Lock(lo); break;
@@ -345,7 +343,7 @@ namespace Cs2Jc
             sangria++;
             foreach (var l in antes) Linea(l);
             Sal(cond);
-            if (w.Statement is BlockSyntax b) foreach (var s in b.Statements) Sentencia(s);
+            if (w.Statement is BlockSyntax b) Sentencias(b);
             else Sentencia(w.Statement);
             sangria--;
             Linea("}");
@@ -379,7 +377,7 @@ namespace Cs2Jc
                 sangria--;
                 Linea("}");
                 Linea(primera + " = false;");
-                if (d.Statement is BlockSyntax cb) foreach (var s in cb.Statements) Sentencia(s);
+                if (d.Statement is BlockSyntax cb) Sentencias(cb);
                 else Sentencia(d.Statement);
                 sangria--;
                 Linea("}");
@@ -388,7 +386,7 @@ namespace Cs2Jc
             Linea("do");
             Linea("{");
             sangria++;
-            if (d.Statement is BlockSyntax b) foreach (var s in b.Statements) Sentencia(s);
+            if (d.Statement is BlockSyntax b) Sentencias(b);
             else Sentencia(d.Statement);
             foreach (var l in antes) Linea(l);
             Sal(cond);
@@ -441,7 +439,7 @@ namespace Cs2Jc
                 foreach (var l in antes) Linea(l);
                 Sal(cond);
             }
-            if (f.Statement is BlockSyntax b) foreach (var s in b.Statements) Sentencia(s);
+            if (f.Statement is BlockSyntax b) Sentencias(b);
             else Sentencia(f.Statement);
             foreach (var i in f.Incrementors) Linea(ExprSentencia(i) + ";");
             sangria--;
@@ -454,7 +452,7 @@ namespace Cs2Jc
         }
 
         /// El bucle al que salta un `continue` (el `switch` no lo para).
-        static SyntaxNode BucleDe(ContinueStatementSyntax c)
+        static SyntaxNode BucleDe(SyntaxNode c)
         {
             foreach (var a in c.Ancestors())
                 if (a is ForStatementSyntax || a is ForEachStatementSyntax || a is WhileStatementSyntax || a is DoStatementSyntax)
@@ -466,6 +464,7 @@ namespace Cs2Jc
         {
             // sobre un T?, un null va al default: el switch de JC no lo hace solo
             if (EsNullable(m.GetTypeInfo(sw.Expression).Type)) { Rechaza(sw.Expression, Porque.Pendiente("switch sobre un T?")); return; }
+            if (SwitchConSaltos(sw)) { EmiteSwitchConSaltos(sw); return; }             // con etiquetas o `goto case` (Saltos.cs)
             // el de JC: `case 1, 2:`, sin caer de un caso al siguiente (C# tampoco), y el `default` al final (en C# el
             // orden no cambia nada, porque no se cae)
             // Una local declarada en un case y usada en otro: en C# su ámbito es el switch entero; en JC, el case.
@@ -485,16 +484,19 @@ namespace Cs2Jc
             // con un nombre propio (`i_s1`), para no chocar con otra del mismo nombre fuera del switch (en C#, otra puede
             // reusarlo en un bloque hermano); no dentro de un `if (true)`: JC no ve que se entra, y una variable que el
             // switch asigna en todos sus casos le parecería sin valor (la diferencia de test-901)
-            foreach (var l in antes)
-            {
-                var decl = l.DeclaringSyntaxReferences.First().GetSyntax();
-                string nuevo = Ident(l.Name) + "_s" + (++subidas);
-                renombradas[l] = nuevo;
-                if (l.IsConst) Linea("const " + Tipo(l.Type, decl) + " " + nuevo + " = " + LiteralDeConstante(l.ConstantValue, decl) + ";");
-                else Linea(Tipo(l.Type, decl) + " " + nuevo + " = " + ValorCualquiera(l.Type, decl) + ";");
-                izadas.Add(l);
-            }
+            foreach (var l in antes) IzaLocal(l);
             SwitchDentro(sw);
+        }
+
+        /// Una local declarada antes de tiempo, con su nombre propio; en su sitio, su declaración es una asignación (Local).
+        void IzaLocal(ILocalSymbol l)
+        {
+            var decl = l.DeclaringSyntaxReferences.First().GetSyntax();
+            string nuevo = Ident(l.Name) + "_s" + (++subidas);
+            renombradas[l] = nuevo;
+            if (l.IsConst) Linea("const " + Tipo(l.Type, decl) + " " + nuevo + " = " + LiteralDeConstante(l.ConstantValue, decl) + ";");
+            else Linea(Tipo(l.Type, decl) + " " + nuevo + " = " + ValorCualquiera(l.Type, decl) + ";");
+            izadas.Add(l);
         }
 
         void SwitchDentro(SwitchStatementSyntax sw)

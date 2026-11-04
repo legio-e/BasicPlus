@@ -1,0 +1,563 @@
+module CsSaltos
+{
+   class Prueba
+   {
+      private static function int Adelante(int n)
+      {
+         int r_s2 = 0;
+         int salto_s1 = 0;
+         do salto_s1
+         {
+            if (salto_s1 <= 0)
+            {
+               r_s2 = 1;
+               if (n > 0)
+               {
+                  salto_s1 = 1;
+                  continue salto_s1;
+               }
+               r_s2 = 2;
+            }
+            if (salto_s1 <= 1)
+            {
+               return r_s2;
+            }
+            break salto_s1;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int Atras(int n)
+      {
+         int i_s4 = 0;
+         int t_s5 = 0;
+         int salto_s3 = 0;
+         do salto_s3
+         {
+            if (salto_s3 <= 0)
+            {
+               i_s4 = 0;
+               t_s5 = 0;
+            }
+            if (salto_s3 <= 1)
+            {
+               t_s5 += i_s4;
+               i_s4++;
+               if (i_s4 < n)
+               {
+                  salto_s3 = 1;
+                  continue salto_s3;
+               }
+               return t_s5;
+            }
+            break salto_s3;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int Cruzan()
+      {
+         int i_s7 = 0;
+         int salto_s6 = 0;
+         do salto_s6
+         {
+            if (salto_s6 <= 0)
+            {
+               i_s7 = 0;
+               salto_s6 = 2;
+               continue salto_s6;
+            }
+            if (salto_s6 <= 1)
+            {
+               i_s7++;
+               if (i_s7 > 1)
+               {
+                  throw new Exception("infloop");
+               }
+               return i_s7 + 10;
+            }
+            if (salto_s6 <= 2)
+            {
+               salto_s6 = 1;
+               continue salto_s6;
+            }
+            break salto_s6;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int Declarada()
+      {
+         int a_s9 = 0;
+         int salto_s8 = 0;
+         do salto_s8
+         {
+            if (salto_s8 <= 0)
+            {
+               salto_s8 = 1;
+               continue salto_s8;
+            }
+            if (salto_s8 <= 1)
+            {
+               a_s9 = 3;
+               return a_s9;
+            }
+            break salto_s8;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int DesdeBucles()
+      {
+         int t_s11 = 0;
+         int salto_s10 = 0;
+         do salto_s10
+         {
+            if (salto_s10 <= 0)
+            {
+               t_s11 = 0;
+               for (int i = 0; i <= 2; i++)
+               {
+                  for (int j = 0; j <= 2; j++)
+                  {
+                     t_s11++;
+                     if (i == 1 && j == 1)
+                     {
+                        salto_s10 = 1;
+                        continue salto_s10;
+                     }
+                  }
+               }
+               t_s11 = 100;
+            }
+            if (salto_s10 <= 1)
+            {
+               return t_s11;
+            }
+            break salto_s10;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int ConFinally()
+      {
+         int r_s13 = 0;
+         int salto_s12 = 0;
+         do salto_s12
+         {
+            if (salto_s12 <= 0)
+            {
+               r_s13 = 0;
+               try
+               {
+                  salto_s12 = 1;
+                  continue salto_s12;
+               }
+               finally
+               {
+                  r_s13 = 7;
+               }
+            }
+            if (salto_s12 <= 1)
+            {
+               return r_s13;
+            }
+            break salto_s12;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int DesdeCatch()
+      {
+         int r_s15 = 0;
+         int salto_s14 = 0;
+         do salto_s14
+         {
+            if (salto_s14 <= 0)
+            {
+               r_s15 = 1;
+               try
+               {
+                  throw new Exception("x");
+               }
+               catch (Exception excepcion_cs1)
+               {
+                  salto_s14 = 1;
+                  continue salto_s14;
+               }
+               r_s15 = 2;
+            }
+            if (salto_s14 <= 1)
+            {
+               return r_s15;
+            }
+            break salto_s14;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int EnUnBucle()
+      {
+         int i = 0;
+         while (true)
+         {
+            if (true)
+            {
+               int salto_s16 = 0;
+               int fuga_s17 = 0;
+               do salto_s16
+               {
+                  if (salto_s16 <= 0)
+                  {
+                     salto_s16 = 1;
+                     continue salto_s16;
+                  }
+                  if (salto_s16 <= 1)
+                  {
+                     i += 3;
+                     fuga_s17 = 1;
+                     break salto_s16;
+                  }
+                  break salto_s16;
+               }
+               while (true);
+               if (fuga_s17 == 1)
+               {
+                  break;
+               }
+               throw new RuntimeError("inalcanzable");
+            }
+         }
+         return i;
+      }
+      private static function int ConContinue()
+      {
+         int t = 0;
+         for (int i = 0; i <= 3; i++)
+         {
+            if (true)
+            {
+               int salto_s18 = 0;
+               int fuga_s19 = 0;
+               do salto_s18
+               {
+                  if (salto_s18 <= 0)
+                  {
+                     if (i == 1)
+                     {
+                        salto_s18 = 1;
+                        continue salto_s18;
+                     }
+                     t += 1;
+                     fuga_s19 = 2;
+                     break salto_s18;
+                  }
+                  if (salto_s18 <= 1)
+                  {
+                     t += 10;
+                  }
+                  break salto_s18;
+               }
+               while (true);
+               if (fuga_s19 == 2)
+               {
+                  continue;
+               }
+            }
+            t += 100;
+         }
+         return t;
+      }
+      private static function int Anidados()
+      {
+         int r_s21 = 0;
+         int salto_s20 = 0;
+         do salto_s20
+         {
+            if (salto_s20 <= 0)
+            {
+               r_s21 = 0;
+               if (true)
+               {
+                  int salto_s22 = 0;
+                  do salto_s22
+                  {
+                     if (salto_s22 <= 0)
+                     {
+                        salto_s22 = 1;
+                        continue salto_s22;
+                     }
+                     if (salto_s22 <= 1)
+                     {
+                        r_s21 += 1;
+                        if (true)
+                        {
+                           int salto_s23 = 0;
+                           do salto_s23
+                           {
+                              if (salto_s23 <= 0)
+                              {
+                                 salto_s23 = 1;
+                                 continue salto_s23;
+                              }
+                              if (salto_s23 <= 1)
+                              {
+                                 r_s21 += 10;
+                                 salto_s20 = 1;
+                                 continue salto_s20;
+                              }
+                              break salto_s23;
+                           }
+                           while (true);
+                           throw new RuntimeError("inalcanzable");
+                        }
+                     }
+                     break salto_s22;
+                  }
+                  while (true);
+                  throw new RuntimeError("inalcanzable");
+               }
+            }
+            if (salto_s20 <= 1)
+            {
+               return r_s21 + 100;
+            }
+            break salto_s20;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int Etiqueta(int a)
+      {
+         int res = 0;
+         int salto_s24 = 3;
+         switch (a)
+         {
+            case 1:
+               salto_s24 = 0;
+            case 2:
+               salto_s24 = 2;
+         }
+         do salto_s24
+         {
+            if (salto_s24 <= 0)
+            {
+               res += 1;
+            }
+            if (salto_s24 <= 1)
+            {
+               res += 3;
+               break salto_s24;
+            }
+            if (salto_s24 <= 2)
+            {
+               res += 2;
+               salto_s24 = 1;
+               continue salto_s24;
+            }
+            break salto_s24;
+         }
+         while (true);
+         return res;
+      }
+      private static function int GotoCase(int x)
+      {
+         int r = 0;
+         int salto_s25 = 4;
+         switch (x)
+         {
+            case 1:
+               salto_s25 = 0;
+            case 2:
+               salto_s25 = 1;
+            case 3:
+               salto_s25 = 2;
+            default:
+               salto_s25 = 3;
+         }
+         do salto_s25
+         {
+            if (salto_s25 <= 0)
+            {
+               r += 1;
+               salto_s25 = 2;
+               continue salto_s25;
+            }
+            if (salto_s25 <= 1)
+            {
+               r += 2;
+               salto_s25 = 3;
+               continue salto_s25;
+            }
+            if (salto_s25 <= 2)
+            {
+               r += 4;
+               break salto_s25;
+            }
+            if (salto_s25 <= 3)
+            {
+               r += 8;
+               break salto_s25;
+            }
+            break salto_s25;
+         }
+         while (true);
+         return r;
+      }
+      private static function string PorCadena(string s)
+      {
+         int salto_s26 = 3;
+         switch (s)
+         {
+            case "a":
+               salto_s26 = 0;
+            case "b":
+               salto_s26 = 1;
+            default:
+               salto_s26 = 2;
+         }
+         do salto_s26
+         {
+            if (salto_s26 <= 0)
+            {
+               salto_s26 = 1;
+               continue salto_s26;
+            }
+            if (salto_s26 <= 1)
+            {
+               return "B";
+            }
+            if (salto_s26 <= 2)
+            {
+               return "?";
+            }
+            break salto_s26;
+         }
+         while (true);
+         throw new RuntimeError("inalcanzable");
+      }
+      private static function int Mezcla(int x)
+      {
+         int r = 0;
+         while (r < 100)
+         {
+            int salto_s27 = 3;
+            switch (x)
+            {
+               case 1:
+                  salto_s27 = 0;
+               case 2:
+                  salto_s27 = 1;
+               default:
+                  salto_s27 = 2;
+            }
+            int fuga_s28 = 0;
+            do salto_s27
+            {
+               if (salto_s27 <= 0)
+               {
+                  for (int i = 0; i <= 2; i++)
+                  {
+                     if (i == 1)
+                     {
+                        break;
+                     }
+                     r += 1;
+                  }
+                  x = 2;
+                  salto_s27 = 1;
+                  continue salto_s27;
+               }
+               if (salto_s27 <= 1)
+               {
+                  r += 10;
+                  if (r < 30)
+                  {
+                     fuga_s28 = 2;
+                     break salto_s27;
+                  }
+                  break salto_s27;
+               }
+               if (salto_s27 <= 2)
+               {
+                  r = 1000;
+                  break salto_s27;
+               }
+               break salto_s27;
+            }
+            while (true);
+            if (fuga_s28 == 2)
+            {
+               continue;
+            }
+            r += 100;
+         }
+         return r;
+      }
+      public static function int Main()
+      {
+         if (Prueba.Adelante(1) != 1 || Prueba.Adelante(0) != 2)
+         {
+            return 1;
+         }
+         if (Prueba.Atras(4) != 6)
+         {
+            return 2;
+         }
+         if (Prueba.Cruzan() != 11)
+         {
+            return 3;
+         }
+         if (Prueba.Declarada() != 3)
+         {
+            return 4;
+         }
+         if (Prueba.DesdeBucles() != 5)
+         {
+            return 5;
+         }
+         if (Prueba.ConFinally() != 7 || Prueba.DesdeCatch() != 1)
+         {
+            return 6;
+         }
+         if (Prueba.EnUnBucle() != 3)
+         {
+            return 7;
+         }
+         if (Prueba.ConContinue() != 113)
+         {
+            return 8;
+         }
+         if (Prueba.Anidados() != 111)
+         {
+            return 9;
+         }
+         if (Prueba.Etiqueta(1) != 4 || Prueba.Etiqueta(2) != 5 || Prueba.Etiqueta(3) != 0)
+         {
+            return 10;
+         }
+         if (Prueba.GotoCase(1) != 5 || Prueba.GotoCase(2) != 10 || Prueba.GotoCase(3) != 4 || Prueba.GotoCase(9) != 8)
+         {
+            return 11;
+         }
+         if (Prueba.PorCadena("a") != "B" || Prueba.PorCadena("b") != "B" || Prueba.PorCadena("c") != "?")
+         {
+            return 12;
+         }
+         if (Prueba.Mezcla(1) != 131 || Prueba.Mezcla(5) != 1100)
+         {
+            return 13;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

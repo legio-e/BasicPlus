@@ -5345,7 +5345,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | 4-nov: Mono **489** |
 | 8 | el tipo de un objeto, sin `Type` al ejecutar (propuesto: una tabla con las clases; hablado: lo escribe el traductor) | el traductor | +1 | +8 | 4-nov: Mono **516** |
 | 9 | los tipos anónimos | sin decidir | +2 | +2 | |
-| 10 | `goto`, con `break` a un bucle con nombre | analizado abajo: por decidir | +4 | | |
+| 10 | `goto`, con `continue` a un bucle con nombre | el compilador y el traductor | +4 | | 4-nov: Mono **535** |
 | 11 | `ulong`, como el `uint` | sin decidir | +2 | +1 | |
 | 12 | `&`, `\|` y `^` entre `bool`, en JC como en Java | el compilador | | +1 | 4-nov: Mono **495** |
 
@@ -5498,6 +5498,15 @@ un `continue` va a la condición, como el de siempre. En el emisor, `loopStack` 
 `goto`, tras cerrar los `try` de encima; la asignación definida sigue el salto al bucle que toca. La VM y el `.mod` no cambian. Sample
 `BucleConNombre`, `BucleConNombreMal`, `BucleConNombreTest`, y en `NatSwitch`, ejecutado en una `native` (`make test-aotswitch`, 16/16,
 también `&` entre `boolean`). El manual, §7.5, y la gramática.
+
+**Hecho en el traductor** (4-nov, `compat/csharp/cs2jc/Saltos.cs`). La regla de arriba: un bloque con etiquetas a las que va un `goto`
+se parte por ellas, y se escribe `do salto { if (salto <= 0) { … } if (salto <= 1) { … } break salto; } while (true);`. Un `switch` con
+etiquetas o con `goto case` se parte igual: cada sección empieza un trozo, y el `switch` de JC sólo elige por cuál se empieza; de una
+sección no se cae en la siguiente, porque C# no lo deja. Las locales de un trozo que se usan en otro, delante, como las de un `case`.
+Lo que no estaba previsto: el bucle de la máquina no es de C#, y un `break` o un `continue` de un bucle de fuera lo cruzaría
+(`test-579`): salen por una variable, `fuga`, y el salto se hace detrás; el `break` del propio `switch` sale de su máquina. Y si C#
+dice que no se llega al final, un `throw` detrás: JC ve el `break` del bucle y pediría un `return`. Caso `Saltos` (y `Rechazos`: el
+`goto` ya no se rechaza). **Mono: 535** (+19, las 19 de la cuenta), sin perder ninguna; fallan las mismas 6. **El tema 1: 117.**
 
 ### El tipo de un objeto (ajuste 8; hecho el 4-nov, `compat/csharp/cs2jc/Tipos.cs`)
 

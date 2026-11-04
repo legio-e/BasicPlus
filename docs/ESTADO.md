@@ -39,8 +39,9 @@
 >   entonces»*, *«El 'instanceof' no puede sustituir la expresion?»*, y el caso de dos `Object`: *«tendría que ser la VM»*. No hay `Type` al
 >   ejecutar: lo que se sabe lo escribe el traductor (`is`, un `true`, el nombre), y lo demás, `__className`, de H9.
 > - **El `goto`, sin etiquetas** (Eduardo: *«No vamos a ñadir labels ni goto. Pero se puede reemplazar por do ... loop y break»*): en el
->   lenguaje, `do miLoop`, `break miLoop` y `continue miLoop`, en BP y en JC, sólo el compilador. Sus dos formas, hacia delante y
->   hacia atrás, no valen cuando se cruzan, y la variable sirve para todas: una sola regla en el traductor (*«OK»*).
+>   lenguaje, `do miLoop`, `break miLoop` y `continue miLoop`, en BP y en JC, sólo el compilador, con su red. Sus dos formas, hacia
+>   delante y hacia atrás, no valen cuando se cruzan, y la variable sirve para todas: una sola regla en el traductor (*«OK»*).
+>   **Mono, 535**: las 19 que sólo pedían `goto`; el tema 1, 117.
 > - **Sin decidir:** del 9 (tipos anónimos) y el 11 (`ulong`), Eduardo no ha dicho nada; y si `while` y `for` llevan nombre.
 >
 > **4-nov** — **los pendientes** (Eduardo: *«Continuamos con las pendientes»*), con la Metro, la Nucleo, la S3 y la P4

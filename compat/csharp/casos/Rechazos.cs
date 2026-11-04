@@ -41,7 +41,7 @@ class Programa
         catch (NullReferenceException)                // le falta a JC: errores de la VM con su tipo
         {
         }
-        goto fin;                                     // fuera: goto
+        goto fin;                                     // ya se traduce (H8): caso Saltos
     fin:
         return 0;
     }
