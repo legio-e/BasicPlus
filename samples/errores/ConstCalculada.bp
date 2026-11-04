@@ -1,0 +1,18 @@
+// ConstCalculada.bp — V8 #789: una const de clase pide un literal, como la de módulo. Con una cuenta, el compilador lo dice;
+// hasta el 4-nov se paraba con un error interno del emisor («Símbolo de datos no declarado»).
+module ConstCalculada
+
+  import Core
+
+  class A
+    private const A.X: integer := 1 + 2
+    public function A.dame(): integer
+      return A.X
+    end dame
+  end A
+
+  function Main()
+    print A.dame()
+  end Main
+
+end ConstCalculada

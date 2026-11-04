@@ -35,8 +35,8 @@ class Programa
     static int Main()
     {
         bool a = true, b = false;
-        bool c = a & b;                                        // le falta a JC: & sobre bool
-        c |= b;                                                // le falta a JC: |= sobre bool
+        bool c = a & b;                                        // ya se traduce (H8): JC tiene & entre bool, como Java
+        c |= b;                                                // ya se traduce (H8)
         string u = Une(Nombre(), Nombre() ?? "x");             // ?? que calcula, detrás de otra llamada: no se puede adelantar
         Foo Foo = null;
         int x = Foo.X;                                         // ya se traduce (H8): la clase, Foo_

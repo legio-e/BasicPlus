@@ -455,15 +455,17 @@ namespace Cs2Jc
             string tipo = Tipo(primero.Type, f.Declaration.Type);
             string acceso = AccesoDe(primero);
             // #777: una constante de C# que vale null (`const string X = null`, test-243): en JC una constante es un valor
-            // y no puede serlo; se escribe como lo que hace, una variable estática que nadie cambia
-            bool constNula = primero.IsConst && primero.HasConstantValue && primero.ConstantValue == null;
-            if (primero.IsConst && !constNula)
+            // y no puede serlo; se escribe como lo que hace, una variable estática que nadie cambia. Lo mismo la que no se
+            // escribe con un literal (NaN, int.MinValue)
+            bool comoVariable = primero.IsConst && primero.HasConstantValue
+                                && (primero.ConstantValue == null || !TieneLiteral(primero.ConstantValue));
+            if (primero.IsConst && !comoVariable)
             {
                 foreach (var v in vars)                                        // JC: una constante por declaración
-                    Linea(acceso + " const " + tipo + " " + Ident(v.Identifier.ValueText) + " = " + Expr(v.Initializer.Value) + ";");
+                    Linea(acceso + " const " + tipo + " " + Ident(v.Identifier.ValueText) + " = " + ValorDeConstante(v) + ";");
                 return;
             }
-            string estatico = (primero.IsStatic || constNula) ? "static " : "";
+            string estatico = (primero.IsStatic || comoVariable) ? "static " : "";
             if (acceso == "public")
             {
                 // BP no deja campos públicos («el estado sale por getters y setters»): cada uno, una propiedad.
@@ -477,6 +479,22 @@ namespace Cs2Jc
             }
             Linea(acceso + " " + estatico + tipo + " " + string.Join(", ", vars.Select(v => Ident(v.Identifier.ValueText)
                   + (v.Initializer != null ? " = " + Expr(ValorDeCampo(v)) : NaceDeCSharp(primero.Type, v)))) + ";");
+        }
+
+        /// ¿Se escribe este valor con un literal? No NaN, los infinitos ni el mínimo de un entero, que en JC son una cuenta.
+        static bool TieneLiteral(object v) => !(v is double d && !double.IsFinite(d)) && !(v is float f && !float.IsFinite(f))
+                                              && !(v is int i && i == int.MinValue) && !(v is long l && l == long.MinValue);
+
+        /// El valor de una constante de clase. JC pide un literal, y C# deja cualquier cuenta constante (`const int X = 1 + 2;`,
+        /// `const bool B = !A & C;`: test-484): el valor que calcula Roslyn. Un estrecho, sin su conversión; un enum, como
+        /// está escrito (el compilador sabe su valor).
+        string ValorDeConstante(VariableDeclaratorSyntax v)
+        {
+            var f = (IFieldSymbol) m.GetDeclaredSymbol(v);
+            var e = v.Initializer.Value;
+            if (e is LiteralExpressionSyntax || EsEnum(f.Type) || !f.HasConstantValue) return Expr(e);
+            if (EsEstrecho(f.Type)) return System.Convert.ToString(f.ConstantValue, System.Globalization.CultureInfo.InvariantCulture);
+            return LiteralDeConstante(f.ConstantValue, v);
         }
 
         /// El valor de un campo. `static bool x = x = F();` (H8, tema 2; test-422) se da a sí mismo el valor que va a tener:

@@ -5345,9 +5345,9 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | 4-nov: Mono **489** |
 | 8 | un `Type` mínimo: el traductor escribe una tabla con las clases del programa | por hablar | +2 | +9 | |
 | 9 | los tipos anónimos | sin decidir | +2 | +2 | |
-| 10 | `goto`, con `break` a un bucle con nombre | por analizar | +4 | | |
+| 10 | `goto`, con `break` a un bucle con nombre | analizado abajo: por decidir | +4 | | |
 | 11 | `ulong`, como el `uint` | sin decidir | +2 | +1 | |
-| 12 | `&`, `\|` y `^` entre `bool`, en JC como en Java | el compilador | | +1 | |
+| 12 | `&`, `\|` y `^` entre `bool`, en JC como en Java | el compilador | | +1 | 4-nov: Mono **495** |
 
 **1. `IDisposable`, hecho.** Una interfaz de `CsSystem`, `function void Dispose()`: una clase del programa la implementa
 como las suyas (`class C : CsSystem.IDisposable`, y en su método, `@implement{ IDisposable }`, sin el módulo), una interfaz
@@ -5402,6 +5402,99 @@ mismas 6. **El tema 2: 80.**
 (`System.Net.IPAddress[] x;`, `test-55`). Y un campo que se da a sí mismo el valor, `static bool x = x = F();` (`test-422`),
 con lo de la derecha: en el valor de un campo no hay sentencia a la que sacar la asignación. Caso `Sueltas`. **Mono: 489** (+2),
 sin perder ninguna; fallan las mismas 6. **El tema 1: 112; el tema 2: 81**, lo previsto para los siete.
+
+**12. `&`, `|` y `^` entre `bool`, hecho, en JC y en BP** (Eduardo: *«el 12 si»*). Calculan los dos lados, como en Java y en C#;
+`and` y `or` (`&&` y `||` en JC) se siguen saltando el segundo. Sólo el compilador: un `boolean` es 0 o 1, y las instrucciones
+de bits ya hacen lo lógico; la VM no cambia, y en el AOT son los de C. Sus compuestos también (`&=`, `|=`, `xor=`). El tipo:
+los dos `boolean`, o un error que lo dice (`'&' requiere integer/long, o dos boolean`); un desplazamiento, sólo con números.
+En el traductor, fuera sus dos rechazos. Sample `BoolBits` en el corpus, `BoolBitsMal` en los de error, `BoolBitsTest` y el
+AOT en `AotCoberturaTest` (31 de 31); los mismos `.mod` en los 734 fuentes y en la stdlib.
+
+Y salió otra cosa: dos pruebas que se traducían ya (`test-484`, `test-533`) daban un error interno, `Símbolo de datos no
+declarado`. Una constante de clase de C# puede ser una cuenta (`const bool B = !A & C;`) y JC pide un literal; el traductor la
+copiaba tal cual, y JC, en vez de decirlo, se paraba en el emisor. Lo primero, en el traductor: una constante de clase se
+escribe con el valor que calcula Roslyn; la que no tiene literal (`NaN`, `int.MinValue`), como una variable que nadie cambia.
+Caso `Constantes`. Lo segundo, en el compilador, `#789`: una const de clase sin literal dice lo que dice la de módulo. **Mono:
+495** (+6, con `test-144`), sin perder ninguna; fallan las mismas 6. **El tema 2: 82.**
+
+### `break` a un bucle con nombre, para el `goto` (4-nov; analizado, por decidir)
+
+Eduardo: *«No vamos a ñadir labels ni goto. Pero se puede reemplazar por do ... loop y break. Lo que igual necesitamos es si
+tenemos varios loops anidados poder hacer un break a un loop concreto. No se poder poner 'do' 'miLoop' ... break miLoop ...
+Loop»*.
+
+**La forma.** Un bucle `do` lleva un nombre detrás de la palabra, y `break` y `continue` pueden nombrar a uno de los que están
+abiertos. Sin palabras nuevas, sin etiquetas y sin `goto`: el nombre sólo se ve dentro de su bucle.
+
+```
+do miLoop                          // BP
+  for i := 1 to 3 do
+    if i = 2 then
+      break miLoop                 // sale de los dos
+    endif
+  next i
+loop
+
+do miLoop                          // JC
+{
+   for (int i = 1; i <= 3; i++)
+   {
+      if (i == 2) { break miLoop; }
+   }
+} while (true);
+```
+
+**Por qué basta para traducir `goto`.** En C# una etiqueta se ve en su bloque y en los de dentro, así que un `goto` nunca entra
+en un bloque: se queda en el de la etiqueta o sale hacia él. Cada bloque con etiquetas se parte por ellas en trozos, y se
+escribe un bucle con una variable que dice por qué trozo sigue. `if (pc <= k)` corre el trozo `k` y, al seguir, los de detrás,
+en orden, como en C#; un `goto` es dar valor a `pc` y `continue` a ese bucle. `test-515`:
+
+```csharp
+int i = 0;                         // C#
+goto a;
+b:
+   if (++ i > 1) throw new System.Exception ("infloop!!!");
+   return;
+a:
+   goto b;
+```
+```
+int i = 0;                         // JC
+int pc = 0;
+do salto
+{
+   if (pc <= 0) { pc = 2; continue salto; }
+   if (pc <= 1) { i++; if (i > 1) { throw …; } return; }
+   if (pc <= 2) { pc = 1; continue salto; }
+   break salto;
+} while (true);
+```
+
+El nombre hace falta porque el `goto` puede estar dentro de un `for`, de un `switch` o de un `try` (`test-626`, `test-519`): sin
+él, `continue` iría a ese bucle. Y hace falta `continue` con nombre además de `break`: un `goto` hacia atrás vuelve a empezar.
+Las locales de los trozos se declaran delante del bucle (lo que hace ya el `switch`, `Local`).
+
+**Lo que toca.** Sólo el compilador: los dos parsers, el análisis (que el nombre sea de un `do` abierto; que un `finally` no salga
+con él, `#674`; la asignación definida), el emisor (`loopStack` ya guarda, de cada bucle, cuántos `try` y cuántas sentencias
+abiertas cierra un salto: se busca por el nombre en vez de mirar el de arriba), el AOT (en C, un `goto` a su fin o a su
+principio) y los dos escritores. La VM y el formato del `.mod` no cambian: son saltos. Sirve además para quien programa: hoy
+salir de dos bucles pide una variable bandera.
+
+**Lo que da.** De las 26 que aún piden `goto`, a 19 no les falta nada más. Las del tema 1, las cuatro. Otra regla, para las etiquetas
+dentro de un `case` (`test-193`, `test-854`, `test-873`) y `goto case` (`test-872`, `test-876`): el `switch` entero es el bloque, y
+elegir el `case` es dar valor a `pc`.
+
+**Por decidir (Eduardo):** `continue` con nombre (hace falta para ir hacia atrás); sólo `do`, o también `while` y `for` con la
+misma regla (el traductor se apaña con `do`; quien programa querrá los tres); y la forma en JC.
+
+### El `Type` mínimo (ajuste 8; por hablar)
+
+Lo que escribí el 2-nov, «BP no guarda el nombre de la clase», ya no es cierto: desde H9 hay `__className(o)` (el builtin 301, en
+las dos VMs y en las placas), que da `Modulo.Clase`, para el nombre de la clase de una excepción en `Overlay.tryExe`. Y `Core.bp`
+lleva desde V5 dos comentarios pidiendo un `className()`. Lo que piden las 22 pruebas: comparar (`o.GetType() == typeof(X)`), `.Name`,
+`.FullName`, `.IsAbstract`, `.IsSealed` e imprimirlo. Dos caminos: (a) sólo en el traductor, una tabla con las clases del programa
+y una cadena de `is`, sin tocar nada más; (b) un `className(o)` público, útil por sí mismo, y el `Type` de `CsSystem` encima
+(los nombres de .NET los sigue poniendo el traductor: `X+A`, `N.A`).
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

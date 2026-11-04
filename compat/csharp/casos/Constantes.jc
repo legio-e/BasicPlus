@@ -1,0 +1,57 @@
+module CsConstantes
+{
+   enum Dia
+   {
+      Lunes = 0,
+      Martes = 1
+   }
+
+   class Prueba
+   {
+      private const int X = 3;
+      private const int Y = 6;
+      private const int Negativa = (-3);
+      private const bool B = false;
+      private const bool C = true;
+      private const bool D = true;
+      private const string S = "ab";
+      private const double Doble = 3.0;
+      private const byte Pequena = 5;
+      private const int Letra = 'a';
+      private const long Largo = 1099511627776L;
+      private const Dia Hoy = Dia.Martes;
+      public const int Publica = 4;
+      private static double Nada = (0.0 / 0.0);
+      private static int Minimo = (-2147483647 - 1);
+      public static function int Main()
+      {
+         const int L = Prueba.X + 1;
+         if (Prueba.X != 3 || Prueba.Y != 6 || Prueba.Negativa != -3 || L != 4 || Prueba.Publica != 4)
+         {
+            return 1;
+         }
+         if (Prueba.B || !Prueba.C || !Prueba.D)
+         {
+            return 2;
+         }
+         if (Prueba.S != "ab" || Prueba.Doble != 3.0 || Prueba.Pequena != 5 || Prueba.Letra != 97 || Prueba.Largo != 1099511627776L)
+         {
+            return 3;
+         }
+         if (Prueba.Hoy != Dia.Martes || Prueba.Nada == Prueba.Nada || Prueba.Minimo != -2147483647 - 1)
+         {
+            return 4;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

@@ -1853,10 +1853,9 @@ public final class SemanticAnalyzer {
         // lectura emitía GET_GLOBAL "Cls.K"/"K" → RuntimeException del ModWriter
         // ("símbolo de datos no declarado") que tumbaba el compilador. Antes el
         // error solo cubría nivel módulo (ownerClass==null); una const de INSTANCIA
-        // de clase no-literal petaba el emisor. Ahora da diagnóstico limpio. (Una
-        // `static const` se deja a su propio camino: su acceso ya falla antes con
-        // "no tiene miembro estático".)
-        if (!nula && cs.literalValue == null && (cs.ownerClass == null || !c.name.isStatic())) {   // un null ya lo dijo #777
+        // de clase no-literal petaba el emisor. Ahora da diagnóstico limpio. V8 #789:
+        // la de clase de JC (`private const int X = 1 + 2;`) también: lo mismo.
+        if (!nula && cs.literalValue == null) {   // un null ya lo dijo #777
             String donde = (cs.ownerClass == null)
                     ? "usa una var asignada en la función inicializadora del módulo"
                     : "usa un campo (var) asignado en el constructor de la clase";
@@ -4248,7 +4247,11 @@ public final class SemanticAnalyzer {
                 // H1.2 — bitwise/shift en i64 si algún operando es long.
                 if ((isIntegerLike(lt) || isLong(lt)) && (isIntegerLike(rt) || isLong(rt)))
                     return (isLong(lt) || isLong(rt)) ? PrimitiveType.LONG : PrimitiveType.INTEGER;
-                err(line, column, "'" + visto + "' requiere integer/long");
+                // V8/H8 (Eduardo, 4-nov: «el 12 si») — `&`, `|` y `xor` entre dos boolean, como en Java y en C#: calculan
+                // los dos lados (`and` y `or` se saltan el segundo). Un boolean es 0 o 1: la operación de bits es la lógica.
+                if (!"shl".equals(op) && !"shr".equals(op) && isBoolean(lt) && isBoolean(rt)) return PrimitiveType.BOOLEAN;
+                err(line, column, "'" + visto + "' requiere integer/long"
+                    + ("shl".equals(op) || "shr".equals(op) ? "" : ", o dos boolean"));
                 return ErrorType.INSTANCE;
             case "and": case "or":
                 if (PrimitiveType.BOOLEAN.isAssignableFrom(lt) && PrimitiveType.BOOLEAN.isAssignableFrom(rt))
@@ -4289,6 +4292,10 @@ public final class SemanticAnalyzer {
 
     private static boolean isLong(BpType t) {   // H1.2 (V2)
         return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.LONG;
+    }
+
+    private static boolean isBoolean(BpType t) {
+        return t instanceof PrimitiveType && ((PrimitiveType) t).tag == PrimitiveType.Kind.BOOLEAN;
     }
 
     /**

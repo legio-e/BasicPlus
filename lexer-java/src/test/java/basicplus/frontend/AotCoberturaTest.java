@@ -65,6 +65,8 @@ class AotCoberturaTest {
         // `string` no admite null; una REFERENCIA sí. La clase la pone el modulo del arnes.
         CASOS.put("NullLitExpr",   "var z: Caja := null\n      return a");
         CASOS.put("BinaryExpr",    "return a + 1");
+        // V8/H8 — `&`, `|` y `xor` entre dos boolean, y sus compuestos: los de C sobre 0 y 1
+        CASOS.put("BoolBits",      "var b: boolean := (a > 0) & (a < 9)\n      b |= a > 1\n      b xor= true\n      if b then\n        return 1\n      endif\n      return a");
         CASOS.put("UnaryExpr",     "return -a");
         CASOS.put("ParenExpr",     "return (a + 1)");
         CASOS.put("IdentifierExpr","return a");
@@ -104,7 +106,7 @@ class AotCoberturaTest {
         // del límite por call_builtin y el salto desde una función del propio .mdn—.
         "TryStmt",
         "TupleExpr",
-        "ArrayLitExpr", "AssignStmt", "BinaryExpr", "BoolLitExpr", "BreakStmt",
+        "ArrayLitExpr", "AssignStmt", "BinaryExpr", "BoolBits", "BoolLitExpr", "BreakStmt",
         "CallExpr", "MemberAccessExpr", "NewObjectExpr", "ContinueStmt",
         "DoLoopStmt", "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr",
         "IfStmt", "IndexExpr", "IntLitExpr", "LongLitExpr", "NullLitExpr",

@@ -361,9 +361,6 @@ namespace Cs2Jc
                     if (m.GetSymbolInfo(a.Left).Symbol is IEventSymbol) return Rechaza(a, Porque.H7(Porque.Delegados));
                     if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) && EsNullable(m.GetTypeInfo(a.Left).Type)) return AsignaNullable(a);
                     if (EsUInt(m.GetTypeInfo(a.Left).Type) && AsignaUInt(a) is string au) return au;    // `u += y`, recortado
-                    if ((a.IsKind(SyntaxKind.AndAssignmentExpression) || a.IsKind(SyntaxKind.OrAssignmentExpression)
-                         || a.IsKind(SyntaxKind.ExclusiveOrAssignmentExpression)) && EsBool(m.GetTypeInfo(a.Left).Type))
-                        return Rechaza(a, Porque.H7(Porque.BoolBits));
                     if (a.Left is TupleExpressionSyntax || a.Left is DeclarationExpressionSyntax) return Rechaza(a, Porque.Pendiente("desempaquetado"));
                     if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) && EsEnum(m.GetTypeInfo(a.Left).Type))
                         return Rechaza(a, Porque.Fuera(Porque.EnteroAEnum));       // `e |= f`: da un enum desde su entero
@@ -688,11 +685,6 @@ namespace Cs2Jc
                         return Rechaza(b, Porque.Pendiente("is " + NombreCompleto(t)));
                     return Expr(b.Left) + " is " + Tipo(t, b.Right);
                 }
-                case SyntaxKind.BitwiseAndExpression:
-                case SyntaxKind.BitwiseOrExpression:
-                case SyntaxKind.ExclusiveOrExpression:
-                    if (EsBool(m.GetTypeInfo(b.Left).Type)) return Rechaza(b, Porque.H7(Porque.BoolBits));
-                    break;
             }
             // Un enum en JC: `==` y `!=` tal cual, y en una cadena, su nombre (`Texto`: `Enum.getName`, #778). Lo que en C# opera con su entero, con
             // `(int)` delante (Eduardo, 31-oct: «(int)Enum.mivalor»): `a < b` es `(int) a < (int) b`, y `a - b`, dos enums,

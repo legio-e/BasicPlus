@@ -1,0 +1,88 @@
+// BoolBits.bp — V8/H8 (4-nov; Eduardo: «el 12 si»): `&`, `|` y `xor` entre dos boolean, como en Java y en C#. Calculan los
+// DOS lados: `and` y `or` se saltan el segundo si el primero ya decide. Con sus compuestos, en una variable, un campo y un
+// elemento de un array, y en una función con `native` no: eso lo mira el AOT, en AotCoberturaTest. Tiene que salir:
+//   false 1
+//   true 2
+//   false 2
+//   true 2
+//   true
+//   false
+//   false
+//   false
+//   true
+//   false
+//   true
+//   true
+//   false
+//   true
+//   fin
+module BoolBits
+
+  import Core   // V6: los tipos de Core se importan
+
+  var llamadas: integer := 0
+
+  function g(v: boolean): boolean
+    llamadas += 1
+    return v
+  end g
+
+  class Bandera
+    private var puesta: boolean := false
+    public function Bandera()
+    end Bandera
+    public function pon(v: boolean)
+      puesta |= v
+    end pon
+    public function quita(v: boolean)
+      puesta &= v
+    end quita
+    public function cambia()
+      puesta xor= true
+    end cambia
+    public function esta(): boolean
+      return puesta
+    end esta
+  end Bandera
+
+  function Main()
+    // los dos lados: g() se llama siempre
+    var a: boolean := false & g(true)
+    print a, llamadas
+    a := true | g(false)
+    print a, llamadas
+
+    // el atajo sigue siendo de `and` y `or`
+    a := false and g(true)
+    print a, llamadas
+    a := true or g(false)
+    print a, llamadas
+
+    print true xor false
+    print true xor true
+    print false xor false
+
+    var c: boolean := true
+    c &= false
+    print c
+    c |= true
+    print c
+    c xor= true
+    print c
+
+    var b: Bandera := Bandera()
+    b.pon(true)
+    print b.esta()
+    var v: boolean[] := [true, false]
+    v[1] |= true
+    print v[1]
+    v[0] &= false
+    print v[0]
+
+    // con el resto de la expresión: `&` liga más que una comparación en BP
+    var x: integer := 2
+    print (x > 1) & (x < 3)
+    print "fin"
+  end Main
+
+end BoolBits

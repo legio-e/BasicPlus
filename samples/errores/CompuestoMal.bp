@@ -9,7 +9,7 @@ module CompuestoMal
     var s: string := "a"
     s -= "b"                 // '-=' requiere números
     var ok: boolean := true
-    ok &= false              // '&=' requiere integer o long
+    ok &= 1                  // '&=' requiere integer o long, o dos boolean
     var b: byte := 1
     var n: integer := 300
     b += n                   // n es un integer que no es un literal: no se guarda solo en un byte

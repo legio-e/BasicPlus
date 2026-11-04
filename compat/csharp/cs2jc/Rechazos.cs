@@ -87,7 +87,6 @@ namespace Cs2Jc
         public const string ErroresVm = "errores de la VM con su tipo";
         public const string ForeachPropio = "foreach sobre colecciones propias";
         // las que salieron al traducir (H6, 31-oct)
-        public const string BoolBits = "& | ^ sobre bool (sin atajo)";
         public const string ColorColor = "un nombre que es a la vez variable y tipo (el Color Color de C#)";
         public const string ConstanteEstrecha = "una constante que cabe, en un argumento o un return estrecho (como en una asignación)";
         public const string Guiones = "los _ de un número, como en C# (varios seguidos, o en el exponente)";

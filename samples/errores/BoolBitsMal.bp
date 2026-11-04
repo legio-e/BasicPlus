@@ -1,0 +1,14 @@
+// BoolBitsMal.bp — `&`, `|` y `xor` valen entre dos boolean (V8/H8) o entre dos enteros, no con uno de cada; y un
+// desplazamiento no tiene sentido sobre un boolean.
+module BoolBitsMal
+
+  import Core
+
+  function Main()
+    var a: boolean := true & 1
+    var b: integer := 1 | false
+    var c: boolean := true shl 1
+    print a, b, c
+  end Main
+
+end BoolBitsMal

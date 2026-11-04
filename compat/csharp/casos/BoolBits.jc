@@ -1,0 +1,59 @@
+module CsBoolBits
+{
+   class Prueba
+   {
+      private static int llamadas = 0;
+      private static function bool G(bool v)
+      {
+         Prueba.llamadas++;
+         return v;
+      }
+      public static function int Main()
+      {
+         bool f = false, t = true;
+         if (f & Prueba.G(true) || Prueba.llamadas != 1)
+         {
+            return 1;
+         }
+         if (!(t | Prueba.G(false)) || Prueba.llamadas != 2)
+         {
+            return 2;
+         }
+         if (!(t ^ f) || (t ^ t) || (f ^ f))
+         {
+            return 3;
+         }
+         bool c = t;
+         c &= f;
+         if (c)
+         {
+            return 4;
+         }
+         c |= t;
+         if (!c)
+         {
+            return 5;
+         }
+         c ^= t;
+         if (c)
+         {
+            return 6;
+         }
+         int a = 1, b = 2;
+         if (!(a == 1 & b == 2))
+         {
+            return 7;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

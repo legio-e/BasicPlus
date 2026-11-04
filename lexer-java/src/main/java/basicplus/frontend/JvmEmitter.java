@@ -1782,6 +1782,16 @@ public final class JvmEmitter implements Opcodes {
             return;
         }
 
+        // V8/H8 — `&`, `|` y `xor` entre dos boolean: en la JVM, enteros de 32 bits (los números aquí son long)
+        if (("&".equals(b.op) || "|".equals(b.op) || "xor".equals(b.op))
+                && lt instanceof PrimitiveType && ((PrimitiveType) lt).tag == PrimitiveType.Kind.BOOLEAN
+                && rt instanceof PrimitiveType && ((PrimitiveType) rt).tag == PrimitiveType.Kind.BOOLEAN) {
+            emitExpr(mv, b.left, ctx);
+            emitExpr(mv, b.right, ctx);
+            mv.visitInsn("&".equals(b.op) ? IAND : "|".equals(b.op) ? IOR : IXOR);
+            return;
+        }
+
         BpType common = numericPromotion(lt, rt);
         emitExpr(mv, b.left, ctx);
         emitConvertIfNeeded(mv, lt, common);
