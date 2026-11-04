@@ -5540,6 +5540,26 @@ Casos `Tipos` y `Constantes` (y `RechazosJc`, la caja compartida). **Mono: 516**
 **El tema 1: 113; el tema 2: 90.** De las 22 de la propuesta, entran 20 (y `test-733`); quedan `test-296` y `test-528`, las que
 guardan el tipo en una variable.
 
+### El tema 3, «propiedades» (4-nov)
+
+Eduardo: *«Mientras puedes mirar las pruebas de Mono que pasan del grupo 3»*. 44 de 83, fallan 2 y 37 no se traducen. Cuatro propuestas
+por lo que da cada una; Eduardo: *«1,2 y 4 OK»*.
+
+| # | ajuste | dónde | tema 3 | hecho |
+|---|---|---|---|---|
+| 1 | ocultar un miembro (`new`): el de la hija lleva otro nombre en JC | el traductor | +7 | 4-nov: Mono **558** |
+| 2 | una propiedad de sólo lectura asignada en su constructor: escribe su campo | el traductor | +1 | |
+| 3 | un array de objetos de una clase con su tamaño (`new Derived[0]`) | por decidir: toca JC | +1 | |
+| 4 | `Console.Error` | `CsSystem` | +1 | |
+
+**1. Ocultar un miembro, hecho** (`Explicitas.cs`). En JC todo método es virtual, y lo que se llama igual en una hija sobrescribe. El
+que oculta (con `new`, o sin él, con el aviso de C#) lleva otro nombre, `Hija_M`: métodos, propiedades, campos, constantes. Qué miembro usa
+cada sitio lo dice Roslyn, así que `b.M()` con `b` del padre va al del padre, y con `b` de la hija, al suyo; un `override` de uno nuevo
+hereda su nombre, y lo que implementa una interfaz, le reenvía (el miembro de la interfaz cambia de nombre, como en las explícitas). Sólo
+con padres del programa: ocultar algo de .NET sigue sin traducirse. De paso, dos propiedades que sólo se diferencian en la primera
+letra (`p` y `P`, `test-56`): en JC, las dos, `getP`; la segunda, con otro nombre. Y `test-502`: un método `get_Value` no oculta el
+accesor de una propiedad. Caso `Ocultos`. **Mono: 558** (+23), sin perder ninguna; fallan las mismas 6. **El tema 3: 52.**
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos

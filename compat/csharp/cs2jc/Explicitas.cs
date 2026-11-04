@@ -22,13 +22,78 @@ namespace Cs2Jc
             (x as IMethodSymbol)?.ExplicitInterfaceImplementations.FirstOrDefault()
             ?? (ISymbol) (x as IPropertySymbol)?.ExplicitInterfaceImplementations.FirstOrDefault();
 
-        /// El nombre en JC de un miembro: el suyo, o el que lleva si es de una interfaz y chocaba.
-        string NombreDe(ISymbol s) => deInterfaz.TryGetValue(s.OriginalDefinition, out var n) ? n : Ident(s.Name);
+        /// Los miembros de una clase que ocultan uno de su padre (`new`, o sin él, con el aviso de C#). En JC todo método es
+        /// virtual y lo que se llama igual en una hija sobrescribe: el que oculta lleva otro nombre (`Hija_M`). Qué miembro usa cada
+        /// sitio lo dice Roslyn, así que `b.M()` con `b` del padre sigue yendo al del padre, y con `b` de la hija, al suyo.
+        readonly Dictionary<ISymbol, string> ocultos = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
+
+        /// El nombre en JC de un miembro: el suyo; o el que lleva si es de una interfaz y chocaba, si oculta a otro, o si
+        /// sobrescribe a uno que lo llevaba.
+        string NombreDe(ISymbol s)
+        {
+            for (var x = s; x != null; x = (x as IMethodSymbol)?.OverriddenMethod ?? (ISymbol) (x as IPropertySymbol)?.OverriddenProperty)
+            {
+                var o = x.OriginalDefinition;
+                if (deInterfaz.TryGetValue(o, out var n) || ocultos.TryGetValue(o, out n)) return n;
+            }
+            return Ident(s.Name);
+        }
+
+        /// Antes de escribir nada: qué miembros ocultan a otro. Si uno implementa además algo de una interfaz, ése cambia de nombre
+        /// también: con el suyo, sobrescribiría al del padre; la clase le reenvía (Reenvia).
+        void BuscaOcultos(IEnumerable<INamedTypeSymbol> tipos)
+        {
+            foreach (var c in tipos.Where(t => t.TypeKind == TypeKind.Class))
+            {
+                foreach (var x in c.GetMembers().Where(x => OcultaAlPadre(x, c)))
+                {
+                    ocultos[x.OriginalDefinition] = NombreTipo(c) + "_" + Ident(x.Name);
+                    foreach (var i in c.AllInterfaces.Where(DelPrograma))
+                        foreach (var mi in i.GetMembers())
+                            if (SymbolEqualityComparer.Default.Equals(c.FindImplementationForInterfaceMember(mi), x))
+                                deInterfaz[mi.OriginalDefinition] = NombreTipo(i) + "_" + Ident(mi.Name);
+                }
+                // dos propiedades que sólo se diferencian en la primera letra (`p` y `P`, test-56): en JC, las dos, `getP`
+                var vistas = new HashSet<string>();
+                foreach (var x in c.GetMembers().Where(EsPropiedadEnJc).OrderBy(x => char.IsUpper(x.Name[0]) ? 0 : 1))
+                    if (!vistas.Add(char.ToUpperInvariant(x.Name[0]) + x.Name.Substring(1)) && !ocultos.ContainsKey(x.OriginalDefinition))
+                        ocultos[x.OriginalDefinition] = NombreTipo(c) + "_" + Ident(x.Name);
+            }
+        }
+
+        /// ¿Es en JC una propiedad, con su `getX`? Las de C#, y los campos públicos («el estado sale por getters y setters»).
+        bool EsPropiedadEnJc(ISymbol x) =>
+            !x.IsImplicitlyDeclared && ((x is IPropertySymbol p && !p.IsIndexer) || (x is IFieldSymbol f && !f.IsConst && AccesoDe(f) == "public"));
+
+        /// ¿Oculta `x` a un miembro de un padre del programa? Un método, con los mismos parámetros; lo privado no se ve, un
+        /// tipo anidado se escribe aparte, y lo estático va con su clase delante (un campo también cambia: en JC es una propiedad).
+        bool OcultaAlPadre(ISymbol x, INamedTypeSymbol c)
+        {
+            if (x.IsImplicitlyDeclared) return false;
+            switch (x)
+            {
+                case IMethodSymbol ms when ms.MethodKind == MethodKind.Ordinary && !ms.IsStatic && !ms.IsOverride: break;
+                case IPropertySymbol ps when !ps.IsStatic && !ps.IsOverride && !ps.IsIndexer && ps.ExplicitInterfaceImplementations.Length == 0: break;
+                case IFieldSymbol _: break;
+                default: return false;
+            }
+            for (var b = c.BaseType; b != null && DelPrograma(b); b = b.BaseType)
+                foreach (var o in b.GetMembers(x.Name))
+                {
+                    if (o is INamedTypeSymbol || o.DeclaredAccessibility == Accessibility.Private) continue;
+                    if (o is IMethodSymbol om && om.MethodKind != MethodKind.Ordinary) continue;
+                    if (o.IsStatic && !(x is IFieldSymbol)) continue;
+                    if (o is IMethodSymbol a && x is IMethodSymbol d && !MismosParametros(a, d)) continue;
+                    return true;
+                }
+            return false;
+        }
 
         /// Antes de escribir nada: qué miembros de interfaz cambian de nombre. Una clase y sus padres del programa: una hija
         /// sobrescribiría, sin querer, lo que en JC se llama igual en su padre.
         void BuscaChoques(IEnumerable<INamedTypeSymbol> tipos)
         {
+            BuscaOcultos(tipos);
             foreach (var s in tipos.Where(t => t.TypeKind == TypeKind.Class || t.TypeKind == TypeKind.Struct))
             {
                 var miembros = new List<ISymbol>();
@@ -84,8 +149,8 @@ namespace Cs2Jc
                     {
                         Linea("public " + Tipo(ps.Type, donde) + " " + NombreDe(mi));
                         Linea("{");
-                        Linea("   get { return this." + Ident(ps.Name) + "; }");
-                        if (ps.SetMethod != null) Linea("   set { this." + Ident(ps.Name) + " = value; }");
+                        Linea("   get { return this." + NombreDe(ps) + "; }");
+                        if (ps.SetMethod != null) Linea("   set { this." + NombreDe(ps) + " = value; }");
                         Linea("}");
                     }
                 }

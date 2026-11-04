@@ -451,7 +451,6 @@ namespace Cs2Jc
         {
             var mods = f.Modifiers;
             if (mods.Any(SyntaxKind.FixedKeyword) || mods.Any(SyntaxKind.UnsafeKeyword)) { Rechaza(f, Porque.Fuera(Porque.Unsafe)); return; }
-            if (mods.Any(SyntaxKind.NewKeyword)) { Rechaza(f, Porque.H7(Porque.NoVirtuales)); return; }
             var vars = f.Declaration.Variables;
             var primero = (IFieldSymbol) m.GetDeclaredSymbol(vars[0]);
             string tipo = Tipo(primero.Type, f.Declaration.Type);
@@ -464,7 +463,7 @@ namespace Cs2Jc
             if (primero.IsConst && !comoVariable)
             {
                 foreach (var v in vars)                                        // JC: una constante por declaración
-                    Linea(acceso + " const " + tipo + " " + Ident(v.Identifier.ValueText) + " = " + ValorDeConstante(v) + ";");
+                    Linea(acceso + " const " + tipo + " " + NombreDe(m.GetDeclaredSymbol(v)) + " = " + ValorDeConstante(v) + ";");
                 return;
             }
             string estatico = (primero.IsStatic || comoVariable) ? "static " : "";
@@ -474,12 +473,12 @@ namespace Cs2Jc
                 foreach (var v in vars)
                 {
                     string valor = v.Initializer != null ? " = " + Expr(ValorDeCampo(v)) : NaceDeCSharp(primero.Type, v);
-                    Linea("public " + estatico + tipo + " " + Ident(v.Identifier.ValueText) + " { get; set; }"
+                    Linea("public " + estatico + tipo + " " + NombreDe(m.GetDeclaredSymbol(v)) + " { get; set; }"
                           + (valor != "" ? valor + ";" : ""));
                 }
                 return;
             }
-            Linea(acceso + " " + estatico + tipo + " " + string.Join(", ", vars.Select(v => Ident(v.Identifier.ValueText)
+            Linea(acceso + " " + estatico + tipo + " " + string.Join(", ", vars.Select(v => NombreDe(m.GetDeclaredSymbol(v))
                   + (v.Initializer != null ? " = " + Expr(ValorDeCampo(v)) : NaceDeCSharp(primero.Type, v)))) + ";");
         }
 
@@ -530,7 +529,7 @@ namespace Cs2Jc
                 // Sentencias, la de una sentencia; una que no lo es, C# no la deja: void)
                 return;
             }
-            if (me.Modifiers.Any(SyntaxKind.NewKeyword) || Oculta(s)) { Rechaza(me, Porque.H7(Porque.NoVirtuales)); return; }
+            if (Oculta(s)) { Rechaza(me, Porque.H7(Porque.NoVirtuales)); return; }
             bool esMain = main != null && (SymbolEqualityComparer.Default.Equals(s, main)
                                            || SymbolEqualityComparer.Default.Equals(s.PartialDefinitionPart, main)
                                            || SymbolEqualityComparer.Default.Equals(s, main.PartialImplementationPart));
@@ -670,8 +669,8 @@ namespace Cs2Jc
         void EmitePropiedad(PropertyDeclarationSyntax p)
         {
             var s = m.GetDeclaredSymbol(p);
-            if (p.Modifiers.Any(SyntaxKind.NewKeyword) || OcultaPropiedad(s)) { Rechaza(p, Porque.H7(Porque.NoVirtuales)); return; }
-            string nombre = Ident(s.Name);
+            if (OcultaPropiedad(s)) { Rechaza(p, Porque.H7(Porque.NoVirtuales)); return; }
+            string nombre = NombreDe(s);
             bool explicita = s.ExplicitInterfaceImplementations.Length > 0;
             if (explicita)
             {
@@ -919,22 +918,24 @@ namespace Cs2Jc
             return false;
         }
 
-        /// ¿Un método que oculta otro de su base, en vez de sobrescribirlo? En BP todo método es virtual: sobrescribiría.
-        static bool Oculta(IMethodSymbol s)
+        /// ¿Un método que oculta otro de un padre de .NET? Al de un padre del programa, sí se oculta: lleva otro nombre
+        /// (Explicitas.cs). Al de .NET, no se sabe si la clase de BP lo tiene.
+        bool Oculta(IMethodSymbol s)
         {
             if (s.IsStatic || s.IsOverride) return false;
             for (var b = s.ContainingType.BaseType; b != null; b = b.BaseType)
-                foreach (var o in b.GetMembers(s.Name).OfType<IMethodSymbol>())
-                    if (!o.IsStatic && o.DeclaredAccessibility != Accessibility.Private && MismosParametros(o, s))
-                        return true;
+                if (!DelPrograma(b))
+                    foreach (var o in b.GetMembers(s.Name).OfType<IMethodSymbol>())
+                        if (!o.IsStatic && o.DeclaredAccessibility != Accessibility.Private && o.MethodKind == MethodKind.Ordinary && MismosParametros(o, s))
+                            return true;
             return false;
         }
 
-        static bool OcultaPropiedad(IPropertySymbol s)
+        bool OcultaPropiedad(IPropertySymbol s)
         {
             if (s.IsStatic || s.IsOverride) return false;
             for (var b = s.ContainingType.BaseType; b != null; b = b.BaseType)
-                if (b.GetMembers(s.Name).Any(o => !o.IsStatic && o.DeclaredAccessibility != Accessibility.Private))
+                if (!DelPrograma(b) && b.GetMembers(s.Name).Any(o => !o.IsStatic && !(o is INamedTypeSymbol) && o.DeclaredAccessibility != Accessibility.Private))
                     return true;
             return false;
         }

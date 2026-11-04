@@ -15,7 +15,7 @@ class Base
 
 class Hija : Base
 {
-    public void Saluda() { }                          // le falta a JC: métodos no virtuales (oculta el de Base)
+    public void Saluda() { }                          // ya se traduce (H8): oculta el de Base (caso Ocultos)
 }
 
 class Programa

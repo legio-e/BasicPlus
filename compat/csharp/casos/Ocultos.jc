@@ -1,0 +1,222 @@
+module CsOcultos
+{
+   class Base
+   {
+      public int campo { get; set; } = 1;
+      public const int Tres = 3;
+      public static int Est { get; set; } = 7;
+      public int Prop
+      {
+         get
+         {
+            return this.campo;
+         }
+         set
+         {
+            this.campo = value;
+         }
+      }
+      public function string Id()
+      {
+         return "Base";
+      }
+      public function string Vir()
+      {
+         return "BaseV";
+      }
+      public function string Llama()
+      {
+         return this.Id() + this.Vir();
+      }
+   }
+
+   class Hija : Base
+   {
+      public int Hija_campo { get; set; } = 10;
+      public const int Hija_Tres = 4;
+      public static int Hija_Est { get; set; } = 8;
+      public int Hija_Prop
+      {
+         get
+         {
+            return this.Hija_campo + 1;
+         }
+         set
+         {
+            this.Hija_campo = value;
+         }
+      }
+      public function string Hija_Id()
+      {
+         return "Hija";
+      }
+      public function string Hija_Vir()
+      {
+         return "HijaV";
+      }
+      public function string DeArriba()
+      {
+         return base.Id() + base.Prop + base.campo + Base.Tres + this.Hija_Id() + this.Hija_Prop + this.Hija_campo + Hija.Hija_Tres;
+      }
+   }
+
+   class Nieta : Hija
+   {
+      @override{}
+      public function string Hija_Vir()
+      {
+         return "NietaV";
+      }
+   }
+
+   class SinNew : Base
+   {
+      public function string SinNew_Id()
+      {
+         return "SinNew";
+      }
+   }
+
+   interface IQ
+   {
+      function string IQ_Id();
+   }
+
+   class ConInterfaz : Base, IQ
+   {
+      public function string ConInterfaz_Id()
+      {
+         return "ConInterfaz";
+      }
+      @implement{ IQ }
+      public function string IQ_Id()
+      {
+         return this.ConInterfaz_Id();
+      }
+   }
+
+   class Privada : Base
+   {
+      private function string Privada_Id()
+      {
+         return "Privada";
+      }
+      public function string Mio()
+      {
+         return this.Privada_Id();
+      }
+   }
+
+   class Padre2
+   {
+      public int Valor { get; set; } = 3;
+   }
+
+   public class Padre2_Anidada
+   {
+   }
+
+   class Hija2 : Padre2
+   {
+      public int Hija2_Valor
+      {
+         get
+         {
+            return 9;
+         }
+      }
+      public int Anidada { get; set; }
+   }
+
+   class Letra
+   {
+      public int Letra_p { get; set; } = 1;
+      public int P
+      {
+         get
+         {
+            return this.Letra_p + 1;
+         }
+      }
+   }
+
+   class Prueba
+   {
+      public static function int Main()
+      {
+         Letra l = new Letra();
+         if (l.Letra_p != 1 || l.P != 2)
+         {
+            return 12;
+         }
+         Hija h = new Hija();
+         Base b = h;
+         if (h.Hija_Id() != "Hija" || b.Id() != "Base")
+         {
+            return 1;
+         }
+         if (h.Hija_Vir() != "HijaV" || b.Vir() != "BaseV" || b.Llama() != "BaseBaseV")
+         {
+            return 2;
+         }
+         if (h.Hija_campo != 10 || b.campo != 1 || h.Hija_Prop != 11 || b.Prop != 1)
+         {
+            return 3;
+         }
+         if (Hija.Hija_Tres != 4 || Base.Tres != 3 || Hija.Hija_Est != 8 || Base.Est != 7)
+         {
+            return 4;
+         }
+         if (h.DeArriba() != "Base113Hija11104")
+         {
+            return 5;
+         }
+         Nieta n = new Nieta();
+         Hija hn = n;
+         Base bn = n;
+         if (hn.Hija_Vir() != "NietaV" || bn.Vir() != "BaseV")
+         {
+            return 6;
+         }
+         SinNew s = new SinNew();
+         Base bs = s;
+         if (s.SinNew_Id() != "SinNew" || bs.Id() != "Base")
+         {
+            return 7;
+         }
+         ConInterfaz c = new ConInterfaz();
+         Base bc = c;
+         IQ q = c;
+         if (c.ConInterfaz_Id() != "ConInterfaz" || bc.Id() != "Base" || q.IQ_Id() != "ConInterfaz")
+         {
+            return 8;
+         }
+         Privada p = new Privada();
+         if (p.Id() != "Base" || p.Mio() != "Privada")
+         {
+            return 9;
+         }
+         Hija2 h2 = new Hija2();
+         Padre2 p2 = h2;
+         if (h2.Hija2_Valor != 9 || p2.Valor != 3)
+         {
+            return 10;
+         }
+         h2.Anidada = 5;
+         if (h2.Anidada != 5)
+         {
+            return 11;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

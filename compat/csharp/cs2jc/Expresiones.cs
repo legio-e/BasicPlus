@@ -471,11 +471,11 @@ namespace Cs2Jc
                         return LiteralDeConstante(cv.Value, id);      // `PI` con `using static System.Math`
                     if (!DelPrograma(f)) return Rechaza(id, Porque.DeNet(NombreCompleto(f.ContainingType) + "." + f.Name));
                     CompruebaAcceso(f, id);
-                    return (f.IsStatic || f.IsConst ? Receptor(f.ContainingType, id) : "this") + "." + Ident(f.Name);
+                    return (f.IsStatic || f.IsConst ? Receptor(f.ContainingType, id) : "this") + "." + NombreDe(f);
                 case IPropertySymbol p:
                     if (!DelPrograma(p)) return Rechaza(id, Porque.DeNet(NombreCompleto(p.ContainingType) + "." + p.Name));
                     CompruebaAcceso(p, id);
-                    return (p.IsStatic ? Receptor(p.ContainingType, id) : "this") + "." + Ident(p.Name);
+                    return (p.IsStatic ? Receptor(p.ContainingType, id) : "this") + "." + NombreDe(p);
                 case INamedTypeSymbol nt:
                     return Tipo(nt, id);
                 case IMethodSymbol _:
@@ -499,10 +499,10 @@ namespace Cs2Jc
             if (s is IMethodSymbol || s is IEventSymbol) return Rechaza(ma, Porque.H7(Porque.Delegados));
             if (s is IPropertySymbol p && p.IsIndexer) return Rechaza(ma, Porque.H7(Porque.Indexadores));
             CompruebaAcceso(s, ma);
-            if (s.IsStatic || (s is IFieldSymbol f && f.IsConst)) return Receptor(s.ContainingType, ma) + "." + Ident(s.Name);
+            if (s.IsStatic || (s is IFieldSymbol f && f.IsConst)) return Receptor(s.ContainingType, ma) + "." + NombreDe(s);
             if (ma.Expression is BaseExpressionSyntax)
             {
-                return "base." + Ident(s.Name);
+                return "base." + NombreDe(s);
             }
             return Expr(ma.Expression) + "." + NombreDe(s);
         }

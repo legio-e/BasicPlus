@@ -206,7 +206,7 @@ namespace Cs2Jc
                     {
                         var s = m.GetSymbolInfo(miembro).Symbol;
                         if (s == null || !DelPrograma(s)) { Rechaza(e, Porque.Pendiente("un inicializador de algo de la biblioteca")); continue; }
-                        Linea(x + "." + Ident(s.Name) + " = " + Expr(a.Right) + ";");
+                        Linea(x + "." + NombreDe(s) + " = " + Expr(a.Right) + ";");
                     }
                     else Rechaza(e, Porque.Pendiente("un inicializador anidado, o de una colección"));
                 }

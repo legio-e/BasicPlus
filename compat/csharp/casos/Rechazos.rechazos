@@ -1,6 +1,5 @@
 # Lo que el traductor tiene que rechazar en Rechazos.cs, y por qué (una línea por rechazo, en orden).
 5: le falta a JC: struct (tipos por valor) — struct Punto { public int X; }
-18: le falta a JC: métodos no virtuales (new) — public void Saluda() { }
 23: le falta a JC: genéricos — <T>
 25: le falta a JC: ref / out — ref int x
 30: le falta a JC: as — o as string
