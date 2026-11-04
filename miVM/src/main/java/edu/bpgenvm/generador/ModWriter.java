@@ -207,6 +207,7 @@ public class ModWriter {
     private final List<byte[]> symbolBytes = new ArrayList<>();
     private final Map<String, Integer> dataSymbolOffset = new HashMap<>();
     private final java.util.Set<String> longGlobals = new java.util.HashSet<>();  // H1.2: globals long (8 bytes)
+    private final java.util.Set<String> simbolosCadena = new java.util.HashSet<>();  // V8 H9.1 (#786): los que emitLeaGlobal carga con LEA_STR
     private int currentNegativeOffset = 0;
 
     private int currentBytecodeSize = 0;
@@ -679,6 +680,7 @@ public class ModWriter {
         byte[] b = new byte[4 + utf8.length];
         writeIntInBuf(b, 0, utf8.length);
         System.arraycopy(utf8, 0, b, 4, utf8.length);
+        simbolosCadena.add(name);
         return registerSymbol(name, b, "el literal " + principioDe(value) + " (" + utf8.length + " bytes)");
     }
 
@@ -2110,6 +2112,9 @@ public class ModWriter {
         emitGlobalAccessOptimal(name, OpCode.SET_GLOBAL, OpCode.SET_GLOBAL_S8);
     }
     public void emitLeaGlobal(String name) throws IOException {
+        // V8 H9.1 (#786) — una cadena, con LEA_STR: en un módulo de un overlay, un literal es un string del heap. Lo
+        // demás que vive en el bloque de datos (un array fijo, un array constante) sigue siendo su dirección.
+        if (simbolosCadena.contains(name)) { emitGlobalAccessOptimal(name, OpCode.LEA_STR, OpCode.LEA_STR_S8); return; }
         emitGlobalAccessOptimal(name, OpCode.LEA_GLOBAL, OpCode.LEA_GLOBAL_S8);
     }
 

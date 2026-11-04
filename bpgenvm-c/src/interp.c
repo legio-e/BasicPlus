@@ -1235,11 +1235,13 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
             mem[addr + 1] = (uint8_t)( v       & 0xFF);
             break;
         }
+        case OP_LEA_STR:        /* V8 H9.1 (#786): un literal de cadena; fuera de un overlay, lo mismo que LEA_GLOBAL */
         case OP_LEA_GLOBAL: {   /* H1.2a: dirección de global (string-const/array fijo) = ref 8 bytes */
             int32_t soff = bpvm_read_csoff_be(mem + pc); pc += 2;
             bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));
             sp += 8; break;
         }
+        case OP_LEA_STR_S8:
         case OP_LEA_GLOBAL_S8: {
             int8_t soff = (int8_t) mem[pc++];
             bpvm_write_i64_be(mem + sp, (int64_t)(uint32_t)((int32_t)cs + soff));

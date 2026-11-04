@@ -3720,6 +3720,7 @@ public class VirtualMachine {
                     break;
                 }
 
+                case 0xC2:   // LEA_STR — V8 H9.1 (#786): un literal de cadena; fuera de un overlay, lo mismo que LEA_GLOBAL
                 case 0x1C: { // LEA_GLOBAL — H1.2a: dirección de global = ref 8 bytes
                     int off = leeDato(mem, pc); pc += 2;
                     writeI64(mem, sp, ((long)(cs + off)) & 0xFFFFFFFFL); sp += 8;
@@ -4752,6 +4753,7 @@ public class VirtualMachine {
                     mem[a] = (byte)(v >> 24); mem[a+1] = (byte)(v >> 16); mem[a+2] = (byte)(v >> 8); mem[a+3] = (byte)v;
                     break;
                 }
+                case 0xC3:   // LEA_STR_S8
                 case 0x6C: { // LEA_GLOBAL_S8 — H1.2a: dirección de global = ref 8 bytes
                     int off = mem[pc]; pc++;
                     int v = cs + off;

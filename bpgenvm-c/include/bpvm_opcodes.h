@@ -297,5 +297,10 @@
 #define OP_INVOKE_IFAZ_REF     0xBF   /* idxI u16, idxM u16, numArgs u8 : ( this ...args -- ret ) */
 #define OP_INSTANCEOF_IFAZ_REF 0xC0   /* idx u16           : ( obj -- int ) */
 #define OP_CHECKCAST_IFAZ_REF  0xC1   /* idx u16, name_off i16 : ( obj -- obj ), si no, RuntimeError que nombra el tipo */
+/* 0xC2-0xC3 — V8 H9.1 (#786): UN LITERAL DE CADENA. Hace lo mismo que LEA_GLOBAL, salvo en un modulo cargado por un
+ * overlay: ahi crea el string en el heap, para que siga vivo cuando el modulo se descargue. Los dos tamaños, como
+ * LEA_GLOBAL: un .mod mide lo mismo que antes. Espejo de OpCode.java. */
+#define OP_LEA_STR             0xC2   /* soff i16 : ( -- ref ) */
+#define OP_LEA_STR_S8          0xC3   /* soff i8  : ( -- ref ) */
 
 #endif /* BPVM_OPCODES_H */

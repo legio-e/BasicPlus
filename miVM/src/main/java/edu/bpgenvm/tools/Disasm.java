@@ -563,7 +563,7 @@ public class Disasm {
                 int v = (byte) raw;          // sign-extend
                 String base;
                 switch (op) {
-                    case GET_GLOBAL_S8: case SET_GLOBAL_S8: case LEA_GLOBAL_S8:
+                    case GET_GLOBAL_S8: case SET_GLOBAL_S8: case LEA_GLOBAL_S8: case LEA_STR_S8:
                         base = "CS";
                         break;
                     case GET_LOCAL_S8: case SET_LOCAL_S8: case LEA_LOCAL_S8:

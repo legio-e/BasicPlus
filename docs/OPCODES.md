@@ -1,12 +1,13 @@
 # Catálogo de opcodes de la VM BasicPlus
 
-Documento canónico de los opcodes del bytecode `.mod`: los **192** que
+Documento canónico de los opcodes del bytecode `.mod`: los **194** que
 define `bpgenvm-c/include/bpvm_opcodes.h` (V8). Los de `0x00..0x70` son los
 de V1; los de `0x6F` y `0x71..0xB0` se añadieron después (long, double,
 potencia, `CHECKCAST`), los `0xB1..0xBB` son los `_REF` del enlace tardío
 (MOD9, V7/H2), `0xBC..0xBD`, `LEA_FIELD` y `LEA_FIELD_REF` (V7/H1), `0xBE`,
-`INVOKE_SLOT` (V7/H7), y `0xBF..0xC1`, los de las interfaces (V8/H7.3); están
-en sus propias secciones al final de las tablas.
+`INVOKE_SLOT` (V7/H7), `0xBF..0xC1`, los de las interfaces (V8/H7.3), y
+`0xC2..0xC3`, los literales de cadena (V8/H9.1); están en sus propias
+secciones al final de las tablas.
 Cada entrada incluye:
 - Byte (`code`), mnemonic.
 - Operando inmediato (si lo hay): tipo + tamaño en bytes.
@@ -477,6 +478,20 @@ una interfaz es llamar a su getter o a su setter con `INVOKE_IFAZ_REF`; y un mé
 
 ---
 
+## 0xC2..0xC3 — los literales de cadena (V8/H9.1 `#786`)
+
+Un literal de cadena vive en el bloque de datos de su módulo, y su referencia es su
+dirección. Si el módulo lo cargó un overlay, esa memoria se va al descargarlo: por eso
+un literal tiene su propia instrucción, que en esos módulos crea el string en el heap.
+Lo demás del bloque de datos (un array fijo, un array constante) sigue con `LEA_GLOBAL`.
+
+| Code | Op | Operando | Stack effect | Semántica |
+|---|---|---|---|---|
+| 0xC2 | `LEA_STR` | `u16` doff | `( -- ref )` | Como `LEA_GLOBAL`. En un módulo cargado por un overlay, un string nuevo del heap con el texto del literal. |
+| 0xC3 | `LEA_STR_S8` | `i8` soff | `( -- ref )` | La variante compacta. |
+
+---
+
 ## Codes no asignados
 
 `0x4F .. 0x50` asignados (I32_TO_I16, I32_TO_U16). `0x6D .. 0x6E` libres
@@ -484,9 +499,9 @@ una interfaz es llamar a su getter o a su setter con `INVOKE_IFAZ_REF`; y un mé
 campos de 8 bytes, `NATIVE_RETURN`, `TRY_BEGIN_EXT`, potencia, `CHECKCAST`).
 `0xB1 .. 0xBB` los `_REF` del enlace tardío (MOD9); `0xBC .. 0xBD`,
 `LEA_FIELD` y `LEA_FIELD_REF` (V7/H1); `0xBE`, `INVOKE_SLOT` (V7/H7 `#607`); `0xBF .. 0xC1`,
-las interfaces (V8/H7.3 `#756`). **`0xC2 .. 0xFF` libres**
-(con `0x6D .. 0x6E`, 64 en total). Total asignado: 192 (miVM, 191: `0xAA`,
-`NATIVE_RETURN`, es sólo de la VM-C).
+las interfaces (V8/H7.3 `#756`); `0xC2 .. 0xC3`, los literales de cadena (V8/H9.1 `#786`).
+**`0xC4 .. 0xFF` libres** (con `0x6D .. 0x6E`, 62 en total). Total asignado: 194 (miVM, 193:
+`0xAA`, `NATIVE_RETURN`, es sólo de la VM-C).
 
 Si una implementación encuentra un opcode no listado, debe fallar con
 "Opcode no implementado: 0x%02X en PC %d" — coherente con la VM Java.

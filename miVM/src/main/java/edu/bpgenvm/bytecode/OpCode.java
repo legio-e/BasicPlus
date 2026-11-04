@@ -330,7 +330,12 @@ public enum OpCode {
     // la llamada virtual de siempre. `is` y la conversión a una interfaz miran la lista de la clase del objeto.
     INVOKE_IFAZ_REF      (0xBF, OperandKind.IDX_U16_IDX_U16_NUMARGS_U8),   // ( this ...args -- ret )
     INSTANCEOF_IFAZ_REF  (0xC0, OperandKind.IDX_U16),
-    CHECKCAST_IFAZ_REF   (0xC1, OperandKind.IDX_U16_NAME_I16);             // + name_off local del literal del mensaje
+    CHECKCAST_IFAZ_REF   (0xC1, OperandKind.IDX_U16_NAME_I16),             // + name_off local del literal del mensaje
+    // V8 H9.1 (#786) — un LITERAL DE CADENA. Hace lo mismo que LEA_GLOBAL, salvo en un módulo cargado por un overlay: ahí
+    // crea el string en el heap, para que siga vivo cuando el módulo se descargue (Eduardo: «sigue en el heap y GC no lo
+    // borra porque hay referencias vivas en A»). Los dos tamaños, como LEA_GLOBAL: un .mod mide lo mismo que antes.
+    LEA_STR              (0xC2, OperandKind.SOFF_I16),
+    LEA_STR_S8           (0xC3, OperandKind.SOFF_I8);
 
     /** Byte estable que va a parar al fichero .mod. */
     public final byte code;
