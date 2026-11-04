@@ -5340,7 +5340,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | 2 | un `struct` sin campos de instancia, una clase | el traductor | | +2 | 4-nov: Mono **468** |
 | 3 | lo suelto de la biblioteca (`d.ToString()`, `"x" is String`, `sizeof(int)`, `StringWriter`, `StreamWriter.Null`, `String.Concat`) | `CsSystem` y el traductor | +5 | | 4-nov: Mono **475** |
 | 4 | `??` con referencias | el traductor | | +1 | 4-nov: Mono **476** |
-| 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | |
+| 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | 4-nov: Mono **485** |
 | 6 | un constructor estático sin llamadas dentro | el traductor | | +1 | |
 | 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | |
 | 8 | un `Type` mínimo: el traductor escribe una tabla con las clases del programa | por hablar | +2 | +9 | |
@@ -5379,6 +5379,16 @@ sigue sin traducirse. Con una interfaz a la izquierda, la derecha lleva la conve
 (`#761`). Y `x ??= y`, con algo que no calcula: `x = (x != null ? x : y)`. Caso `NuloOtro` (y `RechazosJc`, lo que no se puede
 adelantar). **Mono: 476** (+1, `gtest-333`), sin perder ninguna; fallan las mismas 6. **El tema 2: 78.** La estimación de 12
 que di contaba también `?.`: las otras 11 piden `?.`, que queda para su tema.
+
+**5. Las explícitas que chocan, hecho** (`compat/csharp/cs2jc/Explicitas.cs`). En JC una implementación explícita es un método
+público con el nombre del de la interfaz; si la clase, o un padre, tiene otro miembro que se escribiría igual (`int IFoo.Hello()`
+y `public int Hello()`), u otra explícita de otra interfaz (`void IA.Stop()` y `void IB.Stop()`), son dos cuerpos para un
+nombre. Propuse cambiar el nombre del método de la clase; al hacerlo, mejor al revés, y da más: lleva otro nombre **el miembro
+de la interfaz**, en todo el programa (`IFoo_Hello`). La explícita se escribe con él, lo que llama por la interfaz también, y
+una clase que la implementa con un miembro normal añade uno que le reenvía. Lo de la clase no cambia de nombre, así que quien
+lo llama o lo sobrescribe no lo nota, y entra también «la implementación explícita de verdad» (dos interfaces, dos cuerpos), que
+estaba como algo que le faltaba a JC. Sólo si la interfaz no es del programa (`IDisposable`) sigue sin traducirse. Caso
+`Explicitas`. **Mono: 485** (+9), sin perder ninguna; fallan las mismas 6. **El tema 2: 79.**
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

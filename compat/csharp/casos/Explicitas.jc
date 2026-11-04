@@ -1,0 +1,221 @@
+module CsExplicitas
+{
+   interface IFoo
+   {
+      function int IFoo_Hello(int x);
+   }
+
+   class Dos : IFoo
+   {
+      @implement{ IFoo }
+      public function int IFoo_Hello(int x)
+      {
+         return x + 1;
+      }
+      public function int Hello(int x)
+      {
+         return x + 2;
+      }
+      public function int Hello(string s)
+      {
+         return 9;
+      }
+   }
+
+   class Uno : IFoo
+   {
+      public function int Hello(int x)
+      {
+         return x + 3;
+      }
+      @implement{ IFoo }
+      public function int IFoo_Hello(int x)
+      {
+         return this.Hello(x);
+      }
+   }
+
+   class Hija : Uno
+   {
+      @override{}
+      public function int Hello(int x)
+      {
+         return x + 4;
+      }
+   }
+
+   interface IA
+   {
+      function string IA_Stop();
+   }
+
+   interface IB
+   {
+      function string IB_Stop();
+   }
+
+   class Coche : IA, IB
+   {
+      @implement{ IA }
+      public function string IA_Stop()
+      {
+         return "a";
+      }
+      @implement{ IB }
+      public function string IB_Stop()
+      {
+         return "b";
+      }
+      public function string Stop()
+      {
+         IA self = this;
+         return "c" + self.IA_Stop();
+      }
+   }
+
+   interface IP
+   {
+      string IP_Spec { get; set; }
+   }
+
+   interface IQ : IP
+   {
+      string IQ_Spec { get; set; }
+   }
+
+   class Concreta : IQ
+   {
+      @implement{ IP }
+      public string IP_Spec
+      {
+         get
+         {
+            return "P";
+         }
+      }
+      @implement{ IQ }
+      public string IQ_Spec
+      {
+         get
+         {
+            return "Q";
+         }
+      }
+      public string Spec
+      {
+         get
+         {
+            return "C";
+         }
+      }
+   }
+
+   class ConProp : IP
+   {
+      private string valor = "v";
+      public string Spec
+      {
+         get
+         {
+            return this.valor;
+         }
+      }
+      @implement{ IP }
+      public string IP_Spec
+      {
+         get { return this.Spec; }
+      }
+   }
+
+   class Base : IFoo
+   {
+      @implement{ IFoo }
+      public function int IFoo_Hello(int x)
+      {
+         return 100;
+      }
+   }
+
+   class Derivada : Base
+   {
+      public function int Hello(int x)
+      {
+         return 200;
+      }
+   }
+
+   class ConAnidada : IFoo
+   {
+      @implement{ IFoo }
+      public function int IFoo_Hello(int x)
+      {
+         return 5;
+      }
+   }
+
+   public class ConAnidada_Hello2
+   {
+   }
+
+   class Prueba
+   {
+      public static function int Main()
+      {
+         Dos d = new Dos();
+         IFoo fd = d;
+         if (d.Hello(1) != 3 || fd.IFoo_Hello(1) != 2 || d.Hello("s") != 9)
+         {
+            return 1;
+         }
+         Uno u = new Uno();
+         IFoo fu = u;
+         if (fu.IFoo_Hello(1) != 4 || u.Hello(1) != 4)
+         {
+            return 2;
+         }
+         IFoo fh = new Hija();
+         if (fh.IFoo_Hello(1) != 5)
+         {
+            return 3;
+         }
+         Coche c = new Coche();
+         IA a = c;
+         IB b = c;
+         if (a.IA_Stop() != "a" || b.IB_Stop() != "b" || c.Stop() != "ca")
+         {
+            return 4;
+         }
+         Concreta k = new Concreta();
+         if ((k).IP_Spec != "P" || (k).IQ_Spec != "Q" || k.Spec != "C")
+         {
+            return 5;
+         }
+         IP p = new ConProp();
+         if (p.IP_Spec != "v")
+         {
+            return 6;
+         }
+         Derivada de = new Derivada();
+         IFoo fb = de;
+         if (de.Hello(1) != 200 || fb.IFoo_Hello(1) != 100)
+         {
+            return 7;
+         }
+         IFoo fa = new ConAnidada();
+         if (fa.IFoo_Hello(1) != 5)
+         {
+            return 8;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

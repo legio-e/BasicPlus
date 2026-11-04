@@ -501,7 +501,7 @@ namespace Cs2Jc
             {
                 return "base." + Ident(s.Name);
             }
-            return Expr(ma.Expression) + "." + Ident(s.Name);
+            return Expr(ma.Expression) + "." + NombreDe(s);
         }
 
         string Llamada(InvocationExpressionSyntax inv)

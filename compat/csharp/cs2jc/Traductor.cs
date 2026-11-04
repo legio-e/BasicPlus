@@ -141,6 +141,7 @@ namespace Cs2Jc
             }
             while (usados.ContainsKey(modulo)) modulo += "M";
             t.Modulo = modulo;
+            BuscaChoques(tipos);                 // las implementaciones explícitas que chocan (Explicitas.cs)
 
             // JC quiere la clase padre declarada antes que la hija («padre local … no es una clase abierta declarada
             // antes»); a C# le da igual el orden: cada clase, detrás de su base (y si no, en el orden de C#).
@@ -311,6 +312,7 @@ namespace Cs2Jc
             if (s.TypeKind == TypeKind.Struct && s.InstanceConstructors.Any(c => !c.IsImplicitlyDeclared)
                 && s.InstanceConstructors.Any(c => c.IsImplicitlyDeclared && c.Parameters.Length == 0))
                 Linea("public function " + NombreTipo(s) + "() { }");
+            Reenvia(s);                          // lo que implementa con otro nombre (Explicitas.cs)
             sangria--;
             Linea("}");
             Linea("");
@@ -361,13 +363,13 @@ namespace Cs2Jc
                     if (me.TypeParameterList != null) { Rechaza(me.TypeParameterList, Porque.H7(Porque.Genericos)); return; }
                     if (s.IsStatic || !s.IsAbstract) { Rechaza(me, Porque.Pendiente("un método de interfaz con cuerpo o estático (C# 8)")); return; }
                     Linea("function " + Tipo(s.ReturnType, me.ReturnType) + " " + NombreMetodo(s) + "(" + Parametros(me.ParameterList) + ");");
-                    return;
+                    return;   // su nombre, el que lleve si chocaba (Explicitas.cs)
                 }
                 case PropertyDeclarationSyntax p:
                 {
                     var s = m.GetDeclaredSymbol(p);
                     if (s.IsStatic || !s.IsAbstract) { Rechaza(p, Porque.Pendiente("una propiedad de interfaz con cuerpo o estática (C# 8)")); return; }
-                    Linea(Tipo(s.Type, p.Type) + " " + Ident(s.Name) + " { get; set; }");
+                    Linea(Tipo(s.Type, p.Type) + " " + NombreDe(s) + " { get; set; }");
                     return;
                 }
                 default: RechazaNodo(d); return;
@@ -385,6 +387,8 @@ namespace Cs2Jc
                 foreach (var mi in i.GetMembers().Where(x => x is IPropertySymbol || (x is IMethodSymbol xm && xm.MethodKind == MethodKind.Ordinary)))
                 {
                     var impl = claseActual.FindImplementationForInterfaceMember(mi);
+                    // uno que cambió de nombre lo implementa la explícita, o el método que le reenvía (Explicitas.cs)
+                    if (deInterfaz.ContainsKey(mi.OriginalDefinition) && InterfazDe(s) == null) continue;
                     // la anotación lleva el nombre sin el módulo (manual §9.8)
                     string nombre = DelPrograma(i) ? NombreTipo(i) : i.Name;
                     if (SymbolEqualityComparer.Default.Equals(impl, s) && !ifaces.Contains(nombre)) ifaces.Add(nombre);
@@ -497,18 +501,17 @@ namespace Cs2Jc
             bool esMain = main != null && (SymbolEqualityComparer.Default.Equals(s, main)
                                            || SymbolEqualityComparer.Default.Equals(s.PartialDefinitionPart, main)
                                            || SymbolEqualityComparer.Default.Equals(s, main.PartialImplementationPart));
-            // `int IForma.Area()`: la implementación explícita de la interfaz que en JC es la clase base, con su nombre
+            // `int IForma.Area()`: la implementación explícita, con el nombre del de la interfaz (Explicitas.cs)
             string nombre = NombreMetodo(s);
             bool explicita = s.ExplicitInterfaceImplementations.Length > 0;
             if (explicita)
             {
-                nombre = Ident(s.ExplicitInterfaceImplementations[0].Name);
-                if (ChocaConOtro(s, s.ExplicitInterfaceImplementations[0].Name))
+                nombre = NombreMetodo(s.ExplicitInterfaceImplementations[0]);
+                if (explicitasDeFuera.Contains(s))
                 {
                     Rechaza(me, Porque.Pendiente("una implementación explícita y otro miembro con su nombre"));
                     return;
                 }
-                if (ChocaConOtraExplicita(s)) { Rechaza(me, Porque.H7(Porque.ExplicitaDoble)); return; }
             }
             string cabecera = (esMain || explicita ? "public" : AccesoDe(s)) + (s.IsStatic ? " static" : "")
                 + " function " + Tipo(s.ReturnType, me.ReturnType) + " " + nombre
@@ -528,28 +531,9 @@ namespace Cs2Jc
             Linea("}");
         }
 
-        /// H7.3 — ¿otra implementación explícita de la clase se escribiría igual en JC: el mismo nombre y los mismos
-        /// parámetros (`void IA.Draw()` y `void IB.Draw()`)? Es la implementación explícita de verdad, dos cuerpos para un
-        /// mismo método, uno por interfaz: JC no la tiene. Con otra firma, son dos sobrecargas y valen (Mono test-457).
-        bool ChocaConOtraExplicita(ISymbol s)
-        {
-            string n = (s as IMethodSymbol)?.ExplicitInterfaceImplementations[0].Name ?? ((IPropertySymbol) s).ExplicitInterfaceImplementations[0].Name;
-            var ps = (s as IMethodSymbol)?.Parameters ?? ((IPropertySymbol) s).Parameters;
-            return claseActual.GetMembers().Any(o => !SymbolEqualityComparer.Default.Equals(o, s) && o.Kind == s.Kind
-                && ((o as IMethodSymbol)?.ExplicitInterfaceImplementations.FirstOrDefault()?.Name
-                    ?? (o as IPropertySymbol)?.ExplicitInterfaceImplementations.FirstOrDefault()?.Name) == n
-                && MismosParametros((o as IMethodSymbol)?.Parameters ?? ((IPropertySymbol) o).Parameters, ps));
-        }
-
         static bool MismosParametros(System.Collections.Immutable.ImmutableArray<IParameterSymbol> a,
                                      System.Collections.Immutable.ImmutableArray<IParameterSymbol> b) =>
             a.Length == b.Length && a.Zip(b, (x, y) => SymbolEqualityComparer.Default.Equals(x.Type, y.Type)).All(v => v);
-
-        /// ¿Tiene la clase otro miembro que se llame así (y que no sea una implementación explícita)?
-        bool ChocaConOtro(ISymbol s, string nombre) =>
-            claseActual.GetMembers(nombre).Any(o => !SymbolEqualityComparer.Default.Equals(o, s)
-                && !(o is IMethodSymbol om && om.ExplicitInterfaceImplementations.Length > 0)
-                && !(o is IPropertySymbol op && op.ExplicitInterfaceImplementations.Length > 0));
 
         void EmiteConstructor(ConstructorDeclarationSyntax c)
         {
@@ -592,13 +576,12 @@ namespace Cs2Jc
             bool explicita = s.ExplicitInterfaceImplementations.Length > 0;
             if (explicita)
             {
-                nombre = Ident(s.ExplicitInterfaceImplementations[0].Name);
-                if (ChocaConOtro(s, s.ExplicitInterfaceImplementations[0].Name))
+                nombre = NombreDe(s.ExplicitInterfaceImplementations[0]);
+                if (explicitasDeFuera.Contains(s))
                 {
                     Rechaza(p, Porque.Pendiente("una implementación explícita y otro miembro con su nombre"));
                     return;
                 }
-                if (ChocaConOtraExplicita(s)) { Rechaza(p, Porque.H7(Porque.ExplicitaDoble)); return; }
             }
             string cabecera = (explicita ? "public" : AccesoDe(s)) + (s.IsStatic ? " static" : "") + " "
                 + Tipo(s.Type, p.Type) + " " + nombre;
@@ -826,7 +809,7 @@ namespace Cs2Jc
             return Rechaza(donde, Porque.Pendiente("un valor por defecto " + v));
         }
 
-        string NombreMetodo(IMethodSymbol s) => EsToString(s) ? "toString" : Ident(s.Name);
+        string NombreMetodo(IMethodSymbol s) => EsToString(s) ? "toString" : NombreDe(s);
 
         /// `ToString` es el `toString` de BP (la ranura 0 de Object): quien lo sobrescribe en C# lo sobrescribe en JC.
         static bool EsToString(IMethodSymbol s)
