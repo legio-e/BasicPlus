@@ -6188,11 +6188,13 @@ misma dirección, y una clase abierta va a la arena, detrás del código, así q
 ### En las placas (4-nov)
 
 Con la imagen de `761e9c00` y el `Stdlib.pack` nuevo en la Metro, la P4 y la Nucleo, los quince programas de `overlay_smoke`,
-con la salida comparada con la de la VM-C del PC:
+con la salida comparada con la de la VM-C del PC (y después, con la de `35297826`, que lleva lo de abajo y `#787`, los
+dieciséis, los dieciséis bien en las tres):
 
 | | Metro | P4 | Nucleo |
 |---|---|---|---|
-| los quince casos | 14 (`OvCargaFalla` no llega a cargar: `#787`) | 15 | 15 |
+| los quince casos, la primera vez | 14 (`OvCargaFalla` no llega a cargar: `#787`) | 15 | 15 |
+| los dieciséis, con la imagen de `35297826` | 16 | 16 | 16 |
 | la pila de C de `run`: lo que sobra de 16 KB | 8,4 KB | 8,0 KB | no lo dice (`runStackFree` = -1) |
 | `malloc`, el pico de cargar con `Json` en marcha | 59 KB de 298 (55 sin overlay) | — | 41 KB de 130 |
 | un módulo de la zona de packs | `Json`, «cargado XIP desde pack», tres vueltas | sí | sí |

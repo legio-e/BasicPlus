@@ -67,15 +67,18 @@
 >   la del PC, en los quince casos de la P4 y la Nucleo y en catorce de la Metro. A `run` le sobran 8 KB de 16; el registro
 >   del enlace pide 4 KB más que al arrancar; un módulo de la zona se carga XIP; un literal cuesta de 8 a 27 µs dentro de un
 >   overlay, y fuera, lo que leer una variable. Las cifras, en §E13, «En las placas».
-> - **`#787`, abierta:** el caso que falta de la Metro no era de los overlays. Hacia los 4,7 MB de sus 6, el GC se queda sin
->   memoria para su mapa y el programa muere con «heap descarrilado». El mapa crece así desde el 7-jul. Propuesta en la ficha,
->   por aprobar.
+> - **`#787`, cerrada** (*«1 y 2 OK»*; `35297826`): el caso que faltaba de la Metro no era de los overlays. Hacia los 4,7 MB de
+>   sus 6, el GC se quedaba sin memoria para su mapa y el programa moría con «heap descarrilado». Ahora el mapa se pide una vez,
+>   para todo el heap, en la primera colecta. En la Metro, el heap se llena: 1514 cajas, y `malloc` llega a 235 KB de 298.
 > - **Los hilos** (*«2) Debería ser un error»*): si el `Main` del programa cargado acaba y deja hilos vivos, `tryExe` da
 >   `false`. El builtin 302.
 > - **Un «sigue vivo» falso, cazado por el sim:** la regla de los hilos movió unos bytes y `unload` dijo que seguía vivo un
 >   objeto que nadie alcanzaba: un desplazamiento de una vtable de `Core` valía justo su dirección. Sólo con `Core` en un pack:
 >   en el PC, el heap empieza más arriba que cualquier desplazamiento. Mientras se descarga, el GC sólo se fía de los handles.
 >   La prueba, el caso 6b, y su sabotaje, en el sim.
+> - **H9.5, otra vez, con todo:** la Metro, la P4 y la Nucleo, grabadas con la imagen de `35297826`, y el `Stdlib.pack` nuevo en la
+>   Metro y la P4. Los dieciséis casos, con la salida del PC, en las tres. Las placas, sin lo que subí para las pruebas. **Un
+>   tropiezo mío:** al quitar `log=1` de la Nucleo no miré que ya lo tenía; repuesto. Mirar el ENV antes de tocarlo.
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 > - **Otro:** la primera medida de `#786` salió redondeada a 0,2 s por leer el cable con `w.lines`, que espera ese plazo. Se
@@ -83,11 +86,10 @@
 >
 > **Para la próxima sesión:**
 > - con Eduardo delante, en el IDE: `#694` (`Stop` con y sin programa, un RUN rechazado) y la traza de `#582` en la consola;
-> - `#787`: el OK a la propuesta; y otra grabación de la Metro, la P4 y la Nucleo, con su `Stdlib.pack`, para repetir H9.5 con
->   la regla de los hilos, el arreglo del «sigue vivo» y `OvCargaFalla` en la Metro;
+> - **el `Stdlib.pack` de la Nucleo:** el nuevo no cabe (216 KB, y le quedan 88 de su zona, con el viejo como lápida). Hace falta
+>   formatear la zona, que sólo tiene ése, y grabarlo. Hasta entonces lleva el de `761e9c00`: sin la regla de los hilos;
 > - `#745` y `#710` siguen abiertas (Eduardo, 4-nov: *«La 3 no»*);
-> - la Metro, la P4 y la Nucleo llevan la imagen de `761e9c00`, con el `Stdlib.pack` de entonces: **esa imagen no conoce el
->   builtin 302**, así que el `Overlays.mod` de hoy no le vale hasta grabarla. La S3, la del paso 3 de `#730`
+> - la Metro, la P4 y la Nucleo llevan la imagen de `35297826`. La S3, la del paso 3 de `#730`
 >   (`cdbda834`); la DK2, la C3, la C5 y la C6, la del lote del 3-nov, por la mañana. En el próximo lote, todas, y `#785` en
 >   la DK2;
 > - sigue valiendo lo de `packRamBase` de abajo, para la C3, la C5 y la C6.
