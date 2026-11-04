@@ -4,5 +4,12 @@
  * entera sin listarla (el de la STM32, por su carpeta enlazada), y en las demás listas se nombra este fichero, con -O2
  * y -fno-tree-loop-distribute-patterns (decidido por Eduardo el 3-nov). Lo que la VM usa de ella: las funciones de
  * bpvm_internal.h (utf8_cp_count, utf8_primer_malo…, que la llaman) y los builtins de las cadenas (builtins.c).
+ *
+ * #785 — en la STM32, además, memcpy, memmove, memset, memchr y memcmp para todo el firmware (bpstr/mem_libc.c dice por
+ * qué, y por qué sólo allí).
  */
 #include "../bpstr/bpstr.c"
+
+#if defined(STM32U575xx) || defined(STM32U5G9xx)
+#include "../bpstr/mem_libc.c"
+#endif

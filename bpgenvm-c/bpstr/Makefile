@@ -23,8 +23,8 @@ B       = build
 $(B):
 	mkdir -p $(B)
 
-$(B)/prueba$(EXE): bpstr.c bpstr.h oraculo.h prueba.c | $(B)
-	$(CC) $(CFLAGS) bpstr.c prueba.c -o $@
+$(B)/prueba$(EXE): bpstr.c bpstr.h oraculo.h prueba.c mem_libc.c | $(B)
+	$(CC) $(CFLAGS) -DBPSTR_MEM_PRUEBA bpstr.c mem_libc.c prueba.c -o $@
 
 $(B)/prueba_2c$(EXE): bpstr.c bpstr.h oraculo.h prueba.c | $(B)
 	$(CC) $(CFLAGS) -DBPSTR_AGUJA_CORTA=1u -DBPSTR_AGUJA_PAREJAS=0u bpstr.c prueba.c -o $@

@@ -9,6 +9,7 @@ decidido, en `docs/V8_IDEAS.md` §E5, «`#730`: el diseño concreto»; el estado
 | Fichero | Qué |
 |---|---|
 | `bpstr.h`, `bpstr.c` | la biblioteca: el UTF-8, buscar, comparar, mayúsculas y minúsculas, `trim`, copiar y rellenar. Dentro, con sus avisos de licencia, código adaptado de newlib: el de Arm (buscar por parejas y la `memcpy` de Cortex-M, BSD-3) y el Two-Way de Eric Blake (con permiso libre, conservando su aviso) |
+| `mem_libc.c` | `memcpy`, `memmove`, `memset`, `memchr` y `memcmp` con los nombres de la libc, para todo el firmware de la STM32 (`#785`; abajo) |
 | `oraculo.h` | los bucles de la VM de antes, copiados tal cual: lo que bpstr tiene que dar, byte a byte |
 | `prueba.c` | las pruebas, contra el oráculo |
 | `banco.c` | lo que tarda cada función, frente a la libc y frente al bucle de antes |
@@ -33,8 +34,26 @@ Lo que la usa:
   `upper` y `lower`, `trim`, comparar, `startsWith` y `endsWith`. `replace` ya no compara en cada posición: va de
   aparición en aparición.
 
-Copiar y rellenar siguen con la `memcpy` y la `memset` de cada libc. En la STM32, la de un byte por vuelta se cambia
-para todo el firmware en `#785`.
+Copiar y rellenar siguen con la `memcpy` y la `memset` de cada libc.
+
+## En la STM32, para todo el firmware (`#785`)
+
+La libc de la STM32 es newlib-nano, que trae `memcpy`, `memmove`, `memset`, `memchr` y `memcmp` de un byte por vuelta.
+`mem_libc.c` las cambia: `src/bpstr_vm.c` lo compila en esa familia, y el enlazador toma éstas antes que las de la
+biblioteca, así que las usa todo, también el HAL, LVGL y littlefs.
+
+- **`memcpy`** es `bpstr_copia`, la de Arm, con otro nombre;
+- **`memmove`:** sin solaparse o hacia abajo, la misma de Arm, que va siempre de abajo arriba y lee y escribe una
+  palabra cada vez; hacia arriba, un bucle de 16 en 16 desde el final;
+- **`memset`** es `bpstr_rellena`;
+- **`memchr`** es `bpstr_busca_byte`, tras llegar a una dirección múltiplo de 8: C dice que se para en cuanto encuentra,
+  y `n` puede ser mayor que lo que hay (el `%.*s` de `printf`), así que no lee fuera de los 8 bytes de lo encontrado;
+- **`memcmp`** es propia: `bpstr_compara`, con las direcciones desalineadas entre sí, llama a `memcmp`.
+
+En las demás familias no se cambian: en la P4 y la S3 el IDF pone las suyas en la RAM interna (o usa las de la ROM)
+porque se llaman con la caché de la flash apagada, y en la RP2350 pasa lo mismo con el XIP apagado. La STM32 compila
+`src/bpstr_vm.c` con `-O2` y `-fno-tree-loop-distribute-patterns` por una opción de ese fichero en su `.cproject`; el
+resto, con `-Os`.
 
 ## En una placa (el paso 2)
 
@@ -100,8 +119,11 @@ parejas (así cada camino se prueba con agujas pequeñas). Cada vez:
    - agujas de 3 a 300 bytes (la frontera de 256, byte a byte) en tres alfabetos. Uno hace chocar las parejas en la
      tabla: dos bytes que se llevan 32, como la `a` y la `A`, se mezclan igual delante del mismo byte;
 3. comparar: todas las parejas cortas; copiar y rellenar, de 0 a 300 bytes; las dos, en las 16 combinaciones de
-   alineación;
+   alineación. Y las de `mem_libc.c`, de 0 a 300 bytes: `memmove` con el destino hasta 40 bytes a cada lado del origen
+   y 8 alineaciones, y las otras con 8 o 64. En el PC, con otro nombre (`BPSTR_MEM_PRUEBA`), y la de ir hacia delante,
+   con un bucle de bytes; las de verdad, en una imagen de prueba de la STM32;
 4. los bordes: de 0 a 64 bytes, con la cadena pegada a una página de memoria protegida (leer un byte de más revienta);
+   también `memchr`, con `n` de más y lo que busca en el último byte;
 5. al azar: 200 000 cadenas con una semilla fija;
 6. el catálogo de UTF-8 de Markus Kuhn (`third_party/utf8-kuhn/`), entero y línea a línea.
 

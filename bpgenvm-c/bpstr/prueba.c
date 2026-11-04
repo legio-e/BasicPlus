@@ -8,7 +8,8 @@
  *      frontera de 256, byte a byte). Compilada con BPSTR_AGUJA_CORTA=1 y BPSTR_AGUJA_PAREJAS=0, todo va por Two-Way;
  *      con un tope de la corta muy grande, todo por la corta; y con la corta y Two-Way hasta 2, de 3 a 256 bytes por
  *      parejas: el Makefile pasa las cuatro, y la de siempre con los topes de la arquitectura;
- *   3. comparar, copiar y rellenar: todas las parejas cortas, con las 16 combinaciones de alineación;
+ *   3. comparar, copiar y rellenar: todas las parejas cortas, con las 16 combinaciones de alineación; y las de la libc
+ *      de la STM32 (mem_libc.c, #785), de 0 a 300 bytes: en el PC con otro nombre, y en esa placa las de verdad;
  *   4. los bordes: de 0 a 64 bytes con la cadena pegada al final de una página protegida (y una al principio de otra):
  *      leer un byte de más revienta la prueba (en el PC; en una placa no hay páginas);
  *   5. al azar, con una semilla fija: casi todo ASCII, con caracteres largos y trozos malos;
@@ -283,6 +284,140 @@ static void exhaustivo_comparar_copiar(void) {
     grupo("comparar (cortas), copiar y rellenar (0-300): 16 alineaciones", c0, f0);
 }
 
+/* ── las de la libc (mem_libc.c, #785): en el PC con otro nombre; en la STM32, las de verdad ── */
+#if defined(BPSTR_MEM_PRUEBA)
+#define MEM_LIBC 1
+#define MEM(nombre) prueba_##nombre
+void* prueba_memcpy(void* d, const void* s, size_t n);
+void* prueba_memmove(void* d, const void* s, size_t n);
+void* prueba_memset(void* d, int c, size_t n);
+void* prueba_memchr(const void* p, int c, size_t n);
+int   prueba_memcmp(const void* a, const void* b, size_t n);
+#elif defined(STM32U575xx) || defined(STM32U5G9xx)
+#define MEM_LIBC 1
+#define MEM(nombre) nombre
+#endif
+
+#ifdef MEM_LIBC
+#define MEM_TOPE  300u   /* hasta aquí: la de Arm va por bloques de 64 y de 16, y memmove de 16 en 16 */
+#define MEM_DELTA 40u    /* memmove: el destino, hasta tantos bytes a cada lado del origen */
+#define MEM_ZONA  (MEM_TOPE + 2u * MEM_DELTA + 32u)
+#define MEM_PASO(n) ((n) < 72u ? 1u : 19u)
+
+/* Por punteros: con el nombre de la libc, GCC resolvería por su cuenta las llamadas que conoce. */
+static void* (* volatile f_memcpy)(void*, const void*, size_t) = MEM(memcpy);
+static void* (* volatile f_memmove)(void*, const void*, size_t) = MEM(memmove);
+static void* (* volatile f_memset)(void*, int, size_t) = MEM(memset);
+static void* (* volatile f_memchr)(const void*, int, size_t) = MEM(memchr);
+static int   (* volatile f_memcmp)(const void*, const void*, size_t) = MEM(memcmp);
+
+static uint8_t dibujo(uint32_t i) { return (uint8_t) (i * 131u + 17u + (i >> 8)); }
+
+static uint32_t distintos(const uint8_t* a, const uint8_t* b, uint32_t n) {
+    uint32_t k = 0;
+    for (uint32_t i = 0; i < n; i++) k += a[i] != b[i];
+    return k;
+}
+
+static void mem_copiar_rellenar(void) {
+    static const int valores[4] = {0x00, 0xFF, 0x5A, 0x1C3};   /* el último, por encima de un byte */
+    for (uint32_t n = 0; n <= MEM_TOPE; n += MEM_PASO(n))
+        for (uint32_t al = 0; al < 64u; al++) {
+            uint8_t* d = buf + 32 + (al & 7u);
+            uint8_t* s = buf2 + 32 + (al >> 3);
+            for (uint32_t i = 0; i < MEM_ZONA; i++) { buf[i] = 0x5A; buf2[i] = dibujo(i); }
+            IGUAL("memcpy (devuelve)", f_memcpy(d, s, n) == (void*) d, 1, s, n);
+            IGUAL("memcpy (bytes)", distintos(d, s, n), 0, s, n);
+            IGUAL("memcpy (antes)", d[-1], 0x5A, s, n);
+            IGUAL("memcpy (despues)", d[n], 0x5A, s, n);
+            for (uint32_t i = 0; i < MEM_ZONA; i++) buf[i] = 0x5A;
+            int c = valores[al & 3u];
+            uint32_t malos = 0;
+            IGUAL("memset (devuelve)", f_memset(d, c, n) == (void*) d, 1, s, n);
+            for (uint32_t i = 0; i < n; i++) malos += d[i] != (uint8_t) c;
+            IGUAL("memset (bytes)", malos, 0, s, n);
+            IGUAL("memset (antes)", d[-1], 0x5A, s, n);
+            IGUAL("memset (despues)", d[n], 0x5A, s, n);
+        }
+}
+
+/* El destino, de MEM_DELTA bytes por debajo del origen a MEM_DELTA por encima, con las 8 alineaciones: con cada
+ * distancia, y por debajo y por encima de cada bloque, contra un bucle byte a byte en el sentido bueno. */
+static void mem_mover(void) {
+    for (uint32_t n = 0; n <= MEM_TOPE; n += MEM_PASO(n))
+        for (uint32_t al = 0; al < 8u; al++)
+            for (uint32_t k = 0; k <= 2u * MEM_DELTA; k++) {
+                const uint32_t si = MEM_DELTA + 8u + al, di_ = si + k - MEM_DELTA;
+                for (uint32_t i = 0; i < MEM_ZONA; i++) buf[i] = buf2[i] = dibujo(i);
+                if (di_ <= si) for (uint32_t i = 0; i < n; i++) buf2[di_ + i] = buf2[si + i];
+                else for (uint32_t i = n; i-- > 0; ) buf2[di_ + i] = buf2[si + i];
+                IGUAL("memmove (devuelve)", f_memmove(buf + di_, buf + si, n) == (void*) (buf + di_), 1, buf + si, n);
+                IGUAL("memmove (bytes)", distintos(buf, buf2, MEM_ZONA), 0, buf + si, n);
+            }
+}
+
+static void mem_buscar(void) {
+    static const uint8_t valores[6] = {0x00, 0x01, 0x7F, 0x80, 0xE9, 0xFF};
+    static const uint8_t vecinos[3] = {0x01, 0x80, 0xFF};     /* lo que más se parece, para los falsos de la palabra */
+    for (uint32_t v = 0; v < 6u; v++) {
+        const uint8_t c = valores[v];
+        for (uint32_t n = 0; n <= MEM_TOPE; n += MEM_PASO(n))
+            for (uint32_t al = 0; al < 8u; al++) {
+                uint8_t* p = buf + 32 + al;
+                for (uint32_t i = 0; i < n + 16u; i++) p[i] = (uint8_t) (c ^ vecinos[i % 3u]);
+                p[-1] = c;                                     /* justo antes y justo después: fuera */
+                p[n] = c;
+                IGUAL("memchr (no esta)", f_memchr(p, (int) c, n) == NULL, 1, p, n);
+                for (uint32_t pos = 0; pos < n; pos++) {
+                    const uint8_t antes = p[pos], antes2 = p[pos + 3u];
+                    p[pos] = c;
+                    if (pos + 3u < n) p[pos + 3u] = c;         /* el primero, no el segundo */
+                    IGUAL("memchr (la primera)", f_memchr(p, (int) c | 0x100, n) == (void*) (p + pos), 1, p, n);
+                    p[pos] = antes;
+                    p[pos + 3u] = antes2;
+                }
+            }
+    }
+}
+
+static int signo(int r) { return (r > 0) - (r < 0); }
+
+static void mem_comparar(void) {
+    for (uint32_t n = 0; n <= MEM_TOPE; n += MEM_PASO(n))
+        for (uint32_t al = 0; al < 64u; al++) {
+            uint8_t* a = buf + 32 + (al & 7u);
+            uint8_t* b = buf2 + 32 + (al >> 3);
+            for (uint32_t i = 0; i < n + 8u; i++) a[i] = b[i] = dibujo(i);
+            a[n] = 0x00;                                       /* lo de después no cuenta */
+            b[n] = 0xFF;
+            IGUAL("memcmp (iguales)", f_memcmp(a, b, n), 0, a, n);
+            for (uint32_t pos = 0; pos < n; pos++) {
+                const uint8_t va = a[pos], vb = a[pos + 1u];
+                a[pos] = 0x80;                                 /* sin signo: 0x80 es mayor que 0x7F */
+                b[pos] = 0x7F;
+                if (pos + 1u < n) { a[pos + 1u] = 0x00; b[pos + 1u] = 0xFF; }   /* manda la primera diferencia */
+                IGUAL("memcmp (mayor)", signo(f_memcmp(a, b, n)), 1, a, n);
+                IGUAL("memcmp (menor)", signo(f_memcmp(b, a, n)), -1, a, n);
+                a[pos] = b[pos] = va;
+                if (pos + 1u < n) a[pos + 1u] = b[pos + 1u] = vb;
+            }
+            a[n] = b[n] = dibujo(n);
+        }
+}
+
+static void mem_libc(void) {
+    unsigned long long c0 = comprobaciones, f0 = fallos;
+    mem_copiar_rellenar();
+    PROGRESO("mem_libc: copiar y rellenar");
+    mem_mover();
+    PROGRESO("mem_libc: mover");
+    mem_buscar();
+    PROGRESO("mem_libc: buscar");
+    mem_comparar();
+    grupo("las de la libc: memcpy, memmove, memset, memchr y memcmp (0-300)", c0, f0);
+}
+#endif
+
 /* ── al azar ── */
 static uint32_t azar_estado = 0x2545F491u;
 static uint32_t azar(void) {   /* xorshift32: la misma serie en todas partes */
@@ -515,6 +650,15 @@ static void bordes(void) {
                     bpstr_copia(sal, p, n);
                     bpstr_rellena(sal, 0x20, n);
                 }
+#ifdef MEM_LIBC
+                /* memchr se para en cuanto encuentra: con n de más y lo que busca en el último byte, no lee más allá */
+                if (n > 0) {
+                    uint32_t primera = 0;
+                    fin[-1] = 0xAA;
+                    while (p[primera] != 0xAA) primera++;
+                    IGUAL("memchr (bordes)", f_memchr(p, 0xAA, n + 1000u) == (void*) (p + primera), 1, p, n);
+                }
+#endif
             }
     grupo("los bordes: 0 a 64 bytes contra paginas protegidas", c0, f0);
 }
@@ -594,6 +738,9 @@ int bpstr_prueba_main(int larga, const char* ruta_kuhn) {
     dos_caminos_dificil();
     agujas_largas();
     exhaustivo_comparar_copiar();
+#ifdef MEM_LIBC
+    mem_libc();
+#endif
     bordes();
     al_azar(AZAR_VECES);
     kuhn(ruta_kuhn);
