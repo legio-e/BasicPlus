@@ -2350,7 +2350,7 @@ placa ya manda el `RUN_REPLY` entonces—, sólo cuando algo va mal: *«OK, me p
   («load: falta el modulo…», `#431`). Y un KILL sin programa le da `KILL_REPLY`, no `NO_SESSION`. El IDE no lo nota:
   a la VM local sólo le manda el KILL con un programa en marcha.
 
-#### 🔵 `#695` — al parar un programa de GUI, el destructor de `Gui.Button` lanza «referencia nula» y quedan objetos sin destruir (abierta el 12-oct, en el `F1`; Eduardo: *«tiene un problema pero se repone y todo sigue en marcha»* · **lo de «referencia nula», arreglado el 29-oct**, `dffb1c1d`; queda lo de «sin destruir», abajo, 4-nov)
+#### ✅ `#695` — al parar un programa de GUI, el destructor de `Gui.Button` lanza «referencia nula» y quedan objetos sin destruir (abierta el 12-oct, en el `F1`; Eduardo: *«tiene un problema pero se repone y todo sigue en marcha»* · **CERRADA el 4-nov**: lo de «referencia nula», `dffb1c1d`; lo de «sin destruir», `39cda457`, visto en la Metro y la P4)
 
 En el log de la P4, al parar `GuiClickDemo` o `GuiColorDemo`: «el destructor de Gui.Button lanzó: referencia nula: llamada
 a un método de un objeto null — se sigue con la limpieza» (una vez por botón) y, con `GuiColorDemo`, «quedaron sin destruir
@@ -2389,10 +2389,12 @@ está soltando. Reproducir en el PC (las dos VMs) antes de tocar nada.
 - **4-nov, arreglado** (`39cda457`): si la fase la abrió un KILL, el que se pida ahora es ese mismo, repetido
   (`bpvm_request_kill`); manda lo apuntado en `d->matado`, y a la fase la vigila su tope de 3 s. La VM-Java no lo
   necesita: su KILL llega una vez por mensaje. `test-kill`, fases 11 y 12 (`KillDestruyeLento`, con `io` y el poll
-  pegajoso): de 0 a 10 de 10. La red, VERDE. **Por ver en placa:** `GuiColorDemo` en la P4, parado con un KILL, sin
-  «quedaron sin destruir».
+  pegajoso): de 0 a 10 de 10. La red, VERDE;
+- **4-nov, en placa** (Eduardo: *«3) Hazlo»*), con las imágenes de hoy: en la P4, `GuiColorDemo` parado con un KILL, dos
+  veces, sin «quedaron sin destruir» y con la memoria entera; en la Metro, `KillDestruyeLento`, 10 de 10. Los packs,
+  donde estaban (`packRamBase` igual en las dos) y `SqlDemo` funcionando en la Metro.
 
-#### 🔵 `#696` — el IDE del ZIP compila contra un `Core` distinto del de las placas: «compilado contra otra interfaz (b8813a81 != 3897795d); enlace tardío» (abierta el 12-oct, en el `F1`; Eduardo: no es grave)
+#### ✅ `#696` — el IDE del ZIP compila contra un `Core` distinto del de las placas: «compilado contra otra interfaz (b8813a81 != 3897795d); enlace tardío» (abierta el 12-oct, en el `F1`; Eduardo: no es grave · **CERRADA el 4-nov**: el ZIP publicado está bien; Eduardo: *«#696 cierralo»*)
 
 En la P4, cada programa que compila el IDE del ZIP: el `Core` del IDE no es el `/lib/Core.mod` que repone la imagen, y el
 IDE dice de `Json`, `Collections` y `Str` «otra compilación (CRC distinto): vale». El enlace tardío lo resuelve, pero la
@@ -8885,6 +8887,26 @@ bloques grandes de la PSRAM por el alias sin caché, con el mantenimiento de la 
 - **Un dato del 3-nov** (la imagen del lote; `StrFases` en la Metro, con PSRAM, 2 KB): reservar, 309 µs, frente a 19
   copiar en memoria ya reservada (`#736`): lo que cuesta es la memoria recién estrenada, la de esta ficha. Por eso
   `#736` dejó la concatenación como está (3-nov): quitarle la puesta a cero sólo ahorraría la segunda pasada, la barata.
+- **4-nov, medido en la Metro** (Eduardo: *«#738 OK al plan de pruebas»*): dos imágenes de prueba, con un bloque libre de
+  la PSRAM, antes de arrancar la VM; la placa, devuelta a su imagen. Sin errores de coherencia: 0 de 4096 en los siete
+  casos, con la caché llena de datos viejos y otra vez tras vaciarla.
+  - **Atravesando memoria que no está en la caché** (cientos de KB, así que cada línea nueva echa una sucia), de 256 B a
+    256 KB, igual en todos los tamaños:
+
+    | ns por byte | por la caché | por el alias sin caché | con DMA |
+    |---|---|---|---|
+    | poner a cero | 111 | **37** | 36 |
+    | copiar | 231 | **121** (el destino; los dos, 184) | 155 |
+
+    Y el mantenimiento de la caché, 6 ns por byte, ya dentro de lo de arriba. El DMA no da más que el alias: descartado.
+  - **Lo que echa de la caché:** releer 8 KB calientes tras poner a cero 16 KB, 766 µs por la caché y 83 por el alias.
+  - **Con los bloques ya en la caché, el alias pierde:** poner a cero, 14 ns por byte por la caché y 40 por el alias;
+    copiar, 26 y 42; copiar y leer después, 43 y 87. De 32 B a 2 KB, igual.
+  - **Lo que engaña de la segunda tanda:** en frío y con 4 KB en total, la caché da 37 ns por byte, como el alias. Es que
+    las líneas sucias se quedan dentro, y lo que cuesta echarlas se paga después: en esa medida, fuera del cronómetro.
+  - **Qué régimen tiene un programa:** el `reservar` de 2 KB de `StrFases` son 150 ns por byte, el de la memoria fría
+    con líneas sucias; el bump avanza cientos de KB entre colectas. Pero un objeto pequeño se usa en seguida, y ahí
+    conviene que esté en la caché. El tope, por medir con programas de verdad.
 
 #### ✅ `#737` — la caché de las ESP32, por configuración: la L2 de la P4 y las de la S3 (abierta el 27-oct, al cerrar el H5; **CERRADA el 3-nov**: la P4, con la L2 de 256 KB desde el 29-oct —en la placa desde el lote del 3-nov—; la S3, con las dos al máximo —instrucciones 32 KB, datos 64 KB con líneas de 64 B—, medida y en la placa el 3-nov)
 

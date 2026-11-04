@@ -41,17 +41,19 @@
 >   con una suya; ahora sí, como la VM-Java. De 14 fallos de 60 a 0 de 60. La prueba, dejada a la suerte, no veía nada:
 >   hizo falta una ventana de ensayo (`test_cola`, la parte 21).
 > - **`#706`, cerrada** por el diseño (*«cerrar 706 OK»*).
-> - **`#695`, arreglada** (`39cda457`): tras un KILL, `io` repetía el KILL cada 5 ms y cortaba los destructores. De 0 a 10 de
->   10 en `test-kill`; falta verla en la P4.
-> - **`#696`, mirada:** el ZIP publicado está bien (un solo `Core` en todo). Propuesto cerrarla.
-> - **`#738`:** preparada la imagen de prueba (scratchpad, `n738/tmp738.c`), con el plan a Eduardo.
+> - **`#695`, cerrada** (`39cda457`; *«3) Hazlo»*): tras un KILL, `io` repetía el KILL cada 5 ms y cortaba los destructores.
+>   De 0 a 10 de 10 en `test-kill`, y visto en la Metro y en la P4 (`GuiColorDemo`, sin «quedaron sin destruir»).
+> - **`#696`, cerrada** (*«#696 cierralo»*): el ZIP publicado está bien, un solo `Core` en todo.
+> - **`#738`, medido en la Metro** (*«#738 OK al plan de pruebas»*): atravesando memoria fría, poner a cero por el alias sin
+>   caché, de 111 a 37 ns por byte, y copiar, de 231 a 121, sin errores de coherencia; el DMA no da más. Con el bloque ya
+>   en la caché, el alias pierde. El tope, por medir con programas de verdad: propuesto, para el OK.
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 >
 > **Para la próxima sesión:**
-> - la Nucleo lleva la imagen de `571bf24a`; la Metro, la S3 y la P4, la del paso 3 de `#730` (`cdbda834`); la DK2, la C3, la
->   C5 y la C6, la del lote del 3-nov, por la mañana. Ninguna lleva `#762` ni `#695`: en el próximo lote, y ahí `#695` en
->   la P4 y `#785` en la DK2;
+> - la Metro y la P4 llevan la imagen de `39cda457`; la Nucleo, la de `571bf24a`; la S3, la del paso 3 de `#730`
+>   (`cdbda834`); la DK2, la C3, la C5 y la C6, la del lote del 3-nov, por la mañana. En el próximo lote, todas, y `#785` en
+>   la DK2;
 > - sigue valiendo lo de `packRamBase` de abajo, para la C3, la C5 y la C6.
 >
 > **3-nov** — **los pendientes** (Eduardo: *«Continuamos con los pendientes, me da igual el orden»*): 28 abiertos,
