@@ -6045,9 +6045,10 @@ porque no se mueve ningún objeto. Y los pasos:
   programa normal, esos hilos mueren al acabar `Main`.
 - **Un error en un hilo suyo** no llega a `tryExe`, y el programa entero acabará con código 1 (`hilo_sin_atrapar`). Se
   puede recoger en `tryExe`.
-- **Una global `string` de un módulo que se queda** con un literal del que se va no se detecta: las globales no llevan
-  bitmap, y mirarlas a ojo daría falsos positivos. En la stdlib sólo hay una, `Log.ruta` (`Log.bp:66`), que se arregla
-  copiando en su setter.
+- **Una global de un módulo que se queda** con un literal del que se va no se detecta: las globales no llevan bitmap, y
+  en el bloque de datos hay de todo (los descriptores de las clases, por ejemplo), así que mirarlas a ojo daría falsos
+  positivos. En la stdlib sólo hay una `string`, `Log.ruta` (`Log.bp:66`), pero el módulo puede ser del usuario: es el
+  caso de abajo, «El ejemplo de Eduardo».
 - **La GUI:** si el programa cargado la usó, sus widgets siguen en el modelo, y sus manejadores impedirán descargar. Si
   `Gui` vino con el overlay, habrá que hacer `bpvm_gui_reset`.
 - **Los eventos** que queden en cola para sus objetos también impiden descargar.
@@ -6078,9 +6079,46 @@ porque no se mueve ningún objeto. Y los pasos:
 - cada condición de `load` y `unload`, con su texto;
 - no existe, no enlaza, no tiene `Main`, se llama como uno cargado, no cabe.
 
+### El ejemplo de Eduardo: el módulo compartido (4-nov)
+
+> *«Tenemos un programa A que ha cargado los módulos M1,M2 y M3. Ahora con Overlay ejecutamos un programa B que cargaría
+> los módulos M1 y M4. Como M1 ya está cargado no debería volverlo a cargar, en cambio M4 se cargaría. Ahora veamos el
+> stack, tenemos A, M1, M2, M3 y el stack de A. Ahora cargamos B, tenemos A, M1, M2, M3 y el stack de A, M4 y stack de B.
+> Ahora cerramos B, primero el stack de B desaparece, despues M4 se descarga, y devolvemos la ejecución al stack de A.»*
+
+Es el algoritmo de arriba, con tres matices:
+
+- **La pila de B son sus marcos encima de los de A**, en el mismo hilo. Se van al acabar B, y comparten el tamaño de la
+  pila del main: si B se pasa, es el «desbordamiento de pila» de siempre, y lo atrapa `tryExe`. Una pila propia es lo que
+  daría la versión asíncrona.
+- **Primero la ejecución vuelve a A, y es A quien llama a `unload`.** Antes de descargar, A puede leer el error, y los
+  destructores de B corren en su hilo.
+- **El heap es de los dos,** y no sale en el dibujo. La memoria es `[ módulos ][ heap ][ tabla ][ pila de A ]`: B y M4 no
+  pueden ir encima de la pila de A, y tienen que quedar por debajo del heap, porque así distingue la VM un literal de una
+  cadena del heap. Por eso se apartan los objetos.
+
+**Lo que trae compartir M1:**
+
+- **B ve M1 como lo dejó A:** sus globales, y ya iniciado (`__init` no se repite). Lo que B cambie en M1 se queda para A.
+  Así que B como overlay puede portarse distinto que B solo.
+- **Si B se compiló contra otro M1,** `load` falla con el error de siempre (`gen`, o el enlace tardío).
+- **Lo que B deje dentro de M1** es por donde se escapa algo a la descarga:
+  - un objeto de una clase de B o de M4: `unload` se niega y lo nombra;
+  - un objeto de M1 con un literal de B en un campo: se niega y lo nombra, porque los campos llevan bitmap;
+  - **un literal de B en una global de M1:** `M1.setNombre("Demo")`, si M1 se lo guarda en una `var`. Esto no se detecta, y
+    tras la descarga la global apunta a memoria que ya es otra cosa. Y un literal no tiene handle, así que no falla ahí
+    mismo.
+
+**El arreglo de lo último:** el compilador sabe qué globales son referencias (`declareGlobalRef`). Una tabla con sus
+posiciones en el `.mod`, aditiva como las otras subtablas, le daría a `unload` el mismo recorrido exacto que tiene en los
+objetos. El error sería *«queda un literal de B en una global de M1»*. Un `.mod` compilado antes de la tabla no se podría
+comprobar.
+
 ### Lo que hay que decidir sobre el algoritmo (Eduardo)
 
 1. **¿OK al algoritmo?** Sobre todo a las condiciones de `load` (desde `Main`, sin hilos, sin ficheros abiertos) y a una
    sola carga a la vez.
 2. **El nombre del módulo:** la clase `Overlay` en un módulo nuevo `Overlays`, como `Collections.Map`. En `Core` la
    pagarían todos los programas.
+3. **La tabla de las globales** del ejemplo de arriba: ¿entra en la etapa 1? Mi recomendación, sí: sin ella es un fallo
+   silencioso.
