@@ -313,6 +313,7 @@ namespace Cs2Jc
                 && s.InstanceConstructors.Any(c => c.IsImplicitlyDeclared && c.Parameters.Length == 0))
                 Linea("public function " + NombreTipo(s) + "() { }");
             Reenvia(s);                          // lo que implementa con otro nombre (Explicitas.cs)
+            CtorEstatico(s);
             sangria--;
             Linea("}");
             Linea("");
@@ -535,10 +536,76 @@ namespace Cs2Jc
                                      System.Collections.Immutable.ImmutableArray<IParameterSymbol> b) =>
             a.Length == b.Length && a.Zip(b, (x, y) => SymbolEqualityComparer.Default.Equals(x.Type, y.Type)).All(v => v);
 
+        /// El constructor estático de la clase que se está escribiendo.
+        ConstructorDeclarationSyntax estatico;
+
+        /// H8, tema 2 — un constructor estático. En C# corre la primera vez que se usa la clase; en JC, los valores de lo
+        /// estático se calculan al cargar el módulo. No se nota si sólo da valores a lo estático de su clase con lo que no
+        /// tiene efectos ni mira nada de fuera (SoloValores): nadie puede ver esos campos antes de que corra. Se escribe
+        /// detrás de todo, porque en C# corre detrás de los valores de los campos: una función, y un campo que la llama.
+        /// Vacío, nada. Con otra cosa, sigue sin traducirse.
+        void CtorEstatico(INamedTypeSymbol s)
+        {
+            var c = estatico;
+            estatico = null;
+            if (c == null) return;
+            var sentencias = c.Body != null ? c.Body.Statements.ToList()
+                : c.ExpressionBody != null ? new List<StatementSyntax>() : null;
+            var asignaciones = new List<AssignmentExpressionSyntax>();
+            if (c.ExpressionBody?.Expression is AssignmentExpressionSyntax ae) asignaciones.Add(ae);
+            else if (c.ExpressionBody != null) { Rechaza(c, Porque.H7(Porque.CtorEstatico)); return; }
+            foreach (var x in sentencias)
+            {
+                if (x is EmptyStatementSyntax) continue;
+                if (x is ExpressionStatementSyntax es && es.Expression is AssignmentExpressionSyntax a) asignaciones.Add(a);
+                else { Rechaza(c, Porque.H7(Porque.CtorEstatico)); return; }
+            }
+            if (asignaciones.Count == 0) return;
+            foreach (var a in asignaciones)
+            {
+                var d = m.GetSymbolInfo(a.Left).Symbol;
+                if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) || !(d is IFieldSymbol || d is IPropertySymbol) || !d.IsStatic
+                    || !SymbolEqualityComparer.Default.Equals(d.ContainingType, s) || !SoloValores(a.Right, s))
+                { Rechaza(c, Porque.H7(Porque.CtorEstatico)); return; }
+            }
+            Linea("private static int cs_estatico = " + NombreTipo(s) + ".Cs_Estatico();");
+            Linea("private static function int Cs_Estatico()");
+            Linea("{");
+            sangria++;
+            foreach (var a in asignaciones) Linea(ExprSentencia(a) + ";");
+            Linea("return 0;");
+            sangria--;
+            Linea("}");
+        }
+
+        /// ¿Da igual cuándo se calcule `e`? Sin llamadas, sin nada que cambie, sin leer lo estático de otra clase; un `new`,
+        /// sólo de un constructor implícito.
+        bool SoloValores(ExpressionSyntax e, INamedTypeSymbol clase)
+        {
+            foreach (var n in e.DescendantNodesAndSelf())
+                switch (n)
+                {
+                    case InvocationExpressionSyntax _:
+                    case AssignmentExpressionSyntax _:
+                    case PostfixUnaryExpressionSyntax _:
+                    case PrefixUnaryExpressionSyntax pu when pu.IsKind(SyntaxKind.PreIncrementExpression) || pu.IsKind(SyntaxKind.PreDecrementExpression):
+                        return false;
+                    case ObjectCreationExpressionSyntax oc:
+                        if (!(m.GetSymbolInfo(oc).Symbol is IMethodSymbol ctor) || !ctor.IsImplicitlyDeclared || oc.Initializer != null) return false;
+                        break;
+                    case SimpleNameSyntax id:
+                        var s = m.GetSymbolInfo(id).Symbol;
+                        if (s is IPropertySymbol) return false;
+                        if (s is IFieldSymbol f && !f.IsConst && !SymbolEqualityComparer.Default.Equals(f.ContainingType, clase)) return false;
+                        break;
+                }
+            return true;
+        }
+
         void EmiteConstructor(ConstructorDeclarationSyntax c)
         {
             var s = m.GetDeclaredSymbol(c);
-            if (s.IsStatic) { Rechaza(c, Porque.H7(Porque.CtorEstatico)); return; }
+            if (s.IsStatic) { estatico = c; return; }                     // detrás de los campos: CtorEstatico
             string cabecera = AccesoDe(s) + " function " + NombreTipo(claseActual)
                 + "(" + Parametros(c.ParameterList) + ")";
             var ini = c.Initializer;

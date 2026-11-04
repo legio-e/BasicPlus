@@ -13,3 +13,4 @@
 41: le falta a JC: errores de la VM con su tipo — NullReferenceException
 44: fuera: goto — goto fin;
 45: fuera: goto — fin: return 0;
+52: le falta a JC: constructor estático — static ConLlamada() { Console.WriteLine("hola"); }

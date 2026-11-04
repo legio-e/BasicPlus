@@ -46,3 +46,8 @@ class Programa
         return 0;
     }
 }
+
+class ConLlamada
+{
+    static ConLlamada() { Console.WriteLine("hola"); }  // le falta a JC: un constructor estático que hace algo (Estaticos)
+}

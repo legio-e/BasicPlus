@@ -1,0 +1,75 @@
+module CsEstaticos
+{
+   class Vacio_
+   {
+   }
+
+   class Otro
+   {
+   }
+
+   class Valores
+   {
+      private const int Fijo = 1;
+      public static int v { get; set; }
+      public static int w { get; set; } = 3;
+      public static int doble { get; set; }
+      public static string s { get; set; } = null;
+      public static int[] a { get; set; }
+      public static Otro o { get; set; }
+      public static int Prop { get; set; }
+      private static int cs_estatico = Valores.Cs_Estatico();
+      private static function int Cs_Estatico()
+      {
+         Valores.v = 10;
+         Valores.doble = Valores.w * 2 + Valores.Fijo;
+         Valores.s = "x";
+         Valores.a = [1, 2];
+         Valores.o = new Otro();
+         Valores.Prop = 8;
+         return 0;
+      }
+   }
+
+   class ConStruct
+   {
+      public static ConStruct Vacio { get; set; } = new ConStruct();
+      public static int n { get; set; }
+      private static int cs_estatico = ConStruct.Cs_Estatico();
+      private static function int Cs_Estatico()
+      {
+         ConStruct.Vacio = new ConStruct();
+         ConStruct.n = 2;
+         return 0;
+      }
+   }
+
+   class Prueba
+   {
+      public static function int Main()
+      {
+         if (Valores.v != 10 || Valores.w != 3 || Valores.doble != 7)
+         {
+            return 1;
+         }
+         if (Valores.s != "x" || Valores.a[1] != 2 || Valores.o == null || Valores.Prop != 8)
+         {
+            return 2;
+         }
+         if (ConStruct.n != 2)
+         {
+            return 3;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

@@ -5341,7 +5341,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | 3 | lo suelto de la biblioteca (`d.ToString()`, `"x" is String`, `sizeof(int)`, `StringWriter`, `StreamWriter.Null`, `String.Concat`) | `CsSystem` y el traductor | +5 | | 4-nov: Mono **475** |
 | 4 | `??` con referencias | el traductor | | +1 | 4-nov: Mono **476** |
 | 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | 4-nov: Mono **485** |
-| 6 | un constructor estático sin llamadas dentro | el traductor | | +1 | |
+| 6 | un constructor estático sin llamadas dentro | el traductor | | +1 | 4-nov: Mono **487** |
 | 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | |
 | 8 | un `Type` mínimo: el traductor escribe una tabla con las clases del programa | por hablar | +2 | +9 | |
 | 9 | los tipos anónimos | sin decidir | +2 | +2 | |
@@ -5389,6 +5389,14 @@ una clase que la implementa con un miembro normal añade uno que le reenvía. Lo
 lo llama o lo sobrescribe no lo nota, y entra también «la implementación explícita de verdad» (dos interfaces, dos cuerpos), que
 estaba como algo que le faltaba a JC. Sólo si la interfaz no es del programa (`IDisposable`) sigue sin traducirse. Caso
 `Explicitas`. **Mono: 485** (+9), sin perder ninguna; fallan las mismas 6. **El tema 2: 79.**
+
+**6. Un constructor estático que sólo da valores, hecho.** En C# corre la primera vez que se usa la clase; en JC, lo estático
+se calcula al cargar el módulo. No se nota si sólo da valores a lo estático de su clase con lo que no tiene efectos ni mira
+nada de fuera: sin llamadas, sin nada que cambie, sin leer lo estático de otra clase, y un `new` sólo de un constructor
+implícito. Se escribe detrás de todo, porque en C# corre detrás de los valores de los campos: una función `Cs_Estatico`, y un
+campo privado que la llama. Vacío, nada. Si hace otra cosa, se notaría cuándo corre, y sigue sin traducirse. Caso `Estaticos` (y
+`Rechazos`, uno que llama a algo). **Mono: 487** (+2: `test-debug-03` y `gtest-autoproperty-18`), sin perder ninguna; fallan las
+mismas 6. **El tema 2: 80.**
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
