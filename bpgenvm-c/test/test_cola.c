@@ -51,13 +51,15 @@
  *     parado; --sabotaje-anidada: vuelve a entrar sin fin, como antes: el programa colgado (lo para el plazo).
  * 20. dos hilos crean controles en el mismo contenedor (GuiMismoPadre): ni uno perdido (el cerrojo del árbol de Gui.bp;
  *     el control, medido a mano con la Gui de antes).
+ * 21. (#762) la reserva que espera la colecta de otro (ReservaAjena, el heap justo y la ventana ensanchada): colecta ella
+ *     si sigue sin caber —--sabotaje-reserva: se rinde, como antes: «No space in heap» con el heap lleno de basura—.
  *
  * Uso: test_cola Interbloqueo.mod MutexGc.mod FinJunto.mod GcConcurrente.mod EvDosRuns.mod EvHiloMuere.mod
  *                FicherosDosRuns.mod
  *                [--sabotaje-contador | --sabotaje-fin | --sabotaje-salida | --sabotaje-gc | --sabotaje-eventos |
  *                 --sabotaje-revive | --sabotaje-ficheros | --sabotaje-owner | --sabotaje-lineas | --sabotaje-suyo |
  *                 --sabotaje-zona | --sabotaje-colecta | --sabotaje-error | --sabotaje-aviso | --sabotaje-mundo |
- *                 --sabotaje-gui]
+ *                 --sabotaje-gui | --sabotaje-reserva]
  * Sale 0, con la línea «OK:» de la red, si todo pasa.
  */
 #include "bpvm.h"
@@ -68,6 +70,10 @@
 #include <string.h>
 
 #define PASADAS 20
+#define RESERVA_AJENA_PASADAS 10
+#ifndef RESERVA_AJENA_MEM
+#define RESERVA_AJENA_MEM 47104
+#endif
 
 typedef struct { char buf[8192]; size_t n; } salida_t;
 
@@ -600,6 +606,27 @@ static int gui_mismo_padre(void) {
                    PASADAS, NULL, ultimo);
 }
 
+/* 21. (#762) La reserva que espera la colecta de otro (ReservaAjena: dos hilos, cada uno en un run, con el heap justo; la
+ * ventana, ensanchada: el que esperó tarda en volver, y el otro se gasta lo que se soltó): colecta ella si sigue sin
+ * caber, y nadie se queda sin sitio. Sabotaje (--sabotaje-reserva: se rinde, como antes): «sin sitio» con basura. */
+static int reserva_ajena(int sabotaje) {
+    enum { MEM = RESERVA_AJENA_MEM };
+    int malos = 0; char ultimo[80] = "";
+    bpvm_la_cola.ensayo_stw_ms = 1;
+    bpvm_la_cola.ensayo_reserva_ms = 1;
+    bpvm_la_cola.sabotaje_reserva = sabotaje;
+    for (int i = 0; i < RESERVA_AJENA_PASADAS; i++) {
+        salida_t o;
+        bpvm_status_t s = corre("ReservaAjena.mod", MEM, MEM - bpvm_stack_region_bytes(MEM), 2, &o);
+        if (s != BPVM_OK || strstr(o.buf, "sin sitio: 0") == NULL) { malos++; resume(ultimo, sizeof ultimo, s, o.buf); }
+    }
+    bpvm_la_cola.ensayo_stw_ms = 0;
+    bpvm_la_cola.ensayo_reserva_ms = 0;
+    bpvm_la_cola.sabotaje_reserva = 0;
+    return informe("21. la reserva que espera la colecta de otro, con dos runs: nadie sin sitio con basura", sabotaje, malos,
+                   RESERVA_AJENA_PASADAS, NULL, ultimo);
+}
+
 int main(int argc, char** argv) {
     bpvm_fs_register_host();
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -611,7 +638,7 @@ int main(int argc, char** argv) {
     }
     int sab_contador = 0, sab_fin = 0, sab_salida = 0, sab_gc = 0, sab_eventos = 0, sab_revive = 0, sab_ficheros = 0;
     int sab_owner = 0, sab_lineas = 0, sab_suyo = 0, sab_zona = 0, sab_colecta = 0, sab_error = 0, sab_aviso = 0;
-    int sab_mundo = 0, sab_gui = 0, sab_anidada = 0;
+    int sab_mundo = 0, sab_gui = 0, sab_anidada = 0, sab_reserva = 0;
     for (int i = 8; i < argc; i++) {
         if (!strcmp(argv[i], "--sabotaje-contador")) sab_contador = 1;
         else if (!strcmp(argv[i], "--sabotaje-fin")) sab_fin = 1;
@@ -630,10 +657,11 @@ int main(int argc, char** argv) {
         else if (!strcmp(argv[i], "--sabotaje-mundo")) sab_mundo = 1;
         else if (!strcmp(argv[i], "--sabotaje-gui")) sab_gui = 1;
         else if (!strcmp(argv[i], "--sabotaje-anidada")) sab_anidada = 1;
+        else if (!strcmp(argv[i], "--sabotaje-reserva")) sab_reserva = 1;
     }
     int sabotaje = sab_contador || sab_fin || sab_salida || sab_gc || sab_eventos || sab_revive || sab_ficheros
                 || sab_owner || sab_lineas || sab_suyo || sab_zona || sab_colecta || sab_error || sab_aviso
-                || sab_mundo || sab_gui || sab_anidada;
+                || sab_mundo || sab_gui || sab_anidada || sab_reserva;
     int fallos = 0;
     if (!sabotaje) fallos += interbloqueo(argv[1]);
     if (!sabotaje || sab_contador) fallos += falso(argv[2], sab_contador);
@@ -656,11 +684,13 @@ int main(int argc, char** argv) {
     if (!sabotaje || sab_gui) fallos += gui_dos_runs(sab_gui);   /* LVGL con dos runs: la GUI, en el run 0 */
     if (!sabotaje || sab_anidada) fallos += gui_anidada(sab_anidada);   /* y el puente, aparcado con el mundo */
     if (!sabotaje) fallos += gui_mismo_padre();   /* y el árbol de la librería, con su cerrojo */
+    if (!sabotaje || sab_reserva) fallos += reserva_ajena(sab_reserva);   /* #762 */
     if (fallos == 0 && !sabotaje)
         printf("OK: la cola (H12 2a.2 y 2b): el interbloqueo, con uno y dos runs; ni uno falso; el fin, del último que "
                "sale; nadie dentro al avisar; el gc() del programa, con el mundo parado; los eventos y los ficheros con "
                "dos runs; lo de la revisión: owner, líneas largas, el join, la zona, la colecta, el error y un File "
                "compartido; un hilo con dos runs no despierta al otro en vano, ni tras un cuanto (#662) ni tras una "
-               "colecta (la 3.2); y la GUI con dos runs, toda en el run 0, con su puente aparcado si otro run colecta\n");
+               "colecta (la 3.2); la GUI con dos runs, toda en el run 0, con su puente aparcado si otro run colecta; y "
+               "nadie sin sitio con el heap lleno de basura (#762)\n");
     return fallos ? 1 : 0;
 }

@@ -1227,9 +1227,11 @@ static int tabla_crecer(bpvm_t* vm) {
 }
 
 /* H3: GC stop-the-world. Asume vm_lock tomado. Lo usan el disparo proactivo
- * por umbral y la ruta de OOM. En legacy/single-worker no hay baile. */
-static void gc_stw(bpvm_t* vm) {
-    if (vm->gc_suspended) return;   /* V4: GC suspendido durante la migración a handles */
+ * por umbral y la ruta de OOM. En legacy/single-worker no hay baile.
+ * V8 #762: devuelve 0 si la colecta fue de otro, y 1 si no (la hizo éste, o con el GC suspendido no la hay): la reserva
+ * necesita saberlo, porque sólo quien colecta sale de aquí con el cerrojo sin haberlo soltado desde que acabó. */
+static int gc_stw(bpvm_t* vm) {
+    if (vm->gc_suspended) return 1;   /* V4: GC suspendido durante la migración a handles */
     if (vm->smp) {
         /* ── UN SOLO COLECTOR ──────────────────────────────────────────────────
          *
@@ -1254,7 +1256,7 @@ static void gc_stw(bpvm_t* vm) {
         if (vm->smp->stop_the_world) {
             uint32_t antes = vm->gc_colectas;
             stw_esperar_al_otro(vm);
-            if (vm->gc_colectas != antes || bpvm_la_cola.sabotaje_colecta) return;   /* (sabotaje: SÓLO PRUEBAS) */
+            if (vm->gc_colectas != antes || bpvm_la_cola.sabotaje_colecta) return 0;   /* (sabotaje: SÓLO PRUEBAS) */
         }
     }
     stw_parar(vm);
@@ -1267,6 +1269,7 @@ static void gc_stw(bpvm_t* vm) {
     }
     bpvm_gc(vm);
     stw_seguir(vm);
+    return 1;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1683,16 +1686,27 @@ static uint32_t heap_reservar(bpvm_t* vm, uint32_t payload_bytes, int type, uint
 
     uint32_t addr = try_allocate_inner(vm, total);
     if (addr == 0) {
-        /* Sin sitio en free-list ni bump: STW GC y reintentar. */
-        gc_stw(vm);
-        if (vm->gc_descarrilo) {   /* V7 #494: no hay reintento; la del heap descarrilado (#659: la marca, de la tarea) */
-            bpvm_aot_callctx()->reserva_descarrilada = 1;
-            return 0;
+        /* Sin sitio en free-list ni bump: STW GC y reintentar. V8 #762 — hasta una colecta PROPIA: quien colecta sigue con
+         * el cerrojo y reserva el primero, y si ahí no cabe, no cabe. Quien sólo esperó la de otro llega tarde: lo que se
+         * soltó puede habérselo gastado ya el resto, y rendirse entonces era un «No space in heap» con el heap lleno de
+         * basura. (La VM-Java siempre colectó ella: heapAlloc.) */
+        int propia;
+        if (vm->smp != NULL && vm->smp->ensayo_reserva_ms > 0) {   /* SOLO PRUEBAS (test_cola, la 21): la ventana ensanchada */
+            bpvm_platform_mutex_unlock(&vm->smp->vm_lock);
+            bpvm_platform_thread_sleep_ms(vm->smp->ensayo_reserva_ms);
+            bpvm_platform_mutex_lock(&vm->smp->vm_lock);
         }
-        /* V7/H7 #610 — la tabla, otra vez: gc_stw soltó el cerrojo mientras esperaba, y otros workers pueden haberse
-         * gastado los slots que había. Aún no hay nada reservado: si hay que crecer, se puede esperar. */
-        if (!tabla_con_sitio(vm)) return 0;
-        addr = try_allocate_inner(vm, total);
+        do {
+            propia = gc_stw(vm);
+            if (vm->gc_descarrilo) {   /* V7 #494: no hay reintento; la del heap descarrilado (#659: la marca, de la tarea) */
+                bpvm_aot_callctx()->reserva_descarrilada = 1;
+                return 0;
+            }
+            /* V7/H7 #610 — la tabla, otra vez: gc_stw soltó el cerrojo mientras esperaba, y otros workers pueden haberse
+             * gastado los slots que había. Aún no hay nada reservado: si hay que crecer, se puede esperar. */
+            if (!tabla_con_sitio(vm)) return 0;
+            addr = try_allocate_inner(vm, total);
+        } while (addr == 0 && !propia && !bpvm_la_cola.sabotaje_reserva);   /* (sabotaje: SÓLO PRUEBAS) */
         if (addr == 0) {
             /* #355 — EL OOM ERA MUDO: se devolvia 0 y el que llama decidia si
              * mirarlo. Los que no lo miran empujan una ref nula, y de ahi salen

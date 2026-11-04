@@ -168,6 +168,8 @@ typedef struct bpvm_cola {
     int     ensayo_ficheros;         /* 2b: abrir, cerrar y escribir ceden el turno a mitad (la ventana ensanchada) */
     int     sabotaje_zona;           /* 2b: la zona de rascar ocupada por el otro run es un error, como antes */
     int     sabotaje_colecta;        /* 2b: quien esperó a otro mundo parado vuelve sin mirar si colectó (gc_stw) */
+    int     sabotaje_reserva;        /* #762: la reserva se rinde tras la colecta de otro, como antes */
+    int     ensayo_reserva_ms;       /* #762: la reserva sin sitio tarda en ir a colectar: otro colecta antes (heap.c) */
     int     sabotaje_owner;          /* 2b: soltar un owner como antes (sin mirar quién lo mató; el hueco, en el acto) */
     int     sabotaje_suyo;           /* 2b: el despertar y el join, sin mirar si otro run tiene el hilo entre manos */
     int     ensayo_linea_ms;         /* 2b: un hilo que termina tarda en soltar su línea a medias (interp.c) */

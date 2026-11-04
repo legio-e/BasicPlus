@@ -1,0 +1,74 @@
+// ReservaAjena.bp — V8 #762 (4-nov): la reserva que espera la colecta de otro. Dos hilos con el heap justo, uno en cada
+// run: uno crea cadenas cortas sin parar y el otro pide bloques de 2 KB. Cuando los dos se quedan sin sitio a la vez,
+// uno colecta y el otro lo espera; al volver, lo que se soltó ya se lo ha gastado el primero. Si se rinde ahí, «No space
+// in heap» con el heap lleno de basura: tiene que colectar él (test/test_cola.c, la parte 21, con su sabotaje).
+// Determinista en el resultado: «sin sitio: 0».
+module ReservaAjena
+  class Cortas extends Thread
+    var n: integer
+    var sinSitio: integer
+
+    public function Cortas(n: integer)
+      super(4096)
+      this.n := n
+      this.sinSitio := 0
+    end Cortas
+
+    public function run()
+      var i: integer := 0
+      while i < this.n do
+        try
+          var s: string := "pieza " + intToString(i) + " de " + intToString(i * 3)
+          if len(s) == 0 then
+            this.sinSitio := this.sinSitio + 1
+          endif
+        catch e: Exception
+          this.sinSitio := this.sinSitio + 1
+        endtry
+        i := i + 1
+      endwh
+    end run
+
+    public function fallos(): integer
+      return this.sinSitio
+    end fallos
+  end Cortas
+
+  class Grandes extends Thread
+    var n: integer
+    var sinSitio: integer
+
+    public function Grandes(n: integer)
+      super(4096)
+      this.n := n
+      this.sinSitio := 0
+    end Grandes
+
+    public function run()
+      var i: integer := 0
+      while i < this.n do
+        try
+          var a: integer[] := newIntArray(500)
+          a[0] := i
+        catch e: Exception
+          this.sinSitio := this.sinSitio + 1
+        endtry
+        i := i + 1
+      endwh
+    end run
+
+    public function fallos(): integer
+      return this.sinSitio
+    end fallos
+  end Grandes
+
+  function Main()
+    var c: Cortas := Cortas(30000)
+    var g: Grandes := Grandes(6000)
+    c.start()
+    g.start()
+    c.join()
+    g.join()
+    print "sin sitio: " + (c.fallos() + g.fallos())
+  end Main
+end ReservaAjena
