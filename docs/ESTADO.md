@@ -57,8 +57,9 @@
 >   mismas trazas que en el PC; falta verla en el IDE. **La etapa 2, congelada** (*«2) congelalo»*): `#582` pasa a 🧊.
 > - **`#786`, abierta y analizada** (idea de Eduardo; *«3) Haz el análisis a ver que tal»*): `loadModule`/`unloadModule` y un
 >   programa genérico que lance otro y atrape sus errores. En `V8_IDEAS` §E13: cargar en marcha (A) o un relevo entre
->   programas, cada uno en una VM limpia (B). Recomendada la B, por decidir. Medido cuánto tarda en arrancar y acabar
->   un programa en cuatro placas.
+>   programas, cada uno en una VM limpia (B). Medido cuánto tarda en arrancar y acabar un programa en cuatro placas.
+>   **Decidida la A** (*«1) La A. Si hay problemas lo vamos resolviendo poco a poco»*), con una clase `Overlay` y los
+>   métodos `load`, `tryExe` y `unload`. El algoritmo, escrito en §E13 y por aprobar; sin código todavía.
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 > - **Otro:** la primera medida de `#786` salió redondeada a 0,2 s por leer el cable con `w.lines`, que espera ese plazo. Se
@@ -66,7 +67,7 @@
 >
 > **Para la próxima sesión:**
 > - con Eduardo delante, en el IDE: `#694` (`Stop` con y sin programa, un RUN rechazado) y la traza de `#582` en la consola;
-> - decidir `#786`, y contestar si se cierran `#745` y `#710`;
+> - el OK al algoritmo de `#786` (`V8_IDEAS` §E13) y el nombre del módulo; y contestar si se cierran `#745` y `#710`;
 > - la Metro y la P4 llevan la imagen de `8c72bb95`; la Nucleo, la de `571bf24a`; la S3, la del paso 3 de `#730`
 >   (`cdbda834`); la DK2, la C3, la C5 y la C6, la del lote del 3-nov, por la mañana. En el próximo lote, todas, y `#785` en
 >   la DK2;

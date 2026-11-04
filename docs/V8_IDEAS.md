@@ -5699,7 +5699,7 @@ traductor; la red; y la placa, en la próxima tanda.
   (al workdir del micro, como los módulos de la app) y una forma de nombrarlo desde el código.
 - **Por analizar** cuando toque: cómo se declara, cómo viaja con la app al micro y cómo se lee.
 
-## E13 · Lanzar un programa desde otro: cargar módulos en marcha, o un relevo (Eduardo, 4-nov; `#786`; analizado, por decidir)
+## E13 · Lanzar un programa desde otro: cargar módulos en marcha, o un relevo (Eduardo, 4-nov; `#786`; decidida la A, con la clase `Overlay`; el algoritmo, por aprobar: al final de esta sección)
 
 > Eduardo, 4-nov: *«Si lo tuviésemos implementado podríamos hacer una programa genérico al que le podemos pasar como
 > argumento el módulo/pack a ejecutar y el se encargaría que ejecutarlo. Y si lo hiciémos dentro de un bloque try ...
@@ -5908,3 +5908,179 @@ Java: el módulo vive mientras algo lo alcance. Así, lo que quede vivo retiene 
 2. Con B, **¿vale que quien lanza vuelva a empezar desde `Main`?** Es lo único que cambia respecto a lo que pedía.
 3. **¿El tiempo máximo entra de primeras?** Son pocas líneas, y es lo que cubre el bucle sin fin.
 4. **Los nombres** (`Machine.nextProgram`, `lastProgram`, `lastStatus`, `lastMessage`…).
+
+### Decidido (Eduardo, 4-nov)
+
+> *«1) La A. Si hay problemas lo vamos resolviendo poco a poco. 3) Si hay un bucle sin fin mala suerte, eso también puede
+> pasar en un programa normal. Mira lo que yo haría es Crear una clase Overlay y ahí guardamos toda la información que
+> haga falta. Un método 'Load' y otro 'Unload' . Y luego un método tryExe para ejecutar el 'main' del módulo cargado. Mas
+> adelante podemos investigar una versión asíncrona que cree un hilo a parte.»*
+
+- **La opción A**, con una clase `Overlay` que guarda lo que haga falta, y tres métodos: `load`, `tryExe` y `unload` (en
+  minúsculas, por la convención de nombres).
+- **Sin tiempo máximo:** un bucle sin fin es lo que le pasaría a un programa normal.
+- **Más adelante:** una versión asíncrona, en un hilo aparte.
+
+### El algoritmo (por aprobar)
+
+```basic
+module Lanzador
+  import Core
+  import Overlays
+
+  function Main(arg: string)
+    var ov: Overlays.Overlay := Overlays.Overlay()
+    ov.load(arg)                     // si no se puede, RuntimeError
+    if ov.tryExe("") then
+      print "acabó bien"
+    else
+      print "falló: " + ov.getError()
+    endif
+    ov.unload()                      // si no se puede, RuntimeError
+  end Main
+end Lanzador
+```
+
+**Dónde va el módulo: se aparta el heap.** Esto mejora lo que puse arriba en «Lo que hace falta», punto 1. Ni un bloque
+clavado del heap ni encima de la tabla: el módulo va donde van todos, detrás del último, y lo que se mueve son los
+objetos.
+
+```
+antes       [ módulos ][ objetos ············· libre ············· ][ tabla ][ pilas ]
+apartar     [ módulos ][ ············· libre ············· objetos ][ tabla ][ pilas ]
+cargar      [ módulos ][ Demo, Json ][ ······· libre ······ objetos ][ tabla ][ pilas ]
+devolver    [ módulos ][ Demo, Json ][ objetos ······ libre ······· ][ tabla ][ pilas ]
+descargar   [ módulos ][ hueco libre ][ objetos ····· libre ······· ][ tabla ][ pilas ]
+```
+
+- **Apartar** es `Heap.compact` (`#595`), que deja todos los objetos seguidos, más un `memmove` de ese trozo hasta arriba
+  y sumar lo mismo a cada handle. **Devolver** es lo contrario. Mover objetos ya está hecho y probado, y con las mismas
+  condiciones.
+- **El cargador no cambia:** con el heap apartado, ve lo mismo que al arrancar un programa, un heap vacío detrás del
+  último módulo. Se le baja `heap_top` para que no pise lo apartado, y su «no cabe» de siempre vale.
+- **Las cadenas no cambian:** el módulo sigue por debajo del heap, así que un literal sigue por debajo de `heap_start`.
+  Los seis sitios del camino rápido y la docena que pregunta si una dirección está en el heap se quedan como están.
+- **Al descargar no se mueve nada:** `heap_start` vuelve a bajar y lo que ocupaba el módulo es un bloque libre más.
+- **Una sola carga a la vez**, de momento: una segunda `load` es un error. Así, descargar es deshacer lo último.
+
+**`load(ruta)`**
+
+Las condiciones, con un texto cada una, el mismo en las dos VMs:
+
+- **llamado desde `Main`**, directamente: una expresión a medias en otro marco podría tener la dirección de un objeto, y
+  los objetos se van a mover. `load` no devuelve nada, para que no pueda estar dentro de una expresión;
+- **sin otros hilos vivos**, como `Heap.compact`;
+- **sin ficheros abiertos:** su bloque de estado no se puede mover (`bpvm_files_clavar`);
+- **sin otro overlay cargado.**
+
+Y los pasos, con el mundo parado de principio a fin:
+
+1. apuntar cómo está todo: cuántos módulos y símbolos hay, dónde acaba lo cargado, la tabla de interfaces, el pack en
+   ejecución, el registro de las natives;
+2. colecta y compactación; apartar;
+3. `bpvm_load_entry(ruta)`, tal cual: un `.mod` o un pack, y las dependencias que no estén ya cargadas. Lo ya cargado se
+   reutiliza: si `Demo` usa `Core`, es el `Core` del lanzador;
+4. enlazar sólo lo nuevo:
+   - imports y fixups, desde el primer módulo nuevo;
+   - **el enlace tardío:** su registro de clases no se guarda, porque serían unos 80 B fijos de RAM por clase. Así que se
+     rehace para las clases de siempre, sobre su arena, escribiendo lo mismo en el mismo sitio, y se comprueba que acaba
+     en la dirección de entonces. Las clases nuevas van a una arena nueva, detrás de los módulos nuevos. En miVM el
+     registro sigue vivo y sólo se añade;
+   - la tabla de interfaces, nueva y con todas; la vieja se queda para la descarga;
+5. los `.mdn` sueltos de los módulos nuevos, con el bucle de siempre;
+6. devolver los objetos, y dar por caducado lo que se resuelve una vez por RUN (los despachadores de la GUI).
+
+Si algo falla en 3, 4 o 5, se deshace todo lo apuntado en 1 y se lanza una `RuntimeError` con el motivo de siempre («falta
+el módulo X», «recompila Y», «no cabe»). El programa sigue como estaba. Y un módulo con el mismo nombre que uno ya
+cargado también es error, para que el símbolo no resuelva al que no es.
+
+**`tryExe(arg)`**
+
+Está escrito en BP, en la clase, con un `try … catch` de verdad. Devuelve `true` si acabó bien; si no, `false`, y el
+error se queda en el `Overlay`:
+
+```basic
+public function tryExe(arg: string): boolean
+  try
+    __overlayExe(arg)             // vuelve cuando acaba el Main del programa cargado
+    return true
+  catch e: Exception
+    this.fallo := __overlayCopia(e.msg)
+    return false
+  endtry
+end tryExe
+```
+
+- **`__overlayExe`** pone `arg` donde lo lee `__runArg`, apila un marco como el de `CALL_EXT` y salta al `__startup` del
+  módulo. Corre en el hilo de quien llama. `__init` inicia sólo lo nuevo, y después va `Main`.
+- **`HALT` vuelve.** `__startup` acaba en `HALT`, el único sitio que lo emite. En un programa normal, ahí `bp` es el fondo
+  de la pila; si no lo es, a `__startup` lo llamaron, y `HALT` hace lo que un `RET`. No hace falta estado nuevo, y un
+  `.mod` ya compilado vale tal cual.
+- **La excepción no sale del `Overlay`**, que es lo que resuelve el caso de arriba: el objeto muere con el marco de
+  `tryExe`, y al lanzador sólo le llega texto. `__overlayCopia` copia al heap, porque `e.msg` puede ser un literal del
+  módulo que se va.
+- **Lo que queda guardado:** el mensaje, el nombre de la clase y la traza de `#582`, que se compone cuando la excepción
+  sale del módulo. Se leen con `getError()`, `getErrorClass()` y `getTrace()`.
+
+**`unload()`**
+
+Las condiciones: que esté cargado, que no esté corriendo y que no haya otros hilos vivos. No hace falta estar en `Main`,
+porque no se mueve ningún objeto. Y los pasos:
+
+1. sus globales dejan de ser raíces;
+2. colecta y `Core.__destruyePendientes()`, con su código aún en memoria, hasta que no quede nada pendiente: sus
+   destructores corren como siempre (`#668`);
+3. recorrer el heap: ni un objeto de una clase suya, ni un campo o un elemento de array que apunte a su zona (los bitmaps
+   de las clases dicen cuáles son referencias, así que es exacto). Si queda algo, `RuntimeError` con el nombre: *«sigue
+   vivo un objeto de Demo.Cosa»*. El overlay se queda cargado pero cerrado: no se puede ejecutar, y se puede volver a
+   intentar la descarga;
+4. soltar: la memoria de cada módulo, los símbolos, las natives, la tabla de interfaces, el pack en ejecución y la zona.
+   Y dar por caducado lo que guarda direcciones: `str_epoca` (el cursor de las cadenas), la caché de `cs→cb`, los
+   despachadores de la GUI y la marca por clase de los destructores. Si no, otra carga en la misma dirección
+   heredaría datos del anterior.
+
+**Lo que se deja para después, a sabiendas:**
+
+- **Un hilo que el programa deje vivo** impide descargar: el error lo dice, pero el lanzador no puede matarlo. En un
+  programa normal, esos hilos mueren al acabar `Main`.
+- **Un error en un hilo suyo** no llega a `tryExe`, y el programa entero acabará con código 1 (`hilo_sin_atrapar`). Se
+  puede recoger en `tryExe`.
+- **Una global `string` de un módulo que se queda** con un literal del que se va no se detecta: las globales no llevan
+  bitmap, y mirarlas a ojo daría falsos positivos. En la stdlib sólo hay una, `Log.ruta` (`Log.bp:66`), que se arregla
+  copiando en su setter.
+- **La GUI:** si el programa cargado la usó, sus widgets siguen en el modelo, y sus manejadores impedirán descargar. Si
+  `Gui` vino con el overlay, habrá que hacer `bpvm_gui_reset`.
+- **Los eventos** que queden en cola para sus objetos también impiden descargar.
+- **El depurador:** no pone puntos de ruptura en un módulo cargado así, aunque las trazas de `#582` sí dicen su nombre.
+- **`load` desde un manejador de la GUI:** no se puede. El manejador apunta qué quiere y `Main` lo hace al salir del bucle.
+- **Dentro del programa cargado** no valen ni `Heap.compact` ni otro `load`: los dos se niegan solos, porque su `Main` no
+  es el del fondo de la pila.
+- **El tope de 16 módulos** cuenta los del lanzador más los del programa. Se dice al llegar.
+
+**Las etapas:**
+
+1. **El PC, en las dos VMs:** los tres métodos, con `.mod` y packs. La red, con un `overlay_smoke` y los sabotajes que
+   hagan falta.
+2. **Las placas:** la Metro, la P4 y la Nucleo. Lo que hay que mirar: la pila de C de la tarea `run` (16 KB), porque el
+   cargador hoy corre en otra; el registro del enlace (`bpvm_calloc`) con el programa en marcha; y el `.mod` desde un pack
+   en flash.
+3. **Lo de la lista de arriba**, según vaya haciendo falta.
+
+**Lo que tiene que probar la etapa 1**, byte a byte en las dos VMs:
+
+- un programa que acaba bien, y otro que falla con un error de la VM, con un `throw` y con una clase de excepción propia y
+  un mensaje literal;
+- un programa con clases abiertas que extienden las de `Core` y las de un módulo que trae él, y con interfaces;
+- que los objetos del lanzador sobreviven: valores, cadenas y `gc()` antes y después;
+- cien veces cargar, ejecutar y descargar, con `Heap.getFree()` igual en cada vuelta;
+- un destructor del programa, que corre en `unload`;
+- un objeto suyo en una global de un módulo que se queda, y que la descarga lo nombra;
+- cada condición de `load` y `unload`, con su texto;
+- no existe, no enlaza, no tiene `Main`, se llama como uno cargado, no cabe.
+
+### Lo que hay que decidir sobre el algoritmo (Eduardo)
+
+1. **¿OK al algoritmo?** Sobre todo a las condiciones de `load` (desde `Main`, sin hilos, sin ficheros abiertos) y a una
+   sola carga a la vez.
+2. **El nombre del módulo:** la clase `Overlay` en un módulo nuevo `Overlays`, como `Collections.Map`. En `Core` la
+   pagarían todos los programas.

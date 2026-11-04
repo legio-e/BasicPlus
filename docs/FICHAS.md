@@ -7352,7 +7352,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **analizada el 4-nov, por decidir**: `V8_IDEAS` §E13)
+#### 🔵 `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **decidida la A el 4-nov, con la clase `Overlay`; el algoritmo, por aprobar**: `V8_IDEAS` §E13)
 
 - **La idea** (Eduardo, 4-nov): *«Si lo tuviésemos implementado podríamos hacer una programa genérico al que le podemos
   pasar como argumento el módulo/pack a ejecutar y el se encargaría que ejecutarlo. Y si lo hiciémos dentro de un bloque
@@ -7370,9 +7370,14 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
     Atrapa también lo del hilo y, con un tiempo máximo, el bucle. Una vuelta, menos de un segundo en todas las placas
     (medido en la Nucleo, la Metro, la S3 y la P4). Lo que pierde: quien lanza vuelve a empezar desde `Main`, y de vuelta
     sólo llega texto.
-- **Recomendada, la B.** La A se queda escrita para cuando aparezca un complemento de verdad, que comparta objetos con
-  quien lo carga: es lo único que la B no hace, y la A necesitaría a la B detrás para cuando la descarga se niega.
-- **Por decidir** (Eduardo): cuál, si vale volver a empezar desde `Main`, si el tiempo máximo entra de primeras, y los nombres.
+- **Decidido** (Eduardo, 4-nov: *«1) La A. Si hay problemas lo vamos resolviendo poco a poco»*): la opción A, aunque yo
+  recomendaba la B, con una clase `Overlay` y los métodos `load`, `tryExe` y `unload`. Sin tiempo máximo: *«Si hay un bucle
+  sin fin mala suerte, eso también puede pasar en un programa normal»*. Una versión asíncrona, en un hilo aparte, más
+  adelante.
+- **El algoritmo, en `V8_IDEAS` §E13, por aprobar.** Lo nuevo: el módulo va detrás del último, como todos, y lo que se
+  mueve es el heap (compactar, apartar los objetos hasta arriba, cargar, devolverlos). Así, ni el cargador ni las cadenas
+  cambian. `tryExe` está escrito en BP con un `try … catch`, y `HALT` vuelve si a `__startup` lo llamaron. Primero el PC,
+  en las dos VMs, y después las placas; lo que se deja para después está en la lista de la sección.
 
 #### ✅ `#785` — la STM32 copia, rellena, busca y compara la memoria de un byte por vuelta, en todo el firmware: lleva newlib-nano (`--specs=nano.specs`), y sus `memcpy`, `memset`, `memchr` y `memcmp` son las pequeñas (abierta el 3-nov, al medir `#730` · **CERRADA el 4-nov**, `571bf24a`, medida en la Nucleo; la DK2, compilada, se graba en el próximo lote)
 
