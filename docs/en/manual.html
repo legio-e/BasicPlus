@@ -1934,7 +1934,12 @@ Within one module, two classes may refer to each other with no problem.</p>
       program, names the class too (<code>Excepción no atrapada: MiMod.MiError: …</code>) and adds
       a stack trace with the symbolic name and the line of each frame; but with an error of the VM
       itself —division by zero, index out of range…— it only gives the message
-      (<code>"División por cero"</code>), with neither the class nor the stack trace.</li>
+      (<code>"División por cero"</code>), with neither the class nor the stack trace. Both also
+      say <strong>where</strong>, in any of these cases: the call chain, up to 8 frames, as positions
+      (<code>=== traza: Prueba+50 Prueba+72 ===</code> on stderr on the PC; in the <code>EXITED</code>
+      with a board), and the IDE translates it with the <code>.dbg</code>: <code>en Prueba.bp:5</code>,
+      <code>llamado desde Prueba.bp:9</code>. If the error starts inside a <code>native</code>
+      function, the line is that of its caller.</li>
 </ul>
 
 <!-- =========================================================== -->

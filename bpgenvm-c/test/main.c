@@ -483,6 +483,8 @@ static int main_real(int argc, char** argv) {
          * sample que muriese en el corpus. En placa esto no pasa por aqui: el
          * detalle viaja en el `errorMessage` del EXITED. */
         if (s == BPVM_ERR_RUNTIME && re[0]) fprintf(stderr, "=== RuntimeError: %s ===\n", re);
+        /* V8 #582 — dónde, como la VM-Java (Main.java). */
+        if (s == BPVM_ERR_RUNTIME && bpvm_runtime_traza(vm)[0]) fprintf(stderr, "=== traza: %s ===\n", bpvm_runtime_traza(vm));
     }
     printf("=== FIN DE LA EJECUCION (status=%s) ===" BPVM_EOL, bpvm_status_str(s));
 

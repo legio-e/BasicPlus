@@ -1653,6 +1653,7 @@ bpvm_status_t bpvm_programa_preparar(bpvm_t* vm) {
         vm->prefabricando_oom = 0;
         vm->oom_exc = pre;                 /* .v == 0 si ni esto se pudo */
         vm->runtime_error[0] = 0;          /* el prologo no es un error */
+        vm->runtime_traza[0] = 0;
         main_tc->alloc_anchor = 0;         /* el ancla era transitoria */
     }
     /* V7 #494 — y la del HEAP DESCARRILADO, igual y por lo mismo: cuando el recorrido del heap se
@@ -1668,6 +1669,7 @@ bpvm_status_t bpvm_programa_preparar(bpvm_t* vm) {
         vm->prefabricando_oom = 0;
         vm->heap_exc = pre;
         vm->runtime_error[0] = 0;
+        vm->runtime_traza[0] = 0;
         main_tc->alloc_anchor = 0;
     }
     return BPVM_OK;

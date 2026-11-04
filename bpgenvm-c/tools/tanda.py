@@ -208,6 +208,8 @@ if not os.path.exists(EXE):
 STDLIB = os.path.join(RAIZ, "bpstdlib")
 BUILD_TANDA = os.path.join(BPGENVM, "build", "tanda")
 SHOT2PNG = os.path.join(AQUI, "shot2png.py")
+sys.path.insert(0, AQUI)
+import traza_dbg   # noqa: E402 — V8 #582: la traza del EXITED, con sus líneas
 
 TROZO_PUT = 4096          # por encima de esto, PUT por trozos (#294)
 HELLO_SEGS = 8.0          # 24-sep: con 3 s el P4 no llegaba — abrir su CH343 lo reinicia (DTR/RTS) y
@@ -1475,6 +1477,9 @@ def veredicto_de(p, o, res, sin_oraculo):
     st, code = ex.get("status"), ex.get("exitCode")
     emsg = ex.get("errorMessage") or ""
     estado = "EXITED %s exit=%s%s" % (st, code, (" (%s)" % emsg) if emsg else "")
+    if ex.get("stackTrace"):   # V8 #582: dónde, con los .dbg de esta prueba y de la stdlib
+        estado += " en " + " < ".join(traza_dbg.traduce(
+            ex["stackTrace"], [os.path.join(BUILD_TANDA, p["nombre"]), STDLIB]))
     # Hallazgo 7: un fallo de CARGA/ENLACE en la placa es fallo del ARNES (una
     # dependencia que falta o sombreada, un .mod que no se pudo leer), no una
     # paridad que medir: nunca IDENTICO, ni NO-PETA/PETA como si fuera el programa.

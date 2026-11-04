@@ -2260,7 +2260,12 @@ otra sin problema.</p>
       nombra la clase (<code>Excepción no atrapada: MiMod.MiError: …</code>) y añade un stack
       trace con el nombre simbólico y la línea de cada frame; pero con un error de la propia VM
       —división por cero, índice fuera de rango…— sólo da el mensaje
-      (<code>"División por cero"</code>), sin la clase ni el stack trace.</li>
+      (<code>"División por cero"</code>), sin la clase ni el stack trace. Las dos dan además
+      <strong>dónde</strong>, en cualquiera de los casos: la cadena de llamadas, hasta 8, en posiciones
+      (<code>=== traza: Prueba+50 Prueba+72 ===</code> por stderr en el PC; en el <code>EXITED</code>
+      con una placa), y el IDE la traduce con el <code>.dbg</code>: <code>en Prueba.bp:5</code>,
+      <code>llamado desde Prueba.bp:9</code>. Si el error nace dentro de una función
+      <code>native</code>, la línea es la de quien la llamó.</li>
 </ul>
 
 <!-- =========================================================== -->

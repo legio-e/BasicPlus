@@ -695,6 +695,23 @@ la tanda de placas (`tools/tanda.py`, pruebas `"aot"`) comprueba con él que se
 usó el código compilado. Sin receta AOT (el micro simulado, la S3) sale 0. Una
 imagen de antes no lo manda; un cliente que no lo conozca lo ignora.
 
+**`stackTrace`** (V8 `#582`, 4-nov): DÓNDE falló un programa, sólo en `RUNTIME_ERROR` y sólo si un error se quedó sin
+atrapar. La cadena de llamadas de ese error, de dentro afuera, con 8 marcos como mucho:
+
+```json
+{"type":"EXITED","session":3,"status":"RUNTIME_ERROR","exitCode":1,"elapsedMs":12,"nativos":0,
+ "stackTrace":"Prueba+50 Prueba+72 Prueba+99 Prueba+39",
+ "errorMessage":"excepcion no atrapada: Core.RuntimeError: División por cero"}
+```
+
+Cada marco es `Módulo+rel`: `rel` es la instrucción SIGUIENTE a la que falló o llamó, contada desde el principio del código
+del módulo. La placa no tiene el `.dbg` y da posiciones; el que lo tiene pone los nombres, como en el depurador: la línea es
+la del `.dbg` para `rel - 1`. Lo que cae en la línea 0 (el `__init` del módulo) no es del programa. Lo hacen `TrazaError` en el
+IDE y `tools/traza_dbg.py` en la tanda; un módulo sin `.dbg` se deja como `Módulo+rel`.
+
+Las dos VMs mandan lo mismo, byte a byte, y va antes de `errorMessage`, que es lo que se recorta si no cabe. Con varios
+hilos, la del primer error que quedó fijado, el mismo que dice `errorMessage`. Una imagen de antes no lo manda.
+
 **`LINK_ERROR`** (el programa no llegó a arrancar: falló el enlace de sus
 módulos): `errorMessage` lleva el texto del cargador, **byte-idéntico en las dos
 VMs** y el mismo que el CLI imprime entre `=== ERROR DE LINK: … ===`. Los textos:

@@ -233,6 +233,8 @@ def cmd_run(w, args):
                 print("\n[EXITED %s exit=%s %s ms] %s" % (m.get("status"),
                       m.get("exitCode"), m.get("elapsedMs"),
                       m.get("errorMessage") or ""))
+                if m.get("stackTrace"):      # V8 #582: dónde, en posiciones (tools/traza_dbg.py las hace líneas)
+                    print("   traza: " + m["stackTrace"])
                 return
             else:
                 otros.append(m.get("type"))

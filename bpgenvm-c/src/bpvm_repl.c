@@ -2150,7 +2150,7 @@ static void run_mdn_decir(void* user, const char* msg) {
 }
 
 /* EL EXITED, UNO: los campos en el orden de siempre, y el mensaje recortado si no cabe (#557: sale SIEMPRE). */
-static void run_exited(long sesion, const char* estado, int codigo, unsigned long ms, const char* msg) {
+static void run_exited(long sesion, const char* estado, int codigo, unsigned long ms, const char* msg, const char* traza) {
     const bpvm_repl_run_ops_t* r = run_ops();
     char*  b   = r->mensaje;
     size_t cap = r->mensaje_cap;
@@ -2160,6 +2160,8 @@ static void run_exited(long sesion, const char* estado, int codigo, unsigned lon
     if (off >= 0) off = wire_v1_field_long(b, cap, (size_t) off, "exitCode", codigo);
     if (off >= 0) off = wire_v1_field_long(b, cap, (size_t) off, "elapsedMs", (long) ms);
     if (off >= 0) off = wire_v1_field_long(b, cap, (size_t) off, "nativos", (long) bpvm_aot_count());
+    /* V8 #582 — dónde, antes del mensaje: es corto, y lo que se recorta si no cabe es el mensaje. */
+    if (traza && traza[0] && off >= 0) off = wire_v1_field_string(b, cap, (size_t) off, "stackTrace", traza);
     if (msg && msg[0] && off >= 0) off = wire_v1_field_string_recortado(b, cap, (size_t) off, "errorMessage", msg, 1);
     if (off >= 0) off = wire_v1_msg_end(b, cap, (size_t) off);
     if (off >= 0) wire_v1_send_line(b, (size_t) off);
@@ -2254,7 +2256,7 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
     }
     if (!vm) {
         if (r->led) r->led(-1);
-        run_exited(sesion, "INTERNAL_ERROR", -1, 0, "no se pudo inicializar la VM");
+        run_exited(sesion, "INTERNAL_ERROR", -1, 0, "no se pudo inicializar la VM", NULL);
         s_run_sesion = 0;
         return;
     }
@@ -2281,7 +2283,7 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
         else                     snprintf(emsg, sizeof emsg, "load: %s", bpvm_status_str(ls));
         log_printf("run: %s no carga: %s", path, emsg);
         if (r->led) r->led(-1);
-        run_exited(sesion, "RUNTIME_ERROR", 2, 0, emsg);
+        run_exited(sesion, "RUNTIME_ERROR", 2, 0, emsg, NULL);
         bpvm_destroy(vm);
         s_run_sesion = 0;
         return;
@@ -2386,7 +2388,8 @@ void bpvm_repl_run(long id, const char* path, const char* arg) {
     else if (rs == BPVM_KILLED)   { estado = "KILLED";        msg = (s_run_reset >= 0) ? BPVM_REPL_MSG_RESET : bpvm_status_str(rs); }
     else if (link_err[0])         { estado = "LINK_ERROR";    msg = link_err; }
     else                          { estado = "RUNTIME_ERROR"; msg = rt_err[0] ? rt_err : bpvm_status_str(rs); }
-    run_exited(sesion, estado, bpvm_exit_code(rs), dt, msg);
+    run_exited(sesion, estado, bpvm_exit_code(rs), dt, msg,
+               strcmp(estado, "RUNTIME_ERROR") == 0 ? bpvm_runtime_traza(vm) : NULL);
 
     if (r->despues_de_correr) r->despues_de_correr(vm);
     bpvm_destroy(vm);

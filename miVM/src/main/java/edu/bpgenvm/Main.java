@@ -416,6 +416,8 @@ public class Main {
                  * número dice qué pasó; el mensaje, por qué. */
                 exitCode = 1;
                 exitReason = "runtime: " + vm.getRuntimeError();
+                // V8 #582 — dónde, como la VM-C (test/main.c): por stderr, que es del runner.
+                if (!vm.getTrazaError().isEmpty()) System.err.println("=== traza: " + vm.getTrazaError() + " ===");
             }
             }   // #431: fin del `if (cargado)`
         } catch (Throwable t) {
@@ -431,7 +433,8 @@ public class Main {
                 // A1.7: notificar al cliente debug que la ejecución terminó.
                 // Útil para que el IDE cierre la sesión sin necesidad de
                 // poll en el process.exited.
-                controller.emitEvent(new edu.bpgenvm.vm.debug.ExitedEvent(exitCode, exitReason));
+                controller.emitEvent(new edu.bpgenvm.vm.debug.ExitedEvent(exitCode, exitReason, -1L,
+                        exitReason.startsWith("runtime: ") ? vm.getTrazaError() : ""));   // V8 #582
             }
             if (dbgServer != null) {
                 // Pequeña pausa antes de cerrar el socket para que el

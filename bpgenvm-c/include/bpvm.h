@@ -592,6 +592,8 @@ const char* bpvm_load_error(const bpvm_t* vm);
  * handlers de RUN lo surten al wire/host cuando el status es BPVM_ERR_RUNTIME,
  * en vez del "exit N" genérico. NO propietario: válido mientras viva la VM. */
 const char* bpvm_runtime_error(const bpvm_t* vm);
+/* V8 #582 — dónde fue ese error: la cadena de llamadas, «Mod+rel Mod+rel…» (exceptions.c), o "". */
+const char* bpvm_runtime_traza(const bpvm_t* vm);
 
 #ifdef __cplusplus
 }

@@ -28,16 +28,41 @@
  * error, y el EXITED decía el de éste. Y con dos runs, dos escrituras a la vez lo mezclaban. Bajo el cerrojo de la VM:
  * nadie llega aquí con él cogido (el intérprete, y builtin_throw, que se llama sin él). El prólogo de cada programa lo
  * deja vacío (bpvm.c). */
-static void fija_runtime_error(bpvm_t* vm, const char* fmt, ...) {
+static int fija_runtime_error(bpvm_t* vm, const char* fmt, ...) {
     char texto[sizeof vm->runtime_error];
     va_list ap;
     va_start(ap, fmt);
     vsnprintf(texto, sizeof texto, fmt, ap);
     va_end(ap);
     bpvm_smp_lock(vm);
-    if (vm->runtime_error[0] == '\0' || bpvm_la_cola.sabotaje_error)   /* (el sabotaje: SÓLO PRUEBAS, test_cola) */
+    int primero = vm->runtime_error[0] == '\0';
+    if (primero || bpvm_la_cola.sabotaje_error)   /* (el sabotaje: SÓLO PRUEBAS, test_cola) */
         snprintf(vm->runtime_error, sizeof vm->runtime_error, "%s", texto);
     bpvm_smp_unlock(vm);
+    return primero;
+}
+
+/* V8 #582 — DÓNDE, sin los símbolos: la placa da posiciones y el PC pone los nombres, como en el depurador. La cadena de
+ * llamadas de un error que nadie atrapa, «Mod+rel Mod+rel…», de dentro afuera y con 8 marcos como mucho (saved pc en
+ * bp-12, saved bp en bp-8, como dbg_stack). Cada rel es la instrucción SIGUIENTE a la que falló o llamó, desde el
+ * principio del código del módulo: el host lee la línea de rel-1 en el .dbg. Sólo en el camino del error: no cuesta
+ * nada a quien no falla. Un centinela (el principio de un hilo o de un evento) no cae en ningún módulo: ahí acaba.
+ * Espejo de anotaTraza (miVM). */
+#define TRAZA_MARCOS 8
+static void compone_traza(bpvm_t* vm, const bpvm_thread_t* tc, char* out, size_t cap) {
+    uint32_t pc = tc->pc, bp = tc->bp;
+    size_t o = 0;
+    out[0] = '\0';
+    for (int marco = 0; marco < TRAZA_MARCOS; marco++) {
+        const bpvm_module_t* m = bpvm_module_for_code_addr(vm, pc);
+        if (m == NULL) break;
+        int k = snprintf(out + o, cap - o, "%s%s+%" PRIu32, marco ? " " : "", m->name, pc - m->cb);
+        if (k < 0 || (size_t) k >= cap - o) { out[o] = '\0'; break; }   /* el que no cabe entero, fuera */
+        o += (size_t) k;
+        if (bp <= tc->stack_base) break;
+        pc = bpvm_read_u32_be(vm->memory + bp - 12u);
+        bp = bpvm_read_u32_be(vm->memory + bp - 8u);
+    }
 }
 
 void bpvm_eh_push(bpvm_thread_t* tc, int32_t handler_pc, int32_t saved_sp,
@@ -162,6 +187,10 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
     bpvm_diag_urgente("[bpvm] EXCEPCION NO ATRAPADA en el thread %" PRId32 ": el thread "
               "TERMINA aqui. Si esto sale dentro de un catch, el manejador se ha "
               "quedado sin memoria al construir su propio mensaje.", tc->id);
+    char traza[sizeof vm->runtime_traza];
+    int primero = 0;   /* V8 #582: la traza es la del error que quede fijado */
+    compone_traza(vm, tc, traza, sizeof traza);
+    bpvm_diag_urgente("[bpvm]   donde: %s", traza);
     /* #532 — la CLASE de la excepcion, por su nombre (la 4.5 de su modulo: en MOD7/8 no hay y
      * se queda como estaba), y la guardia de que DESCIENDE de Core.Exception antes de leer
      * su campo 0 como el mensaje: un `throw` de un objeto que no es una excepcion (a mano;
@@ -172,8 +201,8 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
     int es_excepcion = (exc_cls == 0u) || (thrown_class != 0u && is_descendant_of(vm, thrown_class, exc_cls));
     if (!es_excepcion) {
         bpvm_diag("[bpvm]   lo lanzado no es una excepcion (clase %s)", clase[0] ? clase : "desconocida");
-        if (clase[0]) fija_runtime_error(vm, "throw de un objeto que no es una excepcion: %.140s", clase);
-        else          fija_runtime_error(vm, "throw de un objeto que no es una excepcion");
+        if (clase[0]) primero = fija_runtime_error(vm, "throw de un objeto que no es una excepcion: %.140s", clase);
+        else          primero = fija_runtime_error(vm, "throw de un objeto que no es una excepcion");
         informa_hilo_muerto(vm, tc, "throw de un objeto que no es una excepcion",
                             strlen("throw de un objeto que no es una excepcion"));   /* #607 */
     } else
@@ -215,23 +244,28 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
              * hay objeto. */
             /* #532 — con la clase delante cuando se sabe: «excepcion no atrapada: Lib.MiError: texto». */
             if (n > 0 && clase[0]) {
-                fija_runtime_error(vm, "excepcion no atrapada: %.70s: %.90s", clase, buf);
+                primero = fija_runtime_error(vm, "excepcion no atrapada: %.70s: %.90s", clase, buf);
             } else if (n > 0) {
-                fija_runtime_error(vm, "excepcion no atrapada: %.160s", buf);
+                primero = fija_runtime_error(vm, "excepcion no atrapada: %.160s", buf);
             } else if (clase[0]) {
-                fija_runtime_error(vm, "excepcion no atrapada: %.150s (sin mensaje)", clase);
+                primero = fija_runtime_error(vm, "excepcion no atrapada: %.150s (sin mensaje)", clase);
             } else {
-                fija_runtime_error(vm, "excepcion no atrapada (sin mensaje)");
+                primero = fija_runtime_error(vm, "excepcion no atrapada (sin mensaje)");
             }
             if (n > 0) informa_hilo_muerto(vm, tc, buf, n);                                  /* #607 */
             else       informa_hilo_muerto(vm, tc, "(sin mensaje)", strlen("(sin mensaje)"));
         } else {
             /* Ni siquiera hay objeto de mensaje. Que se sepa QUE paso: «exit 11»
              * a secas no distingue esto de un fallo de la propia VM. */
-            if (clase[0]) fija_runtime_error(vm, "excepcion no atrapada: %.150s (sin mensaje)", clase);
-            else          fija_runtime_error(vm, "excepcion no atrapada (sin mensaje)");
+            if (clase[0]) primero = fija_runtime_error(vm, "excepcion no atrapada: %.150s (sin mensaje)", clase);
+            else          primero = fija_runtime_error(vm, "excepcion no atrapada (sin mensaje)");
             informa_hilo_muerto(vm, tc, "(sin mensaje)", strlen("(sin mensaje)"));        /* #607 */
         }
+    }
+    if (primero) {
+        bpvm_smp_lock(vm);
+        memcpy(vm->runtime_traza, traza, sizeof vm->runtime_traza);
+        bpvm_smp_unlock(vm);
     }
     tc->status = BPVM_THREAD_TERMINATED;
     return 0;
@@ -239,6 +273,10 @@ int bpvm_eh_unwind(bpvm_t* vm, bpvm_thread_t* tc, bpref_t ref) {
 
 const char* bpvm_runtime_error(const bpvm_t* vm) {
     return (vm && vm->runtime_error[0]) ? vm->runtime_error : "";
+}
+
+const char* bpvm_runtime_traza(const bpvm_t* vm) {
+    return (vm && vm->runtime_traza[0]) ? vm->runtime_traza : "";
 }
 
 /* V7 #494 — si la última reserva falló porque el recorrido del heap se descarriló, la excepción es la

@@ -276,6 +276,10 @@ public final class DebugServer implements AutoCloseable {
                   .append(",\"status\":\"").append(status).append('"')
                   .append(",\"exitCode\":").append(e.exitCode)
                   .append(",\"elapsedMs\":").append(elapsed);
+                // V8 #582 — antes del mensaje, como la placa (bpvm_repl.c: el mensaje es lo que se recorta).
+                if (!e.stackTrace.isEmpty()) {
+                    sb.append(",\"stackTrace\":\"").append(Json.escape(e.stackTrace)).append('"');
+                }
                 if (mensaje != null && !mensaje.isEmpty()) {
                     sb.append(",\"errorMessage\":\"").append(Json.escape(mensaje)).append('"');
                 }
@@ -288,8 +292,8 @@ public final class DebugServer implements AutoCloseable {
                 this.activeSessionStartMs = 0;
             } else if (ev instanceof ExceptionEvent) {
                 // Wire v1 (§6.3) — las excepciones runtime se folddean en
-                // EXITED.status="RUNTIME_ERROR" + errorMessage. Para no
-                // perder el stackTrace lo concatenamos al message. El
+                // EXITED.status="RUNTIME_ERROR" + errorMessage, y dónde, en
+                // stackTrace, como en la placa (V8 #582). El
                 // VM también emite ExitedEvent justo después del fault,
                 // así que el cliente verá los dos: EXITED es la fuente
                 // de verdad del fin de sesión.
@@ -301,11 +305,11 @@ public final class DebugServer implements AutoCloseable {
                 sb.append("{\"type\":\"EXITED\",\"session\":").append(sess)
                   .append(",\"status\":\"RUNTIME_ERROR\"")
                   .append(",\"exitCode\":1")
-                  .append(",\"elapsedMs\":").append(elapsed)
-                  .append(",\"errorMessage\":\"").append(Json.escape(e.message));
+                  .append(",\"elapsedMs\":").append(elapsed);
                 if (e.stackTrace != null && !e.stackTrace.isEmpty()) {
-                    sb.append("\\n").append(Json.escape(e.stackTrace));
+                    sb.append(",\"stackTrace\":\"").append(Json.escape(e.stackTrace)).append('"');
                 }
+                sb.append(",\"errorMessage\":\"").append(Json.escape(e.message));
                 sb.append("\"}");
                 send(sb.toString());
                 this.stepInProgress = false;

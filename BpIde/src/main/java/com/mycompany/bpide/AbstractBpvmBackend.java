@@ -201,11 +201,17 @@ public abstract class AbstractBpvmBackend implements Backend {
                 }
                 edu.bpgenvm.vm.debug.ExitedEvent e =
                         (edu.bpgenvm.vm.debug.ExitedEvent) ev;
+                // V8 #582 — dónde: la placa da posiciones, y el .dbg las hace líneas.
+                java.util.List<String> donde = TrazaError.traduce(e.stackTrace);
+                if (lineSink != null)
+                    for (int i = 0; i < donde.size(); i++)
+                        lineSink.accept((i == 0 ? "  en " : "  llamado desde ") + donde.get(i));
                 // BpvmClient.handleMessage ya consolidó reason desde
                 // {errorMessage → reason → status}. "(OK)" en éxito,
                 // "(detalle)" en fallo, "" si peer no envió ninguno.
                 done.complete("exit " + e.exitCode
-                        + (e.reason == null || e.reason.isEmpty() ? "" : " (" + e.reason + ")")
+                        + (e.reason == null || e.reason.isEmpty() ? "" : " (" + e.reason
+                                + (donde.isEmpty() ? "" : ", " + donde.get(0)) + ")")
                         + formatoDuracion(e.elapsedMs));
             } else if (ev instanceof edu.bpgenvm.vm.debug.PausedEvent) {
                 // Daemon Java arranca en STEP_INTO si --wait-client → primer

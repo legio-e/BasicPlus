@@ -1073,6 +1073,9 @@ public final class PicoExplorer extends JPanel {
                              java.util.function.Consumer<BpvmClient> debugHook,
                              java.util.Map<String, File> resourceFiles,
                              String appPrefix) {
+        if (modFile != null && modFile.getParentFile() != null) {
+            TrazaError.conoce(modFile.getParentFile().toPath());   // V8 #582: su .dbg está al lado
+        }
         if (!isConnected()) {
             if (outputSink != null) outputSink.accept(
                     "[Explorer] no conectado — pulsa Connect primero");

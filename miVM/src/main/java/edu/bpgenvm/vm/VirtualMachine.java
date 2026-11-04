@@ -1126,6 +1126,30 @@ public class VirtualMachine {
 
     private volatile String runtimeError = "";
     public String getRuntimeError() { return runtimeError; }
+
+    /** V8 #582 — DÓNDE: la cadena de llamadas del primer error sin atrapar, «Mod+rel Mod+rel…», de dentro afuera y con
+     *  {@link #TRAZA_MARCOS} marcos como mucho. Cada rel es la instrucción SIGUIENTE a la que falló o llamó: el host lee la
+     *  línea de rel-1 en el .dbg. Lo mismo, byte a byte, que la VM-C (exceptions.c), que no tiene los símbolos. */
+    private volatile String trazaError = "";
+    public String getTrazaError() { return trazaError; }
+    private static final int TRAZA_MARCOS = 8;
+
+    private void anotaTraza(int pcActual, int bpStart, int stackBase) {
+        StringBuilder sb = new StringBuilder();
+        int curPc = pcActual, curBp = bpStart;
+        for (int marco = 0; marco < TRAZA_MARCOS && moduleManager != null; marco++) {
+            String uno = moduleManager.pcRelativo(curPc);
+            if (uno == null) break;                      // un centinela: el principio de un hilo o de un evento
+            if (marco > 0) sb.append(' ');
+            sb.append(uno);
+            if (curBp <= stackBase) break;
+            curPc = readInt32(curBp - 12);
+            curBp = readInt32(curBp - 8);
+        }
+        synchronized (vmLock) {
+            if (trazaError.isEmpty()) trazaError = sb.toString();
+        }
+    }
     /** V7/H7 #612 — el RUN acabó por un fallo de la VM (un Error de Java en un worker), no del programa: la salida
      *  3 de la tabla común (#481), como la VM-C con un opcode o un PC imposibles. */
     private volatile boolean falloInterno = false;
@@ -3189,7 +3213,7 @@ public class VirtualMachine {
                          * un script no lo den por bueno. Antes no cambiaba el codigo de salida. */
                         // A1.7: notificar al IDE remoto si hay listener cableado.
                         emitDebugEvent(new edu.bpgenvm.vm.debug.ExceptionEvent(
-                                tc.id, tf.getMessage(), ""));
+                                tc.id, tf.getMessage(), trazaError));   // V8 #582: dónde
                         synchronized (vmLock) {
                             if (tc.id == 0) {
                                 // main: shutdown coordinado
@@ -4556,6 +4580,7 @@ public class VirtualMachine {
                         // a secas —la de los fallos internos de Java— y un `throw` sin atrapar en un hilo tumbaba la VM
                         // entera, mientras una división por cero en el mismo hilo acababa sólo ese hilo.
                         informaHiloMuerto(tc, vFull, thrownClass);   // #607: que no sea mudo
+                        anotaTraza(pc, bp, tc.stackBase);            // V8 #582
                         throw new BpThreadFault(buildUnhandledExceptionMessage(
                                 currentPC, v, thrownClass, bp, tc.stackBase));
                     }
@@ -4946,6 +4971,7 @@ public class VirtualMachine {
                     String msg = readRuntimeErrorMsg(v);
                     tc.pc = pc; tc.sp = sp; tc.bp = bp; tc.cs = cs;
                     informaHiloMuerto(tc, v, thrownClass);   // #607: que no sea mudo
+                    anotaTraza(pc, bp, tc.stackBase);        // V8 #582
                     throw new BpThreadFault(msg != null ? msg : pending.getMessage());
                 }
             }

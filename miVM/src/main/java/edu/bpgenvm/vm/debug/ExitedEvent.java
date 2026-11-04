@@ -21,14 +21,23 @@ public final class ExitedEvent extends DebugEvent {
      *  que no lo dice. Quien lo pinte tiene que callarse, no escribir "0 ms". */
     public final long elapsedMs;
 
+    /** V8 #582 — dónde: la cadena de llamadas de un error sin atrapar, «Mod+rel Mod+rel…», o "". La placa da las
+     *  posiciones, sin símbolos; quien tiene el .dbg las traduce. */
+    public final String stackTrace;
+
     public ExitedEvent(int exitCode, String reason) {
         this(exitCode, reason, -1L);
     }
 
     public ExitedEvent(int exitCode, String reason, long elapsedMs) {
+        this(exitCode, reason, elapsedMs, "");
+    }
+
+    public ExitedEvent(int exitCode, String reason, long elapsedMs, String stackTrace) {
         this.exitCode = exitCode;
         this.reason = (reason != null) ? reason : "";
         this.elapsedMs = elapsedMs;
+        this.stackTrace = (stackTrace != null) ? stackTrace : "";
     }
 
     @Override public String type() { return "exited"; }

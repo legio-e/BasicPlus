@@ -2056,6 +2056,7 @@ public class FrmMain extends javax.swing.JFrame
             bpFile = currentFile;
             outDir = bpFile.getParent().resolve("out");
         }
+        TrazaError.conoce(outDir);   // V8 #582: los .dbg de lo que se va a ejecutar
 
         new SwingWorker<Void, String>() {
             @Override
@@ -2350,6 +2351,7 @@ public class FrmMain extends javax.swing.JFrame
             bpFile = currentFile;
             outDir = bpFile.getParent().resolve("out");
         }
+        TrazaError.conoce(outDir);   // V8 #582: los .dbg de lo que se va a ejecutar
 
         new SwingWorker<Void, String>() {
             @Override
@@ -2490,6 +2492,7 @@ public class FrmMain extends javax.swing.JFrame
             bpFile = currentFile;
             outDir = bpFile.getParent().resolve("out");
         }
+        TrazaError.conoce(outDir);   // V8 #582: los .dbg de lo que se va a ejecutar
 
         new SwingWorker<Void, String>() {
             @Override
@@ -2593,6 +2596,7 @@ public class FrmMain extends javax.swing.JFrame
             bpFile = currentFile;
             outDir = bpFile.getParent().resolve("out");
         }
+        TrazaError.conoce(outDir);   // V8 #582: los .dbg de lo que se va a ejecutar
 
         new SwingWorker<Boolean, String>() {
             Path modPath = null;
@@ -2873,6 +2877,7 @@ public class FrmMain extends javax.swing.JFrame
             bpFile = currentFile;
             outDir = bpFile.getParent().resolve("out");
         }
+        TrazaError.conoce(outDir);   // V8 #582: los .dbg de lo que se va a ejecutar
 
         new SwingWorker<Boolean, String>() {
             Path modPath = null;

@@ -1194,6 +1194,15 @@ public class ModuleManager {
         return 0;
     }
 
+    /** V8 #582 — un PC como lo cuenta el cable: «Modulo+rel», desde el principio del código del módulo, o null si no cae
+     *  en ningún módulo (un centinela). Es lo que mira el .dbg (DbgFile.lineForRelPc). */
+    public String pcRelativo(int pc) {
+        for (ModuleMetadata meta : loadedModules) {
+            if (pc >= meta.codeStart && pc <= meta.endAddress) return meta.name + "+" + (pc - meta.codeStart);
+        }
+        return null;
+    }
+
     /**
      * Descripción humana de un PC: "ModuleName.exportedFunc+offset" si cae en
      * el rango de una función exportada conocida, o "ModuleName+offset" si solo

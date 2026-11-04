@@ -774,6 +774,8 @@ struct bpvm {
      * setea en CADA throw; solo se REPORTA cuando el run acaba con
      * BPVM_ERR_RUNTIME (no atrapado). "" = sin error. Fijo (MCU-friendly). */
     char runtime_error[192];
+    /* V8 #582 — DÓNDE: la cadena de llamadas de ese error, «Mod+rel Mod+rel…» (exceptions.c). */
+    char runtime_traza[192];
 
     /* #421 — detalle del ÚLTIMO fallo de CARGA de un módulo: qué ruta y qué le
      * pasa. Tercer hermano de `link_error` y `runtime_error`, y por la misma

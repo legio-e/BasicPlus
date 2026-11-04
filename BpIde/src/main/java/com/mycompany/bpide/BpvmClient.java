@@ -2203,7 +2203,8 @@ public final class BpvmClient implements AutoCloseable {
                 fire(new ExitedEvent(
                         (int) Json.getLong(m, "exitCode", 0),
                         reason,
-                        Json.getLong(m, "elapsedMs", -1L)));
+                        Json.getLong(m, "elapsedMs", -1L),
+                        Json.getString(m, "stackTrace", "")));   // V8 #582: dónde
                 // Tras EXITED no hay sesión activa.
                 this.currentSession = 0;
                 break;
