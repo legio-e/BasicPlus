@@ -307,7 +307,8 @@ enum {
     BUILTIN_OVERLAY_FREE                 = 299,   /* __overlayFree() */
     BUILTIN_OVERLAY_TRACE                = 300,   /* __overlayTrace(): string */
     BUILTIN_CLASS_NAME                   = 301,   /* __className(o: any): string */
-    BUILTIN__CUANTOS = 302
+    BUILTIN_OVERLAY_THREADS              = 302,   /* __overlayThreads(): integer */
+    BUILTIN__CUANTOS = 303
 };
 
 #endif

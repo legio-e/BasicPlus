@@ -1445,7 +1445,7 @@ void bpvm_destruir_olvida_clases(bpvm_t* vm);
 void bpvm_overlay_sale(bpvm_t* vm, const bpvm_thread_t* tc);
 /* SÓLO PRUEBAS: rompe una pieza, para ver que overlay_smoke lo caza. 1, un literal no va al heap; 2, los handles no siguen
  * a los objetos; 3, la tabla de interfaces no vuelve; 5, sus globales siguen siendo raíces; 6, los símbolos no se van;
- * 7, rehacer el enlace no acaba donde acabó. */
+ * 7, rehacer el enlace no acaba donde acabó; 8, los hilos que deja, sin contar; 9, al descargar, un entero retiene. */
 extern int bpvm_sabotaje_overlay;
 /* H-010 (v3.0.1): libera un bloque de objeto dejándolo consistente (size@+4 +
  * free-list), para que el recorrido del heap no se desincronice tras FREE_REF. */

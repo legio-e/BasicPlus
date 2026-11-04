@@ -1769,6 +1769,9 @@ module Core
   function __className(o: any): string   // el nombre cualificado de la clase de un objeto
     inline CALL_BUILTIN 301
   end __className
+  function __overlayThreads(): integer   // cuántos hilos vivos hay, sin contar el que llama
+    inline CALL_BUILTIN 302
+  end __overlayThreads
   public function newByteArray(size: integer): byte[]   // opcode, no builtin
     inline NEWARRAY_I8
   end newByteArray

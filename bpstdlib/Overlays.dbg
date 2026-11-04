@@ -5,70 +5,73 @@ lines
 0 0
 24 0
 35 0
-38 81
-46 82
-54 83
+38 85
+46 86
+54 87
 65 0
-68 88
-76 89
-83 90
-90 91
+68 92
+76 93
+83 94
+90 95
 102 0
-105 96
-117 97
-128 99
-139 100
-150 102
-161 103
-173 105
-182 106
-189 107
-192 108
-199 109
-207 110
-219 112
-232 113
-244 114
-258 116
-265 117
-278 0
-281 122
-293 123
-305 125
-316 126
-328 128
-333 129
-340 130
-344 131
-347 132
-377 133
-382 134
-387 135
-392 136
-400 138
-405 139
-415 0
-418 143
-435 0
-438 148
-457 0
-460 153
-479 0
-482 158
-501 0
-528 74
-535 75
-542 76
-549 77
-561 0
-591 0
-605 0
-625 0
-642 0
-661 0
-678 0
-692 0
-711 0
+105 100
+117 101
+128 103
+139 104
+150 106
+161 107
+173 109
+182 110
+189 111
+194 112
+197 113
+204 114
+212 115
+223 116
+235 118
+247 120
+260 121
+272 122
+286 124
+293 125
+306 0
+309 130
+321 131
+333 133
+344 134
+356 136
+361 137
+368 138
+372 139
+375 140
+405 141
+410 142
+415 143
+420 144
+428 146
+433 147
+443 0
+446 151
+463 0
+466 156
+485 0
+488 161
+507 0
+510 166
+529 0
+556 78
+563 79
+570 80
+577 81
+589 0
+619 0
+633 0
+653 0
+670 0
+689 0
+706 0
+720 0
+739 0
 vars
 func Overlay.limpiaError 35
 this -20 8 0 ?
@@ -78,37 +81,38 @@ ruta -20 8 0 string
 func Overlay.tryExe 102
 this -28 8 0 ?
 arg -20 8 0 string
-bien 8 4 0 boolean
-e 12 8 0 ?
-func Overlay.unload 278
+hilos 8 4 0 integer
+bien 12 4 0 boolean
+e 16 8 0 ?
+func Overlay.unload 306
 this -20 8 0 ?
 antes 4 4 0 integer
 rondas 8 4 0 integer
-func Overlay.isLoaded 415
+func Overlay.isLoaded 443
 this -20 8 0 ?
-func Overlay.getError 435
+func Overlay.getError 463
 this -20 8 0 ?
-func Overlay.getErrorClass 457
+func Overlay.getErrorClass 485
 this -20 8 0 ?
-func Overlay.getTrace 479
+func Overlay.getTrace 507
 this -20 8 0 ?
-func Overlay.__init 501
+func Overlay.__init 529
 this -20 8 0 ?
-func __cls_init_Overlay() 591
+func __cls_init_Overlay() 619
 this -20 8 0 ?
-func __cls_m_Overlay#tryExe(s)z 605
+func __cls_m_Overlay#tryExe(s)z 633
 this -28 8 0 ?
 arg -20 8 0 string
-func __cls_m_Overlay#isLoaded()z 625
+func __cls_m_Overlay#isLoaded()z 653
 this -20 8 0 ?
-func __cls_m_Overlay#getError()s 642
+func __cls_m_Overlay#getError()s 670
 this -20 8 0 ?
-func __cls_m_Overlay#load(s)V 661
+func __cls_m_Overlay#load(s)V 689
 this -28 8 0 ?
 ruta -20 8 0 string
-func __cls_m_Overlay#unload()V 678
+func __cls_m_Overlay#unload()V 706
 this -20 8 0 ?
-func __cls_m_Overlay#getTrace()s 692
+func __cls_m_Overlay#getTrace()s 720
 this -20 8 0 ?
-func __cls_m_Overlay#getErrorClass()s 711
+func __cls_m_Overlay#getErrorClass()s 739
 this -20 8 0 ?

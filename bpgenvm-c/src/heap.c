@@ -312,6 +312,11 @@ static void gc_marca_uno(bpvm_t* vm, uint32_t ref_word) {
     bpref_t rr; rr.v = ref_word;
     uint32_t user_ref = bpref_deref(vm, rr);
     if (!is_heap_ref(vm, user_ref)) return;
+    /* V8 H9 (#786) — AL DESCARGAR UN OVERLAY SÓLO VALEN LOS HANDLES. El recorrido es conservador: un entero que cae justo
+     * en un objeto (un desplazamiento de una vtable de Core, la vuelta de un marco) lo retiene de más, y normalmente da
+     * igual. Pero unload pregunta qué sigue vivo de verdad, y ahí eso sería un «sigue vivo» falso. Una palabra sin TAG
+     * nunca es una referencia a un objeto del heap (bpref_deref): el resto del tiempo se deja como está, por las natives. */
+    if ((ref_word & BPVM_HANDLE_TAG) == 0u && vm->overlay != NULL && vm->overlay->cerrado && bpvm_sabotaje_overlay != 9) return;
     uint32_t header_addr = user_ref - 4;
     uint32_t tag = bpvm_read_u32_be(vm->memory + header_addr);
     if (tag & BPVM_TAG_MARK_BIT) return;   /* ya marcado */
@@ -1391,11 +1396,12 @@ static void mueve_objetos(bpvm_t* vm, uint32_t desde, uint32_t hasta, uint32_t l
     }
 }
 
-/* ¿Algún otro hilo vivo? Como en Heap.compact: un TERMINATED que aún debe eventos cuenta como vivo. Con el cerrojo. */
+/* Cuántos otros hilos vivos hay. Como en Heap.compact: un TERMINATED que aún debe eventos cuenta como vivo. Con el cerrojo. */
 int bpvm_overlay_otros_hilos(bpvm_t* vm, const bpvm_thread_t* tc) {
+    int n = 0;
     for (const bpvm_thread_t* o = bpvm_hilos_primero(vm); o; o = bpvm_hilos_siguiente(vm, o))
-        if (o != tc && (o->status != BPVM_THREAD_TERMINATED || bpvm_events_con_deuda(vm, o))) return 1;
-    return 0;
+        if (o != tc && (o->status != BPVM_THREAD_TERMINATED || bpvm_events_con_deuda(vm, o))) n++;
+    return n;
 }
 
 int bpvm_overlay_apartar(bpvm_t* vm, const bpvm_thread_t* tc, bpvm_overlay_t* o, char* fallo, size_t cap) {

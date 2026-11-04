@@ -311,7 +311,8 @@ public enum Builtin {
     OVERLAY_CLOSE("__overlayClose"),   // [298] __overlayClose()
     OVERLAY_FREE("__overlayFree"),   // [299] __overlayFree()
     OVERLAY_TRACE("__overlayTrace"),   // [300] __overlayTrace(): string
-    CLASS_NAME("__className");   // [301] __className(o: any): string
+    CLASS_NAME("__className"),   // [301] __className(o: any): string
+    OVERLAY_THREADS("__overlayThreads");   // [302] __overlayThreads(): integer
 
     public final String bpName;
     public final int id;

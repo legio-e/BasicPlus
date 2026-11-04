@@ -11,11 +11,13 @@ esperado, y lo mismo byte a byte en los tres. Lo que el programa dice empieza po
    4. los objetos de A sobreviven a moverse: cadenas, objetos y `gc()` antes y después;
    5. cincuenta vueltas, con el heap igual en cada una, y sus globales de nuevo a cero;
    6. un objeto de B en una global de un módulo que se queda: unload lo nombra, y una vez suelto se puede descargar;
+      y muchos objetos de B: ninguno sigue «vivo» porque un entero de Core caiga justo en su dirección;
    7. cada condición de load, tryExe y unload, con su texto;
    8. no existe, no enlaza, se llama como uno cargado y no cabe: el programa sigue como estaba;
    9. lo que B deja en un módulo que se queda sigue vivo cuando otro programa ocupa su sitio;
   10. dos clases en la misma dirección, una con destructor y la otra sin él;
-  11. los hilos de B: uno que acaba antes que su Main, y otro que sigue y no deja descargar hasta que acaba;
+  11. los hilos de B: uno que acaba antes que su Main; otro que sigue: es un error de tryExe y no deja descargar hasta
+      que acaba; y un hilo de A no cuenta;
   12. la traza del error, traducida con el .dbg del programa cargado;
   13. dentro de un programa cargado no valen ni otro load ni Heap.compact: los dos se niegan solos;
   14. un programa que viene en un pack, con un módulo suyo dentro;
@@ -651,13 +653,21 @@ end OvHilos
 HILOS_A = """module OvHilosA
   import Overlays
 
+  public class Suya
+    public function corre()
+      sleep(100)
+    end corre
+  end Suya
+
   function Main()
     var ov: Overlays.Overlay := Overlays.Overlay()
     ov.load("OvHilos.mod")
     ov.tryExe("espera")
     ov.unload()
     ov.load("OvHilos.mod")
-    ov.tryExe("sigue")
+    if not ov.tryExe("sigue") then
+      print "» " + ov.getErrorClass() + ": " + ov.getError()
+    endif
     try
       ov.unload()
     catch e: RuntimeError
@@ -665,9 +675,53 @@ HILOS_A = """module OvHilosA
     endtry
     sleep(400)
     ov.unload()
+    ov.load("OvHilos.mod")
+    var t: Thread := Thread(Suya()::corre())
+    t.start()
+    if ov.tryExe("espera") then
+      print "» un hilo de A no es de B"
+    endif
+    t.join()
+    ov.unload()
     print "» fin"
   end Main
 end OvHilosA
+"""
+
+MUCHAS_B = """module OvMuchas
+  public class Bolita
+    var n: integer
+    public function Bolita(n: integer)
+      this.n := n
+    end Bolita
+  end Bolita
+
+  function Main()
+    var l: List := List()
+    var i: integer := 0
+    while i < 3000 do
+      l.add(Bolita(i))
+      i := i + 1
+    endwh
+    print "» B deja " + intToString(l.length())
+  end Main
+end OvMuchas
+"""
+MUCHAS_A = """module OvMuchasA
+  import Overlays
+
+  function Main()
+    var ov: Overlays.Overlay := Overlays.Overlay()
+    var i: integer := 0
+    while i < 3 do
+      ov.load("OvMuchas.mod")
+      ov.tryExe("")
+      ov.unload()
+      i := i + 1
+    endwh
+    print "» fin"
+  end Main
+end OvMuchasA
 """
 
 TRAZA_B = """module OvTraza
@@ -863,7 +917,7 @@ def compila_todo(tmp):
                  ("OvQuedaA", QUEDA_A), ("OvCondiciones", CONDICIONES), ("OvCargaFalla", CARGA_FALLA), ("OvDeja", DEJA_1),
                  ("OvPisa", DEJA_2), ("OvDejaA", DEJA_A), ("OvDtorUno", DTOR_1), ("OvDtorDos", DTOR_2), ("OvDtorA", DTOR_A),
                  ("OvHilos", HILOS_B), ("OvHilosA", HILOS_A), ("OvTraza", TRAZA_B), ("OvTrazaA", TRAZA_A),
-                 ("OvAnida", ANIDA_B), ("OvAnidaA", ANIDA_A), ("OvPackA", PACK_A), ("OvLib", OTRO_LIB),
+                 ("OvAnida", ANIDA_B), ("OvAnidaA", ANIDA_A), ("OvMuchas", MUCHAS_B), ("OvMuchasA", MUCHAS_A), ("OvPackA", PACK_A), ("OvLib", OTRO_LIB),
                  ("OvProgUno", OTRO_1), ("OvProgDos", OTRO_2), ("OvOtroA", OTRO_A)):
         mods[n] = run_smoke.compila(tmp, n, f)
     for n in ("M1", "M2", "M3", "M4", "ProgramaB", "ProgramaA"):
@@ -923,7 +977,7 @@ def caso(num, titulo, nombre, tmp, sim, quiero):
     bien = quiero(c) if callable(quiero) else c == quiero
     if not bien:
         print("       dice: %s" % c)
-    check(bien and c == j and rc_c == 0 and (s is None or s == c), "%d. %s" % (num, titulo))
+    check(bien and c == j and rc_c == 0 and (s is None or s == c), "%s. %s" % (num, titulo))
     return c
 
 
@@ -1004,6 +1058,8 @@ def main():
                     and l[3] == "» Overlay.load: ya hay un modulo 'OvComun' cargado"
                     and l[4] == "» Overlay.load: no cabe en la memoria"
                     and l[5:] == ["» sigue A", "» hola 1", "» fin"])
+        caso("6b", "muchos objetos de B: un entero que cae en uno no lo deja vivo", "OvMuchasA", tmp, sim,
+             ["» B deja 3000"] * 3 + ["» fin"])
         caso(8, "no existe, no enlaza, se llama como uno cargado y no cabe: A sigue como estaba", "OvCargaFalla", tmp, sim, carga)
 
         caso(9, "lo que B deja sigue vivo cuando otro programa ocupa su sitio", "OvDejaA", tmp, sim, [
@@ -1014,9 +1070,11 @@ def main():
         caso(10, "dos clases en la misma dirección, una con destructor y otra sin él", "OvDtorA", tmp, sim, [
             "» sin dtor X", "» destruyo X", "» fin"])
 
-        caso(11, "los hilos de B: uno acaba antes, y otro no deja descargar hasta que acaba", "OvHilosA", tmp, sim, [
-            "» el hilo acaba", "» B acaba", "» B acaba", "» Overlay.unload: no se puede descargar con otros hilos vivos",
-            "» el hilo acaba", "» fin"])
+        caso(11, "los hilos de B: uno acaba antes; otro es un error de tryExe y no deja descargar; uno de A no cuenta", "OvHilosA", tmp, sim, [
+            "» el hilo acaba", "» B acaba", "» B acaba",
+            "» Core.RuntimeError: Overlay.tryExe: el programa ha acabado con hilos vivos",
+            "» Overlay.unload: no se puede descargar con otros hilos vivos",
+            "» el hilo acaba", "» el hilo acaba", "» B acaba", "» un hilo de A no es de B", "» fin"])
 
         l = caso(12, "la traza del error sale", "OvTrazaA", tmp, sim, lambda x: len(x) == 1 and "OvTraza+" in x[0])
         t = l[0].split(": ", 1)[1] if l else ""
@@ -1034,13 +1092,28 @@ def main():
         for n, pieza, prog in ((1, "un literal no va al heap", "OvDejaA"), (2, "los handles no siguen a los objetos", "OvObjetos"),
                                (3, "la tabla de interfaces no vuelve", "OvClasesA"),
                                (5, "sus globales siguen siendo raíces", "OvDtorA"), (6, "los símbolos no se van", "OvOtroA"),
-                               (7, "rehacer el enlace no acaba donde acabó", "ProgramaA")):
+                               (7, "rehacer el enlace no acaba donde acabó", "ProgramaA"),
+                               (8, "los hilos que deja, sin contar", "OvHilosA")):
             bien = vm_c(prog, tmp)
             try:
                 mal = vm_c(prog, tmp, n)
             except subprocess.TimeoutExpired:
                 mal = None
             check(mal != bien, "16.%d. sabotaje: %s" % (n, pieza))
+
+        # El 9, en el sim: en el PC el código de Core está en la memoria de la VM, el heap empieza detrás y un desplazamiento
+        # de una vtable no llega; con Core en un pack, como en las placas, el heap empieza abajo y cae en sus objetos.
+        sock.close()
+        proc.terminate()
+        proc.wait()
+        os.environ["BPVM_SABOTAJE_OVERLAY"] = "9"
+        proc, sock, c = run_smoke.arranca(os.path.join(tmp, "sim9.flash"))
+        del os.environ["BPVM_SABOTAJE_OVERLAY"]
+        for n in ("OvMuchas", "OvMuchasA"):
+            with open(mods[n], "rb") as f:
+                c.call_bulk("PUT", f.read(), path="/app/%s.mod" % n)
+        _, _, ex = c.run("/app/OvMuchasA.mod")
+        check(ex is not None and "sigue vivo" in (ex.get("errorMessage") or ""), "16.9. sabotaje: al descargar, un entero retiene")
     finally:
         c.close() if hasattr(c, "close") else None
         sock.close()

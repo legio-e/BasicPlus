@@ -218,6 +218,7 @@
     <li class="sub"><a href="#interfaces">10.4 module interface (retirado)</a></li>
     <li class="sub"><a href="#encapsulacion">10.5 Encapsulación clase↔módulo</a></li>
     <li class="sub"><a href="#dospasadas">10.6 Dos pasadas y ciclos entre módulos</a></li>
+    <li class="sub"><a href="#overlays">10.7 Overlays: un programa que carga a otro</a></li>
 
     <li class="group"><a href="#excepciones">11. Excepciones</a></li>
     <li class="group"><a href="#owner">12. Owner semantics</a></li>
@@ -2186,6 +2187,59 @@ lo que has escrito, mira si hay un ciclo entre definiciones.</p>
 <p>Recuerda que el límite es sólo para <em>tipos que cruzan la frontera del
 módulo</em>. Dentro de un mismo módulo, dos clases pueden referirse la una a la
 otra sin problema.</p>
+
+<h3 id="overlays">10.7 Overlays: un programa que carga a otro</h3>
+<p>Un programa puede cargar a otro con los módulos que le falten, ejecutar su
+<code>Main</code> y, cuando acabe, descargarlo. Es la clase <code>Overlay</code>, del
+módulo <code>Overlays</code>:</p>
+<pre><code>import Overlays
+
+function Main()
+  var ov: Overlays.Overlay := Overlays.Overlay()
+  ov.load("/app/Demo.mod")            // un .mod o un pack
+  if ov.tryExe("su argumento") then
+    print "acabó bien"
+  else
+    print "falló: " + ov.getError()
+  endif
+  ov.unload()
+end Main</code></pre>
+<p>Lo que ya está cargado no se vuelve a cargar. Si los dos programas usan el módulo
+<code>M1</code>, hay un solo <code>M1</code>: el programa cargado lo ve como lo dejó quien
+lo cargó, con sus globales, y lo que cambie se queda. Lo que entró con él se va con él.</p>
+<ul>
+  <li><code>load(ruta)</code> carga un <code>.mod</code> o un pack. Lo busca como un
+      programa: junto al programa principal, tal cual, en <code>/app</code>, en
+      <code>/lib</code> y en la zona de packs. Los objetos del programa se mueven para
+      hacerle sitio, así que se carga en condiciones controladas, como
+      <code>Heap.compact()</code>: <strong>sólo desde <code>Main</code></strong> (llamando a
+      <code>load</code> directamente), <strong>sin otros hilos vivos</strong>, <strong>sin
+      ficheros abiertos</strong> y con <strong>una sola carga a la vez</strong>. Si no se
+      cumple, o si no se puede cargar, <code>RuntimeError</code>, y el programa sigue como
+      estaba.</li>
+  <li><code>tryExe(arg)</code> ejecuta el programa cargado en el hilo de quien llama, y
+      vuelve cuando acaba su <code>Main</code>: <code>true</code> si acabó bien;
+      <code>false</code> si no, y el error se lee con <code>getError()</code> (el mensaje),
+      <code>getErrorClass()</code> (la clase, con su módulo) y <code>getTrace()</code> (la
+      cadena de llamadas, en posiciones). La excepción no sale: su clase puede ser del
+      programa que se va a descargar. <code>arg</code> es el argumento de su
+      <code>Main</code>, y <code>""</code>, su valor por defecto. El programa tiene que
+      cerrar sus hilos antes de acabar: si su <code>Main</code> acaba y deja alguno vivo,
+      también es un error (<em>el programa ha acabado con hilos vivos</em>), y no se puede
+      descargar hasta que ese hilo acabe. Un error en un hilo del programa cargado no llega
+      a <code>tryExe</code>.</li>
+  <li><code>unload()</code> corre los destructores de lo que el programa dejó y devuelve la
+      memoria. Si queda algo suyo vivo, como un objeto de una clase suya guardado en un
+      módulo que se queda, <code>RuntimeError</code> con su nombre (<em>sigue vivo un objeto
+      de Demo.Cosa</em>): el programa se queda en la memoria, cerrado, y se puede volver a
+      intentar cuando se haya soltado. Tampoco se descarga con otros hilos vivos.</li>
+</ul>
+<p>Dentro de un programa cargado, un literal de cadena es un string del heap: lo que deje en
+un módulo que se queda sigue vivo cuando el programa se va. Cuesta una reserva cada vez que
+se evalúa un literal, y sólo ahí. Sus funciones <code>native</code> corren interpretadas. No
+se pueden anidar: dentro de un programa cargado, <code>load</code> y
+<code>Heap.compact()</code> se niegan, porque su <code>Main</code> no es el del fondo de la
+pila. Un ejemplo completo, en <code>samples/overlay</code>.</p>
 
 <!-- =========================================================== -->
 <h2 id="excepciones">11. Excepciones</h2>

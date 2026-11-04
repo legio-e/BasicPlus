@@ -2223,8 +2223,11 @@ lo cargó, con sus globales, y lo que cambie se queda. Lo que entró con él se 
       <code>getErrorClass()</code> (la clase, con su módulo) y <code>getTrace()</code> (la
       cadena de llamadas, en posiciones). La excepción no sale: su clase puede ser del
       programa que se va a descargar. <code>arg</code> es el argumento de su
-      <code>Main</code>, y <code>""</code>, su valor por defecto. Un error en un hilo del
-      programa cargado no llega a <code>tryExe</code>.</li>
+      <code>Main</code>, y <code>""</code>, su valor por defecto. El programa tiene que
+      cerrar sus hilos antes de acabar: si su <code>Main</code> acaba y deja alguno vivo,
+      también es un error (<em>el programa ha acabado con hilos vivos</em>), y no se puede
+      descargar hasta que ese hilo acabe. Un error en un hilo del programa cargado no llega
+      a <code>tryExe</code>.</li>
   <li><code>unload()</code> corre los destructores de lo que el programa dejó y devuelve la
       memoria. Si queda algo suyo vivo, como un objeto de una clase suya guardado en un
       módulo que se queda, <code>RuntimeError</code> con su nombre (<em>sigue vivo un objeto

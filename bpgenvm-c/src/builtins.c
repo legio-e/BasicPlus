@@ -1434,6 +1434,15 @@ static bpvm_status_t __attribute__((noinline)) overlay_traza(bpvm_t* vm, bpvm_th
     return BPVM_OK;
 }
 
+/* Overlay.tryExe, antes y después: el programa cargado no puede acabar dejando hilos vivos. */
+static bpvm_status_t __attribute__((noinline)) overlay_hilos(bpvm_t* vm, bpvm_thread_t* tc) {
+    bpvm_smp_lock(vm);
+    int n = bpvm_overlay_otros_hilos(vm, tc);
+    bpvm_smp_unlock(vm);
+    push_i32(vm, tc, bpvm_sabotaje_overlay == 8 ? 0 : n);
+    return BPVM_OK;
+}
+
 static bpvm_status_t __attribute__((noinline)) clase_de(bpvm_t* vm, bpvm_thread_t* tc) {
     uint32_t ref = pop_ref(vm, tc);
     char nombre[160];
@@ -4907,6 +4916,7 @@ bpvm_status_t bpvm_call_builtin(bpvm_t* vm, bpvm_thread_t* tc, int id) {
     case BUILTIN_OVERLAY_CLOSE: return overlay_cierra(vm, tc, 0);
     case BUILTIN_OVERLAY_FREE:  return overlay_cierra(vm, tc, 1);
     case BUILTIN_OVERLAY_TRACE: return overlay_traza(vm, tc);
+    case BUILTIN_OVERLAY_THREADS: return overlay_hilos(vm, tc);
     case BUILTIN_CLASS_NAME:    return clase_de(vm, tc);
     case BUILTIN_MACHINE_ADC_CHANNELS: {
         push_i32(vm, tc, (int32_t) bpvm_machine_adc_channels());

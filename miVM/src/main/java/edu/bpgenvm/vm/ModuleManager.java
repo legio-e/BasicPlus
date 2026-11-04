@@ -1641,6 +1641,11 @@ public class ModuleManager {
         return 0;
     }
 
+    /** V8 H9 (#786) — ¿hay un overlay descargándose? */
+    public boolean overlayCerrado() {
+        return overlay != null && overlay.cerrado;
+    }
+
     /**
      * Lista de regiones de data block de todos los módulos cargados.
      * Cada entrada es {dataStart, dataSize}. Lo usa el GC para hacer

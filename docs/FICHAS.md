@@ -7170,9 +7170,9 @@ Por la cascada: primero Java, después C con la salida byte a byte, y después l
 | **H9.2** | **la VM-Java:** el módulo `Overlays`, apartar el heap, cargar y enlazar lo nuevo, `HALT` que vuelve, y descargar. Los ejemplos A y B, en `samples/overlay` | ✅ **hecho el 4-nov** |
 | **H9.3** | **la VM-C:** lo mismo, con el enlace tardío rehecho para lo de siempre. La misma salida que Java, byte a byte | ✅ **hecho el 4-nov** |
 | **H9.4** | **la red:** `overlay_smoke` con los casos de §E13, en las dos VMs y el sim, y los sabotajes | ✅ **hecho el 4-nov:** quince casos y seis sabotajes |
-| **H9.5** | **las placas:** la Metro, la P4 y la Nucleo. La pila de C de la tarea `run`, el registro del enlace con el programa en marcha, un overlay desde un pack en flash, y lo que cuesta un literal | ⬜ |
+| **H9.5** | **las placas:** la Metro, la P4 y la Nucleo. La pila de C de la tarea `run`, el registro del enlace con el programa en marcha, un overlay desde un pack en flash, y lo que cuesta un literal | 🟡 **medido el 4-nov** con la imagen de `761e9c00` (§E13, «En las placas»): la salida, igual que la del PC en 15 casos de 15 en la P4 y la Nucleo y en 14 en la Metro (el que llena el heap, `#787`); a `run` le sobran 8 KB de 16; el registro del enlace, 4 KB más que al arrancar; un módulo de la zona, cargado XIP; un literal, de 8 a 27 µs. **Falta** repetirlo con la imagen siguiente, que lleva dos cosas de esta prueba: la regla de los hilos y el arreglo de un «sigue vivo» falso, que sólo se da con `Core` en un pack |
 | **H9.6** | **la documentación:** el manual, en los dos idiomas, y `OPCODES`, `BUILTINS`, `HEAP_LAYOUT` y `MOD_FORMAT` | ✅ **hecho el 4-nov** |
-| **H9.7** | **lo que se dejó para después** (§E13): los hilos que el programa deje vivos, un error en un hilo suyo, la GUI, los eventos, el depurador, sus `.mdn`, `load` fuera de `Main` y varias cargas a la vez | ⬜ según vaya haciendo falta |
+| **H9.7** | **lo que se dejó para después** (§E13): ~~los hilos que el programa deje vivos~~ (4-nov, Eduardo: un error de `tryExe`), un error en un hilo suyo, la GUI, los eventos, el depurador, sus `.mdn`, `load` fuera de `Main` y varias cargas a la vez | ⬜ según vaya haciendo falta |
 
 #### 🧩 H6, H7 y H8 — C# en JC: el traductor, las mejoras y las pruebas de Mono (abiertos el 31-oct)
 
@@ -7372,6 +7372,28 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **`Json` (`#725`, 23-oct).** El manual no tiene la librería `Json`; cuando la tenga: `parseJson` sigue tras un
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
+
+#### 🔵 `#787` — la Metro no llena sus 6 MB de heap: hacia los 4,7 MB el GC se queda sin memoria para su mapa y el programa muere con «heap descarrilado» (abierta el 4-nov, en las pruebas de H9 en placa; preexistente: el mapa crece así desde el 7-jul; SUELTA)
+
+- **Lo que se ve.** Sin overlays: un programa que llena el heap de objetos vivos —una `List` de cajas, cada una con su
+  `newIntArray(1000)`— acaba en la Metro con «heap descarrilado (fallo interno de la VM)». El mismo programa llena el
+  heap en la P4 (6114 cajas) y en la Nucleo (109), y en el PC con la memoria de la Metro. Un `try` no lo salva: el
+  `catch` atrapa, pero lo primero que reserva pide otra colecta, que vuelve a fallar, y el programa muere dentro del
+  `catch`. El heap no está roto: es la salida que le dio `#598` a un GC sin mapa.
+- **La causa, medida** con `log=1`: `[gc] !! SIN MEMORIA para el mapa de cabeceras del GC (147044 B)`, con 4 708 376 B
+  usados de 6 177 072. El mapa es un bit por palabra del heap usado, y `build_gc_valid_map` (`heap.c`) lo suelta y lo
+  pide mayor en cada colecta: 24, 49, 73, 98, 122 y 147 KB. Sale de `malloc`, que en la Metro es la SRAM que queda:
+  `mem: malloc en uso 34240 B | MAXIMO 190280 B de 304968`. Había 270 KB libres y no dio 147 de una pieza.
+- **Lo que no está medido:** por qué exactamente. Lo más probable, el `malloc` de newlib: pide a `_sbrk` el bloque entero
+  aunque tenga libre lo de arriba (190 + 147 KB pasan de los 298), y sólo devuelve lo de arriba si llega a 128 KB. Eso
+  explicaría que `LlenaHeap`, casi el mismo programa, llenara el heap esa misma mañana (1516 cajas y un `gc()` al
+  final): es cuestión de unos KB al soltar el mapa de 122.
+- **Propuesta, por aprobar.** El mapa se pide UNA vez, para todo el heap, en la primera colecta: 193 KB en la Metro, con
+  la SRAM aún casi vacía (ahí sobra: sin el mapa, el pico es de 59 KB de 298). Ya no crece, y ninguna colecta más pide
+  memoria. Si no cabe, lo de hoy: la parte usada. En las demás placas es lo que ya piden con el heap lleno, sólo que
+  antes: 3 KB en la C3 y la C6, 7 en la Pico 2, 12 en la Nucleo. En julio (`91972833`) pedirlo por capacidad colgaba la
+  Metro en cada `gc()`, porque su `malloc` no podía dar 256 KB; hay que comprobarlo con la imagen de hoy, que tiene los
+  298 KB y el techo en `_sbrk`. La pasada «sin mapa» de `test-heapdescarrilado` tiene que hacer fallar las dos peticiones.
 
 #### 🔵 `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **decidida la A el 4-nov, con la clase `Overlay`; es el hito H9**, y su estado va en «🧩 H9»: `V8_IDEAS` §E13)
 
@@ -8693,6 +8715,7 @@ expresiones landa no entrarían, expresiones como *= y genéricos se podrian añ
 - **Por decidir (Eduardo):** (1) el traductor C# → JC sobre Roslyn primero, como herramienta de desarrollo (fuera del
   producto); (2) lo S en JC y en BP a la vez, empezando por los compuestos, que ya dijo que sí; (3) lo M, por lo que
   rinde, cada cosa con su OK; (4) los genéricos, como hito propio; y lo de las interfaces simples.
+- **Sigue abierta** (Eduardo, 4-nov, al preguntarle si se cerraba: *«La 3 no»*).
 
 #### ✅ `#744` — BP: leer o escribir una propiedad por `super` (`super.prop`) va a la de la hija, no a la del padre; `super.m()` sí va al padre (abierta el 31-oct, con `#745`; preexistente; **CERRADA el 1-nov**, el commit de `#744`)
 
@@ -10494,6 +10517,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   (`MALLOC_CAP_DEFAULT`, en `esp_psram.c`), y algo del arranque la usaría.
 - **Lo que haría falta, si Eduardo quiere:** medir el mínimo en puntos del arranque, para saber quién lo hunde y si es
   pasajero de verdad. Las pruebas dan lo mismo, y el peor margen es la C5, con 153 KB libres.
+- **Sigue abierta** (Eduardo, 4-nov, al preguntarle si se cerraba: *«La 3 no»*).
 
 #### ✅ `#709` — el `resetReason` del `INFO` dice «unknown» tras un reinicio por USB: a la tabla de las ESP le faltan cinco motivos (abierta el 19-oct, al grabar la C3 con el IDF 6.1, `#707`; preexistente; **CERRADA el 3-nov**, en el lote de placas)
 

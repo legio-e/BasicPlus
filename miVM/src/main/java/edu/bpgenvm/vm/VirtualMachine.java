@@ -2304,10 +2304,15 @@ public class VirtualMachine {
      *  V8 #750 — redondeaba el comienzo a un múltiplo absoluto de 4, y desde #740 la pila de un hilo es un bloque del
      *  heap, alineada respecto al inicio del heap y no en absoluto: con el heap desalineado (MOD8, según el tamaño de
      *  Core) se leía cada palabra desfasada, no se veían sus referencias y el barrido soltaba objetos vivos. Los datos de
-     *  un módulo empiezan alineados (la base del módulo más la tabla ext), así que ahí no cambia nada. */
+     *  un módulo empiezan alineados (la base del módulo más la tabla ext), así que ahí no cambia nada.
+     *  V8 H9 (#786) — al descargar un overlay sólo valen los handles: un entero que cae justo en un objeto (un
+     *  desplazamiento de una vtable de Core, la vuelta de un marco) lo retiene de más, y ahí sería un «sigue vivo» falso.
+     *  Como gc_marca_uno. */
     private void scanRegion(int start, int endExclusive, Set<Integer> valid) {
+        boolean soloHandles = moduleManager != null && moduleManager.overlayCerrado();
         for (int p = start; p + 4 <= endExclusive; p += 4) {
             int candidate = readInt32(p);
+            if (soloHandles && (candidate & HANDLE_TAG) == 0) continue;
             int headerAddr = refDeref(candidate) - 4;   // V4: deref handle→addr (conservador)
             if (valid.contains(headerAddr)) {
                 markObject(headerAddr, valid);
@@ -2683,9 +2688,15 @@ public class VirtualMachine {
 
     /** ¿Algún otro hilo vivo? Como en Heap.compact. */
     private boolean otrosHilosVivos(ThreadContext tc) {
+        return cuentaOtrosHilos(tc) != 0;
+    }
+
+    /** Cuántos otros hilos vivos hay. */
+    private int cuentaOtrosHilos(ThreadContext tc) {
+        int n = 0;
         for (ThreadContext t : threads)
-            if (t != tc && t.getStatus() != ThreadStatus.TERMINATED) return true;
-        return false;
+            if (t != tc && t.getStatus() != ThreadStatus.TERMINATED) n++;
+        return n;
     }
 
     /** Mueve el trozo de objetos [desde, desde + len) a `hasta`. Sin huecos ni clavados dentro. */
@@ -7965,6 +7976,12 @@ public class VirtualMachine {
             case OVERLAY_TRACE:
                 pushTcRef(tc, allocVmString(overlayTraza));
                 break;
+            case OVERLAY_THREADS: {   // Overlay.tryExe, antes y después: el programa no puede dejar hilos vivos
+                int hilos;
+                synchronized (vmLock) { hilos = cuentaOtrosHilos(tc); }
+                pushTc(tc, hilos);
+                break;
+            }
             case CLASS_NAME: {
                 int cp = classPtrOfRefOr0(popTcRef(tc));
                 String nombre = (cp != 0 && moduleManager != null) ? moduleManager.nombreDeClase(cp) : null;

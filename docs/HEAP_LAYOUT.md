@@ -107,6 +107,11 @@ memorySize└──────────────────────�
   descargar   [ módulos ][ hueco libre ][ objetos ···· libre ····· ]
   ```
 
+  Mientras se descarga, el GC sólo se fía de los handles: una palabra sin `TAG` no marca nada, ni en las pilas ni en los
+  bloques de datos. El recorrido normal es conservador y un entero que cae justo en un objeto lo retiene de más, sin más
+  daño; pero `unload` pregunta qué sigue vivo de verdad. Con `Core` en un pack, como en las placas, el heap empieza muy
+  abajo, en los mismos números que los desplazamientos de las vtables (`V8_IDEAS` §E13, «En las placas»).
+
 ---
 
 ## 2. Header de objeto en heap

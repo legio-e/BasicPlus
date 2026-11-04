@@ -994,6 +994,11 @@ static size_t parse_size(const char* s) {
 }
 
 int main(int argc, char** argv) {
+    /* SÓLO PRUEBAS (V8 H9, #786): como en test/main.c. Aquí, por lo que no se ve en el PC: con Core en un pack. */
+    if (getenv("BPVM_SABOTAJE_OVERLAY")) {
+        extern int bpvm_sabotaje_overlay;
+        bpvm_sabotaje_overlay = atoi(getenv("BPVM_SABOTAJE_OVERLAY"));
+    }
     if (bpvm_platform_mutex_init(&s_tx_mtx) != 0) { fprintf(stderr, "sim: no se pudo crear el cerrojo del cable\n"); return 1; }
 #ifdef BPVM_SQLITE
     /* UNA VEZ, y lo PRIMERO: sqlite3_config solo vale antes de initialize, y

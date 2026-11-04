@@ -1901,8 +1901,11 @@ goes away with it.</p>
       message), <code>getErrorClass()</code> (the class, with its module) and
       <code>getTrace()</code> (the chain of calls, in positions). The exception does not come
       out: its class may belong to the program about to be unloaded. <code>arg</code> is the
-      argument of its <code>Main</code>, and <code>""</code>, its default value. An error in
-      a thread of the loaded program does not reach <code>tryExe</code>.</li>
+      argument of its <code>Main</code>, and <code>""</code>, its default value. The program
+      has to close its threads before it ends: if its <code>Main</code> ends and leaves one
+      alive, that is an error too (<em>el programa ha acabado con hilos vivos</em>), and it
+      cannot be unloaded until that thread ends. An error in a thread of the loaded program
+      does not reach <code>tryExe</code>.</li>
   <li><code>unload()</code> runs the destructors of what the program left and gives the
       memory back. If something of it is still alive, like an object of one of its classes
       kept in a module that stays, <code>RuntimeError</code> with its name (<em>sigue vivo un

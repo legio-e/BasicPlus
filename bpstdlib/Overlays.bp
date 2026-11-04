@@ -24,7 +24,8 @@
 //
 // tryExe: el programa cargado corre en el hilo de quien llama. Devuelve true si su Main acaba bien; si no, false, y el
 // error se queda aquí, en texto: getError, getErrorClass y getTrace. La excepción no sale, porque su clase puede ser
-// del programa que se va a descargar.
+// del programa que se va a descargar. Un programa tiene que cerrar sus hilos antes de acabar: si su Main acaba y deja
+// alguno vivo, también es un error, y no se puede descargar hasta que ese hilo acabe.
 //
 // unload: corre los destructores de lo que el programa dejó y devuelve la memoria. Si queda algo suyo vivo —un objeto
 // de una clase suya guardado en un módulo que se queda—, RuntimeError con su nombre, y el programa cargado se queda en
@@ -57,6 +58,9 @@ module Overlays
   public function __heapHandles(): integer
     inline CALL_BUILTIN 268
   end __heapHandles
+  public function __overlayThreads(): integer
+    inline CALL_BUILTIN 302
+  end __overlayThreads
 
   public class Overlay
     // Las rondas de destructores de unload: lo que un destructor suelta puede tener el suyo. Las mismas que al acabar
@@ -104,9 +108,13 @@ module Overlays
       endif
       this.limpiaError()
       this.corriendo := true
+      var hilos: integer := __overlayThreads()
       var bien: boolean := false
       try
         __overlayExe(arg)
+        if __overlayThreads() > hilos then
+          throw RuntimeError("Overlay.tryExe: el programa ha acabado con hilos vivos")
+        endif
         bien := true
       catch e: Exception
         this.error := e.msg

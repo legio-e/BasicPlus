@@ -4,7 +4,7 @@ Catálogo de los builtins de la VM BP: qué hace cada uno. **La fuente de la tab
 `bpstdlib/Core.bp`** (V7/H1 P2, 20-sep): cada primitiva es una función de `Core` cuyo
 cuerpo es `inline CALL_BUILTIN n`, y `scripts/gen_builtins.py` GENERA de ahí el enum
 `Builtin` de miVM y `bpgenvm-c/src/builtin_ids.h` —con la firma BP al lado de cada
-id—. Hoy son **302** (0–301). Cada builtin tiene:
+id—. Hoy son **303** (0–302). Cada builtin tiene:
 - `id` = `ordinal()` del enum `Builtin` (estable; **se añade siempre al
   final** para no romper compat con `.mod` ya emitidos).
 - `bpName`: el nombre de su función en `Core`. El compilador ya no resuelve
@@ -661,7 +661,7 @@ consola del PC escribe en binario y cierra cada línea con él. Pública: la int
 (en MOD9 el enlace es por nombre: lo compilado antes sigue enlazando). La prueba: `bpgenvm-c/samples/Eol.bp` (la red
 de paridad: el stdout, byte a byte).
 
-## 296–301 — los overlays  *(V8, H9, `#786`, 4-nov)*
+## 296–302 — los overlays  *(V8, H9, `#786`, 4-nov)*
 
 | id | nombre | firma | uso |
 |---|---|---|---|
@@ -671,6 +671,7 @@ de paridad: el stdout, byte a byte).
 | 299 | `__overlayFree` | `()` | `Overlay.unload()`, lo último |
 | 300 | `__overlayTrace` | `(): string` | `Overlay.getTrace()` |
 | 301 | `__className` | `(o: any): string` | `Overlay.getErrorClass()` |
+| 302 | `__overlayThreads` | `(): int` | `Overlay.tryExe(arg)`: cuántos hilos vivos hay, sin contar el que llama. Se mira antes y después: el programa no puede acabar dejando hilos |
 
 Un programa carga a otro, lo ejecuta y lo descarga (`Overlays.bp`; `V8_IDEAS` §E13). `__overlayLoad` comprueba las
 condiciones, colecta, compacta, aparta los objetos hasta arriba, carga y enlaza lo nuevo, y devuelve los objetos detrás.

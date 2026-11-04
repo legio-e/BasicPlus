@@ -6181,6 +6181,42 @@ el ejemplo de Eduardo. Lo que salió al programarlo:
 - **La carpeta del programa principal,** la que se mira primero en `load`, la guarda la VM-C al cargar (`raiz_dir`): el CLI
   del PC no tiene `basedir`, y Java ya la tenía (`rootModuleDir`).
 
-`overlay_smoke`, en la red: quince casos en las dos VMs y el sim, byte a byte, y seis sabotajes (`BPVM_SABOTAJE_OVERLAY`) que
-tienen que cambiar la salida. La marca por clase de los destructores no tiene sabotaje: hacen falta dos clases en la misma
-dirección, y una clase abierta va a la arena, detrás del código, así que no se puede forzar desde un programa.
+`overlay_smoke`, en la red: dieciséis casos en las dos VMs y el sim, byte a byte, y ocho sabotajes (`BPVM_SABOTAJE_OVERLAY`)
+que tienen que cambiar la salida. La marca por clase de los destructores no tiene sabotaje: hacen falta dos clases en la
+misma dirección, y una clase abierta va a la arena, detrás del código, así que no se puede forzar desde un programa.
+
+### En las placas (4-nov)
+
+Con la imagen de `761e9c00` y el `Stdlib.pack` nuevo en la Metro, la P4 y la Nucleo, los quince programas de `overlay_smoke`,
+con la salida comparada con la de la VM-C del PC:
+
+| | Metro | P4 | Nucleo |
+|---|---|---|---|
+| los quince casos | 14 (`OvCargaFalla` no llega a cargar: `#787`) | 15 | 15 |
+| la pila de C de `run`: lo que sobra de 16 KB | 8,4 KB | 8,0 KB | no lo dice (`runStackFree` = -1) |
+| `malloc`, el pico de cargar con `Json` en marcha | 59 KB de 298 (55 sin overlay) | — | 41 KB de 130 |
+| un módulo de la zona de packs | `Json`, «cargado XIP desde pack», tres vueltas | sí | sí |
+| el mismo bucle de 200 000 vueltas con un literal, solo | 1295 ms | 1060 ms | 1079 ms |
+| y dentro de un overlay | 6620 ms: 27 µs por literal | 3225 ms: 11 µs | 2713 ms: 8 µs |
+
+Fuera de un overlay, un literal cuesta lo mismo que leer una variable. Dentro, lo que cuesta crear una cadena.
+
+**Una falsa alarma del GC, y era del diseño.** Al añadir la regla de los hilos, `tryExe` creció una local, todo se movió unos
+bytes y el caso 2 empezó a fallar en el sim: *«Overlay.unload: sigue vivo un objeto de OvComun.Caja»*, de un objeto que nadie
+alcanzaba. Quien lo marcaba era una palabra del bloque de datos de `Core`: un desplazamiento de una vtable que valía justo
+su dirección, 4612. El recorrido es conservador: una palabra sin `TAG` que cae en un objeto lo retiene de más. Normalmente da
+igual, pero `unload` pregunta qué sigue vivo de verdad, y esto lo hace mentir. En el PC no pasa: `Core` está en la memoria de
+la VM, el heap empieza detrás y ningún desplazamiento llega. En las placas sí, porque `Core` está en el pack y el heap empieza
+muy abajo (en 3008 en la Metro), en los mismos números que los desplazamientos: una lotería con cada objeto de una clase del
+programa. **El arreglo:** con el programa cerrado, mientras se descarga, el GC sólo se fía de los handles. Una palabra sin
+`TAG` nunca es una referencia a un objeto del heap: desde V4 sólo lo son los handles (`bpref_deref`). El resto del tiempo se
+deja como está: las natives pueden tener direcciones crudas en su pila de C, y ahí retener de más no hace daño. La prueba, el
+caso 6b: 3000 objetos de B, tres vueltas; su sabotaje va en el sim, que es donde `Core` está en un pack.
+
+Queda un caso, raro: una local de una función que llama a `unload` por debajo de `Main`, aún sin valor, puede tener un handle
+de lo que había antes en esa zona de la pila. Eso sí es un handle, y retiene el objeto. El `unload` se puede volver a intentar.
+
+**Los hilos** (Eduardo, 4-nov: *«Debería ser un error, el programa B debería asegurarse de cerrar sus hilos antes de
+salir»*). Si el `Main` de B acaba bien y deja hilos vivos, `tryExe` da `false`, con *«Overlay.tryExe: el programa ha acabado
+con hilos vivos»*: compara los hilos vivos de antes y de después, con el builtin 302 (`__overlayThreads`). Los hilos de A no
+cuentan. Si uno de A acaba mientras B deja uno suyo, la cuenta no lo ve, pero `unload` sigue negándose con otros hilos vivos.
