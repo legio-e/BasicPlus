@@ -7319,7 +7319,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#785` — la STM32 copia, rellena, busca y compara la memoria de un byte por vuelta, en todo el firmware: lleva newlib-nano (`--specs=nano.specs`), y sus `memcpy`, `memset`, `memchr` y `memcmp` son las pequeñas (abierta el 3-nov, al medir `#730`; **decidido, para cuando se conecte la STM32**)
+#### ✅ `#785` — la STM32 copia, rellena, busca y compara la memoria de un byte por vuelta, en todo el firmware: lleva newlib-nano (`--specs=nano.specs`), y sus `memcpy`, `memset`, `memchr` y `memcmp` son las pequeñas (abierta el 3-nov, al medir `#730` · **CERRADA el 4-nov**, `571bf24a`, medida en la Nucleo; la DK2, compilada, se graba en el próximo lote)
 
 Visto en el mapa de la Nucleo (`Nucleo_u575b.map`): `memcpy-stub.o` (26 bytes de código), `memset` (16), `memchr` (28)
 y `memcmp` (32), de `libc_nano.a`. Con ese tamaño sólo cabe un bucle de un byte por vuelta. Lo pagan la VM (178 `memcpy`,
@@ -7341,6 +7341,37 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   (decidido por Eduardo) pide una opción por fichero en el `.cproject` de las dos placas: con esto, al medirla. El
   punto 3 (las de bpstr en el heap y el GC), sin hacer en ese paso: el censo no apunta allí (`gc()`, igual antes y
   después), y la VM sigue con la `memcpy` y la `memset` de cada libc; si se mide que se nota, aquí.
+- **4-nov, hecha** (Eduardo: *«OK 1»*, con la Nucleo conectada): `bpstr/mem_libc.c`, sólo en la STM32, dentro de
+  `src/bpstr_vm.c`.
+  - `memcpy` es la de Arm con otro nombre; `memset` y `memchr`, las de bpstr. `memcmp` es propia, porque
+    `bpstr_compara` llama a `memcmp` con las direcciones desalineadas entre sí.
+  - **`memmove` no estaba en la lista**, y también iba de byte en byte; el GC la usa al compactar. Hacia abajo, la de
+    Arm, que va de abajo arriba palabra a palabra; hacia arriba, un bucle de 16 en 16.
+  - `memchr` llega antes a una dirección múltiplo de 8: se para en cuanto encuentra, y no lee fuera de esos 8 bytes
+    aunque `n` sea mayor que lo que hay (el `%.*s` de `printf`).
+  - `strlen` y `strcmp`, como estaban: son de nano, pequeñas, y las cadenas de BP llevan su longitud.
+  - El `-O2` de bpstr, por una opción de ese fichero en el `.cproject` de las dos placas.
+- **Probado:** en el PC, las de 0 a 300 bytes, `memmove` con el destino hasta 40 bytes a cada lado del origen, `memchr`
+  contra una página protegida, y quince sabotajes, todos pillados. En la Nucleo, las de verdad, con una imagen de
+  prueba: VERDE en las 1 038 624 comprobaciones de estas funciones; el único fallo de esa prueba, el catálogo de Kuhn,
+  que no llegó a subirse (es de bpstr, y ya pasó en las otras cuatro placas). La tanda del lote, IDÉNTICA al PC
+  (`compat/informes/tanda_785_nucleo.md`; las de GUI, saltadas).
+- **Medido en la Nucleo**, tres imágenes y dos vueltas: la del lote del 3-nov, la del paso 3 de `#730` y ésta. Lo de esta
+  ficha, frente a la del paso 3:
+
+  | | antes | ahora |
+  |---|---|---|
+  | copiar 2 KB (`StrFases`) | 87,5 µs | 13,2 µs |
+  | reservar 2 KB | 171 µs | 51 µs |
+  | `gc()` | 2,13 ms | 0,94 ms |
+  | `a + b` con 2 KB | 272 µs | 80 µs |
+  | `substring` con 2 KB | 102 µs | 39 µs |
+  | `AllocBench` | 1301 ms | 1221 ms |
+  | `fib(28)`, el control | 7526 ms | 7524 ms |
+
+  `strlen` y `charCodeAt`, ×0,75, por el `-O2` de bpstr. Nada peor: lo que sale marcado, `__bytesDe`, son 100 ns sobre
+  28 µs. Aquí el control no se mueve: en la STM32 no hay lotería del XIP (`#734`).
+- **El punto 3, ya sin objeto en la STM32:** el heap y el GC usan estas. En las demás, como quedó en `#730`.
 
 #### ✅ `#784` — la frecuencia de las ESP: la que dicen es un número escrito a mano —la S3 dice 240 MHz (en el `INFO` y en `Machine.cpuFreqHz()`) y va a 160; y `Machine.cpuFreqHz()` dice 240 también en la C3 y la C6, que van a 160—, y cambiarla en marcha, con la función de la Pico y con una clave del ENV (abierta el 3-nov, al mirar la frecuencia de la S3 tras `#737`; **CERRADA el 3-nov**, `53003a72`: hecha y probada en la S3 y la P4; la S3, a 160 sin la clave)
 
@@ -7964,6 +7995,15 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
 - **Otra vez el 2-nov** (la red del arreglo de `#774`, 22:40): `HeapEstres VM-C --smp=4`, «No space in heap» en un
   hilo, con 1499 creados; lo demás, verde. `check-estres` suelto, después, verde. El cambio de esa red no toca nada de
   lo que hace `HeapEstres` (una clase sin interfaces).
+- **4-nov, la causa: ni el apretón ni la fragmentación.** Con el reactivo (14 de 60 con el PC cargado), lo último antes
+  de fallar: una colecta deja 56 huecos, 4832 B libres y el mayor de 628; y justo después, «pedidos 32 B y no caben». El
+  que falla no ha colectado: encontró una colecta de otro en marcha y la esperó (`gc_stw`, `stw_esperar_al_otro`); al
+  volver, los demás workers ya se han gastado lo libre, reintenta UNA vez y lanza. Quien colecta no tiene ese
+  problema: se queda con el cerrojo y reserva el primero. Así que es un «No space in heap» falso: una colecta más
+  recuperaría sitio. Puede pasar en las placas con dos runs (la Pico 2, la Metro, la S3 y la P4), con el heap casi lleno.
+- **Probado en una copia de la VM-C:** si la colecta fue de otro y no cabe, colecta él, hasta tener una propia: de 14 de
+  60 a **0 de 60**, y en 10 pasadas entró dos veces, y las dos cupo. Con el heap más justo de verdad sigue fallando
+  (`--mem=69632`, 10 de 10), como debe. **Sin tocar el repositorio: por decidir (Eduardo).** Falta mirar la VM-Java.
 
 #### ✅ `#761` — JC/BP: el ternario con dos ramas que sólo comparten una interfaz (`arg ? new B2() : (IA) new B1()`) no compila: «iif: las dos ramas tienen que dar el mismo tipo…»; C# lo tipa por la conversión de una rama (abierta el 1-nov, al cerrar `#751`, que lo tapaba: `test-865` de Mono; **CERRADA el mismo día**, el commit de `#761`: era del traductor)
 

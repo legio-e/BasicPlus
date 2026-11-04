@@ -27,6 +27,24 @@
 
 ## Última sesión
 
+> **4-nov** — **los pendientes** (Eduardo: *«Continuamos con las pendientes»*), con la Metro, la Nucleo, la S3 y la P4
+> conectadas.
+> - **La lista de ayer estaba mal en parte:** copié los títulos de FICHAS, y `#693`–`#695` estaban hechas desde el 29-oct;
+>   Mono va por 447. FICHAS, corregida (`403d338c`): `#451(histórico)` no era un pendiente, `A4` volvió como H12 y
+>   `#460` ya no dice que no hay interfaces.
+> - **`#693`, cerrada:** vista en las cuatro placas, sin grabar nada.
+> - **`#695`, en la P4:** el «referencia nula» ya no sale; parar `GuiColorDemo` con un KILL aún dice «quedaron sin destruir
+>   4 objeto(s)», con la memoria entera. Por averiguar.
+> - **`#785`, cerrada** (*«OK 1»*; `571bf24a`): las cinco funciones de memoria para todo el firmware de la STM32, y bpstr con
+>   `-O2`. En la Nucleo, copiar 2 KB de 87 a 13 µs y `gc()` de 2,13 a 0,94 ms; `fib`, igual; la tanda, IDÉNTICA al PC.
+> - **`#762`, la causa:** un «No space in heap» falso. El que esperó la colecta de otro no reintenta con una suya. Probado
+>   en una copia: de 14 de 60 a 0 de 60. Sin tocar el repositorio; por decidir.
+>
+> **Para la próxima sesión:**
+> - la Nucleo lleva la imagen de `571bf24a`; la Metro, la S3 y la P4, la del paso 3 de `#730` (`cdbda834`); la DK2, la C3, la
+>   C5 y la C6, la del lote del 3-nov, por la mañana: la DK2 y las demás, en el próximo lote;
+> - sigue valiendo lo de `packRamBase` de abajo, para la C3, la C5 y la C6.
+>
 > **3-nov** — **los pendientes** (Eduardo: *«Continuamos con los pendientes, me da igual el orden»*): 28 abiertos,
 > en cinco grupos (diez con el análisis hecho y sólo por decidir; cuatro del IDE y el wire; cinco de las cadenas; seis
 > para el lote de placas; tres ideas largas).
