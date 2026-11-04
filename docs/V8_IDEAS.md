@@ -5339,7 +5339,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | 1 | `IDisposable`, una interfaz de verdad | `CsSystem` y el traductor | | +2 | 4-nov: Mono **450** |
 | 2 | un `struct` sin campos de instancia, una clase | el traductor | | +2 | 4-nov: Mono **468** |
 | 3 | lo suelto de la biblioteca (`d.ToString()`, `"x" is String`, `sizeof(int)`, `StringWriter`, `StreamWriter.Null`, `String.Concat`) | `CsSystem` y el traductor | +5 | | 4-nov: Mono **475** |
-| 4 | `??` con referencias | el traductor | | +1 | |
+| 4 | `??` con referencias | el traductor | | +1 | 4-nov: Mono **476** |
 | 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | |
 | 6 | un constructor estático sin llamadas dentro | el traductor | | +1 | |
 | 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | |
@@ -5371,6 +5371,14 @@ escribe BP, igual que al imprimirlo. `s is string` y `s is object` con una caden
 ningún sitio, `TextWriter.Null` y `StreamWriter.Null`) y `StringWriter`, que se queda lo que le escriben; `new StreamWriter(…)`
 sigue sin traducirse. Y `string.Concat`, la suma, con los argumentos sueltos. Caso `Suelto`. **Mono: 475** (+7), sin perder
 ninguna; fallan las mismas 6. **El tema 1: 111; el tema 2: 77.**
+
+**4. `??` con referencias, hecho.** `a ?? b` es `(a != null ? a : b)`: la derecha, sólo si hace falta, como C#. `null ?? b` es
+`b`, y lo que no puede ser null (`new X() ?? b`), él mismo. `a` va dos veces: si calcula algo, una vez, en una temporal delante
+de la sentencia (`Sacar.cs`), siempre que no se calcule antes otra cosa que tenga efecto ni esté bajo `&&`, `||`, `?:`; si no,
+sigue sin traducirse. Con una interfaz a la izquierda, la derecha lleva la conversión, que da su tipo al ternario de JC
+(`#761`). Y `x ??= y`, con algo que no calcula: `x = (x != null ? x : y)`. Caso `NuloOtro` (y `RechazosJc`, lo que no se puede
+adelantar). **Mono: 476** (+1, `gtest-333`), sin perder ninguna; fallan las mismas 6. **El tema 2: 78.** La estimación de 12
+que di contaba también `?.`: las otras 11 piden `?.`, que queda para su tema.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

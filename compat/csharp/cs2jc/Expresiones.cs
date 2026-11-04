@@ -350,7 +350,13 @@ namespace Cs2Jc
             switch (e)
             {
                 case AssignmentExpressionSyntax a:
-                    if (a.IsKind(SyntaxKind.CoalesceAssignmentExpression)) return Rechaza(a, Porque.H7(Porque.NuloYPunto));
+                    if (a.IsKind(SyntaxKind.CoalesceAssignmentExpression))
+                    {
+                        // `x ??= y`, con una referencia que no calcula nada: `x = (x != null ? x : y)`, como `a ?? b`
+                        if (EsNullable(m.GetTypeInfo(a.Left).Type) || !EsSimple(a.Left)) return Rechaza(a, Porque.H7(Porque.NuloYPunto));
+                        string x = Expr(a.Left);
+                        return x + " = (" + x + " != null ? " + x + " : " + Expr(a.Right) + ")";
+                    }
                     if (a.IsKind(SyntaxKind.UnsignedRightShiftAssignmentExpression)) return Rechaza(a, Porque.Pendiente(">>>="));
                     if (m.GetSymbolInfo(a.Left).Symbol is IEventSymbol) return Rechaza(a, Porque.H7(Porque.Delegados));
                     if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) && EsNullable(m.GetTypeInfo(a.Left).Type)) return AsignaNullable(a);
@@ -659,8 +665,7 @@ namespace Cs2Jc
             switch (b.Kind())
             {
                 case SyntaxKind.AsExpression: return Como(b);
-                case SyntaxKind.CoalesceExpression:
-                    return RechazaNodo(b);
+                case SyntaxKind.CoalesceExpression: return Coalesce(b);
                 case SyntaxKind.UnsignedRightShiftExpression:
                     return Rechaza(b, Porque.Pendiente(">>>"));
                 case SyntaxKind.IsExpression:
@@ -748,6 +753,43 @@ namespace Cs2Jc
             if (tipo == Hueco) return Hueco;
             string x = Atomo(b.Left);
             return "(" + x + " is " + tipo + " ? (" + tipo + ") " + x + " : null)";
+        }
+
+        /// `a ?? b` con referencias (H8, tema 2): `(a != null ? a : b)`, la derecha sólo si hace falta, como C#. `null ?? b`
+        /// es `b`, y lo que no puede ser null (`new X() ?? b`), él mismo. `a` va dos veces: si calcula algo, una vez, en una
+        /// temporal delante de la sentencia (Sacar), que no cambie el orden; si no se puede, sigue sin traducirse.
+        string Coalesce(BinaryExpressionSyntax b)
+        {
+            if (EsNullEscrito(b.Left)) return Expr(b.Right);
+            if (NoPuedeSerNull(b.Left)) return Expr(b.Left);
+            var tipo = m.GetTypeInfo(b.Left).Type;
+            if (EsSimple(b.Left))
+            {
+                string a = Expr(b.Left);
+                return "(" + a + " != null ? " + a + " : " + DerechaDeCoalesce(b, tipo) + ")";
+            }
+            if (sacar == null || BajoCondicional(b) || AlgoAntes(b)) return RechazaNodo(b);
+            if (sacar.Hechos.TryGetValue(b, out var hecho)) return hecho;
+            string t = Temporal();
+            sacar.Antes.Add(Tipo(tipo, b.Left) + " " + t + " = " + Expr(b.Left) + ";");
+            return sacar.Hechos[b] = "(" + t + " != null ? " + t + " : " + DerechaDeCoalesce(b, tipo) + ")";
+        }
+
+        /// La derecha de `a ?? b`: si `a` es una interfaz, con la conversión escrita, que da su tipo al ternario de JC (#761).
+        string DerechaDeCoalesce(BinaryExpressionSyntax b, ITypeSymbol izq)
+        {
+            var der = m.GetTypeInfo(b.Right).Type;
+            if (izq?.TypeKind == TypeKind.Interface && der != null && !SymbolEqualityComparer.Default.Equals(izq, der))
+                return "(" + Tipo(izq, b.Left) + ") " + Atomo(b.Right);
+            return Expr(b.Right);
+        }
+
+        /// ¿Lo que nunca es null: un `new`, `this`, una constante que no lo es?
+        bool NoPuedeSerNull(ExpressionSyntax e)
+        {
+            while (e is ParenthesizedExpressionSyntax p) e = p.Expression;
+            return e is ObjectCreationExpressionSyntax || e is ArrayCreationExpressionSyntax || e is ThisExpressionSyntax
+                   || m.GetConstantValue(e).Value != null;
         }
 
         string Prefijo(PrefixUnaryExpressionSyntax pu)

@@ -130,9 +130,15 @@ namespace Cs2Jc
         /// ¿Hay en la sentencia, fuera de `n`, otra cosa que pueda cambiar o mirar un campo: una llamada, un `new`, otra
         /// asignación, otro `++`?
         bool OtrosEfectos(SyntaxNode n) =>
-            sacar.Raiz.DescendantNodesAndSelf().Any(x => !x.Span.Contains(n.Span) && !n.Span.Contains(x.Span)
-                && (x is InvocationExpressionSyntax || x is ObjectCreationExpressionSyntax || x is AssignmentExpressionSyntax
-                    || x is PostfixUnaryExpressionSyntax pu && !pu.IsKind(SyntaxKind.SuppressNullableWarningExpression)
-                    || x is PrefixUnaryExpressionSyntax pr && (pr.IsKind(SyntaxKind.PreIncrementExpression) || pr.IsKind(SyntaxKind.PreDecrementExpression))));
+            sacar.Raiz.DescendantNodesAndSelf().Any(x => !x.Span.Contains(n.Span) && !n.Span.Contains(x.Span) && HaceAlgo(x));
+
+        /// ¿Se calcula antes que `n` (está escrito delante) algo que tiene efecto? Si es así, `n` no se puede adelantar.
+        bool AlgoAntes(SyntaxNode n) =>
+            sacar.Raiz.DescendantNodesAndSelf().Any(x => x.Span.End <= n.SpanStart && HaceAlgo(x));
+
+        static bool HaceAlgo(SyntaxNode x) =>
+            x is InvocationExpressionSyntax || x is ObjectCreationExpressionSyntax || x is AssignmentExpressionSyntax
+            || x is PostfixUnaryExpressionSyntax pu && !pu.IsKind(SyntaxKind.SuppressNullableWarningExpression)
+            || x is PrefixUnaryExpressionSyntax pr && (pr.IsKind(SyntaxKind.PreIncrementExpression) || pr.IsKind(SyntaxKind.PreDecrementExpression));
     }
 }

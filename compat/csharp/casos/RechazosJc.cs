@@ -37,6 +37,7 @@ class Programa
         bool a = true, b = false;
         bool c = a & b;                                        // le falta a JC: & sobre bool
         c |= b;                                                // le falta a JC: |= sobre bool
+        string u = Une(Nombre(), Nombre() ?? "x");             // ?? que calcula, detrás de otra llamada: no se puede adelantar
         Foo Foo = null;
         int x = Foo.X;                                         // ya se traduce (H8): la clase, Foo_
         int y = Doble(3);                                      // ya se traduce (H8): ((short) 3)
@@ -46,6 +47,8 @@ class Programa
     }
 
     static int Tono(Tonos t = Tonos.Alto) { return 0; }       // le falta a JC: un enum como valor por defecto
+    static string Nombre() { return null; }
+    static string Une(string a, string b) { return a + b; }
 }
 
 enum Tonos { Bajo, Alto }

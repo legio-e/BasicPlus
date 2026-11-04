@@ -1,0 +1,114 @@
+module CsNuloOtro
+{
+   class A
+   {
+   }
+
+   class B : A
+   {
+   }
+
+   interface I
+   {
+      function int V();
+   }
+
+   class C : I
+   {
+      @implement{ I }
+      public function int V()
+      {
+         return 1;
+      }
+   }
+
+   class Prueba
+   {
+      private static int llamadas = 0;
+      private static string campo = null;
+      private static function A Cuenta(A x)
+      {
+         Prueba.llamadas++;
+         return x;
+      }
+      private static function string Texto(string s)
+      {
+         Prueba.llamadas++;
+         return s;
+      }
+      public static function int Main()
+      {
+         A nada = null;
+         A algo = new A();
+         A a = (nada != null ? nada : algo);
+         if (a != algo)
+         {
+            return 1;
+         }
+         A b = (algo != null ? algo : Prueba.Cuenta(new A()));
+         if (b != algo || Prueba.llamadas != 0)
+         {
+            return 2;
+         }
+         A valor_s1 = Prueba.Cuenta(nada);
+         A c = (valor_s1 != null ? valor_s1 : algo);
+         if (c != algo || Prueba.llamadas != 1)
+         {
+            return 3;
+         }
+         A d = algo;
+         A e = new A();
+         if (d != algo || e == algo)
+         {
+            return 4;
+         }
+         string s = null;
+         string t = (s != null ? s : "x");
+         if (t != "x" || ((Prueba.campo != null ? Prueba.campo : "w")) != "w")
+         {
+            return 5;
+         }
+         string valor_s2 = Prueba.Texto("y");
+         if (((valor_s2 != null ? valor_s2 : "z")) != "y" || Prueba.llamadas != 2)
+         {
+            return 6;
+         }
+         A f = (nada != null ? nada : new B());
+         if (!(f is B))
+         {
+            return 7;
+         }
+         I i = null;
+         I j = (i != null ? i : (I) (new C()));
+         if (j.V() != 1)
+         {
+            return 8;
+         }
+         string u = (s != null ? s : (Prueba.campo != null ? Prueba.campo : "v"));
+         if (u != "v")
+         {
+            return 9;
+         }
+         s = (s != null ? s : "n");
+         if (s != "n")
+         {
+            return 10;
+         }
+         s = (s != null ? s : "m");
+         if (s != "n")
+         {
+            return 11;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}
