@@ -2380,8 +2380,17 @@ está soltando. Reproducir en el PC (las dos VMs) antes de tocar nada.
 - **4-nov, en la P4** (sin grabar nada; `GuiColorDemo` y `GuiClickDemo`, parados con un KILL a los 8 s): el «referencia
   nula» ya no sale. `GuiClickDemo` acaba limpio. `GuiColorDemo` dice «quedaron sin destruir 4 objeto(s) con destructor
   (el primero, de Gui.Label)» (el 12-oct, 8), y la memoria vuelve entera («0 bloques sin liberar; plataforma: 0
-  vivos»). Lo dice `termina` (`destruir.c`), sin el aviso del tope de 3 s; por qué acaba la ronda con cuatro dentro,
-  sin averiguar.
+  vivos»). Lo dice `termina` (`destruir.c`), sin el aviso del tope de 3 s;
+- **4-nov, la causa: el KILL se repite.** La fase del final limpia la marca del KILL para que corran los destructores,
+  pero el `poll` del RUN es «pegajoso» (`run_poll`): devuelve 1 en cada vuelta, y `io` lo mira cada 5 ms y vuelve a
+  pedir el KILL. Así que, con `io`, los destructores tienen unos milisegundos: tres o cuatro de `GuiColorDemo` se
+  quedan fuera, y varían de una vez a otra. Sin `io` no pasa, porque `#668` lo guardó en el planificador; y `test-kill`
+  no lo veía: sus destructores tardan menos;
+- **4-nov, arreglado** (`39cda457`): si la fase la abrió un KILL, el que se pida ahora es ese mismo, repetido
+  (`bpvm_request_kill`); manda lo apuntado en `d->matado`, y a la fase la vigila su tope de 3 s. La VM-Java no lo
+  necesita: su KILL llega una vez por mensaje. `test-kill`, fases 11 y 12 (`KillDestruyeLento`, con `io` y el poll
+  pegajoso): de 0 a 10 de 10. La red, VERDE. **Por ver en placa:** `GuiColorDemo` en la P4, parado con un KILL, sin
+  «quedaron sin destruir».
 
 #### 🔵 `#696` — el IDE del ZIP compila contra un `Core` distinto del de las placas: «compilado contra otra interfaz (b8813a81 != 3897795d); enlace tardío» (abierta el 12-oct, en el `F1`; Eduardo: no es grave)
 
@@ -2389,6 +2398,11 @@ En la P4, cada programa que compila el IDE del ZIP: el `Core` del IDE no es el `
 IDE dice de `Json`, `Collections` y `Str` «otra compilación (CRC distinto): vale». El enlace tardío lo resuelve, pero la
 release debería llevar la misma biblioteca en los dos lados. Mirar qué stdlib lleva dentro `BpIde-7.0.jar` y cuál las
 imágenes (la red dice «los 18 módulos embebidos son los de bpstdlib»).
+- **4-nov, mirado en el ZIP publicado (el rehecho el 13-oct, `dist/BasicPlus-7.0-win`): está bien.** `b8813a81`, la
+  interfaz del aviso, no aparece en ningún fichero; `3897795d` está en `bpstdlib/`, en los cinco packs y en las ocho
+  imágenes. El jar no lleva ningún `.mod`: el IDE compila contra `bpstdlib/`, por el `BpVM.cfg`. Y su compilador, en una
+  copia, sella `3897795d`. Probada y descartada una hipótesis: que los `.bp`, copiados después que los `.mod`, los dejaran
+  por rancios; con unos o con otros más nuevos, sella lo mismo. Lo del 12-oct era de un montaje anterior.
 
 #### ✅ `#691` — con `vmheap` por debajo del suelo, el RUN dice «configurar particiones»; y la STM32, sin VM, se da por sana (abierta el 12-oct, en el `F1` de V7, al probar `#686` en la P4 · **CERRADA el mismo día**, `2842cd70` y el commit del lote; en placa, la Nucleo, la Metro y el kit P4 EV)
 
@@ -7974,7 +7988,7 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
     paso», arriba): por eso el argumento de la red es de la 1252.
 - La red, VERDE (14:33). El `bpvm-sim.exe` del IDE (`bpgenvm-c/build/`), rehecho con el manifiesto.
 
-#### 🔵 `#762` — la red: el estrés del heap (`HeapEstres` en la VM-C con el heap justo, 80 KB) se queda a veces sin heap con varios workers: «No space in heap» en un hilo (abierta el 1-nov, en la red de `#752`; preexistente; **sólo análisis**)
+#### ✅ `#762` — la red: el estrés del heap (`HeapEstres` en la VM-C con el heap justo, 80 KB) se queda a veces sin heap con varios workers: «No space in heap» en un hilo (abierta el 1-nov, en la red de `#752`; preexistente · **CERRADA el 4-nov**, `2b8a6ef3`)
 
 - **Cómo salió:** la red de `#752` (1-nov, 14:10), en ROJO sólo por esto: `HeapEstres VM-C --smp=2`, «excepcion no
   atrapada en un hilo (el hilo termina): No space in heap», con 1306 creados de 1600. Lo demás, verde. Con el mismo
@@ -8003,7 +8017,13 @@ que lleva la newlib entera, la `memcpy` es la de Arm en ensamblador; en las ESP,
   recuperaría sitio. Puede pasar en las placas con dos runs (la Pico 2, la Metro, la S3 y la P4), con el heap casi lleno.
 - **Probado en una copia de la VM-C:** si la colecta fue de otro y no cabe, colecta él, hasta tener una propia: de 14 de
   60 a **0 de 60**, y en 10 pasadas entró dos veces, y las dos cupo. Con el heap más justo de verdad sigue fallando
-  (`--mem=69632`, 10 de 10), como debe. **Sin tocar el repositorio: por decidir (Eduardo).** Falta mirar la VM-Java.
+  (`--mem=69632`, 10 de 10), como debe.
+- **4-nov, hecha** (Eduardo: *«1 OK»*): `heap_reservar` repite hasta tener una colecta propia (`gc_stw` dice de quién
+  fue). La VM-Java no lo necesitaba: `heapAlloc` colecta siempre ella, así que la VM-C queda como la de referencia.
+- **La prueba:** `test_cola`, la parte 21, con `ReservaAjena` (dos hilos, uno con cadenas cortas y otro con bloques de
+  2 KB) y el heap justo. Dejada a la suerte no servía: esa carrera sale una vez de cada miles de colectas, y el sabotaje
+  salía verde. Con una ventana de ensayo (`ensayo_reserva_ms`: la reserva sin sitio tarda en ir a colectar, y otro
+  colecta antes), 10 de 10 con el arreglo y 0 de 10 con `--sabotaje-reserva`. La red, VERDE.
 
 #### ✅ `#761` — JC/BP: el ternario con dos ramas que sólo comparten una interfaz (`arg ? new B2() : (IA) new B1()`) no compila: «iif: las dos ramas tienen que dar el mismo tipo…»; C# lo tipa por la conversión de una rama (abierta el 1-nov, al cerrar `#751`, que lo tapaba: `test-865` de Mono; **CERRADA el mismo día**, el commit de `#761`: era del traductor)
 
@@ -10495,7 +10515,7 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
       `sdkconfig` ya los tenían: no hay imagen nueva.
   - **Cerrada.** La observación de la memoria (el punto 9) sigue en `#710`, abierta.
 
-#### 🔵 `#706` — `esp_hosted` 3.0.9, en la C6: tras desinicializar la WiFi (`esp_wifi_deinit`), no vuelve a iniciarse sin reiniciar la C6 (abierta el 19-oct, en el paso 1 del H3; es del componente de Espressif, no de BasicPlus)
+#### ✅ `#706` — `esp_hosted` 3.0.9, en la C6: tras desinicializar la WiFi (`esp_wifi_deinit`), no vuelve a iniciarse sin reiniciar la C6 (abierta el 19-oct, en el paso 1 del H3; es del componente de Espressif, no de BasicPlus · **CERRADA el 4-nov, por el diseño**, Eduardo: *«cerrar 706 OK»*)
 
 - **Medido** (19-oct, la P4 con la prueba `C:\tmp\v8wifi\p4_wifi`): la primera vuelta, entera; en la segunda,
   `esp_wifi_init` contesta que sí y el `esp_wifi_set_mode` que lo sigue da `ESP_ERR_WIFI_NOT_INIT`, igual en la
@@ -10514,6 +10534,8 @@ Lo que queda: `#723` (los streams, por diseñar) y `#724` (el texto de los packs
   cero, con la bandera baja. Comprobado en la P4: tres vueltas, sin el fallo. Sólo saldría si la WiFi se
   desinicializa con la C6 encendida por el Bluetooth, y ahí basta con parar la radio. **Propuesta:** cerrarla por el
   diseño, sin tocar la C6.
+- **4-nov, cerrada** con esa propuesta. Para el H3: apagar del todo es la C6 en reset, y con el Bluetooth encendido se
+  para la radio (`esp_wifi_stop`), sin `esp_wifi_deinit`.
 
 #### ✅ `#705` — `Net.tcpClose` no deja su valor en la pila: dos llamadas sueltas cambian las variables locales de antes, en las dos VMs igual (abierta el 19-oct, al analizar la WiFi, H3; preexistente, de `#241`; **CERRADA el 23-oct**: empuja su 0 en las dos VMs, `821a558e`)
 

@@ -37,12 +37,21 @@
 >   4 objeto(s)», con la memoria entera. Por averiguar.
 > - **`#785`, cerrada** (*«OK 1»*; `571bf24a`): las cinco funciones de memoria para todo el firmware de la STM32, y bpstr con
 >   `-O2`. En la Nucleo, copiar 2 KB de 87 a 13 µs y `gc()` de 2,13 a 0,94 ms; `fib`, igual; la tanda, IDÉNTICA al PC.
-> - **`#762`, la causa:** un «No space in heap» falso. El que esperó la colecta de otro no reintenta con una suya. Probado
->   en una copia: de 14 de 60 a 0 de 60. Sin tocar el repositorio; por decidir.
+> - **`#762`, cerrada** (*«1 OK»*; `2b8a6ef3`): un «No space in heap» falso. El que esperó la colecta de otro no reintentaba
+>   con una suya; ahora sí, como la VM-Java. De 14 fallos de 60 a 0 de 60. La prueba, dejada a la suerte, no veía nada:
+>   hizo falta una ventana de ensayo (`test_cola`, la parte 21).
+> - **`#706`, cerrada** por el diseño (*«cerrar 706 OK»*).
+> - **`#695`, arreglada** (`39cda457`): tras un KILL, `io` repetía el KILL cada 5 ms y cortaba los destructores. De 0 a 10 de
+>   10 en `test-kill`; falta verla en la P4.
+> - **`#696`, mirada:** el ZIP publicado está bien (un solo `Core` en todo). Propuesto cerrarla.
+> - **`#738`:** preparada la imagen de prueba (scratchpad, `n738/tmp738.c`), con el plan a Eduardo.
+> - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
+>   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 >
 > **Para la próxima sesión:**
 > - la Nucleo lleva la imagen de `571bf24a`; la Metro, la S3 y la P4, la del paso 3 de `#730` (`cdbda834`); la DK2, la C3, la
->   C5 y la C6, la del lote del 3-nov, por la mañana: la DK2 y las demás, en el próximo lote;
+>   C5 y la C6, la del lote del 3-nov, por la mañana. Ninguna lleva `#762` ni `#695`: en el próximo lote, y ahí `#695` en
+>   la P4 y `#785` en la DK2;
 > - sigue valiendo lo de `packRamBase` de abajo, para la C3, la C5 y la C6.
 >
 > **3-nov** — **los pendientes** (Eduardo: *«Continuamos con los pendientes, me da igual el orden»*): 28 abiertos,
