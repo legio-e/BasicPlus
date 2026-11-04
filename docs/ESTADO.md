@@ -116,6 +116,8 @@
 >   notó en que los números iban de 200 en 200; repetida con `w.esperar`. El aviso estaba en el propio `wire_serie` (`#495`).
 >
 > **Para la próxima sesión:**
+> - H8: tres decisiones de Eduardo, `new A[n]` (y su forma en BP), los tipos anónimos y `ulong`, y si `while` y `for` llevan nombre; y lo
+>   siguiente, el tema 4, los parámetros (`V8_IDEAS` §E9). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
 > - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;
 > - `#745` y `#710` siguen abiertas (Eduardo, 4-nov: *«La 3 no»*);
 > - la Metro, la P4 y la Nucleo llevan la imagen de `35297826`. La S3, la del paso 3 de `#730`
