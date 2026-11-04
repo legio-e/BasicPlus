@@ -81,6 +81,22 @@ namespace Cs2Jc
             return false;
         }
 
+        // ---------------------------------------------------------------------------------- las interfaces de .NET
+
+        /// Las interfaces de .NET que tiene CsSystem (H8, tema 2): una clase del programa las implementa como las suyas,
+        /// y una variable puede ser de su tipo.
+        static readonly HashSet<string> InterfacesDeCsSystem = new HashSet<string> { "System.IDisposable" };
+
+        static bool EsDeCsSystem(ITypeSymbol t) => t != null && InterfacesDeCsSystem.Contains(NombreCompleto(t));
+
+        /// El nombre en JC de una interfaz de CsSystem, con su import; null si no lo es.
+        string InterfazDeCsSystem(ITypeSymbol t)
+        {
+            if (!EsDeCsSystem(t)) return null;
+            imports.Add("CsSystem");
+            return "CsSystem." + t.Name;
+        }
+
         // ------------------------------------------------------------------------- las funciones y las constantes
 
         /// Los métodos estáticos de .NET que tiene la librería, por su firma en C# (la sobrecarga que eligió C#, con sus
@@ -205,6 +221,10 @@ namespace Cs2Jc
                     return "(" + string.Join(" == ", inv.ArgumentList.Arguments.Select(a => Expr(a.Expression))) + ")";
                 case "System.String.Equals(System.String)":
                     if (objeto != null) return "(" + Expr(objeto.Expression) + " == " + Expr(inv.ArgumentList.Arguments[0].Expression) + ")";
+                    break;
+                // `d.Dispose()` por la interfaz: la de CsSystem (H8, tema 2)
+                case "System.IDisposable.Dispose()":
+                    if (objeto != null) return Expr(objeto.Expression) + ".Dispose()";
                     break;
             }
             switch (clave)

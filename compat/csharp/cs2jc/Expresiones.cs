@@ -670,7 +670,7 @@ namespace Cs2Jc
                     if (t != null && t.IsValueType && ClaseDeCaja(t) != null && izq != null && !izq.IsValueType)
                         return Expr(b.Left) + " is " + ClaseDeCaja(t);
                     if (t == null || t.IsValueType || EsCadena(t)
-                        || (!DelPrograma(t) && ExcepcionJc(t) == null && t.SpecialType != SpecialType.System_Object))
+                        || (!DelPrograma(t) && ExcepcionJc(t) == null && !EsDeCsSystem(t) && t.SpecialType != SpecialType.System_Object))
                         return Rechaza(b, Porque.Pendiente("is " + NombreCompleto(t)));
                     return Expr(b.Left) + " is " + Tipo(t, b.Right);
                 }
@@ -729,7 +729,7 @@ namespace Cs2Jc
                 if (ClaseDeCaja(DeNullable(t)) == null || EsUInt(DeNullable(t))) return Rechaza(b, Porque.H7(Porque.As));
                 tipo = CajaDeNullable(t);
             }
-            else if (t.SpecialType == SpecialType.System_Object || (t is INamedTypeSymbol nt && (DelPrograma(nt) || ExcepcionJc(nt) != null)))
+            else if (t.SpecialType == SpecialType.System_Object || (t is INamedTypeSymbol nt && (DelPrograma(nt) || ExcepcionJc(nt) != null || EsDeCsSystem(nt))))
             {
                 // subir: el mismo objeto (o null), como la conversión hacia arriba, que JC no escribe
                 if (m.ClassifyConversion(b.Left, t).IsImplicit) return Expr(b.Left);
@@ -932,6 +932,7 @@ namespace Cs2Jc
                     }
                 }
                 if (ExcepcionJc(nt) is string ex) return ex;              // Exception, RuntimeError o la de CsSystem
+                if (InterfazDeCsSystem(nt) is string ci) return ci;       // IDisposable (H8, tema 2)
                 if (nt.TypeKind == TypeKind.Interface) return Rechaza(donde, PorInterfazAjena(nt));
                 return Rechaza(donde, Porque.DeNet("tipo " + NombreCompleto(nt)));
             }

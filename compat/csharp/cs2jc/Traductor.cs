@@ -265,14 +265,15 @@ namespace Cs2Jc
                 else if (NombreCompleto(b) == "System.Attribute") { }
                 else Rechaza(lugarBase, Porque.DeNet("hereda de " + NombreCompleto(b)));
             }
-            // Las interfaces (H7.3, #756; antes, con #745, una sola y como clase base): las del programa, en la cabecera
-            // detrás del padre, como en C# (`class C : B, I, J`); las de .NET, la biblioteca. IDisposable no cuenta:
-            // basta con su Dispose.
+            // Las interfaces (H7.3, #756; antes, con #745, una sola y como clase base): las del programa y las de CsSystem
+            // (IDisposable), en la cabecera detrás del padre, como en C# (`class C : B, I, J`); las demás de .NET, la biblioteca.
             var supertipos = new List<string>();
             if (base_ != null) supertipos.Add(base_);
-            foreach (var i in s.Interfaces.Where(i => DelPrograma(i))) supertipos.Add(Tipo(i, lugarBase));
-            foreach (var i in s.Interfaces.Where(i => !DelPrograma(i) && NombreCompleto(i) != "System.IDisposable"))
-                Rechaza(lugarBase, PorInterfazAjena(i));
+            foreach (var i in s.Interfaces)
+            {
+                if (DelPrograma(i) || EsDeCsSystem(i)) supertipos.Add(Tipo(i, lugarBase));
+                else Rechaza(lugarBase, PorInterfazAjena(i));
+            }
 
             Linea((s.DeclaredAccessibility == Accessibility.Public ? "public " : "") + "class " + NombreTipo(s)
                   + (supertipos.Count > 0 ? " : " + string.Join(", ", supertipos) : ""));
@@ -309,7 +310,7 @@ namespace Cs2Jc
             var padres = new List<string>();
             foreach (var i in s.Interfaces)
             {
-                if (DelPrograma(i)) padres.Add(Tipo(i, lugar));
+                if (DelPrograma(i) || EsDeCsSystem(i)) padres.Add(Tipo(i, lugar));
                 else Rechaza(lugar, PorInterfazAjena(i));
             }
             Linea((s.DeclaredAccessibility == Accessibility.Public ? "public " : "") + "interface " + NombreTipo(s)
@@ -356,11 +357,13 @@ namespace Cs2Jc
         void Anotaciones(ISymbol s)
         {
             var ifaces = new List<string>();
-            foreach (var i in claseActual.AllInterfaces.Where(DelPrograma))
+            foreach (var i in claseActual.AllInterfaces.Where(i => DelPrograma(i) || EsDeCsSystem(i)))
                 foreach (var mi in i.GetMembers().Where(x => x is IPropertySymbol || (x is IMethodSymbol xm && xm.MethodKind == MethodKind.Ordinary)))
                 {
                     var impl = claseActual.FindImplementationForInterfaceMember(mi);
-                    if (SymbolEqualityComparer.Default.Equals(impl, s) && !ifaces.Contains(NombreTipo(i))) ifaces.Add(NombreTipo(i));
+                    // la anotación lleva el nombre sin el módulo (manual §9.8)
+                    string nombre = DelPrograma(i) ? NombreTipo(i) : i.Name;
+                    if (SymbolEqualityComparer.Default.Equals(impl, s) && !ifaces.Contains(nombre)) ifaces.Add(nombre);
                 }
             if (ifaces.Count > 0) Linea("@implement{ " + string.Join(", ", ifaces) + " }");
             ISymbol redef = (s as IMethodSymbol)?.OverriddenMethod ?? (ISymbol) (s as IPropertySymbol)?.OverriddenProperty;

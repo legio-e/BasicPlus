@@ -20,9 +20,10 @@ module CsVarios
       }
    }
 
-   class Recurso
+   class Recurso : CsSystem.IDisposable
    {
       public static int Cerrados { get; set; } = 0;
+      @implement{ IDisposable }
       public function void Dispose()
       {
          Recurso.Cerrados++;

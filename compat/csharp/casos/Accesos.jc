@@ -83,7 +83,7 @@ module CsAccesos
          catch (CsSystem.ArgumentNullException excepcion_cs1)
          {
          }
-         Object o;
+         Object o = null;
          o = new Object();
          if (true)
          {

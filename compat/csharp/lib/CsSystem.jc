@@ -70,6 +70,14 @@ module CsSystem
       public function FormatException(string message) : base(message) { }
    }
 
+   // ------------------------------------------------------------------------------------------- las interfaces
+   // Las de .NET que implementan las clases del programa: `IDisposable`, la de `using` (H8, tema 2).
+
+   public interface IDisposable
+   {
+      function void Dispose();
+   }
+
    // ------------------------------------------------------------------------------------------- Math y los números
    // Los métodos estáticos de .NET, como funciones del módulo con el nombre de su tipo delante (`Math.Abs` es
    // `Math_Abs`): una clase Math, Double o Int32 chocaría con lo de BP (el módulo Math, las cajas de Core). Las

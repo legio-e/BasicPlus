@@ -10,7 +10,7 @@ module CsAmbitos
       }
       private static function int Elige(int v)
       {
-         int a;
+         int a = 0;
          int i_s1 = 0;
          switch (v)
          {

@@ -1,0 +1,239 @@
+module CsRecursos
+{
+   import CsSystem;
+
+   class Recurso : CsSystem.IDisposable
+   {
+      public static int Vivos { get; set; } = 0;
+      public static string Orden { get; set; } = "";
+      public string Nombre { get; set; } = null;
+      public function Recurso(string nombre)
+      {
+         this.Nombre = nombre;
+         Recurso.Vivos++;
+      }
+      @implement{ IDisposable }
+      public function void Dispose()
+      {
+         Recurso.Vivos--;
+         Recurso.Orden += this.Nombre;
+      }
+   }
+
+   class Hija : Recurso
+   {
+      public function Hija() : base("h")
+      {
+      }
+   }
+
+   interface IConAlgo : CsSystem.IDisposable
+   {
+      function int Algo();
+   }
+
+   class ConAlgo : IConAlgo
+   {
+      public static int Cerrados { get; set; } = 0;
+      @implement{ IConAlgo }
+      public function int Algo()
+      {
+         return 7;
+      }
+      @implement{ IDisposable }
+      public function void Dispose()
+      {
+         ConAlgo.Cerrados++;
+      }
+   }
+
+   class Prueba
+   {
+      private static function CsSystem.IDisposable Dame()
+      {
+         return new Recurso("d");
+      }
+      private static function int Sale()
+      {
+         if (true)
+         {
+            CsSystem.IDisposable d = Prueba.Dame();
+            try
+            {
+               return 3;
+            }
+            finally
+            {
+               if (d != null)
+               {
+                  d.Dispose();
+               }
+            }
+         }
+      }
+      public static function int Main()
+      {
+         if (true)
+         {
+            Recurso r = new Recurso("a");
+            try
+            {
+               if (Recurso.Vivos != 1)
+               {
+                  return 1;
+               }
+            }
+            finally
+            {
+               if (r != null)
+               {
+                  r.Dispose();
+               }
+            }
+         }
+         if (Recurso.Vivos != 0 || Recurso.Orden != "a")
+         {
+            return 2;
+         }
+         if (Prueba.Sale() != 3 || Recurso.Orden != "ad")
+         {
+            return 3;
+         }
+         if (true)
+         {
+            Hija h = new Hija();
+            try
+            {
+            }
+            finally
+            {
+               if (h != null)
+               {
+                  h.Dispose();
+               }
+            }
+         }
+         if (Recurso.Orden != "adh")
+         {
+            return 4;
+         }
+         if (true)
+         {
+            IConAlgo c = new ConAlgo();
+            try
+            {
+               if (c.Algo() != 7)
+               {
+                  return 5;
+               }
+            }
+            finally
+            {
+               if (c != null)
+               {
+                  c.Dispose();
+               }
+            }
+         }
+         if (ConAlgo.Cerrados != 1)
+         {
+            return 6;
+         }
+         if (true)
+         {
+            Recurso x = new Recurso("x");
+            try
+            {
+               Recurso y = new Recurso("y");
+               try
+               {
+               }
+               finally
+               {
+                  if (y != null)
+                  {
+                     y.Dispose();
+                  }
+               }
+            }
+            finally
+            {
+               if (x != null)
+               {
+                  x.Dispose();
+               }
+            }
+         }
+         if (Recurso.Orden != "adhyx")
+         {
+            return 7;
+         }
+         Recurso nulo = null;
+         if (true)
+         {
+            Recurso recurso_cs1 = nulo;
+            try
+            {
+            }
+            finally
+            {
+               if (recurso_cs1 != null)
+               {
+                  recurso_cs1.Dispose();
+               }
+            }
+         }
+         if (true)
+         {
+            CsSystem.IDisposable recurso_cs2 = Prueba.Dame();
+            try
+            {
+            }
+            finally
+            {
+               if (recurso_cs2 != null)
+               {
+                  recurso_cs2.Dispose();
+               }
+            }
+         }
+         if (Recurso.Orden != "adhyxd")
+         {
+            return 8;
+         }
+         Object o = new Recurso("o");
+         if (!(o is CsSystem.IDisposable))
+         {
+            return 9;
+         }
+         CsSystem.IDisposable i = (CsSystem.IDisposable) o;
+         i.Dispose();
+         if (Recurso.Orden != "adhyxdo")
+         {
+            return 10;
+         }
+         CsSystem.IDisposable j = (o is CsSystem.IDisposable ? (CsSystem.IDisposable) o : null);
+         if (j == null)
+         {
+            return 11;
+         }
+         Object nada = new Object();
+         CsSystem.IDisposable k = (nada is CsSystem.IDisposable ? (CsSystem.IDisposable) nada : null);
+         if (k != null)
+         {
+            return 12;
+         }
+         println(Recurso.Orden);
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

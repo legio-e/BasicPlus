@@ -56,13 +56,13 @@ module CsPartidas
          {
             return 3;
          }
-         Object o;
+         Object o = null;
          o = Programa.Lee(1);
          if ((o) == null)
          {
             return 4;
          }
-         int a, b;
+         int a = 0, b = 0;
          b = 3;
          a = b;
          if (a != 3 || b != 3)

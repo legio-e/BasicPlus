@@ -209,30 +209,51 @@ namespace Cs2Jc
         }
 
         /// `using (R r = …) cuerpo`: `R r = …; try { cuerpo } finally { if (r != null) r.Dispose(); }`, lo que hace C#,
-        /// dentro de un `if (true)` que da a `r` su ámbito.
+        /// dentro de un `if (true)` que da a `r` su ámbito. Con varias variables, una dentro de otra, como dice C#. El tipo,
+        /// el que sea: `IDisposable` es una interfaz de CsSystem (H8, tema 2), y una clase que la implementa tiene su
+        /// `Dispose`, suyo o de su padre.
         void Using(UsingStatementSyntax u)
         {
-            string nombre;
             Linea("if (true)");
             Linea("{");
             sangria++;
-            if (u.Declaration != null)
-            {
-                if (u.Declaration.Variables.Count != 1) { Rechaza(u, Porque.Pendiente("using con varias variables")); }
-                var v = (ILocalSymbol) m.GetDeclaredSymbol(u.Declaration.Variables[0]);
-                nombre = Ident(v.Name);
-                Declaracion(u.Declaration, false);
-                CompruebaDispose(v.Type, u);
-            }
+            if (u.Declaration != null) UsingVariable(u, 0);
             else
             {
                 var t = m.GetTypeInfo(u.Expression).Type;
-                nombre = "recurso_cs" + (++nombresNuevos);
+                if (t == null) Rechaza(u, Porque.Pendiente("using de un null"));
+                string nombre = "recurso_cs" + (++nombresNuevos);
                 Linea(Tipo(t, u.Expression) + " " + nombre + " = " + Expr(u.Expression) + ";");
-                CompruebaDispose(t, u);
+                Linea("try");
+                CuerpoDe(u.Statement);
+                UsingFinally(nombre);
             }
+            sangria--;
+            Linea("}");
+        }
+
+        /// La variable `i` de un `using`, y dentro las que siguen y su cuerpo.
+        void UsingVariable(UsingStatementSyntax u, int i)
+        {
+            var vars = u.Declaration.Variables;
+            var v = (ILocalSymbol) m.GetDeclaredSymbol(vars[i]);
+            if (vars.Count == 1) Declaracion(u.Declaration, false);
+            else Linea(Tipo(v.Type, u.Declaration.Type) + " " + Ident(v.Name) + " = " + Expr(vars[i].Initializer.Value) + ";");
             Linea("try");
-            CuerpoDe(u.Statement);
+            if (i + 1 == vars.Count) CuerpoDe(u.Statement);
+            else
+            {
+                Linea("{");
+                sangria++;
+                UsingVariable(u, i + 1);
+                sangria--;
+                Linea("}");
+            }
+            UsingFinally(Ident(v.Name));
+        }
+
+        void UsingFinally(string nombre)
+        {
             Linea("finally");
             Linea("{");
             Linea("   if (" + nombre + " != null)");
@@ -240,18 +261,6 @@ namespace Cs2Jc
             Linea("      " + nombre + ".Dispose();");
             Linea("   }");
             Linea("}");
-            sangria--;
-            Linea("}");
-        }
-
-        /// Un `using` sólo con una clase del programa que tenga su `Dispose()`.
-        void CompruebaDispose(ITypeSymbol t, SyntaxNode donde)
-        {
-            if (t == null || !DelPrograma(t) || t.TypeKind != TypeKind.Class)
-                Rechaza(donde, Porque.Pendiente("using de algo que no es una clase del programa"));
-            else if (!t.GetMembers("Dispose").OfType<IMethodSymbol>().Any(x => x.Parameters.Length == 0)
-                     && !t.GetMembers().OfType<IMethodSymbol>().Any(x => x.ExplicitInterfaceImplementations.Any(i => i.Name == "Dispose")))
-                Rechaza(donde, Porque.Pendiente("using de una clase cuyo Dispose está en su padre"));
         }
 
         void If(IfStatementSyntax i)

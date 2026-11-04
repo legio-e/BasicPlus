@@ -5324,6 +5324,38 @@ dado valor: `#776`), y cuatro que no se traducían fallan ahora por otra cosa: `
 (`#772`), `test-77` y `test-504` (`#778`). Con `#777` (una constante no puede ser `null`; el traductor escribe la de C#
 como una variable), `test-243` funciona: **Mono: 442**.
 
+### Los temas 1 y 2, otra vez (4-nov)
+
+Eduardo: *«Ahora me gustaría probar el primer y segundo grupo a ver cuantas pasan, y de las que no pasan a ver si podemos
+hacer algo para que pasen algunas mas.»* Con el lote del 4-nov (Mono, 447, y fallan las 6 de siempre): **el tema 1, 106
+de 141; el tema 2, «static, anidadas y partial», 73 de 123**, y ninguna falla. Leídas una a una las 85 que no pasan,
+doce propuestas por lo que da cada una. Eduardo: *«1) al 7) si, el 8 lo hablamos, el 12 si»*; del 9 y el 11, nada, así que
+no se tocan; y del 10, el `goto`: *«No vamos a ñadir labels ni goto. Pero se puede reemplazar por do ... loop y break. Lo
+que igual necesitamos es si tenemos varios loops anidados poder hacer un break a un loop concreto. No se poder poner 'do'
+'miLoop' ... break miLoop ... Loop»*: por analizar.
+
+| # | ajuste | dónde | tema 1 | tema 2 | hecho |
+|---|---|---|---|---|---|
+| 1 | `IDisposable`, una interfaz de verdad | `CsSystem` y el traductor | | +2 | 4-nov: Mono **450** |
+| 2 | un `struct` sin campos de instancia, una clase | el traductor | | +2 | |
+| 3 | lo suelto de la biblioteca (`d.ToString()`, `"x" is String`, `sizeof(int)`, `StringWriter`, `StreamWriter.Null`, `String.Concat`) | `CsSystem` y el traductor | +5 | | |
+| 4 | `??` con referencias | el traductor | | +1 | |
+| 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | |
+| 6 | un constructor estático sin llamadas dentro | el traductor | | +1 | |
+| 7 | dos sueltas: una local sin usar ni valor, `static bool x = x = F();` | el traductor | +1 | +1 | |
+| 8 | un `Type` mínimo: el traductor escribe una tabla con las clases del programa | por hablar | +2 | +9 | |
+| 9 | los tipos anónimos | sin decidir | +2 | +2 | |
+| 10 | `goto`, con `break` a un bucle con nombre | por analizar | +4 | | |
+| 11 | `ulong`, como el `uint` | sin decidir | +2 | +1 | |
+| 12 | `&`, `\|` y `^` entre `bool`, en JC como en Java | el compilador | | +1 | |
+
+**1. `IDisposable`, hecho.** Una interfaz de `CsSystem`, `function void Dispose()`: una clase del programa la implementa
+como las suyas (`class C : CsSystem.IDisposable`, y en su método, `@implement{ IDisposable }`, sin el módulo), una interfaz
+del programa hereda de ella, una variable puede ser de su tipo, y `is`, `as`, una conversión y `d.Dispose()` funcionan. Así
+`using` vale con cualquier tipo (antes, sólo con una clase del programa con su `Dispose`, no heredado); con varias
+variables, una dentro de otra, como dice C#. Caso `Recursos`. **Mono: 450** (+3: `test-713`, `test-727` y `test-53`), sin
+perder ninguna; fallan las mismas 6. **El tema 2: 75.**
+
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
 Eduardo (31-oct): *«El problema de la interfaz, quizás deberiamos añadir una interfaz a JC. En los módulos ya estamos
