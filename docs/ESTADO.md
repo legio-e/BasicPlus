@@ -83,13 +83,19 @@
 >   como lápida), y la zona sólo tenía ése. `PACK_FORMAT` y el pack: 288 KB libres. Antes, lo que podía taparlo: formatear pone
 >   en `/lib` los 17 módulos que la imagen lleva embebidos, y grabar sólo quita los que el pack sirve con los mismos bytes.
 >   Eran los 17, y `/lib` quedó vacío. Los dieciséis casos otra vez, sin nada suelto, con `Overlays` cargado XIP desde el pack.
+> - **El IDE, con Eduardo delante:** `#694` sale bien en la placa: `Stop` con y sin programa, y un RUN rechazado, de un fichero que
+>   el árbol enseñaba y ya no estaba. `#582`, a medias: la línea del programa sale, pero dentro de la stdlib y con la VM local
+>   sale la posición. Abierta `#788`, pendiente (*«Dejalo pendiente, ya lo miraremos mas adelante»*). Sin ver: el `Stop` de la VM
+>   local, y el error entre dos módulos en la placa. La Metro, sin lo que subieron las pruebas.
+> - **Un tropiezo mío:** le pasé ocho pasos y tres propuestas con nombres internos sin decirle qué se quería ver: *«La verdad es
+>   que no entiendo nada de estas pruebas. ¿Que quieres probar?»*. Para una prueba suya, primero para qué.
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
 > - **Otro:** la primera medida de `#786` salió redondeada a 0,2 s por leer el cable con `w.lines`, que espera ese plazo. Se
 >   notó en que los números iban de 200 en 200; repetida con `w.esperar`. El aviso estaba en el propio `wire_serie` (`#495`).
 >
 > **Para la próxima sesión:**
-> - con Eduardo delante, en el IDE: `#694` (`Stop` con y sin programa, un RUN rechazado) y la traza de `#582` en la consola;
+> - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;
 > - `#745` y `#710` siguen abiertas (Eduardo, 4-nov: *«La 3 no»*);
 > - la Metro, la P4 y la Nucleo llevan la imagen de `35297826`. La S3, la del paso 3 de `#730`
 >   (`cdbda834`); la DK2, la C3, la C5 y la C6, la del lote del 3-nov, por la mañana. En el próximo lote, todas, y `#785` en

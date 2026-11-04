@@ -2324,7 +2324,7 @@ el segundo `RUN` contesta `BUSY` y el segundo `KILL`, `NO_SESSION`: en una repet
   a los 3,0 s en la Metro, la Nucleo, la S3 y la P4, y la línea siguiente entra entera. La del log sale en la Nucleo,
   la S3 y la P4, con `log=1`; la Metro no tiene esa clave en su ENV, y tras el arranque no apunta nada.
 
-#### 🔵 `#694` — el IDE da por enviado lo que no sabe si llegó: «KILL enviado» sin esperar el `KILL_REPLY`, y un RUN que la placa rechaza se tira en silencio (abierta el 12-oct, de `#692`; Eduardo: no es grave · **hecha el 29-oct**, `d5d522e9`; falta verla con Eduardo en el IDE)
+#### 🔵 `#694` — el IDE da por enviado lo que no sabe si llegó: «KILL enviado» sin esperar el `KILL_REPLY`, y un RUN que la placa rechaza se tira en silencio (abierta el 12-oct, de `#692`; Eduardo: no es grave · **hecha el 29-oct**, `d5d522e9`; **vista en la placa con Eduardo el 4-nov**; sin confirmar, el `Stop` de la VM local)
 
 El KILL y el RUN van «sin respuesta» (`sendOneShot`), y las respuestas con `id` que no esperaba nadie se descartan («Silencioso
 por diseño»). Así, un KILL perdido decía «KILL enviado», y un RUN con la ruta mal (`NOT_FOUND`) dejaba el `run()` esperando
@@ -2348,7 +2348,11 @@ placa ya manda el `RUN_REPLY` entonces—, sólo cuando algo va mal: *«OK, me p
 - **visto de paso, la VM-Java contesta distinto** (no lo toca esta ficha): hace una ejecución por proceso y contesta el
   `RUN_REPLY` antes de cargar, así que un RUN de lo que no existe no da `NOT_FOUND`; el fallo llega en el `EXITED`
   («load: falta el modulo…», `#431`). Y un KILL sin programa le da `KILL_REPLY`, no `NO_SESSION`. El IDE no lo nota:
-  a la VM local sólo le manda el KILL con un programa en marcha.
+  a la VM local sólo le manda el KILL con un programa en marcha;
+- **visto con Eduardo en el IDE** (4-nov, en la Metro, con la imagen de `35297826`): `Stop` sin programa, «no había ningún programa
+  en marcha en la placa»; `Stop` con un bucle en marcha, «la placa para el programa» y `exit 130 (terminado por KILL)`; y un RUN
+  de un fichero que el árbol enseñaba y ya no estaba, «la placa rechaza el RUN: VM error [NOT_FOUND]: fichero no existe», sin
+  quedarse esperando. **Sin confirmar:** el `Stop` de la VM local, probado sólo sin la ventana (3/3).
 
 #### ✅ `#695` — al parar un programa de GUI, el destructor de `Gui.Button` lanza «referencia nula» y quedan objetos sin destruir (abierta el 12-oct, en el `F1`; Eduardo: *«tiene un problema pero se repone y todo sigue en marcha»* · **CERRADA el 4-nov**: lo de «referencia nula», `dffb1c1d`; lo de «sin destruir», `39cda457`, visto en la Metro y la P4)
 
@@ -4163,7 +4167,9 @@ Python), el AOT y las pruebas—: en la recta final, con `#578` y `#592` dentro,
   la Nucleo y la P4.
 - **En placa** (Eduardo: *«1) Si»*): la Metro y la P4, con las imágenes de hoy y con la stdlib corriendo desde el pack. Un
   error entre módulos, uno en un hilo y uno dentro de `Collections`: la traza, byte a byte la del PC, y las líneas, las
-  buenas. Los packs, donde estaban. **Por ver, con Eduardo:** la consola del IDE (`TrazaError`, probada sin la ventana).
+  buenas. Los packs, donde estaban.
+- **En la consola del IDE, con Eduardo** (4-nov): con el error en el programa y corriendo en la placa, sale su línea
+  (`IdeFallaStd.bp:8`). Dentro de la stdlib y con la VM local sale la posición, no la línea: `#788`, pendiente.
 - **La etapa 2, congelada** (Eduardo: *«congelalo»*): dentro de una native, la línea es la de quien la llamó, y la misma
   función se puede depurar interpretada en el PC. Si se retoma: lo decidido el 9-oct, arriba.
 
@@ -7372,6 +7378,32 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
 - **`Json` (`#725`, 23-oct).** El manual no tiene la librería `Json`; cuando la tenga: `parseJson` sigue tras un
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
+
+#### 🔵 `#788` — un error en la consola del IDE: dentro de la stdlib y con la VM local sale la posición, no la línea (abierta el 4-nov, al ver `#582` con Eduardo en el IDE; SUELTA · Eduardo: *«Dejalo pendiente, ya lo miraremos mas adelante»*)
+
+Visto en la ventana, con la imagen de `35297826` en la Metro. Con el error en el programa y corriendo en la placa, sale su línea
+(`IdeFallaStd.bp:8`). En dos casos sale la posición: el dato no se pierde, pero no le dice nada a quien programa.
+
+- **Dentro de la stdlib,** con `Run on Device`: `en Collections+1815` y `llamado desde Collections+2373`, y tendría que ser
+  `Collections.bp:301` y `Collections.bp:379`. `TrazaError` busca `bpstdlib/` junto al jar (`IdePrefs.installSubdir`), y en el
+  repo el jar está en `BpIde/target/`. En una instalación la carpeta sí está, pero sin los `.dbg`: `montar-zip.sh` copia los
+  `.mod` y los `.bp`, y el ZIP de V7 no lleva ninguno. Así que también lo vería el usuario.
+- **Con la VM local,** con `Run`: `[vm] === traza: IdeFallaLib+43 IdeFalla+56 IdeFalla+83 IdeFalla+44 ===`, que es la salida de
+  error de la VM, y nada más. El `EXITED` trae la traza, pero `runOnVmRemote` no lo mira: `TrazaError.traduce` sólo se llama
+  en `AbstractBpvmBackend.run`.
+
+**Por qué no se vio:** la prueba sin ventana le daba a `TrazaError` las carpetas a mano, y la ventana tiene que encontrarlas sola.
+
+**Lo propuesto, sin hacer:**
+1. en `runOnVmRemote`, lo mismo que en la placa: «en…» y «llamado desde…», con las líneas;
+2. que `TrazaError` mire la stdlib con la que se compiló, la de `BpVM.cfg` (`resolveStdlibDir`), y no junto al jar;
+3. que `montar-zip.sh` copie los `.dbg` de los 32 módulos: 129 KB. Los otros 24 de `bpstdlib/` no tienen `.mod` (`GuiDemo`,
+   `L2Lib`…). **Por comprobar antes:** cada `.dbg` guarda la ruta de esta máquina (`source C:\lenguajes\pm\bpstdlib\Collections.bp`).
+   A la traza le da igual, porque sólo usa el nombre. En el depurador de otro PC, la VM-Java lo carga (`loadDbgFor`) y podría
+   entrar en una función de la stdlib y no encontrar el fuente.
+
+**Para repetirlo:** un `Map.put(null, null)` y una división por cero entre dos módulos, con `Run on Device` y con `Run`. Los
+programas de hoy, en `C:\tmp\ide694`, fuera del repo. La prueba nueva tiene que ir por el camino real, sin darle las carpetas.
 
 #### ✅ `#787` — la Metro no llena sus 6 MB de heap: hacia los 4,7 MB el GC se queda sin memoria para su mapa y el programa muere con «heap descarrilado» (abierta el 4-nov, en las pruebas de H9 en placa; preexistente: el mapa crece así desde el 7-jul; SUELTA · **CERRADA el 4-nov**, `35297826`)
 
