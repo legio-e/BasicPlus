@@ -53,14 +53,21 @@
 >   terminado»*).
 > - **`#582`, la etapa 1** (*«#582 Adelante»*; `8c72bb95`): un error sin atrapar dice dónde, también en una placa. La cadena de
 >   llamadas en el `stackTrace` del EXITED, y el IDE y la tanda la traducen con el `.dbg`. Las dos VMs, byte a byte; de paso, la
->   VM-Java ya la da también con los errores de la VM. La red, VERDE, con `traza_smoke`. Por ver en placa y en el IDE.
-> - **Abierta `#786`** (idea de Eduardo): `loadModule`/`unloadModule` y un programa genérico que lance otro y atrape sus errores.
->   Con un lanzador, las cargas van en pila, y descargar se simplifica.
+>   VM-Java ya la da también con los errores de la VM. La red, VERDE, con `traza_smoke`. Vista en la Metro y la P4, con las
+>   mismas trazas que en el PC; falta verla en el IDE. **La etapa 2, congelada** (*«2) congelalo»*): `#582` pasa a 🧊.
+> - **`#786`, abierta y analizada** (idea de Eduardo; *«3) Haz el análisis a ver que tal»*): `loadModule`/`unloadModule` y un
+>   programa genérico que lance otro y atrape sus errores. En `V8_IDEAS` §E13: cargar en marcha (A) o un relevo entre
+>   programas, cada uno en una VM limpia (B). Recomendada la B, por decidir. Medido cuánto tarda en arrancar y acabar
+>   un programa en cuatro placas.
 > - **Un tropiezo mío:** un heredoc con barras invertidas convirtió los `\n` de `test_kill.c` en saltos de línea, y un
 >   `\0` en un byte nulo. Se ve al compilar, pero la regla ya lo decía: los scripts, con Write.
+> - **Otro:** la primera medida de `#786` salió redondeada a 0,2 s por leer el cable con `w.lines`, que espera ese plazo. Se
+>   notó en que los números iban de 200 en 200; repetida con `w.esperar`. El aviso estaba en el propio `wire_serie` (`#495`).
 >
 > **Para la próxima sesión:**
-> - la Metro y la P4 llevan la imagen de `39cda457`; la Nucleo, la de `571bf24a`; la S3, la del paso 3 de `#730`
+> - con Eduardo delante, en el IDE: `#694` (`Stop` con y sin programa, un RUN rechazado) y la traza de `#582` en la consola;
+> - decidir `#786`, y contestar si se cierran `#745` y `#710`;
+> - la Metro y la P4 llevan la imagen de `8c72bb95`; la Nucleo, la de `571bf24a`; la S3, la del paso 3 de `#730`
 >   (`cdbda834`); la DK2, la C3, la C5 y la C6, la del lote del 3-nov, por la mañana. En el próximo lote, todas, y `#785` en
 >   la DK2;
 > - sigue valiendo lo de `packRamBase` de abajo, para la C3, la C5 y la C6.

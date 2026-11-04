@@ -4124,7 +4124,7 @@ quítale `native`». El manual (§8.3, «Depurar», en las dos lenguas) y `AOT_L
 manual ya no da las tuplas por no soportadas dentro de una native (lo están desde `#577`, salvo con campos `float`,
 `long` o `double`). El frontend, 281 de 281. **Por probar a mano en el IDE** (Eduardo): F9 dentro de una native.
 
-#### 🔵 `#582` — la LÍNEA de un error dentro de una native: el fallo sale sin origen (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT · **decidida B y a V8** el 9-oct: Eduardo, *«B, lo pasamos a V8 salvo que veas que no es demasiado costoso»*; medido, día y medio · **la etapa 1, el bytecode, hecha el 4-nov**, `8c72bb95`; la 2, las natives, por decidir)
+#### 🧊 `#582` — la LÍNEA de un error dentro de una native: el fallo sale sin origen (abierta 27-sep, al cerrar H5; SUELTA: un cabo del AOT · **decidida B y a V8** el 9-oct: Eduardo, *«B, lo pasamos a V8 salvo que veas que no es demasiado costoso»*; medido, día y medio · **la etapa 1, el bytecode, hecha el 4-nov**, `8c72bb95`, y vista en la Metro y la P4 · **la etapa 2, las natives, congelada el 4-nov**: Eduardo, *«congelalo»*)
 
 *«…cómo se puede localizar en qué línea ocurrió»* (Eduardo, 21-ago; `V7_IDEAS` §«Los cabos sueltos del AOT»). Un
 `RuntimeError` desde una native dice QUÉ pasó —con el texto del intérprete— pero no DÓNDE: la estructura del fallo
@@ -4160,8 +4160,12 @@ Python), el AOT y las pruebas—: en la recta final, con `#578` y `#592` dentro,
 - **Probado:** `tools/traza_smoke.py`, en la red, contra líneas marcadas en el fuente: un error de la VM entre dos módulos, un
   `throw`, más de ocho llamadas, un error en un hilo, uno atrapado, un KILL, las dos VMs y el sim byte a byte, y un error
   dentro de `Collections`, que en el sim corre desde el pack y en el PC desde su `.mod`. La red, VERDE. Compilan la RP2350,
-  la Nucleo y la P4. **Por ver:** en una placa de verdad, y en la consola del IDE (`TrazaError`, probada sin la ventana).
-- **La etapa 2, por decidir:** dentro de una native, hoy la línea es la de quien la llamó.
+  la Nucleo y la P4.
+- **En placa** (Eduardo: *«1) Si»*): la Metro y la P4, con las imágenes de hoy y con la stdlib corriendo desde el pack. Un
+  error entre módulos, uno en un hilo y uno dentro de `Collections`: la traza, byte a byte la del PC, y las líneas, las
+  buenas. Los packs, donde estaban. **Por ver, con Eduardo:** la consola del IDE (`TrazaError`, probada sin la ventana).
+- **La etapa 2, congelada** (Eduardo: *«congelalo»*): dentro de una native, la línea es la de quien la llamó, y la misma
+  función se puede depurar interpretada en el PC. Si se retoma: lo decidido el 9-oct, arriba.
 
 #### ✅ `#581` — P2b.3.d en las ESP: la S3, la C3, la C5 y la C6 siguen con la ABI 8 —rechazan todo `.mdn` nuevo y corren interpretado— (abierta 27-sep, al cerrar H5; SUELTA: el resto de la sesión de placas de P2b.3 · **CERRADA el 7-oct**, el commit de `#581`)
 
@@ -7348,23 +7352,27 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **por analizar**)
+#### 🔵 `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **analizada el 4-nov, por decidir**: `V8_IDEAS` §E13)
 
 - **La idea** (Eduardo, 4-nov): *«Si lo tuviésemos implementado podríamos hacer una programa genérico al que le podemos
   pasar como argumento el módulo/pack a ejecutar y el se encargaría que ejecutarlo. Y si lo hiciémos dentro de un bloque
   try ... catch exception atraparíamos cualquier error. Lo único que veo un poco delicado sería liberar los módulos que
   ya no se usan pero tampoco debería ser demasiado problema.»*
-- **De dónde viene:** los overlays, `V2_BACKLOG` §17 (29-may), y lo que ha cambiado desde entonces, `V8_IDEAS` §E1 (14-oct:
-  *«de momento no lo necesitamos»*). No había ficha. No hay código: ningún builtin carga un módulo con el programa en marcha.
-- **Lo que aporta el lanzador:** las cargas van en PILA. Lo último cargado es lo primero que se descarga, así que el código
-  vuelve de una vez y sin huecos, y no hace falta el hueco fijo que §17 recomendaba (su modelo A).
-- **Lo primero que se ve, sin analizar a fondo:**
-  - el `try … catch` vale porque el módulo cargado corre en el hilo del lanzador; no atrapa lo que falle en un hilo que
-    arranque el programa cargado, ni un KILL;
-  - antes de descargar, nada vivo del módulo: hilos, objetos de sus clases (lo vivo se ve con una colecta), manejadores
-    de la GUI, eventos. Si queda algo, un error con nombre; la destrucción de `#668` limpia casi todo eso;
-  - lo que falta: llamar a su `Main` por nombre, correr sus inicializadores, el tope de 16 módulos (`BPVM_MAX_MODULES`), y
-    qué hacer con los `.mdn`; el argumento para el programa ya existe (`__runArg`, `#412`). En las dos VMs.
+- **De dónde viene:** los overlays, `V2_BACKLOG` §17 (29-may); `#595` (*«descomponer un programa grande en pedazos»*); y
+  `V8_IDEAS` §E1 (14-oct: la opción «Configurar el Bluetooth», y *«de momento no lo necesitamos»*). No hay código: ningún
+  builtin carga un módulo con el programa en marcha.
+- **El análisis, en `V8_IDEAS` §E13.** Dos opciones:
+  - **A, cargar y descargar en marcha:** del tamaño del enlace tardío, y toca el heap, el GC, el cargador y el enlace. El
+    `try … catch` no atrapa un error en un hilo del programa lanzado ni un bucle sin fin. Y si queda algo vivo (la
+    excepción en `e`, un literal en una global de quien se queda), la descarga se niega y el lanzador no tiene salida.
+  - **B, un relevo:** el programa pide que, al acabar él, el sistema arranque aquél y luego vuelva a arrancarlo a él,
+    diciéndole cómo acabó. Cada uno, en una VM limpia. Del tamaño de la etapa 1 de `#582`, y no toca nada de lo anterior.
+    Atrapa también lo del hilo y, con un tiempo máximo, el bucle. Una vuelta, menos de un segundo en todas las placas
+    (medido en la Nucleo, la Metro, la S3 y la P4). Lo que pierde: quien lanza vuelve a empezar desde `Main`, y de vuelta
+    sólo llega texto.
+- **Recomendada, la B.** La A se queda escrita para cuando aparezca un complemento de verdad, que comparta objetos con
+  quien lo carga: es lo único que la B no hace, y la A necesitaría a la B detrás para cuando la descarga se niega.
+- **Por decidir** (Eduardo): cuál, si vale volver a empezar desde `Main`, si el tiempo máximo entra de primeras, y los nombres.
 
 #### ✅ `#785` — la STM32 copia, rellena, busca y compara la memoria de un byte por vuelta, en todo el firmware: lleva newlib-nano (`--specs=nano.specs`), y sus `memcpy`, `memset`, `memchr` y `memcmp` son las pequeñas (abierta el 3-nov, al medir `#730` · **CERRADA el 4-nov**, `571bf24a`, medida en la Nucleo; la DK2, compilada, se graba en el próximo lote)
 

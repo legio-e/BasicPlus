@@ -5698,3 +5698,213 @@ traductor; la red; y la placa, en la próxima tanda.
   y `readFile` (que lo lee al heap). Lo que faltaría: que el compilador o el IDE lleven el *resource* con la aplicación
   (al workdir del micro, como los módulos de la app) y una forma de nombrarlo desde el código.
 - **Por analizar** cuando toque: cómo se declara, cómo viaja con la app al micro y cómo se lee.
+
+## E13 · Lanzar un programa desde otro: cargar módulos en marcha, o un relevo (Eduardo, 4-nov; `#786`; analizado, por decidir)
+
+> Eduardo, 4-nov: *«Si lo tuviésemos implementado podríamos hacer una programa genérico al que le podemos pasar como
+> argumento el módulo/pack a ejecutar y el se encargaría que ejecutarlo. Y si lo hiciémos dentro de un bloque try ...
+> catch exception atraparíamos cualquier error. Lo único que veo un poco delicado sería liberar los módulos que ya no
+> se usan pero tampoco debería ser demasiado problema.»* Y después: *«Haz el análisis a ver que tal.»*
+
+### Para qué se quiere
+
+Cuatro usos, que no piden lo mismo:
+
+1. **Un lanzador** (4-nov): un programa genérico que corre otro, ve cómo acabó y sigue.
+2. **Una opción «Configurar el Bluetooth»** que lance el programa de configuración y, al terminar, vuelva (14-oct, E1).
+3. **Partir un programa grande en pedazos** y aprovechar mejor la memoria (`#595`; `V2_BACKLOG` §17).
+4. **Un complemento**: un programa que sigue vivo, carga un módulo, llama a sus funciones y comparte objetos con él.
+   Nadie lo ha pedido; lo pongo porque es el único de los cuatro que sólo se resuelve con la opción A.
+
+Los tres primeros son el mismo gesto: **corre aquél y, cuando acabe, sigo yo**. Entre los dos programas pasa poco: un
+argumento de ida y, de vuelta, cómo acabó. No comparten objetos.
+
+### Cómo está hecho hoy (leído en el código)
+
+- **La memoria:** `[ módulos ][ heap → ][ tabla de handles ][ pila del main ][ pilas ]`. Los módulos van uno detrás de
+  otro y el heap empieza donde acaba el último (`loader.c`, `heap_start = next_free_address`); el enlace tardío pone
+  su arena en ese mismo sitio y mueve el heap (`link.c`). Con el programa en marcha, ahí ya hay objetos: un módulo nuevo
+  no cabe donde hoy van todos.
+- **Un literal no es un objeto del heap:** es una dirección en los datos de su módulo, sin cabecera y sin handle. Seis
+  sitios (`interp.c`, `builtins.c`, `bpvm_internal.h`, y sus espejos en miVM) distinguen un literal de una cadena del
+  heap mirando si la dirección queda por debajo de `heap_start`.
+- **Un objeto apunta a su clase**, y la clase vive en su módulo.
+- **El enlace es de una vez:** `bpvm_link_all` recorre todos los módulos, antes de que corra nada.
+- **Un programa no se puede «llamar»:** `__startup` llama a `__init` y a `Main` y acaba en `HALT`, que termina la VM (y
+  en un hilo que no sea el main, es un error). Y BP no tiene `exit`: un programa acaba cuando acaba su `Main`.
+- **Hay cosas que se resuelven una vez por RUN** y no se vuelven a mirar: los despachadores de la GUI (`#486`), el
+  registro de las natives (`bpvm_aot_clear`), y el cursor de las cadenas guarda la dirección de un literal, que hoy no
+  cambia nunca (`bpvm_strcur_t`).
+- **Tope de 16 módulos** (`BPVM_MAX_MODULES`), y hoy los cuentan el programa y la stdlib que importa.
+- **Acabar un programa es lo más probado que hay:** `bpvm_destroy` lo suelta todo, y cada prueba de la red pasa por ahí.
+
+### Opción A: cargar y descargar en marcha (la de `V2_BACKLOG` §17)
+
+```basic
+module Lanzador
+  import Core
+  import Machine
+
+  function Main(arg: string)
+    var m: integer := Machine.loadModule(arg)
+    try
+      Machine.runModule(m, "")
+    catch e: Exception
+      print "falló: " + e.msg
+    endtry
+    Machine.unloadModule(m)
+  end Main
+end Lanzador
+```
+
+**Lo que hace falta, en las dos VMs:**
+
+1. **Un sitio para el módulo.** Un bloque clavado del heap, como las pilas de los hilos (`#740`), o encima de la tabla
+   de handles. En los dos casos el literal deja de estar por debajo de `heap_start`: hay que rehacer aquellos seis
+   sitios, que están en el camino rápido de las cadenas. Con el bloque clavado, además, la docena de sitios que
+   preguntan si una dirección está en el heap: un literal de ese módulo diría que sí.
+2. **Cargar y enlazar en marcha:** el cargador y `bpvm_link_all`, módulo a módulo; leer el fichero por `io`; el mundo
+   parado mientras cambian `modules[]` y los símbolos; y subir el tope de 16, o un lanzador con `Gui` y `Json` se queda
+   sin sitio para el programa.
+3. **Los `.mdn` y las natives de los packs**, cargados y soltados con el programa en marcha.
+4. **Entrar y volver:** `__startup` acaba en `HALT`. O cambia lo que emite el compilador, o `HALT` pasa a significar
+   «vuelve» dentro de un programa lanzado. (`__init` no da problema: ya es idempotente, y lo que ya se inició no se
+   repite. El argumento tampoco: `__runArg`.)
+5. **Descargar.** Con las condiciones de `Heap.compact` (sólo desde `Main` y sin otros hilos vivos), que resuelven de
+   golpe los marcos de la pila y los hilos:
+   1. quitar sus globales de las raíces;
+   2. una colecta, y correr los destructores con su código aún en memoria;
+   3. recorrer lo vivo: ni un objeto de sus clases ni una palabra que apunte a su zona, en el heap, en las pilas o en
+      las globales de quien se queda; y ni un manejador de la GUI ni un evento suyos;
+   4. si queda algo, un error con nombre; si no, devolver la memoria, los símbolos y los `.mdn`, y dar por caducado lo
+      resuelto (`str_epoca`, la caché de `cs→cb`, los despachadores de la GUI).
+6. **El depurador:** un `.dbg` que aparece con el programa en marcha, las trazas de `#582` y el IDE.
+
+El tamaño: el del enlace tardío (`#523`). Y toca lo que más nos ha costado dejar fiable: el heap, el GC, el cargador.
+
+**Lo delicado es liberar, como dice Eduardo, y es más de lo que parece.** Cinco casos concretos:
+
+- **La excepción.** El programa lanzado falla con un `Demo.ErrorDeSensor`. El lanzador lo tiene en `e`, y `e` sigue en
+  su pila cuando llama a `unloadModule`, que encuentra un objeto vivo de una clase que se va. Tiene arreglo: en la
+  frontera, convertirla en una `RuntimeError` con su texto, para que no cruce ninguna clase.
+- **El literal.** El programa lanzado llama a `Ajustes.setNombre("Demo")` en un módulo que el lanzador también usa. Esa
+  global se queda con la dirección de un literal del módulo que se va. Los handles aquí no protegen, porque un literal
+  no tiene: el paso 3 lo encontraría y se negaría a descargar.
+- **El hilo.** El programa arranca un hilo y falla ahí. La regla del manual: la excepción acaba *su* hilo y los demás
+  siguen, así que el `try` del lanzador no se entera.
+- **El bucle.** `while true` o dos hilos que se esperan: el `try` no vuelve nunca.
+- **El hueco.** Tras varias vueltas, el programa siguiente necesita un bloque seguido que el heap puede no tener.
+
+**Y la consecuencia:** si la descarga se niega, el lanzador no tiene salida. Su razón de ser es sobrevivir al programa
+lanzado, y lo que decide si se puede descargar es lo que ese programa dejó. Lo único seguro en ese punto es terminar
+la VM y volver a empezar, que es la opción B. **A necesita a B detrás; B no necesita a A.**
+
+### Opción B: el relevo
+
+El programa no carga a otro: **pide que, cuando él acabe, el sistema arranque aquél**, y que al terminar vuelva a
+arrancar a quien lo pidió, diciéndole cómo acabó. Cada programa corre en una VM limpia, y entre uno y otro actúa
+`bpvm_destroy`. Sigue habiendo un programa cada vez.
+
+```basic
+module Lanzador
+  import Core
+  import Machine
+
+  function Main(arg: string)
+    if Machine.lastProgram() == "" then
+      Machine.nextProgram(arg, "")     // al acabar yo, ése; y al acabar ése, otra vez yo
+    else
+      print Machine.lastProgram() + " acabó: " + Machine.lastStatus()
+      print Machine.lastMessage()
+    endif
+  end Main
+end Lanzador
+```
+
+(Los nombres son de ejemplo.) Si le pasamos `/app/Demo.mod` y `Demo` divide por cero, pasa esto: `Lanzador` apunta la
+petición y acaba; la VM se destruye; `Demo` arranca en una VM nueva y falla; la VM se destruye; `Lanzador` arranca otra
+vez, desde `Main`, y lee `RUNTIME_ERROR` y `División por cero`.
+
+**Lo que hace falta:**
+
+1. **En `Machine`, una función que apunta la petición** y las que leen cómo acabó el anterior: el estado, el código de
+   salida, el mensaje y la traza de `#582`. Apuntar y nada más: no hay una forma nueva de acabar un programa.
+2. **El RUN común** (`bpvm_repl.c`, el mismo para todas las familias): tras `bpvm_destroy`, si hay petición, otra vuelta
+   con la ruta nueva. La misma sesión para el IDE: un `RUN_REPLY`, un `EXITED` al final y la salida seguida. Vale para
+   un `.mod` y para un pack, porque es `bpvm_load_entry`.
+3. **Lo mismo en los otros sitios que arrancan un programa:** el CLI de la VM-C, `Main.java` y `DebugServer`.
+4. **Menos de 1 KB fuera de la VM**, porque tiene que sobrevivir a `bpvm_destroy`: las dos rutas, el argumento y el
+   resultado. Un nivel: quien pide es a quien se vuelve.
+5. **Las reglas:** un KILL o un RESET cortan la cadena, porque el `Stop` del IDE quiere decir parar. Un programa que no
+   existe o no enlaza vuelve al lanzador con ese error. Con el depurador, se depura el primero.
+6. **Si se quiere, un tiempo máximo:** el RUN común pide el KILL a los N ms, y vuelve con «tiempo agotado». Es lo que
+   hace que el bucle sin fin también se atrape.
+7. **La prueba en la red:** una cadena normal, un error, un error en un hilo, un programa que no enlaza y un KILL, con
+   las dos VMs byte a byte.
+
+No toca el heap, ni el GC, ni el cargador, ni el enlace, ni los literales, ni los `.mdn`, ni los packs: esos caminos
+siguen como están y ya los prueba cada ejecución. El tamaño: el de la etapa 1 de `#582`.
+
+**Lo que cuesta, medido el 4-nov** (`Corto` sólo importa `Core`; `Medio`, `Core`, `Collections`, `Json`, `Math` y
+`Machine`; mediana de 9, del RUN enviado al EXITED recibido, cable incluido; el programa en sí, de 6 a 53 ms):
+
+| Placa | `Corto` | `Medio` |
+|---|---|---|
+| Nucleo | 63 ms | 181 ms |
+| Metro | 153 ms | 368 ms |
+| S3 | 217 ms | 550 ms |
+| P4 | 236 ms | 390 ms |
+
+Una vuelta entera son dos arranques, el del programa y el del lanzador, y el del programa lo paga también la opción A:
+**menos de un segundo en todas**. (La primera tanda salió redondeada a 0,2 s porque leí con `w.lines`, que espera ese
+plazo; es el aviso de `#495`. Estos números son con `w.esperar`.)
+
+**Lo que se pierde:**
+
+- **Quien lanza vuelve a empezar desde `Main`.** Lo que tenía en memoria se va, y lo que quiera conservar lo escribe en
+  un fichero o se lo pasa por el argumento. Para un menú no es nada; para la aplicación con «Configurar el Bluetooth»
+  es volver a abrir su pantalla, y `lastProgram()` le dice que viene de ahí.
+- **De vuelta sólo llega texto:** el resultado, y lo que se deje en un fichero. El argumento tiene 127 bytes de tope.
+- **No tiene forma de `try … catch`:** es un `if` al principio de `Main`.
+- **No hace complementos** (el uso 4).
+
+**Y lo que da sin haberlo pedido:** con `/sys/auto.txt` apuntando al lanzador, una placa sola se vigila a sí misma. Hoy,
+un programa que falla sin nadie delante se queda en el REPL; con el relevo, el lanzador lo apunta y lo vuelve a
+arrancar, o arranca otro. Y en el uso 3 cada pedazo tiene toda la memoria, sin huecos.
+
+### Opción C: otra VM dentro (descartada)
+
+Una segunda `bpvm_t` en un bloque del heap del lanzador daría las dos cosas: aislamiento total y que el lanzador siga
+vivo. Pero hay unas 200 variables de fichero en la VM-C (contadas con `grep`, a ojo), y entre ellas la cola de los hilos
+(`bpvm_la_cola`, 55 usos en la VM), la GUI y el registro de las natives; la memoria habría que partirla por adelantado; la
+stdlib iría dos veces en la RAM de las placas que no la corren desde la flash; y rompe *una app por VM*.
+
+### Qué atrapa cada una
+
+| Lo que pasa en el programa lanzado | A: `try … catch` | B: relevo |
+|---|---|---|
+| Un error en su hilo principal | sí | sí |
+| No carga o no enlaza | sí | sí |
+| Se queda sin memoria | sí | sí, y vuelve toda la memoria |
+| Un error en un hilo suyo | **no** | sí |
+| Un bucle sin fin, dos hilos que se esperan | **no** | con el tiempo máximo |
+| El heap descarrilado (`#494`) | llega la excepción, pero el lanzador sigue en esa VM | sí: VM nueva |
+| Deja algo vivo al acabar | **no se puede descargar** | no pasa |
+| Un fallo del propio firmware | no | no, pero si la placa se reinicia, el autorun arranca el lanzador |
+
+### Recomendación
+
+**La opción B.** Da los usos 1, 2 y 3, atrapa más que el `try … catch`, cuesta una fracción y no toca nada de lo que
+ya es fiable. Lo que no da es que quien lanza conserve su estado, y para un lanzador eso no pesa.
+
+La opción A se queda escrita aquí para cuando aparezca un complemento de verdad (el uso 4). Si llega, dos cosas:
+**una sola llamada** que cargue, corra y descargue (`Machine.runModule(ruta, arg)`), para que las cargas vayan en pila
+por construcción y no se pueda olvidar la descarga; y **que descargue el GC, no el programa**, como un `ClassLoader` de
+Java: el módulo vive mientras algo lo alcance. Así, lo que quede vivo retiene memoria en vez de ser un error.
+
+### Lo que hay que decidir (Eduardo)
+
+1. **¿B, A o las dos?** La recomendación, B.
+2. Con B, **¿vale que quien lanza vuelva a empezar desde `Main`?** Es lo único que cambia respecto a lo que pedía.
+3. **¿El tiempo máximo entra de primeras?** Son pocas líneas, y es lo que cubre el bucle sin fin.
+4. **Los nombres** (`Machine.nextProgram`, `lastProgram`, `lastStatus`, `lastMessage`…).
