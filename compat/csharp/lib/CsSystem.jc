@@ -78,6 +78,34 @@ module CsSystem
       function void Dispose();
    }
 
+   // ------------------------------------------------------------------------------------------- System.IO
+   // Lo poco que piden las pruebas (H8, tema 1): escribir en un `TextWriter`. Éste no escribe en ningún sitio, como
+   // `TextWriter.Null` y `StreamWriter.Null`; `StringWriter` se queda lo que le escriben.
+
+   public class TextWriter : IDisposable
+   {
+      public static TextWriter Null { get; set; } = new TextWriter();
+
+      public function void Write(string s) { }
+      public function void WriteLine() { this.Write(eol()); }
+      public function void WriteLine(string s)
+      {
+         this.Write(s);
+         this.WriteLine();
+      }
+
+      @implement{ IDisposable }
+      public function void Dispose() { }
+   }
+
+   public class StringWriter : TextWriter
+   {
+      private string texto = "";
+
+      public function void Write(string s) { this.texto += s; }
+      public function string toString() { return this.texto; }
+   }
+
    // ------------------------------------------------------------------------------------------- Math y los números
    // Los métodos estáticos de .NET, como funciones del módulo con el nombre de su tipo delante (`Math.Abs` es
    // `Math_Abs`): una clase Math, Double o Int32 chocaría con lo de BP (el módulo Math, las cajas de Core). Las

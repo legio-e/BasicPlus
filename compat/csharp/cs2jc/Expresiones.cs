@@ -267,6 +267,9 @@ namespace Cs2Jc
                 case InterpolatedStringExpressionSyntax ise: return Interpolada(ise);
                 case CheckedExpressionSyntax ce when ce.IsKind(SyntaxKind.UncheckedExpression):
                     return "(" + Expr(ce.Expression) + ")";                    // unchecked: lo de siempre, en C# y en BP
+                // `sizeof(int)`: de un tipo de C#, una constante (H8, tema 1); la de uno propio pide unsafe
+                case SizeOfExpressionSyntax so when m.GetConstantValue(so).HasValue:
+                    return LiteralDeConstante(m.GetConstantValue(so).Value, so);
                 default: return RechazaNodo(e);
             }
         }
@@ -667,6 +670,9 @@ namespace Cs2Jc
                     var izq = m.GetTypeInfo(b.Left).Type;
                     // `x is int`, con `x` un int?: si tiene valor
                     if (EsNullable(izq) && SymbolEqualityComparer.Default.Equals(DeNullable(izq), t)) return "(" + Expr(b.Left) + " != null)";
+                    // `s is string`, `s is object`, con `s` una cadena: que no sea null; una constante, true (H8, tema 1)
+                    if (EsCadena(izq) && (EsCadena(t) || t?.SpecialType == SpecialType.System_Object))
+                        return m.GetConstantValue(b.Left).Value != null ? "true" : "(" + Expr(b.Left) + " != null)";
                     // `o is uint`: en su caja, un uint es un Long, como un long; no se distinguen
                     if (EsUInt(t)) return Rechaza(b, Porque.Pendiente("is uint (en una caja, un uint es un Long, como un long)"));
                     if (t != null && t.IsValueType && ClaseDeCaja(t) != null && izq != null && !izq.IsValueType)
@@ -937,6 +943,7 @@ namespace Cs2Jc
                 }
                 if (ExcepcionJc(nt) is string ex) return ex;              // Exception, RuntimeError o la de CsSystem
                 if (InterfazDeCsSystem(nt) is string ci) return ci;       // IDisposable (H8, tema 2)
+                if (ClaseDeCsSystem(nt) is string cc) return cc;          // TextWriter y StringWriter (H8, tema 1)
                 if (nt.TypeKind == TypeKind.Interface) return Rechaza(donde, PorInterfazAjena(nt));
                 return Rechaza(donde, Porque.DeNet("tipo " + NombreCompleto(nt)));
             }

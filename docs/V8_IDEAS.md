@@ -5338,7 +5338,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 |---|---|---|---|---|---|
 | 1 | `IDisposable`, una interfaz de verdad | `CsSystem` y el traductor | | +2 | 4-nov: Mono **450** |
 | 2 | un `struct` sin campos de instancia, una clase | el traductor | | +2 | 4-nov: Mono **468** |
-| 3 | lo suelto de la biblioteca (`d.ToString()`, `"x" is String`, `sizeof(int)`, `StringWriter`, `StreamWriter.Null`, `String.Concat`) | `CsSystem` y el traductor | +5 | | |
+| 3 | lo suelto de la biblioteca (`d.ToString()`, `"x" is String`, `sizeof(int)`, `StringWriter`, `StreamWriter.Null`, `String.Concat`) | `CsSystem` y el traductor | +5 | | 4-nov: Mono **475** |
 | 4 | `??` con referencias | el traductor | | +1 | |
 | 5 | una implementación explícita y otro miembro con su nombre | el traductor | | +1 | |
 | 6 | un constructor estático sin llamadas dentro | el traductor | | +1 | |
@@ -5364,6 +5364,13 @@ es una conversión; si declara constructores, se escribe además uno sin argumen
 sólo existe en un `struct`, no tiene nada que copiar: se calcula `x`, si calcula algo. El que tiene campos sigue sin
 traducirse (`S?`, también). Caso `Structs`. **Mono: 468** (+18), sin perder ninguna; fallan las mismas 6. **El tema 2: 76**
 (`test-static-using-07` pide además `String.Concat`, en el ajuste 3).
+
+**3. Lo suelto de la biblioteca, hecho.** `d.ToString()` de un `double` o un `float`, y `d.ToString("R")`: el número como lo
+escribe BP, igual que al imprimirlo. `s is string` y `s is object` con una cadena delante: que no sea `null`; una constante,
+`true`. `sizeof(int)`, de un tipo de C#: una constante, que da Roslyn. En `CsSystem`, `TextWriter` (el que no escribe en
+ningún sitio, `TextWriter.Null` y `StreamWriter.Null`) y `StringWriter`, que se queda lo que le escriben; `new StreamWriter(…)`
+sigue sin traducirse. Y `string.Concat`, la suma, con los argumentos sueltos. Caso `Suelto`. **Mono: 475** (+7), sin perder
+ninguna; fallan las mismas 6. **El tema 1: 111; el tema 2: 77.**
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 

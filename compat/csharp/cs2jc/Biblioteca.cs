@@ -97,6 +97,23 @@ namespace Cs2Jc
             return "CsSystem." + t.Name;
         }
 
+        /// Las clases de .NET que tiene CsSystem (H8, tema 1). De `StreamWriter`, sólo `StreamWriter.Null`, un `TextWriter`
+        /// que no escribe en ningún sitio: `new StreamWriter(…)` no se traduce.
+        static readonly Dictionary<string, string> ClasesDeCsSystem = new Dictionary<string, string>
+        {
+            ["System.IO.TextWriter"] = "TextWriter",
+            ["System.IO.StreamWriter"] = "TextWriter",
+            ["System.IO.StringWriter"] = "StringWriter",
+        };
+
+        /// El nombre en JC de una clase de CsSystem, con su import; null si no lo es.
+        string ClaseDeCsSystem(ITypeSymbol t)
+        {
+            if (t == null || !ClasesDeCsSystem.TryGetValue(NombreCompleto(t), out var n)) return null;
+            imports.Add("CsSystem");
+            return "CsSystem." + n;
+        }
+
         // ------------------------------------------------------------------------- las funciones y las constantes
 
         /// Los métodos estáticos de .NET que tiene la librería, por su firma en C# (la sobrecarga que eligió C#, con sus
@@ -203,6 +220,15 @@ namespace Cs2Jc
                 case "System.UInt32.ToString()":
                     if (objeto != null) return "(\"\" + (" + Expr(objeto.Expression) + "))";
                     break;
+                // el de un double o un float: el número, como lo escribe BP, igual que al imprimirlo; y "R", el de ida y
+                // vuelta, en .NET es lo mismo
+                case "System.Double.ToString()": case "System.Single.ToString()":
+                    if (objeto != null) return "(\"\" + (" + Expr(objeto.Expression) + "))";
+                    break;
+                case "System.Double.ToString(System.String)": case "System.Single.ToString(System.String)":
+                    if (objeto != null && m.GetConstantValue(inv.ArgumentList.Arguments[0].Expression).Value as string == "R")
+                        return "(\"\" + (" + Expr(objeto.Expression) + "))";
+                    break;
                 // el de un bool: .NET escribe True y False
                 case "System.Boolean.ToString()":
                     if (objeto != null) return "(" + Expr(objeto.Expression) + " ? \"True\" : \"False\")";
@@ -224,7 +250,11 @@ namespace Cs2Jc
                     break;
                 // `d.Dispose()` por la interfaz: la de CsSystem (H8, tema 2)
                 case "System.IDisposable.Dispose()":
+                case "System.IO.TextWriter.Dispose()":
                     if (objeto != null) return Expr(objeto.Expression) + ".Dispose()";
+                    break;
+                case "System.IO.StringWriter.ToString()":
+                    if (objeto != null) return Expr(objeto.Expression) + ".toString()";
                     break;
             }
             switch (clave)
@@ -232,12 +262,18 @@ namespace Cs2Jc
                 case "System.Console.WriteLine": return Escribe(inv, ms, "println");
                 case "System.Console.Write": return Escribe(inv, ms, "print");
                 case "System.String.Format": return Formatea(inv, ms);
-                // Console.Out.WriteLine(x): lo mismo que Console.WriteLine(x)
+                case "System.String.Concat": return Concat(inv, ms);
+                // Console.Out.WriteLine(x): lo mismo que Console.WriteLine(x); en otro TextWriter, el de CsSystem
                 case "System.IO.TextWriter.WriteLine":
                 case "System.IO.TextWriter.Write":
+                case "System.IO.StreamWriter.WriteLine":
+                case "System.IO.StreamWriter.Write":
+                case "System.IO.StringWriter.WriteLine":
+                case "System.IO.StringWriter.Write":
                     if (objeto != null && m.GetSymbolInfo(objeto.Expression).Symbol is IPropertySymbol salida
                         && NombreCompleto(salida.ContainingType) + "." + salida.Name == "System.Console.Out")
                         return Escribe(inv, ms, ms.Name == "WriteLine" ? "println" : "print");
+                    if (objeto != null) return EscribeEnWriter(inv, ms, objeto);
                     break;
                 case "System.Object.ToString":
                     // el de Object (la clase no lo sobrescribe): el toString de BP (sale `object@…`, no el nombre)
@@ -259,6 +295,11 @@ namespace Cs2Jc
             var cv = m.GetConstantValue(ma);
             if (cv.HasValue) return LiteralDeConstante(cv.Value, ma);
             if (clave == "System.String.Empty") return "\"\"";
+            if (clave == "System.IO.StreamWriter.Null" || clave == "System.IO.TextWriter.Null")
+            {
+                imports.Add("CsSystem");
+                return "CsSystem.TextWriter.Null";
+            }
             // el mensaje de una excepción: el msg de la de BP (ArgumentException y sus hijas sobrescriben Message en .NET:
             // sale con su clase)
             if (s.Name == "Message" && ExcepcionJc(s.ContainingType) != null) return Expr(ma.Expression) + ".msg";
@@ -289,7 +330,34 @@ namespace Cs2Jc
             if (tipo.SpecialType == SpecialType.System_Object && (oc.ArgumentList == null || oc.ArgumentList.Arguments.Count == 0)
                 && oc.Initializer == null)
                 return "new Object()";
+            if (NombreCompleto(tipo) == "System.IO.StringWriter" && (oc.ArgumentList == null || oc.ArgumentList.Arguments.Count == 0)
+                && oc.Initializer == null)
+                return "new " + ClaseDeCsSystem(tipo) + "()";
             return Rechaza(oc, Porque.DeNet("new " + NombreCompleto(tipo)));
+        }
+
+        /// `w.WriteLine(x)` en un `TextWriter` de CsSystem, que recibe una cadena: su texto; con formato, la suma de sus
+        /// piezas, como `string.Format`.
+        string EscribeEnWriter(InvocationExpressionSyntax inv, IMethodSymbol ms, MemberAccessExpressionSyntax objeto)
+        {
+            var args = inv.ArgumentList.Arguments;
+            if (args.Any(a => a.NameColon != null)) return Rechaza(inv, Porque.Pendiente("argumentos con nombre"));
+            string w = Expr(objeto.Expression) + "." + ms.Name;
+            if (args.Count == 0) return w + "()";
+            if (args.Count > 1) return w + "(" + Formatea(inv, ms) + ")";
+            if (ms.Parameters[0].Type is IArrayTypeSymbol) return Rechaza(inv, Porque.Pendiente("Write de un char[]"));
+            return w + "(\"\" + (" + Texto(args[0].Expression) + "))";
+        }
+
+        /// `string.Concat(a, b, c)`: la suma, con el `""` delante para que sea de cadenas aunque el primero sea un número;
+        /// un null se une como "", como en C#. Los argumentos, sueltos: el de un array, todavía no.
+        string Concat(InvocationExpressionSyntax inv, IMethodSymbol ms)
+        {
+            var args = inv.ArgumentList.Arguments;
+            if (args.Any(a => a.NameColon != null)) return Rechaza(inv, Porque.Pendiente("argumentos con nombre"));
+            if (Expandido(ms, inv.ArgumentList) ? false : ms.Parameters.Any(p => !EsCadena(p.Type) && p.Type.SpecialType != SpecialType.System_Object))
+                return Rechaza(inv, Porque.DeNet("System.String.Concat"));
+            return "(\"\"" + string.Concat(args.Select(a => " + (" + Texto(a.Expression) + ")")) + ")";
         }
 
         /// `Console.WriteLine` y `Console.Write`: `println(…)` y `print(…)`. Con un formato literal, troceado aquí:

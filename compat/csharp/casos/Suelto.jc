@@ -1,0 +1,96 @@
+module CsSuelto
+{
+   import CsSystem;
+   import Str;
+
+   class Prueba
+   {
+      private static int llamadas = 0;
+      private static function string Cuenta()
+      {
+         Prueba.llamadas++;
+         return "c";
+      }
+      public static function int Main()
+      {
+         double d = 1.5;
+         float f = 2.5f;
+         if (("" + (d)) != "1.5" || ("" + (d)) != "1.5")
+         {
+            return 1;
+         }
+         if (("" + (f)) != "2.5")
+         {
+            return 2;
+         }
+         string s = "b";
+         string n = null;
+         if (!(true) || !(true))
+         {
+            return 3;
+         }
+         if (!((s != null)) || (n != null) || (n != null))
+         {
+            return 4;
+         }
+         const int tam = 4;
+         if (tam != 4 || 8 != 8 || 1 != 1 || 2 != 2)
+         {
+            return 5;
+         }
+         CsSystem.TextWriter.Null.WriteLine("" + (Prueba.Cuenta()));
+         CsSystem.TextWriter.Null.Write("" + (5));
+         if (Prueba.llamadas != 1)
+         {
+            return 6;
+         }
+         string texto = "";
+         if (true)
+         {
+            CsSystem.StringWriter w = new CsSystem.StringWriter();
+            try
+            {
+               w.Write("" + ("a"));
+               w.Write("" + (1));
+               w.Write("" + (Str.fromCharCode('c')));
+               w.WriteLine(("" + "b" + (2)));
+               w.WriteLine();
+               texto = w.toString();
+            }
+            finally
+            {
+               if (w != null)
+               {
+                  w.Dispose();
+               }
+            }
+         }
+         if (texto != "a1cb2" + eol() + eol())
+         {
+            return 7;
+         }
+         if (("" + ("a") + ("b")) != "ab" || ("" + ("a") + ("b") + ("c")) != "abc")
+         {
+            return 8;
+         }
+         if (("" + ("a") + (n)) != "a" || ("" + (n) + (s) + (n)) != "b")
+         {
+            return 9;
+         }
+         if (("" + (1) + ("b")) != "1b" || ("" + ("a") + (Prueba.Cuenta()) + ("d") + ("e") + ("f")) != "acdef")
+         {
+            return 10;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = Prueba.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}
