@@ -69,6 +69,8 @@ void  bpvm_free       (void* p);   /* vale para las dos familias */
  * "heap.c") falla como si no hubiera memoria; una vez. NULL, ninguna. En el PC el malloc no falla, y los caminos de
  * «sin memoria» del núcleo —los que una placa sí recorre— se quedaban sin probar. */
 void  bpvm_alloc_prueba_fallar(const char* fichero);
+/* V8 #787 — lo mismo, las `veces` siguientes. */
+void  bpvm_alloc_prueba_fallar_veces(const char* fichero, int veces);
 /* #639 (3-oct) — PARA LAS PRUEBAS: toda reserva pedida desde `fichero` (como arriba) de MÁS de `tope` bytes falla, hasta
  * quitarlo con NULL: una placa cuyo bloque libre mayor es `tope` (la C6 con la GUI, 7,9 KB). Vale también para
  * `bpvm_realloc`, que falla dejando el bloque de antes como estaba. */

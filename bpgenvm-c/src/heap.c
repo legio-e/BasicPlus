@@ -137,24 +137,36 @@ static void bpvm_diag_bloque_mentiroso(const bpvm_t* vm, const char* quien,
  * reconoce; un entero a mitad de objeto NO entra → se rechaza. */
 static int is_valid_header(const bpvm_t* vm, uint32_t header_addr);   /* abajo; la usa la comprobación de #593 */
 
+/* Lo que mide el mapa de `span` bytes de heap: un bit por palabra de 4 B, y un byte de relleno. */
+static size_t mapa_bytes(uint32_t span) {
+    return ((size_t) (span / 4u) + 7u) / 8u + 1u;
+}
+
+int bpvm_sabotaje_mapa = 0;   /* SÓLO PRUEBAS (test_heapdescarrilado): el mapa, a la medida de lo usado, como antes de #787 */
+
 static void build_gc_valid_map(bpvm_t* vm) {
-    /* Dimensiona el bitmap por el heap USADO [heap_start, heap_next), NO por la
-     * capacidad total (stack_base - heap_start): is_valid_header solo consulta
-     * direcciones < heap_next, y build recorre hasta heap_next. Sizearlo por la
-     * capacidad hacía un calloc de ~256 KB en el heap de 8 MB (PSRAM) del Metro
-     * que COLGABA el firmware en cada gc() (regresión de Camino 1). El bitmap
-     * crece con el uso real (el chequeo gc_valid_map_size<bytes solo re-aloca al
-     * crecer). Verificado: Pico 128 KB no colgaba; Metro 8 MB sí. */
+    /* V8 #787 (4-nov) — EL MAPA SE PIDE UNA VEZ, PARA TODO EL HEAP, en la primera colecta. Desde el 7-jul se medía por el
+     * heap USADO y se soltaba y se pedía mayor cada vez que crecía: en la Metro, con la SRAM de `malloc` casi libre, los
+     * 147 KB de la sexta colecta no salían de una pieza, y un programa con 4,7 de sus 6 MB moría con «heap descarrilado».
+     * Pedido al principio, con `malloc` aún vacío, cabe y no crece: ninguna colecta más pide memoria. Si no cabe, lo de
+     * antes: la parte usada. (Medirlo por la capacidad colgaba la Metro en cada gc() en julio: entonces un calloc que no
+     * cabía era un cuelgue; hoy `_sbrk` tiene techo, y un NULL aquí es la excepción de #598.)
+     *
+     * Limpiar, sólo lo usado: el recorrido y is_valid_header no miran más allá de heap_next, y en un heap grande con poco
+     * dentro sería borrar en cada colecta un mapa casi entero que no se va a leer. */
     vm->gc_descarrilo = 0;   /* V7 #494: lo levanta el guardián de abajo */
-    uint32_t span  = vm->heap_next - vm->heap_start;       /* heap USADO */
-    uint32_t words = span / 4u;                            /* nº de palabras de 4B */
-    size_t   bytes = ((size_t) words + 7u) / 8u + 1u;      /* 1 bit por palabra + pad */
+    size_t bytes = mapa_bytes(vm->heap_next - vm->heap_start);   /* lo que necesita esta colecta */
     if (vm->gc_valid_map == NULL || vm->gc_valid_map_size < bytes) {
+        size_t todo = bpvm_sabotaje_mapa ? bytes : mapa_bytes(vm->heap_top - vm->heap_start);
         bpvm_free(vm->gc_valid_map);
-        vm->gc_valid_map = (uint8_t*) bpvm_calloc(1, bytes);
-        vm->gc_valid_map_size = vm->gc_valid_map ? bytes : 0;
+        vm->gc_valid_map = (uint8_t*) bpvm_calloc(1, todo);
+        if (vm->gc_valid_map == NULL && todo > bytes) {
+            todo = bytes;
+            vm->gc_valid_map = (uint8_t*) bpvm_calloc(1, bytes);
+        }
+        vm->gc_valid_map_size = vm->gc_valid_map ? todo : 0;
     } else {
-        memset(vm->gc_valid_map, 0, vm->gc_valid_map_size);
+        memset(vm->gc_valid_map, 0, bytes);
     }
     /* V7/H7 #598 — SIN MEMORIA PARA EL MAPA. Aquí ponía «is_heap_ref rechaza todo (conservador)», y era lo
      * contrario: sin mapa no se reconoce ninguna raíz, no se marca nada, y lo que venía después —cerrar los File

@@ -595,14 +595,14 @@ test-tablasim: $(LIBOBJ)
 HEAPD_BIN = build/test_heapdescarrilado.exe
 test-heapdescarrilado: $(LIBOBJ)
 	@mkdir -p build
-	$(call fixture,HeapRoto)
-	@if [ ! -f samples/HeapRoto.mod ]; then \
-	  echo "(skip test-heapdescarrilado: no hay samples/HeapRoto.mod y no se ha podido generar)"; \
+	$(call fixture,HeapRoto HeapCrece)
+	@if [ ! -f samples/HeapRoto.mod ] || [ ! -f samples/HeapCrece.mod ]; then \
+	  echo "(skip test-heapdescarrilado: no hay samples/HeapRoto.mod o HeapCrece.mod y no se han podido generar)"; \
 	else \
 	  $(CC) $(CFLAGS) -Isrc test/test_heapdescarrilado.c \
 	    $(LIBOBJ) -o $(HEAPD_BIN) $(LDFLAGS); \
 	  echo "--- el heap descarrilado (esperado: control PASS, estropeado PASS, sin mapa PASS y la linea OK) ---"; \
-	  (cd samples && ../$(HEAPD_BIN) HeapRoto.mod); \
+	  (cd samples && ../$(HEAPD_BIN) HeapRoto.mod HeapCrece.mod); \
 	fi
 
 # V7/H7 #595 (28-sep) — Heap.compact() con el scheduler SMP: el caso de la revision (un hilo que muere

@@ -25,6 +25,12 @@
  * dos runs, la excepción al que no era. (Si el throw de B tuviera que colectar, su colecta descarrilaría también y la
  * excepción sería suya de verdad: por eso el heap con sitio.)
  *
+ * V8 #787 (4-nov) — EL MAPA SE PIDE UNA VEZ. Tres pasadas más. HeapCrece llena el heap de objetos vivos, colecta tras colecta,
+ * y tras la primera colecta la siguiente reserva del mapa falla: ninguna colecta la pide y el programa acaba bien; con el
+ * mapa a la medida de lo usado, como antes (bpvm_sabotaje_mapa), alguna la pide y el programa muere, como en la Metro. Y si
+ * el mapa entero no cabe, HeapRoto con un tope por debajo de él: la parte usada, y el programa no lo nota. La pasada «sin
+ * mapa» de #598 hace fallar las dos peticiones. Sólo VM-C.
+ *
  * Salida: una línea por pasada y, si las dos van, «OK: ...» (la señal de check-testc). exit 0 si pasan.
  */
 #include "bpvm.h"
@@ -39,11 +45,16 @@
 
 static int s_estropear = 0;
 static int s_estropeado = 0;
+static int s_armar = 0;   /* #787: tras la primera colecta, la siguiente reserva del mapa falla */
 static char s_salida[4096];
 static size_t s_n = 0;
 
 static void gancho(bpvm_t* vm, bpvm_thread_t* tc, uint32_t pc, int line, const char* source, void* user) {
     (void) tc; (void) pc; (void) line; (void) source; (void) user;
+    if (s_armar && vm->gc_valid_map != NULL) {
+        s_armar = 0;
+        bpvm_alloc_prueba_fallar("heap.c");
+    }
     if (!s_estropear || s_estropeado) return;
     if (vm->heap_next <= vm->heap_start) return;   /* todavía no hay ningún bloque */
     s_estropeado = 1;
@@ -72,7 +83,8 @@ static void recoge(const char* s, size_t len, void* user) {
     s_salida[s_n] = 0;
 }
 
-/* Una pasada; devuelve 0 si PASS. `sin_mapa` (#598): sin estropear, falla la reserva del mapa del primer GC. */
+/* Una pasada; devuelve 0 si PASS. `sin_mapa` (#598): sin estropear, fallan las reservas del mapa del primer GC, la del mapa
+ * entero y la de la parte usada. 2 (#787): el mapa entero no cabe, y la parte usada sí. */
 static int corre(const char* mod, int estropear, int sin_mapa, const char* esperado) {
     size_t mem_size = 512 * 1024;
     uint8_t* mem = (uint8_t*) calloc(1, mem_size);
@@ -96,18 +108,52 @@ static int corre(const char* mod, int estropear, int sin_mapa, const char* esper
         fprintf(stderr, "no arranca el hilo io\n");
         bpvm_destroy(vm); free(mem); return 1;
     }
-    if (sin_mapa) bpvm_alloc_prueba_fallar("heap.c");   /* la ÚNICA reserva de heap.c: el mapa del GC */
+    size_t tope = (vm->heap_top - vm->heap_start) / 64u;   /* la mitad del mapa entero */
+    if (sin_mapa == 1) bpvm_alloc_prueba_fallar_veces("heap.c", 2);   /* las ÚNICAS reservas de heap.c: el mapa del GC */
+    if (sin_mapa == 2) bpvm_alloc_prueba_tope("heap.c", tope);
     s = bpvm_run(vm);
     bpvm_alloc_prueba_fallar(NULL);
+    bpvm_alloc_prueba_tope(NULL, 0);
     bpvm_io_stop(vm);
     int descarrilo = vm->gc_descarrilo;
     /* Sin mapa, el GC siguiente ya lo tiene: el último no descarrila, así que ahí no se mira. */
-    int pass = (s == BPVM_OK) && (s_estropeado == (estropear != 0)) && (sin_mapa || descarrilo == (estropear != 0))
+    int pass = (s == BPVM_OK) && (s_estropeado == (estropear != 0)) && (sin_mapa == 1 || descarrilo == (estropear != 0))
                && strstr(s_salida, esperado) != NULL
-               && strstr(s_salida, "lo de antes: guardado 42") != NULL;   /* lo vivo, intacto */
+               && strstr(s_salida, "lo de antes: guardado 42") != NULL   /* lo vivo, intacto */
+               && (sin_mapa != 2 || (vm->gc_valid_map_size > 0u && vm->gc_valid_map_size <= tope));
     printf("[heap] %s: status=%s, cabecera estropeada=%d, el ultimo GC descarrilo=%d, el programa dijo: %s",
-           sin_mapa ? "sin mapa        " : estropear == 2 ? "traga el siguiente" : estropear ? "estropeado      "
-           : "control         ", bpvm_status_str(s), s_estropeado, descarrilo, s_salida);
+           sin_mapa == 1 ? "sin mapa        " : sin_mapa == 2 ? "sin el mapa entero" : estropear == 2 ? "traga el siguiente"
+           : estropear ? "estropeado      " : "control         ", bpvm_status_str(s), s_estropeado, descarrilo, s_salida);
+    printf("[heap] %s\n", pass ? "PASS" : "FAIL");
+    bpvm_destroy(vm); free(mem);
+    return pass ? 0 : 1;
+}
+
+/* ── V8 #787 — el mapa, una vez: tras la primera colecta, la siguiente reserva del mapa falla ── */
+static int corre_crece(const char* mod, int sabotaje) {
+    size_t mem_size = 512 * 1024;
+    uint8_t* mem = (uint8_t*) calloc(1, mem_size);
+    if (!mem) { fprintf(stderr, "OOM\n"); return 1; }
+    bpvm_t* vm = bpvm_init(mem, mem_size, 0);
+    if (!vm || bpvm_load_mod(vm, mod) != BPVM_OK) { fprintf(stderr, "no carga %s\n", mod); if (vm) bpvm_destroy(vm); free(mem); return 1; }
+    s_estropear = 0; s_estropeado = 0; s_n = 0; s_salida[0] = 0;
+    s_armar = 1;
+    bpvm_sabotaje_mapa = sabotaje;
+    bpvm_set_debug_hook(vm, gancho, NULL, NULL);
+    bpvm_io_ops_t ops;
+    memset(&ops, 0, sizeof ops);
+    ops.line = recoge;
+    if (bpvm_io_start(vm, &ops, 0) != 0) { fprintf(stderr, "no arranca el hilo io\n"); bpvm_destroy(vm); free(mem); return 1; }
+    bpvm_status_t s = bpvm_run(vm);
+    bpvm_alloc_prueba_fallar(NULL);
+    bpvm_io_stop(vm);
+    bpvm_sabotaje_mapa = 0;
+    int hubo_colecta = !s_armar;
+    s_armar = 0;
+    int bien = s == BPVM_OK && strstr(s_salida, "suma 4950") != NULL && strstr(s_salida, "fin") != NULL;
+    int pass = hubo_colecta && (sabotaje ? !bien : bien);
+    printf("[heap] %s: status=%s, hubo colecta=%d, el programa dijo: %s\n",
+           sabotaje ? "el mapa crece    " : "el mapa, una vez ", bpvm_status_str(s), hubo_colecta, s_salida);
     printf("[heap] %s\n", pass ? "PASS" : "FAIL");
     bpvm_destroy(vm); free(mem);
     return pass ? 0 : 1;
@@ -190,15 +236,19 @@ int main(int argc, char** argv) {
     bpvm_fs_register_host();   /* el núcleo resuelve por la fachada del FS (como test_kill) */
     setvbuf(stdout, NULL, _IONBF, 0);
     const char* mod = (argc > 1) ? argv[1] : "HeapRoto.mod";
+    const char* crece = (argc > 2) ? argv[2] : "HeapCrece.mod";
     int rc = 0;
     rc |= corre(mod, 0, 0, "sin excepcion");
     rc |= corre(mod, 1, 0, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);
     rc |= corre(mod, 0, 1, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);   /* #598 */
     rc |= corre(mod, 2, 0, "cazada: " BPVM_MSG_HEAP_DESCARRILADO);   /* #593: el que se recomponía en silencio */
     rc |= corre_dos_tareas(mod);                                       /* #659: la marca, de la tarea */
+    rc |= corre(mod, 0, 2, "sin excepcion");                           /* #787: el mapa entero no cabe */
+    rc |= corre_crece(crece, 0);                                       /* #787: el mapa, una vez */
+    rc |= corre_crece(crece, 1);                                       /* #787: y a la medida de lo usado, no */
     if (rc == 0)
         printf("OK: el heap descarrilado es una excepcion atrapable (y sin estropear, ninguna); sin memoria para el "
                "mapa del GC, la misma, y nada barrido; y un bloque que se traga justo el siguiente, tambien (#593); y la "
-               "del heap descarrilado, a la tarea que reservo, no a otra (#659)\n");
+               "del heap descarrilado, a la tarea que reservo, no a otra (#659); y el mapa se pide una vez (#787)\n");
     return rc;
 }

@@ -7388,12 +7388,21 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   aunque tenga libre lo de arriba (190 + 147 KB pasan de los 298), y sólo devuelve lo de arriba si llega a 128 KB. Eso
   explicaría que `LlenaHeap`, casi el mismo programa, llenara el heap esa misma mañana (1516 cajas y un `gc()` al
   final): es cuestión de unos KB al soltar el mapa de 122.
-- **Propuesta, por aprobar.** El mapa se pide UNA vez, para todo el heap, en la primera colecta: 193 KB en la Metro, con
+- **La propuesta.** El mapa se pide UNA vez, para todo el heap, en la primera colecta: 193 KB en la Metro, con
   la SRAM aún casi vacía (ahí sobra: sin el mapa, el pico es de 59 KB de 298). Ya no crece, y ninguna colecta más pide
   memoria. Si no cabe, lo de hoy: la parte usada. En las demás placas es lo que ya piden con el heap lleno, sólo que
   antes: 3 KB en la C3 y la C6, 7 en la Pico 2, 12 en la Nucleo. En julio (`91972833`) pedirlo por capacidad colgaba la
   Metro en cada `gc()`, porque su `malloc` no podía dar 256 KB; hay que comprobarlo con la imagen de hoy, que tiene los
   298 KB y el techo en `_sbrk`. La pasada «sin mapa» de `test-heapdescarrilado` tiene que hacer fallar las dos peticiones.
+- **Aprobada** (Eduardo, 4-nov: *«1 y 2 OK»*) **y hecha en el PC:** `build_gc_valid_map` pide el mapa entero la primera vez
+  y, si no cabe, la parte usada. Limpiarlo es sólo lo usado: en un heap grande con poco dentro sería borrar en cada colecta un
+  mapa casi entero que no se va a leer. Tres pasadas nuevas en `test-heapdescarrilado`: `HeapCrece` llena el heap de objetos
+  vivos y, tras la primera colecta, la siguiente reserva del mapa falla: ninguna la pide y el programa acaba bien; con el
+  mapa a la medida de lo usado, como antes (`bpvm_sabotaje_mapa`), «SIN MEMORIA» y «heap descarrilado», igual que en la
+  Metro; y con el mapa entero por encima de un tope, la parte usada, y el programa no lo nota. La pasada «sin mapa» hace
+  fallar las dos peticiones (`bpvm_alloc_prueba_fallar_veces`). Sólo VM-C: en miVM no hay mapa que pedir.
+- **Lo que hay que saber:** con 8 MB de heap, sin los 2 MB de SQLite, el mapa serían 256 KB de los 298. Cabe, pero al resto
+  de `malloc` le quedaría poco desde la primera colecta, y no sólo con el heap lleno. Hoy la Metro lleva 6 MB.
 
 #### 🔵 `#786` — idea de Eduardo: `loadModule` / `unloadModule` y un programa genérico que lance otro y atrape sus errores (abierta el 4-nov; **decidida la A el 4-nov, con la clase `Overlay`; es el hito H9**, y su estado va en «🧩 H9»: `V8_IDEAS` §E13)
 

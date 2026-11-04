@@ -143,7 +143,9 @@ static void blk_unlink(bpvm_blk_t* b) {
 
 /* V7/H7 #598 — la inyección de fallos de las pruebas (bpvm_alloc.h). */
 static const char* volatile g_fallar_en = NULL;
-void bpvm_alloc_prueba_fallar(const char* fichero) { g_fallar_en = fichero; }
+static volatile int g_fallar_veces = 0;
+void bpvm_alloc_prueba_fallar(const char* fichero) { bpvm_alloc_prueba_fallar_veces(fichero, 1); }
+void bpvm_alloc_prueba_fallar_veces(const char* fichero, int veces) { g_fallar_veces = veces; g_fallar_en = fichero; }
 static int termina_en(const char* s, const char* fin) {
     size_t a = strlen(s), b = strlen(fin);
     return a >= b && strcmp(s + a - b, fin) == 0;
@@ -171,7 +173,7 @@ static int pasa_del_presupuesto(size_t n, const char* file) {
 void* bpvm_alloc_raw(size_t n, int zero, bpvm_alloc_kind_t k,
                      const char* file, int line) {
     if (g_fallar_en != NULL && file != NULL && termina_en(file, g_fallar_en)) {
-        g_fallar_en = NULL;   /* una vez */
+        if (--g_fallar_veces <= 0) g_fallar_en = NULL;
         return NULL;
     }
     if (pasa_del_tope(n, file) || pasa_del_presupuesto(n, file)) return NULL;
