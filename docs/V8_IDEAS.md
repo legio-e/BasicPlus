@@ -6114,11 +6114,50 @@ posiciones en el `.mod`, aditiva como las otras subtablas, le daría a `unload` 
 objetos. El error sería *«queda un literal de B en una global de M1»*. Un `.mod` compilado antes de la tabla no se podría
 comprobar.
 
+### Los literales de un overlay, en el heap (la idea de Eduardo, 4-nov; por aprobar)
+
+> *«Un literal de B, si se descarga desaparece. Ahora un literal de B una vez cargado se convierte en un string en el heap.
+> Si ese literal está referenciado en A, lo que está referenciado es el string y está en el heap. Si desaparece B, no
+> debería haber ningún problema, sigue en el heap y GC no lo borra porque hay referencias vivas en A.»*
+
+**Hoy no es así.** Un literal se queda en el bloque de datos de su módulo, y la referencia es su dirección (`LEA_GLOBAL`,
+`MOD_FORMAT` §5). Medido en las dos VMs, con un literal de 130 B: asignarlo a una variable gasta 0 B de heap, guardarlo en
+una global gasta 0 B, y una cadena de esa medida hecha en marcha gasta 144 B.
+
+**Pero se puede hacer que sea así, y es mejor que la tabla de arriba.** Sólo para los módulos de un overlay:
+
+- el compilador emite una instrucción nueva, `LEA_STR`, en lugar de `LEA_GLOBAL`, cuando el símbolo es una cadena (lo sabe
+  `ModWriter`: `addConstantString`);
+- en un módulo normal, `LEA_STR` hace lo mismo que `LEA_GLOBAL`, con una comparación de más (`cs` frente al primer módulo
+  del overlay);
+- en un módulo del overlay, crea el string en el heap, con el camino de siempre, y empuja su handle.
+
+Con `M1.setNombre("Demo")`, a M1 le llega un string del heap. Se descarga B, el string sigue ahí, y el GC lo suelta cuando
+M1 deje de apuntarlo. Es lo que decía Eduardo.
+
+**Al evaluarlo, no al cargar.** Al cargar habría que duplicar en el heap todos los literales de B, se usen o no, y `LEA_STR`
+necesitaría una tabla para encontrar cada uno, que además serían raíces del GC. Al evaluarlo no hay tabla.
+
+**Lo que desaparece:** la tabla de las globales, `__overlayCopia` (`e.msg` ya es del heap), mirar literales en los campos
+y el caso de `Log.ruta`. `unload` sólo busca objetos de las clases que se van.
+
+**Lo que cuesta:**
+
+- cada vez que B evalúa un literal, una reserva: un bucle con literales irá más lento y dará más trabajo al GC. Sólo en un
+  overlay; A y M1 no lo notan. Sin medir. Si duele, dos arreglos: no copiar donde el literal no se guarda (`print`, `==`,
+  `+`) o una caché por literal;
+- todos los `.mod` se recompilan, y un `.mod` de antes en un overlay sigue con literales sin proteger;
+- **las natives de B:** su código tiene los literales en crudo. En la etapa 1, un overlay no carga sus `.mdn` y corre
+  interpretado, que es lo que ya hace un módulo sin ellos.
+
+**Lo que no cubre:** los arrays del bloque de datos de B (`var t: integer[4]` de módulo, un `const` de bytes) también son
+direcciones, y no se pueden copiar, porque se escribe en ellos. Si M1 se queda con uno en un campo, `unload` lo ve; en una
+global, no. Es raro, y se apunta.
+
 ### Lo que hay que decidir sobre el algoritmo (Eduardo)
 
 1. **¿OK al algoritmo?** Sobre todo a las condiciones de `load` (desde `Main`, sin hilos, sin ficheros abiertos) y a una
    sola carga a la vez.
 2. **El nombre del módulo:** la clase `Overlay` en un módulo nuevo `Overlays`, como `Collections.Map`. En `Core` la
    pagarían todos los programas.
-3. **La tabla de las globales** del ejemplo de arriba: ¿entra en la etapa 1? Mi recomendación, sí: sin ella es un fallo
-   silencioso.
+3. **Los literales de un overlay, en el heap** (arriba), en lugar de la tabla de las globales.
