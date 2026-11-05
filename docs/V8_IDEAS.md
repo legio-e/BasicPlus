@@ -5650,8 +5650,11 @@ tema 5: 35 de 70.**
 | E | un `struct` con estado, como una clase que se copia | el traductor | 180 | 46 | 2 | |
 | F | los tipos anónimos (ya propuesto) | el traductor | 15 | 7 | 3 | |
 
-- **A.** `foreach (T x in c)` con una clase del programa es `E e = c.GetEnumerator(); while (e.MoveNext()) { T x = e.Current; … }`, con `Dispose` si lo tiene; y `IEnumerable`,
-  `IEnumerator`, `ArrayList` y `Hashtable`, en `CsSystem`, sobre `List` y `Map`. Los 141 son casi todos de `IEnumerable<T>`, que pide genéricos: sin ellos, 11.
+- **A, hecho.** `foreach (T x in c)` con una clase del programa es `E e = c.GetEnumerator(); while (e.MoveNext()) { T x = e.Current; … }`, y el enumerador se suelta al salir si es
+  `IDisposable`, o puede serlo una hija suya (`test-188`). También sobre una cadena. `IEnumerable` e `IEnumerator`, en `CsSystem`. **`ArrayList` es la `List` de Core** (Eduardo: *«ArrayList es
+  nuestra List»*): `add`, `get`, `set`, `length` y el `foreach` de JC; en `CsSystem`, sólo lo que ella no tiene: el índice de `Add`, `Clear` y el enumerador. `Hashtable` e `IDictionary` no
+  pueden ser el `Map`, que ordena sus llaves, y aquí una llave es cualquier objeto: una clase de `CsSystem`, sobre dos `List`, que busca una a una. Casos `ForeachPropio` y `Colecciones`.
+  **Mono: 595** (+9). **El tema 3: 61.** Los 141 eran casi todos de `IEnumerable<T>`, que pide genéricos.
 - **B.** `#522` no cambia: JC sigue sin dejar convertir un entero en un enum. Lo que cambia es lo que escribe el traductor para los enums del programa que lo necesitan: los que se
   operan (`A.x | A.y`, `~e`, `e + 1`), se crean de un número (`(E) n`) o llevan valores negativos. Ésos no serían un `enum` de JC, sino una clase de constantes, y sus variables, `int`:
   `class Permiso { public const int Leer = 1; … }` e `int p = Permiso.Leer | Permiso.Escribir;`. Probado: una constante de clase vale en un `case` y en un `|`, igual en las dos VMs. Los

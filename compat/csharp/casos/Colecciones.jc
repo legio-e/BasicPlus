@@ -1,0 +1,122 @@
+module CsColecciones
+{
+   import CsSystem;
+
+   class M
+   {
+      private CsSystem.Hashtable tabla;
+      private function M()
+      {
+         this.tabla = new CsSystem.Hashtable();
+      }
+      private static function int Total(List l)
+      {
+         int t = 0;
+         foreach (var elemento_s1 in l)
+         {
+            int x = ((Integer) elemento_s1).value();
+            t += x;
+         }
+         return t;
+      }
+      public static function int Main()
+      {
+         List l = new List();
+         if (CsSystem.ArrayList_Add(l, "uno") != 0)
+         {
+            return 1;
+         }
+         l.add(new Integer(5));
+         M objeto = new M();
+         l.add(objeto);
+         if (l.length() != 3)
+         {
+            return 2;
+         }
+         if ((string) l.get(0) != "uno" || ((Integer) l.get(1)).value() != 5 || (M) l.get(2) != objeto)
+         {
+            return 3;
+         }
+         l.set(1, new Integer(7));
+         if (((Integer) l.get(1)).value() != 7)
+         {
+            return 4;
+         }
+         int n = 0;
+         foreach (var o in l)
+         {
+            n++;
+         }
+         if (n != 3)
+         {
+            return 5;
+         }
+         List numeros = new List();
+         for (int i = 0; i <= 19; i++)
+         {
+            numeros.add(new Integer(i));
+         }
+         if (M.Total(numeros) != 190)
+         {
+            return 6;
+         }
+         CsSystem.ArrayList_Clear(numeros);
+         if (numeros.length() != 0 || M.Total(numeros) != 0)
+         {
+            return 7;
+         }
+         CsSystem.Hashtable h = new CsSystem.Hashtable();
+         h.Add("A", new Integer(10));
+         h.set_Item("B", new Integer(20));
+         h.set_Item("B", new Integer(21));
+         h.Add(new Integer(5), "cinco");
+         if (h.Count != 3 || ((Integer) h.get_Item("A")).value() != 10 || ((Integer) h.get_Item("B")).value() != 21 || (string) h.get_Item(new Integer(5)) != "cinco")
+         {
+            return 8;
+         }
+         if (!h.Contains("B") || !h.ContainsKey(new Integer(5)) || h.Contains("Z") || h.get_Item("Z") != null)
+         {
+            return 9;
+         }
+         string calculada = "B";
+         calculada += "";
+         if (((Integer) h.get_Item(calculada)).value() != 21)
+         {
+            return 13;
+         }
+         CsSystem.Hashtable sinNumeros = new CsSystem.Hashtable();
+         sinNumeros.set_Item("A", new Integer(1));
+         sinNumeros.set_Item("B", new Integer(2));
+         CsSystem.Hashtable d = sinNumeros;
+         string llaves = "";
+         foreach (var elemento_s2 in d.Keys)
+         {
+            string k = (string) elemento_s2;
+            llaves += k;
+         }
+         if (llaves != "AB")
+         {
+            return 10;
+         }
+         if (d.Count != 2)
+         {
+            return 11;
+         }
+         objeto.tabla.Add("x", objeto);
+         if ((M) objeto.tabla.get_Item("x") != objeto)
+         {
+            return 12;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = M.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

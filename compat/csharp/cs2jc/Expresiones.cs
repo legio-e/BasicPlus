@@ -353,6 +353,10 @@ namespace Cs2Jc
         {
             switch (e)
             {
+                case AssignmentExpressionSyntax c when c.IsKind(SyntaxKind.SimpleAssignmentExpression)
+                                                       && c.Left is ElementAccessExpressionSyntax ea && EsColeccion(ea):
+                    return Expr(ea.Expression) + (EsLista(m.GetTypeInfo(ea.Expression).Type) ? ".set(" : ".set_Item(")
+                           + Expr(ea.ArgumentList.Arguments[0].Expression) + ", " + Expr(c.Right) + ")";
                 case AssignmentExpressionSyntax a:
                     if (a.IsKind(SyntaxKind.CoalesceAssignmentExpression))
                     {
@@ -938,10 +942,17 @@ namespace Cs2Jc
             // `s[i]`: su carácter, que en JC es su código (el escalón 1)
             if (EsCadena(t) && ea.ArgumentList.Arguments.Count == 1)
                 return "charCodeAt(" + Expr(ea.Expression) + ", " + Indice(ea.ArgumentList.Arguments[0].Expression) + ")";
+            if (EsColeccion(ea))
+                return Expr(ea.Expression) + (EsLista(m.GetTypeInfo(ea.Expression).Type) ? ".get(" : ".get_Item(") + Expr(ea.ArgumentList.Arguments[0].Expression) + ")";
             if (m.GetSymbolInfo(ea).Symbol is IPropertySymbol p && p.IsIndexer)
                 return Rechaza(ea, DelPrograma(p) ? Porque.H7(Porque.Indexadores) : Porque.DeNet(NombreCompleto(p.ContainingType) + "[i]"));
             return RechazaNodo(ea);
         }
+
+        /// ¿`x[i]` de una `ArrayList` o una `Hashtable`? En JC, `get` y `set` de la `List`, y `get_Item` y `set_Item` de la tabla.
+        bool EsColeccion(ElementAccessExpressionSyntax ea) =>
+            m.GetSymbolInfo(ea).Symbol is IPropertySymbol p && p.IsIndexer && !DelPrograma(p) && ea.ArgumentList.Arguments.Count == 1
+            && (EsLista(m.GetTypeInfo(ea.Expression).Type) || EsTabla(m.GetTypeInfo(ea.Expression).Type));
 
         /// Un índice: un uint o un ulong (en JC, un long), con `(int)` delante; JC indexa con un entero.
         string Indice(ExpressionSyntax i) => EsUInt(m.GetTypeInfo(i).Type) || EsULong(m.GetTypeInfo(i).Type) ? "(int) " + Atomo(i) : Expr(i);
@@ -1021,6 +1032,8 @@ namespace Cs2Jc
                     }
                 }
                 if (NombreCompleto(nt) == "System.FormattableString") return "string";   // un `$"…"` como objeto: su texto (test-interpolation-10)
+                if (EsLista(nt)) return "List";                            // «ArrayList es nuestra List»
+                if (NombreCompleto(nt) == "System.Collections.IDictionary") { imports.Add("CsSystem"); return "CsSystem.Hashtable"; }
                 if (ExcepcionJc(nt) is string ex) return ex;              // Exception, RuntimeError o la de CsSystem
                 if (InterfazDeCsSystem(nt) is string ci) return ci;       // IDisposable (H8, tema 2)
                 if (ClaseDeCsSystem(nt) is string cc) return cc;          // TextWriter y StringWriter (H8, tema 1)

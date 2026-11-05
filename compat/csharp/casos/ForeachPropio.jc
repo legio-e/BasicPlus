@@ -1,0 +1,217 @@
+module CsForeachPropio
+{
+   import CsSystem;
+
+   class Pasos
+   {
+      private int n;
+      public function Pasos(int n)
+      {
+         this.n = n;
+      }
+      public function bool MoveNext()
+      {
+         int valor_s1 = this.n;
+         this.n--;
+         return valor_s1 > 0;
+      }
+      public int Current
+      {
+         get
+         {
+            return this.n;
+         }
+      }
+   }
+
+   class Cuenta
+   {
+      public function Pasos GetEnumerator()
+      {
+         return new Pasos(3);
+      }
+   }
+
+   class Suelta : Pasos, CsSystem.IDisposable
+   {
+      public static int soltados { get; set; } = 0;
+      public function Suelta() : base(2)
+      {
+      }
+      @implement{ IDisposable }
+      public function void Dispose()
+      {
+         Suelta.soltados++;
+      }
+   }
+
+   class ConSuelta
+   {
+      public function Pasos GetEnumerator()
+      {
+         return new Suelta();
+      }
+   }
+
+   class Trozos : CsSystem.IEnumerable
+   {
+      @implement{ IEnumerable }
+      public function CsSystem.IEnumerator GetEnumerator()
+      {
+         return new Trozos_Paso();
+      }
+   }
+
+   class Trozos_Paso : CsSystem.IEnumerator
+   {
+      private int i = -1;
+      @implement{ IEnumerator }
+      public function bool MoveNext()
+      {
+         this.i++;
+         return this.i < 2;
+      }
+      @implement{ IEnumerator }
+      public function void Reset()
+      {
+         this.i = -1;
+      }
+      @implement{ IEnumerator }
+      public Object Current
+      {
+         get
+         {
+            return this.i == 0 ? "uno" : "dos";
+         }
+      }
+   }
+
+   class M
+   {
+      public static function int Main()
+      {
+         int t = 0;
+         Pasos enumerador_s2 = new Cuenta().GetEnumerator();
+         try
+         {
+            while (enumerador_s2.MoveNext())
+            {
+               int x = enumerador_s2.Current;
+               t = t * 10 + x;
+            }
+         }
+         finally
+         {
+            CsSystem.Foreach_Suelta(enumerador_s2);
+         }
+         if (t != 210)
+         {
+            return 1;
+         }
+         t = 0;
+         Pasos enumerador_s3 = new Cuenta().GetEnumerator();
+         try
+         {
+            while (enumerador_s3.MoveNext())
+            {
+               int x = enumerador_s3.Current;
+               if (x == 2)
+               {
+                  continue;
+               }
+               if (x == 0)
+               {
+                  break;
+               }
+               Pasos enumerador_s4 = new Cuenta().GetEnumerator();
+               try
+               {
+                  while (enumerador_s4.MoveNext())
+                  {
+                     int y = enumerador_s4.Current;
+                     t += y + 1;
+                  }
+               }
+               finally
+               {
+                  CsSystem.Foreach_Suelta(enumerador_s4);
+               }
+            }
+         }
+         finally
+         {
+            CsSystem.Foreach_Suelta(enumerador_s3);
+         }
+         if (t != 6)
+         {
+            return 2;
+         }
+         Pasos enumerador_s5 = new ConSuelta().GetEnumerator();
+         try
+         {
+            while (enumerador_s5.MoveNext())
+            {
+               int x = enumerador_s5.Current;
+               if (x == 0)
+               {
+                  break;
+               }
+            }
+         }
+         finally
+         {
+            CsSystem.Foreach_Suelta(enumerador_s5);
+         }
+         if (Suelta.soltados != 1)
+         {
+            return 3;
+         }
+         string todo = "";
+         CsSystem.IEnumerator enumerador_s6 = new Trozos().GetEnumerator();
+         while (enumerador_s6.MoveNext())
+         {
+            string s = (string) enumerador_s6.Current;
+            todo += s;
+         }
+         if (todo != "unodos")
+         {
+            return 4;
+         }
+         CsSystem.IEnumerator enumerador_s7 = new Trozos().GetEnumerator();
+         while (enumerador_s7.MoveNext())
+         {
+            Object o = enumerador_s7.Current;
+            todo += (string) o;
+         }
+         if (todo != "unodosunodos")
+         {
+            return 5;
+         }
+         int suma = 0;
+         string cadena_s8 = "abc";
+         for (int indice_s8 = 0; indice_s8 <= strlen(cadena_s8) - 1; indice_s8++)
+         {
+            int c = charCodeAt(cadena_s8, indice_s8);
+            if (c == 'b')
+            {
+               continue;
+            }
+            suma += c;
+         }
+         if (suma != 'a' + 'c')
+         {
+            return 6;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = M.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

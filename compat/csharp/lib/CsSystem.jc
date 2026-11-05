@@ -117,6 +117,194 @@ module CsSystem
    // Lo poco que piden las pruebas (H8, tema 1): escribir en un `TextWriter`. Éste no escribe en ningún sitio, como
    // `TextWriter.Null` y `StreamWriter.Null`; `StringWriter` se queda lo que le escriben.
 
+   // `IEnumerable` e `IEnumerator`, los que no son genéricos (H8): una clase del programa los implementa como los suyos, y el foreach
+   // sobre ella es el bucle que escribe C#, con `Foreach_Suelta` al salir, si el enumerador se suelta.
+   public interface IEnumerator
+   {
+      function bool MoveNext();
+      function void Reset();
+      Object Current { get; set; }
+   }
+
+   public interface IEnumerable
+   {
+      function IEnumerator GetEnumerator();
+   }
+
+   // `ArrayList` es la `List` de Core (Eduardo: «ArrayList es nuestra List»). Aquí, sólo lo que ella no tiene: el índice que devuelve `Add`,
+   // `Clear`, y el enumerador de `GetEnumerator`; el foreach sobre una lista es el de JC.
+   public function int ArrayList_Add(List l, Object x)
+   {
+      l.add(x);
+      return l.length() - 1;
+   }
+
+   public function void ArrayList_Clear(List l)
+   {
+      for (int i = l.length() - 1; i >= 0; i--)
+      {
+         l.remove(i);
+      }
+   }
+
+   public class ArrayList_Recorre : IEnumerator
+   {
+      private List lista;
+      private int i = -1;
+
+      public function ArrayList_Recorre(List lista)
+      {
+         this.lista = lista;
+      }
+
+      @implement{ IEnumerator }
+      public function bool MoveNext()
+      {
+         this.i += 1;
+         return this.i < this.lista.length();
+      }
+
+      @implement{ IEnumerator }
+      public function void Reset()
+      {
+         this.i = -1;
+      }
+
+      @implement{ IEnumerator }
+      public Object Current
+      {
+         get
+         {
+            return this.lista.get(this.i);
+         }
+      }
+   }
+
+   // `Hashtable` e `IDictionary` (H8, tema 3), lo que usan los programas: lo demás no se traduce. El `Map` de Collections no vale: ordena sus
+   // llaves, y aquí una llave es cualquier objeto. Las guarda en orden, en una `List`, y las busca una a una: en C#, el orden no está definido,
+   // y aquí no importa la velocidad. El indexador es `get_Item` y `set_Item`, que JC no tiene indexadores.
+   /// ¿La misma llave? Dos cajas o dos cadenas, por su valor; lo demás, el mismo objeto.
+   public function bool Llave_Misma(Object a, Object b)
+   {
+      if (a == null || b == null)
+      {
+         return a == b;
+      }
+      string clase = Type_Clase(a);
+      if (clase != Type_Clase(b))
+      {
+         return false;
+      }
+      if (clase == "?" || a is Integer || a is Long || a is Double || a is Float || a is Boolean)
+      {
+         return "" + a == "" + b;     // una cadena no es un objeto: su clase es "?"
+      }
+      return a == b;
+   }
+
+   public class Hashtable
+   {
+      private List llaves = new List();
+      private List valores = new List();
+
+      public function Hashtable() { }
+
+      private function int Busca(Object llave)
+      {
+         for (int i = 0; i <= this.llaves.length() - 1; i++)
+         {
+            if (Llave_Misma(this.llaves.get(i), llave))
+            {
+               return i;
+            }
+         }
+         return -1;
+      }
+
+      public int Count
+      {
+         get
+         {
+            return this.llaves.length();
+         }
+      }
+
+      public List Keys
+      {
+         get
+         {
+            return this.llaves;
+         }
+      }
+
+      public List Values
+      {
+         get
+         {
+            return this.valores;
+         }
+      }
+
+      public function void Add(Object llave, Object valor)
+      {
+         if (this.Busca(llave) >= 0)
+         {
+            throw new ArgumentException("Item has already been added.");
+         }
+         this.llaves.add(llave);
+         this.valores.add(valor);
+      }
+
+      public function void Clear()
+      {
+         ArrayList_Clear(this.llaves);
+         ArrayList_Clear(this.valores);
+      }
+
+      public function bool Contains(Object llave)
+      {
+         return this.Busca(llave) >= 0;
+      }
+
+      public function bool ContainsKey(Object llave)
+      {
+         return this.Busca(llave) >= 0;
+      }
+
+      public function Object get_Item(Object llave)
+      {
+         int i = this.Busca(llave);
+         if (i < 0)
+         {
+            return null;
+         }
+         return this.valores.get(i);
+      }
+
+      public function void set_Item(Object llave, Object valor)
+      {
+         int i = this.Busca(llave);
+         if (i < 0)
+         {
+            this.llaves.add(llave);
+            this.valores.add(valor);
+         }
+         else
+         {
+            this.valores.set(i, valor);
+         }
+      }
+   }
+
+   public function void Foreach_Suelta(Object o)
+   {
+      if (o is IDisposable)
+      {
+         IDisposable d = (IDisposable) o;
+         d.Dispose();
+      }
+   }
+
    // `System.Version`, sólo el tipo (test-447): sus miembros no se traducen
    public class Version
    {

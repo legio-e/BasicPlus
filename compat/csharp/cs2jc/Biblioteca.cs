@@ -85,7 +85,42 @@ namespace Cs2Jc
 
         /// Las interfaces de .NET que tiene CsSystem (H8, tema 2): una clase del programa las implementa como las suyas,
         /// y una variable puede ser de su tipo.
-        static readonly HashSet<string> InterfacesDeCsSystem = new HashSet<string> { "System.IDisposable" };
+        static readonly HashSet<string> InterfacesDeCsSystem = new HashSet<string>
+        {
+            "System.IDisposable", "System.Collections.IEnumerable", "System.Collections.IEnumerator"
+        };
+
+        /// Lo que tiene de .NET `Hashtable` en CsSystem (H8, tema 3), y por `IDictionary`: se llama igual. Lo demás, la biblioteca.
+        static readonly HashSet<string> MiembrosDeHashtable = new HashSet<string>
+        {
+            "System.Collections.Hashtable.Add", "System.Collections.Hashtable.Count", "System.Collections.Hashtable.Contains",
+            "System.Collections.Hashtable.ContainsKey", "System.Collections.Hashtable.Keys", "System.Collections.Hashtable.Values",
+            "System.Collections.Hashtable.Clear", "System.Collections.IDictionary.Add", "System.Collections.IDictionary.Contains",
+            "System.Collections.IDictionary.Keys", "System.Collections.IDictionary.Values", "System.Collections.IDictionary.Clear",
+        };
+
+        /// `ArrayList` es la `List` de Core (Eduardo: «ArrayList es nuestra List»), y `ICollection`, lo que da `Hashtable.Keys`, también.
+        static bool EsLista(ITypeSymbol t) => t != null && (NombreCompleto(t) == "System.Collections.ArrayList" || NombreCompleto(t) == "System.Collections.ICollection");
+
+        /// `IDictionary`: la `Hashtable` de CsSystem, que es la que hay.
+        static bool EsTabla(ITypeSymbol t) => t != null && (NombreCompleto(t) == "System.Collections.Hashtable" || NombreCompleto(t) == "System.Collections.IDictionary");
+
+        /// Un método de una `List` que en C# era `ArrayList`: `add`; lo que `List` no tiene, las funciones de CsSystem.
+        string LlamadaDeLista(InvocationExpressionSyntax inv, IMethodSymbol ms, MemberAccessExpressionSyntax objeto)
+        {
+            string l = Expr(objeto.Expression);
+            imports.Add("CsSystem");
+            switch (ms.Name)
+            {
+                case "Add":
+                    // su valor es el índice; como sentencia, nadie lo mira
+                    string x = Argumentos(inv.ArgumentList, ms);
+                    return inv.Parent is ExpressionStatementSyntax ? l + ".add(" + x + ")" : "CsSystem.ArrayList_Add(" + l + ", " + x + ")";
+                case "Clear": return "CsSystem.ArrayList_Clear(" + l + ")";
+                case "GetEnumerator": return "new CsSystem.ArrayList_Recorre(" + l + ")";
+                default: return Rechaza(inv, Porque.DeNet(NombreCompleto(ms.ContainingType) + "." + ms.Name));
+            }
+        }
 
         static bool EsDeCsSystem(ITypeSymbol t) => t != null && InterfacesDeCsSystem.Contains(NombreCompleto(t));
 
@@ -105,6 +140,7 @@ namespace Cs2Jc
             ["System.IO.StreamWriter"] = "TextWriter",
             ["System.IO.StringWriter"] = "StringWriter",
             ["System.Version"] = "Version",
+            ["System.Collections.Hashtable"] = "Hashtable",
         };
 
         /// El nombre en JC de una clase de CsSystem, con su import; null si no lo es.
@@ -209,6 +245,10 @@ namespace Cs2Jc
                 return "CsSystem." + ms.ContainingType.Name + "_" + ms.Name + "(" + Argumentos(inv.ArgumentList, ms) + ")";
             }
             var objeto = inv.Expression as MemberAccessExpressionSyntax;
+            if (EsLista(ms.ContainingType) && objeto != null) return LlamadaDeLista(inv, ms, objeto);
+            // un método de una interfaz de CsSystem o de su Hashtable: `e.MoveNext()`, `tabla.Add(k, v)`, con el mismo nombre
+            if ((EsDeCsSystem(ms.ContainingType) || MiembrosDeHashtable.Contains(clave)) && objeto != null)
+                return Expr(objeto.Expression) + "." + ms.Name + "(" + Argumentos(inv.ArgumentList, ms) + ")";
             // `e.ToString()` de un enum: su nombre, como en una cadena (#778; uno [Flags], no: lo dice Texto)
             if (ms.Name == "ToString" && inv.ArgumentList.Arguments.Count == 0 && objeto != null && EsEnum(m.GetTypeInfo(objeto.Expression).Type))
                 return Texto(objeto.Expression);
@@ -306,6 +346,10 @@ namespace Cs2Jc
             var cv = m.GetConstantValue(ma);
             if (cv.HasValue) return LiteralDeConstante(cv.Value, ma);
             if (clave == "System.String.Empty") return "\"\"";
+            // `Count`, de lo que aquí es una `List`; por `IDictionary`, es la de `ICollection`, y va a la `Hashtable`
+            if (s.Name == "Count" && EsLista(m.GetTypeInfo(ma.Expression).Type)) return Expr(ma.Expression) + ".length()";
+            if (EsDeCsSystem(s.ContainingType) || MiembrosDeHashtable.Contains(clave) || (s.Name == "Count" && EsTabla(m.GetTypeInfo(ma.Expression).Type)))
+                return Expr(ma.Expression) + "." + s.Name;     // `e.Current`, `tabla.Keys`
             // BP no tiene salida de error: lo que se escribe se calcula y no va a ningún sitio; en C# tampoco va al stdout
             if (clave == "System.IO.StreamWriter.Null" || clave == "System.IO.TextWriter.Null" || clave == "System.Console.Error")
             {
@@ -342,6 +386,11 @@ namespace Cs2Jc
             if (tipo.SpecialType == SpecialType.System_Object && (oc.ArgumentList == null || oc.ArgumentList.Arguments.Count == 0)
                 && oc.Initializer == null)
                 return "new Object()";
+            // `new ArrayList ()`, y `new ArrayList (10)`: la capacidad, en la `List`, crece sola
+            if (EsLista(tipo) && (ctor.Parameters.Length == 0 || (ctor.Parameters[0].Type.SpecialType == SpecialType.System_Int32
+                                                                  && EsSimple(oc.ArgumentList.Arguments[0].Expression))))
+                return "new List()";
+            if (EsTabla(tipo) && ctor.Parameters.Length == 0) return "new " + ClaseDeCsSystem(tipo) + "()";
             if (NombreCompleto(tipo) == "System.IO.StringWriter" && (oc.ArgumentList == null || oc.ArgumentList.Arguments.Count == 0)
                 && oc.Initializer == null)
                 return "new " + ClaseDeCsSystem(tipo) + "()";

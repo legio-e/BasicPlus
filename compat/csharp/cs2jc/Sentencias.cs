@@ -673,9 +673,117 @@ namespace Cs2Jc
                 CuerpoDe(fe.Statement);
                 return;
             }
-            if (tc != null && tc.SpecialType == SpecialType.System_String) { Rechaza(fe, Porque.Pendiente("foreach sobre una cadena")); return; }
+            if (tc != null && tc.SpecialType == SpecialType.System_String) { ForeachCadena(fe, variable); return; }
             if (tc is IArrayTypeSymbol) { Rechaza(fe, Porque.H7(Porque.ArraysVarias)); return; }
+            if (EsLista(tc)) { ForeachLista(fe, variable); return; }
+            var info = m.GetForEachStatementInfo(fe);
+            if (info.GetEnumeratorMethod is IMethodSymbol ge && (DelPrograma(ge) || EsDeCsSystem(ge.ContainingType)))
+            {
+                ForeachPropio(fe, info, ge, variable);
+                return;
+            }
             Rechaza(fe, Porque.Pendiente("foreach sobre " + NombreCompleto(tc)));
+        }
+
+        /// `foreach (T x in lista)` sobre una `ArrayList`, que es la `List` de Core: el `foreach` de JC, y su elemento, un Object.
+        void ForeachLista(ForEachStatementSyntax fe, ILocalSymbol variable)
+        {
+            var (lista, antes) = Condicion(fe.Expression);
+            foreach (var l in antes) Linea(l);
+            if (variable.Type.SpecialType == SpecialType.System_Object)
+            {
+                Linea("foreach (var " + Ident(variable.Name) + " in " + lista + ")");
+                CuerpoDe(fe.Statement);
+                return;
+            }
+            string x = "elemento_s" + (++sacados);
+            Linea("foreach (var " + x + " in " + lista + ")");
+            var objeto = m.Compilation.GetSpecialType(SpecialType.System_Object);
+            CuerpoConPrimera(fe.Statement, Tipo(variable.Type, fe.Type) + " " + Ident(variable.Name) + " = " + Convierte(x, objeto, variable.Type, fe.Type) + ";");
+        }
+
+        /// `foreach (char c in s)`: sus caracteres, por su índice; en JC, un char es su código. La cadena se calcula una vez.
+        void ForeachCadena(ForEachStatementSyntax fe, ILocalSymbol variable)
+        {
+            if (variable.Type.SpecialType != SpecialType.System_Char) { Rechaza(fe.Type, Porque.Pendiente("foreach con otro tipo que el de los elementos")); return; }
+            var (cadena, antes) = Condicion(fe.Expression);
+            foreach (var l in antes) Linea(l);
+            string t = "cadena_s" + (++sacados), i = "indice_s" + sacados;
+            Linea("string " + t + " = " + cadena + ";");
+            Linea("for (int " + i + " = 0; " + i + " <= strlen(" + t + ") - 1; " + i + "++)");
+            CuerpoConPrimera(fe.Statement, "int " + Ident(variable.Name) + " = charCodeAt(" + t + ", " + i + ");");
+        }
+
+        /// `foreach (T x in c)` sobre lo que tiene `GetEnumerator`, una clase del programa o una de CsSystem: el bucle que escribe
+        /// C#. El enumerador se suelta al salir, por donde sea, si es `IDisposable`, o si puede serlo alguna de sus hijas (test-188).
+        void ForeachPropio(ForEachStatementSyntax fe, ForEachStatementInfo info, IMethodSymbol ge, ILocalSymbol variable)
+        {
+            string tipo = Tipo(ge.ReturnType, fe.Expression);
+            if (tipo == Hueco) return;
+            var (coleccion, antes) = Condicion(fe.Expression);
+            foreach (var l in antes) Linea(l);
+            string e = "enumerador_s" + (++sacados);
+            Linea(tipo + " " + e + " = " + coleccion + "." + (DelPrograma(ge) ? NombreMetodo(ge) : ge.Name) + "();");
+            bool suelta = PuedeSoltarse(ge.ReturnType);
+            if (suelta) { Linea("try"); Linea("{"); sangria++; }
+            string actual = e + "." + (DelPrograma(info.CurrentProperty) ? NombreDe(info.CurrentProperty) : info.CurrentProperty.Name);
+            Linea("while (" + e + "." + (DelPrograma(info.MoveNextMethod) ? NombreMetodo(info.MoveNextMethod) : info.MoveNextMethod.Name) + "())");
+            string valor = Convierte(actual, info.ElementType, variable.Type, fe.Type);
+            CuerpoConPrimera(fe.Statement, Tipo(variable.Type, fe.Type) + " " + Ident(variable.Name) + " = " + valor + ";");
+            if (suelta)
+            {
+                imports.Add("CsSystem");
+                sangria--;
+                Linea("}");
+                Linea("finally");
+                Linea("{");
+                Linea("   CsSystem.Foreach_Suelta(" + e + ");");
+                Linea("}");
+            }
+        }
+
+        /// El cuerpo de un bucle con una sentencia delante.
+        void CuerpoConPrimera(StatementSyntax s, string primera)
+        {
+            if (s is BlockSyntax b) { Bloque(b, primera); return; }
+            Linea("{");
+            sangria++;
+            Linea(primera);
+            Sentencia(s);
+            sangria--;
+            Linea("}");
+        }
+
+        /// ¿Puede ser `IDisposable` lo que hay en una variable de este tipo? Él, o algo del programa que herede de él.
+        bool PuedeSoltarse(ITypeSymbol t)
+        {
+            bool Disponible(ITypeSymbol x) => x.AllInterfaces.Any(i => i.SpecialType == SpecialType.System_IDisposable);
+            if (Disponible(t)) return true;
+            if (t.IsSealed) return false;
+            return arbol.GetRoot().DescendantNodes().OfType<BaseTypeDeclarationSyntax>().Select(d => m.GetDeclaredSymbol(d)).OfType<INamedTypeSymbol>()
+                .Any(c => Disponible(c) && (c.AllInterfaces.Contains(t, SymbolEqualityComparer.Default) || Hereda(c, t)));
+        }
+
+        static bool Hereda(ITypeSymbol c, ITypeSymbol padre)
+        {
+            for (var b = c.BaseType; b != null; b = b.BaseType)
+                if (SymbolEqualityComparer.Default.Equals(b, padre)) return true;
+            return false;
+        }
+
+        /// `x`, de tipo `de`, como un `a`, con lo que escribe una conversión de C# (la del elemento de un foreach).
+        string Convierte(string x, ITypeSymbol de, ITypeSymbol a, SyntaxNode donde)
+        {
+            if (SymbolEqualityComparer.Default.Equals(de, a)) return x;
+            if (!de.IsValueType && a.IsValueType && !EsEnum(a))
+            {
+                string caja = ClaseDeCaja(a);
+                if (caja == null || de.SpecialType != SpecialType.System_Object)
+                    return Rechaza(donde, Porque.Pendiente("sacar un " + NombreCompleto(a) + " de " + NombreCompleto(de)));
+                return "((" + caja + ") " + x + ").value()";
+            }
+            if (!de.IsValueType && !a.IsValueType && a.SpecialType == SpecialType.System_Object) return x;   // subir: no se escribe
+            return "(" + Tipo(a, donde) + ") " + x;
         }
 
         void Throw(ThrowStatementSyntax th)
