@@ -142,9 +142,11 @@ namespace Cs2Jc
 
         /// `(byte) u` y los demás estrechos: sus bits de abajo, como C# (sin `checked`); el cast de JC a uno estrecho mira
         /// el rango, así que el valor le llega ya recortado.
-        string DeUIntAEstrecho(CastExpressionSyntax c, ITypeSymbol a)
+        string DeUIntAEstrecho(CastExpressionSyntax c, ITypeSymbol a) => AEstrecho(Atomo(c.Expression), c, a);
+
+        /// `x`, un entero de JC, a uno estrecho: sus bits de abajo, como C#. También de un enum, con su número (test-642).
+        string AEstrecho(string x, CastExpressionSyntax c, ITypeSymbol a)
         {
-            string x = Atomo(c.Expression);
             string t = Tipo(a, c.Type);
             switch (a.SpecialType)
             {

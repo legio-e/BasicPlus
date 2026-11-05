@@ -27,6 +27,7 @@ class M
         s = $"{a}";
         ulong m = Math.Max (a, b);
         ulong? n = null;
+        x = n == null;
         return 0;
     }
 }

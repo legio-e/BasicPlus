@@ -104,6 +104,7 @@ namespace Cs2Jc
             ["System.IO.TextWriter"] = "TextWriter",
             ["System.IO.StreamWriter"] = "TextWriter",
             ["System.IO.StringWriter"] = "StringWriter",
+            ["System.Version"] = "Version",
         };
 
         /// El nombre en JC de una clase de CsSystem, con su import; null si no lo es.
@@ -208,6 +209,9 @@ namespace Cs2Jc
                 return "CsSystem." + ms.ContainingType.Name + "_" + ms.Name + "(" + Argumentos(inv.ArgumentList, ms) + ")";
             }
             var objeto = inv.Expression as MemberAccessExpressionSyntax;
+            // `e.ToString()` de un enum: su nombre, como en una cadena (#778; uno [Flags], no: lo dice Texto)
+            if (ms.Name == "ToString" && inv.ArgumentList.Arguments.Count == 0 && objeto != null && EsEnum(m.GetTypeInfo(objeto.Expression).Type))
+                return Texto(objeto.Expression);
             // `x.GetType().ToString()`: su nombre (Tipos.cs)
             if (ms.Name == "ToString" && inv.ArgumentList.Arguments.Count == 0 && objeto != null && ExprDeTipo(objeto.Expression) is TipoDe td)
                 return NombreDeTipo(td, true, inv);

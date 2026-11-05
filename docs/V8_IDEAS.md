@@ -5634,6 +5634,33 @@ siempre da cierto, pero con un cast delante que calcula), `test-145` (un array d
 
 De las 13 de genéricos, alguna no usa sus clases genéricas (`gtest-partial-01` tiene el `Main` vacío). Pasarían quitando lo que nadie usa, pero sin probar nada: no se hace.
 
+### Los temas 3 y 5, repasados (5-nov: propuestas, sin decidir)
+
+Eduardo: *«revisa el tema 3, debería haber bastantes que no entran, hay que revisar a ver que se puede hacer. Y despues de todo empezamos a mirar el tema 5. El tema
+4 lo miraremos despacio»*. Hechas de paso cuatro sueltas del traductor: una local con un null que nadie usa no se escribe (`test-624`), `System.Version` como tipo, sin sus miembros
+(`test-447`), un enum a un tipo estrecho, con sus bits de abajo (`test-642`), y el `ToString` de un enum, su nombre (`test-68`). Caso `Sueltas`. **Mono: 579. El tema 3: 57 de 83. El
+tema 5: 35 de 70.**
+
+| # | ajuste | dónde | piden | sólo eso | tema 3 | tema 5 |
+|---|---|---|---|---|---|---|
+| A | `foreach` sobre una clase propia, y `ArrayList` y `Hashtable` | el traductor y `CsSystem` | 141 | 11 | 2 | |
+| B | un enum que se opera, como constantes enteras | el traductor | 66 | unas 14 | | unas 13 |
+| C | un inicializador de objeto fuera de una declaración, a una temporal | el traductor | 33 | 7 | 1 | |
+| D | el constructor primario (C# 12) | el traductor | 6 | 2 | 1 | |
+| E | un `struct` con estado, como una clase que se copia | el traductor | 180 | 46 | 2 | |
+| F | los tipos anónimos (ya propuesto) | el traductor | 15 | 7 | 3 | |
+
+- **A.** `foreach (T x in c)` con una clase del programa es `E e = c.GetEnumerator(); while (e.MoveNext()) { T x = e.Current; … }`, con `Dispose` si lo tiene; y `IEnumerable`,
+  `IEnumerator`, `ArrayList` y `Hashtable`, en `CsSystem`, sobre `List` y `Map`. Los 141 son casi todos de `IEnumerable<T>`, que pide genéricos: sin ellos, 11.
+- **B.** `#522` no cambia: JC sigue sin dejar convertir un entero en un enum. Lo que cambia es lo que escribe el traductor para los enums del programa que lo necesitan: los que se
+  operan (`A.x | A.y`, `~e`, `e + 1`), se crean de un número (`(E) n`) o llevan valores negativos. Ésos no serían un `enum` de JC, sino una clase de constantes, y sus variables, `int`:
+  `class Permiso { public const int Leer = 1; … }` e `int p = Permiso.Leer | Permiso.Escribir;`. Probado: una constante de clase vale en un `case` y en un `|`, igual en las dos VMs. Los
+  demás enums, como hoy. Su nombre en una cadena pediría una función que escribiría el traductor. «Unas 14»: de las 17 que da la cuenta, `test-647` pide además `decimal`, y `test-279` y
+  `test-453`, el nombre de varios valores a la vez.
+- **E.** Es lo grande: un `struct` es un valor. Como clase hay que copiarlo al asignarlo y al pasarlo, darle valor al declararlo y llenar sus arrays. Es su propio tema.
+- **Lo que no se puede:** en el tema 3, 13 son de reflexión, `dynamic`, interop, fechas o `yield`, y `gtest-autoproperty-20` falla por una diferencia decidida (`#776`); en el tema 5, 17 son de
+  reflexión (`typeof`, `Enum.GetValues`, atributos), y otras piden `decimal` o `checked`.
+
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 
 27 de 130, ninguna falla; 44 piden algo de fuera (reflexión, `dynamic`, `ulong`…) y 59 no. Medido con el lote de hoy: «piden», las que lo piden en

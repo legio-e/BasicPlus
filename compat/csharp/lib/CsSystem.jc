@@ -117,6 +117,11 @@ module CsSystem
    // Lo poco que piden las pruebas (H8, tema 1): escribir en un `TextWriter`. Éste no escribe en ningún sitio, como
    // `TextWriter.Null` y `StreamWriter.Null`; `StringWriter` se queda lo que le escriben.
 
+   // `System.Version`, sólo el tipo (test-447): sus miembros no se traducen
+   public class Version
+   {
+   }
+
    public class TextWriter : IDisposable
    {
       public static TextWriter Null { get; set; } = new TextWriter();

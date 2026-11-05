@@ -872,7 +872,7 @@ namespace Cs2Jc
             // `(int) Color.Rojo`, `(long) c`: se copia (Eduardo, 31-oct: «es el compilador el que ha de hacer la
             // conversión»); a un tipo estrecho, todavía no
             if (EsEnum(de) && !SymbolEqualityComparer.Default.Equals(a, de) && EsEstrecho(a))
-                return Rechaza(c, Porque.Pendiente("un enum convertido a un tipo estrecho"));
+                return AEstrecho("((long) " + Atomo(c.Expression) + ")", c, a) ?? Rechaza(c, Porque.Pendiente("un enum convertido a un tipo estrecho"));
             // `(I) y`, `(Animal) perro`: subir no se escribe en JC (sólo se baja); el objeto es el mismo y los métodos,
             // virtuales: se quita. Salvo una cadena como object: en C#, `(object) s == (object) t` compara referencias.
             if (de != null && !de.IsValueType && !a.IsValueType && !SymbolEqualityComparer.Default.Equals(a, de)

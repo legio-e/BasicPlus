@@ -1,8 +1,23 @@
 module CsSueltas
 {
+   import CsSystem;
+
+   enum Color
+   {
+      Rojo = 1,
+      Verde = 300
+   }
+
    class Prueba
    {
       private static bool asi = Prueba.Cierto();
+      public CsSystem.Version Sin
+      {
+         get
+         {
+            throw new Exception("Exception of type 'System.Exception' was thrown.");
+         }
+      }
       private static function int Cero(Object o)
       {
          return 0;
@@ -23,6 +38,16 @@ module CsSueltas
             return 9;
          }
          Prueba.Escribe(("caso " + 1));
+         // nadie: una local sin valor que nadie usa
+         Color c = Color.Verde;
+         if ((byte) ((int) (((long) c) & 255L)) != 44 || (ushort) ((int) (((long) c) & 65535L)) != 300 || (sbyte) ((((int) (((long) c) & 255L)) ^ 128) - 128) != 44 || (short) ((((int) (((long) c) & 65535L)) ^ 32768) - 32768) != 300)
+         {
+            return 8;
+         }
+         if (Enum.getName(c) != "Verde")
+         {
+            return 7;
+         }
          // direcciones: una local sin valor que nadie usa
          // a, b: una local sin valor que nadie usa
          int usada = 0;
