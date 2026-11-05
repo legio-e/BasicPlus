@@ -1453,6 +1453,11 @@ devuelven son la misma para el compilador.</p>
 <p>El motivo es que en el punto de llamada no siempre hay un tipo esperado con el
 que decidir: <code>print g(1)</code> no dice cuál de las dos quieres.</p>
 
+<h4>Sobrecarga y visibilidad</h4>
+<p>Como en Java y en C#, lo que no se ve desde donde se llama no es candidato: una sobrecarga
+<code>private</code> o protegida no compite desde fuera, y se elige entre las que se ven. Si la
+única que encaja no se ve, es un error que lo dice (V8/H8, #796).</p>
+
 <h4>Sobrecarga y herencia: redefinir una NO tapa las demás</h4>
 <p>Si una subclase redefine <em>una</em> de las sobrecargas heredadas, las otras
 siguen ahí:</p>

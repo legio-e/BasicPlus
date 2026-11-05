@@ -1,0 +1,65 @@
+// SobrecargaVisible.bp — V8/H8 (#796, 5-nov): la visibilidad de un método es la de la sobrecarga que se llama. Como en Java y en
+// C#, lo que no se ve desde donde se llama no es candidato: `a.t("x")` vale aunque la primera sobrecarga sea protegida, y `a.f(s)`
+// va a la pública aunque la privada encaje mejor. Lo que no compila, SobrecargaMal, en samples/errores.
+module SobrecargaVisible
+
+  public class Sensor
+    public function Sensor()
+    end Sensor
+  end Sensor
+
+  public class A
+    public function A()
+    end A
+
+    // la primera, protegida
+    function t(i: integer): integer
+      return 5
+    end t
+
+    public function t(s: string): integer
+      return 2
+    end t
+
+    // la que mejor encaja es privada
+    private function f(s: Sensor): integer
+      return 1
+    end f
+
+    public function f(o: Object): integer
+      return 2
+    end f
+
+    private function A.e(s: Sensor): integer
+      return 1
+    end A.e
+
+    public function A.e(o: Object): integer
+      return 2
+    end A.e
+
+    // dentro, las dos se ven
+    public function dentro(): integer
+      return this.f(Sensor()) * 10 + A.e(Sensor())
+    end dentro
+  end A
+
+  public class B extends A
+    public function B()
+      super()
+    end B
+
+    // la hija ve lo protegido, y lo privado no
+    public function hija(): integer
+      return this.t(1) * 100 + this.t("x") * 10 + this.f(Sensor())
+    end hija
+  end B
+
+  function main()
+    var a: A := A()
+    print "la pública, detrás:", a.t("x")
+    print "la privada no es candidata:", a.f(Sensor()), A.e(Sensor())
+    print "dentro:", a.dentro()
+    print "la hija:", B().hija()
+  end main
+end SobrecargaVisible

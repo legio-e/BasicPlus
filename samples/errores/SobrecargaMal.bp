@@ -1,0 +1,54 @@
+// SobrecargaMal.bp — FALLA A PROPÓSITO (V8/H8 #796): la visibilidad de un método es la de la sobrecarga que se llama. Si la única
+// que encaja no se ve, es un error, aunque la primera de la cadena sea pública: `a.t(1)` llamaba desde fuera a un método `private`.
+module SobrecargaMal
+
+  class A
+    public function A()
+    end A
+
+    public function t(s: string): integer
+      return 2
+    end t
+
+    function t(i: integer): integer
+      return 5
+    end t
+
+    public function u(s: string): integer
+      return 2
+    end u
+
+    private function u(i: integer): integer
+      return 5
+    end u
+
+    public function A.e(s: string): integer
+      return 2
+    end A.e
+
+    private function A.e(i: integer): integer
+      return 5
+    end A.e
+
+    private function solo(): integer
+      return 1
+    end solo
+  end A
+
+  class B extends A
+    public function B()
+      super()
+    end B
+
+    public function hija(): integer
+      return u(1) + solo()
+    end hija
+  end B
+
+  function main()
+    var a: A := A()
+    print a.t(1)
+    print a.u(1)
+    print A.e(1)
+  end main
+end SobrecargaMal

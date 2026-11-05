@@ -124,6 +124,10 @@ IndiceMal|'List<Sensor>' guarda 'Sensor', no 'string' (set)
 IndiceMal|guarda 'Sensor', no 'Motor' (put)
 IndiceMal|la llave de este Map es string, no 'integer' (put)
 IndiceMal|el accessor sint
+SobrecargaMal|'t' es protegido de 'A'
+SobrecargaMal|'u' es private de 'A'
+SobrecargaMal|'e' es private de 'A'
+SobrecargaMal|'solo' es private de 'A'
 InterfacesMal|la interfaz 'ConCampo' no tiene campos
 InterfacesMal|ciclo de herencia entre interfaces en 'A'
 InterfacesMal|'SinArea' implementa 'Forma' y no tiene 'area(): double' (tiene 'area(): integer')

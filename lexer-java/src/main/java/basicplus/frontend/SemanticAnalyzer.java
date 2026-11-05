@@ -3637,7 +3637,7 @@ public final class SemanticAnalyzer {
                     err(ma.line, ma.column, "'" + cs.name + "' no tiene miembro estático '" + ma.member + "'");
                     return ErrorType.INSTANCE;
                 }
-                checkVisibility(ma.line, ma.column, sub, cs);
+                if (!seMiraEnLaLlamada(ma, sub)) checkVisibility(ma.line, ma.column, sub, cs);
                 info.exprSymbols.put(ma, sub);
                 return typeOfSymbol(sub);
             }
@@ -3677,7 +3677,7 @@ public final class SemanticAnalyzer {
                 ClassSymbol cs = (ClassSymbol) tgtSym;
                 Symbol staticSub = cs.lookupStatic(ma.member);
                 if (staticSub != null) {
-                    checkVisibility(ma.line, ma.column, staticSub, cs);
+                    if (!seMiraEnLaLlamada(ma, staticSub)) checkVisibility(ma.line, ma.column, staticSub, cs);
                     info.exprSymbols.put(ma, staticSub);
                     return typeOfSymbol(staticSub);
                 }
@@ -3696,7 +3696,8 @@ public final class SemanticAnalyzer {
                 err(ma.line, ma.column, "'" + ct.cls.name + "' no tiene miembro de instancia '" + ma.member + "'");
                 return ErrorType.INSTANCE;
             }
-            checkVisibility(ma.line, ma.column, sub, ct.cls, !(ma.target instanceof SuperExpr));   // #760: super.m, sobre this
+            if (!seMiraEnLaLlamada(ma, sub))
+                checkVisibility(ma.line, ma.column, sub, ct.cls, !(ma.target instanceof SuperExpr));   // #760: super.m, sobre this
             if (sub instanceof VarSymbol) exigirUsoDeArrayFijo(ma, (VarSymbol) sub, ma.line, ma.column);   // V7/H1 #19
             // V7/H1: ni `x.__dtor()` ni `super.__dtor()`. V7 #668: salvo en el módulo raíz —Core.__destruye es quien lo
             // llama cuando el lenguaje libera un objeto (su owner, el GC o el final del programa)—.
@@ -4122,6 +4123,7 @@ public final class SemanticAnalyzer {
             MemberAccessExpr ma = (MemberAccessExpr) ce.callee;
             BpType nombre = nombreDeEnum(ce, ma, scope);   // V8 #778: Enum.getName(c)
             if (nombre != null) return nombre;
+            calleesDeLlamada.add(ma);   // #796
             analyzeExpr(ma, scope, null);
             target = info.exprSymbols.get(ma);
         }
@@ -4230,20 +4232,29 @@ public final class SemanticAnalyzer {
             ClassSymbol recv = maRecvClass.get(ce.callee);
             List<FunctionSymbol> cands = (recv != null)
                     ? collectInstanceCandidates(recv, fn.name) : null;
+            // #796 — la visibilidad, de la sobrecarga que se llama: la de `x.m`, por el objeto; la de `C.m`, por la clase; la
+            // de `m()` a secas, desde aquí. Lo de un módulo no: eso lo mira classCanAccessModuleSymbol.
+            boolean sobreObjeto = recv != null && !(((MemberAccessExpr) ce.callee).target instanceof SuperExpr);
+            ClassSymbol duena = recv != null ? recv : ce.callee instanceof MemberAccessExpr ? fn.ownerClass : currentClass;
+            boolean deClase = fn.ownerClass != null && !fn.isConstructor;
             if (cands != null && cands.size() > 1) {
-                FunctionSymbol chosen = resolveOverloadCall(cands, fn.name, ce, scope);
+                FunctionSymbol chosen = eligeVisible(cands, fn.name, ce, scope, duena, sobreObjeto);
                 if (chosen == null) return ErrorType.INSTANCE;
                 fn = chosen;
                 info.exprSymbols.put(ce.callee, fn);
             } else if (fn.overloaded) {
                 // H5.a — varias sobrecargas con este nombre: elige por firma.
-                FunctionSymbol chosen = resolveOverloadCall(fn, ce, scope);
+                List<FunctionSymbol> cadena = new ArrayList<>();
+                for (FunctionSymbol c = fn; c != null; c = c.nextOverload) cadena.add(c);
+                FunctionSymbol chosen = deClase ? eligeVisible(cadena, fn.name, ce, scope, duena, sobreObjeto)
+                                                : resolveOverloadCall(fn, ce, scope);
                 if (chosen == null) return ErrorType.INSTANCE;   // ambigua / ninguna encaja
                 fn = chosen;
                 info.exprSymbols.put(ce.callee, fn);   // el emisor emite la sobrecarga elegida
             } else {
                 checkArgs(ce.line, ce.column, fn.params, ce.args, scope);
             }
+            if (deClase) checkVisibility(ce.line, ce.column, fn, duena, sobreObjeto);
             // L10 — pre-evaluación de literal en casts a tipo estrecho:
             // si el arg es una constante entera fuera del rango, error
             // en compile-time en lugar de esperar al runtime check.
@@ -5000,11 +5011,17 @@ public final class SemanticAnalyzer {
     /** {@code sobreObjeto}: se usa sobre un objeto (`x.m`, `obj::m`) y {@code owner} es la clase de ese objeto (#760);
      *  false si no hay objeto (lo estático) o si el objeto es `this` (`super.m`). */
     private void checkVisibility(int line, int col, Symbol sub, ClassSymbol owner, boolean sobreObjeto) {
+        String motivo = motivoDeNoVerse(sub, owner, sobreObjeto);
+        if (motivo != null) err(line, col, motivo);
+    }
+
+    /** Por qué `sub` no se ve desde aquí, o null si se ve. */
+    private String motivoDeNoVerse(Symbol sub, ClassSymbol owner, boolean sobreObjeto) {
         // V8 H7.3 — lo de una interfaz es público por definición: es lo que exporta quien la implementa
         if (sub instanceof FunctionSymbol && ((FunctionSymbol) sub).ownerClass != null
-                && ((FunctionSymbol) sub).ownerClass.isInterface) return;
+                && ((FunctionSymbol) sub).ownerClass.isInterface) return null;
         if (sub instanceof PropertySymbol && ((PropertySymbol) sub).ownerClass != null
-                && ((PropertySymbol) sub).ownerClass.isInterface) return;
+                && ((PropertySymbol) sub).ownerClass.isInterface) return null;
         boolean isPublic;
         if      (sub instanceof FunctionSymbol) isPublic = ((FunctionSymbol) sub).isPublic;
         else if (sub instanceof VarSymbol)      isPublic = ((VarSymbol) sub).isPublic;
@@ -5033,15 +5050,15 @@ public final class SemanticAnalyzer {
         else                                    { esPrivado = false; declarante = null; }
         if (esPrivado) {
             if (currentClass == null || currentClass != declarante) {
-                err(line, col, "'" + sub.name + "' es private de '"
+                return "'" + sub.name + "' es private de '"
                         + (declarante != null ? declarante.name : "?") + "': sólo lo usa"
                         + " esa clase. Si quieres que también lo usen sus descendientes,"
-                        + " quítale 'private' — un miembro sin marcar ya es protegido.");
+                        + " quítale 'private' — un miembro sin marcar ya es protegido.";
             }
-            return;
+            return null;
         }
 
-        if (isPublic) return;
+        if (isPublic) return null;
         // #760 (Eduardo, 1-nov) — lo protegido es de la familia, y se pregunta por la clase que lo DECLARA, como con
         // `private`: lo usan esa clase y sus descendientes. Y sobre un objeto (`x.m`), además, el objeto ha de ser de la
         // clase que accede o de una hija suya: en un C, hija de B, el campo de A es un campo de B; en un objeto que es
@@ -5052,19 +5069,41 @@ public final class SemanticAnalyzer {
                 && (currentClass == clase || currentClass.isSubclassOf(clase));
         boolean sobreUnoSuyo = !sobreObjeto || owner == null
                 || owner == currentClass || owner.isSubclassOf(currentClass);
-        if (deLaFamilia && sobreUnoSuyo) return;
+        if (deLaFamilia && sobreUnoSuyo) return null;
         if (deLaFamilia)
-            err(line, col, "'" + sub.name + "' es protegido de '" + clase.name + "': desde '" + currentClass.name
+            return "'" + sub.name + "' es protegido de '" + clase.name + "': desde '" + currentClass.name
                     + "' se usa sobre un '" + currentClass.name + "' o una hija suya, y este objeto es un '"
                     + owner.name + "', de otra clase. " + ((sub instanceof VarSymbol)
                         ? "Léelo por una property pública suya."
-                        : "Hazlo 'public' si tiene que usarse sobre otros objetos."));
-        else
-            err(line, col, "'" + sub.name + "' es protegido de '"
+                        : "Hazlo 'public' si tiene que usarse sobre otros objetos.");
+        return "'" + sub.name + "' es protegido de '"
                     + (clase != null ? clase.name : "?") + "': lo ven esa clase y sus"
                     + " descendientes, no desde fuera. " + ((sub instanceof VarSymbol)
                         ? "Léelo por una property pública suya (un campo no puede ser public)."
-                        : "Hazlo 'public' si tiene que usarse desde cualquier sitio."));
+                        : "Hazlo 'public' si tiene que usarse desde cualquier sitio.");
+    }
+
+    /** #796 — los `x.m` que son el nombre de una llamada: de un método se mira la sobrecarga que se llama, que aquí aún no se
+     *  sabe, y lo hace {@link #analyzeCall}. */
+    private final java.util.Set<MemberAccessExpr> calleesDeLlamada =
+            java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<MemberAccessExpr, Boolean>());
+
+    private boolean seMiraEnLaLlamada(MemberAccessExpr ma, Symbol sub) {
+        return sub instanceof FunctionSymbol && calleesDeLlamada.contains(ma);
+    }
+
+    /** #796 — elige la sobrecarga como en Java y en C#: lo que no se ve desde aquí no es candidato. Si la única que encaja no se
+     *  ve, se elige ésa, y lo dice {@link #checkVisibility}, que es más claro que «no hay ninguna que encaje». */
+    private FunctionSymbol eligeVisible(List<FunctionSymbol> cands, String nombre, CallExpr ce, Scope scope, ClassSymbol owner,
+                                        boolean sobreObjeto) {
+        List<FunctionSymbol> visibles = new ArrayList<>();
+        for (FunctionSymbol f : cands) if (motivoDeNoVerse(f, owner, sobreObjeto) == null) visibles.add(f);
+        if (visibles.isEmpty() || visibles.size() == cands.size()) return resolveOverloadCall(cands, nombre, ce, scope);
+        int errores = info.diagnostics.size();
+        FunctionSymbol elegida = resolveOverloadCall(visibles, nombre, ce, scope);
+        if (elegida != null) return elegida;
+        while (info.diagnostics.size() > errores) info.diagnostics.remove(info.diagnostics.size() - 1);
+        return resolveOverloadCall(cands, nombre, ce, scope);
     }
 
     // ============================================================
