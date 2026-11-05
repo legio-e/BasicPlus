@@ -5758,6 +5758,33 @@ elemento (en una clase marcada también se restringe). Para un micro no parecen 
   enlace tardio») y cargan, y lo para el cast, «conversion invalida: el valor no es un 'Sensor'». Otra razón para que se quede.
 - `Genericos.mod` crece 14 bytes: su `List<Object>` público ahora se escribe en la interfaz (`bpi 11`). Los otros 737 `.mod`, iguales.
 
+### `lista[i]`: una property con índice (5-nov: análisis, sin decidir)
+
+Eduardo: *«Lo de lista[i] me parece bien, en realidad es la notación de una propiedad ( en C# las propiedades pueden tener índice )»*.
+
+**Lo que hay.** `x[i]` sólo vale en un array (*«el tipo 'List' no es indexable»*). Una `property p` son dos métodos, `getP()` y `setP(v)`. Una con índice y sin nombre serían `get(i)` y `set(i, v)`, y ésos ya los tiene `List`. C# hace
+lo mismo: `this[int i]` se compila como `get_Item(i)` y `set_Item(i, v)`, una por clase y sin nombre, sobrecargable por el tipo del índice. Con nombre las tienen VB y Delphi; Java no tiene.
+
+**La propuesta.** `x[i]` es `x.get(i)`, y `x[i] := v`, `x.set(i, v)`, en cualquier clase que los tenga: nada nuevo que declarar y nada que tocar en Core, como `for x in lista`. En un `Map`, `m["a"] := v` es `put`. `gpio.pin[3]` sale solo
+si `pin` devuelve un objeto con `get` y `set`.
+
+**Lo medido:**
+- De las 103 pruebas que piden indexadores, 99 declaran el suyo: con índice `int`, 67; `string`, 20; sobrecargados, 18; en una interfaz, 23; `x[i] += 1`, 14; con dos índices, 14. A 20 no les falta nada más, y 11 de ellas comprueban algo.
+  El traductor puede escribir su `this[…]` como `get` y `set`: JC no necesita esa forma para pasarlas.
+- `l[i]` parece un array y es una llamada. 3 millones de lecturas, con su bucle, en la VM-C del PC: un array, 83 ms; `get`, 169; `get` con su cast, 185.
+
+**El algoritmo:**
+1. `x[i]` con `x` de una clase: se construye la llamada `x.get(i)`, sin tocar el árbol que leen los escritores, y se analiza como cualquier llamada: sobrecargas, visibilidad, la llave de un Map y el `C<X>` de `#793`.
+2. `x[i] := v`: lo mismo con `x.set(i, v)`, o `put` en un Map.
+3. `x[i] += e`: el receptor y el índice, una vez, con los locales ocultos de `#746`; luego `get`, la cuenta y `set`.
+4. Sin `get`: «el tipo 'Tabla' no es indexable». Sin `set`, se lee y no se escribe.
+5. Una `native`: lo mismo que la llamada escrita a mano.
+6. No cambian ni los opcodes, ni el formato del `.mod`, ni la interfaz, ni Core.
+
+**Lo que no cubre:** `x[i, j]` (el traductor escribe `x.get(i, j)`) y `s[i]` en una cadena, que sigue sin valer.
+
+**Por decidir:** la regla sin declaración, o además la forma de property (`public property this[i: integer]: T`; en JC, `public T this[int i] { get {…} set {…} }`), que serían los mismos dos métodos; y `put` en un Map.
+
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 
 27 de 130, ninguna falla; 44 piden algo de fuera (reflexión, `dynamic`, `ulong`…) y 59 no. Medido con el lote de hoy: «piden», las que lo piden en
