@@ -608,6 +608,7 @@ atom     ::= INTEGER_LIT
            | 'this'
            | 'super' [ '(' [ args ] ')' ]
            | array_literal
+           | prim_word '[' expr ']'    (* V8/H8: un array con su tamaño; ver ARRAYS *)
            | call_expr
            | name
            | '(' expr ')' ;
@@ -662,6 +663,9 @@ atom     ::= INTEGER_LIT
 
 array_literal ::= '[' [ expr { ',' expr } ] ']' ;
 
+prim_word ::= 'integer' | 'long' | 'float' | 'double' | 'string' | 'boolean'
+            | 'byte' | 'int8' | 'word' | 'int16' | 'short' ;
+
 (* ARRAYS — INDEXADO Y LÍMITES (regla semántica):
 
    Los arrays son de índice CERO: el primer elemento es arr[0],
@@ -673,7 +677,15 @@ array_literal ::= '[' [ expr { ',' expr } ] ']' ;
    Tamaño:
      - Declaración con tamaño fijo:  var v: integer[10]    (longitud 10)
      - Declaración sin tamaño:       var v: integer[]      (= null)
-     - Literal:                       var v := [2, 3, 5]    (longitud 3) *)
+     - Literal:                       var v := [2, 3, 5]    (longitud 3)
+     - Con su tamaño (V8/H8):         var v: Punto[] := Punto[n]   (longitud n)
+
+   'T[n]' es una expresión, y crea el array: a cero, o a null si es de objetos
+   o de cadenas. Se escribe como indexar: un nombre de clase, de interfaz o de
+   enum (también 'Mod.Clase') es un name con su subíndice, y lo que decide es
+   qué nombra. Si ahí nombra algo con valor (una variable, un parámetro, un
+   campo), gana y se indexa. En JC se escribe 'new T[n]', y sin el 'new' es un
+   error. Un array de arrays no existe. *)
 
 
 (* ========================= TOKENS LÉXICOS ========================= *)

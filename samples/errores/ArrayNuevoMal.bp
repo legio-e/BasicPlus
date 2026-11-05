@@ -1,0 +1,22 @@
+// ArrayNuevoMal.bp — V8/H8: lo que no vale al crear un array con `A[n]`. Cada línea marcada da su error.
+module ArrayNuevoMal
+
+  import Core
+
+  public class Punto
+    public property x: integer
+  end Punto
+
+  function Main()
+    var a: Punto[] := Punto["tres"]    // el tamaño es un integer
+    var b: Punto[] := Punto[2.5]       // el tamaño es un integer
+    Punto[3] := a                      // no es un sitio donde guardar
+    var c: integer[] := Punto[3]       // es un Punto[]
+    var d: Punto[] := integer[3]       // es un integer[]
+    var e: Punto := Punto[3]           // un array, no un Punto
+    var f: Object[] := Punto[3]        // los arrays no son covariantes
+    print NoExiste[3]                  // ni variable ni tipo
+    print 7[3]                         // esto no era un nombre
+  end Main
+
+end ArrayNuevoMal

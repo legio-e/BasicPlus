@@ -5986,6 +5986,13 @@ public final class MivmEmitter {
     }
 
     private void emitIndexLoad(IndexExpr ix) throws IOException {
+        if (info.arraysNuevos.contains(ix)) {   // V8/H8: `A[n]`, lo mismo que el principio de emitArrayLit
+            BpType el = ((ArrayType) info.exprTypes.get(ix)).element;
+            emitExpr(ix.index);
+            if (isRefType(el)) emitBuiltinCall(Builtin.NEW_REF_ARRAY);
+            else               w.emit(newarrayOpForElement(el));
+            return;
+        }
         emitExpr(ix.target);
         emitExpr(ix.index);
         w.emit(aloadOpFor(ix.target));

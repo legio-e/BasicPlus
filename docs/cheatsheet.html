@@ -87,7 +87,7 @@
 <span class="k">var</span> b: <span class="t">byte</span>, w: <span class="t">word</span>          <span class="c">// unsigned 8 / 16</span>
 <span class="k">var</span> i8: <span class="t">int8</span>, i16: <span class="t">int16</span>       <span class="c">// signed</span>
 
-<span class="k">var</span> buf: <span class="t">byte[]</span> <span class="k">:=</span> newByteArray(<span class="t">256</span>)
+<span class="k">var</span> buf: <span class="t">byte[]</span> <span class="k">:=</span> <span class="t">byte</span>[<span class="t">256</span>]
 <span class="k">var</span> t: <span class="t">integer[]</span> <span class="k">:=</span> [<span class="t">1</span>, <span class="t">2</span>, <span class="t">3</span>]
 <span class="k">const</span> PI: <span class="t">float</span> <span class="k">:=</span> <span class="t">3.14159</span>     <span class="c">// module level; := also for const</span></pre>
   <p class="note">A <code>byte[]</code> costs <b>one byte per element</b>, not four —

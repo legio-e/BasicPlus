@@ -732,6 +732,18 @@ final class JcParser {
         return base;
     }
 
+    /** V8/H8 — `new A[n]`, tras el tipo: en BP, `A[n]`. Un array de arrays no se crea así: `new A[3][2]` sería otra cosa
+     *  en C# y en Java, y aquí no tiene forma. */
+    private IExpr arrayNuevo(IExpr tipo) {
+        Tok op = espera("[", "'[' tras el tipo: new int[n]");
+        IExpr tam = expresion();
+        espera("]");
+        if (es("[")) throw error("un array de arrays no se crea con new: tras 'new A[n]' no va otro '['");
+        IndexExpr ix = new IndexExpr(tipo, tam, op.linea, op.columna);
+        ix.conNew = true;
+        return ix;
+    }
+
     /** V8/H7.2 (#749) — `<T, U>` tras el nombre de un tipo: los argumentos de tipo. Qué combinaciones valen lo dice el
      *  análisis (de momento, `List<Object>` y `Collections.Map<int|string, Object>`). */
     private List<TypeRef> argumentosDeTipo() {
@@ -1452,6 +1464,10 @@ final class JcParser {
         if (acepta("new")) {
             // `new X(…)` es la `X(…)` de BP que construye (punto 22).
             Tok n = actual();
+            if (n.tipo == Tipo.RESERVADA && TIPOS.containsKey(n.texto)) {   // V8/H8: `new int[n]`
+                avanza();
+                return arrayNuevo(new IdentifierExpr(TIPOS.get(n.texto), n.linea, n.columna));
+            }
             String escrito = nombre("el nombre de la clase tras 'new'");
             IExpr callee = new IdentifierExpr(escrito, n.linea, n.columna);
             if (es(".") && mira(1).tipo == Tipo.NOMBRE) {
@@ -1460,6 +1476,7 @@ final class JcParser {
                 escrito = escrito + "." + m.texto;
                 callee = new MemberAccessExpr(callee, m.texto, m.linea, m.columna);
             }
+            if (es("[")) return arrayNuevo(callee);   // V8/H8: `new A[n]`
             // V8/H7.2 (#749) — `new List<Object>()`, `new Collections.Map<int, Object>()`: la construcción de BP, con
             // los argumentos de tipo de marca. Un Map de llave entera se crea en BP con `Collections.numericMap()` (su
             // comparador): eso es lo que queda en el árbol, y la marca dice cómo se escribió.

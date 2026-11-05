@@ -51,6 +51,8 @@ class AotCoberturaTest {
         CASOS.put("BreakStmt",     "while true do\n        break\n      endwh\n      return a");
         // V8/H8 — `do miLoop`: en C, dos etiquetas y un `goto`, tras cerrar los `try` de encima
         CASOS.put("DoConNombre",   "var t: integer := 0\n      do fuera\n        for i := 1 to 3 do\n          t += i\n          try\n            if t > 3 then\n              break fuera\n            endif\n            continue fuera\n          catch e: Exception\n            t := 0\n          endtry\n        next i\n      loop t < 9\n      return t");
+        // V8/H8 — `A[n]`: el helper de reserva del literal de array, con el tamaño calculado
+        CASOS.put("ArrayNuevo",    "var w: integer[] := integer[a + 1]\n      var s: string[] := string[2]\n      return len(w) + len(s)");
         CASOS.put("ContinueStmt",  "var t: integer := 0\n      while t < 3 do\n        t += 1\n        continue\n      endwh\n      return t");
         CASOS.put("TryStmt",       "try\n        return 1\n      catch e: Exception\n        return 2\n      endtry");
         // `throw "vaya"` NO es BP: #248 solo deja lanzar instancias de Exception.
@@ -108,7 +110,7 @@ class AotCoberturaTest {
         // del límite por call_builtin y el salto desde una función del propio .mdn—.
         "TryStmt",
         "TupleExpr",
-        "ArrayLitExpr", "AssignStmt", "BinaryExpr", "BoolBits", "BoolLitExpr", "BreakStmt",
+        "ArrayLitExpr", "ArrayNuevo", "AssignStmt", "BinaryExpr", "BoolBits", "BoolLitExpr", "BreakStmt",
         "CallExpr", "MemberAccessExpr", "NewObjectExpr", "ContinueStmt", "DoConNombre",
         "DoLoopStmt", "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr",
         "IfStmt", "IndexExpr", "IntLitExpr", "LongLitExpr", "NullLitExpr",

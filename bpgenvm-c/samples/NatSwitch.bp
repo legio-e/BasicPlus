@@ -8,7 +8,7 @@
 //   - #548: `continue` en un `for` avanza (el AOT lo traducía a un `while` con el paso al final, y el
 //     `continue` de C saltaba a la condición sin avanzar: bucle infinito);
 //   - V8/H8: `break` y `continue` a un `do` con nombre, un goto en C, con los `try` de por medio; y `&`, `|` y
-//     `xor` entre dos boolean.
+//     `xor` entre dos boolean; y `A[n]`, un array con su tamaño: de números, de cadenas y de objetos, que el GC sigue.
 // Las native llevan su bytecode: interpretado corre igual. `make test-aotswitch` lo corre de las dos
 // maneras (con el AOT, con GC en cada alocación) y exige la MISMA salida, sin ningún FALLO.
 module NatSwitch
@@ -151,6 +151,37 @@ module NatSwitch
     return 0
   end bits
 
+  public class Caja
+    public property n: integer
+    public function Caja(x: integer)
+      this.n := x
+    end Caja
+  end Caja
+
+  native function arrays(n: integer): integer
+    var v: integer[] := integer[n + 1]
+    v[n] := 5
+    var s: string[] := string[2]
+    s[1] := "abc"
+    var w: long[] := long[2]
+    w[1] := 5000000000L
+    var c: Caja[] := Caja[n]
+    for i := 0 to n - 1 do
+      c[i] := Caja(i + 1)
+    next i
+    var t: integer := v[n] + len(v) + len(s[1]) + len(w)
+    if s[0] == null then
+      t += 100
+    endif
+    if w[1] > 4000000000L then
+      t += 1000
+    endif
+    for i := 0 to n - 1 do
+      t += c[i].n
+    next i
+    return t
+  end arrays
+
   function mira(que: string, obtenido: integer, esperado: integer)
     if obtenido == esperado then
       print "ok    " + que + " = " + obtenido
@@ -176,5 +207,6 @@ module NatSwitch
     mira("conTry(3)", conTry(3), 202)
     mira("bits(5)", bits(5), 0)
     mira("bits(20)", bits(20), 1)
+    mira("arrays(3)", arrays(3), 1120)
   end Main
 end NatSwitch

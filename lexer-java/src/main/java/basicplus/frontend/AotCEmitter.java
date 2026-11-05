@@ -2794,6 +2794,16 @@ public final class AotCEmitter {
         if (e instanceof Ast.IndexExpr) {
             /* a[i] — lectura de array via helper. v1: solo integer[]. */
             Ast.IndexExpr ix = (Ast.IndexExpr) e;
+            if (semInfo != null && semInfo.arraysNuevos.contains(ix)) {   /* V8/H8: `A[n]`, como emitArrayLit */
+                BpType at = semInfo.exprTypes.get(ix);
+                String nuevo = newarraySufijo(((ArrayType) at).element);
+                if (nuevo == null) throw new UnsupportedAotException(
+                        "AOT: crear un array de '" + at + "' (line " + ix.line + ") todavia no esta implementado.");
+                w.print("vm->aot_helpers->newarray_" + nuevo + "(vm, ");
+                emitExpr(ix.index);
+                w.print(")");
+                return;
+            }
             w.print("vm->aot_helpers->" + arrLoadFn(ix.target) + "(vm, ");
             emitExpr(ix.target);
             w.print(", ");

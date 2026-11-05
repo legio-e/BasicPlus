@@ -1388,7 +1388,7 @@ public final class SemanticAnalyzer {
                 Object n = constLiteralValue(at.size);
                 if (owner == null) {
                     err(at.line, at.column, "un array fijo `tipo[N]` sólo puede ser una variable local o un campo `private var` de clase;"
-                        + " a nivel de módulo escribe `tipo[]` (con newIntArray/newByteArray… o un literal `[…]`)");
+                        + " a nivel de módulo escribe `tipo[]` (con `tipo[n]` o un literal `[…]`)");
                 } else if (!v.isPrivate) {
                     err(at.line, at.column, "un array fijo `tipo[N]` de clase tiene que ser `private var` (no es una referencia: sólo se indexa desde la propia clase)");
                 } else if (!(n instanceof Long) || (Long) n <= 0) {
@@ -1699,6 +1699,11 @@ public final class SemanticAnalyzer {
     }
 
     private BpType resolveNamedType(SimpleTypeRef st) {
+        return resolveNamedType(st, true);
+    }
+
+    /** `avisa`: si el nombre no es un tipo, lo dice y da ErrorType; sin él, da null y no dice nada (V8/H8, `A[n]`). */
+    private BpType resolveNamedType(SimpleTypeRef st, boolean avisa) {
         // L2 v2 — tipo cualificado `Mod.Type`: lookup en el namespace
         // importado bajo el alias.
         int dot = st.name.indexOf('.');
@@ -1719,6 +1724,7 @@ public final class SemanticAnalyzer {
                 if (cand instanceof ClassSymbol) return new ClassType((ClassSymbol) cand);
                 if (cand instanceof EnumSymbol)  return new EnumType((EnumSymbol) cand);
             }
+            if (!avisa) return null;
             if (reportedUnknownType.add(st.name))
                 err(st.line, st.column, "tipo cualificado '" + st.name + "' no encontrado");
             return ErrorType.INSTANCE;
@@ -1775,6 +1781,7 @@ public final class SemanticAnalyzer {
             return new ClassType((ClassSymbol) fromImports);
         if (fromImports instanceof EnumSymbol)
             return new EnumType((EnumSymbol) fromImports);
+        if (!avisa) return null;
         if (reportedUnknownType.add(st.name))
             err(st.line, st.column, "tipo '" + st.name + "' no encontrado" + pistaCore(st.name));
         return ErrorType.INSTANCE;
@@ -2265,7 +2272,7 @@ public final class SemanticAnalyzer {
             } else if (currentFunctionIsNative) {
                 err(at.line, at.column,
                     "array de tamaño fijo local no soportado en función native "
-                    + "(el emisor AOT no lo genera); usa newIntArray/newByteArray/newLongArray");
+                    + "(el emisor AOT no lo genera); usa `var v: tipo[] := tipo[n]`");
             } else {
                 fixedN = (int) (long) (Long) n;
             }
@@ -2617,7 +2624,7 @@ public final class SemanticAnalyzer {
         // target debe ser asignable
         boolean okTarget = a.target instanceof IdentifierExpr
                 || a.target instanceof MemberAccessExpr
-                || a.target instanceof IndexExpr
+                || (a.target instanceof IndexExpr && !info.arraysNuevos.contains(a.target))   // V8/H8: `A[n] := x`
                 || a.target instanceof FieldExpr;
         if (!okTarget)
             err(a.line, a.column, "el operando izquierdo no es asignable");
@@ -3533,6 +3540,24 @@ public final class SemanticAnalyzer {
     }
 
     private BpType analyzeIndex(IndexExpr ix, Scope scope) {
+        BpType elemento = elementoDeArrayNuevo(ix, scope);
+        if (elemento != null) {
+            if (elemento instanceof ErrorType) return ErrorType.INSTANCE;
+            if (enJc && !ix.conNew) {
+                String n = nombreLlamado(ix.target);
+                err(ix.line, ix.column, "'" + n + "[n]' crea un array: en JC se escribe 'new " + nombreJc(n) + "[n]'");
+            }
+            BpType tamT = analyzeExpr(ix.index, scope, PrimitiveType.INTEGER);
+            if (!PrimitiveType.INTEGER.isAssignableFrom(tamT))
+                err(ix.line, ix.column, "el tamaño de un array es un integer, no '" + tamT.display() + "'");
+            info.arraysNuevos.add(ix);
+            return new ArrayType(elemento);
+        }
+        if (ix.conNew) {
+            err(ix.line, ix.column, "tras 'new' va el tipo de los elementos, y '" + nombreLlamado(ix.target)
+                    + "' no es un tipo");
+            return ErrorType.INSTANCE;
+        }
         arrayFijoPermitido.add(ix.target);   // V7/H1 #19: indexar un array fijo sí
         BpType t = analyzeExpr(ix.target, scope, null);
         BpType idxT = analyzeExpr(ix.index, scope, PrimitiveType.INTEGER);
@@ -3542,6 +3567,42 @@ public final class SemanticAnalyzer {
         if (t instanceof ErrorType) return ErrorType.INSTANCE;
         err(ix.line, ix.column, "el tipo '" + t.display() + "' no es indexable");
         return ErrorType.INSTANCE;
+    }
+
+    /** V8/H8 — los nombres de los tipos primitivos, como los deja el parser en una expresión (`integer[10]`). */
+    private static final java.util.Set<String> TIPOS_PRIMITIVOS = new java.util.HashSet<>(java.util.Arrays.asList(
+            "integer", "float", "string", "boolean", "byte", "int8", "word", "int16", "long", "double"));
+
+    /** V8/H8 — `A[n]` (`new A[n]` en JC) crea un array de `n` casillas de `A`, a cero o a null. El árbol es el de indexar,
+     *  porque BP no los distingue al leer: los distingue lo que es el nombre de la izquierda. Da el tipo del elemento, o
+     *  null si no es un tipo. Un nombre con valor (una variable, un campo…) gana y se indexa, como gana en `A(…)`; en JC
+     *  no se mira: tras `new` sólo va un tipo. */
+    private BpType elementoDeArrayNuevo(IndexExpr ix, Scope scope) {
+        String nombre;
+        if (ix.target instanceof IdentifierExpr) {
+            nombre = ((IdentifierExpr) ix.target).name;
+            if (!ix.conNew && tieneValor(nombre, scope)) return null;
+            if (TIPOS_PRIMITIVOS.contains(nombre)) return resolveType(new SimpleTypeRef(nombre, ix.line, ix.column));
+        } else if (ix.target instanceof MemberAccessExpr
+                && ((MemberAccessExpr) ix.target).target instanceof IdentifierExpr) {
+            String modulo = ((IdentifierExpr) ((MemberAccessExpr) ix.target).target).name;
+            if (tieneValor(modulo, scope)) return null;   // `objeto.lista[i]`
+            nombre = modulo + "." + ((MemberAccessExpr) ix.target).member;
+        } else {
+            return null;
+        }
+        return resolveNamedType(new SimpleTypeRef(nombre, ix.line, ix.column), false);
+    }
+
+    /** ¿Nombra `nombre`, aquí, algo que se pueda indexar? Se busca en el orden de {@link #analyzeIdentifier}. Una función
+     *  no: `byte` es la conversión `byte(x)`, y el nombre de una clase es también su constructor. */
+    private boolean tieneValor(String nombre, Scope scope) {
+        Symbol s = (scope != null) ? scope.resolve(nombre) : null;
+        if (s == null && currentClass != null && currentFunction != null && !currentFunction.isStatic)
+            s = currentClass.lookupInstance(nombre);
+        if (s == null) s = module.members.resolve(nombre);
+        return s != null && !(s instanceof FunctionSymbol) && !(s instanceof ClassSymbol) && !(s instanceof EnumSymbol)
+                && !(s instanceof Symbol.ImportedNamespaceSymbol);
     }
 
     /**

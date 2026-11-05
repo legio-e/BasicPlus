@@ -134,6 +134,12 @@ AnnMal|'@BD' sobre 'id' no tiene sentido: su clase 'Cuatro'
 AnnMal|'@BD' sobre una property no conoce la clave 'clave'; hoy admite: columna, pk
 AnnMal|'columna' no puede estar
 AnnMal|(la entidad) o sobre una
+ArrayNuevoMal|el tama
+ArrayNuevoMal|el operando izquierdo no es asignable
+ArrayNuevoMal|no asignable a variable de tipo 'integer[]'
+ArrayNuevoMal|no asignable a variable de tipo 'Object[]'
+ArrayNuevoMal|identificador no resuelto: 'NoExiste'
+ArrayNuevoMal|el tipo 'integer' no es indexable
 BucleConNombreMal|'break b': no hay ning
 BucleConNombreMal|ya hay un bucle 'a' abierto
 BucleConNombreMal|'continue c': no hay ning

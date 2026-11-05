@@ -41,6 +41,11 @@ public final class SemanticInfo {
     public final java.util.Set<Ast.IExpr> refCasts =
             java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.IExpr, Boolean>());
 
+    /** V8/H8 — los `A[n]` (`new A[n]` en JC) que crean un array: el árbol es el de indexar, y quien distingue es el
+     *  análisis. Su tipo, en exprTypes; su tamaño, `index`. El nombre de la izquierda no se analiza: es un tipo. */
+    public final java.util.Set<Ast.IExpr> arraysNuevos =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.IExpr, Boolean>());
+
     /** V8 H7.3 (#756) — los métodos y properties que una clase declara e implementan un miembro de una interfaz de su
      *  cabecera (los que llevan `@implement`): el emisor les pone el bit «implementa» en su fila de 4.5, y el cargador
      *  dice E12 si la interfaz deja de tenerlo. Lo decide el semántico (checkInterfaces), en UN sitio. */

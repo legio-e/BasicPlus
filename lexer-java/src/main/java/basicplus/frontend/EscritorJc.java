@@ -771,6 +771,11 @@ public final class EscritorJc {
         }
         if (e instanceof IndexExpr) {
             IndexExpr i = (IndexExpr) e;
+            if (info.arraysNuevos.contains(i)) {   // V8/H8: el `A[n]` de BP que crea un array
+                String t = (i.target instanceof IdentifierExpr) ? tipoSimple(((IdentifierExpr) i.target).name)
+                                                                : expr(i.target, P_PRIMARIO);
+                return "new " + t + "[" + expr(i.index) + "]";
+            }
             return expr(i.target, P_PRIMARIO) + "[" + expr(i.index) + "]";
         }
         if (e instanceof CallExpr)         return llamada((CallExpr) e);

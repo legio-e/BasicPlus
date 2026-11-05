@@ -1384,6 +1384,7 @@ public final class JvmEmitter implements Opcodes {
     }
 
     private void emitIndexLoad(MethodVisitor mv, IndexExpr ix, EmitContext ctx) {
+        if (info.arraysNuevos.contains(ix)) { errors.add("crear un array con su tamaño: no en el backend jvm"); return; }
         BpType arrT = typeOfExpr(ix.target);
         BpType elemT = (arrT instanceof ArrayType) ? ((ArrayType) arrT).element : ErrorType.INSTANCE;
         emitExpr(mv, ix.target, ctx);

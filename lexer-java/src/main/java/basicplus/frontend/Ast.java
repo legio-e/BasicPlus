@@ -991,6 +991,8 @@ public final class Ast {
     public static final class IndexExpr extends Node implements IExpr {
         public final IExpr target;
         public final IExpr index;
+        /** V8/H8 — JC: se escribió `new A[n]`. El árbol es el `A[n]` de BP; la marca, cómo se escribió (como la de CallExpr). */
+        public boolean conNew;
         public IndexExpr(IExpr target, IExpr index, int line, int column) {
             super(line, column);
             this.target = target;

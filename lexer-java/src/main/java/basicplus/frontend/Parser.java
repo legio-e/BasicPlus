@@ -1858,6 +1858,8 @@ public final class Parser {
                     default:    castName = "int16"; break;   // INT16
                 }
                 advance();
+                if (check(TokenType.LBRACKET))   // V8/H8: `byte[10]`, un array con su tamaño
+                    return new IdentifierExpr(castName, tok.line, tok.column);
                 if (!check(TokenType.LPAREN)) {
                     error("se esperaba '(' tras tipo '" + castName + "' en expresión (cast)");
                     return new NullLitExpr(tok.line, tok.column);
@@ -1883,6 +1885,8 @@ public final class Parser {
                     default:      castName = "double";  break;   // DOUBLE
                 }
                 advance();
+                if (check(TokenType.LBRACKET))   // V8/H8: `integer[10]`, un array con su tamaño
+                    return new IdentifierExpr(castName, tok.line, tok.column);
                 if (!check(TokenType.LPAREN)) {
                     error("se esperaba '(' tras tipo '" + castName + "' en expresión (cast)");
                     return new NullLitExpr(tok.line, tok.column);
@@ -1893,6 +1897,17 @@ public final class Parser {
                 return new CallExpr(new IdentifierExpr(castName, tok.line, tok.column),
                         args, lp.line, lp.column);
             }
+            // V8/H8 — `string[10]`, `boolean[10]`: un array con su tamaño, como `integer[10]` o `Clase[10]`. Estas dos
+            // palabras no son conversiones: en una expresión, sólo van así. Qué es el nombre lo dice el análisis.
+            case STRING:
+            case BOOLEAN:
+                if (pos + 1 < tokens.size() && tokens.get(pos + 1).type == TokenType.LBRACKET) {
+                    advance();
+                    return new IdentifierExpr(tok.type == TokenType.STRING ? "string" : "boolean", tok.line, tok.column);
+                }
+                error("se esperaba una expresión, encontrado '" + tok.lexeme + "'");
+                advance();
+                return new NullLitExpr(tok.line, tok.column);
             // V8 #778 — `Enum.getName(c)`: BP no distingue mayúsculas en sus palabras reservadas, y `Enum` es `enum`. En
             // una expresión, la palabra seguida de un punto es el nombre `Enum`, el de la función que da el nombre del
             // valor de un enum (la resuelve el semántico); una declaración `enum X` nunca lleva el punto detrás. En JC,

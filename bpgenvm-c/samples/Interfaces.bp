@@ -3,7 +3,8 @@
 // hereda de varias; lleva métodos y properties. Aquí: la llamada por una interfaz, la implementación heredada del padre
 // (Figura.nombre, que no sabe nada de Forma), una property por la interfaz (leer y escribir), un método que implementa
 // dos a la vez, `instanceof`, la conversión (y la que falla, con el nombre de la interfaz), `==`, una hija que redefine
-// sin repetir la interfaz (hereda la tabla del padre) y un array de interfaces recorrido con `for`. `@implement` es
+// sin repetir la interfaz (hereda la tabla del padre), un array de interfaces recorrido con `for` y otro creado con su
+// tamaño (`Forma[2]`, V8/H8). `@implement` es
 // obligatoria en lo que implementa una interfaz de la cabecera; `@override`, opcional. Es de paridad (está en el corpus)
 // y se escribe en JC (`class Cuadrado : Figura, Poligono, Etiquetado`).
 // mod8: fuera — las interfaces son del enlace tardío (MOD9): la tabla de cada clase la construye el cargador por clave
@@ -109,6 +110,9 @@ module Interfaces
     var cg: Forma := CuadradoGrande(3.0)
     print "grande", cg.area(), cg.nombre()
     print "total", total([f, g, cg])
+    var formas: Forma[] := Forma[2]
+    formas[0] := g
+    print "array", len(formas), formas[1] == null, formas[0].nombre()
     try
       var mala: Poligono := Poligono(g)
       print "no deberia", mala.lados()

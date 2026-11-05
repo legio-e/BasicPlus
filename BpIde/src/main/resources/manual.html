@@ -516,7 +516,7 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   <tr><th>Ámbito</th><th>Dónde vive</th></tr>
   <tr><td>Local de función</td><td>En el marco: <code>4 + ⌈N·ancho/4⌉·4</code> bytes (los datos se redondean a 4: un <code>byte[3]</code> ocupa 8), a cero al declararlo. Ni heap ni GC.</td></tr>
   <tr><td>Campo <code>private var</code> de clase</td><td>Dentro del objeto: <code>1 + ⌈N·ancho/4⌉</code> ranuras (hasta 255), a cero al construirlo. Sólo lo indexa la propia clase.</td></tr>
-  <tr><td>Global de módulo</td><td><strong>No</strong> (error de compilación): a nivel de módulo escribe <code>T[]</code>, con un literal <code>[…]</code> o <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.</td></tr>
+  <tr><td>Global de módulo</td><td><strong>No</strong> (error de compilación): a nivel de módulo escribe <code>T[]</code>, con un literal <code>[…]</code> o <code>T[n]</code>.</td></tr>
 </table>
 <pre><code><span class="kw">public class</span> Media
   <span class="kw">private var</span> muestras: <span class="type">integer</span>[<span class="num">8</span>]      <span class="comment">// en el objeto</span>
@@ -548,7 +548,21 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
 
 <span class="comment">// Desde una función: split, listDir, etc. devuelven arrays</span>
 <span class="kw">var</span> partes: <span class="type">string</span>[] := split(<span class="str">"a,b,c"</span>, <span class="str">","</span>)
-<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// ordenados; en las dos VMs y en la placa</span></code></pre>
+<span class="kw">var</span> ficheros: <span class="type">string</span>[] := listDir(<span class="str">"."</span>)   <span class="comment">// ordenados; en las dos VMs y en la placa</span>
+
+<span class="comment">// Con su tamaño: T[n], de cualquier tipo</span>
+<span class="kw">var</span> puntos: Punto[] := Punto[<span class="num">10</span>]              <span class="comment">// diez casillas, a null</span>
+<span class="kw">var</span> nombres: <span class="type">string</span>[] := <span class="type">string</span>[n + <span class="num">1</span>]        <span class="comment">// el tamaño se calcula al ejecutar</span>
+<span class="kw">var</span> cuentas: <span class="type">integer</span>[] := <span class="type">integer</span>[n]          <span class="comment">// a cero</span></code></pre>
+<p>
+  <code>T[n]</code> crea un array de <code>n</code> casillas de <code>T</code>: una clase, una interfaz, un
+  enum, <code>string</code> o un número, también con el módulo delante (<code>Mod.Punto[n]</code>). Las
+  casillas de un número nacen a cero; las de un objeto o una cadena, a <code>null</code>. Es una expresión,
+  no el array fijo de <a href="#arrays">§4.2.1</a>, que va en el tipo (<code>var v: integer[10]</code>). Se
+  escribe como indexar, y decide lo que es el nombre: si ahí nombra algo con valor (una variable, un
+  parámetro, un campo), gana y se indexa. En JC se escribe <code>new Punto[10]</code>,
+  <code>new int[n]</code>. Un array de arrays no existe.
+</p>
 <p>
   La VM usa cinco tipos físicos en el heap según el ancho del elemento:
   <code>TYPE_ARRAY_I8</code> (byte/int8 y strings UTF-8),
@@ -1186,8 +1200,7 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
   <li><strong>Subset soportado</strong>: funciones y métodos sobre primitivos
       (<code>integer</code>, <code>long</code>, <code>float</code>,
       <code>double</code>, <code>boolean</code>, estrechos), <code>string</code>,
-      arrays de cualquier tipo de elemento (crearlos con
-      <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>/<code>newDoubleArray</code>
+      arrays de cualquier tipo de elemento (crearlos con <code>T[n]</code> o un literal,
       e indexarlos), objetos, variables de módulo, las conversiones estrechas
       (<code>byte(x)</code>, <code>int16(x)</code>…, con el rango y el mensaje del
       intérprete) y <strong>cualquier función intrínseca</strong> de la stdlib
@@ -1209,7 +1222,7 @@ label(<span class="str">"hola"</span>, <span class="str">"&lt;"</span>, <span cl
       <code>Heap.compact()</code> — lo rechaza el
       compilador con su mensaje y la línea. Los arrays
       fijos locales <code>tipo[N]</code> tampoco (error de compilación): usa
-      <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>.
+      <code>var v: tipo[] := tipo[n]</code>.
       Igual en un método <code>native</code> <em>de clase</em>: es el mismo error, con
       el método y la línea (<code>#519</code>, V7).
       El detalle vivo está en <code>docs/AOT_LIMITES.md</code>.</li>
@@ -1407,7 +1420,7 @@ mismo caso.</p>
   Un campo admite un array de tamaño fijo <code>tipo[N]</code> si es <code>private var</code>:
   vive dentro del objeto y sólo lo indexa la propia clase (<a href="#arrays">§4.2.1</a>). Si
   tiene que verse o pasarse, declara <code>tipo[]</code> e inicialízalo en el constructor
-  con <code>newIntArray(N)</code>/<code>newByteArray(N)</code>/<code>newLongArray(N)</code>.
+  con <code>tipo[n]</code>.
   Un campo es <em>protegido</em> (o <code>private</code>): lo ven su clase y sus
   descendientes, también los de otro módulo — desde V7 la interfaz publica los
   campos no privados con su ranura (<a href="#visibilidad">§9.2.1</a>); para
@@ -2754,7 +2767,7 @@ threads sin tope (<a href="#conc-modelo">§14.1</a>) y los dos núcleos en la pl
       una native (error de compilación, <a href="#funciones-native">§8.3</a>).</li>
   <li>Array de tamaño fijo <code>tipo[N]</code> a nivel de módulo y
       dentro de una <code>native function</code> (error de compilación con
-      alternativa: <code>tipo[]</code> + <code>newIntArray</code>/<code>newByteArray</code>/<code>newLongArray</code>).</li>
+      alternativa: <code>var v: tipo[] := tipo[n]</code>).</li>
   <li><strong>AOT en el ESP32-S3 (Xtensa)</strong> — sus funciones <code>native</code>
       corren <strong>interpretadas</strong>: el AOT emite ARM (Thumb-2) y RISC-V, no
       Xtensa. El IDE lo dice al compilar, nombrando los destinos que sí hay, y el
