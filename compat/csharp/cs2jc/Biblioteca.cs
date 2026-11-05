@@ -250,7 +250,7 @@ namespace Cs2Jc
             if ((EsDeCsSystem(ms.ContainingType) || MiembrosDeHashtable.Contains(clave)) && objeto != null)
                 return Expr(objeto.Expression) + "." + ms.Name + "(" + Argumentos(inv.ArgumentList, ms) + ")";
             // `e.ToString()` de un enum: su nombre, como en una cadena (#778; uno [Flags], no: lo dice Texto)
-            if (ms.Name == "ToString" && inv.ArgumentList.Arguments.Count == 0 && objeto != null && EsEnum(m.GetTypeInfo(objeto.Expression).Type))
+            if (ms.Name == "ToString" && inv.ArgumentList.Arguments.Count == 0 && objeto != null && EsEnumCs(m.GetTypeInfo(objeto.Expression).Type))
                 return Texto(objeto.Expression);
             // `x.GetType().ToString()`: su nombre (Tipos.cs)
             if (ms.Name == "ToString" && inv.ArgumentList.Arguments.Count == 0 && objeto != null && ExprDeTipo(objeto.Expression) is TipoDe td)

@@ -47,7 +47,7 @@ namespace Cs2Jc
         /// Por qué no se traduce un T? que no tiene caja (PorTipo): el de su T, o el de lo que es.
         static string PorNullable(ITypeSymbol u)
         {
-            if (EsEnum(u)) return Porque.Pendiente("un enum que puede ser null (E?)");
+            if (EsEnumCs(u)) return Porque.Pendiente("un enum que puede ser null (E?)");
             if (EsULong(u)) return Porque.Fuera(Porque.ULong);                 // su caja sería un Long (SinSigno.cs)
             string p = PorTipo(u);
             if (p != null) return p;
@@ -153,7 +153,7 @@ namespace Cs2Jc
             var u = DeNullable(de);
             string v = ValorDeNullable(Expr(c.Expression), de, c);
             if (SymbolEqualityComparer.Default.Equals(u, a)) return v;
-            if (EsEnum(a)) return Rechaza(c, Porque.Fuera(Porque.EnteroAEnum));
+            if (EsEnumCs(a)) return Rechaza(c, Porque.Fuera(Porque.EnteroAEnum));
             if (a.SpecialType == SpecialType.System_Char) return "(((int) " + v + ") & 65535)";
             return "(" + Tipo(a, c.Type) + ") " + v;
         }

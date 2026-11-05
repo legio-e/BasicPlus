@@ -1,0 +1,210 @@
+module CsEnumsEnteros
+{
+   enum Permiso
+   {
+      Nada = 0,
+      Leer = 1,
+      Escribir = 2,
+      Borrar = 4
+   }
+
+   enum Dia
+   {
+      Lunes = 0,
+      Martes = 1,
+      Miercoles = 2
+   }
+
+   // Signo: sus valores no caben en un enum de JC; en el programa, enteros
+
+   // Grande: sus valores no caben en un enum de JC; en el programa, enteros
+
+   enum Corto
+   {
+      A = 1,
+      B = 200
+   }
+
+   enum Quieto
+   {
+      Uno = 0,
+      Dos = 1
+   }
+
+   class M
+   {
+      private static int campo = ((int) Permiso.Leer) | ((int) Permiso.Escribir);
+      private const int Fijo = 1;
+      private const int Junto = 201;
+      private int sinValor;
+      private static function int Cual(int a)
+      {
+         return 1;
+      }
+      private static function int Cual_1(int a)
+      {
+         return 2;
+      }
+      private static function int Largo(long a)
+      {
+         return 3;
+      }
+      private static function int Largo_1(long a)
+      {
+         return 4;
+      }
+      private static function string Que(int d)
+      {
+         switch (d)
+         {
+            case ((int) Dia.Lunes):
+               return "l";
+            case ((int) Dia.Martes):
+               return "m";
+            default:
+               return "?";
+         }
+      }
+      private static function int Siguiente(int d, int paso = 1)
+      {
+         return d + (int) paso;
+      }
+      public static function int Main()
+      {
+         int p = ((int) Permiso.Leer) | ((int) Permiso.Escribir);
+         if (p != M.campo)
+         {
+            return 1;
+         }
+         if ((p & ((int) Permiso.Escribir)) == 0 || (p & ((int) Permiso.Borrar)) != 0)
+         {
+            return 2;
+         }
+         p &= (((int) Permiso.Leer) ^ -1);
+         if (p != ((int) Permiso.Escribir))
+         {
+            return 3;
+         }
+         p |= ((int) Permiso.Borrar);
+         if ((int) p != 6)
+         {
+            return 4;
+         }
+         int d = ((int) Dia.Lunes);
+         d++;
+         if (d != ((int) Dia.Martes) || d != M.Fijo)
+         {
+            return 5;
+         }
+         d = (int) 2;
+         if (M.Que(d) != "?" || M.Que(((int) Dia.Lunes)) != "l" || M.Que(d - 1) != "m")
+         {
+            return 6;
+         }
+         int cero = 0;
+         if (cero != ((int) Dia.Lunes) || (int) d != 2 || M.Siguiente(((int) Dia.Lunes)) != ((int) Dia.Martes))
+         {
+            return 7;
+         }
+         if (new M().sinValor != ((int) Dia.Lunes))
+         {
+            return 8;
+         }
+         int s = -1;
+         if ((int) s != -1 || s + 2 != 1)
+         {
+            return 9;
+         }
+         long g = 5000000000L;
+         if ((long) g != 5000000000 || g - 4999999999 != 1L)
+         {
+            return 10;
+         }
+         int c = ((int) Corto.A) | ((int) Corto.B);
+         if ((byte) ((int) (((long) c) & 255L)) != 201 || (byte) ((int) (((long) ((int) Corto.B)) & 255L)) != 200)
+         {
+            return 11;
+         }
+         int[] v = new int[2];
+         v[1] = ((int) Dia.Miercoles);
+         if (v[0] != ((int) Dia.Lunes) || (int) v[1] != 2)
+         {
+            return 12;
+         }
+         if (Cs_Nombre_Dia(((int) Dia.Martes)) != "Martes" || "" + Cs_Nombre_Dia(d) != "Miercoles" || Cs_Nombre_Dia(((int) 7)) != "7")
+         {
+            return 13;
+         }
+         if (Cs_Nombre_Permiso((((int) Permiso.Leer) | ((int) Permiso.Borrar))) != "Leer, Borrar" || Cs_Nombre_Permiso(((int) Permiso.Nada)) != "Nada")
+         {
+            return 14;
+         }
+         if (Cs_Nombre_Signo(-1) != "Menos")
+         {
+            return 15;
+         }
+         const int dentro = 2;
+         if ((int) dentro != 2 || (byte) ((int) (((long) M.Junto) & 255L)) != 201)
+         {
+            return 17;
+         }
+         if (M.Cual(1) != 1 || M.Cual_1(d - 1) != 2 || M.Largo(5L) != 3 || M.Largo_1(5L) != 4)
+         {
+            return 18;
+         }
+         int q = ((int) Quieto.Dos);
+         if ("" + Cs_Nombre_Quieto(q) != "Dos")
+         {
+            return 16;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = M.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+
+   public function string Cs_Nombre_Dia(int v)
+   {
+      if (v == 0) return "Lunes";
+      if (v == 1) return "Martes";
+      if (v == 2) return "Miercoles";
+      return "" + v;
+   }
+
+   public function string Cs_Nombre_Permiso(int v)
+   {
+      if (v == 0) return "Nada";
+      if (v == 1) return "Leer";
+      if (v == 2) return "Escribir";
+      if (v == 4) return "Borrar";
+      string nombres = "";
+      int queda = v;
+      if ((queda & 4) == 4) { queda -= 4; nombres = "Borrar" + (nombres == "" ? "" : ", " + nombres); }
+      if ((queda & 2) == 2) { queda -= 2; nombres = "Escribir" + (nombres == "" ? "" : ", " + nombres); }
+      if ((queda & 1) == 1) { queda -= 1; nombres = "Leer" + (nombres == "" ? "" : ", " + nombres); }
+      if (queda == 0 && nombres != "") return nombres;
+      return "" + v;
+   }
+
+   public function string Cs_Nombre_Signo(int v)
+   {
+      if (v == -1) return "Menos";
+      if (v == 0) return "Cero";
+      if (v == 1) return "Mas";
+      return "" + v;
+   }
+
+   public function string Cs_Nombre_Quieto(int v)
+   {
+      if (v == 0) return "Uno";
+      if (v == 1) return "Dos";
+      return "" + v;
+   }
+}

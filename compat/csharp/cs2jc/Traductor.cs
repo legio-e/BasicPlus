@@ -143,6 +143,8 @@ namespace Cs2Jc
             t.Modulo = modulo;
             BuscaChoques(tipos);                 // las implementaciones explícitas que chocan (Explicitas.cs)
             tiposDelPrograma = tipos;            // el tipo de un objeto (Tipos.cs)
+            BuscaEnumsEnteros(raiz);             // los enums que se operan (EnumsEnteros.cs)
+            BuscaSobrecargasIguales(tipos);
 
             // JC quiere la clase padre declarada antes que la hija («padre local … no es una clase abierta declarada
             // antes»); a C# le da igual el orden: cada clase, detrás de su base (y si no, en el orden de C#).
@@ -163,6 +165,7 @@ namespace Cs2Jc
             EmiteMain();
             if (main == null) Rechaza(raiz, Porque.Pendiente("no hay Main"));
             if (usaTipoDe) EmiteTipoDe();
+            EmiteNombresDeEnums();
 
             if (t.Rechazos.Count == 0)
             {
@@ -220,6 +223,12 @@ namespace Cs2Jc
         {
             var donde = (EnumDeclarationSyntax) Declaracion(s);
             Atributos(donde.AttributeLists);
+            if (enumsSinEscribir.Contains(s))
+            {
+                Linea("// " + NombreTipo(s) + ": sus valores no caben en un enum de JC; en el programa, enteros");
+                Linea("");
+                return;
+            }
             var miembros = new List<string>();
             foreach (var v in donde.Members)
             {
@@ -497,6 +506,7 @@ namespace Cs2Jc
         {
             var f = (IFieldSymbol) m.GetDeclaredSymbol(v);
             var e = v.Initializer.Value;
+            if (EsEnumEntero(f.Type) && f.HasConstantValue) return NumeroDeEnum(f.ConstantValue, f.Type);
             if (e is LiteralExpressionSyntax || EsEnum(f.Type) || !f.HasConstantValue) return Expr(e);
             if (EsEstrecho(f.Type)) return System.Convert.ToString(f.ConstantValue, System.Globalization.CultureInfo.InvariantCulture);
             return LiteralDeConstante(f.ConstantValue, v);
@@ -941,7 +951,7 @@ namespace Cs2Jc
             // un T? con valor (`int? x = 5`): en JC, un objeto, y JC sólo admite un literal (null, como siempre: H7)
             if (EsNullable(ps.Type) && v != null) return Rechaza(donde, Porque.Pendiente("un valor por defecto de un T? (en JC, un objeto)"));
             // un enum (`Dia d = Dia.Martes`): JC sólo admite un literal, y un miembro de un enum no lo es
-            if (ps.Type.TypeKind == TypeKind.Enum) return Rechaza(donde, Porque.H7(Porque.EnumPorDefecto));
+            if (EsEnum(ps.Type)) return Rechaza(donde, Porque.H7(Porque.EnumPorDefecto));
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             switch (v)
             {

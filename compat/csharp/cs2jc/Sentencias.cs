@@ -175,7 +175,7 @@ namespace Cs2Jc
                 case SpecialType.System_Boolean: return "false";
                 case SpecialType.System_String: return "\"\"";
             }
-            if (EsNumerico(t)) return "0";
+            if (EsNumerico(t) || EsEnumEntero(t)) return "0";
             if (EsEnum(t) && t.GetMembers().OfType<IFieldSymbol>().FirstOrDefault(f => f.IsConst) is IFieldSymbol primero)
                 return Tipo(t, donde) + "." + Ident(primero.Name);
             if (!t.IsValueType || EsNullable(t)) return "null";
@@ -230,7 +230,9 @@ namespace Cs2Jc
             // no deja leerla sin asignarla, y lo comprueba con más detalle que JC (un `switch` sobre una constante,
             // test-504): ese valor nadie lo lee. JC, como Java, pide que tenga uno en todos los caminos (#540).
             var partes = d.Variables.Select(v => Ident(v.Identifier.ValueText)
-                                                 + (v.Initializer != null ? " = " + Expr(v.Initializer.Value)
+                                                 + (constante && EsEnumEntero(primero.Type) && m.GetDeclaredSymbol(v) is ILocalSymbol lc
+                                                    ? " = " + NumeroDeEnum(lc.ConstantValue, primero.Type)
+                                                    : v.Initializer != null ? " = " + Expr(v.Initializer.Value)
                                                     : SinValor(((ILocalSymbol) m.GetDeclaredSymbol(v)).Type, v))).ToList();
             // #777: una constante de C# que vale null (`const string x = null`): en JC una constante es un valor y no
             // puede serlo; se escribe como lo que hace, una variable que nadie cambia
@@ -548,7 +550,7 @@ namespace Cs2Jc
         string ValorDeCase(ExpressionSyntax e)
         {
             var t = m.GetTypeInfo(e).Type;
-            if (EsEnum(t)) return Expr(e);
+            if (EsEnum(t) || EsEnumEntero(t)) return Expr(e);
             var cv = m.GetConstantValue(e);
             if (!cv.HasValue) return Rechaza(e, Porque.Pendiente("un case que no es constante"));
             // `case null:` (en JC, un switch sobre un null va al default: #774) pediría partir el switch con un if delante

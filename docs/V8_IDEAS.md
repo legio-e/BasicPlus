@@ -5655,11 +5655,14 @@ tema 5: 35 de 70.**
   nuestra List»*): `add`, `get`, `set`, `length` y el `foreach` de JC; en `CsSystem`, sólo lo que ella no tiene: el índice de `Add`, `Clear` y el enumerador. `Hashtable` e `IDictionary` no
   pueden ser el `Map`, que ordena sus llaves, y aquí una llave es cualquier objeto: una clase de `CsSystem`, sobre dos `List`, que busca una a una. Casos `ForeachPropio` y `Colecciones`.
   **Mono: 595** (+9). **El tema 3: 61.** Los 141 eran casi todos de `IEnumerable<T>`, que pide genéricos.
-- **B.** `#522` no cambia: JC sigue sin dejar convertir un entero en un enum. Lo que cambia es lo que escribe el traductor para los enums del programa que lo necesitan: los que se
-  operan (`A.x | A.y`, `~e`, `e + 1`), se crean de un número (`(E) n`) o llevan valores negativos. Ésos no serían un `enum` de JC, sino una clase de constantes, y sus variables, `int`:
-  `class Permiso { public const int Leer = 1; … }` e `int p = Permiso.Leer | Permiso.Escribir;`. Probado: una constante de clase vale en un `case` y en un `|`, igual en las dos VMs. Los
-  demás enums, como hoy. Su nombre en una cadena pediría una función que escribiría el traductor. «Unas 14»: de las 17 que da la cuenta, `test-647` pide además `decimal`, y `test-279` y
-  `test-453`, el nombre de varios valores a la vez.
+- **B, hecho, como dijo Eduardo** (*«no podemos dejarlos como enum y convertirlos a enteros?»*), que es mejor que lo propuesto (una clase de constantes). `#522` no cambia: JC sigue sin dejar
+  convertir un entero en un enum. **El enum se queda como enum, y lo que se opera se convierte a entero:** sus variables son `int` (`long`, si su tipo de debajo no cabe) y un miembro es
+  `((int) Permiso.Leer)`, que vale en un `|` y en un `case`: sólo se convierte de enum a entero, nunca al revés. Se hace con los enums del programa que se operan (`A.x | A.y`, `~e`, `e + 1`, `e++`,
+  `(E) n`, `E e = 0`); los demás, como hoy. Un enum con valores que uno de JC no lleva (negativos, o que no caben en un int: «el valor de un enum es un entero escrito, sin signo», punto 25) no se escribe, y
+  sus miembros van con su número. Su nombre en una cadena, con una función del enum que escribe el traductor, `Cs_Nombre_E`, también el de un `[Flags]`. Y dos sobrecargas que en JC serían la
+  misma (`Test (int)` y `Test (E)`; también `f (long)` y `f (uint)`): Roslyn dice a cuál va cada llamada, y la segunda lleva otro nombre. `EnumsEnteros.cs`; caso `EnumsEnteros`. **Mono: 609**
+  (+14: más de las «unas 14» que dije de sólo eso, no menos). **El tema 5: 49.**
+- **F, no.** Eduardo: *«no se lo que son tipos anónimos ni para que sirven, por mi no»*. Siguen fuera.
 - **C, hecho** (Eduardo: *«1) si»*: C, D, A y B, por ese orden). `new T () { A = 1 }` en una expresión: el objeto a una temporal y sus asignaciones, en orden, delante de la sentencia,
   y en su sitio la temporal; así `f = new Foo () { P = f.P }` lee el `f` de antes. No bajo `&&`, `||`, `??` o `?:`, ni en el valor de un campo, que no tiene sentencia. Caso
   `InicializaFuera`. **Mono: 584** (+5). **El tema 3: 58.**

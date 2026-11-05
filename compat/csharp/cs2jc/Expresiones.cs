@@ -21,7 +21,13 @@ namespace Cs2Jc
             if (conv.IsUnboxing) return Rechaza(e, Porque.Pendiente("sacar de una caja sin conversión"));
             if (conv.IsUserDefined) return Rechaza(e, Porque.H7(Porque.Operadores));
             if (conv.IsNullable) return ConversionNullable(e, m.GetTypeInfo(e).Type, m.GetTypeInfo(e).ConvertedType);   // un T?
-            if (conv.IsEnumeration) return Rechaza(e, Porque.Fuera(Porque.EnteroAEnum));      // `Color c = 0;`
+            if (conv.IsEnumeration)
+            {
+                // `Color c = 0;`: en uno que se opera, su número, sea del tipo que sea (`M ((long) 0)`, test-783)
+                var aEnum = m.GetTypeInfo(e).ConvertedType;
+                if (!EsEnumEntero(aEnum)) return Rechaza(e, Porque.Fuera(Porque.EnteroAEnum));
+                if (m.GetConstantValue(e) is var cero && cero.HasValue) return NumeroDeEnum(cero.Value, aEnum);
+            }
             if (conv.IsMethodGroup) return Rechaza(e, Porque.H7(Porque.Delegados));
             if (ULongAReal(e)) return Rechaza(e, Porque.Fuera(Porque.ULong));      // `double d = u;` (SinSigno.cs)
             // una constante que cabe en un byte, un short…: JC (como Java) la acepta escrita tal cual en una declaración o una
@@ -54,7 +60,8 @@ namespace Cs2Jc
 
         static bool EsBool(ITypeSymbol t) => t != null && t.SpecialType == SpecialType.System_Boolean;
 
-        static bool EsEnum(ITypeSymbol t) => t != null && t.TypeKind == TypeKind.Enum;
+        /// ¿Un enum de JC? Uno que se opera, ya no: es un entero (EnumsEnteros.cs).
+        bool EsEnum(ITypeSymbol t) => EsEnumCs(t) && !EsEnumEntero(t);
 
         /// La caja de BP de un valor (en BP las cajas son a mano: `Integer(5)`, y se sacan con `.value()`); null si no hay.
         static string ClaseDeCaja(ITypeSymbol t)
@@ -212,6 +219,7 @@ namespace Cs2Jc
             // una cadena, su nombre, como en C# (`X.A + "a"` es "Aa"; en JC, sin más, su número): `Enum.getName(x)`, que el
             // compilador de JC resuelve con los nombres del enum. Uno [Flags] da en C# «A, B» con dos a la vez: no se traduce.
             var tipo = m.GetTypeInfo(e).Type;
+            if (EsEnumEntero(tipo)) return NombreDeEnumEntero(e, tipo);
             if (EsEnum(tipo))
             {
                 if (tipo.GetAttributes().Any(a => a.AttributeClass?.Name == "FlagsAttribute"))
@@ -237,6 +245,10 @@ namespace Cs2Jc
         {
             string porTipo = PorTipo(m.GetTypeInfo(e).Type);
             if (porTipo != null) return Rechaza(e, porTipo);
+            // un miembro de un enum que se opera: un entero (EnumsEnteros.cs)
+            if (EsEnumEntero(m.GetTypeInfo(e).Type) && (e is IdentifierNameSyntax || e is MemberAccessExpressionSyntax)
+                && m.GetSymbolInfo(e).Symbol is IFieldSymbol miembro && miembro.IsConst && EsEnumCs(miembro.ContainingType))
+                return MiembroEntero(miembro, e);
             // una cuenta constante que da un uint o un ulong (`(uint) int.MaxValue + 1`), su valor: lo calcula C#
             if ((EsUInt(m.GetTypeInfo(e).Type) || EsULong(m.GetTypeInfo(e).Type))
                 && (e is BinaryExpressionSyntax || e is PrefixUnaryExpressionSyntax || e is CastExpressionSyntax)
@@ -296,6 +308,7 @@ namespace Cs2Jc
                 case SpecialType.System_Boolean: return "false";
                 case SpecialType.System_String: return "null";            // #774: una variable string de JC puede valer null
             }
+            if (EsEnumEntero(t)) return "0";
             if (EsNullable(t)) return PorTipo(t) is string p ? Rechaza(e, p) : "null";
             if (EsStructSinEstado(t)) return "new " + Tipo(t, e) + "()";
             if (t == null || t.IsValueType) return Rechaza(e, Porque.Pendiente("default de " + NombreCompleto(t)));
@@ -893,7 +906,7 @@ namespace Cs2Jc
             if (EsEnum(a) && !SymbolEqualityComparer.Default.Equals(a, de)) return Rechaza(c, Porque.Fuera(Porque.EnteroAEnum));
             // `(int) Color.Rojo`, `(long) c`: se copia (Eduardo, 31-oct: «es el compilador el que ha de hacer la
             // conversión»); a un tipo estrecho, todavía no
-            if (EsEnum(de) && !SymbolEqualityComparer.Default.Equals(a, de) && EsEstrecho(a))
+            if ((EsEnum(de) || EsEnumEntero(de)) && !SymbolEqualityComparer.Default.Equals(a, de) && EsEstrecho(a))
                 return AEstrecho("((long) " + Atomo(c.Expression) + ")", c, a) ?? Rechaza(c, Porque.Pendiente("un enum convertido a un tipo estrecho"));
             // `(I) y`, `(Animal) perro`: subir no se escribe en JC (sólo se baja); el objeto es el mismo y los métodos,
             // virtuales: se quita. Salvo una cadena como object: en C#, `(object) s == (object) t` compara referencias.
@@ -1007,6 +1020,7 @@ namespace Cs2Jc
                 case SpecialType.System_Object: return "Object";
                 case SpecialType.System_Void: return "void";
             }
+            if (EsEnumEntero(ty)) return TipoDeEnumEntero(ty);                 // EnumsEnteros.cs
             string p = PorTipo(ty);
             if (p != null) return Rechaza(donde, p);
             if (CajaDeNullable(ty) is string caja) return caja;                // un T?, su caja (Nullables.cs)
