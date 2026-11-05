@@ -61,7 +61,7 @@ module CsCaracteres
             return 7;
          }
          int[] letras = ['x', 'y'];
-         int[] vacio = newIntArray(3);
+         int[] vacio = new int[3];
          if (letras[1] != 'y' || vacio[0] != 0 || len(vacio) != 3)
          {
             return 8;

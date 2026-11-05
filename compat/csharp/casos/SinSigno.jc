@@ -130,7 +130,7 @@ module CsSinSigno
          {
             return 22;
          }
-         long[] vacio = newLongArray(3);
+         long[] vacio = new long[3];
          vacio[2] = 7;
          if (vacio[2] != 7 || vacio[0] != 0)
          {

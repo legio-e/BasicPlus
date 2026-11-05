@@ -43,7 +43,7 @@ module CsCajasYArrays
             return 5;
          }
          println(o, " ", l, " ", d);
-         int[] a = newIntArray(4);
+         int[] a = new int[4];
          a[2] = 9;
          if (len(a) != 4 || a[2] != 9 || a[0] != 0)
          {
@@ -69,7 +69,7 @@ module CsCajasYArrays
          {
             return 10;
          }
-         Object[] cajas = newObjArray(2);
+         Object[] cajas = new Object[2];
          cajas[0] = "texto";
          cajas[1] = new Integer(3);
          if (((Integer) cajas[1]).value() != 3)

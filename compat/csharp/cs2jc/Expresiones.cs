@@ -106,21 +106,10 @@ namespace Cs2Jc
             }
         }
 
-        /// `new int[n]`: las funciones de Core que crean un array con su tamaño; null si no hay para ese tipo.
-        static string CreadorDeArray(ITypeSymbol t)
-        {
-            switch (t?.SpecialType)
-            {
-                case SpecialType.System_Int32:
-                case SpecialType.System_Char: return "newIntArray";        // un char es un entero
-                case SpecialType.System_Byte: return "newByteArray";
-                case SpecialType.System_Int64:
-                case SpecialType.System_UInt32: return "newLongArray";      // un uint es un long
-                case SpecialType.System_Double: return "newDoubleArray";
-                case SpecialType.System_Object: return "newObjArray";
-                default: return null;
-            }
-        }
+        /// ¿Nace bien cada casilla de un `new T[n]` de JC? Nacen a cero o a null, como en C#; salvo un array de arrays, que
+        /// JC no crea con su tamaño, y un struct, que en C# nace con su valor y aquí sería null.
+        bool CasillaNaceBien(ITypeSymbol t)
+            => !(t is IArrayTypeSymbol) && (!t.IsValueType || t.TypeKind == TypeKind.Enum || t.SpecialType != SpecialType.None || EsNullable(t));
 
         string CreaArray(ArrayCreationExpressionSyntax ac)
         {
@@ -128,13 +117,14 @@ namespace Cs2Jc
             string tipo = Tipo(at, ac);                                  // los de varias dimensiones, de H7
             if (tipo == Hueco) return Hueco;
             if (ac.Initializer != null) return ValoresDeArray(ac.Initializer.Expressions, at, ac);
-            string fn = CreadorDeArray(at.ElementType);
-            if (fn == null) return Rechaza(ac, Porque.H7(Porque.ArrayConTamano));
-            // el tamaño, un entero: C# convierte uno long (`new char[len]`, test-138); el creador de Core pide un integer
+            if (!CasillaNaceBien(at.ElementType)) return Rechaza(ac, Porque.H7(Porque.ArrayConTamano));
+            string el = Tipo(at.ElementType, ac);
+            if (el == Hueco) return Hueco;
+            // el tamaño, un entero: C# convierte uno long (`new char[len]`, test-138); el de JC es un integer
             var tam = ac.Type.RankSpecifiers[0].Sizes[0];
             if (m.GetTypeInfo(tam).Type?.SpecialType == SpecialType.System_Int64 || EsUInt(m.GetTypeInfo(tam).Type))
-                return fn + "((int) " + Atomo(tam) + ")";
-            return fn + "(" + Expr(tam) + ")";
+                return "new " + el + "[(int) " + Atomo(tam) + "]";
+            return "new " + el + "[" + Expr(tam) + "]";
         }
 
         /// `{ 1, 2 }`: `[1, 2]`. Un array de valores de JC toma el tipo de sus valores: uno que no sea del tipo del array,

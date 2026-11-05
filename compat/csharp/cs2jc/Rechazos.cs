@@ -96,7 +96,7 @@ namespace Cs2Jc
         public const string NullConTipo = "un null con su tipo, (X) null, para elegir una sobrecarga";
         public const string IgualdadRefs = "== y != entre referencias de dos tipos distintos (una clase y su hija, Object)";
         public const string ArrayDeVarios = "un array de valores de otro tipo que el suyo (una clase hija, o mezclados)";
-        public const string ArrayConTamano = "crear un array de un tipo con su tamaño (Core: newIntArray, newByteArray, newLongArray, newDoubleArray y newObjArray)";
+        public const string ArrayConTamano = "crear con su tamaño un array de arrays o de structs (new A[n]: sus casillas nacen a null)";
 
         // Lo que queda fuera
         public const string Lambdas = "lambdas y métodos anónimos";

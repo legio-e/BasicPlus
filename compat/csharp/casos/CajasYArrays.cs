@@ -1,5 +1,5 @@
 // Caso del traductor C# -> JC (V8/H6): las cajas (en BP, a mano: `new Integer(5)` y `.value()`), crear arrays (con su
-// tamaño, con newIntArray y los suyos, y con valores, `[1, 2]`), `Length` y `params`. Se comprueba solo: Main devuelve 0.
+// tamaño, con `new int[n]` y los suyos, y con valores, `[1, 2]`), `Length` y `params`. Se comprueba solo: Main devuelve 0.
 using System;
 
 class Programa

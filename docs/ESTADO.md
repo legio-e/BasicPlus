@@ -27,6 +27,15 @@
 
 ## Última sesión
 
+> **5-nov** — **H8: un array con su tamaño** (Eduardo: *«Continuamos con la compatibilidad C# y JC. Las decisiones 1) Si, en BP no se var
+> a:miObjeto[] := miObjeto[10]»*). `A[n]` en BP y `new A[n]` en JC, de cualquier tipo (`V8_IDEAS` §E9, «El tema 3», el punto 3): el árbol es el
+> de indexar, y lo distingue lo que es el nombre. Ni la VM ni el `.mod` cambian: 734 fuentes, iguales; la red, VERDE; `check-jc`, verde. El
+> traductor escribe así todos sus arrays: **Mono, 563** (+3, las previstas); **el tema 3, 55**. Y mirado el tema 4, sin tocar nada: 27 de 130,
+> con sus propuestas medidas (`V8_IDEAS` §E9, «El tema 4»), para su OK.
+> - **Lo que me falló:** el sample de error lo dejé en `bpgenvm-c/samples/errores`, que no existe (van en `samples/errores`); un `byte[3]`
+>   se indexaba, porque `byte` es también la función `byte(x)`: una función no es un nombre con valor; y en la prueba del AOT, una variable `v`
+>   chocaba con un parámetro del arnés.
+>
 > **4-nov (noche)** — **H8, los temas 1 y 2** (Eduardo: *«me gustaría probar el primer y segundo grupo a ver cuantas pasan, y de
 > las que no pasan a ver si podemos hacer algo para que pasen algunas mas»*). Con el compilador de hoy, el lote seguía en 447: el tema
 > 1, 106 de 141; el tema 2, 73 de 123; ninguna falla. Leídas una a una las 85 que no pasan, doce propuestas (`V8_IDEAS` §E9, «Los
@@ -116,8 +125,8 @@
 >   notó en que los números iban de 200 en 200; repetida con `w.esperar`. El aviso estaba en el propio `wire_serie` (`#495`).
 >
 > **Para la próxima sesión:**
-> - H8: tres decisiones de Eduardo, `new A[n]` (y su forma en BP), los tipos anónimos y `ulong`, y si `while` y `for` llevan nombre; y lo
->   siguiente, el tema 4, los parámetros (`V8_IDEAS` §E9). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
+> - H8: dos decisiones de Eduardo, los tipos anónimos y `ulong`, y si `while` y `for` llevan nombre; y lo siguiente, el tema 4, los
+>   parámetros, con sus propuestas (`V8_IDEAS` §E9, «El tema 4»). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
 > - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;
 > - `#745` y `#710` siguen abiertas (Eduardo, 4-nov: *«La 3 no»*);
 > - la Metro, la P4 y la Nucleo llevan la imagen de `35297826`. La S3, la del paso 3 de `#730`

@@ -836,6 +836,8 @@ mi propuesta: manda lo de aquí.
     quedan 302; de la stdlib, los mismos 15.
 22. **Los objetos, con `new`** (Eduardo, 17-oct): `List l = new List();`. Hace falta ya en la primera fase: aunque
     no declare clases, un programa crea objetos de la stdlib.
+    - **Y los arrays con su tamaño** (H8, 5-nov): `new A[n]`, el `A[n]` de BP, con la misma idea: el árbol es el de indexar y lo
+      distingue el análisis (§E9, «El tema 3»).
     - **En BP, crear, llamar y convertir se escriben igual**: `List()`, `f()`, `integer(x)`, `Persona(o)`. El árbol es
       el mismo (`CallExpr`), y sólo el análisis semántico sabe qué es cada uno: si el nombre es una clase, construye;
       con un único argumento `Object` o de un antepasado, convierte (`refCasts`, `#389` y L19).
@@ -5549,7 +5551,7 @@ por lo que da cada una; Eduardo: *«1,2 y 4 OK»*.
 |---|---|---|---|---|
 | 1 | ocultar un miembro (`new`): el de la hija lleva otro nombre en JC | el traductor | +7 | 4-nov: Mono **558** |
 | 2 | una propiedad de sólo lectura asignada en su constructor: escribe su campo | el traductor | +1 | 4-nov: Mono **560** |
-| 3 | un array de objetos de una clase con su tamaño (`new Derived[0]`) | por decidir: toca JC | +1 | |
+| 3 | un array de objetos de una clase con su tamaño (`new Derived[0]`) | JC y BP | +1 | 5-nov: Mono **563** |
 | 4 | `Console.Error` | `CsSystem` | +1 | 4-nov: Mono **560** |
 
 **1. Ocultar un miembro, hecho** (`Explicitas.cs`). En JC todo método es virtual, y lo que se llama igual en una hija sobrescribe. El
@@ -5568,9 +5570,45 @@ llevaba. Las que redefine una hija se escriben con su campo a la vista (`Y_campo
 **4. `Console.Error`, hecho.** BP no tiene salida de error: lo que se escribe se calcula y no va a ningún sitio; en C# tampoco va al `stdout`,
 que es lo que se compara. **Mono: 560** (+2); fallan 5. **El tema 3: 54.**
 
-**3. Un array de una clase con su tamaño, por decidir.** Probado en JC: `newObjArray(n)` da un `Object[]` y no se asigna a un `A[]`, y `(A[]) x`
-no se puede escribir. Hoy sólo se crea uno con sus valores, `[new A(), new A()]`. Hace falta algo en el lenguaje: en JC, `new A[n]`,
-como en Java y C#; y su forma en BP, porque el árbol es el mismo. 24 pruebas lo piden, a 3 no les falta nada más.
+**3. Un array con su tamaño, hecho** (5-nov; Eduardo: *«Las decisiones 1) Si, en BP no se var a:miObjeto[] := miObjeto[10]»*). Probado en JC:
+`newObjArray(n)` da un `Object[]` y no se asigna a un `A[]`, `(A[]) x` no se puede escribir, y sólo se creaba uno con sus valores,
+`[new A(), new A()]`. Ahora, `A[n]` en BP y `new A[n]` en JC, como en Java y C#, de cualquier tipo: una clase, una interfaz, un enum, `string`
+y los números; las casillas nacen a cero o a null.
+
+- **El árbol es el de indexar**, porque BP no los distingue al leer. Los distingue el análisis, por lo que es el nombre de la izquierda
+  (`info.arraysNuevos`). Un nombre con valor (una variable, un parámetro, un campo) gana y se indexa, como gana en `A(…)`. En JC no se mira:
+  tras `new` sólo va un tipo, sin él es un error que dice cómo se escribe, y `new A[3][2]` también (un array de arrays no existe).
+- **Las palabras de tipo de BP** (`integer`, `string`, `byte`…) entran en una expresión seguidas de `[`: si no, JC no se podría escribir en BP.
+- **La VM y el `.mod` no cambian:** sale lo mismo que el principio de un literal de array, `NEWARRAY…` o el builtin `NEW_REF_ARRAY`; un tamaño
+  negativo o que no cabe da el error de siempre. Los `.mod` de 734 fuentes, iguales. También en una `native` (`NatSwitch`, 17/17).
+- **El traductor** escribe así todos sus `new T[n]`, y su tabla de funciones de Core se fue. Sigue rechazando dos: un array de arrays, y uno de
+  `struct`, cuyas casillas en C# nacen con su valor y aquí serían null.
+
+Sample `ArrayNuevo` y `ArrayNuevoMal`, `ArrayNuevoTest`, caso `ArraysNuevos`. **Mono: 563** (+3, las previstas; a las otras 21 de las 24 que lo
+pedían les falta algo más: genéricos, `struct`, LINQ, reflexión…). **El tema 3: 55.**
+
+### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
+
+27 de 130, ninguna falla; 44 piden algo de fuera (reflexión, `dynamic`, `ulong`…) y 59 no. Medido con el lote de hoy: «piden», las que lo piden en
+todo el lote; «sólo eso», a las que no les falta nada más. Es una medida por motivo: leídas una a una, alguna se queda por el camino.
+
+| # | ajuste | dónde | piden | sólo eso | del tema 4 |
+|---|---|---|---|---|---|
+| 1 | los valores por defecto, escritos en cada llamada, que es lo que hace C#: `null`, un enum, un `T?` | el traductor | 19 | 6 | 6 |
+| 2 | un array de valores de otro tipo (`params object[]` con un 8 y una cadena): una función por tipo y tamaño, con `new T[n]` | el traductor | 20 | 3 | 3 |
+| 3 | `ref` y `out`: la variable vive en una caja, y lo que se pasa es la caja | el traductor | 122 | 14 | 14 |
+| 4 | argumentos con nombre que cambian el orden de lo que se calcula | el traductor | 5 | 2 | 2 |
+| 5 | `(X) null`, para elegir una sobrecarga | el traductor | 3 | 2 | 1 |
+
+Juntas: 1 y 2, +9; con 4 y 5, +13; con 3, +27. Ninguna toca JC.
+
+- **1.** Hoy el valor por defecto va en la declaración, y JC sólo admite ahí un literal. Pero en C# no es de la función: lo pone el compilador en
+  cada llamada, y Roslyn lo sabe. `foo()` se escribe `foo(Foo.None)`. Ojo: `gtest-optional-39` llama a `GetValues(null)` con dos sobrecargas, y
+  con los dos argumentos escritos sigue sin decidirse: es del ajuste 5.
+- **3.** Copiar el valor a la entrada y a la salida no vale: las pruebas llaman dentro de una condición (`if (Prueba(out x) && x == 0)`, `test-893`,
+  `test-904`). Por eso la variable vive en una caja desde que se declara: `Ref_int x = new Ref_int();`, sus usos son `x.v`, y la llamada es
+  `Prueba(x)`. Una clase por tipo, escrita por el traductor. En un primer paso, las variables y los parámetros; lo que se pasa de un campo o de
+  una casilla (`ref a[i]`) y lo de C# 7 (`ref int r = ref x`, `test-ref-11`), aparte.
 
 ## E10 · Las interfaces de clase, en JC y en BP (Eduardo, 31-oct; `#756`; el hito H7.3, decidido entero el 31-oct; HECHO el 1-nov)
 
