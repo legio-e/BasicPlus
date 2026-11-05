@@ -58,10 +58,10 @@ static int32_t aot_NatNew_sumaArray(struct bpvm* vm, int32_t bp_n) {
     int32_t bp_i = 0;
     while ((bp_i < 4)) {
         if (__builtin_expect(*__bpvm_pm != __bpvm_m, 0)) { __bpvm_m = *__bpvm_pm; vm->aot_helpers->punto_control(vm); }   /* #592: la marca */
-        bp_t += vm->aot_helpers->array_load_i32(vm, bp_v, bp_i);
-        bp_i += 1;
+        bp_t = ((int32_t) ((uint32_t) (bp_t) + (uint32_t) (vm->aot_helpers->array_load_i32(vm, bp_v, bp_i))));
+        bp_i = ((int32_t) ((uint32_t) (bp_i) + (uint32_t) (1)));
     }
-    return (bp_t + bp_n);
+    return ((int32_t) ((uint32_t) (bp_t) + (uint32_t) (bp_n)));
 }
 
 static int64_t aot_NatNew_sumaLargos(struct bpvm* vm) {
@@ -70,7 +70,7 @@ static int64_t aot_NatNew_sumaLargos(struct bpvm* vm) {
     int32_t __bpvm_cuenta = 1024;   /* P2b.1.d: la línea del bucle */
     (void) __bpvm_cuenta;
     int32_t bp_v = ({ int32_t __arr = vm->aot_helpers->newarray_i64(vm, 2); vm->aot_helpers->array_store_i64(vm, (uint32_t) __arr, 0, 3000000000LL); vm->aot_helpers->array_store_i64(vm, (uint32_t) __arr, 1, 4000000000LL); __arr; });
-    return (vm->aot_helpers->array_load_i64(vm, bp_v, 0) + vm->aot_helpers->array_load_i64(vm, bp_v, 1));
+    return ((int64_t) ((uint64_t) (vm->aot_helpers->array_load_i64(vm, bp_v, 0)) + (uint64_t) (vm->aot_helpers->array_load_i64(vm, bp_v, 1))));
 }
 
 static int32_t aot_NatNew_tocaPalabras(struct bpvm* vm, int32_t bp_v) {
@@ -82,7 +82,7 @@ static int32_t aot_NatNew_tocaPalabras(struct bpvm* vm, int32_t bp_v) {
     vm->aot_helpers->array_store_i16(vm, bp_v, 0, 1000);
     vm->aot_helpers->array_store_i16(vm, bp_v, 1, 2000);
     vm->aot_helpers->array_store_i16(vm, bp_v, 2, 3000);
-    return ((vm->aot_helpers->array_load_u16(vm, bp_v, 0) + vm->aot_helpers->array_load_u16(vm, bp_v, 1)) + vm->aot_helpers->array_load_u16(vm, bp_v, 2));
+    return ((int32_t) ((uint32_t) (((int32_t) ((uint32_t) (vm->aot_helpers->array_load_u16(vm, bp_v, 0)) + (uint32_t) (vm->aot_helpers->array_load_u16(vm, bp_v, 1))))) + (uint32_t) (vm->aot_helpers->array_load_u16(vm, bp_v, 2))));
 }
 
 static double aot_NatNew_mediaDobles(struct bpvm* vm) {
@@ -104,7 +104,7 @@ static int32_t aot_NatNew_largoDeDos(struct bpvm* vm, int32_t bp_a, int32_t bp_b
     (void) bp_a;
     (void) bp_b;
     int32_t bp_v = ({ int32_t __arr = vm->aot_helpers->newarray_ref(vm, 3); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 0, vm->aot_helpers->int_to_string(vm, bp_a)); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 1, vm->aot_helpers->int_to_string(vm, bp_b)); vm->aot_helpers->array_store_ref(vm, (uint32_t) __arr, 2, vm->aot_helpers->string_from_cstr(vm, "xy", 2)); __arr; });
-    return ((vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, bp_v, 0))) + vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, bp_v, 1)))) + vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, bp_v, 2))));
+    return ((int32_t) ((uint32_t) (((int32_t) ((uint32_t) (vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, bp_v, 0)))) + (uint32_t) (vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, bp_v, 1))))))) + (uint32_t) (vm->aot_helpers->string_length(vm, (uint32_t) (vm->aot_helpers->array_load_ref(vm, bp_v, 2))))));
 }
 
 static float aot_NatNew_sumaFloats(struct bpvm* vm) {
@@ -124,7 +124,7 @@ static int32_t aot_NatNew_areaDe(struct bpvm* vm, int32_t bp_a, int32_t bp_b) {
     (void) bp_a;
     (void) bp_b;
     int32_t bp_p = vm->aot_helpers->call_bp_i32(vm, aot_NatNew_busca(vm, "NatNew.__cls_new_Punto(ii)", "AOT: la native 'areaDe' pide 'NatNew.__cls_new_Punto(ii)' y no est\303\241 en los m\303\263dulos cargados (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (int32_t[]){ bp_a, bp_b }, 2, 0u, 1);
-    return (vm->aot_helpers->call_method_i32(vm, bp_p, aot_NatNew_ranura(vm, "NatNew.Punto", "getX()i", "AOT: la native 'areaDe' pide 'NatNew.Punto.getX()i' y la clase cargada no lo tiene (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (const int32_t*) 0, 0, 0u, 0) * vm->aot_helpers->call_method_i32(vm, bp_p, aot_NatNew_ranura(vm, "NatNew.Punto", "getY()i", "AOT: la native 'areaDe' pide 'NatNew.Punto.getY()i' y la clase cargada no lo tiene (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (const int32_t*) 0, 0, 0u, 0));
+    return ((int32_t) ((uint32_t) (vm->aot_helpers->call_method_i32(vm, bp_p, aot_NatNew_ranura(vm, "NatNew.Punto", "getX()i", "AOT: la native 'areaDe' pide 'NatNew.Punto.getX()i' y la clase cargada no lo tiene (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (const int32_t*) 0, 0, 0u, 0)) * (uint32_t) (vm->aot_helpers->call_method_i32(vm, bp_p, aot_NatNew_ranura(vm, "NatNew.Punto", "getY()i", "AOT: la native 'areaDe' pide 'NatNew.Punto.getY()i' y la clase cargada no lo tiene (\302\277otra versi\303\263n de la dependencia?): recompila 'NatNew'"), (const int32_t*) 0, 0, 0u, 0))));
 }
 
 static void thunk_NatNew_sumaArray(struct bpvm* vm,

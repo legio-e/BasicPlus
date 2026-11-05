@@ -412,8 +412,34 @@ public final class AotCEmitter {
     /** `destino op= valor` (`+=`, `-=`) sobre un `float` o un `double`: la operación
      *  del intérprete (MivmEmitter.emitCompoundOp) con el valor convertido al tipo del
      *  destino. `leer` emite el valor actual del destino. */
-    /** V8/H7.1 (#747) — ¿un compuesto de los nuevos (`*=`, `mod=`…)? Los de antes, `+=` y `-=`, siguen por su camino de
-     *  siempre: el C de los `.mdn` que ya hay no cambia. */
+    /** #790 (5-nov) — ¿un entero de cualquier ancho, o un long? */
+    private static boolean esEnteroC(BpType t) { return esEnteroT(t) || esLongT(t); }
+
+    /** #790 (5-nov) — `a + b`, `a - b` y `a * b` entre enteros dan la vuelta, como en el intérprete. En C el desbordamiento
+     *  con signo no está definido, y gcc lo aprovecha: `x + 1 > x` salía cierto siempre, y la comparación desaparecía. Sin
+     *  signo sí da la vuelta, y las instrucciones son las mismas. `largo`: la cuenta es de 64 bits. */
+    private void emitCuentaEntera(String op, boolean largo, Runnable izq, Runnable der) {
+        String conSigno = largo ? "int64_t" : "int32_t", sinSigno = largo ? "uint64_t" : "uint32_t";
+        w.print("((" + conSigno + ") ((" + sinSigno + ") (");
+        izq.run();
+        w.print(") " + op + " (" + sinSigno + ") (");
+        der.run();
+        w.print(")))");
+    }
+
+    /** #790 (5-nov) — `a shl n` y `a shr n`, como el intérprete: la cuenta con sus 5 bits, o sus 6 en un long. En C, una
+     *  cuenta del ancho o mayor no está definida (ARM da 0, x86 la recorta). `shl`, sin signo por lo mismo que la suma. */
+    private void emitDesplazamiento(boolean izquierda, boolean largo, Ast.IExpr a, Ast.IExpr n) {
+        String conSigno = largo ? "int64_t" : "int32_t", sinSigno = largo ? "uint64_t" : "uint32_t";
+        String bits = largo ? "63" : "31";
+        w.print(izquierda ? "((" + conSigno + ") ((" + sinSigno + ") (" : "(((" + conSigno + ") (");
+        emitExpr(a);
+        w.print(izquierda ? ") << ((" : ")) >> ((");
+        emitExpr(n);
+        w.print(") & " + bits + ")" + (izquierda ? "))" : ")"));
+    }
+
+    /** V8/H7.1 (#747) — ¿un compuesto de los nuevos (`*=`, `mod=`…)? Los de antes, `+=` y `-=`, siguen por su camino. */
     private static boolean esCompuestoNuevo(Ast.AssignOpKind op) {
         return op != Ast.AssignOpKind.ASSIGN && op != Ast.AssignOpKind.PLUS_ASSIGN && op != Ast.AssignOpKind.MINUS_ASSIGN;
     }
@@ -1616,6 +1642,11 @@ public final class AotCEmitter {
                     w.print(cVar(tname) + " = ");
                     emitCompuestoFlotante(a.op, tLocal, () -> w.print(cVar(tname)), a.value);
                     w.println(";");
+                } else if (localNames.contains(tname) && a.op != Ast.AssignOpKind.ASSIGN && esEnteroC(tLocal)) {
+                    /* #790 — `x += v` de enteros: da la vuelta, como la suma. */
+                    w.print(cVar(tname) + " = ");
+                    emitCuentaEntera(a.op.binario(), esLongT(tLocal), () -> w.print(cVar(tname)), () -> emitComo(a.value, tLocal));
+                    w.println(";");
                 } else if (localNames.contains(tname)) {
                     /* Local — emisión directa estilo C. */
                     w.print(cVar(tname));
@@ -1661,11 +1692,10 @@ public final class AotCEmitter {
                         w.println(");");
                     } else {
                         String binOp = (a.op == Ast.AssignOpKind.PLUS_ASSIGN) ? "+" : "-";
-                        w.print("vm->aot_helpers->write_i32_be(" + addr
-                              + ", vm->aot_helpers->read_i32_be(" + addr
-                              + ") " + binOp + " (");
-                        emitExpr(a.value);
-                        w.println("));");
+                        w.print("vm->aot_helpers->write_i32_be(" + addr + ", ");
+                        emitCuentaEntera(binOp, false, () -> w.print("vm->aot_helpers->read_i32_be(" + addr + ")"),
+                                         () -> emitExpr(a.value));   /* #790 — da la vuelta */
+                        w.println(");");
                     }
                 }
                 return;
@@ -1724,13 +1754,15 @@ public final class AotCEmitter {
                     emitExpr(ix.target);
                     w.print(", ");
                     emitExpr(ix.index);
-                    w.print(", vm->aot_helpers->" + arrLoadFn(ix.target) + "(vm, ");
-                    emitExpr(ix.target);
                     w.print(", ");
-                    emitExpr(ix.index);
-                    w.print(") " + binOp + " (");
-                    emitExpr(a.value);
-                    w.println("));");
+                    emitCuentaEntera(binOp, esLongT(tElem), () -> {
+                        w.print("vm->aot_helpers->" + arrLoadFn(ix.target) + "(vm, ");
+                        emitExpr(ix.target);
+                        w.print(", ");
+                        emitExpr(ix.index);
+                        w.print(")");
+                    }, () -> emitExpr(a.value));   /* #790 — da la vuelta */
+                    w.println(");");
                 }
                 return;
             }
@@ -2255,7 +2287,8 @@ public final class AotCEmitter {
         // acababa nunca.
         indent();
         w.println("for (; (" + step + " > 0) ? (" + it + " <= " + end + ") : ("
-                  + it + " >= " + end + "); " + it + " += " + step + ") {");
+                  + it + " >= " + end + "); " + it + " = (int32_t) ((uint32_t) " + it + " + (uint32_t) " + step
+                  + ")) {");   /* #790 — el `i` da la vuelta, como en el intérprete */
         indentLevel++;
         emitCuerpoDeBucle(fs.body);
         indentLevel--;
@@ -2773,6 +2806,19 @@ public final class AotCEmitter {
                     return;
                 }
             }
+            /* #790 — entre enteros: dan la vuelta, y la cuenta de un desplazamiento lleva sus bits. La torre, la del
+             * intérprete: es de 64 bits si lo es un operando o el resultado. */
+            if (esEnteroC(tipoDe(b.left)) && esEnteroC(tipoDe(b.right))) {
+                boolean largo = esLongT(tipoDe(b.left)) || esLongT(tipoDe(b.right)) || esLongT(tipoDe(b));
+                if ("+".equals(b.op) || "-".equals(b.op) || "*".equals(b.op)) {
+                    emitCuentaEntera(b.op, largo, () -> emitExpr(b.left), () -> emitExpr(b.right));
+                    return;
+                }
+                if ("shl".equals(b.op) || "shr".equals(b.op)) {
+                    emitDesplazamiento("shl".equals(b.op), largo, b.left, b.right);
+                    return;
+                }
+            }
             /* Numérico/lógico normal. */
             w.print("(");
             emitExpr(b.left);
@@ -2783,6 +2829,12 @@ public final class AotCEmitter {
         }
         if (e instanceof Ast.UnaryExpr) {
             Ast.UnaryExpr u = (Ast.UnaryExpr) e;
+            /* #790 — negar el mínimo da el mínimo, como en el intérprete; un literal, tal cual */
+            if ("-".equals(u.op) && esEnteroC(tipoDe(u.operand))
+                    && !(u.operand instanceof Ast.IntLitExpr) && !(u.operand instanceof Ast.LongLitExpr)) {
+                emitCuentaEntera("-", esLongT(tipoDe(u.operand)), () -> w.print("0"), () -> emitExpr(u.operand));
+                return;
+            }
             w.print("(");
             if ("-".equals(u.op))      w.print("-");
             else if ("not".equals(u.op)) w.print("!");

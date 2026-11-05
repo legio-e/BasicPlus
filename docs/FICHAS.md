@@ -7379,7 +7379,24 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#790` — una `native` no da lo mismo que interpretada cuando un entero da la vuelta: en C, el desbordamiento con signo no está definido (abierta el 5-nov, al comprobar para el `ulong` de H8 que un `long` da la vuelta; sólo apuntada)
+#### 🔵 `#791` — dividir en los bordes: la VM-C se cae en el PC con el mínimo entre -1, y una `native` de enteros no ve la división por cero (abierta el 5-nov, al arreglar `#790`; sólo apuntada)
+
+Medido en el PC, cada caso en su programa:
+
+| | VM-Java | VM-C | `native` con el AOT |
+|---|---|---|---|
+| mínimo `/` -1, `integer` y `long` | el mínimo | **el proceso muere** (`0xC0000095`) | |
+| mínimo `mod` -1, `integer` y `long` | 0 | **el proceso muere** | |
+| `a / 0` y `a mod 0`, `integer` | «División por cero», se captura | igual | **el proceso muere** |
+
+- **Lo primero:** `interp.c` escribe `a / b` y `a % b` tal cual (`OP_DIV`, `OP_MOD`, `OP_LDIV`, `OP_LMOD`), y los helpers `h_idiv64` y `h_imod64` igual: en C no está
+  definido, y el `idiv` de x86 lo convierte en una excepción. En ARM y RISC-V, según sus manuales, no salta (no probado en placa): por eso no se había visto.
+- **Lo segundo:** el AOT escribe `(bp_a / bp_b)`. El `long` va por `idiv64`, que mira el cero (`#381`); el `integer`, no. En el PC muere; en placa no daría error, sino
+  un número: ARM da 0 y RISC-V, -1 (según sus manuales; no probado). El intérprete da su error, y se puede capturar: es otra diferencia entre el `.mod` con su `.mdn` y sin él.
+- **Arreglo propuesto, por decidir:** (1) en `interp.c` y en los dos helpers, `b == -1` aparte (`0 - a` sin signo; en `mod`, 0): toca la VM, así que entra en
+  las imágenes del próximo lote; (2) en el AOT, el cero se mira antes de dividir y se lanza con `throw_runtime`, que ya está en la tabla: sólo el compilador.
+
+#### ✅ `#790` — una `native` no da lo mismo que interpretada cuando un entero da la vuelta: en C, el desbordamiento con signo no está definido (abierta y cerrada el 5-nov, al comprobar para el `ulong` de H8 que un `long` da la vuelta; Eduardo: *«1) si»*)
 
 Medido en el PC, con el arnés de `test-aotswitch` y la misma función, con el AOT e interpretada:
 
@@ -7399,8 +7416,14 @@ recetas (mirado en el ensamblador). Con `-fwrapv`, la comparación vuelve.
 - **Es el invariante:** el mismo `.mod` dice otra cosa con su `.mdn` que sin él. Sólo se ve en una `native` que compare lo que ha dado la vuelta; un
   hash o una suma sin comparar salen bien. En placa no está probado.
 - **Ya estaba avisado:** `AOT_ABI8_IDEAS.md`, el riesgo 1: *«conviene compilar el `.mdn` con `-fwrapv`»*. No se hizo.
-- **Dos maneras de arreglarlo, por decidir:** (a) `-fwrapv` en las recetas, que cambia su huella: hay que rehacer las imágenes y los `.mdn`; (b) que
-  el AOT escriba `+`, `-` y `*` sin signo (`(int32_t) ((uint32_t) a + (uint32_t) b)`): sólo el compilador, sin tocar el firmware.
+- **Dos maneras de arreglarlo:** (a) `-fwrapv` en las recetas, que cambia su huella: hay que rehacer las imágenes y los `.mdn`; (b) que el AOT escriba las cuentas
+  sin signo (`(int32_t) ((uint32_t) a + (uint32_t) b)`): sólo el compilador, sin tocar el firmware. **Se hizo la (b).**
+- **Hecho:** `AotCEmitter`: `+`, `-` y `*` entre enteros (`emitCuentaEntera`), el menos unario, `+=` y `-=` en una local, una global y una casilla, y el `i` de un `for`.
+  Y lo mismo de fondo en los desplazamientos: la cuenta con sus 5 bits, o sus 6 en un `long`, como el intérprete (en C, una cuenta del ancho o mayor no está definida: ARM da 0).
+- **Comprobado:** `NatSwitch`, 33/33 (`make test-aotswitch`: el AOT da lo mismo que interpretado, con el GC en cada alocación); con el C de antes, 6 de las 16 comprobaciones
+  nuevas fallan, así que la prueba muerde. El código de las placas, con las recetas de verdad, antes y después (`.text`, ARM y RV32IMC): `NatNew`, `ByteNat` y `NatCompuestos`, igual; `CompressBench`, 589 → 565 y
+  593 → 597; `LongNat`, 929 → 933 y 1289 → 1289; `NatSwitch`, 4181 → 4297 y 5067 → 5237, porque antes gcc se saltaba esas comparaciones. La red, VERDE. En placa no
+  está probado; y un `.mdn` ya compilado sigue como estaba hasta que se recompile.
 - **El intérprete de la VM-C** suma igual, con `int32_t` e `int64_t`, y sin `-fwrapv` en ningún build. Ahí gcc no tiene de qué aprovecharse (lee de la
   memoria de la VM y escribe en ella) y la paridad no ha visto nada, pero el C no lo garantiza.
 

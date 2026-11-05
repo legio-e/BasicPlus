@@ -36,6 +36,8 @@
 >   haciendo conversiones de long <-> ulong»*; *«las 2 primeras filas»*): un `long` con sus 64 bits, y lo que no sale igual, no se traduce.
 >   **Mono, 570** (+7); fallan las mismas 5. Las «unas 14» que le dije contaban también `decimal` y `nint`: de `ulong` eran 9. Y de esas 9 conté una que
 >   no pasa: `gtest-optional-36` lleva un `params` tras un valor por defecto, e iba a dar «falla»; ahora no se traduce, con su motivo.
+> - **`#790`** (*«1) si»*), hecha: al comprobar que un `long` da la vuelta, salió que una `native` no: `x + 1 > x` daba 1 con el AOT y 0 interpretada. El AOT escribe las
+>   cuentas sin signo, y `NatSwitch` lo comprueba (33/33; con el C de antes fallan 6). La red, VERDE. Y al hacerlo, `#791`, sólo apuntada.
 > - **Lo que me falló:** el sample de error lo dejé en `bpgenvm-c/samples/errores`, que no existe (van en `samples/errores`); un `byte[3]`
 >   se indexaba, porque `byte` es también la función `byte(x)`: una función no es un nombre con valor; y en la prueba del AOT, una variable `v`
 >   chocaba con un parámetro del arnés.
@@ -129,7 +131,7 @@
 >   notó en que los números iban de 200 en 200; repetida con `w.esperar`. El aviso estaba en el propio `wire_serie` (`#495`).
 >
 > **Para la próxima sesión:**
-> - `#790`, nueva: una `native` da otra cosa que interpretada cuando un entero da la vuelta; dos maneras de arreglarlo, por decidir;
+> - `#791`, nueva: la VM-C se cae en el PC con el mínimo entre -1, y una `native` de enteros no ve la división por cero; su arreglo, por decidir;
 > - H8: dos decisiones de Eduardo, los tipos anónimos, y si `while` y `for` llevan nombre; y lo siguiente, el tema 4, los
 >   parámetros, con sus propuestas (`V8_IDEAS` §E9, «El tema 4»). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
 > - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;
