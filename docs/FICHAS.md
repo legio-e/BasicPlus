@@ -7379,6 +7379,11 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### ⬜ `#793` — los genéricos como una orden al compilador: `List<miTipo>`, `Map<string, miTipo>` y las clases con `@element{…}` (abierta el 5-nov)
+
+Eduardo (5-nov): *«<miTipo> es una instrucción para el compilador, para que sepa que tipo de objetos guarda»*. Sigue a `#749`, que dejó «otros argumentos, más adelante». El diseño, lo medido, lo decidido
+(*«OK a las 4»*) y el algoritmo, en `V8_IDEAS` §E9, «Los genéricos: una orden al compilador». Pendiente: su OK al algoritmo.
+
 #### ✅ `#792` — BP: un tipo genérico al final de una línea no compila: `function f(): List<Object>`, `property p: List<Object>`, `var c: List<Object>` (abierta y **CERRADA** el 5-nov, el commit de `#792`; Eduardo: *«OK a las 4»*)
 
 Salió al mirar cómo cruza `List<miTipo>` de un módulo a otro (H8, los genéricos). `GT` está entre los continuadores del

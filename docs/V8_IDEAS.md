@@ -5700,6 +5700,58 @@ La cuenta de Mono deja de ser el objetivo: es un instrumento. Los datos le dan l
 | `?.` y patrones | 108 | 13 |
 | indexadores | 103 | 20 |
 
+### Los genéricos: una orden al compilador (5-nov, `#793`)
+
+Eduardo: *«A ver, los genéricos yo lo haría así. List y Map se declaran igual que ahora, con Object. Otras clases nuevas se pueden declarar con un tipo o con una interface. Por ejemplo SortList se podría
+declarar con un IComparable. Ahora, a la hora de utilizar la Lista, declaramos var a:List<miTipo> . <miTipo> es una instrucción para el compilador, para que sepa que tipo de objetos guarda. Entonces los
+métodos add y get no hacen falta sobreescribirlos ( ni List ) pero el compilador restringe el tipo. Es como una orden semántica para el compilador, pero no afecta nada a la VM ni al código generado.»*
+
+**De dónde viene.** Le propuse los de Java, por pasos: los contenedores, las clases propias con una variable `T` (borrado de tipos, restricciones, métodos puente) y los métodos genéricos. Lo suyo es más
+simple: la clase no lleva `T` y se compila como hoy. Desaparecen la variable, la sustitución dentro de las clases, los métodos puente y las restricciones (el tipo base ya lo es), y los métodos genéricos no
+hacen falta.
+
+**La regla.** En `C<X>`, donde la firma de `C` dice su tipo base, el compilador lee `X`: lo que entra tiene que ser un `X` y lo que sale es un `X`.
+
+**Lo medido** (lote a28):
+- Las 281 pruebas de «sólo eso» engañan: 109 tienen el `Main` vacío (`gtest-215` son tres declaraciones) y sólo unas 67 comprueban algo (`Main` con contenido, y escriben, lanzan o devuelven un error; por
+  patrones sobre el fuente). Son pruebas del compilador de Mono: miran si acepta una declaración. La razón de los genéricos es lo que gana quien programa, no la cuenta.
+- 1024 números en una `List` gastan 28 272 bytes en la VM-C: unos 28 cada uno (la caja, 12; la referencia, 8; el handle, unos 8). En un array, 4 096.
+- Sin el cast de salida (quitado de un `.mod` de prueba, en las dos VMs, lo mismo): con un `Pequeno` de un campo donde se espera un `Grande` de cuatro, `GET_FIELD` lee el campo del objeto de al lado sin error,
+  `SET_FIELD` escribe encima de ese objeto sin error, y el fallo sale después, en el vecino («el receptor no es un objeto»). Con el cast, para en la línea: «conversion invalida: el valor no es un 'Grande'».
+- Las firmas: en `List`, `SyncList` y `OwnerList`, cada `Object` es el elemento (`add`, `get`, `set`, `pop`, `popBlocking`). En `Map`, no: unas veces es la llave y otras el valor.
+- Entre módulos (su pregunta: *«como va a saber el compilador el tipo del cast?»*): el cast va en el módulo que lee, no en `List`, y ése sabe el tipo por la sección INTERFACE del `.mod` del que declara, que hoy
+  pierde los argumentos (`func mete(l:Core.List):void public`). La clave de un método no los lleva, así que el enlace no cambia. Para usar un `Sensor` hay que importar su módulo, como hoy («el tipo 'Cc.Sensor'
+  no tiene miembros»). La lista en sí no sabe nada: `<Sensor>` va en las declaraciones, no en el objeto; por un `Object` o una `List` a secas se pierde, y quien la recibe lo declara otra vez.
+
+**Lo decidido** (*«OK a las 4»*):
+1. El cast de salida se queda: el compilador escribe el `CHECKCAST` que hoy se escribe a mano. El compilador ve lo que entra por `add`, pero no lo que hace una clase por dentro, donde todo es `Object`, ni lo que
+   llega dando la vuelta por un `Object`. Lo que se genera es lo mismo que con el cast a mano, y la VM no cambia.
+2. Una clase nueva dice su tipo base con una anotación, `@element{IComparable}`: es justo una orden para el compilador. Sin marca, `Thread<Sensor>` compilaría sin significar nada. `class SortList<IComparable>`
+   no: en Java y C# eso declara un parámetro llamado así.
+3. `List<Perro>` no pasa a `List<Animal>` (como en Java y C#: por esa variable se metería un `Gato` entre los perros). Y la `List` a secas se mezcla con `List<Sensor>`, como los raw types de Java, para que no
+   cambie ningún programa.
+4. `#792` se arregla lo primero (hecho).
+
+De su diseño sale además que entre `<` y `>` va una clase, una interfaz o `string`, como en Java: `List<Integer>`. `List<integer>` obligaría a cambiar `get` por `getInteger`, y eso ya no es sólo una orden.
+
+**El algoritmo** (5-nov, pendiente de su OK):
+1. La marca. `@element{B}` en una clase dice su tipo base, y la heredan sus hijas. `List` y sus hijas lo tienen sin marca: `Object`. `Map`, aparte. Se lee antes de resolver las firmas (hoy las anotaciones se
+   validan después del cuerpo).
+2. El tipo. `C<X>` vale si `C` tiene tipo base y `X` es una clase, una interfaz o `string` que desciende de él. Si no, error: `Thread<Sensor>`, `List<integer>`, `SortList<Motor>`. Lo de descender se comprueba al
+   empezar los cuerpos, con la jerarquía entera resuelta.
+3. Una llamada `r.m(args)` con `r` de tipo `C<X>`: se mira la clase que declara `m` y su tipo base `B`. Un parámetro que dice `B` tiene que recibir un `X`. Un parámetro primitivo, si otra sobrecarga de `m` tiene
+   `B` en ese sitio, tiene que recibir algo cuya caja sea un `X`. Si devuelve `B`, la expresión es de tipo `X` y queda anotada para el cast. Lo mismo con las `property`.
+4. `for x in l`: `x` es un `X`, con su cast en cada vuelta.
+5. `Map<K, V>`: `put` recibe `V`; `get` y `valueAt` devuelven `V`. La llave, como hoy. `keyAt` no se toca.
+6. Asignar: `C<A>` a `C<B>` pide los argumentos iguales. Si un lado no los lleva, vale.
+7. Emitir: una expresión anotada emite el `CHECKCAST` de `X` con el mismo código que el cast a mano. Si `X` es `B` no emite nada: `List<Object>` sale como hoy. En una `native`, el mismo error que el cast a mano
+   (`#757`: un cast no se traduce ahí).
+8. Entre módulos: la interfaz escribe `Core.List<Cc.Sensor>` y, en la clase, `element <tipo>`, con `bpi 11` sólo en quien lo use: los demás, byte a byte como hoy. Al importar se lee y se resuelve.
+9. `List<List<Sensor>>`, en BP y en JC: hoy `>>` es un desplazamiento.
+
+**Lo que no cubre:** dos tipos en una clase propia (`Par<A, B>`: sólo `Map` tiene dos), una clase que fija el tipo al heredar (`class Sensores extends List<Sensor>`) y un parámetro del tipo base que no sea el
+elemento (en una clase marcada también se restringe). Para un micro no parecen hacer falta. A las pruebas que los usan se les puede dar servicio desde el traductor, que conoce los tipos y escribe los casts.
+
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 
 27 de 130, ninguna falla; 44 piden algo de fuera (reflexión, `dynamic`, `ulong`…) y 59 no. Medido con el lote de hoy: «piden», las que lo piden en
