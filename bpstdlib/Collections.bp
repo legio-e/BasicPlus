@@ -102,23 +102,32 @@ module Collections
     // sobrecargas add(integer/long/...) se heredan de List y delegan en
     // `this.add(o)`, que despacha por vtable y acaba AQUI, con el cerrojo
     // puesto (medido en samples/ListaHer.bp).
+    // #795 — con `finally`: un índice fuera de la lista lanza, y el cerrojo no se puede quedar cogido.
     public function add(o: Object)
       this.mtx.lock()
-      super.add(o)
-      this.mtx.unlock()
+      try
+        super.add(o)
+      finally
+        this.mtx.unlock()
+      endtry
     end add
 
     public function get(idx: integer): Object
       this.mtx.lock()
-      var r: Object := super.get(idx)
-      this.mtx.unlock()
-      return r
+      try
+        return super.get(idx)
+      finally
+        this.mtx.unlock()
+      endtry
     end get
 
     public function set(idx: integer, o: Object)
       this.mtx.lock()
-      super.set(idx, o)
-      this.mtx.unlock()
+      try
+        super.set(idx, o)
+      finally
+        this.mtx.unlock()
+      endtry
     end set
 
     public function length(): integer
@@ -130,8 +139,11 @@ module Collections
 
     public function remove(idx: integer)
       this.mtx.lock()
-      super.remove(idx)
-      this.mtx.unlock()
+      try
+        super.remove(idx)
+      finally
+        this.mtx.unlock()
+      endtry
     end remove
 
     // Propio de SyncList: sacar el ultimo de forma atomica (cola LIFO).
@@ -492,15 +504,23 @@ module Collections
     //  List no unifica su identidad cross-module — ver GAP-2 en backlog.)
     public function keyAt(i: integer): Object
       this.lock.lock()
-      var k: Object := this.keyList.get(i)
-      this.lock.unlock()
+      var k: Object := null
+      try
+        k := this.keyList.get(i)
+      finally
+        this.lock.unlock()
+      endtry
       return k
     end keyAt
 
     public function valueAt(i: integer): Object
       this.lock.lock()
-      var v: Object := this.valList.get(i)
-      this.lock.unlock()
+      var v: Object := null
+      try
+        v := this.valList.get(i)
+      finally
+        this.lock.unlock()
+      endtry
       return v
     end valueAt
 

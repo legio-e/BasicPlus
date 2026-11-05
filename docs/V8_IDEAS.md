@@ -5790,8 +5790,8 @@ Desde fuera, `x.pin[i]` es el método. Si `pin` no es un miembro, también dentr
 **El traductor.** `T this[…] { get {…} set {…} }` pasa a ser los dos métodos, también en una interfaz, y lo de la `ArrayList` y la `Hashtable` se escribe `x[i]`. Rechaza lo que no cabe: un explícito, con opcionales o `params`, con un miembro llamado
 `get` o `set`, y el `new` que oculta al del padre (`test-147`). Mono, de 609 a 627.
 
-**Lo que salió de las pruebas:** `#795`, `List.get` y `set` miran la capacidad y no el tamaño (`l.get(3)` en una lista de 2 da `null`); y `#796`, de `test-834`: la visibilidad de un método sobrecargado se mira en la primera sobrecarga, no en la
-elegida, y `a.t(1)` llama desde fuera a un `private`. Las dos, anotadas y sin arreglar: las decide Eduardo. Y uno mío, en el compuesto: un `get` privado no está en la vtable (`test-655`, `test-590`).
+**Lo que salió de las pruebas:** `#795`, `List.get` y `set` miraban la capacidad y no el tamaño (`l.get(3)` en una lista de 2 daba `null`); y `#796`, de `test-834`: la visibilidad de un método sobrecargado se miraba en la primera sobrecarga, no en la
+elegida, y `a.t(1)` llamaba desde fuera a un `private`. Las dos, hechas (*«1) si 2) si»*). Y uno mío, en el compuesto: un `get` privado no está en la vtable (`test-655`, `test-590`).
 
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 

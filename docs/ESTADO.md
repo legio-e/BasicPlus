@@ -49,7 +49,8 @@
 >   la firma dice el tipo base; `@element{B}` para las clases nuevas; el cast de salida se queda (sin él, medido, la VM lee y escribe en el objeto de al lado). Su pregunta, *«como va a saber el compilador el tipo del
 >   cast?»*, destapó que la interfaz perdía los argumentos y **`#792`**: en BP, un tipo genérico al final de una línea no compilaba, justo donde un tipo sale de un módulo. Hechas las dos; la red, VERDE.
 > - **`x[i]` sobre un objeto, `#794`, hecho** (Eduardo: *«get normal no tiene índice, get(i) sería una sobrecarga»*): `x[i]` es `x.get(i)`, y `x.pin[i]`, `x.getPin(i)`, sin nada que declarar. Mono, **627**. De las pruebas salieron dos fallos de
->   antes, anotados y sin arreglar, para que los decida él: **`#795`** (`List.get` mira la capacidad, no el tamaño) y **`#796`** (la visibilidad de una sobrecarga se mira en la primera: `a.t(1)` llama a un `private` desde fuera).
+>   antes: **`#796`** (la visibilidad de una sobrecarga se miraba en la primera, y `a.t(1)` llamaba a un `private` desde fuera) y **`#795`** (`List.get`, `set` y `remove` miraban la capacidad, no el tamaño; `get` cuesta un 20 % más, y `SyncList` y `Map` llevan
+>   `finally`, porque se dejaban el cerrojo cogido). Las dos hechas (*«1) si 2) si»*). Mono, **628**.
 > - **Lo que dije mal:** que un `ifaceCrc` distinto rechazaba la carga. En MOD9 sólo avisa, y lo para el cast (`V8_IDEAS` §E9). Y que las 281 pruebas de genéricos daban una idea de su valor: sólo unas 67 comprueban algo.
 > - **Lo que me falló:** el sample de error lo dejé en `bpgenvm-c/samples/errores`, que no existe (van en `samples/errores`); un `byte[3]`
 >   se indexaba, porque `byte` es también la función `byte(x)`: una función no es un nombre con valor; y en la prueba del AOT, una variable `v`
@@ -144,8 +145,8 @@
 >   notó en que los números iban de 200 en 200; repetida con `w.esperar`. El aviso estaba en el propio `wire_serie` (`#495`).
 >
 > **Para la próxima sesión:**
-> - el próximo lote de placas lleva `#791` (`interp.c`): dividir el mínimo entre -1;
-> - `#795` y `#796`, por decidir: las dos cambian lo que hoy compila o corre. El traductor aún no usa los genéricos. `?.`,
+> - el próximo lote de placas lleva `#791` (`interp.c`): dividir el mínimo entre -1; y `#795`: la stdlib embebida, con Core y Collections nuevos;
+> - El traductor aún no usa los genéricos (Eduardo: *«Ahora ya no hay nada que lo impida»*): lo siguiente. `?.`,
 >   propuesto, sin respuesta. El tema 4, «despacio», con sus propuestas (`V8_IDEAS` §E9); `struct` con estado, cuando le toque a su tema. Lo «más probado», más adelante (*«cuando tengamos la compatibilidad mas
 >   avanzada»*). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
 > - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;

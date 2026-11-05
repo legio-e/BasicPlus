@@ -640,11 +640,23 @@ module Core
       this.add(Boolean(b))
     end add
 
+    // #795 — por el tamaño, no por la capacidad del array de dentro: en una lista de 2, `get(3)` daba null, y `set(3, x)`
+    // escribía en una casilla que nadie veía.
+    private function fuera(idx: integer)
+      __throwRte("List: índice fuera de rango " + idx + " (length=" + this.size + ")")
+    end fuera
+
     public function get(idx: integer): Object
+      if idx >= this.size then
+        this.fuera(idx)
+      endif
       return this.items[idx]
     end get
 
     public function set(idx: integer, o: Object)
+      if idx >= this.size then
+        this.fuera(idx)
+      endif
       this.items[idx] := o
     end set
 
@@ -708,6 +720,9 @@ module Core
     end length
 
     public function remove(idx: integer)
+      if idx < 0 or idx >= this.size then
+        this.fuera(idx)
+      endif
       var i: integer := idx
       while i < this.size - 1 do
         this.items[i] := this.items[i + 1]

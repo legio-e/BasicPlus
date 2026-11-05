@@ -7391,20 +7391,28 @@ Eduardo: *«Lo de lista[i] me parece bien, en realidad es la notación de una pr
 - **Lo que no cubre:** `x[i, j]` (el traductor escribe `x.get(i, j)`) y `s[i]` en una cadena. En una native, `x[i]` es la llamada, con sus límites, y `x[i] += e` no se traduce.
 - **En placa:** no hace falta probarla aparte: es del compilador, y la VM no cambia.
 
-#### ⬜ `#796` — la visibilidad de un método sobrecargado se mira en la primera sobrecarga, no en la elegida (abierta el 5-nov)
+#### ✅ `#796` — la visibilidad de un método sobrecargado se mira en la primera sobrecarga, no en la elegida (abierta y **CERRADA** el 5-nov, el commit de `#796`; Eduardo: *«1) si»*)
 
 Salió de `test-834` al traducir los indexadores (`#794`), y se reproduce en BP puro, sin índices, en los dos sentidos. `analyzeMemberAccess` llama a `checkVisibility` con `lookupInstance`, que da la cabeza de la cadena, y las
 sobrecargas se resuelven después, en `analyzeCall`, que ya no la mira.
 - **La primera, protegida, y la elegida, pública:** un error que no toca. `a.t("x")` no compila: «'t' es protegido de 'A'».
 - **La primera, pública, y la elegida, protegida o `private`:** compila, y `a.t(1)` llama desde fuera de la clase a un método `private`. Medido: imprime 5.
 
-Lo segundo es un agujero en lo que promete `private` (`#390`). Arreglarlo es mirar la visibilidad de la elegida, y un programa que hoy compila llamando a un método así dejaría de compilar. `test-834` sigue en «falla» por esto.
+Lo segundo es un agujero en lo que promete `private` (`#390`). **Lo hecho:** como en Java y en C#, lo que no se ve desde donde se llama no es candidato (`eligeVisible`), y `analyzeCall` mira la visibilidad de la sobrecarga que se llama; si la única
+que encaja no se ve, dice por qué. Se cierra de paso `m()` a secas, que no se miraba. **Lo prueban:** `SobrecargaVisible`, en el corpus, y `SobrecargaMal`. Con el jar de antes y el nuevo, 743 `.mod` iguales: ningún programa del árbol dependía de esto.
+`test-834` funciona: Mono, 628.
 
-#### ⬜ `#795` — `List.get(i)` y `List.set(i, v)` miran la capacidad, no el tamaño: fuera de la lista no siempre hay error (abierta el 5-nov)
+#### ✅ `#795` — `List.get(i)` y `List.set(i, v)` miran la capacidad, no el tamaño: fuera de la lista no siempre hay error (abierta y **CERRADA** el 5-nov, el commit de `#795`; Eduardo: *«2) si»*; a las placas, con el próximo lote)
 
 Salió al probar `x[i]` (`#794`), medido en las dos VMs. En una lista de 2 (capacidad 4), `l.get(3)` da `null` sin error, y `l.set(3, "fuera")` escribe sin error en una casilla que nadie ve: `length()` sigue en 2. Sólo falla
 por encima de la capacidad, y con el mensaje del array de dentro (`ALOAD_I64: índice fuera de rango 9 (length=4)`). `#749` dice que si un `for x in lista` acorta la lista, «`get` da su error de índice»: no siempre.
 Con `l[i]`, que parece un array, sorprende más. Arreglarlo es comprobar `idx` contra `size` en `get` y `set`: toca Core, y por tanto la stdlib y las imágenes, y añade una comparación por lectura.
+- **Lo hecho:** `get`, `set` y `remove` miran el tamaño. `remove` también lo tenía: `l.remove(9)` en una lista de 2 quitaba el último. Un negativo en `get` y `set` lo para la VM en el array de dentro, con su mensaje; `remove`, que no es de bucle apretado, lo
+  mira él.
+- **Lo que costó:** 3 millones de `get` en la VM-C del PC, con su bucle: de 169 ms a 203, un 20 %. Con las dos comparaciones eran 243, un 44 %: por eso sólo una.
+- **Lo que salió:** `SyncList` y `Map.keyAt`/`valueAt` se dejaban el cerrojo cogido si lo de dentro lanzaba, y lo siguiente daba «mutex.lock: re-entrada por mismo thread». Ya pasaba antes, y con esto saltaría mucho más: llevan `finally`, como `Gui`.
+- **Lo prueba:** `ListaBorde`, en el corpus (fuera de MOD8: imprime cadenas en un `Object`). `#749` decía que al acortar la lista en un `for`, «`get` da su error de índice»: ahora es verdad.
+- **En placa:** las imágenes embebidas y `packs/Stdlib.pack` están regenerados. Cambian Core y Collections, y las interfaces no. Van con el próximo lote.
 
 #### ✅ `#793` — los genéricos como una orden al compilador: `List<miTipo>`, `Map<string, miTipo>` y las clases con `@element{…}` (abierta y **CERRADA** el 5-nov, el commit de `#793`; Eduardo: *«OK, adelante»*)
 

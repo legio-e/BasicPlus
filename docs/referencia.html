@@ -305,8 +305,9 @@ l.<span class="fn">remove</span>(<span class="num">0</span>)</code></pre>
   <tr><td><code>add(o: Object)</code></td><td>añade un objeto</td></tr>
   <tr><td><code>add(i: integer)</code> · <code>add(l: long)</code> · <code>add(d: double)</code> · <code>add(f: float)</code> · <code>add(b: boolean)</code></td>
       <td>añade un primitivo: lo <strong>envuelve</strong> por ti en su clase (§13.10)</td></tr>
-  <tr><td><code>get(idx): Object</code></td><td>el elemento, sin tipar</td></tr>
-  <tr><td><code>set(idx, o: Object)</code></td><td>lo reemplaza</td></tr>
+  <tr><td><code>get(idx): Object</code></td><td>el elemento, sin tipar. Fuera de la lista lanza un <code>RuntimeError</code>:
+      mira su tamaño, no su capacidad (#795)</td></tr>
+  <tr><td><code>set(idx, o: Object)</code></td><td>lo reemplaza; no añade: fuera de la lista, igual que <code>get</code></td></tr>
   <tr><td><code>length(): integer</code></td><td>cuántos hay</td></tr>
   <tr><td><code>remove(idx)</code></td><td>lo quita y corre los de detrás</td></tr>
 </table>
