@@ -148,6 +148,7 @@
 >   notó en que los números iban de 200 en 200; repetida con `w.esperar`. El aviso estaba en el propio `wire_serie` (`#495`).
 >
 > **Para la próxima sesión:**
+> - **Eduardo, al cerrar:** *«Mañana no se todavía lo que haremos. Yo descansaría un poco de pruebas de compatibilidad y podemos avanzar en otros temas, no se, en Bluetooth o en Wifi.»* Sin decidir; se mira en `FICHAS` el bloque V8 (H2, H3), leyendo el final de cada ficha, y qué placas hay conectadas;
 > - el próximo lote de placas lleva `#791` (`interp.c`): dividir el mínimo entre -1; y `#795`: la stdlib embebida, con Core y Collections nuevos;
 > - `?.`, propuesto, sin respuesta. Si Eduardo quiere, en el traductor: `T[]` como `Object[]` y `default(T)` (§E9, «Los genéricos en el traductor»). El tema 4, «despacio», con sus propuestas (`V8_IDEAS` §E9); `struct` con estado, cuando le toque a su tema. Lo «más probado», más adelante (*«cuando tengamos la compatibilidad mas
 >   avanzada»*). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
