@@ -243,7 +243,10 @@ public final class Lexer {
                 // L5 + H7 — además del groupDepth, suprime el NEWLINE si la línea
                 // acaba en un token CONTINUADOR (operador colgante): la sentencia
                 // sigue en la línea siguiente, sin carácter de continuación.
-                if (groupDepth == 0 && !endsWithContinuer(tokens)) tokens.add(nl);
+                if (groupDepth == 0) {
+                    if (!endsWithContinuer(tokens)) tokens.add(nl);
+                    else tokens.get(tokens.size() - 1).saltoTragado = true;   // #792
+                }
                 continue;
             }
 

@@ -26,6 +26,9 @@ public final class Token {
     public final Object value;
     public final int line;
     public final int column;
+    /** #792 — la línea acababa en este token y el lexer no emitió su NEWLINE: lo tomó por un operador colgante. Lo mira
+     *  el parser cuando es el `>` que cierra un tipo, que no es un operador. */
+    public boolean saltoTragado = false;
 
     public Token(TokenType type, String lexeme, Object value, int line, int column) {
         this.type = type;

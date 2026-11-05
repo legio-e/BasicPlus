@@ -3,7 +3,8 @@
 // de siempre con la llave dicha, que se comprueba al compilar (en un Map() de llaves string, una integer fallaba al
 // ejecutar). Recorrer una List con `for x in lista`: x es un Object, la lista se mide una vez. Y #748: una cadena
 // guardada en un Object se imprime como texto (su toString() es ella misma, como en C#). Es de paridad (está en el
-// corpus) y se escribe en JC (`List<Object>`, `foreach (var x in lista)`).
+// corpus) y se escribe en JC (`List<Object>`, `foreach (var x in lista)`). #792: un tipo así al final de una línea (el
+// retorno de una función, una property, un campo, una var sin valor) no compilaba: el `>` parecía un operador colgante.
 // mod8: fuera — #748 es de MOD9: en MOD8, INSTANCEOF no nombra la clase Object de Core, y una cadena en un Object no se imprime (lo de V7)
 module Genericos
   import Collections
@@ -20,7 +21,39 @@ module Genericos
     end toString
   end Punto
 
+  // #792 — un tipo genérico al final de la línea
+  property guardada: List<Object>
+
+  class Caja
+    var dentro: List<Object>
+    public property otra: List<Object>
+
+    public function Caja()
+      this.dentro := crea("del campo")
+      this.otra := crea("de la property")
+    end Caja
+
+    public function primero(): Object
+      return this.dentro.get(0)
+    end primero
+  end Caja
+
+  public function crea(s: string): List<Object>
+    var l: List<Object>
+    l := List()
+    l.add(s)
+    return l
+  end crea
+
   function main()
+    guardada := crea("de la global")
+    var caja: Caja := Caja()
+    print "al final de la línea:", guardada.get(0), caja.primero(), caja.otra.get(0)
+    // y un `>` que acaba una línea de verdad sigue siendo un operador colgante
+    var mayor: boolean := 3 >
+      2
+    print "colgante:", mayor
+
     var l: List<Object> := List()
     l.add("uno")
     l.add(2)

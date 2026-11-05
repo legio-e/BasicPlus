@@ -628,8 +628,12 @@ public final class Parser {
                     List<TypeRef> args = new ArrayList<>();
                     args.add(parseType());
                     while (match(TokenType.COMMA)) args.add(parseType());
-                    consume(TokenType.GT, "se esperaba '>' al cerrar los argumentos de tipo");
+                    Token cierre = consume(TokenType.GT, "se esperaba '>' al cerrar los argumentos de tipo");
                     ((SimpleTypeRef) baseType).argumentos = args;
+                    // #792 — el lexer no sabe que este `>` cierra un tipo: si acaba la línea, lo tomó por un operador
+                    // colgante y no emitió el salto. Aquí sí se sabe, y se devuelve (`function f(): List<Object>`).
+                    if (cierre.saltoTragado && !check(TokenType.NEWLINE))
+                        tokens.add(pos, new Token(TokenType.NEWLINE, "\n", null, cierre.line, cierre.column + 1));
                 }
                 break;
             }

@@ -7379,7 +7379,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### ⬜ `#792` — BP: un tipo genérico al final de una línea no compila: `function f(): List<Object>`, `property p: List<Object>`, `var c: List<Object>` (abierta el 5-nov)
+#### ✅ `#792` — BP: un tipo genérico al final de una línea no compila: `function f(): List<Object>`, `property p: List<Object>`, `var c: List<Object>` (abierta y **CERRADA** el 5-nov, el commit de `#792`; Eduardo: *«OK a las 4»*)
 
 Salió al mirar cómo cruza `List<miTipo>` de un módulo a otro (H8, los genéricos). `GT` está entre los continuadores del
 lexer (`CONTINUERS`, en `Lexer.java`): una línea que acaba en `>` sigue en la siguiente, y su salto de línea se pierde.
@@ -7388,8 +7388,11 @@ línea: el tipo de retorno de una función, una `property`, un campo o una `var`
 donde un tipo sale de un módulo. El error engaña: «se esperaba salto de línea tras la cabecera de la función», y señala
 la línea siguiente. Viene de `#749`: `Genericos` sólo lo escribe con `:=` detrás. En JC no pasa: ahí hay `;` y `{`.
 
-Al arreglarlo: `a >` al final de una línea tiene que seguir continuando. Quien sabe que ese `>` cierra un tipo es el
-parser, no el lexer.
+`a >` al final de una línea tiene que seguir continuando, y quien sabe que ese `>` cierra un tipo es el parser, no el
+lexer. **Lo hecho:** el lexer deja dicho en el token que se tragó el salto (`Token.saltoTragado`, sólo fuera de
+paréntesis), y el parser, al cerrar los argumentos de un tipo, lo devuelve. **Lo prueban:** `TipoGenericoTest` (5:
+el retorno, la property, el campo, la var, con un comentario detrás, entre paréntesis, y el operador colgante, que sigue
+valiendo) y `Genericos`, en las dos VMs y en JC. Con el jar de antes y el nuevo, 737 `.mod` iguales.
 
 #### ✅ `#791` — dividir en los bordes: la VM-C se cae en el PC con el mínimo entre -1, y una `native` de enteros no ve la división por cero (`319de7a8`; abierta y cerrada el 5-nov, al arreglar `#790`; Eduardo: *«1) haz las dos partes»*)
 
