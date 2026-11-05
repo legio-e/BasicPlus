@@ -471,6 +471,8 @@ namespace Cs2Jc
             {
                 case ILocalSymbol _ when renombradas.TryGetValue(s, out var nuevo):
                     return nuevo;                                  // una local de un case subida antes del switch
+                case IParameterSymbol pp when !enPrimario && DelPrimario(pp):
+                    return Rechaza(id, Porque.Pendiente("un parámetro del constructor primario, en un método"));
                 case ILocalSymbol _:
                 case IParameterSymbol _:
                     return Ident(s.Name);

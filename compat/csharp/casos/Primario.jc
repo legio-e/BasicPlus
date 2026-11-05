@@ -1,0 +1,96 @@
+module CsPrimario
+{
+   import CsSystem;
+
+   class Base
+   {
+      public string Prop { get; set; }
+      public int Fija { get; set; } = 3;
+      public function Base(Object obj)
+      {
+         this.Prop = obj.toString();
+      }
+   }
+
+   class D : Base
+   {
+      private int doble;
+      public string Copia { get; set; }
+      public int Doble
+      {
+         get
+         {
+            return this.doble;
+         }
+      }
+      public function D(string arg, int n) : base(arg)
+      {
+         this.doble = n * 2;
+         this.Copia = arg + "!";
+      }
+   }
+
+   class Vacia : CsSystem.IDisposable
+   {
+      @implement{ IDisposable }
+      public function void Dispose()
+      {
+      }
+   }
+
+   class DosCaminos
+   {
+      public int A { get; set; }
+      public function DosCaminos(string s) : this(strlen(s))
+      {
+      }
+      public function DosCaminos(int a)
+      {
+         this.A = a;
+      }
+   }
+
+   class M
+   {
+      public static function int Main()
+      {
+         D d = new D("hola", 21);
+         if (d.Prop != "hola")
+         {
+            return 1;
+         }
+         if (d.Doble != 42 || d.Copia != "hola!" || d.Fija != 3)
+         {
+            return 2;
+         }
+         if (true)
+         {
+            Vacia v = new Vacia();
+            try
+            {
+            }
+            finally
+            {
+               if (v != null)
+               {
+                  v.Dispose();
+               }
+            }
+         }
+         if (new DosCaminos(7).A != 7 || new DosCaminos("abc").A != 3)
+         {
+            return 3;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = M.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

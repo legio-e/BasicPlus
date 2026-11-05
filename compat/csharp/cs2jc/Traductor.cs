@@ -274,8 +274,8 @@ namespace Cs2Jc
                 .OrderBy(p => p.SpanStart).ToList();
             var donde = partes[0];
             if (s.IsGenericType) { Rechaza(donde.TypeParameterList ?? (SyntaxNode) donde, Porque.H7(Porque.Genericos)); return; }
-            if (partes.Any(p => p.ParameterList != null))
-                Rechaza(partes.First(p => p.ParameterList != null).ParameterList, Porque.Pendiente("constructor primario (C# 12)"));
+            var primario = partes.FirstOrDefault(p => p.ParameterList != null);
+            alPrimario = primario != null ? new List<(string, ExpressionSyntax)>() : null;
             foreach (var p in partes) Atributos(p.AttributeLists);
             string base_ = null;
             var b = s.BaseType;
@@ -305,6 +305,7 @@ namespace Cs2Jc
             foreach (var p in partes)
                 foreach (var miembro in p.Members)
                     EmiteMiembro(miembro);
+            if (primario != null) EmitePrimario(primario);
             // Una excepción sin constructor: el implícito de C# llama a Exception() o a SystemException(), que en BP no
             // existen (la Exception y el RuntimeError de Core piden su mensaje); se escribe con el mensaje que pondría
             // .NET. Las de la librería tienen el suyo sin argumentos, y lo llama el implícito de JC.
@@ -472,14 +473,16 @@ namespace Cs2Jc
                 // BP no deja campos públicos («el estado sale por getters y setters»): cada uno, una propiedad.
                 foreach (var v in vars)
                 {
-                    string valor = v.Initializer != null ? " = " + Expr(ValorDeCampo(v)) : NaceDeCSharp(primero.Type, v);
+                    string valor = v.Initializer == null ? NaceDeCSharp(primero.Type, v)
+                                 : VaAlPrimario(NombreDe(m.GetDeclaredSymbol(v)), v.Initializer.Value) ? "" : " = " + Expr(ValorDeCampo(v));
                     Linea("public " + estatico + tipo + " " + NombreDe(m.GetDeclaredSymbol(v)) + " { get; set; }"
                           + (valor != "" ? valor + ";" : ""));
                 }
                 return;
             }
             Linea(acceso + " " + estatico + tipo + " " + string.Join(", ", vars.Select(v => NombreDe(m.GetDeclaredSymbol(v))
-                  + (v.Initializer != null ? " = " + Expr(ValorDeCampo(v)) : NaceDeCSharp(primero.Type, v)))) + ";");
+                  + (v.Initializer == null ? NaceDeCSharp(primero.Type, v)
+                     : VaAlPrimario(NombreDe(m.GetDeclaredSymbol(v)), v.Initializer.Value) ? "" : " = " + Expr(ValorDeCampo(v))))) + ";");
         }
 
         /// ¿Se escribe este valor con un literal? No NaN, los infinitos ni el mínimo de un entero, que en JC son una cuenta.
@@ -636,6 +639,45 @@ namespace Cs2Jc
             return true;
         }
 
+        /// Los valores de los campos y las propiedades de la clase que miran un parámetro de su constructor primario: van en
+        /// él (EmitePrimario), en orden. null, si la clase no tiene.
+        List<(string Nombre, ExpressionSyntax Valor)> alPrimario;
+        bool enPrimario;
+
+        /// ¿Mira `e` un parámetro del constructor primario? Si es así, el valor de `nombre` se da en él.
+        bool VaAlPrimario(string nombre, ExpressionSyntax e)
+        {
+            if (alPrimario == null || !e.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any(id => m.GetSymbolInfo(id).Symbol is IParameterSymbol))
+                return false;
+            alPrimario.Add((nombre, e));
+            return true;
+        }
+
+        /// ¿Es de un constructor primario (C# 12)? Su símbolo se declara en la clase, no en un constructor escrito.
+        static bool DelPrimario(IParameterSymbol p) =>
+            p.ContainingSymbol is IMethodSymbol { MethodKind: MethodKind.Constructor } c
+            && c.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() is TypeDeclarationSyntax;
+
+        /// `class D (string arg) : Base (arg)` (H8, tema 3): un constructor con esos parámetros, que llama a la base, y da los
+        /// valores que los miran. En un método, en cambio, C# guarda el parámetro en un campo escondido: eso no (Nombre).
+        void EmitePrimario(TypeDeclarationSyntax t)
+        {
+            var bases = t.BaseList?.Types.OfType<PrimaryConstructorBaseTypeSyntax>().FirstOrDefault();
+            if (t.ParameterList.Parameters.Count == 0 && bases == null && alPrimario.Count == 0) return;   // `class X ()`: el implícito
+            enPrimario = true;
+            string cabecera = "public function " + NombreTipo(claseActual) + "(" + Parametros(t.ParameterList) + ")";
+            if (bases != null) cabecera += " : base(" + Argumentos(bases.ArgumentList, m.GetSymbolInfo(bases).Symbol as IMethodSymbol) + ")";
+            Linea(cabecera);
+            Linea("{");
+            sangria++;
+            foreach (var (nombre, valor) in alPrimario)
+                EmiteConSacar(valor, false, () => Linea("this." + nombre + " = " + Expr(valor) + ";"));
+            sangria--;
+            Linea("}");
+            enPrimario = false;
+            alPrimario = null;
+        }
+
         void EmiteConstructor(ConstructorDeclarationSyntax c)
         {
             var s = m.GetDeclaredSymbol(c);
@@ -729,7 +771,8 @@ namespace Cs2Jc
             if (acc.All(a => a.Body == null && a.ExpressionBody == null))
             {
                 // automática; `{ get; }` e `{ get; init; }` también: C# ya comprobó que nadie más la escribe
-                string valor = p.Initializer != null ? " = " + Expr(p.Initializer.Value) : NaceDeCSharp(s.Type, p);
+                string valor = p.Initializer == null ? NaceDeCSharp(s.Type, p)
+                             : VaAlPrimario(nombre, p.Initializer.Value) ? "" : " = " + Expr(p.Initializer.Value);
                 Linea(cabecera + " { get; set; }" + (valor != "" ? valor + ";" : ""));
                 return;
             }

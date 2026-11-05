@@ -5660,6 +5660,8 @@ tema 5: 35 de 70.**
 - **C, hecho** (Eduardo: *«1) si»*: C, D, A y B, por ese orden). `new T () { A = 1 }` en una expresión: el objeto a una temporal y sus asignaciones, en orden, delante de la sentencia,
   y en su sitio la temporal; así `f = new Foo () { P = f.P }` lee el `f` de antes. No bajo `&&`, `||`, `??` o `?:`, ni en el valor de un campo, que no tiene sentencia. Caso
   `InicializaFuera`. **Mono: 584** (+5). **El tema 3: 58.**
+- **D, hecho.** `class D (string arg) : Base (arg)`: un constructor con esos parámetros, que llama a la base y da los valores que los miran, en orden; `class X ()`, el implícito. Un
+  parámetro usado en un método (C# lo guarda en un campo escondido), no. Caso `Primario`. **Mono: 586** (+2). **El tema 3: 59.**
 - **E.** Es lo grande: un `struct` es un valor. Como clase hay que copiarlo al asignarlo y al pasarlo, darle valor al declararlo y llenar sus arrays. Es su propio tema.
 - **Lo que no se puede:** en el tema 3, 13 son de reflexión, `dynamic`, interop, fechas o `yield`, y `gtest-autoproperty-20` falla por una diferencia decidida (`#776`); en el tema 5, 17 son de
   reflexión (`typeof`, `Enum.GetValues`, atributos), y otras piden `decimal` o `checked`.
