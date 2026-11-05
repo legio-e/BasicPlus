@@ -177,7 +177,7 @@ de Java y no se llena.)
 | 0 | `TYPE_ARRAY_I8`  | array de bytes (1 byte por elemento) |
 | 1 | `TYPE_ARRAY_I16` | array de int16 (2 bytes por elemento) |
 | 2 | `TYPE_ARRAY_I32` | array de int32 / float (4 bytes — strings también) |
-| 3 | `TYPE_ARRAY_REF` | array de refs (4 bytes — el GC traza cada slot) |
+| 3 | `TYPE_ARRAY_REF` | array de refs (8 bytes: la ref plana de V4 — el GC traza cada slot) |
 | 4 | `TYPE_OBJECT`    | instancia de clase; `payload[0]` = class_ptr |
 
 ### 2.3 Tamaño total
