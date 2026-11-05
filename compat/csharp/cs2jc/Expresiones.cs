@@ -649,6 +649,22 @@ namespace Cs2Jc
         /// `new T(…)`, sin mirar su inicializador (`{ A = 1 }`): lo escribe la declaración, detrás (Sentencias.Declaracion).
         string NuevoSinInicializador(ObjectCreationExpressionSyntax oc) => Nuevo(oc, true);
 
+        /// `new T(…) { A = 1 }` dentro de una expresión (H8, tema 3): el objeto a una temporal y sus asignaciones, en orden, delante
+        /// de la sentencia; en su sitio, la temporal. El objeto no se ve hasta que está hecho (`f = new Foo () { P = f.P }`: `f`
+        /// es el de antes). Como `??`: no bajo &&, ||, ?? o ?:, ni con algo que se calcule antes; y no en el valor de un campo, que
+        /// no tiene sentencia.
+        string NuevoConInicializador(ObjectCreationExpressionSyntax oc, ITypeSymbol tipo)
+        {
+            if (sacar == null || !oc.Initializer.IsKind(SyntaxKind.ObjectInitializerExpression) || BajoCondicional(oc) || AlgoAntes(oc))
+                return Rechaza(oc.Initializer, Porque.Pendiente("inicializadores de objetos, fuera de una declaración"));
+            if (sacar.Hechos.TryGetValue(oc, out var hecho)) return hecho;
+            string t = Temporal();
+            sacar.Antes.Add(Tipo(tipo, oc.Type) + " " + t + " = " + NuevoSinInicializador(oc) + ";");
+            foreach (var e in oc.Initializer.Expressions)
+                if (AsignacionDeInicializador(t, e) is string linea) sacar.Antes.Add(linea);
+            return sacar.Hechos[oc] = t;
+        }
+
         string Nuevo(ObjectCreationExpressionSyntax oc, bool sinInicializador = false)
         {
             var ctor = m.GetSymbolInfo(oc).Symbol as IMethodSymbol;
@@ -663,7 +679,7 @@ namespace Cs2Jc
             if (ctor == null || tipo == null) return Rechaza(oc, Porque.Pendiente("un new sin resolver"));
             // `new IFoo()`: una interfaz COM ([CoClass]); una interfaz no se construye
             if (tipo.TypeKind == TypeKind.Interface) return Rechaza(oc, Porque.Fuera(Porque.Interop));
-            if (oc.Initializer != null && !sinInicializador) return Rechaza(oc.Initializer, Porque.Pendiente("inicializadores de objetos, fuera de una declaración"));
+            if (oc.Initializer != null && !sinInicializador) return NuevoConInicializador(oc, tipo);
             if (!DelPrograma(tipo)) return BibliotecaNuevo(oc, ctor, tipo);
             CompruebaAcceso(ctor, oc);
             return "new " + Tipo(tipo, oc.Type) + "(" + Argumentos(oc.ArgumentList, ctor) + ")";

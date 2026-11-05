@@ -1,0 +1,122 @@
+module CsInicializaFuera
+{
+   class Datos
+   {
+      public int Valor { get; set; }
+      public string Nombre { get; set; } = null;
+      public function bool Es(string n)
+      {
+         return this.Nombre == n;
+      }
+   }
+
+   class Par
+   {
+      public Datos Uno { get; set; }
+      public int Dos { get; set; }
+   }
+
+   class M
+   {
+      private static Datos propiedad;
+      private static int orden = 0;
+      private static function Datos Hecho()
+      {
+         Datos valor_s1 = new Datos();
+         valor_s1.Valor = 3;
+         valor_s1.Nombre = "tres";
+         return valor_s1;
+      }
+      private static function int Lee(Datos d)
+      {
+         return d.Valor;
+      }
+      private static function int Paso(int n)
+      {
+         M.orden = M.orden * 10 + n;
+         return n;
+      }
+      public static function int Main()
+      {
+         if (M.Hecho().Valor != 3 || M.Hecho().Nombre != "tres")
+         {
+            return 1;
+         }
+         Datos valor_s2 = new Datos();
+         valor_s2.Valor = 4;
+         M.propiedad = valor_s2;
+         if (M.propiedad.Valor != 4)
+         {
+            return 2;
+         }
+         Datos valor_s3 = new Datos();
+         valor_s3.Valor = 5;
+         if (M.Lee(valor_s3) != 5)
+         {
+            return 3;
+         }
+         Datos a = null, b = null;
+         Datos valor_s4 = new Datos();
+         valor_s4.Valor = 6;
+         b = valor_s4;
+         a = b;
+         if (a != b || b.Valor != 6)
+         {
+            return 4;
+         }
+         Datos valor_s5 = new Datos();
+         valor_s5.Nombre = "x";
+         if (!valor_s5.Es("x"))
+         {
+            return 5;
+         }
+         Datos f = new Datos();
+         f.Valor = 7;
+         Datos valor_s6 = new Datos();
+         valor_s6.Valor = f.Valor + 1;
+         f = valor_s6;
+         if (f.Valor != 8)
+         {
+            return 6;
+         }
+         Par p = null;
+         Par valor_s7 = new Par();
+         Datos valor_s8 = new Datos();
+         valor_s8.Valor = M.Paso(1);
+         valor_s7.Uno = valor_s8;
+         valor_s7.Dos = M.Paso(2);
+         p = valor_s7;
+         if (p.Uno.Valor != 1 || p.Dos != 2 || M.orden != 12)
+         {
+            return 7;
+         }
+         Datos d = null;
+         Datos valor_s9 = new Datos();
+         valor_s9.Valor = 9;
+         d = valor_s9;
+         int r = M.Lee(d);
+         if (r != 9 || d.Valor != 9)
+         {
+            return 8;
+         }
+         M.orden = 0;
+         Datos valor_s10 = new Datos();
+         valor_s10.Valor = M.Paso(3);
+         // un new con su inicializador, que nadie guarda
+         if (M.orden != 3)
+         {
+            return 9;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = M.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

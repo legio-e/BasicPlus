@@ -58,6 +58,10 @@ namespace Cs2Jc
                     if (EsSimple(ta.Right)) Linea("// this = …: un struct sin estado no tiene nada que copiar");
                     else EmiteConSacar(es, true, () => Linea(ExprSentencia(ta.Right) + ";"));
                     break;
+                // `new T () { A = 1 };`: el objeto y sus asignaciones van delante, y aquí no queda nada (gtest-autoproperty-22)
+                case ExpressionStatementSyntax es when es.Expression is ObjectCreationExpressionSyntax nuevo && nuevo.Initializer != null:
+                    EmiteConSacar(es, true, () => { Expr(nuevo); Linea("// un new con su inicializador, que nadie guarda"); });
+                    break;
                 case ExpressionStatementSyntax es: EmiteConSacar(es, true, () => Linea(ExprSentencia(es.Expression) + ";")); break;
                 case IfStatementSyntax i: If(i); break;
                 case WhileStatementSyntax w: While(w); break;
@@ -189,6 +193,21 @@ namespace Cs2Jc
             return tiene ? " = " + ValorCualquiera(t, donde) : "";
         }
 
+        /// `A = 1`, de un `new T() { A = 1 }`, sobre el objeto `x`: la sentencia; null, si no se traduce (ya dicho).
+        string AsignacionDeInicializador(string x, ExpressionSyntax e)
+        {
+            if (e is AssignmentExpressionSyntax a && a.IsKind(SyntaxKind.SimpleAssignmentExpression)
+                && a.Left is IdentifierNameSyntax miembro && !(a.Right is InitializerExpressionSyntax))
+            {
+                var s = m.GetSymbolInfo(miembro).Symbol;
+                if (s != null && DelPrograma(s)) return x + "." + NombreDe(s) + " = " + Expr(a.Right) + ";";
+                Rechaza(e, Porque.Pendiente("un inicializador de algo de la biblioteca"));
+                return null;
+            }
+            Rechaza(e, Porque.Pendiente("un inicializador anidado, o de una colección"));
+            return null;
+        }
+
         /// `T a = x, b;` (la de un `for` también): `var`, con su tipo.
         void Declaracion(VariableDeclarationSyntax d, bool constante)
         {
@@ -203,16 +222,7 @@ namespace Cs2Jc
                 string x = Ident(d.Variables[0].Identifier.ValueText);
                 Linea(tipo + " " + x + " = " + NuevoSinInicializador(oc) + ";");
                 foreach (var e in oc.Initializer.Expressions)
-                {
-                    if (e is AssignmentExpressionSyntax a && a.IsKind(SyntaxKind.SimpleAssignmentExpression)
-                        && a.Left is IdentifierNameSyntax miembro && !(a.Right is InitializerExpressionSyntax))
-                    {
-                        var s = m.GetSymbolInfo(miembro).Symbol;
-                        if (s == null || !DelPrograma(s)) { Rechaza(e, Porque.Pendiente("un inicializador de algo de la biblioteca")); continue; }
-                        Linea(x + "." + NombreDe(s) + " = " + Expr(a.Right) + ";");
-                    }
-                    else Rechaza(e, Porque.Pendiente("un inicializador anidado, o de una colección"));
-                }
+                    if (AsignacionDeInicializador(x, e) is string linea) Linea(linea);
                 return;
             }
             // #778 (Eduardo, 3-nov: «el traductor puede asignarle un valor por defecto ( un null ). En Java ese código no

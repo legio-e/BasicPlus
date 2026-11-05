@@ -5657,6 +5657,9 @@ tema 5: 35 de 70.**
   `class Permiso { public const int Leer = 1; … }` e `int p = Permiso.Leer | Permiso.Escribir;`. Probado: una constante de clase vale en un `case` y en un `|`, igual en las dos VMs. Los
   demás enums, como hoy. Su nombre en una cadena pediría una función que escribiría el traductor. «Unas 14»: de las 17 que da la cuenta, `test-647` pide además `decimal`, y `test-279` y
   `test-453`, el nombre de varios valores a la vez.
+- **C, hecho** (Eduardo: *«1) si»*: C, D, A y B, por ese orden). `new T () { A = 1 }` en una expresión: el objeto a una temporal y sus asignaciones, en orden, delante de la sentencia,
+  y en su sitio la temporal; así `f = new Foo () { P = f.P }` lee el `f` de antes. No bajo `&&`, `||`, `??` o `?:`, ni en el valor de un campo, que no tiene sentencia. Caso
+  `InicializaFuera`. **Mono: 584** (+5). **El tema 3: 58.**
 - **E.** Es lo grande: un `struct` es un valor. Como clase hay que copiarlo al asignarlo y al pasarlo, darle valor al declararlo y llenar sus arrays. Es su propio tema.
 - **Lo que no se puede:** en el tema 3, 13 son de reflexión, `dynamic`, interop, fechas o `yield`, y `gtest-autoproperty-20` falla por una diferencia decidida (`#776`); en el tema 5, 17 son de
   reflexión (`typeof`, `Enum.GetValues`, atributos), y otras piden `decimal` o `checked`.
