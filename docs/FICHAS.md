@@ -7379,7 +7379,7 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
-#### 🔵 `#791` — dividir en los bordes: la VM-C se cae en el PC con el mínimo entre -1, y una `native` de enteros no ve la división por cero (abierta el 5-nov, al arreglar `#790`; sólo apuntada)
+#### ✅ `#791` — dividir en los bordes: la VM-C se cae en el PC con el mínimo entre -1, y una `native` de enteros no ve la división por cero (abierta y cerrada el 5-nov, al arreglar `#790`; Eduardo: *«1) haz las dos partes»*)
 
 Medido en el PC, cada caso en su programa:
 
@@ -7393,8 +7393,11 @@ Medido en el PC, cada caso en su programa:
   definido, y el `idiv` de x86 lo convierte en una excepción. En ARM y RISC-V, según sus manuales, no salta (no probado en placa): por eso no se había visto.
 - **Lo segundo:** el AOT escribe `(bp_a / bp_b)`. El `long` va por `idiv64`, que mira el cero (`#381`); el `integer`, no. En el PC muere; en placa no daría error, sino
   un número: ARM da 0 y RISC-V, -1 (según sus manuales; no probado). El intérprete da su error, y se puede capturar: es otra diferencia entre el `.mod` con su `.mdn` y sin él.
-- **Arreglo propuesto, por decidir:** (1) en `interp.c` y en los dos helpers, `b == -1` aparte (`0 - a` sin signo; en `mod`, 0): toca la VM, así que entra en
-  las imágenes del próximo lote; (2) en el AOT, el cero se mira antes de dividir y se lanza con `throw_runtime`, que ya está en la tabla: sólo el compilador.
+- **Hecho, en dos partes:** (1) en `interp.c` y en los dos helpers, `b == -1` aparte (`0 - a` sin signo; en `mod`, 0): toca la VM, así que las placas lo llevarán con
+  las imágenes del próximo lote. (2) En el AOT, `emitDivisionEntera`: el cero se mira antes de dividir y se lanza con `throw_runtime`, que ya estaba en la tabla, y el
+  -1 aparte. Con un divisor literal distinto de cero, tal cual: no le pasa nada, y es lo corriente (`x / 2`).
+- **Comprobado:** `DivBordes`, nuevo en el corpus: paridad 195/195, MOD8 192 y sus 3 SKIP de siempre. `NatSwitch`, 45/45, también con el error capturado dentro de la `native`
+  y fuera de ella. La red, VERDE. En placa, nada: es para el próximo lote.
 
 #### ✅ `#790` — una `native` no da lo mismo que interpretada cuando un entero da la vuelta: en C, el desbordamiento con signo no está definido (`e56062bc`; abierta y cerrada el 5-nov, al comprobar para el `ulong` de H8 que un `long` da la vuelta; Eduardo: *«1) si»*)
 

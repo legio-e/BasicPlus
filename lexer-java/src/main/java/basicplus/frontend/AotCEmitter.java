@@ -439,6 +439,32 @@ public final class AotCEmitter {
         w.print(") & " + bits + ")" + (izquierda ? "))" : ")"));
     }
 
+    /** #791 (5-nov) — `a / b` y `a mod b` de enteros, lo que hace el intérprete (OP_DIV, OP_MOD): por cero es su error, que
+     *  se puede capturar, y el mínimo entre -1 da la vuelta. En C ninguna de las dos está definida: x86 lo convierte en una
+     *  excepción, y ARM y RISC-V dan un número sin decir nada. Es el `idiv64` de un long, sin ir a la tabla. Un divisor
+     *  literal distinto de cero, tal cual: no le pasa nada, y es lo corriente (`x / 2`). */
+    private void emitDivisionEntera(Ast.BinaryExpr b) {
+        boolean resto = !"/".equals(b.op);
+        if (b.right instanceof Ast.IntLitExpr && ((Ast.IntLitExpr) b.right).value != 0) {
+            w.print("(");
+            emitExpr(b.left);
+            w.print(resto ? " % " : " / ");
+            emitExpr(b.right);
+            w.print(")");
+            return;
+        }
+        int t = ++tempBuiltin;
+        String n = "__bpvm_n" + t, d = "__bpvm_d" + t, r = "__bpvm_r" + t;
+        w.print("({ int32_t " + n + " = (");
+        emitExpr(b.left);
+        w.print("); int32_t " + d + " = (");
+        emitExpr(b.right);
+        w.print("); int32_t " + r + "; if (" + d + " == 0) { vm->aot_helpers->throw_runtime(vm, \""
+                + (resto ? "Módulo" : "División") + " por cero\"); " + r + " = 0; } else if (" + d + " == -1) " + r + " = "
+                + (resto ? "0" : "(int32_t) (0u - (uint32_t) " + n + ")") + "; else " + r + " = " + n + (resto ? " % " : " / ")
+                + d + "; " + r + "; })");
+    }
+
     /** V8/H7.1 (#747) — ¿un compuesto de los nuevos (`*=`, `mod=`…)? Los de antes, `+=` y `-=`, siguen por su camino. */
     private static boolean esCompuestoNuevo(Ast.AssignOpKind op) {
         return op != Ast.AssignOpKind.ASSIGN && op != Ast.AssignOpKind.PLUS_ASSIGN && op != Ast.AssignOpKind.MINUS_ASSIGN;
@@ -2816,6 +2842,10 @@ public final class AotCEmitter {
                 }
                 if ("shl".equals(b.op) || "shr".equals(b.op)) {
                     emitDesplazamiento("shl".equals(b.op), largo, b.left, b.right);
+                    return;
+                }
+                if (!largo && ("/".equals(b.op) || "mod".equals(b.op) || "%".equals(b.op))) {
+                    emitDivisionEntera(b);
                     return;
                 }
             }

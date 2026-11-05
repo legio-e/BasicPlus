@@ -130,17 +130,13 @@ static void h_write_i64_be(uint8_t* p, int64_t v) {
  * que se le hiciera a uno hay que hacérsela al otro el mismo día, o el mismo
  * programa daría resultados distintos según se ejecute compilado o interpretado.
  *
- * (Nota de un caso que YA diverge hoy, y que esto no empeora ni arregla:
- * `LONG_MIN / -1` desborda. En Java el resultado es `LONG_MIN`; en C es
- * comportamiento indefinido. El intérprete de la VM-C tiene el mismo `a / b`
- * a pelo, así que la divergencia es preexistente y le toca a su propia ficha —
- * arreglarlo sólo aquí sería introducir una diferencia nueva.) */
+ * #791 — `LONG_MIN / -1` da la vuelta, como en Java; en C no está definido. */
 static int64_t h_idiv64(bpvm_t* vm, int64_t a, int64_t b) {
     if (b == 0) {
         bpvm_aot_helpers_v2.throw_runtime(vm, "División por cero");   /* no retorna */
         return 0;
     }
-    return a / b;
+    return b == -1 ? (int64_t) (0u - (uint64_t) a) : a / b;
 }
 /* ---------- #426 (V6/N1.2): coma flotante de doble precision ----------
  *
@@ -209,7 +205,7 @@ static int64_t h_imod64(bpvm_t* vm, int64_t a, int64_t b) {
         bpvm_aot_helpers_v2.throw_runtime(vm, "Módulo por cero");     /* no retorna */
         return 0;
     }
-    return a % b;
+    return b == -1 ? 0 : a % b;
 }
 
 /* ---------- Control de ejecución ----------

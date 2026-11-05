@@ -11,7 +11,8 @@
 //     `xor` entre dos boolean; y `A[n]`, un array con su tamaño: de números, de cadenas y de objetos, que el GC sigue;
 //   - #790: un entero da la vuelta, como en el intérprete (en C no está definido, y gcc quitaba la comparación de
 //     `x + 1 > x`): +, -, *, el menos, `+=` en una local, una global y una casilla, y el `i` de un for; y la cuenta de
-//     un desplazamiento, con sus 5 bits, o sus 6 en un long.
+//     un desplazamiento, con sus 5 bits, o sus 6 en un long;
+//   - #791: dividir por cero es un error que se captura, también dentro de la native, y el mínimo entre -1 da la vuelta.
 // Las native llevan su bytecode: interpretado corre igual. `make test-aotswitch` lo corre de las dos
 // maneras (con el AOT, con GC en cada alocación) y exige la MISMA salida, sin ningún FALLO.
 module NatSwitch
@@ -277,6 +278,60 @@ module NatSwitch
     return 0
   end desplazaLong
 
+  native function divide(a: integer, b: integer): integer
+    return a / b
+  end divide
+
+  native function resto(a: integer, b: integer): integer
+    return a mod b
+  end resto
+
+  native function divideLong(a: long, b: long): integer
+    var r: long := a / b
+    if r == a then
+      return 1
+    endif
+    return 0
+  end divideLong
+
+  native function restoLong(a: long, b: long): integer
+    var r: long := a mod b
+    if r == 0L then
+      return 1
+    endif
+    return 0
+  end restoLong
+
+  native function porLiteral(a: integer): integer
+    return a / 2 + a mod 7
+  end porLiteral
+
+  native function divideDentro(a: integer, b: integer): integer
+    try
+      return a / b
+    catch e: Exception
+      return -98
+    endtry
+  end divideDentro
+
+  function divideFuera(a: integer, b: integer): integer
+    try
+      return divide(a, b)
+    catch e: Exception
+      print e.msg
+      return -99
+    endtry
+  end divideFuera
+
+  function restoFuera(a: integer, b: integer): integer
+    try
+      return resto(a, b)
+    catch e: Exception
+      print e.msg
+      return -99
+    endtry
+  end restoFuera
+
   function mira(que: string, obtenido: integer, esperado: integer)
     if obtenido == esperado then
       print "ok    " + que + " = " + obtenido
@@ -320,5 +375,18 @@ module NatSwitch
     mira("desplazaDer(33)", desplazaDer(33), 512)
     mira("desplazaNeg(33)", desplazaNeg(33), -512)
     mira("desplazaLong(65)", desplazaLong(65), 1)
+    mira("divide(7, 2)", divide(7, 2), 3)
+    mira("resto(7, 2)", resto(7, 2), 1)
+    mira("divide(min, -1)", divide(minimo, 0 - 1), minimo)
+    mira("resto(min, -1)", resto(minimo, 0 - 1), 0)
+    mira("divide(7, -1)", divide(7, 0 - 1), -7)
+    var minimoLong: long := 0L - 9223372036854775807L - 1L
+    mira("divideLong(min, -1)", divideLong(minimoLong, 0L - 1L), 1)
+    mira("restoLong(min, -1)", restoLong(minimoLong, 0L - 1L), 1)
+    mira("porLiteral(23)", porLiteral(23), 13)
+    mira("divideFuera(7, 0)", divideFuera(7, 0), -99)
+    mira("restoFuera(7, 0)", restoFuera(7, 0), -99)
+    mira("divideDentro(7, 0)", divideDentro(7, 0), -98)
+    mira("divideDentro(9, 3)", divideDentro(9, 3), 3)
   end Main
 end NatSwitch

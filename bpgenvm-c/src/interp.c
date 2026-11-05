@@ -1073,7 +1073,9 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                            if (yielded) *yielded = 1;
                            goto done;
                        }
-                       bpvm_write_i32_be(mem+sp, a / b); sp += 4; break; }
+                       /* #791 — el mínimo entre -1 da la vuelta, como en la VM-Java. En C no está definido, y
+                        * el idiv de x86 lo convierte en una excepción que mata el proceso. */
+                       bpvm_write_i32_be(mem+sp, b == -1 ? (int32_t) (0u - (uint32_t) a) : a / b); sp += 4; break; }
         case OP_MOD: { sp -= 4; int32_t b = bpvm_read_i32_be(mem+sp);
                        sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
                        if (b == 0) {
@@ -1088,7 +1090,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                            if (yielded) *yielded = 1;
                            goto done;
                        }
-                       bpvm_write_i32_be(mem+sp, a % b); sp += 4; break; }
+                       bpvm_write_i32_be(mem+sp, b == -1 ? 0 : a % b); sp += 4; break; }   /* #791 */
         case OP_NEG: { sp -= 4; int32_t a = bpvm_read_i32_be(mem+sp);
                        bpvm_write_i32_be(mem+sp, -a); sp += 4; break; }
 
@@ -1583,7 +1585,8 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                             if (yielded) *yielded = 1;
                             goto done;
                         }
-                        bpvm_write_i64_be(mem+sp, a / b); sp += 8; break; }
+                        /* #791 — lo de OP_DIV */
+                        bpvm_write_i64_be(mem+sp, b == -1 ? (int64_t) (0u - (uint64_t) a) : a / b); sp += 8; break; }
         case OP_LMOD: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
                         sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
                         if (b == 0) {
@@ -1597,7 +1600,7 @@ bpvm_status_t bpvm_interp_run_quantum(bpvm_t* vm, bpvm_thread_t* tc,
                             if (yielded) *yielded = 1;
                             goto done;
                         }
-                        bpvm_write_i64_be(mem+sp, a % b); sp += 8; break; }
+                        bpvm_write_i64_be(mem+sp, b == -1 ? 0 : a % b); sp += 8; break; }   /* #791 */
         case OP_LNEG: { sp -= 8; int64_t a = bpvm_read_i64_be(mem+sp);
                         bpvm_write_i64_be(mem+sp, -a); sp += 8; break; }
         case OP_LBAND: { sp -= 8; int64_t b = bpvm_read_i64_be(mem+sp);
