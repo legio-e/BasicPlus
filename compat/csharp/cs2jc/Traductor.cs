@@ -520,6 +520,8 @@ namespace Cs2Jc
         void EmiteMetodo(MethodDeclarationSyntax me)
         {
             var s = m.GetDeclaredSymbol(me);
+            // un [Conditional] sin definir: C# quita todas sus llamadas, y nadie llega a su cuerpo (test-238)
+            if (CondicionalSinDefinir(s, me) != null) return;
             if (me.TypeParameterList != null) { Rechaza(me.TypeParameterList, Porque.H7(Porque.Genericos)); return; }
             if (s.IsExtern) { Rechaza(me, Porque.Fuera(Porque.Interop)); return; }
             if (s.IsAsync) { Rechaza(me, Porque.Fuera(Porque.Async)); return; }

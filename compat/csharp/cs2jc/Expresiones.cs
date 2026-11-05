@@ -543,6 +543,7 @@ namespace Cs2Jc
             string nombre = NombreMetodo(ms);
             switch (inv.Expression)
             {
+                case CheckedExpressionSyntax { Expression: IdentifierNameSyntax _ }:   // `checked (M) (x)`: no cuenta nada (test-665)
                 case IdentifierNameSyntax _:
                     return (ms.IsStatic ? Receptor(ms.ContainingType, inv) : "this") + "." + nombre + "(" + args + ")";
                 case MemberAccessExpressionSyntax ma:
@@ -1001,6 +1002,7 @@ namespace Cs2Jc
                         default: return Rechaza(donde, Porque.Pendiente("tipo " + nt.TypeKind));
                     }
                 }
+                if (NombreCompleto(nt) == "System.FormattableString") return "string";   // un `$"…"` como objeto: su texto (test-interpolation-10)
                 if (ExcepcionJc(nt) is string ex) return ex;              // Exception, RuntimeError o la de CsSystem
                 if (InterfazDeCsSystem(nt) is string ci) return ci;       // IDisposable (H8, tema 2)
                 if (ClaseDeCsSystem(nt) is string cc) return cc;          // TextWriter y StringWriter (H8, tema 1)

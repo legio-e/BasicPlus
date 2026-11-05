@@ -31,17 +31,9 @@ module CsAtributos
          Programa.calculos++;
          return Programa.calculos;
       }
-      private static function void Depura(int x)
-      {
-         Programa.llamadas += 100;
-      }
       private static function void Traza(int x)
       {
          Programa.llamadas += x;
-      }
-      private static function void DepuraCorto()
-      {
-         // Depura(…): [Conditional("SIN_DEFINIR")], sin definir; C# quita la llamada
       }
       public static function int Main()
       {

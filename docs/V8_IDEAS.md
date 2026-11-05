@@ -5605,6 +5605,35 @@ Casos `ULong` y `RechazosULong`. **Mono: 570** (+7: `test-446`, `test-757`, `tes
 hasta el ajuste 1 del tema 4 no se traduce. Las «unas 14» que dije antes contaban también `decimal` y `nint`, que iban en el mismo motivo; ahora
 van aparte. **El tema 1: 119.**
 
+### Los temas 1 y 2, completados (5-nov)
+
+Eduardo: *«Del tema 1 queda algo mas que podamos arreglar de forma sencilla? Si no queda nada mas sencillo lo damos por completado con sus fallos
+actuales. Del tema 2) lo mismo»*. Leídas una a una las que quedaban, tres eran sencillas, todas del traductor:
+
+- **Un método `[Conditional]` sin definir no se escribe:** C# quita todas sus llamadas, y nadie llega a su cuerpo (`test-238`, y de paso `test-239` y `test-477`).
+- **`checked (M) (x)` es la llamada:** sobre un nombre de método no cuenta nada (`test-665`).
+- **Un `$"…"` que se pasa como `FormattableString` es su texto** (`test-interpolation-10`). Sus miembros (`.Format`) siguen sin traducirse.
+
+Caso `Sueltas`. **Mono: 575.** **El tema 1, completado: 121 de 141. El tema 2, completado: 91 de 123.** Ninguna falla en los dos. Lo que queda:
+
+| motivo | tema 1 | tema 2 |
+|---|---|---|
+| reflexión | 9 | 5 |
+| genéricos | | 13 |
+| tipos anónimos (por decidir) | 3 | 2 |
+| `yield` | | 4 |
+| lambdas, LINQ, delegados | 1 | 2 |
+| hilos, `async`, fechas | 3 | |
+| `decimal`, `nint` | 1 | 1 |
+| interop | 1 | 1 |
+| una sola cosa, que no es sencilla | 2 | 4 |
+
+Las de una sola cosa: `test-74` (un `StreamReader` que lee su propio fuente), `test-interpolation-02` (los miembros de `FormattableString`), `gtest-512` (`(bool) o != null`, que
+siempre da cierto, pero con un cast delante que calcula), `test-145` (un array de arrays, que BP no tiene), `test-441` (comparar un `ulong`: decidido) y `test-614` (`value++` bajo
+`&&`: no se puede sacar a su sentencia, y haría falta una función por campo).
+
+De las 13 de genéricos, alguna no usa sus clases genéricas (`gtest-partial-01` tiene el `Main` vacío). Pasarían quitando lo que nadie usa, pero sin probar nada: no se hace.
+
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 
 27 de 130, ninguna falla; 44 piden algo de fuera (reflexión, `dynamic`, `ulong`…) y 59 no. Medido con el lote de hoy: «piden», las que lo piden en

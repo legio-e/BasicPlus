@@ -36,6 +36,8 @@
 >   haciendo conversiones de long <-> ulong»*; *«las 2 primeras filas»*): un `long` con sus 64 bits, y lo que no sale igual, no se traduce.
 >   **Mono, 570** (+7); fallan las mismas 5. Las «unas 14» que le dije contaban también `decimal` y `nint`: de `ulong` eran 9. Y de esas 9 conté una que
 >   no pasa: `gtest-optional-36` lleva un `params` tras un valor por defecto, e iba a dar «falla»; ahora no se traduce, con su motivo.
+> - **Los temas 1 y 2, completados** (*«lo damos por completado con sus fallos actuales»*): leídas una a una las que quedaban, tres sencillas (`V8_IDEAS` §E9): el tema 1, 121 de
+>   141; el tema 2, 91 de 123; **Mono, 575**; fallan 5, ninguna de los dos.
 > - **`#790`** (*«1) si»*), hecha: al comprobar que un `long` da la vuelta, salió que una `native` no: `x + 1 > x` daba 1 con el AOT y 0 interpretada. El AOT escribe las
 >   cuentas sin signo, y `NatSwitch` lo comprueba (33/33; con el C de antes fallan 6). La red, VERDE. Y al hacerlo, `#791`, sólo apuntada.
 > - **Lo que me falló:** el sample de error lo dejé en `bpgenvm-c/samples/errores`, que no existe (van en `samples/errores`); un `byte[3]`

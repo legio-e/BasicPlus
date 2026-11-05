@@ -1,7 +1,7 @@
 #define CON_TRAZA
 // Caso del traductor C# -> JC (V8/H8, tema 1; 2-nov): los atributos. Una clase de atributo (`: Attribute`) es una clase
-// más, y sus usos (`[Marca(...)]`, `[Obsolete]`, `[AttributeUsage]`…) se quitan. Un método `[Conditional("S")]` se
-// escribe, y sus llamadas, si S no está definido, se quitan como en C#, sin calcular sus argumentos; con `#define S`, se
+// más, y sus usos (`[Marca(...)]`, `[Obsolete]`, `[AttributeUsage]`…) se quitan. De un método `[Conditional("S")]`, si S
+// no está definido, sus llamadas se quitan como en C#, sin calcular sus argumentos, y él no se escribe; con `#define S`, se
 // hacen. Se comprueba solo: Main devuelve 0.
 using System;
 using System.Diagnostics;

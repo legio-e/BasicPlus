@@ -3,12 +3,26 @@ module CsSueltas
    class Prueba
    {
       private static bool asi = Prueba.Cierto();
+      private static function int Cero(Object o)
+      {
+         return 0;
+      }
+      private static function void Escribe(string texto)
+      {
+         println(texto);
+      }
       private static function bool Cierto()
       {
          return true;
       }
       public static function int Main()
       {
+         // NoEsta(…): [Conditional("NO_DEFINIDO")], sin definir; C# quita la llamada
+         if (Prueba.Cero(null) + Prueba.Cero(null) != 0)
+         {
+            return 9;
+         }
+         Prueba.Escribe(("caso " + 1));
          // direcciones: una local sin valor que nadie usa
          // a, b: una local sin valor que nadie usa
          int usada = 0;
