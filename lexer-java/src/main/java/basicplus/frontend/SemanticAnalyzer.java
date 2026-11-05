@@ -121,7 +121,7 @@ public final class SemanticAnalyzer {
      *  uno: un `return` dentro de un `finally`, o un `break`/`continue` que sale de él (su bucle o su switch está FUERA),
      *  es un error —taparía la excepción que fuera en vuelo; y el compilador se caía con un `StackOverflowError`—. */
     private final java.util.ArrayDeque<int[]> finallysAbiertos = new java.util.ArrayDeque<>();
-    /** V8/H8 — los bucles `do` con nombre que están abiertos, de dentro afuera: {nombre, su loopDepth}. */
+    /** V8/H8 — los bucles con nombre que están abiertos, de dentro afuera: {nombre, su loopDepth}. */
     private java.util.ArrayDeque<Object[]> buclesConNombre = new java.util.ArrayDeque<>();
     private boolean seenSuperCallInCtor;
     private boolean isFirstStmtOfCtor;
@@ -2886,28 +2886,37 @@ public final class SemanticAnalyzer {
     private void analyzeWhile(WhileStmt w, Scope scope) {
         analyzeBoolCondition(w.condition, scope);
         loopDepth++;
+        abreBucle(w.nombre, w.line, w.column);
         try { analyzeBody(w.body, new Scope("while", scope)); }
-        finally { loopDepth--; }
+        finally { cierraBucle(w.nombre); loopDepth--; }
+    }
+
+    /** V8/H8 — un bucle con nombre, dentro: `break` y `continue` llegan a él. Dos abiertos no se llaman igual. */
+    private void abreBucle(String nombre, int line, int column) {
+        if (nombre == null) return;
+        for (Object[] b : buclesConNombre)
+            if (nombre.equals(b[0])) err(line, column, "ya hay un bucle '" + nombre + "' abierto: el de dentro lo taparía");
+        buclesConNombre.push(new Object[] { nombre, loopDepth });
+    }
+
+    private void cierraBucle(String nombre) {
+        if (nombre != null) buclesConNombre.pop();
     }
 
     private void analyzeDoLoop(DoLoopStmt dl, Scope scope) {
         loopDepth++;
-        if (dl.nombre != null) {
-            for (Object[] b : buclesConNombre)
-                if (dl.nombre.equals(b[0])) err(dl.line, dl.column, "ya hay un bucle '" + dl.nombre + "' abierto: el de dentro lo taparía");
-            buclesConNombre.push(new Object[] { dl.nombre, loopDepth });
-        }
+        abreBucle(dl.nombre, dl.line, dl.column);
         try {
             analyzeBody(dl.body, new Scope("do", scope));
             if (dl.condition != null) analyzeBoolCondition(dl.condition, scope);
         } finally {
-            if (dl.nombre != null) buclesConNombre.pop();
+            cierraBucle(dl.nombre);
             loopDepth--;
         }
     }
 
     /** V8/H8 (Eduardo, 4-nov: «poder hacer un break a un loop concreto») — `break miLoop` o `continue miLoop`: tiene que ser
-     *  un `do miLoop` abierto, y como el `break` sin nombre, no puede salir de un `finally` (#674). */
+     *  un bucle abierto con ese nombre, y como el `break` sin nombre, no puede salir de un `finally` (#674). */
     private void saltoConNombre(String que, String nombre, int line, int column) {
         for (Object[] b : buclesConNombre) {
             if (!nombre.equals(b[0])) continue;
@@ -2915,7 +2924,7 @@ public final class SemanticAnalyzer {
                 err(line, column, "un 'finally' no puede salir con '" + que + "': taparia la excepcion que fuera en vuelo (#674)");
             return;
         }
-        err(line, column, "'" + que + " " + nombre + "': no hay ningún bucle 'do " + nombre + "' abierto");
+        err(line, column, "'" + que + " " + nombre + "': no hay ningún bucle '" + nombre + "' abierto");
     }
 
     private void analyzeFor(ForStmt f, Scope scope) {
@@ -2960,8 +2969,9 @@ public final class SemanticAnalyzer {
         iv.type = iterT;
         inner.tryDefine(iv);
         loopDepth++;
+        abreBucle(f.nombre, f.line, f.column);
         try { analyzeBody(f.body, inner); }
-        finally { loopDepth--; }
+        finally { cierraBucle(f.nombre); loopDepth--; }
     }
 
     private void analyzeTry(TryStmt tr, Scope scope) {

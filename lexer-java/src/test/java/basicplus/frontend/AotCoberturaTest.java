@@ -53,6 +53,8 @@ class AotCoberturaTest {
         CASOS.put("DoConNombre",   "var t: integer := 0\n      do fuera\n        for i := 1 to 3 do\n          t += i\n          try\n            if t > 3 then\n              break fuera\n            endif\n            continue fuera\n          catch e: Exception\n            t := 0\n          endtry\n        next i\n      loop t < 9\n      return t");
         // V8/H8 — `A[n]`: el helper de reserva del literal de array, con el tamaño calculado
         CASOS.put("ArrayNuevo",    "var w: integer[] := integer[a + 1]\n      var s: string[] := string[2]\n      return len(w) + len(s)");
+        // V8/H8 — con nombre, también un while y un for
+        CASOS.put("WhileConNombre", "var t: integer := 0\n      while t < 9 do fuera\n        t += 1\n        for i := 1 to 3 do dentro\n          if i == 2 then\n            continue fuera\n          endif\n          break dentro\n        next i\n      endwh\n      return t");
         CASOS.put("ContinueStmt",  "var t: integer := 0\n      while t < 3 do\n        t += 1\n        continue\n      endwh\n      return t");
         CASOS.put("TryStmt",       "try\n        return 1\n      catch e: Exception\n        return 2\n      endtry");
         // `throw "vaya"` NO es BP: #248 solo deja lanzar instancias de Exception.
@@ -115,7 +117,7 @@ class AotCoberturaTest {
         "DoLoopStmt", "DoubleLitExpr", "FloatLitExpr", "ForStmt", "IdentifierExpr",
         "IfStmt", "IndexExpr", "IntLitExpr", "LongLitExpr", "NullLitExpr",
         "ParenExpr", "PrintStmt", "ReturnStmt", "StringLitExpr", "SwitchStmt",
-        "ThrowStmt", "UnaryExpr", "VarDecl", "WhileStmt"
+        "ThrowStmt", "UnaryExpr", "VarDecl", "WhileConNombre", "WhileStmt"
     ));
 
     /** El motivo del ultimo rechazo, para que el informe no culpe al nodo

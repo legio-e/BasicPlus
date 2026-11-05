@@ -696,6 +696,7 @@ public final class Ast {
         public final IExpr condition;
         public final List<IStmt> body;
         public final boolean isSingleLine;
+        public String nombre;               // V8/H8: `while c do miLoop`, como el de DoLoopStmt
         public WhileStmt(IExpr condition, List<IStmt> body, boolean isSingleLine, int line, int column) {
             super(line, column);
             this.condition = condition;
@@ -745,6 +746,7 @@ public final class Ast {
         public final ForRange range;
         public final List<IStmt> body;
         public final boolean isSingleLine;
+        public String nombre;               // V8/H8: `for i := 1 to 3 do miLoop`, como el de DoLoopStmt
         public ForStmt(String iteratorName, ForRange range, List<IStmt> body, boolean isSingleLine,
                        int line, int column) {
             super(line, column);

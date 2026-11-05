@@ -894,11 +894,14 @@ final class JcParser {
 
     private WhileStmt mientras() {
         Tok t = espera("while");
+        String n = esNombre() ? nombre("el nombre del bucle") : null;   // V8/H8: `while miLoop (c) { … }`
         espera("(");
         IExpr c = expresion();
         espera(")");
         boolean conLlaves = es("{");
-        return new WhileStmt(c, cuerpo(), !conLlaves, t.linea, t.columna);
+        WhileStmt w = new WhileStmt(c, cuerpo(), n == null && !conLlaves, t.linea, t.columna);
+        w.nombre = n;
+        return w;
     }
 
     /** `do { … } while (c);` es el `do … loop c` de BP (punto 9). */
@@ -918,6 +921,7 @@ final class JcParser {
      *  paso, un número. */
     private ForStmt para() {
         Tok t = espera("for");
+        String nombreDelBucle = esNombre() ? nombre("el nombre del bucle") : null;   // V8/H8: `for miLoop (int i = 0; …) { … }`
         espera("(");
         espera("int", "'int': la variable del for es un int, como en BP (punto 11)");
         String i = nombre("el nombre de la variable del for");
@@ -953,8 +957,10 @@ final class JcParser {
         espera(")");
         boolean conLlaves = es("{");
         List<IStmt> body = cuerpo();
-        return new ForStmt(i, new ForNumericRange(desde, hasta, paso, t.linea, t.columna), body, !conLlaves,
-                           t.linea, t.columna);
+        ForStmt f = new ForStmt(i, new ForNumericRange(desde, hasta, paso, t.linea, t.columna), body,
+                                nombreDelBucle == null && !conLlaves, t.linea, t.columna);
+        f.nombre = nombreDelBucle;
+        return f;
     }
 
     private IExpr numeroDelPaso() {
@@ -967,6 +973,7 @@ final class JcParser {
     /** `foreach (var x in lista)` es el `for x in lista do` de BP (punto 16). */
     private ForStmt paraCada() {
         Tok t = espera("foreach");
+        String nombreDelBucle = esNombre() ? nombre("el nombre del bucle") : null;   // V8/H8: `foreach miLoop (var x in l) { … }`
         espera("(");
         espera("var", "'var': la variable del foreach toma el tipo de los elementos (punto 16)");
         String x = nombre("el nombre de la variable del foreach");
@@ -975,7 +982,9 @@ final class JcParser {
         espera(")");
         boolean conLlaves = es("{");
         List<IStmt> body = cuerpo();
-        return new ForStmt(x, new ForInRange(col, t.linea, t.columna), body, !conLlaves, t.linea, t.columna);
+        ForStmt f = new ForStmt(x, new ForInRange(col, t.linea, t.columna), body, nombreDelBucle == null && !conLlaves, t.linea, t.columna);
+        f.nombre = nombreDelBucle;
+        return f;
     }
 
     /** El `try` de BP con llaves (punto 13): `catch (T e)`, `catch` a secas, y el recurso, `try (T r = e)`. */

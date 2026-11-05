@@ -142,7 +142,7 @@ final class AsignacionDefinida {
             WhileStmt w = (WhileStmt) s;
             lee(w.condition, e);
             Estado base = e.copia();
-            Salida sal = bucle(w.body, base);
+            Salida sal = bucle(w.body, base, w.nombre);
             if (esCierto(w.condition)) {
                 // `while true`: sólo se sale por sus break (si no hay, lo de después no se alcanza)
                 Estado r = sal.alSalir != null ? sal.alSalir : noAlcanzado();
@@ -173,7 +173,7 @@ final class AsignacionDefinida {
                 lee(((ForInRange) f.range).iterable, e);
             }
             Estado base = e.copia();
-            bucle(f.body, base);
+            bucle(f.body, base, f.nombre);
             e.tomaDe(base);
         } else if (s instanceof TryStmt) {
             TryStmt t = (TryStmt) s;
@@ -224,8 +224,9 @@ final class AsignacionDefinida {
         // InlineStmt (bytecode escrito a mano) y ReleaseOwnerStmt (sintetizado): nada que mirar
     }
 
-    private Salida bucle(List<IStmt> cuerpo, Estado base) {
+    private Salida bucle(List<IStmt> cuerpo, Estado base, String nombre) {
         Salida sal = new Salida(true);
+        sal.nombre = nombre;
         salidas.push(sal);
         try { desde(cuerpo, base); } finally { salidas.pop(); }
         return sal;

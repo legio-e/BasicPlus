@@ -58,7 +58,7 @@ class BucleConNombreTest {
     void noAbierto(@TempDir Path tmp) throws IOException {
         Object[] r = compila(tmp, "Mal", modulo("Mal", "    do a", "      print 1", "    loop false", "    while true do", "      break a", "    endwh"));
         assertFalse((Boolean) r[0]);
-        assertTrue(((String) r[1]).contains("'break a': no hay ningún bucle 'do a' abierto"), (String) r[1]);
+        assertTrue(((String) r[1]).contains("'break a': no hay ningún bucle 'a' abierto"), (String) r[1]);
     }
 
     @Test @DisplayName("dos abiertos con el mismo nombre, no")
@@ -66,6 +66,18 @@ class BucleConNombreTest {
         Object[] r = compila(tmp, "Mal2", modulo("Mal2", "    do a", "      do a", "        break a", "      loop false", "    loop false"));
         assertFalse((Boolean) r[0]);
         assertTrue(((String) r[1]).contains("ya hay un bucle 'a' abierto"), (String) r[1]);
+    }
+
+    @Test @DisplayName("while y for llevan nombre, tras su do; solo en la línea, porque `while c do f()` es otra cosa")
+    void whileYFor(@TempDir Path tmp) throws IOException {
+        Object[] r = compila(tmp, "Vale3", modulo("Vale3",
+            "    var k: integer := 0", "    while k < 2 do fuera", "      k += 1", "      for i := 1 to 3 do dentro", "        if i == 2 then",
+            "          continue fuera", "        endif", "        for x in [1, 2] do lista", "          break dentro", "        next x", "      next i",
+            "    endwh", "    while k < 3 do k += 1"));
+        assertTrue((Boolean) r[0], "tiene que compilar:\n" + r[1]);
+        Object[] r2 = compila(tmp, "Mal4", modulo("Mal4", "    for i := 1 to 2 do a", "      print i", "    next i", "    while true do", "      break a", "    endwh"));
+        assertFalse((Boolean) r2[0]);
+        assertTrue(((String) r2[1]).contains("'break a': no hay ningún bucle 'a' abierto"), (String) r2[1]);
     }
 
     @Test @DisplayName("salir de un finally, no; un bucle de dentro del finally, sí")

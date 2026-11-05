@@ -131,6 +131,27 @@ public final class AotCEmitter {
     private final java.util.ArrayDeque<Object[]> doConNombre = new java.util.ArrayDeque<>();
     private int doConNombreN;
 
+    /** V8/H8 — un bucle con nombre, abierto: su número (0, si no lo lleva). */
+    private int abreConNombre(String nombre) {
+        if (nombre == null) return 0;
+        int n = ++doConNombreN;
+        doConNombre.push(new Object[] { nombre, n, trysAbiertos.size() });
+        return n;
+    }
+
+    /** Al final de su cuerpo: `continue miLoop` llega aquí, donde sigue el bucle. */
+    private void sigueConNombre(int n) {
+        if (n != 0) { indent(); w.println("bpvm_sigue_" + n + ": __attribute__((unused)) ;"); }
+    }
+
+    /** Detrás del bucle: `break miLoop` llega aquí. */
+    private void cierraConNombre(int n) {
+        if (n == 0) return;
+        doConNombre.pop();
+        indent();
+        w.println("bpvm_fin_" + n + ": __attribute__((unused)) ;");
+    }
+
     private void saltoConNombre(String nombre, String etiqueta) {
         for (Object[] d : doConNombre)
             if (nombre.equals(d[0])) {
@@ -1807,15 +1828,18 @@ public final class AotCEmitter {
         }
         if (s instanceof Ast.WhileStmt) {
             Ast.WhileStmt wl = (Ast.WhileStmt) s;
+            int n = abreConNombre(wl.nombre);
             indent();
             w.print("while (");
             emitExpr(wl.condition);
             w.println(") {");
             indentLevel++;
             emitCuerpoDeBucle(wl.body);
+            sigueConNombre(n);
             indentLevel--;
             indent();
             w.println("}");
+            cierraConNombre(n);
             return;
         }
         /* [V6/N1.3] `print` dentro de una `native`.
@@ -1878,13 +1902,12 @@ public final class AotCEmitter {
             Ast.DoLoopStmt dl = (Ast.DoLoopStmt) s;
             /* V8/H8 — `do miLoop`: C no tiene `break` con nombre; dos etiquetas, y `break miLoop` y `continue miLoop` son un
              * `goto`, tras cerrar los `try` de encima. `continue` va a la condición, como el de C. */
-            int n = dl.nombre != null ? ++doConNombreN : 0;
-            if (dl.nombre != null) doConNombre.push(new Object[] { dl.nombre, n, trysAbiertos.size() });
+            int n = abreConNombre(dl.nombre);
             indent();
             w.println("do {");
             indentLevel++;
             emitCuerpoDeBucle(dl.body);
-            if (dl.nombre != null) { indent(); w.println("bpvm_sigue_" + n + ": __attribute__((unused)) ;"); }
+            sigueConNombre(n);
             indentLevel--;
             indent();
             if (dl.condition == null) {
@@ -1894,10 +1917,7 @@ public final class AotCEmitter {
                 emitExpr(dl.condition);
                 w.println(");");
             }
-            if (dl.nombre != null) {
-                doConNombre.pop();
-                indent(); w.println("bpvm_fin_" + n + ": __attribute__((unused)) ;");
-            }
+            cierraConNombre(n);
             return;
         }
         if (s instanceof Ast.ForStmt) {
@@ -2311,14 +2331,17 @@ public final class AotCEmitter {
         // #548 (24-sep) — un `for` de C y no `while (…) { body; it += step; }`: el `continue` de C
         // va al `it += step`, como el de BP; con el `while` saltaba a la condición y el bucle no
         // acababa nunca.
+        int conNombre = abreConNombre(fs.nombre);
         indent();
         w.println("for (; (" + step + " > 0) ? (" + it + " <= " + end + ") : ("
                   + it + " >= " + end + "); " + it + " = (int32_t) ((uint32_t) " + it + " + (uint32_t) " + step
                   + ")) {");   /* #790 — el `i` da la vuelta, como en el intérprete */
         indentLevel++;
         emitCuerpoDeBucle(fs.body);
+        sigueConNombre(conNombre);
         indentLevel--;
         indent(); w.println("}");
+        cierraConNombre(conNombre);
 
         indentLevel--;
         indent();

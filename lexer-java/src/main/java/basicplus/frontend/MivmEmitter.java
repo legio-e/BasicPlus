@@ -3798,7 +3798,9 @@ public final class MivmEmitter {
         w.declareLabel(top);
         emitExpr(s.condition);
         w.emitJumpIfFalse(end);
-        loopStack.push(new LoopLabels(top, end));
+        LoopLabels bucle = new LoopLabels(top, end);
+        bucle.nombre = s.nombre;
+        loopStack.push(bucle);
         try {
             for (IStmt st : s.body) emitStmt(st);
         } finally { loopStack.pop(); }
@@ -3898,7 +3900,9 @@ public final class MivmEmitter {
             // no avanzaba y el bucle no acababa nunca. Nadie lo pisaba (2 `continue` en el árbol,
             // ninguno en un `for`); salió al probar el `continue` dentro de un switch (#546).
             int sigue = w.newLabel();
-            loopStack.push(new LoopLabels(sigue, end));
+            LoopLabels bucle = new LoopLabels(sigue, end);
+            bucle.nombre = s.nombre;
+            loopStack.push(bucle);
             try {
                 for (IStmt st : s.body) emitStmt(st);
             } finally { loopStack.pop(); }
@@ -3974,7 +3978,9 @@ public final class MivmEmitter {
             w.emitSetLocal(s.iteratorName);
 
             int sigue = w.newLabel();   // #548 — `continue` salta al __idx += 1, no a `top`
-            loopStack.push(new LoopLabels(sigue, end));
+            LoopLabels bucle = new LoopLabels(sigue, end);
+            bucle.nombre = s.nombre;
+            loopStack.push(bucle);
             try {
                 for (IStmt st : s.body) emitStmt(st);
             } finally { loopStack.pop(); }
@@ -4909,7 +4915,9 @@ public final class MivmEmitter {
         w.emitSetLocal(s.iteratorName);
 
         int sigue = w.newLabel();
-        loopStack.push(new LoopLabels(sigue, end));
+        LoopLabels bucle = new LoopLabels(sigue, end);
+        bucle.nombre = s.nombre;
+        loopStack.push(bucle);
         try {
             for (IStmt st : s.body) emitStmt(st);
         } finally { loopStack.pop(); }

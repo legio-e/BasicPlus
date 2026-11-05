@@ -1001,10 +1001,12 @@ l.add(<span class="num">2</span>)
 
 <h3 id="breakcont">7.5 <code>break</code> / <code>continue</code></h3>
 <p>
-  Un <code>do</code> puede llevar un nombre, y <code>break</code> y <code>continue</code> pueden nombrar a uno de los que están
-  abiertos, para salir de varios bucles de golpe o seguir por el de fuera. No son etiquetas ni hay <code>goto</code>: el nombre sólo
+  Un bucle puede llevar un nombre, y <code>break</code> y <code>continue</code> pueden nombrar a uno de los que están
+  abiertos, para salir de varios bucles de golpe o seguir por el de fuera. El nombre va tras el <code>do</code> del bucle, solo en
+  la línea: <code>do fuera</code>, <code>while c do fuera</code>, <code>for i := 1 to 3 do fuera</code>. No son etiquetas ni hay <code>goto</code>: el nombre sólo
   se ve dentro de su bucle, y dos abiertos no se pueden llamar igual. Cierra los <code>try</code> de por medio y corre sus
-  <code>finally</code>; de un <code>finally</code> no se sale. En JC, <code>do fuera { … } while (c);</code> y <code>break fuera;</code>.
+  <code>finally</code>; de un <code>finally</code> no se sale. En JC, tras la palabra del bucle: <code>do fuera { … } while (c);</code>, <code>while fuera (c) { … }</code>,
+  <code>for fuera (…) { … }</code>, <code>foreach fuera (…) { … }</code>; y <code>break fuera;</code>.
   Con <code>do … loop false</code>, el bucle es un bloque del que se sale con <code>break</code>: da una sola vuelta.
 </p>
 <pre><code><span class="kw">do</span> fuera

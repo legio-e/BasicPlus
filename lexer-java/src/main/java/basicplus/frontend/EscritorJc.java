@@ -569,7 +569,7 @@ public final class EscritorJc {
     }
 
     private void mientras(WhileStmt w) {
-        String cab = "while (" + expr(w.condition) + ")";
+        String cab = conNombre("while", w.nombre) + " (" + expr(w.condition) + ")";
         if (w.isSingleLine) {
             if (w.body.size() != 1) throw new NoSoportado("un while de una línea con más de una sentencia", w);
             enLinea(cab, w.body.get(0));
@@ -614,10 +614,10 @@ public final class EscritorJc {
             } else {
                 throw new NoSoportado("un for cuyo paso no es un número (punto 11)", f);
             }
-            cab = "for (int " + it + " = " + expr(r.from) + "; " + it + " " + cmp + " " + expr(r.to, P_DESPL)
+            cab = conNombre("for", f.nombre) + " (int " + it + " = " + expr(r.from) + "; " + it + " " + cmp + " " + expr(r.to, P_DESPL)
                 + "; " + paso + ")";
         } else if (f.range instanceof ForInRange) {
-            cab = "foreach (var " + it + " in " + expr(((ForInRange) f.range).iterable) + ")";
+            cab = conNombre("foreach", f.nombre) + " (var " + it + " in " + expr(((ForInRange) f.range).iterable) + ")";
         } else {
             throw new NoSoportado(f.range.getClass().getSimpleName(), f);
         }

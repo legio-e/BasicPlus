@@ -475,7 +475,7 @@ default_clause ::= 'default' NEWLINE
 
 while_stmt ::= 'while' expr 'do'
                ( stmt NEWLINE
-               | NEWLINE
+               | [ name ] NEWLINE          (* V8: el nombre del bucle, solo en la línea *)
                  body
                  'endwh' NEWLINE
                ) ;
@@ -498,7 +498,7 @@ do_loop_stmt ::= 'do' [ name ] NEWLINE      (* V8: el nombre del bucle, para 'br
 
 for_stmt ::= 'for' name for_range 'do'
              ( stmt NEWLINE
-             | NEWLINE
+             | [ name ] NEWLINE            (* V8: el nombre del bucle, solo en la línea *)
                body
                'next' [ name ] NEWLINE
              ) ;

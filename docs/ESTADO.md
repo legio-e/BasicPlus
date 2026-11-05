@@ -38,8 +38,9 @@
 >   no pasa: `gtest-optional-36` lleva un `params` tras un valor por defecto, e iba a dar «falla»; ahora no se traduce, con su motivo.
 > - **Los temas 1 y 2, completados** (*«lo damos por completado con sus fallos actuales»*): leídas una a una las que quedaban, tres sencillas (`V8_IDEAS` §E9): el tema 1, 121 de
 >   141; el tema 2, 91 de 123; **Mono, 575**; fallan 5, ninguna de los dos.
-> - **Los temas 3 y 5, repasados** (*«El tema 4 lo miraremos despacio»*): cuatro sueltas: el tema 3, 57 de 83; el tema 5, 35 de 70; **Mono, 579**. Lo demás, seis propuestas
->   con sus cifras (`V8_IDEAS` §E9, «Los temas 3 y 5, repasados»), para su OK.
+> - **Los temas 3 y 5, repasados** (*«El tema 4 lo miraremos despacio»*): cuatro sueltas, y las propuestas por su orden (*«1) si»*): C, los inicializadores; D, el constructor primario; A, `foreach`
+>   propio, con `ArrayList`, que es la `List` de Core (*«ArrayList es nuestra List»*), y `Hashtable`; B, un enum que se opera: se queda como enum y lo que se opera, a entero (*«no podemos
+>   dejarlos como enum y convertirlos a enteros?»*). **El tema 3, 61 de 83; el tema 5, 49 de 70; Mono, 609**; fallan 5. Los tipos anónimos, fuera. Y `while` y `for` llevan nombre, en BP y en JC.
 > - **`#790`** (*«1) si»*), hecha: al comprobar que un `long` da la vuelta, salió que una `native` no: `x + 1 > x` daba 1 con el AOT y 0 interpretada. El AOT escribe las
 >   cuentas sin signo, y `NatSwitch` lo comprueba (con el C de antes fallan 6). Y **`#791`** (*«haz las dos partes»*), que salió al hacerla: la VM-C moría en el PC con el mínimo
 >   entre -1, y una `native` de enteros no veía la división por cero. La red, VERDE, las dos veces; en placa, sin probar.
@@ -137,8 +138,7 @@
 >
 > **Para la próxima sesión:**
 > - el próximo lote de placas lleva `#791` (`interp.c`): dividir el mínimo entre -1;
-> - H8: las propuestas de los temas 3 y 5, para su OK (`V8_IDEAS` §E9); los tipos anónimos y si `while` y `for` llevan nombre, sin decidir; el tema 4, «despacio». Los lotes, en
->   `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
+> - H8: el tema 4, «despacio», con sus propuestas (`V8_IDEAS` §E9); `struct` con estado, cuando le toque a su tema. Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
 > - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;
 > - `#745` y `#710` siguen abiertas (Eduardo, 4-nov: *«La 3 no»*);
 > - la Metro, la P4 y la Nucleo llevan la imagen de `35297826`. La S3, la del paso 3 de `#730`

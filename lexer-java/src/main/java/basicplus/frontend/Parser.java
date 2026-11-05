@@ -1348,6 +1348,7 @@ public final class Parser {
         match(TokenType.WHILE);
         IExpr cond = parseExpr();
         consume(TokenType.DO, "se esperaba 'do' tras la condición del 'while'");
+        String nombre = nombreTrasDo();
 
         if (!check(TokenType.NEWLINE)) {
             IStmt stmt = parseStmt();
@@ -1368,7 +1369,9 @@ public final class Parser {
         List<IStmt> body = parseBody(TokenType.ENDWH);
         consume(TokenType.ENDWH, "se esperaba 'endwh'");
         consumeStmtTerminator("se esperaba salto de línea tras 'endwh'");
-        return new WhileStmt(cond, body, false, tok.line, tok.column);
+        WhileStmt w = new WhileStmt(cond, body, false, tok.line, tok.column);
+        w.nombre = nombre;
+        return w;
     }
 
     // ---------- DO ... LOOP [cond] ----------
@@ -1384,6 +1387,13 @@ public final class Parser {
             cond = parseExpr();
         consumeStmtTerminator("se esperaba salto de línea tras 'loop'");
         return new DoLoopStmt(body, cond, nombre, tok.line, tok.column);
+    }
+
+    /** V8/H8 — el nombre de un `while` o un `for`, tras su `do`: `while c do miLoop`. Va solo en la línea: `while c do f()` es
+     *  la forma de una línea, y un nombre suelto no es una sentencia. */
+    private String nombreTrasDo() {
+        if (!check(TokenType.IDENTIFIER) || pos + 1 >= tokens.size() || tokens.get(pos + 1).type != TokenType.NEWLINE) return null;
+        return nombreDeBucle();
     }
 
     /** V8/H8 — el nombre de un bucle, tras `do`, `break` o `continue`, si lo lleva; si no, null. */
@@ -1416,6 +1426,7 @@ public final class Parser {
             range = new ForInRange(new NullLitExpr(tok.line, tok.column), tok.line, tok.column);
         }
         consume(TokenType.DO, "se esperaba 'do' tras la cabecera del 'for'");
+        String nombre = nombreTrasDo();
 
         if (!check(TokenType.NEWLINE)) {
             IStmt stmt = parseStmt();
@@ -1438,7 +1449,9 @@ public final class Parser {
         consume(TokenType.NEXT, "se esperaba 'next' al final del 'for'");
         if (check(TokenType.IDENTIFIER)) advance();
         consumeStmtTerminator("se esperaba salto de línea tras 'next'");
-        return new ForStmt(iter, range, body, false, tok.line, tok.column);
+        ForStmt f = new ForStmt(iter, range, body, false, tok.line, tok.column);
+        f.nombre = nombre;
+        return f;
     }
 
     // ---------- TRY ----------

@@ -332,6 +332,32 @@ module NatSwitch
     endtry
   end restoFuera
 
+  native function conNombres(n: integer): integer
+    var t: integer := 0
+    var w: integer := 0
+    while w < n do fuera
+      w += 1
+      for i := 1 to 3 do dentro
+        if i == 2 then
+          continue fuera
+        endif
+        t += 10
+      next i
+      t += 1000
+    endwh
+    for i := 1 to 9 do lejos
+      var k: integer := 0
+      while true do cerca
+        k += 1
+        if k == 3 then
+          break lejos
+        endif
+      endwh
+      t += 1000
+    next i
+    return t
+  end conNombres
+
   function mira(que: string, obtenido: integer, esperado: integer)
     if obtenido == esperado then
       print "ok    " + que + " = " + obtenido
@@ -375,6 +401,7 @@ module NatSwitch
     mira("desplazaDer(33)", desplazaDer(33), 512)
     mira("desplazaNeg(33)", desplazaNeg(33), -512)
     mira("desplazaLong(65)", desplazaLong(65), 1)
+    mira("conNombres(3)", conNombres(3), 30)
     mira("divide(7, 2)", divide(7, 2), 3)
     mira("resto(7, 2)", resto(7, 2), 1)
     mira("divide(min, -1)", divide(minimo, 0 - 1), minimo)

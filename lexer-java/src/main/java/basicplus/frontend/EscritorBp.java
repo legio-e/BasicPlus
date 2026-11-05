@@ -370,7 +370,7 @@ public final class EscritorBp {
             enLinea(cab, w.body.get(0));
             return;
         }
-        linea(cab);
+        linea(conNombre(cab, w.nombre));
         cuerpo(w.body);
         linea("endwh");
     }
@@ -399,7 +399,7 @@ public final class EscritorBp {
             enLinea(cab, f.body.get(0));
             return;
         }
-        linea(cab);
+        linea(conNombre(cab, f.nombre));
         cuerpo(f.body);
         linea("next");
     }

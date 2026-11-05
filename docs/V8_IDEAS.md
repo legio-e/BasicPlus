@@ -5634,7 +5634,13 @@ siempre da cierto, pero con un cast delante que calcula), `test-145` (un array d
 
 De las 13 de genéricos, alguna no usa sus clases genéricas (`gtest-partial-01` tiene el `Main` vacío). Pasarían quitando lo que nadie usa, pero sin probar nada: no se hace.
 
-### Los temas 3 y 5, repasados (5-nov: propuestas, sin decidir)
+### `while` y `for` con nombre (5-nov; Eduardo: *«4) si»*)
+
+Como `do`, con la misma regla y sin palabras nuevas: `break` y `continue` nombran a un bucle abierto, y `continue` sigue en su condición o en su paso. **En BP, tras el `do` del bucle,
+solo en la línea:** `while c do miLoop`, `for i := 1 to 3 do miLoop`, `for x in lista do miLoop`; `while c do f()` sigue siendo la forma de una línea. **En JC, tras la palabra**, como `do miLoop`:
+`while miLoop (c) { … }`, `for miLoop (…) { … }`, `foreach miLoop (…) { … }`. El `.mod` no cambia: los bucles sin nombre salen iguales. `BucleConNombre`, `BucleConNombreTest`, `AotCoberturaTest` y `NatSwitch`.
+
+### Los temas 3 y 5, repasados (5-nov: propuestas, ya hechas)
 
 Eduardo: *«revisa el tema 3, debería haber bastantes que no entran, hay que revisar a ver que se puede hacer. Y despues de todo empezamos a mirar el tema 5. El tema
 4 lo miraremos despacio»*. Hechas de paso cuatro sueltas del traductor: una local con un null que nadie usa no se escribe (`test-624`), `System.Version` como tipo, sin sus miembros
