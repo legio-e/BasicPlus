@@ -81,6 +81,7 @@ namespace Cs2Jc
         /// `object o = 5;`: `Object o = new Integer(5);`. Sólo las de las cajas de BP, y sólo como `object`.
         string Caja(ExpressionSyntax e, ITypeSymbol de, ITypeSymbol a)
         {
+            if (de is ITypeParameterSymbol) return ExprBase(e);                  // un `T` ya es un objeto (Genericos.cs)
             if (EsULong(de)) return Rechaza(e, Porque.Fuera(Porque.ULong));        // sería un Long: otro número al escribirlo (SinSigno.cs)
             if (EsNullable(de))
             {
@@ -169,7 +170,7 @@ namespace Cs2Jc
                 var de = m.GetTypeInfo(c.Expression).Type;
                 var a = m.GetTypeInfo(c).Type;
                 if (de != null && a != null && !de.IsValueType && !a.IsValueType && m.ClassifyConversion(c.Expression, a).IsImplicit
-                    && !(RamaDeTernario(c) && a.TypeKind == TypeKind.Interface))   // #761: ésa se conserva (Conversion)
+                    && !RamaDeTernario(c))                                         // #761: ésa se conserva (Conversion)
                     return TipoEnJc(c.Expression);
             }
             return m.GetTypeInfo(e).Type;
@@ -241,7 +242,9 @@ namespace Cs2Jc
 
         /// Una expresión por sí misma, sin la conversión de su sitio: la usan `print` y la suma de cadenas, donde C# mete
         /// un número en una caja para unirlo y JC lo une sin ella.
-        string ExprBase(ExpressionSyntax e)
+        string ExprBase(ExpressionSyntax e) => SaleDeGenerico(e, ExprSinSalir(e));
+
+        string ExprSinSalir(ExpressionSyntax e)
         {
             string porTipo = PorTipo(m.GetTypeInfo(e).Type);
             if (porTipo != null) return Rechaza(e, porTipo);
@@ -292,6 +295,7 @@ namespace Cs2Jc
         string PorDefecto(ExpressionSyntax e)
         {
             var t = m.GetTypeInfo(e).ConvertedType ?? m.GetTypeInfo(e).Type;
+            if (t is ITypeParameterSymbol tp) return tp.HasReferenceTypeConstraint ? "null" : Rechaza(e, Porque.Fuera(Porque.SinT));
             switch (t?.SpecialType)
             {
                 case SpecialType.System_Int32:
@@ -368,13 +372,15 @@ namespace Cs2Jc
             {
                 case AssignmentExpressionSyntax c when c.IsKind(SyntaxKind.SimpleAssignmentExpression)
                                                        && c.Left is ElementAccessExpressionSyntax ea && EsColeccion(ea):
-                    return Expr(ea.Expression) + "[" + Expr(ea.ArgumentList.Arguments[0].Expression) + "] = " + Expr(c.Right);
+                    return Expr(ea.Expression) + "[" + Expr(ea.ArgumentList.Arguments[0].Expression) + "] = "
+                           + EntraEnGenerico(c.Right, Declarado(m.GetSymbolInfo(ea).Symbol));
                 // `x[i, j] = v` y `base[i] = v`: JC no los escribe con índice, sino con la llamada que son (#794)
                 case AssignmentExpressionSyntax c when c.Left is ElementAccessExpressionSyntax ea && IndiceConLlamada(ea):
                     if (!c.IsKind(SyntaxKind.SimpleAssignmentExpression))
                         return Rechaza(c, Porque.Pendiente("un compuesto sobre `x[i, j]` o `base[i]`"));
                     return (ea.Expression is BaseExpressionSyntax ? "base" : Expr(ea.Expression)) + ".set("
-                           + string.Join(", ", ea.ArgumentList.Arguments.Select(a => Expr(a.Expression))) + ", " + Expr(c.Right) + ")";
+                           + ArgumentosEnGenerico(ea.ArgumentList.Arguments, ((IPropertySymbol) m.GetSymbolInfo(ea).Symbol.OriginalDefinition).Parameters)
+                           + ", " + EntraEnGenerico(c.Right, Declarado(m.GetSymbolInfo(ea).Symbol)) + ")";
                 case PostfixUnaryExpressionSyntax p when p.Operand is ElementAccessExpressionSyntax ea && IndiceConLlamada(ea):
                     return Rechaza(p, Porque.Pendiente("un compuesto sobre `x[i, j]` o `base[i]`"));
                 case PrefixUnaryExpressionSyntax p when p.Operand is ElementAccessExpressionSyntax ea && IndiceConLlamada(ea):
@@ -404,20 +410,29 @@ namespace Cs2Jc
                         return Rechaza(a, Porque.Fuera(Porque.EnteroAEnum));       // `e |= f`: da un enum desde su entero
                     // `s += 5`, con `s` una cadena: sin la caja de C#, como en la suma
                     bool unir = a.IsKind(SyntaxKind.AddAssignmentExpression) && EsCadena(m.GetTypeInfo(a.Left).Type);
-                    return Expr(a.Left) + " " + a.OperatorToken.Text + " " + (unir ? ExprBase(a.Right) : Expr(a.Right));
+                    // lo que se declaró con `T` (Genericos.cs): un valor, en su caja; un compuesto, en JC, operaría una caja
+                    if (EsDeT(a.Left))
+                    {
+                        if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression)) return Rechaza(a, Porque.Pendiente(CompuestoDeT));
+                        return TalCual(a.Left) + " = " + EntraEnGenerico(a.Right, Declarado(m.GetSymbolInfo(a.Left).Symbol));
+                    }
+                    return TalCual(a.Left) + " " + a.OperatorToken.Text + " " + (unir ? ExprBase(a.Right) : Expr(a.Right));
                 case PostfixUnaryExpressionSyntax p when p.IsKind(SyntaxKind.PostIncrementExpression) || p.IsKind(SyntaxKind.PostDecrementExpression):
+                    if (EsDeT(p.Operand)) return Rechaza(p, Porque.Pendiente(CompuestoDeT));
                     if (EsEnum(m.GetTypeInfo(p.Operand).Type)) return Rechaza(p, Porque.Fuera(Porque.EnteroAEnum));
                     if (EsNullable(m.GetTypeInfo(p.Operand).Type)) return IncNullable(p.Operand, p.IsKind(SyntaxKind.PostIncrementExpression), p);
                     if (EsUInt(m.GetTypeInfo(p.Operand).Type)) return IncUInt(p.Operand, p.IsKind(SyntaxKind.PostIncrementExpression), p);
                     if (CampoDe(p.Operand) is string campoPost) return campoPost + " = " + Expr(p.Operand) + (p.IsKind(SyntaxKind.PostIncrementExpression) ? " + 1" : " - 1");
                     return Expr(p.Operand) + p.OperatorToken.Text;
                 case PrefixUnaryExpressionSyntax p when p.IsKind(SyntaxKind.PreIncrementExpression) || p.IsKind(SyntaxKind.PreDecrementExpression):
+                    if (EsDeT(p.Operand)) return Rechaza(p, Porque.Pendiente(CompuestoDeT));
                     if (EsEnum(m.GetTypeInfo(p.Operand).Type)) return Rechaza(p, Porque.Fuera(Porque.EnteroAEnum));
                     if (EsNullable(m.GetTypeInfo(p.Operand).Type)) return IncNullable(p.Operand, p.IsKind(SyntaxKind.PreIncrementExpression), p);
                     if (EsUInt(m.GetTypeInfo(p.Operand).Type)) return IncUInt(p.Operand, p.IsKind(SyntaxKind.PreIncrementExpression), p);
                     if (CampoDe(p.Operand) is string campoPre) return campoPre + " = " + Expr(p.Operand) + (p.IsKind(SyntaxKind.PreIncrementExpression) ? " + 1" : " - 1");
                     return Expr(p.Operand) + p.OperatorToken.Text;
                 case InvocationExpressionSyntax _:
+                    return TalCual(e);
                 case ObjectCreationExpressionSyntax _:
                     return Expr(e);
                 default:
@@ -556,14 +571,14 @@ namespace Cs2Jc
             // la de un [Conditional] sin definir, como sentencia, la quita Sentencias; en otro sitio (un for), todavía no
             if (CondicionalSinDefinir(ms, inv) != null) return Rechaza(inv, Porque.Pendiente("una llamada que C# quita ([Conditional]) en este sitio"));
             if (ms.MethodKind == MethodKind.LocalFunction) return Rechaza(inv, Porque.Pendiente("funciones locales"));
-            if (ms.IsGenericMethod) return Rechaza(inv, Porque.H7(Porque.Genericos));
+            if (ms.IsGenericMethod && !DelPrograma(ms)) return Rechaza(inv, Porque.DeNet(NombreCompleto(ms.ContainingType) + "." + ms.Name));
             if (!DelPrograma(ms)) return BibliotecaLlamada(inv, ms);
             if (ms.ReducedFrom != null)
             {
                 // `x.Doble(a)`, un método de extensión: la llamada estática que es, `Ext.Doble(x, a)` (en el mismo orden)
                 if (!(inv.Expression is MemberAccessExpressionSyntax mx)) return Rechaza(inv, Porque.Pendiente("un método de extensión sin receptor"));
                 string resto = Argumentos(inv.ArgumentList, ms);
-                return Receptor(ms.ContainingType, inv) + "." + Ident(ms.Name) + "(" + Expr(mx.Expression)
+                return Receptor(ms.ContainingType, inv) + "." + NombreDe(ms.ReducedFrom) + "(" + Expr(mx.Expression)
                        + (resto.Length > 0 ? ", " + resto : "") + ")";
             }
             CompruebaAcceso(ms, inv);
@@ -573,6 +588,7 @@ namespace Cs2Jc
             {
                 case CheckedExpressionSyntax { Expression: IdentifierNameSyntax _ }:   // `checked (M) (x)`: no cuenta nada (test-665)
                 case IdentifierNameSyntax _:
+                case GenericNameSyntax _:                                            // `Id<int>(5)`
                     return (ms.IsStatic ? Receptor(ms.ContainingType, inv) : "this") + "." + nombre + "(" + args + ")";
                 case MemberAccessExpressionSyntax ma:
                     if (ms.IsStatic) return Receptor(ms.ContainingType, inv) + "." + nombre + "(" + args + ")";
@@ -599,7 +615,7 @@ namespace Cs2Jc
                                           (IArrayTypeSymbol) ms.Parameters.Last().Type, args));
                 return string.Join(", ", partes);
             }
-            return string.Join(", ", args.Arguments.Select(a => Expr(a.Expression)));
+            return ArgumentosEnGenerico(args.Arguments, ms.OriginalDefinition.Parameters);
         }
 
         /// `f(b: 2, a: 1)`: en el orden de los parámetros, `f(1, 2)`. C# los calcula en el orden escrito: si cambia, sólo
@@ -704,6 +720,7 @@ namespace Cs2Jc
                 if (oc.ArgumentList == null || oc.ArgumentList.Arguments.Count == 0) return "null";
                 return MeteEnCaja(oc.ArgumentList.Arguments[0].Expression, tipo);
             }
+            if (m.GetTypeInfo(oc).Type is ITypeParameterSymbol) return Rechaza(oc, Porque.Fuera(Porque.SinT));   // `new T()`
             if (ctor == null || tipo == null) return Rechaza(oc, Porque.Pendiente("un new sin resolver"));
             // `new IFoo()`: una interfaz COM ([CoClass]); una interfaz no se construye
             if (tipo.TypeKind == TypeKind.Interface) return Rechaza(oc, Porque.Fuera(Porque.Interop));
@@ -732,6 +749,7 @@ namespace Cs2Jc
                 case SyntaxKind.IsExpression:
                 {
                     var t = m.GetTypeInfo(b.Right).Type;
+                    if (t != null && PideArgumentos(t)) return Rechaza(b, Porque.Fuera(Porque.SinT));
                     // `o is int`: ¿lleva una caja de int? En BP, `o is Integer`
                     var izq = m.GetTypeInfo(b.Left).Type;
                     // `x is int`, con `x` un int?: si tiene valor
@@ -791,6 +809,7 @@ namespace Cs2Jc
         {
             var t = m.GetTypeInfo(b.Right).Type;
             var de = m.GetTypeInfo(b.Left).Type;
+            if (t != null && PideArgumentos(t)) return Rechaza(b, Porque.Fuera(Porque.SinT));
             if (t == null || de == null || de.IsValueType || EsCadena(t) || EsCadena(de) || !EsSimple(b.Left))
                 return Rechaza(b, Porque.H7(Porque.As));
             string tipo;
@@ -885,6 +904,12 @@ namespace Cs2Jc
             var de = m.GetTypeInfo(c.Expression).Type;
             var a = m.GetTypeInfo(c).Type;
             if (a == null) return Rechaza(c, Porque.Pendiente("una conversión sin resolver"));
+            if (a is ITypeParameterSymbol ta)
+            {
+                // `(T) x`: en JC, `T` ya no está; a su restricción, si la tiene
+                string haciaT = TipoDeParametro(ta, c);
+                return haciaT == "Object" || SymbolEqualityComparer.Default.Equals(de, a) ? Expr(c.Expression) : "(" + haciaT + ") " + Expr(c.Expression);
+            }
             if (c.Expression is LiteralExpressionSyntax nulo && nulo.IsKind(SyntaxKind.NullLiteralExpression))
             {
                 // `(string) null` (#774: una variable string de JC puede valer null), `(object) null`, `(X[]) null`: null,
@@ -917,16 +942,15 @@ namespace Cs2Jc
             // conversión»); a un tipo estrecho, todavía no
             if ((EsEnum(de) || EsEnumEntero(de)) && !SymbolEqualityComparer.Default.Equals(a, de) && EsEstrecho(a))
                 return AEstrecho("((long) " + Atomo(c.Expression) + ")", c, a) ?? Rechaza(c, Porque.Pendiente("un enum convertido a un tipo estrecho"));
-            // `(I) y`, `(Animal) perro`: subir no se escribe en JC (sólo se baja); el objeto es el mismo y los métodos,
-            // virtuales: se quita. Salvo una cadena como object: en C#, `(object) s == (object) t` compara referencias.
+            // `(I) y`, `(Animal) perro`: subir no hace falta; el objeto es el mismo y los métodos, virtuales: se quita. Salvo
+            // una cadena como object: en C#, `(object) s == (object) t` compara referencias.
             if (de != null && !de.IsValueType && !a.IsValueType && !SymbolEqualityComparer.Default.Equals(a, de)
                 && m.ClassifyConversion(c.Expression, a).IsImplicit)
             {
                 if (EsCadena(de)) return Rechaza(c, Porque.Pendiente("una cadena como object (su referencia)"));
-                // #761 — en una rama del ternario, la conversión a una interfaz da su tipo (en C#, el ternario tiene el de
-                // la rama a la que se convierte la otra) y se conserva: JC la escribe, `(IA) x`. A una clase no se
-                // puede: en JC, `Animal(perro)` sería construirla.
-                if (RamaDeTernario(c) && a.TypeKind == TypeKind.Interface) return "(" + Tipo(a, c.Type) + ") " + Atomo(c.Expression);
+                // #761 — en una rama del ternario, la conversión da su tipo (en C#, el ternario tiene el de la rama a la que se
+                // convierte la otra) y se conserva: JC la escribe, `(IA) x`, y desde #797, `(Animal) perro`.
+                if (RamaDeTernario(c)) return "(" + TipoPlano(a, c.Type) + ") " + Atomo(c.Expression);
                 return Expr(c.Expression);
             }
             if (de != null)
@@ -950,7 +974,7 @@ namespace Cs2Jc
                 if (cv.HasValue) return LiteralDeConstante(cv.Value, c);
                 return "(((int) " + Atomo(c.Expression) + ") & 65535)";
             }
-            return "(" + Tipo(a, c.Type) + ") " + Expr(c.Expression);
+            return "(" + TipoPlano(a, c.Type) + ") " + Expr(c.Expression);
         }
 
         string Elemento(ElementAccessExpressionSyntax ea)
@@ -971,7 +995,7 @@ namespace Cs2Jc
                 if (!DelPrograma(p)) return Rechaza(ea, Porque.DeNet(NombreCompleto(p.ContainingType) + "[i]"));
                 if (ea.ArgumentList.Arguments.Any(a => a.NameColon != null))
                     return Rechaza(ea, Porque.Pendiente("un indexador con argumentos con nombre"));
-                string args = string.Join(", ", ea.ArgumentList.Arguments.Select(a => Expr(a.Expression)));
+                string args = ArgumentosEnGenerico(ea.ArgumentList.Arguments, ((IPropertySymbol) p.OriginalDefinition).Parameters);
                 if (ea.Expression is BaseExpressionSyntax) return "base.get(" + args + ")";
                 return IndiceConLlamada(ea) ? Expr(ea.Expression) + ".get(" + args + ")" : Expr(ea.Expression) + "[" + args + "]";
             }
@@ -1049,12 +1073,13 @@ namespace Cs2Jc
             {
                 if (at.Rank > 1) return Rechaza(donde, Porque.H7(Porque.ArraysVarias));
                 if (at.ElementType is IArrayTypeSymbol) return Rechaza(donde, Porque.H7(Porque.ArraysDeArrays));
+                if (ConParametros(at.ElementType)) return Rechaza(donde, Porque.Fuera(Porque.SinT));
                 return Tipo(at.ElementType, donde) + "[]";
             }
-            if (ty is ITypeParameterSymbol) return Rechaza(donde, Porque.H7(Porque.Genericos));
+            if (ty is ITypeParameterSymbol tp) return TipoDeParametro(tp, donde);
             if (ty is INamedTypeSymbol nt)
             {
-                if (nt.IsGenericType) return Rechaza(donde, Porque.H7(Porque.Genericos));
+                if (nt.IsGenericType) return TipoGenerico(nt, donde) ?? Rechaza(donde, Porque.DeNet("tipo " + nt.OriginalDefinition.ToDisplayString()));
                 if (DelPrograma(nt))
                 {
                     switch (nt.TypeKind)

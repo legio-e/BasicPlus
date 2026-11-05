@@ -282,7 +282,8 @@ namespace Cs2Jc
             var partes = s.DeclaringSyntaxReferences.Select(r => (TypeDeclarationSyntax) r.GetSyntax())
                 .OrderBy(p => p.SpanStart).ToList();
             var donde = partes[0];
-            if (s.IsGenericType) { Rechaza(donde.TypeParameterList ?? (SyntaxNode) donde, Porque.H7(Porque.Genericos)); return; }
+            if (!GenericaSeEscribe(s, donde.TypeParameterList ?? (SyntaxNode) donde)) return;
+            if (ImplementaConOtraFirma(s)) { Rechaza(donde, Porque.Pendiente("implementar con un tipo concreto lo que la interfaz declara con T")); return; }
             var primario = partes.FirstOrDefault(p => p.ParameterList != null);
             alPrimario = primario != null ? new List<(string, ExpressionSyntax)>() : null;
             foreach (var p in partes) Atributos(p.AttributeLists);
@@ -291,7 +292,7 @@ namespace Cs2Jc
             var lugarBase = donde.BaseList ?? (SyntaxNode) donde;
             if (b != null && b.SpecialType != SpecialType.System_Object && b.SpecialType != SpecialType.System_ValueType)
             {
-                if (DelPrograma(b)) base_ = Tipo(b, donde);
+                if (DelPrograma(b)) base_ = b.IsGenericType ? NombreTipo(b) : Tipo(b, donde);   // en una cabecera, sin argumentos
                 else if (ExcepcionJc(b) is string ex) base_ = ex;     // una excepción de .NET (CsSystem, el escalón 1)
                 // una clase de atributo (H8, tema 1; 2-nov): en BP, una clase más, sin padre; sus usos, [X(…)], se quitan
                 else if (NombreCompleto(b) == "System.Attribute") { }
@@ -306,7 +307,10 @@ namespace Cs2Jc
                 if (DelPrograma(i) || EsDeCsSystem(i)) supertipos.Add(Tipo(i, lugarBase));
                 else Rechaza(lugarBase, PorInterfazAjena(i));
             }
+            if (supertipos.Distinct().Count() < supertipos.Count) Rechaza(lugarBase, Porque.Pendiente("la misma interfaz con dos tipos"));
 
+            // `class C<T>`: el tipo base, para que JC sepa qué es `C<X>` (#793)
+            if (s.IsGenericType && LlevaElemento(s)) Linea("@element{ " + TipoDeParametro((ITypeParameterSymbol) s.TypeArguments[0], donde) + " }");
             Linea((s.DeclaredAccessibility == Accessibility.Public ? "public " : "") + "class " + NombreTipo(s)
                   + (supertipos.Count > 0 ? " : " + string.Join(", ", supertipos) : ""));
             Linea("{");
@@ -343,7 +347,7 @@ namespace Cs2Jc
             var partes = s.DeclaringSyntaxReferences.Select(r => (TypeDeclarationSyntax) r.GetSyntax())
                 .OrderBy(p => p.SpanStart).ToList();
             var donde = partes[0];
-            if (s.IsGenericType) { Rechaza(donde.TypeParameterList ?? (SyntaxNode) donde, Porque.H7(Porque.Genericos)); claseActual = null; return; }
+            if (!GenericaSeEscribe(s, donde.TypeParameterList ?? (SyntaxNode) donde)) { claseActual = null; return; }
             foreach (var p in partes) Atributos(p.AttributeLists);
             var lugar = donde.BaseList ?? (SyntaxNode) donde;
             var padres = new List<string>();
@@ -373,7 +377,6 @@ namespace Cs2Jc
                 case MethodDeclarationSyntax me:
                 {
                     var s = m.GetDeclaredSymbol(me);
-                    if (me.TypeParameterList != null) { Rechaza(me.TypeParameterList, Porque.H7(Porque.Genericos)); return; }
                     if (s.IsStatic || !s.IsAbstract) { Rechaza(me, Porque.Pendiente("un método de interfaz con cuerpo o estático (C# 8)")); return; }
                     Linea("function " + Tipo(s.ReturnType, me.ReturnType) + " " + NombreMetodo(s) + "(" + Parametros(me.ParameterList) + ");");
                     return;   // su nombre, el que lleve si chocaba (Explicitas.cs)
@@ -546,7 +549,7 @@ namespace Cs2Jc
             var s = m.GetDeclaredSymbol(me);
             // un [Conditional] sin definir: C# quita todas sus llamadas, y nadie llega a su cuerpo (test-238)
             if (CondicionalSinDefinir(s, me) != null) return;
-            if (me.TypeParameterList != null) { Rechaza(me.TypeParameterList, Porque.H7(Porque.Genericos)); return; }
+            if (RedefineConOtraFirma(s)) { Rechaza(me, Porque.Pendiente("redefinir con un tipo concreto lo que el padre declara con T")); return; }
             if (s.IsExtern) { Rechaza(me, Porque.Fuera(Porque.Interop)); return; }
             if (s.IsAsync) { Rechaza(me, Porque.Fuera(Porque.Async)); return; }
             if (me.Modifiers.Any(SyntaxKind.UnsafeKeyword)) { Rechaza(me, Porque.Fuera(Porque.Unsafe)); return; }
@@ -745,6 +748,7 @@ namespace Cs2Jc
         {
             var s = m.GetDeclaredSymbol(p);
             if (OcultaPropiedad(s)) { Rechaza(p, Porque.H7(Porque.NoVirtuales)); return; }
+            if (RedefineConOtraFirma(s)) { Rechaza(p, Porque.Pendiente("redefinir con un tipo concreto lo que el padre declara con T")); return; }
             string nombre = NombreDe(s);
             bool explicita = s.ExplicitInterfaceImplementations.Length > 0;
             if (explicita)
@@ -829,6 +833,7 @@ namespace Cs2Jc
         {
             var s = m.GetDeclaredSymbol(ix);
             if (OcultaPropiedad(s) || OcultaIndexador(s)) { Rechaza(ix, Porque.H7(Porque.NoVirtuales)); return; }
+            if (RedefineConOtraFirma(s)) { Rechaza(ix, Porque.Pendiente("redefinir con un tipo concreto lo que el padre declara con T")); return; }
             if (!IndexadorSeEscribe(ix, s)) return;
             string tipo = Tipo(s.Type, ix.Type), ps = Parametros(ix.ParameterList), acceso = AccesoDe(s);
             if (ix.ExpressionBody != null)
@@ -861,13 +866,17 @@ namespace Cs2Jc
 
         /// Lo que un indexador no puede ser en dos métodos: en una llamada `x[i]` no hay dónde poner lo opcional, y `get` y
         /// `set` tienen que estar libres.
+        string FirmaDeIndexador(IPropertySymbol s) => string.Join(",", s.Parameters.Select(p => EnFirma(p.Type)));
+
         bool IndexadorSeEscribe(IndexerDeclarationSyntax ix, IPropertySymbol s)
         {
             string porque = s.ExplicitInterfaceImplementations.Length > 0 ? "un indexador explícito de una interfaz"
                 : ix.ParameterList.Parameters.Any(p => p.Default != null || p.Modifiers.Any(SyntaxKind.ParamsKeyword))
                     ? "un indexador con parámetros opcionales o params"
                 : s.ContainingType.GetMembers("get").Any() || s.ContainingType.GetMembers("set").Any()
-                    ? "un indexador y un miembro llamado get o set" : null;
+                    ? "un indexador y un miembro llamado get o set"
+                : s.ContainingType.GetMembers().OfType<IPropertySymbol>().Count(o => o.IsIndexer && FirmaDeIndexador(o) == FirmaDeIndexador(s)) > 1
+                    ? "dos indexadores que en JC tienen la misma firma" : null;
             if (porque != null) Rechaza(ix, Porque.Pendiente(porque));
             return porque == null;
         }
@@ -1014,7 +1023,7 @@ namespace Cs2Jc
         /// biblioteca.
         static string PorInterfazAjena(INamedTypeSymbol i)
         {
-            if (i.IsGenericType) return Porque.H7(Porque.Genericos);
+            if (i.IsGenericType) return Porque.DeNet("interfaz " + i.OriginalDefinition.ToDisplayString());
             string n = NombreCompleto(i);
             if (n == "System.Collections.IEnumerable" || n == "System.Collections.IEnumerator") return Porque.H7(Porque.ForeachPropio);
             return Porque.DeNet("implementa " + n);

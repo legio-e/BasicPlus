@@ -44,7 +44,7 @@ namespace Cs2Jc
                 // la llamada a un método partial sin cuerpo: C# la quita, con sus argumentos sin calcular (el escalón 1)
                 case ExpressionStatementSyntax es when es.Expression is InvocationExpressionSyntax llamada
                                                        && m.GetSymbolInfo(llamada).Symbol is IMethodSymbol pm
-                                                       && pm.IsPartialDefinition && pm.PartialImplementationPart == null:
+                                                       && pm.OriginalDefinition.IsPartialDefinition && pm.OriginalDefinition.PartialImplementationPart == null:
                     Linea("// " + pm.Name + "(…): un método partial sin cuerpo; C# quita la llamada");
                     break;
                 // la de un método [Conditional("S")] sin S definido: lo mismo (H8, tema 1)
@@ -692,7 +692,9 @@ namespace Cs2Jc
         {
             var (lista, antes) = Condicion(fe.Expression);
             foreach (var l in antes) Linea(l);
-            if (variable.Type.SpecialType == SpecialType.System_Object)
+            bool conTipo = SaleConSuTipo(fe.Expression);       // en una `List<X>`, ya es un X (Genericos.cs)
+            if (variable.Type.SpecialType == SpecialType.System_Object || variable.Type is ITypeParameterSymbol
+                || (conTipo && !variable.Type.IsValueType))
             {
                 Linea("foreach (var " + Ident(variable.Name) + " in " + lista + ")");
                 CuerpoDe(fe.Statement);
@@ -700,6 +702,11 @@ namespace Cs2Jc
             }
             string x = "elemento_s" + (++sacados);
             Linea("foreach (var " + x + " in " + lista + ")");
+            if (conTipo)
+            {
+                CuerpoConPrimera(fe.Statement, Tipo(variable.Type, fe.Type) + " " + Ident(variable.Name) + " = " + x + ".value();");
+                return;
+            }
             var objeto = m.Compilation.GetSpecialType(SpecialType.System_Object);
             CuerpoConPrimera(fe.Statement, Tipo(variable.Type, fe.Type) + " " + Ident(variable.Name) + " = " + Convierte(x, objeto, variable.Type, fe.Type) + ";");
         }

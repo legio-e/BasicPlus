@@ -20,7 +20,7 @@ class Hija : Base
 
 class Programa
 {
-    static T Primero<T>(T a) { return a; }           // le falta a JC: genéricos
+    static T Primero<T>() { return default(T); }      // fuera: lo que pide saber T al ejecutar
 
     static void Doble(ref int x) { x *= 2; }          // le falta a JC: ref / out
 

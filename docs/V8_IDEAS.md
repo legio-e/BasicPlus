@@ -5798,6 +5798,43 @@ Desde fuera, `x.pin[i]` es el método. Si `pin` no es un miembro, también dentr
 **Lo que salió de las pruebas:** `#795`, `List.get` y `set` miraban la capacidad y no el tamaño (`l.get(3)` en una lista de 2 daba `null`); y `#796`, de `test-834`: la visibilidad de un método sobrecargado se miraba en la primera sobrecarga, no en la
 elegida, y `a.t(1)` llamaba desde fuera a un `private`. Las dos, hechas (*«1) si 2) si»*). Y uno mío, en el compuesto: un `get` privado no está en la vtable (`test-655`, `test-590`).
 
+### Los genéricos en el traductor (5-nov)
+
+Eduardo: *«¿Por que el traductor no utiliza genéricos? Ahora ya no hay nada que lo impida»*. Sólo el traductor (`cs2jc/Genericos.cs`): JC no cambia, salvo `#797`, que salió de aquí. Se borra `T` y se escribe lo que hay:
+
+| en C# | en JC |
+|---|---|
+| `class Caja<T>`, `class Medida<T> where T : IValor` | `@element{ Object } class Caja`, `@element{ IValor } class Medida`, con el tipo base donde dice `T` |
+| `Caja<Sensor>`, `Caja<int>`, `List<int>` | `Caja<Sensor>`, `Caja<Integer>`, `List<Integer>` |
+| `Par<A, B>`, `T Igual<T> (T x)` | la clase a secas y `Object`: no hay nada que escribir, y el cast va en cada uso |
+| un número que entra en un `T` | en su caja: `new Integer(5)` |
+| un número que sale de un `T` | `n.Saca().value()`; si JC no sabe el tipo, con su cast: `((Integer) p.Segundo).value()` |
+| `(Caja<int>) o` | `(Caja) o`: una `Caja` a secas entra en una `Caja<Integer>` |
+
+**Cuándo una clase genérica va a secas, sin `@element`.** JC lee X donde la firma dice el tipo base. Si ahí hay algo que en C# no es `T`, lo leería mal, y no se escribe `C<X>`: el cast va en cada uso, como con dos parámetros.
+- Un `object` de verdad, o un `U` de un método genérico, que sin escribirlo es `Object` (`gtest-039`, `gtest-331`).
+- `Test (int)` junto a `Test (T)`: a `C<X>.Test (3)`, JC le pide que 3 quepa en un X, como el `add(5)` de una lista (`gtest-237`).
+- Un antepasado que guarda otra cosa: `class Mezcla<T> : Caja<int>`.
+
+**Dos sobrecargas que sin `T` son la misma** (`F (IFoo<T>)` y `F<U> (IFoo<U>)`): como las de un enum que se opera, Roslyn dice a cuál va cada llamada y la segunda lleva otro nombre (`BuscaSobrecargasIguales`).
+
+**Lo que no se traduce, con su motivo:**
+- Lo que pide saber `T` al ejecutar: `new T()`, `default(T)`, `x is T`, `x is C<int>`, `T[]`, el `GetType` de una `C<X>`. Es lo que da el diseño: *«no afecta nada a la VM ni al código generado»*. 105 pruebas, y 35 sólo por eso. De ellas se podrían ganar algunas en
+  el traductor, si valiera la pena: `T[]` dentro de su clase, como `Object[]` (ya funciona), unas 10; `default(T)`, mirando con qué se usa `T` en todo el programa, unas 6. `new T()` no.
+- Lo estático de una clase genérica, porque en C# hay uno por cada `C<X>` (17).
+- Dos clases con el mismo nombre y distintos parámetros: `C` y `C<T>` (20).
+- Implementar o redefinir con otra firma lo que se declaró con `T`: el `int Get ()` de una `class X : I<int>`, frente al `Object Get ()` de la interfaz. En JC no es el mismo método, y haría falta uno puente (25 y 14).
+- Un parámetro de tipo con varias restricciones (11), un array como `T` (en JC, un array no es un objeto), y un compuesto sobre lo que se declaró con `T`.
+- Lo de la biblioteca de .NET: `IEnumerable<T>`, `Dictionary<K, V>`, `IComparable<T>`… A JC ya no le faltan los genéricos: lo que queda de ese motivo es de .NET, y así se dice (182, y 22 sólo por eso).
+
+**Lo medido.** Mono, de 628 a **805**, sin perder ninguna. De las 177 nuevas, 30 se comprueban solas, 16 imprimen algo y 131 corren sin imprimir nada: traducirlas y compilarlas prueba algo, pero poco. Fallan 6: las 5 de antes y `gtest-535`, que no se puede arreglar aquí:
+C# descarta la sobrecarga que no cumple su `where T : class`, y a JC, sin restricciones, un `null` le lleva a la más específica.
+
+**Lo que salió:**
+- `#797`: `(Caja) x` no convertía si el constructor de `Caja` aceptaba `x`. Eduardo: *«en JC los constructores van con new Caja(x)»*.
+- `Cs_TipoDe` no reconocía una cadena en un `Object` y decía «System.Object», sin avisar; JC no escribe `o is string`, y se le pregunta a la VM (`Type_Clase`). Y tampoco ve las clases genéricas: si las hay, no se traduce.
+- Leídos uno a uno los 25 fallos del primer lote, ninguno era de JC salvo `#797`: el traductor escribía lo que JC, con razón, no da por bueno.
+
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 
 27 de 130, ninguna falla; 44 piden algo de fuera (reflexión, `dynamic`, `ulong`…) y 59 no. Medido con el lote de hoy: «piden», las que lo piden en

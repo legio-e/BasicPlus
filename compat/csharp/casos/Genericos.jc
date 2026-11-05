@@ -1,0 +1,220 @@
+module CsGenericos
+{
+   import CsSystem;
+
+   interface IValor
+   {
+      function int Valor();
+   }
+
+   class Sensor : IValor
+   {
+      private int v;
+      public function Sensor(int x)
+      {
+         this.v = x;
+      }
+      @implement{ IValor }
+      public function int Valor()
+      {
+         return this.v;
+      }
+   }
+
+   @element{ Object }
+   class Caja
+   {
+      private Object dentro;
+      public function Caja(Object x)
+      {
+         this.dentro = x;
+      }
+      public function Object Saca()
+      {
+         return this.dentro;
+      }
+      public function void Mete(Object x)
+      {
+         this.dentro = x;
+      }
+      public Object Dentro
+      {
+         get
+         {
+            return this.dentro;
+         }
+         set
+         {
+            this.dentro = value;
+         }
+      }
+   }
+
+   @element{ Object }
+   class Hija : Caja
+   {
+      public function Hija(Object x) : base(x)
+      {
+      }
+      public function Object Otra()
+      {
+         return this.Saca();
+      }
+   }
+
+   class Fija : Caja
+   {
+      public function Fija() : base(new Integer(7))
+      {
+      }
+   }
+
+   class Par
+   {
+      public Object Primero { get; set; }
+      public Object Segundo { get; set; }
+      public function Par(Object a, Object b)
+      {
+         this.Primero = a;
+         this.Segundo = b;
+      }
+   }
+
+   @element{ IValor }
+   class Medida
+   {
+      private IValor x;
+      public function Medida(IValor v)
+      {
+         this.x = v;
+      }
+      public function int Cuanto()
+      {
+         return this.x.Valor() * 2;
+      }
+      public function IValor Quien()
+      {
+         return this.x;
+      }
+   }
+
+   @element{ Object }
+   class Nodo
+   {
+      public Object Valor { get; set; }
+      public Nodo Siguiente { get; set; }
+      public function Nodo(Object v, Nodo s)
+      {
+         this.Valor = v;
+         this.Siguiente = s;
+      }
+   }
+
+   @element{ Object }
+   class Pila
+   {
+      private Nodo cima;
+      public int Cuantos { get; set; }
+      public function void Mete(Object x)
+      {
+         this.cima = new Nodo(x, this.cima);
+         this.Cuantos++;
+      }
+      public function Object Saca()
+      {
+         Object r = this.cima.Valor;
+         this.cima = this.cima.Siguiente;
+         this.Cuantos--;
+         return r;
+      }
+      public function bool Vacia()
+      {
+         return this.cima == null;
+      }
+   }
+
+   class X
+   {
+      private static function Object Igual(Object x)
+      {
+         return x;
+      }
+      private static function Caja<Integer> Crea()
+      {
+         return new Caja<Integer>(new Integer(9));
+      }
+      public static function int Main()
+      {
+         Caja<Sensor> c = new Caja<Sensor>(new Sensor(3));
+         println(c.Saca().Valor());
+         c.Mete(new Sensor(4));
+         println(c.Dentro.Valor());
+         c.Dentro = new Sensor(5);
+         println(c.Saca().Valor());
+         Caja<Integer> n = new Caja<Integer>(new Integer(6));
+         int v = n.Saca().value() + 1;
+         n.Mete(new Integer(v));
+         n.Dentro = new Integer(n.Dentro.value() + 1);
+         println(n.Saca().value());
+         Caja<string> s = new Caja<string>("uno");
+         println(s.Saca() + "!");
+         Hija<string> h = new Hija<string>("hija");
+         println(h.Otra() + h.Saca());
+         Fija f = new Fija();
+         println(((Integer) f.Saca()).value() + 1);
+         println(X.Crea().Saca().value());
+         Par p = new Par("a", new Integer(1));
+         println(((string) p.Primero) + ((Integer) p.Segundo).value());
+         p.Segundo = new Integer(2);
+         println(((Integer) p.Segundo).value() + 1);
+         Medida<Sensor> m = new Medida<Sensor>(new Sensor(8));
+         println(m.Cuanto() + m.Quien().Valor());
+         Pila<Integer> pi = new Pila<Integer>();
+         pi.Mete(new Integer(1));
+         pi.Mete(new Integer(2));
+         int t = 0;
+         while (!pi.Vacia())
+         {
+            t = t * 10 + pi.Saca().value();
+         }
+         println(t);
+         println(((Integer) X.Igual(new Integer(5))).value() + ((Integer) X.Igual(new Integer(6))).value());
+         println(((string) X.Igual("x")) + ((string) X.Igual("y")));
+         println(((Sensor) X.Igual(new Sensor(2))).Valor());
+         println(((Pila) X.Igual(new Pila<Integer>())).Vacia());
+         println(((Integer) ((Caja) X.Igual(new Caja<Integer>(new Integer(3)))).Saca()).value());
+         List<Integer> l = new List<Integer>();
+         l.add(new Integer(1));
+         l.add(new Integer(2));
+         l[0] = new Integer(5);
+         int suma = 0;
+         foreach (var elemento_s1 in l)
+         {
+            int x = elemento_s1.value();
+            suma += x;
+         }
+         println(suma + l[1].value() + l.length());
+         List<Sensor> ls = new List<Sensor>();
+         ls.add(new Sensor(1));
+         ls.add(new Sensor(2));
+         foreach (var x in ls)
+         {
+            println(x.Valor());
+         }
+         println(ls[1].Valor());
+         List<Caja<string>> lc = new List<Caja<string>>();
+         lc.add(new Caja<string>("dentro"));
+         println(lc[0].Saca());
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = X.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}

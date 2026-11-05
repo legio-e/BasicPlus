@@ -51,6 +51,9 @@
 > - **`x[i]` sobre un objeto, `#794`, hecho** (Eduardo: *«get normal no tiene índice, get(i) sería una sobrecarga»*): `x[i]` es `x.get(i)`, y `x.pin[i]`, `x.getPin(i)`, sin nada que declarar. Mono, **627**. De las pruebas salieron dos fallos de
 >   antes: **`#796`** (la visibilidad de una sobrecarga se miraba en la primera, y `a.t(1)` llamaba a un `private` desde fuera) y **`#795`** (`List.get`, `set` y `remove` miraban la capacidad, no el tamaño; `get` cuesta un 20 % más, y `SyncList` y `Map` llevan
 >   `finally`, porque se dejaban el cerrojo cogido). Las dos hechas (*«1) si 2) si»*). Mono, **628**.
+> - **Los genéricos, en el traductor** (Eduardo: *«¿Por que el traductor no utiliza genéricos? Ahora ya no hay nada que lo impida»*): `class C<T>` es `@element{B} class C`, y `C<int>`, `C<Integer>`; con dos parámetros, la clase a secas y el cast en cada uso (`V8_IDEAS` §E9, «Los genéricos en el traductor»). **Mono, 805**, sin perder ninguna;
+>   de las 177 nuevas, 30 se comprueban solas, 16 imprimen algo y 131 corren sin imprimir nada. Fallan 6: las 5 de antes y `gtest-535`. Salió **`#797`**: `(Caja) x` no convertía si el constructor aceptaba `x`, porque seguía la regla de BP. Se lo conté y Eduardo lo resolvió de una vez: *«en JC los constructores van con new Caja(x)»*.
+>   Hecha: en JC siempre convierte; BP no cambia, y de JC a BP el traductor dice que no se puede escribir. De los 25 fallos del primer lote, sólo ése era de JC.
 > - **Lo que dije mal:** que un `ifaceCrc` distinto rechazaba la carga. En MOD9 sólo avisa, y lo para el cast (`V8_IDEAS` §E9). Y que las 281 pruebas de genéricos daban una idea de su valor: sólo unas 67 comprueban algo.
 > - **Lo que me falló:** el sample de error lo dejé en `bpgenvm-c/samples/errores`, que no existe (van en `samples/errores`); un `byte[3]`
 >   se indexaba, porque `byte` es también la función `byte(x)`: una función no es un nombre con valor; y en la prueba del AOT, una variable `v`
@@ -146,8 +149,7 @@
 >
 > **Para la próxima sesión:**
 > - el próximo lote de placas lleva `#791` (`interp.c`): dividir el mínimo entre -1; y `#795`: la stdlib embebida, con Core y Collections nuevos;
-> - El traductor aún no usa los genéricos (Eduardo: *«Ahora ya no hay nada que lo impida»*): lo siguiente. `?.`,
->   propuesto, sin respuesta. El tema 4, «despacio», con sus propuestas (`V8_IDEAS` §E9); `struct` con estado, cuando le toque a su tema. Lo «más probado», más adelante (*«cuando tengamos la compatibilidad mas
+> - `?.`, propuesto, sin respuesta. Si Eduardo quiere, en el traductor: `T[]` como `Object[]` y `default(T)` (§E9, «Los genéricos en el traductor»). El tema 4, «despacio», con sus propuestas (`V8_IDEAS` §E9); `struct` con estado, cuando le toque a su tema. Lo «más probado», más adelante (*«cuando tengamos la compatibilidad mas
 >   avanzada»*). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
 > - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;
 > - `#745` y `#710` siguen abiertas (Eduardo, 4-nov: *«La 3 no»*);

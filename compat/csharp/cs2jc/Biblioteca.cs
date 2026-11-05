@@ -100,7 +100,7 @@ namespace Cs2Jc
         };
 
         /// `ArrayList` es la `List` de Core (Eduardo: «ArrayList es nuestra List»), y `ICollection`, lo que da `Hashtable.Keys`, también.
-        static bool EsLista(ITypeSymbol t) => t != null && (NombreCompleto(t) == "System.Collections.ArrayList" || NombreCompleto(t) == "System.Collections.ICollection");
+        static bool EsLista(ITypeSymbol t) => t != null && (NombreCompleto(t) == "System.Collections.ArrayList" || NombreCompleto(t) == "System.Collections.ICollection" || EsListaGenerica(t));
 
         /// `IDictionary`: la `Hashtable` de CsSystem, que es la que hay.
         static bool EsTabla(ITypeSymbol t) => t != null && (NombreCompleto(t) == "System.Collections.Hashtable" || NombreCompleto(t) == "System.Collections.IDictionary");
@@ -389,7 +389,7 @@ namespace Cs2Jc
             // `new ArrayList ()`, y `new ArrayList (10)`: la capacidad, en la `List`, crece sola
             if (EsLista(tipo) && (ctor.Parameters.Length == 0 || (ctor.Parameters[0].Type.SpecialType == SpecialType.System_Int32
                                                                   && EsSimple(oc.ArgumentList.Arguments[0].Expression))))
-                return "new List()";
+                return "new " + Tipo(tipo, oc) + "()";
             if (EsTabla(tipo) && ctor.Parameters.Length == 0) return "new " + ClaseDeCsSystem(tipo) + "()";
             if (NombreCompleto(tipo) == "System.IO.StringWriter" && (oc.ArgumentList == null || oc.ArgumentList.Arguments.Count == 0)
                 && oc.Initializer == null)

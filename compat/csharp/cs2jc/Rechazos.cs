@@ -47,7 +47,7 @@ namespace Cs2Jc
             if (Empieza("System.Runtime.InteropServices", "System.IntPtr", "System.UIntPtr", "System.Marshal")) return Fuera(Interop);
             if (Empieza("System.Collections.Generic", "System.Func", "System.Action", "System.Predicate", "System.Comparison",
                         "System.Nullable", "System.Lazy", "System.Tuple", "System.ValueTuple", "System.IEquatable", "System.IComparable<"))
-                return H7(Genericos);
+                return "la biblioteca: los genéricos de .NET (IEnumerable<T>, Dictionary<K, V>, Nullable<T>…)";
             if (Empieza("System.Delegate", "System.MulticastDelegate", "System.EventHandler", "System.AsyncCallback", "System.IAsyncResult"))
                 return H7(Delegados);
             if (Empieza("System.Threading.Tasks", "System.Runtime.CompilerServices.TaskAwaiter")) return Fuera(Async);
@@ -69,7 +69,7 @@ namespace Cs2Jc
         // Los fallos de JC que salen al traducir (FICHAS.md): hoy, ninguno (#751, #744 y #753, cerrados el 1-nov)
 
         // Las mejoras de H7 (#745)
-        public const string Genericos = "genéricos";
+        public const string SinT = "lo que pide saber T al ejecutar (new T(), default(T), x is T, T[])";
         public const string Struct = "struct (tipos por valor)";
         public const string RefOut = "ref / out";
         public const string Delegados = "delegados y eventos de C# (sin lambdas)";
@@ -126,8 +126,6 @@ namespace Cs2Jc
             [SyntaxKind.CoalesceAssignmentExpression] = H7(NuloYPunto),
             [SyntaxKind.OperatorDeclaration] = H7(Operadores),
             [SyntaxKind.ConversionOperatorDeclaration] = H7(Operadores),
-            [SyntaxKind.GenericName] = H7(Genericos),
-            [SyntaxKind.TypeParameterList] = H7(Genericos),
             [SyntaxKind.StructDeclaration] = H7(Struct),
             [SyntaxKind.RecordStructDeclaration] = H7(Struct),
             [SyntaxKind.DeclarationExpression] = H7(RefOut),

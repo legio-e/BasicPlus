@@ -31,13 +31,15 @@ namespace Cs2Jc
             if (e is TypeOfExpressionSyntax to)
             {
                 var t = m.GetTypeInfo(to.Type).Type;
-                return t == null ? null : new TipoDe { Escrito = t };
+                return t == null || PideArgumentos(t) ? null : new TipoDe { Escrito = t };
             }
             if (e is InvocationExpressionSyntax inv && inv.ArgumentList.Arguments.Count == 0
                 && m.GetSymbolInfo(inv).Symbol is IMethodSymbol ms && ms.Name == "GetType"
                 && ms.ContainingType.SpecialType == SpecialType.System_Object)
             {
                 var de = (inv.Expression as MemberAccessExpressionSyntax)?.Expression;
+                var s = de == null || de is BaseExpressionSyntax || de is ThisExpressionSyntax ? claseActual : m.GetTypeInfo(de).Type;
+                if (s != null && PideArgumentos(s)) return null;          // de un `T` o de una `C<X>`, sin sus argumentos no se sabe
                 return new TipoDe { De = de is BaseExpressionSyntax ? null : de };
             }
             return null;
@@ -104,6 +106,7 @@ namespace Cs2Jc
             }
             // los dos dependen de lo que lleven dentro: lo sabe la VM
             if (HayCajaCompartida()) return Rechaza(donde, Porque.Pendiente(CajaCompartida));
+            if (HayGenericas()) return Rechaza(donde, Porque.Fuera(Porque.SinT));
             imports.Add("CsSystem");
             return "CsSystem.Type_Misma(" + Valor(a) + ", " + Valor(b) + ")";
         }
@@ -195,6 +198,7 @@ namespace Cs2Jc
                 return hay == null ? texto : "(" + hay + " ? " + texto + " : \"\")";
             }
             if (HayCajaCompartida()) return Rechaza(donde, Porque.Pendiente(CajaCompartida));
+            if (HayGenericas()) return Rechaza(donde, Porque.Fuera(Porque.SinT));
             usaTipoDe = true;
             string nombre = "Cs_TipoDe(" + Valor(t) + ")";
             if (entero) return nombre;
@@ -243,10 +247,14 @@ namespace Cs2Jc
             Si("o is Double", "System.Double");
             Si("o is Float", "System.Single");
             Si("o is Boolean", "System.Boolean");
+            Si("CsSystem.Type_Clase(o) == CsSystem.Type_Clase(\"\")", "System.String");     // JC no escribe `o is string`
             Linea("return \"System.Object\";");
             sangria--;
             Linea("}");
         }
+
+        /// ¿Hay clases genéricas? Sin sus argumentos, `Cs_TipoDe` y `CsSystem.Type_Misma` no las distinguen.
+        bool HayGenericas() => tiposDelPrograma.Any(c => c.IsGenericType && c.TypeKind == TypeKind.Class);
 
         void Si(string condicion, string nombre)
         {

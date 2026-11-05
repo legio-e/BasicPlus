@@ -109,6 +109,9 @@ namespace Cs2Jc
         string EnFirma(ITypeSymbol t)
         {
             if (EsEnumEntero(t)) return TipoDeEnumEntero(t);
+            // sin `T`: su restricción, o un Object; y `C<X>`, `C` (Genericos.cs)
+            if (t is ITypeParameterSymbol tp) return tp.ConstraintTypes.Length > 0 ? EnFirma(tp.ConstraintTypes[0]) : "object";
+            if (t is INamedTypeSymbol n && n.IsGenericType && (DelPrograma(n) || EsListaGenerica(n))) return n.OriginalDefinition.ToDisplayString();
             switch (t.SpecialType)
             {
                 case SpecialType.System_Int64:

@@ -23,6 +23,32 @@ module CsTernario
       }
    }
 
+   class P
+   {
+      public function int Valor()
+      {
+         return 0;
+      }
+   }
+
+   class H1 : P
+   {
+      @override{}
+      public function int Valor()
+      {
+         return 1;
+      }
+   }
+
+   class H2 : P
+   {
+      @override{}
+      public function int Valor()
+      {
+         return 2;
+      }
+   }
+
    class Programa
    {
       private static function IA Elige(bool arg)
@@ -44,6 +70,11 @@ module CsTernario
          if (otra.Valor() != 1)
          {
             return 3;
+         }
+         P padre = !true ? new H1() : (P) (new H2());
+         if (padre.Valor() != 2)
+         {
+            return 4;
          }
          println("ternario bien");
          return 0;

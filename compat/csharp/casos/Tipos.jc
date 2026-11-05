@@ -289,6 +289,10 @@ module CsTipos
       {
          return "System.Boolean";
       }
+      if (CsSystem.Type_Clase(o) == CsSystem.Type_Clase(""))
+      {
+         return "System.String";
+      }
       return "System.Object";
    }
 }
