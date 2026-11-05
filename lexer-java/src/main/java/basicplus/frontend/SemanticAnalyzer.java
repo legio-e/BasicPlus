@@ -1246,6 +1246,8 @@ public final class SemanticAnalyzer {
 
         // 1.a) V8 H7.3 (#756) — las interfaces que implementa cada clase, y de las que hereda cada interfaz
         resolverInterfaces();
+        // 1.a bis) V8/H8 (#793) — el tipo base de las clases con @element{B}: antes de las firmas, que lo miran
+        leeTiposBase();
 
         // 1.b) H5.c — un miembro NO puede llamarse igual que un evento heredado
         // (ni al revés). Ver validateEventShadowing: con la cadena de bases ya
@@ -1567,11 +1569,10 @@ public final class SemanticAnalyzer {
     }
 
     /**
-     * V8/H7.2 (#749) — los genéricos de lo que ya hay (Eduardo, 31-oct): `List<Object>` es la List de siempre, y
-     * `Collections.Map<integer, Object>` y `Collections.Map<string, Object>`, el Map de siempre con la llave dicha. La
-     * misma clase y el mismo bytecode; los argumentos sirven para comprobar la llave del Map al compilar. Lo demás
-     * (`List<integer>`, los genéricos propios), de momento no: es error, y se devuelve la clase sin argumentos para no
-     * encadenar errores.
+     * V8/H7.2 (#749), V8/H8 (#793) — `C<X>`, una orden al compilador (Eduardo, 5-nov: «<miTipo> es una instrucción para el
+     * compilador, para que sepa que tipo de objetos guarda»). La clase es la de siempre, con su tipo base en las firmas
+     * (`Object` en una List; el de `@element{B}` en las demás), y los argumentos no llegan al bytecode. Si algo no cuadra,
+     * el error, y se devuelve la clase sin argumentos para no encadenar errores.
      */
     private BpType resolveTipoGenerico(SimpleTypeRef st) {
         BpType base = resolveNamedType(st);
@@ -1584,28 +1585,165 @@ public final class SemanticAnalyzer {
             return base;
         }
         ClassSymbol cls = ((ClassType) base).cls;
-        if (esLista(cls)) {
-            if (args.size() == 1 && esObjetoRaiz(args.get(0))) return new ClassType(cls, args);
-            err(st.line, st.column, "de momento, una lista es " + cls.name + "<Object>: con otro tipo, más adelante (los"
-                    + " genéricos de verdad)");
-            return base;
-        }
         if (esMapa(cls)) {
             if (args.size() != 2)
-                err(st.line, st.column, "un Map lleva dos argumentos de tipo, la llave y el valor: Map<integer, Object> o"
-                        + " Map<string, Object>");
+                err(st.line, st.column, "un Map lleva dos argumentos de tipo, la llave y el valor: Map<integer, Tarea> o"
+                        + " Map<string, Tarea>");
             else if (!(args.get(0) == PrimitiveType.INTEGER || isString(args.get(0))))
                 err(st.line, st.column, "la llave de un Map es integer o string, no '" + args.get(0).display() + "'");
-            else if (!esObjetoRaiz(args.get(1)))
-                err(st.line, st.column, "de momento, el valor de un Map es Object, no '" + args.get(1).display()
-                        + "': con otro tipo, más adelante (los genéricos de verdad)");
+            else if (!cabeEntreAngulos(args.get(1)))
+                err(st.line, st.column, noCabeEntreAngulos(args.get(1)));
             else
                 return new ClassType(cls, args);
             return base;
         }
-        err(st.line, st.column, "'" + cls.name + "' no es genérica: de momento, los genéricos son List<Object> y"
-                + " Collections.Map<integer|string, Object>");
+        BpType tipoBase = tipoBaseDe(cls);
+        if (tipoBase == null) {
+            err(st.line, st.column, "'" + cls.name + "' no es genérica: lo son List, Map y las clases con @element{tipo}");
+            return base;
+        }
+        if (args.size() != 1)
+            err(st.line, st.column, "'" + cls.name + "' lleva un argumento de tipo, el de lo que guarda");
+        else if (!cabeEntreAngulos(args.get(0)))
+            err(st.line, st.column, noCabeEntreAngulos(args.get(0)));
+        else if (!tipoBase.isAssignableFrom(args.get(0)))
+            err(st.line, st.column, "'" + cls.name + "' guarda '" + tipoBase.display() + "', y '" + args.get(0).display()
+                    + "' no lo es");
+        else
+            return new ClassType(cls, args);
         return base;
+    }
+
+    /** V8/H8 (#793) — entre `<` y `>` va una clase, una interfaz o `string`. Una `List<integer>` obligaría a cambiar `get`
+     *  por `getInteger`, y eso ya no es una orden al compilador: es otro código. */
+    private boolean cabeEntreAngulos(BpType t) {
+        return t instanceof ClassType || t instanceof BpType.UnresolvedClassRef || isString(t);
+    }
+
+    private static String noCabeEntreAngulos(BpType t) {
+        return "entre '<' y '>' va una clase, una interfaz o string, no '" + t.display()
+                + "': un número va en su caja (List<Integer>)";
+    }
+
+    /** V8/H8 (#793) — el tipo base de una clase, lo que en `C<X>` se lee como X: el de su `@element{B}` o el de un
+     *  antepasado; `Object` en una List y sus hijas, sin marca; o null, y entonces no es genérica. */
+    private BpType tipoBaseDe(ClassSymbol cls) {
+        for (ClassSymbol c = cls; c != null; c = c.baseClass)
+            if (c.tipoElemento != null) return c.tipoElemento;
+        return esLista(cls) ? resolveNamedType(new SimpleTypeRef("Object", cls.line, cls.column)) : null;
+    }
+
+    /** V8/H8 (#793) — ¿`t`, en una firma, es el tipo base? Es lo que `C<X>` lee como X. */
+    private boolean esElTipoBase(BpType t, BpType base) {
+        if (t == null) return false;
+        return esObjetoRaiz(base) ? esObjetoRaiz(t) : t.sameAs(base);
+    }
+
+    /** V8/H8 (#793) — `@element{B}` en cada clase del módulo. */
+    private void leeTiposBase() {
+        for (Symbol s : module.members.getSymbols()) {
+            if (!(s instanceof ClassSymbol)) continue;
+            ClassSymbol cls = (ClassSymbol) s;
+            if (cls.isExternal || cls.astNode == null) continue;
+            Ast.Annotation a = cls.astNode.anotacion(ANN_ELEMENT);
+            if (a == null) continue;
+            if (a.entries.size() != 1 || a.entries.get(0).value != null) {
+                err(a.line, a.column, "'@" + ANN_ELEMENT + "' lleva un tipo, el de lo que guarda la clase: @"
+                        + ANN_ELEMENT + "{Object}");
+                continue;
+            }
+            BpType b = resolveType(new SimpleTypeRef(a.entries.get(0).key, a.line, a.column));
+            if (b instanceof ClassType) cls.tipoElemento = b;
+            else if (!(b instanceof ErrorType))
+                err(a.line, a.column, "'@" + ANN_ELEMENT + "' lleva una clase o una interfaz, no '" + b.display() + "'");
+        }
+    }
+
+    /** V8/H8 (#793) — `new List<Sensor>()` en JC: la clase con sus argumentos, comprobados como los de una declaración. */
+    private BpType tipoDeNew(CallExpr ce, BpType t) {
+        if (ce.argumentosNew == null || !(t instanceof ClassType)) return t;
+        SimpleTypeRef st = new SimpleTypeRef(ce.claseNew != null ? ce.claseNew : nombreLlamado(ce.callee), ce.line, ce.column);
+        st.argumentos = ce.argumentosNew;
+        return resolveTipoGenerico(st);
+    }
+
+    /** V8/H8 (#793) — una llamada a un método de `C<X>`. Donde la firma dice el tipo base de la clase que declara el método,
+     *  se lee X: lo que entra tiene que ser un X, y lo que sale es un X (con su cast). Un parámetro primitivo, si otra
+     *  sobrecarga tiene ahí el tipo base, es la misma entrada: la caja del valor tiene que ser un X (`add(5)` vale en una
+     *  `List<Integer>` y no en una `List<Sensor>`). */
+    private BpType revisaElemento(CallExpr ce, BpType t) {
+        if (t instanceof ErrorType || !(ce.callee instanceof MemberAccessExpr)) return t;
+        MemberAccessExpr ma = (MemberAccessExpr) ce.callee;
+        BpType rt = info.exprTypes.get(ma.target);
+        if (!(rt instanceof ClassType) || ((ClassType) rt).argumentos == null) return t;
+        Symbol s = info.exprSymbols.get(ce.callee);
+        if (!(s instanceof FunctionSymbol)) return t;
+        FunctionSymbol fs = (FunctionSymbol) s;
+        if (fs.isStatic || fs.ownerClass == null) return t;
+        ClassType ct = (ClassType) rt;
+        if (esMapa(ct.cls)) return revisaValorDeMap(ce, ma, fs, ct, t);
+        BpType base = tipoBaseDe(fs.ownerClass);
+        if (base == null) return t;
+        BpType x = ct.argumentos.get(0);
+        for (int i = 0; i < fs.params.size() && i < ce.args.size(); i++) {
+            BpType at = info.exprTypes.get(ce.args.get(i));
+            if (at == null || at instanceof ErrorType) continue;
+            BpType pt = fs.params.get(i).type;
+            if (esElTipoBase(pt, base)) {
+                if (!x.isAssignableFrom(at)) errDeElemento(ce, ct, x, at, ma.member);
+            } else if (pt instanceof PrimitiveType && !isString(pt) && otraSobrecargaLoDice(ma, fs, i, base)) {
+                BpType caja = cajaDe((PrimitiveType) pt, ce);
+                if (caja == null || !x.isAssignableFrom(caja)) errDeElemento(ce, ct, x, at, ma.member);
+            }
+        }
+        return saleComoElemento(ce, fs.returnType, base, x, t);
+    }
+
+    /** V8/H8 (#793) — `Map<K, V>`: `put` recibe un V, y `get` y `valueAt` lo devuelven. La llave es cosa de
+     *  {@link #revisaLlaveDeMap}, y en un Map `Object` no siempre es el valor: por eso va por nombre. */
+    private BpType revisaValorDeMap(CallExpr ce, MemberAccessExpr ma, FunctionSymbol fs, ClassType ct, BpType t) {
+        BpType v = ct.argumentos.get(1);
+        if ("put".equals(ma.member) && ce.args.size() == 2) {
+            BpType at = info.exprTypes.get(ce.args.get(1));
+            if (at != null && !(at instanceof ErrorType) && !v.isAssignableFrom(at)) errDeElemento(ce, ct, v, at, ma.member);
+        }
+        if (!"get".equals(ma.member) && !"valueAt".equals(ma.member)) return t;
+        return saleComoElemento(ce, fs.returnType, resolveNamedType(new SimpleTypeRef("Object", ce.line, ce.column)), v, t);
+    }
+
+    private void errDeElemento(CallExpr ce, ClassType ct, BpType x, BpType at, String metodo) {
+        err(ce.line, ce.column, "'" + ct.display() + "' guarda '" + x.display() + "', no '" + at.display() + "' (" + metodo + ")");
+    }
+
+    /** V8/H8 (#793) — lo que la firma declara como el tipo base sale como un X. Si X es el propio tipo base, no hay nada que
+     *  escribir: `List<Object>` sale como hoy. */
+    private BpType saleComoElemento(IExpr e, BpType declarado, BpType base, BpType x, BpType t) {
+        if (!esElTipoBase(declarado, base) || esElTipoBase(x, base)) return t;
+        info.castsDeElemento.add(e);
+        return x;
+    }
+
+    /** V8/H8 (#793) — ¿alguna otra sobrecarga del método tiene el tipo base en ese parámetro? */
+    private boolean otraSobrecargaLoDice(MemberAccessExpr ma, FunctionSymbol fs, int i, BpType base) {
+        ClassSymbol recv = maRecvClass.get(ma);
+        if (recv == null) return false;
+        for (FunctionSymbol c : collectInstanceCandidates(recv, fs.name))
+            if (c != fs && c.params.size() == fs.params.size() && esElTipoBase(c.params.get(i).type, base)) return true;
+        return false;
+    }
+
+    /** V8/H8 (#793) — la clase en que Core guarda un valor de este tipo, o null si no tiene. */
+    private BpType cajaDe(PrimitiveType p, Node donde) {
+        String n = p == PrimitiveType.INTEGER ? "Integer" : p == PrimitiveType.LONG ? "Long" : p == PrimitiveType.FLOAT ? "Float"
+                 : p == PrimitiveType.DOUBLE ? "Double" : p == PrimitiveType.BOOLEAN ? "Boolean" : null;
+        return n == null ? null : resolveNamedType(new SimpleTypeRef(n, donde.line, donde.column));
+    }
+
+    /** V8/H8 (#793) — una property de `C<X>`: la misma regla. Al asignarla, su tipo es X y lo comprueba la asignación. */
+    private BpType propiedadDeElemento(MemberAccessExpr ma, PropertySymbol ps, ClassType ct) {
+        BpType t = typeOfSymbol(ps);
+        BpType base = ps.ownerClass != null ? tipoBaseDe(ps.ownerClass) : null;
+        return base == null ? t : saleComoElemento(ma, ps.type, base, ct.argumentos.get(0), t);
     }
 
     /** V8/H7.2 (#749) — los métodos del Map que llevan la llave delante. */
@@ -2953,9 +3091,14 @@ public final class SemanticAnalyzer {
             BpType collT = analyzeExpr(inr.iterable, scope, null);
             if (collT instanceof ArrayType) iterT = ((ArrayType) collT).element;
             else if (collT instanceof ClassType && esLista(((ClassType) collT).cls)) {
-                // V8/H7.2 (#749) — una List (List<Object>): x es cada elemento, un Object.
+                // V8/H7.2 (#749) — una List: x es cada elemento, un Object. V8/H8 (#793) — en una List<X>, un X.
                 iterT = resolveNamedType(new SimpleTypeRef("Object", f.line, f.column));
                 info.forDeListas.add(f);
+                java.util.List<BpType> ar = ((ClassType) collT).argumentos;
+                if (ar != null && !esElTipoBase(ar.get(0), iterT)) {
+                    iterT = ar.get(0);
+                    info.elementoDeFor.put(f, iterT);
+                }
             } else if (collT instanceof ErrorType) {
                 iterT = ErrorType.INSTANCE;
             } else {
@@ -3180,6 +3323,8 @@ public final class SemanticAnalyzer {
             t = analyzeCall((CallExpr) e, scope);
             if (enJc) revisaJc((CallExpr) e, t);
             revisaLlaveDeMap((CallExpr) e);   // V8/H7.2 (#749)
+            t = tipoDeNew((CallExpr) e, t);        // V8/H8 (#793)
+            t = revisaElemento((CallExpr) e, t);   // V8/H8 (#793)
         }
         else if (e instanceof UnaryExpr)     t = analyzeUnary((UnaryExpr) e, scope);
         else if (e instanceof BinaryExpr)    t = analyzeBinary((BinaryExpr) e, scope);
@@ -3541,6 +3686,8 @@ public final class SemanticAnalyzer {
             // sola, así que anotamos la clase para que analyzeCall pueda juntar
             // todos los candidatos de la cadena de herencia.
             if (sub instanceof FunctionSymbol) maRecvClass.put(ma, ct.cls);
+            if (sub instanceof PropertySymbol && ct.argumentos != null && !esMapa(ct.cls))
+                return propiedadDeElemento(ma, (PropertySymbol) sub, ct);   // V8/H8 (#793)
             return typeOfSymbol(sub);
         }
 
@@ -4923,6 +5070,8 @@ public final class SemanticAnalyzer {
      *  que dicen se comprueba con los tipos resueltos ({@link #checkInterfaces}). */
     private static final String ANN_IMPLEMENT = "implement";
     private static final String ANN_OVERRIDE = "override";
+    /** V8/H8 (#793) — `@element{B}`, sobre una clase: su tipo base (lo lee {@link #leeTiposBase}, antes de las firmas). */
+    private static final String ANN_ELEMENT = "element";
 
     private void validateAnnotations(ModuleNode mod) {
         for (ITopLevelDecl def : mod.defs) {
@@ -4932,7 +5081,9 @@ public final class SemanticAnalyzer {
                 for (Ast.Annotation a : cd.annotations) {
                     if (!nombreConocido(a) || !unaVez(cd, a)) continue;
                     if (ANN_BD.equals(a.name)) bdClase = a;
-                    else err(a.line, a.column, "'@" + a.name + "' va sobre un método o una property de una clase, no"
+                    else if (ANN_ELEMENT.equals(a.name)) {
+                        if (cd.isInterface) err(a.line, a.column, "'@" + a.name + "' va sobre una clase, no sobre una interfaz");
+                    } else err(a.line, a.column, "'@" + a.name + "' va sobre un método o una property de una clase, no"
                             + " sobre la " + (cd.isInterface ? "interfaz" : "clase"));
                 }
                 boolean esEntidad = bdClase != null;
@@ -4944,6 +5095,10 @@ public final class SemanticAnalyzer {
                     Node n = (Node) m;
                     for (Ast.Annotation a : n.annotations) {
                         if (!nombreConocido(a) || !unaVez(n, a)) continue;
+                        if (ANN_ELEMENT.equals(a.name)) {
+                            err(a.line, a.column, "'@" + a.name + "' va sobre una clase");
+                            continue;
+                        }
                         if (!ANN_BD.equals(a.name)) {
                             if (!(m instanceof FuncDef) && !(m instanceof PropertyDef))
                                 err(a.line, a.column, "'@" + a.name + "' va sobre un método o una property");
@@ -4982,6 +5137,8 @@ public final class SemanticAnalyzer {
                     if (ANN_BD.equals(a.name))
                         err(a.line, a.column, "'@" + a.name
                                 + "' sólo puede ir sobre una `class` (la entidad) o sobre una `property` suya");
+                    else if (ANN_ELEMENT.equals(a.name))
+                        err(a.line, a.column, "'@" + a.name + "' va sobre una clase");
                     else
                         err(a.line, a.column, "'@" + a.name + "' va sobre un método o una property de una clase");
                 }
@@ -5002,9 +5159,10 @@ public final class SemanticAnalyzer {
     }
 
     private boolean nombreConocido(Ast.Annotation a) {
-        if (ANN_BD.equals(a.name) || ANN_IMPLEMENT.equals(a.name) || ANN_OVERRIDE.equals(a.name)) return true;
-        err(a.line, a.column, "anotación desconocida '@" + a.name
-                + "'; las que existen son '@" + ANN_BD + "', '@" + ANN_IMPLEMENT + "' y '@" + ANN_OVERRIDE + "'");
+        if (ANN_BD.equals(a.name) || ANN_IMPLEMENT.equals(a.name) || ANN_OVERRIDE.equals(a.name)
+                || ANN_ELEMENT.equals(a.name)) return true;
+        err(a.line, a.column, "anotación desconocida '@" + a.name + "'; las que existen son '@" + ANN_BD + "', '@"
+                + ANN_IMPLEMENT + "', '@" + ANN_OVERRIDE + "' y '@" + ANN_ELEMENT + "'");
         return false;
     }
 

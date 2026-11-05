@@ -242,6 +242,18 @@ m.unlock()</pre>
 </section>
 
 <section>
+  <h2>Typed lists</h2>
+<pre><span class="k">var</span> l: List&lt;Sensor&gt; <span class="k">:=</span> List()
+l.add(Sensor(<span class="t">4</span>))
+l.add("x")                 <span class="c">// compile error</span>
+<span class="k">print</span> l.get(<span class="t">0</span>).value()     <span class="c">// no cast to write</span></pre>
+  <p class="note"><code>&lt;Sensor&gt;</code> is an order to the compiler: same class, same VM. What goes in must be a
+     <code>Sensor</code>, and what comes out is one. Inside <code>&lt; &gt;</code> goes a class, an interface or
+     <code>string</code>; a number goes in its box, <code>List&lt;Integer&gt;</code>. A new class opts in with
+     <code>@element{Base}</code>.</p>
+</section>
+
+<section>
   <h2>Native: real machine code</h2>
 <pre><span class="k">native function</span> fib(n: <span class="t">integer</span>): <span class="t">integer</span>
   <span class="k">if</span> n &lt; <span class="t">2</span> <span class="k">then</span> <span class="k">return</span> n      <span class="c">// one-line if: no endif</span>

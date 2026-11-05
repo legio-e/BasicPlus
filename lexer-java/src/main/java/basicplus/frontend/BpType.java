@@ -181,9 +181,10 @@ public abstract class BpType {
     // ============================================================
     public static final class ClassType extends BpType {
         public final Symbol.ClassSymbol cls;
-        /** V8/H7.2 (#749) — los argumentos de tipo (`List<Object>`, `Collections.Map<integer, Object>`), o null. No
-         *  cuentan para la igualdad ni la asignación —es la misma clase, y el mismo bytecode—: sirven para comprobar la
-         *  llave de un Map al compilar. */
+        /** V8/H7.2 (#749), V8/H8 (#793) — los argumentos de tipo (`List<Sensor>`, `Collections.Map<string, Tarea>`), o
+         *  null: una orden al compilador, que dice qué guarda. Es la misma clase y no llegan al bytecode, así que no
+         *  cuentan para la igualdad (`sameAs`, y con ella la clave de un método). Para asignar, sí: `List<Perro>` no pasa
+         *  a `List<Animal>`, y un lado sin argumentos pasa siempre (como los raw types de Java). */
         public final java.util.List<BpType> argumentos;
         public ClassType(Symbol.ClassSymbol cls) { this(cls, null); }
         public ClassType(Symbol.ClassSymbol cls, java.util.List<BpType> argumentos) {
@@ -192,10 +193,7 @@ public abstract class BpType {
         }
 
         @Override public String  display() {
-            if (argumentos == null) return cls.name;
-            StringBuilder s = new StringBuilder(cls.name).append('<');
-            for (int i = 0; i < argumentos.size(); i++) s.append(i > 0 ? ", " : "").append(argumentos.get(i).display());
-            return s.append('>').toString();
+            return conArgumentos(cls.name, argumentos);
         }
         @Override public boolean isReference() { return true; }
 
@@ -214,6 +212,8 @@ public abstract class BpType {
             if (source instanceof ErrorType) return true;
             if (source instanceof NullType)  return true;
             if (source instanceof AnyType)   return true;   // escape hatch para stdlib
+            if (argumentos != null && source instanceof ClassType && ((ClassType) source).argumentos != null
+                    && !mismosArgumentos(argumentos, ((ClassType) source).argumentos)) return false;   // V8/H8 (#793)
             // GAP-2 — cross-module: un valor cuyo tipo es "una clase de otro
             // módulo" llega como UnresolvedClassRef (referencia por nombre del
             // .bpi, sin símbolo local). Asignable si el nombre coincide con el
@@ -447,11 +447,39 @@ public abstract class BpType {
         @Override public boolean isAssignableFrom(BpType source) { return source instanceof ErrorType || sameAs(source); }
     }
 
+    /** V8/H8 (#793) — `List<Sensor>`, como se le enseña a quien programa. */
+    static String conArgumentos(String nombre, java.util.List<BpType> argumentos) {
+        if (argumentos == null) return nombre;
+        StringBuilder s = new StringBuilder(nombre).append('<');
+        for (int i = 0; i < argumentos.size(); i++) s.append(i > 0 ? ", " : "").append(argumentos.get(i).display());
+        return s.append('>').toString();
+    }
+
+    /** V8/H8 (#793) — los mismos tipos, mirando también dentro de sus argumentos, que `sameAs` no mira. */
+    static boolean mismosArgumentos(java.util.List<BpType> a, java.util.List<BpType> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            BpType x = a.get(i), y = b.get(i);
+            if (!x.sameAs(y)) return false;
+            if (x instanceof ClassType && y instanceof ClassType) {
+                java.util.List<BpType> ax = ((ClassType) x).argumentos, ay = ((ClassType) y).argumentos;
+                if (ax != null && ay != null && !mismosArgumentos(ax, ay)) return false;
+            }
+        }
+        return true;
+    }
+
     public static final class UnresolvedClassRef extends BpType {
         public final String name;
-        public UnresolvedClassRef(String name) { this.name = name; }
+        /** V8/H8 (#793) — los argumentos de tipo, como los dice la interfaz (`Core.List<Cc.Sensor>`), o null. */
+        public final java.util.List<BpType> argumentos;
+        public UnresolvedClassRef(String name) { this(name, null); }
+        public UnresolvedClassRef(String name, java.util.List<BpType> argumentos) {
+            this.name = name;
+            this.argumentos = argumentos;
+        }
 
-        @Override public String  display()     { return name; }
+        @Override public String  display()     { return conArgumentos(name, argumentos); }
         @Override public boolean isReference() { return true; }
         @Override public boolean sameAs(BpType other) {
             return other instanceof UnresolvedClassRef

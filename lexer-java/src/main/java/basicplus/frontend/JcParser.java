@@ -394,6 +394,7 @@ final class JcParser {
         while (!es("}")) {
             Tok k = actual();
             String clave = nombre("el nombre de una clave dentro de '@" + nombre + "{ … }'");
+            while (acepta(".")) clave += "." + nombre("el nombre tras '" + clave + ".'");   // V8/H8 (#793)
             Object valor = null;
             if (acepta("=")) {
                 Tok v = actual();
@@ -745,13 +746,17 @@ final class JcParser {
     }
 
     /** V8/H7.2 (#749) — `<T, U>` tras el nombre de un tipo: los argumentos de tipo. Qué combinaciones valen lo dice el
-     *  análisis (de momento, `List<Object>` y `Collections.Map<int|string, Object>`). */
+     *  análisis. */
     private List<TypeRef> argumentosDeTipo() {
         espera("<");
         List<TypeRef> args = new ArrayList<>();
         args.add(tipo());
         while (acepta(",")) args.add(tipo());
-        if (es(">>")) throw error("los genéricos anidados (`<…<…>>`) no los tiene JC, de momento");
+        if (es(">>")) {   // V8/H8 (#793): `List<List<T>>`: el lexer lee un desplazamiento, y al cerrar un tipo son dos `>`
+            Tok t = actual();
+            toks.set(pos, new Tok(Tipo.SIGNO, ">", null, t.linea, t.columna));
+            toks.add(pos + 1, new Tok(Tipo.SIGNO, ">", null, t.linea, t.columna + 1));
+        }
         espera(">", "'>' al cerrar los argumentos de tipo");
         return args;
     }
@@ -770,6 +775,11 @@ final class JcParser {
                 Tok x = mira(j);
                 if (x.es("<")) prof++;
                 else if (x.es(">")) { if (--prof == 0) { k = j + 1; break; } }
+                else if (x.es(">>")) {   // V8/H8 (#793)
+                    prof -= 2;
+                    if (prof < 0) return false;
+                    if (prof == 0) { k = j + 1; break; }
+                }
                 else if (!(x.tipo == Tipo.NOMBRE || (x.tipo == Tipo.RESERVADA && TIPOS.containsKey(x.texto))
                            || x.es(",") || x.es("."))) return false;
             }

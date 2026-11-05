@@ -189,6 +189,70 @@ class InterfazIdaYVueltaTest {
         } finally { Main.FORMATO = antes; }
     }
 
+    /** V8/H8 (#793) — los genéricos, en todos los sitios de una interfaz. */
+    private static final String GENERICOS =
+        "module Juguete\n"
+      + "  import Collections\n"
+      + "  public class Punto\n"
+      + "    public function Punto()\n"
+      + "    end Punto\n"
+      + "  end Punto\n"
+      + "  @element{Object}\n"
+      + "  public class Caja\n"
+      + "    var dentro: List<Punto>\n"
+      + "    public property otra: List<Punto>\n"
+      + "    public property Caja.todas: List<Punto>\n"
+      + "    event cambio(l: List<Punto>)\n"
+      + "    public function Caja(l: List<Punto>)\n"
+      + "      this.dentro := l\n"
+      + "    end Caja\n"
+      + "    public function Caja(l: List<Punto>, n: integer)\n"
+      + "      this.dentro := l\n"
+      + "    end Caja\n"
+      + "    public function lista(): List<Punto>\n"
+      + "      return this.dentro\n"
+      + "    end lista\n"
+      + "    public function Caja.nueva(m: Collections.Map<integer, Punto>, n: integer): List<List<Punto>>\n"
+      + "      return List()\n"
+      + "    end Caja.nueva\n"
+      + "  end Caja\n"
+      + "  public property guardada: Collections.Map<string, List<Punto>>\n"
+      + "  public function dos(): (List<Punto>, Collections.Map<integer, Punto>)\n"
+      + "    return (List(), Collections.numericMap())\n"
+      + "  end dos\n"
+      + "  public function varias(a: List<Punto>[]): integer\n"
+      + "    return 1\n"
+      + "  end varias\n"
+      + "  public function main()\n"
+      + "    print 1\n"
+      + "  end main\n"
+      + "end Juguete\n";
+
+    @Test
+    @DisplayName("bpi 11 (#793): los argumentos de tipo y `element` hacen la ida y vuelta, y sólo los escribe quien los usa")
+    void genericosIdaYVuelta(@TempDir Path tmp) throws Exception {
+        Path src = Files.createDirectories(tmp.resolve("src"));
+        Path out = Files.createDirectories(tmp.resolve("out"));
+        Files.write(src.resolve("Juguete.bp"), GENERICOS.getBytes(StandardCharsets.UTF_8));
+        BpBuild b = new BpBuild();
+        b.projectDir = tmp.toString(); b.sourceDir = src.toString(); b.outDir = out.toString(); b.main = "Juguete";
+        b.version = 7;
+        b.dependencies.add(new File("../bpstdlib").getAbsolutePath());
+        assertTrue(Main.buildProject(b, "mivm", false), "el módulo de juguete debe compilar");
+        Path mod = out.resolve("Juguete.mod");
+        String texto = new String(seccionInterface(mod), StandardCharsets.UTF_8).replace("\r\n", "\n");
+        assertTrue(texto.startsWith("bpi 11\n"), texto);
+        for (String linea : new String[]{ "  element Core.Object\n", "field dentro:Core.List<Punto>\n",
+                                          "prop otra:Core.List<Punto>", "staticprop todas:Core.List<Punto>",
+                                          "(l:Core.List<Punto>,n:integer)", "method lista():Core.List<Punto>",
+                                          "(m:Collections.Map<integer,Punto>,n:integer):Core.List<Core.List<Punto>>",
+                                          "prop guardada:Collections.Map<string,Core.List<Punto>>",
+                                          "func dos():(Core.List<Punto>,Collections.Map<integer,Punto>)",
+                                          "func varias(a:Core.List<Punto>[]):integer" })
+            assertTrue(texto.contains(linea), "falta «" + linea.trim() + "» en:\n" + texto);
+        idaYVueltaDe(mod);
+    }
+
     private static void idaYVueltaDe(Path mod) throws Exception {
         byte[] original = seccionInterface(mod);
         assertTrue(original != null && original.length > 0, mod + ": el .mod lleva sección interface");
@@ -197,7 +261,8 @@ class InterfazIdaYVueltaTest {
         // 17-sep); la ida y vuelta se hace en la version que el .mod TRAE (bpi 8 en un MOD7/8,
         // bpi 9 en un MOD9), no en la del compilador de hoy.
         int formatoAntes = Main.FORMATO;
-        Main.FORMATO = new String(original, 0, Math.min(6, original.length), StandardCharsets.UTF_8).startsWith("bpi 9") ? 9 : 8;
+        String cabecera = new String(original, 0, Math.min(6, original.length), StandardCharsets.UTF_8);
+        Main.FORMATO = cabecera.startsWith("bpi 9") || cabecera.startsWith("bpi 1") ? 9 : 8;   // bpi 10 y bpi 11, también
         byte[] reescrita;
         try { reescrita = iface.toBytes(); } finally { Main.FORMATO = formatoAntes; }
         // V7/H2 (MOD8) - el escritor emite LF fijo desde el 15-sep; un .mod escrito antes

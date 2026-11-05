@@ -98,9 +98,19 @@ IifMal|las dos ramas tienen que dar el mismo tipo
 IifMal|se esperaban 3 argumentos, se pasaron 2
 IifMal|no mueve un owner
 IifMal|es un valor, no una sentencia
-GenericosMal|una lista es List<Object>
+GenericosMal|entre '<' y '>' va una clase, una interfaz o string, no 'integer'
 GenericosMal|la llave de un Map es integer o string, no 'long'
-GenericosMal|el valor de un Map es Object, no 'integer'
+GenericosMal|'Ordenada' guarda 'Comparable', y 'Motor' no lo es
+GenericosMal|'List' lleva un argumento de tipo
+GenericosMal|'List<Sensor>' guarda 'Sensor', no 'string' (add)
+GenericosMal|'List<Sensor>' guarda 'Sensor', no 'integer' (add)
+GenericosMal|'List<Sensor>' guarda 'Sensor', no 'Motor' (set)
+GenericosMal|guarda 'Sensor', no 'Motor' (put)
+GenericosMal|'List<Perro>' no asignable a variable de tipo 'List<Animal>'
+GenericosMal|'@element' lleva un tipo
+GenericosMal|'@element' lleva una clase o una interfaz, no 'integer'
+GenericosMal|'@element' va sobre una clase, no sobre una interfaz
+GenericosMal|'@element' va sobre una clase
 GenericosMal|'Cosa' no es gen
 GenericosMal|una llave integer necesita Collections.numericMap()
 GenericosMal|una llave string necesita Collections.Map()
@@ -125,7 +135,7 @@ EventoValor|compararlo con null
 ConstanteNula|la constante 'NADA' no puede ser null
 ConstanteNula|la constante 'ETIQUETA' no puede ser null
 ConstanteNula|la constante 'LOCAL' no puede ser null
-AnnMal|'@XY'; las que existen son '@BD', '@implement' y '@override'
+AnnMal|'@XY'; las que existen son '@BD', '@implement', '@override' y '@element'
 AnnMal|'@BD' sobre la clase 'Dos' tiene que decir a
 AnnMal|la entidad 'Dos' no dice
 AnnMal|'@BD' sobre una clase no conoce la clave 'esquema'; hoy admite: tabla

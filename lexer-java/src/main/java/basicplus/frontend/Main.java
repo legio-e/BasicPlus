@@ -2572,6 +2572,7 @@ public final class Main {
                     // nombre: el semántico las enlaza a los stubs de su análisis (enlazarInterfacesImportadas)
                     stub.isInterface = cs.isInterface;
                     stub.interfaceNames.addAll(cs.interfaces);
+                    stub.tipoElemento = cs.element;   // V8/H8 (#793)
                     // L2 v3 — propaga layout binario para que subclasses
                     // cross-module puedan reservar slots/fields correctamente.
                     if (cs.binaryNumFields >= 0) {
@@ -2826,6 +2827,7 @@ public final class Main {
                 }
                 // 2nd pass: resolver UnresolvedClassRef contra stubs creados.
                 for (Symbol.ClassSymbol stub : ns.classes.values()) {
+                    stub.tipoElemento = resolveTypeAgainst(stub.tipoElemento, ns);   // V8/H8 (#793)
                     // V7/H2 (#492-B) — los estáticos también: `function Base.crea(): Base`
                     // o `property Base.actual: Otra` llegan como UnresolvedClassRef.
                     List<Symbol> miembros = new ArrayList<>(stub.instanceMembers.getSymbols());
@@ -2942,6 +2944,7 @@ public final class Main {
                 }
             }
             for (Symbol.ClassSymbol stub : ns.classes.values()) {
+                stub.tipoElemento = resolveCrossModuleType(stub.tipoElemento, loadedNs);   // V8/H8 (#793)
                 List<Symbol> miembros = new ArrayList<>(stub.instanceMembers.getSymbols());
                 miembros.addAll(stub.staticMembers.getSymbols());   // V7/H2 (#492-B)
                 for (Symbol mem : miembros) {
@@ -3210,8 +3213,15 @@ public final class Main {
             }
             return t;   // sin resolver: exigirEnumsResueltos lo convierte en error
         }
+        if (t instanceof basicplus.frontend.BpType.ClassType) {   // V8/H8 (#793): `List<Cc.Sensor>`, la clase ya resuelta
+            basicplus.frontend.BpType.ClassType ct = (basicplus.frontend.BpType.ClassType) t;
+            if (ct.argumentos == null) return t;
+            return new basicplus.frontend.BpType.ClassType(ct.cls, argumentosResueltos(ct.argumentos, x -> resolveCrossModuleType(x, allNs)));
+        }
         if (!(t instanceof basicplus.frontend.BpType.UnresolvedClassRef)) return t;
         String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
+        java.util.List<basicplus.frontend.BpType> args = argumentosResueltos(
+                ((basicplus.frontend.BpType.UnresolvedClassRef) t).argumentos, x -> resolveCrossModuleType(x, allNs));
         int lastDot = name.lastIndexOf('.');
         if (lastDot > 0) {
             String modPart = name.substring(0, lastDot);
@@ -3222,10 +3232,10 @@ public final class Main {
                         : candidate.library + "." + candidate.moduleName;
                 if (full.equals(modPart) || candidate.moduleName.equals(modPart)) {
                     Symbol.ClassSymbol cls = candidate.classes.get(clsPart);
-                    if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
+                    if (cls != null) return new basicplus.frontend.BpType.ClassType(cls, args);
                 }
             }
-            return t;   // no se encontró
+            return args == null ? t : new basicplus.frontend.BpType.UnresolvedClassRef(name, args);   // no se encontró
         }
         // Sin punto: la interfaz publica sin cualificar SOLO las clases de su propio módulo (ya
         // resueltas en la 1ª pasada contra su ns) y las del lenguaje. Buscarlo «en cualquier ns»
@@ -3304,11 +3314,29 @@ public final class Main {
             }
             return t;   // de otro módulo (con punto) o desconocido: lo resuelve la pasada 2 o es error
         }
+        if (t instanceof basicplus.frontend.BpType.ClassType) {   // V8/H8 (#793)
+            basicplus.frontend.BpType.ClassType ct = (basicplus.frontend.BpType.ClassType) t;
+            if (ct.argumentos == null) return t;
+            return new basicplus.frontend.BpType.ClassType(ct.cls, argumentosResueltos(ct.argumentos, x -> resolveTypeAgainst(x, ns)));
+        }
         if (!(t instanceof basicplus.frontend.BpType.UnresolvedClassRef)) return t;
         String name = ((basicplus.frontend.BpType.UnresolvedClassRef) t).name;
+        java.util.List<basicplus.frontend.BpType> args = argumentosResueltos(
+                ((basicplus.frontend.BpType.UnresolvedClassRef) t).argumentos, x -> resolveTypeAgainst(x, ns));
         Symbol.ClassSymbol cls = ns.classes.get(name);
-        if (cls != null) return new basicplus.frontend.BpType.ClassType(cls);
-        return t;
+        if (cls != null) return new basicplus.frontend.BpType.ClassType(cls, args);
+        return args == null ? t : new basicplus.frontend.BpType.UnresolvedClassRef(name, args);
+    }
+
+    /** V8/H8 (#793) — los argumentos de tipo de la interfaz (`Core.List<Cc.Sensor>`), resueltos como la clase; null si no
+     *  los lleva. */
+    private static java.util.List<basicplus.frontend.BpType> argumentosResueltos(
+            java.util.List<basicplus.frontend.BpType> args,
+            java.util.function.Function<basicplus.frontend.BpType, basicplus.frontend.BpType> resuelve) {
+        if (args == null) return null;
+        java.util.List<basicplus.frontend.BpType> r = new java.util.ArrayList<>();
+        for (basicplus.frontend.BpType a : args) r.add(resuelve.apply(a));
+        return r;
     }
 
     /** #516 — un enum que sigue sin resolver tras las dos pasadas (o dentro de un array/tupla):

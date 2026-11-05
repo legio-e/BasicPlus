@@ -175,7 +175,7 @@
     <li class="sub"><a href="#enums">4.3 Enums</a></li>
     <li class="sub"><a href="#clases-tipo">4.4 Clases</a></li>
     <li class="sub"><a href="#any">4.5 any</a></li>
-    <li class="sub"><a href="#genericos">4.6 Los genéricos de lo que ya hay</a></li>
+    <li class="sub"><a href="#genericos">4.6 Los genéricos</a></li>
 
     <li class="group"><a href="#declaraciones">5. Declaraciones</a></li>
     <li class="sub"><a href="#var">5.1 var</a></li>
@@ -670,30 +670,71 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   que, si su clase no lo sobrescribe, es su identificador (<code>object@…</code>) (V8, #748).
 </p>
 
-<h3 id="genericos">4.6 Los genéricos de lo que ya hay: <code>List&lt;Object&gt;</code> y <code>Map</code></h3>
+<h3 id="genericos">4.6 Los genéricos: una orden al compilador</h3>
 <p>
-  Una <code>List</code> guarda <code>Object</code>s, y un <code>Collections.Map</code> también, con
-  una llave <code>string</code> (el que da <code>Collections.Map()</code>) o <code>integer</code> (el
-  que da <code>Collections.numericMap()</code>). Su tipo se puede escribir con los argumentos,
-  como en C# o en Java, y entonces el compilador comprueba la llave de cada llamada al
-  <code>Map</code>, y que la fábrica case con ella (V8/H7.2, #749):
+  <code>List&lt;Sensor&gt;</code> es la <code>List</code> de siempre con una orden para el compilador: le
+  dice qué guarda (V8/H8, #793). La clase no cambia y la VM no se entera. Donde la firma de la clase dice
+  su <em>tipo base</em>, <code>Object</code> en una <code>List</code>, el compilador lee <code>Sensor</code>:
+  lo que entra tiene que ser un <code>Sensor</code>, y lo que sale es un <code>Sensor</code>, sin escribir
+  el cast. Lo mismo en sus hijas, <code>SyncList&lt;Sensor&gt;</code> y <code>OwnerList&lt;Sensor&gt;</code>:
 </p>
-<pre><code><span class="kw">var</span> l: <span class="type">List</span>&lt;<span class="type">Object</span>&gt; := List()
-<span class="kw">var</span> porNombre: <span class="type">Collections.Map</span>&lt;<span class="type">string</span>, <span class="type">Object</span>&gt; := Collections.Map()
-<span class="kw">var</span> porId: <span class="type">Collections.Map</span>&lt;<span class="type">integer</span>, <span class="type">Object</span>&gt; := Collections.numericMap()
-porId.put(<span class="num">7</span>, Integer(<span class="num">70</span>))
-porId.put(<span class="str">"siete"</span>, Integer(<span class="num">70</span>))   <span class="comment">// error: la llave de este Map es integer, no 'string' (put)</span>
-<span class="kw">var</span> mal: <span class="type">Collections.Map</span>&lt;<span class="type">integer</span>, <span class="type">Object</span>&gt; := Collections.Map()
-                                    <span class="comment">// error: una llave integer necesita Collections.numericMap()</span></code></pre>
+<pre><code><span class="kw">var</span> sensores: <span class="type">List</span>&lt;<span class="type">Sensor</span>&gt; := List()
+sensores.add(Sensor(<span class="num">4</span>))
+sensores.add(<span class="str">"hola"</span>)            <span class="comment">// error: 'List&lt;Sensor&gt;' guarda 'Sensor', no 'string' (add)</span>
+<span class="kw">print</span> sensores.get(<span class="num">0</span>).valor()        <span class="comment">// sin cast</span>
+<span class="kw">for</span> s <span class="kw">in</span> sensores <span class="kw">do</span>              <span class="comment">// s es un Sensor</span>
+  <span class="kw">print</span> s.valor()
+<span class="kw">next</span></code></pre>
 <p>
-  Sin la comprobación, una llave integer en un <code>Map()</code> de llaves string no fallaba
-  hasta ejecutar. De momento son sólo éstos: el elemento de una lista y el valor de un
-  <code>Map</code> son <code>Object</code> (una <code>List&lt;Persona&gt;</code>, todavía no), y la
-  llave, <code>integer</code> o <code>string</code>. Los argumentos no llegan al bytecode: una
-  <code>List&lt;Object&gt;</code> es la <code>List</code> de siempre, y escribirla sin ellos sigue
-  valiendo. Una lista se recorre con <code>for x in</code> (<a href="#for">§7.3</a>). En JC,
-  <code>new Collections.Map&lt;int, Object&gt;()</code> crea el de llaves integer
-  (<code>Collections.numericMap()</code>).
+  El cast lo escribe el compilador: es el que a mano sería <code>Sensor(sensores.get(0))</code>, con el
+  mismo código. Se queda porque el compilador ve lo que entra por <code>add</code>, pero no lo que hace
+  la clase por dentro, ni lo que da la vuelta por un <code>Object</code> o por una <code>List</code> a
+  secas: si ahí llega otra cosa, el programa para en esa línea con «conversion invalida: el valor no es un
+  'Sensor'», y no corrompe la memoria del objeto de al lado.
+</p>
+<ul>
+  <li><strong>Entre <code>&lt;</code> y <code>&gt;</code> va una clase, una interfaz o <code>string</code></strong>,
+      como en Java. Un número va en su caja: <code>List&lt;Integer&gt;</code>. <code>l.add(5)</code> y
+      <code>l.getInteger(0)</code> valen como siempre, y <code>l.get(0)</code> da un <code>Integer</code>.
+      Un número en una lista gasta unos 28 bytes (la caja, su referencia y su handle), y en un array, 4: para
+      muchos números, un array.</li>
+  <li><strong>Un <code>Map</code> lleva dos:</strong> la llave, <code>integer</code> o <code>string</code>, y el
+      valor. <code>put</code> recibe el valor, y <code>get</code> y <code>valueAt</code> lo devuelven. La llave se
+      comprueba en cada llamada, y la fábrica tiene que casar con ella: <code>Collections.Map()</code> para la
+      <code>string</code> y <code>Collections.numericMap()</code> para la <code>integer</code>.</li>
+  <li><strong>Asignar:</strong> <code>List&lt;Perro&gt;</code> no pasa a <code>List&lt;Animal&gt;</code>, como en
+      Java y en C#: por esa variable se metería un <code>Gato</code> entre los perros. La <code>List</code> a secas
+      se mezcla con <code>List&lt;Sensor&gt;</code> en los dos sentidos, como los raw types de Java.</li>
+  <li><strong>Lo que no viaja:</strong> la lista no sabe lo que guarda; <code>&lt;Sensor&gt;</code> va en las
+      declaraciones, no en el objeto. Si pasa por un <code>Object</code> o por una <code>List</code> a secas, se
+      pierde ahí, y quien la recibe lo declara otra vez: <code>var l: List&lt;Sensor&gt; := otro.dame()</code>.</li>
+  <li><strong>Entre módulos:</strong> el tipo llega por la interfaz del módulo que declara, y el cast va en el que
+      lee. Para usar un <code>Sensor</code> hay que importar su módulo; para pasar la lista de mano en mano, no.</li>
+  <li><strong>En una <code>native</code>:</strong> un cast no se traduce, así que usar el elemento como
+      <code>Sensor</code> es el mismo error que escribir el cast a mano. Hazlo fuera de la native.</li>
+</ul>
+<p>
+  Una clase nueva es genérica si dice su tipo base con <code>@element{tipo}</code>. Se escribe y se compila
+  como cualquier otra, con ese tipo en sus firmas; lo heredan sus hijas, y quien la usa sólo puede pedir algo
+  que descienda de él:
+</p>
+<pre><code>@element{Medida}
+<span class="kw">public class</span> Bolsa
+  <span class="kw">public function</span> mete(m: <span class="type">Medida</span>) ...
+  <span class="kw">public function</span> saca(i: <span class="type">integer</span>): <span class="type">Medida</span> ...
+<span class="kw">end</span> Bolsa
+
+<span class="kw">var</span> b: <span class="type">Bolsa</span>&lt;<span class="type">Metro</span>&gt; := Bolsa()
+b.mete(Metro(<span class="num">2</span>))
+<span class="kw">print</span> b.saca(<span class="num">0</span>).enCm()               <span class="comment">// sale como un Metro</span>
+<span class="kw">var</span> c: <span class="type">Bolsa</span>&lt;<span class="type">Sensor</span>&gt; := Bolsa()         <span class="comment">// error: 'Bolsa' guarda 'Medida', y 'Sensor' no lo es</span></code></pre>
+<p>
+  La regla vale para los métodos y las <code>property</code> de la clase; en sus firmas, el tipo base es
+  siempre el elemento. No hay una variable <code>T</code>: dentro de la clase todo sigue siendo el tipo base.
+  Una clase lleva un solo tipo (sólo <code>Map</code> lleva dos), y otra que hereda no lo fija:
+  <code>class Sensores extends List&lt;Sensor&gt;</code> no se escribe. En JC, <code>new List&lt;Sensor&gt;()</code>
+  y <code>foreach (var s in sensores)</code>, y <code>new Collections.Map&lt;int, Tarea&gt;()</code> crea el de
+  llaves <code>integer</code> (<code>Collections.numericMap()</code>).
 </p>
 
 <!-- =========================================================== -->

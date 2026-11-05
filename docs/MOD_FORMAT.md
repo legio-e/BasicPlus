@@ -341,6 +341,11 @@ que el compilador aliasa no se re-publican). Dentro de `class <n> public [extend
 `prop`; y en una clase, `implements A,B` (de otro módulo, cualificadas: `Lib.Forma`). Las escribe sólo un módulo que las
 usa: los demás siguen con su `bpi 9` y su `ifaceCrc` de siempre.
 
+**Los genéricos** (`bpi 11`, V8/H8, `#793`): un tipo puede llevar sus argumentos, sin espacios (`Core.List<Cc.Sensor>`,
+`Collections.Map<integer,Cc.Sensor>`), y una clase, su tipo base (`element <tipo>`). Es lo que hace llegar `<X>` al módulo
+que lee, que escribe el cast. No cambia ninguna clave: la de un método no lleva los argumentos. Los escribe sólo un módulo
+que los usa, y las VMs, que se saltan la sección, no se enteran.
+
 `staticmethod`, `staticprop` y `ctor+` son directivas **nuevas** y no flags de
 `method`/`prop`/`ctor` a propósito: un lector anterior (`tolerant`, versión mayor
 que la suya) las **salta**. Un flag que el lector anterior ya conociera (`static`

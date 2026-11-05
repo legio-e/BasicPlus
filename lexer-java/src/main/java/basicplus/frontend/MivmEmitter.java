@@ -4912,6 +4912,7 @@ public final class MivmEmitter {
         w.emitGetLocal(idx);
         emitInvokeVirtualSmart(receptorDe(r.iterable, fGet.ownerClass), fGet.ownerClass, emitName(fGet),
                 claveDe(fGet), argSlotCount(fGet));
+        if (info.elementoDeFor.containsKey(s)) emitChequeoDeTipo(info.elementoDeFor.get(s));   // V8/H8 (#793)
         w.emitSetLocal(s.iteratorName);
 
         int sigue = w.newLabel();
@@ -5308,8 +5309,8 @@ public final class MivmEmitter {
         else if (e instanceof UnaryExpr)    emitUnary((UnaryExpr) e);
         else if (e instanceof BinaryExpr)   emitBinary((BinaryExpr) e);
         else if (e instanceof ParenExpr)    emitExpr(((ParenExpr) e).inner);
-        else if (e instanceof CallExpr)         emitCall((CallExpr) e);
-        else if (e instanceof MemberAccessExpr) emitMemberAccess((MemberAccessExpr) e);
+        else if (e instanceof CallExpr)         { emitCall((CallExpr) e); emitCastDeElemento(e); }
+        else if (e instanceof MemberAccessExpr) { emitMemberAccess((MemberAccessExpr) e); emitCastDeElemento(e); }
         else if (e instanceof ThisExpr)         w.emitGetParam("this");
         else if (e instanceof SuperExpr)        w.emitGetParam("this");  // como expresión, super == this con tipo del padre
         else if (e instanceof SuperCallExpr)    emitSuperCall((SuperCallExpr) e);
@@ -5319,6 +5320,51 @@ public final class MivmEmitter {
         else if (e instanceof InstanceOfExpr)   emitInstanceOf((InstanceOfExpr) e);
         else if (e instanceof Ast.TupleExpr)    emitTupleExpr((Ast.TupleExpr) e);
         else errors.add("expresión no soportada: " + e.getClass().getSimpleName());
+    }
+
+    /** V8/H8 (#793) — lo que sale de un `C<X>` como un X: el cast que a mano sería `X(…)`, con el mismo código. */
+    private void emitCastDeElemento(IExpr e) throws IOException {
+        if (info.castsDeElemento.contains(e)) emitChequeoDeTipo(info.exprTypes.get(e));
+    }
+
+    /** #389, la mitad DINÁMICA (16-ago): el cast ya no es solo una reinterpretación — COMPRUEBA. Si el objeto no es de la
+     *  clase destino (o no es una cadena, en `string(o)`), CHECKCAST lanza un RuntimeError atrapable que nombra el tipo
+     *  esperado, en vez del 504 disfrazado que salía después. `Object(x)` no emite nada: un Object puede llevar
+     *  legítimamente una cadena (string→Object es ensanchamiento), y exigirle "ser objeto" la rechazaría. */
+    private void emitChequeoDeTipo(BpType t) throws IOException {
+        if (t instanceof PrimitiveType
+                && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) {
+            w.emitCheckCastString(internString("string"));
+        } else if (t instanceof ClassType && ((ClassType) t).cls.isInterface) {
+            // V8 H7.3 (#756) — a una interfaz: la lista de interfaces de la clase del objeto; si no está, el
+            // RuntimeError que nombra la interfaz
+            Symbol.ClassSymbol iface = ((ClassType) t).cls;
+            if (!mod9()) { errors.add("convertir a la interfaz '" + iface.name + "' es del enlace tardío (MOD9)"); return; }
+            w.emitCheckCastInterfazRef(refClase(iface), internString(iface.name));
+        } else if (t instanceof ClassType) {
+            Symbol.ClassSymbol cls = ((ClassType) t).cls;
+            if (!"Object".equals(cls.name)) {
+                /* #444 — si la clase es de OTRO módulo, su descriptor no está
+                 * en nuestra tabla de símbolos y `emitCheckCast` reventaba con
+                 * una traza de Java («Clase 'X' no declarada para CHECKCAST»).
+                 * Construirla sí funcionaba —eso va por el módulo de origen—,
+                 * así que el crash sólo salía al BAJAR, que es justo lo que
+                 * exige usar `Object` de comodín con la stdlib.
+                 * La variante _EXT lleva el nombre cualificado y el linker
+                 * parcha el cls_off, igual que `TRY_BEGIN_EXT` en un catch. */
+                if (porRef(cls)) {
+                    w.emitCheckCastRef(refClase(cls), internString(cls.name));   // V7/H2 (#523)
+                } else if (cls.isExternal) {
+                    StringBuilder qn = new StringBuilder();
+                    if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty())
+                        qn.append(cls.externalLibrary).append('.');
+                    qn.append(cls.externalModule).append('.').append(cls.name);
+                    w.emitCheckCastExt(qn.toString(), internString(cls.name));
+                } else {
+                    w.emitCheckCast(cls.name, internString(cls.name));
+                }
+            }
+        }
     }
 
     private void emitIdentifier(IdentifierExpr id) throws IOException {
@@ -5587,47 +5633,7 @@ public final class MivmEmitter {
         // regla, para que no pueda divergir.
         if (info.refCasts.contains(c)) {
             emitExpr(c.args.get(0));
-            /* #389, la mitad DINÁMICA (16-ago): el cast ya no es solo una
-             * reinterpretación — COMPRUEBA. Si el objeto no es de la clase
-             * destino (o no es una cadena, en `string(o)`), CHECKCAST lanza un
-             * RuntimeError atrapable que nombra el tipo esperado, en vez del
-             * 504 disfrazado que salía después. `Object(x)` no emite nada: un
-             * Object puede llevar legítimamente una cadena (string→Object es
-             * ensanchamiento), y exigirle "ser objeto" la rechazaría. */
-            BpType t = info.exprTypes.get(c);
-            if (t instanceof PrimitiveType
-                    && ((PrimitiveType) t).tag == PrimitiveType.Kind.STRING) {
-                w.emitCheckCastString(internString("string"));
-            } else if (t instanceof ClassType && ((ClassType) t).cls.isInterface) {
-                // V8 H7.3 (#756) — a una interfaz: la lista de interfaces de la clase del objeto; si no está, el
-                // RuntimeError que nombra la interfaz
-                Symbol.ClassSymbol iface = ((ClassType) t).cls;
-                if (!mod9()) { errors.add("convertir a la interfaz '" + iface.name + "' es del enlace tardío (MOD9)"); return; }
-                w.emitCheckCastInterfazRef(refClase(iface), internString(iface.name));
-            } else if (t instanceof ClassType) {
-                Symbol.ClassSymbol cls = ((ClassType) t).cls;
-                if (!"Object".equals(cls.name)) {
-                    /* #444 — si la clase es de OTRO módulo, su descriptor no está
-                     * en nuestra tabla de símbolos y `emitCheckCast` reventaba con
-                     * una traza de Java («Clase 'X' no declarada para CHECKCAST»).
-                     * Construirla sí funcionaba —eso va por el módulo de origen—,
-                     * así que el crash sólo salía al BAJAR, que es justo lo que
-                     * exige usar `Object` de comodín con la stdlib.
-                     * La variante _EXT lleva el nombre cualificado y el linker
-                     * parcha el cls_off, igual que `TRY_BEGIN_EXT` en un catch. */
-                    if (porRef(cls)) {
-                        w.emitCheckCastRef(refClase(cls), internString(cls.name));   // V7/H2 (#523)
-                    } else if (cls.isExternal) {
-                        StringBuilder qn = new StringBuilder();
-                        if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty())
-                            qn.append(cls.externalLibrary).append('.');
-                        qn.append(cls.externalModule).append('.').append(cls.name);
-                        w.emitCheckCastExt(qn.toString(), internString(cls.name));
-                    } else {
-                        w.emitCheckCast(cls.name, internString(cls.name));
-                    }
-                }
-            }
+            emitChequeoDeTipo(info.exprTypes.get(c));
             return;
         }
         // Caso 1: callee es IdentifierExpr → función top-level o construction.

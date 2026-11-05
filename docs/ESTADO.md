@@ -45,6 +45,10 @@
 >   cuentas sin signo, y `NatSwitch` lo comprueba (con el C de antes fallan 6). Y **`#791`** (*«haz las dos partes»*), que salió al hacerla: la VM-C moría en el PC con el mínimo
 >   entre -1, y una `native` de enteros no veía la división por cero. La red, VERDE, las dos veces; en placa, sin probar.
 > - **El rumbo, desde 609** (*«No se trata de hacer JC un C# sino de hacer JC mejor y mas probado»*): la cuenta de Mono deja de ser el objetivo (`V8_IDEAS` §E9, «El rumbo de H8»).
+> - **Los genéricos, `#793`, hechos** (Eduardo: *«<miTipo> es una instrucción para el compilador»*): su diseño sustituye a los pasos que le propuse. La clase no lleva `T`, y en `C<X>` el compilador lee X donde
+>   la firma dice el tipo base; `@element{B}` para las clases nuevas; el cast de salida se queda (sin él, medido, la VM lee y escribe en el objeto de al lado). Su pregunta, *«como va a saber el compilador el tipo del
+>   cast?»*, destapó que la interfaz perdía los argumentos y **`#792`**: en BP, un tipo genérico al final de una línea no compilaba, justo donde un tipo sale de un módulo. Hechas las dos; la red, VERDE.
+> - **Lo que dije mal:** que un `ifaceCrc` distinto rechazaba la carga. En MOD9 sólo avisa, y lo para el cast (`V8_IDEAS` §E9). Y que las 281 pruebas de genéricos daban una idea de su valor: sólo unas 67 comprueban algo.
 > - **Lo que me falló:** el sample de error lo dejé en `bpgenvm-c/samples/errores`, que no existe (van en `samples/errores`); un `byte[3]`
 >   se indexaba, porque `byte` es también la función `byte(x)`: una función no es un nombre con valor; y en la prueba del AOT, una variable `v`
 >   chocaba con un parámetro del arnés.
@@ -139,7 +143,9 @@
 >
 > **Para la próxima sesión:**
 > - el próximo lote de placas lleva `#791` (`interp.c`): dividir el mínimo entre -1;
-> - H8: el tema 4, «despacio», con sus propuestas (`V8_IDEAS` §E9); `struct` con estado, cuando le toque a su tema. Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
+> - H8: lo siguiente, `lista[i]`, una property con índice (Eduardo: *«en C# las propiedades pueden tener índice»*): falta el análisis, y lo que devuelve ya lo dice `#793`. El traductor aún no usa los genéricos. `?.`,
+>   propuesto, sin respuesta. El tema 4, «despacio», con sus propuestas (`V8_IDEAS` §E9); `struct` con estado, cuando le toque a su tema. Lo «más probado», más adelante (*«cuando tengamos la compatibilidad mas
+>   avanzada»*). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
 > - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;
 > - `#745` y `#710` siguen abiertas (Eduardo, 4-nov: *«La 3 no»*);
 > - la Metro, la P4 y la Nucleo llevan la imagen de `35297826`. La S3, la del paso 3 de `#730`

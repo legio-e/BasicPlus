@@ -62,6 +62,15 @@ public final class SemanticInfo {
     public final java.util.Set<Ast.ForStmt> forDeListas =
             java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.ForStmt, Boolean>());
 
+    /** V8/H8 (#793) — las expresiones que salen de un `C<X>` como un `X`: su tipo, en exprTypes, y el emisor escribe detrás
+     *  el CHECKCAST que a mano sería `X(…)`. El compilador ve lo que entra por `add`, pero no lo que hace la clase por
+     *  dentro ni lo que da la vuelta por un Object, y sin ese cast la VM lee y escribe fuera del objeto. */
+    public final java.util.Set<Ast.IExpr> castsDeElemento =
+            java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.IExpr, Boolean>());
+
+    /** V8/H8 (#793) — en un `for x in lista` sobre una `List<X>`, X: lo mismo, en cada vuelta. */
+    public final java.util.Map<Ast.ForStmt, BpType> elementoDeFor = new IdentityHashMap<>();
+
     /** V8/H7.1 (#747) — de cada asignación compuesta (`x op= e`), el tipo en que se opera: el de `x op e`, como en C#.
      *  Si no es el de `x`, el resultado se recorta al de `x` al guardarlo (`byte b; b += 1` opera en integer). */
     public final Map<Ast.AssignStmt, BpType> compuestos = new IdentityHashMap<>();

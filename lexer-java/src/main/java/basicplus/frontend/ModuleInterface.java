@@ -73,6 +73,9 @@ public final class ModuleInterface {
      *  (los demás, la de siempre: su texto y su ifaceCrc no cambian), así que no es la «actual» de `CURRENT_VERSION` (que
      *  decide si un .bpi guardado está anticuado); es la más nueva que este lector lee entera, sin saltar nada. */
     public static final int VERSION_CON_INTERFACES = 10;
+    /** V8/H8 (#793) — un módulo con genéricos en su interfaz (`Core.List<Cc.Sensor>`, `element <tipo>`) escribe la 11, y los
+     *  demás, la de siempre: su texto y su ifaceCrc no cambian. */
+    public static final int VERSION_CON_GENERICOS = 11;
     /** La versión que ESCRIBE este build: 9 con `--formato=9` (enlace tardío: las ranuras son del cargador,
      *  la interfaz no publica ninguna); 8 en MOD8 (`field … slot n`, `event … recv n`, `layout`). */
     static int versionQueSeEscribe() { return Main.FORMATO == 9 ? 9 : 8; }
@@ -319,6 +322,8 @@ public final class ModuleInterface {
         /** V8 H7.3 — las interfaces de la cabecera de una clase (`implements A,Lib.B`), o de las que hereda una interfaz
          *  (`iface I public extends A,B`): locales al dueño sin cualificar, de otro módulo como `Mod.I` (como el padre). */
         public List<String> interfaces = new ArrayList<>();
+        /** V8/H8 (#793) — el tipo base de `@element{B}` (la directiva `element <tipo>`), o null. */
+        public BpType element = null;
 
         public ClassSig(String name, boolean isPublic, String baseClassName,
                         List<ParamSig> ctorParams, List<PropSig> properties,
@@ -599,6 +604,7 @@ public final class ModuleInterface {
         ClassSig sig = new ClassSig(cls.name, true, parent, ctorParams, properties, methods);
         // V8 H7.3 (#756) — una interfaz, y las interfaces de la cabecera (o de las que hereda), nombradas como el padre
         sig.isInterface = cls.isInterface;
+        sig.element = cls.tipoElemento;   // V8/H8 (#793)
         for (Symbol.ClassSymbol i : cls.interfaces) {
             if (i.isExternal) {
                 StringBuilder sb = new StringBuilder();
@@ -1166,6 +1172,7 @@ public final class ModuleInterface {
             // V8 H7.3 (#756) — un módulo con interfaces escribe la 10 (sus directivas `iface` e `implements`); los demás,
             // la de siempre, y su texto (y su ifaceCrc) no cambia
             if (ver == 9) for (ClassSig c : classes) if (c.isInterface || !c.interfaces.isEmpty()) ver = VERSION_CON_INTERFACES;
+            if (ver >= 9 && usaGenericos()) ver = VERSION_CON_GENERICOS;   // V8/H8 (#793)
             boolean conNumeros = ver < 9;   // bpi 9: la forma de una clase la decide el cargador; aquí no viaja ningún número
             pw.println("bpi " + ver);
             if (library != null && !library.isEmpty()) pw.println("library " + library);
@@ -1223,6 +1230,7 @@ public final class ModuleInterface {
                 pw.println(hdr.toString());
                 if (!c.isInterface && !c.interfaces.isEmpty())   // V8 H7.3: las interfaces de la cabecera
                     pw.println("  implements " + String.join(",", c.interfaces));
+                if (c.element != null) pw.println("  element " + typeToString(c.element));   // V8/H8 (#793)
                 // L2 v3 — layout binario: línea opcional `layout=nF/nM/fbm/obm`
                 // donde fbm y obm son hex (little-endian de ints). El reader
                 // viejo (v5) ignora líneas desconocidas, así que es backward
@@ -1439,6 +1447,49 @@ public final class ModuleInterface {
         return (p.defaultExpr == null) ? null : SemanticAnalyzer.constLiteralValue(p.defaultExpr);
     }
 
+    /** V8/H8 (#793) — `Core.List<Cc.Sensor>`: sin espacios, que las directivas se parten por ellos. */
+    private static String conArgumentos(String nombre, java.util.List<BpType> argumentos) {
+        if (argumentos == null) return nombre;
+        StringBuilder s = new StringBuilder(nombre).append('<');
+        for (int i = 0; i < argumentos.size(); i++) s.append(i > 0 ? "," : "").append(typeToString(argumentos.get(i)));
+        return s.append('>').toString();
+    }
+
+    /** V8/H8 (#793) — ¿la interfaz escribe algún genérico? Si no, el módulo sigue en su versión. */
+    private boolean usaGenericos() {
+        for (FuncSig f : functions) if (firmaConArgumentos(f)) return true;
+        for (PropSig p : properties) if (llevaArgumentos(p.type)) return true;
+        for (ClassSig c : classes) {
+            if (c.element != null || parametrosConArgumentos(c.ctorParams)) return true;
+            for (List<ParamSig> o : c.ctorOverloads) if (parametrosConArgumentos(o)) return true;
+            for (FuncSig f : c.methods) if (firmaConArgumentos(f)) return true;
+            for (FuncSig f : c.staticMethods) if (firmaConArgumentos(f)) return true;
+            for (PropSig p : c.properties) if (llevaArgumentos(p.type)) return true;
+            for (PropSig p : c.staticProps) if (llevaArgumentos(p.type)) return true;
+            for (FieldSig f : c.fields) if (llevaArgumentos(f.type)) return true;
+            for (EventSig e : c.events) if (parametrosConArgumentos(e.params)) return true;
+        }
+        return false;
+    }
+
+    private static boolean firmaConArgumentos(FuncSig f) {
+        return llevaArgumentos(f.returnType) || parametrosConArgumentos(f.params);
+    }
+
+    private static boolean parametrosConArgumentos(List<ParamSig> ps) {
+        if (ps != null) for (ParamSig p : ps) if (llevaArgumentos(p.type)) return true;
+        return false;
+    }
+
+    private static boolean llevaArgumentos(BpType t) {
+        if (t instanceof BpType.ClassType) return ((BpType.ClassType) t).argumentos != null;
+        if (t instanceof BpType.UnresolvedClassRef) return ((BpType.UnresolvedClassRef) t).argumentos != null;
+        if (t instanceof BpType.ArrayType) return llevaArgumentos(((BpType.ArrayType) t).element);
+        if (t instanceof BpType.TupleType)
+            for (BpType e : ((BpType.TupleType) t).elements) if (llevaArgumentos(e)) return true;
+        return false;
+    }
+
     private static String typeToString(BpType t) {
         if (t == null) return "void";
         if (t instanceof VoidType) return "void";
@@ -1459,11 +1510,12 @@ public final class ModuleInterface {
                 if (cls.externalLibrary != null && !cls.externalLibrary.isEmpty())
                     sb.append(cls.externalLibrary).append('.');
                 sb.append(cls.externalModule).append('.').append(cls.name);
-                return sb.toString();
+                return conArgumentos(sb.toString(), ((BpType.ClassType) t).argumentos);
             }
-            return cls.name;
+            return conArgumentos(cls.name, ((BpType.ClassType) t).argumentos);
         }
-        if (t instanceof BpType.UnresolvedClassRef) return ((BpType.UnresolvedClassRef) t).name;
+        if (t instanceof BpType.UnresolvedClassRef)
+            return conArgumentos(((BpType.UnresolvedClassRef) t).name, ((BpType.UnresolvedClassRef) t).argumentos);
         // #516 — `enum:Color` (del propio módulo) o `enum:Lib.Color` (importado de otro).
         if (t instanceof BpType.EnumType) {
             Symbol.EnumSymbol en = ((BpType.EnumType) t).en;
@@ -1546,6 +1598,7 @@ public final class ModuleInterface {
             List<PropSig>  clsStaticProps   = new ArrayList<>();
             boolean        clsEsInterfaz    = false;               // V8 H7.3 (#756): `iface … end iface`
             List<String>   clsInterfaces    = new ArrayList<>();
+            BpType         clsElement       = null;   // V8/H8 (#793)
             // N6 — si el .bpi es de una versión MÁS NUEVA que CURRENT_VERSION, lo
             // leemos best-effort (forward-compat): saltamos las directivas que este
             // compilador no conoce, en lugar de abortar. El formato .bpi es aditivo.
@@ -1568,7 +1621,7 @@ public final class ModuleInterface {
                             + "compilador soporta v" + MIN_SUPPORTED_VERSION + ".." + CURRENT_VERSION
                             + "). Regenéralo desde su fuente .bp.");
                     // N6 — versión más nueva: no abortamos; leemos best-effort.
-                    tolerant = ver > VERSION_CON_INTERFACES;
+                    tolerant = ver > VERSION_CON_GENERICOS;
                     sawHeader = true;
                     continue;
                 }
@@ -1599,6 +1652,8 @@ public final class ModuleInterface {
                                 clsCtorParams, clsProps, clsMethods);
                         cs.isInterface = clsEsInterfaz;   // V8 H7.3
                         cs.interfaces = clsInterfaces;
+                        cs.element = clsElement;   // V8/H8 (#793)
+                        clsElement = null;
                         clsEsInterfaz = false; clsInterfaces = new ArrayList<>();
                         cs.binaryNumFields  = clsBinNumFields;
                         cs.binaryNumMethods = clsBinNumMethods;
@@ -1653,6 +1708,10 @@ public final class ModuleInterface {
                     if (trimmed.startsWith("implements ") && !clsEsInterfaz) {   // V8 H7.3 (bpi 10)
                         for (String n : trimmed.substring("implements ".length()).split(","))
                             if (!n.trim().isEmpty()) clsInterfaces.add(n.trim());
+                        continue;
+                    }
+                    if (trimmed.startsWith("element ")) {   // V8/H8 (#793, bpi 11)
+                        clsElement = parseType(file, lineNo, trimmed.substring("element ".length()).trim());
                         continue;
                     }
                     if (trimmed.startsWith("field ")) {   // V7/H2 (bpi 8)
@@ -1823,8 +1882,8 @@ public final class ModuleInterface {
                 else if (c == '\\') esc = true;
                 else if (c == '"') inStr = false;
             } else if (c == '"') inStr = true;
-            else if (c == '(' || c == '[') depth++;
-            else if (c == ')' || c == ']') depth--;
+            else if (c == '(' || c == '[' || c == '<') depth++;   // V8/H8 (#793): `m:Collections.Map<integer,Cc.Sensor>`
+            else if (c == ')' || c == ']' || c == '>') depth--;
             else if (c == sep && depth == 0) { out.add(s.substring(start, i)); start = i + 1; }
         }
         out.add(s.substring(start));
@@ -2059,8 +2118,8 @@ public final class ModuleInterface {
             int depth = 0, start = 0;
             for (int i = 0; i < inner.length(); i++) {
                 char c = inner.charAt(i);
-                if (c == '(' || c == '[') depth++;
-                else if (c == ')' || c == ']') depth--;
+                if (c == '(' || c == '[' || c == '<') depth++;
+                else if (c == ')' || c == ']' || c == '>') depth--;
                 else if (c == ',' && depth == 0) {
                     BpType el = parseType(file, lineNo, inner.substring(start, i).trim());
                     if (el == null) throw new IOException(file + ":" + lineNo + ": elemento de tupla void: " + s);
@@ -2071,6 +2130,16 @@ public final class ModuleInterface {
             if (last == null) throw new IOException(file + ":" + lineNo + ": elemento de tupla void: " + s);
             elems.add(last);
             return new BpType.TupleType(elems);
+        }
+        // V8/H8 (#793) — `Core.List<Cc.Sensor>`: el consumidor resuelve la clase y sus argumentos.
+        int angulo = s.indexOf('<');
+        if (angulo > 0 && s.endsWith(">")) {
+            java.util.List<BpType> args = new java.util.ArrayList<>();
+            for (String a : splitTopLevel(s.substring(angulo + 1, s.length() - 1), ','))
+                args.add(parseType(file, lineNo, a.trim()));
+            if (!isValidDottedIdentifier(s.substring(0, angulo)))
+                throw new IOException(file + ":" + lineNo + ": tipo no soportado en .bpi: " + s);
+            return new BpType.UnresolvedClassRef(s.substring(0, angulo), args);
         }
         switch (s) {
             case "void":    return null;

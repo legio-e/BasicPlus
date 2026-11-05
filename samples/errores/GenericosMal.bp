@@ -1,6 +1,7 @@
-// GenericosMal.bp — FALLA A PROPÓSITO (V8/H7.2 #749): los genéricos de lo que ya hay son `List<Object>` y
-// `Collections.Map<integer, Object>` o `<string, Object>`; lo demás, de momento no. La llave de un Map tipado se
-// comprueba al compilar, y su fábrica tiene que casar con ella: `Collections.numericMap()` para la integer y
+// GenericosMal.bp — FALLA A PROPÓSITO (V8/H7.2 #749, V8/H8 #793): `<X>` es una orden al compilador. Entre `<` y `>` va una
+// clase, una interfaz o `string`; una clase es genérica si es una List, un Map o lleva `@element{tipo}`, y X tiene que
+// descender de su tipo base. Lo que entra tiene que ser un X, `List<Perro>` no pasa a `List<Animal>`, y la llave de un Map
+// tipado se comprueba al compilar: su fábrica tiene que casar con ella, `Collections.numericMap()` para la integer y
 // `Collections.Map()` para la string.
 module GenericosMal
   import Collections
@@ -9,6 +10,59 @@ module GenericosMal
     public function Cosa()
     end Cosa
   end Cosa
+
+  class Sensor
+    public function Sensor()
+    end Sensor
+  end Sensor
+
+  class Motor
+    public function Motor()
+    end Motor
+  end Motor
+
+  class Animal
+    public function Animal()
+    end Animal
+  end Animal
+
+  class Perro extends Animal
+    public function Perro()
+    end Perro
+  end Perro
+
+  @element{Comparable}
+  class Ordenada
+    public function Ordenada()
+    end Ordenada
+  end Ordenada
+
+  @element{}
+  class SinTipo
+    public function SinTipo()
+    end SinTipo
+  end SinTipo
+
+  @element{integer}
+  class ConNumero
+    public function ConNumero()
+    end ConNumero
+  end ConNumero
+
+  @element{Object}
+  interface Nada
+    function f(): integer
+  end Nada
+
+  class Mal
+    @element{Object}
+    public function Mal()
+    end Mal
+  end Mal
+
+  @element{Object}
+  function suelta()
+  end suelta
 
   function main()
     var a: List<integer> := List()
@@ -23,5 +77,15 @@ module GenericosMal
     for x in 5 do
       print x
     next
+    var g: Ordenada<Motor> := Ordenada()
+    var h: List<Sensor, Motor> := List()
+    var s: List<Sensor> := List()
+    s.add("hola")
+    s.add(5)
+    s.set(0, Motor())
+    var m: Collections.Map<string, Sensor> := Collections.Map()
+    m.put("a", Motor())
+    var perros: List<Perro> := List()
+    var animales: List<Animal> := perros
   end main
 end GenericosMal

@@ -17,7 +17,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * V8/H8 (5-nov) — los tipos genéricos en el fuente. `#792`: el `>` que cierra un tipo al final de una línea no es un
- * operador colgante. Que salen bien en las dos VMs, Genericos, del corpus; aquí, lo que el compilador deja y lo que no.
+ * operador colgante. `#793`: `C<X>`, una orden al compilador. Que salen bien en las dos VMs, Genericos y GenericosOrden, del
+ * corpus; los errores, GenericosMal; aquí, lo que el compilador deja y lo que no.
  */
 class TipoGenericoTest {
 
@@ -44,6 +45,84 @@ class TipoGenericoTest {
     private static void compilaBien(Path tmp, String fuente) throws IOException {
         Object[] r = compila(tmp, "T", fuente);
         assertTrue((Boolean) r[0], (String) r[1]);
+    }
+
+    private static String error(Path tmp, String fuente) throws IOException {
+        Object[] r = compila(tmp, "T", fuente);
+        assertFalse((Boolean) r[0], "tenía que fallar:\n" + r[1]);
+        return (String) r[1];
+    }
+
+    private static final String CLASES = "  class Animal\n    public function Animal()\n    end Animal\n  end Animal\n"
+            + "  class Perro extends Animal\n    public function Perro()\n    end Perro\n  end Perro\n";
+
+    private static String conClases(String cuerpo) {
+        return "module T\n  import Core\n" + CLASES + "  function Main()\n" + cuerpo + "  end Main\nend T\n";
+    }
+
+    @Test @DisplayName("#793: `List<Perro>` no pasa a `List<Animal>`, ni al revés")
+    void sinVarianza(@TempDir Path tmp) throws IOException {
+        assertTrue(error(tmp, conClases("    var p: List<Perro> := List()\n    var a: List<Animal> := p\n"))
+                .contains("valor de tipo 'List<Perro>' no asignable a variable de tipo 'List<Animal>'"));
+    }
+
+    @Test @DisplayName("#793: una List a secas se mezcla con una List<X> en los dos sentidos")
+    void aSecas(@TempDir Path tmp) throws IOException {
+        compilaBien(tmp, conClases("    var p: List<Perro> := List()\n    var c: List := p\n"
+                + "    var q: List<Perro> := c\n    print q.length()\n"));
+    }
+
+    @Test @DisplayName("#793: una hija entra donde se guarda su padre, y sale como el padre")
+    void hijaEntra(@TempDir Path tmp) throws IOException {
+        compilaBien(tmp, conClases("    var a: List<Animal> := List()\n    a.add(Perro())\n"
+                + "    var x: Animal := a.get(0)\n    print x == null\n"));
+    }
+
+    @Test @DisplayName("#793: add(5) vale en una List<Integer> y en una List<Comparable>, por su caja")
+    void cajas(@TempDir Path tmp) throws IOException {
+        compilaBien(tmp, conClases("    var a: List<Integer> := List()\n    a.add(5)\n"
+                + "    var b: List<Comparable> := List()\n    b.add(5)\n    b.add(2.5d)\n    print a.length()\n"));
+    }
+
+    @Test @DisplayName("#793: y no en una List<Long> ni en una de otra cosa")
+    void cajaQueNoEs(@TempDir Path tmp) throws IOException {
+        assertTrue(error(tmp, conClases("    var a: List<Long> := List()\n    a.add(5)\n"))
+                .contains("'List<Long>' guarda 'Long', no 'integer' (add)"));
+    }
+
+    @Test @DisplayName("#793: `Object` en la firma de la raíz no es el elemento: toString y compareTo, como siempre")
+    void loDeLaRaiz(@TempDir Path tmp) throws IOException {
+        compilaBien(tmp, conClases("    var a: List<Perro> := List()\n    print a.toString() == \"\"\n"));
+    }
+
+    @Test @DisplayName("#793: en una native, lo que sale de un C<X> da el mismo error que un cast a mano")
+    void enUnaNative() throws Exception {
+        assertTrue(aot("var c: Caja := l.get(0)\n      return c.n").contains("lleva un cast"));
+        assertEquals("", aot("return l.length()"));
+    }
+
+    /** Como en AotCoberturaTest: lo que dice el emisor de una native con este cuerpo; "" si la traduce. */
+    private static String aot(String cuerpo) throws Exception {
+        String src = "module CobTest\n  import Core\n  public class Caja\n    public property n: integer\n"
+                + "    public function Caja(v: integer)\n      this.n := v\n    end Caja\n  end Caja\n"
+                + "  native function f(l: List<Caja>): integer\n      " + cuerpo + "\n  end f\n"
+                + "  function Main()\n    print f(List())\n  end Main\nend CobTest\n";
+        Parser p = new Parser(new Lexer(src).tokenize());
+        Ast.ModuleNode m = p.parseModule();
+        assertTrue(p.getErrors().isEmpty(), String.valueOf(p.getErrors()));
+        SemanticAnalyzer sa = new SemanticAnalyzer();
+        Main.Ctx ctx = new Main.Ctx();
+        ctx.verbose = false;
+        ctx.outDir = java.nio.file.Paths.get("target");
+        ctx.autodiscoverFromSource(java.nio.file.Paths.get("pom.xml").toAbsolutePath());
+        Main.loadImportsForAnalyzer(m, java.nio.file.Paths.get("target", "CobTest.bp"), ctx, sa, 0);
+        SemanticInfo info = sa.analyze(m);
+        for (SemanticDiagnostic d : info.diagnostics)
+            assertNotEquals(SemanticDiagnostic.Kind.ERROR, d.kind, d.message);
+        AotCEmitter em = new AotCEmitter(m.name);
+        em.setSemanticInfo(info);
+        try { em.emitModule(m); return ""; }
+        catch (RuntimeException e) { return String.valueOf(e.getMessage()); }
     }
 
     @Test @DisplayName("#792: el retorno de una función, al final de la línea")

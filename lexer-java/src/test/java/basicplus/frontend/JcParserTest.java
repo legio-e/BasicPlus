@@ -229,6 +229,25 @@ class JcParserTest {
     }
 
     @Test
+    @DisplayName("V8/H8 (#793): `List<List<T>>` cierra con dos `>`, en los dos parsers, y `a >> b` sigue siendo un desplazamiento")
+    void genericosAnidados() {
+        Ast.ModuleNode j = JcParser.leer(
+            "module M\n{\n   function void main()\n   {\n" +
+            "      List<List<Object>> l = new List<List<Object>>();\n" +
+            "      int a = 8 >> 1;\n" +
+            "   }\n}\n");
+        Ast.ModuleNode b = bp(
+            "module M\n  function main()\n" +
+            "    var l: List<List<Object>> := List()\n" +
+            "    var a: integer := 8 shr 1\n" +
+            "  end main\nend M\n");
+        assertNull(ComparaAst.primeraDiferenciaJc(b, j));
+        Ast.VarDecl v = (Ast.VarDecl) ((Ast.FuncDef) j.defs.get(0)).body.get(0);
+        Ast.SimpleTypeRef dentro = (Ast.SimpleTypeRef) ((Ast.SimpleTypeRef) v.type).argumentos.get(0);
+        assertEquals("Object", ((Ast.SimpleTypeRef) dentro.argumentos.get(0)).name);
+    }
+
+    @Test
     @DisplayName("lo que JC no tiene, o no deja escribir así, es un error con su motivo")
     void erroresConNombre() {
         error(jcMain("      string s = null;\n      string t = s ?? \"x\";\n"), "??");      // V8/H7.1 (#747)

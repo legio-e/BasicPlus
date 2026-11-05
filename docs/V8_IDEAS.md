@@ -5734,11 +5734,11 @@ hacen falta.
 
 De su diseño sale además que entre `<` y `>` va una clase, una interfaz o `string`, como en Java: `List<Integer>`. `List<integer>` obligaría a cambiar `get` por `getInteger`, y eso ya no es sólo una orden.
 
-**El algoritmo** (5-nov, pendiente de su OK):
+**El algoritmo** (5-nov; Eduardo: *«OK, adelante»*; hecho el mismo día):
 1. La marca. `@element{B}` en una clase dice su tipo base, y la heredan sus hijas. `List` y sus hijas lo tienen sin marca: `Object`. `Map`, aparte. Se lee antes de resolver las firmas (hoy las anotaciones se
    validan después del cuerpo).
-2. El tipo. `C<X>` vale si `C` tiene tipo base y `X` es una clase, una interfaz o `string` que desciende de él. Si no, error: `Thread<Sensor>`, `List<integer>`, `SortList<Motor>`. Lo de descender se comprueba al
-   empezar los cuerpos, con la jerarquía entera resuelta.
+2. El tipo. `C<X>` vale si `C` tiene tipo base y `X` es una clase, una interfaz o `string` que desciende de él. Si no, error: `Thread<Sensor>`, `List<integer>`, `SortList<Motor>`. Al resolver un tipo ya están la
+   jerarquía y las interfaces, así que se comprueba ahí.
 3. Una llamada `r.m(args)` con `r` de tipo `C<X>`: se mira la clase que declara `m` y su tipo base `B`. Un parámetro que dice `B` tiene que recibir un `X`. Un parámetro primitivo, si otra sobrecarga de `m` tiene
    `B` en ese sitio, tiene que recibir algo cuya caja sea un `X`. Si devuelve `B`, la expresión es de tipo `X` y queda anotada para el cast. Lo mismo con las `property`.
 4. `for x in l`: `x` es un `X`, con su cast en cada vuelta.
@@ -5747,10 +5747,16 @@ De su diseño sale además que entre `<` y `>` va una clase, una interfaz o `str
 7. Emitir: una expresión anotada emite el `CHECKCAST` de `X` con el mismo código que el cast a mano. Si `X` es `B` no emite nada: `List<Object>` sale como hoy. En una `native`, el mismo error que el cast a mano
    (`#757`: un cast no se traduce ahí).
 8. Entre módulos: la interfaz escribe `Core.List<Cc.Sensor>` y, en la clase, `element <tipo>`, con `bpi 11` sólo en quien lo use: los demás, byte a byte como hoy. Al importar se lee y se resuelve.
-9. `List<List<Sensor>>`, en BP y en JC: hoy `>>` es un desplazamiento.
+9. `List<List<Sensor>>`. En JC, `>>` es un desplazamiento y al cerrar un tipo se parte en dos. En BP ya son dos `>`: su desplazamiento es `shr`.
 
 **Lo que no cubre:** dos tipos en una clase propia (`Par<A, B>`: sólo `Map` tiene dos), una clase que fija el tipo al heredar (`class Sensores extends List<Sensor>`) y un parámetro del tipo base que no sea el
 elemento (en una clase marcada también se restringe). Para un micro no parecen hacer falta. A las pruebas que los usan se les puede dar servicio desde el traductor, que conoce los tipos y escribe los casts.
+
+**Lo que salió al hacerlo:**
+- `new List<Sensor>()`, en JC, da el tipo con sus argumentos, comprobados como los de una declaración: antes se ignoraban.
+- Le dije que si `Aa` pasa de `List<Sensor>` a `List<Motor>`, un `Bd` sin recompilar se rechazaba al cargar. **No es así en MOD9**, medido con proyecto (`gen` 7) y sin él: las dos VMs avisan («compilado contra otra interfaz …;
+  enlace tardio») y cargan, y lo para el cast, «conversion invalida: el valor no es un 'Sensor'». Otra razón para que se quede.
+- `Genericos.mod` crece 14 bytes: su `List<Object>` público ahora se escribe en la interfaz (`bpi 11`). Los otros 737 `.mod`, iguales.
 
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 

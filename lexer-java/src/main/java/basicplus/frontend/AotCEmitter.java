@@ -2934,6 +2934,14 @@ public final class AotCEmitter {
          * dados. Esa era la verdadera razon por la que esto estaba pendiente. */
         if (e instanceof Ast.ArrayLitExpr) { emitArrayLit((Ast.ArrayLitExpr) e); return; }
 
+        /* V8/H8 (#793) — lo que sale de un `C<X>` lleva su cast, y un cast no se traduce (#757): el mismo error, y no un
+         * acceso sin comprobar. */
+        if (semInfo != null && semInfo.castsDeElemento.contains(e)) {
+            BpType x = semInfo.exprTypes.get(e);
+            throw new UnsupportedAotException("AOT: leer un elemento como '" + (x != null ? x.display() : "?") + "' (line "
+                    + ((Ast.Node) e).line + ") lleva un cast, y un cast no se traduce en una native; hazlo fuera de la native");
+        }
+
         /* V8/H7.1 (#747) — el ternario, `iif(c, a, b)`: el `?:` de C, que sólo calcula la rama que toca, como el
          * intérprete; las dos, al tipo del ternario. */
         if (e instanceof Ast.CallExpr && semInfo != null && semInfo.ternarios.contains(e)) {

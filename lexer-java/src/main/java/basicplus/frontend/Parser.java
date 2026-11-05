@@ -322,6 +322,8 @@ public final class Parser {
                 break;
             }
             advance();
+            String clave = k.lexeme;                 // V8/H8 (#793): con punto, `@element{Collections.Comparator}`
+            while (match(TokenType.DOT)) clave += "." + consumeIdentifier("nombre tras '" + clave + ".'");
 
             Object valor = null;                     // sin '=' => bandera (presencia = true)
             if (check(TokenType.EQUALS)) {
@@ -339,7 +341,7 @@ public final class Parser {
                                 + "' tiene que ser un literal, encontrado '" + v.lexeme + "'");
                 }
             }
-            entradas.add(new Ast.AnnEntry(k.lexeme, valor, k.line, k.column));
+            entradas.add(new Ast.AnnEntry(clave, valor, k.line, k.column));
 
             skipNewlines();
             if (check(TokenType.COMMA)) { advance(); skipNewlines(); continue; }

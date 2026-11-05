@@ -117,9 +117,11 @@ defs_stmt ::= { annotation } [ 'public' ] ( const_decl
                          implementa un miembro de una interfaz: una o varias de las
                          interfaces de la clase, y cada una con ese miembro (V8/H7.3);
      @override{}         OPCIONAL en lo que redefine un método o una property del padre
-                         (V8/H7.3); si no redefine nada, es error. *)
+                         (V8/H7.3); si no redefine nada, es error;
+     @element{ B }       sobre una clase: su tipo base, lo que en `C<X>` se lee como X
+                         (V8/H8, #793). Lo heredan sus hijas. *)
 annotation ::= '@' name '{' [ ann_entry { ',' ann_entry } ] '}' ;
-ann_entry  ::= name [ '=' literal ] ;
+ann_entry  ::= name { '.' name } [ '=' literal ] ;
 
 (* REGLA SEMÁNTICA — visibilidad de las VARIABLES (estado real V2):
 
@@ -164,11 +166,12 @@ base_type  ::= 'integer'
              | 'boolean'
              | name [ type_args ] ;
 
-(* V8/H7.2 (#749): los genéricos de lo que ya hay. Sólo valen List<Object> (y sus hijas,
-   SyncList y OwnerList) y Collections.Map<integer, Object> o <string, Object>: la llave del
-   Map se comprueba al compilar, y su fábrica casa con ella (numericMap() para la integer,
-   Map() para la string). Los argumentos no llegan al bytecode; sin ellos, el tipo sigue
-   valiendo. *)
+(* V8/H7.2 (#749), V8/H8 (#793): `C<X>` es una orden al compilador. Vale en List y sus hijas
+   (SyncList, OwnerList), en las clases con @element{tipo} y en Collections.Map<K, V>, con la
+   llave integer o string: su fábrica casa con ella (numericMap() para la integer, Map() para
+   la string). Entre '<' y '>' va una clase, una interfaz o string. Donde la firma de la clase
+   dice su tipo base, se lee X. Los argumentos no llegan al bytecode, salvo el cast de lo que
+   sale; sin ellos, el tipo sigue valiendo. *)
 type_args  ::= '<' type { ',' type } '>' ;
 
 

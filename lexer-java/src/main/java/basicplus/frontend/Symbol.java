@@ -57,6 +57,9 @@ public abstract class Symbol {
         public final boolean isPublic;
         public final Scope instanceMembers = new Scope("instance", null);
         public final Scope staticMembers   = new Scope("static",   null);
+        /** V8/H8 (#793) — el tipo base de `@element{B}`: lo que guarda la clase, y lo que en `C<X>` se lee como X. Lo
+         *  heredan sus hijas. null si no lo declara (`List` y sus hijas lo tienen sin marca: Object). */
+        public BpType tipoElemento = null;
         /** Nombre crudo de 'extends X' (null si no hay). No es final desde V8 H7.3: en JC (`class C : A, B`) el
          *  semántico lo quita si `A` resulta ser una interfaz. */
         public String baseClassName;
