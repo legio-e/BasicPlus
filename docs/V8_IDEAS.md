@@ -855,6 +855,11 @@ mi propuesta: manda lo de aquí.
     - **Como el `new`, el árbol recuerda la conversión**, con una marca que la comparación no cuenta. El análisis la
       comprueba en JC: `(Persona) 5` es un error, mientras que en BP `Persona(5)` construiría.
     - El escritor de JC, con el árbol analizado: si es una conversión, `(T) x`; si construye, `new T(x)`.
+    - **`(T) x` es siempre una conversión** (`#797`, 5-nov; Eduardo: *«en JC los constructores van con new Caja(x)»*).
+      La regla de BP, «si un constructor acepta `x`, gana el constructor», se debe a que `Caja(x)` dice las dos cosas;
+      en JC hay dos formas, y no hace falta. Lo que ya es un `Caja`, o una hija suya, se queda como está, como en Java.
+      Lo que no es de la familia sigue siendo un error. BP no tiene cómo escribir esa conversión: el traductor de JC a
+      BP lo dice (`EscritorBp.sinFormaEnBp`), porque el árbol es el mismo y saldría un `Caja(x)` que construye.
 24. **La comprobación de tipo, `is`, como en C#** (Eduardo, 17-oct): `a is Perro` es el `a instanceof Perro` de BP
     (`InstanceOfExpr`), también con el nombre cualificado (`a is Mod.Perro`). Va con las comparaciones, en BP y en
     C#. Lo demás del `is` de C# (`a is Perro p`, `x is null`) BP no lo tiene: error, de momento; para `null`,

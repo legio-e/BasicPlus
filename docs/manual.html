@@ -662,7 +662,10 @@ java -jar bpgenvm.jar out/Hola.mod</code></pre>
   El cast <code>Clase(x)</code> baja desde un <code>Object</code> o desde cualquier antepasado
   de la clase (<code>Perro(a)</code> con <code>a: Animal</code>); si el valor no es de esa clase,
   lanza en ejecución. Si la clase tiene un constructor que acepta ese argumento, gana el
-  constructor.
+  constructor. En JC no hay duda, porque lo que construye lleva <code>new</code>:
+  <code>new Caja(x)</code> crea un objeto y <code>(Caja) x</code> convierte siempre, acepte
+  <code>x</code> el constructor o no, y si <code>x</code> ya es un <code>Caja</code>, se queda como
+  está, como en Java. Esa conversión, en BP, no se puede escribir, y el traductor de JC a BP lo dice.
 </p>
 <p>
   Un <code>string</code> también cabe en un <code>Object</code> (y así, en una lista o en un

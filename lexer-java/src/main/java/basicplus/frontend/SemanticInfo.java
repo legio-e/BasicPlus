@@ -41,6 +41,10 @@ public final class SemanticInfo {
     public final java.util.Set<Ast.IExpr> refCasts =
             java.util.Collections.newSetFromMap(new IdentityHashMap<Ast.IExpr, Boolean>());
 
+    /** #797 — las conversiones de JC que BP no sabe escribir, con lo que hay que decir de cada una: `(Caja) x` con un `x`
+     *  que el constructor de `Caja` acepta, o que ya es un `Caja`. Las mira el traductor a BP (EscritorBp). */
+    public final java.util.List<String> conversionesSinBp = new java.util.ArrayList<>();
+
     /** V8/H8 — los `A[n]` (`new A[n]` en JC) que crean un array: el árbol es el de indexar, y quien distingue es el
      *  análisis. Su tipo, en exprTypes; su tamaño, `index`. El nombre de la izquierda no se analiza: es un tipo. */
     public final java.util.Set<Ast.IExpr> arraysNuevos =

@@ -596,12 +596,23 @@ public final class EscritorBp {
         return r;
     }
 
+    /** #797 — de un `.jc`, lo que BP no sabe escribir y el árbol no dice: `(Caja) x` y `Caja(x)` son el mismo nodo, y en BP,
+     *  si el constructor acepta `x`, construye; traducido en silencio, sería otro programa. Quien lo sabe es el análisis. Si
+     *  el fuente no se analiza es que no compila: no hay programa que cambiar. null si no hay nada que decir. */
+    private static String sinFormaEnBp(Path p) {
+        if (!Main.esJc(p)) return null;
+        Main.Analizado a = Main.analizarParaTraducir(p);
+        return a.modulo == null || a.info.conversionesSinBp.isEmpty() ? null : a.info.conversionesSinBp.get(0);
+    }
+
     /** V8 #698 — el BP de un fichero, para quien lo pide desde dentro (`Traductor.aBp`, el IDE): de un `.jc`, su
      *  traducción; de un `.bp`, el mismo reescrito. El texto, o por qué no. */
     static Traductor.Resultado traducir(Path p) throws IOException {
         String fuente = new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
         Leido l = Main.esJc(p) ? leerJc(fuente) : leer(fuente);
         if (l.modulo == null) return new Traductor.Resultado(null, "el original no se lee: " + l.error);
+        String sinForma = sinFormaEnBp(p);
+        if (sinForma != null) return new Traductor.Resultado(null, sinForma);
         try {
             return new Traductor.Resultado(escribir(l.modulo), null);
         } catch (NoSoportado ns) {
@@ -616,6 +627,8 @@ public final class EscritorBp {
         String fuente = new String(Files.readAllBytes(p), StandardCharsets.UTF_8);
         Leido l = Main.esJc(p) ? leerJc(fuente) : leer(fuente);
         if (l.modulo == null) { System.err.println("el original no se lee: " + l.error); return 3; }
+        String sinForma = sinFormaEnBp(p);
+        if (sinForma != null) { System.err.println(sinForma); return 2; }
         try {
             out.print(escribir(l.modulo));
             return 0;

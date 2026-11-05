@@ -88,6 +88,22 @@ class TraductorTest {
     }
 
     @Test
+    @DisplayName("`(Caja) x` no tiene forma en BP si el constructor acepta x: se dice, en vez de dar otro programa (#797)")
+    void conversionSinFormaEnBp() throws IOException {
+        String cabeza = "module Cj\n{\n   public class Caja\n   {\n      public function Caja(Object x)\n      {\n      }\n   }\n"
+                + "   public class Punto\n   {\n   }\n   public function void main()\n   {\n";
+        Traductor.Resultado[] r = new Traductor.Resultado[1];
+        Path conConstructor = escribe("Cj.jc", cabeza + "      Object o = new Caja(null);\n      Caja c = (Caja) o;\n   }\n}\n");
+        assertEquals("", loQueEscribe(() -> r[0] = Traductor.aBp(conConstructor)));
+        assertNull(r[0].texto);
+        assertTrue(r[0].error.contains("'(Caja) x' (línea 15 del original): es una conversión, y en BP 'Caja(x)' construiría"), r[0].error);
+
+        Traductor.Resultado bien = Traductor.aBp(escribe("Cj.jc", cabeza + "      Object o = new Punto();\n      Punto p = (Punto) o;\n   }\n}\n"));
+        assertNull(bien.error, bien.error);
+        assertTrue(bien.texto.contains("Punto(o)"), bien.texto);
+    }
+
+    @Test
     @DisplayName("lo que no se traduce dice por qué: un nombre reservado en JC, un JC que no se lee")
     void errores() throws IOException {
         Traductor.Resultado r = Traductor.aJc(escribe("Base.bp",

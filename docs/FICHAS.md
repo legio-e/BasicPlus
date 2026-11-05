@@ -7379,6 +7379,18 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### ✅ `#797` — JC: `(Caja) x` no convierte si el constructor de `Caja` acepta `x`, ni si `x` ya es un `Caja` (abierta y **CERRADA** el 5-nov, el commit de `#797`; Eduardo: *«en JC los constructores van con new Caja(x)»*)
+
+Salió al poner los genéricos en el traductor: `class Caja<T>` tiene un constructor `Caja(Object x)`, y lo que sale de un método genérico se baja con `(Caja) x`. El análisis seguía la regla de BP (`#389`): si un constructor acepta `x`, gana el constructor. Y como `(Caja) x` no
+construye, daba «'(Caja) x' no es una conversión». Esa regla existe porque en BP `Caja(x)` dice las dos cosas; en JC hay dos formas, y no hacía falta.
+- **Lo hecho:** `(Caja) x` convierte siempre que `x` sea de la familia. Desde `Object`, un antepasado o una interfaz, con su comprobación al ejecutar; lo que ya es un `Caja`, o una hija suya, se queda como está, como en Java (antes, un error). Lo que no es de la familia sigue siendo un
+  error. Sirve también con constructores sobrecargados, la limitación que anotaba `#389`.
+- **BP no cambia:** `Caja(x)` sigue construyendo si el constructor acepta `x`. Con el jar de antes y el nuevo, 744 `.mod` iguales.
+- **De JC a BP:** esa conversión no se puede escribir en BP, y el árbol es el mismo: saldría un `Caja(x)` que construye, otro programa y sin decir nada. El traductor lo dice: «'(Caja) x' (línea N del original): es una conversión, y en BP 'Caja(x)' construiría»
+  (`SemanticInfo.conversionesSinBp`, `EscritorBp.sinFormaEnBp`). Si un día BP la necesita, es decisión de Eduardo.
+- **Lo prueban:** `CompilaJcTest` (baja, sube, se queda, y el error fuera de la familia), `TraductorTest` (lo que dice de JC a BP) y el caso `Genericos` del traductor, en las dos VMs. `check-jc`, igual que antes.
+- **En placa:** no hace falta probarla aparte: es del compilador, y la VM no cambia.
+
 #### ✅ `#794` — `x[i]` sobre un objeto: `x.get(i)` y `x.set(i, v)`, y `x.pin[i]`, `x.getPin(i)` y `x.setPin(i, v)` (abierta y **CERRADA** el 5-nov, el commit de `#794`; Eduardo: *«OK»*)
 
 Eduardo: *«Lo de lista[i] me parece bien, en realidad es la notación de una propiedad»*; *«get normal no tiene índice, get(i) sería una sobrecarga y no veo el problema que necesite que se cambie de nombre»*. Lo decidido y lo medido, en

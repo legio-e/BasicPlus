@@ -4197,10 +4197,19 @@ public final class SemanticAnalyzer {
                     boolean ctorLoAcepta = c1 != null && c1.params.size() == 1
                             && c1.params.get(0).type != null
                             && c1.params.get(0).type.isAssignableFrom(at0);
-                    if (!ctorLoAcepta) {
+                    // #797 — en JC, lo que construye lleva `new`: `(Caja) x` es la conversión, acepte `x` su
+                    // constructor o no. Sólo el `Caja(x)` de BP dice las dos cosas, y ahí gana el constructor.
+                    if (ctorLoAcepta && ce.esConversion) conversionSinBp(ce, cls);
+                    if (!ctorLoAcepta || ce.esConversion) {
                         info.refCasts.add(ce);
                         return new ClassType(cls);
                     }
+                }
+                // #797 — y lo que ya es un `Caja`, o una hija suya, se queda como está, como en Java.
+                if (ce.esConversion && at0 instanceof ClassType && new ClassType(cls).isAssignableFrom(at0)) {
+                    conversionSinBp(ce, cls);
+                    info.refCasts.add(ce);
+                    return new ClassType(cls);
                 }
             }
             FunctionSymbol ctor = cls.findConstructor();
@@ -4280,6 +4289,12 @@ public final class SemanticAnalyzer {
         if (target == null && ce.callee instanceof IdentifierExpr)
             err(ce.line, ce.column, "no se puede llamar a '" + ((IdentifierExpr) ce.callee).name + "'");
         return ErrorType.INSTANCE;
+    }
+
+    /** #797 — lo que JC dice con `(Caja) x` no se puede decir en BP: ahí, `Caja(x)` construiría. */
+    private void conversionSinBp(CallExpr ce, ClassSymbol cls) {
+        info.conversionesSinBp.add("no soportado: '(" + cls.name + ") x' (línea " + ce.line + " del original): es una"
+                + " conversión, y en BP '" + cls.name + "(x)' construiría");
     }
 
     /** V8 #698 — JC escribe lo que BP deduce de los tipos: `new X(…)` en una construcción (punto 22) y `(T) x` en una

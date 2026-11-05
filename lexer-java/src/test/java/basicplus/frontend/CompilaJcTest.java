@@ -222,6 +222,52 @@ class CompilaJcTest {
                 + " constructor (#511)"), (String) r[1]);
     }
 
+    /** #797 — una clase cuyo constructor acepta cualquier objeto, una hija suya y otra que no tiene que ver. */
+    private static String cajas(String cuerpo) {
+        return String.join("\n",
+            "module Cajas", "{",
+            "   public class Caja", "   {",
+            "      protected Object dentro;",
+            "      public function Caja(Object x)", "      {", "         this.dentro = x;", "      }",
+            "      public function Object saca()", "      {", "         return this.dentro;", "      }",
+            "   }",
+            "   public class Hija : Caja", "   {",
+            "      public function Hija(Object x) : base(x)", "      {", "      }",
+            "   }",
+            "   public class Otra", "   {", "   }",
+            "   public function void main()", "   {",
+            "      " + cuerpo,
+            "   }",
+            "}", "");
+    }
+
+    @Test
+    @Timeout(120)
+    @DisplayName("`(T) x` es una conversión aunque el constructor acepte x, porque lo que construye lleva `new` (#797)")
+    void conversionConUnConstructorQueLaAcepta(@TempDir Path tmp) throws Exception {
+        Object[] r = compila(tmp, "Cajas", "Cajas.jc", cajas(String.join(" ",
+            "Object o = new Caja(\"dentro\");",
+            "Caja c = (Caja) o;",                                  // baja: el mismo objeto, sin envolverlo
+            "Caja d = new Caja(o);",                               // construye: otro, con el primero dentro
+            "println((string) c.saca(), \" \", (string) ((Caja) d.saca()).saca());",
+            "Object h = new Hija(\"hija\");",
+            "Caja k = (Caja) h;",                                  // desde Object, a un padre
+            "Hija j = (Hija) k;",                                  // desde un antepasado
+            "Caja m = (Caja) j;",                                  // lo que ya es: a un padre
+            "Hija n = (Hija) j;",                                  // lo que ya es: a sí mismo
+            "println((string) m.saca(), \" \", (string) n.saca(), \" \", m == (Caja) j, \" \", n == j);")));
+        assertTrue((Boolean) r[0], (String) r[1]);
+        assertEquals("dentro dentro\nhija hija true true\n", corre((Path) r[2], "Cajas"));
+    }
+
+    @Test
+    @DisplayName("lo que no es de la familia no se convierte, con constructor o sin él (#797)")
+    void conversionFueraDeLaFamilia(@TempDir Path tmp) throws Exception {
+        Object[] r = compila(tmp, "Cajas", "Cajas.jc", cajas("Otra o = new Otra(); Caja c = (Caja) o;"));
+        assertFalse((Boolean) r[0], (String) r[1]);
+        assertTrue(((String) r[1]).contains("'(Caja) x' no es una conversión: un 'Otra' no se convierte en 'Caja'"), (String) r[1]);
+    }
+
     @Test
     @DisplayName("con el main en .bp y en .jc, el proyecto no adivina cuál: lo dice, y no compila")
     void dosMains(@TempDir Path tmp) throws Exception {
