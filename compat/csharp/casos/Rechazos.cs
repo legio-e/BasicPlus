@@ -28,7 +28,7 @@ class Programa
     {
         object o = "hola";
         string s = o as string;                       // le falta a JC: as
-        ulong u = 5;                                  // fuera: ulong (el uint ya se traduce: SinSigno)
+        decimal u = 5;                                // fuera: decimal (el uint y el ulong ya se traducen: SinSigno, ULong)
         Func<int, int> f = x => x + 1;                // fuera: lambdas
         int i = 0;
         int j = i++ + i;                              // le falta a JC: ++ dentro de una expresión (i, leída otra vez)
@@ -49,5 +49,7 @@ class Programa
 
 class ConLlamada
 {
+    static void ConParams(int a = 0, params int[] resto) { }   // el traductor todavía no: JC, uno sin valor tras uno con él
+
     static ConLlamada() { Console.WriteLine("hola"); }  // le falta a JC: un constructor estático que hace algo (Estaticos)
 }

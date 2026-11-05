@@ -162,7 +162,8 @@ namespace Cs2Jc
             switch (t.SpecialType)
             {
                 case SpecialType.System_Int64:
-                case SpecialType.System_UInt32: return "0L";
+                case SpecialType.System_UInt32:
+                case SpecialType.System_UInt64: return "0L";
                 case SpecialType.System_Double: return "0.0";
                 case SpecialType.System_Single: return "0.0f";
                 case SpecialType.System_Boolean: return "false";
@@ -544,6 +545,9 @@ namespace Cs2Jc
             var sw = e.Ancestors().OfType<SwitchStatementSyntax>().FirstOrDefault();
             if (sw != null && EsUInt(m.GetTypeInfo(sw.Expression).Type))
                 return System.Convert.ToInt64(cv.Value).ToString(System.Globalization.CultureInfo.InvariantCulture) + "L";
+            // y sobre un ulong, sus 64 bits (SinSigno.cs)
+            if (sw != null && EsULong(m.GetTypeInfo(sw.Expression).Type))
+                return LiteralDeConstante(cv.Value is ulong ul ? unchecked((long) ul) : System.Convert.ToInt64(cv.Value), e);
             if (e is LiteralExpressionSyntax) return Expr(e);
             switch (cv.Value)
             {

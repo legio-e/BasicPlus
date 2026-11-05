@@ -48,6 +48,7 @@ namespace Cs2Jc
         static string PorNullable(ITypeSymbol u)
         {
             if (EsEnum(u)) return Porque.Pendiente("un enum que puede ser null (E?)");
+            if (EsULong(u)) return Porque.Fuera(Porque.ULong);                 // su caja sería un Long (SinSigno.cs)
             string p = PorTipo(u);
             if (p != null) return p;
             if (u.TypeKind == TypeKind.Struct && u.Locations.Any(l => l.IsInSource)) return Porque.H7(Porque.Struct);

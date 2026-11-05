@@ -3,11 +3,12 @@
 23: le falta a JC: genéricos — <T>
 25: le falta a JC: ref / out — ref int x
 30: le falta a JC: as — o as string
-31: fuera: ulong, decimal, nint y nuint — ulong
+31: fuera: decimal, nint y nuint — decimal
 32: le falta a JC: delegados y eventos de C# (sin lambdas) — Func<int, int>
 32: fuera: lambdas y métodos anónimos — x => x + 1
 34: le falta a JC: ++, -- y = dentro de una expresión — i++
 35: le falta a JC: arrays de varias dimensiones — int[,]
 36: la biblioteca: System.String.Join — string.Join(",", "a", "b")
 41: le falta a JC: errores de la VM con su tipo — NullReferenceException
-52: le falta a JC: constructor estático — static ConLlamada() { Console.WriteLine("hola"); }
+52: el traductor todavía no: un params detrás de un valor por defecto — params int[] resto
+54: le falta a JC: constructor estático — static ConLlamada() { Console.WriteLine("hola"); }

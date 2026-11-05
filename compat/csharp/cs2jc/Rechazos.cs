@@ -53,7 +53,8 @@ namespace Cs2Jc
             if (Empieza("System.Threading.Tasks", "System.Runtime.CompilerServices.TaskAwaiter")) return Fuera(Async);
             if (Empieza("System.Threading", "System.AggregateException")) return Fuera("los hilos de .NET");
             if (Empieza("System.DateTime", "System.TimeSpan", "System.DayOfWeek", "System.Diagnostics.Stopwatch")) return Fuera("las fechas y horas de .NET");
-            if (Empieza("System.UInt32", "System.UInt64", "System.Decimal")) return Fuera(SinSigno);
+            if (Empieza("System.UInt64")) return Fuera(ULong);
+            if (Empieza("System.UInt32", "System.Decimal")) return Fuera(SinSigno);
             if (Empieza("Microsoft.CSharp.RuntimeBinder", "System.Dynamic")) return Fuera(Dynamic);
             if (Empieza("System.Linq")) return Fuera(Linq);
             if (Empieza("System.Collections.IEnumerable", "System.Collections.IEnumerator")) return H7(ForeachPropio);
@@ -104,7 +105,8 @@ namespace Cs2Jc
         public const string Yield = "iteradores (yield)";
         public const string Async = "async/await";
         public const string Unsafe = "unsafe y punteros";
-        public const string SinSigno = "ulong, decimal, nint y nuint";          // el uint, ya no: es un long (2-nov)
+        public const string SinSigno = "decimal, nint y nuint";                 // el uint y el ulong, ya no: son un long
+        public const string ULong = "lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja)";
         public const string Checked = "checked";
         public const string Goto = "goto";
         public const string Reflexion = "reflexión (typeof, GetType, atributos)";

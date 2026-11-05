@@ -484,7 +484,8 @@ namespace Cs2Jc
 
         /// ¿Se escribe este valor con un literal? No NaN, los infinitos ni el mínimo de un entero, que en JC son una cuenta.
         static bool TieneLiteral(object v) => !(v is double d && !double.IsFinite(d)) && !(v is float f && !float.IsFinite(f))
-                                              && !(v is int i && i == int.MinValue) && !(v is long l && l == long.MinValue);
+                                              && !(v is int i && i == int.MinValue) && !(v is long l && l == long.MinValue)
+                                              && !(v is ulong u && u == 9223372036854775808UL);
 
         /// El valor de una constante de clase. JC pide un literal, y C# deja cualquier cuenta constante (`const int X = 1 + 2;`,
         /// `const bool B = !A & C;`: test-484): el valor que calcula Roslyn. Un estrecho, sin su conversión; un enum, como
@@ -760,6 +761,9 @@ namespace Cs2Jc
                 var ps = m.GetDeclaredSymbol(p);
                 if (ps == null) { partes.Add(Rechaza(p, Porque.Fuera(Porque.Interop))); continue; }     // __arglist
                 if (ps.RefKind != RefKind.None) Rechaza(p, Porque.H7(Porque.RefOut));
+                // `int c = 0, params int[] oo` (gtest-optional-36): en JC, uno sin valor no va tras uno con él
+                if (ps.IsParams && pl.Parameters.Any(q => q.Default != null))
+                    Rechaza(p, Porque.Pendiente("un params detrás de un valor por defecto"));
                 // de un método partial, el valor por defecto es el de su declaración sin cuerpo: la que lo define en C#
                 var definicion = (ps.ContainingSymbol as IMethodSymbol)?.PartialDefinitionPart;
                 var conValor = definicion != null ? definicion.Parameters[ps.Ordinal] : ps;
@@ -888,6 +892,7 @@ namespace Cs2Jc
             string porTipo = PorTipo(ps.Type);
             if (porTipo != null) return Rechaza(donde, porTipo);
             var v = ps.ExplicitDefaultValue;
+            if (v is ulong grande) v = unchecked((long) grande);       // un ulong, sus 64 bits (SinSigno.cs)
             // un T? con valor (`int? x = 5`): en JC, un objeto, y JC sólo admite un literal (null, como siempre: H7)
             if (EsNullable(ps.Type) && v != null) return Rechaza(donde, Porque.Pendiente("un valor por defecto de un T? (en JC, un objeto)"));
             // un enum (`Dia d = Dia.Martes`): JC sólo admite un literal, y un miembro de un enum no lo es

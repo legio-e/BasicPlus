@@ -23,6 +23,7 @@ namespace Cs2Jc
             if (conv.IsNullable) return ConversionNullable(e, m.GetTypeInfo(e).Type, m.GetTypeInfo(e).ConvertedType);   // un T?
             if (conv.IsEnumeration) return Rechaza(e, Porque.Fuera(Porque.EnteroAEnum));      // `Color c = 0;`
             if (conv.IsMethodGroup) return Rechaza(e, Porque.H7(Porque.Delegados));
+            if (ULongAReal(e)) return Rechaza(e, Porque.Fuera(Porque.ULong));      // `double d = u;` (SinSigno.cs)
             // una constante que cabe en un byte, un short…: JC (como Java) la acepta escrita tal cual en una declaración o una
             // asignación, no en un argumento ni en un return; ahí, con su conversión escrita, `((byte) 5)` (H8, tema 1). Una
             // cuenta (`byte b = (int) 0x30;`, test-129), con su valor, en cualquier sitio
@@ -73,6 +74,7 @@ namespace Cs2Jc
         /// `object o = 5;`: `Object o = new Integer(5);`. Sólo las de las cajas de BP, y sólo como `object`.
         string Caja(ExpressionSyntax e, ITypeSymbol de, ITypeSymbol a)
         {
+            if (EsULong(de)) return Rechaza(e, Porque.Fuera(Porque.ULong));        // sería un Long: otro número al escribirlo (SinSigno.cs)
             if (EsNullable(de))
             {
                 // un T? como object: la misma referencia (su caja ya es un Object), si es la de su T (la de un byte?, un
@@ -99,6 +101,7 @@ namespace Cs2Jc
                 case SpecialType.System_SByte:
                 case SpecialType.System_UInt16:
                 case SpecialType.System_UInt32:
+                case SpecialType.System_UInt64:
                 case SpecialType.System_Char:
                 case SpecialType.System_Single:
                 case SpecialType.System_Double: return true;
@@ -122,7 +125,8 @@ namespace Cs2Jc
             if (el == Hueco) return Hueco;
             // el tamaño, un entero: C# convierte uno long (`new char[len]`, test-138); el de JC es un integer
             var tam = ac.Type.RankSpecifiers[0].Sizes[0];
-            if (m.GetTypeInfo(tam).Type?.SpecialType == SpecialType.System_Int64 || EsUInt(m.GetTypeInfo(tam).Type))
+            var tipoTam = m.GetTypeInfo(tam).Type;
+            if (tipoTam?.SpecialType == SpecialType.System_Int64 || EsUInt(tipoTam) || EsULong(tipoTam))
                 return "new " + el + "[(int) " + Atomo(tam) + "]";
             return "new " + el + "[" + Expr(tam) + "]";
         }
@@ -189,6 +193,7 @@ namespace Cs2Jc
             // `"x" + null`, `(string) null + null`, `(object) null + "x"`: en C#, el null se une como "". En JC, el null
             // escrito tal cual en una suma de cadenas es un error a propósito (#774), así que se escribe lo que C# dice
             if (EsNullEscrito(e)) return "\"\"";
+            if (EsULong(m.GetTypeInfo(e).Type)) return Rechaza(e, Porque.Fuera(Porque.ULong));   // escribirlo (SinSigno.cs)
             if (ExprDeTipo(e) is TipoDe tipoDe) return NombreDeTipo(tipoDe, true, e);      // un tipo, su nombre (Tipos.cs)
             if (EsNullable(m.GetTypeInfo(e).Type))
             {
@@ -232,8 +237,9 @@ namespace Cs2Jc
         {
             string porTipo = PorTipo(m.GetTypeInfo(e).Type);
             if (porTipo != null) return Rechaza(e, porTipo);
-            // una cuenta constante que da un uint (`(uint) int.MaxValue + 1`), su valor: lo calcula C#
-            if (EsUInt(m.GetTypeInfo(e).Type) && (e is BinaryExpressionSyntax || e is PrefixUnaryExpressionSyntax || e is CastExpressionSyntax)
+            // una cuenta constante que da un uint o un ulong (`(uint) int.MaxValue + 1`), su valor: lo calcula C#
+            if ((EsUInt(m.GetTypeInfo(e).Type) || EsULong(m.GetTypeInfo(e).Type))
+                && (e is BinaryExpressionSyntax || e is PrefixUnaryExpressionSyntax || e is CastExpressionSyntax)
                 && m.GetConstantValue(e) is var cu && cu.HasValue)
                 return LiteralDeConstante(cu.Value, e);
             switch (e)
@@ -283,7 +289,8 @@ namespace Cs2Jc
                 case SpecialType.System_UInt16:
                 case SpecialType.System_Char: return "0";
                 case SpecialType.System_Int64:
-                case SpecialType.System_UInt32: return "0L";
+                case SpecialType.System_UInt32:
+                case SpecialType.System_UInt64: return "0L";
                 case SpecialType.System_Double: return "0.0";
                 case SpecialType.System_Single: return "0.0f";
                 case SpecialType.System_Boolean: return "false";
@@ -304,6 +311,7 @@ namespace Cs2Jc
                 if (c is InterpolatedStringTextSyntax txt) partes.Add(Cadena(txt.TextToken.ValueText));
                 else if (c is InterpolationSyntax it)
                 {
+                    if (EsULong(m.GetTypeInfo(it.Expression).Type)) return Rechaza(it, Porque.Fuera(Porque.ULong));   // escribirlo
                     if (it.AlignmentClause != null || it.FormatClause != null)
                     {
                         // `{x,5}` y `{x:X}` (H8, tema 1): con su ancho y su formato (PiezaConFormato); el ancho, una constante
@@ -364,6 +372,7 @@ namespace Cs2Jc
                     if (m.GetSymbolInfo(a.Left).Symbol is IEventSymbol) return Rechaza(a, Porque.H7(Porque.Delegados));
                     if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) && EsNullable(m.GetTypeInfo(a.Left).Type)) return AsignaNullable(a);
                     if (EsUInt(m.GetTypeInfo(a.Left).Type) && AsignaUInt(a) is string au) return au;    // `u += y`, recortado
+                    if (EsULong(m.GetTypeInfo(a.Left).Type) && ULongNoSale(a.Kind())) return Rechaza(a, Porque.Fuera(Porque.ULong));
                     if (a.Left is TupleExpressionSyntax || a.Left is DeclarationExpressionSyntax) return Rechaza(a, Porque.Pendiente("desempaquetado"));
                     if (!a.IsKind(SyntaxKind.SimpleAssignmentExpression) && EsEnum(m.GetTypeInfo(a.Left).Type))
                         return Rechaza(a, Porque.Fuera(Porque.EnteroAEnum));       // `e |= f`: da un enum desde su entero
@@ -396,7 +405,6 @@ namespace Cs2Jc
             if (t == null) return null;
             switch (t.SpecialType)
             {
-                case SpecialType.System_UInt64:
                 case SpecialType.System_Decimal:
                 case SpecialType.System_IntPtr:
                 case SpecialType.System_UIntPtr: return Porque.Fuera(Porque.SinSigno);
@@ -419,7 +427,8 @@ namespace Cs2Jc
                 {
                     var v = l.Token.Value;
                     if (v is uint u) return u.ToString(System.Globalization.CultureInfo.InvariantCulture) + "L";   // un uint es un long
-                    if (v is ulong || v is decimal) return Rechaza(l, Porque.Fuera(Porque.SinSigno));
+                    if (v is ulong ul) return LiteralDeConstante(ul, l);                // sus 64 bits, en un long (SinSigno.cs)
+                    if (v is decimal) return Rechaza(l, Porque.Fuera(Porque.SinSigno));
                     string txt = l.Token.Text;
                     if (GuionesQueJcNoLee(txt)) txt = txt.Replace("_", "");          // `1__000` es `1000` (H8, tema 1)
                     return txt.StartsWith(".") ? "0" + txt : txt;      // `.5`: el lexer de JC quiere la cifra delante
@@ -665,6 +674,7 @@ namespace Cs2Jc
             if ((b.IsKind(SyntaxKind.EqualsExpression) || b.IsKind(SyntaxKind.NotEqualsExpression))
                 && ExprDeTipo(b.Left) is TipoDe tipoIzq && ExprDeTipo(b.Right) is TipoDe tipoDer)
                 return ComparaTipos(b, tipoIzq, tipoDer);
+            if (BinariaULong(b) is string ul) return ul;                          // lo que un long no da igual (SinSigno.cs)
             // con un T?: sus funciones de CsSystem (Nullables.cs); `x ?? y`, el ternario
             if (b.IsKind(SyntaxKind.CoalesceExpression) && EsNullable(m.GetTypeInfo(b.Left).Type)) return CoalesceNullable(b);
             if (m.GetOperation(b) is IBinaryOperation bo && EsOperacionNullable(bo)) return BinariaNullable(b, bo);
@@ -843,6 +853,12 @@ namespace Cs2Jc
                 if (!a.IsValueType) return "null";
             }
             if (EsNullable(a) || EsNullable(de)) return ConversionEscritaNullable(c, de, a);      // un T? (Nullables.cs)
+            // de un ulong a un real, o al revés: de 2^63 para arriba sería otro número; una constante, su valor (SinSigno.cs)
+            if ((EsULong(de) && EsReal(a)) || (EsReal(de) && EsULong(a)))
+            {
+                var cr = m.GetConstantValue(c);
+                return cr.HasValue ? LiteralDeConstante(cr.Value, c) : Rechaza(c, Porque.Fuera(Porque.ULong));
+            }
             // a un uint, sus 32 bits de abajo; de un uint a uno estrecho, sus bits de abajo (SinSigno.cs)
             if (EsUInt(a) && de != null && de.IsValueType && !EsUInt(de))
             {
@@ -850,7 +866,7 @@ namespace Cs2Jc
                 if (cu.HasValue) return LiteralDeConstante(cu.Value, c);
                 if (AUInt(c, de) is string au) return au;
             }
-            if (EsUInt(de) && DeUIntAEstrecho(c, a) is string ae) return ae;
+            if ((EsUInt(de) || EsULong(de)) && DeUIntAEstrecho(c, a) is string ae) return ae;
             if (EsEnum(a) && !SymbolEqualityComparer.Default.Equals(a, de)) return Rechaza(c, Porque.Fuera(Porque.EnteroAEnum));
             // `(int) Color.Rojo`, `(long) c`: se copia (Eduardo, 31-oct: «es el compilador el que ha de hacer la
             // conversión»); a un tipo estrecho, todavía no
@@ -908,8 +924,8 @@ namespace Cs2Jc
             return RechazaNodo(ea);
         }
 
-        /// Un índice: un uint (en JC, un long), con `(int)` delante; JC indexa con un entero.
-        string Indice(ExpressionSyntax i) => EsUInt(m.GetTypeInfo(i).Type) ? "(int) " + Atomo(i) : Expr(i);
+        /// Un índice: un uint o un ulong (en JC, un long), con `(int)` delante; JC indexa con un entero.
+        string Indice(ExpressionSyntax i) => EsUInt(m.GetTypeInfo(i).Type) || EsULong(m.GetTypeInfo(i).Type) ? "(int) " + Atomo(i) : Expr(i);
 
         /// Al sacar una clase anidada al módulo, lo privado de la de fuera deja de verse: en C# sí se ve.
         void CompruebaAcceso(ISymbol s, SyntaxNode donde)
@@ -952,6 +968,7 @@ namespace Cs2Jc
                 case SpecialType.System_SByte: return "sbyte";
                 case SpecialType.System_UInt16: return "ushort";
                 case SpecialType.System_UInt32: return "long";         // un uint es un long (SinSigno.cs)
+                case SpecialType.System_UInt64: return "long";         // un ulong, con sus 64 bits (SinSigno.cs)
                 case SpecialType.System_Char: return "int";            // en JC, char es un entero (Eduardo, 1-nov)
                 case SpecialType.System_Single: return "float";
                 case SpecialType.System_Double: return "double";

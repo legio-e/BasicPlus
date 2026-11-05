@@ -1,0 +1,22 @@
+# Lo que el traductor tiene que rechazar en RechazosULong.cs, y por qué (una línea por rechazo, en orden).
+9: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a < b
+10: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a <= b
+11: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a > b
+12: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a >= b
+13: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a / b
+14: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a % b
+15: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a >> 1
+16: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — c /= 2
+17: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — c %= 2
+18: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — c >>= 1
+19: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a
+20: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — (double) a
+21: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — (float) a
+22: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — (ulong) d
+23: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a
+24: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — Console.WriteLine (a)
+25: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a
+26: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — a.ToString ()
+27: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — {a}
+28: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — Math.Max (a, b)
+29: fuera: lo de un ulong que en un long no sale igual (comparar, /, %, >>, escribirlo, pasarlo a un real o a una caja) — ulong?

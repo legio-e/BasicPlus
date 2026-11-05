@@ -189,7 +189,8 @@ namespace Cs2Jc
                     r += "f";
                     break;
                 case uint u: return u.ToString(ci) + "L";                        // un uint es un long (SinSigno.cs)
-                case ulong _: case decimal _: return Rechaza(donde, Porque.Fuera(Porque.SinSigno));
+                case ulong ul: return LiteralDeConstante(unchecked((long) ul), donde);   // un ulong, sus 64 bits (SinSigno.cs)
+                case decimal _: return Rechaza(donde, Porque.Fuera(Porque.SinSigno));
                 default: return Rechaza(donde, Porque.Pendiente("una constante " + v));
             }
             return r.StartsWith("-") ? "(" + r + ")" : r;
@@ -198,6 +199,8 @@ namespace Cs2Jc
         string BibliotecaLlamada(InvocationExpressionSyntax inv, IMethodSymbol ms)
         {
             if (EsNullable(ms.ContainingType)) return LlamadaDeNullable(inv, ms);      // un T? (Nullables.cs)
+            // lo de .NET con un ulong (`u.ToString()`, `Console.WriteLine(u)`, `Math.Max(u, v)`): con un long saldría otra cosa
+            if (EsULong(ms.ContainingType) || ms.Parameters.Any(p => EsULong(p.Type))) return Rechaza(inv, Porque.Fuera(Porque.ULong));
             string clave = NombreCompleto(ms.ContainingType) + "." + ms.Name;
             if (ms.IsStatic && FuncionesDeCsSystem.Contains(Firma(ms)))
             {

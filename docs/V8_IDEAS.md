@@ -4794,7 +4794,7 @@ miembro de la clase, dónde hay una caja.
 | `throw;` | `throw e;`, con el nombre de su `catch` | se reescribe |
 | y lo demás de la lista de `#745`: las clases `partial`, `params`, los métodos de extensión, los inicializadores de objetos, `using`… | con la misma regla | se reescribe |
 | los genéricos (salvo `List<Object>` y el `Map`), `struct`, `ref`/`out`, los delegados, `as`, `??`, los indexadores, los operadores propios, `int[,]`, `++` dentro de una expresión… | — | no se traduce: le falta a JC (H7) |
-| las lambdas, `yield`, LINQ, `async`, la reflexión, `ulong`, `decimal`, `goto`… (ya no: la herencia múltiple al estilo Java, con H7.3, `#756`; ni `int?` ni `uint`, el 2-nov) | — | no se traduce: fuera |
+| las lambdas, `yield`, LINQ, `async`, la reflexión, `ulong`, `decimal`, `goto`… (ya no: la herencia múltiple al estilo Java, con H7.3, `#756`; ni `int?` ni `uint`, el 2-nov; ni casi todo `ulong`, el 5-nov) | — | no se traduce: fuera |
 
 Un nombre de C# que en JC es palabra reservada (`print`, `function`, `module`, `field`…) se renombra con un `_` detrás,
 en todas partes, y el informe lo dice.
@@ -5348,7 +5348,7 @@ que igual necesitamos es si tenemos varios loops anidados poder hacer un break a
 | 8 | el tipo de un objeto, sin `Type` al ejecutar (propuesto: una tabla con las clases; hablado: lo escribe el traductor) | el traductor | +1 | +8 | 4-nov: Mono **516** |
 | 9 | los tipos anónimos | sin decidir | +2 | +2 | |
 | 10 | `goto`, con `continue` a un bucle con nombre | el compilador y el traductor | +4 | | 4-nov: Mono **535** |
-| 11 | `ulong`, como el `uint` | sin decidir | +2 | +1 | |
+| 11 | `ulong`, sólo lo que da los mismos bits en un `long` | el traductor | +2 | | 5-nov: Mono **570** |
 | 12 | `&`, `\|` y `^` entre `bool`, en JC como en Java | el compilador | | +1 | 4-nov: Mono **495** |
 
 **1. `IDisposable`, hecho.** Una interfaz de `CsSystem`, `function void Dispose()`: una clase del programa la implementa
@@ -5586,6 +5586,24 @@ y los números; las casillas nacen a cero o a null.
 
 Sample `ArrayNuevo` y `ArrayNuevoMal`, `ArrayNuevoTest`, caso `ArraysNuevos`. **Mono: 563** (+3, las previstas; a las otras 21 de las 24 que lo
 pedían les falta algo más: genéricos, `struct`, LINQ, reflexión…). **El tema 3: 55.**
+
+### `ulong`, sólo en el traductor (5-nov)
+
+Eduardo: *«A ver ulong. No soportamos operaciones con ulong. Lo que podemos es permitir declarar ulong, leer y escribir haciendo conversiones de
+long <-> ulong»*; y con lo medido, *«OK, hacemos 1 y 2, solo en el traductor»*, *«las 2 primeras filas»*. JC sigue sin tener `ulong`: para el
+traductor es un `long` con sus 64 bits tal cual (`ulong.MaxValue` es `-1L`), como el `uint` es un `long` con su valor.
+
+- **Sale sin nada** lo que da los mismos bits en un `long`, también de 2^63 para arriba y dando la vuelta: declararlo, pasarlo, leerlo y
+  escribirlo; `+`, `-`, `*`, `&`, `|`, `^`, `~`, `<<`, `++`, `--`, `==`, `!=` y un `switch`; y las conversiones a los enteros, con sus bits de
+  abajo. Medido antes: un `long` da la vuelta sin error en las dos VMs, y `<<` usa 6 bits de la cuenta, como C#.
+- **No se traduce**, con su motivo, lo que de 2^63 para arriba daría otro resultado en silencio: comparar, `/`, `%`, `>>`, escribirlo, pasarlo a un
+  real o a una caja, `ulong?`, y lo de .NET que lo recibe (`Math.Max(u, v)`, `u.ToString()`). Lo que C# ya calcula (`ulong.MaxValue > 5`) es una
+  constante y sí va. Aquí se queda la tercera fila de lo medido: `test-146`, `test-441` y `test-729`, que sólo piden comparar.
+
+Casos `ULong` y `RechazosULong`. **Mono: 570** (+7: `test-446`, `test-757`, `test-615`, `test-683` y `test-499`; y `test-binaryliteral` y
+`test-cls-10`, que no había contado). `gtest-optional-36`, que sí conté, no pasa: lleva un `params` tras un valor por defecto, que JC no deja, y
+hasta el ajuste 1 del tema 4 no se traduce. Las «unas 14» que dije antes contaban también `decimal` y `nint`, que iban en el mismo motivo; ahora
+van aparte. **El tema 1: 119.**
 
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 

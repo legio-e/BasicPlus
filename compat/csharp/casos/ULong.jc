@@ -1,0 +1,269 @@
+module CsULong
+{
+   class Caja
+   {
+      public long Caja_valor { get; set; }
+      public static long compartido { get; set; } = 7;
+      public const long Max = (-1L);
+      public static long Medio { get; set; } = (-9223372036854775807L - 1L);
+      public const long Cinco = 5;
+      public function long Doble(long x)
+      {
+         return x * 2;
+      }
+      public long Valor
+      {
+         get
+         {
+            return this.Caja_valor;
+         }
+         set
+         {
+            this.Caja_valor = value;
+         }
+      }
+   }
+
+   class M
+   {
+      private static function long Suma(long x, long y = 3L)
+      {
+         return x + y;
+      }
+      private static function long Mucho(long y = -1L)
+      {
+         return y;
+      }
+      private static function int Grande(long x)
+      {
+         switch (x)
+         {
+            case 0L:
+               return 1;
+            case 9223372036854775807L:
+               return 2;
+            case (-9223372036854775807L - 1L):
+               return 3;
+            case (-1L):
+               return 4;
+            default:
+               return 5;
+         }
+      }
+      public static function int Main()
+      {
+         long a = 5;
+         long b = a;
+         if (b != 5)
+         {
+            return 1;
+         }
+         a = (-1L);
+         if (a != (-1L))
+         {
+            return 2;
+         }
+         a++;
+         if (a != 0)
+         {
+            return 3;
+         }
+         a--;
+         if (a != (-1L))
+         {
+            return 4;
+         }
+         long c = (-9223372036854775807L - 1L);
+         long d = c + c;
+         if (d != 0)
+         {
+            return 5;
+         }
+         if (c * 2 != 0)
+         {
+            return 6;
+         }
+         if (c - 1 != 9223372036854775807)
+         {
+            return 7;
+         }
+         if (a + 2 != 1)
+         {
+            return 8;
+         }
+         if (a * a != 1)
+         {
+            return 9;
+         }
+         if ((a & 255) != 255)
+         {
+            return 10;
+         }
+         if ((c | 1) != (-9223372036854775807L))
+         {
+            return 11;
+         }
+         if ((a ^ 1) != (-2L))
+         {
+            return 12;
+         }
+         if ((a ^ -1) != 0)
+         {
+            return 13;
+         }
+         if ((-9223372036854775807L - 1L) != c)
+         {
+            return 14;
+         }
+         long uno = 1;
+         int cuenta = 64;
+         if (uno << cuenta != 1)
+         {
+            return 15;
+         }
+         if (uno << 63 != c)
+         {
+            return 16;
+         }
+         long e = 3;
+         e += 4;
+         e -= 1;
+         e *= 3;
+         e &= 31;
+         e |= 64;
+         e ^= 1;
+         e <<= 1;
+         if (e != 166)
+         {
+            return 17;
+         }
+         long l = (long) a;
+         if (l != -1)
+         {
+            return 18;
+         }
+         long f = (long) l;
+         if (f != (-1L))
+         {
+            return 19;
+         }
+         int i = -1;
+         long g = (long) i;
+         if (g != (-1L))
+         {
+            return 20;
+         }
+         if ((int) g != -1)
+         {
+            return 21;
+         }
+         if ((byte) ((int) (g & 255L)) != 255)
+         {
+            return 22;
+         }
+         if ((sbyte) ((((int) (g & 255L)) ^ 128) - 128) != -1)
+         {
+            return 23;
+         }
+         if ((short) ((((int) (g & 65535L)) ^ 32768) - 32768) != -1)
+         {
+            return 24;
+         }
+         if ((ushort) ((int) (g & 65535L)) != 65535)
+         {
+            return 25;
+         }
+         if (((g) & 4294967295L) != 4294967295L)
+         {
+            return 26;
+         }
+         long h = 65;
+         if ((((int) h) & 65535) != 'A')
+         {
+            return 27;
+         }
+         long pequeno = 4000000000L;
+         long grande = pequeno;
+         if (grande != 4000000000L)
+         {
+            return 28;
+         }
+         int letra = 'c';
+         long res = 0;
+         res = res * 16 + letra;
+         if (res != 99)
+         {
+            return 29;
+         }
+         long[] v = new long[2];
+         if (v[0] != 0)
+         {
+            return 30;
+         }
+         v[1] = (-1L);
+         if (v[1] + 1 != 0)
+         {
+            return 31;
+         }
+         long[] w = [(long) 7, (long) 8];
+         long uno2 = 1;
+         if (w[(int) uno2] != 8)
+         {
+            return 32;
+         }
+         int[] t = new int[(int) (uno2 + 1)];
+         if (len(t) != 2)
+         {
+            return 33;
+         }
+         Caja caja = new Caja();
+         if (caja.Caja_valor != 0)
+         {
+            return 34;
+         }
+         caja.Valor = Caja.Max;
+         if (caja.Valor != (-1L) || caja.Doble(Caja.Medio) != 0)
+         {
+            return 35;
+         }
+         Caja.compartido += Caja.Cinco;
+         if (Caja.compartido != 12)
+         {
+            return 36;
+         }
+         if (M.Suma(1) != 4 || M.Suma(1, 2) != 3 || M.Mucho() != (-1L))
+         {
+            return 37;
+         }
+         long q = i == -1 ? (-1L) : 5;
+         if (q + 1 != 0)
+         {
+            return 38;
+         }
+         if (M.Grande(0) != 1 || M.Grande(9223372036854775807L) != 2 || M.Grande((-9223372036854775807L - 1L)) != 3 || M.Grande((-1L)) != 4 || M.Grande(7) != 5)
+         {
+            return 39;
+         }
+         const bool mayor = true;
+         if (!mayor)
+         {
+            return 40;
+         }
+         double real = 5L;
+         if (real != 5.0)
+         {
+            return 41;
+         }
+         return 0;
+      }
+   }
+
+   public function void main()
+   {
+      int r = M.Main();
+      if (r != 0)
+      {
+         throw new RuntimeError("Main devuelve " + r);
+      }
+   }
+}
