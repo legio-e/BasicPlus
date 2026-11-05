@@ -5678,6 +5678,28 @@ tema 5: 35 de 70.**
 - **Lo que no se puede:** en el tema 3, 13 son de reflexión, `dynamic`, interop, fechas o `yield`, y `gtest-autoproperty-20` falla por una diferencia decidida (`#776`); en el tema 5, 17 son de
   reflexión (`typeof`, `Enum.GetValues`, atributos), y otras piden `decimal` o `checked`.
 
+### El rumbo de H8, desde 609 (5-nov)
+
+Eduardo: *«600 Test de Mono pasados es un gran logro, el doble con que empezamos. Al principio aparecieron algunos bugs ahora casi no hay, lo que es muy buen síntoma. Algunas cosas que no entran
+de C# me resisto a incorporarlas porque hacen al lenguaje mas complejo y no creo que aporten tanto en el ámbito en el que estamos de micro-controladores. Lo que tenemos que ver es a partir de ahora que
+incorporamos y si realmente suponen una mejora. No se trata de hacer JC un C# sino de hacer JC mejor y mas probado.»*
+
+La cuenta de Mono deja de ser el objetivo: es un instrumento. Los datos le dan la razón: de la batería han salido doce fallos reales de BP, de JC o de las VMs (`#744`, `#751`, `#752`, `#753`, `#755`, `#760`, `#761`,
+`#772`, `#777`, `#789`, `#790` y `#791`), y desde 447 hasta 609, sólo los tres últimos. Lo que queda, con el lote de hoy («piden» / a las que no les falta nada más):
+
+| motivo | piden | sólo eso |
+|---|---|---|
+| genéricos propios | 987 | 281 |
+| lambdas (fuera, decidido) | 569 | 137 |
+| delegados y eventos de C# | 538 | 53 |
+| reflexión | 243 | 27 |
+| `struct` | 229 | 21 |
+| `yield` | 136 | 19 |
+| `ref` y `out` | 121 | 13 |
+| sobrecarga de operadores | 120 | 29 |
+| `?.` y patrones | 108 | 13 |
+| indexadores | 103 | 20 |
+
 ### El tema 4, los parámetros (5-nov: propuestas, sin decidir)
 
 27 de 130, ninguna falla; 44 piden algo de fuera (reflexión, `dynamic`, `ulong`…) y 59 no. Medido con el lote de hoy: «piden», las que lo piden en

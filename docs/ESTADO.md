@@ -44,6 +44,7 @@
 > - **`#790`** (*«1) si»*), hecha: al comprobar que un `long` da la vuelta, salió que una `native` no: `x + 1 > x` daba 1 con el AOT y 0 interpretada. El AOT escribe las
 >   cuentas sin signo, y `NatSwitch` lo comprueba (con el C de antes fallan 6). Y **`#791`** (*«haz las dos partes»*), que salió al hacerla: la VM-C moría en el PC con el mínimo
 >   entre -1, y una `native` de enteros no veía la división por cero. La red, VERDE, las dos veces; en placa, sin probar.
+> - **El rumbo, desde 609** (*«No se trata de hacer JC un C# sino de hacer JC mejor y mas probado»*): la cuenta de Mono deja de ser el objetivo (`V8_IDEAS` §E9, «El rumbo de H8»).
 > - **Lo que me falló:** el sample de error lo dejé en `bpgenvm-c/samples/errores`, que no existe (van en `samples/errores`); un `byte[3]`
 >   se indexaba, porque `byte` es también la función `byte(x)`: una función no es un nombre con valor; y en la prueba del AOT, una variable `v`
 >   chocaba con un parámetro del arnés.
