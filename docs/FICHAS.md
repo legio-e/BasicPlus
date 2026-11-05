@@ -7379,6 +7379,31 @@ documentación de JC. En el IDE las 2 opciones de traducción nuevas también ha
   error, como un compilador, y los da todos (diez como mucho); `JsonError`, con su línea y su columna; y
   `AggregateError`, con la lista. Los dos son `RuntimeError`.
 
+#### 🔵 `#790` — una `native` no da lo mismo que interpretada cuando un entero da la vuelta: en C, el desbordamiento con signo no está definido (abierta el 5-nov, al comprobar para el `ulong` de H8 que un `long` da la vuelta; sólo apuntada)
+
+Medido en el PC, con el arnés de `test-aotswitch` y la misma función, con el AOT e interpretada:
+
+```
+native function vuelta(x: integer): integer
+  if x + 1 > x then
+    return 1
+  endif
+  return 0
+end vuelta
+```
+
+`vuelta(2147483647)` da **1** con el AOT y **0** interpretada, que es lo que dice el lenguaje; y lo mismo con un `long`. El emisor escribe
+`((bp_x + 1) > bp_x)` con un `int32_t`, y gcc, que da por hecho que eso no se desborda, quita la comparación: con `-O2` y con `-Os`, el de las tres
+recetas (mirado en el ensamblador). Con `-fwrapv`, la comparación vuelve.
+
+- **Es el invariante:** el mismo `.mod` dice otra cosa con su `.mdn` que sin él. Sólo se ve en una `native` que compare lo que ha dado la vuelta; un
+  hash o una suma sin comparar salen bien. En placa no está probado.
+- **Ya estaba avisado:** `AOT_ABI8_IDEAS.md`, el riesgo 1: *«conviene compilar el `.mdn` con `-fwrapv`»*. No se hizo.
+- **Dos maneras de arreglarlo, por decidir:** (a) `-fwrapv` en las recetas, que cambia su huella: hay que rehacer las imágenes y los `.mdn`; (b) que
+  el AOT escriba `+`, `-` y `*` sin signo (`(int32_t) ((uint32_t) a + (uint32_t) b)`): sólo el compilador, sin tocar el firmware.
+- **El intérprete de la VM-C** suma igual, con `int32_t` e `int64_t`, y sin `-fwrapv` en ningún build. Ahí gcc no tiene de qué aprovecharse (lee de la
+  memoria de la VM y escribe en ella) y la paridad no ha visto nada, pero el C no lo garantiza.
+
 #### ✅ `#789` — JC: una const de clase con una cuenta (`private const int X = 1 + 2;`) para al compilador con un error interno del emisor, «Símbolo de datos no declarado (forward ref no permitida): A.X»; la de módulo dice «una const requiere un valor literal» (abierta el 4-nov, con `test-484` de Mono, al entrar `&` entre `bool`; **CERRADA el mismo día**, el commit de `&`, `|` y `^` entre `bool`)
 
 - **Cómo salió:** `const bool correct = !a00 & !a01 …` en una clase de C#. El traductor la copiaba tal cual; JC pide un literal,

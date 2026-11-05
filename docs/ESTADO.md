@@ -129,6 +129,7 @@
 >   notó en que los números iban de 200 en 200; repetida con `w.esperar`. El aviso estaba en el propio `wire_serie` (`#495`).
 >
 > **Para la próxima sesión:**
+> - `#790`, nueva: una `native` da otra cosa que interpretada cuando un entero da la vuelta; dos maneras de arreglarlo, por decidir;
 > - H8: dos decisiones de Eduardo, los tipos anónimos, y si `while` y `for` llevan nombre; y lo siguiente, el tema 4, los
 >   parámetros, con sus propuestas (`V8_IDEAS` §E9, «El tema 4»). Los lotes, en `C:\lenguajes\pruebas-csharp\salida\`, fuera del repositorio;
 > - `#788`, pendiente, cuando lo diga Eduardo; y en `#694`, sólo queda confirmar el `Stop` de la VM local;
